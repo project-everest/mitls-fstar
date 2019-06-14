@@ -1,6 +1,8 @@
 # A revamped Makefile inspired from HACL
 # --------------------------------------
 
+all: compile
+
 SHELL		= /bin/bash
 
 ifeq ($(shell uname -s),Darwin)
@@ -32,7 +34,7 @@ INCLUDE_PATHS 	= \
   $(KREMLIN_HOME)/kremlib/compat \
   $(KREMLIN_HOME)/kremlib \
   $(MITLS_HOME)/libs/ffi \
-  $(MITLS_HOME)/../quackyducky/src/lowparse \
+  $(QD_HOME)/src/lowparse \
   $(MITLS_HOME)/src/parsers/generated
 
 # Flat directory structure for miTLS
@@ -62,8 +64,11 @@ run-with-log = \
   $(TIME) -q -f '%E' -o $3.time sh -c "$(subst ",\",$1)" > $3.out 2> >( tee $3.err 1>&2 ); \
   ret=$$?; \
   time=$$(cat $3.time); \
+  if grep -q "admit_smt_queries true" $3.cmd; then \
+    admitted=" (ADMITTED)"; \
+  fi; \
   if [ $$ret -eq 0 ]; then \
-    echo "$2, $$time"; \
+    echo -e "$2\033[31m$$admitted\033[0m, $$time"; \
   else \
     echo "<><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><>"; \
     echo -e "\033[31mFatal error while running\033[0m: $1"; \
@@ -76,12 +81,6 @@ run-with-log = \
 else
 run-with-log = $1
 endif
-
-###############
-# Main Target #
-###############
-
-all: compile
 
 #########
 # FStar #
@@ -114,7 +113,7 @@ FSTAR = $(FSTAR_NO_FLAGS) $(OTHERFLAGS)
 
 .PHONY: parsers
 parsers:
-	QD_HOME=$(QD_HOME) $(MAKE) -C ../parsers
+	$(MAKE) -C ../parsers
 
 
 ##########
@@ -155,6 +154,12 @@ endif
 
 hints:
 	mkdir -p $@
+
+ifndef VERIFY_PARSERS
+$(OUTPUT_DIR)/Parsers_%.krml \
+$(OUTPUT_DIR)/Parsers.%.checked: FSTAR_FLAGS=--admit_smt_queries true \
+  --__temp_fast_implicits
+endif
 
 %.checked: FSTAR_FLAGS=
 %.checked: | hints

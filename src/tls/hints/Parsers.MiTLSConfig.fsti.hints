@@ -1,0 +1,57 @@
+[
+  "ÑþØ\u0007{T~\u001b!‰•«RŸ'Œ",
+  [
+    [
+      "Parsers.MiTLSConfig.miTLSConfig",
+      1,
+      2,
+      1,
+      [
+        "@query", "assumption_Parsers.Boolean.boolean__uu___haseq",
+        "assumption_Parsers.CipherSuite.cipherSuite__uu___haseq",
+        "assumption_Parsers.KnownProtocolVersion.knownProtocolVersion__uu___haseq",
+        "assumption_Parsers.MiTLSConfigUseTicket.miTLSConfigUseTicket__uu___haseq",
+        "assumption_Parsers.MiTLSConfig_alpn.miTLSConfig_alpn__uu___haseq",
+        "assumption_Parsers.MiTLSConfig_max_early_data.miTLSConfig_max_early_data__uu___haseq",
+        "assumption_Parsers.MiTLSConfig_peer_name.miTLSConfig_peer_name__uu___haseq",
+        "assumption_Parsers.MiTLSConfig_send_ticket.miTLSConfig_send_ticket__uu___haseq",
+        "assumption_Parsers.NamedGroup.namedGroup__uu___haseq",
+        "assumption_Parsers.SignatureScheme.signatureScheme__uu___haseq",
+        "assumption_Parsers.TaggedUnknownExtension.taggedUnknownExtension__uu___haseq",
+        "assumption_Prims.list__uu___haseq",
+        "equation_Parsers.MiTLSConfig_cipher_suites.miTLSConfig_cipher_suites",
+        "equation_Parsers.MiTLSConfig_custom_extensions.miTLSConfig_custom_extensions",
+        "equation_Parsers.MiTLSConfig_named_groups.miTLSConfig_named_groups",
+        "equation_Parsers.MiTLSConfig_use_tickets.miTLSConfig_use_tickets",
+        "equation_Parsers.NamedGroupList.namedGroupList",
+        "equation_Parsers.SignatureSchemeList.signatureSchemeList",
+        "haseqTm_refine_16d32bbc9188fbeb65eb4649406f74eb",
+        "haseqTm_refine_1837b7ffd48c850d5dc61306890945b0",
+        "haseqTm_refine_781e12a7b71f728d8425b6596c14de79",
+        "haseqTm_refine_7a540eb781b0edc4c0cfb971e22d0597",
+        "haseqTm_refine_8b303af14ef677aa3d9f68c1afc02628",
+        "haseqTm_refine_e5f8b76c26b9d42031e02e26b90ac1a4",
+        "kinding_Parsers.CipherSuite.cipherSuite@tok",
+        "kinding_Parsers.MiTLSConfigUseTicket.miTLSConfigUseTicket@tok",
+        "kinding_Parsers.NamedGroup.namedGroup@tok",
+        "kinding_Parsers.SignatureScheme.signatureScheme@tok",
+        "kinding_Parsers.TaggedUnknownExtension.taggedUnknownExtension@tok"
+      ],
+      0,
+      "ef339a39a47ded5a2adc89d3216c2e4b"
+    ],
+    [
+      "Parsers.MiTLSConfig.miTLSConfig_valid",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "equation_Prims.squash",
+        "l_and-interp",
+        "refinement_interpretation_Tm_refine_8d65e998a07dd53ec478e27017d9dba5"
+      ],
+      0,
+      "721e1e74a2c12a3ac1cd532beacdfec3"
+    ]
+  ]
+]

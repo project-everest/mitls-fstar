@@ -1,0 +1,31 @@
+[
+  "lÊ/I:\tÅ)Ç'\u0015¨Œô\\\b",
+  [
+    [
+      "Parsers.CertificateStatusRequest.certificateStatusRequest",
+      1,
+      2,
+      1,
+      [
+        "@query",
+        "assumption_Parsers.CertificateStatusType.certificateStatusType__uu___haseq",
+        "assumption_Parsers.OCSPStatusRequest.oCSPStatusRequest__uu___haseq"
+      ],
+      0,
+      "2a1cc62a0d7638bfc492c7b25383c217"
+    ],
+    [
+      "Parsers.CertificateStatusRequest.certificateStatusRequest_valid",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "equation_Prims.squash",
+        "l_and-interp",
+        "refinement_interpretation_Tm_refine_8d65e998a07dd53ec478e27017d9dba5"
+      ],
+      0,
+      "451db5e785c94b990d769b5fb620daf6"
+    ]
+  ]
+]

@@ -1,1 +1,146 @@
-[ "bŠn¶u\u001a#\u0012%T£åwwîä", [] ]
+[
+  "èÆÄ`sC…NýŸ¬³@ÆvÄ",
+  [
+    [
+      "IdNonce.n_id",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "equation_FStar.Bytes.lbytes",
+        "equation_Nonce.random", "equation_TLSInfo.random",
+        "haseqTm_refine_b0383769854f2b8d05d9f8fb03a8cbd4",
+        "refinement_interpretation_Tm_refine_414d0a9f578ab0048252f8c8f552b99f",
+        "typing_FStar.Bytes.bytes"
+      ],
+      0,
+      "b17b8d832b55734287be97fb4470ce9f"
+    ],
+    [
+      "IdNonce.nonce_id_table",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "equation_FStar.Bytes.lbytes",
+        "equation_Mem.rgn", "equation_Mem.tls_rgn", "equation_Nonce.random",
+        "equation_TLSInfo.random",
+        "haseqTm_refine_b0383769854f2b8d05d9f8fb03a8cbd4",
+        "refinement_interpretation_Tm_refine_414d0a9f578ab0048252f8c8f552b99f",
+        "refinement_interpretation_Tm_refine_b5163a5c7eb2f4891aa85b6bd19b6e5e",
+        "refinement_interpretation_Tm_refine_c358ce785c6b462b7618aa4f08d5c31e",
+        "typing_FStar.Bytes.bytes"
+      ],
+      0,
+      "780fbd703cd30af9f3074a886cc3db45"
+    ],
+    [
+      "IdNonce.id_of_nonce",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "equation_FStar.Bytes.lbytes",
+        "equation_Nonce.random", "equation_TLSInfo.random",
+        "haseqTm_refine_b0383769854f2b8d05d9f8fb03a8cbd4",
+        "refinement_interpretation_Tm_refine_414d0a9f578ab0048252f8c8f552b99f",
+        "typing_FStar.Bytes.bytes"
+      ],
+      0,
+      "62adc724d9d454ea8b232cc4f9ec0a76"
+    ],
+    [
+      "IdNonce.lookup",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "bool_inversion",
+        "disc_equation_FStar.Pervasives.Native.None",
+        "disc_equation_FStar.Pervasives.Native.Some",
+        "equation_FStar.Bytes.lbytes", "equation_IdNonce.n_id",
+        "equation_Nonce.random", "equation_TLSInfo.random",
+        "haseqTm_refine_b0383769854f2b8d05d9f8fb03a8cbd4",
+        "lemma_FStar.Pervasives.invertOption",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Tm_refine_414d0a9f578ab0048252f8c8f552b99f",
+        "typing_FStar.Bytes.bytes",
+        "typing_FStar.Pervasives.Native.uu___is_Some", "typing_IdNonce.n_id"
+      ],
+      0,
+      "d0eb8b65457e6725412e42aac14b6047"
+    ],
+    [
+      "IdNonce.lookup",
+      2,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "equation_FStar.Bytes.lbytes",
+        "equation_FStar.HyperStack.ST.m_rref",
+        "equation_FStar.HyperStack.ST.mref",
+        "equation_FStar.Monotonic.DependentMap.fresh",
+        "equation_FStar.Monotonic.DependentMap.imap",
+        "equation_FStar.Monotonic.DependentMap.t",
+        "equation_FStar.Monotonic.HyperStack.frameOf",
+        "equation_FStar.Monotonic.HyperStack.mref",
+        "equation_FStar.Monotonic.HyperStack.mreference",
+        "equation_IdNonce.id_of_nonce", "equation_Nonce.random",
+        "equation_TLSInfo.random",
+        "fuel_guarded_inversion_FStar.Monotonic.HyperStack.mreference_",
+        "haseqTm_refine_b0383769854f2b8d05d9f8fb03a8cbd4",
+        "refinement_interpretation_Tm_refine_1a1278f1aecd37594ba20d888b7fd230",
+        "refinement_interpretation_Tm_refine_414d0a9f578ab0048252f8c8f552b99f",
+        "refinement_interpretation_Tm_refine_ecfe710eaddaa768c46a7d024350dcbc",
+        "refinement_interpretation_Tm_refine_f596a1e23d65ebe54b463345ece4e00f",
+        "typing_FStar.Bytes.bytes", "typing_IdNonce.nonce_id_table"
+      ],
+      0,
+      "c4e782f3a75fe04aad9b9c547f8d96cf"
+    ],
+    [
+      "IdNonce.injectivity",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "equation_FStar.Bytes.lbytes",
+        "equation_Nonce.random", "equation_TLSInfo.random",
+        "haseqTm_refine_b0383769854f2b8d05d9f8fb03a8cbd4",
+        "refinement_interpretation_Tm_refine_414d0a9f578ab0048252f8c8f552b99f",
+        "typing_FStar.Bytes.bytes"
+      ],
+      0,
+      "510c4bff0228617538ed0c56ccac83bc"
+    ],
+    [
+      "IdNonce.injectivity",
+      2,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "equation_FStar.Bytes.lbytes",
+        "equation_FStar.HyperStack.ST.m_rref",
+        "equation_FStar.HyperStack.ST.mref",
+        "equation_FStar.Monotonic.DependentMap.contains",
+        "equation_FStar.Monotonic.DependentMap.imap",
+        "equation_FStar.Monotonic.DependentMap.t",
+        "equation_FStar.Monotonic.HyperStack.mem",
+        "equation_FStar.Monotonic.HyperStack.mref",
+        "equation_FStar.Monotonic.HyperStack.mreference",
+        "equation_IdNonce.id_of_nonce", "equation_Mem.tls_tables_region",
+        "equation_Nonce.random", "equation_TLSInfo.random",
+        "fuel_guarded_inversion_FStar.Monotonic.HyperStack.mreference_",
+        "haseqTm_refine_b0383769854f2b8d05d9f8fb03a8cbd4",
+        "refinement_interpretation_Tm_refine_1a1278f1aecd37594ba20d888b7fd230",
+        "refinement_interpretation_Tm_refine_1f2e1bb6641d211365e67e3099229cf0",
+        "refinement_interpretation_Tm_refine_414d0a9f578ab0048252f8c8f552b99f",
+        "refinement_interpretation_Tm_refine_ecfe710eaddaa768c46a7d024350dcbc",
+        "refinement_interpretation_Tm_refine_f596a1e23d65ebe54b463345ece4e00f",
+        "typing_FStar.Bytes.bytes", "typing_IdNonce.nonce_id_table"
+      ],
+      0,
+      "f43984e043dfe72072b4f899f1ff7954"
+    ]
+  ]
+]

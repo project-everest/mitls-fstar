@@ -1,0 +1,168 @@
+[
+  "Ýð·wø$xM/\u0004n<A)w+",
+  [
+    [
+      "Parsers.Char2Representation.char2Representation",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "assumption_Parsers.Char2Pentanomial.char2Pentanomial__uu___haseq",
+        "equation_Parsers.Char2Trinomial.char2Trinomial",
+        "haseqTm_refine_ded83f0e40056526ff4d5b32368d0718",
+        "refinement_interpretation_Tm_refine_414d0a9f578ab0048252f8c8f552b99f",
+        "typing_FStar.Bytes.bytes"
+      ],
+      0,
+      "78c5b628722cf584754dc1dda4a8b3c3"
+    ],
+    [
+      "Parsers.Char2Representation.__proj__Repr_ec_basis_trinomial__item___0",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_Parsers.Char2Representation.Repr_ec_basis_trinomial",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Tm_refine_389f3b8056454b70af076aca7790e725"
+      ],
+      0,
+      "034c912d6bdec0a329ae8e00129bba3b"
+    ],
+    [
+      "Parsers.Char2Representation.__proj__Repr_ec_basis_pentanomial__item___0",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_Parsers.Char2Representation.Repr_ec_basis_pentanomial",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Tm_refine_99c31586916d02acf50dcbd59a673eba"
+      ],
+      0,
+      "44dab73cc2871d48d1c2cdb68b0f8bb7"
+    ],
+    [
+      "Parsers.Char2Representation.tag_of_char2Representation",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_Parsers.Char2Representation.Repr_ec_basis_pentanomial",
+        "disc_equation_Parsers.Char2Representation.Repr_ec_basis_trinomial",
+        "fuel_guarded_inversion_Parsers.Char2Representation.char2Representation"
+      ],
+      0,
+      "93af33b491a1eb442aca59f4ccc6c481"
+    ],
+    [
+      "Parsers.Char2Representation.lemma_valid_char2Representation_valid_eCBasisType",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "equation_Prims.squash",
+        "refinement_interpretation_Tm_refine_8d65e998a07dd53ec478e27017d9dba5"
+      ],
+      0,
+      "bacb33eb529f7ea6e84aa875bf3b1d44"
+    ],
+    [
+      "Parsers.Char2Representation.char2Representation_clens_ec_basis_trinomial",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "constructor_distinct_Parsers.ECBasisType.Ec_basis_pentanomial",
+        "constructor_distinct_Parsers.ECBasisType.Ec_basis_trinomial",
+        "disc_equation_Parsers.Char2Representation.Repr_ec_basis_trinomial",
+        "equality_tok_Parsers.ECBasisType.Ec_basis_pentanomial@tok",
+        "equality_tok_Parsers.ECBasisType.Ec_basis_trinomial@tok",
+        "equation_Parsers.Char2Representation.tag_of_char2Representation",
+        "fuel_guarded_inversion_Parsers.Char2Representation.char2Representation"
+      ],
+      0,
+      "43b686d2e060d416aaafd209e1aa36e4"
+    ],
+    [
+      "Parsers.Char2Representation.char2Representation_clens_ec_basis_pentanomial",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "constructor_distinct_Parsers.ECBasisType.Ec_basis_pentanomial",
+        "constructor_distinct_Parsers.ECBasisType.Ec_basis_trinomial",
+        "disc_equation_Parsers.Char2Representation.Repr_ec_basis_pentanomial",
+        "equality_tok_Parsers.ECBasisType.Ec_basis_pentanomial@tok",
+        "equality_tok_Parsers.ECBasisType.Ec_basis_trinomial@tok",
+        "equation_Parsers.Char2Representation.tag_of_char2Representation",
+        "fuel_guarded_inversion_Parsers.Char2Representation.char2Representation"
+      ],
+      0,
+      "1504bb1438179ab5b4e8abd034ab5fbf"
+    ],
+    [
+      "Parsers.Char2Representation.finalize_char2Representation_ec_basis_trinomial",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "Prims_pretyping_ae567c2fb75be05905677af440075565", "b2t_def",
+        "equation_FStar.Monotonic.HyperStack.mem",
+        "equation_FStar.UInt.fits", "equation_FStar.UInt.max_int",
+        "equation_FStar.UInt.min_int", "equation_FStar.UInt.size",
+        "equation_FStar.UInt.uint_t", "equation_LowParse.Bytes.byte",
+        "equation_LowParse.Low.Base.max_uint32",
+        "equation_Parsers.Char2Trinomial.char2Trinomial",
+        "equation_Parsers.Char2Trinomial.char2Trinomial_parser_kind",
+        "fuel_guarded_inversion_LowParse.Slice.slice",
+        "function_token_typing_Prims.__cache_version_number__",
+        "int_inversion", "primitive_Prims.op_Addition",
+        "primitive_Prims.op_AmpAmp", "primitive_Prims.op_LessThanOrEqual",
+        "primitive_Prims.op_Subtraction",
+        "projection_inverse_BoxBool_proj_0",
+        "projection_inverse_BoxInt_proj_0",
+        "refinement_interpretation_Tm_refine_68e189c7a4c2194bf85b1ac2e15805ed",
+        "refinement_interpretation_Tm_refine_a347709bfeba48709474ad26f4f6be87",
+        "typing_FStar.UInt32.v", "typing_LowParse.Low.Base.max_uint32"
+      ],
+      0,
+      "ab663e70bbd616701d6cd3173c45bf55"
+    ],
+    [
+      "Parsers.Char2Representation.finalize_char2Representation_ec_basis_pentanomial",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "Prims_pretyping_ae567c2fb75be05905677af440075565", "b2t_def",
+        "equation_FStar.Monotonic.HyperStack.mem",
+        "equation_FStar.UInt.fits", "equation_FStar.UInt.max_int",
+        "equation_FStar.UInt.min_int", "equation_FStar.UInt.size",
+        "equation_FStar.UInt.uint_t", "equation_LowParse.Bytes.byte",
+        "equation_LowParse.Low.Base.max_uint32",
+        "equation_Parsers.Char2Pentanomial.char2Pentanomial_parser_kind",
+        "fuel_guarded_inversion_LowParse.Slice.slice",
+        "function_token_typing_Prims.__cache_version_number__",
+        "int_inversion", "primitive_Prims.op_Addition",
+        "primitive_Prims.op_AmpAmp", "primitive_Prims.op_LessThanOrEqual",
+        "primitive_Prims.op_Subtraction",
+        "projection_inverse_BoxBool_proj_0",
+        "projection_inverse_BoxInt_proj_0",
+        "refinement_interpretation_Tm_refine_a347709bfeba48709474ad26f4f6be87",
+        "refinement_interpretation_Tm_refine_f8db6fab63bb3a4ddba214c63145f221",
+        "typing_FStar.UInt32.v", "typing_LowParse.Low.Base.max_uint32"
+      ],
+      0,
+      "008e54ca1e140e411e66a1c03b4b4c8c"
+    ]
+  ]
+]

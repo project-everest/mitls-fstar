@@ -1,0 +1,34 @@
+[
+  "≠nô`h=ºîy\u00075û„ï\u007f≈",
+  [
+    [
+      "Parsers.ResumeInfo.resumeInfo",
+      1,
+      2,
+      1,
+      [
+        "@query", "assumption_Parsers.ResumeInfo13.resumeInfo13__uu___haseq",
+        "assumption_Parsers.ResumeInfo_resumeInfo12.resumeInfo_resumeInfo12__uu___haseq",
+        "assumption_Prims.list__uu___haseq",
+        "equation_Parsers.ResumeInfo_resumeInfo13.resumeInfo_resumeInfo13",
+        "haseqTm_refine_fd61e291a3d03364670b1030cef53325",
+        "kinding_Parsers.ResumeInfo13.resumeInfo13@tok"
+      ],
+      0,
+      "ac84b9fe0e8cff16f92843749e133594"
+    ],
+    [
+      "Parsers.ResumeInfo.resumeInfo_valid",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "equation_Prims.squash",
+        "l_and-interp",
+        "refinement_interpretation_Tm_refine_8d65e998a07dd53ec478e27017d9dba5"
+      ],
+      0,
+      "4fe7aa82130467fde476ad3b70e1186a"
+    ]
+  ]
+]

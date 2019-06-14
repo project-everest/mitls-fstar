@@ -1,0 +1,34 @@
+[
+  "≈W\u0001ÓM\u0010âã\u0003®;\u0002ê'\\Ì",
+  [
+    [
+      "Parsers.NewSessionTicket12.newSessionTicket12",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "assumption_FStar.UInt32.t__uu___haseq",
+        "equation_Parsers.NewSessionTicket12_ticket.newSessionTicket12_ticket",
+        "haseqTm_refine_bc1a96f20b06a0bd0d936da7c6c01d5c",
+        "refinement_interpretation_Tm_refine_414d0a9f578ab0048252f8c8f552b99f",
+        "typing_FStar.Bytes.bytes"
+      ],
+      0,
+      "de9355269e0aabfce8308c26214c1a09"
+    ],
+    [
+      "Parsers.NewSessionTicket12.newSessionTicket12_valid",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "equation_Prims.squash",
+        "l_and-interp",
+        "refinement_interpretation_Tm_refine_8d65e998a07dd53ec478e27017d9dba5"
+      ],
+      0,
+      "1be393c8fcb2cf288d94fcd5c967e192"
+    ]
+  ]
+]

@@ -180,7 +180,6 @@ function fetch_qd() {
     git reset --hard $ref
     cd ..
     export_home QD "$(pwd)/qd"
-    echo QD_HOME is $QD_HOME
 }
 
 function fetch_and_make_qd() {
@@ -232,8 +231,6 @@ function mitls_verify() {
     fetch_vale &&
     OTHERFLAGS="--admit_smt_queries true $OTHERFLAGS" build_hacl_vale &&
     build_pki_if &&
-    echo QD_HOME is $QD_HOME &&
-    echo HACL_HOME is $HACL_HOME &&
     make -C src/tls -j $threads all -k &&
     make -C src/tls -j $threads test -k
 }

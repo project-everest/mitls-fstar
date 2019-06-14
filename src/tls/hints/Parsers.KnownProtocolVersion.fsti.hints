@@ -1,0 +1,346 @@
+[
+  "?è¡?\u0007”\nÍ\u0004q\u0001∫YÅJ\u007f",
+  [
+    [
+      "Parsers.KnownProtocolVersion.knownProtocolVersion",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "assumption_FStar.UInt16.t__uu___haseq",
+        "equation_Parsers.ProtocolVersion.protocolVersion_repr",
+        "equation_Prims.eqtype", "equation_Prims.l_False",
+        "equation_Prims.squash", "function_token_typing_Prims.unit",
+        "haseqTm_refine_8d65e998a07dd53ec478e27017d9dba5",
+        "refinement_interpretation_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
+      ],
+      0,
+      "d5a1c786edee71bbbada35556239dbd1"
+    ],
+    [
+      "Parsers.KnownProtocolVersion.__proj__Constraint_SSL_3p0__item___0",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_Parsers.KnownProtocolVersion.Constraint_SSL_3p0",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Tm_refine_8a4b21d68c0767179aced29b9c83ccfc"
+      ],
+      0,
+      "63af72880903440ad02a54f2ebde1163"
+    ],
+    [
+      "Parsers.KnownProtocolVersion.__proj__Constraint_TLS_1p0__item___0",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_Parsers.KnownProtocolVersion.Constraint_TLS_1p0",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Tm_refine_9a471e5d03afb43ccee194ac9030c697"
+      ],
+      0,
+      "8cf469e0fc82f522242398273a708caa"
+    ],
+    [
+      "Parsers.KnownProtocolVersion.__proj__Constraint_TLS_1p1__item___0",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_Parsers.KnownProtocolVersion.Constraint_TLS_1p1",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Tm_refine_5ad970e2c7de4cf434f7b5a9f6ee604c"
+      ],
+      0,
+      "e43bd94221820245b4384b355991c044"
+    ],
+    [
+      "Parsers.KnownProtocolVersion.__proj__Constraint_TLS_1p2__item___0",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_Parsers.KnownProtocolVersion.Constraint_TLS_1p2",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Tm_refine_0fd4f175173a1bae9658b111bfd6c8ad"
+      ],
+      0,
+      "6c0c893341ac33ab1340404525d4b9d1"
+    ],
+    [
+      "Parsers.KnownProtocolVersion.__proj__Constraint_TLS_1p3__item___0",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_Parsers.KnownProtocolVersion.Constraint_TLS_1p3",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Tm_refine_c287e59e1c054e0f6fb2095d1a2c8ed5"
+      ],
+      0,
+      "532a35d66dab812e72492a36a8dfab6f"
+    ],
+    [
+      "Parsers.KnownProtocolVersion.__proj__Constraint_Unknown_protocolVersion__item__v",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_Parsers.KnownProtocolVersion.Constraint_Unknown_protocolVersion",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Tm_refine_69eb4c1417b4cb74927313c8b96a7eb6"
+      ],
+      0,
+      "41fe4ad31a626d70db56aff18e3c4038"
+    ],
+    [
+      "Parsers.KnownProtocolVersion.__proj__Constraint_Unknown_protocolVersion__item__x",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_Parsers.KnownProtocolVersion.Constraint_Unknown_protocolVersion",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Tm_refine_69eb4c1417b4cb74927313c8b96a7eb6"
+      ],
+      0,
+      "687007187378265b29c8604623986066"
+    ],
+    [
+      "Parsers.KnownProtocolVersion.tag_of_knownProtocolVersion",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_Parsers.KnownProtocolVersion.Constraint_SSL_3p0",
+        "disc_equation_Parsers.KnownProtocolVersion.Constraint_TLS_1p0",
+        "disc_equation_Parsers.KnownProtocolVersion.Constraint_TLS_1p1",
+        "disc_equation_Parsers.KnownProtocolVersion.Constraint_TLS_1p2",
+        "disc_equation_Parsers.KnownProtocolVersion.Constraint_TLS_1p3",
+        "disc_equation_Parsers.KnownProtocolVersion.Constraint_Unknown_protocolVersion",
+        "fuel_guarded_inversion_Parsers.KnownProtocolVersion.knownProtocolVersion"
+      ],
+      0,
+      "b6ac4bd5040a41ac6b81eb230136e1c5"
+    ],
+    [
+      "Parsers.KnownProtocolVersion.knownProtocolVersion_jumper",
+      1,
+      2,
+      1,
+      [
+        "@query", "equation_LowParse.Spec.Base.strong_parser_kind",
+        "equation_Parsers.KnownProtocolVersion.knownProtocolVersion_parser_kind",
+        "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_high",
+        "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_low",
+        "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_high",
+        "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_low"
+      ],
+      0,
+      "a4ac36c25e88360ec7e99babfc5ebc0b"
+    ],
+    [
+      "Parsers.KnownProtocolVersion.lemma_valid_knownProtocolVersion_valid_protocolVersion",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "equation_Prims.squash",
+        "refinement_interpretation_Tm_refine_8d65e998a07dd53ec478e27017d9dba5"
+      ],
+      0,
+      "eca363e067ae9823a742128d0b0644d6"
+    ],
+    [
+      "Parsers.KnownProtocolVersion.finalize_knownProtocolVersion_SSL_3p0",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "Prims_pretyping_ae567c2fb75be05905677af440075565", "b2t_def",
+        "data_elim_LowParse.Slice.Mkslice",
+        "equation_FStar.Monotonic.HyperStack.mem",
+        "equation_FStar.UInt.fits", "equation_FStar.UInt.max_int",
+        "equation_FStar.UInt.min_int", "equation_FStar.UInt.size",
+        "equation_FStar.UInt.uint_t", "equation_LowParse.Bytes.byte",
+        "equation_LowParse.Slice.buffer_srel_of_srel",
+        "equation_LowParse.Slice.srel",
+        "equation_LowStar.Monotonic.Buffer.length", "equation_Prims.nat",
+        "fuel_guarded_inversion_LowParse.Slice.slice",
+        "function_token_typing_FStar.UInt8.t",
+        "function_token_typing_Prims.__cache_version_number__",
+        "int_inversion", "primitive_Prims.op_Addition",
+        "primitive_Prims.op_AmpAmp", "primitive_Prims.op_LessThanOrEqual",
+        "proj_equation_LowParse.Slice.Mkslice_base",
+        "proj_equation_LowParse.Slice.Mkslice_len",
+        "projection_inverse_BoxBool_proj_0",
+        "projection_inverse_BoxInt_proj_0",
+        "refinement_interpretation_Tm_refine_2e08432ac229fe7968fbbdf1bf8ed528",
+        "refinement_interpretation_Tm_refine_a347709bfeba48709474ad26f4f6be87",
+        "refinement_interpretation_Tm_refine_ba523126f67e00e7cd55f0b92f16681d",
+        "refinement_interpretation_Tm_refine_bcf3df5aaf7b8146879438878b0a9a1d",
+        "typing_FStar.UInt32.v",
+        "typing_LowParse.Slice.__proj__Mkslice__item__base",
+        "typing_LowStar.Monotonic.Buffer.len"
+      ],
+      0,
+      "cfc62933b0b8ec53dd00893ca723429f"
+    ],
+    [
+      "Parsers.KnownProtocolVersion.finalize_knownProtocolVersion_TLS_1p0",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "Prims_pretyping_ae567c2fb75be05905677af440075565", "b2t_def",
+        "data_elim_LowParse.Slice.Mkslice",
+        "equation_FStar.Monotonic.HyperStack.mem",
+        "equation_FStar.UInt.fits", "equation_FStar.UInt.max_int",
+        "equation_FStar.UInt.min_int", "equation_FStar.UInt.size",
+        "equation_FStar.UInt.uint_t", "equation_LowParse.Bytes.byte",
+        "equation_LowParse.Slice.buffer_srel_of_srel",
+        "equation_LowParse.Slice.srel",
+        "equation_LowStar.Monotonic.Buffer.length", "equation_Prims.nat",
+        "fuel_guarded_inversion_LowParse.Slice.slice",
+        "function_token_typing_FStar.UInt8.t",
+        "function_token_typing_Prims.__cache_version_number__",
+        "int_inversion", "primitive_Prims.op_Addition",
+        "primitive_Prims.op_AmpAmp", "primitive_Prims.op_LessThanOrEqual",
+        "proj_equation_LowParse.Slice.Mkslice_base",
+        "proj_equation_LowParse.Slice.Mkslice_len",
+        "projection_inverse_BoxBool_proj_0",
+        "projection_inverse_BoxInt_proj_0",
+        "refinement_interpretation_Tm_refine_2e08432ac229fe7968fbbdf1bf8ed528",
+        "refinement_interpretation_Tm_refine_a347709bfeba48709474ad26f4f6be87",
+        "refinement_interpretation_Tm_refine_ba523126f67e00e7cd55f0b92f16681d",
+        "refinement_interpretation_Tm_refine_bcf3df5aaf7b8146879438878b0a9a1d",
+        "typing_FStar.UInt32.v",
+        "typing_LowParse.Slice.__proj__Mkslice__item__base",
+        "typing_LowStar.Monotonic.Buffer.len"
+      ],
+      0,
+      "a0120a435a6473e002fa3f8c8d8deb11"
+    ],
+    [
+      "Parsers.KnownProtocolVersion.finalize_knownProtocolVersion_TLS_1p1",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "Prims_pretyping_ae567c2fb75be05905677af440075565", "b2t_def",
+        "data_elim_LowParse.Slice.Mkslice",
+        "equation_FStar.Monotonic.HyperStack.mem",
+        "equation_FStar.UInt.fits", "equation_FStar.UInt.max_int",
+        "equation_FStar.UInt.min_int", "equation_FStar.UInt.size",
+        "equation_FStar.UInt.uint_t", "equation_LowParse.Bytes.byte",
+        "equation_LowParse.Slice.buffer_srel_of_srel",
+        "equation_LowParse.Slice.srel",
+        "equation_LowStar.Monotonic.Buffer.length", "equation_Prims.nat",
+        "fuel_guarded_inversion_LowParse.Slice.slice",
+        "function_token_typing_FStar.UInt8.t",
+        "function_token_typing_Prims.__cache_version_number__",
+        "int_inversion", "primitive_Prims.op_Addition",
+        "primitive_Prims.op_AmpAmp", "primitive_Prims.op_LessThanOrEqual",
+        "proj_equation_LowParse.Slice.Mkslice_base",
+        "proj_equation_LowParse.Slice.Mkslice_len",
+        "projection_inverse_BoxBool_proj_0",
+        "projection_inverse_BoxInt_proj_0",
+        "refinement_interpretation_Tm_refine_2e08432ac229fe7968fbbdf1bf8ed528",
+        "refinement_interpretation_Tm_refine_a347709bfeba48709474ad26f4f6be87",
+        "refinement_interpretation_Tm_refine_ba523126f67e00e7cd55f0b92f16681d",
+        "refinement_interpretation_Tm_refine_bcf3df5aaf7b8146879438878b0a9a1d",
+        "typing_FStar.UInt32.v",
+        "typing_LowParse.Slice.__proj__Mkslice__item__base",
+        "typing_LowStar.Monotonic.Buffer.len"
+      ],
+      0,
+      "88040d1550c0ea14b6b53b449e58c8cd"
+    ],
+    [
+      "Parsers.KnownProtocolVersion.finalize_knownProtocolVersion_TLS_1p2",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "Prims_pretyping_ae567c2fb75be05905677af440075565", "b2t_def",
+        "data_elim_LowParse.Slice.Mkslice",
+        "equation_FStar.Monotonic.HyperStack.mem",
+        "equation_FStar.UInt.fits", "equation_FStar.UInt.max_int",
+        "equation_FStar.UInt.min_int", "equation_FStar.UInt.size",
+        "equation_FStar.UInt.uint_t", "equation_LowParse.Bytes.byte",
+        "equation_LowParse.Slice.buffer_srel_of_srel",
+        "equation_LowParse.Slice.srel",
+        "equation_LowStar.Monotonic.Buffer.length", "equation_Prims.nat",
+        "fuel_guarded_inversion_LowParse.Slice.slice",
+        "function_token_typing_FStar.UInt8.t",
+        "function_token_typing_Prims.__cache_version_number__",
+        "int_inversion", "primitive_Prims.op_Addition",
+        "primitive_Prims.op_AmpAmp", "primitive_Prims.op_LessThanOrEqual",
+        "proj_equation_LowParse.Slice.Mkslice_base",
+        "proj_equation_LowParse.Slice.Mkslice_len",
+        "projection_inverse_BoxBool_proj_0",
+        "projection_inverse_BoxInt_proj_0",
+        "refinement_interpretation_Tm_refine_2e08432ac229fe7968fbbdf1bf8ed528",
+        "refinement_interpretation_Tm_refine_a347709bfeba48709474ad26f4f6be87",
+        "refinement_interpretation_Tm_refine_ba523126f67e00e7cd55f0b92f16681d",
+        "refinement_interpretation_Tm_refine_bcf3df5aaf7b8146879438878b0a9a1d",
+        "typing_FStar.UInt32.v",
+        "typing_LowParse.Slice.__proj__Mkslice__item__base",
+        "typing_LowStar.Monotonic.Buffer.len"
+      ],
+      0,
+      "22ce1a4a18081dfbc1ae42c55c3141cd"
+    ],
+    [
+      "Parsers.KnownProtocolVersion.finalize_knownProtocolVersion_TLS_1p3",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "Prims_pretyping_ae567c2fb75be05905677af440075565", "b2t_def",
+        "data_elim_LowParse.Slice.Mkslice",
+        "equation_FStar.Monotonic.HyperStack.mem",
+        "equation_FStar.UInt.fits", "equation_FStar.UInt.max_int",
+        "equation_FStar.UInt.min_int", "equation_FStar.UInt.size",
+        "equation_FStar.UInt.uint_t", "equation_LowParse.Bytes.byte",
+        "equation_LowParse.Slice.buffer_srel_of_srel",
+        "equation_LowParse.Slice.srel",
+        "equation_LowStar.Monotonic.Buffer.length", "equation_Prims.nat",
+        "fuel_guarded_inversion_LowParse.Slice.slice",
+        "function_token_typing_FStar.UInt8.t",
+        "function_token_typing_Prims.__cache_version_number__",
+        "int_inversion", "primitive_Prims.op_Addition",
+        "primitive_Prims.op_AmpAmp", "primitive_Prims.op_LessThanOrEqual",
+        "proj_equation_LowParse.Slice.Mkslice_base",
+        "proj_equation_LowParse.Slice.Mkslice_len",
+        "projection_inverse_BoxBool_proj_0",
+        "projection_inverse_BoxInt_proj_0",
+        "refinement_interpretation_Tm_refine_2e08432ac229fe7968fbbdf1bf8ed528",
+        "refinement_interpretation_Tm_refine_a347709bfeba48709474ad26f4f6be87",
+        "refinement_interpretation_Tm_refine_ba523126f67e00e7cd55f0b92f16681d",
+        "refinement_interpretation_Tm_refine_bcf3df5aaf7b8146879438878b0a9a1d",
+        "typing_FStar.UInt32.v",
+        "typing_LowParse.Slice.__proj__Mkslice__item__base",
+        "typing_LowStar.Monotonic.Buffer.len"
+      ],
+      0,
+      "a2e64598a259fcd03bab6c827aba9c7b"
+    ]
+  ]
+]

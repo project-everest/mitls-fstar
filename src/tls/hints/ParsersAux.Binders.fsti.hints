@@ -8,7 +8,7 @@
       1,
       [ "@query" ],
       0,
-      "11da09396599a7ef4b26a7eb76f80d1c"
+      "88b8973e702c8c7fb770f79adb5fbe6d"
     ],
     [
       "ParsersAux.Binders.get_binders",
@@ -22,7 +22,7 @@
         "refinement_interpretation_Tm_refine_8879e4d447c306881afdf046534ba346"
       ],
       0,
-      "918c6bbcd972ee4ed65a4e85175f9260"
+      "9728fcf1a4322a0c56742cd896608660"
     ],
     [
       "ParsersAux.Binders.set_binders",
@@ -36,7 +36,7 @@
         "refinement_interpretation_Tm_refine_8879e4d447c306881afdf046534ba346"
       ],
       0,
-      "cc1c52d3530350a0983091f47b16e93a"
+      "3e790cd641d91962eb8aed23f5babb66"
     ],
     [
       "ParsersAux.Binders.set_binders_get_binders",
@@ -80,7 +80,7 @@
         "typing_FStar.List.Tot.Base.last"
       ],
       0,
-      "592527005c1219d941b04ad59702d814"
+      "dde44a779bfdc3e273e942044ea3f9f4"
     ],
     [
       "ParsersAux.Binders.set_binders_set_binders",
@@ -125,7 +125,7 @@
         "typing_ParsersAux.Binders.set_binders"
       ],
       0,
-      "b27bbbd0a273b73d185d233331475fb1"
+      "283bdbed55352c584daa10c20ebc40cc"
     ],
     [
       "ParsersAux.Binders.binders_offset_set_binder",
@@ -134,7 +134,7 @@
       1,
       [ "@query" ],
       0,
-      "df71a3816a652d9afa7884a9b9067bb1"
+      "d2bc858a4ef28f7b1661d973ee9713a4"
     ],
     [
       "ParsersAux.Binders.truncate_clientHello_bytes",
@@ -175,7 +175,7 @@
         "typing_ParsersAux.Binders.has_binders"
       ],
       0,
-      "94647869322cc127986cba514d4d6885"
+      "a8203fdea051b21c658a63b196c497fa"
     ],
     [
       "ParsersAux.Binders.truncate_clientHello_bytes_correct",
@@ -266,7 +266,7 @@
       1,
       [ "@query" ],
       0,
-      "7df0d089ca804a8b6992310717a9d77e"
+      "0835fcb939dc654f33786f2c41d8cef8"
     ],
     [
       "ParsersAux.Binders.truncate_clientHello_bytes_inj",
@@ -282,7 +282,7 @@
         "refinement_interpretation_Tm_refine_8879e4d447c306881afdf046534ba346"
       ],
       0,
-      "a4c8c060c33c96405ba4a232c301792c"
+      "a9b2d65cabebdc1938befe92f916d4c4"
     ],
     [
       "ParsersAux.Binders.valid_truncate_clientHello",
@@ -394,6 +394,7 @@
         "refinement_interpretation_Tm_refine_487390f3fcd8ab01b078d6a92a94b8e3",
         "refinement_interpretation_Tm_refine_528d1ac7a4a801fe55aa0f436f85ad2a",
         "refinement_interpretation_Tm_refine_559c261b1c3777929ea329abfe70ab33",
+        "refinement_interpretation_Tm_refine_5ac791f1cbd143f4ddee9b161489e638",
         "refinement_interpretation_Tm_refine_7aac12c24449a22c34d98a0ea8ed4a32",
         "refinement_interpretation_Tm_refine_8879e4d447c306881afdf046534ba346",
         "refinement_interpretation_Tm_refine_8d65e998a07dd53ec478e27017d9dba5",
@@ -420,6 +421,7 @@
         "typing_LowParse.Low.Base.serialized_length",
         "typing_LowParse.Low.Base.validator_max_length",
         "typing_LowParse.Slice.__proj__Mkslice__item__base",
+        "typing_LowParse.Slice.__proj__Mkslice__item__len",
         "typing_LowParse.Spec.Base.serialize",
         "typing_LowStar.Monotonic.Buffer.as_seq",
         "typing_LowStar.Monotonic.Buffer.len",
@@ -439,7 +441,7 @@
         "typing_ParsersAux.Binders.truncate_clientHello_bytes", "unit_typing"
       ],
       0,
-      "3edba21a303164fc15e01942ebca9897"
+      "d30b46dd020cd28baa9ab29fac3cd1fb"
     ],
     [
       "ParsersAux.Binders.truncate_clientHello_valid",
@@ -546,7 +548,7 @@
         "typing_ParsersAux.Binders.truncate_clientHello_bytes"
       ],
       0,
-      "49c00418c978ff5fcf282ffee3d36d28"
+      "f666b9908fa7b914a726ad98230c8aad"
     ],
     [
       "ParsersAux.Binders.binders_pos",
@@ -559,7 +561,7 @@
         "refinement_interpretation_Tm_refine_e88e890b59cad5b201f2b82686b554a8"
       ],
       0,
-      "af7380a8be0bad864009bae25d7ce47b"
+      "ec29b141c46345846ef4e569542ed41f"
     ],
     [
       "ParsersAux.Binders.valid_binders_mutate",
@@ -657,7 +659,7 @@
         "typing_ParsersAux.Binders.truncate_clientHello_bytes", "unit_typing"
       ],
       0,
-      "279c86b3b750e95f755b7e3ed24b3bcf"
+      "4a53f7c5d88a3225affff5773caa1b24"
     ],
     [
       "ParsersAux.Binders.build_canonical_binders",
@@ -666,7 +668,7 @@
       1,
       [ "@query" ],
       0,
-      "d55559fa9747c106fac3caabc0e4878a"
+      "f7654da7238347d0e1f257846f0232e4"
     ]
   ]
 ]

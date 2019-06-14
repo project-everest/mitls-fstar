@@ -1,0 +1,102 @@
+[
+  "s\u000b…≠®\u0006¯M≤Ou‹‘à\u001c‚",
+  [
+    [
+      "Parsers.EarlyDataIndicationNewSessionTicket.earlyDataIndicationNewSessionTicket_bytesize_eq",
+      1,
+      2,
+      1,
+      [
+        "@query", "equation_LowParse.Spec.Base.serialize",
+        "equation_Parsers.EarlyDataIndicationNewSessionTicket.earlyDataIndicationNewSessionTicket",
+        "equation_Parsers.EarlyDataIndicationNewSessionTicket.earlyDataIndicationNewSessionTicket_bytesize"
+      ],
+      0,
+      "a14aa09ee7451014ba24cc043af3c809"
+    ],
+    [
+      "Parsers.EarlyDataIndicationNewSessionTicket.earlyDataIndicationNewSessionTicket_validator",
+      1,
+      2,
+      1,
+      [
+        "@query", "equation_LowParse.Spec.Base.strong_parser_kind",
+        "equation_Parsers.EarlyDataIndicationNewSessionTicket.earlyDataIndicationNewSessionTicket_parser_kind",
+        "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_high",
+        "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_low",
+        "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata",
+        "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_high",
+        "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_low",
+        "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata"
+      ],
+      0,
+      "a3caa057a76c8c6c4febcda2d539b5c6"
+    ],
+    [
+      "Parsers.EarlyDataIndicationNewSessionTicket.earlyDataIndicationNewSessionTicket_jumper",
+      1,
+      2,
+      1,
+      [
+        "@query", "equation_LowParse.Spec.Base.strong_parser_kind",
+        "equation_Parsers.EarlyDataIndicationNewSessionTicket.earlyDataIndicationNewSessionTicket_parser_kind",
+        "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_high",
+        "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_low",
+        "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_high",
+        "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_low"
+      ],
+      0,
+      "ecc77c840b5c9ed689b31679a3ef0d47"
+    ],
+    [
+      "Parsers.EarlyDataIndicationNewSessionTicket.earlyDataIndicationNewSessionTicket_bytesize_eqn",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "Prims_pretyping_ae567c2fb75be05905677af440075565",
+        "constructor_distinct_FStar.Pervasives.Native.Some",
+        "equation_LowParse.Bytes.byte", "equation_LowParse.Bytes.bytes",
+        "equation_LowParse.Spec.Base.serialize",
+        "equation_LowParse.Spec.Base.strong_parser_kind",
+        "equation_LowParse.Spec.Base.total_constant_size_parser_kind",
+        "equation_LowParse.Spec.Int.parse_u32_kind",
+        "equation_Parsers.EarlyDataIndicationNewSessionTicket.earlyDataIndicationNewSessionTicket",
+        "equation_Parsers.EarlyDataIndicationNewSessionTicket.earlyDataIndicationNewSessionTicket_bytesize",
+        "equation_Parsers.EarlyDataIndicationNewSessionTicket.earlyDataIndicationNewSessionTicket_serializer",
+        "equation_Prims.nat", "function_token_typing_FStar.UInt32.t",
+        "function_token_typing_FStar.UInt8.t",
+        "function_token_typing_Prims.__cache_version_number__",
+        "int_inversion", "lemma_LowParse.Spec.Base.serialize_length",
+        "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_high",
+        "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_low",
+        "projection_inverse_BoxInt_proj_0",
+        "projection_inverse_FStar.Pervasives.Native.Some_v",
+        "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_high",
+        "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_low",
+        "refinement_interpretation_Tm_refine_ba523126f67e00e7cd55f0b92f16681d",
+        "typing_FStar.Seq.Base.length",
+        "typing_LowParse.Spec.Base.serialize",
+        "typing_LowParse.Spec.Int.parse_u32",
+        "typing_LowParse.Spec.Int.parse_u32_kind",
+        "typing_LowParse.Spec.Int.serialize_u32"
+      ],
+      0,
+      "c04d8c95e3fc333c74b7c903fb359d4c"
+    ],
+    [
+      "Parsers.EarlyDataIndicationNewSessionTicket.earlyDataIndicationNewSessionTicket_parser_serializer_eq",
+      1,
+      2,
+      1,
+      [
+        "@query",
+        "equation_Parsers.EarlyDataIndicationNewSessionTicket.earlyDataIndicationNewSessionTicket_parser",
+        "equation_Parsers.EarlyDataIndicationNewSessionTicket.earlyDataIndicationNewSessionTicket_serializer"
+      ],
+      0,
+      "9b4cee207c1e01206e4bc5f6336d639c"
+    ]
+  ]
+]
