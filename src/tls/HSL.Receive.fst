@@ -261,6 +261,8 @@ let parse_hsm13_nst
 
 /// The flights parsing code is straightforward if..then..else using the parsing functions above
 
+#set-options "--max_fuel 1 --max_ifuel 1 --z3rlimit 16"
+
 let receive_flight13_ee_c_cv_fin st b from to =
   let flt = F13_ee_c_cv_fin in
 

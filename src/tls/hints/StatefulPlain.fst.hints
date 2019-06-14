@@ -11,7 +11,7 @@
         "equation_StatefulPlain.id", "projection_inverse_BoxInt_proj_0"
       ],
       0,
-      "1a56905c180cf22322f728fda77e7610"
+      "921030248650923a881c6cbac023d6c7"
     ],
     [
       "StatefulPlain.makeAD",
@@ -56,7 +56,7 @@
         "typing_Spec.Poly1305.size_key"
       ],
       0,
-      "5b6733328ab8ed6c3672c33caffc5736"
+      "d3bc0a67d958f5422605d9e60bccb4d8"
     ],
     [
       "StatefulPlain.lemma_12",
@@ -70,7 +70,7 @@
         "refinement_interpretation_Tm_refine_8fcbdf9612ed9cda5a238ad00e36f8ee"
       ],
       0,
-      "bbe7f53734198af4f382d3c90b36204a"
+      "97b85929227610f04062afd89b46ab33"
     ],
     [
       "StatefulPlain.is_plain",
@@ -79,7 +79,7 @@
       1,
       [ "@query", "assumption_Content.contentType__uu___haseq" ],
       0,
-      "2fab7834581381cecdf51000f190a47e"
+      "2cf7f4e58e03f3d312b43dda658ad274"
     ],
     [
       "StatefulPlain.assert_is_plain",
@@ -91,7 +91,7 @@
         "refinement_interpretation_Tm_refine_dfb41679c4620ddf785a536323b5453d"
       ],
       0,
-      "c19b0865d2ca818bb3740105ba68d7e2"
+      "a29a2f11f661486262f26dd18113476e"
     ],
     [
       "StatefulPlain.ghost_repr",
@@ -103,6 +103,7 @@
         "Content_pretyping_b030e2c8e211c2e89c8f24e1774b7a05",
         "data_typing_intro_Content.Alert@tok", "disc_equation_TLSInfo.ID12",
         "equation_Content.ct_rg", "equation_Content.rg",
+        "equation_FStar.Pervasives.Native.fst",
         "equation_FStar.Pervasives.Native.snd", "equation_Prims.nat",
         "equation_Range.frange", "equation_Range.range",
         "equation_Range.rbytes", "equation_Range.wider",
@@ -122,7 +123,7 @@
         "typing_Content.ghost_repr"
       ],
       0,
-      "aef31a74d3fe7d86a61879cb6caec75e"
+      "34ec7d0bb1fc313315b3133570c3ed01"
     ],
     [
       "StatefulPlain.repr",
@@ -136,7 +137,7 @@
         "typing_FStar.Bytes.bytes"
       ],
       0,
-      "cafc4125de64329d47889123d7315b5b"
+      "3b46653897695430960509625f4eafc5"
     ],
     [
       "StatefulPlain.repr",
@@ -149,6 +150,7 @@
         "bool_inversion", "bool_typing",
         "data_typing_intro_Content.Alert@tok", "disc_equation_TLSInfo.ID12",
         "equation_Content.ct_rg", "equation_Content.rg",
+        "equation_FStar.Pervasives.Native.fst",
         "equation_FStar.Pervasives.Native.snd", "equation_Prims.nat",
         "equation_Range.frange", "equation_Range.range",
         "equation_Range.rbytes", "equation_Range.wider",
@@ -169,7 +171,7 @@
         "typing_Content.ghost_repr", "typing_TLSInfo.uu___is_ID12"
       ],
       0,
-      "0b5d84dc55f646fea437af4b590ce9f0"
+      "6c8222874b1da9fe2b959b5290608672"
     ],
     [
       "StatefulPlain.wf_ad_rg",
@@ -178,7 +180,7 @@
       1,
       [ "@query", "assumption_Content.contentType__uu___haseq" ],
       0,
-      "c3a8fdb66037812f550b872d57b587d4"
+      "c80fa63ede87b35cfb2975dd1dfb5f10"
     ],
     [
       "StatefulPlain.wf_payload_ad_rg",
@@ -198,7 +200,7 @@
         "typing_FStar.Seq.Base.length"
       ],
       0,
-      "9a0733e57d728c12ee1f4219d5cf5592"
+      "e287253a11ac0f7e03088ab127ab91f5"
     ],
     [
       "StatefulPlain.mk_plain",
@@ -212,7 +214,7 @@
         "typing_FStar.Bytes.bytes"
       ],
       0,
-      "b91c258afa6d8beaf46189361fc0a097"
+      "c7ea487bea798083db1fda67f52b06fd"
     ],
     [
       "StatefulPlain.mk_plain",
@@ -227,16 +229,12 @@
         "constructor_distinct_Content.CT_CCS",
         "constructor_distinct_Content.CT_Data",
         "constructor_distinct_Content.CT_Handshake",
-        "constructor_distinct_FStar.Integers.W128",
-        "constructor_distinct_FStar.Integers.W32",
         "data_typing_intro_Content.Alert@tok",
         "disc_equation_FStar.Error.Correct", "disc_equation_TLSInfo.ID12",
         "equality_tok_Content.Alert@tok",
         "equality_tok_Content.Application_data@tok",
         "equality_tok_Content.Change_cipher_spec@tok",
-        "equality_tok_Content.Handshake@tok",
-        "equality_tok_FStar.Integers.W128@tok",
-        "equality_tok_FStar.Integers.W32@tok", "equation_Content.ct",
+        "equality_tok_Content.Handshake@tok", "equation_Content.ct",
         "equation_Content.ct_rg", "equation_Content.fragmentRepr",
         "equation_Content.mk_fragment", "equation_Content.rg",
         "equation_FStar.Pervasives.Native.fst",
@@ -265,7 +263,6 @@
         "projection_inverse_Content.CT_Handshake_f",
         "projection_inverse_Content.CT_Handshake_i",
         "projection_inverse_Content.CT_Handshake_rg",
-        "projection_inverse_FStar.Integers.Signed__0",
         "projection_inverse_FStar.Pervasives.Native.Mktuple2__1",
         "projection_inverse_FStar.Pervasives.Native.Mktuple2__2",
         "refinement_interpretation_Tm_refine_329f7cdd508b70bf332607897e0b8a7b",
@@ -278,7 +275,7 @@
         "typing_TLSInfo.uu___is_ID12"
       ],
       0,
-      "ba961cb801c18a2cf155dee8febeb9cc"
+      "cf3ee356baab0856f2731426de2039eb"
     ],
     [
       "StatefulPlain.cipher",
@@ -295,7 +292,7 @@
         "typing_FStar.Bytes.reveal", "typing_FStar.Seq.Base.length"
       ],
       0,
-      "1c50a05f488cfb584cbf006f37918844"
+      "962e653be1b0d89520ec367e4fa4fc08"
     ]
   ]
 ]
