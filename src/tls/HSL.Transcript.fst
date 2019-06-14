@@ -24,7 +24,11 @@ module SH = Parsers.ServerHello
 module CRF = Crypto.CRF
 module TestCRF = Test.CRF
 
+#set-options "--max_fuel 1 --max_ifuel 1 --z3rlimit 16"
+
+// Now in HandshakeMessages
 let is_hrr _ = admit()
+// In Negotiation.Version.fst
 let nego_version _ _ = admit ()
 
 //Seems to be automatic
@@ -180,9 +184,6 @@ let transcript_bytes_does_not_start_with_message_hash
       (serialize_server_hello sh `Seq.append`
         LP.serialize (LPSL.serialize_list _ HSM13.handshake13_serializer) rest)
 
-
-#push-options "--z3rlimit 16"
-
 let transcript_bytes_injective_retry
   (r1: option retry)
   (t1: transcript_t { transcript_get_retry t1 == None } )
@@ -207,8 +208,6 @@ let transcript_bytes_injective_retry
     transcript_bytes_does_not_start_with_message_hash t2 r1 (transcript_bytes t1)
   | _, Some r2 ->
     transcript_bytes_does_not_start_with_message_hash t1 r2 (transcript_bytes t2)
-
-#pop-options
 
 let transcript_arbitrary_index
   (t1: transcript_t)
@@ -329,7 +328,6 @@ let region_of #a s = s.region
 let frame_invariant (#a:_) (s:state a) (t: transcript_t) (h0 h1:HS.mem) (l:B.loc) =
   CRF.frame_invariant l s.hash_state h0 h1
 
-#set-options "--max_fuel 0 --max_ifuel  1 --initial_ifuel  1"
 let create r a =
   let h0 = get() in
   let s = CRF.create_in a r in
@@ -339,8 +337,7 @@ let create r a =
    hash_state=s},
   Ghost.hide (Start None)
 
-#set-options "--max_fuel 0 --max_ifuel  1 --initial_ifuel  1 --z3rlimit 200"
-
+#push-options "--max_fuel 0 --max_ifuel  1 --initial_ifuel  1 --z3rlimit 200"
 let extend (#a:_) (s:state a) (l:label_repr) (tx:G.erased transcript_t) =
   let h0 = HyperStack.ST.get() in
   match l with
@@ -500,9 +497,6 @@ let extend (#a:_) (s:state a) (l:label_repr) (tx:G.erased transcript_t) =
 
     let len = hs12.R.end_pos - hs12.R.start_pos in
     let data = C.sub b.R.base hs12.R.start_pos len in
-
-//    assert (C.as_seq h0 data == LP.serialize HSM13.handshake13_serializer (R.value hs13));
-
     let tx' = G.hide (Some?.v (transition (G.reveal tx) (label_of_label_repr l))) in
 
     LPSL.serialize_list_singleton HSM12.handshake12_parser HSM12.handshake12_serializer
@@ -551,6 +545,7 @@ let extend (#a:_) (s:state a) (l:label_repr) (tx:G.erased transcript_t) =
     CRF.update (Ghost.hide a) s.hash_state (C.to_buffer data) len;
 
     tx'
+#pop-options
 
 let transcript_hash (a:HashDef.hash_alg) (t:transcript_t)
   = Spec.Hash.hash a (transcript_bytes t)

@@ -61,8 +61,7 @@ let valid_clientHelloExtension_of_tagged_unknown_extension
 
 let clientHelloExtensions_of_tagged_unknown_extensions l = List.Tot.map clientHelloExtension_of_tagged_unknown_extension l
 
-#push-options "--z3rlimit 16"
-
+#push-options "--z3rlimit 20 --max_fuel 1 --max_ifuel 0"
 let rec valid_list_clientHelloExtensions_of_tagged_unknown_extensions'
   (h: HS.mem)
   (#rrel #rel: _)
@@ -86,7 +85,6 @@ let rec valid_list_clientHelloExtensions_of_tagged_unknown_extensions'
     valid_list_clientHelloExtensions_of_tagged_unknown_extensions' h sl pos1 pos' ;
     LP.valid_list_cons clientHelloExtension_parser h sl pos pos'
   end
-
 #pop-options
 
 let valid_list_clientHelloExtensions_of_tagged_unknown_extensions = valid_list_clientHelloExtensions_of_tagged_unknown_extensions'
