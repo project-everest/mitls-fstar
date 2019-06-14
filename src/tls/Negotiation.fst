@@ -414,7 +414,7 @@ private let rec list_valid_ng_is_list_ng (l:CommonDH.supportedNamedGroups) : Tot
 // We fill binders with placeholders to use QD clientHelloextensions_serializer32
 
 private let compute_binder_ph (pski:pskInfo) : Tot pskBinderEntry =
-  let h = pski.early_hash in
+  let CipherSuite13 _ h = pski.early_cs in
   let len : UInt32.t = Hacl.Hash.Definitions.hash_len h in
   assume (32 <= U32.v len /\ U32.v len <= 256); // hash must not be MD5 or SHA1...
   FStar.Bytes.create len 0uy
@@ -425,7 +425,7 @@ private let compute_binder_ph (pski:pskInfo) : Tot pskBinderEntry =
 
 let compute_binder_ph_new (t: Parsers.TicketContents13.ticketContents13) : Tot pskBinderEntry =
   let pski = Ticket.ticketContents13_pskinfo t in
-  let h = pski.early_hash in
+  let CipherSuite13 _ h = pski.early_cs in
   let len : UInt32.t = Hacl.Hash.Definitions.hash_len h in
   assert (32 <= U32.v len /\ U32.v len <= 256); // hash must not be MD5 or SHA1...
   FStar.Bytes.create len 0uy
@@ -1877,70 +1877,114 @@ let clientComplete_13 #region ns ee optCertRequest optServerCert optCertVerify d
 
 (* SERVER *)
 
-// the KEX selected by the server, with its parameters
-type cs13 offer =
-  | PSK_EDH: j:pski offer -> oks: option share -> cs: cipherSuite -> cs13 offer
-  | JUST_EDH: oks: share -> cs: cipherSuite -> cs13 offer
+// The KEX selected by the server, with its parameters. Note that
+// PSK_EDH covers two kexes, with or without EDH.
+//
+// Consider keeping it instead of the server mode
+// can we also use it for client accept? 
 
-let is_named_cs cs n = 
+let names_group_of gns ((| g, _ |): share) = 
+  match CommonDH.namedGroup_of_group g with
+  | None -> false 
+  | Some gn -> List.Tot.mem gn gns
+
+// TODO: strengten property to prove that the share itself is included
+// in the offer.
+type selected_share cfg offer = 
+  s: share { 
+    cfg.named_groups `names_group_of` s /\ 
+    ( match find_supported_groups offer with
+      | Some ngs -> ngs `names_group_of` s 
+      | None -> False ) }
+
+let names_cs13 ncss (cs: cipherSuite): bool =
+  CipherSuite13? cs && 
+  List.Tot.mem (name_of_cipherSuite cs) ncss 
+
+type selected_cs cfg offer = 
+  cs: cipherSuite13 { 
+    List.Tot.mem cs cfg.cipher_suites /\ 
+    offer.CH.cipher_suites `names_cs13` cs }
+
+let is_named_cs cs n : bool = 
   Some cs = cipherSuite_of_name n
 
-let is_named_cs13_in_cfg cfg n =
-  match cipherSuite_of_name n with 
-  | None    -> false 
-  | Some cs -> CipherSuite13? cs && List.Tot.mem cs cfg.cipher_suites
+let select_cs cfg offer : option (selected_cs cfg offer) = 
+  match List.Helpers.find_aux offer.CH.cipher_suites names_cs13 cfg.cipher_suites with 
+  | None -> None 
+  | Some cs -> 
+    assume(List.Tot.mem cs cfg.cipher_suites); // List.find post?
+    Some cs
 
-let is_allowed_kex (info:PSK.pskInfo) kex = 
+type cs13 cfg offer =
+  | PSK_EDH: 
+    j:pski offer -> 
+    cks: option (selected_share cfg offer) ->
+    cs: selected_cs cfg offer -> cs13 cfg offer
+  | JUST_EDH: 
+    cks: selected_share cfg offer -> 
+    cs: selected_cs cfg offer -> cs13 cfg offer
+
+let is_allowed_kex ((info:PSK.pskInfo), (share:bool)) kex = 
   let open TLS.Callbacks in 
   match kex with
-  | Psk_dhe_ke -> info.allow_dhe_resumption 
+  | Psk_dhe_ke -> share && info.allow_dhe_resumption 
   | Psk_ke     -> info.allow_psk_resumption
   | _          -> false 
+
 
 // The PSK sets the ciphersuite and constrains the kex.
 // The ciphersuite must also be offered and acceptable 
 let select_psk 
-  (cfg: config)
+  (cfg:config)
   (o:offer) 
-  (g_gx:option share)  
-  (i:nat) (id:PSK.pskid) (info:PSK.pskInfo)
+  (g_gx:option (s:selected_share cfg o))
+  (i:pski o) (id:PSK.pskid) (info:PSK.pskInfo): option (cs13 cfg o)
 =
-  let cs = CipherSuite13 info.early_ae info.early_hash in
+  let cs = info.early_cs in
   if not (List.Tot.mem cs cfg.cipher_suites) then None else 
-  if not (List.Tot.exists_b_aux cs is_named_cs o.CH.cipher_suites) then None else
-  match find_psk_key_exchange_modes o with 
+  if not (o.CH.cipher_suites `names_cs13` cs) then None else
+  let kexes = find_psk_key_exchange_modes o in
+  match List.Helpers.find_aux (info,Some? g_gx) is_allowed_kex kexes with
   | None -> None 
-  | Some kexes -> 
-    match List.Helpers.find_aux info is_allowed_kex kexes with
-    | None -> None 
-    | Some Psk_dhe_ke -> Some (PSK_EDH i g_gx cs) 
-    | Some Psk_ke -> Some (PSK_EDH i None cs)
+  | Some Psk_ke -> Some (PSK_EDH i None cs)
+  | Some Psk_dhe_ke -> assert (Some? g_gx); Some (PSK_EDH i g_gx cs) 
 
-let rec compute_cs13_aux 
+// heavy-handed? we need to keep the two aligned 
+type psks (o:offer) = 
+  v: list (option (PSK.pskid & PSK.pskInfo))
+  { match find_clientPske o with
+    | Some psk -> List.length v == List.length psk.Extensions.identities
+    | None     -> List.length v == 0}
+
+//#reset-options "--log_queries"
+val compute_cs13_aux 
   (cfg: config)
   (o:offer)
-  (psks:list (PSK.pskid * PSK.pskInfo)) // from the offer, after registration 
-  (g_gx:option share) 
-  (cert_available:bool) // is the server ready to sign? 
-  (i:nat) // psk index to try next 
-  : option (cs13 o)
-=
-  let _ = assume False in
+  (psks: psks o) // from the offer, after registration 
+  (g_gx:option (s:selected_share cfg o))
+  (cert_available:bool) (* is the server ready to sign? *) : 
+  i:nat{ i <= List.length psks } (* PSK index to try next *) ->
+  Tot (option (cs13 cfg o)) (decreases ( (List.length psks - i) <: nat ))
+
+// to be lowered as a vlbyte loop on psks
+let rec compute_cs13_aux cfg o psks g_gx cert_available i =
   if i = List.length psks then
     if not cert_available then None else 
     match g_gx with
     | None -> None 
     | Some x -> 
-      match List.Helpers.find_aux cfg is_named_cs13_in_cfg o.CH.cipher_suites with
+      match select_cs cfg o with
       | None    -> None 
-      | Some cs -> Some (JUST_EDH x cs)
+      | Some cs -> 
+         Some (JUST_EDH x cs)
   else
-    let (id, info) = List.Tot.index psks i in
-    let choice = select_psk o id info in 
+    let choice = 
+      match List.Tot.index psks i with 
+      | None -> None 
+      | Some (id, info) -> select_psk cfg o g_gx i id info in 
     if Some? choice then choice else
-    compute_cs13_aux (i+1) o psks g_gx ncs server_cert
-
-let is_named_group_in_cfg cfg g = List.Tot.mem g cfg.named_groups
+    compute_cs13_aux cfg o psks g_gx cert_available (i+1) 
 
 let group_of_named_group (x:_{Some? (CommonDH.group_of_namedGroup x)}) =
   Some?.v (CommonDH.group_of_namedGroup x)
@@ -1949,41 +1993,28 @@ let share_in_named_group gl (x :share) =
   let (| g, _ |) = x in
   List.Tot.mem g gl
 
-(*
-let rec filter_cipherSuites13_aux 
-  (cfg: config) 
-  (l: list cipherSuiteName) 
-  (accu: list cipherSuite) : Tot (list cipherSuite) (decreases l) =
-  match l with
-  | [] -> List.Tot.rev accu
-  | csn :: q ->
-    let accu' = match cipherSuite_of_name csn with
-    | None -> accu
-    | Some cs -> if is_cs13_in_cfg cfg cs then cs :: accu else accu
-    in
-    filter_cipherSuites13_aux cfg q accu'
-
-let filter_cipherSuites13 (cfg: config) (l: list cipherSuiteName) : Tot (list cipherSuite) =
-  filter_cipherSuites13_aux cfg l []
-*)
-
 //#set-options "--admit_smt_queries true"
 
-// returns a list of negotiable "core modes" for TLS 1.3
-// and an optional group and ciphersuite suitable for HRR
-// the key exchange can be derived from cs13
-// (we could stop after finding the first)
+/// selects a "core modes" for TLS 1.3, if any
+
 val compute_cs13:
   cfg: config ->
   o: offer ->
-  psks: list (PSK.pskid * PSK.pskInfo) ->
+  psks: psks o ->
   shares: list share (* pre-registered *) ->
   server_cert: bool (* is a certificate available for signing? *) ->
-  result (option (cs13 o) * option (CommonDH.namedGroup * cs:cipherSuite))
+  option (cs13 cfg o)
 let compute_cs13 cfg o psks shares server_cert =
   // first pick an offered group & share usable for DHE/ECDHE
-  let g_gx: option share = List.Helpers.find_aux (cfg,o) share_in_supported_group_in_cfg shares in
-  compute_cs13_aux 0 o psks g_gx
+  // for now the client ordering takes precedence 
+  let g_gx = //: option (s:share {cfg.named_groups `names_group_of` s}) =   
+    match List.Helpers.find_aux cfg.named_groups names_group_of shares with
+    | None -> None 
+    | Some s -> 
+      match find_supported_groups o with 
+      | None -> None
+      | Some ngs -> if ngs `names_group_of` s then Some s else None in
+  compute_cs13_aux cfg o psks g_gx server_cert 0
 
 val retry_cs13:
   cfg: config ->
@@ -1991,31 +2022,62 @@ val retry_cs13:
   shares: list share (* pre-registered *) ->
   option (CommonDH.namedGroup * cs:cipherSuite)
 
+
+/// Negotiation failed, but may still succeed after an HRR: the server
+/// selects its preferred group and ciphersuite in those offered by
+/// the client.
+///
+/// We do not check whether the client already provided a share for
+/// that group, as otherwise internal negotiation succeeded and the
+/// application may decide to retry anyway. Similarly, we do not check
+/// whether the server is ready to sign.
+
+let hrr0 o cs = 
+  HRR.({
+    version = TLS_1p2;
+    session_id = o.CH.session_id;
+    legacy_compression = Parsers.LegacyCompression.NullCompression;
+    cipher_suite = name_of_cipherSuite cs;
+    extensions = [ HRRE_supported_versions TLS_1p3 ]; })
+
+let f o cs = assert_norm (HRR.(helloRetryRequest_bytesize (hrr0 o cs) <= 300))
+
+let hrr_extend hrr (ext:_{ 
+  Parsers.HRRExtensions.hRRExtensions_list_bytesize 
+  (hrr.HRR.extensions @ [ext]) <= 1000 })
+= 
+  HRR.({ hrr with extensions = List.append hrr.extensions [ext]}) 
+
+(*
 let is_g_share (g:CommonDH.namedGroup) (gx: share) = dfst gx = g 
 let is_supported_but_not_shared (supported,shares) g = 
   List.Tot.mem supported g &&
   not (List.Tot.exists_b_aux g is_shared shares)
+*)
+let mem_group gs g = List.Tot.mem #CommonDH.namedGroup g gs 
 
-let mem_group gs g = List.Tot.mem #CommonDH.namedGroup gs g 
-
-let retry_cs13 cfg o psks shares =
-  // Pick our preferred group and ciphersuite in those offered by the
-  // client, and check that the client did not already include a share
-  // for that group.  Should we also require that the server be ready
-  // to sign?
-  match find_supported_groups o with
-  | None -> None
-  | Some support ->
+let compute_hrr cfg o =
+  support <-- (
+    match find_supported_groups o with
+    | None -> fatal Handshake_failure "ciphersuite negotiation failed: no supported group extension"
+    | Some support -> return support); 
+  g <-- (
     match List.Helpers.find_aux support mem_group cfg.named_groups with
-    | None -> None
-    | Some g ->
-      if List.Helpers.exists_aux g is_g_share shares then None else 
-      match List.Helpers.find_aux o.CH.ciphersuites is_named_cs13 cfg.ciphersuites  with  
-      | None -> None 
-      | Some cs -> Some (g,cs) in 
+    | None -> fatal Handshake_failure "ciphersuite negotiation failed: no acceptable group" 
+    | Some g -> return g ); 
+  cs <-- (
+    match select_cs cfg o with 
+    | None -> fatal Handshake_failure "ciphersuite negotiation failed: no acceptable ciphersuite"
+    | Some cs -> return cs);
+  Correct(
+    ServerRetry(
+      hrr_extend (hrr0 o cs) (HRRE_key_share g)))
 
 // Registration and filtering of PSK identities
-let rec filter_psk (l:list pskIdentity) : St (list (PSK.pskid * PSK.pskInfo)) =
+//
+// To avoid psk re-indexing, we produce a list of options rather than
+// a filtered list; to be revisited to avoid this intermediate list.
+let rec filter_psk (l:list pskIdentity) : St (r:list (option (PSK.pskid * PSK.pskInfo)) {List.length r = List.length l}) =
   match l with
   | [] -> []
   | ({identity = id; obfuscated_ticket_age = _}) :: t ->
@@ -2023,19 +2085,17 @@ let rec filter_psk (l:list pskIdentity) : St (list (PSK.pskid * PSK.pskInfo)) =
     | Some info -> 
         //19-04-23 should be check_ticket post? 
         assume(PSK.registered_psk id);
-        (id, info) :: (filter_psk t)
+        Some (id, info) :: (filter_psk t)
     | None ->
       (match PSK.psk_lookup id with
-      | Some info -> trace ("Loaded PSK from ticket <"^print_bytes id^">"); (id, info) :: (filter_psk t)
-      | None -> trace ("WARNING: the PSK <"^print_bytes id^"> has been filtered"); filter_psk t))
+      | Some info -> trace ("Loaded PSK from ticket <"^print_bytes id^">"); Some (id, info) :: filter_psk t
+      | None -> trace ("WARNING: the PSK <"^print_bytes id^"> has been filtered"); None :: filter_psk t))
 
 // Registration of DH shares
 let rec register_shares (l:list pre_share): St (list share) =
   match l with
   | [] -> []
-  | (| g, gx |) :: t -> (| g, CommonDH.register_dhi #g gx |) :: (
-    assume False; // TODO recursion?
-    register_shares t)
+  | (| g, gx |) :: t -> (| g, CommonDH.register_dhi #g gx |) :: register_shares t
 
 let get_sni o =
   match find_client_extension CHE_server_name? o with
@@ -2062,105 +2122,20 @@ let nego_alpn (o:offer) (cfg:config) : bytes =
       | a :: _ -> a
       | _ -> empty_bytes
 
-irreducible val computeServerMode:
-  cfg: config ->
-  co: offer ->
-  serverRandom: TLSInfo.random ->
-  St (result serverMode)
-
-// TODO split in two
 #push-options "--admit_smt_queries true" 
-let computeServerMode cfg co serverRandom =
-  match Negotiation.Version.choose cfg co with
-  | Error z -> Error z
-  | Correct TLS_1p3 ->
-    begin
-    let pske = // Filter and register offered PSKs
-      match find_pske co with
-      | Some pske -> filter_psk pske.identities
-      | None -> [] in
-    let shares = register_shares (find_key_shares co) in
-    let scert =
-      match find_signature_algorithms co with
-      | None -> None
-      | Some sigalgs ->
-        let sigalgs =
-          List.Helpers.filter_aux cfg.signature_algorithms List.Helpers.mem_rev sigalgs
-        in
-        if sigalgs = [] then
-	  (trace "No shared signature algorithm, restricting to PSK"; None)
-        // FIXME(adl) workaround for a bug in TLSConstants that causes signature schemes list to be parsed in reverse order
-        else cert_select_cb cfg.cert_callbacks TLS_1p3 (get_sni co) (nego_alpn co cfg) (List.Tot.rev sigalgs)
-      in
-    match compute_cs13 cfg co pske shares (Some? scert) with
-    | Some (PSK_EDH j ogx cs) -> (
-      trace "Negotiated PSK_EDH key exchange"; // two kexes, depending on ogx
-      Correct (ServerMode (Mode
-        co
-        None
-        TLS_1p3
-        serverRandom
-        co.CH.session_id
-        cs
-        (Some j)
-        []
-	None
-        None // no server key share yet
-        NoRequest // TODO: n_client_cert_request
-        None
-        ogx)
-      None [])) // No cert
-      
-    | Some (JUST_EDH gx cs) -> (
-      trace "Negotiated Pure EDH key exchange";
-      let Some (cert, sa) = scert in
-      let schain = cert_format_cb cfg.cert_callbacks cert in
-      trace ("Negotiated " ^ string_of_signatureScheme sa);
-      Correct (ServerMode (Mode
-        co
-        None
-        TLS_1p3
-        serverRandom
-        co.CH.session_id
-        cs
-        None // No PSKs, pure (EC)DHE
-	[]
-        None // Extensions will be filled in next pass
-        None // no server key share yet
-        NoRequest // TODO: n_client_cert_request
-        (Some (Cert.chain_up schain, sa))
-        (Some gx))
-      scert []))
-
-    | None -> 
-      match retry_cs13 cfg co shares with 
-      | Some (ng,cs) -> 
-        let hrr = HRR.({
-          version = TLS_1p2;
-          session_id = co.CH.session_id;
-          legacy_compression = Parsers.LegacyCompression.NullCompression;
-          cipher_suite = name_of_cipherSuite cs;
-          extensions = [
-            HRRE_supported_versions TLS_1p3;
-            HRRE_key_share ng;
-          ]; }) in
-        Correct(ServerRetry hrr)
-
-      | None -> fatal Handshake_failure "ciphersuite negotiation failed"
-    end
-    
-  | Correct TLS_1p2 ->
-    let valid_ticket =
-      match find_sessionTicket co with
-      | None -> None
-      | Some t ->
-        // No tickets if client desn't send an SID (too messy)
-        if length co.CH.session_id = 0 then None
-        else Ticket.check_ticket12 t
-      in
-    (match valid_ticket with
-    | Some (pv, cs, ems, _, _) ->
-      Correct (ServerMode (Mode
+let computeServerMode12 cfg co serverRandom = 
+  let pv = TLS_1p2 in 
+  let valid_ticket =
+    match find_sessionTicket co with
+    | None -> None
+    | Some t ->
+      // No tickets if client desn't send an SID (too messy)
+      if length co.CH.session_id = 0 then None
+      else Ticket.check_ticket12 t in
+  match valid_ticket with
+  | Some (pv, cs, ems, _, _) ->
+    Correct (ServerMode 
+      (Mode
         co
         None // TODO: no HRR
         pv
@@ -2173,43 +2148,108 @@ let computeServerMode cfg co serverRandom =
         None
         NoRequest
         None
-        None) None [])
-    | _ ->
-      // Make sure NullCompression is offered
-      if not (List.Tot.mem NullCompression co.CH.compression_methods)
-      then fatal Illegal_parameter "Compression is deprecated" else
-      let salgs =
-        match find_signature_algorithms co with
-        | None -> [Unknown_signatureScheme 0xFFFFus; Ecdsa_sha1]
-        | Some sigalgs -> List.Helpers.filter_aux cfg.signature_algorithms List.Helpers.mem_rev sigalgs
-        in
-      match cert_select_cb cfg.cert_callbacks pv (get_sni co) (nego_alpn co cfg) salgs with
-      | None -> 
-        //18-10-29 review Certificate_unknown; was No_certificate
-        fatal Certificate_unknown (perror __SOURCE_FILE__ __LINE__ "No compatible certificate can be selected")
-      | Some (cert, sa) ->
-        let schain = cert_format_cb cfg.cert_callbacks cert in
-        let sig, _ = sigHashAlg_of_signatureScheme sa in
-        match negotiateCipherSuite cfg pv co.CH.cipher_suites sig with
-        | Error z -> Error z
-        | Correct cs -> 
-          let CipherSuite kex _ ae = cs in 
-          Correct (ServerMode (Mode
-            co
-            None // no HRR before TLS 1.3
-            pv
-            serverRandom
-            (Random.sample32 32ul)
-            cs
-            None
-	    []
-            None // Extensions will be filled later
-            None // no server key share yet
-            NoRequest
-            (Some (Cert.chain_up schain, sa))
-            None) // no client key share yet for 1.2
-          (Some(cert, sa)) [] ))
+        None) 
+      None [])
+      
+  | None ->
+    // Not required anymore? Make sure NullCompression is offered
+    if not (List.Tot.mem NullCompression co.CH.compression_methods)
+    then fatal Illegal_parameter "Compression is deprecated" else
+    let salgs =
+      match find_signature_algorithms co with
+      | None -> [Unknown_signatureScheme 0xFFFFus; Ecdsa_sha1]
+      | Some sigalgs -> List.Helpers.filter_aux cfg.signature_algorithms List.Helpers.mem_rev sigalgs
+    in
+    match cert_select_cb cfg.cert_callbacks pv (get_sni co) (nego_alpn co cfg) salgs with
+    | None -> 
+      //18-10-29 review Certificate_unknown; was No_certificate
+      fatal Certificate_unknown (perror __SOURCE_FILE__ __LINE__ "No compatible certificate can be selected")
+    | Some (cert, sa) ->
+      let schain = cert_format_cb cfg.cert_callbacks cert in
+      let sig, _ = sigHashAlg_of_signatureScheme sa in
+      match negotiateCipherSuite cfg pv co.CH.cipher_suites sig with
+      | Error z -> Error z
+      | Correct cs -> 
+        let CipherSuite kex _ ae = cs in 
+        Correct (ServerMode (Mode
+          co
+          None // no HRR before TLS 1.3
+          pv
+          serverRandom
+          (Random.sample32 32ul)
+          cs
+          None
+          []
+          None // Extensions will be filled later
+          None // no server key share yet
+          NoRequest
+          (Some (Cert.chain_up schain, sa))
+          None) // no client key share yet for 1.2
+        (Some(cert, sa)) [] )
 #pop-options 
+
+irreducible val computeServerMode:
+  cfg: config ->
+  co: offer ->
+  serverRandom: TLSInfo.random ->
+  St (result serverMode)
+
+#push-options "--admit_smt_queries true" 
+let computeServerMode cfg offer serverRandom =
+  match Negotiation.Version.choose cfg offer with
+  | Error z -> Error z
+  | Correct TLS_1p2 -> computeServerMode12 cfg offer serverRandom 
+  | Correct TLS_1p3 -> 
+    let pske = // Filter and register offered PSKs
+      match find_pske offer with
+      | Some pske -> filter_psk pske.identities
+      | None -> [] in
+    let shares = register_shares (find_key_shares offer) in
+    let scert =
+      match find_signature_algorithms offer with
+      | None -> None
+      | Some sigalgs ->
+        let sigalgs =
+          List.Helpers.filter_aux cfg.signature_algorithms List.Helpers.mem_rev sigalgs
+        in
+        if sigalgs = [] then
+	  (trace "No shared signature algorithm, restricting to PSK"; None)
+        // FIXME(adl) workaround for a bug in TLSConstants that causes signature schemes list to be parsed in reverse order
+        else cert_select_cb cfg.cert_callbacks TLS_1p3 (get_sni offer) (nego_alpn offer cfg) (List.Tot.rev sigalgs)
+      in
+    match compute_cs13 cfg offer pske shares (Some? scert) with
+    | None -> compute_hrr cfg offer 
+    | Some r -> 
+      // the actual outcome
+      let cs, oj, oc, ogx, scert = 
+        match r with 
+        | PSK_EDH j ogx cs -> 
+          trace "Negotiated PSK_EDH key exchange"; // two kexes, depending on ogx
+          cs, Some j, None, ogx, None
+        | JUST_EDH gx cs -> 
+          trace "Negotiated Pure EDH key exchange"; 
+          let Some (cert, sa) = scert in
+          let schain = cert_format_cb cfg.cert_callbacks cert in
+          trace ("Negotiated " ^ string_of_signatureScheme sa);
+          cs, None, Some (Cert.chain_up schain, sa), Some gx, scert 
+      in
+      Correct (ServerMode 
+        (Mode
+          offer
+          None
+          TLS_1p3
+          serverRandom
+          offer.CH.session_id
+          cs
+          oj 
+          []
+          None // extensions will be filled in next pass 
+          None // no server key share yet
+          NoRequest // TODO: n_client_cert_request
+          oc
+          ogx)
+        scert []) 
+#pop-options     
 
 private
 let accum_string_of_pv s pv = s ^ " " ^ string_of_pv pv
@@ -2248,12 +2288,25 @@ let valid_retry o1 hrr o2 =
   o1.CH.compression_methods = o2.CH.compression_methods &&
   extension_ok
 
-let server_ClientHello2_stateful o1 hrr o2 = 
+/// Should we also check for a cookie in o2?
+/// Note that our server always produces a cookie.
+/// 
+
+val server_ClientHello2_stateful:
+  #region:rgn -> 
+  t region Server ->
+  HSM.clientHello -> 
+  HSM.hrr -> 
+  HSM.clientHello -> 
+  St (result serverMode)
+
+#push-options "--admit_smt_queries true"
+let server_ClientHello2_stateful #region ns o1 hrr o2 = 
   trace ("Processing second offer based on existing HRR state (stateful HRR).");
   if not (valid_retry o1 hrr o2) then 
     fatal Illegal_parameter "Inconsistant parameters between first and second client hello"
   else
-    let sm = computeServerMode ns.cfg offer ns.nonce in
+    let sm = computeServerMode ns.cfg o2 ns.nonce in
     match sm with
     | Error z -> 
       trace ("negotiation failed: "^string_of_error z); Error z
@@ -2265,17 +2318,28 @@ let server_ClientHello2_stateful o1 hrr o2 =
     | Correct (ServerMode m cert _) ->
       trace ("negotiated after HRR "^string_of_pv m.n_protocol_version^" "^string_of_ciphersuite m.n_cipher_suite);
       let nego_cb = ns.cfg.nego_callback in
-      let exts = List.Tot.filter CHE_Unknown_extensionType? offer.CH.extensions in
+      let exts = List.Tot.filter CHE_Unknown_extensionType? o2.CH.extensions in
       let exts_bytes = clientHelloExtensions_serializer32 exts in
       trace ("Negotiation callback to handle extra extensions.");
       match nego_cb.negotiate nego_cb.nego_context m.n_protocol_version exts_bytes (Some empty_bytes) with
       | Nego_accept sexts ->
         let el = Extensions.eext_of_custom sexts in
-        HST.op_Colon_Equals ns.state (S_ClientHello m cert);
+        ns.state := S_ClientHello m cert;
         Correct (ServerMode m cert el)
       | _ ->
         trace ("Application requested to abort the handshake after internal HRR.");
         fatal Handshake_failure "application aborted the handshake by callback"
+#pop-options 
+
+(*
+val server_ClientHello': 
+  #region:rgn -> ns: t region Server ->
+  HSM.clientHello -> 
+  log:HandshakeLog.t ->
+  ST (result serverMode)
+  (requires fun h0 -> inv ns h0)
+  (ensures fun h0 _ h1 -> true)
+*)
 
 #push-options "--admit_smt_queries true"
 let server_ClientHello #region ns offer log =
@@ -2291,74 +2355,81 @@ let server_ClientHello #region ns offer log =
     List.Tot.fold_left accum_string_of_pv "offered versions" (Negotiation.Version.offered_versions offer));
     
   match !ns.state with
-  | S_HRR o1 hrr -> server_ClientHello2_stateful o1 hrr offer 
+  | S_HRR o1 hrr -> server_ClientHello2_stateful ns o1 hrr offer
   | S_Init _ ->
     let sm = computeServerMode ns.cfg offer ns.nonce in
-    let previous_cookie = // for stateless HRR
-      match find_cookie offer with
-      | None -> None
-      | Some c ->
-        match Ticket.check_cookie c with
-        | None -> trace ("WARNING: ignorning invalid cookie "^(hex_of_bytes c)); None
-        | Some (hrr, digest, extra) ->
-          trace ("Loaded stateless retry cookie "^(hex_of_bytes c));
-          let hrr = { hrr with HRR.extensions =
-            (HRRE_cookie c) :: hrr.HRR.extensions; } in
-          // Overwrite the current transcript digest with values from cookie
-          trace ("Overwriting the transcript digest with CH1 hash "^(hex_of_bytes digest));
-          HandshakeLog.load_stateless_cookie log hrr digest;
-          Some extra // for the server nego callback
-      in
     match sm with
-    | Error z ->
-      trace ("negotiation failed: "^string_of_error z);
-      Error z
-    | Correct (ServerRetry hrr) ->
-      // Internal HRR caused by group negotiation
-      // We do not invoke the server nego callback in this case
-      // record the initial offer and return the HRR to HS
-      trace ("no common group, sending a retry request...");
-      let Some cs = cipherSuite_of_name hrr.HRR.cipher_suite in
-      let ha = verifyDataHashAlg_of_ciphersuite cs in
-      let digest = HandshakeLog.hash_tag #ha log in
-      let cookie = Ticket.create_cookie hrr digest empty_bytes in
-      let hrr = { hrr with HRR.extensions =
-        (HRRE_cookie cookie) :: hrr.HRR.extensions; } in
-      HST.op_Colon_Equals ns.state (S_HRR offer hrr);
-      sm
-    | Correct (ServerMode m cert _) ->
-      let nego_cb = ns.cfg.nego_callback in
-      let exts = List.Tot.filter CHE_Unknown_extensionType? offer.CH.extensions in
-      let exts_bytes = clientHelloExtensions_serializer32 exts in
-      trace ("Negotiation callback to handle extra extensions and query for stateless retry.");
-      trace ("Application data in cookie: "^(match previous_cookie with | Some c -> hex_of_bytes c | _ -> "none"));
-      match nego_cb.negotiate nego_cb.nego_context m.n_protocol_version exts_bytes previous_cookie with
-      | Nego_abort ->
-        trace ("Application requested to abort the handshake.");
-        fatal Handshake_failure "application aborted the handshake by callback"
-      | Nego_retry cextra ->
-        let hrr = HRR.({
-	  version = TLS_1p2;
-          session_id = offer.CH.session_id;
-	  legacy_compression = Parsers.LegacyCompression.NullCompression;
-          cipher_suite = name_of_cipherSuite m.n_cipher_suite;
-          extensions = [
-            HRRE_supported_versions TLS_1p3;
-          ]}) in
-        let ha = verifyDataHashAlg_of_ciphersuite m.n_cipher_suite in
-        let digest = HandshakeLog.hash_tag #ha log in
-        let cookie = Ticket.create_cookie hrr digest cextra in
-        let hrr = { hrr with HRR.extensions =
-	  (HRRE_cookie cookie) :: hrr.HRR.extensions; } in
-        ns.state := (S_HRR offer hrr);
-        Correct (ServerRetry hrr)
-      | Nego_accept sexts ->
-        trace ("negotiated "^string_of_pv m.n_protocol_version^" "^string_of_ciphersuite m.n_cipher_suite);
-        ns.state := S_ClientHello m cert;
-        Correct (ServerMode m cert (Extensions.eext_of_custom sexts))
+    | Error z -> trace ("negotiation failed: "^string_of_error z); Error z
+    | Correct r -> 
+      let stateless_retry = 
+        match find_cookie offer with
+        | None -> None
+        | Some c ->
+          // stateless HRR
+          match Ticket.decrypt_cookie c with
+          | None -> 
+            // This connection is doomed, so we could return a fatal error. 
+            trace ("WARNING: ignoring invalid cookie "^hex_of_bytes c); 
+            None
+            
+          | Some (hrr, digest, extra) ->
+            trace ("Loaded stateless retry cookie "^hex_of_bytes c);
+            let hrr = hrr_extend hrr (HRRE_cookie c) in
+            // Overwrite the current transcript digest with values from cookie
+            trace ("Setting transcript to CH1 hash "^hex_of_bytes digest);
+            // TODO create Transcript in state Start(Some(digest,hrr)) 
+            // using sm's hash algorithm
+            HandshakeLog.load_stateless_cookie log hrr digest;
+            // we will pass extra to the server nego callback
+            Some extra 
+        in
+      match r with 
+      | ServerRetry hrr ->
+        if Some? stateless_retry then 
+          fatal Handshake_failure "negotiation failed after a retry"
+        else (
+          // Internal HRR caused by group negotiation
+          // We do not invoke the server nego callback in this case
+          // record the initial offer and return the HRR to HS
+          trace ("no common group, sending a retry request...");
+          // TODO create Transcript in state Start(Some(digest,hrr)) to compute this digest
+          let Some cs = cipherSuite_of_name hrr.HRR.cipher_suite in
+          let ha = verifyDataHashAlg_of_ciphersuite cs in
+          let digest = HandshakeLog.hash_tag #ha log in
+          let cookie = Ticket.create_cookie hrr digest empty_bytes in
+          let hrr = hrr_extend hrr (HRRE_cookie cookie) in 
+          ns.state := S_HRR offer hrr;
+          sm )
+
+      | ServerMode m cert _ ->
+        let nego_cb = ns.cfg.nego_callback in
+        let exts = List.Tot.filter CHE_Unknown_extensionType? offer.CH.extensions in
+        let exts_bytes = clientHelloExtensions_serializer32 exts in
+        trace ("Negotiation callback to handle extra extensions and query for stateless retry.");
+        trace ("Application data in cookie: "^(match stateless_retry with | Some c -> hex_of_bytes c | _ -> "none"));
+        match nego_cb.negotiate nego_cb.nego_context m.n_protocol_version exts_bytes stateless_retry with
+        | Nego_abort ->
+          trace ("Application requested to abort the handshake.");
+          fatal Handshake_failure "application aborted the handshake by callback"
+
+        | Nego_retry filling ->
+          let hrr = hrr0 offer m.n_cipher_suite in
+          let ha = verifyDataHashAlg_of_ciphersuite m.n_cipher_suite in
+          let digest = HandshakeLog.hash_tag #ha log in
+          let cookie = Ticket.create_cookie hrr digest filling in
+          let hrr = hrr_extend hrr (HRRE_cookie cookie) in 
+          ns.state := S_HRR offer hrr;
+          Correct (ServerRetry hrr)
+        
+        | Nego_accept sexts ->
+          trace ("negotiated "^
+            string_of_pv m.n_protocol_version^" "^
+            string_of_ciphersuite m.n_cipher_suite);
+          ns.state := S_ClientHello m cert;
+          Correct (ServerMode m cert (Extensions.eext_of_custom sexts))
 #pop-options
 
-(* still useful?
+(* 
 let share_of_serverKeyShare (ks:CommonDH.serverKeyShare) : share =
   assume False; //18-12-16 TODO incomplete pattern
   let CommonDH.Share g gy = ks in (| g, gy |)

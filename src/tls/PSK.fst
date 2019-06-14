@@ -161,7 +161,7 @@ let coerce_psk (i:psk_identifier) (ctx:pskInfo) (k:app_psk i)
 let compatible_hash_ae_st (i:pskid) (ha:hash_alg) (ae:aeadAlg) (h:mem) =
   (MDM.defined app_psk_table i h /\
   (let (_,ctx,_) = MDM.value_of app_psk_table i h in
-  ha = ctx.early_hash /\ ae = ctx.early_ae))
+  ctx.early_cs = CipherSuite13 ae ha ))
 
 let compatible_hash_ae (i:pskid) (h:hash_alg) (a:aeadAlg) =
   witnessed (compatible_hash_ae_st i h a)
@@ -186,7 +186,7 @@ let verify_hash_ae (i:pskid) (ha:hash_alg) (ae:aeadAlg) : ST bool
     cut(MDM.contains app_psk_table i x h);
     cut(MDM.value_of app_psk_table i h = x);
     let (_, ctx, _) = x in
-    if ctx.early_hash = ha && ctx.early_ae = ae then
+    if ctx.early_cs = CipherSuite13 ae ha then
      begin
       cut(compatible_hash_ae_st i ha ae h);
       assume(stable_on_t app_psk_table (compatible_hash_ae_st i ha ae));

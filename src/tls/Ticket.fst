@@ -464,9 +464,9 @@ let create_cookie (hr:HSM.hrr) (digest:bytes) (extra:bytes) =
   trace ("Encrypted cookie:  "^(hex_of_bytes cipher));
   cipher
 
-val check_cookie: b:bytes -> St (option (HSM.hrr * bytes * bytes))
-let check_cookie b =
-  trace ("Decrypting cookie "^(hex_of_bytes b));
+val decrypt_cookie: b:bytes -> St (option (HSM.hrr * bytes * bytes))
+let decrypt_cookie b =
+  trace ("Decrypting cookie "^hex_of_bytes b);
   if length b < 32 then None else
   match ticket_decrypt false b with
   | None -> trace ("Cookie decryption failed."); None
@@ -494,7 +494,6 @@ let ticket_pskinfo (t:ticket) =
   let open TLS.Callbacks in 
   match t with
   | Ticket13 cs li _ _ nonce created age_add custom ->
-    let CipherSuite13 ae h = cs in
     Some ({
       ticket_nonce = Some nonce;
       time_created = created;
@@ -502,8 +501,7 @@ let ticket_pskinfo (t:ticket) =
       allow_early_data = true;
       allow_dhe_resumption = true;
       allow_psk_resumption = true;
-      early_ae = ae;
-      early_hash = h;
+      early_cs = cs;
       identities = (empty_bytes, empty_bytes);
     })
   | _ -> None
@@ -513,8 +511,6 @@ let ticketContents13_pskinfo (t: TC13.ticketContents13) : Tot TLS.Callbacks.pskI
   let open TLS.Callbacks in 
   match t with
   | ({ TC13.cs = cs; TC13.nonce = nonce; TC13.creation_time = created; TC13.age_add = age_add; TC13.custom_data = custom }) ->
-    begin match cipherSuite_of_cipherSuite13 cs with
-    | (CipherSuite13 ae h) ->
       ({
         ticket_nonce = Some nonce;
         time_created = created;
@@ -522,11 +518,9 @@ let ticketContents13_pskinfo (t: TC13.ticketContents13) : Tot TLS.Callbacks.pskI
         allow_early_data = true;
         allow_dhe_resumption = true;
         allow_psk_resumption = true;
-        early_ae = ae;
-        early_hash = h;
+        early_cs = cipherSuite_of_cipherSuite13 cs;
         identities = (empty_bytes, empty_bytes);
       })
-    end
 
 noextract
 let ticketContents_pskinfo (t:TC.ticketContents) : Tot (option TLS.Callbacks.pskInfo) =

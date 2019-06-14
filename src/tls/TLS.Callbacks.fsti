@@ -162,8 +162,7 @@ type pskInfo = {
   allow_early_data: bool;      // New draft 13 flag
   allow_dhe_resumption: bool;  // New draft 13 flag
   allow_psk_resumption: bool;  // New draft 13 flag
-  early_ae: aeadAlg;
-  early_hash: hash_alg;
+  early_cs: cipherSuite13; // more precise than a pair of algorithms
   identities: bytes * bytes; // TODO certs 
 }
 

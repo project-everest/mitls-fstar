@@ -437,10 +437,12 @@ val get_alpn: offer -> Tot Extensions.clientHelloExtension_CHE_application_layer
 
 /// 
 val server_ClientHello: 
-  #region:rgn -> t region Server ->
+  #region:rgn -> ns: t region Server ->
   HSM.clientHello -> 
   log:HandshakeLog.t ->
-  St (result serverMode)
+  ST (result serverMode)
+  (requires fun h0 -> inv ns h0)
+  (ensures fun h0 _ h1 -> inv ns h1)
   // [S_Init | S_HRR ==> S_ClientHello m cert] 
   // ensures r = computeServerMode ns.cfg ns.nonce offer (stateful)
   // but [compute_cs13] and [negotiateCipherSuite] are pure. 
