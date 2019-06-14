@@ -1,0 +1,196 @@
+[
+  "<|¿j\u001e,½¨°Åû<ÐB\r¨",
+  [
+    [
+      "DefineTable.table",
+      1,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "ca04183a6bce435f9c9252fd7def39e3"
+    ],
+    [
+      "DefineTable.ideal",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "bool_inversion",
+        "equation_DefineTable.dt", "equation_Mem.model", "typing_Flags.model"
+      ],
+      0,
+      "e920690bbcf93990030908b24cd65fbf"
+    ],
+    [
+      "DefineTable.real",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "bool_inversion",
+        "equation_DefineTable.dt", "equation_Mem.is_tls_rgn",
+        "equation_Mem.model", "equation_Mem.rgn", "equation_Mem.tls_rgn",
+        "refinement_interpretation_Tm_refine_b5163a5c7eb2f4891aa85b6bd19b6e5e",
+        "refinement_interpretation_Tm_refine_c358ce785c6b462b7618aa4f08d5c31e",
+        "typing_Mem.is_tls_rgn", "typing_Mem.tls_region"
+      ],
+      0,
+      "bd21dc52b3f83b6b9b48a9fa3c4579ce"
+    ],
+    [
+      "DefineTable.loc",
+      1,
+      2,
+      1,
+      [ "@query", "projection_inverse_BoxBool_proj_0" ],
+      0,
+      "e72c52744d26e8e97a3184ceee0f17f9"
+    ],
+    [
+      "DefineTable.fresh",
+      1,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "f53425942a1e48160591fd2b9b34d6b4"
+    ],
+    [
+      "DefineTable.lemma_fresh_frame",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "b2t_def", "bool_inversion",
+        "disc_equation_FStar.Pervasives.Native.Some",
+        "equation_DefineTable.dt", "equation_DefineTable.fresh",
+        "equation_DefineTable.ideal", "equation_DefineTable.live",
+        "equation_DefineTable.loc", "equation_DefineTable.table",
+        "equation_FStar.HyperStack.ST.m_rref",
+        "equation_FStar.HyperStack.ST.mref",
+        "equation_FStar.Monotonic.DependentMap.defined",
+        "equation_FStar.Monotonic.DependentMap.fresh",
+        "equation_FStar.Monotonic.DependentMap.imap",
+        "equation_FStar.Monotonic.DependentMap.t",
+        "equation_FStar.Monotonic.HyperStack.mref", "equation_Mem.model",
+        "equation_Mem.tls_define_region", "equation_Prims.l_True",
+        "lemma_LowStar.Monotonic.Buffer.loc_disjoint_sym_",
+        "lemma_LowStar.Monotonic.Buffer.modifies_mreference_elim",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Tm_refine_1a1278f1aecd37594ba20d888b7fd230",
+        "refinement_interpretation_Tm_refine_ecfe710eaddaa768c46a7d024350dcbc",
+        "refinement_interpretation_Tm_refine_f596a1e23d65ebe54b463345ece4e00f",
+        "typing_DefineTable.loc",
+        "typing_FStar.Monotonic.DependentMap.grows",
+        "typing_FStar.Monotonic.DependentMap.imap", "typing_Flags.model",
+        "typing_Tm_abs_4b76b1ad7be4bf3817f61e94e04f2edb"
+      ],
+      0,
+      "5c27826acc793408fc5b144186ad3379"
+    ],
+    [
+      "DefineTable.defined",
+      1,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "afe9e30272f60976745232ebb9465b59"
+    ],
+    [
+      "DefineTable.extended",
+      1,
+      2,
+      1,
+      [ "@query", "projection_inverse_BoxBool_proj_0" ],
+      0,
+      "267a39f72f8c75f2ecfade1607d4569e"
+    ],
+    [
+      "DefineTable.unchanged",
+      1,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "0f6833efe1312cb2fbb3a423fd7dfbd9"
+    ],
+    [
+      "DefineTable.lemma_unchanged_frame",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "bool_inversion",
+        "equation_DefineTable.dt", "equation_DefineTable.ideal",
+        "equation_DefineTable.live", "equation_DefineTable.loc",
+        "equation_DefineTable.table", "equation_DefineTable.unchanged",
+        "equation_FStar.HyperStack.ST.m_rref",
+        "equation_FStar.HyperStack.ST.mref",
+        "equation_FStar.Monotonic.DependentMap.imap",
+        "equation_FStar.Monotonic.DependentMap.t",
+        "equation_FStar.Monotonic.HyperStack.mref", "equation_Mem.model",
+        "equation_Mem.tls_define_region", "equation_Prims.l_True",
+        "lemma_LowStar.Monotonic.Buffer.loc_disjoint_sym_",
+        "lemma_LowStar.Monotonic.Buffer.modifies_mreference_elim",
+        "refinement_interpretation_Tm_refine_1a1278f1aecd37594ba20d888b7fd230",
+        "refinement_interpretation_Tm_refine_ecfe710eaddaa768c46a7d024350dcbc",
+        "refinement_interpretation_Tm_refine_f596a1e23d65ebe54b463345ece4e00f",
+        "typing_DefineTable.loc",
+        "typing_FStar.Monotonic.DependentMap.grows",
+        "typing_FStar.Monotonic.DependentMap.imap", "typing_Flags.model",
+        "typing_Tm_abs_4b76b1ad7be4bf3817f61e94e04f2edb"
+      ],
+      0,
+      "78e7cebf6ded3707c8574e48d1a18861"
+    ],
+    [
+      "DefineTable.lemma_disjoint_unchanged",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "bool_inversion",
+        "equation_DefineTable.disjoint", "equation_DefineTable.dt",
+        "equation_DefineTable.ideal", "equation_DefineTable.live",
+        "equation_DefineTable.loc", "equation_DefineTable.table",
+        "equation_DefineTable.unchanged",
+        "equation_FStar.HyperStack.ST.m_rref",
+        "equation_FStar.HyperStack.ST.mref",
+        "equation_FStar.Monotonic.DependentMap.imap",
+        "equation_FStar.Monotonic.DependentMap.t",
+        "equation_FStar.Monotonic.HyperStack.mref", "equation_Mem.model",
+        "equation_Mem.tls_define_region", "equation_Prims.l_True",
+        "lemma_LowStar.Monotonic.Buffer.loc_disjoint_sym_",
+        "lemma_LowStar.Monotonic.Buffer.modifies_mreference_elim",
+        "refinement_interpretation_Tm_refine_1a1278f1aecd37594ba20d888b7fd230",
+        "refinement_interpretation_Tm_refine_ecfe710eaddaa768c46a7d024350dcbc",
+        "refinement_interpretation_Tm_refine_f596a1e23d65ebe54b463345ece4e00f",
+        "typing_DefineTable.loc",
+        "typing_FStar.Monotonic.DependentMap.grows",
+        "typing_FStar.Monotonic.DependentMap.imap", "typing_Flags.model",
+        "typing_Tm_abs_4b76b1ad7be4bf3817f61e94e04f2edb"
+      ],
+      0,
+      "9b826eec465c3308e565e1e9eab953e4"
+    ],
+    [
+      "DefineTable.lookup",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "Prims_interpretation_Tm_arrow_e06752ba152f81447b312efcdf8f0e23",
+        "bool_inversion", "bool_typing",
+        "disc_equation_FStar.Pervasives.Native.None",
+        "disc_equation_FStar.Pervasives.Native.Some",
+        "lemma_FStar.Pervasives.invertOption",
+        "projection_inverse_BoxBool_proj_0"
+      ],
+      0,
+      "ef8dff1d0e1d5d3a3ee0c689e9b0dcfb"
+    ]
+  ]
+]
