@@ -117,15 +117,15 @@ type resumption_offer_12 = // part of resumeInfo
 // type offer = ch:HandshakeMessages.ch { valid_offer ch }
 
 
-// boilerplate code for accessing individual extensions
-// 18-09-09 TODO use lowparse readers (simpler datatypes)
+// Boilerplate code for accessing individual extensions
 
 val find_client_extension: 
   filter: (clientHelloExtension -> bool) -> 
   o:offer -> 
   option (e:clientHelloExtension{filter e}) 
 
-let find_client_extension filter o = List.Tot.find filter o.CH.extensions
+let find_client_extension filter o = 
+  List.Tot.find filter o.CH.extensions
 
 let find_client_extension_aux env filter o =
   List.Helpers.find_aux env filter o.CH.extensions
@@ -215,6 +215,7 @@ let is_cacheable12 m =
     sid <> m.n_offer.CH.session_id &&
     sid <> empty_bytes)
 
+(*
 let ns_step (#r:role) (#cfg:config)
   (ns:negotiationState r cfg) (ns':negotiationState r cfg) =
   match ns, ns' with
@@ -236,8 +237,8 @@ let ns_rel (#r:role) (#cfg:config)
 let ns_step_lemma #r #cfg (ns0 ns1: negotiationState r cfg): Lemma 
   (requires ns_step ns0 ns1) 
   (ensures ns_rel ns0 ns1) = ()
+*)
 
-private 
 let rec find_ticket12 
   (acc:option (psk_identifier * t:Ticket.ticket{Ticket.Ticket12? t})) 
   (r: list (psk_identifier * Ticket.ticket)) :
@@ -247,7 +248,6 @@ let rec find_ticket12
   | [] -> acc
   | (tid, t) :: r -> find_ticket12 (if Ticket.Ticket12? t then Some (tid, t) else acc) r
 
-private
 let rec filter_ticket13 
   (acc:list (psk_identifier * t:Ticket.ticket{Ticket.Ticket13? t}))
   (r: list (psk_identifier * Ticket.ticket)) :
@@ -257,7 +257,6 @@ let rec filter_ticket13
   | [] -> List.Tot.rev acc //why?
   | (tid, t) :: r -> filter_ticket13 (if Ticket.Ticket13? t then (tid, t)::acc else acc) r
 
-private
 let rec ticket13_pskinfo 
   (acc:list (psk_identifier * pskInfo))
   (r:list (psk_identifier * t:Ticket.ticket{Ticket.Ticket13? t})): // refinement required for Some?.v below
@@ -633,7 +632,8 @@ let prepareClientExtensions
   | Correct supported_versions -> Correct(
 
   // 18-12-22 TODO cfg.safe_renegotiation is ignored? 
-  Extensions.cext_of_custom cfg.custom_extensions @
+
+  Extensions.clientHelloExtensions_of_unknownExtensions cfg.custom_extensions @ 
   (* Always send supported extensions.
      The configuration options will influence how strict the tests will be *)
   (* let cri = *)
@@ -686,7 +686,7 @@ let prepareClientExtensions_new
       | Correct final_extensions ->
         Correct begin
           // 18-12-22 TODO cfg.safe_renegotiation is ignored? 
-          Extensions.clientHelloExtensions_of_tagged_unknown_extensions cfg.CFG.custom_extensions @
+          Extensions.clientHelloExtensions_of_unknownExtensions cfg.CFG.custom_extensions @
           (* Always send supported extensions.
              The configuration options will influence how strict the tests will be *)
           (* let cri = *)
@@ -1218,11 +1218,6 @@ let client_ClientHello #region ns oks =
       ns.state := C_Offer offer;
       Correct offer )
 
-let group_of_hrr hrr : option namedGroup =
-  match List.Tot.find HRRE_key_share? hrr.HRR.extensions with
-  | Some (HRRE_key_share ng) -> Some ng
-  | _ -> None
-
 private
 let choose_extension (s:option share) (e:clientHelloExtension) =
   match e with
@@ -1240,6 +1235,7 @@ let choose_extension (s:option share) (e:clientHelloExtension) =
   | e -> Some e
 
 
+let group_of_hrr = TLS.Cookie.find_keyshare
 
 #push-options "--admit_smt_queries true"
 let client_HelloRetryRequest #region (ns:t region Client) hrr (s:option share) =
@@ -1261,21 +1257,21 @@ let client_HelloRetryRequest #region (ns:t region Client) hrr (s:option share) =
     // Echo the cookie for QUIC stateless retry
     let ext', no_cookie : list clientHelloExtension * bool =
       match List.Tot.find HRRE_cookie? el with
-      | Some (HRRE_cookie c) -> (CHE_cookie c) :: ext', false
+      | Some (HRRE_cookie c) -> CHE_cookie c :: ext', false
       | None -> ext', true in
 
     if sid <> offer.CH.session_id then
       fatal Illegal_parameter "mismatched session ID in HelloRetryRequest"
     // 2018.03.08 SZ: TODO We must Update PSK extension if present
     // See https://tools.ietf.org/html/draft-ietf-tls-tls13-26#section-4.1.2
-    else if None? (group_of_hrr hrr) && no_cookie then
+    else if None? (TLS.Cookie.find_keyshare  hrr) && no_cookie then
       fatal Illegal_parameter "received a HRR that would yield the same ClientHello"
     else
      begin
       assume(clientHelloExtensions_list_bytesize ext' <= 65535);
       let offer' = {offer with CH.extensions = ext'} in
       let ri = (hrr, old_shares, old_psk) in
-      ns.state := (C_HRR offer' ri);
+      ns.state := C_HRR offer' ri;
       Correct(offer')
      end
 #pop-options
@@ -2032,22 +2028,6 @@ val retry_cs13:
 /// application may decide to retry anyway. Similarly, we do not check
 /// whether the server is ready to sign.
 
-let hrr0 o cs = 
-  HRR.({
-    version = TLS_1p2;
-    session_id = o.CH.session_id;
-    legacy_compression = Parsers.LegacyCompression.NullCompression;
-    cipher_suite = name_of_cipherSuite cs;
-    extensions = [ HRRE_supported_versions TLS_1p3 ]; })
-
-let f o cs = assert_norm (HRR.(helloRetryRequest_bytesize (hrr0 o cs) <= 300))
-
-let hrr_extend hrr (ext:_{ 
-  Parsers.HRRExtensions.hRRExtensions_list_bytesize 
-  (hrr.HRR.extensions @ [ext]) <= 1000 })
-= 
-  HRR.({ hrr with extensions = List.append hrr.extensions [ext]}) 
-
 (*
 let is_g_share (g:CommonDH.namedGroup) (gx: share) = dfst gx = g 
 let is_supported_but_not_shared (supported,shares) g = 
@@ -2057,6 +2037,10 @@ let is_supported_but_not_shared (supported,shares) g =
 let mem_group gs g = List.Tot.mem #CommonDH.namedGroup g gs 
 
 let compute_hrr cfg o =
+  cs <-- (
+    match select_cs cfg o with 
+    | None -> fatal Handshake_failure "ciphersuite negotiation failed: no acceptable ciphersuite"
+    | Some cs -> return cs);
   support <-- (
     match find_supported_groups o with
     | None -> fatal Handshake_failure "ciphersuite negotiation failed: no supported group extension"
@@ -2065,13 +2049,10 @@ let compute_hrr cfg o =
     match List.Helpers.find_aux support mem_group cfg.named_groups with
     | None -> fatal Handshake_failure "ciphersuite negotiation failed: no acceptable group" 
     | Some g -> return g ); 
-  cs <-- (
-    match select_cs cfg o with 
-    | None -> fatal Handshake_failure "ciphersuite negotiation failed: no acceptable ciphersuite"
-    | Some cs -> return cs);
-  Correct(
-    ServerRetry(
-      hrr_extend (hrr0 o cs) (HRRE_key_share g)))
+  let hrr = TLS.Cookie.hrr0 o.CH.session_id cs in 
+  let hrr = TLS.Cookie.append_keyshare hrr g in 
+  Correct(ServerRetry hrr)
+
 
 // Registration and filtering of PSK identities
 //
@@ -2192,7 +2173,14 @@ irreducible val computeServerMode:
   cfg: config ->
   co: offer ->
   serverRandom: TLSInfo.random ->
-  St (result serverMode)
+  ST (result serverMode)
+  (requires fun h0 -> True)
+  (ensures fun h0 r h1 -> 
+    B.(modifies loc_none h0 h1) /\ 
+    ( match r with 
+      | Correct (ServerRetry hrr) -> TLS.Cookie.hrr_len <= 16 // leaving enough room for the cookie 
+      | _ -> True )
+    )
 
 #push-options "--admit_smt_queries true" 
 let computeServerMode cfg offer serverRandom =
@@ -2258,7 +2246,7 @@ private
 let valid_ch2_extension (o1, hrr) (e:clientHelloExtension) =
   match e with
   | CHE_key_share ecl ->
-    (match ecl, group_of_hrr hrr with
+    (match ecl, TLS.Cookie.find_keyshare hrr with
     | [ks], Some ng -> tag_of_keyShareEntry ks = ng
 //19-01-21 do we need this case? 
 //        | _, None -> (
@@ -2279,6 +2267,12 @@ let valid_ch2_extension (o1, hrr) (e:clientHelloExtension) =
       true) // FIXME
       //(extensionBytes e) = (extensionBytes e'))
 
+// Not enforceable by a stateless server? The client can change its
+// mind, but at least the whole exchange integrity is guaranteed by
+// the digest computation. The (unauthenticated) HRR won't not
+// convince the client to use a weaker CS for 0RTT, since it is bound
+// to the PSK.
+
 let valid_retry o1 hrr o2 = 
   let extension_ok = List.Helpers.forall_aux (o1, hrr) valid_ch2_extension o2.CH.extensions in
   o1.CH.version = o2.CH.version &&
@@ -2288,17 +2282,26 @@ let valid_retry o1 hrr o2 =
   o1.CH.compression_methods = o2.CH.compression_methods &&
   extension_ok
 
+
 /// Should we also check for a cookie in o2?
 /// Note that our server always produces a cookie.
-/// 
 
 val server_ClientHello2_stateful:
-  #region:rgn -> 
-  t region Server ->
+  #region:rgn -> ns: t region Server ->
   HSM.clientHello -> 
   HSM.hrr -> 
   HSM.clientHello -> 
-  St (result serverMode)
+  ST (result serverMode)
+  (requires fun h0 -> inv ns h0)
+  (ensures fun h0 r h1 -> 
+    inv ns h1 /\ 
+    B.(modifies (loc_mreference ns.state) h0 h1) /\ 
+    ( 
+    let s1 = HS.sel h1 ns.state in 
+    match r, s1 with 
+    | Error _, _ -> True
+    | Correct _, S_ClientHello _ _ -> True
+    | _ -> False ))
 
 #push-options "--admit_smt_queries true"
 let server_ClientHello2_stateful #region ns o1 hrr o2 = 
@@ -2323,9 +2326,8 @@ let server_ClientHello2_stateful #region ns o1 hrr o2 =
       trace ("Negotiation callback to handle extra extensions.");
       match nego_cb.negotiate nego_cb.nego_context m.n_protocol_version exts_bytes (Some empty_bytes) with
       | Nego_accept sexts ->
-        let el = Extensions.eext_of_custom sexts in
         ns.state := S_ClientHello m cert;
-        Correct (ServerMode m cert el)
+        Correct (ServerMode m cert sexts)
       | _ ->
         trace ("Application requested to abort the handshake after internal HRR.");
         fatal Handshake_failure "application aborted the handshake by callback"
@@ -2341,7 +2343,32 @@ val server_ClientHello':
   (ensures fun h0 _ h1 -> true)
 *)
 
-#push-options "--admit_smt_queries true"
+
+// Checks that the mode selected for a second ClientHello is
+// compatible with our HelloRetryRequest: the required ciphersuite and
+// group (if any) are those negotiated. No need to check the sessionId
+// is unchanged since it is included in the digest.
+
+let server_hrr_verify offer mode hrr = 
+  is_named_cs mode.n_cipher_suite hrr.HRR.cipher_suite &&
+  ( match TLS.Cookie.find_keyshare hrr with
+    | None -> true 
+    | Some g -> kexAlg mode <> Kex_PSK && chosenGroup mode = CommonDH.group_of_namedGroup g )
+
+(*
+val _server_ClientHello: 
+  #region:rgn -> ns: t region Server ->
+  HSM.clientHello -> 
+  log:HandshakeLog.t ->
+  ST (result serverMode)
+  (requires fun h0 -> 
+    inv ns h0 /\ 
+    (let s = HS.sel h0 ns.state in S_Init? s \/ S_HRR? s))
+  (ensures fun h0 _ h1 -> True)
+*)
+
+//#push-options "--admit_smt_queries true"
+#reset-options "--z3rlimit 200"
 let server_ClientHello #region ns offer log =
   trace ("offered client extensions "^string_of_ches offer.CH.extensions);
   trace ("offered cipher suites "^string_of_ciphersuitenames offer.CH.cipher_suites);
@@ -2354,37 +2381,46 @@ let server_ClientHello #region ns offer log =
   trace ( 
     List.Tot.fold_left accum_string_of_pv "offered versions" (Negotiation.Version.offered_versions offer));
     
-  match !ns.state with
+  let r = match !ns.state with
   | S_HRR o1 hrr -> server_ClientHello2_stateful ns o1 hrr offer
   | S_Init _ ->
     let sm = computeServerMode ns.cfg offer ns.nonce in
     match sm with
     | Error z -> trace ("negotiation failed: "^string_of_error z); Error z
-    | Correct r -> 
+    | Correct r -> (
+      let h = get() in assert (inv ns h);
       let stateless_retry = 
         match find_cookie offer with
         | None -> None
         | Some c ->
-          // stateless HRR
-          match Ticket.decrypt_cookie c with
-          | None -> 
-            // This connection is doomed, so we could return a fatal error. 
+          // stateless HRR.
+          match TLS.Cookie.decrypt c with
+          | Error _ -> 
+            // This connection is doomed: we could instead return a fatal error. 
             trace ("WARNING: ignoring invalid cookie "^hex_of_bytes c); 
             None
             
-          | Some (hrr, digest, extra) ->
-            trace ("Loaded stateless retry cookie "^hex_of_bytes c);
-            let hrr = hrr_extend hrr (HRRE_cookie c) in
-            // Overwrite the current transcript digest with values from cookie
+          | Correct (digest, extra, hrr) ->
+            trace ("Loaded stateless retry cookie "^hex_of_bytes extra);
             trace ("Setting transcript to CH1 hash "^hex_of_bytes digest);
-            // TODO create Transcript in state Start(Some(digest,hrr)) 
-            // using sm's hash algorithm
-            HandshakeLog.load_stateless_cookie log hrr digest;
+
+            // TODO check consistency of sm with hrr's cs and group; this is required to enforce 
+            // the earlier server policy. 
+            
+            // TODO create Transcript in state Start(Some(digest,hrr))
+            // using sm's hash algorithm. Lower: consider taking the
+            // (decrypted) digest, (small, reconstructed) hrr prefix,
+            // and (received) encrypted cookie from three different
+            // const_buffers.
+
+            //FIXME! can't prove [writing] without a precondition
+            // HandshakeLog.load_stateless_cookie log hrr digest;
             // we will pass extra to the server nego callback
             Some extra 
-        in
+        in 
+      let h = get() in assert (inv ns h);
       match r with 
-      | ServerRetry hrr ->
+      | ServerRetry hrr -> (
         if Some? stateless_retry then 
           fatal Handshake_failure "negotiation failed after a retry"
         else (
@@ -2393,41 +2429,47 @@ let server_ClientHello #region ns offer log =
           // record the initial offer and return the HRR to HS
           trace ("no common group, sending a retry request...");
           // TODO create Transcript in state Start(Some(digest,hrr)) to compute this digest
-          let Some cs = cipherSuite_of_name hrr.HRR.cipher_suite in
-          let ha = verifyDataHashAlg_of_ciphersuite cs in
-          let digest = HandshakeLog.hash_tag #ha log in
-          let cookie = Ticket.create_cookie hrr digest empty_bytes in
-          let hrr = hrr_extend hrr (HRRE_cookie cookie) in 
+          let ha = TLS.Cookie.hrr_ha hrr in 
+          let digest = HandshakeLog.hash_tag #ha log in 
+          let hrr = TLS.Cookie.append digest empty_bytes hrr in
           ns.state := S_HRR offer hrr;
-          sm )
+          sm ))
 
-      | ServerMode m cert _ ->
+      | ServerMode m cert _ -> (
         let nego_cb = ns.cfg.nego_callback in
         let exts = List.Tot.filter CHE_Unknown_extensionType? offer.CH.extensions in
+        // 19-06-16 recurring problem with list filtering; might disappear by lowering, or we could use the list serializer.
+        assume(clientHelloExtensions_list_bytesize exts <= 65535);
         let exts_bytes = clientHelloExtensions_serializer32 exts in
         trace ("Negotiation callback to handle extra extensions and query for stateless retry.");
         trace ("Application data in cookie: "^(match stateless_retry with | Some c -> hex_of_bytes c | _ -> "none"));
-        match nego_cb.negotiate nego_cb.nego_context m.n_protocol_version exts_bytes stateless_retry with
-        | Nego_abort ->
+        let r = nego_cb.negotiate nego_cb.nego_context m.n_protocol_version exts_bytes stateless_retry in
+        let h = get() in assert (inv ns h);
+        match r with 
+        | Nego_abort -> (
           trace ("Application requested to abort the handshake.");
-          fatal Handshake_failure "application aborted the handshake by callback"
+          fatal Handshake_failure "application requested to abort the handshake.")
 
-        | Nego_retry filling ->
-          let hrr = hrr0 offer m.n_cipher_suite in
-          let ha = verifyDataHashAlg_of_ciphersuite m.n_cipher_suite in
+        | Nego_retry filling -> (
+          trace ("Application requested to retry the handshake.");
+          assume(CipherSuite13? m.n_cipher_suite); // from ServerMode 
+          let hrr = TLS.Cookie.hrr0 offer.CH.session_id m.n_cipher_suite in
+          let ha = TLS.Cookie.hrr_ha hrr in 
           let digest = HandshakeLog.hash_tag #ha log in
-          let cookie = Ticket.create_cookie hrr digest filling in
-          let hrr = hrr_extend hrr (HRRE_cookie cookie) in 
+          let hrr = TLS.Cookie.append digest filling hrr in
           ns.state := S_HRR offer hrr;
-          Correct (ServerRetry hrr)
+          assume False; //19-06-17 TBC
+          Correct (ServerRetry hrr))
         
-        | Nego_accept sexts ->
-          trace ("negotiated "^
+        | Nego_accept sexts -> (
+          trace ("Application accepted "^
             string_of_pv m.n_protocol_version^" "^
             string_of_ciphersuite m.n_cipher_suite);
           ns.state := S_ClientHello m cert;
-          Correct (ServerMode m cert (Extensions.eext_of_custom sexts))
-#pop-options
+          Correct (ServerMode m cert sexts)))) in
+  r
+//#pop-options
+
 
 (* 
 let share_of_serverKeyShare (ks:CommonDH.serverKeyShare) : share =
@@ -2466,6 +2508,7 @@ let server_ServerShare #region ns oks app_ees =
         (Option.mapTot keyShareEntry_of_ks oks)
         (mode.n_sessionID = mode.n_offer.CH.session_id)
         ches in 
+      let app_ees = Extensions.encryptedExtensions_of_unknownExtensions app_ees in
       trace ("including application encrypted extensions "^string_of_ees app_ees);
       trace ("including other encrypted extensions "^string_of_ees tls_ees);
       List.Tot.append tls_ees app_ees )

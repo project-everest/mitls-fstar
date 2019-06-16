@@ -677,7 +677,7 @@ noeq type config : Type0 = {
     //QD: see new [TaggedUnknownExtension]. We will use a
     // manually-written coercion in [Extensions] but we still need to
     // prove that the two parsers coincide. 
-    custom_extensions: custom_extensions;
+    custom_extensions: Parsers.UnknownExtensions.unknownExtensions;
 
     // propose these tickets 
     
