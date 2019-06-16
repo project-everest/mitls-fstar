@@ -64,8 +64,11 @@ val find_clientPske: offer -> option Extensions.offeredPsks
 type pski (o:offer) = n:nat {
   // o.ch_protocol_version = TLS_1p3 /\ // 19-01-04  was mistaken?
   (match find_clientPske o with
-  | Some psks -> n < List.length psks.Extensions.identities
-  | _ -> False) }
+  | None -> False
+  | Some psks -> 
+    n < List.length psks.Extensions.identities /\ 
+    n < 65536 (* uint16 *)
+  )}
 
 type cr =
 | NoRequest
@@ -311,6 +314,7 @@ val client_ClientHello:
       | Correct offer -> HS.sel h1 ns.state == C_Offer offer 
       | _             -> True)))
 
+// deprecated--use TLS.Cookie.find_keyshare 
 val group_of_hrr: HSM.hrr -> option CommonDH.namedGroup
 
 // [C_Offer ==> C_HRR] TODO separate pure spec
@@ -419,15 +423,13 @@ val clientComplete_13:
 
 (* SERVER *) 
 
-// For application-handled extensions set by nego callback,
-// such as QUIC transport parameters
-type extra_sext = list (s:Extensions.encryptedExtension{Extensions.EE_Unknown_extensionType? s})
 
 //17-03-30 still missing a few for servers.
 module HRR = Parsers.HelloRetryRequest
+
 noeq type serverMode =
-  | ServerRetry: hrr:HSM.hrr -> serverMode
-  | ServerMode: mode -> certNego -> extra_sext -> serverMode
+  | ServerMode: mode -> certNego -> Extensions.unknownExtensions -> serverMode
+  | ServerRetry: TLS.Cookie.(hrr_leq extensions_max_length) -> serverMode
 
 (* Returns the server hostName, if any, or an empty bytestring; review. *)
 val get_sni: offer -> Tot bytes 
@@ -435,14 +437,20 @@ val get_sni: offer -> Tot bytes
 (* for QUIC *) 
 val get_alpn: offer -> Tot Extensions.clientHelloExtension_CHE_application_layer_protocol_negotiation
 
-/// 
+/// Should this call also allocate and process the Transcript digest?
+
 val server_ClientHello: 
   #region:rgn -> ns: t region Server ->
   HSM.clientHello -> 
   log:HandshakeLog.t ->
   ST (result serverMode)
-  (requires fun h0 -> inv ns h0)
-  (ensures fun h0 _ h1 -> inv ns h1)
+  (requires fun h0 -> 
+    inv ns h0 /\ 
+    (let s = HS.sel h0 ns.state in S_Init? s \/ S_HRR? s))
+  (ensures fun h0 _ h1 -> 
+    inv ns h1
+    // TODO modifies at least the transcript 
+    )
   // [S_Init | S_HRR ==> S_ClientHello m cert] 
   // ensures r = computeServerMode ns.cfg ns.nonce offer (stateful)
   // but [compute_cs13] and [negotiateCipherSuite] are pure. 
@@ -453,9 +461,11 @@ val server_ClientHello:
 val server_ServerShare: 
   #region:rgn -> ns: t region Server ->
   oks:option (g:CommonDH.group & CommonDH.pre_share g) -> //19-01-22 to be refined?
-  app_exts: extra_sext ->
+  app_exts: Extensions.unknownExtensions ->
   ST (result mode)
-  (requires fun h0 -> inv ns h0) 
+  (requires fun h0 -> 
+    inv ns h0 /\ 
+    (let s = HS.sel h0 ns.state in S_ClientHello? s))
   (ensures fun h0 _ h1 -> inv ns h1) 
   // [S_ClientHello ==> S_Mode] setting [sexts, oks] in mode
   // requires oks is consistent with mode (?)

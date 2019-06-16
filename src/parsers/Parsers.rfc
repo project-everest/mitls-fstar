@@ -1740,6 +1740,8 @@ struct {
   } payload[len]; /*extension_data*/
 } TaggedUnknownExtension; /* should be UnknownExtension */
 
+TaggedUnknownExtension UnknownExtensions<0..2^16-1>;
+
 opaque TicketSeal<0..2^16-1>;
 
 struct {
@@ -1764,7 +1766,7 @@ struct {
   
   NamedGroupList offer_shares; /* TODO: maybe we should define a supportedNamedGroups type here, unless it is to be defined by the provider */
   
-  TaggedUnknownExtension custom_extensions<0..2^16-1>;
+  UnknownExtensions custom_extensions;
   
   MiTLSConfigUseTicket use_tickets<0..2^16-1>; /* unsure about bounds */
 
@@ -1799,3 +1801,24 @@ struct {
   } peer_name;
 
 } MiTLSConfig;
+
+/*
+Internal format for encrypted cookies payloads. This is implementation
+specific, ensuring roundtrip authentication for the server and
+compatibility with the opaque cookie<1..2^16-1> of the RFC.
+
+The cookie includes enough data to recompute & hash the HRR message in
+the transcript, that is, all the variable parts computed by our
+HRR-issuing server code.
+
+The cipher_suite sets the hash algorithm and tag length.
+
+*/
+
+struct {
+  SessionID session_id;
+  CipherSuite cipher_suite;
+  NamedGroup group_share<0..2>;
+  opaque clientHelloDigest<0..64>;
+  opaque extra<0..32767>;
+} MiTLSCookieContents;

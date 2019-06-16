@@ -206,26 +206,32 @@ noeq type ticket_cb = {
 
 /// Custom Extensions sent and received from the negotiation callback.
 
-include Parsers.ExtensionType
-include Parsers.UnknownExtension
+open Parsers.ExtensionType
+open Parsers.UnknownExtensions
 
-// 18-12-22 TODO use a vl wire format instead of a list
-type custom_id = v:UInt16.t{~(known_extensionType_repr v)}
-type custom_extension = custom_id * unknownExtension
-type custom_extensions = list custom_extension
+// 18-12-22 TODO use a vl wire format instead of a list: 
+// get rid of these 3 types!
 
-(* Helper functions for the C API to construct the list from array *)
-let empty_custom_extensions () : list custom_extension = []
+/// Ad hoc helper functions for the C API to construct the list;
+/// we could be more defensive.
+
+type custom_tag = Parsers.ExtensionType.(v: extensionType_repr{not (known_extensionType_repr v)})
+
+let empty_custom_extensions () : unknownExtensions = []
 let add_custom_extension 
-  (l:list custom_extension) 
-  (hd:custom_id) 
-  (b:bytes {length b < 65533}) = (hd, b) :: l
+  (ues: unknownExtensions) 
+  (tg: custom_tag)
+  (b:bytes {length b < 65533}) = Parsers.TaggedUnknownExtension.Payload_Unknown_extensionType tg b :: ues
 
-type cookie = Parsers.Cookie.cookie 
+// these are *decrypted cookie extra*, not quite cookies 
+type cookie = 
+  Parsers.MiTLSCookieContents_extra.miTLSCookieContents_extra
+  //Parsers.Cookie.cookie 
+
 type nego_action =
   | Nego_abort: nego_action
   | Nego_retry: cookie_extra: cookie -> nego_action
-  | Nego_accept: extra_ext: custom_extensions -> nego_action
+  | Nego_accept: extra_ext: unknownExtensions -> nego_action
 
 /// Witnessing the callback's decision as an abstract property that
 /// can be provably authenticated by the peer connection.
@@ -245,10 +251,11 @@ inline_for_extraction
 type nego_cb_fun =
   pv: Parsers.ProtocolVersion.protocolVersion -> 
   client_ext: bytes -> 
-  cookie: option cookie -> 
+  cookie: option cookie ->
   ST nego_action
     (requires fun _ -> True)
     (ensures fun h0 r h1 -> 
+      modifies_none h0 h1 /\ 
       negotiated pv client_ext cookie r /\ 
       (Nego_retry? r ==> None? cookie /\ modifies_none h0 h1))
 
@@ -276,7 +283,7 @@ noeq type nego_cb = {
 /// compiling this to C via KreMLin. The representation is hidden from
 /// callers and the wrappers are provided below to implement it.
 
-type cert_repr = b:bytes {length b < 16777216}
+type cert_repr = Parsers.ASN1Cert.aSN1Cert // aka b:bytes {length b < 16777216} but with another syntax 
 type cert_type = FFICallbacks.callbacks
 
 include Parsers.SignatureScheme
@@ -326,7 +333,7 @@ val cert_parse: cc: list cert_repr -> option (ct:cert_type{ cc == cert_format ct
 inline_for_extraction
 type cert_format_cb_fun =
   ct:cert_type -> 
-  ST (list cert_repr)
+  ST Parsers.Certificate12.certificate12 // a binary-length refinement on list_cert_repr
     (requires fun _ -> True)
     (ensures fun h0 r h1 -> 
       (r == [] \/ r == cert_format ct) /\

@@ -92,12 +92,13 @@ let read_psk (i:PSK.pskid)
   (ensures fun h0 _ h1 -> modifies_none h0 h1)
   =
   let c = PSK.psk_info i in
+  let CipherSuite13 early_ae early_hash = c.early_cs in 
   let id =
     if Some? c.ticket_nonce then
-      let (| li, rmsid |) = Ticket.dummy_rmsid c.early_ae c.early_hash in
+      let (| li, rmsid |) = Ticket.dummy_rmsid early_ae early_hash in
       ResumptionPSK #li rmsid
     else
-      ApplicationPSK #(c.early_hash) #(c.early_ae) i
+      ApplicationPSK #early_hash #early_ae i
     in
   (id, c, PSK.psk_value i)
 
@@ -347,7 +348,7 @@ private let mk_binder (#rid) (pskid:psk_identifier) (t:ticket13)
   let i : esId = ResumptionPSK (Ticket.Ticket13?.rmsId t) in
   let pski = Some?.v (Ticket.ticket_pskinfo t) in
   let psk = Ticket.Ticket13?.rms t in
-  let h = pski.early_hash in
+  let CipherSuite13 _ h = pski.early_cs in
   dbg ("Loaded pre-shared key "^(print_bytes pskid)^": "^(print_bytes psk));
   let es : es i = HKDF.extract #h (H.zeroHash h) psk in
   dbg ("Early secret: "^(print_bytes es));
@@ -490,7 +491,8 @@ let ks_server_13_init ks cr cs pskid g_gx =
           (i, psk, h)
         | None ->
           let i, pski, psk = read_psk id in
-          (i, psk, pski.early_hash)
+          let CipherSuite13 _ early_hash = pski.early_cs in 
+          (i, psk, early_hash)
         in
       dbg ("Pre-shared key: "^(print_bytes psk));
       let es: Hashing.Spec.tag h = HKDF.extract #h (H.zeroHash h) psk in
