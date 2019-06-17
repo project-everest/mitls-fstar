@@ -64,8 +64,8 @@ let keyShareEntry_serializer =
   LP.serialize_synth
     _
     synth_keyShareEntry
-    (LP.serialize_nondep_then _ namedGroup_serializer ()
-                              _ (LP.serialize_bounded_vlbytes 1 65535))
+    (LP.serialize_nondep_then namedGroup_serializer
+                              (LP.serialize_bounded_vlbytes 1 65535))
     unsynth_keyShareEntry
     ()
 
@@ -76,10 +76,10 @@ let keyShareEntry_serializer32: LP.serializer32 keyShareEntry_serializer =
   LP.serialize32_synth
     (LP.nondep_then namedGroup_parser (LP.parse_bounded_vlbytes 1 65535))
     synth_keyShareEntry
-    (LP.serialize_nondep_then namedGroup_parser namedGroup_serializer ()
-                              (LP.parse_bounded_vlbytes 1 65535) (LP.serialize_bounded_vlbytes 1 65535))
-    (LP.serialize32_nondep_then namedGroup_serializer32 () 
-                                (LP.serialize32_bounded_vlbytes 1 65535) ())
+    (LP.serialize_nondep_then namedGroup_serializer
+                              (LP.serialize_bounded_vlbytes 1 65535))
+    (LP.serialize32_nondep_then namedGroup_serializer32
+                              (LP.serialize32_bounded_vlbytes 1 65535))
     unsynth_keyShareEntry
     (fun x -> unsynth_keyShareEntry x)
     ()

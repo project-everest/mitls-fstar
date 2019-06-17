@@ -192,9 +192,9 @@ let dhparam_serializer: LP.serializer dhparam_parser =
   LP.serialize_synth
     _ 
     synth_dhparams
-    (LP.serialize_nondep_then _ vls () _
-      (LP.serialize_nondep_then _ vls () _
-        (LP.serialize_nondep_then _ vls () _ vls)))
+    (LP.serialize_nondep_then vls
+      (LP.serialize_nondep_then vls
+        (LP.serialize_nondep_then vls vls)))
     unsynth_dhparams
     ()
 
@@ -206,11 +206,11 @@ let dhparam_serializer32: LP.serializer32 dhparam_serializer =
     _
     synth_dhparams
     _
-    (LP.serialize32_nondep_then vls32 ()
-      (LP.serialize32_nondep_then vls32 ()
-        (LP.serialize32_nondep_then vls32 () vls32 ())
-      ())
-    ())
+    (LP.serialize32_nondep_then vls32
+      (LP.serialize32_nondep_then vls32
+        (LP.serialize32_nondep_then vls32 vls32)
+      )
+    )
     unsynth_dhparams
     (fun x -> unsynth_dhparams x)
     ()
