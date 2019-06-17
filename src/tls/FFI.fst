@@ -461,8 +461,7 @@ let ffiGetExporter (c:Connection.connection) (early:bool)
 let ffiTicketInfoBytes (info:ticketInfo) (key:bytes) =
   let si = match info with
     | TicketInfo_13 ctx ->
-      let ae = ctx.early_ae in
-      let h = ctx.early_hash in
+      let CipherSuite13 ae h = ctx.early_cs in
       let (| li, rmsid |) = Ticket.dummy_rmsid ae h in
       Ticket.Ticket13 (CipherSuite13 ae h) li rmsid key empty_bytes ctx.time_created ctx.ticket_age_add empty_bytes
     | TicketInfo_12 (pv, cs, ems) ->

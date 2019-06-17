@@ -663,7 +663,7 @@ let client_NewSessionTicket_13 (hs:hs) (st13:HSM.newSessionTicket13)
     allow_early_data = Some? ed;
     allow_dhe_resumption = true;
     allow_psk_resumption = true;
-    early_ae = ae; early_hash = h;
+    early_cs = CipherSuite13 ae h;
     identities = (empty_bytes, empty_bytes); // TODO certs
   }) in
 

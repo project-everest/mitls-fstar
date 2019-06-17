@@ -2478,6 +2478,7 @@ let server_ClientHello #region ns offer log =
   r
 //#pop-options
 
+
 (* 
 let share_of_serverKeyShare (ks:CommonDH.serverKeyShare) : share =
   assume False; //18-12-16 TODO incomplete pattern
