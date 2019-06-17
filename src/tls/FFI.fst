@@ -379,7 +379,7 @@ let ffiAddCustomExtension cfg h b =
   trace ("offering custom extension "^(hex_of_bytes (Parse.bytes_of_uint16 h)));
   trace ("extension contents: "^(hex_of_bytes b));
   { cfg with
-  custom_extensions = (h, b) :: cfg.custom_extensions
+  custom_extensions = add_custom_extension cfg.custom_extensions h b
   }
 
 val ffiSetTicketKey: a:string -> k:bytes -> ML bool

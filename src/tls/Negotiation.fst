@@ -2019,13 +2019,6 @@ let compute_cs13 cfg o psks shares server_cert =
       | Some ngs -> if ngs `names_group_of` s then Some s else None in
   compute_cs13_aux cfg o psks g_gx server_cert 0
 
-val retry_cs13:
-  cfg: config ->
-  o: offer ->
-  shares: list share (* pre-registered *) ->
-  option (CommonDH.namedGroup * cs:cipherSuite)
-
-
 /// Negotiation failed, but may still succeed after an HRR: the server
 /// selects its preferred group and ciphersuite in those offered by
 /// the client.
@@ -2363,12 +2356,6 @@ let server_ClientHello2_stateful #region ns o1 hrr o2 =
 /// compatible with our HelloRetryRequest: the required ciphersuite
 /// and group (if any) are those negotiated. No need to check the
 /// sessionId is unchanged since it is included in the digest.
-
-
-// Checks that the mode selected for a second ClientHello is
-// compatible with our HelloRetryRequest: the required ciphersuite and
-// group (if any) are those negotiated. No need to check the sessionId
-// is unchanged since it is included in the digest.
 
 let server_hrr_verify offer mode hrr = 
   is_named_cs mode.n_cipher_suite hrr.HRR.cipher_suite &&
