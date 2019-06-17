@@ -13,7 +13,7 @@
   See the License for the specific language governing permissions and
   limitations under the License.
 
-  Authors: T. Ramananandro, A. Rastogi, N. Swamy
+  Authors: T. Ramananandro, A. Rastogi, N. Swamy, A. Fromherz
 *)
 module MITLS.Repr
 
@@ -33,6 +33,7 @@ module MITLS.Repr
       framing principle and SMT triggers for it.
 *)
 module LP = LowParse.Low.Base
+module LS = LowParse.SLow.Base
 module B = LowStar.Buffer
 module HS = FStar.HyperStack
 open FStar.Integers
@@ -279,6 +280,42 @@ let mk_from_const_slice
       end_pos = to;
       meta = m
     }
+
+let mk_from_serialize
+  (b:LP.slice mut_p mut_p{ LP.(b.len <= validator_max_length) })
+  (from:index (of_slice b))
+  (#k:strong_parser_kind) #t (#parser:LP.parser k t) (#serializer: LP.serializer parser)
+  (serializer32: LS.serializer32 serializer) (size32: LS.size32 serializer)
+  (x: t)
+: Stack (option (repr_p t (of_slice b) parser))
+    (requires fun h ->
+      LP.live_slice h b)
+    (ensures fun h0 r h1 ->
+      B.modifies (LP.loc_slice_from b from) h0 h1 /\
+      begin match r with
+      | None ->
+        (* not enough space in output slice *)
+        Seq.length (LP.serialize serializer x) > FStar.UInt32.v (b.LP.len - from)
+      | Some r ->
+        valid r h1 /\
+        r.start_pos == from /\
+        value r == x
+      end
+    )
+= let size = size32 x in
+  let len = b.LP.len - from in
+  if len < size
+  then None
+  else begin
+    let bytes = serializer32 x in
+    let dst = B.sub b.LP.base from size in
+    (if size > 0ul then FStar.Bytes.store_bytes bytes dst);
+    let to = from + size in
+    let h = get () in
+    LP.serialize_valid_exact serializer h b x from to;
+    let r = mk b from to parser in
+    Some r
+  end
 
 (*** Stable Representations ***)
 
