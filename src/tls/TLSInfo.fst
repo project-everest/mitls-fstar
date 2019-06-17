@@ -95,7 +95,7 @@ let defaultConfig =
   extended_master_secret = true;
   enable_tickets = true;
 
-  ticket_callback = PSK.defaultTicketCB;
+  ticket_callback = defaultTicketCB;
   nego_callback = defaultServerNegoCB;
   cert_callbacks = defaultCertCB;
 

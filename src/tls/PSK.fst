@@ -11,6 +11,8 @@ open TLSConstants
 module DM = FStar.DependentMap
 module MDM = FStar.Monotonic.DependentMap
 module DT = DefineTable
+module U32 = FStar.UInt32
+
 module HS = FStar.HyperStack
 module ST = FStar.HyperStack.ST
 
@@ -19,32 +21,16 @@ include Parsers.PskIdentity
 include Parsers.PskIdentity_identity
 include Parsers.OfferedPsks
 
-// *** PSK ***
-
-// The constraints for PSK indexes are:
-//  - must be public (as psk index appears in hsId, msId and derived keys)
-//  - must support application-provided PSK as well as RMS-based PSK
-//  - must support dynamic compromise; we want to prove KI of 1RT keys in PSK_DHE
-//    even for leaked PSK (but not PSK-based auth obivously)
-// Implementation style:
-//  - pskid is the TLS PSK identifier, an internal index to the PSK table
-//  - for tickets, the encrypted serialized state is the PSK identifier
-//  - we store in the table the PSK context and compromise status
-
-// The type of PSK identifiers (labels used in TLS messages)
-type pskName = pskIdentity_identity
-
-// The information associated with a PSK, i.e. time created,
-// usage (PSK+DHE or PSK only), hash, and AEAD (for 0-RTT)
-type pskInfo = TLS.Callbacks.pskInfo
-
-// We rule out all PSK that do not have at least one non-null byte
-// thus avoiding possible confusion with non-PSK for all possible hash algs
-type app_psk (i:psk_identifier) =
-  b:bytes{exists i.{:pattern b.[i]} b.[i] <> 0z}
+// Concrete test to reject invalid PSKs
+let is_valid_psk (k:bytes) : (b:bool{b ==> non_zero k}) =
+  let rec aux (i:U32.t{U32.v i <= length k})
+    : Tot (b:bool{b ==> non_zero k}) (decreases (length k - U32.v i))=
+    if i = len k then false
+    else (if k.[i] <> 0z then true else aux U32.(i +^ 1ul))
+  in aux 0ul
 
 type app_psk_entry (i:psk_identifier) =
-  (app_psk i) * pskInfo * bool
+  k:bytes{non_zero k} * pskInfo * bool
 
 type psk_table_invariant (m:MDM.partial_dependent_map psk_identifier app_psk_entry) = True
 
@@ -65,6 +51,7 @@ let valid_app_psk (ctx:pskInfo) (i:psk_identifier) (h:mem) =
 
 type pskid = i:psk_identifier{registered_psk i}
 
+<<<<<<< HEAD
 let psk_value (i:pskid) : ST (app_psk i)
   (requires (fun h0 -> True))
   (ensures (fun h0 _ h1 -> modifies_none h0 h1))
@@ -194,6 +181,9 @@ let verify_hash_ae (i:pskid) (ha:hash_alg) (ae:aeadAlg) : ST bool
       true
      end
     else false
+=======
+let coerce k = admit()
+>>>>>>> Prepare refactoring of PSK
 
 (*
 Provisional support for the PSK extension
@@ -221,43 +211,6 @@ Hence, the server authenticates age, and may filter 0RTT accordingly.
 
 *)
 
-type ticket_age = UInt32.t
-type obfuscated_ticket_age = UInt32.t
-let default_obfuscated_age = 0ul
-open FStar.UInt32
-let encode_age (t:ticket_age)  mask = t +%^ mask
-let decode_age (t:obfuscated_ticket_age) mask = t -%^ mask
-
-private let inverse_mask t mask: Lemma (decode_age (encode_age t mask) mask = t) = ()
-
-
-/// By default we use an in-memory ticket table
-/// and the in-memory internal PSK database
-
-val defaultTicketCBFun: context -> ticket_cb_fun
-let defaultTicketCBFun _ sni ticket info psk =
-  let h0 = get() in
-  begin
-  (*
-  match info with
-  | TicketInfo_12 (pv, cs, ems) ->
-    // 2018.03.10 SZ: The ticket must be fresh
-    assume False;
-    s12_extend ticket (pv, cs, ems, psk) // modifies PSK.tregion
-  | TicketInfo_13 pskInfo ->
-    // 2018.03.10 SZ: Missing refinement in ticket_cb_fun
-    assume (exists i.{:pattern index psk i} index psk i <> 0z);
-    // 2018.03.10 SZ: The ticket must be fresh
-    assume False;
-    coerce_psk ticket pskInfo psk;      // modifies psk_region
-    extend sni ticket                   // modifies PSK.tregion
-  *) ()
-  end;
-  let h1 = ST.get() in
-  // 2018.03.10 SZ: [ticket_cb_fun] ensures [modifies_none]
-  assume (modifies_none h0 h1)
-
-let defaultTicketCB = {
-  ticket_context = default_context();
-  new_ticket = defaultTicketCBFun;
-}
+let encode_age age mask = U32.(age +%^ mask)
+let decode_age age mask = U32.(age -%^ mask)
+let lemma_age_encode_decode t mask = ()
