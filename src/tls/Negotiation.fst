@@ -2364,6 +2364,12 @@ let server_ClientHello2_stateful #region ns o1 hrr o2 =
 /// and group (if any) are those negotiated. No need to check the
 /// sessionId is unchanged since it is included in the digest.
 
+
+// Checks that the mode selected for a second ClientHello is
+// compatible with our HelloRetryRequest: the required ciphersuite and
+// group (if any) are those negotiated. No need to check the sessionId
+// is unchanged since it is included in the digest.
+
 let server_hrr_verify offer mode hrr = 
   is_named_cs mode.n_cipher_suite hrr.HRR.cipher_suite &&
   ( match TLS.Cookie.find_keyshare hrr with
@@ -2471,8 +2477,6 @@ let server_ClientHello #region ns offer log =
           Correct (ServerMode m cert sexts)))) in
   r
 //#pop-options
-
-
 
 (* 
 let share_of_serverKeyShare (ks:CommonDH.serverKeyShare) : share =
