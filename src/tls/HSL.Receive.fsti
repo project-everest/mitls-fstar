@@ -222,6 +222,70 @@ let receive_post
 /// the postconditions of the receive functions
 
 
+(*** ClientHello and ServerHello flights ***)
+
+
+(****** Handshake state S_Idle ******)
+
+
+/// Handshake state S_Idle expects the following flight
+///
+/// [ ClientHello ]
+///
+/// The following flight type covers this case
+
+
+noeq type s_Idle (b:R.const_slice) = {
+  ch_msg : HSMR.ch_repr b
+}
+
+let valid_s_Idle
+  (#b:R.const_slice) (from to:uint_32)
+  (flt:s_Idle b) (h:HS.mem)
+  = let open R in
+
+    flt.ch_msg.start_pos == from /\
+    flt.ch_msg.end_pos == to /\
+
+    valid flt.ch_msg h
+
+
+val receive_s_Idle (st:hsl_state) (b:R.const_slice) (from to:uint_32)
+  : ST (TLSError.result (option (s_Idle b)))
+       (requires receive_pre st b from to F_s_Idle)
+       (ensures  receive_post st b from to F_s_Idle valid_s_Idle)
+
+
+(****** Handshake state C_wait_ServerHello ******)
+
+
+/// Handshake state C_wait_ServerHello expects the following flight
+///
+/// [ ServerHello ]
+///
+/// The following flight type covers this case
+
+noeq type c_wait_ServerHello (b:R.const_slice) = {
+  sh_msg : m:HSMR.sh_repr b
+}
+
+let valid_c_wait_ServerHello
+  (#b:R.const_slice) (from to:uint_32)
+  (flt:c_wait_ServerHello b) (h:HS.mem)
+  = let open R in
+
+    flt.sh_msg.start_pos == from /\
+    flt.sh_msg.end_pos == to /\
+
+    valid flt.sh_msg h
+
+
+val receive_c_wait_ServerHello (st:hsl_state) (b:R.const_slice) (from to:uint_32)
+  : ST (TLSError.result (option (c_wait_ServerHello b)))
+       (requires receive_pre st b from to F_c_wait_ServerHello)
+       (ensures  receive_post st b from to F_c_wait_ServerHello valid_c_wait_ServerHello)
+
+
 (*** 1.3 flights ***)
 
 /// The receive functions, and the flight types are designed as per the Handshake state
@@ -527,70 +591,6 @@ val receive_s12_wait_CCS1 (st:hsl_state) (b:R.const_slice) (from to:uint_32)
 
 
 
-(*** ClientHello and ServerHello flights ***)
-
-
-(****** Handshake state S_Idle ******)
-
-
-/// Handshake state S_Idle expects the following flight
-///
-/// [ ClientHello ]
-///
-/// The following flight type covers this case
-
-
-noeq type s_Idle (b:R.const_slice) = {
-  ch_msg : HSMR.ch_repr b
-}
-
-let valid_s_Idle
-  (#b:R.const_slice) (from to:uint_32)
-  (flt:s_Idle b) (h:HS.mem)
-  = let open R in
-
-    flt.ch_msg.start_pos == from /\
-    flt.ch_msg.end_pos == to /\
-
-    valid flt.ch_msg h
-
-
-val receive_s_Idle (st:hsl_state) (b:R.const_slice) (from to:uint_32)
-  : ST (TLSError.result (option (s_Idle b)))
-       (requires receive_pre st b from to F_s_Idle)
-       (ensures  receive_post st b from to F_s_Idle valid_s_Idle)
-
-
-(****** Handshake state C_wait_ServerHello ******)
-
-
-/// Handshake state C_wait_ServerHello expects the following flight
-///
-/// [ ServerHello ]
-///
-/// The following flight type covers this case
-
-noeq type c_wait_ServerHello (b:R.const_slice) = {
-  sh_msg : m:HSMR.sh_repr b
-}
-
-let valid_c_wait_ServerHello
-  (#b:R.const_slice) (from to:uint_32)
-  (flt:c_wait_ServerHello b) (h:HS.mem)
-  = let open R in
-
-    flt.sh_msg.start_pos == from /\
-    flt.sh_msg.end_pos == to /\
-
-    valid flt.sh_msg h
-
-
-val receive_c_wait_ServerHello (st:hsl_state) (b:R.const_slice) (from to:uint_32)
-  : ST (TLSError.result (option (c_wait_ServerHello b)))
-       (requires receive_pre st b from to F_c_wait_ServerHello)
-       (ensures  receive_post st b from to F_c_wait_ServerHello valid_c_wait_ServerHello)
-
-
 
 /// Stub that will remain in HandshakeLog.state, at least for now,
 /// replacing {incoming, parsed, hashes}. It may actually be
@@ -625,4 +625,3 @@ let receive f s = f s.st s.input s.from s.to
 // receive, e.g. calling parse32 on the received flights and computing
 // a few tags before calling the functions on the rhs of the patterns
 // at the end of Old.Handshake.
-
