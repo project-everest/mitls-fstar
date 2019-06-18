@@ -258,7 +258,7 @@ let lemma_top_loc_disjoint (i j:nat)
   = ()
 
 (*
-FIXME(adl)
+//FIXME(adl)
 #set-options "--max_fuel 2 --max_ifuel 2"
 let _ =
   lemma_disjoint_regions tls_tables_region tls_define_region;

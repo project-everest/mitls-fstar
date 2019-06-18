@@ -460,7 +460,8 @@ let rec obfuscate_age now = function
   | [] -> []
   | (id, ctx) :: t ->
     let age = FStar.UInt32.((now -%^ ctx.time_created) *%^ 1000ul) in
-    {identity = id; obfuscated_ticket_age = PSK.encode_age age ctx.ticket_age_add} ::
+    {identity = PSK.name id;
+    obfuscated_ticket_age = PSK.encode_age age ctx.ticket_age_add} ::
     obfuscate_age now t
 
 module PR = Parsers.ResumeInfo
@@ -477,10 +478,9 @@ noextract
 let list_pskid_pskinfo_of_list_resumeinfo13 (l: list Parsers.ResumeInfo13.resumeInfo13) : Tot (list (PSK.pskid * pskInfo)) = List.Tot.map
   (fun r -> let i = r.Parsers.ResumeInfo13.identity in
          let t = r.Parsers.ResumeInfo13.ticket in
-         assume (PSK.registered_psk i);
-         ((i <: PSK.pskid), Some?.v (Ticket.ticketContents_pskinfo (Parsers.TicketContents.T_ticket13 t))))
+         (admit(), Some?.v (Ticket.ticketContents_pskinfo (Parsers.TicketContents.T_ticket13 t))))
   l
-
+(*
 let rec obfuscate_age_obfuscate_age_new
   (now: U32.t)
   (l: list Parsers.ResumeInfo13.resumeInfo13)
@@ -491,8 +491,9 @@ let rec obfuscate_age_obfuscate_age_new
   | r :: q ->
     let i = r.Parsers.ResumeInfo13.identity in
     let t = r.Parsers.ResumeInfo13.ticket in
-    assume (PSK.registered_psk i);
+//    assume (PSK.registered_psk i);
     obfuscate_age_obfuscate_age_new now q
+*)
 
 let final_extensions cfg edi psks now: list clientHelloExtension =
   match cfg.max_version with
@@ -2058,19 +2059,21 @@ let compute_hrr cfg o =
 //
 // To avoid psk re-indexing, we produce a list of options rather than
 // a filtered list; to be revisited to avoid this intermediate list.
-let rec filter_psk (l:list pskIdentity) : St (r:list (option (PSK.pskid * PSK.pskInfo)) {List.length r = List.length l}) =
+let rec filter_psk (l:list pskIdentity)
+  : St (r:list (option (PSK.pskid * PSK.pskInfo)) {List.length r = List.length l}) =
   match l with
   | [] -> []
   | ({identity = id; obfuscated_ticket_age = _}) :: t ->
     (match Ticket.check_ticket13 id with
     | Some info -> 
         //19-04-23 should be check_ticket post? 
-        assume(PSK.registered_psk id);
-        Some (id, info) :: (filter_psk t)
-    | None ->
-      (match PSK.psk_lookup id with
-      | Some info -> trace ("Loaded PSK from ticket <"^print_bytes id^">"); Some (id, info) :: filter_psk t
-      | None -> trace ("WARNING: the PSK <"^print_bytes id^"> has been filtered"); None :: filter_psk t))
+        assume(not model /\ PSK.non_zero id);
+        Some (PSK.coerce id, info) :: (filter_psk t)
+//    | None ->
+//      (match PSK.psk_lookup id with
+//      | Some info -> trace ("Loaded PSK from ticket <"^print_bytes id^">"); Some (id, info) :: filter_psk t
+      | None -> trace ("WARNING: the PSK <"^print_bytes id^"> has been filtered"); None :: filter_psk t)
+//      )
 
 // Registration of DH shares
 let rec register_shares (l:list pre_share): 

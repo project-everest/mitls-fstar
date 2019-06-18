@@ -54,6 +54,9 @@ val coerce:
   (requires fun h0 -> True)
   (ensures fun h0 _ h1 -> M.modifies loc_psk_region h0 h1)
 
+val leak: i:pskid{not model} -> bytes
+val name: pskid -> pskName
+
 // FIXME turn abstract for confidentiality?
 type ticket_age = UInt32.t
 type obfuscated_ticket_age = UInt32.t

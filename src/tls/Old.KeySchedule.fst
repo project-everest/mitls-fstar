@@ -86,22 +86,6 @@ private let res_psk_value (i:rmsId{registered_res_psk i}) =
 abstract let psk (i:esId) =
   b:bytes{len b = Hacl.Hash.Definitions.hash_len (esId_hash i)}
 
-let read_psk (i:PSK.pskid)
-  : ST (esId * pskInfo * PSK.app_psk i)
-  (requires fun h -> True)
-  (ensures fun h0 _ h1 -> modifies_none h0 h1)
-  =
-  let c = PSK.psk_info i in
-  let CipherSuite13 early_ae early_hash = c.early_cs in 
-  let id =
-    if Some? c.ticket_nonce then
-      let (| li, rmsid |) = Ticket.dummy_rmsid early_ae early_hash in
-      ResumptionPSK #li rmsid
-    else
-      ApplicationPSK #early_hash #early_ae i
-    in
-  (id, c, PSK.psk_value i)
-
 type binderId = i:pre_binderId{valid (I_BINDER i)}
 type hsId = i:TLSInfo.pre_hsId{valid (I_HS i)}
 type asId = i:pre_asId{valid (I_AS i)}
@@ -405,7 +389,7 @@ let ks_client_13_ch ks (log:bytes): ST (exportKey * recordInstance)
    li_ch0_cr = cr;
    li_ch0_ed_ae = ae;
    li_ch0_ed_hash = h;
-   li_ch0_ed_psk = empty_bytes; }) in
+   li_ch0_ed_psk = PSK.coerce empty_bytes; }) in
 
   let log : hashed_log li = log in
   let expandId : expandId li = ExpandedSecret (EarlySecretID i) ClientEarlyTrafficSecret log in
@@ -479,6 +463,7 @@ let ks_server_13_init ks cr cs pskid g_gx =
   let esId, es, bk =
     match pskid with
     | Some id ->
+      let id = PSK.leak id in
       dbg ("Using negotiated PSK identity: "^(print_bytes id));
       let i, psk, h : esId * bytes * Hashing.Spec.alg =
         match Ticket.check_ticket false id with
@@ -489,10 +474,7 @@ let ks_server_13_init ks cr cs pskid g_gx =
           let nonce, _ = split id 12ul in
           let psk = HKDF.derive_secret h rms "resumption" nonce in
           (i, psk, h)
-        | None ->
-          let i, pski, psk = read_psk id in
-          let CipherSuite13 _ early_hash = pski.early_cs in 
-          (i, psk, early_hash)
+        | None -> admit() // App PSK table to be replaced by app PSK callback
         in
       dbg ("Pre-shared key: "^(print_bytes psk));
       let es: Hashing.Spec.tag h = HKDF.extract #h (H.zeroHash h) psk in
@@ -548,7 +530,7 @@ let ks_server_13_0rtt_key ks (log:bytes)
     li_ch0_cr = cr;
     li_ch0_ed_ae = ae;
     li_ch0_ed_hash = h;
-    li_ch0_ed_psk = empty_bytes;
+    li_ch0_ed_psk = PSK.coerce empty_bytes;
   }) in
   let log : hashed_log li = log in
   let expandId : expandId li = ExpandedSecret (EarlySecretID esId) ClientEarlyTrafficSecret log in

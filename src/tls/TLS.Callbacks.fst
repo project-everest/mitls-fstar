@@ -133,6 +133,6 @@ let defaultTicketCBFun _ sni ticket info psk =
     extend sni ticket                   // modifies PSK.tregion
   *) ()
   end;
-  let h1 = ST.get() in
+  let h1 = get() in
   // 2018.03.10 SZ: [ticket_cb_fun] ensures [modifies_none]
   assume (modifies_none h0 h1)

@@ -663,7 +663,7 @@ let client_NewSessionTicket_13 (hs:hs) (st13:HSM.newSessionTicket13)
     allow_early_data = Some? ed;
     allow_dhe_resumption = true;
     allow_psk_resumption = true;
-    early_cs = CipherSuite13 ae h;
+    early_cs = mode.Nego.n_cipher_suite;
     identities = (empty_bytes, empty_bytes); // TODO certs
   }) in
 
@@ -855,8 +855,8 @@ let server_ClientHello hs offer =
             let tlen = Extensions.offeredPsks_binders_size32 psks.Extensions.binders in
             let Some id = List.Tot.nth psks.Extensions.identities i in
             let Some tag = List.Tot.nth psks.Extensions.binders i in
-            assume(PSK.registered_psk id.Extensions.identity);
-            let server_share, Some binderKey = KeySchedule.ks_server_13_init hs.ks cr cs (Some id.Extensions.identity) g_gx in
+	    let pskid = Some (PSK.coerce id.Extensions.identity) in
+            let server_share, Some binderKey = KeySchedule.ks_server_13_init hs.ks cr cs pskid g_gx in
             if verify_binder hs binderKey tag tlen
             then Correct server_share
             else

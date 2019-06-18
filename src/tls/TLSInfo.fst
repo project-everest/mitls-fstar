@@ -376,7 +376,7 @@ type binderLabel =
 /// early secrets (range of 1st extraction)
 [@ Gc ] // cwinter: quic2c
 type pre_esId : Type0 =
-  | ApplicationPSK: #ha:HMAC.ha -> #ae:aeadAlg -> i:PSK.pskid{PSK.compatible_hash_ae i ha ae} -> pre_esId
+  | ApplicationPSK: #ha:HMAC.ha -> #ae:aeadAlg -> i:PSK.pskid -> pre_esId
   | ResumptionPSK: #li:logInfo{~(LogInfo_CH? li)} -> i:pre_rmsId li -> pre_esId
   | NoPSK: HMAC.ha -> pre_esId
 and pre_binderId =
@@ -514,7 +514,7 @@ type valid (i:pre_index) =
   (match i with
   | I_ES i ->
     (match i with
-    | ApplicationPSK i -> PSK.registered_psk i
+    | ApplicationPSK i -> True //PSK.registered_psk i
     | ResumptionPSK #li i -> registered (I_RMS #li i)
     | NoPSK _ -> True)
   | I_BINDER (Binder i _) -> registered (I_ES i)
