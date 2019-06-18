@@ -114,3 +114,7 @@ val decrypt:
 // "global" authenticated predicate in the presence of key updates. We
 // may need extra parameters, such as the initial client hello and
 // server configuration.
+
+val test: unit -> ST bool
+  (requires fun h0 -> True)
+  (ensures fun h0 _ h1 -> B.(modifies loc_none h0 h1))

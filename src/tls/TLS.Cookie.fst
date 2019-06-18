@@ -70,7 +70,7 @@ let decrypt encrypted =
 
 // Can we get rid of Evercrypt.algs??
 
-let test =
+let test() =
   let chd = empty_bytes in
   let hrr = hrr0 empty_bytes (CipherSuite13 EverCrypt.AES128_GCM Spec.Hash.Definitions.SHA2_256) in
   let extra = empty_bytes in
@@ -82,6 +82,7 @@ let test =
     | Error _ -> false
     | Correct (chd', extra', hrr') ->
       (chd' = chd && extra' = extra && hrr' = hrr)
+
 
 
 
