@@ -58,6 +58,9 @@ let is_ch (#b:R.const_slice) (r:repr b) : GTot bool =
 let is_sh (#b:R.const_slice) (r:repr b) : GTot bool =
   HSM.M_server_hello? (R.value r)
 
+type ch_repr (b:R.const_slice) = m:repr b{is_ch m}
+type sh_repr (b:R.const_slice) = m:repr b{is_sh m}
+
 let clientHello (#b:R.const_slice) (r:repr b{is_ch r})
   : Stack (RCH.repr b)
     (requires fun h ->

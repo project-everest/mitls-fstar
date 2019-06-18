@@ -82,6 +82,17 @@ let is_nst (#b:R.const_slice) (r:repr b) : GTot bool =
 let is_fin (#b:R.const_slice) (r:repr b) : GTot bool =
   HSM12.M12_finished? (R.value r)
 
+type hr12_repr (b:R.const_slice) = m:repr b{is_hr m}
+type c12_repr (b:R.const_slice) = m:repr b{is_c m}
+type ske12_repr (b:R.const_slice) = m:repr b{is_ske m}
+type cr12_repr (b:R.const_slice) = m:repr b{is_cr m}
+type shd12_repr (b:R.const_slice) = m:repr b{is_shd m}
+type cv12_repr (b:R.const_slice) = m:repr b{is_cv m}
+type cke12_repr (b:R.const_slice) = m:repr b{is_cke m}
+type nst12_repr (b:R.const_slice) = m:repr b{is_nst m}
+type fin12_repr (b:R.const_slice) = m:repr b{is_fin m}
+
+
 (*
  * Common precondition for functions that return the
  *   reprs for specific instance types

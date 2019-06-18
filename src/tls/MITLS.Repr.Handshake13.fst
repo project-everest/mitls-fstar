@@ -77,6 +77,15 @@ let is_nst (#b:R.const_slice) (r:repr b) : GTot bool =
 let is_kupd (#b:R.const_slice) (r:repr b) : GTot bool =
   HSM13.M13_key_update? (R.value r)
 
+type ee13_repr (b:R.const_slice) = r:repr b{is_ee r}
+type c13_repr (b:R.const_slice) = r:repr b{is_c r}
+type cv13_repr (b:R.const_slice) = r:repr b{is_cv r}
+type fin13_repr (b:R.const_slice) = r:repr b{is_fin r}
+type cr13_repr (b:R.const_slice) = r:repr b{is_cr r}
+type eoed13_repr (b:R.const_slice) = r:repr b{is_eoed r}
+type nst13_repr (b:R.const_slice) = r:repr b{is_nst r}
+
+
 (*
  * Common precondition for functions that return the
  *   reprs for specific instance types

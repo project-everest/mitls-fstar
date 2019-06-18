@@ -77,20 +77,16 @@ module HSMR   = MITLS.Repr.Handshake
 
 type in_progress_flt_t =
   | F_none
-  | F13_ee_c_cv_fin
-  | F13_ee_cr_c_cv_fin
-  | F13_ee_fin
-  | F13_fin
-  | F13_c_cv_fin
-  | F13_eoed
-  | F13_nst
-  | F12_c_ske_shd
-  | F12_c_ske_cr_shd
-  | F12_fin
-  | F12_nst
-  | F12_cke
-  | F_ch
-  | F_sh
+  | F_c13_wait_Finished1
+  | F_s13_wait_Finished2
+  | F_s13_wait_EOED
+  | F_c13_Complete
+  | F_c12_wait_ServerHelloDone
+  | F_cs12_wait_Finished
+  | F_c12_wait_NST
+  | F_s12_wait_CCS1
+  | F_s_Idle
+  | F_c_wait_ServerHello
 
 
 /// Abstract HSL state
@@ -222,7 +218,7 @@ let receive_post
 /// The flight types contain appropriate refinements to say, for example,
 /// that a particular HSM13 repr is EE or Fin
 ///
-/// Other facts such as stitched indices and (stateful) validity are provided in
+/// Other facts such as ranges and (stateful) validity are provided in
 /// the postconditions of the receive functions
 
 
@@ -230,22 +226,12 @@ let receive_post
 
 /// The receive functions, and the flight types are designed as per the Handshake state
 
-type ee13_repr (b:R.const_slice) = r:HSM13R.repr b{HSM13R.is_ee r}
-type c13_repr (b:R.const_slice) = r:HSM13R.repr b{HSM13R.is_c r}
-type cv13_repr (b:R.const_slice) = r:HSM13R.repr b{HSM13R.is_cv r}
-type fin13_repr (b:R.const_slice) = r:HSM13R.repr b{HSM13R.is_fin r}
-type cr13_repr (b:R.const_slice) = r:HSM13R.repr b{HSM13R.is_cr r}
-type eoed13_repr (b:R.const_slice) = r:HSM13R.repr b{HSM13R.is_eoed r}
-type nst13_repr (b:R.const_slice) = r:HSM13R.repr b{HSM13R.is_nst r}
-
-unfold let none_or_in_range
-  (#b:R.const_slice) (r:option (HSM13R.repr b))
-  (from to:uint_32)
-  = let open R in
-    r == None \/
-    (let r = Some?.v r in
-     from <= r.start_pos /\ r.end_pos <= to)
-
+unfold let in_range_and_valid
+  (#a:Type0) (#b:R.const_slice) (r:R.repr a b)
+  (from to:uint_32) (h:HS.mem)
+   = let open R in
+     from <= r.start_pos /\ r.end_pos <= to /\  //in-range
+     valid r h  //valid
 
 (****** Handshake state C13_wait_Finished1 ******)
 
@@ -254,329 +240,214 @@ unfold let none_or_in_range
 
 /// Handshake state C13_wait_Finished1 expects three flights:
 ///
-/// [ EE; C; CV; Fin ]
-/// [ EE; CR; C; CV; Fin ]
-/// [ EE; Fin ]
+/// [ EncryptedExtensions13; Certificate13; CertificateVerify13; Finished13 ]
+/// [ EncryptedExtensions13; CertificateRequest13; Certificate13; CertificateVerify13; Finished13 ]
+/// [ EncryptedExtensions13; Finished13 ]
 ///
 /// The following type covers all these cases
 
 noeq type c13_wait_Finished1 (b:R.const_slice) = {
-  ee_msg   : ee13_repr b;
-  cr_msg   : option (cr13_repr b);
-  c_cv_msg : option (c13_repr b & cv13_repr b);
-  fin_msg  : fin13_repr b
+  ee_msg   : HSM13R.ee13_repr b;
+  cr_msg   : option (HSM13R.cr13_repr b);
+  c_cv_msg : option (HSM13R.c13_repr b & HSM13R.cv13_repr b);
+  fin_msg  : HSM13R.fin13_repr b
 }
+
+
+/// The validity predicate, such as the following, are underspecified in that
+///   they only say that all the messages in the flight are between from and to
+///   and don't say that they are actually stitched in order
+
 
 unfold let valid_c13_wait_Finished1
   (#b:R.const_slice) (from to:uint_32)
-  (flt:c13_wait_Finished1) (h:HS.mem)
-  = let open R in
+  (flt:c13_wait_Finished1 b) (h:HS.mem)
+  = R.(flt.ee_msg.start_pos == from /\
+       flt.fin_msg.end_pos == to)   /\  //flight begins at from and finishes at to
 
-    flt.ee_msg.start_pos == from /\
+    in_range_and_valid flt.ee_msg from to h /\
     
-    flt.fin_msg.end_pos == to /\ True
+    (Some? flt.cr_msg ==> in_range_and_valid (Some?.v flt.cr_msg) from to h) /\
     
+    (Some? flt.c_cv_msg ==>
+      (let c13_msg, cv13_msg = Some?.v flt.c_cv_msg in
+       in_range_and_valid c13_msg from to h /\
+       in_range_and_valid cv13_msg from to h)) /\
+
+    in_range_and_valid flt.fin_msg from to h
 
 
-
-
-
-//19-05-28 the handshake may not need the position details; the only
-// thing that matters is that all messages are within from..to.
-
-unfold let valid_flight13_ee_c_cv_fin
-  (#b:R.const_slice) (from to:uint_32)
-  (flt:flight13_ee_c_cv_fin b) (h:HS.mem)
-  = let open R in  
-  
-    flt.ee_msg.start_pos == from /\
-    flt.ee_msg.end_pos == flt.c_msg.start_pos /\
-    flt.c_msg.end_pos == flt.cv_msg.start_pos /\
-    flt.cv_msg.end_pos == flt.fin_msg.start_pos /\
-    flt.fin_msg.end_pos == to /\
-  
-    valid flt.ee_msg h /\
-    valid flt.c_msg h /\
-    valid flt.cv_msg h /\
-    valid flt.fin_msg h
-
-// c13_wait_Finished1 for all 3 ee...fin
-val receive_flight13_ee_c_cv_fin
+val receive_c13_wait_Finished1
   (st:hsl_state) (b:R.const_slice) (from to:uint_32)
-  : ST (TLSError.result (option (flight13_ee_c_cv_fin b)))
-       (requires receive_pre st b from to F13_ee_c_cv_fin)
-       (ensures  receive_post st b from to F13_ee_c_cv_fin valid_flight13_ee_c_cv_fin)
+  : ST (TLSError.result (option (c13_wait_Finished1 b)))
+       (requires receive_pre st b from to F_c13_wait_Finished1)
+       (ensures  receive_post st b from to F_c13_wait_Finished1 valid_c13_wait_Finished1)
 
 
-(****** Flight [EncryptedExtensions; Certificaterequest13; Certificate13; CertificateVerify; Finished ] ******)
+(****** Handshake state S13_wait_Finished2 ******)
 
-noeq
-type flight13_ee_cr_c_cv_fin (b:R.const_slice) = {
-  ee_msg  : HSM13R.repr b;
-  cr_msg  : HSM13R.repr b;
-  c_msg   : HSM13R.repr b;
-  cv_msg  : HSM13R.repr b;
-  fin_msg : m:HSM13R.repr b{
-    HSM13R.is_ee ee_msg /\
-    HSM13R.is_cr cr_msg /\
-    HSM13R.is_c c_msg /\
-    HSM13R.is_cv cv_msg /\
-    HSM13R.is_fin m
-  }
+
+/// Handshake state S13_wait_Finished2 expects two flights:
+///
+/// [ Finished13 ]
+/// [ Certificate13; CertificateVerify13; Finished13 ]
+///
+/// The following type covers both these cases
+
+
+noeq type s13_wait_Finished2 (b:R.const_slice) = {
+  c_cv_msg : option (HSM13R.c13_repr b & HSM13R.cv13_repr b);
+  fin_msg  : HSM13R.fin13_repr b
+}
+
+unfold let valid_s13_wait_Finished2
+  (#b:R.const_slice) (from to:uint_32)
+  (flt:s13_wait_Finished2 b) (h:HS.mem)
+  = match flt.c_cv_msg with
+    | Some (c_msg, cv_msg) ->
+      R.(c_msg.start_pos == from    /\
+         flt.fin_msg.end_pos == to) /\
+
+      in_range_and_valid c_msg from to h /\
+
+      in_range_and_valid cv_msg from to h /\
+
+      in_range_and_valid flt.fin_msg from to h
+
+    | None ->
+      R.(flt.fin_msg.start_pos == from /\
+         flt.fin_msg.end_pos   == to)  /\
+
+      in_range_and_valid flt.fin_msg from to h
+
+val receive_s13_wait_Finished2 (st:hsl_state) (b:R.const_slice) (from to:uint_32)
+  : ST (TLSError.result (option (s13_wait_Finished2 b)))
+       (requires receive_pre st b from to F_s13_wait_Finished2)
+       (ensures  receive_post st b from to F_s13_wait_Finished2 valid_s13_wait_Finished2)
+
+
+(****** Handshake state S13_wait_EOED ******)
+
+
+/// Handshake state S13_wait_EOED expects
+///
+/// [ EndOfEarlyData13 ]
+///
+/// The following flight type covers this
+
+
+noeq type s13_wait_EOED (b:R.const_slice) = {
+  eoed_msg : HSM13R.eoed13_repr b
 }
 
 
-unfold let valid_flight13_ee_cr_c_cv_fin
+let valid_s13_wait_EOED
   (#b:R.const_slice) (from to:uint_32)
-  (flt:flight13_ee_cr_c_cv_fin b) (h:HS.mem)
-  = let open R in
-
-    flt.ee_msg.start_pos == from /\
-    flt.ee_msg.end_pos == flt.cr_msg.start_pos /\
-    flt.cr_msg.end_pos == flt.c_msg.start_pos /\
-    flt.c_msg.end_pos == flt.cv_msg.start_pos /\
-    flt.cv_msg.end_pos == flt.fin_msg.start_pos /\
-    flt.fin_msg.end_pos == to /\
-
-    valid flt.ee_msg h /\
-    valid flt.cr_msg h /\
-    valid flt.c_msg h /\
-    valid flt.cv_msg h /\
-    valid flt.fin_msg h
-
-val receive_flight13_ee_cr_c_cv_fin
-  (st:hsl_state) (b:R.const_slice) (from to:uint_32)
-  : ST (TLSError.result (option (flight13_ee_cr_c_cv_fin b)))
-       (requires receive_pre st b from to F13_ee_cr_c_cv_fin)
-       (ensures  receive_post st b from to F13_ee_cr_c_cv_fin valid_flight13_ee_cr_c_cv_fin)
-
-
-(****** Flight [EncryptedExtensions; Finished] ******)
-
-noeq
-type flight13_ee_fin (b:R.const_slice) = {
-  ee_msg  : HSM13R.repr b;
-  fin_msg : m:HSM13R.repr b{
-    HSM13R.is_ee ee_msg /\
-    HSM13R.is_fin m
-  }
-}
-
-let valid_flight13_ee_fin
-  (#b:R.const_slice) (from to:uint_32)
-  (flt:flight13_ee_fin b) (h:HS.mem)
-  = let open R in
-
-    flt.ee_msg.start_pos == from /\
-    flt.ee_msg.end_pos == flt.fin_msg.start_pos /\
-    flt.fin_msg.end_pos == to /\
-
-    valid flt.ee_msg h /\
-    valid flt.fin_msg h
-
-val receive_flight13_ee_fin (st:hsl_state) (b:R.const_slice) (from to:uint_32)
-  : ST (TLSError.result (option (flight13_ee_fin b)))
-       (requires receive_pre st b from to F13_ee_fin)
-       (ensures  receive_post st b from to F13_ee_fin valid_flight13_ee_fin)
-
-
-(****** Flight [ Finished13 ] ******)
-
-noeq
-type flight13_fin (b:R.const_slice) = {
-  fin_msg : m:HSM13R.repr b{HSM13R.is_fin m}
-}
-
-
-let valid_flight13_fin
-  (#b:R.const_slice) (from to:uint_32)
-  (flt:flight13_fin b) (h:HS.mem)
-  = let open R in
-
-    flt.fin_msg.start_pos == from /\
-    flt.fin_msg.end_pos == to /\
-
-    valid flt.fin_msg h
-
-// s13_wait_Finished2 (with a second case below)
-val receive_flight13_fin (st:hsl_state) (b:R.const_slice) (from to:uint_32)
-  : ST (TLSError.result (option (flight13_fin b)))
-       (requires receive_pre st b from to F13_fin)
-       (ensures  receive_post st b from to F13_fin valid_flight13_fin)
-
-
-(****** Flight [ Certificate13; CertificateVerify; Finished ] ******)
-
-noeq
-type flight13_c_cv_fin (b:R.const_slice) = {
-  c_msg   : HSM13R.repr b;
-  cv_msg  : HSM13R.repr b;
-  fin_msg : m:HSM13R.repr b{
-    HSM13R.is_c c_msg /\
-    HSM13R.is_cv cv_msg /\
-    HSM13R.is_fin m
-  }
-}
-
-
-let valid_flight13_c_cv_fin
-  (#b:R.const_slice) (from to:uint_32)
-  (flt:flight13_c_cv_fin b) (h:HS.mem)
-  = let open R in
-
-    flt.c_msg.start_pos == from /\
-    flt.c_msg.end_pos == flt.cv_msg.start_pos /\
-    flt.cv_msg.end_pos == flt.fin_msg.start_pos /\
-    flt.fin_msg.end_pos == to /\
-
-    valid flt.c_msg h /\
-    valid flt.cv_msg h /\
-    valid flt.fin_msg h
-
-val receive_flight13_c_cv_fin
-  (st:hsl_state) (b:R.const_slice) (from to:uint_32)
-  : ST (TLSError.result (option (flight13_c_cv_fin b)))
-       (requires receive_pre st b from to F13_c_cv_fin)
-       (ensures  receive_post st b from to F13_c_cv_fin valid_flight13_c_cv_fin)
-
-
-(****** Flight [ EndOfEarlyData ] ******)
-
-noeq
-type flight13_eoed (b:R.const_slice) = {
-  eoed_msg : m:HSM13R.repr b{HSM13R.is_eoed m}
-}
-
-
-let valid_flight13_eoed
-  (#b:R.const_slice) (from to:uint_32)
-  (flt:flight13_eoed b) (h:HS.mem)
+  (flt:s13_wait_EOED b) (h:HS.mem)
   = let open R in
 
     flt.eoed_msg.start_pos == from /\
-    flt.eoed_msg.end_pos == to /\
+    flt.eoed_msg.end_pos == to     /\
 
     valid flt.eoed_msg h
 
-// s13_wait_EOED
-val receive_flight13_eoed (st:hsl_state) (b:R.const_slice) (from to:uint_32)
-  : ST (TLSError.result (option (flight13_eoed b)))
-       (requires receive_pre st b from to F13_eoed)
-       (ensures  receive_post st b from to F13_eoed valid_flight13_eoed)
+val receive_s13_wait_EOED (st:hsl_state) (b:R.const_slice) (from to:uint_32)
+  : ST (TLSError.result (option (s13_wait_EOED b)))
+       (requires receive_pre st b from to F_s13_wait_EOED)
+       (ensures  receive_post st b from to F_s13_wait_EOED valid_s13_wait_EOED)
 
 
-(****** Flight [ NewSessionTicket13 ] ******)
+(****** Handshake state C13_Complete ******)
 
-noeq
-type flight13_nst (b:R.const_slice) = {
-  nst_msg : m:HSM13R.repr b{HSM13R.is_nst m}
+
+/// Handshake state C13_Complete expects
+///
+/// [ NewSessionTicket13 ]
+///
+/// The following flight type covers this
+
+
+noeq type c13_Complete (b:R.const_slice) = {
+  nst_msg : HSM13R.nst13_repr b
 }
 
 
-let valid_flight13_nst
+let valid_c13_Complete
   (#b:R.const_slice) (from to:uint_32)
-  (flt:flight13_nst b) (h:HS.mem)
+  (flt:c13_Complete b) (h:HS.mem)
   = let open R in
 
     flt.nst_msg.start_pos == from /\
-    flt.nst_msg.end_pos == to /\
+    flt.nst_msg.end_pos == to     /\
 
     valid flt.nst_msg h
 
-// c13_complete 
-val receive_flight13_nst (st:hsl_state) (b:R.const_slice) (from to:uint_32)
-  : ST (TLSError.result (option (flight13_nst b)))
-       (requires receive_pre st b from to F13_nst)
-       (ensures  receive_post st b from to F13_nst valid_flight13_nst)
+val receive_c13_Complete (st:hsl_state) (b:R.const_slice) (from to:uint_32)
+  : ST (TLSError.result (option (c13_Complete b)))
+       (requires receive_pre st b from to F_c13_Complete)
+       (ensures  receive_post st b from to F_c13_Complete valid_c13_Complete)
 
 
 (*** 1.2 flights ***)
 
 
-(****** Flight [ Certificate12; ServerKeyExchange12; ServerHelloDone12 ] ******)
+(****** Handshake state C12_wait_ServerHelloDone ******)
 
-noeq
-type flight12_c_ske_shd (b:R.const_slice) = {
-  c_msg   : HSM12R.repr b;
-  ske_msg : HSM12R.repr b;
-  shd_msg : m:HSM12R.repr b{
-    HSM12R.is_c c_msg /\
-    HSM12R.is_ske ske_msg /\
-    HSM12R.is_shd m
-  }
+
+/// Handshake state C12_wait_ServerHelloDone expects two flights
+///
+/// [ Certificate12; ServerKeyExchange12; ServerHelloDone12 ]
+/// [ Certificate12; ServerKeyExchange12; CertificateRequest12; ServerHelloDone12 ]
+///
+/// The following flight type covers both these cases
+
+
+noeq type c12_wait_ServerHelloDone (b:R.const_slice) = {
+  c_msg   : HSM12R.c12_repr b;
+  ske_msg : HSM12R.ske12_repr b;
+  cr_msg  : option (HSM12R.cr12_repr b);
+  shd_msg : HSM12R.shd12_repr b
+}
+
+let valid_c12_wait_ServerHelloDone
+  (#b:R.const_slice) (from to:uint_32)
+  (flt:c12_wait_ServerHelloDone b) (h:HS.mem)
+  = R.(flt.c_msg.start_pos == from /\
+       flt.shd_msg.end_pos == to)  /\
+
+    in_range_and_valid flt.c_msg from to h /\
+
+    in_range_and_valid flt.ske_msg from to h /\
+
+    (Some? flt.cr_msg ==> in_range_and_valid (Some?.v flt.cr_msg) from to h) /\
+
+    in_range_and_valid flt.shd_msg from to h
+  
+
+val receive_c12_wait_ServerHelloDone (st:hsl_state) (b:R.const_slice) (from to:uint_32)
+  : ST (TLSError.result (option (c12_wait_ServerHelloDone b)))
+       (requires receive_pre st b from to F_c12_wait_ServerHelloDone)
+       (ensures  receive_post st b from to F_c12_wait_ServerHelloDone valid_c12_wait_ServerHelloDone)
+
+
+(****** Handshake states C12_wait_Finished2, C12_wait_R_Finished1, S12_wait_Finished1, and S12_wait_CF2 ******)
+
+
+/// All the above mentioned Handshake states expect the following flight
+///
+/// [ Finished12 ]
+///
+/// The following flight type covers this case
+
+
+noeq type cs12_wait_Finished (b:R.const_slice) = {
+  fin_msg : HSM12R.fin12_repr b
 }
 
 
-let valid_flight12_c_ske_shd
+let valid_cs12_wait_Finished
   (#b:R.const_slice) (from to:uint_32)
-  (flt:flight12_c_ske_shd b) (h:HS.mem)
-  = let open R in
-
-    flt.c_msg.start_pos == from /\
-    flt.c_msg.end_pos == flt.ske_msg.start_pos /\
-    flt.ske_msg.end_pos == flt.shd_msg.start_pos /\
-    flt.shd_msg.end_pos == to /\
-
-    valid flt.c_msg h /\
-    valid flt.ske_msg h /\
-    valid flt.shd_msg h
-
-// c12_wait_ServerHelloDone (2 variants)
-val receive_flight12_c_ske_shd (st:hsl_state) (b:R.const_slice) (from to:uint_32)
-  : ST (TLSError.result (option (flight12_c_ske_shd b)))
-       (requires receive_pre st b from to F12_c_ske_shd)
-       (ensures  receive_post st b from to F12_c_ske_shd valid_flight12_c_ske_shd)
-
-
-(****** Flight [ Certificate12; ServerKeyExchange12; CertificateRequest12; ServerHelloDone12 ] ******)
-
-noeq
-type flight12_c_ske_cr_shd (b:R.const_slice) = {
-  c_msg   : HSM12R.repr b;
-  ske_msg : HSM12R.repr b;
-  cr_msg  : HSM12R.repr b;
-  shd_msg : m:HSM12R.repr b{
-    HSM12R.is_c c_msg /\
-    HSM12R.is_ske ske_msg /\
-    HSM12R.is_cr cr_msg /\
-    HSM12R.is_shd m
-  }
-}
-
-
-let valid_flight12_c_ske_cr_shd
-  (#b:R.const_slice) (from to:uint_32)
-  (flt:flight12_c_ske_cr_shd b) (h:HS.mem)
-  = let open R in
-
-    flt.c_msg.start_pos == from /\
-    flt.c_msg.end_pos == flt.ske_msg.start_pos /\
-    flt.ske_msg.end_pos == flt.cr_msg.start_pos /\
-    flt.cr_msg.end_pos == flt.shd_msg.start_pos /\
-    flt.shd_msg.end_pos == to /\
-
-    valid flt.c_msg h /\
-    valid flt.ske_msg h /\
-    valid flt.cr_msg h /\
-    valid flt.shd_msg h
-
-val receive_flight12_c_ske_cr_shd (st:hsl_state) (b:R.const_slice) (from to:uint_32)
-  : ST (TLSError.result (option (flight12_c_ske_cr_shd b)))
-       (requires receive_pre st b from to F12_c_ske_cr_shd)
-       (ensures  receive_post st b from to F12_c_ske_cr_shd valid_flight12_c_ske_cr_shd)
-
-
-(****** Flight [ Finished12 ] ******)
-
-noeq
-type flight12_fin (b:R.const_slice) = {
-  fin_msg : m:HSM12R.repr b{HSM12R.is_fin m}
-}
-
-
-let valid_flight12_fin
-  (#b:R.const_slice) (from to:uint_32)
-  (flt:flight12_fin b) (h:HS.mem)
+  (flt:cs12_wait_Finished b) (h:HS.mem)
   = let open R in
 
     flt.fin_msg.start_pos == from /\
@@ -584,24 +455,30 @@ let valid_flight12_fin
 
     valid flt.fin_msg h
 
-// c12_wait_Finished [used for both Finished1 and Finished2]
-val receive_flight12_fin (st:hsl_state) (b:R.const_slice) (from to:uint_32)
-  : ST (TLSError.result (option (flight12_fin b)))
-       (requires receive_pre st b from to F12_fin)
-       (ensures  receive_post st b from to F12_fin valid_flight12_fin)
+
+val receive_cs12_wait_Finished (st:hsl_state) (b:R.const_slice) (from to:uint_32)
+  : ST (TLSError.result (option (cs12_wait_Finished b)))
+       (requires receive_pre st b from to F_cs12_wait_Finished)
+       (ensures  receive_post st b from to F_cs12_wait_Finished valid_cs12_wait_Finished)
 
 
-(****** Flight [ NewSessionTicket12 ] ******)
+(****** Handshake state C12_wait_NST ******)
 
-noeq
-type flight12_nst (b:R.const_slice) = {
-  nst_msg : m:HSM12R.repr b{HSM12R.is_nst m}
+
+/// Handshake state C12_wait_NST expects the following flight
+///
+/// [ NewSessionticket12 ]
+///
+/// The following flight type covers this case
+
+noeq type c12_wait_NST (b:R.const_slice) = {
+  nst_msg : HSM12R.nst12_repr b
 }
 
 
-let valid_flight12_nst
+let valid_c12_wait_NST
   (#b:R.const_slice) (from to:uint_32)
-  (flt:flight12_nst b) (h:HS.mem)
+  (flt:c12_wait_NST b) (h:HS.mem)
   = let open R in
 
     flt.nst_msg.start_pos == from /\
@@ -609,23 +486,32 @@ let valid_flight12_nst
 
     valid flt.nst_msg h
 
-// c12_wait_NewSessionTicket 
-val receive_flight12_nst (st:hsl_state) (b:R.const_slice) (from to:uint_32)
-  : ST (TLSError.result (option (flight12_nst b)))
-       (requires receive_pre st b from to F12_nst)
-       (ensures  receive_post st b from to F12_nst valid_flight12_nst)
 
-(****** Flight [ ClientKeyExchange12 ] ******)
+val receive_c12_wait_NST (st:hsl_state) (b:R.const_slice) (from to:uint_32)
+  : ST (TLSError.result (option (c12_wait_NST b)))
+       (requires receive_pre st b from to F_c12_wait_NST)
+       (ensures  receive_post st b from to F_c12_wait_NST valid_c12_wait_NST)
 
-noeq
-type flight12_cke (b:R.const_slice) = {
-  cke_msg : m:HSM12R.repr b{HSM12R.is_cke m}
+
+
+(****** Handshake state S12_wait_CCS1 ******)
+
+
+/// Handshake state S12_wait_CCS1 expects the following flight
+///
+/// [ ClientKeyExchange12 ]
+///
+/// The following flight type covers this case
+
+
+noeq type s12_wait_CCS1 (b:R.const_slice) = {
+  cke_msg : HSM12R.cke12_repr b
 }
 
 
-let valid_flight12_cke
+let valid_s12_wait_CCS1
   (#b:R.const_slice) (from to:uint_32)
-  (flt:flight12_cke b) (h:HS.mem)
+  (flt:s12_wait_CCS1 b) (h:HS.mem)
   = let open R in
 
     flt.cke_msg.start_pos == from /\
@@ -633,29 +519,34 @@ let valid_flight12_cke
 
     valid flt.cke_msg h
 
-// s12_wait_ClientKeyExchange 
-// note the HS should wait for CCS1 before accepting this message.
 
-val receive_flight12_cke (st:hsl_state) (b:R.const_slice) (from to:uint_32)
-  : ST (TLSError.result (option (flight12_cke b)))
-       (requires receive_pre st b from to F12_cke)
-       (ensures  receive_post st b from to F12_cke valid_flight12_cke)
+val receive_s12_wait_CCS1 (st:hsl_state) (b:R.const_slice) (from to:uint_32)
+  : ST (TLSError.result (option (s12_wait_CCS1 b)))
+       (requires receive_pre st b from to F_s12_wait_CCS1)
+       (ensures  receive_post st b from to F_s12_wait_CCS1 valid_s12_wait_CCS1)
+
 
 
 (*** ClientHello and ServerHello flights ***)
 
 
-(****** Flight [ ClientHello ] ******)
+(****** Handshake state S_Idle ******)
 
 
-noeq
-type flight_ch (b:R.const_slice) = {
-  ch_msg : m:HSMR.repr b{HSMR.is_ch m}
+/// Handshake state S_Idle expects the following flight
+///
+/// [ ClientHello ]
+///
+/// The following flight type covers this case
+
+
+noeq type s_Idle (b:R.const_slice) = {
+  ch_msg : HSMR.ch_repr b
 }
 
-let valid_flight_ch
+let valid_s_Idle
   (#b:R.const_slice) (from to:uint_32)
-  (flt:flight_ch b) (h:HS.mem)
+  (flt:s_Idle b) (h:HS.mem)
   = let open R in
 
     flt.ch_msg.start_pos == from /\
@@ -663,24 +554,29 @@ let valid_flight_ch
 
     valid flt.ch_msg h
 
-// s_wait_ClientHello 
-val receive_flight_ch (st:hsl_state) (b:R.const_slice) (from to:uint_32)
-  : ST (TLSError.result (option (flight_ch b)))
-       (requires receive_pre st b from to F_ch)
-       (ensures  receive_post st b from to F_ch valid_flight_ch)
+
+val receive_s_Idle (st:hsl_state) (b:R.const_slice) (from to:uint_32)
+  : ST (TLSError.result (option (s_Idle b)))
+       (requires receive_pre st b from to F_s_Idle)
+       (ensures  receive_post st b from to F_s_Idle valid_s_Idle)
 
 
-(****** Flight [ ServerHello ] ******)
+(****** Handshake state C_wait_ServerHello ******)
 
 
-noeq
-type flight_sh (b:R.const_slice) = {
-  sh_msg : m:HSMR.repr b{HSMR.is_sh m}
+/// Handshake state C_wait_ServerHello expects the following flight
+///
+/// [ ServerHello ]
+///
+/// The following flight type covers this case
+
+noeq type c_wait_ServerHello (b:R.const_slice) = {
+  sh_msg : m:HSMR.sh_repr b
 }
 
-let valid_flight_sh
+let valid_c_wait_ServerHello
   (#b:R.const_slice) (from to:uint_32)
-  (flt:flight_sh b) (h:HS.mem)
+  (flt:c_wait_ServerHello b) (h:HS.mem)
   = let open R in
 
     flt.sh_msg.start_pos == from /\
@@ -688,11 +584,11 @@ let valid_flight_sh
 
     valid flt.sh_msg h
 
-// c_wait_ServerHello 
-val receive_flight_sh (st:hsl_state) (b:R.const_slice) (from to:uint_32)
-  : ST (TLSError.result (option (flight_sh b)))
-       (requires receive_pre st b from to F_sh)
-       (ensures  receive_post st b from to F_sh valid_flight_sh)
+
+val receive_c_wait_ServerHello (st:hsl_state) (b:R.const_slice) (from to:uint_32)
+  : ST (TLSError.result (option (c_wait_ServerHello b)))
+       (requires receive_pre st b from to F_c_wait_ServerHello)
+       (ensures  receive_post st b from to F_c_wait_ServerHello valid_c_wait_ServerHello)
 
 
 
