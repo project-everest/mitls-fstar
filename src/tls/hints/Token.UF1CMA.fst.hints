@@ -39,7 +39,7 @@
         "typing_Mem.is_tls_rgn", "typing_Mem.tls_region"
       ],
       0,
-      "a6125b6a07c4fd06ec7c9b031a801844"
+      "699b45e66b209d37912c6f1e20f09295"
     ],
     [
       "Token.UF1CMA.keylen",
@@ -100,7 +100,7 @@
         "typing_Spec.Poly1305.size_key", "typing_tok_Lib.IntTypes.U32@tok"
       ],
       0,
-      "f709b8f4b29a58c4b045d0e65263067e"
+      "0a935f90336053abac9bbfc34e826b52"
     ],
     [
       "Token.UF1CMA.log_t",
@@ -109,7 +109,7 @@
       1,
       [ "@query" ],
       0,
-      "8b24b6e36e02f2227b5018a6a598168c"
+      "4b09157f6b8c08ecedb002c6c387737a"
     ],
     [
       "Token.UF1CMA.__proj__MAC__item__k",
@@ -121,7 +121,7 @@
         "projection_inverse_Token.UF1CMA.MAC_u"
       ],
       0,
-      "e0f32698f29f45dcd83724f17735a6f0"
+      "4d0378d0c208c06c6943ad782af05991"
     ],
     [
       "Token.UF1CMA.__proj__IdealKey__item__ck",
@@ -135,7 +135,7 @@
         "refinement_interpretation_Tm_refine_2064bd27c050d4c1e13213e7b952c2a4"
       ],
       0,
-      "28312c5a2a17fd92932303b97d18e4d8"
+      "dec7fcbb6daec104194dd73013f57b60"
     ],
     [
       "Token.UF1CMA.__proj__IdealKey__item__region",
@@ -152,7 +152,7 @@
         "refinement_interpretation_Tm_refine_2064bd27c050d4c1e13213e7b952c2a4"
       ],
       0,
-      "ece72eb2bc6d9f4b93a58cad9b9ca72e"
+      "41cc5d18a2a10cac48f0412f9621cb5a"
     ],
     [
       "Token.UF1CMA.__proj__IdealKey__item__log",
@@ -186,7 +186,7 @@
         "typing_FStar.Monotonic.HyperStack.is_eternal_color"
       ],
       0,
-      "3519f99f9ce77d0256da2673f70ecdbe"
+      "a783feff403d9e534d441043dbf77981"
     ],
     [
       "Token.UF1CMA.__proj__RealKey__item__ck",
@@ -200,7 +200,7 @@
         "refinement_interpretation_Tm_refine_96b3b92c5ca1c7dc5915041cc8aee631"
       ],
       0,
-      "74dbf22ea45af27cf558075ff6abf656"
+      "625b4f2fe0e470f2fae5c158d8aaa29f"
     ],
     [
       "Token.UF1CMA.usage",
@@ -216,7 +216,7 @@
         "refinement_interpretation_Tm_refine_5c4aa9a10c15a70e247ce2ae79345149"
       ],
       0,
-      "8da6d36edc8516b2c564488887da5804"
+      "cfd41bdc4a8d4b1ee50b24f02687186f"
     ],
     [
       "Token.UF1CMA.keyval",
@@ -244,7 +244,7 @@
         "typing_Token.UF1CMA.usage"
       ],
       0,
-      "f32973c53163e13ec3232f2f645ebb3c"
+      "1dc2c35b4b02152712b012873856210d"
     ],
     [
       "Token.UF1CMA.footprint",
@@ -268,7 +268,7 @@
         "typing_Mem.is_tls_rgn", "typing_Mem.tls_region"
       ],
       0,
-      "f9ed7ed5ccf50c9517d7b02acf00dc10"
+      "cf0113ca65cf6b6fedeabf4896ce69ea"
     ],
     [
       "Token.UF1CMA.coerceT",
@@ -328,7 +328,7 @@
         "typing_Token.UF1CMA.keylen"
       ],
       0,
-      "98dae77f72d55e06555fd55d4b26c835"
+      "b430af3b2934a796f5d489dd2902486f"
     ],
     [
       "Token.UF1CMA.coerce",
@@ -436,7 +436,7 @@
         "refinement_interpretation_Tm_refine_5c4aa9a10c15a70e247ce2ae79345149"
       ],
       0,
-      "b01122056b1a115f40ccfcf799c913c5"
+      "a6baa18b0ddc5e71b3f51aa3284aa5cd"
     ],
     [
       "Token.UF1CMA.token",
@@ -575,7 +575,7 @@
         "unit_inversion", "unit_typing"
       ],
       0,
-      "23d11644c1a6c0970b0b92eb7326d498"
+      "62a1d675a4821fc94dadbe025faddf5a"
     ],
     [
       "Token.UF1CMA.verify",
@@ -644,7 +644,7 @@
         "unit_typing"
       ],
       0,
-      "630fc1be73e6e2d5491a6d383df571a3"
+      "63999a4d3c86fc09fbdfa4f8d3ea32d4"
     ],
     [
       "Token.UF1CMA.localpkg",
@@ -664,7 +664,7 @@
         "typing_Flags.model", "typing_Token.UF1CMA.ideal"
       ],
       0,
-      "b0863f9ec6bfa324b792c0a3971d4c7f"
+      "de6447d3593e804c338e48a76232a998"
     ],
     [
       "Token.UF1CMA.coerce_eq2",
@@ -673,7 +673,7 @@
       1,
       [ "@query" ],
       0,
-      "de7888ebebda865e986b60a574fbabff"
+      "680aadb10d0a0251282b6e18052017d8"
     ],
     [
       "Token.UF1CMA.ip",
@@ -697,7 +697,7 @@
         "typing_Mem.is_tls_rgn", "typing_Mem.tls_region"
       ],
       0,
-      "3a0ab560f61bd2996e8d910585855df6"
+      "65c981e639816f101b7a84ff6ab743aa"
     ],
     [
       "Token.UF1CMA.test",

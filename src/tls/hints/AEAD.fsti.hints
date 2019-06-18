@@ -17,7 +17,7 @@
         "typing_AEAD.ivlen", "typing_FStar.UInt32.v"
       ],
       0,
-      "b01bfd439b241de143936c5cef9275ca"
+      "b722ef17d0a33f750f8b9183f27b3680"
     ],
     [
       "AEAD.aadmax",
@@ -26,7 +26,7 @@
       1,
       [ "@query" ],
       0,
-      "12452f538b1cf0659f619aa59fe40c54"
+      "af298725e665c05e12863fe822100f81"
     ],
     [
       "AEAD.cipher",
@@ -47,7 +47,7 @@
         "typing_AEAD.taglen", "typing_FStar.UInt32.v"
       ],
       0,
-      "7f7b5dbddc60da6058efdc9fe04f218f"
+      "28c79c85aa18c3ef8356edf34ce1b539"
     ],
     [
       "AEAD.cipher32",
@@ -79,7 +79,7 @@
         "typing_FStar.UInt.fits", "typing_Spec.Poly1305.size_key"
       ],
       0,
-      "a2dc4704381a2194efc9fe776afba366"
+      "6fa3980beed3f97d532f1cd20319d6e1"
     ],
     [
       "AEAD.mk_entry",
@@ -98,7 +98,7 @@
         "typing_Crypto.Plain.as_bytes"
       ],
       0,
-      "663cea2e76275c4cb993824b7bc74262"
+      "93ed25adbe9c879a4b3e6d6cf5ed5bec"
     ],
     [
       "AEAD.entry_injective",
@@ -127,7 +127,7 @@
         "typing_FStar.UInt32.v"
       ],
       0,
-      "6392240ea6cbbe4ef79fde437108c46c"
+      "c256a58fd7511dfa2cc53e03bdb52209"
     ],
     [
       "AEAD.fresh_addresses",
@@ -142,7 +142,7 @@
         "refinement_interpretation_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
       ],
       0,
-      "f5bf2d545306a3db51213d567a49ac2e"
+      "7da5d712d8643e2320cf7d23611e450b"
     ],
     [
       "AEAD.fresh_addresses",
@@ -157,7 +157,7 @@
         "refinement_interpretation_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
       ],
       0,
-      "a1798c4cd2a07cd7f056a6d2dd3b2971"
+      "184b2360e5cb4e85df098b8dee594f23"
     ],
     [
       "AEAD.ok_plain_len_32",
@@ -174,7 +174,7 @@
         "typing_FStar.UInt32.v"
       ],
       0,
-      "d7a3137068924c8936e386a0486f4c0f"
+      "ed176452781849551e7d62a23ab96ce0"
     ],
     [
       "AEAD.frame_log",
@@ -187,7 +187,7 @@
         "refinement_interpretation_Tm_refine_8d65e998a07dd53ec478e27017d9dba5"
       ],
       0,
-      "5588c3c67665cd6125c2fa9ea2303746"
+      "259ec25acf84d0d45adb8f58bf22ce8d"
     ]
   ]
 ]
