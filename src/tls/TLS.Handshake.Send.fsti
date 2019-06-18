@@ -66,19 +66,17 @@ open FStar.Bytes
 /// QUIC.API.
 // TODO functions to treat it as a lowParse-writer slice
 
+module B = LowStar.Buffer
+module LP = LowParse.Low.Base
 
-
-
-noeq inline_for_extraction
-type outbuffer = {
-  base: Buffer.buffer UInt8.t;                        // provided by caller, filled by Send
-  len: (len: UInt32.t{ v len = Buffer.length base }); // provided by caller
-  pos: (pos: UInt32.t{ v pos <= Buffer.length base }); // updated by Send, QD-style
-}
+(* TODO: do we need a separate type for outbuffer, or can we inline the slice and the position into the output state? *)
 
 noeq type send_state = {
   // outgoing data, already formatted and hashed. Overflows are fatal.
-  outgoing: bytes; // should become an [outbuffer]
+  out_slice: (out_slice: LP.slice (B.trivial_preorder _) (B.trivial_preorder _) { out_slice.LP.len <= LP.validator_max_length }) ; // provided by caller, filled by Send
+  out_pos: (pos: UInt32.t{ v pos <= v out_slice.LP.len }); // updated by Send, QD-style
+
+  outgoing: bytes; // TODO: remove, being replaced with [out] above
 
   // still supporting the high-level API to TLS and Record;
   // as next_keys_use, with next fragment after CCS
@@ -90,6 +88,8 @@ noeq type send_state = {
 // is live.
 
 let send_state0 = {
+  out_slice = LP.make_slice B.null 0ul;
+  out_pos = 0ul;
   outgoing = empty_bytes;
   outgoing_next_keys = None;
   outgoing_complete = false; }

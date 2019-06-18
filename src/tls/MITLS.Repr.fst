@@ -215,6 +215,25 @@ let value #t #b (r:repr t b)
   = (Ghost.reveal r.meta).value
 
 open FStar.HyperStack.ST
+
+/// `to_bytes`: for intermediate purposes only, extract bytes from the repr
+let to_bytes #t #b (r: repr t b)
+  : Stack FStar.Bytes.bytes
+    (requires fun h ->
+      valid r h
+    )
+    (ensures fun h x h' ->
+      B.modifies B.loc_none h h' /\
+      FStar.Bytes.reveal x == (Ghost.reveal r.meta).repr_bytes /\
+      FStar.Bytes.len x == r.end_pos - r.start_pos
+    )
+  = let len = r.end_pos - r.start_pos in
+    let b' = C.sub b.base r.start_pos len in
+    (* FIXME: FStar.Bytes does not cater to const buffers,
+       but do we really care, this code is transitional anyway *)
+    assume (C.qbuf_qual (C.as_qbuf b') == C.MUTABLE);
+    FStar.Bytes.of_buffer len (C.cast b')
+
 /// `mk b from to p`:
 ///    Constructing a `repr` from a sub-slice
 ///      b.[from, to)
