@@ -159,6 +159,8 @@ ifndef VERIFY_PARSERS
 $(OUTPUT_DIR)/Parsers_%.krml \
 $(OUTPUT_DIR)/Parsers.%.checked: FSTAR_FLAGS=--admit_smt_queries true \
   --__temp_fast_implicits
+$(OUTPUT_DIR)/Parsers_%.krml \
+$(OUTPUT_DIR)/Parsers.%.checked: FSTAR_HINTS=
 endif
 
 %.checked: FSTAR_FLAGS=
