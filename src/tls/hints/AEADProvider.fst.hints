@@ -12,7 +12,7 @@
         "lemma_FStar.HyperStack.ST.lemma_same_refs_in_stack_regions_intro"
       ],
       0,
-      "c7a5848843ef260f37426562ee0d5f25"
+      "0c787a724864f8aca20eacd955f18924"
     ],
     [
       "AEADProvider.dbg",
@@ -20,11 +20,12 @@
       2,
       1,
       [
-        "@query", "equation_DebugFlags.debug",
-        "equation_DebugFlags.debug_AEP"
+        "@query", "equation_FStar.HyperStack.ST.equal_stack_domains",
+        "equation_FStar.Monotonic.Heap.equal_dom",
+        "lemma_FStar.HyperStack.ST.lemma_same_refs_in_stack_regions_intro"
       ],
       0,
-      "c4f2cf48149bff58662ce57def8462d9"
+      "f7f34bbe3deeed4962630cd6db7cb5a8"
     ],
     [
       "AEADProvider.alg",
@@ -38,7 +39,7 @@
         "typing_CipherSuite.uu___is_AEAD"
       ],
       0,
-      "211892c8bae5ed487b431b841689ea97"
+      "d2df1dddaaa41b3bf6fead5e42ed5090"
     ],
     [
       "AEADProvider.alg'",
@@ -52,7 +53,7 @@
         "typing_CipherSuite.uu___is_AEAD"
       ],
       0,
-      "1323be916990cca9c59000611b97bc42"
+      "a666be384459d4c49eeeaf6e1cfaa25b"
     ],
     [
       "AEADProvider.aeadAlg_for_evercrypt",
@@ -64,7 +65,7 @@
         "refinement_interpretation_Tm_refine_b549bf3deb28db882d1c0fc679cf41b7"
       ],
       0,
-      "c150b2340249d08a219e59c8b090ac6b"
+      "619610c86b539eaed0e84298b6ea99d0"
     ],
     [
       "AEADProvider.iv",
@@ -76,7 +77,7 @@
         "equation_AEADProvider.iv_length", "projection_inverse_BoxInt_proj_0"
       ],
       0,
-      "d6b3d0068b9483dc76527fc8bb2193b1"
+      "cddc4e853cd2371a0e6020b7b6c72f71"
     ],
     [
       "AEADProvider.salt_length",
@@ -97,7 +98,7 @@
         "typing_AEADProvider.alg_"
       ],
       0,
-      "ea088748018681251fbe1129f99cba55"
+      "08c48d1ca009fba4848db4ee7e2a5b1b"
     ],
     [
       "AEADProvider.explicit_iv_length",
@@ -118,7 +119,7 @@
         "typing_AEADProvider.alg_"
       ],
       0,
-      "2157a12c99c32614e9e322d176321b72"
+      "e04d25fe3985f1ffd3cf31018868111e"
     ],
     [
       "AEADProvider.key",
@@ -135,7 +136,7 @@
         "typing_AEADProvider.key_length"
       ],
       0,
-      "2fd426378cb4f14f700f22ec5b225a25"
+      "fabf996929a710b4bb513528d415d10c"
     ],
     [
       "AEADProvider.salt",
@@ -149,7 +150,7 @@
         "projection_inverse_BoxInt_proj_0", "typing_AEADProvider.salt_length"
       ],
       0,
-      "709efcad84a010adec5a1360685086d5"
+      "2933d0592f2ab1e44659a65c15d867ac"
     ],
     [
       "AEADProvider.noncelen",
@@ -158,7 +159,7 @@
       1,
       [ "@query" ],
       0,
-      "93029529995485a0720c4768d30fb15c"
+      "168d5e26a7fad51a647b34c1eac1b04e"
     ],
     [
       "AEADProvider.nonce",
@@ -174,7 +175,7 @@
         "typing_AEADProvider.salt_length"
       ],
       0,
-      "6c9a542e9a0d0f2e761043232ae8ad74"
+      "140996b72fa2ef54d707b6b541e3a384"
     ],
     [
       "AEADProvider.coerce_iv",
@@ -186,7 +187,7 @@
         "equation_AEADProvider.iv_length", "projection_inverse_BoxInt_proj_0"
       ],
       0,
-      "d0a6f320659502b2c6e109a6e0b68cff"
+      "11aa2b0dcd2a7fcdfcbbf66dfe7dc939"
     ],
     [
       "AEADProvider.create_nonce",
@@ -244,7 +245,7 @@
         "typing_Spec.Poly1305.size_key"
       ],
       0,
-      "292a9c50e8d697525d313f2e67f379ae"
+      "3a9d7a4a23b8181a87fd33b8059709a9"
     ],
     [
       "AEADProvider.leak",
@@ -283,7 +284,7 @@
         "typing_FStar.Set.complement", "typing_FStar.Set.empty"
       ],
       0,
-      "932d08e08d638b7fadbd6110b896b17c"
+      "930002eb9aea83269680f382bc8c7cd5"
     ],
     [
       "AEADProvider.adata",
@@ -295,7 +296,7 @@
         "projection_inverse_BoxInt_proj_0"
       ],
       0,
-      "aafda7bcf40740c8bb5245ff2f790383"
+      "e09727ed838515f556438bc6c6dd4043"
     ],
     [
       "AEADProvider.cipherlen",
@@ -316,7 +317,7 @@
         "typing_AEADProvider.taglen"
       ],
       0,
-      "30286461b3b0e5e0606097d8e4a07a9b"
+      "b494747ee0228cd4a558a019d55e5ae6"
     ],
     [
       "AEADProvider.from_bytes",
@@ -381,7 +382,7 @@
         "typing_LowStar.Monotonic.Buffer.loc_unused_in"
       ],
       0,
-      "eb65d24731e58c08d7ef15e35fce8368"
+      "2ac7ada2c377c7202563eeac99f74297"
     ]
   ]
 ]

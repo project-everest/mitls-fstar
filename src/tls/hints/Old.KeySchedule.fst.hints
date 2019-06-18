@@ -12,7 +12,7 @@
         "lemma_FStar.HyperStack.ST.lemma_same_refs_in_stack_regions_intro"
       ],
       0,
-      "3d878d50bc72eff92a0086f25302b41e"
+      "6668d2e40d93950793790cd8884be940"
     ],
     [
       "Old.KeySchedule.dbg",
@@ -20,10 +20,12 @@
       2,
       1,
       [
-        "@query", "equation_DebugFlags.debug", "equation_DebugFlags.debug_KS"
+        "@query", "equation_FStar.HyperStack.ST.equal_stack_domains",
+        "equation_FStar.Monotonic.Heap.equal_dom",
+        "lemma_FStar.HyperStack.ST.lemma_same_refs_in_stack_regions_intro"
       ],
       0,
-      "06a1f16f4ef9cf33f6a0be49a662b7d0"
+      "8ac6fd78bc419ebf76c58aaa15347834"
     ]
   ]
 ]
