@@ -376,3 +376,8 @@ val defaultServerNegoCB: nego_cb
 val defaultCertCB: cert_cb 
 
 
+val defaultTicketCBFun: context -> ticket_cb_fun
+let defaultTicketCB = {
+  ticket_context = default_context();
+  new_ticket = defaultTicketCBFun;
+}

@@ -18,15 +18,12 @@ module Pkg
 
 open Mem
 
+module B = FStar.Bytes
 module DT = DefineTable
 module M = LowStar.Modifies
 module MDM = FStar.Monotonic.DependentMap
 module MH = FStar.Monotonic.Heap
 module HS = FStar.HyperStack
-
-type bytes = FStar.Bytes.bytes
-//let lbytes32 = FStar.Bytes.lbytes32
-type lbytes32 n = FStar.Bytes.lbytes (UInt32.v n)
 
 /// Index packages provide an abstract index for instances, with an
 /// interface to project (ghost) indexes to (concrete) runtime
@@ -37,7 +34,7 @@ type lbytes32 n = FStar.Bytes.lbytes (UInt32.v n)
 /// intent (and is considered public) and "safe", which controls
 /// fine-grained idealization: roughly safe i = Flags.ideal /\ honest i
 
-inline_for_extraction
+inline_for_extraction noextract
 noeq type ipkg = | Idx:
   t: eqtype  (* abstract type for indexes *) ->
   // three abstract predicates implemented as witnesses, and a stateful reader.
@@ -141,9 +138,9 @@ noeq type pkg (ip: ipkg) = | Pkg:
   // that the concrete (model off) functionality behaves like
   // the real (model on, ideal off) one
   coerceT: (i:regid ip{ideal ==> ~(ip.honest i)} ->
-    a:info i -> lbytes32 (len a) -> GTot (key i)) ->
+    a:info i -> B.lbytes32 (len a) -> GTot (key i)) ->
   coerce: (i:regid ip{ideal ==> ~(ip.honest i)} ->
-    a:info i -> rk: lbytes32 (len a) -> ST (key i)
+    a:info i -> rk: B.lbytes32 (len a) -> ST (key i)
     (requires fun h0 ->
       package_invariant h0 /\
       DT.fresh define_table i h0)
@@ -177,9 +174,9 @@ noeq type local_pkg (ip: ipkg) =
     (ensures fun h0 k h1 -> M.modifies M.loc_none h0 h1 /\
        get_info k == a /\ inv k h1 /\ fresh_loc (local_footprint k) h0 h1)) ->
   coerceT: (i:regid ip{ideal ==> ~(ip.honest i)} ->
-    a:info i -> lbytes32 (len a) -> GTot (key i)) ->
+    a:info i -> B.lbytes32 (len a) -> GTot (key i)) ->
   coerce: (i:regid ip{ideal ==> ~(ip.honest i)} ->
-    a:info i -> rk:lbytes32 (len a) -> ST (key i)
+    a:info i -> rk: B.lbytes32 (len a) -> ST (key i)
     (requires fun h0 -> True)
     (ensures fun h0 k h1 -> k == coerceT i a rk /\ M.modifies M.loc_none h0 h1 /\
       get_info k == a /\ inv k h1 /\ fresh_loc (local_footprint k) h0 h1)) ->
@@ -240,7 +237,7 @@ let memoization (#ip:ipkg) (p:local_pkg ip) ($dt:DT.dt p.key) : pkg ip
     in
   [@inline_let]
   let coerce (i:regid ip{p.ideal ==> ~(ip.honest i)})
-    (a:p.info i) (k0:lbytes32 (p.len a))
+    (a:p.info i) (k0:B.lbytes32 (p.len a))
     : ST (p.key i)
     (requires fun h0 -> package_invariant h0 /\ DT.fresh dt i h0)
     (ensures fun h0 k h1 -> p.get_info k == a /\
