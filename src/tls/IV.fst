@@ -20,9 +20,11 @@ module U32 = FStar.UInt32
 type idealRaw = b2t Flags.flag_Raw
 type valid_len (ip:ipkg) = i:ip.t -> keylen -> Type
 
+noextract inline_for_extraction
 type info (#ip:ipkg) (lid:valid_len ip) (i:ip.t) =
   len:keylen{lid i len}
 
+noextract inline_for_extraction
 type raw (#ip:ipkg) (lid:valid_len ip) (i:regid ip) =
   b:B.bytes{let l = B.len b in
   0 < U32.v l /\ U32.v l <= 255 /\ lid i l}
@@ -43,7 +45,7 @@ let coerceT_raw (#ip:ipkg) (lid:valid_len ip)
   : GTot (raw lid i) 
   = r
 
-inline_for_extraction
+noextract inline_for_extraction
 let coerce_raw (#ip: ipkg) (lid:valid_len ip)
   (i: regid ip{idealRaw ==> ~(ip.honest i)})
   (len: info lid i) (r: Bytes.lbytes32 len):

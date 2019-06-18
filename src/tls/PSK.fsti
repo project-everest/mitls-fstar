@@ -45,7 +45,6 @@ val is_valid_psk: k:bytes -> (b:bool{b ==> non_zero k})
 // The type of PSK indexes is abstract, but reveals equality
 // When model is off, the representation of the index it the PSK
 // itself, so we need to enforce confidentiality by type abstraction
-inline_for_extraction noextract
 val pskid: eqtype
 
 val coerce:
