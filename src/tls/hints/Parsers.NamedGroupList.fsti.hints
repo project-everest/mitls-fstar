@@ -1,5 +1,5 @@
 [
-  "Õªå\u001d#þ§\u001c üadmK^Ë",
+  "`ª®Y³õEŠÅ˜`Uä\\¬á",
   [
     [
       "Parsers.NamedGroupList.finalize_namedGroupList",
@@ -15,13 +15,12 @@
         "equation_FStar.Monotonic.HyperStack.mem",
         "equation_FStar.UInt.fits", "equation_FStar.UInt.max_int",
         "equation_FStar.UInt.min_int", "equation_FStar.UInt.size",
-        "equation_FStar.UInt.uint_t",
-        "equation_LowParse.Low.Base.max_uint32",
+        "equation_FStar.UInt.uint_t", "equation_LowParse.Bytes.byte",
         "equation_LowParse.Low.Base.validator_max_length",
         "equation_Parsers.NamedGroup.namedGroup_parser_kind",
         "equation_Prims.nat",
         "equation_with_fuel_Prims.pow2.fuel_instrumented",
-        "fuel_guarded_inversion_LowParse.Low.Base.slice",
+        "fuel_guarded_inversion_LowParse.Slice.slice",
         "function_token_typing_Prims.__cache_version_number__",
         "int_inversion", "int_typing", "lemma_FStar.UInt.pow2_values",
         "primitive_Prims.op_Addition", "primitive_Prims.op_AmpAmp",
@@ -30,15 +29,14 @@
         "projection_inverse_BoxBool_proj_0",
         "projection_inverse_BoxInt_proj_0",
         "refinement_interpretation_Tm_refine_07033d2b2c1d2fb6c1dd88a8f1110ac2",
+        "refinement_interpretation_Tm_refine_9478367a852f960e7e410fb2a1abbc49",
         "refinement_interpretation_Tm_refine_a347709bfeba48709474ad26f4f6be87",
         "refinement_interpretation_Tm_refine_ba523126f67e00e7cd55f0b92f16681d",
-        "refinement_interpretation_Tm_refine_e5cc4e4dd2410ba709ee2fc2a3fb4e2f",
-        "typing_FStar.UInt.fits", "typing_FStar.UInt32.v",
-        "typing_LowParse.Low.Base.max_uint32",
+        "typing_FStar.UInt32.v",
         "typing_LowParse.Low.Base.validator_max_length"
       ],
       0,
-      "86c52b9f3929af3a094e4bb459e56e18"
+      "586b7c82c1b1ff192e21c5cf57048d14"
     ],
     [
       "Parsers.NamedGroupList.namedGroupList_count",
@@ -55,25 +53,25 @@
         "equation_LowParse.Spec.Base.strong_parser_kind",
         "equation_Parsers.NamedGroupList.namedGroupList",
         "equation_Parsers.NamedGroupList.namedGroupList_parser_kind",
-        "equation_Prims.nat",
-        "fuel_guarded_inversion_LowParse.Low.Base.slice",
+        "fuel_guarded_inversion_LowParse.Slice.slice",
         "function_token_typing_Prims.__cache_version_number__",
-        "int_inversion", "primitive_Prims.op_Addition",
-        "primitive_Prims.op_AmpAmp", "primitive_Prims.op_LessThanOrEqual",
+        "int_inversion", "lemma_LowParse.Low.Base.content_length_post",
+        "lemma_LowParse.Low.Base.get_valid_pos_post",
+        "primitive_Prims.op_Addition", "primitive_Prims.op_AmpAmp",
+        "primitive_Prims.op_LessThanOrEqual",
         "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_low",
         "projection_inverse_BoxBool_proj_0",
         "projection_inverse_BoxInt_proj_0",
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_low",
-        "refinement_interpretation_Tm_refine_04ecb3a98e8473bc206c5decfb4fb020",
-        "refinement_interpretation_Tm_refine_86d2c1bfb8b9f7b59fb2c11be524698a",
+        "refinement_interpretation_Tm_refine_13213883780df6f29ac8042f8ea4717f",
         "refinement_interpretation_Tm_refine_a347709bfeba48709474ad26f4f6be87",
         "refinement_kinding_Tm_refine_e5f8b76c26b9d42031e02e26b90ac1a4",
-        "typing_FStar.UInt32.v", "typing_LowParse.Low.Base.content_length",
+        "typing_FStar.UInt32.v",
         "typing_Parsers.NamedGroupList.namedGroupList_parser",
         "typing_Parsers.NamedGroupList.namedGroupList_parser_kind"
       ],
       0,
-      "c0f308e538c83b7278cc36f42e5bf99d"
+      "ea9347c3da0e46331e1b373963f10f28"
     ],
     [
       "Parsers.NamedGroupList.namedGroupList_clens_nth",
@@ -82,7 +80,7 @@
       1,
       [ "@query" ],
       0,
-      "3bc784721cf619c42ca8a8716cad4a21"
+      "1794bc44692b6f671ef6f7b352d13a4e"
     ],
     [
       "Parsers.NamedGroupList.namedGroupList_nth",
@@ -100,7 +98,7 @@
         "refinement_interpretation_Tm_refine_ba523126f67e00e7cd55f0b92f16681d"
       ],
       0,
-      "1cbb7b7e770f6cab7cb419c5667231d1"
+      "030da35d53dbaf4d7c10c7ee87fb6c85"
     ]
   ]
 ]

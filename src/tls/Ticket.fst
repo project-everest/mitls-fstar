@@ -248,7 +248,10 @@ let ticketContents_of_ticket (t: ticket) : GTot TC.ticketContents =
 
 #reset-options "--max_fuel 0 --initial_fuel 0 --max_ifuel 1 --initial_ifuel 1 --z3rlimit 64 --z3cliopt smt.arith.nl=false --z3refresh --using_facts_from '* -FStar.Tactics -FStar.Reflection' --log_queries"
 
-let write_ticket12 (t: ticket) (sl: LPB.slice) (pos: U32.t) : Stack U32.t
+inline_for_extraction
+type slice = LPB.slice (B.trivial_preorder _) (B.trivial_preorder _)
+
+let write_ticket12 (t: ticket) (sl: slice) (pos: U32.t) : Stack U32.t
   (requires (fun h -> LPB.live_slice h sl /\ U32.v pos <= U32.v sl.LPB.len /\ Ticket12? t ))
   (ensures (fun h pos' h' ->
     let tc = ticketContents_of_ticket t in
@@ -269,8 +272,8 @@ let write_ticket12 (t: ticket) (sl: LPB.slice) (pos: U32.t) : Stack U32.t
       let pos4 = PTL.boolean_writer (if ems then PB.B_true else PB.B_false) sl pos3 in
       let pos5 = PTL.write_ticketContents12_master_secret ms sl pos4 in
       let h = get () in
-      PTL.valid_ticketContents12_intro h sl pos1;
-      PTL.finalize_case_ticketContents12 sl pos;
+      PTL.ticketContents12_valid h sl pos1;
+      PTL.finalize_ticketContents_ticket12 sl pos;
       pos5
     end
 
