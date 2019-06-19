@@ -13,15 +13,15 @@
         "equation_FStar.UInt.min_int", "equation_Mem.rgn",
         "lemma_FStar.Monotonic.HyperHeap.lemma_root_has_color_zero",
         "primitive_Prims.op_LessThanOrEqual",
-        "refinement_interpretation_Tm_refine_2fbd657fe85bcb2423f9c7e5f9b3bcb5",
-        "refinement_interpretation_Tm_refine_b5163a5c7eb2f4891aa85b6bd19b6e5e",
+        "refinement_interpretation_Tm_refine_31bfde48b952b6d7959cd5a2aa36404e",
+        "refinement_interpretation_Tm_refine_7f37da2c7bc73049d03abda609f5f8b3",
         "typing_FStar.Monotonic.HyperHeap.color",
         "typing_FStar.Monotonic.HyperHeap.root",
         "typing_FStar.Monotonic.HyperStack.is_eternal_color",
         "typing_TLSInfo.safe_region"
       ],
       0,
-      "fb9d6c2e7df1311375815dfa170d2926"
+      "5d72e84b727811faa6f438908f2b2d9a"
     ],
     [
       "Test.StAE.discard",
@@ -34,7 +34,7 @@
         "lemma_FStar.HyperStack.ST.lemma_same_refs_in_stack_regions_intro"
       ],
       0,
-      "ee1e337536db725c58145015e89cb7b7"
+      "51f3a0521060b790e2f8cb0991504eaa"
     ],
     [
       "Test.StAE.eprint",
@@ -53,10 +53,9 @@
         "equation_FStar.HyperStack.ST.mref",
         "equation_FStar.HyperStack.ST.ref",
         "equation_FStar.Monotonic.HyperStack.mref", "equation_Prims.eqtype",
-        "equation_Prims.l_True",
         "function_token_typing_FStar.Heap.trivial_preorder",
         "function_token_typing_Prims.bool",
-        "interpretation_Tm_abs_fa0cb1fe1698a880aba4dd22bebacfbf",
+        "interpretation_Tm_abs_424e1ecfb6a0755ec01f6fae94331cc1",
         "lemma_FStar.HyperStack.ST.lemma_same_refs_in_all_regions_elim",
         "lemma_FStar.HyperStack.ST.lemma_same_refs_in_stack_regions_intro",
         "primitive_Prims.op_Negation", "projection_inverse_BoxBool_proj_0",
@@ -67,7 +66,7 @@
         "typing_FStar.Monotonic.HyperStack.is_mm"
       ],
       0,
-      "de00de5d6f82657f8ab40588b5478457"
+      "91f19c3566d3d84635db1478b19a0433"
     ],
     [
       "Test.StAE.nprint",
@@ -76,7 +75,7 @@
       1,
       [ "@query" ],
       0,
-      "1b7ee14d13b583dea2ec92eb7a43c93b"
+      "0bcee584360c09e97e4b264e9cedfca7"
     ]
   ]
 ]
