@@ -398,7 +398,6 @@ let client_HelloRetryRequest (hs:hs) (hrr:HSM.hrr) : St incoming =
   match Nego.client_HelloRetryRequest hs.nego hrr s with
   | Error z -> InError z
   | Correct(ch) ->
-    HSL.send hs.log (HSL.Msg (HSM.M_client_hello ch));
     client_Binders hs ch;
     // Note: we stay in Wait_ServerHello
     // Only the Nego state machine was moved by HRR
