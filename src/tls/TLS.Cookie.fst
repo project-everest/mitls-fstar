@@ -12,7 +12,7 @@ open Parsers.HRRExtensions
 open Parsers.HelloRetryRequest
 
 module Contents = Parsers.MiTLSCookieContents
-
+module Ticket = Ticket
 
 
 
@@ -24,7 +24,7 @@ val discard: bool -> ST unit
   (requires (fun _ -> True))
   (ensures (fun h0 _ h1 -> h0 == h1))
 let discard _ = ()
-let print s = discard (IO.debug_print_string ("CKI | "^s^"\n"))
+let print s = discard (IO.debug_print_string ("CKI| "^s^"\n"))
 unfold val trace: s:string -> ST unit
   (requires (fun _ -> True))
   (ensures (fun h0 _ h1 -> h0 == h1))
@@ -77,24 +77,30 @@ let reconstruct_hrr
   correct #(hrr_leq extensions_max_length) (append_extension 16 hrr (HRRE_cookie raw))
 
 let append chd app hrr =
-  // TODO encrypt
-  let encrypted = Contents.miTLSCookieContents_serializer32 (prepare_contents chd app hrr) in
-  trace ("Encrypted cookie:  "^hex_of_bytes encrypted);
+  let plain = Contents.miTLSCookieContents_serializer32 (prepare_contents chd app hrr) in
+  // TODO use EverCrypt.AEAD-based TLS.Store instead of Ticket & prove the bounds statically
+  let encrypted = Ticket.ticket_encrypt false plain in
+  assume (32 <= length encrypted /\ length encrypted <= encrypted_max_length);
+  trace ("Plaintext cookie="^hex_of_bytes plain);
+  trace ("Encrypted cookie="^hex_of_bytes encrypted);
   append_extension 16 hrr (HRRE_cookie encrypted)
 
 let decrypt encrypted =
-  // TODO decrypt
-  trace ("Decrypting cookie "^hex_of_bytes encrypted);
-  if length encrypted > encrypted_max_length then
-    fatal Handshake_failure "oversized cookie"
-  else
-  match LowParseWrappers.wrap_parser32 Contents.miTLSCookieContents_parser32 "invalid cookie contents" encrypted with
-  | Correct v  -> (
-    if DebugFlags.debug_NGO then print_contents v;
-    match reconstruct_hrr encrypted v with
-    | Correct hrr -> correct(v.Contents.clientHelloDigest, v.Contents.extra, hrr)
-    | Error z -> Error z )
-  | Error z -> Error z
+  if length encrypted < 32 || length encrypted > encrypted_max_length then
+    fatal Decode_error "bad cookie length"
+  else (
+    // TODO use EverCrypt.AEAD-based TLS.Store instead of Ticket
+    match Ticket.ticket_decrypt false encrypted with
+    | None -> fatal Decode_error "cookie decryption failed"
+    | Some plain ->
+      trace ("Decrypted cookie="^hex_of_bytes plain);
+      match LowParseWrappers.wrap_parser32 Contents.miTLSCookieContents_parser32 "invalid cookie contents" plain with
+      | Correct v -> (
+        if DebugFlags.debug_NGO then print_contents v;
+        match reconstruct_hrr encrypted v with
+        | Correct hrr -> correct(v.Contents.clientHelloDigest, v.Contents.extra, hrr)
+        | Error z -> Error z )
+      | Error z -> Error z )
 
 
 /// Basic testing:
