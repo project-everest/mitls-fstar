@@ -323,10 +323,10 @@ let send_truncated l m tr =
       | Msg (M_server_hello sh) ->
         if is_hrr sh then
           let hrr = get_hrr sh in
-          let Some cs = cipherSuite_of_name hrr.HRR.cipher_suite in
-          let hmsg = Hashing.compute (verifyDataHashAlg_of_ciphersuite cs) p in
-          let hht = (bytes_of_hex "fe0000") @| (bytes_of_int 1 (length hmsg)) @| hmsg in
-          OpenHash (hht @| mb)
+          let Some (CipherSuite13 _ h) = cipherSuite_of_name hrr.HRR.cipher_suite in
+          let hmsg = Hashing.compute h p in
+	  trace ("Detected HRR, replacing CH1 with its hash "^(hex_of_bytes hmsg));
+          OpenHash ((bytes_of_hex "fe0000") @| (Parse.vlbytes1 hmsg) @| mb)
 	else OpenHash (p @| mb)
       | _ -> OpenHash (p @| mb))
     in

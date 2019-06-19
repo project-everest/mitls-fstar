@@ -123,7 +123,7 @@ int main(int argc, char **argv)
     if(!strcasecmp(argv[1], "0rtt-reject"))
       mode = handshake_0rtt_reject;
     if(!strcasecmp(argv[1], "hrr"))
-      mode = handshake_stateless_retry;
+      mode = handshake_retry;
   }
 
   // Server PKI configuration: one ECDSA certificate
@@ -210,9 +210,9 @@ int main(int argc, char **argv)
   reset_ctx(&cctx, &sctx, cbuf, sbuf, cmax, smax);
   
   // GENERIC HANDSHAKE TEST (NO 0RTT)
-  if (mode == handshake_simple)
+  if (mode == handshake_simple || mode == handshake_retry)
   {
-    printf("\n     1-RTT HANDSHAKE TEST\n\n");
+    printf("\n     1-RTT HANDSHAKE TEST %s\n\n", (mode == handshake_retry ? "(with stateful HRR)" : ""));
 
     printf("[S] create\n");
     config.callback_state = &server;
@@ -221,6 +221,7 @@ int main(int argc, char **argv)
     config.is_server = 0;
     printf("[C] create\n");
     config.callback_state = &client;
+    if(mode == handshake_retry) config.named_groups = "X25519@"; // Offer X25519 but do not create a share
     assert(FFI_mitls_quic_create(&client.quic_state, &config));
       
     for(int i = 0, post_hs = 0; post_hs < 2 ; i++)

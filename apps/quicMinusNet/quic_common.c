@@ -3,6 +3,7 @@ typedef enum {
   handshake_simple,
   handshake_0rtt,
   handshake_0rtt_reject,
+  handshake_retry,
   handshake_stateless_retry
 } hs_type;
 

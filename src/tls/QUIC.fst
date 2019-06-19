@@ -96,6 +96,7 @@ let rec find_ticket_content (l:Extensions.offeredPsks_identities)
 
 module HSM = HandshakeMessages
 module CH = Parsers.ClientHello
+module CK = TLS.Cookie
 
 let peekClientHello (ch:bytes) (has_record:bool) : ML (option chSummary) =
   if length ch < 40 then (trace "peekClientHello: too short"; None) else
@@ -123,14 +124,13 @@ let peekClientHello (ch:bytes) (has_record:bool) : ML (option chSummary) =
 	  match Negotiation.find_clientPske ch with
 	  | None -> None
 	  | Some psk -> find_ticket_content psk.Extensions.identities in
-        let cookie = None
-          //19-06-17 FIXME        
-          // match Negotiation.find_cookie ch with
-          // | None -> None
-          // | Some c ->
-          //   match Ticket.check_cookie c with
-          //   | None -> None
-          //   | Some (hrr, digest, extra) -> Some extra
+        let cookie =
+           match Negotiation.find_cookie ch with
+           | None -> None
+           | Some c ->
+             match CK.decrypt c with
+             | Error z -> None
+             | Correct (_, extra, _) -> Some extra
           in
         Some ({ch_sni = sni; ch_alpn = alpn; ch_extensions = ext; ch_cookie = cookie; ch_ticket_data = ticket_data })
     | _ -> trace ("peekClientHello: not a client hello!"); None
