@@ -1,13 +1,13 @@
 module Negotiation
 
 /// Negotiates the TLS parameters for connection establishment, based
-/// on the local configuration and the peer's hello message.
-///
-/// Defines datatypes holding the TLS parameters: [offer] and [mode]
-/// used in Handshake, FFI, QUIC.
+/// on the local configuration, the peer's hello message and
+/// extensions, the optional HelloRetryRequest roundtrip, and
+/// callbacks to the application.
 
-// application-specific negotation relies on a callback in the
-// configuration.
+// We are refactoring this module in state-passing style, using ad-hoc
+// state types between the negotiation steps. In particular, [mode]
+// will be split into simpler, more precise types.
 
 open FStar.Error
 open FStar.Bytes
@@ -460,7 +460,8 @@ let rec obfuscate_age now = function
   | [] -> []
   | (id, ctx) :: t ->
     let age = FStar.UInt32.((now -%^ ctx.time_created) *%^ 1000ul) in
-    {identity = id; obfuscated_ticket_age = PSK.encode_age age ctx.ticket_age_add} ::
+    {identity = PSK.name id;
+    obfuscated_ticket_age = PSK.encode_age age ctx.ticket_age_add} ::
     obfuscate_age now t
 
 module PR = Parsers.ResumeInfo
@@ -477,10 +478,9 @@ noextract
 let list_pskid_pskinfo_of_list_resumeinfo13 (l: list Parsers.ResumeInfo13.resumeInfo13) : Tot (list (PSK.pskid * pskInfo)) = List.Tot.map
   (fun r -> let i = r.Parsers.ResumeInfo13.identity in
          let t = r.Parsers.ResumeInfo13.ticket in
-         assume (PSK.registered_psk i);
-         ((i <: PSK.pskid), Some?.v (Ticket.ticketContents_pskinfo (Parsers.TicketContents.T_ticket13 t))))
+         (admit(), Some?.v (Ticket.ticketContents_pskinfo (Parsers.TicketContents.T_ticket13 t))))
   l
-
+(*
 let rec obfuscate_age_obfuscate_age_new
   (now: U32.t)
   (l: list Parsers.ResumeInfo13.resumeInfo13)
@@ -491,8 +491,9 @@ let rec obfuscate_age_obfuscate_age_new
   | r :: q ->
     let i = r.Parsers.ResumeInfo13.identity in
     let t = r.Parsers.ResumeInfo13.ticket in
-    assume (PSK.registered_psk i);
+//    assume (PSK.registered_psk i);
     obfuscate_age_obfuscate_age_new now q
+*)
 
 let final_extensions cfg edi psks now: list clientHelloExtension =
   match cfg.max_version with
@@ -2058,19 +2059,21 @@ let compute_hrr cfg o =
 //
 // To avoid psk re-indexing, we produce a list of options rather than
 // a filtered list; to be revisited to avoid this intermediate list.
-let rec filter_psk (l:list pskIdentity) : St (r:list (option (PSK.pskid * PSK.pskInfo)) {List.length r = List.length l}) =
+let rec filter_psk (l:list pskIdentity)
+  : St (r:list (option (PSK.pskid * PSK.pskInfo)) {List.length r = List.length l}) =
   match l with
   | [] -> []
   | ({identity = id; obfuscated_ticket_age = _}) :: t ->
     (match Ticket.check_ticket13 id with
     | Some info -> 
         //19-04-23 should be check_ticket post? 
-        assume(PSK.registered_psk id);
-        Some (id, info) :: (filter_psk t)
-    | None ->
-      (match PSK.psk_lookup id with
-      | Some info -> trace ("Loaded PSK from ticket <"^print_bytes id^">"); Some (id, info) :: filter_psk t
-      | None -> trace ("WARNING: the PSK <"^print_bytes id^"> has been filtered"); None :: filter_psk t))
+        assume(not model /\ PSK.non_zero id);
+        Some (PSK.coerce id, info) :: (filter_psk t)
+//    | None ->
+//      (match PSK.psk_lookup id with
+//      | Some info -> trace ("Loaded PSK from ticket <"^print_bytes id^">"); Some (id, info) :: filter_psk t
+      | None -> trace ("WARNING: the PSK <"^print_bytes id^"> has been filtered"); None :: filter_psk t)
+//      )
 
 // Registration of DH shares
 let rec register_shares (l:list pre_share): 
@@ -2365,7 +2368,7 @@ let server_hrr_verify offer mode hrr =
 
 //19-06-17 Verification of this function is particularly slow and brittle; what to do? 
 #reset-options "--z3rlimit 300"
-let server_ClientHello #region ns offer log =
+let server_ClientHello #region ns offer log0 =
   trace ("offered client extensions "^string_of_ches offer.CH.extensions);
   trace ("offered cipher suites "^string_of_ciphersuitenames offer.CH.cipher_suites);
   trace (match find_supported_groups offer with
@@ -2385,9 +2388,11 @@ let server_ClientHello #region ns offer log =
     | Error z -> trace ("negotiation failed: "^string_of_error z); Error z
     | Correct r -> (
       let h = get() in assert (inv ns h);
+      // TRANSCRIPT:
+      // let tr = Transcript.create (ha_of_sm sm) in // { state(tr) == Start(None) }
       let stateless_retry = 
         match find_cookie offer with
-        | None -> None
+        | None -> None 
         | Some c ->
           // stateless HRR.
           match TLS.Cookie.decrypt c with
@@ -2399,21 +2404,31 @@ let server_ClientHello #region ns offer log =
           | Correct (digest, extra, hrr) ->
             trace ("Loaded stateless retry cookie "^hex_of_bytes extra);
             trace ("Setting transcript to CH1 hash "^hex_of_bytes digest);
+            // TODO check consistency of sm with hrr's cs and group;
+            // this is required to enforce the earlier server policy.
 
-            // TODO check consistency of sm with hrr's cs and group; this is required to enforce 
-            // the earlier server policy. 
+            // Lowering: we can use the output buffer as scratch space
+            // for outputting the digest (of known size) and the hrr
+            // (possibly quite large), since we only need them for
+            // computing the transcript digest.
+            //
+            // Alternatively, we could pass the hrr in two chunks: the
+            // (small, reconstructed) hrr prefix, and the (received)
+            // encrypted cookie.
+            //
+            // TRANSCRIPT 
+            // extend_stateless hrr digest hrr //{ Start(None) --HRR digest hrr--> Start(Some(digest,hrr)) }
+            // using sm's hash algorithm. 
+
+            //FIXME! can't prove [writing] without a precondition. The whole function TCs without these 3 lines.
+            let h0 = get() in assume HandshakeLog.(writing h0 log0 /\ valid_transcript (transcript h0 log0)); 
+            HandshakeLog.load_stateless_cookie log0 hrr digest;
+            assume False; 
+            Some extra // to be passed to the server nego callback
             
-            // TODO create Transcript in state Start(Some(digest,hrr))
-            // using sm's hash algorithm. Lower: consider taking the
-            // (decrypted) digest, (small, reconstructed) hrr prefix,
-            // and (received) encrypted cookie from three different
-            // const_buffers.
-
-            //FIXME! can't prove [writing] without a precondition
-            // HandshakeLog.load_stateless_cookie log hrr digest;
-            // we will pass extra to the server nego callback
-            Some extra 
         in 
+      // TRANSCRIPT 
+      // extend_ch offer //{ Start(r) --> ClientHello(r,offer) }
       let h = get() in assert (inv ns h);
       match r with 
       | ServerRetry hrr -> (
@@ -2426,7 +2441,7 @@ let server_ClientHello #region ns offer log =
           trace ("no common group, sending a retry request...");
           // TODO create Transcript in state Start(Some(digest,hrr)) to compute this digest
           let ha = TLS.Cookie.hrr_ha hrr in 
-          let digest = HandshakeLog.hash_tag #ha log in 
+          let digest = HandshakeLog.hash_tag #ha log0 in 
           let hrr = TLS.Cookie.append digest empty_bytes hrr in
           ns.state := S_HRR offer hrr;
           sm ))
@@ -2451,7 +2466,7 @@ let server_ClientHello #region ns offer log =
           assume(CipherSuite13? m.n_cipher_suite); // from ServerMode 
           let hrr = TLS.Cookie.hrr0 offer.CH.session_id m.n_cipher_suite in
           let ha = TLS.Cookie.hrr_ha hrr in 
-          let digest = HandshakeLog.hash_tag #ha log in
+          let digest = HandshakeLog.hash_tag #ha log0 in
           let hrr = TLS.Cookie.append digest filling hrr in
           ns.state := S_HRR offer hrr;
           Correct (ServerRetry hrr))

@@ -15,8 +15,10 @@ open Mem
 open Pkg
 open Idx
 open Pkg.Tree
+
 open FStar.HyperStack.ST
 
+module B = FStar.Bytes
 module M = LowStar.Modifies
 module DM = FStar.DependentMap
 module MDM = FStar.Monotonic.DependentMap
@@ -35,7 +37,7 @@ to instances (whose type is computed from the usage and label)
 *)
 
 inline_for_extraction
-let sample (len:UInt32.t): ST (lbytes32 len)
+let sample (len:UInt32.t): ST (B.lbytes32 len)
     (requires fun h0 -> True)
     (ensures fun h0 r h1 -> h0 == h1)
   = assume false; Random.sample32 len
@@ -79,7 +81,7 @@ let derived_key
 
 inline_for_extraction
 let secret_len (a:info) : keylen = Hacl.Hash.Definitions.hash_len a.ha
-type real_secret (i:regid) = a:info0 i & lbytes32 (secret_len a)
+type real_secret (i:regid) = a:info0 i & B.lbytes32 (secret_len a)
 
 let safe (#ideal:iflag) (u:usage ideal) (i:regid) =
   honest i /\ b2t ideal
@@ -294,7 +296,7 @@ type kdf_invariant_wit (#ideal:iflag) (#u:usage ideal) (#i:regid)
     | Some k' ->
       let a' = Pkg?.get_info pkg' k' in
       let len' = Pkg?.len pkg' a' in
-      let lb = FStar.Bytes.bytes_of_string lbl in
+      let lb = B.bytes_of_string lbl in
       let raw' = HKDF.expand_spec #a.ha raw lb len' in
       k' == Pkg?.coerceT pkg' i' a' raw')
    end))
@@ -416,7 +418,7 @@ val coerceT:
   u: usage ideal ->
   i: regid{~(safe u i)} ->
   a: info0 i ->
-  repr: lbytes32 (secret_len a) ->
+  repr: B.lbytes32 (secret_len a) ->
   GTot (secret u i)
 
 let coerceT #ideal u i a repr =
@@ -427,7 +429,7 @@ val coerce:
   u: usage ideal ->
   i: regid{~(safe u i)} ->
   a: info0 i ->
-  repr: lbytes32 (secret_len a) ->
+  repr: B.lbytes32 (secret_len a) ->
   ST (secret u i)
   (requires fun h0 -> valid_info i a)
   (ensures fun h0 k h1 ->
@@ -595,7 +597,7 @@ val derive:
     tree_inv t h1 /\
     (~(safe (u_of_t t) i) ==> (
       let (| a, raw |) = Model.real k in
-      let lb = Bytes.bytes_of_string lbl in
+      let lb = B.bytes_of_string lbl in
       let len' = LocalPkg?.len child_pkg a' in
       r == (LocalPkg?.coerceT child_pkg) (derive i lbl ctx) a'
       (HKDF.expand_spec #a.ha raw lb len')))
@@ -625,7 +627,8 @@ let derive #ideal #t #i k lbl ctx child_pkg a' =
     else
      begin
       let dlen = (LocalPkg?.len child_pkg) a' in
-      let raw = HKDF.expand #((get_info k).ha) (dsnd (Model.real k)) (FStar.Bytes.bytes_of_string lbl) dlen in
+      let raw = HKDF.expand #((get_info k).ha)
+        (dsnd (Model.real k)) (B.bytes_of_string lbl) dlen in
       let dk = (LocalPkg?.coerce child_pkg) i' a' raw in
       (| (), dk |)
      end
@@ -634,7 +637,7 @@ let derive #ideal #t #i k lbl ctx child_pkg a' =
    begin
     let len' = (LocalPkg?.len child_pkg) a' in
     let (| a, key |) = Model.real k in
-    let raw = HKDF.expand #a.ha key (Bytes.bytes_of_string lbl) len' in
+    let raw = HKDF.expand #a.ha key (B.bytes_of_string lbl) len' in
     let dk = (LocalPkg?.coerce child_pkg) i' a' raw in
     let h2 = get() in
     (| (), dk |)

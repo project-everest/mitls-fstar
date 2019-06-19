@@ -463,7 +463,7 @@ let ffiTicketInfoBytes (info:ticketInfo) (key:bytes) =
     | TicketInfo_13 ctx ->
       let CipherSuite13 ae h = ctx.early_cs in
       let (| li, rmsid |) = Ticket.dummy_rmsid ae h in
-      Ticket.Ticket13 (CipherSuite13 ae h) li rmsid key empty_bytes ctx.time_created ctx.ticket_age_add empty_bytes
+      Ticket.Ticket13 ctx.early_cs li rmsid key empty_bytes ctx.time_created ctx.ticket_age_add empty_bytes
     | TicketInfo_12 (pv, cs, ems) ->
       Ticket.Ticket12 pv cs ems (Ticket.dummy_msId pv cs ems) key
     in

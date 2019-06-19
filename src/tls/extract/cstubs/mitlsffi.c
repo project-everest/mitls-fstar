@@ -423,7 +423,7 @@ static TLS_Callbacks_nego_action nego_cb_proxy(FStar_Dyn_dyn cbs, Parsers_Protoc
   mitls_extension *extra_exts = NULL;
   size_t i, app_cookie_len = 0, extra_exts_len = 0;
   TLS_Callbacks_nego_action a;
-  TLS_Callbacks_custom_extensions cexts;
+  Extensions_unknownExtensions cexts;
 
   if(cookie.tag == FStar_Pervasives_Native_Some)
   {

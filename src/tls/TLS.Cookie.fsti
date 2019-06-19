@@ -1,6 +1,18 @@
 module TLS.Cookie
 
-/// Also including helper functions for server-side HRR processing.
+/// Defines stateless retry processing from the server's viewpoint:
+///
+/// * When issuing a HelloRetryRequest, the server embeds an encrypted
+///   cookie for authenticating the first exchange together with some
+///   application context.
+///
+/// * When receiving a ClientHello with a cookie, the server uses it
+///   to reconstruct this first exchange, check that the ClientHello
+///   complies with its earlier request, and extend its transcript
+///   accordingly.
+///
+/// The encrypted contents of these cookies is implementation
+/// specific: see Parsers.MiTLSCookieContents in Parsers.rfc
 
 open Mem
 open FStar.Bytes // for the time being
@@ -54,7 +66,6 @@ let hrr0 sid (cs: cipherSuite13): hrr_leq 8 =
     legacy_compression = Parsers.LegacyCompression.NullCompression;
     cipher_suite = name_of_cipherSuite cs;
     extensions = [ HRRE_supported_versions TLS_1p3 ]; }
-
 
 #set-options "--z3rlimit 100"
 noextract
@@ -114,3 +125,7 @@ val decrypt:
 // "global" authenticated predicate in the presence of key updates. We
 // may need extra parameters, such as the initial client hello and
 // server configuration.
+
+val test: unit -> ST bool
+  (requires fun h0 -> True)
+  (ensures fun h0 _ h1 -> B.(modifies loc_none h0 h1))

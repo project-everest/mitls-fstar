@@ -41,7 +41,7 @@ private let dummy_id (a:aeadAlg) : St AE.id =
   let h = Hashing.Spec.SHA2_256 in
   let li = LogInfo_CH0 ({
     li_ch0_cr = Bytes.create 32ul 0z;
-    li_ch0_ed_psk = empty_bytes;
+    li_ch0_ed_psk = PSK.coerce empty_bytes;
     li_ch0_ed_ae = a;
     li_ch0_ed_hash = h;
   }) in
@@ -197,7 +197,11 @@ let parse (b:bytes) (nonce:bytes) : St (option ticket) =
          end
         | _ -> None
 
-let ticket_decrypt (seal:bool) cipher : St (option bytes) =
+let ticket_decrypt (seal:bool) cipher : 
+  ST (option bytes) 
+  (requires fun h0 -> True)
+  (ensures fun h0 _ h1 -> LowStar.Buffer.(modifies loc_none h0 h1))
+  =
   let Key tid _ rd = if seal then get_sealing_key () else get_ticket_key () in
   let salt = AE.salt_of_state rd in
   let (iv, b) = split_ cipher (AE.iv_length tid) in
@@ -440,10 +444,13 @@ let write_ticket
 /// Tickets are doubly-encrypted: at the server using its ticket key,
 /// then at the client using its sealing key.
 
-//$ use the lower-evel EverCrypt calling convention.
-//$ where is the corresponding decryptor?
+//$ use the lower-level EverCrypt calling convention.
 
-let ticket_encrypt (seal:bool) plain : St bytes =
+let ticket_encrypt (seal:bool) plain : 
+  ST bytes 
+  (requires fun h0 -> True)
+  (ensures fun h0 r h1 -> B.(modifies loc_none h0 h1))
+=
   let Key tid wr _ = if seal then get_sealing_key () else get_ticket_key () in
   let nb = Random.sample (AE.iv_length tid) in
   let salt = AE.salt_of_state wr in
@@ -455,7 +462,8 @@ let create_ticket (seal:bool) t =
   let plain = serialize t in
   ticket_encrypt seal plain
 
-// FIXME(adl): restore HRR support in QD
+(* This code is now subsumed by TLS.Cookie 
+
 let create_cookie (hr:HSM.hrr) (digest:bytes) (extra:bytes) =
   let hrb = HSM.(handshake_serializer32 (M_server_hello (serverHello_of_hrr hr))) in
   let plain = hrb @| (vlbytes 1 digest) @| (vlbytes 2 extra) in
@@ -487,6 +495,7 @@ let decrypt_cookie b =
        end
       else (trace ("Warning: bad HRR in cookie (file bug report)"); None)
     | _ -> trace ("Cookie decode error (file bug report)"); None
+*)
 
 #pop-options
 

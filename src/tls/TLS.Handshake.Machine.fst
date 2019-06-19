@@ -553,4 +553,3 @@ type server_state
 //| S_wait_CF2 of digest       // TLS resume (CF)
 //| S_Complete
 
-*)
