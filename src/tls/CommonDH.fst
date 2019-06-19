@@ -396,6 +396,7 @@ let register_dhi #g gx =
     recall log;
     if None? (MDM.lookup log i) then MDM.extend log i Corrupt;
     assume(stable_on_t log (MDM.defined log i));
+    admit ();  //AR: 06/19: #1750 (FStar)
     mr_witness log (MDM.defined log i); gx
   else gx
 
