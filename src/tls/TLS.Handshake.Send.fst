@@ -72,14 +72,6 @@ let signals sto next_keys1 complete1 =
 
 /// The functions below are not used yet, will replace their counterpart in HandshakeLog
 
-module T = HSL.Transcript
-
-inline_for_extraction
-type transcript_state (a:EverCrypt.Hash.alg) = T.state a
-
-inline_for_extraction
-type transcript = Ghost.erased T.transcript_t
-
 // usable also on the receiving side; later, we will use instead a
 // lower-level caller-allocated output buffer.
 val tag: #a:EverCrypt.Hash.alg -> transcript_state a -> transcript -> St bytes
@@ -99,6 +91,22 @@ let tag #a stt transcript =
 
 /// Serializes and buffers a message to be sent, and extends the
 /// transcript digest with it.
+
+let send13
+  #a stt t sto m
+= let h0 = get () in
+  let r = MITLS.Repr.Handshake13.serialize sto.out_slice sto.out_pos m in
+  let h1 = get () in
+  T.frame_invariant stt (Ghost.reveal t) h0 h1 (B.loc_buffer sto.out_slice.LowParse.Low.Base.base);
+  match r with
+  | None ->
+    fatal Internal_error "output buffer overflow"
+  | Some r ->
+    let t' = HSL.Transcript.extend stt (T.LR_HSM13 r) t in
+    let b = MITLS.Repr.to_bytes r in
+    trace ("send "^hex_of_bytes b);
+    let sto = { sto with out_pos = r.MITLS.Repr.end_pos; outgoing = sto.outgoing @| b } in
+    correct (sto, t')
 
 inline_for_extraction
 noextract

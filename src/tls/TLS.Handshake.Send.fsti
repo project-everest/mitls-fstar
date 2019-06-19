@@ -84,8 +84,19 @@ noeq type send_state = {
   outgoing_complete: bool;
 }
 
-// TODO we'll need an invariant, mostly stating that the output buffer
-// is live.
+let footprint
+  (sto: send_state)
+: GTot B.loc
+= B.loc_buffer sto.out_slice.LowParse.Low.Base.base
+
+let invariant
+  (sto: send_state)
+  (h: _)
+: GTot Type0
+= LowParse.Low.Base.live_slice h sto.out_slice /\
+  sto.out_pos <= sto.out_slice.LowParse.Low.Base.len /\
+  FStar.Bytes.len sto.outgoing <= sto.out_pos // TODO: remove once fully lowered
+  // TODO: what more to stick into this invariant?
 
 let send_state0 = {
   out_slice = LP.make_slice B.null 0ul;
@@ -101,3 +112,42 @@ val signals:
   option (bool & bool) ->
   bool ->
   send_state
+
+module T = HSL.Transcript
+
+inline_for_extraction
+type transcript_state (a:EverCrypt.Hash.alg) = T.state a
+
+inline_for_extraction
+type transcript = Ghost.erased T.transcript_t
+
+open FStar.HyperStack.ST
+open TLSError
+
+val send13
+  (#a:EverCrypt.Hash.alg)
+  (stt: transcript_state a)
+  (t: transcript)
+  (sto: send_state)
+  (m: handshake13)
+: Stack (result (send_state & transcript))
+  (requires (fun h ->
+    invariant sto h /\
+    T.invariant stt (Ghost.reveal t) h /\
+    B.loc_disjoint (footprint sto) (T.footprint stt) /\
+    T.extensible (Ghost.reveal t) /\
+    Some? (T.transition (Ghost.reveal t) (T.L_HSM13 m))
+  ))
+  (ensures (fun h res h' ->
+    B.modifies (footprint sto `B.loc_union` T.footprint stt) h h' /\
+    begin match res with
+    | Correct (sto', t') ->
+      invariant sto' h' /\
+      sto'.out_slice == sto.out_slice /\
+      sto'.out_pos >= sto.out_pos /\
+//      LowParse.Low.Base.bytes_of_slice_from_to h' sto.out_slice sto.out_pos sto'.out_pos == LowParse.Spec.Base.serialize handshake13_serializer m /\ // TODO: is this needed? if so, then TR needs to enrich MITLS.Repr.* with the suitable lemmas
+      T.invariant stt (Ghost.reveal t') h' /\
+      T.transition (Ghost.reveal t) (T.L_HSM13 m) == Some (Ghost.reveal t')
+    | _ -> True
+    end
+  ))
