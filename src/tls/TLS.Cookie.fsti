@@ -1,6 +1,18 @@
 module TLS.Cookie
 
-/// Also including helper functions for server-side HRR processing.
+/// Defines stateless retry processing from the server's viewpoint:
+///
+/// * When issuing a HelloRetryRequest, the server embeds an encrypted
+///   cookie for authenticating the first exchange together with some
+///   application context.
+///
+/// * When receiving a ClientHello with a cookie, the server uses it
+///   to reconstruct this first exchange, check that the ClientHello
+///   complies with its earlier request, and extend its transcript
+///   accordingly.
+///
+/// The encrypted contents of these cookies is implementation
+/// specific: see Parsers.MiTLSCookieContents in Parsers.rfc
 
 open Mem
 open FStar.Bytes // for the time being

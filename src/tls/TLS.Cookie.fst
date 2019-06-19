@@ -97,7 +97,6 @@ let decrypt encrypted =
   | Error z -> Error z
 
 
-
 /// Basic testing:
 /// - unwrapping our own cookies is an identity on (chd,hrr,extra)
 
@@ -113,41 +112,3 @@ let test() =
     | Error _ -> trace "decryption failed"; false
     | Correct (chd', extra', hrr') ->
       (chd' = chd && extra' = extra && hrr' = hrr)
-
-
-
-
-
-// TODO restore debug trace; see below.
-
-(*
-  let hrm = HandshakeMessages.HelloRetryRequest hrr in
-  let hrb = vlbytes 3 (HandshakeMessages.handshakeMessageBytes None hrm) in
-  let plain = hrb @| (vlbytes 1 digest) @| (vlbytes 2 extra) in
-  let cipher = ticket_encrypt false plain in
-  cipher
-*)
-
-
-(*
-  trace ("Decrypting cookie "^(hex_of_bytes b));
-  if length b < 32 then None else
-  match ticket_decrypt false b with
-  | None -> trace ("Cookie decryption failed."); None
-  | Some plain ->
-    trace ("Plain cookie: "^(hex_of_bytes plain));
-    match vlsplit 3 plain with
-    | Error _ -> trace ("Cookie decode error: HRR"); None
-    | Correct (hrb, b) ->
-      let (_, hrb) = split hrb 4ul in // Skip handshake tag and vlbytes 3
-      match HandshakeMessages.parseHelloRetryRequest hrb with
-      | Error (_, m) -> trace ("Cookie decode error: parse HRR, "^m); None
-      | Correct hrr ->
-        match vlsplit 1 b with
-        | Error _ -> trace ("Cookie decode error: digest"); None
-        | Correct (digest, b) ->
-          match vlparse 2 b with
-          | Error _ -> trace ("Cookie decode error: application data"); None
-          | Correct extra ->
-            Some (hrr, digest, extra)
-*)
