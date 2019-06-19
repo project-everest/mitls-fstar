@@ -1,13 +1,13 @@
 module Negotiation
 
 /// Negotiates the TLS parameters for connection establishment, based
-/// on the local configuration and the peer's hello message.
-///
-/// Defines datatypes holding the TLS parameters: [offer] and [mode]
-/// used in Handshake, FFI, QUIC.
+/// on the local configuration, the peer's hello message and
+/// extensions, the optional HelloRetryRequest roundtrip, and
+/// callbacks to the application.
 
-// application-specific negotation relies on a callback in the
-// configuration.
+// We are refactoring this module in state-passing style, using ad-hoc
+// state types between the negotiation steps. In particular, [mode]
+// will be split into simpler, more precise types.
 
 open FStar.Error
 open FStar.Bytes

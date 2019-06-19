@@ -55,7 +55,6 @@ let hrr0 sid (cs: cipherSuite13): hrr_leq 8 =
     cipher_suite = name_of_cipherSuite cs;
     extensions = [ HRRE_supported_versions TLS_1p3 ]; }
 
-
 #set-options "--z3rlimit 100"
 noextract
 inline_for_extraction

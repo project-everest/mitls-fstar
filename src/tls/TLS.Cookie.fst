@@ -13,6 +13,25 @@ open Parsers.HelloRetryRequest
 
 module Contents = Parsers.MiTLSCookieContents
 
+
+
+
+(**
+  Debugging flag.
+  F* normalizer will erase debug prints at extraction when set to false.
+*)
+val discard: bool -> ST unit
+  (requires (fun _ -> True))
+  (ensures (fun h0 _ h1 -> h0 == h1))
+let discard _ = ()
+let print s = discard (IO.debug_print_string ("CKI | "^s^"\n"))
+unfold val trace: s:string -> ST unit
+  (requires (fun _ -> True))
+  (ensures (fun h0 _ h1 -> h0 == h1))
+unfold let trace = if DebugFlags.debug_NGO then print else (fun _ -> ())
+
+
+
 let prepare_contents (chd:digest) app (hrr: helloRetryRequest) =
   { Contents.session_id = hrr.session_id;
     Contents.cipher_suite = hrr.cipher_suite;
@@ -22,6 +41,16 @@ let prepare_contents (chd:digest) app (hrr: helloRetryRequest) =
       | None -> []);
     Contents.clientHelloDigest = chd;
     Contents.extra = app }
+
+let print_contents (x:Contents.miTLSCookieContents) =
+  let open Contents in
+  trace ("session_id="^hex_of_bytes x.session_id);
+  trace ("cipher_suite="^Parsers.CipherSuite.string_of_cipherSuite x.cipher_suite);// not cs printer!?
+  ( match x.group_share with
+  | []  -> trace "no group_share"
+  | [g] -> trace ("group_share="^Parsers.NamedGroup.string_of_namedGroup g));
+  trace ("clientHelloDigest="^hex_of_bytes x.clientHelloDigest);
+  trace ("extra="^hex_of_bytes x.extra)
 
 
 /// Failures within this code should be prevented by authenticated
@@ -50,36 +79,38 @@ let reconstruct_hrr
 let append chd app hrr =
   // TODO encrypt
   let encrypted = Contents.miTLSCookieContents_serializer32 (prepare_contents chd app hrr) in
+  trace ("Encrypted cookie:  "^hex_of_bytes encrypted);
   append_extension 16 hrr (HRRE_cookie encrypted)
 
 let decrypt encrypted =
   // TODO decrypt
+  trace ("Decrypting cookie "^hex_of_bytes encrypted);
   if length encrypted > encrypted_max_length then
     fatal Handshake_failure "oversized cookie"
   else
-  match Contents.miTLSCookieContents_parser32 encrypted with
-  | Some (v,0ul) -> (
+  match LowParseWrappers.wrap_parser32 Contents.miTLSCookieContents_parser32 "invalid cookie contents" encrypted with
+  | Correct v  -> (
+    if DebugFlags.debug_NGO then print_contents v;
     match reconstruct_hrr encrypted v with
     | Correct hrr -> correct(v.Contents.clientHelloDigest, v.Contents.extra, hrr)
     | Error z -> Error z )
-  | _ -> fatal Handshake_failure "invalid cookie contents"
+  | Error z -> Error z
 
 
 
-/// Basic testing---how do I run it?
-
-// Can we get rid of Evercrypt.algs??
+/// Basic testing:
+/// - unwrapping our own cookies is an identity on (chd,hrr,extra)
 
 let test() =
-  let chd = empty_bytes in
+  let chd = Bytes.create 16ul 221uy in
   let hrr = hrr0 empty_bytes (CipherSuite13 EverCrypt.AES128_GCM Spec.Hash.Definitions.SHA2_256) in
-  let extra = empty_bytes in
+  let extra = Bytes.create 8ul 204uy in
   let hrr = append chd extra hrr in
   match find_cookie hrr with
-  | None -> false
+  | None -> trace "cookie not found"; false
   | Some c ->
     match decrypt c with
-    | Error _ -> false
+    | Error _ -> trace "decryption failed"; false
     | Correct (chd', extra', hrr') ->
       (chd' = chd && extra' = extra && hrr' = hrr)
 
@@ -94,10 +125,9 @@ let test() =
   let hrb = vlbytes 3 (HandshakeMessages.handshakeMessageBytes None hrm) in
   let plain = hrb @| (vlbytes 1 digest) @| (vlbytes 2 extra) in
   let cipher = ticket_encrypt false plain in
-  trace ("Encrypting cookie: "^(hex_of_bytes plain));
-  trace ("Encrypted cookie:  "^(hex_of_bytes cipher));
   cipher
 *)
+
 
 (*
   trace ("Decrypting cookie "^(hex_of_bytes b));
