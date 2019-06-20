@@ -164,7 +164,7 @@ $(OUTPUT_DIR)/%.krml:
 # KreMLin and C compilation #
 #############################
 
-compile-all: compile-compact compile-compact-msvc compile-test
+compile-all: compile-compact compile-compact-msvc
 
 KRML = $(KREMLIN_HOME)/krml
 
@@ -175,7 +175,7 @@ HAND_WRITTEN_FILES = $(HAND_WRITTEN_C_FILES) $(HAND_WRITTEN_H_FILES)
 # - AEAD.Pkg does not extract (type-checks against a fictitious AEAD interface)
 # - KreMLin bug in anonymous unions
 # - many void* pointers being assigned due to debug flags...
-KRML_FLAGS = \
+KRML_OPTS = \
   -skip-compilation \
   -silent \
   -warn-error -9-7-6@4-14-15+11-20 \
@@ -185,6 +185,9 @@ KRML_FLAGS = \
   \
   -drop DebugFlags \
   -library EverCrypt,EverCrypt.* \
+
+KRML_FLAGS = \
+  $(KRML_OPTS) \
   -bundle 'EverCrypt,EverCrypt.\*[rename=EverCrypt]' \
   -bundle 'Vale.*,Hacl.*[rename=Unused1]' \
   -bundle 'LowParse.\*,LowParseWrappers[rename=LowParse]' \
@@ -223,9 +226,17 @@ dist/%/Makefile.basic: $(ALL_KRML_FILES)
 	  $(notdir $(HAND_WRITTEN_C_FILES)) \
 	  -o libmitls.a
 
+# Comma-separated list of miTLS modules (because we still don't have a TLS
+# namespace).
+MITLS_FSTS	:= $(patsubst %.fst,%,$(filter-out Test Test.%,$(wildcard *.fst)))
+MITLS_MODULES	:= $(shell echo $(MITLS_FSTS) | tr ' ' ',')
+
 dist/test/Makefile.basic: $(ALL_KRML_FILES)
-	$(KRML) \
-	  -bundle 'Test,Test.*=[rename=Test]' \
+	$(KRML) $(KRML_OPTS) \
+	  -bundle 'Test.Main=Test.*[rename=Test]' \
+	  -bundle '\*[rename=Test_miTLS]' \
+	  -library $(MITLS_MODULES) \
+	  -library 'Parsers,Parsers.\*' \
 	  -tmpdir $(dir $@) -skip-compilation \
 	  $(filter %.krml,$^) \
 	  -silent \
@@ -245,6 +256,6 @@ else
   LD_EXTRA = LD_LIBRARY_PATH="$(MITLS_HOME)/src/tls/dist/compact"
 endif
 
-test: compile-test
-	$(LD_EXTRA) dist/test/test.exe
+test: dist/test/Makefile.basic
+	$(MAKE) -C dist/test test
 
