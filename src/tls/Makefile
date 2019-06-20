@@ -168,23 +168,33 @@ compile-all: compile-compact compile-compact-msvc
 
 KRML = $(KREMLIN_HOME)/krml
 
+HAND_WRITTEN_C_FILES = $(wildcard cstubs/*.c)
+HAND_WRITTEN_H_FILES = $(wildcard cstubs/*.h) ../../libs/ffi/mitlsffi.h ../pki/mipki.h
+
 HAND_WRITTEN_FILES = $(HAND_WRITTEN_C_FILES) $(HAND_WRITTEN_H_FILES)
 
 # Notes:
 # - Token.UF1CMA does not extract
 # - AEAD.Pkg does not extract (type-checks against a fictitious AEAD interface)
-# - KreMLin bug in anonymous unions
-# - many void* pointers being assigned due to debug flags...
+# - KreMLin bug in anonymous unions, hence the -fno-anonymous-unions
+# - many void* pointers being assigned due to debug flags; is the code even
+#   runnable without debug?
+# - spurious error: StreamAE.c: In function ‘StreamAE_decrypt’:
+#    StreamAE.c:255:13: error: ‘*((void *)&f1+1)’ may be used uninitialized in
+#    this function [-Werror=maybe-uninitialized]
+# - forcing Parsers.ClientHello to remain visible to support linkage with the
+#   test later on; eventually, we can remove the left-hand side of that bundle
+
 KRML_OPTS = \
   -skip-compilation \
   -silent \
   -warn-error -9-7-6@4-14-15+11-20 \
   -add-include '"kremlin/internal/compat.h"' \
-  -ccopts -Wno-type-limits,-Wno-unused \
+  -ccopts -Wno-type-limits,-Wno-unused,-Wno-uninitialized \
   -fnoanonymous-unions -fparentheses -fno-shadow -fcurly-braces \
   \
   -drop DebugFlags \
-  -library EverCrypt,EverCrypt.* \
+  -library EverCrypt,EverCrypt.*
 
 KRML_FLAGS = \
   $(KRML_OPTS) \
@@ -193,33 +203,35 @@ KRML_FLAGS = \
   -bundle 'LowParse.\*,LowParseWrappers[rename=LowParse]' \
   -bundle 'Format.\*' \
   -bundle 'FStar.\*,LowStar.\*,C,C.\*[rename=Mitls_Kremlib]' \
-  -bundle 'Parsers=Parsers.\*,ParsersAux.\*' \
+  -bundle 'Parsers.ClientHello=Parsers.\*,ParsersAux.\*[rename=Parsers]' \
   -bundle 'Spec.\*' \
+  -bundle 'Test.\*' \
   -bundle Lib.*[rename=Hacl_Lib] \
-  -bundle TLSConstants=TLSConstants,QD.TLS_protocolVersion,List.Helpers \
+  -bundle TLSConstants=QD.TLS_protocolVersion,List.Helpers \
   -bundle Hashing=Hashing.Spec,Hashing,Hashing.CRF,HMAC,HKDF,HMAC.UFCMA \
-  -bundle Old.Handshake=Old.HMAC.UFCMA,Old.Epochs,Old.KeySchedule,Old.Handshake \
-  -bundle StatefulLHAE=AEAD_GCM,LHAEPlain,StatefulPlain,StatefulLHAE \
-  -bundle StreamAE=StreamPlain,StreamAE \
-  -bundle CommonDH=TLS.Curve25519,DHGroup,ECGroup,CommonDH \
-  -bundle Content=Content,DataStream \
-  -bundle Record=Record,StAE,Transport,StreamDeltas \
-  -bundle PMS=PMS,RSAKey,TLSPRF \
-  -bundle Crypto.Plain=Buffer.Utils,Crypto.Indexing,Crypto.Plain,Crypto.Symmetric.Bytes \
-  -bundle Flags=Flags,Flag,TLSInfoFlags \
+  -bundle Old.Handshake=Old.HMAC.UFCMA,Old.Epochs,Old.KeySchedule \
+  -bundle StatefulLHAE=AEAD_GCM,LHAEPlain,StatefulPlain \
+  -bundle StreamPlain+StreamAE=[rename=StreamAE] \
+  -bundle TLS.Curve25519+DHGroup+ECGroup+CommonDH=[rename=CommonDH] \
+  -bundle Content=DataStream \
+  -bundle Record+StAE=Transport,StreamDeltas[rename=Record] \
+  -bundle PMS=RSAKey,TLSPRF \
+  -bundle Buffer.Utils,Crypto.Indexing,Crypto.Plain,Crypto.Symmetric.Bytes[rename=Crypto_Plain] \
+  -bundle Flags,Flag,TLSInfoFlags[rename=Flags] \
   -bundle 'Model,Model.\*[rename=Unused]' \
   -bundle 'Token.UF1CMA,AEAD,AEAD.Pkg'
 
-dist/compact-msvc/Makefile.basic: KRML_FLAGS += -falloca -ftail-calls
+compile-%: dist/Makefile dist/%/Makefile.basic
+	cp $< dist/$*/
+	$(MAKE) -C dist/$*
 
-compile-%: dist/%/Makefile.basic
-	$(MAKE) -C $(dir $^) -f Makefile.basic
+dist/compact-msvc/Makefile.basic: KRML_FLAGS += -falloca -ftail-calls
 
 .PRECIOUS: dist/%/Makefile.basic
 
 dist/%/Makefile.basic: $(ALL_KRML_FILES)
 	mkdir -p $(dir $@)
-	#cp $(HAND_WRITTEN_FILES) $(dir $@)
+	cp $(HAND_WRITTEN_FILES) $(dir $@)
 	$(KRML) $(KOPTS) $(KRML_FLAGS) \
 	  $(filter %.krml,$^) \
 	  -tmpdir $(dir $@)  \
@@ -242,7 +254,6 @@ dist/test/Makefile.basic: $(ALL_KRML_FILES)
 	  -silent \
 	  -warn-error -4-6+9 \
 	  -o test.exe
-
 
 #########
 # Tests #

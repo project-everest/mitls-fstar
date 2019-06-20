@@ -291,7 +291,7 @@ FStar_Dyn_dyn PKI_init(Prims_string cafile, Prims_list__K___Prims_string_Prims_s
   mipki_config_entry *pki_config = alloca(len*sizeof(mipki_config_entry));
   int err;
 
-  for(int i = 0; i<len; i++)
+  for(uint32_t i = 0; i<len; i++)
   {
     K___Prims_string_Prims_string_bool cfg = cur->hd;
 

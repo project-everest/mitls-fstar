@@ -36,7 +36,6 @@ let iv () =
   C.EXIT_SUCCESS
 
 let main (): St C.exit_code =
-  ignore (FStar.Test.dummy ());
   if Random.init () = 0ul then
     begin
     print_string "✘ RNG initialization\n";

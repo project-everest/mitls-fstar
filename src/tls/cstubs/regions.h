@@ -1,3 +1,6 @@
+/* This allows running with a region allocator whose implementation is in
+ * RegionAllocator.c... but we don't enable it in the default configuration. */
+
 #include <stdlib.h>
 #include <stdint.h>
 #include "RegionAllocator.h"
