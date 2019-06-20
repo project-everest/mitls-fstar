@@ -8,6 +8,7 @@ open TLSConstants
 
 #reset-options "--using_facts_from '* -LowParse.Spec.Base'"
 
+inline_for_extraction noextract
 let ideal = Flags.ideal_PMS // controls idealization of PMS.
 
 type rsarepr = bytes

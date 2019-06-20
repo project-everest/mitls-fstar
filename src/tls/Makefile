@@ -1,7 +1,7 @@
 # A revamped Makefile inspired from HACL
 # --------------------------------------
 
-all: compile
+all: compile-all
 
 SHELL		= /bin/bash
 
@@ -19,23 +19,7 @@ else
   TIME := /usr/bin/time
 endif
 
-MITLS_HOME	?= ../..
-FSTAR_HOME	?= $(MITLS_HOME)/../FStar
-KREMLIN_HOME	?= $(MITLS_HOME)/../kremlin
-HACL_HOME	?= $(MITLS_HOME)/../hacl-star
-MLCRYPTO_HOME	?= $(MITLS_HOME)/../MLCrypto
-QD_HOME		?= $(MITLS_HOME)/../quackyducky
-
-include $(HACL_HOME)/Makefile.include
-
-INCLUDE_PATHS 	= \
-  $(ALL_HACL_DIRS) \
-  $(KREMLIN_HOME)/include \
-  $(KREMLIN_HOME)/kremlib/compat \
-  $(KREMLIN_HOME)/kremlib \
-  $(MITLS_HOME)/libs/ffi \
-  $(QD_HOME)/src/lowparse \
-  $(MITLS_HOME)/src/parsers/generated
+include Makefile.common
 
 # Flat directory structure for miTLS
 FSTAR_ROOTS	= $(wildcard *.fst *.fsti)
@@ -86,8 +70,6 @@ endif
 # FStar #
 #########
 
-FSTAR_INCLUDES = $(addprefix --include ,$(INCLUDE_PATHS))
-
 FSTAR_HINTS ?= --use_hints --use_hint_hashes --record_hints
 
 # 272: top-level bindings must be total
@@ -103,9 +85,6 @@ FSTAR_NO_FLAGS = $(FSTAR_HOME)/bin/fstar.exe $(FSTAR_HINTS) \
 
 FSTAR = $(FSTAR_NO_FLAGS) $(OTHERFLAGS)
 
-%.fst-in %.fsti-in:
-	@echo $(FSTAR_INCLUDES)
-
 
 ########################
 # Parser re-generation #
@@ -120,15 +99,13 @@ parsers:
 # Depend #
 ##########
 
-.PHONY: depend-warning
-depend-warning:
-	@echo "⚠ Starting dependency analysis... may take a couple minutes. Remember to run subsequent builds with NODEPEND=1 !"
 
 ifndef NODEPEND
 ifndef MAKE_RESTARTS
-# Note that the dependencies are marked as .PHONY which forces re-generation of
-# .depend no matter what.
-.depend: parsers depend-warning
+# Note that the dependency is marked as .PHONY which forces re-generation of
+# .depend no matter what. (Achieved via .FORCE in the HACL* Makefile.)
+.depend: parsers
+	@echo "⚠ Starting dependency analysis... may take a couple minutes. Remember to run subsequent builds with NODEPEND=1 !"
 	$(call run-with-log,\
 	  $(FSTAR_NO_FLAGS) --dep full $(notdir $(FSTAR_ROOTS)) \
 	    > $@ \
@@ -182,5 +159,92 @@ $(OUTPUT_DIR)/%.krml:
 	  touch $@ \
 	  ,[EXTRACT-KRML] $*,$@)
 
-compile: $(ALL_KRML_FILES)
-	echo $^
+
+#############################
+# KreMLin and C compilation #
+#############################
+
+compile-all: compile-compact compile-compact-msvc compile-test
+
+KRML = $(KREMLIN_HOME)/krml
+
+HAND_WRITTEN_FILES = $(HAND_WRITTEN_C_FILES) $(HAND_WRITTEN_H_FILES)
+
+# Notes:
+# - Token.UF1CMA does not extract
+# - AEAD.Pkg does not extract (type-checks against a fictitious AEAD interface)
+# - KreMLin bug in anonymous unions
+# - many void* pointers being assigned due to debug flags...
+KRML_FLAGS = \
+  -skip-compilation \
+  -silent \
+  -warn-error -9-7-6@4-14-15+11-20 \
+  -add-include '"kremlin/internal/compat.h"' \
+  -ccopts -Wno-type-limits,-Wno-unused \
+  -fnoanonymous-unions -fparentheses -fno-shadow -fcurly-braces \
+  \
+  -drop DebugFlags \
+  -library EverCrypt,EverCrypt.* \
+  -bundle 'EverCrypt,EverCrypt.\*[rename=EverCrypt]' \
+  -bundle 'Vale.*,Hacl.*[rename=Unused1]' \
+  -bundle 'LowParse.\*,LowParseWrappers[rename=LowParse]' \
+  -bundle 'Format.\*' \
+  -bundle 'FStar.\*,LowStar.\*,C,C.\*[rename=Mitls_Kremlib]' \
+  -bundle 'Parsers=Parsers.\*,ParsersAux.\*' \
+  -bundle 'Spec.\*' \
+  -bundle Lib.*[rename=Hacl_Lib] \
+  -bundle TLSConstants=TLSConstants,QD.TLS_protocolVersion,List.Helpers \
+  -bundle Hashing=Hashing.Spec,Hashing,Hashing.CRF,HMAC,HKDF,HMAC.UFCMA \
+  -bundle Old.Handshake=Old.HMAC.UFCMA,Old.Epochs,Old.KeySchedule,Old.Handshake \
+  -bundle StatefulLHAE=AEAD_GCM,LHAEPlain,StatefulPlain,StatefulLHAE \
+  -bundle StreamAE=StreamPlain,StreamAE \
+  -bundle CommonDH=TLS.Curve25519,DHGroup,ECGroup,CommonDH \
+  -bundle Content=Content,DataStream \
+  -bundle Record=Record,StAE,Transport,StreamDeltas \
+  -bundle PMS=PMS,RSAKey,TLSPRF \
+  -bundle Crypto.Plain=Buffer.Utils,Crypto.Indexing,Crypto.Plain,Crypto.Symmetric.Bytes \
+  -bundle Flags=Flags,Flag,TLSInfoFlags \
+  -bundle 'Model,Model.\*[rename=Unused]' \
+  -bundle 'Token.UF1CMA,AEAD,AEAD.Pkg'
+
+dist/compact-msvc/Makefile.basic: KRML_FLAGS += -falloca -ftail-calls
+
+compile-%: dist/%/Makefile.basic
+	$(MAKE) -C $(dir $^) -f Makefile.basic
+
+.PRECIOUS: dist/%/Makefile.basic
+
+dist/%/Makefile.basic: $(ALL_KRML_FILES)
+	mkdir -p $(dir $@)
+	#cp $(HAND_WRITTEN_FILES) $(dir $@)
+	$(KRML) $(KOPTS) $(KRML_FLAGS) \
+	  $(filter %.krml,$^) \
+	  -tmpdir $(dir $@)  \
+	  $(notdir $(HAND_WRITTEN_C_FILES)) \
+	  -o libmitls.a
+
+dist/test/Makefile.basic: $(ALL_KRML_FILES)
+	$(KRML) \
+	  -bundle 'Test,Test.*=[rename=Test]' \
+	  -tmpdir $(dir $@) -skip-compilation \
+	  $(filter %.krml,$^) \
+	  -silent \
+	  -warn-error -4-6+9 \
+	  -o test.exe
+
+
+#########
+# Tests #
+#########
+
+ifeq ($(OS),Windows_NT)
+  LD_EXTRA = PATH="$(MITLS_HOME)/src/tls/dist/compact:$$PATH"
+else ifeq ($(shell uname -s),Darwin)
+  LD_EXTRA = DYLD_LIBRARY_PATH="$(MITLS_HOME)/src/tls/dist/compact"
+else
+  LD_EXTRA = LD_LIBRARY_PATH="$(MITLS_HOME)/src/tls/dist/compact"
+endif
+
+test: compile-test
+	$(LD_EXTRA) dist/test/test.exe
+

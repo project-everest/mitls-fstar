@@ -73,7 +73,7 @@ module MDM = FStar.Monotonic.DependentMap
 
 /// Global, ideal memory
 
-inline_for_extraction 
+inline_for_extraction noextract
 let model = Flags.model 
 
 /// 18-01-04 We need to explicitly choose between using colors and
