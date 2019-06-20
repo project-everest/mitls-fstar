@@ -185,12 +185,15 @@ HAND_WRITTEN_FILES = $(HAND_WRITTEN_C_FILES) $(HAND_WRITTEN_H_FILES)
 # - forcing Parsers.ClientHello to remain visible to support linkage with the
 #   test later on; eventually, we can remove the left-hand side of that bundle
 
+DEBUG_FLAGS= -DDEBUGFLAGS_DEBUG,-DDEBUGFLAGS_DEBUG_CDH,-DDEBUGFLAGS_DEBUG_EPOCHS,-DDEBUGFLAGS_DEBUG_FFI,-DDEBUGFLAGS_DEBUG_HS,-DDEBUGFLAGS_DEBUG_HSL,-DDEBUGFLAGS_DEBUG_KS,-DDEBUGFLAGS_DEBUG_NGO,-DDEBUGFLAGS_DEBUG_QUIC,-DDEBUGFLAGS_DEBUG_RECORD,-DDEBUGFLAGS_DEBUG_TLS,-DDEBUGFLAGS_DEBUG_AEP
+
 KRML_OPTS = \
   -skip-compilation \
   -silent \
   -warn-error -9-7-6@4-14-15+11-20 \
   -add-include '"kremlin/internal/compat.h"' \
   -ccopts -Wno-type-limits,-Wno-unused,-Wno-uninitialized \
+  -ccopts $(DEBUG_FLAGS) \
   -fnoanonymous-unions -fparentheses -fno-shadow -fcurly-braces \
   \
   -drop DebugFlags \
@@ -216,13 +219,14 @@ KRML_FLAGS = \
   -bundle Content=DataStream \
   -bundle Record+StAE=Transport,StreamDeltas[rename=Record] \
   -bundle PMS=RSAKey,TLSPRF \
+  -bundle MITLS.Repr.*[rename=Reprs] \
   -bundle Buffer.Utils,Crypto.Indexing,Crypto.Plain,Crypto.Symmetric.Bytes[rename=Crypto_Plain] \
   -bundle Flags,Flag,TLSInfoFlags[rename=Flags] \
   -bundle 'Model,Model.\*[rename=Unused]' \
   -bundle 'Token.UF1CMA,AEAD,AEAD.Pkg'
 
 compile-%: dist/Makefile dist/%/Makefile.basic
-	cp $< dist/$*/
+	[ "$*" != "test" ] && cp $< dist/$*/ || true
 	$(MAKE) -C dist/$*
 
 compile-test: compile-compact
@@ -262,14 +266,6 @@ dist/test/Makefile.basic: $(ALL_KRML_FILES)
 # Tests #
 #########
 
-ifeq ($(OS),Windows_NT)
-  LD_EXTRA = PATH="$(MITLS_HOME)/src/tls/dist/compact:$$PATH"
-else ifeq ($(shell uname -s),Darwin)
-  LD_EXTRA = DYLD_LIBRARY_PATH="$(MITLS_HOME)/src/tls/dist/compact"
-else
-  LD_EXTRA = LD_LIBRARY_PATH="$(MITLS_HOME)/src/tls/dist/compact"
-endif
-
-test: dist/test/Makefile.basic
+test:
 	$(MAKE) -C dist/test test
 

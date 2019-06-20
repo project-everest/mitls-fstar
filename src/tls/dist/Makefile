@@ -1,3 +1,9 @@
+MITLS_HOME 	?= ../../../..
+KREMLIN_HOME	?= $(MITLS_HOME)/../kremlin
+FSTAR_HOME	?= $(MITLS_HOME)/../FStar
+HACL_HOME	?= $(MITLS_HOME)/../hacl-star
+MLCRYPTO_HOME	?= $(MITLS_HOME)/../MLCrypto
+
 UNAME		= $(shell uname)
 MARCH		= x86_64
 ifeq ($(UNAME),Darwin)
@@ -19,7 +25,9 @@ endif
 include Makefile.basic
 
 CFLAGS		+= -g -std=gnu11 -O3
-LDFLAGS		+= -L$(HACL_HOME)/dist/compact -levercrypt -L$(MITLS_HOME)/src/pki -lmipki
+LDFLAGS		+= -L$(HACL_HOME)/dist/compact -levercrypt
+LDFLAGS		+= -L$(MITLS_HOME)/src/pki -lmipki
+LDFLAGS		+= -L$(MLCRYPTO_HOME)/openssl -lcrypto
 
 KREMLIB_A 	= $(KREMLIN_HOME)/kremlib/dist/generic/libkremlib.a
 EVERCRYPT_SO 	= $(HACL_HOME)/dist/compact/libevercrypt.$(SO)
