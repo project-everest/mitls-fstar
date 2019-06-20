@@ -127,16 +127,16 @@ open TLSError
 val send13
   (#a:EverCrypt.Hash.alg)
   (stt: transcript_state a)
-  (t: transcript)
+  (#n: Ghost.erased nat)
+  (t: T.g_transcript_n n { Ghost.reveal n < T.max_transcript_size - 1 })
   (sto: send_state)
   (m: handshake13)
-: Stack (result (send_state & transcript))
+: Stack (result (send_state & T.g_transcript_n (Ghost.hide (Ghost.reveal n + 1))))
   (requires (fun h ->
     invariant sto h /\
     T.invariant stt (Ghost.reveal t) h /\
     B.loc_disjoint (footprint sto) (T.footprint stt) /\
-    T.extensible (Ghost.reveal t) /\
-    Some? (T.transition (Ghost.reveal t) (T.L_HSM13 m))
+    T.Transcript13? (Ghost.reveal t)
   ))
   (ensures (fun h res h' ->
     B.modifies (footprint sto `B.loc_union` T.footprint stt) h h' /\
@@ -147,7 +147,7 @@ val send13
       sto'.out_pos >= sto.out_pos /\
 //      LowParse.Low.Base.bytes_of_slice_from_to h' sto.out_slice sto.out_pos sto'.out_pos == LowParse.Spec.Base.serialize handshake13_serializer m /\ // TODO: is this needed? if so, then TR needs to enrich MITLS.Repr.* with the suitable lemmas
       T.invariant stt (Ghost.reveal t') h' /\
-      T.transition (Ghost.reveal t) (T.L_HSM13 m) == Some (Ghost.reveal t')
+      Ghost.reveal t' == T.snoc13 (Ghost.reveal t) m
     | _ -> True
     end
   ))

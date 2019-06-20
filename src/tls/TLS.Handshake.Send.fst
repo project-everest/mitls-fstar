@@ -93,7 +93,7 @@ let tag #a stt transcript =
 /// transcript digest with it.
 
 let send13
-  #a stt t sto m
+  #a stt #_ t sto m
 = let h0 = get () in
   let r = MITLS.Repr.Handshake13.serialize sto.out_slice sto.out_pos m in
   let h1 = get () in
@@ -102,11 +102,13 @@ let send13
   | None ->
     fatal Internal_error "output buffer overflow"
   | Some r ->
+//    let t : Ghost.erased T.transcript_t = Ghost.hide (Ghost.reveal t) in
+    List.lemma_snoc_length (T.Transcript13?.rest (Ghost.reveal t), m);
     let t' = HSL.Transcript.extend stt (T.LR_HSM13 r) t in
     let b = MITLS.Repr.to_bytes r in
     trace ("send "^hex_of_bytes b);
     let sto = { sto with out_pos = r.MITLS.Repr.end_pos; outgoing = sto.outgoing @| b } in
-    correct (sto, t')
+    correct (sto, t') // Ghost.hide (Ghost.reveal t'))
 
 inline_for_extraction
 noextract

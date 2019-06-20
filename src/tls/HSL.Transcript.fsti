@@ -346,6 +346,28 @@ type label =
   | L_HSM12 of HSM12.handshake12
   | L_HSM13 of HSM13.handshake13
 
+inline_for_extraction
+let transcript_n (n: Ghost.erased nat) = (t: transcript_t { transcript_size t == Ghost.reveal n })
+
+inline_for_extraction
+let g_transcript_n (n: Ghost.erased nat) = (t: Ghost.erased transcript_t { transcript_size (Ghost.reveal t) == Ghost.reveal n }) // Ghost.erased (transcript_n n)
+
+let snoc12
+  (t: transcript_t { Transcript12? t /\ transcript_size t < max_transcript_size - 1 })
+  (m: HSM12.handshake12)
+: Tot transcript_t
+= let Transcript12 ch sh rest = t in
+  List.lemma_snoc_length (rest, m);
+  Transcript12 ch sh (List.snoc (rest, m))
+
+let snoc13
+  (t: transcript_t { Transcript13? t /\ transcript_size t < max_transcript_size - 1 })
+  (m: HSM13.handshake13)
+: Tot (transcript_n (Ghost.hide (transcript_size t + 1)))
+= let Transcript13 retry ch sh rest = t in
+  List.lemma_snoc_length (rest, m);
+  Transcript13 retry ch sh (List.snoc (rest, m))
+
 let transition (t:transcript_t) (l:label)
   : GTot (option transcript_t)
   = match t, l with
