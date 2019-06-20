@@ -164,7 +164,7 @@ $(OUTPUT_DIR)/%.krml:
 # KreMLin and C compilation #
 #############################
 
-compile-all: compile-compact compile-compact-msvc
+compile-all: compile-compact compile-compact-msvc compile-test
 
 KRML = $(KREMLIN_HOME)/krml
 
@@ -225,6 +225,8 @@ compile-%: dist/Makefile dist/%/Makefile.basic
 	cp $< dist/$*/
 	$(MAKE) -C dist/$*
 
+compile-test: compile-compact
+
 dist/compact-msvc/Makefile.basic: KRML_FLAGS += -falloca -ftail-calls
 
 .PRECIOUS: dist/%/Makefile.basic
@@ -245,6 +247,7 @@ MITLS_MODULES	:= $(shell echo $(MITLS_FSTS) | tr ' ' ',')
 
 dist/test/Makefile.basic: $(ALL_KRML_FILES)
 	$(KRML) $(KRML_OPTS) \
+	  -no-prefix Test.Main \
 	  -bundle 'Test.Main=Test.*[rename=Test]' \
 	  -bundle '\*[rename=Test_miTLS]' \
 	  -library $(MITLS_MODULES) \
