@@ -300,6 +300,8 @@ let mk_from_const_slice
       meta = m
     }
 
+inline_for_extraction
+noextract
 let mk_from_serialize
   (b:LP.slice mut_p mut_p{ LP.(b.len <= validator_max_length) })
   (from:index (of_slice b))
