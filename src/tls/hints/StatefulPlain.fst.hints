@@ -11,7 +11,7 @@
         "equation_StatefulPlain.id", "projection_inverse_BoxInt_proj_0"
       ],
       0,
-      "818548fdacdf8c3bd9aa5587ebb5ec9e"
+      "2e6cba49a4416dc50ad9ad7969e15ee4"
     ],
     [
       "StatefulPlain.makeAD",
@@ -56,7 +56,7 @@
         "typing_Spec.Poly1305.size_key"
       ],
       0,
-      "0f1b70b70dfa6f69993df1b54f53f5c8"
+      "a7b54b277661a39c775ef0e5a71102e5"
     ],
     [
       "StatefulPlain.lemma_12",
@@ -70,7 +70,7 @@
         "refinement_interpretation_Tm_refine_8fcbdf9612ed9cda5a238ad00e36f8ee"
       ],
       0,
-      "842b671dd257fe3ce7e42f2214c45a86"
+      "b829f2074fbc1defb451235545313702"
     ],
     [
       "StatefulPlain.is_plain",
@@ -79,7 +79,7 @@
       1,
       [ "@query", "assumption_Content.contentType__uu___haseq" ],
       0,
-      "190c53abd4a18fb4f7221f4af5518837"
+      "9c6ffab55d654494c829d79af022060b"
     ],
     [
       "StatefulPlain.assert_is_plain",
@@ -91,7 +91,7 @@
         "refinement_interpretation_Tm_refine_dfb41679c4620ddf785a536323b5453d"
       ],
       0,
-      "b371c9b2b3d28e08320ae2d6bd90f8ed"
+      "7e902ba37eb1edb109bf0ff39310d14c"
     ],
     [
       "StatefulPlain.ghost_repr",
@@ -122,7 +122,7 @@
         "typing_Content.ghost_repr"
       ],
       0,
-      "e671706e0911b5d053ce65dfa572f366"
+      "a4bcda5d58564098ee52c2bce8cad596"
     ],
     [
       "StatefulPlain.repr",
@@ -136,7 +136,7 @@
         "typing_FStar.Bytes.bytes"
       ],
       0,
-      "24015f63bcdd02da6d7495a7fc8e2681"
+      "2c1f8e3a9cbc26c14a18ab2d12fb6d5d"
     ],
     [
       "StatefulPlain.repr",
@@ -169,7 +169,7 @@
         "typing_Content.ghost_repr", "typing_TLSInfo.uu___is_ID12"
       ],
       0,
-      "60f61ffc154b607d5db0fe153209af8b"
+      "d47df43b608c90d87edfc45ada3a3efe"
     ],
     [
       "StatefulPlain.wf_ad_rg",
@@ -178,7 +178,7 @@
       1,
       [ "@query", "assumption_Content.contentType__uu___haseq" ],
       0,
-      "c60ff40b2410849a15c177d1449295bd"
+      "1c6b8dbb1023e96bb4445f3c3cbbec0a"
     ],
     [
       "StatefulPlain.wf_payload_ad_rg",
@@ -198,7 +198,7 @@
         "typing_FStar.Seq.Base.length"
       ],
       0,
-      "8d0a9f36805add1939b0619b51d8e45e"
+      "5590c5e3a73286b41d056cbaa607a669"
     ],
     [
       "StatefulPlain.mk_plain",
@@ -212,7 +212,7 @@
         "typing_FStar.Bytes.bytes"
       ],
       0,
-      "d2cf589de2a05722c567db30f4cf353d"
+      "d014404eb218028ac68fb38a731f1f67"
     ],
     [
       "StatefulPlain.mk_plain",
@@ -278,7 +278,7 @@
         "typing_TLSInfo.uu___is_ID12"
       ],
       0,
-      "a90a1a750e2d54721a4e16f09f6d8ce0"
+      "b0d01ab04027279bd13d6a01261c9834"
     ],
     [
       "StatefulPlain.cipher",
@@ -295,7 +295,7 @@
         "typing_FStar.Bytes.reveal", "typing_FStar.Seq.Base.length"
       ],
       0,
-      "f17f94e156369f648267d1eb6519cb81"
+      "46a85986876c2530a399226d8c33a173"
     ]
   ]
 ]
