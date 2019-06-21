@@ -3,9 +3,10 @@ KREMLIN_HOME	?= $(MITLS_HOME)/../kremlin
 FSTAR_HOME	?= $(MITLS_HOME)/../FStar
 HACL_HOME	?= $(MITLS_HOME)/../hacl-star
 MLCRYPTO_HOME	?= $(MITLS_HOME)/../MLCrypto
+OPENSSL_HOME	?= $(MLCRYPTO_HOME)/openssl
 
 LD_DIRS 	= \
-  $(MLCRYPTO_HOME)/openssl \
+  $(OPENSSL_HOME) \
   $(HACL_HOME)/dist/compact \
   $(MITLS_HOME)/src/tls/dist/compact \
   $(MITLS_HOME)/src/pki \
