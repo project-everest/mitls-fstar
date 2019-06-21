@@ -17,14 +17,17 @@ NOOP=
 SPACE=$(NOOP) $(NOOP)
 LD_PATH=$(subst $(SPACE),:,$(LD_DIRS))
 
-UNAME := $(shell uname -s)
-
+UNAME		= $(shell uname)
+MARCH		= x86_64
 ifeq ($(UNAME),Darwin)
-  LD_EXTRA = DYLD_LIBRARY_PATH=$(LD_PATH):$$DYLD_LIBRARY_PATH
+  export DYLD_LIBRARY_PATH := $(LD_PATH):$(DYLD_LIBRARY_PATH)
 else ifeq ($(UNAME),Linux)
-  LD_EXTRA = LD_LIBRARY_PATH=$(LD_PATH):$$LD_LIBRARY_PATH
+  CFLAGS	+= -fPIC -fstack-check
+  export LD_LIBRARY_PATH := $(LD_PATH):$(LD_LIBRARY_PATH)
 else ifeq ($(OS),Windows_NT)
-  LD_EXTRA = PATH=$(LD_PATH):$$PATH
+  CFLAGS        += -fno-asynchronous-unwind-tables
+  CC		= $(MARCH)-w64-mingw32-gcc
+  export PATH := $(LD_PATH):$(PATH)
 endif
 
 LDFLAGS 	+= $(addprefix -L,$(LD_DIRS)) $(addprefix -l,$(LD_LIBS)) \
