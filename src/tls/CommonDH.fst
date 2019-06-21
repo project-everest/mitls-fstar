@@ -394,9 +394,17 @@ let register_dhi #g gx =
     let log: i_ilog = ilog in
     let i = (| g, gx |) in
     recall log;
-    if None? (MDM.lookup log i) then MDM.extend log i Corrupt;
+    if None? (MDM.lookup log i) then begin
+      let h0 = HST.get () in
+      MDM.extend log i Corrupt;
+      let h1 = HST.get () in
+      let t0 = HS.sel h0 log in
+      let t1 = HS.sel h1 log in
+      assert (MDM.repr (MDM.upd t0 i Corrupt) ==
+              DM.upd (MDM.repr t0) i (Some Corrupt));
+      assert (MDM.sel t1 i == DM.sel (MDM.repr t1) i)
+    end;
     assume(stable_on_t log (MDM.defined log i));
-    admit ();  //AR: 06/19: #1750 (FStar)
     mr_witness log (MDM.defined log i); gx
   else gx
 
