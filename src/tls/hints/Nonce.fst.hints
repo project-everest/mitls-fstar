@@ -48,7 +48,7 @@
         "typing_Spec.Poly1305.size_key"
       ],
       0,
-      "db1b3df5530d0416e9302888629fdb87"
+      "48bf10941a97819543a590047290fd09"
     ],
     [
       "Nonce.injective",
@@ -63,7 +63,7 @@
         "typing_FStar.Bytes.bytes"
       ],
       0,
-      "6f660281b46cd2bb9733f035ddb554e9"
+      "24285b3f5f354cabef00219dc2963cca"
     ],
     [
       "Nonce.injective",
@@ -81,7 +81,7 @@
         "typing_FStar.Bytes.bytes", "typing_FStar.Monotonic.HyperHeap.rid"
       ],
       0,
-      "2f6e3bffc5d1bd58e8f877a1ffd83280"
+      "c24f58b3e0a5c3df3cdae0570f5a0fab"
     ],
     [
       "Nonce.nonce_rid_table",
@@ -91,7 +91,6 @@
       [
         "@MaxIFuel_assumption", "@query",
         "FStar.FunctionalExtensionality_interpretation_Tm_arrow_a7d5cc170be69663c495e8582d2bc62a",
-        "FStar.Monotonic.DependentMap_interpretation_Tm_arrow_3630dd7d07a06f08e0ece1f481ab7713",
         "FStar.Monotonic.DependentMap_interpretation_Tm_arrow_3d132ac5fe8c37d24d89d41d7e63e4b3",
         "Nonce_interpretation_Tm_arrow_2bf5fa3ec284b01abce1b5b41ced5ea8",
         "Prims_interpretation_Tm_arrow_2eaa01e78f73e9bab5d0955fc1a662da",
@@ -101,12 +100,12 @@
         "equation_Mem.rgn", "equation_Mem.tls_rgn", "equation_Nonce.ex_rid",
         "equation_Nonce.injective", "equation_Nonce.n_rid",
         "equation_Nonce.random", "equation_Prims.eqtype",
-        "function_token_typing_FStar.Monotonic.DependentMap.opt",
         "function_token_typing_Nonce.n_rid",
         "function_token_typing_Nonce.random",
         "haseqTm_refine_71ea40360194fe02ee1272538c9cacbc",
         "interpretation_Tm_abs_26eef3985d99a56697f5a9d337882dba",
         "lemma_FStar.DependentMap.sel_create",
+        "partial_app_typing_288a6a81e33ce68aa4faaa9c8b11bb29",
         "projection_inverse_FStar.Pervasives.Native.Mktuple2__1",
         "refinement_interpretation_Tm_refine_31bfde48b952b6d7959cd5a2aa36404e",
         "refinement_interpretation_Tm_refine_414d0a9f578ab0048252f8c8f552b99f",
@@ -118,7 +117,7 @@
         "typing_Tm_abs_26eef3985d99a56697f5a9d337882dba"
       ],
       0,
-      "b857688bc217f74865082697e419f633"
+      "cdcd52441bb928dc5c232e5653d05290"
     ],
     [
       "Nonce.fresh",
@@ -140,7 +139,7 @@
         "typing_Nonce.n_rid"
       ],
       0,
-      "3cec78ffb856dfb7abea9025b26878cd"
+      "436a6f0abf0f64f4b55c441d0566ac53"
     ],
     [
       "Nonce.fresh_region",
@@ -162,7 +161,7 @@
         "typing_Nonce.n_rid"
       ],
       0,
-      "560ca8b038f1250896143d05887e58c2"
+      "dcbb60856e754eff6399baaf21a2c55f"
     ],
     [
       "Nonce.registered",
@@ -177,7 +176,7 @@
         "typing_FStar.Bytes.bytes"
       ],
       0,
-      "2ab24a4cfef53ba3d0b1231a915b5ecb"
+      "416c2245ac65da81bf2ccf92b49f8137"
     ],
     [
       "Nonce.testify",
@@ -193,7 +192,7 @@
         "typing_FStar.Bytes.bytes"
       ],
       0,
-      "0a6ab99a7efee8d4022f395a88b1c254"
+      "c56b11aa8df8e1c25b9aaa9d5bcd620a"
     ],
     [
       "Nonce.mkHelloRandom",
@@ -210,7 +209,7 @@
         "typing_FStar.Bytes.bytes"
       ],
       0,
-      "e1a9a95a0c19863ef263e87b14c8d52e"
+      "b1ae5658ede8483855c834eed6f00a63"
     ],
     [
       "Nonce.mkHelloRandom",
@@ -222,7 +221,6 @@
         "@fuel_correspondence_Prims.pow2.fuel_instrumented",
         "@fuel_irrelevance_Prims.pow2.fuel_instrumented", "@query",
         "FStar.Integers_pretyping_6ad08c58c10cb742e34ff2d7d8900d61",
-        "FStar.Monotonic.DependentMap_interpretation_Tm_arrow_3630dd7d07a06f08e0ece1f481ab7713",
         "Nonce_interpretation_Tm_arrow_2bf5fa3ec284b01abce1b5b41ced5ea8",
         "Prims_interpretation_Tm_arrow_2eaa01e78f73e9bab5d0955fc1a662da",
         "b2t_def", "bool_inversion",
@@ -285,7 +283,6 @@
         "equation_Spec.Poly1305.size_key",
         "fuel_guarded_inversion_FStar.Pervasives.Native.option",
         "fuel_guarded_inversion_TLSConstants.role",
-        "function_token_typing_FStar.Monotonic.DependentMap.opt",
         "function_token_typing_FStar.Monotonic.Heap.heap",
         "function_token_typing_FStar.UInt8.t",
         "function_token_typing_Nonce.n_rid",
@@ -308,11 +305,12 @@
         "lemma_FStar.Seq.Base.lemma_len_append",
         "lemma_FStar.Set.mem_complement", "lemma_FStar.Set.mem_empty",
         "lemma_FStar.Set.mem_subset", "lemma_FStar.Set.subset_mem",
-        "lemma_Lib.IntTypes.pow2_values", "primitive_Prims.op_Addition",
-        "primitive_Prims.op_AmpAmp", "primitive_Prims.op_BarBar",
-        "primitive_Prims.op_Equality", "primitive_Prims.op_LessThanOrEqual",
-        "primitive_Prims.op_Multiply", "primitive_Prims.op_Negation",
-        "primitive_Prims.op_Subtraction",
+        "lemma_Lib.IntTypes.pow2_values",
+        "partial_app_typing_288a6a81e33ce68aa4faaa9c8b11bb29",
+        "primitive_Prims.op_Addition", "primitive_Prims.op_AmpAmp",
+        "primitive_Prims.op_BarBar", "primitive_Prims.op_Equality",
+        "primitive_Prims.op_LessThanOrEqual", "primitive_Prims.op_Multiply",
+        "primitive_Prims.op_Negation", "primitive_Prims.op_Subtraction",
         "projection_inverse_BoxBool_proj_0",
         "projection_inverse_BoxInt_proj_0",
         "projection_inverse_FStar.Integers.Signed__0",
@@ -366,7 +364,7 @@
         "typing_tok_FStar.Integers.W32@tok"
       ],
       0,
-      "06f9f2c065ad107c2f17f9a5aee8f1c3"
+      "df08376744d20b6e564cab4f7de8ff1f"
     ],
     [
       "Nonce.lookup",
@@ -381,7 +379,7 @@
         "typing_FStar.Bytes.bytes"
       ],
       0,
-      "6ced2b30fc77268aecbda1611760fb0b"
+      "557d925890317a6e4e948e94751c4f0c"
     ],
     [
       "Nonce.nonce_rids_exists",
@@ -396,7 +394,7 @@
         "typing_FStar.Bytes.bytes"
       ],
       0,
-      "446eb4fc379157343ccbb4815503179f"
+      "0fc075edd614a348eb9410be7a534a31"
     ],
     [
       "Nonce.nonce_rids_exists",
@@ -412,7 +410,7 @@
         "typing_FStar.Bytes.bytes"
       ],
       0,
-      "604f7218fe69ceef96b41ae29cba8ac0"
+      "fc893319b5da33d8787a110e9922701a"
     ],
     [
       "Nonce.new_region",
@@ -498,7 +496,7 @@
         "typing_Mem.tls_tables_region", "typing_Nonce.nonce_rid_table"
       ],
       0,
-      "5a4caaafc92d667d81dd5dfa29fd1ce7"
+      "1a6579770ae76e0b4e93f391847dffeb"
     ]
   ]
 ]

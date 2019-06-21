@@ -38,7 +38,7 @@
         "typing_LowStar.Monotonic.Buffer.loc_none"
       ],
       0,
-      "66587c2e36769bd97477a728ef1fe2ec"
+      "fdf2965f67fe4f919d3a9ad643a3b737"
     ],
     [
       "TLS.Curve25519.keygen",
@@ -72,8 +72,8 @@
         "equation_Prims.pos", "equation_Spec.Poly1305.size_key",
         "function_token_typing_FStar.Monotonic.Heap.heap",
         "function_token_typing_FStar.UInt8.t",
-        "function_token_typing_Prims.__cache_version_number__",
-        "int_inversion", "int_typing", "lemma_FStar.Bytes.length_reveal",
+        "function_token_typing_Prims.__cache_version_number__", "int_typing",
+        "lemma_FStar.Bytes.length_reveal",
         "lemma_FStar.HyperStack.ST.lemma_same_refs_in_stack_regions_elim",
         "lemma_FStar.HyperStack.ST.lemma_same_refs_in_stack_regions_intro",
         "lemma_FStar.Map.lemma_ContainsDom",
@@ -128,7 +128,7 @@
       1,
       [ "@query", "equation_TLS.Curve25519.point" ],
       0,
-      "38affd62daf70c3942f1c9ed176e5110"
+      "0861831284b1bbf944b0865a8c52dc56"
     ]
   ]
 ]
