@@ -192,7 +192,6 @@ KRML_OPTS = \
   -silent \
   -warn-error -9-7-6@4-14-15+11-20 \
   -add-include '"kremlin/internal/compat.h"' \
-  -add-early-include '"log_to_choice.h"' \
   -ccopts -Wno-type-limits,-Wno-unused,-Wno-uninitialized \
   -ccopts $(DEBUG_FLAGS) \
   -fnoanonymous-unions -fparentheses -fno-shadow -fcurly-braces \
@@ -202,6 +201,7 @@ KRML_OPTS = \
 
 KRML_FLAGS = \
   $(KRML_OPTS) \
+  -add-early-include '"log_to_choice.h"' \
   -bundle 'EverCrypt,EverCrypt.\*[rename=EverCrypt]' \
   -bundle 'Vale.*,Hacl.*[rename=Unused1]' \
   -bundle 'LowParse.\*,LowParseWrappers[rename=LowParse]' \

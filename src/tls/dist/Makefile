@@ -73,5 +73,5 @@ $(KREMLIB_A) $(EVERCRYPT_SO) $(MIPKI_SO):
 all: libmitls.$(SO)
 
 libmitls.$(SO): $(OBJS) $(KREMLIB_A) | $(EVERCRYPT_SO) $(MIPKI_SO)
-	$(CC) $(CFLAGS) -shared -o $@ $^ $(LDFLAGS)
+	$(CC) $(CFLAGS) -shared -o $@ $(OBJS) $(LDFLAGS) $(KREMLIB_A)
 
