@@ -12,6 +12,12 @@ OPENSSL_HOME	?= $(MLCRYPTO_HOME)/openssl
 # - ignoring clobbered variable by longjmp error messages.
 # Once we are fully low-level and no longer rely on manual memory management,
 # all of these should go.
+#
+# This Makefile is configured to build libmitls with custom logging. This
+# entails:
+# - adding -add-early-include '"log_to_choice.h"' to the kremlin invocation
+# - ignoring function cast type errors
+# - defining LOG_TO_CHOICE
 
 LD_DIRS 	= \
   $(OPENSSL_HOME) \
@@ -51,7 +57,9 @@ endif
 
 include Makefile.basic
 
-CFLAGS		+= -g -std=gnu11 -O3 -DUSE_HEAP_REGIONS -Wno-clobbered
+CFLAGS		+= -g -std=gnu11 -O3 \
+  -DUSE_HEAP_REGIONS -Wno-clobbered -Wno-cast-function-type \
+  -DLOG_TO_CHOICE
 LDFLAGS 	+= $(addprefix -L,$(LD_DIRS)) $(addprefix -l,$(LD_LIBS)) \
 
 KREMLIB_A 	= $(KREMLIN_HOME)/kremlib/dist/generic/libkremlib.a
