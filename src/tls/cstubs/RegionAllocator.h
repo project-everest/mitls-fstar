@@ -18,6 +18,9 @@ This file has multiple compilation options:
 ******/
 
 #include <stdlib.h> // for size_t
+#ifdef LOG_TO_CHOICE
+#include "log_to_choice.h"
+#endif
 
 typedef void *HEAP_REGION;
 
