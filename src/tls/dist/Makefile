@@ -5,12 +5,22 @@ HACL_HOME	?= $(MITLS_HOME)/../hacl-star
 MLCRYPTO_HOME	?= $(MITLS_HOME)/../MLCrypto
 OPENSSL_HOME	?= $(MLCRYPTO_HOME)/openssl
 
+# This Makefile is configured to build libmitls with heap regions. This entails:
+# - passing RegionAllocator.c at link-time
+# - defining USE_HEAP_REGIONS
+# - linking against pthreads
+# - ignoring clobbered variable by longjmp error messages.
+# Once we are fully low-level and no longer rely on manual memory management,
+# all of these should go.
+
 LD_DIRS 	= \
   $(OPENSSL_HOME) \
   $(HACL_HOME)/dist/compact \
   $(MITLS_HOME)/src/pki \
 
-LD_LIBS = crypto evercrypt mipki
+LD_LIBS = crypto evercrypt mipki pthread
+
+# This Makefile uses heap regions
 
 NOOP=
 SPACE=$(NOOP) $(NOOP)
@@ -26,7 +36,9 @@ else ifeq ($(UNAME),Linux)
   CFLAGS	+= -fPIC -fstack-check
   VARIANT	= -linux
   SO 		= so
-  LDFLAGS	+= -Xlinker -z -Xlinker noexecstack -Xlinker --unresolved-symbols=report-all
+  LDFLAGS	+= -Xlinker -z -Xlinker noexecstack -Xlinker --unresolved-symbols=report-all \
+    -Xlinker --version-script -Xlinker libmitls_internal_script \
+    -Wl,-z,defs
   export LD_LIBRARY_PATH := $(LD_PATH):$(LD_LIBRARY_PATH)
 else ifeq ($(OS),Windows_NT)
   CFLAGS        += -fno-asynchronous-unwind-tables
@@ -39,7 +51,7 @@ endif
 
 include Makefile.basic
 
-CFLAGS		+= -g -std=gnu11 -O3
+CFLAGS		+= -g -std=gnu11 -O3 -DUSE_HEAP_REGIONS -Wno-clobbered
 LDFLAGS 	+= $(addprefix -L,$(LD_DIRS)) $(addprefix -l,$(LD_LIBS)) \
 
 KREMLIB_A 	= $(KREMLIN_HOME)/kremlib/dist/generic/libkremlib.a

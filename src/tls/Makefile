@@ -225,9 +225,11 @@ KRML_FLAGS = \
   -bundle 'Model,Model.\*[rename=Unused]' \
   -bundle 'Token.UF1CMA,AEAD,AEAD.Pkg'
 
+BUILD_FILES=dist/Makefile $(wildcard dist/libmitls_*_script)
+
 .PHONY: compile-%
-compile-%: dist/Makefile dist/%/Makefile.basic
-	[ "$*" != "test" ] && cp $< dist/$*/ || true
+compile-%: $(BUILD_FILES) dist/%/Makefile.basic
+	[ "$*" != "test" ] && cp $(BUILD_FILES) dist/$*/ || true
 	$(MAKE) -C dist/$*
 
 compile-test: compile-compact

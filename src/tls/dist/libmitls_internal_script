@@ -1,0 +1,8 @@
+# This version script is used on CI because the test needs access to internal
+# structures and helpers.
+LIBMITLS_0.1 {
+    global:
+      *;
+    local:
+      kremlinit_globals;
+};
