@@ -195,9 +195,9 @@ KRML_OPTS = \
   -ccopts -Wno-type-limits,-Wno-unused,-Wno-uninitialized \
   -ccopts $(DEBUG_FLAGS) \
   -fnoanonymous-unions -fparentheses -fno-shadow -fcurly-braces \
-  \
   -drop DebugFlags \
-  -library EverCrypt,EverCrypt.*
+  -library EverCrypt,EverCrypt.* \
+  -no-prefix MITLS.Init
 
 KRML_FLAGS = \
   $(KRML_OPTS) \
@@ -225,6 +225,7 @@ KRML_FLAGS = \
   -bundle 'Model,Model.\*[rename=Unused]' \
   -bundle 'Token.UF1CMA,AEAD,AEAD.Pkg'
 
+.PHONY: compile-%
 compile-%: dist/Makefile dist/%/Makefile.basic
 	[ "$*" != "test" ] && cp $< dist/$*/ || true
 	$(MAKE) -C dist/$*
@@ -266,6 +267,7 @@ dist/test/Makefile.basic: $(ALL_KRML_FILES)
 # Tests #
 #########
 
-test:
+.PHONY: test
+test: compile-test
 	$(MAKE) -C dist/test test
 
