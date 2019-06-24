@@ -57,6 +57,8 @@ assume val cert:HSM13.handshake13_m13_certificate
 // TODO: Should be computed from nego. Requires lowering to take hash instead of bytes?
 assume val signature:HSM13.handshake13_m13_certificate_verify
 
+// TODO: should tag be allocated inside of a function? on the stack?
+
 val serverFinished: hs:handshake -> tag:Hacl.Hash.Definitions.hash_t (hs.a) -> ST (result handshake)
     (requires fun h -> valid hs h /\ B.live h tag /\ is_state13 hs /\
       Ghost.reveal hs.n < T.max_transcript_size - 4 /\
@@ -89,11 +91,13 @@ let serverFinished hs tag =
         begin
         match TS.send13 hs.stt hs.t hs.sto m with
         | Correct (sto, t') ->
-          let m = HSM13.M13_certificate cert in
+          // TODO: let cert = let Some (chain, _) = mode.n_server_cert in { certificate_list = chain; certificate_request_context = empty_bytes } in
+          let m = HSM13.M13_certificate cert in // AF suggests to have this whole message already as part of mode, instead of just chain
           begin
           match TS.send_tag13 hs.stt t' sto m tag with
           | Correct (sto, t') ->
             begin
+            // TODO: let tbs = Nego.to_be_signed pv ... tag in let signature = Nego.sign hs.nego tbs in
             match TS.send_tag13 hs.stt t' sto (HSM13.M13_certificate_verify signature) tag with
             | Correct (sto, t') -> Correct (HS hs.r hs.nego hs.stt t' sto)
             | Error z -> Error z
@@ -112,6 +116,7 @@ let serverFinished hs tag =
     in
     match digestFinished with
     | Correct hs' ->
+      // TODO: let svd = let (| _, sfin_key |) = KS.ks_server_13_server_finished hs.ks in HMAC_UFCMA.mac sfin_key tag in
       let m = HSM13.M13_finished svd in
       begin
       match TS.send_tag13 hs'.stt hs'.t hs'.sto m tag with
