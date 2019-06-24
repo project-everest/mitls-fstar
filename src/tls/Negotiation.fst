@@ -2367,7 +2367,10 @@ let server_hrr_verify offer mode hrr =
     | Some g -> kexAlg mode <> Kex_PSK && chosenGroup mode = CommonDH.group_of_namedGroup g )
 
 //19-06-17 Verification of this function is particularly slow and brittle; what to do? 
-#reset-options "--z3rlimit 300"
+
+#reset-options "--using_facts_from '* -LowParse'"
+
+#push-options "--z3rlimit 300 --max_ifuel 8 --initial_ifuel 8"
 let server_ClientHello #region ns offer log0 =
   trace ("offered client extensions "^string_of_ches offer.CH.extensions);
   trace ("offered cipher suites "^string_of_ciphersuitenames offer.CH.cipher_suites);
@@ -2478,7 +2481,7 @@ let server_ClientHello #region ns offer log0 =
           ns.state := S_ClientHello m cert;
           Correct (ServerMode m cert sexts)))) in
   r
-//#pop-options
+#pop-options
 
 
 (* 
