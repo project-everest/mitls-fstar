@@ -114,24 +114,11 @@ let send13
 /// Serializes and buffers a message to be sent, and extends the
 /// transcript digest with it. Also returns the current hash of the transcript
 let send_tag13 #a stt #_ t sto m tag =
-let h0 = get () in
-  let r = MITLS.Repr.Handshake13.serialize sto.out_slice sto.out_pos m in
-  let h1 = get () in
-  T.frame_invariant stt (Ghost.reveal t) h0 h1 (B.loc_buffer sto.out_slice.LowParse.Low.Base.base);
-  match r with
-  | None ->
-    fatal Internal_error "output buffer overflow"
-  | Some r ->
-//    let t : Ghost.erased T.transcript_t = Ghost.hide (Ghost.reveal t) in
-    List.lemma_snoc_length (T.Transcript13?.rest (Ghost.reveal t), m);
-    let t' = HSL.Transcript.extend stt (T.LR_HSM13 r) t in
-    let b = MITLS.Repr.to_bytes r in
-    trace ("send "^hex_of_bytes b);
-    let sto = { sto with out_pos = r.MITLS.Repr.end_pos; outgoing = sto.outgoing @| b } in
+  match send13 stt t sto m with
+  | Correct (sto, t') ->
     T.extract_hash stt tag t';
-    trace ("extract hash of sent "^hex_of_bytes b);
-    correct (sto, t') // Ghost.hide (Ghost.reveal t'))
-
+    correct (sto, t')
+  | Error z -> Error z
 
 inline_for_extraction
 noextract
