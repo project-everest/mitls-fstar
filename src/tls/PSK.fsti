@@ -51,7 +51,7 @@ val coerce:
   k:bytes{non_zero k} ->
   ST pskid
   (requires fun h0 -> True)
-  (ensures fun h0 _ h1 -> M.modifies loc_psk_region h0 h1)
+  (ensures fun h0 _ h1 -> M.modifies (loc_psk_region ()) h0 h1)
 
 val leak: i:pskid{not model} -> bytes
 val name: pskid -> pskName
@@ -67,4 +67,3 @@ val decode_age: obfuscated_ticket_age -> UInt32.t -> ticket_age
 
 val lemma_age_encode_decode: t:ticket_age -> m:UInt32.t ->
   Lemma (decode_age (encode_age t m) m = t)
-
