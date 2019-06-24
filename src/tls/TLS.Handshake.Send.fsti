@@ -175,6 +175,7 @@ val send_tag13
   (ensures (fun h res h' ->
     B.modifies (footprint sto `B.loc_union` T.footprint stt `B.loc_union`
       B.loc_buffer tag `B.loc_union` B.loc_region_only true Mem.tls_tables_region) h h' /\
+    B.live h' tag /\
     begin match res with
     | Correct (sto', t') ->
       invariant sto' h' /\

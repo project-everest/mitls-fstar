@@ -129,6 +129,7 @@ let h0 = get () in
     trace ("send "^hex_of_bytes b);
     let sto = { sto with out_pos = r.MITLS.Repr.end_pos; outgoing = sto.outgoing @| b } in
     T.extract_hash stt tag t';
+    trace ("extract hash of sent "^hex_of_bytes b);
     correct (sto, t') // Ghost.hide (Ghost.reveal t'))
 
 
