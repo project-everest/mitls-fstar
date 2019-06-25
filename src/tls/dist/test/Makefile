@@ -11,7 +11,7 @@ LD_DIRS 	= \
   $(MITLS_HOME)/src/tls/dist/compact \
   $(MITLS_HOME)/src/pki \
 
-LD_LIBS = crypto evercrypt mitls mipki
+LD_LIBS = mitls mipki evercrypt crypto
 
 NOOP=
 SPACE=$(NOOP) $(NOOP)
@@ -30,7 +30,7 @@ else ifeq ($(OS),Windows_NT)
   export PATH := $(LD_PATH):$(PATH)
 endif
 
-LDFLAGS 	+= $(addprefix -L,$(LD_DIRS)) $(addprefix -l,$(LD_LIBS)) \
+LDFLAGS 	+= $(addprefix -L,$(LD_DIRS)) $(addprefix -Xlinker -Bdynamic -l,$(LD_LIBS)) \
   $(KREMLIN_HOME)/kremlib/dist/generic/libkremlib.a
 
 include Makefile.basic

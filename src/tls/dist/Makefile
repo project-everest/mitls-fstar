@@ -24,7 +24,7 @@ LD_DIRS 	= \
   $(HACL_HOME)/dist/compact \
   $(MITLS_HOME)/src/pki \
 
-LD_LIBS = crypto evercrypt mipki pthread
+LD_LIBS = evercrypt crypto mipki pthread
 
 # This Makefile uses heap regions
 
@@ -37,6 +37,7 @@ MARCH		= x86_64
 ifeq ($(UNAME),Darwin)
   VARIANT	= -darwin
   SO		= so
+  HEAD		= ghead
   export DYLD_LIBRARY_PATH := $(LD_PATH):$(DYLD_LIBRARY_PATH)
 else ifeq ($(UNAME),Linux)
   CFLAGS	+= -fPIC -fstack-check
@@ -45,6 +46,7 @@ else ifeq ($(UNAME),Linux)
   LDFLAGS	+= -Xlinker -z -Xlinker noexecstack -Xlinker --unresolved-symbols=report-all \
     -Xlinker --version-script -Xlinker libmitls_internal_script \
     -Wl,-z,defs
+  HEAD		= head
   export LD_LIBRARY_PATH := $(LD_PATH):$(LD_LIBRARY_PATH)
 else ifeq ($(OS),Windows_NT)
   CFLAGS        += -fno-asynchronous-unwind-tables
@@ -52,6 +54,8 @@ else ifeq ($(OS),Windows_NT)
   AR		= $(MARCH)-w64-mingw32-ar
   VARIANT	= -mingw
   SO		= dll
+  LDFLAGS	+= -Xlinker --version-script -Xlinker libmitls_internal_script
+  HEAD		= head
   export PATH := $(LD_PATH):$(PATH)
 endif
 
@@ -60,7 +64,7 @@ include Makefile.basic
 CFLAGS		+= -g -std=gnu11 -O3 \
   -DUSE_HEAP_REGIONS -Wno-clobbered -Wno-cast-function-type \
   -DLOG_TO_CHOICE
-LDFLAGS 	+= $(addprefix -L,$(LD_DIRS)) $(addprefix -l,$(LD_LIBS)) \
+LDFLAGS 	+= $(addprefix -L,$(LD_DIRS)) $(addprefix -Xlinker -Bdynamic -l,$(LD_LIBS)) \
 
 KREMLIB_A 	= $(KREMLIN_HOME)/kremlib/dist/generic/libkremlib.a
 EVERCRYPT_SO 	= $(HACL_HOME)/dist/compact/libevercrypt.$(SO)
@@ -72,6 +76,11 @@ $(KREMLIB_A) $(EVERCRYPT_SO) $(MIPKI_SO):
 
 all: libmitls.$(SO)
 
-libmitls.$(SO): $(OBJS) $(KREMLIB_A) | $(EVERCRYPT_SO) $(MIPKI_SO)
+libmitls_custom_script: libmitls_internal_script | libmitls.def
+	$(HEAD) -n -1 $< > $@
+	egrep '(__eq__|__neq__)' libmitls.def | sed 's/$$/;/g' >> $@
+	echo '};' >> $@
+
+libmitls.$(SO): libmitls_custom_script $(OBJS) $(KREMLIB_A) | $(EVERCRYPT_SO) $(MIPKI_SO)
 	$(CC) $(CFLAGS) -shared -o $@ $(OBJS) $(LDFLAGS) $(KREMLIB_A)
 
