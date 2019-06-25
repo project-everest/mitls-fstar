@@ -42,30 +42,6 @@ private let pre_id (role:role) =
 
 let id12 = pre_id Client
 
-let id13_cr () =
-  let x = Bytes.create 32ul 0z in
-  x
-
-let id13 =
-//  [@inline_let]
-  [@inline_let]
-  let ch0 = {
-    li_ch0_cr = id13_cr ();
-    li_ch0_ed_psk = Bytes.utf8_encode "whatever";
-    li_ch0_ed_ae = EverCrypt.AES256_GCM;
-    li_ch0_ed_hash = Hashing.Spec.SHA2_256; } in
-  [@inline_let]
-  let li = LogInfo_CH0 ch0 in
-  [@inline_let]
-  let i = ExpandedSecret
-      (EarlySecretID (NoPSK Hashing.Spec.SHA2_256))
-      ClientEarlyTrafficSecret
-      (Bytes.utf8_encode "whatever") in
-  [@inline_let]
-  let kid: keyId = KeyID #li i in
-  ID13 kid
-
-
 let encryptRecord (#id:StAE.stae_id) (wr:StAE.writer id) ct plain : St bytes =
   let rg: Range.frange id = (length plain, length plain) in
   let f: DataStream.fragment id rg = plain in
@@ -113,7 +89,7 @@ let test id =
   then nprint "decryption fails on wrong sequence number"
   else eprint "decryption should fail on wrong sequence number";
 
-  if id = id13 then
+  if ID13? id then
     nprint "TLS 1.3 does not intend to provide outer CT authentication"
   else (
     let d = decryptRecord #id rd Content.Alert c0 in
@@ -140,5 +116,5 @@ let test id =
 // Called from Test.Main
 let main () =
   test id12;
-  test id13 ;
+  test (Test.AEAD.id13 EverCrypt.AES128_GCM);
   if !ok then C.EXIT_SUCCESS else C.EXIT_FAILURE

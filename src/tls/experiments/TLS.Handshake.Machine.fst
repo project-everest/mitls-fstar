@@ -179,23 +179,30 @@ noeq type client_state
     // a retry. 
 
     digest: Transcript.state (offered_ha offer.full_ch) (* ..tch then ..ch *) -> 
-    // typically re-used, unless the serve pick another algorithm
-    ks: secret_c13_wait_ServerHello 
-      (pskis_of_psks (offered_psks offer.full_ch)) 
-      (groups_of_ks (offered_shares offer.full_ch)) ->
+    // typically re-used, unless the server pick another algorithm
+
+    ks: KeySchedule.ks -> 
+    // in unverified state [Old.KeySchedule.C_13_wait_SH],
+    // TODO key-schedule state 
+    // ks: secret_c13_wait_ServerHello 
+    //   (pskis_of_psks (offered_psks offer.full_ch)) 
+    //   (groups_of_ks (offered_shares offer.full_ch)) ->
     // keeping the associated infos, master secrets, and exponents
-    // could also use unverified Old.KeySchedule.C_13_wait_SH 
+    // could also use unverified 
 
     client_state region cfg  
 
   // waiting for encrypted handshake (1.3 only). The optional binders
   // are now ghost, and the transcript now uses the hash algorithm
-  // chosen by the server. We may need to add a C13_sent_EOED variant.
+  // chosen by the server. 
   | C13_wait_Finished1: 
     offer: full_offer{ offered cfg offer } -> 
 
     sh: serverHello{ accepted13 cfg offer sh (* not yet authenticated *) } -> 
     digest: Transcript.state (selected_ha sh) (* ..sh, now using the server's ha *) -> 
+
+    ks: KeySchedule.ks -> 
+    // in unverified state [Old.KeySchedule.C_13_wait_SF]
     // TODO key-schedule state 
     //i:   Secret.hs_id ->
     //ams: Secret.ams (Secret.ams_of_hms i) ->
@@ -204,9 +211,9 @@ noeq type client_state
     client_state region cfg 
 
   // TODO add optional intermediate model-irrelevant C13_sent_EOED,
-  // possibly just making fin2 optional in C13_complete; Old.Handshake
-  // currently holds [digestEOED ocr cfin_key] in that state to
-  // complete the transaction after installing the new keys.
+  // possibly just making fin2 optional or empty in C13_complete;
+  // Old.Handshake currently holds [digestEOED ocr cfin_key] in that
+  // state to complete the transaction after installing the new keys.
   
   // waiting for post-handshake messages (1.3 only; TBC rekeying);
   // also used for witnessing the pre-condition of the client finished
@@ -224,8 +231,12 @@ noeq type client_state
     fin2: Ghost.erased finished (* sent by the client *) 
     // We keep the finished messages only to specify the transcript digest.
     { client_complete offer sh ee server_id } -> 
-//  i:   Secret.ams_id ->
-//  rms: Secret.secret (rms_of_ams i tr) (* for accepting resumption tickets *) ->
+
+    ks: KeySchedule.ks -> 
+    // in unverified state [Old.KeySchedule.C_13_wait_CF/postHS]
+    // TODO key-schedule state 
+    //  i:   Secret.ams_id ->
+    //  rms: Secret.secret (rms_of_ams i tr) (* for accepting resumption tickets *) ->
     client_state region cfg  
 
     // let client_complete offer sh ee svn = 
@@ -474,7 +485,8 @@ let test (#region:rgn) (st: t region):
 /// -------------end of sanity check----------------
 
 
-(* the server side is WIP 
+
+                          (* SERVER SIDE *)
 
 type server_retry_info = digest0: bytes & helloRetryRequest
 type s_offer = {
@@ -497,13 +509,11 @@ type s13_mode (region:rgn) (cfg:server_config) = {
     // including the nego callback that led to those choices; we may want to keep its [cfg']
     selected cfg offer sh ee certs };
   }
-  
 
 type server_state 
   (region:rgn)
   (cfg: server_config) // much smaller than before
 =  
-
   | S_wait_ClientHello:
     server_state rgn cfg 
 
@@ -543,4 +553,3 @@ type server_state
 //| S_wait_CF2 of digest       // TLS resume (CF)
 //| S_Complete
 
-*)

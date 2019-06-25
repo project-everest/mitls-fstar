@@ -379,7 +379,7 @@ let ffiAddCustomExtension cfg h b =
   trace ("offering custom extension "^(hex_of_bytes (Parse.bytes_of_uint16 h)));
   trace ("extension contents: "^(hex_of_bytes b));
   { cfg with
-  custom_extensions = (h, b) :: cfg.custom_extensions
+  custom_extensions = add_custom_extension cfg.custom_extensions h b
   }
 
 val ffiSetTicketKey: a:string -> k:bytes -> ML bool
@@ -461,10 +461,9 @@ let ffiGetExporter (c:Connection.connection) (early:bool)
 let ffiTicketInfoBytes (info:ticketInfo) (key:bytes) =
   let si = match info with
     | TicketInfo_13 ctx ->
-      let ae = ctx.early_ae in
-      let h = ctx.early_hash in
+      let CipherSuite13 ae h = ctx.early_cs in
       let (| li, rmsid |) = Ticket.dummy_rmsid ae h in
-      Ticket.Ticket13 (CipherSuite13 ae h) li rmsid key empty_bytes ctx.time_created ctx.ticket_age_add empty_bytes
+      Ticket.Ticket13 ctx.early_cs li rmsid key empty_bytes ctx.time_created ctx.ticket_age_add empty_bytes
     | TicketInfo_12 (pv, cs, ems) ->
       Ticket.Ticket12 pv cs ems (Ticket.dummy_msId pv cs ems) key
     in

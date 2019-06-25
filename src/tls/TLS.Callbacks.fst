@@ -114,3 +114,25 @@ let defaultCertCB : cert_cb =
     none5
     defaultCertCB_cert_verify_ptr
     false6
+
+let defaultTicketCBFun _ sni ticket info psk =
+  let h0 = get() in
+  begin
+  (*
+  match info with
+  | TicketInfo_12 (pv, cs, ems) ->
+    // 2018.03.10 SZ: The ticket must be fresh
+    assume False;
+    s12_extend ticket (pv, cs, ems, psk) // modifies PSK.tregion
+  | TicketInfo_13 pskInfo ->
+    // 2018.03.10 SZ: Missing refinement in ticket_cb_fun
+    assume (exists i.{:pattern index psk i} index psk i <> 0z);
+    // 2018.03.10 SZ: The ticket must be fresh
+    assume False;
+    coerce_psk ticket pskInfo psk;      // modifies psk_region
+    extend sni ticket                   // modifies PSK.tregion
+  *) ()
+  end;
+  let h1 = get() in
+  // 2018.03.10 SZ: [ticket_cb_fun] ensures [modifies_none]
+  assume (modifies_none h0 h1)
