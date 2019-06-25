@@ -12,7 +12,7 @@
         "refinement_interpretation_Tm_refine_b53ae398bac700dcd61b3b5668ccba51"
       ],
       0,
-      "1234c5c8f9491a599b5f0627b65e09de"
+      "a12d1c5fb59d6e6680b49a57f5431519"
     ],
     [
       "Pkg.Tree.__proj__Node__item__node",
@@ -25,7 +25,7 @@
         "refinement_interpretation_Tm_refine_38d2bec63e374d1a01ada0c25be39dfe"
       ],
       0,
-      "f1a1b9bb78042eedcb87038d0abb8b39"
+      "88b6e26a4c128799c7989fd2b1b43eeb"
     ],
     [
       "Pkg.Tree.__proj__Node__item__children",
@@ -40,7 +40,7 @@
         "refinement_interpretation_Tm_refine_38d2bec63e374d1a01ada0c25be39dfe"
       ],
       0,
-      "18adf4f2d20c4edbdeb8bb448384b985"
+      "f6c24f09e06535f0af2753782796cdc2"
     ],
     [
       "Pkg.Tree.depth",
@@ -49,15 +49,17 @@
       1,
       [
         "@MaxIFuel_assumption", "@query",
+        "Prims_pretyping_ae567c2fb75be05905677af440075565",
         "binder_x_eede97d783918db738c62da6082dd56d_1",
         "disc_equation_Pkg.Tree.Leaf", "disc_equation_Pkg.Tree.Node",
         "equation_Prims.nat", "fuel_guarded_inversion_Pkg.Tree.tree_",
+        "function_token_typing_Prims.__cache_version_number__",
         "primitive_Prims.op_Addition", "projection_inverse_BoxInt_proj_0",
-        "refinement_interpretation_Tm_refine_542f9d4f129664613f2483a6c88bc7c2",
+        "refinement_interpretation_Tm_refine_ba523126f67e00e7cd55f0b92f16681d",
         "subterm_ordering_Pkg.Tree.Node"
       ],
       0,
-      "b5e37f75471e3a1b0a77f9073b60d626"
+      "743022d3f53795eae93cbff5b6f12eeb"
     ],
     [
       "Pkg.Tree.depth",
@@ -66,18 +68,20 @@
       2,
       [
         "@MaxIFuel_assumption", "@query",
+        "Prims_pretyping_ae567c2fb75be05905677af440075565",
         "binder_x_163de57ec0aef7896add517573243f88_1",
         "data_elim_Prims.Cons", "disc_equation_Prims.Cons",
         "disc_equation_Prims.Nil", "equation_Idx.label",
         "equation_Pkg.Tree.children_", "equation_Pkg.Tree.max",
         "equation_Prims.nat", "fuel_guarded_inversion_Prims.list",
+        "function_token_typing_Prims.__cache_version_number__",
         "projection_inverse_Prims.Cons_tl",
-        "refinement_interpretation_Tm_refine_542f9d4f129664613f2483a6c88bc7c2",
+        "refinement_interpretation_Tm_refine_ba523126f67e00e7cd55f0b92f16681d",
         "subterm_ordering_FStar.Pervasives.Native.Mktuple2",
         "subterm_ordering_Prims.Cons"
       ],
       0,
-      "18d4907216655ccfcbc6a147ac7adf63"
+      "169daedd7d4fd6a858aa0f71ed221fe4"
     ],
     [
       "Pkg.Tree.find_lbl",
@@ -93,13 +97,13 @@
         "equation_Pkg.Tree.tree", "equation_Prims.eqtype",
         "fuel_guarded_inversion_Prims.list",
         "function_token_typing_Prims.string",
-        "haseqTm_refine_ea0aee2a4942a75634c88e815c4b29c4",
+        "haseqTm_refine_746d88fd13424e5805e3b87ec2170843",
         "primitive_Prims.op_Negation",
         "refinement_interpretation_Tm_refine_414d0a9f578ab0048252f8c8f552b99f",
-        "subterm_ordering_Prims.Cons", "typing_Mem.model"
+        "subterm_ordering_Prims.Cons", "typing_Flags.model"
       ],
       0,
-      "d74ee4b4026b220bfb858a723e5c5499"
+      "0bdf555fe4db3e8603572868d436492a"
     ],
     [
       "Pkg.Tree.down",
@@ -108,12 +112,12 @@
       1,
       [
         "@MaxIFuel_assumption", "@query",
-        "disc_equation_FStar.Pervasives.Native.Some",
+        "disc_equation_FStar.Pervasives.Native.Some", "equation_Idx.label",
         "equation_Pkg.Tree.has_lbl", "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_95875d9bc0e59fedcfafd2bbbfd60990"
+        "refinement_interpretation_Tm_refine_a1a90e425eba159b7a03d90ce1de1acc"
       ],
       0,
-      "c2e53801e3e82041b8158d39e6231f1f"
+      "282376ababe8d6f067a713100ecfc719"
     ],
     [
       "Pkg.Tree.child",
@@ -123,13 +127,13 @@
       [
         "@MaxIFuel_assumption", "@query", "bool_inversion",
         "disc_equation_Pkg.Tree.Leaf", "disc_equation_Pkg.Tree.Node",
-        "equation_Mem.model", "equation_Pkg.Tree.tree",
+        "equation_Idx.label", "equation_Mem.model", "equation_Pkg.Tree.tree",
         "fuel_guarded_inversion_Pkg.Tree.tree_",
-        "refinement_interpretation_Tm_refine_347e23d2a41bc6d18ff8e45aed784ee1",
-        "typing_Mem.model"
+        "refinement_interpretation_Tm_refine_aef4d5729ca66bc6359aab246e16d856",
+        "typing_Flags.model"
       ],
       0,
-      "0672b83c2711868e7353dfc012456ddb"
+      "3415bb0c2e4cccc453524126a38d7e64"
     ]
   ]
 ]
