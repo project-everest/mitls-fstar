@@ -5,6 +5,10 @@ HACL_HOME	?= $(MITLS_HOME)/../hacl-star
 MLCRYPTO_HOME	?= $(MITLS_HOME)/../MLCrypto
 OPENSSL_HOME	?= $(MLCRYPTO_HOME)/openssl
 
+ifeq ($(OS),Windows_NT)
+  OPENSSL_HOME := $(shell cygpath -u $(OPENSSL_HOME))
+endif
+
 LD_DIRS 	= \
   $(OPENSSL_HOME) \
   $(HACL_HOME)/dist/compact \
@@ -30,7 +34,7 @@ else ifeq ($(OS),Windows_NT)
   export PATH := $(LD_PATH):$(PATH)
 endif
 
-LDFLAGS 	+= $(addprefix -L,$(LD_DIRS)) $(addprefix -Xlinker -Bdynamic -l,$(LD_LIBS)) \
+LDFLAGS 	+= $(addprefix -L,$(LD_DIRS)) $(addprefix -l,$(LD_LIBS)) \
   $(KREMLIN_HOME)/kremlib/dist/generic/libkremlib.a
 
 include Makefile.basic
@@ -38,5 +42,6 @@ include Makefile.basic
 test.exe:
 	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
 
+.PHONY: test
 test: test.exe
-	$(LD_EXTRA) ./$<
+	./$<

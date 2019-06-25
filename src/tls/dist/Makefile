@@ -54,7 +54,7 @@ else ifeq ($(OS),Windows_NT)
   AR		= $(MARCH)-w64-mingw32-ar
   VARIANT	= -mingw
   SO		= dll
-  LDFLAGS	+= -Xlinker --version-script -Xlinker libmitls_internal_script
+  LDFLAGS	+= -Xlinker --version-script -Xlinker libmitls_internal_script -Wl,--out-implib,libmitls.dll.a
   HEAD		= head
   export PATH := $(LD_PATH):$(PATH)
 endif
@@ -64,7 +64,7 @@ include Makefile.basic
 CFLAGS		+= -g -std=gnu11 -O3 \
   -DUSE_HEAP_REGIONS -Wno-clobbered -Wno-cast-function-type \
   -DLOG_TO_CHOICE
-LDFLAGS 	+= $(addprefix -L,$(LD_DIRS)) $(addprefix -Xlinker -Bdynamic -l,$(LD_LIBS)) \
+LDFLAGS 	+= $(addprefix -L,$(LD_DIRS)) $(addprefix -l,$(LD_LIBS)) \
 
 KREMLIB_A 	= $(KREMLIN_HOME)/kremlib/dist/generic/libkremlib.a
 EVERCRYPT_SO 	= $(HACL_HOME)/dist/compact/libevercrypt.$(SO)
