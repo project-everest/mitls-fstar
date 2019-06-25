@@ -79,7 +79,7 @@ val invariant_loc_in_footprint
   (m: HS.mem)
 : Lemma
   (requires (invariant m s))
-  (ensures (loc_in (footprint m s) m))
+  (ensures (B.loc_in (footprint m s) m))
   [SMTPat (invariant m s)]
 
 val hashed: #a:alg -> HS.mem -> state a -> GTot bytes
