@@ -7,7 +7,7 @@
       2,
       1,
       [
-        "@MaxIFuel_assumption", "@query", "equation_LowParse.Bytes.byte",
+        "@MaxIFuel_assumption", "@query",
         "equation_LowParse.Spec.Base.serialize",
         "equation_LowParse.Spec.Base.strong_parser_kind",
         "equation_LowParse.Spec.Combinators.and_then_kind",
@@ -28,7 +28,7 @@
         "equation_Parsers.OfferedPsks_identities.offeredPsks_identities_parser_kind",
         "fuel_guarded_inversion_FStar.Pervasives.Native.tuple2",
         "fuel_guarded_inversion_Parsers.OfferedPsks.offeredPsks",
-        "interpretation_Tm_abs_7a0e33e14cdeb4ac679234621cfa867c",
+        "interpretation_Tm_abs_5b47a15bf1b1f6da1a1ebf19bfe10d95",
         "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind",
         "proj_equation_Parsers.OfferedPsks.MkofferedPsks_binders",
         "proj_equation_Parsers.OfferedPsks.MkofferedPsks_identities",
@@ -43,7 +43,7 @@
         "unit_inversion"
       ],
       0,
-      "55e7717d95d4b4e3a988a8f2240e3d29"
+      "4217fc3819962ebb62d5ae51df389381"
     ],
     [
       "ParsersAux.Binders.Aux.serialize_clientHelloExtension_CHE_pre_shared_key_eq",
@@ -54,8 +54,7 @@
         "@MaxFuel_assumption", "@MaxIFuel_assumption",
         "@fuel_correspondence_Prims.pow2.fuel_instrumented",
         "@fuel_irrelevance_Prims.pow2.fuel_instrumented", "@query",
-        "Prims_pretyping_ae567c2fb75be05905677af440075565", "b2t_def",
-        "constructor_distinct_FStar.Pervasives.Native.Some",
+        "b2t_def", "constructor_distinct_FStar.Pervasives.Native.Some",
         "disc_equation_FStar.Pervasives.Native.Some",
         "equation_FStar.UInt.fits", "equation_FStar.UInt.max_int",
         "equation_FStar.UInt.min_int", "equation_FStar.UInt.size",
@@ -69,17 +68,16 @@
         "equation_Parsers.OfferedPsks.offeredPsks_bytesize",
         "equation_Parsers.OfferedPsks_binders.offeredPsks_binders_parser_kind",
         "equation_Parsers.OfferedPsks_identities.offeredPsks_identities_parser_kind",
-        "equation_Parsers.PreSharedKeyClientExtension.preSharedKeyClientExtension",
         "equation_Parsers.PreSharedKeyClientExtension.preSharedKeyClientExtension_bytesize",
         "equation_Parsers.PreSharedKeyClientExtension.preSharedKeyClientExtension_parser_kind",
         "equation_Parsers.PreSharedKeyClientExtension.preSharedKeyClientExtension_serializer",
-        "equation_Prims.nat", "function_token_typing_FStar.UInt8.t",
-        "function_token_typing_Prims.__cache_version_number__",
-        "int_inversion", "int_typing", "lemma_FStar.UInt.pow2_values",
-        "primitive_Prims.op_Addition", "primitive_Prims.op_AmpAmp",
-        "primitive_Prims.op_GreaterThan", "primitive_Prims.op_LessThan",
-        "primitive_Prims.op_LessThanOrEqual",
-        "primitive_Prims.op_Subtraction",
+        "equation_Prims.nat",
+        "equation_with_fuel_Prims.pow2.fuel_instrumented",
+        "function_token_typing_FStar.UInt8.t", "int_inversion", "int_typing",
+        "lemma_FStar.UInt.pow2_values", "primitive_Prims.op_Addition",
+        "primitive_Prims.op_AmpAmp", "primitive_Prims.op_GreaterThan",
+        "primitive_Prims.op_LessThan", "primitive_Prims.op_LessThanOrEqual",
+        "primitive_Prims.op_Multiply", "primitive_Prims.op_Subtraction",
         "proj_equation_FStar.Pervasives.Native.Some_v",
         "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_high",
         "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_low",
@@ -89,20 +87,20 @@
         "projection_inverse_FStar.Pervasives.Native.Some_v",
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_high",
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_low",
-        "refinement_interpretation_Tm_refine_1232d7c31404e3dd30cc0f0b94c039e1",
-        "refinement_interpretation_Tm_refine_487390f3fcd8ab01b078d6a92a94b8e3",
-        "refinement_interpretation_Tm_refine_546bd17e6f1845f0224f72eac33516bd",
-        "refinement_interpretation_Tm_refine_9fc4b705eaf2fe68d9cc8785e7df72bf",
+        "refinement_interpretation_Tm_refine_42417c0a732848736b70205b54b36236",
+        "refinement_interpretation_Tm_refine_542f9d4f129664613f2483a6c88bc7c2",
+        "refinement_interpretation_Tm_refine_54d8e4368ef4be5e2ddd5dfe39051b03",
+        "refinement_interpretation_Tm_refine_79780233e567b4a9c09b9410edebc7c8",
         "refinement_interpretation_Tm_refine_b913a3f691ca99086652e0a655e72f17",
-        "refinement_interpretation_Tm_refine_ba523126f67e00e7cd55f0b92f16681d",
-        "refinement_interpretation_Tm_refine_c16bc1b61f58b349bf6fc1c94dcaf83b",
+        "refinement_interpretation_Tm_refine_e8742734128d4decd2e43294eabfef1f",
+        "refinement_interpretation_Tm_refine_eab35042a80f6a8031a4662fae5136b8",
         "typing_FStar.Seq.Base.empty", "typing_FStar.Seq.Base.length",
         "typing_LowParse.Spec.BoundedInt.log256_",
         "typing_LowParse.Spec.VLData.parse_bounded_vldata_strong_kind",
         "typing_Parsers.PreSharedKeyClientExtension.preSharedKeyClientExtension_parser_kind"
       ],
       0,
-      "37b9151f63bee54c79cb840243e49a37"
+      "2a1360b68aacc16aa5ca873ef84bbcba"
     ],
     [
       "ParsersAux.Binders.Aux.serialize_clientHelloExtension_CHE_pre_shared_key_eq",
@@ -113,7 +111,6 @@
         "@MaxIFuel_assumption", "@query",
         "constructor_distinct_FStar.Pervasives.Native.Some",
         "disc_equation_FStar.Pervasives.Native.Some",
-        "equation_LowParse.Bytes.byte",
         "equation_LowParse.Spec.Base.serialize",
         "equation_LowParse.Spec.Base.strong_parser_kind",
         "equation_LowParse.Spec.BoundedInt.integer_size",
@@ -138,7 +135,7 @@
         "equation_Parsers.PreSharedKeyClientExtension.preSharedKeyClientExtension_serializer",
         "equation_Prims.nat",
         "fuel_guarded_inversion_Parsers.OfferedPsks.offeredPsks",
-        "interpretation_Tm_abs_4641563103cfcf55f124c96b8fc4fb3d",
+        "interpretation_Tm_abs_c18181e6e093b4a69a377f53ae984901",
         "lemma_Parsers.PreSharedKeyClientExtension.preSharedKeyClientExtension_bytesize_eqn",
         "primitive_Prims.op_LessThan",
         "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_high",
@@ -147,14 +144,14 @@
         "projection_inverse_FStar.Pervasives.Native.Some_a",
         "projection_inverse_FStar.Pervasives.Native.Some_v",
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_high",
-        "refinement_interpretation_Tm_refine_487390f3fcd8ab01b078d6a92a94b8e3",
-        "refinement_interpretation_Tm_refine_546bd17e6f1845f0224f72eac33516bd",
+        "refinement_interpretation_Tm_refine_54d8e4368ef4be5e2ddd5dfe39051b03",
+        "refinement_interpretation_Tm_refine_79780233e567b4a9c09b9410edebc7c8",
         "token_correspondence_Parsers.ClientHelloExtension_CHE_pre_shared_key.synth_clientHelloExtension_CHE_pre_shared_key",
         "token_correspondence_Parsers.ClientHelloExtension_CHE_pre_shared_key.synth_clientHelloExtension_CHE_pre_shared_key_recip",
         "unit_inversion"
       ],
       0,
-      "1cdc5d67f2b746322744b9cbd20c5f9a"
+      "e8ac4d60c558fb772726d9723ee7154b"
     ],
     [
       "ParsersAux.Binders.Aux.serialize_list_clientHelloExtension",
@@ -182,7 +179,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind"
       ],
       0,
-      "ae1f663f6c4a42657ad2e4273390d754"
+      "5577c1712065e72e5b8d51722cfe3420"
     ],
     [
       "ParsersAux.Binders.Aux.serialize_list_clientHelloExtension_eq",
@@ -206,7 +203,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind"
       ],
       0,
-      "5a5f08af5462a01fb8e0d8324f3fb40d"
+      "7acb7a8ab654081eb98f007e373e5c6a"
     ],
     [
       "ParsersAux.Binders.Aux.serialize_list_clientHelloExtension_inj_prefix",
@@ -224,7 +221,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind"
       ],
       0,
-      "88523fa0a8b658e16223d59c9deb07a2"
+      "7bba2d6df8e8a89d28df024e40b86b89"
     ],
     [
       "ParsersAux.Binders.Aux.size32_list_clientHelloExtension",
@@ -233,7 +230,7 @@
       1,
       [ "@query" ],
       0,
-      "5adfff82376ff7f6b48dec481f4fb09a"
+      "6ac2f6f6763d905e3c8fd8cab79359fa"
     ],
     [
       "ParsersAux.Binders.Aux.size32_list_clientHelloExtension",
@@ -245,15 +242,12 @@
         "@fuel_correspondence_Prims.pow2.fuel_instrumented",
         "@fuel_irrelevance_Prims.pow2.fuel_instrumented", "@query",
         "LowParse.Spec.Base_pretyping_e24e8cabdb5c58cdc1d812d5f6f285ec",
-        "Prims_pretyping_ae567c2fb75be05905677af440075565", "b2t_def",
-        "constructor_distinct_FStar.Pervasives.Native.Some",
+        "b2t_def", "constructor_distinct_FStar.Pervasives.Native.Some",
         "data_typing_intro_LowParse.Spec.Base.ParserConsumesAll@tok",
         "disc_equation_FStar.Pervasives.Native.Some", "eq2-interp",
-        "equation_FStar.Bytes.lbytes", "equation_FStar.UInt.fits",
-        "equation_FStar.UInt.max_int", "equation_FStar.UInt.min_int",
-        "equation_FStar.UInt.size", "equation_FStar.UInt.uint_t",
-        "equation_LowParse.Bytes.byte",
-        "equation_LowParse.Low.Base.max_uint32",
+        "equation_FStar.UInt.fits", "equation_FStar.UInt.max_int",
+        "equation_FStar.UInt.min_int", "equation_FStar.UInt.size",
+        "equation_FStar.UInt.uint_t",
         "equation_LowParse.SLow.Base.size32_postcond",
         "equation_LowParse.SLow.Base.u32_max",
         "equation_LowParse.Spec.Base.strong_parser_kind",
@@ -263,8 +257,7 @@
         "equation_Parsers.OfferedPsks_identities.offeredPsks_identities_parser_kind",
         "equation_ParsersAux.Binders.Aux.serialize_list_clientHelloExtension",
         "equation_Prims.nat",
-        "equation_with_fuel_Prims.pow2.fuel_instrumented",
-        "function_token_typing_Prims.__cache_version_number__", "int_typing",
+        "equation_with_fuel_Prims.pow2.fuel_instrumented", "int_typing",
         "lemma_FStar.UInt.pow2_values", "lemma_FStar.UInt32.vu_inv",
         "primitive_Prims.op_AmpAmp", "primitive_Prims.op_Equality",
         "primitive_Prims.op_GreaterThan",
@@ -280,15 +273,12 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_high",
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_low",
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind",
-        "refinement_interpretation_Tm_refine_3dcf9ae4179503dc6e439dffc15e5b81",
-        "refinement_interpretation_Tm_refine_a347709bfeba48709474ad26f4f6be87",
-        "refinement_interpretation_Tm_refine_b0383769854f2b8d05d9f8fb03a8cbd4",
-        "refinement_interpretation_Tm_refine_ba523126f67e00e7cd55f0b92f16681d",
-        "typing_FStar.Bytes.empty_bytes", "typing_FStar.Bytes.len",
-        "typing_FStar.UInt32.v"
+        "refinement_interpretation_Tm_refine_542f9d4f129664613f2483a6c88bc7c2",
+        "refinement_interpretation_Tm_refine_e4ec945900ca1e5044dc6b166995042d",
+        "refinement_interpretation_Tm_refine_f13070840248fced9d9d60d77bdae3ec"
       ],
       0,
-      "0606b5d7a69075719726dff5b4d0a632"
+      "1c4771f38c30a0b827a3a77250d0d8ee"
     ],
     [
       "ParsersAux.Binders.Aux.list_clientHelloExtension_last_pos",
@@ -297,13 +287,11 @@
       1,
       [
         "@MaxIFuel_assumption", "@query",
-        "equation_FStar.Monotonic.HyperStack.mem",
-        "equation_LowParse.Bytes.byte",
         "fuel_guarded_inversion_LowParse.Slice.slice",
-        "refinement_interpretation_Tm_refine_db8835757835da5f4846209bc8e54f37"
+        "refinement_interpretation_Tm_refine_6008219b70d7db7011dfce5daaf1ce5a"
       ],
       0,
-      "a40e5f081a50c39516966425913ba811"
+      "b10d857bcac294d8b58c0faec2c0a674"
     ],
     [
       "ParsersAux.Binders.Aux.list_clientHelloExtension_last_pos",
@@ -313,9 +301,8 @@
       [
         "@MaxIFuel_assumption",
         "@fuel_correspondence_FStar.List.Tot.Base.init.fuel_instrumented",
-        "@query", "disc_equation_Prims.Cons",
-        "equation_FStar.Monotonic.HyperStack.mem",
-        "equation_LowParse.Bytes.byte", "equation_LowParse.Bytes.bytes",
+        "@query", "disc_equation_Prims.Cons", "equation_LowParse.Bytes.byte",
+        "equation_LowParse.Bytes.bytes",
         "equation_LowParse.Low.Base.bytes_of_slice_from_to",
         "equation_LowParse.Spec.Base.strong_parser_kind",
         "equation_LowParse.Spec.List.parse_list_kind",
@@ -331,15 +318,15 @@
         "projection_inverse_BoxInt_proj_0",
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_low",
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind",
-        "refinement_interpretation_Tm_refine_c16bc1b61f58b349bf6fc1c94dcaf83b",
-        "refinement_interpretation_Tm_refine_db67c347bb24cdb809d45114f7029fa9",
-        "refinement_interpretation_Tm_refine_db8835757835da5f4846209bc8e54f37",
+        "refinement_interpretation_Tm_refine_322f9f85c27323ee5f57b288fa61f42b",
+        "refinement_interpretation_Tm_refine_6008219b70d7db7011dfce5daaf1ce5a",
+        "refinement_interpretation_Tm_refine_64756a55a2e320d9278a9b3bfd255bcb",
         "typing_FStar.Ghost.reveal",
         "typing_LowParse.Low.Base.bytes_of_slice_from_to",
         "typing_ParsersAux.Binders.Aux.serialize_list_clientHelloExtension"
       ],
       0,
-      "408fa40b33931889b92c1d038a62fe05"
+      "e6048737943267c89ffff433eeeca27a"
     ],
     [
       "ParsersAux.Binders.Aux.clientHelloExtensions_list_bytesize_eq'",
@@ -352,7 +339,7 @@
         "equation_ParsersAux.Binders.Aux.serialize_list_clientHelloExtension"
       ],
       0,
-      "b1a714c42d099785a68f1fe5cb302f1a"
+      "2f8d30f138fbba915d1208d4d4edf9cf"
     ],
     [
       "ParsersAux.Binders.Aux.serialize_clientHelloExtensions_eq",
@@ -363,7 +350,7 @@
         "@MaxFuel_assumption", "@MaxIFuel_assumption",
         "@fuel_correspondence_Prims.pow2.fuel_instrumented",
         "@fuel_irrelevance_Prims.pow2.fuel_instrumented", "@query",
-        "Prims_pretyping_ae567c2fb75be05905677af440075565", "b2t_def",
+        "b2t_def", "constructor_distinct_FStar.Pervasives.Native.None",
         "constructor_distinct_FStar.Pervasives.Native.Some",
         "disc_equation_FStar.Pervasives.Native.Some",
         "equation_FStar.UInt.fits", "equation_FStar.UInt.max_int",
@@ -375,8 +362,7 @@
         "equation_Parsers.OfferedPsks_binders.offeredPsks_binders_parser_kind",
         "equation_Parsers.OfferedPsks_identities.offeredPsks_identities_parser_kind",
         "equation_Prims.nat",
-        "equation_with_fuel_Prims.pow2.fuel_instrumented",
-        "function_token_typing_Prims.__cache_version_number__", "int_typing",
+        "equation_with_fuel_Prims.pow2.fuel_instrumented", "int_typing",
         "lemma_FStar.UInt.pow2_values", "primitive_Prims.op_AmpAmp",
         "primitive_Prims.op_LessThan", "primitive_Prims.op_LessThanOrEqual",
         "primitive_Prims.op_Multiply", "primitive_Prims.op_Subtraction",
@@ -384,15 +370,16 @@
         "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_low",
         "projection_inverse_BoxBool_proj_0",
         "projection_inverse_BoxInt_proj_0",
+        "projection_inverse_FStar.Pervasives.Native.None_a",
         "projection_inverse_FStar.Pervasives.Native.Some_a",
         "projection_inverse_FStar.Pervasives.Native.Some_v",
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_high",
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_low",
         "refinement_interpretation_Tm_refine_2bae5c3803c6c608e1680d3a46547c16",
-        "refinement_interpretation_Tm_refine_ba523126f67e00e7cd55f0b92f16681d"
+        "refinement_interpretation_Tm_refine_542f9d4f129664613f2483a6c88bc7c2"
       ],
       0,
-      "fe04bc3be0ebf843d708a40be36f8821"
+      "9e788095ea01e2ec4ba41193f9abb367"
     ],
     [
       "ParsersAux.Binders.Aux.serialize_clientHelloExtensions_eq",
@@ -406,7 +393,6 @@
         "constructor_distinct_FStar.Pervasives.Native.Some",
         "data_typing_intro_LowParse.Spec.Base.ParserConsumesAll@tok",
         "disc_equation_FStar.Pervasives.Native.Some",
-        "equation_LowParse.Bytes.byte",
         "equation_LowParse.Spec.Base.serialize",
         "equation_LowParse.Spec.Base.strong_parser_kind",
         "equation_LowParse.Spec.BoundedInt.integer_size",
@@ -428,7 +414,7 @@
         "equation_Parsers.OfferedPsks_binders.offeredPsks_binders_parser_kind",
         "equation_ParsersAux.Binders.Aux.serialize_list_clientHelloExtension",
         "equation_Prims.nat",
-        "interpretation_Tm_abs_4641563103cfcf55f124c96b8fc4fb3d",
+        "interpretation_Tm_abs_c18181e6e093b4a69a377f53ae984901",
         "primitive_Prims.op_Equality", "primitive_Prims.op_GreaterThan",
         "primitive_Prims.op_LessThan",
         "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_high",
@@ -436,19 +422,18 @@
         "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind",
         "projection_inverse_BoxBool_proj_0",
         "projection_inverse_BoxInt_proj_0",
-        "projection_inverse_FStar.Pervasives.Native.None_a",
         "projection_inverse_FStar.Pervasives.Native.Some_a",
         "projection_inverse_FStar.Pervasives.Native.Some_v",
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_high",
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_low",
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind",
-        "refinement_interpretation_Tm_refine_546bd17e6f1845f0224f72eac33516bd",
+        "refinement_interpretation_Tm_refine_79780233e567b4a9c09b9410edebc7c8",
         "token_correspondence_Parsers.ClientHelloExtensions.synth_clientHelloExtensions",
         "token_correspondence_Parsers.ClientHelloExtensions.synth_clientHelloExtensions_recip",
         "unit_inversion"
       ],
       0,
-      "76ef31033c057a7e624440ee5a443452"
+      "79897e76f2c916cde3c938334e9882ea"
     ],
     [
       "ParsersAux.Binders.Aux.serialize_clientHello_eq",
@@ -458,8 +443,6 @@
       [
         "@MaxIFuel_assumption", "@query",
         "LowParse.Spec.Base_pretyping_e24e8cabdb5c58cdc1d812d5f6f285ec",
-        "Prims_interpretation_Tm_arrow_9cb3c953faf527c316d427b2ce8bd81b",
-        "Prims_pretyping_ae567c2fb75be05905677af440075565",
         "constructor_distinct_FStar.Pervasives.Native.Some",
         "constructor_distinct_LowParse.Spec.Base.ParserConsumesAll",
         "constructor_distinct_LowParse.Spec.Base.ParserStrong",
@@ -469,9 +452,7 @@
         "equality_tok_LowParse.Spec.Base.ParserConsumesAll@tok",
         "equality_tok_LowParse.Spec.Base.ParserStrong@tok",
         "equation_LowParse.Bytes.byte", "equation_LowParse.Bytes.bytes",
-        "equation_LowParse.Spec.Base.bare_serializer",
         "equation_LowParse.Spec.Base.serialize",
-        "equation_LowParse.Spec.Base.serializer",
         "equation_LowParse.Spec.Base.strong_parser_kind",
         "equation_LowParse.Spec.Combinators.and_then_kind",
         "equation_LowParse.Spec.Combinators.bare_serialize_nondep_then",
@@ -493,8 +474,6 @@
         "equation_Parsers.ClientHello_cipher_suites.clientHello_cipher_suites_parser_kind",
         "equation_Parsers.ClientHello_compression_methods.clientHello_compression_methods",
         "equation_Parsers.ClientHello_compression_methods.clientHello_compression_methods_parser_kind",
-        "equation_Parsers.OfferedPsks_binders.offeredPsks_binders_parser_kind",
-        "equation_Parsers.OfferedPsks_identities.offeredPsks_identities_parser_kind",
         "equation_Parsers.ProtocolVersion.protocolVersion_parser_kind",
         "equation_Parsers.Random.random",
         "equation_Parsers.Random.random_parser_kind",
@@ -505,11 +484,9 @@
         "fuel_guarded_inversion_Parsers.ClientHello.clientHello",
         "function_token_typing_FStar.UInt8.t",
         "function_token_typing_Parsers.ClientHello.clientHello_",
-        "function_token_typing_Parsers.Random.random",
-        "function_token_typing_Parsers.SessionID.sessionID",
-        "function_token_typing_Prims.__cache_version_number__",
-        "int_inversion", "int_typing",
-        "interpretation_Tm_abs_7a0e33e14cdeb4ac679234621cfa867c",
+        "function_token_typing_Parsers.Random.random", "int_inversion",
+        "int_typing",
+        "interpretation_Tm_abs_5b47a15bf1b1f6da1a1ebf19bfe10d95",
         "inversion-interp", "kinding_FStar.Pervasives.Native.tuple2@tok",
         "kinding_Parsers.ClientHello.clientHello@tok",
         "kinding_Parsers.ProtocolVersion.protocolVersion@tok",
@@ -545,13 +522,13 @@
         "projection_inverse_Parsers.ClientHello.MkclientHello_random",
         "projection_inverse_Parsers.ClientHello.MkclientHello_session_id",
         "projection_inverse_Parsers.ClientHello.MkclientHello_version",
-        "refinement_interpretation_Tm_refine_03127b5d59ee3055620018693b4264e8",
-        "refinement_interpretation_Tm_refine_36f208f2b1019ab7b5d9be73f4c89349",
-        "refinement_interpretation_Tm_refine_40a24c6c363915cd0813473da688de21",
-        "refinement_interpretation_Tm_refine_ba523126f67e00e7cd55f0b92f16681d",
+        "refinement_interpretation_Tm_refine_542f9d4f129664613f2483a6c88bc7c2",
+        "refinement_interpretation_Tm_refine_ac201cf927190d39c033967b63cb957b",
+        "refinement_interpretation_Tm_refine_d83f8da8ef6c1cb9f71d1465c1bb1c55",
         "refinement_kinding_Tm_refine_1506f9bd8a9f298520f6ac5f043b46bc",
         "refinement_kinding_Tm_refine_2bae5c3803c6c608e1680d3a46547c16",
         "refinement_kinding_Tm_refine_7ecfee61ad5954fd130d64a2dba634f0",
+        "refinement_kinding_Tm_refine_beec71e2de9ddfab99931e183d4c495c",
         "token_correspondence_LowParse.Spec.Combinators.bare_serialize_nondep_then",
         "token_correspondence_Parsers.ClientHello.synth_clientHello",
         "token_correspondence_Parsers.ClientHello.synth_clientHello_recip",
@@ -587,7 +564,7 @@
         "typing_Parsers.SessionID.sessionID_serializer", "unit_inversion"
       ],
       0,
-      "4e4c5dcf5782666c2bf202c7efaa08fd"
+      "872801176124430a28e259ac3d38a8ff"
     ],
     [
       "ParsersAux.Binders.Aux.serialize_handshake_m_client_hello_eq",
@@ -598,15 +575,11 @@
         "@MaxFuel_assumption", "@MaxIFuel_assumption",
         "@fuel_correspondence_Prims.pow2.fuel_instrumented",
         "@fuel_irrelevance_Prims.pow2.fuel_instrumented", "@query",
-        "Prims_pretyping_ae567c2fb75be05905677af440075565", "b2t_def",
-        "constructor_distinct_FStar.Pervasives.Native.None",
+        "b2t_def", "constructor_distinct_FStar.Pervasives.Native.None",
         "constructor_distinct_FStar.Pervasives.Native.Some",
         "disc_equation_FStar.Pervasives.Native.Some",
         "equation_FStar.UInt.fits", "equation_FStar.UInt.max_int",
         "equation_FStar.UInt.min_int", "equation_FStar.UInt.size",
-        "equation_FStar.UInt.uint_t",
-        "equation_LowParse.Low.Base.max_uint32",
-        "equation_LowParse.Low.Base.validator_max_length",
         "equation_LowParse.Spec.Base.parser_kind",
         "equation_LowParse.Spec.Base.serialize",
         "equation_LowParse.Spec.Base.strong_parser_kind",
@@ -629,9 +602,8 @@
         "equation_Prims.nat",
         "equation_with_fuel_Prims.pow2.fuel_instrumented",
         "fuel_guarded_inversion_Parsers.ClientHello.clientHello",
-        "function_token_typing_Prims.__cache_version_number__", "int_typing",
-        "kinding_Parsers.ClientHello.clientHello@tok",
-        "lemma_FStar.UInt.pow2_values", "lemma_FStar.UInt32.vu_inv",
+        "int_typing", "kinding_Parsers.ClientHello.clientHello@tok",
+        "lemma_FStar.UInt.pow2_values",
         "lemma_LowParse.Spec.Base.serialize_length",
         "primitive_Prims.op_Addition", "primitive_Prims.op_AmpAmp",
         "primitive_Prims.op_LessThan", "primitive_Prims.op_LessThanOrEqual",
@@ -646,12 +618,8 @@
         "projection_inverse_FStar.Pervasives.Native.Some_v",
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_high",
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_low",
-        "refinement_interpretation_Tm_refine_07033d2b2c1d2fb6c1dd88a8f1110ac2",
-        "refinement_interpretation_Tm_refine_9fc4b705eaf2fe68d9cc8785e7df72bf",
-        "refinement_interpretation_Tm_refine_a347709bfeba48709474ad26f4f6be87",
-        "refinement_interpretation_Tm_refine_ba523126f67e00e7cd55f0b92f16681d",
-        "typing_FStar.UInt32.v", "typing_LowParse.Low.Base.max_uint32",
-        "typing_LowParse.Low.Base.validator_max_length",
+        "refinement_interpretation_Tm_refine_42417c0a732848736b70205b54b36236",
+        "refinement_interpretation_Tm_refine_542f9d4f129664613f2483a6c88bc7c2",
         "typing_LowParse.Spec.Base.__proj__Mkparser_kind___item__parser_kind_low",
         "typing_LowParse.Spec.Combinators.and_then_kind",
         "typing_Parsers.ClientHello.clientHello_parser",
@@ -661,7 +629,7 @@
         "typing_Parsers.Random.random_parser_kind"
       ],
       0,
-      "2399d7dc7ae4ec31808e19e950e44163"
+      "13d6c2c00eca019cc165653d18ad8700"
     ],
     [
       "ParsersAux.Binders.Aux.serialize_handshake_m_client_hello_eq",
@@ -701,7 +669,7 @@
         "equation_Parsers.Handshake_m_client_hello.handshake_m_client_hello_serializer",
         "equation_Prims.nat",
         "fuel_guarded_inversion_Parsers.ClientHello.clientHello",
-        "interpretation_Tm_abs_4641563103cfcf55f124c96b8fc4fb3d",
+        "interpretation_Tm_abs_c18181e6e093b4a69a377f53ae984901",
         "kinding_Parsers.ClientHello.clientHello@tok",
         "primitive_Prims.op_AmpAmp", "primitive_Prims.op_Equality",
         "primitive_Prims.op_GreaterThan", "primitive_Prims.op_LessThan",
@@ -724,7 +692,7 @@
         "unit_typing"
       ],
       0,
-      "f4bc8ab0c82f7ec7c3a25c6879ed29c7"
+      "dc365c01cbf6a4264a23effa0b28b388"
     ]
   ]
 ]

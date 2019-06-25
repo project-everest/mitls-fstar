@@ -1,5 +1,5 @@
 [
-  "Ó¸;\báäéH*˜‡¹l¯“G",
+  "óÁ]¼žrC\u001aæDÖ\"ÀXÝP",
   [
     [
       "TLS.Callbacks.pskInfo",
@@ -8,21 +8,23 @@
       1,
       [
         "@MaxIFuel_assumption", "@query",
-        "assumption_EverCrypt.aead_alg__uu___haseq",
+        "assumption_CipherSuite.cipherSuite___uu___haseq",
         "assumption_FStar.Pervasives.Native.option__uu___haseq",
         "assumption_FStar.Pervasives.Native.tuple2__uu___haseq",
         "assumption_FStar.UInt32.t__uu___haseq",
-        "assumption_Spec.Hash.Definitions.hash_alg__uu___haseq",
-        "equation_CipherSuite.aeadAlg", "equation_CipherSuite.hash_alg",
+        "equation_CipherSuite.cipherSuite",
+        "equation_CipherSuite.cipherSuite13",
         "equation_TLS.Callbacks.vlbytespl",
         "fuel_guarded_inversion_FStar.Pervasives.Native.tuple2",
-        "haseqTm_refine_381e0859389e84e3777a67956da12d68",
+        "haseqTm_refine_33191a9f51e100ecf6b60c7a223f77ec",
+        "haseqTm_refine_4efafdaa406d7e0dd35ef4b76469edf6",
+        "haseqTm_refine_59c3c511fab69cd40cdc781ec85d3b5f",
         "refinement_interpretation_Tm_refine_414d0a9f578ab0048252f8c8f552b99f",
-        "refinement_kinding_Tm_refine_381e0859389e84e3777a67956da12d68",
+        "refinement_kinding_Tm_refine_33191a9f51e100ecf6b60c7a223f77ec",
         "typing_FStar.Bytes.bytes"
       ],
       0,
-      "56e994205070cd8c2c3a672f626820b1"
+      "82e8ea41753ee0a471d35b12cc39aff2"
     ],
     [
       "TLS.Callbacks.ticketInfo",
@@ -43,7 +45,7 @@
         "refinement_kinding_Tm_refine_4efafdaa406d7e0dd35ef4b76469edf6"
       ],
       0,
-      "d1bc1aa78fc93e4bff287c7f7175a7f0"
+      "3b50154a86b30b39d85e24cb9e7f9f72"
     ],
     [
       "TLS.Callbacks.__proj__TicketInfo_12__item___0",
@@ -57,7 +59,7 @@
         "refinement_interpretation_Tm_refine_fd38f55f421e64f6425fae42481a904b"
       ],
       0,
-      "96af4422bd1eafeb189a49a5669d151d"
+      "d19c507e9250e69b43c8e3cf9e110dd2"
     ],
     [
       "TLS.Callbacks.__proj__TicketInfo_13__item___0",
@@ -71,7 +73,22 @@
         "refinement_interpretation_Tm_refine_6df7baa2141df663431627b6f4f2b142"
       ],
       0,
-      "d2f6842528481df6196c6f8d05639cf5"
+      "44fbc57df4dbd1be361904ac322bec16"
+    ],
+    [
+      "TLS.Callbacks.empty_custom_extensions",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "eq2-interp", "equation_Prims.eq2",
+        "equation_Prims.squash",
+        "function_token_typing_Parsers.UnknownExtensions.unknownExtensions_list_bytesize_nil",
+        "projection_inverse_BoxInt_proj_0",
+        "refinement_interpretation_Tm_refine_2de20c066034c13bf76e9c0b94f4806c"
+      ],
+      0,
+      "6842370e793829732546d1d81b8fbf77"
     ],
     [
       "TLS.Callbacks.add_custom_extension",
@@ -79,18 +96,16 @@
       2,
       1,
       [
-        "@MaxIFuel_assumption", "@query",
-        "Prims_pretyping_ae567c2fb75be05905677af440075565",
-        "equation_Prims.nat", "function_token_typing_FStar.UInt8.t",
-        "function_token_typing_Prims.__cache_version_number__",
+        "@MaxIFuel_assumption", "@query", "equation_Prims.nat",
+        "function_token_typing_FStar.UInt8.t",
         "lemma_FStar.Bytes.length_reveal",
         "projection_inverse_BoxInt_proj_0",
-        "refinement_interpretation_Tm_refine_116fac71ebc30a72642cb3c4586f9ede",
-        "refinement_interpretation_Tm_refine_ba523126f67e00e7cd55f0b92f16681d",
+        "refinement_interpretation_Tm_refine_542f9d4f129664613f2483a6c88bc7c2",
+        "refinement_interpretation_Tm_refine_62025d096cb6f96be6e40b49580ae84e",
         "typing_FStar.Bytes.reveal", "typing_FStar.Seq.Base.length"
       ],
       0,
-      "333cbb2f0f107c1a21fc01a7d6122b53"
+      "1e5b9819983025b37a84b004f6c441bd"
     ],
     [
       "TLS.Callbacks.nego_action",
@@ -99,26 +114,19 @@
       1,
       [
         "@MaxIFuel_assumption", "@query",
-        "assumption_FStar.Pervasives.Native.tuple2__uu___haseq",
-        "assumption_FStar.UInt16.t__uu___haseq",
+        "assumption_Parsers.TaggedUnknownExtension.taggedUnknownExtension__uu___haseq",
         "assumption_Prims.list__uu___haseq",
-        "equation_Parsers.Cookie.cookie",
-        "equation_Parsers.UnknownExtension.unknownExtension",
+        "equation_Parsers.MiTLSCookieContents_extra.miTLSCookieContents_extra",
+        "equation_Parsers.UnknownExtensions.unknownExtensions",
         "equation_TLS.Callbacks.cookie",
-        "equation_TLS.Callbacks.custom_extension",
-        "equation_TLS.Callbacks.custom_extensions",
-        "equation_TLS.Callbacks.custom_id",
-        "function_token_typing_Parsers.UnknownExtension.unknownExtension",
-        "function_token_typing_TLS.Callbacks.custom_extension",
-        "function_token_typing_TLS.Callbacks.custom_id",
-        "haseqTm_refine_890898da45366855aef912053dd93a23",
-        "haseqTm_refine_9a2308e4216787a42fcd90fc40592982",
-        "haseqTm_refine_bc1a96f20b06a0bd0d936da7c6c01d5c",
+        "haseqTm_refine_1435f57f5c2037ae77b75e98d1c4caf7",
+        "haseqTm_refine_6bc7db8d58405ea7793ddbeb5b9ae66d",
+        "kinding_Parsers.TaggedUnknownExtension.taggedUnknownExtension@tok",
         "refinement_interpretation_Tm_refine_414d0a9f578ab0048252f8c8f552b99f",
         "typing_FStar.Bytes.bytes"
       ],
       0,
-      "cd2d5ccfdf0635172892a2908cdb12f2"
+      "dae2d4755a4fe5031110322e3a195dd0"
     ],
     [
       "TLS.Callbacks.__proj__Nego_retry__item__cookie_extra",
@@ -132,7 +140,7 @@
         "refinement_interpretation_Tm_refine_f3ba8d5f2a05d1289e19ebf2dac3fb3c"
       ],
       0,
-      "b95fa71ce8d8cae421ee4b4e1d3f94f4"
+      "641ae72bd6767b3d2da1097b43155ca5"
     ],
     [
       "TLS.Callbacks.__proj__Nego_accept__item__extra_ext",
@@ -146,7 +154,7 @@
         "refinement_interpretation_Tm_refine_9665927b65cd31c97c29ee6cbb7133a4"
       ],
       0,
-      "84989b53c6a6785601556a827bb4323d"
+      "5743f12ebfe7dfcbc4be908ac73a3225"
     ],
     [
       "TLS.Callbacks.cert_select_cb_fun",
@@ -167,7 +175,7 @@
         "typing_FStar.Pervasives.Native.uu___is_Some"
       ],
       0,
-      "3fd25e8a7459ea6727829e8951621382"
+      "3699746ed6196e23f43a82967e3c658b"
     ],
     [
       "TLS.Callbacks.cert_verify_cb_fun",
@@ -182,7 +190,7 @@
         "typing_TLS.Callbacks.cert_parse"
       ],
       0,
-      "fa00144eaa1f68e956049e10258738da"
+      "fc6e93f249d902e592cbf19776f59c15"
     ]
   ]
 ]
