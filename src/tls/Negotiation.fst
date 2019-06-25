@@ -2370,8 +2370,7 @@ let server_hrr_verify offer mode hrr =
 
 #reset-options "--using_facts_from '* -LowParse'"
 
-#push-options "--z3rlimit 300 --max_ifuel 8 --initial_ifuel 8"
-let server_ClientHello #region ns offer log0 =
+let trace_server_ClientHello #region (ns: t region Server) (offer: HSM.clientHello) : HST.Stack unit (requires (fun _ -> True)) (ensures (fun h _ h' -> B.modifies B.loc_none h h')) =
   trace ("offered client extensions "^string_of_ches offer.CH.extensions);
   trace ("offered cipher suites "^string_of_ciphersuitenames offer.CH.cipher_suites);
   trace (match find_supported_groups offer with
@@ -2381,8 +2380,11 @@ let server_ClientHello #region ns offer log0 =
     | Some (CHE_key_share ksl) -> "offered shares on groups "^string_of_keyShares ksl
     | None -> "no key shares offered, only PSK and HRR possible");
   trace ( 
-    List.Tot.fold_left accum_string_of_pv "offered versions" (Negotiation.Version.offered_versions offer));
-    
+    List.Tot.fold_left accum_string_of_pv "offered versions" (Negotiation.Version.offered_versions offer))
+
+#push-options "--z3rlimit 1024 --max_ifuel 8 --initial_ifuel 8"
+let server_ClientHello #region ns offer log0 =
+  trace_server_ClientHello #region ns offer;
   let r = match !ns.state with
   | S_HRR o1 hrr -> server_ClientHello2_stateful ns o1 hrr offer
   | S_Init _ ->
@@ -2489,6 +2491,10 @@ let share_of_serverKeyShare (ks:CommonDH.serverKeyShare) : share =
   assume False; //18-12-16 TODO incomplete pattern
   let CommonDH.Share g gy = ks in (| g, gy |)
 *)
+
+#restart-solver
+
+#reset-options "--using_facts_from '* -LowParse'"
 
 private let keyShareEntry_of_ks (|g,gx|) : Parsers.ServerHelloExtension.serverHelloExtension_SHE_key_share = 
   let r = CommonDH.format #g gx in
