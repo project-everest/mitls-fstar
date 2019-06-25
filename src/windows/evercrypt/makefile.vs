@@ -33,6 +33,7 @@ SOURCES = \
   Hacl_Poly1305_128.c \
   Hacl_Poly1305_256.c \
   Hacl_Curve25519.c \
+  Hacl_Spec.c \
   evercrypt_vale_stubs.c
 
 {amd64\}.asm.obj:
@@ -45,7 +46,7 @@ SOURCES = \
 PLATFORM_OBJS = aes-i686.obj
 !else if "$(PLATFORM)"=="X64" || "$(VSCMD_ARG_TGT_ARCH)"=="x64"
 PLATFORM_OBJS = aes-x86_64-msvc.obj sha256-x86_64-msvc.obj \
-  aesgcm-x86_64-msvc.obj cpuid-x86_64-msvc.obj curve25519-x86_64-msvc.obj \
+  oldaesgcm-x86_64-msvc.obj aesgcm-x86_64-msvc.obj cpuid-x86_64-msvc.obj curve25519-x86_64-msvc.obj \
   poly1305-x86_64-msvc.obj
 !else
 PLATFORM_OBJS = 
