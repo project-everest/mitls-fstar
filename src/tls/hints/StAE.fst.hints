@@ -25,7 +25,7 @@
         "typing_TLSInfo.safe_region"
       ],
       0,
-      "91161e0ab8cbcb86253c531687801fee"
+      "2ec3ea355d7d3f2fffe4e475f056a697"
     ],
     [
       "StAE.frag_plain_len",
@@ -34,7 +34,7 @@
       1,
       [ "@query" ],
       0,
-      "810aaf49908a4e5de0a884268220b1cf"
+      "2c902038a5c57c06dbb0cebc6cdacd8d"
     ],
     [
       "StAE.frag_cipher_len",
@@ -43,7 +43,7 @@
       1,
       [ "@query", "equation_StAE.is_stream" ],
       0,
-      "04a9b213c6a3863742398acc3ab9a154"
+      "f522eb626fd010ba9021e5598ead46f8"
     ],
     [
       "StAE.aeKeySize",
@@ -65,7 +65,7 @@
         "typing_StAE.is_stlhae", "typing_TLSInfo.safe_region"
       ],
       0,
-      "1e27cc711f59cac224d54cf697f0a3a3"
+      "6b424a5a729adb862237638c51bdbba3"
     ],
     [
       "StAE.keyBytes",
@@ -93,14 +93,12 @@
         "equation_AEADProvider.alg_", "equation_AEADProvider.id",
         "equation_AEADProvider.iv_length",
         "equation_AEADProvider.salt_length", "equation_CipherSuite.aeadAlg",
-        "equation_FStar.HyperStack.ST.is_eternal_region",
-        "equation_FStar.Monotonic.HyperStack.is_eternal_color",
-        "equation_FStar.UInt.uint_t", "equation_Mem.rgn",
-        "equation_StAE.aeKeySize", "equation_StAE.is_stlhae",
-        "equation_StAE.is_stream", "equation_StAE.stae_id",
-        "equation_StreamAE.id", "equation_StreamPlain.id",
-        "equation_TLSConstants.protocolVersion",
-        "equation_TLSInfo.aeAlg_of_id", "equation_TLSInfo.pv_of_id",
+        "equation_FStar.UInt.uint_t", "equation_Mem.is_tls_rgn",
+        "equation_Mem.tls_rgn", "equation_StAE.aeKeySize",
+        "equation_StAE.is_stlhae", "equation_StAE.is_stream",
+        "equation_StAE.stae_id", "equation_StreamAE.id",
+        "equation_StreamPlain.id", "equation_TLSInfo.aeAlg_of_id",
+        "equation_TLSInfo.pv_of_id",
         "function_token_typing_Prims.__cache_version_number__",
         "lemma_FStar.Buffer.lemma_size", "primitive_Prims.op_Addition",
         "primitive_Prims.op_AmpAmp", "primitive_Prims.op_BarBar",
@@ -117,21 +115,19 @@
         "projection_inverse_TLSInfo.ID12_sr",
         "projection_inverse_TLSInfo.ID12_writer",
         "refinement_interpretation_Tm_refine_27bc248aea929afc1c455a4ca114e85e",
-        "refinement_interpretation_Tm_refine_5a42b69505c74575f4084030e217c997",
+        "refinement_interpretation_Tm_refine_33c77bf558392d71098c5ee93f1d02de",
         "refinement_interpretation_Tm_refine_771d00c42e1fa557a792d8f0bf7b724d",
         "refinement_interpretation_Tm_refine_7f2a2c302ee268d1f2067f3ad49e35d9",
-        "refinement_interpretation_Tm_refine_a347709bfeba48709474ad26f4f6be87",
-        "refinement_interpretation_Tm_refine_b5163a5c7eb2f4891aa85b6bd19b6e5e",
-        "refinement_interpretation_Tm_refine_f39bd1782581f69a042cf0a284ec6a88",
+        "refinement_interpretation_Tm_refine_9393f41ccc9ce36df1080eefe33f6c53",
+        "refinement_interpretation_Tm_refine_f13070840248fced9d9d60d77bdae3ec",
+        "refinement_interpretation_Tm_refine_f9e4770d739623983b2d81b383b47a96",
         "typing_AEADProvider.alg_", "typing_EverCrypt.aead_keyLen",
-        "typing_FStar.Monotonic.HyperHeap.color",
-        "typing_FStar.Monotonic.HyperStack.is_eternal_color",
-        "typing_FStar.UInt32.v", "typing_StAE.is_stlhae",
-        "typing_StAE.is_stream", "typing_StreamAE.alg",
-        "typing_TLSInfo.safe_region"
+        "typing_FStar.UInt32.v", "typing_Mem.tls_region",
+        "typing_StAE.is_stlhae", "typing_StAE.is_stream",
+        "typing_StreamAE.alg"
       ],
       0,
-      "b14219bd8433da26bd00a9fd944c84c3"
+      "a7761274b5635586adb321b5e075ec61"
     ]
   ]
 ]

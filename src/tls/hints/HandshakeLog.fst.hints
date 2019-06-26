@@ -13,7 +13,7 @@
         "fuel_guarded_inversion_Prims.list", "subterm_ordering_Prims.Cons"
       ],
       0,
-      "cc620d54d3fdb1e6d6b3c2d0e333878d"
+      "1c57b0f2b1ebaaa0e98f21907ebd000f"
     ],
     [
       "HandshakeLog.append_transcript",
@@ -25,7 +25,7 @@
         "refinement_interpretation_Tm_refine_3ed241300a1f24835b7d1f3ec025b52a"
       ],
       0,
-      "3c46ca719a8d14a863fd37fb0a76d54a"
+      "9805a088a555aeddc79432cefd311554"
     ],
     [
       "HandshakeLog.discard",
@@ -38,7 +38,7 @@
         "lemma_FStar.HyperStack.ST.lemma_same_refs_in_stack_regions_intro"
       ],
       0,
-      "1eadd0e65f2b73417b03e5dcd529533d"
+      "87766f02b0ff936bb7d3147ccd819b2f"
     ],
     [
       "HandshakeLog.trace",
@@ -51,7 +51,7 @@
         "lemma_FStar.HyperStack.ST.lemma_same_refs_in_stack_regions_intro"
       ],
       0,
-      "e4cd90d25a67d106fe5ec60ccb0f4f1c"
+      "89381e8c59cae400c77d8194206e0202"
     ],
     [
       "HandshakeLog.elift1_def",
@@ -64,7 +64,7 @@
         "typing_FStar.Ghost.elift1"
       ],
       0,
-      "289fa366d371ba6d6ffaebbe8b061b7a"
+      "e7099a248490d1f6294bd8e0c5f5601f"
     ],
     [
       "HandshakeLog.bind_log",
@@ -76,7 +76,7 @@
         "equation_HandshakeLog.reveal_log"
       ],
       0,
-      "47b016c4598634b2fa5b1e51c8c11be7"
+      "04bd1c64baba4ccba374b8ccae404f45"
     ],
     [
       "HandshakeLog.empty_hs_transcript",
@@ -90,7 +90,7 @@
         "projection_inverse_BoxBool_proj_0", "projection_inverse_Prims.Nil_a"
       ],
       0,
-      "53e49b552dd6ebd559e9c70c97a96878"
+      "1e62216a996005d552f2bdd33f32d795"
     ],
     [
       "HandshakeLog.append_hs_transcript",
@@ -102,7 +102,7 @@
         "refinement_interpretation_Tm_refine_0b4850cfb0c3c5f5ad9aa8e9cbacc66b"
       ],
       0,
-      "2e404e8a55e4eab367934a4798b973c3"
+      "e8b23352bf87f435eb8e3884ecbb6bc5"
     ],
     [
       "HandshakeLog.extend_hs_transcript",
@@ -114,7 +114,7 @@
         "refinement_interpretation_Tm_refine_69404bfc3b689fbbf6243a2b14e4353e"
       ],
       0,
-      "4e6e2df81f60d20e5bc0bc48979c8e26"
+      "187ec090e833ec785845a7716aebf8a4"
     ],
     [
       "HandshakeLog.gforall_list_to_list_refined",
@@ -125,33 +125,31 @@
         "@MaxFuel_assumption", "@MaxIFuel_assumption",
         "@fuel_correspondence_HandshakeLog.gforall.fuel_instrumented",
         "@fuel_irrelevance_HandshakeLog.gforall.fuel_instrumented", "@query",
-        "HandshakeLog_interpretation_Tm_arrow_c55d73caaab25917152a038f3941a712",
-        "Prims_interpretation_Tm_arrow_9cb3c953faf527c316d427b2ce8bd81b",
-        "Prims_pretyping_f537159ed795b314b4e58c260361ae86",
-        "binder_x_f2f82181567e6a0b0e5eef3bba6c33ba_3",
-        "binder_x_f4c10f2ec6a911fa02faaade377f4c86_2",
+        "FStar.Seq.Properties_interpretation_Tm_ghost_arrow_9a34a9deaac3ca72ad48c3ec79b6656c",
+        "HandshakeLog_interpretation_Tm_ghost_arrow_91040baa576254f59f26077b926e4973",
+        "Prims_pretyping_ae567c2fb75be05905677af440075565",
+        "binder_x_305bfb6241561845621b641f253a0683_2",
+        "binder_x_6dc7d5e885a1f1092abb79630e57e5e3_3",
         "binder_x_fe28d8bcde588226b4e538b35321de05_1", "bool_inversion",
-        "bool_typing", "constructor_distinct_Prims.Cons",
+        "constructor_distinct_BoxBool", "constructor_distinct_Prims.Cons",
         "constructor_distinct_Tm_unit", "disc_equation_Prims.Cons",
-        "disc_equation_Prims.Nil",
-        "equation_FStar.HyperStack.ST.is_eternal_region",
-        "equation_FStar.Monotonic.HyperStack.is_eternal_color",
-        "equation_Mem.rgn",
+        "disc_equation_Prims.Nil", "equation_Mem.is_tls_rgn",
+        "equation_Mem.tls_rgn",
         "equation_with_fuel_HandshakeLog.gforall.fuel_instrumented",
-        "primitive_Prims.op_AmpAmp", "projection_inverse_BoxBool_proj_0",
+        "function_token_typing_Prims.__cache_version_number__",
+        "primitive_Prims.op_AmpAmp", "primitive_Prims.op_Equality",
+        "projection_inverse_BoxBool_proj_0",
         "projection_inverse_Prims.Cons_a",
         "projection_inverse_Prims.Cons_hd",
         "projection_inverse_Prims.Cons_tl",
-        "refinement_interpretation_Tm_refine_b5163a5c7eb2f4891aa85b6bd19b6e5e",
-        "refinement_interpretation_Tm_refine_f66af9f7d5fb1d869c5ba0485770192b",
+        "refinement_interpretation_Tm_refine_5df7a239cffc1cbece33048aa5c6b300",
+        "refinement_interpretation_Tm_refine_9393f41ccc9ce36df1080eefe33f6c53",
         "subterm_ordering_Prims.Cons",
         "token_correspondence_HandshakeLog.gforall.fuel_instrumented",
-        "typing_FStar.Monotonic.HyperHeap.color",
-        "typing_FStar.Monotonic.HyperStack.is_eternal_color",
-        "typing_HandshakeLog.gforall", "typing_TLSInfo.safe_region"
+        "typing_HandshakeLog.gforall", "typing_Mem.tls_region"
       ],
       0,
-      "ef48cf6720c5c068750fa86eb53e9036"
+      "df88f5014f386a16b50ea55a9a613c0d"
     ],
     [
       "HandshakeLog.msg_parser",
@@ -160,11 +158,10 @@
       1,
       [
         "@MaxIFuel_assumption", "@query",
-        "LowParse.SLow.Base_interpretation_Tm_arrow_c4ceb127c0a3a5b372c26402269d6118",
+        "LowParse.SLow.Base_interpretation_Tm_arrow_ff5732131c4d8d7fb4c3eb412f8744c3",
         "bool_inversion", "bool_typing",
         "disc_equation_FStar.Pervasives.Native.None",
         "disc_equation_FStar.Pervasives.Native.Some",
-        "equation_LowParse.SLow.Base.bytes32",
         "equation_LowParse.SLow.Base.parser32",
         "equation_Parsers.Handshake.handshake_parser_kind",
         "equation_Parsers.Handshake12.handshake12_parser_kind",
@@ -175,13 +172,13 @@
         "kinding_Parsers.Handshake12.handshake12@tok",
         "kinding_Parsers.Handshake13.handshake13@tok",
         "lemma_FStar.Pervasives.invertOption",
-        "refinement_interpretation_Tm_refine_c28ed5a0c122862bed8762ed717dc39e",
+        "refinement_interpretation_Tm_refine_e81200776b42135b929d100b8e428349",
         "typing_Parsers.Handshake.handshake_parser32",
         "typing_Parsers.Handshake12.handshake12_parser32",
         "typing_Parsers.Handshake13.handshake13_parser32"
       ],
       0,
-      "00c86f9fbf59d29aba339f104616c210"
+      "0af687dcdebba0d6582a6b50f720af2c"
     ]
   ]
 ]

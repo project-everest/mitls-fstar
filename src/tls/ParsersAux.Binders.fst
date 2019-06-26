@@ -926,6 +926,7 @@ let truncate_clientHello_bytes_inj_binders_bytesize m1 m2 =
   LP.serialize_strong_prefix HT.handshakeType_serializer HT.Client_hello HT.Client_hello (truncate_handshake_m_client_hello (H.M_client_hello?._0 m1)) (truncate_handshake_m_client_hello (H.M_client_hello?._0 m2));
   truncate_handshake_m_client_hello_inj_binders_bytesize (H.M_client_hello?._0 m1) (H.M_client_hello?._0 m2)
 
+#push-options "--z3rlimit 32"
 let binders_pos #rrel #rel sl pos =
   let h = HST.get () in
   let x = Ghost.hide (LP.contents H.handshake_parser h sl pos) in
@@ -941,6 +942,7 @@ let binders_pos #rrel #rel sl pos =
   LP.serialize_valid_exact Psks.offeredPsks_binders_serializer h sl (get_binders (Ghost.reveal x)) res (Ghost.reveal gpos');
   LP.valid_exact_valid Psks.offeredPsks_binders_parser h sl res (Ghost.reveal gpos');
   res
+#pop-options
 
 let rec build_canonical_list_binders (len: U32.t) (accu: list Parsers.PskBinderEntry.pskBinderEntry) : Pure (list Parsers.PskBinderEntry.pskBinderEntry)
   (requires (
