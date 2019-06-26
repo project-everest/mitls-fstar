@@ -76,11 +76,6 @@ $(KREMLIB_A) $(EVERCRYPT_SO) $(MIPKI_SO):
 
 all: libmitls.$(SO)
 
-libmitls_custom_script: libmitls_internal_script | libmitls.def
-	$(HEAD) -n -1 $< > $@
-	egrep '(__eq__|__neq__|FStar_)' libmitls.def | sed 's/$$/;/g' >> $@
-	echo '};' >> $@
-
-libmitls.$(SO): libmitls_custom_script $(OBJS) $(KREMLIB_A) | $(EVERCRYPT_SO) $(MIPKI_SO)
+libmitls.$(SO): $(OBJS) $(KREMLIB_A) | $(EVERCRYPT_SO) $(MIPKI_SO)
 	$(CC) $(CFLAGS) -shared -o $@ $(OBJS) $(LDFLAGS) $(KREMLIB_A)
 

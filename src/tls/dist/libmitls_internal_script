@@ -5,4 +5,7 @@ LIBMITLS_0.1 {
       *;
     local:
       kremlinit_globals;
+      __eq__*;
+      __neq__*;
+      FStar_Bytes_*;
 };
