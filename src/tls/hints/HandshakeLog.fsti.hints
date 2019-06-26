@@ -13,7 +13,7 @@
         "fuel_guarded_inversion_Prims.list", "subterm_ordering_Prims.Cons"
       ],
       0,
-      "d23e6278c9877025c41cb68a6fe39c1b"
+      "81fad4181c485002df5fe0dc7514a9ad"
     ],
     [
       "HandshakeLog.append_transcript",
@@ -21,11 +21,11 @@
       2,
       1,
       [
-        "@MaxIFuel_assumption", "@query", "equation_HandshakeLog.msg",
-        "refinement_interpretation_Tm_refine_fb118621c0b0f2173d7d8e9b92378a43"
+        "@MaxIFuel_assumption", "@query",
+        "refinement_interpretation_Tm_refine_72e5a2aa76f3c2442b018562b3272ee5"
       ],
       0,
-      "bac5a736b20241e1d1738d14f0ce78ca"
+      "4c84e5f8ce342c1bf48c24af5aca8d05"
     ],
     [
       "HandshakeLog.narrowTag",
@@ -34,7 +34,7 @@
       1,
       [ "@query", "assumption_FStar.UInt32.t__uu___haseq" ],
       0,
-      "a872468ae98c2f347ffd481e98afa475"
+      "394ffcbfe09975e159564cc18235a48a"
     ],
     [
       "HandshakeLog.narrowTag",
@@ -43,7 +43,7 @@
       1,
       [ "@query" ],
       0,
-      "c0936e68c36c740982e86e61eb52a69c"
+      "cb1536afb90955c864b759fd2bf7b6b8"
     ],
     [
       "HandshakeLog.modifies_one",
@@ -51,16 +51,13 @@
       2,
       1,
       [
-        "@MaxIFuel_assumption", "@query",
-        "Prims_pretyping_ae567c2fb75be05905677af440075565",
-        "equation_Prims.eqtype", "equation_Prims.nat",
-        "function_token_typing_Prims.__cache_version_number__",
-        "function_token_typing_Prims.int",
-        "haseqTm_refine_ba523126f67e00e7cd55f0b92f16681d",
+        "@MaxIFuel_assumption", "@query", "equation_Prims.eqtype",
+        "equation_Prims.nat", "function_token_typing_Prims.int",
+        "haseqTm_refine_542f9d4f129664613f2483a6c88bc7c2",
         "refinement_interpretation_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
       ],
       0,
-      "32f411500eecc62a5c9906cc635efc3d"
+      "b515bf39d643af3890b671191f7a9f45"
     ]
   ]
 ]
