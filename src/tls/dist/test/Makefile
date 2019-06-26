@@ -24,14 +24,14 @@ LD_PATH=$(subst $(SPACE),:,$(LD_DIRS))
 UNAME		= $(shell uname)
 MARCH		= x86_64
 ifeq ($(UNAME),Darwin)
-  export DYLD_LIBRARY_PATH := $(LD_PATH):$(DYLD_LIBRARY_PATH)
+  LD_EXTRA = DYLD_LIBRARY_PATH=$(LD_PATH):$$DYLD_LIBRARY_PATH
 else ifeq ($(UNAME),Linux)
   CFLAGS	+= -fPIC -fstack-check
-  export LD_LIBRARY_PATH := $(LD_PATH):$(LD_LIBRARY_PATH)
+  LD_EXTRA = LD_LIBRARY_PATH=$(LD_PATH):$$LD_LIBRARY_PATH
 else ifeq ($(OS),Windows_NT)
   CFLAGS        += -fno-asynchronous-unwind-tables
   CC		= $(MARCH)-w64-mingw32-gcc
-  export PATH := $(LD_PATH):$(PATH)
+  LD_EXTRA = PATH=$(LD_PATH):$$PATH
 endif
 
 LDFLAGS 	+= $(addprefix -L,$(LD_DIRS)) $(addprefix -l,$(LD_LIBS)) \
@@ -44,4 +44,4 @@ test.exe:
 
 .PHONY: test
 test: test.exe
-	./$<
+	$(LD_EXTRA) ./$<
