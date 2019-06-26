@@ -101,7 +101,8 @@ function build_hacl_vale () {
     # This is only for libevercrypt.so for now,
     # not for checked files.
     make -C hacl-star vale-fst -j $threads &&
-    make -C hacl-star compile-compact compile-generic compile-evercrypt-external-headers -j $threads
+    make -C hacl-star compile-compact compile-generic compile-evercrypt-external-headers -j $threads &&
+    find hacl-star/dist -iname '*.dll.a' -delete
 }
 
 # By default, HACL* master works against F* stable. Can also be overridden.
