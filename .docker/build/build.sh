@@ -231,8 +231,7 @@ function mitls_verify() {
     fetch_vale &&
     OTHERFLAGS="--admit_smt_queries true $OTHERFLAGS" build_hacl_vale &&
     build_pki_if &&
-    make -C src/tls -j $threads all -k &&
-    make -C src/tls -j $threads test -k
+    make -j $threads test -k
 }
 
 function mitls_verify_and_hints() {
