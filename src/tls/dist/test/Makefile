@@ -5,15 +5,15 @@ HACL_HOME	?= $(MITLS_HOME)/../hacl-star
 MLCRYPTO_HOME	?= $(MITLS_HOME)/../MLCrypto
 OPENSSL_HOME	?= $(MLCRYPTO_HOME)/openssl
 
-ifeq ($(OS),Windows_NT)
-  OPENSSL_HOME := $(shell cygpath -u $(OPENSSL_HOME))
-endif
-
 LD_DIRS 	= \
   $(OPENSSL_HOME) \
   $(HACL_HOME)/dist/compact \
   $(MITLS_HOME)/src/tls/dist/compact \
   $(MITLS_HOME)/src/pki \
+
+ifeq ($(OS),Windows_NT)
+  LD_DIRS := $(shell cygpath -u $(LD_DIRS))
+endif
 
 LD_LIBS = mitls mipki evercrypt crypto
 
