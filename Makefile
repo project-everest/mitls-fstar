@@ -4,7 +4,7 @@ all: tls-all quic-app tls-app
 
 .PHONY: tls-all
 tls-all: pki
-	#$(MAKE) -C src/tls
+	$(MAKE) -C src/tls
 
 .PHONY: quic-app
 quic-app: tls-all
