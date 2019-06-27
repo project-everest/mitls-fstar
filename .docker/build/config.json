@@ -4,7 +4,7 @@
     "BaseContainerIsEverestImage" : true,
     "BaseContainerImageName" : "hacl-star",
     "BaseContainerImageTagOrCommitId": "latest",
-    "BranchName" : "fstar-master",
+    "BranchName" : "taramana_folding_containers",
     "GithubCommitUrl" : "https://github.com/project-everest/hacl-star/commit",
     "OnDemandBuildDefinition" : "Hacl\\Hacl-{agentOS}",
 
