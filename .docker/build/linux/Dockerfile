@@ -7,7 +7,7 @@
 # replace latest with the commit id from github using 12 characters.
 ARG DOCKERHUBPROJECT
 ARG COMMITID
-FROM ${DOCKERHUBPROJECT}fstar-linux:${COMMITID}
+FROM ${DOCKERHUBPROJECT}hacl-star-linux:${COMMITID}
 
 ARG BUILDLOGFILE
 ARG MAXTHREADS
