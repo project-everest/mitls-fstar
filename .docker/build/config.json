@@ -2,11 +2,11 @@
     "ProjectName" : "mitls-fstar",
 
     "BaseContainerIsEverestImage" : true,
-    "BaseContainerImageName" : "fstar",
+    "BaseContainerImageName" : "hacl-star",
     "BaseContainerImageTagOrCommitId": "latest",
-    "BranchName" : "master",
-    "GithubCommitUrl" : "https://github.com/FStarLang/FStar/commit",
-    "OnDemandBuildDefinition" : "FStar\\FStar-{agentOS}",
+    "BranchName" : "fstar-master",
+    "GithubCommitUrl" : "https://github.com/project-everest/hacl-star/commit",
+    "OnDemandBuildDefinition" : "Hacl\\Hacl-{agentOS}",
 
     "DockerFile": ".docker/build/{agentOS}/Dockerfile",
     "DependencyFiles" : [
@@ -24,9 +24,6 @@
     "PublicBranches" : [ "master", "dev" ],
 
     "RepoVersions" : {
-        "kremlin_version" : "origin/master",
-        "hacl_version" : "origin/fstar-master",
-        "mlcrypto_version" : "origin/master",
         "qd_version" : "origin/master"
     }
 }

@@ -7,32 +7,6 @@ out_file=$2
 threads=$3
 branchname=$4
 
-function fetch_mlcrypto() {
-    if [ ! -d mlcrypto ]; then
-        git clone https://github.com/project-everest/MLCrypto mlcrypto
-    fi
-
-    cd mlcrypto
-    git fetch origin
-    local ref=$(jq -c -r '.RepoVersions["mlcrypto_version"]' "$rootPath/.docker/build/config.json" )
-    if [[ $ref == "" || $ref == "null" ]]; then
-        echo "Unable to find RepoVersions.mlcrypto_version on $rootPath/.docker/build/config.json"
-        return -1
-    fi
-
-    echo Switching to MLCrypto $ref
-    git reset --hard $ref
-    git submodule update
-    cd ..
-    export_home MLCRYPTO "$(pwd)/mlcrypto"
-    export_home OPENSSL "$(pwd)/mlcrypto/openssl"
-}
-
-function fetch_and_make_mlcrypto() {
-    fetch_mlcrypto
-    make -C mlcrypto -j $threads
-}
-
 # Windows only: Visual Studio's command line to set up environment (VS_ENV_CMD)
 if [[ $OS == "Windows_NT" ]] ; then
   # Starting from Visual Studio 2017, version 15.2 or later,
@@ -96,74 +70,6 @@ function export_home() {
     fi
 }
 
-function build_hacl_vale () {
-    # Only building a subset of HACL* for now, no verification.
-    # This is only for libevercrypt.so for now,
-    # not for checked files.
-    make -C hacl-star vale-fst -j $threads &&
-    make -C hacl-star compile-compact compile-generic compile-evercrypt-external-headers -j $threads &&
-    make -C hacl-star/providers/quic_provider
-}
-
-# By default, HACL* master works against F* stable. Can also be overridden.
-function fetch_hacl() {
-    if [ ! -d hacl-star ]; then
-        git clone https://github.com/mitls/hacl-star hacl-star
-    fi
-
-    cd hacl-star
-    git fetch origin
-    local ref=$(jq -c -r '.RepoVersions["hacl_version"]' "$rootPath/.docker/build/config.json" )
-    if [[ $ref == "" || $ref == "null" ]]; then
-        echo "Unable to find RepoVersions.hacl_version on $rootPath/.docker/build/config.json"
-        return -1
-    fi
-
-    echo Switching to HACL $ref
-    git reset --hard $ref
-    git clean -fdx
-    cd ..
-    export_home HACL "$(pwd)/hacl-star"
-    export_home EVERCRYPT "$(pwd)/hacl-star/providers"
-}
-
-# By default, kremlin master works against F* stable. Can also be overridden.
-function fetch_kremlin() {
-    if [ ! -d kremlin ]; then
-        git clone https://github.com/FStarLang/kremlin kremlin
-    fi
-
-    cd kremlin
-    git fetch origin
-    local ref=$(jq -c -r '.RepoVersions["kremlin_version"]' "$rootPath/.docker/build/config.json" )
-    if [[ $ref == "" || $ref == "null" ]]; then
-        echo "Unable to find RepoVersions.kremlin_version on $rootPath/.docker/build/config.json"
-        return -1
-    fi
-
-    echo Switching to KreMLin $ref
-    git reset --hard $ref
-    cd ..
-    export_home KREMLIN "$(pwd)/kremlin"
-}
-
-function fetch_and_make_kremlin() {
-    fetch_kremlin
-
-    # Default build target is minimal, unless specified otherwise
-    local target
-    if [[ $1 == "" ]]; then
-        target="minimal"
-    else
-        target="$1"
-    fi
-
-    make -C kremlin -j $threads $target ||
-        (cd kremlin && git clean -fdx && make -j $threads $target)
-    OTHERFLAGS='--admit_smt_queries true' make -C kremlin/kremlib -j $threads
-    export PATH="$(pwd)/kremlin:$PATH"
-}
-
 function fetch_qd() {
     if [ ! -d qd ]; then
         git clone https://github.com/project-everest/quackyducky qd
@@ -203,21 +109,6 @@ function build_pki_if() {
     fi
 }
 
-function fetch_vale() {
-    if [[ ! -d vale ]]; then
-        mkdir vale
-    fi
-    vale_version=$(<hacl-star/vale/.vale_version)
-    vale_version=${vale_version%$'\r'}  # remove Windows carriage return, if it exists
-    wget "https://github.com/project-everest/vale/releases/download/v${vale_version}/vale-release-${vale_version}.zip" -O vale/vale-release.zip
-    rm -rf "vale/vale-release-${vale_version}"
-    unzip -o vale/vale-release.zip -d vale
-    rm -rf "vale/bin"
-    mv "vale/vale-release-${vale_version}/bin" vale/
-    chmod +x vale/bin/*.exe
-    export_home VALE "$(pwd)/vale"
-}
-
 function mitls_verify() {
     export_home MITLS "$(pwd)"
 
@@ -225,12 +116,7 @@ function mitls_verify() {
     CI_BRANCH=${branchname##refs/heads/}
     echo "Current branch_name=$CI_BRANCH"
 
-    fetch_and_make_kremlin all &&
     fetch_and_make_qd &&
-    fetch_and_make_mlcrypto &&
-    fetch_hacl &&
-    fetch_vale &&
-    OTHERFLAGS="--admit_smt_queries true $OTHERFLAGS" build_hacl_vale &&
     build_pki_if &&
     make -j $threads test -k
 }
@@ -332,6 +218,11 @@ export OTHERFLAGS="--use_hints --query_stats"
 export MAKEFLAGS="$MAKEFLAGS -Otarget"
 
 export_home FSTAR "$(pwd)/FStar"
+export_home KREMLIN "$(pwd)/kremlin"
+export_home HACL "$(pwd)/hacl-star"
+export_home MLCRYPTO "$HACL_HOME/mlcrypto"
+export_home OPENSSL "$MLCRYPTO_HOME/openssl"
+export_home VALE "$HACL_HOME/valebin"
 cd mitls-fstar
 rootPath=$(pwd)
 exec_build
