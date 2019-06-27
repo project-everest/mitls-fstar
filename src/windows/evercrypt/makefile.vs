@@ -33,7 +33,6 @@ SOURCES = \
   Hacl_Poly1305_128.c \
   Hacl_Poly1305_256.c \
   Hacl_Curve25519.c \
-  Hacl_Spec.c \
   evercrypt_vale_stubs.c
 
 {amd64\}.asm.obj:
