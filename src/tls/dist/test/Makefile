@@ -37,6 +37,8 @@ endif
 LDFLAGS 	+= $(addprefix -L,$(LD_DIRS)) $(addprefix -l,$(LD_LIBS)) \
   $(KREMLIN_HOME)/kremlib/dist/generic/libkremlib.a
 
+CFLAGS += -Wno-deprecated-declarations
+
 include Makefile.basic
 
 test.exe:

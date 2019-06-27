@@ -62,7 +62,7 @@ endif
 include Makefile.basic
 
 CFLAGS		+= -g -std=gnu11 -O3 \
-  -DUSE_HEAP_REGIONS -Wno-clobbered -Wno-cast-function-type \
+  -DUSE_HEAP_REGIONS -Wno-clobbered -Wno-cast-function-type -Wno-deprecated-declarations \
   -DLOG_TO_CHOICE
 LDFLAGS 	+= $(addprefix -L,$(LD_DIRS)) $(addprefix -l,$(LD_LIBS)) \
 
