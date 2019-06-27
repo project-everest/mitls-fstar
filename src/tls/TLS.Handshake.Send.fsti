@@ -125,6 +125,62 @@ type transcript = Ghost.erased T.transcript_t
 open FStar.HyperStack.ST
 open TLSError
 
+val send_ch
+  (#a:EverCrypt.Hash.alg)
+  (stt: transcript_state a)
+  (#n: Ghost.erased nat)
+  (t: T.g_transcript_n n { Ghost.reveal n < T.max_transcript_size - 1 })
+  (sto: send_state)
+  (m: T.hs_ch)
+: Stack (result (send_state & T.g_transcript_n n))
+  (requires (fun h ->
+    invariant sto h /\
+    T.invariant stt (Ghost.reveal t) h /\
+    B.loc_disjoint (footprint sto) (T.footprint stt) /\
+    T.Start? (Ghost.reveal t)
+  ))
+  (ensures (fun h res h' ->
+    B.modifies (footprint sto `B.loc_union` T.footprint stt) h h' /\
+    begin match res with
+    | Correct (sto', t') ->
+      invariant sto' h' /\
+      sto'.out_slice == sto.out_slice /\
+      sto'.out_pos >= sto.out_pos /\
+      T.invariant stt (Ghost.reveal t') h' /\
+      Ghost.reveal t' == T.ClientHello (T.Start?.retried (Ghost.reveal t)) (M_client_hello?._0 m)
+    | _ -> True
+    end
+  ))
+
+val send_hrr
+  (#a:EverCrypt.Hash.alg)
+  (stt: transcript_state a)
+  (#n: Ghost.erased nat)
+  (t: T.g_transcript_n n { Ghost.reveal n < T.max_transcript_size - 1 })
+  (sto: send_state)
+  (tag: T.any_hash_tag)
+  (hrr: T.hs_sh)
+: Stack (result (send_state & T.g_transcript_n n))
+  (requires (fun h ->
+    invariant sto h /\
+    T.invariant stt (Ghost.reveal t) h /\
+    B.loc_disjoint (footprint sto) (T.footprint stt) /\
+    T.is_hrr (M_server_hello?._0 hrr) /\
+    Ghost.reveal t == T.Start None
+  ))
+  (ensures (fun h res h' ->
+    B.modifies (footprint sto `B.loc_union` T.footprint stt) h h' /\
+    begin match res with
+    | Correct (sto', t') ->
+      invariant sto' h' /\
+      sto'.out_slice == sto.out_slice /\
+      sto'.out_pos >= sto.out_pos /\
+      T.invariant stt (Ghost.reveal t') h' /\
+      Ghost.reveal t' == T.Start (Some (tag, M_server_hello?._0 hrr))
+    | _ -> True
+    end
+  ))
+
 val send13
   (#a:EverCrypt.Hash.alg)
   (stt: transcript_state a)

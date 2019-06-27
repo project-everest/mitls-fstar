@@ -92,6 +92,48 @@ let tag #a stt transcript =
 /// Serializes and buffers a message to be sent, and extends the
 /// transcript digest with it.
 
+let send_ch
+  #a stt #_ t sto m
+= let h0 = get () in
+  let r = MITLS.Repr.Handshake.serialize sto.out_slice sto.out_pos m in
+  let h1 = get () in
+  T.frame_invariant stt (Ghost.reveal t) h0 h1 (B.loc_buffer sto.out_slice.LowParse.Low.Base.base);
+  match r with
+  | None ->
+    fatal Internal_error "output buffer overflow"
+  | Some r ->
+    let t' = HSL.Transcript.extend stt (T.LR_ClientHello r) t in
+    let b = MITLS.Repr.to_bytes r in
+    trace ("send "^hex_of_bytes b);
+    let sto = { sto with out_pos = r.MITLS.Repr.end_pos; outgoing = sto.outgoing @| b } in
+    correct (sto, t') // Ghost.hide (Ghost.reveal t'))
+
+#push-options "--z3rlimit 32"
+
+let send_hrr
+  #a stt #_ t sto tag hrr
+= let h0 = get () in
+  let r = MITLS.Repr.Handshake.serialize sto.out_slice sto.out_pos tag in
+  match r with
+  | None ->
+    fatal Internal_error "output buffer overflow for tag"
+  | Some r_tag ->
+    let r = MITLS.Repr.Handshake.serialize sto.out_slice r_tag.MITLS.Repr.end_pos hrr in
+    begin match r with
+    | None ->
+      fatal Internal_error "output_buffer_overflow for hrr"
+    | Some r_hrr ->
+      let h1 = get () in
+      T.frame_invariant stt (Ghost.reveal t) h0 h1 (B.loc_buffer sto.out_slice.LowParse.Low.Base.base);
+      let t' = HSL.Transcript.extend stt (T.LR_HRR r_tag r_hrr) t in
+      let b = MITLS.Repr.to_bytes r_tag @| MITLS.Repr.to_bytes r_hrr in
+      trace ("send "^hex_of_bytes b);
+      let sto = { sto with out_pos = r_hrr.MITLS.Repr.end_pos; outgoing = sto.outgoing @| b } in
+      correct (sto, t')
+    end
+
+#pop-options
+
 let send13
   #a stt #_ t sto m
 = let h0 = get () in
