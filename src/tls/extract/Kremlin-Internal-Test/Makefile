@@ -61,7 +61,7 @@ INCLUDE_DIRS 	= $(KREMLIN_HOME)/include include stub pki ffi .
 FILES = $(patsubst %.c,%,$(wildcard *.c)) \
   stub/mipki_wrapper stub/buffer_bytes stub/RegionAllocator
 
-CFLAGS := $(addprefix -I,$(INCLUDE_DIRS)) $(CFLAGS) -Wall -Werror \
+CFLAGS := $(addprefix -I,$(INCLUDE_DIRS)) $(CFLAGS) -Wall -Werror -Wno-deprecated-declarations \
   -Wno-unused-variable -Wno-parentheses -Wno-unknown-warning-option \
   -Wno-unused-but-set-variable -Wno-infinite-recursion -g -fwrapv -fstack-check \
   -D_BSD_SOURCE -D_DEFAULT_SOURCE -D__USE_MINGW_ANSI_STDIO \
