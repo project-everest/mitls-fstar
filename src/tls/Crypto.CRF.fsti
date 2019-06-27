@@ -24,7 +24,7 @@ module G = FStar.Ghost
 open Mem
 open FStar.HyperStack.ST
 
-inline_for_extraction
+inline_for_extraction noextract
 let model = Flags.model
 // not sure where to put the flags, or if we need a separate one
 

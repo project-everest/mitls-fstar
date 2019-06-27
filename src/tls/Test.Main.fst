@@ -44,7 +44,7 @@ let rng_initialization() = b2c (Random.init() <> 0ul)
 let cookie: tf = fun _ ->  b2c (TLS.Cookie.test())
 
 let main (): St C.exit_code =
-  ignore (FStar.Test.dummy ());
+  MITLS.Init.mitls_init ();
   iter [
     "RNG initialization", rng_initialization;
     "BufferBytes", BufferBytes.main;
@@ -60,4 +60,3 @@ let main (): St C.exit_code =
     (* ADD NEW TESTS HERE *)
   ];
   C.EXIT_SUCCESS
- 

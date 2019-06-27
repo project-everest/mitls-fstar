@@ -2369,7 +2369,11 @@ let server_hrr_verify offer mode hrr =
 //19-06-17 Verification of this function is particularly slow and brittle; what to do? 
 
 #reset-options "--using_facts_from '* -LowParse'"
+#restart-solver
 
+// 20190625 JP: Overflow error. Reducing rlimits and/or ifuel yields unknown instead of
+// error. Disabling until we switch to a version of Z3 with the fix.
+#push-options "--z3rlimit 300 --max_ifuel 8 --initial_ifuel 8 --admit_smt_queries true"
 let trace_server_ClientHello #region (ns: t region Server) (offer: HSM.clientHello) : HST.Stack unit (requires (fun _ -> True)) (ensures (fun h _ h' -> B.modifies B.loc_none h h')) =
   trace ("offered client extensions "^string_of_ches offer.CH.extensions);
   trace ("offered cipher suites "^string_of_ciphersuitenames offer.CH.cipher_suites);
@@ -2495,7 +2499,7 @@ let share_of_serverKeyShare (ks:CommonDH.serverKeyShare) : share =
 #restart-solver
 
 #reset-options "--using_facts_from '* -LowParse'"
-
+#set-options "--z3rlimit 100"
 private let keyShareEntry_of_ks (|g,gx|) : Parsers.ServerHelloExtension.serverHelloExtension_SHE_key_share = 
   let r = CommonDH.format #g gx in
   //19-06-17 push to CommonDH? 

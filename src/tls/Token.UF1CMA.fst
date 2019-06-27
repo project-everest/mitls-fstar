@@ -16,6 +16,7 @@ module H = Hashing.Spec
 // random token is just 1/#tokens. (Do we need to enforce a single
 // verification attempt?)
 
+inline_for_extraction noextract
 let ideal = Flags.ideal_HMAC
 // secret idealization flag for the UF1CMA assumption
 //TODO use a separate flag

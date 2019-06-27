@@ -13,6 +13,7 @@ module MDM = FStar.Monotonic.DependentMap
 
 #set-options "--initial_fuel 1 --max_fuel 1 --initial_ifuel 1 --max_ifuel 1"
 
+inline_for_extraction noextract
 let ideal = Flags.ideal_HMAC // secret idealization flag for the UFCMA assumption
 
 type safe (#ip:ipkg) (i:ip.t) = b2t ideal /\ ip.honest i
