@@ -83,6 +83,7 @@ all: libmitls.$(SO)
 -include $(addsuffix .d,$(FILES))
 
 libmitls.$(SO): $(addsuffix .o,$(FILES))
+	rm -rf $(EVERCRYPT_HOME)/../dist/compact/*.dll.a # newer dynamic link is not properly setup on mitls/master ... persist with static linking
 	$(CC) $^ -shared -o $@ $(LDOPTS) $(KREMLIN_HOME)/kremlib/dist/generic/libkremlib.a
 
 clean:

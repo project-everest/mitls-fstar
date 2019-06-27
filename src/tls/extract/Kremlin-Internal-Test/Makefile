@@ -87,6 +87,7 @@ LDOPTS += -L$(MITLS_HOME)/src/pki -lmipki $(KREMLIN_HOME)/kremlib/dist/generic/l
 -include $(addsuffix .d,$(FILES))
 
 test.exe: $(addsuffix .o,$(FILES))
+	rm -rf $(EVERCRYPT_HOME)/../dist/compact/*.dll.a # newer dynamic link is not properly setup on mitls/master ... persist with static linking
 	$(CC) $^ -o $@ $(LDOPTS)
 
 CERT_FILES=CAFile.pem server-ecdsa.crt server-ecdsa.key
