@@ -29,21 +29,21 @@ COPY / .
 WORKDIR ".."
 
 # Do some cleanup
-RUN Invoke-BashCmd rm -f build.sh
-RUN Invoke-BashCmd rm -f build_helper.sh
-RUN Invoke-BashCmd rm -f buildlogfile.txt
-RUN Invoke-BashCmd rm -f log_no_replay.html
-RUN Invoke-BashCmd rm -f log_worst.html
-RUN Invoke-BashCmd rm -f orange_status.txt
-RUN Invoke-BashCmd rm -f result.txt
-RUN Invoke-BashCmd rm -f status.txt
-RUN Invoke-BashCmd rm -f commitinfofilename.json
-
-RUN Invoke-BashCmd rm mitls-fstar/Dockerfile
-RUN Invoke-BashCmd rm mitls-fstar/build.sh
-RUN Invoke-BashCmd rm mitls-fstar/build_helper.sh
-RUN Invoke-BashCmd rm mitls-fstar/id_rsa
-RUN Invoke-BashCmd rm mitls-fstar/commitinfofilename.json
+RUN Invoke-BashCmd rm -f \
+  build.sh \
+  build_helper.sh \
+  buildlogfile.txt \
+  log_no_replay.html \
+  log_worst.html \
+  orange_status.txt \
+  result.txt \
+  status.txt \
+  commitinfofilename.json \
+  mitls-fstar/Dockerfile \
+  mitls-fstar/build.sh \
+  mitls-fstar/build_helper.sh \
+  mitls-fstar/id_rsa \
+  mitls-fstar/commitinfofilename.json
 
 COPY build.sh build.sh
 COPY build_helper.sh build_helper.sh
