@@ -83,10 +83,12 @@ type bytes = FStar.Seq.seq uint_8
 let hs_ch = ch:HSM.handshake{HSM.M_client_hello? ch}
 let hs_sh = sh:HSM.handshake{HSM.M_server_hello? sh}
 
-/// `is_hrr`: For now, we assume the existence of a pure function to
+/// `is_hrr`: a pure function to
 /// decide if a server-hello message is a hello-retry-request (hrr)
-// assume
-val is_hrr (sh:SH.serverHello) : bool
+/// TODO: it is the same as HandshakeMessages.is_hrr, so decide which one to keep
+inline_for_extraction
+let is_hrr (sh:SH.serverHello) : Tot bool =
+  SH.ServerHello_is_hrr_true? sh.SH.is_hrr
 
 let is_any_hash_tag (h: HSM.handshake) : GTot Type0 =
   HSM.M_message_hash? h /\ (FStar.Bytes.length (HSM.M_message_hash?._0 h) <= 64)
@@ -476,7 +478,7 @@ val frame_invariant (#a:_) (s:state a) (t: transcript_t) (h0 h1:HS.mem) (l:B.loc
 ///
 ///   -- The transcript's initial state is empty
 val create (r:Mem.rgn) (a:HashDef.hash_alg)
-  : ST (state a & Ghost.erased transcript_t)
+  : ST (state a & g_transcript_n (Ghost.hide 0))
        (requires fun _ -> B.(loc_disjoint (loc_region_only true r) (loc_region_only true Mem.tls_tables_region)))
        (ensures fun h0 (s, tx) h1 ->
          let tx = Ghost.reveal tx in

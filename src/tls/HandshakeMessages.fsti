@@ -50,6 +50,9 @@ type eoed = unit
 type sh = realServerHello
 type hrr = helloRetryRequest
 
+/// TODO: this is the same as HSL.Transcript.is_hrr; decide which one to keep.
+/// In fact, I claim that we should redefine `hrr` above as (sh: serverHello { is_hrr sh })
+/// and so get rid of the conversion functions below.
 let is_hrr (m:serverHello) =
   match m.is_hrr with
   | ServerHello_is_hrr_false _ -> false

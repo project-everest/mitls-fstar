@@ -1,6 +1,7 @@
 module Test.TLS.Send
 
 module HS = FStar.HyperStack
+module HM = HandshakeMessages
 module Nego = Negotiation
 module HST = FStar.HyperStack.ST
 module TS = TLS.Handshake.Send
@@ -10,6 +11,8 @@ module B = LowStar.Buffer
 module HSM = Parsers.Handshake
 module HSM12 = Parsers.Handshake12
 module HSM13 = Parsers.Handshake13
+module CH = Parsers.ClientHello
+module CHE = Parsers.ClientHelloExtension
 
 
 open FStar.Integers
@@ -132,7 +135,7 @@ val server_ClientHello:
   #region: _ -> ns: Nego.t region TLSConstants.Server ->
   out: TS.send_state ->
   T.hs_ch -> 
-  ST (result handshake)
+  ST (result (handshake & Nego.serverMode))
   (requires fun h0 -> 
     Mem.is_hs_rgn region /\
     Nego.inv ns h0 /\
@@ -142,7 +145,7 @@ val server_ClientHello:
   (ensures fun h0 r h1 -> 
     B.modifies (Nego.footprint ns `B.loc_union` TS.footprint out `B.loc_union` B.loc_region_only true Mem.tls_tables_region) h0 h1 /\
     begin match r with
-    | Correct hs ->
+    | Correct (hs, sm) ->
       invariant hs h1 /\
       hs.region == region /\
       hs.r == TLSConstants.Server /\
@@ -176,7 +179,9 @@ assume val serverMode_hashAlg: Nego.serverMode -> Tot Hashing.Spec.alg
     )
 *)
 
-#push-options "--z3rlimit 300 --max_ifuel 8 --initial_ifuel 8"
+#restart-solver
+
+#push-options "--z3rlimit 300 --max_ifuel 16 --initial_ifuel 16"
 
 let server_ClientHello #region ns out offer =
 // TODO: match !ns.Nego.state with  | Nego.S_HRR o1 hrr -> server_ClientHello2_stateful ns o1 hrr offer
@@ -185,39 +190,76 @@ let server_ClientHello #region ns out offer =
     match sm with
     | Error z -> Error z
     | Correct r ->
+      let alg = serverMode_hashAlg r in
+      let hash_len = Hacl.Hash.Definitions.hash_len alg in
       let h = get() in
-      // TRANSCRIPT:
-      let tr = T.create region (serverMode_hashAlg r) in
+      let (ts, tr) = T.create region alg in
       let stateless_retry = 
         match find_cookie (HSM.M_client_hello?._0 offer) with
-        | None -> None 
+        | None -> Correct (tr, None)
         | Some c ->
           // stateless HRR.
           match TLS.Cookie.decrypt c with
-          | Error _ -> 
+          | Error z -> 
             // This connection is doomed: we could instead return a fatal error. 
-            None
-            
+            Error z
           | Correct (digest, extra, hrr) ->
             // TODO check consistency of sm with hrr's cs and group;
             // this is required to enforce the earlier server policy.
-
-            // Lowering: we can use the output buffer as scratch space
+            // Lowering: we use the output buffer as scratch space
             // for outputting the digest (of known size) and the hrr
             // (possibly quite large), since we only need them for
             // computing the transcript digest.
-            //
-            // Alternatively, we could pass the hrr in two chunks: the
-            // (small, reconstructed) hrr prefix, and the (received)
-            // encrypted cookie.
-            //
-            // TRANSCRIPT 
-            // extend_stateless hrr digest hrr //{ Start(None) --HRR digest hrr--> Start(Some(digest,hrr)) }
-            // using sm's hash algorithm. 
-            Some extra // to be passed to the server nego callback
-        in 
-        fatal Handshake_failure "negotiation failed after a retry"
-      
+            begin match TS.send_hrr ts tr out (HSM.M_message_hash digest) (HSM.M_server_hello (HM.serverHello_of_hrr hrr)) with
+            | Error z ->
+              // serialization failure
+              Error z
+            | Correct (_, tr1) ->
+              // we drop the updated output state, so that we can overwrite
+              // the hrr in the remainder of the function
+              Correct (tr1, Some extra) // to be passed to the server nego callback
+            end
+      in
+      begin match stateless_retry with
+      | Error z -> Error z
+      | Correct (tr1, stateless_retry) ->
+        begin match TS.send_ch ts tr1 out offer with
+        | Error z -> Error z
+        | Correct (_, tr2) ->
+          begin match r with
+          | Nego.ServerRetry hrr ->
+            if Some? stateless_retry then
+              fatal Handshake_failure "negotiation failed after a retry"
+            else begin
+              // Internal HRR caused by group negotiation
+              // We do not invoke the server nego callback in this case
+              // record the initial offer and return the HRR to HS
+              // TODO: allocate on the stack or use out as scratch space for digest?
+              push_frame ();
+              let bmdigest = B.alloca 0uy 64ul in // constant size large enough to contain any digest
+              let bdigest = B.sub bmdigest 0ul hash_len in
+              let ha = TLS.Cookie.hrr_ha hrr in
+              // TODO create Transcript in state Start(Some(digest0,hrr)) to compute this digest
+              // using ha instead of alg; what is digest0?
+              T.extract_hash ts bdigest tr2;
+              // TODO: lower
+              let digest = FStar.Bytes.of_buffer hash_len bdigest in
+              assume (TLS.Cookie.hrr_len hrr <= 16);
+              let hrr = TLS.Cookie.append digest FStar.Bytes.empty_bytes hrr in
+              ns.Nego.state := Nego.S_HRR (HSM.M_client_hello?._0 offer) hrr;
+              let st = HS TLSConstants.Server ns ts tr2 out in
+              pop_frame ();
+              Correct (st, r)
+            end
+          | Nego.ServerMode m cert _ ->
+            let nego_cb = ns.Nego.cfg.TLSConstants.nego_callback in
+            let exts = List.Tot.filter CHE.CHE_Unknown_extensionType? (HSM.M_client_hello?._0 offer).CH.extensions in
+            fatal Handshake_failure "negotiation failed after a retry"
+          end
+        end
+      end
+    
+
 (*
 
       // let tr = Transcript.create (ha_of_sm sm) in // { state(tr) == Start(None) }
