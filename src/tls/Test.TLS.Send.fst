@@ -13,6 +13,7 @@ module HSM12 = Parsers.Handshake12
 module HSM13 = Parsers.Handshake13
 module CH = Parsers.ClientHello
 module CHE = Parsers.ClientHelloExtension
+module CHEs = Parsers.ClientHelloExtensions
 
 
 open FStar.Integers
@@ -253,67 +254,39 @@ let server_ClientHello #region ns out offer =
             end
           | Nego.ServerMode m cert _ ->
             let nego_cb = ns.Nego.cfg.TLSConstants.nego_callback in
-            let exts = List.Tot.filter CHE.CHE_Unknown_extensionType? (HSM.M_client_hello?._0 offer).CH.extensions in
-            fatal Handshake_failure "negotiation failed after a retry"
+            let exts0 = (HSM.M_client_hello?._0 offer).CH.extensions in
+            let exts : list CHE.clientHelloExtension = List.Tot.filter CHE.CHE_Unknown_extensionType? exts0 in
+            LowParseWrappers.list_bytesize_filter CHE.clientHelloExtension_bytesize CHEs.clientHelloExtensions_list_bytesize () (fun _ _ -> ()) CHE.CHE_Unknown_extensionType? exts0;
+            let exts_bytes = CHEs.clientHelloExtensions_serializer32 exts in
+            let r = nego_cb.TLS.Callbacks.negotiate nego_cb.TLS.Callbacks.nego_context m.Nego.n_protocol_version exts_bytes stateless_retry in
+            begin match r with
+            | TLS.Callbacks.Nego_abort ->
+              fatal Handshake_failure "application requested to abort the handshake."
+            | TLS.Callbacks.Nego_retry filling ->
+              assume(CipherSuite13? m.Nego.n_cipher_suite); // from ServerMode 
+              let hrr = TLS.Cookie.hrr0 (HSM.M_client_hello?._0 offer).CH.session_id m.Nego.n_cipher_suite in
+              // TODO: ha vs. alg
+              let ha = TLS.Cookie.hrr_ha hrr in
+              // TODO: allocate on the stack or use out as scratch space for digest?
+              push_frame ();
+              let bmdigest = B.alloca 0uy 64ul in // constant size large enough to contain any digest
+              let bdigest = B.sub bmdigest 0ul hash_len in
+              T.extract_hash ts bdigest tr2;
+              // TODO: lower
+              let digest = FStar.Bytes.of_buffer hash_len bdigest in
+              assume (TLS.Cookie.hrr_len hrr <= 16);
+              let hrr = TLS.Cookie.append digest FStar.Bytes.empty_bytes hrr in
+              ns.Nego.state := Nego.S_HRR (HSM.M_client_hello?._0 offer) hrr;
+              let st = HS TLSConstants.Server ns ts tr2 out in
+              pop_frame ();
+              Correct (st, Nego.ServerRetry hrr)
+            | TLS.Callbacks.Nego_accept sexts ->
+              ns.Nego.state := Nego.S_ClientHello m cert;
+              let st = HS TLSConstants.Server ns ts tr2 out in
+              Correct (st, Nego.ServerMode m cert sexts)
+            end
           end
         end
       end
-    
 
-(*
-
-      // let tr = Transcript.create (ha_of_sm sm) in // { state(tr) == Start(None) }
-      
-
-      // TRANSCRIPT 
-      // extend_ch offer //{ Start(r) --> ClientHello(r,offer) }
-      let h = get() in assert (inv ns h);
-      match r with 
-      | ServerRetry hrr -> (
-        if Some? stateless_retry then 
-          fatal Handshake_failure "negotiation failed after a retry"
-        else (
-          // Internal HRR caused by group negotiation
-          // We do not invoke the server nego callback in this case
-          // record the initial offer and return the HRR to HS
-          trace ("no common group, sending a retry request...");
-          // TODO create Transcript in state Start(Some(digest,hrr)) to compute this digest
-          let ha = TLS.Cookie.hrr_ha hrr in 
-          let digest = HandshakeLog.hash_tag #ha log0 in 
-          let hrr = TLS.Cookie.append digest empty_bytes hrr in
-          ns.state := S_HRR offer hrr;
-          sm ))
-
-      | ServerMode m cert _ -> (
-        let nego_cb = ns.cfg.nego_callback in
-        let exts = List.Tot.filter CHE_Unknown_extensionType? offer.CH.extensions in
-        // 19-06-16 recurring problem with list filtering; might disappear by lowering, or we could use the list serializer.
-        assume(clientHelloExtensions_list_bytesize exts <= 65535);
-        let exts_bytes = clientHelloExtensions_serializer32 exts in
-        trace ("Negotiation callback to handle extra extensions and query for stateless retry.");
-        trace ("Application data in cookie: "^(match stateless_retry with | Some c -> hex_of_bytes c | _ -> "none"));
-        let r = nego_cb.negotiate nego_cb.nego_context m.n_protocol_version exts_bytes stateless_retry in
-        let h = get() in assert (inv ns h);
-        match r with 
-        | Nego_abort -> (
-          trace ("Application requested to abort the handshake.");
-          fatal Handshake_failure "application requested to abort the handshake.")
-
-        | Nego_retry filling -> (
-          trace ("Application requested to retry the handshake.");
-          assume(CipherSuite13? m.n_cipher_suite); // from ServerMode 
-          let hrr = TLS.Cookie.hrr0 offer.CH.session_id m.n_cipher_suite in
-          let ha = TLS.Cookie.hrr_ha hrr in 
-          let digest = HandshakeLog.hash_tag #ha log0 in
-          let hrr = TLS.Cookie.append digest filling hrr in
-          ns.state := S_HRR offer hrr;
-          Correct (ServerRetry hrr))
-        
-        | Nego_accept sexts -> (
-          trace ("Application accepted "^
-            string_of_pv m.n_protocol_version^" "^
-            string_of_ciphersuite m.n_cipher_suite);
-          ns.state := S_ClientHello m cert;
-          Correct (ServerMode m cert sexts)))) in
-  r
 #pop-options
