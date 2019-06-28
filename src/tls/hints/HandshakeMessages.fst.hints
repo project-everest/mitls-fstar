@@ -1,1 +1,79 @@
-[ "∂zb∆vVD‰Î*÷ìïÁ÷}", [] ]
+[
+  "t\u0005.If7ç±∆äs\u001e£Ó∏",
+  [
+    [
+      "HandshakeMessages.is_hrr",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_Parsers.ServerHello_is_hrr.ServerHello_is_hrr_false",
+        "disc_equation_Parsers.ServerHello_is_hrr.ServerHello_is_hrr_true",
+        "fuel_guarded_inversion_Parsers.ServerHello_is_hrr.serverHello_is_hrr",
+        "proj_equation_Parsers.ServerHello.MkserverHello_is_hrr",
+        "typing_Parsers.ServerHello.__proj__MkserverHello__item__is_hrr"
+      ],
+      0,
+      "7dc79d01e7b87ae612f7035c771c22be"
+    ],
+    [
+      "HandshakeMessages.get_hrr",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "bool_inversion",
+        "constructor_distinct_Tm_unit",
+        "disc_equation_Parsers.ServerHello_is_hrr.ServerHello_is_hrr_true",
+        "equation_HandshakeMessages.is_hrr",
+        "refinement_interpretation_Tm_refine_6e57058ef569de90ae614e17eb80fb92",
+        "typing_HandshakeMessages.is_hrr"
+      ],
+      0,
+      "39afb9276b164643fa6a469cb8c60551"
+    ],
+    [
+      "HandshakeMessages.get_sh",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "bool_inversion",
+        "constructor_distinct_Tm_unit",
+        "disc_equation_Parsers.ServerHello_is_hrr.ServerHello_is_hrr_false",
+        "equation_HandshakeMessages.is_hrr",
+        "refinement_interpretation_Tm_refine_6ef02521f154ee328142906ece7faaee",
+        "typing_HandshakeMessages.is_hrr"
+      ],
+      0,
+      "58ce088f158246f1873524f1f223de3d"
+    ],
+    [
+      "HandshakeMessages.serverHello_of_sh",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "equation_FStar.Bytes.lbytes",
+        "haseqTm_refine_71ea40360194fe02ee1272538c9cacbc",
+        "refinement_interpretation_Tm_refine_414d0a9f578ab0048252f8c8f552b99f",
+        "typing_FStar.Bytes.bytes"
+      ],
+      0,
+      "c35edb627546171517c20896c6f9caff"
+    ],
+    [
+      "HandshakeMessages.serverHello_of_sh",
+      2,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "refinement_interpretation_Tm_refine_69784ae30953d51ab26128f7f80bf74b"
+      ],
+      0,
+      "957a87cbc5a3591af362bcb0677f271d"
+    ]
+  ]
+]

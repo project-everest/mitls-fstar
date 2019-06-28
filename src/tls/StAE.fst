@@ -147,6 +147,7 @@ let ideal_log (r:rgn) (i:id) =
     AEAD_GCM.ideal_log r i
   else False
 
+noextract
 let ilog (#i:id) (#rw:rw) (s:state i rw{authId i}): Tot (ideal_log (log_region s) i) =
   match s with
   | Stream u s -> Stream.ilog (Stream.State?.log s)

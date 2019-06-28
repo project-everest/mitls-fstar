@@ -21,27 +21,23 @@
         "equation_LowParse.Spec.Base.serialize",
         "equation_LowParse.Spec.Base.strong_parser_kind",
         "equation_LowParse.Spec.Base.total_constant_size_parser_kind",
-        "equation_LowParse.Spec.Combinators.and_then_kind",
         "equation_LowParse.Spec.Int.parse_u8_kind",
         "equation_LowParse.Spec.Sum.make_sum",
         "equation_LowParse.Spec.Sum.make_sum_",
-        "equation_LowParse.Spec.Sum.parse_sum_kind",
         "equation_LowParse.Spec.Sum.sum_enum",
         "equation_LowParse.Spec.Sum.sum_key_type",
         "equation_LowParse.Spec.Sum.sum_repr_type",
         "equation_LowParse.Spec.Sum.sum_tag_of_data",
         "equation_LowParse.Spec.Sum.synth_sum_case_recip",
         "equation_Parsers.Handshake.handshake_clens__client_hello",
-        "equation_Parsers.Handshake.handshake_parser_kind",
         "equation_Parsers.Handshake.handshake_serializer",
         "equation_Parsers.Handshake.handshake_sum",
         "equation_Parsers.Handshake.key_of_handshake",
         "equation_Parsers.Handshake.serialize_handshake_cases",
         "equation_Parsers.Handshake.synth_handshake_cases_recip",
         "equation_Parsers.HandshakeType.handshakeType_enum",
-        "equation_Parsers.HandshakeType.handshakeType_repr_serializer",
+        "equation_Parsers.HandshakeType.handshakeType_repr_parser",
         "equation_Parsers.HandshakeType.handshakeType_serializer",
-        "equation_Parsers.HandshakeType.parse_handshakeType_key",
         "equation_Parsers.HandshakeType.serialize_handshakeType_key",
         "equation_Parsers.HandshakeType.synth_handshakeType_inv",
         "equation_Parsers.Handshake_m_client_hello.handshake_m_client_hello",
@@ -68,7 +64,7 @@
         "unit_inversion"
       ],
       0,
-      "5c68d04a44e6ff6ea52d2ea436aa2e9f"
+      "f53fb40d8dd3300871f44da04d41d14a"
     ]
   ]
 ]

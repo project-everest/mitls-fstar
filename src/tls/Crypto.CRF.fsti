@@ -24,7 +24,7 @@ module G = FStar.Ghost
 open Mem
 open FStar.HyperStack.ST
 
-inline_for_extraction
+inline_for_extraction noextract
 let model = Flags.model
 // not sure where to put the flags, or if we need a separate one
 
@@ -79,7 +79,7 @@ val invariant_loc_in_footprint
   (m: HS.mem)
 : Lemma
   (requires (invariant m s))
-  (ensures (loc_in (footprint m s) m))
+  (ensures (B.loc_in (footprint m s) m))
   [SMTPat (invariant m s)]
 
 val hashed: #a:alg -> HS.mem -> state a -> GTot bytes

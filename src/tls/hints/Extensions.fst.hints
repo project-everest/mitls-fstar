@@ -1,5 +1,5 @@
 [
-  "âõ!ù¶b⁄Q85ûß–\u0019†!",
+  "îè\u001d\u000eµ©I‰l\u001f˚|:=‰Ê",
   [
     [
       "Extensions.clientHelloExtension_of_tagged_unknown_extension",
@@ -37,10 +37,51 @@
         "disc_equation_Parsers.TaggedUnknownExtension.Payload_Unknown_extensionType",
         "equation_Prims.l_False", "equation_Prims.squash", "false_interp",
         "fuel_guarded_inversion_Parsers.TaggedUnknownExtension.taggedUnknownExtension",
-        "refinement_interpretation_Tm_refine_8d65e998a07dd53ec478e27017d9dba5"
+        "refinement_interpretation_Tm_refine_2de20c066034c13bf76e9c0b94f4806c"
       ],
       0,
-      "fe4f093b4ca796a51f628cc338a00c89"
+      "b84d2b9fcc2c797684c5e5ac73cc03e3"
+    ],
+    [
+      "Extensions.encryptedExtension_of_tagged_unknown_extension",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "data_elim_Parsers.TaggedUnknownExtension.Payload_application_layer_protocol_negotiation",
+        "data_elim_Parsers.TaggedUnknownExtension.Payload_certificate_authorities",
+        "data_elim_Parsers.TaggedUnknownExtension.Payload_client_certificate_type",
+        "data_elim_Parsers.TaggedUnknownExtension.Payload_cookie",
+        "data_elim_Parsers.TaggedUnknownExtension.Payload_early_data",
+        "data_elim_Parsers.TaggedUnknownExtension.Payload_ec_point_formats",
+        "data_elim_Parsers.TaggedUnknownExtension.Payload_encrypt_then_mac",
+        "data_elim_Parsers.TaggedUnknownExtension.Payload_extended_master_secret",
+        "data_elim_Parsers.TaggedUnknownExtension.Payload_heartbeat",
+        "data_elim_Parsers.TaggedUnknownExtension.Payload_key_share",
+        "data_elim_Parsers.TaggedUnknownExtension.Payload_max_fragment_length",
+        "data_elim_Parsers.TaggedUnknownExtension.Payload_oid_filters",
+        "data_elim_Parsers.TaggedUnknownExtension.Payload_padding",
+        "data_elim_Parsers.TaggedUnknownExtension.Payload_post_handshake_auth",
+        "data_elim_Parsers.TaggedUnknownExtension.Payload_pre_shared_key",
+        "data_elim_Parsers.TaggedUnknownExtension.Payload_psk_key_exchange_modes",
+        "data_elim_Parsers.TaggedUnknownExtension.Payload_server_certificate_type",
+        "data_elim_Parsers.TaggedUnknownExtension.Payload_server_name",
+        "data_elim_Parsers.TaggedUnknownExtension.Payload_session_ticket",
+        "data_elim_Parsers.TaggedUnknownExtension.Payload_signature_algorithms",
+        "data_elim_Parsers.TaggedUnknownExtension.Payload_signature_algorithms_cert",
+        "data_elim_Parsers.TaggedUnknownExtension.Payload_signed_certificate_timestamp",
+        "data_elim_Parsers.TaggedUnknownExtension.Payload_status_request",
+        "data_elim_Parsers.TaggedUnknownExtension.Payload_supported_groups",
+        "data_elim_Parsers.TaggedUnknownExtension.Payload_supported_versions",
+        "data_elim_Parsers.TaggedUnknownExtension.Payload_use_srtp",
+        "disc_equation_Parsers.TaggedUnknownExtension.Payload_Unknown_extensionType",
+        "equation_Prims.l_False", "equation_Prims.squash", "false_interp",
+        "fuel_guarded_inversion_Parsers.TaggedUnknownExtension.taggedUnknownExtension",
+        "refinement_interpretation_Tm_refine_2de20c066034c13bf76e9c0b94f4806c"
+      ],
+      0,
+      "022be241b8deca04a4d11decf6756f81"
     ],
     [
       "Extensions.valid_clientHelloExtension_of_tagged_unknown_extension",
@@ -121,7 +162,6 @@
         "fuel_guarded_inversion_LowParse.Spec.Enum.maybe_enum_key",
         "fuel_guarded_inversion_Parsers.TaggedUnknownExtension.taggedUnknownExtension",
         "function_token_typing_LowParse.Spec.Sum.dsum_tag_of_data",
-        "function_token_typing_Parsers.TaggedUnknownExtension_payload_default.taggedUnknownExtension_payload_default",
         "kinding_LowParse.Spec.Enum.maybe_enum_key@tok",
         "lemma_LowParse.Low.Base.valid_pos_get_valid_pos",
         "projection_inverse_BoxBool_proj_0",
@@ -139,8 +179,10 @@
         "projection_inverse_LowParse.Spec.Sum.DSum_type_of_unknown_tag",
         "projection_inverse_Parsers.TaggedUnknownExtension.Payload_Unknown_extensionType_v",
         "projection_inverse_Parsers.TaggedUnknownExtension.Payload_Unknown_extensionType_x",
-        "refinement_interpretation_Tm_refine_8d65e998a07dd53ec478e27017d9dba5",
+        "refinement_interpretation_Tm_refine_1afc85baa7cde4c5ffc806e27db40aaa",
+        "refinement_interpretation_Tm_refine_2de20c066034c13bf76e9c0b94f4806c",
         "refinement_interpretation_Tm_refine_c16bc1b61f58b349bf6fc1c94dcaf83b",
+        "refinement_kinding_Tm_refine_11cc7f5656ce89136014ec18edef1a39",
         "token_correspondence_LowParse.Spec.Sum.make_dsum",
         "token_correspondence_LowParse.Spec.Sum.make_dsum_",
         "token_correspondence_LowParse.Spec.Sum.synth_dsum_case",
@@ -164,7 +206,7 @@
         "typing_Parsers.TaggedUnknownExtension_payload_default.taggedUnknownExtension_payload_default_parser_kind"
       ],
       0,
-      "72e3fb41876eb43f7543eae5d92e7713"
+      "0dd520ba31b1258180e2ca2f103afa13"
     ],
     [
       "Extensions.valid_list_clientHelloExtensions_of_tagged_unknown_extensions'",
@@ -173,10 +215,10 @@
       0,
       [
         "@MaxIFuel_assumption", "@query", "equation_Prims.squash",
-        "refinement_interpretation_Tm_refine_8d65e998a07dd53ec478e27017d9dba5"
+        "refinement_interpretation_Tm_refine_2de20c066034c13bf76e9c0b94f4806c"
       ],
       0,
-      "57d355d43eb750e5b1e76d3090bf407e"
+      "ee5bcd686ecd36a4b1431c5779811485"
     ],
     [
       "Extensions.valid_list_clientHelloExtensions_of_tagged_unknown_extensions'",
@@ -188,28 +230,31 @@
         "@fuel_correspondence_FStar.List.Tot.Base.map.fuel_instrumented",
         "@fuel_irrelevance_FStar.List.Tot.Base.map.fuel_instrumented",
         "@query",
-        "Extensions_interpretation_Tm_arrow_9828cb728668a3a7d1adec39110980b6",
-        "Prims_interpretation_Tm_arrow_9cb3c953faf527c316d427b2ce8bd81b",
+        "Extensions_interpretation_Tm_arrow_061f514a1ca07eb3f9fe251ec3abd6d7",
+        "FStar.FunctionalExtensionality_interpretation_Tm_arrow_6980332764c4493a7b0df5c02f7aefbe",
         "Prims_pretyping_ae567c2fb75be05905677af440075565",
         "assumption_FStar.UInt32.t__uu___haseq",
-        "binder_x_0c8c560ea1f64597ac6752d770b1c7b5_0",
-        "binder_x_3cfe4f5782784c1de200aa5f421ffb64_4",
-        "binder_x_3cfe4f5782784c1de200aa5f421ffb64_5",
-        "binder_x_c8cebb0eb7b6c3d1b0b7047158bf3ea1_1",
-        "binder_x_c8cebb0eb7b6c3d1b0b7047158bf3ea1_2",
-        "binder_x_e78491f7df53ba08a5c0fd6fde2e2968_3", "bool_inversion",
+        "binder_x_041e3a67a2d2b51fd702f1f88cfc3b44_4",
+        "binder_x_041e3a67a2d2b51fd702f1f88cfc3b44_5",
+        "binder_x_7c0ec7ad67b8f3b5f3390c5b8c276960_3",
+        "binder_x_ed25b04ac1a3660bf4cdc8ae577888d8_0",
+        "binder_x_fc6de19b11238bce44fc4e0f86446161_1",
+        "binder_x_fc6de19b11238bce44fc4e0f86446161_2", "bool_inversion",
         "constructor_distinct_Prims.Cons", "constructor_distinct_Prims.Nil",
         "equality_tok_LowParse.Spec.Sum.DSum@tok",
         "equality_tok_Prims.LexTop@tok",
-        "equation_Extensions.clientHelloExtensions_of_tagged_unknown_extensions",
+        "equation_Extensions.clientHelloExtensions_of_unknownExtensions_list",
+        "equation_FStar.Monotonic.HyperHeap.hmap",
+        "equation_FStar.Monotonic.HyperStack.is_tip",
+        "equation_FStar.Monotonic.HyperStack.is_wf_with_ctr_and_tip",
+        "equation_FStar.Monotonic.HyperStack.mem",
         "equation_LowParse.Low.Base.valid_content",
         "equation_LowParse.Low.Base.valid_content_pos",
         "equation_LowParse.Low.Base.valid_pos",
         "equation_LowParse.Spec.Base.strong_parser_kind",
         "equation_LowParse.Spec.Sum.dsum_type",
         "equation_LowParse.Spec.Sum.make_dsum",
-        "equation_LowParse.Spec.Sum.make_dsum_", "equation_Mem.is_tls_rgn",
-        "equation_Mem.rgn", "equation_Mem.tls_rgn",
+        "equation_LowParse.Spec.Sum.make_dsum_",
         "equation_Parsers.ClientHelloExtension.clientHelloExtension_parser",
         "equation_Parsers.ClientHelloExtension.clientHelloExtension_parser_kind",
         "equation_Parsers.ExtensionType.extensionType_enum",
@@ -221,8 +266,10 @@
         "equation_with_fuel_FStar.List.Tot.Base.map.fuel_instrumented",
         "fuel_guarded_inversion_LowParse.Slice.slice",
         "function_token_typing_Extensions.clientHelloExtension_of_tagged_unknown_extension",
+        "function_token_typing_FStar.Monotonic.Heap.heap",
         "function_token_typing_Prims.__cache_version_number__", "int_typing",
         "kinding_Parsers.ClientHelloExtension.clientHelloExtension@tok",
+        "lemma_FStar.Map.lemma_ContainsDom",
         "lemma_LowParse.Low.Base.content_length_post",
         "lemma_LowParse.Low.Base.get_valid_pos_post",
         "lemma_LowParse.Low.Base.valid_list_elim",
@@ -237,15 +284,16 @@
         "projection_inverse_Prims.Cons_a",
         "projection_inverse_Prims.Cons_hd",
         "projection_inverse_Prims.Cons_tl", "projection_inverse_Prims.Nil_a",
-        "refinement_interpretation_Tm_refine_8d65e998a07dd53ec478e27017d9dba5",
+        "refinement_interpretation_Tm_refine_05e15190c946858f68c69156f585f95a",
+        "refinement_interpretation_Tm_refine_2de20c066034c13bf76e9c0b94f4806c",
         "refinement_interpretation_Tm_refine_a3ac6b29f87fe50a32f565e9fe1d0950",
-        "refinement_interpretation_Tm_refine_b5163a5c7eb2f4891aa85b6bd19b6e5e",
-        "refinement_interpretation_Tm_refine_c358ce785c6b462b7618aa4f08d5c31e",
         "token_correspondence_LowParse.Spec.Sum.make_dsum",
         "token_correspondence_LowParse.Spec.Sum.make_dsum_",
+        "typing_FStar.Map.contains", "typing_FStar.Monotonic.HyperHeap.rid",
+        "typing_FStar.Monotonic.HyperStack.get_hmap",
+        "typing_FStar.Monotonic.HyperStack.get_tip",
         "typing_LowParse.Low.Base.contents_list",
-        "typing_LowParse.Spec.Sum.dsum_type", "typing_Mem.is_tls_rgn",
-        "typing_Mem.tls_region",
+        "typing_LowParse.Spec.Sum.dsum_type",
         "typing_Parsers.ClientHelloExtension.clientHelloExtension_parser",
         "typing_Parsers.TaggedUnknownExtension.taggedUnknownExtension_parser",
         "typing_Parsers.TaggedUnknownExtension.taggedUnknownExtension_parser_kind",
@@ -253,7 +301,7 @@
         "well-founded-ordering-on-nat"
       ],
       0,
-      "98d433f01e17b016f40dd06b5fcc2271"
+      "2aae221d4b037faf1a89ddf1ecdd1991"
     ],
     [
       "Extensions.valid_list_clientHelloExtensions_of_tagged_unknown_extensions",
@@ -262,10 +310,39 @@
       1,
       [
         "@MaxIFuel_assumption", "@query", "equation_Prims.squash",
-        "refinement_interpretation_Tm_refine_8d65e998a07dd53ec478e27017d9dba5"
+        "refinement_interpretation_Tm_refine_2de20c066034c13bf76e9c0b94f4806c"
       ],
       0,
-      "54c6e1a2867950bef47c1df3dea6cbc5"
+      "c9f529317bda8813d3be24cacd7da552"
+    ],
+    [
+      "Extensions.bindersLen",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption",
+        "@fuel_correspondence_FStar.List.Tot.Base.find.fuel_instrumented",
+        "@query",
+        "FStar.List.Tot.Base_interpretation_Tm_arrow_84543425b818e2d10a976186b8e8c250",
+        "Parsers.ClientHelloExtension_interpretation_Tm_arrow_562ea3a3fd4c831177caf72e7918061d",
+        "data_elim_FStar.Pervasives.Native.Some",
+        "disc_equation_FStar.Pervasives.Native.None",
+        "disc_equation_FStar.Pervasives.Native.Some",
+        "disc_equation_Parsers.ClientHelloExtension.CHE_pre_shared_key",
+        "equation_Parsers.ClientHelloExtensions.clientHelloExtensions",
+        "fuel_guarded_inversion_FStar.Pervasives.Native.option",
+        "function_token_typing_Parsers.ClientHelloExtension.uu___is_CHE_pre_shared_key",
+        "kinding_Parsers.ClientHelloExtension.clientHelloExtension@tok",
+        "proj_equation_FStar.Pervasives.Native.Some_v",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Tm_refine_2bae5c3803c6c608e1680d3a46547c16",
+        "refinement_interpretation_Tm_refine_3b1cb9ec3355fed185c658f53954b3fa",
+        "token_correspondence_Parsers.ClientHelloExtension.uu___is_CHE_pre_shared_key",
+        "typing_FStar.List.Tot.Base.find"
+      ],
+      0,
+      "2def8a048a846e261447b3c754ba0c0c"
     ]
   ]
 ]

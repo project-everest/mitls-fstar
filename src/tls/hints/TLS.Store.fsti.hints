@@ -1,0 +1,62 @@
+[
+  "•ÁVº\u001eu\u001dá0í–9i\u0014<6",
+  [
+    [
+      "TLS.Store.default_alg",
+      1,
+      2,
+      1,
+      [
+        "@query", "constructor_distinct_FStar.Integers.W63",
+        "constructor_distinct_FStar.Integers.W64",
+        "constructor_distinct_FStar.Integers.W8",
+        "constructor_distinct_Spec.AEAD.AES256_GCM",
+        "equality_tok_FStar.Integers.W63@tok",
+        "equality_tok_FStar.Integers.W64@tok",
+        "equality_tok_FStar.Integers.W8@tok",
+        "equality_tok_Spec.AEAD.AES256_GCM@tok",
+        "equation_Spec.AEAD.iv_length", "equation_Spec.AEAD.tag_length",
+        "projection_inverse_FStar.Integers.Signed__0",
+        "projection_inverse_FStar.Integers.Unsigned__0"
+      ],
+      0,
+      "723067adf3338f7e96e5f82974c0dc41"
+    ],
+    [
+      "TLS.Store.reset",
+      1,
+      2,
+      1,
+      [ "@query", "assumption_EverCrypt.Error.error_code__uu___haseq" ],
+      0,
+      "f098f6fde3b5c4a8cb9621a6317aeaee"
+    ],
+    [
+      "TLS.Store.set_key",
+      1,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "4684f163a87c585f7648147eb2ae66d0"
+    ],
+    [
+      "TLS.Store.encrypt",
+      1,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "1f3eb2afc3e30cc161ff284307e75660"
+    ],
+    [
+      "TLS.Store.decrypt",
+      1,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "bad2634a8f87bf12044d2f6122beba1c"
+    ]
+  ]
+]

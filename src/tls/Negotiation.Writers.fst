@@ -499,7 +499,7 @@ let write_constr_clientHelloExtension_CHE_early_data
       end
   )
 
-#push-options "--z3rlimit 128 --query_stats --print_z3_statistics --max_ifuel 8 --initial_ifuel 8"
+#push-options "--z3rlimit 256 --query_stats --print_z3_statistics --max_ifuel 8 --initial_ifuel 8"
 
 module L = FStar.List.Tot
 

@@ -1,5 +1,5 @@
 [
-  "ê¯2À'~jÒœšvX'J!û",
+  "|\r\"Â¿‹¦H’UÉ]ftnŠ",
   [
     [
       "Crypto.CRF.update_pre",
@@ -8,7 +8,7 @@
       0,
       [ "@query" ],
       0,
-      "e88508e4d29124fd6062c3807f761a47"
+      "fc97626868aa3389991b739ba47181db"
     ],
     [
       "Crypto.CRF.finish_st",
@@ -16,13 +16,11 @@
       0,
       0,
       [
-        "@MaxIFuel_assumption", "@query",
-        "equation_FStar.Monotonic.HyperStack.mem",
-        "lemma_Crypto.CRF.hash_fits",
-        "refinement_interpretation_Tm_refine_6e28d2705e3537b09f7bfe0cc3313f1e"
+        "@MaxIFuel_assumption", "@query", "lemma_Crypto.CRF.hash_fits",
+        "refinement_interpretation_Tm_refine_6812ea18be958b463bc9fc06e48f1acb"
       ],
       0,
-      "fe656ec903706c7afe6ed6b7c7130df1"
+      "84eb358d6af1a1e1838afd7f36097432"
     ]
   ]
 ]

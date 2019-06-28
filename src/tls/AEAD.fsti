@@ -66,8 +66,10 @@ val entry_injective (#i:I.id)
 
 val nonce_of_entry (#i:_) (e:entry i) : nonce i
 
+inline_for_extraction noextract
 let safeMac (i:I.id) = Flag.safeHS i && Flag.mac1 i
 
+inline_for_extraction noextract
 let safeId  (i:I.id) = Flag.safeId i
 
 val aead_state: I.id -> I.rw -> Type0

@@ -7,34 +7,27 @@
       1,
       1,
       [
-        "@MaxIFuel_assumption", "@query",
-        "Prims_pretyping_ae567c2fb75be05905677af440075565", "b2t_def",
+        "@MaxIFuel_assumption", "@query", "b2t_def",
         "equation_DataStream.fragment",
-        "equation_FStar.Pervasives.Native.fst",
-        "equation_FStar.Pervasives.Native.snd", "equation_FStar.UInt.fits",
+        "equation_FStar.Pervasives.Native.fst", "equation_FStar.UInt.fits",
         "equation_FStar.UInt.min_int", "equation_FStar.UInt.size",
         "equation_FStar.UInt.uint_t", "equation_Prims.nat",
         "equation_Range.fragment_range", "equation_Range.frange",
-        "equation_Range.range", "equation_Range.wider",
-        "equation_Range.within", "equation_StreamDeltas.id",
-        "equation_TLSConstants.max_TLSPlaintext_fragment_length",
-        "function_token_typing_Prims.__cache_version_number__",
-        "primitive_Prims.op_AmpAmp", "primitive_Prims.op_LessThanOrEqual",
+        "equation_Range.wider", "equation_Range.within",
+        "equation_StreamDeltas.id", "primitive_Prims.op_AmpAmp",
+        "primitive_Prims.op_LessThanOrEqual",
         "proj_equation_FStar.Pervasives.Native.Mktuple2__1",
-        "proj_equation_FStar.Pervasives.Native.Mktuple2__2",
         "projection_inverse_BoxBool_proj_0",
-        "projection_inverse_BoxInt_proj_0",
         "projection_inverse_FStar.Pervasives.Native.Mktuple2__1",
-        "projection_inverse_FStar.Pervasives.Native.Mktuple2__2",
+        "refinement_interpretation_Tm_refine_020c697cfdd7a8139572a965ec953131",
         "refinement_interpretation_Tm_refine_9f948bc3ea58283edd778ba9c9ec878b",
-        "refinement_interpretation_Tm_refine_a347709bfeba48709474ad26f4f6be87",
         "refinement_interpretation_Tm_refine_d8bdfb1b483f1471db6abe90c9377c69",
-        "refinement_interpretation_Tm_refine_e48af6218e3040b64df43b6a7c255461",
+        "refinement_interpretation_Tm_refine_f13070840248fced9d9d60d77bdae3ec",
         "typing_DataStream.ghost_repr", "typing_FStar.Bytes.len",
         "typing_FStar.UInt32.v"
       ],
       0,
-      "3bdf3a3abe08d69614e4935a8f1a3dd0"
+      "6822b6d64d154aa9156b2552e36b5a4d"
     ],
     [
       "StreamDeltas.stream_deltas_snoc",
@@ -46,7 +39,7 @@
         "equation_StreamDeltas.project_deltas"
       ],
       0,
-      "38f196c6a76c56afa9b88c01ac29e643"
+      "46d09de54e666b55b18479cc6f964e06"
     ],
     [
       "StreamDeltas.project_fragment_deltas",
@@ -55,7 +48,7 @@
       1,
       [ "@query" ],
       0,
-      "1c22391c2ba2609a426d8837a426e6a2"
+      "6add61ed8e17e502e3a4a520c83e1fa2"
     ],
     [
       "StreamDeltas.project_fragment_deltas",
@@ -76,7 +69,7 @@
         "typing_TLSInfo.safe_region", "typing_TLSInfo.uu___is_PlaintextID"
       ],
       0,
-      "41fe846382c34c47781e5df7b7e45bfb"
+      "f925edcc383cfb2112b8c554503384e2"
     ],
     [
       "StreamDeltas.stream_deltas_snoc2",
@@ -97,7 +90,7 @@
         "typing_TLSInfo.safe_region", "typing_TLSInfo.uu___is_PlaintextID"
       ],
       0,
-      "d9b7794a5a55fca13fc4c3f94595566e"
+      "361c20e5ead6ea0c69109997b7231f4d"
     ],
     [
       "StreamDeltas.encrypt",
@@ -106,7 +99,7 @@
       1,
       [ "@query" ],
       0,
-      "3c0c875862b084c9b17b7bba197c8105"
+      "7253f9522f294a71af3b96aca6e38c71"
     ],
     [
       "StreamDeltas.encrypt",
@@ -124,7 +117,7 @@
         "typing_TLSInfo.uu___is_PlaintextID"
       ],
       0,
-      "2f6782c7fac2b8b89ca29675cf7b6995"
+      "85820127f9f541a156bd78ceb9051ffe"
     ]
   ]
 ]

@@ -36,7 +36,9 @@ let alg (i:id) : HMAC.ha = match i with
 | HMAC_Binder i -> TLSInfo.binderId_hash i
 
 //assume
+inline_for_extraction noextract
 val authId: id -> Tot bool
+inline_for_extraction noextract
 let authId id = false // TODO: move to Flags
 
 type text = bytes
