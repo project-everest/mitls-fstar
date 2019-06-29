@@ -20,9 +20,11 @@ module U32 = FStar.UInt32
 type idealRaw = b2t Flags.flag_Raw
 type valid_len (ip:ipkg) = i:ip.t -> keylen -> Type
 
+noextract inline_for_extraction
 type info (#ip:ipkg) (lid:valid_len ip) (i:ip.t) =
   len:keylen{lid i len}
 
+noextract inline_for_extraction
 type raw (#ip:ipkg) (lid:valid_len ip) (i:regid ip) =
   b:B.bytes{let l = B.len b in
   0 < U32.v l /\ U32.v l <= 255 /\ lid i l}
@@ -36,13 +38,14 @@ let create_raw (#ip:ipkg) (lid:valid_len ip) (i:regid ip) (len:info lid i)
     fresh_loc M.loc_none h0 h1)
   = Random.sample32 len
 
+noextract
 let coerceT_raw (#ip:ipkg) (lid:valid_len ip)
   (i: regid ip{idealRaw ==> ~(ip.honest i)})
   (len:info lid i) (r:Bytes.lbytes32 len)
   : GTot (raw lid i) 
   = r
 
-inline_for_extraction
+noextract inline_for_extraction
 let coerce_raw (#ip: ipkg) (lid:valid_len ip)
   (i: regid ip{idealRaw ==> ~(ip.honest i)})
   (len: info lid i) (r: Bytes.lbytes32 len):
@@ -53,8 +56,7 @@ let coerce_raw (#ip: ipkg) (lid:valid_len ip)
     M.modifies M.loc_none h0 h1)
   = r
 
-noextract
-inline_for_extraction
+inline_for_extraction noextract
 let local_raw_pkg (#ip:ipkg) (lid:valid_len ip)
   : Pure (local_pkg ip)
   (requires True) (ensures fun p -> LocalPkg?.key p == raw lid)
@@ -72,7 +74,7 @@ let local_raw_pkg (#ip:ipkg) (lid:valid_len ip)
     (coerceT_raw lid)
     (coerce_raw lid)
 
-noextract inline_for_extraction
+inline_for_extraction noextract
 let rp (ip:ipkg) (lid:valid_len ip)
   : ST (pkg ip)
   (requires fun h0 -> True)
@@ -99,7 +101,6 @@ inline_for_extraction noextract
 private let id_len (i:id) (a:keylen) =
   if i > 0 && i < 32 then U32.v a == i else a == 32ul
 
-noextract
 let test() : ST unit
   (requires fun h0 -> True)
   (ensures fun h0 _ h1 -> True)
@@ -112,8 +113,12 @@ let test() : ST unit
   [@inline_let] let p = local_raw_pkg #ip id_len in
   let v0 = LocalPkg?.coerce p 12 kl k in
   print (Bytes.hex_of_bytes v0);
-  
-  let q = rp ip id_len in
+
+  let dt = DT.alloc p.key in
+  let h = get() in
+  [@inline_let] let q = memoization p dt in
+  DT.lemma_footprint_empty dt p.local_footprint h;
+  DT.lemma_forall_empty dt p.inv h;
   let v1 = Pkg?.coerce q 12 kl k in
   print (Bytes.hex_of_bytes v1);
   ()

@@ -1,5 +1,5 @@
 [
-  "W;˜wR9ß?\u0006bm£Lp\u0010¬",
+  "ÊtmÅòöðß©sxŽë®o\u0016",
   [
     [
       "TLSError.string_of_result",
@@ -16,7 +16,7 @@
         "typing_FStar.Error.uu___is_Correct"
       ],
       0,
-      "40e2512266e8e9993722ac9752e5c920"
+      "330017e9948a404d574588d42429bb8e"
     ],
     [
       "TLSError.resT",
@@ -30,7 +30,7 @@
         "refinement_interpretation_Tm_refine_beedc2a801d7d2c429f84212cb5b7279"
       ],
       0,
-      "94a993d156c827fd4381b8255d88b183"
+      "bafa408dcb0a922ab3f7b0b1bce508df"
     ],
     [
       "TLSError.mapResult",
@@ -47,7 +47,7 @@
         "typing_FStar.Error.uu___is_Error"
       ],
       0,
-      "5a760ad800ea92fd633b3746f1db1106"
+      "75c2efc751225c57e8b6d426d7d81b70"
     ],
     [
       "TLSError.bindResult",
@@ -64,7 +64,7 @@
         "typing_FStar.Error.uu___is_Error"
       ],
       0,
-      "a520afda5f999afc7d7de08c65303138"
+      "5cd342c16c32746b1906858675202921"
     ],
     [
       "TLSError.resultMap",
@@ -81,7 +81,7 @@
         "typing_FStar.Error.uu___is_Error"
       ],
       0,
-      "f255c4d07c4d4f57777bc5989f70f366"
+      "1381890e9422747a9ccf38119b90e8d3"
     ],
     [
       "TLSError.resultBind",
@@ -98,7 +98,7 @@
         "typing_FStar.Error.uu___is_Error"
       ],
       0,
-      "035d65582ce25e06de9bae72278b7727"
+      "f4d72e4e642ac9acb041b256707d0fa6"
     ],
     [
       "TLSError.option_of_result",
@@ -115,7 +115,24 @@
         "typing_FStar.Error.uu___is_Error"
       ],
       0,
-      "9d8b5b5f91fc71cffacd9c36cd6eb9e2"
+      "ababe12ca4c85ee5cd03125ef1dc4547"
+    ],
+    [
+      "TLSError.bind",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "bool_inversion",
+        "disc_equation_FStar.Error.Correct",
+        "disc_equation_FStar.Error.Error", "equation_TLSError.error",
+        "equation_TLSError.result", "function_token_typing_TLSError.error",
+        "lemma_FStar.Error.invertOptResult",
+        "typing_FStar.Error.uu___is_Correct",
+        "typing_FStar.Error.uu___is_Error"
+      ],
+      0,
+      "c51a2ecebffe958f0b931a5023e2fd37"
     ]
   ]
 ]

@@ -1,0 +1,974 @@
+[
+  "Ùôœà‰¦Ÿæ–;\u001d€å¸«+",
+  [
+    [
+      "HSL.Transcript.tch_binders_len",
+      1,
+      2,
+      1,
+      [
+        "@MaxFuel_assumption", "@MaxIFuel_assumption",
+        "@fuel_correspondence_Prims.pow2.fuel_instrumented",
+        "@fuel_irrelevance_Prims.pow2.fuel_instrumented", "@query",
+        "Prims_pretyping_ae567c2fb75be05905677af440075565", "b2t_def",
+        "bool_inversion", "bool_typing",
+        "constructor_distinct_Parsers.Handshake.M_client_hello",
+        "disc_equation_Parsers.Handshake.M_client_hello", "eq2-interp",
+        "equation_FStar.UInt.fits", "equation_FStar.UInt.max_int",
+        "equation_FStar.UInt.min_int", "equation_FStar.UInt.size",
+        "equation_FStar.UInt.uint_t",
+        "equation_HSL.Transcript.clientHello_with_binders",
+        "equation_LowParse.Low.Base.max_uint32",
+        "equation_LowParse.Low.Base.validator_max_length",
+        "equation_LowParse.SLow.Base.size32_postcond",
+        "equation_LowParse.SLow.Base.u32_max",
+        "equation_Parsers.OfferedPsks_binders.offeredPsks_binders",
+        "equation_Parsers.PskBinderEntry.pskBinderEntry",
+        "equation_ParsersAux.Binders.has_binders", "equation_Prims.nat",
+        "equation_with_fuel_Prims.pow2.fuel_instrumented",
+        "function_token_typing_Prims.__cache_version_number__", "int_typing",
+        "lemma_FStar.UInt.pow2_values", "lemma_FStar.UInt32.vu_inv",
+        "lemma_Parsers.OfferedPsks_binders.offeredPsks_binders_bytesize_eqn",
+        "primitive_Prims.op_Addition", "primitive_Prims.op_AmpAmp",
+        "primitive_Prims.op_GreaterThan",
+        "primitive_Prims.op_LessThanOrEqual", "primitive_Prims.op_Multiply",
+        "primitive_Prims.op_Subtraction",
+        "projection_inverse_BoxBool_proj_0",
+        "projection_inverse_BoxInt_proj_0",
+        "projection_inverse_Parsers.Handshake.M_client_hello__0",
+        "refinement_interpretation_Tm_refine_07033d2b2c1d2fb6c1dd88a8f1110ac2",
+        "refinement_interpretation_Tm_refine_22cdeb3c035fdace7f5a48d44d0c6ac1",
+        "refinement_interpretation_Tm_refine_a347709bfeba48709474ad26f4f6be87",
+        "refinement_interpretation_Tm_refine_ba523126f67e00e7cd55f0b92f16681d",
+        "refinement_interpretation_Tm_refine_d12ede7312cbc074195ccbfb82cc246f",
+        "typing_LowParse.Low.Base.validator_max_length",
+        "typing_ParsersAux.Binders.has_binders"
+      ],
+      0,
+      "92edb27581b29717179a4475b501ec14"
+    ],
+    [
+      "HSL.Transcript.hs_tch",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "equation_FStar.Integers.uint_32",
+        "equation_HSL.Transcript.binders_len",
+        "equation_HSL.Transcript.clientHello_with_binders",
+        "equation_HSL.Transcript.tch_binders_len",
+        "equation_LowParse.Bytes.byte",
+        "equation_Parsers.OfferedPsks_binders.offeredPsks_binders",
+        "refinement_interpretation_Tm_refine_22cdeb3c035fdace7f5a48d44d0c6ac1",
+        "refinement_interpretation_Tm_refine_313a95391f9021bf9cc3c152aa8f8a97",
+        "refinement_interpretation_Tm_refine_ed0e7d179ca2875d04f5868470c44c15",
+        "typing_HSL.Transcript.tch_binders_len"
+      ],
+      0,
+      "5419c3cc65ee7ae995678348a27aead7"
+    ],
+    [
+      "HSL.Transcript.truncate",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "LowParse.SLow.Base_interpretation_Tm_arrow_c83b870bbcba94f49cc6bf1b49fd83fe",
+        "bool_inversion",
+        "constructor_distinct_Parsers.Handshake.M_client_hello",
+        "disc_equation_Parsers.Handshake.M_client_hello",
+        "equation_FStar.Integers.uint_32",
+        "equation_HSL.Transcript.binders_len",
+        "equation_HSL.Transcript.clientHello_with_binders",
+        "equation_HSL.Transcript.tch_binders_len",
+        "equation_LowParse.Bytes.byte", "equation_LowParse.SLow.Base.size32",
+        "equation_Parsers.Handshake_m_client_hello.handshake_m_client_hello",
+        "equation_Parsers.OfferedPsks_binders.offeredPsks_binders",
+        "equation_Parsers.OfferedPsks_binders.offeredPsks_binders_parser_kind",
+        "equation_ParsersAux.Binders.get_binders",
+        "equation_ParsersAux.Binders.has_binders",
+        "lemma_FStar.UInt32.uv_inv", "primitive_Prims.op_AmpAmp",
+        "proj_equation_Parsers.Handshake.M_client_hello__0",
+        "projection_inverse_BoxBool_proj_0",
+        "projection_inverse_Parsers.Handshake.M_client_hello__0",
+        "refinement_interpretation_Tm_refine_22cdeb3c035fdace7f5a48d44d0c6ac1",
+        "refinement_interpretation_Tm_refine_313a95391f9021bf9cc3c152aa8f8a97",
+        "refinement_interpretation_Tm_refine_4dc146ed944efb3b210bff483da51ba5",
+        "refinement_interpretation_Tm_refine_8879e4d447c306881afdf046534ba346",
+        "refinement_interpretation_Tm_refine_ac6770a4ba3278d19ebed8dee4a32c42",
+        "refinement_interpretation_Tm_refine_ed0e7d179ca2875d04f5868470c44c15",
+        "typing_HSL.Transcript.tch_binders_len",
+        "typing_Parsers.OfferedPsks_binders.offeredPsks_binders_size32",
+        "typing_ParsersAux.Binders.get_binders",
+        "typing_ParsersAux.Binders.has_binders"
+      ],
+      0,
+      "df875990436a12b13e2fbfa4ff682340"
+    ],
+    [
+      "HSL.Transcript.max_transcript_size",
+      1,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "d2d8794835e8362bc57c48ce229b0f95"
+    ],
+    [
+      "HSL.Transcript.max_message_size_lt_max_input_length",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "constructor_distinct_FStar.Integers.Signed",
+        "constructor_distinct_FStar.Integers.W128",
+        "constructor_distinct_FStar.Integers.W16",
+        "constructor_distinct_FStar.Integers.W31",
+        "constructor_distinct_FStar.Integers.W32",
+        "constructor_distinct_FStar.Integers.W63",
+        "constructor_distinct_FStar.Integers.W8",
+        "constructor_distinct_FStar.Integers.Winfinite",
+        "equality_tok_FStar.Integers.W128@tok",
+        "equality_tok_FStar.Integers.W16@tok",
+        "equality_tok_FStar.Integers.W31@tok",
+        "equality_tok_FStar.Integers.W32@tok",
+        "equality_tok_FStar.Integers.W63@tok",
+        "equality_tok_FStar.Integers.W8@tok",
+        "equality_tok_FStar.Integers.Winfinite@tok",
+        "equation_FStar.Integers.width_of_sw",
+        "equation_Spec.Hash.Definitions.max_input_length",
+        "fuel_guarded_inversion_Spec.Hash.Definitions.hash_alg",
+        "projection_inverse_FStar.Integers.Signed__0",
+        "projection_inverse_FStar.Integers.Unsigned__0"
+      ],
+      0,
+      "366e2b53183c457dc72f9ef39f599c32"
+    ],
+    [
+      "HSL.Transcript.__proj__Start__item__retried",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_HSL.Transcript.Start",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Tm_refine_12be3c8e40eeb23d3f9462167c6b2d49"
+      ],
+      0,
+      "d5920ed72bc8ab8e68d21fb1870c236c"
+    ],
+    [
+      "HSL.Transcript.__proj__TruncatedClientHello__item__retried",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_HSL.Transcript.TruncatedClientHello",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Tm_refine_1131c137d4b9ecef4a5e3a81d2ee8405"
+      ],
+      0,
+      "cc8b22b768e7b5d1f74c7b4c0d01efee"
+    ],
+    [
+      "HSL.Transcript.__proj__TruncatedClientHello__item__tch",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_HSL.Transcript.TruncatedClientHello",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Tm_refine_1131c137d4b9ecef4a5e3a81d2ee8405"
+      ],
+      0,
+      "d77838864216dcbb5d550c74b462071c"
+    ],
+    [
+      "HSL.Transcript.__proj__ClientHello__item__retried",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_HSL.Transcript.ClientHello",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Tm_refine_8054d18ef519c5b9d990efb52b063adc"
+      ],
+      0,
+      "7b59434c7c49968ca625998b2293cb2b"
+    ],
+    [
+      "HSL.Transcript.__proj__ClientHello__item__ch",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_HSL.Transcript.ClientHello",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Tm_refine_8054d18ef519c5b9d990efb52b063adc"
+      ],
+      0,
+      "1cf1015a4c6e5c6cdb6d7e6baa937d1e"
+    ],
+    [
+      "HSL.Transcript.__proj__Transcript12__item__ch",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_HSL.Transcript.Transcript12",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Tm_refine_0900eaf74c18995820f91c810d095d50"
+      ],
+      0,
+      "710193cf95896a11f85233f722975e7a"
+    ],
+    [
+      "HSL.Transcript.__proj__Transcript12__item__sh",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_HSL.Transcript.Transcript12",
+        "proj_equation_HSL.Transcript.Transcript12_ch",
+        "projection_inverse_BoxBool_proj_0",
+        "projection_inverse_HSL.Transcript.Transcript12_ch",
+        "refinement_interpretation_Tm_refine_0900eaf74c18995820f91c810d095d50"
+      ],
+      0,
+      "b8d0c8271596e34eea9e028a71158831"
+    ],
+    [
+      "HSL.Transcript.__proj__Transcript12__item__rest",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_HSL.Transcript.Transcript12",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Tm_refine_0900eaf74c18995820f91c810d095d50"
+      ],
+      0,
+      "d18a1a1537ac0510a9b3b5d8fa36ecb4"
+    ],
+    [
+      "HSL.Transcript.__proj__Transcript13__item__retried",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_HSL.Transcript.Transcript13",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Tm_refine_af7a739b2a6dfba8546fc5e62d0696c6"
+      ],
+      0,
+      "846ec649da6d66f878a45e0d691d8ad1"
+    ],
+    [
+      "HSL.Transcript.__proj__Transcript13__item__ch",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_HSL.Transcript.Transcript13",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Tm_refine_af7a739b2a6dfba8546fc5e62d0696c6"
+      ],
+      0,
+      "822f2d2f00bb24b4e794d2ec106aa9af"
+    ],
+    [
+      "HSL.Transcript.__proj__Transcript13__item__sh",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_HSL.Transcript.Transcript13",
+        "proj_equation_HSL.Transcript.Transcript13_ch",
+        "projection_inverse_BoxBool_proj_0",
+        "projection_inverse_HSL.Transcript.Transcript13_ch",
+        "refinement_interpretation_Tm_refine_af7a739b2a6dfba8546fc5e62d0696c6"
+      ],
+      0,
+      "777514b05316d87d8957ed95e643c2cc"
+    ],
+    [
+      "HSL.Transcript.__proj__Transcript13__item__rest",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_HSL.Transcript.Transcript13",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Tm_refine_af7a739b2a6dfba8546fc5e62d0696c6"
+      ],
+      0,
+      "9e357b1ae9a944ca2ca8ea0736083a89"
+    ],
+    [
+      "HSL.Transcript.transcript_size",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_HSL.Transcript.ClientHello",
+        "disc_equation_HSL.Transcript.Start",
+        "disc_equation_HSL.Transcript.Transcript12",
+        "disc_equation_HSL.Transcript.Transcript13",
+        "disc_equation_HSL.Transcript.TruncatedClientHello",
+        "fuel_guarded_inversion_HSL.Transcript.transcript_t"
+      ],
+      0,
+      "7d60f3fa80e3469de316b80caec5ad37"
+    ],
+    [
+      "HSL.Transcript.__proj__L_ClientHello__item___0",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_HSL.Transcript.L_ClientHello",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Tm_refine_d16e86694fdbd6e10a2f5a337874f683"
+      ],
+      0,
+      "780394148f8ce08b4979246e37f5d3d1"
+    ],
+    [
+      "HSL.Transcript.__proj__L_ServerHello__item___0",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_HSL.Transcript.L_ServerHello",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Tm_refine_18f652652c33c65b447a91c5f1a39518"
+      ],
+      0,
+      "5d09c8c09d731185c10b5dbbb3813089"
+    ],
+    [
+      "HSL.Transcript.__proj__L_TCH__item___0",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_HSL.Transcript.L_TCH",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Tm_refine_3eafaa77ca8682e1642f65bb46120005"
+      ],
+      0,
+      "586067205c2b7f7dd7e803658e37c16d"
+    ],
+    [
+      "HSL.Transcript.__proj__L_CompleteTCH__item___0",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_HSL.Transcript.L_CompleteTCH",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Tm_refine_a94323e2fa3f4a40babeae22cf8e2b03"
+      ],
+      0,
+      "2cd80b727971d832bd38b55050b8ade0"
+    ],
+    [
+      "HSL.Transcript.__proj__L_HRR__item___0",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_HSL.Transcript.L_HRR",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Tm_refine_f88cacbcbc5146ce821a4e3067b95919"
+      ],
+      0,
+      "9b39e7f168fc824916c5310d6be0302f"
+    ],
+    [
+      "HSL.Transcript.__proj__L_HSM12__item___0",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_HSL.Transcript.L_HSM12",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Tm_refine_0e3948ea3375239aa12079aef69f7607"
+      ],
+      0,
+      "3bf584642d268ef50eae235321823174"
+    ],
+    [
+      "HSL.Transcript.__proj__L_HSM13__item___0",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_HSL.Transcript.L_HSM13",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Tm_refine_271110f1bc64f50ee6c7d8125c31ca7c"
+      ],
+      0,
+      "1d6f6dcbefc570c297f0346871304101"
+    ],
+    [
+      "HSL.Transcript.transition",
+      1,
+      2,
+      1,
+      [
+        "@MaxFuel_assumption", "@MaxIFuel_assumption",
+        "@fuel_correspondence_FStar.List.Tot.Base.length.fuel_instrumented",
+        "@query",
+        "HSL.Transcript_pretyping_6bbc862ab5ff5827ed5c3759390b6f6e",
+        "HSL.Transcript_pretyping_cf5c8a0c04e501aefc110c9f40a80f2b",
+        "assumption_Parsers.ClientHello.clientHello__uu___haseq",
+        "bool_inversion", "constructor_distinct_Prims.Nil",
+        "data_typing_intro_Prims.Nil@tok",
+        "equality_tok_Parsers.ProtocolVersion.TLS_1p2@tok",
+        "equality_tok_Parsers.ProtocolVersion.TLS_1p3@tok",
+        "equation_HSL.Transcript.clientHello_with_binders",
+        "equation_HSL.Transcript.hs_tch", "equation_Mem.is_tls_rgn",
+        "equation_Mem.rgn", "equation_Mem.tls_rgn",
+        "equation_with_fuel_FStar.List.Tot.Base.length.fuel_instrumented",
+        "haseqTm_refine_22cdeb3c035fdace7f5a48d44d0c6ac1",
+        "haseqTm_refine_40cbaab8fb7f4c4852edb0f443e2f76c",
+        "kinding_Parsers.Handshake12.handshake12@tok",
+        "kinding_Parsers.Handshake13.handshake13@tok",
+        "primitive_Prims.op_LessThan", "projection_inverse_BoxBool_proj_0",
+        "projection_inverse_BoxInt_proj_0",
+        "projection_inverse_FStar.Pervasives.Native.Mktuple2__1",
+        "projection_inverse_HSL.Transcript.ClientHello_retried",
+        "projection_inverse_Prims.Nil_a",
+        "refinement_interpretation_Tm_refine_b5163a5c7eb2f4891aa85b6bd19b6e5e",
+        "refinement_interpretation_Tm_refine_c358ce785c6b462b7618aa4f08d5c31e",
+        "typing_Mem.is_tls_rgn", "typing_Mem.tls_region"
+      ],
+      0,
+      "aed53011f37048dfbdcda618103a56a7"
+    ],
+    [
+      "HSL.Transcript.label_repr",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_Parsers.Handshake.M_server_hello",
+        "equation_HSL.Transcript.hs_sh_repr",
+        "equation_MITLS.Repr.Handshake.is_sh",
+        "fuel_guarded_inversion_MITLS.Repr.const_slice",
+        "refinement_interpretation_Tm_refine_e4ea5a37b313f4ab47fb5b2f070e19a9"
+      ],
+      0,
+      "c0f9f2fd53deed6ac85d1d7a55687e72"
+    ],
+    [
+      "HSL.Transcript.__proj__LR_ClientHello__item__b",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_HSL.Transcript.LR_ClientHello",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Tm_refine_e641398f176de45e3d20a731c5dc5071"
+      ],
+      0,
+      "269b3b1ce7b224e835f62559369a48c6"
+    ],
+    [
+      "HSL.Transcript.__proj__LR_ClientHello__item__ch",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "bool_inversion",
+        "data_elim_HSL.Transcript.LR_ClientHello",
+        "disc_equation_HSL.Transcript.LR_ClientHello",
+        "equation_HSL.Transcript.hs_ch_repr",
+        "equation_MITLS.Repr.Handshake.is_ch",
+        "equation_MITLS.Repr.Handshake.repr", "equation_MITLS.Repr.repr_p",
+        "equation_Mem.is_tls_rgn", "equation_Mem.rgn",
+        "equation_Mem.tls_rgn",
+        "equation_Parsers.Handshake.handshake_parser_kind",
+        "proj_equation_HSL.Transcript.LR_ClientHello_b",
+        "projection_inverse_BoxBool_proj_0",
+        "projection_inverse_HSL.Transcript.LR_ClientHello_b",
+        "projection_inverse_HSL.Transcript.LR_ClientHello_ch",
+        "refinement_interpretation_Tm_refine_b5163a5c7eb2f4891aa85b6bd19b6e5e",
+        "refinement_interpretation_Tm_refine_c358ce785c6b462b7618aa4f08d5c31e",
+        "refinement_interpretation_Tm_refine_d0c586a86c5641491189f56116987d37",
+        "refinement_interpretation_Tm_refine_d68285d0b4567c17b20f6e366afe9178",
+        "refinement_interpretation_Tm_refine_e641398f176de45e3d20a731c5dc5071",
+        "typing_MITLS.Repr.Handshake.is_ch", "typing_Mem.is_tls_rgn",
+        "typing_Mem.tls_region"
+      ],
+      0,
+      "83735b5449e9b061792e1c33c6b94e73"
+    ],
+    [
+      "HSL.Transcript.__proj__LR_ServerHello__item__b",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_HSL.Transcript.LR_ServerHello",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Tm_refine_62aa233580072ded983d541f26e2b7dd"
+      ],
+      0,
+      "633d1329ff1f18c90e6e2c624bb6fceb"
+    ],
+    [
+      "HSL.Transcript.__proj__LR_ServerHello__item__ch",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "bool_inversion",
+        "data_elim_HSL.Transcript.LR_ServerHello",
+        "disc_equation_HSL.Transcript.LR_ServerHello",
+        "equation_HSL.Transcript.hs_sh_repr",
+        "equation_MITLS.Repr.Handshake.is_sh",
+        "equation_MITLS.Repr.Handshake.repr", "equation_MITLS.Repr.repr_p",
+        "equation_Mem.is_tls_rgn", "equation_Mem.rgn",
+        "equation_Mem.tls_rgn",
+        "equation_Parsers.Handshake.handshake_parser_kind",
+        "proj_equation_HSL.Transcript.LR_ServerHello_b",
+        "projection_inverse_BoxBool_proj_0",
+        "projection_inverse_HSL.Transcript.LR_ServerHello_b",
+        "projection_inverse_HSL.Transcript.LR_ServerHello_ch",
+        "refinement_interpretation_Tm_refine_62aa233580072ded983d541f26e2b7dd",
+        "refinement_interpretation_Tm_refine_b5163a5c7eb2f4891aa85b6bd19b6e5e",
+        "refinement_interpretation_Tm_refine_c358ce785c6b462b7618aa4f08d5c31e",
+        "refinement_interpretation_Tm_refine_d0c586a86c5641491189f56116987d37",
+        "refinement_interpretation_Tm_refine_e4ea5a37b313f4ab47fb5b2f070e19a9",
+        "typing_MITLS.Repr.Handshake.is_sh", "typing_Mem.is_tls_rgn",
+        "typing_Mem.tls_region"
+      ],
+      0,
+      "6d80747a787ea7f9992746f770704a01"
+    ],
+    [
+      "HSL.Transcript.__proj__LR_TCH__item__b",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_HSL.Transcript.LR_TCH",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Tm_refine_4fdc7c0c7fa0a34654b5bf7c20280475"
+      ],
+      0,
+      "573a9c7a22860658a3ce706ea16811e9"
+    ],
+    [
+      "HSL.Transcript.__proj__LR_TCH__item__ch",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "bool_inversion", "bool_typing",
+        "disc_equation_HSL.Transcript.LR_TCH",
+        "disc_equation_Parsers.Handshake.M_client_hello",
+        "equation_HSL.Transcript.hs_ch_repr",
+        "equation_MITLS.Repr.Handshake.is_ch",
+        "equation_MITLS.Repr.Handshake.repr", "equation_MITLS.Repr.repr_p",
+        "equation_MITLS.Repr.value", "equation_Mem.is_tls_rgn",
+        "equation_Mem.rgn", "equation_Mem.tls_rgn",
+        "equation_Parsers.Handshake.handshake_parser_kind",
+        "equation_ParsersAux.Binders.has_binders",
+        "primitive_Prims.op_AmpAmp", "proj_equation_HSL.Transcript.LR_TCH_b",
+        "projection_inverse_BoxBool_proj_0",
+        "projection_inverse_HSL.Transcript.LR_TCH_b",
+        "refinement_interpretation_Tm_refine_4fdc7c0c7fa0a34654b5bf7c20280475",
+        "refinement_interpretation_Tm_refine_730c9bf3aef62d9621e6ba7b3905e1f3",
+        "refinement_interpretation_Tm_refine_b5163a5c7eb2f4891aa85b6bd19b6e5e",
+        "refinement_interpretation_Tm_refine_c358ce785c6b462b7618aa4f08d5c31e",
+        "refinement_interpretation_Tm_refine_d0c586a86c5641491189f56116987d37",
+        "refinement_interpretation_Tm_refine_d68285d0b4567c17b20f6e366afe9178",
+        "typing_Mem.is_tls_rgn", "typing_Mem.tls_region"
+      ],
+      0,
+      "5f4d69553f96bc4967568b70cb55fcfe"
+    ],
+    [
+      "HSL.Transcript.__proj__LR_CompleteTCH__item__b",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_HSL.Transcript.LR_CompleteTCH",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Tm_refine_19457574a7436c00021c1e3d0c0fe57e"
+      ],
+      0,
+      "d47f9c50c4d1ba4816fe6aee8bac5da6"
+    ],
+    [
+      "HSL.Transcript.__proj__LR_CompleteTCH__item__ch",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "bool_inversion", "bool_typing",
+        "disc_equation_HSL.Transcript.LR_CompleteTCH",
+        "disc_equation_Parsers.Handshake.M_client_hello",
+        "equation_HSL.Transcript.hs_ch_repr",
+        "equation_MITLS.Repr.Handshake.is_ch",
+        "equation_MITLS.Repr.Handshake.repr", "equation_MITLS.Repr.repr_p",
+        "equation_MITLS.Repr.value", "equation_Mem.is_tls_rgn",
+        "equation_Mem.rgn", "equation_Mem.tls_rgn",
+        "equation_Parsers.Handshake.handshake_parser_kind",
+        "equation_ParsersAux.Binders.has_binders",
+        "primitive_Prims.op_AmpAmp",
+        "proj_equation_HSL.Transcript.LR_CompleteTCH_b",
+        "projection_inverse_BoxBool_proj_0",
+        "projection_inverse_HSL.Transcript.LR_CompleteTCH_b",
+        "refinement_interpretation_Tm_refine_19457574a7436c00021c1e3d0c0fe57e",
+        "refinement_interpretation_Tm_refine_730c9bf3aef62d9621e6ba7b3905e1f3",
+        "refinement_interpretation_Tm_refine_b5163a5c7eb2f4891aa85b6bd19b6e5e",
+        "refinement_interpretation_Tm_refine_c358ce785c6b462b7618aa4f08d5c31e",
+        "refinement_interpretation_Tm_refine_d0c586a86c5641491189f56116987d37",
+        "refinement_interpretation_Tm_refine_d68285d0b4567c17b20f6e366afe9178",
+        "typing_Mem.is_tls_rgn", "typing_Mem.tls_region"
+      ],
+      0,
+      "9a909ed59f4f7c72e79b446936760f97"
+    ],
+    [
+      "HSL.Transcript.__proj__LR_HRR__item__b1",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_HSL.Transcript.LR_HRR",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Tm_refine_1533b4324b03af43facb035bdb3b3dc7"
+      ],
+      0,
+      "59f19d178a9a6fa1d6b59c3e2b28f4f3"
+    ],
+    [
+      "HSL.Transcript.__proj__LR_HRR__item__ch_tag",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_HSL.Transcript.LR_HRR",
+        "equation_MITLS.Repr.Handshake.repr", "equation_MITLS.Repr.repr_p",
+        "equation_Parsers.Handshake.handshake_parser_kind",
+        "proj_equation_HSL.Transcript.LR_HRR_b1",
+        "projection_inverse_BoxBool_proj_0",
+        "projection_inverse_HSL.Transcript.LR_HRR_b1",
+        "refinement_interpretation_Tm_refine_1533b4324b03af43facb035bdb3b3dc7",
+        "refinement_interpretation_Tm_refine_38efbd6b9629eb388941a633161832b1",
+        "refinement_interpretation_Tm_refine_d0c586a86c5641491189f56116987d37"
+      ],
+      0,
+      "8547afc0ae73b4192a39ce0ca80da0c0"
+    ],
+    [
+      "HSL.Transcript.__proj__LR_HRR__item__b2",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_HSL.Transcript.LR_HRR",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Tm_refine_1533b4324b03af43facb035bdb3b3dc7"
+      ],
+      0,
+      "052f5603f7982d9b8f3417c8b7c3fe92"
+    ],
+    [
+      "HSL.Transcript.__proj__LR_HRR__item__hrr",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_Parsers.Handshake.M_server_hello",
+        "equation_HSL.Transcript.hs_sh_repr",
+        "equation_MITLS.Repr.Handshake.is_sh",
+        "proj_equation_HSL.Transcript.LR_HRR_b2",
+        "refinement_interpretation_Tm_refine_e4ea5a37b313f4ab47fb5b2f070e19a9"
+      ],
+      0,
+      "42f15337bce346f049f85bf6e2212990"
+    ],
+    [
+      "HSL.Transcript.__proj__LR_HRR__item__hrr",
+      2,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "bool_inversion",
+        "data_elim_HSL.Transcript.LR_HRR",
+        "disc_equation_HSL.Transcript.LR_HRR",
+        "disc_equation_Parsers.Handshake.M_server_hello",
+        "equation_HSL.Transcript.hs_sh_repr",
+        "equation_MITLS.Repr.Handshake.is_sh",
+        "equation_MITLS.Repr.Handshake.repr", "equation_MITLS.Repr.repr_p",
+        "equation_MITLS.Repr.value", "equation_Mem.is_tls_rgn",
+        "equation_Mem.rgn", "equation_Mem.tls_rgn",
+        "equation_Parsers.Handshake.handshake_parser_kind",
+        "fuel_guarded_inversion_MITLS.Repr.const_slice",
+        "proj_equation_HSL.Transcript.LR_HRR_b2",
+        "projection_inverse_BoxBool_proj_0",
+        "projection_inverse_HSL.Transcript.LR_HRR_b2",
+        "projection_inverse_HSL.Transcript.LR_HRR_hrr",
+        "refinement_interpretation_Tm_refine_0335e14741d82b76929cf09da1dd8008",
+        "refinement_interpretation_Tm_refine_1533b4324b03af43facb035bdb3b3dc7",
+        "refinement_interpretation_Tm_refine_b5163a5c7eb2f4891aa85b6bd19b6e5e",
+        "refinement_interpretation_Tm_refine_c358ce785c6b462b7618aa4f08d5c31e",
+        "refinement_interpretation_Tm_refine_d0c586a86c5641491189f56116987d37",
+        "refinement_interpretation_Tm_refine_e4ea5a37b313f4ab47fb5b2f070e19a9",
+        "typing_Mem.is_tls_rgn", "typing_Mem.tls_region"
+      ],
+      0,
+      "2f3aabfb0fbf7a74455cf03cfc55e864"
+    ],
+    [
+      "HSL.Transcript.__proj__LR_HSM12__item__b",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_HSL.Transcript.LR_HSM12",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Tm_refine_0ffaf068ac997cb6645f9dc8bc81bce8"
+      ],
+      0,
+      "8b1d39e565a1828c7b4206721f56e0a9"
+    ],
+    [
+      "HSL.Transcript.__proj__LR_HSM12__item__hs12",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_HSL.Transcript.LR_HSM12",
+        "equation_HSL.Transcript.repr_hs12", "equation_MITLS.Repr.repr_p",
+        "equation_Parsers.Handshake12.handshake12_parser_kind",
+        "proj_equation_HSL.Transcript.LR_HSM12_b",
+        "projection_inverse_BoxBool_proj_0",
+        "projection_inverse_HSL.Transcript.LR_HSM12_b",
+        "refinement_interpretation_Tm_refine_0ffaf068ac997cb6645f9dc8bc81bce8",
+        "refinement_interpretation_Tm_refine_d0c586a86c5641491189f56116987d37"
+      ],
+      0,
+      "2bf2bb56f302867b7947a05305733902"
+    ],
+    [
+      "HSL.Transcript.__proj__LR_HSM13__item__b",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_HSL.Transcript.LR_HSM13",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Tm_refine_974705d971002418259a4c001585605c"
+      ],
+      0,
+      "c935f3ac97c5df294132a82208c8eaad"
+    ],
+    [
+      "HSL.Transcript.__proj__LR_HSM13__item__hs13",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_HSL.Transcript.LR_HSM13",
+        "equation_HSL.Transcript.repr_hs13", "equation_MITLS.Repr.repr_p",
+        "equation_Parsers.Handshake13.handshake13_parser_kind",
+        "proj_equation_HSL.Transcript.LR_HSM13_b",
+        "projection_inverse_BoxBool_proj_0",
+        "projection_inverse_HSL.Transcript.LR_HSM13_b",
+        "refinement_interpretation_Tm_refine_974705d971002418259a4c001585605c",
+        "refinement_interpretation_Tm_refine_d0c586a86c5641491189f56116987d37"
+      ],
+      0,
+      "ffed4d1db1601cd4fdfd9828a1c525d1"
+    ],
+    [
+      "HSL.Transcript.label_of_label_repr",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "bool_inversion",
+        "disc_equation_HSL.Transcript.LR_ClientHello",
+        "disc_equation_HSL.Transcript.LR_CompleteTCH",
+        "disc_equation_HSL.Transcript.LR_HRR",
+        "disc_equation_HSL.Transcript.LR_HSM12",
+        "disc_equation_HSL.Transcript.LR_HSM13",
+        "disc_equation_HSL.Transcript.LR_ServerHello",
+        "disc_equation_HSL.Transcript.LR_TCH",
+        "disc_equation_Parsers.Handshake.M_client_hello",
+        "disc_equation_Parsers.Handshake.M_server_hello",
+        "equation_HSL.Transcript.hs_ch_repr",
+        "equation_HSL.Transcript.hs_sh_repr",
+        "equation_MITLS.Repr.Handshake.is_ch",
+        "equation_MITLS.Repr.Handshake.is_sh", "equation_Mem.is_tls_rgn",
+        "equation_Mem.rgn", "equation_Mem.tls_rgn",
+        "equation_ParsersAux.Binders.has_binders",
+        "fuel_guarded_inversion_HSL.Transcript.label_repr",
+        "primitive_Prims.op_AmpAmp",
+        "proj_equation_Parsers.Handshake.M_client_hello__0",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Tm_refine_0335e14741d82b76929cf09da1dd8008",
+        "refinement_interpretation_Tm_refine_38efbd6b9629eb388941a633161832b1",
+        "refinement_interpretation_Tm_refine_730c9bf3aef62d9621e6ba7b3905e1f3",
+        "refinement_interpretation_Tm_refine_b5163a5c7eb2f4891aa85b6bd19b6e5e",
+        "refinement_interpretation_Tm_refine_c358ce785c6b462b7618aa4f08d5c31e",
+        "refinement_interpretation_Tm_refine_d68285d0b4567c17b20f6e366afe9178",
+        "refinement_interpretation_Tm_refine_e4ea5a37b313f4ab47fb5b2f070e19a9",
+        "typing_Mem.is_tls_rgn", "typing_Mem.tls_region",
+        "typing_ParsersAux.Binders.has_binders"
+      ],
+      0,
+      "d2750021a17ad469466bf3330ef898fd"
+    ],
+    [
+      "HSL.Transcript.valid_label_repr",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_HSL.Transcript.LR_ClientHello",
+        "disc_equation_HSL.Transcript.LR_CompleteTCH",
+        "disc_equation_HSL.Transcript.LR_HRR",
+        "disc_equation_HSL.Transcript.LR_HSM12",
+        "disc_equation_HSL.Transcript.LR_HSM13",
+        "disc_equation_HSL.Transcript.LR_ServerHello",
+        "disc_equation_HSL.Transcript.LR_TCH",
+        "fuel_guarded_inversion_HSL.Transcript.label_repr"
+      ],
+      0,
+      "61e30e14d27df44e978dbfcfb9d660a2"
+    ],
+    [
+      "HSL.Transcript.loc_of_label_repr",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_HSL.Transcript.LR_ClientHello",
+        "disc_equation_HSL.Transcript.LR_CompleteTCH",
+        "disc_equation_HSL.Transcript.LR_HRR",
+        "disc_equation_HSL.Transcript.LR_HSM12",
+        "disc_equation_HSL.Transcript.LR_HSM13",
+        "disc_equation_HSL.Transcript.LR_ServerHello",
+        "disc_equation_HSL.Transcript.LR_TCH",
+        "fuel_guarded_inversion_HSL.Transcript.label_repr"
+      ],
+      0,
+      "1ea10084536ffa5d298c3b76a7e5a48b"
+    ],
+    [
+      "HSL.Transcript.extend",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "equation_FStar.Monotonic.HyperStack.mem",
+        "refinement_interpretation_Tm_refine_af4e8741f42b4edb3d25c1af0ed6e3e9"
+      ],
+      0,
+      "3697c0a575e57c484ee3e5d84a48a406"
+    ],
+    [
+      "HSL.Transcript.transcript_hash",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "constructor_distinct_FStar.Integers.W16",
+        "constructor_distinct_FStar.Integers.W31",
+        "constructor_distinct_FStar.Integers.W32",
+        "constructor_distinct_FStar.Integers.W63",
+        "constructor_distinct_FStar.Integers.W8",
+        "equality_tok_FStar.Integers.W16@tok",
+        "equality_tok_FStar.Integers.W31@tok",
+        "equality_tok_FStar.Integers.W32@tok",
+        "equality_tok_FStar.Integers.W63@tok",
+        "equality_tok_FStar.Integers.W8@tok",
+        "equation_Spec.Hash.Definitions.hash_length",
+        "equation_Spec.Hash.Definitions.hash_word_length",
+        "equation_Spec.Hash.Definitions.word_length",
+        "fuel_guarded_inversion_Spec.Hash.Definitions.hash_alg",
+        "primitive_Prims.op_Multiply", "projection_inverse_BoxInt_proj_0",
+        "projection_inverse_FStar.Integers.Signed__0",
+        "projection_inverse_FStar.Integers.Unsigned__0"
+      ],
+      0,
+      "48f6b559fd0228007a9b9a705db6e87c"
+    ],
+    [
+      "HSL.Transcript.injectivity",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "constructor_distinct_FStar.Integers.W16",
+        "constructor_distinct_FStar.Integers.W31",
+        "constructor_distinct_FStar.Integers.W32",
+        "constructor_distinct_FStar.Integers.W63",
+        "constructor_distinct_FStar.Integers.W8",
+        "equality_tok_FStar.Integers.W16@tok",
+        "equality_tok_FStar.Integers.W31@tok",
+        "equality_tok_FStar.Integers.W32@tok",
+        "equality_tok_FStar.Integers.W63@tok",
+        "equality_tok_FStar.Integers.W8@tok",
+        "equation_Spec.Hash.Definitions.hash_length",
+        "equation_Spec.Hash.Definitions.hash_word_length",
+        "equation_Spec.Hash.Definitions.word_length",
+        "fuel_guarded_inversion_Spec.Hash.Definitions.hash_alg",
+        "primitive_Prims.op_Multiply", "projection_inverse_BoxInt_proj_0",
+        "projection_inverse_FStar.Integers.Signed__0",
+        "projection_inverse_FStar.Integers.Unsigned__0"
+      ],
+      0,
+      "da8be2980302b1d45fbac81ae3c80004"
+    ]
+  ]
+]

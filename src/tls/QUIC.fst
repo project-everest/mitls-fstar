@@ -123,13 +123,14 @@ let peekClientHello (ch:bytes) (has_record:bool) : ML (option chSummary) =
 	  match Negotiation.find_clientPske ch with
 	  | None -> None
 	  | Some psk -> find_ticket_content psk.Extensions.identities in
-        let cookie =
-          match Negotiation.find_cookie ch with
-          | None -> None
-          | Some c ->
-            match Ticket.check_cookie c with
-            | None -> None
-            | Some (hrr, digest, extra) -> Some extra
+        let cookie = None
+          //19-06-17 FIXME        
+          // match Negotiation.find_cookie ch with
+          // | None -> None
+          // | Some c ->
+          //   match Ticket.check_cookie c with
+          //   | None -> None
+          //   | Some (hrr, digest, extra) -> Some extra
           in
         Some ({ch_sni = sni; ch_alpn = alpn; ch_extensions = ext; ch_cookie = cookie; ch_ticket_data = ticket_data })
     | _ -> trace ("peekClientHello: not a client hello!"); None

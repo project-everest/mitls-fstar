@@ -290,7 +290,11 @@ val cipherSuite_of_name_of_cipherSuite (c: cipherSuite') : Lemma (match name_of_
 let validCipherSuite (c:cipherSuite') = Correct? (name_of_cipherSuite' c)
 
 inline_for_extraction
-let cipherSuite = c:cipherSuite' {validCipherSuite c} // we finally decide to shadow Parsers.CipherSuite.cipherSuite from now on
+type cipherSuite = c:cipherSuite' {validCipherSuite c} // we finally decide to shadow Parsers.CipherSuite.cipherSuite from now on
+
+inline_for_extraction
+type cipherSuite13 = c:cipherSuite {CipherSuite13? c}
+
 let valid_cipher_suite = cipherSuite // redundant, needed by HandshakeMessages for now
 
 type cipherSuites = cs: list cipherSuite

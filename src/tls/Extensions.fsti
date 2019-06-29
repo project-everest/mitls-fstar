@@ -117,6 +117,7 @@ include Parsers.KeyShareClientHello
 
 (* Unknown *)
 include Parsers.UnknownExtension
+include Parsers.UnknownExtensions
 
 (* New Session Ticket *)
 include Parsers.NewSessionTicketExtension
@@ -150,20 +151,30 @@ include Parsers.ClientHelloExtensions
 
 include Parsers.TaggedUnknownExtension
 
-type custom_extension = TLS.Callbacks.custom_extension
-type custom_extensions = TLS.Callbacks.custom_extensions
+// For application-handled extensions set by nego callback,
+// such as QUIC transport parameters. 
 
-val cext_of_custom: custom_extensions -> clientHelloExtensions
-val eext_of_custom: custom_extensions -> encryptedExtensions
-val custom_of_cext: clientHelloExtensions -> custom_extensions
-val custom_of_eext: encryptedExtensions -> custom_extensions
+type unknownExtensions = Parsers.UnknownExtensions.unknownExtensions
 
-val clientHelloExtensions_of_tagged_unknown_extensions (x: list taggedUnknownExtension) : Tot (list clientHelloExtension)
+//val cext_of_custom: custom_extensions -> clientHelloExtensions
+//val eext_of_custom: custom_extensions -> unknown_encryptedExtensions
+//val custom_of_cext: clientHelloExtensions -> custom_extensions
+//val custom_of_eext: encryptedExtensions -> custom_extensions
+
+val clientHelloExtensions_of_unknownExtensions_list: 
+  list taggedUnknownExtension -> list clientHelloExtension
+
+val clientHelloExtensions_of_unknownExtensions: 
+  unknownExtensions -> list clientHelloExtension
+  
+val encryptedExtensions_of_unknownExtensions:
+  unknownExtensions -> list encryptedExtension
 
 module HS = FStar.HyperStack
 module LP = LowParse.Low.Base
 module U32 = FStar.UInt32
 
+//19-06-17 used for lowering; TODO 
 val valid_list_clientHelloExtensions_of_tagged_unknown_extensions
   (h: HS.mem)
   (#rrel #rel: _)
@@ -173,7 +184,7 @@ val valid_list_clientHelloExtensions_of_tagged_unknown_extensions
   (requires (LP.valid_list taggedUnknownExtension_parser h sl pos pos'))
   (ensures (
     LP.valid_list clientHelloExtension_parser h sl pos pos' /\
-    LP.contents_list clientHelloExtension_parser h sl pos pos' == clientHelloExtensions_of_tagged_unknown_extensions (LP.contents_list taggedUnknownExtension_parser h sl pos pos')
+    LP.contents_list clientHelloExtension_parser h sl pos pos' == clientHelloExtensions_of_unknownExtensions_list (LP.contents_list taggedUnknownExtension_parser h sl pos pos')
   ))
 
 val bindersLen: clientHelloExtensions -> UInt32.t

@@ -37,6 +37,7 @@ let rec choose_aux  (#a:Type)
         | Some i -> i :: choose_aux env f tl
         | None -> choose_aux env f tl
 
+// List.exists (f env) l without a closure 
 let exists_b_aux (#a:Type) (#b:Type) (env:b) (f:b -> a -> Tot bool) (l:list a) =
   Some? (find_aux env f l)
 

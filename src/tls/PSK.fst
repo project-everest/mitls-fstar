@@ -11,6 +11,8 @@ open TLSConstants
 module DM = FStar.DependentMap
 module MDM = FStar.Monotonic.DependentMap
 module DT = DefineTable
+module U32 = FStar.UInt32
+
 module HS = FStar.HyperStack
 module ST = FStar.HyperStack.ST
 
@@ -19,32 +21,16 @@ include Parsers.PskIdentity
 include Parsers.PskIdentity_identity
 include Parsers.OfferedPsks
 
-// *** PSK ***
-
-// The constraints for PSK indexes are:
-//  - must be public (as psk index appears in hsId, msId and derived keys)
-//  - must support application-provided PSK as well as RMS-based PSK
-//  - must support dynamic compromise; we want to prove KI of 1RT keys in PSK_DHE
-//    even for leaked PSK (but not PSK-based auth obivously)
-// Implementation style:
-//  - pskid is the TLS PSK identifier, an internal index to the PSK table
-//  - for tickets, the encrypted serialized state is the PSK identifier
-//  - we store in the table the PSK context and compromise status
-
-// The type of PSK identifiers (labels used in TLS messages)
-type pskName = pskIdentity_identity
-
-// The information associated with a PSK, i.e. time created,
-// usage (PSK+DHE or PSK only), hash, and AEAD (for 0-RTT)
-type pskInfo = TLS.Callbacks.pskInfo
-
-// We rule out all PSK that do not have at least one non-null byte
-// thus avoiding possible confusion with non-PSK for all possible hash algs
-type app_psk (i:psk_identifier) =
-  b:bytes{exists i.{:pattern b.[i]} b.[i] <> 0z}
+// Concrete test to reject invalid PSKs
+let is_valid_psk (k:bytes) : (b:bool{b ==> non_zero k}) =
+  let rec aux (i:U32.t{U32.v i <= length k})
+    : Tot (b:bool{b ==> non_zero k}) (decreases (length k - U32.v i))=
+    if i = len k then false
+    else (if k.[i] <> 0z then true else aux U32.(i +^ 1ul))
+  in aux 0ul
 
 type app_psk_entry (i:psk_identifier) =
-  (app_psk i) * pskInfo * bool
+  k:bytes{non_zero k} * pskInfo * bool
 
 type psk_table_invariant (m:MDM.partial_dependent_map psk_identifier app_psk_entry) = True
 
@@ -65,135 +51,14 @@ let valid_app_psk (ctx:pskInfo) (i:psk_identifier) (h:mem) =
 
 type pskid = i:psk_identifier{registered_psk i}
 
-let psk_value (i:pskid) : ST (app_psk i)
-  (requires (fun h0 -> True))
-  (ensures (fun h0 _ h1 -> modifies_none h0 h1))
-  =
-  recall app_psk_table;
-  testify (MDM.defined app_psk_table i);
-  match MDM.lookup app_psk_table i with
-  | Some (psk, _, _) -> psk
+let coerce k =
+  assume False; k
 
-let psk_info (i:pskid) : ST (pskInfo)
-  (requires (fun h0 -> True))
-  (ensures (fun h0 _ h1 -> modifies_none h0 h1))
-  =
-  recall app_psk_table;
-  testify (MDM.defined app_psk_table i);
-  match MDM.lookup app_psk_table i with
-  | Some (_, ctx, _) -> ctx
+let leak k = k
 
-let psk_lookup (i:psk_identifier) : ST (option pskInfo)
-  (requires (fun h0 -> True))
-  (ensures (fun h0 r h1 ->
-    modifies_none h0 h1
-    /\ (Some? r ==> registered_psk i)))
-  =
-  recall app_psk_table;
-  match MDM.lookup app_psk_table i with
-  | Some (_, ctx, _) ->
-    assume(stable_on_t app_psk_table (MDM.defined app_psk_table i));
-    mr_witness app_psk_table (MDM.defined app_psk_table i);
-    Some ctx
-  | None -> None
-
-type honest_st (i:pskid) (h:mem) =
-  (MDM.defined app_psk_table i h /\
-  (let (_,_,b) = MDM.value_of app_psk_table i h in b = true))
-
-type honest_psk (i:pskid) = witnessed (honest_st i)
-
-// Generates a fresh PSK identity
-val fresh_psk_id: unit -> ST psk_identifier
-  (requires (fun h -> True))
-  (ensures (fun h0 i h1 ->
-    modifies_none h0 h1 /\
-    MDM.fresh app_psk_table i h1))
-let rec fresh_psk_id () =
-  let id = Random.sample32 8ul in
-  match MDM.lookup app_psk_table id with
-  | None -> id
-  | Some _ -> fresh_psk_id ()
-
-// "Application PSK" generator (enforces empty session context)
-// Usual caveat of random producing pairwise distinct keys (TODO)
-let gen_psk (i:psk_identifier) (ctx:pskInfo)
-  : ST unit
-  (requires (fun h -> MDM.fresh app_psk_table i h))
-  (ensures (fun h0 r h1 ->
-    modifies_one psk_region h0 h1 /\
-    registered_psk i /\
-    honest_psk i))
-  =
-  let rand = Random.sample32 32ul in
-  let h = get () in
-  assume(MDM.fresh app_psk_table i h); // Frame new stateful RNG call
-  recall app_psk_table;
-  let psk = (abyte 1z) @| rand in
-  assume(psk.[0ul] = 1z);
-  let add : app_psk_entry i = (psk, ctx, true) in
-  MDM.extend app_psk_table i add;
-  MDM.contains_stable app_psk_table i add;
-  let h = get () in
-  cut(MDM.sel (HS.sel h app_psk_table) i == Some add);
-  assume(stable_on_t app_psk_table (MDM.defined app_psk_table i));
-  mr_witness app_psk_table (MDM.defined app_psk_table i);
-  assume(stable_on_t app_psk_table (honest_st i));
-  mr_witness app_psk_table (honest_st i);
-  assume False //18-09-01 TODO timeout? 
-
-let coerce_psk (i:psk_identifier) (ctx:pskInfo) (k:app_psk i)
-  : ST unit
-  (requires (fun h -> MDM.fresh app_psk_table i h))
-  (ensures (fun h0 _ h1 ->
-    modifies_one psk_region h0 h1 /\
-    registered_psk i /\
-    ~(honest_psk i)))
-  =
-  recall app_psk_table;
-  let add : app_psk_entry i = (k, ctx, false) in
-  MDM.extend app_psk_table i add;
-  MDM.contains_stable app_psk_table i add;
-  let h = get () in
-  cut(MDM.sel (HS.sel h app_psk_table) i == Some add);
-  admit()
-
-let compatible_hash_ae_st (i:pskid) (ha:hash_alg) (ae:aeadAlg) (h:mem) =
-  (MDM.defined app_psk_table i h /\
-  (let (_,ctx,_) = MDM.value_of app_psk_table i h in
-  ha = ctx.early_hash /\ ae = ctx.early_ae))
-
-let compatible_hash_ae (i:pskid) (h:hash_alg) (a:aeadAlg) =
-  witnessed (compatible_hash_ae_st i h a)
-
-let compatible_info_st (i:pskid) (c:pskInfo) (h:mem) =
-  (MDM.defined app_psk_table i h /\
-  (let (_,ctx,_) = MDM.value_of app_psk_table i h in c = ctx))
-
-let compatible_info (i:pskid) (c:pskInfo) =
-  witnessed (compatible_info_st i c)
-
-let verify_hash_ae (i:pskid) (ha:hash_alg) (ae:aeadAlg) : ST bool
-  (requires (fun h0 -> True))
-  (ensures (fun h0 b h1 ->
-    b ==> compatible_hash_ae i ha ae))
-  =
-  recall app_psk_table;
-  testify (MDM.defined app_psk_table i);
-  match MDM.lookup app_psk_table i with
-  | Some x ->
-    let h = get() in
-    cut(MDM.contains app_psk_table i x h);
-    cut(MDM.value_of app_psk_table i h = x);
-    let (_, ctx, _) = x in
-    if ctx.early_hash = ha && ctx.early_ae = ae then
-     begin
-      cut(compatible_hash_ae_st i ha ae h);
-      assume(stable_on_t app_psk_table (compatible_hash_ae_st i ha ae));
-      mr_witness app_psk_table (compatible_hash_ae_st i ha ae);
-      true
-     end
-    else false
+// Temporary, to disentangle concrete identifier and crypto index
+let name k =
+  assume False; k
 
 (*
 Provisional support for the PSK extension
@@ -221,43 +86,6 @@ Hence, the server authenticates age, and may filter 0RTT accordingly.
 
 *)
 
-type ticket_age = UInt32.t
-type obfuscated_ticket_age = UInt32.t
-let default_obfuscated_age = 0ul
-open FStar.UInt32
-let encode_age (t:ticket_age)  mask = t +%^ mask
-let decode_age (t:obfuscated_ticket_age) mask = t -%^ mask
-
-private let inverse_mask t mask: Lemma (decode_age (encode_age t mask) mask = t) = ()
-
-
-/// By default we use an in-memory ticket table
-/// and the in-memory internal PSK database
-
-val defaultTicketCBFun: context -> ticket_cb_fun
-let defaultTicketCBFun _ sni ticket info psk =
-  let h0 = get() in
-  begin
-  (*
-  match info with
-  | TicketInfo_12 (pv, cs, ems) ->
-    // 2018.03.10 SZ: The ticket must be fresh
-    assume False;
-    s12_extend ticket (pv, cs, ems, psk) // modifies PSK.tregion
-  | TicketInfo_13 pskInfo ->
-    // 2018.03.10 SZ: Missing refinement in ticket_cb_fun
-    assume (exists i.{:pattern index psk i} index psk i <> 0z);
-    // 2018.03.10 SZ: The ticket must be fresh
-    assume False;
-    coerce_psk ticket pskInfo psk;      // modifies psk_region
-    extend sni ticket                   // modifies PSK.tregion
-  *) ()
-  end;
-  let h1 = ST.get() in
-  // 2018.03.10 SZ: [ticket_cb_fun] ensures [modifies_none]
-  assume (modifies_none h0 h1)
-
-let defaultTicketCB = {
-  ticket_context = default_context();
-  new_ticket = defaultTicketCBFun;
-}
+let encode_age age mask = U32.(age +%^ mask)
+let decode_age age mask = U32.(age -%^ mask)
+let lemma_age_encode_decode t mask = ()

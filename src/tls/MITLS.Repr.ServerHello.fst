@@ -41,6 +41,7 @@ let t = SH.serverHello
 let repr (b:R.const_slice) =
   R.repr_p SH.serverHello b SH.serverHello_parser
 
+#push-options "--z3rlimit 16 --max_fuel 1 --max_ifuel 1"
 let cipherSuite (#b:R.const_slice) (r:repr b)
   : Stack Parsers.CipherSuite.cipherSuite
     (requires R.valid r)
@@ -61,3 +62,4 @@ let cipherSuite (#b:R.const_slice) (r:repr b)
       let pos1 = SH.serverHello_is_hrr_accessor_false b pos0 in
       let pos2 = SHK.accessor_sHKind_cipher_suite b pos1 in
       Parsers.CipherSuite.cipherSuite_reader b pos2
+#pop-options

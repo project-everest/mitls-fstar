@@ -26,16 +26,17 @@ module AEAD = AEADProvider
 let id13 alg =
   assume false;
   let cr  = Bytes.create 32ul 0z in
+  let pskid = PSK.coerce (Bytes.utf8_encode "whatever") in
   let ch0 = {
     li_ch0_cr = cr;
-    li_ch0_ed_psk = Bytes.utf8_encode "whatever";
+    li_ch0_ed_psk = pskid;
     li_ch0_ed_ae = alg;
     li_ch0_ed_hash = Hashing.Spec.SHA2_256; } in
   let li = LogInfo_CH0 ch0 in
   let i = ExpandedSecret
       (EarlySecretID (NoPSK Hashing.Spec.SHA2_256))
       ClientEarlyTrafficSecret
-      (Bytes.utf8_encode "whatever") in
+      empty_bytes in
   let kid: keyId = KeyID #li i in
   ID13 kid
 

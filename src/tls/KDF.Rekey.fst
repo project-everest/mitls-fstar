@@ -5,6 +5,7 @@ open Idx
 open Pkg
 open Pkg.Tree
 
+module B = FStar.Bytes
 module H = Hashing.Spec
 
 /// This module illustrates our use of indexes, packages, and KDF on a
@@ -23,7 +24,7 @@ let print s = discard (IO.debug_print_string ("RKY| "^s^"\n"))
 // Move  to Idx? 
 // utf8_encode gives this but not bytes_of_string
 assume val lemma_bytes_of_string_length: s:string -> Lemma
-  (Bytes.length (Bytes.bytes_of_string s) <= op_Multiply 4 (String.length s))
+  (B.length (B.bytes_of_string s) <= op_Multiply 4 (String.length s))
 
 inline_for_extraction noextract let mklabel (s:string) : Pure (s':label {s = s'})
   (requires normalize (String.length s < 32))
@@ -183,7 +184,7 @@ concrete_pkg (#n:nat) (t:tree (idealKDF (n+1)){is_rekey_tree n t}) (l:label) =
 
 inline_for_extraction noextract
 let coerce_root_kdf (n:nat) (t:tree (idealKDF (n+1)){is_rekey_tree n t})
-  (i:regid) (a:KDF.info0 i) (k:lbytes32 (KDF.secret_len a))
+  (i:regid) (a:KDF.info0 i) (k:B.lbytes32 (KDF.secret_len a))
   : ST (KDF.secret #(flagKDF n)
    (if model then let t':tree' (idealKDF (n+1)) = t in
    Node?.children t' else erased_tree) i)
@@ -249,10 +250,10 @@ let test_rekey(): St C.exit_code
   let t1 = _down t2 in
 
   let i1' = derive i2 (mklabel "IV") Expand in
-  let a1' = ivlen i1' in
+  let a1' : IV.info ivlen i1' = H.hash_len H.SHA2_256 in
   [@inline_let] let cpkg' = concrete_pkg t2 "IV" in
   let (| (), iv1 |) = KDF.derive #(flagKDF 2) #t2 #i2 kdf2 (mklabel "IV") Expand cpkg' a1' in
-  print ("IV1: "^(Bytes.hex_of_bytes iv1));
+  print ("IV1: "^(B.hex_of_bytes iv1));
 
   let i0 = derive i1 (mklabel "RE") Expand in
   let a0  : KDF.info0 i0 = KDF.Info Hashing.Spec.SHA2_256 None in
@@ -260,10 +261,10 @@ let test_rekey(): St C.exit_code
   let (| (), kdf0 |) = KDF.derive #(flagKDF 1) #t1 #i1 kdf1 (mklabel "RE") Expand cpkg' a0 in
 
   let i0' = derive i1 (mklabel "IV") Expand in
-  let a0' = ivlen i0' in
+  let a0' : IV.info ivlen i0' = H.hash_len H.SHA2_256 in
   [@inline_let] let cpkg' = concrete_pkg #1 t1 "IV" in
   let (| (), iv0 |) = KDF.derive #(flagKDF 1) #t1 #i1 kdf1 (mklabel "IV") Expand cpkg' a0' in
-  print ("IV0: "^(Bytes.hex_of_bytes iv0));
+  print ("IV0: "^(B.hex_of_bytes iv0));
   
   C.EXIT_SUCCESS
 

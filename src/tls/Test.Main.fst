@@ -8,8 +8,10 @@ module PBinders = ParsersAux.Binders // for verification purposes only
 
 #set-options "--admit_smt_queries true"
 
+type tf = unit -> St C.exit_code
+
 inline_for_extraction
-let check s (f: unit -> St C.exit_code): St unit =
+let check s (f: tf): St unit =
   match f () with
   | C.EXIT_SUCCESS ->
       C.(ignore (fflush stdout); ignore (fflush stderr));
@@ -23,7 +25,10 @@ let check s (f: unit -> St C.exit_code): St unit =
       print_string "\n";
       C.exit 255l
 
-let rec iter (xs:list (string * (unit -> St C.exit_code))) : St unit =
+noextract inline_for_extraction 
+let b2c b : St C.exit_code = if b then C.EXIT_SUCCESS else C.EXIT_FAILURE
+
+let rec iter (xs:list (string * tf)) : St unit =
   match xs with
   | [] -> ()
   | (s,f) :: xs -> check s f; iter xs
@@ -35,27 +40,24 @@ let iv () =
   IV.test(); 
   C.EXIT_SUCCESS
 
+let rng_initialization() = b2c (Random.init() <> 0ul)
+let cookie: tf = fun _ ->  b2c (TLS.Cookie.test())
+
 let main (): St C.exit_code =
   ignore (FStar.Test.dummy ());
-  if Random.init () = 0ul then
-    begin
-    print_string "✘ RNG initialization\n";
-    C.EXIT_FAILURE
-    end
-  else
-    begin
-    print_string "✔ RNG initialization\n";
-    iter [
-      "BufferBytes", BufferBytes.main;
-      "TLSConstants", TLSConstants.main;
-      "AEAD", AEAD.main;
-      "StAE", StAE.main;
-      "CommonDH", CommonDH.main;
-      "Parsers", Parsers.main;
-      "Handshake", handshake;
-      "IV", iv;
-      "Rekey", KDF.Rekey.test_rekey;
-      (* ADD NEW TESTS HERE *)
-    ];
-    C.EXIT_SUCCESS
-    end
+  iter [
+    "RNG initialization", rng_initialization;
+    "BufferBytes", BufferBytes.main;
+    "TLSConstants", TLSConstants.main;
+    "AEAD", AEAD.main;
+    "StAE", StAE.main;
+    "CommonDH", CommonDH.main;
+    "Parsers", Parsers.main;
+    "Handshake", handshake;
+    "IV", iv;
+    "Cookie", cookie;
+    "Rekey", KDF.Rekey.test_rekey;
+    (* ADD NEW TESTS HERE *)
+  ];
+  C.EXIT_SUCCESS
+ 
