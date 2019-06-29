@@ -77,6 +77,8 @@ module HSMR   = MITLS.Repr.Handshake
 
 type in_progress_flt_t =
   | F_none
+  | F_s_Idle  //server waiting for CH
+  | F_c_wait_ServerHello
   | F_c13_wait_Finished1
   | F_s13_wait_Finished2
   | F_s13_wait_EOED
@@ -85,8 +87,6 @@ type in_progress_flt_t =
   | F_cs12_wait_Finished
   | F_c12_wait_NST
   | F_s12_wait_CCS1
-  | F_s_Idle
-  | F_c_wait_ServerHello
 
 
 /// Abstract HSL state
