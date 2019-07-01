@@ -1,1 +1,44 @@
-[ "ëK,$G_(o*Åï¿Æ—®È", [] ]
+[
+  "ëK,$G_(o*Åï¿Æ—®È",
+  [
+    [
+      "Format.ECPointFormat.ecPointFormat",
+      1,
+      2,
+      1,
+      [ "@query", "assumption_FStar.UInt8.t__uu___haseq" ],
+      0,
+      "396d18a1a13263fe0643104c03aa5a2d"
+    ],
+    [
+      "Format.ECPointFormat.__proj__RESERVED__item___0",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_Format.ECPointFormat.RESERVED",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Tm_refine_13ab7adbd1ddd719c9bbfeb872fcae7f"
+      ],
+      0,
+      "b5cc2707edbbb122d8bd1cb1a0210ab4"
+    ],
+    [
+      "Format.ECPointFormat.u8_of_ecPointFormat",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_Format.ECPointFormat.ANSIX962_COMPRESSED_CHAR2",
+        "disc_equation_Format.ECPointFormat.ANSIX962_COMPRESSED_PRIME",
+        "disc_equation_Format.ECPointFormat.RESERVED",
+        "disc_equation_Format.ECPointFormat.UNCOMPRESSED",
+        "fuel_guarded_inversion_Format.ECPointFormat.ecPointFormat"
+      ],
+      0,
+      "d4328e17f8121e073553ee828fe89080"
+    ]
+  ]
+]

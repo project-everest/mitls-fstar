@@ -1,0 +1,7 @@
+# This version script is used for releases to only expose FFI functions
+LIBMITLS_0.1 {
+    global:
+      FFI_*;
+    local:
+      *;
+};

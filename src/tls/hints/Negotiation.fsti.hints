@@ -1,5 +1,5 @@
 [
-  "ó©\u001cpóœË\ná—\u0017dp\u0019¸’",
+  "Êfπèß{YΩàt\u007f∏>£èc",
   [
     [
       "Negotiation.implemented_version",
@@ -11,7 +11,25 @@
         "assumption_Parsers.ProtocolVersion.protocolVersion__uu___haseq"
       ],
       0,
-      "cb50c5fbc52e672be2742d505abc35a0"
+      "3c149ed5d86d669d246dfe0878ea26b3"
+    ],
+    [
+      "Negotiation.pski",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "bool_inversion",
+        "disc_equation_FStar.Pervasives.Native.None",
+        "disc_equation_FStar.Pervasives.Native.Some",
+        "kinding_Parsers.OfferedPsks.offeredPsks@tok",
+        "lemma_FStar.Pervasives.invertOption",
+        "typing_FStar.Pervasives.Native.uu___is_None",
+        "typing_FStar.Pervasives.Native.uu___is_Some",
+        "typing_Negotiation.find_clientPske"
+      ],
+      0,
+      "cf3aa5505ec1fe3f10f7adc976b05f25"
     ],
     [
       "Negotiation.cr",
@@ -24,7 +42,7 @@
         "assumption_Parsers.CertificateRequest13.certificateRequest13__uu___haseq"
       ],
       0,
-      "8606d2f78bf8876a7c7556f14616be77"
+      "dcc4ff14fde7a0aa64adf934e49a0c6f"
     ],
     [
       "Negotiation.__proj__CertRequest12__item___0",
@@ -38,7 +56,7 @@
         "refinement_interpretation_Tm_refine_cb88a629897954e423236d26f22e1b99"
       ],
       0,
-      "3b196751fdd8080fac6abafed30e1265"
+      "2ed0da4cb4e53d060f740b5c8f3ae4d8"
     ],
     [
       "Negotiation.__proj__CertRequest13__item___0",
@@ -52,7 +70,7 @@
         "refinement_interpretation_Tm_refine_77967c6cb5c4665a754bc42ae2186179"
       ],
       0,
-      "b03ab93b1f20df66bc22dd3bf1423c7a"
+      "83d796ad477a02b74fe2ebc68eeff35a"
     ],
     [
       "Negotiation.__proj__Mode__item__n_pski",
@@ -64,7 +82,7 @@
         "projection_inverse_Negotiation.Mode_n_offer"
       ],
       0,
-      "59c0d6a286614a90105702d253205910"
+      "093e197162d01d361dae4f9a9fbd11fd"
     ],
     [
       "Negotiation.__proj__C_Init__item__n_client_random",
@@ -77,7 +95,7 @@
         "refinement_interpretation_Tm_refine_f824580933b3e5c204f427df2ea87d5d"
       ],
       0,
-      "627ab733acfe7e27f40289c5d38fbeb5"
+      "40e1ae306231ad77c849ae6a65b15dee"
     ],
     [
       "Negotiation.__proj__C_Offer__item__n_offer",
@@ -91,7 +109,7 @@
         "refinement_interpretation_Tm_refine_ce40c987ecf6efe9977a30194a918c6e"
       ],
       0,
-      "5faceac8269df17c2482f8c292255b14"
+      "dad155e041a90a1af0de52e468afbb55"
     ],
     [
       "Negotiation.__proj__C_HRR__item__n_offer",
@@ -104,7 +122,7 @@
         "refinement_interpretation_Tm_refine_4c285493f7adcf31dfd5565912bc8c98"
       ],
       0,
-      "ab6aa5d215a3be2a8002a7213867a655"
+      "81a804015514d160999d4cb813d78626"
     ],
     [
       "Negotiation.__proj__C_HRR__item__n_hrr",
@@ -117,7 +135,7 @@
         "refinement_interpretation_Tm_refine_4c285493f7adcf31dfd5565912bc8c98"
       ],
       0,
-      "c2c7f87bc25dc60bc63edfefa3fb690b"
+      "86429f5ebfe95608e084996c56659c4c"
     ],
     [
       "Negotiation.__proj__C_WaitFinished1__item__n_partialmode",
@@ -131,7 +149,7 @@
         "refinement_interpretation_Tm_refine_939ce2fde9ef14ae506a678a7092f418"
       ],
       0,
-      "5333125a051123d95297310ec6faeab5"
+      "5b1f33c2dc3de4547c7df09f7f581934"
     ],
     [
       "Negotiation.__proj__C_Mode__item__n_mode",
@@ -144,7 +162,7 @@
         "refinement_interpretation_Tm_refine_43182a47fdfd7b1070a6e10da1df33cb"
       ],
       0,
-      "f51fb476bed2a2c2b225aadc010a0187"
+      "bee88c5a3f01795ac337dc32f797a97d"
     ],
     [
       "Negotiation.__proj__C_WaitFinished2__item__n_mode",
@@ -158,7 +176,7 @@
         "refinement_interpretation_Tm_refine_d37045c605d3e4dd6cc3448462659bad"
       ],
       0,
-      "0a6959952bacd4c13184ba44d6b6da1e"
+      "1f6607dcd0bfb9f83dde51a1a2d6ac6f"
     ],
     [
       "Negotiation.__proj__C_WaitFinished2__item__n_client_certificate",
@@ -172,7 +190,7 @@
         "refinement_interpretation_Tm_refine_d37045c605d3e4dd6cc3448462659bad"
       ],
       0,
-      "2ca99e7b2a9e1fca002a7a4f674c1a18"
+      "1dca36fae1e1a85b81409bc492d4ede5"
     ],
     [
       "Negotiation.__proj__C_Complete__item__n_mode",
@@ -186,7 +204,7 @@
         "refinement_interpretation_Tm_refine_adfbeb973f138ebfd624cef06c951607"
       ],
       0,
-      "f3f6ff3baab4d19ae73fa6ca633b58db"
+      "2fc817516b83afa3cbc205e74c08bc61"
     ],
     [
       "Negotiation.__proj__C_Complete__item__n_client_certificate",
@@ -200,7 +218,7 @@
         "refinement_interpretation_Tm_refine_adfbeb973f138ebfd624cef06c951607"
       ],
       0,
-      "60a1741a4ecae9e66e602e4037a6d9f3"
+      "76532e4c75cbbcd4233562c72f947555"
     ],
     [
       "Negotiation.__proj__S_Init__item__n_server_random",
@@ -213,7 +231,7 @@
         "refinement_interpretation_Tm_refine_8876f1ee849d4ee1bb53d2b51ce16214"
       ],
       0,
-      "c7b956bb1073cfd2c7ed861b6fc9d9a9"
+      "6fab27d937d826ff37e93e864ea0abe9"
     ],
     [
       "Negotiation.__proj__S_HRR__item__n_offer",
@@ -226,7 +244,7 @@
         "refinement_interpretation_Tm_refine_e49aff01f1b4c208743d67bc8e8a3825"
       ],
       0,
-      "efd9ac2a5615aa6cb1d5096348704428"
+      "814b249f1d07fcdef3e1d94956eddfe1"
     ],
     [
       "Negotiation.__proj__S_HRR__item__n_hrr",
@@ -239,7 +257,7 @@
         "refinement_interpretation_Tm_refine_e49aff01f1b4c208743d67bc8e8a3825"
       ],
       0,
-      "842c3915dec628cffa1181a62faf314f"
+      "056a695075e318cf54f30cf2eb8a8d12"
     ],
     [
       "Negotiation.__proj__S_ClientHello__item__n_mode",
@@ -253,7 +271,7 @@
         "refinement_interpretation_Tm_refine_377470996a4b896d8a26514bddd1b6f4"
       ],
       0,
-      "91506f99169e18d0509e7e6ce0f7b712"
+      "87760837a9637b6aca9a0a42efc06772"
     ],
     [
       "Negotiation.__proj__S_ClientHello__item__n_selected_cert",
@@ -267,7 +285,7 @@
         "refinement_interpretation_Tm_refine_377470996a4b896d8a26514bddd1b6f4"
       ],
       0,
-      "7c7bdb1aae2b41b2a466cc43615b7098"
+      "267c2db64b9922bd4a05f40b185b1b1f"
     ],
     [
       "Negotiation.__proj__S_Mode__item__n_mode",
@@ -280,7 +298,7 @@
         "refinement_interpretation_Tm_refine_e37291de1d7103c73251cd3b62ef5f82"
       ],
       0,
-      "4caad5afc2a2429bad431447ba9fa393"
+      "4b221de5bc005fcefc363bd770baeeeb"
     ],
     [
       "Negotiation.__proj__S_Mode__item__n_selected_cert",
@@ -293,7 +311,7 @@
         "refinement_interpretation_Tm_refine_e37291de1d7103c73251cd3b62ef5f82"
       ],
       0,
-      "e3b006bfc086e27edf8b736e2d6f7b83"
+      "145663bc1c236ea18dc2bed749150ff1"
     ],
     [
       "Negotiation.__proj__S_Complete__item__n_mode",
@@ -307,7 +325,7 @@
         "refinement_interpretation_Tm_refine_386efaf75601b26efd171ce33b377102"
       ],
       0,
-      "71a38a630d34f74e1805082be33a9819"
+      "603dc0de6122da98dc2d0f266d62cf2a"
     ],
     [
       "Negotiation.__proj__S_Complete__item__n_client_certificate",
@@ -321,7 +339,7 @@
         "refinement_interpretation_Tm_refine_386efaf75601b26efd171ce33b377102"
       ],
       0,
-      "bb851fb895f41579ce80d6a66e2104b4"
+      "7f9d604c039a8a14113309d0f20465be"
     ],
     [
       "Negotiation.__proj__NS__item__state",
@@ -340,7 +358,7 @@
         "refinement_interpretation_Tm_refine_b5163a5c7eb2f4891aa85b6bd19b6e5e"
       ],
       0,
-      "abed2cfad50d652366bad2278b4779cf"
+      "f2999527ab80e3dfa0099fbb8b013fa8"
     ],
     [
       "Negotiation.client_ClientHello",
@@ -362,7 +380,7 @@
         "refinement_interpretation_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
       ],
       0,
-      "ae9ed0446d8de47d87cc7cc6736aa10b"
+      "6ba69a75205a04744cecde55329e4356"
     ],
     [
       "Negotiation.client_ServerHello",
@@ -373,12 +391,11 @@
         "@MaxIFuel_assumption", "@query",
         "disc_equation_Negotiation.C_Offer",
         "equality_tok_TLSConstants.Client@tok",
-        "equation_FStar.Monotonic.HyperStack.mem",
         "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_9f87645f06a2f5c647f001e64b6473ad"
+        "refinement_interpretation_Tm_refine_cdb0bb699273bce395436f29ce411ef2"
       ],
       0,
-      "19d01cd788e1912f8302ffda6e13999d"
+      "4a33f0a3570f89a7993779c9e6209042"
     ],
     [
       "Negotiation.clientComplete_13",
@@ -390,21 +407,21 @@
         "assumption_Parsers.ProtocolVersion.protocolVersion__uu___haseq"
       ],
       0,
-      "504850ca40a6aa8b55201745e04ed31e"
+      "bbf97d76a6267cd058982419b0ee2367"
     ],
     [
-      "Negotiation.__proj__ServerRetry__item__hrr",
+      "Negotiation.serverMode",
       1,
       2,
       1,
       [
-        "@MaxIFuel_assumption", "@query",
-        "disc_equation_Negotiation.ServerRetry",
-        "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_38a9ae15169f3c0b272258b8219ad392"
+        "@query", "equation_TLS.Cookie.contents_max_length",
+        "equation_TLS.Cookie.encrypted_max_length",
+        "equation_TLS.Cookie.extensions_max_length",
+        "primitive_Prims.op_Addition", "projection_inverse_BoxInt_proj_0"
       ],
       0,
-      "65b078125331ca305247229df00c7b1d"
+      "2883562fed5505694f69093c12676a83"
     ],
     [
       "Negotiation.__proj__ServerMode__item___0",
@@ -418,7 +435,7 @@
         "refinement_interpretation_Tm_refine_a24df06741a0dafc30197f2b0509b7aa"
       ],
       0,
-      "61191941b653400bfed2b5f7b0859162"
+      "718b2b83577970f7621f84cb8e49f089"
     ],
     [
       "Negotiation.__proj__ServerMode__item___1",
@@ -432,7 +449,7 @@
         "refinement_interpretation_Tm_refine_a24df06741a0dafc30197f2b0509b7aa"
       ],
       0,
-      "8baecbb2846a9745fdce0a706717f8a1"
+      "15dbd21ed3aaa80cca144c604b46a64d"
     ],
     [
       "Negotiation.__proj__ServerMode__item___2",
@@ -446,7 +463,39 @@
         "refinement_interpretation_Tm_refine_a24df06741a0dafc30197f2b0509b7aa"
       ],
       0,
-      "7170e8f686580dbada82003b4bd470e3"
+      "d7537ace2445922c96d0f2f81e1a1169"
+    ],
+    [
+      "Negotiation.__proj__ServerRetry__item___0",
+      1,
+      2,
+      1,
+      [
+        "@query", "equation_TLS.Cookie.contents_max_length",
+        "equation_TLS.Cookie.encrypted_max_length",
+        "equation_TLS.Cookie.extensions_max_length",
+        "primitive_Prims.op_Addition", "projection_inverse_BoxInt_proj_0"
+      ],
+      0,
+      "7e26ff49930f64288b910b57c7f0cbb0"
+    ],
+    [
+      "Negotiation.__proj__ServerRetry__item___0",
+      2,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_Negotiation.ServerRetry",
+        "equation_TLS.Cookie.contents_max_length",
+        "equation_TLS.Cookie.encrypted_max_length",
+        "equation_TLS.Cookie.extensions_max_length",
+        "primitive_Prims.op_Addition", "projection_inverse_BoxBool_proj_0",
+        "projection_inverse_BoxInt_proj_0",
+        "refinement_interpretation_Tm_refine_38a9ae15169f3c0b272258b8219ad392"
+      ],
+      0,
+      "259bdb510cbd95b91fe285bc43778bd2"
     ],
     [
       "Negotiation.__proj__Fresh__item___0",
@@ -459,7 +508,7 @@
         "refinement_interpretation_Tm_refine_ccaf2274defaf994fe740109c4c6122c"
       ],
       0,
-      "11bf1417e491eac91ff7d2bebd52d983"
+      "6e32ceab4cbcd45c49e736fdfb3bac2e"
     ],
     [
       "Negotiation.__proj__Resumed__item___0",
@@ -473,7 +522,7 @@
         "refinement_interpretation_Tm_refine_7c4b92295b5797e0e1031b62ddfec097"
       ],
       0,
-      "5064ee74bc4c19d2c3f59162cf5c392e"
+      "7d8cfe48c9a45d11ff06906a3a9d1a9e"
     ]
   ]
 ]

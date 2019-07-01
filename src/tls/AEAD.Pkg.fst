@@ -31,7 +31,9 @@ type aeadAlg =
   | AES_GCM128
   | AES_GCM256
 
+inline_for_extraction noextract
 val ideal: b:bool{b ==> model}
+inline_for_extraction noextract
 let ideal = Flags.ideal_AEAD
 
 type safe (#ip:ipkg) (i:ip.t) = ideal /\ ip.honest i

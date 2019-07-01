@@ -1,0 +1,220 @@
+[
+  "\u0010»Ób#&±ªîª“è·¿@(",
+  [
+    [
+      "TC.__proj__Refl__item__x",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "disc_equation_TC.Refl",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Tm_refine_e62da5b5ef8432bbdb836eda7b300df7"
+      ],
+      0,
+      "e07410b2f68770b021e4217e55095fa3"
+    ],
+    [
+      "TC.__proj__Step__item__x",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "disc_equation_TC.Step",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Tm_refine_3d302c448cf959d0b5d939310536dbf3"
+      ],
+      0,
+      "19d1b70cf85e65e7d9c296f356e0e79a"
+    ],
+    [
+      "TC.__proj__Step__item__y",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "disc_equation_TC.Step",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Tm_refine_3d302c448cf959d0b5d939310536dbf3"
+      ],
+      0,
+      "6c07841380095ce1d11db08ff139e726"
+    ],
+    [
+      "TC.__proj__Step__item___2",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "disc_equation_TC.Step",
+        "proj_equation_TC.Step_x", "proj_equation_TC.Step_y",
+        "projection_inverse_BoxBool_proj_0", "projection_inverse_TC.Step_x",
+        "projection_inverse_TC.Step_y",
+        "refinement_interpretation_Tm_refine_3d302c448cf959d0b5d939310536dbf3"
+      ],
+      0,
+      "c4874383cb32c5387ecc1487488ea403"
+    ],
+    [
+      "TC.__proj__Closure__item__x",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "disc_equation_TC.Closure",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Tm_refine_944fff9e9967e026fba7d60d29cb01e7"
+      ],
+      0,
+      "87c80fcc9453242887a260fbc75615e0"
+    ],
+    [
+      "TC.__proj__Closure__item__y",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "disc_equation_TC.Closure",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Tm_refine_944fff9e9967e026fba7d60d29cb01e7"
+      ],
+      0,
+      "b0cf8becdc1c85c18d9c67fdd65a3a1f"
+    ],
+    [
+      "TC.__proj__Closure__item__z",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "disc_equation_TC.Closure",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Tm_refine_944fff9e9967e026fba7d60d29cb01e7"
+      ],
+      0,
+      "7793d2bfb6494e61065bfa77e4198358"
+    ],
+    [
+      "TC.__proj__Closure__item___3",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "disc_equation_TC.Closure",
+        "proj_equation_TC.Closure_x", "proj_equation_TC.Closure_y",
+        "projection_inverse_BoxBool_proj_0",
+        "projection_inverse_TC.Closure_x", "projection_inverse_TC.Closure_y",
+        "refinement_interpretation_Tm_refine_944fff9e9967e026fba7d60d29cb01e7"
+      ],
+      0,
+      "ef7ea5b7208f2c1fa2266dc0e59bc438"
+    ],
+    [
+      "TC.__proj__Closure__item___4",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "disc_equation_TC.Closure",
+        "proj_equation_TC.Closure_y", "proj_equation_TC.Closure_z",
+        "projection_inverse_BoxBool_proj_0",
+        "projection_inverse_TC.Closure_y", "projection_inverse_TC.Closure_z",
+        "refinement_interpretation_Tm_refine_944fff9e9967e026fba7d60d29cb01e7"
+      ],
+      0,
+      "5a33e1060d33b60ab5e73218123e99a9"
+    ],
+    [
+      "TC.closure_reflexive",
+      1,
+      2,
+      1,
+      [
+        "@query", "equation_FStar.Preorder.reflexive",
+        "token_correspondence_TC.closure@tok", "true_interp"
+      ],
+      0,
+      "851ca85a753f62aa8ad5791373160d5a"
+    ],
+    [
+      "TC.closure_transitive",
+      1,
+      2,
+      1,
+      [ "@query", "true_interp" ],
+      0,
+      "b52a04bba6993e47aadecb15e2932705"
+    ],
+    [
+      "TC.reflexive_transitive_closure",
+      1,
+      2,
+      1,
+      [ "@query", "equation_FStar.Preorder.preorder_rel" ],
+      0,
+      "ad85476f84246673172810444cc870e2"
+    ],
+    [
+      "TC.p",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "disc_equation_TC.A",
+        "disc_equation_TC.B", "disc_equation_TC.C",
+        "fuel_guarded_inversion_TC.state"
+      ],
+      0,
+      "7531248b21019affea6197f1b9dfe0de"
+    ],
+    [
+      "TC.q",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "disc_equation_TC.A",
+        "disc_equation_TC.B", "disc_equation_TC.C",
+        "fuel_guarded_inversion_TC.state"
+      ],
+      0,
+      "dec4ecd17a9d0f42ba664247a3c4dbba"
+    ],
+    [
+      "TC.hp",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "TC_pretyping_624f7fa474a10abef2c30bcc42cb64de",
+        "constructor_distinct_TC.A", "constructor_distinct_TC.B",
+        "constructor_distinct_TC.C", "data_typing_intro_TC.B@tok",
+        "equation_TC.p", "equation_TC.r", "fuel_guarded_inversion_TC.state",
+        "projection_inverse_FStar.Pervasives.Native.Mktuple2__1",
+        "projection_inverse_FStar.Pervasives.Native.Mktuple2__2",
+        "refinement_interpretation_Tm_refine_39596c55cd79182dea5accd2db42dec8"
+      ],
+      0,
+      "d5e1ecbc809c5faf0345b025c8137e07"
+    ],
+    [
+      "TC.f",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "TC_pretyping_624f7fa474a10abef2c30bcc42cb64de",
+        "assumption_TC.state__uu___haseq", "constructor_distinct_TC.A",
+        "constructor_distinct_TC.B", "data_typing_intro_TC.B@tok",
+        "equality_tok_TC.A@tok", "equality_tok_TC.B@tok", "equation_TC.cl",
+        "equation_TC.p", "equation_TC.reflexive_transitive_closure",
+        "refinement_interpretation_Tm_refine_17f502aa58442f881ce4342477d45c79",
+        "token_correspondence_TC.closure@tok"
+      ],
+      0,
+      "0f7ddc997e974ab5766be9d5d2f20ef1"
+    ]
+  ]
+]

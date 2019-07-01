@@ -1,25 +1,34 @@
-FSTAR_HOME    ?= ../FStar
-KREMLIN_HOME  ?= ../kremlin
-HACL_HOME     ?= ../hacl-star
-MLCRYPTO_HOME ?= ../MLCrypto
-MITLS_HOME    ?= .
+# Just aliases so that there's a proper target in the root directory.
 
-all: model-all ocaml-all kremlin-all test
+all: tls-all quic-app tls-app
 
-model-% verify-% ocaml-% kremlin-% quic-%:
-	$(MAKE) -C $(MITLS_HOME)/src/tls $*
+.PHONY: tls-all
+tls-all: pki
+	$(MAKE) -C src/tls
 
-test clean:
-	$(MAKE) -C $(MITLS_HOME)/src/tls $*
+.PHONY: quic-app
+quic-app: tls-all
+	$(MAKE) -C apps/quicMinusNet all
+
+.PHONY: mitls-app
+tls-app: tls-all
+	$(MAKE) -C apps/cmitls all
 
 
-# cwinter: todo; put the CI commands here instead of everest-ci/ci?
-ci: 
-	$(MAKE) -C $(HACL_HOME)/secure_api/LowCProvider
-	$(MAKE) -C $(MITLS_HOME)/libs/ffi
-	$(MAKE) -C $(MITLS_HOME)/src/pki
-	$(MAKE) -C $(MITLS_HOME)/src/tls all -k
-	$(MAKE) -C $(MITLS_HOME)/src/tls test -k
+test: tls-test quic-app-test tls-app-test
 
-%.fst-in %.fsti-in:
-	$(MAKE) -C $(MITLS_HOME)/src/tls -f Makefile $@
+.PHONY: tls-test
+tls-test: tls-all
+	$(MAKE) -C src/tls/dist/test test
+
+.PHONY: quic-app-test
+quic-app-test: tls-all
+	$(MAKE) -C apps/quicMinusNet test
+
+.PHONY: tls-app-test
+tls-app-test: tls-all
+	$(MAKE) -C apps/cmitls test
+
+.PHONY: pki
+pki:
+	$(MAKE) -C src/pki

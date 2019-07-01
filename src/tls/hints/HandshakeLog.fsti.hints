@@ -13,7 +13,7 @@
         "fuel_guarded_inversion_Prims.list", "subterm_ordering_Prims.Cons"
       ],
       0,
-      "dec73156181eb87fb3b1d93cef51ec19"
+      "e97bbd442e4bdbc3f20b565dbfbff42c"
     ],
     [
       "HandshakeLog.append_transcript",
@@ -25,7 +25,7 @@
         "refinement_interpretation_Tm_refine_3ed241300a1f24835b7d1f3ec025b52a"
       ],
       0,
-      "cc46b1a80531663bdd77b96b53b7d902"
+      "770ea42a490b74788a42ca8fba6d6d54"
     ],
     [
       "HandshakeLog.narrowTag",
@@ -34,7 +34,7 @@
       1,
       [ "@query", "assumption_FStar.UInt32.t__uu___haseq" ],
       0,
-      "f14b35f3e1765818eec0170b12afe5e8"
+      "eaef839f93ccf44ed9140827995c7563"
     ],
     [
       "HandshakeLog.narrowTag",
@@ -43,7 +43,7 @@
       1,
       [ "@query" ],
       0,
-      "de30913f3cdb76584290f8221efc3e33"
+      "c0dc45285337d90ae0b6c7b54be16d70"
     ],
     [
       "HandshakeLog.modifies_one",
@@ -51,16 +51,13 @@
       2,
       1,
       [
-        "@MaxIFuel_assumption", "@query",
-        "Prims_pretyping_ae567c2fb75be05905677af440075565",
-        "equation_Prims.eqtype", "equation_Prims.nat",
-        "function_token_typing_Prims.__cache_version_number__",
-        "function_token_typing_Prims.int",
-        "haseqTm_refine_ba523126f67e00e7cd55f0b92f16681d",
+        "@MaxIFuel_assumption", "@query", "equation_Prims.eqtype",
+        "equation_Prims.nat", "function_token_typing_Prims.int",
+        "haseqTm_refine_542f9d4f129664613f2483a6c88bc7c2",
         "refinement_interpretation_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
       ],
       0,
-      "6b7866902235b7a1615d23c28bc4d1a0"
+      "8d62a258507f4b4388f85cc58ac65d83"
     ]
   ]
 ]

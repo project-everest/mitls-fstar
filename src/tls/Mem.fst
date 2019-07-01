@@ -40,7 +40,7 @@ module ST = FStar.HyperStack.ST
 
 #set-options "--z3rlimit 40 --max_fuel 0  --max_ifuel 0"
 
-inline_for_extraction
+inline_for_extraction noextract
 let model = Flags.model
 
 let fresh_loc (l:loc) (h0 h1:mem) = loc_not_in l h0 /\ loc_in l h1

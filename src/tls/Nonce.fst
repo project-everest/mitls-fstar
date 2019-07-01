@@ -13,7 +13,7 @@ module HST = FStar.HyperStack.ST
 
 type random = lbytes 32
 
-inline_for_extraction
+inline_for_extraction noextract
 let ideal = Flags.ideal_Nonce // controls idealization of random sample: collision-avoidance.
 
 val timestamp: unit -> ST (lbytes 4)
