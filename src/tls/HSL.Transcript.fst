@@ -26,8 +26,6 @@ module TestCRF = Test.CRF
 
 #set-options "--max_fuel 1 --max_ifuel 1 --z3rlimit 16"
 
-// Now in HandshakeMessages
-let is_hrr _ = admit()
 // In Negotiation.Version.fst
 let nego_version _ _ = admit ()
 

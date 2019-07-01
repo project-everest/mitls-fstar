@@ -180,20 +180,22 @@ assume val serverMode_hashAlg: Nego.serverMode -> Tot Hashing.Spec.alg
     )
 *)
 
+// #reset-options "--using_facts_from '* -LowParse'"
+
 #restart-solver
 
-#push-options "--z3rlimit 300 --max_ifuel 16 --initial_ifuel 16"
+#push-options "--z3rlimit 1024 --max_ifuel 12 --initial_ifuel 12"
 
 let server_ClientHello #region ns out offer =
 // TODO: match !ns.Nego.state with  | Nego.S_HRR o1 hrr -> server_ClientHello2_stateful ns o1 hrr offer
 //  | Nego.S_Init _ ->
+  let r =
     let sm = computeServerMode in // ns.Nego.cfg offer ns.Nego.nonce in
     match sm with
     | Error z -> Error z
     | Correct r ->
       let alg = serverMode_hashAlg r in
       let hash_len = Hacl.Hash.Definitions.hash_len alg in
-      let h = get() in
       let (ts, tr) = T.create region alg in
       let stateless_retry = 
         match find_cookie (HSM.M_client_hello?._0 offer) with
@@ -239,6 +241,7 @@ let server_ClientHello #region ns out offer =
               push_frame ();
               let bmdigest = B.alloca 0uy 64ul in // constant size large enough to contain any digest
               let bdigest = B.sub bmdigest 0ul hash_len in
+              assert (B.length bdigest == Spec.Hash.Definitions.hash_length alg);
               let ha = TLS.Cookie.hrr_ha hrr in
               // TODO create Transcript in state Start(Some(digest0,hrr)) to compute this digest
               // using ha instead of alg; what is digest0?
@@ -288,5 +291,14 @@ let server_ClientHello #region ns out offer =
           end
         end
       end
+  in
+  let h1 = HST.get () in
+  assert (
+    match r with
+      | Correct (hs, sm) ->
+        TS.invariant hs.sto h1
+      | _ -> True
+  );
+  r
 
 #pop-options
