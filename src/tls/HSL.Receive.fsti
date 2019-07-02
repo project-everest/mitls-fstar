@@ -611,21 +611,21 @@ val receive_s12_wait_CCS1 (st:hsl_state) (b:R.const_slice) (f_begin f_end:uint_3
 
 
 
-/// Stub that will remain in HandshakeLog.state, at least for now,
-/// replacing {incoming, parsed, hashes}. It may actually be
-/// convenient for each of the receive functions and conditions above
-/// to take the same struct as input instead of 4 parameters.
+// /// Stub that will remain in HandshakeLog.state, at least for now,
+// /// replacing {incoming, parsed, hashes}. It may actually be
+// /// convenient for each of the receive functions and conditions above
+// /// to take the same struct as input instead of 4 parameters.
 
-noeq type receive_state = { 
-    st: hsl_state; 
-    input: R.const_slice; // large enough in practice; TODO not const! 
-    from: UInt32.t;
-    to: UInt32.t; // both within the slice 
-    // with invariant framed on input
-    // with state disjoint from input and everything else
-    }
+// noeq type receive_state = { 
+//     st: hsl_state; 
+//     input: R.const_slice; // large enough in practice; TODO not const! 
+//     from: UInt32.t;
+//     to: UInt32.t; // both within the slice 
+//     // with invariant framed on input
+//     // with state disjoint from input and everything else
+//     }
 
-let receive f s = f s.st s.input s.from s.to 
+// let receive f s = f s.st s.input s.from s.to 
 
 //type receive_t flt flight valid_flight = 
 //  s:receive_state -> 
