@@ -98,3 +98,26 @@ let serverHello (#b:R.const_slice) (r:repr b{is_sh r})
     let end_pos = Parsers.ServerHello.serverHello_jumper s pos in
     let sh_repr = R.mk_from_const_slice b pos end_pos Parsers.ServerHello.serverHello_parser in
     sh_repr
+
+(* Serializer from high-level value via intermediate-level formatter *)
+
+let serialize
+  (b:LP.slice R.mut_p R.mut_p{ LP.(b.len <= validator_max_length) })
+  (from:R.index (R.of_slice b))
+  (x: t)
+: Stack (option (repr (R.of_slice b)))
+    (requires fun h ->
+      LP.live_slice h b)
+    (ensures fun h0 r h1 ->
+      B.modifies (LP.loc_slice_from b from) h0 h1 /\
+      begin match r with
+      | None ->
+        (* not enough space in output slice *)
+        Seq.length (LP.serialize HSM.handshake_serializer x) > FStar.UInt32.v (b.LP.len - from)
+      | Some r ->
+        R.valid r h1 /\
+        r.R.start_pos == from /\
+        R.value r == x
+      end
+    )
+= R.mk_from_serialize b from HSM.handshake_serializer32 HSM.handshake_size32 x

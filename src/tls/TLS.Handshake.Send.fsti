@@ -66,19 +66,17 @@ open FStar.Bytes
 /// QUIC.API.
 // TODO functions to treat it as a lowParse-writer slice
 
+module B = LowStar.Buffer
+module LP = LowParse.Low.Base
 
-
-
-noeq inline_for_extraction
-type outbuffer = {
-  base: Buffer.buffer UInt8.t;                        // provided by caller, filled by Send
-  len: (len: UInt32.t{ v len = Buffer.length base }); // provided by caller
-  pos: (pos: UInt32.t{ v pos <= Buffer.length base }); // updated by Send, QD-style
-}
+(* TODO: do we need a separate type for outbuffer, or can we inline the slice and the position into the output state? *)
 
 noeq type send_state = {
   // outgoing data, already formatted and hashed. Overflows are fatal.
-  outgoing: bytes; // should become an [outbuffer]
+  out_slice: (out_slice: LP.slice (B.trivial_preorder _) (B.trivial_preorder _) { out_slice.LP.len <= LP.validator_max_length }) ; // provided by caller, filled by Send
+  out_pos: (pos: UInt32.t{ v pos <= v out_slice.LP.len }); // updated by Send, QD-style
+
+  outgoing: bytes; // TODO: remove, being replaced with [out] above
 
   // still supporting the high-level API to TLS and Record;
   // as next_keys_use, with next fragment after CCS
@@ -86,10 +84,24 @@ noeq type send_state = {
   outgoing_complete: bool;
 }
 
-// TODO we'll need an invariant, mostly stating that the output buffer
-// is live.
+let footprint
+  (sto: send_state)
+: GTot B.loc
+= B.loc_buffer sto.out_slice.LowParse.Low.Base.base
+
+let invariant
+  (sto: send_state)
+  (h: _)
+: GTot Type0
+= B.loc_disjoint (footprint sto) (B.loc_region_only true Mem.tls_tables_region) /\
+  LowParse.Low.Base.live_slice h sto.out_slice /\
+  sto.out_pos <= sto.out_slice.LowParse.Low.Base.len /\
+  FStar.Bytes.len sto.outgoing <= sto.out_pos // TODO: remove once fully lowered
+  // TODO: what more to stick into this invariant?
 
 let send_state0 = {
+  out_slice = LP.make_slice B.null 0ul;
+  out_pos = 0ul;
   outgoing = empty_bytes;
   outgoing_next_keys = None;
   outgoing_complete = false; }
@@ -101,3 +113,136 @@ val signals:
   option (bool & bool) ->
   bool ->
   send_state
+
+module T = HSL.Transcript
+
+inline_for_extraction
+type transcript_state (a:EverCrypt.Hash.alg) = T.state a
+
+inline_for_extraction
+type transcript = Ghost.erased T.transcript_t
+
+open FStar.HyperStack.ST
+open TLSError
+
+val send_ch
+  (#a:EverCrypt.Hash.alg)
+  (stt: transcript_state a)
+  (#n: Ghost.erased nat)
+  (t: T.g_transcript_n n { Ghost.reveal n < T.max_transcript_size - 1 })
+  (sto: send_state)
+  (m: T.hs_ch)
+: Stack (result (send_state & T.g_transcript_n n))
+  (requires (fun h ->
+    invariant sto h /\
+    T.invariant stt (Ghost.reveal t) h /\
+    B.loc_disjoint (footprint sto) (T.footprint stt) /\
+    T.Start? (Ghost.reveal t)
+  ))
+  (ensures (fun h res h' ->
+    B.modifies (footprint sto `B.loc_union` T.footprint stt) h h' /\
+    begin match res with
+    | Correct (sto', t') ->
+      invariant sto' h' /\
+      sto'.out_slice == sto.out_slice /\
+      sto'.out_pos >= sto.out_pos /\
+      T.invariant stt (Ghost.reveal t') h' /\
+      Ghost.reveal t' == T.ClientHello (T.Start?.retried (Ghost.reveal t)) (M_client_hello?._0 m)
+    | _ -> True
+    end
+  ))
+
+val send_hrr
+  (#a:EverCrypt.Hash.alg)
+  (stt: transcript_state a)
+  (#n: Ghost.erased nat)
+  (t: T.g_transcript_n n { Ghost.reveal n < T.max_transcript_size - 1 })
+  (sto: send_state)
+  (tag: T.any_hash_tag)
+  (hrr: T.hs_sh)
+: Stack (result (send_state & T.g_transcript_n n))
+  (requires (fun h ->
+    invariant sto h /\
+    T.invariant stt (Ghost.reveal t) h /\
+    B.loc_disjoint (footprint sto) (T.footprint stt) /\
+    T.is_hrr (M_server_hello?._0 hrr) /\
+    Ghost.reveal t == T.Start None
+  ))
+  (ensures (fun h res h' ->
+    B.modifies (footprint sto `B.loc_union` T.footprint stt) h h' /\
+    begin match res with
+    | Correct (sto', t') ->
+      invariant sto' h' /\
+      sto'.out_slice == sto.out_slice /\
+      sto'.out_pos >= sto.out_pos /\
+      T.invariant stt (Ghost.reveal t') h' /\
+      Ghost.reveal t' == T.Start (Some (tag, M_server_hello?._0 hrr))
+    | _ -> True
+    end
+  ))
+
+val send13
+  (#a:EverCrypt.Hash.alg)
+  (stt: transcript_state a)
+  (#n: Ghost.erased nat)
+  (t: T.g_transcript_n n { Ghost.reveal n < T.max_transcript_size - 1 })
+  (sto: send_state)
+  (m: handshake13)
+: Stack (result (send_state & T.g_transcript_n (Ghost.hide (Ghost.reveal n + 1))))
+  (requires (fun h ->
+    invariant sto h /\
+    T.invariant stt (Ghost.reveal t) h /\
+    B.loc_disjoint (footprint sto) (T.footprint stt) /\
+    T.Transcript13? (Ghost.reveal t)
+  ))
+  (ensures (fun h res h' ->
+    B.modifies (footprint sto `B.loc_union` T.footprint stt) h h' /\
+    begin match res with
+    | Correct (sto', t') ->
+      invariant sto' h' /\
+      sto'.out_slice == sto.out_slice /\
+      sto'.out_pos >= sto.out_pos /\
+//      LowParse.Low.Base.bytes_of_slice_from_to h' sto.out_slice sto.out_pos sto'.out_pos == LowParse.Spec.Base.serialize handshake13_serializer m /\ // TODO: is this needed? if so, then TR needs to enrich MITLS.Repr.* with the suitable lemmas
+      T.invariant stt (Ghost.reveal t') h' /\
+      Ghost.reveal t' == T.snoc13 (Ghost.reveal t) m
+    | _ -> True
+    end
+  ))
+
+val send_tag13
+  (#a:EverCrypt.Hash.alg)
+  (stt: transcript_state a)
+  (#n: Ghost.erased nat)
+  (t: T.g_transcript_n n { Ghost.reveal n < T.max_transcript_size - 1 })
+  (sto: send_state)
+  (m: handshake13)
+  (tag:Hacl.Hash.Definitions.hash_t a)
+: ST (result (send_state & T.g_transcript_n (Ghost.hide (Ghost.reveal n + 1))) )
+  (requires (fun h ->
+    invariant sto h /\
+    T.invariant stt (Ghost.reveal t) h /\
+    B.loc_disjoint (footprint sto) (T.footprint stt) /\
+    B.loc_disjoint (footprint sto) (B.loc_buffer tag) /\
+    B.loc_disjoint (T.footprint stt) (B.loc_buffer tag) /\
+    B.loc_disjoint (B.loc_buffer tag) (B.loc_region_only true Mem.tls_tables_region) /\
+    B.live h tag /\
+    T.Transcript13? (Ghost.reveal t)
+  ))
+  (ensures (fun h res h' ->
+    B.modifies (footprint sto `B.loc_union` T.footprint stt `B.loc_union`
+      B.loc_buffer tag `B.loc_union` B.loc_region_only true Mem.tls_tables_region) h h' /\
+    B.live h' tag /\
+    begin match res with
+    | Correct (sto', t') ->
+      invariant sto' h' /\
+      sto'.out_slice == sto.out_slice /\
+      sto'.out_pos >= sto.out_pos /\
+//      LowParse.Low.Base.bytes_of_slice_from_to h' sto.out_slice sto.out_pos sto'.out_pos == LowParse.Spec.Base.serialize handshake13_serializer m /\ // TODO: is this needed? if so, then TR needs to enrich MITLS.Repr.* with the suitable lemmas
+      T.invariant stt (Ghost.reveal t') h' /\
+      Ghost.reveal t' == T.snoc13 (Ghost.reveal t) m /\
+      B.as_seq h' tag == T.transcript_hash a (Ghost.reveal t') /\
+      T.hashed a (Ghost.reveal t')
+    | _ -> True
+    end
+  ))
+ 

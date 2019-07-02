@@ -30,7 +30,14 @@ unfold val trace: s:string -> ST unit
   (ensures (fun h0 _ h1 -> h0 == h1))
 unfold let trace = if DebugFlags.debug_NGO then print else (fun _ -> ())
 
-
+let hRRExtensions_list_bytesize_snoc exts e =
+  LowParseWrappers.list_bytesize_snoc
+    hRRExtension_bytesize
+    hRRExtensions_list_bytesize
+    ()
+    (fun _ _ -> ())
+    exts
+    e
 
 let prepare_contents (chd:digest) app (hrr: helloRetryRequest) =
   { Contents.session_id = hrr.session_id;
@@ -106,6 +113,8 @@ let decrypt encrypted =
 /// Basic testing:
 /// - unwrapping our own cookies is an identity on (chd,hrr,extra)
 
+#push-options "--z3rlimit 100"
+
 let test() =
   let chd = Bytes.create 16ul 221uy in
   let hrr = hrr0 empty_bytes (CipherSuite13 EverCrypt.AES128_GCM Spec.Hash.Definitions.SHA2_256) in
@@ -118,3 +127,5 @@ let test() =
     | Error _ -> trace "decryption failed"; false
     | Correct (chd', extra', hrr') ->
       (chd' = chd && extra' = extra && hrr' = hrr)
+
+#pop-options

@@ -268,6 +268,11 @@ val getMode: reader mode
 val version: reader protocolVersion 
 val is_hrr: reader bool
 
+let footprint
+  (#region:rgn) (#role:TLSConstants.role) (ns:t region role)
+: GTot B.loc 
+= B.loc_mreference ns.state
+
 let inv (#region:rgn) (#role:TLSConstants.role) (ns:t region role) h0 = h0 `HS.contains` ns.state
 
 // signature callback; is it used outside Negotiation? 

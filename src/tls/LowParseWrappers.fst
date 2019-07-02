@@ -170,3 +170,52 @@ let lemma_inverse_serializer32_parser32
 : Lemma
   (lemma_inverse_g_f (wrap_serializer32 s32) (wrap_parser32 p32 msg) x)
 = serializer32_then_parser32 s p32 s32 x
+
+module L = FStar.List.Tot
+
+let rec list_bytesize_snoc
+  (#t: Type)
+  (bytesize: t -> GTot nat)
+  (list_bytesize: list t -> GTot nat)
+  (list_bytesize_nil: squash (list_bytesize [] == 0))
+  (list_bytesize_cons: (
+    (x: t) ->
+    (y: list t) ->
+    Lemma
+    (list_bytesize (x :: y) == bytesize x + list_bytesize y)
+  ))
+  (l: list t)
+  (x: t)
+: Lemma
+  (list_bytesize (L.append l [x]) == list_bytesize l + bytesize x)
+= match l with
+  | [] ->
+    list_bytesize_cons x []
+  | a :: q ->
+    list_bytesize_snoc bytesize list_bytesize list_bytesize_nil list_bytesize_cons q x;
+    list_bytesize_cons a (L.append q [x]);
+    list_bytesize_cons a q
+
+let rec list_bytesize_filter
+  (#t: Type)
+  (bytesize: t -> GTot nat)
+  (list_bytesize: list t -> GTot nat)
+  (list_bytesize_nil: squash (list_bytesize [] == 0))
+  (list_bytesize_cons: (
+    (x: t) ->
+    (y: list t) ->
+    Lemma
+    (list_bytesize (x :: y) == bytesize x + list_bytesize y)
+  ))
+  (f: t -> Tot bool)
+  (l: list t)
+: Lemma
+  (list_bytesize (L.filter f l) <= list_bytesize l)
+= match l with
+  | [] -> ()
+  | a :: q ->
+    list_bytesize_cons a q;
+    list_bytesize_filter bytesize list_bytesize list_bytesize_nil list_bytesize_cons f q;
+    if f a
+    then list_bytesize_cons a (L.filter f q)
+    else ()
