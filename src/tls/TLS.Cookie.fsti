@@ -67,7 +67,12 @@ let hrr0 sid (cs: cipherSuite13): hrr_leq 8 =
     cipher_suite = name_of_cipherSuite cs;
     extensions = [ HRRE_supported_versions TLS_1p3 ]; }
 
-#set-options "--z3rlimit 100"
+val hRRExtensions_list_bytesize_snoc
+  (exts: list hRRExtension)
+  (e: hRRExtension)
+: Lemma
+  (hRRExtensions_list_bytesize (exts `List.append` [e]) == hRRExtensions_list_bytesize exts + hRRExtension_bytesize e)
+
 noextract
 inline_for_extraction
 let append_extension
@@ -77,7 +82,7 @@ let append_extension
   hrr_leq (n + hRRExtension_bytesize ext)
 =
   let exts = hrr.extensions @ [ext] in
-  assume( hRRExtensions_list_bytesize exts = hRRExtensions_list_bytesize hrr.extensions + hRRExtension_bytesize ext );
+  hRRExtensions_list_bytesize_snoc hrr.extensions ext;
   { hrr with extensions = exts }
 
 let find_keyshare (hrr: helloRetryRequest) : option Parsers.NamedGroup.namedGroup =

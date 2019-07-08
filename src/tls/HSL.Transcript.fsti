@@ -83,10 +83,12 @@ type bytes = FStar.Seq.seq uint_8
 let hs_ch = ch:HSM.handshake{HSM.M_client_hello? ch}
 let hs_sh = sh:HSM.handshake{HSM.M_server_hello? sh}
 
-/// `is_hrr`: For now, we assume the existence of a pure function to
+/// `is_hrr`: a pure function to
 /// decide if a server-hello message is a hello-retry-request (hrr)
-// assume
-val is_hrr (sh:SH.serverHello) : bool
+/// TODO: it is the same as HandshakeMessages.is_hrr, so decide which one to keep
+inline_for_extraction
+let is_hrr (sh:SH.serverHello) : Tot bool =
+  SH.ServerHello_is_hrr_true? sh.SH.is_hrr
 
 let is_any_hash_tag (h: HSM.handshake) : GTot Type0 =
   HSM.M_message_hash? h /\ (FStar.Bytes.length (HSM.M_message_hash?._0 h) <= 64)
@@ -346,6 +348,28 @@ type label =
   | L_HSM12 of HSM12.handshake12
   | L_HSM13 of HSM13.handshake13
 
+inline_for_extraction
+let transcript_n (n: Ghost.erased nat) = (t: transcript_t { transcript_size t == Ghost.reveal n })
+
+inline_for_extraction
+let g_transcript_n (n: Ghost.erased nat) = (t: Ghost.erased transcript_t { transcript_size (Ghost.reveal t) == Ghost.reveal n }) // Ghost.erased (transcript_n n)
+
+let snoc12
+  (t: transcript_t { Transcript12? t /\ transcript_size t < max_transcript_size - 1 })
+  (m: HSM12.handshake12)
+: Tot transcript_t
+= let Transcript12 ch sh rest = t in
+  List.lemma_snoc_length (rest, m);
+  Transcript12 ch sh (List.snoc (rest, m))
+
+let snoc13
+  (t: transcript_t { Transcript13? t /\ transcript_size t < max_transcript_size - 1 })
+  (m: HSM13.handshake13)
+: Tot (transcript_n (Ghost.hide (transcript_size t + 1)))
+= let Transcript13 retry ch sh rest = t in
+  List.lemma_snoc_length (rest, m);
+  Transcript13 retry ch sh (List.snoc (rest, m))
+
 let transition (t:transcript_t) (l:label)
   : GTot (option transcript_t)
   = match t, l with
@@ -454,7 +478,7 @@ val frame_invariant (#a:_) (s:state a) (t: transcript_t) (h0 h1:HS.mem) (l:B.loc
 ///
 ///   -- The transcript's initial state is empty
 val create (r:Mem.rgn) (a:HashDef.hash_alg)
-  : ST (state a & Ghost.erased transcript_t)
+  : ST (state a & g_transcript_n (Ghost.hide 0))
        (requires fun _ -> B.(loc_disjoint (loc_region_only true r) (loc_region_only true Mem.tls_tables_region)))
        (ensures fun h0 (s, tx) h1 ->
          let tx = Ghost.reveal tx in

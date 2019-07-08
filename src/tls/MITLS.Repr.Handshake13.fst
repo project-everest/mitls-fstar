@@ -77,6 +77,15 @@ let is_nst (#b:R.const_slice) (r:repr b) : GTot bool =
 let is_kupd (#b:R.const_slice) (r:repr b) : GTot bool =
   HSM13.M13_key_update? (R.value r)
 
+type ee13_repr (b:R.const_slice) = r:repr b{is_ee r}
+type c13_repr (b:R.const_slice) = r:repr b{is_c r}
+type cv13_repr (b:R.const_slice) = r:repr b{is_cv r}
+type fin13_repr (b:R.const_slice) = r:repr b{is_fin r}
+type cr13_repr (b:R.const_slice) = r:repr b{is_cr r}
+type eoed13_repr (b:R.const_slice) = r:repr b{is_eoed r}
+type nst13_repr (b:R.const_slice) = r:repr b{is_nst r}
+
+
 (*
  * Common precondition for functions that return the
  *   reprs for specific instance types
@@ -201,3 +210,26 @@ let get_nst_repr (#b:R.const_slice) (r:repr b{is_nst r})
     let end_pos = Parsers.NewSessionTicket13.newSessionTicket13_jumper lp_b pos in
 
     R.mk_from_const_slice b pos end_pos Parsers.NewSessionTicket13.newSessionTicket13_parser
+
+(* Serializer from high-level value via intermediate-level formatter *)
+
+let serialize
+  (b:LP.slice R.mut_p R.mut_p{ LP.(b.len <= validator_max_length) })
+  (from:R.index (R.of_slice b))
+  (x: t)
+: Stack (option (repr (R.of_slice b)))
+    (requires fun h ->
+      LP.live_slice h b)
+    (ensures fun h0 r h1 ->
+      B.modifies (LP.loc_slice_from b from) h0 h1 /\
+      begin match r with
+      | None ->
+        (* not enough space in output slice *)
+        Seq.length (LP.serialize HSM13.handshake13_serializer x) > FStar.UInt32.v (b.LP.len - from)
+      | Some r ->
+        R.valid r h1 /\
+        r.R.start_pos == from /\
+        R.value r == x
+      end
+    )
+= R.mk_from_serialize b from HSM13.handshake13_serializer32 HSM13.handshake13_size32 x
