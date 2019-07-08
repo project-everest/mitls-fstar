@@ -1759,14 +1759,13 @@ let client_ServerKeyExchange #region ns crt kex ske ocr =
   if version ns <> TLS_1p2 then 
     fatal Internal_error "TLS 1.2 only" //19-04-19 TODO make it static
   else 
-  let mode = getMode ns in
   let open Parsers.KeyExchangeAlgorithm in
   let open Parsers.ServerKeyExchange in
   match kex with
   | Dh_anon | Rsa ->
-  fatal Handshake_failure (perror __SOURCE_FILE__ __LINE__ "Illegal message")
+    fatal Handshake_failure (perror __SOURCE_FILE__ __LINE__ "Illegal message")
+
   | Dhe | Ecdhe ->
-    let ocr = match ocr with | None -> NoRequest | Some cr -> CertRequest12 cr in
     let sig, tbs = match ske with
       | Ske_dhe dh ->
         let open Parsers.SignedDHParams in
@@ -1783,11 +1782,14 @@ let client_ServerKeyExchange #region ns crt kex ske ocr =
     match CommonDH.parse_partial (kex=Ecdhe) tbs with
     | Error z -> Error z
     | Correct (gy, _) ->
+    let mode = getMode ns in
     match accept_salg12 mode sig.algorithm with
     | Error z -> Error z 
     | Correct sa ->
       let csr = ns.nonce @| mode.n_server_random in
       let tbs = to_be_signed mode.n_protocol_version Server (Some csr) tbs in
+
+      // verify both the certicate chain and the signature using the leaf verification key. 
       //let h = get() in assert(inv ns h);
       let valid = cert_verify_cb ns.cfg.cert_callbacks (coerce_crt crt) sa tbs sig.signature_payload in
       //let h = get() in assume(inv ns h);
@@ -1795,6 +1797,7 @@ let client_ServerKeyExchange #region ns crt kex ske ocr =
       if not valid then
         fatal Handshake_failure (perror __SOURCE_FILE__ __LINE__ "Failed to check SKE signature")
       else
+        let ocr = match ocr with | None -> NoRequest | Some cr -> CertRequest12 cr in
         let scert = Some (Cert.chain_up crt, sa) in
         let        Mode offer hrr pv sr sid cs pski sext _ _ _ _                  gx = mode in
         let mode = Mode offer hrr pv sr sid cs pski sext None (Some gy) ocr scert gx in
