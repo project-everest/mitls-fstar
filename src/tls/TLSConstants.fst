@@ -652,6 +652,7 @@ type ticket_seal = b:bytes{length b < 65536}
 
 // 2018.03.10 SZ: Allow it to modify [psk_region]?
 // Missing refinements on arguments from types in PSK
+unfold
 type ticket_cb_fun =
   (FStar.Dyn.dyn -> sni:string -> ticket:bytes{length ticket < 65536} -> info:ticketInfo -> rawkey:bytes -> ST unit
     (requires fun _ -> True)
@@ -675,6 +676,7 @@ type nego_action =
   | Nego_retry: cookie_extra: bytes -> nego_action
   | Nego_accept: extra_ext: custom_extensions -> nego_action
 
+unfold
 type nego_cb_fun =
   (FStar.Dyn.dyn -> pv: protocolVersion -> client_ext: bytes -> cookie: option bytes -> ST nego_action
     (requires fun _ -> True)
