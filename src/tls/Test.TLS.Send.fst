@@ -49,7 +49,7 @@ let invariant (hs:handshake) (h:HS.mem) =
 
 let footprint (hs:handshake) =
   TS.footprint hs.sto `B.loc_union`
-  T.footprint hs.stt `B.loc_union` 
+  T.footprint hs.stt `B.loc_union`
   Nego.footprint hs.nego
 
 let is_state13 (hs:handshake) = T.Transcript13? (Ghost.reveal hs.t)
@@ -68,7 +68,7 @@ val serverFinished: hs:handshake -> tag:Hacl.Hash.Definitions.hash_t (hs.a) -> S
       Ghost.reveal hs.n < T.max_transcript_size - 4 /\
       B.loc_disjoint (B.loc_buffer tag) (B.loc_region_only true Mem.tls_tables_region) /\
       B.loc_disjoint (B.loc_buffer tag) (footprint hs))
-    (ensures fun h0 res h1 -> 
+    (ensures fun h0 res h1 ->
       B.(modifies (footprint hs `loc_union` loc_buffer tag `loc_union` loc_region_only true Mem.tls_tables_region)) h0 h1 /\
       begin match res with
       | Correct hs' -> invariant hs' h1
@@ -113,7 +113,7 @@ let serverFinished hs tag =
       | _ -> // PSK
         let m = HSM13.M13_encrypted_extensions eexts in
         match TS.send_tag13 hs.stt hs.t hs.sto m tag with
-        | Correct (sto, t') -> 
+        | Correct (sto, t') ->
           let h1 = get() in
           Correct (HS hs.r hs.nego hs.stt t' sto)
         | Error z -> Error z
@@ -132,18 +132,18 @@ let serverFinished hs tag =
     | Error z -> Error z
 
 
-val server_ClientHello: 
+val server_ClientHello:
   #region: _ -> ns: Nego.t region TLSConstants.Server ->
   out: TS.send_state ->
-  T.hs_ch -> 
+  T.hs_ch ->
   ST (result (handshake & Nego.serverMode))
-  (requires fun h0 -> 
+  (requires fun h0 ->
     Mem.is_hs_rgn region /\
     Nego.inv ns h0 /\
     TS.invariant out h0 /\
     B.loc_disjoint (TS.footprint out) (Nego.footprint ns) /\
     (let s = HS.sel h0 ns.Nego.state in Nego.S_Init? s)) // TODO:  \/ Nego.S_HRR? s
-  (ensures fun h0 r h1 -> 
+  (ensures fun h0 r h1 ->
     B.modifies (Nego.footprint ns `B.loc_union` TS.footprint out `B.loc_union` B.loc_region_only true Mem.tls_tables_region) h0 h1 /\
     begin match r with
     | Correct (hs, sm) ->
@@ -156,13 +156,13 @@ val server_ClientHello:
     |  _ -> True
     end
     )
-  // [S_Init | S_HRR ==> S_ClientHello m cert] 
+  // [S_Init | S_HRR ==> S_ClientHello m cert]
   // ensures r = computeServerMode ns.cfg ns.nonce offer (stateful)
-  // but [compute_cs13] and [negotiateCipherSuite] are pure. 
+  // but [compute_cs13] and [negotiateCipherSuite] are pure.
 
 assume val computeServerMode: result Nego.serverMode
 
-assume val find_cookie: Nego.offer -> option Extensions.cookie 
+assume val find_cookie: Nego.offer -> option Extensions.cookie
 
 assume val serverMode_hashAlg: Nego.serverMode -> Tot Hashing.Spec.alg
 
@@ -172,10 +172,10 @@ assume val serverMode_hashAlg: Nego.serverMode -> Tot Hashing.Spec.alg
   serverRandom: TLSInfo.random ->
   ST (result serverMode)
   (requires fun h0 -> True)
-  (ensures fun h0 r h1 -> 
-    B.(modifies loc_none h0 h1) /\ 
-    ( match r with 
-      | Correct (ServerRetry hrr) -> TLS.Cookie.hrr_len hrr <= 16 // leaving enough room for the cookie 
+  (ensures fun h0 r h1 ->
+    B.(modifies loc_none h0 h1) /\
+    ( match r with
+      | Correct (ServerRetry hrr) -> TLS.Cookie.hrr_len hrr <= 16 // leaving enough room for the cookie
       | _ -> True )
     )
 *)
@@ -184,7 +184,7 @@ assume val serverMode_hashAlg: Nego.serverMode -> Tot Hashing.Spec.alg
 
 #restart-solver
 
-#push-options "--z3rlimit 1024 --max_ifuel 12 --initial_ifuel 12"
+#push-options "--z3rlimit 1024 --max_ifuel 1 --initial_ifuel 1"
 
 let server_ClientHello #region ns out offer =
 // TODO: match !ns.Nego.state with  | Nego.S_HRR o1 hrr -> server_ClientHello2_stateful ns o1 hrr offer
@@ -197,14 +197,14 @@ let server_ClientHello #region ns out offer =
       let alg = serverMode_hashAlg r in
       let hash_len = Hacl.Hash.Definitions.hash_len alg in
       let (ts, tr) = T.create region alg in
-      let stateless_retry = 
+      let stateless_retry =
         match find_cookie (HSM.M_client_hello?._0 offer) with
         | None -> Correct (tr, None)
         | Some c ->
           // stateless HRR.
           match TLS.Cookie.decrypt c with
-          | Error z -> 
-            // This connection is doomed: we could instead return a fatal error. 
+          | Error z ->
+            // This connection is doomed: we could instead return a fatal error.
             Error z
           | Correct (digest, extra, hrr) ->
             // TODO check consistency of sm with hrr's cs and group;
@@ -266,7 +266,7 @@ let server_ClientHello #region ns out offer =
             | TLS.Callbacks.Nego_abort ->
               fatal Handshake_failure "application requested to abort the handshake."
             | TLS.Callbacks.Nego_retry filling ->
-              assume(CipherSuite13? m.Nego.n_cipher_suite); // from ServerMode 
+              assume(CipherSuite13? m.Nego.n_cipher_suite); // from ServerMode
               let hrr = TLS.Cookie.hrr0 (HSM.M_client_hello?._0 offer).CH.session_id m.Nego.n_cipher_suite in
               // TODO: ha vs. alg
               let ha = TLS.Cookie.hrr_ha hrr in
