@@ -306,45 +306,72 @@ let server_ClientHello #region ns out offer =
 
 #pop-options
 
+// Almost copy-pasted from TLS.Handshake.Machine. rcv_b was replaced by a const_slice
+noeq type rcv_state = {
+  flt: HSL.Receive.in_progress_flt_t; // The incoming flight we are waiting for; erase?
+  rcv: HSL.Receive.hsl_state;
+  rcv_b: R.const_slice;
+  rcv_from: UInt32.t;
+  rcv_to: UInt32.t;
+  // { rcv_from <= rcv_to /\ v rcv_to <= Buffer.length rcv_b }
+  }
+
+let rcv_inv (st:rcv_state) (h:HS.mem) (in_progress:REC.in_progress_flt_t) =
+  REC.invariant st.rcv h /\
+  R.live h st.rcv_b /\
+  B.loc_disjoint (REC.footprint st.rcv) (R.loc st.rcv_b) /\
+
+  UInt32.v st.rcv_from + REC.length_parsed_bytes st.rcv h <= UInt32.v st.rcv_to /\
+  UInt32.v st.rcv_to <= UInt32.v st.rcv_b.R.len /\
+
+  Seq.equal (Seq.slice (R.as_seq h st.rcv_b)
+                       (UInt32.v st.rcv_from)
+                       (UInt32.v st.rcv_from + REC.length_parsed_bytes st.rcv h))
+             (REC.parsed_bytes st.rcv h) /\
+
+  (REC.in_progress_flt st.rcv h == REC.F_none \/ REC.in_progress_flt st.rcv h == in_progress) /\
+
+  // Is this redundant? Should we remove flt from the rcv_state struct?
+  REC.in_progress_flt st.rcv h == st.flt
 
 val receive_server_ClientHello:
   #region: _ -> ns: Nego.t region TLSConstants.Server ->
   out: TS.send_state ->
-  rec_st: REC.hsl_state ->
-  f_begin:uint_32 ->
-  f_end:uint_32 ->
-  b:R.const_slice ->
+  rec_st: rcv_state ->
 //  T.hs_ch ->
-  ST (result (handshake & Nego.serverMode))
+  ST (result (rcv_state & (handshake & Nego.serverMode)))
   (requires fun h0 ->
     Mem.is_hs_rgn region /\
     Nego.inv ns h0 /\
     TS.invariant out h0 /\
-    REC.invariant rec_st h0 /\
-    REC.receive_pre rec_st b f_begin f_end REC.F_s_Idle h0 /\
-    B.loc_disjoint (TS.footprint out) (REC.footprint rec_st) /\
-    B.loc_disjoint (REC.footprint rec_st) (Nego.footprint ns) /\
+    rcv_inv rec_st h0 REC.F_s_Idle /\
+    B.loc_disjoint (TS.footprint out) (REC.footprint rec_st.rcv) /\
+    B.loc_disjoint (REC.footprint rec_st.rcv) (Nego.footprint ns) /\
     B.loc_disjoint (TS.footprint out) (Nego.footprint ns) /\
     (let s = HS.sel h0 ns.Nego.state in Nego.S_Init? s)) // TODO:  \/ Nego.S_HRR? s
   (ensures fun h0 r h1 ->
-    B.modifies (REC.footprint rec_st `B.loc_union` Nego.footprint ns `B.loc_union` TS.footprint out `B.loc_union` B.loc_region_only true Mem.tls_tables_region) h0 h1 /\
+    B.modifies (REC.footprint rec_st.rcv `B.loc_union` Nego.footprint ns `B.loc_union` TS.footprint out `B.loc_union` B.loc_region_only true Mem.tls_tables_region) h0 h1 /\
     begin match r with
-    | Correct (hs, sm) ->
+    | Correct (rec_st', (hs, sm)) ->
       invariant hs h1 /\
-      hs.region == region /\
-      hs.r == TLSConstants.Server /\
-      hs.nego == ns /\
-      T.ClientHello? (Ghost.reveal hs.t)
+      rcv_inv rec_st' h1 REC.F_s_Idle /\
+      rec_st'.flt == REC.F_none ==>
+        // If we finished receiving a message and processed it...
+        (hs.region == region /\
+        hs.r == TLSConstants.Server /\
+        hs.nego == ns /\
+        T.ClientHello? (Ghost.reveal hs.t))
       // TODO: /\ hs.t == ...
     |  _ -> True
     end
     )
 
-let receive_server_ClientHello #region ns out rec_st f_begin f_end b =
-  match REC.receive_s_Idle rec_st b f_begin f_end with
+let receive_server_ClientHello #region ns out rec_st =
+  match REC.receive_s_Idle rec_st.rcv rec_st.rcv_b rec_st.rcv_from rec_st.rcv_to with
   | Error z -> Error z
-  | Correct None -> admit() // What to do when waiting for the full flight?
-    // Should we have an additional "error" code for waiting?
+  | Correct None -> admit()
+    // How do we return a handshake here when not yet processing anything?
+    // Should we have initialized a whole handshake previously with default values?
   | Correct (Some flt) ->
       let ch = flt.REC.ch_msg in // Extracting the ClientHello Repr from the returned struct
       // We then parse the returned repr into a high level value. This should disappear after
@@ -354,4 +381,7 @@ let receive_server_ClientHello #region ns out rec_st f_begin f_end b =
       // If we could parse the value, we then execute the regular server_ClientHello with the high-level value
       match h_ch with
       | None -> fatal Internal_error "received client Hello could not be parsed"
-      | Some (v, _) -> server_ClientHello ns out (HSM.M_client_hello v)
+      | Some (v, _) ->
+             match server_ClientHello ns out (HSM.M_client_hello v) with
+             | Error z -> Error z
+             | Correct res -> Correct (rec_st, res)
