@@ -5,8 +5,10 @@ module HM = HandshakeMessages
 module Nego = Negotiation
 module HST = FStar.HyperStack.ST
 module TS = TLS.Handshake.Send
+module REC = HSL.Receive
 module T = HSL.Transcript
 module B = LowStar.Buffer
+module R = MITLS.Repr
 
 module HSM = Parsers.Handshake
 module HSM12 = Parsers.Handshake12
@@ -15,6 +17,7 @@ module CH = Parsers.ClientHello
 module CHE = Parsers.ClientHelloExtension
 module CHEs = Parsers.ClientHelloExtensions
 
+module LP = LowParse.Low.Base
 
 open FStar.Integers
 open FStar.HyperStack.ST
@@ -302,3 +305,53 @@ let server_ClientHello #region ns out offer =
   r
 
 #pop-options
+
+
+val receive_server_ClientHello:
+  #region: _ -> ns: Nego.t region TLSConstants.Server ->
+  out: TS.send_state ->
+  rec_st: REC.hsl_state ->
+  f_begin:uint_32 ->
+  f_end:uint_32 ->
+  b:R.const_slice ->
+//  T.hs_ch ->
+  ST (result (handshake & Nego.serverMode))
+  (requires fun h0 ->
+    Mem.is_hs_rgn region /\
+    Nego.inv ns h0 /\
+    TS.invariant out h0 /\
+    REC.invariant rec_st h0 /\
+    REC.receive_pre rec_st b f_begin f_end REC.F_s_Idle h0 /\
+    B.loc_disjoint (TS.footprint out) (REC.footprint rec_st) /\
+    B.loc_disjoint (REC.footprint rec_st) (Nego.footprint ns) /\
+    B.loc_disjoint (TS.footprint out) (Nego.footprint ns) /\
+    (let s = HS.sel h0 ns.Nego.state in Nego.S_Init? s)) // TODO:  \/ Nego.S_HRR? s
+  (ensures fun h0 r h1 ->
+    B.modifies (REC.footprint rec_st `B.loc_union` Nego.footprint ns `B.loc_union` TS.footprint out `B.loc_union` B.loc_region_only true Mem.tls_tables_region) h0 h1 /\
+    begin match r with
+    | Correct (hs, sm) ->
+      invariant hs h1 /\
+      hs.region == region /\
+      hs.r == TLSConstants.Server /\
+      hs.nego == ns /\
+      T.ClientHello? (Ghost.reveal hs.t)
+      // TODO: /\ hs.t == ...
+    |  _ -> True
+    end
+    )
+
+let receive_server_ClientHello #region ns out rec_st f_begin f_end b =
+  match REC.receive_s_Idle rec_st b f_begin f_end with
+  | Error z -> Error z
+  | Correct None -> admit() // What to do when waiting for the full flight?
+    // Should we have an additional "error" code for waiting?
+  | Correct (Some flt) ->
+      let ch = flt.REC.ch_msg in // Extracting the ClientHello Repr from the returned struct
+      // We then parse the returned repr into a high level value. This should disappear after
+      // lowering
+      let bytes_ch = R.to_bytes ch in
+      let h_ch = Parsers.ClientHello.clientHello_parser32 bytes_ch in
+      // If we could parse the value, we then execute the regular server_ClientHello with the high-level value
+      match h_ch with
+      | None -> fatal Internal_error "received client Hello could not be parsed"
+      | Some (v, _) -> server_ClientHello ns out (HSM.M_client_hello v)
