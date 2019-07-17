@@ -20,7 +20,7 @@ open Range
 module HS = FStar.HyperStack
 
 module Epochs = Old.Epochs
-module Handshake = Old.Handshake
+module Handshake = TLS.Handshake
 
 #set-options "--admit_smt_queries true"
 

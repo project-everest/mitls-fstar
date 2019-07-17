@@ -30,7 +30,7 @@ module SD   = StreamDeltas
 module Conn = Connection
 
 module Epochs    = Old.Epochs
-module Handshake = Old.Handshake
+module Handshake = TLS.Handshake
 
 (* A flag for runtime debugging of TLS data.
    The F* normalizer will erase debug prints at extraction

@@ -58,7 +58,7 @@ private let errno description txt: ST error
   let a = match description with | Some a -> a | None -> fatalAlert Internal_error in
   Parse.uint16_of_bytes (Alert.alertBytes a)
 
-module Handshake = Old.Handshake
+module Handshake = TLS.Handshake
 
 let quic_check config =
   if config.min_version <> TLS_1p3 then trace "WARNING: not TLS 1.3";
@@ -135,7 +135,7 @@ let peekClientHello (ch:bytes) (has_record:bool) : ML (option chSummary) =
         Some ({ch_sni = sni; ch_alpn = alpn; ch_extensions = ext; ch_cookie = cookie; ch_ticket_data = ticket_data })
     | _ -> trace ("peekClientHello: not a client hello!"); None
 
-module H = Old.Handshake
+module H = TLS.Handshake
 module HSL = HandshakeLog
 
 let create_hs (is_server:bool) config : ML H.hs =
@@ -260,7 +260,7 @@ type raw_key = {
   pn_key: bytes;
 }
 
-let get_key (hs:Old.Handshake.hs) (ectr:nat) (rw:bool) : ML (option raw_key) =
+let get_key (hs:TLS.Handshake.hs) (ectr:nat) (rw:bool) : ML (option raw_key) =
   let epochs = Monotonic.Seq.i_read (Old.Epochs.get_epochs (Handshake.epochs_of hs)) in
   if Seq.length epochs <= ectr then None
   else
@@ -284,5 +284,5 @@ let get_key (hs:Old.Handshake.hs) (ectr:nat) (rw:bool) : ML (option raw_key) =
       pn_key = pn;
     })
     
-let send_ticket (hs:Old.Handshake.hs) (b:bytes) : ML bool =
-  Old.Handshake.send_ticket hs b
+let send_ticket (hs:TLS.Handshake.hs) (b:bytes) : ML bool =
+  TLS.Handshake.send_ticket hs b
