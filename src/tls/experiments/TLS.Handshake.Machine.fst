@@ -49,6 +49,10 @@ let client_config = config * Negotiation.resumeInfo
 ///
 ///   Note HS needs to select the incoming flight type.
 
+//NS: Unused so far
+//    * Where will this state be be held?
+//    * Should something like this type be provided by HSL.Receive itself?
+//    * LP.slice or const_slice?
 noeq type rcv_state = { 
   flt: HSL.Receive.in_progress_flt_t; // The incoming flight we are waiting for; erase? 
   rcv: HSL.Receive.hsl_state; 
@@ -79,6 +83,7 @@ noeq type rcv_state = {
 ///   
 ///   We should start thinking about their invariants and footprints.
 
+// NS: Why are the _is_quic flags important?
 noeq type client_keys = { 
   cks_is_quic: bool;
   cks: Old.KeySchedule.ks_client_state; } 
@@ -100,6 +105,8 @@ assume val is_psk: Idx.id -> bool
 /// To be aligned with Transcript:
 /// retry info, precise for clients, hashed for servers.
 
+// NS: Why is the ch0 a full clientHello
+//     In transcript, it's a anyHashTag
 type client_retry_info = {
   ch0: clientHello;
   sh0: helloRetryRequest; }
@@ -119,6 +126,10 @@ let trans (n:nat) = tr: Transcript.transcript_t { Transcript.transcript_size tr 
 // setting binders to some default value determined by the PSK
 // extension; we may need to prove that this function is idempotent
 // and does not affect other accessors.
+
+// NS: See PB.build_canonical_binders (tch_binders_len tch)
+//     and Transcript.truncate (ch:clientHello_with_binders)
+//     Is this really meant to be Tot or will Ghost do?
 assume val clear_binders: clientHello -> clientHello 
 
 assume val hash_retry: option client_retry_info -> option Transcript.retry
@@ -384,6 +395,7 @@ and mode12 = {
 // we embed in the type above refinements for functional properties
 // and witnessed properties, but we also need a stateful invariant.
 
+// NS: What is Secret.invariant?
 
 let client_invariant 
   (#region:rgn) (#cfg: client_config) (#nonce: TLSInfo.random) 
@@ -457,6 +469,8 @@ noeq abstract type t (region:rgn) = {
 /// sample SSA properties: the initial and retried ClientHello
 /// messages are both stable once defined, except for their binders.
 
+// NS: What does SSA mean in this context?
+
 (* Together with transcript injectivity, this is the gist of the
    authentication carried by the binders, of the form 
 
@@ -478,6 +492,7 @@ fun m ->
    | _ -> False // no other messages are MACed with the binder key.
 *)
 
+// NS: Projecting various forms of client hellos from the client_staet
 let st_ch0 (#region:rgn) (#cfg: client_config) (st: client_state region cfg) =
   match st with 
   | C_init _ -> None 
@@ -509,8 +524,12 @@ let st_ch (#region:rgn) (#cfg: client_config) (st: client_state region cfg) =
 
 // establishing their stability for every step; to trivial to apply
 // below, but apparently not required.
+
+// NS: `ssa f st0 st1`: f is invariant across the two states (if set initially)
 let ssa f st0 st1 = Some? (f st0) ==> f st0 == f st1 
 
+// NS: could use a more descriptive name here
+//     f is preserved across the step relation  
 let st_mon 
   (f: (#region:rgn -> #cfg: client_config -> client_state region cfg -> _)) = 
   region:rgn -> cfg: client_config -> 
@@ -525,6 +544,8 @@ let m_ch1: st_mon st_ch1 = fun _ _ _ _ -> ()
 /// Testing monotonicity, relying on the new closure library; we could
 /// probably do it more parametrically to scale up.
 
+// NS: could use a more descriptive name
+//     seems to be turning the function f into a heap relation
 let p #region (st:t region) f (o:Negotiation.offer) h0 = 
   f (HS.sel h0 st.state) == Some o 
 
@@ -561,7 +582,7 @@ val witness1 (#region:rgn) (st: t region):
       token_p st.state (p st st_ch1 o) /\
       modifies_none h0 h1)
 
-#push-options "--z3rlimit 100" 
+#push-options "--z3rlimit 100"  // NS: wow, that's a lot for a little proof
 let witness1 #region st =
   match st_ch1 !st.state with 
   | Some o -> (
