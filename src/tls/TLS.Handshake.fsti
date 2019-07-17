@@ -2,105 +2,22 @@ module TLS.Handshake
 
 open Mem
 open TLSConstants
-open TLS.Handshake.State
 
 module HS = FStar.HyperStack 
 module Range = Range
 module Epochs = Old.Epochs
-module KeySchedule = Old.KeySchedule
+module Nego = Negotiation
+
+// FIXME: restore better abstraction
+include TLS.Handshake.State
 
 #set-options "--admit_smt_queries true"
 
-val hs: Type0
-
-// the handshake epochs internally maintains counters for the current reader and writer
-val nonce: hs -> Tot TLSInfo.random  // unique for all honest instances; locally enforced
-val region_of: hs -> Tot Parse.rgn
-val role_of: hs -> role
-val random_of: hs -> Tot TLSInfo.random
-val config_of: hs -> ST config
-  (requires fun h0 -> True)
-  (ensures fun h0 _ h1 -> h0 == h1)
-val version_of: hs -> ST TLSConstants.protocolVersion
-  (requires fun h0 -> True)
-  (ensures fun h0 _ h1 -> h0 == h1)
-val get_mode: hs -> ST Negotiation.mode
-  (requires fun h0 -> True)
-  (ensures fun h0 _ h1 -> h0 == h1)
-val is_server_hrr: hs -> ST bool
-  (requires fun h0 -> True)
-  (ensures fun h0 _ h1 -> h0 == h1)
-val is_0rtt_offered: hs -> ST bool
-  (requires fun h0 -> True)
-  (ensures fun h0 _ h1 -> h0 == h1)
-val is_post_handshake: hs -> ST bool
-  (requires fun h0 -> True)
-  (ensures fun h0 _ h1 -> h0 == h1)
 
 // annoyingly, we will need specification-level variants too.
 
 // 17-04-08 TODO unclear how abstract Epochs should be.
 
-let epochs_t_of (s:hs) = Seq.seq (Epochs.epoch (region_of s) (random_of s))
-val epochs_of: s:hs -> Tot (Epochs.epochs (region_of s) (random_of s))
-
-// val logT: s:hs ->  h:HS.mem -> GTot (epochs_t_of s)
-let logT (s:hs) (h:HS.mem) = Epochs.epochsT (epochs_of s) h
-
-let non_empty h s = Seq.length (logT s h) > 0
-
-let logIndex (#t:Type) (log: Seq.seq t) = n:int { -1 <= n /\ n < Seq.length log }
-
-val completed: #region:rgn -> #nonce:TLSInfo.random -> Epochs.epoch region nonce -> Type0
-
-val hs_inv: s:hs -> HS.mem -> Type0
-
-let es_of (s:hs) = Epochs.((epochs_of s).es)
-
-// returns the current counters, with a precise refinement
-let iT (s:hs) rw (h:HS.mem): GTot (Epochs.epoch_ctr_inv (region_of s) (es_of s)) =
-  match rw with
-  | Reader -> Epochs.readerT (epochs_of s) h
-  | Writer -> Epochs.writerT (epochs_of s) h
-
-// this function increases (how to specify it once for all?)
-let i (s:hs) (rw:rw) : ST int
-  (requires (fun h -> True))
-  (ensures (fun h0 i h1 ->
-    h0 == h1 /\
-    i = iT s rw h1 /\
-    Epochs.get_ctr_post (epochs_of s) rw h0 i h1))
-=
-  assume false;
-  match rw with
-  | Reader -> Epochs.get_reader (epochs_of s)
-  | Writer -> Epochs.get_writer (epochs_of s)
-
-// returns the current epoch for reading or writing
-let eT s rw (h:HS.mem {iT s rw h >= 0}) =
-  let es = logT s h in
-  let j = iT s rw h in
-  assume(j < Seq.length es); //17-04-08 added verification hint; assumed for now.
-  Seq.index es j
-let readerT s h = eT s Reader h
-let writerT s h = eT s Writer h
-
-// returns the current exporter keys
-val xkeys_of: s:hs -> ST (Seq.seq KeySchedule.exportKey)
-  (requires fun h0 -> True)
-  (ensures fun h0 r h1 -> h0 == h1 /\ Seq.length r <= 2)
-
-
-type incoming =
-  | InAck: // the fragment is accepted, and...
-      next_keys : bool -> // the reader index increases;
-      complete  : bool -> // the handshake is complete!
-      incoming
-  | InQuery: Cert.chain -> bool -> incoming // could be part of InAck if no explicit user auth
-  | InError: TLSError.error -> incoming // how underspecified should it be?
-
-let in_next_keys (r:incoming) = InAck? r && InAck?.next_keys r
-let in_complete (r:incoming)  = InAck? r && InAck?.complete r
 
 (* ----------------------- Control Interface -------------------------*)
 

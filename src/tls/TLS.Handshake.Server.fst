@@ -385,7 +385,7 @@ let server_ClientFinished_13 hs f digestBeforeClientFinished digestClientFinishe
          (match Nego.find_psk_key_exchange_modes mode.Nego.n_offer with
          | [] -> trace ("Not sending a ticket: no PSK key exchange mode advertised")
          | psk_kex ->
-           if Some? cfg.send_ticket then server_Ticket hs (Some?.v cfg.send_ticket));
+           if Some? cfg.send_ticket then server_Ticket13 hs (Some?.v cfg.send_ticket));
          Epochs.incr_reader hs.epochs; // finally start reading with AKTs
          InAck true true  // Server 1.3 ATK
         end

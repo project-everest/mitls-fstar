@@ -270,6 +270,7 @@ let client_ServerFinished hs f digestClientFinished =
 let client_NewSessionTicket_12 (hs:hs) (resume:bool) (digest:Hashing.anyTag) (st: HSM.newSessionTicket12)
   : St incoming =
   let open Parsers.NewSessionTicket12 in
+  let open TLS.Callbacks in
   trace ("Processing ticket: "^B.print_bytes st.ticket);
 
   hs.state := C_wait_CCS (resume, digest);
@@ -289,6 +290,24 @@ let client_NewSessionTicket_12 (hs:hs) (resume:bool) (digest:Hashing.anyTag) (st
 
 (*** TLS 1.3 ***)
 
+let client_ClientFinished_13 hs digestServerFinished ocr cfin_key =
+  let mode = Nego.getMode hs.nego in
+  let ha = verifyDataHashAlg_of_ciphersuite (mode.Nego.n_cipher_suite) in
+  let digest =
+    match ocr with
+    | Some cr ->
+      let open Parsers.Certificate13 in
+      let c = ({certificate_request_context = B.empty_bytes; certificate_list = []}) in
+      HandshakeLog.send_tag #ha hs.log (HSL.Msg13 (HSM.M13_certificate c))
+    | None -> digestServerFinished in
+  let (| finId, cfin_key |) = cfin_key in
+  let cvd = HMAC.mac cfin_key digest in
+  let digest_CF = HSL.send_tag #ha hs.log (HSL.Msg13 (HSM.M13_finished cvd)) in
+  KS.ks_client13_cf hs.ks digest_CF; // For Post-HS
+  Epochs.incr_reader hs.epochs; // to ATK
+  HSL.send_signals hs.log (Some (true, false)) true; //was: Epochs.incr_writer hs.epochs
+  hs.state := C_Complete // full_mode (cvd,svd); do we still need to keep those?
+
 let client_ServerFinished_13 hs ee ocr oc ocv
   svd digestCert digestCertVerify digestServerFinished =
   let oc =
@@ -300,10 +319,10 @@ let client_ServerFinished_13 hs ee ocr oc ocv
   | Correct mode ->
     // ADL: 4th returned value is the exporter master secret.
        // should be passed to application somehow --- store in Nego? We need agreement.
-       let (sfin_key, cfin_key, app_keys, exporter_master_secret) = KeySchedule.ks_client13_sf hs.ks digestServerFinished in
+       let (sfin_key, cfin_key, app_keys, exporter_master_secret) = KS.ks_client13_sf hs.ks digestServerFinished in
        let (| finId, sfin_key |) = sfin_key in
-       if not (HMAC_UFCMA.verify sfin_key digestCertVerify svd)
-       then InError (fatalAlert Decode_error, "Finished MAC did not verify: expected digest "^print_bytes digestCertVerify )
+       if not (HMAC.verify sfin_key digestCertVerify svd)
+       then InError (fatalAlert Decode_error, "Finished MAC did not verify: expected digest "^B.print_bytes digestCertVerify )
        else
        begin
          export hs exporter_master_secret;
@@ -314,8 +333,8 @@ let client_ServerFinished_13 hs ee ocr oc ocv
          begin
            trace "Early data accepted; emitting EOED.";
            let ha = Nego.hashAlg mode in
-           let digestEOED = HandshakeLog.send_tag #ha hs.log (HSL.Msg13 (HSM.M13_end_of_early_data ())) in
-           HandshakeLog.send_signals hs.log (Some (false, false)) false;
+           let digestEOED = HSL.send_tag #ha hs.log (HSL.Msg13 (HSM.M13_end_of_early_data ())) in
+           HSL.send_signals hs.log (Some (false, false)) false;
            hs.state := C13_sent_EOED digestEOED ocr cfin_key;
            InAck false false
          end
@@ -328,31 +347,14 @@ let client_ServerFinished_13 hs ee ocr oc ocv
          end
        end // moving to C_Complete
 
-let client_ClientFinished_13 hs digestServerFinished ocr cfin_key =
-  let mode = Nego.getMode hs.nego in
-  let ha = verifyDataHashAlg_of_ciphersuite (mode.Nego.n_cipher_suite) in
-  let digest =
-    match ocr with
-    | Some cr ->
-      let open Parsers.Certificate13 in
-      let c = ({certificate_request_context = empty_bytes; certificate_list = []}) in
-      HandshakeLog.send_tag #ha hs.log (HSL.Msg13 (HSM.M13_certificate c))
-    | None -> digestServerFinished in
-  let (| finId, cfin_key |) = cfin_key in
-  let cvd = HMAC_UFCMA.mac cfin_key digest in
-  let digest_CF = HandshakeLog.send_tag #ha hs.log (HSL.Msg13 (HSM.M13_finished cvd)) in
-  KeySchedule.ks_client13_cf hs.ks digest_CF; // For Post-HS
-  Epochs.incr_reader hs.epochs; // to ATK
-  HandshakeLog.send_signals hs.log (Some (true, false)) true; //was: Epochs.incr_writer hs.epochs
-  hs.state := C_Complete // full_mode (cvd,svd); do we still need to keep those?
-
 let client_NewSessionTicket_13 hs st13 =
+  let open TLS.Callbacks in
   let open Parsers.NewSessionTicket13 in
   let open Parsers.NewSessionTicketExtension in
   let tid = st13.ticket in
   let nonce = st13.ticket_nonce in
   let age_add = st13.ticket_age_add in
-  trace ("Received ticket: "^(hex_of_bytes tid)^" nonce: "^(hex_of_bytes nonce));
+  trace ("Received ticket: "^(B.hex_of_bytes tid)^" nonce: "^(B.hex_of_bytes nonce));
   let mode = Nego.getMode hs.nego in
   let CipherSuite13 ae h = mode.Nego.n_cipher_suite in
   let ed = List.Tot.find NSTE_early_data? st13.extensions in
@@ -366,11 +368,11 @@ let client_NewSessionTicket_13 hs st13 =
     allow_dhe_resumption = true;
     allow_psk_resumption = true;
     early_cs = mode.Nego.n_cipher_suite;
-    identities = (empty_bytes, empty_bytes); // TODO certs
+    identities = (B.empty_bytes, B.empty_bytes); // TODO certs
   }) in
 
-  let psk = KeySchedule.ks_client13_rms_psk hs.ks nonce in
-  let sni = iutf8 (Nego.get_sni mode.Nego.n_offer) in
+  let psk = KS.ks_client13_rms_psk hs.ks nonce in
+  let Some sni = B.iutf8_opt (Nego.get_sni mode.Nego.n_offer) in
   let cfg = Nego.local_config hs.nego in
   let valid_ed =
     if cfg.is_quic then

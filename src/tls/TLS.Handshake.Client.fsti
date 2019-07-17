@@ -90,6 +90,14 @@ val client_NewSessionTicket_12:
 
 (*** TLS 1.3 ***)
 
+// Send ClientFinished flight (hide from API?)
+val client_ClientFinished_13:
+  hs: hs ->
+  digest: H.anyTag ->
+  cr: option HSM.certificateRequest13 ->
+  cfk: (i:HMAC.finishedId & cfk:KS.fink i) ->
+  St unit
+
 (* receive EncryptedExtension...ServerFinished for TLS 1.3, roughly mirroring client_ServerHelloDone *)
 val client_ServerFinished_13:
   s: hs ->
@@ -102,16 +110,6 @@ val client_ServerFinished_13:
   digestCertVerify: H.anyTag ->
   digestServerFinished: H.anyTag ->
   St incoming
-// hs.state: C13_wait_Finished1 ==> 
-//           C13_complete \/ 
-//           C13_sent_EOED (with the arguments for delayed call to client_ClientFinished13)
-
-val client_ClientFinished_13:
-  hs: hs ->
-  digest: H.anyTag ->
-  cr: option HSM.certificateRequest13 ->
-  cfk: (i:HMAC.finishedId & cfk:KS.fink i) ->
-  St unit
 
 val client_NewSessionTicket_13:
   hs: hs ->
