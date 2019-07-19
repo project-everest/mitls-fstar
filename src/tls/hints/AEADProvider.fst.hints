@@ -12,7 +12,7 @@
         "lemma_FStar.HyperStack.ST.lemma_same_refs_in_stack_regions_intro"
       ],
       0,
-      "1564796a05385df50d1047da1eeef85d"
+      "3598f4b695ebbd5fc656674e6e79f493"
     ],
     [
       "AEADProvider.dbg",
@@ -24,7 +24,7 @@
         "equation_DebugFlags.debug_AEP"
       ],
       0,
-      "3a65ed7212aae43b8e1fda81006e896b"
+      "38826e6af4c30a31771e21e080a6687d"
     ],
     [
       "AEADProvider.alg",
@@ -38,7 +38,7 @@
         "typing_CipherSuite.uu___is_AEAD"
       ],
       0,
-      "d66a1de470dff94af4f29550f9e8c2f3"
+      "3ab10db2e5970b3bc789ce1b71fdb58d"
     ],
     [
       "AEADProvider.alg'",
@@ -52,7 +52,7 @@
         "typing_CipherSuite.uu___is_AEAD"
       ],
       0,
-      "89bd1d5709216f11b0c76ce684ac38af"
+      "c82a1d7c1e07e8831820c91de8e78e60"
     ],
     [
       "AEADProvider.aeadAlg_for_evercrypt",
@@ -64,7 +64,7 @@
         "refinement_interpretation_Tm_refine_aeb42dbe7bcd8439bc45e996e277ed62"
       ],
       0,
-      "310dd63b06c7b9a0c97b3ebf7d39d5af"
+      "4a2a66dcbe00c1f07e8ecac039b9dc48"
     ],
     [
       "AEADProvider.iv",
@@ -76,7 +76,7 @@
         "equation_AEADProvider.iv_length", "projection_inverse_BoxInt_proj_0"
       ],
       0,
-      "c922da8814ade91b882f8e0fecc4f791"
+      "46f1fc3888dbca9890b04e32abb26e61"
     ],
     [
       "AEADProvider.salt_length",
@@ -97,7 +97,7 @@
         "typing_AEADProvider.alg_"
       ],
       0,
-      "e9042aec85a2a8c4eab8d5f1328b55d7"
+      "65d65ee827987ae74a8d6a83db5a2610"
     ],
     [
       "AEADProvider.explicit_iv_length",
@@ -118,7 +118,7 @@
         "typing_AEADProvider.alg_"
       ],
       0,
-      "2ffffcc742e143987114871e61268388"
+      "aa0240643c936f70e873c94272571e1a"
     ],
     [
       "AEADProvider.key",
@@ -132,7 +132,7 @@
         "typing_AEADProvider.key_length"
       ],
       0,
-      "245093c69808f73fd3bae9581f2314ae"
+      "229d63cbce6e5bc03486b64094e29477"
     ],
     [
       "AEADProvider.salt",
@@ -146,7 +146,7 @@
         "projection_inverse_BoxInt_proj_0", "typing_AEADProvider.salt_length"
       ],
       0,
-      "5c2ab35fde1e8b1dca4afefd6f214c32"
+      "9993dcb53f879d1988483633f866481c"
     ],
     [
       "AEADProvider.noncelen",
@@ -155,7 +155,7 @@
       1,
       [ "@query" ],
       0,
-      "b277d8cd04688e5ac978a14af8b0e1d1"
+      "29f43b9735acc67355f740b25b75ee26"
     ],
     [
       "AEADProvider.nonce",
@@ -171,7 +171,7 @@
         "typing_AEADProvider.salt_length"
       ],
       0,
-      "964c256686705adbd6ac9f02859d5619"
+      "707a644b642d6f0d2b29dcc3a466773e"
     ],
     [
       "AEADProvider.coerce_iv",
@@ -183,7 +183,7 @@
         "equation_AEADProvider.iv_length", "projection_inverse_BoxInt_proj_0"
       ],
       0,
-      "ae9e4a2cf5269eb17007791dd15cedc3"
+      "944d64839a90c875254c067cbf8e7fd6"
     ],
     [
       "AEADProvider.create_nonce",
@@ -205,14 +205,14 @@
         "equality_tok_Parsers.ProtocolVersion.TLS_1p3@tok",
         "equation_AEADProvider.alg", "equation_AEADProvider.alg_",
         "equation_AEADProvider.id", "equation_AEADProvider.iv_length",
-        "equation_AEADProvider.key_length", "equation_AEADProvider.nonce",
-        "equation_AEADProvider.noncelen", "equation_AEADProvider.salt",
-        "equation_AEADProvider.salt_length",
+        "equation_AEADProvider.nonce", "equation_AEADProvider.noncelen",
+        "equation_AEADProvider.salt", "equation_AEADProvider.salt_length",
         "equation_AEADProvider.salt_of_state", "equation_AEADProvider.state",
         "equation_EverCrypt.aead_state", "equation_FStar.Bytes.lbytes",
         "equation_FStar.UInt.fits", "equation_FStar.UInt.max_int",
         "equation_FStar.UInt.min_int", "equation_FStar.UInt.size",
-        "equation_FStar.UInt.uint_t", "equation_Spec.Chacha20.size_nonce",
+        "equation_FStar.UInt.uint_t", "equation_Hashing.Spec.maxTagLen",
+        "equation_Spec.Chacha20.size_nonce",
         "equation_Spec.Poly1305.size_key",
         "fuel_guarded_inversion_FStar.Pervasives.Native.tuple2",
         "function_token_typing_FStar.UInt8.t", "int_inversion",
@@ -231,14 +231,14 @@
         "refinement_interpretation_Tm_refine_71ea40360194fe02ee1272538c9cacbc",
         "refinement_interpretation_Tm_refine_a78e81a34494fa620ef91991a1267b1f",
         "refinement_interpretation_Tm_refine_f13070840248fced9d9d60d77bdae3ec",
-        "typing_AEADProvider.key_length", "typing_AEADProvider.noncelen",
-        "typing_AEADProvider.salt_of_state", "typing_FStar.Bytes.len",
-        "typing_FStar.Bytes.reveal", "typing_FStar.UInt.fits",
-        "typing_FStar.UInt32.v", "typing_Spec.Chacha20.size_nonce",
+        "typing_AEADProvider.noncelen", "typing_AEADProvider.salt_of_state",
+        "typing_FStar.Bytes.len", "typing_FStar.Bytes.reveal",
+        "typing_FStar.UInt.fits", "typing_FStar.UInt32.v",
+        "typing_Hashing.Spec.maxTagLen", "typing_Spec.Chacha20.size_nonce",
         "typing_Spec.Poly1305.size_key"
       ],
       0,
-      "29a9e18aec6787275d701e6f48068405"
+      "8f1fade59a3e19a38205da973e164595"
     ],
     [
       "AEADProvider.leak",
@@ -277,7 +277,7 @@
         "typing_FStar.Set.complement", "typing_FStar.Set.empty"
       ],
       0,
-      "b2adff75eecb95637a02b66e41b9ae64"
+      "c35a1a6c1f6a0eef0ce40b88d14b927b"
     ],
     [
       "AEADProvider.adata",
@@ -289,7 +289,7 @@
         "projection_inverse_BoxInt_proj_0"
       ],
       0,
-      "00412cc77ebe7ead9d6ddef9ff9439a7"
+      "7dd24518cbfd23638f72d7d3c6da6031"
     ],
     [
       "AEADProvider.cipherlen",
@@ -308,7 +308,7 @@
         "typing_AEADProvider.taglen"
       ],
       0,
-      "8e7cac4aaed52700f43008eba9180688"
+      "0afed6cfa34b08e36cb4c70cb2df80ec"
     ],
     [
       "AEADProvider.from_bytes",
@@ -372,7 +372,7 @@
         "typing_LowStar.Monotonic.Buffer.loc_unused_in"
       ],
       0,
-      "7088320f57c0ade85e1eed4f6aae7d5f"
+      "6c9760137617ee33b71c02ebfd134dae"
     ]
   ]
 ]

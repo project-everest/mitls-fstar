@@ -11,7 +11,7 @@
         "refinement_interpretation_Tm_refine_07481b2515c4679d0ce1536417b50638"
       ],
       0,
-      "d57fdf62f7fc3420f33cb2f08ccd653d"
+      "d7366c7e166861aef7312cdb9f9b04ad"
     ],
     [
       "LHAEPlain.adata",
@@ -27,7 +27,7 @@
         "refinement_interpretation_Tm_refine_8fcbdf9612ed9cda5a238ad00e36f8ee"
       ],
       0,
-      "d1f6b88d73444d8d6b46eeaf0257c74b"
+      "49b8a7eec676ee6cef2efd48fbb62326"
     ],
     [
       "LHAEPlain.seqN",
@@ -35,21 +35,24 @@
       2,
       1,
       [
-        "@MaxIFuel_assumption", "@query", "b2t_def", "bool_inversion",
+        "@MaxFuel_assumption", "@MaxIFuel_assumption",
+        "@fuel_correspondence_Prims.pow2.fuel_instrumented",
+        "@fuel_irrelevance_Prims.pow2.fuel_instrumented", "@query",
+        "b2t_def", "bool_inversion", "bool_typing",
         "equation_FStar.Bytes.lbytes", "equation_FStar.Seq.Properties.split",
         "equation_FStar.UInt.fits", "equation_FStar.UInt.max_int",
         "equation_FStar.UInt.min_int", "equation_FStar.UInt.size",
-        "equation_FStar.UInt.uint_t", "equation_LHAEPlain.ad_Length",
-        "equation_LHAEPlain.adata", "equation_LHAEPlain.id",
-        "equation_Parse.seq_of_bytes", "equation_Prims.nat",
-        "equation_Spec.Poly1305.size_key",
+        "equation_FStar.UInt.uint_t", "equation_Hashing.Spec.maxTagLen",
+        "equation_LHAEPlain.ad_Length", "equation_LHAEPlain.adata",
+        "equation_LHAEPlain.id", "equation_Parse.seq_of_bytes",
+        "equation_Prims.nat", "equation_Spec.Poly1305.size_key",
         "equation_StatefulPlain.ad_Length",
         "function_token_typing_FStar.UInt8.t", "int_inversion", "int_typing",
         "lemma_FStar.Buffer.lemma_size", "lemma_FStar.Bytes.length_reveal",
         "lemma_FStar.Bytes.repr_bytes_size",
         "lemma_FStar.Seq.Base.lemma_len_slice", "lemma_FStar.UInt32.vu_inv",
-        "primitive_Prims.op_Addition", "primitive_Prims.op_AmpAmp",
-        "primitive_Prims.op_LessThanOrEqual",
+        "lemma_Lib.IntTypes.pow2_values", "primitive_Prims.op_Addition",
+        "primitive_Prims.op_AmpAmp", "primitive_Prims.op_LessThanOrEqual",
         "primitive_Prims.op_Subtraction",
         "projection_inverse_BoxBool_proj_0",
         "projection_inverse_BoxInt_proj_0",
@@ -63,14 +66,14 @@
         "refinement_interpretation_Tm_refine_b913a3f691ca99086652e0a655e72f17",
         "refinement_interpretation_Tm_refine_f13070840248fced9d9d60d77bdae3ec",
         "refinement_interpretation_Tm_refine_f89365498cfb1cc23c3c34ee6feda61a",
-        "typing_FStar.Bytes.empty_bytes", "typing_FStar.Bytes.int_of_bytes",
-        "typing_FStar.Bytes.len", "typing_FStar.Bytes.reveal",
+        "typing_FStar.Bytes.int_of_bytes", "typing_FStar.Bytes.reveal",
         "typing_FStar.Bytes.split", "typing_FStar.Seq.Base.empty",
         "typing_FStar.Seq.Base.length", "typing_FStar.UInt.fits",
-        "typing_FStar.UInt32.v", "typing_Spec.Poly1305.size_key"
+        "typing_FStar.UInt32.v", "typing_Hashing.Spec.maxTagLen",
+        "typing_Spec.Poly1305.size_key"
       ],
       0,
-      "7b11dff35fc57ccdebaeb72dc88c717f"
+      "b1bff998896d016d76a10b6329e08cc6"
     ],
     [
       "LHAEPlain.lemma_makeAD_seqN",
@@ -86,7 +89,7 @@
         "refinement_interpretation_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
       ],
       0,
-      "257047b4ca9c37a6c43456b148591acb"
+      "51d9159f59e893cc6f98394f39a3c9c3"
     ],
     [
       "LHAEPlain.plain",
@@ -104,7 +107,7 @@
         "refinement_interpretation_Tm_refine_f89365498cfb1cc23c3c34ee6feda61a"
       ],
       0,
-      "09492ebdba6a243b8552189de986850e"
+      "87879269c53537dedfe666efa76830b2"
     ],
     [
       "LHAEPlain.ghost_repr",
@@ -127,7 +130,7 @@
         "typing_StatefulPlain.parseAD"
       ],
       0,
-      "72966a1a439cad9fdb76723f036d1699"
+      "70db7023b7c41b3669a49d21f07755fd"
     ],
     [
       "LHAEPlain.repr",
@@ -155,7 +158,7 @@
         "typing_StatefulPlain.parseAD"
       ],
       0,
-      "c2af253909f3ddbdf6ab79b1108af53b"
+      "b3fcd1c13644ea18f6e2baf0aa0497a4"
     ],
     [
       "LHAEPlain.mk_plain",
@@ -173,7 +176,7 @@
         "refinement_interpretation_Tm_refine_f89365498cfb1cc23c3c34ee6feda61a"
       ],
       0,
-      "994e577a1d7e0cbf9721b9545a5894b3"
+      "ed38c056bf16ce2b68d3a78a79111cdd"
     ],
     [
       "LHAEPlain.mk_plain",
@@ -191,7 +194,7 @@
         "refinement_interpretation_Tm_refine_f89365498cfb1cc23c3c34ee6feda61a"
       ],
       0,
-      "9c0497ffdf1a3e6ed9816151a878674f"
+      "268c3fdcb52efb974dd9c5ff6b59d9c3"
     ],
     [
       "LHAEPlain.mk_plain",
@@ -219,7 +222,7 @@
         "refinement_interpretation_Tm_refine_f89365498cfb1cc23c3c34ee6feda61a"
       ],
       0,
-      "06ebd08a02303ec3b6fc666c7553d280"
+      "41de48bc920d5fcb44fbb8196c4f4c6f"
     ]
   ]
 ]
