@@ -2389,7 +2389,7 @@ let trace_server_ClientHello #region (ns: t region Server) (offer: HSM.clientHel
   trace ( 
     List.Tot.fold_left accum_string_of_pv "offered versions" (Negotiation.Version.offered_versions offer))
 
-#push-options "--z3rlimit 1024 --max_ifuel 8 --initial_ifuel 8"
+#push-options "--z3rlimit 2048 --max_ifuel 12 --initial_ifuel 12"
 let server_ClientHello #region ns offer log0 =
   trace_server_ClientHello #region ns offer;
   let r = match !ns.state with
