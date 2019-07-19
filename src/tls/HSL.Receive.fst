@@ -183,7 +183,24 @@ private let err_or_insufficient_data
 ///   and then either return an error or the flight flt
 
 inline_for_extraction noextract
-let check_end_index_and_return (#a:Type) (st:hsl_state) (pos f_end:uint_32) (flt:a) =
+let check_end_index_and_return
+  (#a:Type)
+  (st:hsl_state)
+  (pos f_end:uint_32)
+  (flt:a)
+: Stack (TLSError.result (option a))
+  (requires (fun h -> B.live h st.inc_st))
+  (ensures (fun h0 res h1 ->
+    B.modifies (footprint st) h0 h1 /\ (
+    if pos <> f_end
+    then
+      E.Error? res /\ B.as_seq h1 st.inc_st == B.as_seq h0 st.inc_st
+    else
+      res == E.Correct (Some flt) /\
+      parsed_bytes st h1 == Seq.empty /\
+      in_progress_flt st h1 == F_none
+  )))
+=
   if pos <> f_end then E.Error bytes_remain_error
   else begin
     reset_incremental_state st;
