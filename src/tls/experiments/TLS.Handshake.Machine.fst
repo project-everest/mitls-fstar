@@ -791,10 +791,22 @@ let buffer_received_fragment ms #i rg f = ms
 // (later?)
 
 
-// the actual transitions
+// the actual transitions; we should experiment with some precise pre/post
 assume val client_HelloRetryRequest: #region:rgn -> hs: t region -> HSM.hrr -> St incoming
 assume val client_ServerHello:       #region:rgn -> hs: t region -> HSM.sh -> St incoming
 assume val client_ServerHelloDone:   #region:rgn -> hs: t region -> HSM.sh -> St incoming
+assume val client_ServerFinished13:  #region:rgn -> hs: t region ->
+  full_offer ->
+  sh: serverHello ->
+  ee: HSM.encryptedExtensions ->
+  ocr: option HSM.certificateRequest13 ->
+  oc: option HSM.certificate13 ->
+  ocv: option HSM.certificateVerify13 ->
+  svd: bytes ->
+  digestCert: option Hashing.anyTag ->
+  digestCertVerify: Hashing.anyTag ->
+  digestServerFinished: Hashing.anyTag ->
+  St incoming
 
 #set-options "--admit_smt_queries true"
 let rec receive_fragment #region hs #i rg f =
@@ -866,9 +878,9 @@ let rec receive_fragment #region hs #i rg f =
     | Correct None -> InAck false false // nothing happened
     | Correct (Some x) ->
       // covering 3 cases (see old code for details)
-      // let ee, ocr, oc, ocv, fin1, otag0, tag1, tag_fin1 = admit() in
-      // client_ServerFinished_13 hs ee ocr ocv fin1 otag0 tag1 tag_fin1
-      admit()
+      // we need to extract these high-level values from the flight:
+      let ee, ocr, oc, ocv, fin1, otag0, tag1, tag_fin1 = admit() in
+      client_ServerFinished13 hs offer sh ee ocr oc ocv fin1 otag0 tag1 tag_fin1
       )
 (*
   | C13_Complete _ _ _ _ _ _ _ ms0 _ ->
