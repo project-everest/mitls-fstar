@@ -46,6 +46,19 @@ noeq type t = {
 
 let callbacks v send recv: t = { ptr = v; snd = send; rcv = recv }
 
+val send:
+  t ->
+  buffer: FStar.Buffer.buffer UInt8.t ->
+  len: size_t ->
+  ST Int32.t
+  (requires fun h0 -> 
+    Buffer.live h0 buffer /\ 
+    UInt32.v len = Buffer.length buffer)
+  (ensures fun h0 r h1 -> 
+    let v = Int32.v r in
+    modifies_none h0 h1 /\
+    (v = -1 \/ (0 <= v /\ v <= UInt32.v len)))
+
 // following the indirection
 let send t buffer len = t.snd t.ptr buffer len 
 

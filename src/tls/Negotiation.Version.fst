@@ -149,7 +149,6 @@ val write_supportedVersions
       match support cfg with 
       | Error _ -> False 
       | Correct che -> valid_content_pos clientHelloExtension_parser h1 out p0 che p1 ))
-#pop-options 
 
 let write_supportedVersions cfg out p0 =
   if out.len - p0 < 10ul then fatal Internal_error "output buffer" else
@@ -170,6 +169,8 @@ let write_supportedVersions cfg out p0 =
 // this kind of code is hard to get right, as the programmer needs to
 // know every detail of the wire format, including its byte offsets
 // and explicit proof steps---every error takes 10' 
+
+#pop-options 
 
 (* another attempt based on higher-order low-level writing combinators *)
 

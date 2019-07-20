@@ -24,7 +24,23 @@ let nonce_id_table : MDM.t tls_tables_region random n_id (fun x -> True) =
 
 let id_of_nonce (n:random) (i:n_id n) = HST.witnessed (MDM.contains nonce_id_table n i)
 
-let insert n i =
+val insert:
+  n: random ->
+  i: n_id n ->
+  ST unit
+  (requires (fun h ->
+    ~ (MDM.defined nonce_id_table n h)
+  ))
+  (ensures (fun h0 _ h1 ->
+    let cur = HS.sel h0 nonce_id_table in
+    HS.contains h1 nonce_id_table /\
+    HS.modifies (Set.singleton tls_tables_region) h0 h1 /\
+    HS.modifies_ref tls_tables_region (Set.singleton (HS.as_addr nonce_id_table)) h0 h1 /\
+    HS.sel h1 nonce_id_table == MDM.upd cur n i /\
+    witnessed (MDM.contains nonce_id_table n i)
+  ))
+
+let insert n i=
   HST.recall nonce_id_table;
   MDM.extend nonce_id_table n i
 

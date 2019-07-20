@@ -274,3 +274,12 @@ dist/test/Makefile.basic: $(ALL_KRML_FILES)
 test: compile-test
 	$(MAKE) -C dist/test test
 
+#####################
+# Verification only #
+#####################
+
+# NOTE: this rule is subsumed by $(ALL_KRML_FILES) so it need not be
+# explicitly added to `all`.
+
+.PHONY: verify-all
+verify-all: $(ALL_CHECKED_FILES)
