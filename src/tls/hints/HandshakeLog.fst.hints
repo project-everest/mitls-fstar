@@ -13,7 +13,7 @@
         "fuel_guarded_inversion_Prims.list", "subterm_ordering_Prims.Cons"
       ],
       0,
-      "e7d7d0f9ecae477bffba77ddcfb41cae"
+      "d277b4325cc361d9f458121699d1e1ff"
     ],
     [
       "HandshakeLog.append_transcript",
@@ -25,7 +25,7 @@
         "refinement_interpretation_Tm_refine_72e5a2aa76f3c2442b018562b3272ee5"
       ],
       0,
-      "04b3f518f9a8f9ca03ce0b0e2d5556f5"
+      "75c75ece6d4657e666b0df8b1291334d"
     ],
     [
       "HandshakeLog.discard",
@@ -38,7 +38,7 @@
         "lemma_FStar.HyperStack.ST.lemma_same_refs_in_stack_regions_intro"
       ],
       0,
-      "bf573e4222384784dace879c9a4e8246"
+      "0c6295b187a379b026aae37cc4bb3a76"
     ],
     [
       "HandshakeLog.trace",
@@ -50,7 +50,7 @@
         "equation_DebugFlags.debug_HSL"
       ],
       0,
-      "6843df3fefcbd41c7e9924f5ca8004ed"
+      "3efdb46c1935f4d668e8ddb8715e140d"
     ],
     [
       "HandshakeLog.elift1_def",
@@ -63,7 +63,7 @@
         "typing_FStar.Ghost.elift1"
       ],
       0,
-      "a9c6fc8f1f8d2408bfe06fb7e32b7346"
+      "31a648dfe3d39dbf08272595d203263b"
     ],
     [
       "HandshakeLog.bind_log",
@@ -75,7 +75,7 @@
         "equation_HandshakeLog.reveal_log"
       ],
       0,
-      "4f39b47f9b6991f83bf411a8269cb40f"
+      "82fd7532ad72ce9b69742289e5e0c856"
     ],
     [
       "HandshakeLog.empty_hs_transcript",
@@ -100,7 +100,7 @@
         "token_correspondence_HandshakeMessages.valid_hs_msg_prop"
       ],
       0,
-      "f3ca6abdb40179b09ea166e64a911e6d"
+      "3be04a72eebc76b73763c88a747beb76"
     ],
     [
       "HandshakeLog.append_hs_transcript",
@@ -112,7 +112,7 @@
         "refinement_interpretation_Tm_refine_3e2c9291fd3b066a107ccf5a30cfc03a"
       ],
       0,
-      "1c00e70b88d1e9e39a8ab4b71ba1a575"
+      "dc10b68765225f23d4f3bcec5ed49847"
     ],
     [
       "HandshakeLog.extend_hs_transcript",
@@ -124,7 +124,7 @@
         "refinement_interpretation_Tm_refine_71752dd75c462e2f1a8dac5147cb3746"
       ],
       0,
-      "bcfed4358147c23965421ca59bdf8520"
+      "4aabe6978194cf2808798ffb2ee99d14"
     ],
     [
       "HandshakeLog.gforall_list_to_list_refined",
@@ -159,7 +159,7 @@
         "typing_HandshakeLog.gforall", "typing_TLSInfo.safe_region"
       ],
       0,
-      "681506d0091ff8f187230272f9fc28d7"
+      "1166fec27d4f0e4bb469f5a17d1407d8"
     ],
     [
       "HandshakeLog.valid_transcript_to_list_valid_hs_msg_aux",
@@ -198,7 +198,7 @@
         "typing_HandshakeLog.gforall", "typing_TLSInfo.safe_region"
       ],
       0,
-      "b89d5f051851bf7daaf55db86ff14d6c"
+      "419ce362f864c2472d8579375b135c2a"
     ],
     [
       "HandshakeLog.valid_transcript_to_list_valid_hs_msg_aux_inj",
@@ -207,7 +207,7 @@
       1,
       [ "@query" ],
       0,
-      "d19c47b693c9b9c17b8c389409ece515"
+      "69efef8968946f756c5b3fe9592f1140"
     ],
     [
       "HandshakeLog.valid_transcript_to_list_valid_hs_msg_aux_inj",
@@ -256,7 +256,7 @@
         "typing_HandshakeLog.gforall", "typing_TLSInfo.safe_region"
       ],
       0,
-      "2d92a75b8e217e19e0d0b7f583e88663"
+      "a94681039458ac61daa24fbf97f8ffee"
     ],
     [
       "HandshakeLog.transcript_bytes",
@@ -271,7 +271,7 @@
         "refinement_interpretation_Tm_refine_7913c46ed823df5e60659625cd966658"
       ],
       0,
-      "9045aba53ddd8c90dde45221ee045ea4"
+      "a80657427409a5643edf148b4cbb3b41"
     ]
   ]
 ]
