@@ -14,6 +14,7 @@ include Mem // temporary, for code opening only TLSConstants
 
 // basic parsing and formatting---an attempt at splitting TLSConstant.
 
+inline_for_extraction
 type pinverse_t (#a:Type) (#b:Type) ($f:(a -> Tot b)) = b -> Tot (result a)
 
 unfold type lemma_inverse_g_f (#a:Type) (#b:Type) ($f:a -> Tot b) ($g:b -> Tot (result a)) (x:a) =
