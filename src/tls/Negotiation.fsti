@@ -219,6 +219,7 @@ val create:
   St (t region r)
   // ensures ns.cfg = cfg /\ ns.nonce = nonce /\ initial state. 
 
+inline_for_extraction
 type reader 'a = 
   #region:rgn -> #role:TLSConstants.role -> ns:t region role -> ST 'a 
   (requires (fun h0 -> h0 `HS.contains` ns.state ))
