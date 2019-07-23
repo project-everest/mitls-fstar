@@ -207,6 +207,33 @@ let receive_post
        in_progress_flt st h1 == F_none
      | _ -> False)
 
+unfold private
+let receive_post_with_leftover
+  (#flt:Type)
+  (st:hsl_state)
+  (b:R.const_slice)
+  (f_begin f_end:uint_32)
+  (in_progress:in_progress_flt_t)
+  (valid:uint_32 -> uint_32 -> flt -> HS.mem -> Type0)
+  (h0:HS.mem)
+  (x:TLSError.result (option (flt & uint_32)))
+  (h1:HS.mem)
+  = receive_pre st b f_begin f_end in_progress h0 /\
+    B.modifies (footprint st) h0 h1 /\
+    (let open FStar.Error in
+     match x with
+     | Error _ -> True
+     | Correct None ->
+       in_progress_flt st h1 == in_progress /\
+       parsed_bytes st h1 ==
+         Seq.slice (R.as_seq h0 b) (v f_begin) (v f_end)
+     | Correct (Some (flt, idx_end)) ->
+       idx_end <= f_end /\  //AR: do we need this?
+       valid f_begin idx_end flt h1 /\
+       in_progress_flt st h1 == F_none /\
+       parsed_bytes st h1 == Seq.empty
+     | _ -> False)
+
 
 /// Error codes returned by the receive functions
 
@@ -220,11 +247,10 @@ let unexpected_flight_error : TLSError.error = {
   Parsers.Alert.description = Parsers.AlertDescription.Unexpected_message
 }, ""
 
-let bytes_remain_error : TLSError.error = {
+let unexpected_end_index_error : TLSError.error = {
   Parsers.Alert.level = Parsers.AlertLevel.Fatal;
   Parsers.Alert.description = Parsers.AlertDescription.Unexpected_message
 }, ""
-
 
 /// ad-hoc flight types
 /// HS would ask HSL to parse specific flight types, depending on where its own state machine is
@@ -297,11 +323,19 @@ let valid_c_wait_ServerHello
 
     valid flt.sh_msg h
 
+(*
+ * AR: 07/23: Cedric mentioned that for this flight, the buffer may have leftover bytes
+ *            So we should not insist of consuming all the bytes [f_begin, f_end]
+ *            In general, since the interface is ad-hoc anyway, we will decide this on a flight-by-flight basis
+ *            Also, we don't enforce anything about the flight in the leftover bytes
+ *
+ *            The receive function then returns the flight and the index upto which the buffer was consumed
+ *)
 
 val receive_c_wait_ServerHello (st:hsl_state) (b:R.const_slice) (f_begin f_end:uint_32)
-  : ST (TLSError.result (option (c_wait_ServerHello b)))
+  : ST (TLSError.result (option (c_wait_ServerHello b & uint_32)))
        (requires receive_pre st b f_begin f_end F_c_wait_ServerHello)
-       (ensures  receive_post st b f_begin f_end F_c_wait_ServerHello valid_c_wait_ServerHello)
+       (ensures  receive_post_with_leftover st b f_begin f_end F_c_wait_ServerHello valid_c_wait_ServerHello)
 
 
 (*** 1.3 flights ***)

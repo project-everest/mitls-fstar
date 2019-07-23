@@ -179,32 +179,57 @@ private let err_or_insufficient_data
       B.upd st.inc_st 0ul inc_st;
       E.Correct None
 
-/// Helper function to check that the end index matches with pos
+/// Helper function to check that pos matches f_end
 ///   and then either return an error or the flight flt
 
 inline_for_extraction noextract
-let check_end_index_and_return
+let check_eq_end_index_and_return
   (#a:Type)
   (st:hsl_state)
   (pos f_end:uint_32)
   (flt:a)
 : Stack (TLSError.result (option a))
-  (requires (fun h -> B.live h st.inc_st))
-  (ensures (fun h0 res h1 ->
-    B.modifies (footprint st) h0 h1 /\ (
+  (requires fun h -> B.live h st.inc_st)
+  (ensures fun h0 res h1 ->
     if pos <> f_end
-    then
-      E.Error? res /\ B.as_seq h1 st.inc_st == B.as_seq h0 st.inc_st
+    then res == E.Error unexpected_end_index_error /\ h0 == h1
     else
+      B.modifies (footprint st) h0 h1 /\
       res == E.Correct (Some flt) /\
       parsed_bytes st h1 == Seq.empty /\
-      in_progress_flt st h1 == F_none
-  )))
+      in_progress_flt st h1 == F_none)
 =
-  if pos <> f_end then E.Error bytes_remain_error
+  if pos <> f_end then E.Error unexpected_end_index_error
   else begin
     reset_incremental_state st;
     E.Correct (Some flt)
+  end
+
+
+/// Helper function to check that pos is leq f_end
+///   and then either return an error or the flight flt
+
+inline_for_extraction noextract
+let check_leq_end_index_and_return
+  (#a:Type)
+  (st:hsl_state)
+  (pos f_end:uint_32)
+  (flt:a)
+: Stack (TLSError.result (option (a & uint_32)))
+  (requires fun h -> B.live h st.inc_st)
+  (ensures fun h0 res h1 ->
+    if pos > f_end
+    then res == E.Error unexpected_end_index_error /\ h0 == h1
+    else
+      B.modifies (footprint st) h0 h1 /\
+      res == E.Correct (Some (flt, pos)) /\
+      parsed_bytes st h1 == Seq.empty /\
+      in_progress_flt st h1 == F_none)
+=
+  if pos > f_end then E.Error unexpected_end_index_error
+  else begin
+    reset_incremental_state st;
+    E.Correct (Some (flt, pos))
   end
 
 
@@ -235,7 +260,7 @@ let receive_s_Idle st b f_begin f_end =
   | E.Error _ | E.Correct None ->
     err_or_insufficient_data r flt st b f_begin f_end
   | E.Correct (Some (ch_repr, pos)) ->
-    check_end_index_and_return st pos f_end ({ ch_msg = ch_repr })
+    check_eq_end_index_and_return st pos f_end ({ ch_msg = ch_repr })
 
 let receive_c_wait_ServerHello st b f_begin f_end =
   let flt = F_c_wait_ServerHello in
@@ -245,7 +270,7 @@ let receive_c_wait_ServerHello st b f_begin f_end =
   | E.Error _ | E.Correct None ->
     err_or_insufficient_data r flt st b f_begin f_end
   | E.Correct (Some (sh_repr, pos)) ->
-    check_end_index_and_return st pos f_end ({sh_msg = sh_repr})
+    check_leq_end_index_and_return st pos f_end ({sh_msg = sh_repr})
 
 
 (*** 1.3 flights ***)
@@ -377,7 +402,7 @@ let receive_c13_wait_Finished1 st b f_begin f_end =
        | E.Error _ | E.Correct None ->
          err_or_insufficient_data r flt st b f_begin f_end
        | E.Correct (Some (fin_repr, fin_end)) ->
-         check_end_index_and_return st fin_end f_end ({
+         check_eq_end_index_and_return st fin_end f_end ({
            ee_msg = ee_repr;
            cr_msg = cr_repr;
            c_cv_msg = c_cv_repr;
@@ -401,7 +426,7 @@ let receive_s13_wait_Finished2 st b f_begin f_end =
     match r with
     | E.Error _ | E.Correct None -> err_or_insufficient_data r flt st b f_begin f_end
     | E.Correct (Some (fin_repr, fin_end)) ->
-      check_end_index_and_return st fin_end f_end ({
+      check_eq_end_index_and_return st fin_end f_end ({
         c_cv_msg = c_cv_repr;
         fin_msg = fin_repr
       })
@@ -414,7 +439,7 @@ let receive_s13_wait_EOED st b f_begin f_end =
   | E.Error _ | E.Correct None ->
     err_or_insufficient_data r flt st b f_begin f_end
   | E.Correct (Some (eoed_repr, pos)) ->
-    check_end_index_and_return st pos f_end ({ eoed_msg = eoed_repr })
+    check_eq_end_index_and_return st pos f_end ({ eoed_msg = eoed_repr })
 
 let receive_c13_Complete st b f_begin f_end =
   let flt = F_c13_Complete in
@@ -424,7 +449,7 @@ let receive_c13_Complete st b f_begin f_end =
   | E.Error _ | E.Correct None ->
     err_or_insufficient_data r flt st b f_begin f_end
   | E.Correct (Some (nst_repr, pos)) ->
-    check_end_index_and_return st pos f_end ({ nst_msg = nst_repr })
+    check_eq_end_index_and_return st pos f_end ({ nst_msg = nst_repr })
 
 
 (*** 1.2 flights ***)
@@ -512,7 +537,7 @@ let receive_c12_wait_ServerHelloDone st b f_begin f_end =
         | E.Error _ | E.Correct None ->
           err_or_insufficient_data r flt st b f_begin f_end
         | E.Correct (Some (shd_repr, pos)) ->
-          check_end_index_and_return st pos f_end ({
+          check_eq_end_index_and_return st pos f_end ({
             c_msg = c_repr;
             ske_msg = ske_repr;
             cr_msg = cr_repr;
@@ -527,7 +552,7 @@ let receive_cs12_wait_Finished st b f_begin f_end =
   | E.Error _ | E.Correct None ->
     err_or_insufficient_data r flt st b f_begin f_end
   | E.Correct (Some (fin_repr, pos)) ->
-    check_end_index_and_return st pos f_end ({ fin_msg = fin_repr })
+    check_eq_end_index_and_return st pos f_end ({ fin_msg = fin_repr })
 
 let receive_c12_wait_NST st b f_begin f_end =
   let flt = F_c12_wait_NST in
@@ -537,7 +562,7 @@ let receive_c12_wait_NST st b f_begin f_end =
   | E.Error _ | E.Correct None ->
     err_or_insufficient_data r flt st b f_begin f_end
   | E.Correct (Some (nst_repr, pos)) ->
-    check_end_index_and_return st pos f_end ({ nst_msg = nst_repr })
+    check_eq_end_index_and_return st pos f_end ({ nst_msg = nst_repr })
 
 let receive_s12_wait_CCS1 st b f_begin f_end =
   let flt = F_s12_wait_CCS1 in
@@ -547,4 +572,4 @@ let receive_s12_wait_CCS1 st b f_begin f_end =
   | E.Error _ | E.Correct None ->
     err_or_insufficient_data r flt st b f_begin f_end
   | E.Correct (Some (cke_repr, pos)) ->
-    check_end_index_and_return st pos f_end ({ cke_msg = cke_repr })
+    check_eq_end_index_and_return st pos f_end ({ cke_msg = cke_repr })
