@@ -41,7 +41,7 @@ let iv () =
   C.EXIT_SUCCESS
 
 let rng_initialization() = b2c (Random.init() <> 0ul)
-let cookie: tf = fun _ ->  b2c (TLS.Cookie.test())
+let cookie () =  b2c (TLS.Cookie.test())
 
 let main (): St C.exit_code =
   MITLS.Init.mitls_init ();
