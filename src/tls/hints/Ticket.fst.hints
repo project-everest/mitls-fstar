@@ -12,7 +12,7 @@
         "fuel_guarded_inversion_Ticket.ticket"
       ],
       0,
-      "bb18c914fb5df267560fcda50860d912"
+      "767c332bed54514d7b2aa17ace1bdba0"
     ],
     [
       "Ticket.write_ticket12",
@@ -186,7 +186,7 @@
         "typing_tok_Parsers.Boolean.B_true@tok"
       ],
       0,
-      "c490108602d14edff05d177d7c0ecb44"
+      "d508afdcb29af4fa15f1fa0038b01999"
     ],
     [
       "Ticket.store_bytes_strong",
@@ -238,7 +238,7 @@
         "typing_LowStar.Monotonic.Buffer.loc_buffer"
       ],
       0,
-      "af2790e3f01ec3a0bbf96321a097bc76"
+      "22e6ddf7dbf19bb860134970f383786e"
     ],
     [
       "Ticket.write_ticket13",
@@ -422,7 +422,7 @@
         "typing_Spec.Poly1305.size_key", "typing_Ticket.uu___is_Ticket13"
       ],
       0,
-      "4af05b27925865e4ccf297f62e8ecb39"
+      "c6c32d517e9f5b3b0c7f4430e6152584"
     ],
     [
       "Ticket.write_ticket",
@@ -450,7 +450,7 @@
         "typing_FStar.Monotonic.HyperStack.get_tip"
       ],
       0,
-      "e066fcceb36e32484cbc0295e833a714"
+      "a80b0a099023fdcda3998cef60e9df88"
     ],
     [
       "Ticket.ticketContents_pskinfo_ticketContents_of_ticket",
@@ -484,7 +484,25 @@
         "typing_Ticket.ticketContents_pskinfo"
       ],
       0,
-      "9f12d26d7ee3a7c88749a29bb42e2eb7"
+      "883221544c416b14273ca6083fdddba8"
+    ],
+    [
+      "Ticket.check_ticket13",
+      1,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "14b8d2593c43a76afe7edc8e66330082"
+    ],
+    [
+      "Ticket.check_ticket12",
+      1,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "f45cf6480d915b1d7355a1f18819768e"
     ],
     [
       "Ticket.check_ticket12_low",
@@ -496,7 +514,7 @@
         "refinement_interpretation_Tm_refine_ba66e9a6a5d248a55437ac060425816b"
       ],
       0,
-      "05f903bf4f9682fdf2d6daa93dcb9148"
+      "d2a1f00e9235975a9eeedbb6b25a091e"
     ],
     [
       "Ticket.check_ticket12_low",
@@ -565,7 +583,7 @@
         "typing_Parsers.TicketContents12_master_secret.ticketContents12_master_secret_parser_kind"
       ],
       0,
-      "391e853bd42ff3f198d0a998b141e060"
+      "4540eac4d57436704d725a2c75ec48a6"
     ]
   ]
 ]

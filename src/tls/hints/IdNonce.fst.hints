@@ -1,5 +1,5 @@
 [
-  "èÆÄ`sC…NýŸ¬³@ÆvÄ",
+  "³\u0005‹c€’¡}‰‹Dþ·r°\u0007",
   [
     [
       "IdNonce.n_id",
@@ -14,7 +14,7 @@
         "typing_FStar.Bytes.bytes"
       ],
       0,
-      "b5307c19ef2b97c84e07b5dc2fdba007"
+      "7e56825eb2b7ffe29777f72921300b04"
     ],
     [
       "IdNonce.nonce_id_table",
@@ -37,7 +37,7 @@
         "typing_FStar.Bytes.bytes", "typing_Mem.tls_tables_region"
       ],
       0,
-      "90c16d0027857311aba205acddd38088"
+      "730667fb217ac469f8b22b92180e8c79"
     ],
     [
       "IdNonce.id_of_nonce",
@@ -52,7 +52,40 @@
         "typing_FStar.Bytes.bytes"
       ],
       0,
-      "ac608ee46059019521f0772ffb6514c8"
+      "fef2e389d95716015f0dd2e98cc259c6"
+    ],
+    [
+      "IdNonce.insert",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "equation_FStar.Bytes.lbytes",
+        "equation_Nonce.random", "equation_Prims.eqtype",
+        "equation_Prims.nat", "equation_TLSInfo.random",
+        "function_token_typing_Prims.int",
+        "haseqTm_refine_542f9d4f129664613f2483a6c88bc7c2",
+        "haseqTm_refine_71ea40360194fe02ee1272538c9cacbc",
+        "refinement_interpretation_Tm_refine_414d0a9f578ab0048252f8c8f552b99f",
+        "typing_FStar.Bytes.bytes"
+      ],
+      0,
+      "e62598884215283e6e3a8ab09bc598c3"
+    ],
+    [
+      "IdNonce.insert",
+      2,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "equation_FStar.Bytes.lbytes",
+        "equation_Nonce.random", "equation_TLSInfo.random",
+        "haseqTm_refine_71ea40360194fe02ee1272538c9cacbc",
+        "refinement_interpretation_Tm_refine_414d0a9f578ab0048252f8c8f552b99f",
+        "typing_FStar.Bytes.bytes"
+      ],
+      0,
+      "27408723d0caf88f234c4f858ccc4f48"
     ],
     [
       "IdNonce.lookup",
@@ -73,7 +106,7 @@
         "typing_FStar.Pervasives.Native.uu___is_Some", "typing_IdNonce.n_id"
       ],
       0,
-      "afc8f5d4a20e2996e00fc00b75b2f746"
+      "7656a629461645f8accba7aa44c82584"
     ],
     [
       "IdNonce.lookup",
@@ -100,7 +133,7 @@
         "typing_FStar.Bytes.bytes", "typing_IdNonce.nonce_id_table"
       ],
       0,
-      "df55a415eb6190e7b0a65494ed97fe6f"
+      "6e76293e381f14fad0121092eda061c1"
     ],
     [
       "IdNonce.injectivity",
@@ -115,7 +148,7 @@
         "typing_FStar.Bytes.bytes"
       ],
       0,
-      "27dae6a8ec7c125633c67385f15ab0d8"
+      "5508cc33085fb8ecdfd4eb8213595308"
     ],
     [
       "IdNonce.injectivity",
@@ -143,7 +176,7 @@
         "typing_FStar.Bytes.bytes", "typing_IdNonce.nonce_id_table"
       ],
       0,
-      "2374f1c71c94cc67a20d6f99dca580d3"
+      "a512fdcb540b2af63708f49de322bd2d"
     ]
   ]
 ]

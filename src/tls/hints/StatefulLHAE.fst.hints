@@ -8,7 +8,7 @@
       1,
       [ "@query" ],
       0,
-      "c4b8c870c3088063d08db7029abab459"
+      "58e26a1e475c92c79d90425ecde5a6b4"
     ],
     [
       "StatefulLHAE.dplain",
@@ -17,7 +17,7 @@
       1,
       [ "@query" ],
       0,
-      "c2a97f09052cc2b2a0f03b93698f00f2"
+      "9eff89977b7fa7bf5da9f8a56158ec6b"
     ],
     [
       "StatefulLHAE.dplain",
@@ -33,7 +33,7 @@
         "typing_FStar.Bytes.len", "typing_FStar.UInt32.v"
       ],
       0,
-      "98ed10b343e10d9d15b91c244acec42f"
+      "08d656130f2ab749e4198a4ca66c7260"
     ],
     [
       "StatefulLHAE.genReader",
@@ -51,7 +51,7 @@
         "refinement_interpretation_Tm_refine_dd822fca68570d6ca21c42711549ab9b"
       ],
       0,
-      "1514091f39416ebd32895e6bda216cc6"
+      "1a1976b61f103df2dfe57564c950fbc2"
     ],
     [
       "StatefulLHAE.genReader",
@@ -60,7 +60,25 @@
       1,
       [ "@query" ],
       0,
-      "dc348eeb6f5c62761a91fbd89961abcb"
+      "935ee328d739c965d0981001b817d002"
+    ],
+    [
+      "StatefulLHAE.coerce",
+      1,
+      0,
+      1,
+      [ "@query" ],
+      0,
+      "35b36c25426305b745cd8ed6e9999b0b"
+    ],
+    [
+      "StatefulLHAE.leak",
+      1,
+      0,
+      1,
+      [ "@query" ],
+      0,
+      "3421cd5ea28b00ac4d4781992182b992"
     ],
     [
       "StatefulLHAE.encrypt",
@@ -107,7 +125,7 @@
         "typing_Mem.tls_region"
       ],
       0,
-      "005ecd96d453bca2ecfe2f2d37998b37"
+      "059162ade70fb8d00813d6969b6a8881"
     ],
     [
       "StatefulLHAE.encrypt",
@@ -121,7 +139,7 @@
         "refinement_interpretation_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
       ],
       0,
-      "61954f57b1e7a8e43aef67f56aea99c0"
+      "9c7b50b9f3be6b6828bdbcd8cb3653b6"
     ],
     [
       "StatefulLHAE.encrypt",
@@ -194,7 +212,7 @@
         "typing_tok_TLSConstants.Writer@tok"
       ],
       0,
-      "eac2923be5d95961458e520599f68152"
+      "d4861fdcf79df15dca4af85a80561e0e"
     ],
     [
       "StatefulLHAE.decrypt",
@@ -229,7 +247,7 @@
         "typing_TLSInfo.uu___is_PlaintextID"
       ],
       0,
-      "bd3b37d3cfbefcb7c658b0d6d4620410"
+      "90d7781c93ef90f1155a3cc93e34e9a5"
     ],
     [
       "StatefulLHAE.decrypt",
@@ -238,7 +256,7 @@
       0,
       [ "@query" ],
       0,
-      "f94506264d66f3e519a867480a240dd1"
+      "6e7bcc4901a62ec7cee6b5bca148ccf7"
     ],
     [
       "StatefulLHAE.decrypt",
@@ -313,7 +331,7 @@
         "typing_tok_TLSConstants.Reader@tok"
       ],
       0,
-      "f236a09c5af2a21b93586ab074c31c2a"
+      "b9e1bba84896c941311dbb87f08900bc"
     ]
   ]
 ]

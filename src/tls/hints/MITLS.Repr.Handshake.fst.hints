@@ -1,5 +1,5 @@
 [
-  "ÂcÄäè9ôÂÔ\u000f´ÿÒxèõ",
+  "nß2ã@õ˝»˘\u0013‰õd\"Sô",
   [
     [
       "MITLS.Repr.Handshake.handshakeType",
@@ -31,7 +31,7 @@
         "typing_MITLS.Repr.preorder", "typing_MITLS.Repr.to_slice"
       ],
       0,
-      "2ae544c0802bf28e1b1112c35f7abfe4"
+      "092627b488bbb03e4392779b865df698"
     ],
     [
       "MITLS.Repr.Handshake.clientHello",
@@ -166,7 +166,7 @@
         "typing_Parsers.Handshake_m_client_hello.handshake_m_client_hello_parser_kind"
       ],
       0,
-      "217a87057dd7d859fa42a3145e6d66c6"
+      "19a8ab037f4f52124b2d3ca5e659d443"
     ],
     [
       "MITLS.Repr.Handshake.serverHello",
@@ -298,7 +298,51 @@
         "typing_Parsers.ServerHello.serverHello_parser_kind"
       ],
       0,
-      "4a6678702b1c92fd471214b239ca8d7e"
+      "cb6872d605212ab8daf79b37e79df14f"
+    ],
+    [
+      "MITLS.Repr.Handshake.serialize",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "b2t_def", "bool_inversion",
+        "constructor_distinct_FStar.Integers.Unsigned",
+        "constructor_distinct_FStar.Integers.W32",
+        "disc_equation_FStar.Pervasives.Native.None",
+        "disc_equation_FStar.Pervasives.Native.Some",
+        "equality_tok_FStar.Integers.W32@tok",
+        "equation_FStar.Integers.int_t", "equation_FStar.Integers.uint_32",
+        "equation_FStar.UInt.fits", "equation_FStar.UInt.lte",
+        "equation_FStar.UInt.max_int", "equation_FStar.UInt.min_int",
+        "equation_FStar.UInt.size", "equation_FStar.UInt.uint_t",
+        "equation_FStar.UInt32.lte",
+        "equation_LowParse.Low.Base.validator_max_length",
+        "equation_LowParse.Spec.Base.strong_parser_kind",
+        "equation_MITLS.Repr.Handshake.repr", "equation_MITLS.Repr.index",
+        "equation_MITLS.Repr.of_slice",
+        "equation_Parsers.Handshake.handshake_parser_kind", "int_inversion",
+        "lemma_FStar.Pervasives.invertOption", "primitive_Prims.op_AmpAmp",
+        "primitive_Prims.op_LessThanOrEqual",
+        "primitive_Prims.op_Subtraction",
+        "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind",
+        "proj_equation_MITLS.Repr.MkSlice_len",
+        "projection_inverse_BoxBool_proj_0",
+        "projection_inverse_BoxInt_proj_0",
+        "projection_inverse_FStar.Integers.Unsigned__0",
+        "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind",
+        "projection_inverse_MITLS.Repr.MkSlice_len",
+        "refinement_interpretation_Tm_refine_2773e256709094c97dab4205bd2254f0",
+        "refinement_interpretation_Tm_refine_7b6e2cfe377742828d343c201f6a175c",
+        "refinement_interpretation_Tm_refine_daef052e7a6441fcd19956845e2cffd8",
+        "refinement_interpretation_Tm_refine_f13070840248fced9d9d60d77bdae3ec",
+        "typing_FStar.Pervasives.Native.uu___is_Some",
+        "typing_FStar.UInt32.v", "typing_LowParse.Low.Base.max_uint32",
+        "typing_LowParse.Low.Base.validator_max_length",
+        "typing_MITLS.Repr.Handshake.repr", "typing_MITLS.Repr.of_slice"
+      ],
+      0,
+      "745d495b48e3d594611bd6cdc4be9ea1"
     ]
   ]
 ]

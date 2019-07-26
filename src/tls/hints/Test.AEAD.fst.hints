@@ -11,7 +11,7 @@
         "equation_CipherSuite.aeadAlg"
       ],
       0,
-      "68e683fbe46f6003b333400b8160d025"
+      "71a54c515c738e8d5d7f61b12fb96cf9"
     ],
     [
       "Test.AEAD.iter",
@@ -31,7 +31,16 @@
         "typing_tok_C.EXIT_FAILURE@tok", "typing_tok_C.EXIT_SUCCESS@tok"
       ],
       0,
-      "023fce7b1981d2d269adcb90a033311b"
+      "f1f088f15515e969bbd498fff67c1c34"
+    ],
+    [
+      "Test.AEAD.main",
+      1,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "06ac17a0d8fc03353720205a28639922"
     ]
   ]
 ]

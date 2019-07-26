@@ -1,5 +1,5 @@
 [
-  "ñ¸hˇ∫ù\u001e‚5¢\f6°\u001eë⁄",
+  "+≤5gßî`r|]\u0014x{‚]˚",
   [
     [
       "HSL.Receive.length_parsed_bytes",
@@ -8,7 +8,7 @@
       0,
       [ "@query" ],
       0,
-      "d485632f04e787051f498fba62652109"
+      "9e4292d7468c5ea5d40c1c437777fc8f"
     ],
     [
       "HSL.Receive.receive_pre",
@@ -61,7 +61,7 @@
         "typing_MITLS.Repr.__proj__MkSlice__item__len"
       ],
       0,
-      "6e0d842aeced14713804b5af12f935a4"
+      "1577237aef7e403cab75b9079f81e3a0"
     ],
     [
       "HSL.Receive.receive_post",
@@ -111,130 +111,78 @@
         "typing_MITLS.Repr.loc"
       ],
       0,
-      "657f69e7f1daaf845c0603dca98360fa"
+      "6b0b8e9ddcb51eeae90d7af32c1d6cf7"
     ],
     [
-      "HSL.Receive.__proj__Mkflight13_ee_c_cv_fin__item__fin_msg",
+      "HSL.Receive.receive_post_with_leftover",
+      1,
+      0,
+      0,
+      [
+        "@MaxIFuel_assumption", "@query", "b2t_def",
+        "constructor_distinct_FStar.Integers.Unsigned",
+        "constructor_distinct_FStar.Integers.W32",
+        "equality_tok_FStar.Integers.W32@tok", "equation_FStar.Integers.nat",
+        "equation_FStar.Integers.v", "equation_FStar.UInt.fits",
+        "equation_FStar.UInt.min_int", "equation_FStar.UInt.size",
+        "equation_HSL.Receive.length_parsed_bytes",
+        "equation_LowParse.Bytes.byte",
+        "equation_LowStar.ConstBuffer.as_mbuf",
+        "equation_LowStar.ConstBuffer.as_seq",
+        "equation_LowStar.ConstBuffer.length",
+        "equation_LowStar.ConstBuffer.live",
+        "equation_LowStar.ConstBuffer.loc_buffer",
+        "equation_LowStar.ConstBuffer.qbuf_pre",
+        "equation_MITLS.Repr.as_seq", "equation_MITLS.Repr.live",
+        "equation_MITLS.Repr.loc", "equation_Prims.nat",
+        "function_token_typing_FStar.UInt8.t",
+        "lemma_LowStar.Monotonic.Buffer.length_as_seq",
+        "lemma_LowStar.Monotonic.Buffer.loc_disjoint_sym_",
+        "lemma_LowStar.Monotonic.Buffer.modifies_buffer_elim",
+        "primitive_Prims.op_Addition", "primitive_Prims.op_AmpAmp",
+        "primitive_Prims.op_LessThanOrEqual",
+        "proj_equation_MITLS.Repr.MkSlice_base",
+        "proj_equation_MITLS.Repr.MkSlice_len",
+        "projection_inverse_BoxBool_proj_0",
+        "projection_inverse_BoxInt_proj_0",
+        "projection_inverse_FStar.Integers.Unsigned__0",
+        "refinement_interpretation_Tm_refine_542f9d4f129664613f2483a6c88bc7c2",
+        "refinement_interpretation_Tm_refine_d5740b24341df62e578cc1a55f78a42f",
+        "refinement_interpretation_Tm_refine_ef3919256654f6b3ff3f6a54193365a0",
+        "typing_HSL.Receive.footprint",
+        "typing_HSL.Receive.length_parsed_bytes",
+        "typing_LowStar.ConstBuffer.as_mbuf",
+        "typing_LowStar.ConstBuffer.as_qbuf",
+        "typing_LowStar.ConstBuffer.q_preorder",
+        "typing_LowStar.ConstBuffer.qbuf_pre",
+        "typing_LowStar.ConstBuffer.qbuf_qual",
+        "typing_MITLS.Repr.__proj__MkSlice__item__base",
+        "typing_MITLS.Repr.__proj__MkSlice__item__len",
+        "typing_MITLS.Repr.loc"
+      ],
+      0,
+      "b687e11e47f0cd2be95f19318c8918d1"
+    ],
+    [
+      "HSL.Receive.valid_s13_wait_Finished2",
       1,
       0,
       0,
       [
         "@MaxIFuel_assumption", "@query", "bool_inversion",
-        "equation_MITLS.Repr.Handshake13.is_c",
-        "equation_MITLS.Repr.Handshake13.is_cv",
-        "equation_MITLS.Repr.Handshake13.is_ee",
-        "proj_equation_HSL.Receive.Mkflight13_ee_c_cv_fin_c_msg",
-        "proj_equation_HSL.Receive.Mkflight13_ee_c_cv_fin_cv_msg",
-        "proj_equation_HSL.Receive.Mkflight13_ee_c_cv_fin_ee_msg",
-        "projection_inverse_HSL.Receive.Mkflight13_ee_c_cv_fin_c_msg",
-        "projection_inverse_HSL.Receive.Mkflight13_ee_c_cv_fin_cv_msg",
-        "projection_inverse_HSL.Receive.Mkflight13_ee_c_cv_fin_ee_msg",
-        "typing_MITLS.Repr.Handshake13.is_c",
-        "typing_MITLS.Repr.Handshake13.is_cv",
-        "typing_MITLS.Repr.Handshake13.is_ee"
+        "disc_equation_FStar.Pervasives.Native.None",
+        "disc_equation_FStar.Pervasives.Native.Some",
+        "kinding_FStar.Pervasives.Native.tuple2@tok",
+        "lemma_FStar.Pervasives.invertOption",
+        "proj_equation_HSL.Receive.Mks13_wait_Finished2_c_cv_msg",
+        "typing_FStar.Pervasives.Native.uu___is_None",
+        "typing_FStar.Pervasives.Native.uu___is_Some",
+        "typing_HSL.Receive.__proj__Mks13_wait_Finished2__item__c_cv_msg",
+        "typing_MITLS.Repr.Handshake13.c13_repr",
+        "typing_MITLS.Repr.Handshake13.cv13_repr"
       ],
       0,
-      "b6953d9ce564f95b89c482a527bfe772"
-    ],
-    [
-      "HSL.Receive.__proj__Mkflight13_ee_cr_c_cv_fin__item__fin_msg",
-      1,
-      0,
-      0,
-      [
-        "@MaxIFuel_assumption", "@query", "bool_inversion",
-        "equation_MITLS.Repr.Handshake13.is_c",
-        "equation_MITLS.Repr.Handshake13.is_cr",
-        "equation_MITLS.Repr.Handshake13.is_cv",
-        "equation_MITLS.Repr.Handshake13.is_ee",
-        "proj_equation_HSL.Receive.Mkflight13_ee_cr_c_cv_fin_c_msg",
-        "proj_equation_HSL.Receive.Mkflight13_ee_cr_c_cv_fin_cr_msg",
-        "proj_equation_HSL.Receive.Mkflight13_ee_cr_c_cv_fin_cv_msg",
-        "proj_equation_HSL.Receive.Mkflight13_ee_cr_c_cv_fin_ee_msg",
-        "projection_inverse_HSL.Receive.Mkflight13_ee_cr_c_cv_fin_c_msg",
-        "projection_inverse_HSL.Receive.Mkflight13_ee_cr_c_cv_fin_cr_msg",
-        "projection_inverse_HSL.Receive.Mkflight13_ee_cr_c_cv_fin_cv_msg",
-        "projection_inverse_HSL.Receive.Mkflight13_ee_cr_c_cv_fin_ee_msg",
-        "typing_MITLS.Repr.Handshake13.is_c",
-        "typing_MITLS.Repr.Handshake13.is_cr",
-        "typing_MITLS.Repr.Handshake13.is_cv",
-        "typing_MITLS.Repr.Handshake13.is_ee"
-      ],
-      0,
-      "50d7b1e5d7464e4fb71db0bddb8a85b9"
-    ],
-    [
-      "HSL.Receive.__proj__Mkflight13_ee_fin__item__fin_msg",
-      1,
-      0,
-      0,
-      [
-        "@query", "proj_equation_HSL.Receive.Mkflight13_ee_fin_ee_msg",
-        "projection_inverse_HSL.Receive.Mkflight13_ee_fin_ee_msg"
-      ],
-      0,
-      "9496542ed535d338f66e21231e6f58cb"
-    ],
-    [
-      "HSL.Receive.__proj__Mkflight13_c_cv_fin__item__fin_msg",
-      1,
-      0,
-      0,
-      [
-        "@MaxIFuel_assumption", "@query", "bool_inversion",
-        "equation_MITLS.Repr.Handshake13.is_c",
-        "equation_MITLS.Repr.Handshake13.is_cv",
-        "proj_equation_HSL.Receive.Mkflight13_c_cv_fin_c_msg",
-        "proj_equation_HSL.Receive.Mkflight13_c_cv_fin_cv_msg",
-        "projection_inverse_HSL.Receive.Mkflight13_c_cv_fin_c_msg",
-        "projection_inverse_HSL.Receive.Mkflight13_c_cv_fin_cv_msg",
-        "typing_MITLS.Repr.Handshake13.is_c",
-        "typing_MITLS.Repr.Handshake13.is_cv"
-      ],
-      0,
-      "961aa8b51fc0ccb7089ab5ae3adc93fd"
-    ],
-    [
-      "HSL.Receive.__proj__Mkflight12_c_ske_shd__item__shd_msg",
-      1,
-      0,
-      0,
-      [
-        "@MaxIFuel_assumption", "@query", "bool_inversion",
-        "equation_MITLS.Repr.Handshake12.is_c",
-        "equation_MITLS.Repr.Handshake12.is_ske",
-        "proj_equation_HSL.Receive.Mkflight12_c_ske_shd_c_msg",
-        "proj_equation_HSL.Receive.Mkflight12_c_ske_shd_ske_msg",
-        "projection_inverse_HSL.Receive.Mkflight12_c_ske_shd_c_msg",
-        "projection_inverse_HSL.Receive.Mkflight12_c_ske_shd_ske_msg",
-        "typing_MITLS.Repr.Handshake12.is_c",
-        "typing_MITLS.Repr.Handshake12.is_ske"
-      ],
-      0,
-      "701d478379c21967b056407dfb16400a"
-    ],
-    [
-      "HSL.Receive.__proj__Mkflight12_c_ske_cr_shd__item__shd_msg",
-      1,
-      0,
-      0,
-      [
-        "@MaxIFuel_assumption", "@query", "bool_inversion",
-        "equation_MITLS.Repr.Handshake12.is_c",
-        "equation_MITLS.Repr.Handshake12.is_cr",
-        "equation_MITLS.Repr.Handshake12.is_ske",
-        "proj_equation_HSL.Receive.Mkflight12_c_ske_cr_shd_c_msg",
-        "proj_equation_HSL.Receive.Mkflight12_c_ske_cr_shd_cr_msg",
-        "proj_equation_HSL.Receive.Mkflight12_c_ske_cr_shd_ske_msg",
-        "projection_inverse_HSL.Receive.Mkflight12_c_ske_cr_shd_c_msg",
-        "projection_inverse_HSL.Receive.Mkflight12_c_ske_cr_shd_cr_msg",
-        "projection_inverse_HSL.Receive.Mkflight12_c_ske_cr_shd_ske_msg",
-        "typing_MITLS.Repr.Handshake12.is_c",
-        "typing_MITLS.Repr.Handshake12.is_cr",
-        "typing_MITLS.Repr.Handshake12.is_ske"
-      ],
-      0,
-      "da981344d0faef85eeac3cbd9008fe39"
+      "48fd0c8178177782513e6fdc423058f1"
     ]
   ]
 ]
