@@ -323,10 +323,11 @@ let send_truncated l m tr =
       | Msg (M_server_hello sh) ->
         if is_hrr sh then
           let hrr = get_hrr sh in
-          let Some cs = cipherSuite_of_name hrr.HRR.cipher_suite in
-          let hmsg = Hashing.compute (verifyDataHashAlg_of_ciphersuite cs) p in
-          let hht = (bytes_of_hex "fe0000") @| (bytes_of_int 1 (length hmsg)) @| hmsg in
-          OpenHash (hht @| mb)
+          let Some (CipherSuite13 _ h) = cipherSuite_of_name hrr.HRR.cipher_suite in
+          let hmsg = Hashing.compute h p in
+	  trace ("Detected HRR, replacing CH1 with its hash "^(hex_of_bytes hmsg));
+	  trace ("HRR bytes: "^(hex_of_bytes mb));
+          OpenHash ((bytes_of_hex "fe0000") @| (Parse.vlbytes1 hmsg) @| mb)
 	else OpenHash (p @| mb)
       | _ -> OpenHash (p @| mb))
     in
@@ -522,15 +523,15 @@ let rec hashHandshakeMessages t p hs n nb =
       | OpenHash b ->
         let hs =
 	  match m with
+	  (* When receiving HRR, we must hash CH1 before adding HRR to the transcript *)
           | Msg (M_server_hello sh) ->
 	    if is_hrr sh then
 	     begin
 	      let hrr = get_hrr sh in
-              let hmsg = match cipherSuite_of_name hrr.HRR.cipher_suite with
-                | Some cs -> Hashing.compute (verifyDataHashAlg_of_ciphersuite cs) b
-                | None -> b in
+	      let Some (CipherSuite13 _ h) = cipherSuite_of_name hrr.HRR.cipher_suite in
+              let hmsg = Hashing.compute h b in
               let hht = (bytes_of_hex "fe0000") @| (Parse.vlbytes 1 hmsg) in
-              trace ("Replacing CH1 in transcript with "^(hex_of_bytes hht));
+              trace ("Replacing CH1 in transcript with "^(hex_of_bytes hmsg));
               trace ("HRR bytes: "^(hex_of_bytes mb));
               OpenHash (hht @| mb)
 	     end

@@ -1,0 +1,26 @@
+[
+  "ë…‰c§Œ\u007f5nXõ\u0018$o\u0004\u001d",
+  [
+    [
+      "PSK.non_zero",
+      1,
+      2,
+      1,
+      [ "@query", "assumption_FStar.UInt8.t__uu___haseq" ],
+      0,
+      "e628f41cb4ac6861f15ca8c5b898572f"
+    ],
+    [
+      "PSK.lemma_age_encode_decode",
+      1,
+      2,
+      1,
+      [
+        "@query", "assumption_FStar.UInt32.t__uu___haseq",
+        "equation_PSK.ticket_age"
+      ],
+      0,
+      "6f71ca0207bf761e7455cd79f0ae06f0"
+    ]
+  ]
+]

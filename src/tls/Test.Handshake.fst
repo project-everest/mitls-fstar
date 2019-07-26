@@ -16,7 +16,7 @@ open FStar.HyperStack.ST
 
 module StAE = StAE
 module Range = Range
-module Handshake = Old.Handshake
+module Handshake = TLS.Handshake
 module PKI = PKI
 
 #set-options "--admit_smt_queries true"

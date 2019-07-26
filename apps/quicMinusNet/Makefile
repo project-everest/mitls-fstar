@@ -73,7 +73,7 @@ test: quic.exe
 	./quic.exe
 	./quic.exe 0rtt
 	./quic.exe 0rtt-reject
-#	./quic.exe hrr
+	./quic.exe hrr
 
 debug: quic.exe
 	gdb ./quic.exe

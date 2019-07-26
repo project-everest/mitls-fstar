@@ -58,7 +58,7 @@ private let errno description txt: ST error
   let a = match description with | Some a -> a | None -> fatalAlert Internal_error in
   Parse.uint16_of_bytes (Alert.alertBytes a)
 
-module Handshake = Old.Handshake
+module Handshake = TLS.Handshake
 
 let quic_check config =
   if config.min_version <> TLS_1p3 then trace "WARNING: not TLS 1.3";
@@ -96,6 +96,7 @@ let rec find_ticket_content (l:Extensions.offeredPsks_identities)
 
 module HSM = HandshakeMessages
 module CH = Parsers.ClientHello
+module CK = TLS.Cookie
 
 let peekClientHello (ch:bytes) (has_record:bool) : ML (option chSummary) =
   if length ch < 40 then (trace "peekClientHello: too short"; None) else
@@ -123,19 +124,18 @@ let peekClientHello (ch:bytes) (has_record:bool) : ML (option chSummary) =
 	  match Negotiation.find_clientPske ch with
 	  | None -> None
 	  | Some psk -> find_ticket_content psk.Extensions.identities in
-        let cookie = None
-          //19-06-17 FIXME        
-          // match Negotiation.find_cookie ch with
-          // | None -> None
-          // | Some c ->
-          //   match Ticket.check_cookie c with
-          //   | None -> None
-          //   | Some (hrr, digest, extra) -> Some extra
+        let cookie =
+           match Negotiation.find_cookie ch with
+           | None -> None
+           | Some c ->
+             match CK.decrypt c with
+             | Error z -> None
+             | Correct (_, extra, _) -> Some extra
           in
         Some ({ch_sni = sni; ch_alpn = alpn; ch_extensions = ext; ch_cookie = cookie; ch_ticket_data = ticket_data })
     | _ -> trace ("peekClientHello: not a client hello!"); None
 
-module H = Old.Handshake
+module H = TLS.Handshake
 module HSL = HandshakeLog
 
 let create_hs (is_server:bool) config : ML H.hs =
@@ -260,7 +260,7 @@ type raw_key = {
   pn_key: bytes;
 }
 
-let get_key (hs:Old.Handshake.hs) (ectr:nat) (rw:bool) : ML (option raw_key) =
+let get_key (hs:TLS.Handshake.hs) (ectr:nat) (rw:bool) : ML (option raw_key) =
   let epochs = Monotonic.Seq.i_read (Old.Epochs.get_epochs (Handshake.epochs_of hs)) in
   if Seq.length epochs <= ectr then None
   else
@@ -284,5 +284,5 @@ let get_key (hs:Old.Handshake.hs) (ectr:nat) (rw:bool) : ML (option raw_key) =
       pn_key = pn;
     })
     
-let send_ticket (hs:Old.Handshake.hs) (b:bytes) : ML bool =
-  Old.Handshake.send_ticket hs b
+let send_ticket (hs:TLS.Handshake.hs) (b:bytes) : ML bool =
+  TLS.Handshake.send_ticket hs b

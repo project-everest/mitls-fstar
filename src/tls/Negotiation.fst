@@ -1664,7 +1664,8 @@ let accept_ServerHello cfg offer sh =
 
 let client_ServerHello #region ns sh =
   match !ns.state with
-//| C_HRR offer _ // -> FIXME validation; also outside the Negotiation state machine!
+  | C_HRR offer _
+    // FIXME validate that the SH is consistent with CH1, HRR
   | C_Offer offer -> (
     match accept_ServerHello ns.cfg offer sh with 
     | Error z -> Error z 
