@@ -213,6 +213,7 @@ KRML_FLAGS = \
   -bundle Lib.*[rename=Hacl_Lib] \
   -bundle TLSConstants=QD.TLS_protocolVersion,List.Helpers \
   -bundle Hashing=Hashing.Spec,Hashing,Hashing.CRF,HMAC,HKDF,HMAC.UFCMA \
+  -bundle HandshakeLog,TLS.Handshake.Send[rename=HandshakeLog] \
   -bundle 'TLS.Handshake=TLS.Handshake.\*,Old.HMAC.UFCMA,Old.Epochs,Old.KeySchedule[rename=Handshake]' \
   -bundle StatefulLHAE=AEAD_GCM,LHAEPlain,StatefulPlain \
   -bundle StreamPlain+StreamAE=[rename=StreamAE] \

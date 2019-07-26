@@ -874,7 +874,7 @@ typedef struct quic_state {
    uint8_t is_server;
    uint8_t is_complete;
    uint8_t is_post_hs;
-   Old_Handshake_hs hs;
+   TLS_Handshake_State_hs hs;
 } quic_state;
 
 static TLSConstants_config quic_set_config(TLSConstants_config c0, const quic_config *cfg)
