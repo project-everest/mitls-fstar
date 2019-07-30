@@ -198,10 +198,12 @@ let receive_post
      match x with
      | Error _ -> True
      | Correct None ->
+       invariant st h1 /\
        in_progress_flt st h1 == in_progress /\
        parsed_bytes st h1 ==
          Seq.slice (R.as_seq h0 b) (v f_begin) (v f_end)
      | Correct (Some flt) ->
+       invariant st h1 /\
        valid f_begin f_end flt h1 /\
        parsed_bytes st h1 == Seq.empty /\
        in_progress_flt st h1 == F_none
@@ -224,10 +226,12 @@ let receive_post_with_leftover
      match x with
      | Error _ -> True
      | Correct None ->
+       invariant st h1 /\
        in_progress_flt st h1 == in_progress /\
        parsed_bytes st h1 ==
          Seq.slice (R.as_seq h0 b) (v f_begin) (v f_end)
      | Correct (Some (flt, idx_end)) ->
+       invariant st h1 /\
        idx_end <= f_end /\  //AR: do we need this?
        valid f_begin idx_end flt h1 /\
        in_progress_flt st h1 == F_none /\
