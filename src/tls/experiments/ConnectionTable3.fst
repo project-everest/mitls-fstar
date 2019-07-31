@@ -90,7 +90,8 @@ val inv: t:connection_table -> h:mem -> Type0
 let inv t h = 
   let m = sel h t in
   forall (id:connection_id).{:pattern (T.defined t id h)}
-    T.defined t id h ==> connection_inv m (sel h (Some?.v (T.sel m id)))
+    (T.defined t id h /\ h `contains` (T.value_of t id h))    
+    ==> connection_inv m (sel h (Some?.v (T.sel m id)))
 
 val alloc: unit -> ST (connection_table)
   (requires fun _ -> witnessed (region_contains_pred rgn))
@@ -122,9 +123,28 @@ let create t id =
   assert (
     let m0 = sel h0 t in
     forall (id':connection_id).{:pattern (T.value_of t id' h0)}
-      (T.defined t id' h0 /\ ~(c == T.value_of t id' h0)) ==>
+      (T.defined t id' h0 /\ h0 `contains` (T.value_of t id' h0) /\ ~(c == T.value_of t id' h0)) ==>
       connection_inv m0 (sel h1 (T.value_of t id' h0)));
   c
+
+val free: t:connection_table -> id:connection_id -> ST unit
+  (requires fun h0 -> 
+    h0 `contains` t /\ inv t h0 /\ T.defined t id h0 /\
+    T.value_of t id h0 `is_live_for_rw_in` h0 /\ inv t h0)
+  (ensures  fun h0 _ h1 -> 
+    h0 `contains` (T.value_of t id h0) /\
+    h1 == HyperStack.free (T.value_of t id h0) h0 /\
+    inv t h1)
+let free t id =
+  let c = Some?.v (T.lookup t id) in
+  let h0 = get() in
+  rfree c;
+  let h1 = get() in
+  assert (
+    let m = sel h1 t in
+    forall (id:connection_id).{:pattern (T.defined t id h1)}
+    (T.defined t id h0 /\ h1 `contains` (T.value_of t id h1)) ==> 
+    connection_inv m (sel h1 (T.value_of t id h1)))
 
 (* Added a pattern; all alternatives I tried didn't work or were too cumbersome *)
 val token_functoriality
@@ -135,7 +155,7 @@ val token_functoriality
 let token_functoriality #a #rel r p q = 
   token_functoriality r p q
 
-#set-options "--z3rlimit 40"
+#set-options "--z3rlimit 100"
 
 (*
    This tests the server side of a full handshake with mismatched parameters:
@@ -143,10 +163,12 @@ let token_functoriality #a #rel r p q =
    1. Allocate an empty connection table 
    2. Create a first connection c1 with id = 1 (in Init state)
    3. Receive a ClientHello ch1 with random 0 on c1. Transition c1 to Sent_HRR 0 ch1
-   4. Create a second connection c2 (in Init state)
-   5. Receive a ClientHello ch2 on c2 with a random and cookie extension matching ch1.
+   4. Deallocate c1
+   5. Create a second connection c2 (in Init state)
+   6. Receive a ClientHello ch2 on c2 with a random and cookie extension matching ch1.
       Transition c2 to Sent_ServerHello 0 ch2 1, with c1 as the matching initial connection 
-   6. Receive a ClientFinished on c2. Transition c2 to Complete 0 ch2 1
+   7. Receive a ClientFinished on c2. Transition c2 to Complete 0 ch2 1
+   8. Deallocate c2
 *)
 val test: ch1:client_hello -> ch2:client_hello{has_cookie ch2} -> ST connection_table
   (requires fun _ -> witnessed (region_contains_pred rgn) /\
@@ -156,8 +178,6 @@ let test ch1 ch2 =
   let t = alloc () in
   let c1 = create t 1 in
   c1 := Sent_HRR 0 ch1;
-  let c2 = create t 2 in
-  c2 := Sent_ServerHello 0 ch2 1;
   stable_on_closure (closure step) 
     (fun c ->
       Sent_HRR? c /\ 
@@ -168,5 +188,9 @@ let test ch1 ch2 =
       Sent_HRR? (sel h c1) /\ 
       nonce_of (sel h c1) == 0 /\
       ch_cookie ch2 `matches` Sent_HRR?.ch (sel h c1));
-  c2 := Complete 0 ch2 1;
+  free t 1;
+  let c2 = create t 2 in
+  c2 := Sent_ServerHello 0 ch2 1;
+  c2 := Complete 0 ch2 1;  
+  free t 2;
   t
