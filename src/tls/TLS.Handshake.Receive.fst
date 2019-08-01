@@ -15,7 +15,7 @@
 
   Authors: T. Ramananandro, A. Rastogi, N. Swamy
 *)
-module HSL.Receive
+module TLS.Handshake.Receive
 
 open FStar.Integers
 open FStar.HyperStack.ST

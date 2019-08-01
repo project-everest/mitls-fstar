@@ -1,4 +1,4 @@
-module HSL.Receive.Wrapper
+module TLS.Handshake.Receive.Wrapper
 
 open FStar.Integers
 open FStar.HyperStack.ST
@@ -11,7 +11,24 @@ module B  = LowStar.Buffer
 
 module LP = LowParse.Low.Base
 
-module Rcv = HSL.Receive
+module Rcv = TLS.Handshake.Receive
+
+
+// unchanged from our stable Handshake API.
+
+type incoming =
+  | InAck: // the fragment is accepted, and...
+      next_keys : bool -> // the reader index increases;
+      complete  : bool -> // the handshake is complete!
+      incoming
+  | InQuery: Cert.chain -> bool -> incoming // could be part of InAck if no explicit user auth
+  | InError: TLSError.error -> incoming // how underspecified should it be?
+
+let in_next_keys (r:incoming) = InAck? r && InAck?.next_keys r
+let in_complete (r:incoming)  = InAck? r && InAck?.complete r
+
+
+
 
 (*
  * A wrapper over HSL.receive as expected by the current TLS.Handshake.Machine
@@ -21,7 +38,7 @@ type byte = FStar.Bytes.byte
 type bytes = FStar.Bytes.bytes
 
 noeq type rcv_state = {
-  current_flt : G.erased Rcv.in_progress_flt_t;
+  current_flt : G.erased Rcv.in_progress_flt_t; // not needed? 
   hsl_rcv_st  : Rcv.hsl_state;
   rcv_b       : b:B.buffer byte{B.loc_disjoint (B.loc_buffer b) (Rcv.footprint hsl_rcv_st)};
   rcv_from    : uint_32;

@@ -15,7 +15,7 @@
 
   Authors: C.Fournet, T. Ramananandro, A. Rastogi, N. Swamy
 *)
-module HSL.Receive
+module TLS.Handshake.Receive
 
 (*
  * This module provides the receive flights functionality to the Handshake

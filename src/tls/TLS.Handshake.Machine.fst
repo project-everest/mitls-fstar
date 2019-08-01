@@ -1,10 +1,10 @@
 module TLS.Handshake.Machine
 
-/// The Handshake verified state machine, integrating refinements,
-/// monotonic properties, and stateful properties from Transcript,
-/// Negotiation, KeySchedule.
+/// The Handshake verified state machine, integrating state,
+/// refinements, monotonic properties, and stateful properties from
+/// Transcript, Negotiation, KeySchedule, Send, and Receive.
 
-// This is WIP to converge on a verified coding style; will replace the start of Old.Handshake.
+// This is WIP to converge on a verified coding style; will replace TLS.Handshake.State
 
 open FStar.Error
 open FStar.Bytes // still used for cookies, tickets, signatures...
@@ -54,8 +54,10 @@ let client_config = config * Negotiation.resumeInfo
 ///
 ///   Note HS needs to select the incoming flight type.
 
-// to be merged with HSL.Receive
-noeq type rcv_state = {
+let rcv_state = TLS.Handshake.Receive.Wrapper.rcv_state
+
+(*
+type noeq type rcv_state = {
   flt: HSL.Receive.in_progress_flt_t; // The incoming flight we are waiting for; erase?
   rcv: HSL.Receive.hsl_state;
   rcv_b: Buffer.buffer UInt8.t; // We need a writable slice for buffering fragment; how to view it as a MITLS.Repr.const_slice?
@@ -64,6 +66,9 @@ noeq type rcv_state = {
   // { rcv_from <= rcv_to /\ v rcv_to <= Buffer.length rcv_b }
   }
 //let rcv_inv hsl flt = HSL.Receive.pre hsl.rcv hsl.rcv_b hsl.rcv_from hsl.rcv_to flt
+*)
+
+
 
 /// * We recompute the transcript from the HS state (with a
 ///   state-dependent bound on its length) and keep a digest with that
@@ -237,10 +242,10 @@ assume val pskis_of_psks: option Extensions.offeredPsks -> list (i:_{is_psk i})
 
 /// Stateful parts shared between all states after CH.
 ///
-noeq type msg_state (region: rgn) inflight random ha  = {
+noeq type msg_state (region: rgn) (inflight: TLS.Handshake.Receive.in_progress_flt_t) random ha  = {
   digest: Transcript.state ha;
   sending: TLS.Handshake.Send.send_state;
-  receiving: r:rcv_state { r.flt == inflight };
+  receiving: r:rcv_state { r.TLS.Handshake.Receive.Wrapper.current_flt == Ghost.hide inflight };
   epochs: Old.Epochs.epochs region random; }
 
 noeq type client_state
@@ -266,7 +271,7 @@ noeq type client_state
     offer: full_offer { offered cfg offer } ->
     // Witnessed in the binders, then overwritten to add binders or a retry.
 
-    ms: msg_state region HSL.Receive.F_c_wait_ServerHello (offer.full_ch.HSM.random) (offered_ha offer.full_ch) ->
+    ms: msg_state region TLS.Handshake.Receive.F_c_wait_ServerHello (offer.full_ch.HSM.random) (offered_ha offer.full_ch) ->
     ks: c_wait_ServerHello_keys ->
     // TODO sync key-schedule state
     // ks: secret_c13_wait_ServerHello
@@ -282,7 +287,7 @@ noeq type client_state
   | C13_wait_Finished1:
     offer: full_offer{ offered cfg offer } ->
     sh: serverHello{ accepted13 cfg offer sh (* not yet authenticated *) } ->
-    ms: msg_state region HSL.Receive.F_c13_wait_Finished1 (offer.full_ch.HSM.random) (selected_ha sh) ->
+    ms: msg_state region TLS.Handshake.Receive.F_c13_wait_Finished1 (offer.full_ch.HSM.random) (selected_ha sh) ->
     ks: c13_wait_Finished1_keys ->
     // TODO sync key-schedule state
     //i:   Secret.hs_id ->
@@ -318,7 +323,7 @@ noeq type client_state
       option HSM.certificateRequest13 &
       (i:Old.HMAC.UFCMA.finishedId & Old.KeySchedule.fink i))) ->
 
-    ms: msg_state region HSL.Receive.F_c13_wait_Finished1 (offer.full_ch.HSM.random) (selected_ha sh) ->
+    ms: msg_state region TLS.Handshake.Receive.F_c13_wait_Finished1 (offer.full_ch.HSM.random) (selected_ha sh) ->
     ks: client_keys ->
     // in unverified state [Old.KeySchedule.C_13_wait_CF/postHS]
     // TODO key-schedule state
@@ -348,13 +353,13 @@ noeq type client_state
   // In the TLS 1.2 states below, using [mode] as a placeholder for the final mode,
   // but it may be better to recompute its contents on the fly from ch sh etc.
   //
-  // still missing below HSL.Receive.receive_state and HSL.Send.send_state.
+  // still missing below TLS.Handshake.Receive.receive_state and HSL.Send.send_state.
 
   // 1.2 full, waiting for the rest of the first server flight
   | C12_wait_ServerHelloDone:
     ch: clientHello ->
     sh: serverHello (*{ accepted12 ch sh }*) ->
-    ms: msg_state region HSL.Receive.F_c12_wait_ServerHelloDone ch.HSM.random (selected_ha sh) ->
+    ms: msg_state region TLS.Handshake.Receive.F_c12_wait_ServerHelloDone ch.HSM.random (selected_ha sh) ->
     ks: client_keys ->
     client_state region cfg
 
@@ -363,7 +368,7 @@ noeq type client_state
   | C12_wait_Finished2:
     ch: clientHello ->
     sh: serverHello (*{ accepted12 ch sh }*) ->
-    ms: msg_state region HSL.Receive.F_c12_wait_ServerHelloDone ch.HSM.random (selected_ha sh) ->
+    ms: msg_state region TLS.Handshake.Receive.F_c12_wait_ServerHelloDone ch.HSM.random (selected_ha sh) ->
     m:mode12 ->
     // collapsing into a single state [wait_CCS2 (true)] followed by [wait_Finished2 (false)]
     // no need to track missing fin messages, as they are used just for recomputing the transcript
@@ -376,7 +381,7 @@ noeq type client_state
   | C12_wait_Finished1:
     ch: clientHello ->
     sh: serverHello (*{ accepted12 ch sh }*) ->
-    ms: msg_state region HSL.Receive.F_c12_wait_ServerHelloDone ch.HSM.random (selected_ha sh) ->
+    ms: msg_state region TLS.Handshake.Receive.F_c12_wait_ServerHelloDone ch.HSM.random (selected_ha sh) ->
     mode12 ->
     // collapsing into a single state [wait_CCS1 (true)] followed by [wait_Finished1 (false)]
     // no need to track missing fin messages, as they are used just for recomputing the transcript
@@ -386,7 +391,7 @@ noeq type client_state
   | C12_complete: // now with fin2 and stronger properties
     ch: clientHello ->
     sh: serverHello (*{ accepted12 ch sh }*) ->
-    ms: msg_state region HSL.Receive.F_c12_wait_ServerHelloDone ch.HSM.random (selected_ha sh) ->
+    ms: msg_state region TLS.Handshake.Receive.F_c12_wait_ServerHelloDone ch.HSM.random (selected_ha sh) ->
     mode12 ->
     client_state region cfg
 //
@@ -474,11 +479,12 @@ let mrel
 noeq abstract type t (region:rgn) = {
   cfg: client_config;
   nonce: TLSInfo.random;
-  state: st:HST.mreference
+  cstate: st:HST.mreference
     (client_state region cfg)
     (mrel #region #cfg)
     { HS.frameOf st = region } }
 
+let cst (#region:rgn) (x:t region) = x.cstate
 
 /// ----------------------------------------------------------------
 /// sample monotonic properties: the initial and retried ClientHello
@@ -566,69 +572,69 @@ let m_ch1: st_mon st_ch1 = fun _ _ _ _ -> ()
 /// probably do it more parametrically to scale up.
 
 let p #region (st:t region) f (o:Negotiation.offer) h0 =
-  f (HS.sel h0 st.state) == Some o
+  f (HS.sel h0 st.cstate) == Some o
 
 val witness0 (#region:rgn) (st: t region):
   Stack clientHello
-    (requires fun h0 -> match HS.sel h0 st.state with
+    (requires fun h0 -> match HS.sel h0 st.cstate with
         | C_wait_ServerHello _ _ _
         | C13_wait_Finished1 _ _ _ _
-        | C13_complete _ _ _ _ _ _ _ _ _ -> h0 `HS.contains` st.state
+        | C13_complete _ _ _ _ _ _ _ _ _ -> h0 `HS.contains` st.cstate
         | _ -> False )
     (ensures fun h0 o h1 ->
-      token_p st.state (p st st_ch0 o) /\
+      token_p st.cstate (p st st_ch0 o) /\
       modifies_none h0 h1)
 
 #push-options "--z3rlimit 100" // NS: wow, that's a lot for a little proof
 let witness0 #region st =
-  match st_ch0 !st.state with
+  match st_ch0 !st.cstate with
   | Some o -> (
       ReflexiveTransitiveClosure.stable_on_closure
         (step #region #st.cfg)
         (fun st -> st_ch0 st == Some o) ();
-      witness_p st.state (p #region st st_ch0 o);
+      witness_p st.cstate (p #region st st_ch0 o);
       o )
 #pop-options
 
 val witness1 (#region:rgn) (st: t region):
   Stack clientHello
     (requires fun h0 ->
-      h0 `HS.contains` st.state /\
-      ( match HS.sel h0 st.state with
+      h0 `HS.contains` st.cstate /\
+      ( match HS.sel h0 st.cstate with
         | C_wait_ServerHello offer _ _
         | C13_wait_Finished1 offer _ _ _
         | C13_complete offer _ _ _ _ _ _ _ _ -> Some? offer.full_retry
         | _ -> False ))
     (ensures fun h0 o h1 ->
-      token_p st.state (p st st_ch1 o) /\
+      token_p st.cstate (p st st_ch1 o) /\
       modifies_none h0 h1)
 
 #push-options "--z3rlimit 100" // NS: wow, that's a lot for a little proof
 let witness1 #region st =
-  match st_ch1 !st.state with
+  match st_ch1 !st.cstate with
   | Some o -> (
       ReflexiveTransitiveClosure.stable_on_closure
         (step #region #st.cfg)
         (fun st -> st_ch1 st == Some o) ();
-      witness_p st.state (p #region st st_ch1 o);
+      witness_p st.cstate (p #region st st_ch1 o);
       o )
 #pop-options
 
 assume val stuff (#region:rgn) (st: t region): Stack unit
-  (requires fun h0      -> h0 `HS.contains` st.state)
-  (ensures  fun h0 _ h1 -> h1 `HS.contains` st.state)
+  (requires fun h0      -> h0 `HS.contains` st.cstate)
+  (ensures  fun h0 _ h1 -> h1 `HS.contains` st.cstate)
 
 let test (#region:rgn) (st: t region):
   Stack unit
-    (requires fun h0 -> h0 `HS.contains` st.state)
+    (requires fun h0 -> h0 `HS.contains` st.cstate)
     (ensures fun h0 _ h1 -> True)
 =
-  let r = st_ch1 !st.state in
+  let r = st_ch1 !st.cstate in
   if Some? r then
     let o = witness1 st in
     stuff st;
-    let r' = st_ch1 !st.state in
-    recall_p st.state (p st st_ch1 o);
+    let r' = st_ch1 !st.cstate in
+    recall_p st.cstate (p st st_ch1 o);
     assert(r' == Some o)
 
 /// -------------end of sanity check----------------
@@ -703,7 +709,7 @@ noeq type server_state
   // TLS 1.3, intermediate state to encryption
   | S13_sent_ServerHello:
     mode: s13_mode region cfg ->
-    ms: msg_state region HSL.Receive.F_c_wait_ServerHello (mode.offer.ch.HSM.random) (selected_ha mode.sh) ->
+    ms: msg_state region TLS.Handshake.Receive.F_c_wait_ServerHello (mode.offer.ch.HSM.random) (selected_ha mode.sh) ->
 //  i: Idx.id -> // Secret.esId ->
 //  idh: Idx.id_dhe ->
 //  ks: Secret.s13_wait_ServerHello i idh ->
@@ -717,7 +723,7 @@ noeq type server_state
     mode: s13_mode region cfg ->
     ssv: Ghost.erased HandshakeMessages.certificateVerify13 ->
     fin1: Ghost.erased finished ->
-    ms: msg_state region HSL.Receive.F_c_wait_ServerHello (mode.offer.ch.HSM.random) (selected_ha mode.sh) ->
+    ms: msg_state region TLS.Handshake.Receive.F_c_wait_ServerHello (mode.offer.ch.HSM.random) (selected_ha mode.sh) ->
     // ms.digest is expected to be MACed in the Client Finished
     ks: server_keys -> // keeping fin2key and rms
     server_state region cfg
@@ -728,7 +734,7 @@ noeq type server_state
     fin1: Ghost.erased finished ->
     fin2: Ghost.erased finished ->
 //  { client_complete mode } ->
-    ms: msg_state region HSL.Receive.F_c_wait_ServerHello (mode.offer.ch.HSM.random) (selected_ha mode.sh) ->
+    ms: msg_state region TLS.Handshake.Receive.F_c_wait_ServerHello (mode.offer.ch.HSM.random) (selected_ha mode.sh) ->
     ks: server_keys ->
     server_state region cfg
 
@@ -737,174 +743,3 @@ noeq type server_state
 //| S_wait_CCS2 of digest      // TLS resume (CCS)
 //| S_wait_CF2 of digest       // TLS resume (CF)
 //| S_Complete
-
-
-/// Outlining our integration test (code adapted from TLS.Handshake)
-
-(* ----------------------- Incoming ----------------------- *)
-
-// unchanged from our stable Handshake API.
-
-type incoming =
-  | InAck: // the fragment is accepted, and...
-      next_keys : bool -> // the reader index increases;
-      complete  : bool -> // the handshake is complete!
-      incoming
-  | InQuery: Cert.chain -> bool -> incoming // could be part of InAck if no explicit user auth
-  | InError: TLSError.error -> incoming // how underspecified should it be?
-
-let in_next_keys (r:incoming) = InAck? r && InAck?.next_keys r
-let in_complete (r:incoming)  = InAck? r && InAck?.complete r
-
-
-(* OLD:
-let recv_ensures (#region:rgn) (cfg:client_config) (cs:client_state region cfg) (h0:HS.mem) (result:incoming) (h1:HS.mem) =
-    let w0 = iT s Writer h0 in
-    let w1 = iT s Writer h1 in
-    let r0 = iT s Reader h0 in
-    let r1 = iT s Reader h1 in
-    hs_inv s h1 /\
-    mods s h0 h1 /\
-    w1 == w0 /\
-    r1 == (if in_next_keys result then r0 + 1 else r0) /\
-    (b2t (in_complete result) ==> r1 >= 0 /\ r1 = w1 /\ iT s Reader h1 >= 0 (*/\ completed (eT s Reader h1)*) )
-*)
-
-val receive_fragment:
-  // mutable client state
-  #region:rgn -> hs: t region ->
-  // high-level calling convention for the incoming fragment
-  #i:TLSInfo.id -> rg:Range.frange i -> f:Range.rbytes rg ->
-  ST incoming
-  (requires fun h0 ->
-    // TODO statically exclude C_init
-    True)
-  (ensures fun h0 r h1 -> True)
-
-let buffer_received_fragment ms #i rg f = ms
-
-// TODO ms has a dependent type
-
-// TODO copy f's contents into !hs.receiving.rcv_b between rcv_to and
-// the end of the slice, probably returning indexes too, possibly
-// reallocating a bigger buffer if the current one is too small
-// (later?)
-
-
-// the actual transitions; we should experiment with some precise pre/post
-assume val client_HelloRetryRequest: #region:rgn -> hs: t region -> HSM.hrr -> St incoming
-assume val client_ServerHello:       #region:rgn -> hs: t region -> HSM.sh -> St incoming
-assume val client_ServerHelloDone:   #region:rgn -> hs: t region -> HSM.sh -> St incoming
-assume val client_ServerFinished13:  #region:rgn -> hs: t region ->
-  full_offer ->
-  sh: serverHello ->
-  ee: HSM.encryptedExtensions ->
-  ocr: option HSM.certificateRequest13 ->
-  oc: option HSM.certificate13 ->
-  ocv: option HSM.certificateVerify13 ->
-  svd: bytes ->
-  digestCert: option Hashing.anyTag ->
-  digestCertVerify: Hashing.anyTag ->
-  digestServerFinished: Hashing.anyTag ->
-  St incoming
-
-#set-options "--admit_smt_queries true"
-let rec receive_fragment #region hs #i rg f =
-  let open HandshakeMessages in
-  let recv_again r =
-    match r with
-    // only case where the next incoming flight may already have been buffered.
-    | InAck false false -> receive_fragment hs #i (0,0) empty_bytes
-    | r -> r  in
-  // trace "recv_fragment";
-  let h0 = HST.get() in
-
-  match !hs.state with
-  | C_init _ ->
-    InError (fatalAlert Unexpected_message, "Client hasn't sent hello yet (to be statically excluded)")
-
-  | C_wait_ServerHello offer0 ms0 ks0 -> (
-    let ms1 = buffer_received_fragment ms0 #i rg f in
-    let cslice = admit() (* from ms1.receiving.rcv_b *) in
-    // TODO: adjust parameters; refactor HSL.Receive to take ms1.receiving as parameter?
-    match HSL.Receive.receive_c_wait_ServerHello
-      ms1.receiving.rcv
-      cslice
-      ms1.receiving.rcv_from
-      ms1.receiving.rcv_to
-    with
-    | Error z -> InError z
-    | Correct None -> InAck false false // nothing happened
-    | Correct (Some sh_msg) -> (
-      let sh = admit() in
-      if HSM.is_hrr sh then
-        // TODO adjust digest, here or in the transition call
-        client_HelloRetryRequest hs (HSM.get_hrr sh)
-      else
-        // TODO extend digest[..sh]
-        // transitioning to C12_wait_ServerHelloDone or C13_wait_Finished1;
-        let r = client_ServerHello hs (HSM.get_sh sh) in
-        // TODO check that ms1.receiving is set for processing the next flight
-        recv_again r ))
-
-  | C12_wait_ServerHelloDone ch sh ms0 ks -> (
-    let ms1 = buffer_received_fragment ms0 #i rg f in
-    let cslice = admit() (* from ms1.receiving.rcv_b *) in
-    match HSL.Receive.receive_c12_wait_ServerHelloDone
-      ms1.receiving.rcv
-      cslice
-      ms1.receiving.rcv_from
-      ms1.receiving.rcv_to
-    with
-    | Error z -> InError z
-    | Correct None -> InAck false false // nothing happened
-    | Correct (Some x) ->
-      // TODO extend digest[..ServerHelloDone]
-      // let c, ske, ocr = admit() in
-      // client_ServerHelloDone hs c ske None
-      admit()
-      )
-
-  | C13_wait_Finished1 offer sh ms0 ks -> (
-    let ms1 = buffer_received_fragment ms0 #i rg f in
-    let cslice = admit() (* from ms1.receiving.rcv_b *) in
-    match HSL.Receive.receive_c13_wait_Finished1
-      ms1.receiving.rcv
-      cslice
-      ms1.receiving.rcv_from
-      ms1.receiving.rcv_to
-    with
-    | Error z -> InError z
-    | Correct None -> InAck false false // nothing happened
-    | Correct (Some x) ->
-      // covering 3 cases (see old code for details)
-      // we need to extract these high-level values from the flight:
-      let ee, ocr, oc, ocv, fin1, otag0, tag1, tag_fin1 = admit() in
-      client_ServerFinished13 hs offer sh ee ocr oc ocv fin1 otag0 tag1 tag_fin1
-      )
-(*
-  | C13_Complete _ _ _ _ _ _ _ ms0 _ ->
-    let ms1 = buffer_received_fragment ms0 #i rg f in
-    // TODO two sub-states: waiting for fin2 or for the post-handshake ticket.
-    match HSL.Receive.receive_c_wait_ServerHello 12_wait_ServerHelloDone st b f_begin f_end with
-    | Error z -> InError z
-    | Correct None -> InAck false false // nothing happened
-    | Correct (Some x) ->
-
-  , [Msg13 (M13_new_session_ticket st13)], [_] ->
-      client_NewSessionTicket_13 hs st13
-
-  // 1.2 full: wrap these two into a single received flight with optional [cr]
-    | C_wait_Finished2 digestClientFinished, [Msg12 (M12_finished f)], [digestServerFinished] ->
-      client_ServerFinished hs f digestClientFinished
-
-    | C_wait_NST resume, [Msg12 (M12_new_session_ticket st)], [digestNewSessionTicket] ->
-      client_NewSessionTicket_12 hs resume digestNewSessionTicket st
-
-    // 1.2 resumption
-    | C_wait_R_Finished1 digestNewSessionTicket, [Msg12 (M12_finished f)], [digestServerFinished] ->
-      client_R_ServerFinished hs f digestNewSessionTicket digestServerFinished
-*)
-
-  | _ ->
-    InError (fatalAlert Unexpected_message, "TBC")
