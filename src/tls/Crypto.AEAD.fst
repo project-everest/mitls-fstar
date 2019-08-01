@@ -32,37 +32,46 @@ let table
 
 noeq
 type state (a: SC.supported_alg) (phi: plain_pred) = {
-  ec: B.pointer (EC.state_s a);
-  kv: (if F.model then SC.kv a else unit);
+  ec: (if F.model then unit else B.pointer (EC.state_s a));
+  kv: (if F.model then SC.kv a else G.erased (SC.kv a));
   table: (if F.ideal_AEAD then table a kv phi else unit)
 }
 
-let invariant (#a: SC.supported_alg) (#phi: plain_pred) (h: HS.mem) (s: state a phi) : GTot Type0 =
-  EC.invariant h s.ec /\
-  (F.model ==> EC.as_kv (B.deref h s.ec) == s.kv) /\
-  (
-    if F.ideal_AEAD
-    then B.loc_disjoint (EC.footprint h s.ec) (B.loc_mreference (s.table <: table a s.kv phi)) /\ h `HS.contains` (s.table <: table a s.kv phi)
-    else True
-  )
+inline_for_extraction
+let state_ec
+  (#a: SC.supported_alg) (#phi: plain_pred)
+  (s: state a phi { F.model == false })
+: Tot (B.pointer (EC.state_s a))
+= s.ec
 
-let model_footprint
-  (#a: SC.supported_alg) (#phi: plain_pred) (h: HS.mem) (s: state a phi) : GTot B.loc
-= if F.ideal_AEAD then B.loc_mreference (s.table <: table a (s.kv) phi) else B.loc_none
+let state_kv
+  (#a: SC.supported_alg) (#phi: plain_pred)
+  (s: state a phi)
+: GTot (SC.kv a)
+= if F.model then s.kv else G.reveal s.kv
+
+let invariant (#a: SC.supported_alg) (#phi: plain_pred) (h: HS.mem) (s: state a phi) : GTot Type0 =
+  if F.model
+  then
+    if F.ideal_AEAD
+    then
+      h `HS.contains` (s.table <: table a s.kv phi)
+    else
+      True
+  else
+    EC.invariant h (state_ec s) /\
+    EC.as_kv (B.deref h (state_ec s)) == state_kv s
 
 let footprint (#a: SC.supported_alg) (#phi: plain_pred) (h: HS.mem) (s: state a phi) : GTot B.loc =
-  EC.footprint h s.ec `B.loc_union` model_footprint h s
-
-let encrypted (#a: SC.supported_alg) (#phi: plain_pred) (s: state a phi) (cipher: SC.cipher a) : GTot Type0 =
-  if F.ideal_AEAD
+  if F.model
   then
-    Seq.length cipher >= 12 + SC.tag_length a /\ (
-    let iv = Seq.slice cipher 0 12 in
-    let cipher' = Seq.slice cipher 12 (Seq.length cipher) in
-    HST.witnessed (MDM.defined (s.table <: table a (s.kv) phi) (iv, cipher'))
-  )
+    if F.ideal_AEAD
+    then
+      B.loc_mreference (s.table <: table a (s.kv) phi)
+    else
+      B.loc_none
   else
-    True
+    EC.footprint h (state_ec s)
 
 let encrypt
   (#a: SC.supported_alg)
@@ -99,6 +108,7 @@ let encrypt
   let ad_len = 0ul in
   let cipher' = B.sub cipher iv_len plain_len in
   let tag' = B.sub cipher (iv_len `U32.add` plain_len) (tag_len a) in
+  assume (F.model == false);
   let res = EC.encrypt
     #(G.hide a)
     s.ec
@@ -111,7 +121,8 @@ let encrypt
     cipher'
     tag'
   in
-  assume (F.model == false);
+  let h' = HST.get () in
+  assume (EC.as_kv (B.deref h' (state_ec s)) == state_kv s);
   res
 
 let decrypt
@@ -149,6 +160,7 @@ let decrypt
   let plain_len = cipher_len `U32.sub` tag_len a `U32.sub` iv_len in
   let cipher' = B.sub cipher iv_len plain_len in
   let tag' = B.sub cipher (iv_len `U32.add` plain_len) (tag_len a) in
+  assume (F.model == false);
   let res = EverCrypt.AEAD.decrypt
     #(G.hide a)
     s.ec
@@ -162,5 +174,5 @@ let decrypt
     plain
   in
   let h' = HST.get () in
-  assume (F.model == false);
+  assume (EC.as_kv (B.deref h' (state_ec s)) == state_kv s);
   res
