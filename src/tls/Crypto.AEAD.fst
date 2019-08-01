@@ -12,11 +12,7 @@ module HST = FStar.HyperStack.ST
 module EE = EverCrypt.Error
 module G = FStar.Ghost
 module MDM = FStar.Monotonic.DependentMap
-
-type plain_pred = (plain: Seq.seq SC.uint8) -> Tot Type0
-
-// inline_for_extraction
-let ideal: bool = false
+module F = Flags
 
 noextract
 inline_for_extraction
@@ -34,49 +30,39 @@ let table
 : Tot Type0
 = MDM.t HS.root (entry a) (fun (iv, cipher) -> (plain: SC.plain a { phi plain /\ SC.encrypt kv iv Seq.empty plain == cipher })) (fun _ -> True)
 
-inline_for_extraction
 noeq
 type state (a: SC.supported_alg) (phi: plain_pred) = {
   ec: B.pointer (EC.state_s a);
-  kv: Ghost.erased (SC.kv a);
-  table: (if ideal then table a (Ghost.reveal kv) phi else unit)
+  kv: (if F.model then SC.kv a else unit);
+  table: (if F.ideal_AEAD then table a kv phi else unit)
 }
 
 let invariant (#a: SC.supported_alg) (#phi: plain_pred) (h: HS.mem) (s: state a phi) : GTot Type0 =
   EC.invariant h s.ec /\
-  EC.as_kv (B.deref h s.ec) == G.reveal s.kv /\
+  (F.model ==> EC.as_kv (B.deref h s.ec) == s.kv) /\
   (
-    if ideal
-    then B.loc_disjoint (EC.footprint h s.ec) (B.loc_mreference (s.table <: table a (G.reveal s.kv) phi)) /\ h `HS.contains` (s.table <: table a (G.reveal s.kv) phi)
+    if F.ideal_AEAD
+    then B.loc_disjoint (EC.footprint h s.ec) (B.loc_mreference (s.table <: table a s.kv phi)) /\ h `HS.contains` (s.table <: table a s.kv phi)
     else True
   )
 
+let model_footprint
+  (#a: SC.supported_alg) (#phi: plain_pred) (h: HS.mem) (s: state a phi) : GTot B.loc
+= if F.ideal_AEAD then B.loc_mreference (s.table <: table a (s.kv) phi) else B.loc_none
+
 let footprint (#a: SC.supported_alg) (#phi: plain_pred) (h: HS.mem) (s: state a phi) : GTot B.loc =
-  EC.footprint h s.ec `B.loc_union` (if ideal then B.loc_mreference (s.table <: table a (G.reveal s.kv) phi) else B.loc_none)
+  EC.footprint h s.ec `B.loc_union` model_footprint h s
 
 let encrypted (#a: SC.supported_alg) (#phi: plain_pred) (s: state a phi) (cipher: SC.cipher a) : GTot Type0 =
-  if ideal
+  if F.ideal_AEAD
   then
     Seq.length cipher >= 12 + SC.tag_length a /\ (
     let iv = Seq.slice cipher 0 12 in
     let cipher' = Seq.slice cipher 12 (Seq.length cipher) in
-    HST.witnessed (MDM.defined (s.table <: table a (G.reveal s.kv) phi) (iv, cipher'))
+    HST.witnessed (MDM.defined (s.table <: table a (s.kv) phi) (iv, cipher'))
   )
   else
     True
-
-noextract
-inline_for_extraction
-let tag_len: SC.alg -> Tot U32.t =
-  let open SC in
-  function
-  | AES128_CCM8       ->  8ul
-  | AES256_CCM8       ->  8ul
-  | AES128_GCM        -> 16ul
-  | AES256_GCM        -> 16ul
-  | CHACHA20_POLY1305 -> 16ul
-  | AES128_CCM        -> 16ul
-  | AES256_CCM        -> 16ul
 
 let encrypt
   (#a: SC.supported_alg)
@@ -125,8 +111,7 @@ let encrypt
     cipher'
     tag'
   in
-  let h' = HST.get () in
-  assume (EC.as_kv (B.deref h' s.ec) == G.reveal s.kv);
+  assume (F.model == false);
   res
 
 let decrypt
@@ -177,5 +162,5 @@ let decrypt
     plain
   in
   let h' = HST.get () in
-  assume (EC.as_kv (B.deref h' s.ec) == G.reveal s.kv);
+  assume (F.model == false);
   res
