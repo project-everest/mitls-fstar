@@ -1,0 +1,40 @@
+[
+  "\u0007≤\u0010˜˘›œ•∏èl≠0`jå",
+  [
+    [
+      "TLS.Handshake.State.discard",
+      1,
+      2,
+      1,
+      [
+        "@query", "equation_FStar.HyperStack.ST.equal_stack_domains",
+        "equation_FStar.Monotonic.Heap.equal_dom",
+        "lemma_FStar.HyperStack.ST.lemma_same_refs_in_stack_regions_intro"
+      ],
+      0,
+      "f89dfbbda43e727bf2392109a76ac27e"
+    ],
+    [
+      "TLS.Handshake.State.print",
+      1,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "f7f0fd56e9ac515e370b55a762e1dc35"
+    ],
+    [
+      "TLS.Handshake.State.trace",
+      1,
+      2,
+      1,
+      [
+        "@query", "equation_FStar.HyperStack.ST.equal_stack_domains",
+        "equation_FStar.Monotonic.Heap.equal_dom",
+        "lemma_FStar.HyperStack.ST.lemma_same_refs_in_stack_regions_intro"
+      ],
+      0,
+      "b4a26a7864cce9e8533f1a8f7abd8792"
+    ]
+  ]
+]

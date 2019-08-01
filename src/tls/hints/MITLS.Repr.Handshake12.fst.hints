@@ -1,5 +1,5 @@
 [
-  "í˚çŸÕPÿp\u0014®ŸcAﬂR§",
+  "Iå\u0006ßj+îÙèi%îM\u0018V\u001d",
   [
     [
       "MITLS.Repr.Handshake12.get_hr_repr",
@@ -136,7 +136,7 @@
         "unit_inversion", "unit_typing"
       ],
       0,
-      "fbcd452539a0254f76329f1a32bb62e6"
+      "2af5c5d45e3cd38c5862dcde8bc4f911"
     ],
     [
       "MITLS.Repr.Handshake12.get_c_repr",
@@ -288,7 +288,7 @@
         "typing_Parsers.Handshake12_m12_certificate.handshake12_m12_certificate_parser_kind"
       ],
       0,
-      "aa31fcb1a1dd74d9b936466ce916af37"
+      "fc67981c4d31b72ed712c73b621e4719"
     ],
     [
       "MITLS.Repr.Handshake12.get_ske_repr",
@@ -412,7 +412,7 @@
         "typing_Parsers.Handshake12_m12_server_key_exchange.handshake12_m12_server_key_exchange_parser_kind"
       ],
       0,
-      "ccf0e08f1d2e56e2325acbf68af735ee"
+      "9b0f8acfd1513fc34b2c75dbc4b76084"
     ],
     [
       "MITLS.Repr.Handshake12.get_cr_repr",
@@ -548,7 +548,7 @@
         "typing_Parsers.Handshake12_m12_certificate_request.handshake12_m12_certificate_request_parser_kind"
       ],
       0,
-      "ce9d3a87289f66820b6a69c892920ef6"
+      "52ae3b8e17c46b5c830363e9cc73e3a9"
     ],
     [
       "MITLS.Repr.Handshake12.get_shd_repr",
@@ -686,7 +686,7 @@
         "unit_inversion", "unit_typing"
       ],
       0,
-      "813946cf10d15a65eeee49ec353b7106"
+      "c6444cf07f0784147f5da0366a5377ba"
     ],
     [
       "MITLS.Repr.Handshake12.get_cv_repr",
@@ -820,7 +820,7 @@
         "typing_Parsers.Handshake12_m12_certificate_verify.handshake12_m12_certificate_verify_parser_kind"
       ],
       0,
-      "16906eb7f705f608cfc445ee433b83b1"
+      "e305e4c8b4a14acd6f2b6dd6fa775c8e"
     ],
     [
       "MITLS.Repr.Handshake12.get_cke_repr",
@@ -943,7 +943,7 @@
         "typing_Parsers.Handshake12_m12_client_key_exchange.handshake12_m12_client_key_exchange_parser_kind"
       ],
       0,
-      "544de48e5bee22d5dc25ebee98ee049f"
+      "4b718665f56d0e3251bbf78117ad6181"
     ],
     [
       "MITLS.Repr.Handshake12.get_nst_repr",
@@ -1080,7 +1080,7 @@
         "typing_Parsers.NewSessionTicket12.newSessionTicket12_parser_kind"
       ],
       0,
-      "094c70255cb0bf67e798b96464e5f27a"
+      "80a9bac2c326bf929e37528631664f4a"
     ],
     [
       "MITLS.Repr.Handshake12.get_fin_repr",
@@ -1203,7 +1203,52 @@
         "typing_Parsers.Handshake12_m12_finished.handshake12_m12_finished_parser_kind"
       ],
       0,
-      "83a593c0b2f4b045a6587d99eb96617f"
+      "11a922fdfe0e5db09510de0f87a9ebfb"
+    ],
+    [
+      "MITLS.Repr.Handshake12.serialize",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "b2t_def", "bool_inversion",
+        "constructor_distinct_FStar.Integers.Unsigned",
+        "constructor_distinct_FStar.Integers.W32",
+        "disc_equation_FStar.Pervasives.Native.None",
+        "disc_equation_FStar.Pervasives.Native.Some",
+        "equality_tok_FStar.Integers.W32@tok",
+        "equation_FStar.Integers.int_t", "equation_FStar.Integers.uint_32",
+        "equation_FStar.UInt.fits", "equation_FStar.UInt.lte",
+        "equation_FStar.UInt.max_int", "equation_FStar.UInt.min_int",
+        "equation_FStar.UInt.size", "equation_FStar.UInt.uint_t",
+        "equation_FStar.UInt32.lte",
+        "equation_LowParse.Low.Base.validator_max_length",
+        "equation_LowParse.Spec.Base.strong_parser_kind",
+        "equation_MITLS.Repr.Handshake12.repr",
+        "equation_MITLS.Repr.Handshake12.t", "equation_MITLS.Repr.index",
+        "equation_MITLS.Repr.of_slice",
+        "equation_Parsers.Handshake12.handshake12_parser_kind",
+        "int_inversion", "lemma_FStar.Pervasives.invertOption",
+        "primitive_Prims.op_AmpAmp", "primitive_Prims.op_LessThanOrEqual",
+        "primitive_Prims.op_Subtraction",
+        "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind",
+        "proj_equation_MITLS.Repr.MkSlice_len",
+        "projection_inverse_BoxBool_proj_0",
+        "projection_inverse_BoxInt_proj_0",
+        "projection_inverse_FStar.Integers.Unsigned__0",
+        "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind",
+        "projection_inverse_MITLS.Repr.MkSlice_len",
+        "refinement_interpretation_Tm_refine_2773e256709094c97dab4205bd2254f0",
+        "refinement_interpretation_Tm_refine_7b6e2cfe377742828d343c201f6a175c",
+        "refinement_interpretation_Tm_refine_daef052e7a6441fcd19956845e2cffd8",
+        "refinement_interpretation_Tm_refine_f13070840248fced9d9d60d77bdae3ec",
+        "typing_FStar.Pervasives.Native.uu___is_Some",
+        "typing_FStar.UInt32.v", "typing_LowParse.Low.Base.max_uint32",
+        "typing_LowParse.Low.Base.validator_max_length",
+        "typing_MITLS.Repr.Handshake12.repr", "typing_MITLS.Repr.of_slice"
+      ],
+      0,
+      "c582c5d12e8641375310ec7c673f0e4a"
     ]
   ]
 ]

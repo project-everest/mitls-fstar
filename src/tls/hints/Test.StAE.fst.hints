@@ -27,7 +27,7 @@
         "typing_FStar.Monotonic.HyperStack.get_tip"
       ],
       0,
-      "3f7fc3bf1af9aa67bddcbdc51ac927dc"
+      "02d5103de17c15040ff0d2424a85c983"
     ],
     [
       "Test.StAE.discard",
@@ -40,7 +40,16 @@
         "lemma_FStar.HyperStack.ST.lemma_same_refs_in_stack_regions_intro"
       ],
       0,
-      "135e59dc9a66d7c4910d6f0d43ce6a1b"
+      "927731cc9e0ced4ad8dcc57946f7ebf8"
+    ],
+    [
+      "Test.StAE.print",
+      1,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "6ce032964220d9a1f1fe68449e35ebd2"
     ],
     [
       "Test.StAE.eprint",
@@ -72,7 +81,7 @@
         "typing_FStar.Monotonic.HyperStack.is_mm"
       ],
       0,
-      "bb6223d03ae4a458f08623dabae7abed"
+      "f882eb9afd067f85130f7e8ad4def42b"
     ],
     [
       "Test.StAE.nprint",
@@ -81,7 +90,7 @@
       1,
       [ "@query" ],
       0,
-      "24308a7d90540c914b833f751da7ea91"
+      "ec23525dcf8980e82acdcc2122528814"
     ]
   ]
 ]

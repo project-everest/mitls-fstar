@@ -213,7 +213,8 @@ KRML_FLAGS = \
   -bundle Lib.*[rename=Hacl_Lib] \
   -bundle TLSConstants=QD.TLS_protocolVersion,List.Helpers \
   -bundle Hashing=Hashing.Spec,Hashing,Hashing.CRF,HMAC,HKDF,HMAC.UFCMA \
-  -bundle Old.Handshake=Old.HMAC.UFCMA,Old.Epochs,Old.KeySchedule \
+  -bundle HandshakeLog,TLS.Handshake.Send[rename=HandshakeLog] \
+  -bundle 'TLS.Handshake=TLS.Handshake.\*,Old.HMAC.UFCMA,Old.Epochs,Old.KeySchedule[rename=Handshake]' \
   -bundle StatefulLHAE=AEAD_GCM,LHAEPlain,StatefulPlain \
   -bundle StreamPlain+StreamAE=[rename=StreamAE] \
   -bundle TLS.Curve25519+DHGroup+ECGroup+CommonDH=[rename=CommonDH] \
@@ -274,3 +275,12 @@ dist/test/Makefile.basic: $(ALL_KRML_FILES)
 test: compile-test
 	$(MAKE) -C dist/test test
 
+#####################
+# Verification only #
+#####################
+
+# NOTE: this rule is subsumed by $(ALL_KRML_FILES) so it need not be
+# explicitly added to `all`.
+
+.PHONY: verify-all
+verify-all: $(ALL_CHECKED_FILES)

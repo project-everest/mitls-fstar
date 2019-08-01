@@ -14,7 +14,7 @@
         "typing_AEAD.ivlen", "typing_FStar.UInt32.v"
       ],
       0,
-      "c3bf02935b2814f58111a5975b10ae5d"
+      "73976848cf2c74900d4b5484e74dfb4d"
     ],
     [
       "AEAD.aadmax",
@@ -23,7 +23,7 @@
       1,
       [ "@query" ],
       0,
-      "aff588635a8857a155563574df726eaf"
+      "bfedce7d5a61cfaced096e3c324d19c0"
     ],
     [
       "AEAD.cipher",
@@ -41,7 +41,7 @@
         "typing_AEAD.taglen", "typing_FStar.UInt32.v"
       ],
       0,
-      "7b7823a6987441e4a0880f1cb1137818"
+      "9bdf9c7d4ea7e3dcfa509aecf4847d19"
     ],
     [
       "AEAD.cipher32",
@@ -71,7 +71,7 @@
         "typing_FStar.UInt.fits", "typing_Spec.Poly1305.size_key"
       ],
       0,
-      "adfb94c4749cb90e705b6e06bace6640"
+      "094b7f586cfb466c8ecd06e547fe98fd"
     ],
     [
       "AEAD.mk_entry",
@@ -88,7 +88,7 @@
         "typing_Crypto.Plain.as_bytes"
       ],
       0,
-      "86a9800895da04674e23407332a8c012"
+      "5acc7feab672b55b566754031f18d6c1"
     ],
     [
       "AEAD.entry_injective",
@@ -112,7 +112,7 @@
         "typing_FStar.UInt32.v"
       ],
       0,
-      "4c0122813abb970206677d638d455455"
+      "a8596ff020a417aa0c6c297eb51d1a2a"
     ],
     [
       "AEAD.fresh_addresses",
@@ -127,7 +127,7 @@
         "refinement_interpretation_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
       ],
       0,
-      "74ea8567eb5058bab847cee4ab66a361"
+      "6c65d1d7d096a727e3610b9543cee7af"
     ],
     [
       "AEAD.fresh_addresses",
@@ -142,7 +142,7 @@
         "refinement_interpretation_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
       ],
       0,
-      "60459e7e8df38acbf120a9d5c0bf79b6"
+      "224f9bdb86aba35013c003a92aa643f9"
     ],
     [
       "AEAD.ok_plain_len_32",
@@ -156,7 +156,7 @@
         "typing_FStar.UInt32.v"
       ],
       0,
-      "a443e4d0022e21f5da4b7d9465b05075"
+      "40d0902b2712a08f87dd6ce9efb214db"
     ],
     [
       "AEAD.frame_log",
@@ -169,7 +169,7 @@
         "refinement_interpretation_Tm_refine_2de20c066034c13bf76e9c0b94f4806c"
       ],
       0,
-      "67a53b1ee11404c2142b46b136369aa9"
+      "2e848fca565d0a2294c02192a2031cfe"
     ]
   ]
 ]

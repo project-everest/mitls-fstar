@@ -17,6 +17,11 @@
 *)
 module HSL.Receive
 
+
+(*** The module is deprecated
+     Instead we are trying out a state-passing version of it from TLS.Handshake.ParseFlights ***)
+
+
 open FStar.Integers
 open FStar.HyperStack.ST
 
@@ -99,49 +104,50 @@ let parse_common
     forall (m:a1).
       (tag_fn m == tag) <==> cl.LP.clens_cond m})
   (acc:LP.accessor gacc)
-  : b:R.const_slice -> f_begin:uint_32 ->
-    Stack (TLSError.result (option (R.repr_p a1 b p1 & uint_32)))
-    (requires fun h ->
-      R.live h b /\
-      f_begin <= b.R.len)
-    (ensures fun h0 r h1 ->
-      B.modifies B.loc_none h0 h1 /\
-      (match r with
-       | E.Error _ -> True
-       | E.Correct None -> True
-       | E.Correct (Some (repr, pos)) ->  //on a successful parse it returns a valid repr with lens condition
-         repr.R.start_pos == f_begin /\
-         repr.R.end_pos == pos /\
-         R.valid repr h1 /\
-         cl.LP.clens_cond (R.value repr)))
+: b:R.const_slice -> f_begin:uint_32 ->
+  Stack (TLSError.result (option (R.repr_p a1 b p1 & uint_32)))
+  (requires fun h ->
+    R.live h b /\
+    f_begin <= b.R.len)
+  (ensures fun h0 r h1 ->
+    B.modifies B.loc_none h0 h1 /\
+    (match r with
+     | E.Error _ -> True
+     | E.Correct None -> True
+     | E.Correct (Some (repr, pos)) ->  //on a successful parse it returns a valid repr with lens condition
+       repr.R.start_pos == f_begin /\
+       repr.R.end_pos == pos /\
+       R.valid repr h1 /\
+       cl.LP.clens_cond (R.value repr)))
          
-  = fun b f_begin ->
-    let lp_b = R.to_slice b in
-    let pos = validator lp_b f_begin in  //validator gives us the valid postcondition
+= fun b f_begin ->
+  let lp_b = R.to_slice b in
+  let pos = validator lp_b f_begin in  //validator gives us the valid postcondition
 
-    if pos <= LP.validator_max_length then begin
-      let parsed_tag = HSMType.handshakeType_reader lp_b f_begin in
-      if parsed_tag = tag then  //and this dynamic check gives us the lens postcondition
-        let r = R.mk_from_const_slice b f_begin pos p1 in
-        E.Correct (Some (r, pos))
-      else E.Error unexpected_flight_error
-    end
-    else if pos = LP.validator_error_not_enough_data then E.Correct None
-    else E.Error parsing_error
+  if pos <= LP.validator_max_length then begin
+    let parsed_tag = HSMType.handshakeType_reader lp_b f_begin in
+    if parsed_tag = tag then  //and this dynamic check gives us the lens postcondition
+      let r = R.mk_from_const_slice b f_begin pos p1 in
+      E.Correct (Some (r, pos))
+    else E.Error unexpected_flight_error
+  end
+  else if pos = LP.validator_error_not_enough_data then E.Correct None
+  else E.Error parsing_error
 
 
 /// Helper function to reset incremental state
 /// Will be used when we have successfully parsed the requested flight
 
 private let reset_incremental_state (st:hsl_state)
-  : Stack unit
-    (requires fun h -> B.live h st.inc_st)
-    (ensures fun h0 _ h1 ->
-      B.modifies (footprint st) h0 h1 /\
-      parsed_bytes st h1 == Seq.empty /\
-      in_progress_flt st h1 == F_none)
-  =  let inc_st = G.hide (Seq.empty, F_none) in
-     B.upd st.inc_st 0ul inc_st
+: Stack unit
+  (requires fun h -> B.live h st.inc_st)
+  (ensures fun h0 _ h1 ->
+    B.modifies (footprint st) h0 h1 /\
+    parsed_bytes st h1 == Seq.empty /\
+    in_progress_flt st h1 == F_none)
+= let inc_st = G.hide (Seq.empty, F_none) in
+  B.upd st.inc_st 0ul inc_st
+
 
 /// Helper function to handle the error case or the insufficient data case
 ///
@@ -153,41 +159,81 @@ private let err_or_insufficient_data
   (parse_result:TLSError.result (option a))
   (in_progress:in_progress_flt_t)
   (st:hsl_state) (b:R.const_slice) (f_begin f_end:uint_32)
-  : Stack (TLSError.result (option t))
-    (requires fun h ->
-      B.live h st.inc_st /\ R.live h b /\
-      B.loc_disjoint (footprint st) (R.loc b) /\
-      f_begin <= f_end /\ f_end <= b.R.len /\
-      (E.Error? parse_result \/ parse_result == E.Correct None))
-    (ensures  fun h0 r h1 ->
-      B.modifies (footprint st) h0 h1 /\
-      (match parse_result with
-       | E.Error e -> r == E.Error e
-       | E.Correct None ->
-         r == E.Correct None /\
-         parsed_bytes st h1 ==
-           Seq.slice (R.as_seq h0 b) (v f_begin) (v f_end) /\
-         in_progress_flt st h1 == in_progress))
-  = match parse_result with
-    | E.Error e -> E.Error e
-    | E.Correct None ->
-      let inc_st =
-        let h = ST.get () in
-        let parsed_bytes = LP.bytes_of_slice_from_to h (R.to_slice b) f_begin f_end in
-        G.hide (parsed_bytes, in_progress)
-      in
-      B.upd st.inc_st 0ul inc_st;
-      E.Correct None
+: Stack (TLSError.result (option t))
+  (requires fun h ->
+    B.live h st.inc_st /\ R.live h b /\
+    B.loc_disjoint (footprint st) (R.loc b) /\
+    f_begin <= f_end /\ f_end <= b.R.len /\
+    (E.Error? parse_result \/ parse_result == E.Correct None))
+  (ensures  fun h0 r h1 ->
+    B.modifies (footprint st) h0 h1 /\
+    (match parse_result with
+     | E.Error e -> r == E.Error e
+     | E.Correct None ->
+       r == E.Correct None /\
+       parsed_bytes st h1 ==
+         Seq.slice (R.as_seq h0 b) (v f_begin) (v f_end) /\
+       in_progress_flt st h1 == in_progress))
+= match parse_result with
+  | E.Error e -> E.Error e
+  | E.Correct None ->
+    let inc_st =
+      let h = ST.get () in
+      let parsed_bytes = LP.bytes_of_slice_from_to h (R.to_slice b) f_begin f_end in
+      G.hide (parsed_bytes, in_progress)
+    in
+    B.upd st.inc_st 0ul inc_st;
+    E.Correct None
 
-/// Helper function to check that the end index matches with pos
+/// Helper function to check that pos matches f_end
 ///   and then either return an error or the flight flt
 
 inline_for_extraction noextract
-let check_end_index_and_return (#a:Type) (st:hsl_state) (pos f_end:uint_32) (flt:a) =
-  if pos <> f_end then E.Error bytes_remain_error
+let check_eq_end_index_and_return
+  (#a:Type)
+  (st:hsl_state)
+  (pos f_end:uint_32)
+  (flt:a)
+: Stack (TLSError.result (option a))
+  (requires fun h -> B.live h st.inc_st)
+  (ensures fun h0 res h1 ->
+    if pos <> f_end
+    then res == E.Error unexpected_end_index_error /\ h0 == h1
+    else
+      B.modifies (footprint st) h0 h1 /\
+      res == E.Correct (Some flt) /\
+      parsed_bytes st h1 == Seq.empty /\
+      in_progress_flt st h1 == F_none)
+= if pos <> f_end then E.Error unexpected_end_index_error
   else begin
     reset_incremental_state st;
     E.Correct (Some flt)
+  end
+
+
+/// Helper function to check that pos is leq f_end
+///   and then either return an error or the flight flt
+
+inline_for_extraction noextract
+let check_leq_end_index_and_return
+  (#a:Type)
+  (st:hsl_state)
+  (pos f_end:uint_32)
+  (flt:a)
+: Stack (TLSError.result (option (a & uint_32)))
+  (requires fun h -> B.live h st.inc_st)
+  (ensures fun h0 res h1 ->
+    if pos > f_end
+    then res == E.Error unexpected_end_index_error /\ h0 == h1
+    else
+      B.modifies (footprint st) h0 h1 /\
+      res == E.Correct (Some (flt, pos)) /\
+      parsed_bytes st h1 == Seq.empty /\
+      in_progress_flt st h1 == F_none)
+= if pos > f_end then E.Error unexpected_end_index_error
+  else begin
+    reset_incremental_state st;
+    E.Correct (Some (flt, pos))
   end
 
 
@@ -196,39 +242,39 @@ let check_end_index_and_return (#a:Type) (st:hsl_state) (pos f_end:uint_32) (flt
 
 inline_for_extraction noextract
 let parse_hsm_ch
-  = parse_common
-      HSM.handshake_validator
-      HSM.tag_of_handshake
-      HSMType.Client_hello
-      HSM.handshake_accessor_client_hello
+= parse_common
+    HSM.handshake_validator
+    HSM.tag_of_handshake
+    HSMType.Client_hello
+    HSM.handshake_accessor_client_hello
 
 inline_for_extraction noextract
 let parse_hsm_sh
-  = parse_common
-      HSM.handshake_validator
-      HSM.tag_of_handshake
-      HSMType.Server_hello
-      HSM.handshake_accessor_server_hello
+= parse_common
+    HSM.handshake_validator
+    HSM.tag_of_handshake
+    HSMType.Server_hello
+    HSM.handshake_accessor_server_hello
 
-let receive_s_Idle st b f_begin f_end =
-  let flt = F_s_Idle in
+let receive_s_Idle st b f_begin f_end
+= let flt = F_s_Idle in
 
   let r = parse_hsm_ch b f_begin in
   match r with
   | E.Error _ | E.Correct None ->
     err_or_insufficient_data r flt st b f_begin f_end
   | E.Correct (Some (ch_repr, pos)) ->
-    check_end_index_and_return st pos f_end ({ ch_msg = ch_repr })
+    check_eq_end_index_and_return st pos f_end ({ ch_msg = ch_repr })
 
-let receive_c_wait_ServerHello st b f_begin f_end =
-  let flt = F_c_wait_ServerHello in
+let receive_c_wait_ServerHello st b f_begin f_end
+= let flt = F_c_wait_ServerHello in
 
   let r = parse_hsm_sh b f_begin in
   match r with
   | E.Error _ | E.Correct None ->
     err_or_insufficient_data r flt st b f_begin f_end
   | E.Correct (Some (sh_repr, pos)) ->
-    check_end_index_and_return st pos f_end ({sh_msg = sh_repr})
+    check_leq_end_index_and_return st pos f_end ({sh_msg = sh_repr})
 
 
 (*** 1.3 flights ***)
@@ -238,95 +284,95 @@ let receive_c_wait_ServerHello st b f_begin f_end =
 
 inline_for_extraction noextract
 let parse_hsm13_ee
-  = parse_common
-      HSM13.handshake13_validator
-      HSM13.tag_of_handshake13
-      HSMType.Encrypted_extensions
-      HSM13.handshake13_accessor_encrypted_extensions
+= parse_common
+    HSM13.handshake13_validator
+    HSM13.tag_of_handshake13
+    HSMType.Encrypted_extensions
+    HSM13.handshake13_accessor_encrypted_extensions
       
 inline_for_extraction noextract
 let parse_hsm13_c
-  = parse_common
-      HSM13.handshake13_validator
-      HSM13.tag_of_handshake13
-      HSMType.Certificate
-      HSM13.handshake13_accessor_certificate
+= parse_common
+    HSM13.handshake13_validator
+    HSM13.tag_of_handshake13
+    HSMType.Certificate
+    HSM13.handshake13_accessor_certificate
 
 inline_for_extraction noextract
 let parse_hsm13_cv
-  = parse_common
-      HSM13.handshake13_validator
-      HSM13.tag_of_handshake13
-      HSMType.Certificate_verify
-      HSM13.handshake13_accessor_certificate_verify
+= parse_common
+    HSM13.handshake13_validator
+    HSM13.tag_of_handshake13
+    HSMType.Certificate_verify
+    HSM13.handshake13_accessor_certificate_verify
 
 inline_for_extraction noextract
 let parse_hsm13_fin
-  = parse_common
-      HSM13.handshake13_validator
-      HSM13.tag_of_handshake13
-      HSMType.Finished
-      HSM13.handshake13_accessor_finished
+= parse_common
+    HSM13.handshake13_validator
+    HSM13.tag_of_handshake13
+    HSMType.Finished
+    HSM13.handshake13_accessor_finished
 
 inline_for_extraction noextract
 let parse_hsm13_cr
-  = parse_common
-      HSM13.handshake13_validator
-      HSM13.tag_of_handshake13
-      HSMType.Certificate_request
-      HSM13.handshake13_accessor_certificate_request
+= parse_common
+    HSM13.handshake13_validator
+    HSM13.tag_of_handshake13
+    HSMType.Certificate_request
+    HSM13.handshake13_accessor_certificate_request
 
 inline_for_extraction noextract
 let parse_hsm13_eoed
-  = parse_common
-      HSM13.handshake13_validator
-      HSM13.tag_of_handshake13
-      HSMType.End_of_early_data
-      HSM13.handshake13_accessor_end_of_early_data
+= parse_common
+    HSM13.handshake13_validator
+    HSM13.tag_of_handshake13
+    HSMType.End_of_early_data
+    HSM13.handshake13_accessor_end_of_early_data
 
 inline_for_extraction noextract
 let parse_hsm13_nst
-  = parse_common
-      HSM13.handshake13_validator
-      HSM13.tag_of_handshake13
-      HSMType.New_session_ticket
-      HSM13.handshake13_accessor_new_session_ticket
+= parse_common
+    HSM13.handshake13_validator
+    HSM13.tag_of_handshake13
+    HSMType.New_session_ticket
+    HSM13.handshake13_accessor_new_session_ticket
 
 
 /// Helper function to parse c13 and cv13 that appear together in a flight
 
 private let parse_hsm13_c_cv
   (b:R.const_slice) (f_begin:uint_32)
-  : Stack (TLSError.result (option (HSM13R.c13_repr b & HSM13R.cv13_repr b & uint_32)))
-    (requires fun h ->
-      R.live h b /\
-      f_begin <= b.R.len)
-    (ensures fun h0 r h1 ->
-      B.modifies B.loc_none h0 h1 /\
-      (match r with
-       | E.Error _ -> True
-       | E.Correct None -> True
-       | E.Correct (Some (c13, cv13, pos)) ->
-         c13.R.start_pos == f_begin /\
-         c13.R.end_pos == cv13.R.start_pos /\
-         cv13.R.end_pos == pos /\
-         R.valid c13 h1 /\
-         R.valid cv13 h1))
-  = let r = parse_hsm13_c b f_begin in
+: Stack (TLSError.result (option (HSM13R.c13_repr b & HSM13R.cv13_repr b & uint_32)))
+  (requires fun h ->
+    R.live h b /\
+    f_begin <= b.R.len)
+  (ensures fun h0 r h1 ->
+    B.modifies B.loc_none h0 h1 /\
+    (match r with
+     | E.Error _ -> True
+     | E.Correct None -> True
+     | E.Correct (Some (c13, cv13, pos)) ->
+       c13.R.start_pos == f_begin /\
+       c13.R.end_pos == cv13.R.start_pos /\
+       cv13.R.end_pos == pos /\
+       R.valid c13 h1 /\
+       R.valid cv13 h1))
+= let r = parse_hsm13_c b f_begin in
+  match r with
+  | E.Error e -> E.Error e
+  | E.Correct None -> E.Correct None
+  | E.Correct (Some (c_repr, c_end)) ->
+    let r = parse_hsm13_cv b c_end in
     match r with
     | E.Error e -> E.Error e
     | E.Correct None -> E.Correct None
-    | E.Correct (Some (c_repr, c_end)) ->
-      let r = parse_hsm13_cv b c_end in
-      match r with
-      | E.Error e -> E.Error e
-      | E.Correct None -> E.Correct None
-      | E.Correct (Some (cv_repr, cv_end)) ->
-        E.Correct (Some (c_repr, cv_repr, cv_end))
+    | E.Correct (Some (cv_repr, cv_end)) ->
+      E.Correct (Some (c_repr, cv_repr, cv_end))
 
 #set-options "--z3rlimit 50"
-let receive_c13_wait_Finished1 st b f_begin f_end =
-  let flt = F_c13_wait_Finished1 in
+let receive_c13_wait_Finished1 st b f_begin f_end
+= let flt = F_c13_wait_Finished1 in
 
   let r = parse_hsm13_ee b f_begin in
   match r with
@@ -360,15 +406,15 @@ let receive_c13_wait_Finished1 st b f_begin f_end =
        | E.Error _ | E.Correct None ->
          err_or_insufficient_data r flt st b f_begin f_end
        | E.Correct (Some (fin_repr, fin_end)) ->
-         check_end_index_and_return st fin_end f_end ({
+         check_eq_end_index_and_return st fin_end f_end ({
            ee_msg = ee_repr;
            cr_msg = cr_repr;
            c_cv_msg = c_cv_repr;
            fin_msg = fin_repr
          })
 
-let receive_s13_wait_Finished2 st b f_begin f_end =
-  let flt = F_s13_wait_Finished2 in
+let receive_s13_wait_Finished2 st b f_begin f_end
+= let flt = F_s13_wait_Finished2 in
 
   let r = parse_hsm13_c_cv b f_begin in
   match r with
@@ -384,30 +430,30 @@ let receive_s13_wait_Finished2 st b f_begin f_end =
     match r with
     | E.Error _ | E.Correct None -> err_or_insufficient_data r flt st b f_begin f_end
     | E.Correct (Some (fin_repr, fin_end)) ->
-      check_end_index_and_return st fin_end f_end ({
+      check_eq_end_index_and_return st fin_end f_end ({
         c_cv_msg = c_cv_repr;
         fin_msg = fin_repr
       })
 
-let receive_s13_wait_EOED st b f_begin f_end =
-  let flt = F_s13_wait_EOED in
+let receive_s13_wait_EOED st b f_begin f_end
+= let flt = F_s13_wait_EOED in
 
   let r = parse_hsm13_eoed b f_begin in
   match r with
   | E.Error _ | E.Correct None ->
     err_or_insufficient_data r flt st b f_begin f_end
   | E.Correct (Some (eoed_repr, pos)) ->
-    check_end_index_and_return st pos f_end ({ eoed_msg = eoed_repr })
+    check_eq_end_index_and_return st pos f_end ({ eoed_msg = eoed_repr })
 
-let receive_c13_Complete st b f_begin f_end =
-  let flt = F_c13_Complete in
+let receive_c13_Complete st b f_begin f_end
+= let flt = F_c13_Complete in
 
   let r = parse_hsm13_nst b f_begin in
   match r with
   | E.Error _ | E.Correct None ->
     err_or_insufficient_data r flt st b f_begin f_end
   | E.Correct (Some (nst_repr, pos)) ->
-    check_end_index_and_return st pos f_end ({ nst_msg = nst_repr })
+    check_eq_end_index_and_return st pos f_end ({ nst_msg = nst_repr })
 
 
 (*** 1.2 flights ***)
@@ -415,63 +461,63 @@ let receive_c13_Complete st b f_begin f_end =
 
 inline_for_extraction noextract
 let parse_hsm12_c
-  = parse_common
-      HSM12.handshake12_validator
-      HSM12.tag_of_handshake12
-      HSMType.Certificate
-      HSM12.handshake12_accessor_certificate
+= parse_common
+    HSM12.handshake12_validator
+    HSM12.tag_of_handshake12
+    HSMType.Certificate
+    HSM12.handshake12_accessor_certificate
 
 inline_for_extraction noextract
 let parse_hsm12_ske
-  = parse_common
-      HSM12.handshake12_validator
-      HSM12.tag_of_handshake12
-      HSMType.Server_key_exchange
-      HSM12.handshake12_accessor_server_key_exchange
+= parse_common
+    HSM12.handshake12_validator
+    HSM12.tag_of_handshake12
+    HSMType.Server_key_exchange
+    HSM12.handshake12_accessor_server_key_exchange
 
 inline_for_extraction noextract
 let parse_hsm12_shd
-  = parse_common
-      HSM12.handshake12_validator
-      HSM12.tag_of_handshake12
-      HSMType.Server_hello_done
-      HSM12.handshake12_accessor_server_hello_done
+= parse_common
+    HSM12.handshake12_validator
+    HSM12.tag_of_handshake12
+    HSMType.Server_hello_done
+    HSM12.handshake12_accessor_server_hello_done
 
 inline_for_extraction noextract
 let parse_hsm12_cr
-  = parse_common
-      HSM12.handshake12_validator
-      HSM12.tag_of_handshake12
-      HSMType.Certificate_request
-      HSM12.handshake12_accessor_certificate_request
+= parse_common
+    HSM12.handshake12_validator
+    HSM12.tag_of_handshake12
+    HSMType.Certificate_request
+    HSM12.handshake12_accessor_certificate_request
 
 inline_for_extraction noextract
 let parse_hsm12_fin
-  = parse_common
-      HSM12.handshake12_validator
-      HSM12.tag_of_handshake12
-      HSMType.Finished
-      HSM12.handshake12_accessor_finished
+= parse_common
+    HSM12.handshake12_validator
+    HSM12.tag_of_handshake12
+    HSMType.Finished
+    HSM12.handshake12_accessor_finished
 
 inline_for_extraction noextract
 let parse_hsm12_nst
-  = parse_common
-      HSM12.handshake12_validator
-      HSM12.tag_of_handshake12
-      HSMType.New_session_ticket
-      HSM12.handshake12_accessor_new_session_ticket
+= parse_common
+    HSM12.handshake12_validator
+    HSM12.tag_of_handshake12
+    HSMType.New_session_ticket
+    HSM12.handshake12_accessor_new_session_ticket
 
 inline_for_extraction noextract
 let parse_hsm12_cke
-  = parse_common
-      HSM12.handshake12_validator
-      HSM12.tag_of_handshake12
-      HSMType.Client_key_exchange
-      HSM12.handshake12_accessor_client_key_exchange
+= parse_common
+    HSM12.handshake12_validator
+    HSM12.tag_of_handshake12
+    HSMType.Client_key_exchange
+    HSM12.handshake12_accessor_client_key_exchange
 
 
-let receive_c12_wait_ServerHelloDone st b f_begin f_end =
-  let flt = F_c12_wait_ServerHelloDone in
+let receive_c12_wait_ServerHelloDone st b f_begin f_end
+= let flt = F_c12_wait_ServerHelloDone in
 
   let r = parse_hsm12_c b f_begin in
   match r with
@@ -495,39 +541,39 @@ let receive_c12_wait_ServerHelloDone st b f_begin f_end =
         | E.Error _ | E.Correct None ->
           err_or_insufficient_data r flt st b f_begin f_end
         | E.Correct (Some (shd_repr, pos)) ->
-          check_end_index_and_return st pos f_end ({
+          check_eq_end_index_and_return st pos f_end ({
             c_msg = c_repr;
             ske_msg = ske_repr;
             cr_msg = cr_repr;
             shd_msg = shd_repr
           })
 
-let receive_cs12_wait_Finished st b f_begin f_end =
-  let flt = F_cs12_wait_Finished in
+let receive_cs12_wait_Finished st b f_begin f_end
+= let flt = F_cs12_wait_Finished in
 
   let r = parse_hsm12_fin b f_begin in
   match r with
   | E.Error _ | E.Correct None ->
     err_or_insufficient_data r flt st b f_begin f_end
   | E.Correct (Some (fin_repr, pos)) ->
-    check_end_index_and_return st pos f_end ({ fin_msg = fin_repr })
+    check_eq_end_index_and_return st pos f_end ({ fin_msg = fin_repr })
 
-let receive_c12_wait_NST st b f_begin f_end =
-  let flt = F_c12_wait_NST in
+let receive_c12_wait_NST st b f_begin f_end
+= let flt = F_c12_wait_NST in
 
   let r = parse_hsm12_nst b f_begin in
   match r with
   | E.Error _ | E.Correct None ->
     err_or_insufficient_data r flt st b f_begin f_end
   | E.Correct (Some (nst_repr, pos)) ->
-    check_end_index_and_return st pos f_end ({ nst_msg = nst_repr })
+    check_eq_end_index_and_return st pos f_end ({ nst_msg = nst_repr })
 
-let receive_s12_wait_CCS1 st b f_begin f_end =
-  let flt = F_s12_wait_CCS1 in
+let receive_s12_wait_CCS1 st b f_begin f_end
+= let flt = F_s12_wait_CCS1 in
 
   let r = parse_hsm12_cke b f_begin in
   match r with
   | E.Error _ | E.Correct None ->
     err_or_insufficient_data r flt st b f_begin f_end
   | E.Correct (Some (cke_repr, pos)) ->
-    check_end_index_and_return st pos f_end ({ cke_msg = cke_repr })
+    check_eq_end_index_and_return st pos f_end ({ cke_msg = cke_repr })

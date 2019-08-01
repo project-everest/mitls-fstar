@@ -12,7 +12,7 @@
         "projection_inverse_BoxBool_proj_0"
       ],
       0,
-      "caf611017f8cdf70d9fce626d3dd9caf"
+      "15175511eb2f4315aac3f237859c0d8b"
     ],
     [
       "HMAC.UFCMA.__proj__Info__item__good",
@@ -24,7 +24,7 @@
         "projection_inverse_HMAC.UFCMA.Info_alg"
       ],
       0,
-      "367bab71ebbdfddf794b1d621d855f14"
+      "8734d659f9d899f7934b0455f529c81b"
     ],
     [
       "HMAC.UFCMA.klen",
@@ -86,7 +86,7 @@
         "typing_Spec.Poly1305.size_key", "typing_tok_Lib.IntTypes.U32@tok"
       ],
       0,
-      "8bf39a114fc09f41a42670b005ee01bf"
+      "3bf0816583c084c94265f05ad1c39c82"
     ],
     [
       "HMAC.UFCMA.log_t",
@@ -111,7 +111,7 @@
         "typing_HMAC.UFCMA.text"
       ],
       0,
-      "1c2ae6ddf88004e8ff11f2ad2b162dcd"
+      "8422bc1a62d5850db477d6a32f55abc3"
     ],
     [
       "HMAC.UFCMA.__proj__Ideal__item___0",
@@ -136,7 +136,7 @@
         "typing_HMAC.UFCMA.text"
       ],
       0,
-      "0afdf8581dcf91c9e18fd695336cdd3f"
+      "5ec3862742c13b644737007c58fec025"
     ],
     [
       "HMAC.UFCMA.__proj__Ideal__item___0",
@@ -165,7 +165,7 @@
         "typing_HMAC.UFCMA.text"
       ],
       0,
-      "14587a33fd8ad99e1c840acd341acafe"
+      "0bfc3df733493a154858c49b12e43595"
     ],
     [
       "HMAC.UFCMA.__proj__MAC__item__krepr",
@@ -177,7 +177,7 @@
         "projection_inverse_HMAC.UFCMA.MAC_info"
       ],
       0,
-      "935c7b944334b5a97797c3b1479731f2"
+      "2a530748b93d5d78d0f3d451f60294b7"
     ],
     [
       "HMAC.UFCMA.__proj__MAC__item__log",
@@ -191,7 +191,7 @@
         "refinement_interpretation_Tm_refine_aaa326242191e734b07254af4acac75b"
       ],
       0,
-      "e3752c02cce81662f96406b19fa50212"
+      "a67cc70caaf3dfe285141ecbf718ae0f"
     ],
     [
       "HMAC.UFCMA.footprint",
@@ -236,7 +236,7 @@
         "typing_Hashing.Spec.macable", "typing_Mem.tls_region"
       ],
       0,
-      "1657955651507ad185f5f7175968a874"
+      "edf960633eddd2a0abdfeb095339ec12"
     ],
     [
       "HMAC.UFCMA.create",
@@ -363,7 +363,7 @@
         "typing_Spec.Poly1305.size_key"
       ],
       0,
-      "543886d4205b6817f730048dd9b485b7"
+      "0ce0e218d8e53096f495ee232f6387ca"
     ],
     [
       "HMAC.UFCMA.coerceT",
@@ -540,7 +540,7 @@
         "typing_HMAC.UFCMA.text"
       ],
       0,
-      "d6532866984058aaba395209bf892043"
+      "83f59785f4bd4767d840260c4f3d22db"
     ],
     [
       "HMAC.UFCMA.mac",
@@ -568,7 +568,7 @@
         "typing_HMAC.UFCMA.__proj__MAC__item__info", "typing_HMAC.UFCMA.text"
       ],
       0,
-      "2fe452bf4e02c1afb202213c20217ca3"
+      "764d3cffcdeb13219d23e32de08de06c"
     ],
     [
       "HMAC.UFCMA.mac",
@@ -670,7 +670,7 @@
         "unit_inversion"
       ],
       0,
-      "0dfe15a3817c141b83cf5f091920e0f2"
+      "3fd6d38e5ba7a1327c5382c860f88e4b"
     ],
     [
       "HMAC.UFCMA.verify",
@@ -738,7 +738,7 @@
         "typing_Hashing.Spec.hash_len"
       ],
       0,
-      "d6df588e29297cada566297ac02cb8e4"
+      "1c37e653e2ab474b39086e718f081728"
     ],
     [
       "HMAC.UFCMA.localpkg",
@@ -756,7 +756,7 @@
         "typing_HMAC.UFCMA.ideal"
       ],
       0,
-      "625d625f3938c3b95297e16d42d3e443"
+      "d79bad55657484f446fba5e6e3f9fc40"
     ],
     [
       "HMAC.UFCMA.id0",
@@ -772,7 +772,7 @@
         "refinement_interpretation_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
       ],
       0,
-      "4ccb2c6f40889e4a07a1ded7cc7d055a"
+      "7e7bcf1701239029ffc8083da8e3268f"
     ],
     [
       "HMAC.UFCMA.ip",
@@ -794,7 +794,7 @@
         "typing_Mem.is_tls_rgn", "typing_Mem.tls_region"
       ],
       0,
-      "1c2033a5c330c4570487571588c540de"
+      "1bd255f8d5c53c8efb0c79a700d494ba"
     ],
     [
       "HMAC.UFCMA.test",
@@ -882,7 +882,7 @@
         "typing_Mem.model"
       ],
       0,
-      "bc540c48726ddc3d88a421a861043a78"
+      "9ebc7327a0d3679cd02172e1486dc39b"
     ],
     [
       "HMAC.UFCMA.unit_test",
@@ -926,7 +926,7 @@
         "typing_tok_Spec.Hash.Definitions.SHA1@tok"
       ],
       0,
-      "fa730181022acc5d8a5095b0c4a3ca1b"
+      "9ea75e5b12d3697047ee399a0198785d"
     ]
   ]
 ]

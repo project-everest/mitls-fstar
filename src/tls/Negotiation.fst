@@ -1664,7 +1664,8 @@ let accept_ServerHello cfg offer sh =
 
 let client_ServerHello #region ns sh =
   match !ns.state with
-//| C_HRR offer _ // -> FIXME validation; also outside the Negotiation state machine!
+  | C_HRR offer _
+    // FIXME validate that the SH is consistent with CH1, HRR
   | C_Offer offer -> (
     match accept_ServerHello ns.cfg offer sh with 
     | Error z -> Error z 
@@ -2388,7 +2389,7 @@ let trace_server_ClientHello #region (ns: t region Server) (offer: HSM.clientHel
   trace ( 
     List.Tot.fold_left accum_string_of_pv "offered versions" (Negotiation.Version.offered_versions offer))
 
-#push-options "--z3rlimit 1024 --max_ifuel 8 --initial_ifuel 8"
+#push-options "--z3rlimit 2048 --max_ifuel 12 --initial_ifuel 12"
 let server_ClientHello #region ns offer log0 =
   trace_server_ClientHello #region ns offer;
   let r = match !ns.state with

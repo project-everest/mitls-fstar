@@ -12,7 +12,16 @@
         "lemma_FStar.HyperStack.ST.lemma_same_refs_in_stack_regions_intro"
       ],
       0,
-      "77bee46321bc9d0522fd88a99cc42412"
+      "0076851b605664dd68867af7370bbb58"
+    ],
+    [
+      "KDF.Rekey.print",
+      1,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "6faa8e69b567e12135ef87548c2520c7"
     ],
     [
       "KDF.Rekey.mklabel",
@@ -37,7 +46,7 @@
         "typing_FStar.String.list_of_string", "typing_FStar.String.strlen"
       ],
       0,
-      "7c58336c0eaa48e138cea4c6f4369c92"
+      "928c83bdf1c55fe0a9ffc474244c0450"
     ],
     [
       "KDF.Rekey.ivlen",
@@ -46,7 +55,7 @@
       1,
       [ "@query" ],
       0,
-      "8997c646a52e902ef51f4658d8f6198e"
+      "efdcd4713fea8cd7a4ebe3c31fc49be3"
     ],
     [
       "KDF.Rekey.is_iv_p",
@@ -55,7 +64,7 @@
       1,
       [ "@query" ],
       0,
-      "f6fcb935d7c5e6647851522a100da288"
+      "41e664420db0833913796fb19f5bb915"
     ],
     [
       "KDF.Rekey.lemma_KDF_depth",
@@ -68,7 +77,7 @@
         "refinement_interpretation_Tm_refine_542f9d4f129664613f2483a6c88bc7c2"
       ],
       0,
-      "6d4ec1ac15996c6671ae3913e7d37dee"
+      "665edc4ab25a9c9df9f8ae81a4e79cf2"
     ],
     [
       "KDF.Rekey.is_kdf_p",
@@ -81,7 +90,7 @@
         "projection_inverse_Pkg.LocalPkg_key"
       ],
       0,
-      "682e4d9aeba13cd6bce2ccec6736def7"
+      "a6ae651dc576d76e9c085394939d0ae4"
     ],
     [
       "KDF.Rekey._mchildren",
@@ -94,7 +103,7 @@
         "equation_Pkg.Tree.children", "typing_Flags.model"
       ],
       0,
-      "c4b283e227365ee763ea6e900a77fb1b"
+      "52ad7e7ccb2374ab785c71f28fd418a9"
     ],
     [
       "KDF.Rekey.is_rekey_tree'",
@@ -107,7 +116,7 @@
         "refinement_interpretation_Tm_refine_542f9d4f129664613f2483a6c88bc7c2"
       ],
       0,
-      "e173ca179c1744f86b3d3b1e4854d474"
+      "b0ce36a7d978590bd024a0f09b966741"
     ],
     [
       "KDF.Rekey.is_rekey_tree'",
@@ -141,7 +150,7 @@
         "typing_Mem.tls_region", "well-founded-ordering-on-nat"
       ],
       0,
-      "8cf7778c75146a81b22fe75eb11f9bce"
+      "e367d0a0cc4b7156d3030d9ea07f7626"
     ],
     [
       "KDF.Rekey.is_rekey_tree",
@@ -154,7 +163,7 @@
         "refinement_interpretation_Tm_refine_542f9d4f129664613f2483a6c88bc7c2"
       ],
       0,
-      "6c323ca59705dacc1dba6dc113ba9b1b"
+      "d158ca2ec2ad1f86cee5d7863b648a52"
     ],
     [
       "KDF.Rekey.is_rekey_tree",
@@ -168,7 +177,7 @@
         "refinement_interpretation_Tm_refine_542f9d4f129664613f2483a6c88bc7c2"
       ],
       0,
-      "c8a9dd0af4812401e2cbc04b3670abd8"
+      "b45e7575476e941871ce3127b670ad48"
     ],
     [
       "KDF.Rekey.mk_rekey'",
@@ -183,7 +192,7 @@
         "refinement_interpretation_Tm_refine_b96e0510459e2ede993bb7bc614e004f"
       ],
       0,
-      "bc84d13045e5a9798caac76fbb86670a"
+      "396170dbd20bc3015ae63cd5154cd5a6"
     ],
     [
       "KDF.Rekey.lift_children'",
@@ -197,7 +206,7 @@
         "typing_Mem.model"
       ],
       0,
-      "bc0648078e414465381df4b57bc35e9b"
+      "bb6b034d13caa1f4d24e618532ee34e2"
     ],
     [
       "KDF.Rekey.mk_rekey'",
@@ -299,7 +308,7 @@
         "typing_Mem.tls_region", "typing_Spec.Poly1305.size_key"
       ],
       0,
-      "92552438fc990fe95772f54421334eb9"
+      "6f6b25064c03cb242e51f1db0c8e634d"
     ],
     [
       "KDF.Rekey.mk_rekey",
@@ -313,9 +322,8 @@
         "equation_FStar.Monotonic.Heap.equal_dom",
         "equation_KDF.Rekey.is_rekey_tree", "equation_KDF.itree",
         "equation_Mem.is_tls_rgn", "equation_Mem.tls_rgn",
-        "equation_Pkg.Tree.no_tree", "equation_Pkg.Tree.tree",
-        "equation_Pkg.Tree.tree_inv", "equation_Prims.nat",
-        "function_token_typing_Pkg.Tree.erased_tree",
+        "equation_Pkg.Tree.tree", "equation_Pkg.Tree.tree_inv",
+        "equation_Prims.nat",
         "function_token_typing_Prims.__cache_version_number__",
         "int_inversion",
         "lemma_FStar.HyperStack.ST.lemma_same_refs_in_stack_regions_intro",
@@ -324,10 +332,10 @@
         "projection_inverse_BoxInt_proj_0",
         "refinement_interpretation_Tm_refine_542f9d4f129664613f2483a6c88bc7c2",
         "refinement_interpretation_Tm_refine_9393f41ccc9ce36df1080eefe33f6c53",
-        "true_interp", "typing_Mem.tls_region"
+        "true_interp", "typing_Mem.tls_region", "typing_Pkg.Tree.erased_tree"
       ],
       0,
-      "d7905a3a4d6e951952180355ea588d0e"
+      "459194a040831fbf9b8b7613b4e33966"
     ],
     [
       "KDF.Rekey._cpkg",
@@ -336,12 +344,10 @@
       1,
       [
         "@query", "equation_KDF.usage", "equation_Pkg.Tree.children",
-        "equation_Pkg.Tree.no_tree",
-        "function_token_typing_Pkg.Tree.erased_tree",
-        "projection_inverse_BoxBool_proj_0"
+        "projection_inverse_BoxBool_proj_0", "typing_Pkg.Tree.erased_tree"
       ],
       0,
-      "6e61b09065d9c185817d9c194bd71726"
+      "7414243fc7f985b728a356a422034e86"
     ],
     [
       "KDF.Rekey.concrete_pkg",
@@ -354,7 +360,7 @@
         "refinement_interpretation_Tm_refine_542f9d4f129664613f2483a6c88bc7c2"
       ],
       0,
-      "1e6ff689f937c221d759faa3a6fef0f1"
+      "41f62097cbf1bfadbc7695acdbaaf961"
     ],
     [
       "KDF.Rekey.concrete_pkg",
@@ -445,7 +451,7 @@
         "typing_Spec.Poly1305.size_key"
       ],
       0,
-      "664b35f568c725397f954fc414e93608"
+      "59021bfbc472306cf74f63787db96da2"
     ],
     [
       "KDF.Rekey.coerce_root_kdf",
@@ -462,7 +468,7 @@
         "refinement_interpretation_Tm_refine_542f9d4f129664613f2483a6c88bc7c2"
       ],
       0,
-      "66804bc503d73d24185db385194e5012"
+      "6b946a3668b61f7471bf953227bd7122"
     ],
     [
       "KDF.Rekey.coerce_root_kdf",
@@ -472,7 +478,8 @@
       [
         "@MaxFuel_assumption", "@MaxIFuel_assumption",
         "@fuel_correspondence_KDF.Rekey.is_rekey_tree_.fuel_instrumented",
-        "@query", "Prims_pretyping_ae567c2fb75be05905677af440075565",
+        "@query", "Prims_pretyping_3862c4e8ff39bfc3871b6a47e7ff5b2e",
+        "Prims_pretyping_ae567c2fb75be05905677af440075565",
         "Prims_pretyping_f8666440faa91836cc5a13998af863fc", "b2t_def",
         "bool_inversion", "constructor_distinct_FStar.Integers.W32",
         "constructor_distinct_FStar.Integers.Winfinite",
@@ -482,7 +489,7 @@
         "equation_FStar.Bytes.lbytes", "equation_FStar.Bytes.lbytes32",
         "equation_FStar.HyperStack.ST.erid", "equation_FStar.UInt.fits",
         "equation_FStar.UInt.size", "equation_FStar.UInt.uint_t",
-        "equation_Idx.id", "equation_Idx.ii",
+        "equation_Idx.id", "equation_Idx.ii", "equation_Idx.label",
         "equation_KDF.Rekey._mchildren", "equation_KDF.Rekey.flagKDF",
         "equation_KDF.Rekey.is_kdf_p", "equation_KDF.Rekey.is_rekey_tree",
         "equation_KDF.info0", "equation_KDF.itree",
@@ -492,17 +499,16 @@
         "equation_Mem.subrgn", "equation_Mem.subtls",
         "equation_Mem.tls_honest_region", "equation_Mem.tls_rgn",
         "equation_Model.ir", "equation_Pkg.Tree.children",
-        "equation_Pkg.Tree.children_", "equation_Pkg.Tree.no_tree",
-        "equation_Pkg.Tree.regid", "equation_Pkg.Tree.t",
-        "equation_Pkg.Tree.tree", "equation_Pkg.memoization",
-        "equation_Pkg.regid", "equation_Prims.eqtype", "equation_Prims.nat",
+        "equation_Pkg.Tree.children_", "equation_Pkg.Tree.regid",
+        "equation_Pkg.Tree.t", "equation_Pkg.Tree.tree",
+        "equation_Pkg.memoization", "equation_Pkg.regid",
+        "equation_Prims.eqtype", "equation_Prims.nat",
         "equation_Spec.Poly1305.size_key",
         "equation_with_fuel_KDF.Rekey.is_rekey_tree_.fuel_instrumented",
         "false_interp", "fuel_guarded_inversion_KDF.info",
         "fuel_guarded_inversion_Pkg.Tree.tree_",
         "fuel_guarded_inversion_Pkg.pkg", "function_token_typing_KDF.info0",
         "function_token_typing_KDF.secret",
-        "function_token_typing_Pkg.Tree.erased_tree",
         "function_token_typing_Pkg.__proj__Pkg__item__key",
         "function_token_typing_Prims.__cache_version_number__",
         "int_inversion", "int_typing",
@@ -554,11 +560,11 @@
         "typing_FStar.UInt.fits", "typing_FStar.UInt32.v",
         "typing_KDF.Rekey.flagKDF", "typing_KDF.Rekey.flagKDF_",
         "typing_Mem.tls_honest_region", "typing_Mem.tls_region",
-        "typing_Pkg.Tree.regid", "typing_Spec.Poly1305.size_key",
-        "unit_inversion", "unit_typing"
+        "typing_Pkg.Tree.erased_tree", "typing_Pkg.Tree.regid",
+        "typing_Spec.Poly1305.size_key", "unit_inversion", "unit_typing"
       ],
       0,
-      "c21d47839c62b61e7deb86370cac93ae"
+      "be0af7401ec99623e4fe0875991b8986"
     ],
     [
       "KDF.Rekey._down",
@@ -571,7 +577,7 @@
         "refinement_interpretation_Tm_refine_afd51579b90d50ea23e03b743a1fa001"
       ],
       0,
-      "eb1951f120fc283d29132a2f2be250a1"
+      "95bacc623329332db11c8960b009faca"
     ],
     [
       "KDF.Rekey._down",
@@ -603,9 +609,9 @@
         "equation_Mem.tls_honest_region", "equation_Mem.tls_rgn",
         "equation_Pkg.Tree.children", "equation_Pkg.Tree.children_",
         "equation_Pkg.Tree.down", "equation_Pkg.Tree.has_lbl",
-        "equation_Pkg.Tree.has_lbl_", "equation_Pkg.Tree.no_tree",
-        "equation_Pkg.Tree.t", "equation_Pkg.Tree.tree",
-        "equation_Prims.logical", "equation_Prims.nat",
+        "equation_Pkg.Tree.has_lbl_", "equation_Pkg.Tree.t",
+        "equation_Pkg.Tree.tree", "equation_Prims.logical",
+        "equation_Prims.nat",
         "equation_with_fuel_FStar.List.Tot.Base.length.fuel_instrumented",
         "equation_with_fuel_KDF.Rekey.is_rekey_tree_.fuel_instrumented",
         "equation_with_fuel_Pkg.Tree.find_lbl.fuel_instrumented",
@@ -615,7 +621,6 @@
         "fuel_guarded_inversion_Pkg.Tree.tree_",
         "fuel_guarded_inversion_Pkg.pkg",
         "fuel_guarded_inversion_Prims.list",
-        "function_token_typing_Pkg.Tree.erased_tree",
         "function_token_typing_Prims.__cache_version_number__",
         "int_inversion", "int_typing", "l_and-interp",
         "lemma_FStar.Monotonic.HyperHeap.lemma_extends_includes",
@@ -638,7 +643,7 @@
         "refinement_interpretation_Tm_refine_1cc6c9f8558dddb337b6c1187115cd6a",
         "refinement_interpretation_Tm_refine_3692e5d4bc95faba478158d004f3f983",
         "refinement_interpretation_Tm_refine_38d2bec63e374d1a01ada0c25be39dfe",
-        "refinement_interpretation_Tm_refine_3943ef02be5f5fe386dffa6295d9b1d4",
+        "refinement_interpretation_Tm_refine_464b645d42e7c6e46b1e14981e8c2cc3",
         "refinement_interpretation_Tm_refine_542f9d4f129664613f2483a6c88bc7c2",
         "refinement_interpretation_Tm_refine_5aee6c1d5e606045d3f22072ebbfd523",
         "refinement_interpretation_Tm_refine_6c5072d4c9562dd38fd2703ecfb013df",
@@ -653,10 +658,11 @@
         "typing_Mem.tls_honest_region", "typing_Mem.tls_region",
         "typing_Mem.top_regions",
         "typing_Pkg.Tree.__proj__Node__item__children",
-        "typing_Pkg.Tree.find_lbl_", "typing_Pkg.__proj__Pkg__item__ideal"
+        "typing_Pkg.Tree.erased_tree", "typing_Pkg.Tree.find_lbl_",
+        "typing_Pkg.__proj__Pkg__item__ideal"
       ],
       0,
-      "51141187910b30500ab032ae95c14aa9"
+      "38e11f61b2312ebb04f6ab690aaacf22"
     ],
     [
       "KDF.Rekey.test_rekey",
@@ -703,16 +709,15 @@
         "equation_Mem.subrgn", "equation_Mem.subtls",
         "equation_Mem.tls_honest_region", "equation_Mem.tls_rgn",
         "equation_Pkg.Tree.children", "equation_Pkg.Tree.children_",
-        "equation_Pkg.Tree.no_tree", "equation_Pkg.Tree.regid",
-        "equation_Pkg.Tree.tree", "equation_Pkg.memoization",
-        "equation_Pkg.regid", "equation_Prims.logical", "equation_Prims.nat",
+        "equation_Pkg.Tree.regid", "equation_Pkg.Tree.tree",
+        "equation_Pkg.memoization", "equation_Pkg.regid",
+        "equation_Prims.logical", "equation_Prims.nat",
         "equation_with_fuel_Idx.pre_wellformed_id.fuel_instrumented",
         "equation_with_fuel_KDF.Rekey.is_rekey_tree_.fuel_instrumented",
         "equation_with_fuel_KDF.index_info.fuel_instrumented",
         "false_interp", "function_token_typing_FStar.Monotonic.Heap.heap",
         "function_token_typing_Idx.honest",
         "function_token_typing_Idx.registered",
-        "function_token_typing_Pkg.Tree.erased_tree",
         "function_token_typing_Prims.__cache_version_number__", "int_typing",
         "l_and-interp", "lemma_FStar.Map.lemma_ContainsDom",
         "lemma_FStar.Monotonic.HyperHeap.lemma_extends_includes",
@@ -742,8 +747,8 @@
         "refinement_interpretation_Tm_refine_1cc6c9f8558dddb337b6c1187115cd6a",
         "refinement_interpretation_Tm_refine_3692e5d4bc95faba478158d004f3f983",
         "refinement_interpretation_Tm_refine_38d2bec63e374d1a01ada0c25be39dfe",
-        "refinement_interpretation_Tm_refine_3943ef02be5f5fe386dffa6295d9b1d4",
         "refinement_interpretation_Tm_refine_3a27f645dec4cdae0c85acae767af7f3",
+        "refinement_interpretation_Tm_refine_464b645d42e7c6e46b1e14981e8c2cc3",
         "refinement_interpretation_Tm_refine_470156e17d4b4d396e6287bc60cb11f6",
         "refinement_interpretation_Tm_refine_4e12754ccfe4cd4bcc46292b0ac8dee4",
         "refinement_interpretation_Tm_refine_542f9d4f129664613f2483a6c88bc7c2",
@@ -767,10 +772,11 @@
         "typing_Mem.tls_honest_region", "typing_Mem.tls_region",
         "typing_Mem.top_regions",
         "typing_Pkg.Tree.__proj__Node__item__children",
-        "typing_tok_Idx.Expand@tok", "unit_typing"
+        "typing_Pkg.Tree.erased_tree", "typing_tok_Idx.Expand@tok",
+        "unit_typing"
       ],
       0,
-      "9e36d2ad3d0157c36a204b292a996d7e"
+      "413fcd9190680af6f9c410cd2ec8170f"
     ]
   ]
 ]

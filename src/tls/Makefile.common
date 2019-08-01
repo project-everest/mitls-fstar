@@ -14,7 +14,9 @@ INCLUDE_PATHS 	= \
   $(KREMLIN_HOME)/kremlib \
   $(MITLS_HOME)/libs/ffi \
   $(QD_HOME)/src/lowparse \
-  $(MITLS_HOME)/src/parsers/generated
+  $(MITLS_HOME)/src/parsers/generated \
+  $(MITLS_HOME)/src/tls \
+  $(MITLS_HOME)/src/tls/obj
 
 FSTAR_INCLUDES = $(addprefix --include ,$(INCLUDE_PATHS))
 
