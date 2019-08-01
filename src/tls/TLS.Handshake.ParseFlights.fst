@@ -15,12 +15,7 @@
 
   Authors: T. Ramananandro, A. Rastogi, N. Swamy
 *)
-module HSL.Receive
-
-
-(*** The module is deprecated
-     Instead we are trying out a state-passing version of it from TLS.Handshake.ParseFlights ***)
-
+module TLS.Handshake.ParseFlights
 
 open FStar.Integers
 open FStar.HyperStack.ST
@@ -50,40 +45,24 @@ open HSL.Common
 
 #reset-options "--max_fuel 0 --max_ifuel 0 --using_facts_from '* -FStar.Tactics -FStar.Reflection -LowParse + LowParse.Slice'"
 
-type inc_st_t = G.erased (bytes & in_progress_flt_t)
-
-
-/// inc_st is a pointer to erased data
-
 noeq
-type hsl_state = {
-  rgn: Mem.rgn;
-  inc_st: (p:B.pointer inc_st_t{
-    rgn `region_includes` B.loc_buffer p
-  });
+type state = {
+  inc_st : G.erased (bytes & in_progress_flt_t);
 }
 
-let region_of st = st.rgn
+let parsed_bytes st = fst (G.reveal st.inc_st)
 
-let parsed_bytes st h = fst (G.reveal (B.deref h st.inc_st))
+let in_progress_flt st = snd (G.reveal st.inc_st)
 
-let in_progress_flt st h = snd (G.reveal (B.deref h st.inc_st))
+let reset () = {
+  inc_st = G.hide (Seq.empty, F_none);
+}
 
-let invariant s h = B.live h s.inc_st
-
-let footprint s = B.loc_buffer s.inc_st
-
-let frame_hsl_state _ _ _ _ = ()
-
-let create r =
-  let inc_st = B.malloc r (G.hide (Seq.empty, F_none)) 1ul in
-  { rgn = r; inc_st = inc_st }
-
+let create () = reset ()
 
 /// Main workhorse of parsing messages
 ///
-/// Later we partially apply this function to parse
-/// 1.3, 1.2, and CH and SH messages
+/// A common function that we instantiate later for SH/CH, 12, and 13 messages
 
 inline_for_extraction noextract
 let parse_common
@@ -135,45 +114,31 @@ let parse_common
   else E.Error parsing_error
 
 
-/// Helper function to reset incremental state
-/// Will be used when we have successfully parsed the requested flight
-
-private let reset_incremental_state (st:hsl_state)
-: Stack unit
-  (requires fun h -> B.live h st.inc_st)
-  (ensures fun h0 _ h1 ->
-    B.modifies (footprint st) h0 h1 /\
-    parsed_bytes st h1 == Seq.empty /\
-    in_progress_flt st h1 == F_none)
-= let inc_st = G.hide (Seq.empty, F_none) in
-  B.upd st.inc_st 0ul inc_st
-
-
-/// Helper function to handle the error case or the insufficient data case
-///
-/// In the first case, it just returns the error as is
-/// In the second case, it saves the incremental state
+/// Helper function to handle the case when there is an error or insufficient data
 
 private let err_or_insufficient_data
   (#a:Type) (#t:Type)
   (parse_result:TLSError.result (option a))
   (in_progress:in_progress_flt_t)
-  (st:hsl_state) (b:R.const_slice) (f_begin f_end:uint_32)
-: Stack (TLSError.result (option t))
+  (b:R.const_slice) (f_begin f_end:uint_32)
+: Stack (TLSError.result (option t & state))
   (requires fun h ->
-    B.live h st.inc_st /\ R.live h b /\
-    B.loc_disjoint (footprint st) (R.loc b) /\
+    R.live h b /\
     f_begin <= f_end /\ f_end <= b.R.len /\
-    (E.Error? parse_result \/ parse_result == E.Correct None))
+    (match parse_result with
+     | E.Error _ -> True
+     | E.Correct opt -> opt == None))
   (ensures  fun h0 r h1 ->
-    B.modifies (footprint st) h0 h1 /\
+    h0 == h1 /\
     (match parse_result with
      | E.Error e -> r == E.Error e
      | E.Correct None ->
-       r == E.Correct None /\
-       parsed_bytes st h1 ==
-         Seq.slice (R.as_seq h0 b) (v f_begin) (v f_end) /\
-       in_progress_flt st h1 == in_progress))
+       (match r with
+        | E.Correct (None, rst) ->          
+          parsed_bytes rst ==
+            Seq.slice (R.as_seq h0 b) (v f_begin) (v f_end) /\
+          in_progress_flt rst == in_progress
+        | _ -> False)))
 = match parse_result with
   | E.Error e -> E.Error e
   | E.Correct None ->
@@ -182,59 +147,28 @@ private let err_or_insufficient_data
       let parsed_bytes = LP.bytes_of_slice_from_to h (R.to_slice b) f_begin f_end in
       G.hide (parsed_bytes, in_progress)
     in
-    B.upd st.inc_st 0ul inc_st;
-    E.Correct None
+    E.Correct (None, { inc_st = inc_st })
 
-/// Helper function to check that pos matches f_end
-///   and then either return an error or the flight flt
+
+///  Helper functions to check the end index and reset the state if ok
 
 inline_for_extraction noextract
 let check_eq_end_index_and_return
   (#a:Type)
-  (st:hsl_state)
   (pos f_end:uint_32)
   (flt:a)
-: Stack (TLSError.result (option a))
-  (requires fun h -> B.live h st.inc_st)
-  (ensures fun h0 res h1 ->
-    if pos <> f_end
-    then res == E.Error unexpected_end_index_error /\ h0 == h1
-    else
-      B.modifies (footprint st) h0 h1 /\
-      res == E.Correct (Some flt) /\
-      parsed_bytes st h1 == Seq.empty /\
-      in_progress_flt st h1 == F_none)
+: TLSError.result (option a & state)
 = if pos <> f_end then E.Error unexpected_end_index_error
-  else begin
-    reset_incremental_state st;
-    E.Correct (Some flt)
-  end
-
-
-/// Helper function to check that pos is leq f_end
-///   and then either return an error or the flight flt
+  else E.Correct (Some flt, reset ())
 
 inline_for_extraction noextract
 let check_leq_end_index_and_return
   (#a:Type)
-  (st:hsl_state)
   (pos f_end:uint_32)
   (flt:a)
-: Stack (TLSError.result (option (a & uint_32)))
-  (requires fun h -> B.live h st.inc_st)
-  (ensures fun h0 res h1 ->
-    if pos > f_end
-    then res == E.Error unexpected_end_index_error /\ h0 == h1
-    else
-      B.modifies (footprint st) h0 h1 /\
-      res == E.Correct (Some (flt, pos)) /\
-      parsed_bytes st h1 == Seq.empty /\
-      in_progress_flt st h1 == F_none)
+: TLSError.result (option (a & uint_32) & state)
 = if pos > f_end then E.Error unexpected_end_index_error
-  else begin
-    reset_incremental_state st;
-    E.Correct (Some (flt, pos))
-  end
+  else E.Correct (Some (flt, pos), reset ())
 
 
 (*** ClientHello and ServerHello flights ***)
@@ -262,9 +196,9 @@ let receive_s_Idle st b f_begin f_end
   let r = parse_hsm_ch b f_begin in
   match r with
   | E.Error _ | E.Correct None ->
-    err_or_insufficient_data r flt st b f_begin f_end
+    err_or_insufficient_data r flt b f_begin f_end
   | E.Correct (Some (ch_repr, pos)) ->
-    check_eq_end_index_and_return st pos f_end ({ ch_msg = ch_repr })
+    check_eq_end_index_and_return pos f_end ({ ch_msg = ch_repr })
 
 let receive_c_wait_ServerHello st b f_begin f_end
 = let flt = F_c_wait_ServerHello in
@@ -272,15 +206,13 @@ let receive_c_wait_ServerHello st b f_begin f_end
   let r = parse_hsm_sh b f_begin in
   match r with
   | E.Error _ | E.Correct None ->
-    err_or_insufficient_data r flt st b f_begin f_end
+    err_or_insufficient_data r flt b f_begin f_end
   | E.Correct (Some (sh_repr, pos)) ->
-    check_leq_end_index_and_return st pos f_end ({sh_msg = sh_repr})
+    check_leq_end_index_and_return pos f_end ({sh_msg = sh_repr})
 
 
 (*** 1.3 flights ***)
 
-
-/// Specialize the parse_common function for Handshake13 messages
 
 inline_for_extraction noextract
 let parse_hsm13_ee
@@ -377,12 +309,12 @@ let receive_c13_wait_Finished1 st b f_begin f_end
   let r = parse_hsm13_ee b f_begin in
   match r with
   | E.Error _ | E.Correct None ->
-    err_or_insufficient_data r flt st b f_begin f_end
+    err_or_insufficient_data r flt b f_begin f_end
   | E.Correct (Some (ee_repr, ee_end)) ->
     let r = parse_hsm13_cr b ee_end in
     match r with
     | E.Correct None ->
-      err_or_insufficient_data r flt st b f_begin f_end
+      err_or_insufficient_data r flt b f_begin f_end
     | _ ->
      let cr_repr, c_cv_begin =
        match r with
@@ -393,7 +325,7 @@ let receive_c13_wait_Finished1 st b f_begin f_end
      let r = parse_hsm13_c_cv b c_cv_begin in
      match r with
      | E.Correct None ->
-       err_or_insufficient_data r flt st b f_begin f_end
+       err_or_insufficient_data r flt b f_begin f_end
      | _ ->
        let c_cv_repr, fin_begin =
          match r with
@@ -404,9 +336,9 @@ let receive_c13_wait_Finished1 st b f_begin f_end
        let r = parse_hsm13_fin b fin_begin in
        match r with
        | E.Error _ | E.Correct None ->
-         err_or_insufficient_data r flt st b f_begin f_end
+         err_or_insufficient_data r flt b f_begin f_end
        | E.Correct (Some (fin_repr, fin_end)) ->
-         check_eq_end_index_and_return st fin_end f_end ({
+         check_eq_end_index_and_return fin_end f_end ({
            ee_msg = ee_repr;
            cr_msg = cr_repr;
            c_cv_msg = c_cv_repr;
@@ -418,7 +350,7 @@ let receive_s13_wait_Finished2 st b f_begin f_end
 
   let r = parse_hsm13_c_cv b f_begin in
   match r with
-  | E.Correct None -> err_or_insufficient_data r flt st b f_begin f_end
+  | E.Correct None -> err_or_insufficient_data r flt b f_begin f_end
   | _ ->
     let c_cv_repr, fin_begin =
       match r with
@@ -428,9 +360,9 @@ let receive_s13_wait_Finished2 st b f_begin f_end
     in
     let r = parse_hsm13_fin b fin_begin in
     match r with
-    | E.Error _ | E.Correct None -> err_or_insufficient_data r flt st b f_begin f_end
+    | E.Error _ | E.Correct None -> err_or_insufficient_data r flt b f_begin f_end
     | E.Correct (Some (fin_repr, fin_end)) ->
-      check_eq_end_index_and_return st fin_end f_end ({
+      check_eq_end_index_and_return fin_end f_end ({
         c_cv_msg = c_cv_repr;
         fin_msg = fin_repr
       })
@@ -441,9 +373,9 @@ let receive_s13_wait_EOED st b f_begin f_end
   let r = parse_hsm13_eoed b f_begin in
   match r with
   | E.Error _ | E.Correct None ->
-    err_or_insufficient_data r flt st b f_begin f_end
+    err_or_insufficient_data r flt b f_begin f_end
   | E.Correct (Some (eoed_repr, pos)) ->
-    check_eq_end_index_and_return st pos f_end ({ eoed_msg = eoed_repr })
+    check_eq_end_index_and_return pos f_end ({ eoed_msg = eoed_repr })
 
 let receive_c13_Complete st b f_begin f_end
 = let flt = F_c13_Complete in
@@ -451,9 +383,9 @@ let receive_c13_Complete st b f_begin f_end
   let r = parse_hsm13_nst b f_begin in
   match r with
   | E.Error _ | E.Correct None ->
-    err_or_insufficient_data r flt st b f_begin f_end
+    err_or_insufficient_data r flt b f_begin f_end
   | E.Correct (Some (nst_repr, pos)) ->
-    check_eq_end_index_and_return st pos f_end ({ nst_msg = nst_repr })
+    check_eq_end_index_and_return pos f_end ({ nst_msg = nst_repr })
 
 
 (*** 1.2 flights ***)
@@ -521,15 +453,15 @@ let receive_c12_wait_ServerHelloDone st b f_begin f_end
 
   let r = parse_hsm12_c b f_begin in
   match r with
-  | E.Error _ | E.Correct None -> err_or_insufficient_data r flt st b f_begin f_end
+  | E.Error _ | E.Correct None -> err_or_insufficient_data r flt b f_begin f_end
   | E.Correct (Some (c_repr, c_end)) ->
     let r = parse_hsm12_ske b c_end in
     match r with
-    | E.Error _ | E.Correct None -> err_or_insufficient_data r flt st b f_begin f_end
+    | E.Error _ | E.Correct None -> err_or_insufficient_data r flt b f_begin f_end
     | E.Correct (Some (ske_repr, ske_end)) ->
       let r = parse_hsm12_cr b ske_end in
       match r with
-      | E.Correct None -> err_or_insufficient_data r flt st b f_begin f_end
+      | E.Correct None -> err_or_insufficient_data r flt b f_begin f_end
       | _ ->
         let cr_repr, shd_begin =
           match r with
@@ -539,9 +471,9 @@ let receive_c12_wait_ServerHelloDone st b f_begin f_end
         let r = parse_hsm12_shd b shd_begin in
         match r with
         | E.Error _ | E.Correct None ->
-          err_or_insufficient_data r flt st b f_begin f_end
+          err_or_insufficient_data r flt b f_begin f_end
         | E.Correct (Some (shd_repr, pos)) ->
-          check_eq_end_index_and_return st pos f_end ({
+          check_eq_end_index_and_return pos f_end ({
             c_msg = c_repr;
             ske_msg = ske_repr;
             cr_msg = cr_repr;
@@ -554,9 +486,9 @@ let receive_cs12_wait_Finished st b f_begin f_end
   let r = parse_hsm12_fin b f_begin in
   match r with
   | E.Error _ | E.Correct None ->
-    err_or_insufficient_data r flt st b f_begin f_end
+    err_or_insufficient_data r flt b f_begin f_end
   | E.Correct (Some (fin_repr, pos)) ->
-    check_eq_end_index_and_return st pos f_end ({ fin_msg = fin_repr })
+    check_eq_end_index_and_return pos f_end ({ fin_msg = fin_repr })
 
 let receive_c12_wait_NST st b f_begin f_end
 = let flt = F_c12_wait_NST in
@@ -564,9 +496,9 @@ let receive_c12_wait_NST st b f_begin f_end
   let r = parse_hsm12_nst b f_begin in
   match r with
   | E.Error _ | E.Correct None ->
-    err_or_insufficient_data r flt st b f_begin f_end
+    err_or_insufficient_data r flt b f_begin f_end
   | E.Correct (Some (nst_repr, pos)) ->
-    check_eq_end_index_and_return st pos f_end ({ nst_msg = nst_repr })
+    check_eq_end_index_and_return pos f_end ({ nst_msg = nst_repr })
 
 let receive_s12_wait_CCS1 st b f_begin f_end
 = let flt = F_s12_wait_CCS1 in
@@ -574,6 +506,6 @@ let receive_s12_wait_CCS1 st b f_begin f_end
   let r = parse_hsm12_cke b f_begin in
   match r with
   | E.Error _ | E.Correct None ->
-    err_or_insufficient_data r flt st b f_begin f_end
+    err_or_insufficient_data r flt b f_begin f_end
   | E.Correct (Some (cke_repr, pos)) ->
-    check_eq_end_index_and_return st pos f_end ({ cke_msg = cke_repr })
+    check_eq_end_index_and_return pos f_end ({ cke_msg = cke_repr })
