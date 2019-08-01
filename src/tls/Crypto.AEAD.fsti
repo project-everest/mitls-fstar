@@ -28,6 +28,13 @@ val invariant (#a: SC.supported_alg) (#phi: plain_pred) (h: HS.mem) (s: state a 
 
 val footprint (#a: SC.supported_alg) (#phi: plain_pred) (h: HS.mem) (s: state a phi) : GTot B.loc
 
+val frame_invariant
+  (#a: SC.supported_alg) (#phi: plain_pred) (h: HS.mem) (s: state a phi)
+  (l: B.loc) (h' : HS.mem)
+: Lemma
+  (requires (B.modifies l h h' /\ B.loc_disjoint l (footprint h s) /\ invariant h s))
+  (ensures (footprint h' s == footprint h s /\ invariant h' s))
+
 noextract
 inline_for_extraction
 let tag_len : (x: SC.alg) -> Tot (y: U32.t { U32.v y == SC.tag_length x }) =

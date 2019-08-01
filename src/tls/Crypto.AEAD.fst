@@ -73,6 +73,18 @@ let footprint (#a: SC.supported_alg) (#phi: plain_pred) (h: HS.mem) (s: state a 
   else
     EC.footprint h (state_ec s)
 
+let frame_invariant
+  #a #phi h s l h'
+= if F.model
+  then
+    if F.ideal_AEAD
+    then assume (invariant h' s) // MDM still uses very old modifies clauses
+    else ()
+  else begin
+    assume (EC.as_kv (B.deref h' (state_ec s)) == state_kv s);
+    EC.frame_invariant l (state_ec s) h h'
+  end
+
 let encrypt
   #a #phi s plain plain_len cipher
 = let iv_len = 12ul in
