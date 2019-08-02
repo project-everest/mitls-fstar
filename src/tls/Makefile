@@ -243,10 +243,10 @@ dist/compact-msvc/Makefile.basic: KRML_FLAGS += -falloca -ftail-calls
 dist/%/Makefile.basic: $(ALL_KRML_FILES)
 	mkdir -p $(dir $@)
 	cp $(HAND_WRITTEN_FILES) $(dir $@)
-	echo \
+	for f in \
 	  $(filter %.krml,$^) \
 	  $(notdir $(HAND_WRITTEN_C_FILES)) \
-	> $@.rsp
+	; do echo $$f ; done > $@.rsp
 	$(KRML) $(KOPTS) $(KRML_FLAGS) \
 	  @$@.rsp \
 	  -tmpdir $(dir $@)  \
@@ -259,9 +259,9 @@ MITLS_FSTS	:= $(patsubst %.fst,%,$(filter-out Test Test.%,$(wildcard *.fst)))
 MITLS_MODULES	:= $(shell echo $(MITLS_FSTS) | tr ' ' ',')
 
 dist/test/Makefile.basic: $(ALL_KRML_FILES)
-	echo \
+	for f in \
 	  $(filter %.krml,$^) \
-	> $@.rsp
+	; do echo $$f ; done > $@.rsp
 	$(KRML) $(KRML_OPTS) \
 	  @$@.rsp \
 	  -no-prefix Test.Main \
