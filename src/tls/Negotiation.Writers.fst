@@ -257,7 +257,7 @@ let write_preSharedKeyClientExtension
   (#h0: _)
   (#sout: _)
   (#pout_from0: _)
-  (w_identities: LPW.owriter Parsers.OfferedPsks_identities.offeredPsks_identities_serializer h0 sout pout_from0) 
+  (w_identities: LPW.owriter Parsers.OfferedPsks_identities.offeredPsks_identities_serializer h0 sout pout_from0)
   (w_binders: LPW.owriter Parsers.OfferedPsks_binders.offeredPsks_binders_serializer h0 sout pout_from0)
 : Tot (y: LPW.owriter Parsers.PreSharedKeyClientExtension.preSharedKeyClientExtension_serializer h0 sout pout_from0 {
     LPW.owvalue y == make_preSharedKeyClientExtension (LPW.owvalue w_identities) (LPW.owvalue w_binders)
@@ -495,7 +495,7 @@ let write_constr_clientHelloExtension_CHE_early_data
       then res
       else begin
         finalize_clientHelloExtension_early_data sout pout_from;
-        res        
+        res
       end
   )
 
@@ -521,7 +521,7 @@ let write_final_extensions
     LP.valid_list Parsers.ResumeInfo13.resumeInfo13_parser h0 sin pin_from pin_to /\
     U32.v pout_from0 <= U32.v sout.LP.len /\
     B.loc_disjoint (LP.loc_slice_from_to scfg pcfg (LP.get_valid_pos Parsers.MiTLSConfig.miTLSConfig_parser h0 scfg pcfg)) (LP.loc_slice_from sout pout_from0) /\
-    B.loc_disjoint (LP.loc_slice_from_to sin pin_from pin_to) (LP.loc_slice_from sout pout_from0)  
+    B.loc_disjoint (LP.loc_slice_from_to sin pin_from pin_to) (LP.loc_slice_from sout pout_from0)
   })
 : Tot (y: LPW.olwriter Parsers.ClientHelloExtension.clientHelloExtension_serializer h0 sout pout_from0 {
     let cfg = LP.contents Parsers.MiTLSConfig.miTLSConfig_parser h0 scfg pcfg in
@@ -675,6 +675,8 @@ let make_clientHelloExtension_CHE_signature_algorithms
     else
       None
 
+#push-options "--z3rlimit 24"
+
 inline_for_extraction
 noextract
 let write_clientHelloExtension_CHE_signature_algorithms
@@ -707,6 +709,8 @@ let write_clientHelloExtension_CHE_signature_algorithms
         end
     end
   )
+
+#pop-options
 
 inline_for_extraction
 let constr_clientHelloExtension_CHE_signature_algorithms
