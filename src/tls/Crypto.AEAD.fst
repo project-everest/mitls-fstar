@@ -11,53 +11,40 @@ module HS = FStar.HyperStack
 module HST = FStar.HyperStack.ST
 module EE = EverCrypt.Error
 module G = FStar.Ghost
-module MDM = FStar.Monotonic.DependentMap
 module F = Flags
-
-noextract
-inline_for_extraction
-let entry (a: SC.supported_alg): Tot eqtype =
-  [@inline_let]
-  let t = SC.iv a & SC.cipher a in
-  assume (hasEq t);
-  t
-
-inline_for_extraction
-let table
-  (a: SC.supported_alg)
-  (kv: SC.kv a)
-  (phi: plain_pred)
-: Tot Type0
-= MDM.t HS.root (entry a) (fun (iv, cipher) -> (plain: SC.plain a { phi plain /\ SC.encrypt kv iv Seq.empty plain == cipher })) (fun _ -> True)
+module Model = Model.AEAD
 
 noeq
-type state (a: SC.supported_alg) (phi: plain_pred) = {
-  ec: (if F.model then unit else B.pointer (EC.state_s a));
-  kv: (if F.model then SC.kv a else G.erased (SC.kv a));
-  table: (if F.ideal_AEAD then table a kv phi else unit)
+inline_for_extraction
+type cstate
+  (a: SC.supported_alg) (phi: plain_pred)
+= {
+  ec: B.pointer (EC.state_s a);
+  kv: G.erased (SC.kv a);
 }
+
+let state (a: SC.supported_alg) (phi: plain_pred) =
+  if F.model
+  then Model.state a phi
+  else cstate a phi
 
 inline_for_extraction
 let state_ec
   (#a: SC.supported_alg) (#phi: plain_pred)
   (s: state a phi { F.model == false })
 : Tot (B.pointer (EC.state_s a))
-= s.ec
+= (s <: cstate a phi).ec
 
 let state_kv
   (#a: SC.supported_alg) (#phi: plain_pred)
   (s: state a phi)
 : GTot (SC.kv a)
-= if F.model then s.kv else G.reveal s.kv
+= if F.model then Model.state_kv (s <: Model.state a phi) else G.reveal (s <: cstate a phi).kv
 
 let invariant (#a: SC.supported_alg) (#phi: plain_pred) (h: HS.mem) (s: state a phi) : GTot Type0 =
   if F.model
   then
-    if F.ideal_AEAD
-    then
-      h `HS.contains` (s.table <: table a s.kv phi)
-    else
-      True
+    Model.invariant h (s <: Model.state a phi)
   else
     EC.invariant h (state_ec s) /\
     EC.as_kv (B.deref h (state_ec s)) == state_kv s
@@ -65,11 +52,7 @@ let invariant (#a: SC.supported_alg) (#phi: plain_pred) (h: HS.mem) (s: state a 
 let footprint (#a: SC.supported_alg) (#phi: plain_pred) (h: HS.mem) (s: state a phi) : GTot B.loc =
   if F.model
   then
-    if F.ideal_AEAD
-    then
-      B.loc_mreference (s.table <: table a (s.kv) phi)
-    else
-      B.loc_none
+    Model.footprint (s <: Model.state a phi)
   else
     EC.footprint h (state_ec s)
 
@@ -77,11 +60,9 @@ let frame_invariant
   #a #phi h s l h'
 = if F.model
   then
-    if F.ideal_AEAD
-    then assume (invariant h' s) // MDM still uses very old modifies clauses
-    else ()
+    Model.frame_invariant h (s <: Model.state a phi) l h'
   else begin
-    assume (EC.as_kv (B.deref h' (state_ec s)) == state_kv s);
+    assume (EC.as_kv (B.deref h' (state_ec s)) == state_kv s); // TODO: add to EverCrypt
     EC.frame_invariant l (state_ec s) h h'
   end
 
@@ -97,7 +78,7 @@ let encrypt
   assume (F.model == false);
   let res = EC.encrypt
     #(G.hide a)
-    s.ec
+    (state_ec s)
     iv
     iv_len
     ad
@@ -108,7 +89,7 @@ let encrypt
     tag'
   in
   let h' = HST.get () in
-  assume (EC.as_kv (B.deref h' (state_ec s)) == state_kv s);
+  assume (EC.as_kv (B.deref h' (state_ec s)) == state_kv s); // TODO: add to EverCrypt
   res
 
 let decrypt
@@ -123,7 +104,7 @@ let decrypt
   assume (F.model == false);
   let res = EverCrypt.AEAD.decrypt
     #(G.hide a)
-    s.ec
+    (state_ec s)
     iv
     iv_len
     ad
@@ -134,5 +115,5 @@ let decrypt
     plain
   in
   let h' = HST.get () in
-  assume (EC.as_kv (B.deref h' (state_ec s)) == state_kv s);
+  assume (EC.as_kv (B.deref h' (state_ec s)) == state_kv s); // TODO: add to Evercrypt
   res

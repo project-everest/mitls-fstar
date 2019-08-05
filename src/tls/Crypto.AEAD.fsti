@@ -11,7 +11,6 @@ module HS = FStar.HyperStack
 module HST = FStar.HyperStack.ST
 module EE = EverCrypt.Error
 module G = FStar.Ghost
-module MDM = FStar.Monotonic.DependentMap
 module F = Flags
 
 type plain_pred = (plain: Seq.seq SC.uint8) -> Tot Type0
