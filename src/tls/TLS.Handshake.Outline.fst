@@ -18,7 +18,7 @@ module Transcript = HSL.Transcript
 
 module Range = Range
 
-include TLS.Handshake.Receive.Wrapper
+include TLS.Handshake.Receive
 include TLS.Handshake.Machine
 
 /// Outlining our integration test (code adapted from TLS.Handshake).
@@ -80,7 +80,8 @@ assume val client_ServerFinished13:  #region:rgn -> hs: t region ->
   digestServerFinished: Hashing.anyTag ->
   St incoming
 
-open TLS.Handshake.Receive.Wrapper
+open TLS.Handshake.Receive
+open TLS.Handshake.Machine
 
 #set-options "--admit_smt_queries true"
 let rec receive_fragment #region hs #i rg f =
@@ -93,7 +94,7 @@ let rec receive_fragment #region hs #i rg f =
   // trace "recv_fragment";
   let h0 = HST.get() in
 
-  match !(cst hs) with
+  match !hs.cstate with
   | C_init _ ->
     InError (fatalAlert Unexpected_message, "Client hasn't sent hello yet (to be statically excluded)")
 

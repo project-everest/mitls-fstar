@@ -117,9 +117,7 @@ let hash a v =
       | None -> MDM.extend table x v
       | Some v' -> if v <> v' then stop "hash collision detected");
   let h1 = ST.get() in
-  assume LowStar.Buffer.(modifies (loc_region_only true tls_tables_region) h0 h1);
-  //19-05-25 TODO stuck with an old library
-  //assume(h0 == h1); //modifies loc_none h0 h1);
+  LowStar.Buffer.modifies_loc_regions_intro (Set.singleton tls_tables_region) h0 h1;
   t
 
 // sanity check

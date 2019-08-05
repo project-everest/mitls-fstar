@@ -2,14 +2,13 @@ module Crypto.CRF
 
 /// Status. See also `Test.CRF.fst`.
 ///
-/// * Later: relocate to hacl-star/secure; we still depend on mitls
-/// * flags.
+/// * Later: relocate to hacl-star/secure; we still depend on mitls flags.
 ///
-/// * Still relies on `FStar.Monotonic.DependentMap`, not clearly
-///   compatible with location-based modifies and Stack. For now I am
-///   assuming a modifies clause. But we need to find a style where we
-///   can modify the TLS region without too much trouble.
-
+/// * Still relies on `FStar.Monotonic.DependentMap`, which used old-style
+/// modifies clauses incompatible with `LowStar.Buffer`. Model.CRF uses
+/// `LowStar.Buffer.modifies_loc_regions_intro` to bridge between the old
+/// and new styles.
+///
 module Concrete = EverCrypt.Hash.Incremental
 module Hash = EverCrypt.Hash
 module HD = Spec.Hash.Definitions

@@ -22,6 +22,8 @@ module HSM = HandshakeMessages
 module LP = LowParse.Low.Base
 module Transcript = HSL.Transcript
 
+module PF = TLS.Handshake.ParseFlights
+
 /// Message types (move to HandshakeMessages or Repr modules)
 
 type clientHello = HandshakeMessages.clientHello
@@ -54,7 +56,7 @@ let client_config = config * Negotiation.resumeInfo
 ///
 ///   Note HS needs to select the incoming flight type.
 
-let rcv_state = TLS.Handshake.Receive.Wrapper.rcv_state
+let rcv_state = TLS.Handshake.Receive.state
 
 (*
 type noeq type rcv_state = {
@@ -242,10 +244,10 @@ assume val pskis_of_psks: option Extensions.offeredPsks -> list (i:_{is_psk i})
 
 /// Stateful parts shared between all states after CH.
 ///
-noeq type msg_state (region: rgn) (inflight: TLS.Handshake.Receive.in_progress_flt_t) random ha  = {
+noeq type msg_state (region: rgn) (inflight: PF.in_progress_flt_t) random ha  = {
   digest: Transcript.state ha;
   sending: TLS.Handshake.Send.send_state;
-  receiving: r:rcv_state { r.TLS.Handshake.Receive.Wrapper.current_flt == Ghost.hide inflight };
+  receiving: r:rcv_state { PF.in_progress_flt r.TLS.Handshake.Receive.pf_st == inflight };
   epochs: Old.Epochs.epochs region random; }
 
 noeq type client_state
@@ -271,7 +273,7 @@ noeq type client_state
     offer: full_offer { offered cfg offer } ->
     // Witnessed in the binders, then overwritten to add binders or a retry.
 
-    ms: msg_state region TLS.Handshake.Receive.F_c_wait_ServerHello (offer.full_ch.HSM.random) (offered_ha offer.full_ch) ->
+    ms: msg_state region PF.F_c_wait_ServerHello (offer.full_ch.HSM.random) (offered_ha offer.full_ch) ->
     ks: c_wait_ServerHello_keys ->
     // TODO sync key-schedule state
     // ks: secret_c13_wait_ServerHello
@@ -287,7 +289,7 @@ noeq type client_state
   | C13_wait_Finished1:
     offer: full_offer{ offered cfg offer } ->
     sh: serverHello{ accepted13 cfg offer sh (* not yet authenticated *) } ->
-    ms: msg_state region TLS.Handshake.Receive.F_c13_wait_Finished1 (offer.full_ch.HSM.random) (selected_ha sh) ->
+    ms: msg_state region PF.F_c13_wait_Finished1 (offer.full_ch.HSM.random) (selected_ha sh) ->
     ks: c13_wait_Finished1_keys ->
     // TODO sync key-schedule state
     //i:   Secret.hs_id ->
@@ -323,7 +325,7 @@ noeq type client_state
       option HSM.certificateRequest13 &
       (i:Old.HMAC.UFCMA.finishedId & Old.KeySchedule.fink i))) ->
 
-    ms: msg_state region TLS.Handshake.Receive.F_c13_wait_Finished1 (offer.full_ch.HSM.random) (selected_ha sh) ->
+    ms: msg_state region PF.F_c13_wait_Finished1 (offer.full_ch.HSM.random) (selected_ha sh) ->
     ks: client_keys ->
     // in unverified state [Old.KeySchedule.C_13_wait_CF/postHS]
     // TODO key-schedule state
@@ -359,7 +361,7 @@ noeq type client_state
   | C12_wait_ServerHelloDone:
     ch: clientHello ->
     sh: serverHello (*{ accepted12 ch sh }*) ->
-    ms: msg_state region TLS.Handshake.Receive.F_c12_wait_ServerHelloDone ch.HSM.random (selected_ha sh) ->
+    ms: msg_state region PF.F_c12_wait_ServerHelloDone ch.HSM.random (selected_ha sh) ->
     ks: client_keys ->
     client_state region cfg
 
@@ -368,7 +370,7 @@ noeq type client_state
   | C12_wait_Finished2:
     ch: clientHello ->
     sh: serverHello (*{ accepted12 ch sh }*) ->
-    ms: msg_state region TLS.Handshake.Receive.F_c12_wait_ServerHelloDone ch.HSM.random (selected_ha sh) ->
+    ms: msg_state region PF.F_c12_wait_ServerHelloDone ch.HSM.random (selected_ha sh) ->
     m:mode12 ->
     // collapsing into a single state [wait_CCS2 (true)] followed by [wait_Finished2 (false)]
     // no need to track missing fin messages, as they are used just for recomputing the transcript
@@ -381,7 +383,7 @@ noeq type client_state
   | C12_wait_Finished1:
     ch: clientHello ->
     sh: serverHello (*{ accepted12 ch sh }*) ->
-    ms: msg_state region TLS.Handshake.Receive.F_c12_wait_ServerHelloDone ch.HSM.random (selected_ha sh) ->
+    ms: msg_state region PF.F_c12_wait_ServerHelloDone ch.HSM.random (selected_ha sh) ->
     mode12 ->
     // collapsing into a single state [wait_CCS1 (true)] followed by [wait_Finished1 (false)]
     // no need to track missing fin messages, as they are used just for recomputing the transcript
@@ -391,7 +393,7 @@ noeq type client_state
   | C12_complete: // now with fin2 and stronger properties
     ch: clientHello ->
     sh: serverHello (*{ accepted12 ch sh }*) ->
-    ms: msg_state region TLS.Handshake.Receive.F_c12_wait_ServerHelloDone ch.HSM.random (selected_ha sh) ->
+    ms: msg_state region PF.F_c12_wait_ServerHelloDone ch.HSM.random (selected_ha sh) ->
     mode12 ->
     client_state region cfg
 //
@@ -476,7 +478,7 @@ let mrel
   FStar.ReflexiveTransitiveClosure.closure (step #region #cfg)
 
 /// We can finally define our main, stateful, monotonic type for the connection handshake
-noeq abstract type t (region:rgn) = {
+noeq type t (region:rgn) = {
   cfg: client_config;
   nonce: TLSInfo.random;
   cstate: st:HST.mreference
@@ -484,7 +486,7 @@ noeq abstract type t (region:rgn) = {
     (mrel #region #cfg)
     { HS.frameOf st = region } }
 
-let cst (#region:rgn) (x:t region) = x.cstate
+// let cst (#region:rgn) (x:t region) = x.cstate
 
 /// ----------------------------------------------------------------
 /// sample monotonic properties: the initial and retried ClientHello
@@ -709,7 +711,7 @@ noeq type server_state
   // TLS 1.3, intermediate state to encryption
   | S13_sent_ServerHello:
     mode: s13_mode region cfg ->
-    ms: msg_state region TLS.Handshake.Receive.F_c_wait_ServerHello (mode.offer.ch.HSM.random) (selected_ha mode.sh) ->
+    ms: msg_state region PF.F_c_wait_ServerHello (mode.offer.ch.HSM.random) (selected_ha mode.sh) ->
 //  i: Idx.id -> // Secret.esId ->
 //  idh: Idx.id_dhe ->
 //  ks: Secret.s13_wait_ServerHello i idh ->
@@ -723,7 +725,7 @@ noeq type server_state
     mode: s13_mode region cfg ->
     ssv: Ghost.erased HandshakeMessages.certificateVerify13 ->
     fin1: Ghost.erased finished ->
-    ms: msg_state region TLS.Handshake.Receive.F_c_wait_ServerHello (mode.offer.ch.HSM.random) (selected_ha mode.sh) ->
+    ms: msg_state region PF.F_c_wait_ServerHello (mode.offer.ch.HSM.random) (selected_ha mode.sh) ->
     // ms.digest is expected to be MACed in the Client Finished
     ks: server_keys -> // keeping fin2key and rms
     server_state region cfg
@@ -734,7 +736,7 @@ noeq type server_state
     fin1: Ghost.erased finished ->
     fin2: Ghost.erased finished ->
 //  { client_complete mode } ->
-    ms: msg_state region TLS.Handshake.Receive.F_c_wait_ServerHello (mode.offer.ch.HSM.random) (selected_ha mode.sh) ->
+    ms: msg_state region PF.F_c_wait_ServerHello (mode.offer.ch.HSM.random) (selected_ha mode.sh) ->
     ks: server_keys ->
     server_state region cfg
 
