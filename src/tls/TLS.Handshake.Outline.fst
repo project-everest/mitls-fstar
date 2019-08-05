@@ -49,6 +49,7 @@ val receive_fragment:
   #i:TLSInfo.id -> rg:Range.frange i -> f:Range.rbytes rg ->
   ST incoming
   (requires fun h0 ->
+    h0 `HS.contains` hs.cstate /\
     // TODO statically exclude C_init
     True)
   (ensures fun h0 r h1 -> True)
@@ -83,6 +84,7 @@ assume val client_ServerFinished13:  #region:rgn -> hs: t region ->
 open TLS.Handshake.Receive
 open TLS.Handshake.Machine
 
+
 #set-options "--admit_smt_queries true"
 let rec receive_fragment #region hs #i rg f =
   let open HandshakeMessages in
@@ -93,69 +95,61 @@ let rec receive_fragment #region hs #i rg f =
     | r -> r  in
   // trace "recv_fragment";
   let h0 = HST.get() in
-
   match !hs.cstate with
   | C_init _ ->
-    InError (fatalAlert Unexpected_message, "Client hasn't sent hello yet (to be statically excluded)")
+    InError (
+      fatalAlert Unexpected_message,
+      "Client hasn't sent hello yet (to be statically excluded)")
 
   | C_wait_ServerHello offer0 ms0 ks0 -> (
-    let ms1 = buffer_received_fragment ms0 #i rg f in
-    let cslice = admit() (* from ms1.receiving.rcv_b *) in
-    // TODO: adjust parameters; refactor HSL.Receive to take ms1.receiving as parameter?
-    match TLS.Handshake.Receive.receive_c_wait_ServerHello // to be refined to advance the rcv_state
-      ms1.receiving.hsl_rcv_st
-      cslice
-      ms1.receiving.rcv_from
-      ms1.receiving.rcv_to
-    with
+    let rcv1 = buffer_received_fragment ms0.receiving f in
+    match TLS.Handshake.Receive.receive_c_wait_ServerHello rcv1 with
     | Error z -> InError z
-    | Correct None -> InAck false false // nothing happened
-    | Correct (Some sh_msg) -> (
-      let sh = admit() in
-      if HSM.is_hrr sh then
-        // TODO adjust digest, here or in the transition call
-        client_HelloRetryRequest hs (HSM.get_hrr sh)
-      else
-        // TODO extend digest[..sh]
-        // transitioning to C12_wait_ServerHelloDone or C13_wait_Finished1;
-        let r = client_ServerHello hs (HSM.get_sh sh) in
-        // TODO check that ms1.receiving is set for processing the next flight
-        recv_again r ))
+    | Correct (x, rcv2) ->
+      hs.cstate := C_wait_ServerHello offer0 ({ms0 with receiving = rcv2}) ks0;
+      match x with
+      | None -> InAck false false // nothing happened
+      | Some sh_msg -> (
+        let sh = admit() in
+        if HSM.is_hrr sh then
+          // TODO adjust digest, here or in the transition call
+          client_HelloRetryRequest hs (HSM.get_hrr sh)
+        else
+          // TODO extend digest[..sh]
+          // transitioning to C12_wait_ServerHelloDone or C13_wait_Finished1;
+          let r = client_ServerHello hs (HSM.get_sh sh) in
+          // TODO check that ms1.receiving is set for processing the next flight
+          recv_again r ))
 
   | C12_wait_ServerHelloDone ch sh ms0 ks -> (
-    let ms1 = buffer_received_fragment ms0 #i rg f in
-    let cslice = admit() (* from ms1.receiving.rcv_b *) in
-    match TLS.Handshake.Receive.receive_c12_wait_ServerHelloDone
-      ms1.receiving.hsl_rcv_st
-      cslice
-      ms1.receiving.rcv_from
-      ms1.receiving.rcv_to
-    with
+    let rcv1 = buffer_received_fragment ms0.receiving f in
+    match TLS.Handshake.Receive.receive_c12_wait_ServerHelloDone rcv1 with
     | Error z -> InError z
-    | Correct None -> InAck false false // nothing happened
-    | Correct (Some x) ->
+    | Correct (x, rcv2) ->
+      hs.cstate := C12_wait_ServerHelloDone ch sh ({ms0 with receiving = rcv2}) ks;
+      match x with
+      | None -> InAck false false // nothing happened
+      | Some x ->
       // TODO extend digest[..ServerHelloDone]
       // let c, ske, ocr = admit() in
       // client_ServerHelloDone hs c ske None
-      admit()
+        admit()
       )
 
   | C13_wait_Finished1 offer sh ms0 ks -> (
-    let ms1 = buffer_received_fragment ms0 #i rg f in
-    let cslice = admit() (* from ms1.receiving.rcv_b *) in
-    match TLS.Handshake.Receive.receive_c13_wait_Finished1
-      ms1.receiving.hsl_rcv_st
-      cslice
-      ms1.receiving.rcv_from
-      ms1.receiving.rcv_to
+    let rcv1 = buffer_received_fragment ms0.receiving f in
+    match TLS.Handshake.Receive.receive_c13_wait_Finished1 rcv1
     with
     | Error z -> InError z
-    | Correct None -> InAck false false // nothing happened
-    | Correct (Some x) ->
-      // covering 3 cases (see old code for details)
-      // we need to extract these high-level values from the flight:
-      let ee, ocr, oc, ocv, fin1, otag0, tag1, tag_fin1 = admit() in
-      client_ServerFinished13 hs offer sh ee ocr oc ocv fin1 otag0 tag1 tag_fin1
+    | Correct (x, rcv2) ->
+      hs.cstate := C13_wait_Finished1 offer sh ({ms0 with receiving = rcv2}) ks;
+      match x with
+      | None -> InAck false false // nothing happened
+      | Some x ->
+        // covering 3 cases (see old code for details)
+        // we need to extract these high-level values from the flight:
+        let ee, ocr, oc, ocv, fin1, otag0, tag1, tag_fin1 = admit() in
+        client_ServerFinished13 hs offer sh ee ocr oc ocv fin1 otag0 tag1 tag_fin1
       )
 (*
   | C13_Complete _ _ _ _ _ _ _ ms0 _ ->
