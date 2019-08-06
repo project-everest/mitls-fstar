@@ -38,6 +38,8 @@ val print_namedGroupList
   (requires (fun h -> LP.valid Parsers.NamedGroupList.namedGroupList_parser h sl pos))
   (ensures (fun h _ h' -> B.modifies B.loc_none h h'))
 
+val string_of_hrres: Parsers.HRRExtensions.hRRExtensions -> string
+
 let implemented_version = pv:protocolVersion {pv = TLS_1p2 || pv = TLS_1p3}
 
 type pre_share = g:CommonDH.group & CommonDH.pre_share g
@@ -154,10 +156,6 @@ noeq type negotiationState (r:role) (cfg:config) : Type0 =
   | C_Offer:    n_offer: offer ->
                 negotiationState r cfg
 
-  | C_HRR:      n_offer: offer ->
-                n_hrr: retryInfo n_offer ->
-                negotiationState r cfg
-
   | C_WaitFinished1:
                 n_partialmode: mode ->
                 negotiationState r cfg
@@ -175,11 +173,6 @@ noeq type negotiationState (r:role) (cfg:config) : Type0 =
                 negotiationState r cfg
 
   | S_Init:     n_server_random: TLSInfo.random ->
-                negotiationState r cfg
-
-  // Waiting for ClientHello2
-  | S_HRR:      n_offer: offer ->
-                n_hrr: HSM.hrr ->
                 negotiationState r cfg
 
   | S_ClientHello: // Transitional state to allow Handshake to call KS and generate a share
@@ -225,9 +218,6 @@ type reader 'a =
   (requires (fun h0 -> h0 `HS.contains` ns.state ))
   (ensures (fun h0 _ h1 -> h0 == h1))
 
-// For QUIC, the handshake signals it is returning HRR (to issue a special packet type)
-val is_server_hrr: reader bool 
-
 val hashAlg: mode -> Hashing.Spec.alg
 val kexAlg: mode -> TLSConstants.kexAlg
 val aeAlg:
@@ -263,11 +253,11 @@ val resume:
   #region:rgn -> #role:TLSConstants.role -> t region role -> 
   Tot resumeInfo
 
+val getOffer: reader offer
 val getMode: reader mode
 
 (* Returns the negotiated version, when known, or cfg.max_version *)
 val version: reader protocolVersion 
-val is_hrr: reader bool
 
 let footprint
   (#region:rgn) (#role:TLSConstants.role) (ns:t region role)
@@ -323,14 +313,19 @@ val client_ClientHello:
 // deprecated--use TLS.Cookie.find_keyshare 
 val group_of_hrr: HSM.hrr -> option CommonDH.namedGroup
 
-// [C_Offer ==> C_HRR] TODO separate pure spec
+// Pure spec of computing CH2 from CH1+HRR
 val client_HelloRetryRequest:
-  #region:rgn -> ns:t region Client -> 
-  HSM.hrr -> 
-  option share -> 
-  ST (result offer) 
-  (requires fun h0 -> inv ns h0)
-  (ensures fun h0 _ h1 -> inv ns h1)
+  ch1: offer ->
+  hrr: HSM.hrr -> 
+  s: share -> 
+  result (retryInfo ch1 & offer)
+
+// Pure spec of checking retry consistency
+val check_retry:
+  ch1: offer ->
+  ri: retryInfo ch1 ->
+  sh: HSM.sh ->
+  (result unit)
 
 /// What the client accepts, abstractly.
 ///
@@ -349,7 +344,7 @@ val accept_ServerHello:
   HSM.sh -> 
   result (m:mode {m.n_offer == offer})
 
-/// [C_Offer | C_HRR_offer ==> C_Mode] with TODO hrr
+/// [C_Offer ==> C_Mode]
 ///
 /// Fails if the server's choices are unacceptable
 /// 
@@ -443,21 +438,43 @@ val get_sni: offer -> Tot bytes
 (* for QUIC *) 
 val get_alpn: offer -> Tot Extensions.clientHelloExtension_CHE_application_layer_protocol_negotiation
 
-/// Should this call also allocate and process the Transcript digest?
+val trace_offer: HSM.clientHello ->
+  ST unit
+  (requires fun h0 -> True)
+  (ensures fun h0 () h1 -> h0 == h1)
 
+// When receiving CH2
+val server_ClientHello2:
+  #region:rgn -> ns: t region Server ->
+  ch1: HSM.clientHello -> 
+  hrr: HSM.hrr -> 
+  ch2: HSM.clientHello -> 
+  app_cookie: bytes ->
+  ST (result serverMode)
+  (requires fun h0 -> inv ns h0)
+  (ensures fun h0 r h1 -> 
+    inv ns h1 /\ 
+    B.(modifies (loc_mreference ns.state) h0 h1) /\ 
+    ( 
+    let s1 = HS.sel h1 ns.state in 
+    match r, s1 with 
+    | Error _, _ -> True
+    | Correct _, S_ClientHello _ _ -> True
+    | _ -> False ))
+
+// When receiving CH1 or CH2[CH1 cookie]
 val server_ClientHello: 
   #region:rgn -> ns: t region Server ->
   HSM.clientHello -> 
-  log:HandshakeLog.t ->
   ST (result serverMode)
   (requires fun h0 -> 
     inv ns h0 /\ 
-    (let s = HS.sel h0 ns.state in S_Init? s \/ S_HRR? s))
+    (let s = HS.sel h0 ns.state in S_Init? s))
   (ensures fun h0 _ h1 -> 
     inv ns h1
     // TODO modifies at least the transcript 
     )
-  // [S_Init | S_HRR ==> S_ClientHello m cert] 
+  // [S_Init ==> S_ClientHello m cert] 
   // ensures r = computeServerMode ns.cfg ns.nonce offer (stateful)
   // but [compute_cs13] and [negotiateCipherSuite] are pure. 
 

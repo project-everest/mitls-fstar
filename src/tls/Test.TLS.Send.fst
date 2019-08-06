@@ -250,7 +250,7 @@ let server_ClientHello #region ns out offer =
               let digest = FStar.Bytes.of_buffer hash_len bdigest in
               assume (TLS.Cookie.hrr_len hrr <= 16);
               let hrr = TLS.Cookie.append digest FStar.Bytes.empty_bytes hrr in
-              ns.Nego.state := Nego.S_HRR (HSM.M_client_hello?._0 offer) hrr;
+//              ns.Nego.state := Nego.S_HRR (HSM.M_client_hello?._0 offer) hrr;
               let st = HS TLSConstants.Server ns ts tr2 out in
               pop_frame ();
               Correct (st, r)
@@ -279,7 +279,7 @@ let server_ClientHello #region ns out offer =
               let digest = FStar.Bytes.of_buffer hash_len bdigest in
               assume (TLS.Cookie.hrr_len hrr <= 16);
               let hrr = TLS.Cookie.append digest FStar.Bytes.empty_bytes hrr in
-              ns.Nego.state := Nego.S_HRR (HSM.M_client_hello?._0 offer) hrr;
+//              ns.Nego.state := Nego.S_HRR (HSM.M_client_hello?._0 offer) hrr;
               let st = HS TLSConstants.Server ns ts tr2 out in
               pop_frame ();
               Correct (st, Nego.ServerRetry hrr)
