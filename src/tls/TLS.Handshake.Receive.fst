@@ -52,6 +52,8 @@ noeq type state = {
   rcv_to   : i:uint_32{rcv_from <= i /\ i <= B.len rcv_b}
 }
 
+let in_progress (s:state) = PF.in_progress_flt s.pf_st
+
 
 /// Invariant that related parsed_bytes in pf_st with rcv_b and its from and to indices
 
@@ -106,12 +108,11 @@ let cslice_of (st:state) : R.const_slice =
 
 unfold
 let receive_pre
-  (st:state) (in_progress:PF.in_progress_flt_t)
+  (st:state) (inflight:PF.in_progress_flt_t)
 : HS.mem -> Type0
 = fun h ->
-  B.live h st.rcv_b /\
-  invariant st h /\
-  PF.(length_parsed_bytes st.pf_st == 0 \/ in_progress_flt st.pf_st == in_progress)
+  B.live h st.rcv_b /\ invariant st h /\
+  ( PF.length_parsed_bytes st.pf_st == 0 \/ in_progress st == inflight )
 
 unfold
 let only_changes_pf_state (st1 st0:state) : Type0
@@ -126,11 +127,11 @@ unfold
 let receive_post
   (#flt:Type)
   (st:state)
-  (in_progress:PF.in_progress_flt_t)
+  (inflight:PF.in_progress_flt_t)
   (valid:uint_32 -> uint_32 -> flt -> HS.mem -> Type0)
 : HS.mem -> TLSError.result (option flt & state) -> HS.mem -> Type0
 = fun h0 r h1 ->
-  receive_pre st in_progress h0 /\
+  receive_pre st inflight h0 /\
   B.(modifies loc_none h0 h1) /\
   (let open FStar.Error in
    match r with
@@ -138,23 +139,23 @@ let receive_post
    | Correct (None, rst) ->
      invariant rst h1 /\
      rst `only_changes_pf_state` st /\
-     PF.(in_progress_flt rst.pf_st == in_progress)
+     in_progress rst == inflight
    | Correct (Some flt, rst) ->
      invariant rst h1 /\
      rst `only_changes_pf_state` st /\
      valid st.rcv_from st.rcv_to flt h1 /\
-     PF.(in_progress_flt rst.pf_st == F_none /\
-         parsed_bytes rst.pf_st == Seq.empty))
+     in_progress rst == PF.F_none /\
+     PF.parsed_bytes rst.pf_st == Seq.empty)
 
 unfold
 let receive_post_with_leftover_bytes
   (#flt:Type)
   (st:state)
-  (in_progress:PF.in_progress_flt_t)
+  (inflight:PF.in_progress_flt_t)
   (valid:uint_32 -> uint_32 -> flt -> HS.mem -> Type0)
 : HS.mem -> TLSError.result (option (flt & uint_32) & state) -> HS.mem -> Type0
 = fun h0 r h1 ->
-  receive_pre st in_progress h0 /\
+  receive_pre st inflight h0 /\
   B.(modifies loc_none h0 h1) /\
   (let open FStar.Error in
    match r with
@@ -162,14 +163,14 @@ let receive_post_with_leftover_bytes
    | Correct (None, rst) ->
      invariant rst h1 /\
      rst `only_changes_pf_state` st /\
-     PF.(in_progress_flt rst.pf_st == in_progress)
+     in_progress rst == inflight
    | Correct (Some (flt, idx_end), rst) ->
      invariant rst h1 /\
      idx_end <= st.rcv_to /\
      rst `only_changes_pf_state` st /\
      valid st.rcv_from idx_end flt h1 /\
-     PF.(in_progress_flt rst.pf_st == F_none /\
-         parsed_bytes rst.pf_st == Seq.empty))
+     in_progress rst == PF.F_none /\
+     PF.parsed_bytes rst.pf_st == Seq.empty)
 
 module E = FStar.Error
 

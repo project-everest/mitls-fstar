@@ -66,7 +66,18 @@ let buffer_received_fragment ms #i rg f = ms
 
 // the actual transitions; we should experiment with some precise pre/post
 assume val client_HelloRetryRequest: #region:rgn -> hs: t region -> HSM.hrr -> St incoming
-assume val client_ServerHello:       #region:rgn -> hs: t region -> HSM.sh -> St incoming
+
+assume val client_ServerHello:
+  #region:rgn -> hs: t region -> HSM.sh -> ST incoming
+  (requires fun h0 ->
+    // updated handshake invariant from C_wait_ServerHello
+  True)
+  (ensures fun h0 r h1 ->
+    // handshake invariant in C13_wait_Finished1
+
+    True)
+
+
 assume val client_ServerHelloDone:   #region:rgn -> hs: t region -> HSM.sh -> St incoming
 assume val client_ServerFinished13:  #region:rgn -> hs: t region ->
   full_offer ->

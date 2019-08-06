@@ -21,8 +21,8 @@ module HST = FStar.HyperStack.ST
 module HSM = HandshakeMessages
 module LP = LowParse.Low.Base
 module Transcript = HSL.Transcript
-
 module PF = TLS.Handshake.ParseFlights
+module Rcv = TLS.Handshake.Receive
 
 /// Message types (move to HandshakeMessages or Repr modules)
 
@@ -55,8 +55,6 @@ let client_config = config * Negotiation.resumeInfo
 ///   [I wish we could pass fewer indexes.]
 ///
 ///   Note HS needs to select the incoming flight type.
-
-let rcv_state = TLS.Handshake.Receive.state
 
 (*
 type noeq type rcv_state = {
@@ -207,7 +205,10 @@ let accepted
   // what's actually computed and may be worth caching:
   // pv cs resume? checkServerExtensions? pski
 
-assume val accepted13: cfg: client_config -> full_offer -> serverHello -> Type0
+// TBC
+// assume val accepted13: cfg: client_config -> full_offer -> serverHello -> Type0
+let accepted13 (cfg: client_config) (o:full_offer) (sh:serverHello) =
+
 assume val client_complete: full_offer -> serverHello -> encryptedExtensions -> serverCredentials -> Type0
 
 
@@ -247,15 +248,28 @@ assume val pskis_of_psks: option Extensions.offeredPsks -> list (i:_{is_psk i})
 noeq type msg_state (region: rgn) (inflight: PF.in_progress_flt_t) random ha  = {
   digest: Transcript.state ha;
   sending: TLS.Handshake.Send.send_state;
-  receiving: r:rcv_state { PF.in_progress_flt r.TLS.Handshake.Receive.pf_st == inflight };
+  receiving: Rcv.(r:state { in_progress r == inflight });
   epochs: Old.Epochs.epochs region random; }
+// TODO add regional refinements
+
+
+/// Datatype for the handshake-client state machine.
+///
+/// [region] is used for all handshake state (at least when not model)
+/// and in particularity for stashing intermediate data
+///
+/// [cfg] is the fixed client configuration (maybe stashed later).
+///
+/// Each state include enough data to reconstruct the transcript
+/// currently hashes in the digest, as well as some derived,
+/// negotiated parameters, which may in principle be recomputed from
+/// the transcript.
 
 noeq type client_state
-  (region:rgn) // unused for now; worth the trouble? passed only as stateful-invariant argument?
+  (region:rgn)
   (cfg: client_config)
-  // removed the nonce (may also be cached)
 =
-  // used only for allocating the client state and binding it to its
+  // Used only for allocating the client state and binding it to its
   // local nonce in the connection table.
   | C_init:
     random: TLSInfo.random ->
@@ -355,7 +369,7 @@ noeq type client_state
   // In the TLS 1.2 states below, using [mode] as a placeholder for the final mode,
   // but it may be better to recompute its contents on the fly from ch sh etc.
   //
-  // still missing below TLS.Handshake.Receive.receive_state and HSL.Send.send_state.
+  // still missing below Rcv.receive_state and HSL.Send.send_state.
 
   // 1.2 full, waiting for the rest of the first server flight
   | C12_wait_ServerHelloDone:
@@ -428,14 +442,12 @@ let client_invariant
   | C_init _ -> True
 
   | C_wait_ServerHello offer ms ks ->
-
     let transcript = Transcript.ClientHello (hash_retry offer.full_retry) offer.full_ch in
-    // let transcript = Ghost.reveal transcript in
     Transcript.invariant ms.digest transcript h
     // KeySchedule.invariant ks h
 
   | C13_wait_Finished1 offer sh ms ks ->
-    let sh : _ = assume False; sh in // mismatch on transcript refinement
+    //let sh : _ = assume False; sh in // mismatch on transcript refinement
     let transcript = Transcript.Transcript13 (hash_retry offer.full_retry) offer.full_ch sh [] in
     Transcript.invariant ms.digest transcript h
     // KeySchedule.invariant_C13_wait_Finished1 ks
