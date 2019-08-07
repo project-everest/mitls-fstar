@@ -61,6 +61,10 @@ let footprint
   else
     B.loc_none
 
+let invariant_loc_in_footprint
+  #a #phi h s
+= ()
+
 let frame_invariant
   #a #phi h s l h'
 = if F.ideal_iv

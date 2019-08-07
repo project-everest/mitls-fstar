@@ -25,6 +25,12 @@ val invariant (#a: SC.supported_alg) (#phi: plain_pred) (h: HS.mem) (s: state a 
 
 val footprint (#a: SC.supported_alg) (#phi: plain_pred) (s: state a phi) : GTot B.loc
 
+val invariant_loc_in_footprint
+  (#a: SC.supported_alg) (#phi: plain_pred) (h: HS.mem) (s: state a phi)
+: Lemma
+  (requires (invariant h s))
+  (ensures (footprint s `B.loc_in` h))
+
 val frame_invariant
   (#a: SC.supported_alg) (#phi: plain_pred) (h: HS.mem) (s: state a phi)
   (l: B.loc) (h' : HS.mem)
