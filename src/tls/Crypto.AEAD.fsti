@@ -64,6 +64,47 @@ noextract
 let cipher_p (a: SC.supported_alg): Type0 =
   p:B.buffer U8.t { B.length p + SC.tag_length a <= SC.max_length a }
 
+val fresh_iv
+  (#a: SC.supported_alg)
+  (#phi: plain_pred)
+  (h: HS.mem)
+  (s: state a phi) // key
+  (iv: SC.iv a)
+: GTot Type0
+
+val frame_fresh_iv
+  (#a: SC.supported_alg)
+  (#phi: plain_pred)
+  (h: HS.mem)
+  (s: state a phi) // key
+  (iv: SC.iv a)
+  (l: B.loc)
+  (h' : HS.mem)
+: Lemma
+  (requires (
+    invariant h s /\
+    B.modifies l h h' /\
+    B.loc_disjoint l (footprint s)
+  ))
+  (ensures (fresh_iv h' s iv <==> fresh_iv h s iv))
+
+val is_fresh_iv
+  (#a: SC.supported_alg)
+  (#phi: plain_pred)
+  (s: state a phi) // key
+  (iv: B.buffer U8.t)
+: HST.Stack bool
+  (requires (fun h -> 
+    Flags.ideal_iv == true /\
+    invariant h s /\
+    B.live h iv /\
+    B.len iv == iv_len
+  ))
+  (ensures (fun h res h' ->
+    B.modifies B.loc_none h h' /\
+    (res == true <==> fresh_iv h s (Cast.to_seq_sec8 (B.as_seq h iv)))
+  ))
+
 val encrypt
   (#a: SC.supported_alg)
   (#phi: plain_pred)
@@ -82,7 +123,8 @@ val encrypt
     B.loc_disjoint (footprint s) (B.loc_buffer plain) /\
     B.loc_disjoint (footprint s) (B.loc_buffer cipher) /\
     B.disjoint plain cipher /\
-    B.length cipher == B.length plain + iv_length + SC.tag_length a
+    B.length cipher == B.length plain + iv_length + SC.tag_length a /\
+    (F.ideal_iv == true ==> fresh_iv h s (Cast.to_seq_sec8 (B.as_seq h (B.gsub cipher 0ul iv_len))))
   ))
   (ensures (fun h res h' -> 
     match res with

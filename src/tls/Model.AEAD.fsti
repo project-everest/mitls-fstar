@@ -32,6 +32,45 @@ val frame_invariant
   (requires (B.modifies l h h' /\ B.loc_disjoint l (footprint s) /\ invariant h s))
   (ensures (invariant h' s))
 
+val fresh_iv
+  (#a: SC.supported_alg)
+  (#phi: plain_pred)
+  (h: HS.mem)
+  (s: state a phi) // key
+  (iv: SC.iv a)
+: GTot Type0
+
+val frame_fresh_iv
+  (#a: SC.supported_alg)
+  (#phi: plain_pred)
+  (h: HS.mem)
+  (s: state a phi) // key
+  (iv: SC.iv a)
+  (l: B.loc)
+  (h' : HS.mem)
+: Lemma
+  (requires (
+    invariant h s /\
+    B.modifies l h h' /\
+    B.loc_disjoint l (footprint s)
+  ))
+  (ensures (fresh_iv h' s iv <==> fresh_iv h s iv))
+
+val is_fresh_iv
+  (#a: SC.supported_alg)
+  (#phi: plain_pred)
+  (s: state a phi) // key
+  (iv: SC.iv a)
+: HST.Stack bool
+  (requires (fun h -> 
+    Flags.ideal_iv == true /\
+    invariant h s
+  ))
+  (ensures (fun h res h' ->
+    B.modifies B.loc_none h h' /\
+    (res == true <==> fresh_iv h s iv)
+  ))
+
 val encrypt
   (#a: SC.supported_alg)
   (#phi: plain_pred)
@@ -42,6 +81,7 @@ val encrypt
   (requires (fun h ->
     Flags.model == true /\
     invariant h s /\
+    (Flags.ideal_iv == true ==> fresh_iv h s iv) /\
     phi plain
   ))
   (ensures (fun h cipher h' -> 

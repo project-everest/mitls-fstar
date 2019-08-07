@@ -133,6 +133,25 @@ let rec put_buffer
     assert (B.as_seq h' b `Seq.equal` Seq.append (B.as_seq h' b0) (B.as_seq h' b'))
   end
 
+let fresh_iv
+  #a #phi h s iv
+= F.model == true ==> Model.fresh_iv h (state_m s) iv
+
+let frame_fresh_iv
+  #a #phi h s iv l h'
+= if F.model
+  then Model.frame_fresh_iv h (state_m s) iv l h'
+
+let is_fresh_iv
+  #a #phi s iv
+= let h = HST.get () in
+  let iv_s = get_buffer iv iv_len in
+  let h1 = HST.get () in
+  frame_invariant h s B.loc_none h1;
+  let res = Model.is_fresh_iv (state_m s) (Cast.to_seq_sec8 iv_s) in
+  frame_fresh_iv h s (Cast.to_seq_sec8 iv_s) B.loc_none h1 ;
+  res
+
 #push-options "--z3rlimit 16"
 
 inline_for_extraction
@@ -155,7 +174,8 @@ val encrypt'
     B.loc_disjoint (footprint s) (B.loc_buffer plain) /\
     B.loc_disjoint (footprint s) (B.loc_buffer cipher) /\
     B.disjoint plain cipher /\
-    B.length cipher == B.length plain + iv_length + SC.tag_length a
+    B.length cipher == B.length plain + iv_length + SC.tag_length a /\
+    (F.ideal_iv == true ==> fresh_iv h s (B.as_seq h (B.gsub cipher 0ul iv_len)))
   ))
   (ensures (fun h res h' -> 
     match res with
@@ -185,6 +205,7 @@ let encrypt'
     let cipher_tag' = B.sub cipher iv_len cipher_tag_len in
     let h1 = HST.get () in
     Model.frame_invariant h0 s B.loc_none h1;
+    Model.frame_fresh_iv h0 s iv_s B.loc_none h1;
     let cipher_s = Model.encrypt s iv_s plain_s in
     let h2 = HST.get () in
     put_buffer cipher_tag' cipher_tag_len cipher_s;
@@ -319,9 +340,9 @@ let encrypt
   Cast.as_seq_to_buf_sec8 plain h;
   Cast.loc_buffer_to_buf_sec8 plain;
   Cast.loc_buffer_to_buf_sec8 cipher;
+  to_seq_sec8_as_seq_gsub h cipher 0ul iv_len;
   let res = encrypt' s (Cast.to_buf_sec8 plain) plain_len (Cast.to_buf_sec8 cipher) in
   let h' = HST.get () in
-  to_seq_sec8_as_seq_gsub h cipher 0ul iv_len;
   to_seq_sec8_as_seq_gsub h' cipher iv_len plain_len;
   to_seq_sec8_as_seq_gsub h' cipher (iv_len `U32.add` plain_len) (tag_len a);
   to_seq_sec8_as_seq_gsub h' cipher iv_len (B.len cipher `U32.sub` iv_len);
