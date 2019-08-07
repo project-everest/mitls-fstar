@@ -88,6 +88,7 @@ val frame_fresh_iv
   ))
   (ensures (fresh_iv h' s iv <==> fresh_iv h s iv))
 
+noextract
 val is_fresh_iv
   (#a: SC.supported_alg)
   (#phi: plain_pred)
