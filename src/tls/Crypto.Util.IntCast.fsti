@@ -4,6 +4,7 @@ module U8 = FStar.UInt8
 module Seq = FStar.Seq
 module B = LowStar.Buffer
 module HS = FStar.HyperStack
+module U32 = FStar.UInt32
 
 noextract
 val to_uint8 (x: I.uint8) : Tot (y: U8.t { I.v x == U8.v y })
@@ -13,19 +14,6 @@ val to_seq_uint8 (x: Seq.seq I.uint8) : Tot (y: Seq.seq U8.t { Seq.length y == S
 
 val to_seq_uint8_correct (x: Seq.seq I.uint8) (i: nat { i < Seq.length x }) : Lemma
   (to_uint8 (Seq.index x i) == Seq.index (to_seq_uint8 x) i)
-
-noextract
-inline_for_extraction
-val to_buf_uint8 (x: B.buffer I.uint8) : Tot (y: B.buffer U8.t {B.length y == B.length x})
-
-val to_buf_uint8_correct (x: B.buffer I.uint8) (h: HS.mem) : Lemma
-  (to_seq_uint8 (B.as_seq h x) == B.as_seq h (to_buf_uint8 x))
-
-val live_to_buf_uint8 (x: B.buffer I.uint8) (h: HS.mem) : Lemma
-  (B.live h (to_buf_uint8 x) <==> B.live h x)
-
-val loc_buffer_to_buf_uint8 (x: B.buffer I.uint8) : Lemma
-  (B.loc_buffer (to_buf_uint8 x) == B.loc_buffer x)
 
 noextract
 val to_sec8 (x: U8.t) : Tot (y: I.uint8 { I.v y == U8.v x })
@@ -52,24 +40,19 @@ val to_buf_sec8
   (x: B.buffer U8.t)
 : Tot (y: B.buffer I.uint8 { B.length y == B.length x })
 
-val to_buf_sec8_correct
+val as_seq_to_buf_sec8
   (x: B.buffer U8.t)
   (h: HS.mem)
 : Lemma
   (to_seq_sec8 (B.as_seq h x) == B.as_seq h (to_buf_sec8 x))
 
-val live_to_buf_sec8 (x: B.buffer I.uint8) (h: HS.mem) : Lemma
-  (B.live h (to_buf_uint8 x) <==> B.live h x)
+val live_to_buf_sec8 (x: B.buffer U8.t) (h: HS.mem) : Lemma
+  (B.live h (to_buf_sec8 x) <==> B.live h x)
+
+val gsub_to_buf_sec8 (x: B.buffer U8.t) (off: U32.t) (len: U32.t { U32.v off + U32.v len <= B.length x }) : Lemma
+  (B.gsub (to_buf_sec8 x) off len == to_buf_sec8 (B.gsub x off len))
 
 val loc_buffer_to_buf_sec8 (x: B.buffer U8.t) : Lemma
   (B.loc_buffer (to_buf_sec8 x) == B.loc_buffer x)
 
-val to_buf_sec8_to_buf_uint8
-  (x: B.buffer I.uint8)
-: Lemma
-  (to_buf_sec8 (to_buf_uint8 x) == x)
-
-val to_buf_uint8_to_buf_sec8
-  (x: B.buffer U8.t)
-: Lemma
-  (to_buf_uint8 (to_buf_sec8 x) == x)
+val seq_sec8_has_eq: unit -> Lemma (hasEq (Seq.seq I.uint8))

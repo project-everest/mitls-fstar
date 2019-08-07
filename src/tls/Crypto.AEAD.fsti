@@ -11,8 +11,9 @@ module HST = FStar.HyperStack.ST
 module EE = EverCrypt.Error
 module G = FStar.Ghost
 module F = Flags
+module Cast = Crypto.Util.IntCast
 
-type plain_pred = (plain: Seq.seq SC.uint8) -> Tot Type0
+type plain_pred = (plain: Seq.seq U8.t) -> Tot Type0
 
 inline_for_extraction
 val state (a: SC.supported_alg) (phi: plain_pred) : Tot Type0
@@ -53,13 +54,23 @@ inline_for_extraction
 noextract
 let iv_length = 12
 
+inline_for_extraction
+noextract
+let plain_p (a: SC.supported_alg): Type0 =
+  p:B.buffer U8.t { B.length p <= SC.max_length a }
+
+inline_for_extraction
+noextract
+let cipher_p (a: SC.supported_alg): Type0 =
+  p:B.buffer U8.t { B.length p + SC.tag_length a <= SC.max_length a }
+
 val encrypt
   (#a: SC.supported_alg)
   (#phi: plain_pred)
   (s: state a phi) // key
-  (plain: EC.plain_p a)
+  (plain: plain_p a)
   (plain_len: U32.t {U32.v plain_len == B.length plain})
-  (cipher: EC.cipher_p a) // cipher == iv ++ cipher ++ tag (see EverCrypt.AEAD.encrypt_st)
+  (cipher: cipher_p a) // cipher == iv ++ cipher ++ tag (see EverCrypt.AEAD.encrypt_st)
   // FIXME: for now we assume that cipher already contains some iv, but at some point
   // we should have `encrypt` randomly generate it and write it into cipher
 : HST.Stack EE.error_code
@@ -84,7 +95,7 @@ val encrypt
       let cipher' = B.gsub cipher iv_len (B.len cipher `U32.sub` iv_len) in
       B.modifies (B.loc_union (footprint s) (B.loc_buffer cipher')) h h' /\
       invariant h' s /\
-      (F.ideal_AEAD == false ==> SC.encrypt (state_kv s) (B.as_seq h iv) Seq.empty (B.as_seq h plain) `Seq.equal` B.as_seq h' cipher')
+      (F.ideal_AEAD == false ==> SC.encrypt (state_kv s) (Cast.to_seq_sec8 (B.as_seq h iv)) Seq.empty (Cast.to_seq_sec8 (B.as_seq h plain)) `Seq.equal` Cast.to_seq_sec8 (B.as_seq h' cipher'))
     | _ -> False
   ))
 
@@ -92,9 +103,9 @@ val decrypt
   (#a: SC.supported_alg)
   (#phi: plain_pred)
   (s: state a phi) // key
-  (cipher: EC.cipher_p a) // cipher == iv ++ cipher ++ tag (see EverCrypt.AEAD.decrypt_st)
+  (cipher: cipher_p a) // cipher == iv ++ cipher ++ tag (see EverCrypt.AEAD.decrypt_st)
   (cipher_len: U32.t { U32.v cipher_len == B.length cipher })
-  (plain: EC.plain_p a)
+  (plain: plain_p a)
 : HST.Stack EE.error_code
   (requires (fun h ->
     invariant h s /\
@@ -116,11 +127,11 @@ val decrypt
       invariant h' s /\ (
         if F.ideal_AEAD
         then phi (B.as_seq h' plain)
-        else SC.decrypt (state_kv s) (B.as_seq h iv') Seq.empty (B.as_seq h cipher') == Some (B.as_seq h' plain)
+        else SC.decrypt (state_kv s) (Cast.to_seq_sec8 (B.as_seq h iv')) Seq.empty (Cast.to_seq_sec8 (B.as_seq h cipher')) == Some (Cast.to_seq_sec8 (B.as_seq h' plain))
       )
     | EE.AuthenticationFailure ->
       B.modifies (B.loc_union (footprint s) (B.loc_buffer plain)) h h' /\
       invariant h' s /\
-      (F.ideal_AEAD == false ==> SC.decrypt (state_kv s) (B.as_seq h iv') Seq.empty (B.as_seq h cipher') == None)
+      (F.ideal_AEAD == false ==> SC.decrypt (state_kv s) (Cast.to_seq_sec8 (B.as_seq h iv')) Seq.empty (Cast.to_seq_sec8 (B.as_seq h cipher')) == None)
     | _ -> False
   ))

@@ -13,6 +13,7 @@ module EE = EverCrypt.Error
 module G = FStar.Ghost
 module F = Flags
 module Model = Model.AEAD
+module Cast = Crypto.Util.IntCast
 
 noeq
 inline_for_extraction
@@ -24,10 +25,20 @@ type cstate
   fp: G.erased B.loc;
 }
 
+let mphi (phi: plain_pred) : Tot (Model.plain_pred) =
+  (fun x -> phi (Cast.to_seq_uint8 x))
+
 let state (a: SC.supported_alg) (phi: plain_pred) =
   if F.model
-  then Model.state a phi
+  then Model.state a (mphi phi)
   else cstate a phi
+
+inline_for_extraction
+noextract
+let state_m
+  (#a: SC.supported_alg) (#phi: plain_pred) (s: state a phi { F.model == true })
+: Tot (Model.state a (mphi phi))
+= (s <: Model.state a (mphi phi))
 
 inline_for_extraction
 let state_ec
@@ -40,12 +51,12 @@ let state_kv
   (#a: SC.supported_alg) (#phi: plain_pred)
   (s: state a phi)
 : GTot (SC.kv a)
-= if F.model then Model.state_kv (s <: Model.state a phi) else G.reveal (s <: cstate a phi).kv
+= if F.model then Model.state_kv (state_m s) else G.reveal (s <: cstate a phi).kv
 
 let invariant (#a: SC.supported_alg) (#phi: plain_pred) (h: HS.mem) (s: state a phi) : GTot Type0 =
   if F.model
   then
-    Model.invariant h (s <: Model.state a phi)
+    Model.invariant h (state_m s)
   else
     EC.invariant h (state_ec s) /\
     EC.footprint h (state_ec s) == Ghost.reveal (s <: cstate a phi).fp /\
@@ -54,7 +65,7 @@ let invariant (#a: SC.supported_alg) (#phi: plain_pred) (h: HS.mem) (s: state a 
 let footprint (#a: SC.supported_alg) (#phi: plain_pred) (s: state a phi) : GTot B.loc =
   if F.model
   then
-    Model.footprint (s <: Model.state a phi)
+    Model.footprint (state_m s)
   else
     Ghost.reveal (s <: cstate a phi).fp
 
@@ -62,7 +73,7 @@ let frame_invariant
   #a #phi h s l h'
 = if F.model
   then
-    Model.frame_invariant h (s <: Model.state a phi) l h'
+    Model.frame_invariant h (state_m s) l h'
   else begin
     assume (EC.as_kv (B.deref h' (state_ec s)) == state_kv s); // TODO: add to EverCrypt
     EC.frame_invariant l (state_ec s) h h'
@@ -124,13 +135,50 @@ let rec put_buffer
 
 #push-options "--z3rlimit 16"
 
-let encrypt
+inline_for_extraction
+noextract
+val encrypt'
+  (#a: SC.supported_alg)
+  (#phi: plain_pred)
+  (s: state a phi) // key
+  (plain: EC.plain_p a)
+  (plain_len: U32.t {U32.v plain_len == B.length plain})
+  (cipher: EC.cipher_p a) // cipher == iv ++ cipher ++ tag (see EverCrypt.AEAD.encrypt_st)
+  // FIXME: for now we assume that cipher already contains some iv, but at some point
+  // we should have `encrypt` randomly generate it and write it into cipher
+: HST.Stack EE.error_code
+  (requires (fun h ->
+    invariant h s /\
+    B.live h plain /\
+    B.live h cipher /\
+    phi (Cast.to_seq_uint8 (B.as_seq h plain)) /\
+    B.loc_disjoint (footprint s) (B.loc_buffer plain) /\
+    B.loc_disjoint (footprint s) (B.loc_buffer cipher) /\
+    B.disjoint plain cipher /\
+    B.length cipher == B.length plain + iv_length + SC.tag_length a
+  ))
+  (ensures (fun h res h' -> 
+    match res with
+    | EE.InvalidKey ->
+      B.modifies B.loc_none h h' // TODO: should be False, need to fix EverCrypt
+    | EE.Success ->
+      // FIXME: currently we assume iv already in cipher,
+      // at some point it should be randomly generated here
+      let iv = B.gsub cipher 0ul iv_len in
+      let cipher' = B.gsub cipher iv_len (B.len cipher `U32.sub` iv_len) in
+      B.modifies (B.loc_union (footprint s) (B.loc_buffer cipher')) h h' /\
+      invariant h' s /\
+      (F.ideal_AEAD == false ==> SC.encrypt (state_kv s) (B.as_seq h iv) Seq.empty (B.as_seq h plain) `Seq.equal` B.as_seq h' cipher')
+    | _ -> False
+  ))
+
+let encrypt'
   #a #phi s plain plain_len cipher
 = let h0 = HST.get () in
   let iv = B.sub cipher 0ul iv_len in
   if F.model
   then begin
-    let s : Model.state a phi = s in
+    let s : Model.state a (mphi phi) = s in
     let iv_s = get_buffer iv iv_len in
     let plain_s = get_buffer plain plain_len in
     let cipher_tag_len = plain_len `U32.add` tag_len a in
@@ -167,14 +215,53 @@ let encrypt
     res
   end
 
-let decrypt
+inline_for_extraction
+noextract
+val decrypt'
+  (#a: SC.supported_alg)
+  (#phi: plain_pred)
+  (s: state a phi) // key
+  (cipher: EC.cipher_p a) // cipher == iv ++ cipher ++ tag (see EverCrypt.AEAD.decrypt_st)
+  (cipher_len: U32.t { U32.v cipher_len == B.length cipher })
+  (plain: EC.plain_p a)
+: HST.Stack EE.error_code
+  (requires (fun h ->
+    invariant h s /\
+    B.live h plain /\
+    B.live h cipher /\
+    B.length cipher == B.length plain + iv_length + SC.tag_length a /\
+    B.loc_disjoint (footprint s) (B.loc_buffer plain) /\
+    B.loc_disjoint (footprint s) (B.loc_buffer cipher) /\
+    B.disjoint plain cipher
+  ))
+  (ensures (fun h res h' ->
+    let iv' = B.gsub cipher 0ul iv_len in
+    let cipher' = B.gsub cipher iv_len (cipher_len `U32.sub` iv_len) in
+    match res with
+    | EE.InvalidKey ->
+      B.modifies B.loc_none h h' // TODO: should be False, need to fix EverCrypt
+    | EE.Success ->
+      B.modifies (B.loc_union (footprint s) (B.loc_buffer plain)) h h' /\
+      invariant h' s /\ (
+        if F.ideal_AEAD
+        then phi (Cast.to_seq_uint8 (B.as_seq h' plain))
+        else SC.decrypt (state_kv s) (B.as_seq h iv') Seq.empty (B.as_seq h cipher') == Some (B.as_seq h' plain)
+      )
+    | EE.AuthenticationFailure ->
+      B.modifies (B.loc_union (footprint s) (B.loc_buffer plain)) h h' /\
+      invariant h' s /\
+      (F.ideal_AEAD == false ==> SC.decrypt (state_kv s) (B.as_seq h iv') Seq.empty (B.as_seq h cipher') == None)
+    | _ -> False
+  ))
+
+let decrypt'
   #a #phi s cipher cipher_len plain
 = let h0 = HST.get () in
   let iv = B.sub cipher 0ul iv_len in
   let plain_len = cipher_len `U32.sub` tag_len a `U32.sub` iv_len in
   if F.model = true
   then begin
-    let s : Model.state a phi = s in
+    let s : Model.state a (mphi phi) = s in
     let iv_s = get_buffer iv iv_len in
     let cipher_tag_len = cipher_len `U32.sub` iv_len in
     let cipher_tag = B.sub cipher iv_len cipher_tag_len in
@@ -212,5 +299,48 @@ let decrypt
     assume (EC.as_kv (B.deref h' (state_ec s)) == state_kv s); // TODO: add to Evercrypt
     res
   end
+
+let to_seq_sec8_as_seq_gsub (h: HS.mem) (b: B.buffer U8.t) (off: U32.t) (len: U32.t { U32.v off + U32.v len <= B.length b }) : Lemma
+    (Cast.to_seq_sec8 (B.as_seq h (B.gsub b off len)) == B.as_seq h (B.gsub (Cast.to_buf_sec8 b) off len))
+= Cast.gsub_to_buf_sec8 b off len;
+  Cast.as_seq_to_buf_sec8 (B.gsub b off len) h
+
+let loc_buffer_gsub_to_buf_sec8 (b: B.buffer U8.t) (off: U32.t) (len: U32.t { U32.v off + U32.v len <= B.length b }) : Lemma
+  (B.loc_buffer (B.gsub (Cast.to_buf_sec8 b) off len) == B.loc_buffer (B.gsub b off len))
+= Cast.gsub_to_buf_sec8 b off len;
+  Cast.loc_buffer_to_buf_sec8 (B.gsub b off len)
+
+let encrypt
+  #a #phi s plain plain_len cipher
+= let h = HST.get () in
+  Cast.live_to_buf_sec8 plain h;
+  Cast.live_to_buf_sec8 cipher h;
+  Cast.to_seq_uint8_to_seq_sec8 (B.as_seq h plain);
+  Cast.as_seq_to_buf_sec8 plain h;
+  Cast.loc_buffer_to_buf_sec8 plain;
+  Cast.loc_buffer_to_buf_sec8 cipher;
+  let res = encrypt' s (Cast.to_buf_sec8 plain) plain_len (Cast.to_buf_sec8 cipher) in
+  let h' = HST.get () in
+  to_seq_sec8_as_seq_gsub h cipher 0ul iv_len;
+  to_seq_sec8_as_seq_gsub h' cipher iv_len plain_len;
+  to_seq_sec8_as_seq_gsub h' cipher (iv_len `U32.add` plain_len) (tag_len a);
+  to_seq_sec8_as_seq_gsub h' cipher iv_len (B.len cipher `U32.sub` iv_len);
+  loc_buffer_gsub_to_buf_sec8 cipher iv_len (B.len cipher `U32.sub` iv_len);
+  res
+
+let decrypt
+  #a #phi s cipher cipher_len plain
+= let h = HST.get () in
+  Cast.live_to_buf_sec8 plain h;
+  Cast.live_to_buf_sec8 cipher h;
+  Cast.loc_buffer_to_buf_sec8 plain;
+  Cast.loc_buffer_to_buf_sec8 cipher;
+  let res = decrypt' s (Cast.to_buf_sec8 cipher) cipher_len (Cast.to_buf_sec8 plain) in
+  let h' = HST.get () in
+  to_seq_sec8_as_seq_gsub h cipher 0ul iv_len;
+  to_seq_sec8_as_seq_gsub h cipher iv_len (cipher_len `U32.sub` iv_len);
+  Cast.to_seq_uint8_to_seq_sec8 (B.as_seq h' plain);
+  Cast.as_seq_to_buf_sec8 plain h';
+  res
 
 #pop-options

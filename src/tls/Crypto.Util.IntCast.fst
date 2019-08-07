@@ -13,14 +13,6 @@ let to_seq_uint8 x = x
 
 let to_seq_uint8_correct x i = ()
 
-let to_buf_uint8 x = x
-
-let to_buf_uint8_correct x h = ()
-
-let live_to_buf_uint8 x h = ()
-
-let loc_buffer_to_buf_uint8 x = ()
-
 let to_sec8 x = x
 
 let to_seq_sec8 x = x
@@ -29,12 +21,12 @@ let to_seq_sec8_correct x i = ()
 
 let to_buf_sec8 x = x
 
-let to_buf_sec8_correct x h = ()
+let as_seq_to_buf_sec8 x h = ()
 
 let live_to_buf_sec8 x h = ()
 
+let gsub_to_buf_sec8 x off len = ()
+
 let loc_buffer_to_buf_sec8 x = ()
 
-let to_buf_sec8_to_buf_uint8 x = ()
-
-let to_buf_uint8_to_buf_sec8 x = ()
+let seq_sec8_has_eq _ = ()

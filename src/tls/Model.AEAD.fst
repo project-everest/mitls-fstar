@@ -11,13 +11,12 @@ module F = Flags
 module B = LowStar.Buffer
 module MDM = FStar.Monotonic.DependentMap
 
-friend Lib.IntTypes // to prove that entry hasEq, because Spec.uint8 is a secret integer type but miTLS is using FStar UInt8
-
 noextract
 inline_for_extraction
 let entry (a: SC.supported_alg): Tot eqtype =
   [@inline_let]
   let t = SC.iv a in
+  Crypto.Util.IntCast.seq_sec8_has_eq ();
   t
 
 let table
@@ -83,7 +82,7 @@ let encrypt
     B.modifies_loc_regions_intro (Set.singleton (HS.frameOf tbl)) h h' ;
     B.modifies_loc_addresses_intro (HS.frameOf tbl) (Set.singleton (HS.as_addr tbl)) B.loc_none h h' ;
     assume (HST.equal_domains h h'); // TODO: fix FStar.Monotonic.DependentMap
-    Seq.create (SC.cipher_length plain) 0uy
+    Seq.create (SC.cipher_length plain) (Crypto.Util.IntCast.to_sec8 0uy)
   end else
     cipher
 
