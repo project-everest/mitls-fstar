@@ -25,7 +25,7 @@ let table
   (kv: SC.kv a)
   (phi: plain_pred)
 : Tot Type0
-= MDM.t HS.root (entry a) (fun iv -> (cipher: SC.cipher a & (plain: SC.plain a { phi plain }))) (fun _ -> True)
+= MDM.t HS.root (entry a) (fun iv -> (cipher: SC.cipher a & (plain: SC.decrypted cipher { phi plain }))) (fun _ -> True)
 
 noeq
 type state (a: SC.supported_alg) (phi: plain_pred) = {

@@ -58,7 +58,7 @@ val decrypt
   (s: state a phi) // key
   (iv: SC.iv a)
   (cipher: SC.cipher a { Seq.length cipher <= SC.max_length a + SC.tag_length a })
-: HST.Stack (option (SC.plain a))
+: HST.Stack (option (SC.decrypted cipher))
   (requires (fun h ->
     Flags.model == true /\
     invariant h s
@@ -66,12 +66,12 @@ val decrypt
   (ensures (fun h res h' ->
     B.modifies (footprint s) h h' /\
     (Flags.ideal_AEAD == false ==> (
-      (match SC.decrypt (state_kv s) iv Seq.empty cipher with Some plain -> Some (plain <: SC.plain a) | _ -> None) == res
+      SC.decrypt (state_kv s) iv Seq.empty cipher == res
     )) /\
+    invariant h' s /\
     begin match res with
     | None -> True
     | Some plain ->
-      invariant h' s /\
       (Flags.ideal_AEAD == true ==> phi plain)
     end
   ))

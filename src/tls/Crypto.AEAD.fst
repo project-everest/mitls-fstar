@@ -68,60 +68,149 @@ let frame_invariant
     EC.frame_invariant l (state_ec s) h h'
   end
 
+noextract
+let rec get_buffer
+  (#t: Type)
+  (b: B.buffer t)
+  (len: U32.t)
+: HST.Stack (Seq.seq t)
+  (requires (fun h ->
+    F.model == true /\
+    B.live h b /\
+    len == B.len b
+  ))
+  (ensures (fun h s h' ->
+    B.modifies B.loc_none h h' /\
+    s `Seq.equal` B.as_seq h b
+  ))
+  (decreases (U32.v len))
+= if len = 0ul
+  then Seq.empty
+  else
+    let x = B.index b 0ul in
+    let len' = len `U32.sub` 1ul in
+    let b' = B.sub b 1ul len' in
+    let s = get_buffer b' len' in
+    Seq.cons x s
+
+noextract
+let rec put_buffer
+  (#t: Type)
+  (b: B.buffer t)
+  (len: U32.t)
+  (s: Seq.seq t)
+: HST.Stack unit
+  (requires (fun h ->
+    F.model == true /\
+    B.live h b /\
+    len == B.len b /\
+    Seq.length s == B.length b
+  ))
+  (ensures (fun h _ h' ->
+    B.modifies (B.loc_buffer b) h h' /\
+    B.as_seq h' b `Seq.equal` s
+  ))
+= if len = 0ul
+  then ()
+  else begin
+    let b0 = B.sub b 0ul 1ul in
+    B.upd b0 0ul (Seq.head s);
+    let len' = len `U32.sub` 1ul in
+    let b' = B.sub b 1ul len' in
+    put_buffer b' len' (Seq.tail s);
+    let h' = HST.get () in
+    assert (B.as_seq h' b `Seq.equal` Seq.append (B.as_seq h' b0) (B.as_seq h' b'))
+  end
+
 #push-options "--z3rlimit 16"
 
 let encrypt
   #a #phi s plain plain_len cipher
-= let iv = B.sub cipher 0ul iv_len in
-  // E.random_sample iv_len iv; // TODO
-  let ad = B.sub iv 0ul 0ul in
-  let ad_len = 0ul in
-  let cipher' = B.sub cipher iv_len plain_len in
-  let tag' = B.sub cipher (iv_len `U32.add` plain_len) (tag_len a) in
-  assume (F.model == false);
-  let res = EC.encrypt
-    #(G.hide a)
-    (state_ec s)
-    iv
-    iv_len
-    ad
-    ad_len
-    plain
-    plain_len
-    cipher'
-    tag'
-  in
-  let h' = HST.get () in
-  assume (EC.as_kv (B.deref h' (state_ec s)) == state_kv s); // TODO: add to EverCrypt
-  assert (B.as_seq h' (B.gsub cipher iv_len (B.len cipher `U32.sub` iv_len)) `Seq.equal` Seq.append (B.as_seq h' cipher') (B.as_seq h' tag'));
-  res
+= let h0 = HST.get () in
+  let iv = B.sub cipher 0ul iv_len in
+  if F.model
+  then begin
+    let s : Model.state a phi = s in
+    let iv_s = get_buffer iv iv_len in
+    let plain_s = get_buffer plain plain_len in
+    let cipher_tag_len = plain_len `U32.add` tag_len a in
+    let cipher_tag' = B.sub cipher iv_len cipher_tag_len in
+    let h1 = HST.get () in
+    Model.frame_invariant h0 s B.loc_none h1;
+    let cipher_s = Model.encrypt s iv_s plain_s in
+    let h2 = HST.get () in
+    put_buffer cipher_tag' cipher_tag_len cipher_s;
+    let h3 = HST.get () in
+    Model.frame_invariant h2 s (B.loc_buffer cipher_tag') h3;
+    EE.Success
+  end else begin
+    // E.random_sample iv_len iv; // TODO
+    let ad = B.sub iv 0ul 0ul in
+    let ad_len = 0ul in
+    let cipher' = B.sub cipher iv_len plain_len in
+    let tag' = B.sub cipher (iv_len `U32.add` plain_len) (tag_len a) in
+    let res = EC.encrypt
+      #(G.hide a)
+      (state_ec s)
+      iv
+      iv_len
+      ad
+      ad_len
+      plain
+      plain_len
+      cipher'
+      tag'
+    in
+    let h' = HST.get () in
+    assume (EC.as_kv (B.deref h' (state_ec s)) == state_kv s); // TODO: add to EverCrypt
+    assert (B.as_seq h' (B.gsub cipher iv_len (B.len cipher `U32.sub` iv_len)) `Seq.equal` Seq.append (B.as_seq h' cipher') (B.as_seq h' tag'));
+    res
+  end
 
 let decrypt
   #a #phi s cipher cipher_len plain
-= let iv_len = 12ul in
+= let h0 = HST.get () in
   let iv = B.sub cipher 0ul iv_len in
-  let ad = B.sub iv 0ul 0ul in
-  let ad_len = 0ul in
   let plain_len = cipher_len `U32.sub` tag_len a `U32.sub` iv_len in
-  let cipher' = B.sub cipher iv_len plain_len in
-  let tag' = B.sub cipher (iv_len `U32.add` plain_len) (tag_len a) in
-  assume (F.model == false);
-  let h = HST.get () in
-  let res = EverCrypt.AEAD.decrypt
-    #(G.hide a)
-    (state_ec s)
-    iv
-    iv_len
-    ad
-    ad_len
-    cipher'
-    plain_len
-    tag'
-    plain
-  in
-  assert (B.as_seq h (B.gsub cipher iv_len (B.len cipher `U32.sub` iv_len)) `Seq.equal` Seq.append (B.as_seq h cipher') (B.as_seq h tag'));
-  let h' = HST.get () in
-  assume (EC.as_kv (B.deref h' (state_ec s)) == state_kv s); // TODO: add to Evercrypt
-  res
+  if F.model = true
+  then begin
+    let s : Model.state a phi = s in
+    let iv_s = get_buffer iv iv_len in
+    let cipher_tag_len = cipher_len `U32.sub` iv_len in
+    let cipher_tag = B.sub cipher iv_len cipher_tag_len in
+    let cipher_tag_s = get_buffer cipher_tag cipher_tag_len in
+    let h1 = HST.get () in
+    Model.frame_invariant h0 s B.loc_none h1;
+    match Model.decrypt s iv_s cipher_tag_s with
+    | None -> EE.AuthenticationFailure
+    | Some plain_s ->
+      let h2 = HST.get () in
+      put_buffer plain plain_len plain_s;
+      let h3 = HST.get () in
+      Model.frame_invariant h2 s (B.loc_buffer plain) h3;
+      EE.Success
+  end else begin
+    let ad = B.sub iv 0ul 0ul in
+    let ad_len = 0ul in
+    let cipher' = B.sub cipher iv_len plain_len in
+    let tag' = B.sub cipher (iv_len `U32.add` plain_len) (tag_len a) in
+    let h = HST.get () in
+    let res = EC.decrypt
+      #(G.hide a)
+      (state_ec s)
+      iv
+      iv_len
+      ad
+      ad_len
+      cipher'
+      plain_len
+      tag'
+      plain
+    in
+    assert (B.as_seq h (B.gsub cipher iv_len (B.len cipher `U32.sub` iv_len)) `Seq.equal` Seq.append (B.as_seq h cipher') (B.as_seq h tag'));
+    let h' = HST.get () in
+    assume (EC.as_kv (B.deref h' (state_ec s)) == state_kv s); // TODO: add to Evercrypt
+    res
+  end
 
 #pop-options
