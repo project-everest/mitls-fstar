@@ -8,7 +8,7 @@ module HS = FStar.HyperStack
 module HST = FStar.HyperStack.ST
 module G = FStar.Ghost
 module F = Flags
-module B = LowStar.Buffer
+module B = LowStar.Buffer // for loc, modifies
 
 (* THIS MODULE MUST NOT BE EXTRACTED *)
 
@@ -66,7 +66,10 @@ val decrypt
   ))
   (ensures (fun h res h' ->
     B.modifies (footprint s) h h' /\
-    (Flags.ideal_AEAD == false ==> HST.equal_domains h h') /\ // to go to the Stack effect
+    (Flags.ideal_AEAD == false ==> (
+      HST.equal_domains h h' /\ // to go to the Stack effect
+      (match SC.decrypt (state_kv s) iv Seq.empty cipher with Some plain -> Some (plain <: SC.plain a) | _ -> None) == res
+    )) /\
     begin match res with
     | None -> True
     | Some plain ->

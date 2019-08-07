@@ -11,7 +11,7 @@ module F = Flags
 module B = LowStar.Buffer
 module MDM = FStar.Monotonic.DependentMap
 
-friend Lib.IntTypes // because Spec.uint8 is a secret integer type but miTLS is using FStar UInt8
+friend Lib.IntTypes // to prove that entry hasEq, because Spec.uint8 is a secret integer type but miTLS is using FStar UInt8
 
 noextract
 inline_for_extraction
@@ -25,7 +25,7 @@ let table
   (kv: SC.kv a)
   (phi: plain_pred)
 : Tot Type0
-= MDM.t HS.root (entry a) (fun iv -> (plain: SC.plain a { phi plain })) (fun _ -> True)
+= MDM.t HS.root (entry a) (fun iv -> (cipher: SC.cipher a & (plain: SC.plain a { phi plain }))) (fun _ -> True)
 
 noeq
 type state (a: SC.supported_alg) (phi: plain_pred) = {
@@ -72,18 +72,19 @@ let frame_invariant
 
 let encrypt
   #a #phi s iv plain
-= if F.ideal_AEAD
+= let cipher = SC.encrypt (state_kv s) iv Seq.empty plain in
+  if F.ideal_AEAD
   then begin
     let h = HST.get () in
     let tbl = state_table s in
     assume (~ (MDM.defined tbl iv h)); // cryptographic assumption
-    MDM.extend tbl iv plain;
+    MDM.extend tbl iv (| cipher, plain |);
     let h' = HST.get () in
     B.modifies_loc_regions_intro (Set.singleton (HS.frameOf tbl)) h h' ;
     B.modifies_loc_addresses_intro (HS.frameOf tbl) (Set.singleton (HS.as_addr tbl)) B.loc_none h h' ;
     Seq.create (SC.cipher_length plain) 0uy
   end else
-    SC.encrypt (state_kv s) iv Seq.empty plain
+    cipher
 
 let decrypt
   #a #phi s iv cipher
@@ -91,7 +92,10 @@ let decrypt
   then begin
     match MDM.lookup (state_table s) iv with
     | None -> None
-    | Some plain -> Some plain
+    | Some (| cipher' , plain |) ->
+      if cipher = cipher'
+      then Some plain
+      else None
   end else
     match SC.decrypt (state_kv s) iv Seq.empty cipher with
     | None -> None
