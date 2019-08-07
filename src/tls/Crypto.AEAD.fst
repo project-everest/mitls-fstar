@@ -14,6 +14,7 @@ module G = FStar.Ghost
 module F = Flags
 module Model = Model.AEAD
 module Cast = Crypto.Util.IntCast
+module MU = Model.Utils
 
 noeq
 inline_for_extraction
@@ -79,60 +80,6 @@ let frame_invariant
     EC.frame_invariant l (state_ec s) h h'
   end
 
-noextract
-let rec get_buffer
-  (#t: Type)
-  (b: B.buffer t)
-  (len: U32.t)
-: HST.Stack (Seq.seq t)
-  (requires (fun h ->
-    F.model == true /\
-    B.live h b /\
-    len == B.len b
-  ))
-  (ensures (fun h s h' ->
-    B.modifies B.loc_none h h' /\
-    s `Seq.equal` B.as_seq h b
-  ))
-  (decreases (U32.v len))
-= if len = 0ul
-  then Seq.empty
-  else
-    let x = B.index b 0ul in
-    let len' = len `U32.sub` 1ul in
-    let b' = B.sub b 1ul len' in
-    let s = get_buffer b' len' in
-    Seq.cons x s
-
-noextract
-let rec put_buffer
-  (#t: Type)
-  (b: B.buffer t)
-  (len: U32.t)
-  (s: Seq.seq t)
-: HST.Stack unit
-  (requires (fun h ->
-    F.model == true /\
-    B.live h b /\
-    len == B.len b /\
-    Seq.length s == B.length b
-  ))
-  (ensures (fun h _ h' ->
-    B.modifies (B.loc_buffer b) h h' /\
-    B.as_seq h' b `Seq.equal` s
-  ))
-= if len = 0ul
-  then ()
-  else begin
-    let b0 = B.sub b 0ul 1ul in
-    B.upd b0 0ul (Seq.head s);
-    let len' = len `U32.sub` 1ul in
-    let b' = B.sub b 1ul len' in
-    put_buffer b' len' (Seq.tail s);
-    let h' = HST.get () in
-    assert (B.as_seq h' b `Seq.equal` Seq.append (B.as_seq h' b0) (B.as_seq h' b'))
-  end
-
 let fresh_iv
   #a #phi h s iv
 = F.model == true ==> Model.fresh_iv h (state_m s) iv
@@ -145,7 +92,7 @@ let frame_fresh_iv
 let is_fresh_iv
   #a #phi s iv
 = let h = HST.get () in
-  let iv_s = get_buffer iv iv_len in
+  let iv_s = MU.get_buffer iv iv_len in
   let h1 = HST.get () in
   frame_invariant h s B.loc_none h1;
   let res = Model.is_fresh_iv (state_m s) (Cast.to_seq_sec8 iv_s) in
@@ -199,8 +146,8 @@ let encrypt'
   if F.model
   then begin
     let s : Model.state a (mphi phi) = s in
-    let iv_s = get_buffer iv iv_len in
-    let plain_s = get_buffer plain plain_len in
+    let iv_s = MU.get_buffer iv iv_len in
+    let plain_s = MU.get_buffer plain plain_len in
     let cipher_tag_len = plain_len `U32.add` tag_len a in
     let cipher_tag' = B.sub cipher iv_len cipher_tag_len in
     let h1 = HST.get () in
@@ -208,7 +155,7 @@ let encrypt'
     Model.frame_fresh_iv h0 s iv_s B.loc_none h1;
     let cipher_s = Model.encrypt s iv_s plain_s in
     let h2 = HST.get () in
-    put_buffer cipher_tag' cipher_tag_len cipher_s;
+    MU.put_buffer cipher_tag' cipher_tag_len cipher_s;
     let h3 = HST.get () in
     Model.frame_invariant h2 s (B.loc_buffer cipher_tag') h3;
     EE.Success
@@ -283,17 +230,17 @@ let decrypt'
   if F.model = true
   then begin
     let s : Model.state a (mphi phi) = s in
-    let iv_s = get_buffer iv iv_len in
+    let iv_s = MU.get_buffer iv iv_len in
     let cipher_tag_len = cipher_len `U32.sub` iv_len in
     let cipher_tag = B.sub cipher iv_len cipher_tag_len in
-    let cipher_tag_s = get_buffer cipher_tag cipher_tag_len in
+    let cipher_tag_s = MU.get_buffer cipher_tag cipher_tag_len in
     let h1 = HST.get () in
     Model.frame_invariant h0 s B.loc_none h1;
     match Model.decrypt s iv_s cipher_tag_s with
     | None -> EE.AuthenticationFailure
     | Some plain_s ->
       let h2 = HST.get () in
-      put_buffer plain plain_len plain_s;
+      MU.put_buffer plain plain_len plain_s;
       let h3 = HST.get () in
       Model.frame_invariant h2 s (B.loc_buffer plain) h3;
       EE.Success
