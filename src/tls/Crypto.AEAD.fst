@@ -21,6 +21,7 @@ type cstate
 = {
   ec: B.pointer (EC.state_s a);
   kv: G.erased (SC.kv a);
+  fp: G.erased B.loc;
 }
 
 let state (a: SC.supported_alg) (phi: plain_pred) =
@@ -47,14 +48,15 @@ let invariant (#a: SC.supported_alg) (#phi: plain_pred) (h: HS.mem) (s: state a 
     Model.invariant h (s <: Model.state a phi)
   else
     EC.invariant h (state_ec s) /\
+    EC.footprint h (state_ec s) == Ghost.reveal (s <: cstate a phi).fp /\
     EC.as_kv (B.deref h (state_ec s)) == state_kv s
 
-let footprint (#a: SC.supported_alg) (#phi: plain_pred) (h: HS.mem) (s: state a phi) : GTot B.loc =
+let footprint (#a: SC.supported_alg) (#phi: plain_pred) (s: state a phi) : GTot B.loc =
   if F.model
   then
     Model.footprint (s <: Model.state a phi)
   else
-    EC.footprint h (state_ec s)
+    Ghost.reveal (s <: cstate a phi).fp
 
 let frame_invariant
   #a #phi h s l h'

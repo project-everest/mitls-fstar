@@ -25,14 +25,14 @@ val state_kv
 
 val invariant (#a: SC.supported_alg) (#phi: plain_pred) (h: HS.mem) (s: state a phi) : GTot Type0
 
-val footprint (#a: SC.supported_alg) (#phi: plain_pred) (h: HS.mem) (s: state a phi) : GTot B.loc
+val footprint (#a: SC.supported_alg) (#phi: plain_pred) (s: state a phi) : GTot B.loc
 
 val frame_invariant
   (#a: SC.supported_alg) (#phi: plain_pred) (h: HS.mem) (s: state a phi)
   (l: B.loc) (h' : HS.mem)
 : Lemma
-  (requires (B.modifies l h h' /\ B.loc_disjoint l (footprint h s) /\ invariant h s))
-  (ensures (footprint h' s == footprint h s /\ invariant h' s))
+  (requires (B.modifies l h h' /\ B.loc_disjoint l (footprint s) /\ invariant h s))
+  (ensures (invariant h' s))
 
 noextract
 inline_for_extraction
@@ -60,8 +60,8 @@ val encrypt
     B.live h plain /\
     B.live h cipher /\
     phi (B.as_seq h plain) /\
-    B.loc_disjoint (footprint h s) (B.loc_buffer plain) /\
-    B.loc_disjoint (footprint h s) (B.loc_buffer cipher) /\
+    B.loc_disjoint (footprint s) (B.loc_buffer plain) /\
+    B.loc_disjoint (footprint s) (B.loc_buffer cipher) /\
     B.disjoint plain cipher /\
     B.length cipher == B.length plain + 12 + SC.tag_length a
   ))
@@ -70,8 +70,7 @@ val encrypt
     | EE.InvalidKey ->
       B.modifies B.loc_none h h'
     | EE.Success ->
-      footprint h' s == footprint h s /\
-      B.modifies (B.loc_union (footprint h s) (B.loc_buffer cipher)) h h' /\
+      B.modifies (B.loc_union (footprint s) (B.loc_buffer cipher)) h h' /\
       invariant h' s
     | _ -> False
   ))
@@ -89,8 +88,8 @@ val decrypt
     B.live h plain /\
     B.live h cipher /\
     B.length cipher == B.length plain + 12 + SC.tag_length a /\
-    B.loc_disjoint (footprint h s) (B.loc_buffer plain) /\
-    B.loc_disjoint (footprint h s) (B.loc_buffer cipher) /\
+    B.loc_disjoint (footprint s) (B.loc_buffer plain) /\
+    B.loc_disjoint (footprint s) (B.loc_buffer cipher) /\
     B.disjoint plain cipher
   ))
   (ensures (fun h res h' ->
@@ -99,8 +98,7 @@ val decrypt
       B.modifies B.loc_none h h'
     | EE.Success
     | EE.AuthenticationFailure ->
-      B.modifies (B.loc_union (footprint h s) (B.loc_buffer plain)) h h' /\
-      footprint h' s == footprint h s /\
+      B.modifies (B.loc_union (footprint s) (B.loc_buffer plain)) h h' /\
       invariant h' s
     | _ -> False
   ))
