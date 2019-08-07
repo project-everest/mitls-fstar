@@ -82,6 +82,7 @@ let encrypt
     let h' = HST.get () in
     B.modifies_loc_regions_intro (Set.singleton (HS.frameOf tbl)) h h' ;
     B.modifies_loc_addresses_intro (HS.frameOf tbl) (Set.singleton (HS.as_addr tbl)) B.loc_none h h' ;
+    assume (HST.equal_domains h h'); // TODO: fix FStar.Monotonic.DependentMap
     Seq.create (SC.cipher_length plain) 0uy
   end else
     cipher

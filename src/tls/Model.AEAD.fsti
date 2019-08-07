@@ -38,7 +38,7 @@ val encrypt
   (s: state a phi) // key
   (iv: SC.iv a)
   (plain: SC.plain a)
-: HST.ST (SC.encrypted plain)
+: HST.Stack (SC.encrypted plain)
   (requires (fun h ->
     Flags.model == true /\
     invariant h s /\
@@ -48,10 +48,9 @@ val encrypt
     B.modifies (footprint s) h h' /\
     Seq.length cipher <= SC.max_length a + SC.tag_length a /\
     invariant h' s /\
-    (Flags.ideal_AEAD == false ==> (
-      SC.encrypt (state_kv s) iv Seq.empty plain == cipher /\
-      HST.equal_domains h h' // to go to the Stack effect
-  ))))
+    (Flags.ideal_AEAD == false ==>
+      SC.encrypt (state_kv s) iv Seq.empty plain == cipher
+  )))
 
 val decrypt
   (#a: SC.supported_alg)
@@ -59,7 +58,7 @@ val decrypt
   (s: state a phi) // key
   (iv: SC.iv a)
   (cipher: SC.cipher a { Seq.length cipher <= SC.max_length a + SC.tag_length a })
-: HST.ST (option (SC.plain a))
+: HST.Stack (option (SC.plain a))
   (requires (fun h ->
     Flags.model == true /\
     invariant h s
@@ -67,13 +66,12 @@ val decrypt
   (ensures (fun h res h' ->
     B.modifies (footprint s) h h' /\
     (Flags.ideal_AEAD == false ==> (
-      HST.equal_domains h h' /\ // to go to the Stack effect
       (match SC.decrypt (state_kv s) iv Seq.empty cipher with Some plain -> Some (plain <: SC.plain a) | _ -> None) == res
     )) /\
     begin match res with
     | None -> True
     | Some plain ->
       invariant h' s /\
-      Flags.ideal_AEAD == true ==> phi plain
+      (Flags.ideal_AEAD == true ==> phi plain)
     end
   ))
