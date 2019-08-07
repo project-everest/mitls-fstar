@@ -68,11 +68,12 @@ let frame_invariant
     EC.frame_invariant l (state_ec s) h h'
   end
 
+#push-options "--z3rlimit 16"
+
 let encrypt
   #a #phi s plain plain_len cipher
-= let iv_len = 12ul in
-  let iv = B.sub cipher 0ul iv_len in
-  // E.random_sample iv_len iv;
+= let iv = B.sub cipher 0ul iv_len in
+  // E.random_sample iv_len iv; // TODO
   let ad = B.sub iv 0ul 0ul in
   let ad_len = 0ul in
   let cipher' = B.sub cipher iv_len plain_len in
@@ -92,6 +93,7 @@ let encrypt
   in
   let h' = HST.get () in
   assume (EC.as_kv (B.deref h' (state_ec s)) == state_kv s); // TODO: add to EverCrypt
+  assert (B.as_seq h' (B.gsub cipher iv_len (B.len cipher `U32.sub` iv_len)) `Seq.equal` Seq.append (B.as_seq h' cipher') (B.as_seq h' tag'));
   res
 
 let decrypt
@@ -104,6 +106,7 @@ let decrypt
   let cipher' = B.sub cipher iv_len plain_len in
   let tag' = B.sub cipher (iv_len `U32.add` plain_len) (tag_len a) in
   assume (F.model == false);
+  let h = HST.get () in
   let res = EverCrypt.AEAD.decrypt
     #(G.hide a)
     (state_ec s)
@@ -116,6 +119,9 @@ let decrypt
     tag'
     plain
   in
+  assert (B.as_seq h (B.gsub cipher iv_len (B.len cipher `U32.sub` iv_len)) `Seq.equal` Seq.append (B.as_seq h cipher') (B.as_seq h tag'));
   let h' = HST.get () in
   assume (EC.as_kv (B.deref h' (state_ec s)) == state_kv s); // TODO: add to Evercrypt
   res
+
+#pop-options
