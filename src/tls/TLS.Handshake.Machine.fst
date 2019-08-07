@@ -206,8 +206,8 @@ let accepted
   // pv cs resume? checkServerExtensions? pski
 
 // TBC
-// assume val accepted13: cfg: client_config -> full_offer -> serverHello -> Type0
-let accepted13 (cfg: client_config) (o:full_offer) (sh:serverHello) =
+assume val accepted13: cfg: client_config -> full_offer -> serverHello -> Type0
+// let accepted13 (cfg: client_config) (o:full_offer) (sh:serverHello) =
 
 assume val client_complete: full_offer -> serverHello -> encryptedExtensions -> serverCredentials -> Type0
 
@@ -264,6 +264,9 @@ noeq type msg_state (region: rgn) (inflight: PF.in_progress_flt_t) random ha  = 
 /// currently hashes in the digest, as well as some derived,
 /// negotiated parameters, which may in principle be recomputed from
 /// the transcript.
+///
+/// JP: convention is C_ when we don't know yet whether we're doing 12 or 13.
+/// C12 / C13 are for when we know which version we've negotiated.
 
 noeq type client_state
   (region:rgn)
@@ -272,6 +275,10 @@ noeq type client_state
   // Used only for allocating the client state and binding it to its
   // local nonce in the connection table.
   | C_init:
+    // JP: random would be a good candidate to start lowering; this will include
+    // conversions with repr.value (), but that's a fixed cost. This will be the
+    // first occurrence of a stashed value. Be aware that this will touch a lot
+    // of modules, including the connection table and the crypto model.
     random: TLSInfo.random ->
     client_state region cfg
 
@@ -289,6 +296,7 @@ noeq type client_state
 
     ms: msg_state region PF.F_c_wait_ServerHello (offer.full_ch.HSM.random) (offered_ha offer.full_ch) ->
     ks: c_wait_ServerHello_keys ->
+    // JP: this is the crypto-modeling stuff
     // TODO sync key-schedule state
     // ks: secret_c13_wait_ServerHello
     //   (pskis_of_psks (offered_psks offer.full_ch))
@@ -325,7 +333,9 @@ noeq type client_state
     server_id: serverCredentials ->
     fin1: Ghost.erased finished -> (* received from the server *)
     fin2: Ghost.erased finished (* sent by the client *)
-    // We keep the finished messages only to specify the transcript digest.
+    // We keep the (ghost, high-level) finished messages only to specify the
+    // transcript for the client_invariant below (in turn needed by
+    // HSL.Transcript.invariant).
     { client_complete offer sh ee server_id } ->
 
     // TLS 1.3 #20 aggravation: optional intermediate model-irrelevant
@@ -442,12 +452,15 @@ let client_invariant
   | C_init _ -> True
 
   | C_wait_ServerHello offer ms ks ->
+    // JP: the HSL.Transcript invariant is a relation between a heap, a state
+    // and a (ghost) transcript. So, we reconstruct the transcript here (because
+    // we can always do so) and use it to state the invariant.
     let transcript = Transcript.ClientHello (hash_retry offer.full_retry) offer.full_ch in
     Transcript.invariant ms.digest transcript h
     // KeySchedule.invariant ks h
 
   | C13_wait_Finished1 offer sh ms ks ->
-    //let sh : _ = assume False; sh in // mismatch on transcript refinement
+    let sh : _ = assume False; sh in // mismatch on transcript refinement
     let transcript = Transcript.Transcript13 (hash_retry offer.full_retry) offer.full_ch sh [] in
     Transcript.invariant ms.digest transcript h
     // KeySchedule.invariant_C13_wait_Finished1 ks
@@ -492,7 +505,10 @@ let mrel
 /// We can finally define our main, stateful, monotonic type for the connection handshake
 noeq type t (region:rgn) = {
   cfg: client_config;
+  // JP: nonce will disappear, redundant with what is in the client state.
   nonce: TLSInfo.random;
+  // Eventually, this will become: state where type state = | Server: server_state -> state | Client: client_state -> state
+  // Along with some refinements and selectors to query the specific state, e.g. type server_state = s:state { is_server_state s }
   cstate: st:HST.mreference
     (client_state region cfg)
     (mrel #region #cfg)
@@ -577,6 +593,7 @@ let st_mon
   st0:client_state region cfg ->
   st1:client_state region cfg -> Lemma (step st0 st1 ==> ssa f st0 st1)
 
+// Via the type above, m_ch0 is a relation between two states...
 let m_ch0: st_mon st_ch0 = fun _ _ _ _ -> ()
 let m_ch1: st_mon st_ch1 = fun _ _ _ _ -> ()
 // expected to fail
@@ -585,9 +602,11 @@ let m_ch1: st_mon st_ch1 = fun _ _ _ _ -> ()
 /// Testing monotonicity, relying on the new closure library; we could
 /// probably do it more parametrically to scale up.
 
-let p #region (st:t region) f (o:Negotiation.offer) h0 =
+let assigned_to #region (st:t region) f (o:Negotiation.offer) h0 =
   f (HS.sel h0 st.cstate) == Some o
 
+// ... intuitively, witness0 gives the stateful equivalent of m_ch0 with the
+// monotonicity property exposed in the post-condition.
 val witness0 (#region:rgn) (st: t region):
   Stack clientHello
     (requires fun h0 -> match HS.sel h0 st.cstate with
@@ -596,7 +615,7 @@ val witness0 (#region:rgn) (st: t region):
         | C13_complete _ _ _ _ _ _ _ _ _ -> h0 `HS.contains` st.cstate
         | _ -> False )
     (ensures fun h0 o h1 ->
-      token_p st.cstate (p st st_ch0 o) /\
+      token_p st.cstate (st_ch0 `(assigned_to st)` o) /\
       modifies_none h0 h1)
 
 #push-options "--z3rlimit 100" // NS: wow, that's a lot for a little proof
@@ -606,7 +625,7 @@ let witness0 #region st =
       ReflexiveTransitiveClosure.stable_on_closure
         (step #region #st.cfg)
         (fun st -> st_ch0 st == Some o) ();
-      witness_p st.cstate (p #region st st_ch0 o);
+      witness_p st.cstate (assigned_to #region st st_ch0 o);
       o )
 #pop-options
 
@@ -620,7 +639,7 @@ val witness1 (#region:rgn) (st: t region):
         | C13_complete offer _ _ _ _ _ _ _ _ -> Some? offer.full_retry
         | _ -> False ))
     (ensures fun h0 o h1 ->
-      token_p st.cstate (p st st_ch1 o) /\
+      token_p st.cstate (assigned_to st st_ch1 o) /\
       modifies_none h0 h1)
 
 #push-options "--z3rlimit 100" // NS: wow, that's a lot for a little proof
@@ -630,7 +649,7 @@ let witness1 #region st =
       ReflexiveTransitiveClosure.stable_on_closure
         (step #region #st.cfg)
         (fun st -> st_ch1 st == Some o) ();
-      witness_p st.cstate (p #region st st_ch1 o);
+      witness_p st.cstate (assigned_to #region st st_ch1 o);
       o )
 #pop-options
 
@@ -648,7 +667,7 @@ let test (#region:rgn) (st: t region):
     let o = witness1 st in
     stuff st;
     let r' = st_ch1 !st.cstate in
-    recall_p st.cstate (p st st_ch1 o);
+    recall_p st.cstate (assigned_to st st_ch1 o);
     assert(r' == Some o)
 
 /// -------------end of sanity check----------------
