@@ -58,3 +58,23 @@ let sample (len:nat{len < pow2 32}) : ST (lbytes len)
   (ensures fun h0 _ h1 -> modifies_none h0 h1)
   =
   sample32 (UInt32.uint_to_t len)
+
+module B = LowStar.Buffer
+module U32 = FStar.UInt32
+module LI = Lib.IntTypes
+module HST = FStar.HyperStack.ST
+module ES = EverCrypt.Specs
+module E = EverCrypt
+
+inline_for_extraction
+noextract
+let sample_buffer
+  (len: U32.t)
+  (out: B.buffer LI.uint8 { B.len out == len })
+: HST.Stack unit
+  (requires (fun h -> B.live h out))
+  (ensures (fun h _ h' -> B.modifies (B.loc_buffer out) h h'))
+= let h = HST.get () in
+  assume (ES.random_sample_pre h);
+  E.random_sample len out
+

@@ -16,18 +16,6 @@ let iv_len = 12ul
 
 inline_for_extraction
 noextract
-let random_sample
-  (len: U32.t)
-  (out: B.buffer SC.uint8 { B.len out == len })
-: HST.Stack unit
-  (requires (fun h -> B.live h out))
-  (ensures (fun h _ h' -> B.modifies (B.loc_buffer out) h h'))
-= let h = HST.get () in
-  assume (ES.random_sample_pre h);
-  E.random_sample len out
-
-inline_for_extraction
-noextract
 let iv_length = 12
 
 let rec regenerate_iv
@@ -49,7 +37,7 @@ let rec regenerate_iv
     (F.ideal_iv == true ==> fresh_iv h' s res)
   ))
 = let h0 = HST.get () in
-  random_sample iv_len out;
+  Random.sample_buffer iv_len out;
   let iv = MU.get_buffer out iv_len in
   let h1 = HST.get () in
   frame_invariant h0 s (B.loc_buffer out) h1;
