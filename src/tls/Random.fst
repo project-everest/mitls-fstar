@@ -68,7 +68,7 @@ module E = EverCrypt
 
 inline_for_extraction
 noextract
-let sample_buffer
+let sample_secret_buffer
   (len: U32.t)
   (out: B.buffer LI.uint8 { B.len out == len })
 : HST.Stack unit

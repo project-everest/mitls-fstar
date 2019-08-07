@@ -37,7 +37,7 @@ let rec regenerate_iv
     (F.ideal_iv == true ==> fresh_iv h' s res)
   ))
 = let h0 = HST.get () in
-  Random.sample_buffer iv_len out;
+  Random.sample_secret_buffer iv_len out;
   let iv = MU.get_buffer out iv_len in
   let h1 = HST.get () in
   frame_invariant h0 s (B.loc_buffer out) h1;

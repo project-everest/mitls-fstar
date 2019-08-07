@@ -26,7 +26,7 @@ let encrypt
     let iv = B.sub cipher 0ul iv_len in
     let h1 = HST.get () in
     Cast.live_to_buf_sec8 iv h1;
-    Random.sample_buffer iv_len (Cast.to_buf_sec8 iv);
+    Random.sample_secret_buffer iv_len (Cast.to_buf_sec8 iv);
     Cast.loc_buffer_to_buf_sec8 iv;
     let h2 = HST.get () in
     frame_invariant h0 s (B.loc_buffer cipher) h2;
