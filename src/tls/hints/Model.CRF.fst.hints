@@ -1,5 +1,5 @@
 [
-  "*Úî2ÑŽIØh¼ý^ïn±ñ",
+  "\u0017,ìipƒŠP”ìT.x\u0015UD",
   [
     [
       "Model.CRF.range",
@@ -16,7 +16,7 @@
         "haseqTm_refine_642b6b11877c27d32dfbeef24f1af5ca"
       ],
       0,
-      "4ffab672f5e9f7dc9aeea164be0f2a94"
+      "42a40c60c09a55a53e28bfcd8713669e"
     ],
     [
       "Model.CRF.__proj__Computed__item__t",
@@ -28,7 +28,7 @@
         "projection_inverse_Model.CRF.Computed_a"
       ],
       0,
-      "36c97e88a433c798d5fde44c464f1f32"
+      "4d6cb7ae9b47c9922954b25c43a98e60"
     ],
     [
       "Model.CRF.domain",
@@ -42,7 +42,7 @@
         "function_token_typing_FStar.UInt8.t"
       ],
       0,
-      "069f1758be6e7bb6b31e5c3512b6e3c2"
+      "17bde23274e47b2ade1df77ab2a7a768"
     ],
     [
       "Model.CRF.table",
@@ -63,7 +63,7 @@
         "typing_Mem.tls_tables_region"
       ],
       0,
-      "05a2e0e4a2307dca5ec80bf58b6778df"
+      "cf8f9fab01caf6efd44e2c6b399fb175"
     ],
     [
       "Model.CRF.hashed",
@@ -72,7 +72,7 @@
       0,
       [ "@query", "assumption_Model.CRF.range__uu___haseq" ],
       0,
-      "1c3cde8fe5f76709156b50a8d66e7cea"
+      "676dc8987567af0d9f6f6e6d329db278"
     ],
     [
       "Model.CRF.concrete_hashed",
@@ -81,7 +81,7 @@
       0,
       [ "@query", "equation_Model.CRF.hashed" ],
       0,
-      "0606e043bb6130b38632cd79f72a4974"
+      "dc4c47f0c6f617c1f401d5e388573d3c"
     ],
     [
       "Model.CRF.injective",
@@ -93,7 +93,7 @@
         "refinement_interpretation_Tm_refine_0a3821ca04c04108dbd98f9d818261f8"
       ],
       0,
-      "2640df204b86bc76a83e12d15fe5bc9e"
+      "526e2976d75d88870a8cda0fdbc9635b"
     ],
     [
       "Model.CRF.injective",
@@ -131,7 +131,7 @@
         "typing_Model.CRF.table", "unit_inversion", "unit_typing"
       ],
       0,
-      "58e5a7a927d6ce92c0e5fcba5d60d982"
+      "44c5721096dfa0fa0f3069e291f82bca"
     ],
     [
       "Model.CRF.hash",
@@ -140,7 +140,7 @@
       0,
       [ "@query" ],
       0,
-      "e483d060656f19263f64d3fe61945690"
+      "c19d3afa67bc05a57d94522f1c56dbcd"
     ],
     [
       "Model.CRF.hash",
@@ -158,31 +158,56 @@
         "disc_equation_FStar.Pervasives.Native.None",
         "disc_equation_FStar.Pervasives.Native.Some",
         "equation_FStar.HyperStack.ST.equal_stack_domains",
+        "equation_FStar.HyperStack.ST.erid",
         "equation_FStar.Monotonic.Heap.equal_dom",
+        "equation_FStar.Monotonic.HyperHeap.hmap",
+        "equation_FStar.Monotonic.HyperHeap.modifies_just",
         "equation_FStar.Monotonic.HyperStack.mem",
+        "equation_FStar.Monotonic.HyperStack.modifies", "equation_Mem.rgn",
+        "equation_Mem.subrgn", "equation_Mem.subtls",
         "equation_Mem.tls_tables_region", "equation_Model.CRF.domain",
         "equation_Model.CRF.h", "equation_Model.CRF.hashable",
         "equation_Model.CRF.hashed", "equation_Prims.nat",
         "equation_Spec.Hash.Definitions.bytes_hash",
         "equation_Spec.Hash.Definitions.max_input_length",
+        "function_token_typing_FStar.Monotonic.Heap.heap",
         "function_token_typing_FStar.UInt8.t",
         "function_token_typing_Model.CRF.domain", "int_inversion",
         "lemma_FStar.HyperStack.ST.lemma_same_refs_in_stack_regions_intro",
-        "lemma_FStar.Pervasives.invertOption", "primitive_Prims.op_LessThan",
-        "primitive_Prims.op_disEquality",
+        "lemma_FStar.Map.lemma_ContainsDom",
+        "lemma_FStar.Map.lemma_InDomConcat",
+        "lemma_FStar.Map.lemma_InDomRestrict",
+        "lemma_FStar.Map.lemma_SelConcat1",
+        "lemma_FStar.Map.lemma_SelConcat2",
+        "lemma_FStar.Map.lemma_SelRestrict",
+        "lemma_FStar.Map.lemma_equal_intro",
+        "lemma_FStar.Pervasives.invertOption", "lemma_FStar.Set.mem_subset",
+        "primitive_Prims.op_AmpAmp", "primitive_Prims.op_BarBar",
+        "primitive_Prims.op_LessThan", "primitive_Prims.op_disEquality",
         "projection_inverse_BoxBool_proj_0",
         "projection_inverse_FStar.Pervasives.Native.Some_v",
         "projection_inverse_Model.CRF.Computed_a",
         "projection_inverse_Model.CRF.Computed_t",
         "refinement_interpretation_Tm_refine_0357ff0023e9458023d98c962bee5b59",
+        "refinement_interpretation_Tm_refine_05e15190c946858f68c69156f585f95a",
+        "refinement_interpretation_Tm_refine_3692e5d4bc95faba478158d004f3f983",
         "refinement_interpretation_Tm_refine_542f9d4f129664613f2483a6c88bc7c2",
+        "refinement_interpretation_Tm_refine_5aee6c1d5e606045d3f22072ebbfd523",
+        "refinement_interpretation_Tm_refine_6c5072d4c9562dd38fd2703ecfb013df",
+        "refinement_interpretation_Tm_refine_cbcd4728ad1c1a555eb459c562a69044",
         "refinement_interpretation_Tm_refine_f2e7eaaba84468fd3536157f2c7144df",
+        "typing_FStar.Map.concat", "typing_FStar.Map.contains",
+        "typing_FStar.Map.domain", "typing_FStar.Map.restrict",
+        "typing_FStar.Monotonic.HyperHeap.rid",
+        "typing_FStar.Monotonic.HyperStack.get_hmap",
         "typing_FStar.Pervasives.Native.uu___is_Some",
-        "typing_Model.CRF.domain", "typing_Model.CRF.hashable",
+        "typing_FStar.Set.complement", "typing_FStar.Set.singleton",
+        "typing_Mem.tls_tables_region", "typing_Model.CRF.domain",
+        "typing_Model.CRF.hashable",
         "typing_Spec.Hash.Definitions.max_input_length", "unit_inversion"
       ],
       0,
-      "4466e4eaf383dc20448bcca0bafebfe1"
+      "3e6503e9009367afac4847c0790747d4"
     ],
     [
       "Model.CRF.test",
@@ -213,7 +238,7 @@
         "typing_Mem.model"
       ],
       0,
-      "7af21013537e477283338c503e276c1a"
+      "07d64fda82b9be91c4722dbd7c5a9c29"
     ]
   ]
 ]

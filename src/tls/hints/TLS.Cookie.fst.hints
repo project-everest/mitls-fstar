@@ -15,7 +15,7 @@
         "refinement_interpretation_Tm_refine_9f2d823de39889f52e2dcb7702077505"
       ],
       0,
-      "7c2a40608493353e223daece0bf499c9"
+      "87ceae49609f98dbdac15487be504b43"
     ],
     [
       "TLS.Cookie.hrr0",
@@ -164,7 +164,7 @@
         "typing_tok_Parsers.ProtocolVersion.TLS_1p3@tok"
       ],
       0,
-      "b661af9549256c0ee12df2af9153eac3"
+      "b58c787dd2d3f51b2d31b7b2f6f56e6a"
     ],
     [
       "TLS.Cookie.discard",
@@ -177,16 +177,7 @@
         "lemma_FStar.HyperStack.ST.lemma_same_refs_in_stack_regions_intro"
       ],
       0,
-      "0b10ec70dda9ccf12d8bffefed9f4fbf"
-    ],
-    [
-      "TLS.Cookie.print",
-      1,
-      2,
-      1,
-      [ "@query" ],
-      0,
-      "c18df34afc970cc63f5569f36f0a10d0"
+      "440d0bf7b217090f395d8f08acbb739f"
     ],
     [
       "TLS.Cookie.trace",
@@ -199,7 +190,7 @@
         "lemma_FStar.HyperStack.ST.lemma_same_refs_in_stack_regions_intro"
       ],
       0,
-      "e23eeb0a915636aac147d4d85d978970"
+      "53f5d1a191f583197eae8bb21ba57897"
     ],
     [
       "TLS.Cookie.hRRExtensions_list_bytesize_snoc",
@@ -214,7 +205,7 @@
         "refinement_interpretation_Tm_refine_2de20c066034c13bf76e9c0b94f4806c"
       ],
       0,
-      "3ac355e65e2b142291ee9f76717e25ec"
+      "9210f23246719a13b2fab6750deb0cbf"
     ],
     [
       "TLS.Cookie.append_extension",
@@ -246,7 +237,7 @@
         "typing_Parsers.HelloRetryRequest.__proj__MkhelloRetryRequest__item__extensions"
       ],
       0,
-      "c0b7b7f0a04f6fa71c8c3f2e44c26581"
+      "baadb809d75f6f2c329453f0671fa63a"
     ],
     [
       "TLS.Cookie.append_keyshare",
@@ -265,7 +256,7 @@
         "primitive_Prims.op_Addition", "projection_inverse_BoxInt_proj_0"
       ],
       0,
-      "060624dc6182747eb8b27f962547e460"
+      "e9b0adfaa5880cd36a8840723494b9a4"
     ],
     [
       "TLS.Cookie.prepare_contents",
@@ -295,7 +286,7 @@
         "typing_TLS.Cookie.find_keyshare"
       ],
       0,
-      "e3b251766e5ea57206e5b82a569f830b"
+      "e6df271d49153ca197cf13a7fcf3df44"
     ],
     [
       "TLS.Cookie.print_contents",
@@ -334,7 +325,7 @@
         "typing_Prims.__proj__Cons__item__tl"
       ],
       0,
-      "3a7ece0c703e650a4a1c354964ca8cbf"
+      "c21a3af2089a61e2af86b7d770639b31"
     ],
     [
       "TLS.Cookie.reconstruct_hrr",
@@ -364,7 +355,7 @@
         "typing_Mem.tls_region", "typing_Parsers.Cookie.cookie_bytesize"
       ],
       0,
-      "318ceaba5584ce8bd874e18bd5b3d9d4"
+      "21d037d606b20389752634c9f230cf66"
     ],
     [
       "TLS.Cookie.append",
@@ -378,7 +369,7 @@
         "primitive_Prims.op_Addition", "projection_inverse_BoxInt_proj_0"
       ],
       0,
-      "0aeebae2a1dc425c9aeda08686fe9136"
+      "e5f2b1f62f0459d19ac9ee9a77652ead"
     ],
     [
       "TLS.Cookie.append",
@@ -402,7 +393,7 @@
         "typing_Parsers.Cookie.cookie_bytesize"
       ],
       0,
-      "159172d2f636b327fc6e884932b750bc"
+      "f48cadc632738f399a5289363b497104"
     ],
     [
       "TLS.Cookie.decrypt",
@@ -416,7 +407,7 @@
         "primitive_Prims.op_Addition", "projection_inverse_BoxInt_proj_0"
       ],
       0,
-      "849bf8eea9dfda21b47cc844487bf802"
+      "bad4e74292b50e2b7c37d54851d0307b"
     ],
     [
       "TLS.Cookie.decrypt",
@@ -487,7 +478,7 @@
         "typing_Prims.__proj__Cons__item__tl"
       ],
       0,
-      "bc04b9fea40d185082be4fd76b0816a9"
+      "78424884bc2bb38f68b3d1ff28da6ea1"
     ],
     [
       "TLS.Cookie.test",
@@ -582,7 +573,7 @@
         "typing_TLS.Cookie.find_cookie", "typing_TLS.Cookie.hrr_leq"
       ],
       0,
-      "866925ebb1017da83379d9cce88e02ea"
+      "9d9702a844614abeff9293a67b299bd0"
     ]
   ]
 ]
