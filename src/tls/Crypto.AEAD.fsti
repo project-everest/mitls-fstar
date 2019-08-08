@@ -34,19 +34,6 @@ val frame_invariant
   (requires (B.modifies l h h' /\ B.loc_disjoint l (footprint s) /\ invariant h s))
   (ensures (invariant h' s))
 
-noextract
-inline_for_extraction
-let tag_len : (x: SC.alg) -> Tot (y: U32.t { U32.v y == SC.tag_length x }) =
-  let open SC in
-  function
-  | AES128_CCM8       ->  8ul
-  | AES256_CCM8       ->  8ul
-  | AES128_GCM        -> 16ul
-  | AES256_GCM        -> 16ul
-  | CHACHA20_POLY1305 -> 16ul
-  | AES128_CCM        -> 16ul
-  | AES256_CCM        -> 16ul
-
 inline_for_extraction
 let iv_len = 12ul
 
@@ -177,4 +164,39 @@ val decrypt
       invariant h' s /\
       (F.ideal_AEAD == false ==> SC.decrypt (state_kv s) (Cast.to_seq_sec8 (B.as_seq h iv')) Seq.empty (Cast.to_seq_sec8 (B.as_seq h cipher')) == None)
     | _ -> False
+  ))
+
+val create
+  (r: HS.rid)
+  (#a: SC.supported_alg)
+  (k: B.buffer U8.t) // contains the key
+  (phi: plain_pred)
+: HST.ST (option (state a phi))
+  (requires (fun h ->
+    HST.is_eternal_region r /\
+    B.live h k /\
+    B.length k == SC.key_length a
+  ))
+  (ensures (fun h res h' ->
+    B.modifies B.loc_none h h' /\
+    begin match res with
+    | None -> True // unsupported algorithm. FIXME: maybe we should enrich the spec in EverCrypt.AEAD accordingly, with (~ (is_supported_alg a))
+    | Some s ->
+      B.fresh_loc (footprint s) h h' /\
+      B.loc_includes (B.loc_region_only true r) (footprint s) /\
+      invariant h' s /\
+      state_kv s == Cast.to_seq_sec8 (B.as_seq h k)
+    end
+  ))
+
+val free
+  (#a: SC.supported_alg)
+  (#phi: plain_pred)
+  (s: state a phi)
+: HST.ST unit
+  (requires (fun h ->
+    invariant h s
+  ))
+  (ensures (fun h _ h' ->
+    B.modifies (footprint s) h h'
   ))

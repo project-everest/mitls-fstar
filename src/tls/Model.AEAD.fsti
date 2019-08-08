@@ -121,3 +121,32 @@ val decrypt
       (Flags.ideal_AEAD == true ==> phi plain)
     end
   ))
+
+val create
+  (r: HS.rid)
+  (#a: SC.supported_alg)
+  (k: SC.kv a)
+  (phi: plain_pred)
+: HST.ST (state a phi)
+  (requires (fun h ->
+    HST.is_eternal_region r
+  ))
+  (ensures (fun h s h' ->
+    B.modifies B.loc_none h h' /\
+    B.fresh_loc (footprint s) h h' /\
+    B.loc_includes (B.loc_region_only true r) (footprint s) /\
+    invariant h' s /\
+    state_kv s == k
+  ))
+
+val free
+  (#a: SC.supported_alg)
+  (#phi: plain_pred)
+  (s: state a phi)
+: HST.ST unit
+  (requires (fun h ->
+    invariant h s
+  ))
+  (ensures (fun h _ h' ->
+    B.modifies (footprint s) h h'
+  ))

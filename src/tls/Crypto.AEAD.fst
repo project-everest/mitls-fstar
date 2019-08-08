@@ -54,14 +54,18 @@ let state_kv
 : GTot (SC.kv a)
 = if F.model then Model.state_kv (state_m s) else G.reveal (s <: cstate a phi).kv
 
-let invariant (#a: SC.supported_alg) (#phi: plain_pred) (h: HS.mem) (s: state a phi) : GTot Type0 =
+unfold
+let invariant' (#a: SC.supported_alg) (#phi: plain_pred) (h: HS.mem) (s: state a phi) : GTot Type0 =
   if F.model
   then
     Model.invariant h (state_m s)
   else
     EC.invariant h (state_ec s) /\
     EC.footprint h (state_ec s) == Ghost.reveal (s <: cstate a phi).fp /\
+    EC.freeable h (state_ec s) /\
     EC.as_kv (B.deref h (state_ec s)) == state_kv s
+
+let invariant = invariant'
 
 let footprint (#a: SC.supported_alg) (#phi: plain_pred) (s: state a phi) : GTot B.loc =
   if F.model
@@ -98,6 +102,20 @@ let is_fresh_iv
   let res = Model.is_fresh_iv (state_m s) (Cast.to_seq_sec8 iv_s) in
   frame_fresh_iv h s (Cast.to_seq_sec8 iv_s) B.loc_none h1 ;
   res
+
+// TODO: move to EverCrypt.AEAD
+noextract
+inline_for_extraction
+let tag_len : (x: SC.alg) -> Tot (y: U32.t { U32.v y == SC.tag_length x }) =
+  let open SC in
+  function
+  | AES128_CCM8       ->  8ul
+  | AES256_CCM8       ->  8ul
+  | AES128_GCM        -> 16ul
+  | AES256_GCM        -> 16ul
+  | CHACHA20_POLY1305 -> 16ul
+  | AES128_CCM        -> 16ul
+  | AES256_CCM        -> 16ul
 
 #push-options "--z3rlimit 16"
 
@@ -179,6 +197,7 @@ let encrypt'
     in
     let h' = HST.get () in
     assume (EC.as_kv (B.deref h' (state_ec s)) == state_kv s); // TODO: add to EverCrypt
+    assume (EC.freeable_s (B.deref h' (state_ec s))); // TODO: add to EverCrypt
     assert (B.as_seq h' (B.gsub cipher iv_len (B.len cipher `U32.sub` iv_len)) `Seq.equal` Seq.append (B.as_seq h' cipher') (B.as_seq h' tag'));
     res
   end
@@ -265,6 +284,7 @@ let decrypt'
     assert (B.as_seq h (B.gsub cipher iv_len (B.len cipher `U32.sub` iv_len)) `Seq.equal` Seq.append (B.as_seq h cipher') (B.as_seq h tag'));
     let h' = HST.get () in
     assume (EC.as_kv (B.deref h' (state_ec s)) == state_kv s); // TODO: add to Evercrypt
+    assume (EC.freeable_s (B.deref h' (state_ec s))); // TODO: add to EverCrypt
     res
   end
 
@@ -302,3 +322,42 @@ let decrypt
   res
 
 #pop-options
+
+let create
+  r #a k phi
+= if F.model
+  then
+    let kv = MU.get_buffer k (U32.uint_to_t (SC.key_length a)) in
+    let kv = Cast.to_seq_sec8 kv in
+    let res = Model.create r kv (mphi phi) <: Model.state a (mphi phi) in
+    Some res
+  else begin
+    let h0 = HST.get () in
+    let dst : B.pointer (B.pointer_or_null (EC.state_s a)) = B.mmalloc r B.null 1ul in // I could also allocate it onto a fresh stack frame, but it's useless here
+    let h1 = HST.get () in
+    Cast.live_to_buf_sec8 k h1;
+    let res =
+      match EC.create_in r dst (Cast.to_buf_sec8 k) with
+      | EE.UnsupportedAlgorithm ->
+        B.free dst;
+        None
+      | EE.Success ->
+        let b : B.pointer (EC.state_s a) = B.index dst 0ul in
+        let h2 = HST.get () in
+        let s : state a phi = {ec = b; kv = G.hide (Cast.to_seq_sec8 (B.as_seq h0 k)); fp = G.hide (EC.footprint h2 b)} <: cstate a phi in
+        assume (EC.as_kv (B.deref h2 (state_ec s)) == state_kv s); // TODO: add to EverCrypt.AEAD.frame_invariant. This is due to B.index modifying loc_none
+        B.free dst;
+        let h3 = HST.get () in
+        frame_invariant h2 s (B.loc_addr_of_buffer dst) h3;
+        Some s
+    in
+    let h4 = HST.get () in
+    B.modifies_only_not_unused_in B.loc_none h0 h4;
+    res
+  end
+
+let free
+  #a #phi s
+= if F.model
+  then Model.free (state_m s)
+  else EC.free #(G.hide a) (state_ec s)
