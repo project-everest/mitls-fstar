@@ -57,6 +57,13 @@ val client_ServerHello:
   sh: HSM.sh ->
   St incoming
 
+val client_ServerHello_HRR:
+  hs: hs ->
+  ch1: Nego.offer ->
+  hrr: Nego.retryInfo ch1 ->
+  sh: HSM.sh ->
+  St incoming
+
 (*** TLS 1.2 ***)
 
 val client_ServerHelloDone:

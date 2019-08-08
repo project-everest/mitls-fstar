@@ -88,25 +88,21 @@ let client_ClientHello hs =
     Correct ()
 
 let client_HelloRetryRequest hs hrr =
-  trace "client_HelloRetryRequest";
-  let s =
-    match Nego.group_of_hrr hrr with
-    | None ->
-      // this case should only ever happen in QUIC stateless retry address validation
-      // FIXME(adl) deprecated in current QUIC with transport retry
-      trace "Server did not specify a group in HRR, re-using the previous choice"; None
-    | Some ng ->
-        let Some g = CommonDH.group_of_namedGroup ng in
-        let s = KS.ks_client13_hello_retry hs.ks g in
-        Some (| g, s |)
-    in
-  match Nego.client_HelloRetryRequest hs.nego hrr s with
-  | Error z -> InError z
-  | Correct(ch) ->
-    client_Binders hs ch;
-    // Note: we stay in Wait_ServerHello
-    // Only the Nego state machine was moved by HRR
-    InAck false false
+  let open Parsers.HelloRetryRequest in
+  trace("Got HRR, extensions: " ^ Nego.string_of_hrres hrr.extensions);
+  let ch1 = Nego.getOffer hs.nego in
+  match Nego.group_of_hrr hrr with
+  | None -> InError (fatalAlert Illegal_parameter, "HRR is missing new group")
+  | Some ng ->
+    let Some g = CommonDH.group_of_namedGroup ng in
+    let s = KS.ks_client13_hello_retry hs.ks g in
+    match Nego.client_HelloRetryRequest ch1 hrr (| g, s |) with
+    | Error z -> InError z
+    | Correct (hri, ch2) ->
+      client_Binders hs ch2;
+      hs.state := C13_sent_CH2 ch1 hri;
+      hs.nego.Nego.state := Nego.C_Offer ch2;
+      InAck false false
 
 let client_ServerHello s sh =
   trace "client_ServerHello";
@@ -178,6 +174,13 @@ let client_ServerHello s sh =
            InAck false false
          end
       end
+
+let client_ServerHello_HRR s ch1 hri sh =
+  trace "client_ServerHello";
+  match Nego.check_retry ch1 hri sh with
+  | Error z -> InError z
+  | Correct () ->
+    client_ServerHello s sh
 
 (*** TLS 1.2 ***)
 
