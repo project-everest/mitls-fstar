@@ -45,14 +45,19 @@ let recv_ensures (#region:rgn) (cfg:client_config) (cs:client_state region cfg) 
 val receive_fragment:
   // mutable client state
   #region:rgn -> hs: TLS.Handshake.Machine.t region ->
-  // high-level calling convention for the incoming fragment
+  // high-level calling conveention for the incoming fragment
   #i:TLSInfo.id -> rg:Range.frange i -> f:Range.rbytes rg ->
   ST incoming
   (requires fun h0 ->
     h0 `HS.contains` hs.cstate /\
+    TLS.Handshake.Machine.client_invariant (HS.sel h0 hs.cstate) h0 /\
     // TODO statically exclude C_init
     True)
-  (ensures fun h0 r h1 -> True)
+  (ensures fun h0 r h1 -> h1 `HS.contains` hs.cstate /\
+// TODO: Try proving this once the disjointness of components has been specified
+//    TLS.Handshake.Machine.client_invariant (HS.sel h1 hs.cstate) h1 /\
+    True
+  )
 
 let buffer_received_fragment ms #i rg f = ms
 
@@ -65,14 +70,33 @@ let buffer_received_fragment ms #i rg f = ms
 
 
 // the actual transitions; we should experiment with some precise pre/post
-assume val client_HelloRetryRequest: #region:rgn -> hs: t region -> HSM.hrr -> St incoming
+// AF: Pre/post should be in terms of each component of cstate instead of passing
+// the global client_invarinat
+// AF: We might want to only pass components of hs instead of the whole structure,
+
+assume val client_HelloRetryRequest: #region:rgn -> hs: t region -> HSM.hrr -> ST incoming
+  (requires fun h0 ->
+    h0 `HS.contains` hs.cstate /\
+    TLS.Handshake.Machine.client_invariant (HS.sel h0 hs.cstate) h0 /\
+    // add updated handshake invariant
+  True)
+  (ensures fun h0 r h1 ->
+    h1 `HS.contains` hs.cstate /\
+    TLS.Handshake.Machine.client_invariant (HS.sel h1 hs.cstate) h1 /\
+    // add handshake invariant
+
+    True)
 
 assume val client_ServerHello:
   #region:rgn -> hs: t region -> HSM.sh -> ST incoming
   (requires fun h0 ->
+    h0 `HS.contains` hs.cstate /\
+    TLS.Handshake.Machine.client_invariant (HS.sel h0 hs.cstate) h0 /\
     // updated handshake invariant from C_wait_ServerHello
   True)
   (ensures fun h0 r h1 ->
+    h1 `HS.contains` hs.cstate /\
+    TLS.Handshake.Machine.client_invariant (HS.sel h1 hs.cstate) h1 /\
     // handshake invariant in C13_wait_Finished1
 
     True)
@@ -94,9 +118,25 @@ assume val client_ServerFinished13:  #region:rgn -> hs: t region ->
 
 open TLS.Handshake.Receive
 open TLS.Handshake.Machine
+module PF = TLS.Handshake.ParseFlights
+open FStar.Integers
+
+// Some parsing functions translating between low-level representations
+// obtained after receiving, and high-level values passed as arguments
+// to the processing functions
+// TODO: Implement this. This is likely a well-chosen call to Parsers.ServerHello.something
+assume
+val parse_wait_serverHello
+  (#st:state)
+  (res:PF.c_wait_ServerHello (cslice_of st) & uint_32) :
+  ST Parsers.ServerHello.serverHello
+    (requires fun h -> PF.valid_c_wait_ServerHello st.rcv_from (snd res) (fst res) h)
+    // Maybe a bit too strong?
+    (ensures fun h0 _ h1 -> h0 == h1)
 
 
-#set-options "--admit_smt_queries true"
+#set-options "--max_fuel 0 --max_ifuel 1 --z3rlimit 20"
+// #set-options "--admit_smt_queries true"
 let rec receive_fragment #region hs #i rg f =
   let open HandshakeMessages in
   let recv_again r =
@@ -113,15 +153,34 @@ let rec receive_fragment #region hs #i rg f =
       "Client hasn't sent hello yet (to be statically excluded)")
 
   | C_wait_ServerHello offer0 ms0 ks0 -> (
+    // AF: How do we ensure this statically? Should this be handled by buffer_received_fragment,
+    // returning an Error if the property does not hold?
+    assume (UInt32.v ms0.receiving.rcv_to + Bytes.length f <= B.length ms0.receiving.rcv_b);
     let rcv1 = buffer_received_fragment ms0.receiving f in
     match TLS.Handshake.Receive.receive_c_wait_ServerHello rcv1 with
     | Error z -> InError z
     | Correct (x, rcv2) ->
-      hs.cstate := C_wait_ServerHello offer0 ({ms0 with receiving = rcv2}) ks0;
+      let v = C_wait_ServerHello offer0 ({ms0 with receiving = rcv2}) ks0 in
+      let h1 = HST.get() in
+      // TODO: We need disjointness between the cstate ref and the components of cstate
+      // In this specific case, we only need disjointness with the receiving state
+      assume (HS.sel h0 hs.cstate == HS.sel h1 hs.cstate);
+      hs.cstate := v;
+      let h2 = get() in
       match x with
       | None -> InAck false false // nothing happened
       | Some sh_msg -> (
-        let sh = admit() in
+        // TODO: Again, missing disjointness. If we could prove that updating hs.cstate
+        // modifies a disjoint region of memory from the repr (fst sh_msg), MITLS.Repr.frame_valid
+        // would be triggered and prove the following assumed property
+        assume (PF.valid_c_wait_ServerHello rcv1.rcv_from (snd sh_msg) (fst sh_msg) h1 ==>
+          PF.valid_c_wait_ServerHello rcv1.rcv_from (snd sh_msg) (fst sh_msg) h2);
+
+        let sh = parse_wait_serverHello sh_msg in
+        let h3 = HST.get() in
+        // TODO: Again, disjointness. We would here need disjointness between cstate and
+        // its components, as well as between the different components of cstate
+        assume (client_invariant (HS.sel h3 hs.cstate) h3);
         if HSM.is_hrr sh then
           // TODO adjust digest, here or in the transition call
           client_HelloRetryRequest hs (HSM.get_hrr sh)
@@ -132,6 +191,7 @@ let rec receive_fragment #region hs #i rg f =
           // TODO check that ms1.receiving is set for processing the next flight
           recv_again r ))
 
+(*
   | C12_wait_ServerHelloDone ch sh ms0 ks -> (
     let rcv1 = buffer_received_fragment ms0.receiving f in
     match TLS.Handshake.Receive.receive_c12_wait_ServerHelloDone rcv1 with
@@ -162,7 +222,7 @@ let rec receive_fragment #region hs #i rg f =
         let ee, ocr, oc, ocv, fin1, otag0, tag1, tag_fin1 = admit() in
         client_ServerFinished13 hs offer sh ee ocr oc ocv fin1 otag0 tag1 tag_fin1
       )
-(*
+
   | C13_Complete _ _ _ _ _ _ _ ms0 _ ->
     let ms1 = buffer_received_fragment ms0 #i rg f in
     // TODO two sub-states: waiting for fin2 or for the post-handshake ticket.

@@ -248,7 +248,7 @@ assume val pskis_of_psks: option Extensions.offeredPsks -> list (i:_{is_psk i})
 noeq type msg_state (region: rgn) (inflight: PF.in_progress_flt_t) random ha  = {
   digest: Transcript.state ha;
   sending: TLS.Handshake.Send.send_state;
-  receiving: Rcv.(r:state { in_progress r == inflight });
+  receiving: Rcv.(r:state { PF.length_parsed_bytes r.pf_st == 0 \/ in_progress r == inflight });
   epochs: Old.Epochs.epochs region random; }
 // TODO add regional refinements
 
@@ -444,7 +444,7 @@ and mode12 = {
 //keying parts of the state.
 
 let client_invariant
-  (#region:rgn) (#cfg: client_config) (#nonce: TLSInfo.random)
+  (#region:rgn) (#cfg: client_config)
   (state: client_state region cfg)
   (h: HS.mem)
 =
@@ -456,7 +456,12 @@ let client_invariant
     // and a (ghost) transcript. So, we reconstruct the transcript here (because
     // we can always do so) and use it to state the invariant.
     let transcript = Transcript.ClientHello (hash_retry offer.full_retry) offer.full_ch in
-    Transcript.invariant ms.digest transcript h
+    Transcript.invariant ms.digest transcript h /\
+
+    Receive.invariant ms.receiving h /\
+    // AF: Why is this not a part of the Receive invariant?
+    B.live h ms.receiving.Receive.rcv_b
+
     // KeySchedule.invariant ks h
 
   | C13_wait_Finished1 offer sh ms ks ->
