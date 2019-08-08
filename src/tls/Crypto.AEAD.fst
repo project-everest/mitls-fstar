@@ -268,16 +268,6 @@ let decrypt'
     res
   end
 
-let to_seq_sec8_as_seq_gsub (h: HS.mem) (b: B.buffer U8.t) (off: U32.t) (len: U32.t { U32.v off + U32.v len <= B.length b }) : Lemma
-    (Cast.to_seq_sec8 (B.as_seq h (B.gsub b off len)) == B.as_seq h (B.gsub (Cast.to_buf_sec8 b) off len))
-= Cast.gsub_to_buf_sec8 b off len;
-  Cast.as_seq_to_buf_sec8 (B.gsub b off len) h
-
-let loc_buffer_gsub_to_buf_sec8 (b: B.buffer U8.t) (off: U32.t) (len: U32.t { U32.v off + U32.v len <= B.length b }) : Lemma
-  (B.loc_buffer (B.gsub (Cast.to_buf_sec8 b) off len) == B.loc_buffer (B.gsub b off len))
-= Cast.gsub_to_buf_sec8 b off len;
-  Cast.loc_buffer_to_buf_sec8 (B.gsub b off len)
-
 let encrypt
   #a #phi s plain plain_len cipher
 = let h = HST.get () in
@@ -287,13 +277,13 @@ let encrypt
   Cast.as_seq_to_buf_sec8 plain h;
   Cast.loc_buffer_to_buf_sec8 plain;
   Cast.loc_buffer_to_buf_sec8 cipher;
-  to_seq_sec8_as_seq_gsub h cipher 0ul iv_len;
+  Cast.to_seq_sec8_as_seq_gsub h cipher 0ul iv_len;
   let res = encrypt' s (Cast.to_buf_sec8 plain) plain_len (Cast.to_buf_sec8 cipher) in
   let h' = HST.get () in
-  to_seq_sec8_as_seq_gsub h' cipher iv_len plain_len;
-  to_seq_sec8_as_seq_gsub h' cipher (iv_len `U32.add` plain_len) (tag_len a);
-  to_seq_sec8_as_seq_gsub h' cipher iv_len (B.len cipher `U32.sub` iv_len);
-  loc_buffer_gsub_to_buf_sec8 cipher iv_len (B.len cipher `U32.sub` iv_len);
+  Cast.to_seq_sec8_as_seq_gsub h' cipher iv_len plain_len;
+  Cast.to_seq_sec8_as_seq_gsub h' cipher (iv_len `U32.add` plain_len) (tag_len a);
+  Cast.to_seq_sec8_as_seq_gsub h' cipher iv_len (B.len cipher `U32.sub` iv_len);
+  Cast.loc_buffer_gsub_to_buf_sec8 cipher iv_len (B.len cipher `U32.sub` iv_len);
   res
 
 let decrypt
@@ -305,8 +295,8 @@ let decrypt
   Cast.loc_buffer_to_buf_sec8 cipher;
   let res = decrypt' s (Cast.to_buf_sec8 cipher) cipher_len (Cast.to_buf_sec8 plain) in
   let h' = HST.get () in
-  to_seq_sec8_as_seq_gsub h cipher 0ul iv_len;
-  to_seq_sec8_as_seq_gsub h cipher iv_len (cipher_len `U32.sub` iv_len);
+  Cast.to_seq_sec8_as_seq_gsub h cipher 0ul iv_len;
+  Cast.to_seq_sec8_as_seq_gsub h cipher iv_len (cipher_len `U32.sub` iv_len);
   Cast.to_seq_uint8_to_seq_sec8 (B.as_seq h' plain);
   Cast.as_seq_to_buf_sec8 plain h';
   res

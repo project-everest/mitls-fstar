@@ -15,14 +15,35 @@ module F = Flags
 module Cast = Crypto.Util.IntCast
 module E = EverCrypt
 module ES = EverCrypt.Specs
+module Model = Model.AE
+module MU = Model.Utils
+module Cast = Crypto.Util.IntCast
 
-friend Crypto.AEAD
+friend Crypto.AEAD // needed because of the definition of state for model
 
 let encrypt
   #a #phi s plain plain_len cipher
 = let h0 = HST.get () in
-  assume (F.model == false);
-  begin
+  if F.model
+  then begin
+    let s : Model.state a (mphi phi) = s in
+    let plain_s = MU.get_buffer plain plain_len in
+    let plain_s_sec = Cast.to_seq_sec8 plain_s in
+    let cipher_len = iv_len `U32.add` plain_len `U32.add` tag_len a in
+    let h1 = HST.get () in
+    Model.frame_invariant h0 s B.loc_none h1;
+    Cast.to_seq_uint8_to_seq_sec8 plain_s;
+    let cipher_s_sec = Model.encrypt s plain_s_sec in
+    let h2 = HST.get () in
+    Cast.live_to_buf_sec8 cipher h2;
+    MU.put_buffer (Cast.to_buf_sec8 cipher) cipher_len cipher_s_sec;
+    let h3 = HST.get () in
+    Cast.loc_buffer_to_buf_sec8 cipher;
+    Cast.to_seq_sec8_as_seq_gsub h3 cipher 0ul iv_len;
+    Cast.to_seq_sec8_as_seq_gsub h3 cipher iv_len (B.len cipher `U32.sub` iv_len);
+    Model.frame_invariant h2 s (B.loc_buffer cipher) h3;
+    EE.Success
+  end else begin
     let iv = B.sub cipher 0ul iv_len in
     let h1 = HST.get () in
     Cast.live_to_buf_sec8 iv h1;

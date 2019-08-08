@@ -56,3 +56,13 @@ val loc_buffer_to_buf_sec8 (x: B.buffer U8.t) : Lemma
   (B.loc_buffer (to_buf_sec8 x) == B.loc_buffer x)
 
 val seq_sec8_has_eq: unit -> Lemma (hasEq (Seq.seq I.uint8))
+
+let to_seq_sec8_as_seq_gsub (h: HS.mem) (b: B.buffer U8.t) (off: U32.t) (len: U32.t { U32.v off + U32.v len <= B.length b }) : Lemma
+    (to_seq_sec8 (B.as_seq h (B.gsub b off len)) == B.as_seq h (B.gsub (to_buf_sec8 b) off len))
+= gsub_to_buf_sec8 b off len;
+  as_seq_to_buf_sec8 (B.gsub b off len) h
+
+let loc_buffer_gsub_to_buf_sec8 (b: B.buffer U8.t) (off: U32.t) (len: U32.t { U32.v off + U32.v len <= B.length b }) : Lemma
+  (B.loc_buffer (B.gsub (to_buf_sec8 b) off len) == B.loc_buffer (B.gsub b off len))
+= gsub_to_buf_sec8 b off len;
+  loc_buffer_to_buf_sec8 (B.gsub b off len)
