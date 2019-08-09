@@ -80,7 +80,6 @@ let frame_invariant
   then
     Model.frame_invariant h (state_m s) l h'
   else begin
-    assume (EC.as_kv (B.deref h' (state_ec s)) == state_kv s); // TODO: add to EverCrypt
     EC.frame_invariant l (state_ec s) h h'
   end
 
@@ -196,8 +195,6 @@ let encrypt'
       tag'
     in
     let h' = HST.get () in
-    assume (EC.as_kv (B.deref h' (state_ec s)) == state_kv s); // TODO: add to EverCrypt
-    assume (EC.freeable_s (B.deref h' (state_ec s))); // TODO: add to EverCrypt
     assert (B.as_seq h' (B.gsub cipher iv_len (B.len cipher `U32.sub` iv_len)) `Seq.equal` Seq.append (B.as_seq h' cipher') (B.as_seq h' tag'));
     res
   end
@@ -283,8 +280,6 @@ let decrypt'
     in
     assert (B.as_seq h (B.gsub cipher iv_len (B.len cipher `U32.sub` iv_len)) `Seq.equal` Seq.append (B.as_seq h cipher') (B.as_seq h tag'));
     let h' = HST.get () in
-    assume (EC.as_kv (B.deref h' (state_ec s)) == state_kv s); // TODO: add to Evercrypt
-    assume (EC.freeable_s (B.deref h' (state_ec s))); // TODO: add to EverCrypt
     res
   end
 
@@ -342,10 +337,10 @@ let create
         B.free dst;
         None
       | EE.Success ->
-        let b : B.pointer (EC.state_s a) = B.index dst 0ul in
         let h2 = HST.get () in
+        let b : B.pointer (EC.state_s a) = B.index dst 0ul in
         let s : state a phi = {ec = b; kv = G.hide (Cast.to_seq_sec8 (B.as_seq h0 k)); fp = G.hide (EC.footprint h2 b)} <: cstate a phi in
-        assume (EC.as_kv (B.deref h2 (state_ec s)) == state_kv s); // TODO: add to EverCrypt.AEAD.frame_invariant. This is due to B.index modifying loc_none
+        Cast.as_seq_to_buf_sec8 k h1;
         B.free dst;
         let h3 = HST.get () in
         frame_invariant h2 s (B.loc_addr_of_buffer dst) h3;
