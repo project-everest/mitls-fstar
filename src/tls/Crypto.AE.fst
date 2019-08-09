@@ -42,7 +42,7 @@ let encrypt
     Cast.to_seq_sec8_as_seq_gsub h3 cipher 0ul iv_len;
     Cast.to_seq_sec8_as_seq_gsub h3 cipher iv_len (B.len cipher `U32.sub` iv_len);
     Model.frame_invariant h2 s (B.loc_buffer cipher) h3;
-    EE.Success
+    ()
   end else begin
     let iv = B.sub cipher 0ul iv_len in
     let h1 = HST.get () in

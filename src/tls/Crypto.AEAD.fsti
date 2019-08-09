@@ -102,7 +102,7 @@ val encrypt
   (cipher: cipher_p a) // cipher == iv ++ cipher ++ tag (see EverCrypt.AEAD.encrypt_st)
   // FIXME: for now we assume that cipher already contains some iv, but at some point
   // we should have `encrypt` randomly generate it and write it into cipher
-: HST.Stack EE.error_code
+: HST.Stack unit
   (requires (fun h ->
     invariant h s /\
     B.live h plain /\
@@ -114,11 +114,7 @@ val encrypt
     B.length cipher == B.length plain + iv_length + SC.tag_length a /\
     (F.ideal_iv == true ==> fresh_iv h s (Cast.to_seq_sec8 (B.as_seq h (B.gsub cipher 0ul iv_len))))
   ))
-  (ensures (fun h res h' -> 
-    match res with
-    | EE.InvalidKey ->
-      B.modifies B.loc_none h h' // TODO: should be False, need to fix EverCrypt
-    | EE.Success ->
+  (ensures (fun h _ h' ->
       // FIXME: currently we assume iv already in cipher,
       // at some point it should be randomly generated here
       let iv = B.gsub cipher 0ul iv_len in
@@ -126,7 +122,6 @@ val encrypt
       B.modifies (B.loc_union (footprint s) (B.loc_buffer cipher')) h h' /\
       invariant h' s /\
       (F.ideal_AEAD == false ==> SC.encrypt (state_kv s) (Cast.to_seq_sec8 (B.as_seq h iv)) Seq.empty (Cast.to_seq_sec8 (B.as_seq h plain)) `Seq.equal` Cast.to_seq_sec8 (B.as_seq h' cipher'))
-    | _ -> False
   ))
 
 val decrypt
@@ -150,8 +145,6 @@ val decrypt
     let iv' = B.gsub cipher 0ul iv_len in
     let cipher' = B.gsub cipher iv_len (cipher_len `U32.sub` iv_len) in
     match res with
-    | EE.InvalidKey ->
-      B.modifies B.loc_none h h' // TODO: should be False, need to fix EverCrypt
     | EE.Success ->
       B.modifies (B.loc_union (footprint s) (B.loc_buffer plain)) h h' /\
       invariant h' s /\ (
@@ -180,7 +173,7 @@ val create
   (ensures (fun h res h' ->
     B.modifies B.loc_none h h' /\
     begin match res with
-    | None -> True // unsupported algorithm. FIXME: maybe we should enrich the spec in EverCrypt.AEAD accordingly, with (~ (is_supported_alg a))
+    | None -> True // supported_alg is not enough to ensure that EverCrypt.AEAD.create_in will succeed (cf. EverCrypt.AEAD.fst: Vale with bad config)
     | Some s ->
       B.fresh_loc (footprint s) h h' /\
       B.loc_includes (B.loc_region_only true r) (footprint s) /\

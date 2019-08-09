@@ -129,7 +129,7 @@ val encrypt'
   (cipher: EC.cipher_p a) // cipher == iv ++ cipher ++ tag (see EverCrypt.AEAD.encrypt_st)
   // FIXME: for now we assume that cipher already contains some iv, but at some point
   // we should have `encrypt` randomly generate it and write it into cipher
-: HST.Stack EE.error_code
+: HST.Stack unit
   (requires (fun h ->
     invariant h s /\
     B.live h plain /\
@@ -141,11 +141,7 @@ val encrypt'
     B.length cipher == B.length plain + iv_length + SC.tag_length a /\
     (F.ideal_iv == true ==> fresh_iv h s (B.as_seq h (B.gsub cipher 0ul iv_len)))
   ))
-  (ensures (fun h res h' -> 
-    match res with
-    | EE.InvalidKey ->
-      B.modifies B.loc_none h h' // TODO: should be False, need to fix EverCrypt
-    | EE.Success ->
+  (ensures (fun h _ h' ->
       // FIXME: currently we assume iv already in cipher,
       // at some point it should be randomly generated here
       let iv = B.gsub cipher 0ul iv_len in
@@ -153,7 +149,6 @@ val encrypt'
       B.modifies (B.loc_union (footprint s) (B.loc_buffer cipher')) h h' /\
       invariant h' s /\
       (F.ideal_AEAD == false ==> SC.encrypt (state_kv s) (B.as_seq h iv) Seq.empty (B.as_seq h plain) `Seq.equal` B.as_seq h' cipher')
-    | _ -> False
   ))
 
 let encrypt'
@@ -175,14 +170,14 @@ let encrypt'
     MU.put_buffer cipher_tag' cipher_tag_len cipher_s;
     let h3 = HST.get () in
     Model.frame_invariant h2 s (B.loc_buffer cipher_tag') h3;
-    EE.Success
+    ()
   end else begin
     // E.random_sample iv_len iv; // TODO
     let ad = B.sub iv 0ul 0ul in
     let ad_len = 0ul in
     let cipher' = B.sub cipher iv_len plain_len in
     let tag' = B.sub cipher (iv_len `U32.add` plain_len) (tag_len a) in
-    let res = EC.encrypt
+    let _ = EC.encrypt
       #(G.hide a)
       (state_ec s)
       iv
@@ -196,7 +191,7 @@ let encrypt'
     in
     let h' = HST.get () in
     assert (B.as_seq h' (B.gsub cipher iv_len (B.len cipher `U32.sub` iv_len)) `Seq.equal` Seq.append (B.as_seq h' cipher') (B.as_seq h' tag'));
-    res
+    ()
   end
 
 inline_for_extraction
@@ -222,8 +217,6 @@ val decrypt'
     let iv' = B.gsub cipher 0ul iv_len in
     let cipher' = B.gsub cipher iv_len (cipher_len `U32.sub` iv_len) in
     match res with
-    | EE.InvalidKey ->
-      B.modifies B.loc_none h h' // TODO: should be False, need to fix EverCrypt
     | EE.Success ->
       B.modifies (B.loc_union (footprint s) (B.loc_buffer plain)) h h' /\
       invariant h' s /\ (
@@ -293,13 +286,13 @@ let encrypt
   Cast.loc_buffer_to_buf_sec8 plain;
   Cast.loc_buffer_to_buf_sec8 cipher;
   Cast.to_seq_sec8_as_seq_gsub h cipher 0ul iv_len;
-  let res = encrypt' s (Cast.to_buf_sec8 plain) plain_len (Cast.to_buf_sec8 cipher) in
+  let _ = encrypt' s (Cast.to_buf_sec8 plain) plain_len (Cast.to_buf_sec8 cipher) in
   let h' = HST.get () in
   Cast.to_seq_sec8_as_seq_gsub h' cipher iv_len plain_len;
   Cast.to_seq_sec8_as_seq_gsub h' cipher (iv_len `U32.add` plain_len) (tag_len a);
   Cast.to_seq_sec8_as_seq_gsub h' cipher iv_len (B.len cipher `U32.sub` iv_len);
   Cast.loc_buffer_gsub_to_buf_sec8 cipher iv_len (B.len cipher `U32.sub` iv_len);
-  res
+  ()
 
 let decrypt
   #a #phi s cipher cipher_len plain
