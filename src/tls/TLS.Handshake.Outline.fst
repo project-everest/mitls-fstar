@@ -50,6 +50,7 @@ val receive_fragment:
   ST incoming
   (requires fun h0 ->
     h0 `HS.contains` hs.cstate /\
+    B.loc_disjoint (B.loc_mreference hs.cstate) (TLS.Handshake.Machine.client_footprint (HS.sel h0 hs.cstate)) /\
     TLS.Handshake.Machine.client_invariant (HS.sel h0 hs.cstate) h0 /\
     // TODO statically exclude C_init
     True)
@@ -73,15 +74,17 @@ let buffer_received_fragment ms #i rg f = ms
 // AF: Pre/post should be in terms of each component of cstate instead of passing
 // the global client_invarinat
 // AF: We might want to only pass components of hs instead of the whole structure,
-
+// AF: We probably will need that parsed_bytes in the receiving state is 0 as a precondition
 assume val client_HelloRetryRequest: #region:rgn -> hs: t region -> HSM.hrr -> ST incoming
   (requires fun h0 ->
     h0 `HS.contains` hs.cstate /\
+    B.loc_disjoint (B.loc_mreference hs.cstate) (TLS.Handshake.Machine.client_footprint (HS.sel h0 hs.cstate)) /\
     TLS.Handshake.Machine.client_invariant (HS.sel h0 hs.cstate) h0 /\
     // add updated handshake invariant
   True)
   (ensures fun h0 r h1 ->
     h1 `HS.contains` hs.cstate /\
+      B.loc_disjoint (B.loc_mreference hs.cstate) (TLS.Handshake.Machine.client_footprint (HS.sel h1 hs.cstate)) /\
     TLS.Handshake.Machine.client_invariant (HS.sel h1 hs.cstate) h1 /\
     // add handshake invariant
 
@@ -91,11 +94,13 @@ assume val client_ServerHello:
   #region:rgn -> hs: t region -> HSM.sh -> ST incoming
   (requires fun h0 ->
     h0 `HS.contains` hs.cstate /\
+    B.loc_disjoint (B.loc_mreference hs.cstate) (TLS.Handshake.Machine.client_footprint (HS.sel h0 hs.cstate)) /\
     TLS.Handshake.Machine.client_invariant (HS.sel h0 hs.cstate) h0 /\
     // updated handshake invariant from C_wait_ServerHello
   True)
   (ensures fun h0 r h1 ->
     h1 `HS.contains` hs.cstate /\
+    B.loc_disjoint (B.loc_mreference hs.cstate) (TLS.Handshake.Machine.client_footprint (HS.sel h1 hs.cstate)) /\
     TLS.Handshake.Machine.client_invariant (HS.sel h1 hs.cstate) h1 /\
     // handshake invariant in C13_wait_Finished1
 
@@ -162,25 +167,13 @@ let rec receive_fragment #region hs #i rg f =
     | Correct (x, rcv2) ->
       let v = C_wait_ServerHello offer0 ({ms0 with receiving = rcv2}) ks0 in
       let h1 = HST.get() in
-      // TODO: We need disjointness between the cstate ref and the components of cstate
-      // In this specific case, we only need disjointness with the receiving state
-      assume (HS.sel h0 hs.cstate == HS.sel h1 hs.cstate);
       hs.cstate := v;
       let h2 = get() in
       match x with
       | None -> InAck false false // nothing happened
       | Some sh_msg -> (
-        // TODO: Again, missing disjointness. If we could prove that updating hs.cstate
-        // modifies a disjoint region of memory from the repr (fst sh_msg), MITLS.Repr.frame_valid
-        // would be triggered and prove the following assumed property
-        assume (PF.valid_c_wait_ServerHello rcv1.rcv_from (snd sh_msg) (fst sh_msg) h1 ==>
-          PF.valid_c_wait_ServerHello rcv1.rcv_from (snd sh_msg) (fst sh_msg) h2);
-
         let sh = parse_wait_serverHello sh_msg in
         let h3 = HST.get() in
-        // TODO: Again, disjointness. We would here need disjointness between cstate and
-        // its components, as well as between the different components of cstate
-        assume (client_invariant (HS.sel h3 hs.cstate) h3);
         if HSM.is_hrr sh then
           // TODO adjust digest, here or in the transition call
           client_HelloRetryRequest hs (HSM.get_hrr sh)

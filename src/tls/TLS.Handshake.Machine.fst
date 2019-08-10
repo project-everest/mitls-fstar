@@ -245,13 +245,24 @@ assume val pskis_of_psks: option Extensions.offeredPsks -> list (i:_{is_psk i})
 
 /// Stateful parts shared between all states after CH.
 ///
-noeq type msg_state (region: rgn) (inflight: PF.in_progress_flt_t) random ha  = {
+noeq type msg_state' (region: rgn) (inflight: PF.in_progress_flt_t) random ha  = {
   digest: Transcript.state ha;
   sending: TLS.Handshake.Send.send_state;
   receiving: Rcv.(r:state { PF.length_parsed_bytes r.pf_st == 0 \/ in_progress r == inflight });
   epochs: Old.Epochs.epochs region random; }
 // TODO add regional refinements
 
+let msg_state (region: rgn) (inflight: PF.in_progress_flt_t) random ha  =
+  ms:msg_state' region inflight random ha{
+     B.loc_disjoint (Transcript.footprint ms.digest) (TLS.Handshake.Send.footprint ms.sending) /\
+     B.loc_disjoint (Transcript.footprint ms.digest) (B.loc_buffer ms.receiving.Rcv.rcv_b) /\
+     B.loc_disjoint (TLS.Handshake.Send.footprint ms.sending) (B.loc_buffer ms.receiving.Rcv.rcv_b)
+  }
+
+let msg_state_footprint #region #inflight #random #ha (ms:msg_state region inflight random ha) =
+  B.loc_union
+    (B.loc_union (Transcript.footprint ms.digest) (TLS.Handshake.Send.footprint ms.sending))
+    (B.loc_buffer ms.receiving.Rcv.rcv_b)
 
 /// Datatype for the handshake-client state machine.
 ///
@@ -442,6 +453,17 @@ and mode12 = {
 
 //19-07-19 TODO collect invariant for the sending, receiving, and
 //keying parts of the state.
+
+let client_footprint
+  (#region:rgn) (#cfg: client_config)
+  (state: client_state region cfg)
+=
+  match state with
+  | C_init _ -> B.loc_none
+
+  | C_wait_ServerHello offer ms ks -> msg_state_footprint ms
+
+  | _ -> admit() // TODO: Complete this
 
 let client_invariant
   (#region:rgn) (#cfg: client_config)
