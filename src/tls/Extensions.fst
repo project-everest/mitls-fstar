@@ -219,7 +219,10 @@ let client_psk_kexes_bytes (ckxs: client_psk_kexes): b:bytes {length b <= 3} =
   lemma_repr_bytes_values (length content);
   vlbytes 1 content
 
+let client_psk_kexes_length (l:client_psk_kexes): Lemma (List.Tot.length l < 3) = ()
+
 #set-options "--admit_smt_queries true"
+
 let parse_client_psk_kexes: pinverse_t client_psk_kexes_bytes = fun b ->
   if b = client_psk_kexes_bytes [PSK_KE] then Correct [PSK_KE] else
   if b = client_psk_kexes_bytes [PSK_DHE_KE] then Correct [PSK_DHE_KE] else

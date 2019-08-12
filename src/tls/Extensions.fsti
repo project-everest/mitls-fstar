@@ -72,8 +72,9 @@ type psk_kex =
 type client_psk_kexes = l:list psk_kex
   { l = [PSK_KE] \/ l = [PSK_DHE_KE] \/ l = [PSK_KE; PSK_DHE_KE] \/ l = [PSK_DHE_KE; PSK_KE] }
 
+val client_psk_kexes_length (l:client_psk_kexes): Lemma (List.Tot.length l < 3)
+
 #set-options "--admit_smt_queries true"
-let client_psk_kexes_length (l:client_psk_kexes): Lemma (List.Tot.length l < 3) = ()
 
 (* EARLY DATA INDICATION *)
 
