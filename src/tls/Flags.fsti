@@ -8,7 +8,8 @@ inline_for_extraction val ideal_Nonce: t
 inline_for_extraction val ideal_Sig: t
 inline_for_extraction val ideal_PMS: t
 inline_for_extraction val ideal_PRF: t
-inline_for_extraction val ideal_AEAD: t
+inline_for_extraction val ideal_iv: t
+inline_for_extraction val ideal_AEAD: (ideal_AEAD: t { ideal_AEAD == true ==> ideal_iv == true })
 inline_for_extraction val ideal_HMAC: t // see HMAC.UFCMA
 
 inline_for_extraction val flag_Raw:  b:bool{b ==> model}

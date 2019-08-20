@@ -34,6 +34,10 @@ unfold let trace = if DebugFlags.debug_HS then print else (fun _ -> ())
 type machineState =
   | C_init
   | C_wait_ServerHello
+  | C13_sent_CH2: // Replaces the C_HRR state in Nego
+    ch1: Nego.offer ->
+    hrr: Nego.retryInfo ch1 ->
+    machineState
   | C13_wait_Finished1
   | C13_sent_EOED: H.anyTag ->
     option HSM.certificateRequest13 ->
@@ -47,6 +51,10 @@ type machineState =
   | C_Complete //19-06-07 to be split between 1.2 and 1.3
 
   | S_Idle //19-06-07 may disappear
+  | S13_wait_CH2:                // TLS 1.3, sent a retry request
+    ch1: Nego.offer ->
+    hrr: HSM.hrr ->
+    machineState
   | S13_sent_ServerHello         // TLS 1.3, intermediate state to encryption
   | S13_wait_EOED                // TLS 1.3, sometimes waiting for EOED
   | S13_wait_Finished2 of H.anyTag // TLS 1.3, digest to be MACed by client
@@ -80,7 +88,6 @@ let random_of (s:hs) = nonce s
 let config_of (s:hs) = Nego.local_config s.nego
 let version_of (s:hs) = Nego.version s.nego
 let get_mode (s:hs) = Nego.getMode s.nego
-let is_server_hrr (s:hs) = Nego.is_server_hrr s.nego
 let is_0rtt_offered (s:hs) =
   let mode = get_mode s in Nego.zeroRTToffer mode.Nego.n_offer
 let is_post_handshake (s:hs) =
