@@ -43,7 +43,7 @@ type finished = HandshakeMessages.finished // TODO shared type, ideally with tig
 ///   LATER: add footprint and invariant as we lower the config.
 
 // TLS.Config will define a more convenient client-specific configuration
-let client_config = config * Negotiation.resumeInfo
+let client_config = Negotiation.client_config
 
 /// * We will not keep Nego state.
 ///   We may keep [mode] for TLS 1.2 states for now
@@ -90,12 +90,15 @@ type noeq type rcv_state = {
 ///
 ///   We should start thinking about their invariants and footprints.
 
+(* NOW IN KEYSCHEDULE:
 noeq type client_keys = {
   // The [is_quic] fields duplicate a flag in the current config;
   // they are currently used to select some HKDF, as it was in
   // [KeySchedule.ks]. REFACTOR?
   cks_is_quic: bool;
   cks: Old.KeySchedule.ks_client_state; }
+*)
+let client_keys = Old.KeySchedule.ks_client_state
 
 noeq type server_keys = {
   sks_is_quic: bool;
@@ -103,8 +106,9 @@ noeq type server_keys = {
 
 // let Secret = Handshake.Secret
 
-let c_wait_ServerHello_keys = s: client_keys { Old.KeySchedule.C_wait_ServerHello? s.cks }
-let c13_wait_Finished1_keys = s: client_keys { Old.KeySchedule.C13_wait_Finished1? s.cks }
+
+let c_wait_ServerHello_keys = s: client_keys { Old.KeySchedule.C_wait_ServerHello? s }
+let c13_wait_Finished1_keys = s: client_keys { Old.KeySchedule.C13_wait_Finished1? s }
 
 // Helpful refinement within Secret? stating that an index is for a PSK.
 assume val is_psk: Idx.id -> bool
@@ -174,20 +178,20 @@ let deobfuscate offer resumeInfo =
 // TBC re: prior consistency; we probably need to branch as only the
 // initial offer is a function of the config.
 
-let offered0 ((cfg,resume):client_config) (offer:Negotiation.offer) =
+let offered0 (cfg:client_config) (offer:Negotiation.offer) =
   let ks = offered_shares offer in
-  let now = deobfuscate offer resume in
-  Correct offer == Negotiation.client_offer
-    cfg offer.Parsers.ClientHello.random ks resume now
+  let now = deobfuscate offer (snd cfg) in
+  let random = offer.Parsers.ClientHello.random in
+  Correct offer == Negotiation.client_offer cfg random ks now
 
-let offered ((cfg,resume):client_config) (offer:full_offer) =
+let offered (cfg:client_config) (offer:full_offer) =
   let ch = offer.full_ch in
    match offer.full_retry with
-  | None -> offered0 (cfg,resume) ch
+  | None -> offered0 cfg ch
   | Some retry ->
     let ks1 = offered_shares ch in
-    let now1 = deobfuscate ch resume in
-    offered0 (cfg,resume) retry.ch0
+    let now1 = deobfuscate ch (snd cfg) in
+    offered0 cfg retry.ch0
     // TBC Negotiation: /\
     // digest_ch0 = hash (selected_hashAlg hrr) offer0 /\
     // Correct offer == Negotiation.client_retry cfg offer0 ks now
@@ -263,6 +267,21 @@ let msg_state_footprint #region #inflight #random #ha (ms:msg_state region infli
   B.loc_union
     (B.loc_union (Transcript.footprint ms.digest) (TLS.Handshake.Send.footprint ms.sending))
     (B.loc_buffer ms.receiving.Rcv.rcv_b)
+
+
+let create_msg_state (region: rgn) (inflight: PF.in_progress_flt_t) random ha:
+  ST (msg_state region inflight random ha)
+  (requires fun h0 -> True)
+  (ensures fun h0 mst h1 -> True)
+=
+  // who should allocate this receive buffer?
+  let b = admit() in
+  let d, _ = Transcript.create region ha in
+  { digest = d;
+    sending = Send.send_state0;
+    receiving = Receive.create b;
+    epochs = Old.Epochs.create region random }
+
 
 /// Datatype for the handshake-client state machine.
 ///
@@ -499,7 +518,7 @@ let client_invariant
 /// interest. For example, the transcript is monotonic; and
 /// Negotiation's offer and mode are SSA.
 
-let step
+let client_step
   (#region:rgn) (#cfg: client_config)
   (st0 st1: client_state region cfg)
 = //st0 == undo_last_step st1
@@ -525,23 +544,14 @@ let step
 
   | _, _ -> False // TBC
 
-let mrel
+let client_mrel
   (#region:rgn) (#cfg: client_config) =
-  FStar.ReflexiveTransitiveClosure.closure (step #region #cfg)
+  FStar.ReflexiveTransitiveClosure.closure (client_step #region #cfg)
 
-/// We can finally define our main, stateful, monotonic type for the connection handshake
-noeq type t (region:rgn) = {
-  cfg: client_config;
-  // JP: nonce will disappear, redundant with what is in the client state.
-  nonce: TLSInfo.random;
-  // Eventually, this will become: state where type state = | Server: server_state -> state | Client: client_state -> state
-  // Along with some refinements and selectors to query the specific state, e.g. type server_state = s:state { is_server_state s }
-  cstate: st:HST.mreference
-    (client_state region cfg)
-    (mrel #region #cfg)
-    { HS.frameOf st = region } }
+type client_mref rgn cfg =
+  st:HST.mreference (client_state rgn cfg) (client_mrel #rgn #cfg)
+  { HS.frameOf st = rgn }
 
-// let cst (#region:rgn) (x:t region) = x.cstate
 
 /// ----------------------------------------------------------------
 /// sample monotonic properties: the initial and retried ClientHello
@@ -618,7 +628,7 @@ let st_mon
   (f: (#region:rgn -> #cfg: client_config -> client_state region cfg -> _)) =
   region:rgn -> cfg: client_config ->
   st0:client_state region cfg ->
-  st1:client_state region cfg -> Lemma (step st0 st1 ==> ssa f st0 st1)
+  st1:client_state region cfg -> Lemma (client_step st0 st1 ==> ssa f st0 st1)
 
 // Via the type above, m_ch0 is a relation between two states...
 let m_ch0: st_mon st_ch0 = fun _ _ _ _ -> ()
@@ -626,75 +636,76 @@ let m_ch1: st_mon st_ch1 = fun _ _ _ _ -> ()
 // expected to fail
 //let m_ch: st_mon st_ch = fun _ _ _ _ -> ()
 
+
 /// Testing monotonicity, relying on the new closure library; we could
 /// probably do it more parametrically to scale up.
 
-let assigned_to #region (st:t region) f (o:Negotiation.offer) h0 =
-  f (HS.sel h0 st.cstate) == Some o
+let assigned_to #region #cfg (st:client_mref region cfg) f (o:Negotiation.offer) h0 =
+  f (HS.sel h0 st) == Some o
 
 // ... intuitively, witness0 gives the stateful equivalent of m_ch0 with the
 // monotonicity property exposed in the post-condition.
-val witness0 (#region:rgn) (st: t region):
+val witness0 (#region:rgn) (#cfg:client_config) (st:client_mref region cfg):
   Stack clientHello
-    (requires fun h0 -> match HS.sel h0 st.cstate with
+    (requires fun h0 -> match HS.sel h0 st with
         | C_wait_ServerHello _ _ _
         | C13_wait_Finished1 _ _ _ _
-        | C13_complete _ _ _ _ _ _ _ _ _ -> h0 `HS.contains` st.cstate
+        | C13_complete _ _ _ _ _ _ _ _ _ -> h0 `HS.contains` st
         | _ -> False )
     (ensures fun h0 o h1 ->
-      token_p st.cstate (st_ch0 `(assigned_to st)` o) /\
+      token_p st (st_ch0 `(assigned_to st)` o) /\
       modifies_none h0 h1)
 
 #push-options "--z3rlimit 100" // NS: wow, that's a lot for a little proof
-let witness0 #region st =
-  match st_ch0 !st.cstate with
+let witness0 (#region:rgn) (#cfg:client_config) (st:client_mref region cfg) =
+  match st_ch0 !st with
   | Some o -> (
       ReflexiveTransitiveClosure.stable_on_closure
-        (step #region #st.cfg)
+        (client_step #region #cfg)
         (fun st -> st_ch0 st == Some o) ();
-      witness_p st.cstate (assigned_to #region st st_ch0 o);
+      witness_p st (assigned_to #region st st_ch0 o);
       o )
 #pop-options
 
-val witness1 (#region:rgn) (st: t region):
+val witness1 (#region:rgn) (#cfg:client_config) (st:client_mref region cfg):
   Stack clientHello
     (requires fun h0 ->
-      h0 `HS.contains` st.cstate /\
-      ( match HS.sel h0 st.cstate with
+      h0 `HS.contains` st /\
+      ( match HS.sel h0 st with
         | C_wait_ServerHello offer _ _
         | C13_wait_Finished1 offer _ _ _
         | C13_complete offer _ _ _ _ _ _ _ _ -> Some? offer.full_retry
         | _ -> False ))
     (ensures fun h0 o h1 ->
-      token_p st.cstate (assigned_to st st_ch1 o) /\
+      token_p st (assigned_to st st_ch1 o) /\
       modifies_none h0 h1)
 
 #push-options "--z3rlimit 100" // NS: wow, that's a lot for a little proof
-let witness1 #region st =
-  match st_ch1 !st.cstate with
+let witness1 #region #cfg st =
+  match st_ch1 !st with
   | Some o -> (
       ReflexiveTransitiveClosure.stable_on_closure
-        (step #region #st.cfg)
+        (client_step #region #cfg)
         (fun st -> st_ch1 st == Some o) ();
-      witness_p st.cstate (assigned_to #region st st_ch1 o);
+      witness_p st (assigned_to #region st st_ch1 o);
       o )
 #pop-options
 
-assume val stuff (#region:rgn) (st: t region): Stack unit
-  (requires fun h0      -> h0 `HS.contains` st.cstate)
-  (ensures  fun h0 _ h1 -> h1 `HS.contains` st.cstate)
+assume val stuff (#region:rgn) (#cfg:client_config) (st: client_mref region cfg): Stack unit
+  (requires fun h0      -> h0 `HS.contains` st)
+  (ensures  fun h0 _ h1 -> h1 `HS.contains` st)
 
-let test (#region:rgn) (st: t region):
+let test (#region:rgn) (#cfg:client_config) (st: client_mref region cfg):
   Stack unit
-    (requires fun h0 -> h0 `HS.contains` st.cstate)
+    (requires fun h0 -> h0 `HS.contains` st)
     (ensures fun h0 _ h1 -> True)
 =
-  let r = st_ch1 !st.cstate in
+  let r = st_ch1 !st in
   if Some? r then
     let o = witness1 st in
     stuff st;
-    let r' = st_ch1 !st.cstate in
-    recall_p st.cstate (assigned_to st st_ch1 o);
+    let r' = st_ch1 !st in
+    recall_p st (assigned_to st st_ch1 o);
     assert(r' == Some o)
 
 /// -------------end of sanity check----------------
@@ -747,7 +758,12 @@ type s_offer = {
 // As a technicality, it includes only the *tag* supposed to be the
 // hash of the initial offer after a retry.
 
-assume val selected: server_config -> s_offer -> serverHello -> encryptedExtensions -> option HandshakeMessages.certificate13 -> Type
+assume val selected:
+  server_config ->
+  s_offer ->
+  serverHello ->
+  encryptedExtensions ->
+  option HandshakeMessages.certificate13 -> Type
 
 type s13_mode (region:rgn) (cfg:server_config) = {
   offer: s_offer; (* { honest_psk offer ==> client_offered offer } *)
@@ -803,3 +819,47 @@ noeq type server_state
 //| S_wait_CCS2 of digest      // TLS resume (CCS)
 //| S_wait_CF2 of digest       // TLS resume (CF)
 //| S_Complete
+
+
+
+                              (* API *)
+
+/// We can finally define our main, stateful, monotonic type for client connection handshake
+
+let server_step
+  (#region:rgn) (#cfg: server_config)
+  (st0 st1: server_state region cfg)
+= True // TODO
+
+let server_mrel (#region:rgn) (#cfg: server_config) =
+  FStar.ReflexiveTransitiveClosure.closure (server_step #region #cfg)
+
+type server_mref rgn cfg =
+  st:HST.mreference (server_state rgn cfg) (server_mrel #rgn #cfg)
+  { HS.frameOf st = rgn }
+
+noeq type state =
+  | Client:
+    client_rgn: rgn ->
+    client_cfg: client_config ->
+    client_state: client_mref client_rgn client_cfg -> state
+
+  | Server:
+    server_rgn: rgn ->
+    server_cfg: server_config ->
+    server_state: server_mref server_rgn server_cfg -> state
+
+let frame s = match s with
+  | Client rgn _ _
+  | Server rgn _ _ -> rgn
+
+let state_entry (n: TLSInfo.random) = state // TODO refinement witness reading stable n
+
+/// TODO
+/// - define a model-only global table from disjoint nonces to those connections.
+/// - define a constructor adding a model-only nonce value and
+///   witnessing its table registration. This is the main connection
+///   type at the API.
+
+type client = s:state {Client? s}
+type server = s:state {Server? s}

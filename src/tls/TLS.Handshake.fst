@@ -14,7 +14,7 @@ open TLSConstants
 open Range
 open Old.Epochs
 
-open TLS.Handshake.Client
+//open TLS.Handshake.Client
 open TLS.Handshake.Server
 
 module U32 = FStar.UInt32

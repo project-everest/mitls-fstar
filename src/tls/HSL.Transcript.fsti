@@ -16,7 +16,7 @@
   Authors: C. Fournet, T. Ramananandro, A. Rastogi, N. Swamy
 *)
 module HSL.Transcript
-//Should this be called MITLS.TranscriptHash?
+// TODO rename to [TLS.Handshake.Transcript]
 
 (* Summary:
 

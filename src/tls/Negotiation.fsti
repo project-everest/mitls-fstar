@@ -59,6 +59,7 @@ val find_cookie: offer -> option Extensions.cookie
 val find_psk_key_exchange_modes: offer -> list Extensions.pskKeyExchangeMode // [] when not found; pick better representation?
 val find_sessionTicket: offer -> option Extensions.clientHelloExtension_CHE_session_ticket 
 val find_clientPske: offer -> option Extensions.offeredPsks 
+val find_serverKeyShare: HSM.sh -> option pre_share 
 
 // the type of correct indexes into the list of PSKs offered by the client
 type pski (o:offer) = n:nat {
@@ -134,10 +135,15 @@ noeq type complete_mode13 = {
 // m.n_protocol_version is supported 
 // m.n_protocol_version = TLS_1p2 ==> CipherSuite? m.n_cipher_suite 
 
+// move to PSK?
 
-type resumeInfo =
-  option (psk_identifier * t:Ticket.ticket{Ticket.Ticket12? t}) *
-  list (psk_identifier * t:Ticket.ticket{Ticket.Ticket13? t})
+type bkey12 = psk_identifier * t:Ticket.ticket{Ticket.Ticket12? t}
+type bkey13 = psk_identifier * t:Ticket.ticket{Ticket.Ticket13? t}
+type resumeInfo = option bkey12 * list bkey13
+
+let ha_bkey13 (bk:bkey13) = 
+  let _, Ticket.Ticket13 (CipherSuite13 _ ha) li _ _ nonce created age_add custom = bk in 
+  ha
 
 // main negotation state (why are we duplicating the nonce? to make it clearly stateless?)
 // 19-01-06 how to declare an opaque noeq?
@@ -288,12 +294,13 @@ val sign:
 
 (* CLIENT *) 
 
+let client_config = config * resumeInfo
+
 /// What the client offers, abstractly. 
 val client_offer: 
-  cfg:config -> 
+  ccfg: client_config -> 
   nonce:TLSInfo.random -> 
   ks:option Extensions.keyShareClientHello -> 
-  resume:resumeInfo -> 
   now:UInt32.t -> result offer
 
 /// [C_Init ==> C_Offer]
@@ -307,30 +314,28 @@ val client_offer:
 /// Fails when the version is misconfigurated 
 /// 
 val client_ClientHello: 
-  #region:rgn -> ns:t region Client -> 
+  ccfg: client_config ->
+  nonce: TLSInfo.random -> 
   oks:option Extensions.keyShareClientHello -> 
   ST (result offer)
-  (requires fun h0 -> 
-    inv ns h0 /\ 
-    C_Init? (HS.sel h0 ns.state))
+  (requires fun h0 -> True)  
   (ensures fun h0 r h1 -> 
-    inv ns h1 /\ (
-    (exists (now:UInt32.t). (r = client_offer ns.cfg ns.nonce oks ns.resume now )) /\ 
-    ( match r with
-      | Correct offer -> HS.sel h1 ns.state == C_Offer offer 
-      | _             -> True)))
+    B.modifies B.loc_none h0 h1 /\
+    (exists (now:UInt32.t). (r = client_offer ccfg nonce oks now)))
 
 // deprecated--use TLS.Cookie.find_keyshare 
 val group_of_hrr: HSM.hrr -> option CommonDH.namedGroup
 
 // [C_Offer ==> C_HRR] TODO separate pure spec
+// should we return also a [retryInfo n_offer], which used to be stored in C_HRR? 
 val client_HelloRetryRequest:
-  #region:rgn -> ns:t region Client -> 
+  offer -> 
   HSM.hrr -> 
   option share -> 
   ST (result offer) 
-  (requires fun h0 -> inv ns h0)
-  (ensures fun h0 _ h1 -> inv ns h1)
+  (requires fun h0 -> True)
+  (ensures fun h0 _ h1 -> 
+    B.modifies B.loc_none h0 h1)
 
 /// What the client accepts, abstractly.
 ///
@@ -342,7 +347,14 @@ val client_HelloRetryRequest:
 ///   let sh = Handshake.serverHello server_mode in 
 ///   let client_mode = accept_ServerHello client_cfg offer sh in
 ///   server_mode == client_mode // excluding encrypted extensions, server_cert, etc 
-///
+
+//19-08-20  newer simpler call; the two below will probably go
+val client_accept_ServerHello: 
+  config -> 
+  offer: offer -> 
+  HSM.sh -> 
+  result (cipherSuite * option (pski offer))
+
 val accept_ServerHello: 
   config -> 
   offer: offer -> 
@@ -479,10 +491,19 @@ val server_ServerShare:
   // review their ordering, and how QD separates them
 
 
+
+
+
+
+
+
+
 //17-03-30 get rid of this wrapper?
 noeq type session = {
   session_nego: option mode;
 }
+
+/// Still used in Old.Epoch
 
 // represents the outcome of a successful handshake,
 // providing context for the derived epoch
@@ -493,3 +514,13 @@ noeq type handshake =
 // We tried using instead hs, but this creates circularities
 // We'll probably need a global log to reason about them.
 // We should probably do the same in the session store.
+
+
+/// QUIC uses ch accessors: 
+/// Negotiation.get_sni
+/// Negotiation.get_alpn
+/// Negotiation.find_clientPske
+/// Negotiation.find_cookie
+///
+/// Negotiation.zeroRTToffer mode.Negotiation.n_offer
+/// Negotiation.zeroRTT mode

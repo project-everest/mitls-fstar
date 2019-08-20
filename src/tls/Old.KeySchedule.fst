@@ -325,17 +325,15 @@ private let keygen (g:CommonDH.group)
   : St (g:CommonDH.group & CommonDH.ikeyshare g)
   = (| g, CommonDH.keygen g |)
 
-val ks_client_init: ks:ks -> ogl: option CommonDH.supportedNamedGroups
-  -> ST (option keyShareClientHello)
-  (requires fun h0 ->
-    let kss = sel h0 (KS?.state ks) in
-    C? kss /\ C_Init? (C?.s kss))
-  (ensures fun h0 ogxl h1 ->
-    let KS #rid st _ = ks in
+val ks_client_init: 
+  cr: random ->
+  ogl: option CommonDH.supportedNamedGroups -> 
+  ST (ks_client_state * option keyShareClientHello)
+  (requires fun h0 -> True)
+  (ensures fun h0 (ks,ogxl) h1 -> 
+    h0 == h1 /\ 
     (None? ogl ==> None? ogxl) /\
-    (Some? ogl ==> (Some? ogxl /\ Some?.v ogl == List.Tot.map tag_of_keyShareEntry (Some?.v ogxl))) /\
-    modifies (Set.singleton rid) h0 h1 /\
-    HS.modifies_ref rid (Set.singleton (Heap.addr_of (as_ref st))) ( h0) ( h1))
+    (Some? ogl ==> (Some? ogxl /\ Some?.v ogl == List.Tot.map tag_of_keyShareEntry (Some?.v ogxl))))
 
 private
 let serialize_share (gx:(g:CommonDH.group & CommonDH.ikeyshare g)) =
@@ -348,28 +346,29 @@ private let rec map_ST_keygen l =
   | [] -> []
   | hd :: tl -> keygen hd :: map_ST_keygen tl
 
-let ks_client_init ks ogl =
+
+/// TODO take random as an input when required--not an output 
+
+let ks_client_init cr ogl =
   dbg ("ks_client_init "^(if ogl=None then "1.2" else "1.3"));
-  let KS #rid st _ = ks in
-  let C (C_Init cr) = !st in
   match ogl with
   | None -> // TLS 1.2
-    st := C (C12_Full_CH cr);
-    None
+    C12_Full_CH cr, None
   | Some gl -> // TLS 1.3
     let groups = List.Tot.map group_of_valid_namedGroup gl in
     let gs = map_ST_keygen groups in
     let gxl = List.Tot.map serialize_share gs in
-    st := C (C_wait_ServerHello cr [] gs);
-    Some gxl
+    C_wait_ServerHello cr [] gs, Some gxl
 
 type ticket13 = t:Ticket.ticket{Ticket.Ticket13? t}
 
-private let mk_binder (#rid) (pskid:psk_identifier) (t:ticket13)
+/// Called from Handshake.Client
+let mk_binder (#rid) (bk:Negotiation.bkey13)
   : ST ((i:binderId & bk:binderKey i) * (i:esId{~(NoPSK? i)} & es i))
   (requires fun h0 -> True)
   (ensures fun h0 _ h1 -> modifies_none h0 h1)
   =
+  let (pskid,t) = bk in 
   let i : esId = ResumptionPSK (Ticket.Ticket13?.rmsId t) in
   let pski = Some?.v (Ticket.ticket_pskinfo t) in
   let psk = Ticket.Ticket13?.rms t in
@@ -392,7 +391,7 @@ private let rec tickets13 #rid acc (l:list (psk_identifier * Ticket.ticket))
   : ST0 (list ((i:binderId & bk:binderKey i) * (i:esId{~(NoPSK? i)} & es i)))
   = match l with
   | [] -> List.Tot.rev acc
-  | (pskid, t) :: r -> tickets13 #rid (if Ticket.Ticket13? t then (mk_binder #rid pskid t)::acc else acc) r
+  | bk :: r -> tickets13 #rid (if Ticket.Ticket13? (snd bk) then (mk_binder #rid bk)::acc else acc) r
 
 let ks_client13_get_binder_keys ks l =
   let KS #rid st _ = ks in
@@ -401,31 +400,25 @@ let ks_client13_get_binder_keys ks l =
   st := C (C_wait_ServerHello cr esl gs);
   bkl
 
-let ks_client13_hello_retry ks (g:CommonDH.group)
-  : ST0 (CommonDH.share g) =
-  let KS #rid st _ = ks in
-  let C (C_wait_ServerHello cr esl gs) = !st in
+let ks_client13_hello_retry ks0 (g:CommonDH.group)
+  : ST0 (CommonDH.share g * _) =
+  let C_wait_ServerHello cr esl gs = ks0 in
   let s : CommonDH.ikeyshare g = CommonDH.keygen g in
-  st := C (C_wait_ServerHello cr esl [(| g, s |)]);
-  CommonDH.ipubshare #g s
+  let ks1 = C_wait_ServerHello cr esl [(| g, s |)] in
+  CommonDH.ipubshare #g s, ks1
 
-// Derive the early data key from the first offered PSK
-// Only called if 0-RTT is enabled on the client
-let ks_client13_ch ks (log:bytes): ST (exportKey * recordInstance)
+/// Derive the early data key from the first offered PSK
+/// Only called if 0-RTT is enabled on the client
+let ks_client13_ch is_quic client_state (log:bytes): ST (exportKey * recordInstance)
   (requires fun h0 ->
-    let kss = sel h0 (KS?.state ks) in
-    C? kss /\ C_wait_ServerHello? (C?.s kss))
+    C_wait_ServerHello? client_state)
   (ensures fun h0 r h1 ->
-    let KS #rid st _ = ks in
     modifies_none h0 h1)
   =
-  dbg ("ks_client13_ch log="^(print_bytes log));
-  let KS #rid st is_quic = ks in
-  let C (C_wait_ServerHello cr ((| i, es |) :: _) gs) = !st in
-
+  dbg ("ks_client13_ch log="^print_bytes log);
+  let C_wait_ServerHello cr ((| i, es |) :: _) gs = client_state in
   let h = esId_hash i in
   let ae = esId_ae i in
-
   let li = LogInfo_CH0 ({
    li_ch0_cr = cr;
    li_ch0_ed_ae = ae;
@@ -836,14 +829,13 @@ let ks_client12_resume ks sr pv cs =
 //   2. they use different return types
 //   3. they are called at different locations
 
-val ks_client13_sh: ks:ks -> sr:random -> cs:cipherSuite -> h:bytes ->
+val ks_client13_sh: Mem.rgn -> ks:ks_client_state -> is_quic:bool -> sr:random -> cs:cipherSuite -> h:bytes ->
   gy:option (g:CommonDH.group & CommonDH.share g) -> accept_psk:option nat ->
-  ST (recordInstance)
+  ST (recordInstance * ks_client_state)
   (requires fun h0 ->
-    let kss = sel h0 (KS?.state ks) in
-    C? kss /\ C_wait_ServerHello? (C?.s kss) /\
-    // Ensure that the PSK accepted is one offered
-    (let C_wait_ServerHello _ ei gc = C?.s kss in
+    match ks with 
+    | C_wait_ServerHello _ ei gc ->
+      // Ensure that the PSK accepted is one offered
      (match gy with
      | Some (| g, _ |) -> List.Tot.existsb (fun gx -> g = dfst gx) gc
      | None -> True)
@@ -851,11 +843,10 @@ val ks_client13_sh: ks:ks -> sr:random -> cs:cipherSuite -> h:bytes ->
      (match ei, accept_psk with
       | [], None -> True
       | _::_ , Some n -> n < List.Tot.length ei
-      | _ -> False)))
-  (ensures fun h0 r h1 ->
-    let KS #rid st _ = ks in
-    modifies (Set.singleton rid) h0 h1
-    /\ HS.modifies_ref rid (Set.singleton (Heap.addr_of (as_ref st))) ( h0) ( h1))
+      | _ -> False)
+    | _ -> False )  
+  (ensures fun h0 r h1 -> 
+    modifies_none h0 h1 )
 
 private let group_matches
               (g:CommonDH.group)
@@ -865,12 +856,10 @@ private let group_matches
 
 // ServerHello log breakpoint (client)
 // log == digest[..ServerHello]
-let ks_client13_sh ks sr cs log gy accept_psk =
-  dbg ("ks_client13_sh hashed_log = "^(print_bytes log));
-  let KS #region st is_quic = ks in
-  let C (C_wait_ServerHello cr esl gc) = !st in
+let ks_client13_sh region ks is_quic sr cs log gy accept_psk =
+  dbg ("ks_client13_sh hashed_log = "^print_bytes log);
+  let C_wait_ServerHello cr esl gc = ks in
   let CipherSuite13 ae h = cs in
-
   // Early secret: must derive zero here as hash is not known before
   let (| esId, es |): (i: esId & es i) =
     match esl, accept_psk with
@@ -953,8 +942,8 @@ let ks_client13_sh ks sr cs log gy accept_psk =
   let w = StAE.coerce HS.root id (ckv @| civ) in
   let rw = StAE.coerce HS.root id (skv @| siv) in
   let r = StAE.genReader HS.root rw in
-  st := C (C13_wait_Finished1 (ae, h) (| cfkId, cfk1 |) (| sfkId, sfk1 |) (| asId, ams |));
-  StAEInstance r w (spn, cpn)
+  let ks = C13_wait_Finished1 (ae, h) (| cfkId, cfk1 |) (| sfkId, sfk1 |) (| asId, ams |) in
+  StAEInstance r w (spn, cpn), ks
 
 (******************************************************************)
 

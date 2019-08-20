@@ -233,9 +233,7 @@ let process_hs (hs:H.hs) (ctx:hs_in) : ML hs_result =
       let post_hs = H.is_post_handshake hs in
       let reject_0rtt = 
         if H.role_of hs = Client && j = 2 then // FIXME: early reject vs. late reject
-	  let mode = H.get_mode hs in
-	  Negotiation.zeroRTToffer mode.Negotiation.n_offer
-	    && not (Negotiation.zeroRTT mode)
+	  TLS.Handshake.Client.early_rejected hs 
 	else false in
       let i = currentId hs Writer in
       let max_o = UInt32.v ctx.max_output in

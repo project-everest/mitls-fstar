@@ -1094,7 +1094,7 @@ let sign #region #role ns tbs =
 // TR: added according to AR's remark above
 // CF: restored; let's keep at least high-level code under CI
 
-let client_offer cfg nonce ks resume now =
+let client_offer (cfg,resume) nonce ks now =
   let ticket12, sid =
     match fst resume, cfg.enable_tickets, cfg.min_version with
     | _, _, TLS_1p3 -> 
@@ -1200,23 +1200,22 @@ let client_offer_new cfg nonce ks resume now =
       else
         fatal Internal_error "computeOffer: check_clientHelloExtensions_list_bytesize failed"
 
-let client_ClientHello #region ns oks =
-  match !ns.state with
-  | C_Init _ ->
-      trace(
-        if (match ticket13_pskinfo [] (snd ns.resume) with
-        | (_, i) :: _ -> i.allow_early_data && Some? ns.cfg.max_early_data // Must be the first PSK
-        | _ -> false)
-        then "Offering a PSK compatible with 0-RTT"
-        else "No PSK or 0-RTT disabled");
+let client_ClientHello config nonce oks =
+  let (cfg,resume) = config in 
+  trace(
+    if (
+      match ticket13_pskinfo [] (snd resume) with
+      | (_, i) :: _ -> i.allow_early_data && Some? cfg.max_early_data // Must be the first PSK
+      | _ -> false)
+    then "Offering a PSK compatible with 0-RTT"
+    else "No PSK or 0-RTT disabled");
 
-      let now = UInt32.uint_to_t (FStar.Date.secondsFromDawn()) in
-      match client_offer ns.cfg ns.nonce oks ns.resume now with 
-      | Error z -> Error z 
-      | Correct offer -> (
+    let now = UInt32.uint_to_t (FStar.Date.secondsFromDawn()) in
+    match client_offer config nonce oks now with 
+    | Error z -> Error z 
+    | Correct offer -> (
       trace ("offering client extensions "^string_of_ches offer.CH.extensions);
       trace ("offering cipher suites "^string_of_ciphersuitenames offer.CH.cipher_suites);
-      ns.state := C_Offer offer;
       Correct offer )
 
 private
@@ -1239,42 +1238,40 @@ let choose_extension (s:option share) (e:clientHelloExtension) =
 let group_of_hrr = TLS.Cookie.find_keyshare
 
 #push-options "--admit_smt_queries true"
-let client_HelloRetryRequest #region (ns:t region Client) hrr (s:option share) =
+let client_HelloRetryRequest offer hrr (s:option share) =
   let open Parsers.HelloRetryRequest in
   let { version = _; session_id = sid; cipher_suite = cs; extensions = el } = hrr in
   trace("Got HRR, extensions: " ^ string_of_hrres el);
-  match !ns.state with
-  | C_Offer offer ->
-    let old_shares = find_key_shares offer in
 
-    let old_psk =
-      match find_pske offer with
-      | None -> []
-      | Some pskl -> pskl.identities in
+  let old_shares = find_key_shares offer in
+  let old_psk =
+    match find_pske offer with
+    | None -> []
+    | Some pskl -> pskl.identities in
 
-    // TODO early data not recorded in retryInfo
-    let ext' = List.Helpers.choose_aux s choose_extension offer.CH.extensions in
+  // TODO early data not recorded in retryInfo
+  let ext' = List.Helpers.choose_aux s choose_extension offer.CH.extensions in
 
-    // Echo the cookie for QUIC stateless retry
-    let ext', no_cookie : list clientHelloExtension * bool =
-      match List.Tot.find HRRE_cookie? el with
-      | Some (HRRE_cookie c) -> CHE_cookie c :: ext', false
-      | None -> ext', true in
+  // Echo the cookie for QUIC stateless retry
+  let ext', no_cookie : list clientHelloExtension * bool =
+    match List.Tot.find HRRE_cookie? el with
+    | Some (HRRE_cookie c) -> CHE_cookie c :: ext', false
+    | None -> ext', true in
 
-    if sid <> offer.CH.session_id then
-      fatal Illegal_parameter "mismatched session ID in HelloRetryRequest"
-    // 2018.03.08 SZ: TODO We must Update PSK extension if present
-    // See https://tools.ietf.org/html/draft-ietf-tls-tls13-26#section-4.1.2
-    else if None? (TLS.Cookie.find_keyshare  hrr) && no_cookie then
-      fatal Illegal_parameter "received a HRR that would yield the same ClientHello"
-    else
-     begin
-      assume(clientHelloExtensions_list_bytesize ext' <= 65535);
-      let offer' = {offer with CH.extensions = ext'} in
-      let ri = (hrr, old_shares, old_psk) in
-      ns.state := C_HRR offer' ri;
-      Correct(offer')
-     end
+  if sid <> offer.CH.session_id then
+    fatal Illegal_parameter "mismatched session ID in HelloRetryRequest"
+  // 2018.03.08 SZ: TODO We must Update PSK extension if present
+  // See https://tools.ietf.org/html/draft-ietf-tls-tls13-26#section-4.1.2
+  else if None? (TLS.Cookie.find_keyshare  hrr) && no_cookie then
+    fatal Illegal_parameter "received a HRR that would yield the same ClientHello"
+  else
+   begin
+    assume(clientHelloExtensions_list_bytesize ext' <= 65535);
+    let offer' = {offer with CH.extensions = ext'} in
+    let ri = (hrr, old_shares, old_psk) in
+    // 19-08-19 should we return ri? 
+    Correct(offer')
+   end
 #pop-options
 
 // usable on both sides; following https://tlswg.github.io/tls13-spec/#rfc.section.4.2.1
@@ -1602,6 +1599,14 @@ let ciphersuite_accept cfg pv sh : result (cs_pv pv)
         fatal Internal_error "Statically Excluded"
     else
       fatal Illegal_parameter (perror __SOURCE_FILE__ __LINE__ "Ciphersuite negotiation")
+
+let client_accept_ServerHello cfg offer sh = 
+  pv <-- Negotiation.Version.accept cfg sh; 
+  cs <-- ciphersuite_accept cfg pv sh;
+  pski <-- accept_pski offer sh;  
+  let cs: cipherSuite = cs in 
+  return (cs,pski)
+
 
 let accept_ServerHello cfg offer sh = 
   [@inline_let]
