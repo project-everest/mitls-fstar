@@ -1,6 +1,7 @@
 ﻿(* Copyright (C) 2012--2015 Microsoft Research and INRIA *)
 module Hashing
 
+open Declassify
 open Mem
 
 include Hashing.Spec
@@ -39,21 +40,23 @@ let compute a text =
   let tlen = Hacl.Hash.Definitions.hash_len a in
   let output = LowStar.Buffer.alloca 0uy tlen in
   let len = Bytes.len text in
-  if len = 0ul then (
+  if len = 0ul then
+    begin
     let input = LowStar.Buffer.null in
     //18-09-01 this could follow from LowStar.Buffer or Bytes properties
     let h0 = ST.get() in
     Seq.lemma_eq_intro (reveal text) (LowStar.Buffer.as_seq h0 input);
     EverCrypt.Hash.hash a output input len
-    )
-  else (
+    end
+  else
+    begin
     let h0 = ST.get() in
     push_frame();
     let input = LowStar.Buffer.alloca 0uy len in
     store_bytes text input;
     EverCrypt.Hash.hash a output input len;
     pop_frame()
-    );
+    end;
   let t = Bytes.of_buffer tlen output in
   pop_frame();
   t
