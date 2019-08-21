@@ -13,8 +13,9 @@ module EE = EverCrypt.Error
 module G = FStar.Ghost
 module F = Flags
 module Model = Model.AEAD
-module Cast = Crypto.Util.IntCast
 module MU = Model.Utils
+
+open Declassify
 
 noeq
 inline_for_extraction
@@ -27,7 +28,7 @@ type cstate
 }
 
 let mphi (phi: plain_pred) : Tot (Model.plain_pred) =
-  (fun x -> phi (Cast.to_seq_uint8 x))
+  phi
 
 let state (a: SC.supported_alg) (phi: plain_pred) =
   if F.model
@@ -39,7 +40,7 @@ noextract
 let state_m
   (#a: SC.supported_alg) (#phi: plain_pred) (s: state a phi { F.model == true })
 : Tot (Model.state a (mphi phi))
-= (s <: Model.state a (mphi phi))
+= s
 
 inline_for_extraction
 let state_ec
@@ -98,8 +99,8 @@ let is_fresh_iv
   let iv_s = MU.get_buffer iv iv_len in
   let h1 = HST.get () in
   frame_invariant h s B.loc_none h1;
-  let res = Model.is_fresh_iv (state_m s) (Cast.to_seq_sec8 iv_s) in
-  frame_fresh_iv h s (Cast.to_seq_sec8 iv_s) B.loc_none h1 ;
+  let res = Model.is_fresh_iv (state_m s) iv_s in
+  frame_fresh_iv h s iv_s B.loc_none h1 ;
   res
 
 // TODO: move to EverCrypt.AEAD
@@ -118,42 +119,8 @@ let tag_len : (x: SC.alg) -> Tot (y: U32.t { U32.v y == SC.tag_length x }) =
 
 #push-options "--z3rlimit 16"
 
-inline_for_extraction
-noextract
-val encrypt'
-  (#a: SC.supported_alg)
-  (#phi: plain_pred)
-  (s: state a phi) // key
-  (plain: EC.plain_p a)
-  (plain_len: U32.t {U32.v plain_len == B.length plain})
-  (cipher: EC.cipher_p a) // cipher == iv ++ cipher ++ tag (see EverCrypt.AEAD.encrypt_st)
-  // FIXME: for now we assume that cipher already contains some iv, but at some point
-  // we should have `encrypt` randomly generate it and write it into cipher
-: HST.Stack unit
-  (requires (fun h ->
-    invariant h s /\
-    B.live h plain /\
-    B.live h cipher /\
-    phi (Cast.to_seq_uint8 (B.as_seq h plain)) /\
-    B.loc_disjoint (footprint s) (B.loc_buffer plain) /\
-    B.loc_disjoint (footprint s) (B.loc_buffer cipher) /\
-    B.disjoint plain cipher /\
-    B.length cipher == B.length plain + iv_length + SC.tag_length a /\
-    (F.ideal_iv == true ==> fresh_iv h s (B.as_seq h (B.gsub cipher 0ul iv_len)))
-  ))
-  (ensures (fun h _ h' ->
-      // FIXME: currently we assume iv already in cipher,
-      // at some point it should be randomly generated here
-      let iv = B.gsub cipher 0ul iv_len in
-      let cipher' = B.gsub cipher iv_len (B.len cipher `U32.sub` iv_len) in
-      B.modifies (B.loc_union (footprint s) (B.loc_buffer cipher')) h h' /\
-      invariant h' s /\
-      (F.ideal_AEAD == false ==> SC.encrypt (state_kv s) (B.as_seq h iv) Seq.empty (B.as_seq h plain) `Seq.equal` B.as_seq h' cipher')
-  ))
-
-let encrypt'
-  #a #phi s plain plain_len cipher
-= let h0 = HST.get () in
+let encrypt #a #phi s plain plain_len cipher = 
+  let h0 = HST.get () in
   let iv = B.sub cipher 0ul iv_len in
   if F.model
   then begin
@@ -169,8 +136,7 @@ let encrypt'
     let h2 = HST.get () in
     MU.put_buffer cipher_tag' cipher_tag_len cipher_s;
     let h3 = HST.get () in
-    Model.frame_invariant h2 s (B.loc_buffer cipher_tag') h3;
-    ()
+    Model.frame_invariant h2 s (B.loc_buffer cipher_tag') h3
   end else begin
     // E.random_sample iv_len iv; // TODO
     let ad = B.sub iv 0ul 0ul in
@@ -190,50 +156,11 @@ let encrypt'
       tag'
     in
     let h' = HST.get () in
-    assert (B.as_seq h' (B.gsub cipher iv_len (B.len cipher `U32.sub` iv_len)) `Seq.equal` Seq.append (B.as_seq h' cipher') (B.as_seq h' tag'));
-    ()
+    assert (B.as_seq h' (B.gsub cipher iv_len (B.len cipher `U32.sub` iv_len)) `Seq.equal` Seq.append (B.as_seq h' cipher') (B.as_seq h' tag'))
   end
 
-inline_for_extraction
-noextract
-val decrypt'
-  (#a: SC.supported_alg)
-  (#phi: plain_pred)
-  (s: state a phi) // key
-  (cipher: EC.cipher_p a) // cipher == iv ++ cipher ++ tag (see EverCrypt.AEAD.decrypt_st)
-  (cipher_len: U32.t { U32.v cipher_len == B.length cipher })
-  (plain: EC.plain_p a)
-: HST.Stack EE.error_code
-  (requires (fun h ->
-    invariant h s /\
-    B.live h plain /\
-    B.live h cipher /\
-    B.length cipher == B.length plain + iv_length + SC.tag_length a /\
-    B.loc_disjoint (footprint s) (B.loc_buffer plain) /\
-    B.loc_disjoint (footprint s) (B.loc_buffer cipher) /\
-    B.disjoint plain cipher
-  ))
-  (ensures (fun h res h' ->
-    let iv' = B.gsub cipher 0ul iv_len in
-    let cipher' = B.gsub cipher iv_len (cipher_len `U32.sub` iv_len) in
-    match res with
-    | EE.Success ->
-      B.modifies (B.loc_union (footprint s) (B.loc_buffer plain)) h h' /\
-      invariant h' s /\ (
-        if F.ideal_AEAD
-        then phi (Cast.to_seq_uint8 (B.as_seq h' plain))
-        else SC.decrypt (state_kv s) (B.as_seq h iv') Seq.empty (B.as_seq h cipher') == Some (B.as_seq h' plain)
-      )
-    | EE.AuthenticationFailure ->
-      B.modifies (B.loc_union (footprint s) (B.loc_buffer plain)) h h' /\
-      invariant h' s /\
-      (F.ideal_AEAD == false ==> SC.decrypt (state_kv s) (B.as_seq h iv') Seq.empty (B.as_seq h cipher') == None)
-    | _ -> False
-  ))
-
-let decrypt'
-  #a #phi s cipher cipher_len plain
-= let h0 = HST.get () in
+let decrypt #a #phi s cipher cipher_len plain = 
+  let h0 = HST.get () in
   let iv = B.sub cipher 0ul iv_len in
   let plain_len = cipher_len `U32.sub` tag_len a `U32.sub` iv_len in
   if F.model = true
@@ -276,64 +203,27 @@ let decrypt'
     res
   end
 
-let encrypt
-  #a #phi s plain plain_len cipher
-= let h = HST.get () in
-  Cast.live_to_buf_sec8 plain h;
-  Cast.live_to_buf_sec8 cipher h;
-  Cast.to_seq_uint8_to_seq_sec8 (B.as_seq h plain);
-  Cast.as_seq_to_buf_sec8 plain h;
-  Cast.loc_buffer_to_buf_sec8 plain;
-  Cast.loc_buffer_to_buf_sec8 cipher;
-  Cast.to_seq_sec8_as_seq_gsub h cipher 0ul iv_len;
-  let _ = encrypt' s (Cast.to_buf_sec8 plain) plain_len (Cast.to_buf_sec8 cipher) in
-  let h' = HST.get () in
-  Cast.to_seq_sec8_as_seq_gsub h' cipher iv_len plain_len;
-  Cast.to_seq_sec8_as_seq_gsub h' cipher (iv_len `U32.add` plain_len) (tag_len a);
-  Cast.to_seq_sec8_as_seq_gsub h' cipher iv_len (B.len cipher `U32.sub` iv_len);
-  Cast.loc_buffer_gsub_to_buf_sec8 cipher iv_len (B.len cipher `U32.sub` iv_len);
-  ()
-
-let decrypt
-  #a #phi s cipher cipher_len plain
-= let h = HST.get () in
-  Cast.live_to_buf_sec8 plain h;
-  Cast.live_to_buf_sec8 cipher h;
-  Cast.loc_buffer_to_buf_sec8 plain;
-  Cast.loc_buffer_to_buf_sec8 cipher;
-  let res = decrypt' s (Cast.to_buf_sec8 cipher) cipher_len (Cast.to_buf_sec8 plain) in
-  let h' = HST.get () in
-  Cast.to_seq_sec8_as_seq_gsub h cipher 0ul iv_len;
-  Cast.to_seq_sec8_as_seq_gsub h cipher iv_len (cipher_len `U32.sub` iv_len);
-  Cast.to_seq_uint8_to_seq_sec8 (B.as_seq h' plain);
-  Cast.as_seq_to_buf_sec8 plain h';
-  res
-
 #pop-options
 
-let create
-  r #a k phi
-= if F.model
+let create r #a k phi = 
+  if F.model
   then
     let kv = MU.get_buffer k (U32.uint_to_t (SC.key_length a)) in
-    let kv = Cast.to_seq_sec8 kv in
     let res = Model.create r kv (mphi phi) <: Model.state a (mphi phi) in
     Some res
   else begin
     let h0 = HST.get () in
     let dst : B.pointer (B.pointer_or_null (EC.state_s a)) = B.mmalloc r B.null 1ul in // I could also allocate it onto a fresh stack frame, but it's useless here
     let h1 = HST.get () in
-    Cast.live_to_buf_sec8 k h1;
     let res =
-      match EC.create_in r dst (Cast.to_buf_sec8 k) with
+      match EC.create_in r dst k with
       | EE.UnsupportedAlgorithm ->
         B.free dst;
         None
       | EE.Success ->
         let h2 = HST.get () in
         let b : B.pointer (EC.state_s a) = B.index dst 0ul in
-        let s : state a phi = {ec = b; kv = G.hide (Cast.to_seq_sec8 (B.as_seq h0 k)); fp = G.hide (EC.footprint h2 b)} <: cstate a phi in
-        Cast.as_seq_to_buf_sec8 k h1;
+        let s : state a phi = {ec = b; kv = G.hide (B.as_seq h0 k); fp = G.hide (EC.footprint h2 b)} <: cstate a phi in        
         B.free dst;
         let h3 = HST.get () in
         frame_invariant h2 s (B.loc_addr_of_buffer dst) h3;
@@ -344,8 +234,7 @@ let create
     res
   end
 
-let free
-  #a #phi s
-= if F.model
+let free #a #phi s = 
+  if F.model
   then Model.free (state_m s)
   else EC.free #(G.hide a) (state_ec s)

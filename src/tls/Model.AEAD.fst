@@ -11,13 +11,12 @@ module F = Flags
 module B = LowStar.Buffer
 module MDM = FStar.Monotonic.DependentMap
 
+open Declassify
+
 noextract
 inline_for_extraction
 let entry_key (a: SC.supported_alg): Tot eqtype =
-  [@inline_let]
-  let t = SC.iv a in
-  Crypto.Util.IntCast.seq_sec8_has_eq ();
-  t
+  SC.iv a
 
 noextract
 inline_for_extraction
@@ -76,41 +75,27 @@ let invariant (#a: SC.supported_alg) (#phi: plain_pred) (h: HS.mem) (s: state a 
   else
     True
 
-let footprint
-  #a #phi s
-= if F.ideal_iv
+let footprint #a #phi s = 
+  if F.ideal_iv
   then
     B.loc_freed_mreference (state_table s)
   else
     B.loc_none
 
-let invariant_loc_in_footprint
-  #a #phi h s
-= ()
+let invariant_loc_in_footprint #a #phi h s = ()
 
-let frame_invariant
-  #a #phi h s l h'
-= if F.ideal_iv
-  then
-    B.modifies_mreference_elim (state_table s) l h h' // FIXME: WHY WHY WHY do I need to call this lemma by hand?
-  else
-    ()
+let frame_invariant #a #phi h s l h' = ()
 
-let fresh_iv
-  #a #phi h s iv
-= F.ideal_iv == true ==> MDM.fresh (state_table s) iv h
+let fresh_iv #a #phi h s iv = 
+  F.ideal_iv == true ==> MDM.fresh (state_table s) iv h
 
-let frame_fresh_iv
-  #a #phi h s iv l h'
-= ()
+let frame_fresh_iv #a #phi h s iv l h' = ()
 
-let is_fresh_iv
-  #a #phi s iv
-= None? (MDM.lookup (state_table s) iv)
+let is_fresh_iv #a #phi s iv = 
+  None? (MDM.lookup (state_table s) iv)
 
-let encrypt
-  #a #phi s iv plain
-= let plain' = if F.ideal_AEAD then Seq.create (Seq.length plain) (Crypto.Util.IntCast.to_sec8 0uy) else plain in
+let encrypt #a #phi s iv plain = 
+  let plain' = if F.ideal_AEAD then Seq.create (Seq.length plain) 0uy else plain in
   let cipher = SC.encrypt (state_kv s) iv Seq.empty plain' in
   if F.ideal_iv
   then begin
@@ -123,9 +108,8 @@ let encrypt
   end;
   cipher
 
-let decrypt
-  #a #phi s iv cipher
-= if F.ideal_AEAD
+let decrypt #a #phi s iv cipher = 
+  if F.ideal_AEAD
   then begin
     match MDM.lookup (state_table s) iv with
     | None -> None
@@ -138,9 +122,8 @@ let decrypt
     | None -> None
     | Some plain -> Some plain
 
-let create
-  r #a k phi
-= if F.ideal_iv
+let create r #a k phi = 
+  if F.ideal_iv
   then begin
     HST.recall_region r;
     HST.witness_region r;
@@ -149,6 +132,5 @@ let create
   end else
     {kv = k; region = (); table = ()}
 
-let free
-  #a #phi s
-= () // we cannot rfree the table, because it is not mm
+let free #a #phi s = 
+  () // we cannot rfree the table, because it is not mm
