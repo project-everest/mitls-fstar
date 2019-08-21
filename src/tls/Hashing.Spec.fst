@@ -61,6 +61,11 @@ type hkey (a:alg) = b:bytes{
   length b > 0 /\
   Spec.HMAC.keysized a (length b)}
 
+let to_public = Vale.Arch.BufferFriend.of_bytes
+let to_secret = Vale.Arch.BufferFriend.to_bytes
+
+let bytes_hash a = s:Seq.seq UInt8.t { Seq.length s = hash_length a }
+
 val hmac:
   a:alg ->
   k:hkey a ->
@@ -68,15 +73,16 @@ val hmac:
   GTot (t:tag a{
     let text = Bytes.reveal text in
     Seq.length text + block_length a <= max_input_length a /\
-    Bytes.reveal t = Spec.HMAC.hmac a (Bytes.reveal k) text})
+    Bytes.reveal t = to_public (Spec.HMAC.hmac a (to_secret (Bytes.reveal k)) (to_secret text))})
 
+#push-options "--max_fuel 0 --max_ifuel 0 --z3rlimit 100"
 let hmac a k text =
   let k = Bytes.reveal k in
   let text = Bytes.reveal text in
   assert_norm (pow2 32 < pow2 61);
   assert_norm (pow2 61 < pow2 125);
   assert (Seq.length text + block_length a <= max_input_length a);
-  let t: Spec.Hash.Definitions.bytes_hash a = Spec.HMAC.hmac a k text in
+  let t: bytes_hash a = to_public (Spec.HMAC.hmac a (to_secret k) (to_secret text)) in
   Bytes.hide t
 
 //18-08-31 review
