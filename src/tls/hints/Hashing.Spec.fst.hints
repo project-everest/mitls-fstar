@@ -1,5 +1,5 @@
 [
-  "˘^>\u0017ô©ˆômÉ®ºxS4!",
+  "¶)âê\u0005∞úû\u0000w)\u0000\\©∆z",
   [
     [
       "Hashing.Spec.hash_len",
@@ -28,7 +28,7 @@
         "projection_inverse_BoxBool_proj_0"
       ],
       0,
-      "f6a691d7a6c7539cba4b22e895582092"
+      "c1aedbee198e7f8977e221cdc1f0d6e0"
     ],
     [
       "Hashing.Spec.tag",
@@ -56,7 +56,7 @@
         "projection_inverse_FStar.Integers.Unsigned__0"
       ],
       0,
-      "09f9727dc2d249c780e5018deb13e761"
+      "8c2e402906ebb98f5cddaf7630e85ec2"
     ],
     [
       "Hashing.Spec.anyTag",
@@ -68,7 +68,7 @@
         "projection_inverse_BoxInt_proj_0"
       ],
       0,
-      "c2a25f313ce3f3602cdd298e328e79e9"
+      "5825d6530009e22f7aa81b0e59929839"
     ],
     [
       "Hashing.Spec.lemma_tagLen",
@@ -97,7 +97,7 @@
         "projection_inverse_FStar.Integers.Unsigned__0"
       ],
       0,
-      "e32672298e1657d457dba3bc76e0b66c"
+      "5b14bea5b5a16ef1bd628e45b508530d"
     ],
     [
       "Hashing.Spec.lemma_blockLength",
@@ -126,7 +126,7 @@
         "projection_inverse_FStar.Integers.Unsigned__0"
       ],
       0,
-      "080b5d2e2e2425b71db8ec2e4577b902"
+      "ae9ee68427c22ed51a143657a24f95b5"
     ],
     [
       "Hashing.Spec.hkey",
@@ -135,7 +135,7 @@
       1,
       [ "@query" ],
       0,
-      "20e7069e2097eab0687a868e153404b4"
+      "e2ce02cd506f6948e5614670700694bc"
     ],
     [
       "Hashing.Spec.hmac",
@@ -145,38 +145,56 @@
       [
         "@MaxIFuel_assumption", "@query",
         "assumption_FStar.Seq.Base.seq__uu___haseq",
-        "assumption_FStar.UInt8.t__uu___haseq", "equation_Hashing.Spec.hkey",
-        "equation_Hashing.Spec.max_input_length",
+        "assumption_FStar.UInt8.t__uu___haseq",
+        "constructor_distinct_FStar.Integers.W16",
+        "constructor_distinct_FStar.Integers.W31",
+        "constructor_distinct_FStar.Integers.W8",
+        "constructor_distinct_Lib.IntTypes.U32", "eq2-interp",
+        "equality_tok_FStar.Integers.W16@tok",
+        "equality_tok_FStar.Integers.W31@tok",
+        "equality_tok_FStar.Integers.W8@tok",
+        "equality_tok_Lib.IntTypes.U32@tok", "equation_Hashing.Spec.hkey",
+        "equation_Hashing.Spec.macable", "equation_Lib.IntTypes.bits",
+        "equation_Lib.IntTypes.unsigned", "equation_Prims.eq2",
+        "equation_Prims.squash",
+        "function_token_typing_Declassify.declassify",
         "function_token_typing_FStar.UInt8.t",
         "lemma_FStar.Bytes.length_reveal", "primitive_Prims.op_Subtraction",
         "projection_inverse_BoxInt_proj_0",
+        "projection_inverse_FStar.Integers.Signed__0",
+        "projection_inverse_FStar.Integers.Unsigned__0",
+        "refinement_interpretation_Tm_refine_2bdf871324b477f38e180d50b5b0b08f",
+        "refinement_interpretation_Tm_refine_2de20c066034c13bf76e9c0b94f4806c",
         "refinement_interpretation_Tm_refine_b21789173a631cc76b7a4875d8baa4ff"
       ],
       0,
-      "16734c2a8134dacc99250ed1b048bbdd"
+      "91bf2c4def247ddd119eebb963e3fbac"
     ],
     [
       "Hashing.Spec.hmac",
       2,
-      2,
-      1,
+      0,
+      0,
       [
         "@MaxFuel_assumption", "@MaxIFuel_assumption",
-        "@fuel_correspondence_Prims.pow2.fuel_instrumented",
-        "@fuel_irrelevance_Prims.pow2.fuel_instrumented", "@query",
+        "@fuel_correspondence_Prims.pow2.fuel_instrumented", "@query",
         "constructor_distinct_FStar.Integers.W16",
         "constructor_distinct_FStar.Integers.W31",
-        "constructor_distinct_FStar.Integers.W32",
-        "constructor_distinct_FStar.Integers.W63",
+        "constructor_distinct_FStar.Integers.W64",
         "constructor_distinct_FStar.Integers.W8",
+        "constructor_distinct_Lib.IntTypes.S16",
+        "constructor_distinct_Lib.IntTypes.U32",
+        "constructor_distinct_Tm_unit", "eq2-interp",
         "equality_tok_FStar.Integers.W16@tok",
         "equality_tok_FStar.Integers.W31@tok",
-        "equality_tok_FStar.Integers.W32@tok",
-        "equality_tok_FStar.Integers.W63@tok",
-        "equality_tok_FStar.Integers.W8@tok", "equation_Hashing.Spec.hkey",
-        "equation_Hashing.Spec.macable",
+        "equality_tok_FStar.Integers.W64@tok",
+        "equality_tok_FStar.Integers.W8@tok",
+        "equality_tok_Lib.IntTypes.U32@tok", "equation_FStar.UInt.max_int",
+        "equation_Hashing.Spec.hkey", "equation_Hashing.Spec.macable",
         "equation_Hashing.Spec.max_hash_length",
         "equation_Hashing.Spec.max_input_length",
+        "equation_Lib.IntTypes.bits", "equation_Lib.IntTypes.unsigned",
+        "equation_Prims.eq2", "equation_Prims.nat", "equation_Prims.squash",
         "equation_Spec.HMAC.keysized",
         "equation_Spec.Hash.Definitions.block_length",
         "equation_Spec.Hash.Definitions.block_word_length",
@@ -185,7 +203,7 @@
         "equation_Spec.Hash.Definitions.hash_word_length",
         "equation_Spec.Hash.Definitions.max_input_length",
         "equation_Spec.Hash.Definitions.word_length",
-        "fuel_guarded_inversion_Spec.Hash.Definitions.hash_alg",
+        "function_token_typing_Declassify.declassify", "int_inversion",
         "lemma_FStar.Bytes.length_reveal", "lemma_FStar.Bytes.reveal_hide",
         "lemma_Hashing.Spec.lemma_tagLen", "primitive_Prims.op_Addition",
         "primitive_Prims.op_Multiply", "primitive_Prims.op_Subtraction",
@@ -193,12 +211,15 @@
         "projection_inverse_FStar.Integers.Signed__0",
         "projection_inverse_FStar.Integers.Unsigned__0",
         "refinement_interpretation_Tm_refine_2bdf871324b477f38e180d50b5b0b08f",
+        "refinement_interpretation_Tm_refine_2de20c066034c13bf76e9c0b94f4806c",
         "refinement_interpretation_Tm_refine_38e451b9d9ad2da0da316b063aebee77",
-        "refinement_interpretation_Tm_refine_642b6b11877c27d32dfbeef24f1af5ca",
-        "refinement_interpretation_Tm_refine_b21789173a631cc76b7a4875d8baa4ff"
+        "refinement_interpretation_Tm_refine_542f9d4f129664613f2483a6c88bc7c2",
+        "refinement_interpretation_Tm_refine_b21789173a631cc76b7a4875d8baa4ff",
+        "refinement_interpretation_Tm_refine_b3e3751c3894f166dfde09b500dd73a6",
+        "typing_Spec.Hash.Definitions.max_input_length"
       ],
       0,
-      "4df1a4508d8aca636f901dca2f6e4b30"
+      "ee868d0814c725905310682966cd40d7"
     ],
     [
       "Hashing.Spec.zeroHash",
@@ -207,12 +228,25 @@
       1,
       [
         "@MaxIFuel_assumption", "@query",
+        "constructor_distinct_FStar.Integers.W16",
+        "constructor_distinct_FStar.Integers.W31",
+        "constructor_distinct_FStar.Integers.W8",
+        "constructor_distinct_Lib.IntTypes.PUB",
+        "constructor_distinct_Lib.IntTypes.U32",
+        "equality_tok_FStar.Integers.W16@tok",
+        "equality_tok_FStar.Integers.W31@tok",
+        "equality_tok_FStar.Integers.W8@tok",
+        "equality_tok_Lib.IntTypes.PUB@tok",
+        "equality_tok_Lib.IntTypes.U32@tok",
         "equation_Hacl.Hash.Definitions.hash_len",
-        "refinement_interpretation_Tm_refine_df3a3c874bdde7918a851d6b6b7e637a",
+        "equation_Lib.IntTypes.pub_int_v", "equation_Lib.IntTypes.v",
+        "projection_inverse_FStar.Integers.Signed__0",
+        "projection_inverse_FStar.Integers.Unsigned__0",
+        "refinement_interpretation_Tm_refine_c7753baa38cd99c4f00a675631dc1dde",
         "typing_Hacl.Hash.Definitions.hash_len"
       ],
       0,
-      "dfe4b8536988c6f714d87c73c58a1a97"
+      "a598189fcd389b74d107701ab65b20db"
     ],
     [
       "Hashing.Spec.tls_alg",
@@ -221,7 +255,7 @@
       1,
       [ "@query", "assumption_Spec.Hash.Definitions.hash_alg__uu___haseq" ],
       0,
-      "0ec24866005d955e0a7e573b1d2f77c4"
+      "43d27a32329a8c2badb501222466a2ef"
     ],
     [
       "Hashing.Spec.__proj__Hash__item___0",
@@ -234,7 +268,7 @@
         "refinement_interpretation_Tm_refine_cc1ea40d38e5f63ed2e1772a24033a7a"
       ],
       0,
-      "a6e5f165bfcf0180afbd437ea1845aef"
+      "66f7543501e70a448dfca19d770804bb"
     ],
     [
       "Hashing.Spec.tls_tagLen",
@@ -243,7 +277,7 @@
       1,
       [ "@query", "assumption_Hashing.Spec.tls_alg__uu___haseq" ],
       0,
-      "3ffb43f626e39c42f2173fede3f1c9bd"
+      "5e5e5f3f14fe8576ce3fd1dfdd6c575d"
     ],
     [
       "Hashing.Spec.tls_tagLen",
@@ -252,7 +286,7 @@
       1,
       [ "@query", "assumption_Hashing.Spec.tls_alg__uu___haseq" ],
       0,
-      "50e9d8d96e5572536f502522d53d3ab6"
+      "e1f4d374ce9c9e61a089c1a64272f8bf"
     ],
     [
       "Hashing.Spec.tls_tagLen",
@@ -301,7 +335,7 @@
         "typing_tok_Spec.Hash.Definitions.SHA1@tok"
       ],
       0,
-      "3b0a94aad4a8d6eb235bee8db9270447"
+      "b42a624bf75517b1ea1959605b0f43ad"
     ]
   ]
 ]
