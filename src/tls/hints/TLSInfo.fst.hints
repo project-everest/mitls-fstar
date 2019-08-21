@@ -8,7 +8,7 @@
       1,
       [ "@query" ],
       0,
-      "0185aee88d107bf887fd2ea2d88988ba"
+      "2f719ce9eb1b7681c95f57a412205565"
     ],
     [
       "TLSInfo.default_groups",
@@ -48,7 +48,7 @@
         "typing_tok_Parsers.NamedGroup.X25519@tok"
       ],
       0,
-      "0667f962132f03a278331336bd6737a6"
+      "0dc6656b3c2ad1f994656776dde4dc72"
     ],
     [
       "TLSInfo.defaultConfig",
@@ -102,7 +102,7 @@
         "typing_tok_Parsers.NamedGroup.X25519@tok"
       ],
       0,
-      "257d0fb0e2f101293468ddf349f48eaf"
+      "87a63530b5413ed8901c2842466fda6b"
     ],
     [
       "TLSInfo.abbrInfo",
@@ -126,7 +126,7 @@
         "typing_FStar.Bytes.bytes"
       ],
       0,
-      "fc055187edcb5118def4c24aa7dc1de7"
+      "f0f7cf164f12563c9bdddaa1437367e3"
     ],
     [
       "TLSInfo.csrands",
@@ -138,7 +138,7 @@
         "@fuel_correspondence_Prims.pow2.fuel_instrumented",
         "@fuel_irrelevance_Prims.pow2.fuel_instrumented", "@query",
         "Prims_pretyping_ae567c2fb75be05905677af440075565", "b2t_def",
-        "constructor_distinct_FStar.Integers.W16",
+        "bool_inversion", "constructor_distinct_FStar.Integers.W16",
         "constructor_distinct_FStar.Integers.W31",
         "constructor_distinct_FStar.Integers.W8",
         "constructor_distinct_Lib.IntTypes.U32",
@@ -149,16 +149,19 @@
         "equality_tok_Lib.IntTypes.U32@tok", "equation_FStar.Bytes.lbytes",
         "equation_FStar.UInt.fits", "equation_FStar.UInt.max_int",
         "equation_FStar.UInt.min_int", "equation_FStar.UInt.size",
-        "equation_Lib.IntTypes.bits", "equation_Mem.is_tls_rgn",
+        "equation_FStar.UInt.uint_t", "equation_Lib.IntTypes.bits",
+        "equation_Lib.IntTypes.unsigned", "equation_Mem.is_tls_rgn",
         "equation_Mem.tls_rgn", "equation_Nonce.random",
-        "equation_Prims.nat", "equation_TLSInfo.crand",
-        "equation_TLSInfo.random", "equation_TLSInfo.srand",
+        "equation_Prims.nat", "equation_Spec.Poly1305.size_key",
+        "equation_TLSInfo.crand", "equation_TLSInfo.random",
+        "equation_TLSInfo.srand",
+        "equation_with_fuel_Prims.pow2.fuel_instrumented",
         "fuel_guarded_inversion_TLSInfo.sessionInfo",
         "function_token_typing_FStar.UInt8.t",
         "function_token_typing_Prims.__cache_version_number__", "int_typing",
         "lemma_FStar.Bytes.length_reveal",
         "lemma_FStar.Seq.Base.lemma_len_append",
-        "lemma_Lib.IntTypes.pow2_values", "primitive_Prims.op_Addition",
+        "lemma_FStar.UInt.pow2_values", "primitive_Prims.op_Addition",
         "primitive_Prims.op_AmpAmp", "primitive_Prims.op_Equality",
         "primitive_Prims.op_LessThanOrEqual", "primitive_Prims.op_Multiply",
         "primitive_Prims.op_Subtraction",
@@ -168,15 +171,20 @@
         "projection_inverse_BoxInt_proj_0",
         "projection_inverse_FStar.Integers.Signed__0",
         "projection_inverse_FStar.Integers.Unsigned__0",
+        "refinement_interpretation_Tm_refine_0ec011aea9f93256a3547ad9f0c667f1",
         "refinement_interpretation_Tm_refine_542f9d4f129664613f2483a6c88bc7c2",
         "refinement_interpretation_Tm_refine_71ea40360194fe02ee1272538c9cacbc",
         "refinement_interpretation_Tm_refine_9393f41ccc9ce36df1080eefe33f6c53",
-        "typing_FStar.Bytes.reveal", "typing_Mem.tls_region",
+        "refinement_interpretation_Tm_refine_f13070840248fced9d9d60d77bdae3ec",
+        "typing_FStar.Bytes.empty_bytes", "typing_FStar.Bytes.len",
+        "typing_FStar.Bytes.reveal", "typing_FStar.UInt.fits",
+        "typing_FStar.UInt32.v", "typing_Mem.tls_region",
+        "typing_Spec.Poly1305.size_key",
         "typing_TLSInfo.__proj__MksessionInfo__item__init_crand",
         "typing_TLSInfo.__proj__MksessionInfo__item__init_srand"
       ],
       0,
-      "cee85c2498b987a9982f631e310473f0"
+      "c99503b95d3837607fbbc488fbe2de9b"
     ],
     [
       "TLSInfo.kefAlg",
@@ -188,7 +196,7 @@
         "assumption_Parsers.ProtocolVersion.protocolVersion__uu___haseq"
       ],
       0,
-      "0230cbbe5c2b73d5528927951290202d"
+      "95c9ca7840aebcc14667bd8978eb44d8"
     ],
     [
       "TLSInfo.kefAlg",
@@ -200,7 +208,7 @@
         "assumption_Parsers.ProtocolVersion.protocolVersion__uu___haseq"
       ],
       0,
-      "678740f48d2011c5eeb58e6ca6a1906f"
+      "8a813a82b2894e9f64a776f1919f6636"
     ],
     [
       "TLSInfo.kefAlg",
@@ -237,7 +245,7 @@
         "typing_Mem.tls_region"
       ],
       0,
-      "bf8719e8868835fae978cf97d5e89566"
+      "59918222c8e5f4f9755e8031fe99b312"
     ],
     [
       "TLSInfo.kdfAlg",
@@ -249,7 +257,7 @@
         "assumption_Parsers.ProtocolVersion.protocolVersion__uu___haseq"
       ],
       0,
-      "8a9d5af06aa8228776c1a2a42588e96f"
+      "af387429b22e0c47afb51cd3175d4b6a"
     ],
     [
       "TLSInfo.kdfAlg",
@@ -261,7 +269,7 @@
         "assumption_Parsers.ProtocolVersion.protocolVersion__uu___haseq"
       ],
       0,
-      "0267f9b5899e05bbb8496bd0d92946b4"
+      "968abb5783a4ae7faf9d56bad7245885"
     ],
     [
       "TLSInfo.kdfAlg",
@@ -291,7 +299,7 @@
         "typing_Parsers.ProtocolVersion.uu___is_Unknown_protocolVersion"
       ],
       0,
-      "b46b0a386815038c593b9d4632b5f635"
+      "16c4978e6fab3087b51bea3e2bb159d0"
     ],
     [
       "TLSInfo.siAuthEncAlg",
@@ -303,7 +311,7 @@
         "assumption_Parsers.ProtocolVersion.protocolVersion__uu___haseq"
       ],
       0,
-      "6d7ffab4909761e962fa49188ddd65d2"
+      "e17a88a2da6215d1139f7081abcf1ace"
     ],
     [
       "TLSInfo.siAuthEncAlg",
@@ -315,7 +323,7 @@
         "assumption_Parsers.ProtocolVersion.protocolVersion__uu___haseq"
       ],
       0,
-      "d787b4a2ed801ae25947e68cffd16b2e"
+      "35f81a9391c3e43adb5e08d734412a74"
     ],
     [
       "TLSInfo.siAuthEncAlg",
@@ -346,7 +354,7 @@
         "typing_TLSInfo.__proj__MksessionInfo__item__protocol_version"
       ],
       0,
-      "7d3190987efa714f0cca599707e412c7"
+      "ac5672b49474517cdf4614660971e081"
     ],
     [
       "TLSInfo.msId",
@@ -364,7 +372,7 @@
         "typing_FStar.Bytes.bytes"
       ],
       0,
-      "982d9d75fb3a02b8a0cdde50788d691f"
+      "8e1a2b6266b497f728711cf64be3c45f"
     ],
     [
       "TLSInfo.__proj__StandardMS__item___0",
@@ -377,7 +385,7 @@
         "refinement_interpretation_Tm_refine_149e4f155854640b2ca7dd181714fbcb"
       ],
       0,
-      "04a63e0cb3779867ee425671939474a4"
+      "bf264fe1e47ff205dc9590c2aa7f13da"
     ],
     [
       "TLSInfo.__proj__StandardMS__item___1",
@@ -390,7 +398,7 @@
         "refinement_interpretation_Tm_refine_149e4f155854640b2ca7dd181714fbcb"
       ],
       0,
-      "aeca997e13acd70153750706f36cdd0c"
+      "f8dac365bfe16bcefec96817c8d2afd9"
     ],
     [
       "TLSInfo.__proj__StandardMS__item___2",
@@ -403,7 +411,7 @@
         "refinement_interpretation_Tm_refine_149e4f155854640b2ca7dd181714fbcb"
       ],
       0,
-      "88ae6f2f1b90cb7866f87223e23f4046"
+      "49423aa393e9817deb9100555f3a79fb"
     ],
     [
       "TLSInfo.__proj__ExtendedMS__item___0",
@@ -416,7 +424,7 @@
         "refinement_interpretation_Tm_refine_86858b4d8f904dd5f9b755b8aed2c1c0"
       ],
       0,
-      "047e323a38298fab344f09906a67b58f"
+      "20b858e861a303506b7ec1b3e4875124"
     ],
     [
       "TLSInfo.__proj__ExtendedMS__item___1",
@@ -429,7 +437,7 @@
         "refinement_interpretation_Tm_refine_86858b4d8f904dd5f9b755b8aed2c1c0"
       ],
       0,
-      "bbf86892da908c8226349b4e2f10f2bb"
+      "5d0307f200b233331e2e0ff2b77c1eff"
     ],
     [
       "TLSInfo.__proj__ExtendedMS__item___2",
@@ -442,7 +450,7 @@
         "refinement_interpretation_Tm_refine_86858b4d8f904dd5f9b755b8aed2c1c0"
       ],
       0,
-      "59d08c9867f5a777d9e4137560d783ef"
+      "e615c331a06ac1b66d552ba9ddeeb9aa"
     ],
     [
       "TLSInfo.honestMS",
@@ -455,7 +463,7 @@
         "fuel_guarded_inversion_TLSInfo.msId"
       ],
       0,
-      "7f9cb8fe94633aa7105a3edd869c0d53"
+      "328c5bba7039f443f52055491d388728"
     ],
     [
       "TLSInfo.msid",
@@ -480,7 +488,7 @@
         "typing_TLSInfo.__proj__MksessionInfo__item__protocol_version"
       ],
       0,
-      "7a5e3099e9cf4b2d9ab28a59e1bb4726"
+      "e4d85f0a319c837a7ae987821fcef442"
     ],
     [
       "TLSInfo.strongPRF",
@@ -492,7 +500,7 @@
         "assumption_Parsers.ProtocolVersion.protocolVersion__uu___haseq"
       ],
       0,
-      "927d8aec79ffb94f765ad062f624bec0"
+      "3099e0c0d4115e41a0d7ece67911bed7"
     ],
     [
       "TLSInfo.strongPRF",
@@ -504,7 +512,7 @@
         "assumption_Parsers.ProtocolVersion.protocolVersion__uu___haseq"
       ],
       0,
-      "59ba9a23cfc096930567fa8a4e7a3d8d"
+      "f2cbfccaf50bfcd68dc92aa597af660e"
     ],
     [
       "TLSInfo.strongPRF",
@@ -516,7 +524,7 @@
         "refinement_interpretation_Tm_refine_7c59266512e3f40d9df405f4fb08015f"
       ],
       0,
-      "b24f2e8b2733dbfaa8de41396ad628cf"
+      "b25ed4da6a3c8811c8db84360bd627af"
     ],
     [
       "TLSInfo.strongHS",
@@ -528,7 +536,7 @@
         "assumption_Parsers.ProtocolVersion.protocolVersion__uu___haseq"
       ],
       0,
-      "aabd3b169dc01ccd0418c3228d483598"
+      "5179db4a2aa3a8f3835284996b418beb"
     ],
     [
       "TLSInfo.strongHS",
@@ -540,7 +548,7 @@
         "refinement_interpretation_Tm_refine_7c59266512e3f40d9df405f4fb08015f"
       ],
       0,
-      "6dcec408d731a808b05bb5e204413944"
+      "5aac3317be3b878e48057c7d3f0e82f1"
     ],
     [
       "TLSInfo.logInfo_CH",
@@ -557,7 +565,7 @@
         "typing_FStar.Bytes.bytes", "typing_PSK.pskid"
       ],
       0,
-      "48c5e8a34fc9127861c7726b94a9eba5"
+      "830f911ffa932da8d591832c55440c10"
     ],
     [
       "TLSInfo.logInfo_CH0",
@@ -577,7 +585,7 @@
         "typing_FStar.Bytes.bytes", "typing_PSK.pskid"
       ],
       0,
-      "9ac41826f9634af06fba41d1c0f052e5"
+      "cbd7d45a9a3878d15ba24b4f7d649e14"
     ],
     [
       "TLSInfo.logInfo_SH",
@@ -598,7 +606,7 @@
         "typing_FStar.Bytes.bytes", "typing_PSK.pskid"
       ],
       0,
-      "03e2b8899c1b72895f000e0c8dbe636f"
+      "b7e7d5c766933193f4620f7064befc9d"
     ],
     [
       "TLSInfo.logInfo_SF",
@@ -620,7 +628,7 @@
         "typing_FStar.Bytes.bytes"
       ],
       0,
-      "dcae945daf7a09d607fc887af3714fe8"
+      "39e1565fc4cace359c9abb04c1ece8ef"
     ],
     [
       "TLSInfo.logInfo_CF",
@@ -642,7 +650,7 @@
         "typing_FStar.Bytes.bytes"
       ],
       0,
-      "4c729bcd62a66b202d52807b52bb42c8"
+      "52bba8d438790b82f48a93ddbabb6c4c"
     ],
     [
       "TLSInfo.logInfo",
@@ -657,7 +665,7 @@
         "assumption_TLSInfo.logInfo_SH__uu___haseq"
       ],
       0,
-      "cd3c96f97d8f9839fe2a8c82cde7080a"
+      "a2b52365095cbb5600442704c6db6b75"
     ],
     [
       "TLSInfo.__proj__LogInfo_CH__item___0",
@@ -670,7 +678,7 @@
         "refinement_interpretation_Tm_refine_41d792af5c9e14ff88450f443131d1ff"
       ],
       0,
-      "f086cd633fdb6dd285d56fff42dd7453"
+      "74a99baced62575d07f5342d7cc2bf92"
     ],
     [
       "TLSInfo.__proj__LogInfo_CH0__item___0",
@@ -684,7 +692,7 @@
         "refinement_interpretation_Tm_refine_5db88e8cda57ff4a81e278da22680dee"
       ],
       0,
-      "abbfa4e99bec8e1057b5446762ce45f9"
+      "b9348738d6c58b79b502e8887e5f901b"
     ],
     [
       "TLSInfo.__proj__LogInfo_SH__item___0",
@@ -697,7 +705,7 @@
         "refinement_interpretation_Tm_refine_c97be3501b751c8445ef1e446788348a"
       ],
       0,
-      "6a17425305d99ba706703b8c168d5cb8"
+      "1ac87d219d37846a55e84df7ff98a135"
     ],
     [
       "TLSInfo.__proj__LogInfo_SF__item___0",
@@ -710,7 +718,7 @@
         "refinement_interpretation_Tm_refine_f686db788d3adfb47040f84f6681b7a4"
       ],
       0,
-      "1b42e29cefb7f4daba7cccaef6a76147"
+      "b49af92d28876da4b08fcfb5e88ec2e2"
     ],
     [
       "TLSInfo.__proj__LogInfo_CF__item___0",
@@ -723,7 +731,7 @@
         "refinement_interpretation_Tm_refine_160b90bc9cd5efb1a06860d48de32b90"
       ],
       0,
-      "0e3f86fa0ca654ef8e045f4f1e08a915"
+      "340d51acd5cd34330605f9665bbd25ad"
     ],
     [
       "TLSInfo.logInfo_ae",
@@ -741,7 +749,7 @@
         "refinement_interpretation_Tm_refine_09d127107f044e79826620c3786e8a26"
       ],
       0,
-      "4dced34bc79e23091bf6fe683f57e537"
+      "d30494cbfd4616d501b4008e04c64381"
     ],
     [
       "TLSInfo.logInfo_hash",
@@ -759,7 +767,7 @@
         "refinement_interpretation_Tm_refine_09d127107f044e79826620c3786e8a26"
       ],
       0,
-      "09925974f7e3a33e855da496af647e31"
+      "ad4aea3501273df6a63d5c22f21e729e"
     ],
     [
       "TLSInfo.logInfo_nonce",
@@ -775,7 +783,7 @@
         "fuel_guarded_inversion_TLSInfo.logInfo"
       ],
       0,
-      "383581377d568596ce6e071e6281f1d7"
+      "8f95761c2d12b530a11c2d1b35c96e82"
     ],
     [
       "TLSInfo.eq_logInfo",
@@ -784,7 +792,7 @@
       1,
       [ "@query", "assumption_TLSInfo.logInfo__uu___haseq" ],
       0,
-      "08ea080bfad9412e25b1517cf803f14d"
+      "a9e942a10c4dca32817339bfa612a9f7"
     ],
     [
       "TLSInfo.hashed_log",
@@ -793,7 +801,7 @@
       1,
       [ "@query", "assumption_TLSInfo.logInfo__uu___haseq" ],
       0,
-      "64ae933236ee482f5b6ee97e851edf6f"
+      "7c82a026e97e0e9294365a1d95556359"
     ],
     [
       "TLSInfo.pre_esId",
@@ -823,7 +831,7 @@
         "typing_FStar.Bytes.bytes", "typing_PSK.pskid"
       ],
       0,
-      "7b7a8142e9ab3b34e12bd32949f120ed"
+      "903597d4fbe275e5867c9e740a7126bb"
     ],
     [
       "TLSInfo.__proj__ApplicationPSK__item__ha",
@@ -837,7 +845,7 @@
         "refinement_interpretation_Tm_refine_27e74ecb54f0290f48359f3df2fcee74"
       ],
       0,
-      "fb7092d1b6cde666a6082844b2326054"
+      "92dea3718ded2e6d0e08896b9a84a23c"
     ],
     [
       "TLSInfo.__proj__ApplicationPSK__item__ae",
@@ -851,7 +859,7 @@
         "refinement_interpretation_Tm_refine_27e74ecb54f0290f48359f3df2fcee74"
       ],
       0,
-      "b3633bcb4e8119ab9a590d10a84c290f"
+      "380b6977cbd8feaac0f729bcb9a9f3aa"
     ],
     [
       "TLSInfo.__proj__ApplicationPSK__item__i",
@@ -869,7 +877,7 @@
         "refinement_interpretation_Tm_refine_27e74ecb54f0290f48359f3df2fcee74"
       ],
       0,
-      "59b44f93f3471cfff04292bf66fa641f"
+      "9238f2e9c10e08674deedde53d439ad5"
     ],
     [
       "TLSInfo.__proj__ResumptionPSK__item__li",
@@ -883,7 +891,7 @@
         "refinement_interpretation_Tm_refine_ad5a303e2447e61f82f378291c3229bf"
       ],
       0,
-      "fd1125305109c5729c5eebe95b97590a"
+      "d5f5efd0d5dae8d01c70260b6adb79f1"
     ],
     [
       "TLSInfo.__proj__ResumptionPSK__item__i",
@@ -899,7 +907,7 @@
         "refinement_interpretation_Tm_refine_ad5a303e2447e61f82f378291c3229bf"
       ],
       0,
-      "e9f6ec22b92588c1ed3fe53157e98c20"
+      "fde1b304e8a9ec5f008f716bfb82caf2"
     ],
     [
       "TLSInfo.__proj__NoPSK__item___0",
@@ -912,7 +920,7 @@
         "refinement_interpretation_Tm_refine_8e4459239fb392868a856242198150a7"
       ],
       0,
-      "b95f14bc9353114099a2dddd62b949c0"
+      "9d52ea2c41f1d492d728007a5ad8434f"
     ],
     [
       "TLSInfo.__proj__HSID_PSK__item___0",
@@ -925,7 +933,7 @@
         "refinement_interpretation_Tm_refine_0a76b08ddaa8c1ebd879822527d0270e"
       ],
       0,
-      "4490c48ead90f57b4f51ef86c9d10e8b"
+      "99a7063b1743ed9a763d19e4e5674e69"
     ],
     [
       "TLSInfo.__proj__HSID_DHE__item___0",
@@ -938,7 +946,7 @@
         "refinement_interpretation_Tm_refine_9e4981c9e88e4dbce45dcd449d7bee9e"
       ],
       0,
-      "b9adfa708d76bf0b8eff54ba3e038b60"
+      "f78bc93d54acfebfb8994fd36ea8c953"
     ],
     [
       "TLSInfo.__proj__HSID_DHE__item__g",
@@ -951,7 +959,7 @@
         "refinement_interpretation_Tm_refine_9e4981c9e88e4dbce45dcd449d7bee9e"
       ],
       0,
-      "b3273ab244e84fb2d6caf8d263919bc3"
+      "f9fff8903425ab1c7e43c777b4d83d9d"
     ],
     [
       "TLSInfo.__proj__HSID_DHE__item__si",
@@ -969,7 +977,7 @@
         "refinement_interpretation_Tm_refine_9e4981c9e88e4dbce45dcd449d7bee9e"
       ],
       0,
-      "ebce14a196e73fe9bd13c3a0e3b95bcd"
+      "151db5cd0901893776fbb3fa3f96ac0d"
     ],
     [
       "TLSInfo.__proj__HSID_DHE__item__sr",
@@ -988,7 +996,7 @@
         "refinement_interpretation_Tm_refine_9e4981c9e88e4dbce45dcd449d7bee9e"
       ],
       0,
-      "5d20fd9a830c9d48fd5a8811c8a87d6b"
+      "15e3a45f5f838749b414437b962c2dd6"
     ],
     [
       "TLSInfo.__proj__EarlySecretID__item___0",
@@ -1002,7 +1010,7 @@
         "refinement_interpretation_Tm_refine_05e0fd373aacbc63da0f5bdf10eca23b"
       ],
       0,
-      "df87521df806c67ea257e996c34eb3be"
+      "d7f5b5bc49ab0da24dd592635defc486"
     ],
     [
       "TLSInfo.__proj__HandshakeSecretID__item___0",
@@ -1016,7 +1024,7 @@
         "refinement_interpretation_Tm_refine_18167dd44837f2f4bb0cce0f5e3f7571"
       ],
       0,
-      "95a11e2e05b5e8a347717a09a191d163"
+      "8ca409999d899191c774de11fe782aff"
     ],
     [
       "TLSInfo.__proj__ApplicationSecretID__item___0",
@@ -1030,7 +1038,7 @@
         "refinement_interpretation_Tm_refine_4ce5329de296d1f9de782f102e784249"
       ],
       0,
-      "c48ffd425f7a02fc494bb683a7299621"
+      "7891de00fa5b2f7f0a460aba97b55041"
     ],
     [
       "TLSInfo.__proj__EarlyExportID__item___0",
@@ -1044,7 +1052,7 @@
         "refinement_interpretation_Tm_refine_d8975ab5a0bddc987324997570d8f868"
       ],
       0,
-      "711ef025da4dcdf8b801639b9a3bb771"
+      "7c40b096eb2999232ec32ce3286f4ca1"
     ],
     [
       "TLSInfo.__proj__EarlyExportID__item___1",
@@ -1058,7 +1066,7 @@
         "refinement_interpretation_Tm_refine_d8975ab5a0bddc987324997570d8f868"
       ],
       0,
-      "dd61dc8c7f86338c186f7f492ea1ae41"
+      "a040243f29c337dc4194f7ba7c6c7d2b"
     ],
     [
       "TLSInfo.__proj__ExportID__item___0",
@@ -1071,7 +1079,7 @@
         "refinement_interpretation_Tm_refine_0ff3319c27a1d6affa190f2d69c14bea"
       ],
       0,
-      "9e25a3878ed0708de540963ef47c54dd"
+      "deba20b3b3c0996fdead01683c99aa1b"
     ],
     [
       "TLSInfo.__proj__ExportID__item___1",
@@ -1084,7 +1092,7 @@
         "refinement_interpretation_Tm_refine_0ff3319c27a1d6affa190f2d69c14bea"
       ],
       0,
-      "84d99abb0182e909c1544bb16dbc601c"
+      "5f9ed790511e0cc8e954f632f4aa1d9c"
     ],
     [
       "TLSInfo.__proj__KeyID__item__i",
@@ -1096,7 +1104,7 @@
         "projection_inverse_TLSInfo.KeyID_li"
       ],
       0,
-      "9eacd9e3090ceb929600934e4bc6284b"
+      "9743df9453c05f2b30a4ea76b00ff25e"
     ],
     [
       "TLSInfo.__proj__FinishedID__item___1",
@@ -1108,7 +1116,7 @@
         "projection_inverse_TLSInfo.FinishedID_li"
       ],
       0,
-      "308f0bce75bc4607e10cfc546778f036"
+      "b5585bfe2f45f3cff4f3cef9d3d9e4be"
     ],
     [
       "TLSInfo.esId_hash",
@@ -1126,7 +1134,7 @@
         "subterm_ordering_TLSInfo.ResumptionPSK"
       ],
       0,
-      "75e395d3085556c076703ff52598e052"
+      "ee637c07df8003a24e7c443e5d8f0f7f"
     ],
     [
       "TLSInfo.esId_hash",
@@ -1139,7 +1147,7 @@
         "equality_tok_Prims.LexTop@tok", "subterm_ordering_TLSInfo.Binder"
       ],
       0,
-      "8f5a91a6b412907b788b41568f2e9c3e"
+      "afa367324594a35c1537b56be7ba698a"
     ],
     [
       "TLSInfo.esId_hash",
@@ -1157,7 +1165,7 @@
         "subterm_ordering_TLSInfo.HSID_PSK"
       ],
       0,
-      "4583bc21670e1ed8424891461e68939e"
+      "2de81a5368d51647c08133564d8ef6c6"
     ],
     [
       "TLSInfo.esId_hash",
@@ -1170,7 +1178,7 @@
         "equality_tok_Prims.LexTop@tok", "subterm_ordering_TLSInfo.ASID"
       ],
       0,
-      "f880d9e4d61205aa1aef808400c73d61"
+      "d40790e869cd262e97e615fba7c10135"
     ],
     [
       "TLSInfo.esId_hash",
@@ -1183,7 +1191,7 @@
         "equality_tok_Prims.LexTop@tok", "subterm_ordering_TLSInfo.Salt"
       ],
       0,
-      "3daa904c6760809a489b6bb782c7ae2f"
+      "c3253930a9661c580770d93ce281b1a0"
     ],
     [
       "TLSInfo.esId_hash",
@@ -1204,7 +1212,7 @@
         "subterm_ordering_TLSInfo.HandshakeSecretID"
       ],
       0,
-      "584218a72e436a21cfe1ea2aa1609748"
+      "9fb48fed22a6bd33075d72e11b12969a"
     ],
     [
       "TLSInfo.esId_hash",
@@ -1217,7 +1225,7 @@
         "equality_tok_Prims.LexTop@tok", "subterm_ordering_TLSInfo.RMSID"
       ],
       0,
-      "e063f6d9d5db6c14f6f79bcfab69f2f9"
+      "ec940482f90500bb426ad153c0243d62"
     ],
     [
       "TLSInfo.esId_hash",
@@ -1234,7 +1242,7 @@
         "subterm_ordering_TLSInfo.ExportID"
       ],
       0,
-      "2d6a1d8c67d7d9caf49ea3caf7f69a92"
+      "3dff62ffbf0c63cb33cb311ff06a3f8a"
     ],
     [
       "TLSInfo.esId_hash",
@@ -1248,7 +1256,7 @@
         "subterm_ordering_TLSInfo.ExpandedSecret"
       ],
       0,
-      "57229ddd8bd9e43d544361aadddb83c0"
+      "34003d6c6c87a807e6b15eb38166a1d0"
     ],
     [
       "TLSInfo.esId_hash",
@@ -1261,7 +1269,7 @@
         "equality_tok_Prims.LexTop@tok", "subterm_ordering_TLSInfo.KeyID"
       ],
       0,
-      "064002c05d091036eac5860c74038175"
+      "25b1363edac3205bd82594771d32c123"
     ],
     [
       "TLSInfo.esId_hash",
@@ -1275,7 +1283,7 @@
         "subterm_ordering_TLSInfo.FinishedID"
       ],
       0,
-      "84561feb677e1696ee56bca652981edb"
+      "86111ccffbe69aef592712f23311b737"
     ],
     [
       "TLSInfo.esId_ae",
@@ -1289,7 +1297,7 @@
         "refinement_interpretation_Tm_refine_9c562b207e8dfa7a27b3bce71aeffb35"
       ],
       0,
-      "70ff810c06fc55462cf669f8d0f699e8"
+      "9b66211791641d8a2c51cffe2b7f3a6e"
     ],
     [
       "TLSInfo.valid_hlen",
@@ -1298,7 +1306,7 @@
       1,
       [ "@query", "assumption_FStar.UInt32.t__uu___haseq" ],
       0,
-      "6bd75b5ff7153643d6fe533e45fabe46"
+      "fd6b43d5de905bdd92fd4becf6456f25"
     ],
     [
       "TLSInfo.pre_index",
@@ -1320,7 +1328,7 @@
         "assumption_TLSInfo.pre_secretId__uu___haseq"
       ],
       0,
-      "e5a51e8397dbce9447a72fc8ea8b4325"
+      "cf8e5100abd77fece88ebd3a4013c100"
     ],
     [
       "TLSInfo.__proj__I_ES__item___0",
@@ -1333,7 +1341,7 @@
         "refinement_interpretation_Tm_refine_1753d5c80c139584794f93601eeaeeaf"
       ],
       0,
-      "4c0ccb3e1da5c8b4798fbde71fbafe87"
+      "c22c7be2e6fbb704ac15dc80370105b5"
     ],
     [
       "TLSInfo.__proj__I_BINDER__item___0",
@@ -1346,7 +1354,7 @@
         "refinement_interpretation_Tm_refine_f1226783cb854c63eda7d25c182bbcf7"
       ],
       0,
-      "74751dbb7a99687e6b3f278656231ae9"
+      "993d7fff186037a8122e2ca06bbdb973"
     ],
     [
       "TLSInfo.__proj__I_HS__item___0",
@@ -1359,7 +1367,7 @@
         "refinement_interpretation_Tm_refine_83d1f350b798c1406032780d3bc5ddd0"
       ],
       0,
-      "ce166843f0327efa010a8cb2cdd2b2fd"
+      "5dfa311b87c0e72d58af59a21900f1a2"
     ],
     [
       "TLSInfo.__proj__I_AS__item___0",
@@ -1372,7 +1380,7 @@
         "refinement_interpretation_Tm_refine_5e28f353705836e52c560714f03488bd"
       ],
       0,
-      "60d2e5b3723d10ac449c96d2460f27fc"
+      "fef3f4552d66cfa715178250064e306e"
     ],
     [
       "TLSInfo.__proj__I_SALT__item___0",
@@ -1385,7 +1393,7 @@
         "refinement_interpretation_Tm_refine_561da592cbc59194a2c54fdba542f0fe"
       ],
       0,
-      "ebeb698a35d49846d7ab25b7e026f346"
+      "12657dd47d5185602740523736dd08d9"
     ],
     [
       "TLSInfo.__proj__I_SECRET__item___0",
@@ -1398,7 +1406,7 @@
         "refinement_interpretation_Tm_refine_bf82f36f40c910969ae5bf94bed4b7fe"
       ],
       0,
-      "a89dd8ae88222549f84ce016d5aa43d4"
+      "a9e8c0c1cb0ef79ee3a109040db2426b"
     ],
     [
       "TLSInfo.__proj__I_RMS__item__li",
@@ -1411,7 +1419,7 @@
         "refinement_interpretation_Tm_refine_3f5eb32cbfe8535fd1731530dcce1702"
       ],
       0,
-      "a5f1047a569bc58907bb6e522240d57d"
+      "06e44381e5aad937df8fe053a25d21bc"
     ],
     [
       "TLSInfo.__proj__I_RMS__item___1",
@@ -1426,7 +1434,7 @@
         "refinement_interpretation_Tm_refine_3f5eb32cbfe8535fd1731530dcce1702"
       ],
       0,
-      "8074598899ad92e0173f010dd61eaad8"
+      "30d6922c451d8c8fb8581b6cd310ca21"
     ],
     [
       "TLSInfo.__proj__I_EXPORT__item__li",
@@ -1439,7 +1447,7 @@
         "refinement_interpretation_Tm_refine_3eb404139e817f509e066a3c8ff8d799"
       ],
       0,
-      "e41f97a46e986d0cb25e08e0a0655d7f"
+      "29b352eb8ae2e220d49dfbbce2b864d3"
     ],
     [
       "TLSInfo.__proj__I_EXPORT__item___1",
@@ -1454,7 +1462,7 @@
         "refinement_interpretation_Tm_refine_3eb404139e817f509e066a3c8ff8d799"
       ],
       0,
-      "dce290ab4c26ee7a9da911e660de1b00"
+      "efc9a3cdb8db6181b1435c6213ba793c"
     ],
     [
       "TLSInfo.__proj__I_EXPAND__item__li",
@@ -1467,7 +1475,7 @@
         "refinement_interpretation_Tm_refine_54d7f94ff187e2bc9e88ced300e11b33"
       ],
       0,
-      "898c8fa5917dd3794a27bb22c0b21e15"
+      "d549ea468d86c4f25430bb0f956c0419"
     ],
     [
       "TLSInfo.__proj__I_EXPAND__item___1",
@@ -1482,7 +1490,7 @@
         "refinement_interpretation_Tm_refine_54d7f94ff187e2bc9e88ced300e11b33"
       ],
       0,
-      "7ded26e055f57390f8b069db4c82bae6"
+      "dde75c19148ca1e464634801613d9f8d"
     ],
     [
       "TLSInfo.__proj__I_KEY__item___0",
@@ -1495,7 +1503,7 @@
         "refinement_interpretation_Tm_refine_e7fd10ddec5cb22b2d0949b470e036d3"
       ],
       0,
-      "c9ff6be96bc3ab1b23e615cfa49fe94d"
+      "f817009b09ab7c903e8a9641d509bdb2"
     ],
     [
       "TLSInfo.__proj__I_FINISHED__item___0",
@@ -1508,7 +1516,7 @@
         "refinement_interpretation_Tm_refine_c098d1416b790f62ea1558dc3a184518"
       ],
       0,
-      "3e1ed398df93edf32caef705289f8ddb"
+      "0a2f33970596b129d4418c4ca1157037"
     ],
     [
       "TLSInfo.safe_region",
@@ -1531,7 +1539,7 @@
         "typing_Mem.tls_tables_region"
       ],
       0,
-      "1321398d056763057e1fa95cc2363ace"
+      "04133796bf849593b9f22c2b3c273906"
     ],
     [
       "TLSInfo.i_safety_log",
@@ -1540,7 +1548,7 @@
       1,
       [ "@query", "assumption_TLSInfo.pre_index__uu___haseq" ],
       0,
-      "254c3bc92df70689bfadc0aab23312c6"
+      "6603cee39a17605b14f1679cd9bd3158"
     ],
     [
       "TLSInfo.safety_table",
@@ -1558,7 +1566,7 @@
         "typing_TLSInfo.safe_region", "unit_typing"
       ],
       0,
-      "07d2096c2fadd4b51708a0b432daca9b"
+      "eda7a986e494cd83360facfc812abcec"
     ],
     [
       "TLSInfo.registered",
@@ -1570,7 +1578,7 @@
         "equation_TLSInfo.s_table", "typing_TLSInfo.safety_table"
       ],
       0,
-      "eaad69c718004c669b94558835cc9a7d"
+      "015dc91503aac75cf275a63ed77aa88d"
     ],
     [
       "TLSInfo.valid",
@@ -1601,7 +1609,7 @@
         "refinement_interpretation_Tm_refine_80eae8a46698bbad9b5d85b7fbe62b74"
       ],
       0,
-      "a8d9cc2d6833c8deb27eced8b9578f7c"
+      "689787330c6181468ed8b731ce935d61"
     ],
     [
       "TLSInfo.honest",
@@ -1613,7 +1621,7 @@
         "equation_TLSInfo.s_table", "typing_TLSInfo.safety_table"
       ],
       0,
-      "bb7374d2f2dd1101520ea1c5bb52a02b"
+      "e8e2b3359880799d0987ca244cc10f6a"
     ],
     [
       "TLSInfo.dishonest",
@@ -1625,7 +1633,7 @@
         "equation_TLSInfo.s_table", "typing_TLSInfo.safety_table"
       ],
       0,
-      "eb1c07d25790dd49d04aac2a9f6c48cf"
+      "40b252dbb700bdfd51f9738cfc1c023d"
     ],
     [
       "TLSInfo.id",
@@ -1637,7 +1645,7 @@
         "assumption_Parsers.ProtocolVersion.protocolVersion__uu___haseq"
       ],
       0,
-      "8bb442e645921a74b0fd5f94ea0d2503"
+      "ca3174c66492468d524a86f5e6f6fbe3"
     ],
     [
       "TLSInfo.id",
@@ -1649,7 +1657,7 @@
         "assumption_Parsers.ProtocolVersion.protocolVersion__uu___haseq"
       ],
       0,
-      "776ec8067902ab6b097c77bf01c84d10"
+      "c70d25baf87dc4a03ad3fa5512a71f70"
     ],
     [
       "TLSInfo.id",
@@ -1661,7 +1669,7 @@
         "assumption_Parsers.ProtocolVersion.protocolVersion__uu___haseq"
       ],
       0,
-      "257fbfb4ffa92f98b268b4fc78d96087"
+      "ea86f36b34b8722592c730fb09c711a7"
     ],
     [
       "TLSInfo.id",
@@ -1689,7 +1697,7 @@
         "typing_FStar.Bytes.bytes"
       ],
       0,
-      "045bbb6901962f504ddb0a38859703ac"
+      "e222c65871b9a540ca89c25205fd200d"
     ],
     [
       "TLSInfo.__proj__PlaintextID__item__our_rand",
@@ -1703,7 +1711,7 @@
         "refinement_interpretation_Tm_refine_adb68869c71b56f2de3e9b66a7e14803"
       ],
       0,
-      "f08cf1fe9c181abe3f6dc20036acc254"
+      "e3dd281bfe31e01c746134149354dc78"
     ],
     [
       "TLSInfo.__proj__ID13__item__keyId",
@@ -1716,7 +1724,7 @@
         "refinement_interpretation_Tm_refine_771d00c42e1fa557a792d8f0bf7b724d"
       ],
       0,
-      "10e85ce089c83ef2a7d25ecb3e113819"
+      "8d60a45ac64e3f39b752695046756281"
     ],
     [
       "TLSInfo.__proj__ID12__item__pv",
@@ -1728,7 +1736,7 @@
         "assumption_Parsers.ProtocolVersion.protocolVersion__uu___haseq"
       ],
       0,
-      "f89e9dce45f506e30c9770354d20a6a4"
+      "30552737b5096edb65ebf5625b5d3dfc"
     ],
     [
       "TLSInfo.__proj__ID12__item__pv",
@@ -1742,7 +1750,7 @@
         "refinement_interpretation_Tm_refine_8fcbdf9612ed9cda5a238ad00e36f8ee"
       ],
       0,
-      "58ba32690f6b41a7f20653808ab37f53"
+      "f8fc271335478e3906304ba3c3631053"
     ],
     [
       "TLSInfo.__proj__ID12__item__msId",
@@ -1755,7 +1763,7 @@
         "refinement_interpretation_Tm_refine_8fcbdf9612ed9cda5a238ad00e36f8ee"
       ],
       0,
-      "d06f2c74bf454d02d6b394db41f18f96"
+      "b8d2591d4bfbada8c62d1005de497223"
     ],
     [
       "TLSInfo.__proj__ID12__item__kdfAlg",
@@ -1768,7 +1776,7 @@
         "refinement_interpretation_Tm_refine_8fcbdf9612ed9cda5a238ad00e36f8ee"
       ],
       0,
-      "f346b79fbc651f94a5cac0eadb2dd37c"
+      "a9234580abb9961a75b25a7b1a91e6a3"
     ],
     [
       "TLSInfo.__proj__ID12__item__aeAlg",
@@ -1781,7 +1789,7 @@
         "refinement_interpretation_Tm_refine_8fcbdf9612ed9cda5a238ad00e36f8ee"
       ],
       0,
-      "dffc7ea31655a7d7c7d5aed4dbb5027c"
+      "dc9857ea77b0c83b4ca340f1a5663efe"
     ],
     [
       "TLSInfo.__proj__ID12__item__cr",
@@ -1794,7 +1802,7 @@
         "refinement_interpretation_Tm_refine_8fcbdf9612ed9cda5a238ad00e36f8ee"
       ],
       0,
-      "e78ddca3d0b085fc67940592e1434afe"
+      "a3f5d8c6040d77e17dcf2f3d46da66b0"
     ],
     [
       "TLSInfo.__proj__ID12__item__sr",
@@ -1807,7 +1815,7 @@
         "refinement_interpretation_Tm_refine_8fcbdf9612ed9cda5a238ad00e36f8ee"
       ],
       0,
-      "7894eeedcaaa44e8d0114414021b60eb"
+      "9758378a7dfd84757131e1feb68953de"
     ],
     [
       "TLSInfo.__proj__ID12__item__writer",
@@ -1820,7 +1828,7 @@
         "refinement_interpretation_Tm_refine_8fcbdf9612ed9cda5a238ad00e36f8ee"
       ],
       0,
-      "81ceacdd43e9f180319772d906674abf"
+      "fef94982c9af6020976156d09034a7c3"
     ],
     [
       "TLSInfo.peerLabel",
@@ -1838,7 +1846,7 @@
         "fuel_guarded_inversion_TLSInfo.expandTag"
       ],
       0,
-      "122f79d24a70ed85673164fe8056b2e2"
+      "1d1c57a84cd30a7c7f4e177c8b67bb3c"
     ],
     [
       "TLSInfo.peerId",
@@ -1851,7 +1859,7 @@
         "fuel_guarded_inversion_TLSInfo.id"
       ],
       0,
-      "0cf3efd82579e9f4eb2b1b103fa1347f"
+      "c6be0a7847877157d2e203622d0c12a1"
     ],
     [
       "TLSInfo.siId",
@@ -1863,7 +1871,7 @@
         "assumption_Parsers.ProtocolVersion.protocolVersion__uu___haseq"
       ],
       0,
-      "f6fba8972101b5c6e6db5c03ffeff2ac"
+      "9087910f8258a4db7142207b1c6e9daa"
     ],
     [
       "TLSInfo.siId",
@@ -1875,7 +1883,7 @@
         "assumption_Parsers.ProtocolVersion.protocolVersion__uu___haseq"
       ],
       0,
-      "cdb007e7ad21efefeafca4f932d6c3c1"
+      "72d2aa2ec36b74a5eeee998f5befce13"
     ],
     [
       "TLSInfo.siId",
@@ -1910,12 +1918,12 @@
         "projection_inverse_BoxInt_proj_0",
         "projection_inverse_FStar.Pervasives.Native.Mktuple2__1",
         "projection_inverse_FStar.Pervasives.Native.Mktuple2__2",
+        "refinement_interpretation_Tm_refine_0ec011aea9f93256a3547ad9f0c667f1",
         "refinement_interpretation_Tm_refine_12904f1a9e9e8436c394a25477098548",
         "refinement_interpretation_Tm_refine_71ea40360194fe02ee1272538c9cacbc",
         "refinement_interpretation_Tm_refine_81407705a0828c2c1b1976675443f647",
         "refinement_interpretation_Tm_refine_9393d5893839cb3aaf93f101bad13b82",
         "refinement_interpretation_Tm_refine_a678543f3c739a367ac0999d83af1cd5",
-        "refinement_interpretation_Tm_refine_a78e81a34494fa620ef91991a1267b1f",
         "refinement_interpretation_Tm_refine_b913a3f691ca99086652e0a655e72f17",
         "typing_FStar.Bytes.reveal", "typing_FStar.Seq.Base.empty",
         "typing_FStar.Seq.Base.length",
@@ -1927,7 +1935,7 @@
         "typing_tok_Parsers.ProtocolVersion.TLS_1p2@tok"
       ],
       0,
-      "c94fd52e06275fb6ea72a61d323e5172"
+      "1ea6cfbffbb5ca37eb864d7e702f4a5b"
     ],
     [
       "TLSInfo.pv_of_id",
@@ -1942,7 +1950,7 @@
         "refinement_interpretation_Tm_refine_9f948bc3ea58283edd778ba9c9ec878b"
       ],
       0,
-      "866b25a98670eb08a01f871660ba1906"
+      "646bd7713c31f2e26877336a4db2632e"
     ],
     [
       "TLSInfo.nonce_of_id",
@@ -1957,7 +1965,7 @@
         "fuel_guarded_inversion_TLSInfo.id"
       ],
       0,
-      "6d656041f5408034b011bc23a70f30ac"
+      "4e8ccbac391863fe2b781fe9a0b8f74f"
     ],
     [
       "TLSInfo.kdfAlg_of_id",
@@ -1970,7 +1978,7 @@
         "refinement_interpretation_Tm_refine_8fcbdf9612ed9cda5a238ad00e36f8ee"
       ],
       0,
-      "7fb4c40aa3ead80b65ba4af5b4487c4e"
+      "f513fb40300013a8d194b8cfe39ba946"
     ],
     [
       "TLSInfo.macAlg_of_id",
@@ -1986,7 +1994,7 @@
         "refinement_interpretation_Tm_refine_c05ce9ff00b708cd92d521f714e36edc"
       ],
       0,
-      "53a1d8baeb59f68fb176330b81265dc4"
+      "55f0daf80e573807fb0979db3d9b772b"
     ],
     [
       "TLSInfo.encAlg_of_id",
@@ -2001,7 +2009,7 @@
         "refinement_interpretation_Tm_refine_b319154b09083d417aa297445f13dac1"
       ],
       0,
-      "2477d16ac269aab73c1fb2242c9c8d0b"
+      "302aad7bb328737cac0dccba2cd6b1ea"
     ],
     [
       "TLSInfo.aeAlg_of_id",
@@ -2016,7 +2024,7 @@
         "refinement_interpretation_Tm_refine_9f948bc3ea58283edd778ba9c9ec878b"
       ],
       0,
-      "1d1aa78a5aae32f14b1079d5f4620d62"
+      "88a9f6cb144274adba8719943eb5040a"
     ],
     [
       "TLSInfo.lemma_MtE",
@@ -2033,7 +2041,7 @@
         "refinement_interpretation_Tm_refine_9f948bc3ea58283edd778ba9c9ec878b"
       ],
       0,
-      "b2f46ed7f961dafcae0fa373c88fe7c7"
+      "03a615606647e494a8c591d92969a7fc"
     ],
     [
       "TLSInfo.lemma_ID13",
@@ -2049,7 +2057,7 @@
         "projection_inverse_CipherSuite.AEAD__1"
       ],
       0,
-      "1b81cc937db223e8447575457e665618"
+      "7234f88064c7b8283c99b2abceeaab47"
     ],
     [
       "TLSInfo.lemma_ID12",
@@ -2065,7 +2073,7 @@
         "refinement_interpretation_Tm_refine_33c77bf558392d71098c5ee93f1d02de"
       ],
       0,
-      "a8c2e7ebde8ae534e200d01f3a63589f"
+      "98458abfaf211dd1e9a5b2cad8861d67"
     ],
     [
       "TLSInfo.plainText_is_not_auth",
@@ -2077,7 +2085,7 @@
         "projection_inverse_BoxBool_proj_0"
       ],
       0,
-      "838255c1a4bc71d0a73decb0780a5827"
+      "f4b064ec88cd7a5feca7f4cd021123b5"
     ]
   ]
 ]

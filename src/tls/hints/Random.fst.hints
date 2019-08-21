@@ -1,5 +1,5 @@
 [
-  "\u0004r»–òÆ\u0001†`VøµQ9p¹",
+  "šL¥0M7d\u0005‘-\u0007”Í\u0004íí",
   [
     [
       "Random.discard",
@@ -12,16 +12,7 @@
         "lemma_FStar.HyperStack.ST.lemma_same_refs_in_stack_regions_intro"
       ],
       0,
-      "09868f15689fc7cb0cf48f16943b37ca"
-    ],
-    [
-      "Random.print",
-      1,
-      2,
-      1,
-      [ "@query" ],
-      0,
-      "9513bd713733469a5d85efb0e6baf697"
+      "aeb18577ef1fa426fe95bf82ae3f6dfc"
     ],
     [
       "Random.trace",
@@ -34,7 +25,7 @@
         "lemma_FStar.HyperStack.ST.lemma_same_refs_in_stack_regions_intro"
       ],
       0,
-      "6318feed680fda732fc786df0bcdb3b4"
+      "3f3ca2476368886e97f09be01465c2b5"
     ],
     [
       "Random.sample32",
@@ -94,7 +85,7 @@
         "typing_FStar.UInt32.v", "typing_Mem.tls_region"
       ],
       0,
-      "a77a85721d10e76c8ffcfa532b914210"
+      "8454b86fa3354a5ada18713962e811c3"
     ],
     [
       "Random.sample",
@@ -132,7 +123,19 @@
         "typing_Spec.Poly1305.size_key"
       ],
       0,
-      "bd1bfd11b850ff9ea88e9b514c710fe0"
+      "1b9b47bf7bd0f5151547b20ccfa81ac7"
+    ],
+    [
+      "Random.sample_secret_buffer",
+      1,
+      2,
+      1,
+      [
+        "@query", "equation_EverCrypt.Specs.random_sample_pre",
+        "equation_FStar.Monotonic.HyperStack.mem"
+      ],
+      0,
+      "dcbd39f085a18969a02ae0682043c463"
     ]
   ]
 ]
