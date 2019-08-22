@@ -14,9 +14,12 @@ open FStar.Bytes
 
 open Declassify
 
+#set-options "--max_fuel 0 --max_ifuel 0 --z3rlimit 10"
+
 let hash_len (a:alg)
   : n:UInt32.t{UInt32.v n == hash_length a}
   =
+  allow_inversion alg;
   match a with
   | MD5 -> assert_norm(hash_length MD5 == 16); 16ul
   | SHA1 -> assert_norm(hash_length SHA1 == 20); 20ul
@@ -76,7 +79,7 @@ let hmac a k text =
   assert_norm (pow2 32 < pow2 61);
   assert_norm (pow2 61 < pow2 125);
   assert (Seq.length text + block_length a <= max_input_length a);
-  let t: Spec.Hash.Definitions.bytes_hash a = Spec.HMAC.hmac a k text in
+  let t: bytes_hash a = Spec.HMAC.hmac a k text in
   Bytes.hide t
 
 //18-08-31 review

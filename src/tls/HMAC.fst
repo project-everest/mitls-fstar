@@ -5,6 +5,8 @@ open Mem
 
 open FStar.HyperStack.ST
 
+#set-options "--max_fuel 0 --max_ifuel 0 --z3rlimit 20"
+
 let ha = EverCrypt.HMAC.supported_alg
 
 (* Parametric keyed HMAC; could be coded up from two HASH calls. *)
@@ -12,15 +14,13 @@ let ha = EverCrypt.HMAC.supported_alg
 val hmac:
   a:ha ->
   k:hkey a ->
-  m: macable a ->
-//18-09-12 failing on equal_domains with Stack instead of ST, not sure why.
-  ST (tag a)
+  m:macable a ->
+  Stack (tag a)
   (requires fun h0 -> True)
   (ensures fun h0 t h1 ->
-    modifies_none h0 h1 /\ // FIXME(adl) this is now wrong
+    modifies_none h0 h1 /\
     t = Hashing.Spec.hmac a k m)
 
-#set-options "--z3rlimit 20"
 let hmac a k m =
   let h00 = get() in
   push_frame();
@@ -46,7 +46,6 @@ let hmac a k m =
     pop_frame();
     let h1 = get() in
     assert(LowStar.Modifies.(modifies (loc_buffer bt) h0 h1))
-    //assume(equal_domains h0 h1)
     );
 
   let t = Bytes.of_buffer lt bt in
@@ -59,7 +58,6 @@ let hmac a k m =
   assert(LowStar.Modifies.(modifies loc_none h00 h11));
   assume(modifies_none h00 h11); //18-09-12 missing compatibility lemma?
   t
-
 
 //18-09-02 TODO lower code to avoid bytes-allocating the tag.
 
