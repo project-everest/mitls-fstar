@@ -134,7 +134,7 @@
         "typing_Spec.Poly1305.size_key", "typing_tok_Lib.IntTypes.U32@tok"
       ],
       0,
-      "12fd07526d7a99d8da4bd9a6fee05ffe"
+      "29af23e7a2c4ebe5396f726a7f637be5"
     ],
     [
       "HMAC.UFCMA.log_t",
@@ -564,6 +564,7 @@
         "equation_HMAC.UFCMA.ipkg", "equation_HMAC.UFCMA.key",
         "equation_HMAC.UFCMA.keylen", "equation_HMAC.UFCMA.lbytes32",
         "equation_HMAC.ha", "equation_Hashing.Spec.max_block_length",
+        "equation_Hashing.Spec.max_hash_length",
         "equation_Lib.IntTypes.pub_int_v", "equation_Lib.IntTypes.v",
         "equation_Mem.is_tls_rgn", "equation_Mem.tls_rgn",
         "equation_Pkg.keylen", "equation_Prims.nat",
@@ -575,9 +576,9 @@
         "fuel_guarded_inversion_Pkg.ipkg",
         "function_token_typing_Prims.__cache_version_number__",
         "int_inversion", "lemma_Hashing.Spec.lemma_blockLength",
-        "primitive_Prims.op_Addition", "primitive_Prims.op_AmpAmp",
-        "primitive_Prims.op_Equality", "primitive_Prims.op_LessThan",
-        "primitive_Prims.op_LessThanOrEqual",
+        "lemma_Hashing.Spec.lemma_tagLen", "primitive_Prims.op_Addition",
+        "primitive_Prims.op_AmpAmp", "primitive_Prims.op_Equality",
+        "primitive_Prims.op_LessThan", "primitive_Prims.op_LessThanOrEqual",
         "primitive_Prims.op_Subtraction",
         "proj_equation_HMAC.UFCMA.Info_alg",
         "projection_inverse_BoxBool_proj_0",
@@ -601,7 +602,7 @@
         "typing_Spec.Hash.Definitions.hash_word_length"
       ],
       0,
-      "b2ea0c453071070c0c45f0992b780e69"
+      "d26847bd86fcdec1ca87d9bd4bd08f08"
     ],
     [
       "HMAC.UFCMA.coerce",
@@ -665,6 +666,7 @@
         "equation_HMAC.UFCMA.lbytes32", "equation_HMAC.UFCMA.model",
         "equation_HMAC.UFCMA.usage", "equation_HMAC.ha",
         "equation_Hashing.Spec.max_block_length",
+        "equation_Hashing.Spec.max_hash_length",
         "equation_Lib.IntTypes.pub_int_v", "equation_Lib.IntTypes.v",
         "equation_Mem.rset_empty", "equation_Pkg.fresh_regions",
         "equation_Pkg.keylen", "equation_Prims.nat",
@@ -686,10 +688,10 @@
         "lemma_FStar.Map.lemma_equal_intro",
         "lemma_FStar.Set.mem_complement", "lemma_FStar.Set.mem_empty",
         "lemma_FStar.Set.mem_subset", "lemma_Hashing.Spec.lemma_blockLength",
-        "primitive_Prims.op_Addition", "primitive_Prims.op_AmpAmp",
-        "primitive_Prims.op_BarBar", "primitive_Prims.op_LessThan",
-        "primitive_Prims.op_LessThanOrEqual", "primitive_Prims.op_Negation",
-        "primitive_Prims.op_Subtraction",
+        "lemma_Hashing.Spec.lemma_tagLen", "primitive_Prims.op_Addition",
+        "primitive_Prims.op_AmpAmp", "primitive_Prims.op_BarBar",
+        "primitive_Prims.op_LessThan", "primitive_Prims.op_LessThanOrEqual",
+        "primitive_Prims.op_Negation", "primitive_Prims.op_Subtraction",
         "proj_equation_HMAC.UFCMA.Info_alg",
         "proj_equation_HMAC.UFCMA.MAC_u",
         "projection_inverse_BoxBool_proj_0",
@@ -876,7 +878,7 @@
         "typing_Spec.Poly1305.size_key"
       ],
       0,
-      "89c823a9c9e8e9a4a24e68284bf8e28d"
+      "2cd1d63c0958f4cde2b8517a65367ebf"
     ],
     [
       "HMAC.UFCMA.info1",
@@ -1082,7 +1084,7 @@
         "typing_Tm_abs_26eef3985d99a56697f5a9d337882dba"
       ],
       0,
-      "f1ca3f6c8747d5ca005b68e472a07cf4"
+      "83564f14c089e14b8cc31fc9c5b7c473"
     ],
     [
       "HMAC.UFCMA.unit_test",
@@ -1168,7 +1170,7 @@
         "typing_tok_Spec.Hash.Definitions.SHA1@tok"
       ],
       0,
-      "ffc6deeb78553d46d660f04eb0e1540d"
+      "7885d241f441557923ebdd956bd2a4dd"
     ]
   ]
 ]
