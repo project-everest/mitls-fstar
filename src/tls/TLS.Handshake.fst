@@ -127,11 +127,18 @@ let rec recv_fragment (hs:hs) #i rg f =
     (* CLIENT *)
 
     | C_init, _, _ -> InError (fatalAlert Unexpected_message, "Client hasn't sent hello yet")
+
     | C_wait_ServerHello, [Msg (M_server_hello sh)], [] ->
       if HSM.is_hrr sh then
         client_HelloRetryRequest hs (HSM.get_hrr sh)
       else
         recv_again (client_ServerHello hs (HSM.get_sh sh))
+
+    | C13_sent_CH2 ch1 hrr, [Msg (M_server_hello sh)], [] ->
+      if HSM.is_hrr sh then 
+        InError (fatalAlert Unexpected_message, "server sent a second retry request")
+      else
+        recv_again (client_ServerHello_HRR hs ch1 hrr (HSM.get_sh sh))
 
     // 1.2 full: wrap these two into a single received flight with optional [cr]
     | C_wait_ServerHelloDone, [Msg12 (M12_certificate c); Msg12 (M12_server_key_exchange ske); Msg12 (M12_server_hello_done ())], [_] ->
@@ -179,6 +186,10 @@ let rec recv_fragment (hs:hs) #i rg f =
     | S_wait_CF2 digest, [Msg12 (M12_finished f)], [digestClientFinished] -> // classic resumption
       server_ClientFinished2 hs f digest digestClientFinished
 
+    // 1.3, retry (second CH)
+    | S13_wait_CH2 ch1 hrr, [Msg (M_client_hello ch2)], [] ->
+      server_ClientHello2 hs ch1 hrr ch2 empty_bytes
+
     // 1.3, similarly group cases with optional ((c,cv)?
     | S13_wait_EOED, [Msg13 (M13_end_of_early_data ())], [digestEOED] ->
       server_EOED hs digestEOED
@@ -203,7 +214,7 @@ let recv_ccs (hs:hs) =
   trace "recv_ccs";
   // Draft 22 CCS during HRR
   // Because of stateless HRR, this may also happen as the very first message before CH (!!!)
-  let is_hrr = Nego.is_hrr hs.nego in
+  let is_hrr = C13_sent_CH2? !hs.state in
   let is_idle = S_Idle? !hs.state in
   if is_hrr || is_idle then
     begin

@@ -17,6 +17,16 @@ module Nego = Negotiation
 module HS = FStar.HyperStack
 module H = Hashing.Spec
 
+val server_ClientHello2:
+  hs: hs ->
+  ch1: HSM.clientHello ->
+  hrr: HSM.hrr ->
+  ch2: HSM.clientHello ->
+  app_cookie: B.bytes ->
+  ST incoming
+  (requires fun h -> True)
+  (ensures fun h0 _ h1 -> True)
+  
 val server_ClientHello:
   hs: hs ->
   ch: HSM.clientHello ->

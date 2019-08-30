@@ -447,6 +447,8 @@ let stash (rgn:HS.rid) #t #b (r:repr t b)
      B.modifies B.loc_none h0 h1 /\
      valid r' h1 /\
      r.meta == r'.meta)
+     //Add that the slice s is actually in region rgn
+     //And that the slice is live if the region is live
  = let r_len = r.end_pos - r.start_pos in
    let b_sub = C.sub b.base r.start_pos r_len in
    (*

@@ -179,6 +179,35 @@ let client_ClientHello (Client region config r) =
     r := C_wait_ServerHello ({full_retry=None; full_ch=offer1}) ms ks;
     Correct () )
 
+let client_HelloRetryRequest hs hrr =
+  let open Parsers.HelloRetryRequest in
+  trace("Got HRR, extensions: " ^ Nego.string_of_hrres hrr.extensions);
+  let ch1 = Nego.getOffer hs.nego in
+  let share, ks =
+  match Negotiation.group_of_hrr hrr with
+  | None ->
+    // this case should only ever happen in QUIC stateless retry address validation
+    // FIXME(adl) deprecated in current QUIC with transport retry
+    trace "Server did not specify a group in HRR, re-using the previous choice"; None, ks
+  | Some ng ->
+    let Some g = CommonDH.group_of_namedGroup ng in
+      let s, ks = KS.ks_client13_hello_retry ks g in
+      Some (| g, s |), ks
+  in
+  match Nego.client_HelloRetryRequest ch1 hrr share with
+  | Error z -> InError z
+  | Correct (hri, ch2) ->
+    // TODO: adapt from the code above
+    // does it make sense to send binders with the wrong hash algorithm?
+
+    // WAS: (assuming the server's required share had already been sent)
+    // client_Binders hs ch2;
+//    client_Binders hs ch2;
+//    hs.state := C13_sent_CH2 ch1 hri;
+//    hs.nego.Nego.state := Nego.C_Offer ch2;
+    Receive.InAck false false
+
+(*
 let client_HelloRetryRequest (Client region config r) hrr =
   trace "client_HelloRetryRequest";
   let C_wait_ServerHello offer ms ks = !r in
@@ -196,14 +225,11 @@ let client_HelloRetryRequest (Client region config r) hrr =
   match Negotiation.client_HelloRetryRequest offer.full_ch hrr share with
   | Error z -> Receive.InError z
   | Correct offer2 -> (
-    // TODO: adapt from the code above
-    // does it make sense to send binders with the wrong hash algorithm?
 
-    // WAS: (assuming the server's required share had already been sent)
-    // client_Binders hs ch2;
     // // Note: we stay in Wait_ServerHello
     // // Only the Nego state machine was moved by HRR
     Receive.InAck false false )
+*)
 
 let client_ServerHello (Client region config r) sh =
   trace "client_ServerHello";
@@ -271,6 +297,13 @@ let client_ServerHello (Client region config r) sh =
         s.state := C_wait_ServerHelloDone;
         InAck false false
       end ))
+
+let client_ServerHello_HRR s ch1 hri sh =
+  trace "client_ServerHello";
+  match Nego.check_retry ch1 hri sh with
+  | Error z -> InError z
+  | Correct () ->
+    client_ServerHello s sh
 
 (*** TLS 1.2 ***)
 

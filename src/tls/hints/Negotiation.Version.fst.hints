@@ -11,7 +11,7 @@
         "assumption_Parsers.ProtocolVersion.protocolVersion__uu___haseq"
       ],
       0,
-      "04b035b27433c7277922df3ccb58403e"
+      "42af6d923644a3e99a96328b49e9d537"
     ],
     [
       "Negotiation.Version.snoc_supportedVersion",
@@ -28,7 +28,7 @@
         "projection_inverse_FStar.Pervasives.Native.Mktuple2__2"
       ],
       0,
-      "68a1e051b3e0bb089d1664c8b53a892e"
+      "696ef373f7598beba4ffd2e5c287f28a"
     ],
     [
       "Negotiation.Version.support",
@@ -65,7 +65,7 @@
         "typing_tok_Parsers.ProtocolVersion.TLS_1p3@tok"
       ],
       0,
-      "1d3d7b7cdebc1cd8dcef34b35c829810"
+      "f87c90e40abe9c915a73673561f03b68"
     ],
     [
       "Negotiation.Version.support_new",
@@ -99,7 +99,7 @@
         "typing_tok_Parsers.ProtocolVersion.TLS_1p3@tok"
       ],
       0,
-      "7bed09ed7d2d82b4ec1f12dc54295134"
+      "62aaa12477d253b82a67922002c0e334"
     ],
     [
       "Negotiation.Version.mem_support",
@@ -111,7 +111,7 @@
         "assumption_Parsers.ProtocolVersion.protocolVersion__uu___haseq"
       ],
       0,
-      "2cdc6679ea63887b952a74f7fa699b82"
+      "28fa99cf3e47739d2a5c66fa4f518606"
     ],
     [
       "Negotiation.Version.supported_lemma",
@@ -210,7 +210,7 @@
         "typing_tok_Parsers.ProtocolVersion.TLS_1p3@tok"
       ],
       0,
-      "3101bcd0a990a004bca9ac68b58c392d"
+      "2cfe63a72a41a568dda0b9d6b53786a2"
     ],
     [
       "Negotiation.Version.write_supportedVersion",
@@ -222,7 +222,7 @@
         "refinement_interpretation_Tm_refine_8402762c0a711db3dd84e7403c402152"
       ],
       0,
-      "3956ffe81c9754337d8010d1cc5a3b9f"
+      "be62e4e0c890e88a82fdf00b91710b88"
     ],
     [
       "Negotiation.Version.write_supportedVersion",
@@ -336,7 +336,7 @@
         "typing_Negotiation.Version.support"
       ],
       0,
-      "8e059bc2e2187a77dd3b5de89e0b3e72"
+      "ec853c837542413aff48e9906393361c"
     ],
     [
       "Negotiation.Version.write_supportedVersions",
@@ -505,7 +505,7 @@
         "typing_TLSInfo.safe_region"
       ],
       0,
-      "0bef62521fde2cc0559e051ed536d40f"
+      "2cb250c7805f48b265a56abfed07dfb5"
     ],
     [
       "Negotiation.Version.owrite_supportedVersions",
@@ -522,7 +522,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind"
       ],
       0,
-      "9883395e7861dc9ddb2b488269eb6707"
+      "21ba6896175f6a7b535e085e8873e91e"
     ],
     [
       "Negotiation.Version.owrite_supportedVersions",
@@ -607,7 +607,7 @@
         "lemma_FStar.Map.lemma_ContainsDom",
         "lemma_FStar.Pervasives.invertOption",
         "lemma_FStar.Set.lemma_equal_refl", "lemma_FStar.UInt.pow2_values",
-        "lemma_FStar.UInt32.vu_inv",
+        "lemma_FStar.UInt32.uv_inv", "lemma_FStar.UInt32.vu_inv",
         "lemma_LowParse.Low.Base.valid_list_elim",
         "lemma_LowParse.Slice.buffer_srel_of_srel_of_buffer_srel",
         "lemma_LowStar.Monotonic.Buffer.loc_buffer_from_to_eq",
@@ -648,6 +648,7 @@
         "refinement_interpretation_Tm_refine_a3ac6b29f87fe50a32f565e9fe1d0950",
         "refinement_interpretation_Tm_refine_b8b6aeb489b761b86c0ce3170a6f72d6",
         "refinement_interpretation_Tm_refine_bd8e6951232017ff14d792ff84022c45",
+        "refinement_interpretation_Tm_refine_c6c18a7ceb46d419c35ff8551117551e",
         "refinement_interpretation_Tm_refine_f13070840248fced9d9d60d77bdae3ec",
         "refinement_interpretation_Tm_refine_fe73bdb8b9cb8fc03d6c2d252618ec90",
         "refinement_interpretation_Tm_refine_ff3f214a1d72a8cdeaa968f7e92cedb4",
@@ -658,9 +659,11 @@
         "typing_FStar.Monotonic.HyperStack.get_hmap",
         "typing_FStar.Monotonic.HyperStack.get_tip",
         "typing_FStar.UInt.fits", "typing_FStar.UInt32.sub",
-        "typing_FStar.UInt32.v", "typing_LowParse.Low.Base.contents_list",
+        "typing_FStar.UInt32.uint_to_t", "typing_FStar.UInt32.v",
+        "typing_LowParse.Low.Base.contents_list",
         "typing_LowParse.Low.Base.max_uint32",
         "typing_LowParse.Low.Base.serialized_length",
+        "typing_LowParse.Low.Base.serialized_list_length",
         "typing_LowParse.Slice.__proj__Mkslice__item__base",
         "typing_LowParse.Slice.__proj__Mkslice__item__len",
         "typing_LowParse.Slice.loc_slice_from",
@@ -668,6 +671,7 @@
         "typing_LowStar.Buffer.trivial_preorder",
         "typing_Parsers.ProtocolVersion.protocolVersion_parser",
         "typing_Parsers.ProtocolVersion.protocolVersion_parser_kind",
+        "typing_Parsers.ProtocolVersion.protocolVersion_serializer",
         "typing_Parsers.SupportedVersions.supportedVersions_parser",
         "typing_Parsers.SupportedVersions.supportedVersions_parser_kind"
       ],
@@ -686,7 +690,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind"
       ],
       0,
-      "50fde2acbe07e88ada8248b53b01afcf"
+      "7c6339e07b575be9f6e590c17c9ccc1b"
     ],
     [
       "Negotiation.Version.owrite_clientHelloExtension_CHE_supported_versions",
@@ -820,7 +824,7 @@
         "typing_Parsers.SupportedVersions.supportedVersions_parser_kind"
       ],
       0,
-      "ece0384c961026c69d31ab210b9306a5"
+      "31ef72a88ce29a882c3f066ad0c2292e"
     ],
     [
       "Negotiation.Version.omake_CHE_supported_versions",
@@ -839,7 +843,7 @@
         "typing_FStar.Pervasives.Native.uu___is_Some"
       ],
       0,
-      "d0e5cd2d538aac177898142343650f82"
+      "f894cb362c3cd6259320904c186f1522"
     ],
     [
       "Negotiation.Version.owrite_constr_clientHelloExtension_CHE_supported_versions",
@@ -853,7 +857,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind"
       ],
       0,
-      "27205bf013caf658ff04cdf219d8ba93"
+      "2ce40b7c3b9b97906bf8bd73f180446d"
     ],
     [
       "Negotiation.Version.owrite_constr_clientHelloExtension_CHE_supported_versions",
@@ -995,7 +999,7 @@
         "typing_Parsers.ClientHelloExtension_CHE_supported_versions.clientHelloExtension_CHE_supported_versions_parser_kind"
       ],
       0,
-      "9e6f324029ae2ed4fb66dc800b965153"
+      "5eda05a83af24c6816a925eafecf97fa"
     ],
     [
       "Negotiation.Version.write_snoc_supportedVersion",
@@ -1012,7 +1016,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind"
       ],
       0,
-      "a1ad2f9243ea1d72aea81c9ada443616"
+      "561f61db282474cc83cee0db7f9537e1"
     ],
     [
       "Negotiation.Version.write_snoc_supportedVersion",
@@ -1059,7 +1063,7 @@
         "typing_Parsers.ProtocolVersion.protocolVersion_writer"
       ],
       0,
-      "5d263d0ca821c38ae6a70dcb0920d2db"
+      "bdb69d1399c73c97df1674b0c026e3fe"
     ],
     [
       "Negotiation.Version.write_supportedVersions_new",
@@ -1257,7 +1261,7 @@
         "typing_tok_Parsers.ProtocolVersion.TLS_1p3@tok"
       ],
       0,
-      "c1a568e6557a22b82e171aa7e2f91d6d"
+      "a4619566a0e74b76827780c6b383172e"
     ],
     [
       "Negotiation.Version.offered_versions",
@@ -1288,7 +1292,7 @@
         "typing_Negotiation.Version.offered_extensions"
       ],
       0,
-      "fc600444f96796ff2b7f9b074fc2c839"
+      "c1fb7ea5a4b3eecc528230644e68c54f"
     ],
     [
       "Negotiation.Version.choose",
@@ -1350,7 +1354,7 @@
         "typing_Negotiation.Version.offered_extensions"
       ],
       0,
-      "cf28a438718f914a5a1c1a3a35c552c8"
+      "1eec690f31bf2b2dbbb76ba1bdb5803e"
     ],
     [
       "Negotiation.Version.isSentinelRandomValue",
@@ -1384,7 +1388,7 @@
         "typing_FStar.UInt32.v", "typing_Mem.tls_region"
       ],
       0,
-      "f987033c119f00e048f50b82ea7ae6f2"
+      "0fc07570056de5cbe9317141b18c9551"
     ],
     [
       "Negotiation.Version.chosen",
@@ -1416,7 +1420,7 @@
         "typing_Parsers.RealServerHello.__proj__MkrealServerHello__item__extensions"
       ],
       0,
-      "e3f75add4abe9032379066ca0f208192"
+      "5072a24c1bfaa7c3369f6d5b26d0a52c"
     ],
     [
       "Negotiation.Version.accept",
@@ -1437,7 +1441,7 @@
         "refinement_interpretation_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
       ],
       0,
-      "6bdf4e79c118464846dfeec434a3bf76"
+      "724f474a0e7a07937dfc5d7451e9dbf6"
     ],
     [
       "Negotiation.Version.accept",
@@ -1465,7 +1469,7 @@
         "typing_Negotiation.Version.chosen"
       ],
       0,
-      "814246411379bb87e29f6df97ea5de65"
+      "3b60a32abd0eb6a7be234d455fa89fcd"
     ]
   ]
 ]

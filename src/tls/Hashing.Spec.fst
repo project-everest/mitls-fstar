@@ -12,6 +12,8 @@ include Spec.Hash.Definitions
 open FStar.Integers
 open FStar.Bytes
 
+open Declassify
+
 let hash_len (a:alg)
   : n:UInt32.t{UInt32.v n == hash_length a}
   =
@@ -70,13 +72,14 @@ val hmac:
     Seq.length text + block_length a <= max_input_length a /\
     Bytes.reveal t = Spec.HMAC.hmac a (Bytes.reveal k) text})
 
+#push-options "--max_fuel 0 --max_ifuel 0 --z3rlimit 100"
 let hmac a k text =
   let k = Bytes.reveal k in
   let text = Bytes.reveal text in
   assert_norm (pow2 32 < pow2 61);
   assert_norm (pow2 61 < pow2 125);
   assert (Seq.length text + block_length a <= max_input_length a);
-  let t: Spec.Hash.Definitions.bytes_hash a = Spec.HMAC.hmac a k text in
+  let t: bytes_hash a = Spec.HMAC.hmac a k text in
   Bytes.hide t
 
 //18-08-31 review

@@ -631,7 +631,7 @@ val extend (#a:_) (s:state a) (l:label_repr) (tx:G.erased transcript_t)
 
 /// `transcript_hash`: The specificational hash of the transcript
 val transcript_hash (a:HashDef.hash_alg) (t:transcript_t)
-  : GTot (b: HashDef.lbytes (HashDef.hash_length a))
+  : GTot (HashDef.bytes_hash a)
 
 /// `hashed a t`: An abstract predicate recording that the transcript
 /// has been hashed in ideal state, if idealization is on

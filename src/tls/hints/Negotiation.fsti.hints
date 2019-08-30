@@ -1,5 +1,5 @@
 [
-  "nxEq•µ¼T15Ì÷¢\u00198\u0017",
+  "\u001cÕ¢µ÷œø§\t\u0003“Ðà|G–",
   [
     [
       "Negotiation.implemented_version",
@@ -11,7 +11,7 @@
         "assumption_Parsers.ProtocolVersion.protocolVersion__uu___haseq"
       ],
       0,
-      "19b61f7814e81b1e6a9bd64575ec9188"
+      "1c23b177ae9903a2f1c999cf1579927a"
     ],
     [
       "Negotiation.pski",
@@ -29,7 +29,7 @@
         "typing_Negotiation.find_clientPske"
       ],
       0,
-      "a7a554d30104e60fe8e9035f6ce9bd86"
+      "6d9a6db2f9585bad09859d5964851971"
     ],
     [
       "Negotiation.cr",
@@ -42,7 +42,7 @@
         "assumption_Parsers.CertificateRequest13.certificateRequest13__uu___haseq"
       ],
       0,
-      "45aea9c357119c600890abd3d2bc78dc"
+      "cd43a31c569a72e3afe270b1a5b8049f"
     ],
     [
       "Negotiation.__proj__CertRequest12__item___0",
@@ -56,7 +56,7 @@
         "refinement_interpretation_Tm_refine_cb88a629897954e423236d26f22e1b99"
       ],
       0,
-      "20a54ae71543e4624991fbd3d471e58c"
+      "4660ce556c9e8c10c4bb6c2fa40e5c95"
     ],
     [
       "Negotiation.__proj__CertRequest13__item___0",
@@ -70,7 +70,7 @@
         "refinement_interpretation_Tm_refine_77967c6cb5c4665a754bc42ae2186179"
       ],
       0,
-      "3f360edef5f65334e9df324d985fa9c3"
+      "638de9b8673e1624cb2c3d450807359f"
     ],
     [
       "Negotiation.__proj__Mode__item__n_pski",
@@ -82,7 +82,7 @@
         "projection_inverse_Negotiation.Mode_n_offer"
       ],
       0,
-      "41e024c7e1835e36277e13f5112ffbc6"
+      "19e8ee092e4ea14fb650ab8f27d9db8a"
     ],
     [
       "Negotiation.__proj__C_Init__item__n_client_random",
@@ -95,7 +95,7 @@
         "refinement_interpretation_Tm_refine_f824580933b3e5c204f427df2ea87d5d"
       ],
       0,
-      "3dbea20d5b04fca72a01ca3d63b0a2b0"
+      "668e1cb61f41e469acd3f1d90d727e45"
     ],
     [
       "Negotiation.__proj__C_Offer__item__n_offer",
@@ -109,33 +109,7 @@
         "refinement_interpretation_Tm_refine_ce40c987ecf6efe9977a30194a918c6e"
       ],
       0,
-      "c35229afcaa5081ade3ed7e668305322"
-    ],
-    [
-      "Negotiation.__proj__C_HRR__item__n_offer",
-      1,
-      2,
-      1,
-      [
-        "@MaxIFuel_assumption", "@query", "disc_equation_Negotiation.C_HRR",
-        "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_4c285493f7adcf31dfd5565912bc8c98"
-      ],
-      0,
-      "c9018b7c2df6610cc66e539e7f9acfe9"
-    ],
-    [
-      "Negotiation.__proj__C_HRR__item__n_hrr",
-      1,
-      2,
-      1,
-      [
-        "@MaxIFuel_assumption", "@query", "disc_equation_Negotiation.C_HRR",
-        "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_4c285493f7adcf31dfd5565912bc8c98"
-      ],
-      0,
-      "c34e0c9442164ba30e5bb408768de54f"
+      "c2f6736601e3e16894b34bb43b961030"
     ],
     [
       "Negotiation.__proj__C_WaitFinished1__item__n_partialmode",
@@ -149,7 +123,7 @@
         "refinement_interpretation_Tm_refine_939ce2fde9ef14ae506a678a7092f418"
       ],
       0,
-      "ad5a7109d6a27726b4a2b936cdb4c510"
+      "13857063c02b0a104b22da1c375b0b8c"
     ],
     [
       "Negotiation.__proj__C_Mode__item__n_mode",
@@ -162,7 +136,7 @@
         "refinement_interpretation_Tm_refine_43182a47fdfd7b1070a6e10da1df33cb"
       ],
       0,
-      "3519e04adf473925e01a35a383f12dd6"
+      "bd3c8112bae96a8c8d3bf501f77f92d9"
     ],
     [
       "Negotiation.__proj__C_WaitFinished2__item__n_mode",
@@ -176,7 +150,7 @@
         "refinement_interpretation_Tm_refine_d37045c605d3e4dd6cc3448462659bad"
       ],
       0,
-      "1898729a0a4a50f61fd589d5e7fc7dc1"
+      "209c02231f70fcdbde61a2aa97091563"
     ],
     [
       "Negotiation.__proj__C_WaitFinished2__item__n_client_certificate",
@@ -190,7 +164,7 @@
         "refinement_interpretation_Tm_refine_d37045c605d3e4dd6cc3448462659bad"
       ],
       0,
-      "8585ab8cfa756b1be8d15dd868fef32c"
+      "37dc487ac7c481c31cefb6c2ac9955f8"
     ],
     [
       "Negotiation.__proj__C_Complete__item__n_mode",
@@ -204,7 +178,7 @@
         "refinement_interpretation_Tm_refine_adfbeb973f138ebfd624cef06c951607"
       ],
       0,
-      "7dc70935c150f5a5a9c20bd885efa997"
+      "5d9d0931f3afe2e30cc1a4adae9ce104"
     ],
     [
       "Negotiation.__proj__C_Complete__item__n_client_certificate",
@@ -218,7 +192,7 @@
         "refinement_interpretation_Tm_refine_adfbeb973f138ebfd624cef06c951607"
       ],
       0,
-      "a445d7cca6b71fa1e1eab0f6e49e6d7f"
+      "ca7e812bf1ed0c43521a41dbeca0e56b"
     ],
     [
       "Negotiation.__proj__S_Init__item__n_server_random",
@@ -231,33 +205,7 @@
         "refinement_interpretation_Tm_refine_8876f1ee849d4ee1bb53d2b51ce16214"
       ],
       0,
-      "c0cd08f8f0629b02277ec7fc7c68995a"
-    ],
-    [
-      "Negotiation.__proj__S_HRR__item__n_offer",
-      1,
-      2,
-      1,
-      [
-        "@MaxIFuel_assumption", "@query", "disc_equation_Negotiation.S_HRR",
-        "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_e49aff01f1b4c208743d67bc8e8a3825"
-      ],
-      0,
-      "d93eab3cc1c1c7d80b39a203d4d3bcd5"
-    ],
-    [
-      "Negotiation.__proj__S_HRR__item__n_hrr",
-      1,
-      2,
-      1,
-      [
-        "@MaxIFuel_assumption", "@query", "disc_equation_Negotiation.S_HRR",
-        "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_e49aff01f1b4c208743d67bc8e8a3825"
-      ],
-      0,
-      "9567e808db2fc722cbcc4fc5d92d36c4"
+      "179078be2a916be10fa4a457c3d31649"
     ],
     [
       "Negotiation.__proj__S_ClientHello__item__n_mode",
@@ -271,7 +219,7 @@
         "refinement_interpretation_Tm_refine_377470996a4b896d8a26514bddd1b6f4"
       ],
       0,
-      "8d2a5485ae5a6b63635a576dbe021835"
+      "25da784dce65b51407d5cb1af36aeb1a"
     ],
     [
       "Negotiation.__proj__S_ClientHello__item__n_selected_cert",
@@ -285,7 +233,7 @@
         "refinement_interpretation_Tm_refine_377470996a4b896d8a26514bddd1b6f4"
       ],
       0,
-      "d3b71cd556d8c83e6765b8389266b864"
+      "5bd532f53b167ba2f71b84a68a957ef9"
     ],
     [
       "Negotiation.__proj__S_Mode__item__n_mode",
@@ -298,7 +246,7 @@
         "refinement_interpretation_Tm_refine_e37291de1d7103c73251cd3b62ef5f82"
       ],
       0,
-      "4c69f6e022bbaa5d9350b6989f137729"
+      "df4a8a8a07d5a9138312549920f42d43"
     ],
     [
       "Negotiation.__proj__S_Mode__item__n_selected_cert",
@@ -311,7 +259,7 @@
         "refinement_interpretation_Tm_refine_e37291de1d7103c73251cd3b62ef5f82"
       ],
       0,
-      "678e5a1a8c78e5b935504f0ad9c8e9f0"
+      "f41622996c97122b6e0b03dcaf9678dd"
     ],
     [
       "Negotiation.__proj__S_Complete__item__n_mode",
@@ -325,7 +273,7 @@
         "refinement_interpretation_Tm_refine_386efaf75601b26efd171ce33b377102"
       ],
       0,
-      "e82aadf1e3b671cc24e10b8732a61c46"
+      "a21805ce669ff51b916b9b75e196e50d"
     ],
     [
       "Negotiation.__proj__S_Complete__item__n_client_certificate",
@@ -339,7 +287,7 @@
         "refinement_interpretation_Tm_refine_386efaf75601b26efd171ce33b377102"
       ],
       0,
-      "3567aef5371cb7d65ad89bdd64e90ff2"
+      "bef929db287ddd11c2946e469ded828a"
     ],
     [
       "Negotiation.__proj__NS__item__state",
@@ -358,7 +306,7 @@
         "refinement_interpretation_Tm_refine_b5163a5c7eb2f4891aa85b6bd19b6e5e"
       ],
       0,
-      "184b1b111c4f31ed10235f2b2f9fa989"
+      "d626e3d3dd087f940a778fdfbc84521a"
     ],
     [
       "Negotiation.client_ClientHello",
@@ -380,7 +328,7 @@
         "refinement_interpretation_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
       ],
       0,
-      "9909c12eaa59972238e4d757ab2ae897"
+      "1053037fd6e7f7ab5235d58a51bc3cbf"
     ],
     [
       "Negotiation.client_ServerHello",
@@ -395,7 +343,7 @@
         "refinement_interpretation_Tm_refine_cdb0bb699273bce395436f29ce411ef2"
       ],
       0,
-      "32f8c9f7ed47a35696518635603a5333"
+      "7dfb443fb2253200b9bcf3ac34369ab8"
     ],
     [
       "Negotiation.clientComplete_13",
@@ -407,7 +355,7 @@
         "assumption_Parsers.ProtocolVersion.protocolVersion__uu___haseq"
       ],
       0,
-      "64d8136f67aace22934c984f7996e2fa"
+      "7752971a5edd5945fc107aa8ce25e54b"
     ],
     [
       "Negotiation.serverMode",
@@ -421,7 +369,7 @@
         "primitive_Prims.op_Addition", "projection_inverse_BoxInt_proj_0"
       ],
       0,
-      "eb2a62851806286c4e7bd7018f3b9395"
+      "9c43d49bbe0d7dbb1eb9928963df4323"
     ],
     [
       "Negotiation.__proj__ServerMode__item___0",
@@ -435,7 +383,7 @@
         "refinement_interpretation_Tm_refine_a24df06741a0dafc30197f2b0509b7aa"
       ],
       0,
-      "cd4f44aa9817db418c3c2955fa273f63"
+      "454c0d3e6c8bb7c0e7ce5cce73196a43"
     ],
     [
       "Negotiation.__proj__ServerMode__item___1",
@@ -449,7 +397,7 @@
         "refinement_interpretation_Tm_refine_a24df06741a0dafc30197f2b0509b7aa"
       ],
       0,
-      "7cf0af5151de604b8e85625138d96a2b"
+      "86012f4554b3693d1c21d6228cdfe0ae"
     ],
     [
       "Negotiation.__proj__ServerMode__item___2",
@@ -463,7 +411,7 @@
         "refinement_interpretation_Tm_refine_a24df06741a0dafc30197f2b0509b7aa"
       ],
       0,
-      "57232700a6e5043ce6bb566fa2391742"
+      "6b10fb5dbc7a77269c54508394ce8909"
     ],
     [
       "Negotiation.__proj__ServerRetry__item___0",
@@ -477,7 +425,7 @@
         "primitive_Prims.op_Addition", "projection_inverse_BoxInt_proj_0"
       ],
       0,
-      "51971e961abb3411af16d0d9dffa2c27"
+      "21a42fe1fd8fe88619d9312c53b45dcd"
     ],
     [
       "Negotiation.__proj__ServerRetry__item___0",
@@ -495,7 +443,7 @@
         "refinement_interpretation_Tm_refine_38a9ae15169f3c0b272258b8219ad392"
       ],
       0,
-      "298450e0c26bbdeaa54afdb431e96ca0"
+      "01a8de9c6dbdc02d3da7ff3f13f7a5ea"
     ],
     [
       "Negotiation.__proj__Fresh__item___0",
@@ -508,7 +456,7 @@
         "refinement_interpretation_Tm_refine_ccaf2274defaf994fe740109c4c6122c"
       ],
       0,
-      "c037ddd6a27961c65dca0bc98bbb12c3"
+      "799cbc4bc37d351b5b49c03dbfe14b73"
     ],
     [
       "Negotiation.__proj__Resumed__item___0",
@@ -522,7 +470,7 @@
         "refinement_interpretation_Tm_refine_7c4b92295b5797e0e1031b62ddfec097"
       ],
       0,
-      "0b9a5e025a6c60e893868a02e0f6d6b7"
+      "ed54940a7d3937e21a1cc745f6f90961"
     ]
   ]
 ]

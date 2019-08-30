@@ -8,7 +8,7 @@
       1,
       [ "@query", "assumption_Parsers.NamedGroup.namedGroup__uu___haseq" ],
       0,
-      "edbdf2ed0f75759154d7aeeb6b71e8b6"
+      "a47aa61ca560ed09eecbd19e73e4d06c"
     ],
     [
       "CommonDH.as_supportedNamedGroups",
@@ -41,7 +41,7 @@
         "typing_FStar.List.Tot.Base.for_all"
       ],
       0,
-      "0b8c211da982bc868737ff2389bccdd7"
+      "abee325fb451b057c7572ca36f689123"
     ],
     [
       "CommonDH.discard",
@@ -54,7 +54,7 @@
         "lemma_FStar.HyperStack.ST.lemma_same_refs_in_stack_regions_intro"
       ],
       0,
-      "04000f2e8402f52a1b9f30a6b0998515"
+      "805747f55225f7fdb4f95be2321827e7"
     ],
     [
       "CommonDH.dbg",
@@ -67,7 +67,7 @@
         "lemma_FStar.HyperStack.ST.lemma_same_refs_in_stack_regions_intro"
       ],
       0,
-      "f7dba20fd349ae08d41e2259f0555eec"
+      "18894e7ca79e7fd4d5641e07c8ec0bbf"
     ],
     [
       "CommonDH.group'",
@@ -79,7 +79,7 @@
         "assumption_EverCrypt.ec_curve__uu___haseq", "equation_ECGroup.group"
       ],
       0,
-      "f060b2774fb585772fd23a3b2bdf19b7"
+      "f78d03865b322b55657f92bd0b51b167"
     ],
     [
       "CommonDH.__proj__FFDH__item___0",
@@ -92,7 +92,7 @@
         "refinement_interpretation_Tm_refine_58066f49daf8dc204d13d6f149205410"
       ],
       0,
-      "4cf61e01e71de8d73739acccc4ba5ce4"
+      "1868a3fcb1e5871b197b30353ade01ee"
     ],
     [
       "CommonDH.__proj__ECDH__item___0",
@@ -105,7 +105,7 @@
         "refinement_interpretation_Tm_refine_60e79e51ec8062f18e3801bebe96f4b0"
       ],
       0,
-      "d18bf8d2c31be6476185422935d57335"
+      "51209a8d60d9b013f2cb0299f47d1383"
     ],
     [
       "CommonDH.group",
@@ -114,7 +114,7 @@
       1,
       [ "@query", "assumption_CommonDH.group___uu___haseq" ],
       0,
-      "c70aeb04f709458bb6e825054f884b3a"
+      "6ee01e2032db39a8341252622eefd445"
     ],
     [
       "CommonDH.string_of_group",
@@ -147,7 +147,7 @@
         "typing_Mem.tls_region"
       ],
       0,
-      "3ba0223004aae3e3625c83db6d85c628"
+      "8149186ea3933915953cd29236db46fa"
     ],
     [
       "CommonDH.pre_keyshare'",
@@ -166,7 +166,7 @@
         "typing_DHGroup.keyshare"
       ],
       0,
-      "2eb79651a1cc285195b91991aab12332"
+      "34106cf8cf9926a5f4d21252058bbd99"
     ],
     [
       "CommonDH.__proj__KS_FF__item__g",
@@ -179,7 +179,7 @@
         "refinement_interpretation_Tm_refine_c2299b50409481fc34ed9bd8770d93f3"
       ],
       0,
-      "0ac6ec702f661f1488c9687d6cec57f3"
+      "d4df795f713367e4fbe62855f10da0c4"
     ],
     [
       "CommonDH.__proj__KS_FF__item___1",
@@ -194,7 +194,7 @@
         "refinement_interpretation_Tm_refine_c2299b50409481fc34ed9bd8770d93f3"
       ],
       0,
-      "ed13f3ae95a20ff505079817ad29f229"
+      "c5a1a050ed4d8ae783b978341311221d"
     ],
     [
       "CommonDH.__proj__KS_EC__item__g",
@@ -207,7 +207,7 @@
         "refinement_interpretation_Tm_refine_dbcac6db93db07a87f47fddba7b72416"
       ],
       0,
-      "4d605dfa9a3a64ae60ffb3e78739bf7e"
+      "2c5db70c5c8922f1e5306d30454739c6"
     ],
     [
       "CommonDH.__proj__KS_EC__item___1",
@@ -225,7 +225,7 @@
         "refinement_interpretation_Tm_refine_dbcac6db93db07a87f47fddba7b72416"
       ],
       0,
-      "8c334937ec9279594292607fc25f0bcb"
+      "8b580b5f19154baf534f472c0507528b"
     ],
     [
       "CommonDH.pre_keyshare",
@@ -242,7 +242,7 @@
         "fuel_guarded_inversion_CommonDH.group_"
       ],
       0,
-      "61ac3e215c601325bfd63cc0178df8b4"
+      "acd03fd1231a34735110b4cdc12db7ef"
     ],
     [
       "CommonDH.pre_share'",
@@ -262,7 +262,7 @@
         "typing_FStar.Bytes.bytes"
       ],
       0,
-      "1503d07b67a008404173fbcb85f75c07"
+      "27e606095fd6185499df5817f343ba90"
     ],
     [
       "CommonDH.__proj__S_FF__item__g",
@@ -275,7 +275,7 @@
         "refinement_interpretation_Tm_refine_73643e91ad48fb2a1012bc11f1d85642"
       ],
       0,
-      "59e0e15ed677494356a3b7a3e9c2c8d7"
+      "1c214bf486cb72fe4db9f4bb9877dd5a"
     ],
     [
       "CommonDH.__proj__S_FF__item___1",
@@ -289,7 +289,7 @@
         "refinement_interpretation_Tm_refine_73643e91ad48fb2a1012bc11f1d85642"
       ],
       0,
-      "ef37c1632fad798b0692f94fea7a290a"
+      "e92c8dee05cfd615407cf531fdbdd44f"
     ],
     [
       "CommonDH.__proj__S_EC__item__g",
@@ -302,7 +302,7 @@
         "refinement_interpretation_Tm_refine_7f5bbb9fca41a14e3bdecd1f55fd77ad"
       ],
       0,
-      "9623e6b94f42b76f36402da554ccb625"
+      "767cb9552a9d20b0baefb6f3803db02f"
     ],
     [
       "CommonDH.__proj__S_EC__item___1",
@@ -319,7 +319,7 @@
         "refinement_interpretation_Tm_refine_a4ddaaa0c5ada3c52c38846ce399248a"
       ],
       0,
-      "0cce9891eff061ad5a25aba894103e40"
+      "67d78bdf86ce02b8dc960bb6260d86e4"
     ],
     [
       "CommonDH.pre_share",
@@ -336,7 +336,7 @@
         "fuel_guarded_inversion_CommonDH.group_"
       ],
       0,
-      "36275ca4f59306236265929a6f759b94"
+      "205eb3ff4a66822530ee8196fd0df99d"
     ],
     [
       "CommonDH.pre_pubshare",
@@ -372,7 +372,7 @@
         "typing_Mem.is_tls_rgn", "typing_Mem.tls_region"
       ],
       0,
-      "f85683fd04c83fd6d36c6791a405022b"
+      "8a3c9bde8e0603094d430a0262df735e"
     ],
     [
       "CommonDH.lemma_namedGroup_of_group",
@@ -422,7 +422,7 @@
         "typing_Mem.is_tls_rgn", "typing_Mem.tls_region"
       ],
       0,
-      "896c1eb1fc7b13e01a405f18b935f99c"
+      "fd4ffbde82441c21635181bbd92e382f"
     ],
     [
       "CommonDH.is_ecdhe",
@@ -431,7 +431,7 @@
       1,
       [ "@query", "assumption_Parsers.NamedGroup.namedGroup__uu___haseq" ],
       0,
-      "dce0bf59e5edd18d85d4680e2152181d"
+      "99c0174da5082615b60107a2d0118edd"
     ],
     [
       "CommonDH.is_ffdhe",
@@ -440,7 +440,7 @@
       1,
       [ "@query", "assumption_Parsers.NamedGroup.namedGroup__uu___haseq" ],
       0,
-      "6db92143ed4cf8e80e16ee0fd8a15a5e"
+      "22614f184de43445dde7fabe5e1523f6"
     ],
     [
       "CommonDH.dh_region",
@@ -463,7 +463,7 @@
         "typing_Mem.tls_tables_region"
       ],
       0,
-      "fbd3832f40ed2a2aa6ff7bd02a43e2d9"
+      "466f8b07773cfbc3083cecdaeb056f16"
     ],
     [
       "CommonDH.__proj__Honest__item___0",
@@ -476,7 +476,7 @@
         "refinement_interpretation_Tm_refine_e48b72c4d9e2afe77f36010d23871d6e"
       ],
       0,
-      "1ea38c4e5e7de8d4a6e5d06c325886b8"
+      "ac1fb8fdd90ded8b240479b0956fc161"
     ],
     [
       "CommonDH.i_ilog",
@@ -498,7 +498,7 @@
         "token_correspondence_CommonDH.pre_share"
       ],
       0,
-      "8a009069b7f2889ff4420da363546d4b"
+      "359a73579128d2f63f1ae9eaaaa4c700"
     ],
     [
       "CommonDH.ilog",
@@ -546,7 +546,7 @@
         "token_correspondence_CommonDH.pre_share", "typing_CommonDH.ilog"
       ],
       0,
-      "1dc950385d387b5c76522d7ca5e655ce"
+      "b4bfe4d45da99b6d1f46a85ee5497d10"
     ],
     [
       "CommonDH.fresh_dhi",
@@ -566,7 +566,7 @@
         "token_correspondence_CommonDH.pre_share", "typing_CommonDH.ilog"
       ],
       0,
-      "13f75df4addd25d47b48834f2d5b3d03"
+      "445c5f96142326d60e509d47b809289a"
     ],
     [
       "CommonDH.honest_dhi_st",
@@ -586,7 +586,7 @@
         "token_correspondence_CommonDH.pre_share"
       ],
       0,
-      "71d48575acc2d0cbf4305c9a6847702c"
+      "d09c7fc5810b8859161a22f26e5619d5"
     ],
     [
       "CommonDH.lemma_honest_dhi_stable",
@@ -606,7 +606,7 @@
         "token_correspondence_CommonDH.pre_share"
       ],
       0,
-      "f8c8c065a8291fe000817732aec65224"
+      "1adf5251ec839d56b3a62c2820928b29"
     ],
     [
       "CommonDH.honest_dhi",
@@ -615,7 +615,7 @@
       1,
       [ "@query", "equation_CommonDH.ishare_table", "typing_CommonDH.ilog" ],
       0,
-      "375b0dbe8f7d5169cb7d7c8baeaf6ecf"
+      "7f7eea525f41b12b2a6a29d7ce64feed"
     ],
     [
       "CommonDH.corrupt_dhi_st",
@@ -635,7 +635,7 @@
         "token_correspondence_CommonDH.pre_share"
       ],
       0,
-      "67159655df1243758653f503c6c7c356"
+      "19d5991e842647bea6a729a0952ed04a"
     ],
     [
       "CommonDH.lemma_corrupt_dhi_stable",
@@ -655,7 +655,7 @@
         "token_correspondence_CommonDH.pre_share"
       ],
       0,
-      "09b98109cf0f29fd7ad6c246aa2b1e46"
+      "f42adcdf51572b815b20aa39b42ac03c"
     ],
     [
       "CommonDH.corrupt_dhi",
@@ -664,7 +664,7 @@
       1,
       [ "@query", "equation_CommonDH.ishare_table", "typing_CommonDH.ilog" ],
       0,
-      "eb67b1eb9fccb0e225313d53da8f957a"
+      "35aaa5e430f116df9c0d13e9f2ca34ad"
     ],
     [
       "CommonDH.is_honest_dhi",
@@ -741,7 +741,7 @@
         "refinement_interpretation_Tm_refine_b8229996fdf2866295ad1e10a51aa96b"
       ],
       0,
-      "d528f0cd83a3ea2c72886a76dbf5575e"
+      "3ca40423ae694998ef69780bef83bc2f"
     ],
     [
       "CommonDH.registered_dhr_st",
@@ -775,7 +775,7 @@
       1,
       [ "@query", "equation_CommonDH.ishare_table", "typing_CommonDH.ilog" ],
       0,
-      "7e8e2459ecf61c19a9fda229486293cd"
+      "ff8fefba9badbac12d5adc4eb6dd455c"
     ],
     [
       "CommonDH.fresh_dhr",
@@ -834,7 +834,7 @@
       1,
       [ "@query", "equation_CommonDH.ishare_table", "typing_CommonDH.ilog" ],
       0,
-      "088e848972c41047a137c8ea7a0b4ba8"
+      "d619206d701669b335c528d52fd3fc5e"
     ],
     [
       "CommonDH.corrupt_dhr_st",
@@ -868,7 +868,7 @@
       1,
       [ "@query", "equation_CommonDH.ishare_table", "typing_CommonDH.ilog" ],
       0,
-      "757568a89c630d19d580c17cef13422a"
+      "d3868fcace97b52feec72ec5bac42c5d"
     ],
     [
       "CommonDH.is_honest_dhr",
@@ -957,7 +957,7 @@
         "refinement_interpretation_Tm_refine_80eae8a46698bbad9b5d85b7fbe62b74"
       ],
       0,
-      "d28976a7407d6a93a891a937f6b9caea"
+      "55be23823a32b23af725f0f4f6ad3344"
     ],
     [
       "CommonDH.keygen",
@@ -1101,7 +1101,7 @@
         "typing_FStar.Set.complement", "typing_FStar.Set.singleton"
       ],
       0,
-      "6f5ec0773c9dd29410619d2b0d829b7a"
+      "8765582a1f95e7efd808156d6c73d263"
     ],
     [
       "CommonDH.dh_responder",
@@ -1113,7 +1113,7 @@
         "refinement_interpretation_Tm_refine_80eae8a46698bbad9b5d85b7fbe62b74"
       ],
       0,
-      "84ae83810facb116a8d9ca26b8f69231"
+      "9c1fc34520d7ec4e52b28b6ff6cee009"
     ],
     [
       "CommonDH.dh_responder",
@@ -1144,7 +1144,10 @@
         "equation_CommonDH.registered_dhi",
         "equation_CommonDH.registered_dhr",
         "equation_CommonDH.registered_dhr_st", "equation_CommonDH.rshare",
-        "equation_CommonDH.secret", "equation_FStar.HyperStack.ST.erid",
+        "equation_CommonDH.secret",
+        "equation_FStar.HyperStack.ST.equal_domains",
+        "equation_FStar.HyperStack.ST.equal_stack_domains",
+        "equation_FStar.HyperStack.ST.erid",
         "equation_FStar.HyperStack.ST.m_rref",
         "equation_FStar.HyperStack.ST.mref",
         "equation_FStar.Monotonic.DependentMap.contains",
@@ -1168,6 +1171,8 @@
         "function_token_typing_CommonDH.pre_share",
         "function_token_typing_FStar.Monotonic.Heap.heap",
         "kinding_CommonDH.group_@tok", "kinding_CommonDH.ilog_entry@tok",
+        "lemma_FStar.HyperStack.ST.lemma_same_refs_in_all_regions_elim",
+        "lemma_FStar.HyperStack.ST.lemma_same_refs_in_stack_regions_intro",
         "lemma_FStar.Map.lemma_ContainsDom",
         "lemma_FStar.Map.lemma_InDomConcat",
         "lemma_FStar.Map.lemma_InDomRestrict",
@@ -1206,7 +1211,7 @@
         "typing_Tm_abs_26574c9ccfe974acf361eee3f7bda38b"
       ],
       0,
-      "bc7fb5eac158b0f8bd0fffaa11810616"
+      "4f9ec527e4c9ba106d29e95fc8f5b401"
     ],
     [
       "CommonDH.register_dhi",
@@ -1232,6 +1237,7 @@
         "equation_CommonDH.ishare", "equation_CommonDH.ishare_table",
         "equation_CommonDH.pre_dhi", "equation_CommonDH.pre_share",
         "equation_CommonDH.registered_dhi",
+        "equation_FStar.HyperStack.ST.equal_domains",
         "equation_FStar.HyperStack.ST.equal_stack_domains",
         "equation_FStar.HyperStack.ST.erid",
         "equation_FStar.HyperStack.ST.m_rref",
@@ -1261,6 +1267,7 @@
         "function_token_typing_FStar.Monotonic.Heap.heap",
         "kinding_CommonDH.group_@tok", "kinding_CommonDH.ilog_entry@tok",
         "lemma_FStar.DependentMap.sel_upd_same",
+        "lemma_FStar.HyperStack.ST.lemma_same_refs_in_all_regions_elim",
         "lemma_FStar.HyperStack.ST.lemma_same_refs_in_stack_regions_intro",
         "lemma_FStar.Map.lemma_ContainsDom",
         "lemma_FStar.Map.lemma_InDomConcat",
@@ -1310,7 +1317,7 @@
         "typing_Tm_abs_26574c9ccfe974acf361eee3f7bda38b"
       ],
       0,
-      "22a7879ac68facdce4c7da7d8a33271f"
+      "5a40ae9b050398cd9f4423af11124aa2"
     ],
     [
       "CommonDH.register_dhr",
@@ -1468,7 +1475,7 @@
         "typing_Mem.tls_region"
       ],
       0,
-      "b8f248eb23585d70022aa12e7560c468"
+      "750e79d8e08a1bfb25189a4d3a7af000"
     ],
     [
       "CommonDH.parse_partial",
@@ -1499,7 +1506,7 @@
         "typing_FStar.Bytes.bytes"
       ],
       0,
-      "e28ae664b2c7adac65f70160917074d6"
+      "45e99d8116e6256b84a36603be338fdb"
     ],
     [
       "CommonDH.serialize",
@@ -1528,7 +1535,7 @@
         "refinement_interpretation_Tm_refine_a8d9c836041fa0fbb516b87658e18fff"
       ],
       0,
-      "11e1465baf0f1e4e47700a8d2a4ec8ac"
+      "0ad3c82640770299dbb30a18df2c2969"
     ],
     [
       "CommonDH.serialize_raw",
@@ -1561,7 +1568,7 @@
         "typing_DHGroup.params_of_group"
       ],
       0,
-      "3beb324ce9dc381d3a194af2093989f7"
+      "43bd2b68c46087b0e9490777fcce04a9"
     ],
     [
       "CommonDH.validate",
@@ -1629,7 +1636,7 @@
         "typing_tok_EverCrypt.ECC_X25519@tok"
       ],
       0,
-      "3d22fa63731229bdad9a9840bfd984e6"
+      "c5db9e7b47218d507e398026dfcc175a"
     ],
     [
       "CommonDH.format",

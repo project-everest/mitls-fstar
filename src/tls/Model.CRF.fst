@@ -3,6 +3,7 @@ module Model.CRF
 
 /// This module should not be extracted to C.
 
+open Declassify
 open Mem
 open Spec.Hash.Definitions
 open EverCrypt.Hash

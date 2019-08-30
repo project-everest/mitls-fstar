@@ -24,7 +24,10 @@ ifeq ($(OS),Windows_NT)
     # find dllcorecrypto.dll; it is in the current directory, which Windows
     # always uses to search for DLLs.
     EXTRA_PATH = PATH="/usr/$(MARCH)-w64-mingw32/sys-root/mingw/bin/:$(PATH)"
-    VS_BIN = $(shell ../../scripts/vsbin.sh)
+    VS_BIN := $(shell ../../scripts/vsbin.sh)
+    ifeq ($(.SHELLSTATUS),1)
+      $(error Could not find a Visual Studio installation with VC Tools)
+    endif
     ARCH = win32
     EXTRA_OPTS =
     EXTRA_LIBS = -L.

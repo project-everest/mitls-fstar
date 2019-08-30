@@ -19,14 +19,19 @@
 module TLS.Handshake.Receive
 
 (*
- * A wrapper over TLS.Handshake.ParseFlights that provides a single-buffer oriented interface to
- *   TLS.Handshake.Machine
+ * A wrapper over TLS.Handshake.ParseFlights that provides a single-slice oriented interface to
+ *   TLS.Handshake.Machine,
+ * As opposed to the interface of TLS.Handshake.ParseFlights that takes the input buffer as argument for every call
  *
- * See the Public API section below
+ * This is a quite light wrapper with no abstraction
+ * 
+ * See the Public API section below, and a test function at the end
  *)
 
 open FStar.Integers
 open FStar.HyperStack.ST
+
+module E = FStar.Error
 
 module G  = FStar.Ghost
 module Bytes = FStar.Bytes
@@ -38,42 +43,52 @@ module LP = LowParse.Low.Base
 
 module PF = TLS.Handshake.ParseFlights
 
+module R = MITLS.Repr
+module C = LowStar.ConstBuffer
+
+
+#set-options "--max_fuel 0 --max_ifuel 0"
+
 type byte = FStar.Bytes.byte
 type bytes = FStar.Bytes.bytes
 
-/// The state encapsulates PF.state, and a buffer with current from and to indices
+/// The state encapsulates PF.state, and a slice with current from and to indices
 ///
 /// The interface provided by this module is in state-passing style
 
+let slice_t = b:LP.slice (B.trivial_preorder byte) (B.trivial_preorder byte){
+  b.LP.len <= LP.validator_max_length
+}
+
 noeq type state = {
   pf_st    : PF.state;
-  rcv_b    : b:B.buffer byte;
+  rcv_b    : slice_t;
   rcv_from : uint_32;
-  rcv_to   : i:uint_32{rcv_from <= i /\ i <= B.len rcv_b}
+  rcv_to   : i:uint_32{rcv_from <= i /\ i <= rcv_b.LP.len}
 }
 
 let in_progress (s:state) = PF.in_progress_flt s.pf_st
 
 
-/// Invariant that related parsed_bytes in pf_st with rcv_b and its from and to indices
+/// Invariant that relates parsed_bytes in pf_st with rcv_b and its from and to indices
 
 let invariant (st:state) (h:HS.mem) : Type0
-= PF.length_parsed_bytes st.pf_st <= (v st.rcv_to - v st.rcv_from) /\
+= LP.live_slice h st.rcv_b /\
+  PF.length_parsed_bytes st.pf_st <= (v st.rcv_to - v st.rcv_from) /\
   PF.parsed_bytes st.pf_st ==
-    Seq.slice (B.as_seq h st.rcv_b) (v st.rcv_from) (v st.rcv_from + PF.length_parsed_bytes st.pf_st)
+    Seq.slice (B.as_seq h st.rcv_b.LP.base) (v st.rcv_from) (v st.rcv_from + PF.length_parsed_bytes st.pf_st)
 
 
-/// Framing is simple
+/// Framing is trivial
 
 let frame_invariant
   (st:state) (l:B.loc) (h0 h1:HS.mem)
 : Lemma
   (requires
     invariant st h0 /\
-    B.live h0 st.rcv_b /\
-    B.(loc_disjoint (loc_buffer st.rcv_b) l) /\
+    B.(loc_disjoint (loc_buffer st.rcv_b.LP.base) l) /\
     B.modifies l h0 h1)
-  (ensures invariant st h1 /\ B.as_seq h0 st.rcv_b == B.as_seq h1 st.rcv_b)
+  (ensures invariant st h1 /\ B.as_seq h0 st.rcv_b.LP.base == B.as_seq h1 st.rcv_b.LP.base)
 = ()
 
 unfold
@@ -93,16 +108,10 @@ private let lemma_seq (#a:Type) (s1 s2:Seq.seq a) (from to:nat) (to':nat)
   (ensures Seq.equal (Seq.slice s1 from to') (Seq.slice s2 from to'))
 = assert (forall (i:nat). i < to - from ==> Seq.index (Seq.slice s1 from to) i == Seq.index (Seq.slice s2 from to) i)
 
-module R = MITLS.Repr
-module C = LowStar.ConstBuffer
-
 
 /// Helper function to create a const_slice from rcv_b
 
-let cslice_of (st:state) : R.const_slice =
-  assume (st.rcv_to <= LP.validator_max_length);
-  R.MkSlice (C.of_buffer st.rcv_b) st.rcv_to
-
+unfold let cslice_of (st:state) : R.const_slice = R.of_slice st.rcv_b
 
 /// Precondition of the receive functions
 
@@ -111,8 +120,8 @@ let receive_pre
   (st:state) (inflight:PF.in_progress_flt_t)
 : HS.mem -> Type0
 = fun h ->
-  B.live h st.rcv_b /\ invariant st h /\
-  ( PF.length_parsed_bytes st.pf_st == 0 \/ in_progress st == inflight )
+  invariant st h /\
+  PF.(length_parsed_bytes st.pf_st == 0 \/ in_progress_flt st.pf_st == in_progress)
 
 unfold
 let only_changes_pf_state (st1 st0:state) : Type0
@@ -172,8 +181,6 @@ let receive_post_with_leftover_bytes
      in_progress rst == PF.F_none /\
      PF.parsed_bytes rst.pf_st == Seq.empty)
 
-module E = FStar.Error
-
 inline_for_extraction noextract
 let wrap_pf_st
   (#a:Type)
@@ -190,13 +197,17 @@ let wrap_pf_st
 
 
 /// Create a state instance
-///
-/// A pure function that creates a new instance of PF.state and sets from and to indices to 0
-///
-/// The returned instance satisfies `invariant st h` for all (h:HS.mem)
 
-let create (b:B.buffer byte)
-: state
+let create (b:slice_t)
+: Stack state
+  (requires fun h -> LP.live_slice h b)
+  (ensures fun h0 r h1 ->
+    h0 == h1 /\
+    r.pf_st == PF.create () /\
+    r.rcv_b == b /\
+    r.rcv_from == 0ul /\
+    r.rcv_to == 0ul /\
+    invariant r h1)
 = { pf_st = PF.create ();
     rcv_b = b;
     rcv_from = 0ul;
@@ -207,36 +218,40 @@ let create (b:B.buffer byte)
 
 let buffer_received_fragment
   (st:state) (bs:bytes)
-: Stack state
-  (requires fun h ->
-    B.live h st.rcv_b /\
-    invariant st h /\
-    v st.rcv_to + Bytes.length bs <= B.length st.rcv_b)  //that adding these bytes does not overflow the buffer
+: Stack (option state)
+  (requires fun h -> invariant st h)
   (ensures fun h0 rst h1 ->
-    if Bytes.length bs = 0 then h0 == h1 /\ rst == st
+    if Bytes.length bs = 0
+    then h0 == h1 /\ rst == Some st
+    else if Bytes.length bs > v st.rcv_b.LP.len - v st.rcv_to
+    then h0 == h1 /\ rst == None
     else
-      rst `only_increments_rcv_to` st /\
-      rst.rcv_to == st.rcv_to + Bytes.len bs /\
-      B.(modifies (loc_buffer (gsub st.rcv_b st.rcv_to (Bytes.len bs)))) h0 h1 /\
-      Seq.slice (B.as_seq h1 rst.rcv_b) (v st.rcv_to) (v rst.rcv_to) == Bytes.reveal bs /\
-      invariant rst h1)
-= if Bytes.length bs = 0 then st
+      Some? rst /\
+      (let rst = Some?.v rst in
+       rst `only_increments_rcv_to` st /\
+       rst.rcv_to == st.rcv_to + Bytes.len bs /\
+       B.(modifies (loc_buffer (gsub st.rcv_b.LP.base st.rcv_to (Bytes.len bs)))) h0 h1 /\
+       Seq.slice (B.as_seq h1 rst.rcv_b.LP.base) (v st.rcv_to) (v rst.rcv_to) == Bytes.reveal bs /\
+       invariant rst h1))
+= if Bytes.length bs = 0 then Some st
+  else if Bytes.len bs > st.rcv_b.LP.len - st.rcv_to then None
   else
     let h0 = ST.get () in
-    let sub = B.sub st.rcv_b st.rcv_to (Bytes.len bs) in
+    let sub = B.sub st.rcv_b.LP.base st.rcv_to (Bytes.len bs) in
     FStar.Bytes.store_bytes bs sub;
     let h1 = ST.get () in
     let rst = { st with rcv_to = st.rcv_to + Bytes.len bs } in
 
-    assert (Seq.equal (B.as_seq h1 (B.gsub rst.rcv_b rst.rcv_from (st.rcv_to - rst.rcv_from)))
-                      (Seq.slice (B.as_seq h1 rst.rcv_b) (v rst.rcv_from) (v st.rcv_to)));
+    assert (Seq.equal (B.as_seq h1 (B.gsub rst.rcv_b.LP.base rst.rcv_from (st.rcv_to - rst.rcv_from)))
+                      (Seq.slice (B.as_seq h1 rst.rcv_b.LP.base) (v rst.rcv_from) (v st.rcv_to)));
     lemma_seq
-      (B.as_seq h0 st.rcv_b)
-      (B.as_seq h1 rst.rcv_b)
+      (B.as_seq h0 st.rcv_b.LP.base)
+      (B.as_seq h1 rst.rcv_b.LP.base)
       (v st.rcv_from)
       (v st.rcv_to)
       (v st.rcv_from + PF.length_parsed_bytes st.pf_st);
-    rst
+    Some rst
+
 
 /// Receive flights functions
 
@@ -343,9 +358,9 @@ let in_complete (r:incoming)  = InAck? r && InAck?.complete r
 assume val bs : bs:bytes{Bytes.length bs > 0}
 
 noextract
-let test (b:B.buffer byte)
+let test (b:slice_t)
 : ST unit
-  (requires fun h -> B.live h b)
+  (requires fun h -> B.live h b.LP.base)
   (ensures fun _ _ _ -> True)
 = let open FStar.Error in
 
@@ -353,28 +368,34 @@ let test (b:B.buffer byte)
   let st = create b in
 
   //at this point st.rcv_from and st.rcv_to are both 0, so append some bytes
-  assume (v st.rcv_to + Bytes.length bs <= B.length st.rcv_b);
   let st = buffer_received_fragment st bs in
-
-  //try to receive ServerHello
-  let r = receive_c_wait_ServerHello st in
-  match r with
-  | Error e -> ()  //abandon
-  | Correct (None, st) ->
-    //we need more data in ther buffer before the flight can be parsed
-    assume (v st.rcv_to + Bytes.length bs <= B.length st.rcv_b);
-    let st = buffer_received_fragment st bs in
-
-    //if we tried to parse some other flight, it won't verify, the following call fails
-    //let r = receive_c12_wait_NST st in
-
-    //but we can try parsing ServerHello again
+  match st with
+  | None -> ()  //buffer overflowed
+  | Some st ->
+    //try to receive ServerHello
     let r = receive_c_wait_ServerHello st in
+    match r with
+    | Error e -> ()  //abandon, some parsing error
+    | Correct (None, st) ->
+      //we need more data in ther buffer before the flight can be parsed
+      let st = buffer_received_fragment st bs in
+      (match st with
+       | None -> ()  //buffer overflowed
+       | Some st ->
+         //if we tried to parse some other flight, it won't verify, the following call fails
+         //let r = receive_c12_wait_NST st in
 
-    ()
-  | Correct (Some (flt, idx_end), st) ->
-    //now we can parse ServerHelloDone
-    let st = { st with rcv_from = idx_end } in
+         //but we can try parsing ServerHello again
+         let r = receive_c_wait_ServerHello st in
 
-    let r = receive_c12_wait_ServerHelloDone st in
-    ()
+         //and so on ...
+
+         ())
+    | Correct (Some (flt, idx_end), st) ->
+      //now we can parse ServerHelloDone
+      let st = { st with rcv_from = idx_end } in
+
+      let r = receive_c12_wait_ServerHelloDone st in
+
+      //and so on ...
+      ()

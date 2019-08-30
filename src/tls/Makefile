@@ -243,11 +243,15 @@ dist/compact-msvc/Makefile.basic: KRML_FLAGS += -falloca -ftail-calls
 dist/%/Makefile.basic: $(ALL_KRML_FILES)
 	mkdir -p $(dir $@)
 	cp $(HAND_WRITTEN_FILES) $(dir $@)
-	$(KRML) $(KOPTS) $(KRML_FLAGS) \
+	for f in \
 	  $(filter %.krml,$^) \
-	  -tmpdir $(dir $@)  \
 	  $(notdir $(HAND_WRITTEN_C_FILES)) \
+	; do echo $$f ; done > $@.rsp
+	$(KRML) $(KOPTS) $(KRML_FLAGS) \
+	  @$@.rsp \
+	  -tmpdir $(dir $@)  \
 	  -o libmitls.a
+	rm -f $@.rsp
 
 # Comma-separated list of miTLS modules (because we still don't have a TLS
 # namespace).
@@ -255,17 +259,21 @@ MITLS_FSTS	:= $(patsubst %.fst,%,$(filter-out Test Test.%,$(wildcard *.fst)))
 MITLS_MODULES	:= $(shell echo $(MITLS_FSTS) | tr ' ' ',')
 
 dist/test/Makefile.basic: $(ALL_KRML_FILES)
+	for f in \
+	  $(filter %.krml,$^) \
+	; do echo $$f ; done > $@.rsp
 	$(KRML) $(KRML_OPTS) \
+	  @$@.rsp \
 	  -no-prefix Test.Main \
 	  -bundle 'Test.Main=Test.*[rename=Test]' \
 	  -bundle '\*[rename=Test_miTLS]' \
 	  -library $(MITLS_MODULES) \
 	  -library 'Parsers,Parsers.\*' \
 	  -tmpdir $(dir $@) -skip-compilation \
-	  $(filter %.krml,$^) \
 	  -silent \
 	  -warn-error -4-6+9 \
 	  -o test.exe
+	rm -f $@.rsp
 
 #########
 # Tests #
