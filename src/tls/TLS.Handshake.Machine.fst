@@ -27,8 +27,8 @@ module Rcv = TLS.Handshake.Receive
 /// Message types (move to HandshakeMessages or Repr modules)
 
 type clientHello = HandshakeMessages.clientHello
-type serverHello = HandshakeMessages.serverHello
-type helloRetryRequest = msg: serverHello {Transcript.is_hrr msg}
+type serverHello = HandshakeMessages.sh
+type helloRetryRequest = HandshakeMessages.hrr
 type encryptedExtensions = HandshakeMessages.encryptedExtensions
 type finished = HandshakeMessages.finished // TODO shared type, ideally with tighter bound.
 
@@ -202,7 +202,7 @@ let accepted
   (offer: Negotiation.offer)
   (sh: HandshakeMessages.sh) // refined to exclude HRR
   (ee: Parsers.EncryptedExtensions.encryptedExtensions) =
-  Negotiation.accept_ServerHello cfg offer sh
+  Negotiation.client_accept_ServerHello cfg offer sh
   // TBC Negotiation:
   // missing the late processing of encrypted extensions and its callback.
 
@@ -259,14 +259,14 @@ noeq type msg_state' (region: rgn) (inflight: PF.in_progress_flt_t) random ha  =
 let msg_state (region: rgn) (inflight: PF.in_progress_flt_t) random ha  =
   ms:msg_state' region inflight random ha{
      B.loc_disjoint (Transcript.footprint ms.digest) (TLS.Handshake.Send.footprint ms.sending) /\
-     B.loc_disjoint (Transcript.footprint ms.digest) (B.loc_buffer ms.receiving.Rcv.rcv_b) /\
-     B.loc_disjoint (TLS.Handshake.Send.footprint ms.sending) (B.loc_buffer ms.receiving.Rcv.rcv_b)
+     B.loc_disjoint (Transcript.footprint ms.digest) (Rcv.loc_recv ms.receiving) /\
+     B.loc_disjoint (TLS.Handshake.Send.footprint ms.sending) (Rcv.loc_recv ms.receiving)
   }
 
 let msg_state_footprint #region #inflight #random #ha (ms:msg_state region inflight random ha) =
   B.loc_union
     (B.loc_union (Transcript.footprint ms.digest) (TLS.Handshake.Send.footprint ms.sending))
-    (B.loc_buffer ms.receiving.Rcv.rcv_b)
+    (Rcv.loc_recv ms.receiving)
 
 
 let create_msg_state (region: rgn) (inflight: PF.in_progress_flt_t) random ha:
@@ -281,6 +281,23 @@ let create_msg_state (region: rgn) (inflight: PF.in_progress_flt_t) random ha:
     sending = Send.send_state0;
     receiving = Receive.create b;
     epochs = Old.Epochs.create region random }
+
+
+
+/// Computing (ghost) transcripts from the Client state
+///
+#push-options "--admit_smt_queries true"
+let transcript_tch offer = Transcript.TruncatedClientHello (hash_retry offer.full_retry) offer.full_ch
+let transcript_offer offer = Transcript.ClientHello (hash_retry offer.full_retry) offer.full_ch
+let transcript13 offer (sh: HSM.sh) rest = Transcript.Transcript13 (hash_retry offer.full_retry) offer.full_ch (admit()(*sh*)) rest
+let transcript_complete offer sh ee ccv fin1 fin2 eoed =
+  let rest: Transcript.(bounded_list HSM.handshake13 max_transcript_size) =
+    HSM.M13_encrypted_extensions ee ::
+    (match ccv with Some(c,cv) -> [HSM.M13_certificate c; HSM.M13_certificate_verify cv] | None -> []) @
+    (if Bytes.length fin1 = 0 then [] else [HSM.M13_finished fin1]) @
+    (if Bytes.length fin2 = 0 then [] else [HSM.M13_finished fin2]) in
+  transcript13 offer sh rest
+#pop-options
 
 
 /// Datatype for the handshake-client state machine.
@@ -499,14 +516,14 @@ let client_invariant
     let transcript = Transcript.ClientHello (hash_retry offer.full_retry) offer.full_ch in
     Transcript.invariant ms.digest transcript h /\
 
-    Receive.invariant ms.receiving h /\
+    Receive.invariant ms.receiving h
     // AF: Why is this not a part of the Receive invariant?
-    B.live h ms.receiving.Receive.rcv_b
+    // B.live h ms.receiving.Receive.rcv_b
 
     // KeySchedule.invariant ks h
 
   | C13_wait_Finished1 offer sh ms ks ->
-    let sh : _ = assume False; sh in // mismatch on transcript refinement
+    let sh = admit() in // : _ = assume False; sh in // mismatch on transcript refinement
     let transcript = Transcript.Transcript13 (hash_retry offer.full_retry) offer.full_ch sh [] in
     Transcript.invariant ms.digest transcript h
     // KeySchedule.invariant_C13_wait_Finished1 ks

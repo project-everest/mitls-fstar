@@ -44,7 +44,7 @@ include Parsers.KeyExchangeAlgorithm
 (* Parsers are generated automatically, see src/parsers/Parsers.rfc *)
 
 // trivial message for convenience; these could also be bound as named types in the RFC.
-type finished = FStar.Seq.(b: seq UInt8.t {0 <= length b /\ length b <= 16777215})
+type finished = b:Bytes.bytes {0 <= Bytes.length b /\ Bytes.length b <= 16777215}
 type eoed = unit 
 
 type sh = realServerHello

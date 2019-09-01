@@ -81,12 +81,15 @@ let invariant (st:state) (h:HS.mem) : Type0
 
 /// Framing is trivial
 
+let loc_recv st = B.loc_buffer st.rcv_b.LP.base
+
+
 let frame_invariant
   (st:state) (l:B.loc) (h0 h1:HS.mem)
 : Lemma
   (requires
     invariant st h0 /\
-    B.(loc_disjoint (loc_buffer st.rcv_b.LP.base) l) /\
+    B.(loc_disjoint (loc_recv st) l) /\
     B.modifies l h0 h1)
   (ensures invariant st h1 /\ B.as_seq h0 st.rcv_b.LP.base == B.as_seq h1 st.rcv_b.LP.base)
 = ()
@@ -121,7 +124,7 @@ let receive_pre
 : HS.mem -> Type0
 = fun h ->
   invariant st h /\
-  PF.(length_parsed_bytes st.pf_st == 0 \/ in_progress_flt st.pf_st == in_progress)
+  PF.(length_parsed_bytes st.pf_st == 0 \/ in_progress st == inflight)
 
 unfold
 let only_changes_pf_state (st1 st0:state) : Type0
@@ -196,6 +199,17 @@ let wrap_pf_st
 (*** Public API ***)
 
 
+/// Create an input buffer (until we figure out if the application allocates it)
+
+let alloc_slice (region: Mem.rgn):  ST slice_t 
+  (requires fun h0 -> True)
+  (ensures fun h0 b h1 -> 
+    // TODO track freshness and region
+    LP.live_slice h1 b)
+=
+  let receiving_buffer = LowStar.Buffer.malloc region 0uy 12000ul in
+  LowParse.Slice.make_slice receiving_buffer 12000ul
+  
 /// Create a state instance
 
 let create (b:slice_t)
@@ -399,3 +413,4 @@ let test (b:slice_t)
 
       //and so on ...
       ()
+

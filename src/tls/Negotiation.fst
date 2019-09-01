@@ -205,15 +205,15 @@ let find_early_data o =
 let find_server_extension filter sh =
   List.Tot.find filter sh.SH.extensions
 
-let is_resumption12 m =
-  not (is_pv_13 m.n_protocol_version)  &&
-  m.n_sessionID = m.n_offer.CH.session_id
+// let is_resumption12 m =
+//   not (is_pv_13 m.n_protocol_version)  &&
+//   m.n_sessionID = m.n_offer.CH.session_id
 
-let is_cacheable12 m =
-  not (is_pv_13 m.n_protocol_version)  &&
-  ( let sid = m.n_sessionID in
-    sid <> m.n_offer.CH.session_id &&
-    sid <> empty_bytes)
+// let is_cacheable12 m =
+//   not (is_pv_13 m.n_protocol_version)  &&
+//   ( let sid = m.n_sessionID in
+//     sid <> m.n_offer.CH.session_id &&
+//     sid <> empty_bytes)
 
 (*
 let ns_step (#r:role) (#cfg:config)
@@ -942,6 +942,7 @@ let rec unseal_tickets
       | None -> trace ("WARNING: failed to unseal the session data for ticket "^print_bytes tid^" (check sealing key)"); acc in
     unseal_tickets acc r )
 
+(*
 let create region r cfg nonce =
   let resume = unseal_tickets [] cfg.use_tickets in
   assume False; //18-12-16 ??
@@ -1011,11 +1012,12 @@ let resume_12 mode =
   Some? (find_sessionTicket mode.n_offer) &&
   length mode.n_offer.CH.session_id > 0 &&
   mode.n_sessionID = mode.n_offer.CH.session_id
-
 let local_config #region #role ns = ns.cfg
 let nonce        #region #role ns = ns.nonce
 let resume       #region #role ns = ns.resume
+*)
 
+(*
 let getOffer #region #role ns =
   match !ns.state with
   | C_Offer offer -> offer
@@ -1046,6 +1048,7 @@ let version #region #role ns =
   | S_Mode mode _
   | S_Complete mode _ -> mode.n_protocol_version
 //19-01-23 slow TC??
+*)
 
 (*
 val getSigningKey: #a:Signature.alg -> #region:rgn -> #role:TLSConstants.role -> t region role ->
@@ -1056,9 +1059,12 @@ let getSigningKey #a #region #role ns =
   Signature.lookup_key #a ns.cfg.private_key_file
 *)
 
+let zeroRTT sh = List.Tot.existsb SHE_early_data? sh.SH.extensions
+
 private
 let const_true _ = true
 
+(*
 let sign #region #role ns tbs =
   // 18-10-29 review usage of Bad_certificate to report signing error
   // TODO(adl) make the pattern below a static pre-condition
@@ -1068,6 +1074,8 @@ let sign #region #role ns tbs =
   | None -> fatal Bad_certificate (perror __SOURCE_FILE__ __LINE__ "Failed to sign with selected certificate.")
   | Some sigv ->
     Correct HSM.({algorithm = sa; signature = sigv})
+*)
+
 
 (* CLIENT *)
 
@@ -1233,7 +1241,7 @@ let choose_extension (s:share) (e:clientHelloExtension) =
 let group_of_hrr = TLS.Cookie.find_keyshare
 
 #push-options "--admit_smt_queries true"
-let client_HelloRetryRequest ch1 hrr s =
+let client_HelloRetryRequest ch1 hrr (Some s) =
   let open Parsers.HelloRetryRequest in
   let { version = _; session_id = sid; cipher_suite = cs; extensions = el } = hrr in
   let old_shares = find_key_shares ch1 in
@@ -1249,12 +1257,12 @@ let client_HelloRetryRequest ch1 hrr s =
    begin
     assume(clientHelloExtensions_list_bytesize ext' <= 65535);
     let ch2 = {ch1 with CH.extensions = ext'} in
-    let ri = (hrr, old_shares, old_psk) in
-    Correct(ri, ch2)
+    // let ri = (hrr, old_shares, old_psk) in
+    Correct ch2
    end
 #pop-options
 
-let check_retry ch1 ri sh =
+let check_retry ch1 hrr ch2 sh =
   // FIXME(adl) check SH is consistent with HRR
   Correct ()
 
@@ -1591,7 +1599,7 @@ let client_accept_ServerHello cfg offer sh =
   let cs: cipherSuite = cs in 
   return (cs,pski)
 
-
+(*
 let accept_ServerHello cfg offer sh = 
   [@inline_let]
   let r = m:mode{Mode?.n_offer m == offer} in 
@@ -1659,6 +1667,7 @@ let client_ServerHello #region ns sh =
     | Correct mode -> 
       ns.state := C_Mode mode;
       Correct mode )
+*)
 
 //19-01-04 should we check that we have a matching client share? 
 
@@ -1713,28 +1722,28 @@ let filter_ske_salg12 (sa: signatureScheme) (sa': signatureScheme) =
     then fatal Handshake_failure "Signature algorithm negotiation failed"
     else correct sa
 
-#push-options "--z3rlimit 200"
-let accept_salg12 mode (sa:signatureScheme)
-  : result signatureScheme  =
-  let pv = mode.n_protocol_version in 
-  assume(
-    pvcs pv mode.n_cipher_suite /\ 
-    ~ (Unknown_protocolVersion? pv) /\ //19-04-19 TODO mismatch with TLSonstants
-    pv <> TLS_1p3); //18-12-16 TODO preconditions
-  let ha0 = sessionHashAlg pv mode.n_cipher_suite in
-  match sigAlg_of_ciphersuite mode.n_cipher_suite with 
-  | Error z -> Error z 
-  | Correct sa' -> (
-    match mode.n_protocol_version with
-    | TLS_1p0 | TLS_1p1 | SSL_3p0 -> 
-      filter_ske_salg12 sa (signatureScheme_of_sigHashAlg sa' ha0)
-    | TLS_1p2 ->
-    match find_signature_algorithms mode.n_offer with
-    | None -> filter_ske_salg12 sa (signatureScheme_of_sigHashAlg sa' ha0)
-    | Some algs -> 
-      (match List.Helpers.find_aux sa' matches_sigHashAlg_of_signatureScheme algs with
-        | Some sa -> Correct sa 
-        | None -> fatal Handshake_failure "Signature algorithm negotiation failed" ))
+// #push-options "--z3rlimit 200"
+// let accept_salg12 mode (sa:signatureScheme)
+//   : result signatureScheme  =
+//   let pv = mode.n_protocol_version in 
+//   assume(
+//     pvcs pv mode.n_cipher_suite /\ 
+//     ~ (Unknown_protocolVersion? pv) /\ //19-04-19 TODO mismatch with TLSonstants
+//     pv <> TLS_1p3); //18-12-16 TODO preconditions
+//   let ha0 = sessionHashAlg pv mode.n_cipher_suite in
+//   match sigAlg_of_ciphersuite mode.n_cipher_suite with 
+//   | Error z -> Error z 
+//   | Correct sa' -> (
+//     match mode.n_protocol_version with
+//     | TLS_1p0 | TLS_1p1 | SSL_3p0 -> 
+//       filter_ske_salg12 sa (signatureScheme_of_sigHashAlg sa' ha0)
+//     | TLS_1p2 ->
+//     match find_signature_algorithms mode.n_offer with
+//     | None -> filter_ske_salg12 sa (signatureScheme_of_sigHashAlg sa' ha0)
+//     | Some algs -> 
+//       (match List.Helpers.find_aux sa' matches_sigHashAlg_of_signatureScheme algs with
+//         | Some sa -> Correct sa 
+//         | None -> fatal Handshake_failure "Signature algorithm negotiation failed" ))
 
 // TLS 1.2 only. Sets [server_share; client_cert_request; server_cert] in mode. 
 // Too restrictive for RSA? 
@@ -1743,125 +1752,58 @@ let accept_salg12 mode (sa:signatureScheme)
 private let coerce_asncert (x:Parsers.ASN1Cert.aSN1Cert): cert_repr = x
 private let coerce_crt crt = List.Tot.map coerce_asncert crt 
 
-let client_ServerKeyExchange #region ns crt kex ske ocr =
-  if version ns <> TLS_1p2 then 
-    fatal Internal_error "TLS 1.2 only" //19-04-19 TODO make it static
-  else 
-  let open Parsers.KeyExchangeAlgorithm in
-  let open Parsers.ServerKeyExchange in
-  match kex with
-  | Dh_anon | Rsa ->
-    fatal Handshake_failure (perror __SOURCE_FILE__ __LINE__ "Illegal message")
+// let client_ServerKeyExchange #region ns crt kex ske ocr =
+//   if version ns <> TLS_1p2 then 
+//     fatal Internal_error "TLS 1.2 only" //19-04-19 TODO make it static
+//   else 
+//   let open Parsers.KeyExchangeAlgorithm in
+//   let open Parsers.ServerKeyExchange in
+//   match kex with
+//   | Dh_anon | Rsa ->
+//     fatal Handshake_failure (perror __SOURCE_FILE__ __LINE__ "Illegal message")
+//
+//   | Dhe | Ecdhe ->
+//     let sig, tbs = match ske with
+//       | Ske_dhe dh ->
+//         let open Parsers.SignedDHParams in
+// 	let open Parsers.SignedDHKeyExchange in
+// 	dh.signature, signedDHParams_serializer32 dh.params
+//       | Ske_ecdhe ecdh ->
+//         let open Parsers.ServerECDHParams in
+// 	let open Parsers.SignedECDHKeyExchange in
+// 	ecdh.signature, serverECDHParams_serializer32 ecdh.params in
+//     if length tbs > 128 then 
+//       fatal Internal_error "tbs is too large" // our parsers tolerate much larger ones?!
+//     else 
+//     let open Parsers.Signature in
+//     match CommonDH.parse_partial (kex=Ecdhe) tbs with
+//     | Error z -> Error z
+//     | Correct (gy, _) ->
+//     let mode = getMode ns in
+//     match accept_salg12 mode sig.algorithm with
+//     | Error z -> Error z 
+//     | Correct sa ->
+//       let csr = ns.nonce @| mode.n_server_random in
+//       let tbs = to_be_signed mode.n_protocol_version Server (Some csr) tbs in
+//
+//       // verify both the certicate chain and the signature using the leaf verification key. 
+//       //let h = get() in assert(inv ns h);
+//       let valid = cert_verify_cb ns.cfg.cert_callbacks (coerce_crt crt) sa tbs sig.signature_payload in
+//       //let h = get() in assume(inv ns h);
+//       trace ("ServerKeyExchange signature: " ^ (if valid then "Valid" else "Invalid"));
+//       if not valid then
+//         fatal Handshake_failure (perror __SOURCE_FILE__ __LINE__ "Failed to check SKE signature")
+//       else
+//         let ocr = match ocr with | None -> NoRequest | Some cr -> CertRequest12 cr in
+//         let scert = Some (Cert.chain_up crt, sa) in
+//         let        Mode offer hrr pv sr sid cs pski sext _ _ _ _                  gx = mode in
+//         let mode = Mode offer hrr pv sr sid cs pski sext None (Some gy) ocr scert gx in
+//         let ccert = None in // TODO
+//         ns.state := C_WaitFinished2 mode ccert;
+//         Correct mode
 
-  | Dhe | Ecdhe ->
-    let sig, tbs = match ske with
-      | Ske_dhe dh ->
-        let open Parsers.SignedDHParams in
-	let open Parsers.SignedDHKeyExchange in
-	dh.signature, signedDHParams_serializer32 dh.params
-      | Ske_ecdhe ecdh ->
-        let open Parsers.ServerECDHParams in
-	let open Parsers.SignedECDHKeyExchange in
-	ecdh.signature, serverECDHParams_serializer32 ecdh.params in
-    if length tbs > 128 then 
-      fatal Internal_error "tbs is too large" // our parsers tolerate much larger ones?!
-    else 
-    let open Parsers.Signature in
-    match CommonDH.parse_partial (kex=Ecdhe) tbs with
-    | Error z -> Error z
-    | Correct (gy, _) ->
-    let mode = getMode ns in
-    match accept_salg12 mode sig.algorithm with
-    | Error z -> Error z 
-    | Correct sa ->
-      let csr = ns.nonce @| mode.n_server_random in
-      let tbs = to_be_signed mode.n_protocol_version Server (Some csr) tbs in
 
-      // verify both the certicate chain and the signature using the leaf verification key. 
-      //let h = get() in assert(inv ns h);
-      let valid = cert_verify_cb ns.cfg.cert_callbacks (coerce_crt crt) sa tbs sig.signature_payload in
-      //let h = get() in assume(inv ns h);
-      trace ("ServerKeyExchange signature: " ^ (if valid then "Valid" else "Invalid"));
-      if not valid then
-        fatal Handshake_failure (perror __SOURCE_FILE__ __LINE__ "Failed to check SKE signature")
-      else
-        let ocr = match ocr with | None -> NoRequest | Some cr -> CertRequest12 cr in
-        let scert = Some (Cert.chain_up crt, sa) in
-        let        Mode offer hrr pv sr sid cs pski sext _ _ _ _                  gx = mode in
-        let mode = Mode offer hrr pv sr sid cs pski sext None (Some gy) ocr scert gx in
-        let ccert = None in // TODO
-        ns.state := C_WaitFinished2 mode ccert;
-        Correct mode
-
-let clientComplete_13 #region ns ee optCertRequest optServerCert optCertVerify digest =
-  trace "Nego.clientComplete_13";
-  match !ns.state with
-  | C_Mode mode ->
-    let pv = TLS_1p3 in // mode.n_protocol_version  
-    let ccert = None in
-    trace ("Encrypted Extensions "^string_of_ees ee);
-    let nego_cb = ns.cfg.nego_callback in
-    let uexts = List.Tot.filter EE_Unknown_extensionType? ee in
-    // this could be statically excluded from the definition of filtering 
-    if not (check_encryptedExtensions_list_bytesize uexts) then 
-      fatal Internal_error "encrypted extensions are too large"
-    else
-    let uexts_bytes = encryptedExtensions_serializer32 uexts in
-    trace ("Negotiation callback to process application extensions.");
-
-    // to be simplified (see TLS.Callbacks)
-    match nego_cb.negotiate nego_cb.nego_context pv uexts_bytes None with
-    | Nego_abort -> fatal Handshake_failure (perror __SOURCE_FILE__ __LINE__ "application requested to abort the handshake")
-    | Nego_retry _ -> fatal Internal_error (perror __SOURCE_FILE__ __LINE__ "client application requested a server retry")
-    | Nego_accept _ ->
-      let validSig, schain =
-        match kexAlg mode, optServerCert, optCertVerify, digest with
-        | Kex_DHE, Some c, Some cv, Some digest
-        | Kex_ECDHE, Some c, Some cv, Some digest -> (
-          // TODO ensure that valid_offer mandates signature extensions for 1.3
-          let sal = match find_signature_algorithms mode.n_offer with 
-          | Some sal -> sal
-          | None -> [] in
-          let sa = cv.HSM.algorithm in
-          let chain = Some (c, sa) in
-          let r = 
-          if List.Tot.mem sa sal then
-            let tbs = to_be_signed pv Server None digest in            
-            cert_verify_cb ns.cfg.cert_callbacks
-	      (coerce_crt (Cert.chain_down c)) sa tbs cv.HSM.signature,
-	    chain
-          else false, None in // The server signed with an algorithm we did not offer
-          // let h0 = HST.get() in 
-          // assert(h0 `HS.contains` ns.state);
-          r )
-        | Kex_PSK_ECDHE, None, None, None
-        | Kex_PSK, None, None, None -> true, None // FIXME recall chain from PSK
-        | _ -> false, None
-        in
-      //19-04-23 TODO where did we lose it? The callbacks are (allegedly) modifies_none 
-      let h0 = HST.get() in 
-      assume(h0 `HS.contains` ns.state);
-      trace ("Certificate & signature 1.3 callback result: " ^ (if validSig then "valid" else "invalid"));
-      if validSig then
-        let mode = Mode
-          mode.n_offer
-          mode.n_hrr
-          pv
-          mode.n_server_random
-          mode.n_sessionID
-          mode.n_cipher_suite
-          mode.n_pski
-          mode.n_server_extensions
-	  (Some ee)
-          mode.n_server_share
-          (match optCertRequest with None -> NoRequest | Some cr -> CertRequest13 cr)
-          schain
-          mode.n_client_share
-        in
-        ns.state := C_Complete mode ccert;
-        Correct mode
-      else
-        fatal Bad_certificate "Failed to validate signature or certificate"
+(*19-08-31 
 
 (* SERVER *)
 
@@ -2504,3 +2446,5 @@ let server_ServerShare #region ns oks app_ees =
     in
     ns.state := S_Mode mode cert;
     Correct mode ))
+
+*)

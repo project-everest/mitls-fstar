@@ -393,12 +393,12 @@ private let rec tickets13 #rid acc (l:list (psk_identifier * Ticket.ticket))
   | [] -> List.Tot.rev acc
   | bk :: r -> tickets13 #rid (if Ticket.Ticket13? (snd bk) then (mk_binder #rid bk)::acc else acc) r
 
-let ks_client13_get_binder_keys ks l =
-  let KS #rid st _ = ks in
-  let C (C_wait_ServerHello cr [] gs) = !st in
-  let (bkl, esl) = List.Tot.split (tickets13 #rid [] l) in
-  st := C (C_wait_ServerHello cr esl gs);
-  bkl
+// let ks_client13_get_binder_keys ks l =
+//   let KS #rid st _ = ks in
+//   let C (C_wait_ServerHello cr [] gs) = !st in
+//   let (bkl, esl) = List.Tot.split (tickets13 #rid [] l) in
+//   st := C (C_wait_ServerHello cr esl gs);
+//   bkl
 
 let ks_client13_hello_retry ks0 (g:CommonDH.group)
   : ST0 (CommonDH.share g * _) =
@@ -947,20 +947,18 @@ let ks_client13_sh region ks is_quic sr cs log gy accept_psk =
 
 (******************************************************************)
 
-let ks_client13_sf ks (log:bytes)
-  : ST (( i:finishedId & sfk:fink i ) * ( i:finishedId & cfk:fink i ) * recordInstance * exportKey)
+let ks_client13_sf is_quic ks (log:bytes)
+  : ST (ks_client_state * (( i:finishedId & sfk:fink i ) * ( i:finishedId & cfk:fink i ) * recordInstance * exportKey))
   (requires fun h0 ->
     // log == digest[..Finished1] 
-    let kss = sel h0 (KS?.state ks) in
-    C? kss /\ C13_wait_Finished1? (C?.s kss))
+    C13_wait_Finished1? ks)
   (ensures fun h0 r h1 ->
-    let KS #rid st _ = ks in
-    modifies (Set.singleton rid) h0 h1
-    /\ HS.modifies_ref rid (Set.singleton (Heap.addr_of (as_ref st))) ( h0) ( h1))
+    let (ks, _) = r in
+    C13_wait_Finished2? ks /\
+    modifies Set.empty h0 h1 )
   =
-  dbg ("ks_client13_sf hashed_log = "^(print_bytes log));
-  let KS #region st is_quic = ks in
-  let C (C13_wait_Finished1 alpha cfk sfk (| asId, ams |)) = !st in
+  dbg ("ks_client13_sf hashed_log = "^print_bytes log);
+  let C13_wait_Finished1 alpha cfk sfk (| asId, ams |) = ks in
   let (ae, h) = alpha in
 
   let FinishedID #li _ = dfst cfk in // TODO loginfo
@@ -993,7 +991,7 @@ let ks_client13_sf ks (log:bytes)
   let rw = StAE.coerce HS.root id (skv @| siv) in
   let r = StAE.genReader HS.root rw in
 
-  st := C (C13_wait_Finished2 alpha cfk (| asId, ams |) (| li, c_expandId, (cts,sts)|));
+  C13_wait_Finished2 alpha cfk (| asId, ams |) (| li, c_expandId, (cts,sts)|),
   (sfk, cfk, StAEInstance r w (spn, cpn), exporter1)
 
 let ks_server13_sf ks (log:bytes)
@@ -1075,18 +1073,15 @@ let ks_server13_rms ks : ST (li:logInfo & i:rmsId li & rms i)
   rms
   
 // Handshake must call this when ClientFinished goes into log
-let ks_client13_cf ks (log:bytes) : ST unit
+let ks_client13_cf ks (log:bytes) : ST ks_client_state
   (requires fun h0 ->
-    let kss = sel h0 (KS?.state ks) in
-    C? kss /\ C13_wait_Finished2? (C?.s kss))
+    C13_wait_Finished2? ks)
   (ensures fun h0 r h1 ->
-    let KS #rid st _ = ks in
-    modifies (Set.singleton rid) h0 h1
-    /\ HS.modifies_ref rid (Set.singleton (Heap.addr_of (as_ref st))) ( h0) ( h1))
+    C13_Complete? ks /\ 
+    modifies Set.empty h0 h1)
   =
-  dbg ("ks_client13_cf hashed_log = "^(print_bytes log));
-  let KS #region st _ = ks in
-  let C (C13_wait_Finished2 alpha cfk (| asId, ams |) rekey_info) = !st in
+  dbg ("ks_client13_cf hashed_log = "^print_bytes log);
+  let C13_wait_Finished2 alpha cfk (| asId, ams |) rekey_info = ks in
   let (ae, h) = alpha in
 
   // TODO loginfo CF
@@ -1096,23 +1091,20 @@ let ks_client13_cf ks (log:bytes) : ST unit
 
   let rms : rms rmsId = HKDF.derive_secret h ams "res master" log in
   dbg ("resumption master secret:        "^print_bytes rms);
-  st := C (C13_Complete alpha rekey_info (| li, rmsId, rms |))
+  C13_Complete alpha rekey_info (| li, rmsId, rms |)
 
 // Generate a PSK out of the current RMS and incoming ticket nonce
 // May be called several times if server sends multiple tickets
 let ks_client13_rms_psk ks (nonce:bytes) : ST (bytes)
   (requires fun h0 ->
-    let kss = sel h0 (KS?.state ks) in
-    C? kss /\ C13_Complete? (C?.s kss))
+    C13_Complete? ks)
   (ensures fun h0 r h1 ->
-    let KS #rid st _ = ks in
     modifies_none h0 h1)
   =
   dbg "ks_client13_rms";
-  let KS #region st _ = ks in
-  let C (C13_Complete _ _ rmsi) = !st in
+  let C13_Complete _ _ rmsi = ks in
   let (| li, rmsId, rms |) = rmsi in
-  dbg ("Recall RMS: "^(hex_of_bytes rms));
+  dbg ("Recall RMS: "^hex_of_bytes rms);
   HKDF.derive_secret (rmsId_hash rmsId) rms "resumption" nonce
 
 (******************************************************************)

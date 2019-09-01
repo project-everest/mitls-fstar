@@ -95,7 +95,7 @@ let next_fragment_bounded (hs:hs) i (max:nat) =
       | Error z -> Error z
       | Correct () -> Correct(HSL.write_at_most hs.log i max))
     | HSL.Outgoing None None false, C13_sent_EOED d ocr cfk ->
-      client_ClientFinished_13 hs d ocr cfk;
+      client13_Finished2 hs d ocr cfk;
       Correct(HSL.write_at_most hs.log i max)
     | _ -> Correct outgoing // nothing to do
 
@@ -142,34 +142,34 @@ let rec recv_fragment (hs:hs) #i rg f =
 
     // 1.2 full: wrap these two into a single received flight with optional [cr]
     | C_wait_ServerHelloDone, [Msg12 (M12_certificate c); Msg12 (M12_server_key_exchange ske); Msg12 (M12_server_hello_done ())], [_] ->
-      client_ServerHelloDone hs c ske None
+      client12_ServerHelloDone hs c ske None
 
     | C_wait_ServerHelloDone, [Msg12 (M12_certificate c); Msg12 (M12_server_key_exchange ske); Msg12 (M12_certificate_request cr); Msg12 (M12_server_hello_done ())], [_] ->
-      client_ServerHelloDone hs c ske (Some cr)
+      client12_ServerHelloDone hs c ske (Some cr)
 
     | C_wait_Finished2 digestClientFinished, [Msg12 (M12_finished f)], [digestServerFinished] ->
-      client_ServerFinished hs f digestClientFinished
+      client12_ServerFinished hs f digestClientFinished
 
     | C_wait_NST resume, [Msg12 (M12_new_session_ticket st)], [digestNewSessionTicket] ->
-      client_NewSessionTicket_12 hs resume digestNewSessionTicket st
+      client12_NewSessionTicket hs resume digestNewSessionTicket st
 
     // 1.3; wrap these three into single flight with optional cr and optional (c;cv).
     | C13_wait_Finished1, [Msg13 (M13_encrypted_extensions ee); Msg13 (M13_certificate c); Msg13 (M13_certificate_verify cv); Msg13 (M13_finished f)],
       [_; digestCert; digestCertVerify; digestServerFinished] ->
-      client_ServerFinished_13 hs ee None (Some c) (Some cv) f
+      client13_Finished1 hs ee None (Some c) (Some cv) f
                                (Some digestCert) digestCertVerify digestServerFinished
 
     | C13_wait_Finished1, [Msg13 (M13_encrypted_extensions ee); Msg13 (M13_certificate_request cr); Msg13 (M13_certificate c); Msg13 (M13_certificate_verify cv); Msg13 (M13_finished f)],
       [_; digestCert; digestCertVerify; digestServerFinished] ->
-      client_ServerFinished_13 hs ee (Some cr) (Some c) (Some cv) f
+      client13_Finished1 hs ee (Some cr) (Some c) (Some cv) f
                                (Some digestCert) digestCertVerify digestServerFinished
 
     | C13_wait_Finished1, [Msg13 (M13_encrypted_extensions ee); Msg13 (M13_finished f)],
                         [digestEE; digestServerFinished] ->
-      client_ServerFinished_13 hs ee None None None f None digestEE digestServerFinished
+      client13_Finished1 hs ee None None None f None digestEE digestServerFinished
 
     | C_Complete, [Msg13 (M13_new_session_ticket st13)], [_] ->
-      client_NewSessionTicket_13 hs st13
+      client13_NewSessionTicket hs st13
 
     // 1.2 resumption
     | C_wait_R_Finished1 digestNewSessionTicket, [Msg12 (M12_finished f)], [digestServerFinished] ->
