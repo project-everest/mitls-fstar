@@ -51,20 +51,25 @@ val find_cookie: offer -> option Extensions.cookie
 val find_psk_key_exchange_modes: offer -> list Extensions.pskKeyExchangeMode // [] when not found; pick better representation?
 val find_sessionTicket: offer -> option Extensions.clientHelloExtension_CHE_session_ticket 
 val find_clientPske: offer -> option Extensions.offeredPsks 
-val find_serverKeyShare: HSM.sh -> option pre_share 
 val find_serverPske: HSM.sh -> option UInt16.t
+val find_serverKeyShare: HSM.sh -> option pre_share 
+val find_early_data: offer -> bool 
+
 (* Returns the server hostName, if any, or an empty bytestring; review. *)
 val get_sni: offer -> Tot bytes 
 
+// Offered hash algorithm, depending on first PSK or first
+// ciphersuite; this may be overridden in SH or HRR
+val offered_ha: offer -> EverCrypt.Hash.alg 
+val selected_ha: HSM.sh -> EverCrypt.Hash.alg //? also applicable to HRR
 
 // the type of correct indexes into the list of PSKs offered by the client
-type pski (o:offer) = n:nat {
+type pski (o:offer) = n:UInt16.t {
   // o.ch_protocol_version = TLS_1p3 /\ // 19-01-04  was mistaken?
   (match find_clientPske o with
   | None -> False
   | Some psks -> 
-    n < List.length psks.Extensions.identities /\ 
-    n < 65536 (* uint16 *)
+    UInt16.v n < List.length psks.Extensions.identities
   )}
 
 type cr =
@@ -148,7 +153,6 @@ let ha_bkey13 (bk:bkey13) =
 
 type certNego = option (cert_type * signatureScheme)
 
-val find_early_data: offer -> bool 
 
 (*
 //19-08-30 deprecated
@@ -567,3 +571,6 @@ noeq type handshake =
 ///
 /// Negotiation.zeroRTToffer mode.Negotiation.n_offer
 /// Negotiation.zeroRTT mode
+
+
+

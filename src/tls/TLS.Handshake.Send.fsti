@@ -2,6 +2,8 @@ module TLS.Handshake.Send
 
 /// Adding an interface to hoist definitions from HandshakeLog.fsti
 
+module Transcript = HSL.Transcript
+
 open HandshakeMessages
 
 type msg =
@@ -114,13 +116,12 @@ val signals:
   bool ->
   send_state
 
-module T = HSL.Transcript
 
 inline_for_extraction
-type transcript_state (a:EverCrypt.Hash.alg) = T.state a
+type transcript_state (a:EverCrypt.Hash.alg) = Transcript.state a
 
 inline_for_extraction
-type transcript = Ghost.erased T.transcript_t
+type transcript = Ghost.erased Transcript.transcript_t
 
 open FStar.HyperStack.ST
 open TLSError
@@ -129,25 +130,25 @@ val send_ch
   (#a:EverCrypt.Hash.alg)
   (stt: transcript_state a)
   (#n: Ghost.erased nat)
-  (t: T.g_transcript_n n { Ghost.reveal n < T.max_transcript_size - 1 })
+  (t: Transcript.g_transcript_n n { Ghost.reveal n < Transcript.max_transcript_size - 1 })
   (sto: send_state)
-  (m: T.hs_ch)
-: Stack (result (send_state & T.g_transcript_n n))
+  (m: Transcript.hs_ch)
+: Stack (result (send_state & Transcript.g_transcript_n n))
   (requires (fun h ->
     invariant sto h /\
-    T.invariant stt (Ghost.reveal t) h /\
-    B.loc_disjoint (footprint sto) (T.footprint stt) /\
-    T.Start? (Ghost.reveal t)
+    Transcript.invariant stt (Ghost.reveal t) h /\
+    B.loc_disjoint (footprint sto) (Transcript.footprint stt) /\
+    Transcript.Start? (Ghost.reveal t)
   ))
   (ensures (fun h res h' ->
-    B.modifies (footprint sto `B.loc_union` T.footprint stt) h h' /\
+    B.modifies (footprint sto `B.loc_union` Transcript.footprint stt) h h' /\
     begin match res with
     | Correct (sto', t') ->
       invariant sto' h' /\
       sto'.out_slice == sto.out_slice /\
       sto'.out_pos >= sto.out_pos /\
-      T.invariant stt (Ghost.reveal t') h' /\
-      Ghost.reveal t' == T.ClientHello (T.Start?.retried (Ghost.reveal t)) (M_client_hello?._0 m)
+      Transcript.invariant stt (Ghost.reveal t') h' /\
+      Ghost.reveal t' == Transcript.ClientHello (Transcript.Start?.retried (Ghost.reveal t)) (M_client_hello?._0 m)
     | _ -> True
     end
   ))
@@ -156,27 +157,27 @@ val send_hrr
   (#a:EverCrypt.Hash.alg)
   (stt: transcript_state a)
   (#n: Ghost.erased nat)
-  (t: T.g_transcript_n n { Ghost.reveal n < T.max_transcript_size - 1 })
+  (t: Transcript.g_transcript_n n { Ghost.reveal n < Transcript.max_transcript_size - 1 })
   (sto: send_state)
-  (tag: T.any_hash_tag)
-  (hrr: T.hs_sh)
-: Stack (result (send_state & T.g_transcript_n n))
+  (tag: Transcript.any_hash_tag)
+  (hrr: Transcript.hs_sh)
+: Stack (result (send_state & Transcript.g_transcript_n n))
   (requires (fun h ->
     invariant sto h /\
-    T.invariant stt (Ghost.reveal t) h /\
-    B.loc_disjoint (footprint sto) (T.footprint stt) /\
-    T.is_hrr (M_server_hello?._0 hrr) /\
-    Ghost.reveal t == T.Start None
+    Transcript.invariant stt (Ghost.reveal t) h /\
+    B.loc_disjoint (footprint sto) (Transcript.footprint stt) /\
+    is_hrr (M_server_hello?._0 hrr) /\
+    Ghost.reveal t == Transcript.Start None
   ))
   (ensures (fun h res h' ->
-    B.modifies (footprint sto `B.loc_union` T.footprint stt) h h' /\
+    B.modifies (footprint sto `B.loc_union` Transcript.footprint stt) h h' /\
     begin match res with
     | Correct (sto', t') ->
       invariant sto' h' /\
       sto'.out_slice == sto.out_slice /\
       sto'.out_pos >= sto.out_pos /\
-      T.invariant stt (Ghost.reveal t') h' /\
-      Ghost.reveal t' == T.Start (Some (tag, M_server_hello?._0 hrr))
+      Transcript.invariant stt (Ghost.reveal t') h' /\
+      Ghost.reveal t' == Transcript.Start (Some (tag, M_server_hello?._0 hrr))
     | _ -> True
     end
   ))
@@ -185,26 +186,26 @@ val send13
   (#a:EverCrypt.Hash.alg)
   (stt: transcript_state a)
   (#n: Ghost.erased nat)
-  (t: T.g_transcript_n n { Ghost.reveal n < T.max_transcript_size - 1 })
+  (t: Transcript.g_transcript_n n { Ghost.reveal n < Transcript.max_transcript_size - 1 })
   (sto: send_state)
   (m: handshake13)
-: Stack (result (send_state & T.g_transcript_n (Ghost.hide (Ghost.reveal n + 1))))
+: Stack (result (send_state & Transcript.g_transcript_n (Ghost.hide (Ghost.reveal n + 1))))
   (requires (fun h ->
     invariant sto h /\
-    T.invariant stt (Ghost.reveal t) h /\
-    B.loc_disjoint (footprint sto) (T.footprint stt) /\
-    T.Transcript13? (Ghost.reveal t)
+    Transcript.invariant stt (Ghost.reveal t) h /\
+    B.loc_disjoint (footprint sto) (Transcript.footprint stt) /\
+    Transcript.Transcript13? (Ghost.reveal t)
   ))
   (ensures (fun h res h' ->
-    B.modifies (footprint sto `B.loc_union` T.footprint stt) h h' /\
+    B.modifies (footprint sto `B.loc_union` Transcript.footprint stt) h h' /\
     begin match res with
     | Correct (sto', t') ->
       invariant sto' h' /\
       sto'.out_slice == sto.out_slice /\
       sto'.out_pos >= sto.out_pos /\
 //      LowParse.Low.Base.bytes_of_slice_from_to h' sto.out_slice sto.out_pos sto'.out_pos == LowParse.Spec.Base.serialize handshake13_serializer m /\ // TODO: is this needed? if so, then TR needs to enrich MITLS.Repr.* with the suitable lemmas
-      T.invariant stt (Ghost.reveal t') h' /\
-      Ghost.reveal t' == T.snoc13 (Ghost.reveal t) m
+      Transcript.invariant stt (Ghost.reveal t') h' /\
+      Ghost.reveal t' == Transcript.snoc13 (Ghost.reveal t) m
     | _ -> True
     end
   ))
@@ -213,23 +214,23 @@ val send_tag13
   (#a:EverCrypt.Hash.alg)
   (stt: transcript_state a)
   (#n: Ghost.erased nat)
-  (t: T.g_transcript_n n { Ghost.reveal n < T.max_transcript_size - 1 })
+  (t: Transcript.g_transcript_n n { Ghost.reveal n < Transcript.max_transcript_size - 1 })
   (sto: send_state)
   (m: handshake13)
   (tag:Hacl.Hash.Definitions.hash_t a)
-: ST (result (send_state & T.g_transcript_n (Ghost.hide (Ghost.reveal n + 1))) )
+: ST (result (send_state & Transcript.g_transcript_n (Ghost.hide (Ghost.reveal n + 1))) )
   (requires (fun h ->
     invariant sto h /\
-    T.invariant stt (Ghost.reveal t) h /\
-    B.loc_disjoint (footprint sto) (T.footprint stt) /\
+    Transcript.invariant stt (Ghost.reveal t) h /\
+    B.loc_disjoint (footprint sto) (Transcript.footprint stt) /\
     B.loc_disjoint (footprint sto) (B.loc_buffer tag) /\
-    B.loc_disjoint (T.footprint stt) (B.loc_buffer tag) /\
+    B.loc_disjoint (Transcript.footprint stt) (B.loc_buffer tag) /\
     B.loc_disjoint (B.loc_buffer tag) (B.loc_region_only true Mem.tls_tables_region) /\
     B.live h tag /\
-    T.Transcript13? (Ghost.reveal t)
+    Transcript.Transcript13? (Ghost.reveal t)
   ))
   (ensures (fun h res h' ->
-    B.modifies (footprint sto `B.loc_union` T.footprint stt `B.loc_union`
+    B.modifies (footprint sto `B.loc_union` Transcript.footprint stt `B.loc_union`
       B.loc_buffer tag `B.loc_union` B.loc_region_only true Mem.tls_tables_region) h h' /\
     B.live h' tag /\
     begin match res with
@@ -238,10 +239,10 @@ val send_tag13
       sto'.out_slice == sto.out_slice /\
       sto'.out_pos >= sto.out_pos /\
 //      LowParse.Low.Base.bytes_of_slice_from_to h' sto.out_slice sto.out_pos sto'.out_pos == LowParse.Spec.Base.serialize handshake13_serializer m /\ // TODO: is this needed? if so, then TR needs to enrich MITLS.Repr.* with the suitable lemmas
-      T.invariant stt (Ghost.reveal t') h' /\
-      Ghost.reveal t' == T.snoc13 (Ghost.reveal t) m /\
-      B.as_seq h' tag == T.transcript_hash a (Ghost.reveal t') /\
-      T.hashed a (Ghost.reveal t')
+      Transcript.invariant stt (Ghost.reveal t') h' /\
+      Ghost.reveal t' == Transcript.snoc13 (Ghost.reveal t) m /\
+      B.as_seq h' tag == Transcript.transcript_hash a (Ghost.reveal t') /\
+      Transcript.hashed a (Ghost.reveal t')
     | _ -> True
     end
   ))

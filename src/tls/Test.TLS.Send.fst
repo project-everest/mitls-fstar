@@ -1,20 +1,15 @@
 module Test.TLS.Send
 
 module HS = FStar.HyperStack
-module HM = HandshakeMessages
+module HSM = HandshakeMessages
 module Nego = Negotiation
 module HST = FStar.HyperStack.ST
-module TS = TLS.Handshake.Send
-module T = HSL.Transcript
+module Send = TLS.Handshake.Send
 module B = LowStar.Buffer
 
-module HSM = Parsers.Handshake
-module HSM12 = Parsers.Handshake12
-module HSM13 = Parsers.Handshake13
-module CH = Parsers.ClientHello
+module Transcript = HSL.Transcript
 module CHE = Parsers.ClientHelloExtension
 module CHEs = Parsers.ClientHelloExtensions
-
 
 open FStar.Integers
 open FStar.HyperStack.ST
@@ -27,12 +22,12 @@ assume val trace: string -> unit
 noeq type handshake = | HS:
   #region: Mem.rgn {Mem.is_hs_rgn region} ->
   r: TLSConstants.role ->
-  nego: Nego.t region r ->
+  // nego: Nego.t region r ->
   #a: EverCrypt.Hash.alg ->
-  stt: TS.transcript_state a ->
+  stt: Send.transcript_state a ->
   #n: Ghost.erased nat ->                 // Length of the current transcript
-  t:T.g_transcript_n n ->                // Ghost transcript
-  sto:TS.send_state ->
+  t:Transcript.g_transcript_n n ->                // Ghost transcript
+  sto:Send.send_state ->
 //  log: HandshakeLog.t {HandshakeLog.region_of log = region} ->
 //  ks: KeySchedule.ks (*region*) ->
 //  epochs: epochs region (Nego.nonce nego) ->
@@ -40,32 +35,32 @@ noeq type handshake = | HS:
   handshake
 
 let invariant (hs:handshake) (h:HS.mem) =
-  TS.invariant hs.sto h /\
-  T.invariant hs.stt (Ghost.reveal hs.t) h /\
-  Nego.inv hs.nego h /\
-  B.loc_disjoint (TS.footprint hs.sto) (T.footprint hs.stt) /\
-  B.loc_disjoint (TS.footprint hs.sto) (Nego.footprint hs.nego) /\
-  B.loc_disjoint (T.footprint hs.stt) (Nego.footprint hs.nego)
+  Send.invariant hs.sto h /\
+  Transcript.invariant hs.stt (Ghost.reveal hs.t) h /\
+  B.loc_disjoint (Send.footprint hs.sto) (Transcript.footprint hs.stt) 
+//  Nego.inv hs.nego h /\
+//  B.loc_disjoint (Send.footprint hs.sto) (Nego.footprint hs.nego) /\
+//  B.loc_disjoint (Transcript.footprint hs.stt) (Nego.footprint hs.nego)
 
 let footprint (hs:handshake) =
-  TS.footprint hs.sto `B.loc_union`
-  T.footprint hs.stt `B.loc_union` 
-  Nego.footprint hs.nego
+  Send.footprint hs.sto `B.loc_union`
+  Transcript.footprint hs.stt 
+//`B.loc_union` Nego.footprint hs.nego
 
-let is_state13 (hs:handshake) = T.Transcript13? (Ghost.reveal hs.t)
+let is_state13 (hs:handshake) = Transcript.Transcript13? (Ghost.reveal hs.t)
 
 // TODO: Should be computed using key schedule
-assume val svd:HSM13.handshake13_m13_finished
+assume val svd:HSM.handshake13_m13_finished
 //TODO: Should be computed from nego + certificate13 parsers
-assume val cert:HSM13.handshake13_m13_certificate
+assume val cert:HSM.handshake13_m13_certificate
 // TODO: Should be computed from nego. Requires lowering to take hash instead of bytes?
-assume val signature:HSM13.handshake13_m13_certificate_verify
+assume val signature:HSM.handshake13_m13_certificate_verify
 
 // TODO: should tag be allocated inside of a function? on the stack?
 
 val serverFinished: hs:handshake -> tag:Hacl.Hash.Definitions.hash_t (hs.a) -> ST (result handshake)
     (requires fun h -> invariant hs h /\ B.live h tag /\ is_state13 hs /\
-      Ghost.reveal hs.n < T.max_transcript_size - 4 /\
+      Ghost.reveal hs.n < Transcript.max_transcript_size - 4 /\
       B.loc_disjoint (B.loc_buffer tag) (B.loc_region_only true Mem.tls_tables_region) /\
       B.loc_disjoint (B.loc_buffer tag) (footprint hs))
     (ensures fun h0 res h1 -> 
@@ -80,30 +75,30 @@ val serverFinished: hs:handshake -> tag:Hacl.Hash.Definitions.hash_t (hs.a) -> S
 
 let serverFinished hs tag =
     trace "prepare Server Finished";
-    let mode = Nego.getMode hs.nego in
-    let cfg = Nego.local_config hs.nego in
-    let kex = Nego.kexAlg mode in
-    let pv = mode.Nego.n_protocol_version in
-    let cs = mode.Nego.n_cipher_suite in
-    let exts = mode.Nego.n_server_extensions in
-    let eexts = match mode.Nego.n_encrypted_extensions with | None -> [] | Some ee -> ee in
+//  let mode = Nego.getMode hs.nego in
+//  let cfg = Nego.local_config hs.nego in
+    let kex = admit() in // Nego.kexAlg mode in
+//  let pv = admit() in //mode.Nego.n_protocol_version in
+//  let cs = admit() in //mode.Nego.n_cipher_suite in
+//  let exts = admit() in //mode.Nego.n_server_extensions in
+    let eexts = admit() in //match mode.Nego.n_encrypted_extensions with | None -> [] | Some ee -> ee in
 
     let digestFinished : result handshake =
       match kex with
       | Kex_ECDHE -> // [Certificate; CertificateVerify]
-        let m = HSM13.M13_encrypted_extensions eexts in
+        let m = HSM.M13_encrypted_extensions eexts in
         begin
-        match TS.send13 hs.stt hs.t hs.sto m with
+        match Send.send13 hs.stt hs.t hs.sto m with
         | Correct (sto, t') ->
           // TODO: let cert = let Some (chain, _) = mode.n_server_cert in { certificate_list = chain; certificate_request_context = empty_bytes } in
-          let m = HSM13.M13_certificate cert in // AF suggests to have this whole message already as part of mode, instead of just chain
+          let m = HSM.M13_certificate cert in // AF suggests to have this whole message already as part of mode, instead of just chain
           begin
-          match TS.send_tag13 hs.stt t' sto m tag with
+          match Send.send_tag13 hs.stt t' sto m tag with
           | Correct (sto, t') ->
             begin
             // TODO: let tbs = Nego.to_be_signed pv ... tag in let signature = Nego.sign hs.nego tbs in
-            match TS.send_tag13 hs.stt t' sto (HSM13.M13_certificate_verify signature) tag with
-            | Correct (sto, t') -> Correct (HS hs.r hs.nego hs.stt t' sto)
+            match Send.send_tag13 hs.stt t' sto (HSM.M13_certificate_verify signature) tag with
+            | Correct (sto, t') -> Correct (HS #hs.region hs.r hs.stt t' sto)
             | Error z -> Error z
             end
           | Error z -> Error z
@@ -111,47 +106,47 @@ let serverFinished hs tag =
         | Error z -> Error z
         end
       | _ -> // PSK
-        let m = HSM13.M13_encrypted_extensions eexts in
-        match TS.send_tag13 hs.stt hs.t hs.sto m tag with
+        let m = HSM.M13_encrypted_extensions eexts in
+        match Send.send_tag13 hs.stt hs.t hs.sto m tag with
         | Correct (sto, t') -> 
           let h1 = get() in
-          Correct (HS hs.r hs.nego hs.stt t' sto)
+          Correct (HS #hs.region hs.r hs.stt t' sto)
         | Error z -> Error z
     in
     match digestFinished with
     | Correct hs' ->
       // TODO: let svd = let (| _, sfin_key |) = KS.ks_server_13_server_finished hs.ks in HMAC_UFCMA.mac sfin_key tag in
-      let m = HSM13.M13_finished svd in
+      let m = HSM.M13_finished svd in
       begin
-      match TS.send_tag13 hs'.stt hs'.t hs'.sto m tag with
+      match Send.send_tag13 hs'.stt hs'.t hs'.sto m tag with
       | Correct (sto, t') ->
         // TODO: export, register, send signals, nego state
-        Correct (HS hs.r hs.nego hs.stt t' sto)
+        Correct (HS #hs.region hs.r hs.stt t' sto)
       | Error z -> Error z
       end
     | Error z -> Error z
 
 
 val server_ClientHello: 
-  #region: _ -> ns: Nego.t region TLSConstants.Server ->
-  out: TS.send_state ->
-  T.hs_ch -> 
-  ST (result (handshake & Nego.serverMode))
+  #region: _ -> // ns: Nego.t region TLSConstants.Server ->
+  out: Send.send_state ->
+  Transcript.hs_ch -> 
+  ST (result handshake)
   (requires fun h0 -> 
     Mem.is_hs_rgn region /\
-    Nego.inv ns h0 /\
-    TS.invariant out h0 /\
-    B.loc_disjoint (TS.footprint out) (Nego.footprint ns) /\
-    (let s = HS.sel h0 ns.Nego.state in Nego.S_Init? s)) // TODO:  \/ Nego.S_HRR? s
+//  Nego.inv ns h0 /\
+    Send.invariant out h0 )
+//  B.loc_disjoint (Send.footprint out) (Nego.footprint ns) /\
+//    (let s = HS.sel h0 in Nego.S_Init? s)) // TODO:  \/ Nego.S_HRR? s
   (ensures fun h0 r h1 -> 
-    B.modifies (Nego.footprint ns `B.loc_union` TS.footprint out `B.loc_union` B.loc_region_only true Mem.tls_tables_region) h0 h1 /\
+    B.modifies (Send.footprint out `B.loc_union` B.loc_region_only true Mem.tls_tables_region) h0 h1 /\
     begin match r with
-    | Correct (hs, sm) ->
+    | Correct hs ->
       invariant hs h1 /\
       hs.region == region /\
       hs.r == TLSConstants.Server /\
-      hs.nego == ns /\
-      T.ClientHello? (Ghost.reveal hs.t)
+      // hs.nego == ns /\
+      Transcript.ClientHello? (Ghost.reveal hs.t)
       // TODO: /\ hs.t == ...
     |  _ -> True
     end
@@ -160,11 +155,9 @@ val server_ClientHello:
   // ensures r = computeServerMode ns.cfg ns.nonce offer (stateful)
   // but [compute_cs13] and [negotiateCipherSuite] are pure. 
 
-assume val computeServerMode: result Nego.serverMode
-
-assume val find_cookie: Nego.offer -> option Extensions.cookie 
-
-assume val serverMode_hashAlg: Nego.serverMode -> Tot Hashing.Spec.alg
+// assume val computeServerMode: result Nego.serverMode
+// assume val find_cookie: Nego.offer -> option Extensions.cookie 
+// assume val serverMode_hashAlg: Nego.serverMode -> Tot Hashing.Spec.alg
 
 (*
   cfg: TLSConstants.config ->
@@ -196,7 +189,7 @@ let server_ClientHello #region ns out offer =
     | Correct r ->
       let alg = serverMode_hashAlg r in
       let hash_len = Hacl.Hash.Definitions.hash_len alg in
-      let (ts, tr) = T.create region alg in
+      let (ts, tr) = Transcript.create region alg in
       let stateless_retry = 
         match find_cookie (HSM.M_client_hello?._0 offer) with
         | None -> Correct (tr, None)
@@ -213,7 +206,7 @@ let server_ClientHello #region ns out offer =
             // for outputting the digest (of known size) and the hrr
             // (possibly quite large), since we only need them for
             // computing the transcript digest.
-            begin match TS.send_hrr ts tr out (HSM.M_message_hash digest) (HSM.M_server_hello (HM.serverHello_of_hrr hrr)) with
+            begin match Send.send_hrr ts tr out (HSM.M_message_hash digest) (HSM.M_server_hello (HM.serverHello_of_hrr hrr)) with
             | Error z ->
               // serialization failure
               Error z
@@ -226,7 +219,7 @@ let server_ClientHello #region ns out offer =
       begin match stateless_retry with
       | Error z -> Error z
       | Correct (tr1, stateless_retry) ->
-        begin match TS.send_ch ts tr1 out offer with
+        begin match Send.send_ch ts tr1 out offer with
         | Error z -> Error z
         | Correct (_, tr2) ->
           begin match r with
@@ -245,7 +238,7 @@ let server_ClientHello #region ns out offer =
               let ha = TLS.Cookie.hrr_ha hrr in
               // TODO create Transcript in state Start(Some(digest0,hrr)) to compute this digest
               // using ha instead of alg; what is digest0?
-              T.extract_hash ts bdigest tr2;
+              Transcript.extract_hash ts bdigest tr2;
               // TODO: lower
               let digest = FStar.Bytes.of_buffer hash_len bdigest in
               assume (TLS.Cookie.hrr_len hrr <= 16);
@@ -274,7 +267,7 @@ let server_ClientHello #region ns out offer =
               push_frame ();
               let bmdigest = B.alloca 0uy 64ul in // constant size large enough to contain any digest
               let bdigest = B.sub bmdigest 0ul hash_len in
-              T.extract_hash ts bdigest tr2;
+              Transcript.extract_hash ts bdigest tr2;
               // TODO: lower
               let digest = FStar.Bytes.of_buffer hash_len bdigest in
               assume (TLS.Cookie.hrr_len hrr <= 16);
@@ -296,7 +289,7 @@ let server_ClientHello #region ns out offer =
   assert (
     match r with
       | Correct (hs, sm) ->
-        TS.invariant hs.sto h1
+        Send.invariant hs.sto h1
       | _ -> True
   );
   r

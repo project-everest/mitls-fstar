@@ -23,7 +23,7 @@ module HST = FStar.HyperStack.ST
 
 module HSM = HandshakeMessages
 module CH = Parsers.ClientHello
-module SH = Parsers.RealServerHello
+// module SH = Parsers.RealServerHello
 module HRR = Parsers.HelloRetryRequest
 
 open Extensions // for its aggregated datatypes
@@ -88,7 +88,7 @@ let print_namedGroupList
 
 #reset-options "--using_facts_from '* -LowParse'"
 
-
+// ~> HandshakeMessages? 
 let string_of_namedGroups xs = string_of_list string_of_namedGroup "[" xs
 let string_of_keyShares xs = string_of_list string_of_keyShare "[" xs
 let string_of_che  x = string_of_extensionType (tag_of_clientHelloExtension x)
@@ -177,9 +177,9 @@ let find_serverSupportedVersions (ses: serverHelloExtensions): option protocolVe
   | Some (SHE_supported_versions spv) -> Some spv
 
 let find_serverPske sh =
-  match List.Tot.find SHE_pre_shared_key? sh.SH.extensions with
+  match List.Tot.find SHE_pre_shared_key? (HSM.sh_extensions sh) with
   | None -> None
-  | Some (SHE_pre_shared_key idx) -> Some (UInt16.v idx)    
+  | Some (SHE_pre_shared_key idx) -> Some idx
 
 let find_supported_groups o =
   match find_client_extension CHE_supported_groups? o with
@@ -193,7 +193,7 @@ let find_key_shares (o:offer) : list pre_share =
   | Some (CHE_key_share ks) -> CommonDH.validate_many ks
 
 let find_serverKeyShare sh : option pre_share =
-  match List.find SHE_key_share? sh.SH.extensions with
+  match List.find SHE_key_share? (HSM.sh_extensions sh) with
   | None -> None
   | Some (SHE_key_share ks) -> CommonDH.validate ks
 
@@ -203,7 +203,28 @@ let find_early_data o =
   | Some (CHE_early_data ()) -> true
 
 let find_server_extension filter sh =
-  List.Tot.find filter sh.SH.extensions
+  List.Tot.find filter (HSM.sh_extensions sh)
+
+let get_sni o =
+  match find_client_extension CHE_server_name? o with
+  | Some (CHE_server_name ((Sni_host_name sni)::_)) -> sni
+  | _ -> empty_bytes
+
+// 19-09-02 to be reviewed 
+let offered_ha offer =
+  match offer.Parsers.ClientHello.cipher_suites with
+  | [] -> EverCrypt.Hash.Incremental.SHA2_256
+  | cs::_ ->
+    match cipherSuite_of_name cs with
+    | Some (CipherSuite.CipherSuite13 _ ha) -> ha
+    | _ -> EverCrypt.Hash.Incremental.SHA2_256
+
+let selected_ha sh = 
+  match cipherSuite_of_name (HSM.sh_cipher_suite sh) with
+  | Some (CipherSuite.CipherSuite13 _ ha) -> ha
+  | _ -> EverCrypt.Hash.Incremental.SHA2_256
+  
+  // 19-04-23 TODO recheck error cases in case we don't understand the extension contents; should we return a result? 
 
 // let is_resumption12 m =
 //   not (is_pv_13 m.n_protocol_version)  &&
@@ -817,7 +838,7 @@ private val server_clientExtension:
   config -> 
   cipherSuite -> 
   option (cVerifyData * sVerifyData) -> 
-  option (pski:nat {pski < 65536}) -> 
+  option (pski:UInt16.t) -> 
   option Extensions.serverHelloExtension_SHE_key_share -> 
   bool -> 
   clientHelloExtension -> option serverHelloExtension
@@ -827,7 +848,7 @@ private val encrypted_clientExtension:
   config -> 
   cipherSuite -> 
   option (cVerifyData * sVerifyData) -> 
-  option (pski:nat {pski < 65536}) -> 
+  option (pski:UInt16.t) -> 
   option Extensions.serverHelloExtension_SHE_key_share -> 
   bool -> 
   clientHelloExtension -> option encryptedExtension 
@@ -860,7 +881,7 @@ let server_clientExtension pv cfg cs ri pski ks resuming ce =
       if pski = None then None
       else
         let x = Some?.v pski in
-        Some (SHE_pre_shared_key (UInt16.uint_to_t x))
+        Some (SHE_pre_shared_key x)
     | _ -> None
   else 
     match ce with
@@ -891,7 +912,7 @@ let encrypted_clientExtension pv cfg cs ri pski ks resuming ce =
 //| CHE_client_certificate_type
 //| CHE_server_certificate_type
   | CHE_early_data b -> // EE
-    if Some? cfg.max_early_data && pski = Some 0 
+    if Some? cfg.max_early_data && pski = Some 0us 
     then Some (EE_early_data ()) 
     else None
   | _ -> None
@@ -1059,7 +1080,7 @@ let getSigningKey #a #region #role ns =
   Signature.lookup_key #a ns.cfg.private_key_file
 *)
 
-let zeroRTT sh = List.Tot.existsb SHE_early_data? sh.SH.extensions
+let zeroRTT sh = List.Tot.existsb SHE_early_data? (HSM.sh_extensions sh)
 
 private
 let const_true _ = true
@@ -1558,7 +1579,7 @@ let matching_share
 let accept_pski offer sh: result (option (pski offer)) =
   match find_clientPske offer, find_serverPske sh with
   | Some offered, Some idx ->
-    if idx < List.length offered.identities then
+    if UInt16.v idx < List.length offered.identities then
       Correct (Some #(pski offer) idx) // REMARK: we can't check yet consistency with early_data in EE
     else
       fatal Illegal_parameter (perror __SOURCE_FILE__ __LINE__ "PSK out of bounds")
@@ -1580,7 +1601,7 @@ let cs_pv pv =
     
 let ciphersuite_accept cfg pv sh : result (cs_pv pv) 
 = 
-  match cipherSuite_of_name sh.SH.cipher_suite with 
+  match cipherSuite_of_name (HSM.sh_cipher_suite sh) with 
   | None -> fatal Illegal_parameter (perror __SOURCE_FILE__ __LINE__ "Server cipherSuite") 
   | Some cs -> 
     if acceptableCipherSuite cfg pv cs then 

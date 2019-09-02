@@ -20,7 +20,7 @@ module HS = FStar.HyperStack
 module Transcript = HSL.Transcript
 module Receive = TLS.Handshake.Receive
 
-// include TLS.Handshake.State
+
 
 val discard: bool -> ST unit
   (requires (fun _ -> True))
@@ -34,9 +34,7 @@ unfold let trace = if DebugFlags.debug_HS then print else (fun _ -> ())
 
 #push-options "--admit_smt_queries true"
 
-/// floating; imported from State on demand
-
-// indexing & epochs, to be reviewed
+// Floating: indexing & epochs, to be reviewed
 val register:
   #region:rgn -> #n:random -> Epochs.epochs region n ->
   KS.recordInstance -> St unit
@@ -59,7 +57,8 @@ let export #region #n epochs xk =
   FStar.Monotonic.Seq.i_write_at_end epochs.Epochs.exporter xk
 #pop-options
 
-// high-level transcript; floating.
+
+// Floating: high-level transcript
 // TODO merge with [Send.tag]; add precise type; move to Transcript
 let transcript_extract
   #ha
@@ -85,6 +84,24 @@ let transcript_extract
   let tag = FStar.Bytes.of_buffer ltag btag in
   pop_frame();
   tag
+
+let extend13
+  #ha
+  (di:Transcript.state ha)
+  (msg: handshake13)
+  (#n: Ghost.erased (n:nat{n < Transcript.max_transcript_size - 1}))
+  (tx0: Transcript.g_transcript_n n):
+  Stack (Ghost.erased Transcript.g_transcript_n (n+1))
+  (requires fun h0 ->
+    Transcript.invariant di (Ghost.reveal tx0) h0)
+  (ensures fun h0 tx1 h1 ->
+    let tx1 = Ghost.reveal tx1 in
+    Transcript.invariant di tx1 h1 /\
+    B.(modifies (Transcript.footprint di) h0 h1)
+    // missing full spec of tx1
+    )
+  =
+  admit()
 
 (*** Hello messages ***)
 
@@ -121,9 +138,9 @@ let client_Binders #region (hs:t region) (offer:HSM.clientHello) =
 #set-options "--admit_smt_queries true"
 
 /// Create a transcript digest for the truncated client Hello.
-/// TODO take a const_slice or Transcript.label_repr instead of tch
-/// TODO handle spec-level branching depending on the presence of binders.
-/// TODO re-use it on ha-mismatch in client_ServerHello
+// TODO take a const_slice or Transcript.label_repr instead of tch
+// TODO handle spec-level branching depending on the presence of binders.
+// TODO re-use it on ha-mismatch in client_ServerHello.
 let client_transcript (region:rgn) ha tch =
   let di, transcript0 = Transcript.create region ha in
   let transcript1 = Transcript.extend di (admit() (*of tch*)) transcript0 in
@@ -141,7 +158,7 @@ assume val compute_binder:
 
 /// Compute binder MACs for the PSKs; in rare cases we allocate an
 /// auxiliary transcripts for other hash algorithms.
-//TODO type; tch & logical payload
+// TODO type; tch & logical payload
 val client_Binders:
   region:rgn ->
   ha0: EverCrypt.Hash.Incremental.alg ->
@@ -169,14 +186,6 @@ let rec client_Binders region ha0 di0 tch bkeys =
         tag in
     let binder = compute_binder bkey tag in
     Bytes.append binder (client_Binders region ha0 di0 tch bkeys )
-
-let initial_ha offer =
-  match offer.Parsers.ClientHello.cipher_suites with
-  | [] -> EverCrypt.Hash.Incremental.SHA2_256
-  | cs::_ ->
-    match cipherSuite_of_name cs with
-    | Some (CipherSuite.CipherSuite13 _ ha) -> ha
-    | _ -> EverCrypt.Hash.Incremental.SHA2_256
 
 // TODO also return a slice in the sending buffer containing the
 // serialized [ch]; it is not constant yet as we may need to patch the
@@ -220,7 +229,7 @@ let client_ClientHello (Client region config r) =
     // TODO assert we have a slice with this serialized offer
 
     // allocate state with a reasonable default hash algorithm for the digest
-    let ha = initial_ha offer0 in
+    let ha = Negotiation.offered_ha offer0 in
     let tag, di = client_transcript region ha offer0 in
     let tx_tch = Ghost.hide (transcript_tch full0) in
     let receiving = Receive.(create (alloc_slice region)) in
@@ -338,7 +347,7 @@ let client_ServerHello (Client region config r) sh =
         region
         ks
         cfg.is_quic
-        sh.Parsers.RealServerHello.random
+        (HSM.sh_random sh)
         (CipherSuite13 ae ha)
         digest_ServerHello
         server_share
@@ -371,7 +380,7 @@ let client_ServerHello (Client region config r) sh =
     )
     | CipherSuite kex sa ae -> (
       trace "Running classic TLS";
-      trace ("Offered SID="^(Bytes.print_bytes offer.full_ch.CH.session_id)^" Server SID="^(Bytes.print_bytes sh.Parsers.RealServerHello.session_id));
+      trace Bytes.("Offered SID="^print_bytes offer.full_ch.CH.session_id^" Server SID="^print_bytes (HSM.sh_session_id sh));
       Receive.InError (fatalAlert Handshake_failure, "TLS 1.2 TBC")
       // if Negotiation.resume_12 mode then
       // begin // 1.2 resumption
@@ -591,7 +600,7 @@ let client13_NewSessionTicket (Client region config r) st13 =
   trace ("Received ticket: "^Bytes.hex_of_bytes tid^" nonce: "^Bytes.hex_of_bytes nonce);
 
   let C13_complete offer sh ee server_id _fin1 _fin2 _eoed_args _ms ks = !r in
-  let cs = sh.Parsers.RealServerHello.cipher_suite in
+  let cs = HSM.sh_cipher_suite sh in
   let Some cs = CipherSuite.cipherSuite_of_name cs in // add static refinement?
   let ed = List.Tot.find NSTE_early_data? st13.extensions in
   let now = UInt32.uint_to_t (FStar.Date.secondsFromDawn()) in
@@ -628,7 +637,7 @@ let early_rejected (Client region config r) =
   | C13_wait_Finished1 offer sh _ _
   | C13_complete offer sh _ _ _ _ _ _ _ ->
     Negotiation.find_early_data offer.full_ch &&
-    not (List.Tot.existsb Parsers.ServerHelloExtension.SHE_early_data? sh.Parsers.RealServerHello.extensions)
+    not (List.Tot.existsb Parsers.ServerHelloExtension.SHE_early_data? (HSM.sh_extensions sh))
   | _ -> false
 
 (*** TLS 1.2 ***)

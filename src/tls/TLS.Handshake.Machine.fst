@@ -3,8 +3,32 @@ module TLS.Handshake.Machine
 /// The Handshake verified state machine, integrating state,
 /// refinements, monotonic properties, and stateful properties from
 /// Transcript, Negotiation, KeySchedule, Send, and Receive.
-
-// This is WIP to converge on a verified coding style; will replace TLS.Handshake.State
+///
+///      Client                     TLS 1.3               Server
+/// ________________________________________________________________________
+///
+/// Key  ^ ClientHello
+/// Exch | + key_share*
+///      | + signature_algorithms*
+///      | + psk_key_exchange_modes*
+///      v + pre_shared_key*       -------->          ServerHello  ^ Key
+///                                                  + key_share*  | Exch
+///                                             + pre_shared_key*  v
+///
+///                                         {EncryptedExtensions}  ^  Server
+///                                         {CertificateRequest*}  v  Params
+///                                                {Certificate*}  ^
+///                                          {CertificateVerify*}  | Auth
+///                                                    {Finished}  v
+///                                <--------  [Application Data*]
+///      ^ {Certificate*}
+/// Auth | {CertificateVerify*}
+///      v {Finished}              -------->
+///
+///        [Application Data]      <------->  [Application Data]
+///                                <--------            [Ticket]
+/// ________________________________________________________________________
+/// From the RFC; omitting 0RTT Data and EOED
 
 open FStar.Error
 open FStar.Bytes // still used for cookies, tickets, signatures...
@@ -148,19 +172,11 @@ let trans (n:nat) = tr: Transcript.transcript_t { Transcript.transcript_size tr 
 assume val clear_binders: clientHello -> clientHello
 assume val hash_retry: option client_retry_info -> option Transcript.retry
 
-
-/// To be adapted within Negotation
-///
-// Offered, depending on first PSK or first ciphersuite.
-assume val offered_ha:  clientHello -> EverCrypt.Hash.alg
-
 // detail: those two may also return lists
 assume val offered_shares: clientHello -> option Extensions.keyShareClientHello
 assume val offered_psks: clientHello -> option Extensions.offeredPsks
 
 /// certificate-based credentials (server-only for now)
-
-assume val selected_ha: serverHello -> EverCrypt.Hash.alg // also applicable to HRR
 
 type serverCredentials =
   option HandshakeMessages.(certificate13 * certificateVerify13)
@@ -341,7 +357,7 @@ noeq type client_state
     offer: full_offer { offered cfg offer } ->
     // Witnessed in the binders, then overwritten to add binders or a retry.
 
-    ms: msg_state region PF.F_c_wait_ServerHello (offer.full_ch.HSM.random) (offered_ha offer.full_ch) ->
+    ms: msg_state region PF.F_c_wait_ServerHello (offer.full_ch.HSM.random) (Negotiation.offered_ha offer.full_ch) ->
     ks: c_wait_ServerHello_keys ->
     // JP: this is the crypto-modeling stuff
     // TODO sync key-schedule state
@@ -357,8 +373,8 @@ noeq type client_state
   // The transcript is ..SH; its digest now uses the server's ha.
   | C13_wait_Finished1:
     offer: full_offer{ offered cfg offer } ->
-    sh: serverHello{ accepted13 cfg offer sh (* not yet authenticated *) } ->
-    ms: msg_state region PF.F_c13_wait_Finished1 (offer.full_ch.HSM.random) (selected_ha sh) ->
+    sh: HSM.sh{ accepted13 cfg offer sh (* not yet authenticated *) } ->
+    ms: msg_state region PF.F_c13_wait_Finished1 (offer.full_ch.HSM.random) (Negotiation.selected_ha sh) ->
     ks: c13_wait_Finished1_keys ->
     // TODO sync key-schedule state
     //i:   Secret.hs_id ->
@@ -375,7 +391,7 @@ noeq type client_state
   // The transcript is ..Fin1 then ..Fin2.
   | C13_complete:
     offer: full_offer{ offered cfg offer } ->
-    sh: serverHello{ accepted13 cfg offer sh } ->
+    sh: HSM.sh{ accepted13 cfg offer sh } ->
     ee: encryptedExtensions ->
     server_id: serverCredentials ->
     fin1: Ghost.erased finished -> (* received from the server *)
@@ -396,7 +412,7 @@ noeq type client_state
       option HSM.certificateRequest13 &
       (i:Old.HMAC.UFCMA.finishedId & Old.KeySchedule.fink i))) ->
 
-    ms: msg_state region PF.F_c13_wait_Finished1 (offer.full_ch.HSM.random) (selected_ha sh) ->
+    ms: msg_state region PF.F_c13_wait_Finished1 (offer.full_ch.HSM.random) (Negotiation.selected_ha sh) ->
     ks: client_keys ->
     // in unverified state [Old.KeySchedule.C_13_wait_CF/postHS]
     // TODO key-schedule state
@@ -432,7 +448,7 @@ noeq type client_state
   | C12_wait_ServerHelloDone:
     ch: clientHello ->
     sh: serverHello (*{ accepted12 ch sh }*) ->
-    ms: msg_state region PF.F_c12_wait_ServerHelloDone ch.HSM.random (selected_ha sh) ->
+    ms: msg_state region PF.F_c12_wait_ServerHelloDone ch.HSM.random (Negotiation.selected_ha sh) ->
     ks: client_keys ->
     client_state region cfg
 
@@ -441,7 +457,7 @@ noeq type client_state
   | C12_wait_Finished2:
     ch: clientHello ->
     sh: serverHello (*{ accepted12 ch sh }*) ->
-    ms: msg_state region PF.F_c12_wait_ServerHelloDone ch.HSM.random (selected_ha sh) ->
+    ms: msg_state region PF.F_c12_wait_ServerHelloDone ch.HSM.random (Negotiation.selected_ha sh) ->
     m:mode12 ->
     // collapsing into a single state [wait_CCS2 (true)] followed by [wait_Finished2 (false)]
     // no need to track missing fin messages, as they are used just for recomputing the transcript
@@ -454,7 +470,7 @@ noeq type client_state
   | C12_wait_Finished1:
     ch: clientHello ->
     sh: serverHello (*{ accepted12 ch sh }*) ->
-    ms: msg_state region PF.F_c12_wait_ServerHelloDone ch.HSM.random (selected_ha sh) ->
+    ms: msg_state region PF.F_c12_wait_ServerHelloDone ch.HSM.random (Negotiation.selected_ha sh) ->
     mode12 ->
     // collapsing into a single state [wait_CCS1 (true)] followed by [wait_Finished1 (false)]
     // no need to track missing fin messages, as they are used just for recomputing the transcript
@@ -463,8 +479,8 @@ noeq type client_state
 
   | C12_complete: // now with fin2 and stronger properties
     ch: clientHello ->
-    sh: serverHello (*{ accepted12 ch sh }*) ->
-    ms: msg_state region PF.F_c12_wait_ServerHelloDone ch.HSM.random (selected_ha sh) ->
+    sh: HSM.sh (*{ accepted12 ch sh }*) ->
+    ms: msg_state region PF.F_c12_wait_ServerHelloDone ch.HSM.random (Negotiation.selected_ha sh) ->
     mode12 ->
     client_state region cfg
 //
@@ -763,6 +779,7 @@ let epochs_of (#region:rgn) (#cfg:client_config) (s:client_state region cfg {~(C
 
 type server_config = config // TBC
 
+//TODO share with Transcript
 type server_retry_info = digest0: bytes & helloRetryRequest
 type s_offer = {
   retry: option server_retry_info;
@@ -802,7 +819,7 @@ noeq type server_state
   // TLS 1.3, intermediate state to encryption
   | S13_sent_ServerHello:
     mode: s13_mode region cfg ->
-    ms: msg_state region PF.F_c_wait_ServerHello (mode.offer.ch.HSM.random) (selected_ha mode.sh) ->
+    ms: msg_state region PF.F_c_wait_ServerHello (mode.offer.ch.HSM.random) (Negotiation.selected_ha mode.sh) ->
 //  i: Idx.id -> // Secret.esId ->
 //  idh: Idx.id_dhe ->
 //  ks: Secret.s13_wait_ServerHello i idh ->
@@ -816,7 +833,7 @@ noeq type server_state
     mode: s13_mode region cfg ->
     ssv: Ghost.erased HandshakeMessages.certificateVerify13 ->
     fin1: Ghost.erased finished ->
-    ms: msg_state region PF.F_c_wait_ServerHello (mode.offer.ch.HSM.random) (selected_ha mode.sh) ->
+    ms: msg_state region PF.F_c_wait_ServerHello (mode.offer.ch.HSM.random) (Negotiation.selected_ha mode.sh) ->
     // ms.digest is expected to be MACed in the Client Finished
     ks: server_keys -> // keeping fin2key and rms
     server_state region cfg
@@ -827,7 +844,7 @@ noeq type server_state
     fin1: Ghost.erased finished ->
     fin2: Ghost.erased finished ->
 //  { client_complete mode } ->
-    ms: msg_state region PF.F_c_wait_ServerHello (mode.offer.ch.HSM.random) (selected_ha mode.sh) ->
+    ms: msg_state region PF.F_c_wait_ServerHello (mode.offer.ch.HSM.random) (Negotiation.selected_ha mode.sh) ->
     ks: server_keys ->
     server_state region cfg
 

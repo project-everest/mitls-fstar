@@ -47,20 +47,70 @@ include Parsers.KeyExchangeAlgorithm
 type finished = b:Bytes.bytes {0 <= Bytes.length b /\ Bytes.length b <= 16777215}
 type eoed = unit 
 
-type sh = realServerHello
-type hrr = helloRetryRequest
 
-/// TODO: this is the same as HSL.Transcript.is_hrr; decide which one to keep.
-/// In fact, I claim that we should redefine `hrr` above as (sh: serverHello { is_hrr sh })
-/// and so get rid of the conversion functions below.
-let is_hrr (m:serverHello) =
-  match m.is_hrr with
-  | ServerHello_is_hrr_false _ -> false
-  | ServerHello_is_hrr_true _ -> true
 
 module SH = Parsers.ServerHello
 module HRK = Parsers.HRRKind
 module SHK = Parsers.SHKind
+
+/// `is_hrr`: a pure function to
+/// decide if a server-hello message is a hello-retry-request (hrr)
+
+inline_for_extraction
+let is_hrr (m:serverHello): bool =
+  ServerHello_is_hrr_true? m.is_hrr
+
+/// 19-09-02 These are the "semantic" server hello contents and HRR
+/// payloads,
+
+type sh = realServerHello
+type hrr = helloRetryRequest
+
+/// They will be replaced by:
+
+type sh0  = sh: serverHello {~(is_hrr sh)}
+type hrr0 = sh: serverHello { is_hrr sh}
+
+/// These types are awkward in specifications and high-level code. In
+/// preparation, we should define spec-level ad-hoc accessors, as
+/// illustrated below.
+
+// Make these functions opaque? Fuse with Repr.ServerHello? 
+
+private let sh_value (sh: sh0) = 
+  match sh.SH.is_hrr  with 
+  | ServerHello_is_hrr_false v -> v
+private let hrr_value (sh: hrr0) = 
+  match sh.SH.is_hrr  with 
+  | ServerHello_is_hrr_true v -> v
+
+// let sh_version (sh: sh0) = sh.SH.version 
+// let sh_random       (sh: sh0) = (sh_value sh).tag 
+// let sh_session_id   (sh: sh0) = (sh_value sh).value.SHK.session_id
+// let sh_cipher_suite (sh: sh0) = (sh_value sh).value.SHK.cipher_suite 
+// let sh_extensions   (sh: sh0) = (sh_value sh).value.SHK.extensions 
+
+// let hrr_version     (sh: hrr0) = sh.SH.version 
+// let hrr_session_id  (sh: hrr0) = (hrr_value sh).HRK.session_id
+// let hrr_cipher_suite(sh: hrr0) = (hrr_value sh).HRK.cipher_suite
+// let hrr_extensions  (sh: hrr0) = (hrr_value sh).HRK.extensions 
+
+module RSH = Parsers.RealServerHello
+module HRR = Parsers.HelloRetryRequest
+
+let sh_version      (sh: sh) = sh.RSH.version
+let sh_random       (sh: sh) = sh.RSH.random
+let sh_session_id   (sh: sh) = sh.RSH.session_id
+let sh_cipher_suite (sh: sh) = sh.RSH.cipher_suite 
+let sh_extensions   (sh: sh) = sh.RSH.extensions 
+
+let hrr_version     (sh: hrr) = sh.HRR.version
+let hrr_session_id  (sh: hrr) = sh.HRR.session_id
+let hrr_cipher_suite(sh: hrr) = sh.HRR.cipher_suite
+let hrr_extensions  (sh: hrr) = sh.HRR.extensions 
+
+/// The function below provides *temporary* conversions to the
+/// simpler, synthetic types.
 
 let get_hrr (m:serverHello{is_hrr m}) : hrr =
   let ServerHello_is_hrr_true hrr = m.is_hrr in
@@ -85,8 +135,6 @@ let get_sh (m:serverHello{not (is_hrr m)}) : sh =
     extensions = sh.value.SHK.extensions;
   })
 
-module RSH = Parsers.RealServerHello
-module HRR = Parsers.HelloRetryRequest
 
 let serverHello_of_sh (m:sh{m.RSH.random <> serverHello_is_hrr_cst}) =
   SH.({

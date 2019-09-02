@@ -77,14 +77,14 @@ let signals sto next_keys1 complete1 =
 val tag: #a:EverCrypt.Hash.alg -> transcript_state a -> transcript -> St bytes
 let tag #a stt transcript =
   let h0 = get () in
-  assume (T.invariant stt (Ghost.reveal transcript) h0);
-  T.elim_invariant stt (Ghost.reveal transcript) h0;
+  assume (Transcript.invariant stt (Ghost.reveal transcript) h0);
+  Transcript.elim_invariant stt (Ghost.reveal transcript) h0;
   push_frame();
   let ltag =  Hashing.Spec.hash_len a in
   let btag = LowStar.Buffer.alloca 0uy ltag in
   let h1 = get () in
-  T.frame_invariant stt (Ghost.reveal transcript) h0 h1 B.loc_none;
-  T.extract_hash stt btag transcript;
+  Transcript.frame_invariant stt (Ghost.reveal transcript) h0 h1 B.loc_none;
+  Transcript.extract_hash stt btag transcript;
   let tag = FStar.Bytes.of_buffer ltag btag in
   pop_frame();
   tag
@@ -97,12 +97,12 @@ let send_ch
 = let h0 = get () in
   let r = MITLS.Repr.Handshake.serialize sto.out_slice sto.out_pos m in
   let h1 = get () in
-  T.frame_invariant stt (Ghost.reveal t) h0 h1 (B.loc_buffer sto.out_slice.LowParse.Low.Base.base);
+  Transcript.frame_invariant stt (Ghost.reveal t) h0 h1 (B.loc_buffer sto.out_slice.LowParse.Low.Base.base);
   match r with
   | None ->
     fatal Internal_error "output buffer overflow"
   | Some r ->
-    let t' = HSL.Transcript.extend stt (T.LR_ClientHello r) t in
+    let t' = HSL.Transcript.extend stt (Transcript.LR_ClientHello r) t in
     let b = MITLS.Repr.to_bytes r in
     trace ("send "^hex_of_bytes b);
     let sto = { sto with out_pos = r.MITLS.Repr.end_pos; outgoing = sto.outgoing @| b } in
@@ -124,8 +124,8 @@ let send_hrr
       fatal Internal_error "output_buffer_overflow for hrr"
     | Some r_hrr ->
       let h1 = get () in
-      T.frame_invariant stt (Ghost.reveal t) h0 h1 (B.loc_buffer sto.out_slice.LowParse.Low.Base.base);
-      let t' = HSL.Transcript.extend stt (T.LR_HRR r_tag r_hrr) t in
+      Transcript.frame_invariant stt (Ghost.reveal t) h0 h1 (B.loc_buffer sto.out_slice.LowParse.Low.Base.base);
+      let t' = HSL.Transcript.extend stt (Transcript.LR_HRR r_tag r_hrr) t in
       let b = MITLS.Repr.to_bytes r_tag @| MITLS.Repr.to_bytes r_hrr in
       trace ("send "^hex_of_bytes b);
       let sto = { sto with out_pos = r_hrr.MITLS.Repr.end_pos; outgoing = sto.outgoing @| b } in
@@ -139,14 +139,14 @@ let send13
 = let h0 = get () in
   let r = MITLS.Repr.Handshake13.serialize sto.out_slice sto.out_pos m in
   let h1 = get () in
-  T.frame_invariant stt (Ghost.reveal t) h0 h1 (B.loc_buffer sto.out_slice.LowParse.Low.Base.base);
+  Transcript.frame_invariant stt (Ghost.reveal t) h0 h1 (B.loc_buffer sto.out_slice.LowParse.Low.Base.base);
   match r with
   | None ->
     fatal Internal_error "output buffer overflow"
   | Some r ->
-//    let t : Ghost.erased T.transcript_t = Ghost.hide (Ghost.reveal t) in
-    List.lemma_snoc_length (T.Transcript13?.rest (Ghost.reveal t), m);
-    let t' = HSL.Transcript.extend stt (T.LR_HSM13 r) t in
+//    let t : Ghost.erased Transcript.transcript_t = Ghost.hide (Ghost.reveal t) in
+    List.lemma_snoc_length (Transcript.Transcript13?.rest (Ghost.reveal t), m);
+    let t' = HSL.Transcript.extend stt (Transcript.LR_HSM13 r) t in
     let b = MITLS.Repr.to_bytes r in
     trace ("send "^hex_of_bytes b);
     let sto = { sto with out_pos = r.MITLS.Repr.end_pos; outgoing = sto.outgoing @| b } in
@@ -158,7 +158,7 @@ let send13
 let send_tag13 #a stt #_ t sto m tag =
   match send13 stt t sto m with
   | Correct (sto, t') ->
-    T.extract_hash stt tag t';
+    Transcript.extract_hash stt tag t';
     correct (sto, t')
   | Error z -> Error z
 
@@ -190,8 +190,8 @@ val send:
 let send #a stt transcript0 sto msg =
   let h0 = get () in
   assume (LowParse.Low.Base.live_slice h0 sto.out_slice);
-  assume (T.invariant stt (Ghost.reveal transcript0) h0);
-  assume (B.loc_disjoint (B.loc_buffer sto.out_slice.LowParse.Low.Base.base) (T.footprint stt));
+  assume (Transcript.invariant stt (Ghost.reveal transcript0) h0);
+  assume (B.loc_disjoint (B.loc_buffer sto.out_slice.LowParse.Low.Base.base) (Transcript.footprint stt));
   let r : option (msg_repr_type msg (MITLS.Repr.of_slice sto.out_slice)) =
     match msg with
     | Msg m -> 
@@ -204,19 +204,19 @@ let send #a stt transcript0 sto msg =
     fatal Internal_error "output buffer overflow"
   | Some r ->
     let r : MITLS.Repr.repr (msg_type msg) (MITLS.Repr.of_slice sto.out_slice) = r in
-    let olabel : option T.label_repr = match msg with
-    | Msg (Parsers.Handshake.M_client_hello _) -> Some (T.LR_ClientHello r) (* TODO: LR_TCH? *)
-    | Msg (Parsers.Handshake.M_server_hello _) -> Some (T.LR_ServerHello r)
-    | Msg12 _ -> Some (T.LR_HSM12 r)
-    | Msg13 _ -> Some (T.LR_HSM13 r)
+    let olabel : option Transcript.label_repr = match msg with
+    | Msg (Parsers.Handshake.M_client_hello _) -> Some (Transcript.LR_ClientHello r) (* TODO: LR_TCH? *)
+    | Msg (Parsers.Handshake.M_server_hello _) -> Some (Transcript.LR_ServerHello r)
+    | Msg12 _ -> Some (Transcript.LR_HSM12 r)
+    | Msg13 _ -> Some (Transcript.LR_HSM13 r)
     | _ -> None
     in
     begin match olabel with
     | Some label ->
       let h1 = get () in
-      T.frame_invariant stt (Ghost.reveal transcript0) h0 h1 (B.loc_buffer sto.out_slice.LowParse.Low.Base.base);
-      assume (T.extensible (Ghost.reveal transcript0));
-      assume (Some? (T.transition (Ghost.reveal transcript0) (T.label_of_label_repr label)));
+      Transcript.frame_invariant stt (Ghost.reveal transcript0) h0 h1 (B.loc_buffer sto.out_slice.LowParse.Low.Base.base);
+      assume (Transcript.extensible (Ghost.reveal transcript0));
+      assume (Some? (Transcript.transition (Ghost.reveal transcript0) (Transcript.label_of_label_repr label)));
       let transcript1 = HSL.Transcript.extend stt label transcript0 in
       let b = MITLS.Repr.to_bytes r in
       trace ("send "^hex_of_bytes b);

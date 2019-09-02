@@ -51,9 +51,12 @@ module B = LowStar.Buffer
 module C = LowStar.ConstBuffer
 module G = FStar.Ghost
 
-module HSM = Parsers.Handshake
-module HSM12 = Parsers.Handshake12
-module HSM13 = Parsers.Handshake13
+module HSM = HandshakeMessages 
+
+open HandshakeMessages
+//module HSM12 = Parsers.Handshake12
+//module HSM13 = Parsers.Handshake13
+
 module PV = Parsers.ProtocolVersion
 module LP = LowParse.Low.Base
 module IncHash = EverCrypt.Hash.Incremental
@@ -70,35 +73,29 @@ module CRF = Crypto.CRF
 
 //TODO: move to a separate module
 let repr_hs12 (b:R.const_slice) =
-  R.repr_p _ b HSM12.handshake12_parser
+  R.repr_p _ b HSM.handshake12_parser
 
 //TODO: move to a separate module
 let repr_hs13 (b:R.const_slice) =
-  R.repr_p _ b HSM13.handshake13_parser
+  R.repr_p _ b HSM.handshake13_parser
 
+//19-09-02 vs FStar.Bytes? 
 type bytes = FStar.Seq.seq uint_8
 
 /// `hs_ch` and `hs_sh`: Abbreviations for handshake messages that
 /// hold client and server hellos, respectively
-let hs_ch = ch:HSM.handshake{HSM.M_client_hello? ch}
-let hs_sh = sh:HSM.handshake{HSM.M_server_hello? sh}
-
-/// `is_hrr`: a pure function to
-/// decide if a server-hello message is a hello-retry-request (hrr)
-/// TODO: it is the same as HandshakeMessages.is_hrr, so decide which one to keep
-inline_for_extraction
-let is_hrr (sh:SH.serverHello) : Tot bool =
-  SH.ServerHello_is_hrr_true? sh.SH.is_hrr
+let hs_ch = HSM.(ch:handshake{M_client_hello? ch})
+let hs_sh = HSM.(sh:handshake{M_server_hello? sh})
 
 let is_any_hash_tag (h: HSM.handshake) : GTot Type0 =
-  HSM.M_message_hash? h /\ (FStar.Bytes.length (HSM.M_message_hash?._0 h) <= 64)
+  HSM.M_message_hash? h /\ (Bytes.length (HSM.M_message_hash?._0 h) <= 64)
   
 let any_hash_tag = 
-  (h: HSM.handshake { is_any_hash_tag h })
+  h: HSM.handshake { is_any_hash_tag h }
 
 /// `retry`: a pair of a client hello hash and hello retry request
 type retry =
-  any_hash_tag & s:SH.serverHello{is_hrr s}
+  any_hash_tag & HSM.hrr0
 
 ////////////////////////////////////////////////////////////////////////////////
 // Truncated client hellos
@@ -124,10 +121,10 @@ type retry =
 /// perhaps using a different hashing algorithm (as determined by the
 /// PSK identity).
 
+//why from PB? To be shared 
 let clientHello_with_binders = ch:CH.clientHello {
   PB.has_binders (HSM.M_client_hello ch)
 }
-
 let binders_len = len:uint_32{
   35 <= UInt32.v len /\
   UInt32.v len <= 65537
@@ -170,12 +167,9 @@ let truncate (ch:clientHello_with_binders)
     PB.truncate_clientHello_bytes_set_binders hs_ch cb;
     HSM.M_client_hello?._0 tch
 
-
 /// `nego_version`: This is to be provided eventually by a refactoring
 /// of the Negotiation module.
-val nego_version (ch:CH.clientHello)
-                 (sh:SH.serverHello)
-       : PV.protocolVersion
+val negotiation_selected_version: HSM.sh0 -> PV.protocolVersion
 
 /// `max_transcript_size` and `max_message_size`:
 ///
@@ -207,6 +201,7 @@ let max_message_size_lt_max_input_length (a: HashDef.hash_alg)
     [SMTPat (Spec.Hash.Definitions.max_input_length a)]
   = assert_norm ((max_transcript_size + 4) * max_message_size < pow2 61);
     assert_norm ((max_transcript_size + 4) * max_message_size < pow2 125)
+//19-09-02 broken? 
 
 /// Move to the FStar.List library?
 let bounded_list 'a n = l:list 'a{List.length l < n}
@@ -243,16 +238,16 @@ type transcript_t =
       transcript_t
 
   | Transcript12:
-      ch:CH.clientHello ->
-      sh:SH.serverHello{nego_version ch sh == PV.TLS_1p2} ->
-      rest:bounded_list HSM12.handshake12 max_transcript_size ->
+      ch:HSM.clientHello ->
+      sh:HSM.sh0{negotiation_selected_version sh == PV.TLS_1p2} ->
+      rest:bounded_list HSM.handshake12 max_transcript_size ->
       transcript_t
 
   | Transcript13:
       retried:option retry ->
-      ch:CH.clientHello ->
-      sh:SH.serverHello{nego_version ch sh == PV.TLS_1p3} ->
-      rest:bounded_list HSM13.handshake13 max_transcript_size ->
+      ch:HSM.clientHello ->
+      sh:HSM.sh0{negotiation_selected_version sh == PV.TLS_1p3} ->
+      rest:bounded_list HSM.handshake13 max_transcript_size ->
       transcript_t
 
 /// `transcript_size`: the size of a transcript is the length of its
@@ -340,13 +335,13 @@ let ext_transcript_t = t:transcript_t{extensible t}
 
 noeq
 type label =
-  | L_ClientHello of CH.clientHello
-  | L_ServerHello of SH.serverHello
+  | L_ClientHello of clientHello
+  | L_ServerHello of sh0
   | L_TCH of clientHello_with_binders
   | L_CompleteTCH of clientHello_with_binders
   | L_HRR of retry
-  | L_HSM12 of HSM12.handshake12
-  | L_HSM13 of HSM13.handshake13
+  | L_HSM12 of handshake12
+  | L_HSM13 of handshake13
 
 inline_for_extraction
 let transcript_n (n: Ghost.erased nat) = (t: transcript_t { transcript_size t == Ghost.reveal n })
@@ -356,7 +351,7 @@ let g_transcript_n (n: Ghost.erased nat) = (t: Ghost.erased transcript_t { trans
 
 let snoc12
   (t: transcript_t { Transcript12? t /\ transcript_size t < max_transcript_size - 1 })
-  (m: HSM12.handshake12)
+  (m: handshake12)
 : Tot transcript_t
 = let Transcript12 ch sh rest = t in
   List.lemma_snoc_length (rest, m);
@@ -364,7 +359,7 @@ let snoc12
 
 let snoc13
   (t: transcript_t { Transcript13? t /\ transcript_size t < max_transcript_size - 1 })
-  (m: HSM13.handshake13)
+  (m: handshake13)
 : Tot (transcript_n (Ghost.hide (transcript_size t + 1)))
 = let Transcript13 retry ch sh rest = t in
   List.lemma_snoc_length (rest, m);
@@ -389,7 +384,7 @@ let transition (t:transcript_t) (l:label)
 
     | ClientHello retry ch, L_ServerHello sh ->
       begin
-      match nego_version ch sh, retry with
+      match negotiation_selected_version sh, retry with
       | PV.TLS_1p2, None ->
         Some (Transcript12 ch sh [])
 
@@ -412,6 +407,7 @@ let transition (t:transcript_t) (l:label)
       else None
 
     | _ -> None
+//19-09-02 where is the client transition when receiving HRR?
 
 let ( ~~> ) (t1 t2:transcript_t) =
   exists l. Some t2 == transition t1 l
@@ -503,7 +499,7 @@ type label_repr =
 
   | LR_ServerHello:
        #b:R.const_slice ->
-       ch:hs_sh_repr b ->
+       sh:hs_sh_repr b {not (is_hrr (HSM.M_server_hello?._0 (R.value sh)))}->
        label_repr
 
   | LR_TCH:
@@ -561,6 +557,7 @@ let label_of_label_repr (l:label_repr)
 
 /// `valid_label`: Validity of the labels is simply the validity of
 ///  the message representations it contains
+// why two stages? 
 let valid_label_repr (l:label_repr) (h:HS.mem) =
   match l with
   | LR_HRR ch hrr ->
@@ -626,6 +623,11 @@ val extend (#a:_) (s:state a) (l:label_repr) (tx:G.erased transcript_t)
         B.modifies (footprint s) h0 h1 /\
         tx' == Some?.v (transition tx (label_of_label_repr l)))
 
+// We discussed keeping the erased transcript and possibly ha as a
+// ghost function from the state. This would be easier to use, but a
+// bit awkward to implement (updating a ref to a ghost?)
+//
+// val transcript (#a:_) (s:state a) (h:HS.mem): GTot transcript_t 
 
 (*** Hashes and injectivity ***)
 
