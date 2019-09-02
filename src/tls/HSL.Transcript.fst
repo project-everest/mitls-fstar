@@ -6,28 +6,19 @@ module HS = FStar.HyperStack
 module B = LowStar.Buffer
 module G = FStar.Ghost
 
-module HSM = Parsers.Handshake
-module HSM12 = Parsers.Handshake12
-module HSM13 = Parsers.Handshake13
+module HSM = HandshakeMessages
 
 module PV = Parsers.ProtocolVersion
 module LP = LowParse.Low.Base
 
 module R = MITLS.Repr
 module R_HS = MITLS.Repr.Handshake
-
 module R_CH = MITLS.Repr.ClientHello
-module CH = Parsers.ClientHello
-
 module R_SH = MITLS.Repr.ServerHello
-module SH = Parsers.ServerHello
 module CRF = Crypto.CRF
 module TestCRF = Test.CRF
 
 #set-options "--max_fuel 1 --max_ifuel 1 --z3rlimit 16"
-
-// In Negotiation.Version.fst
-let nego_version _ _ = admit ()
 
 //Seems to be automatic
 let serialize_max_size
@@ -70,10 +61,10 @@ let rec serialize_list_max_size #pk #t #p s x =
 let serialize_any_tag (ht:any_hash_tag) =
     LP.serialize HSM.handshake_serializer ht // (Parsers.Handshake.M_message_hash ht)
 
-let serialize_client_hello (ch:CH.clientHello) =
+let serialize_client_hello (ch:HSM.clientHello) =
   LP.serialize HSM.handshake_serializer (HSM.M_client_hello ch)
 
-let serialize_server_hello (sh:SH.serverHello) =
+let serialize_server_hello (sh:HSM.serverHello) =
   LP.serialize HSM.handshake_serializer (HSM.M_server_hello sh)
 
 let serialize_retry (r:option retry)
@@ -102,18 +93,18 @@ let transcript_bytes (t:transcript_t)
     serialize_client_hello ch
     
   | Transcript12 ch sh rest ->
-    serialize_list_max_size HSM12.handshake12_serializer rest;
+    serialize_list_max_size HSM.handshake12_serializer rest;
     serialize_client_hello ch `Seq.append` (
     serialize_server_hello sh `Seq.append`
-    LP.serialize (LPSL.serialize_list _ HSM12.handshake12_serializer) rest
+    LP.serialize (LPSL.serialize_list _ HSM.handshake12_serializer) rest
     )
 
   | Transcript13 retry ch sh rest ->
-    serialize_list_max_size HSM13.handshake13_serializer rest;
+    serialize_list_max_size HSM.handshake13_serializer rest;
     serialize_retry retry `Seq.append` (
     serialize_client_hello ch `Seq.append` (
     serialize_server_hello sh `Seq.append` (
-    LP.serialize (LPSL.serialize_list _ HSM13.handshake13_serializer) rest
+    LP.serialize (LPSL.serialize_list _ HSM.handshake13_serializer) rest
     )))
 
 let transcript_is_empty (t: transcript_t) : Tot bool = match t with
@@ -140,8 +131,8 @@ let transcript_script_bytes (t: transcript_t) : Lemma
 = ()
 
 let seq_append_empty () : Lemma
-  (forall (s: Seq.seq LP.byte) . {:pattern (Seq.empty `Seq.append` s)} Seq.empty `Seq.append` s == s)
-= assert (forall (s: Seq.seq LP.byte) . {:pattern (Seq.empty `Seq.append` s)} (Seq.empty `Seq.append` s) `Seq.equal` s)
+  FStar.Seq.(forall (s: seq LP.byte) . {:pattern (empty `append` s)} empty `append` s == s)
+= FStar.Seq.(assert (forall (s: seq LP.byte) . {:pattern (empty `append` s)} (empty `append` s) `equal` s))
 
 let transcript_bytes_does_not_start_with_message_hash
   (t: transcript_t)
@@ -173,14 +164,14 @@ let transcript_bytes_does_not_start_with_message_hash
       ht (HSM.M_client_hello ch)
       (serialize_server_hello hrr `Seq.append` q)
       (serialize_server_hello sh `Seq.append`
-        LP.serialize (LPSL.serialize_list _ HSM12.handshake12_serializer) rest)
+        LP.serialize (LPSL.serialize_list _ HSM.handshake12_serializer) rest)
 
   | Transcript13 _ ch sh rest ->
     LP.serialize_strong_prefix HSM.handshake_serializer 
       ht (HSM.M_client_hello ch)
       (serialize_server_hello hrr `Seq.append` q)
       (serialize_server_hello sh `Seq.append`
-        LP.serialize (LPSL.serialize_list _ HSM13.handshake13_serializer) rest)
+        LP.serialize (LPSL.serialize_list _ HSM.handshake13_serializer) rest)
 
 let transcript_bytes_injective_retry
   (r1: option retry)
@@ -262,14 +253,14 @@ let rec transcript_bytes_injective_no_retry
       | ClientHello _ ch2 ->
         seq_append_empty_r ();
         LP.serialize_strong_prefix HSM.handshake_serializer (HSM.M_client_hello ch1) (HSM.M_client_hello ch2) (serialize_server_hello sh1 `Seq.append` (
-    LP.serialize (LPSL.serialize_list _ HSM12.handshake12_serializer) rest1)) Seq.empty
+    LP.serialize (LPSL.serialize_list _ HSM.handshake12_serializer) rest1)) Seq.empty
       | Transcript12 ch2 sh2 rest2 ->
         LP.serialize_strong_prefix HSM.handshake_serializer (HSM.M_client_hello ch1) (HSM.M_client_hello ch2) (serialize_server_hello sh1 `Seq.append` (
-    LP.serialize (LPSL.serialize_list _ HSM12.handshake12_serializer) rest1)) (serialize_server_hello sh2 `Seq.append` (
-    LP.serialize (LPSL.serialize_list _ HSM12.handshake12_serializer) rest2));
-        LP.serialize_strong_prefix HSM.handshake_serializer (HSM.M_server_hello sh1) (HSM.M_server_hello sh2)     (LP.serialize (LPSL.serialize_list _ HSM12.handshake12_serializer) rest1) (
-    LP.serialize (LPSL.serialize_list _ HSM12.handshake12_serializer) rest2);
-        LP.serializer_injective _ (LPSL.serialize_list _ HSM12.handshake12_serializer) rest1 rest2
+    LP.serialize (LPSL.serialize_list _ HSM.handshake12_serializer) rest1)) (serialize_server_hello sh2 `Seq.append` (
+    LP.serialize (LPSL.serialize_list _ HSM.handshake12_serializer) rest2));
+        LP.serialize_strong_prefix HSM.handshake_serializer (HSM.M_server_hello sh1) (HSM.M_server_hello sh2)     (LP.serialize (LPSL.serialize_list _ HSM.handshake12_serializer) rest1) (
+    LP.serialize (LPSL.serialize_list _ HSM.handshake12_serializer) rest2);
+        LP.serializer_injective _ (LPSL.serialize_list _ HSM.handshake12_serializer) rest1 rest2
       end      
     | Transcript13 _ ch1 sh1 rest1 ->
       begin match t2 with
@@ -279,15 +270,15 @@ let rec transcript_bytes_injective_no_retry
       | ClientHello _ ch2 ->
         seq_append_empty_r ();
         LP.serialize_strong_prefix HSM.handshake_serializer (HSM.M_client_hello ch1) (HSM.M_client_hello ch2) (serialize_server_hello sh1 `Seq.append` (
-    LP.serialize (LPSL.serialize_list _ HSM13.handshake13_serializer) rest1)) Seq.empty
+    LP.serialize (LPSL.serialize_list _ HSM.handshake13_serializer) rest1)) Seq.empty
       | Transcript12 ch2 sh2 _ -> ()
       | Transcript13 _ ch2 sh2 rest2 ->
         LP.serialize_strong_prefix HSM.handshake_serializer (HSM.M_client_hello ch1) (HSM.M_client_hello ch2) (serialize_server_hello sh1 `Seq.append` (
-    LP.serialize (LPSL.serialize_list _ HSM13.handshake13_serializer) rest1)) (serialize_server_hello sh2 `Seq.append` (
-    LP.serialize (LPSL.serialize_list _ HSM13.handshake13_serializer) rest2));
-        LP.serialize_strong_prefix HSM.handshake_serializer (HSM.M_server_hello sh1) (HSM.M_server_hello sh2)     (LP.serialize (LPSL.serialize_list _ HSM13.handshake13_serializer) rest1) (
-    LP.serialize (LPSL.serialize_list _ HSM13.handshake13_serializer) rest2);
-        LP.serializer_injective _ (LPSL.serialize_list _ HSM13.handshake13_serializer) rest1 rest2
+    LP.serialize (LPSL.serialize_list _ HSM.handshake13_serializer) rest1)) (serialize_server_hello sh2 `Seq.append` (
+    LP.serialize (LPSL.serialize_list _ HSM.handshake13_serializer) rest2));
+        LP.serialize_strong_prefix HSM.handshake_serializer (HSM.M_server_hello sh1) (HSM.M_server_hello sh2)     (LP.serialize (LPSL.serialize_list _ HSM.handshake13_serializer) rest1) (
+    LP.serialize (LPSL.serialize_list _ HSM.handshake13_serializer) rest2);
+        LP.serializer_injective _ (LPSL.serialize_list _ HSM.handshake13_serializer) rest1 rest2
       end
 
 let transcript_bytes_injective (t1 t2:transcript_t)
@@ -376,8 +367,8 @@ let extend (#a:_) (s:state a) (l:label_repr) (tx:G.erased transcript_t) =
 
     let tx' = G.hide (Some?.v (transition (G.reveal tx) (label_of_label_repr l))) in
 
-    LPSL.serialize_list_nil HSM12.handshake12_parser HSM12.handshake12_serializer;
-    LPSL.serialize_list_nil HSM13.handshake13_parser HSM13.handshake13_serializer;
+    LPSL.serialize_list_nil HSM.handshake12_parser HSM.handshake12_serializer;
+    LPSL.serialize_list_nil HSM.handshake13_parser HSM.handshake13_serializer;
     assert ((transcript_bytes (G.reveal tx) `Seq.append` 
              serialize_server_hello (HSM.M_server_hello?._0 (R.value sh)))
         `Seq.equal`     
@@ -490,20 +481,20 @@ let extend (#a:_) (s:state a) (l:label_repr) (tx:G.erased transcript_t) =
     // These three lemmas prove that the data in the subbuffer data is
     // the serialized data corresponding to the client hello that is being added
     R.reveal_valid();
-    LP.valid_pos_valid_exact HSM12.handshake12_parser h0 (R.to_slice b) hs12.R.start_pos hs12.R.end_pos;
-    LP.valid_exact_serialize HSM12.handshake12_serializer h0 (R.to_slice b) hs12.R.start_pos hs12.R.end_pos;
+    LP.valid_pos_valid_exact HSM.handshake12_parser h0 (R.to_slice b) hs12.R.start_pos hs12.R.end_pos;
+    LP.valid_exact_serialize HSM.handshake12_serializer h0 (R.to_slice b) hs12.R.start_pos hs12.R.end_pos;
 
     let len = hs12.R.end_pos - hs12.R.start_pos in
     let data = C.sub b.R.base hs12.R.start_pos len in
     let tx' = G.hide (Some?.v (transition (G.reveal tx) (label_of_label_repr l))) in
 
-    LPSL.serialize_list_singleton HSM12.handshake12_parser HSM12.handshake12_serializer
+    LPSL.serialize_list_singleton HSM.handshake12_parser HSM.handshake12_serializer
       (R.value hs12);
-    LPSL.serialize_list_append HSM12.handshake12_parser HSM12.handshake12_serializer
+    LPSL.serialize_list_append HSM.handshake12_parser HSM.handshake12_serializer
       (let Transcript12 _ _ rest = G.reveal tx in rest)
       [R.value hs12];
     assert ((transcript_bytes (G.reveal tx) `Seq.append` 
-                              LP.serialize HSM12.handshake12_serializer (R.value hs12))
+                              LP.serialize HSM.handshake12_serializer (R.value hs12))
         `Seq.equal`     
              transcript_bytes (G.reveal tx'));
     
@@ -519,21 +510,21 @@ let extend (#a:_) (s:state a) (l:label_repr) (tx:G.erased transcript_t) =
     // These three lemmas prove that the data in the subbuffer data is
     // the serialized data corresponding to the client hello that is being added
     R.reveal_valid();
-    LP.valid_pos_valid_exact HSM13.handshake13_parser h0 (R.to_slice b) hs13.R.start_pos hs13.R.end_pos;
-    LP.valid_exact_serialize HSM13.handshake13_serializer h0 (R.to_slice b) hs13.R.start_pos hs13.R.end_pos;
+    LP.valid_pos_valid_exact HSM.handshake13_parser h0 (R.to_slice b) hs13.R.start_pos hs13.R.end_pos;
+    LP.valid_exact_serialize HSM.handshake13_serializer h0 (R.to_slice b) hs13.R.start_pos hs13.R.end_pos;
 
     let len = hs13.R.end_pos - hs13.R.start_pos in
     let data = C.sub b.R.base hs13.R.start_pos len in
 
     let tx' = G.hide (Some?.v (transition (G.reveal tx) (label_of_label_repr l))) in
 
-    LPSL.serialize_list_singleton HSM13.handshake13_parser HSM13.handshake13_serializer
+    LPSL.serialize_list_singleton HSM.handshake13_parser HSM.handshake13_serializer
       (R.value hs13);
-    LPSL.serialize_list_append HSM13.handshake13_parser HSM13.handshake13_serializer
+    LPSL.serialize_list_append HSM.handshake13_parser HSM.handshake13_serializer
       (let Transcript13 _ _ _ rest = G.reveal tx in rest)
       [R.value hs13];
     assert ((transcript_bytes (G.reveal tx) `Seq.append` 
-                              LP.serialize HSM13.handshake13_serializer (R.value hs13))
+                              LP.serialize HSM.handshake13_serializer (R.value hs13))
         `Seq.equal`     
              transcript_bytes (G.reveal tx'));
 

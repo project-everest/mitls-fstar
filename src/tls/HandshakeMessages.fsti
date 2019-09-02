@@ -50,6 +50,7 @@ type eoed = unit
 
 
 module SH = Parsers.ServerHello
+
 module HRK = Parsers.HRRKind
 module SHK = Parsers.SHKind
 
@@ -63,100 +64,98 @@ let is_hrr (m:serverHello): bool =
 /// 19-09-02 These are the "semantic" server hello contents and HRR
 /// payloads,
 
-type sh = realServerHello
-type hrr = helloRetryRequest
+type sh  = sh: serverHello {~(is_hrr sh)}
+type hrr = sh: serverHello { is_hrr sh}
 
-/// They will be replaced by:
-
-type sh0  = sh: serverHello {~(is_hrr sh)}
-type hrr0 = sh: serverHello { is_hrr sh}
-
-/// These types are awkward in specifications and high-level code. In
-/// preparation, we should define spec-level ad-hoc accessors, as
-/// illustrated below.
+/// These types are awkward in specifications and high-level code, so
+/// we also provide spec-level ad hoc accessors.
 
 // Make these functions opaque? Fuse with Repr.ServerHello? 
 
-private let sh_value (sh: sh0) = 
+private let sh_value (sh: sh) = 
   match sh.SH.is_hrr  with 
   | ServerHello_is_hrr_false v -> v
-private let hrr_value (sh: hrr0) = 
+private let hrr_value (sh: hrr) = 
   match sh.SH.is_hrr  with 
   | ServerHello_is_hrr_true v -> v
 
-// let sh_version (sh: sh0) = sh.SH.version 
-// let sh_random       (sh: sh0) = (sh_value sh).tag 
-// let sh_session_id   (sh: sh0) = (sh_value sh).value.SHK.session_id
-// let sh_cipher_suite (sh: sh0) = (sh_value sh).value.SHK.cipher_suite 
-// let sh_extensions   (sh: sh0) = (sh_value sh).value.SHK.extensions 
+let sh_version (sh: sh) = sh.SH.version 
+let sh_random       (sh: sh) = (sh_value sh).tag 
+let sh_session_id   (sh: sh) = (sh_value sh).value.SHK.session_id
+let sh_cipher_suite (sh: sh) = (sh_value sh).value.SHK.cipher_suite 
+let sh_extensions   (sh: sh) = (sh_value sh).value.SHK.extensions 
 
-// let hrr_version     (sh: hrr0) = sh.SH.version 
-// let hrr_session_id  (sh: hrr0) = (hrr_value sh).HRK.session_id
-// let hrr_cipher_suite(sh: hrr0) = (hrr_value sh).HRK.cipher_suite
-// let hrr_extensions  (sh: hrr0) = (hrr_value sh).HRK.extensions 
+let hrr_version     (sh: hrr) = sh.SH.version 
+let hrr_session_id  (sh: hrr) = (hrr_value sh).HRK.session_id
+let hrr_cipher_suite(sh: hrr) = (hrr_value sh).HRK.cipher_suite
+let hrr_extensions  (sh: hrr) = (hrr_value sh).HRK.extensions 
 
-module RSH = Parsers.RealServerHello
-module HRR = Parsers.HelloRetryRequest
+// prior, simpler types, but without a direct wire format: 
+// type sh = realServerHello
+// type hrr = helloRetryRequest
 
-let sh_version      (sh: sh) = sh.RSH.version
-let sh_random       (sh: sh) = sh.RSH.random
-let sh_session_id   (sh: sh) = sh.RSH.session_id
-let sh_cipher_suite (sh: sh) = sh.RSH.cipher_suite 
-let sh_extensions   (sh: sh) = sh.RSH.extensions 
+// module RSH = Parsers.RealServerHello
+// module HRR = Parsers.HelloRetryRequest
 
-let hrr_version     (sh: hrr) = sh.HRR.version
-let hrr_session_id  (sh: hrr) = sh.HRR.session_id
-let hrr_cipher_suite(sh: hrr) = sh.HRR.cipher_suite
-let hrr_extensions  (sh: hrr) = sh.HRR.extensions 
+// let sh_version      (sh: sh) = sh.RSH.version
+// let sh_random       (sh: sh) = sh.RSH.random
+// let sh_session_id   (sh: sh) = sh.RSH.session_id
+// let sh_cipher_suite (sh: sh) = sh.RSH.cipher_suite 
+// let sh_extensions   (sh: sh) = sh.RSH.extensions 
 
-/// The function below provides *temporary* conversions to the
-/// simpler, synthetic types.
+// let hrr_version     (sh: hrr) = sh.HRR.version
+// let hrr_session_id  (sh: hrr) = sh.HRR.session_id
+// let hrr_cipher_suite(sh: hrr) = sh.HRR.cipher_suite
+// let hrr_extensions  (sh: hrr) = sh.HRR.extensions 
 
-let get_hrr (m:serverHello{is_hrr m}) : hrr =
-  let ServerHello_is_hrr_true hrr = m.is_hrr in
-  let open Parsers.HelloRetryRequest in
-  ({
-    version = m.SH.version;
-    session_id = hrr.HRK.session_id;
-    cipher_suite = hrr.HRK.cipher_suite;
-    legacy_compression = hrr.HRK.legacy_compression;
-    extensions = hrr.HRK.extensions;
-  })
+// /// The function below provides *temporary* conversions to the
+// /// simpler, synthetic types.
 
-let get_sh (m:serverHello{not (is_hrr m)}) : sh =
-  let ServerHello_is_hrr_false sh = m.is_hrr in
-  let open Parsers.RealServerHello in
-  ({
-    version = m.SH.version;
-    random = sh.tag;
-    session_id = sh.value.SHK.session_id;
-    cipher_suite = sh.value.SHK.cipher_suite;
-    compression_method = sh.value.SHK.compression_method;
-    extensions = sh.value.SHK.extensions;
-  })
+// let get_hrr (m:serverHello{is_hrr m}) : hrr =
+//   let ServerHello_is_hrr_true hrr = m.is_hrr in
+//   let open Parsers.HelloRetryRequest in
+//   ({
+//     version = m.SH.version;
+//     session_id = hrr.HRK.session_id;
+//     cipher_suite = hrr.HRK.cipher_suite;
+//     legacy_compression = hrr.HRK.legacy_compression;
+//     extensions = hrr.HRK.extensions;
+//   })
+
+// let get_sh (m:serverHello{not (is_hrr m)}) : sh =
+//   let ServerHello_is_hrr_false sh = m.is_hrr in
+//   let open Parsers.RealServerHello in
+//   ({
+//     version = m.SH.version;
+//     random = sh.tag;
+//     session_id = sh.value.SHK.session_id;
+//     cipher_suite = sh.value.SHK.cipher_suite;
+//     compression_method = sh.value.SHK.compression_method;
+//     extensions = sh.value.SHK.extensions;
+//   })
 
 
-let serverHello_of_sh (m:sh{m.RSH.random <> serverHello_is_hrr_cst}) =
-  SH.({
-    version = m.RSH.version;
-    is_hrr = ServerHello_is_hrr_false Parsers.ServerHello_is_hrr.({
-      tag = m.RSH.random;
-      value = Parsers.SHKind.({
-        session_id = m.RSH.session_id;
-	cipher_suite = m.RSH.cipher_suite;
-	compression_method = m.RSH.compression_method;
-	extensions = m.RSH.extensions;
-      });
-    });
-  })
+// let serverHello_of_sh (m:sh{m.RSH.random <> serverHello_is_hrr_cst}) =
+//   SH.({
+//     version = m.RSH.version;
+//     is_hrr = ServerHello_is_hrr_false Parsers.ServerHello_is_hrr.({
+//       tag = m.RSH.random;
+//       value = Parsers.SHKind.({
+//         session_id = m.RSH.session_id;
+// 	cipher_suite = m.RSH.cipher_suite;
+// 	compression_method = m.RSH.compression_method;
+// 	extensions = m.RSH.extensions;
+//       });
+//     });
+//   })
 
-let serverHello_of_hrr (m:hrr) =
-  SH.({
-    version = m.HRR.version;
-    is_hrr = ServerHello_is_hrr_true Parsers.HRRKind.({
-      session_id = m.HRR.session_id;
-      cipher_suite = m.HRR.cipher_suite;
-      legacy_compression = m.HRR.legacy_compression;
-      extensions = m.HRR.extensions;
-    })
-  })
+// let serverHello_of_hrr (m:hrr) =
+//   SH.({
+//     version = m.HRR.version;
+//     is_hrr = ServerHello_is_hrr_true Parsers.HRRKind.({
+//       session_id = m.HRR.session_id;
+//       cipher_suite = m.HRR.cipher_suite;
+//       legacy_compression = m.HRR.legacy_compression;
+//       extensions = m.HRR.extensions;
+//     })
+//   })

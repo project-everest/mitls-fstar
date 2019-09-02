@@ -444,25 +444,25 @@ val client_ServerKeyExchange:
 /// 
 /// (conversely, the Finished message is verified by Handshake.Client)
 /// 
-val clientComplete_13: 
-  // #region:rgn -> ns:t region Client ->
-  config -> 
-  offer -> 
-  kexAlg -> 
-  ee: HandshakeMessages.encryptedExtensions ->
-  // optCertRequest: option HandshakeMessages.certificateRequest13 ->
-  sigdata: option (
-    Cert.chain13 * 
-    option HandshakeMessages.certificateVerify13 *
-    (b:bytes{length b <= 32})) ->
-  ST (result unit) // needs to be computed, whether returned or not
-  (requires fun h0 -> True)
-  (ensures fun h0 _ h1 -> B.modifies B.loc_none h0 h1)
-  // [C_Mode ==> C_Complete] setting [sexts optCertRequest schain] in mode and recording [ccert]
-  // ensures schain-based server authentication of the mode (including sexts) 
-  // ensures consistency of sexts and schain with the offer.
-  // TODO client sigs; till then ccert=None and optCertRequest is ignored.
-  // 19-04-19 TODO inv preservation through callbacks?
+// val clientComplete_13: 
+//   // #region:rgn -> ns:t region Client ->
+//   config -> 
+//   offer -> 
+//   kexAlg -> 
+//   ee: HandshakeMessages.encryptedExtensions ->
+//   // optCertRequest: option HandshakeMessages.certificateRequest13 ->
+//   sigdata: option (
+//     Cert.chain13 * 
+//     option HandshakeMessages.certificateVerify13 *
+//     (b:bytes{length b <= 32})) ->
+//   ST (result unit) // needs to be computed, whether returned or not
+//   (requires fun h0 -> True)
+//   (ensures fun h0 _ h1 -> B.modifies B.loc_none h0 h1)
+//   // [C_Mode ==> C_Complete] setting [sexts optCertRequest schain] in mode and recording [ccert]
+//   // ensures schain-based server authentication of the mode (including sexts) 
+//   // ensures consistency of sexts and schain with the offer.
+//   // TODO client sigs; till then ccert=None and optCertRequest is ignored.
+//   // 19-04-19 TODO inv preservation through callbacks?
 
 
 (* SERVER *) 

@@ -145,7 +145,7 @@ assume val is_psk: Idx.id -> bool
 
 type client_retry_info = {
   ch0: clientHello;
-  sh0: helloRetryRequest; }
+  sh0: HSM.hrr; }
 
 type full_offer = {
   full_retry: option client_retry_info;
@@ -447,7 +447,7 @@ noeq type client_state
   // 1.2 full, waiting for the rest of the first server flight
   | C12_wait_ServerHelloDone:
     ch: clientHello ->
-    sh: serverHello (*{ accepted12 ch sh }*) ->
+    sh: HSM.sh (*{ accepted12 ch sh }*) ->
     ms: msg_state region PF.F_c12_wait_ServerHelloDone ch.HSM.random (Negotiation.selected_ha sh) ->
     ks: client_keys ->
     client_state region cfg
@@ -456,7 +456,7 @@ noeq type client_state
   // the digest[..Finished1] to be MAC-verified in Finished2 will now be computed as it is received
   | C12_wait_Finished2:
     ch: clientHello ->
-    sh: serverHello (*{ accepted12 ch sh }*) ->
+    sh: HSM.sh (*{ accepted12 ch sh }*) ->
     ms: msg_state region PF.F_c12_wait_ServerHelloDone ch.HSM.random (Negotiation.selected_ha sh) ->
     m:mode12 ->
     // collapsing into a single state [wait_CCS2 (true)] followed by [wait_Finished2 (false)]
@@ -469,7 +469,7 @@ noeq type client_state
   // we will need digests before (to verify it) and after (for keying)
   | C12_wait_Finished1:
     ch: clientHello ->
-    sh: serverHello (*{ accepted12 ch sh }*) ->
+    sh: HSM.sh (*{ accepted12 ch sh }*) ->
     ms: msg_state region PF.F_c12_wait_ServerHelloDone ch.HSM.random (Negotiation.selected_ha sh) ->
     mode12 ->
     // collapsing into a single state [wait_CCS1 (true)] followed by [wait_Finished1 (false)]
@@ -795,13 +795,13 @@ type s_offer = {
 assume val selected:
   server_config ->
   s_offer ->
-  serverHello ->
+  HSM.sh ->
   encryptedExtensions ->
   option HandshakeMessages.certificate13 -> Type
 
 type s13_mode (region:rgn) (cfg:server_config) = {
   offer: s_offer; (* { honest_psk offer ==> client_offered offer } *)
-  sh: serverHello;
+  sh: HSM.sh;
   ee: encryptedExtensions;
   certs: certs:option HandshakeMessages.certificate13
   {

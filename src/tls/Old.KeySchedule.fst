@@ -830,7 +830,7 @@ let ks_client12_resume ks sr pv cs =
 //   3. they are called at different locations
 
 val ks_client13_sh: Mem.rgn -> ks:ks_client_state -> is_quic:bool -> sr:random -> cs:cipherSuite -> h:bytes ->
-  gy:option (g:CommonDH.group & CommonDH.share g) -> accept_psk:option nat ->
+  gy:option (g:CommonDH.group & CommonDH.share g) -> accept_psk:option UInt16.t ->
   ST (recordInstance * ks_client_state)
   (requires fun h0 ->
     match ks with 
@@ -842,7 +842,7 @@ val ks_client13_sh: Mem.rgn -> ks:ks_client_state -> is_quic:bool -> sr:random -
      /\
      (match ei, accept_psk with
       | [], None -> True
-      | _::_ , Some n -> n < List.Tot.length ei
+      | _::_ , Some n -> UInt16.v n < List.Tot.length ei
       | _ -> False)
     | _ -> False )  
   (ensures fun h0 r h1 -> 
@@ -864,7 +864,7 @@ let ks_client13_sh region ks is_quic sr cs log gy accept_psk =
   let (| esId, es |): (i: esId & es i) =
     match esl, accept_psk with
     | l, Some n ->
-      let Some (| i, es |) : option (i:esId & es i) = List.Tot.nth l n in
+      let Some (| i, es |) : option (i:esId & es i) = List.Tot.nth l (UInt16.v n) in
       dbg ("recallPSK early secret:          "^print_bytes es);
       (| i, es |)
     | _, None ->

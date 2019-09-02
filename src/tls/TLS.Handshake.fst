@@ -27,10 +27,6 @@ module KS = Old.KeySchedule
 module HMAC_UFCMA = Old.HMAC.UFCMA
 module HSM = HandshakeMessages
 module HSL = HandshakeLog
-module CH = Parsers.ClientHello
-module SH = Parsers.RealServerHello
-module HRR = Parsers.HelloRetryRequest
-module FSH = Parsers.ServerHello
 
 // consider adding an optional (resume: option sid) on the client side
 // for now this bit is not explicitly authenticated.
@@ -130,15 +126,15 @@ let rec recv_fragment (hs:hs) #i rg f =
 
     | C_wait_ServerHello, [Msg (M_server_hello sh)], [] ->
       if HSM.is_hrr sh then
-        client_HelloRetryRequest hs (HSM.get_hrr sh)
+        client_HelloRetryRequest hs sh
       else
-        recv_again (client_ServerHello hs (HSM.get_sh sh))
+        recv_again (client_ServerHello hs sh)
 
     | C13_sent_CH2 ch1 hrr, [Msg (M_server_hello sh)], [] ->
       if HSM.is_hrr sh then 
         InError (fatalAlert Unexpected_message, "server sent a second retry request")
       else
-        recv_again (client_ServerHello_HRR hs ch1 hrr (HSM.get_sh sh))
+        recv_again (client_ServerHello_HRR hs ch1 hrr sh)
 
     // 1.2 full: wrap these two into a single received flight with optional [cr]
     | C_wait_ServerHelloDone, [Msg12 (M12_certificate c); Msg12 (M12_server_key_exchange ske); Msg12 (M12_server_hello_done ())], [_] ->

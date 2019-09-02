@@ -53,6 +53,7 @@ module G = FStar.Ghost
 
 module HSM = HandshakeMessages 
 
+open TLSError
 open HandshakeMessages
 //module HSM12 = Parsers.Handshake12
 //module HSM13 = Parsers.Handshake13
@@ -95,7 +96,7 @@ let any_hash_tag =
 
 /// `retry`: a pair of a client hello hash and hello retry request
 type retry =
-  any_hash_tag & HSM.hrr0
+  any_hash_tag & HSM.hrr
 
 ////////////////////////////////////////////////////////////////////////////////
 // Truncated client hellos
@@ -167,10 +168,6 @@ let truncate (ch:clientHello_with_binders)
     PB.truncate_clientHello_bytes_set_binders hs_ch cb;
     HSM.M_client_hello?._0 tch
 
-/// `nego_version`: This is to be provided eventually by a refactoring
-/// of the Negotiation module.
-val negotiation_selected_version: HSM.sh0 -> PV.protocolVersion
-
 /// `max_transcript_size` and `max_message_size`:
 ///
 /// Some complications arise from the maximum size of transcript
@@ -239,14 +236,14 @@ type transcript_t =
 
   | Transcript12:
       ch:HSM.clientHello ->
-      sh:HSM.sh0{negotiation_selected_version sh == PV.TLS_1p2} ->
+      sh:HSM.sh{Negotiation.Version.selected sh == Correct PV.TLS_1p2} ->
       rest:bounded_list HSM.handshake12 max_transcript_size ->
       transcript_t
 
   | Transcript13:
       retried:option retry ->
       ch:HSM.clientHello ->
-      sh:HSM.sh0{negotiation_selected_version sh == PV.TLS_1p3} ->
+      sh:HSM.sh{Negotiation.Version.selected sh == Correct PV.TLS_1p3} ->
       rest:bounded_list HSM.handshake13 max_transcript_size ->
       transcript_t
 
@@ -336,12 +333,14 @@ let ext_transcript_t = t:transcript_t{extensible t}
 noeq
 type label =
   | L_ClientHello of clientHello
-  | L_ServerHello of sh0
+  | L_ServerHello of sh
   | L_TCH of clientHello_with_binders
   | L_CompleteTCH of clientHello_with_binders
   | L_HRR of retry
   | L_HSM12 of handshake12
   | L_HSM13 of handshake13
+
+//19-09-02 can we avoid any ghost parameter for types? 
 
 inline_for_extraction
 let transcript_n (n: Ghost.erased nat) = (t: transcript_t { transcript_size t == Ghost.reveal n })
@@ -384,11 +383,11 @@ let transition (t:transcript_t) (l:label)
 
     | ClientHello retry ch, L_ServerHello sh ->
       begin
-      match negotiation_selected_version sh, retry with
-      | PV.TLS_1p2, None ->
+      match Negotiation.Version.selected sh, retry with
+      | Correct PV.TLS_1p2, None ->
         Some (Transcript12 ch sh [])
 
-      | PV.TLS_1p3, _ ->
+      | Correct PV.TLS_1p3, _ ->
         Some (Transcript13 retry ch sh [])
 
       | _ -> None

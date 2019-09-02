@@ -1,5 +1,6 @@
 module TLS.Handshake.Client
 
+//open FStar.Integers
 open Mem
 open TLSConstants
 open TLSInfo
@@ -85,23 +86,48 @@ let transcript_extract
   pop_frame();
   tag
 
+#push-options "--z3rlimit 100"
+// Adapted from Send.send13, using [sending] as scratch space;
+// temporary. We may need similar functions for the Hello messages.
 let extend13
   #ha
+  (sending: Send.send_state)
   (di:Transcript.state ha)
-  (msg: handshake13)
-  (#n: Ghost.erased (n:nat{n < Transcript.max_transcript_size - 1}))
-  (tx0: Transcript.g_transcript_n n):
-  Stack (Ghost.erased Transcript.g_transcript_n (n+1))
+  (msg: HSM.handshake13)
+  (#n: Ghost.erased nat)
+  (tx0: Transcript.g_transcript_n n {Ghost.reveal n < Transcript.max_transcript_size - 1}):
+  ST (result (Transcript.g_transcript_n (Ghost.hide (Ghost.reveal n+1))))
   (requires fun h0 ->
-    Transcript.invariant di (Ghost.reveal tx0) h0)
-  (ensures fun h0 tx1 h1 ->
-    let tx1 = Ghost.reveal tx1 in
-    Transcript.invariant di tx1 h1 /\
-    B.(modifies (Transcript.footprint di) h0 h1)
-    // missing full spec of tx1
-    )
+    let tx0 = Ghost.reveal tx0 in Transcript.Transcript13? tx0 /\
+    B.loc_disjoint (Send.footprint sending) (Transcript.footprint di) /\
+    Send.invariant sending h0 /\
+    Transcript.invariant di tx0 h0)
+  (ensures fun h0 r h1 ->
+    B.(modifies (Send.footprint sending `B.loc_union` Transcript.footprint di) h0 h1) /\
+    Send.invariant sending h1 /\ (
+    match r with
+    | Error _ -> True
+    | Correct tx1 ->
+      let tx0 = Ghost.reveal tx0 in
+      let tx1 = Ghost.reveal tx1 in
+      Transcript.invariant di tx1 h1 /\
+      tx1 == Transcript.snoc13 tx0 msg ))
   =
-  admit()
+  let h0 = get () in
+  let r = MITLS.Repr.Handshake13.serialize sending.Send.out_slice sending.Send.out_pos msg in
+  let h1 = get () in
+  Transcript.frame_invariant di (Ghost.reveal tx0) h0 h1 (B.loc_buffer sending.Send.out_slice.LowParse.Low.Base.base);
+  match r with
+  | None ->
+    fatal Internal_error "output buffer overflow"
+  | Some r ->
+    List.lemma_snoc_length (Transcript.Transcript13?.rest (Ghost.reveal tx0), msg);
+    let tx1 = HSL.Transcript.extend di (Transcript.LR_HSM13 r) tx0 in
+    let b = MITLS.Repr.to_bytes r in
+    trace ("extended with "^Bytes.hex_of_bytes b);
+    // we do *not* return the modified indexes in [sending]
+    correct tx1
+#pop-options
 
 (*** Hello messages ***)
 
@@ -273,7 +299,7 @@ let client_ClientHello (Client region config r) =
 let client_HelloRetryRequest (Client region config r) hrr =
   let C_wait_ServerHello offer ms ks = !r in
   let open Parsers.HelloRetryRequest in
-  trace("HelloRetryRequest with extensions " ^ Nego.string_of_hrres hrr.extensions);
+  trace("HelloRetryRequest with extensions " ^ Nego.string_of_hrres (HSM.hrr_extensions hrr));
   let ch1 = offer.full_ch in
   let share, ks =
   match Negotiation.group_of_hrr hrr with
@@ -380,7 +406,7 @@ let client_ServerHello (Client region config r) sh =
     )
     | CipherSuite kex sa ae -> (
       trace "Running classic TLS";
-      trace Bytes.("Offered SID="^print_bytes offer.full_ch.CH.session_id^" Server SID="^print_bytes (HSM.sh_session_id sh));
+      trace FStar.Bytes.("Offered SID="^print_bytes offer.full_ch.CH.session_id^" Server SID="^print_bytes (HSM.sh_session_id sh));
       Receive.InError (fatalAlert Handshake_failure, "TLS 1.2 TBC")
       // if Negotiation.resume_12 mode then
       // begin // 1.2 resumption
@@ -420,7 +446,7 @@ let client_ServerHello (Client region config r) sh =
 let client13_Finished2 (Client region config r) (*ocr*) =
 
   let C13_complete offer sh ee server_id fin1 fin2 eoed_args ms ks = !r in
-  let ha = selected_ha sh in
+  let ha = Negotiation.selected_ha sh in
   let hlen = Hacl.Hash.Definitions.hash_len ha in
   let btag: Hacl.Hash.Definitions.hash_t ha = B.alloca 0uy 64ul in // large enough for any digest
 
@@ -482,13 +508,18 @@ private let coerce_asncert (x:Parsers.ASN1Cert.aSN1Cert): cert_repr = x
 private let coerce_crt crt = List.Tot.map coerce_asncert crt
 
 // process the certificate chain and verify the server signature
-let client13_c_cv cfg offer ha transcript_ee (digest: Transcript.state ha)
+let client13_c_cv #ha sending (digest: Transcript.state ha) cfg offer (transcript_ee: Transcript.g_transcript_n (Ghost.hide 1))
   (c: HSM.certificate13)
-  (cv: HSM.certificateVerify13) =
-  let transcript_c = Transcript.extend digest (admit()(*c*)) transcript_ee in
+  (cv: HSM.certificateVerify13) :
+  St (result (Transcript.g_transcript_n (Ghost.hide 4)))
+  =
+  match extend13 sending digest (HSM.M13_certificate c) transcript_ee with
+  | Error z -> Error z
+  | Correct transcript_c ->
   let digest_signed = transcript_extract digest transcript_c in
-  let transcript_cv = Transcript.extend digest (admit()(*cv*)) transcript_c in
-
+  match extend13 sending digest (HSM.M13_certificate_verify cv) transcript_c with
+  | Error z -> Error z
+  | Correct transcript_cv ->
   // TODO ensure that valid_offer mandates signature extensions for 1.3
   let sal = match Negotiation.find_signature_algorithms offer with
   | Some sal -> sal
@@ -520,12 +551,13 @@ let client13_Finished1 hs ee client_cert_request server_cert_certverify finished
   | None ->
 
   let C13_wait_Finished1 offer sh ms ks = !r in
-  let ha = selected_ha sh in
+  let ha = Negotiation.selected_ha sh in
   let hlen = Hacl.Hash.Definitions.hash_len ha in
   let btag: Hacl.Hash.Definitions.hash_t ha = B.alloca 0uy 64ul in // large enough for any digest
-  let transcript_ee: Ghost.erased Transcript.transcript_t = Transcript.extend ms.digest
-    (admit()(* LR for ee *))
-    (Ghost.hide (transcript13 offer sh [])) in
+  let transcript_sh: Transcript.g_transcript_n (Ghost.hide 0) = Ghost.hide (transcript13 offer sh []) in
+  match extend13 ms.sending ms.digest (HSM.M13_encrypted_extensions ee) transcript_sh with
+  | Error z -> Receive.InError z
+  | Correct transcript_ee ->
   let psk_based = Some? (Negotiation.find_serverPske sh) in
   let verified_server =
     match server_cert_certverify with
@@ -542,7 +574,7 @@ let client13_Finished1 hs ee client_cert_request server_cert_certverify finished
         if psk_based then
           fatal Handshake_failure "unexpected certificate chain and signature"
         else
-          client13_c_cv cfg offer.full_ch ha transcript_ee ms.digest c cv
+          client13_c_cv #ha ms.sending ms.digest cfg offer.full_ch transcript_ee c cv
   in
   match verified_server with
   | Error z -> Receive.InError z
@@ -554,7 +586,9 @@ let client13_Finished1 hs ee client_cert_request server_cert_certverify finished
     // match Negotiation.clientComplete_13 hs.nego ee ocr oc ocv digestCert with
 
   let digest_maced = transcript_extract ms.digest transcript_maced in
-  let transcript_Finished1 = Transcript.(extend ms.digest (admit()(*finished*)) transcript_maced) in
+  match extend13 ms.sending ms.digest (HSM.M13_finished digest_maced) transcript_maced with
+  | Error z -> Receive.InError z
+  | Correct transcript_Finished1 -> (
   let digest_Finished1 = transcript_extract ms.digest transcript_Finished1 in
   let ks, (sfin_key, cfin_key, app_keys, exporter_master_secret) = KS.ks_client13_sf cfg.is_quic ks digest_Finished1 in
   // ADL: 4th returned value is the exporter master secret.
@@ -588,7 +622,7 @@ let client13_Finished1 hs ee client_cert_request server_cert_certverify finished
       match client13_Finished2 hs with
       | Error z   -> Receive.InError z
       | Correct _ -> Receive.InAck true false // Client 1.3 ATK; next the client will read again to send Finished, writer++, and the Complete signal
-      )))
+      ))))
 
 let client13_NewSessionTicket (Client region config r) st13 =
   let open TLS.Callbacks in

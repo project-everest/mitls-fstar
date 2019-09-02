@@ -470,7 +470,7 @@ let isSentinelRandomValue client_pv server_pv server_random =
 // TODO do we produce them? do we get downgrade resistance from them?
 
 /// ServerHello sets the protocol version
-let chosen sh =
+let selected sh =
   let pv0 = HSM.sh_version sh in
   if TLS_1p3 `leqPV` pv0 then
     fatal Illegal_parameter "Server selected an illegal legacy protocol version"
@@ -490,10 +490,10 @@ val accept:
 //pv: protocolVersion ->
 //ses: Parsers.ServerHelloExtensions.serverHelloExtensions ->
 //sr: TLSInfo.random ->
-  result (pv: Parsers.ProtocolVersion.protocolVersion{ chosen sh = Correct pv /\ supported cfg pv })
+  result (pv: Parsers.ProtocolVersion.protocolVersion{ selected sh = Correct pv /\ supported cfg pv })
 
 let accept cfg sh (*pv ses sr*) =
-  match chosen sh with
+  match selected sh with
   | Error z -> Error z
   | Correct pv ->
     if isSentinelRandomValue cfg.max_version pv (HSM.sh_random sh) then
