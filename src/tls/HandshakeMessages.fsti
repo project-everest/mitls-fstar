@@ -62,7 +62,7 @@ let is_hrr (m:serverHello): bool =
   ServerHello_is_hrr_true? m.is_hrr
 
 /// 19-09-02 These are the "semantic" server hello contents and HRR
-/// payloads,
+/// payloads.
 
 type sh  = sh: serverHello {~(is_hrr sh)}
 type hrr = sh: serverHello { is_hrr sh}

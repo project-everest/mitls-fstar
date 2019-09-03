@@ -212,6 +212,7 @@ let seq_append_empty_r () : Lemma
   (forall (s: Seq.seq LP.byte) . {:pattern (s `Seq.append` Seq.empty)} s `Seq.append` Seq.empty  == s)
 = assert   (forall (s: Seq.seq LP.byte) . {:pattern (s `Seq.append` Seq.empty)} (s `Seq.append` Seq.empty) `Seq.equal` s)
 
+//19-09-03 what broke this proof? 
 let rec transcript_bytes_injective_no_retry
   (t1: transcript_t { transcript_get_retry t1 == None } )
   (t2: transcript_t { transcript_get_retry t2 == None } )

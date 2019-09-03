@@ -247,3 +247,33 @@ val send_tag13
     end
   ))
  
+val send_extract13 
+  (#a:EverCrypt.Hash.alg)
+  (stt: transcript_state a)
+  (#n: Ghost.erased nat)
+  (t: Transcript.g_transcript_n n { Ghost.reveal n < Transcript.max_transcript_size - 1 })
+  (sto: send_state)
+  (m: handshake13)
+: ST (result (send_state & Bytes.bytes & Transcript.g_transcript_n (Ghost.hide (Ghost.reveal n + 1))) )
+  (requires (fun h ->
+    invariant sto h /\
+    Transcript.invariant stt (Ghost.reveal t) h /\
+    B.loc_disjoint (footprint sto) (Transcript.footprint stt) /\
+    Transcript.Transcript13? (Ghost.reveal t)
+  ))
+  (ensures (fun h res h' ->
+    B.modifies (footprint sto `B.loc_union` Transcript.footprint stt `B.loc_union`
+      B.loc_region_only true Mem.tls_tables_region) h h' /\
+    begin match res with
+    | Correct (sto', tag, t') ->
+      invariant sto' h' /\
+      sto'.out_slice == sto.out_slice /\
+      sto'.out_pos >= sto.out_pos /\
+//      LowParse.Low.Base.bytes_of_slice_from_to h' sto.out_slice sto.out_pos sto'.out_pos == LowParse.Spec.Base.serialize handshake13_serializer m /\ // TODO: is this needed? if so, then TR needs to enrich MITLS.Repr.* with the suitable lemmas
+      Transcript.invariant stt (Ghost.reveal t') h' /\
+      Ghost.reveal t' == Transcript.snoc13 (Ghost.reveal t) m /\
+      Bytes.reveal  tag == Transcript.transcript_hash a (Ghost.reveal t') /\
+      Transcript.hashed a (Ghost.reveal t')
+    | _ -> True
+    end
+  ))

@@ -21,8 +21,6 @@ module HS = FStar.HyperStack
 module Transcript = HSL.Transcript
 module Receive = TLS.Handshake.Receive
 
-
-
 val discard: bool -> ST unit
   (requires (fun _ -> True))
   (ensures (fun h0 _ h1 -> h0 == h1))
@@ -33,6 +31,7 @@ unfold val trace: s:string -> ST unit
   (ensures (fun h0 _ h1 -> h0 == h1))
 unfold let trace = if DebugFlags.debug_HS then print else (fun _ -> ())
 
+#set-options "--max_fuel 0 --max_ifuel 0"
 #push-options "--admit_smt_queries true"
 
 // Floating: indexing & epochs, to be reviewed
@@ -79,7 +78,8 @@ let transcript_extract
   =
   push_frame();
   let ltag = EverCrypt.Hash.Incremental.hash_len ha in
-  let btag = LowStar.Buffer.alloca 0uy ltag in
+  let btag0 = LowStar.Buffer.alloca 0uy 64ul in // big enough for all tags
+  let btag = LowStar.Buffer.sub btag0 0ul ltag in
   assume False;//19-09-01 disjointness and framing of btag?
   Transcript.extract_hash di btag tx;
   let tag = FStar.Bytes.of_buffer ltag btag in
@@ -87,6 +87,7 @@ let transcript_extract
   tag
 
 #push-options "--z3rlimit 100"
+open FStar.Integers
 // Adapted from Send.send13, using [sending] as scratch space;
 // temporary. We may need similar functions for the Hello messages.
 let extend13
@@ -161,7 +162,8 @@ let client_Binders #region (hs:t region) (offer:HSM.clientHello) =
     // Nego ensures that EDI is not sent in a 2nd ClientHello
  *)
 
-#set-options "--admit_smt_queries true"
+//19-09-03 much left to do for stateful TCing
+#push-options "--admit_smt_queries true"
 
 /// Create a transcript digest for the truncated client Hello.
 // TODO take a const_slice or Transcript.label_repr instead of tch
@@ -443,14 +445,13 @@ let client_ServerHello (Client region config r) sh =
 
 (*** TLS 1.3 ***)
 
+#pop-options
+#push-options "--z3rlimit 200 --max_fuel 1"
 let client13_Finished2 (Client region config r) (*ocr*) =
-
   let C13_complete offer sh ee server_id fin1 fin2 eoed_args ms ks = !r in
   let ha = Negotiation.selected_ha sh in
-  let hlen = Hacl.Hash.Definitions.hash_len ha in
-  let btag: Hacl.Hash.Definitions.hash_t ha = B.alloca 0uy 64ul in // large enough for any digest
 
-  // TODO: support certificate-based client authentication
+  // LATER: support certificate-based client authentication
   // let digest =
   //   match ocr with
   //   | Some cr ->
@@ -461,8 +462,7 @@ let client13_Finished2 (Client region config r) (*ocr*) =
 
   // prepare & send Finished2
   let transcript_Finished1: Transcript.g_transcript_n (Ghost.hide 0) = Ghost.hide (transcript13 offer sh []) in
-  Transcript.extract_hash ms.digest btag transcript_Finished1;
-  let digest_Finished1 = Bytes.of_buffer hlen btag in
+  let digest_Finished1 = transcript_extract ms.digest transcript_Finished1 in
 
   // to be updated, possibly using btag as output buffer.
   // may use an abstract accessor instead: (i:HMAC.finishedId & cfk:KS.fink i)
@@ -483,6 +483,11 @@ let client13_Finished2 (Client region config r) (*ocr*) =
   // updating [ms.sending fin2 ks]
   r := C13_complete offer sh ee server_id fin1 fin2 eoed_args ms ks;
   Correct ()
+
+
+let x =1
+#pop-options
+#push-options "--admit_smt_queries true"
 
 let client13_nego_cb cfg ee =
   trace ("Received encrypted extensions "^Negotiation.string_of_ees ee);

@@ -162,6 +162,24 @@ let send_tag13 #a stt #_ t sto m tag =
     correct (sto, t')
   | Error z -> Error z
 
+let send_extract13 #ha stt #_ t sto m = 
+  push_frame();
+  let ltag = EverCrypt.Hash.Incremental.hash_len ha in
+  let btag0 = LowStar.Buffer.alloca 0uy 64ul in // big enough for all tags
+  let btag = LowStar.Buffer.sub btag0 0ul ltag in
+  // 19-09-01 disjointness and framing of btag?
+  assume False;
+  // assume (
+  //   B.loc_disjoint (footprint sto) (B.loc_buffer btag) /\
+  //   B.loc_disjoint (Transcript.footprint stt) (B.loc_buffer btag) /\
+  //   B.loc_disjoint (B.loc_buffer btag) (B.loc_region_only true Mem.tls_tables_region));
+  match send_tag13 stt t sto m btag with 
+  | Error z -> Error z 
+  | Correct (sto, tr) -> 
+  let tag = FStar.Bytes.of_buffer ltag btag in
+  pop_frame();
+  Correct(sto,tag,tr)
+
 inline_for_extraction
 noextract
 let msg_type (msg: msg)

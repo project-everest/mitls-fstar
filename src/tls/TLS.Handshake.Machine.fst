@@ -302,8 +302,10 @@ let create_msg_state (region: rgn) (inflight: PF.in_progress_flt_t) random ha:
 
 /// Computing (ghost) transcripts from the Client state
 ///
-#push-options "--admit_smt_queries true"
-let transcript_tch offer = Transcript.TruncatedClientHello (hash_retry offer.full_retry) offer.full_ch
+// #push-options "--admit_smt_queries true"
+let transcript_tch (offer: full_offer { ParsersAux.Binders.has_binders (HSM.M_client_hello offer.full_ch)}) =
+  let ch: Transcript.hs_tch = offer.full_ch in
+  Transcript.TruncatedClientHello (hash_retry offer.full_retry) ch
 let transcript_offer offer = Transcript.ClientHello (hash_retry offer.full_retry) offer.full_ch
 let transcript13 offer (sh: HSM.sh) rest = Transcript.Transcript13 (hash_retry offer.full_retry) offer.full_ch (admit()(*sh*)) rest
 let transcript_complete offer sh ee ccv fin1 fin2 eoed =
@@ -313,7 +315,7 @@ let transcript_complete offer sh ee ccv fin1 fin2 eoed =
     (if Bytes.length fin1 = 0 then [] else [HSM.M13_finished fin1]) @
     (if Bytes.length fin2 = 0 then [] else [HSM.M13_finished fin2]) in
   transcript13 offer sh rest
-#pop-options
+// #pop-options
 
 
 /// Datatype for the handshake-client state machine.
@@ -543,6 +545,9 @@ let client_invariant
     let transcript = Transcript.Transcript13 (hash_retry offer.full_retry) offer.full_ch sh [] in
     Transcript.invariant ms.digest transcript h
     // KeySchedule.invariant_C13_wait_Finished1 ks
+
+  | C13_complete offer sh ee server_id fin1 fin2 eoed_args ms ks ->
+    True // for TCing experiment
 
   | _ -> False // TBC
 
