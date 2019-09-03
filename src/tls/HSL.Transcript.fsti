@@ -218,7 +218,9 @@ let bounded_list 'a n = l:list 'a{List.length l < n}
 /// hello-retry requests. The transcript hash records the full
 /// transcript, including the retry, if any. Note, the standard
 /// forbids multiple retries.
-noeq
+///
+/// N.B. we may need transcript equality, as we store them in
+/// crypto indexes for concrete (but ideal) table lookups
 type transcript_t =
   | Start:
       retried:option retry ->

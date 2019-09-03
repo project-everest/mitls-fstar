@@ -2,13 +2,14 @@ module Idx
 
 open Mem
 
+module G = FStar.Ghost
+module T = HSL.Transcript
 module B = LowStar.Buffer
 module DM = FStar.DependentMap
 module MDM = FStar.Monotonic.DependentMap
+module HSM = HandshakeMessages
 
 #set-options "--max_fuel 0 --max_ifuel 0 --z3rlimit 30" 
-
-type info = TLSInfo.logInfo
 
 /// TLS-specific Key Indices
 
@@ -34,10 +35,7 @@ type context =
   | Extract: context // TLS extractions have no label and no context; we may separate Extract0 and Extract2
   | ExtractDH: v:id_dhe -> context // This is Extract1 (the middle extraction)
   | Expand: context // TLS expansion with default hash value
-  | ExpandLog: // TLS expansion using hash of the handshake log
-    info: TLSInfo.logInfo (* ghost, abstract summary of the transcript *) ->
-    hv: Hashing.Spec.anyTag (* requires stratification *) -> context
-// 18-09-25 should info be HandshakeLog.hs_transcript? 
+  | ExpandTranscript: tx:T.transcript_t -> context
 
 /// Underneath, HKDF takes a "context" and a required length, with
 /// disjoint internal encodings of the context:
@@ -67,17 +65,28 @@ let rec ha_of_id = function
   | Preshared a _ -> a
   | Derive i lbl ctx -> ha_of_id i
 
-// Placeholders
-assume val idh_of_log: TLSInfo.logInfo -> id_dhe // 2019.06.05 SZ: Unused?
-assume val summary: Bytes.bytes -> TLSInfo.logInfo
+private let hash_of_cs (cs:CipherSuite.cipherSuiteName) =
+  match CipherSuite.cipherSuite_of_name cs with
+  | Some (CipherSuite.CipherSuite13 _ ha) -> Some ha
+  | _ -> None
 
-// concrete transcript digest
-let digest_info (a:kdfa) (info:TLSInfo.logInfo) (hv:Hashing.Spec.anyTag) =
-  exists (transcript: Hashing.hashable a).
-    // Bytes.length hv = hash_len a /\
-    hv = Hashing.h a transcript /\
-    Hashing.CRF.hashed a transcript /\
-    info = summary transcript
+// This function ensures that the hash of indexes derived
+// with a transcript is consistent with the negotiated value
+let consistent_transcript_hash (a:kdfa) (tx:T.transcript_t) =
+  let open Parsers.ServerHello in
+  let open Parsers.ServerHello_is_hrr in
+  let open Parsers.SHKind in
+  match tx with
+  | T.ClientHello _ ch ->
+    let open Parsers.ClientHello in
+    let halgs = List.Tot.choose hash_of_cs ch.cipher_suites in
+    List.Tot.memP a halgs
+  | T.Transcript13 _ _ sh _ ->
+    let ServerHello_is_hrr_false v = sh.is_hrr in
+    (match hash_of_cs v.value.cipher_suite with
+    | Some ha -> ha == a
+    | _ -> False)
+  | _ -> False
 
 /// Stratified definition of id required.
 ///
@@ -90,11 +99,11 @@ let digest_info (a:kdfa) (info:TLSInfo.logInfo) (hv:Hashing.Spec.anyTag) =
 val pre_wellformed_id: pre_id -> Type0
 let rec pre_wellformed_id = function
   | Preshared a _ -> True
-  | Derive i l (ExpandLog info hv) -> 
-      pre_wellformed_id i /\ digest_info (ha_of_id i) info hv
-  | Derive i lbl ctx ->
-      //TODO "ctx either extends the parent's, or includes its idh" /\
-      pre_wellformed_id i
+  | Derive i l ctx ->
+    pre_wellformed_id i /\
+    (match ctx with
+    | ExpandTranscript tx -> consistent_transcript_hash (ha_of_id i) tx
+    | _ -> True)
 
 #pop-options
 
