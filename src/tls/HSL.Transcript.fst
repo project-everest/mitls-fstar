@@ -212,7 +212,6 @@ let seq_append_empty_r () : Lemma
   (forall (s: Seq.seq LP.byte) . {:pattern (s `Seq.append` Seq.empty)} s `Seq.append` Seq.empty  == s)
 = assert   (forall (s: Seq.seq LP.byte) . {:pattern (s `Seq.append` Seq.empty)} (s `Seq.append` Seq.empty) `Seq.equal` s)
 
-//19-09-03 what broke this proof? 
 let rec transcript_bytes_injective_no_retry
   (t1: transcript_t { transcript_get_retry t1 == None } )
   (t2: transcript_t { transcript_get_retry t2 == None } )
@@ -272,7 +271,13 @@ let rec transcript_bytes_injective_no_retry
         seq_append_empty_r ();
         LP.serialize_strong_prefix HSM.handshake_serializer (HSM.M_client_hello ch1) (HSM.M_client_hello ch2) (serialize_server_hello sh1 `Seq.append` (
     LP.serialize (LPSL.serialize_list _ HSM.handshake13_serializer) rest1)) Seq.empty
-      | Transcript12 ch2 sh2 _ -> ()
+      | Transcript12 ch2 sh2 rest2 ->
+        LP.serialize_strong_prefix HSM.handshake_serializer (HSM.M_client_hello ch1) (HSM.M_client_hello ch2) (serialize_server_hello sh1 `Seq.append` (
+    LP.serialize (LPSL.serialize_list _ HSM.handshake13_serializer) rest1)) (serialize_server_hello sh2 `Seq.append` (
+    LP.serialize (LPSL.serialize_list _ HSM.handshake12_serializer) rest2));
+        LP.serialize_strong_prefix HSM.handshake_serializer (HSM.M_server_hello sh1) (HSM.M_server_hello sh2)     (LP.serialize (LPSL.serialize_list _ HSM.handshake13_serializer) rest1) (
+    LP.serialize (LPSL.serialize_list _ HSM.handshake12_serializer) rest2);
+        assert False
       | Transcript13 _ ch2 sh2 rest2 ->
         LP.serialize_strong_prefix HSM.handshake_serializer (HSM.M_client_hello ch1) (HSM.M_client_hello ch2) (serialize_server_hello sh1 `Seq.append` (
     LP.serialize (LPSL.serialize_list _ HSM.handshake13_serializer) rest1)) (serialize_server_hello sh2 `Seq.append` (
