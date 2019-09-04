@@ -39,9 +39,9 @@ let hRRExtensions_list_bytesize_snoc exts e =
     exts
     e
 
-let prepare_contents (chd:digest) app (hrr: helloRetryRequest) =
-  { Contents.session_id = hrr.session_id;
-    Contents.cipher_suite = hrr.cipher_suite;
+let prepare_contents (chd:digest) app (hrr: hrr) =
+  { Contents.session_id = hrr_session_id hrr;
+    Contents.cipher_suite = hrr_cipher_suite hrr;
     Contents.group_share = (
       match find_keyshare hrr with
       | Some g -> [g]

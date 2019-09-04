@@ -61,6 +61,12 @@ unfold let canonical_binders        = Binders.build_canonical_binders
 let tch = ch:clientHello_with_binders
   { ch_binders ch == canonical_binders (ch_binders_len ch) } 
 
+/// `truncate`: A specificational version of truncation
+/// which replaces the binders of a client hellow with canonical binders
+/// of the appropriate length
+let clear_binders (ch:clientHello) = 
+  if ch_bound ch then set_binders ch (canonical_binders (ch_binders_len ch)) else ch 
+
 
 /// Trivial message for convenience; these could also be bound as named types in the RFC.
 type finished = b:Bytes.bytes {0 <= Bytes.length b /\ Bytes.length b <= 16777215}
@@ -83,7 +89,7 @@ let is_hrr (m:serverHello): bool =
 /// payloads.
 
 type sh  = sh: serverHello {~(is_hrr sh)}
-type hrr = sh: serverHello { is_hrr sh}
+type hrr = sh: serverHello {is_hrr sh}
 
 /// These types are awkward in specifications and high-level code, so
 /// we also provide spec-level ad hoc accessors.
@@ -107,6 +113,25 @@ let hrr_version     (sh: hrr) = sh.SH.version
 let hrr_session_id  (sh: hrr) = (hrr_value sh).HRK.session_id
 let hrr_cipher_suite(sh: hrr) = (hrr_value sh).HRK.cipher_suite
 let hrr_extensions  (sh: hrr) = (hrr_value sh).HRK.extensions 
+
+let mk_hrr v sid cs es : hrr = 
+  SH.({
+    version = v;
+    is_hrr = ServerHello_is_hrr_true HRK.({
+      session_id = sid;
+      cipher_suite = cs;
+      legacy_compression = Parsers.LegacyCompression.NullCompression;
+      extensions = es }) })
+
+type valid_hrr = sh: hrr {
+  CipherSuite.(
+    match cipherSuite_of_name (hrr_cipher_suite sh) with 
+    | Some (CipherSuite13 _ _) -> True
+    | _ -> False) }
+
+let hrr_ha (sh: valid_hrr) = 
+  match cipherSuite_of_name (hrr_cipher_suite sh) with 
+    | Some (CipherSuite13 _ ha) -> ha
 
 // prior, simpler types, but without a direct wire format: 
 // type sh = realServerHello

@@ -39,9 +39,10 @@ type encrypted_cookie = c:Parsers.Cookie.cookie {Bytes.length c <= encrypted_max
 
 inline_for_extraction noextract let extensions_max_length = encrypted_max_length + 24 // upper bound for 3 extensions
 
+open HandshakeMessages
 open Parsers.HRRExtension
 open Parsers.HRRExtensions
-open Parsers.HelloRetryRequest
+// open Parsers.HelloRetryRequest
 
 /// Base contents of all HRR messages produced by our server, with a
 /// convenient refinement on its ciphersuite.
@@ -49,23 +50,19 @@ open Parsers.HelloRetryRequest
 /// The only potentially-large part of HRR is the encrypted-cookie
 /// extension, added last; for the rest we use small static bounds
 
-type hrr13 = x:helloRetryRequest {
-  match cipherSuite_of_name x.cipher_suite with
+type hrr13 = x:hrr {
+  match cipherSuite_of_name (hrr_cipher_suite x) with
   | Some (CipherSuite13 _ _) -> True
   | _ -> False }
 let hrr_ha (x:hrr13) =
-  match cipherSuite_of_name x.cipher_suite with
+  match cipherSuite_of_name (hrr_cipher_suite x) with
   | Some (CipherSuite13 _ ha) -> ha
 
-let hrr_len (x:helloRetryRequest) = hRRExtensions_bytesize x.extensions
+let hrr_len (x:hrr) = hRRExtensions_bytesize (hrr_extensions x)
 type hrr_leq (n:nat) = x:hrr13 { hrr_len x <= n }
 
 let hrr0 sid (cs: cipherSuite13): hrr_leq 8 =
-  { version = TLS_1p2;
-    session_id = sid;
-    legacy_compression = Parsers.LegacyCompression.NullCompression;
-    cipher_suite = name_of_cipherSuite cs;
-    extensions = [ HRRE_supported_versions TLS_1p3 ]; }
+  mk_hrr TLS_1p2 sid (name_of_cipherSuite cs) [ HRRE_supported_versions TLS_1p3 ]
 
 val hRRExtensions_list_bytesize_snoc
   (exts: list hRRExtension)
@@ -81,17 +78,17 @@ let append_extension
   (ext: hRRExtension{ n + hRRExtension_bytesize ext <= extensions_max_length }) :
   hrr_leq (n + hRRExtension_bytesize ext)
 =
-  let exts = hrr.extensions @ [ext] in
-  hRRExtensions_list_bytesize_snoc hrr.extensions ext;
-  { hrr with extensions = exts }
+  let exts = hrr_extensions hrr @ [ext] in
+  hRRExtensions_list_bytesize_snoc (hrr_extensions hrr) ext;
+  mk_hrr (hrr_version hrr) (hrr_session_id hrr) (hrr_cipher_suite hrr) exts
 
-let find_keyshare (hrr: helloRetryRequest) : option Parsers.NamedGroup.namedGroup =
-  match List.Tot.find HRRE_key_share? hrr.extensions with
+let find_keyshare (hrr: hrr) : option Parsers.NamedGroup.namedGroup =
+  match List.Tot.find HRRE_key_share? (hrr_extensions hrr) with
   | Some (HRRE_key_share g) -> Some g
   | _ -> None
 
-let find_cookie (hrr: helloRetryRequest) : option Parsers.Cookie.cookie =
-  match List.Tot.find HRRE_cookie? hrr.extensions with
+let find_cookie (hrr: hrr) : option Parsers.Cookie.cookie =
+  match List.Tot.find HRRE_cookie? (hrr_extensions hrr) with
   | Some (HRRE_cookie g) -> Some g
   | _ -> None
 

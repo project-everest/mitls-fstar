@@ -150,12 +150,13 @@ let find_cookie o =
   | None -> None
   | Some (CHE_cookie c) -> Some c
 
-// finding the pre-shared keys in ClientHello
 let find_pske o : option offeredPsks =
-  match find_client_extension CHE_pre_shared_key? o with
-  | None -> None
-  | Some (CHE_pre_shared_key psks) -> Some psks
-
+  if Cons? o then 
+  match List.Tot.last o with 
+  | CHE_pre_shared_key psks -> Some psks 
+  | _ -> None 
+  else None 
+  
 let find_psk_key_exchange_modes o =
   match find_client_extension CHE_psk_key_exchange_modes? o with
   | None -> []

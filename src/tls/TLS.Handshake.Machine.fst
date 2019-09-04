@@ -124,12 +124,14 @@ noeq type client_keys = {
 *)
 let client_keys = Old.KeySchedule.ks_client_state
 
+// TODO get rid of sks_is_quic, as we did for the client (the caller
+// just passes to KeySchedule the config's is_quic as additional
+// parameter when required)
 noeq type server_keys = {
   sks_is_quic: bool;
   sks: Old.KeySchedule.ks_server_state; }
 
 // let Secret = Handshake.Secret
-
 
 let c_wait_ServerHello_keys = s: client_keys { Old.KeySchedule.C_wait_ServerHello? s }
 let c13_wait_Finished1_keys = s: client_keys { Old.KeySchedule.C13_wait_Finished1? s }
@@ -145,7 +147,7 @@ assume val is_psk: Idx.id -> bool
 
 type client_retry_info = {
   ch0: clientHello;
-  sh0: HSM.hrr; }
+  sh0: HSM.valid_hrr; }
 
 type full_offer = {
   full_retry: option client_retry_info;
@@ -157,20 +159,18 @@ type offer = {
   ch: clientHello; // not insisting that ch initially has zeroed binders
   }
 
+// see also Transcript.g_transcript_n
 let trans (n:nat) = tr: Transcript.transcript_t { Transcript.transcript_size tr <= n }
 
-/// setting binders to some default value determined by the PSK
-/// extension; we may need to prove that this function is idempotent
-/// and does not affect other accessors.
+let ch_digest ha (ch: clientHello) = Transcript.(transcript_hash ha (ClientHello None ch))
 
-// NS: See PB.build_canonical_binders (tch_binders_len tch)
-//     and Transcript.truncate (ch:clientHello_with_binders)
-//     Is this really meant to be Tot or will Ghost do?
-// CF: I still need something more abstract here (no branching on hte PSK extension).
-// CF: We use Ghost only for erased values in stateful code. Let's rediscuss this convention if necessary.
-
-assume val clear_binders: clientHello -> clientHello
-assume val hash_retry: option client_retry_info -> option Transcript.retry
+let hash_retry (o: option client_retry_info) : option Transcript.retry =
+  match o with
+  | None -> None
+  | Some x ->
+    let ha = HSM.hrr_ha x.sh0 in
+    let tag = admit() in //ch_digest ha x.ch0 in
+    Some (HSM.M_message_hash tag, x.sh0)
 
 // detail: those two may also return lists
 assume val offered_shares: clientHello -> option Extensions.keyShareClientHello
@@ -303,9 +303,9 @@ let create_msg_state (region: rgn) (inflight: PF.in_progress_flt_t) random ha:
 /// Computing (ghost) transcripts from the Client state
 ///
 // #push-options "--admit_smt_queries true"
-let transcript_tch (offer: full_offer { ParsersAux.Binders.has_binders (HSM.M_client_hello offer.full_ch)}) =
-  let ch: Transcript.hs_tch = offer.full_ch in
-  Transcript.TruncatedClientHello (hash_retry offer.full_retry) ch
+let transcript_tch (offer: full_offer { HSM.ch_bound offer.full_ch}) =
+  let ch: HSM.clientHello_with_binders = offer.full_ch in
+  Transcript.TruncatedClientHello (hash_retry offer.full_retry) (HSM.clear_binders ch)
 let transcript_offer offer = Transcript.ClientHello (hash_retry offer.full_retry) offer.full_ch
 let transcript13 offer (sh: HSM.sh) rest = Transcript.Transcript13 (hash_retry offer.full_retry) offer.full_ch (admit()(*sh*)) rest
 let transcript_complete offer sh ee ccv fin1 fin2 eoed =
@@ -570,7 +570,7 @@ let client_step
     C_wait_ServerHello offer1 ms1 ks1 ->
     // enabling addition of the real binders
     ( offer0.full_retry == offer1.full_retry /\
-      clear_binders offer0.full_ch == clear_binders offer1.full_ch)  \/
+      offer0.full_ch == Trancript.truncate offer1.full_ch)  \/
     // enabling addition of a retry; too lax for now
     ( match offer0.full_retry, offer1.full_retry with
       | None, Some hr -> hr.ch0 = offer0.full_ch

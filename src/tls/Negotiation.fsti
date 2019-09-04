@@ -50,7 +50,12 @@ val find_signature_algorithms: offer -> option signatureSchemeList
 val find_cookie: offer -> option Extensions.cookie 
 val find_psk_key_exchange_modes: offer -> list Extensions.pskKeyExchangeMode // [] when not found; pick better representation?
 val find_sessionTicket: offer -> option Extensions.clientHelloExtension_CHE_session_ticket 
+
+// finding the pre-shared keys in ClientHello. 
+// Note we only consider the *last* extension.
+// Use instead ch_psks when the extension is known to exist.
 val find_clientPske: offer -> option Extensions.offeredPsks 
+
 val find_serverPske: HSM.sh -> option UInt16.t
 val find_serverKeyShare: HSM.sh -> option pre_share 
 val find_early_data: offer -> bool 

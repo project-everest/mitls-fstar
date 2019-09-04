@@ -17,7 +17,7 @@ module R_CH = MITLS.Repr.ClientHello
 module R_SH = MITLS.Repr.ServerHello
 module CRF = Crypto.CRF
 module TestCRF = Test.CRF
-
+module PB = ParsersAux.Binders 
 #set-options "--max_fuel 1 --max_ifuel 1 --z3rlimit 16"
 
 //Seems to be automatic
@@ -236,7 +236,7 @@ let rec transcript_bytes_injective_no_retry
         PB.truncate_clientHello_bytes_inj_binders_bytesize tch1' tch2';
         PB.set_binders_get_binders tch1';
         PB.set_binders_get_binders tch2';
-        PB.truncate_clientHello_bytes_inj tch1' tch2' (PB.build_canonical_binders (tch_binders_len tch1))
+        PB.truncate_clientHello_bytes_inj tch1' tch2' (PB.build_canonical_binders (ch_binders_len tch1))
       end
     | ClientHello _ ch1 ->
       begin match t2 with
@@ -405,7 +405,7 @@ let extend (#a:_) (s:state a) (l:label_repr) (tx:G.erased transcript_t) =
 
     PB.truncate_clientHello_bytes_set_binders
       (R.value tch)
-      (PB.build_canonical_binders (tch_binders_len (HSM.M_client_hello?._0 (R.value tch))));
+      (PB.build_canonical_binders (ch_binders_len (HSM.M_client_hello?._0 (R.value tch))));
 
     
     tx'
@@ -435,7 +435,7 @@ let extend (#a:_) (s:state a) (l:label_repr) (tx:G.erased transcript_t) =
 
     PB.truncate_clientHello_bytes_set_binders
       (R.value tch)
-      (PB.build_canonical_binders (tch_binders_len (HSM.M_client_hello?._0 (R.value tch))));
+      (PB.build_canonical_binders (ch_binders_len (HSM.M_client_hello?._0 (R.value tch))));
 
     assert ((transcript_bytes (G.reveal tx) `Seq.append` (C.as_seq h0 data))
         `Seq.equal` 
