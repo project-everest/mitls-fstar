@@ -41,12 +41,30 @@ include Parsers.ClientKeyExchange
 include Parsers.KeyUpdate
 include Parsers.KeyExchangeAlgorithm
 
+module Binders = ParsersAux.Binders
 (* Parsers are generated automatically, see src/parsers/Parsers.rfc *)
 
-// trivial message for convenience; these could also be bound as named types in the RFC.
+/// Selected specs shared with ParserAux
+
+unfold let binders                  = Binders.binders
+unfold let binders_len              = Binders.binders_len
+unfold let ch_bound                 = Binders.ch_bound
+unfold let clientHello_with_binders = Binders.clientHello_with_binders
+unfold let ch_binders               = Binders.ch_binders 
+unfold let set_binders              = Binders.ch_set_binders 
+unfold let ch_binders_len           = Binders.ch_binders_len
+unfold let canonical_binders        = Binders.build_canonical_binders
+
+/// `tch` is a client hello with dummy binders: our specification of
+/// truncated ClientHello messages.
+
+let tch = ch:clientHello_with_binders
+  { ch_binders ch == canonical_binders (ch_binders_len ch) } 
+
+
+/// Trivial message for convenience; these could also be bound as named types in the RFC.
 type finished = b:Bytes.bytes {0 <= Bytes.length b /\ Bytes.length b <= 16777215}
 type eoed = unit 
-
 
 
 module SH = Parsers.ServerHello

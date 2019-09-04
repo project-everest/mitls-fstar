@@ -51,12 +51,10 @@ module B = LowStar.Buffer
 module C = LowStar.ConstBuffer
 module G = FStar.Ghost
 
+open HandshakeMessages
 module HSM = HandshakeMessages 
 
 open TLSError
-open HandshakeMessages
-//module HSM12 = Parsers.Handshake12
-//module HSM13 = Parsers.Handshake13
 
 module PV = Parsers.ProtocolVersion
 module LP = LowParse.Low.Base
@@ -69,7 +67,6 @@ module CH = Parsers.ClientHello
 module R_SH = MITLS.Repr.ServerHello
 module SH = Parsers.ServerHello
 module Psks = Parsers.OfferedPsks
-module PB = ParsersAux.Binders
 module CRF = Crypto.CRF
 
 //TODO: move to a separate module
@@ -102,7 +99,7 @@ type retry =
 // Truncated client hellos
 ////////////////////////////////////////////////////////////////////////////////
 
-/// `hs_tch`: Handshake message holding a truncated client hello
+/// `tch`: Handshake message holding a truncated client hello
 ///
 /// Truncated client hellos are related to pre-shared keys.
 ///
@@ -122,51 +119,13 @@ type retry =
 /// perhaps using a different hashing algorithm (as determined by the
 /// PSK identity).
 
-//why from PB? To be shared 
-let clientHello_with_binders = ch:CH.clientHello {
-  PB.has_binders (HSM.M_client_hello ch)
-}
-let binders_len = len:uint_32{
-  35 <= UInt32.v len /\
-  UInt32.v len <= 65537
-}
-
-/// The length of all the binders in a clientHello
-let tch_binders_len (ch:clientHello_with_binders)
-  : Tot (b:binders_len {
-           let hs_ch = HSM.M_client_hello ch in
-           UInt32.v b =
-           Psks.offeredPsks_binders_bytesize
-             (PB.get_binders hs_ch) /\
-           UInt32.v b =
-           Seq.length
-             (LP.serialize
-               Psks.offeredPsks_binders_serializer
-                 (PB.get_binders hs_ch))
-         })
-  = let hs_ch = HSM.M_client_hello ch in
-    Psks.offeredPsks_binders_bytesize_eq (PB.get_binders hs_ch);
-    Psks.offeredPsks_binders_size32 (PB.get_binders hs_ch)
-    // An alternative way to compute it in GTot
-    // UInt32.uint_to_t (Psks.offeredPsks_binders_bytesize (PB.get_binders ch))
-
-
-/// `hs_tch` is a client hello with dummy binders
-let hs_tch = tch:clientHello_with_binders{
-  PB.get_binders (HSM.M_client_hello tch) ==
-  PB.build_canonical_binders (tch_binders_len tch)
-}
 
 /// `truncate`: A specificational version of truncation
 /// which replaces the binders of a client hellow with canonical binders
 /// of the appropriate length
-let truncate (ch:clientHello_with_binders)
-  : GTot hs_tch
-  = let cb = PB.build_canonical_binders (tch_binders_len ch) in
-    let hs_ch = HSM.M_client_hello ch in
-    let tch = PB.set_binders hs_ch cb in
-    PB.truncate_clientHello_bytes_set_binders hs_ch cb;
-    HSM.M_client_hello?._0 tch
+let truncate (ch:clientHello_with_binders): tch = 
+  set_binders ch (canonical_binders (ch_binders_len ch))
+
 
 /// `max_transcript_size` and `max_message_size`:
 ///
@@ -218,8 +177,8 @@ let bounded_list 'a n = l:list 'a{List.length l < n}
 /// hello-retry requests. The transcript hash records the full
 /// transcript, including the retry, if any. Note, the standard
 /// forbids multiple retries.
-///
-/// N.B. we may need transcript equality, as we store them in
+
+/// N.B. we need transcript equality, as we store them in
 /// crypto indexes for concrete (but ideal) table lookups
 type transcript_t =
   | Start:
@@ -228,7 +187,7 @@ type transcript_t =
 
   | TruncatedClientHello:
       retried:option retry ->
-      tch:hs_tch ->
+      tch:tch ->
       transcript_t
 
   | ClientHello:
@@ -332,12 +291,14 @@ let ext_transcript_t = t:transcript_t{extensible t}
 
 (** TRANSITIONS **)
 
+// the two first labels are different because L_TCH has a custom
+// implementation that relies on the message having binders.
 noeq
 type label =
   | L_ClientHello of clientHello
-  | L_ServerHello of sh
-  | L_TCH of clientHello_with_binders
+  | L_TCH of clientHello_with_binders 
   | L_CompleteTCH of clientHello_with_binders
+  | L_ServerHello of sh
   | L_HRR of retry
   | L_HSM12 of handshake12
   | L_HSM13 of handshake13
@@ -505,12 +466,12 @@ type label_repr =
 
   | LR_TCH:
       #b:R.const_slice ->
-      ch:hs_ch_repr b{PB.has_binders (R.value ch)} ->
+      ch:hs_ch_repr b{ch_bound (R.value ch)} ->
       label_repr
 
   | LR_CompleteTCH:
       #b:R.const_slice ->
-      ch:hs_ch_repr b{PB.has_binders (R.value ch)} ->
+      ch:hs_ch_repr b{ch_bound (R.value ch)} ->
       label_repr
 
   | LR_HRR:

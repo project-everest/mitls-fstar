@@ -446,7 +446,7 @@ let client_ServerHello (Client region config r) sh =
 (*** TLS 1.3 ***)
 
 #pop-options
-#push-options "--z3rlimit 200 --max_fuel 1"
+#push-options "--z3rlimit 200 --max_fuel 1" // for length [] == 0
 let client13_Finished2 (Client region config r) (*ocr*) =
   let C13_complete offer sh ee server_id fin1 fin2 eoed_args ms ks = !r in
   let ha = Negotiation.selected_ha sh in
@@ -470,11 +470,9 @@ let client13_Finished2 (Client region config r) (*ocr*) =
   let cvd = HMAC.mac cfin_key digest_Finished1 in
   let fin2 = Ghost.hide #finished cvd in
 
-  match Send.send_tag13 ms.digest transcript_Finished1 ms.sending (HSM.M13_finished cvd) btag with
+  match Send.send_extract13 ms.digest transcript_Finished1 ms.sending (HSM.M13_finished cvd) with
   | Error z -> Error z
-  | Correct (sending, transcript_Finished2) ->
-
-  let digest_Finished2 = FStar.Bytes.of_buffer hlen btag in
+  | Correct (sending, digest_Finished2, transcript_Finished2) ->
   let ks = KS.ks_client13_cf ks digest_Finished2 in // post-handshake keying
   Epochs.incr_reader ms.epochs; // to ATK
   let sending = Send.signals sending (Some (true, false)) true in
