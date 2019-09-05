@@ -90,7 +90,7 @@ let tag #a stt transcript =
   tag
 
 
-let send_tch sto m = 
+let send_tch sto m =
   let h0 = get () in
   let r = MITLS.Repr.Handshake.serialize sto.out_slice sto.out_pos (M_client_hello m) in
   match r with
@@ -102,11 +102,11 @@ let send_tch sto m =
     let sto = { sto with out_pos = r.MITLS.Repr.end_pos; outgoing = sto.outgoing @| b } in
     correct sto
 
-let patch_binders 
-  #a stt t sto binders 
+let patch_binders
+  #a stt t sto binders
 =
-  admit() 
-  
+  admit()
+
 let send_ch
   #a stt #_ t sto m
 = let h0 = get () in
@@ -177,31 +177,34 @@ let send_tag13 #a stt #_ t sto m tag =
     correct (sto, t')
   | Error z -> Error z
 
-let send_extract13 #ha stt #_ t sto m = 
+#push-options "--max_fuel 0 --max_ifuel 0 --z3rlimit 32"
+
+let send_extract13 #ha stt #_ t sto m =
+  (**) let h0 = get() in
+  // Need to call elim_invariant with initial memory to conclude that the footprint
+  // is disjoint from the new frame
+  (**) Transcript.elim_invariant stt (Ghost.reveal t) h0;
   push_frame();
   let ltag = EverCrypt.Hash.Incremental.hash_len ha in
-  let btag0 = LowStar.Buffer.alloca 0uy 64ul in // big enough for all tags
-  let btag = LowStar.Buffer.sub btag0 0ul ltag in
-  // 19-09-01 disjointness and framing of btag?
-  assume False;
-  // assume (
-  //   B.loc_disjoint (footprint sto) (B.loc_buffer btag) /\
-  //   B.loc_disjoint (Transcript.footprint stt) (B.loc_buffer btag) /\
-  //   B.loc_disjoint (B.loc_buffer btag) (B.loc_region_only true Mem.tls_tables_region));
-  match send_tag13 stt t sto m btag with 
-  | Error z -> Error z 
-  | Correct (sto, tr) -> 
+  let btag = LowStar.Buffer.alloca 0uy ltag in
+  match send_tag13 stt t sto m btag with
+  | Error z -> pop_frame(); Error z
+  | Correct (sto, tr) ->
+  (**) let h1 = get() in
   let tag = FStar.Bytes.of_buffer ltag btag in
   pop_frame();
+  (**) let h2 = get() in
+  (**) Transcript.frame_invariant stt (Ghost.reveal tr) h1 h2 (B.loc_region_only false (FStar.HyperStack.get_tip h1));
   Correct(sto,tag,tr)
 
+#pop-options
 
 inline_for_extraction
 noextract
 let msg_type (msg: msg)
 : Tot Type
 = match msg with
-| Msg m -> valid_handshake 
+| Msg m -> valid_handshake
 | Msg12 _ -> handshake12
 | Msg13 _ -> handshake13
 
@@ -218,7 +221,7 @@ val send:
   transcript_state a -> transcript ->
   send_state -> msg ->
   St (result (send_state & transcript))
- 
+
 //#push-options "--z3rlimit 32"
 let send #a stt transcript0 sto msg =
   let h0 = get () in
@@ -227,7 +230,7 @@ let send #a stt transcript0 sto msg =
   assume (B.loc_disjoint (B.loc_buffer sto.out_slice.LowParse.Low.Base.base) (Transcript.footprint stt));
   let r : option (msg_repr_type msg (MITLS.Repr.of_slice sto.out_slice)) =
     match msg with
-    | Msg m -> 
+    | Msg m ->
       MITLS.Repr.Handshake.serialize sto.out_slice sto.out_pos m
     | Msg12 m -> MITLS.Repr.Handshake12.serialize sto.out_slice sto.out_pos m
     | Msg13 m -> MITLS.Repr.Handshake13.serialize sto.out_slice sto.out_pos m
@@ -236,13 +239,13 @@ let send #a stt transcript0 sto msg =
   | None ->
     fatal Internal_error "output buffer overflow"
   | Some r ->
-    //19-09-05 
+    //19-09-05
     // regression possibly due to the valid_sh refinement; no obvious fix.
     assume(False);
     let r : MITLS.Repr.repr (msg_type msg) (MITLS.Repr.of_slice sto.out_slice) = r in
     let olabel : option Transcript.label_repr = match msg with
     | Msg (Parsers.Handshake.M_client_hello _) -> Some (Transcript.LR_ClientHello r) (* TODO: LR_TCH? *)
-    | Msg (Parsers.Handshake.M_server_hello sh) -> 
+    | Msg (Parsers.Handshake.M_server_hello sh) ->
       Some (Transcript.LR_ServerHello r)
     | Msg12 _ -> Some (Transcript.LR_HSM12 r)
     | Msg13 _ -> Some (Transcript.LR_HSM13 r)

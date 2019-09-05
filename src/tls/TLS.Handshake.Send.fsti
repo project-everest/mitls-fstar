@@ -149,7 +149,7 @@ val send_tch
   ))
 
 /// Overwrites the binders in the output buffer, and extend the digest
-/// accordingly. Always succeeds. 
+/// accordingly. Always succeeds.
 // TODO unclear how we compute & pass the position to overwrite within stt
 
 val patch_binders
@@ -158,17 +158,17 @@ val patch_binders
   (t: Transcript.g_transcript_n (Ghost.hide 0) {Transcript.TruncatedClientHello? (Ghost.reveal t)})
   (sto: send_state)
   (m: HandshakeMessages.binders)
-: Stack (Transcript.g_transcript_n (Ghost.hide 0))
+: Stack (t':Transcript.g_transcript_n (Ghost.hide 0) {Transcript.ClientHello? (Ghost.reveal t')})
   (requires fun h ->
     invariant sto h /\
     Transcript.invariant stt (Ghost.reveal t) h /\
     B.loc_disjoint (footprint sto) (Transcript.footprint stt))
   (ensures fun h t' h' ->
-    let Transcript.TruncatedClientHello retry tch = Ghost.reveal t in 
-    let Transcript.ClientHello retry' ch = Ghost.reveal t' in 
-    retry == retry' /\ 
-    tch = clear_binders ch /\ 
-    B.modifies (footprint sto `B.loc_union` Transcript.footprint stt) h h' /\ 
+    let Transcript.TruncatedClientHello retry tch = Ghost.reveal t in
+    let Transcript.ClientHello retry' ch = Ghost.reveal t' in
+    retry == retry' /\
+    tch = clear_binders ch /\
+    B.modifies (footprint sto `B.loc_union` Transcript.footprint stt) h h' /\
     invariant sto h' /\
     Transcript.invariant stt (Ghost.reveal t') h' )
 
@@ -223,7 +223,7 @@ val send_hrr
     B.modifies (footprint sto `B.loc_union` Transcript.footprint stt) h h' /\
     begin match res with
     | Correct (sto', t') ->
-      let hrr = M_server_hello?._0 hrr in 
+      let hrr = M_server_hello?._0 hrr in
       invariant sto' h' /\
       sto'.out_slice == sto.out_slice /\
       sto'.out_pos >= sto.out_pos /\
@@ -232,7 +232,7 @@ val send_hrr
     | _ -> True
     end
   ))
-#pop-options 
+#pop-options
 // 19-09-05 not sure what I broke :(
 
 val send13
@@ -299,8 +299,8 @@ val send_tag13
     | _ -> True
     end
   ))
- 
-val send_extract13 
+
+val send_extract13
   (#a:EverCrypt.Hash.alg)
   (stt: transcript_state a)
   (#n: Ghost.erased nat)

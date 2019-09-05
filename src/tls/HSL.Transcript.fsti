@@ -52,7 +52,7 @@ module C = LowStar.ConstBuffer
 module G = FStar.Ghost
 
 open HandshakeMessages
-module HSM = HandshakeMessages 
+module HSM = HandshakeMessages
 
 open TLSError
 
@@ -77,7 +77,7 @@ let repr_hs12 (b:R.const_slice) =
 let repr_hs13 (b:R.const_slice) =
   R.repr_p _ b HSM.handshake13_parser
 
-//19-09-02 vs FStar.Bytes? 
+//19-09-02 vs FStar.Bytes?
 type bytes = FStar.Seq.seq uint_8
 
 /// `hs_ch` and `hs_sh`: Abbreviations for handshake messages that
@@ -90,8 +90,8 @@ let hs_sh = HSM.(sh:handshake{M_server_hello? sh})
 
 let is_any_hash_tag (h: HSM.handshake) : GTot Type0 =
   HSM.M_message_hash? h /\ (Bytes.length (HSM.M_message_hash?._0 h) <= 64)
-  
-let any_hash_tag = 
+
+let any_hash_tag =
   h: HSM.handshake { is_any_hash_tag h }
 
 /// `retry`: a pair of a client hello hash and hello retry request. We
@@ -157,10 +157,8 @@ let max_message_size_lt_max_input_length (a: HashDef.hash_alg)
   : Lemma
     ((max_transcript_size + 4) * max_message_size < HashDef.max_input_length a)
     [SMTPat (Spec.Hash.Definitions.max_input_length a)]
-  = admit()
-//19-09-02 broken? 
-//    assert_norm ((max_transcript_size + 4) * max_message_size < pow2 61);
-//    assert_norm ((max_transcript_size + 4) * max_message_size < pow2 125)
+  = assert_norm ((max_transcript_size + 4) * max_message_size < pow2 61);
+    assert_norm ((max_transcript_size + 4) * max_message_size < pow2 125)
 
 /// Move to the FStar.List library?
 let bounded_list 'a n = l:list 'a{List.length l < n}
@@ -299,14 +297,14 @@ let ext_transcript_t = t:transcript_t{extensible t}
 noeq
 type label =
   | L_ClientHello of clientHello
-  | L_TCH of clientHello_with_binders 
+  | L_TCH of clientHello_with_binders
   | L_CompleteTCH of clientHello_with_binders
   | L_ServerHello of sh
   | L_HRR of retry
   | L_HSM12 of handshake12
   | L_HSM13 of handshake13
 
-//19-09-02 can we avoid any ghost parameter for types? 
+//19-09-02 can we avoid any ghost parameter for types?
 
 inline_for_extraction
 let transcript_n (n: Ghost.erased nat) = (t: transcript_t { transcript_size t == Ghost.reveal n })
@@ -522,7 +520,7 @@ let label_of_label_repr (l:label_repr)
 
 /// `valid_label`: Validity of the labels is simply the validity of
 ///  the message representations it contains
-// why two stages? 
+// why two stages?
 let valid_label_repr (l:label_repr) (h:HS.mem) =
   match l with
   | LR_HRR ch hrr ->
@@ -592,7 +590,7 @@ val extend (#a:_) (s:state a) (l:label_repr) (tx:G.erased transcript_t)
 // ghost function from the state. This would be easier to use, but a
 // bit awkward to implement (updating a ref to a ghost?)
 //
-// val transcript (#a:_) (s:state a) (h:HS.mem): GTot transcript_t 
+// val transcript (#a:_) (s:state a) (h:HS.mem): GTot transcript_t
 
 (*** Hashes and injectivity ***)
 
@@ -620,7 +618,7 @@ val extract_hash
       let tx = G.reveal tx in
       invariant s tx h0 /\
       B.live h0 tag /\
-      B.(loc_disjoint (loc_buffer tag) (loc_region_only true Mem.tls_tables_region)) /\      
+      B.(loc_disjoint (loc_buffer tag) (loc_region_only true Mem.tls_tables_region)) /\
       B.loc_disjoint (footprint s) (B.loc_buffer tag))
     (ensures fun h0 _ h1 ->
       let open B in
