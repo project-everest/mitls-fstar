@@ -126,6 +126,56 @@ type transcript = Ghost.erased Transcript.transcript_t
 open FStar.HyperStack.ST
 open TLSError
 
+
+// Can we avoid writing so many transient wrappers?
+
+/// Serializes and buffers a ClientHello to be sent.  We write the
+/// whole message, even if it includes dummies.  We will probably need
+/// a resulting slice representing the message. No transcript yet.
+
+val send_tch
+  (sto: send_state)
+  (m: clientHello)
+: Stack (result send_state)
+  (requires fun h -> invariant sto h)
+  (ensures fun h res h' ->
+    B.modifies (footprint sto) h h' /\ (
+    match res with
+    | Correct sto' ->
+      invariant sto' h' /\
+      sto'.out_slice == sto.out_slice /\
+      sto'.out_pos >= sto.out_pos
+    | _ -> True
+  ))
+
+/// Overwrites the binders in the output buffer, and extend the digest
+/// accordingly. Always succeeds. 
+// TODO unclear how we compute & pass the position to overwrite within stt
+
+val patch_binders
+  (#a:EverCrypt.Hash.alg)
+  (stt: transcript_state a)
+  (t: Transcript.g_transcript_n (Ghost.hide 0) {Transcript.TruncatedClientHello? (Ghost.reveal t)})
+  (sto: send_state)
+  (m: HandshakeMessages.binders)
+: Stack (Transcript.g_transcript_n (Ghost.hide 0))
+  (requires fun h ->
+    invariant sto h /\
+    Transcript.invariant stt (Ghost.reveal t) h /\
+    B.loc_disjoint (footprint sto) (Transcript.footprint stt) /\
+    Transcript.Start? (Ghost.reveal t))
+  (ensures fun h t' h' ->
+    let Transcript.TruncatedClientHello retry tch = Ghost.reveal t in 
+    let Transcript.ClientHello retry' ch = Ghost.reveal t' in 
+    retry == retry' /\ 
+    tch = clear_binders ch /\ 
+    B.modifies (footprint sto `B.loc_union` Transcript.footprint stt) h h' /\ 
+    invariant sto h' /\
+    Transcript.invariant stt (Ghost.reveal t') h' )
+
+/// Serializes and buffers a message to be sent, and extends the
+/// transcript digest with it.
+
 val send_ch
   (#a:EverCrypt.Hash.alg)
   (stt: transcript_state a)
@@ -153,6 +203,7 @@ val send_ch
     end
   ))
 
+#push-options "--z3rlimit 32"
 val send_hrr
   (#a:EverCrypt.Hash.alg)
   (stt: transcript_state a)
@@ -160,7 +211,7 @@ val send_hrr
   (t: Transcript.g_transcript_n n { Ghost.reveal n < Transcript.max_transcript_size - 1 })
   (sto: send_state)
   (tag: Transcript.any_hash_tag)
-  (hrr: Transcript.hs_sh)
+  (hrr: Transcript.hs_sh { is_valid_hrr (M_server_hello?._0 hrr) })
 : Stack (result (send_state & Transcript.g_transcript_n n))
   (requires (fun h ->
     invariant sto h /\
@@ -173,14 +224,17 @@ val send_hrr
     B.modifies (footprint sto `B.loc_union` Transcript.footprint stt) h h' /\
     begin match res with
     | Correct (sto', t') ->
+      let hrr = M_server_hello?._0 hrr in 
       invariant sto' h' /\
       sto'.out_slice == sto.out_slice /\
       sto'.out_pos >= sto.out_pos /\
       Transcript.invariant stt (Ghost.reveal t') h' /\
-      Ghost.reveal t' == Transcript.Start (Some (tag, M_server_hello?._0 hrr))
+      Ghost.reveal t' == Transcript.Start (Some (tag, hrr))
     | _ -> True
     end
   ))
+#pop-options 
+// 19-09-05 not sure what I broke :(
 
 val send13
   (#a:EverCrypt.Hash.alg)

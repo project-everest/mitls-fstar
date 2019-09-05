@@ -123,15 +123,22 @@ let mk_hrr v sid cs es : hrr =
       legacy_compression = Parsers.LegacyCompression.NullCompression;
       extensions = es }) })
 
-type valid_hrr = sh: hrr {
+let is_valid_hrr (sh: serverHello) = 
+  is_hrr sh /\
   CipherSuite.(
     match cipherSuite_of_name (hrr_cipher_suite sh) with 
     | Some (CipherSuite13 _ _) -> True
-    | _ -> False) }
-
+    | _ -> False)
+type valid_hrr = sh: hrr { is_valid_hrr sh }
+ 
 let hrr_ha (sh: valid_hrr) = 
   match cipherSuite_of_name (hrr_cipher_suite sh) with 
     | Some (CipherSuite13 _ ha) -> ha
+
+type valid_handshake = m: handshake {
+  match m with 
+  | M_server_hello sh -> (is_hrr sh ==> is_valid_hrr sh)
+  | _ -> True }
 
 // prior, simpler types, but without a direct wire format: 
 // type sh = realServerHello

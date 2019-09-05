@@ -151,8 +151,9 @@ let find_cookie o =
   | Some (CHE_cookie c) -> Some c
 
 let find_pske o : option offeredPsks =
-  if Cons? o then 
-  match List.Tot.last o with 
+  let es = o.CH.extensions in 
+  if Cons? es then 
+  match List.Tot.last es with 
   | CHE_pre_shared_key psks -> Some psks 
   | _ -> None 
   else None 
@@ -434,6 +435,9 @@ private let rec list_valid_ng_is_list_ng (l:CommonDH.supportedNamedGroups) : Tot
       hd :: list_valid_ng_is_list_ng tl
 // We fill binders with placeholders to use QD clientHelloextensions_serializer32
 
+//19-09-05 Align to ParsersAux's definition of dummy binders?  
+// It may be best to leave it underspecified.
+
 private let compute_binder_ph (pski:pskInfo) : Tot pskBinderEntry =
   let CipherSuite13 _ h = pski.early_cs in
   let len : UInt32.t = Hacl.Hash.Definitions.hash_len h in
@@ -527,6 +531,8 @@ let final_extensions cfg edi psks now: list clientHelloExtension =
         ((if List.Tot.existsb allow_dhe_resumption pskinfos then [Psk_dhe_ke] else []) <: (l: list _ { List.Tot.length l <= 1 } )) in
       assume (List.Tot.length psk_kex >= 1);
       let binders = List.Tot.map compute_binder_ph pskinfos in
+      // TODO 19-09-05 postcondition, [Psks.offeredPsks_binders_list_bytesize binders == bkeys_binders_list_bytesize psks]
+      // which will be required to overwrite the dummy binders. 
       let pskidentities = obfuscate_age now psks in
       assume (let x = offeredPsks_identities_list_bytesize pskidentities in 7 <= x /\ x <= 65535);
       assume (let x = offeredPsks_binders_list_bytesize binders in 33 <= x /\ x <= 65535);
@@ -1223,7 +1229,7 @@ let client_offer_new cfg nonce ks resume now =
           extensions = extensions;
         })
       else
-        fatal Internal_error "computeOffer: check_clientHelloExtensions_list_bytesize failed"
+         fatal Internal_error "computeOffer: check_clientHelloExtensions_list_bytesize failed"
 
 let client_ClientHello config nonce oks =
   let (cfg,resume) = config in 
@@ -1264,8 +1270,9 @@ let group_of_hrr = TLS.Cookie.find_keyshare
 
 #push-options "--admit_smt_queries true"
 let client_HelloRetryRequest ch1 hrr (Some s) =
-  let open Parsers.HelloRetryRequest in
-  let { version = _; session_id = sid; cipher_suite = cs; extensions = el } = hrr in
+  let sid = HSM.hrr_session_id hrr in
+  let cs = HSM.hrr_cipher_suite hrr in
+  let el = HSM.hrr_extensions hrr in 
   let old_shares = find_key_shares ch1 in
   let old_psk = match find_pske ch1 with None -> [] | Some pskl -> pskl.identities in
   let ext' = List.Helpers.choose_aux s choose_extension ch1.CH.extensions in

@@ -173,6 +173,7 @@ let transcript_bytes_does_not_start_with_message_hash
       (serialize_server_hello sh `Seq.append`
         LP.serialize (LPSL.serialize_list _ HSM.handshake13_serializer) rest)
 
+#push-options "--z3rlimit 32" 
 let transcript_bytes_injective_retry
   (r1: option retry)
   (t1: transcript_t { transcript_get_retry t1 == None } )
@@ -197,6 +198,7 @@ let transcript_bytes_injective_retry
     transcript_bytes_does_not_start_with_message_hash t2 r1 (transcript_bytes t1)
   | _, Some r2 ->
     transcript_bytes_does_not_start_with_message_hash t1 r2 (transcript_bytes t2)
+#pop-options 
 
 let transcript_arbitrary_index
   (t1: transcript_t)

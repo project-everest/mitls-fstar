@@ -481,7 +481,7 @@ type label_repr =
       #b1:R.const_slice ->
       ch_tag: R_HS.repr b1 { is_any_hash_tag (R.value ch_tag) }  ->
       #b2:R.const_slice ->
-      hrr:hs_sh_repr b2{is_hrr (HSM.M_server_hello?._0 (R.value hrr))} ->
+      hrr:hs_sh_repr b2{is_valid_hrr (HSM.M_server_hello?._0 (R.value hrr))} ->
       label_repr
 
   | LR_HSM12:
@@ -597,8 +597,8 @@ val extend (#a:_) (s:state a) (l:label_repr) (tx:G.erased transcript_t)
 (*** Hashes and injectivity ***)
 
 /// `transcript_hash`: The specificational hash of the transcript
-val transcript_hash (a:HashDef.hash_alg) (t:transcript_t): HashDef.bytes_hash a
-// 19-09-04 eventually no_extract, but not ghost!
+val transcript_hash:
+  a:HashDef.hash_alg -> t:transcript_t -> GTot (HashDef.bytes_hash a)
 
 /// `hashed a t`: An abstract predicate recording that the transcript
 /// has been hashed in ideal state, if idealization is on

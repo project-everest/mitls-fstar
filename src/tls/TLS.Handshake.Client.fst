@@ -86,6 +86,31 @@ let transcript_extract
   pop_frame();
   tag
 
+// 19-09-05 Much overhead for calling Transcript
+let extend_ch #ha
+  (sending: Send.send_state)
+  (di:Transcript.state ha)
+  (msg: clientHello)
+  (tx0: Ghost.erased Transcript.transcript_t):
+  ST (result (Ghost.erased Transcript.transcript_t ))
+  (requires fun h0 ->
+    let tx0 = Ghost.reveal tx0 in Transcript.Start? tx0 /\
+    B.loc_disjoint (Send.footprint sending) (Transcript.footprint di) /\
+    Send.invariant sending h0 /\
+    Transcript.invariant di tx0 h0)
+  (ensures fun h0 r h1 ->
+    B.(modifies (Send.footprint sending `loc_union` Transcript.footprint di) h0 h1) /\
+    Send.invariant sending h1 /\ (
+    match r with
+    | Error _ -> True
+    | Correct tx1 ->
+      let Transcript.Start r = Ghost.reveal tx0 in
+      let tx1 = Ghost.reveal tx1 in
+      Transcript.invariant di tx1 h1 /\
+      tx1 == Transcript.ClientHello r msg ))
+=
+  admit()
+
 #push-options "--z3rlimit 100"
 open FStar.Integers
 // Adapted from Send.send13, using [sending] as scratch space;
@@ -173,35 +198,53 @@ let client_transcript (region:rgn) ha tch =
   let di, transcript0 = Transcript.create region ha in
   let transcript1 = Transcript.extend di (admit() (*of tch*)) transcript0 in
   let tag = transcript_extract di transcript1 in
-  (tag, di)
+  (tag, di, transcript1)
 
+let binder = Parsers.PskBinderEntry.pskBinderEntry
+let binder_for (bkey:Negotiation.bkey13) =
+  b:binder { Bytes.length b ==  EverCrypt.Hash.Incremental.hash_length (Negotiation.ha_bkey13 bkey) }
+
+// its buffer; use a Repr instead?
 let btag (bkey:Negotiation.bkey13) =
-  Bytes.bytes
-  // Hacl.Hash.Definitions.hash_t (Negotiation.ha_bkey13 bkey)
+  Hacl.Hash.Definitions.hash_t (Negotiation.ha_bkey13 bkey)
 
-// TODO sort it out within KeySchedule
+// TODO sort it out within KeySchedule. Still high-level
 assume val compute_binder:
   bkey:Negotiation.bkey13 ->
-  tag: btag bkey -> btag bkey
+  tag: Bytes.lbytes (EverCrypt.Hash.Incremental.hash_length (Negotiation.ha_bkey13 bkey))  ->
+  binder_for bkey
+
+// TODO, used for computing binder lengths, reusing Parsers ParsersAux
+let rec bkeys_binders_list_bytesize (bkeys: list Negotiation.bkey13) =
+  match bkeys with
+  | bkey::bkeys -> 1 + EverCrypt.Hash.Incremental.hash_length (Negotiation.ha_bkey13 bkey) + bkeys_binders_list_bytesize bkeys
+  | [] -> 0
 
 /// Compute binder MACs for the PSKs; in rare cases we allocate an
 /// auxiliary transcripts for other hash algorithms.
-// TODO type; tch & logical payload
+///
+/// We pass the (full, truncated) offer, or its repr, in order to
+/// specify/recompute what is MACed.
+
+
+// TODO type; tch & logical payload TODO prove by induction that the
+// resulting binders have the right length, reusing ParsersAux
 val client_Binders:
   region:rgn ->
   ha0: EverCrypt.Hash.Incremental.alg ->
   di: Transcript.state ha0 ->
   tch: full_offer ->
   bkey: list Negotiation.bkey13 ->
-  ST Bytes.bytes
+  ST Parsers.OfferedPsks_binders.(b:offeredPsks_binders {offeredPsks_binders_list_bytesize b = bkeys_binders_list_bytesize bkey})
   (requires fun h0 ->
     Transcript.invariant di (transcript_tch tch) h0)
   (ensures fun h0 b h1 ->
-    modifies_none h0 h1)
+    modifies_none h0 h1 //TBC
+    )
 
 let rec client_Binders region ha0 di0 tch bkeys =
   match bkeys with
-  | [] -> Bytes.empty_bytes
+  | [] -> []
   | bkey::bkeys ->
     let ha = Negotiation.ha_bkey13 bkey in
     let tx: Transcript.g_transcript_n (Ghost.hide 0) = Ghost.hide (transcript_tch tch) in
@@ -209,28 +252,15 @@ let rec client_Binders region ha0 di0 tch bkeys =
       if ha = ha0 then
         transcript_extract di0 tx
       else
-        let tag, di = client_transcript region ha tch in
+        let tag, di, transcript_tch = client_transcript region ha tch in
         // TODO Transcript.free di
         tag in
     let binder = compute_binder bkey tag in
-    Bytes.append binder (client_Binders region ha0 di0 tch bkeys )
+    binder :: client_Binders region ha0 di0 tch bkeys
 
 // TODO also return a slice in the sending buffer containing the
 // serialized [ch]; it is not constant yet as we may need to patch the
 // binders.
-assume val send_tch:
-  st0: Send.send_state ->
-  ch: Negotiation.offer ->
-  ST (result Send.send_state)
-  (requires fun h0 -> Send.invariant st0 h0)
-  (ensures fun h0 r h1 ->
-    B.modifies (Send.footprint st0) h0 h1 /\
-    (match r with
-    | Error _ -> True
-    | Correct st1 ->
-      Send.footprint st0 == Send.footprint st1 /\
-      Send.invariant st1 h1
-      ))
 
 let client_ClientHello (Client region config r) =
   let (cfg,resume) = config in
@@ -243,60 +273,76 @@ let client_ClientHello (Client region config r) =
     // groups = Some [] is valid, may be used to deliberately trigger HRR
   let ks, shares = KS.ks_client_init random groups in
 
-  // Compute and send the ClientHello offer
+  // Compute the initial ClientHello offer
   // lower: we'll instead pass the sending state for writing the offer.
   let sending = Send.send_state0 in
   match Negotiation.client_ClientHello config random shares with
   | Error z -> Error z
   | Correct offer0 ->
-  match send_tch sending offer0 with
+  assert( // TODO in Negotiation.client_ClientHello
+    HSM.ch_bound offer0 ==>
+    Parsers.OfferedPsks.offeredPsks_binders_list_bytesize (HSM.ch_binders offer0) == bkeys_binders_list_bytesize (snd resume));
+
+  // Send the (possibly-truncated) ClientHello, without transcript so far.
+  match Send.send_tch sending offer0 with
   | Error z -> Error z
   | Correct sending -> (
-    // offer0 includes dummy binders for its PSKs (if any)
-    let full0 = {full_retry = None; full_ch = offer0} in
-    // TODO assert we have a slice with this serialized offer
 
-    // allocate state with a reasonable default hash algorithm for the digest
-    let ha = Negotiation.offered_ha offer0 in
-    let tag, di = client_transcript region ha offer0 in
-    let tx_tch = Ghost.hide (transcript_tch full0) in
-    let receiving = Receive.(create (alloc_slice region)) in
-    let epochs = Epochs.create region random in
-    let ms: msg_state region ParseFlights.F_c_wait_ServerHello random ha = {
-      digest = di;
-      sending = sending;
-      receiving = receiving;
-      epochs = epochs;
-    } in
-    // write transient state for witnessing offer0 (used for binders)
-    r := C_wait_ServerHello full0 ms ks;
+  // This is specification-only, ensuring that offer0 has the
+  // canonical binders used to keep track of the tch transcript,
+  // instead of the dummy binders produced by Negotation from ha
+  // information. (Not great--to revisit when lowering Nego.) This
+  // does not affect the concrete, truncated representation of the
+  // message.
+  let offer0 = HSM.clear_binders offer0 in
+  let full0 = {full_retry = None; full_ch = offer0} in
 
-    // TODO below: postcondition stating the transcript is
-    // now at [ClientHello None offer1]
-    let offer1, sending = (
-      match resume with
-      | (_,[]) -> offer0, sending
-      | (_,psks) -> (
-        let binders = client_Binders region ha di full0 psks in
+  // Allocate state with the "main" offered hash algorithm for the digest
+  let ha = Negotiation.offered_ha offer0 in
+  let tag, di, tx_tch = client_transcript region ha offer0 in
+  let receiving = Receive.(create (alloc_slice region)) in
+  let epochs = Epochs.create region random in
+  let ms: msg_state region ParseFlights.F_c_wait_ServerHello random ha = {
+    digest = di;
+    sending = sending;
+    receiving = receiving;
+    epochs = epochs;
+  } in
 
-        // TODO patch both the offer and its serialization in [sending]
-        let offer1 = offer0 in
-        // awkward calling convention to extend with binders
-        let tx1 = Transcript.(extend di (admit()) (* LR_CompleteTCH of [binder] *) tx_tch) in
-        let sending =
-          if Negotiation.find_early_data offer0 then (
-            trace "setting up 0RTT";
-            let digest_CH = transcript_extract di tx1  in
-            // TODO consider doing export & register within KS
-            let early_exporter_secret, edk = KS.ks_client13_ch cfg.is_quic ks digest_CH in
-            export epochs early_exporter_secret;
-            register epochs edk;
-            Send.signals sending (Some (true, false)) false )
-          else sending in
-        offer1, sending )) in
+  // assert(tx_tch == Ghost.hide (transcript_tch full0));
+  r := C_wait_ServerHello full0 ms ks;
 
-    r := C_wait_ServerHello ({full_retry=None; full_ch=offer1}) ms ks;
-    Correct () )
+  let offer1, sending = (
+    match resume with
+    | (_,[]) -> offer0, sending
+    | (_,psks) -> (
+      let binders = client_Binders region ha di full0 psks in
+      let offer1 = HSM.set_binders offer0 binders in
+
+      // Extend the transcript from tx_tch with R_CompleteTCH, as
+      // possibly required for 0RTT.
+      let tx1 = Send.patch_binders ms.digest tx_tch ms.sending binders in
+
+      // Set up 0RTT keys if offered
+      let sending =
+        if Negotiation.find_early_data offer0 then (
+          trace "setting up 0RTT";
+          let digest_CH = transcript_extract di tx1 in
+          // TODO LATER consider doing export & register within KS
+          let early_exporter_secret, edk = KS.ks_client13_ch cfg.is_quic ks digest_CH in
+          export epochs early_exporter_secret;
+          register epochs edk;
+          Send.signals sending (Some (true, false)) false )
+        else sending in
+      offer1, sending )) in
+
+  // In both cases, the transcript is now at [ClientHello None offer1]
+  let h1 = get() in
+  let fo1 = {full_retry=None; full_ch=offer1} in
+  assert (Transcript.invariant ms.digest (transcript_offer fo1) h1);
+
+  r := C_wait_ServerHello fo1 ms ks;
+  Correct () )
 
 let client_HelloRetryRequest (Client region config r) hrr =
   let C_wait_ServerHello offer ms ks = !r in

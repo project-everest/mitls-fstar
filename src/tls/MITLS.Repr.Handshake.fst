@@ -37,7 +37,7 @@ open FStar.HyperStack.ST
 let t = HSM.handshake
 
 let repr (b:R.const_slice) =
-  R.repr_p HSM.handshake b HSM.handshake_parser
+  R.repr_p t b HSM.handshake_parser
 
 let handshakeType (#b:R.const_slice) (r:repr b)
   : Stack Parsers.HandshakeType.handshakeType
