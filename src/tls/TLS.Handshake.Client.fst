@@ -57,6 +57,7 @@ let export #region #n epochs xk =
   FStar.Monotonic.Seq.i_write_at_end epochs.Epochs.exporter xk
 #pop-options
 
+#push-options "--max_fuel 0 --max_fuel 0 --z3rlimit 32"
 
 // Floating: high-level transcript
 // TODO merge with [Send.tag]; add precise type; move to Transcript
@@ -64,7 +65,7 @@ let transcript_extract
   #ha
   (di:Transcript.state ha)
   (tx: Ghost.erased Transcript.transcript_t):
-  Stack Bytes.bytes
+  ST Bytes.bytes
   (requires fun h0 ->
     Transcript.invariant di (Ghost.reveal tx) h0)
   (ensures fun h0 t h1 ->
@@ -76,15 +77,20 @@ let transcript_extract
     Bytes.reveal t == Transcript.transcript_hash ha tx /\
     Transcript.hashed ha tx)
   =
+  // Show that the transcript state is disjoint from the new frame since it's not unused
+  (**) let h0 = get() in
+  (**) Transcript.elim_invariant di (Ghost.reveal tx) h0;
   push_frame();
   let ltag = EverCrypt.Hash.Incremental.hash_len ha in
+  // AF: Why not allocate directly with size ltag?
   let btag0 = LowStar.Buffer.alloca 0uy 64ul in // big enough for all tags
   let btag = LowStar.Buffer.sub btag0 0ul ltag in
-  assume False;//19-09-01 disjointness and framing of btag?
   Transcript.extract_hash di btag tx;
   let tag = FStar.Bytes.of_buffer ltag btag in
   pop_frame();
   tag
+
+#pop-options
 
 // 19-09-05 Much overhead for calling Transcript
 let extend_ch #ha

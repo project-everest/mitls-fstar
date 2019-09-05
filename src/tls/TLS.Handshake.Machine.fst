@@ -535,8 +535,6 @@ let client_invariant
     Transcript.invariant ms.digest transcript h /\
 
     Receive.invariant ms.receiving h
-    // AF: Why is this not a part of the Receive invariant?
-    // B.live h ms.receiving.Receive.rcv_b
 
     // KeySchedule.invariant ks h
 
