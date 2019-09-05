@@ -191,12 +191,13 @@ let client_Binders #region (hs:t region) (offer:HSM.clientHello) =
 #push-options "--admit_smt_queries true"
 
 /// Create a transcript digest for the truncated client Hello.
-// TODO take a const_slice or Transcript.label_repr instead of tch
 // TODO handle spec-level branching depending on the presence of binders.
 // TODO re-use it on ha-mismatch in client_ServerHello.
-let client_transcript (region:rgn) ha tch =
+// TODO (LOWER) take a const_slice or Transcript.label_repr instead of tch
+let client_transcript (region:rgn) ha (full_tch: full_offer) =
   let di, transcript0 = Transcript.create region ha in
-  let transcript1 = Transcript.extend di (admit() (*of tch*)) transcript0 in
+  // TODO intermediate hashing of ch0 and hrr if Some? full_tch.retry
+  let transcript1 = Transcript.extend di (admit() (*full_tch.full_ch *)) transcript0 in
   let tag = transcript_extract di transcript1 in
   (tag, di, transcript1)
 
@@ -362,19 +363,59 @@ let client_HelloRetryRequest (Client region config r) hrr =
   in
   match Nego.client_HelloRetryRequest ch1 hrr share with
   | Error z -> Receive.InError z
-  | Correct offer2 ->
-    // TODO: adapt from the code above
-    // does it make sense to send binders with the wrong hash algorithm?
+  | Correct offer ->
 
-    // WAS: (assuming the server's required share had already been sent)
-    // client_Binders hs ch2;
-    // hs.state := C13_sent_CH2 ch1 hri;
-    // hs.nego.Nego.state := Nego.C_Offer ch2;
+  // The rest of the code is similar to client_ClientHello's, might
+  // even be shared.
 
-    let retry = {ch0=ch1; sh0=hrr} in
-    let full2 = ({full_retry=Some retry; full_ch=offer2}) in
-    r := C_wait_ServerHello full2 ms ks;
-    Receive.InAck false false
+  assert(Negotiation.offered_ha offer == HSM.hrr_ha hrr);
+  assert( // TODO in Negotiation.client_ClientHello
+    HSM.ch_bound offer ==>
+    Parsers.OfferedPsks.offeredPsks_binders_list_bytesize (HSM.ch_binders offer) ==
+    bkeys_binders_list_bytesize (snd (snd config)));
+
+  match Send.send_tch ms.sending offer with
+  | Error z -> Receive.InError z
+  | Correct sending ->
+
+  let offer = HSM.clear_binders offer in
+  let retry = Some({ch0=ch1; sh0 = hrr}) in
+  let full2 = {full_retry=retry; full_ch=offer} in
+
+  // TODO recycle the existing digest when HSM.hrr_ha hrr =
+  // Negotiation.offered_ha ch1, or at least free it.
+
+  let ha = HSM.hrr_ha hrr in
+  let tag, di, tx_tch = client_transcript region ha full2 in
+  r := C_wait_ServerHello full2 ms ks;
+
+  let cfg, resume = config in
+  let offer, sending = (
+    // TODO RFC recheck we send binders for the initial bkeys
+    match resume with
+    | (_,[]) -> offer, sending
+    | (_,psks) -> (
+      let binders = client_Binders region ha di full2 psks in
+      let offer = HSM.set_binders offer binders in
+      let tx1 = Send.patch_binders ms.digest tx_tch ms.sending binders in
+
+      // Set up 0RTT keys if offered ---- is it enabled after HRR?
+      let sending =
+        if Negotiation.find_early_data offer then (
+          trace "setting up 0RTT";
+          let digest_CH = transcript_extract di tx1 in
+          // TODO LATER consider doing export & register within KS
+          let early_exporter_secret, edk = KS.ks_client13_ch cfg.is_quic ks digest_CH in
+          export ms.epochs early_exporter_secret;
+          register ms.epochs edk;
+          Send.signals sending (Some (true, false)) false )
+        else sending in
+      offer, sending )) in
+
+  let full2 = ({full_retry=retry; full_ch=offer}) in
+
+  r := C_wait_ServerHello full2 ms ks;
+  Receive.InAck false false
 (*
 let client_HelloRetryRequest (Client region config r) hrr =
   trace "client_HelloRetryRequest";

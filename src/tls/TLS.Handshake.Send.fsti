@@ -162,8 +162,7 @@ val patch_binders
   (requires fun h ->
     invariant sto h /\
     Transcript.invariant stt (Ghost.reveal t) h /\
-    B.loc_disjoint (footprint sto) (Transcript.footprint stt) /\
-    Transcript.Start? (Ghost.reveal t))
+    B.loc_disjoint (footprint sto) (Transcript.footprint stt))
   (ensures fun h t' h' ->
     let Transcript.TruncatedClientHello retry tch = Ghost.reveal t in 
     let Transcript.ClientHello retry' ch = Ghost.reveal t' in 

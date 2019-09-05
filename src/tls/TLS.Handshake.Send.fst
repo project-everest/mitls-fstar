@@ -262,7 +262,6 @@ let send #a stt transcript0 sto msg =
       correct (sto, transcript1)
     | _ -> fatal Internal_error "unsupported?"
     end
-//#pop-options
 
 val send_tag:
   #a:EverCrypt.Hash.alg ->

@@ -669,7 +669,7 @@ let st_mon
   st1:client_state region cfg -> Lemma (client_step st0 st1 ==> ssa f st0 st1)
 
 // 19-09-05 broken by adding clear_binders? The proof now depends on it being idempotent.
-#set-options "--admit_smt_queries true"
+#push-options "--admit_smt_queries true"
 
 // Via the type above, m_ch0 is a relation between two states...
 let m_ch0: st_mon st_ch0 = fun _ _ _ _ -> ()
@@ -748,16 +748,20 @@ let test (#region:rgn) (#cfg:client_config) (st: client_mref region cfg):
     recall_p st (assigned_to st st_ch1 o);
     assert(r' == Some o)
 
+#pop-options
+
 /// -------------end of sanity check----------------
 
+#restart-solver
 
 /// Starting to port the auxiliary accessors previously defined and
 /// used in Old.Handshake; many of them could often be shown to be
 /// monotonic. We will need more to cut direct dependencies on [mode].
 
-// #set-options "--query_stats --z3rlimit 30"
+//#set-options "--max_ifuel 2 --z3rlimit 20 --query_stats"
 let nonce (#region:rgn) (#cfg:client_config) (s:client_state region cfg) =
- match s with
+  //allow_inversion (client_state region cfg);
+  match s with
   | C_init random -> random
   | C_wait_ServerHello offer _ _
   | C13_wait_Finished1 offer _ _ _
