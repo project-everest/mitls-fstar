@@ -7,7 +7,7 @@ open TLSError
 
 open FStar.Bytes
 open FStar.HyperStack.ST
-open TLS.Handshake.State
+open TLS.Handshake.Machine
 
 module CH = Parsers.ClientHello
 module E = Extensions

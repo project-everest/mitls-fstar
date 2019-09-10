@@ -36,7 +36,7 @@ type machineState =
   | C_wait_ServerHello
   | C13_sent_CH2: // Replaces the C_HRR state in Nego
     ch1: Nego.offer ->
-    hrr: Nego.retryInfo ch1 ->
+    hrr: HSM.hrr -> //Nego.retryInfo ch1 ->
     machineState
   | C13_wait_Finished1
   | C13_sent_EOED: H.anyTag ->

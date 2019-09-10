@@ -25,7 +25,7 @@ val server_ClientHello2:
   ST TLS.Handshake.Receive.incoming
   (requires fun h -> True)
   (ensures fun h0 _ h1 -> True)
-  
+
 val server_ClientHello:
   hs: hs ->
   ch: HSM.ch ->
