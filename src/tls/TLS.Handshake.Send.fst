@@ -92,7 +92,7 @@ let tag #a stt transcript =
 
 let send_tch sto m =
   let h0 = get () in
-  let r = MITLS.Repr.Handshake.serialize sto.out_slice sto.out_pos (M_client_hello m) in
+  let r = MITLS.Repr.Handshake.serialize sto.out_slice sto.out_pos (HSM.M_client_hello m) in
   match r with
   | None ->
     fatal Internal_error "output buffer overflow"
@@ -204,9 +204,9 @@ noextract
 let msg_type (msg: msg)
 : Tot Type
 = match msg with
-| Msg m -> valid_handshake
-| Msg12 _ -> handshake12
-| Msg13 _ -> handshake13
+| Msg m -> HSM.valid_handshake
+| Msg12 _ -> HSM.handshake12
+| Msg13 _ -> HSM.handshake13
 
 inline_for_extraction
 let msg_repr_type (msg: msg) (b: MITLS.Repr.const_slice)

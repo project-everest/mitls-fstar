@@ -4,22 +4,22 @@ module TLS.Handshake.Send
 
 module Transcript = HSL.Transcript
 
-open HandshakeMessages
+module HSM = HandshakeMessages
 
 type msg =
-| Msg of handshake
-| Msg12 of handshake12
-| Msg13 of handshake13
+| Msg of HSM.handshake
+| Msg12 of HSM.handshake12
+| Msg13 of HSM.handshake13
 
 let tag_of = function
-| Msg h -> tag_of_handshake h
-| Msg12 h -> tag_of_handshake12 h
-| Msg13 h -> tag_of_handshake13 h
+| Msg h -> HSM.tag_of_handshake h
+| Msg12 h -> HSM.tag_of_handshake12 h
+| Msg13 h -> HSM.tag_of_handshake13 h
 
 let msg_bytes = function
-| Msg h -> handshake_serializer32 h
-| Msg12 h -> handshake12_serializer32 h
-| Msg13 h -> handshake13_serializer32 h
+| Msg h -> HSM.handshake_serializer32 h
+| Msg12 h -> HSM.handshake12_serializer32 h
+| Msg13 h -> HSM.handshake13_serializer32 h
 
 // FRAGMENT INTERFACE
 //
@@ -135,7 +135,7 @@ open TLSError
 
 val send_tch
   (sto: send_state)
-  (m: clientHello)
+  (m: HSM.clientHello)
 : Stack (result send_state)
   (requires fun h -> invariant sto h)
   (ensures fun h res h' ->
@@ -167,7 +167,7 @@ val patch_binders
     let Transcript.TruncatedClientHello retry tch = Ghost.reveal t in
     let Transcript.ClientHello retry' ch = Ghost.reveal t' in
     retry == retry' /\
-    tch = clear_binders ch /\
+    tch = HSM.clear_binders ch /\
     B.modifies (footprint sto `B.loc_union` Transcript.footprint stt) h h' /\
     invariant sto h' /\
     Transcript.invariant stt (Ghost.reveal t') h' )
@@ -197,7 +197,7 @@ val send_ch
       sto'.out_slice == sto.out_slice /\
       sto'.out_pos >= sto.out_pos /\
       Transcript.invariant stt (Ghost.reveal t') h' /\
-      Ghost.reveal t' == Transcript.ClientHello (Transcript.Start?.retried (Ghost.reveal t)) (M_client_hello?._0 m)
+      Ghost.reveal t' == Transcript.ClientHello (Transcript.Start?.retried (Ghost.reveal t)) (HSM.M_client_hello?._0 m)
     | _ -> True
     end
   ))
@@ -210,20 +210,20 @@ val send_hrr
   (t: Transcript.g_transcript_n n { Ghost.reveal n < Transcript.max_transcript_size - 1 })
   (sto: send_state)
   (tag: Transcript.any_hash_tag)
-  (hrr: Transcript.hs_sh { is_valid_hrr (M_server_hello?._0 hrr) })
+  (hrr: Transcript.hs_sh { HSM.is_valid_hrr (HSM.M_server_hello?._0 hrr) })
 : Stack (result (send_state & Transcript.g_transcript_n n))
   (requires (fun h ->
     invariant sto h /\
     Transcript.invariant stt (Ghost.reveal t) h /\
     B.loc_disjoint (footprint sto) (Transcript.footprint stt) /\
-    is_hrr (M_server_hello?._0 hrr) /\
+    HSM.is_hrr (HSM.M_server_hello?._0 hrr) /\
     Ghost.reveal t == Transcript.Start None
   ))
   (ensures (fun h res h' ->
     B.modifies (footprint sto `B.loc_union` Transcript.footprint stt) h h' /\
     begin match res with
     | Correct (sto', t') ->
-      let hrr = M_server_hello?._0 hrr in
+      let hrr = HSM.M_server_hello?._0 hrr in
       invariant sto' h' /\
       sto'.out_slice == sto.out_slice /\
       sto'.out_pos >= sto.out_pos /\
@@ -235,13 +235,14 @@ val send_hrr
 #pop-options
 // 19-09-05 not sure what I broke :(
 
+
 val send13
   (#a:EverCrypt.Hash.alg)
   (stt: transcript_state a)
   (#n: Ghost.erased nat)
   (t: Transcript.g_transcript_n n { Ghost.reveal n < Transcript.max_transcript_size - 1 })
   (sto: send_state)
-  (m: handshake13)
+  (m: HSM.handshake13)
 : Stack (result (send_state & Transcript.g_transcript_n (Ghost.hide (Ghost.reveal n + 1))))
   (requires (fun h ->
     invariant sto h /\
@@ -269,7 +270,7 @@ val send_tag13
   (#n: Ghost.erased nat)
   (t: Transcript.g_transcript_n n { Ghost.reveal n < Transcript.max_transcript_size - 1 })
   (sto: send_state)
-  (m: handshake13)
+  (m: HSM.handshake13)
   (tag:Hacl.Hash.Definitions.hash_t a)
 : ST (result (send_state & Transcript.g_transcript_n (Ghost.hide (Ghost.reveal n + 1))) )
   (requires (fun h ->
@@ -306,7 +307,7 @@ val send_extract13
   (#n: Ghost.erased nat)
   (t: Transcript.g_transcript_n n { Ghost.reveal n < Transcript.max_transcript_size - 1 })
   (sto: send_state)
-  (m: handshake13)
+  (m: HSM.handshake13)
 : ST (result (send_state & Bytes.bytes & Transcript.g_transcript_n (Ghost.hide (Ghost.reveal n + 1))) )
   (requires (fun h ->
     invariant sto h /\
