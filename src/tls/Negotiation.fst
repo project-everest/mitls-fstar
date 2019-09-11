@@ -229,8 +229,12 @@ let offered_ha offer =
     | Some (CipherSuite.CipherSuite13 _ ha) -> ha
     | _ -> EverCrypt.Hash.Incremental.SHA2_256
 
-let selected_ha sh = 
-  match cipherSuite_of_name (HSM.sh_cipher_suite sh) with
+// Both for HRR and SH
+let selected_ha sh =
+  let cs =
+    if HSM.is_hrr sh then hrr_cipher_suite sh
+    else HSM.sh_cipher_suite sh in
+  match cipherSuite_of_name cs with
   | Some (CipherSuite.CipherSuite13 _ ha) -> ha
   | _ -> EverCrypt.Hash.Incremental.SHA2_256
   
