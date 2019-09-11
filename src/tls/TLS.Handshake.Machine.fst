@@ -896,6 +896,13 @@ noeq type server_state
   | S_wait_ClientHello:
     server_state region cfg
 
+  // Stateful HRR
+  | S13_sent_HelloRetryRequest:
+    retry: client_retry_info ->
+    ms: msg_state region PF.F_s_Idle (retry.ch0.HSM.random)
+      (Negotiation.selected_ha retry.sh0) ->
+    server_state region cfg
+
   // TLS 1.3, intermediate state to encryption
   | S13_sent_ServerHello:
     mode: s13_mode region cfg ->

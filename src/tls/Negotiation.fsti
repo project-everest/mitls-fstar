@@ -77,7 +77,7 @@ val offered_ha: offer -> EverCrypt.Hash.alg
 
 /// Selected algorithm, overwritten in SH (here) or HRR [HSM.hrr_ha]
 
-val selected_ha: HSM.sh -> EverCrypt.Hash.alg
+val selected_ha: HSM.serverHello -> EverCrypt.Hash.alg
 
 
 /// CLIENT CERTIFICATE REQUESTS are currently disabled.
