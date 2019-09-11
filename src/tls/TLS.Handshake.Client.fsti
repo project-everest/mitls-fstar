@@ -119,7 +119,7 @@ val client13_Finished1:
   hs: client ->
   ee: HSM.encryptedExtensions ->
   ocr: option HSM.certificateRequest13 ->
-  ocvv: option (HSM.certificate13 * HSM.certificateVerify13) ->
+  ocvv: option (HSM.certificate13 & HSM.certificateVerify13) ->
   svd: Bytes.bytes ->
   // digestCert: option Hash.anyTag ->
   // digestCertVerify: Hash.anyTag ->

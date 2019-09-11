@@ -96,7 +96,7 @@ let transcript_extract
 let extend_ch #ha
   (sending: Send.send_state)
   (di:Transcript.state ha)
-  (msg: clientHello)
+  (msg: HSM.ch)
   (tx0: Ghost.erased Transcript.transcript_t):
   ST (result (Ghost.erased Transcript.transcript_t ))
   (requires fun h0 ->
@@ -306,7 +306,7 @@ let client_ClientHello (Client region config r) =
 
   // Allocate state with the "main" offered hash algorithm for the digest
   let ha = Negotiation.offered_ha offer0 in
-  let tag, di, tx_tch = client_transcript region ha offer0 in
+  let tag, di, tx_tch = client_transcript region ha full0 in
   let receiving = Receive.(create (alloc_slice region)) in
   let epochs = Epochs.create region random in
   let ms: msg_state region ParseFlights.F_c_wait_ServerHello random ha = {
@@ -555,13 +555,18 @@ let client13_Finished2 (Client region config r) (*ocr*) =
 
   // prepare & send Finished2
   let transcript_Finished1: Transcript.g_transcript_n (Ghost.hide 0) = Ghost.hide (transcript13 offer sh []) in
+
+  let h = get() in
+  assume(Transcript.invariant ms.digest (Ghost.reveal transcript_Finished1) h);
   let digest_Finished1 = transcript_extract ms.digest transcript_Finished1 in
+
+  assume False; // missing too many stateful invariants
 
   // to be updated, possibly using btag as output buffer.
   // may use an abstract accessor instead: (i:HMAC.finishedId & cfk:KS.fink i)
   let Old.KeySchedule.C13_wait_Finished2 _ (| cfin_id, cfin_key |) _ _ = ks in
   let cvd = HMAC.mac cfin_key digest_Finished1 in
-  let fin2 = Ghost.hide #finished cvd in
+  let fin2 = Ghost.hide #HSM.finished cvd in
 
   match Send.send_extract13 ms.digest transcript_Finished1 ms.sending (HSM.M13_finished cvd) with
   | Error z -> Error z
@@ -576,7 +581,6 @@ let client13_Finished2 (Client region config r) (*ocr*) =
   Correct ()
 
 
-let x =1
 #pop-options
 #push-options "--admit_smt_queries true"
 

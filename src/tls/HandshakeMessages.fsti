@@ -85,9 +85,10 @@ inline_for_extraction
 let is_hrr (m:serverHello): bool =
   ServerHello_is_hrr_true? m.is_hrr
 
-/// 19-09-02 These are the "semantic" server hello contents and HRR
-/// payloads.
+/// These are the "semantic" server hello contents and HRR payloads;
+/// we don't define sh13 yet because it depends on Nego.
 
+type ch = clientHello 
 type sh  = sh: serverHello {~(is_hrr sh)}
 type hrr = sh: serverHello {is_hrr sh}
 
