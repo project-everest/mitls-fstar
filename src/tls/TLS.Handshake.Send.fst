@@ -8,6 +8,7 @@ open FStar.Bytes
 open TLSError
 
 open FStar.HyperStack.ST
+module HS = FStar.HyperStack
 
 // TODO may require switching from Tot to Stack
 assume val trace: string -> unit
@@ -146,6 +147,35 @@ let send_hrr
       let sto = { sto with out_pos = r_hrr.MITLS.Repr.end_pos; outgoing = sto.outgoing @| b } in
       correct (sto, t')
     end
+
+#pop-options
+
+#push-options "--max_fuel 0 --max_ifuel 0 --z3rlimit 32"
+
+assume val any_hash_tag_of_buffer (b:B.buffer Lib.IntTypes.uint8) : Tot Transcript.any_hash_tag
+
+let extend_hrr #ha sending di retry msg #n tx0 =
+  let h0 = get() in
+  // Need to call elim_invariant with initial memory to conclude that the footprint
+  // is disjoint from the new frame
+  (**) Transcript.elim_invariant di (Ghost.reveal tx0) h0;
+  push_frame();
+  let ltag = EverCrypt.Hash.Incremental.hash_len ha in
+  let btag = LowStar.Buffer.alloca 0uy ltag in
+
+  Transcript.extract_hash di btag tx0;
+  let tx1 = Transcript.reset di tx0 in
+
+  // TODO: Do this the correct way. How do we get a repr out of a buffer of bytes?
+  // Once this is done, we can take only the second part of send_hrr (i.e. parse sh0)
+  // before calling extend
+  let tag = any_hash_tag_of_buffer btag in
+  let h1 = get() in
+  assume (tag == HSM.M_message_hash (Bytes.hide (B.as_seq h1 btag)));
+  let result = send_hrr di tx1 sending tag (HSM.M_server_hello retry.sh0) in
+
+  pop_frame();
+  result
 
 #pop-options
 

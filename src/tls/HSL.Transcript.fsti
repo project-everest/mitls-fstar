@@ -448,6 +448,20 @@ val create (r:Mem.rgn) (a:HashDef.hash_alg)
          B.modifies B.loc_none h0 h1 /\
          B.fresh_loc (footprint s) h0 h1)
 
+/// `reset`: Reinitializing an instance of the transcript hash
+///
+///   -- Caller provides a valid transcript `tx` and the corresponding state `s`
+///
+///   -- The transcript is reset to the empty state
+val reset (#a:_) (s:state a) (tx:G.erased transcript_t)
+  : ST (g_transcript_n (Ghost.hide 0))
+       (requires fun h -> invariant s (Ghost.reveal tx) h)
+       (ensures fun h0 tx h1 ->
+         let tx = Ghost.reveal tx in
+         tx == Start None /\
+         invariant s tx h1 /\
+         B.modifies (footprint s) h0 h1)
+
 (** CONCRETE STATE TRANSITIONS **)
 
 let hs_ch_repr b = ch:R_HS.repr b { R_HS.is_ch ch }

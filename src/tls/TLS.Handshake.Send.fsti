@@ -235,6 +235,55 @@ val send_hrr
 #pop-options
 // 19-09-05 not sure what I broke :(
 
+// TODO: Copied from Machine. Should agree on where to put it to define it only once
+type client_retry_info = {
+  ch0: HSM.ch;
+  sh0: HSM.valid_hrr; }
+
+#push-options "--z3rlimit 32" // what makes it so slow?
+let retry_info_digest (r:client_retry_info): GTot Transcript.retry =
+  let ha = HSM.hrr_ha r.sh0 in
+  let th = Transcript.transcript_hash ha (Transcript.ClientHello None r.ch0) in
+  HSM.M_message_hash (Bytes.hide th), r.sh0
+#pop-options
+
+/// Stateful implementation? As discussed, we need a new Transcript
+/// transition ClientHello None ch0 --hrr--> Start (Some (digest_retry
+/// {ch0 = ch0; sh0=hrr})). Here is the spec
+
+val extend_hrr
+  (#ha:_)
+  (sending: send_state)
+  (di:Transcript.state ha)
+  (retry: client_retry_info) (* its ch0 could be ghost *)
+  // AF: What is the role of the following argument? Maybe a copy/paste mistake?
+  (msg: HSM.handshake13)
+  (#n: Ghost.erased nat)
+  (tx0: Transcript.g_transcript_n n { Ghost.reveal n < Transcript.max_transcript_size - 1 }):
+  // AF: Why were we not also returning the send state here?
+  ST (result (send_state & Transcript.g_transcript_n n))
+  (requires fun h0 ->
+    let tx0 = Ghost.reveal tx0 in
+    ha == HSM.hrr_ha retry.sh0 /\
+    tx0 == Transcript.ClientHello None retry.ch0 /\
+    B.loc_disjoint (footprint sending) (Transcript.footprint di) /\
+    invariant sending h0 /\
+    Transcript.invariant di tx0 h0)
+  (ensures fun h0 r h1 ->
+    B.(modifies (footprint sending `B.loc_union` Transcript.footprint di
+                                   `B.loc_union` B.loc_region_only true Mem.tls_tables_region)
+       h0 h1) /\ (
+    match r with
+    | Error _ -> True
+    | Correct (sending', tx1) ->
+      let tx1 = Ghost.reveal tx1 in
+      // enabling ch0 CRF-based injectivity:
+      Transcript.hashed ha (Transcript.ClientHello None retry.ch0) /\
+      Transcript.invariant di tx1 h1 /\
+      sending'.out_slice == sending.out_slice /\
+      sending'.out_pos >= sending.out_pos /\
+      invariant sending' h1 /\
+      tx1 == Transcript.Start(Some (retry_info_digest retry))))
 
 val send13
   (#a:EverCrypt.Hash.alg)
