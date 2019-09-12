@@ -828,7 +828,7 @@ let random_of #region #cfg (s:client_state region cfg) = client_nonce s
 let client_epochs_of (#region:rgn) (#cfg:client_config) (s:client_state region cfg {~(C_init? s)}):
   Old.Epochs.epochs region (client_nonce s)
 =
- match s with
+  match s with
   | C_wait_ServerHello _ ms _
   | C13_wait_Finished1 _ _ ms _
   | C13_complete _ _ _ _ _ _ _ ms _
@@ -837,6 +837,16 @@ let client_epochs_of (#region:rgn) (#cfg:client_config) (s:client_state region c
   | C12_wait_Finished1 _ _ ms _ _
   | C12_complete _ _ ms _ -> ms.epochs
 
+// 19-09-12 TODO we could return the whole Certificate13 message
+// contents; for now we ignore its extensions.
+let client_server_certificates (#region:rgn) (#cfg:client_config) (s:client_state region cfg): option Cert.chain13 =
+  match s with
+  | C13_complete _ _ _ (Some (certs,_)) _ _ _ _ _ -> Some certs.Parsers.Certificate13.certificate_list
+// TBC TLS 1.2
+//| C12_wait_ServerHelloDone _ _ ms _
+//| C12_wait_Finished2 _ _ ms _ _
+//| C12_complete _ _ ms _ -> ms.epochs
+  | _ -> None
 
 
                           (* SERVER SIDE *)
@@ -958,17 +968,37 @@ let nonceT s h =
   | Client region config r -> client_nonce (HS.sel h r)
   | Server region config r -> server_nonce (HS.sel h r)
 
+assume val nonce: state -> St TLSInfo.random
 
 let invariant s h =
   match s with
-  | Client region config r -> client_invariant (HS.sel h r) h
-  | Server region config r -> server_invariant (HS.sel h r) h
+  | Client region config r -> h `HS.contains` r /\ client_invariant (HS.sel h r) h
+  | Server region config r -> h `HS.contains` r /\ server_invariant (HS.sel h r) h
 
 let frame s = match s with
   | Client rgn _ _
   | Server rgn _ _ -> rgn
 
 assume val epochsT (s:_) (h:_): Old.Epochs.epochs (frame s) (nonceT s h)
+
+// 19-09-11 freshly stateful dependency...
+assume val epochs (s:_) (n:TLSInfo.random): St (Old.Epochs.epochs (frame s) n)
+
+let epochs_es s n = (epochs s n).Old.Epochs.es
+
+assume val version_of: state -> protocolVersion
+
+// used in FFI, TBC
+let get_server_certificates (s:state) :
+  ST (option Cert.chain13)
+  (requires fun h0 -> invariant s h0)
+  (ensures fun h0 r h1 ->
+    modifies_none h0 h1 /\
+    invariant s h1)
+=
+  match s with
+  | Client region config r -> client_server_certificates #region !r
+  | Server _ _ _ -> None //19-09-12 TBC! arguably not required.
 
 
 let state_entry (n: TLSInfo.random) = state // TODO refinement witness reading stable n

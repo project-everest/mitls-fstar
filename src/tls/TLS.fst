@@ -31,6 +31,7 @@ module Conn = Connection
 
 module Epochs    = Old.Epochs
 module Handshake = TLS.Handshake
+module Machine = TLS.Handshake.Machine
 
 (* A flag for runtime debugging of TLS data.
    The F* normalizer will erase debug prints at extraction
@@ -56,9 +57,9 @@ unfold let op_Array_Access (#a:Type) (s:Seq.seq a) n = Seq.index s n // s.[n]
 
 // the (now fake) protocol version in the record header
 let outerPV (c:connection) : ST protocolVersion
-  (requires (Handshake.hs_inv c.hs))
+  (requires (Machine.invariant c.hs))
   (ensures (fun h0 pv h1 -> h0 == h1)) =
-  match Handshake.version_of c.hs with
+  match Machine.version_of c.hs with
   | TLS_1p3 -> TLS_1p0
   | pv      -> pv
 
@@ -157,7 +158,9 @@ let rekey c ops       = Handshake.rekey       (C?.hs c) ops
 //  ))
 let request c ops     = Handshake.request     (C?.hs c) ops
 
-let get_mode c = (Handshake.get_mode (C?.hs c))
+// 19-09-11 TODO more specific accessors
+// let get_mode c = (Handshake.get_mode (C?.hs c))
+
 let set_ticket_key (a:aeadAlg) (kv:bytes) = Ticket.set_ticket_key a kv
 let set_sealing_key (a:aeadAlg) (kv:bytes) = Ticket.set_sealing_key a kv
 
@@ -186,7 +189,8 @@ val no_seqn_overflow: c: connection -> rw:rw -> ST bool
     )))
 
 let no_seqn_overflow c rw =
-  let es = MS.i_read (Handshake.es_of c.hs) in //ST.op_Bang c.hs.log in
+  let n = Machine.nonce c.hs in 
+  let es = MS.i_read (Machine.epochs_es c.hs n) in //ST.op_Bang c.hs.log in
   let j = Handshake.i c.hs rw in // -1 <= j < length es
   if j < 0 then //16-05-28 style: ghost constraint prevents using j < 0 || ...
     true
@@ -267,7 +271,7 @@ let unrecoverable c reason =
 let currentId_T (c:connection) (rw:rw) (h:HS.mem) : GTot id =
   let j = Handshake.iT c.hs rw h in
   if j < 0
-  then PlaintextID (c_nonce c)
+  then PlaintextID (Machine.nonceT c.hs h)
   else epoch_id (Handshake.eT c.hs rw h)
 
 let currentId (c:connection) (rw:rw)
@@ -275,9 +279,10 @@ let currentId (c:connection) (rw:rw)
       (requires (fun h -> True))
       (ensures (fun h0 r h1 -> h0==h1 /\ r=currentId_T c rw h1))
 =
+  let n = Machine.nonce c.hs in 
   let j = Handshake.i c.hs rw in
-  if j<0 then PlaintextID (c_nonce c)
-  else let e = Epochs.get_current_epoch (Handshake.epochs_of c.hs) rw in epoch_id e
+  if j<0 then PlaintextID n
+  else let e = Epochs.get_current_epoch (Machine.epochs c.hs n) rw in epoch_id e
 
 let maybe_indexable (es:seq 'a) (i:int) = i=(-1) \/ indexable es i
 
@@ -321,7 +326,7 @@ let trigger_peer (#a:Type) (x:a) = True
 
 let cwriter (i:id) (c:connection) =
   w:StAE.writer i{exists (r:StAE.reader (peerId i)).{:pattern (trigger_peer r)}
-		    epoch_region_inv' (Handshake.region_of c.hs) r w}
+		    epoch_region_inv' (Machine.frame c.hs) r w}
 
 let current_writer_pre (c:connection) (i:id) (h:HS.mem) : GTot bool =
   let hs = c.hs in
@@ -355,7 +360,8 @@ let current_writer c i =
   if ix < 0
   then None
   else
-    let epochs = MS.i_read (Handshake.es_of c.hs) in
+    let n = Machine.nonce c.hs in 
+    let epochs = MS.i_read (Machine.epochs_es c.hs n) in
     let e = epochs.(ix) in
     let _ = cut (trigger_peer (Epoch?.r e)) in
     Some (Epoch?.w e)
@@ -463,7 +469,7 @@ let sendFragment c #i wo f =
 	     SD.encrypt wr f
              end
        in
-       let pv = Handshake.version_of c.hs in
+       let pv = Machine.version_of c.hs in
        lemma_repr_bytes_values (length payload);
        assume (repr_bytes (length payload) <= 2); //NS: How are we supposed to prove this?
        trace ("Sending fragment of length " ^ string_of_int (length payload));
@@ -537,7 +543,7 @@ private let sendAlert (c:connection) (ad:alert) (reason:string)
 // Sending handshake messages on a given writer
 ////////////////////////////////////////////////////////////////////////////////
 let sendHandshake_post (#c:connection) (#i:id) (wopt:option (cwriter i c))
-		       (om:option (HandshakeLog.fragment i)) (send_ccs:bool) (h0:HS.mem) r (h1:HS.mem) =
+		       (om:option (TLS.Handshake.Send.fragment i)) (send_ccs:bool) (h0:HS.mem) r (h1:HS.mem) =
       HS.modifies (opt_writer_regions wopt) h0 h1   //didn't modify more than the writer's regions
       /\ (match wopt with
  	 | None -> True
@@ -574,7 +580,7 @@ private let sendHandshake
   (#c:connection)
   (#i:id)
   (wopt:option (cwriter i c))
-  (om:option (HandshakeLog.fragment i))
+  (om:option (TLS.Handshake.Send.fragment i))
   (send_ccs:bool) :
   ST (result unit)
      (requires (sendFragment_inv wopt))
@@ -622,10 +628,10 @@ let next_fragment_pre (i:id) (c:connection) h0 =
     let j = Handshake.iT s Writer h0 in
     i=currentId_T c Writer h0 /\
     current_writer_pre c i h0 /\
-    Handshake.hs_inv s h0 /\
+    Machine.invariant s h0 /\
     maybe_indexable es j /\
     (if j = -1 then PlaintextID? i else i == epoch_id es.(j))
-val next_fragment: i:id -> c:connection -> ST (result (HandshakeLog.outgoing i))
+val next_fragment: i:id -> c:connection -> ST (result (TLS.Handshake.Send.outgoing i))
   (requires (next_fragment_pre i c))
   (ensures (fun h0 result h1 ->
     Handshake.next_fragment_ensures #i c.hs h0 result h1 /\
@@ -635,7 +641,8 @@ val next_fragment: i:id -> c:connection -> ST (result (HandshakeLog.outgoing i))
 let next_fragment i c =
   let s = c.hs in
   let h0 = get() in
-  let ilog = Handshake.es_of s in
+  let n = Machine.nonce s in 
+  let ilog = Machine.epochs_es s n in
   let w0 = Handshake.i s Writer in
   let _  = if w0 >= 0
 	   then (MS.i_at_least_is_stable w0 (MS.i_sel h0 ilog).(w0) ilog;
@@ -703,16 +710,16 @@ let rec writeHandshake h_init c new_writer =
   (* let h0 = get() in  *)
   match next_fragment i c with
   | Error (ad,reason) -> sendAlert c ad reason
-  | Correct(HandshakeLog.Outgoing om next_keys complete) ->
+  | Correct(TLS.Handshake.Send.Outgoing om next_keys complete) ->
       //From Handshake.next_fragment ensures, we know that if next_keys = false
       //then current_writer didn't change;
       //We also know that this only modifies the handshake region, so the delta logs didn't change
       let new_writer, send_ccs, skip_0rtt =
         match next_keys with
         | Some u ->
-          Some (u.HandshakeLog.out_appdata),
-          u.HandshakeLog.out_ccs_first,
-          u.HandshakeLog.out_skip_0RTT
+          Some (u.TLS.Handshake.Send.out_appdata),
+          u.TLS.Handshake.Send.out_ccs_first,
+          u.TLS.Handshake.Send.out_skip_0RTT
         | None -> new_writer, false, false in
       trace ("HS.next_fragment returned "^
         (if Some? om then "a fragment" else "nothing")^
@@ -721,8 +728,8 @@ let rec writeHandshake h_init c new_writer =
           | None -> ""
           | Some u -> (
             "; next_keys " ^
-            (if u.HandshakeLog.out_appdata then "(for all data)" else "(for handshake only") ^
-            (if u.HandshakeLog.out_skip_0RTT then " skipping 0RTT" else ""))) ^
+            (if u.TLS.Handshake.Send.out_appdata then "(for all data)" else "(for handshake only") ^
+            (if u.TLS.Handshake.Send.out_skip_0RTT then " skipping 0RTT" else ""))) ^
         (if complete then "; complete" else ""));
       match sendHandshake wopt om send_ccs with
       // we may have sent an handshake message and/or a CCS message;
@@ -732,14 +739,16 @@ let rec writeHandshake h_init c new_writer =
           sendAlert c ad reason )
       | _   -> (
           recall_current_writer c;
+          let n = Machine.nonce c.hs in 
           let j_ = Handshake.i c.hs Writer in  //just to get (maybe_indexable es j_)
-          if Some? next_keys then Epochs.incr_writer (Handshake.epochs_of c.hs); // much happening ghostly
-          if skip_0rtt then Epochs.incr_writer (Handshake.epochs_of c.hs); // merge the two ++?
+          let es: Epochs.epochs (Machine.frame c.hs) n = Machine.epochs c.hs n in 
+          if Some? next_keys then Epochs.incr_writer es; // much happening ghostly
+          if skip_0rtt then Epochs.incr_writer (Machine.epochs c.hs n); // merge the two ++?
           let (str,stw) = !c.state in
           if complete then c.state := (Open, Open)  // much happening ghostly too
           else
           ( match next_keys with
-            | Some b -> c.state := (str, (if b.HandshakeLog.out_appdata then Open else Ctrl))
+            | Some b -> c.state := (str, (if b.TLS.Handshake.Send.out_appdata then Open else Ctrl))
             | None -> () );
           if complete || Some? new_writer || (None? om && not send_ccs)
           then WrittenHS new_writer complete // done, either to writable/completion or because there is nothing left to do
@@ -1009,7 +1018,7 @@ let sel_reader h c =
 type delta h c =
   (match sel_reader h c with
   | Some (| i , _ |) -> DataStream.delta i
-  | None             -> DataStream.delta (PlaintextID (c_nonce c)))
+  | None             -> DataStream.delta (PlaintextID (Machine.nonceT c.hs h)))
 
 
 // frequent error handler; note that i is the (unused) reader index
@@ -1064,7 +1073,8 @@ let rec readFragment c i =
   | Record.ReadError e -> Error e
   | Record.ReadWouldBlock -> Correct None
   | Record.Received ct pv payload ->
-    let es = ST.op_Bang (Handshake.es_of c.hs) in
+    let n = Machine.nonce c.hs in 
+    let es = ST.op_Bang (Machine.epochs_es c.hs n) in
     let j : Handshake.logIndex es = Handshake.i c.hs Reader in
     trace ("Read fragment at epoch index: " ^ string_of_int j ^
            " of length " ^ string_of_int (length payload));
@@ -1148,10 +1158,10 @@ let readOne c i =
     | Content.CT_Handshake rg f ->
       begin
         trace "read Handshake fragment";
-        match Handshake.recv_fragment c.hs rg f with
-        | Handshake.InError (x,y) -> alertFlush c i x y
-        | Handshake.InQuery q a   -> CertQuery q a
-        | Handshake.InAck next_keys complete ->
+        match TLS.Handshake.recv_fragment c.hs rg f with
+        | TLS.Handshake.Receive.InError (x,y) -> alertFlush c i x y
+        | TLS.Handshake.Receive.InQuery q a   -> CertQuery q a
+        | TLS.Handshake.Receive.InAck next_keys complete ->
             if complete
             then (c.state := (Open, Open); Complete)
             //else if next_keys then (trace "0RTT?"; c.state := (Open, snd !c.state); Update false)
@@ -1171,9 +1181,9 @@ let readOne c i =
       begin
         trace "read CCS fragment";
         match Handshake.recv_ccs c.hs with
-        | Handshake.InError (x,y) -> alertFlush c i x y
-        | Handshake.InAck false false -> ReadAgain // FIXME TLS 1.3 CCS with HRR (!!!)
-        | Handshake.InAck true false -> ReadAgainFinishing // specialized for HS 1.2
+        | TLS.Handshake.Receive.InError (x,y) -> alertFlush c i x y
+        | TLS.Handshake.Receive.InAck false false -> ReadAgain // FIXME TLS 1.3 CCS with HRR (!!!)
+        | TLS.Handshake.Receive.InAck true false -> ReadAgainFinishing // specialized for HS 1.2
       end
     | Content.CT_Data rg f ->
       begin

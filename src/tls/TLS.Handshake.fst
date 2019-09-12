@@ -15,7 +15,7 @@ open Range
 open Old.Epochs
 
 //open TLS.Handshake.Client
-open TLS.Handshake.Server
+//open TLS.Handshake.Server
 
 module U32 = FStar.UInt32
 module MS = FStar.Monotonic.Seq
@@ -26,7 +26,6 @@ module Epochs = Old.Epochs
 module KS = Old.KeySchedule
 module HMAC_UFCMA = Old.HMAC.UFCMA
 module HSM = HandshakeMessages
-module HSL = HandshakeLog
 
 // consider adding an optional (resume: option sid) on the client side
 // for now this bit is not explicitly authenticated.
@@ -42,6 +41,12 @@ module HSL = HandshakeLog
 // no need for an epoch states invariant here: the HS never modifies them
 
 #set-options "--admit_smt_queries true"
+
+let is_0rtt hs = admit()
+
+let xkeys_of hs = 
+  let n = Machine.nonce hs in 
+  FStar.Monotonic.Seq.i_read (Machine.epochs hs n).Epochs.exporter
 
 (* -------------------- Control Interface ---------------------- *)
 

@@ -124,9 +124,8 @@ let connect ctx send recv config_1 : ML (Connection.connection * int) =
 
 val getCert: Connection.connection -> ML bytes // bytes of the first certificate in the server-certificate chain.
 let getCert c =
-  let mode = TLS.get_mode c in
-  match mode.Negotiation.n_server_cert with
-  | Some (c, _) -> Cert.certificateListBytes13 c
+  match TLS.Handshake.Machine.get_server_certificates Connection.(c.hs) with
+  | Some c -> Cert.certificateListBytes13 c
   | _ -> empty_bytes
 
 let accept_connected ctx send recv config_1 : ML (Connection.connection * int) =

@@ -27,6 +27,40 @@ let iT (s:Machine.state) rw (h:HS.mem): GTot (Epochs.epoch_ctr_inv (Machine.fram
   | Reader -> Epochs.readerT (Machine.epochsT s h) h
   | Writer -> Epochs.writerT (Machine.epochsT s h) h
 
+// this function increases (how to specify it once for all?)
+let i (s:Machine.state) (rw:rw) : ST int
+  (requires (fun h -> True))
+  (ensures (fun h0 i h1 ->
+    h0 == h1 /\
+    i = iT s rw h1 /\
+    Epochs.get_ctr_post (Machine.epochsT s h1) rw h0 i h1))
+  =
+  assume false;
+  let h = get() in 
+  let n = Machine.nonce s in 
+  let es = Machine.epochs s n in 
+  match rw with
+  | Reader -> Epochs.get_reader es
+  | Writer -> Epochs.get_writer es
+
+// returns the current epoch for reading or writing
+let eT s rw (h:HS.mem {iT s rw h >= 0}) =
+  let es = logT s h in
+  let j = iT s rw h in
+  assume(j < Seq.length es); //17-04-08 added verification hint; assumed for now.
+  Seq.index es j
+  
+let logIndex (#t:Type) (log: Seq.seq t) = n:int { -1 <= n /\ n < Seq.length log }
+
+val is_0rtt_offered: Machine.state -> bool
+// let mode = get_mode s in 
+// Nego.zeroRTToffer mode.Nego.n_offer
+
+// returns the current exporter keys
+val xkeys_of: Machine.state -> ST (Seq.seq Old.KeySchedule.exportKey)
+  (requires fun h0 -> True)
+  (ensures fun h0 r h1 -> h0 == h1 /\ Seq.length r <= 2)
+
 (* ----------------------- Control Interface -------------------------*)
 
 // Create instance for a fresh connection, with optional resumption for clients

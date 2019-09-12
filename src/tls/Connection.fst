@@ -21,6 +21,7 @@ module HS = FStar.HyperStack
 
 module Epochs = Old.Epochs
 module Handshake = TLS.Handshake
+module Machine = TLS.Handshake.Machine 
 
 #set-options "--admit_smt_queries true"
 
@@ -63,17 +64,18 @@ type c_rgn = r:rgn { HS.disjoint r tls_region }
  *)
 noeq type connection = | C:
   #region: c_rgn ->
-  hs     : Handshake.hs {extends (Handshake.region_of hs) region /\ is_hs_rgn (Handshake.region_of hs)} (* providing role, config, and uid *) ->
+  hs     : Machine.state {extends (Machine.frame hs) region /\ is_hs_rgn (Machine.frame hs)} (* providing role, config, and uid *) ->
   tcp    : Transport.t ->
   recv   : Record.input_state -> //TODO {HS.frameOf recv = region} -> // added for buffering non-blocking reads
   state  : ref tlsState {HS.frameOf state = region} -> 
   connection
 
 // 17-04-08 helpful or not?
-let c_role c = Handshake.role_of c.hs
-let c_nonce c = Handshake.random_of c.hs
-let c_cfg c = Handshake.config_of c.hs
-let c_log c = Handshake.epochs_of c.hs
+let c_role c = 
+  if Machine.Client? c.hs then Client else Server 
+
+// let c_cfg c = Handshake.config_of c.hs
+let c_log c = Machine.epochs c.hs
 
 (* val reader_epoch: #region:rgn -> #nonce:_ -> e:epoch region nonce -> Tot (StAE.reader (peerId(hsId e.h))) *)
 (* let reader_epoch #region #peer e = Epoch?.r e *)
@@ -82,10 +84,10 @@ let c_log c = Handshake.epochs_of c.hs
 (* let writer_epoch #region #peer e = Handshake.writer_epoch e *)
 
 #set-options "--initial_fuel 0 --initial_ifuel 0 --max_fuel 0 --max_ifuel 0"
-type st_inv c h = Handshake.hs_inv (C?.hs c) h
+type st_inv c h = Machine.invariant (C?.hs c) h
 
 //TODO: we will get the property that at most the current epochs' logs are extended, by making them monotonic in HS
-val epochs : c:connection -> h:HS.mem -> GTot (es:seq (Epochs.epoch (Handshake.region_of c.hs) (Handshake.random_of c.hs)){
+val epochs : c:connection -> h:HS.mem -> GTot (es:seq (Epochs.epoch (Machine.frame c.hs) (Machine.nonceT c.hs h)){
   Epochs.epochs_inv es /\ es == Handshake.logT c.hs h
 })
 let epochs c h = Handshake.logT c.hs h
