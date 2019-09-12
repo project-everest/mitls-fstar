@@ -17,7 +17,7 @@ module R_CH = MITLS.Repr.ClientHello
 module R_SH = MITLS.Repr.ServerHello
 module CRF = Crypto.CRF
 module TestCRF = Test.CRF
-module PB = ParsersAux.Binders 
+module PB = ParsersAux.Binders
 #set-options "--max_fuel 1 --max_ifuel 1 --z3rlimit 16"
 
 //Seems to be automatic
@@ -57,7 +57,7 @@ let rec serialize_list_max_size #pk #t #p s x =
   match x with
   | [] -> LPSL.serialize_list_nil p s
   | hd::tl -> LPSL.serialize_list_cons p s hd tl; serialize_list_max_size s tl
-   
+
 let serialize_any_tag (ht:any_hash_tag) =
     LP.serialize HSM.handshake_serializer ht // (Parsers.Handshake.M_message_hash ht)
 
@@ -91,7 +91,7 @@ let transcript_bytes (t:transcript_t)
   | ClientHello r ch ->
     serialize_retry r `Seq.append`
     serialize_client_hello ch
-    
+
   | Transcript12 ch sh rest ->
     serialize_list_max_size HSM.handshake12_serializer rest;
     serialize_client_hello ch `Seq.append` (
@@ -143,37 +143,37 @@ let transcript_bytes_does_not_start_with_message_hash
   (ensures False)
 = let ht, hrr = r in
   seq_append_empty();
-  assert (transcript_bytes t `Seq.equal` 
-    (serialize_any_tag ht `Seq.append` (serialize_server_hello hrr `Seq.append` q)));  
+  assert (transcript_bytes t `Seq.equal`
+    (serialize_any_tag ht `Seq.append` (serialize_server_hello hrr `Seq.append` q)));
   match t with
   | ClientHello _ ch ->
     assert (transcript_bytes t `Seq.equal` (serialize_client_hello ch `Seq.append` Seq.empty));
-    LP.serialize_strong_prefix HSM.handshake_serializer 
+    LP.serialize_strong_prefix HSM.handshake_serializer
       ht (HSM.M_client_hello ch)
       (serialize_server_hello hrr `Seq.append` q)
       Seq.empty
 
-  | TruncatedClientHello _ tch -> 
+  | TruncatedClientHello _ tch ->
     PB.parse_truncate_clientHello_bytes (HSM.M_client_hello tch);
-    LP.parse_strong_prefix HSM.handshake_parser 
+    LP.parse_strong_prefix HSM.handshake_parser
       (serialize_any_tag ht)
       (Bytes.reveal (PB.truncate_clientHello_bytes (HSM.M_client_hello tch)))
 
   | Transcript12 ch sh rest ->
-    LP.serialize_strong_prefix HSM.handshake_serializer 
+    LP.serialize_strong_prefix HSM.handshake_serializer
       ht (HSM.M_client_hello ch)
       (serialize_server_hello hrr `Seq.append` q)
       (serialize_server_hello sh `Seq.append`
         LP.serialize (LPSL.serialize_list _ HSM.handshake12_serializer) rest)
 
   | Transcript13 _ ch sh rest ->
-    LP.serialize_strong_prefix HSM.handshake_serializer 
+    LP.serialize_strong_prefix HSM.handshake_serializer
       ht (HSM.M_client_hello ch)
       (serialize_server_hello hrr `Seq.append` q)
       (serialize_server_hello sh `Seq.append`
         LP.serialize (LPSL.serialize_list _ HSM.handshake13_serializer) rest)
 
-#push-options "--z3rlimit 32" 
+#push-options "--z3rlimit 32"
 let transcript_bytes_injective_retry
   (r1: option retry)
   (t1: transcript_t { transcript_get_retry t1 == None } )
@@ -190,7 +190,7 @@ let transcript_bytes_injective_retry
     assert ((serialize_retry r2 `Seq.append` transcript_bytes t2) `Seq.equal` (serialize_any_tag ht2 `Seq.append` (serialize_server_hello sh2 `Seq.append` transcript_bytes t2)));
     LP.serialize_strong_prefix HSM.handshake_serializer ht1 ht2
       (serialize_server_hello sh1 `Seq.append` transcript_bytes t1)
-      (serialize_server_hello sh2 `Seq.append` transcript_bytes t2);        
+      (serialize_server_hello sh2 `Seq.append` transcript_bytes t2);
     LP.serialize_strong_prefix HSM.handshake_serializer
       (HSM.M_server_hello sh1) (HSM.M_server_hello sh2)
       (transcript_bytes t1) (transcript_bytes t2)
@@ -198,7 +198,7 @@ let transcript_bytes_injective_retry
     transcript_bytes_does_not_start_with_message_hash t2 r1 (transcript_bytes t1)
   | _, Some r2 ->
     transcript_bytes_does_not_start_with_message_hash t1 r2 (transcript_bytes t2)
-#pop-options 
+#pop-options
 
 let transcript_arbitrary_index
   (t1: transcript_t)
@@ -263,7 +263,7 @@ let rec transcript_bytes_injective_no_retry
         LP.serialize_strong_prefix HSM.handshake_serializer (HSM.M_server_hello sh1) (HSM.M_server_hello sh2)     (LP.serialize (LPSL.serialize_list _ HSM.handshake12_serializer) rest1) (
     LP.serialize (LPSL.serialize_list _ HSM.handshake12_serializer) rest2);
         LP.serializer_injective _ (LPSL.serialize_list _ HSM.handshake12_serializer) rest1 rest2
-      end      
+      end
     | Transcript13 _ ch1 sh1 rest1 ->
       begin match t2 with
       | TruncatedClientHello _ tch2 ->
@@ -334,6 +334,10 @@ let create r a =
    hash_state=s},
   Ghost.hide (Start None)
 
+let reset #a s tx =
+  CRF.init (Ghost.hide a) s.hash_state;
+  Ghost.hide (Start None)
+
 #push-options "--max_fuel 0 --max_ifuel  1 --initial_ifuel  1 --z3rlimit 200"
 let extend (#a:_) (s:state a) (l:label_repr) (tx:G.erased transcript_t) =
   let h0 = HyperStack.ST.get() in
@@ -377,9 +381,9 @@ let extend (#a:_) (s:state a) (l:label_repr) (tx:G.erased transcript_t) =
 
     LPSL.serialize_list_nil HSM.handshake12_parser HSM.handshake12_serializer;
     LPSL.serialize_list_nil HSM.handshake13_parser HSM.handshake13_serializer;
-    assert ((transcript_bytes (G.reveal tx) `Seq.append` 
+    assert ((transcript_bytes (G.reveal tx) `Seq.append`
              serialize_server_hello (HSM.M_server_hello?._0 (R.value sh)))
-        `Seq.equal`     
+        `Seq.equal`
              transcript_bytes (G.reveal tx'));
 
     tx'
@@ -409,17 +413,17 @@ let extend (#a:_) (s:state a) (l:label_repr) (tx:G.erased transcript_t) =
       (R.value tch)
       (PB.build_canonical_binders (ch_binders_len (HSM.M_client_hello?._0 (R.value tch))));
 
-    
+
     tx'
 
-  | LR_CompleteTCH #b tch -> 
+  | LR_CompleteTCH #b tch ->
     assume (C.qbuf_qual (C.as_qbuf b.R.base) = C.MUTABLE);
 
     R.reveal_valid();
     // Needed to detect that the whole b.R.base between start and pos is actually serialize tch
     LP.valid_pos_valid_exact HSM.handshake_parser h0 (R.to_slice b) tch.R.start_pos tch.R.end_pos;
     LP.valid_exact_serialize HSM.handshake_serializer h0 (R.to_slice b) tch.R.start_pos tch.R.end_pos;
-    
+
     let h0 = HyperStack.ST.get() in
     assert (LP.valid HSM.handshake_parser h0 (R.to_slice b) tch.R.start_pos);
     let start_pos = PB.binders_pos (R.to_slice b) tch.R.start_pos in
@@ -440,7 +444,7 @@ let extend (#a:_) (s:state a) (l:label_repr) (tx:G.erased transcript_t) =
       (PB.build_canonical_binders (ch_binders_len (HSM.M_client_hello?._0 (R.value tch))));
 
     assert ((transcript_bytes (G.reveal tx) `Seq.append` (C.as_seq h0 data))
-        `Seq.equal` 
+        `Seq.equal`
           transcript_bytes (G.reveal tx'));
 
     tx'
@@ -482,7 +486,7 @@ let extend (#a:_) (s:state a) (l:label_repr) (tx:G.erased transcript_t) =
     let hf = HyperStack.ST.get () in
 
     tx'
-  
+
   | LR_HSM12 #b hs12 ->
     assume (C.qbuf_qual (C.as_qbuf b.R.base) = C.MUTABLE);
 
@@ -501,11 +505,11 @@ let extend (#a:_) (s:state a) (l:label_repr) (tx:G.erased transcript_t) =
     LPSL.serialize_list_append HSM.handshake12_parser HSM.handshake12_serializer
       (let Transcript12 _ _ rest = G.reveal tx in rest)
       [R.value hs12];
-    assert ((transcript_bytes (G.reveal tx) `Seq.append` 
+    assert ((transcript_bytes (G.reveal tx) `Seq.append`
                               LP.serialize HSM.handshake12_serializer (R.value hs12))
-        `Seq.equal`     
+        `Seq.equal`
              transcript_bytes (G.reveal tx'));
-    
+
     assert_norm ((max_transcript_size + 4) * max_message_size < pow2 61);
 
     CRF.update (Ghost.hide a) s.hash_state (C.to_buffer data) len;
@@ -531,12 +535,12 @@ let extend (#a:_) (s:state a) (l:label_repr) (tx:G.erased transcript_t) =
     LPSL.serialize_list_append HSM.handshake13_parser HSM.handshake13_serializer
       (let Transcript13 _ _ _ rest = G.reveal tx in rest)
       [R.value hs13];
-    assert ((transcript_bytes (G.reveal tx) `Seq.append` 
+    assert ((transcript_bytes (G.reveal tx) `Seq.append`
                               LP.serialize HSM.handshake13_serializer (R.value hs13))
-        `Seq.equal`     
+        `Seq.equal`
              transcript_bytes (G.reveal tx'));
 
-    
+
     assert_norm ((max_transcript_size + 4) * max_message_size < pow2 61);
 
     CRF.update (Ghost.hide a) s.hash_state (C.to_buffer data) len;
@@ -547,13 +551,13 @@ let extend (#a:_) (s:state a) (l:label_repr) (tx:G.erased transcript_t) =
 let transcript_hash (a:HashDef.hash_alg) (t:transcript_t)
   = Spec.Hash.hash a (transcript_bytes t)
 
-let hashed (a:HashDef.hash_alg) (t:transcript_t) = 
+let hashed (a:HashDef.hash_alg) (t:transcript_t) =
   Model.CRF.hashed a (transcript_bytes t)
-  
-let extract_hash (#a:_) (s:state a) 
+
+let extract_hash (#a:_) (s:state a)
   (tag:Hacl.Hash.Definitions.hash_t a)
   (tx:G.erased transcript_t)
-  = 
+  =
     let h0 = HyperStack.ST.get() in
     CRF.finish (Ghost.hide a) s.hash_state tag;
     let h1 = HyperStack.ST.get() in

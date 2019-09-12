@@ -184,37 +184,6 @@ let retry_digest o =
   | None -> None
   | Some x -> Some (retry_info_digest x)
 
-/// Stateful implementation? As discussed, we need a new Transcript
-/// transition ClientHello None ch0 --hrr--> Start (Some (digest_retry
-/// {ch0 = ch0; sh0=hrr})). Here is the spec
-
-val extend_hrr
-  (#ha:_)
-  (sending: Send.send_state)
-  (di:Transcript.state ha)
-  (retry: client_retry_info) (* its ch0 could be ghost *)
-  (msg: HSM.handshake13)
-  (tx0: Ghost.erased Transcript.transcript_t):
-  ST (result (tx1: Ghost.erased Transcript.transcript_t))
-  (requires fun h0 ->
-    let tx0 = Ghost.reveal tx0 in
-    ha == HSM.hrr_ha retry.sh0 /\
-    tx0 == Transcript.ClientHello None retry.ch0 /\
-    B.loc_disjoint (Send.footprint sending) (Transcript.footprint di) /\
-    Send.invariant sending h0 /\
-    Transcript.invariant di tx0 h0)
-  (ensures fun h0 r h1 ->
-    B.(modifies (Send.footprint sending `B.loc_union` Transcript.footprint di) h0 h1) /\
-    Send.invariant sending h1 /\ (
-    match r with
-    | Error _ -> True
-    | Correct tx1 ->
-      let tx1 = Ghost.reveal tx1 in
-      // enabling ch0 CRF-based injectivity:
-      Transcript.hashed ha (Transcript.ClientHello None retry.ch0) /\
-      Transcript.invariant di tx1 h1 /\
-      tx1 == Transcript.Start(Some (retry_info_digest retry))))
-
 // let hash_retry (o: option client_retry_info) : option Transcript.retry =
 //   match o with
 //   | None -> None
