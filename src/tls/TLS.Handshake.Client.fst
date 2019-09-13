@@ -577,7 +577,7 @@ let client13_Finished2 (Client region config r) (*ocr*) =
 
   let ms = { ms with sending = sending } in
   // updating [ms.sending fin2 ks]
-  r := C13_complete offer sh ee server_id fin1 fin2 eoed_args ms ks;
+  r := C13_complete offer sh ee server_id fin1 fin2 None ms ks;
   Correct ()
 
 

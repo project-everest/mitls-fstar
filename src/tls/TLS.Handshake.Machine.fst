@@ -794,17 +794,81 @@ let client_nonce (#region:rgn) (#cfg:client_config) (s:client_state region cfg) 
 
 let random_of #region #cfg (s:client_state region cfg) = client_nonce s
 
-let client_epochs_of (#region:rgn) (#cfg:client_config) (s:client_state region cfg {~(C_init? s)}):
-  Old.Epochs.epochs region (client_nonce s)
+let client_ha
+  (#region:rgn) (#cfg:client_config) (s:client_state region cfg {~(C_init? s)}):
+  Spec.Hash.Definitions.hash_alg
 =
   match s with
-  | C_wait_ServerHello _ ms _
-  | C13_wait_Finished1 _ _ ms _
-  | C13_complete _ _ _ _ _ _ _ ms _
-  | C12_wait_ServerHelloDone _ _ ms _
-  | C12_wait_Finished2 _ _ ms _ _
-  | C12_wait_Finished1 _ _ ms _ _
-  | C12_complete _ _ ms _ -> ms.epochs
+  | C_wait_ServerHello offer ms ks -> Negotiation.offered_ha offer.full_ch
+  | C13_wait_Finished1 offer sh ms ks -> Negotiation.selected_ha sh
+  | C13_complete offer sh _ _ _ _ _ ms ks -> Negotiation.selected_ha sh
+//| C12_wait_ServerHelloDone _ _ ms _
+//| C12_wait_Finished2 _ _ ms _ _
+//| C12_wait_Finished1 _ _ ms _ _
+//| C12_complete _ _ ms _ -> ms
+  | _ -> admit()
+
+let client_flight
+  (#region:rgn) (#cfg:client_config) (s:client_state region cfg {~(C_init? s)}):
+  PF.in_progress_flt_t
+=
+  match s with
+  | C_wait_ServerHello offer ms ks        -> PF.F_c_wait_ServerHello
+  | C13_wait_Finished1 offer sh ms ks     -> PF.F_c13_wait_Finished1
+  | C13_complete offer sh _ _ _ _ _ ms ks -> PF.F_c13_wait_Finished1
+//| C12_wait_ServerHelloDone _ _ ms _
+//| C12_wait_Finished2 _ _ ms _ _
+//| C12_wait_Finished1 _ _ ms _ _
+//| C12_complete _ _ ms _ -> ms
+  | _ -> admit()
+
+
+// it is awkward to provide generic getters ands setters for ms due to
+// its dependencies
+
+type client_ms_t (#region:rgn) (#cfg:client_config) (s:client_state region cfg {~(C_init? s)}) =
+  msg_state region (client_flight s) (client_nonce s) (client_ha s)
+
+
+let client_ms (#region:rgn) (#cfg:client_config) (s:client_state region cfg {~(C_init? s)}): client_ms_t s
+=
+  match s with
+  | C_wait_ServerHello _ ms _ -> ms
+  | C13_wait_Finished1 _ _ ms _ -> ms
+  | C13_complete _ _ _ _ _ _ _ ms _ -> ms
+  | _ -> admit()
+//| C12_wait_ServerHelloDone _ _ ms _ -> ms
+//| C12_wait_Finished2 _ _ ms _ _ -> ms
+//| C12_wait_Finished1 _ _ ms _ _ -> ms
+//| C12_complete _ _ ms _ -> ms
+
+let set_client_ms
+  (#region:rgn) (#cfg:client_config) (s:client_state region cfg {~(C_init? s)})
+  (ms1: client_ms_t s):
+  s:client_state region cfg {~(C_init? s)}
+=
+  match s with
+  | C_wait_ServerHello offer ms0 ks ->
+    C_wait_ServerHello offer ms1 ks
+  | C13_wait_Finished1 offer sh ms0 ks ->
+    C13_wait_Finished1 offer sh ms1 ks
+  | C13_complete offer sh ee server_id fin1 fin2 eoed_args ms0 ks ->
+    C13_complete offer sh ee server_id fin1 fin2 eoed_args ms1 ks
+  | _ -> admit()
+
+let client_epochs
+  (#region:rgn) (#cfg:client_config) (s:client_state region cfg {~(C_init? s)}):
+  Old.Epochs.epochs region (client_nonce s)
+=
+  (client_ms s).epochs
+
+let client_sto
+  (#region:rgn) (#cfg:client_config) (s:client_state region cfg {~(C_init? s)}):
+  Send.send_state
+=
+  (client_ms s).sending
+
+
 
 // 19-09-12 TODO we could return the whole Certificate13 message
 // contents; for now we ignore its extensions.
@@ -910,9 +974,26 @@ type server_mref rgn cfg =
   st:HST.mreference (server_state rgn cfg) (server_mrel #rgn #cfg)
   { HS.frameOf st = rgn }
 
+
+let server_footprint
+  (#region:rgn) (#cfg: server_config)
+  (state: server_state region cfg)
+=
+  match state with
+  | _ -> B.loc_none  // TBC!
+
 let server_invariant #region #config (ss: server_state region config) h = True
 
 assume val server_nonce (#region:rgn) (#cfg:server_config) (s:server_state region cfg): TLSInfo.random
+assume val server_ha (#region:rgn) (#cfg:server_config) (s:server_state region cfg): Spec.Hash.Definitions.hash_alg
+assume val server_flight (#region:rgn) (#cfg:server_config) (s:server_state region cfg): PF.in_progress_flt_t
+
+type server_ms_t (#region:rgn) (#cfg:server_config) (s:server_state region cfg) =
+  msg_state region (server_flight s) (server_nonce s) (server_ha s)
+
+assume val server_ms (#region:rgn) (#cfg:server_config) (s:server_state region cfg): server_ms_t s
+
+assume val set_server_ms (#region:rgn) (#cfg:server_config) (s:server_state region cfg): server_ms_t s -> server_state region cfg
 
 assume val server_epochs_of (#region:rgn) (#cfg:server_config) (s:server_state region cfg):
   Old.Epochs.epochs region (server_nonce s)
@@ -932,6 +1013,9 @@ noeq type state =
     server_cfg: server_config ->
     server_state: server_mref server_rgn server_cfg -> state
 
+type client = s:state {Client? s}
+type server = s:state {Server? s}
+
 let nonceT s h =
   match s with
   | Client region config r -> client_nonce (HS.sel h r)
@@ -941,8 +1025,16 @@ assume val nonce: state -> St TLSInfo.random
 
 let invariant s h =
   match s with
-  | Client region config r -> h `HS.contains` r /\ client_invariant (HS.sel h r) h
-  | Server region config r -> h `HS.contains` r /\ server_invariant (HS.sel h r) h
+  | Client region config r ->
+    h `HS.contains` r /\
+    client_invariant (HS.sel h r) h /\
+    B.loc_disjoint (B.loc_mreference r) (client_footprint (HS.sel h r))
+
+  | Server region config r ->
+    h `HS.contains` r /\
+    server_invariant (HS.sel h r) h /\
+    B.loc_disjoint (B.loc_mreference r) (server_footprint (HS.sel h r))
+
 
 let frame s = match s with
   | Client rgn _ _
@@ -958,16 +1050,17 @@ let epochs_es s n = (epochs s n).Old.Epochs.es
 assume val version_of: state -> protocolVersion
 
 // used in FFI, TBC
-let get_server_certificates (s:state) :
+let get_server_certificates (s:client) :
   ST (option Cert.chain13)
-  (requires fun h0 -> invariant s h0)
+  (requires fun h0 ->
+    invariant s h0)
   (ensures fun h0 r h1 ->
     modifies_none h0 h1 /\
     invariant s h1)
 =
   match s with
   | Client region config r -> client_server_certificates #region !r
-  | Server _ _ _ -> None //19-09-12 TBC! arguably not required.
+//| Server _ _ _ -> None //arguably not required.
 
 
 let state_entry (n: TLSInfo.random) = state // TODO refinement witness reading stable n
@@ -977,6 +1070,3 @@ let state_entry (n: TLSInfo.random) = state // TODO refinement witness reading s
 /// - define a constructor adding a model-only nonce value and
 ///   witnessing its table registration. This is the main connection
 ///   type at the API.
-
-type client = s:state {Client? s}
-type server = s:state {Server? s}
