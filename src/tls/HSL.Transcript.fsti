@@ -198,14 +198,14 @@ type transcript_t =
 
   | Transcript12:
       ch:HSM.clientHello ->
-      sh:HSM.sh{Negotiation.Version.selected sh == Correct PV.TLS_1p2} ->
+      sh:HSM.sh{Negotiation.selected_version sh == Correct PV.TLS_1p2} ->
       rest:bounded_list HSM.handshake12 max_transcript_size ->
       transcript_t
 
   | Transcript13:
       retried:option retry ->
       ch:HSM.clientHello ->
-      sh:HSM.sh{Negotiation.Version.selected sh == Correct PV.TLS_1p3} ->
+      sh:HSM.sh{Negotiation.selected_version sh == Correct PV.TLS_1p3} ->
       rest:bounded_list HSM.handshake13 max_transcript_size ->
       transcript_t
 
@@ -328,6 +328,10 @@ let snoc13
   List.lemma_snoc_length (rest, m);
   Transcript13 retry ch sh (List.snoc (rest, m))
 
+// We decided not to add a transition for recording HRR from a
+// transcript holding a ClientHello.
+
+#restart-solver
 let transition (t:transcript_t) (l:label)
   : GTot (option transcript_t)
   = match t, l with
@@ -347,7 +351,7 @@ let transition (t:transcript_t) (l:label)
 
     | ClientHello retry ch, L_ServerHello sh ->
       begin
-      match Negotiation.Version.selected sh, retry with
+      match Negotiation.selected_version sh, retry with
       | Correct PV.TLS_1p2, None ->
         Some (Transcript12 ch sh [])
 
@@ -370,7 +374,6 @@ let transition (t:transcript_t) (l:label)
       else None
 
     | _ -> None
-//19-09-02 where is the client transition when receiving HRR?
 
 let ( ~~> ) (t1 t2:transcript_t) =
   exists l. Some t2 == transition t1 l

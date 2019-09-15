@@ -10,14 +10,12 @@ open TLS.Handshake.Machine
 
 module B = LowStar.Buffer // not FStar.Bytes
 module CH = Parsers.ClientHello
-// module E = Extensions
 module Epochs = Old.Epochs
 module HSM = HandshakeMessages
 module PF = TLS.Handshake.ParseFlights // avoidable?
 module HMAC = Old.HMAC.UFCMA
 module KS = Old.KeySchedule
 module HS = FStar.HyperStack
-// module H = Hashing.Spec
 module Transcript = HSL.Transcript
 module Receive = TLS.Handshake.Receive
 
@@ -32,9 +30,11 @@ unfold val trace: s:string -> ST unit
 unfold let trace = if DebugFlags.debug_HS then print else (fun _ -> ())
 
 #set-options "--max_fuel 0 --max_ifuel 0"
-#push-options "--admit_smt_queries true"
+
 
 // Floating: indexing & epochs, to be reviewed
+
+#push-options "--admit_smt_queries true"
 val register:
   #region:rgn -> #n:random -> Epochs.epochs region n ->
   KS.recordInstance -> St unit
@@ -56,6 +56,7 @@ let export #region #n epochs xk =
   trace "exporting a key";
   FStar.Monotonic.Seq.i_write_at_end epochs.Epochs.exporter xk
 #pop-options
+
 
 #push-options "--max_fuel 0 --max_fuel 0 --z3rlimit 32"
 
@@ -93,29 +94,29 @@ let transcript_extract
 #pop-options
 
 // 19-09-05 Much overhead for calling Transcript
-let extend_ch #ha
-  (sending: Send.send_state)
-  (di:Transcript.state ha)
-  (msg: HSM.ch)
-  (tx0: Ghost.erased Transcript.transcript_t):
-  ST (result (Ghost.erased Transcript.transcript_t ))
-  (requires fun h0 ->
-    let tx0 = Ghost.reveal tx0 in Transcript.Start? tx0 /\
-    B.loc_disjoint (Send.footprint sending) (Transcript.footprint di) /\
-    Send.invariant sending h0 /\
-    Transcript.invariant di tx0 h0)
-  (ensures fun h0 r h1 ->
-    B.(modifies (Send.footprint sending `loc_union` Transcript.footprint di) h0 h1) /\
-    Send.invariant sending h1 /\ (
-    match r with
-    | Error _ -> True
-    | Correct tx1 ->
-      let Transcript.Start r = Ghost.reveal tx0 in
-      let tx1 = Ghost.reveal tx1 in
-      Transcript.invariant di tx1 h1 /\
-      tx1 == Transcript.ClientHello r msg ))
-=
-  admit()
+// let extend_ch #ha
+//   (sending: Send.send_state)
+//   (di:Transcript.state ha)
+//   (msg: HSM.ch)
+//   (tx0: Ghost.erased Transcript.transcript_t):
+//   ST (result (Ghost.erased Transcript.transcript_t ))
+//   (requires fun h0 ->
+//     let tx0 = Ghost.reveal tx0 in Transcript.Start? tx0 /\
+//     B.loc_disjoint (Send.footprint sending) (Transcript.footprint di) /\
+//     Send.invariant sending h0 /\
+//     Transcript.invariant di tx0 h0)
+//   (ensures fun h0 r h1 ->
+//     B.(modifies (Send.footprint sending `loc_union` Transcript.footprint di) h0 h1) /\
+//     Send.invariant sending h1 /\ (
+//     match r with
+//     | Error _ -> True
+//     | Correct tx1 ->
+//       let Transcript.Start r = Ghost.reveal tx0 in
+//       let tx1 = Ghost.reveal tx1 in
+//       Transcript.invariant di tx1 h1 /\
+//       tx1 == Transcript.ClientHello r msg ))
+// =
+//   admit()
 
 #push-options "--z3rlimit 100"
 open FStar.Integers
@@ -206,6 +207,7 @@ let client_transcript (region:rgn) ha (full_tch: full_offer) =
   let transcript1 = Transcript.extend di (admit() (*full_tch.full_ch *)) transcript0 in
   let tag = transcript_extract di transcript1 in
   (tag, di, transcript1)
+#pop-options
 
 let binder = Parsers.PskBinderEntry.pskBinderEntry
 let binder_for (bkey:Negotiation.bkey13) =
@@ -218,14 +220,17 @@ let btag (bkey:Negotiation.bkey13) =
 // TODO sort it out within KeySchedule. Still high-level
 assume val compute_binder:
   bkey:Negotiation.bkey13 ->
-  tag: Bytes.lbytes (EverCrypt.Hash.Incremental.hash_length (Negotiation.ha_bkey13 bkey))  ->
+  tag: Bytes.lbytes (EverCrypt.Hash.Incremental.hash_length (Negotiation.ha_bkey13 bkey)) ->
   binder_for bkey
 
 // TODO, used for computing binder lengths, reusing Parsers ParsersAux
+#push-options "--max_ifuel 1"
 let rec bkeys_binders_list_bytesize (bkeys: list Negotiation.bkey13) =
   match bkeys with
   | bkey::bkeys -> 1 + EverCrypt.Hash.Incremental.hash_length (Negotiation.ha_bkey13 bkey) + bkeys_binders_list_bytesize bkeys
   | [] -> 0
+#pop-options
+
 
 /// Compute binder MACs for the PSKs; in rare cases we allocate an
 /// auxiliary transcripts for other hash algorithms.
@@ -233,22 +238,22 @@ let rec bkeys_binders_list_bytesize (bkeys: list Negotiation.bkey13) =
 /// We pass the (full, truncated) offer, or its repr, in order to
 /// specify/recompute what is MACed.
 
-
-// TODO type; tch & logical payload TODO prove by induction that the
+// TODO type; tch & logical payload; prove by induction that the
 // resulting binders have the right length, reusing ParsersAux
 val client_Binders:
   region:rgn ->
   ha0: EverCrypt.Hash.Incremental.alg ->
   di: Transcript.state ha0 ->
-  tch: full_offer ->
+  tch: full_offer { HSM.ch_bound tch.full_ch} ->
   bkey: list Negotiation.bkey13 ->
-  ST Parsers.OfferedPsks_binders.(b:offeredPsks_binders {offeredPsks_binders_list_bytesize b = bkeys_binders_list_bytesize bkey})
+  ST Parsers.OfferedPsks_binders.(b:list Parsers.PskBinderEntry.pskBinderEntry {offeredPsks_binders_list_bytesize b = bkeys_binders_list_bytesize bkey})
   (requires fun h0 ->
     Transcript.invariant di (transcript_tch tch) h0)
   (ensures fun h0 b h1 ->
     modifies_none h0 h1 //TBC
     )
 
+#push-options "--admit_smt_queries true" // list bytesizes
 let rec client_Binders region ha0 di0 tch bkeys =
   match bkeys with
   | [] -> []
@@ -264,6 +269,7 @@ let rec client_Binders region ha0 di0 tch bkeys =
         tag in
     let binder = compute_binder bkey tag in
     binder :: client_Binders region ha0 di0 tch bkeys
+#pop-options
 
 // TODO also return a slice in the sending buffer containing the
 // serialized [ch]; it is not constant yet as we may need to patch the
@@ -286,7 +292,7 @@ let client_ClientHello (Client region config r) =
   match Negotiation.client_ClientHello config random shares with
   | Error z -> Error z
   | Correct offer0 ->
-  assert( // TODO in Negotiation.client_ClientHello
+  assume( // TODO in Negotiation.client_ClientHello
     HSM.ch_bound offer0 ==>
     Parsers.OfferedPsks.offeredPsks_binders_list_bytesize (HSM.ch_binders offer0) == bkeys_binders_list_bytesize (snd resume));
 
@@ -306,6 +312,7 @@ let client_ClientHello (Client region config r) =
 
   // Allocate state with the "main" offered hash algorithm for the digest
   let ha = Negotiation.offered_ha offer0 in
+  assume False; //19-09-14 TBC
   let tag, di, tx_tch = client_transcript region ha full0 in
   let receiving = Receive.(create (alloc_slice region)) in
   let epochs = Epochs.create region random in
@@ -351,22 +358,26 @@ let client_ClientHello (Client region config r) =
   r := C_wait_ServerHello fo1 ms ks;
   Correct () )
 
-let client_HelloRetryRequest (Client region config r) hrr =
+let client_HelloRetryRequest hs hrr =
+  let Client region config r = hs in
   let C_wait_ServerHello offer ms ks = !r in
   let open Parsers.HelloRetryRequest in
   trace("HelloRetryRequest with extensions " ^ Nego.string_of_hrres (HSM.hrr_extensions hrr));
   let ch1 = offer.full_ch in
   let share, ks =
-  match Negotiation.group_of_hrr hrr with
-  | None ->
-    // this case should only ever happen in QUIC stateless retry address validation
-    // FIXME(adl) deprecated in current QUIC with transport retry
-    trace "Server did not specify a group in HRR, re-using the previous choice"; None, ks
-  | Some ng ->
-    let Some g = CommonDH.group_of_namedGroup ng in
-      let s, ks = KS.ks_client13_hello_retry ks g in
-      Some (| g, s |), ks
+    match TLS.Cookie.find_keyshare hrr with
+    | None ->
+      // this case should only ever happen in QUIC stateless retry address validation
+      // FIXME(adl) deprecated in current QUIC with transport retry
+      trace "Server did not specify a group in HRR, re-using the previous choice"; None, ks
+    | Some ng ->
+      match CommonDH.group_of_namedGroup ng with
+      | None -> admit() //TODO handle group decoding error
+      | Some g -> (
+        let s, ks = KS.ks_client13_hello_retry ks g in
+        Some (| g, s |), ks )
   in
+  let h0 = get() in assume(Send.invariant ms.sending h0); //TODO framing
   match Nego.client_HelloRetryRequest ch1 hrr share with
   | Error z -> Receive.InError z
   | Correct offer ->
@@ -374,8 +385,9 @@ let client_HelloRetryRequest (Client region config r) hrr =
   // The rest of the code is similar to client_ClientHello's, might
   // even be shared.
 
-  assert(Negotiation.offered_ha offer == HSM.hrr_ha hrr);
-  assert( // TODO in Negotiation.client_ClientHello
+  assert(HSM.is_valid_hrr hrr);
+  assume(Negotiation.offered_ha offer == HSM.hrr_ha hrr); // TODO!
+  assume( // TODO in Negotiation.client_ClientHello
     HSM.ch_bound offer ==>
     Parsers.OfferedPsks.offeredPsks_binders_list_bytesize (HSM.ch_binders offer) ==
     bkeys_binders_list_bytesize (snd (snd config)));
@@ -392,6 +404,7 @@ let client_HelloRetryRequest (Client region config r) hrr =
   // Negotiation.offered_ha ch1, or at least free it.
 
   let ha = HSM.hrr_ha hrr in
+  assume False; //19-09-14 TBC after fixing client_transcript
   let tag, di, tx_tch = client_transcript region ha full2 in
   r := C_wait_ServerHello full2 ms ks;
 
@@ -446,6 +459,7 @@ let client_HelloRetryRequest (Client region config r) hrr =
     Receive.InAck false false )
 *)
 
+// #push-options "--max_ifuel 3 --z3rlimit 32"
 let client_ServerHello (Client region config r) sh =
   trace "client_ServerHello";
   let cfg,_ = config in
@@ -453,6 +467,7 @@ let client_ServerHello (Client region config r) sh =
   match Negotiation.client_accept_ServerHello cfg offer.full_ch sh with
   | Error z -> Receive.InError z
   | Correct (cs,pski) -> (
+    //assert (Correct? (Negotiation.selected_version sh));
     match cs with
     | CipherSuite13 ae ha -> (
       trace "Running TLS 1.3";
@@ -538,7 +553,6 @@ let client_ServerHello (Client region config r) sh =
 
 (*** TLS 1.3 ***)
 
-#pop-options
 #push-options "--z3rlimit 200 --max_fuel 1" // for length [] == 0
 let client13_Finished2 (Client region config r) (*ocr*) =
   let C13_complete offer sh ee server_id fin1 fin2 eoed_args ms ks = !r in
@@ -579,11 +593,9 @@ let client13_Finished2 (Client region config r) (*ocr*) =
   // updating [ms.sending fin2 ks]
   r := C13_complete offer sh ee server_id fin1 fin2 None ms ks;
   Correct ()
-
-
 #pop-options
-#push-options "--admit_smt_queries true"
 
+#push-options "--max_ifuel 1"
 let client13_nego_cb cfg ee =
   trace ("Received encrypted extensions "^Negotiation.string_of_ees ee);
   trace ("Negotiation callback to process application extensions.");
@@ -601,17 +613,29 @@ let client13_nego_cb cfg ee =
   | Nego_abort    -> fatal Handshake_failure "application requested to abort the handshake"
   | Nego_retry _  -> fatal Internal_error "client application requested a server retry"
   | Nego_accept _ -> Correct ()
+#pop-options
 
 // annoying differently refined bytes, to be reviewed
 type cert_repr = Parsers.ASN1Cert.aSN1Cert // aka b:bytes {length b < 16777216} but with another syntax
 private let coerce_asncert (x:Parsers.ASN1Cert.aSN1Cert): cert_repr = x
 private let coerce_crt crt = List.Tot.map coerce_asncert crt
 
+//#push-options "--admit_smt_queries true"
 // process the certificate chain and verify the server signature
+
+// it may be more convenient to pass the whole ms with its invariant
 let client13_c_cv #ha sending (digest: Transcript.state ha) cfg offer (transcript_ee: Transcript.g_transcript_n (Ghost.hide 1))
-  (c: HSM.certificate13)
+  (c: Parsers.Handshake13_m13_certificate.handshake13_m13_certificate)
   (cv: HSM.certificateVerify13) :
-  St (result (Transcript.g_transcript_n (Ghost.hide 4)))
+  ST (result (Transcript.g_transcript_n (Ghost.hide 3)))
+  (requires fun h0 ->
+    let tr0 = Ghost.reveal transcript_ee in
+    Send.invariant sending h0 /\
+    Transcript.invariant digest tr0 h0 /\
+    B.loc_disjoint (Transcript.footprint digest) (TLS.Handshake.Send.footprint sending) /\
+    Transcript.Transcript13? tr0)
+  (ensures fun h0 r h1 ->
+    True)
   =
   match extend13 sending digest (HSM.M13_certificate c) transcript_ee with
   | Error z -> Error z
@@ -640,6 +664,8 @@ let client13_c_cv #ha sending (digest: Transcript.state ha) cfg offer (transcrip
         trace("Certificate & signature 1.3 callback succeeded");
         Correct transcript_cv )
 
+// #push-options "--max_ifuel 2 --max_fuel 2 --z3rlimit 32"
+#push-options "--admit_smt_queries true" // TODO prove invariant in postcondition
 let client13_Finished1 hs ee client_cert_request server_cert_certverify finished
 =
   let Client region (cfg,_) r = hs in
@@ -653,8 +679,11 @@ let client13_Finished1 hs ee client_cert_request server_cert_certverify finished
   let C13_wait_Finished1 offer sh ms ks = !r in
   let ha = Negotiation.selected_ha sh in
   let hlen = Hacl.Hash.Definitions.hash_len ha in
-  let btag: Hacl.Hash.Definitions.hash_t ha = B.alloca 0uy 64ul in // large enough for any digest
+  let btag: Hacl.Hash.Definitions.hash_t ha =
+    B.sub (B.alloca 0uy 64ul) 0ul hlen in // allocated large enough for any digest
   let transcript_sh: Transcript.g_transcript_n (Ghost.hide 0) = Ghost.hide (transcript13 offer sh []) in
+
+  let h0 = get() in assume(invariant hs h0);//TODO frame a few calls above
   match extend13 ms.sending ms.digest (HSM.M13_encrypted_extensions ee) transcript_sh with
   | Error z -> Receive.InError z
   | Correct transcript_ee ->
@@ -723,6 +752,7 @@ let client13_Finished1 hs ee client_cert_request server_cert_certverify finished
       | Error z   -> Receive.InError z
       | Correct _ -> Receive.InAck true false // Client 1.3 ATK; next the client will read again to send Finished, writer++, and the Complete signal
       ))))
+//#pop-options
 
 let client13_NewSessionTicket (Client region config r) st13 =
   let open TLS.Callbacks in

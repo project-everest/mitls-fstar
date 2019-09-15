@@ -1,101 +1,6 @@
 [
-  "4év~ w¦TMã¬GTø@\u0001",
+  "ü\u001aˆðÖÈê,^\u0006#¥¸à>î",
   [
-    [
-      "HSL.Transcript.tch_binders_len",
-      1,
-      2,
-      1,
-      [
-        "@MaxFuel_assumption", "@MaxIFuel_assumption",
-        "@fuel_correspondence_Prims.pow2.fuel_instrumented",
-        "@fuel_irrelevance_Prims.pow2.fuel_instrumented", "@query",
-        "b2t_def", "bool_inversion", "bool_typing",
-        "constructor_distinct_Parsers.Handshake.M_client_hello",
-        "disc_equation_Parsers.Handshake.M_client_hello", "eq2-interp",
-        "equation_FStar.UInt.fits", "equation_FStar.UInt.max_int",
-        "equation_FStar.UInt.min_int", "equation_FStar.UInt.size",
-        "equation_FStar.UInt.uint_t",
-        "equation_HSL.Transcript.clientHello_with_binders",
-        "equation_LowParse.SLow.Base.size32_postcond",
-        "equation_LowParse.SLow.Base.u32_max",
-        "equation_Parsers.OfferedPsks_binders.offeredPsks_binders",
-        "equation_ParsersAux.Binders.has_binders", "equation_Prims.nat",
-        "equation_with_fuel_Prims.pow2.fuel_instrumented", "int_typing",
-        "lemma_FStar.UInt.pow2_values", "lemma_FStar.UInt32.vu_inv",
-        "lemma_Parsers.OfferedPsks_binders.offeredPsks_binders_bytesize_eqn",
-        "primitive_Prims.op_Addition", "primitive_Prims.op_AmpAmp",
-        "primitive_Prims.op_GreaterThan",
-        "primitive_Prims.op_LessThanOrEqual", "primitive_Prims.op_Multiply",
-        "primitive_Prims.op_Subtraction",
-        "projection_inverse_BoxBool_proj_0",
-        "projection_inverse_BoxInt_proj_0",
-        "projection_inverse_Parsers.Handshake.M_client_hello__0",
-        "refinement_interpretation_Tm_refine_22cdeb3c035fdace7f5a48d44d0c6ac1",
-        "refinement_interpretation_Tm_refine_542f9d4f129664613f2483a6c88bc7c2",
-        "refinement_interpretation_Tm_refine_609152d84d8b640876aaac6ef0ab5cb7",
-        "refinement_interpretation_Tm_refine_f13070840248fced9d9d60d77bdae3ec",
-        "typing_ParsersAux.Binders.has_binders"
-      ],
-      0,
-      "588455bb949eb06f74d0fe4e343c712a"
-    ],
-    [
-      "HSL.Transcript.hs_tch",
-      1,
-      2,
-      1,
-      [
-        "@MaxIFuel_assumption", "@query",
-        "equation_HSL.Transcript.binders_len",
-        "equation_HSL.Transcript.clientHello_with_binders",
-        "equation_HSL.Transcript.tch_binders_len",
-        "refinement_interpretation_Tm_refine_1ec050d0c5f819d0e1818927eee76927",
-        "refinement_interpretation_Tm_refine_22cdeb3c035fdace7f5a48d44d0c6ac1",
-        "refinement_interpretation_Tm_refine_f39e2630348d8a8909f5e67c471829d8",
-        "typing_HSL.Transcript.tch_binders_len"
-      ],
-      0,
-      "5eee4f58f5195e3c1cf070f4926e92a7"
-    ],
-    [
-      "HSL.Transcript.truncate",
-      1,
-      2,
-      1,
-      [
-        "@MaxIFuel_assumption", "@query",
-        "LowParse.SLow.Base_interpretation_Tm_arrow_b04d122514f99a72ff9ce3f85f1f08f9",
-        "bool_inversion",
-        "constructor_distinct_Parsers.Handshake.M_client_hello",
-        "disc_equation_Parsers.Handshake.M_client_hello",
-        "equation_HSL.Transcript.binders_len",
-        "equation_HSL.Transcript.clientHello_with_binders",
-        "equation_HSL.Transcript.tch_binders_len",
-        "equation_LowParse.SLow.Base.size32",
-        "equation_Parsers.Handshake_m_client_hello.handshake_m_client_hello",
-        "equation_Parsers.OfferedPsks_binders.offeredPsks_binders",
-        "equation_Parsers.OfferedPsks_binders.offeredPsks_binders_parser_kind",
-        "equation_ParsersAux.Binders.get_binders",
-        "equation_ParsersAux.Binders.has_binders",
-        "lemma_FStar.UInt32.uv_inv", "primitive_Prims.op_AmpAmp",
-        "proj_equation_Parsers.Handshake.M_client_hello__0",
-        "projection_inverse_BoxBool_proj_0",
-        "projection_inverse_Parsers.Handshake.M_client_hello__0",
-        "refinement_interpretation_Tm_refine_1ec050d0c5f819d0e1818927eee76927",
-        "refinement_interpretation_Tm_refine_22cdeb3c035fdace7f5a48d44d0c6ac1",
-        "refinement_interpretation_Tm_refine_8879e4d447c306881afdf046534ba346",
-        "refinement_interpretation_Tm_refine_ac6770a4ba3278d19ebed8dee4a32c42",
-        "refinement_interpretation_Tm_refine_e70272bbea6f6c7d05ad2f356644d43f",
-        "refinement_interpretation_Tm_refine_f39e2630348d8a8909f5e67c471829d8",
-        "typing_HSL.Transcript.tch_binders_len",
-        "typing_Parsers.OfferedPsks_binders.offeredPsks_binders_size32",
-        "typing_ParsersAux.Binders.get_binders",
-        "typing_ParsersAux.Binders.has_binders"
-      ],
-      0,
-      "316ac8cd374d01d003aa1aea131179f1"
-    ],
     [
       "HSL.Transcript.max_transcript_size",
       1,
@@ -103,7 +8,7 @@
       1,
       [ "@query" ],
       0,
-      "11a3aa8bceaa3ed55e2ea3b6d222cd98"
+      "76fd9de64fac7665188da1780dfc6ade"
     ],
     [
       "HSL.Transcript.max_message_size_lt_max_input_length",
@@ -134,7 +39,43 @@
         "projection_inverse_FStar.Integers.Unsigned__0"
       ],
       0,
-      "bc5c8fa7860dff0653c4821e15219d39"
+      "4831e2a52cf7cd77278c333133c7c805"
+    ],
+    [
+      "HSL.Transcript.transcript_t",
+      1,
+      2,
+      1,
+      [
+        "@query", "assumption_FStar.Pervasives.Native.option__uu___haseq",
+        "assumption_FStar.Pervasives.Native.tuple2__uu___haseq",
+        "assumption_Parsers.ClientHello.clientHello__uu___haseq",
+        "assumption_Parsers.Handshake.handshake__uu___haseq",
+        "assumption_Parsers.Handshake12.handshake12__uu___haseq",
+        "assumption_Parsers.Handshake13.handshake13__uu___haseq",
+        "assumption_Parsers.ServerHello.serverHello__uu___haseq",
+        "assumption_Prims.list__uu___haseq",
+        "equation_HSL.Transcript.any_hash_tag",
+        "equation_HSL.Transcript.bounded_list",
+        "equation_HSL.Transcript.retry", "equation_HandshakeMessages.hrr",
+        "equation_HandshakeMessages.sh", "equation_HandshakeMessages.tch",
+        "equation_HandshakeMessages.valid_hrr",
+        "equation_ParsersAux.Binders.clientHello_with_binders",
+        "function_token_typing_HSL.Transcript.retry",
+        "haseqTm_refine_0a664c7b9f4c6522dffb8c773dde859e",
+        "haseqTm_refine_45b7b963bd9830ec276b2e7a97a8b9f9",
+        "haseqTm_refine_6e57058ef569de90ae614e17eb80fb92",
+        "haseqTm_refine_6ef02521f154ee328142906ece7faaee",
+        "haseqTm_refine_97b5d0648d70b22a9061aeb250fab276",
+        "haseqTm_refine_c78aac7798afeafd32bb136d57a065e5",
+        "haseqTm_refine_eeffee6f77b4482743e8038fdcd3104e",
+        "kinding_Parsers.Handshake12.handshake12@tok",
+        "kinding_Parsers.Handshake13.handshake13@tok",
+        "refinement_kinding_Tm_refine_c78aac7798afeafd32bb136d57a065e5",
+        "refinement_kinding_Tm_refine_eeffee6f77b4482743e8038fdcd3104e"
+      ],
+      0,
+      "bec7d01b7be1287c425c93b7bbff3f76"
     ],
     [
       "HSL.Transcript.__proj__Start__item__retried",
@@ -148,7 +89,7 @@
         "refinement_interpretation_Tm_refine_12be3c8e40eeb23d3f9462167c6b2d49"
       ],
       0,
-      "4afc33b6dffc7cc214decf8e6f442538"
+      "b7cbef41838414054767c7ea6ad2403f"
     ],
     [
       "HSL.Transcript.__proj__TruncatedClientHello__item__retried",
@@ -162,7 +103,7 @@
         "refinement_interpretation_Tm_refine_1131c137d4b9ecef4a5e3a81d2ee8405"
       ],
       0,
-      "5fa59848715cc520f3c5733d91e03833"
+      "a1bdde3c9f2281c30433914656259e05"
     ],
     [
       "HSL.Transcript.__proj__TruncatedClientHello__item__tch",
@@ -176,7 +117,7 @@
         "refinement_interpretation_Tm_refine_1131c137d4b9ecef4a5e3a81d2ee8405"
       ],
       0,
-      "56166ce8f964da01111f7e1409a80131"
+      "710e1c04ed43d79d77cb1d4078482bd8"
     ],
     [
       "HSL.Transcript.__proj__ClientHello__item__retried",
@@ -190,7 +131,7 @@
         "refinement_interpretation_Tm_refine_8054d18ef519c5b9d990efb52b063adc"
       ],
       0,
-      "d5a26295e823f0f55b9d1612a1f775ba"
+      "2d6a428f1cefcece33fa271b2aa25531"
     ],
     [
       "HSL.Transcript.__proj__ClientHello__item__ch",
@@ -204,7 +145,7 @@
         "refinement_interpretation_Tm_refine_8054d18ef519c5b9d990efb52b063adc"
       ],
       0,
-      "ce608ee0051cf1552007d19d3fb5cc73"
+      "a2ec590a4f6e12a0951510ca864a2535"
     ],
     [
       "HSL.Transcript.__proj__Transcript12__item__ch",
@@ -218,7 +159,7 @@
         "refinement_interpretation_Tm_refine_0900eaf74c18995820f91c810d095d50"
       ],
       0,
-      "9fb4191a4ce546f85ed5e1db92d6722e"
+      "07ac771650d93758f638e4c9b67bdee4"
     ],
     [
       "HSL.Transcript.__proj__Transcript12__item__sh",
@@ -228,13 +169,11 @@
       [
         "@MaxIFuel_assumption", "@query",
         "disc_equation_HSL.Transcript.Transcript12",
-        "proj_equation_HSL.Transcript.Transcript12_ch",
         "projection_inverse_BoxBool_proj_0",
-        "projection_inverse_HSL.Transcript.Transcript12_ch",
         "refinement_interpretation_Tm_refine_0900eaf74c18995820f91c810d095d50"
       ],
       0,
-      "b73a50841fc118bae79bcdc947964a8f"
+      "7199177577768b905826c004836a803c"
     ],
     [
       "HSL.Transcript.__proj__Transcript12__item__rest",
@@ -248,7 +187,7 @@
         "refinement_interpretation_Tm_refine_0900eaf74c18995820f91c810d095d50"
       ],
       0,
-      "54d2ef5bc3109325bd42b81516c50e8d"
+      "cc2ef278d1d350fb2d07d40e73d887a8"
     ],
     [
       "HSL.Transcript.__proj__Transcript13__item__retried",
@@ -262,7 +201,7 @@
         "refinement_interpretation_Tm_refine_af7a739b2a6dfba8546fc5e62d0696c6"
       ],
       0,
-      "1460037d928c0e4dbd725809e9a0a818"
+      "d406b2127d9814eb2ff26600fcaa91ed"
     ],
     [
       "HSL.Transcript.__proj__Transcript13__item__ch",
@@ -276,7 +215,7 @@
         "refinement_interpretation_Tm_refine_af7a739b2a6dfba8546fc5e62d0696c6"
       ],
       0,
-      "0f9165415a33ef80dccd1f8ddb49f9a1"
+      "890fc6a4178e17b5af546a93c17b8be2"
     ],
     [
       "HSL.Transcript.__proj__Transcript13__item__sh",
@@ -286,13 +225,11 @@
       [
         "@MaxIFuel_assumption", "@query",
         "disc_equation_HSL.Transcript.Transcript13",
-        "proj_equation_HSL.Transcript.Transcript13_ch",
         "projection_inverse_BoxBool_proj_0",
-        "projection_inverse_HSL.Transcript.Transcript13_ch",
         "refinement_interpretation_Tm_refine_af7a739b2a6dfba8546fc5e62d0696c6"
       ],
       0,
-      "b5f1649f2d15f5b086248cf874c602d1"
+      "d4a2540acc7dcd3db6c6855123b8379f"
     ],
     [
       "HSL.Transcript.__proj__Transcript13__item__rest",
@@ -306,7 +243,7 @@
         "refinement_interpretation_Tm_refine_af7a739b2a6dfba8546fc5e62d0696c6"
       ],
       0,
-      "d6a42adb596b7ceb98242964143ba132"
+      "bbd4b21b025d3cb077395e648cc98940"
     ],
     [
       "HSL.Transcript.transcript_size",
@@ -323,7 +260,7 @@
         "fuel_guarded_inversion_HSL.Transcript.transcript_t"
       ],
       0,
-      "b2c1c9261f0dba4094ea31fa8f5d50f5"
+      "464f4e63605150f3ed0e8605d3af0df1"
     ],
     [
       "HSL.Transcript.__proj__L_ClientHello__item___0",
@@ -337,21 +274,7 @@
         "refinement_interpretation_Tm_refine_d16e86694fdbd6e10a2f5a337874f683"
       ],
       0,
-      "b59b87801e37a2bbd04e4a412cd3b75c"
-    ],
-    [
-      "HSL.Transcript.__proj__L_ServerHello__item___0",
-      1,
-      2,
-      1,
-      [
-        "@MaxIFuel_assumption", "@query",
-        "disc_equation_HSL.Transcript.L_ServerHello",
-        "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_18f652652c33c65b447a91c5f1a39518"
-      ],
-      0,
-      "4fafcd32cf9a9caa83721f459ee3b151"
+      "7342e38cfe2e4f114572fbd3d720e0f6"
     ],
     [
       "HSL.Transcript.__proj__L_TCH__item___0",
@@ -365,7 +288,7 @@
         "refinement_interpretation_Tm_refine_3eafaa77ca8682e1642f65bb46120005"
       ],
       0,
-      "1f45b4b28912d61b2b5d8a4a745b403d"
+      "4a712b8cf73ede86a85bf0033786eb9f"
     ],
     [
       "HSL.Transcript.__proj__L_CompleteTCH__item___0",
@@ -379,7 +302,21 @@
         "refinement_interpretation_Tm_refine_a94323e2fa3f4a40babeae22cf8e2b03"
       ],
       0,
-      "ca9bf1b798de98eb0d3e4edaa92be3f2"
+      "220366219f2b73364817cd64e718760e"
+    ],
+    [
+      "HSL.Transcript.__proj__L_ServerHello__item___0",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_HSL.Transcript.L_ServerHello",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Tm_refine_18f652652c33c65b447a91c5f1a39518"
+      ],
+      0,
+      "93e5f411c5580215b04d77e422454d6b"
     ],
     [
       "HSL.Transcript.__proj__L_HRR__item___0",
@@ -393,7 +330,7 @@
         "refinement_interpretation_Tm_refine_f88cacbcbc5146ce821a4e3067b95919"
       ],
       0,
-      "da755f7f0c543ce31014f7879b7e449a"
+      "bcb529cd9be8b4b40b24fca760313b4e"
     ],
     [
       "HSL.Transcript.__proj__L_HSM12__item___0",
@@ -407,7 +344,7 @@
         "refinement_interpretation_Tm_refine_0e3948ea3375239aa12079aef69f7607"
       ],
       0,
-      "4552723e705a266e2bf421cdbacb5eaf"
+      "11110062a77887f225bdfcd05fb2a30d"
     ],
     [
       "HSL.Transcript.__proj__L_HSM13__item___0",
@@ -421,7 +358,7 @@
         "refinement_interpretation_Tm_refine_271110f1bc64f50ee6c7d8125c31ca7c"
       ],
       0,
-      "5e91ab0c8baef1fe0742e5f1df49e382"
+      "537c82a182e10bddaac228ee6154a412"
     ],
     [
       "HSL.Transcript.snoc12",
@@ -443,7 +380,7 @@
         "refinement_interpretation_Tm_refine_1826b6d6ebce6d52d8a0532e3e885506"
       ],
       0,
-      "c59372ccf7dfa2220f7d6f610ad822bc"
+      "c240367a968d86a2598df1c9c9824e49"
     ],
     [
       "HSL.Transcript.snoc13",
@@ -485,7 +422,7 @@
         "typing_FStar.List.Tot.Base.length"
       ],
       0,
-      "041018d4e18fe1fb70be096b9a9b3da3"
+      "da4f0eaec8dfd9f1835bd5a0916ba854"
     ],
     [
       "HSL.Transcript.transition",
@@ -498,31 +435,65 @@
         "@query",
         "HSL.Transcript_pretyping_6bbc862ab5ff5827ed5c3759390b6f6e",
         "HSL.Transcript_pretyping_cf5c8a0c04e501aefc110c9f40a80f2b",
+        "LowParse.SLow.Base_interpretation_Tm_arrow_b04d122514f99a72ff9ce3f85f1f08f9",
         "Prims_pretyping_ae567c2fb75be05905677af440075565",
         "assumption_Parsers.ClientHello.clientHello__uu___haseq",
+        "bool_inversion", "bool_typing",
+        "constructor_distinct_FStar.Error.Correct",
+        "constructor_distinct_FStar.Error.Error",
         "constructor_distinct_Prims.Nil", "data_typing_intro_Prims.Nil@tok",
-        "equality_tok_Parsers.ProtocolVersion.TLS_1p2@tok",
-        "equality_tok_Parsers.ProtocolVersion.TLS_1p3@tok",
-        "equation_HSL.Transcript.clientHello_with_binders",
-        "equation_HSL.Transcript.hs_tch", "equation_Mem.is_tls_rgn",
+        "disc_equation_FStar.Error.Correct",
+        "equation_HandshakeMessages.clear_binders",
+        "equation_LowParse.SLow.Base.size32", "equation_Mem.is_tls_rgn",
         "equation_Mem.tls_rgn",
+        "equation_Parsers.OfferedPsks_binders.offeredPsks_binders",
+        "equation_Parsers.OfferedPsks_binders.offeredPsks_binders_parser_kind",
+        "equation_ParsersAux.Binders.binders",
+        "equation_ParsersAux.Binders.binders_len",
+        "equation_ParsersAux.Binders.ch_binders",
+        "equation_ParsersAux.Binders.ch_binders_len",
+        "equation_ParsersAux.Binders.ch_bound",
+        "equation_ParsersAux.Binders.clientHello_with_binders",
+        "equation_TLSError.error", "equation_TLSError.result",
         "equation_with_fuel_FStar.List.Tot.Base.length.fuel_instrumented",
         "function_token_typing_Prims.__cache_version_number__",
-        "haseqTm_refine_18506aa35129af6bfc67f712585c5ba7",
-        "haseqTm_refine_22cdeb3c035fdace7f5a48d44d0c6ac1",
+        "function_token_typing_TLSError.error",
         "kinding_Parsers.Handshake12.handshake12@tok",
         "kinding_Parsers.Handshake13.handshake13@tok",
+        "kinding_Parsers.ProtocolVersion.protocolVersion@tok",
+        "lemma_FStar.Error.invertOptResult", "lemma_FStar.UInt32.uv_inv",
         "primitive_Prims.op_Equality", "primitive_Prims.op_LessThan",
         "projection_inverse_BoxBool_proj_0",
         "projection_inverse_BoxInt_proj_0",
+        "projection_inverse_FStar.Error.Correct__0",
+        "projection_inverse_FStar.Error.Correct__a",
+        "projection_inverse_FStar.Error.Correct__b",
+        "projection_inverse_FStar.Error.Error__0",
+        "projection_inverse_FStar.Error.Error__a",
+        "projection_inverse_FStar.Error.Error__b",
         "projection_inverse_FStar.Pervasives.Native.Mktuple2__1",
+        "projection_inverse_FStar.Pervasives.Native.Mktuple2__2",
         "projection_inverse_HSL.Transcript.ClientHello_retried",
+        "projection_inverse_HSL.Transcript.L_ServerHello__0",
         "projection_inverse_Prims.Nil_a",
+        "refinement_interpretation_Tm_refine_0a664c7b9f4c6522dffb8c773dde859e",
+        "refinement_interpretation_Tm_refine_303b10955a9c96a641771b82bf676e2f",
+        "refinement_interpretation_Tm_refine_34bdb053def6b14a793cb1f1a0b8f657",
+        "refinement_interpretation_Tm_refine_7cbdcf6d939dd0d01f019288ef27a510",
         "refinement_interpretation_Tm_refine_9393f41ccc9ce36df1080eefe33f6c53",
-        "typing_Mem.tls_region"
+        "refinement_interpretation_Tm_refine_d34415718a2c6ead8c15559aa19a7b53",
+        "refinement_interpretation_Tm_refine_e70272bbea6f6c7d05ad2f356644d43f",
+        "refinement_interpretation_Tm_refine_f3cb119ea0a588d64ba3ce823a8c948b",
+        "typing_FStar.Error.uu___is_Error", "typing_Mem.tls_region",
+        "typing_Negotiation.selected_version",
+        "typing_Parsers.OfferedPsks_binders.offeredPsks_binders_size32",
+        "typing_ParsersAux.Binders.build_canonical_binders",
+        "typing_ParsersAux.Binders.ch_binders_len",
+        "typing_ParsersAux.Binders.ch_bound",
+        "typing_ParsersAux.Binders.ch_set_binders"
       ],
       0,
-      "50ffb10b928db706751b465906b6f648"
+      "1003b202b15bf2994393381a8a9cb54d"
     ],
     [
       "HSL.Transcript.label_repr",
@@ -538,7 +509,55 @@
         "refinement_interpretation_Tm_refine_e4ea5a37b313f4ab47fb5b2f070e19a9"
       ],
       0,
-      "1a5eeaece1d297b27139d1d6b1c04e4d"
+      "25c7e53271b7960a78633fbf7dcbe38e"
+    ],
+    [
+      "HSL.Transcript.label_repr",
+      2,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_Parsers.Handshake.M_client_hello",
+        "equation_HSL.Transcript.hs_ch_repr",
+        "equation_MITLS.Repr.Handshake.is_ch",
+        "fuel_guarded_inversion_MITLS.Repr.const_slice",
+        "refinement_interpretation_Tm_refine_d68285d0b4567c17b20f6e366afe9178"
+      ],
+      0,
+      "9d8be6939a8111856668fb04ea7af08b"
+    ],
+    [
+      "HSL.Transcript.label_repr",
+      3,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_Parsers.Handshake.M_client_hello",
+        "equation_HSL.Transcript.hs_ch_repr",
+        "equation_MITLS.Repr.Handshake.is_ch",
+        "fuel_guarded_inversion_MITLS.Repr.const_slice",
+        "refinement_interpretation_Tm_refine_d68285d0b4567c17b20f6e366afe9178"
+      ],
+      0,
+      "7e267bdbf00cf0109be66d3046c09c28"
+    ],
+    [
+      "HSL.Transcript.label_repr",
+      4,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_Parsers.Handshake.M_server_hello",
+        "equation_HSL.Transcript.hs_sh_repr",
+        "equation_MITLS.Repr.Handshake.is_sh",
+        "fuel_guarded_inversion_MITLS.Repr.const_slice",
+        "refinement_interpretation_Tm_refine_e4ea5a37b313f4ab47fb5b2f070e19a9"
+      ],
+      0,
+      "c37aacf65191a979671d8b40d53bac5c"
     ],
     [
       "HSL.Transcript.__proj__LR_ClientHello__item__b",
@@ -552,7 +571,7 @@
         "refinement_interpretation_Tm_refine_e641398f176de45e3d20a731c5dc5071"
       ],
       0,
-      "bd67c5448394f4a80176fe8dc6b7880a"
+      "0975ce703eda74e0fe17e5a87bfb0189"
     ],
     [
       "HSL.Transcript.__proj__LR_ClientHello__item__ch",
@@ -582,7 +601,7 @@
         "typing_Mem.tls_region"
       ],
       0,
-      "0c9c1294c9122a59fda017becc60f79d"
+      "2923eb878b4b20b9beb23066c9208e09"
     ],
     [
       "HSL.Transcript.__proj__LR_ServerHello__item__b",
@@ -596,37 +615,54 @@
         "refinement_interpretation_Tm_refine_62aa233580072ded983d541f26e2b7dd"
       ],
       0,
-      "6020b7171118865e496a10a62a0d9ddb"
+      "de08217071514bee76b3ad5ce9c68f1d"
     ],
     [
-      "HSL.Transcript.__proj__LR_ServerHello__item__ch",
+      "HSL.Transcript.__proj__LR_ServerHello__item__sh",
       1,
       2,
       1,
       [
-        "@MaxIFuel_assumption", "@query", "bool_inversion",
-        "data_elim_HSL.Transcript.LR_ServerHello",
-        "disc_equation_HSL.Transcript.LR_ServerHello",
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_Parsers.Handshake.M_server_hello",
         "equation_HSL.Transcript.hs_sh_repr",
         "equation_MITLS.Repr.Handshake.is_sh",
-        "equation_MITLS.Repr.Handshake.repr", "equation_MITLS.Repr.repr_p",
-        "equation_Mem.is_tls_rgn", "equation_Mem.rgn",
-        "equation_Mem.tls_rgn",
+        "proj_equation_HSL.Transcript.LR_ServerHello_b",
+        "refinement_interpretation_Tm_refine_e4ea5a37b313f4ab47fb5b2f070e19a9"
+      ],
+      0,
+      "99f7645a1281b1dc635b1a9305a225d2"
+    ],
+    [
+      "HSL.Transcript.__proj__LR_ServerHello__item__sh",
+      2,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "data_elim_HSL.Transcript.LR_ServerHello",
+        "disc_equation_HSL.Transcript.LR_ServerHello",
+        "disc_equation_Parsers.Handshake.M_server_hello",
+        "disc_equation_Parsers.ServerHello_is_hrr.ServerHello_is_hrr_true",
+        "equation_HSL.Transcript.hs_sh_repr",
+        "equation_HandshakeMessages.is_hrr",
+        "equation_MITLS.Repr.Handshake.is_sh",
+        "equation_MITLS.Repr.Handshake.repr",
+        "equation_MITLS.Repr.Handshake.t", "equation_MITLS.Repr.repr_p",
+        "equation_MITLS.Repr.value",
         "equation_Parsers.Handshake.handshake_parser_kind",
+        "fuel_guarded_inversion_MITLS.Repr.const_slice",
         "proj_equation_HSL.Transcript.LR_ServerHello_b",
         "projection_inverse_BoxBool_proj_0",
         "projection_inverse_HSL.Transcript.LR_ServerHello_b",
-        "projection_inverse_HSL.Transcript.LR_ServerHello_ch",
+        "projection_inverse_HSL.Transcript.LR_ServerHello_sh",
         "refinement_interpretation_Tm_refine_62aa233580072ded983d541f26e2b7dd",
-        "refinement_interpretation_Tm_refine_b5163a5c7eb2f4891aa85b6bd19b6e5e",
-        "refinement_interpretation_Tm_refine_c358ce785c6b462b7618aa4f08d5c31e",
+        "refinement_interpretation_Tm_refine_cdfeb32b65107ffae09cb3cc2e87ad66",
         "refinement_interpretation_Tm_refine_d0c586a86c5641491189f56116987d37",
-        "refinement_interpretation_Tm_refine_e4ea5a37b313f4ab47fb5b2f070e19a9",
-        "typing_MITLS.Repr.Handshake.is_sh", "typing_Mem.is_tls_rgn",
-        "typing_Mem.tls_region"
+        "refinement_interpretation_Tm_refine_e4ea5a37b313f4ab47fb5b2f070e19a9"
       ],
       0,
-      "bc5ae1d2ad63a24168aa570df2ae0d4b"
+      "62716e00c670ddd1fb398cd688e4efdc"
     ],
     [
       "HSL.Transcript.__proj__LR_TCH__item__b",
@@ -640,7 +676,7 @@
         "refinement_interpretation_Tm_refine_4fdc7c0c7fa0a34654b5bf7c20280475"
       ],
       0,
-      "80ef159980c16357ff5dfc2873064fa6"
+      "5f6b816d1cb04b3cd83952c642dee3f2"
     ],
     [
       "HSL.Transcript.__proj__LR_TCH__item__ch",
@@ -670,7 +706,36 @@
         "typing_Mem.is_tls_rgn", "typing_Mem.tls_region"
       ],
       0,
-      "e08dd56ef1ecbc8a2bf86c0cbcc2a3fb"
+      "51eb63d5865616b723c167a9e451904b"
+    ],
+    [
+      "HSL.Transcript.__proj__LR_TCH__item__ch",
+      2,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "data_elim_HSL.Transcript.LR_TCH",
+        "disc_equation_HSL.Transcript.LR_TCH",
+        "disc_equation_Parsers.Handshake.M_client_hello",
+        "equation_HSL.Transcript.hs_ch_repr",
+        "equation_MITLS.Repr.Handshake.is_ch",
+        "equation_MITLS.Repr.Handshake.repr",
+        "equation_MITLS.Repr.Handshake.t", "equation_MITLS.Repr.repr_p",
+        "equation_MITLS.Repr.value",
+        "equation_Parsers.Handshake.handshake_parser_kind",
+        "equation_ParsersAux.Binders.ch_bound",
+        "fuel_guarded_inversion_MITLS.Repr.const_slice",
+        "primitive_Prims.op_AmpAmp", "proj_equation_HSL.Transcript.LR_TCH_b",
+        "projection_inverse_BoxBool_proj_0",
+        "projection_inverse_HSL.Transcript.LR_TCH_b",
+        "projection_inverse_HSL.Transcript.LR_TCH_ch",
+        "refinement_interpretation_Tm_refine_4fbf68a5fd1a03fdb5ec4195e7c367d0",
+        "refinement_interpretation_Tm_refine_4fdc7c0c7fa0a34654b5bf7c20280475",
+        "refinement_interpretation_Tm_refine_d0c586a86c5641491189f56116987d37",
+        "refinement_interpretation_Tm_refine_d68285d0b4567c17b20f6e366afe9178"
+      ],
+      0,
+      "44e539bffce0bc0cb55701a2631b2ea7"
     ],
     [
       "HSL.Transcript.__proj__LR_CompleteTCH__item__b",
@@ -684,7 +749,7 @@
         "refinement_interpretation_Tm_refine_19457574a7436c00021c1e3d0c0fe57e"
       ],
       0,
-      "aad138ca5340d978e99a1d43736a1733"
+      "0e4217ef1a09db2d514baef421851097"
     ],
     [
       "HSL.Transcript.__proj__LR_CompleteTCH__item__ch",
@@ -715,7 +780,38 @@
         "typing_Mem.is_tls_rgn", "typing_Mem.tls_region"
       ],
       0,
-      "227981ec6bc14c6fcf9610d367201de4"
+      "623244133a24bf1c708ad8962dd1aa37"
+    ],
+    [
+      "HSL.Transcript.__proj__LR_CompleteTCH__item__ch",
+      2,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "data_elim_HSL.Transcript.LR_CompleteTCH",
+        "disc_equation_HSL.Transcript.LR_CompleteTCH",
+        "disc_equation_Parsers.Handshake.M_client_hello",
+        "equation_HSL.Transcript.hs_ch_repr",
+        "equation_MITLS.Repr.Handshake.is_ch",
+        "equation_MITLS.Repr.Handshake.repr",
+        "equation_MITLS.Repr.Handshake.t", "equation_MITLS.Repr.repr_p",
+        "equation_MITLS.Repr.value",
+        "equation_Parsers.Handshake.handshake_parser_kind",
+        "equation_ParsersAux.Binders.ch_bound",
+        "fuel_guarded_inversion_MITLS.Repr.const_slice",
+        "primitive_Prims.op_AmpAmp",
+        "proj_equation_HSL.Transcript.LR_CompleteTCH_b",
+        "projection_inverse_BoxBool_proj_0",
+        "projection_inverse_HSL.Transcript.LR_CompleteTCH_b",
+        "projection_inverse_HSL.Transcript.LR_CompleteTCH_ch",
+        "refinement_interpretation_Tm_refine_19457574a7436c00021c1e3d0c0fe57e",
+        "refinement_interpretation_Tm_refine_4fbf68a5fd1a03fdb5ec4195e7c367d0",
+        "refinement_interpretation_Tm_refine_d0c586a86c5641491189f56116987d37",
+        "refinement_interpretation_Tm_refine_d68285d0b4567c17b20f6e366afe9178"
+      ],
+      0,
+      "62768aaab71a1fa7ff6dd9a037e890fb"
     ],
     [
       "HSL.Transcript.__proj__LR_HRR__item__b1",
@@ -729,7 +825,7 @@
         "refinement_interpretation_Tm_refine_1533b4324b03af43facb035bdb3b3dc7"
       ],
       0,
-      "49acdbf25e0de3ccb9441d1ab00a88b8"
+      "72d1e53379420003c8bc92c8cf4eef93"
     ],
     [
       "HSL.Transcript.__proj__LR_HRR__item__ch_tag",
@@ -749,7 +845,7 @@
         "refinement_interpretation_Tm_refine_d0c586a86c5641491189f56116987d37"
       ],
       0,
-      "7a04c15959f1b2f646d75236830774d1"
+      "a2f821b56eeaa45ca7158e4fa4c9eadc"
     ],
     [
       "HSL.Transcript.__proj__LR_HRR__item__b2",
@@ -763,7 +859,7 @@
         "refinement_interpretation_Tm_refine_1533b4324b03af43facb035bdb3b3dc7"
       ],
       0,
-      "36abe48ffb4725b0ed129fdd81479677"
+      "9a102afdaf76c3aa18387f185bd67ed6"
     ],
     [
       "HSL.Transcript.__proj__LR_HRR__item__hrr",
@@ -779,7 +875,7 @@
         "refinement_interpretation_Tm_refine_e4ea5a37b313f4ab47fb5b2f070e19a9"
       ],
       0,
-      "0a35a19c6fbd0ac609da64b4ea99ce07"
+      "419466c2aad9a26f96ab5a408b092470"
     ],
     [
       "HSL.Transcript.__proj__LR_HRR__item__hrr",
@@ -811,7 +907,7 @@
         "typing_Mem.is_tls_rgn", "typing_Mem.tls_region"
       ],
       0,
-      "dbb712c0bbeb18e4dce61553e0862922"
+      "e2d80c4d413f66d82a1634df102a0d83"
     ],
     [
       "HSL.Transcript.__proj__LR_HSM12__item__b",
@@ -825,7 +921,7 @@
         "refinement_interpretation_Tm_refine_0ffaf068ac997cb6645f9dc8bc81bce8"
       ],
       0,
-      "7c0e179b788f4b48e3574685f90b21d7"
+      "3f84b73112091d6ee3480843875ead8e"
     ],
     [
       "HSL.Transcript.__proj__LR_HSM12__item__hs12",
@@ -844,7 +940,7 @@
         "refinement_interpretation_Tm_refine_d0c586a86c5641491189f56116987d37"
       ],
       0,
-      "48195eecc44bf06fcac8f24efc619829"
+      "a240efcb1c7a264e9ceee7dd6eb81157"
     ],
     [
       "HSL.Transcript.__proj__LR_HSM13__item__b",
@@ -858,7 +954,7 @@
         "refinement_interpretation_Tm_refine_974705d971002418259a4c001585605c"
       ],
       0,
-      "13cd78db6526a206ea7fbfd1364147f9"
+      "79f7175b8581ebad805b6204aa794809"
     ],
     [
       "HSL.Transcript.__proj__LR_HSM13__item__hs13",
@@ -877,7 +973,7 @@
         "refinement_interpretation_Tm_refine_d0c586a86c5641491189f56116987d37"
       ],
       0,
-      "57bbcce71aa6a7a5f8942113b9e9ad0f"
+      "26691ee8ac8f8f4c8a82129051900c50"
     ],
     [
       "HSL.Transcript.label_of_label_repr",
@@ -885,7 +981,7 @@
       2,
       1,
       [
-        "@MaxIFuel_assumption", "@query", "bool_inversion",
+        "@MaxIFuel_assumption", "@query",
         "disc_equation_HSL.Transcript.LR_ClientHello",
         "disc_equation_HSL.Transcript.LR_CompleteTCH",
         "disc_equation_HSL.Transcript.LR_HRR",
@@ -897,26 +993,19 @@
         "disc_equation_Parsers.Handshake.M_server_hello",
         "equation_HSL.Transcript.hs_ch_repr",
         "equation_HSL.Transcript.hs_sh_repr",
+        "equation_HandshakeMessages.is_valid_hrr",
         "equation_MITLS.Repr.Handshake.is_ch",
-        "equation_MITLS.Repr.Handshake.is_sh", "equation_Mem.is_tls_rgn",
-        "equation_Mem.rgn", "equation_Mem.tls_rgn",
-        "equation_ParsersAux.Binders.has_binders",
+        "equation_MITLS.Repr.Handshake.is_sh",
         "fuel_guarded_inversion_HSL.Transcript.label_repr",
-        "primitive_Prims.op_AmpAmp",
-        "proj_equation_Parsers.Handshake.M_client_hello__0",
-        "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_0335e14741d82b76929cf09da1dd8008",
-        "refinement_interpretation_Tm_refine_38efbd6b9629eb388941a633161832b1",
-        "refinement_interpretation_Tm_refine_730c9bf3aef62d9621e6ba7b3905e1f3",
-        "refinement_interpretation_Tm_refine_b5163a5c7eb2f4891aa85b6bd19b6e5e",
-        "refinement_interpretation_Tm_refine_c358ce785c6b462b7618aa4f08d5c31e",
+        "refinement_interpretation_Tm_refine_00979cb7cbb123e46a5cac1e32364b0c",
+        "refinement_interpretation_Tm_refine_4fbf68a5fd1a03fdb5ec4195e7c367d0",
+        "refinement_interpretation_Tm_refine_cdfeb32b65107ffae09cb3cc2e87ad66",
         "refinement_interpretation_Tm_refine_d68285d0b4567c17b20f6e366afe9178",
-        "refinement_interpretation_Tm_refine_e4ea5a37b313f4ab47fb5b2f070e19a9",
-        "typing_Mem.is_tls_rgn", "typing_Mem.tls_region",
-        "typing_ParsersAux.Binders.has_binders"
+        "refinement_interpretation_Tm_refine_e2a6b8db1fc31df9bce1041852a1cd72",
+        "refinement_interpretation_Tm_refine_e4ea5a37b313f4ab47fb5b2f070e19a9"
       ],
       0,
-      "0b26e9496a2eb79fe0705e47df0b2b8d"
+      "cfbf5ad6b57f37b092edc4514d437415"
     ],
     [
       "HSL.Transcript.valid_label_repr",
@@ -935,7 +1024,7 @@
         "fuel_guarded_inversion_HSL.Transcript.label_repr"
       ],
       0,
-      "13860a94741d06da35114bf5a67b3f5e"
+      "664b94c25fc5b9b1fa7e307d389674f1"
     ],
     [
       "HSL.Transcript.loc_of_label_repr",
@@ -954,7 +1043,7 @@
         "fuel_guarded_inversion_HSL.Transcript.label_repr"
       ],
       0,
-      "d03c43b113231031c239a5f03d43e0e1"
+      "b13930b379653db08ae60fe5f5eaf3fd"
     ],
     [
       "HSL.Transcript.extend",
@@ -966,7 +1055,7 @@
         "refinement_interpretation_Tm_refine_ee9bf13e25a3a516afa39536603bbf08"
       ],
       0,
-      "fb33af771efb186058e6c5a50bd84ddd"
+      "c232fd097985f7faaf95efd367087593"
     ]
   ]
 ]

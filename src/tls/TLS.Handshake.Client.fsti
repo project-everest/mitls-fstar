@@ -19,12 +19,6 @@ module KS = Old.KeySchedule
 
 open TLS.Handshake.Machine
 
-// defined elsewhere?
-let inv (Client rgn cfg st:client) h0 =
-  h0 `HS.contains` st /\
-  B.loc_disjoint (B.loc_mreference st) (client_footprint (HS.sel h0 st)) /\
-  client_invariant (HS.sel h0 st) h0
-
 (*** Hello messages ***)
 
 /// C_Init ==> C_wait_ServerHello (initial)
@@ -32,12 +26,12 @@ val client_ClientHello:
   hs: client ->
   ST (result unit)
   (requires fun h0 ->
-    inv hs h0 /\ (
-    match hs with
-    | Client _ _ r -> C_init? (HS.sel h0 r)))
+    let Client _ _ r = hs in
+    invariant hs h0 /\
+    C_init? (HS.sel h0 r))
   (ensures fun h0 r h1 ->
     // see precise post-condition in the stateful invariant
-    inv hs h1)
+    invariant hs h1)
 (*
     let n = HS.sel h0 Nego.(s.nego.state) in
     let t = HSL.transcript h0 s.log in
@@ -66,11 +60,11 @@ val client_HelloRetryRequest:
   hrr: HSM.hrr ->
   ST Receive.incoming
   (requires fun h0 ->
-    inv hs h0 /\ (
-    match hs with
-    | Client _ _ r -> C_wait_ServerHello? (HS.sel h0 r)))
+    let Client _ _ r = hs in
+    invariant hs h0 /\
+    C_wait_ServerHello? (HS.sel h0 r))
   (ensures fun h0 r h1 ->
-    inv hs h1)
+    invariant hs h1)
 
 /// C_wait_ServerHello (any) ==> C13_wait_Finished1
 val client_ServerHello:
@@ -79,10 +73,10 @@ val client_ServerHello:
   ST Receive.incoming
   (requires fun h0 ->
     let Client rgn cfg r = hs in
-    inv hs h0 /\
+    invariant hs h0 /\
     C_wait_ServerHello? (HS.sel h0 r))
   (ensures fun h0 r h1 ->
-    inv hs h1)
+    invariant hs h1)
 
 (*** TLS 1.3 ***)
 
@@ -99,11 +93,11 @@ val client13_Finished2:
   ST (result unit)
   (requires fun h0 ->
     let Client _ _ r = hs in
-    inv hs h0 /\
+    invariant hs h0 /\
     C13_complete? (HS.sel h0 r))
   (ensures fun h0 r h1 ->
     let Client _ _ r = hs in
-    inv hs h1 /\
+    invariant hs h1 /\
     C13_complete? (HS.sel h1 r) )
 
 /// C13_wait_Finished1 ==> C13_complete
@@ -121,15 +115,13 @@ val client13_Finished1:
   ocr: option HSM.certificateRequest13 ->
   ocvv: option (HSM.certificate13 & HSM.certificateVerify13) ->
   svd: Bytes.bytes ->
-  // digestCert: option Hash.anyTag ->
-  // digestCertVerify: Hash.anyTag ->
-  // digestServerFinished: Hash.anyTag ->
   ST Receive.incoming
   (requires fun h0 ->
     let Client _ _ r = hs in
-    inv hs h0 /\
+    invariant hs h0 /\
     C13_wait_Finished1? (HS.sel h0 r))
-  (ensures fun h0 i h1 -> inv hs h1)
+  (ensures fun h0 i h1 ->
+    invariant hs h1)
 
 /// Post-handshake incoming ticket
 /// (stays in C13_complete)
@@ -140,15 +132,17 @@ val client13_NewSessionTicket:
   ST Receive.incoming
   (requires fun h0 ->
     let Client _ _ r = hs in
-    inv hs h0 /\
+    invariant hs h0 /\
     C13_complete? (HS.sel h0 r))
-  (ensures fun h0 i h1 -> inv hs h1)
+  (ensures fun h0 i h1 ->
+    invariant hs h1)
 
 /// used for QUIC signalling; underspecified
 val early_rejected:
   hs: client ->
   ST bool
-  (requires fun h0 -> inv hs h0)
+  (requires fun h0 ->
+    invariant hs h0)
   (ensures fun h0 r h1 -> h0 == h1)
 
 (*** TLS 1.2 ***)
@@ -159,8 +153,8 @@ val client12_ServerHelloDone:
   ske_bytes: Bytes.bytes -> // delayed parsing
   cr: option HSM.certificateRequest12 ->
   ST Receive.incoming
-  (requires fun h0 -> inv hs h0)
-  (ensures fun h0 i h1 -> inv hs h1)
+  (requires fun h0 -> invariant hs h0)
+  (ensures fun h0 i h1 -> invariant hs h1)
 
 val client12_R_ServerFinished:
   hs: client ->
@@ -168,16 +162,16 @@ val client12_R_ServerFinished:
   digest_nst: Hash.anyTag ->
   digest_sf: Hash.anyTag ->
   ST Receive.incoming
-  (requires fun h0 -> inv hs h0)
-  (ensures fun h0 i h1 -> inv hs h1)
+  (requires fun h0 -> invariant hs h0)
+  (ensures fun h0 i h1 -> invariant hs h1)
 
 val client12_ServerFinished:
   hs: client ->
   fin: Bytes.bytes ->
   digest: Hash.anyTag ->
   ST Receive.incoming
-  (requires fun h0 -> inv hs h0)
-  (ensures fun h0 i h1 -> inv hs h1)
+  (requires fun h0 -> invariant hs h0)
+  (ensures fun h0 i h1 -> invariant hs h1)
 
 val client12_NewSessionTicket:
   hs: client ->
@@ -185,5 +179,5 @@ val client12_NewSessionTicket:
   digest: Hash.anyTag ->
   nst: HSM.newSessionTicket12 ->
   ST Receive.incoming
-  (requires fun h0 -> inv hs h0)
-  (ensures fun h0 i h1 -> inv hs h1)
+  (requires fun h0 -> invariant hs h0)
+  (ensures fun h0 i h1 -> invariant hs h1)

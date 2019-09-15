@@ -30,8 +30,8 @@ module TLS.Handshake.Machine
 /// ________________________________________________________________________
 /// From the RFC; omitting 0RTT Data and EOED
 
+
 open FStar.Error
-open FStar.Bytes // still used for cookies, tickets, signatures...
 
 open Mem
 open TLSError
@@ -45,86 +45,97 @@ module HST = FStar.HyperStack.ST
 module HSM = HandshakeMessages
 module LP = LowParse.Low.Base
 module Transcript = HSL.Transcript
-module PF = TLS.Handshake.ParseFlights
-module Rcv = TLS.Handshake.Receive
+module PF = TLS.Handshake.ParseFlights // only for flight names
+module Recv = TLS.Handshake.Receive
+module Send = TLS.Handshake.Send
 
 /// Message types (move to HandshakeMessages or Repr modules)
 
-type sh13 = sh: HSM.sh {Negotiation.Version.selected sh == Correct TLS_1p3}
-
-//type clientHello = HandshakeMessages.clientHello
-//type serverHello = HandshakeMessages.sh
-//type helloRetryRequest = HandshakeMessages.hrr
-//type encryptedExtensions = HandshakeMessages.encryptedExtensions
-//type finished = HandshakeMessages.finished // TODO shared type, ideally with tighter bound.
-
+#push-options "--max_ifuel 1"
+type sh13 = Negotiation.(sh: HSM.sh {selected_version sh == Correct TLS_1p3})
+#pop-options
 
 /// Auxiliary datatypes (shared between states)
 ///
-/// Each Handshake state embeds the state of other modules, as
-/// follows. (As we verify more, we may use more precise,
-/// state-specific types for them.)
+/// Each Handshake state embeds the state of other handshake modules
+/// in state-passing style, as follows. (As we verify more, we may use
+/// more precise, state-specific types for them.)
 ///
 /// * It is parameterized by a region and a configuration.
-///   LATER: add footprint and invariant as we lower the config.
 
 // TLS.Config will define a more convenient client-specific configuration
 let client_config = Negotiation.client_config
 
-/// * We will not keep Nego state.
-///   We may keep [mode] for TLS 1.2 states for now
-///
 /// * We keep [epochs] for now, to be replaced by multistreams.
 ///
-/// * We keep the receiver private state and a connection-allocated
-///   input buffer, also used by a stub to exchange bytes with the TLS record.
-///   [I wish we could pass fewer indexes.]
+/// * We keep the Receive state, includiong a connection-allocated
+///   input slice, also used by a stub to exchange bytes with the TLS
+///   record.  [I wish we could pass fewer indexes.]
 ///
-///   Note HS needs to select the incoming flight type.
-
-(*
-type noeq type rcv_state = {
-  flt: HSL.Receive.in_progress_flt_t; // The incoming flight we are waiting for; erase?
-  rcv: HSL.Receive.hsl_state;
-  rcv_b: Buffer.buffer UInt8.t; // We need a writable slice for buffering fragment; how to view it as a MITLS.Repr.const_slice?
-  rcv_from: UInt32.t;
-  rcv_to: UInt32.t;
-  // { rcv_from <= rcv_to /\ v rcv_to <= Buffer.length rcv_b }
-  }
-//let rcv_inv hsl flt = HSL.Receive.pre hsl.rcv hsl.rcv_b hsl.rcv_from hsl.rcv_to flt
-*)
-
-
-
-/// * We recompute the transcript from the HS state (with a
-///   state-dependent bound on its length) and keep a digest with that
-///   current contents.
+///   This state is indexed by the incoming flight type.
 ///
-///   This requires that HS state keep message contents, at least
-///   ghostly. (Good to try out erasure.)
+/// * We keep a digest, indexed by its hash algorith. We recompute the
+///   transcript from the handshake state (with a state-dependent
+///   bound on its length) and state that it is currently-hased in the
+///   digest in the stateful machine invariant. This requires that the
+///   machine state keep message contents, at least ghostly. (Good to
+///   try out erasure.)
 ///
-///   We do not include the digest in shared state because its
-///   allocation is late and algorithm-dependent.
-// digest: Transcript.state ha
-// TODO: invariant etc .
+/// * We keep the Send state, including a connection-allocated output
+///   slice.
+///
+/// The resulting record of sub-states is dynamically allocated in the
+/// handshake, and kept in most subsequent states of the machine:
 
-/// * TLS.Handshake.Send: we keep send_state. TODO: invariant etc
+noeq type msg_state' (region: rgn) (inflight: PF.in_progress_flt_t) random ha  = {
+  digest: Transcript.state ha;
+  sending: TLS.Handshake.Send.send_state;
+  receiving: Recv.(r:state {
+    PF.length_parsed_bytes r.pf_st == 0 \/ in_progress r == inflight });
+  epochs: Old.Epochs.epochs region random; }
+// TODO complete regional refinements
+// TODO stateful epochs (or wait for their refactoring?)
+
+let msg_state (region: rgn) (inflight: PF.in_progress_flt_t) random ha  =
+  ms:msg_state' region inflight random ha{
+     B.loc_disjoint (Transcript.footprint ms.digest) (TLS.Handshake.Send.footprint ms.sending) /\
+     B.loc_disjoint (Transcript.footprint ms.digest) (Recv.loc_recv ms.receiving) /\
+     B.loc_disjoint (TLS.Handshake.Send.footprint ms.sending) (Recv.loc_recv ms.receiving) }
+
+let msg_invariant #region #inflight #random #ha (ms:msg_state region inflight random ha) transcript h =
+    Transcript.invariant ms.digest transcript h /\
+    Send.invariant ms.sending h /\
+    Receive.invariant ms.receiving h
+
+let msg_state_footprint #region #inflight #random #ha (ms:msg_state region inflight random ha) =
+  B.loc_union (B.loc_union
+    (Transcript.footprint ms.digest)
+    (TLS.Handshake.Send.footprint ms.sending))
+    (Recv.loc_recv ms.receiving)
+
+let create_msg_state (region: rgn) (inflight: PF.in_progress_flt_t) random ha:
+  ST (msg_state region inflight random ha)
+  (requires fun h0 -> True)
+  (ensures fun h0 mst h1 -> True)
+=
+  // TODO. Who should allocate this receive buffer?
+  let b = admit() in
+  let d, _ = Transcript.create region ha in
+  { digest = d;
+    sending = Send.send_state0;
+    receiving = Receive.create b;
+    epochs = Old.Epochs.create region random }
 
 
 /// * Old.KeySchedule: most state keep either ks_client_state or
 ///   ks_server_state (usually knowing exactly its constructor).
 ///
-///   We should start thinking about their invariants and footprints.
+///   We should start thinking about their invariants and footprints,
+///   subject to conditional idealization.
 
-(* NOW IN KEYSCHEDULE:
-noeq type client_keys = {
-  // The [is_quic] fields duplicate a flag in the current config;
-  // they are currently used to select some HKDF, as it was in
-  // [KeySchedule.ks]. REFACTOR?
-  cks_is_quic: bool;
-  cks: Old.KeySchedule.ks_client_state; }
-*)
 let client_keys = Old.KeySchedule.ks_client_state
+let c_wait_ServerHello_keys = s: client_keys { Old.KeySchedule.C_wait_ServerHello? s }
+let c13_wait_Finished1_keys = s: client_keys { Old.KeySchedule.C13_wait_Finished1? s }
 
 // TODO get rid of sks_is_quic, as we did for the client (the caller
 // just passes to KeySchedule the config's is_quic as additional
@@ -133,30 +144,43 @@ noeq type server_keys = {
   sks_is_quic: bool;
   sks: Old.KeySchedule.ks_server_state; }
 
-// let Secret = Handshake.Secret
-
-let c_wait_ServerHello_keys = s: client_keys { Old.KeySchedule.C_wait_ServerHello? s }
-let c13_wait_Finished1_keys = s: client_keys { Old.KeySchedule.C13_wait_Finished1? s }
-
 // Helpful refinement within Secret? stating that an index is for a PSK.
 assume val is_psk: Idx.id -> bool
 
+/// From Handshake.Secret, indexing TBC; for now we omit their
+/// (opaque) part of the state. Unused?
 
-/// To be aligned with Transcript.
-///
+assume type secret_c13_wait_ServerHello
+  (pskis: list (i:_{is_psk i}))
+  (groups: list CommonDH.group)
+
+// we may need an extra ghost in the implementation of the type above.
+assume val shares_of_ks:
+  #psks  : list (i:_{is_psk i}) ->
+  #groups: list CommonDH.group ->
+  secret_c13_wait_ServerHello psks groups -> option Extensions.keyShareClientHello
+
+assume val groups_of_ks:
+  option Extensions.keyShareClientHello -> list CommonDH.group
+
+assume val pskis_of_psks: option Extensions.offeredPsks -> list (i:_{is_psk i})
+
+
 /// Different flavors of retry info, with precise ClientHello for
 /// clients and just the hash for stateless servers.
+///
+/// These definitions could go to Transcript.
 
-type client_retry_info = {
+noeq type client_retry_info = {
   ch0: HSM.ch;
   sh0: HSM.valid_hrr; }
 
-type full_offer = {
+noeq type full_offer = {
   full_retry: option client_retry_info;
   full_ch: HSM.ch; // not insisting that ch initially has zeroed binders
   }
 
-type offer = {
+noeq type offer = {
   hashed_retry: option Transcript.retry;
   ch: HSM.ch; // not insisting that ch initially has zeroed binders
   }
@@ -196,7 +220,8 @@ let retry_digest o =
 assume val offered_shares: HSM.ch -> option Extensions.keyShareClientHello
 assume val offered_psks: HSM.ch -> option Extensions.offeredPsks
 
-/// certificate-based credentials (server-only for now)
+
+/// Certificate-based credentials (for now only to identify the server)
 
 type serverCredentials =
   option HandshakeMessages.(certificate13 * certificateVerify13)
@@ -209,6 +234,9 @@ let deobfuscate offer resumeInfo =
   match Negotiation.find_clientPske offer, ris with
   //  | Some (pski::_), ((_,ticket)::_)  -> PSK.decode_age pski.ticket_age ticket.ticket_age_add
   | _ -> PSK.default_obfuscated_age
+
+
+/// Main Negotiation properties, used for witnessing the peer's state.
 
 // witnessed to produce the binder.
 // TBC re: prior consistency; we probably need to branch as only the
@@ -251,24 +279,6 @@ assume val accepted13: (cfg: client_config) -> full_offer -> sh13 -> Type0
 
 assume val client_complete: full_offer -> sh13 -> HSM.encryptedExtensions -> serverCredentials -> Type0
 
-/// From Handshake.Secret, indexing TBC; for now we omit their
-/// (opaque) part of the state.
-
-assume type secret_c13_wait_ServerHello
-  (pskis: list (i:_{is_psk i}))
-  (groups: list CommonDH.group)
-
-// we may need an extra ghost in the implementation of the type above.
-assume val shares_of_ks:
-  #psks  : list (i:_{is_psk i}) ->
-  #groups: list CommonDH.group ->
-  secret_c13_wait_ServerHello psks groups -> option Extensions.keyShareClientHello
-
-assume val groups_of_ks:
-  option Extensions.keyShareClientHello -> list CommonDH.group
-
-assume val pskis_of_psks: option Extensions.offeredPsks -> list (i:_{is_psk i})
-
 
 /// State machine for the connection handshake (private to Handshake).
 /// Each role now has its own type.
@@ -276,50 +286,13 @@ assume val pskis_of_psks: option Extensions.offeredPsks -> list (i:_{is_psk i})
 /// Low*: we'll turn all high-level messages constructor arguments
 /// into ghost, possibly using reprs.
 
-// Will replace both [machineState] and [hs] in Old.Handshake.
-//
 // Compared to the old state machine, we can compute a tag from the
 // current transcript, so there is less need to precompute and store
 // such tags.
 
-/// Stateful parts shared between all states after CH.
-///
-noeq type msg_state' (region: rgn) (inflight: PF.in_progress_flt_t) random ha  = {
-  digest: Transcript.state ha;
-  sending: TLS.Handshake.Send.send_state;
-  receiving: Rcv.(r:state { PF.length_parsed_bytes r.pf_st == 0 \/ in_progress r == inflight });
-  epochs: Old.Epochs.epochs region random; }
-// TODO add regional refinements
 
-let msg_state (region: rgn) (inflight: PF.in_progress_flt_t) random ha  =
-  ms:msg_state' region inflight random ha{
-     B.loc_disjoint (Transcript.footprint ms.digest) (TLS.Handshake.Send.footprint ms.sending) /\
-     B.loc_disjoint (Transcript.footprint ms.digest) (Rcv.loc_recv ms.receiving) /\
-     B.loc_disjoint (TLS.Handshake.Send.footprint ms.sending) (Rcv.loc_recv ms.receiving)
-  }
-
-let msg_state_footprint #region #inflight #random #ha (ms:msg_state region inflight random ha) =
-  B.loc_union
-    (B.loc_union (Transcript.footprint ms.digest) (TLS.Handshake.Send.footprint ms.sending))
-    (Rcv.loc_recv ms.receiving)
-
-
-let create_msg_state (region: rgn) (inflight: PF.in_progress_flt_t) random ha:
-  ST (msg_state region inflight random ha)
-  (requires fun h0 -> True)
-  (ensures fun h0 mst h1 -> True)
-=
-  // who should allocate this receive buffer?
-  let b = admit() in
-  let d, _ = Transcript.create region ha in
-  { digest = d;
-    sending = Send.send_state0;
-    receiving = Receive.create b;
-    epochs = Old.Epochs.create region random }
-
-
-
-/// Computing (ghost) transcripts from the Client state
+/// Computing (ghost) transcripts from the Client state, hopefully
+/// sharable with the Server.
 ///
 let transcript_tch (offer: full_offer { HSM.ch_bound offer.full_ch}) =
   let ch: HSM.clientHello_with_binders = offer.full_ch in
@@ -365,8 +338,9 @@ noeq type mode12 = {
 /// negotiated parameters, which may in principle be recomputed from
 /// the transcript.
 ///
-/// JP: convention is C_ when we don't know yet whether we're doing 12 or 13.
-/// C12 / C13 are for when we know which version we've negotiated.
+/// JP: global handshake convention is C_ when we don't know yet
+/// whether we're doing 12 or 13.  C12 / C13 are for when we know
+/// which version we've negotiated.
 
 #restart-solver
 #set-options "--query_stats"
@@ -481,7 +455,7 @@ noeq type client_state
   // In the TLS 1.2 states below, using [mode] as a placeholder for the final mode,
   // but it may be better to recompute its contents on the fly from ch sh etc.
   //
-  // still missing below Rcv.receive_state and HSL.Send.send_state.
+  // still missing below Recv.receive_state and HSL.Send.send_state.
 
   // 1.2 full, waiting for the rest of the first server flight
   | C12_wait_ServerHelloDone:
@@ -555,20 +529,19 @@ let client_invariant
     // and a (ghost) transcript. So, we reconstruct the transcript here (because
     // we can always do so) and use it to state the invariant.
     let transcript = Transcript.ClientHello (retry_digest offer.full_retry) offer.full_ch in
-    Transcript.invariant ms.digest transcript h /\
-
-    Receive.invariant ms.receiving h
-
+    msg_invariant ms transcript h
     // KeySchedule.invariant ks h
 
   | C13_wait_Finished1 offer sh ms ks ->
     // let sh = admit() in // : _ = assume False; sh in // mismatch on transcript refinement
     let transcript = Transcript.Transcript13 (retry_digest offer.full_retry) offer.full_ch sh [] in
-    Transcript.invariant ms.digest transcript h
+    msg_invariant ms transcript h
     // KeySchedule.invariant_C13_wait_Finished1 ks
 
   | C13_complete offer sh ee server_id fin1 fin2 eoed_args ms ks ->
-    True // for TCing experiment
+    True
+    // msg_invariant ms transcript h
+    // TBC
 
   | _ -> False // TBC
 
@@ -887,7 +860,7 @@ let client_server_certificates (#region:rgn) (#cfg:client_config) (s:client_stat
 type server_config = config // TBC
 
 //TODO share with Transcript
-type server_retry_info = digest0: bytes & HSM.valid_hrr
+type server_retry_info = digest0: Bytes.bytes & HSM.valid_hrr
 type s_offer = {
   retry: option server_retry_info;
   ch: HSM.ch; }
@@ -1027,13 +1000,13 @@ let invariant s h =
   match s with
   | Client region config r ->
     h `HS.contains` r /\
-    client_invariant (HS.sel h r) h /\
-    B.loc_disjoint (B.loc_mreference r) (client_footprint (HS.sel h r))
+    B.loc_disjoint (B.loc_mreference r) (client_footprint (HS.sel h r)) /\
+    client_invariant (HS.sel h r) h
 
   | Server region config r ->
     h `HS.contains` r /\
-    server_invariant (HS.sel h r) h /\
-    B.loc_disjoint (B.loc_mreference r) (server_footprint (HS.sel h r))
+    B.loc_disjoint (B.loc_mreference r) (server_footprint (HS.sel h r)) /\
+    server_invariant (HS.sel h r) h
 
 
 let frame s = match s with
