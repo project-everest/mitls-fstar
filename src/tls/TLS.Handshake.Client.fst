@@ -16,7 +16,6 @@ module PF = TLS.Handshake.ParseFlights // avoidable?
 module HMAC = Old.HMAC.UFCMA
 module KS = Old.KeySchedule
 module HS = FStar.HyperStack
-module Transcript = HSL.Transcript
 module Receive = TLS.Handshake.Receive
 
 val discard: bool -> ST unit
@@ -65,12 +64,11 @@ let export #region #n epochs xk =
 let transcript_extract
   #ha
   (di:Transcript.state ha)
-  (tx: Ghost.erased Transcript.transcript_t):
+  (tx: Transcript.transcript_t):
   ST Bytes.bytes
   (requires fun h0 ->
-    Transcript.invariant di (Ghost.reveal tx) h0)
+    Transcript.invariant di tx h0)
   (ensures fun h0 t h1 ->
-    let tx = Ghost.reveal tx in
     Transcript.invariant di tx h1 /\
     B.(modifies (
       Transcript.footprint di `loc_union`
@@ -80,7 +78,7 @@ let transcript_extract
   =
   // Show that the transcript state is disjoint from the new frame since it's not unused
   (**) let h0 = get() in
-  (**) Transcript.elim_invariant di (Ghost.reveal tx) h0;
+  (**) Transcript.elim_invariant di tx h0;
   push_frame();
   let ltag = EverCrypt.Hash.Incremental.hash_len ha in
   // AF: Why not allocate directly with size ltag?
@@ -128,10 +126,10 @@ let extend13
   (di:Transcript.state ha)
   (msg: HSM.handshake13)
   (#n: Ghost.erased nat)
-  (tx0: Transcript.g_transcript_n n {Ghost.reveal n < Transcript.max_transcript_size - 1}):
-  ST (result (Transcript.g_transcript_n (Ghost.hide (Ghost.reveal n+1))))
+  (tx0: Transcript.transcript_n n {Ghost.reveal n < Transcript.max_transcript_size - 1}):
+  ST (result (Transcript.transcript_n (Ghost.hide (Ghost.reveal n+1))))
   (requires fun h0 ->
-    let tx0 = Ghost.reveal tx0 in Transcript.Transcript13? tx0 /\
+    Transcript.Transcript13? tx0 /\
     B.loc_disjoint (Send.footprint sending) (Transcript.footprint di) /\
     Send.invariant sending h0 /\
     Transcript.invariant di tx0 h0)
@@ -141,21 +139,19 @@ let extend13
     match r with
     | Error _ -> True
     | Correct tx1 ->
-      let tx0 = Ghost.reveal tx0 in
-      let tx1 = Ghost.reveal tx1 in
       Transcript.invariant di tx1 h1 /\
       tx1 == Transcript.snoc13 tx0 msg ))
   =
   let h0 = get () in
   let r = MITLS.Repr.Handshake13.serialize sending.Send.out_slice sending.Send.out_pos msg in
   let h1 = get () in
-  Transcript.frame_invariant di (Ghost.reveal tx0) h0 h1 (B.loc_buffer sending.Send.out_slice.LowParse.Low.Base.base);
+  Transcript.frame_invariant di tx0 h0 h1 (B.loc_buffer sending.Send.out_slice.LowParse.Low.Base.base);
   match r with
   | None ->
     fatal Internal_error "output buffer overflow"
   | Some r ->
-    List.lemma_snoc_length (Transcript.Transcript13?.rest (Ghost.reveal tx0), msg);
-    let tx1 = HSL.Transcript.extend di (Transcript.LR_HSM13 r) tx0 in
+    List.lemma_snoc_length (Transcript.Transcript13?.rest tx0, msg);
+    let tx1 = Transcript.extend di (Transcript.LR_HSM13 r) tx0 in
     let b = MITLS.Repr.to_bytes r in
     trace ("extended with "^Bytes.hex_of_bytes b);
     // we do *not* return the modified indexes in [sending]
@@ -259,7 +255,7 @@ let rec client_Binders region ha0 di0 tch bkeys =
   | [] -> []
   | bkey::bkeys ->
     let ha = Negotiation.ha_bkey13 bkey in
-    let tx: Transcript.g_transcript_n (Ghost.hide 0) = Ghost.hide (transcript_tch tch) in
+    let tx: Transcript.transcript_n (Ghost.hide 0) = transcript_tch tch in
     let tag =
       if ha = ha0 then
         transcript_extract di0 tx
@@ -476,7 +472,7 @@ let client_ServerHello (Client region config r) sh =
       // (two cases depending on retry)
 
       let server_share = Negotiation.find_serverKeyShare sh in
-      let transcript_sh = Transcript.extend ms.digest (admit() (*sh*)) (Ghost.hide (transcript_offer offer)) in
+      let transcript_sh = Transcript.extend ms.digest (admit() (*sh*)) (transcript_offer offer) in
       //assert(transcript_sh == transcript13 offer sh []);
       let digest_ServerHello = transcript_extract ms.digest transcript_sh in
       let hs_keys, ks = KS.ks_client13_sh
@@ -568,10 +564,10 @@ let client13_Finished2 (Client region config r) (*ocr*) =
   //   | None -> digestServerFinished in
 
   // prepare & send Finished2
-  let transcript_Finished1: Transcript.g_transcript_n (Ghost.hide 0) = Ghost.hide (transcript13 offer sh []) in
+  let transcript_Finished1: Transcript.transcript_n (Ghost.hide 0) = transcript13 offer sh [] in
 
   let h = get() in
-  assume(Transcript.invariant ms.digest (Ghost.reveal transcript_Finished1) h);
+  assume(Transcript.invariant ms.digest transcript_Finished1 h);
   let digest_Finished1 = transcript_extract ms.digest transcript_Finished1 in
 
   assume False; // missing too many stateful invariants
@@ -624,16 +620,15 @@ private let coerce_crt crt = List.Tot.map coerce_asncert crt
 // process the certificate chain and verify the server signature
 
 // it may be more convenient to pass the whole ms with its invariant
-let client13_c_cv #ha sending (digest: Transcript.state ha) cfg offer (transcript_ee: Transcript.g_transcript_n (Ghost.hide 1))
+let client13_c_cv #ha sending (digest: Transcript.state ha) cfg offer (transcript_ee: Transcript.transcript_n (Ghost.hide 1))
   (c: Parsers.Handshake13_m13_certificate.handshake13_m13_certificate)
   (cv: HSM.certificateVerify13) :
-  ST (result (Transcript.g_transcript_n (Ghost.hide 3)))
+  ST (result (Transcript.transcript_n (Ghost.hide 3)))
   (requires fun h0 ->
-    let tr0 = Ghost.reveal transcript_ee in
     Send.invariant sending h0 /\
-    Transcript.invariant digest tr0 h0 /\
+    Transcript.invariant digest transcript_ee h0 /\
     B.loc_disjoint (Transcript.footprint digest) (TLS.Handshake.Send.footprint sending) /\
-    Transcript.Transcript13? tr0)
+    Transcript.Transcript13? transcript_ee)
   (ensures fun h0 r h1 ->
     True)
   =
@@ -681,7 +676,7 @@ let client13_Finished1 hs ee client_cert_request server_cert_certverify finished
   let hlen = Hacl.Hash.Definitions.hash_len ha in
   let btag: Hacl.Hash.Definitions.hash_t ha =
     B.sub (B.alloca 0uy 64ul) 0ul hlen in // allocated large enough for any digest
-  let transcript_sh: Transcript.g_transcript_n (Ghost.hide 0) = Ghost.hide (transcript13 offer sh []) in
+  let transcript_sh: Transcript.transcript_n (Ghost.hide 0) = transcript13 offer sh [] in
 
   let h0 = get() in assume(invariant hs h0);//TODO frame a few calls above
   match extend13 ms.sending ms.digest (HSM.M13_encrypted_extensions ee) transcript_sh with
