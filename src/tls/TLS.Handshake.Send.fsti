@@ -107,6 +107,11 @@ let send_state0 = {
   outgoing_next_keys = None;
   outgoing_complete = false; }
 
+// used within QUIC, to be revised with i/o buffer management policy.
+let to_be_written (s:send_state): nat =
+  Bytes.length s.outgoing
+
+
 val write_at_most: sto:send_state -> i:id -> max:nat -> send_state & outgoing i
 
 val signals:

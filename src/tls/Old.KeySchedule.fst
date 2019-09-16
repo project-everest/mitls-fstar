@@ -400,8 +400,9 @@ private let rec tickets13 #rid acc (l:list (psk_identifier * Ticket.ticket))
 //   st := C (C_wait_ServerHello cr esl gs);
 //   bkl
 
-let ks_client13_hello_retry ks0 (g:CommonDH.group)
-  : ST0 (CommonDH.share g * _) =
+let ks_client13_hello_retry 
+  (ks0:ks_client_state{ C_wait_ServerHello?ks0 }) (g:CommonDH.group)
+  : ST0 (CommonDH.share g * ks1:ks_client_state{ C_wait_ServerHello?ks1 }) =
   let C_wait_ServerHello cr esl gs = ks0 in
   let s : CommonDH.ikeyshare g = CommonDH.keygen g in
   let ks1 = C_wait_ServerHello cr esl [(| g, s |)] in

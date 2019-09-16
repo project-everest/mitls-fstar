@@ -469,8 +469,8 @@ let isSentinelRandomValue client_pv server_pv server_random =
   (server_pv `leqPV` TLS_1p1 && TLS_1p2 `leqPV` client_pv && server_random = down @| abyte 0z)
 // TODO do we produce them? do we get downgrade resistance from them?
 
-/// ServerHello sets the protocol version
-let selected sh =
+/// ServerHello sets the protocol version (not necessarily locally acceptable)
+let selected sh : result Parsers.ProtocolVersion.protocolVersion =
   let pv0 = HSM.sh_version sh in
   if TLS_1p3 `leqPV` pv0 then
     fatal Illegal_parameter "Server selected an illegal legacy protocol version"

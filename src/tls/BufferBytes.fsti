@@ -1,5 +1,5 @@
 (**
-Functions to go back and forth between FStar.Bytes and Buffers
+Functions to go back and forth between FStar.Bytes and Buffers. THIS MODULE IS DEPRECATE. Use Fstar.Bytes instead. 
 *)
 module BufferBytes
 

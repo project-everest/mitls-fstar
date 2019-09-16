@@ -23,8 +23,6 @@ module HST = FStar.HyperStack.ST
 
 module HSM = HandshakeMessages
 module CH = Parsers.ClientHello
-// module SH = Parsers.RealServerHello
-module HRR = Parsers.HelloRetryRequest
 
 open Extensions // for its aggregated datatypes
 
@@ -102,7 +100,9 @@ let string_of_ees xs = string_of_list string_of_ee "[" xs
 let string_of_ciphersuitenames xs = string_of_list string_of_cipherSuite "[" xs
 let string_of_hrrs x = string_of_extensionType (tag_of_serverHelloExtension x)
 
-
+inline_for_extraction
+let selected_version sh = Negotiation.Version.selected sh 
+  
 (* Negotiation: HELLO sub-module *)
 type ri = cVerifyData * sVerifyData
 
@@ -212,7 +212,15 @@ let get_sni o =
   | Some (CHE_server_name ((Sni_host_name sni)::_)) -> sni
   | _ -> empty_bytes
 
-// 19-09-02 to be reviewed 
+let get_alpn o =
+  match find_client_extension CHE_application_layer_protocol_negotiation? o with
+  | None -> 
+      // 19-04-23 TODO return a result (list can't be empty); requires adapting QUIC API?
+      assume False; 
+      []
+  | Some (CHE_application_layer_protocol_negotiation pl) -> pl
+
+// 19-09-02 to be reviewed to account for the offered PSKs.
 let offered_ha offer =
   match offer.Parsers.ClientHello.cipher_suites with
   | [] -> EverCrypt.Hash.Incremental.SHA2_256
@@ -226,55 +234,35 @@ let selected_ha sh =
   | Some (CipherSuite.CipherSuite13 _ ha) -> ha
   | _ -> EverCrypt.Hash.Incremental.SHA2_256
   
-  // 19-04-23 TODO recheck error cases in case we don't understand the extension contents; should we return a result? 
+// 19-04-23 TODO recheck error cases in case we don't understand the extension contents; should we return a result? 
 
 // let is_resumption12 m =
 //   not (is_pv_13 m.n_protocol_version)  &&
 //   m.n_sessionID = m.n_offer.CH.session_id
-
+//
 // let is_cacheable12 m =
 //   not (is_pv_13 m.n_protocol_version)  &&
 //   ( let sid = m.n_sessionID in
 //     sid <> m.n_offer.CH.session_id &&
 //     sid <> empty_bytes)
 
-(*
-let ns_step (#r:role) (#cfg:config)
-  (ns:negotiationState r cfg) (ns':negotiationState r cfg) =
-  match ns, ns' with
-  | C_Init nonce, C_Offer offer -> nonce == offer.CH.random
-  | C_Offer offer, C_Mode mode -> mode.n_offer == offer
-  | C_Offer _, C_Complete _ _ -> True
-  | C_Mode _, C_WaitFinished2 _ _ -> True
-  | C_Mode _, C_Complete _ _ -> True
-  | S_Init _, S_ClientHello _ _ -> True
-  | S_ClientHello _ _, S_Mode _ _ -> True
-  | _, _ -> ns == ns'
-
-// used? worth the trouble? 
-let ns_rel (#r:role) (#cfg:config)
-  (ns:negotiationState r cfg) (ns':negotiationState r cfg) =
-  ns_step ns ns' \/
-  (exists ns0. ns_step ns ns0 /\ ns_step ns0 ns')
-
-let ns_step_lemma #r #cfg (ns0 ns1: negotiationState r cfg): Lemma 
-  (requires ns_step ns0 ns1) 
-  (ensures ns_rel ns0 ns1) = ()
-*)
+type id_ticket = psk_identifier * Ticket.ticket
+type id_ticket12 = psk_identifier * t:Ticket.ticket{Ticket.Ticket12? t}
+type id_ticket13 = psk_identifier * t:Ticket.ticket{Ticket.Ticket13? t}
 
 let rec find_ticket12 
-  (acc:option (psk_identifier * t:Ticket.ticket{Ticket.Ticket12? t})) 
-  (r: list (psk_identifier * Ticket.ticket)) :
-  Tot (option (psk_identifier * t:Ticket.ticket{Ticket.Ticket12? t})) (decreases r) 
+  (acc:option id_ticket12) 
+  (r: list id_ticket) :
+  Tot (option id_ticket12) (decreases r) 
 =
   match r with   
   | [] -> acc
   | (tid, t) :: r -> find_ticket12 (if Ticket.Ticket12? t then Some (tid, t) else acc) r
 
 let rec filter_ticket13 
-  (acc:list (psk_identifier * t:Ticket.ticket{Ticket.Ticket13? t}))
-  (r: list (psk_identifier * Ticket.ticket)) :
-  Tot (list (psk_identifier * t:Ticket.ticket{Ticket.Ticket13? t})) (decreases r) 
+  (acc:list id_ticket13)
+  (r: list id_ticket) :
+  Tot (list id_ticket13) (decreases r) 
 =
   match r with 
   | [] -> List.Tot.rev acc //why?
@@ -282,13 +270,14 @@ let rec filter_ticket13
 
 let rec ticket13_pskinfo 
   (acc:list (psk_identifier * pskInfo))
-  (r:list (psk_identifier * t:Ticket.ticket{Ticket.Ticket13? t})): // refinement required for Some?.v below
+  (r:list id_ticket13): // refinement required for Some?.v below
   Tot (list (psk_identifier * pskInfo)) (decreases r) =
   match r with
   | [] -> List.Tot.rev acc
   | (tid, t) :: r -> ticket13_pskinfo ((tid, Some?.v (Ticket.ticket_pskinfo t))::acc) r
 
-// imported from Extensions 
+
+/// Auxiliary code for issuing/processing extensions
 
 /// High-level extensions offered by the Client, with plenty of
 /// intermediate functions for their implementation refinements.
@@ -385,8 +374,6 @@ let sigalgs_extension cfg: list clientHelloExtension =
   [CHE_signature_algorithms 
     (assume False; // unprovable list bytesize due to double vlbytes
     cfg.signature_algorithms)]
-
-module LPS = LowParse.SLow.Base
 
 let sigalgs_extension_new cfg: Tot (result (list clientHelloExtension)) =
   if check_clientHelloExtension_CHE_signature_algorithms_bytesize cfg.CFG.signature_algorithms
@@ -1268,8 +1255,10 @@ let choose_extension (s:share) (e:clientHelloExtension) =
 
 let group_of_hrr = TLS.Cookie.find_keyshare
 
-#push-options "--admit_smt_queries true"
-let client_HelloRetryRequest ch1 hrr (Some s) =
+let client_HelloRetryRequest ch1 hrr share =
+  match share with 
+  | None -> fatal Internal_error "expected a share in HRR negtiation" 
+  | Some s -> (
   let sid = HSM.hrr_session_id hrr in
   let cs = HSM.hrr_cipher_suite hrr in
   let el = HSM.hrr_extensions hrr in 
@@ -1279,19 +1268,24 @@ let client_HelloRetryRequest ch1 hrr (Some s) =
   let ext', no_cookie : list clientHelloExtension * bool =
     match List.Tot.find HRRE_cookie? el with
     | Some (HRRE_cookie c) -> CHE_cookie c :: ext', false
-    | None -> ext', true in
+    | _ -> ext', true in
+  let valid = 
+    match cipherSuite_of_name cs with
+    | Some (CipherSuite13 _ _) -> true
+    | _ -> false in 
+  if not valid then 
+    fatal Illegal_parameter "HRR ciphersuite should be at least TLS 1.3"
+  else 
   if sid <> ch1.CH.session_id then
     fatal Illegal_parameter "mismatched session ID in HelloRetryRequest"
-  else
-   begin
-    assume(clientHelloExtensions_list_bytesize ext' <= 65535);
-    let ch2 = {ch1 with CH.extensions = ext'} in
-    // let ri = (hrr, old_shares, old_psk) in
-    Correct ch2
-   end
-#pop-options
+  else (
+  
+  assume(clientHelloExtensions_list_bytesize ext' <= 65535);
+  let ch2 = {ch1 with CH.extensions = ext'} in
+  // let ri = (hrr, old_shares, old_psk) in
+  Correct ch2 ))
 
-let check_retry ch1 hrr ch2 sh =
+let client_accept_second_ServerHello ch1 hrr ch2 sh =
   // FIXME(adl) check SH is consistent with HRR
   Correct ()
 
@@ -1625,7 +1619,7 @@ let client_accept_ServerHello cfg offer sh =
   pv <-- Negotiation.Version.accept cfg sh; 
   cs <-- ciphersuite_accept cfg pv sh;
   pski <-- accept_pski offer sh;  
-  let cs: cipherSuite = cs in 
+  let cs: selected_cs_t sh = cs in 
   return (cs,pski)
 
 (*
@@ -2049,20 +2043,6 @@ let rec register_shares (l:list pre_share):
   | (| g, gx |) :: t -> (| g, CommonDH.register_dhi #g gx |) :: register_shares t in
   // 19-06-17 TODO framing of registration 
   assume False; r
-
-let get_sni o =
-  match find_client_extension CHE_server_name? o with
-  | Some (CHE_server_name ((Sni_host_name sni)::_)) -> sni
-  | _ -> empty_bytes
-  // 19-04-23 TODO recheck error cases in case we don't understand the extension contents; should we return a result? 
-
-let get_alpn o =
-  match find_client_extension CHE_application_layer_protocol_negotiation? o with
-  | None -> 
-      // 19-04-23 TODO return a result (list can't be empty); requires adapting QUIC API?
-      assume False; 
-      []
-  | Some (CHE_application_layer_protocol_negotiation pl) -> pl
 
 let nego_alpn (o:offer) (cfg:config) : bytes =
   match cfg.alpn with
