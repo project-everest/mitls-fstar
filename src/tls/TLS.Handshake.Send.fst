@@ -75,16 +75,16 @@ let signals sto next_keys1 complete1 =
 
 // usable also on the receiving side; later, we will use instead a
 // lower-level caller-allocated output buffer.
-val tag: #a:EverCrypt.Hash.alg -> transcript_state a -> transcript -> St bytes
+val tag: #a:EverCrypt.Hash.alg -> Transcript.state a -> Transcript.transcript_t -> St bytes
 let tag #a stt transcript =
   let h0 = get () in
-  assume (Transcript.invariant stt (Ghost.reveal transcript) h0);
-  Transcript.elim_invariant stt (Ghost.reveal transcript) h0;
+  assume (Transcript.invariant stt transcript h0);
+  Transcript.elim_invariant stt transcript h0;
   push_frame();
   let ltag =  Hashing.Spec.hash_len a in
   let btag = LowStar.Buffer.alloca 0uy ltag in
   let h1 = get () in
-  Transcript.frame_invariant stt (Ghost.reveal transcript) h0 h1 B.loc_none;
+  Transcript.frame_invariant stt transcript h0 h1 B.loc_none;
   Transcript.extract_hash stt btag transcript;
   let tag = FStar.Bytes.of_buffer ltag btag in
   pop_frame();
@@ -113,16 +113,16 @@ let send_ch
 = let h0 = get () in
   let r = MITLS.Repr.Handshake.serialize sto.out_slice sto.out_pos m in
   let h1 = get () in
-  Transcript.frame_invariant stt (Ghost.reveal t) h0 h1 (B.loc_buffer sto.out_slice.LowParse.Low.Base.base);
+  Transcript.frame_invariant stt t h0 h1 (B.loc_buffer sto.out_slice.LowParse.Low.Base.base);
   match r with
   | None ->
     fatal Internal_error "output buffer overflow"
   | Some r ->
-    let t' = HSL.Transcript.extend stt (Transcript.LR_ClientHello r) t in
+    let t' = Transcript.extend stt (Transcript.LR_ClientHello r) t in
     let b = MITLS.Repr.to_bytes r in
     trace ("send "^hex_of_bytes b);
     let sto = { sto with out_pos = r.MITLS.Repr.end_pos; outgoing = sto.outgoing @| b } in
-    correct (sto, t') // Ghost.hide (Ghost.reveal t'))
+    correct (sto, t')
 
 #push-options "--z3rlimit 32"
 
@@ -140,8 +140,8 @@ let send_hrr
       fatal Internal_error "output_buffer_overflow for hrr"
     | Some r_hrr ->
       let h1 = get () in
-      Transcript.frame_invariant stt (Ghost.reveal t) h0 h1 (B.loc_buffer sto.out_slice.LowParse.Low.Base.base);
-      let t' = HSL.Transcript.extend stt (Transcript.LR_HRR r_tag r_hrr) t in
+      Transcript.frame_invariant stt t h0 h1 (B.loc_buffer sto.out_slice.LowParse.Low.Base.base);
+      let t' = Transcript.extend stt (Transcript.LR_HRR r_tag r_hrr) t in
       let b = MITLS.Repr.to_bytes r_tag @| MITLS.Repr.to_bytes r_hrr in
       trace ("send "^hex_of_bytes b);
       let sto = { sto with out_pos = r_hrr.MITLS.Repr.end_pos; outgoing = sto.outgoing @| b } in
@@ -158,7 +158,7 @@ let extend_hrr #ha sending di retry msg #n tx0 =
   let h0 = get() in
   // Need to call elim_invariant with initial memory to conclude that the footprint
   // is disjoint from the new frame
-  (**) Transcript.elim_invariant di (Ghost.reveal tx0) h0;
+  (**) Transcript.elim_invariant di tx0 h0;
   push_frame();
   let ltag = EverCrypt.Hash.Incremental.hash_len ha in
   let btag = LowStar.Buffer.alloca 0uy ltag in
@@ -184,18 +184,18 @@ let send13
 = let h0 = get () in
   let r = MITLS.Repr.Handshake13.serialize sto.out_slice sto.out_pos m in
   let h1 = get () in
-  Transcript.frame_invariant stt (Ghost.reveal t) h0 h1 (B.loc_buffer sto.out_slice.LowParse.Low.Base.base);
+  Transcript.frame_invariant stt t h0 h1 (B.loc_buffer sto.out_slice.LowParse.Low.Base.base);
   match r with
   | None ->
     fatal Internal_error "output buffer overflow"
   | Some r ->
 //    let t : Ghost.erased Transcript.transcript_t = Ghost.hide (Ghost.reveal t) in
-    List.lemma_snoc_length (Transcript.Transcript13?.rest (Ghost.reveal t), m);
-    let t' = HSL.Transcript.extend stt (Transcript.LR_HSM13 r) t in
+    List.lemma_snoc_length (Transcript.Transcript13?.rest t, m);
+    let t' = Transcript.extend stt (Transcript.LR_HSM13 r) t in
     let b = MITLS.Repr.to_bytes r in
     trace ("send "^hex_of_bytes b);
     let sto = { sto with out_pos = r.MITLS.Repr.end_pos; outgoing = sto.outgoing @| b } in
-    correct (sto, t') // Ghost.hide (Ghost.reveal t'))
+    correct (sto, t')
 
 
 /// Serializes and buffers a message to be sent, and extends the
@@ -213,7 +213,7 @@ let send_extract13 #ha stt #_ t sto m =
   (**) let h0 = get() in
   // Need to call elim_invariant with initial memory to conclude that the footprint
   // is disjoint from the new frame
-  (**) Transcript.elim_invariant stt (Ghost.reveal t) h0;
+  (**) Transcript.elim_invariant stt t h0;
   push_frame();
   let ltag = EverCrypt.Hash.Incremental.hash_len ha in
   let btag = LowStar.Buffer.alloca 0uy ltag in
@@ -224,7 +224,7 @@ let send_extract13 #ha stt #_ t sto m =
   let tag = FStar.Bytes.of_buffer ltag btag in
   pop_frame();
   (**) let h2 = get() in
-  (**) Transcript.frame_invariant stt (Ghost.reveal tr) h1 h2 (B.loc_region_only false (FStar.HyperStack.get_tip h1));
+  (**) Transcript.frame_invariant stt tr h1 h2 (B.loc_region_only false (FStar.HyperStack.get_tip h1));
   Correct(sto,tag,tr)
 
 #pop-options
@@ -248,15 +248,15 @@ let msg_repr_type (msg: msg) (b: MITLS.Repr.const_slice)
 
 val send:
   #a:EverCrypt.Hash.alg ->
-  transcript_state a -> transcript ->
+  Transcript.state a -> Transcript.transcript_t ->
   send_state -> msg ->
-  St (result (send_state & transcript))
+  St (result (send_state & Transcript.transcript_t))
 
 //#push-options "--z3rlimit 32"
 let send #a stt transcript0 sto msg =
   let h0 = get () in
   assume (LowParse.Low.Base.live_slice h0 sto.out_slice);
-  assume (Transcript.invariant stt (Ghost.reveal transcript0) h0);
+  assume (Transcript.invariant stt transcript0 h0);
   assume (B.loc_disjoint (B.loc_buffer sto.out_slice.LowParse.Low.Base.base) (Transcript.footprint stt));
   let r : option (msg_repr_type msg (MITLS.Repr.of_slice sto.out_slice)) =
     match msg with
@@ -284,10 +284,10 @@ let send #a stt transcript0 sto msg =
     begin match olabel with
     | Some label ->
       let h1 = get () in
-      Transcript.frame_invariant stt (Ghost.reveal transcript0) h0 h1 (B.loc_buffer sto.out_slice.LowParse.Low.Base.base);
-      assume (Transcript.extensible (Ghost.reveal transcript0));
-      assume (Some? (Transcript.transition (Ghost.reveal transcript0) (Transcript.label_of_label_repr label)));
-      let transcript1 = HSL.Transcript.extend stt label transcript0 in
+      Transcript.frame_invariant stt transcript0 h0 h1 (B.loc_buffer sto.out_slice.LowParse.Low.Base.base);
+      assume (Transcript.extensible transcript0);
+      assume (Some? (Transcript.transition transcript0 (Transcript.label_of_label_repr label)));
+      let transcript1 = Transcript.extend stt label transcript0 in
       let b = MITLS.Repr.to_bytes r in
       trace ("send "^hex_of_bytes b);
       assume (FStar.Bytes.len sto.outgoing <= sto.out_pos);
@@ -298,9 +298,9 @@ let send #a stt transcript0 sto msg =
 
 val send_tag:
   #a:EverCrypt.Hash.alg ->
-  transcript_state a -> transcript ->
+  Transcript.state a -> Transcript.transcript_t ->
   send_state -> msg ->
-  St (result (send_state & transcript & bytes))
+  St (result (send_state & Transcript.transcript_t & bytes))
 
 let send_tag #a stt transcript0 sto msg =
   let r = send #a stt transcript0 sto msg in

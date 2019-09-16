@@ -44,7 +44,6 @@ module HST = FStar.HyperStack.ST
 
 module HSM = HandshakeMessages
 module LP = LowParse.Low.Base
-module Transcript = HSL.Transcript
 module PF = TLS.Handshake.ParseFlights
 module Rcv = TLS.Handshake.Receive
 
@@ -161,11 +160,12 @@ type offer = {
   ch: HSM.ch; // not insisting that ch initially has zeroed binders
   }
 
-// see also Transcript.g_transcript_n
+//NS: Is this abbreviation really necessary?
+//Transcript.transcript_n is similar but provides an equality rather than [<=]
 let trans (n:nat) = tr: Transcript.transcript_t { Transcript.transcript_size tr <= n }
 
 // not so useful?
-let ch_digest ha (ch: HSM.ch) = Transcript.(transcript_hash ha (ClientHello None ch))
+let ch_digest ha (ch: HSM.ch) = Transcript.transcript_hash ha (Transcript.ClientHello None ch)
 
 /// Ghost function, used for witnessing the more detailed view of the
 /// retry held by the client and by the initial server who issued the
@@ -329,7 +329,7 @@ let transcript_offer offer =
 let transcript13 offer (sh: sh13) rest =
   Transcript.Transcript13 (retry_digest offer.full_retry) offer.full_ch sh rest
 let transcript_complete offer sh ee ccv fin1 fin2 eoed =
-  let rest: Transcript.(bounded_list HSM.handshake13 max_transcript_size) =
+  let rest: Transcript.bounded_list HSM.handshake13 Transcript.max_transcript_size =
     HSM.M13_encrypted_extensions ee ::
     (match ccv with Some(c,cv) -> [HSM.M13_certificate c; HSM.M13_certificate_verify cv] | None -> []) @
     (if Bytes.length fin1 = 0 then [] else [HSM.M13_finished fin1]) @

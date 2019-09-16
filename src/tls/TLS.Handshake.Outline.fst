@@ -14,7 +14,6 @@ module HST = FStar.HyperStack.ST
 
 module HSM = HandshakeMessages
 module LP = LowParse.Low.Base
-module Transcript = HSL.Transcript
 
 module Range = Range
 

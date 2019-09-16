@@ -3,7 +3,7 @@ module Idx
 open Mem
 
 module G = FStar.Ghost
-module T = HSL.Transcript
+module T = TLS.Handshake.Transcript
 module B = LowStar.Buffer
 module DM = FStar.DependentMap
 module MDM = FStar.Monotonic.DependentMap
