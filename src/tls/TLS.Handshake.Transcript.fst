@@ -1,4 +1,21 @@
-module HSL.Transcript
+(*
+  Copyright 2015--2019 INRIA and Microsoft Corporation
+
+  Licensed under the Apache License, Version 2.0 (the "License");
+  you may not use this file except in compliance with the License.
+  You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+
+  Authors: C. Fournet, A. Fromherz, T. Ramananandro, A. Rastogi, N. Swamy
+*)
+module TLS.Handshake.Transcript
 open FStar.Integers
 open FStar.HyperStack.ST
 module List = FStar.List.Tot
@@ -107,16 +124,20 @@ let transcript_bytes (t:transcript_t)
     LP.serialize (LPSL.serialize_list _ HSM.handshake13_serializer) rest
     )))
 
-let transcript_is_empty (t: transcript_t) : Tot bool = match t with
-  | Start None -> true
-  | _ -> false
+let transcript_is_empty (t: transcript_t)
+  : GTot bool
+  = match t with
+    | Start None -> true
+    | _ -> false
 
-let transcript_get_retry (t: transcript_t) : Tot (option retry) = match t with
-  | Start r -> r
-  | TruncatedClientHello r _ -> r
-  | ClientHello r _ -> r
-  | Transcript12 _ _ _ -> None
-  | Transcript13 r _ _ _ -> r
+let transcript_get_retry (t: transcript_t)
+  : GTot (option retry)
+  = match t with
+    | Start r -> r
+    | TruncatedClientHello r _ -> r
+    | ClientHello r _ -> r
+    | Transcript12 _ _ _ -> None
+    | Transcript13 r _ _ _ -> r
 
 let transcript_set_retry (t: transcript_t) (r: option retry { Transcript12? t ==> None? r }) : Tot transcript_t =
   match t with
@@ -332,17 +353,22 @@ let create r a =
   {region=r;
    loc=Ghost.hide (CRF.footprint h1 s);
    hash_state=s},
-  Ghost.hide (Start None)
+  Start None
 
 let reset #a s tx =
   CRF.init (Ghost.hide a) s.hash_state;
-  Ghost.hide (Start None)
+  Start None
 
 #push-options "--max_fuel 0 --max_ifuel  1 --initial_ifuel  1 --z3rlimit 200"
-let extend (#a:_) (s:state a) (l:label_repr) (tx:G.erased transcript_t) =
+let extend (#a:_) (s:state a) (l:label_repr) (tx:transcript_t) =
   let h0 = HyperStack.ST.get() in
   match l with
   | LR_ClientHello #b ch ->
+    //NS: 09/16 This assume is to justify the `to_buffer` cast a few lines below
+    //That case is needed because CRF.update expects a buffer, not a const buffer
+    //Once we have support for const buffers in KreMLin and in HACL*, we will
+    //be able to remove this assume and the to_buffer cast
+    //The same pattern appears in each case below.
     assume (C.qbuf_qual (C.as_qbuf b.R.base) = C.MUTABLE);
 
     // These three lemmas prove that the data in the subbuffer data is
@@ -357,7 +383,7 @@ let extend (#a:_) (s:state a) (l:label_repr) (tx:G.erased transcript_t) =
     assert_norm (pow2 32 < pow2 61);
     CRF.update (Ghost.hide a) s.hash_state (C.to_buffer data) len;
 
-    let tx' = G.hide (Some?.v (transition (G.reveal tx) (label_of_label_repr l))) in
+    let tx' = Some?.v (transition tx (label_of_label_repr l)) in
 
     tx'
 
@@ -377,14 +403,14 @@ let extend (#a:_) (s:state a) (l:label_repr) (tx:G.erased transcript_t) =
     CRF.update (Ghost.hide a) s.hash_state (C.to_buffer data) len;
     let h1 = HyperStack.ST.get() in
 
-    let tx' = G.hide (Some?.v (transition (G.reveal tx) (label_of_label_repr l))) in
+    let tx' = Some?.v (transition tx (label_of_label_repr l)) in
 
     LPSL.serialize_list_nil HSM.handshake12_parser HSM.handshake12_serializer;
     LPSL.serialize_list_nil HSM.handshake13_parser HSM.handshake13_serializer;
-    assert ((transcript_bytes (G.reveal tx) `Seq.append`
+    assert ((transcript_bytes tx `Seq.append`
              serialize_server_hello (HSM.M_server_hello?._0 (R.value sh)))
         `Seq.equal`
-             transcript_bytes (G.reveal tx'));
+             transcript_bytes tx');
 
     tx'
 
@@ -407,7 +433,7 @@ let extend (#a:_) (s:state a) (l:label_repr) (tx:G.erased transcript_t) =
     CRF.frame_invariant B.loc_none s.hash_state h0 h1;
     CRF.update (Ghost.hide a) s.hash_state (C.to_buffer data) len;
 
-    let tx' = G.hide (Some?.v (transition (G.reveal tx) (label_of_label_repr l))) in
+    let tx' = Some?.v (transition tx (label_of_label_repr l)) in
 
     PB.truncate_clientHello_bytes_set_binders
       (R.value tch)
@@ -437,15 +463,15 @@ let extend (#a:_) (s:state a) (l:label_repr) (tx:G.erased transcript_t) =
     CRF.frame_invariant B.loc_none s.hash_state h0 h1;
     CRF.update (Ghost.hide a) s.hash_state (C.to_buffer data) len;
 
-    let tx' = G.hide (Some?.v (transition (G.reveal tx) (label_of_label_repr l))) in
+    let tx' = Some?.v (transition tx (label_of_label_repr l)) in
 
     PB.truncate_clientHello_bytes_set_binders
       (R.value tch)
       (PB.build_canonical_binders (ch_binders_len (HSM.M_client_hello?._0 (R.value tch))));
 
-    assert ((transcript_bytes (G.reveal tx) `Seq.append` (C.as_seq h0 data))
-        `Seq.equal`
-          transcript_bytes (G.reveal tx'));
+    assert ((transcript_bytes tx `Seq.append` (C.as_seq h0 data))
+           `Seq.equal`
+           transcript_bytes tx');
 
     tx'
 
@@ -453,7 +479,7 @@ let extend (#a:_) (s:state a) (l:label_repr) (tx:G.erased transcript_t) =
     assume (C.qbuf_qual (C.as_qbuf b1.R.base) = C.MUTABLE);
     assume (C.qbuf_qual (C.as_qbuf b2.R.base) = C.MUTABLE);
 
-    let tx' = G.hide (Some?.v (transition (G.reveal tx) (label_of_label_repr l))) in
+    let tx' = Some?.v (transition tx (label_of_label_repr l)) in
 
     // these three lemmas prove that the data in the subbuffer data is
     // the serialized data corresponding to the client hello that is being added
@@ -498,17 +524,17 @@ let extend (#a:_) (s:state a) (l:label_repr) (tx:G.erased transcript_t) =
 
     let len = hs12.R.end_pos - hs12.R.start_pos in
     let data = C.sub b.R.base hs12.R.start_pos len in
-    let tx' = G.hide (Some?.v (transition (G.reveal tx) (label_of_label_repr l))) in
+    let tx' = Some?.v (transition tx (label_of_label_repr l)) in
 
     LPSL.serialize_list_singleton HSM.handshake12_parser HSM.handshake12_serializer
       (R.value hs12);
     LPSL.serialize_list_append HSM.handshake12_parser HSM.handshake12_serializer
-      (let Transcript12 _ _ rest = G.reveal tx in rest)
+      (Transcript12?.rest tx)
       [R.value hs12];
-    assert ((transcript_bytes (G.reveal tx) `Seq.append`
-                              LP.serialize HSM.handshake12_serializer (R.value hs12))
+    assert ((transcript_bytes tx `Seq.append`
+             LP.serialize HSM.handshake12_serializer (R.value hs12))
         `Seq.equal`
-             transcript_bytes (G.reveal tx'));
+             transcript_bytes tx');
 
     assert_norm ((max_transcript_size + 4) * max_message_size < pow2 61);
 
@@ -528,17 +554,17 @@ let extend (#a:_) (s:state a) (l:label_repr) (tx:G.erased transcript_t) =
     let len = hs13.R.end_pos - hs13.R.start_pos in
     let data = C.sub b.R.base hs13.R.start_pos len in
 
-    let tx' = G.hide (Some?.v (transition (G.reveal tx) (label_of_label_repr l))) in
+    let tx' = Some?.v (transition tx (label_of_label_repr l)) in
 
     LPSL.serialize_list_singleton HSM.handshake13_parser HSM.handshake13_serializer
       (R.value hs13);
     LPSL.serialize_list_append HSM.handshake13_parser HSM.handshake13_serializer
-      (let Transcript13 _ _ _ rest = G.reveal tx in rest)
+      (Transcript13?.rest tx)
       [R.value hs13];
-    assert ((transcript_bytes (G.reveal tx) `Seq.append`
-                              LP.serialize HSM.handshake13_serializer (R.value hs13))
+    assert ((transcript_bytes tx `Seq.append`
+             LP.serialize HSM.handshake13_serializer (R.value hs13))
         `Seq.equal`
-             transcript_bytes (G.reveal tx'));
+             transcript_bytes tx');
 
 
     assert_norm ((max_transcript_size + 4) * max_message_size < pow2 61);
@@ -556,7 +582,7 @@ let hashed (a:HashDef.hash_alg) (t:transcript_t) =
 
 let extract_hash (#a:_) (s:state a)
   (tag:Hacl.Hash.Definitions.hash_t a)
-  (tx:G.erased transcript_t)
+  (tx:transcript_t)
   =
     let h0 = HyperStack.ST.get() in
     CRF.finish (Ghost.hide a) s.hash_state tag;
@@ -566,11 +592,11 @@ let extract_hash (#a:_) (s:state a)
       (B.loc_buffer tag) h0 h1 tag)
 
 let injectivity a t0 t1 =
-  let b0 = Ghost.hide (transcript_bytes (Ghost.reveal t0)) in
-  let b1 = Ghost.hide (transcript_bytes (Ghost.reveal t1)) in
+  let b0 = Ghost.hide (transcript_bytes t0) in
+  let b1 = Ghost.hide (transcript_bytes t1) in
   Model.CRF.injective a b0 b1;
   let aux () : Lemma
     (requires CRF.model /\ Model.CRF.crf a /\ b0 == b1)
-    (ensures Ghost.reveal t0 == Ghost.reveal t1) =
-    transcript_bytes_injective (Ghost.reveal t0) (Ghost.reveal t1)
+    (ensures t0 == t1) =
+    transcript_bytes_injective t0 t1
   in Classical.move_requires aux ()
