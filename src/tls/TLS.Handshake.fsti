@@ -8,8 +8,6 @@ module Range = Range
 module Epochs = Old.Epochs
 module Nego = Negotiation
 
-#set-options "--admit_smt_queries true"
-
 
 // annoyingly, we will need specification-level variants too.
 
@@ -57,9 +55,9 @@ val is_0rtt_offered: Machine.state -> bool
 // Nego.zeroRTToffer mode.Nego.n_offer
 
 // returns the current exporter keys
-val xkeys_of: Machine.state -> ST (Seq.seq Old.KeySchedule.exportKey)
-  (requires fun h0 -> True)
-  (ensures fun h0 r h1 -> h0 == h1 /\ Seq.length r <= 2)
+val xkeys_of: s:Machine.state -> ST (Seq.seq Old.KeySchedule.exportKey)
+  (requires Machine.invariant s)
+  (ensures fun h0 r h1 -> modifies_none h0 h1 /\ Seq.length r <= 2)
 
 (* ----------------------- Control Interface -------------------------*)
 
@@ -136,11 +134,19 @@ let next_fragment_requires (#i:TLSInfo.id) (s:Machine.state) h0 =
   Machine.invariant s h0 /\
   (if j < 0 then TLSInfo.PlaintextID? i else let e = Seq.index es j in i = Epochs.epoch_id e)
 
-val next_fragment_bounded: s:Machine.state -> i:TLSInfo.id -> nax:nat -> ST (result (Send.outgoing i))
-  (requires (fun h0 -> next_fragment_requires #i s h0))
-  (ensures (fun h0 r h1 -> next_fragment_ensures #i s h0 r h1))
 
-val next_fragment: s:Machine.state -> i:TLSInfo.id -> ST (result (Send.outgoing i))
+/// Returns outgoing handshake packet or signal; the length of the
+/// outgoing packet can be bounded tighter than the TLS
+/// max_fragment_length.
+
+val next_fragment_bounded: s:Machine.state -> i:TLSInfo.id -> max:nat -> 
+
+  ST (result (Send.outgoing i))
+  (requires fun h0 -> next_fragment_requires #i s h0)
+  (ensures fun h0 r h1 -> next_fragment_ensures #i s h0 r h1)
+
+val next_fragment: s:Machine.state -> i:TLSInfo.id -> 
+  ST (result (Send.outgoing i))
   (requires (fun h0 -> next_fragment_requires #i s h0))
   (ensures (fun h0 r h1 -> next_fragment_ensures #i s h0 r h1))
 
@@ -161,9 +167,14 @@ let recv_ensures (s:Machine.state) (h0:HS.mem) (result:Receive.incoming) (h1:HS.
     r1 == (if Receive.in_next_keys result then r0 + 1 else r0) /\
     (b2t (Receive.in_complete result) ==> r1 >= 0 /\ r1 = w1 /\ iT s Reader h1 >= 0 (*/\ completed (eT s Reader h1)*) )
 
-val recv_fragment: s:Machine.state -> #i:TLSInfo.id -> rg:Range.frange i -> f:Range.rbytes rg -> ST Receive.incoming (* incoming transitions for our state machine *)
-  (requires (Machine.invariant s))
-  (ensures (recv_ensures s))
+val recv_fragment: 
+  s:Machine.state -> 
+  // high-level incoming fragment 
+  #i:TLSInfo.id -> rg:Range.frange i -> f:Range.rbytes rg -> 
+  // resulting signals, keys, outgoing fragments, etc
+  ST Receive.incoming 
+  (requires Machine.invariant s)
+  (ensures recv_ensures s)
 
 // special case: CCS before 1p3; could merge with recv_fragment
 val recv_ccs: Receive.(

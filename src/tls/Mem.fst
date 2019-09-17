@@ -50,7 +50,7 @@ val fresh_is_disjoint (old_loc:loc) (new_loc:loc) (h0 h1:mem) : Lemma
   (ensures  loc_disjoint old_loc new_loc)
 let fresh_is_disjoint old_loc new_loc h0 h1 = ()
 
-(** Used for defining one-shot PRFs and authenticators (could me moved to FStar.Preorder) *)
+(** Used for defining one-shot PRFs and authenticators (could be moved to FStar.Preorder) *)
 val ssa: #a:Type0 -> Preorder.preorder (option a)
 let ssa #a = fun x y ->
   match x,y with

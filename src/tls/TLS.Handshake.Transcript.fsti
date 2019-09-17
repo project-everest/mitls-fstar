@@ -389,11 +389,12 @@ let ( ~~> ) (t1 t2:transcript_t) =
 /// `state`: Abstract state of the module
 ///
 /// It maintains the transcript in mutable state.
-///
+val state (a:HashDef.hash_alg) : Type0
+
 /// We may need a way to free the state also, although if it is
 /// allocated in a connection-granularity region, it will be reclaimed
 /// along with that region.
-val state (a:HashDef.hash_alg) : Type0
+// yes, we need [free]
 
 /// `invariant s t h`: Relates the state of the module (i.e., the
 /// state of the underlying incremental hash) to the a particular
@@ -411,12 +412,11 @@ val footprint (#a:_) (s:state a) : GTot B.loc
 val elim_invariant (#a: _) (s:state a) (t:transcript_t) (h:HS.mem)
   : Lemma
     (requires invariant s t h)
-    (ensures B.loc_not_unused_in h `B.loc_includes` footprint s)
+    (ensures B.(loc_not_unused_in h `loc_includes` footprint s))
 
 /// `region_of`: The internal state of the module is allocated in a
 /// user-provided region
-val region_of (#a: _) (s:state a)
-  : GTot HS.rid
+val region_of (#a: _) (s:state a) : GTot HS.rid
 
 /// `frame_invariant`: The invariant is maintained across
 /// footprint-preserving heap modifications
@@ -454,7 +454,7 @@ val create (r:Mem.rgn) (a:HashDef.hash_alg)
 ///
 ///   -- Caller provides a valid transcript `tx` and the corresponding state `s`
 ///
-///   -- The transcript is reset to the empty state
+///   -- The transcript is reset to the empty state for the same has algorithm
 val reset (#a:_) (s:state a) (tx:transcript_t)
   : ST (transcript_n (Ghost.hide 0))
        (requires fun h -> invariant s tx h)

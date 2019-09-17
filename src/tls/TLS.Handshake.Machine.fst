@@ -112,6 +112,21 @@ let msg_state_footprint #region #inflight #random #ha (ms:msg_state region infli
     (TLS.Handshake.Send.footprint ms.sending))
     (Recv.loc_recv ms.receiving)
 
+/// `frame_invariant`: The invariant is maintained across
+/// footprint-preserving heap modifications
+let frame_msg_invariant #region #inflight #random #ha (ms:msg_state region inflight random ha) t (h0 h1:HS.mem) (l:B.loc)
+  : Lemma
+    (requires
+      msg_invariant ms t h0 /\
+      B.loc_disjoint l (msg_state_footprint ms) /\
+      B.modifies l h0 h1)
+    (ensures
+      msg_invariant ms t h1)
+    [SMTPat (msg_invariant ms t h1);
+     SMTPat (B.modifies l h0 h1)]
+=
+  ()
+
 let create_msg_state (region: rgn) (inflight: PF.in_progress_flt_t) random ha:
   ST (msg_state region inflight random ha)
   (requires fun h0 -> True)
@@ -994,7 +1009,6 @@ let nonceT s h =
   | Client region config r -> client_nonce (HS.sel h r)
   | Server region config r -> server_nonce (HS.sel h r)
 
-assume val nonce: state -> St TLSInfo.random
 
 let invariant s h =
   match s with
@@ -1008,28 +1022,44 @@ let invariant s h =
     B.loc_disjoint (B.loc_mreference r) (server_footprint (HS.sel h r)) /\
     server_invariant (HS.sel h r) h
 
+let nonce (s:state):
+  ST TLSInfo.random
+  (requires fun h0 -> invariant s h0)
+  (ensures fun h0 r h1 -> modifies_none h0 h1)
+=
+  match s with
+  | Client region config r -> client_nonce !r
+  | Server region config r -> server_nonce !r
+
+
 
 let frame s = match s with
   | Client rgn _ _
   | Server rgn _ _ -> rgn
 
+
 assume val epochsT (s:_) (h:_): Old.Epochs.epochs (frame s) (nonceT s h)
 
 // 19-09-11 freshly stateful dependency...
-assume val epochs (s:_) (n:TLSInfo.random): St (Old.Epochs.epochs (frame s) n)
+assume val epochs (s:_) (n:TLSInfo.random):
+  ST (Old.Epochs.epochs (frame s) n)
+  (requires fun h0 -> invariant s h0)
+  (ensures fun h0 r h1 -> modifies_none h0 h1)
 
-let epochs_es s n = (epochs s n).Old.Epochs.es
+let epochs_es s n:
+  ST _
+  (requires fun h0 -> invariant s h0)
+  (ensures fun h0 r h1 -> modifies_none h0 h1)
+=
+  (epochs s n).Old.Epochs.es
 
 assume val version_of: state -> protocolVersion
 
 // used in FFI, TBC
 let get_server_certificates (s:client) :
   ST (option Cert.chain13)
-  (requires fun h0 ->
-    invariant s h0)
-  (ensures fun h0 r h1 ->
-    modifies_none h0 h1 /\
-    invariant s h1)
+  (requires fun h0 -> invariant s h0)
+  (ensures fun h0 r h1 -> modifies_none h0 h1)
 =
   match s with
   | Client region config r -> client_server_certificates #region !r

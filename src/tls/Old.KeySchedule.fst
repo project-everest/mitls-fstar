@@ -1,8 +1,6 @@
 module Old.KeySchedule
 
-open FStar.Heap
-open FStar.HyperStack
-open FStar.HyperStack.ST
+open Mem 
 open FStar.Seq
 open FStar.Bytes
 open FStar.Error
@@ -37,8 +35,6 @@ unfold let dbg : string -> ST unit (requires (fun _ -> True))
   (ensures (fun h0 _ h1 -> h0 == h1)) =
   if DebugFlags.debug_KS then print else (fun _ -> ())
 
-#set-options "--admit_smt_queries true"
-
 let print_share (#g:CommonDH.group) (s:CommonDH.share g) : ST unit
   (requires (fun h0 -> True))
   (ensures (fun h0 _ h1 -> modifies_none h0 h1))
@@ -46,6 +42,7 @@ let print_share (#g:CommonDH.group) (s:CommonDH.share g) : ST unit
   let kb = CommonDH.serialize_raw #g s in
   let kh = FStar.Bytes.hex_of_bytes kb in
   dbg ("Share: "^kh)
+
 
 (********************************************
 *    Resumption PSK is disabled for now     *
@@ -90,6 +87,7 @@ type binderId = i:pre_binderId{valid (I_BINDER i)}
 type hsId = i:TLSInfo.pre_hsId{valid (I_HS i)}
 type asId = i:pre_asId{valid (I_AS i)}
 
+#push-options "--admit_smt_queries true"
 // Resumption context
 let rec esId_rc : (esId -> St bytes) =
   function
@@ -106,6 +104,7 @@ and secretId_rc : (secretId -> St bytes) = function
   | EarlySecretID i -> esId_rc i
   | HandshakeSecretID i -> hsId_rc i
   | ApplicationSecretID i -> asId_rc i
+#pop-options
 
 // miTLS 0.9:
 // ==========
@@ -128,7 +127,7 @@ type binderKey (i:binderId) = HMAC_UFCMA.key (HMAC_UFCMA.HMAC_Binder i) trivial
 abstract type ams (i:asId) = H.tag (asId_hash i)
 
 type rekeyId (li:logInfo) = i:expandId li{
-  (let ExpandedSecret _ t _ = i in
+  (let ExpandedSecret _ t _ = i in 
     ApplicationTrafficSecret? t \/
     ClientApplicationTrafficSecret? t \/
     ServerApplicationTrafficSecret? t)}
@@ -144,7 +143,7 @@ type ems #li (i:exportId li) = H.tag (exportId_hash i)
 // TODO this is superseeded by StAE.state i
 // but I'm waiting for it to be tested to switch over
 // TODO use the newer index types
-type recordInstance =
+noeq type recordInstance =
   | StAEInstance: 
     #id:TLSInfo.id ->
     r: StAE.reader (peerId id) ->
@@ -188,7 +187,7 @@ type ks_alpha13 = ae:aeadAlg * h:hash_alg
 ///          parts of the state determined by the Handshake messages
 ///          (such as nonces, public shares, and alpha)
 
-type ks_client_state =
+noeq type ks_client_state =
 | C_Init: 
   // HS knows cr, so no need for this initial state
   cr:random -> ks_client_state
@@ -230,7 +229,7 @@ type ks_client_state =
 // Unused:
 // | C_Done
 
-type ks_server_state =
+noeq type ks_server_state =
 // HS has sr: no need for this initial state
 | S_Init: sr:random -> ks_server_state
 
@@ -253,24 +252,16 @@ type ks_server_state =
 	        ( li:logInfo & i:rmsId li & rms i) -> ks_server_state
 | S_Done
 
-// Reflecting state separation from HS
-type ks_state =
-| C: s:ks_client_state -> ks_state
-| S: s:ks_server_state -> ks_state
 
-// KeySchedule instances
-(*
- * AR: changing state from rref to ref, with region captured in the refinement.
- *)
-type ks =
-| KS:
-  #region:rid ->
-  state:(ref ks_state){HS.frameOf state = region} ->
-  is_quic: bool ->
-  ks
+/// Placeholder for the global invariant and framing of this module,
+/// TBC with its verification.
 
-//17-04-17 CF: expose it as a concrete ref?
-//17-04-17 CF: no need to keep the region, already in the ref.
+
+// assume val client_invariant: ks_client_state -> HS.mem -> Type0
+// more boilerplate required; see Transcript? 
+
+#set-options "--admit_smt_queries true" 
+//TODO 19-09-16 bounds on constant string lengths 
 
 // Extract keys and IVs from a derived 1.3 secret
 private let keygen_13 h secret ae is_quic : St (bytes * bytes * option bytes) =
@@ -288,27 +279,7 @@ private let keygen_13 h secret ae is_quic : St (bytes * bytes * option bytes) =
 private let finished_13 h secret : St (bytes) =
   HKDF.expand_label #h secret "finished" empty_bytes (Hacl.Hash.Definitions.hash_len h)
 
-// Create a fresh key schedule instance
-// We expect this to be called when the Handshake instance is created
-val create: #rid:rid -> role -> is_quic:bool -> ST (ks * random)
-  (requires fun h -> rid<>root)
-  (ensures fun h0 (r,_) h1 ->
-    let KS #ks_region state iq = r in
-    HS.fresh_region ks_region h0 h1
-    /\ extends ks_region rid
-    /\ iq = is_quic
-    /\ modifies (Set.singleton rid) h0 h1
-    /\ HS.modifies_ref rid (Set.singleton (Heap.addr_of (as_ref state))) ( h0) ( h1))
-
-let create #rid r is_quic =
-  ST.recall_region rid;
-  let ks_region = new_region rid in
-  let nonce = Nonce.mkHelloRandom r ks_region in
-  let istate = match r with
-    | Client -> C (C_Init nonce)
-    | Server -> S (S_Init nonce) in
-  (KS #ks_region (ralloc ks_region istate) is_quic), nonce
-
+//TODO 19-09-16 partiality
 private let group_of_valid_namedGroup
   (g:CommonDH.supportedNamedGroup)
   : CommonDH.group
@@ -446,6 +417,52 @@ let ks_client13_ch is_quic client_state (log:bytes): ST (exportKey * recordInsta
   let r = StAE.genReader HS.root rw in
   let early_d = StAEInstance r rw (pn, pn) in
   exporter0, early_d
+
+
+
+(* TO BE DELETED: *)
+// Reflecting state separation from HS; now unusued? 
+type ks_state =
+| C: s:ks_client_state -> ks_state
+| S: s:ks_server_state -> ks_state
+
+// KeySchedule instances
+(*
+ * AR: changing state from rref to ref, with region captured in the refinement.
+ *)
+type ks =
+| KS:
+  #region:rid ->
+  state:(ref ks_state){HS.frameOf state = region} ->
+  is_quic: bool ->
+  ks
+
+// Create a fresh key schedule instance
+// We expect this to be called when the Handshake instance is created
+val create: #rid:rid -> role -> is_quic:bool -> ST (ks * random)
+  (requires fun h -> rid<>root)
+  (ensures fun h0 (r,_) h1 ->
+    let KS #ks_region state iq = r in
+    HS.fresh_region ks_region h0 h1
+    /\ extends ks_region rid
+    /\ iq = is_quic
+    /\ modifies (Set.singleton rid) h0 h1
+    /\ HS.modifies_ref rid (Set.singleton (Heap.addr_of (as_ref state))) ( h0) ( h1))
+
+let create #rid r is_quic =
+  ST.recall_region rid;
+  let ks_region = new_region rid in
+  let nonce = Nonce.mkHelloRandom r ks_region in
+  let istate = match r with
+    | Client -> C (C_Init nonce)
+    | Server -> S (S_Init nonce) in
+  (KS #ks_region (ralloc ks_region istate) is_quic), nonce
+
+//17-04-17 CF: expose it as a concrete ref?
+//17-04-17 CF: no need to keep the region, already in the ref.
+
+
+
 
 val ks_server12_init_dh: ks:ks -> cr:random -> pv:protocolVersion -> cs:cipherSuite -> ems:bool -> g:CommonDH.group -> ST (CommonDH.share g)
   (requires fun h0 ->

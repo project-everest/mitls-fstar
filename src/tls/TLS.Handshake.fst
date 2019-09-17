@@ -17,6 +17,7 @@ open Old.Epochs
 //open TLS.Handshake.Client
 //open TLS.Handshake.Server
 
+
 module U32 = FStar.UInt32
 module MS = FStar.Monotonic.Seq
 module HS = FStar.HyperStack
@@ -49,9 +50,12 @@ module LP = LowParse.Low.Base
 
 let is_0rtt_offered hs = admit()
 
+#push-options "--max_ifuel 0 --z3rlimit 32"
 let xkeys_of hs = 
-  let n = Machine.nonce hs in 
-  FStar.Monotonic.Seq.i_read (Machine.epochs hs n).Epochs.exporter
+  let n = Machine.nonce hs in
+  let es = Machine.epochs hs n in 
+  //let h = Mem.get() in assert(modifies_none h h);
+  FStar.Monotonic.Seq.i_read es.Epochs.exporter
 
 open TLS.Handshake.Machine 
 
