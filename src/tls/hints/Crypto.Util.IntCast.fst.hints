@@ -1,20 +1,24 @@
 [
-  "Ú‚v\u0011\tŒ\b™Pá\t;äI&l",
+  "Ú_§VnÄûÆÇ9Œ\u001ežYùÉ",
   [
     [
       "Crypto.Util.IntCast.to_uint8",
       1,
-      2,
-      1,
-      [ "@query" ],
       0,
-      "752b3a65c424058c8b7192cbd82f8e85"
+      0,
+      [
+        "@query", "constructor_distinct_Lib.IntTypes.U8",
+        "equality_tok_Lib.IntTypes.U8@tok", "equation_Lib.IntTypes.bits",
+        "projection_inverse_BoxInt_proj_0"
+      ],
+      0,
+      "9283913c26fb8f3e3cff2e6718dd08b3"
     ],
     [
       "Crypto.Util.IntCast.to_uint8",
       2,
-      2,
-      1,
+      0,
+      0,
       [
         "@query", "constructor_distinct_Lib.IntTypes.SEC",
         "constructor_distinct_Lib.IntTypes.U8",
@@ -24,13 +28,13 @@
         "equation_Lib.IntTypes.v"
       ],
       0,
-      "74be78ce7f746e85bda524b3873fd51f"
+      "39596cab183b7c64fd2281c72a6e2aad"
     ],
     [
       "Crypto.Util.IntCast.to_seq_uint8",
       1,
-      2,
-      1,
+      0,
+      0,
       [
         "@query", "constructor_distinct_Lib.IntTypes.SEC",
         "constructor_distinct_Lib.IntTypes.U8",
@@ -39,13 +43,13 @@
         "equation_Lib.IntTypes.pub_int_t", "equation_Lib.IntTypes.sec_int_t"
       ],
       0,
-      "ce0e714d309215be3e6406f552e7c092"
+      "2a03e582779db918f8736eea7bae3539"
     ],
     [
       "Crypto.Util.IntCast.to_seq_uint8_correct",
       1,
-      2,
-      1,
+      0,
+      0,
       [
         "@MaxIFuel_assumption", "@query",
         "equation_Crypto.Util.IntCast.to_seq_uint8",
@@ -53,13 +57,13 @@
         "typing_Crypto.Util.IntCast.to_seq_uint8"
       ],
       0,
-      "6c6a4a09238eb12c8df8f7910c5cf2db"
+      "42452c8038c22af6e1b93fd906f4be8a"
     ],
     [
       "Crypto.Util.IntCast.to_seq_uint8_correct",
       2,
-      2,
-      1,
+      0,
+      0,
       [
         "@query", "constructor_distinct_Lib.IntTypes.SEC",
         "constructor_distinct_Lib.IntTypes.U8",
@@ -71,22 +75,26 @@
         "equation_Lib.IntTypes.sec_int_t"
       ],
       0,
-      "43af2599129303b94e837c9fb65e7353"
+      "70952db2542669214462e08a268eb4f1"
     ],
     [
       "Crypto.Util.IntCast.to_sec8",
       1,
-      2,
-      1,
-      [ "@query" ],
       0,
-      "34e60d22294ba8d26d8fb2d1434d6f54"
+      0,
+      [
+        "@query", "constructor_distinct_Lib.IntTypes.U8",
+        "equality_tok_Lib.IntTypes.U8@tok", "equation_Lib.IntTypes.bits",
+        "projection_inverse_BoxInt_proj_0"
+      ],
+      0,
+      "31eadd187e60fa8aaf9124d6085a6532"
     ],
     [
       "Crypto.Util.IntCast.to_sec8",
       2,
-      2,
-      1,
+      0,
+      0,
       [
         "@query", "constructor_distinct_Lib.IntTypes.SEC",
         "constructor_distinct_Lib.IntTypes.U8",
@@ -96,13 +104,13 @@
         "equation_Lib.IntTypes.v"
       ],
       0,
-      "af8d6f4ecf04e4a9858bf4c5b0744f0b"
+      "f76ae5169fb225aec758389b319fca0b"
     ],
     [
       "Crypto.Util.IntCast.to_seq_sec8",
       1,
-      2,
-      1,
+      0,
+      0,
       [
         "@query", "constructor_distinct_Lib.IntTypes.SEC",
         "constructor_distinct_Lib.IntTypes.U8",
@@ -111,13 +119,13 @@
         "equation_Lib.IntTypes.pub_int_t", "equation_Lib.IntTypes.sec_int_t"
       ],
       0,
-      "5e32d07f7ce2a9d7dc69a4b9e00dc72e"
+      "67d2b607be24af87bd944ae8c4d99142"
     ],
     [
       "Crypto.Util.IntCast.to_seq_sec8_correct",
       1,
-      2,
-      1,
+      0,
+      0,
       [
         "@MaxIFuel_assumption", "@query",
         "equation_Crypto.Util.IntCast.to_seq_sec8",
@@ -125,13 +133,13 @@
         "typing_Crypto.Util.IntCast.to_seq_sec8"
       ],
       0,
-      "2694922f13105e8fe20b8043cf711201"
+      "209f32b05740413cf12150e7ed9e92a8"
     ],
     [
       "Crypto.Util.IntCast.to_seq_sec8_correct",
       2,
-      2,
-      1,
+      0,
+      0,
       [
         "@query", "constructor_distinct_Lib.IntTypes.SEC",
         "constructor_distinct_Lib.IntTypes.U8",
@@ -143,13 +151,13 @@
         "equation_Lib.IntTypes.sec_int_t"
       ],
       0,
-      "2c2baaba01742b35eb8217cbb17427db"
+      "6db51e2301d3f44df0edc215714bab3b"
     ],
     [
       "Crypto.Util.IntCast.to_seq_sec8_to_seq_uint8",
       1,
-      2,
-      1,
+      0,
+      0,
       [
         "@MaxIFuel_assumption", "@query",
         "equation_Crypto.Util.IntCast.to_seq_sec8",
@@ -161,13 +169,13 @@
         "typing_Crypto.Util.IntCast.to_seq_uint8"
       ],
       0,
-      "daec625786e90747ea6234fb0385d384"
+      "5197eac981061c50a367a19e74cb06a4"
     ],
     [
       "Crypto.Util.IntCast.to_seq_uint8_to_seq_sec8",
       1,
-      2,
-      1,
+      0,
+      0,
       [
         "@MaxIFuel_assumption", "@query",
         "equation_Crypto.Util.IntCast.to_seq_sec8",
@@ -178,13 +186,13 @@
         "typing_Crypto.Util.IntCast.to_seq_sec8"
       ],
       0,
-      "6fdcd7fd881d93acb4fa3460a4f0c103"
+      "a88d0b8655279fbe9a5d16191766a211"
     ],
     [
       "Crypto.Util.IntCast.to_buf_sec8",
       1,
-      2,
-      1,
+      0,
+      0,
       [
         "@query", "constructor_distinct_Lib.IntTypes.SEC",
         "constructor_distinct_Lib.IntTypes.U8",
@@ -193,13 +201,13 @@
         "equation_Lib.IntTypes.pub_int_t", "equation_Lib.IntTypes.sec_int_t"
       ],
       0,
-      "4293e31dba485d625a58e0cef1491127"
+      "33fbe843909a361f269d1baea336671a"
     ],
     [
       "Crypto.Util.IntCast.as_seq_to_buf_sec8",
       1,
-      2,
-      1,
+      0,
+      0,
       [
         "@query", "constructor_distinct_Lib.IntTypes.SEC",
         "constructor_distinct_Lib.IntTypes.U8",
@@ -211,13 +219,13 @@
         "equation_Lib.IntTypes.sec_int_t"
       ],
       0,
-      "2a102e97685719f9b5272932b379fd6e"
+      "67ecedbf2605b726924b20551fd48e5c"
     ],
     [
       "Crypto.Util.IntCast.live_to_buf_sec8",
       1,
-      2,
-      1,
+      0,
+      0,
       [
         "@query", "constructor_distinct_Lib.IntTypes.SEC",
         "constructor_distinct_Lib.IntTypes.U8",
@@ -228,13 +236,13 @@
         "equation_Lib.IntTypes.sec_int_t"
       ],
       0,
-      "7fdf62425f9edc01c1b4012a9d721d1d"
+      "e63f7403e8bb35de1d11ea5db4ad046e"
     ],
     [
       "Crypto.Util.IntCast.gsub_to_buf_sec8",
       1,
-      2,
-      1,
+      0,
+      0,
       [
         "@MaxIFuel_assumption", "@query",
         "equation_Crypto.Util.IntCast.to_buf_sec8",
@@ -243,13 +251,13 @@
         "typing_Crypto.Util.IntCast.to_buf_sec8"
       ],
       0,
-      "f3e207bc09243389ffde24e50c074d00"
+      "6b4de92e0bcb3b05f5cea352ca8a5d71"
     ],
     [
       "Crypto.Util.IntCast.gsub_to_buf_sec8",
       2,
-      2,
-      1,
+      0,
+      0,
       [
         "@query", "constructor_distinct_Lib.IntTypes.SEC",
         "constructor_distinct_Lib.IntTypes.U8",
@@ -260,13 +268,13 @@
         "equation_Lib.IntTypes.sec_int_t"
       ],
       0,
-      "ec1c0355e32dca2de03460874b7a6151"
+      "06c9047d2f2aed106b945215e1e5bd65"
     ],
     [
       "Crypto.Util.IntCast.loc_buffer_to_buf_sec8",
       1,
-      2,
-      1,
+      0,
+      0,
       [
         "@query", "constructor_distinct_Lib.IntTypes.SEC",
         "constructor_distinct_Lib.IntTypes.U8",
@@ -277,13 +285,13 @@
         "equation_Lib.IntTypes.sec_int_t"
       ],
       0,
-      "6ec4d534918bab3b9445558b641b1c60"
+      "6c19874174b6be8c27adab3bbe986e49"
     ],
     [
       "Crypto.Util.IntCast.seq_sec8_has_eq",
       1,
-      2,
-      1,
+      0,
+      0,
       [
         "@query", "assumption_FStar.Seq.Base.seq__uu___haseq",
         "assumption_FStar.UInt8.t__uu___haseq",
@@ -296,13 +304,13 @@
         "function_token_typing_Lib.IntTypes.uint8"
       ],
       0,
-      "a8b26a7795ec234720be6f4b4d7c5764"
+      "ffc5164aa194947a3a89d6c98620888d"
     ],
     [
       "Crypto.Util.IntCast.to_seq_sec8_as_seq_gsub",
       1,
-      2,
-      1,
+      0,
+      0,
       [
         "@MaxIFuel_assumption", "@query",
         "equation_Crypto.Util.IntCast.to_buf_sec8",
@@ -311,13 +319,13 @@
         "typing_Crypto.Util.IntCast.to_buf_sec8"
       ],
       0,
-      "6ab048d06d4ac83811aa62f1aec3bb40"
+      "6aad661079c2bfb88b944dd450510eff"
     ],
     [
       "Crypto.Util.IntCast.loc_buffer_gsub_to_buf_sec8",
       1,
-      2,
-      1,
+      0,
+      0,
       [
         "@MaxIFuel_assumption", "@query",
         "equation_Crypto.Util.IntCast.to_buf_sec8",
@@ -326,7 +334,7 @@
         "typing_Crypto.Util.IntCast.to_buf_sec8"
       ],
       0,
-      "84a281f7fb24a1c3d61bbce3bc5aaaea"
+      "6c5a2b4b6df5ecd0f6c2dcba8f77afd7"
     ]
   ]
 ]
