@@ -12,7 +12,7 @@
         "assumption_Parsers.Handshake13.handshake13__uu___haseq"
       ],
       0,
-      "98c10a5e4549331bf4edebeff6a83e44"
+      "fbec8e55d794d58729361230c5a80179"
     ],
     [
       "TLS.Handshake.Send.__proj__Msg__item___0",
@@ -26,7 +26,7 @@
         "refinement_interpretation_Tm_refine_c887e7f578653fec1a5c265a7b2b8856"
       ],
       0,
-      "f2497a48f83464a196dcd0516dc9c9db"
+      "7ad1435ccfb9ba4a377411c086aa1909"
     ],
     [
       "TLS.Handshake.Send.__proj__Msg12__item___0",
@@ -40,7 +40,7 @@
         "refinement_interpretation_Tm_refine_a6dc4341f4226747618c75f172aae17b"
       ],
       0,
-      "0dfdcff5eb04392a9b1acb69729b6906"
+      "28d927d9e1c96a04e4b2c0746f584a47"
     ],
     [
       "TLS.Handshake.Send.__proj__Msg13__item___0",
@@ -54,7 +54,7 @@
         "refinement_interpretation_Tm_refine_bf20eb5d302ae927e1ec2c0fcf403763"
       ],
       0,
-      "92567e683e361213867fe574ff3ed415"
+      "ff1bc22ebfcd6b861b9bc338773615be"
     ],
     [
       "TLS.Handshake.Send.tag_of",
@@ -69,7 +69,7 @@
         "fuel_guarded_inversion_TLS.Handshake.Send.msg"
       ],
       0,
-      "c60266c104ec260e6b4448a37f67926c"
+      "aa156a2dae8293dbe09a8499f2185621"
     ],
     [
       "TLS.Handshake.Send.msg_bytes",
@@ -84,7 +84,7 @@
         "fuel_guarded_inversion_TLS.Handshake.Send.msg"
       ],
       0,
-      "8e0865ba72dcc257992589def1ae7db7"
+      "80a8b24570570ec181d7096677227998"
     ],
     [
       "TLS.Handshake.Send.outgoing",
@@ -120,7 +120,7 @@
         "typing_Range.frange", "typing_TLS.Handshake.Send.fragment"
       ],
       0,
-      "df9ec4835b742c439f8b2a83076c9cb3"
+      "c289e79ed0b6df098fdf779516efacda"
     ],
     [
       "TLS.Handshake.Send.__proj__Mksend_state__item__out_pos",
@@ -132,7 +132,7 @@
         "projection_inverse_TLS.Handshake.Send.Mksend_state_out_slice"
       ],
       0,
-      "982226ce9d851e4414132d870aae081c"
+      "facccc184d8df5b29f0b1777137a6ea4"
     ],
     [
       "TLS.Handshake.Send.send_state0",
@@ -179,7 +179,7 @@
         "typing_TLS.Handshake.Send.__proj__Mksend_state__item__outgoing"
       ],
       0,
-      "ac916e89adbb6a06ab8052a9cdcfa161"
+      "c151f473440dc6eb19d4360affadcae8"
     ],
     [
       "TLS.Handshake.Send.send_tch",
@@ -188,7 +188,7 @@
       1,
       [ "@query" ],
       0,
-      "422df966935ccbe76b3b94c21390b0c3"
+      "c39502c831e673241b484b0230d4b645"
     ],
     [
       "TLS.Handshake.Send.patch_binders",
@@ -201,12 +201,12 @@
         "bool_inversion", "disc_equation_HSL.Transcript.ClientHello",
         "disc_equation_HSL.Transcript.TruncatedClientHello",
         "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_27cbdb1d4229a4ffe76b24c316f1b5db",
-        "refinement_interpretation_Tm_refine_fb22a4d45fa6c189b6eea22777755fbb",
+        "refinement_interpretation_Tm_refine_00ad220364381ea326f6ba690aac9491",
+        "refinement_interpretation_Tm_refine_a40568a44466415c66270d92ba2deed8",
         "typing_HSL.Transcript.uu___is_TruncatedClientHello"
       ],
       0,
-      "ab1c362c0736f815aeb4d607a7649903"
+      "67bfd0ab597ad4c523ad86adcd96f456"
     ],
     [
       "TLS.Handshake.Send.send_ch",
@@ -218,7 +218,7 @@
         "refinement_interpretation_Tm_refine_ec95f2f1c3a79506e991483c9268d090"
       ],
       0,
-      "011a250abc5f635693250755b3138f27"
+      "e059ebff09a8404c204b12129d33c400"
     ],
     [
       "TLS.Handshake.Send.send_hrr",
@@ -231,7 +231,7 @@
         "refinement_interpretation_Tm_refine_5a43229acfef1387763c694b123d9fd0"
       ],
       0,
-      "14a2263208324e26babd322a6a943266"
+      "b31d95015098e81e93aab8fed4aa4de4"
     ],
     [
       "TLS.Handshake.Send.client_retry_info",
@@ -247,7 +247,7 @@
         "haseqTm_refine_c78aac7798afeafd32bb136d57a065e5"
       ],
       0,
-      "8f38eb3e3263ebde1eac9567266151fb"
+      "876bb2cd46600df55b8191c4e7fff361"
     ],
     [
       "TLS.Handshake.Send.retry_info_digest",
@@ -303,7 +303,7 @@
         "typing_TLS.Handshake.Send.__proj__Mkclient_retry_info__item__sh0"
       ],
       0,
-      "af5e4f4c6b8ac5ef5b9daa1c67964f1c"
+      "de69a7a47bfe996bd6add17ed1ba46f2"
     ],
     [
       "TLS.Handshake.Send.extend_hrr",
@@ -323,7 +323,7 @@
         "typing_HSL.Transcript.g_transcript_n"
       ],
       0,
-      "fb246e7d4b37d93a242b0db0c12dab23"
+      "beb9a9e548aa767af6a1a3dc860acc0d"
     ],
     [
       "TLS.Handshake.Send.send13",
@@ -335,15 +335,15 @@
         "equation_HSL.Transcript.g_transcript_n",
         "fuel_guarded_inversion_TLS.Handshake.Send.send_state",
         "primitive_Prims.op_Addition", "projection_inverse_BoxInt_proj_0",
-        "refinement_interpretation_Tm_refine_41432aab4fd96f858ee39658ee4ff4e4",
+        "refinement_interpretation_Tm_refine_555c44df6819b53a8cf313b0af3e24f7",
+        "refinement_interpretation_Tm_refine_90a1661541e4f009452ab107b47b5955",
         "refinement_interpretation_Tm_refine_9d086d8e4ec2b00c481694c666d84a5d",
-        "refinement_interpretation_Tm_refine_c99b4025e6018cbeec9a97bb9cd21b65",
-        "refinement_interpretation_Tm_refine_ebced975c1dca0b76ac4d7f73cea594d",
-        "refinement_kinding_Tm_refine_c99b4025e6018cbeec9a97bb9cd21b65",
+        "refinement_interpretation_Tm_refine_f24dceab5359b5426b3cc6fd1f3bb3de",
+        "refinement_kinding_Tm_refine_90a1661541e4f009452ab107b47b5955",
         "typing_FStar.Ghost.reveal"
       ],
       0,
-      "488897b9d48bdac38bd823fef9f2ac3d"
+      "dcddf9ea7630bde82e39404e1d6d25be"
     ],
     [
       "TLS.Handshake.Send.send_tag13",
@@ -356,14 +356,14 @@
         "fuel_guarded_inversion_TLS.Handshake.Send.send_state",
         "primitive_Prims.op_Addition", "projection_inverse_BoxInt_proj_0",
         "refinement_interpretation_Tm_refine_37a27dd78837f66266d7ef163b330ae4",
-        "refinement_interpretation_Tm_refine_41432aab4fd96f858ee39658ee4ff4e4",
-        "refinement_interpretation_Tm_refine_c99b4025e6018cbeec9a97bb9cd21b65",
-        "refinement_interpretation_Tm_refine_ebced975c1dca0b76ac4d7f73cea594d",
-        "refinement_kinding_Tm_refine_c99b4025e6018cbeec9a97bb9cd21b65",
+        "refinement_interpretation_Tm_refine_555c44df6819b53a8cf313b0af3e24f7",
+        "refinement_interpretation_Tm_refine_90a1661541e4f009452ab107b47b5955",
+        "refinement_interpretation_Tm_refine_f24dceab5359b5426b3cc6fd1f3bb3de",
+        "refinement_kinding_Tm_refine_90a1661541e4f009452ab107b47b5955",
         "typing_FStar.Ghost.reveal"
       ],
       0,
-      "58af3eb24e8b61cb2df7187fafae7fad"
+      "4f174f8a27291ef17b521c10785e0678"
     ],
     [
       "TLS.Handshake.Send.send_extract13",
@@ -378,15 +378,15 @@
         "function_token_typing_Declassify.declassify",
         "primitive_Prims.op_Addition", "projection_inverse_BoxInt_proj_0",
         "refinement_interpretation_Tm_refine_2de20c066034c13bf76e9c0b94f4806c",
-        "refinement_interpretation_Tm_refine_41432aab4fd96f858ee39658ee4ff4e4",
+        "refinement_interpretation_Tm_refine_555c44df6819b53a8cf313b0af3e24f7",
+        "refinement_interpretation_Tm_refine_90a1661541e4f009452ab107b47b5955",
         "refinement_interpretation_Tm_refine_9d086d8e4ec2b00c481694c666d84a5d",
-        "refinement_interpretation_Tm_refine_c99b4025e6018cbeec9a97bb9cd21b65",
-        "refinement_interpretation_Tm_refine_ebced975c1dca0b76ac4d7f73cea594d",
-        "refinement_kinding_Tm_refine_c99b4025e6018cbeec9a97bb9cd21b65",
+        "refinement_interpretation_Tm_refine_f24dceab5359b5426b3cc6fd1f3bb3de",
+        "refinement_kinding_Tm_refine_90a1661541e4f009452ab107b47b5955",
         "typing_FStar.Ghost.reveal"
       ],
       0,
-      "46ed0dd9127147b1e9b7713234365e61"
+      "c6d6795f5060d7d4bef7b64a6a64af55"
     ]
   ]
 ]

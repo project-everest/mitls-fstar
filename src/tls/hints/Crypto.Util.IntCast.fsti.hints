@@ -6,9 +6,13 @@
       1,
       2,
       1,
-      [ "@query" ],
+      [
+        "@query", "constructor_distinct_Lib.IntTypes.U8",
+        "equality_tok_Lib.IntTypes.U8@tok", "equation_Lib.IntTypes.bits",
+        "projection_inverse_BoxInt_proj_0"
+      ],
       0,
-      "71d184192475095364acfccf7776dc3f"
+      "f26c48440617829f21bca5ebe291da74"
     ],
     [
       "Crypto.Util.IntCast.to_seq_uint8_correct",
@@ -21,16 +25,20 @@
         "typing_Crypto.Util.IntCast.to_seq_uint8"
       ],
       0,
-      "20f4de13980849df1ba23f9a95226587"
+      "535d2499d563f15ba02f90444ed8dcd8"
     ],
     [
       "Crypto.Util.IntCast.to_sec8",
       1,
       2,
       1,
-      [ "@query" ],
+      [
+        "@query", "constructor_distinct_Lib.IntTypes.U8",
+        "equality_tok_Lib.IntTypes.U8@tok", "equation_Lib.IntTypes.bits",
+        "projection_inverse_BoxInt_proj_0"
+      ],
       0,
-      "0cfb4d43dd91e348ea19ce329914d1f7"
+      "3f8899d6efff7313678e95219556306f"
     ],
     [
       "Crypto.Util.IntCast.to_seq_sec8_correct",
@@ -43,7 +51,7 @@
         "typing_Crypto.Util.IntCast.to_seq_sec8"
       ],
       0,
-      "97379637c52a5da308682f7ed7de4023"
+      "8e6577d0c88bca8ffbda6369ffdfea59"
     ],
     [
       "Crypto.Util.IntCast.to_seq_sec8_to_seq_uint8",
