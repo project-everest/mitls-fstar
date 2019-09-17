@@ -7,6 +7,8 @@ module HS = FStar.HyperStack
 
 friend Lib.IntTypes
 
+#set-options "--max_fuel 0 --max_ifuel 0 --z3rlimit 15"
+
 let to_uint8 x = x
 
 let to_seq_uint8 x = x

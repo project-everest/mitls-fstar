@@ -109,11 +109,6 @@ let ha_bkey13 (bk:bkey13) =
   let _, Ticket.Ticket13 (CipherSuite13 _ ha) li _ _ nonce created age_add custom = bk in
   ha
 
-
-
-
-// type certNego = option (cert_type * signatureScheme)
-
 (*
 val hashAlg: mode -> Hashing.Spec.alg
 val kexAlg: mode -> TLSConstants.kexAlg
@@ -359,22 +354,41 @@ val client_ServerKeyExchange:
 
 (* SERVER *)
 
-(* 19-08-31 TODO get rid of stateful nego
-
-//17-03-30 still missing a few for servers.
 module HRR = Parsers.HelloRetryRequest
 
-noeq type serverMode =
-  | ServerMode: mode -> certNego -> Extensions.unknownExtensions -> serverMode
-  | ServerRetry: TLS.Cookie.(hrr_leq extensions_max_length) -> serverMode
+// Represents the abstract certificate choice of the server
+// Needs to be stored independently of the ServerHello since
+// the certificate chain is sent in the next flight
+type certNego = option (cert_type * signatureScheme)
 
+// The outcome of server negotiation
+type server_choice =
+| ServerAccept12:
+  sh: HSM.sh{selected_version sh == Correct TLS_1p2} ->
+  cert: certNego -> // Certificate to send
+  server_choice
+| ServerResume12:
+  sh: HSM.sh{selected_version sh == Correct TLS_1p2} ->
+  ticket: bkey12 -> // The ticket to use by key schedule
+  server_choice
+| ServerAccept13:
+  sh: HSM.sh{selected_version sh == Correct TLS_1p3} ->
+  ee: HSM.encryptedExtensions ->
+  use_psk: option bkey13 -> // PSK to use by key schedule
+  use_share: option share -> // DH share to use by key schedule
+  cert: certNego -> // Certificate to send
+  server_choice
+| ServerRetry:
+  hrr: HSM.hrr ->
+  server_choice
 
+// Print information about the client offer
 val trace_offer: HSM.clientHello ->
   ST unit
   (requires fun h0 -> True)
   (ensures fun h0 () h1 -> h0 == h1)
 
-// When receiving CH2
+(*
 val server_ClientHello2:
   #region:rgn -> ns: t region Server ->
   ch1: HSM.clientHello ->
@@ -392,26 +406,31 @@ val server_ClientHello2:
     | Error _, _ -> True
     | Correct _, S_ClientHello _ _ -> True
     | _ -> False ))
+*)
 
 // When receiving CH1 or CH2[CH1 cookie]
 val server_ClientHello:
-  #region:rgn -> ns: t region Server ->
-  HSM.clientHello ->
-  ST (result serverMode)
-  (requires fun h0 ->
-    inv ns h0 /\
-    (let s = HS.sel h0 ns.state in S_Init? s))
-  (ensures fun h0 _ h1 ->
-    inv ns h1
-    // TODO modifies at least the transcript
-    )
-  // [S_Init ==> S_ClientHello m cert]
-  // ensures r = computeServerMode ns.cfg ns.nonce offer (stateful)
-  // but [compute_cs13] and [negotiateCipherSuite] are pure.
+  cfg: config ->
+  offer: HSM.ch ->
+  nonce: TLSInfo.random ->
+  ST (result server_choice)
+  (requires fun h0 -> True)
+  (ensures fun h0 r h1 ->
+    B.modifies B.loc_none h0 h1 /\
+    (match r with
+    | Correct (ServerResume12 sh _) ->
+      HSM.sh_random sh == nonce
+    | Correct (ServerAccept13 sh ee psk dhg _) ->
+      HSM.sh_random sh == nonce /\
+      (Some? psk \/ Some? dhg) /\
+      (match find_clientPske offer, find_serverPske sh, psk with
+      | Some ids, Some i, Some (pskid, _) ->
+        let id = List.Tot.nth ids.Extensions.identities (UInt16.v i) in
+	Some? id /\ (Some?.v id).identity == pskid
+      | _ -> False)
+    | _ -> True))
 
-/// Complete the server's mode with its DH share
-/// (the two-step decomposition enables DH generation from partial mode in-between)
-///
+(*
 val server_ServerShare:
   #region:rgn -> ns: t region Server ->
   oks:option (g:CommonDH.group & CommonDH.pre_share g) -> //19-01-22 to be refined?
@@ -426,19 +445,13 @@ val server_ServerShare:
   // ensures sexts = server_negotiateExtensions ns mode cexts @ app_exts
   // review their ordering, and how QD separates them
 
-
-
-
-
-
 *)
 
-//17-03-30 get rid of this wrapper?
+/// Still used in Old.Epoch
+
 noeq type session = {
   session_nego: option unit // mode;
 }
-
-/// Still used in Old.Epoch
 
 // represents the outcome of a successful handshake,
 // providing context for the derived epoch
@@ -449,9 +462,6 @@ noeq type handshake =
 // We tried using instead hs, but this creates circularities
 // We'll probably need a global log to reason about them.
 // We should probably do the same in the session store.
-
-
-
 
 /// QUIC uses ch accessors:
 /// Negotiation.get_sni
