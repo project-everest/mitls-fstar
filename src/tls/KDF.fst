@@ -25,6 +25,7 @@ module MDM = FStar.Monotonic.DependentMap
 module HS = FStar.HyperStack
 module DT = DefineTable
 module HD = Spec.Hash.Definitions
+module T = HSL.Transcript
 
 #set-options "--max_fuel 1 --max_ifuel 1 --z3rlimit 30"
 
@@ -42,22 +43,17 @@ let sample (len:UInt32.t): ST (B.lbytes32 len)
     (ensures fun h0 r h1 -> h0 == h1)
   = assume false; Random.sample32 len
 
-type details (ha:kdfa) =
-| Log:
-  loginfo: TLSInfo.logInfo ->
-  hv: Hashing.Spec.anyTag {digest_info ha loginfo hv} -> details ha
-
 type info =
 | Info:
-  ha:kdfa ->
-  option (details ha) -> info
+  ha: kdfa ->
+  tx: option (T.transcript_t) -> info
 
 noextract
 let rec index_info (i:id{model}) =
   let i':pre_id = i in
   match i' with
   | Preshared a _ -> Info a None
-  | Derive i l (ExpandLog log hv) -> Info (ha_of_id i) (Some (Log log hv))
+  | Derive i l (ExpandTranscript tx) -> Info (ha_of_id i) (Some tx)
   | Derive i _ _ -> index_info i
 
 let valid_info (i:id) (v:info) = model ==> (v == index_info i)

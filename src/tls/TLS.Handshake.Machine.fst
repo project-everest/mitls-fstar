@@ -43,10 +43,23 @@ module HS = FStar.HyperStack
 module HST = FStar.HyperStack.ST
 
 module HSM = HandshakeMessages
+module KS = Old.KeySchedule
+module Epochs = Old.Epochs
 module LP = LowParse.Low.Base
 module PF = TLS.Handshake.ParseFlights // only for flight names
 module Recv = TLS.Handshake.Receive
 module Send = TLS.Handshake.Send
+
+(* Debug output, shared by client and server *)
+val discard: bool -> ST unit
+  (requires (fun _ -> True))
+  (ensures (fun h0 _ h1 -> h0 == h1))
+let discard _ = ()
+let print s = discard (IO.debug_print_string ("HS | "^s^"\n"))
+unfold val trace: s:string -> ST unit
+  (requires (fun _ -> True))
+  (ensures (fun h0 _ h1 -> h0 == h1))
+unfold let trace = if DebugFlags.debug_HS then print else (fun _ -> ())
 
 /// Message types (move to HandshakeMessages or Repr modules)
 
@@ -132,16 +145,14 @@ let create_msg_state (region: rgn) (inflight: PF.in_progress_flt_t) random ha:
 ///   We should start thinking about their invariants and footprints,
 ///   subject to conditional idealization.
 
-let client_keys = Old.KeySchedule.ks_client_state
-let c_wait_ServerHello_keys = s: client_keys { Old.KeySchedule.C_wait_ServerHello? s }
-let c13_wait_Finished1_keys = s: client_keys { Old.KeySchedule.C13_wait_Finished1? s }
+let client_keys = KS.ks_client_state
+let c_wait_ServerHello_keys = s: client_keys { KS.C_wait_ServerHello? s }
+let c13_wait_Finished1_keys = s: client_keys { KS.C13_wait_Finished1? s }
 
-// TODO get rid of sks_is_quic, as we did for the client (the caller
-// just passes to KeySchedule the config's is_quic as additional
-// parameter when required)
-noeq type server_keys = {
-  sks_is_quic: bool;
-  sks: Old.KeySchedule.ks_server_state; }
+let server_keys = KS.ks_server_state
+let s_init = s:server_keys {KS.S_Init? s}
+let s_wait_ServerHello_keys = s:server_keys {KS.S13_wait_SH? s}
+let s_wait_ServerFinished_keys = s:server_keys {KS.S13_wait_SF? s}
 
 // Helpful refinement within Secret? stating that an index is for a PSK.
 assume val is_psk: Idx.id -> bool
@@ -423,7 +434,7 @@ noeq type client_state
     // keys.
     eoed_args: (option (
       option HSM.certificateRequest13 &
-      (i:Old.HMAC.UFCMA.finishedId & Old.KeySchedule.fink i))) ->
+      (i:Old.HMAC.UFCMA.finishedId & KS.fink i))) ->
 
     ms: msg_state region PF.F_c13_wait_Finished1 (offer.full_ch.HSM.random) (Negotiation.selected_ha sh) ->
     ks: client_keys ->
@@ -905,13 +916,17 @@ noeq type server_state
 
   // TLS 1.3, intermediate state to encryption
   | S13_sent_ServerHello:
-    mode: s13_mode region cfg ->
+    offer: HSM.ch ->
+    mode: HSM.sh ->
+    ee: HSM.encryptedExtensions ->
     ms: msg_state region PF.F_c_wait_ServerHello (mode.offer.ch.HSM.random) (Negotiation.selected_ha mode.sh) ->
 //  i: Idx.id -> // Secret.esId ->
 //  idh: Idx.id_dhe ->
-//  ks: Secret.s13_wait_ServerHello i idh ->
-    ks: server_keys ->
+//    ks: Secret.s13_wait_ServerHello i idh ->
+    cert: Nego.certNego ->
+    ks: s_wait_ServerFinished_keys ->
     server_state region cfg
+
 //
 //// TLS 1.3 intermediate state
 //| S13_wait_EOED
@@ -1050,3 +1065,162 @@ let state_entry (n: TLSInfo.random) = state // TODO refinement witness reading s
 /// - define a constructor adding a model-only nonce value and
 ///   witnessing its table registration. This is the main connection
 ///   type at the API.
+
+(**** Key output interface (floating) **)
+
+// ADL: moved here for now to share between client and server
+#push-options "--admit_smt_queries true"
+let register (#region:rgn) (#n:random) (epochs:Epochs.epochs region n)
+  (keys:KS.recordInstance) : St unit
+  =
+  let ep = //? we don't have a full index yet for the epoch; reuse the one for keys??
+    let h = Negotiation.Fresh ({ Negotiation.session_nego = None }) in
+    Epochs.recordInstanceToEpoch #region #n h keys in // just coercion
+    // New Handshake does
+    // let KeySchedule.StAEInstance #id r w = keys in
+    // Epochs.recordInstanceToEpoch #hs.region #(nonce hs) h (Handshake.Secret.StAEInstance #id r w) in
+  Epochs.add_epoch epochs ep // actually extending the epochs log
+
+let export (#region:rgn) (#n:random) (epochs:Epochs.epochs region n)
+  (xk:KS.exportKey) : St unit
+  =
+  trace "exporting a key";
+  FStar.Monotonic.Seq.i_write_at_end epochs.Epochs.exporter xk
+#pop-options
+
+(**** Transcript Bytes Wrappers ***)
+
+// FIXME(adl) add bytes wrapper to Transcript interface?
+// Temporarily moved here to share between client and server
+#push-options "--max_fuel 0 --max_fuel 0 --z3rlimit 32"
+let transcript_extract
+  #ha
+  (di:Transcript.state ha)
+  (tx: Ghost.erased Transcript.transcript_t):
+  ST Bytes.bytes
+  (requires fun h0 ->
+    Transcript.invariant di (Ghost.reveal tx) h0)
+  (ensures fun h0 t h1 ->
+    let tx = Ghost.reveal tx in
+    Transcript.invariant di tx h1 /\
+    B.(modifies (
+      Transcript.footprint di `loc_union`
+      loc_region_only true Mem.tls_tables_region) h0 h1) /\
+    Bytes.reveal t == Transcript.transcript_hash ha tx /\
+    Transcript.hashed ha tx)
+  =
+  // Show that the transcript state is disjoint from the new frame since it's not unused
+  (**) let h0 = get() in
+  (**) Transcript.elim_invariant di (Ghost.reveal tx) h0;
+  push_frame();
+  let ltag = EverCrypt.Hash.Incremental.hash_len ha in
+  // AF: Why not allocate directly with size ltag?
+  let btag0 = LowStar.Buffer.alloca 0uy 64ul in // big enough for all tags
+  let btag = LowStar.Buffer.sub btag0 0ul ltag in
+  Transcript.extract_hash di btag tx;
+  let tag = FStar.Bytes.of_buffer ltag btag in
+  trace ("Extracted a transcript hash "^Bytes.hex_of_bytes tag);
+  pop_frame();
+  tag
+#pop-options
+
+// 19-09-05 Much overhead for calling Transcript
+// let extend_ch #ha
+//   (sending: Send.send_state)
+//   (di:Transcript.state ha)
+//   (msg: HSM.ch)
+//   (tx0: Ghost.erased Transcript.transcript_t):
+//   ST (result (Ghost.erased Transcript.transcript_t ))
+//   (requires fun h0 ->
+//     let tx0 = Ghost.reveal tx0 in Transcript.Start? tx0 /\
+//     B.loc_disjoint (Send.footprint sending) (Transcript.footprint di) /\
+//     Send.invariant sending h0 /\
+//     Transcript.invariant di tx0 h0)
+//   (ensures fun h0 r h1 ->
+//     B.(modifies (Send.footprint sending `loc_union` Transcript.footprint di) h0 h1) /\
+//     Send.invariant sending h1 /\ (
+//     match r with
+//     | Error _ -> True
+//     | Correct tx1 ->
+//       let Transcript.Start r = Ghost.reveal tx0 in
+//       let tx1 = Ghost.reveal tx1 in
+//       Transcript.invariant di tx1 h1 /\
+//       tx1 == Transcript.ClientHello r msg ))
+// =
+//   admit()
+
+#push-options "--max_fuel 0 --max_fuel 0 --z3rlimit 100"
+// Adapted from Send.send13, using [sending] as scratch space;
+// temporary. We may need similar functions for the Hello messages.
+open FStar.Integers
+let extend13
+  #ha
+  (sending: Send.send_state)
+  (di:Transcript.state ha)
+  (msg: HSM.handshake13)
+  (#n: Ghost.erased nat)
+  (tx0: Transcript.g_transcript_n n {Ghost.reveal n < Transcript.max_transcript_size - 1}):
+  ST (result (Transcript.g_transcript_n (Ghost.hide (Ghost.reveal n+1))))
+  (requires fun h0 ->
+    let tx0 = Ghost.reveal tx0 in Transcript.Transcript13? tx0 /\
+    B.loc_disjoint (Send.footprint sending) (Transcript.footprint di) /\
+    Send.invariant sending h0 /\
+    Transcript.invariant di tx0 h0)
+  (ensures fun h0 r h1 ->
+    B.(modifies (Send.footprint sending `B.loc_union` Transcript.footprint di) h0 h1) /\
+    Send.invariant sending h1 /\ (
+    match r with
+    | Error _ -> True
+    | Correct tx1 ->
+      let tx0 = Ghost.reveal tx0 in
+      let tx1 = Ghost.reveal tx1 in
+      Transcript.invariant di tx1 h1 /\
+      tx1 == Transcript.snoc13 tx0 msg ))
+  =
+  let h0 = get () in
+  let r = MITLS.Repr.Handshake13.serialize sending.Send.out_slice sending.Send.out_pos msg in
+  let h1 = get () in
+  Transcript.frame_invariant di (Ghost.reveal tx0) h0 h1 (B.loc_buffer sending.Send.out_slice.LowParse.Low.Base.base);
+  match r with
+  | None ->
+    fatal Internal_error "output buffer overflow"
+  | Some r ->
+    List.lemma_snoc_length (Transcript.Transcript13?.rest (Ghost.reveal tx0), msg);
+    let tx1 = HSL.Transcript.extend di (Transcript.LR_HSM13 r) tx0 in
+    let b = MITLS.Repr.to_bytes r in
+    trace ("extended transcript with "^Bytes.hex_of_bytes b);
+    // we do *not* return the modified indexes in [sending]
+    correct tx1
+#pop-options
+
+(**** Shared binders definitions (move to TLS.Handshake.Binders?) ***)
+
+let binder = Parsers.PskBinderEntry.pskBinderEntry
+let binder_for (bkey:Negotiation.bkey13) =
+  b:binder { Bytes.length b ==  EverCrypt.Hash.Incremental.hash_length (Negotiation.ha_bkey13 bkey) }
+let rec binders_for (l:list Negotiation.bkey13) (l':list binder) =
+  (match l, l' with
+  | [], [] -> True
+  | key::t, binder::t' -> Bytes.length binder ==  Hashing.hash_length (Negotiation.ha_bkey13 key)
+    /\ binders_for t t'
+  | _ -> False)
+
+let btag (bkey:Negotiation.bkey13) = Hashing.tag (Negotiation.ha_bkey13 bkey)
+
+assume val compute_binder:
+  bkey: Negotiation.bkey13 ->
+  tag: Bytes.lbytes (Hashing.hash_length (Negotiation.ha_bkey13 bkey)) ->
+  binder_for bkey
+
+assume val verify_binder:
+  bkey: Negotiation.bkey13 ->
+  tag: Bytes.lbytes (Hashing.hash_length (Negotiation.ha_bkey13 bkey)) ->
+  binder: binder_for bkey ->
+  bool
+
+#push-options "--max_ifuel 1"
+let rec bkeys_binders_list_bytesize (bkeys: list Negotiation.bkey13) =
+  match bkeys with
+  | bkey::bkeys -> 1 + EverCrypt.Hash.Incremental.hash_length (Negotiation.ha_bkey13 bkey) + bkeys_binders_list_bytesize bkeys
+  | [] -> 0
+#pop-options

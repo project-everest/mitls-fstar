@@ -469,31 +469,30 @@ let ks_server12_init_dh ks cr pv cs ems g =
   let csr = cr @| sr in
   st := S (S12_wait_CKE_DH csr (pv, cs, ems) (| g, our_share |));
   CommonDH.ipubshare our_share
-  
+
 val ks_server13_init:
-  ks:ks ->
+  ks:ks_server_state ->
   cr:random ->
   cs:cipherSuite ->
   pskid:option PSK.pskid ->
   g_gx:option (g:CommonDH.group & CommonDH.share g) ->
-  ST (option (g:CommonDH.group & CommonDH.share g) * option (i:binderId & binderKey i))
+  ST (ks_server_state * option (g:CommonDH.group & CommonDH.share g) * option (i:binderId & binderKey i))
   (requires fun h0 ->
-    let kss = sel h0 (KS?.state ks) in
-    S? kss /\ S_Init? (S?.s kss)
+    S_Init? ks
     /\ (Some? g_gx \/ Some? pskid)
     /\ (Some? g_gx ==> Some? (CommonDH.namedGroup_of_group (dfst (Some?.v g_gx))))
     /\ CipherSuite13? cs)
-  (ensures fun h0 (gy, bk) h1 ->
-    let KS #rid st _ = ks in
-    modifies (Set.singleton rid) h0 h1
+  (ensures fun h0 (ks', gy, bk) h1 ->
+    modifies_none h0 h1
     /\ (Some? bk <==> Some? pskid)
     /\ (Some? gy \/ Some? bk)
-    /\ HS.modifies_ref rid (Set.singleton (Heap.addr_of (as_ref st))) h0 h1)
+    /\ S13_wait_SH? ks')
+//    /\ HS.modifies_ref rid (Set.singleton (Heap.addr_of (as_ref st))) h0 h1)
 
 let ks_server13_init ks cr cs pskid g_gx =
   dbg ("ks_server_init");
-  let KS #region st _ = ks in
-  let S (S_Init sr) = !st in
+//  let KS #region st _ = ks in
+  let S_Init sr = ks in
   let CipherSuite13 ae h = cs in
   let esId, es, bk =
     match pskid with
@@ -521,7 +520,8 @@ let ks_server13_init ks cr cs pskid g_gx =
       dbg ("binder key:                      "^print_bytes bk);
       let bk = finished_13 h bk in
       dbg ("binder Finished key:             "^print_bytes bk);
-      let bk : binderKey bId = HMAC_UFCMA.coerce (HMAC_UFCMA.HMAC_Binder bId) (fun _ -> True) region bk in
+      let bk : binderKey bId =
+        HMAC_UFCMA.coerce (HMAC_UFCMA.HMAC_Binder bId) (fun _ -> True) Mem.tls_region bk in
       i, es, Some (| bId, bk |)
     | None ->
       dbg "No PSK selected.";
@@ -547,8 +547,8 @@ let ks_server13_init ks cr cs pskid g_gx =
       None, hsId, hs
     in
   dbg ("Handshake secret:                "^print_bytes hs);
-  st := S (S13_wait_SH (ae, h) cr sr (| esId, es |) (| hsId, hs |));
-  gy, bk
+  let ks' = (S13_wait_SH (ae, h) cr sr (| esId, es |) (| hsId, hs |)) in
+  ks', gy, bk
 
 let ks_server13_0rtt_key ks (log:bytes)
   : ST ((li:logInfo & i:exportId li & ems i) * recordInstance)
