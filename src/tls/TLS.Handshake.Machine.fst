@@ -50,22 +50,9 @@ module PF = TLS.Handshake.ParseFlights // only for flight names
 module Recv = TLS.Handshake.Receive
 module Send = TLS.Handshake.Send
 
-(* Debug output, shared by client and server *)
-val discard: bool -> ST unit
-  (requires (fun _ -> True))
-  (ensures (fun h0 _ h1 -> h0 == h1))
-let discard _ = ()
-let print s = discard (IO.debug_print_string ("HS | "^s^"\n"))
-unfold val trace: s:string -> ST unit
-  (requires (fun _ -> True))
-  (ensures (fun h0 _ h1 -> h0 == h1))
-unfold let trace = if DebugFlags.debug_HS then print else (fun _ -> ())
-
-/// Message types (move to HandshakeMessages or Repr modules)
-
-#push-options "--max_ifuel 1"
-type sh13 = Negotiation.(sh: HSM.sh {selected_version sh == Correct TLS_1p3})
-#pop-options
+// Union of {Send, Recv, Transcript, Epochs) state
+// defined in type msg_state
+open TLS.Handshake.Messaging
 
 /// Auxiliary datatypes (shared between states)
 ///
@@ -78,66 +65,6 @@ type sh13 = Negotiation.(sh: HSM.sh {selected_version sh == Correct TLS_1p3})
 // TLS.Config will define a more convenient client-specific configuration
 let client_config = Negotiation.client_config
 
-/// * We keep [epochs] for now, to be replaced by multistreams.
-///
-/// * We keep the Receive state, includiong a connection-allocated
-///   input slice, also used by a stub to exchange bytes with the TLS
-///   record.  [I wish we could pass fewer indexes.]
-///
-///   This state is indexed by the incoming flight type.
-///
-/// * We keep a digest, indexed by its hash algorith. We recompute the
-///   transcript from the handshake state (with a state-dependent
-///   bound on its length) and state that it is currently-hased in the
-///   digest in the stateful machine invariant. This requires that the
-///   machine state keep message contents, at least ghostly. (Good to
-///   try out erasure.)
-///
-/// * We keep the Send state, including a connection-allocated output
-///   slice.
-///
-/// The resulting record of sub-states is dynamically allocated in the
-/// handshake, and kept in most subsequent states of the machine:
-
-noeq type msg_state' (region: rgn) (inflight: PF.in_progress_flt_t) random ha  = {
-  digest: Transcript.state ha;
-  sending: TLS.Handshake.Send.send_state;
-  receiving: Recv.(r:state {
-    PF.length_parsed_bytes r.pf_st == 0 \/ in_progress r == inflight });
-  epochs: Old.Epochs.epochs region random; }
-// TODO complete regional refinements
-// TODO stateful epochs (or wait for their refactoring?)
-
-let msg_state (region: rgn) (inflight: PF.in_progress_flt_t) random ha  =
-  ms:msg_state' region inflight random ha{
-     B.loc_disjoint (Transcript.footprint ms.digest) (TLS.Handshake.Send.footprint ms.sending) /\
-     B.loc_disjoint (Transcript.footprint ms.digest) (Recv.loc_recv ms.receiving) /\
-     B.loc_disjoint (TLS.Handshake.Send.footprint ms.sending) (Recv.loc_recv ms.receiving) }
-
-let msg_invariant #region #inflight #random #ha (ms:msg_state region inflight random ha) transcript h =
-    Transcript.invariant ms.digest transcript h /\
-    Send.invariant ms.sending h /\
-    Receive.invariant ms.receiving h
-
-let msg_state_footprint #region #inflight #random #ha (ms:msg_state region inflight random ha) =
-  B.loc_union (B.loc_union
-    (Transcript.footprint ms.digest)
-    (TLS.Handshake.Send.footprint ms.sending))
-    (Recv.loc_recv ms.receiving)
-
-let create_msg_state (region: rgn) (inflight: PF.in_progress_flt_t) random ha:
-  ST (msg_state region inflight random ha)
-  (requires fun h0 -> True)
-  (ensures fun h0 mst h1 -> True)
-=
-  // TODO. Who should allocate this receive buffer?
-  let b = admit() in
-  let d, _ = Transcript.create region ha in
-  { digest = d;
-    sending = Send.send_state0;
-    receiving = Receive.create b;
-    epochs = Old.Epochs.create region random }
-
 
 /// * Old.KeySchedule: most state keep either ks_client_state or
 ///   ks_server_state (usually knowing exactly its constructor).
@@ -145,14 +72,17 @@ let create_msg_state (region: rgn) (inflight: PF.in_progress_flt_t) random ha:
 ///   We should start thinking about their invariants and footprints,
 ///   subject to conditional idealization.
 
-let client_keys = KS.ks_client_state
+let client_keys = KS.ks_client
 let c_wait_ServerHello_keys = s: client_keys { KS.C_wait_ServerHello? s }
 let c13_wait_Finished1_keys = s: client_keys { KS.C13_wait_Finished1? s }
+let c13_wait_Finished2_keys = s: client_keys { KS.C13_wait_Finished2? s }
+let c13_complete_keys = s: client_keys { KS.C13_Complete? s }
 
-let server_keys = KS.ks_server_state
-let s_init = s:server_keys {KS.S_Init? s}
-let s_wait_ServerHello_keys = s:server_keys {KS.S13_wait_SH? s}
-let s_wait_ServerFinished_keys = s:server_keys {KS.S13_wait_SF? s}
+let server_keys = KS.ks_server
+let s13_wait_ServerHello_keys = s:server_keys {KS.S13_wait_SH? s}
+let s13_wait_ServerFinished_keys = s:server_keys {KS.S13_wait_SF? s}
+let s13_wait_ClientFinished_keys = s:server_keys {KS.S13_wait_CF? s}
+let s13_complete_keys = s:server_keys{KS.S13_postHS? s}
 
 // Helpful refinement within Secret? stating that an index is for a PSK.
 assume val is_psk: Idx.id -> bool
@@ -181,19 +111,20 @@ assume val pskis_of_psks: option Extensions.offeredPsks -> list (i:_{is_psk i})
 ///
 /// These definitions could go to Transcript.
 
-noeq type client_retry_info = {
+type client_retry_info = {
   ch0: HSM.ch;
-  sh0: HSM.valid_hrr; }
+  sh0: HSM.valid_hrr;
+}
 
-noeq type full_offer = {
+type full_offer = {
   full_retry: option client_retry_info;
   full_ch: HSM.ch; // not insisting that ch initially has zeroed binders
-  }
+}
 
-noeq type offer = {
+type offer = {
   hashed_retry: option Transcript.retry;
   ch: HSM.ch; // not insisting that ch initially has zeroed binders
-  }
+}
 
 //NS: Is this abbreviation really necessary?
 //Transcript.transcript_n is similar but provides an equality rather than [<=]
@@ -227,11 +158,6 @@ let retry_digest o =
 //     let tag = admit() in //ch_digest ha x.ch0 in
 //     Some (HSM.M_message_hash tag, x.sh0)
 
-// detail: those two may also return lists
-assume val offered_shares: HSM.ch -> option Extensions.keyShareClientHello
-assume val offered_psks: HSM.ch -> option Extensions.offeredPsks
-
-
 /// Certificate-based credentials (for now only to identify the server)
 
 type serverCredentials =
@@ -254,7 +180,7 @@ let deobfuscate offer resumeInfo =
 // initial offer is a function of the config.
 
 let offered0 (cfg:client_config) (offer:Negotiation.offer) =
-  let ks = offered_shares offer in
+  let ks = Negotiation.find_clientKeyShares offer in
   let now = deobfuscate offer (snd cfg) in
   let random = offer.Parsers.ClientHello.random in
   Correct offer == Negotiation.client_offer cfg random ks now
@@ -264,7 +190,7 @@ let offered (cfg:client_config) (offer:full_offer) =
    match offer.full_retry with
   | None -> offered0 cfg ch
   | Some retry ->
-    let ks1 = offered_shares ch in
+    let ks1 = Negotiation.find_clientKeyShares ch in
     let now1 = deobfuscate ch (snd cfg) in
     offered0 cfg retry.ch0
     // TBC Negotiation: /\
@@ -284,11 +210,14 @@ let accepted
   // what's actually computed and may be worth caching:
   // pv cs resume? checkServerExtensions? pski
 
-// TBC
-assume val accepted13: (cfg: client_config) -> full_offer -> sh13 -> Type0
+assume val accepted13:
+  (cfg: client_config) ->
+  full_offer ->
+  Transcript.sh13 ->
+  Type0
 // let accepted13 (cfg: client_config) (o:full_offer) (sh:serverHello) =
 
-assume val client_complete: full_offer -> sh13 -> HSM.encryptedExtensions -> serverCredentials -> Type0
+assume val client_complete: full_offer -> Transcript.sh13 -> HSM.encryptedExtensions -> serverCredentials -> Type0
 
 
 /// State machine for the connection handshake (private to Handshake).
@@ -310,7 +239,7 @@ let transcript_tch (offer: full_offer { HSM.ch_bound offer.full_ch}) =
   Transcript.TruncatedClientHello (retry_digest offer.full_retry) (HSM.clear_binders ch)
 let transcript_offer offer =
   Transcript.ClientHello (retry_digest offer.full_retry) offer.full_ch
-let transcript13 offer (sh: sh13) rest =
+let transcript13 offer (sh: Transcript.sh13) rest =
   Transcript.Transcript13 (retry_digest offer.full_retry) offer.full_ch sh rest
 let transcript_complete offer sh ee ccv fin1 fin2 eoed =
   let rest: Transcript.bounded_list HSM.handshake13 Transcript.max_transcript_size =
@@ -352,6 +281,30 @@ noeq type mode12 = {
 /// JP: global handshake convention is C_ when we don't know yet
 /// whether we're doing 12 or 13.  C12 / C13 are for when we know
 /// which version we've negotiated.
+
+
+    // TLS 1.3 #20 aggravation: optional intermediate model-irrelevant
+    // EOED between C13_wait_Finished1 and C13_complete, with
+    // transcript [..fin1 EOED]. We add an optional parameter to track
+    // it, just making fin2 optional or empty in C13_complete;
+    // Old.Handshake currently holds [digestEOED ocr cfin_key] in that
+    // state to complete the transaction after installing the new
+    // keys.
+
+// Sub-states of C13_Complete to account for EOED and Fin2 being sent
+// Is it really worth merging wait_CF and complete in a single state?
+// Cedric thinks yes, I think no - we are still missing client auth
+// with an additional sub-state
+noeq type client13_finished_state ch sh ee server_id =
+| Finished_pending:
+  cfk: (i:_ & KS.fink i) ->
+  ks: c13_wait_Finished2_keys ->
+  eoed_sent: bool{True (* not (offered_0rtt ch) ==> not eoed *)} ->
+  client13_finished_state ch sh ee server_id
+| Finished_sent:
+  fin2: Ghost.erased HSM.finished { client_complete ch sh ee server_id } ->
+  ks: c13_complete_keys ->
+  client13_finished_state ch sh ee server_id
 
 #restart-solver
 #set-options "--query_stats"
@@ -397,14 +350,9 @@ noeq type client_state
   // The transcript is ..SH; its digest now uses the server's ha.
   | C13_wait_Finished1:
     offer: full_offer{ offered cfg offer } ->
-    sh: sh13{ accepted13 cfg offer sh (* not yet authenticated *) } ->
+    sh: Transcript.sh13{ accepted13 cfg offer sh (* not yet authenticated *) } ->
     ms: msg_state region PF.F_c13_wait_Finished1 (offer.full_ch.HSM.random) (Negotiation.selected_ha sh) ->
     ks: c13_wait_Finished1_keys ->
-    // TODO sync key-schedule state
-    //i:   Secret.hs_id ->
-    //ams: Secret.ams (Secret.ams_of_hms i) ->
-    //cfk: Secret.fink (Secret.cfk_of_hms i) ->
-    //sfk: Secret.fink (Secret.sfk_of_hms i) ->
     client_state region cfg
 
   // Waiting for post-handshake messages (1.3; TBC rekeying);
@@ -415,50 +363,18 @@ noeq type client_state
   // The transcript is ..Fin1 then ..Fin2.
   | C13_complete:
     offer: full_offer{ offered cfg offer } ->
-    sh: sh13{ accepted13 cfg offer sh } ->
+    sh: Transcript.sh13{ accepted13 cfg offer sh } ->
     ee: HSM.encryptedExtensions ->
     server_id: serverCredentials ->
-    fin1: Ghost.erased HSM.finished -> (* received from the server *)
-    fin2: Ghost.erased HSM.finished (* sent by the client *)
-    // We keep the (ghost, high-level) finished messages only to specify the
-    // transcript for the client_invariant below (in turn needed by
-    // HSL.Transcript.invariant).
-    { client_complete offer sh ee server_id } ->
-
-    // TLS 1.3 #20 aggravation: optional intermediate model-irrelevant
-    // EOED between C13_wait_Finished1 and C13_complete, with
-    // transcript [..fin1 EOED]. We add an optional parameter to track
-    // it, just making fin2 optional or empty in C13_complete;
-    // Old.Handshake currently holds [digestEOED ocr cfin_key] in that
-    // state to complete the transaction after installing the new
-    // keys.
-    eoed_args: (option (
-      option HSM.certificateRequest13 &
-      (i:Old.HMAC.UFCMA.finishedId & KS.fink i))) ->
-
+    fin1: Ghost.erased HSM.finished ->
     ms: msg_state region PF.F_c13_wait_Finished1 (offer.full_ch.HSM.random) (Negotiation.selected_ha sh) ->
-    ks: client_keys ->
-    // in unverified state [Old.KeySchedule.C_13_wait_CF/postHS]
-    // TODO key-schedule state
-    //  i:   Secret.ams_id ->
-    //  rms: Secret.secret (rms_of_ams i tr) (* for accepting resumption tickets *) ->
+    fin_state: client13_finished_state offer sh ee server_id ->
     client_state region cfg
     // let client_complete offer sh ee svn =
     //   client_offered cfg offer /\
     //   client_accepted13 offer sh /\
     //   client_verified13 offer sh ee svc /\
     //   (honest_server sh ... ==> server_selected13 offer sh ee svc)
-//
-(* OLDER:
-  // TLS 1.3 #20 aggravation, optional between C13_wait_Finished1 and C13_complete, with transcript [..fin1 EOED]
-  | C13_sent_EOED:
-    transcript: Ghost.erased (transcript: trans 4 { Transcript.Hello? transcript }) ->
-    //i:   Secret.hs_id ->
-    //ams: Secret.ams (Secret.ams_of_hms i) ->
-    //cfk: Secret.fink (Secret.cfk_of_hms i) ->
-    //digest (* _EOED *) ->
-    //option HSM.cr13 ->
-    st region role cfg resume nonce *)
 
   //
   // STATES FOR TLS 1.2 -- comment out for proof experiments.
@@ -468,46 +384,47 @@ noeq type client_state
   //
   // still missing below Recv.receive_state and HSL.Send.send_state.
 
-  // 1.2 full, waiting for the rest of the first server flight
-  | C12_wait_ServerHelloDone:
-    ch: HSM.ch ->
-    sh: HSM.sh (*{ accepted12 ch sh }*) ->
-    ms: msg_state region PF.F_c12_wait_ServerHelloDone ch.HSM.random (Negotiation.selected_ha sh) ->
-    ks: client_keys ->
-    client_state region cfg
-
-  // 1.2 full
-  // the digest[..Finished1] to be MAC-verified in Finished2 will now be computed as it is received
-  | C12_wait_Finished2:
-    ch: HSM.ch ->
-    sh: HSM.sh (*{ accepted12 ch sh }*) ->
-    ms: msg_state region PF.F_c12_wait_ServerHelloDone ch.HSM.random (Negotiation.selected_ha sh) ->
-    m:mode12 ->
-    // collapsing into a single state [wait_CCS2 (true)] followed by [wait_Finished2 (false)]
-    // no need to track missing fin messages, as they are used just for recomputing the transcript
-    wait_CCS2: bool ->
-    client_state region cfg
-
   // 1.2 resumption, waiting for the server CCS1 and Finished1
   // we used to pass a digest, but the caller can now recompute it as it receives Finished1
   // we will need digests before (to verify it) and after (for keying)
   | C12_wait_Finished1:
     ch: HSM.ch ->
-    sh: HSM.sh (*{ accepted12 ch sh }*) ->
+    sh: Transcript.sh12 ->
     ms: msg_state region PF.F_c12_wait_ServerHelloDone ch.HSM.random (Negotiation.selected_ha sh) ->
+    ks: client_keys { KS.C12_has_MS? ks } ->
     mode12 ->
     // collapsing into a single state [wait_CCS1 (true)] followed by [wait_Finished1 (false)]
     // no need to track missing fin messages, as they are used just for recomputing the transcript
     wait_CCS1: bool ->
     client_state region cfg
 
+  // 1.2 full, waiting for the rest of the first server flight
+  // No key schedule state created yet
+  | C12_wait_ServerHelloDone:
+    ch: HSM.ch ->
+    sh: Transcript.sh12 ->
+    ms: msg_state region PF.F_c12_wait_ServerHelloDone ch.HSM.random (Negotiation.selected_ha sh) ->
+    client_state region cfg
+
+  // 1.2 full
+  // the digest[..Finished1] to be MAC-verified in Finished2 will now be computed as it is received
+  | C12_wait_Finished2:
+    ch: HSM.ch ->
+    sh: Transcript.sh12 ->
+    ms: msg_state region PF.F_c12_wait_ServerHelloDone ch.HSM.random (Negotiation.selected_ha sh) ->
+    ks: client_keys{KS.C12_has_MS? ks \/ KS.C12_wait_MS? ks} ->
+    m:mode12 ->
+    // collapsing into a single state [wait_CCS2 (true)] followed by [wait_Finished2 (false)]
+    // no need to track missing fin messages, as they are used just for recomputing the transcript
+    wait_CCS2: bool ->
+    client_state region cfg
+
   | C12_complete: // now with fin2 and stronger properties
     ch: HSM.ch ->
-    sh: HSM.sh (*{ accepted12 ch sh }*) ->
+    sh: Transcript.sh12 ->
     ms: msg_state region PF.F_c12_wait_ServerHelloDone ch.HSM.random (Negotiation.selected_ha sh) ->
     mode12 ->
     client_state region cfg
-
 
 /// We embed in the type above various refinements for functional
 /// properties and witnessed properties, but we also need monotonic
@@ -523,8 +440,7 @@ let client_footprint
   match state with
   | C_init _ -> B.loc_none
   | C_wait_ServerHello _ ms ks -> msg_state_footprint ms
-  | C13_complete _ _ _ _ _ _ _ ms ks -> msg_state_footprint ms
-
+  | C13_complete _ _ _ _ _ ms _ -> msg_state_footprint ms
   | _ -> B.loc_none  // TODO: Complete this
 
 let client_invariant
@@ -549,7 +465,7 @@ let client_invariant
     msg_invariant ms transcript h
     // KeySchedule.invariant_C13_wait_Finished1 ks
 
-  | C13_complete offer sh ee server_id fin1 fin2 eoed_args ms ks ->
+  | C13_complete offer sh ee server_id fin1 ms sub_state ->
     True
     // msg_invariant ms transcript h
     // TBC
@@ -585,6 +501,15 @@ let client_step
     C13_wait_Finished1 offer1 sh1 ms1 ks1 ->
     offer1 == offer0
 
+  (* Sub state-machine for sending EOED and finished *)
+  | C13_complete offer0 sh0 ee0 sid0 fin0 ms0 sub0,
+    C13_complete offer1 sh1 ee1 sid1 fin1 ms1 sub1 ->
+    offer1 == offer0 /\ sh1 == sh0 /\ ee1 == ee0 /\ sid1 == sid0 /\ fin1 == fin0 /\
+    (match sub0, sub1 with
+    | Finished_pending cfk0 ks0 false, Finished_pending cfk1 ks1 true ->
+      cfk1 == cfk0 /\ ks1 == ks0
+    | Finished_pending _ _ _, Finished_sent fin2 ks -> True
+    | _ -> False)
   | _, _ -> False // TBC
 
 let client_mrel
@@ -628,7 +553,7 @@ let st_ch0 (#region:rgn) (#cfg: client_config) (st: client_state region cfg) =
   | C_init _ -> None
   | C_wait_ServerHello offer _ _
   | C13_wait_Finished1 offer _ _ _
-  | C13_complete offer _ _ _ _ _ _ _ _ -> (
+  | C13_complete offer _ _ _ _ _ _ -> (
     match offer.full_retry with
     | None    -> Some (HSM.clear_binders offer.full_ch)
     | Some hr -> Some (HSM.clear_binders hr.ch0) )
@@ -641,7 +566,7 @@ let st_ch1 (#region:rgn) (#cfg: client_config) (st: client_state region cfg) =
   | C_init _ -> None
   | C_wait_ServerHello offer _ _
   | C13_wait_Finished1 offer _ _ _
-  | C13_complete offer _ _ _ _ _ _ _ _ -> (
+  | C13_complete offer _ _ _ _ _ _ -> (
     match offer.full_retry with
     | None    -> None
     | Some _  -> Some (HSM.clear_binders offer.full_ch) )
@@ -654,7 +579,7 @@ let st_ch (#region:rgn) (#cfg: client_config) (st: client_state region cfg) =
   | C_init _ -> None
   | C_wait_ServerHello offer _ _
   | C13_wait_Finished1 offer _ _ _
-  | C13_complete offer _ _ _ _ _ _ _ _ -> Some (HSM.clear_binders offer.full_ch)
+  | C13_complete offer _ _ _ _ _ _ -> Some (HSM.clear_binders offer.full_ch)
   | _ -> None // TBC 1.2
 
 // establishing their stability for every step; to trivial to apply
@@ -695,7 +620,7 @@ val witness0 (#region:rgn) (#cfg:client_config) (st:client_mref region cfg):
     (requires fun h0 -> match HS.sel h0 st with
         | C_wait_ServerHello _ _ _
         | C13_wait_Finished1 _ _ _ _
-        | C13_complete _ _ _ _ _ _ _ _ _ -> h0 `HS.contains` st
+        | C13_complete _ _ _ _ _ _ _ -> h0 `HS.contains` st
         | _ -> False )
     (ensures fun h0 o h1 ->
       token_p st (st_ch0 `(assigned_to st)` o) /\
@@ -719,7 +644,7 @@ val witness1 (#region:rgn) (#cfg:client_config) (st:client_mref region cfg):
       ( match HS.sel h0 st with
         | C_wait_ServerHello offer _ _
         | C13_wait_Finished1 offer _ _ _
-        | C13_complete offer _ _ _ _ _ _ _ _ -> Some? offer.full_retry
+        | C13_complete offer _ _ _ _ _ _ -> Some? offer.full_retry
         | _ -> False ))
     (ensures fun h0 o h1 ->
       token_p st (assigned_to st st_ch1 o) /\
@@ -770,13 +695,11 @@ let client_nonce (#region:rgn) (#cfg:client_config) (s:client_state region cfg) 
   | C_init random -> random
   | C_wait_ServerHello offer _ _
   | C13_wait_Finished1 offer _ _ _
-  | C13_complete offer _ _ _ _ _ _ _ _ -> offer.full_ch.HSM.random
-  | C12_wait_ServerHelloDone ch _ _ _
-  | C12_wait_Finished2 ch _ _ _ _
-  | C12_wait_Finished1 ch _ _ _ _
+  | C13_complete offer _ _ _ _ _ _ -> offer.full_ch.HSM.random
+  | C12_wait_ServerHelloDone ch _ _
+  | C12_wait_Finished2 ch _ _ _ _ _
+  | C12_wait_Finished1 ch _ _ _ _ _
   | C12_complete ch _ _ _ -> ch.HSM.random
-
-let random_of #region #cfg (s:client_state region cfg) = client_nonce s
 
 let client_ha
   (#region:rgn) (#cfg:client_config) (s:client_state region cfg {~(C_init? s)}):
@@ -785,7 +708,7 @@ let client_ha
   match s with
   | C_wait_ServerHello offer ms ks -> Negotiation.offered_ha offer.full_ch
   | C13_wait_Finished1 offer sh ms ks -> Negotiation.selected_ha sh
-  | C13_complete offer sh _ _ _ _ _ ms ks -> Negotiation.selected_ha sh
+  | C13_complete offer sh _ _ _ _ _ -> Negotiation.selected_ha sh
 //| C12_wait_ServerHelloDone _ _ ms _
 //| C12_wait_Finished2 _ _ ms _ _
 //| C12_wait_Finished1 _ _ ms _ _
@@ -799,7 +722,7 @@ let client_flight
   match s with
   | C_wait_ServerHello offer ms ks        -> PF.F_c_wait_ServerHello
   | C13_wait_Finished1 offer sh ms ks     -> PF.F_c13_wait_Finished1
-  | C13_complete offer sh _ _ _ _ _ ms ks -> PF.F_c13_wait_Finished1
+  | C13_complete offer sh _ _ _ _ _ -> PF.F_c13_wait_Finished1
 //| C12_wait_ServerHelloDone _ _ ms _
 //| C12_wait_Finished2 _ _ ms _ _
 //| C12_wait_Finished1 _ _ ms _ _
@@ -819,7 +742,7 @@ let client_ms (#region:rgn) (#cfg:client_config) (s:client_state region cfg {~(C
   match s with
   | C_wait_ServerHello _ ms _ -> ms
   | C13_wait_Finished1 _ _ ms _ -> ms
-  | C13_complete _ _ _ _ _ _ _ ms _ -> ms
+  | C13_complete _ _ _ _ _ ms _ -> ms
   | _ -> admit()
 //| C12_wait_ServerHelloDone _ _ ms _ -> ms
 //| C12_wait_Finished2 _ _ ms _ _ -> ms
@@ -836,8 +759,8 @@ let set_client_ms
     C_wait_ServerHello offer ms1 ks
   | C13_wait_Finished1 offer sh ms0 ks ->
     C13_wait_Finished1 offer sh ms1 ks
-  | C13_complete offer sh ee server_id fin1 fin2 eoed_args ms0 ks ->
-    C13_complete offer sh ee server_id fin1 fin2 eoed_args ms1 ks
+  | C13_complete offer sh ee server_id fin1 ms0 ks ->
+    C13_complete offer sh ee server_id fin1 ms1 ks
   | _ -> admit()
 
 let client_epochs
@@ -858,7 +781,7 @@ let client_sto
 // contents; for now we ignore its extensions.
 let client_server_certificates (#region:rgn) (#cfg:client_config) (s:client_state region cfg): option Cert.chain13 =
   match s with
-  | C13_complete _ _ _ (Some (certs,_)) _ _ _ _ _ -> Some certs.Parsers.Certificate13.certificate_list
+  | C13_complete _ _ _ (Some (certs,_)) _ _ _ -> Some certs.Parsers.Certificate13.certificate_list
 // TBC TLS 1.2
 //| C12_wait_ServerHelloDone _ _ ms _
 //| C12_wait_Finished2 _ _ ms _ _
@@ -870,11 +793,10 @@ let client_server_certificates (#region:rgn) (#cfg:client_config) (s:client_stat
 
 type server_config = config // TBC
 
-//TODO share with Transcript
-type server_retry_info = digest0: Bytes.bytes & HSM.valid_hrr
 type s_offer = {
-  retry: option server_retry_info;
-  ch: HSM.ch; }
+  retry: option Transcript.retry;
+  ch: HSM.ch;
+}
 
 // Complete mode for the connection; sufficient to derive all the
 // negotiated connection parameters, and shared between clients and
@@ -883,70 +805,97 @@ type s_offer = {
 // As a technicality, it includes only the *tag* supposed to be the
 // hash of the initial offer after a retry.
 
-assume val selected:
+// Witness from certificate callback
+assume val selected_cert:
   server_config ->
   s_offer ->
   HSM.sh ->
   HSM.encryptedExtensions ->
-  option HandshakeMessages.certificate13 -> Type
+  TLS.Callbacks.cert_type ->
+  Type
 
-noeq type s13_mode (region:rgn) (cfg:server_config) = {
-  offer: s_offer; (* { honest_psk offer ==> client_offered offer } *)
-  sh: sh13;
-  ee: HSM.encryptedExtensions;
-  certs: certs:option HandshakeMessages.certificate13
-  {
-    // including the nego callback that led to those choices; we may want to keep its [cfg']
-    selected cfg offer sh ee certs };
-  }
+// Witness from certificate formatting callback
+assume val formatted_cert:
+  TLS.Callbacks.cert_type ->
+  HSM.certificate13 ->
+  Type
+
+// Witness from certificate signing callback
+assume val signed_tx:
+  s_offer ->
+  HSM.sh ->
+  HSM.encryptedExtensions ->
+  HSM.certificate13 ->
+  HSM.certificateVerify13 ->
+  Type
+
+type s13_cert_info cfg ch sh ee =
+| NoServerCert
+| ServerCert:
+  pointer: TLS.Callbacks.cert_type{selected_cert cfg ch sh ee pointer} ->
+  chain: HSM.certificate13{formatted_cert pointer chain} ->
+  verify: HSM.certificateVerify13{signed_tx ch sh ee chain verify} ->
+  s13_cert_info cfg ch sh ee
+
+noeq type s13_mode (region:rgn) (cfg:server_config) =
+| S13_mode:
+  offer: s_offer -> (* { honest_psk offer ==> client_offered offer } *)
+  sh: Transcript.sh13 ->
+  ee: HSM.encryptedExtensions ->
+  cert: s13_cert_info cfg offer sh ee ->
+  s13_mode region cfg
+
+// The transcript prefix associated with a mode
+let s13_mode_transcript #r #cfg (m:s13_mode r cfg) : Transcript.transcript_t =
+  assume false; // bounded_list
+  Transcript.Transcript13 m.offer.retry m.offer.ch m.sh
+    (match m.cert with NoServerCert -> []
+    | ServerCert _ chain verify ->
+      [HSM.M13_certificate chain;
+       HSM.M13_certificate_verify verify])
 
 noeq type server_state
   (region:rgn)
-  (cfg: server_config) // much smaller than before
-=
+  (cfg:server_config)
+  =
   | S_wait_ClientHello:
+    random: TLSInfo.random ->
     server_state region cfg
 
   // Stateful HRR
   | S13_sent_HelloRetryRequest:
-    retry: client_retry_info ->
-    ms: msg_state region PF.F_s_Idle (retry.ch0.HSM.random)
-      (Negotiation.selected_ha retry.sh0) ->
+    random: TLSInfo.random ->
+    retry: Transcript.retry ->
+    ms: msg_state region PF.F_s_Idle random
+      (Negotiation.selected_ha (snd retry)) ->
     server_state region cfg
 
   // TLS 1.3, intermediate state to encryption
   | S13_sent_ServerHello:
-    offer: HSM.ch ->
-    mode: HSM.sh ->
+    offer: s_offer ->
+    sh: Transcript.sh13 ->
     ee: HSM.encryptedExtensions ->
-    ms: msg_state region PF.F_c_wait_ServerHello (mode.offer.ch.HSM.random) (Negotiation.selected_ha mode.sh) ->
-//  i: Idx.id -> // Secret.esId ->
-//  idh: Idx.id_dhe ->
-//    ks: Secret.s13_wait_ServerHello i idh ->
-    cert: Nego.certNego ->
-    ks: s_wait_ServerFinished_keys ->
+    ms: msg_state region PF.F_c_wait_ServerHello (offer.ch.HSM.random) (Negotiation.selected_ha sh) ->
+    cert: Negotiation.certNego ->
+    ks: s13_wait_ServerFinished_keys ->
     server_state region cfg
 
-//
-//// TLS 1.3 intermediate state
-//| S13_wait_EOED
-//
   | S13_wait_Finished2:
     mode: s13_mode region cfg ->
-    ssv: Ghost.erased HandshakeMessages.certificateVerify13 ->
     fin1: Ghost.erased HSM.finished ->
-    ms: msg_state region PF.F_c_wait_ServerHello (mode.offer.ch.HSM.random) (Negotiation.selected_ha mode.sh) ->
-    // ms.digest is expected to be MACed in the Client Finished
-    ks: server_keys -> // keeping fin2key and rms
+    eoed_done: bool{True (*not (accepted_0rtt mode) ==> eoed_done==true*)} ->
+    ms: msg_state region
+     (if eoed_done then PF.F_s13_wait_Finished2 else PF.F_s13_wait_EOED)
+     (mode.offer.ch.HSM.random) (Negotiation.selected_ha mode.sh) ->
+    ks: s13_wait_ClientFinished_keys ->
     server_state region cfg
 
   | S13_complete:
     mode: s13_mode region cfg ->
-    ssv: Ghost.erased HandshakeMessages.certificateVerify13 ->
     fin1: Ghost.erased HSM.finished ->
     fin2: Ghost.erased HSM.finished ->
-//  { client_complete mode } ->
-    ms: msg_state region PF.F_c_wait_ServerHello (mode.offer.ch.HSM.random) (Negotiation.selected_ha mode.sh) ->
+    ms: msg_state region PF.F_s_Idle (* PF.F_s13_postHS *)
+    (mode.offer.ch.HSM.random) (Negotiation.selected_ha mode.sh) ->
     ks: server_keys ->
     server_state region cfg
 
@@ -960,7 +909,22 @@ noeq type server_state
 let server_step
   (#region:rgn) (#cfg: server_config)
   (st0 st1: server_state region cfg)
-= True // TODO
+  =
+  match st0, st1 with
+  | S_wait_ClientHello r0, S13_sent_HelloRetryRequest r1 _ _ ->
+    r1 == r0
+  | S13_sent_HelloRetryRequest r0 retry m0,
+    S13_sent_ServerHello offer sh ee m1 _ _ ->
+    offer.retry == Some retry
+  | S_wait_ClientHello _, S13_sent_ServerHello _ _ _ _ _ _
+  | S13_sent_ServerHello _ _ _ _ _ _, S13_wait_Finished2 _ _ _ _ _
+  | S13_wait_Finished2 _ _ _ _ _, S13_complete _ _ _ _ _
+    -> True
+  | S13_wait_Finished2 m0 sfin0 false ms0 ks0,
+    S13_wait_Finished2 m1 sfin1 true ms1 ks1 -> // Received EOED
+    m1 == m0 /\ sfin1 == sfin0 /\ ks1 == ks0 /\
+    True // transcript is updated with EOED
+  | _ -> False
 
 let server_mrel (#region:rgn) (#cfg: server_config) =
   FStar.ReflexiveTransitiveClosure.closure (server_step #region #cfg)
@@ -968,7 +932,6 @@ let server_mrel (#region:rgn) (#cfg: server_config) =
 type server_mref rgn cfg =
   st:HST.mreference (server_state rgn cfg) (server_mrel #rgn #cfg)
   { HS.frameOf st = rgn }
-
 
 let server_footprint
   (#region:rgn) (#cfg: server_config)
@@ -979,19 +942,54 @@ let server_footprint
 
 let server_invariant #region #config (ss: server_state region config) h = True
 
-assume val server_nonce (#region:rgn) (#cfg:server_config) (s:server_state region cfg): TLSInfo.random
-assume val server_ha (#region:rgn) (#cfg:server_config) (s:server_state region cfg): Spec.Hash.Definitions.hash_alg
-assume val server_flight (#region:rgn) (#cfg:server_config) (s:server_state region cfg): PF.in_progress_flt_t
+let server_nonce (#region:rgn) (#cfg:server_config) (s:server_state region cfg)
+  : TLSInfo.random =
+  match s with
+  | S_wait_ClientHello random -> random
+  | S13_sent_HelloRetryRequest random _ _ -> random
+  | S13_sent_ServerHello _ sh _ _ _ _ -> HSM.sh_random sh
+  | S13_wait_Finished2 mode _ _ _ _
+  | S13_complete mode _ _ _ _ -> HSM.sh_random mode.sh
+  | _ -> admit()
+
+let server_ha (#region:rgn) (#cfg:server_config) (s:server_state region cfg)
+  : Spec.Hash.Definitions.hash_alg =
+  match s with
+  | S13_sent_HelloRetryRequest _ retry _ -> Negotiation.selected_ha (snd retry)
+  | S13_sent_ServerHello _ sh _ _ _ _ -> Negotiation.selected_ha sh
+  | S13_wait_Finished2 mode _ _ _ _
+  | S13_complete mode _ _ _ _ -> Negotiation.selected_ha mode.sh
+  | _ -> admit()
+
+let server_flight (#region:rgn) (#cfg:server_config) (s:server_state region cfg)
+  : PF.in_progress_flt_t =
+  match s with
+  | S_wait_ClientHello _
+  | S13_sent_HelloRetryRequest _ _ _
+  | S13_sent_ServerHello _ _ _ _ _ _ -> PF.F_s_Idle
+  | S13_wait_Finished2 _ _ eoed _ _ ->
+    if eoed then PF.F_s13_wait_Finished2 else PF.F_s13_wait_EOED
+  | S13_complete _ _ _ _ _ -> 
+    // FIXME(adl) post-HS
+    PF.F_s_Idle
+  | _ -> admit()
 
 type server_ms_t (#region:rgn) (#cfg:server_config) (s:server_state region cfg) =
   msg_state region (server_flight s) (server_nonce s) (server_ha s)
 
-assume val server_ms (#region:rgn) (#cfg:server_config) (s:server_state region cfg): server_ms_t s
+let server_ms (#region:rgn) (#cfg:server_config) (s:server_state region cfg)
+  : server_ms_t s
+  = assume false;
+  match s with
+  | S13_sent_HelloRetryRequest _ _ ms -> ms
+  | S13_sent_ServerHello _ _ _ ms _ _ -> ms
+  | S13_wait_Finished2 _ _ _ ms _ -> ms
+  | S13_complete _ _ _ ms _ -> ms
+  | _ -> admit()  
 
-assume val set_server_ms (#region:rgn) (#cfg:server_config) (s:server_state region cfg): server_ms_t s -> server_state region cfg
-
-assume val server_epochs_of (#region:rgn) (#cfg:server_config) (s:server_state region cfg):
-  Old.Epochs.epochs region (server_nonce s)
+let server_epochs (#region:rgn) (#cfg:server_config) (s:server_state region cfg)
+  : Epochs.epochs region (server_nonce s)
+  = (server_ms s).epochs
 
                               (* API *)
 
@@ -1016,7 +1014,14 @@ let nonceT s h =
   | Client region config r -> client_nonce (HS.sel h r)
   | Server region config r -> server_nonce (HS.sel h r)
 
-assume val nonce: state -> St TLSInfo.random
+let nonce (s:state)
+  : ST TLSInfo.random
+  (requires fun h0 -> True)
+  (ensures fun h0 r h1 -> h0 == h1 /\ r == nonceT s h1)
+  = assume false;
+  match s with
+  | Client _ _ r -> client_nonce !r
+  | Server _ _ r -> server_nonce !r
 
 let invariant s h =
   match s with
@@ -1030,33 +1035,39 @@ let invariant s h =
     B.loc_disjoint (B.loc_mreference r) (server_footprint (HS.sel h r)) /\
     server_invariant (HS.sel h r) h
 
-
 let frame s = match s with
   | Client rgn _ _
   | Server rgn _ _ -> rgn
 
-assume val epochsT (s:_) (h:_): Old.Epochs.epochs (frame s) (nonceT s h)
+let epochsT s h
+  : GTot (Epochs.epochs (frame s) (nonceT s h))
+  = assume false;
+  match s with
+  | Client region config r -> client_epochs (HS.sel h r)
+  | Server region config r -> server_epochs (HS.sel h r)
 
-// 19-09-11 freshly stateful dependency...
-assume val epochs (s:_) (n:TLSInfo.random): St (Old.Epochs.epochs (frame s) n)
+let epochs s n
+  : ST (Epochs.epochs (frame s) n)
+  (requires fun h0 -> n == nonceT s h0)
+  (ensures fun h0 e h1 -> h0 == h1
+    /\ e == epochsT s h1)
+  = admit()
 
-let epochs_es s n = (epochs s n).Old.Epochs.es
+//let epochs_es s n = (epochs s n).Epochs.es
 
+// Ill defined?
 assume val version_of: state -> protocolVersion
 
 // used in FFI, TBC
 let get_server_certificates (s:client) :
   ST (option Cert.chain13)
-  (requires fun h0 ->
-    invariant s h0)
+  (requires fun h0 -> Client? s /\ invariant s h0)
   (ensures fun h0 r h1 ->
     modifies_none h0 h1 /\
     invariant s h1)
 =
   match s with
   | Client region config r -> client_server_certificates #region !r
-//| Server _ _ _ -> None //arguably not required.
-
 
 let state_entry (n: TLSInfo.random) = state // TODO refinement witness reading stable n
 
@@ -1088,110 +1099,6 @@ let export (#region:rgn) (#n:random) (epochs:Epochs.epochs region n)
   FStar.Monotonic.Seq.i_write_at_end epochs.Epochs.exporter xk
 #pop-options
 
-(**** Transcript Bytes Wrappers ***)
-
-// FIXME(adl) add bytes wrapper to Transcript interface?
-// Temporarily moved here to share between client and server
-#push-options "--max_fuel 0 --max_fuel 0 --z3rlimit 32"
-let transcript_extract
-  #ha
-  (di:Transcript.state ha)
-  (tx: Ghost.erased Transcript.transcript_t):
-  ST Bytes.bytes
-  (requires fun h0 ->
-    Transcript.invariant di (Ghost.reveal tx) h0)
-  (ensures fun h0 t h1 ->
-    let tx = Ghost.reveal tx in
-    Transcript.invariant di tx h1 /\
-    B.(modifies (
-      Transcript.footprint di `loc_union`
-      loc_region_only true Mem.tls_tables_region) h0 h1) /\
-    Bytes.reveal t == Transcript.transcript_hash ha tx /\
-    Transcript.hashed ha tx)
-  =
-  // Show that the transcript state is disjoint from the new frame since it's not unused
-  (**) let h0 = get() in
-  (**) Transcript.elim_invariant di (Ghost.reveal tx) h0;
-  push_frame();
-  let ltag = EverCrypt.Hash.Incremental.hash_len ha in
-  // AF: Why not allocate directly with size ltag?
-  let btag0 = LowStar.Buffer.alloca 0uy 64ul in // big enough for all tags
-  let btag = LowStar.Buffer.sub btag0 0ul ltag in
-  Transcript.extract_hash di btag tx;
-  let tag = FStar.Bytes.of_buffer ltag btag in
-  trace ("Extracted a transcript hash "^Bytes.hex_of_bytes tag);
-  pop_frame();
-  tag
-#pop-options
-
-// 19-09-05 Much overhead for calling Transcript
-// let extend_ch #ha
-//   (sending: Send.send_state)
-//   (di:Transcript.state ha)
-//   (msg: HSM.ch)
-//   (tx0: Ghost.erased Transcript.transcript_t):
-//   ST (result (Ghost.erased Transcript.transcript_t ))
-//   (requires fun h0 ->
-//     let tx0 = Ghost.reveal tx0 in Transcript.Start? tx0 /\
-//     B.loc_disjoint (Send.footprint sending) (Transcript.footprint di) /\
-//     Send.invariant sending h0 /\
-//     Transcript.invariant di tx0 h0)
-//   (ensures fun h0 r h1 ->
-//     B.(modifies (Send.footprint sending `loc_union` Transcript.footprint di) h0 h1) /\
-//     Send.invariant sending h1 /\ (
-//     match r with
-//     | Error _ -> True
-//     | Correct tx1 ->
-//       let Transcript.Start r = Ghost.reveal tx0 in
-//       let tx1 = Ghost.reveal tx1 in
-//       Transcript.invariant di tx1 h1 /\
-//       tx1 == Transcript.ClientHello r msg ))
-// =
-//   admit()
-
-#push-options "--max_fuel 0 --max_fuel 0 --z3rlimit 100"
-// Adapted from Send.send13, using [sending] as scratch space;
-// temporary. We may need similar functions for the Hello messages.
-open FStar.Integers
-let extend13
-  #ha
-  (sending: Send.send_state)
-  (di:Transcript.state ha)
-  (msg: HSM.handshake13)
-  (#n: Ghost.erased nat)
-  (tx0: Transcript.g_transcript_n n {Ghost.reveal n < Transcript.max_transcript_size - 1}):
-  ST (result (Transcript.g_transcript_n (Ghost.hide (Ghost.reveal n+1))))
-  (requires fun h0 ->
-    let tx0 = Ghost.reveal tx0 in Transcript.Transcript13? tx0 /\
-    B.loc_disjoint (Send.footprint sending) (Transcript.footprint di) /\
-    Send.invariant sending h0 /\
-    Transcript.invariant di tx0 h0)
-  (ensures fun h0 r h1 ->
-    B.(modifies (Send.footprint sending `B.loc_union` Transcript.footprint di) h0 h1) /\
-    Send.invariant sending h1 /\ (
-    match r with
-    | Error _ -> True
-    | Correct tx1 ->
-      let tx0 = Ghost.reveal tx0 in
-      let tx1 = Ghost.reveal tx1 in
-      Transcript.invariant di tx1 h1 /\
-      tx1 == Transcript.snoc13 tx0 msg ))
-  =
-  let h0 = get () in
-  let r = MITLS.Repr.Handshake13.serialize sending.Send.out_slice sending.Send.out_pos msg in
-  let h1 = get () in
-  Transcript.frame_invariant di (Ghost.reveal tx0) h0 h1 (B.loc_buffer sending.Send.out_slice.LowParse.Low.Base.base);
-  match r with
-  | None ->
-    fatal Internal_error "output buffer overflow"
-  | Some r ->
-    List.lemma_snoc_length (Transcript.Transcript13?.rest (Ghost.reveal tx0), msg);
-    let tx1 = HSL.Transcript.extend di (Transcript.LR_HSM13 r) tx0 in
-    let b = MITLS.Repr.to_bytes r in
-    trace ("extended transcript with "^Bytes.hex_of_bytes b);
-    // we do *not* return the modified indexes in [sending]
-    correct tx1
-#pop-options
 
 (**** Shared binders definitions (move to TLS.Handshake.Binders?) ***)
 
@@ -1207,14 +1114,15 @@ let rec binders_for (l:list Negotiation.bkey13) (l':list binder) =
 
 let btag (bkey:Negotiation.bkey13) = Hashing.tag (Negotiation.ha_bkey13 bkey)
 
+// FIXME add ghost truncated client hello, Transcript.hashed, UFCMA.maced
 assume val compute_binder:
   bkey: Negotiation.bkey13 ->
-  tag: Bytes.lbytes (Hashing.hash_length (Negotiation.ha_bkey13 bkey)) ->
+  tch_hash: Bytes.lbytes (Hashing.hash_length (Negotiation.ha_bkey13 bkey)) ->
   binder_for bkey
 
 assume val verify_binder:
   bkey: Negotiation.bkey13 ->
-  tag: Bytes.lbytes (Hashing.hash_length (Negotiation.ha_bkey13 bkey)) ->
+  tch_hash: Bytes.lbytes (Hashing.hash_length (Negotiation.ha_bkey13 bkey)) ->
   binder: binder_for bkey ->
   bool
 

@@ -199,6 +199,11 @@ let find_serverKeyShare sh : option pre_share =
   | None -> None
   | Some (SHE_key_share ks) -> CommonDH.validate ks
 
+let find_clientKeyShares (o:offer) =
+  match find_client_extension CHE_key_share? o with
+  | None -> None
+  | Some (CHE_key_share ks) -> Some ks
+
 let find_early_data o =
   match find_client_extension CHE_early_data? o with
   | None -> false 

@@ -60,6 +60,7 @@ val find_clientPske: offer -> option Extensions.offeredPsks
 
 val find_serverPske: HSM.sh -> option UInt16.t
 val find_serverKeyShare: HSM.sh -> option pre_share
+val find_clientKeyShares: offer -> option Extensions.keyShareClientHello
 val find_early_data: offer -> bool
 
 // Returns the server hostName, if any, or an empty bytestring; review.
