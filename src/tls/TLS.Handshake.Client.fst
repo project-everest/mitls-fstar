@@ -6,6 +6,8 @@ open TLSConstants
 open TLSInfo
 open TLSError
 open FStar.HyperStack.ST
+
+open TLS.Handshake.Messaging
 open TLS.Handshake.Machine
 
 module B = LowStar.Buffer // not FStar.Bytes

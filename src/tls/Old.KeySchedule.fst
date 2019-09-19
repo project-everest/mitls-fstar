@@ -47,39 +47,6 @@ let print_share (#g:CommonDH.group) (s:CommonDH.share g) : ST unit
   let kh = FStar.Bytes.hex_of_bytes kb in
   dbg ("Share: "^kh)
 
-(********************************************
-*    Resumption PSK is disabled for now     *
-*********************************************
-
-abstract type res_psk (i:rmsId) =
-  b:bytes{exists i.{:pattern index b i} index b i <> 0z}
-
-abstract type res_context (i:rmsId) =
-  b:bytes{length b = CoreCrypto.H.hash_len (rmsId_hash i)}
-
-private type res_psk_entry (i:rmsId) =
-  (res_psk i) * (res_context i) * ctx:psk_context * leaked:(rref tls_tables_region bool)
-
-let res_psk_injective (m:MDM.map' rmsId res_psk_entry) =
-  forall i1 i2.{:pattern (MDM.sel m i1); (MDM.sel m i2)}
-       i1 = i2 <==> (match MDM.sel m i1, MDM.sel m i2 with
-                  | Some (psk1, _, _, _), Some (psk2, _, _, _) -> b2t (equalBytes psk1 psk2)
-                  | _ -> True)
-
-let res_psk_table : MDM.t tls_tables_region rmsId res_psk_entry res_psk_injective =
-  MDM.alloc #TLSConstants.tls_tables_region #rmsId #res_psk_entry #res_psk_injective
-
-let registered_res_psk (i:rmsId) (h:HH.t) =
-  b2t (Some? (MDM.sel (HS.sel h res_psk_table) i))
-
-let res_psk_context (i:rmsId{registered_res_psk i}) =
-  let (_, _, c, _) = Some.v (MDM.sel res_psk_table i) in c
-
-private let res_psk_value (i:rmsId{registered_res_psk i}) =
-  let (psk, _, _, _) = Some.v (MDM.sel res_psk_table i) in psk
-
-**)
-
 // PSK (internal/external multiplex, abstract)
 // Note that application PSK is externally defined but should
 // be idealized together with KS
@@ -178,8 +145,10 @@ type exportKey = (li:logInfo & i:exportId li & ems i)
 //  writer : role             // the role of the writer
 //  }
 
-type ks_alpha12 = pv:protocolVersion * cs:cipherSuite * ems:bool
-type ks_alpha13 = ae:aeadAlg * h:hash_alg
+type ks_info12 =
+| Info12: pv:protocolVersion -> cs:cipherSuite -> ems:bool -> ks_info12
+type ks_info13 =
+| Info13: is_quic:bool -> ae:aeadAlg -> h:hash_alg -> ks_info13
  
 /// 19-07-05 Notes towards verified state-passing refactoring: each of
 ///          these cases will become its own type (or possibly cover a
@@ -188,89 +157,100 @@ type ks_alpha13 = ae:aeadAlg * h:hash_alg
 ///          parts of the state determined by the Handshake messages
 ///          (such as nonces, public shares, and alpha)
 
-type ks_client_state =
-| C_Init: 
-  // HS knows cr, so no need for this initial state
-  cr:random -> ks_client_state
-
+type ks_client =
 | C_wait_ServerHello:
-  cr:random -> 
+  cr:random ->
+  is_quic: bool ->
   esl: list (i:esId{~(NoPSK? i)} & es i) ->
-  gs:list (g:CommonDH.group & CommonDH.ikeyshare g) -> ks_client_state
+  gs:list (g:CommonDH.group & CommonDH.ikeyshare g) ->
+  ks_client
 
-| C13_wait_Finished1: // indexed with digest[..ServerHello]
-  alpha:ks_alpha13 -> 
+| C13_wait_Finished1:
+  info:ks_info13 -> 
   (i:finishedId & cfk:fink i) -> 
   (i:finishedId & sfk:fink i) ->
-  // handshake master secret
-  (i:asId & ams:ams i) -> ks_client_state
-
-| C13_wait_Finished2: 
-  // transient state, waiting for digest[..Finished2] and a completion
-  // witness based on Handshake.C13_Complete without [fin2]
-  alpha:ks_alpha13 -> 
-  // still indexed by digest[..ServerHello] 
-  (i:finishedId & cfk:fink i) -> 
-  // application and rekeying secrets, indexed by digest[..Finished1] 
   (i:asId & ams:ams i) ->
-  (li:logInfo & i:rekeyId li & rekey_secrets i) -> ks_client_state
+  ks_client
+
+| C13_wait_Finished2:
+  info: ks_info13 ->
+  (i:finishedId & cfk:fink i) -> // still indexed by [..ServerHello] 
+  (i:asId & ams:ams i) -> // indexed by [..Finished1] 
+  (li:logInfo & i:rekeyId li & rekey_secrets i) ->
+  ks_client
 
 | C13_Complete: 
-  alpha:ks_alpha13 -> 
-  // rekeying secrets, indexed by digest[..Finished1] 
-  (li:logInfo & i:rekeyId li & rekey_secrets i) ->
-  // resumption secret, indexed by digest[..Finished2]
-  (li:logInfo & i:rmsId li & rms i) -> ks_client_state
+  info:ks_info13 -> 
+  (li:logInfo & i:rekeyId li & rekey_secrets i) -> // indexed by [..Finished1] 
+  (li:logInfo & i:rmsId li & rms i) -> // indexed by [..Finished2]
+  ks_client
 
-| C12_Resume_CH: cr:random -> si:sessionInfo -> msId:TLSInfo.msId -> ms:ms -> ks_client_state
-| C12_Full_CH: cr:random -> ks_client_state
-| C12_wait_MS: csr:csRands -> alpha:ks_alpha12 -> id:TLSInfo.pmsId -> pms:pms -> ks_client_state
-| C12_has_MS:  csr:csRands -> alpha:ks_alpha12 -> id:TLSInfo.msId -> ms:ms -> ks_client_state
-//
-// Unused:
-// | C_Done
+| C12_Full_CH: // To be removed
+  cr:random ->
+  ks_client
 
-type ks_server_state =
-// HS has sr: no need for this initial state
-| S_Init: sr:random -> ks_server_state
+| C12_Resume_CH:
+  cr:random ->
+  si:sessionInfo ->
+  msId:TLSInfo.msId ->
+  ms:ms ->
+  ks_client
 
-| S12_wait_CKE_DH: csr:csRands -> alpha:ks_alpha12 -> our_share:(g:CommonDH.group & CommonDH.ikeyshare g) -> ks_server_state
-| S12_wait_CKE_RSA: csr: csRands -> alpha:ks_alpha12 -> ks_server_state
-| S12_has_MS: csr:csRands -> alpha:ks_alpha12 -> id:TLSInfo.msId -> ms:ms -> ks_server_state
+| C12_wait_MS:
+  csr:csRands ->
+  info: ks_info12 ->
+  id:TLSInfo.pmsId -> 
+  pms:pms ->
+  ks_client
+  
+| C12_has_MS:
+  csr:csRands ->
+  info:ks_info12 ->
+  id:TLSInfo.msId ->
+  ms:ms ->
+  ks_client
 
+type ks_server =
+| S12_wait_CKE_DH:
+  csr:csRands ->
+  info:ks_info12 ->
+  our_share: (g:CommonDH.group & CommonDH.ikeyshare g) ->
+  ks_server
 
-| S13_wait_SH: alpha:ks_alpha13 -> cr:random -> sr:random -> es:(i:esId & es i) ->
-                hs:( i:hsId & hs i ) -> ks_server_state
-| S13_wait_SF: alpha:ks_alpha13 -> ( i:finishedId & cfk:fink i ) -> ( i:finishedId & sfk:fink i ) ->
-                ( i:asId & ams:ams i ) -> ks_server_state
-//
-// S13_wait_Finished2 
-| S13_wait_CF: alpha:ks_alpha13 -> ( i:finishedId & cfk:fink i ) -> ( i:asId & ams i ) ->
-                ( li:logInfo & i:rekeyId li & rekey_secrets i ) ->  ks_server_state
-//
-// S13_Complete
-| S13_postHS: alpha:ks_alpha13 -> ( li:logInfo & i:rekeyId li & rekey_secrets i ) ->
-	        ( li:logInfo & i:rmsId li & rms i) -> ks_server_state
-| S_Done
+| S12_has_MS:
+  csr:csRands ->
+  info:ks_info12 ->
+  id:TLSInfo.msId ->
+  ms:ms ->
+  ks_server
 
-// Reflecting state separation from HS
-type ks_state =
-| C: s:ks_client_state -> ks_state
-| S: s:ks_server_state -> ks_state
+| S13_wait_SH:
+  info:ks_info13 ->
+  cr:random ->
+  sr:random ->
+  es:(i:esId & es i) ->
+  hs:(i:hsId & hs i) ->
+  ks_server
 
-// KeySchedule instances
-(*
- * AR: changing state from rref to ref, with region captured in the refinement.
- *)
-type ks =
-| KS:
-  #region:rid ->
-  state:(ref ks_state){HS.frameOf state = region} ->
-  is_quic: bool ->
-  ks
+| S13_wait_SF:
+  info:ks_info13 ->
+  sfk:(i:finishedId & cfk:fink i) ->
+  cfk:(i:finishedId & sfk:fink i) ->
+  ams:(i:asId & ams:ams i) ->
+  ks_server
 
-//17-04-17 CF: expose it as a concrete ref?
-//17-04-17 CF: no need to keep the region, already in the ref.
+| S13_wait_CF:
+  info:ks_info13 ->
+  cfk:(i:finishedId & cfk:fink i) ->
+  ams:(i:asId & ams i) ->
+  rk:(li:logInfo & i:rekeyId li & rekey_secrets i) ->
+  ks_server
+
+| S13_postHS:
+  info:ks_info13 ->
+  rki:(li:logInfo & i:rekeyId li & rekey_secrets i) ->
+  rms:(li:logInfo & i:rmsId li & rms i) ->
+  ks_server
 
 // Extract keys and IVs from a derived 1.3 secret
 private let keygen_13 h secret ae is_quic : St (bytes * bytes * option bytes) =
@@ -287,27 +267,6 @@ private let keygen_13 h secret ae is_quic : St (bytes * bytes * option bytes) =
 // Extract finished keys
 private let finished_13 h secret : St (bytes) =
   HKDF.expand_label #h secret "finished" empty_bytes (Hacl.Hash.Definitions.hash_len h)
-
-// Create a fresh key schedule instance
-// We expect this to be called when the Handshake instance is created
-val create: #rid:rid -> role -> is_quic:bool -> ST (ks * random)
-  (requires fun h -> rid<>root)
-  (ensures fun h0 (r,_) h1 ->
-    let KS #ks_region state iq = r in
-    HS.fresh_region ks_region h0 h1
-    /\ extends ks_region rid
-    /\ iq = is_quic
-    /\ modifies (Set.singleton rid) h0 h1
-    /\ HS.modifies_ref rid (Set.singleton (Heap.addr_of (as_ref state))) ( h0) ( h1))
-
-let create #rid r is_quic =
-  ST.recall_region rid;
-  let ks_region = new_region rid in
-  let nonce = Nonce.mkHelloRandom r ks_region in
-  let istate = match r with
-    | Client -> C (C_Init nonce)
-    | Server -> S (S_Init nonce) in
-  (KS #ks_region (ralloc ks_region istate) is_quic), nonce
 
 private let group_of_valid_namedGroup
   (g:CommonDH.supportedNamedGroup)
@@ -327,8 +286,9 @@ private let keygen (g:CommonDH.group)
 
 val ks_client_init: 
   cr: random ->
+  is_quic: bool ->
   ogl: option CommonDH.supportedNamedGroups -> 
-  ST (ks_client_state * option keyShareClientHello)
+  ST (ks_client * option keyShareClientHello)
   (requires fun h0 -> True)
   (ensures fun h0 (ks,ogxl) h1 -> 
     h0 == h1 /\ 
@@ -346,10 +306,7 @@ private let rec map_ST_keygen l =
   | [] -> []
   | hd :: tl -> keygen hd :: map_ST_keygen tl
 
-
-/// TODO take random as an input when required--not an output 
-
-let ks_client_init cr ogl =
+let ks_client_init cr is_quic ogl =
   dbg ("ks_client_init "^(if ogl=None then "1.2" else "1.3"));
   match ogl with
   | None -> // TLS 1.2
@@ -358,7 +315,7 @@ let ks_client_init cr ogl =
     let groups = List.Tot.map group_of_valid_namedGroup gl in
     let gs = map_ST_keygen groups in
     let gxl = List.Tot.map serialize_share gs in
-    C_wait_ServerHello cr [] gs, Some gxl
+    C_wait_ServerHello cr is_quic [] gs, Some gxl
 
 type ticket13 = t:Ticket.ticket{Ticket.Ticket13? t}
 
@@ -401,23 +358,23 @@ private let rec tickets13 #rid acc (l:list (psk_identifier * Ticket.ticket))
 //   bkl
 
 let ks_client13_hello_retry 
-  (ks0:ks_client_state{ C_wait_ServerHello?ks0 }) (g:CommonDH.group)
-  : ST0 (CommonDH.share g * ks1:ks_client_state{ C_wait_ServerHello?ks1 }) =
-  let C_wait_ServerHello cr esl gs = ks0 in
+  (ks0:ks_client{ C_wait_ServerHello? ks0 }) (g:CommonDH.group)
+  : ST0 (CommonDH.share g * ks1:ks_client{ C_wait_ServerHello? ks1}) =
+  let C_wait_ServerHello cr is_quic esl gs = ks0 in
   let s : CommonDH.ikeyshare g = CommonDH.keygen g in
-  let ks1 = C_wait_ServerHello cr esl [(| g, s |)] in
+  let ks1 = C_wait_ServerHello cr is_quic esl [(| g, s |)] in
   CommonDH.ipubshare #g s, ks1
 
 /// Derive the early data key from the first offered PSK
 /// Only called if 0-RTT is enabled on the client
-let ks_client13_ch is_quic client_state (log:bytes): ST (exportKey * recordInstance)
-  (requires fun h0 ->
-    C_wait_ServerHello? client_state)
-  (ensures fun h0 r h1 ->
-    modifies_none h0 h1)
+let ks_client13_ch client_state (log:bytes)
+  : ST (exportKey * recordInstance)
+  (requires fun h0 -> C_wait_ServerHello? client_state
+    /\ C_wait_ServerHello?.esl client_state <> [])
+  (ensures fun h0 r h1 -> modifies_none h0 h1)
   =
   dbg ("ks_client13_ch log="^print_bytes log);
-  let C_wait_ServerHello cr ((| i, es |) :: _) gs = client_state in
+  let C_wait_ServerHello cr is_quic ((| i, es |) :: _) gs = client_state in
   let h = esId_hash i in
   let ae = esId_ae i in
   let li = LogInfo_CH0 ({
@@ -447,39 +404,36 @@ let ks_client13_ch is_quic client_state (log:bytes): ST (exportKey * recordInsta
   let early_d = StAEInstance r rw (pn, pn) in
   exporter0, early_d
 
-val ks_server12_init_dh: ks:ks -> cr:random -> pv:protocolVersion -> cs:cipherSuite -> ems:bool -> g:CommonDH.group -> ST (CommonDH.share g)
-  (requires fun h0 ->
-    let kss = sel h0 (KS?.state ks) in
-    S? kss /\ S_Init? (S?.s kss)
-    /\ CipherSuite? cs
+val ks_server12_init_dh: sr:random -> cr:random ->
+  pv:protocolVersion -> cs:cipherSuite -> ems:bool ->
+  g:CommonDH.group ->
+  ST (CommonDH.share g * ks_server)
+  (requires fun h0 -> CipherSuite? cs
     /\ (let CipherSuite kex _ _ = cs in
-         (kex = Kex_DHE \/ kex = Kex_ECDHE)))
-  (ensures fun h0 r h1 ->
-    let KS #rid st _ = ks in
-    modifies (Set.singleton rid) h0 h1
-    /\ HS.modifies_ref rid (Set.singleton (Heap.addr_of (as_ref st))) ( h0) ( h1))
+      (kex = Kex_DHE \/ kex = Kex_ECDHE)))
+  (ensures fun h0 (gx,s) h1 -> S12_wait_CKE_DH? s)
 
-let ks_server12_init_dh ks cr pv cs ems g =
+let ks_server12_init_dh sr cr pv cs ems g =
   dbg "ks_server12_init_dh";
-  let KS #region st _ = ks in
-  let S (S_Init sr) = !st in
   let CipherSuite kex sa ae = cs in
   let our_share = CommonDH.keygen g in
   let _ = print_share (CommonDH.ipubshare our_share) in
+  let info = Info12 pv cs ems in
   let csr = cr @| sr in
-  st := S (S12_wait_CKE_DH csr (pv, cs, ems) (| g, our_share |));
-  CommonDH.ipubshare our_share
+  let st = S12_wait_CKE_DH csr info (| g, our_share |) in
+  CommonDH.ipubshare our_share, st
 
 val ks_server13_init:
-  ks:ks_server_state ->
+  sr:random ->
   cr:random ->
   cs:cipherSuite ->
+  is_quic:bool ->
   pskid:option PSK.pskid ->
   g_gx:option (g:CommonDH.group & CommonDH.share g) ->
-  ST (ks_server_state * option (g:CommonDH.group & CommonDH.share g) * option (i:binderId & binderKey i))
-  (requires fun h0 ->
-    S_Init? ks
-    /\ (Some? g_gx \/ Some? pskid)
+  ST (ks_server *
+      option (g:CommonDH.group & CommonDH.share g) *
+      option (i:binderId & binderKey i))
+  (requires fun h0 -> (Some? g_gx \/ Some? pskid)
     /\ (Some? g_gx ==> Some? (CommonDH.namedGroup_of_group (dfst (Some?.v g_gx))))
     /\ CipherSuite13? cs)
   (ensures fun h0 (ks', gy, bk) h1 ->
@@ -487,13 +441,11 @@ val ks_server13_init:
     /\ (Some? bk <==> Some? pskid)
     /\ (Some? gy \/ Some? bk)
     /\ S13_wait_SH? ks')
-//    /\ HS.modifies_ref rid (Set.singleton (Heap.addr_of (as_ref st))) h0 h1)
 
-let ks_server13_init ks cr cs pskid g_gx =
+let ks_server13_init sr cr cs is_quic pskid g_gx =
   dbg ("ks_server_init");
-//  let KS #region st _ = ks in
-  let S_Init sr = ks in
   let CipherSuite13 ae h = cs in
+  let info = Info13 is_quic ae h in
   let esId, es, bk =
     match pskid with
     | Some id ->
@@ -547,20 +499,16 @@ let ks_server13_init ks cr cs pskid g_gx =
       None, hsId, hs
     in
   dbg ("Handshake secret:                "^print_bytes hs);
-  let ks' = (S13_wait_SH (ae, h) cr sr (| esId, es |) (| hsId, hs |)) in
+  let ks' = (S13_wait_SH info cr sr (| esId, es |) (| hsId, hs |)) in
   ks', gy, bk
 
-let ks_server13_0rtt_key ks (log:bytes)
+let ks_server13_0rtt_key (s:ks_server) (log:bytes)
   : ST ((li:logInfo & i:exportId li & ems i) * recordInstance)
-  (requires fun h0 ->
-    let kss = sel h0 (KS?.state ks) in
-    S? kss /\ S13_wait_SH? (S?.s kss))
+  (requires fun h0 -> S13_wait_SH? s)
   (ensures fun h0 _ h1 -> modifies_none h0 h1)
   =
   dbg "ks_server13_0rtt_key";
-  let KS #region st is_quic = ks in
-  let S (S13_wait_SH (ae, h) cr sr (| esId, es |) _) = !st in
-
+  let S13_wait_SH (Info13 is_quic ae h) cr sr (| esId, es |) _ = s in
   let li = LogInfo_CH0 ({
     li_ch0_cr = cr;
     li_ch0_ed_ae = ae;
@@ -587,19 +535,16 @@ let ks_server13_0rtt_key ks (log:bytes)
   let early_d = StAEInstance r rw (pn, pn) in
   (| li, expId, early_export |), early_d
 
-val ks_server13_sh: ks:ks -> log:bytes -> ST (recordInstance)
-  (requires fun h0 ->
-    let kss = sel h0 (KS?.state ks) in
-    S? kss /\ S13_wait_SH? (S?.s kss))
-  (ensures fun h0 r h1 ->
-    let KS #rid st _ = ks in
-    modifies (Set.singleton rid) h0 h1
-    /\ HS.modifies_ref rid (Set.singleton (Heap.addr_of (as_ref st))) ( h0) ( h1))
+val ks_server13_sh: s:ks_server -> log:bytes ->
+  ST (ks_server * recordInstance)
+  (requires fun h0 -> S13_wait_SH? s)
+  (ensures fun h0 (s', _) h1 -> modifies_none h0 h1
+    /\ S13_wait_SF? s')
 
-let ks_server13_sh ks log =
+let ks_server13_sh s log =
   dbg ("ks_server13_sh, hashed log = "^print_bytes log);
-  let KS #region st is_quic = ks in
-  let S (S13_wait_SH (ae, h) cr sr _ (| hsId, hs |)) = !st in
+  let S13_wait_SH info cr sr _ (| hsId, hs |) = s in
+  let Info13 is_quic ae h = info in
   let secretId = HandshakeSecretID hsId in
   let li = LogInfo_SH ({
     li_sh_cr = cr;
@@ -641,8 +586,10 @@ let ks_server13_sh ks log =
   let sfk1 = finished_13 h sts in
   dbg ("finished key[S]:                 "^print_bytes sfk1);
 
-  let cfk1 : fink cfkId = HMAC_UFCMA.coerce (HMAC_UFCMA.HMAC_Finished cfkId) (fun _ -> True) region cfk1 in
-  let sfk1 : fink sfkId = HMAC_UFCMA.coerce (HMAC_UFCMA.HMAC_Finished sfkId) (fun _ -> True) region sfk1 in
+  let cfk1 : fink cfkId = HMAC_UFCMA.coerce
+    (HMAC_UFCMA.HMAC_Finished cfkId) (fun _ -> True) HS.root cfk1 in
+  let sfk1 : fink sfkId = HMAC_UFCMA.coerce
+    (HMAC_UFCMA.HMAC_Finished sfkId) (fun _ -> True) HS.root sfk1 in
 
   let saltId = Salt (HandshakeSecretID hsId) in
   let salt = HKDF.derive_secret h hs "derived" (H.emptyHash h) in
@@ -653,62 +600,23 @@ let ks_server13_sh ks log =
   let ams : ams amsId = HKDF.extract #h salt (H.zeroHash h) in
   dbg ("Application secret:              "^print_bytes ams);
 
-  st := S (S13_wait_SF (ae, h) (| cfkId, cfk1 |) (| sfkId, sfk1 |) (| amsId, ams |));
-  StAEInstance r w (cpn, spn)
+  let s' = S13_wait_SF info (| cfkId, cfk1 |) (| sfkId, sfk1 |) (| amsId, ams |) in
+  s', StAEInstance r w (cpn, spn) 
 
-let ks_server13_server_finished ks
-  : ST (i:finishedId & fink i)
-  (requires (fun h0 -> True))
-  (ensures (fun h0 _ h1 -> h0 == h1))
-  =
-  let KS #region st _ = ks in
-  let S (S13_wait_SF _ _ sfk _) = !st in
-  sfk
+let ks_server13_get_sfk (S13_wait_SF _ _ sfk _) = sfk
+let ks_server13_get_cfk (S13_wait_CF _ cfk _ _) = cfk
 
-let ks_server13_client_finished ks
-  : ST (i:finishedId & fink i)
-  (requires (fun h0 -> True))
-  (ensures (fun h0 _ h1 -> h0 == h1))
-  =
-  let KS #region st _ = ks in
-  let S (S13_wait_CF _ cfk _ _) = !st in
-  cfk
+let ks_client12_finished_key (C12_has_MS _ _ _ ms) = TLSPRF.coerce ms
+let ks_server12_finished_key (S12_has_MS _ _ _ ms) = TLSPRF.coerce ms
 
-// Will become private; public API will have
-// ks_client12_keygen: ks -> (i:id * w:StatefulLHAE.writer i)
-// ks_server12_keygen: ...
-val ks12_finished_key: ks:ks -> ST (key:TLSPRF.key)
-  (requires fun h0 ->
-    let st = sel h0 (KS?.state ks) in
-    match st with
-    | C (C12_has_MS _ _ _ _) | S (S12_has_MS _ _ _ _) -> true
-    | _ -> false)
-  (ensures fun h0 r h1 ->
-    modifies Set.empty h0 h1)
+let ks_client12_ms (C12_has_MS _ _ msId ms) = (msId, ms)
+let ks_server12_ms (S12_has_MS _ _ msId ms) = (msId, ms)
 
-let ks12_finished_key ks =
- let KS #region st _ = ks in
- let ms = match !st with
- | C (C12_has_MS _ _ _ ms) -> ms
- | S (S12_has_MS _ _ _ ms) -> ms in
- TLSPRF.coerce ms
-
-let ks12_ms ks =
-  let KS #region st _ = ks in
-  match !st with
-  | C (C12_has_MS _ _ msId ms) -> (msId, ms)
-  | S (S12_has_MS _ _ msId ms) -> (msId, ms)
-
-private val ks12_record_key: ks:ks -> St recordInstance
-let ks12_record_key ks =
+private let ks12_record_key role csr info msId ms
+  : St recordInstance =
   dbg "ks12_record_key";
-  let KS #region st _ = ks in
-  let role, csr, alpha, msId, ms =
-    match !st with
-    | C (C12_has_MS csr alpha msId ms) -> Client, csr, alpha, msId, ms
-    | S (S12_has_MS csr alpha msId ms) -> Server, csr, alpha, msId, ms in
   let cr, sr = split csr 32ul in
-  let (pv, cs, ems) = alpha in
+  let Info12 pv cs ems = info in
   let kdf = kdfAlg pv cs in
   let ae = get_aeAlg cs in
   let id = ID12 pv msId kdf ae cr sr role in
@@ -729,56 +637,66 @@ let ks12_record_key ks =
   let r = StAE.genReader HS.root rw in
   StAEInstance r w (None, None)
 
-(* 1.2 resumption *)
+let ks12_client_key (s:ks_client)
+  : ST recordInstance
+  (requires fun h0 -> C12_has_MS? s)
+  (ensures fun h0 _ h1 -> modifies_none h0 h1)
+  =
+  let C12_has_MS csr info msId ms = s in
+  ks12_record_key Client csr info msId ms
 
-// We can potentially 1.2 resume from 1.2 or 1.3 ClientHello
-let ks_client12_resume (ks:ks) (sr:random) (pv:protocolVersion) (cs:cipherSuite)
-  (ems:bool) (msId:TLSInfo.msId) (ms:bytes) : ST recordInstance
-  (requires fun h0 ->
-    let kss = sel h0 (KS?.state ks) in
-    C? kss /\ (C12_Full_CH? (C?.s kss) \/ C_wait_ServerHello? (C?.s kss)))
-  (ensures fun h0 r h1 ->
-    let KS #rid st _ = ks in
-    modifies (Set.singleton rid) h0 h1
-    /\ HS.modifies_ref rid (Set.singleton (Heap.addr_of (as_ref st))) ( h0) ( h1))
+let ks12_server_key (s:ks_server)
+  : ST recordInstance
+  (requires fun h0 -> S12_has_MS? s)
+  (ensures fun h0 _ h1 -> modifies_none h0 h1)
+  =
+  let S12_has_MS csr info msId ms = s in
+  ks12_record_key Server csr info msId ms
+
+let ks_client12_resume (s:ks_client) (sr:random)
+  (pv:protocolVersion) (cs:cipherSuite) (ems:bool)
+  (msId:TLSInfo.msId) (ms:bytes)
+  : ST ks_client
+  (requires fun h0 -> (C12_Full_CH? s \/ C_wait_ServerHello? s))
+  (ensures fun h0 s' h1 -> modifies_none h0 h1
+    /\ C12_has_MS? s')
   =
   dbg "ks_client12_resume";
-  let KS #rid st _ = ks in
-  let cr = match !st with
-    | C (C12_Full_CH cr) -> cr
-    | C (C_wait_ServerHello cr _ _) -> cr in
+  let cr = match s with
+    | C12_Full_CH cr -> cr
+    | C_wait_ServerHello cr _ _ _ -> cr in
+  let csr = cr @| sr in
+  let info = Info12 pv cs ems in
   dbg ("Recall MS: "^(print_bytes ms));
-  st := C (C12_has_MS (cr @| sr) (pv, cs, ems) msId ms);
-  ks12_record_key ks
+  C12_has_MS csr info msId ms
 
-let ks_server12_resume (ks:ks) (cr:random) (pv:protocolVersion) (cs:cipherSuite)
-  (ems:bool) (msId:msId) (ms:bytes) =
-  dbg ("ks_server12_resume");
-  let KS #region st _ = ks in
-  let S (S_Init sr) = !st in
-  dbg ("Recall MS: "^(print_bytes ms));
-  st := S (S12_has_MS (cr @| sr) (pv, cs, ems) msId ms);
-  ks12_record_key ks
+let ks_server12_resume (sr:random) (cr:random)
+  (pv:protocolVersion) (cs:cipherSuite) (ems:bool)
+  (msId:msId) (ms:bytes)
+  : ST ks_server
+  (requires fun h0 -> True)
+  (ensures fun h0 s h1 -> modifies_none h0 h1
+    /\ S12_has_MS? s)
+  =
+  dbg ("ks_server12_resume MS: "^(print_bytes ms));
+  let csr = cr @| sr in
+  let info = Info12 pv cs ems in
+  S12_has_MS csr info msId ms
 
-(******************************************************************)
-
-// log is the raw HS log, used for EMS derivation
-val ks_server12_cke_dh: ks:ks -> gy:(g:CommonDH.group & CommonDH.share g) ->
-  log:bytes -> ST (recordInstance)
-  (requires fun h0 ->
-    let kss = sel h0 (KS?.state ks) in
-    S? kss /\ S12_wait_CKE_DH? (S?.s kss) /\
-    (let S (S12_wait_CKE_DH _ _ (| g', _ |)) = kss in
+val ks_server12_cke_dh: s:ks_server ->
+  gy:(g:CommonDH.group & CommonDH.share g) ->
+  log:bytes ->
+  ST ks_server
+  (requires fun h0 -> S12_wait_CKE_DH? s /\
+    (let S12_wait_CKE_DH _ _ (| g', _ |) = s in
     g' = dfst gy)) // Responder share must be over the same group as initiator's
-  (ensures fun h0 r h1 ->
-    let KS #rid st _ = ks in
-    modifies (Set.singleton rid) h0 h1
-    /\ HS.modifies_ref rid (Set.singleton (Heap.addr_of (as_ref st))) ( h0) ( h1))
-let ks_server12_cke_dh ks gy hashed_log =
+  (ensures fun h0 s' h1 -> modifies_none h0 h1
+    /\ S12_has_MS? s')
+
+let ks_server12_cke_dh s gy hashed_log =
   dbg "ks_server12_cke_dh";
-  let KS #region st _ = ks in
-  let S (S12_wait_CKE_DH csr alpha (| g, gx |)) = !st in
-  let (pv, cs, ems) = alpha in
+  let S12_wait_CKE_DH csr alpha (| g, gx |) = s in
+  let Info12 pv cs ems = alpha in
   let (| _, gy |) = gy in
   let _ = print_share gy in
   let pmsb = CommonDH.dh_initiator g gx gy in
@@ -801,41 +719,26 @@ let ks_server12_cke_dh ks gy hashed_log =
       msId, ms
       end
     in
-  st := S (S12_has_MS csr alpha msId ms);
-  ks12_record_key ks
+  S12_has_MS csr alpha msId ms
 
-(**
-// Called after receiving server hello; server accepts resumption proposal
-// This function only checks the agility paramaters compared to the resumed sessionInfo
-// and returns to the handshake whether the resumption is permissible
-val ks_client12_resume: ks:ks -> random -> pv:protocolVersion -> cs:cipherSuite -> ST unit
-  (requires fun h0 ->
-    let kss = sel h0 (KS?.state ks) in
-    C? kss /\ C12_Resume_CH? (C?.s kss))
-  (ensures fun h0 r h1 ->
-    let KS #rid st = ks in
-    modifies (Set.singleton rid) h0 h1
-    /\ HS.modifies_ref rid (Set.singleton (Heap.addr_of (as_ref st))) ( h0) ( h1))
-
-let ks_client12_resume ks sr pv cs =
-  let KS #region st = ks in
-  let C (C12_Resume_CH cr si msId ms) = !st in
-  let csr = cr @| sr in
-  let ems = si.extended_ms in
-  st := C (C12_has_MS csr (pv, cs, ems) msId ms)
-*)
+private let group_matches (g:CommonDH.group)
+  (gx:(x:CommonDH.group & CommonDH.ikeyshare g)) =
+  g = dfst gx
 
 // The two functions below are similar but we decide not to factor them because:
 //   1. they use different arguemtns
 //   2. they use different return types
 //   3. they are called at different locations
 
-val ks_client13_sh: Mem.rgn -> ks:ks_client_state -> is_quic:bool -> sr:random -> cs:cipherSuite -> h:bytes ->
-  gy:option (g:CommonDH.group & CommonDH.share g) -> accept_psk:option UInt16.t ->
-  ST (recordInstance * ks_client_state)
+val ks_client13_sh: Mem.rgn -> ks:ks_client ->
+  sr:random -> cs:cipherSuite ->
+  h:bytes -> // [..ServerHello]
+  gy:option (g:CommonDH.group & CommonDH.share g) ->
+  accept_psk:option UInt16.t ->
+  ST (ks_client * recordInstance)
   (requires fun h0 ->
     match ks with 
-    | C_wait_ServerHello _ ei gc ->
+    | C_wait_ServerHello _ _ ei gc ->
       // Ensure that the PSK accepted is one offered
      (match gy with
      | Some (| g, _ |) -> List.Tot.existsb (fun gx -> g = dfst gx) gc
@@ -846,21 +749,15 @@ val ks_client13_sh: Mem.rgn -> ks:ks_client_state -> is_quic:bool -> sr:random -
       | _::_ , Some n -> UInt16.v n < List.Tot.length ei
       | _ -> False)
     | _ -> False )  
-  (ensures fun h0 r h1 -> 
-    modifies_none h0 h1 )
+  (ensures fun h0 (s',_) h1 -> modifies_none h0 h1
+    /\ C13_wait_Finished1? s')
 
-private let group_matches
-              (g:CommonDH.group)
-              (gx:(x:CommonDH.group & CommonDH.ikeyshare g)) =
-    let (| g', _ |) = gx in
-    g=g'
-
-// ServerHello log breakpoint (client)
-// log == digest[..ServerHello]
-let ks_client13_sh region ks is_quic sr cs log gy accept_psk =
+let ks_client13_sh region ks sr cs log gy accept_psk =
   dbg ("ks_client13_sh hashed_log = "^print_bytes log);
-  let C_wait_ServerHello cr esl gc = ks in
+  let C_wait_ServerHello cr is_quic esl gc = ks in
   let CipherSuite13 ae h = cs in
+  let info = Info13 is_quic ae h in
+  
   // Early secret: must derive zero here as hash is not known before
   let (| esId, es |): (i: esId & es i) =
     match esl, accept_psk with
@@ -943,24 +840,18 @@ let ks_client13_sh region ks is_quic sr cs log gy accept_psk =
   let w = StAE.coerce HS.root id (ckv @| civ) in
   let rw = StAE.coerce HS.root id (skv @| siv) in
   let r = StAE.genReader HS.root rw in
-  let ks = C13_wait_Finished1 (ae, h) (| cfkId, cfk1 |) (| sfkId, sfk1 |) (| asId, ams |) in
-  StAEInstance r w (spn, cpn), ks
+  let s'= C13_wait_Finished1 info (| cfkId, cfk1 |) (| sfkId, sfk1 |) (| asId, ams |) in
+  s', StAEInstance r w (spn, cpn)
 
-(******************************************************************)
-
-let ks_client13_sf is_quic ks (log:bytes)
-  : ST (ks_client_state * (( i:finishedId & sfk:fink i ) * ( i:finishedId & cfk:fink i ) * recordInstance * exportKey))
-  (requires fun h0 ->
-    // log == digest[..Finished1] 
-    C13_wait_Finished1? ks)
-  (ensures fun h0 r h1 ->
-    let (ks, _) = r in
-    C13_wait_Finished2? ks /\
-    modifies Set.empty h0 h1 )
+let ks_client13_sf (s:ks_client) (log:bytes) // [..Finished1]
+  : ST (ks_client * ((i:finishedId & sfk:fink i) * (i:finishedId & cfk:fink i) * recordInstance * exportKey))
+  (requires fun h0 -> C13_wait_Finished1? s)
+  (ensures fun h0 (s',_) h1 -> modifies_none h0 h1
+    /\ C13_wait_Finished2? s')
   =
   dbg ("ks_client13_sf hashed_log = "^print_bytes log);
-  let C13_wait_Finished1 alpha cfk sfk (| asId, ams |) = ks in
-  let (ae, h) = alpha in
+  let C13_wait_Finished1 info cfk sfk (| asId, ams |) = s in
+  let Info13 is_quic ae h = info in
 
   let FinishedID #li _ = dfst cfk in // TODO loginfo
   let log : hashed_log li = log in
@@ -992,24 +883,19 @@ let ks_client13_sf is_quic ks (log:bytes)
   let rw = StAE.coerce HS.root id (skv @| siv) in
   let r = StAE.genReader HS.root rw in
 
-  C13_wait_Finished2 alpha cfk (| asId, ams |) (| li, c_expandId, (cts,sts)|),
+  C13_wait_Finished2 info cfk (| asId, ams |) (| li, c_expandId, (cts,sts)|),
   (sfk, cfk, StAEInstance r w (spn, cpn), exporter1)
 
-let ks_server13_sf ks (log:bytes)
-  : ST (recordInstance * (li:logInfo & i:exportId li & ems i))
-  (requires fun h0 ->
-    let kss = sel h0 (KS?.state ks) in
-    S? kss /\ C13_wait_Finished1? (C?.s kss))
-  (ensures fun h0 r h1 ->
-    let KS #rid st _ = ks in
-    modifies (Set.singleton rid) h0 h1
-    /\ HS.modifies_ref rid (Set.singleton (Heap.addr_of (as_ref st))) ( h0) ( h1))
+let ks_server13_sf (s:ks_server) (log:bytes) // [..Finished1]
+  : ST (ks_server * recordInstance * (li:logInfo & i:exportId li & ems i))
+  (requires fun h0 -> S13_wait_SF? s)
+  (ensures fun h0 (s',_,_) h1 -> modifies_none h0 h1
+    /\ S13_wait_CF? s')
   =
   dbg ("ks_server13_sf hashed_log = "^print_bytes log);
-  let KS #region st is_quic = ks in
-  let S (S13_wait_SF alpha cfk _ (| asId, ams |)) = !st in
+  let S13_wait_SF info cfk _ (| asId, ams |) = s in
   let FinishedID #li _ = dfst cfk in // TODO loginfo
-  let (ae, h) = alpha in
+  let Info13 is_quic ae h = info in
 
   let log : hashed_log li = log in
   let secretId = ApplicationSecretID asId in
@@ -1040,263 +926,145 @@ let ks_server13_sf ks (log:bytes)
   let rw = StAE.coerce HS.root id (ckv @| civ) in
   let r = StAE.genReader HS.root rw in
 
-  st := S (S13_wait_CF alpha cfk (| asId, ams |) (| li, c_expandId, (cts,sts) |));
-  StAEInstance r w (cpn, spn), exporter1
+  let s' = S13_wait_CF info cfk (| asId, ams |) (| li, c_expandId, (cts,sts) |) in
+  s', StAEInstance r w (cpn, spn), exporter1
 
-let ks_server13_cf ks (log:bytes) : ST unit
-  (requires fun h0 ->
-    let kss = sel h0 (KS?.state ks) in
-    S? kss /\ S13_wait_CF? (S?.s kss))
-  (ensures fun h0 r h1 ->
-    let KS #rid st _ = ks in
-    modifies (Set.singleton rid) h0 h1
-    /\ HS.modifies_ref rid (Set.singleton (Heap.addr_of (as_ref st))) ( h0) ( h1))
+let ks_server13_cf (s:ks_server) (log:bytes)
+  : ST ks_server
+  (requires fun h0 -> S13_wait_CF? s)
+  (ensures fun h0 s' h1 -> modifies_none h0 h1
+    /\ S13_postHS? s')
   =
   dbg ("ks_server13_cf hashed_log = "^(print_bytes log));
-  let KS #region st _ = ks in
-  let S (S13_wait_CF alpha cfk (| asId, ams |) rekey_info) = !st in
-  let (ae, h) = alpha in
+  let S13_wait_CF info cfk (| asId, ams |) rekey_info = s in
+  let Info13 is_quic ae h = info in
   let (| li, _, _ |) = rekey_info in
   let log : hashed_log li = log in
   let rmsId : rmsId li = RMSID asId log in
   let rms : rms rmsId = HKDF.derive_secret h ams "res master" log in
   dbg ("resumption master secret:        "^print_bytes rms);
-  st := S (S13_postHS alpha rekey_info (| li, rmsId, rms |))
+  S13_postHS info rekey_info (| li, rmsId, rms |)
 
-let ks_server13_rms ks : ST (li:logInfo & i:rmsId li & rms i)
-  (requires fun h0 ->
-    let kss = sel h0 (KS?.state ks) in
-    S? kss /\ S13_postHS? (S?.s kss))
-  (ensures fun h0 r h1 -> modifies (Set.empty) h0 h1)
-  =
-  let KS #region st _ = ks in
-  let S (S13_postHS _ _ rms) = !st in
-  rms
-  
-// Handshake must call this when ClientFinished goes into log
-let ks_client13_cf ks (log:bytes) : ST ks_client_state
-  (requires fun h0 ->
-    C13_wait_Finished2? ks)
-  (ensures fun h0 r h1 ->
-    C13_Complete? ks /\ 
-    modifies Set.empty h0 h1)
+let ks_server13_rms (S13_postHS _ _ rms) = rms
+
+let ks_client13_cf (s:ks_client) (log:bytes)
+  : ST ks_client
+  (requires fun h0 -> C13_wait_Finished2? s)
+  (ensures fun h0 s' h1 -> modifies_none h0 h1
+    /\ C13_Complete? s')
   =
   dbg ("ks_client13_cf hashed_log = "^print_bytes log);
-  let C13_wait_Finished2 alpha cfk (| asId, ams |) rekey_info = ks in
-  let (ae, h) = alpha in
+  let C13_wait_Finished2 info cfk (| asId, ams |) rekey_info = s in
+  let Info13 is_quic ae h = info in
 
-  // TODO loginfo CF
   let (| li, _, _ |) = rekey_info in
   let log : hashed_log li = log in
   let rmsId : rmsId li = RMSID asId log in
 
   let rms : rms rmsId = HKDF.derive_secret h ams "res master" log in
   dbg ("resumption master secret:        "^print_bytes rms);
-  C13_Complete alpha rekey_info (| li, rmsId, rms |)
+  C13_Complete info rekey_info (| li, rmsId, rms |)
 
 // Generate a PSK out of the current RMS and incoming ticket nonce
 // May be called several times if server sends multiple tickets
-let ks_client13_rms_psk ks (nonce:bytes) : ST (bytes)
-  (requires fun h0 ->
-    C13_Complete? ks)
-  (ensures fun h0 r h1 ->
-    modifies_none h0 h1)
+let ks_client13_rms_psk (s:ks_client) (nonce:bytes)
+  : ST bytes
+  (requires fun h0 -> C13_Complete? s)
+  (ensures fun h0 _ h1 -> modifies_none h0 h1)
   =
   dbg "ks_client13_rms";
-  let C13_Complete _ _ rmsi = ks in
+  let C13_Complete _ _ rmsi = s in
   let (| li, rmsId, rms |) = rmsi in
   dbg ("Recall RMS: "^hex_of_bytes rms);
   HKDF.derive_secret (rmsId_hash rmsId) rms "resumption" nonce
 
-(******************************************************************)
-
-// Called by Hanshake when DH key echange is negotiated
-val ks_client12_full_dh: ks:ks -> sr:random -> pv:protocolVersion ->
-  cs:cipherSuite -> ems:bool -> gx:(g:CommonDH.group & CommonDH.share g) ->
-  ST (CommonDH.share (dfst gx))
+let ks_client12_full_dh (s:ks_client) (sr:random)
+  (pv:protocolVersion) (cs:cipherSuite) (ems:bool)
+  (g_gx:(g:CommonDH.group & CommonDH.share g))
+  : ST (ks_client * CommonDH.share (dfst g_gx))
   (requires fun h0 ->
-    let st = sel h0 (KS?.state ks) in
-    C? st /\
-    (C12_Full_CH? (C?.s st) \/ C12_Resume_CH? (C?.s st) \/ C_wait_ServerHello? (C?.s st)))
-  (ensures fun h0 r h1 ->
-    let KS #rid st _ = ks in
-    modifies (Set.singleton rid) h0 h1
-    /\ HS.modifies_ref rid (Set.singleton (Heap.addr_of (as_ref st))) ( h0) ( h1))
-
-let ks_client12_full_dh ks sr pv cs ems (|g,gx|) =
-  let KS #region st _ = ks in
-  let cr = match !st with
-    | C (C12_Full_CH cr) -> cr
-    | C (C12_Resume_CH cr _ _ _) -> cr
-    | C (C_wait_ServerHello cr _ _ ) -> cr in
+    C12_Full_CH? s \/ C12_Resume_CH? s \/ C_wait_ServerHello? s)
+  (ensures fun h0 (s',_) h1 -> modifies_none h0 h1
+    /\ (if ems then C12_wait_MS? s' else C12_has_MS? s'))
+  =
+  let (| g, gx |) = g_gx in
+  let cr = match s with
+    | C12_Full_CH cr -> cr
+    | C12_Resume_CH cr _ _ _ -> cr
+    | C_wait_ServerHello cr _ _ _ -> cr in
   let csr = cr @| sr in
-  let alpha = (pv, cs, ems) in
+  let info = Info12 pv cs ems in
   let gy, pmsb = CommonDH.dh_responder g gx in
   let _ = print_share gx in
   let _ = print_share gy in
   dbg ("PMS: "^(print_bytes pmsb));
   let dhpmsId = PMS.DHPMS g gx gy (PMS.ConcreteDHPMS pmsb) in
-  let ns =
+  let s' =
     if ems then
-      C12_wait_MS csr alpha dhpmsId pmsb
+      C12_wait_MS csr info dhpmsId pmsb
     else
       let kef = kefAlg pv cs false in
       let ms = TLSPRF.extract kef pmsb csr 48ul in
       dbg ("master secret: "^(print_bytes ms));
       let msId = StandardMS dhpmsId csr kef in
-      C12_has_MS csr alpha msId ms in
-  st := C ns; gy
+      C12_has_MS csr info msId ms in
+  s', gy
 
-// Called by Handshake after server hello when a full RSA key exchange is negotiated
-val ks_client12_full_rsa: ks:ks -> sr:random -> pv:protocolVersion -> cs:cipherSuite -> ems:bool -> RSAKey.pk -> ST bytes
-  (requires fun h0 ->
-    let st = sel h0 (KS?.state ks) in
-    C? st /\
-    (C12_Full_CH? (C?.s st) \/ C12_Resume_CH? (C?.s st)))
-  (ensures fun h0 r h1 ->
-    let KS #rid st _ = ks in
-    modifies (Set.singleton rid) h0 h1
-    /\ HS.modifies_ref rid (Set.singleton (Heap.addr_of (as_ref st))) ( h0) ( h1))
-
-let ks_client12_full_rsa ks sr pv cs ems pk =
-  let KS #region st _ = ks in
-  let alpha = (pv, cs, ems) in
-  let cr = match !st with
-    | C (C12_Full_CH cr) -> cr
-    | C (C12_Resume_CH cr _ _ _) -> cr in
+(* Disabling RSA - support is removed in EverCrypt
+let ks_client12_full_rsa (s:ks_client) (sr:random)
+  (pv:protocolVersion) (cs:cipherSuite) (ems:bool)
+  (pk:RSAKey.pk)
+  : ST (ks_client * bytes)
+  (requires fun h0 -> C12_Full_CH? s \/ C12_Resume_CH? s)
+  (ensures fun h0 (s',_) h1 -> modifies_none h0 h1
+    /\ (if ems then C12_wait_MS? s' else C12_has_MS? s'))
+  =
+  let info = Info12 pv cs ems in
+  let cr = match s with
+    | C12_Full_CH cr -> cr
+    | C12_Resume_CH cr _ _ _ -> cr in
   let csr = cr @| sr in
   let rsapms = PMS.genRSA pk pv in
   let pmsb = PMS.leakRSA pk pv rsapms in
-  let encrypted = Random.sample 256 in //CoreCrypto.rsa_encrypt (RSAKey.repr_of_rsapkey pk) CoreCrypto.Pad_PKCS1 pmsb in
+  //CoreCrypto.rsa_encrypt (RSAKey.repr_of_rsapkey pk) CoreCrypto.Pad_PKCS1 pmsb in
+  let encrypted = Random.sample 256 in
   let rsapmsId = PMS.RSAPMS(pk, pv, rsapms) in
-  let ns =
+  let s' =
     if ems then
-      C12_wait_MS csr alpha rsapmsId pmsb
+      C12_wait_MS csr info rsapmsId pmsb
     else
       let kef = kefAlg pv cs false in
       let ms = TLSPRF.extract kef pmsb csr 48ul in
       let msId = StandardMS rsapmsId csr kef in
-      C12_has_MS csr alpha msId ms in
-  st := C ns; encrypted
-
-val ks_client12_set_session_hash: ks:ks -> h:bytes -> ST (TLSPRF.key * recordInstance)
-  (requires fun h0 ->
-    let st = sel h0 (KS?.state ks) in
-    C? st /\ (C12_wait_MS? (C?.s st) \/ C12_has_MS? (C?.s st)))
-  (ensures fun h0 r h1 ->
-    let st = sel h1 (KS?.state ks) in
-    modifies (Set.singleton (KS?.region ks)) h0 h1 /\
-    C? st /\ (C12_has_MS? (C?.s st))
-    /\ HS.modifies_ref (KS?.region ks) (Set.singleton (Heap.addr_of (as_ref (KS?.state ks)))) ( h0) ( h1))
-
-let ks_client12_set_session_hash ks log =
-  dbg ("ks_client12_set_session_hash hashed_log = "^(print_bytes log));
-  let KS #region st _ = ks in
-  let ms =
-    match !st with
-    | C (C12_has_MS csr alpha msId ms) ->
-      dbg ("master secret:"^(print_bytes ms));
-      ms
-    | C (C12_wait_MS csr alpha pmsId pms) ->
-      let (pv, cs, ems) = alpha in
-      let kef = kefAlg pv cs ems in
-      let h = verifyDataHashAlg_of_ciphersuite cs in
-      let msId, ms =
-        if ems then
-          begin
-          let ms = TLSPRF.prf (pv,cs) pms (utf8_encode "extended master secret") log 48ul in
-          dbg ("extended master secret:"^(print_bytes ms));
-          let msId = ExtendedMS pmsId log kef in
-          msId, ms
-          end
-        else
-          begin
-          let ms = TLSPRF.extract kef pms csr 48ul in
-          dbg ("master secret:"^(print_bytes ms));
-          let msId = StandardMS pmsId csr kef in
-          msId, ms
-          end
-      in
-      st := C (C12_has_MS csr alpha msId ms);
-      ms
-    in
-  let appk = ks12_record_key ks in
-  (TLSPRF.coerce ms, appk)
-
-// *********************************************************************************
-//  All functions below assume that the MS is already computed (and thus they are
-//  shared accross role, key exchange, handshake mode...)
-// *********************************************************************************
-
-(*)
-let ks_client12_client_finished ks
-  : ST (cvd:bytes)
-  (requires fun h0 ->
-    let st = sel h0 (KS?.state ks) in
-    C? st /\ C12_has_MS? (C?.s st))
-  (ensures fun h0 r h1 -> h1 == h0)
-  =
-  let KS #region st = ks in
-  let C (C12_has_MS csr alpha msId ms) = !st in
-  let (pv, cs, ems) = alpha in
-//  let h = verifyDataHashAlg_of_ciphersuite cs in
-//  let log = HandshakeLog.getHash hsl h in
-  let log = HandshakeLog.getBytes hsl in
-  TLSPRF.verifyData (pv,cs) ms Client log
-
-let ks_server12_client_finished ks
-  : ST (cvd:bytes)
-  (requires fun h0 ->
-    let st = sel h0 (KS?.state ks) in
-    S? st /\ S12_has_MS? (S?.s st))
-  (ensures fun h0 r h1 -> h1 == h0)
-  =
-  let KS #region st = ks in
-  let S (S12_has_MS csr alpha msId ms) = !st in
-  let (pv, cs, ems) = alpha in
-//  let h = verifyDataHashAlg_of_ciphersuite cs in
-//  let log = HandshakeLog.getHash hsl h in
-  let log = HandshakeLog.getBytes hsl in
-  TLSPRF.verifyData (pv,cs) ms Client log
-
-let ks_server12_server_finished ks
-  : ST (svd:bytes)
-  (requires fun h0 ->
-    let st = sel h0 (KS?.state ks) in
-    S? st /\ S12_has_MS? (S?.s st))
-  (ensures fun h0 r h1 ->
-    let KS #rid st = ks in
-    modifies (Set.singleton rid) h0 h1
-    /\ HS.modifies_ref rid !{as_ref st} ( h0) ( h1))
-  =
-  let KS #region st = ks in
-  let S (S12_has_MS csr alpha msId ms) = !st in
-  let (pv, cs, ems) = alpha in
-//  let h = verifyDataHashAlg_of_ciphersuite cs in
-//  let log = HandshakeLog.getHash hsl h in
-  let log = HandshakeLog.getBytes hsl in
-  st := S S_Done;
-  TLSPRF.verifyData (pv,cs) ms Server log
-
-let ks_client12_server_finished ks
-  : ST (svd:bytes)
-  (requires fun h0 ->
-    let st = sel h0 (KS?.state ks) in
-    C? st /\ C12_has_MS? (C?.s st))
-  (ensures fun h0 r h1 ->
-    let KS #rid st = ks in
-    modifies (Set.singleton rid) h0 h1
-    /\ HS.modifies_ref rid !{as_ref st} ( h0) ( h1))
-  =
-  let KS #region st = ks in
-  let C (C12_has_MS csr alpha msId ms) = !st in
-  let (pv, cs, ems) = alpha in
-//  let h = verifyDataHashAlg_of_ciphersuite cs in
-//  let log = HandshakeLog.getHash hsl h in
-  let log = HandshakeLog.getBytes hsl in
-  st := C C_Done;
-  TLSPRF.verifyData (pv,cs) ms Server log
+      C12_has_MS csr info msId ms in
+  s', encrypted
 *)
 
+let ks_client12_set_session_hash (s:ks_client) (log:bytes)
+  : ST (ks_client)
+  (requires fun h0 -> C12_wait_MS? s)
+  (ensures fun h0 s' h1 -> modifies_none h0 h1
+    /\ C12_has_MS? s')
+  =
+  dbg ("ks_client12_set_session_hash hashed_log = "^(print_bytes log));
+  let C12_wait_MS csr info pmsId pms = s in
+  let Info12 pv cs ems = info in
+  let kef = kefAlg pv cs ems in
+  let h = verifyDataHashAlg_of_ciphersuite cs in
+  let msId, ms =
+    if ems then (
+      let ms = TLSPRF.prf (pv,cs) pms (utf8_encode "extended master secret") log 48ul in
+      dbg ("extended master secret:"^(print_bytes ms));
+      let msId = ExtendedMS pmsId log kef in
+      msId, ms
+    ) else (
+      let ms = TLSPRF.extract kef pms csr 48ul in
+      dbg ("master secret:"^(print_bytes ms));
+      let msId = StandardMS pmsId csr kef in
+      msId, ms
+    ) in
+  C12_has_MS csr info msId ms
+
+// Used by Epochs to read index of recordInstance
 val getId: recordInstance -> GTot id
 let getId (StAEInstance #i _ _ _) = i
