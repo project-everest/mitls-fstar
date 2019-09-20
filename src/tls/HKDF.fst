@@ -95,7 +95,7 @@ let expand #ha prk info len =
   let tlen = Hacl.Hash.Definitions.hash_len ha in
   let prk_p = LowStar.Buffer.alloca 0uy tlen in
   store_bytes prk prk_p;
-  assert_norm(Spec.HMAC.keysized ha (Spec.Hash.Definitions.hash_length ha));
+  assert_norm(Spec.Agile.HMAC.keysized ha (Spec.Hash.Definitions.hash_length ha));
 
   let tag_p = LowStar.Buffer.alloca 0uy len in
   let infolen = Bytes.len info in

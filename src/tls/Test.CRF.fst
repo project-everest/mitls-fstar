@@ -73,7 +73,7 @@ let test() =
     assert(~(Seq.equal v0 v1));
     assert(
       model /\ Model.CRF.crf a ==>
-      ~(Seq.equal (Spec.Hash.hash a v0) (Spec.Hash.hash a v1))));
+      ~(Seq.equal (Spec.Agile.Hash.hash a v0) (Spec.Agile.Hash.hash a v1))));
   ()
 
 
