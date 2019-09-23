@@ -113,7 +113,7 @@ let mac #i #good k p =
   assume (length p + Hashing.Spec.block_length a < pow2 32);
   assert_norm (pow2 32 < pow2 61);
   assert_norm (pow2 32 < pow2 125);
-  assert_norm(Spec.HMAC.keysized a (Spec.Hash.Definitions.hash_length a));
+  assert_norm(Spec.Agile.HMAC.keysized a (Spec.Hash.Definitions.hash_length a));
   let p : p:bytes { authId i ==> good p } = p in
   let t = HMAC.hmac a k.kv p in
   let e : entry i good = Entry t p in
