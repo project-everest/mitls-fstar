@@ -7,6 +7,7 @@ open TLSError
 
 open FStar.HyperStack.ST
 open TLS.Handshake.Machine
+open TLS.Handshake.Messaging
 
 (* FStar libraries *)
 module HS = FStar.HyperStack
@@ -21,7 +22,8 @@ module HMAC = Old.HMAC.UFCMA
 module KS = Old.KeySchedule
 module Nego = Negotiation
 module Send = TLS.Handshake.Send
-module Receive = TLS.Handshake.Receive
+module Recv = TLS.Handshake.Receive
+module Epochs = Old.Epochs
 
 (* Hashing *)
 module H = Hashing.Spec
@@ -131,14 +133,16 @@ let server_ClientHello_12 hs offer mode app_exts : St incoming =
   | _ -> InError (fatalAlert Handshake_failure, "Unsupported RSA key exchange")
 *)
 
+(*
 // Bramch after selecting TLS 1.3
 private let server_ClientHello_13 (ch:HSM.ch) (sh:HSM.sh) (ks:s_init)
   (#r:rgn) (m:msg_state r ParseFlights.F_s_Idle (HSM.sh_random sh))
   (gx:option Nego.share) (use_psk:option Nego.bkey13) (cert:Nego.certNego)
-  : St Receive.incoming =
+  : St Receive.incoming
+  =
   let cs = HSM.sh_cipher_suite sh in
   let cr = ch.CH.random in
-  let opskid = match use_psk with Some (id,_) -> Some id | None -> None in // FIXME(KS)
+  let opskid = match use_psk with Some (id,_) -> Some id | None -> None in
   let ks', ogy, obk = KS.ks_server13_init ks cr cs opskid gx in
   let sh' = Nego.server_KeyShare sh ogy in // Write server share extension
   match extend m.sending m.digest (HSM.M_server_hello sh) [MSH.M_client_hello ch] with
@@ -148,7 +152,8 @@ private let server_ClientHello_13 (ch:HSM.ch) (sh:HSM.sh) (ks:s_init)
     let ks'', hs_keys = KS.ks_server13_sh ks' digest_sh in
     register m.epochs hs_keys;
     Correct ks''
-    
+*)
+
   (*
   let oshare =
     match mode.Nego.n_pski with
@@ -197,23 +202,36 @@ private let server_ClientHello_13 (ch:HSM.ch) (sh:HSM.sh) (ks:s_init)
   *)
 
 // Only if we are sure this is the 1st CH
-let server_ClientHello1 (Server region config r) offer
+let server_ClientHello1 st offer
   : St Receive.incoming =
-  let S_init random = !r in
-  let ks0 = KS.ks_server_init random in
+  let Server region config r = st in
+  let S_wait_ClientHello random = !r in
+
   let sending = Send.send_state0 in
-  let receiving = Receive.(create (alloc_slice region)) in
+  let receiving = Recv.(create (alloc_slice region)) in
   let epochs = Epochs.create region random in
-  let m: msg_state region ParseFlights.F_s_Idle random ha = {
-    digest = di;
-    sending = sending;
-    receiving = receiving;
-    epochs = epochs;
-  } in
-  match Nego.server_ClientHello config offer random with
-  | Error z -> InError z
+
+  match Nego.server_ClientHello config offer with
+  | Error z -> Recv.InError z
   | Correct (Nego.ServerRetry hrr) -> admit()
-    (*
+  | Correct (Nego.ServerAccept13 cert cs13 opsk) ->
+    match cs13 with
+    | Nego.PSK_EDH j g_gx cs ->
+      let ks = KS.ks_server13_init random (offer.CH.random) cs config.is_quic opsk g_gx in
+      Recv.InError (fatalAlert Internal_error, "TBC")
+    | Nego.JUST_EDH g_gx cs ->
+      let CipherSuite13 ae ha = cs in
+      let ks = KS.ks_server13_init random (offer.CH.random) cs config.is_quic opsk (Some g_gx) in
+      let tag_CHT, di, tx0 = transcript_start region ha None offer in
+      let m: msg_state region ParseFlights.F_s_Idle random ha = {
+        digest = di;
+        sending = sending;
+        receiving = receiving;
+        epochs = epochs;
+      } in
+    admit()
+
+(*
     // Create a cookie, for stateless retry
     let ha = TLS.Cookie.hrr_ha hrr in 
     let digest = HandshakeLog.hash_tag #ha hs.log in 
@@ -222,14 +240,12 @@ let server_ClientHello1 (Server region config r) offer
     HSL.send hs.log (HSL.Msg m);
     hs.state := S13_wait_CH2 offer hrr;
     InAck false false
-    *)
   | Correct (Nego.ServerAccept13 sh ee psk dhg cert) ->
     (match server_ClientHello_13 with
     | Correct ks' ->
       r := S13_sent_ServerHello ch sh ee m cert ks'';
       InAck true false
     | Error z -> InError z)
-(*
     if Nego.resume_12 mode then
        server_ClientHello_resume12 hs offer mode app_exts
     else if mode.Nego.n_protocol_version = TLS_1p3 then
@@ -237,6 +253,9 @@ let server_ClientHello1 (Server region config r) offer
     else
       server_ClientHello_12 hs offer mode app_exts
 *)
+
+let server_ClientHello2 hs ch1 hrr ch2 app_cookie =
+  admit()
 
 (*
 // Only if this is a 2nd CH (stateful or stateless)
@@ -277,7 +296,15 @@ let server_ClientHello hs offer =
 	server_ClientHello2 hs offer hrr offer extra
 *)
 
+let server_ClientHello = server_ClientHello1
+
 (*** TLS 1.2 ***)
+
+let server_ClientCCS1 hs cke digestCCS1 = admit()
+
+let server_ClientFinished hs cvd digestCCF digestCF = admit()
+
+let server_ClientFinished2 hs cvd digestSF digestCF = admit()
 
 (*
 private let convert_kex = function
@@ -362,6 +389,15 @@ let server_ClientFinished2 hs cvd digestSF digestCF =
 *)
 
 (*** TLS 1.3 ***)
+
+let server_ServerFinished_13 hs = admit()
+
+let server_EOED hs digestEOED = admit()
+
+let server_Ticket13 hs digestEOED = admit()
+
+let server_ClientFinished_13 hs cvd digest_SF digest_F client_cert = admit()
+
 
 (*
 let server_ServerFinished_13 hs =

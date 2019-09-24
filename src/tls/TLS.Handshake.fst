@@ -1,21 +1,19 @@
 module TLS.Handshake
 
-open FStar.String
-open FStar.Heap
-open FStar.HyperStack
-open FStar.Seq
 open FStar.Error
 open FStar.Bytes
+open FStar.HyperStack.ST
 
 open TLSError
+open TLSConstants
 open TLSInfo
 open TLS.Callbacks
-open TLSConstants
+
 open Range
 open Old.Epochs
 
-//open TLS.Handshake.Client
-//open TLS.Handshake.Server
+open TLS.Handshake.Machine
+open TLS.Handshake.Messaging
 
 module U32 = FStar.UInt32
 module MS = FStar.Monotonic.Seq
@@ -29,10 +27,13 @@ module HSM = HandshakeMessages
 
 module Client = TLS.Handshake.Client
 module Server = TLS.Handshake.Server
-module Receive = TLS.Handshake.Receive 
+module Send = TLS.Handshake.Send
+module Recv = TLS.Handshake.Receive 
 module PF = TLS.Handshake.ParseFlights
-
 module LP = LowParse.Low.Base
+
+#set-options "--admit_smt_queries true"
+#set-options "--max_fuel 1 --max_ifuel 1 --z3rlimit 20"
 
 // consider adding an optional (resume: option sid) on the client side
 // for now this bit is not explicitly authenticated.
@@ -47,14 +48,11 @@ module LP = LowParse.Low.Base
 // abstract invariant; depending only on the HS state (not the epochs state)
 // no need for an epoch states invariant here: the HS never modifies them
 
-let is_0rtt_offered hs = admit()
+let is_0rtt_offered hs = false // FIXME
 
 let xkeys_of hs = 
   let n = Machine.nonce hs in 
   FStar.Monotonic.Seq.i_read (Machine.epochs hs n).Epochs.exporter
-
-open TLS.Handshake.Machine 
-
 
 /// now integrating Outline.fst; see also
 /// https://github.com/project-everest/mitls-fstar/issues/231 and
@@ -69,7 +67,8 @@ let create (parent:rid) cfg role =
   let r = new_region parent in
   // let log = HSL.create r None (* cfg.max_version (Nego.hashAlg nego) *) in
   //let nonce = Nonce.mkHelloRandom r r0 in //NS: should this really be Client?
-  let ks, nonce = KS.create #r role cfg.is_quic in
+  let nonce = Nonce.mkHelloRandom role r in
+  //let ks, nonce = KS.create #r role cfg.is_quic in
   // let nego = Nego.create r role cfg nonce in
   // let epochs = Epochs.create r nonce in
   let resume = None, [] in //TODO 19-09-13 cfg.use_tickets in 
@@ -120,7 +119,7 @@ let rec next_fragment_bounded hs i max =
       r := st1; 
       match result, st1 with
       | Send.Outgoing None None false, 
-        C13_complete offer sh ee server_id fin1 fin2 (Some _) ms ks -> (
+        C13_complete offer sh ee server_id fin1 ms (Finished_pending _ _ _) -> (
         match Client.client13_Finished2 hs with
         | Error z -> Error z 
         | Correct _ -> next_fragment_bounded hs i max )
@@ -136,7 +135,7 @@ let rec next_fragment_bounded hs i max =
     r := st1; 
     match result, st1 with
     | Send.Outgoing None None false, 
-      S13_sent_ServerHello _ _ _ -> (
+      S13_sent_ServerHello _ _ _ _ _ _ -> (
       match Server.server_ServerFinished_13 hs with
       | Error z -> Error z 
       | Correct _ -> next_fragment_bounded hs i max )
@@ -163,14 +162,19 @@ let buffer_received_fragment ms #i rg f = ms
 // obtained after receiving, and high-level values passed as arguments
 // to the processing functions
 // TODO: Implement this. This is likely a well-chosen call to Parsers.ServerHello.something
-assume
 val parse_wait_serverHello
-  (#st:Receive.state)
-  (res:PF.c_wait_ServerHello (Receive.cslice_of st) & UInt32.t) :
+  (#st:Recv.state)
+  (res:PF.c_wait_ServerHello (Recv.cslice_of st) & UInt32.t) :
   ST Parsers.ServerHello.serverHello
-    (requires fun h -> PF.valid_c_wait_ServerHello st.Receive.rcv_from (snd res) (fst res) h)
+    (requires fun h -> PF.valid_c_wait_ServerHello st.Recv.rcv_from (snd res) (fst res) h)
     // Maybe a bit too strong?
     (ensures fun h0 _ h1 -> h0 == h1)
+
+let parse_wait_serverHello #st (res, pos) = assume false;
+  let sh = MITLS.Repr.Handshake.serverHello res.PF.sh_msg in
+  let shb = MITLS.Repr.to_bytes sh in
+  let Some (sh, _) = Parsers.ServerHello.serverHello_parser32 shb in
+  sh
 
 #set-options "--max_fuel 0 --max_ifuel 1 --z3rlimit 20"
 // #set-options "--admit_smt_queries true"
@@ -179,7 +183,7 @@ let rec recv_fragment hs #i rg f =
   let recv_again r =
     match r with
     // only case where the next incoming flight may already have been buffered.
-    | Receive.InAck false false -> recv_fragment hs #i (0,0) empty_bytes
+    | Recv.InAck false false -> recv_fragment hs #i (0,0) empty_bytes
     | r -> r  in
   // trace "recv_fragment";
   let h0 = HST.get() in
@@ -187,7 +191,7 @@ let rec recv_fragment hs #i rg f =
   | Client region config r -> (
     match !r  with
     | C_init _ ->
-      Receive.InError (
+      Recv.InError (
         fatalAlert Unexpected_message,
         "Client hasn't sent hello yet (to be statically excluded)")
 
@@ -197,17 +201,17 @@ let rec recv_fragment hs #i rg f =
       // property does not hold? CF: yes; or realloc the buffer if
       // this is problematic.
       let rcv0 = ms0.receiving in 
-      assume Receive.(UInt32.v rcv0.rcv_to + Bytes.length f <= UInt32.v rcv0.rcv_b.LP.len);
+      assume Recv.(UInt32.v rcv0.rcv_to + Bytes.length f <= UInt32.v rcv0.rcv_b.LP.len);
       let rcv1 = buffer_received_fragment rcv0 #i rg f in
-      match Receive.receive_c_wait_ServerHello rcv1 with
-      | Error z -> Receive.InError z
+      match Recv.receive_c_wait_ServerHello rcv1 with
+      | Error z -> Recv.InError z
       | Correct (x, rcv2) ->
         let v = C_wait_ServerHello offer0 ({ms0 with receiving = rcv2}) ks0 in
         let h1 = HST.get() in
         r := v;
         let h2 = HST.get() in
         match x with
-        | None -> Receive.InAck false false // nothing happened
+        | None -> Recv.InAck false false // nothing happened
         | Some sh_msg -> (
           let sh = parse_wait_serverHello sh_msg in
           let h3 = HST.get() in
@@ -276,8 +280,7 @@ let rec recv_fragment hs #i rg f =
 *)
 
   | _ ->
-    Receive.InError (fatalAlert Unexpected_message, "TBC")
-
+    Recv.InError (fatalAlert Unexpected_message, "TBC")
 
 
 (* The old, but more complete version, to be merged: 
