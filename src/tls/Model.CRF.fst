@@ -19,7 +19,7 @@ module MDM = FStar.Monotonic.DependentMap
 
 assume val crf: alg -> Tot bool
 
-let h = Spec.Hash.hash
+let h = Spec.Agile.Hash.hash
 
 /// Depending on a single, global idealization function, we keep a
 /// global inverse table for all (finalized) hash computations, and we
@@ -43,7 +43,7 @@ private type range = | Computed: a: alg {crf a} -> t: bytes_hash a -> range
 private type domain (r:range) =
   b:Seq.seq UInt8.t {
     let Computed a t = r in
-    Seq.length b < max_input_length a /\
+    Seq.length b <= max_input_length a /\
     h a b = t}
 
 private let table : MDM.t tls_tables_region range domain (fun _ -> True) = MDM.alloc()
@@ -57,7 +57,7 @@ private let table : MDM.t tls_tables_region range domain (fun _ -> True) = MDM.a
 abstract type hashed (a:alg) (b:bytes) =
   model /\ crf a ==> (
     hashable b /\
-    Seq.length b < max_input_length a /\
+    Seq.length b <= max_input_length a /\
     (
     let t = h a b in
     witnessed (MDM.contains table (Computed a t) (b <: domain (Computed a t)))))
@@ -98,7 +98,7 @@ val hash: a:alg -> v:bytes -> ST (bytes_hash a)
   (requires fun h0 -> hashable v)
   (ensures fun h0 t h1 ->
     LowStar.Buffer.(modifies (loc_region_only true tls_tables_region) h0 h1) /\
-    Seq.length v < max_input_length a /\
+    Seq.length v <= max_input_length a /\
     t == h a v /\
     hashed a v
   )
@@ -110,8 +110,8 @@ module ST = FStar.HyperStack.ST
 let hash a v =
   let h0 = ST.get() in
   assert_norm (pow2 61 < pow2 125);
-  assert(Seq.length v < max_input_length a);
-  let t = Spec.Hash.hash a v in
+  assert(Seq.length v <= max_input_length a);
+  let t = Spec.Agile.Hash.hash a v in
   if crf a then (
     let x = Computed a t in
     match MDM.lookup table x with

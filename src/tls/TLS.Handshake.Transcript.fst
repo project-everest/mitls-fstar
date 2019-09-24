@@ -636,7 +636,7 @@ let extend (#a:_) (s:state a) (l:label_repr) (tx:transcript_t) =
 #pop-options
 
 let transcript_hash (a:HashDef.hash_alg) (t:transcript_t)
-  = Spec.Hash.hash a (transcript_bytes t)
+  = Spec.Agile.Hash.hash a (transcript_bytes t)
 
 let hashed (a:HashDef.hash_alg) (t:transcript_t) =
   Model.CRF.hashed a (transcript_bytes t)

@@ -21,7 +21,7 @@ type tag (a:alg) = lbytes32 (Hacl.Hash.Definitions.hash_len a)
 // 18-08-31 pure hash specification;
 // renamed from [hash] already included from EverCrypt.Hash
 let h (a:alg) (b:hashable a): GTot (tag a) =
-  let v = Spec.Hash.hash a (Bytes.reveal b) in
+  let v = Spec.Agile.Hash.hash a (Bytes.reveal b) in
   Bytes.hide v
 
 /// bytes wrapper for [EverCrypt.Hash.hash]
@@ -101,7 +101,7 @@ val hmac:
   a:alg ->
   k:tag a ->
   m:bytes {length m + block_length a <= max_input_length a } ->
-  Stack (t:tag a {reveal t == Spec.HMAC.hmac a (reveal k) (reveal m)})
+  Stack (t:tag a {reveal t == Spec.Agile.HMAC.hmac a (reveal k) (reveal m)})
   (requires fun h0 -> True)
   (ensures fun h0 t h1 -> modifies Set.empty h0 h1)
 *)
