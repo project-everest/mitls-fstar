@@ -1,14 +1,25 @@
 [
-  "˝YÒﬂ-XﬁO7á…(≈πÙﬁ",
+  "Ò_lπ=Ø\\Êl\u0019”l≤\u0013æ\u0007",
   [
     [
       "ParsersAux.Binders.ch_bound",
       1,
       2,
       1,
-      [ "@query" ],
+      [
+        "@MaxIFuel_assumption", "@query",
+        "assumption_Parsers.ClientHelloExtension.clientHelloExtension__uu___haseq",
+        "assumption_Prims.list__uu___haseq", "disc_equation_Prims.Cons",
+        "equation_Parsers.ClientHelloExtensions.clientHelloExtensions",
+        "fuel_guarded_inversion_Prims.list",
+        "kinding_Parsers.ClientHelloExtension.clientHelloExtension@tok",
+        "proj_equation_Parsers.ClientHello.MkclientHello_extensions",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Tm_refine_2bae5c3803c6c608e1680d3a46547c16",
+        "typing_Parsers.ClientHello.__proj__MkclientHello__item__extensions"
+      ],
       0,
-      "319ac0fa622c3f2f13017370719820ed"
+      "062aff870196237e4ab3364f97764da0"
     ],
     [
       "ParsersAux.Binders.ch_psks",
@@ -18,13 +29,21 @@
       [
         "@MaxIFuel_assumption", "@query", "bool_inversion", "bool_typing",
         "disc_equation_Parsers.ClientHelloExtension.CHE_pre_shared_key",
+        "disc_equation_Prims.Cons",
+        "equation_Parsers.ClientHelloExtensions.clientHelloExtensions",
         "equation_ParsersAux.Binders.ch_bound",
         "equation_ParsersAux.Binders.clientHello_with_binders",
-        "primitive_Prims.op_AmpAmp", "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_0a664c7b9f4c6522dffb8c773dde859e"
+        "fuel_guarded_inversion_Parsers.ClientHello.clientHello",
+        "fuel_guarded_inversion_Prims.list", "primitive_Prims.op_AmpAmp",
+        "primitive_Prims.op_disEquality",
+        "proj_equation_Parsers.ClientHello.MkclientHello_extensions",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Tm_refine_0a664c7b9f4c6522dffb8c773dde859e",
+        "refinement_interpretation_Tm_refine_2bae5c3803c6c608e1680d3a46547c16",
+        "typing_Parsers.ClientHello.__proj__MkclientHello__item__extensions"
       ],
       0,
-      "be39c4651e2775eac3b4a2d6c0ba8f02"
+      "07389f3b2305fa645674c7bf562cc6fe"
     ],
     [
       "ParsersAux.Binders.ch_set_binders",
@@ -33,22 +52,31 @@
       1,
       [
         "@MaxIFuel_assumption", "@query",
-        "assumption_Prims.list__uu___haseq",
+        "assumption_Prims.list__uu___haseq", "bool_inversion",
+        "disc_equation_Prims.Cons",
+        "equation_Parsers.ClientHelloExtensions.clientHelloExtensions",
         "equation_Parsers.OfferedPsks_binders.offeredPsks_binders",
         "equation_Parsers.PskBinderEntry.pskBinderEntry",
         "equation_ParsersAux.Binders.binders",
         "equation_ParsersAux.Binders.ch_bound",
         "equation_ParsersAux.Binders.clientHello_with_binders",
+        "fuel_guarded_inversion_Parsers.ClientHello.clientHello",
+        "fuel_guarded_inversion_Prims.list",
         "haseqTm_refine_609152d84d8b640876aaac6ef0ab5cb7",
         "haseqTm_refine_9a5867ee735299a7d440e4d6898018d1",
-        "primitive_Prims.op_AmpAmp", "projection_inverse_BoxBool_proj_0",
+        "primitive_Prims.op_AmpAmp", "primitive_Prims.op_disEquality",
+        "proj_equation_Parsers.ClientHello.MkclientHello_extensions",
+        "projection_inverse_BoxBool_proj_0",
         "refinement_interpretation_Tm_refine_0a664c7b9f4c6522dffb8c773dde859e",
+        "refinement_interpretation_Tm_refine_2bae5c3803c6c608e1680d3a46547c16",
         "refinement_interpretation_Tm_refine_414d0a9f578ab0048252f8c8f552b99f",
         "refinement_kinding_Tm_refine_9a5867ee735299a7d440e4d6898018d1",
-        "typing_FStar.Bytes.bytes"
+        "typing_FStar.Bytes.bytes",
+        "typing_Parsers.ClientHello.__proj__MkclientHello__item__extensions",
+        "typing_ParsersAux.Binders.ch_bound"
       ],
       0,
-      "57b9313c99ca86f7504e12dae2e75cd0"
+      "cf50ddb60ccef7ec6f3220a5233e258b"
     ],
     [
       "ParsersAux.Binders.get_binders",
@@ -62,7 +90,7 @@
         "refinement_interpretation_Tm_refine_8879e4d447c306881afdf046534ba346"
       ],
       0,
-      "30a9270afd216792cea8deb91a41e3b3"
+      "c0e880448a4e94504d3c327e7bf3fdd9"
     ],
     [
       "ParsersAux.Binders.set_binders",
@@ -79,7 +107,7 @@
         "refinement_interpretation_Tm_refine_d70f6ff6edb521047a74ca218b15de81"
       ],
       0,
-      "100a6e16c393d73a3e99ac8468a83874"
+      "94d1fc57a0dff031464ef627c4d98a56"
     ],
     [
       "ParsersAux.Binders.set_binders_get_binders",
@@ -89,14 +117,12 @@
       [
         "@MaxIFuel_assumption", "@query",
         "assumption_Parsers.ClientHello.clientHello__uu___haseq",
-        "bool_inversion",
-        "data_elim_Parsers.ClientHelloExtension.CHE_pre_shared_key",
-        "data_elim_Parsers.Handshake.M_client_hello",
+        "bool_inversion", "data_elim_Parsers.Handshake.M_client_hello",
         "disc_equation_Parsers.ClientHelloExtension.CHE_pre_shared_key",
         "disc_equation_Parsers.Handshake.M_client_hello",
-        "equation_Parsers.ClientHelloExtension_CHE_pre_shared_key.clientHelloExtension_CHE_pre_shared_key",
+        "disc_equation_Prims.Cons",
+        "equation_Parsers.ClientHelloExtensions.clientHelloExtensions",
         "equation_Parsers.Handshake_m_client_hello.handshake_m_client_hello",
-        "equation_Parsers.PreSharedKeyClientExtension.preSharedKeyClientExtension",
         "equation_ParsersAux.Binders.ch_binders",
         "equation_ParsersAux.Binders.ch_bound",
         "equation_ParsersAux.Binders.ch_psks",
@@ -105,8 +131,8 @@
         "equation_ParsersAux.Binders.has_binders",
         "fuel_guarded_inversion_Parsers.ClientHello.clientHello",
         "fuel_guarded_inversion_Parsers.OfferedPsks.offeredPsks",
-        "kinding_Parsers.ClientHelloExtension.clientHelloExtension@tok",
-        "primitive_Prims.op_AmpAmp",
+        "fuel_guarded_inversion_Prims.list", "primitive_Prims.op_AmpAmp",
+        "primitive_Prims.op_disEquality",
         "proj_equation_Parsers.ClientHello.MkclientHello_cipher_suites",
         "proj_equation_Parsers.ClientHello.MkclientHello_compression_methods",
         "proj_equation_Parsers.ClientHello.MkclientHello_extensions",
@@ -118,21 +144,18 @@
         "proj_equation_Parsers.OfferedPsks.MkofferedPsks_identities",
         "projection_inverse_BoxBool_proj_0",
         "refinement_interpretation_Tm_refine_0a664c7b9f4c6522dffb8c773dde859e",
+        "refinement_interpretation_Tm_refine_2bae5c3803c6c608e1680d3a46547c16",
         "refinement_interpretation_Tm_refine_2c99c1adb7de9c904c5b6afb0a6370ca",
         "refinement_interpretation_Tm_refine_303b10955a9c96a641771b82bf676e2f",
         "refinement_interpretation_Tm_refine_34bdb053def6b14a793cb1f1a0b8f657",
-        "refinement_interpretation_Tm_refine_54d8e4368ef4be5e2ddd5dfe39051b03",
-        "refinement_interpretation_Tm_refine_734cceed3d47f0e5b8650d4760489e66",
-        "refinement_interpretation_Tm_refine_7aac12c24449a22c34d98a0ea8ed4a32",
         "refinement_interpretation_Tm_refine_8879e4d447c306881afdf046534ba346",
-        "typing_FStar.List.Tot.Base.last",
         "typing_ParsersAux.Binders.ch_psks",
         "typing_ParsersAux.Binders.ch_set_binders",
         "typing_ParsersAux.Binders.get_binders",
         "typing_ParsersAux.Binders.has_binders"
       ],
       0,
-      "d5940920df357221c9f0820d2d224d1d"
+      "78d64fe901f2bbca46dc1bc0b736a078"
     ],
     [
       "ParsersAux.Binders.set_binders_set_binders",
@@ -144,7 +167,9 @@
         "assumption_Parsers.ClientHello.clientHello__uu___haseq",
         "bool_inversion",
         "disc_equation_Parsers.ClientHelloExtension.CHE_pre_shared_key",
-        "disc_equation_Parsers.Handshake.M_client_hello", "eq2-interp",
+        "disc_equation_Parsers.Handshake.M_client_hello",
+        "disc_equation_Prims.Cons", "eq2-interp",
+        "equation_Parsers.ClientHelloExtensions.clientHelloExtensions",
         "equation_Parsers.Handshake_m_client_hello.handshake_m_client_hello",
         "equation_Parsers.OfferedPsks_binders.offeredPsks_binders",
         "equation_Parsers.PskBinderEntry.pskBinderEntry",
@@ -160,7 +185,7 @@
         "fuel_guarded_inversion_Parsers.OfferedPsks.offeredPsks",
         "fuel_guarded_inversion_Prims.list",
         "function_token_typing_Parsers.OfferedPsks_binders.offeredPsks_binders_list_bytesize_nil",
-        "primitive_Prims.op_AmpAmp",
+        "primitive_Prims.op_AmpAmp", "primitive_Prims.op_disEquality",
         "proj_equation_Parsers.ClientHello.MkclientHello_cipher_suites",
         "proj_equation_Parsers.ClientHello.MkclientHello_compression_methods",
         "proj_equation_Parsers.ClientHello.MkclientHello_extensions",
@@ -175,6 +200,7 @@
         "refinement_interpretation_Tm_refine_0a664c7b9f4c6522dffb8c773dde859e",
         "refinement_interpretation_Tm_refine_189ca4d4bb5237ee9ae85f0d8d3ca8f0",
         "refinement_interpretation_Tm_refine_213ed8cceccc2f49349946a28f2c2564",
+        "refinement_interpretation_Tm_refine_2bae5c3803c6c608e1680d3a46547c16",
         "refinement_interpretation_Tm_refine_2de20c066034c13bf76e9c0b94f4806c",
         "refinement_interpretation_Tm_refine_303b10955a9c96a641771b82bf676e2f",
         "refinement_interpretation_Tm_refine_34bdb053def6b14a793cb1f1a0b8f657",
@@ -192,7 +218,7 @@
         "typing_ParsersAux.Binders.set_binders"
       ],
       0,
-      "2e9ca6ba0f1fdc9165977542f9f58736"
+      "6652428f090b92e8f9abb1df3bfcfe49"
     ],
     [
       "ParsersAux.Binders.binders_offset_set_binder",
@@ -201,7 +227,7 @@
       1,
       [ "@query" ],
       0,
-      "810064f3ac90823b5e993fbcdabc2b03"
+      "82d936b20e6e8ccac9b417ea00a92f54"
     ],
     [
       "ParsersAux.Binders.truncate_clientHello_bytes",
@@ -239,7 +265,7 @@
         "typing_ParsersAux.Binders.has_binders"
       ],
       0,
-      "06cd785fd300557b19c7e2be79fec730"
+      "91ed4b3d6cbc32ad344366715bec0014"
     ],
     [
       "ParsersAux.Binders.truncate_clientHello_bytes_correct",
@@ -320,7 +346,7 @@
         "typing_ParsersAux.Binders.truncate_clientHello_bytes"
       ],
       0,
-      "5d1b42b7ea82def272953c0ad4e79a32"
+      "24aee4f1e11a25841660e33f46a2b39b"
     ],
     [
       "ParsersAux.Binders.truncate_clientHello_bytes_set_binders",
@@ -329,7 +355,7 @@
       1,
       [ "@query" ],
       0,
-      "ce45c497203525a5333fa3325a04e40f"
+      "36b6377e76111ab91068a1d2d3e9d0a8"
     ],
     [
       "ParsersAux.Binders.truncate_clientHello_bytes_inj",
@@ -347,7 +373,7 @@
         "refinement_interpretation_Tm_refine_d381869298367706490ffcbaf178747c"
       ],
       0,
-      "ad242b5e312e1d68f4e1f2a200c2081d"
+      "6397b08a8a4c99b186e452518e0bfafc"
     ],
     [
       "ParsersAux.Binders.valid_truncate_clientHello",
@@ -360,7 +386,7 @@
         "@fuel_irrelevance_Prims.pow2.fuel_instrumented", "@query",
         "LowParse.SLow.Base_interpretation_Tm_arrow_1ea557206cf20dccb0bbdaf8d9b173a8",
         "Parsers.Handshake_pretyping_e820e8f1af892b0c2d02b3e800c975d6",
-        "b2t_def", "bool_inversion", "bool_typing",
+        "b2t_def", "bool_inversion",
         "constructor_distinct_FStar.Pervasives.Native.Some",
         "data_elim_LowParse.Slice.Mkslice",
         "data_elim_Parsers.ClientHelloExtension.CHE_pre_shared_key",
@@ -398,6 +424,7 @@
         "equation_ParsersAux.Binders.ch_binders",
         "equation_ParsersAux.Binders.ch_bound",
         "equation_ParsersAux.Binders.ch_psks",
+        "equation_ParsersAux.Binders.clientHello_with_binders",
         "equation_ParsersAux.Binders.get_binders",
         "equation_ParsersAux.Binders.has_binders",
         "equation_ParsersAux.Binders.truncate_clientHello_bytes",
@@ -405,6 +432,7 @@
         "equation_with_fuel_Prims.pow2.fuel_instrumented",
         "fuel_guarded_inversion_LowParse.Slice.slice",
         "fuel_guarded_inversion_Parsers.OfferedPsks.offeredPsks",
+        "fuel_guarded_inversion_Prims.list",
         "function_token_typing_FStar.Monotonic.Heap.heap",
         "function_token_typing_FStar.UInt8.t", "int_inversion", "int_typing",
         "kinding_Parsers.ClientHelloExtension.clientHelloExtension@tok",
@@ -428,12 +456,13 @@
         "lemma_Parsers.OfferedPsks_binders.offeredPsks_binders_bytesize_eqn",
         "primitive_Prims.op_Addition", "primitive_Prims.op_AmpAmp",
         "primitive_Prims.op_LessThanOrEqual", "primitive_Prims.op_Multiply",
-        "primitive_Prims.op_Subtraction",
+        "primitive_Prims.op_Subtraction", "primitive_Prims.op_disEquality",
         "proj_equation_LowParse.Slice.Mkslice_base",
         "proj_equation_LowParse.Slice.Mkslice_len",
         "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_high",
         "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_low",
         "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind",
+        "proj_equation_Parsers.ClientHello.MkclientHello_extensions",
         "proj_equation_Parsers.Handshake.M_client_hello__0",
         "proj_equation_Parsers.OfferedPsks.MkofferedPsks_binders",
         "projection_inverse_BoxBool_proj_0",
@@ -443,6 +472,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_low",
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind",
         "refinement_interpretation_Tm_refine_05e15190c946858f68c69156f585f95a",
+        "refinement_interpretation_Tm_refine_0a664c7b9f4c6522dffb8c773dde859e",
         "refinement_interpretation_Tm_refine_14204cbf581c67c0bcdd8469a13d0929",
         "refinement_interpretation_Tm_refine_189ca4d4bb5237ee9ae85f0d8d3ca8f0",
         "refinement_interpretation_Tm_refine_1ba8fd8bb363097813064c67740b2de5",
@@ -451,6 +481,7 @@
         "refinement_interpretation_Tm_refine_2de20c066034c13bf76e9c0b94f4806c",
         "refinement_interpretation_Tm_refine_3222344f513ab29ebe06c013530c1097",
         "refinement_interpretation_Tm_refine_35a0739c434508f48d0bb1d5cd5df9e8",
+        "refinement_interpretation_Tm_refine_3ae7934f7bb0b211572daa2c0f2cb446",
         "refinement_interpretation_Tm_refine_542f9d4f129664613f2483a6c88bc7c2",
         "refinement_interpretation_Tm_refine_54d8e4368ef4be5e2ddd5dfe39051b03",
         "refinement_interpretation_Tm_refine_58e48de108dd8d3561ae781a7312b1bf",
@@ -459,7 +490,6 @@
         "refinement_interpretation_Tm_refine_7aac12c24449a22c34d98a0ea8ed4a32",
         "refinement_interpretation_Tm_refine_81407705a0828c2c1b1976675443f647",
         "refinement_interpretation_Tm_refine_8879e4d447c306881afdf046534ba346",
-        "refinement_interpretation_Tm_refine_8ab435e460f87c7e6e8429cfd1af0a17",
         "refinement_interpretation_Tm_refine_9864cb84bafe0bc511caf24c3876607c",
         "refinement_interpretation_Tm_refine_ac201cf927190d39c033967b63cb957b",
         "refinement_interpretation_Tm_refine_b8b6aeb489b761b86c0ce3170a6f72d6",
@@ -480,6 +510,7 @@
         "typing_FStar.UInt.fits", "typing_FStar.UInt32.v",
         "typing_LowParse.Low.Base.serialized_length",
         "typing_LowParse.Slice.__proj__Mkslice__item__base",
+        "typing_LowParse.Slice.__proj__Mkslice__item__len",
         "typing_LowParse.Spec.Base.serialize",
         "typing_LowStar.Monotonic.Buffer.as_seq",
         "typing_LowStar.Monotonic.Buffer.len",
@@ -496,10 +527,11 @@
         "typing_Parsers.OfferedPsks_binders.offeredPsks_binders_serializer",
         "typing_Parsers.OfferedPsks_binders.offeredPsks_binders_serializer32",
         "typing_ParsersAux.Binders.binders_offset",
+        "typing_ParsersAux.Binders.ch_psks",
         "typing_ParsersAux.Binders.truncate_clientHello_bytes"
       ],
       0,
-      "ac98df7b0e3f2823299a333424612302"
+      "b8de7e1f7c5d11200bef58aa03e6e29e"
     ],
     [
       "ParsersAux.Binders.truncate_clientHello_valid",
@@ -607,7 +639,7 @@
         "typing_ParsersAux.Binders.truncate_clientHello_bytes"
       ],
       0,
-      "2c393401a0aa9bea194237bc8c9bfb65"
+      "266f0e431fad088f8ec051e4aba78025"
     ],
     [
       "ParsersAux.Binders.binders_pos",
@@ -619,7 +651,7 @@
         "refinement_interpretation_Tm_refine_a0863fb03730faf5c05012c36e62accb"
       ],
       0,
-      "f6b700df4a087d3febf8811d022d4f3d"
+      "9a581e2072a6391d3cccaabc854c7cf0"
     ],
     [
       "ParsersAux.Binders.valid_binders_mutate",
@@ -712,7 +744,7 @@
         "typing_ParsersAux.Binders.truncate_clientHello_bytes"
       ],
       0,
-      "7fd9621176efa156b4ec8170ed4dc641"
+      "c00f93fd3ffcefc6421e27249c5f2041"
     ],
     [
       "ParsersAux.Binders.ch_binders_len",
@@ -765,7 +797,7 @@
         "typing_ParsersAux.Binders.ch_bound"
       ],
       0,
-      "ff495af4a0c375b369aca23e5ec2ff5d"
+      "63c1cbfc19e72c162a0e19fda8534087"
     ],
     [
       "ParsersAux.Binders.build_canonical_binders",
@@ -774,7 +806,7 @@
       1,
       [ "@query" ],
       0,
-      "14af4e9b8f91215824bdd20a274097ae"
+      "b65e17488a63c5c353a6ee4dbe485560"
     ]
   ]
 ]

@@ -32,6 +32,8 @@ module Conn = Connection
 module Epochs    = Old.Epochs
 module Handshake = TLS.Handshake
 module Machine = TLS.Handshake.Machine
+module Send = TLS.Handshake.Send
+module Recv = TLS.Handshake.Receive
 
 (* A flag for runtime debugging of TLS data.
    The F* normalizer will erase debug prints at extraction
@@ -190,7 +192,7 @@ val no_seqn_overflow: c: connection -> rw:rw -> ST bool
 
 let no_seqn_overflow c rw =
   let n = Machine.nonce c.hs in 
-  let es = MS.i_read (Machine.epochs_es c.hs n) in //ST.op_Bang c.hs.log in
+  let es = MS.i_read (Machine.epochs c.hs n).es in //ST.op_Bang c.hs.log in
   let j = Handshake.i c.hs rw in // -1 <= j < length es
   if j < 0 then //16-05-28 style: ghost constraint prevents using j < 0 || ...
     true
@@ -361,7 +363,7 @@ let current_writer c i =
   then None
   else
     let n = Machine.nonce c.hs in 
-    let epochs = MS.i_read (Machine.epochs_es c.hs n) in
+    let epochs = MS.i_read (Machine.epochs c.hs n).es in
     let e = epochs.(ix) in
     let _ = cut (trigger_peer (Epoch?.r e)) in
     Some (Epoch?.w e)
@@ -642,7 +644,7 @@ let next_fragment i c =
   let s = c.hs in
   let h0 = get() in
   let n = Machine.nonce s in 
-  let ilog = Machine.epochs_es s n in
+  let ilog = (Machine.epochs s n).es in
   let w0 = Handshake.i s Writer in
   let _  = if w0 >= 0
 	   then (MS.i_at_least_is_stable w0 (MS.i_sel h0 ilog).(w0) ilog;
@@ -1074,7 +1076,7 @@ let rec readFragment c i =
   | Record.ReadWouldBlock -> Correct None
   | Record.Received ct pv payload ->
     let n = Machine.nonce c.hs in 
-    let es = ST.op_Bang (Machine.epochs_es c.hs n) in
+    let es = ST.op_Bang (Machine.epochs c.hs n).es in
     let j : Handshake.logIndex es = Handshake.i c.hs Reader in
     trace ("Read fragment at epoch index: " ^ string_of_int j ^
            " of length " ^ string_of_int (length payload));

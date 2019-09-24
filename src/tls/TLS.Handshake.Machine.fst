@@ -795,7 +795,7 @@ type server_config = config // TBC
 
 type s_offer = {
   retry: option Transcript.retry;
-  ch: HSM.ch;
+  s_ch: HSM.ch;
 }
 
 // Complete mode for the connection; sufficient to derive all the
@@ -848,7 +848,7 @@ noeq type s13_mode (region:rgn) (cfg:server_config) =
 // The transcript prefix associated with a mode
 let s13_mode_transcript #r #cfg (m:s13_mode r cfg) : Transcript.transcript_t =
   assume false; // bounded_list
-  Transcript.Transcript13 m.offer.retry m.offer.ch m.sh
+  Transcript.Transcript13 m.offer.retry m.offer.s_ch m.sh
     (match m.cert with NoServerCert -> []
     | ServerCert _ chain verify ->
       [HSM.M13_certificate chain;
@@ -875,8 +875,8 @@ noeq type server_state
     offer: s_offer ->
     sh: Transcript.sh13 ->
     ee: HSM.encryptedExtensions ->
-    ms: msg_state region PF.F_c_wait_ServerHello (offer.ch.HSM.random) (Negotiation.selected_ha sh) ->
-    cert: Negotiation.certNego ->
+    ms: msg_state region PF.F_c_wait_ServerHello (offer.s_ch.HSM.random) (Negotiation.selected_ha sh) ->
+    cert: option Negotiation.cert_choice ->
     ks: s13_wait_ServerFinished_keys ->
     server_state region cfg
 
@@ -886,7 +886,7 @@ noeq type server_state
     eoed_done: bool{True (*not (accepted_0rtt mode) ==> eoed_done==true*)} ->
     ms: msg_state region
      (if eoed_done then PF.F_s13_wait_Finished2 else PF.F_s13_wait_EOED)
-     (mode.offer.ch.HSM.random) (Negotiation.selected_ha mode.sh) ->
+     (mode.offer.s_ch.HSM.random) (Negotiation.selected_ha mode.sh) ->
     ks: s13_wait_ClientFinished_keys ->
     server_state region cfg
 
@@ -895,7 +895,7 @@ noeq type server_state
     fin1: Ghost.erased HSM.finished ->
     fin2: Ghost.erased HSM.finished ->
     ms: msg_state region PF.F_s_Idle (* PF.F_s13_postHS *)
-    (mode.offer.ch.HSM.random) (Negotiation.selected_ha mode.sh) ->
+    (mode.offer.s_ch.HSM.random) (Negotiation.selected_ha mode.sh) ->
     ks: server_keys ->
     server_state region cfg
 
@@ -987,6 +987,22 @@ let server_ms (#region:rgn) (#cfg:server_config) (s:server_state region cfg)
   | S13_complete _ _ _ ms _ -> ms
   | _ -> admit()  
 
+let set_server_ms
+  (#region:rgn) (#cfg:server_config) (s:server_state region cfg {~(S_wait_ClientHello? s)})
+  (ms1: server_ms_t s):
+  s:server_state region cfg {~(S_wait_ClientHello? s)}
+  = assume false;
+  match s with
+  | S13_sent_HelloRetryRequest a b _ ->
+    S13_sent_HelloRetryRequest a b ms1
+  | S13_sent_ServerHello a b c _   d e ->
+    S13_sent_ServerHello a b c ms1 d e
+  | S13_wait_Finished2 a b c _   d ->
+    S13_wait_Finished2 a b c ms1 d
+  | S13_complete a b c _   d ->
+    S13_complete a b c ms1 d
+  | _ -> admit()
+
 let server_epochs (#region:rgn) (#cfg:server_config) (s:server_state region cfg)
   : Epochs.epochs region (server_nonce s)
   = (server_ms s).epochs
@@ -1046,17 +1062,32 @@ let epochsT s h
   | Client region config r -> client_epochs (HS.sel h r)
   | Server region config r -> server_epochs (HS.sel h r)
 
-let epochs s n
-  : ST (Epochs.epochs (frame s) n)
-  (requires fun h0 -> n == nonceT s h0)
+let epochs st n
+  : ST (Epochs.epochs (frame st) n)
+  (requires fun h0 -> n == nonceT st h0)
   (ensures fun h0 e h1 -> h0 == h1
-    /\ e == epochsT s h1)
-  = admit()
+    /\ e == epochsT st h1)
+  = assume false;
+  match st with
+  | Client r c s ->
+    let s = !s in
+    client_epochs s
+  | Server r c s ->
+    let s = !s in
+    server_epochs s
 
 //let epochs_es s n = (epochs s n).Epochs.es
 
-// Ill defined?
-assume val version_of: state -> protocolVersion
+// FIXME(adl) used by TLS, but not well-defined
+let version_of (s:state) =
+  assume false;
+  match s with
+  | Client _ _ st ->
+    let st = !st in
+    TLS_1p3
+  | Server _ _ st ->
+    let st = !st in
+    TLS_1p3
 
 // used in FFI, TBC
 let get_server_certificates (s:client) :
@@ -1127,8 +1158,91 @@ assume val verify_binder:
   bool
 
 #push-options "--max_ifuel 1"
-let rec bkeys_binders_list_bytesize (bkeys: list Negotiation.bkey13) =
+let rec binder_key_list_bytesize (bkeys: list KS.binder_key) =
   match bkeys with
-  | bkey::bkeys -> 1 + EverCrypt.Hash.Incremental.hash_length (Negotiation.ha_bkey13 bkey) + bkeys_binders_list_bytesize bkeys
+  | bkey::bkeys -> 1 + EverCrypt.Hash.Incremental.hash_length (TLSInfo.binderId_hash (dfst bkey)) + binder_key_list_bytesize bkeys
   | [] -> 0
 #pop-options
+
+#push-options "--max_ifuel 1"
+let rec bkey_list_bytesize (bkeys: list Negotiation.bkey13) =
+  match bkeys with
+  | bkey::bkeys -> 1 + EverCrypt.Hash.Incremental.hash_length (Negotiation.ha_bkey13 bkey) + bkey_list_bytesize bkeys
+  | [] -> 0
+#pop-options
+
+module Binders = ParsersAux.Binders
+
+#push-options "--admit_smt_queries true"
+let get_handshake_repr (m:HSM.handshake)
+  : StackInline (b:MITLS.Repr.const_slice & MITLS.Repr.repr HSM.handshake b)
+  (requires fun h0 -> True)
+  (ensures fun h0 _ h1 -> modifies_none h0 h1)
+  =
+  push_frame ();
+  let len = HSM.handshake_size32 m in
+  let b = B.alloca 0z len in
+  let slice = LP.make_slice b len in
+  let Some r = MITLS.Repr.Handshake.serialize slice 0ul m in
+  pop_frame ();
+  (| MITLS.Repr.of_slice slice, r |)
+#pop-options
+
+#push-options "--admit_smt_queries true"
+let get_handshake13_repr (m:HSM.handshake13)
+  : StackInline (b:MITLS.Repr.const_slice & MITLS.Repr.repr HSM.handshake13 b)
+  (requires fun h0 -> True)
+  (ensures fun h0 _ h1 -> modifies_none h0 h1)
+  =
+  push_frame ();
+  let len = HSM.handshake13_size32 m in
+  let b = B.alloca 0z len in
+  let slice = LP.make_slice b len in
+  let Some r = MITLS.Repr.Handshake13.serialize slice 0ul m in
+  pop_frame ();
+  (| MITLS.Repr.of_slice slice, r |)
+#pop-options
+
+// ADL: I rewrote this to cover all transcript transitions from Start to Hello
+// Note that this does not guarantee that the hash for the retry digest matches ha
+// The returned digest is for the truncated CH if it contains binders,
+// or the full CH if it does not
+#push-options "--admit_smt_queries true"
+let transcript_start (region:rgn) ha (retry:option Transcript.retry) (ch:HSM.clientHello) =
+  push_frame ();
+  let di, transcript0 = Transcript.create region ha in
+  let transcript1 =
+    match retry with
+    | None -> transcript0
+    | Some (chh, hrr) ->
+      let t0 = chh in
+      let t1 = HSM.M_server_hello hrr in
+      let (| _, r0 |) = get_handshake_repr t0 in
+      let (| _, r1 |) = get_handshake_repr t1 in
+      let label = Transcript.LR_HRR r0 r1 in
+      Transcript.extend di label transcript0
+    in
+  let (| _, chr |) = get_handshake_repr (HSM.M_client_hello ch) in
+  let label =
+    if Binders.ch_bound ch then Transcript.LR_TCH chr
+    else Transcript.LR_ClientHello chr in
+  let transcript1 = Transcript.extend di label transcript0 in
+  let tag = transcript_extract di transcript1 in
+  pop_frame ();
+  (tag, di, transcript1)
+#pop-options
+
+// Used to replace CH0 with M_message_hash - ignores binders
+#push-options "--admit_smt_queries true"
+let hash_ch0 (region:rgn) ha (ch:HSM.clientHello) =
+  push_frame ();
+  let di, transcript0 = Transcript.create region ha in
+  let (| _, chr |) = get_handshake_repr (HSM.M_client_hello ch) in
+  let label = Transcript.LR_ClientHello chr in
+  let transcript1 = Transcript.extend di label transcript0 in
+  let tag = transcript_extract di transcript1 in
+  // FIXME(adl) free_transcript di
+  pop_frame ();
+  HSM.M_message_hash tag
+#pop-options
+

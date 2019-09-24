@@ -8,15 +8,17 @@ open TLSError
 open TLSConstants
 open TLSInfo
 open Range
-open HandshakeMessages
-open HandshakeLog
-open Negotiation
+
 open FStar.HyperStack
 open FStar.HyperStack.ST
 
+module Nego = Negotiation
+module HSM = HandshakeMessages
 module StAE = StAE
 module Range = Range
 module Handshake = TLS.Handshake
+module Send = TLS.Handshake.Send
+module Recv = TLS.Handshake.Receive
 module PKI = PKI
 
 #set-options "--admit_smt_queries true"
@@ -56,38 +58,38 @@ let test config: St unit =
   let client = Handshake.create rid config Client in
   let out0 = Handshake.next_fragment client i in
   match out0 with
-  | Correct(HandshakeLog.Outgoing (Some f) _ _) ->
+  | Correct(Send.Outgoing (Some f) _ _) ->
     let (|rg, ch|) = f in
     nprint ("----client-hello---> "^first_bytes ch);
     let server = Handshake.create rid config Server in
     let _ = Handshake.recv_fragment server rg ch in
     let out1 = Handshake.next_fragment server i in
     (match out1 with
-    | Correct(HandshakeLog.Outgoing (Some f) _ _) ->
+    | Correct(Send.Outgoing (Some f) _ _) ->
       let (|rg, sh|) = f in
       nprint ("<---server-hello---- "^first_bytes sh);
       let r = Handshake.recv_fragment client rg sh in
       (match r with
-      | Handshake.InError z -> nprint ("FAILED: "^string_of_error z)
+      | Recv.InError z -> nprint ("FAILED: "^string_of_error z)
       | _ -> ());
       let out2 = Handshake.next_fragment server i in
       (match out2 with
-      | Correct(HandshakeLog.Outgoing (Some f) _ _) ->
+      | Correct(Send.Outgoing (Some f) _ _) ->
         let (|rg, sf|) = f in
         nprint ("<--server-finished-- \n"^first_bytes sf);
         let r = Handshake.recv_fragment client rg sf in
 	(match r with
-	| Handshake.InError z -> nprint ("FAILED: "^string_of_error z)
+	| Recv.InError z -> nprint ("FAILED: "^string_of_error z)
 	| _ -> ());
         let out3 = Handshake.next_fragment client i in
         (match out3 with
-        | Correct(HandshakeLog.Outgoing (Some f) _ _) ->
+        | Correct(Send.Outgoing (Some f) _ _) ->
           let (|rg, cf|) = f in
           nprint ("--client-finished---> "^first_bytes cf);
           let _ = Handshake.recv_fragment server rg cf in
           let out4 = Handshake.next_fragment server i in
           (match out4 with
-          | Correct(HandshakeLog.Outgoing (Some f) _ _) ->
+          | Correct(Send.Outgoing (Some f) _ _) ->
             let (|rg, nst|) = f in
             nprint ("<--session-ticket-- "^first_bytes nst);
             let _ = Handshake.recv_fragment client rg nst in

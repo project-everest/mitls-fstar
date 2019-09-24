@@ -318,10 +318,12 @@ let ks_client_init cr is_quic ogl =
     C_wait_ServerHello cr is_quic [] gs, Some gxl
 
 type ticket13 = t:Ticket.ticket{Ticket.Ticket13? t}
+type bkey13 = psk_identifier * t:Ticket.ticket{Ticket.Ticket13? t}
+type binder_key = i:binderId & bk:binderKey i
+type early_secret = i:esId{~(NoPSK? i)} & es i
 
-/// Called from Handshake.Client
-let mk_binder (#rid) (bk:Negotiation.bkey13)
-  : ST ((i:binderId & bk:binderKey i) * (i:esId{~(NoPSK? i)} & es i))
+private let mk_binder (bk:bkey13)
+  : ST (binder_key * early_secret)
   (requires fun h0 -> True)
   (ensures fun h0 _ h1 -> modifies_none h0 h1)
   =
@@ -341,21 +343,27 @@ let mk_binder (#rid) (bk:Negotiation.bkey13)
   dbg ("Binder key["^lb^"]: "^(print_bytes bk));
   let bk = finished_13 h bk in
   dbg ("Binder Finished key: "^(print_bytes bk));
-  let bk : binderKey bId = HMAC_UFCMA.coerce (HMAC_UFCMA.HMAC_Binder bId) trivial rid bk in
+  let bk : binderKey bId = HMAC_UFCMA.coerce (HMAC_UFCMA.HMAC_Binder bId) trivial HS.root bk in
   (| bId, bk|), (| i, es |)
 
-private let rec tickets13 #rid acc (l:list (psk_identifier * Ticket.ticket))
-  : ST0 (list ((i:binderId & bk:binderKey i) * (i:esId{~(NoPSK? i)} & es i)))
+private let rec tickets13 acc (l:list bkey13)
+  : ST0 (list (binder_key * early_secret))
   = match l with
   | [] -> List.Tot.rev acc
-  | bk :: r -> tickets13 #rid (if Ticket.Ticket13? (snd bk) then (mk_binder #rid bk)::acc else acc) r
+  | bk :: r -> tickets13 ((mk_binder bk)::acc) r
 
-// let ks_client13_get_binder_keys ks l =
-//   let KS #rid st _ = ks in
-//   let C (C_wait_ServerHello cr [] gs) = !st in
-//   let (bkl, esl) = List.Tot.split (tickets13 #rid [] l) in
-//   st := C (C_wait_ServerHello cr esl gs);
-//   bkl
+// Called from TLS.Handshake.Client, updates both the list 
+// of early secrets and computes the binder keys
+let ks_client13_get_binder_keys (s:ks_client) (l:list bkey13)
+  : ST (ks_client * list binder_key)
+  (requires fun h0 -> C_wait_ServerHello? s /\ C_wait_ServerHello?.esl s == [])
+  (ensures fun h0 (s',_) h1 -> modifies_none h0 h1
+    /\ C_wait_ServerHello? s
+    /\ List.Tot.length (C_wait_ServerHello?.esl s') == List.Tot.length l)
+  =
+  let C_wait_ServerHello cr is_quic [] gs = s in
+  let (bkl, esl) = List.Tot.split (tickets13 [] l) in
+  (C_wait_ServerHello cr is_quic esl gs), bkl
 
 let ks_client13_hello_retry 
   (ks0:ks_client{ C_wait_ServerHello? ks0 }) (g:CommonDH.group)
@@ -428,7 +436,7 @@ val ks_server13_init:
   cr:random ->
   cs:cipherSuite ->
   is_quic:bool ->
-  pskid:option PSK.pskid ->
+  pskid:option bkey13 ->
   g_gx:option (g:CommonDH.group & CommonDH.share g) ->
   ST (ks_server *
       option (g:CommonDH.group & CommonDH.share g) *
@@ -446,24 +454,17 @@ let ks_server13_init sr cr cs is_quic pskid g_gx =
   dbg ("ks_server_init");
   let CipherSuite13 ae h = cs in
   let info = Info13 is_quic ae h in
-  let esId, es, bk =
+  let (| esId, es |), bk =
     match pskid with
-    | Some id ->
-      let id = PSK.leak id in
+    | Some (id, Ticket.Ticket13 cs li rmsId rms _ _ _ _) ->
       dbg ("Using negotiated PSK identity: "^(print_bytes id));
-      let i, psk, h : esId * bytes * Hashing.Spec.alg =
-        match Ticket.check_ticket false id with
-        | Some (Ticket.Ticket13 cs li rmsId rms _ _ _ _) ->
-          dbg ("Ticket RMS: "^(print_bytes rms));
-          let i = ResumptionPSK #li rmsId in
-          let CipherSuite13 _ h = cs in
-          let nonce, _ = split id 12ul in
-          let psk = HKDF.derive_secret h rms "resumption" nonce in
-          (i, psk, h)
-        | None -> admit() // App PSK table to be replaced by app PSK callback
-        in
+      dbg ("Ticket RMS: "^(print_bytes rms));
+      let i = ResumptionPSK #li rmsId in
+      let CipherSuite13 _ h = cs in
+      let nonce, _ = split id 12ul in
+      let psk = HKDF.derive_secret h rms "resumption" nonce in
       dbg ("Pre-shared key: "^(print_bytes psk));
-      let es: Hashing.Spec.tag h = HKDF.extract #h (H.zeroHash h) psk in
+      let es: es i = HKDF.extract #h (H.zeroHash h) psk in
       let ll, lb =
         if ApplicationPSK? i then ExtBinder, "ext binder"
         else ResBinder, "res binder" in
@@ -472,14 +473,14 @@ let ks_server13_init sr cr cs is_quic pskid g_gx =
       dbg ("binder key:                      "^print_bytes bk);
       let bk = finished_13 h bk in
       dbg ("binder Finished key:             "^print_bytes bk);
-      let bk : binderKey bId =
-        HMAC_UFCMA.coerce (HMAC_UFCMA.HMAC_Binder bId) (fun _ -> True) Mem.tls_region bk in
-      i, es, Some (| bId, bk |)
+      let bk : binderKey bId = HMAC_UFCMA.coerce
+        (HMAC_UFCMA.HMAC_Binder bId) (fun _ -> True) Mem.tls_region bk in
+      (| i, es |), Some (| bId, bk |)
     | None ->
       dbg "No PSK selected.";
       let esId = NoPSK h in
       let es : es esId = HKDF.extract #h (H.zeroHash h) (H.zeroHash h) in
-      esId, es, None
+      (| esId, es |), None
     in
   dbg ("Computed early secret:           "^print_bytes es);
   let saltId = Salt (EarlySecretID esId) in
