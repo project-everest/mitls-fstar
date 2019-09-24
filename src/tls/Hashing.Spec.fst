@@ -62,7 +62,7 @@ type hkey (a:alg) = b:bytes{
   // 18-09-12 this usage restriction is dubious, but always met in
   // miTLS; it avoids a null-pointer case in the wrapper below.
   length b > 0 /\
-  Spec.HMAC.keysized a (length b)}
+  Spec.Agile.HMAC.keysized a (length b)}
 
 val hmac:
   a:alg ->
@@ -71,7 +71,7 @@ val hmac:
   GTot (t:tag a{
     let text = Bytes.reveal text in
     Seq.length text + block_length a <= max_input_length a /\
-    Bytes.reveal t = Spec.HMAC.hmac a (Bytes.reveal k) text})
+    Bytes.reveal t = Spec.Agile.HMAC.hmac a (Bytes.reveal k) text})
 
 let hmac a k text =
   let k = Bytes.reveal k in
@@ -79,7 +79,7 @@ let hmac a k text =
   assert_norm (pow2 32 < pow2 61);
   assert_norm (pow2 61 < pow2 125);
   assert (Seq.length text + block_length a <= max_input_length a);
-  let t: bytes_hash a = Spec.HMAC.hmac a k text in
+  let t: bytes_hash a = Spec.Agile.HMAC.hmac a k text in
   Bytes.hide t
 
 //18-08-31 review

@@ -50,7 +50,7 @@ let hmac a k m =
 
   let t = Bytes.of_buffer lt bt in
   Hacl.HMAC.key_and_data_fits a;
-  assert(Bytes.reveal t == Spec.HMAC.hmac a (Bytes.reveal k) (Bytes.reveal m));
+  assert(Bytes.reveal t == Spec.Agile.HMAC.hmac a (Bytes.reveal k) (Bytes.reveal m));
   assert(t = Hashing.Spec.hmac a k m);
   pop_frame();
   let h11 = HyperStack.ST.get() in
