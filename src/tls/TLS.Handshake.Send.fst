@@ -96,7 +96,7 @@ let send_tch sto m =
   let r = MITLS.Repr.Handshake.serialize sto.out_slice sto.out_pos (HSM.M_client_hello m) in
   match r with
   | None ->
-    fatal Internal_error "output buffer overflow"
+    fatal Internal_error "send_tch: output buffer overflow"
   | Some r ->
     let b = MITLS.Repr.to_bytes r in
     trace ("send "^hex_of_bytes b);
@@ -116,7 +116,7 @@ let send_ch
   Transcript.frame_invariant stt t h0 h1 (B.loc_buffer sto.out_slice.LowParse.Low.Base.base);
   match r with
   | None ->
-    fatal Internal_error "output buffer overflow"
+    fatal Internal_error "send_ch: output buffer overflow"
   | Some r ->
     let t' = Transcript.extend stt (Transcript.LR_ClientHello r) t in
     let b = MITLS.Repr.to_bytes r in
@@ -132,7 +132,7 @@ let send_hrr
   let r = MITLS.Repr.Handshake.serialize sto.out_slice sto.out_pos tag in
   match r with
   | None ->
-    fatal Internal_error "output buffer overflow for tag"
+    fatal Internal_error "send_hrr: output buffer overflow for tag"
   | Some r_tag ->
     let r = MITLS.Repr.Handshake.serialize sto.out_slice r_tag.MITLS.Repr.end_pos hrr in
     begin match r with
@@ -187,7 +187,7 @@ let send13
   Transcript.frame_invariant stt t h0 h1 (B.loc_buffer sto.out_slice.LowParse.Low.Base.base);
   match r with
   | None ->
-    fatal Internal_error "output buffer overflow"
+    fatal Internal_error "send13: output buffer overflow"
   | Some r ->
 //    let t : Ghost.erased Transcript.transcript_t = Ghost.hide (Ghost.reveal t) in
     List.lemma_snoc_length (Transcript.Transcript13?.rest t, m);
@@ -267,7 +267,7 @@ let send #a stt transcript0 sto msg =
   in
   match r with
   | None ->
-    fatal Internal_error "output buffer overflow"
+    fatal Internal_error "send: output buffer overflow"
   | Some r ->
     //19-09-05
     // regression possibly due to the valid_sh refinement; no obvious fix.

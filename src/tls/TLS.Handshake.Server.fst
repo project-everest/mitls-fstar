@@ -21,6 +21,7 @@ module HSM = HandshakeMessages
 module HMAC = Old.HMAC.UFCMA
 module KS = Old.KeySchedule
 module Nego = Negotiation
+module Transcript = TLS.Handshake.Transcript
 module Send = TLS.Handshake.Send
 module Recv = TLS.Handshake.Receive
 module Epochs = Old.Epochs

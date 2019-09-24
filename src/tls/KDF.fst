@@ -25,7 +25,7 @@ module MDM = FStar.Monotonic.DependentMap
 module HS = FStar.HyperStack
 module DT = DefineTable
 module HD = Spec.Hash.Definitions
-module T = HSL.Transcript
+module T = TLS.Handshake.Transcript
 
 #set-options "--max_fuel 1 --max_ifuel 1 --z3rlimit 30"
 

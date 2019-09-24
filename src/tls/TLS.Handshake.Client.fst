@@ -22,7 +22,7 @@ module HSM = HandshakeMessages
 module PF = TLS.Handshake.ParseFlights // avoidable?
 module HMAC = Old.HMAC.UFCMA
 module KS = Old.KeySchedule
-module Transcript = HSL.Transcript
+module Transcript = TLS.Handshake.Transcript
 
 #set-options "--max_fuel 0 --max_ifuel 0"
 
@@ -46,13 +46,12 @@ module Transcript = HSL.Transcript
 val client_Binders:
   region:rgn ->
   ha0: EverCrypt.Hash.Incremental.alg ->
-  tx0: Ghost.erased Transcript.transcript_t ->
+  tx0: Transcript.transcript_t ->
   di: Transcript.state ha0 ->
   tch: full_offer { HSM.ch_bound tch.full_ch} ->
   bkey: list KS.binder_key ->
   ST Parsers.OfferedPsks_binders.(b:list Parsers.PskBinderEntry.pskBinderEntry {offeredPsks_binders_list_bytesize b = binder_key_list_bytesize bkey})
-  (requires fun h0 ->
-    Transcript.invariant di (Ghost.reveal tx0) h0)
+  (requires fun h0 -> Transcript.invariant di tx0 h0)
   (ensures fun h0 b h1 ->
     modifies_none h0 h1 //TBC
     )
@@ -99,9 +98,6 @@ let client_ClientHello (Client region config r) =
     // groups = Some [] is valid, may be used to deliberately trigger HRR
   let ks, shares = KS.ks_client_init random cfg.is_quic groups in
 
-  // Compute the initial ClientHello offer
-  // lower: we'll instead pass the sending state for writing the offer.
-  let sending = Send.send_state0 in
   match Negotiation.client_ClientHello config random shares with
   | Error z -> Error z
   | Correct offer0 ->
@@ -109,8 +105,10 @@ let client_ClientHello (Client region config r) =
     HSM.ch_bound offer0 ==>
     Parsers.OfferedPsks.offeredPsks_binders_list_bytesize (HSM.ch_binders offer0) == bkey_list_bytesize (snd resume));
 
+  let ha = Negotiation.offered_ha offer0 in
+  let ms = create_msg_state region ParseFlights.F_c_wait_ServerHello random ha in
   // Send the (possibly-truncated) ClientHello, without transcript so far.
-  match Send.send_tch sending offer0 with
+  match Send.send_tch ms.sending offer0 with
   | Error z -> Error z
   | Correct sending -> (
 
@@ -122,19 +120,11 @@ let client_ClientHello (Client region config r) =
   // message.
   let offer0 = HSM.clear_binders offer0 in
   let full0 = {full_retry = None; full_ch = offer0} in
-  let ha = Negotiation.offered_ha offer0 in
 
   // Allocate state with the "main" offered hash algorithm for the digest
   assume False; //19-09-14 TBC
   let tag, di, tx_tch = transcript_start region ha None offer0 in
-  let receiving = Recv.(create (alloc_slice region)) in
-  let epochs = Epochs.create region random in
-  let ms: msg_state region ParseFlights.F_c_wait_ServerHello random ha = {
-    digest = di;
-    sending = sending;
-    receiving = receiving;
-    epochs = epochs;
-  } in
+  let ms = {ms with digest = di; sending = sending} in
 
   // Compute the binders
   let ks', offer1, sending = (
@@ -157,8 +147,8 @@ let client_ClientHello (Client region config r) =
           let digest_CH = transcript_extract di tx1 in
           // TODO LATER consider doing export & register within KS
           let early_exporter_secret, edk = KS.ks_client13_ch ks digest_CH in
-          export epochs early_exporter_secret;
-          register epochs edk;
+          export ms.epochs early_exporter_secret;
+          register ms.epochs edk;
           Send.signals sending (Some (true, false)) false )
         else sending in
       ks', offer1, sending )) in
@@ -303,7 +293,7 @@ let client_ServerHello (Client region config r) sh =
       let server_share = Negotiation.find_serverKeyShare sh in
       let (| _, shr |) = get_handshake_repr (HSM.M_server_hello sh) in
       let label = Transcript.LR_ServerHello shr in
-      let tx = Ghost.hide (transcript_offer offer) in
+      let tx = transcript_offer offer in
       let transcript_sh = Transcript.extend ms.digest label tx in
 
       //assert(transcript_sh == transcript13 offer sh []);
