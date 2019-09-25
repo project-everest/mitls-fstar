@@ -108,7 +108,8 @@ let strong_parser_kind =
 noeq
 type repr_meta (t:Type) = {
   parser_kind: strong_parser_kind;
-  parser:LP.parser parser_kind t;
+  parser: LP.parser parser_kind t;
+  parser32: LS.parser32 parser;
   value: t;
   repr_bytes: Seq.seq LP.byte
 }
@@ -123,6 +124,7 @@ noeq
 type repr (t:Type) (b:const_slice) = {
   start_pos: index b;
   end_pos: i:index b {start_pos <= i /\ i <= b.len};
+  _value: t;
   meta: Ghost.erased (repr_meta t)
 }
 
@@ -139,11 +141,12 @@ type repr (t:Type) (b:const_slice) = {
 /// representations from wire formats. At those points, the `repr_p`
 /// type is useful, since it is a `repr` that is also indexed by a
 /// parser.
-let repr_p (t:Type) (b:const_slice) #k (parser:LP.parser k t) =
+let repr_p (t:Type) (b:const_slice) #k (parser:LP.parser k t) (parser32:LS.parser32 parser) =
   r:repr t b {
     let meta = Ghost.reveal r.meta in
     meta.parser_kind == k /\
-    meta.parser == parser
+    meta.parser == parser /\
+    meta.parser32 == parser32
   }
 
 (*** Validity ***)
@@ -217,6 +220,17 @@ let value #t #b (r:repr t b)
 open FStar.HyperStack.ST
 
 /// `to_bytes`: for intermediate purposes only, extract bytes from the repr
+
+let to_bytes_from_buf (len:UInt32.t) (c:B.buffer UInt8.t)
+: Stack (b:FStar.Bytes.bytes{FStar.Bytes.length b == UInt32.v len})
+  (requires fun h ->
+    B.live h c /\
+    B.length c == UInt32.v len)
+  (ensures fun h0 b h1 ->
+    B.(modifies loc_none h0 h1) /\
+    b == FStar.Bytes.hide (B.as_seq h0 c))
+= FStar.Bytes.of_buffer len c
+    
 let to_bytes #t #b (r: repr t b)
   : Stack FStar.Bytes.bytes
     (requires fun h ->
@@ -230,9 +244,9 @@ let to_bytes #t #b (r: repr t b)
   = let len = r.end_pos - r.start_pos in
     let b' = C.sub b.base r.start_pos len in
     (* FIXME: FStar.Bytes does not cater to const buffers,
-       but do we really care, this code is transitional anyway *)
-    assume (C.qbuf_qual (C.as_qbuf b') == C.MUTABLE);
-    FStar.Bytes.of_buffer len (C.cast b')
+      but do we really care, this code is transitional anyway *)
+   assume (C.qbuf_qual (C.as_qbuf b') == C.MUTABLE);
+   FStar.Bytes.of_buffer len (C.cast b')
 
 /// `mk b from to p`:
 ///    Constructing a `repr` from a sub-slice
@@ -240,12 +254,13 @@ let to_bytes #t #b (r: repr t b)
 ///    known to be valid for a given wire-format parser `p`
 let mk (b:LP.slice mut_p mut_p{ LP.(b.len <= validator_max_length) })
        (from to:index (of_slice b))
-       (#k:strong_parser_kind) #t (parser:LP.parser k t)
-  : Stack (repr_p t (of_slice b) parser)
+       (#k:strong_parser_kind) #t
+       (parser:LP.parser k t) (parser32:LS.parser32 parser)
+  : Stack (repr_p t (of_slice b) parser parser32)
     (requires fun h ->
       LP.valid_pos parser h b from to)
     (ensures fun h0 r h1 ->
-      h0 == h1 /\
+      B.(modifies loc_none h0 h1) /\
       valid r h1 /\
       r.start_pos = from /\
       r.end_pos = to /\
@@ -256,15 +271,23 @@ let mk (b:LP.slice mut_p mut_p{ LP.(b.len <= validator_max_length) })
       Ghost.hide ({
         parser_kind = _;
         parser = parser;
+        parser32 = parser32;
         value = v;
         repr_bytes = LP.bytes_of_slice_from_to h b from to
       })
     in
-    {
-      start_pos = from;
-      end_pos = to;
-      meta = m
-    }
+
+    let sub_b = B.sub b.LP.base from (to - from) in
+    let sub_b_bytes = FStar.Bytes.of_buffer (to - from) sub_b in
+    assume (Some? (LP.parse parser (LP.bytes_of_slice_from_to h b from to)));
+    match parser32 sub_b_bytes with
+    | Some (v, _) ->
+      {
+        start_pos = from;
+        end_pos = to;
+        _value = v;
+        meta = m
+      }
 
 /// `mk b from to p`:
 ///    Constructing a `repr` from a sub-slice
