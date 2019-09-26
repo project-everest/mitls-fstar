@@ -969,7 +969,7 @@ let server_flight (#region:rgn) (#cfg:server_config) (s:server_state region cfg)
   | S13_sent_ServerHello _ _ _ _ _ _ -> PF.F_s_Idle
   | S13_wait_Finished2 _ _ eoed _ _ ->
     if eoed then PF.F_s13_wait_Finished2 else PF.F_s13_wait_EOED
-  | S13_complete _ _ _ _ _ -> 
+  | S13_complete _ _ _ _ _ ->
     // FIXME(adl) post-HS
     PF.F_s_Idle
   | _ -> admit()
@@ -985,7 +985,7 @@ let server_ms (#region:rgn) (#cfg:server_config) (s:server_state region cfg)
   | S13_sent_ServerHello _ _ _ ms _ _ -> ms
   | S13_wait_Finished2 _ _ _ ms _ -> ms
   | S13_complete _ _ _ ms _ -> ms
-  | _ -> admit()  
+  | _ -> admit()
 
 let set_server_ms
   (#region:rgn) (#cfg:server_config) (s:server_state region cfg {~(S_wait_ClientHello? s)})
@@ -1173,26 +1173,29 @@ let rec bkey_list_bytesize (bkeys: list Negotiation.bkey13) =
 
 module Binders = ParsersAux.Binders
 
-#push-options "--admit_smt_queries true"
+#push-options "--max_fuel 0 --max_ifuel 0"
+
 let get_handshake_repr (m:HSM.handshake)
-  : StackInline (b:MITLS.Repr.const_slice & MITLS.Repr.repr HSM.handshake b)
+  : Stack (b:MITLS.Repr.const_slice & MITLS.Repr.Handshake.repr b)
   (requires fun h0 -> True)
-  (ensures fun h0 _ h1 -> modifies_none h0 h1)
+  (ensures fun h0 (| _, r |) h1 ->
+    B.modifies B.loc_none h0 h1 /\
+    MITLS.Repr.value r == m)
   =
-  push_frame ();
+  push_frame();
   let len = HSM.handshake_size32 m in
   let b = B.alloca 0z len in
   let slice = LP.make_slice b len in
   let Some r = MITLS.Repr.Handshake.serialize slice 0ul m in
-  pop_frame ();
+  pop_frame();
   (| MITLS.Repr.of_slice slice, r |)
-#pop-options
 
-#push-options "--admit_smt_queries true"
 let get_handshake13_repr (m:HSM.handshake13)
-  : StackInline (b:MITLS.Repr.const_slice & MITLS.Repr.repr HSM.handshake13 b)
+  : Stack (b:MITLS.Repr.const_slice & MITLS.Repr.Handshake13.repr b)
   (requires fun h0 -> True)
-  (ensures fun h0 _ h1 -> modifies_none h0 h1)
+  (ensures fun h0 (|_, r|) h1 ->
+    B.modifies B.loc_none h0 h1 /\
+    MITLS.Repr.value r == m)
   =
   push_frame ();
   let len = HSM.handshake13_size32 m in
@@ -1245,4 +1248,3 @@ let hash_ch0 (region:rgn) ha (ch:HSM.clientHello) =
   pop_frame ();
   HSM.M_message_hash tag
 #pop-options
-
