@@ -36,4 +36,4 @@ module EE = Parsers.EncryptedExtensions
 let t = EE.encryptedExtensions
 
 let repr (b:R.slice) =
-  R.repr_p t b EE.encryptedExtensions_parser
+  R.repr_p t b EE.encryptedExtensions_parser32

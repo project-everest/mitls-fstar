@@ -36,4 +36,4 @@ module HSM13 = Parsers.Handshake13
 let t = HSM13.handshake13_m13_finished
 
 let repr (b:R.slice) =
-  R.repr_p t b HSM13.handshake13_m13_finished_parser
+  R.repr_p t b HSM13.handshake13_m13_finished_parser32

@@ -36,4 +36,4 @@ module CV12 = Parsers.CertificateVerify12
 let t = CV12.certificateVerify12
 
 let repr (b:R.slice) =
-  R.repr_p t b CV12.certificateVerify12_parser
+  R.repr_p t b CV12.certificateVerify12_parser32

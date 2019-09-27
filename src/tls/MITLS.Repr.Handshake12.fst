@@ -31,6 +31,7 @@ module MITLS.Repr.Handshake12
 
 module ST = FStar.HyperStack.ST
 module LP = LowParse.Low.Base
+module LS = LowParse.SLow.Base
 module B  = LowStar.Buffer
 module HS = FStar.HyperStack
 module R  = MITLS.Repr
@@ -53,7 +54,7 @@ module FinRepr = MITLS.Repr.Finished12
 type t = HSM12.handshake12
 
 type repr (b:R.const_slice) =
-  R.repr_p t b HSM12.handshake12_parser
+  R.repr_p t b HSM12.handshake12_parser32
 
 let is_hr (#b:R.const_slice) (r:repr b) : GTot bool =
   HSM12.M12_hello_request? (R.value r)
@@ -107,9 +108,9 @@ unfold let repr_pre (#b:R.const_slice) (r:repr b)
  *)
 unfold let repr_post_common
   (#b:R.const_slice)
-  (#a:Type) (#k:LP.parser_kind) (#p:LP.parser k a)
+  (#a:Type) (#k:LP.parser_kind) (#p:LP.parser k a) (#p32:LS.parser32 p)
   (r:repr b)  //input repr
-  : HS.mem -> R.repr_p a b p -> HS.mem -> Type0
+  : HS.mem -> R.repr_p a b p32 -> HS.mem -> Type0
   = fun h0 rr h1 ->
     let open R in
     B.(modifies loc_none h0 h1) /\
@@ -128,7 +129,7 @@ let get_hr_repr (#b:R.const_slice) (r:repr b{is_hr r})
     let pos = HSM12.handshake12_accessor_hello_request lp_b r.R.start_pos in
     let end_pos = HSM12.handshake12_m12_hello_request_jumper lp_b pos in
 
-    R.mk_from_const_slice b pos end_pos HSM12.handshake12_m12_hello_request_parser
+    R.mk_from_const_slice b pos end_pos HSM12.handshake12_m12_hello_request_parser32
 
 let get_c_repr (#b:R.const_slice) (r:repr b{is_c r})
   : Stack (CRepr.repr b)
@@ -144,7 +145,7 @@ let get_c_repr (#b:R.const_slice) (r:repr b{is_c r})
     let pos = HSM12.handshake12_m12_certificate_accessor lp_b pos in
     let end_pos = Parsers.Certificate12.certificate12_jumper lp_b pos in
 
-    R.mk_from_const_slice b pos end_pos Parsers.Certificate12.certificate12_parser
+    R.mk_from_const_slice b pos end_pos Parsers.Certificate12.certificate12_parser32
 
 let get_ske_repr (#b:R.const_slice) (r:repr b{is_ske r})
   : Stack (SKERepr.repr b)
@@ -157,7 +158,7 @@ let get_ske_repr (#b:R.const_slice) (r:repr b{is_ske r})
     let pos = HSM12.handshake12_accessor_server_key_exchange lp_b r.R.start_pos in
     let end_pos = HSM12.handshake12_m12_server_key_exchange_jumper lp_b pos in
 
-    R.mk_from_const_slice b pos end_pos HSM12.handshake12_m12_server_key_exchange_parser
+    R.mk_from_const_slice b pos end_pos HSM12.handshake12_m12_server_key_exchange_parser32
 
 let get_cr_repr (#b:R.const_slice) (r:repr b{is_cr r})
   : Stack (CRRepr.repr b)
@@ -171,7 +172,7 @@ let get_cr_repr (#b:R.const_slice) (r:repr b{is_cr r})
     let pos = HSM12.handshake12_m12_certificate_request_accessor lp_b pos in
     let end_pos = Parsers.CertificateRequest12.certificateRequest12_jumper lp_b pos in
 
-    R.mk_from_const_slice b pos end_pos Parsers.CertificateRequest12.certificateRequest12_parser
+    R.mk_from_const_slice b pos end_pos Parsers.CertificateRequest12.certificateRequest12_parser32
 
 let get_shd_repr (#b:R.const_slice) (r:repr b{is_shd r})
   : Stack (SHDRepr.repr b)
@@ -184,7 +185,7 @@ let get_shd_repr (#b:R.const_slice) (r:repr b{is_shd r})
     let pos = HSM12.handshake12_accessor_server_hello_done lp_b r.R.start_pos in
     let end_pos = HSM12.handshake12_m12_server_hello_done_jumper lp_b pos in
 
-    R.mk_from_const_slice b pos end_pos HSM12.handshake12_m12_server_hello_done_parser
+    R.mk_from_const_slice b pos end_pos HSM12.handshake12_m12_server_hello_done_parser32
 
 let get_cv_repr (#b:R.const_slice) (r:repr b{is_cv r})
   : Stack (CVRepr.repr b)
@@ -198,7 +199,7 @@ let get_cv_repr (#b:R.const_slice) (r:repr b{is_cv r})
     let pos = HSM12.handshake12_m12_certificate_verify_accessor lp_b pos in
     let end_pos = Parsers.CertificateVerify12.certificateVerify12_jumper lp_b pos in
 
-    R.mk_from_const_slice b pos end_pos Parsers.CertificateVerify12.certificateVerify12_parser
+    R.mk_from_const_slice b pos end_pos Parsers.CertificateVerify12.certificateVerify12_parser32
 
 let get_cke_repr (#b:R.const_slice) (r:repr b{is_cke r})
   : Stack (CKERepr.repr b)
@@ -211,7 +212,7 @@ let get_cke_repr (#b:R.const_slice) (r:repr b{is_cke r})
     let pos = HSM12.handshake12_accessor_client_key_exchange lp_b r.R.start_pos in
     let end_pos = HSM12.handshake12_m12_client_key_exchange_jumper lp_b pos in
 
-    R.mk_from_const_slice b pos end_pos HSM12.handshake12_m12_client_key_exchange_parser
+    R.mk_from_const_slice b pos end_pos HSM12.handshake12_m12_client_key_exchange_parser32
 
 let get_nst_repr (#b:R.const_slice) (r:repr b{is_nst r})
   : Stack (NSTRepr.repr b)
@@ -225,7 +226,7 @@ let get_nst_repr (#b:R.const_slice) (r:repr b{is_nst r})
     let pos = HSM12.handshake12_m12_new_session_ticket_accessor lp_b pos in
     let end_pos = Parsers.NewSessionTicket12.newSessionTicket12_jumper lp_b pos in
 
-    R.mk_from_const_slice b pos end_pos Parsers.NewSessionTicket12.newSessionTicket12_parser
+    R.mk_from_const_slice b pos end_pos Parsers.NewSessionTicket12.newSessionTicket12_parser32
 
 let get_fin_repr (#b:R.const_slice) (r:repr b{is_fin r})
   : Stack (FinRepr.repr b)
@@ -238,7 +239,7 @@ let get_fin_repr (#b:R.const_slice) (r:repr b{is_fin r})
     let pos = HSM12.handshake12_accessor_finished lp_b r.R.start_pos in
     let end_pos = HSM12.handshake12_m12_finished_jumper lp_b pos in
 
-    R.mk_from_const_slice b pos end_pos HSM12.handshake12_m12_finished_parser
+    R.mk_from_const_slice b pos end_pos HSM12.handshake12_m12_finished_parser32
 
 (* Serializer from high-level value via intermediate-level formatter *)
 
@@ -261,4 +262,4 @@ let serialize
         R.value r == x
       end
     )
-= R.mk_from_serialize b from HSM12.handshake12_serializer32 HSM12.handshake12_size32 x
+= R.mk_from_serialize b from HSM12.handshake12_parser32 HSM12.handshake12_serializer32 HSM12.handshake12_size32 x
