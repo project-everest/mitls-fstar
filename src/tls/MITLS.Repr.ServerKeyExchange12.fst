@@ -39,4 +39,4 @@ module HSM12 = Parsers.Handshake12
 let t = HSM12.handshake12_m12_server_key_exchange
 
 let repr (b:R.slice) =
-  R.repr_p t b HSM12.handshake12_m12_server_key_exchange_parser
+  R.repr_p t b HSM12.handshake12_m12_server_key_exchange_parser32

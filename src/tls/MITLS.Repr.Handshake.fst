@@ -37,7 +37,7 @@ open FStar.HyperStack.ST
 let t = HSM.handshake
 
 let repr (b:R.const_slice) =
-  R.repr_p t b HSM.handshake_parser
+  R.repr_p t b HSM.handshake_parser32
 
 let handshakeType (#b:R.const_slice) (r:repr b)
   : Stack Parsers.HandshakeType.handshakeType
@@ -77,7 +77,7 @@ let clientHello (#b:R.const_slice) (r:repr b{is_ch r})
     let pos = HSM.handshake_accessor_client_hello s r.start_pos in
     let pos = HSM.handshake_m_client_hello_accessor s pos in
     let end_pos = Parsers.ClientHello.clientHello_jumper s pos in
-    let ch_repr = R.mk_from_const_slice b pos end_pos Parsers.ClientHello.clientHello_parser in
+    let ch_repr = R.mk_from_const_slice b pos end_pos Parsers.ClientHello.clientHello_parser32 in
     ch_repr
 
 let serverHello (#b:R.const_slice) (r:repr b{is_sh r})
@@ -96,7 +96,7 @@ let serverHello (#b:R.const_slice) (r:repr b{is_sh r})
     let pos = HSM.handshake_accessor_server_hello s r.start_pos in
     let pos = HSM.handshake_m_server_hello_accessor s pos in
     let end_pos = Parsers.ServerHello.serverHello_jumper s pos in
-    let sh_repr = R.mk_from_const_slice b pos end_pos Parsers.ServerHello.serverHello_parser in
+    let sh_repr = R.mk_from_const_slice b pos end_pos Parsers.ServerHello.serverHello_parser32 in
     sh_repr
 
 (* Serializer from high-level value via intermediate-level formatter *)
@@ -120,4 +120,4 @@ let serialize
         R.value r == x
       end
     )
-= R.mk_from_serialize b from HSM.handshake_serializer32 HSM.handshake_size32 x
+= R.mk_from_serialize b from HSM.handshake_parser32 HSM.handshake_serializer32 HSM.handshake_size32 x

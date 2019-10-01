@@ -27,6 +27,7 @@ module ST = FStar.HyperStack.ST
 module B = LowStar.Buffer
 
 module LP = LowParse.Low.Base
+module LS = LowParse.SLow.Base
 
 module E = FStar.Error
 
@@ -67,7 +68,7 @@ let create () = reset ()
 inline_for_extraction noextract
 let parse_common
   (#a1:Type) (#k1:R.strong_parser_kind)
-  (#p1:LP.parser k1 a1)
+  (#p1:LP.parser k1 a1) (p132:LS.parser32 p1)
   (validator:LP.validator #k1 #a1 p1)  //a1, p1, etc. are HSM12, HSM13, or HSM
   (tag_fn:a1 -> HSMType.handshakeType{  //this refinment is basically capturing lemma_valid_handshake13_valid_handshakeType kind of lemmas
     forall (b:R.const_slice) (pos:UInt32.t) (h:HS.mem).
@@ -84,7 +85,7 @@ let parse_common
       (tag_fn m == tag) <==> cl.LP.clens_cond m})
   (acc:LP.accessor gacc)
 : b:R.const_slice -> f_begin:uint_32 ->
-  Stack (TLSError.result (option (R.repr_p a1 b p1 & uint_32)))
+  Stack (TLSError.result (option (R.repr_p a1 b p132 & uint_32)))
   (requires fun h ->
     R.live h b /\
     f_begin <= b.R.len)
@@ -106,7 +107,7 @@ let parse_common
   if pos <= LP.validator_max_length then begin
     let parsed_tag = HSMType.handshakeType_reader lp_b f_begin in
     if parsed_tag = tag then  //and this dynamic check gives us the lens postcondition
-      let r = R.mk_from_const_slice b f_begin pos p1 in
+      let r = R.mk_from_const_slice b f_begin pos p132 in
       E.Correct (Some (r, pos))
     else E.Error unexpected_flight_error
   end
@@ -177,6 +178,7 @@ let check_leq_end_index_and_return
 inline_for_extraction noextract
 let parse_hsm_ch
 = parse_common
+    HSM.handshake_parser32
     HSM.handshake_validator
     HSM.tag_of_handshake
     HSMType.Client_hello
@@ -185,6 +187,7 @@ let parse_hsm_ch
 inline_for_extraction noextract
 let parse_hsm_sh
 = parse_common
+    HSM.handshake_parser32
     HSM.handshake_validator
     HSM.tag_of_handshake
     HSMType.Server_hello
@@ -217,6 +220,7 @@ let receive_c_wait_ServerHello st b f_begin f_end
 inline_for_extraction noextract
 let parse_hsm13_ee
 = parse_common
+    HSM13.handshake13_parser32
     HSM13.handshake13_validator
     HSM13.tag_of_handshake13
     HSMType.Encrypted_extensions
@@ -225,6 +229,7 @@ let parse_hsm13_ee
 inline_for_extraction noextract
 let parse_hsm13_c
 = parse_common
+    HSM13.handshake13_parser32
     HSM13.handshake13_validator
     HSM13.tag_of_handshake13
     HSMType.Certificate
@@ -233,6 +238,7 @@ let parse_hsm13_c
 inline_for_extraction noextract
 let parse_hsm13_cv
 = parse_common
+    HSM13.handshake13_parser32
     HSM13.handshake13_validator
     HSM13.tag_of_handshake13
     HSMType.Certificate_verify
@@ -241,6 +247,7 @@ let parse_hsm13_cv
 inline_for_extraction noextract
 let parse_hsm13_fin
 = parse_common
+    HSM13.handshake13_parser32
     HSM13.handshake13_validator
     HSM13.tag_of_handshake13
     HSMType.Finished
@@ -249,6 +256,7 @@ let parse_hsm13_fin
 inline_for_extraction noextract
 let parse_hsm13_cr
 = parse_common
+    HSM13.handshake13_parser32
     HSM13.handshake13_validator
     HSM13.tag_of_handshake13
     HSMType.Certificate_request
@@ -257,6 +265,7 @@ let parse_hsm13_cr
 inline_for_extraction noextract
 let parse_hsm13_eoed
 = parse_common
+    HSM13.handshake13_parser32
     HSM13.handshake13_validator
     HSM13.tag_of_handshake13
     HSMType.End_of_early_data
@@ -265,6 +274,7 @@ let parse_hsm13_eoed
 inline_for_extraction noextract
 let parse_hsm13_nst
 = parse_common
+    HSM13.handshake13_parser32
     HSM13.handshake13_validator
     HSM13.tag_of_handshake13
     HSMType.New_session_ticket
@@ -394,6 +404,7 @@ let receive_c13_Complete st b f_begin f_end
 inline_for_extraction noextract
 let parse_hsm12_c
 = parse_common
+    HSM12.handshake12_parser32
     HSM12.handshake12_validator
     HSM12.tag_of_handshake12
     HSMType.Certificate
@@ -402,6 +413,7 @@ let parse_hsm12_c
 inline_for_extraction noextract
 let parse_hsm12_ske
 = parse_common
+    HSM12.handshake12_parser32
     HSM12.handshake12_validator
     HSM12.tag_of_handshake12
     HSMType.Server_key_exchange
@@ -410,6 +422,7 @@ let parse_hsm12_ske
 inline_for_extraction noextract
 let parse_hsm12_shd
 = parse_common
+    HSM12.handshake12_parser32
     HSM12.handshake12_validator
     HSM12.tag_of_handshake12
     HSMType.Server_hello_done
@@ -418,6 +431,7 @@ let parse_hsm12_shd
 inline_for_extraction noextract
 let parse_hsm12_cr
 = parse_common
+    HSM12.handshake12_parser32
     HSM12.handshake12_validator
     HSM12.tag_of_handshake12
     HSMType.Certificate_request
@@ -426,6 +440,7 @@ let parse_hsm12_cr
 inline_for_extraction noextract
 let parse_hsm12_fin
 = parse_common
+    HSM12.handshake12_parser32
     HSM12.handshake12_validator
     HSM12.tag_of_handshake12
     HSMType.Finished
@@ -434,6 +449,7 @@ let parse_hsm12_fin
 inline_for_extraction noextract
 let parse_hsm12_nst
 = parse_common
+    HSM12.handshake12_parser32
     HSM12.handshake12_validator
     HSM12.tag_of_handshake12
     HSMType.New_session_ticket
@@ -442,6 +458,7 @@ let parse_hsm12_nst
 inline_for_extraction noextract
 let parse_hsm12_cke
 = parse_common
+    HSM12.handshake12_parser32
     HSM12.handshake12_validator
     HSM12.tag_of_handshake12
     HSMType.Client_key_exchange

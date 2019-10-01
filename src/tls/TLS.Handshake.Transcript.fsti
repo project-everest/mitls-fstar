@@ -74,11 +74,11 @@ type sh12 = sh:HSM.sh{Negotiation.selected_version sh == Correct PV.TLS_1p2}
 
 //TODO: move to a separate module
 let repr_hs12 (b:R.const_slice) =
-  R.repr_p _ b HSM.handshake12_parser
+  R.repr_p _ b HSM.handshake12_parser32
 
 //TODO: move to a separate module
 let repr_hs13 (b:R.const_slice) =
-  R.repr_p _ b HSM.handshake13_parser
+  R.repr_p _ b HSM.handshake13_parser32
 
 //19-09-02 vs FStar.Bytes?
 type bytes = FStar.Seq.seq uint_8

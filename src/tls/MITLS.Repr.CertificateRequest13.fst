@@ -36,4 +36,4 @@ module CR13 = Parsers.CertificateRequest13
 let t = CR13.certificateRequest13
 
 let repr (b:R.slice) =
-  R.repr_p t b CR13.certificateRequest13_parser
+  R.repr_p t b CR13.certificateRequest13_parser32
