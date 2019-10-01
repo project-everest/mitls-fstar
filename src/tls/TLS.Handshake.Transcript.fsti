@@ -188,6 +188,7 @@ let bounded_list 'a n = l:list 'a{List.length l < n}
 /// N.B. we need transcript equality, as we store them in
 /// crypto indexes for concrete (but ideal) table lookups
 [@erasable]
+noeq
 type transcript_t =
   | Start:
       retried:option retry ->
@@ -215,6 +216,8 @@ type transcript_t =
       sh:sh13 ->
       rest:bounded_list HSM.handshake13 max_transcript_size ->
       transcript_t
+
+assume Transcript_HasEq_TEMPORARY_ESCAPE_HATCH: hasEq transcript_t
 
 /// `transcript_size`: the size of a transcript is the length of its
 /// protocol-specific suffix
