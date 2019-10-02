@@ -1039,6 +1039,20 @@ let nonce (s:state)
   | Client _ _ r -> client_nonce !r
   | Server _ _ r -> server_nonce !r
 
+let initT s h =
+  match s with
+  | Client _ _ r -> C_init? (HS.sel h r)
+  | Server _ _ r -> S_wait_ClientHello? (HS.sel h r)
+
+let is_init (s:state)
+  : ST bool
+  (requires fun h0 -> True)
+  (ensures fun h0 r h1 -> h0 == h1 /\ r == initT s h1)
+  = assume false;
+  match s with
+  | Client _ _ r -> C_init? !r
+  | Server _ _ r -> S_wait_ClientHello? !r
+
 let invariant s h =
   match s with
   | Client region config r ->

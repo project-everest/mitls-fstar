@@ -9,11 +9,9 @@ include Parsers.AlertDescription
 include Parsers.AlertLevel
 include Parsers.Alert
 
-let string_of_alertDescription (a:alertDescription) = "alertDescription"
-let string_of_alertLevel (a:alertLevel) = "alertLevel"
 let string_of_alert (a:alert) = 
   "level="^string_of_alertLevel a.level^
-  "description="^string_of_alertDescription a.description
+  ", description="^string_of_alertDescription a.description
 
 let fatalAlert ad = {level=Fatal; description=ad}
 

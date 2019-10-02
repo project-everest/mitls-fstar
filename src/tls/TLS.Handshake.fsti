@@ -34,7 +34,7 @@ let i (s:Machine.state) (rw:rw) : ST int
     Epochs.get_ctr_post (Machine.epochsT s h1) rw h0 i h1))
   =
   assume false;
-  let h = get() in 
+  if Machine.is_init s then -1 else
   let n = Machine.nonce s in 
   let es = Machine.epochs s n in 
   match rw with

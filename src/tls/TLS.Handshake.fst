@@ -65,30 +65,32 @@ let xkeys_of hs =
 (* -------------------- Control Interface ---------------------- *)
 
 //19-09-11 we'll need to split it between clients and servers, since their config differ. 
-
+// FIXME(adl) keeping a single function for client and server to maintain current API
 let create (parent:rid) cfg role =
-  assert(role == TLSConstants.Client);
   let r = new_region parent in
-  // let log = HSL.create r None (* cfg.max_version (Nego.hashAlg nego) *) in
-  //let nonce = Nonce.mkHelloRandom r r0 in //NS: should this really be Client?
   let nonce = Nonce.mkHelloRandom role r in
-  //let ks, nonce = KS.create #r role cfg.is_quic in
-  // let nego = Nego.create r role cfg nonce in
-  // let epochs = Epochs.create r nonce in
-  let resume = None, [] in //TODO 19-09-13 cfg.use_tickets in 
-  let config: client_config = cfg, resume in 
-  let state = ralloc r (C_init nonce) in
-  Machine.Client r config state
+  match role with
+  | TLSConstants.Client ->
+    // FIXME(adl) Nego.unseal_tickets cfg.use_tickets
+    let resume = None, [] in
+    let config: client_config = cfg, resume in 
+    let state = ralloc r (C_init nonce) in
+    Machine.Client r config state
+  | TLSConstants.Server ->
+    let state = ralloc r (S_wait_ClientHello nonce) in
+    Machine.Server r cfg state
 
 let rehandshake s c = FStar.Error.unexpected "rehandshake: not yet implemented"
 
 let rekey s c = FStar.Error.unexpected "rekey: not yet implemented"
 
-//19-09-13 TODO 
 let send_ticket hs app_data =
-//if is_post_handshake hs then
+  match hs with
+  | Machine.Client _ _ _ -> false
+  | Machine.Server _ _ s ->
+    match !s with
+    | S13_complete _ _ _ _ ks ->
 //  let _ = server_Ticket13 hs app_data in true
-//else 
     false
 
 let request s c = FStar.Error.unexpected "request: not yet implemented"
@@ -160,53 +162,40 @@ let to_be_written hs =
 
 (* ----------------------- Incoming ----------------------- *)
 
-let buffer_received_fragment ms #i rg f = ms
+module R = MITLS.Repr
+module RH = MITLS.Repr.Handshake
+module RH12 = MITLS.Repr.Handshake12
+module RH13 = MITLS.Repr.Handshake13
 
-// Some parsing functions translating between low-level representations
-// obtained after receiving, and high-level values passed as arguments
-// to the processing functions
-// TODO: Implement this. This is likely a well-chosen call to Parsers.ServerHello.something
-val parse_wait_serverHello
-  (#st:Recv.state)
-  (res:PF.c_wait_ServerHello (Recv.cslice_of st) & UInt32.t) :
-  ST Parsers.ServerHello.serverHello
-    (requires fun h -> PF.valid_c_wait_ServerHello st.Recv.rcv_from (snd res) (fst res) h)
-    // Maybe a bit too strong?
-    (ensures fun h0 _ h1 -> h0 == h1)
-
-let parse_wait_serverHello #st (res, pos) = assume false;
-  let sh = MITLS.Repr.Handshake.serverHello res.PF.sh_msg in
-  let shb = MITLS.Repr.to_bytes sh in
-  let Some (sh, _) = Parsers.ServerHello.serverHello_parser32 shb in
-  sh
+inline_for_extraction noextract
+let overflow () = Recv.InError (fatalAlert Internal_error, "Overflow in input buffer")
 
 #set-options "--max_fuel 0 --max_ifuel 1 --z3rlimit 20"
 // #set-options "--admit_smt_queries true"
 let rec recv_fragment hs #i rg f =
+  trace "recv_fragment";
   let open HandshakeMessages in
-  let recv_again r =
+  // only case where the next incoming flight may already have been buffered.
+  [@inline_let] let recv_again r =
     match r with
-    // only case where the next incoming flight may already have been buffered.
     | Recv.InAck false false -> recv_fragment hs #i (0,0) empty_bytes
     | r -> r  in
   // trace "recv_fragment";
   let h0 = HST.get() in
   match hs with 
-  | Client region config r -> (
+  | Client region config r ->
+   begin // Client
     match !r  with
     | C_init _ ->
+      trace "No CH sent (statically excluded)";
       Recv.InError (
         fatalAlert Unexpected_message,
         "Client hasn't sent hello yet (to be statically excluded)")
 
     | C_wait_ServerHello offer0 ms0 ks0 -> (
-      // AF: How do we ensure this statically? Should this be handled
-      // by buffer_received_fragment, returning an Error if the
-      // property does not hold? CF: yes; or realloc the buffer if
-      // this is problematic.
-      let rcv0 = ms0.receiving in 
-      assume Recv.(UInt32.v rcv0.rcv_to + Bytes.length f <= UInt32.v rcv0.rcv_b.LP.len);
-      let rcv1 = buffer_received_fragment rcv0 #i rg f in
+      match Recv.buffer_received_fragment ms0.receiving f with
+      | None -> overflow ()
+      | Some rcv1 ->
       match Recv.receive_c_wait_ServerHello rcv1 with
       | Error z -> Recv.InError z
       | Correct (x, rcv2) ->
@@ -216,51 +205,48 @@ let rec recv_fragment hs #i rg f =
         let h2 = HST.get() in
         match x with
         | None -> Recv.InAck false false // nothing happened
-        | Some sh_msg -> (
-          let sh = parse_wait_serverHello sh_msg in
+        | Some (sh_msg,pos) ->
+          let shr = RH.serverHello (sh_msg.PF.sh_msg) in
+	  let sh = shr.R.vv in
           let h3 = HST.get() in
           if HSM.is_hrr sh then
-            // TODO adjust digest, here or in the transition call
             Client.client_HelloRetryRequest hs sh
           else
-            // TODO extend digest[..sh]
-            // transitioning to C12_wait_ServerHelloDone or C13_wait_Finished1;
             let r = Client.client_ServerHello hs sh in
-            // TODO check that ms1.receiving is set for processing the next flight
-            recv_again r )))
+            recv_again r)
+
+    | C13_wait_Finished1 offer sh ms0 ks -> (
+      match Recv.buffer_received_fragment ms0.receiving f with
+      | None -> overflow ()
+      | Some rcv1 ->
+      match TLS.Handshake.Receive.receive_c13_wait_Finished1 rcv1 with
+      | Error z -> Recv.InError z
+      | Correct (sflight, rcv2) ->
+        r := C13_wait_Finished1 offer sh ({ms0 with receiving = rcv2}) ks;
+        match sflight with
+        | None -> Recv.InAck false false // nothing happened
+        | Some sflight ->
+	  let ee = RH13.get_ee_repr sflight.PF.ee_msg in
+	  let fin = RH13.get_fin_repr (PF.Mkc13_wait_Finished1?.fin_msg sflight) in
+	  let ocr = match PF.Mkc13_wait_Finished1?.cr_msg sflight with
+	    | None -> None | Some cr -> let x = RH13.get_cr_repr cr in Some x.R.vv in
+	  let oc_cv = match PF.Mkc13_wait_Finished1?.c_cv_msg sflight with
+	    | None -> None | Some (c,cv) ->
+	      let x = RH13.get_c_repr c in
+	      let y = RH13.get_cv_repr cv in
+	      Some (x.R.vv, y.R.vv) in
+          Client.client13_Finished1 hs (ee.R.vv) ocr oc_cv (fin.R.vv))
+
+    | _ ->
+      Recv.InError (fatalAlert Unexpected_message, "TBC")
+   end // Client
+  | Server region config r ->
+   begin // Server
+    admit()
+   end // Server
+
 (*
-  | C12_wait_ServerHelloDone ch sh ms0 ks -> (
-    let rcv1 = buffer_received_fragment ms0.receiving f in
-    match TLS.Handshake.Receive.receive_c12_wait_ServerHelloDone rcv1 with
-    | Error z -> InError z
-    | Correct (x, rcv2) ->
-      hs.cstate := C12_wait_ServerHelloDone ch sh ({ms0 with receiving = rcv2}) ks;
-      match x with
-      | None -> InAck false false // nothing happened
-      | Some x ->
-      // TODO extend digest[..ServerHelloDone]
-      // let c, ske, ocr = admit() in
-      // client_ServerHelloDone hs c ske None
-        admit()
-      )
-
-  | C13_wait_Finished1 offer sh ms0 ks -> (
-    let rcv1 = buffer_received_fragment ms0.receiving f in
-    match TLS.Handshake.Receive.receive_c13_wait_Finished1 rcv1
-    with
-    | Error z -> InError z
-    | Correct (x, rcv2) ->
-      hs.cstate := C13_wait_Finished1 offer sh ({ms0 with receiving = rcv2}) ks;
-      match x with
-      | None -> InAck false false // nothing happened
-      | Some x ->
-        // covering 3 cases (see old code for details)
-        // we need to extract these high-level values from the flight:
-        let ee, ocr, oc, ocv, fin1, otag0, tag1, tag_fin1 = admit() in
-        client_ServerFinished13 hs offer sh ee ocr oc ocv fin1 otag0 tag1 tag_fin1
-      )
-
-  | C13_Complete _ _ _ _ _ _ _ ms0 _ ->
+    | C13_Complete _ _ _ _ _ _ _ ms0 _ ->
     let ms1 = buffer_received_fragment ms0 #i rg f in
     // TODO two sub-states: waiting for fin2 or for the post-handshake ticket.
     match HSL.Receive.receive_c_wait_ServerHello 12_wait_ServerHelloDone st b f_begin f_end with
@@ -282,9 +268,6 @@ let rec recv_fragment hs #i rg f =
     | C_wait_R_Finished1 digestNewSessionTicket, [Msg12 (M12_finished f)], [digestServerFinished] ->
       client_R_ServerFinished hs f digestNewSessionTicket digestServerFinished
 *)
-
-  | _ ->
-    Recv.InError (fatalAlert Unexpected_message, "TBC")
 
 
 (* The old, but more complete version, to be merged: 
