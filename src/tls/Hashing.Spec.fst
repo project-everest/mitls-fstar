@@ -44,10 +44,6 @@ private let lemma_blockLength (a:alg)
   [SMTPat (block_length a)]
   = ()
 
-// JP: override the definition from evercrypt (which uses <) with miTLS
-// compatible definitions (which uses <=)
-let max_input_length a = max_input_length a - 1
-
 let macable a = b:bytes {length b + block_length a < pow2 32}
 let macable_any = b:bytes{length b + max_block_length < pow2 32}
 
@@ -61,7 +57,7 @@ type hkey (a:alg) = b:bytes{
   // 18-09-12 this usage restriction is dubious, but always met in
   // miTLS; it avoids a null-pointer case in the wrapper below.
   length b > 0 /\
-  Spec.HMAC.keysized a (length b)}
+  Spec.Agile.HMAC.keysized a (length b)}
 
 val hmac:
   a:alg ->
@@ -70,7 +66,7 @@ val hmac:
   GTot (t:tag a{
     let text = Bytes.reveal text in
     Seq.length text + block_length a <= max_input_length a /\
-    Bytes.reveal t = Spec.HMAC.hmac a (Bytes.reveal k) text})
+    Bytes.reveal t = Spec.Agile.HMAC.hmac a (Bytes.reveal k) text})
 
 #push-options "--max_fuel 0 --max_ifuel 0 --z3rlimit 100"
 let hmac a k text =
@@ -79,7 +75,7 @@ let hmac a k text =
   assert_norm (pow2 32 < pow2 61);
   assert_norm (pow2 61 < pow2 125);
   assert (Seq.length text + block_length a <= max_input_length a);
-  let t: bytes_hash a = Spec.HMAC.hmac a k text in
+  let t: bytes_hash a = Spec.Agile.HMAC.hmac a k text in
   Bytes.hide t
 
 //18-08-31 review

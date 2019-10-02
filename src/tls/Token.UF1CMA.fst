@@ -119,7 +119,7 @@ let create #ip hofi gofi i u =
   assume false;
   assert_norm (pow2 32 < pow2 61);
   assert_norm (pow2 61 < pow2 125);
-  assert(Spec.HMAC.keysized u.alg (Spec.Hash.Definitions.hash_length u.alg));
+  assert(Spec.Agile.HMAC.keysized u.alg (Spec.Hash.Definitions.hash_length u.alg));
   let kv: keyrepr u.alg = Random.sample32 (Hacl.Hash.Definitions.hash_len u.alg) in
   let ck = MAC u kv in
   let k : ir_key hofi gofi i =
@@ -137,7 +137,7 @@ let coerceT (#ip: ipkg) (ha_of_i: ip.Pkg.t -> ha) (good_of_i: ip.Pkg.t -> bool)
   =
   assert_norm (pow2 32 < pow2 61);
   assert_norm (pow2 61 < pow2 125);
-  assert(Spec.HMAC.keysized u.alg (Spec.Hash.Definitions.hash_length u.alg));
+  assert(Spec.Agile.HMAC.keysized u.alg (Spec.Hash.Definitions.hash_length u.alg));
   let ck = MAC u kv in
   if model then
     let k : ir_key ha_of_i good_of_i i = RealKey ck in k
@@ -160,7 +160,7 @@ val coerce:
 let coerce #ip hofi gofi i u kv =
   assert_norm (pow2 32 < pow2 61);
   assert_norm (pow2 61 < pow2 125);
-  assert(Spec.HMAC.keysized u.alg (Spec.Hash.Definitions.hash_length u.alg));
+  assert(Spec.Agile.HMAC.keysized u.alg (Spec.Hash.Definitions.hash_length u.alg));
   let ck = MAC u kv in
   if model then
     let k : ir_key hofi gofi i = RealKey ck in k

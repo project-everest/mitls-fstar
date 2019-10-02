@@ -36,4 +36,4 @@ module NST12 = Parsers.NewSessionTicket12
 let t = NST12.newSessionTicket12
 
 let repr (b:R.slice) =
-  R.repr_p t b NST12.newSessionTicket12_parser
+  R.repr_p t b NST12.newSessionTicket12_parser32

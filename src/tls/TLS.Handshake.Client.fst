@@ -5,228 +5,31 @@ open Mem
 open TLSConstants
 open TLSInfo
 open TLSError
+
+module HS = FStar.HyperStack
 open FStar.HyperStack.ST
+
+open TLS.Handshake.Messaging
 open TLS.Handshake.Machine
 
-module B = LowStar.Buffer // not FStar.Bytes
+module Send = TLS.Handshake.Send
+module Recv = TLS.Handshake.Receive
+
+module LB = LowStar.Buffer
 module CH = Parsers.ClientHello
 module Epochs = Old.Epochs
 module HSM = HandshakeMessages
 module PF = TLS.Handshake.ParseFlights // avoidable?
 module HMAC = Old.HMAC.UFCMA
 module KS = Old.KeySchedule
-module HS = FStar.HyperStack
-module Receive = TLS.Handshake.Receive
-
-val discard: bool -> ST unit
-  (requires (fun _ -> True))
-  (ensures (fun h0 _ h1 -> h0 == h1))
-let discard _ = ()
-let print s = discard (IO.debug_print_string ("HS | "^s^"\n"))
-unfold val trace: s:string -> ST unit
-  (requires (fun _ -> True))
-  (ensures (fun h0 _ h1 -> h0 == h1))
-unfold let trace = if DebugFlags.debug_HS then print else (fun _ -> ())
+module Transcript = TLS.Handshake.Transcript
 
 #set-options "--max_fuel 0 --max_ifuel 0"
 
-
-// Floating: indexing & epochs, to be reviewed
-
-#push-options "--admit_smt_queries true"
-val register:
-  #region:rgn -> #n:random -> Epochs.epochs region n ->
-  KS.recordInstance -> St unit
-
-let register #region #n epochs keys =
-    let ep = //? we don't have a full index yet for the epoch; reuse the one for keys??
-      let h = Negotiation.Fresh ({ Negotiation.session_nego = None }) in
-      Epochs.recordInstanceToEpoch #region #n h keys in // just coercion
-      // New Handshake does
-      // let KeySchedule.StAEInstance #id r w = keys in
-      // Epochs.recordInstanceToEpoch #hs.region #(nonce hs) h (Handshake.Secret.StAEInstance #id r w) in
-    Epochs.add_epoch epochs ep // actually extending the epochs log
-
-val export:
-  #region:rgn -> #n:random -> Epochs.epochs region n ->
-  KS.exportKey -> St unit
-
-let export #region #n epochs xk =
-  trace "exporting a key";
-  FStar.Monotonic.Seq.i_write_at_end epochs.Epochs.exporter xk
-#pop-options
-
-
-#push-options "--max_fuel 0 --max_fuel 0 --z3rlimit 32"
-
-// Floating: high-level transcript
-// TODO merge with [Send.tag]; add precise type; move to Transcript
-let transcript_extract
-  #ha
-  (di:Transcript.state ha)
-  (tx: Transcript.transcript_t):
-  ST Bytes.bytes
-  (requires fun h0 ->
-    Transcript.invariant di tx h0)
-  (ensures fun h0 t h1 ->
-    Transcript.invariant di tx h1 /\
-    B.(modifies (
-      Transcript.footprint di `loc_union`
-      loc_region_only true Mem.tls_tables_region) h0 h1) /\
-    Bytes.reveal t == Transcript.transcript_hash ha tx /\
-    Transcript.hashed ha tx)
-  =
-  // Show that the transcript state is disjoint from the new frame since it's not unused
-  (**) let h0 = get() in
-  (**) Transcript.elim_invariant di tx h0;
-  push_frame();
-  let ltag = EverCrypt.Hash.Incremental.hash_len ha in
-  // AF: Why not allocate directly with size ltag?
-  let btag0 = LowStar.Buffer.alloca 0uy 64ul in // big enough for all tags
-  let btag = LowStar.Buffer.sub btag0 0ul ltag in
-  Transcript.extract_hash di btag tx;
-  let tag = FStar.Bytes.of_buffer ltag btag in
-  pop_frame();
-  tag
-
-#pop-options
-
-// 19-09-05 Much overhead for calling Transcript
-// let extend_ch #ha
-//   (sending: Send.send_state)
-//   (di:Transcript.state ha)
-//   (msg: HSM.ch)
-//   (tx0: Ghost.erased Transcript.transcript_t):
-//   ST (result (Ghost.erased Transcript.transcript_t ))
-//   (requires fun h0 ->
-//     let tx0 = Ghost.reveal tx0 in Transcript.Start? tx0 /\
-//     B.loc_disjoint (Send.footprint sending) (Transcript.footprint di) /\
-//     Send.invariant sending h0 /\
-//     Transcript.invariant di tx0 h0)
-//   (ensures fun h0 r h1 ->
-//     B.(modifies (Send.footprint sending `loc_union` Transcript.footprint di) h0 h1) /\
-//     Send.invariant sending h1 /\ (
-//     match r with
-//     | Error _ -> True
-//     | Correct tx1 ->
-//       let Transcript.Start r = Ghost.reveal tx0 in
-//       let tx1 = Ghost.reveal tx1 in
-//       Transcript.invariant di tx1 h1 /\
-//       tx1 == Transcript.ClientHello r msg ))
-// =
-//   admit()
-
-#push-options "--z3rlimit 100"
-open FStar.Integers
-// Adapted from Send.send13, using [sending] as scratch space;
-// temporary. We may need similar functions for the Hello messages.
-let extend13
-  #ha
-  (sending: Send.send_state)
-  (di:Transcript.state ha)
-  (msg: HSM.handshake13)
-  (#n: Ghost.erased nat)
-  (tx0: Transcript.transcript_n n {Ghost.reveal n < Transcript.max_transcript_size - 1}):
-  ST (result (Transcript.transcript_n (Ghost.hide (Ghost.reveal n+1))))
-  (requires fun h0 ->
-    Transcript.Transcript13? tx0 /\
-    B.loc_disjoint (Send.footprint sending) (Transcript.footprint di) /\
-    Send.invariant sending h0 /\
-    Transcript.invariant di tx0 h0)
-  (ensures fun h0 r h1 ->
-    B.(modifies (Send.footprint sending `B.loc_union` Transcript.footprint di) h0 h1) /\
-    Send.invariant sending h1 /\ (
-    match r with
-    | Error _ -> True
-    | Correct tx1 ->
-      Transcript.invariant di tx1 h1 /\
-      tx1 == Transcript.snoc13 tx0 msg ))
-  =
-  let h0 = get () in
-  let r = MITLS.Repr.Handshake13.serialize sending.Send.out_slice sending.Send.out_pos msg in
-  let h1 = get () in
-  Transcript.frame_invariant di tx0 h0 h1 (B.loc_buffer sending.Send.out_slice.LowParse.Low.Base.base);
-  match r with
-  | None ->
-    fatal Internal_error "output buffer overflow"
-  | Some r ->
-    List.lemma_snoc_length (Transcript.Transcript13?.rest tx0, msg);
-    let tx1 = Transcript.extend di (Transcript.LR_HSM13 r) tx0 in
-    let b = MITLS.Repr.to_bytes r in
-    trace ("extended with "^Bytes.hex_of_bytes b);
-    // we do *not* return the modified indexes in [sending]
-    correct tx1
-#pop-options
-
 (*** Hello messages ***)
-
-(*
-val map_ST2: 'c -> ('c -> 'a -> KS.ST0 'b) -> list 'a -> KS.ST0 (list 'b)
-let rec map_ST2 env f x = match x with
-  | [] -> []
-  | a::tl -> f env a :: map_ST2 env f tl
-
-type btag (binderKey:(i:HMAC.binderId & bk:KS.binderKey i)) =
-  HMAC.tag (HMAC.HMAC_Binder (let (|i,_|) = binderKey in i))
-
-private let compute_binder (bkey:(i:HMAC.binderId & bk:KS.binderKey i)) tag
-  : ST (btag bkey)
-  (requires fun h0 -> True)
-  (ensures fun h0 _ h1 -> modifies_none h0 h1) =
-  let _,bk = bkey in
-  HMAC.mac bkey tag
-
-let client_Binders #region (hs:t region) (offer:HSM.clientHello) =
-  match snd hs.cfg with
-  | (_, []) ->
-    Send.send_ch hs.log (HSL.Msg (HSM.M_client_hello offer))
-  | (_, pskl) ->
-    let binderKeys = KS.ks_client13_get_binder_keys hs.ks pskl in
-    let blen = E.bindersLen offer.CH.extensions in
-    HSL.send_truncated hs.log (HSL.Msg (HSM.M_client_hello offer)) blen;
-    let binders = map_ST2 hs compute_binder binderKeys in
-    let bb = PSK.offeredPsks_binders_serializer32 binders in
-    HSL.send_raw hs.log bb;
-    // Nego ensures that EDI is not sent in a 2nd ClientHello
- *)
 
 //19-09-03 much left to do for stateful TCing
 #push-options "--admit_smt_queries true"
-
-/// Create a transcript digest for the truncated client Hello.
-// TODO handle spec-level branching depending on the presence of binders.
-// TODO re-use it on ha-mismatch in client_ServerHello.
-// TODO (LOWER) take a const_slice or Transcript.label_repr instead of tch
-let client_transcript (region:rgn) ha (full_tch: full_offer) =
-  let di, transcript0 = Transcript.create region ha in
-  // TODO intermediate hashing of ch0 and hrr if Some? full_tch.retry
-  let transcript1 = Transcript.extend di (admit() (*full_tch.full_ch *)) transcript0 in
-  let tag = transcript_extract di transcript1 in
-  (tag, di, transcript1)
-#pop-options
-
-let binder = Parsers.PskBinderEntry.pskBinderEntry
-let binder_for (bkey:Negotiation.bkey13) =
-  b:binder { Bytes.length b ==  EverCrypt.Hash.Incremental.hash_length (Negotiation.ha_bkey13 bkey) }
-
-// its buffer; use a Repr instead?
-let btag (bkey:Negotiation.bkey13) =
-  Hacl.Hash.Definitions.hash_t (Negotiation.ha_bkey13 bkey)
-
-// TODO sort it out within KeySchedule. Still high-level
-assume val compute_binder:
-  bkey:Negotiation.bkey13 ->
-  tag: Bytes.lbytes (EverCrypt.Hash.Incremental.hash_length (Negotiation.ha_bkey13 bkey)) ->
-  binder_for bkey
-
-// TODO, used for computing binder lengths, reusing Parsers ParsersAux
-#push-options "--max_ifuel 1"
-let rec bkeys_binders_list_bytesize (bkeys: list Negotiation.bkey13) =
-  match bkeys with
-  | bkey::bkeys -> 1 + EverCrypt.Hash.Incremental.hash_length (Negotiation.ha_bkey13 bkey) + bkeys_binders_list_bytesize bkeys
-  | [] -> 0
-#pop-options
-
 
 /// Compute binder MACs for the PSKs; in rare cases we allocate an
 /// auxiliary transcripts for other hash algorithms.
@@ -236,35 +39,48 @@ let rec bkeys_binders_list_bytesize (bkeys: list Negotiation.bkey13) =
 
 // TODO type; tch & logical payload; prove by induction that the
 // resulting binders have the right length, reusing ParsersAux
+// ADL: extended to work on the second client hello - taking offer
+// as input instead of full_offer to avoid re-hashing CH0
+// I assume that only the compatible PSKs are offered the second time
+// such that one CH digest is enough
 val client_Binders:
   region:rgn ->
   ha0: EverCrypt.Hash.Incremental.alg ->
+  tx0: Transcript.transcript_t ->
   di: Transcript.state ha0 ->
   tch: full_offer { HSM.ch_bound tch.full_ch} ->
-  bkey: list Negotiation.bkey13 ->
-  ST Parsers.OfferedPsks_binders.(b:list Parsers.PskBinderEntry.pskBinderEntry {offeredPsks_binders_list_bytesize b = bkeys_binders_list_bytesize bkey})
-  (requires fun h0 ->
-    Transcript.invariant di (transcript_tch tch) h0)
+  bkey: list KS.binder_key ->
+  ST Parsers.OfferedPsks_binders.(b:list Parsers.PskBinderEntry.pskBinderEntry {offeredPsks_binders_list_bytesize b = binder_key_list_bytesize bkey})
+  (requires fun h0 -> Transcript.invariant di tx0 h0)
   (ensures fun h0 b h1 ->
     modifies_none h0 h1 //TBC
     )
 
 #push-options "--admit_smt_queries true" // list bytesizes
-let rec client_Binders region ha0 di0 tch bkeys =
+let rec client_Binders region ha0 tx0 di0 tch bkeys =
   match bkeys with
   | [] -> []
-  | bkey::bkeys ->
-    let ha = Negotiation.ha_bkey13 bkey in
-    let tx: Transcript.transcript_n (Ghost.hide 0) = transcript_tch tch in
+  | (| i, k |)::bkeys ->
+    let ha = binderId_hash i in
     let tag =
-      if ha = ha0 then
-        transcript_extract di0 tx
+      if ha = ha0 then transcript_extract di0 tx0
       else
-        let tag, di, transcript_tch = client_transcript region ha tch in
-        // TODO Transcript.free di
-        tag in
-    let binder = compute_binder bkey tag in
-    binder :: client_Binders region ha0 di0 tch bkeys
+        let retry = match tch.full_retry with
+	  // We may try to optimize by computing once per ha
+	  | Some {ch0=ch0; sh0=hrr} -> Some (hash_ch0 region ha ch0, hrr)
+	  | None -> None in
+        let tag, _, _ = transcript_start region ha retry tch.full_ch in
+	tag
+      in
+//    let tag =
+//      if ha = ha0 then
+//        transcript_extract di0 tx
+//      else
+//        let tag, di, transcript_tch = transcript_start region ha tch.hashed_retry tch.ch in
+//        // TODO Transcript.free di
+//        tag in
+    let binder = HMAC.mac k tag in
+    binder :: client_Binders region ha0 tx0 di0 tch bkeys
 #pop-options
 
 // TODO also return a slice in the sending buffer containing the
@@ -280,20 +96,19 @@ let client_ClientHello (Client region config r) =
     | _       -> trace "offering ClientHello 1.2"; None in
     // groups = None indicates a 1.2 handshake
     // groups = Some [] is valid, may be used to deliberately trigger HRR
-  let ks, shares = KS.ks_client_init random groups in
+  let ks, shares = KS.ks_client_init random cfg.is_quic groups in
 
-  // Compute the initial ClientHello offer
-  // lower: we'll instead pass the sending state for writing the offer.
-  let sending = Send.send_state0 in
   match Negotiation.client_ClientHello config random shares with
   | Error z -> Error z
   | Correct offer0 ->
   assume( // TODO in Negotiation.client_ClientHello
     HSM.ch_bound offer0 ==>
-    Parsers.OfferedPsks.offeredPsks_binders_list_bytesize (HSM.ch_binders offer0) == bkeys_binders_list_bytesize (snd resume));
+    Parsers.OfferedPsks.offeredPsks_binders_list_bytesize (HSM.ch_binders offer0) == bkey_list_bytesize (snd resume));
 
+  let ha = Negotiation.offered_ha offer0 in
+  let ms = create_msg_state region ParseFlights.F_c_wait_ServerHello random ha in
   // Send the (possibly-truncated) ClientHello, without transcript so far.
-  match Send.send_tch sending offer0 with
+  match Send.send_tch ms.sending offer0 with
   | Error z -> Error z
   | Correct sending -> (
 
@@ -307,31 +122,23 @@ let client_ClientHello (Client region config r) =
   let full0 = {full_retry = None; full_ch = offer0} in
 
   // Allocate state with the "main" offered hash algorithm for the digest
-  let ha = Negotiation.offered_ha offer0 in
   assume False; //19-09-14 TBC
-  let tag, di, tx_tch = client_transcript region ha full0 in
-  let receiving = Receive.(create (alloc_slice region)) in
-  let epochs = Epochs.create region random in
-  let ms: msg_state region ParseFlights.F_c_wait_ServerHello random ha = {
-    digest = di;
-    sending = sending;
-    receiving = receiving;
-    epochs = epochs;
-  } in
+  let tag, di, tx_tch = transcript_start region ha None offer0 in
+  let ms = {ms with digest = di; sending = sending} in
 
-  // assert(tx_tch == Ghost.hide (transcript_tch full0));
-  r := C_wait_ServerHello full0 ms ks;
-
-  let offer1, sending = (
+  // Compute the binders
+  let ks', offer1, sending = (
     match resume with
-    | (_,[]) -> offer0, sending
+    | (_,[]) -> ks, offer0, sending
     | (_,psks) -> (
-      let binders = client_Binders region ha di full0 psks in
+      // Both derives the binder keys and stores the associated early secrets
+      let ks', binder_keys = KS.ks_client13_get_binder_keys ks psks in
+      let binders = client_Binders region ha tx_tch di full0 binder_keys in
       let offer1 = HSM.set_binders offer0 binders in
 
       // Extend the transcript from tx_tch with R_CompleteTCH, as
       // possibly required for 0RTT.
-      let tx1 = Send.patch_binders ms.digest tx_tch ms.sending binders in
+      let tx1 = Send.patch_binders ms.digest tx_tch sending binders in
 
       // Set up 0RTT keys if offered
       let sending =
@@ -339,19 +146,22 @@ let client_ClientHello (Client region config r) =
           trace "setting up 0RTT";
           let digest_CH = transcript_extract di tx1 in
           // TODO LATER consider doing export & register within KS
-          let early_exporter_secret, edk = KS.ks_client13_ch cfg.is_quic ks digest_CH in
-          export epochs early_exporter_secret;
-          register epochs edk;
+          let early_exporter_secret, edk = KS.ks_client13_ch ks digest_CH in
+          export ms.epochs early_exporter_secret;
+          register ms.epochs edk;
           Send.signals sending (Some (true, false)) false )
         else sending in
-      offer1, sending )) in
+      ks', offer1, sending )) in
+
+  // assert(tx_tch == Ghost.hide (transcript_tch full0));
+  r := C_wait_ServerHello full0 ms ks;
 
   // In both cases, the transcript is now at [ClientHello None offer1]
   let h1 = get() in
-  let fo1 = {full_retry=None; full_ch=offer1} in
-  assert (Transcript.invariant ms.digest (transcript_offer fo1) h1);
+  let full1 = {full_retry=None; full_ch=offer1} in
+  assert (Transcript.invariant ms.digest (transcript_offer full1) h1);
 
-  r := C_wait_ServerHello fo1 ms ks;
+  r := C_wait_ServerHello full1 ms ks';
   Correct () )
 
 let client_HelloRetryRequest hs hrr =
@@ -359,7 +169,7 @@ let client_HelloRetryRequest hs hrr =
   let C_wait_ServerHello offer ms ks = !r in
   let open Parsers.HelloRetryRequest in
   trace("HelloRetryRequest with extensions " ^ Nego.string_of_hrres (HSM.hrr_extensions hrr));
-  let ch1 = offer.full_ch in
+  let ch0 = offer.full_ch in
   let share, ks =
     match TLS.Cookie.find_keyshare hrr with
     | None ->
@@ -374,44 +184,45 @@ let client_HelloRetryRequest hs hrr =
         Some (| g, s |), ks )
   in
   let h0 = get() in assume(Send.invariant ms.sending h0); //TODO framing
-  match Nego.client_HelloRetryRequest ch1 hrr share with
+  match Nego.client_HelloRetryRequest ch0 hrr share with
   | Error z -> Receive.InError z
-  | Correct offer ->
+  | Correct ch1 ->
 
   // The rest of the code is similar to client_ClientHello's, might
   // even be shared.
 
   assert(HSM.is_valid_hrr hrr);
-  assume(Negotiation.offered_ha offer == HSM.hrr_ha hrr); // TODO!
+  assume(Negotiation.offered_ha ch1 == HSM.hrr_ha hrr);
   assume( // TODO in Negotiation.client_ClientHello
-    HSM.ch_bound offer ==>
-    Parsers.OfferedPsks.offeredPsks_binders_list_bytesize (HSM.ch_binders offer) ==
-    bkeys_binders_list_bytesize (snd (snd config)));
+    HSM.ch_bound ch1 ==>
+    Parsers.OfferedPsks.offeredPsks_binders_list_bytesize (HSM.ch_binders ch1) ==
+    bkey_list_bytesize (snd (snd config)));
 
-  match Send.send_tch ms.sending offer with
+  match Send.send_tch ms.sending ch1 with
   | Error z -> Receive.InError z
   | Correct sending ->
 
-  let offer = HSM.clear_binders offer in
-  let retry = Some({ch0=ch1; sh0 = hrr}) in
-  let full2 = {full_retry=retry; full_ch=offer} in
-
-  // TODO recycle the existing digest when HSM.hrr_ha hrr =
-  // Negotiation.offered_ha ch1, or at least free it.
-
   let ha = HSM.hrr_ha hrr in
+  let offer1 = HSM.clear_binders ch1 in
+  let full_retry = Some({ch0=ch0; sh0 = hrr}) in
+  let retry = Some (hash_ch0 region ha ch0, hrr) in
+  let full1 = {full_retry=full_retry; full_ch=offer1} in
+
+  // FIXME free old digest - we are restarting with retry
   assume False; //19-09-14 TBC after fixing client_transcript
-  let tag, di, tx_tch = client_transcript region ha full2 in
-  r := C_wait_ServerHello full2 ms ks;
+  let tag, di, tx_tch = transcript_start region ha retry offer1 in
+  r := C_wait_ServerHello full1 ms ks;
 
   let cfg, resume = config in
-  let offer, sending = (
+  let offer2, sending = (
     // TODO RFC recheck we send binders for the initial bkeys
+    // ADL: no, we should filter out PSKs that don't match with HRR's ha
     match resume with
-    | (_,[]) -> offer, sending
+    | (_,[]) -> offer1, sending
     | (_,psks) -> (
-      let binders = client_Binders region ha di full2 psks in
-      let offer = HSM.set_binders offer binders in
+      let ks', binder_keys = KS.ks_client13_get_binder_keys ks psks in
+      let binders = client_Binders region ha tx_tch di full1 binder_keys in
+      let offer = HSM.set_binders offer1 binders in
       let tx1 = Send.patch_binders ms.digest tx_tch ms.sending binders in
 
       // Set up 0RTT keys if offered ---- is it enabled after HRR?
@@ -420,17 +231,18 @@ let client_HelloRetryRequest hs hrr =
           trace "setting up 0RTT";
           let digest_CH = transcript_extract di tx1 in
           // TODO LATER consider doing export & register within KS
-          let early_exporter_secret, edk = KS.ks_client13_ch cfg.is_quic ks digest_CH in
+          let early_exporter_secret, edk = KS.ks_client13_ch ks digest_CH in
           export ms.epochs early_exporter_secret;
           register ms.epochs edk;
           Send.signals sending (Some (true, false)) false )
         else sending in
       offer, sending )) in
 
-  let full2 = ({full_retry=retry; full_ch=offer}) in
+  let full2 = ({full_retry=full_retry; full_ch=offer2}) in
 
   r := C_wait_ServerHello full2 ms ks;
   Receive.InAck false false
+
 (*
 let client_HelloRetryRequest (Client region config r) hrr =
   trace "client_HelloRetryRequest";
@@ -467,18 +279,26 @@ let client_ServerHello (Client region config r) sh =
     match cs with
     | CipherSuite13 ae ha -> (
       trace "Running TLS 1.3";
-      // TODO handle mismatch between ha and initial_ha, causing the
-      // re-allocation of the digest with a ClientHello transcript
-      // (two cases depending on retry)
+      
+      let ms = // we need to restart digest if server changes hash
+        if ha = Nego.offered_ha offer.full_ch then ms
+	else
+	  let retry =
+	    match offer.full_retry with
+	    | None -> None
+	    | Some {ch0 = ch0; sh0 = hrr} -> Some (hash_ch0 region ha ch0, hrr) in
+	  let _, di, _ = transcript_start region ha retry offer.full_ch in
+	  {ms with digest = di} in
 
       let server_share = Negotiation.find_serverKeyShare sh in
-      let transcript_sh = Transcript.extend ms.digest (admit() (*sh*)) (transcript_offer offer) in
+      let (| _, shr |) = get_handshake_repr (HSM.M_server_hello sh) in
+      let label = Transcript.LR_ServerHello shr in
+      let tx = transcript_offer offer in
+      let transcript_sh = Transcript.extend ms.digest label tx in
+
       //assert(transcript_sh == transcript13 offer sh []);
       let digest_ServerHello = transcript_extract ms.digest transcript_sh in
-      let hs_keys, ks = KS.ks_client13_sh
-        region
-        ks
-        cfg.is_quic
+      let ks, hs_keys = KS.ks_client13_sh region ks
         (HSM.sh_random sh)
         (CipherSuite13 ae ha)
         digest_ServerHello
@@ -550,9 +370,11 @@ let client_ServerHello (Client region config r) sh =
 (*** TLS 1.3 ***)
 
 #push-options "--z3rlimit 200 --max_fuel 1" // for length [] == 0
-let client13_Finished2 (Client region config r) (*ocr*) =
-  let C13_complete offer sh ee server_id fin1 fin2 eoed_args ms ks = !r in
+let client13_Finished2 (Client region config r) =
+  let C13_complete offer sh ee server_id fin1 ms (Finished_pending cfk ks false) = !r in
   let ha = Negotiation.selected_ha sh in
+
+  // FIXME(adl) send EOED! in parent function? we are changing wkey...
 
   // LATER: support certificate-based client authentication
   // let digest =
@@ -573,9 +395,7 @@ let client13_Finished2 (Client region config r) (*ocr*) =
   assume False; // missing too many stateful invariants
 
   // to be updated, possibly using btag as output buffer.
-  // may use an abstract accessor instead: (i:HMAC.finishedId & cfk:KS.fink i)
-  let Old.KeySchedule.C13_wait_Finished2 _ (| cfin_id, cfin_key |) _ _ = ks in
-  let cvd = HMAC.mac cfin_key digest_Finished1 in
+  let cvd = HMAC.mac (dsnd cfk) digest_Finished1 in
   let fin2 = Ghost.hide #HSM.finished cvd in
 
   match Send.send_extract13 ms.digest transcript_Finished1 ms.sending (HSM.M13_finished cvd) with
@@ -587,7 +407,7 @@ let client13_Finished2 (Client region config r) (*ocr*) =
 
   let ms = { ms with sending = sending } in
   // updating [ms.sending fin2 ks]
-  r := C13_complete offer sh ee server_id fin1 fin2 None ms ks;
+  r := C13_complete offer sh ee server_id fin1 ms (Finished_sent fin2 ks);
   Correct ()
 #pop-options
 
@@ -714,35 +534,36 @@ let client13_Finished1 hs ee client_cert_request server_cert_certverify finished
   | Error z -> Receive.InError z
   | Correct transcript_Finished1 -> (
   let digest_Finished1 = transcript_extract ms.digest transcript_Finished1 in
-  let ks, (sfin_key, cfin_key, app_keys, exporter_master_secret) = KS.ks_client13_sf cfg.is_quic ks digest_Finished1 in
+  let ks, (sfin_key, cfin_key, app_keys, exporter_master_secret) =
+    KS.ks_client13_sf ks digest_Finished1 in
   // ADL: 4th returned value is the exporter master secret.
   // should be passed to application somehow --- store in Nego? We need agreement.
 
-  let (| finId, sfin_key |) = sfin_key in
-  if not (HMAC.verify sfin_key digest_maced digest_maced)
+  if not (HMAC.verify (dsnd sfin_key) digest_maced digest_maced)
   then
     Receive.InError (fatalAlert Decode_error, "Finished MAC did not verify: expected digest "^Bytes.print_bytes digest_maced)
   else (
     export ms.epochs exporter_master_secret;
     register ms.epochs app_keys; // ATKs are ready to use in both directions
 
-    if Negotiation.zeroRTT sh && not cfg.is_quic // EOED emitting (not used for QUIC)
-    then (
+    let send_eoed = Negotiation.zeroRTT sh && not cfg.is_quic in
+    if send_eoed then ( // EOED emitting (not used for QUIC)
       trace "Early data accepted; emitting EOED.";
       match Send.send13 #ha ms.digest #(Ghost.hide 0) (admit()) ms.sending (HSM.M13_end_of_early_data ()) with
       | Correct (sending, transcript) -> (
         let sending = Send.signals sending (Some (false, false)) false in
-        let eoed_args = Some (None, cfin_key) in
         let fin1 = Ghost.hide Bytes.empty_bytes in
-        let fin2 = Ghost.hide Bytes.empty_bytes in
-        r := C13_complete offer sh ee server_cert_certverify fin1 fin2 eoed_args ms ks; // digestEOED ocr cfin_key;
+        r := C13_complete offer sh ee server_cert_certverify fin1 ms
+	  (Finished_pending cfin_key ks true);
         Receive.InAck false false )
       | Error z -> Receive.InError z )
     else (
       (if Negotiation.zeroRTT sh
       then trace "Early data accepted (QUIC, no EOED)."
       else trace "Early data rejected");
-      // TODO write r before this call!
+      let fin1 = Ghost.hide Bytes.empty_bytes in
+      r := C13_complete offer sh ee server_cert_certverify fin1 ms
+	  (Finished_pending cfin_key ks false);
       match client13_Finished2 hs with
       | Error z   -> Receive.InError z
       | Correct _ -> Receive.InAck true false // Client 1.3 ATK; next the client will read again to send Finished, writer++, and the Complete signal
@@ -758,7 +579,7 @@ let client13_NewSessionTicket (Client region config r) st13 =
   let age_add = st13.ticket_age_add in
   trace ("Received ticket: "^Bytes.hex_of_bytes tid^" nonce: "^Bytes.hex_of_bytes nonce);
 
-  let C13_complete offer sh ee server_id _fin1 _fin2 _eoed_args _ms ks = !r in
+  let C13_complete offer sh ee server_id _fin1 _ms (Finished_sent _fin2 ks) = !r in
   let cs = HSM.sh_cipher_suite sh in
   let Some cs = CipherSuite.cipherSuite_of_name cs in // add static refinement?
   let ed = List.Tot.find NSTE_early_data? st13.extensions in
@@ -794,7 +615,7 @@ let client13_NewSessionTicket (Client region config r) st13 =
 let early_rejected (Client region config r) =
   match !r with
   | C13_wait_Finished1 offer sh _ _
-  | C13_complete offer sh _ _ _ _ _ _ _ ->
+  | C13_complete offer sh _ _ _ _ _ ->
     Negotiation.find_early_data offer.full_ch &&
     not (List.Tot.existsb Parsers.ServerHelloExtension.SHE_early_data? (HSM.sh_extensions sh))
   | _ -> false

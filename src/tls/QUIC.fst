@@ -140,6 +140,7 @@ let peekClientHello (ch:bytes) (has_record:bool) : ML (option chSummary) =
     | _ -> trace ("peekClientHello: not a client hello!"); None
 
 module H = TLS.Handshake
+module HM = TLS.Handshake.Machine
 
 let create_hs (is_server:bool) config : ML Machine.state =
   quic_check config;
@@ -238,9 +239,13 @@ let process_hs (hs:Machine.state) (ctx:hs_in) : ML hs_result =
       let j = H.i hs Writer in
 
       //19-09-14 TODO recheck semantics 
-      let post_hs = H.is_post_handshake hs in
+      let post_hs =
+        match hs with
+	| HM.Client _ _ r -> HM.C13_complete? !r
+	| HM.Server _ _ r -> HM.S13_complete? !r
+	| _ -> false in
       let reject_0rtt = 
-        if H.role_of hs = Client && j = 2 then // FIXME: early reject vs. late reject
+        if HM.Client? hs && j = 2 then // FIXME: early reject vs. late reject
 	  TLS.Handshake.Client.early_rejected hs 
 	else false in
       let i = currentId hs Writer in
@@ -266,8 +271,10 @@ type raw_key = {
   pn_key: bytes;
 }
 
-let get_key (hs:TLS.Handshake.hs) (ectr:nat) (rw:bool) : ML (option raw_key) =
-  let epochs = Monotonic.Seq.i_read (Old.Epochs.get_epochs (Handshake.epochs_of hs)) in
+let get_key (hs:HM.state) (ectr:nat) (rw:bool) : ML (option raw_key) =
+  let n = HM.nonce hs in
+  let epochs = Monotonic.Seq.i_read
+    (Old.Epochs.get_epochs (HM.epochs hs n)) in
   if Seq.length epochs <= ectr then None
   else
     let e = Seq.index epochs ectr in
@@ -290,5 +297,5 @@ let get_key (hs:TLS.Handshake.hs) (ectr:nat) (rw:bool) : ML (option raw_key) =
       pn_key = pn;
     })
     
-let send_ticket (hs:TLS.Handshake.hs) (b:bytes) : ML bool =
+let send_ticket (hs:HM.state) (b:bytes) : ML bool =
   TLS.Handshake.send_ticket hs b

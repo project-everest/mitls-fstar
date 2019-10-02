@@ -70,7 +70,7 @@ val create:
 let create #ip i a =
   assert_norm (pow2 32 < pow2 61);
   assert_norm (pow2 61 < pow2 125);
-  assert_norm(Spec.HMAC.keysized a.alg (H.hash_length a.alg));
+  assert_norm(Spec.Agile.HMAC.keysized a.alg (H.hash_length a.alg));
   let kv: krepr a.alg = Random.sample32 (H.hash_len a.alg) in
   let log =
     if is_safe i then Ideal (DT.alloc (entry i a))
@@ -85,7 +85,7 @@ let coerceT (#ip: ipkg)
   : GTot (key i) =
   assert_norm (pow2 32 < pow2 61);
   assert_norm (pow2 61 < pow2 125);
-  assert_norm(Spec.HMAC.keysized a.alg (H.hash_length a.alg));
+  assert_norm(Spec.Agile.HMAC.keysized a.alg (H.hash_length a.alg));
   MAC a kv Real
 
 val coerce:
@@ -103,7 +103,7 @@ val coerce:
 let coerce #ip i a kv =
   assert_norm (pow2 32 < pow2 61);
   assert_norm (pow2 61 < pow2 125);
-  assert_norm(Spec.HMAC.keysized a.alg (H.hash_length a.alg));
+  assert_norm(Spec.Agile.HMAC.keysized a.alg (H.hash_length a.alg));
   MAC a kv Real
 
 let log_of (#ip:ipkg) (#i:regid ip) (k:key i)

@@ -39,7 +39,7 @@ open FStar.HyperStack.ST
 let t = SH.serverHello
 
 let repr (b:R.const_slice) =
-  R.repr_p SH.serverHello b SH.serverHello_parser
+  R.repr_p SH.serverHello b SH.serverHello_parser32
 
 #push-options "--z3rlimit 16 --max_fuel 1 --max_ifuel 1"
 let cipherSuite (#b:R.const_slice) (r:repr b)

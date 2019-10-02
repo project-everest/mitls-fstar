@@ -36,4 +36,4 @@ module C12 = Parsers.Certificate12
 let t = C12.certificate12
 
 let repr (b:R.slice) =
-  R.repr_p t b C12.certificate12_parser
+  R.repr_p t b C12.certificate12_parser32

@@ -35,7 +35,7 @@ open FStar.HyperStack.ST
 let t = CH.clientHello
 
 let repr (b:R.const_slice) =
-  R.repr_p CH.clientHello b CH.clientHello_parser
+  R.repr_p CH.clientHello b CH.clientHello_parser32
 
 let version (#b:R.const_slice) (r:repr b)
   : Stack Parsers.ProtocolVersion.protocolVersion

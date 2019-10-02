@@ -77,6 +77,7 @@ type in_progress_flt_t =
   | F_c13_wait_Finished1
   | F_s13_wait_Finished2
   | F_s13_wait_EOED
+  // FIXME(adl) missing F_s13_postHS / complete
   | F_c13_Complete
   | F_c12_wait_ServerHelloDone
   | F_cs12_wait_Finished

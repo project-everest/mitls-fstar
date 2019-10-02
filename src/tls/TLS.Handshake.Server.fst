@@ -5,51 +5,58 @@ open TLSConstants
 open TLSInfo
 open TLSError
 
-open FStar.Bytes
 open FStar.HyperStack.ST
-open TLS.Handshake.State
+open TLS.Handshake.Machine
+open TLS.Handshake.Messaging
 
-module CH = Parsers.ClientHello
+(* FStar libraries *)
+module HS = FStar.HyperStack
+module B = FStar.Bytes
+module LB = LowStar.Buffer
+module M = LowStar.Modifies
+
+(* Internal dependencies *)
 module E = Extensions
-module Epochs = Old.Epochs
 module HSM = HandshakeMessages
 module HMAC = Old.HMAC.UFCMA
 module KS = Old.KeySchedule
-module HSL = HandshakeLog
 module Nego = Negotiation
-module HS = FStar.HyperStack
-module H = Hashing.Spec
-module SH = Parsers.RealServerHello
+module Transcript = TLS.Handshake.Transcript
+module Send = TLS.Handshake.Send
+module Recv = TLS.Handshake.Receive
+module Epochs = Old.Epochs
 
+(* Hashing *)
+module H = Hashing.Spec
+module HD = Spec.Hash.Definitions
+module HI = EverCrypt.Hash.Incremental
+
+(* Parsers (for easy access to conflicting field names *)
+module CH = Parsers.ClientHello
+module SH = Parsers.ServerHello
 
 #set-options "--admit_smt_queries true"
 
-private let serverHello (m:Nego.mode) =
-  let open Nego in
-  HSM.M_server_hello (HSM.serverHello_of_sh SH.({
-    version = minPV TLS_1p2 m.n_protocol_version;
-    random = m.n_server_random;
-    session_id = m.n_sessionID;
-    cipher_suite = name_of_cipherSuite m.n_cipher_suite;
-    compression_method = NullCompression;
-    extensions = m.n_server_extensions;
-   }))
-
-private let verify_binder (hs:hs) (bkey:(i:HMAC.binderId & bk:KS.binderKey i))
-  (tag:HMAC.tag (HMAC.HMAC_Binder (dfst bkey))) tlen
+(* See common functions in TLS.Handshake.Machine
+private let rec verify_binder (bkey:list Nego.bkey13) (tags: list binders)
+//  (tag:HMAC.tag (HMAC.HMAC_Binder (dfst bkey))) tlen
   : ST bool
-    (requires fun h0 -> True)
+    (requires fun h0 -> binders_for bkey tags)
     (ensures fun h0 _ h1 -> modifies_none h0 h1)
   =
   let (| bid, bk |) = bkey in
   let digest_CH0 = HSL.hash_tag_truncated #(binderId_hash bid) hs.log tlen in
   HMAC.verify bk digest_CH0 tag
+*)
 
 private let consistent_truncation (x:option E.offeredPsks) =
   match x with
   | None -> true
   | Some psk -> List.length psk.E.identities = List.length psk.E.binders
 
+(*** TLS 1.2 functions **)
+
+(*
 // When sending a TLS 1.2 flight
 private let server_ServerHelloDone (hs:hs) : St incoming =
   trace "Sending ...ServerHelloDone";
@@ -125,11 +132,30 @@ let server_ClientHello_12 hs offer mode app_exts : St incoming =
       HSL.setParams hs.log pv ha (Some ka) None;
       server_ServerHelloDone hs
   | _ -> InError (fatalAlert Handshake_failure, "Unsupported RSA key exchange")
+*)
 
-let server_ClientHello_13 hs offer mode app_exts : St incoming =
-  let cs = mode.Nego.n_cipher_suite in
-  let cr = mode.Nego.n_offer.CH.random in
-  let g_gx = mode.Nego.n_client_share in
+(*
+// Bramch after selecting TLS 1.3
+private let server_ClientHello_13 (ch:HSM.ch) (sh:HSM.sh) (ks:s_init)
+  (#r:rgn) (m:msg_state r ParseFlights.F_s_Idle (HSM.sh_random sh))
+  (gx:option Nego.share) (use_psk:option Nego.bkey13) (cert:Nego.certNego)
+  : St Receive.incoming
+  =
+  let cs = HSM.sh_cipher_suite sh in
+  let cr = ch.CH.random in
+  let opskid = match use_psk with Some (id,_) -> Some id | None -> None in
+  let ks', ogy, obk = KS.ks_server13_init ks cr cs opskid gx in
+  let sh' = Nego.server_KeyShare sh ogy in // Write server share extension
+  match extend m.sending m.digest (HSM.M_server_hello sh) [MSH.M_client_hello ch] with
+  | Error z -> Error z
+  | Correct tx' ->
+    let digest_sh = transcript_extract m.digest tx' in
+    let ks'', hs_keys = KS.ks_server13_sh ks' digest_sh in
+    register m.epochs hs_keys;
+    Correct ks''
+*)
+
+  (*
   let oshare =
     match mode.Nego.n_pski with
     | None ->
@@ -164,8 +190,8 @@ let server_ClientHello_13 hs offer mode app_exts : St incoming =
          let early_exporter_secret, zero_keys =
            KS.ks_server13_0rtt_key hs.ks digestClientHelloBinders in
          export hs early_exporter_secret;
-         register hs zero_keys;
-         Epochs.incr_reader hs.epochs // Be ready to read 0-RTT data
+         register hs zero_keys
+//         Epochs.incr_reader hs.epochs // Be ready to read 0-RTT data
       );
       // signal key change after writing ServerHello
       HSL.send_signals hs.log (Some (false, zeroing)) false;
@@ -174,12 +200,39 @@ let server_ClientHello_13 hs offer mode app_exts : St incoming =
       register hs hs_keys;
       hs.state := S13_sent_ServerHello;
       InAck zeroing false
+  *)
 
 // Only if we are sure this is the 1st CH
-let server_ClientHello1 hs offer : St incoming =
-  match Nego.server_ClientHello hs.nego offer with
-  | Error z -> InError z
-  | Correct (Nego.ServerRetry hrr) ->
+let server_ClientHello1 st offer
+  : St Receive.incoming =
+  let Server region config r = st in
+  let S_wait_ClientHello random = !r in
+
+  let sending = Send.send_state0 in
+  let receiving = Recv.(create (alloc_slice region)) in
+  let epochs = Epochs.create region random in
+
+  match Nego.server_ClientHello config offer with
+  | Error z -> Recv.InError z
+  | Correct (Nego.ServerRetry hrr) -> admit()
+  | Correct (Nego.ServerAccept13 cert cs13 opsk) ->
+    match cs13 with
+    | Nego.PSK_EDH j g_gx cs ->
+      let ks = KS.ks_server13_init random (offer.CH.random) cs config.is_quic opsk g_gx in
+      Recv.InError (fatalAlert Internal_error, "TBC")
+    | Nego.JUST_EDH g_gx cs ->
+      let CipherSuite13 ae ha = cs in
+      let ks = KS.ks_server13_init random (offer.CH.random) cs config.is_quic opsk (Some g_gx) in
+      let tag_CHT, di, tx0 = transcript_start region ha None offer in
+      let m: msg_state region ParseFlights.F_s_Idle random ha = {
+        digest = di;
+        sending = sending;
+        receiving = receiving;
+        epochs = epochs;
+      } in
+    admit()
+
+(*
     // Create a cookie, for stateless retry
     let ha = TLS.Cookie.hrr_ha hrr in 
     let digest = HandshakeLog.hash_tag #ha hs.log in 
@@ -188,14 +241,24 @@ let server_ClientHello1 hs offer : St incoming =
     HSL.send hs.log (HSL.Msg m);
     hs.state := S13_wait_CH2 offer hrr;
     InAck false false
-  | Correct (Nego.ServerMode mode cert app_exts) ->
+  | Correct (Nego.ServerAccept13 sh ee psk dhg cert) ->
+    (match server_ClientHello_13 with
+    | Correct ks' ->
+      r := S13_sent_ServerHello ch sh ee m cert ks'';
+      InAck true false
+    | Error z -> InError z)
     if Nego.resume_12 mode then
        server_ClientHello_resume12 hs offer mode app_exts
     else if mode.Nego.n_protocol_version = TLS_1p3 then
       server_ClientHello_13 hs offer mode app_exts
     else
       server_ClientHello_12 hs offer mode app_exts
+*)
 
+let server_ClientHello2 hs ch1 hrr ch2 app_cookie =
+  admit()
+
+(*
 // Only if this is a 2nd CH (stateful or stateless)
 let server_ClientHello2 hs ch1 hrr ch2 app_cookie =
   let open Parsers.OfferedPsks in
@@ -232,9 +295,19 @@ let server_ClientHello hs offer =
 	// FIXME(adl) need to compute ch1 from ch2 + hrr
 	// or weaken authentication (e.g. exists ch1. Nego.valid_retry ch1 hrr ch2)
 	server_ClientHello2 hs offer hrr offer extra
+*)
+
+let server_ClientHello = server_ClientHello1
 
 (*** TLS 1.2 ***)
 
+let server_ClientCCS1 hs cke digestCCS1 = admit()
+
+let server_ClientFinished hs cvd digestCCF digestCF = admit()
+
+let server_ClientFinished2 hs cvd digestSF digestCF = admit()
+
+(*
 private let convert_kex = function
   | Kex_RSA -> Correct HSM.Rsa
   | Kex_DHE -> Correct HSM.Dhe
@@ -266,7 +339,7 @@ let server_ClientCCS1 hs cke digestCCS1 =
     | true, Some gy ->
       let app_keys = KS.ks_server12_cke_dh hs.ks (| g, gy |) digestCCS1 in
       register hs app_keys;
-      Epochs.incr_reader hs.epochs;
+//      Epochs.incr_reader hs.epochs;
       // use the new reader; will use the new writer only after sending CCS
       hs.state := S_wait_Finished1 digestCCS1; // keep digest to verify the Client Finished
       InAck true false  // Server 1.2 ATK
@@ -314,9 +387,20 @@ let server_ClientFinished2 hs cvd digestSF digestCF =
     (hs.state := S_Complete; InAck false false)
   else
     InError (fatalAlert Decode_error, "Client Finished MAC did not verify: expected digest "^print_bytes digestSF)
+*)
 
 (*** TLS 1.3 ***)
 
+let server_ServerFinished_13 hs = admit()
+
+let server_EOED hs digestEOED = admit()
+
+let server_Ticket13 hs digestEOED = admit()
+
+let server_ClientFinished_13 hs cvd digest_SF digest_F client_cert = admit()
+
+
+(*
 let server_ServerFinished_13 hs =
     trace "prepare Server Finished";
     let mode = Nego.getMode hs.nego in
@@ -361,7 +445,7 @@ let server_ServerFinished_13 hs =
         if Nego.zeroRTT mode && not cfg.is_quic then
           S13_wait_EOED // EOED sent with 0-RTT: dont increment reader
         else
-          (Epochs.incr_reader hs.epochs; // Turn on HS key
+          ( //Epochs.incr_reader hs.epochs; // Turn on HS key
           S13_wait_Finished2 digestServerFinished)
       );
       Correct()
@@ -369,7 +453,7 @@ let server_ServerFinished_13 hs =
 
 let server_EOED hs digestEOED =
   trace "Process EOED (increment reader to HS key)";
-  Epochs.incr_reader hs.epochs;
+//  Epochs.incr_reader hs.epochs;
   hs.state := S13_wait_Finished2 digestEOED;
   InAck false false
 
@@ -422,8 +506,9 @@ let server_ClientFinished_13 hs f digestBeforeClientFinished digestClientFinishe
          | [] -> trace ("Not sending a ticket: no PSK key exchange mode advertised")
          | psk_kex ->
            if Some? cfg.send_ticket then server_Ticket13 hs (Some?.v cfg.send_ticket));
-         Epochs.incr_reader hs.epochs; // finally start reading with AKTs
+//         Epochs.incr_reader hs.epochs; // finally start reading with AKTs
          InAck true true  // Server 1.3 ATK
         end
        else InError (fatalAlert Decode_error, "Finished MAC did not verify: expected digest "^print_bytes digestClientFinished)
 
+*)

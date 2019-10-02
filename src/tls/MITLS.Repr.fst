@@ -56,6 +56,9 @@ type const_slice =
       } ->
       const_slice
 
+// When should we use these slices instead of those from LP? Will
+// those definitions eventually go to QD?
+
 [@(deprecated "use const_slice instead")]
 let slice = const_slice
 
@@ -100,18 +103,22 @@ let strong_parser_kind =
 
 (*** Representation types ***)
 
-/// `repr_meta t`: Each representation is associated with metadata
-/// that records both
-///  -- the parser that defines the wire-format used
-///  -- an erased value represented by the wire format
-///  -- the bytes of the wire format
+/// `repr_meta t`: Each representation is associated with
+/// specification metadata that records
+///
+///  -- the parser(s) that defines its wire format
+///  -- the represented value
+///  -- the bytes of its wire format
 noeq
 type repr_meta (t:Type) = {
   parser_kind: strong_parser_kind;
   parser:LP.parser parser_kind t;
-  value: t;
+  parser32:LS.parser32 parser;
+  v: t;
   repr_bytes: Seq.seq LP.byte
 }
+// is it a good use case for `erasable` ?
+// why keeping repr_bytes + invariant vs recalculating it from v?
 
 /// `repr t b`: The main type of this module.
 ///
@@ -119,18 +126,27 @@ type repr_meta (t:Type) = {
 ///    `b.[start_pos, end_pos)`
 ///
 ///   * The representation is described by erased the `meta` field
+///
+///   * At this stage, we also keep a real high-level value (vv). We
+///     plan to gradually access instead its ghost (.meta.v) and
+///     eventually get rid of it to lower implicit heap allocations.
+///
+///   * Similarly, we should consider passing fewer real indexes
+///     around: we need access to start_pos, but probably not to
+///     end_pos (recomputable anyway) or b.len.
 noeq
 type repr (t:Type) (b:const_slice) = {
   start_pos: index b;
   end_pos: i:index b {start_pos <= i /\ i <= b.len};
-  meta: Ghost.erased (repr_meta t)
+  meta: Ghost.erased (repr_meta t);
+  vv: x:t{x == (Ghost.reveal meta).v}
 }
 
 
 /// `repr_p`
 ///
 /// One of the main ideas of `repr` is to index representation by
-/// types rather than parsers that define wire-formats.
+/// types rather than parsers that define their wire-formats.
 ///
 /// When manipulating reprs, the intention is for clients to be
 /// agnostic to the specific wire formats used.
@@ -139,12 +155,14 @@ type repr (t:Type) (b:const_slice) = {
 /// representations from wire formats. At those points, the `repr_p`
 /// type is useful, since it is a `repr` that is also indexed by a
 /// parser.
-let repr_p (t:Type) (b:const_slice) #k (parser:LP.parser k t) =
+let repr_p (t:Type) (b:const_slice) #k (#parser:LP.parser k t) (parser32:LS.parser32 parser) =
   r:repr t b {
     let meta = Ghost.reveal r.meta in
     meta.parser_kind == k /\
-    meta.parser == parser
+    meta.parser == parser /\
+    meta.parser32 == parser32
   }
+// No harm in passing parser32, even if it is seldom used.
 
 (*** Validity ***)
 
@@ -154,12 +172,12 @@ let repr_p (t:Type) (b:const_slice) #k (parser:LP.parser k t) =
 ///   First, we provide `valid'`, a transparent definition and then
 ///   turn it `abstract` by the `valid` predicate just below.
 ///
-///   Validity encapsulates three related LowParse notions:
+///   Validity encapsulates three related LowParse properties:notions:
 ///
-///    1. That the underlying slice contains a valid wire-format
+///    1. The underlying slice contains a valid wire-format
 ///    (`valid_pos`)
 ///
-///    2. That the ghost value associated with the `repr` is the
+///    2. The ghost value associated with the `repr` is the
 ///    parsed value of the wire format.
 ///
 ///    3. The bytes of the slice are indeed the representation of the
@@ -168,9 +186,8 @@ let valid' (#t:Type) (#b:const_slice) (r:repr t b) (h:HS.mem)
   = let m = Ghost.reveal r.meta in
     let b = to_slice b in
     LP.valid_pos m.parser h b r.start_pos r.end_pos /\
-    m.value == LP.contents m.parser h b r.start_pos /\
+    m.v == LP.contents m.parser h b r.start_pos /\
     m.repr_bytes == LP.bytes_of_slice_from_to h b r.start_pos r.end_pos
-
 
 /// `valid`: abstract validity
 abstract
@@ -212,7 +229,9 @@ let frame_valid #t #b (r:repr t b) (l:B.loc) (h0 h1:HS.mem)
 /// represented
 let value #t #b (r:repr t b)
   : GTot t
-  = (Ghost.reveal r.meta).value
+  = (Ghost.reveal r.meta).v
+// do we use `repr` in other libraries for it :) ? maybe reserve `v`
+// for this one if it is pervasive in e.g. Machine?
 
 open FStar.HyperStack.ST
 
@@ -238,14 +257,16 @@ let to_bytes #t #b (r: repr t b)
 ///    Constructing a `repr` from a sub-slice
 ///      b.[from, to)
 ///    known to be valid for a given wire-format parser `p`
+inline_for_extraction
 let mk (b:LP.slice mut_p mut_p{ LP.(b.len <= validator_max_length) })
        (from to:index (of_slice b))
-       (#k:strong_parser_kind) #t (parser:LP.parser k t)
-  : Stack (repr_p t (of_slice b) parser)
+       (#k:strong_parser_kind) #t (#parser:LP.parser k t)
+       (parser32:LS.parser32 parser)
+  : Stack (repr_p t (of_slice b) parser32)
     (requires fun h ->
       LP.valid_pos parser h b from to)
     (ensures fun h0 r h1 ->
-      h0 == h1 /\
+      B.(modifies loc_none h0 h1) /\
       valid r h1 /\
       r.start_pos = from /\
       r.end_pos = to /\
@@ -256,59 +277,87 @@ let mk (b:LP.slice mut_p mut_p{ LP.(b.len <= validator_max_length) })
       Ghost.hide ({
         parser_kind = _;
         parser = parser;
-        value = v;
+        parser32 = parser32;
+        v = v;
         repr_bytes = LP.bytes_of_slice_from_to h b from to
       })
     in
-    {
-      start_pos = from;
-      end_pos = to;
-      meta = m
-    }
+
+    LP.contents_exact_eq parser h b from to;
+
+    // Compute [.vv]; this code will eventually disappear
+    let sub_b = B.sub b.LP.base from (to - from) in
+    let sub_b_bytes = FStar.Bytes.of_buffer (to - from) sub_b in
+    match parser32 sub_b_bytes with
+    | Some (v, _) ->
+      {
+        start_pos = from;
+        end_pos = to;
+        vv = v;
+        meta = m
+      }
 
 /// `mk b from to p`:
 ///    Constructing a `repr` from a sub-slice
 ///      b.[from, to)
 ///    known to be valid for a given wire-format parser `p`
+#set-options "--z3rlimit 20"
+inline_for_extraction
 let mk_from_const_slice
          (b:const_slice)
          (from to:index b)
-         (#k:strong_parser_kind) #t (parser:LP.parser k t)
-  : Stack (repr_p t b parser)
+         (#k:strong_parser_kind) #t (#parser:LP.parser k t)
+         (parser32:LS.parser32 parser)
+  : Stack (repr_p t b parser32)
     (requires fun h ->
       LP.valid_pos parser h (to_slice b) from to)
     (ensures fun h0 r h1 ->
-      h0 == h1 /\
+      B.(modifies loc_none h0 h1) /\
       valid r h1 /\
       r.start_pos = from /\
       r.end_pos = to /\
       value r == LP.contents parser h1 (to_slice b) from)
   = let h = get () in
+    assume (C.qbuf_qual (C.as_qbuf b.base) == C.MUTABLE);
     let b = to_slice b in
     let m =
       let v = LP.contents parser h b from in
       Ghost.hide ({
         parser_kind = _;
         parser = parser;
-        value = v;
+        parser32 = parser32;
+        v = v;
         repr_bytes = LP.bytes_of_slice_from_to h b from to
       })
     in
-    {
-      start_pos = from;
-      end_pos = to;
-      meta = m
-    }
 
+    LP.contents_exact_eq parser h b from to;
+
+    let sub_b = B.sub b.LP.base from (to - from) in
+    let sub_b_bytes = FStar.Bytes.of_buffer (to - from) sub_b in
+    match parser32 sub_b_bytes with
+    | Some (v, _) ->
+      {
+        start_pos = from;
+        end_pos = to;
+        vv = v;
+        meta = m
+      }
+
+/// A high-level constructor, taking a value instead of a slice.
+///
+/// Can we remove the `noextract` for the time being? Can we
+/// `optimize` it so that vv is assigned x? It will take us a while to
+/// lower all message writing.
 inline_for_extraction
 noextract
 let mk_from_serialize
   (b:LP.slice mut_p mut_p{ LP.(b.len <= validator_max_length) })
   (from:index (of_slice b))
   (#k:strong_parser_kind) #t (#parser:LP.parser k t) (#serializer: LP.serializer parser)
-  (serializer32: LS.serializer32 serializer) (size32: LS.size32 serializer)
-  (x: t)
-: Stack (option (repr_p t (of_slice b) parser))
+  (parser32: LS.parser32 parser) (serializer32: LS.serializer32 serializer)
+  (size32: LS.size32 serializer) (x: t)
+: Stack (option (repr_p t (of_slice b) parser32))
     (requires fun h ->
       LP.live_slice h b)
     (ensures fun h0 r h1 ->
@@ -334,7 +383,7 @@ let mk_from_serialize
     let to = from + size in
     let h = get () in
     LP.serialize_valid_exact serializer h b x from to;
-    let r = mk b from to parser in
+    let r = mk b from to parser32 in
     Some r
   end
 
@@ -356,7 +405,7 @@ let mk_from_serialize
 module I = LowStar.ImmutableBuffer
 
 /// `valid_if_live`: A pure predicate on `r:repr t b` that states that
-/// so long as the underlying buffer is live in a given state `h`, that
+/// so long as the underlying buffer is live in a given state `h`,
 /// `r` is valid in that state
 let valid_if_live #t (#b:const_slice) (r:repr t b) =
   C.qbuf_qual (C.as_qbuf b.base) == C.IMMUTABLE /\
@@ -472,7 +521,8 @@ let stash (rgn:HS.rid) #t #b (r:repr t b)
    let r' : repr t s = {
      start_pos = 0ul;
      end_pos = r_len;
-     meta = r.meta
+     meta = r.meta;
+     vv = r.vv
    }
    in
    assert (valid r' h1);

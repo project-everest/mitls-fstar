@@ -69,12 +69,16 @@ module Psks = Parsers.OfferedPsks
 module CRF = Crypto.CRF
 
 //TODO: move to a separate module
+type sh13 = sh:HSM.sh{Negotiation.selected_version sh == Correct PV.TLS_1p3}
+type sh12 = sh:HSM.sh{Negotiation.selected_version sh == Correct PV.TLS_1p2}
+
+//TODO: move to a separate module
 let repr_hs12 (b:R.const_slice) =
-  R.repr_p _ b HSM.handshake12_parser
+  R.repr_p _ b HSM.handshake12_parser32
 
 //TODO: move to a separate module
 let repr_hs13 (b:R.const_slice) =
-  R.repr_p _ b HSM.handshake13_parser
+  R.repr_p _ b HSM.handshake13_parser32
 
 //19-09-02 vs FStar.Bytes?
 type bytes = FStar.Seq.seq uint_8
@@ -184,6 +188,7 @@ let bounded_list 'a n = l:list 'a{List.length l < n}
 /// N.B. we need transcript equality, as we store them in
 /// crypto indexes for concrete (but ideal) table lookups
 [@erasable]
+noeq
 type transcript_t =
   | Start:
       retried:option retry ->
@@ -201,16 +206,18 @@ type transcript_t =
 
   | Transcript12:
       ch:HSM.clientHello ->
-      sh:HSM.sh{Negotiation.selected_version sh == Correct PV.TLS_1p2} ->
+      sh:sh12 ->
       rest:bounded_list HSM.handshake12 max_transcript_size ->
       transcript_t
 
   | Transcript13:
       retried:option retry ->
       ch:HSM.clientHello ->
-      sh:HSM.sh{Negotiation.selected_version sh == Correct PV.TLS_1p3} ->
+      sh:sh13 ->
       rest:bounded_list HSM.handshake13 max_transcript_size ->
       transcript_t
+
+assume Transcript_HasEq_TEMPORARY_ESCAPE_HATCH: hasEq transcript_t
 
 /// `transcript_size`: the size of a transcript is the length of its
 /// protocol-specific suffix
@@ -629,7 +636,7 @@ val extract_hash
     (requires fun h0 ->
       invariant s tx h0 /\
       B.live h0 tag /\
-      B.(loc_disjoint (loc_buffer tag) (loc_region_only true Mem.tls_tables_region)) /\
+      B.(loc_disjoint (loc_buffer tag) (Mem.loc_tables_region ())) /\
       B.loc_disjoint (footprint s) (B.loc_buffer tag))
     (ensures fun h0 _ h1 ->
       let open B in

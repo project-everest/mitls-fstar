@@ -31,7 +31,7 @@ type binders = Psks.offeredPsks_binders
 
 let ch_bound (ch:CH.clientHello): bool =
   let es = ch.CH.extensions in
-  Cons? es && CHE.CHE_pre_shared_key? (List.last es)
+  es <> [] && CHE.CHE_pre_shared_key? (List.last es)
 
 let clientHello_with_binders = ch: CH.clientHello{ ch_bound ch }
 

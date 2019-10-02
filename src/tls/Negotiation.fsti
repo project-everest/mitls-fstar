@@ -59,7 +59,9 @@ val find_sessionTicket: offer -> option Extensions.clientHelloExtension_CHE_sess
 val find_clientPske: offer -> option Extensions.offeredPsks
 
 val find_serverPske: HSM.sh -> option UInt16.t
+val find_supported_groups: offer -> option Extensions.namedGroupList
 val find_serverKeyShare: HSM.sh -> option pre_share
+val find_clientKeyShares: offer -> option Extensions.keyShareClientHello
 val find_early_data: offer -> bool
 
 // Returns the server hostName, if any, or an empty bytestring; review.
@@ -77,7 +79,7 @@ val offered_ha: offer -> EverCrypt.Hash.alg
 
 /// Selected algorithm, overwritten in SH (here) or HRR [HSM.hrr_ha]
 
-val selected_ha: HSM.sh -> EverCrypt.Hash.alg
+val selected_ha: HSM.serverHello -> EverCrypt.Hash.alg
 
 
 /// CLIENT CERTIFICATE REQUESTS are currently disabled.
@@ -108,11 +110,6 @@ type resumeInfo = option bkey12 * list bkey13
 let ha_bkey13 (bk:bkey13) =
   let _, Ticket.Ticket13 (CipherSuite13 _ ha) li _ _ nonce created age_add custom = bk in
   ha
-
-
-
-
-// type certNego = option (cert_type * signatureScheme)
 
 (*
 val hashAlg: mode -> Hashing.Spec.alg
@@ -359,86 +356,88 @@ val client_ServerKeyExchange:
 
 (* SERVER *)
 
-(* 19-08-31 TODO get rid of stateful nego
-
-//17-03-30 still missing a few for servers.
 module HRR = Parsers.HelloRetryRequest
 
-noeq type serverMode =
-  | ServerMode: mode -> certNego -> Extensions.unknownExtensions -> serverMode
-  | ServerRetry: TLS.Cookie.(hrr_leq extensions_max_length) -> serverMode
+let names_group_of gns ((| g, _ |): share) = 
+  match CommonDH.namedGroup_of_group g with
+  | None -> false 
+  | Some gn -> List.Tot.mem gn gns
 
+// TODO: strengten property to prove that the share itself is included
+// in the offer.
+type selected_share cfg offer = 
+  s: share { 
+    cfg.named_groups `names_group_of` s /\ 
+    ( match find_supported_groups offer with
+      | Some ngs -> ngs `names_group_of` s 
+      | None -> False ) }
 
+let names_cs13 ncss (cs: cipherSuite): bool =
+  CipherSuite13? cs && 
+  List.Tot.mem (name_of_cipherSuite cs) ncss 
+
+type selected_cs cfg offer = 
+  cs: cipherSuite13 { 
+    List.Tot.mem cs cfg.cipher_suites /\ 
+    offer.HSM.cipher_suites `names_cs13` cs }
+
+type cs13 server_cert cfg offer =
+  | PSK_EDH: 
+    j: pski offer -> 
+    cks: option (selected_share cfg offer) ->
+    cs: selected_cs cfg offer -> cs13 server_cert cfg offer
+  | JUST_EDH: 
+    cks: selected_share cfg offer -> 
+    cs: selected_cs cfg offer { b2t server_cert } ->
+    cs13 server_cert cfg offer
+
+// Represents the abstract choice of a certificate by the application
+// FIXME refine with TLS.Callbacks.cert_selected cfg o
+type cert_choice = cert_type * signatureScheme
+
+// The outcome of server negotiation
+type server_choice (cfg:config) (o:offer) =
+| ServerAccept12:
+  cert: cert_choice ->
+  cs: cipherSuite{CipherSuite? cs} ->
+  server_choice cfg o
+| ServerResume12:
+  ticket: bkey12 ->
+  server_choice cfg o
+| ServerAccept13:
+  cert: option cert_choice ->
+  cs13: cs13 (Some? cert) cfg o ->
+  opsk: option bkey13 ->
+  server_choice cfg o
+| ServerRetry:
+  hrr: HSM.hrr ->
+  server_choice cfg o
+
+// Print information about the client offer
 val trace_offer: HSM.clientHello ->
   ST unit
   (requires fun h0 -> True)
   (ensures fun h0 () h1 -> h0 == h1)
 
-// When receiving CH2
-val server_ClientHello2:
-  #region:rgn -> ns: t region Server ->
-  ch1: HSM.clientHello ->
-  hrr: HSM.hrr ->
-  ch2: HSM.clientHello ->
-  app_cookie: bytes ->
-  ST (result serverMode)
-  (requires fun h0 -> inv ns h0)
-  (ensures fun h0 r h1 ->
-    inv ns h1 /\
-    B.(modifies (loc_mreference ns.state) h0 h1) /\
-    (
-    let s1 = HS.sel h1 ns.state in
-    match r, s1 with
-    | Error _, _ -> True
-    | Correct _, S_ClientHello _ _ -> True
-    | _ -> False ))
-
 // When receiving CH1 or CH2[CH1 cookie]
 val server_ClientHello:
-  #region:rgn -> ns: t region Server ->
-  HSM.clientHello ->
-  ST (result serverMode)
-  (requires fun h0 ->
-    inv ns h0 /\
-    (let s = HS.sel h0 ns.state in S_Init? s))
-  (ensures fun h0 _ h1 ->
-    inv ns h1
-    // TODO modifies at least the transcript
-    )
-  // [S_Init ==> S_ClientHello m cert]
-  // ensures r = computeServerMode ns.cfg ns.nonce offer (stateful)
-  // but [compute_cs13] and [negotiateCipherSuite] are pure.
+  cfg: config ->
+  offer: HSM.ch ->
+  ST (result (server_choice cfg offer))
+  (requires fun h0 -> True)
+  (ensures fun h0 r h1 ->
+    B.modifies B.loc_none h0 h1 /\
+    (match r with
+    | Correct (ServerResume12 _) -> True
+    | Correct (ServerAccept13 _ _ _) -> True
+    | Correct (ServerRetry _) -> True
+    | _ -> True))
 
-/// Complete the server's mode with its DH share
-/// (the two-step decomposition enables DH generation from partial mode in-between)
-///
-val server_ServerShare:
-  #region:rgn -> ns: t region Server ->
-  oks:option (g:CommonDH.group & CommonDH.pre_share g) -> //19-01-22 to be refined?
-  app_exts: Extensions.unknownExtensions ->
-  ST (result mode)
-  (requires fun h0 ->
-    inv ns h0 /\
-    (let s = HS.sel h0 ns.state in S_ClientHello? s))
-  (ensures fun h0 _ h1 -> inv ns h1)
-  // [S_ClientHello ==> S_Mode] setting [sexts, oks] in mode
-  // requires oks is consistent with mode (?)
-  // ensures sexts = server_negotiateExtensions ns mode cexts @ app_exts
-  // review their ordering, and how QD separates them
+// Still used in Old.Epoch
 
-
-
-
-
-
-*)
-
-//17-03-30 get rid of this wrapper?
 noeq type session = {
   session_nego: option unit // mode;
 }
-
-/// Still used in Old.Epoch
 
 // represents the outcome of a successful handshake,
 // providing context for the derived epoch
@@ -449,9 +448,6 @@ noeq type handshake =
 // We tried using instead hs, but this creates circularities
 // We'll probably need a global log to reason about them.
 // We should probably do the same in the session store.
-
-
-
 
 /// QUIC uses ch accessors:
 /// Negotiation.get_sni

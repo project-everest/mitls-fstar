@@ -75,7 +75,7 @@ let c_role c =
   if Machine.Client? c.hs then Client else Server 
 
 // let c_cfg c = Handshake.config_of c.hs
-let c_log c = Machine.epochs c.hs
+let c_log c n = Machine.epochs c.hs n
 
 (* val reader_epoch: #region:rgn -> #nonce:_ -> e:epoch region nonce -> Tot (StAE.reader (peerId(hsId e.h))) *)
 (* let reader_epoch #region #peer e = Epoch?.r e *)

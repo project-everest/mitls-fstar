@@ -87,7 +87,7 @@ val hash_fits (#a:alg) (h:HS.mem) (s:state a): Lemma
   (requires (
     invariant h s))
   (ensures (
-    S.length (hashed h s) < HD.max_input_length a))
+    S.length (hashed h s) <= HD.max_input_length a))
   [ SMTPat (hashed h s) ]
 
 val frame_invariant (#a: alg) (l: B.loc) (s: state a) (h0 h1: HS.mem): Lemma
@@ -213,7 +213,7 @@ let finish_st (a: Hash.alg) =
         loc_buffer dst `loc_union`
         footprint h0 s `loc_union`
         loc_region_only true Mem.tls_tables_region) h0 h1) /\
-      S.equal (B.as_seq h1 dst) (Spec.Hash.hash a (hashed h0 s)) /\
+      S.equal (B.as_seq h1 dst) (Spec.Agile.Hash.hash a (hashed h0 s)) /\
       // NEW! ↓
       Model.CRF.hashed a (hashed h0 s))
 
