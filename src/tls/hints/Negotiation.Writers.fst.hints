@@ -5,7 +5,7 @@
       "Negotiation.Writers.write_binder_ph",
       1,
       2,
-      2,
+      1,
       [
         "@MaxFuel_assumption", "@MaxIFuel_assumption",
         "@fuel_correspondence_Prims.pow2.fuel_instrumented",
@@ -175,7 +175,7 @@
         "typing_Spec.Poly1305.size_key"
       ],
       0,
-      "05c1947ce55633b3c0c6643cfdb58cce"
+      "40553bfb2a86955915710c304ec521b3"
     ],
     [
       "Negotiation.Writers.write_obfuscate_age",
@@ -378,7 +378,7 @@
         "typing_Spec.Poly1305.size_key"
       ],
       0,
-      "d218a81e92b24f7c2b08286ac323a8a1"
+      "3a7996d42a3f05930cf85c99d566337f"
     ],
     [
       "Negotiation.Writers.make_offeredPsks_identities",
@@ -391,7 +391,7 @@
         "projection_inverse_BoxBool_proj_0"
       ],
       0,
-      "bf81a55850b2452d0743cf537a7a3925"
+      "dc93d1fe56d7fffa862fc190af2c158d"
     ],
     [
       "Negotiation.Writers.write_offeredPsks_identities",
@@ -408,7 +408,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind"
       ],
       0,
-      "1cd0869a5c52823be1067ba7d47c2465"
+      "9f07f872c344afeb2c9c7926e4a0c674"
     ],
     [
       "Negotiation.Writers.write_offeredPsks_identities",
@@ -557,7 +557,7 @@
         "typing_Spec.Poly1305.size_block", "typing_Spec.Poly1305.size_key"
       ],
       0,
-      "fa2f670925aa8c1260dfdb4de5fe1382"
+      "fb59d2015cb38b92328e0f3dceb02a8a"
     ],
     [
       "Negotiation.Writers.make_offeredPsks_binders",
@@ -570,7 +570,7 @@
         "projection_inverse_BoxBool_proj_0"
       ],
       0,
-      "cdea0d38b22fb47b8c798a80c063eb22"
+      "0060655825985fab0044a4d49cd05acb"
     ],
     [
       "Negotiation.Writers.write_offeredPsks_binders",
@@ -587,7 +587,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind"
       ],
       0,
-      "101590bf0116c9f8c9fd6f240d0609b5"
+      "cdb69f88665460f17901c0cc4ecc843f"
     ],
     [
       "Negotiation.Writers.write_offeredPsks_binders",
@@ -738,7 +738,7 @@
         "typing_Spec.Poly1305.size_block", "typing_Spec.Poly1305.size_key"
       ],
       0,
-      "6e1283796a54dc81039632c07fd1adbb"
+      "621a0ab339995394cd692131b35f0c04"
     ],
     [
       "Negotiation.Writers.write_preSharedKeyClientExtension",
@@ -753,7 +753,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind"
       ],
       0,
-      "029d3563243b9dcc3f75b2d5d325ef9d"
+      "61169403b67c277a9f78acf15ea63c7b"
     ],
     [
       "Negotiation.Writers.write_preSharedKeyClientExtension",
@@ -904,7 +904,7 @@
         "typing_Spec.Poly1305.size_key"
       ],
       0,
-      "f4562c72b93c927c453e8bc8c225f5b0"
+      "957b267c75b6823b883dc32138f1b3a9"
     ],
     [
       "Negotiation.Writers.make_clientHelloExtension_CHE_pre_shared_key",
@@ -931,7 +931,7 @@
         "typing_Parsers.PreSharedKeyClientExtension.preSharedKeyClientExtension_bytesize"
       ],
       0,
-      "d511717e75163a827e89f4e12f398bd0"
+      "881177533ee238d2d3aadea5a93408e1"
     ],
     [
       "Negotiation.Writers.write_clientHelloExtension_CHE_pre_shared_key",
@@ -945,7 +945,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind"
       ],
       0,
-      "886cc9ff18ba8df5522a7e0dbde0e2a9"
+      "62c8380ffc8e6506fc54e96198223a70"
     ],
     [
       "Negotiation.Writers.write_clientHelloExtension_CHE_pre_shared_key",
@@ -1096,7 +1096,7 @@
         "typing_Spec.Poly1305.size_block", "typing_Spec.Poly1305.size_key"
       ],
       0,
-      "e892138f635805421892911348850eba"
+      "821ddbb3c3d322e7bee6231efac076bb"
     ],
     [
       "Negotiation.Writers.constr_clientHelloExtension_CHE_pre_shared_key",
@@ -1114,7 +1114,7 @@
         "typing_FStar.Pervasives.Native.uu___is_Some"
       ],
       0,
-      "ab3a4587d1f43f676b015c604d5e5351"
+      "ee10b27fb197ca0e24170e31bcceaefd"
     ],
     [
       "Negotiation.Writers.write_constr_clientHelloExtension_CHE_pre_shared_key",
@@ -1128,7 +1128,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind"
       ],
       0,
-      "468d016aa4dd030179e53a167cf622ef"
+      "ca4876bb4f1c7785199d260af9b7f086"
     ],
     [
       "Negotiation.Writers.write_constr_clientHelloExtension_CHE_pre_shared_key",
@@ -1273,7 +1273,7 @@
         "typing_Spec.Poly1305.size_key"
       ],
       0,
-      "c2cb37a498b6be591d5fcfb99eafe354"
+      "143448bef6903c5931f180aef6842768"
     ],
     [
       "Negotiation.Writers.write_pskKeyExchangeModes",
@@ -1290,7 +1290,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind"
       ],
       0,
-      "8175465d73deb4344dd307decb4e3b95"
+      "e33b881391abe2496680f0e2fbcbaab3"
     ],
     [
       "Negotiation.Writers.write_pskKeyExchangeModes",
@@ -1422,7 +1422,7 @@
         "typing_Spec.Poly1305.size_key"
       ],
       0,
-      "89813875f468f24d67153e1a16ec5c18"
+      "227fe6955ca6be7b555bb810cdc8a517"
     ],
     [
       "Negotiation.Writers.write_clientHelloExtension_CHE_psk_key_exchange_modes",
@@ -1436,7 +1436,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind"
       ],
       0,
-      "72801dadcff5b1416894849bafa3a055"
+      "72f0e057bf838fa47e05b2e559c8499c"
     ],
     [
       "Negotiation.Writers.write_clientHelloExtension_CHE_psk_key_exchange_modes",
@@ -1488,7 +1488,7 @@
         "fuel_guarded_inversion_LowParse.Low.Writers.writer",
         "fuel_guarded_inversion_LowParse.Slice.slice",
         "function_token_typing_FStar.Monotonic.Heap.heap",
-        "function_token_typing_FStar.UInt8.t", "int_inversion", "int_typing",
+        "function_token_typing_FStar.UInt8.t", "int_typing",
         "interpretation_Tm_abs_612136ee4143d24977831c80e4f470a1",
         "l_and-interp", "l_imp-interp",
         "l_quant_interp_702e988c6b3b01c0777bad6ab7596f28",
@@ -1497,7 +1497,6 @@
         "lemma_FStar.HyperStack.ST.lemma_same_refs_in_all_regions_intro",
         "lemma_FStar.Map.lemma_ContainsDom",
         "lemma_FStar.Set.lemma_equal_refl", "lemma_FStar.UInt32.vu_inv",
-        "lemma_LowParse.Low.Base.content_length_post",
         "lemma_LowParse.Low.Base.valid_elim_",
         "lemma_LowParse.Slice.buffer_srel_of_srel_of_buffer_srel",
         "lemma_LowParse.Spec.Base.serialize_length",
@@ -1568,7 +1567,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind"
       ],
       0,
-      "0d463e68f640b73c1a8876cd134c1264"
+      "0075d054d4aeb679da042e4818309b06"
     ],
     [
       "Negotiation.Writers.write_constr_clientHelloExtension_CHE_psk_key_exchange_modes",
@@ -1615,12 +1614,11 @@
         "equation_Parsers.ClientHelloExtension_CHE_psk_key_exchange_modes.clientHelloExtension_CHE_psk_key_exchange_modes",
         "equation_Parsers.ClientHelloExtension_CHE_psk_key_exchange_modes.clientHelloExtension_CHE_psk_key_exchange_modes_parser_kind",
         "equation_Parsers.PskKeyExchangeModes.pskKeyExchangeModes",
-        "equation_Spec.Poly1305.size_block",
         "equation_Spec.Poly1305.size_key",
         "fuel_guarded_inversion_LowParse.Low.Writers.writer",
         "fuel_guarded_inversion_LowParse.Slice.slice",
         "function_token_typing_FStar.Monotonic.Heap.heap",
-        "function_token_typing_FStar.UInt8.t", "int_typing",
+        "function_token_typing_FStar.UInt8.t", "int_inversion", "int_typing",
         "interpretation_Tm_abs_612136ee4143d24977831c80e4f470a1",
         "kinding_Parsers.ClientHelloExtension.clientHelloExtension@tok",
         "l_and-interp", "l_imp-interp",
@@ -1685,7 +1683,7 @@
         "typing_Parsers.ClientHelloExtension_CHE_psk_key_exchange_modes.clientHelloExtension_CHE_psk_key_exchange_modes_parser",
         "typing_Parsers.ClientHelloExtension_CHE_psk_key_exchange_modes.clientHelloExtension_CHE_psk_key_exchange_modes_parser_kind",
         "typing_Parsers.ClientHelloExtension_CHE_psk_key_exchange_modes.clientHelloExtension_CHE_psk_key_exchange_modes_serializer",
-        "typing_Spec.Poly1305.size_block", "typing_Spec.Poly1305.size_key"
+        "typing_Spec.Poly1305.size_key"
       ],
       0,
       "5e5a5e32e02c2109df670e75d5ac2f57"
@@ -1760,7 +1758,7 @@
         "typing_Spec.Poly1305.size_key", "unit_inversion"
       ],
       0,
-      "52d922860b462f1227185f521faaf732"
+      "ab6f8bed40444a10e464f0c3a6e6ca0e"
     ],
     [
       "Negotiation.Writers.write_constr_clientHelloExtension_CHE_early_data",
@@ -1807,7 +1805,8 @@
         "equation_Parsers.ClientHelloExtension.clientHelloExtension_parser_kind",
         "equation_Parsers.ClientHelloExtension_CHE_early_data.clientHelloExtension_CHE_early_data",
         "equation_Parsers.ClientHelloExtension_CHE_early_data.clientHelloExtension_CHE_early_data_parser_kind",
-        "equation_Prims.eqtype", "equation_Spec.Poly1305.size_key",
+        "equation_Prims.eqtype", "equation_Spec.Poly1305.size_block",
+        "equation_Spec.Poly1305.size_key",
         "fuel_guarded_inversion_LowParse.Slice.slice",
         "function_token_typing_FStar.Monotonic.Heap.heap",
         "function_token_typing_FStar.UInt8.t",
@@ -1880,7 +1879,8 @@
         "typing_Parsers.ClientHelloExtension_CHE_early_data.clientHelloExtension_CHE_early_data_parser",
         "typing_Parsers.ClientHelloExtension_CHE_early_data.clientHelloExtension_CHE_early_data_parser_kind",
         "typing_Parsers.ClientHelloExtension_CHE_early_data.clientHelloExtension_CHE_early_data_serializer",
-        "typing_Spec.Poly1305.size_key", "unit_typing"
+        "typing_Spec.Poly1305.size_block", "typing_Spec.Poly1305.size_key",
+        "unit_typing"
       ],
       0,
       "146dd8d048189a038aca9a9a660c8016"
@@ -1892,7 +1892,7 @@
       8,
       [ "@query" ],
       0,
-      "ba270d03f7d983ed0feb202a304925af"
+      "9a9afa0aea749c8d0115adaf88e5526e"
     ],
     [
       "Negotiation.Writers.write_final_extensions",
@@ -2318,7 +2318,7 @@
         "typing_tok_Parsers.PskKeyExchangeMode.Psk_ke@tok", "unit_typing"
       ],
       0,
-      "c5712a9b5346da0db4d84197ca22dff8"
+      "f3787694cb556d433a9ecfc89a93e156"
     ],
     [
       "Negotiation.Writers.make_clientHelloExtension_CHE_signature_algorithms",
@@ -2345,7 +2345,7 @@
         "typing_Parsers.SignatureSchemeList.signatureSchemeList_bytesize"
       ],
       0,
-      "1cff0c45060264feb0c72cdcfb0d96e0"
+      "08a631f8f2cfbc0de60c790a26ad8fdc"
     ],
     [
       "Negotiation.Writers.write_clientHelloExtension_CHE_signature_algorithms",
@@ -2359,7 +2359,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind"
       ],
       0,
-      "4e00d489ef96346da570c319d3b0a1ab"
+      "6ea02f391df527976d9e12698197775a"
     ],
     [
       "Negotiation.Writers.write_clientHelloExtension_CHE_signature_algorithms",
@@ -2515,7 +2515,7 @@
         "typing_Spec.Poly1305.size_block", "typing_Spec.Poly1305.size_key"
       ],
       0,
-      "756656014b147cd28d676d03ffee6643"
+      "7259f45ebdd39e00af75bad5d574e5df"
     ],
     [
       "Negotiation.Writers.constr_clientHelloExtension_CHE_signature_algorithms",
@@ -2534,7 +2534,7 @@
         "typing_FStar.Pervasives.Native.uu___is_Some"
       ],
       0,
-      "630ad2b682f2f8876309049ee5498337"
+      "281ffeb20432ae5b40e9f6adcae749f8"
     ],
     [
       "Negotiation.Writers.write_constr_clientHelloExtension_CHE_signature_algorithms",
@@ -2548,7 +2548,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind"
       ],
       0,
-      "548c8dea009fa40d42d45de02711bc9d"
+      "f1387535f2ff82e168604b8f0d5bd550"
     ],
     [
       "Negotiation.Writers.write_constr_clientHelloExtension_CHE_signature_algorithms",
@@ -2691,7 +2691,7 @@
         "typing_Spec.Poly1305.size_key"
       ],
       0,
-      "2a6390caae0e0c2c2ddb8ab74d70fc14"
+      "771281fbb96e1c58478ef3433337eea9"
     ],
     [
       "Negotiation.Writers.write_sigalgs_extension",
@@ -2847,7 +2847,7 @@
         "typing_Spec.Poly1305.size_key", "typing_TLSError.option_of_result"
       ],
       0,
-      "38d3a4328a3e5a33bbf27d217b36c242"
+      "0ecad7601d3fc79e9d8404a43f3b8297"
     ]
   ]
 ]

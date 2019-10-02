@@ -55,7 +55,7 @@
         "typing_Spec.GaloisField.__proj__GF__item__t"
       ],
       0,
-      "2bcb9d860c8ae11199b55276d7eda73f"
+      "bde4dc35a567404cb260ffbb4f3e12f2"
     ],
     [
       "Crypto.AEAD.encrypt",
@@ -140,6 +140,7 @@
         "typing_FStar.UInt32.uint_to_t", "typing_FStar.UInt32.v",
         "typing_Lib.IntTypes.minint", "typing_Lib.IntTypes.v",
         "typing_LowStar.Buffer.trivial_preorder",
+        "typing_LowStar.Monotonic.Buffer.len",
         "typing_LowStar.Monotonic.Buffer.length",
         "typing_Spec.AEAD.is_supported_alg", "typing_Spec.AEAD.max_length",
         "typing_Spec.AEAD.tag_length", "typing_Spec.AES.gf8",
@@ -149,7 +150,7 @@
         "typing_tok_Lib.IntTypes.SEC@tok", "typing_tok_Lib.IntTypes.U8@tok"
       ],
       0,
-      "2e399b34c5118f389c20619abed76343"
+      "c1b04b7aea4957772ab4ddd887ff05eb"
     ],
     [
       "Crypto.AEAD.decrypt",
@@ -255,7 +256,7 @@
         "typing_tok_Lib.IntTypes.U8@tok"
       ],
       0,
-      "8113fb281ff018c0112e7fe409e772db"
+      "22f596ee78e251430115c178ac25f58d"
     ],
     [
       "Crypto.AEAD.create",
@@ -276,7 +277,7 @@
         "typing_FStar.Pervasives.Native.uu___is_Some"
       ],
       0,
-      "5331465bed58c9b4911d8e7d84b00299"
+      "2b4bcb3e41bb13235917401c4ece7f4b"
     ]
   ]
 ]
