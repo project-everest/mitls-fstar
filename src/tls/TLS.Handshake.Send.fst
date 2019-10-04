@@ -143,6 +143,13 @@ let send_sh
 
 #push-options "--z3rlimit 32"
 
+let send_tag_sh #a stt #_ t sto m tag =
+  match send_sh stt t sto m with
+  | Correct (sto, t') ->
+    Transcript.extract_hash stt tag t';
+    correct (sto, t')
+  | Error z -> Error z
+
 let send_hrr
   #a stt #_ t sto tag hrr
 = let h0 = get () in
