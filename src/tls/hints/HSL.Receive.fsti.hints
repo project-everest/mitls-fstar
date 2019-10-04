@@ -1,15 +1,6 @@
 [
-  "0Nµf£…›Þ¨²i\fïXüì",
+  "Š8c‰Í2\u0004TÓÏ½\u0015YJ\u007fî",
   [
-    [
-      "HSL.Receive.length_parsed_bytes",
-      1,
-      0,
-      0,
-      [ "@query" ],
-      0,
-      "8eda096a59e100b1eb057406e1b82e1c"
-    ],
     [
       "HSL.Receive.receive_pre",
       1,
@@ -43,7 +34,7 @@
         "refinement_interpretation_Tm_refine_05e15190c946858f68c69156f585f95a",
         "refinement_interpretation_Tm_refine_3492485485169daae0bcb76fd66cf10d",
         "refinement_interpretation_Tm_refine_542f9d4f129664613f2483a6c88bc7c2",
-        "refinement_interpretation_Tm_refine_c99b4025e6018cbeec9a97bb9cd21b65",
+        "refinement_interpretation_Tm_refine_90a1661541e4f009452ab107b47b5955",
         "typing_FStar.Map.contains", "typing_FStar.Monotonic.HyperHeap.rid",
         "typing_FStar.Monotonic.HyperStack.get_hmap",
         "typing_FStar.Monotonic.HyperStack.get_tip",
@@ -56,7 +47,7 @@
         "typing_MITLS.Repr.__proj__MkSlice__item__len"
       ],
       0,
-      "219c9d2d00f9c8193d451737a5a53f40"
+      "cde9662333622d189b9b224413f3334a"
     ],
     [
       "HSL.Receive.receive_post",
@@ -72,14 +63,9 @@
         "equation_LowStar.ConstBuffer.as_mbuf",
         "equation_LowStar.ConstBuffer.as_seq",
         "equation_LowStar.ConstBuffer.length",
-        "equation_LowStar.ConstBuffer.live",
-        "equation_LowStar.ConstBuffer.loc_buffer",
         "equation_LowStar.ConstBuffer.qbuf_pre",
-        "equation_MITLS.Repr.as_seq", "equation_MITLS.Repr.live",
-        "equation_MITLS.Repr.loc", "function_token_typing_FStar.UInt8.t",
+        "equation_MITLS.Repr.as_seq", "function_token_typing_FStar.UInt8.t",
         "lemma_LowStar.Monotonic.Buffer.length_as_seq",
-        "lemma_LowStar.Monotonic.Buffer.loc_disjoint_sym_",
-        "lemma_LowStar.Monotonic.Buffer.modifies_buffer_elim",
         "primitive_Prims.op_Addition", "primitive_Prims.op_AmpAmp",
         "primitive_Prims.op_LessThanOrEqual",
         "proj_equation_MITLS.Repr.MkSlice_base",
@@ -87,20 +73,17 @@
         "projection_inverse_BoxBool_proj_0",
         "projection_inverse_BoxInt_proj_0",
         "refinement_interpretation_Tm_refine_3492485485169daae0bcb76fd66cf10d",
-        "refinement_interpretation_Tm_refine_c99b4025e6018cbeec9a97bb9cd21b65",
-        "typing_HSL.Receive.footprint",
+        "refinement_interpretation_Tm_refine_90a1661541e4f009452ab107b47b5955",
         "typing_HSL.Receive.length_parsed_bytes",
         "typing_LowStar.ConstBuffer.as_mbuf",
         "typing_LowStar.ConstBuffer.as_qbuf",
         "typing_LowStar.ConstBuffer.q_preorder",
-        "typing_LowStar.ConstBuffer.qbuf_pre",
         "typing_LowStar.ConstBuffer.qbuf_qual",
         "typing_MITLS.Repr.__proj__MkSlice__item__base",
-        "typing_MITLS.Repr.__proj__MkSlice__item__len",
-        "typing_MITLS.Repr.loc"
+        "typing_MITLS.Repr.__proj__MkSlice__item__len"
       ],
       0,
-      "2ba3d88ea97f78f5b100e1af9f275d20"
+      "a464eb4fda7c675ae6d06f2150a042f9"
     ],
     [
       "HSL.Receive.receive_post_with_leftover_bytes",
@@ -116,14 +99,9 @@
         "equation_LowStar.ConstBuffer.as_mbuf",
         "equation_LowStar.ConstBuffer.as_seq",
         "equation_LowStar.ConstBuffer.length",
-        "equation_LowStar.ConstBuffer.live",
-        "equation_LowStar.ConstBuffer.loc_buffer",
         "equation_LowStar.ConstBuffer.qbuf_pre",
-        "equation_MITLS.Repr.as_seq", "equation_MITLS.Repr.live",
-        "equation_MITLS.Repr.loc", "function_token_typing_FStar.UInt8.t",
+        "equation_MITLS.Repr.as_seq", "function_token_typing_FStar.UInt8.t",
         "lemma_LowStar.Monotonic.Buffer.length_as_seq",
-        "lemma_LowStar.Monotonic.Buffer.loc_disjoint_sym_",
-        "lemma_LowStar.Monotonic.Buffer.modifies_buffer_elim",
         "primitive_Prims.op_Addition", "primitive_Prims.op_AmpAmp",
         "primitive_Prims.op_LessThanOrEqual",
         "proj_equation_MITLS.Repr.MkSlice_base",
@@ -131,41 +109,17 @@
         "projection_inverse_BoxBool_proj_0",
         "projection_inverse_BoxInt_proj_0",
         "refinement_interpretation_Tm_refine_3492485485169daae0bcb76fd66cf10d",
-        "refinement_interpretation_Tm_refine_c99b4025e6018cbeec9a97bb9cd21b65",
-        "typing_HSL.Receive.footprint",
+        "refinement_interpretation_Tm_refine_90a1661541e4f009452ab107b47b5955",
         "typing_HSL.Receive.length_parsed_bytes",
         "typing_LowStar.ConstBuffer.as_mbuf",
         "typing_LowStar.ConstBuffer.as_qbuf",
         "typing_LowStar.ConstBuffer.q_preorder",
-        "typing_LowStar.ConstBuffer.qbuf_pre",
         "typing_LowStar.ConstBuffer.qbuf_qual",
         "typing_MITLS.Repr.__proj__MkSlice__item__base",
-        "typing_MITLS.Repr.__proj__MkSlice__item__len",
-        "typing_MITLS.Repr.loc"
+        "typing_MITLS.Repr.__proj__MkSlice__item__len"
       ],
       0,
-      "314e9e53e0a6d73fc497b4b0831c4575"
-    ],
-    [
-      "HSL.Receive.valid_s13_wait_Finished2",
-      1,
-      0,
-      0,
-      [
-        "@MaxIFuel_assumption", "@query", "bool_inversion",
-        "disc_equation_FStar.Pervasives.Native.None",
-        "disc_equation_FStar.Pervasives.Native.Some",
-        "kinding_FStar.Pervasives.Native.tuple2@tok",
-        "lemma_FStar.Pervasives.invertOption",
-        "proj_equation_HSL.Receive.Mks13_wait_Finished2_c_cv_msg",
-        "typing_FStar.Pervasives.Native.uu___is_None",
-        "typing_FStar.Pervasives.Native.uu___is_Some",
-        "typing_HSL.Receive.__proj__Mks13_wait_Finished2__item__c_cv_msg",
-        "typing_MITLS.Repr.Handshake13.c13_repr",
-        "typing_MITLS.Repr.Handshake13.cv13_repr"
-      ],
-      0,
-      "ed561ab5e4cce9261ebfb435ef125f2e"
+      "5ff95dcd839cd459974c90d57c247607"
     ]
   ]
 ]
