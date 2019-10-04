@@ -124,6 +124,23 @@ let send_ch
     let sto = { sto with out_pos = r.MITLS.Repr.end_pos; outgoing = sto.outgoing @| b } in
     correct (sto, t')
 
+let send_sh
+  #a stt #_ t sto m
+=
+  let h0 = get () in
+  let r = MITLS.Repr.Handshake.serialize sto.out_slice sto.out_pos m in
+  let h1 = get () in
+  Transcript.frame_invariant stt t h0 h1 (B.loc_buffer sto.out_slice.LowParse.Low.Base.base);
+  match r with
+  | None ->
+    fatal Internal_error "send_sh: output buffer overflow"
+  | Some r ->
+    let t' = Transcript.extend stt (Transcript.LR_ServerHello r) t in
+    let b = MITLS.Repr.to_bytes r in
+    trace ("send "^hex_of_bytes b);
+    let sto = { sto with out_pos = r.MITLS.Repr.end_pos; outgoing = sto.outgoing @| b } in
+    correct (sto, t')
+
 #push-options "--z3rlimit 32"
 
 let send_hrr

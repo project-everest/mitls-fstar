@@ -199,6 +199,46 @@ val send_ch
     end
   ))
 
+module PV = Parsers.ProtocolVersion
+
+val send_sh
+  (#a:EverCrypt.Hash.alg)
+  (stt: Transcript.state a)
+  (#n: Ghost.erased nat)
+  (t: Transcript.transcript_n n { Ghost.reveal n < Transcript.max_transcript_size - 1 })
+  (sto: send_state)
+  (m: Transcript.hs_sh)
+: Stack (result (send_state & Transcript.transcript_n n))
+  (requires (fun h ->
+    invariant sto h /\
+    Transcript.invariant stt t h /\
+    B.loc_disjoint (footprint sto) (Transcript.footprint stt) /\
+    (~ (HSM.is_hrr (HSM.M_server_hello?._0 m))) /\
+    Transcript.ClientHello? t /\
+    begin match Negotiation.selected_version (HSM.M_server_hello?._0 m) with
+    | Correct PV.TLS_1p3 -> True
+    | Correct PV.TLS_1p2 -> None? (Transcript.ClientHello?.retried t)
+    | _ -> False
+    end
+  ))
+  (ensures (fun h res h' ->
+    B.modifies (footprint sto `B.loc_union` Transcript.footprint stt) h h' /\
+    begin match res with
+    | Correct (sto', t') ->
+      invariant sto' h' /\
+      sto'.out_slice == sto.out_slice /\
+      sto'.out_pos >= sto.out_pos /\
+      Transcript.invariant stt t' h' /\
+      begin match Negotiation.selected_version (HSM.M_server_hello?._0 m) with
+      | Correct PV.TLS_1p3 ->
+        t' == Transcript.Transcript13 (Transcript.ClientHello?.retried t) (Transcript.ClientHello?.ch t) (HSM.M_server_hello?._0 m) []
+      | Correct PV.TLS_1p2 ->
+        t' == Transcript.Transcript12 (Transcript.ClientHello?.ch t) (HSM.M_server_hello?._0 m) []
+      end
+    | _ -> True
+    end
+  ))
+
 #push-options "--z3rlimit 32"
 val send_hrr
   (#a:EverCrypt.Hash.alg)
