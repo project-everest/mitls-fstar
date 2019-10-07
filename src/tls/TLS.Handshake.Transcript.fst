@@ -420,7 +420,7 @@ let reset #a s tx =
   CRF.init (Ghost.hide a) s.hash_state;
   Start None
 
-#push-options "--max_fuel 0 --max_ifuel  1 --initial_ifuel  1 --z3rlimit 200"
+#push-options "--max_fuel 0 --max_ifuel  1 --initial_ifuel  1 --z3rlimit 300"
 let extend (#a:_) (s:state a) (l:label_repr) (tx:transcript_t) =
   let h0 = HyperStack.ST.get() in
   match l with
@@ -431,6 +431,13 @@ let extend (#a:_) (s:state a) (l:label_repr) (tx:transcript_t) =
     //be able to remove this assume and the to_buffer cast
     //The same pattern appears in each case below.
     assume (C.qbuf_qual (C.as_qbuf b.R.base) = C.MUTABLE);
+
+    // Demo of low-level debugging.
+    if DebugFlags.debug then begin
+      let pv = MITLS.Repr.ClientHello.version (MITLS.Repr.Handshake.clientHello ch) in
+      let pv_s = Parsers.ProtocolVersion.string_of_protocolVersion pv in
+      LowStar.Printf.(printf "[Handshake.Transcript] Protocol version is: %s\n" pv_s done)
+    end;
 
     // These three lemmas prove that the data in the subbuffer data is
     // the serialized data corresponding to the client hello that is being added
