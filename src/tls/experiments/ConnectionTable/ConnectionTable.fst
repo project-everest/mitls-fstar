@@ -16,6 +16,7 @@ open ConnectionTable_Aux
 [@"opaque_to_smt"]
 let model = false
 
+// References to connections live in pairwise disjoint regions
 let minv (m:partial_dependent_map maybe_id connection_ref) =
   forall id1 id2.{:pattern (Some? (DM.sel m id1)); (Some? (DM.sel m id2))}
     (id1 <> id2 /\ Some? (DM.sel m id1) /\ Some? (DM.sel m id2)) ==>
@@ -24,19 +25,18 @@ let minv (m:partial_dependent_map maybe_id connection_ref) =
 let empty = T.empty
 
 val connection_inv:
-    m:T.imap maybe_id connection_ref minv
-  -> c:connection
+    T.imap maybe_id connection_ref minv
+  -> connection
   -> Type0
 let connection_inv m c =
   if model then
     match c with
-    | Sent_ServerHello r ch id1 | Complete r ch id1 ->
+    | Sent_ServerHello ch id1 | Complete ch id1 ->
       if has_cookie ch then
         match T.sel m id1 with
         | Some c' ->
           token_p c' (fun h0 ->
             Sent_HRR? (sel h0 c') /\
-            nonce_of (sel h0 c') == r /\
             ch_of_cookie ch == Sent_HRR?.ch (sel h0 c'))
         | _ -> False
       else True
@@ -109,9 +109,9 @@ let token_functoriality #a #rel r p q =
 let receive_client_hello1 t id c ch =
   let h0 = get () in
   if ch_compatible ch (Init?.cfg !c) then
-    c := Sent_ServerHello (ch_random ch) ch (if model then 0ul else ())
+    c := Sent_ServerHello ch (if model then 0ul else ())
   else
-    c := Sent_HRR (ch_random ch) ch;
+    c := Sent_HRR ch;
   if model then
     let h1 = get () in
     let t:_connection_table = t in
@@ -132,7 +132,6 @@ let validate_cookie t ch2 =
       (let c' = T.value_of t id1 h0 in
         token_p c' (fun h0 ->
           Sent_HRR? (sel h0 c') /\
-          nonce_of (sel h0 c') == ch_random ch2 /\
           ch_of_cookie ch2 == Sent_HRR?.ch (sel h0 c'))));
     Some 0ul
     end
@@ -145,7 +144,7 @@ let receive_client_hello2 t id c ch2 =
   | Some id1 -> 
     if ch_compatible ch2 (Init?.cfg !c) then
       begin
-      c := Sent_ServerHello (ch_random ch2) ch2 id1;
+      c := Sent_ServerHello ch2 id1;
       let h1 = get () in
       assert (
         if model then
@@ -161,8 +160,7 @@ let receive_client_hello2 t id c ch2 =
 let receive_client_finished t id c =
   let c0 = !c in
   let h0 = get() in
-  c := Complete (Sent_ServerHello?.random c0)
-               (Sent_ServerHello?.ch c0)
+  c := Complete (Sent_ServerHello?.ch c0)
                (Sent_ServerHello?.id1 c0);
   let h1 = get () in
   assert (

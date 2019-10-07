@@ -12,6 +12,52 @@ module DM = FStar.DependentMap
 
 open ConnectionTable_Aux
 
+(*
+  The connection table and ids are model artifacts that do not exist
+  in concrete code. So functions that modify the connection state 
+  do it through a connection reference rather than looking up in the table.
+
+- API functions take (id:maybe_id) (c:connection_ref id) as arguments.
+  There is no real dependency on id in connection_ref and maybe_id is
+  just unit and discarded in concrete code.
+  Note that we cannot store the id in the connection reference to avoid
+  having to pass it as argument, because we need to use it in specifications.
+  We could still store it and keep a witness that the id is the same
+  as the index, but this is of little use.
+
+- We could add an API layer that allocates a single global connection table
+  and uses it throughout. We could eliminate that layer by doing this from 
+  the beginning, but avoiding top-level effects is cleaner for an experiment.
+
+- In miTLS, we'll use
+
+  type connection_id = random // Unique across clients and server connections
+
+  Always sampled fresh upon connection creation
+
+  type connection = TLS.Handshake.Machine.tt
+
+  and the table will map r:random -> connection
+
+  TLS.Handshake.Machine defines
+
+  type state =
+  | Client:
+    client_rgn: rgn ->
+    client_cfg: client_config ->
+    client_state: client_mref client_rgn client_cfg -> state
+
+  | Server:
+    server_rgn: rgn ->
+    server_cfg: server_config ->
+    server_state: server_mref server_rgn server_cfg -> state
+ 
+  let tt =
+    | Connection: 
+      nonce: if model then TLSInfo.random else unit -> 
+      state: t {token_p st (fun h -> nonce_of st h == nonce)}
+*)
+
 inline_for_extraction
 val model: bool
 
@@ -20,24 +66,20 @@ let maybe_id = if model then connection_id else unit
 noeq
 type connection =
   | Init: cfg:configuration -> connection
-  | Sent_HRR: random:UInt32.t -> ch:client_hello -> connection
-  | Sent_ServerHello: random:UInt32.t -> ch:client_hello -> id1:maybe_id -> connection
-  | Complete: random:UInt32.t -> ch:client_hello -> id1:maybe_id -> connection
-
-let nonce_of (c:connection{~(Init? c)}) =
-  match c with
-  | Sent_HRR r _ | Sent_ServerHello r _ _ | Complete r _ _ -> r
+  | Sent_HRR: ch:client_hello -> connection
+  | Sent_ServerHello: ch:client_hello -> id1:maybe_id -> connection
+  | Complete: ch:client_hello -> id1:maybe_id -> connection
 
 let step (s1 s2:connection) : Type0 =
   match s1, s2 with
-  | Init _, Sent_HRR _ _ -> True
-  | Init _, Sent_ServerHello _ _ _ -> True
-  | Sent_ServerHello r ch id1, Complete r' ch' id1' -> 
-    r == r' /\ ch == ch' /\ id1 == id1'
+  | Init _, Sent_HRR _ -> True
+  | Init _, Sent_ServerHello _ _ -> True
+  | Sent_ServerHello ch id1, Complete ch' id1' -> ch == ch' /\ id1 == id1'
   | _, _ -> False
 
 let rel : Preorder.preorder connection = closure step
 
+// Store the ID rather than making it a parameter?
 let connection_ref (id:maybe_id) = 
   r:mmmref connection rel{frameOf r `extends` rgn}
 
@@ -82,12 +124,12 @@ val create:
       mods [Ref t] h0 h1 /\
       T.defined t id h1 /\
       sel h1 t == T.upd (sel h0 t) id c
-    else mods [] h0 h1) /\
-     frameOf c `extends` rgn /\
-     fresh_region (frameOf c) h0 h1 /\
-     ~(h0 `contains` c) /\
-     h1 `contains` c /\
-     sel h1 c == Init cfg)
+     else mods [] h0 h1) /\
+    frameOf c `extends` rgn /\
+    fresh_region (frameOf c) h0 h1 /\
+    ~(h0 `contains` c) /\
+    h1 `contains` c /\
+    sel h1 c == Init cfg)
 
 inline_for_extraction
 val free_connection:
@@ -109,7 +151,7 @@ val free_connection:
       inv t h1 /\
       T.defined t id h1 /\
       T.value_of t id h0 == c
-    else True) /\
+     else True) /\
     h0 `contains` c /\
     h1 == HyperStack.free c h0)
 
@@ -136,9 +178,9 @@ val receive_client_hello1:
        T.defined t id h1
      else True) /\
      (if ch_compatible ch (Init?.cfg (sel h0 c)) then
-       sel h1 c == Sent_ServerHello (ch_random ch) ch (if model then 0ul else ())
+       sel h1 c == Sent_ServerHello ch (if model then 0ul else ())
      else
-       sel h1 c == Sent_HRR (ch_random ch) ch))
+       sel h1 c == Sent_HRR ch))
 
 (*
    Validates a cookie in a second ClientHello.
@@ -166,13 +208,12 @@ val validate_cookie: t:connection_table -> ch2:client_hello
         (let c' = T.value_of t id1 h0 in
            token_p c' (fun h0 ->
              Sent_HRR? (sel h0 c') /\
-             nonce_of (sel h0 c') == ch_random ch2 /\
              ch_of_cookie ch2 == Sent_HRR?.ch (sel h0 c')))
       else True))
 
 val receive_client_hello2:
     t:connection_table
-  -> id:maybe_id
+  -> id:maybe_id 
   -> c:connection_ref id
   -> ch2:client_hello
   -> ST bool
@@ -196,7 +237,6 @@ val receive_client_hello2:
      if b then
        mods [Ref c] h0 h1 /\
        Sent_ServerHello? c' /\
-       Sent_ServerHello?.random c' == ch_random ch2 /\
        Sent_ServerHello?.ch c' == ch2
      else 
        mods [] h0 h1))
@@ -225,5 +265,4 @@ val receive_client_finished:
     (let c0 = sel h0 c in
      let c1 = sel h1 c in
      Complete? c1 /\
-     Complete?.random c1 == Sent_ServerHello?.random c0 /\
      Complete?.ch c1 == Sent_ServerHello?.ch c0))
