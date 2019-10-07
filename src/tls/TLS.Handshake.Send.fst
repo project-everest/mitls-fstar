@@ -17,47 +17,44 @@ let mkfrange i min max: frange i =
   assume false;
   (min,max)
 
+#push-options "--z3rlimit 32"
 // For QUIC handshake interface
 // do not do TLS fragmentation, support
 // max output buffer size
 let write_at_most sto i max
   =
   // do we have a fragment to send?
-  let fragment, outgoing' =
-    let o = sto.outgoing in
-    let lo = length o in
-    if lo = 0 then // nothing to send
-       (None, empty_bytes)
-    else // at most one fragment
-    if (lo <= max) then
-      let rg = mkfrange i lo lo in
-      (Some (| rg, o |), empty_bytes)
-    else // at least two fragments
-      let (x,y) = split_ o max in
-      let lx = length x in
-      let rg = mkfrange i lx lx in
-      (Some (| rg, x |), y) in
-  if length outgoing' = 0 || max = 0
+  let lo = sto.out_pos `op_Subtraction #(Unsigned W32)`  sto.out_start in
+  // do we have an integer library?
+  let lo = if lo <= max then lo else max in
+  let fragment, sto =
+    if lo = 0ul then
+      None, sto
+    else
+      let lb = LowStar.Buffer.sub sto.out_slice.LowParse.Low.Base.base sto.out_start lo in
+      let o = Bytes.of_buffer lo lb in
+      let rg = mkfrange i (v lo) (v lo) in
+      Some (| rg, o |), { sto with out_start = sto.out_start + lo } in
+  if sto.out_start = sto.out_pos || max = 0ul // why this other case?
     then (
       // send signals only after flushing the output buffer
-      let next_keys1, outgoing1 = match sto.outgoing_next_keys with
-      | Some(a, Some finishedFragment, z) ->
-        (if a || z then trace "unexpected 1.2 signals");
-        Some({
-          out_appdata = a;
-          out_ccs_first = true;
-          out_skip_0RTT = z}), finishedFragment
-      | Some(a, None, z) ->
-        Some({
-          out_appdata = a;
-          out_ccs_first = false;
-          out_skip_0RTT = z}), outgoing'
-      | None -> None, outgoing' in
-      let sto = { sto with outgoing = outgoing1; outgoing_next_keys = None; outgoing_complete = false } in
+      // annoyingly, we may have to re-populate the buffer with
+      // delayed bytes to be sent after we signal a key change.
+      let next_keys1  =
+        match sto.outgoing_next_keys with
+        | None -> None
+        | Some(a, delayed_fragment, z) -> (
+          if Some? delayed_fragment then (
+            (if a || z then trace "unexpected 1.2 signals");
+            trace "TODO re-buffer delayed send for TLS 1.2" );
+          Some({
+            out_appdata = a;
+            out_ccs_first = false;
+            out_skip_0RTT = z})) in
+      let sto = { sto with outgoing_next_keys = None; outgoing_complete = false } in
       sto, Outgoing #i fragment next_keys1 sto.outgoing_complete
       )
     else (
-      let sto = { sto with outgoing = outgoing' } in
       sto, Outgoing #i fragment None false )
 
 // TODO require or check that both flags are clear before the call
