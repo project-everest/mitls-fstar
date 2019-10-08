@@ -23,9 +23,9 @@ open Declassify
 
 let encrypt #a #phi s plain plain_len cipher = 
   let h0 = HST.get () in
-  if F.model
+  if safe s
   then begin
-    let s : Model.state a phi = s in
+    let s = log s in
     let plain_s = MU.get_buffer plain plain_len in
     let cipher_len = iv_len `U32.add` plain_len `U32.add` tag_len a in
     let h1 = HST.get () in
