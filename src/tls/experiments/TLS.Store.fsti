@@ -33,7 +33,7 @@ type usage =
 
 // a simplification for length computations 
 
-type alg = a:alg { iv_length a = 12 /\ tag_length a = 16 } 
+type alg = a:supported_alg { iv_length a 12 /\ tag_length a = 16 } 
 noextract let overhead = 12 + 16
 
 let default_alg: alg = AES256_GCM 
@@ -53,7 +53,29 @@ type cipher_p = p:B.buffer UInt8.t{ overhead <= B.length p /\ B.length p <= over
 /// around forever after as part of the global TLS invariant. Also
 /// useful for scrubbing the old keys.
 
-type inv: FStar.HyperStack.mem -> Type0
+let substore = Mem.subtls_gen Mem.tls_store_region
+
+val tls_store_server_cookie_region : substore
+val tls_store_server_ticket_region : substore
+
+let loc_store_server_cookie_region () : GTot B.loc =
+  B.loc_all_regions_from true tls_store_server_cookie_region
+
+let loc_store_server_ticket_region () : GTot B.loc =
+  B.loc_all_regions_from true tls_store_server_ticket_region
+
+val loc_store_regions_disjoint : squash (B.loc_disjoint (loc_store_server_cookie_region ()) (loc_store_server_ticket_region ()))
+
+val inv: FStar.HyperStack.mem -> Type0
+
+val frame:
+  h: FStar.HyperStack.mem ->
+  l: B.loc ->
+  h': FStar.HyperStack.mem ->
+  Lemma
+  (requires (B.modifies l h h' /\ inv h /\ B.loc_disjoint l (Mem.loc_store_region ())))
+  (ensures (inv h'))
+  [SMTPat (inv h'); SMTPat (B.modifies l h h')]
 
 val reset: unit -> ST error_code 
   (requires fun h0 -> True)
@@ -64,8 +86,8 @@ val set_key:
   a: alg -> 
   key: B.buffer UInt8.t { B.length key = key_length a } -> 
   ST error_code 
-  (requires fun h0 -> inv h0)
-  (ensures fun h0 r h1 -> inv h0)
+  (requires fun h0 -> B.live h0 key /\ inv h0)
+  (ensures fun h0 r h1 -> B.modifies (Mem.loc_store_region ()) h0 h1 /\ inv h1)
 
 /// The other functions are ad hoc and internal to TLS, making the use
 /// of the global keys implicit. They all operate on (serialized)
@@ -81,12 +103,13 @@ val encrypt:
   Stack error_code 
   (requires fun h0 -> 
     inv h0 /\ // other EverCrypt.AEAD pre/inv follow from this module's invariant
+    B.loc_disjoint (B.loc_buffer plain `B.loc_union` B.loc_buffer cipher) (Mem.loc_store_region ()) /\
     LowStar.Monotonic.Buffer.(all_live h0 [ buf plain; buf cipher ]) /\ 
     B.disjoint plain cipher)
   (ensures fun h0 r h1 -> 
     inv h1 /\ 
     // no need for concrete functional correctness 
-    B.(modifies (loc_buffer cipher) h0 h1)) 
+    B.(modifies (loc_buffer cipher `loc_union` Mem.loc_store_region ()) h0 h1)) 
 
 val decrypt:
   u: usage ->
@@ -96,6 +119,7 @@ val decrypt:
   Stack error_code 
   (requires fun h0 -> 
     inv h0 /\ // other EverCrypt.AEAD pre/inv follow from this module's invariant
+    B.loc_disjoint (B.loc_buffer plain `B.loc_union` B.loc_buffer cipher) (Mem.loc_store_region ()) /\
     LowStar.Monotonic.Buffer.(all_live h0 [ buf plain; buf cipher ]) /\
     B.disjoint plain cipher)
   (ensures fun h0 r h1 -> 
