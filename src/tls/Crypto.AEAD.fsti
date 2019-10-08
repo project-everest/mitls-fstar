@@ -75,6 +75,7 @@ val coerce
     end
   )
 
+noextract
 val create
   (r: HS.rid)
   (a: SC.supported_alg)

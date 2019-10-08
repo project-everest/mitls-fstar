@@ -38,7 +38,7 @@ type state (a: SC.supported_alg) (phi: plain_pred) =
   | Coerced: (st: cstate a) -> state a phi
 
 let safe #a #phi s =
-  F.model && Created? s
+  if F.model then Created? s else false
 
 noextract
 let log (#a: _) (#phi: _) (s: state a phi { safe s }) : Tot (Model.state a phi)
