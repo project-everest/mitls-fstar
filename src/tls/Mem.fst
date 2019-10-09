@@ -191,7 +191,7 @@ let tls_define_region = List.Tot.index top_regions 1
 let tls_honest_region = List.Tot.index top_regions 2
 let tls_psk_region    = List.Tot.index top_regions 3
 let tls_crf_region    = List.Tot.index top_regions 4
-let tls_store_region  = List.Tot.index top_regions 5
+let tls_store_region  = List.Tot.index top_regions 5 // FIXME: tls_store_region MUST NOT BE a subregion of TLS
 
 #push-options "--z3rlimit 40 --max_fuel 6  --max_ifuel 0"
 

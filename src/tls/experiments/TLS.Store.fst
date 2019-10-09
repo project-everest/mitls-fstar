@@ -82,6 +82,13 @@ let keyptr (u: usage) : Tot (ptr u) =
   | WrapPSK -> wrap_psk_key
   | ClientSeal -> client_seal_key
 
+let keyptr_recallable (u: usage) : Lemma
+  (B.recallable (keyptr u))
+  [SMTPat (B.recallable (keyptr u))]
+= ()
+
+module HST = FStar.HyperStack.ST
+
 let per_usage_inv (h: HS.mem) (u: usage) : Tot Type0 =
   B.live h (keyptr u) /\
   begin match B.deref h (keyptr u) with
@@ -113,7 +120,14 @@ let per_usage_frame'
     B.loc_disjoint l (Mem.loc_store_region ())
   ))
   (ensures (per_usage_inv h' u'))
-= admit ()
+= assert (Mem.loc_store_region () `B.loc_includes` B.loc_buffer (keyptr u));
+  assert (Mem.loc_store_region () `B.loc_includes` B.loc_buffer (keyptr u'));
+  begin match B.deref h (keyptr u') with
+  | None -> ()
+  | Some (| a, st |) ->
+    assert (Mem.loc_store_region () `B.loc_includes` AE.footprint st);
+    AE.frame_invariant h st (loc_store_regions u `B.loc_union` l) h'
+  end
 
 let per_usage_frame
   (u: usage)
@@ -152,93 +166,67 @@ let frame h l h' =
   per_usage_frame' ServerTicket ClientSeal h l h' ;
   per_usage_frame' ClientSeal ServerCookie h l h'
 
-(*
-
-  assert (Mem.loc_store_region () `B.loc_includes` B.loc_buffer server_cookie_key);
-  assert (Mem.loc_store_region () `B.loc_includes` B.loc_buffer server_ticket_key); 
-  assert (B.live h' server_cookie_key);
-  begin match B.deref h server_cookie_key with
-  | None -> ()
-  | Some (| a, st |) ->
-    assert (Mem.loc_store_region () `B.loc_includes` AE.footprint st);
-    AE.frame_invariant h st l h'
-  end;
-  assert (B.live h' server_ticket_key);
-  begin match B.deref h server_ticket_key with
-  | None -> ()
-  | Some (| a, st |) ->
-    assert (Mem.loc_store_region () `B.loc_includes` AE.footprint st);
-    AE.frame_invariant h st l h'
-  end
+inline_for_extraction
+noextract
+let reset_key (u: usage) : HST.Stack unit
+  (requires (fun _ -> True))
+  (ensures (fun h _ h' ->
+    B.modifies (loc_store_regions u) h h' /\
+    per_usage_inv h' u
+  ))
+= let p = keyptr u in
+  B.recall p;
+  B.upd p 0ul None
 
 let reset _ =
-  B.recall server_cookie_key;
-  B.recall server_ticket_key;
-  B.upd server_cookie_key 0ul None;
-  B.upd server_ticket_key 0ul None;
+  let h0 = HST.get () in
+  reset_key ServerCookie;
+  let h1 = HST.get () in
+  reset_key ClientSeal;
+  let h2 = HST.get () in
+  per_usage_frame' ClientSeal ServerCookie h1 B.loc_none h2;
+  reset_key WrapPSK;
+  let h3 = HST.get () in
+  per_usage_frame' WrapPSK ClientSeal h2 B.loc_none h3;
+  per_usage_frame' WrapPSK ServerCookie h2 B.loc_none h3;
+  reset_key ServerTicket;
+  let h4 = HST.get () in
+  per_usage_frame' ServerTicket WrapPSK h3 B.loc_none h4;
+  per_usage_frame' ServerTicket ClientSeal h3 B.loc_none h4;
+  per_usage_frame' ServerTicket ServerCookie h3 B.loc_none h4;  
   Success
 
 #push-options "--z3rlimit 16"
 
 let set_key u a key =
   let h = HST.get () in
-  match u with
-  | ServerCookie ->
-    // TODO: free the extant one, if any; requires key to be disjoint from region
-    begin match AE.coerce tls_store_server_cookie_region a key server_cookie_phi with
+  // TODO: free the extant one, if any; requires key to be disjoint from region
+  match AE.coerce (tls_store_regions u) a key (phi u) with
     | None -> UnsupportedAlgorithm // TODO: refine error codes
     | Some st ->
+      let p = keyptr u in
       let h1 = HST.get () in
-      B.upd server_cookie_key 0ul (Some (| a, st |));
+      B.upd p 0ul (Some (| a, st |));
       let h' = HST.get () in
-      AE.frame_invariant h1 st (B.loc_buffer server_cookie_key) h';
-      let f () : Lemma (inv' h') =
-        begin match B.deref h server_ticket_key with
-        | None -> ()
-        | Some (| a', st' |) ->
-          AE.frame_invariant h st' (B.loc_buffer server_cookie_key) h'
-        end;
-        assert (inv' h')        
-      in
-      f ();
+      AE.frame_invariant h1 st (B.loc_buffer p) h';
+      per_usage_frame u h B.loc_none h';
       Success
-    end
-  | _ -> Success
 
 let encrypt u plain plain_len cipher =
   let h = HST.get () in
-  match u with
-  | ServerCookie ->
-    begin match B.index server_cookie_key 0ul with
+  let p = keyptr u in
+  match B.index p 0ul with
     | None -> InvalidKey
     | Some (| a, st |) ->
-//      assert (B.loc_disjoint (AE.footprint st) (B.loc_buffer server_cookie_key));
-      assume (server_cookie_phi (B.as_seq h plain));
+      assume (phi u (B.as_seq h plain));
       assert (Mem.loc_store_region () `B.loc_includes` AE.footprint st);
       AE.encrypt st plain plain_len cipher;
       let h' = HST.get () in
-      assert (Mem.loc_store_region () `B.loc_includes` B.loc_buffer server_cookie_key);
-      let f () : Lemma (inv' h') =
-        assert (loc_store_server_ticket_region () `B.loc_includes` B.loc_buffer server_ticket_key);
-        assert (loc_store_server_cookie_region () `B.loc_includes` AE.footprint st);
-        assert (Mem.loc_store_region () `B.loc_includes` B.loc_buffer server_ticket_key);
-        begin match B.deref h server_ticket_key with
-        | None -> ()
-        | Some (| a', st' |) ->
-          assert (loc_store_server_ticket_region () `B.loc_includes` AE.footprint st');
-          assert (Mem.loc_store_region () `B.loc_includes` AE.footprint st');
-          AE.frame_invariant h st' (AE.footprint st `B.loc_union` B.loc_buffer cipher) h'
-        end;
-        assert (inv' h')        
-      in
-      f ();
+      assert (Mem.loc_store_region () `B.loc_includes` B.loc_buffer p);
+      per_usage_frame u h (B.loc_buffer cipher) h';
       Success
-    end
-  | _ -> InvalidKey
 
 let decrypt u plain plain_len cipher =
   Success
 
-(*
-let server_cookie_key :
-  (server_cookie_key: B.pointer (option (a: alg & AE.state a server_cookie_phi)) { B.frameOf server_cookie_key == store_region }) = B.gcmalloc store_region None 1ul
+#pop-options
