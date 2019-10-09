@@ -8,7 +8,7 @@
       0,
       [ "@query" ],
       0,
-      "7d349d9457a24e4a7fac9934a4269cd8"
+      "1381d08312c0cf595a1be1f618d6493d"
     ],
     [
       "Crypto.CRF.of_seq",
@@ -22,7 +22,7 @@
         "refinement_interpretation_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
       ],
       0,
-      "65601abd87e5a692fbabcd314ba1923b"
+      "707fba2c9650a48fdee63141df6468f4"
     ],
     [
       "Crypto.CRF.ideal",
@@ -35,7 +35,7 @@
         "typing_Flags.model"
       ],
       0,
-      "d78e71f01a6bc2fd8704471991451506"
+      "33191197c0fc43deff3a4521d2f97f63"
     ],
     [
       "Crypto.CRF.gideal",
@@ -48,7 +48,7 @@
         "typing_Flags.model"
       ],
       0,
-      "d6bb112d627c8c88fa48a89b67460096"
+      "6dd31ff216744dd7e6f95bab410f3029"
     ],
     [
       "Crypto.CRF.real",
@@ -65,7 +65,7 @@
         "typing_Mem.is_tls_rgn", "typing_Mem.tls_region"
       ],
       0,
-      "e68c96dc7864d9d0c360a7f0e88366fc"
+      "f19ea13dc580a07dac90b862a03dd602"
     ],
     [
       "Crypto.CRF.greal",
@@ -82,7 +82,7 @@
         "typing_Mem.is_tls_rgn", "typing_Mem.tls_region"
       ],
       0,
-      "4b9d721dd58055f217b706df73a80f67"
+      "31456bc9ab3251619b6e3dbdf635191e"
     ],
     [
       "Crypto.CRF.freeable",
@@ -104,7 +104,7 @@
         "typing_FStar.Monotonic.HyperStack.get_tip", "typing_Flags.model"
       ],
       0,
-      "22a5d37fbacf5a7aa3c61b50fa1bb3b0"
+      "2188944a2b68bd83e5fe6015a17eff06"
     ],
     [
       "Crypto.CRF.footprint",
@@ -126,7 +126,7 @@
         "typing_FStar.Monotonic.HyperStack.get_tip", "typing_Flags.model"
       ],
       0,
-      "d482cb5f8c209a23c0a14dadb66b7d98"
+      "2da7c8bd0c10e0c497d059fb931828d6"
     ],
     [
       "Crypto.CRF.invariant",
@@ -148,7 +148,7 @@
         "typing_FStar.Monotonic.HyperStack.get_tip", "typing_Flags.model"
       ],
       0,
-      "e911e822c239a3886efd5d53b155c375"
+      "b65bfa6df9745121d28fdcf94e2616f8"
     ],
     [
       "Crypto.CRF.invariant_loc_in_footprint",
@@ -182,7 +182,7 @@
         "typing_Tm_abs_afb00d94733125e557a8c688cd509842"
       ],
       0,
-      "497fb995cc28b6c7be4091e0dab5bc12"
+      "290e4990927a171619f8ed7060d9e8bd"
     ],
     [
       "Crypto.CRF.hashed",
@@ -208,7 +208,7 @@
         "typing_FStar.Monotonic.HyperStack.get_tip"
       ],
       0,
-      "b8db93cbaaf776772e9e6f8fa0709ca0"
+      "af3b0a7599994f556497c3c716b65a72"
     ],
     [
       "Crypto.CRF.hash_fits",
@@ -224,8 +224,8 @@
         "constructor_distinct_FStar.Integers.W63",
         "constructor_distinct_FStar.Integers.W8",
         "constructor_distinct_Lib.IntTypes.U1",
-        "constructor_distinct_Lib.IntTypes.U64", "eq2-interp",
-        "equality_tok_FStar.Integers.W16@tok",
+        "constructor_distinct_Lib.IntTypes.U64", "data_elim_Prims.Mkdtuple2",
+        "eq2-interp", "equality_tok_FStar.Integers.W16@tok",
         "equality_tok_FStar.Integers.W31@tok",
         "equality_tok_FStar.Integers.W32@tok",
         "equality_tok_FStar.Integers.W63@tok",
@@ -236,20 +236,28 @@
         "equality_tok_Spec.Hash.Definitions.SHA2_256@tok",
         "equality_tok_Spec.Hash.Definitions.SHA2_384@tok",
         "equality_tok_Spec.Hash.Definitions.SHA2_512@tok",
-        "equation_Crypto.CRF.hashed", "equation_Crypto.CRF.invariant",
+        "equation_Crypto.CRF.hashed", "equation_Crypto.CRF.ideal",
+        "equation_Crypto.CRF.invariant", "equation_Crypto.CRF.mstate",
         "equation_Crypto.CRF.real", "equation_Crypto.CRF.state",
-        "equation_Model.CRF.bytes", "equation_Prims.eq2",
-        "equation_Prims.nat", "equation_Prims.squash",
+        "equation_LowStar.Buffer.pointer", "equation_Model.CRF.bytes",
+        "equation_Prims.eq2", "equation_Prims.nat", "equation_Prims.squash",
         "equation_Spec.Hash.Definitions.max_input_length",
+        "fuel_guarded_inversion_Prims.dtuple2",
         "fuel_guarded_inversion_Spec.Hash.Definitions.hash_alg",
         "function_token_typing_Declassify.declassify",
         "function_token_typing_FStar.UInt8.t", "int_inversion",
+        "interpretation_Tm_abs_afb00d94733125e557a8c688cd509842",
         "l_and-interp", "lemma_EverCrypt.Hash.Incremental.hash_fits",
-        "primitive_Prims.op_LessThan", "projection_inverse_BoxBool_proj_0",
+        "primitive_Prims.op_LessThan", "primitive_Prims.op_Subtraction",
+        "proj_equation_Prims.Mkdtuple2__2",
+        "projection_inverse_BoxBool_proj_0",
+        "projection_inverse_BoxInt_proj_0",
         "projection_inverse_FStar.Integers.Signed__0",
         "projection_inverse_FStar.Integers.Unsigned__0",
         "refinement_interpretation_Tm_refine_2de20c066034c13bf76e9c0b94f4806c",
+        "refinement_interpretation_Tm_refine_40a6e73d618aa10a50e2439ecb2e51ed",
         "refinement_interpretation_Tm_refine_542f9d4f129664613f2483a6c88bc7c2",
+        "refinement_interpretation_Tm_refine_573cfed777dae20cc82e8fef9622857e",
         "typing_Crypto.CRF.hashed", "typing_FStar.Seq.Base.length",
         "typing_tok_Spec.Hash.Definitions.MD5@tok",
         "typing_tok_Spec.Hash.Definitions.SHA1@tok",
@@ -259,7 +267,7 @@
         "typing_tok_Spec.Hash.Definitions.SHA2_512@tok"
       ],
       0,
-      "8ba4f6b7562df9508eaee33872a90391"
+      "797281483c7c4d15317bbbc96b089d4f"
     ],
     [
       "Crypto.CRF.frame_invariant",
@@ -323,7 +331,7 @@
         "typing_Tm_abs_afb00d94733125e557a8c688cd509842"
       ],
       0,
-      "bcc2ffbf012b57ace1b9d66e735ed7c3"
+      "9214add5bdf7b09effbaf00486c5a3de"
     ],
     [
       "Crypto.CRF.frame_hashed",
@@ -381,7 +389,7 @@
         "typing_Tm_abs_afb00d94733125e557a8c688cd509842"
       ],
       0,
-      "d3d79aae31b4d3b9bed51952df67d7a4"
+      "816fa7b6d2b4331c1df9680a03979a76"
     ],
     [
       "Crypto.CRF.frame_freeable",
@@ -395,7 +403,7 @@
         "lemma_EverCrypt.Hash.Incremental.frame_freeable"
       ],
       0,
-      "62afa2d252ef286709e9164a877bdb25"
+      "0c73522c5b0f0a5c33c63746842a8d44"
     ],
     [
       "Crypto.CRF.create_in",
@@ -467,7 +475,7 @@
         "typing_Mem.tls_tables_region"
       ],
       0,
-      "f4fa092e597bc51d3bec95dc2048fd7f"
+      "c04f098e53b80131e707bfb183a13318"
     ],
     [
       "Crypto.CRF.init",
@@ -550,7 +558,7 @@
         "typing_LowStar.Monotonic.Buffer.loc_buffer", "typing_Prims.pow2"
       ],
       0,
-      "29e9c0df5eeda06bfde0bffe90df7887"
+      "c1dd78240c8d54b98719eb2b1051e61b"
     ],
     [
       "Crypto.CRF.update_pre",
@@ -559,7 +567,7 @@
       0,
       [ "@query" ],
       0,
-      "a370288a91f39df2f459211c1eb0d808"
+      "83f41218a30ca13fed25416c4452276b"
     ],
     [
       "Crypto.CRF.update",
@@ -634,7 +642,7 @@
         "typing_LowStar.Monotonic.Buffer.loc_buffer"
       ],
       0,
-      "f8412b176cbea28f3acbd0d70e1984b3"
+      "2c79052d9cc486f4cc55bfc3ffbd219f"
     ],
     [
       "Crypto.CRF.finish_st",
@@ -650,7 +658,7 @@
         "refinement_interpretation_Tm_refine_e1e29cb0b38dfb3cd2ef20a69e983b74"
       ],
       0,
-      "c1444b00604047eeecc016dcc80f707a"
+      "0472508c0d8cb98fea815e83f9afc1d6"
     ],
     [
       "Crypto.CRF.finish",
@@ -748,7 +756,7 @@
         "typing_Mem.tls_tables_region"
       ],
       0,
-      "0c164b2fce54d26912f28b34539dd263"
+      "0bdf69aebdd795a795735304ad951f01"
     ],
     [
       "Crypto.CRF.free",
@@ -778,7 +786,7 @@
         "typing_FStar.Monotonic.HyperStack.get_tip"
       ],
       0,
-      "0fef35aeebf712c1b10277b559b40f26"
+      "4a2bae091710d4c122ad2784a4ec9ef5"
     ]
   ]
 ]

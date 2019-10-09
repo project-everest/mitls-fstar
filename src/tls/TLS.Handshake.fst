@@ -105,7 +105,10 @@ let invalidateSession hs = ()
 // ServerHello in plaintext, we continue with encrypted traffic.
 // Otherwise, we just returns buffered messages and signals.
 
+let lib_max x y : nat  = if x >= y then x else y 
+
 let rec next_fragment_bounded hs i max =
+  let max32 = UInt32.uint_to_t (lib_max (FStar.UInt.max_int 32) max) in 
   trace "next_fragment";
   match hs with 
   | Client region config r -> (
@@ -116,7 +119,7 @@ let rec next_fragment_bounded hs i max =
       | Correct () -> next_fragment_bounded hs i max )
     else 
       let ms0 = Machine.client_ms st0 in 
-      let sending, result = Send.write_at_most ms0.sending i max in
+      let sending, result = Send.write_at_most ms0.sending i max32 in
       let ms1 = { ms0 with sending = sending } in 
       let st1 = set_client_ms st0 ms1 in 
       // any simpler way to update substate? 
@@ -133,7 +136,7 @@ let rec next_fragment_bounded hs i max =
   | Server region config r -> ( 
     let st0 = !r in 
     let ms0 = Machine.server_ms st0 in 
-    let sending, result = Send.write_at_most ms0.sending i max in
+    let sending, result = Send.write_at_most ms0.sending i max32 in
     let ms1 = { ms0 with sending = sending } in 
     let st1 = set_server_ms st0 ms1 in 
     r := st1; 

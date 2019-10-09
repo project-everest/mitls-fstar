@@ -87,7 +87,6 @@ let tag #a stt transcript =
   pop_frame();
   tag
 
-
 let send_tch sto m =
   let h0 = get () in
   let r = MITLS.Repr.Handshake.serialize sto.out_slice sto.out_pos (HSM.M_client_hello m) in
@@ -95,9 +94,10 @@ let send_tch sto m =
   | None ->
     fatal Internal_error "send_tch: output buffer overflow"
   | Some r ->
+    // TODO Jonathan trace from slice
     let b = MITLS.Repr.to_bytes r in
     trace ("send "^hex_of_bytes b);
-    let sto = { sto with out_pos = r.MITLS.Repr.end_pos; outgoing = sto.outgoing @| b } in
+    let sto = { sto with out_pos = r.MITLS.Repr.end_pos } in
     correct sto
 
 let patch_binders
@@ -118,7 +118,7 @@ let send_ch
     let t' = Transcript.extend stt (Transcript.LR_ClientHello r) t in
     let b = MITLS.Repr.to_bytes r in
     trace ("send "^hex_of_bytes b);
-    let sto = { sto with out_pos = r.MITLS.Repr.end_pos; outgoing = sto.outgoing @| b } in
+    let sto = { sto with out_pos = r.MITLS.Repr.end_pos } in
     correct (sto, t')
 
 #push-options "--z3rlimit 32"
@@ -141,7 +141,7 @@ let send_hrr
       let t' = Transcript.extend stt (Transcript.LR_HRR r_tag r_hrr) t in
       let b = MITLS.Repr.to_bytes r_tag @| MITLS.Repr.to_bytes r_hrr in
       trace ("send "^hex_of_bytes b);
-      let sto = { sto with out_pos = r_hrr.MITLS.Repr.end_pos; outgoing = sto.outgoing @| b } in
+      let sto = { sto with out_pos = r_hrr.MITLS.Repr.end_pos } in
       correct (sto, t')
     end
 
@@ -191,7 +191,7 @@ let send13
     let t' = Transcript.extend stt (Transcript.LR_HSM13 r) t in
     let b = MITLS.Repr.to_bytes r in
     trace ("send "^hex_of_bytes b);
-    let sto = { sto with out_pos = r.MITLS.Repr.end_pos; outgoing = sto.outgoing @| b } in
+    let sto = { sto with out_pos = r.MITLS.Repr.end_pos } in
     correct (sto, t')
 
 
@@ -287,8 +287,7 @@ let send #a stt transcript0 sto msg =
       let transcript1 = Transcript.extend stt label transcript0 in
       let b = MITLS.Repr.to_bytes r in
       trace ("send "^hex_of_bytes b);
-      assume (FStar.Bytes.len sto.outgoing <= sto.out_pos);
-      let sto = { sto with out_pos = r.MITLS.Repr.end_pos; outgoing = sto.outgoing @| b } in
+      let sto = { sto with out_pos = r.MITLS.Repr.end_pos } in
       correct (sto, transcript1)
     | _ -> fatal Internal_error "unsupported?"
     end
