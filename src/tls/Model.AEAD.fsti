@@ -30,6 +30,7 @@ val invariant_loc_in_footprint
 : Lemma
   (requires (invariant h s))
   (ensures (footprint s `B.loc_in` h))
+  [SMTPat (invariant h s)]
 
 val frame_invariant
   (#a: SC.supported_alg) (#phi: plain_pred) (h: HS.mem) (s: state a phi)

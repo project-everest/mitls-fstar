@@ -194,21 +194,33 @@ let reset _ =
   per_usage_frame' ServerTicket ServerCookie h3 B.loc_none h4;  
   Success
 
-#push-options "--z3rlimit 16"
+#push-options "--z3rlimit 32"
 
 let set_key u a key =
   let h = HST.get () in
-  // TODO: free the extant one, if any; requires key to be disjoint from region
   match AE.coerce (tls_store_regions u) a key (phi u) with
     | None -> UnsupportedAlgorithm // TODO: refine error codes
     | Some st ->
       let p = keyptr u in
       let h1 = HST.get () in
+      begin match B.index p 0ul with
+      | None -> ()
+      | Some (| a', st' |) ->
+        AE.frame_invariant h st' B.loc_none h1;
+        AE.free st';
+        let h2 = HST.get () in
+        AE.frame_invariant h1 st (AE.footprint st') h2
+      end;
+      let h2 = HST.get () in
       B.upd p 0ul (Some (| a, st |));
       let h' = HST.get () in
-      AE.frame_invariant h1 st (B.loc_buffer p) h';
+      AE.frame_invariant h2 st (B.loc_buffer p) h';
       per_usage_frame u h B.loc_none h';
       Success
+
+#pop-options
+
+#push-options "--z3rlimit 16"
 
 let encrypt u plain plain_len cipher =
   let h = HST.get () in
