@@ -53,19 +53,6 @@ type cipher_p = p:B.buffer UInt8.t{ overhead <= B.length p /\ B.length p <= over
 /// around forever after as part of the global TLS invariant. Also
 /// useful for scrubbing the old keys.
 
-let substore = Mem.subtls_gen Mem.tls_store_region
-
-val tls_store_server_cookie_region : substore
-val tls_store_server_ticket_region : substore
-
-let loc_store_server_cookie_region () : GTot B.loc =
-  B.loc_all_regions_from true tls_store_server_cookie_region
-
-let loc_store_server_ticket_region () : GTot B.loc =
-  B.loc_all_regions_from true tls_store_server_ticket_region
-
-val loc_store_regions_disjoint : squash (B.loc_disjoint (loc_store_server_cookie_region ()) (loc_store_server_ticket_region ()))
-
 val inv: FStar.HyperStack.mem -> Type0
 
 val frame:

@@ -7,8 +7,8 @@ module AE = Crypto.AE
 module HS = FStar.HyperStack
 module HST = FStar.HyperStack.ST
 
-let store_regions : (l:list substore{List.Tot.length l == 4 /\ Mem.r_pairwise_disjoint l})
-  = Mem.r_disjoint_alloc _ 4
+let store_regions : (l:list Mem.substore{List.Tot.length l == 4 /\ Mem.r_pairwise_disjoint l})
+  = Mem.r_disjoint_alloc _ _ 4
 
 module HS = FStar.HyperStack
 
@@ -28,9 +28,7 @@ let tls_store_server_ticket_region = List.Tot.index store_regions 1
 let tls_store_wrap_psk_region = List.Tot.index store_regions 2
 let tls_store_client_seal_region = List.Tot.index store_regions 3
 
-let loc_store_regions_disjoint = ()
-
-let tls_store_regions (u: usage) : Tot substore =
+let tls_store_regions (u: usage) : Tot Mem.substore =
   match u with
   | ServerCookie -> tls_store_server_cookie_region
   | ServerTicket -> tls_store_server_ticket_region

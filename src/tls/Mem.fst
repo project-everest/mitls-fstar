@@ -63,16 +63,19 @@ let ssa #a = fun x y ->
 let tls_color   = -1 // For all regions in the TLS global region.
 let epoch_color = -2 // Unused so far.
 let hs_color    = -3
+let store_color = -4
 
 let is_tls_rgn r   = (color r = tls_color)
 let is_epoch_rgn r = (color r = epoch_color)
 let is_hs_rgn r    = (color r = hs_color)
+let is_store_rgn r = (color r = store_color)
 
 let rgn = r:erid{r =!= root}
 
 let tls_rgn   = r:rgn{is_tls_rgn r}
 let epoch_rgn = r:rgn{is_epoch_rgn r}
 let hs_rgn    = r:rgn{is_hs_rgn r}
+let store_rgn = r:rgn{is_store_rgn r}
 
 type fresh_subregion child parent h0 h1 =
   (is_tls_rgn child <==> is_tls_rgn parent) /\
@@ -82,10 +85,24 @@ type fresh_subregion child parent h0 h1 =
 type subrgn p = r:rgn{parent r == p}
 
 (** Global top-level region for TLS ideal state *)
-let tls_region: tls_rgn = new_colored_region root tls_color
 
-type subtls_gen (r0: rgn) = r: subrgn r0 { is_tls_rgn r }
-type subtls = subtls_gen tls_region
+let tls_and_store_regions :
+  (tls_region: tls_rgn & (store_region: store_rgn {
+    tls_region `HS.disjoint` store_region
+  }))
+= let tls_region = new_colored_region root tls_color in
+  let store_region = new_colored_region root store_color in
+  (| tls_region, store_region |)
+
+let tls_region: tls_rgn =
+  let (| tls_region, _ |) = tls_and_store_regions in tls_region
+
+let store_region : (store_region: store_rgn { tls_region `HS.disjoint` store_region })  =
+  let (| _, store_region |) = tls_and_store_regions in store_region
+
+type subrgn_with_color (r0: rgn) (c: int) = r: subrgn r0 { color r == c }
+type subtls = subrgn_with_color tls_region tls_color
+type substore = subrgn_with_color store_region store_color
 
 /// Top-level disjointness
 ///
@@ -96,20 +113,20 @@ type subtls = subtls_gen tls_region
 #push-options "--max_ifuel 1"
 
 (** r `rlist_disjoint` l holds if r is disjoint from all regions in l *)
-val rlist_disjoint (#r0: rgn) : subtls_gen r0 -> list (subtls_gen r0) -> Type0
-let rec rlist_disjoint #r0 r = function
+val rlist_disjoint (#r0: rgn) (#c: int) : subrgn_with_color r0 c -> list (subrgn_with_color r0 c) -> Type0
+let rec rlist_disjoint #r0 #c r = function
   | [] -> True
   | r' :: l -> r `HS.disjoint` r' /\ rlist_disjoint r l
 
 (** r_pairwise_disjoint l holds if all regions in l are pairwise disjoint *)
-val r_pairwise_disjoint (#r0: rgn): list (subtls_gen r0) -> Type0
-let rec r_pairwise_disjoint #r0 = function
+val r_pairwise_disjoint (#r0: rgn) (#c: int): list (subrgn_with_color r0 c) -> Type0
+let rec r_pairwise_disjoint #r0 #c = function
   | [] -> True
   | r :: l -> rlist_disjoint r l /\ r_pairwise_disjoint l
 
 (** r_fresh l h0 h1 holds when all regions in l are fresh between h0 and h1 *)
-val r_fresh (#r0: rgn): list (subtls_gen r0) -> mem -> mem -> Type0
-let rec r_fresh #r0 l h0 h1 =
+val r_fresh (#r0: rgn) (#c: int): list (subrgn_with_color r0 c) -> mem -> mem -> Type0
+let rec r_fresh #r0 #c l h0 h1 =
   match l with
   | [] -> True
   | r :: l -> fresh_region r h0 h1 /\ r_fresh l h0 h1
@@ -124,56 +141,56 @@ let fresh_back r h0 h1 h2 = ()
 
 #push-options "--max_fuel 1 --max_ifuel 1"
 
-val r_fresh_back (#r0: rgn) (l:list (subtls_gen r0)) (h0 h1 h2:mem) : Lemma
+val r_fresh_back (#r0: rgn) (#c: int) (l:list (subrgn_with_color r0 c)) (h0 h1 h2:mem) : Lemma
   (requires r_fresh l h1 h2 /\ modifies_none h0 h1)
   (ensures  r_fresh l h0 h2)
-let rec r_fresh_back #r0 l h0 h1 h2 =
+let rec r_fresh_back #r0 #c l h0 h1 h2 =
   match l with
   | [] -> ()
   | r :: l' -> r_fresh_back l' h0 h1 h2
 
-val r_fresh_fwd (#r0: rgn) (l:list (subtls_gen r0)) (h0 h1 h2:mem) : Lemma
+val r_fresh_fwd (#r0: rgn) (#c: int) (l:list (subrgn_with_color r0 c)) (h0 h1 h2:mem) : Lemma
   (requires r_fresh l h0 h1 /\ modifies_none h1 h2)
   (ensures  r_fresh l h0 h2)
-let rec r_fresh_fwd #r0 l h0 h1 h2 =
+let rec r_fresh_fwd #r0 #c l h0 h1 h2 =
   match l with
   | [] -> ()
   | r :: l' -> r_fresh_fwd l' h0 h1 h2
 
-val r_fresh_disjoint (#r0: rgn) (r:subtls_gen r0) (l:list (subtls_gen r0)) (h0 h1 h2:mem) : Lemma
+val r_fresh_disjoint (#r0: rgn) (#c: int) (r:subrgn_with_color r0 c) (l:list (subrgn_with_color r0 c)) (h0 h1 h2:mem) : Lemma
   (requires r_fresh l h0 h1 /\ fresh_region r h1 h2)
   (ensures  rlist_disjoint r l)
-let rec r_fresh_disjoint #r0 r l h0 h1 h2 =
+let rec r_fresh_disjoint #r0 #c r l h0 h1 h2 =
   match l with
   | [] -> ()
   | r' :: l' ->
     lemma_extends_disjoint r0 r r';
     r_fresh_disjoint r l' h0 h1 h2
 
-val r_fresh_forall: #r0: rgn -> l:list (subtls_gen r0) -> h0:mem -> h1:mem -> Lemma
+val r_fresh_forall: #r0: rgn -> #c: int -> l:list (subrgn_with_color r0 c) -> h0:mem -> h1:mem -> Lemma
   ((forall r.{:pattern fresh_region r h0 h1} List.Tot.mem r l ==> fresh_region r h0 h1) <==>
    r_fresh l h0 h1)
-let rec r_fresh_forall #r0 l h0 h1 =
+let rec r_fresh_forall #r0 #c l h0 h1 =
   match l with
   | [] -> ()
   | r :: l' -> r_fresh_forall l' h0 h1
 
 (** Allocates n pairwise disjoint subregions of tls_region *)
-val r_disjoint_alloc: r0: rgn -> n:nat -> ST (l:list (subtls_gen r0))
+val r_disjoint_alloc: r0: rgn -> c: int { HS.is_eternal_color c } -> n:nat -> ST (l:list (subrgn_with_color r0 c))
   (requires fun h0 -> True)
   (ensures  fun h0 l h1 ->
     modifies_none h0 h1 /\
     r_fresh l h0 h1 /\
     List.Tot.length l == n /\
     r_pairwise_disjoint l)
-let rec r_disjoint_alloc r0 n =
+let rec r_disjoint_alloc r0 c n =
   if n = 0 then []
   else
     begin
     let h0 = ST.get () in
-    let l = r_disjoint_alloc r0 (n-1) in
+    let l = r_disjoint_alloc r0 c (n-1) in
     let h1 = ST.get () in
-    let r = new_colored_region r0 tls_color in
+    let r = new_colored_region r0 c in
     let h2 = ST.get () in
     r_fresh_disjoint r l h0 h1 h2;
     r_fresh_fwd l h0 h1 h2;
@@ -183,19 +200,18 @@ let rec r_disjoint_alloc r0 n =
 #pop-options
 
 // We use region disjointness as a coarse grained way of framing invariants.
-let top_regions: (l:list subtls{List.Tot.length l == 6 /\ r_pairwise_disjoint l})
-  = r_disjoint_alloc _ 6
+let top_regions: (l:list subtls{List.Tot.length l == 5 /\ r_pairwise_disjoint l})
+  = r_disjoint_alloc _ _ 5
 
 let tls_tables_region = List.Tot.index top_regions 0
 let tls_define_region = List.Tot.index top_regions 1
 let tls_honest_region = List.Tot.index top_regions 2
 let tls_psk_region    = List.Tot.index top_regions 3
 let tls_crf_region    = List.Tot.index top_regions 4
-let tls_store_region  = List.Tot.index top_regions 5 // FIXME: tls_store_region MUST NOT BE a subregion of TLS
 
-#push-options "--z3rlimit 40 --max_fuel 6  --max_ifuel 0"
+#push-options "--z3rlimit 40 --max_fuel 5  --max_ifuel 0"
 
-val top_regions_disjoint: i:nat{i < 6} -> j:nat{j < 6} -> Lemma
+val top_regions_disjoint: i:nat{i < 5} -> j:nat{j < 5} -> Lemma
   (requires i <> j)
   (ensures  (List.Tot.index top_regions i) `HS.disjoint` (List.Tot.index top_regions j))
   [SMTPat (List.Tot.index top_regions i); SMTPat (List.Tot.index top_regions j)]
@@ -227,7 +243,7 @@ val loc_crf_region: unit -> GTot loc
 let loc_crf_region _ = loc_all_regions_from true tls_crf_region
 
 val loc_store_region: unit -> GTot loc
-let loc_store_region _ = loc_all_regions_from true tls_store_region
+let loc_store_region _ = loc_all_regions_from true store_region
 
 (** Sanity check: this works with fuel=0, ifuel=0 because of the lemma above *)
 let _ = assert (all_disjoint
