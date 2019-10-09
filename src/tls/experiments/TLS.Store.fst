@@ -236,7 +236,19 @@ let encrypt u plain plain_len cipher =
       per_usage_frame u h (B.loc_buffer cipher) h';
       Success
 
+module U32 = FStar.UInt32
+
 let decrypt u plain plain_len cipher =
-  Success
+  let h = HST.get () in
+  let p = keyptr u in
+  match B.index p 0ul with
+  | None -> InvalidKey
+  | Some (| a, st |) ->
+    assert (Mem.loc_store_region () `B.loc_includes` AE.footprint st);
+    let res = AE.decrypt st cipher (U32.uint_to_t overhead `U32.add` plain_len) plain in
+    let h' = HST.get () in
+    assert (Mem.loc_store_region () `B.loc_includes` B.loc_buffer p);
+    per_usage_frame u h (B.loc_buffer plain) h';
+    res
 
 #pop-options

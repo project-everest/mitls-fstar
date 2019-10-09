@@ -112,7 +112,7 @@ val decrypt:
   (ensures fun h0 r h1 -> 
     inv h1 /\ 
     // no need for concrete functional correctness 
-    B.(modifies (loc_buffer plain) h0 h1)) 
+    B.(modifies (loc_buffer plain `loc_union` Mem.loc_store_region ()) h0 h1)) 
   
 // TODO stateful concrete invariant
 
