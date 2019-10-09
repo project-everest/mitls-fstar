@@ -115,10 +115,36 @@ let set_key u a key =
     end
   | _ -> Success
 
-#pop-options
-
 let encrypt u plain plain_len cipher =
-  Success
+  let h = HST.get () in
+  match u with
+  | ServerCookie ->
+    begin match B.index server_cookie_key 0ul with
+    | None -> InvalidKey
+    | Some (| a, st |) ->
+//      assert (B.loc_disjoint (AE.footprint st) (B.loc_buffer server_cookie_key));
+      assume (server_cookie_phi (B.as_seq h plain));
+      assert (Mem.loc_store_region () `B.loc_includes` AE.footprint st);
+      AE.encrypt st plain plain_len cipher;
+      let h' = HST.get () in
+      assert (Mem.loc_store_region () `B.loc_includes` B.loc_buffer server_cookie_key);
+      let f () : Lemma (inv' h') =
+        assert (loc_store_server_ticket_region () `B.loc_includes` B.loc_buffer server_ticket_key);
+        assert (loc_store_server_cookie_region () `B.loc_includes` AE.footprint st);
+        assert (Mem.loc_store_region () `B.loc_includes` B.loc_buffer server_ticket_key);
+        begin match B.deref h server_ticket_key with
+        | None -> ()
+        | Some (| a', st' |) ->
+          assert (loc_store_server_ticket_region () `B.loc_includes` AE.footprint st');
+          assert (Mem.loc_store_region () `B.loc_includes` AE.footprint st');
+          AE.frame_invariant h st' (AE.footprint st `B.loc_union` B.loc_buffer cipher) h'
+        end;
+        assert (inv' h')        
+      in
+      f ();
+      Success
+    end
+  | _ -> InvalidKey
 
 let decrypt u plain plain_len cipher =
   Success
