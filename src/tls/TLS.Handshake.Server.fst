@@ -32,8 +32,11 @@ module HD = Spec.Hash.Definitions
 module HI = EverCrypt.Hash.Incremental
 
 (* Parsers (for easy access to conflicting field names *)
+module PF = TLS.Handshake.ParseFlights
 module CH = Parsers.ClientHello
 module SH = Parsers.ServerHello
+module SHK = Parsers.SHKind
+module HRRK = Parsers.HRRKind
 
 #set-options "--admit_smt_queries true"
 
@@ -53,6 +56,13 @@ private let consistent_truncation (x:option E.offeredPsks) =
   match x with
   | None -> true
   | Some psk -> List.length psk.E.identities = List.length psk.E.binders
+
+private let keyShareEntry_of_share ((| g, gx |):Nego.share)
+  : Parsers.ServerHelloExtension.serverHelloExtension_SHE_key_share = 
+  let r = CommonDH.format #g gx in
+  //19-06-17 push to CommonDH? 
+  assume(Parsers.KeyShareEntry.keyShareEntry_bytesize r <= 65535);
+  r
 
 (*** TLS 1.2 functions **)
 
@@ -207,30 +217,73 @@ let server_ClientHello1 st offer
   : St Receive.incoming =
   let Server region config r = st in
   let S_wait_ClientHello random = !r in
-
-  let sending = Send.send_state0 in
-  let receiving = Recv.(create (alloc_slice region)) in
-  let epochs = Epochs.create region random in
+  let soffer = {retry = None; s_ch = offer} in
 
   match Nego.server_ClientHello config offer with
   | Error z -> Recv.InError z
   | Correct (Nego.ServerRetry hrr) -> admit()
   | Correct (Nego.ServerAccept13 cert cs13 opsk) ->
-    match cs13 with
-    | Nego.PSK_EDH j g_gx cs ->
-      let ks = KS.ks_server13_init random (offer.CH.random) cs config.is_quic opsk g_gx in
-      Recv.InError (fatalAlert Internal_error, "TBC")
-    | Nego.JUST_EDH g_gx cs ->
-      let CipherSuite13 ae ha = cs in
-      let ks = KS.ks_server13_init random (offer.CH.random) cs config.is_quic opsk (Some g_gx) in
-      let tag_CHT, di, tx0 = transcript_start region ha None offer in
-      let m: msg_state region ParseFlights.F_s_Idle random ha = {
-        digest = di;
-        sending = sending;
-        receiving = receiving;
-        epochs = epochs;
-      } in
+    let cs, opski, g_gx =
+      match cs13 with
+      | Nego.PSK_EDH j g_gx cs -> cs, (Some j), g_gx
+      | Nego.JUST_EDH g_gx cs -> cs, None, (Some g_gx)
+      in
+    let CipherSuite13 ae ha = cs in
+    let tag0, di, tx0 = transcript_start region ha None offer false in
+    let (ks, ogy, obk) = KS.ks_server13_init random (offer.CH.random) cs config.is_quic opsk g_gx in
+    let ogyb = match ogy with None -> None | Some gy -> Some (keyShareEntry_of_share gy) in
+    let accept_0rtt =  Some? config.max_early_data &&
+      Some 0us = opski && Nego.find_early_data offer in
+
+    // Verify selected binder, update tag, di, tx
+    let binder_ok = match obk with
+      | None -> Correct (tag0, di, tx0)
+      | Some bk ->
+        let open Parsers.OfferedPsks in
+        let open Parsers.OfferedPsks_binders in
+        let Some opsk = Nego.find_clientPske offer in
+        let Some binder = List.Tot.nth opsk.binders (UInt16.v (Some?.v opski)) in
+        if HMAC.verify (dsnd bk) tag0 binder then
+          Correct (transcript_start region ha None offer true) // FIXME wasteful
+        else Error (fatalAlert Bad_record_mac, "Failed to verify selected binder")
+      in
+
+    match binder_ok with
+    | Error z -> Recv.InError z
+    | Correct (tag1, di1, tx1) ->
+      let pfs = if accept_0rtt then PF.F_s13_wait_EOED else PF.F_s13_wait_Finished2 in
+      let ms0 : msg_state region pfs random ha =
+        {create_msg_state region pfs random ha with digest = di} in
+      if accept_0rtt then (
+        let ees, ets = KS.ks_server13_0rtt_key ks tag1 in
+         export ms0.epochs ees;
+         register ms0.epochs ets
+//         Epochs.incr_reader ms0.epochs
+      );
+      let she = Nego.server_clientExtensions TLS_1p3 config cs None opski ogyb false offer.CH.extensions in
+      let ee = Nego.encrypted_clientExtensions TLS_1p3 config cs None opski ogyb false offer.CH.extensions in
+      let sh = SH.({
+        version = TLS_1p3;
+	is_hrr = Parsers.ServerHello_is_hrr.(
+	  ServerHello_is_hrr_false ({
+	  tag = random;
+	  value = SHK.({
+            session_id = B.empty_bytes;
+	    cipher_suite = name_of_cipherSuite cs;
+	    compression_method = Parsers.CompressionMethod.NullCompression;
+	    extensions = she
+          });
+	}));
+      }) in
     admit()
+(* FIXME(adl) where is Send.send_sh??
+      let send', tag_SH, tx2 = Send.send_sh 
+      Send.signals ms0.sending (Some (false, accept_0rtt)) false;
+      let ks', hsk = KS.ks_server13_sh ks tag1 in
+      register ms0.epochs hsk;
+      r := S13_sent_ServerHello soffer sh ee accept_0rtt ms0 cert ks';
+      Recv.InAck false false
+*)
 
 (*
     // Create a cookie, for stateless retry

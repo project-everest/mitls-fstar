@@ -125,15 +125,18 @@ let rec next_fragment_bounded hs i (max32: UInt32.t) =
       r := st1; 
       match result, st1 with
       | Send.Outgoing None None false, 
-        C13_complete offer sh ee server_id fin1 ms (Finished_pending _ _ _) -> (
-        match Client.client13_Finished2 hs with
+        C13_complete offer sh ee server_id fin1 ms (Finished_pending _ _ _) -> (match Client.client13_Finished2 hs with
         | Error z -> Error z 
         | Correct _ -> next_fragment_bounded hs i max32 )
-
       | _ -> Correct result // nothing to do
     )
-  | Server region config r -> ( 
-    let st0 = !r in 
+  | Server region config r ->
+    let st0 = !r in
+    if S_wait_ClientHello? st0 then
+      // Allocation of the messaging state must be delayed until
+      // CH is received (to avoid re-allocation)
+      Correct (Send.Outgoing None None false)
+    else
     let ms0 = Machine.server_ms st0 in 
     let sending, result = Send.write_at_most ms0.sending i max32 in
     let ms1 = { ms0 with sending = sending } in 
@@ -141,12 +144,11 @@ let rec next_fragment_bounded hs i (max32: UInt32.t) =
     r := st1; 
     match result, st1 with
     | Send.Outgoing None None false, 
-      S13_sent_ServerHello _ _ _ _ _ _ -> (
-      match Server.server_ServerFinished_13 hs with
+      S13_sent_ServerHello _ _ _ _ _ _ _ ->
+      (match Server.server_ServerFinished_13 hs with
       | Error z -> Error z 
       | Correct _ -> next_fragment_bounded hs i max32 )
     | _ -> Correct result // nothing to do
-    )
 
 let next_fragment hs i =
   next_fragment_bounded hs i max_TLSPlaintext_fragment_length32
@@ -242,7 +244,11 @@ let rec recv_fragment hs #i rg f =
    end // Client
   | Server region config r ->
    begin // Server
-    admit()
+    match !r  with
+    | S_wait_ClientHello n -> Recv.InAck false false
+    | _ ->
+      Recv.InError (fatalAlert Unexpected_message,
+        "Unexpected server state")
    end // Server
 
 (*

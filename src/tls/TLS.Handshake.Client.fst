@@ -69,7 +69,7 @@ let rec client_Binders region ha0 tx0 di0 tch bkeys =
 	  // We may try to optimize by computing once per ha
 	  | Some {ch0=ch0; sh0=hrr} -> Some (hash_ch0 region ha ch0, hrr)
 	  | None -> None in
-        let tag, _, _ = transcript_start region ha retry tch.full_ch in
+        let tag, _, _ = transcript_start region ha retry tch.full_ch false in
 	tag
       in
 //    let tag =
@@ -123,7 +123,7 @@ let client_ClientHello (Client region config r) =
 
   // Allocate state with the "main" offered hash algorithm for the digest
   assume False; //19-09-14 TBC
-  let tag, di, tx_tch = transcript_start region ha None offer0 in
+  let tag, di, tx_tch = transcript_start region ha None offer0 false in
   let ms = {ms with digest = di; sending = sending} in
 
   // Compute the binders
@@ -210,7 +210,7 @@ let client_HelloRetryRequest hs hrr =
 
   // FIXME free old digest - we are restarting with retry
   assume False; //19-09-14 TBC after fixing client_transcript
-  let tag, di, tx_tch = transcript_start region ha retry offer1 in
+  let tag, di, tx_tch = transcript_start region ha retry offer1 false in
   r := C_wait_ServerHello full1 ms ks;
 
   let cfg, resume = config in
@@ -280,14 +280,14 @@ let client_ServerHello (Client region config r) sh =
     | CipherSuite13 ae ha -> (
       trace "Running TLS 1.3";
       
-      let ms = // we need to restart digest if server changes hash
+      let ms = // we need to restart digest if server changes hash (ignoring binders)
         if ha = Nego.offered_ha offer.full_ch then ms
 	else
 	  let retry =
 	    match offer.full_retry with
 	    | None -> None
 	    | Some {ch0 = ch0; sh0 = hrr} -> Some (hash_ch0 region ha ch0, hrr) in
-	  let _, di, _ = transcript_start region ha retry offer.full_ch in
+	  let _, di, _ = transcript_start region ha retry offer.full_ch true in
 	  {ms with digest = di} in
 
       let server_share = Negotiation.find_serverKeyShare sh in

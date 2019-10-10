@@ -743,9 +743,12 @@ let rec writeHandshake h_init c new_writer =
           recall_current_writer c;
           let n = Machine.nonce c.hs in 
           let j_ = Handshake.i c.hs Writer in  //just to get (maybe_indexable es j_)
-          let es: Epochs.epochs (Machine.frame c.hs) n = Machine.epochs c.hs n in 
-          if Some? next_keys then Epochs.incr_writer es; // much happening ghostly
-          if skip_0rtt then Epochs.incr_writer (Machine.epochs c.hs n); // merge the two ++?
+          (if Some? next_keys then
+	    let es = Machine.epochs c.hs n in
+	    Epochs.incr_writer es);
+          (if skip_0rtt then
+	    let es = Machine.epochs c.hs n in
+	    Epochs.incr_writer es);
           let (str,stw) = !c.state in
           if complete then c.state := (Open, Open)  // much happening ghostly too
           else
@@ -1076,8 +1079,7 @@ let rec readFragment c i =
   | Record.ReadWouldBlock -> Correct None
   | Record.Received ct pv payload ->
     let n = Machine.nonce c.hs in 
-    let es = ST.op_Bang (Machine.epochs c.hs n).es in
-    let j : Handshake.logIndex es = Handshake.i c.hs Reader in
+    let j = Handshake.i c.hs Reader in
     trace ("Read fragment at epoch index: " ^ string_of_int j ^
            " of length " ^ string_of_int (length payload));
     if j < 0 then // payload is in plaintext
@@ -1085,6 +1087,7 @@ let rec readFragment c i =
       Correct(Some (Content.mk_fragment i ct rg payload))
     else
       // payload decryption
+      let es = ST.op_Bang (Machine.epochs c.hs n).es in
       let e = Seq.index es j in
       let Epoch hs rd wr _ = e in
       let tccs = StAE.tolerate_ccs #i rd in

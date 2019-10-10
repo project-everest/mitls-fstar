@@ -920,7 +920,8 @@ let encrypted_clientExtension pv cfg cs ri pski ks resuming ce =
   | _ -> None
 
 // 19-01-05 boring, and not tail-recursive, use an iterator instead?
-// we defer the length check on the result
+// FIXME(adl) check length constraints for serialized list
+#push-options "--admit_smt_queries true"
 let rec server_clientExtensions pv cfg cs ri pski ks resuming (ches:list clientHelloExtension) =
   match ches with
   | [] -> []
@@ -937,6 +938,7 @@ let rec encrypted_clientExtensions pv cfg cs ri pski ks resuming (ches:list clie
     match encrypted_clientExtension pv cfg cs ri pski ks resuming che with
     | None -> es
     | Some e -> e::es
+#pop-options
 
 (* dead code since we don't support SSL3.
      begin

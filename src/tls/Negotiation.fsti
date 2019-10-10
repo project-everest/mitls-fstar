@@ -167,6 +167,29 @@ val sign:
   (ensures fun h0 _ h1 -> inv ns h1)
 *)
 
+(*** Extensions *)
+
+val server_clientExtensions:
+  protocolVersion -> 
+  config -> 
+  cipherSuite -> 
+  option (cVerifyData * sVerifyData) -> 
+  option (pski:UInt16.t) -> 
+  option Extensions.serverHelloExtension_SHE_key_share -> 
+  bool -> 
+  Parsers.ClientHelloExtensions.clientHelloExtensions ->
+  Parsers.ServerHelloExtensions.serverHelloExtensions
+
+val encrypted_clientExtensions:
+  protocolVersion -> 
+  config -> 
+  cipherSuite -> 
+  option (cVerifyData * sVerifyData) -> 
+  option (pski:UInt16.t) -> 
+  option Extensions.serverHelloExtension_SHE_key_share -> 
+  bool -> 
+  Parsers.ClientHelloExtensions.clientHelloExtensions ->
+  Parsers.EncryptedExtensions.encryptedExtensions
 
 (*** CLIENT *)
 
