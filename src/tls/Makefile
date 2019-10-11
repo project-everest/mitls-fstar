@@ -210,6 +210,7 @@ KRML_FLAGS = \
   -bundle 'Parsers.ClientHello=Parsers.\*,ParsersAux.\*[rename=Parsers]' \
   -bundle 'Spec.\*' \
   -bundle 'Test.\*' \
+  -bundle 'Meta.\*' \
   -bundle Lib.*[rename=Hacl_Lib] \
   -bundle TLSConstants=QD.TLS_protocolVersion,List.Helpers \
   -bundle Hashing=Hashing.Spec,Hashing,Hashing.CRF,HMAC,HKDF,HMAC.UFCMA \
