@@ -1,5 +1,5 @@
 [
-  "'}Ÿ*ÍÝ\\7»ô®LLR´²",
+  "¦LÕ6á—ÔZfó[œ«‰Y\u0007",
   [
     [
       "TLS.Cookie.hrr_ha",
@@ -12,10 +12,10 @@
         "disc_equation_FStar.Pervasives.Native.Some",
         "equation_CipherSuite.cipherSuite", "equation_TLS.Cookie.hrr13",
         "proj_equation_FStar.Pervasives.Native.Some_v",
-        "refinement_interpretation_Tm_refine_9604540f38f8bf12fd4431280b2777d5"
+        "refinement_interpretation_Tm_refine_9f2d823de39889f52e2dcb7702077505"
       ],
       0,
-      "74a80c172bcc0fb2e3f3e1e9f9efdb63"
+      "6ae07f615f8ff02d1b5eff9e68d67029"
     ],
     [
       "TLS.Cookie.hrr0",
@@ -31,7 +31,6 @@
         "constructor_distinct_CipherSuite.CipherSuite",
         "constructor_distinct_CipherSuite.CipherSuite13",
         "constructor_distinct_CipherSuite.ECDSA",
-        "constructor_distinct_CipherSuite.Kex_DHE",
         "constructor_distinct_CipherSuite.Kex_ECDHE",
         "constructor_distinct_CipherSuite.Kex_PSK",
         "constructor_distinct_CipherSuite.MtE",
@@ -57,7 +56,6 @@
         "constructor_distinct_Parsers.CipherSuite.TLS_AES_128_GCM_SHA256",
         "constructor_distinct_Parsers.CipherSuite.TLS_AES_256_GCM_SHA384",
         "constructor_distinct_Parsers.CipherSuite.TLS_CHACHA20_POLY1305_SHA256",
-        "constructor_distinct_Parsers.ServerHello_is_hrr.ServerHello_is_hrr_true",
         "constructor_distinct_Spec.Hash.Definitions.SHA1",
         "constructor_distinct_Spec.Hash.Definitions.SHA2_256",
         "constructor_distinct_Spec.Hash.Definitions.SHA2_384",
@@ -70,7 +68,6 @@
         "disc_equation_CipherSuite.CipherSuite13",
         "disc_equation_FStar.Error.Correct", "eq2-interp",
         "equality_tok_CipherSuite.ECDSA@tok",
-        "equality_tok_CipherSuite.Kex_DHE@tok",
         "equality_tok_CipherSuite.Kex_ECDHE@tok",
         "equality_tok_CipherSuite.Kex_PSK@tok",
         "equality_tok_CipherSuite.NullCipherSuite@tok",
@@ -93,7 +90,6 @@
         "equality_tok_Parsers.CipherSuite.TLS_AES_128_GCM_SHA256@tok",
         "equality_tok_Parsers.CipherSuite.TLS_AES_256_GCM_SHA384@tok",
         "equality_tok_Parsers.CipherSuite.TLS_CHACHA20_POLY1305_SHA256@tok",
-        "equality_tok_Parsers.CipherSuite.TLS_DHE_RSA_WITH_CHACHA20_POLY1305_SHA256@tok",
         "equality_tok_Parsers.CipherSuite.TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256@tok",
         "equality_tok_Parsers.CipherSuite.TLS_ECDHE_RSA_WITH_3DES_EDE_CBC_SHA@tok",
         "equality_tok_Parsers.CipherSuite.TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA256@tok",
@@ -118,10 +114,6 @@
         "equation_CipherSuite.name_of_cipherSuite",
         "equation_CipherSuite.name_of_cipherSuite_",
         "equation_CipherSuite.validCipherSuite",
-        "equation_HandshakeMessages.hrr_cipher_suite",
-        "equation_HandshakeMessages.hrr_extensions",
-        "equation_HandshakeMessages.hrr_value",
-        "equation_HandshakeMessages.mk_hrr",
         "equation_Parsers.HRRExtension_HRRE_supported_versions.hRRExtension_HRRE_supported_versions",
         "equation_Prims.eq2", "equation_Prims.nat", "equation_Prims.squash",
         "equation_TLS.Cookie.hrr_len", "equation_TLSError.error",
@@ -137,9 +129,8 @@
         "lemma_Parsers.HRRExtensions.hRRExtensions_list_bytesize_cons",
         "lemma_Parsers.ProtocolVersion.protocolVersion_bytesize_eqn",
         "primitive_Prims.op_Addition",
-        "proj_equation_Parsers.HRRKind.MkhRRKind_cipher_suite",
-        "proj_equation_Parsers.HRRKind.MkhRRKind_extensions",
-        "proj_equation_Parsers.ServerHello.MkserverHello_is_hrr",
+        "proj_equation_Parsers.HelloRetryRequest.MkhelloRetryRequest_cipher_suite",
+        "proj_equation_Parsers.HelloRetryRequest.MkhelloRetryRequest_extensions",
         "projection_inverse_BoxBool_proj_0",
         "projection_inverse_BoxInt_proj_0",
         "projection_inverse_CipherSuite.AEAD__0",
@@ -157,10 +148,8 @@
         "projection_inverse_FStar.Pervasives.Native.None_a",
         "projection_inverse_FStar.Pervasives.Native.Some_a",
         "projection_inverse_FStar.Pervasives.Native.Some_v",
-        "projection_inverse_Parsers.HRRKind.MkhRRKind_cipher_suite",
-        "projection_inverse_Parsers.HRRKind.MkhRRKind_extensions",
-        "projection_inverse_Parsers.ServerHello.MkserverHello_is_hrr",
-        "projection_inverse_Parsers.ServerHello_is_hrr.ServerHello_is_hrr_true__0",
+        "projection_inverse_Parsers.HelloRetryRequest.MkhelloRetryRequest_cipher_suite",
+        "projection_inverse_Parsers.HelloRetryRequest.MkhelloRetryRequest_extensions",
         "refinement_interpretation_Tm_refine_2de20c066034c13bf76e9c0b94f4806c",
         "refinement_interpretation_Tm_refine_4efafdaa406d7e0dd35ef4b76469edf6",
         "refinement_interpretation_Tm_refine_542f9d4f129664613f2483a6c88bc7c2",
@@ -169,13 +158,13 @@
         "typing_CipherSuite.cipherSuite_of_name",
         "typing_CipherSuite.name_of_cipherSuite",
         "typing_CipherSuite.name_of_cipherSuite_",
-        "typing_HandshakeMessages.hrr_cipher_suite",
-        "typing_HandshakeMessages.hrr_extensions",
         "typing_Parsers.HRRExtension.hRRExtension_bytesize",
+        "typing_Parsers.HelloRetryRequest.__proj__MkhelloRetryRequest__item__cipher_suite",
+        "typing_Parsers.HelloRetryRequest.__proj__MkhelloRetryRequest__item__extensions",
         "typing_tok_Parsers.ProtocolVersion.TLS_1p3@tok"
       ],
       0,
-      "4837dc2333aea6503b9d19b4f612a7cd"
+      "e3b1cae668623f2fcc76e02fb14a0ebf"
     ],
     [
       "TLS.Cookie.discard",
@@ -188,7 +177,7 @@
         "lemma_FStar.HyperStack.ST.lemma_same_refs_in_stack_regions_intro"
       ],
       0,
-      "ef22e5b4d4e2276aa5b2898a41c844ea"
+      "ebc00116b3cca67467c3cfd0a5415a31"
     ],
     [
       "TLS.Cookie.trace",
@@ -201,7 +190,7 @@
         "lemma_FStar.HyperStack.ST.lemma_same_refs_in_stack_regions_intro"
       ],
       0,
-      "7e6538d14cd288b4834b386224b538e5"
+      "214cc66d23db3511f0a79d84bfde2b40"
     ],
     [
       "TLS.Cookie.hRRExtensions_list_bytesize_snoc",
@@ -216,7 +205,7 @@
         "refinement_interpretation_Tm_refine_2de20c066034c13bf76e9c0b94f4806c"
       ],
       0,
-      "04ec4a198e2d3f88907df65cbcf3ae25"
+      "5ef46117ec4a858922cda8fc37755bd0"
     ],
     [
       "TLS.Cookie.append_extension",
@@ -226,45 +215,29 @@
       [
         "@MaxIFuel_assumption",
         "@fuel_correspondence_FStar.List.Tot.Base.append.fuel_instrumented",
-        "@query",
-        "constructor_distinct_Parsers.ServerHello_is_hrr.ServerHello_is_hrr_true",
-        "equality_tok_Parsers.LegacyCompression.NullCompression@tok",
-        "equation_HandshakeMessages.hrr",
-        "equation_HandshakeMessages.hrr_cipher_suite",
-        "equation_HandshakeMessages.hrr_extensions",
-        "equation_HandshakeMessages.hrr_session_id",
-        "equation_HandshakeMessages.hrr_value",
-        "equation_HandshakeMessages.hrr_version",
-        "equation_HandshakeMessages.mk_hrr",
-        "equation_Parsers.HRRExtensions.hRRExtensions", "equation_Prims.nat",
-        "equation_TLS.Cookie.contents_max_length",
+        "@query", "equation_Parsers.HRRExtensions.hRRExtensions",
+        "equation_Prims.nat", "equation_TLS.Cookie.contents_max_length",
         "equation_TLS.Cookie.encrypted_max_length",
         "equation_TLS.Cookie.extensions_max_length",
         "equation_TLS.Cookie.hrr13", "equation_TLS.Cookie.hrr_len",
-        "equation_TLS.Cookie.hrr_leq",
-        "fuel_guarded_inversion_Parsers.ServerHello.serverHello",
-        "int_inversion",
+        "equation_TLS.Cookie.hrr_leq", "int_inversion",
         "lemma_Parsers.HRRExtensions.hRRExtensions_bytesize_eqn",
         "primitive_Prims.op_Addition",
-        "proj_equation_Parsers.HRRKind.MkhRRKind_cipher_suite",
-        "proj_equation_Parsers.HRRKind.MkhRRKind_extensions",
-        "proj_equation_Parsers.ServerHello.MkserverHello_is_hrr",
+        "proj_equation_Parsers.HelloRetryRequest.MkhelloRetryRequest_cipher_suite",
+        "proj_equation_Parsers.HelloRetryRequest.MkhelloRetryRequest_extensions",
         "projection_inverse_BoxInt_proj_0",
-        "projection_inverse_Parsers.HRRKind.MkhRRKind_cipher_suite",
-        "projection_inverse_Parsers.HRRKind.MkhRRKind_extensions",
-        "projection_inverse_Parsers.ServerHello.MkserverHello_is_hrr",
-        "projection_inverse_Parsers.ServerHello_is_hrr.ServerHello_is_hrr_true__0",
+        "projection_inverse_Parsers.HelloRetryRequest.MkhelloRetryRequest_cipher_suite",
+        "projection_inverse_Parsers.HelloRetryRequest.MkhelloRetryRequest_extensions",
         "refinement_interpretation_Tm_refine_542f9d4f129664613f2483a6c88bc7c2",
-        "refinement_interpretation_Tm_refine_6e57058ef569de90ae614e17eb80fb92",
         "refinement_interpretation_Tm_refine_86fef0defc7b1c0bdb3984822d6fb857",
-        "refinement_interpretation_Tm_refine_9604540f38f8bf12fd4431280b2777d5",
+        "refinement_interpretation_Tm_refine_9f2d823de39889f52e2dcb7702077505",
         "refinement_interpretation_Tm_refine_cbee87cb86ca5cb61a128a6dc628d577",
         "refinement_interpretation_Tm_refine_d90b63c3dad8c3c2c8a6974c6369258d",
-        "typing_HandshakeMessages.hrr_extensions",
-        "typing_Parsers.HRRExtension.hRRExtension_bytesize"
+        "typing_Parsers.HRRExtension.hRRExtension_bytesize",
+        "typing_Parsers.HelloRetryRequest.__proj__MkhelloRetryRequest__item__extensions"
       ],
       0,
-      "768c768007a1610fead39cd427fe64b4"
+      "27aa987887e9965b8b91e0054014b7b9"
     ],
     [
       "TLS.Cookie.append_keyshare",
@@ -283,7 +256,7 @@
         "primitive_Prims.op_Addition", "projection_inverse_BoxInt_proj_0"
       ],
       0,
-      "1a54767ee66f92d73ca6a03f4834dc7a"
+      "1a329444890a7ecc78c80e52e3f8fd15"
     ],
     [
       "TLS.Cookie.prepare_contents",
@@ -313,7 +286,7 @@
         "typing_TLS.Cookie.find_keyshare"
       ],
       0,
-      "e68a20a1f3481d59d24368b75566faa3"
+      "6634f14e9d654041acf0fc057a4869c7"
     ],
     [
       "TLS.Cookie.print_contents",
@@ -352,7 +325,7 @@
         "typing_Prims.__proj__Cons__item__tl"
       ],
       0,
-      "86e345f252ee03071082b63621480a40"
+      "7b0fbf1938de22cb05f13ab3cf0f8776"
     ],
     [
       "TLS.Cookie.reconstruct_hrr",
@@ -382,7 +355,7 @@
         "typing_Mem.tls_region", "typing_Parsers.Cookie.cookie_bytesize"
       ],
       0,
-      "a941cf4583bd06f93b0e2c7e83dbf78c"
+      "08c51c030678a07f1fc3109eeddd40d2"
     ],
     [
       "TLS.Cookie.append",
@@ -396,7 +369,7 @@
         "primitive_Prims.op_Addition", "projection_inverse_BoxInt_proj_0"
       ],
       0,
-      "10ba4d4089f7022173a509c6e16cee5d"
+      "9eb7dce711c2e1cc4977c9a757dfb49f"
     ],
     [
       "TLS.Cookie.append",
@@ -420,7 +393,7 @@
         "typing_Parsers.Cookie.cookie_bytesize"
       ],
       0,
-      "de69bbf3da84acb686f11ce27bdd4b83"
+      "3574761dee78e60cf9887c39c14e72ce"
     ],
     [
       "TLS.Cookie.decrypt",
@@ -434,7 +407,7 @@
         "primitive_Prims.op_Addition", "projection_inverse_BoxInt_proj_0"
       ],
       0,
-      "46faac45419b77997d487505034ecca4"
+      "7655e191c325cc1b956d4124d596c7a7"
     ],
     [
       "TLS.Cookie.decrypt",
@@ -505,7 +478,7 @@
         "typing_Prims.__proj__Cons__item__tl"
       ],
       0,
-      "893badecccfca34e45dde4cf5f70438a"
+      "9645bdfd1bba9d9d992978fa769be650"
     ],
     [
       "TLS.Cookie.test",
@@ -514,7 +487,7 @@
       1,
       [
         "@MaxIFuel_assumption", "@query",
-        "assumption_Parsers.ServerHello.serverHello__uu___haseq",
+        "assumption_Parsers.HelloRetryRequest.helloRetryRequest__uu___haseq",
         "bool_inversion", "bool_typing",
         "constructor_distinct_CipherSuite.CipherSuite13",
         "constructor_distinct_EverCrypt.AES128_GCM",
@@ -544,8 +517,7 @@
         "equation_FStar.Monotonic.HyperStack.is_tip",
         "equation_FStar.Monotonic.HyperStack.is_wf_with_ctr_and_tip",
         "equation_FStar.Monotonic.HyperStack.mem", "equation_FStar.UInt.lt",
-        "equation_FStar.UInt32.lt", "equation_HandshakeMessages.hrr",
-        "equation_Parsers.Cookie.cookie",
+        "equation_FStar.UInt32.lt", "equation_Parsers.Cookie.cookie",
         "equation_Parsers.MiTLSCookieContents_clientHelloDigest.miTLSCookieContents_clientHelloDigest",
         "equation_Parsers.MiTLSCookieContents_extra.miTLSCookieContents_extra",
         "equation_Prims.nat", "equation_TLS.Cookie.contents_max_length",
@@ -555,11 +527,10 @@
         "equation_TLS.Cookie.extra", "equation_TLS.Cookie.find_cookie",
         "equation_TLS.Cookie.hrr13", "equation_TLS.Cookie.hrr_leq",
         "equation_TLSError.error", "equation_TLSError.result",
-        "fuel_guarded_inversion_Parsers.ServerHello.serverHello",
+        "fuel_guarded_inversion_Parsers.HelloRetryRequest.helloRetryRequest",
         "function_token_typing_FStar.Monotonic.Heap.heap",
         "function_token_typing_TLSError.error",
-        "haseqTm_refine_6e57058ef569de90ae614e17eb80fb92",
-        "haseqTm_refine_9604540f38f8bf12fd4431280b2777d5",
+        "haseqTm_refine_9f2d823de39889f52e2dcb7702077505",
         "haseqTm_refine_cbee87cb86ca5cb61a128a6dc628d577",
         "kinding_FStar.Pervasives.Native.tuple3@tok",
         "lemma_FStar.Error.invertOptResult",
@@ -584,9 +555,8 @@
         "refinement_interpretation_Tm_refine_3c2afa935c19b8189fa8111d9da07735",
         "refinement_interpretation_Tm_refine_414d0a9f578ab0048252f8c8f552b99f",
         "refinement_interpretation_Tm_refine_542f9d4f129664613f2483a6c88bc7c2",
-        "refinement_interpretation_Tm_refine_6e57058ef569de90ae614e17eb80fb92",
         "refinement_interpretation_Tm_refine_71ea40360194fe02ee1272538c9cacbc",
-        "refinement_interpretation_Tm_refine_9604540f38f8bf12fd4431280b2777d5",
+        "refinement_interpretation_Tm_refine_9f2d823de39889f52e2dcb7702077505",
         "refinement_interpretation_Tm_refine_cbee87cb86ca5cb61a128a6dc628d577",
         "refinement_interpretation_Tm_refine_d5c9a5d684eddca66b29d5f92abb88a6",
         "refinement_kinding_Tm_refine_1435f57f5c2037ae77b75e98d1c4caf7",
@@ -603,7 +573,7 @@
         "typing_TLS.Cookie.find_cookie", "typing_TLS.Cookie.hrr_leq"
       ],
       0,
-      "702cafc23f17b1d521631821fa09881f"
+      "910db5c1faaf33ebf00487d503c560da"
     ]
   ]
 ]
