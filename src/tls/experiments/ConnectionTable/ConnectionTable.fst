@@ -14,15 +14,7 @@ module AEAD = Crypto.AEAD
 module AE = Crypto.AE
 module EE = EverCrypt.Error
 
-open ConnectionTable_Aux
-
 #set-options "--max_fuel 0 --max_ifuel 0 --z3rlimit 30"
-
-// References to connections live in pairwise disjoint regions
-let minv (m:partial_dependent_map maybe_id connection_ref) =
-  forall id1 id2.{:pattern (Some? (DM.sel m id1)); (Some? (DM.sel m id2))}
-    (id1 <> id2 /\ Some? (DM.sel m id1) /\ Some? (DM.sel m id2)) ==>
-    frameOf (Some?.v (DM.sel m id1)) `disjoint` frameOf (Some?.v (DM.sel m id2))
 
 let empty = T.empty
 
@@ -88,9 +80,9 @@ let cookie_key =
   in
   let ck =
     if model then
-      Some (AE.create cookie_rgn alg key phi)
+      Some (AE.create cookie_rgn alg key cookie_phi)
     else
-      AE.coerce cookie_rgn alg key phi 
+      AE.coerce cookie_rgn alg key cookie_phi 
   in
   pop_frame();
   ck
@@ -116,8 +108,11 @@ let create id cfg =
     let t:_connection_table = table in
     assert (forall (id:connection_id).
       T.defined t id h0 ==> ~(c == T.value_of t id h0));
+    let h1 = get () in
     T.extend t id c;
     let h2 = get() in
+    B.modifies_loc_regions_intro (Set.singleton (frameOf t)) h1 h2;
+    B.modifies_loc_addresses_intro (frameOf t) (Set.singleton (as_addr t)) B.loc_none h1 h2;
     assert (
       forall (id':connection_id).{:pattern (T.value_of t id' h2)}
         T.defined t id' h2 ==> (T.defined t id' h0 \/ T.value_of t id' h2 == c))
