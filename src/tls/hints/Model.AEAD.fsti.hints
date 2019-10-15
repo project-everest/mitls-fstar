@@ -1,5 +1,5 @@
 [
-  "M\u000f6Ïíÿ%ƒ¾»?¤±Åˆ¹",
+  "§Ì¢;<ï\u001a\u0004fü’Œ»ÆHÀ",
   [
     [
       "Model.AEAD.encrypt",
@@ -7,13 +7,14 @@
       2,
       1,
       [
-        "@MaxIFuel_assumption", "@query", "equation_Spec.AEAD.max_length",
+        "@MaxIFuel_assumption", "@query",
+        "equation_Spec.Agile.AEAD.max_length",
         "projection_inverse_BoxInt_proj_0",
         "refinement_interpretation_Tm_refine_90a1661541e4f009452ab107b47b5955",
-        "typing_Spec.AEAD.max_length"
+        "typing_Spec.Agile.AEAD.max_length"
       ],
       0,
-      "fd0a91c76f0c80c155359cac922cf0e4"
+      "f55ea34c7f779d2c89133912178be79c"
     ],
     [
       "Model.AEAD.decrypt",
@@ -27,22 +28,24 @@
         "disc_equation_FStar.Pervasives.Native.Some",
         "equality_tok_Lib.IntTypes.U1@tok",
         "equality_tok_Lib.IntTypes.U8@tok", "equation_Lib.IntTypes.minint",
-        "equation_Lib.IntTypes.unsigned", "equation_Spec.AEAD.decrypted",
-        "equation_Spec.AEAD.max_length", "equation_Spec.AES.gf8",
-        "equation_Spec.AES.irred", "equation_Spec.GaloisField.gf",
+        "equation_Lib.IntTypes.unsigned", "equation_Spec.AES.gf8",
+        "equation_Spec.AES.irred", "equation_Spec.Agile.AEAD.decrypted",
+        "equation_Spec.Agile.AEAD.max_length",
+        "equation_Spec.GaloisField.gf",
         "lemma_FStar.Pervasives.invertOption",
         "proj_equation_Spec.GaloisField.GF_t",
         "projection_inverse_BoxBool_proj_0",
         "projection_inverse_Spec.GaloisField.GF_t",
-        "refinement_interpretation_Tm_refine_3d138700928a415b74aeba769dcba37d",
+        "refinement_interpretation_Tm_refine_2a5baaeccb6b50d92d793d09091c6346",
         "refinement_interpretation_Tm_refine_90a1661541e4f009452ab107b47b5955",
         "refinement_interpretation_Tm_refine_de8080fdc4bd6678af723874a7d70466",
-        "typing_FStar.Pervasives.Native.uu___is_Some",
-        "typing_Spec.AEAD.decrypted", "typing_Spec.AEAD.max_length",
-        "typing_Spec.AES.gf8", "typing_Spec.GaloisField.__proj__GF__item__t"
+        "typing_FStar.Pervasives.Native.uu___is_Some", "typing_Spec.AES.gf8",
+        "typing_Spec.Agile.AEAD.decrypted",
+        "typing_Spec.Agile.AEAD.max_length",
+        "typing_Spec.GaloisField.__proj__GF__item__t"
       ],
       0,
-      "c41216871955a004065d70e65baa563f"
+      "704e921bde577b9ee283d13561072577"
     ]
   ]
 ]

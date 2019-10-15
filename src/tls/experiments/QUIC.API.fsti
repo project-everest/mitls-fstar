@@ -9,7 +9,7 @@ open FStar.HyperStack.ST
 open EverCrypt.Helpers
 open EverCrypt.Error
 
-module SAEAD = Spec.AEAD
+module SAEAD = Spec.Agile.AEAD
 module SH = Spec.Hash
 module SHD = Spec.Hash.Definitions
 module SQUIC = Spec.QUIC

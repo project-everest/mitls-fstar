@@ -5,7 +5,7 @@ module Crypto.AEAD
 module U8 = FStar.UInt8
 module Seq = FStar.Seq
 module EC = EverCrypt.AEAD
-module SC = Spec.AEAD
+module SC = Spec.Agile.AEAD
 module B = LowStar.Buffer
 module U32 = FStar.UInt32
 module HS = FStar.HyperStack

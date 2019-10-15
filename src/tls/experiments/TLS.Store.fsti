@@ -19,7 +19,7 @@ module B = LowStar.Buffer
 
 open FStar.Integers
 open FStar.HyperStack.ST
-open Spec.AEAD
+open Spec.Agile.AEAD
 open EverCrypt.AEAD
 open EverCrypt.Error 
 
