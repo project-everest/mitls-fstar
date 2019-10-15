@@ -56,34 +56,6 @@ module EE = EverCrypt.Error
       state: t {token_p st (fun h -> nonce_of st h == nonce)}
 *)
 
-inline_for_extraction noextract
-val empty: m:imap maybe_id connection_ref minv{m == T.empty}
-
-val inv: _connection_table -> mem -> Type0
-
-val framing: h0:mem -> t:_connection_table -> l:B.loc -> h1:mem -> Lemma
-  (requires B.modifies l h0 h1 /\ 
-            B.loc_disjoint l (B.loc_all_regions_from true rgn) /\
-            h0 `contains` t /\
-            (forall a rel (r:mreference a rel). 
-              frameOf r `extends` table_rgn ==> 
-              h1 `contains` r ==> h0 `contains` r) /\
-            inv t h0)
-  (ensures  inv t h1)
-
-inline_for_extraction
-val alloc: unit -> ST connection_table
-  (requires fun _ ->
-    if model then witnessed (region_contains_pred rgn)
-    else True)
-  (ensures  fun h0 t h1 -> 
-    if model then ralloc_post #_ #T.grows rgn empty h0 t h1 /\ inv t h1
-    else h0 == h1)
-
-val table : connection_table 
-
-let cookie_phi = cookie_phi table
-
 val cookie_key : k:option (AE.state alg cookie_phi){
   Some? k ==>
     (let k = Some?.v k in 

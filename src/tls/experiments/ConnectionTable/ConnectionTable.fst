@@ -1,4 +1,5 @@
 module ConnectionTable
+friend ConnectionTable_Aux
 
 open FStar.ReflexiveTransitiveClosure
 open FStar.Monotonic.DependentMap
@@ -15,57 +16,6 @@ module AE = Crypto.AE
 module EE = EverCrypt.Error
 
 #set-options "--max_fuel 0 --max_ifuel 0 --z3rlimit 30"
-
-let empty = T.empty
-
-val connection_inv:
-    T.imap maybe_id connection_ref minv
-  -> connection
-  -> Type0
-let connection_inv m c =
-  if model then
-    match c with
-    | Sent_ServerHello ch id1 | Complete ch id1 ->
-      if has_cookie ch then
-        match T.sel m id1 with
-        | Some c' ->
-          token_p c' (fun h0 ->
-            Sent_HRR? (sel h0 c') /\
-            ch_of_cookie ch == Sent_HRR?.ch (sel h0 c'))
-        | _ -> False
-      else True
-    | _ -> True
-  else True
-
-(*
-  Stateful invariant
-  Can't be attached to the table because it needs to dereference connections
-*)
-let inv t h =
-  h `contains` t /\
-  (let m = sel h t in
-  forall (id:maybe_id).{:pattern (T.defined t id h)}
-    (T.defined t id h /\ h `contains` (T.value_of t id h))
-    ==> connection_inv m (sel h (Some?.v (T.sel m id))))
-
-let framing h0 t l h1 =
-  assert (B.loc_includes (B.loc_all_regions_from true rgn) (B.loc_mreference t));
-  assert (forall (id:maybe_id).{:pattern (T.defined t id h1)}
-    (T.defined t id h1 /\ h1 `contains` (T.value_of t id h1)) ==>
-    B.loc_includes (B.loc_all_regions_from true rgn) 
-                   (B.loc_mreference (T.value_of t id h1)));
-  assert (forall (id:maybe_id).{:pattern (T.defined t id h1)}
-    (T.defined t id h0 /\ h0 `contains` (T.value_of t id h1)) ==>
-    B.loc_includes (B.loc_all_regions_from true rgn) 
-                   (B.loc_mreference (T.value_of t id h0)))
-
-let alloc _ =
-  if model then T.alloc () <: _connection_table
-
-let table = 
-  recall_region rgn;
-  witness_region rgn;
-  alloc ()
 
 // TODO: switch to use the cookie key from TLS.Store,
 // but decrypt is underspecified there.
