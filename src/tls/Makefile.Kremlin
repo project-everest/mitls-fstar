@@ -16,6 +16,7 @@ MITLS_BUNDLES = \
   -bundle 'FStar.\*,LowStar.\*,C,C.\*[rename=Mitls_Kremlib]' \
   -bundle 'Parsers.\*' \
   -bundle 'Spec.\*' \
+  -bundle 'Meta.\*' \
   -bundle Lib.*[rename=Hacl_Lib] \
   -bundle TLSConstants=TLSConstants,QD.TLS_protocolVersion,List.Helpers \
   -bundle Hashing=Hashing.Spec,Hashing,Hashing.CRF,HMAC,HKDF,HMAC.UFCMA \
