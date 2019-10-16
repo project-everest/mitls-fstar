@@ -22,8 +22,14 @@ SOURCES = \
   EverCrypt_Vale.c \
   evercrypt_vale_stubs.c \
   Hacl_Chacha20.c \
-  Hacl_Chacha20Poly1305.c \
-  Hacl_Curve25519.c \
+  Hacl_Chacha20_Vec32.c \
+  Hacl_Chacha20_Vec128.c \
+  Hacl_Chacha20_Vec256.c \
+  Hacl_Chacha20Poly1305_32.c \
+  Hacl_Chacha20Poly1305_128.c \
+  Hacl_Chacha20Poly1305_256.c \
+  Hacl_Curve25519_51.c \
+  Hacl_Curve25519_64.c \
   Hacl_Ed25519.c \
   Hacl_Hash.c \
   Hacl_AES.c \
@@ -32,7 +38,6 @@ SOURCES = \
   Hacl_Poly1305_32.c \
   Hacl_Poly1305_128.c \
   Hacl_Poly1305_256.c \
-  Hacl_Curve25519.c \
   evercrypt_vale_stubs.c
 
 {amd64\}.asm.obj:
