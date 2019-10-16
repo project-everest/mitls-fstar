@@ -13,6 +13,7 @@ module B = LowStar.Buffer
 module AEAD = Crypto.AEAD
 module AE = Crypto.AE
 module EE = EverCrypt.Error
+module TS = TLS.Store
 
 (*
   The connection table and ids are model artifacts that do not exist
@@ -55,12 +56,6 @@ module EE = EverCrypt.Error
       nonce: if model then TLSInfo.random else unit -> 
       state: t {token_p st (fun h -> nonce_of st h == nonce)}
 *)
-
-val cookie_key : k:option (AE.state alg cookie_phi){
-  Some? k ==>
-    (let k = Some?.v k in 
-     (model ==> AE.safe k) /\
-     B.loc_includes (B.loc_region_only true cookie_rgn) (AE.footprint k))} 
 
 inline_for_extraction
 val create:
@@ -154,13 +149,12 @@ val validate_cookie:
   -> Stack (option (maybe_id & random))
   (requires fun h0 ->
     B.frameOf ck == other_rgn /\
-    Some? cookie_key /\
-    AE.invariant h0 (Some?.v cookie_key) /\ 
+    TS.inv h0 /\
     B.live h0 ck /\
     (model ==> inv table h0))
   (ensures  fun h0 o h1 ->
-    B.modifies (AE.footprint (Some?.v cookie_key)) h0 h1 /\
-    AE.invariant h1 (Some?.v cookie_key) /\ 
+    B.modifies (Mem.loc_store_region ()) h0 h1 /\
+    TS.inv h1 /\
     equal_domains h0 h1 /\
     (match o with
     | None -> True
@@ -181,8 +175,7 @@ val receive_client_hello2:
   -> ch2:client_hello{has_cookie ch2}
   -> ST bool
   (requires fun h0 ->
-    Some? cookie_key /\
-    AE.invariant h0 (Some?.v cookie_key) /\ 
+    TS.inv h0 /\
     B.live h0 (CH2?.ck ch2) /\
     (if model then
       let t:_connection_table = table in
@@ -194,7 +187,7 @@ val receive_client_hello2:
     Init? (sel h0 c) /\ 
     has_cookie ch2)
   (ensures  fun h0 b h1 ->
-    AE.invariant h1 (Some?.v cookie_key) /\ 
+    TS.inv h1 /\
     (if model then
       let t:_connection_table = table in
       inv t h1 /\
@@ -203,12 +196,12 @@ val receive_client_hello2:
     (let c' = sel h1 c in
      if b then      
        B.modifies (B.loc_union 
-         (AE.footprint (Some?.v cookie_key)) 
+         (Mem.loc_store_region ())
          (B.loc_mreference c)) h0 h1 /\
        Sent_ServerHello? c' /\
        Sent_ServerHello?.ch c' == ch2
      else 
-       B.modifies (AE.footprint (Some?.v cookie_key)) h0 h1))
+       B.modifies (Mem.loc_store_region ()) h0 h1))
 
 val receive_client_finished:
     id:maybe_id

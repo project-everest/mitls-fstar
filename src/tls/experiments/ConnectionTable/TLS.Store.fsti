@@ -23,6 +23,8 @@ open Spec.Agile.AEAD
 open EverCrypt.AEAD
 open EverCrypt.Error 
 
+module AE = Crypto.AE
+
 // Adapted from the beginning of Ticket.fst 
 
 type usage = 
@@ -32,6 +34,15 @@ type usage =
   | ClientSeal   // used by clients to protect received ticketInfo
 
 // a simplification for length computations 
+
+let server_cookie_phi : AE.plain_pred = ConnectionTable_Aux.cookie_phi
+
+// TODO: remove once the other phis are known
+val default_phi : AE.plain_pred
+
+let phi (u: usage) : Tot AE.plain_pred = match u with
+  | ServerCookie -> server_cookie_phi
+  | _ -> default_phi
 
 type alg = a:supported_alg { iv_length a 12 /\ tag_length a = 16 } 
 noextract let overhead = 12 + 16
@@ -73,8 +84,8 @@ val set_key:
   a: alg -> 
   key: B.buffer UInt8.t { B.length key = key_length a } -> 
   ST error_code 
-  (requires fun h0 -> B.live h0 key /\ inv h0)
-  (ensures fun h0 r h1 -> B.modifies (Mem.loc_store_region ()) h0 h1 /\ inv h1)
+  (requires fun h0 -> B.live h0 key /\ inv h0 /\ B.loc_disjoint (B.loc_buffer key) (Mem.loc_store_region ()))
+  (ensures fun h0 r h1 -> B.modifies (Mem.loc_store_region () `B.loc_union` B.loc_buffer key) h0 h1 /\ inv h1)
 
 /// The other functions are ad hoc and internal to TLS, making the use
 /// of the global keys implicit. They all operate on (serialized)
@@ -92,7 +103,9 @@ val encrypt:
     inv h0 /\ // other EverCrypt.AEAD pre/inv follow from this module's invariant
     B.loc_disjoint (B.loc_buffer plain `B.loc_union` B.loc_buffer cipher) (Mem.loc_store_region ()) /\
     LowStar.Monotonic.Buffer.(all_live h0 [ buf plain; buf cipher ]) /\ 
-    B.disjoint plain cipher)
+    B.disjoint plain cipher /\
+    (Flags.ideal_AEAD == true ==> phi u (B.as_seq h0 plain))
+  )
   (ensures fun h0 r h1 -> 
     inv h1 /\ 
     // no need for concrete functional correctness 
@@ -111,7 +124,7 @@ val decrypt:
     B.disjoint plain cipher)
   (ensures fun h0 r h1 -> 
     inv h1 /\ 
-    // no need for concrete functional correctness 
+    ((r == Success /\ Flags.ideal_AEAD == true) ==> phi u (B.as_seq h1 plain)) /\
     B.(modifies (loc_buffer plain `loc_union` Mem.loc_store_region ()) h0 h1)) 
   
 // TODO stateful concrete invariant

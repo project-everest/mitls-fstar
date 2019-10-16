@@ -7,6 +7,8 @@ module AE = Crypto.AE
 module HS = FStar.HyperStack
 module HST = FStar.HyperStack.ST
 
+let default_phi = server_cookie_phi // dummy, remove once all phis are known
+
 let store_regions : (l:list Mem.substore{List.Tot.length l == 4 /\ Mem.r_pairwise_disjoint l})
   = Mem.r_disjoint_alloc _ _ 4
 
@@ -43,19 +45,13 @@ let loc_store_regions_disjoint' (u1 u2: usage) : Lemma
   [SMTPat (B.loc_disjoint (loc_store_regions u1) (loc_store_regions u2))]
 = ()
 
-assume val server_cookie_phi : AE.plain_pred 
-assume val server_ticket_phi : AE.plain_pred 
-
-let phi (u: usage) : Tot AE.plain_pred =
-  match u with
-  | ServerCookie -> server_cookie_phi
-  | ServerTicket -> server_ticket_phi
-  | _ -> server_cookie_phi
-
 inline_for_extraction
 noextract
 let ptr (u: usage) : Tot Type0 =
-  (ptr: B.pointer (option (a: alg & (st: AE.state a (phi u) { B.loc_includes (loc_store_regions u) (AE.footprint st) }))) {
+  (ptr: B.pointer (option (a: alg & (st: AE.state a (phi u) { 
+    B.loc_includes (loc_store_regions u) (AE.footprint st) /\
+    (Flags.ideal_AEAD == true ==> AE.safe st)
+  }))) {
     B.recallable ptr /\
     B.frameOf ptr == tls_store_regions u
   })
@@ -194,11 +190,17 @@ let reset _ =
   per_usage_frame' ServerTicket ServerCookie h3 B.loc_none h4;  
   Success
 
-#push-options "--z3rlimit 32"
+#push-options "--z3rlimit 64"
 
 let set_key u a key =
   let h = HST.get () in
-  match AE.coerce (tls_store_regions u) a key (phi u) with
+  let ck =
+    if Flags.model then
+      Some (AE.create (tls_store_regions u) a key (phi u))
+    else
+      AE.coerce (tls_store_regions u) a key (phi u)
+  in
+  match ck with
     | None -> UnsupportedAlgorithm // TODO: refine error codes
     | Some st ->
       let p = keyptr u in
@@ -206,7 +208,8 @@ let set_key u a key =
       begin match B.index p 0ul with
       | None -> ()
       | Some (| a', st' |) ->
-        AE.frame_invariant h st' B.loc_none h1;
+        assert (Mem.loc_store_region () `B.loc_includes` AE.footprint st');
+        AE.frame_invariant h st' (B.loc_buffer key) h1;
         AE.free st';
         let h2 = HST.get () in
         AE.frame_invariant h1 st (AE.footprint st') h2
@@ -215,7 +218,7 @@ let set_key u a key =
       B.upd p 0ul (Some (| a, st |));
       let h' = HST.get () in
       AE.frame_invariant h2 st (B.loc_buffer p) h';
-      per_usage_frame u h B.loc_none h';
+      per_usage_frame u h (B.loc_buffer key) h';
       Success
 
 #pop-options
@@ -228,7 +231,6 @@ let encrypt u plain plain_len cipher =
   match B.index p 0ul with
     | None -> InvalidKey
     | Some (| a, st |) ->
-      assume (phi u (B.as_seq h plain));
       assert (Mem.loc_store_region () `B.loc_includes` AE.footprint st);
       AE.encrypt st plain plain_len cipher;
       let h' = HST.get () in

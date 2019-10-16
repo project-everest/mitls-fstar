@@ -17,26 +17,6 @@ module EE = EverCrypt.Error
 
 #set-options "--max_fuel 0 --max_ifuel 0 --z3rlimit 30"
 
-// TODO: switch to use the cookie key from TLS.Store,
-// but decrypt is underspecified there.
-let cookie_key =
-  push_frame();
-  let key =
-    B.alloca_of_list
-    [ 0x00uy; 0x01uy; 0x02uy; 0x03uy;
-      0x04uy; 0x05uy; 0x06uy; 0x07uy;
-      0x08uy; 0x09uy; 0x0Auy; 0x0Buy;
-      0x0Cuy; 0x0Duy; 0x0Euy; 0x0Fuy ] 
-  in
-  let ck =
-    if model then
-      Some (AE.create cookie_rgn alg key cookie_phi)
-    else
-      AE.coerce cookie_rgn alg key cookie_phi 
-  in
-  pop_frame();
-  ck
-
 #push-options "--max_ifuel 1"
 
 let create id cfg =
@@ -112,18 +92,13 @@ val _random_of_buffer: b:B.buffer UInt8.t -> ST random
 let random_of_buffer = _random_of_buffer
 
 let validate_cookie ck =
-  match cookie_key with
-  | None -> None
-  | Some cookie_key ->
     begin
     let h0 = get () in
     push_frame();
     let plain = B.alloca 0uy 64ul in
     let h1 = get () in
-    AE.frame_invariant h0 cookie_key B.loc_none h1;
     let res : option (maybe_id & random) =
-      match AE.decrypt cookie_key ck 92ul plain with
-      | EE.AuthenticationFailure -> None
+      match TS.decrypt TS.ServerCookie plain 64ul ck with
       | EE.Success ->
         let random = random_of_buffer plain in
         let id = id_of_random random in
@@ -137,11 +112,11 @@ let validate_cookie ck =
              CH1 random == Sent_HRR?.ch (sel h' c))));
           Some (id, random)
         else Some ((), random)
+      | _ -> None
     in
     let h3 = get () in
     pop_frame();
     let h4 = get () in
-    AE.frame_invariant h3 cookie_key (B.loc_region_only false (get_tip h3)) h4;
     res
     end
 
@@ -167,7 +142,6 @@ let receive_client_hello2 id c ch2 =
       let h0' = get () in
       c := Sent_ServerHello ch2 id0;
       let h1 = get () in
-      AE.frame_invariant h0' (Some?.v cookie_key) (B.loc_mreference c) h1;
       assert (
         if model then
         let t:_connection_table = table in

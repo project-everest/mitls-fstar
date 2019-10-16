@@ -89,7 +89,7 @@ val encrypt
     Flags.model == true /\
     invariant h s /\
     (Flags.ideal_iv == true ==> fresh_iv h s iv) /\
-    phi plain
+    (Flags.ideal_AEAD == true ==> phi plain)
   ))
   (ensures (fun h cipher h' -> 
     B.modifies (footprint s) h h' /\
