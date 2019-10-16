@@ -1,6 +1,57 @@
 [
-  "¢ Ì¢Oj\u0017˛Å\u0002\u0010á.\u0013$÷",
+  "ÿ÷f£ë,íÕ.èÒí:≤\n\u001e",
   [
+    [
+      "Crypto.AEAD.sample",
+      1,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "b982ea348c87e61cf9e1cc7a1439a153"
+    ],
+    [
+      "Crypto.AEAD.coerce",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "bool_inversion",
+        "disc_equation_FStar.Pervasives.Native.None",
+        "disc_equation_FStar.Pervasives.Native.Some", "eq2-interp",
+        "equation_Prims.eq2", "equation_Prims.squash",
+        "equation_Spec.Agile.AEAD.uint8",
+        "function_token_typing_Declassify.declassify",
+        "lemma_FStar.Pervasives.invertOption",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Tm_refine_2de20c066034c13bf76e9c0b94f4806c",
+        "typing_Crypto.AEAD.state",
+        "typing_FStar.Pervasives.Native.uu___is_Some"
+      ],
+      0,
+      "f19f283380be9f6c2bec640b8be6f99c"
+    ],
+    [
+      "Crypto.AEAD.create",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "bool_inversion",
+        "disc_equation_FStar.Pervasives.Native.None",
+        "disc_equation_FStar.Pervasives.Native.Some", "eq2-interp",
+        "equation_Prims.eq2", "equation_Prims.squash",
+        "equation_Spec.Agile.AEAD.uint8",
+        "function_token_typing_Declassify.declassify",
+        "lemma_FStar.Pervasives.invertOption",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Tm_refine_2de20c066034c13bf76e9c0b94f4806c",
+        "typing_Crypto.AEAD.state",
+        "typing_FStar.Pervasives.Native.uu___is_Some"
+      ],
+      0,
+      "6041b78aaa8b4bd6a5f9e64c84057d71"
+    ],
     [
       "Crypto.AEAD.is_fresh_iv",
       1,
@@ -57,7 +108,7 @@
         "typing_Spec.GaloisField.__proj__GF__item__t"
       ],
       0,
-      "b5d5d6f76a2bf3b7807bafe6d19a7723"
+      "caa6f4b339f10d1a8be45239e05e03af"
     ],
     [
       "Crypto.AEAD.encrypt",
@@ -145,7 +196,6 @@
         "typing_FStar.UInt32.uint_to_t", "typing_FStar.UInt32.v",
         "typing_Lib.IntTypes.minint", "typing_Lib.IntTypes.v",
         "typing_LowStar.Buffer.trivial_preorder",
-        "typing_LowStar.Monotonic.Buffer.len",
         "typing_LowStar.Monotonic.Buffer.length", "typing_Spec.AES.gf8",
         "typing_Spec.AES.irred", "typing_Spec.Agile.AEAD.is_supported_alg",
         "typing_Spec.Agile.AEAD.max_length",
@@ -156,7 +206,7 @@
         "typing_tok_Lib.IntTypes.SEC@tok", "typing_tok_Lib.IntTypes.U8@tok"
       ],
       0,
-      "4f022f415fa8affa7bd2f1b9c43eccd6"
+      "1f6d16d159234852ab7a5753de799009"
     ],
     [
       "Crypto.AEAD.decrypt",
@@ -284,28 +334,7 @@
         "typing_tok_Lib.IntTypes.U8@tok"
       ],
       0,
-      "2ef423bf8b11b235def95367d263a4b4"
-    ],
-    [
-      "Crypto.AEAD.create",
-      1,
-      2,
-      1,
-      [
-        "@MaxIFuel_assumption", "@query", "bool_inversion",
-        "disc_equation_FStar.Pervasives.Native.None",
-        "disc_equation_FStar.Pervasives.Native.Some", "eq2-interp",
-        "equation_Prims.eq2", "equation_Prims.squash",
-        "equation_Spec.Agile.AEAD.uint8",
-        "function_token_typing_Declassify.declassify",
-        "lemma_FStar.Pervasives.invertOption",
-        "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_2de20c066034c13bf76e9c0b94f4806c",
-        "typing_Crypto.AEAD.state",
-        "typing_FStar.Pervasives.Native.uu___is_Some"
-      ],
-      0,
-      "5fc2ce98546b1745245255f7ffa9046a"
+      "21b38d54e0c61e3b8c54081f12494643"
     ]
   ]
 ]
