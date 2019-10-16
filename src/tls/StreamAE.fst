@@ -17,6 +17,7 @@ open TLSConstants
 open TLSInfo
 open StreamPlain
 
+
 module AEAD = AEADProvider
 module HS = FStar.HyperStack
 
@@ -50,11 +51,18 @@ noextract
 let ilog (#r:erid) (#i:id) (l:log_ref r i{authId i}) : Tot (ideal_log r i) =
   l
 
-irreducible let max_ctr: n:nat{n = 18446744073709551615} =
-  assert_norm (pow2 64 - 1 = 18446744073709551615);
-  pow2 64 - 1
+//19-10-13 Artificially lowered, to be restored when we switch this
+//module to UInt64. Otherwise we get a C-compiler unsigned integrs
+//constant overflow.
+irreducible let max_ctr: n:nat {n = 9223372036854775807} =
+  FStar.Integers.(assert_norm (9223372036854775807 = pow2 63 - 1);
+  v 9223372036854775807UL)
+// irreducible let max_ctr: n:nat {n = 18446744073709551615} =
+//   FStar.Integers.(assert_norm (18446744073709551615 = pow2 64 - 1);
+//   v 18446744073709551615UL)
 
-type counter = c:nat{c <= max_ctr}
+
+type counter = c: nat {c <= max_ctr}
 
 let ideal_ctr (#l:erid) (r: erid) (i:id) (log:ideal_log l i) : Tot Type0 =
   FStar.Monotonic.Seq.seqn r log max_ctr
