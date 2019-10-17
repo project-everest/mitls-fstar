@@ -77,6 +77,8 @@ EXPORTS
   EverCrypt_HMAC_compute_sha2_256
   EverCrypt_HMAC_compute_sha2_384
   EverCrypt_HMAC_compute_sha2_512
+  EverCrypt_HKDF_expand
+  EverCrypt_HKDF_extract
   EverCrypt_HKDF_hkdf_expand
   EverCrypt_HKDF_hkdf_extract
   EverCrypt_Poly1305_poly1305
