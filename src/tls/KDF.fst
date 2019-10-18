@@ -231,7 +231,7 @@ let coerce #ideal u i a repr =
 /// I added a unit here
 ///
 /// CF: Ok; I did not know. Is it a style bug in FStar.Monotonic.Map ? 
-let alloc (#a:eqtype) #b #inv (r: erid):
+let alloc #a #b #inv (r: erid):
   ST (MDM.t r a b inv)
     (requires (fun h -> 
       inv (MDM.empty_partial_dependent_map #a #b) /\ 
