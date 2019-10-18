@@ -35,5 +35,5 @@ module CV12 = Parsers.CertificateVerify12
 
 let t = CV12.certificateVerify12
 
-let repr (b:R.slice) =
-  R.repr_p t b CV12.certificateVerify12_parser32
+let repr (b:LowParse.Ptr.const_slice) =
+  R.repr_p t b CV12.certificateVerify12_parser

@@ -1,4 +1,4 @@
-(*
+>(*
   Copyright 2015--2019 INRIA and Microsoft Corporation
 
   Licensed under the Apache License, Version 2.0 (the "License");
@@ -35,5 +35,5 @@ module CV13 = Parsers.CertificateVerify13
 
 let t = CV13.certificateVerify13
 
-let repr (b:R.slice) =
-  R.repr_p t b CV13.certificateVerify13_parser32
+let repr (b:LowParse.Ptr.const_slice) =
+  R.repr_p t b CV13.certificateVerify13_parser

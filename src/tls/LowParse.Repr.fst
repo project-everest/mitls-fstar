@@ -15,7 +15,7 @@
 
   Authors: T. Ramananandro, A. Rastogi, N. Swamy, A. Fromherz
 *)
-module LowParse.Ptr
+module LowParse.Repr
 
 module LP = LowParse.Low.Base
 module LS = LowParse.SLow.Base
@@ -48,7 +48,7 @@ let strong_parser_kind =
 
 let preorder (c:C.const_buffer LP.byte) = C.qbuf_pre (C.as_qbuf c)
 
-let slice_of_const_buffer (b:C.const_buffer LP.byte) (len:uint_32{U32.v len <= C.length b}) 
+let slice_of_const_buffer (b:C.const_buffer LP.byte) (len:uint_32{U32.v len <= C.length b})
   : LP.slice (preorder b) (preorder b)
   = let b = C.cast b in
     LP.({
@@ -79,12 +79,13 @@ type const_slice =
 let to_slice (x:const_slice)
   : Tot (LP.slice (preorder x.base) (preorder x.base))
   = slice_of_const_buffer x.base x.slice_len
-  
+
 let of_slice (x:LP.slice mut_p mut_p {x.LP.len <= LP.validator_max_length} )
   : Tot const_slice
   = let b = C.of_buffer x.LP.base in
     let len = x.LP.len in
     MkSlice b len
+
 
 (*** Pointer-based Representation types ***)
 
@@ -94,9 +95,9 @@ let of_slice (x:LP.slice mut_p mut_p {x.LP.len <= LP.validator_max_length} )
 ///  -- the parser(s) that defines its wire format
 ///  -- the represented value
 ///  -- the bytes of its wire format
-/// 
+///
 ///  We retain both the value and its wire format for convenience.
-/// 
+///
 ///  An alternative would be to also retain here a serializer and then
 ///  compute the bytes when needed from the serializer. But that's a
 ///  bit heavy
@@ -121,7 +122,7 @@ type meta (t:Type) = {
 ///   * The representation is described by erased the `meta` field
 ///
 /// Temporary fields:
-/// 
+///
 ///   * At this stage, we also keep a real high-level value (vv). We
 ///     plan to gradually access instead its ghost (.meta.v) and
 ///     eventually get rid of it to lower implicit heap allocations.
@@ -131,23 +132,35 @@ type meta (t:Type) = {
 ///     towards using slices rather than pointers. As those APIs
 ///     change, we will remove the length field.
 noeq
-type repr_ptr (t:Type) = 
+type repr_ptr (t:Type) =
   | Ptr: b:C.const_buffer LP.byte ->
          meta:meta t ->
-         value:t ->
+         vv:t ->
          length:U32.t { U32.v meta.len == C.length b /\
                        meta.len == length /\
-                       value == meta.v } ->
-       repr_ptr t                       
+                       vv == meta.v } ->
+       repr_ptr t
 
 let value #t (p:repr_ptr t) : GTot t = p.meta.v
 
 let repr_ptr_p (t:Type) (#k:strong_parser_kind) (parser:LP.parser k t) =
   p:repr_ptr t{ p.meta.parser_kind == k /\ p.meta.parser == parser }
 
-let slice_of_repr_ptr #t (p:repr_ptr t) 
+let slice_of_repr_ptr #t (p:repr_ptr t)
   : GTot (LP.slice (preorder p.b) (preorder p.b))
   = slice_of_const_buffer p.b p.meta.len
+
+let sub_ptr (p2:repr_ptr 'a) (p1: repr_ptr 'b) =
+  exists pos len. Ptr?.b p2 `C.const_sub_buffer pos len` Ptr?.b p1
+
+let intro_sub_ptr (x:repr_ptr 'a) (y:repr_ptr 'b) (from to:uint_32)
+  : Lemma
+    (requires
+       to >= from /\
+       Ptr?.b x `C.const_sub_buffer from (to - from)` Ptr?.b y)
+    (ensures
+      x `sub_ptr` y)
+  = ()
 
 /// TEMPORARY: DO NOT USE THIS FUNCTION UNLESS YOU REALLY HAVE SOME
 /// SPECIAL REASON FOR IT
@@ -155,8 +168,7 @@ let slice_of_repr_ptr #t (p:repr_ptr t)
 /// It is meant to support migration towards an EverParse API that
 /// will eventually provide accessors and jumpers for pointers rather
 /// than slices
-private
-let temp_slice_of_repr_ptr #t (p:repr_ptr t) 
+let temp_slice_of_repr_ptr #t (p:repr_ptr t)
   : Tot (LP.slice (preorder p.b) (preorder p.b))
   = slice_of_const_buffer p.b p.length
 
@@ -178,12 +190,12 @@ let temp_slice_of_repr_ptr #t (p:repr_ptr t)
 ///
 ///    3. The bytes of the slice are indeed the representation of the
 ///       ghost value in wire format
-unfold 
+unfold
 let valid_slice (#t:Type) (#r #s:_) (slice:LP.slice r s) (meta:meta t) (h:HS.mem) =
   LP.valid_content_pos meta.parser h slice 0ul meta.v meta.len /\
   meta.repr_bytes == LP.bytes_of_slice_from_to h slice 0ul meta.len
 
-unfold 
+unfold
 let valid' (#t:Type) (p:repr_ptr t) (h:HS.mem) =
   let slice = slice_of_const_buffer p.b p.meta.len in
   valid_slice slice p.meta h
@@ -255,9 +267,9 @@ let mk_from_const_slice
         len = to - from;
         repr_bytes = LP.bytes_of_slice_from_to h slice from to;
         meta_ok = ()
-    } in 
+    } in
     let sub_b = C.sub b.base from (to - from) in
-    let value = 
+    let value =
       // Compute [.v]; this code will eventually disappear
       let sub_b_bytes = FStar.Bytes.of_buffer (to - from) (C.cast sub_b) in
       let Some (v, _) = parser32 sub_b_bytes in
@@ -275,7 +287,8 @@ let mk_from_const_slice
 ///      b.[from, to)
 ///    known to be valid for a given wire-format parser `p`
 inline_for_extraction
-let mk (slice:LP.slice mut_p mut_p{ slice.LP.len <= LP.validator_max_length })
+let mk #q
+       (slice:LP.slice (C.q_preorder q LP.byte) (C.q_preorder q LP.byte){ slice.LP.len <= LP.validator_max_length })
        (from to:uint_32)
        (#k:strong_parser_kind) #t (#parser:LP.parser k t)
        (parser32:LS.parser32 parser)
@@ -285,9 +298,9 @@ let mk (slice:LP.slice mut_p mut_p{ slice.LP.len <= LP.validator_max_length })
     (ensures fun h0 p h1 ->
       B.(modifies loc_none h0 h1) /\
       valid p h1 /\
-      p.b `C.const_sub_buffer from (to - from)` (C.of_buffer slice.LP.base) /\
+      p.b `C.const_sub_buffer from (to - from)` (C.of_qbuf slice.LP.base) /\
       p.meta.v == LP.contents parser h1 slice from)
-  = let c = MkSlice (C.of_buffer slice.LP.base) slice.LP.len in
+  = let c = MkSlice (C.of_qbuf slice.LP.base) slice.LP.len in
     mk_from_const_slice c from to parser32
 
 /// A high-level constructor, taking a value instead of a slice.
@@ -388,14 +401,14 @@ let valid_if_live #t (p:repr_ptr t) =
   C.qbuf_qual (C.as_qbuf p.b) == C.IMMUTABLE /\
   (let i : I.ibuffer LP.byte = C.as_mbuf p.b in
    let m = p.meta in
-   exists (h:HS.mem).{:pattern valid p h}
-      i `I.value_is` Ghost.hide m.repr_bytes /\
+   i `I.value_is` Ghost.hide m.repr_bytes /\
+   (exists (h:HS.mem).{:pattern valid p h}
       m.repr_bytes == B.as_seq h i /\
       valid p h /\
       (forall h'.
         C.live h' p.b /\
         B.as_seq h i `Seq.equal` B.as_seq h' i ==>
-        valid p h'))
+        valid p h')))
 
 /// `stable_repr_ptr t`: A representation that is valid if its buffer is
 /// live
@@ -434,6 +447,21 @@ let valid_if_live_intro #t (r:repr_ptr t) (h:HS.mem)
     in
     ()
 
+let sub_ptr_liveness #t (r0 r1:repr_ptr t)
+  : Stack unit
+    (requires fun h ->
+      r0 `sub_ptr` r1 /\
+      valid_if_live r1 /\
+      valid r0 h)
+    (ensures fun h0 _ h1 ->
+      h0 == h1 /\
+      valid_if_live r0)
+  = let b : I.ibuffer LP.byte = C.cast r0.b in
+    let h0 = get () in
+    B.witness_p b (I.seq_eq (Ghost.hide (B.as_seq h0 b)));
+    valid_if_live_intro r0 h0
+
+
 /// `recall_stable_repr_ptr` Main lemma: if the underlying buffer is live
 ///    then a stable repr_ptr is valid
 let recall_stable_repr_ptr #t (r:stable_repr_ptr t)
@@ -470,7 +498,7 @@ let stable_region_repr_ptr (r:D.drgn) (t:Type) =
 
 let recall_stable_region_repr_ptr #t (r:D.drgn) (p:stable_region_repr_ptr r t)
   : Stack unit
-    (requires fun h -> 
+    (requires fun h ->
       HS.live_region h (D.rid_of_drgn r))
     (ensures fun h0 _ h1 ->
       h0 == h1 /\
@@ -514,13 +542,13 @@ let stash (rgn:D.drgn) #t (r:repr_ptr t) (len:uint_32{len == r.meta.len})
  = let buf' = ralloc_and_blit rgn r.b len in
    let s = MkSlice buf' len in
    let h = get () in
-   let _ = 
+   let _ =
      let slice = slice_of_const_buffer r.b len in
      let slice' = slice_of_const_buffer buf' len in
      LP.valid_facts r.meta.parser h slice 0ul; //elim valid_pos slice
      LP.valid_facts r.meta.parser h slice' 0ul //intro valid_pos slice'
    in
-   let p = Ptr buf' r.meta r.value r.length in
+   let p = Ptr buf' r.meta r.vv r.length in
    valid_if_live_intro p h;
    p
 
@@ -533,18 +561,20 @@ noeq
 type repr_pos (t:Type) (b:const_slice) =
   | Pos: start_pos:index b ->
          meta:meta t ->
-         value:t -> //temporary
+         vv_pos:t -> //temporary
          length:U32.t { //temporary
                         U32.v start_pos + U32.v meta.len <= U32.v b.slice_len /\
-                        value == meta.v /\
+                        vv_pos == meta.v /\
                         length == meta.len } ->
          repr_pos t b
 
-let as_ptr_spec #t #b (p:repr_pos t b) 
+let value_pos #t #b (r:repr_pos t b) : GTot t = r.meta.v
+
+let as_ptr_spec #t #b (p:repr_pos t b)
   : GTot (repr_ptr t)
   = Ptr (C.gsub b.base p.start_pos ((Pos?.meta p).len))
         (Pos?.meta p)
-        (Pos?.value p)
+        (Pos?.vv_pos p)
         (Pos?.length p)
 
 
@@ -576,18 +606,9 @@ let repr_pos_p (t:Type) (b:const_slice) #k (parser:LP.parser k t) =
 
 (*** Validity ***)
 /// `valid`: abstract validity
-abstract
 let repr_pos_valid (#t:Type) (#b:const_slice) (r:repr_pos t b) (h:HS.mem)
   = valid (as_ptr_spec r) h /\
     C.live h b.base
-
-/// `reveal_valid`:
-///   An explicit lemma exposes the definition of `valid`
-let reveal_repr_pos_valid ()
-  : Lemma (forall (t:Type) (b:const_slice) (r:repr_pos t b) (h:HS.mem).
-              {:pattern (repr_pos_valid #t #b r h)}
-           repr_pos_valid #t #b r h <==> (valid (as_ptr_spec r) h /\ C.live h b.base))
-  = ()
 
 /// `fp r`: The memory footprint of a repr_pos is the
 ///         sub-slice b.[from, to)
@@ -622,7 +643,7 @@ let as_ptr #t #b (r:repr_pos t b)
       h0 == h1)
   = let b = sub b.base r.start_pos (Ghost.hide r.meta.len) in
     let m = r.meta in
-    let v = r.value in
+    let v = r.vv_pos in
     let l = r.length in
     Ptr b m v l
 
@@ -633,7 +654,7 @@ let as_repr_pos #t (b:const_slice) (from to:index b) (p:repr_ptr t)
       Ptr?.b p  == C.gsub b.base from (to - from))
     (ensures fun r ->
       p == as_ptr_spec r)
-  = Pos from (Ptr?.meta p) (Ptr?.value p) (Ptr?.length p)
+  = Pos from (Ptr?.meta p) (Ptr?.vv p) (Ptr?.length p)
 
 /// `mk_repr_pos b from to p`:
 ///    Constructing a `repr_pos` from a sub-slice
@@ -651,7 +672,7 @@ let mk_repr_pos (b:LP.slice mut_p mut_p{ LP.(b.len <= validator_max_length) })
       B.(modifies loc_none h0 h1) /\
       repr_pos_valid r h1 /\
       r.start_pos = from /\
-      r.value == LP.contents parser h1 b from)
+      r.vv_pos == LP.contents parser h1 b from)
   = as_repr_pos (of_slice b) from to (mk b from to parser32)
 
 /// `mk b from to p`:
@@ -671,7 +692,7 @@ let mk_repr_pos_from_const_slice
       B.(modifies loc_none h0 h1) /\
       repr_pos_valid r h1 /\
       r.start_pos = from /\
-      r.value == LP.contents parser h1 (to_slice b) from)
+      r.vv_pos == LP.contents parser h1 (to_slice b) from)
   = as_repr_pos b from to (mk_from_const_slice b from to parser32)
 
 /// A high-level constructor, taking a value instead of a slice.
@@ -699,7 +720,7 @@ let mk_repr_pos_from_serialize
       | Some r ->
         repr_pos_valid r h1 /\
         r.start_pos == from /\
-        r.value == x
+        r.vv_pos == x
       end
     )
 = let size = size32 x in

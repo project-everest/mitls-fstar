@@ -21,19 +21,12 @@ module MITLS.Repr.CertificateRequest13
    This module encapsulates wire-format representations of
    Parsers.CertificateRequest13.certificateRequest13
 
-   Its main type, `repr b` is an instance of MITLS.Repr.repr
-   instantiated with Parsers.CertificateRequest13.certificateRequest13_parser
 *)
 module LP = LowParse.Low.Base
 module B = LowStar.Monotonic.Buffer
 module HS = FStar.HyperStack
-module R = MITLS.Repr
-open FStar.Integers
-open FStar.HyperStack.ST
-
+module R = LowParse.Repr
 module CR13 = Parsers.CertificateRequest13
 
-let t = CR13.certificateRequest13
-
-let repr (b:R.slice) =
-  R.repr_p t b CR13.certificateRequest13_parser32
+let ptr = R.repr_ptr_p _ CR13.certificateRequest13_parser
+let pos (b:R.const_slice) = R.repr_pos_p _ b CR13.certificateRequest13_parser

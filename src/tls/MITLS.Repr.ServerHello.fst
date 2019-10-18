@@ -27,7 +27,7 @@ module MITLS.Repr.ServerHello
 module LP = LowParse.Low.Base
 module B = LowStar.Monotonic.Buffer
 module HS = FStar.HyperStack
-module R = MITLS.Repr
+module R = LowParse.Repr
 module SH = Parsers.ServerHello
 module SHB = Parsers.ServerHello_is_hrr
 module SHK = Parsers.SHKind
@@ -38,22 +38,23 @@ open FStar.HyperStack.ST
 
 let t = SH.serverHello
 
-let repr (b:R.const_slice) =
-  R.repr_p SH.serverHello b SH.serverHello_parser32
+let ptr = R.repr_ptr_p t SH.serverHello_parser
 
-#push-options "--z3rlimit 16 --max_fuel 1 --max_ifuel 1"
-let cipherSuite (#b:R.const_slice) (r:repr b)
+let pos (b:R.const_slice) = R.repr_pos_p SH.serverHello b SH.serverHello_parser
+
+#push-options "--max_fuel 1 --max_ifuel 1"
+let cipherSuite (p:ptr)
   : Stack Parsers.CipherSuite.cipherSuite
-    (requires R.valid r)
+    (requires R.valid p)
     (ensures fun h0 cs h1 ->
       B.modifies B.loc_none h0 h1 /\
-      cs == (match SH.((R.value r).is_hrr) with
-      | SHB.ServerHello_is_hrr_true hrr -> HRK.(hrr.cipher_suite)
-      | SHB.ServerHello_is_hrr_false sh -> SHK.(sh.SHB.value.cipher_suite)))
+      cs == (match (R.value p).SH.is_hrr with
+             | SHB.ServerHello_is_hrr_true hrr -> HRK.(hrr.cipher_suite)
+             | SHB.ServerHello_is_hrr_false sh -> SHK.(sh.SHB.value.cipher_suite)))
   = let open R in
     R.reveal_valid();
-    let b = R.to_slice b in
-    let pos0 = SH.accessor_serverHello_is_hrr b r.start_pos in
+    let b = R.temp_slice_of_repr_ptr p in
+    let pos0 = SH.accessor_serverHello_is_hrr b 0ul in
     if SHB.serverHello_is_hrr_test b pos0 then
       let pos1 = SH.serverHello_is_hrr_accessor_true b pos0 in
       let pos2 = HRK.accessor_hRRKind_cipher_suite b pos1 in
