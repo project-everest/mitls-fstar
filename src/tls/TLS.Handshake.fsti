@@ -139,7 +139,7 @@ let next_fragment_requires (#i:TLSInfo.id) (s:Machine.state) h0 =
 /// outgoing packet can be bounded tighter than the TLS
 /// max_fragment_length.
 
-val next_fragment_bounded: s:Machine.state -> i:TLSInfo.id -> max:nat -> 
+val next_fragment_bounded: s:Machine.state -> i:TLSInfo.id -> max:UInt32.t -> 
 
   ST (result (Send.outgoing i))
   (requires fun h0 -> next_fragment_requires #i s h0)
