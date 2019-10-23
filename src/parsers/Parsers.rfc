@@ -677,7 +677,7 @@ struct {
   uint16 len;
   select(type)
   {
-    case server_name: ServerNameList;
+    case server_name: Empty;
     case max_fragment_length: MaxFragmentLength;
     case supported_groups: NamedGroupList;
     case use_srtp: SRTPProtectionProfiles;
