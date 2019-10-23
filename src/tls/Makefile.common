@@ -16,7 +16,10 @@ INCLUDE_PATHS 	= \
   $(QD_HOME)/src/lowparse \
   $(MITLS_HOME)/src/parsers/generated \
   $(MITLS_HOME)/src/tls \
-  $(MITLS_HOME)/src/tls/obj
+  $(MITLS_HOME)/src/tls/obj \
+  $(VALE_DIRS)
+
+INCLUDE_PATHS := $(filter-out $(HACL_HOME)/providers/evercrypt/fst, $(INCLUDE_PATHS))
 
 FSTAR_INCLUDES = $(addprefix --include ,$(INCLUDE_PATHS))
 
