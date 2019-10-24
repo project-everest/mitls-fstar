@@ -15,13 +15,9 @@ INCLUDE_PATHS 	= \
   $(MITLS_HOME)/libs/ffi \
   $(QD_HOME)/src/lowparse \
   $(MITLS_HOME)/src/parsers/generated \
-  $(MITLS_HOME)/src/tls \
-  $(MITLS_HOME)/src/tls/obj \
-  $(VALE_DIRS)
-
-INCLUDE_PATHS := $(filter-out $(HACL_HOME)/providers/evercrypt/fst, $(INCLUDE_PATHS))
+  $(MITLS_HOME)/src/tls
 
 FSTAR_INCLUDES = $(addprefix --include ,$(INCLUDE_PATHS))
 
 %.fst-in %.fsti-in:
-	@echo $(FSTAR_INCLUDES)
+	@echo $(FSTAR_INCLUDES) --include $(MITLS_HOME)/src/tls/obj
