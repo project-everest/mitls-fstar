@@ -31,10 +31,12 @@ module R = LowParse.Repr
 module CH = Parsers.ClientHello
 module C = LowStar.ConstBuffer
 module R_CHE = MITLS.Repr.ClientHelloExtensions
+module D = LowStar.Native.DynamicRegion
 open FStar.Integers
 open FStar.HyperStack.ST
 
 let ptr = R.repr_ptr_p CH.clientHello CH.clientHello_parser
+let stable_ptr = p:ptr { R.is_stable_in_region p }
 let pos (b:R.const_slice) = R.repr_pos_p CH.clientHello b CH.clientHello_parser
 
 /// Reader for the protocol version
@@ -84,6 +86,7 @@ let extensions' (p:ptr)
 
 /// Accessor for the extensions
 ///    returns a pointer, since it is a variable-length field
+///    And preserves stability
 let extensions (p:ptr)
   : Stack R_CHE.ptr
     (requires R.valid p)
@@ -91,7 +94,9 @@ let extensions (p:ptr)
       B.modifies B.loc_none h0 h1 /\
       R.valid e_ptr h1 /\
       R.value e_ptr == (R.value p).CH.extensions /\
-      e_ptr `R.sub_ptr` p)
+      e_ptr `R.sub_ptr` p /\
+      R.region_of e_ptr == R.region_of p /\
+      (R.is_stable_in_region p ==> R.is_stable_in_region e_ptr))
   =  let e_ptr, _, _ = extensions' p in e_ptr
 
 /// Just for demo purposes: to access a field from a positional repr,

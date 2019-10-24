@@ -27,6 +27,7 @@ module D = LowStar.Native.DynamicRegion
 
 open FStar.Integers
 open FStar.HyperStack.ST
+module I = LowStar.ImmutableBuffer
 
 (* Summary:
 
@@ -140,6 +141,8 @@ type repr_ptr (t:Type) =
                        meta.len == length /\
                        vv == meta.v } ->
        repr_ptr t
+
+let region_of #t (p:repr_ptr t) : GTot HS.rid = B.frameOf (C.cast p.b)
 
 let value #t (p:repr_ptr t) : GTot t = p.meta.v
 
@@ -392,7 +395,6 @@ let to_bytes #t (p: repr_ptr t) (len:uint_32)
          value. This will soon be added to the LowStar library.
 *)
 
-module I = LowStar.ImmutableBuffer
 
 /// `valid_if_live`: A pure predicate on `r:repr_ptr t` that states that
 /// so long as the underlying buffer is live in a given state `h`,
@@ -413,6 +415,7 @@ let valid_if_live #t (p:repr_ptr t) =
 /// `stable_repr_ptr t`: A representation that is valid if its buffer is
 /// live
 let stable_repr_ptr t= p:repr_ptr t { valid_if_live p }
+
 
 /// `valid_if_live_intro` :
 ///    An internal lemma to introduce `valid_if_live`
@@ -447,20 +450,38 @@ let valid_if_live_intro #t (r:repr_ptr t) (h:HS.mem)
     in
     ()
 
-let sub_ptr_liveness #t (r0 r1:repr_ptr t)
-  : Stack unit
-    (requires fun h ->
+let sub_ptr_stable (#t0 #t1:_) (r0:repr_ptr t0) (r1:repr_ptr t1) (h:HS.mem)
+  : Lemma
+    (requires
       r0 `sub_ptr` r1 /\
       valid_if_live r1 /\
+      valid r1 h /\
       valid r0 h)
-    (ensures fun h0 _ h1 ->
-      h0 == h1 /\
-      valid_if_live r0)
-  = let b : I.ibuffer LP.byte = C.cast r0.b in
-    let h0 = get () in
-    B.witness_p b (I.seq_eq (Ghost.hide (B.as_seq h0 b)));
-    valid_if_live_intro r0 h0
-
+    (ensures
+      valid_if_live r0 /\
+      (let b0 = C.cast r0.b in
+       let b1 = C.cast r1.b in
+       B.frameOf b0 == B.frameOf b1 /\
+      (D.region_lifetime_buf (B.frameOf b0) b1 ==>
+       D.region_lifetime_buf (B.frameOf b0) b0)))
+    [SMTPat (r0 `sub_ptr` r1);
+     SMTPat (valid_if_live r1);
+     SMTPat (valid r0 h)]
+  = let b0 : I.ibuffer LP.byte = C.cast r0.b in
+    let b1 : I.ibuffer LP.byte = C.cast r1.b in
+    assert (I.value_is b1 (Ghost.hide r1.meta.repr_bytes));
+    assert (Seq.length r1.meta.repr_bytes == B.length b1);
+    let aux (i len:U32.t)
+      : Lemma
+        (requires
+          r0.b `C.const_sub_buffer i len` r1.b)
+        (ensures
+          I.value_is b0 (Ghost.hide r0.meta.repr_bytes))
+        [SMTPat (r0.b `C.const_sub_buffer i len` r1.b)]
+      = I.sub_ptr_value_is b0 b1 h i len r1.meta.repr_bytes
+    in
+    D.region_lifetime_sub #_ #_ #_ #(I.immutable_preorder _) (B.frameOf b1) b1 b0;
+    valid_if_live_intro r0 h
 
 /// `recall_stable_repr_ptr` Main lemma: if the underlying buffer is live
 ///    then a stable repr_ptr is valid
@@ -490,10 +511,16 @@ let recall_stable_repr_ptr #t (r:stable_repr_ptr t)
      in
      I.recall_value i es
 
+let is_stable_in_region #t (p:repr_ptr t) =
+  let r = B.frameOf (C.cast p.b) in
+  valid_if_live p /\
+  B.frameOf (C.cast p.b) == r /\
+  D.region_lifetime_buf r (C.cast p.b)
+
 let stable_region_repr_ptr (r:D.drgn) (t:Type) =
-  p:stable_repr_ptr t {
-    B.frameOf (C.cast p.b) == D.rid_of_drgn r /\
-    D.region_lifetime_buf r (C.cast p.b)
+  p:repr_ptr t {
+    is_stable_in_region p /\
+    B.frameOf (C.cast p.b) == D.rid_of_drgn r
   }
 
 let recall_stable_region_repr_ptr #t (r:D.drgn) (p:stable_region_repr_ptr r t)
@@ -516,11 +543,12 @@ let ralloc_and_blit (r:D.drgn) (src:C.const_buffer LP.byte) (len:U32.t)
     (ensures fun h0 b h1 ->
       let c = C.as_qbuf b in
       let s = Seq.slice (C.as_seq h0 src) 0 (U32.v len) in
+      let r = D.rid_of_drgn r in
       C.qbuf_qual c == C.IMMUTABLE /\
       B.alloc_post_mem_common (C.to_ibuffer b) h0 h1 s /\
       C.to_ibuffer b `I.value_is` s /\
       D.region_lifetime_buf r (C.cast b) /\
-      B.frameOf (C.cast b) == (D.rid_of_drgn r))
+      B.frameOf (C.cast b) == r)
   = let src_buf = C.cast src in
     let b : I.ibuffer LP.byte = D.ralloc_and_blit_buf r src_buf 0ul len in
     let h0 = get() in
@@ -551,6 +579,47 @@ let stash (rgn:D.drgn) #t (r:repr_ptr t) (len:uint_32{len == r.meta.len})
    let p = Ptr buf' r.meta r.vv r.length in
    valid_if_live_intro p h;
    p
+
+(*** Accessing fields of ptrs ***)
+
+unfold
+let field_accessor_post (#t1:Type) (p:repr_ptr t1)
+                        (#k2: strong_parser_kind)
+                        (#t2:Type)
+                        (p2: LP.parser k2 t2)
+                        (cl:LP.clens t1 t2) =
+   fun h0 (q:repr_ptr_p t2 p2) h1 ->
+      cl.LP.clens_cond p.meta.v /\
+      B.modifies B.loc_none h0 h1 /\
+      valid q h1 /\
+      value q == cl.LP.clens_get (value p) /\
+      q `sub_ptr` p /\
+      region_of q == region_of p /\
+      (is_stable_in_region p ==> is_stable_in_region q)
+
+inline_for_extraction
+let get_field #t1 (p:repr_ptr t1)
+              (#k2: strong_parser_kind)
+              (#t2: Type)
+              (#p2: LP.parser k2 t2)
+              (#cl: LP.clens t1 t2)
+              (#g: LP.gaccessor p.meta.parser p2 cl)
+              (acc:LP.accessor g)
+              (jump:LP.jumper p2)
+              (p2': LS.parser32 p2)
+ : Stack (repr_ptr_p t2 p2)
+     (requires fun h ->
+       valid p h /\
+       cl.LP.clens_cond p.meta.v)
+     (ensures
+       field_accessor_post p p2 cl)
+  = let b = temp_slice_of_repr_ptr p in
+    let pos = acc b 0ul in
+    let pos_to = jump b pos in
+    let q = mk b pos pos_to p2' in
+    assert (q.b `C.const_sub_buffer pos (pos_to - pos)` p.b);
+    q
+
 
 (*** Positional representation types ***)
 
@@ -727,3 +796,48 @@ let mk_repr_pos_from_serialize
   match (mk_from_serialize b from parser32 serializer32 size32 x) with
   | None -> None
   | Some p -> Some (as_repr_pos (of_slice b) from (from + size) p)
+
+/// Accessors on positional reprs
+
+
+// unfold
+// let field_accessor_post (#t1:Type) (p:repr_ptr t1)
+//                         (#k2: strong_parser_kind)
+//                         (#t2:Type)
+//                         (p2: LP.parser k2 t2)
+//                         (cl:LP.clens t1 t2) =
+//    fun h0 (q:repr_ptr_p t2 p2) h1 ->
+//       cl.LP.clens_cond p.meta.v /\
+//       B.modifies B.loc_none h0 h1 /\
+//       valid q h1 /\
+//       value q == cl.LP.clens_get (value p) /\
+//       q `sub_ptr` p /\
+//       region_of q == region_of p /\
+//       (is_stable_in_region p ==> is_stable_in_region q)
+
+inline_for_extraction
+let get_field_pos (#b:const_slice) #t1 (pp:repr_pos t1 b)
+                  (#k2: strong_parser_kind)
+                  (#t2: Type)
+                  (#p2: LP.parser k2 t2)
+                  (#cl: LP.clens t1 t2)
+                  (#g: LP.gaccessor pp.meta.parser p2 cl)
+                  (acc:LP.accessor g)
+                  (jump:LP.jumper p2)
+                  (p2': LS.parser32 p2)
+ : Stack (repr_pos_p t2 b p2)
+     (requires fun h ->
+       repr_pos_valid pp h /\
+       cl.LP.clens_cond pp.meta.v)
+     (ensures fun h0 qq h1 ->
+       B.modifies B.loc_none h0 h1 /\
+       repr_pos_valid qq h1 /\
+       value_pos qq == cl.LP.clens_get (value_pos pp))
+ = let p = as_ptr pp in
+   let bb = temp_slice_of_repr_ptr p in
+   let pos = acc bb 0ul in
+   let pos_to = jump bb pos in
+   let q = mk bb pos pos_to p2' in
+   let len = pos_to - pos in
+   assert (Ptr?.b q `C.const_sub_buffer pos len` Ptr?.b p);
+   as_repr_pos b (pp.start_pos + pos) (pp.start_pos + pos + len) q

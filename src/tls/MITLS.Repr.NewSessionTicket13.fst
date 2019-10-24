@@ -27,7 +27,7 @@ module MITLS.Repr.NewSessionTicket13
 module LP = LowParse.Low.Base
 module B = LowStar.Monotonic.Buffer
 module HS = FStar.HyperStack
-module R = MITLS.Repr
+module R = LowParse.Repr
 open FStar.Integers
 open FStar.HyperStack.ST
 
@@ -35,5 +35,8 @@ module NST13 = Parsers.NewSessionTicket13
 
 let t = NST13.newSessionTicket13
 
-let repr (b:R.slice) =
-  R.repr_p t b NST13.newSessionTicket13_parser32
+let ptr =
+  R.repr_ptr_p t NST13.newSessionTicket13_parser
+
+let pos (b:R.const_slice) =
+  R.repr_pos_p t b NST13.newSessionTicket13_parser
