@@ -14,7 +14,7 @@
         "typing_AEAD.ivlen", "typing_FStar.UInt32.v"
       ],
       0,
-      "7e7f7ef80f766f8cb34feb1b47251680"
+      "9564f8eb68d6bccd67137574cf949e0f"
     ],
     [
       "AEAD.aadmax",
@@ -23,7 +23,7 @@
       1,
       [ "@query" ],
       0,
-      "ad97142513c1650edf33b41eaaf52fea"
+      "d9cd89b9abf9905452cd68850d715c84"
     ],
     [
       "AEAD.cipher",
@@ -41,7 +41,7 @@
         "typing_AEAD.taglen", "typing_FStar.UInt32.v"
       ],
       0,
-      "92ac25f4e67917c02c636be8b75c8526"
+      "b33800ed0091356b3e87bb1c0c63af92"
     ],
     [
       "AEAD.cipher32",
@@ -66,7 +66,7 @@
         "typing_Spec.Poly1305.size_key"
       ],
       0,
-      "e70d4ee801c28c5460336e876d85658e"
+      "06c9dbc2abc1dcb6411ee80e9dc6faf2"
     ],
     [
       "AEAD.mk_entry",
@@ -83,7 +83,7 @@
         "typing_Crypto.Plain.as_bytes"
       ],
       0,
-      "5656ebc7b8f1fa28d26086fc139fb2ac"
+      "2e04db14ac1d440a7029c7651762c4b3"
     ],
     [
       "AEAD.entry_injective",
@@ -107,7 +107,7 @@
         "typing_FStar.UInt32.v"
       ],
       0,
-      "6aa4c1ceb65c1d38a8b36a6bdadce2b9"
+      "055fed35f3064d971413f3bb1b460823"
     ],
     [
       "AEAD.fresh_addresses",
@@ -122,7 +122,7 @@
         "refinement_interpretation_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
       ],
       0,
-      "12ab4ecc0889c1695791433f8f95dc48"
+      "c328d1aa784b7db869eb8c3d1afc1d0c"
     ],
     [
       "AEAD.fresh_addresses",
@@ -137,7 +137,7 @@
         "refinement_interpretation_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
       ],
       0,
-      "ddcd1b96ff501851d886e09b4049c402"
+      "ec46857276ba5ab03431a4f849d7c4c0"
     ],
     [
       "AEAD.ok_plain_len_32",
@@ -151,7 +151,7 @@
         "typing_FStar.UInt32.v"
       ],
       0,
-      "1ac3d74f325b6793768eecf05e247eab"
+      "91013b7e7429559c4e9935e57b7d2057"
     ],
     [
       "AEAD.frame_log",
@@ -164,7 +164,7 @@
         "refinement_interpretation_Tm_refine_2de20c066034c13bf76e9c0b94f4806c"
       ],
       0,
-      "e972caa6752a4d756d97fb091747501c"
+      "ab24079f11bc226dff5b77f77d52b769"
     ]
   ]
 ]
