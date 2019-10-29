@@ -69,6 +69,12 @@ quic.exe: quic.c $(EXTERNAL_HEADERS) $(EXTERNAL_LIBS)
           -L$(subst :, -L,$(LIBPATHS)) \
 	  $< -lmitls -lquiccrypto -lmipki $(CFLAGS) -o $@
 
+copy: $(MITLS_HOME)/src/pki/$(LIBPKI) $(MITLS_HOME)/src/tls/dist/compact/$(LIBMITLS)
+	cp $(MITLS_HOME)/src/pki/$(LIBPKI) .
+	cp $(MLCRYPTO_HOME)/openssl/$(OPENSSL) .
+	cp $(MITLS_HOME)/src/tls/dist/compact/$(LIBMITLS) .
+	cp $(HACL_HOME)/providers/quic_provider/$(LIBQC) .
+
 test: quic.exe
 	./quic.exe
 	./quic.exe 0rtt
