@@ -124,8 +124,7 @@ let client_ClientHello (Client region config r) =
   // Allocate state with the "main" offered hash algorithm for the digest
   assume False; //19-09-14 TBC
   let tag, di, tx_tch = transcript_start region ha None offer0 false in
-  let ms = {ms with digest = di; sending = sending} in
-
+  
   // Compute the binders
   let ks', offer1, sending = (
     match resume with
@@ -155,6 +154,7 @@ let client_ClientHello (Client region config r) =
 
   // assert(tx_tch == Ghost.hide (transcript_tch full0));
   r := C_wait_ServerHello full0 ms ks;
+  let ms = {ms with digest = di; sending = sending} in
 
   // In both cases, the transcript is now at [ClientHello None offer1]
   let h1 = get() in
@@ -281,13 +281,14 @@ let client_ServerHello (Client region config r) sh =
       trace "Running TLS 1.3";
       
       let ms = // we need to restart digest if server changes hash (ignoring binders)
-        if ha = Nego.offered_ha offer.full_ch then ms
+        if false && ha = Nego.offered_ha offer.full_ch then ms
 	else
 	  let retry =
 	    match offer.full_retry with
 	    | None -> None
 	    | Some {ch0 = ch0; sh0 = hrr} -> Some (hash_ch0 region ha ch0, hrr) in
-	  let _, di, _ = transcript_start region ha retry offer.full_ch true in
+	  let tag, di, _ = transcript_start region ha retry offer.full_ch true in
+	  trace ("Server changed hash, new CH hash "^(Bytes.hex_of_bytes tag));
 	  {ms with digest = di} in
 
       let server_share = Negotiation.find_serverKeyShare sh in

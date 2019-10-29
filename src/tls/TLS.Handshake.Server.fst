@@ -230,6 +230,7 @@ let server_ClientHello1 st offer
       in
     let CipherSuite13 ae ha = cs in
     let tag0, di, tx0 = transcript_start region ha None offer false in
+    trace ("ClientHello/Binder digest: "^(B.hex_of_bytes tag0));
     let (ks, ogy, obk) = KS.ks_server13_init random (offer.CH.random) cs config.is_quic opsk g_gx in
     let ogyb = match ogy with None -> None | Some gy -> Some (keyShareEntry_of_share gy) in
     let accept_0rtt =  Some? config.max_early_data &&
@@ -263,27 +264,30 @@ let server_ClientHello1 st offer
       let she = Nego.server_clientExtensions TLS_1p3 config cs None opski ogyb false offer.CH.extensions in
       let ee = Nego.encrypted_clientExtensions TLS_1p3 config cs None opski ogyb false offer.CH.extensions in
       let sh = SH.({
-        version = TLS_1p3;
+        version = TLS_1p2;
 	is_hrr = Parsers.ServerHello_is_hrr.(
 	  ServerHello_is_hrr_false ({
 	  tag = random;
 	  value = SHK.({
-            session_id = B.empty_bytes;
+            session_id = offer.CH.session_id;
 	    cipher_suite = name_of_cipherSuite cs;
 	    compression_method = Parsers.CompressionMethod.NullCompression;
 	    extensions = she
           });
 	}));
       }) in
-    admit()
-(* FIXME(adl) where is Send.send_sh??
-      let send', tag_SH, tx2 = Send.send_sh 
-      Send.signals ms0.sending (Some (false, accept_0rtt)) false;
-      let ks', hsk = KS.ks_server13_sh ks tag1 in
-      register ms0.epochs hsk;
-      r := S13_sent_ServerHello soffer sh ee accept_0rtt ms0 cert ks';
-      Recv.InAck false false
-*)
+      let tag_SH = LB.alloca 0z (H.hash_len ha) in
+      let sd = Send.signals ms0.sending (Some (false, accept_0rtt)) false in
+      match Send.send_tag_sh di #(Ghost.hide 1) tx1 sd (HSM.M_server_hello sh) tag_SH with
+      | Error z -> Recv.InError z
+      | Correct (sd, tx2) ->
+        let digest_SH = B.of_buffer (H.hash_len ha) tag_SH in
+        let ks', hsk = KS.ks_server13_sh ks digest_SH in
+	trace ("Transcript ServerHello: "^(Bytes.hex_of_bytes digest_SH));
+        register ms0.epochs hsk;
+	let ms1 : msg_state region pfs random ha = {ms0 with sending=sd} in
+        r := S13_sent_ServerHello soffer sh ee accept_0rtt ms1 cert ks';
+        Recv.InAck false false
 
 (*
     // Create a cookie, for stateless retry
@@ -354,7 +358,7 @@ let server_ClientHello = server_ClientHello1
 
 (*** TLS 1.2 ***)
 
-let server_ClientCCS1 hs cke digestCCS1 = admit()
+let server_ClientCCS1 st = admit()
 
 let server_ClientFinished hs cvd digestCCF digestCF = admit()
 
@@ -444,7 +448,69 @@ let server_ClientFinished2 hs cvd digestSF digestCF =
 
 (*** TLS 1.3 ***)
 
-let server_ServerFinished_13 hs = admit()
+let server_ServerFinished_13 hs =
+  trace ("server_ServerFinished_13");
+  let Server region config r = hs in
+  let S13_sent_ServerHello soffer sh ee accept_0rtt ms cert ks = !r in
+  let ha = Nego.selected_ha sh in
+  let tx = transcript13 ({full_ch=soffer.s_ch;full_retry=None}) sh [] in
+  let eem = HSM.M13_encrypted_extensions ee in
+  let tag_F = LB.alloca 0z (H.hash_len ha) in
+  match Send.send13 #ha ms.digest #(Ghost.hide 0) tx ms.sending eem with
+  | Error z -> Error z
+  | Correct (send, tx) ->
+    let send_cert =
+      match cert with
+      | None ->
+        Transcript.extract_hash ms.digest tag_F tx;
+        Correct (send, tx, NoServerCert)
+      | Some (cert_ptr, sa) ->
+        let tag_C = LB.alloca 0z (H.hash_len ha) in
+        let chain12 = TLS.Callbacks.cert_format_cb config.cert_callbacks cert_ptr in
+	let chain = Parsers.Certificate13.({
+	  certificate_request_context = Bytes.empty_bytes;
+	  certificate_list = Cert.chain_up chain12;
+	  }) in
+	match Send.send_tag13 ms.digest tx send (HSM.M13_certificate chain) tag_C with
+	| Error z -> Error z
+	| Correct (send, tx) ->
+	  let digest_C = Bytes.of_buffer (H.hash_len ha) tag_C in
+          trace ("Hash up to Cert: "^(Bytes.hex_of_bytes digest_C));
+	  let tbs = Nego.to_be_signed TLS_1p3 TLSConstants.Server None digest_C in
+	  match TLS.Callbacks.cert_sign_cb config.cert_callbacks cert_ptr sa tbs with
+	  | None -> fatal Bad_certificate
+	    (perror __SOURCE_FILE__ __LINE__ "Failed to sign with selected certificate.")
+          | Some sigv ->
+            let cv = HSM.(({algorithm = sa; signature = sigv})) in
+	    match Send.send_tag13 ms.digest tx send (HSM.M13_certificate_verify cv) tag_F with
+	    | Error z -> Error z
+	    | Correct (send, tx) ->
+	      Correct (send, tx, ServerCert cert_ptr chain cv)
+     in
+    match send_cert with
+    | Error z -> Error z
+    | Correct (send, tx, cert_ctx) ->
+      let (| sfinId, sfin_key |) = KS.ks_server13_get_sfk ks in
+      let digest_F = Bytes.of_buffer (H.hash_len ha) tag_F in
+      trace ("Hash for Finished: "^(Bytes.hex_of_bytes digest_F));
+      let svd = HMAC.mac sfin_key digest_F in
+      let fin = HSM.(M13_finished svd) in
+      match Send.send_tag13 ms.digest tx send fin tag_F with
+      | Error z -> Error z
+      | Correct (send, tx) ->
+        let digest_SF = Bytes.of_buffer (H.hash_len ha) tag_F in
+        trace ("Hash up to SF: "^(Bytes.hex_of_bytes digest_SF));
+        let ks, app_keys, ems = KS.ks_server13_sf ks digest_SF in 
+	export ms.epochs ems;
+        register ms.epochs app_keys;
+        let send = Send.signals send (Some (true,false)) false in
+	let mode = S13_mode soffer sh ee cert_ctx in
+	let eoed_done = not (Nego.zeroRTT sh) || config.is_quic in
+	let pf = if eoed_done then ParseFlights.F_s13_wait_Finished2
+	         else ParseFlights.F_s13_wait_EOED in
+	let ms : msg_state region pf _ ha = {ms with sending = send} in
+        r := S13_wait_Finished2 mode (Ghost.hide svd) eoed_done ms ks;
+        Correct()
 
 let server_EOED hs digestEOED = admit()
 

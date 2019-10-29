@@ -15,7 +15,7 @@ open Old.Epochs
 open TLS.Handshake.Machine
 open TLS.Handshake.Messaging
 
-
+module LB = LowStar.Buffer
 module U32 = FStar.UInt32
 module MS = FStar.Monotonic.Seq
 module HS = FStar.HyperStack
@@ -107,8 +107,13 @@ let invalidateSession hs = ()
 // ServerHello in plaintext, we continue with encrypted traffic.
 // Otherwise, we just returns buffered messages and signals.
 
+<<<<<<< HEAD
 let rec next_fragment_bounded hs i (max32: UInt32.t) =
   trace "next_fragment";
+=======
+let rec next_fragment_bounded hs i max =
+  trace ("next_fragment_bounded["^(string_of_int max)^"]");
+>>>>>>> Extend server side
   match hs with 
   | Client region config r -> (
     let st0 = !r in 
@@ -125,7 +130,8 @@ let rec next_fragment_bounded hs i (max32: UInt32.t) =
       r := st1; 
       match result, st1 with
       | Send.Outgoing None None false, 
-        C13_complete offer sh ee server_id fin1 ms (Finished_pending _ _ _) -> (match Client.client13_Finished2 hs with
+        C13_complete offer sh ee server_id fin1 ms (Finished_pending _ _ _) ->
+	(match Client.client13_Finished2 hs with
         | Error z -> Error z 
         | Correct _ -> next_fragment_bounded hs i max32 )
       | _ -> Correct result // nothing to do
@@ -137,23 +143,24 @@ let rec next_fragment_bounded hs i (max32: UInt32.t) =
       // CH is received (to avoid re-allocation)
       Correct (Send.Outgoing None None false)
     else
-    let ms0 = Machine.server_ms st0 in 
-    let sending, result = Send.write_at_most ms0.sending i max32 in
-    let ms1 = { ms0 with sending = sending } in 
-    let st1 = set_server_ms st0 ms1 in 
-    r := st1; 
-    match result, st1 with
-    | Send.Outgoing None None false, 
-      S13_sent_ServerHello _ _ _ _ _ _ _ ->
-      (match Server.server_ServerFinished_13 hs with
-      | Error z -> Error z 
-      | Correct _ -> next_fragment_bounded hs i max32 )
-    | _ -> Correct result // nothing to do
+      let ms0 = Machine.server_ms st0 in 
+      let sending, result = Send.write_at_most ms0.sending i max32 in
+      let ms1 = { ms0 with sending = sending } in 
+      let st1 = set_server_ms st0 ms1 in 
+      r := st1; 
+      match result, st1 with
+      | Send.Outgoing None None false, 
+        S13_sent_ServerHello _ _ _ _ _ _ _ ->
+        (match Server.server_ServerFinished_13 hs with
+        | Error z -> Error z 
+        | Correct _ -> next_fragment_bounded hs i max32)
+      | _ -> Correct result
 
 let next_fragment hs i =
   next_fragment_bounded hs i max_TLSPlaintext_fragment_length32
 
 let to_be_written hs =
+  if Machine.is_init hs then 0 else
   let sto = 
     match hs with
     | Machine.Client region config r -> 
@@ -182,7 +189,6 @@ let rec recv_fragment hs #i rg f =
     match r with
     | Recv.InAck false false -> recv_fragment hs #i (0,0) empty_bytes
     | r -> r  in
-  // trace "recv_fragment";
   let h0 = HST.get() in
   match hs with 
   | Client region config r ->
@@ -191,8 +197,8 @@ let rec recv_fragment hs #i rg f =
     | C_init _ ->
       trace "No CH sent (statically excluded)";
       Recv.InError (
-        fatalAlert Unexpected_message,
-        "Client hasn't sent hello yet (to be statically excluded)")
+      fatalAlert Unexpected_message,
+      "Client hasn't sent hello yet (to be statically excluded)")
 
     | C_wait_ServerHello offer0 ms0 ks0 -> (
       match Recv.buffer_received_fragment ms0.receiving f with
@@ -245,7 +251,25 @@ let rec recv_fragment hs #i rg f =
   | Server region config r ->
    begin // Server
     match !r  with
-    | S_wait_ClientHello n -> Recv.InAck false false
+    | S_wait_ClientHello n ->
+     begin
+      let in_buf_len = 16000ul in
+      let b_in = LB.malloc region 0z in_buf_len in
+      let ms0 = Recv.create (LP.make_slice b_in in_buf_len) in
+      match Recv.buffer_received_fragment ms0 f with
+      | None -> overflow ()
+      | Some rcv1 ->
+      match Recv.receive_s_Idle rcv1 with
+      | Error z -> Recv.InError z
+      | Correct (x, rcv2) ->
+        match x with
+        | None -> Recv.InAck false false // nothing happened
+        | Some ch ->
+          let chr = RH.clientHello (ch.PF.ch_msg) in
+	  let ch = chr.R.vv in
+          let h3 = HST.get() in
+          Server.server_ClientHello hs ch
+     end	  
     | _ ->
       Recv.InError (fatalAlert Unexpected_message,
         "Unexpected server state")

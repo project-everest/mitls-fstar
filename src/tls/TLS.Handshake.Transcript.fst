@@ -37,6 +37,17 @@ module TestCRF = Test.CRF
 module PB = ParsersAux.Binders
 #set-options "--max_fuel 1 --max_ifuel 1 --z3rlimit 16"
 
+(* Debug output, shared by client and server *)
+val discard: bool -> ST unit
+  (requires (fun _ -> True))
+  (ensures (fun h0 _ h1 -> h0 == h1))
+let discard _ = ()
+let print s = discard (IO.debug_print_string ("TX | "^s^"\n"))
+unfold val trace: s:string -> ST unit
+  (requires (fun _ -> True))
+  (ensures (fun h0 _ h1 -> h0 == h1))
+unfold let trace = if DebugFlags.debug_HS then print else (fun _ -> ())
+
 //Seems to be automatic
 let serialize_max_size
   (#pk:_) (#t:_) (#p:LP.parser pk t) (s:LP.serializer p)
