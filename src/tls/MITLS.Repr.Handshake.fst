@@ -31,6 +31,7 @@ module R = LowParse.Repr
 module HSM = Parsers.Handshake
 module RCH = MITLS.Repr.ClientHello
 module RSH = MITLS.Repr.ServerHello
+module HSTag = Parsers.HandshakeType
 open FStar.Integers
 open FStar.HyperStack.ST
 
@@ -40,23 +41,46 @@ let ptr = R.repr_ptr_p t HSM.handshake_parser
 
 let pos (b:R.const_slice) = R.repr_pos_p t b HSM.handshake_parser
 
-let handshakeType (p:ptr)
-  : Stack Parsers.HandshakeType.handshakeType
-    (requires
-      R.valid p)
-    (ensures fun h0 ht h1 ->
-      B.modifies B.loc_none h0 h1 /\
-      ht == HSM.tag_of_handshake (R.value p))
-  = let open Parsers.HandshakeType in
-    R.reveal_valid();
-    let b = R.temp_slice_of_repr_ptr p in
-    handshakeType_reader b 0ul
+module LL = LowParse.Low.Base
+
+let handshakeType_clens
+  : LL.clens t Parsers.HandshakeType.handshakeType
+  = let open LL in
+    { clens_cond = (fun _ -> True);
+      clens_get = HSM.tag_of_handshake }
+
+let tag_gaccessor_body #k #t (p:LP.parser k t) (sl:LowParse.Bytes.bytes) =
+  if Some k.LP.parser_kind_low = k.LP.parser_kind_high
+  && k.LP.parser_kind_low <= Seq.length sl
+  then 0, k.LP.parser_kind_low
+  else 0, 0
+
+let handshakeType_gaccessor
+  : LL.gaccessor
+             HSM.handshake_parser
+             Parsers.HandshakeType.handshakeType_parser
+             handshakeType_clens
+  = fun (sl:_) ->
+    admit();
+    tag_gaccessor_body Parsers.HandshakeType.handshakeType_parser sl
+
+let handshakeType_accessor
+  : LL.accessor handshakeType_gaccessor
+  = fun #rrel #rel sl pos ->
+    let h = get () in
+    LL.slice_access_eq h handshakeType_gaccessor sl pos;
+    pos
+
+let field_handshakeType =
+  R.FieldReader handshakeType_accessor Parsers.HandshakeType.handshakeType_reader
+
+let read_handshakeType = R.read_field field_handshakeType
 
 let is_ch (p:ptr) : GTot bool =
-  HSM.M_client_hello? (R.value p)
+  HSM.tag_of_handshake (R.value p) = HSTag.Client_hello
 
 let is_sh (p:ptr) : GTot bool =
-  HSM.M_server_hello? (R.value p)
+  HSM.tag_of_handshake (R.value p) = HSTag.Server_hello
 
 type ch_ptr = m:ptr{is_ch m}
 type sh_ptr = m:ptr{is_sh m}

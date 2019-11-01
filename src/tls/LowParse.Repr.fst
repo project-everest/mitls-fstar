@@ -582,44 +582,91 @@ let stash (rgn:D.drgn) #t (r:repr_ptr t) (len:uint_32{len == r.meta.len})
 
 (*** Accessing fields of ptrs ***)
 
+noeq
+type field_accessor (#k1 #k2:strong_parser_kind)
+                    (#t1 #t2:Type)
+                    (p1 : LP.parser k1 t1)
+                    (p2 : LP.parser k2 t2) =
+  | FieldAccessor :
+     (#cl: LP.clens t1 t2) ->
+     (#g: LP.gaccessor p1 p2 cl) ->
+     (acc:LP.accessor g) ->
+     (jump:LP.jumper p2) ->
+     (p2': LS.parser32 p2) ->
+     field_accessor p1 p2
+
 unfold
-let field_accessor_post (#t1:Type) (p:repr_ptr t1)
-                        (#k2: strong_parser_kind)
-                        (#t2:Type)
-                        (p2: LP.parser k2 t2)
-                        (cl:LP.clens t1 t2) =
-   fun h0 (q:repr_ptr_p t2 p2) h1 ->
-      cl.LP.clens_cond p.meta.v /\
-      B.modifies B.loc_none h0 h1 /\
-      valid q h1 /\
-      value q == cl.LP.clens_get (value p) /\
-      q `sub_ptr` p /\
-      region_of q == region_of p /\
-      (is_stable_in_region p ==> is_stable_in_region q)
+let field_accessor_t
+      (#k1:strong_parser_kind) #t1 (#p1:LP.parser k1 t1)
+      (#k2: strong_parser_kind) (#t2:Type) (#p2:LP.parser k2 t2)
+      (f:field_accessor p1 p2)
+   =  p:repr_ptr_p t1 p1 ->
+      Stack (repr_ptr_p t2 p2)
+      (requires fun h ->
+         valid p h /\
+         f.cl.LP.clens_cond p.meta.v)
+      (ensures fun h0 (q:repr_ptr_p t2 p2) h1 ->
+        f.cl.LP.clens_cond p.meta.v /\
+        B.modifies B.loc_none h0 h1 /\
+        valid q h1 /\
+        value q == f.cl.LP.clens_get (value p) /\
+        q `sub_ptr` p /\
+        region_of q == region_of p /\
+        (is_stable_in_region p ==> is_stable_in_region q))
 
 inline_for_extraction
-let get_field #t1 (p:repr_ptr t1)
-              (#k2: strong_parser_kind)
-              (#t2: Type)
-              (#p2: LP.parser k2 t2)
-              (#cl: LP.clens t1 t2)
-              (#g: LP.gaccessor p.meta.parser p2 cl)
-              (acc:LP.accessor g)
-              (jump:LP.jumper p2)
-              (p2': LS.parser32 p2)
- : Stack (repr_ptr_p t2 p2)
+let get_field (#k1:strong_parser_kind) #t1 (#p1:LP.parser k1 t1)
+              (#k2: strong_parser_kind) (#t2:Type) (#p2:LP.parser k2 t2)
+              (f:field_accessor p1 p2)
+   : field_accessor_t f
+   = fun p ->
+     let FieldAccessor acc jump p2' = f in
+     let b = temp_slice_of_repr_ptr p in
+     let pos = acc b 0ul in
+     let pos_to = jump b pos in
+     let q = mk b pos pos_to p2' in
+     assert (q.b `C.const_sub_buffer pos (pos_to - pos)` p.b);
+     q
+
+noeq
+type field_reader (#k1:strong_parser_kind)
+                  (#t1:Type)
+                  (p1 : LP.parser k1 t1)
+                  (t2:Type) =
+  | FieldReader :
+     (#k2: strong_parser_kind) ->
+     (#p2: LP.parser k2 t2) ->
+     (#cl: LP.clens t1 t2) ->
+     (#g: LP.gaccessor p1 p2 cl) ->
+     (acc:LP.accessor g) ->
+     (reader: LP.leaf_reader p2) ->
+     field_reader p1 t2
+
+
+unfold
+let field_reader_t
+      (#k1:strong_parser_kind) #t1 (#p1:LP.parser k1 t1)
+      (#t2:Type)
+      (f:field_reader p1 t2)
+  =  p:repr_ptr_p t1 p1 ->
+     Stack t2
      (requires fun h ->
        valid p h /\
-       cl.LP.clens_cond p.meta.v)
-     (ensures
-       field_accessor_post p p2 cl)
-  = let b = temp_slice_of_repr_ptr p in
-    let pos = acc b 0ul in
-    let pos_to = jump b pos in
-    let q = mk b pos pos_to p2' in
-    assert (q.b `C.const_sub_buffer pos (pos_to - pos)` p.b);
-    q
+       f.cl.LP.clens_cond p.meta.v)
+     (ensures fun h0 pv h1 ->
+       B.modifies B.loc_none h0 h1 /\
+       pv == f.cl.LP.clens_get (value p))
 
+inline_for_extraction
+let read_field (#k1:strong_parser_kind) (#t1:_) (#p1:LP.parser k1 t1)
+               #t2 (f:field_reader p1 t2)
+  : field_reader_t f
+  = fun p ->
+    [@inline_let]
+    let FieldReader acc reader = f in
+    let b = temp_slice_of_repr_ptr p in
+    let pos = acc b 0ul in
+    reader b pos
 
 (*** Positional representation types ***)
 
@@ -675,7 +722,7 @@ let repr_pos_p (t:Type) (b:const_slice) #k (parser:LP.parser k t) =
 
 (*** Validity ***)
 /// `valid`: abstract validity
-let repr_pos_valid (#t:Type) (#b:const_slice) (r:repr_pos t b) (h:HS.mem)
+let valid_repr_pos (#t:Type) (#b:const_slice) (r:repr_pos t b) (h:HS.mem)
   = valid (as_ptr_spec r) h /\
     C.live h b.base
 
@@ -688,15 +735,15 @@ let fp_pos #t (#b:const_slice) (r:repr_pos t b)
 /// `frame_valid`:
 ///    A framing principle for `valid r h`
 ///    It is invariant under footprint-preserving heap updates
-let frame_repr_pos_valid #t #b (r:repr_pos t b) (l:B.loc) (h0 h1:HS.mem)
+let frame_valid_repr_pos #t #b (r:repr_pos t b) (l:B.loc) (h0 h1:HS.mem)
   : Lemma
     (requires
-      repr_pos_valid r h0 /\
+      valid_repr_pos r h0 /\
       B.modifies l h0 h1 /\
       B.loc_disjoint (fp_pos r) l)
     (ensures
-      repr_pos_valid r h1)
-    [SMTPat (repr_pos_valid r h1);
+      valid_repr_pos r h1)
+    [SMTPat (valid_repr_pos r h1);
      SMTPat (B.modifies l h0 h1)]
   = ()
 
@@ -706,7 +753,7 @@ let frame_repr_pos_valid #t #b (r:repr_pos t b) (l:B.loc) (h0 h1:HS.mem)
 let as_ptr #t #b (r:repr_pos t b)
   : Stack (repr_ptr t)
     (requires fun h ->
-      repr_pos_valid r h)
+      valid_repr_pos r h)
     (ensures fun h0 ptr h1 ->
       ptr == as_ptr_spec r /\
       h0 == h1)
@@ -739,7 +786,7 @@ let mk_repr_pos (b:LP.slice mut_p mut_p{ LP.(b.len <= validator_max_length) })
       LP.valid_pos parser h b from to)
     (ensures fun h0 r h1 ->
       B.(modifies loc_none h0 h1) /\
-      repr_pos_valid r h1 /\
+      valid_repr_pos r h1 /\
       r.start_pos = from /\
       r.vv_pos == LP.contents parser h1 b from)
   = as_repr_pos (of_slice b) from to (mk b from to parser32)
@@ -759,7 +806,7 @@ let mk_repr_pos_from_const_slice
       LP.valid_pos parser h (to_slice b) from to)
     (ensures fun h0 r h1 ->
       B.(modifies loc_none h0 h1) /\
-      repr_pos_valid r h1 /\
+      valid_repr_pos r h1 /\
       r.start_pos = from /\
       r.vv_pos == LP.contents parser h1 (to_slice b) from)
   = as_repr_pos b from to (mk_from_const_slice b from to parser32)
@@ -787,7 +834,7 @@ let mk_repr_pos_from_serialize
         (* not enough space in output slice *)
         Seq.length (LP.serialize serializer x) > FStar.UInt32.v (b.LP.len - from)
       | Some r ->
-        repr_pos_valid r h1 /\
+        valid_repr_pos r h1 /\
         r.start_pos == from /\
         r.vv_pos == x
       end
@@ -798,46 +845,66 @@ let mk_repr_pos_from_serialize
   | Some p -> Some (as_repr_pos (of_slice b) from (from + size) p)
 
 /// Accessors on positional reprs
+unfold
+let field_accessor_pos_post (#b:const_slice) (#t1:Type) (p:repr_pos t1 b)
+                            (#k2: strong_parser_kind)
+                            (#t2:Type)
+                            (#p2: LP.parser k2 t2)
+                            (f:field_accessor p.meta.parser p2) =
+   fun h0 (q:repr_pos_p t2 b p2) h1 ->
+      let cl = FieldAccessor?.cl f in
+      cl.LP.clens_cond p.meta.v /\
+      B.modifies B.loc_none h0 h1 /\
+      valid_repr_pos q h1 /\
+      value_pos q == cl.LP.clens_get (value_pos p)
 
+unfold
+let get_field_pos_t (#k1: strong_parser_kind) (#t1: Type) (#p1: LP.parser k1 t1)
+                    (#k2: strong_parser_kind) (#t2: Type) (#p2: LP.parser k2 t2)
+                    (f:field_accessor p1 p2)
+   = (#b:const_slice) ->
+     (pp:repr_pos_p t1 b p1) ->
+    Stack (repr_pos_p t2 b p2)
+     (requires fun h ->
+       let cl = FieldAccessor?.cl f in
+       valid_repr_pos pp h /\
+       cl.LP.clens_cond pp.meta.v)
+     (ensures
+       field_accessor_pos_post pp f)
 
-// unfold
-// let field_accessor_post (#t1:Type) (p:repr_ptr t1)
-//                         (#k2: strong_parser_kind)
-//                         (#t2:Type)
-//                         (p2: LP.parser k2 t2)
-//                         (cl:LP.clens t1 t2) =
-//    fun h0 (q:repr_ptr_p t2 p2) h1 ->
-//       cl.LP.clens_cond p.meta.v /\
-//       B.modifies B.loc_none h0 h1 /\
-//       valid q h1 /\
-//       value q == cl.LP.clens_get (value p) /\
-//       q `sub_ptr` p /\
-//       region_of q == region_of p /\
-//       (is_stable_in_region p ==> is_stable_in_region q)
 
 inline_for_extraction
-let get_field_pos (#b:const_slice) #t1 (pp:repr_pos t1 b)
-                  (#k2: strong_parser_kind)
-                  (#t2: Type)
-                  (#p2: LP.parser k2 t2)
-                  (#cl: LP.clens t1 t2)
-                  (#g: LP.gaccessor pp.meta.parser p2 cl)
-                  (acc:LP.accessor g)
-                  (jump:LP.jumper p2)
-                  (p2': LS.parser32 p2)
- : Stack (repr_pos_p t2 b p2)
-     (requires fun h ->
-       repr_pos_valid pp h /\
-       cl.LP.clens_cond pp.meta.v)
-     (ensures fun h0 qq h1 ->
-       B.modifies B.loc_none h0 h1 /\
-       repr_pos_valid qq h1 /\
-       value_pos qq == cl.LP.clens_get (value_pos pp))
- = let p = as_ptr pp in
-   let bb = temp_slice_of_repr_ptr p in
-   let pos = acc bb 0ul in
-   let pos_to = jump bb pos in
-   let q = mk bb pos pos_to p2' in
-   let len = pos_to - pos in
-   assert (Ptr?.b q `C.const_sub_buffer pos len` Ptr?.b p);
-   as_repr_pos b (pp.start_pos + pos) (pp.start_pos + pos + len) q
+let get_field_pos (#k1: strong_parser_kind) (#t1: Type) (#p1: LP.parser k1 t1)
+                  (#k2: strong_parser_kind) (#t2: Type) (#p2: LP.parser k2 t2)
+                  (f:field_accessor p1 p2)
+ : get_field_pos_t f
+ = fun #b pp ->
+    let FieldAccessor acc jump p2' = f in
+    let p = as_ptr pp in
+    let bb = temp_slice_of_repr_ptr p in
+    let pos = acc bb 0ul in
+    let pos_to = jump bb pos in
+    let q = mk bb pos pos_to p2' in
+    let len = pos_to - pos in
+    assert (Ptr?.b q `C.const_sub_buffer pos len` Ptr?.b p);
+    as_repr_pos b (pp.start_pos + pos) (pp.start_pos + pos + len) q
+
+unfold
+let read_field_pos_t (#k1: strong_parser_kind) (#t1: Type) (#p1: LP.parser k1 t1)
+                     #t2 (f:field_reader p1 t2)
+  = (#b:const_slice) ->
+    (p:repr_pos_p t1 b p1) ->
+    Stack t2
+    (requires fun h ->
+      valid_repr_pos p h /\
+      f.cl.LP.clens_cond p.meta.v)
+    (ensures fun h0 pv h1 ->
+      B.modifies B.loc_none h0 h1 /\
+      pv == f.cl.LP.clens_get (value_pos p))
+
+inline_for_extraction
+let read_field_pos (#k1: strong_parser_kind) (#t1: Type) (#p1: LP.parser k1 t1)
+                   #t2 (f:field_reader p1 t2)
+   : read_field_pos_t f
+   = fun #b p ->
+     read_field f (as_ptr p)
