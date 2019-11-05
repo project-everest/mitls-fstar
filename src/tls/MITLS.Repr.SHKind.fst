@@ -15,26 +15,17 @@
 
   Authors: T. Ramananandro, A. Rastogi, N. Swamy
 *)
-module MITLS.Repr.Finished13
-(* Summary:
-
-   This module encapsulates wire-format representations of
-   Parsers.Handshake13.handshake13_m13_finished messges
-
-   Its main type, `repr b` is an instance of MITLS.Repr.repr
-   instantiated with Parsers.Handshake13.handshake13_m13_finished_parser
-*)
+module MITLS.Repr.SHKind
 module LP = LowParse.Low.Base
-module B = LowStar.Monotonic.Buffer
-module HS = FStar.HyperStack
 module R = LowParse.Repr
-open FStar.Integers
-open FStar.HyperStack.ST
+include Parsers.SHKind
+module SHK = Parsers.SHKind
 
-module HSM13 = Parsers.Handshake13
+let t = SHK.sHKind
+let ptr = R.repr_ptr_p t SHK.sHKind_parser
+let pos (b:R.const_slice) = R.repr_pos_p t b SHK.sHKind_parser
 
-let t = HSM13.handshake13_m13_finished
-
-let ptr = R.repr_ptr_p t HSM13.handshake13_m13_finished_parser
-
-let pos (b:R.const_slice) = R.repr_pos_p t b HSM13.handshake13_m13_finished_parser
+let field_cipherSuite =
+  R.FieldReader
+    SHK.accessor_sHKind_cipher_suite
+    Parsers.CipherSuite.cipherSuite_reader

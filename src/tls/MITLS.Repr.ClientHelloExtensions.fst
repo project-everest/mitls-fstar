@@ -15,26 +15,25 @@
 
   Authors: T. Ramananandro, A. Rastogi, N. Swamy
 *)
-module MITLS.Repr.Finished13
+module MITLS.Repr.ClientHelloExtensions
 (* Summary:
 
    This module encapsulates wire-format representations of
-   Parsers.Handshake13.handshake13_m13_finished messges
+   Parsers.ClientHello messages.
 
    Its main type, `repr b` is an instance of MITLS.Repr.repr
-   instantiated with Parsers.Handshake13.handshake13_m13_finished_parser
+   instantiated with clientHello_parser
 *)
 module LP = LowParse.Low.Base
 module B = LowStar.Monotonic.Buffer
 module HS = FStar.HyperStack
 module R = LowParse.Repr
+module CHE = Parsers.ClientHelloExtensions
 open FStar.Integers
 open FStar.HyperStack.ST
 
-module HSM13 = Parsers.Handshake13
+let ptr =
+  R.repr_ptr_p CHE.clientHelloExtensions CHE.clientHelloExtensions_parser
 
-let t = HSM13.handshake13_m13_finished
-
-let ptr = R.repr_ptr_p t HSM13.handshake13_m13_finished_parser
-
-let pos (b:R.const_slice) = R.repr_pos_p t b HSM13.handshake13_m13_finished_parser
+let pos (b:R.const_slice) =
+  R.repr_pos_p CHE.clientHelloExtensions b CHE.clientHelloExtensions_parser

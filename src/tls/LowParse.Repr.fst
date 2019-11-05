@@ -237,7 +237,6 @@ let frame_valid #t (p:repr_ptr t) (l:B.loc) (h0 h1:HS.mem)
   = ()
 
 (***  Contructors ***)
-
 /// `mk b from to p`:
 ///    Constructing a `repr_ptr` from a sub-slice
 ///      b.[from, to)
@@ -245,10 +244,10 @@ let frame_valid #t (p:repr_ptr t) (l:B.loc) (h0 h1:HS.mem)
 #set-options "--z3rlimit 20"
 inline_for_extraction
 let mk_from_const_slice
-         (b:const_slice)
-         (from to:uint_32)
          (#k:strong_parser_kind) #t (#parser:LP.parser k t)
          (parser32:LS.parser32 parser)
+         (b:const_slice)
+         (from to:uint_32)
   : Stack (repr_ptr_p t parser)
     (requires fun h ->
       LP.valid_pos parser h (to_slice b) from to)
@@ -290,11 +289,11 @@ let mk_from_const_slice
 ///      b.[from, to)
 ///    known to be valid for a given wire-format parser `p`
 inline_for_extraction
-let mk #q
+let mk (#k:strong_parser_kind) #t (#parser:LP.parser k t)
+       (parser32:LS.parser32 parser)
+       #q
        (slice:LP.slice (C.q_preorder q LP.byte) (C.q_preorder q LP.byte){ slice.LP.len <= LP.validator_max_length })
        (from to:uint_32)
-       (#k:strong_parser_kind) #t (#parser:LP.parser k t)
-       (parser32:LS.parser32 parser)
   : Stack (repr_ptr_p t parser)
     (requires fun h ->
       LP.valid_pos parser h slice from to)
@@ -304,7 +303,7 @@ let mk #q
       p.b `C.const_sub_buffer from (to - from)` (C.of_qbuf slice.LP.base) /\
       p.meta.v == LP.contents parser h1 slice from)
   = let c = MkSlice (C.of_qbuf slice.LP.base) slice.LP.len in
-    mk_from_const_slice c from to parser32
+    mk_from_const_slice parser32 c from to
 
 /// A high-level constructor, taking a value instead of a slice.
 ///
@@ -314,11 +313,12 @@ let mk #q
 inline_for_extraction
 noextract
 let mk_from_serialize
-    (b:LP.slice mut_p mut_p{ LP.(b.len <= validator_max_length) })
-    (from:uint_32 { from <= b.LP.len })
     (#k:strong_parser_kind) #t (#parser:LP.parser k t) (#serializer: LP.serializer parser)
     (parser32: LS.parser32 parser) (serializer32: LS.serializer32 serializer)
-    (size32: LS.size32 serializer) (x: t)
+    (size32: LS.size32 serializer)
+    (b:LP.slice mut_p mut_p{ LP.(b.len <= validator_max_length) })
+    (from:uint_32 { from <= b.LP.len })
+    (x: t)
   : Stack (option (repr_ptr_p t parser))
     (requires fun h ->
        LP.live_slice h b)
@@ -345,7 +345,7 @@ let mk_from_serialize
         let to = from + size in
       let h = get () in
       LP.serialize_valid_exact serializer h b x from to;
-      let r = mk b from to parser32 in
+      let r = mk parser32 b from to in
       Some r
     end
 
@@ -596,6 +596,20 @@ type field_accessor (#k1 #k2:strong_parser_kind)
      field_accessor p1 p2
 
 unfold
+let field_accessor_comp (#k1 #k2 #k3:strong_parser_kind)
+                        (#t1 #t2 #t3:Type)
+                        (#p1 : LP.parser k1 t1)
+                        (#p2 : LP.parser k2 t2)
+                        (#p3 : LP.parser k3 t3)
+                        (f12 : field_accessor p1 p2)
+                        (f23 : field_accessor p2 p3)
+   : field_accessor p1 p3
+   = let FieldAccessor acc12 j2 p2' = f12 in
+     let FieldAccessor acc23 j3 p3' = f23 in
+     let acc13 = LP.accessor_compose acc12 acc23 () in
+     FieldAccessor acc13 j3 p3'
+
+unfold
 let field_accessor_t
       (#k1:strong_parser_kind) #t1 (#p1:LP.parser k1 t1)
       (#k2: strong_parser_kind) (#t2:Type) (#p2:LP.parser k2 t2)
@@ -624,7 +638,7 @@ let get_field (#k1:strong_parser_kind) #t1 (#p1:LP.parser k1 t1)
      let b = temp_slice_of_repr_ptr p in
      let pos = acc b 0ul in
      let pos_to = jump b pos in
-     let q = mk b pos pos_to p2' in
+     let q = mk p2' b pos pos_to in
      assert (q.b `C.const_sub_buffer pos (pos_to - pos)` p.b);
      q
 
@@ -777,10 +791,10 @@ let as_repr_pos #t (b:const_slice) (from to:index b) (p:repr_ptr t)
 ///      b.[from, to)
 ///    known to be valid for a given wire-format parser `p`
 inline_for_extraction
-let mk_repr_pos (b:LP.slice mut_p mut_p{ LP.(b.len <= validator_max_length) })
-                (from to:index (of_slice b))
-                (#k:strong_parser_kind) #t (#parser:LP.parser k t)
+let mk_repr_pos (#k:strong_parser_kind) #t (#parser:LP.parser k t)
                 (parser32:LS.parser32 parser)
+                (b:LP.slice mut_p mut_p{ LP.(b.len <= validator_max_length) })
+                (from to:index (of_slice b))
   : Stack (repr_pos_p t (of_slice b) parser)
     (requires fun h ->
       LP.valid_pos parser h b from to)
@@ -789,7 +803,7 @@ let mk_repr_pos (b:LP.slice mut_p mut_p{ LP.(b.len <= validator_max_length) })
       valid_repr_pos r h1 /\
       r.start_pos = from /\
       r.vv_pos == LP.contents parser h1 b from)
-  = as_repr_pos (of_slice b) from to (mk b from to parser32)
+  = as_repr_pos (of_slice b) from to (mk parser32 b from to)
 
 /// `mk b from to p`:
 ///    Constructing a `repr_pos` from a sub-slice
@@ -797,10 +811,10 @@ let mk_repr_pos (b:LP.slice mut_p mut_p{ LP.(b.len <= validator_max_length) })
 ///    known to be valid for a given wire-format parser `p`
 inline_for_extraction
 let mk_repr_pos_from_const_slice
-         (b:const_slice)
-         (from to:index b)
          (#k:strong_parser_kind) #t (#parser:LP.parser k t)
          (parser32:LS.parser32 parser)
+         (b:const_slice)
+         (from to:index b)
   : Stack (repr_pos_p t b parser)
     (requires fun h ->
       LP.valid_pos parser h (to_slice b) from to)
@@ -809,7 +823,7 @@ let mk_repr_pos_from_const_slice
       valid_repr_pos r h1 /\
       r.start_pos = from /\
       r.vv_pos == LP.contents parser h1 (to_slice b) from)
-  = as_repr_pos b from to (mk_from_const_slice b from to parser32)
+  = as_repr_pos b from to (mk_from_const_slice parser32 b from to)
 
 /// A high-level constructor, taking a value instead of a slice.
 ///
@@ -819,11 +833,12 @@ let mk_repr_pos_from_const_slice
 inline_for_extraction
 noextract
 let mk_repr_pos_from_serialize
-  (b:LP.slice mut_p mut_p{ LP.(b.len <= validator_max_length) })
-  (from:index (of_slice b))
   (#k:strong_parser_kind) #t (#parser:LP.parser k t) (#serializer: LP.serializer parser)
   (parser32: LS.parser32 parser) (serializer32: LS.serializer32 serializer)
-  (size32: LS.size32 serializer) (x: t)
+  (size32: LS.size32 serializer)
+  (b:LP.slice mut_p mut_p{ LP.(b.len <= validator_max_length) })
+  (from:index (of_slice b))
+  (x: t)
 : Stack (option (repr_pos_p t (of_slice b) parser))
     (requires fun h ->
       LP.live_slice h b)
@@ -840,7 +855,7 @@ let mk_repr_pos_from_serialize
       end
     )
 = let size = size32 x in
-  match (mk_from_serialize b from parser32 serializer32 size32 x) with
+  match (mk_from_serialize parser32 serializer32 size32 b from x) with
   | None -> None
   | Some p -> Some (as_repr_pos (of_slice b) from (from + size) p)
 
@@ -884,7 +899,7 @@ let get_field_pos (#k1: strong_parser_kind) (#t1: Type) (#p1: LP.parser k1 t1)
     let bb = temp_slice_of_repr_ptr p in
     let pos = acc bb 0ul in
     let pos_to = jump bb pos in
-    let q = mk bb pos pos_to p2' in
+    let q = mk p2' bb pos pos_to in
     let len = pos_to - pos in
     assert (Ptr?.b q `C.const_sub_buffer pos len` Ptr?.b p);
     as_repr_pos b (pp.start_pos + pos) (pp.start_pos + pos + len) q
