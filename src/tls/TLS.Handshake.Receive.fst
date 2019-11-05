@@ -43,7 +43,7 @@ module LP = LowParse.Low.Base
 
 module PF = TLS.Handshake.ParseFlights
 
-module R = MITLS.Repr
+module R = LowParse.Repr
 module C = LowStar.ConstBuffer
 
 
