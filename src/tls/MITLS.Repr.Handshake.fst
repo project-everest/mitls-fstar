@@ -124,14 +124,17 @@ let serialize =
 // Some additional conveniences ... maybe not necessary?
 ////////////////////////////////////////////////////////////////////////////////
 
-let is_ch (p:ptr) : GTot bool =
-  HSM.tag_of_handshake (R.value p) = HSTag.Client_hello
+let is_ch (x:t) : GTot bool =
+  HSM.tag_of_handshake x = HSTag.Client_hello
 
-let is_sh (p:ptr) : GTot bool =
-  HSM.tag_of_handshake (R.value p) = HSTag.Server_hello
+let is_sh (x:t) : GTot bool =
+  HSM.tag_of_handshake x = HSTag.Server_hello
 
-type ch_ptr = m:ptr{is_ch m}
-type sh_ptr = m:ptr{is_sh m}
+type ch_ptr = m:ptr{is_ch (R.value m)}
+type ch_pos b = m:pos b{is_ch (R.value_pos m)}
+
+type sh_ptr = m:ptr{is_sh (R.value m)}
+type sh_pos b = m:pos b{is_sh (R.value_pos m)}
 
 let get_handshakeType = R.read_field field_handshakeType
 

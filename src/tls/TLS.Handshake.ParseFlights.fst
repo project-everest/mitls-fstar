@@ -36,7 +36,7 @@ module HSM12 = Parsers.Handshake12
 module HSM   = Parsers.Handshake
 
 module HSMType = Parsers.HandshakeType
-module R = MITLS.Repr
+module R = LowParse.Repr
 
 module HSM13R = MITLS.Repr.Handshake13
 module HSM12R = MITLS.Repr.Handshake12
@@ -85,10 +85,10 @@ let parse_common
       (tag_fn m == tag) <==> cl.LP.clens_cond m})
   (acc:LP.accessor gacc)
 : b:R.const_slice -> f_begin:uint_32 ->
-  Stack (TLSError.result (option (R.repr_p a1 b p132 & uint_32)))
+  Stack (TLSError.result (option (R.repr_pos_p a1 b p1 & uint_32)))
   (requires fun h ->
-    R.live h b /\
-    f_begin <= b.R.len)
+    R.live_slice h b /\
+    f_begin <= b.R.slice_len)
   (ensures fun h0 r h1 ->
     B.modifies B.loc_none h0 h1 /\
     (match r with
@@ -96,9 +96,9 @@ let parse_common
      | E.Correct None -> True
      | E.Correct (Some (repr, pos)) ->  //on a successful parse it returns a valid repr with lens condition
        repr.R.start_pos == f_begin /\
-       repr.R.end_pos == pos /\
-       R.valid repr h1 /\
-       cl.LP.clens_cond (R.value repr)))
+       R.end_pos repr == pos /\
+       R.valid_repr_pos repr h1 /\
+       cl.LP.clens_cond (R.value_pos repr)))
          
 = fun b f_begin ->
   let lp_b = R.to_slice b in
@@ -107,7 +107,7 @@ let parse_common
   if pos <= LP.validator_max_length then begin
     let parsed_tag = HSMType.handshakeType_reader lp_b f_begin in
     if parsed_tag = tag then  //and this dynamic check gives us the lens postcondition
-      let r = R.mk_from_const_slice b f_begin pos p132 in
+      let r = R.mk_repr_pos_from_const_slice p132 b f_begin pos in
       E.Correct (Some (r, pos))
     else E.Error unexpected_flight_error
   end
@@ -124,8 +124,8 @@ private let err_or_insufficient_data
   (b:R.const_slice) (f_begin f_end:uint_32)
 : Stack (TLSError.result (option t & state))
   (requires fun h ->
-    R.live h b /\
-    f_begin <= f_end /\ f_end <= b.R.len /\
+    R.live_slice h b /\
+    f_begin <= f_end /\ f_end <= b.R.slice_len /\
     (match parse_result with
      | E.Error _ -> True
      | E.Correct opt -> opt == None))
@@ -137,7 +137,7 @@ private let err_or_insufficient_data
        (match r with
         | E.Correct (None, rst) ->          
           parsed_bytes rst ==
-            Seq.slice (R.as_seq h0 b) (v f_begin) (v f_end) /\
+            Seq.slice (R.slice_as_seq h0 b) (v f_begin) (v f_end) /\
           in_progress_flt rst == in_progress
         | _ -> False)))
 = match parse_result with
@@ -285,10 +285,10 @@ let parse_hsm13_nst
 
 private let parse_hsm13_c_cv
   (b:R.const_slice) (f_begin:uint_32)
-: Stack (TLSError.result (option (HSM13R.c13_repr b & HSM13R.cv13_repr b & uint_32)))
+: Stack (TLSError.result (option (HSM13R.c13_pos b & HSM13R.cv13_pos b & uint_32)))
   (requires fun h ->
-    R.live h b /\
-    f_begin <= b.R.len)
+    R.live_slice h b /\
+    f_begin <= b.R.slice_len)
   (ensures fun h0 r h1 ->
     B.modifies B.loc_none h0 h1 /\
     (match r with
@@ -296,10 +296,10 @@ private let parse_hsm13_c_cv
      | E.Correct None -> True
      | E.Correct (Some (c13, cv13, pos)) ->
        c13.R.start_pos == f_begin /\
-       c13.R.end_pos == cv13.R.start_pos /\
-       cv13.R.end_pos == pos /\
-       R.valid c13 h1 /\
-       R.valid cv13 h1))
+       R.end_pos c13 == cv13.R.start_pos /\
+       R.end_pos cv13 == pos /\
+       R.valid_repr_pos c13 h1 /\
+       R.valid_repr_pos cv13 h1))
 = let r = parse_hsm13_c b f_begin in
   match r with
   | E.Error e -> E.Error e

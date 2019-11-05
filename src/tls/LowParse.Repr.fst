@@ -87,6 +87,11 @@ let of_slice (x:LP.slice mut_p mut_p {x.LP.len <= LP.validator_max_length} )
     let len = x.LP.len in
     MkSlice b len
 
+let live_slice (h:HS.mem) (c:const_slice) =
+    C.live h c.base
+
+let slice_as_seq (h:HS.mem) (c:const_slice) =
+  Seq.slice (C.as_seq h c.base) 0 (U32.v c.slice_len)
 
 (*** Pointer-based Representation types ***)
 
@@ -763,6 +768,11 @@ let frame_valid_repr_pos #t #b (r:repr_pos t b) (l:B.loc) (h0 h1:HS.mem)
 
 (*** Operations on repr_pos ***)
 
+/// End position, ghostly
+let end_pos #t #b (r:repr_pos t b)
+  : GTot (index b)
+  = r.start_pos + r.meta.len
+
 /// Mostly just by inheriting operations on pointers
 let as_ptr #t #b (r:repr_pos t b)
   : Stack (repr_ptr t)
@@ -802,6 +812,7 @@ let mk_repr_pos (#k:strong_parser_kind) #t (#parser:LP.parser k t)
       B.(modifies loc_none h0 h1) /\
       valid_repr_pos r h1 /\
       r.start_pos = from /\
+      end_pos r = to /\
       r.vv_pos == LP.contents parser h1 b from)
   = as_repr_pos (of_slice b) from to (mk parser32 b from to)
 
@@ -822,6 +833,7 @@ let mk_repr_pos_from_const_slice
       B.(modifies loc_none h0 h1) /\
       valid_repr_pos r h1 /\
       r.start_pos = from /\
+      end_pos r = to /\
       r.vv_pos == LP.contents parser h1 (to_slice b) from)
   = as_repr_pos b from to (mk_from_const_slice parser32 b from to)
 
@@ -851,7 +863,8 @@ let mk_repr_pos_from_serialize
       | Some r ->
         valid_repr_pos r h1 /\
         r.start_pos == from /\
-        r.vv_pos == x
+        r.vv_pos == x /\
+        v (end_pos r) = v from + v (size32 x)
       end
     )
 = let size = size32 x in
