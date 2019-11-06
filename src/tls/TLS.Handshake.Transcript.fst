@@ -420,8 +420,6 @@ let reset #a s tx =
   CRF.init (Ghost.hide a) s.hash_state;
   Start None
 
-#push-options "--z3rlimit 400 --query_stats"
-#restart-solver
 unfold
 let extend_t (cond:label_repr -> bool) =
    (#a:_) ->
@@ -481,7 +479,6 @@ let extend_sh : extend_t LR_ServerHello? =
 
     assume (C.qbuf_qual (C.as_qbuf data) == C.MUTABLE);
 
-
     // These three lemmas prove that the data in the subbuffer data is
     // the serialized data corresponding to the server hello that is being added
     R.reveal_valid();
@@ -509,7 +506,6 @@ let extend_tch : extend_t LR_TCH? =
   match l with
   | LR_TCH #b tch   ->
     R.reveal_valid();
-    let h0 = HyperStack.ST.get() in
     let tch_ptr = R.as_ptr tch in
     let data = R.Ptr?.b tch_ptr in
     let len = R.Pos?.length tch in
@@ -535,6 +531,7 @@ let extend_tch : extend_t LR_TCH? =
 
     tx'
 
+#push-options "--z3rlimit_factor 2"
 let extend_complete_tch : extend_t LR_CompleteTCH? =
   fun #a s l tx ->
   assert_norm (pow2 32 < pow2 61);
@@ -542,7 +539,6 @@ let extend_complete_tch : extend_t LR_CompleteTCH? =
   match l with
   | LR_CompleteTCH #b tch ->
     R.reveal_valid();
-    let h0 = HyperStack.ST.get() in
     let tch_ptr = R.as_ptr tch in
     let data = R.Ptr?.b tch_ptr in
     let len = R.Pos?.length tch in
@@ -554,7 +550,6 @@ let extend_complete_tch : extend_t LR_CompleteTCH? =
     LP.valid_pos_valid_exact HSM.handshake_parser h0 slice 0ul len;
     LP.valid_exact_serialize HSM.handshake_serializer h0 slice 0ul len;
 
-    let h0 = HyperStack.ST.get() in
     assert (LP.valid HSM.handshake_parser h0 slice 0ul);
 
     let start_pos = PB.binders_pos slice 0ul in
@@ -579,6 +574,7 @@ let extend_complete_tch : extend_t LR_CompleteTCH? =
            transcript_bytes tx');
 
     tx'
+#pop-options
 
 let extend_hrr : extend_t LR_HRR? =
   fun #a s l tx ->
@@ -611,11 +607,6 @@ let extend_hrr : extend_t LR_HRR? =
     LP.valid_pos_valid_exact HSM.handshake_parser h0 hrr_slice 0ul hrr_len;
     LP.valid_exact_serialize HSM.handshake_serializer h0 hrr_slice 0ul hrr_len;
 
-
-    // let len = ch_tag.R.end_pos - ch_tag.R.start_pos in
-    // let data = C.sub b1.R.base ch_tag.R.start_pos len in
-
-    assert_norm (pow2 32 < pow2 61);
     CRF.update (Ghost.hide a) s.hash_state (C.to_buffer ch_data) ch_len;
 
     assert ((Seq.empty `Seq.append`  LP.serialize HSM.handshake_serializer (R.value ch_ptr))
@@ -623,9 +614,6 @@ let extend_hrr : extend_t LR_HRR? =
         LP.serialize HSM.handshake_serializer (R.value ch_ptr));
 
     let h1 = HyperStack.ST.get() in
-
-    // let len = hrr.R.end_pos - hrr.R.start_pos in
-    // let data = C.sub b2.R.base hrr.R.start_pos len in
 
     CRF.update (Ghost.hide a) s.hash_state (C.to_buffer hrr_data) hrr_len;
 
@@ -729,8 +717,6 @@ let extend (#a:_) (s:state a) (l:label_repr) (tx:transcript_t) =
     extend_hsm12 s l tx
   | LR_HSM13 _ ->
     extend_hsm13 s l tx
-
-#pop-options
 
 let transcript_hash (a:HashDef.hash_alg) (t:transcript_t)
   = Spec.Agile.Hash.hash a (transcript_bytes t)
