@@ -59,7 +59,7 @@ module PV = Parsers.ProtocolVersion
 module LP = LowParse.Low.Base
 module IncHash = EverCrypt.Hash.Incremental
 module HashDef = Spec.Hash.Definitions
-module R = MITLS.Repr
+module R = LowParse.Repr
 module R_HS = MITLS.Repr.Handshake
 module R_CH = MITLS.Repr.ClientHello
 module CH = Parsers.ClientHello
@@ -67,18 +67,12 @@ module R_SH = MITLS.Repr.ServerHello
 module SH = Parsers.ServerHello
 module Psks = Parsers.OfferedPsks
 module CRF = Crypto.CRF
+module HS12 = MITLS.Repr.Handshake12
+module HS13 = MITLS.Repr.Handshake13
 
 //TODO: move to a separate module
 type sh13 = sh:HSM.sh{Negotiation.selected_version sh == Correct PV.TLS_1p3}
 type sh12 = sh:HSM.sh{Negotiation.selected_version sh == Correct PV.TLS_1p2}
-
-//TODO: move to a separate module
-let repr_hs12 (b:R.const_slice) =
-  R.repr_p _ b HSM.handshake12_parser32
-
-//TODO: move to a separate module
-let repr_hs13 (b:R.const_slice) =
-  R.repr_p _ b HSM.handshake13_parser32
 
 //19-09-02 vs FStar.Bytes?
 type bytes = FStar.Seq.seq uint_8
@@ -339,6 +333,7 @@ let snoc13
 // transcript holding a ClientHello.
 
 #restart-solver
+#push-options "--z3rlimit_factor 2 --query_stats"
 let transition (t:transcript_t) (l:label)
   : GTot (option transcript_t)
   = match t, l with
@@ -381,7 +376,7 @@ let transition (t:transcript_t) (l:label)
       else None
 
     | _ -> None
-
+#pop-options
 let ( ~~> ) (t1 t2:transcript_t) =
   exists l. Some t2 == transition t1 l
 
@@ -472,72 +467,72 @@ val reset (#a:_) (s:state a) (tx:transcript_t)
 
 (** CONCRETE STATE TRANSITIONS **)
 
-let hs_ch_repr b = ch:R_HS.repr b { R_HS.is_ch ch }
-let hs_sh_repr b = sh:R_HS.repr b { R_HS.is_sh sh }
+let ch_pos b = ch:R_HS.pos b { R_HS.is_ch (R.value_pos ch) }
+let sh_pos b = sh:R_HS.pos b { R_HS.is_sh (R.value_pos sh) }
 
 noeq
 type label_repr =
   | LR_ClientHello:
-       #b:R.const_slice ->
-       ch:hs_ch_repr b ->
+       #b:_ ->
+       ch:ch_pos b ->
        label_repr
 
   | LR_ServerHello:
-       #b:R.const_slice ->
-       sh:hs_sh_repr b {not (is_hrr (HSM.M_server_hello?._0 (R.value sh)))}->
+       #b:_ ->
+       sh:sh_pos b {not (is_hrr (HSM.M_server_hello?._0 (R.value_pos sh)))} ->
        label_repr
 
   | LR_TCH:
-      #b:R.const_slice ->
-      ch:hs_ch_repr b{ch_bound (HSM.M_client_hello?._0(R.value ch))} ->
-      label_repr
+       #b:_ ->
+       ch:ch_pos b{ch_bound (HSM.M_client_hello?._0(R.value_pos ch))} ->
+       label_repr
 
   | LR_CompleteTCH:
-      #b:R.const_slice ->
-      ch:hs_ch_repr b{ch_bound (HSM.M_client_hello?._0(R.value ch))} ->
+      #b:_ ->
+      ch:ch_pos b{ch_bound (HSM.M_client_hello?._0(R.value_pos ch))} ->
       label_repr
 
   | LR_HRR:
-      #b1:R.const_slice ->
-      ch_tag: R_HS.repr b1 { is_any_hash_tag (R.value ch_tag) }  ->
-      #b2:R.const_slice ->
-      hrr:hs_sh_repr b2{is_valid_hrr (HSM.M_server_hello?._0 (R.value hrr))} ->
+      #b:_ ->
+      ch_tag: R_HS.pos b { is_any_hash_tag (R.value_pos ch_tag) }  ->
+      #b1:_ ->
+      hrr:sh_pos b1{is_valid_hrr (HSM.M_server_hello?._0 (R.value_pos hrr))} ->
       label_repr
 
   | LR_HSM12:
-      #b:R.const_slice ->
-      hs12:repr_hs12 b ->
+      #b:_ ->
+      hs12:HS12.pos b ->
       label_repr
 
   | LR_HSM13:
-      #b:R.const_slice ->
-      hs13:repr_hs13 b ->
+      #b:_ ->
+      hs13:HS13.pos b ->
       label_repr
 
 let label_of_label_repr (l:label_repr)
   : GTot label
   = match l with
     | LR_ClientHello ch ->
-      L_ClientHello (HSM.M_client_hello?._0 (R.value ch))
+      L_ClientHello (HSM.M_client_hello?._0 (R.value_pos ch))
 
     | LR_ServerHello sh ->
-      L_ServerHello (HSM.M_server_hello?._0 (R.value sh))
+      L_ServerHello (HSM.M_server_hello?._0 (R.value_pos sh))
 
     | LR_TCH ch ->
-      L_TCH (HSM.M_client_hello?._0 (R.value ch))
+      L_TCH (HSM.M_client_hello?._0 (R.value_pos ch))
 
     | LR_CompleteTCH ch ->
-      L_CompleteTCH (HSM.M_client_hello?._0 (R.value ch))
+      L_CompleteTCH (HSM.M_client_hello?._0 (R.value_pos ch))
 
     | LR_HRR ch sh ->
-      L_HRR (R.value ch,
-             HSM.M_server_hello?._0 (R.value sh))
+      L_HRR (R.value_pos ch,
+             HSM.M_server_hello?._0 (R.value_pos sh))
 
     | LR_HSM12 hs12 ->
-      L_HSM12 (R.value hs12)
+      L_HSM12 (R.value_pos hs12)
 
     | LR_HSM13 hs13 ->
-      L_HSM13 (R.value hs13)
+      L_HSM13 (R.value_pos hs13)
 
 
 /// `valid_label`: Validity of the labels is simply the validity of
@@ -546,8 +541,8 @@ let label_of_label_repr (l:label_repr)
 let valid_label_repr (l:label_repr) (h:HS.mem) =
   match l with
   | LR_HRR ch hrr ->
-    R.valid ch h /\
-    R.valid hrr h
+    R.valid_repr_pos ch h /\
+    R.valid_repr_pos hrr h
 
   | LR_ClientHello r
   | LR_ServerHello r
@@ -555,24 +550,21 @@ let valid_label_repr (l:label_repr) (h:HS.mem) =
   | LR_CompleteTCH r
   | LR_HSM12 r
   | LR_HSM13 r ->
-    R.valid r h
+    R.valid_repr_pos r h
 
 /// `loc_of_label`: The footprint of a label is simply the union of
 ///  the footprints of all the message representations it contains
 let loc_of_label_repr (l:label_repr) =
   match l with
-  | LR_HRR #b1 _ #b2 _ ->
-    B.loc_union
-      (C.loc_buffer R.(b1.base))
-      (C.loc_buffer R.(b2.base))
+  | LR_HRR p1 p2 ->
+    B.loc_union (R.fp_pos p1) (R.fp_pos p2)
+  | LR_ClientHello p
+  | LR_ServerHello p
+  | LR_TCH p
+  | LR_CompleteTCH p
+  | LR_HSM12 p
+  | LR_HSM13 p -> R.fp_pos p
 
-  | LR_ClientHello #b _
-  | LR_ServerHello #b _
-  | LR_TCH #b _
-  | LR_CompleteTCH #b _
-  | LR_HSM12 #b _
-  | LR_HSM13 #b _ ->
-    C.loc_buffer R.(b.base)
 
 /// `extend`: The single, concrete state transition function
 ///

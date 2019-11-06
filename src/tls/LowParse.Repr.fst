@@ -72,8 +72,8 @@ type const_slice =
   | MkSlice:
       base:C.const_buffer LP.byte ->
       slice_len:uint_32 {
-        UInt32.v slice_len <= C.length base /\
-        slice_len <= LP.validator_max_length
+        UInt32.v slice_len <= C.length base//  /\
+        // slice_len <= LP.validator_max_length
       } ->
       const_slice
 
@@ -91,7 +91,7 @@ let live_slice (h:HS.mem) (c:const_slice) =
     C.live h c.base
 
 let slice_as_seq (h:HS.mem) (c:const_slice) =
-  Seq.slice (C.as_seq h c.base) 0 (U32.v c.slice_len)
+    Seq.slice (C.as_seq h c.base) 0 (U32.v c.slice_len)
 
 (*** Pointer-based Representation types ***)
 
@@ -116,9 +116,9 @@ type meta (t:Type) = {
   v: t;
   len: uint_32;
   repr_bytes: Seq.lseq LP.byte (U32.v len);
-  meta_ok: squash (LowParse.Spec.Base.parse parser repr_bytes == Some (v, U32.v len) /\
-                   0ul < len /\
-                   len < LP.validator_max_length)
+  meta_ok: squash (LowParse.Spec.Base.parse parser repr_bytes == Some (v, U32.v len))//  /\
+                   // 0ul < len /\
+                   // len < LP.validator_max_length)
 }
 
 /// `repr_ptr t`: The main type of this module.
@@ -263,8 +263,6 @@ let mk_from_const_slice
       p.b `C.const_sub_buffer from (to - from)` b.base)
   = let h = get () in
     let slice = to_slice b in
-    assume (from =!= to);
-    assume (to - from < LP.validator_max_length);
     LP.contents_exact_eq parser h slice from to;
     let meta :meta t = {
         parser_kind = _;
@@ -297,7 +295,7 @@ inline_for_extraction
 let mk (#k:strong_parser_kind) #t (#parser:LP.parser k t)
        (parser32:LS.parser32 parser)
        #q
-       (slice:LP.slice (C.q_preorder q LP.byte) (C.q_preorder q LP.byte){ slice.LP.len <= LP.validator_max_length })
+       (slice:LP.slice (C.q_preorder q LP.byte) (C.q_preorder q LP.byte))
        (from to:uint_32)
   : Stack (repr_ptr_p t parser)
     (requires fun h ->
@@ -321,7 +319,7 @@ let mk_from_serialize
     (#k:strong_parser_kind) #t (#parser:LP.parser k t) (#serializer: LP.serializer parser)
     (parser32: LS.parser32 parser) (serializer32: LS.serializer32 serializer)
     (size32: LS.size32 serializer)
-    (b:LP.slice mut_p mut_p{ LP.(b.len <= validator_max_length) })
+    (b:LP.slice mut_p mut_p)
     (from:uint_32 { from <= b.LP.len })
     (x: t)
   : Stack (option (repr_ptr_p t parser))
@@ -587,6 +585,9 @@ let stash (rgn:D.drgn) #t (r:repr_ptr t) (len:uint_32{len == r.meta.len})
 
 (*** Accessing fields of ptrs ***)
 
+/// Instances of field_accessor should be marked `unfold`
+/// so that we get compact verification conditions for the lens conditions
+/// and to inline the code for extraction
 noeq
 type field_accessor (#k1 #k2:strong_parser_kind)
                     (#t1 #t2:Type)
@@ -630,8 +631,7 @@ let field_accessor_t
         valid q h1 /\
         value q == f.cl.LP.clens_get (value p) /\
         q `sub_ptr` p /\
-        region_of q == region_of p /\
-        (is_stable_in_region p ==> is_stable_in_region q))
+        region_of q == region_of p)
 
 inline_for_extraction
 let get_field (#k1:strong_parser_kind) #t1 (#p1:LP.parser k1 t1)
@@ -644,9 +644,15 @@ let get_field (#k1:strong_parser_kind) #t1 (#p1:LP.parser k1 t1)
      let pos = acc b 0ul in
      let pos_to = jump b pos in
      let q = mk p2' b pos pos_to in
+     let h = get () in
      assert (q.b `C.const_sub_buffer pos (pos_to - pos)` p.b);
+     assert (q `sub_ptr` p); //needed to trigger the sub_ptr_stable lemma
+     assert (is_stable_in_region p ==> is_stable_in_region q);
      q
 
+/// Instances of field_reader should be marked `unfold`
+/// so that we get compact verification conditions for the lens conditions
+/// and to inline the code for extraction
 noeq
 type field_reader (#k1:strong_parser_kind)
                   (#t1:Type)
@@ -697,8 +703,7 @@ type repr_pos (t:Type) (b:const_slice) =
   | Pos: start_pos:index b ->
          meta:meta t ->
          vv_pos:t -> //temporary
-         length:U32.t { //temporary
-                        U32.v start_pos + U32.v meta.len <= U32.v b.slice_len /\
+         length:U32.t { U32.v start_pos + U32.v meta.len <= U32.v b.slice_len /\
                         vv_pos == meta.v /\
                         length == meta.len } ->
          repr_pos t b
@@ -768,10 +773,11 @@ let frame_valid_repr_pos #t #b (r:repr_pos t b) (l:B.loc) (h0 h1:HS.mem)
 
 (*** Operations on repr_pos ***)
 
-/// End position, ghostly
+/// End position
+/// On positional reprs, this is concretely computable
 let end_pos #t #b (r:repr_pos t b)
-  : GTot (index b)
-  = r.start_pos + r.meta.len
+  : index b
+  = r.start_pos + r.length
 
 /// Mostly just by inheriting operations on pointers
 let as_ptr #t #b (r:repr_pos t b)
@@ -794,7 +800,7 @@ let as_repr_pos #t (b:const_slice) (from to:index b) (p:repr_ptr t)
       Ptr?.b p  == C.gsub b.base from (to - from))
     (ensures fun r ->
       p == as_ptr_spec r)
-  = Pos from (Ptr?.meta p) (Ptr?.vv p) (Ptr?.length p)
+  = Pos from (Ptr?.meta p) (Ptr?.vv p) (to - from)
 
 /// `mk_repr_pos b from to p`:
 ///    Constructing a `repr_pos` from a sub-slice
