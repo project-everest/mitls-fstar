@@ -454,6 +454,9 @@ let reset #a s =
   let etx : etx = if transcript_idealization then tx else Ghost.hide tx in
   s.transcript := etx
 
+let ideal_transcript #a s =
+  !s.transcript
+
 unfold
 let extend_t (cond:label_repr -> bool) =
    (#a:_) ->
