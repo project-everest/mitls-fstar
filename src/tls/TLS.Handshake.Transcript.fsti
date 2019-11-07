@@ -70,7 +70,9 @@ module CRF = Crypto.CRF
 module HS12 = MITLS.Repr.Handshake12
 module HS13 = MITLS.Repr.Handshake13
 
-let transcript_idealization = CRF.model
+inline_for_extraction
+noextract
+let transcript_idealization = Flags.model
 
 //TODO: move to a separate module
 type sh13 = sh:HSM.sh{Negotiation.selected_version sh == Correct PV.TLS_1p3}
