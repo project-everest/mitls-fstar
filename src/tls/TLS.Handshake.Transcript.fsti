@@ -175,14 +175,9 @@ let bounded_list 'a n = l:list 'a{List.length l < n}
 /// hello-retry requests. The transcript hash records the full
 /// transcript, including the retry, if any. Note, the standard
 /// forbids multiple retries.
-///
-/// transcript_t is marked `erasable`, enforcing that is is used only
-/// for specification and is erased at extraction.
 
 /// N.B. we need transcript equality, as we store them in
 /// crypto indexes for concrete (but ideal) table lookups
-[@erasable]
-noeq
 type transcript_t =
   | Start:
       retried:option retry ->
@@ -211,11 +206,9 @@ type transcript_t =
       rest:bounded_list HSM.handshake13 max_transcript_size ->
       transcript_t
 
-assume Transcript_HasEq_TEMPORARY_ESCAPE_HATCH: hasEq transcript_t
-
 /// `transcript_size`: the size of a transcript is the length of its
 /// protocol-specific suffix
-let transcript_size (t:transcript_t) : GTot nat =
+let transcript_size (t:transcript_t) : nat =
     match t with
     | Start _
     | ClientHello _ _
@@ -225,7 +218,7 @@ let transcript_size (t:transcript_t) : GTot nat =
 
 /// `extensible`: a transcript is extensible if it is smaller than
 /// `max_transcript_size`
-let extensible (t:transcript_t) : GTot bool = transcript_size t < max_transcript_size - 1
+let extensible (t:transcript_t) : bool = transcript_size t < max_transcript_size - 1
 let ext_transcript_t = t:transcript_t{extensible t}
 
 (* A depiction of the state machine for transcript hashes
@@ -335,7 +328,7 @@ let snoc13
 #restart-solver
 #push-options "--z3rlimit_factor 2 --query_stats"
 let transition (t:transcript_t) (l:label)
-  : GTot (option transcript_t)
+  : option transcript_t
   = match t, l with
     | Start None, L_HRR retry ->
       Some (Start (Some retry))
@@ -398,22 +391,25 @@ val state (a:HashDef.hash_alg) : Type0
 /// along with that region.
 // yes, we need [free]
 
-/// `invariant s t h`: Relates the state of the module (i.e., the
+/// `invariant s h`: Relates the state of the module (i.e., the
 /// state of the underlying incremental hash) to the a particular
 /// transcript
-val invariant (#a: _) (s:state a) (t:transcript_t) (h:HS.mem) : Type0
+val invariant (#a: _) (s:state a) (h:HS.mem) : Type0
 
 /// `footprint`: Abstract memory footprint
 val footprint (#a:_) (s:state a) : GTot B.loc
+
+/// `transcript`: A ghost, state-indexed function to read the transcript
+val transcript (#a:_) (s:state a) (h:HS.mem) : GTot transcript_t
 
 /// `elim_invariant`: One way to eliminate the invariant is simply to
 ///  recover that the memory footprint of the module is used in the
 ///  memory state `h`. Withouth this, it is not possible to prove that
 ///  a freshly allocated location doesn't interfere with the abstract
 ///  footprint of this module.
-val elim_invariant (#a: _) (s:state a) (t:transcript_t) (h:HS.mem)
+val elim_invariant (#a: _) (s:state a) (h:HS.mem)
   : Lemma
-    (requires invariant s t h)
+    (requires invariant s h)
     (ensures B.(loc_not_unused_in h `loc_includes` footprint s))
 
 /// `region_of`: The internal state of the module is allocated in a
@@ -422,15 +418,16 @@ val region_of (#a: _) (s:state a) : GTot HS.rid
 
 /// `frame_invariant`: The invariant is maintained across
 /// footprint-preserving heap modifications
-val frame_invariant (#a:_) (s:state a) (t: transcript_t) (h0 h1:HS.mem) (l:B.loc)
+val frame_invariant (#a:_) (s:state a) (h0 h1:HS.mem) (l:B.loc)
   : Lemma
     (requires
-      invariant s t h0 /\
+      invariant s h0 /\
       B.loc_disjoint l (footprint s) /\
       B.modifies l h0 h1)
     (ensures
-      invariant s t h1)
-    [SMTPat (invariant s t h1);
+      invariant s h1 /\
+      transcript s h0 == transcript s h1)
+    [SMTPat (invariant s h1);
      SMTPat (B.modifies l h0 h1)]
 
 /// `create`: Allocating a new instance of the transcript hash
@@ -442,11 +439,11 @@ val frame_invariant (#a:_) (s:state a) (t: transcript_t) (h0 h1:HS.mem) (l:B.loc
 ///
 ///   -- The transcript's initial state is empty
 val create (r:Mem.rgn) (a:HashDef.hash_alg)
-  : ST (state a & transcript_n (Ghost.hide 0))
+  : ST (state a)
        (requires fun _ -> B.(loc_disjoint (loc_region_only true r) (loc_region_only true Mem.tls_tables_region)))
-       (ensures fun h0 (s, tx) h1 ->
-         tx == Start None /\
-         invariant s tx h1 /\
+       (ensures fun h0 s h1 ->
+         transcript s h1 == Start None /\
+         invariant s h1 /\
          region_of s == r /\
          B.loc_region_only true r `B.loc_includes` footprint s /\
          B.modifies B.loc_none h0 h1 /\
@@ -454,15 +451,14 @@ val create (r:Mem.rgn) (a:HashDef.hash_alg)
 
 /// `reset`: Reinitializing an instance of the transcript hash
 ///
-///   -- Caller provides a valid transcript `tx` and the corresponding state `s`
-///
 ///   -- The transcript is reset to the empty state for the same has algorithm
 val reset (#a:_) (s:state a) (tx:transcript_t)
-  : ST (transcript_n (Ghost.hide 0))
-       (requires fun h -> invariant s tx h)
-       (ensures fun h0 tx h1 ->
-         tx == Start None /\
-         invariant s tx h1 /\
+  : ST unit
+       (requires fun h ->
+         invariant s h)
+       (ensures fun h0 _ h1 ->
+         transcript s h1 == Start None /\
+         invariant s h1 /\
          B.modifies (footprint s) h0 h1)
 
 (** CONCRETE STATE TRANSITIONS **)
@@ -584,16 +580,19 @@ let loc_of_label_repr (l:label_repr) =
 ///      -- state machine invariant
 ///      -- that it mutates only the state machine's footprint
 ///      -- that the new state is the one computed by the transition
-val extend (#a:_) (s:state a) (l:label_repr) (tx:transcript_t)
-  : Stack transcript_t
+val extend (#a:_) (s:state a) (l:label_repr)
+  : Stack unit
     (requires fun h ->
-        invariant s tx h /\
+        let tx = transcript s h in
+        invariant s h /\
         valid_label_repr l h /\
         B.loc_disjoint (loc_of_label_repr l) (footprint s) /\
         extensible tx /\
         Some? (transition tx (label_of_label_repr l)))
-    (ensures fun h0 tx' h1 ->
-        invariant s tx' h1 /\
+    (ensures fun h0 _ h1 ->
+        let tx = transcript s h0 in
+        let tx' = transcript s h1 in
+        invariant s h1 /\
         B.modifies (footprint s) h0 h1 /\
         tx' == Some?.v (transition tx (label_of_label_repr l)))
 
@@ -623,16 +622,17 @@ val hashed (a:HashDef.hash_alg) (t:transcript_t) : Type0
 val extract_hash
   (#a:_) (s:state a)
   (tag:Hacl.Hash.Definitions.hash_t a)
-  (tx:transcript_t)
   : ST unit
     (requires fun h0 ->
-      invariant s tx h0 /\
+      invariant s h0 /\
       B.live h0 tag /\
       B.(loc_disjoint (loc_buffer tag) (Mem.loc_tables_region ())) /\
       B.loc_disjoint (footprint s) (B.loc_buffer tag))
     (ensures fun h0 _ h1 ->
       let open B in
-      invariant s tx h1 /\
+      let tx = transcript s h0 in
+      invariant s h1 /\
+      transcript s h0 == transcript s h1 /\
       modifies (
         loc_buffer tag `loc_union`
         footprint s `loc_union`
@@ -645,7 +645,7 @@ val extract_hash
 /// `injectivity`: The main lemma provided by this module is a form of
 ///  collision resistance adapted to transcripts, i.e., if the hashes
 ///  of two transcripts match then the transcripts themselves do.
-val injectivity (a:HashDef.hash_alg) (tx1 tx2:transcript_t)
+val injectivity (a:HashDef.hash_alg) (tx1 tx2:Ghost.erased transcript_t)
   : Stack unit
     (requires fun h ->
       hashed a tx1 /\
