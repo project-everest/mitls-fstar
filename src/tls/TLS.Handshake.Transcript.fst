@@ -385,7 +385,7 @@ let transcript_bytes_injective (t1 t2:transcript_t)
     transcript_bytes_injective_no_retry t1' t2'
 
 let etx =
-  if CRF.model
+  if transcript_idealization
   then transcript_t
   else Ghost.erased transcript_t
 
@@ -400,7 +400,7 @@ type state (a:HashDef.hash_alg) = {
 let get_transcript #a (s:state a) (h:HS.mem) : GTot transcript_t =
   let open FStar.HyperStack.ST in
   let etx = HS.sel h s.transcript in
-  if CRF.model then etx else Ghost.reveal etx
+  if transcript_idealization then etx else Ghost.reveal etx
 
 let invariant (#a:HashDef.hash_alg) (s:state a) (h:HS.mem) =
   let tx = get_transcript s h in
@@ -410,7 +410,9 @@ let invariant (#a:HashDef.hash_alg) (s:state a) (h:HS.mem) =
   B.loc_region_only true s.region `B.loc_includes` Ghost.reveal s.loc /\
   Ghost.reveal s.loc == B.loc_union (B.loc_mreference s.transcript) (CRF.footprint h s.hash_state) /\
   B.loc_disjoint (B.loc_mreference s.transcript) (CRF.footprint h s.hash_state) /\
-  B.loc_not_unused_in h `B.loc_includes` Ghost.reveal s.loc
+  B.loc_not_unused_in h `B.loc_includes` Ghost.reveal s.loc /\
+  B.loc_disjoint (B.loc_region_only true Mem.tls_tables_region)
+                 (B.loc_region_only true s.region)
 
 let footprint (#a:HashDef.hash_alg) (s:state a) = Ghost.reveal s.loc
 
@@ -428,7 +430,7 @@ let create r a =
   let s = CRF.create_in a r in
   let h1 = get () in
   let transcript = Start None in
-  let transcript : etx = if CRF.model then transcript else Ghost.hide transcript in
+  let transcript : etx = if transcript_idealization then transcript else Ghost.hide transcript in
   let etx_ref : ref etx = ralloc r transcript in
   let h2 = get () in
   B.loc_unused_in_not_unused_in_disjoint h1;
@@ -446,10 +448,10 @@ let create r a =
    hash_state=s;
    transcript=etx_ref }
 
-let reset #a s _ =
+let reset #a s =
   CRF.init (Ghost.hide a) s.hash_state;
   let tx = Start None in
-  let etx : etx = if CRF.model then tx else Ghost.hide tx in
+  let etx : etx = if transcript_idealization then tx else Ghost.hide tx in
   s.transcript := etx
 
 unfold
@@ -472,12 +474,12 @@ let extend_t (cond:label_repr -> bool) =
         B.modifies (footprint s) h0 h1 /\
         tx' == Some?.v (transition tx (label_of_label_repr l)))
 
-let elabel = if CRF.model then label else Ghost.erased label
+let elabel = if transcript_idealization then label else Ghost.erased label
 let elabel_label (e:elabel) : GTot label =
-  if CRF.model then e else Ghost.reveal e
+  if transcript_idealization then e else Ghost.reveal e
 inline_for_extraction
 let label_elabel (l:label) : elabel =
-  if CRF.model then l else Ghost.hide l
+  if transcript_idealization then l else Ghost.hide l
 let elabel_of_label_repr (l:label_repr)
   : Tot (e:elabel{elabel_label e == label_of_label_repr l})
   = match l with
@@ -504,7 +506,7 @@ let elabel_of_label_repr (l:label_repr)
       label_elabel (L_HSM13 hs13.R.vv_pos)
 
 let etx_extensible (etx:etx) (l:elabel) =
-  if CRF.model then
+  if transcript_idealization then
     extensible etx /\
     Some? (transition etx l)
   else
@@ -515,7 +517,7 @@ let transition_etx (e:etx) (l:elabel)
   : Pure etx
     (requires etx_extensible e l)
     (ensures fun _ -> True)
-  = if CRF.model
+  = if transcript_idealization
     then Some?.v (transition e l)
     else Ghost.hide (Some?.v (transition (Ghost.reveal e) (elabel_label l)))
 
@@ -825,12 +827,7 @@ let extract_hash (#a:_) (s:state a)
     let h1 = HyperStack.ST.get() in
     B.(modifies_liveness_insensitive_buffer
       (CRF.footprint h0 s.hash_state `loc_union` (loc_region_only true Mem.tls_tables_region))
-      (B.loc_buffer tag) h0 h1 tag);
-    assume (B.loc_disjoint
-              (B.loc_region_only true Mem.tls_tables_region)
-              (B.loc_region_only true s.region));
-    assert (transcript s h0 == transcript s h1);
-    assert (HS.contains h1 s.transcript)
+      (B.loc_buffer tag) h0 h1 tag)
 
 let injectivity a t0 t1 =
   let b0 = Ghost.hide (transcript_bytes t0) in

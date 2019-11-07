@@ -70,6 +70,8 @@ module CRF = Crypto.CRF
 module HS12 = MITLS.Repr.Handshake12
 module HS13 = MITLS.Repr.Handshake13
 
+let transcript_idealization = CRF.model
+
 //TODO: move to a separate module
 type sh13 = sh:HSM.sh{Negotiation.selected_version sh == Correct PV.TLS_1p3}
 type sh12 = sh:HSM.sh{Negotiation.selected_version sh == Correct PV.TLS_1p2}
@@ -326,7 +328,7 @@ let snoc13
 // transcript holding a ClientHello.
 
 #restart-solver
-#push-options "--z3rlimit_factor 2 --query_stats"
+#push-options "--z3rlimit_factor 4 --query_stats"
 let transition (t:transcript_t) (l:label)
   : option transcript_t
   = match t, l with
@@ -452,7 +454,7 @@ val create (r:Mem.rgn) (a:HashDef.hash_alg)
 /// `reset`: Reinitializing an instance of the transcript hash
 ///
 ///   -- The transcript is reset to the empty state for the same has algorithm
-val reset (#a:_) (s:state a) (tx:transcript_t)
+val reset (#a:_) (s:state a)
   : ST unit
        (requires fun h ->
          invariant s h)
@@ -460,6 +462,17 @@ val reset (#a:_) (s:state a) (tx:transcript_t)
          transcript s h1 == Start None /\
          invariant s h1 /\
          B.modifies (footprint s) h0 h1)
+
+/// `ideal_transcript`: A stateful function that returns the
+/// current transcript, only callable if idealization is on
+val ideal_transcript (#a:_) (s:state a)
+  : Stack transcript_t
+    (requires fun h ->
+      transcript_idealization /\
+      invariant s h)
+    (ensures fun h0 tx h1 ->
+      h0 == h1 /\
+      tx == transcript s h1)
 
 (** CONCRETE STATE TRANSITIONS **)
 
