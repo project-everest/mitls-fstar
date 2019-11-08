@@ -107,7 +107,7 @@ let invalidateSession hs = ()
 // ServerHello in plaintext, we continue with encrypted traffic.
 // Otherwise, we just returns buffered messages and signals.
 
-let rec next_fragment_bounded hs i max =
+let rec next_fragment_bounded hs i (max32: UInt32.t) =
   trace "next_fragment";
   match hs with 
   | Client region config r -> (
@@ -115,10 +115,10 @@ let rec next_fragment_bounded hs i max =
     if C_init? st0 then (
       match Client.client_ClientHello hs with
       | Error z -> Error z
-      | Correct () -> next_fragment_bounded hs i max )
+      | Correct () -> next_fragment_bounded hs i max32 )
     else 
       let ms0 = Machine.client_ms st0 in 
-      let sending, result = Send.write_at_most ms0.sending i max in
+      let sending, result = Send.write_at_most ms0.sending i max32 in
       let ms1 = { ms0 with sending = sending } in 
       let st1 = set_client_ms st0 ms1 in 
       // any simpler way to update substate? 
@@ -128,14 +128,14 @@ let rec next_fragment_bounded hs i max =
         C13_complete offer sh ee server_id fin1 ms (Finished_pending _ _ _) -> (
         match Client.client13_Finished2 hs with
         | Error z -> Error z 
-        | Correct _ -> next_fragment_bounded hs i max )
+        | Correct _ -> next_fragment_bounded hs i max32 )
 
       | _ -> Correct result // nothing to do
     )
   | Server region config r -> ( 
     let st0 = !r in 
     let ms0 = Machine.server_ms st0 in 
-    let sending, result = Send.write_at_most ms0.sending i max in
+    let sending, result = Send.write_at_most ms0.sending i max32 in
     let ms1 = { ms0 with sending = sending } in 
     let st1 = set_server_ms st0 ms1 in 
     r := st1; 
@@ -144,12 +144,12 @@ let rec next_fragment_bounded hs i max =
       S13_sent_ServerHello _ _ _ _ _ _ -> (
       match Server.server_ServerFinished_13 hs with
       | Error z -> Error z 
-      | Correct _ -> next_fragment_bounded hs i max )
+      | Correct _ -> next_fragment_bounded hs i max32 )
     | _ -> Correct result // nothing to do
     )
 
 let next_fragment hs i =
-  next_fragment_bounded hs i max_TLSPlaintext_fragment_length
+  next_fragment_bounded hs i max_TLSPlaintext_fragment_length32
 
 let to_be_written hs =
   let sto = 

@@ -172,6 +172,7 @@ let aeadRecordIVSize =
 
 (** Constants for API and protocol-level fragments are in [0..2^14] *)
 let max_TLSPlaintext_fragment_length     = 16384
+let max_TLSPlaintext_fragment_length32   = 16384ul
 let max_TLSCompressed_fragment_length    = max_TLSPlaintext_fragment_length + 1024
 let max_TLSCiphertext_fragment_length    = max_TLSPlaintext_fragment_length + 2048
 let max_TLSCiphertext_fragment_length_13 = max_TLSPlaintext_fragment_length + 256

@@ -174,10 +174,85 @@ let check_leq_end_index_and_return
 
 (*** ClientHello and ServerHello flights ***)
 
+(***** Using layered effects *****)
+
+/// First inject parse_common into the effect
+
+open TLSError
+
+unfold let parse_common_wp
+  (#a1:Type) (#k1:R.strong_parser_kind)
+  (#p1:LP.parser k1 a1) (p132:LS.parser32 p1)
+  (#a2:Type) (cl:LP.clens a1 a2)
+  (b:R.const_slice) (f_begin:uint_32)
+:exn_wp_t (option (R.repr_p a1 b p132 & uint_32))
+= fun p h0 ->
+  R.live h0 b /\
+  f_begin <= b.R.len /\
+  (forall r h1.
+     (B.modifies B.loc_none h0 h1 /\
+      equal_domains h0 h1 /\
+      (match r with
+       | E.Error _ -> True
+       | E.Correct None -> True
+       | E.Correct (Some (repr, pos)) ->
+         repr.R.start_pos == f_begin /\
+         repr.R.end_pos == pos /\
+         R.valid repr h1 /\
+         cl.LP.clens_cond (R.value repr))) ==> p r h1)
+
+
+inline_for_extraction noextract
+let parse_common__
+  (#a1:Type) (#k1:R.strong_parser_kind)
+  (#p1:LP.parser k1 a1) (p132:LS.parser32 p1)
+  (validator:LP.validator #k1 #a1 p1)
+  (tag_fn:a1 -> HSMType.handshakeType{
+    forall (b:R.const_slice) (pos:UInt32.t) (h:HS.mem).
+      let b = R.to_slice b in
+      LP.valid p1 h b pos ==>
+      (LP.valid HSMType.handshakeType_parser h b pos /\
+       LP.contents HSMType.handshakeType_parser h b pos ==
+       tag_fn (LP.contents p1 h b pos))})
+  (#a2:Type) (#k2:R.strong_parser_kind)
+  (#p2:LP.parser k2 a2) (#cl:LP.clens a1 a2)
+  (#gacc:LP.gaccessor p1 p2 cl)
+  (tag:HSMType.handshakeType{
+    forall (m:a1).
+      (tag_fn m == tag) <==> cl.LP.clens_cond m})
+  (acc:LP.accessor gacc)
+  (b:R.const_slice) (f_begin:uint_32)
+: exn_repr (option (R.repr_p a1 b p132 & uint_32))
+  (parse_common_wp #a1 #k1 #p1 p132 #a2 cl b f_begin)
+= fun _ -> parse_common p132 validator tag_fn tag acc b f_begin
+
+inline_for_extraction noextract
+let parse_common_
+  (#a1:Type) (#k1:R.strong_parser_kind)
+  (#p1:LP.parser k1 a1) (p132:LS.parser32 p1)
+  (validator:LP.validator #k1 #a1 p1)
+  (tag_fn:a1 -> HSMType.handshakeType{
+    forall (b:R.const_slice) (pos:UInt32.t) (h:HS.mem).
+      let b = R.to_slice b in
+      LP.valid p1 h b pos ==>
+      (LP.valid HSMType.handshakeType_parser h b pos /\
+       LP.contents HSMType.handshakeType_parser h b pos ==
+       tag_fn (LP.contents p1 h b pos))})
+  (#a2:Type) (#k2:R.strong_parser_kind)
+  (#p2:LP.parser k2 a2) (#cl:LP.clens a1 a2)
+  (#gacc:LP.gaccessor p1 p2 cl)
+  (tag:HSMType.handshakeType{
+    forall (m:a1).
+      (tag_fn m == tag) <==> cl.LP.clens_cond m})
+  (acc:LP.accessor gacc)
+  (b:R.const_slice) (f_begin:uint_32)
+: TLSEXN (option (R.repr_p a1 b p132 & uint_32))
+  (parse_common_wp #a1 #k1 #p1 p132 #a2 cl b f_begin)
+= TLSEXN?.reflect (parse_common__ p132 validator tag_fn tag acc b f_begin)
 
 inline_for_extraction noextract
 let parse_hsm_ch
-= parse_common
+= parse_common_
     HSM.handshake_parser32
     HSM.handshake_validator
     HSM.tag_of_handshake
@@ -186,7 +261,7 @@ let parse_hsm_ch
 
 inline_for_extraction noextract
 let parse_hsm_sh
-= parse_common
+= parse_common_
     HSM.handshake_parser32
     HSM.handshake_validator
     HSM.tag_of_handshake
@@ -196,7 +271,7 @@ let parse_hsm_sh
 let receive_s_Idle st b f_begin f_end
 = let flt = F_s_Idle in
 
-  let r = parse_hsm_ch b f_begin in
+  let r = reify (parse_hsm_ch b f_begin) () in
   match r with
   | E.Error _ | E.Correct None ->
     err_or_insufficient_data r flt b f_begin f_end
@@ -206,7 +281,7 @@ let receive_s_Idle st b f_begin f_end
 let receive_c_wait_ServerHello st b f_begin f_end
 = let flt = F_c_wait_ServerHello in
 
-  let r = parse_hsm_sh b f_begin in
+  let r = reify (parse_hsm_sh b f_begin) () in
   match r with
   | E.Error _ | E.Correct None ->
     err_or_insufficient_data r flt b f_begin f_end

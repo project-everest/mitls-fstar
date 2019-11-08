@@ -2,6 +2,8 @@ module TLS.Handshake.Send
 
 /// Adding an interface to hoist definitions from HandshakeLog.fsti
 
+open FStar.HyperStack.ST
+open TLSError
 
 module HSM = HandshakeMessages
 
@@ -72,12 +74,26 @@ module LP = LowParse.Low.Base
 
 (* TODO: do we need a separate type for outbuffer, or can we inline the slice and the position into the output state? *)
 
+/// We need 1 (fixed) base pointer to the output buffer and 3 indexes within:
+/// - out_start, aka the prior out_pos,
+/// - out_pos, with [out_star..out_pos[ holding formatted messages ready to be sent
+/// - out_len, with [out_pos..out_len[ available for formatting new messages.
+///
+/// We group the base pointer and out_len in the LP slice
+///
+/// The first [out_pos] bytes of [out_slice] are ready to be written;
+/// The rest of the slice is available for formatting new messages.
+///
+/// Overflows
 noeq type send_state = {
   // outgoing data, already formatted and hashed. Overflows are fatal.
-  out_slice: (out_slice: LP.slice (B.trivial_preorder _) (B.trivial_preorder _) { out_slice.LP.len <= LP.validator_max_length }) ; // provided by caller, filled by Send
-  out_pos: (pos: UInt32.t{ v pos <= v out_slice.LP.len }); // updated by Send, QD-style
-
-  outgoing: bytes; // TODO: remove, being replaced with [out] above
+  out_slice: (out_slice: LP.slice (B.trivial_preorder _) (B.trivial_preorder _) {
+    out_slice.LP.len <= LP.validator_max_length }) ; // provided by caller, filled by Send
+  out_start: (pos: UInt32.t{
+    v pos <= v out_slice.LP.len }); // updated as the client sends data
+  out_pos:   (pos: UInt32.t{
+    v out_start <= v pos /\
+    v pos <= v out_slice.LP.len }); // updated by Send, QD-style
 
   // still supporting the high-level API to TLS and Record;
   // as next_keys_use, with next fragment after CCS
@@ -90,38 +106,37 @@ let footprint
 : GTot B.loc
 = B.loc_buffer sto.out_slice.LowParse.Low.Base.base
 
-let invariant
-  (sto: send_state)
-  (h: _)
-: GTot Type0
-= B.loc_disjoint (footprint sto) (B.loc_region_only true Mem.tls_tables_region) /\
-  LowParse.Low.Base.live_slice h sto.out_slice /\
-  sto.out_pos <= sto.out_slice.LowParse.Low.Base.len /\
-  FStar.Bytes.len sto.outgoing <= sto.out_pos // TODO: remove once fully lowered
-  // TODO: what more to stick into this invariant?
+let invariant (sto: send_state) (h: _) =
+  B.loc_disjoint (footprint sto) (B.loc_region_only true Mem.tls_tables_region) /\
+  LowParse.Low.Base.live_slice h sto.out_slice
 
 let send_state0 = {
   out_slice = LP.make_slice B.null 0ul;
+  out_start = 0ul;
   out_pos = 0ul;
-  outgoing = empty_bytes;
   outgoing_next_keys = None;
   outgoing_complete = false; }
 
 // used within QUIC, to be revised with i/o buffer management policy.
 let to_be_written (s:send_state): nat =
-  Bytes.length s.outgoing
+  UInt32.v s.out_pos
 
+// returns a buffer outgoing fragment and signals.
+val write_at_most:
+  sto:send_state -> i:id -> max:UInt32.t ->
+  Stack (send_state & outgoing i)
+  (requires fun h0 -> invariant sto h0)
+  (ensures fun h0 r h1 ->
+    B.(modifies loc_none h0 h1) /\
+    invariant sto h1)
 
-val write_at_most: sto:send_state -> i:id -> max:nat -> send_state & outgoing i
-
+/// Registers signals from the Handshake to its client.
 val signals:
   sto:send_state ->
   option (bool & bool) ->
   bool ->
   send_state
 
-open FStar.HyperStack.ST
-open TLSError
 
 
 // Can we avoid writing so many transient wrappers?

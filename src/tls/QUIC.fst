@@ -212,7 +212,7 @@ let process_hs (hs:Machine.state) (ctx:hs_in) : ML hs_result =
       })
     else
       let i = currentId hs Writer in
-      match H.next_fragment_bounded hs i (UInt32.v ctx.max_output) with
+      match H.next_fragment_bounded hs i ctx.max_output with
       | Error z -> api_error z
       | Correct (Send.Outgoing (Some frag) sig complete) ->
         let is_writable = handle_signals hs sig in
@@ -249,8 +249,7 @@ let process_hs (hs:Machine.state) (ctx:hs_in) : ML hs_result =
 	  TLS.Handshake.Client.early_rejected hs 
 	else false in
       let i = currentId hs Writer in
-      let max_o = UInt32.v ctx.max_output in
-      match H.next_fragment_bounded hs i max_o with
+      match H.next_fragment_bounded hs i ctx.max_output with
       | Error z -> api_error z
       | Correct (Send.Outgoing frag sig complete' ) ->
         let is_writable = handle_signals hs sig in
