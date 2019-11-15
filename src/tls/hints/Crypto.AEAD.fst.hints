@@ -13,7 +13,7 @@
         "refinement_interpretation_Tm_refine_2de20c066034c13bf76e9c0b94f4806c"
       ],
       0,
-      "84d6321216c1a0867e1a37e7edb94d1d"
+      "9ab755f07605a22c5560f190a1777200"
     ],
     [
       "Crypto.AEAD.state",
@@ -27,7 +27,7 @@
         "refinement_interpretation_Tm_refine_2de20c066034c13bf76e9c0b94f4806c"
       ],
       0,
-      "3f6751d1e78e25b385737ae251dcb07a"
+      "e2e9195e2a1de48264fcbf9b68e32aa9"
     ],
     [
       "Crypto.AEAD.__proj__Created__item__log",
@@ -41,7 +41,7 @@
         "refinement_interpretation_Tm_refine_2de20c066034c13bf76e9c0b94f4806c"
       ],
       0,
-      "e0edfabfe078d76757ebe559e13e59b6"
+      "3e1f5c95429ec0220a5d11890f01a4c3"
     ],
     [
       "Crypto.AEAD.__proj__Created__item__log",
@@ -59,7 +59,7 @@
         "refinement_interpretation_Tm_refine_2de20c066034c13bf76e9c0b94f4806c"
       ],
       0,
-      "af3847f833a38f8f380c939f3b7d749c"
+      "59daff7b21b1506bcdcf3a46d7282e1b"
     ],
     [
       "Crypto.AEAD.__proj__Coerced__item__st",
@@ -73,7 +73,7 @@
         "refinement_interpretation_Tm_refine_f9de1f54259b62dd15e1d62ae555e86b"
       ],
       0,
-      "cccead03cc70d72ed84df74d8b54275a"
+      "b6256e409f902d5411fffa655d205587"
     ],
     [
       "Crypto.AEAD.safe",
@@ -82,7 +82,7 @@
       1,
       [ "@query" ],
       0,
-      "b6f2b8970743fff74b737f391234cc6c"
+      "7d7cf11fd063066b2686c0176dbf3d1a"
     ],
     [
       "Crypto.AEAD.log",
@@ -110,7 +110,7 @@
         "typing_Spec.GaloisField.__proj__GF__item__t"
       ],
       0,
-      "273f0003b4f90bb2b55bb89e444e1da4"
+      "8070154a5bef65a6db5867c8e7a4cb53"
     ],
     [
       "Crypto.AEAD.state_kv",
@@ -139,7 +139,7 @@
         "typing_Spec.AES.gf8", "typing_Spec.GaloisField.__proj__GF__item__t"
       ],
       0,
-      "be18c4ae3537f185403bcdbb8aa78cec"
+      "4ddf9b03e91fc17cfe2306d220a141c6"
     ],
     [
       "Crypto.AEAD.invariant'",
@@ -168,7 +168,7 @@
         "typing_Spec.AES.gf8", "typing_Spec.GaloisField.__proj__GF__item__t"
       ],
       0,
-      "f0f9e023d8d259c3626b0e5acb6d8a03"
+      "4b4524e0259f4d334a7ec41559039cce"
     ],
     [
       "Crypto.AEAD.footprint",
@@ -197,7 +197,7 @@
         "typing_Spec.AES.gf8", "typing_Spec.GaloisField.__proj__GF__item__t"
       ],
       0,
-      "13a9d4403f665ee8031a5adfb0f4df52"
+      "b5b30021f894b50c92d4efb065c7398d"
     ],
     [
       "Crypto.AEAD.frame_invariant",
@@ -269,7 +269,7 @@
         "typing_tok_Lib.IntTypes.U8@tok"
       ],
       0,
-      "f995efd07741ade6365a1839c7e7cbc5"
+      "00af6b65227d70782b9eace7e6d25d8d"
     ],
     [
       "Crypto.AEAD.sample",
@@ -278,7 +278,7 @@
       1,
       [ "@query" ],
       0,
-      "e53e3c288963efce53bf8dab96c31dfa"
+      "d37a0d2b20aec59fdfc2fac42aeeaebc"
     ],
     [
       "Crypto.AEAD.sample",
@@ -306,7 +306,7 @@
         "typing_LowStar.Monotonic.Buffer.len"
       ],
       0,
-      "6d33fd70cd18316f9cdb029e953fa023"
+      "1fee3ddd4534ba11efbb323bf3e18213"
     ],
     [
       "Crypto.AEAD.coerce",
@@ -327,7 +327,7 @@
         "typing_FStar.Pervasives.Native.uu___is_Some"
       ],
       0,
-      "73b6ab9c784295be15e33b7708f2024c"
+      "5208f5bd247203592931352d03573448"
     ],
     [
       "Crypto.AEAD.coerce",
@@ -485,7 +485,7 @@
         "typing_Spec.Agile.AEAD.kv"
       ],
       0,
-      "6b745b82531294c100928cc58b61501d"
+      "e8309662afc47324c027ea034b37592d"
     ],
     [
       "Crypto.AEAD.create",
@@ -499,7 +499,7 @@
         "refinement_interpretation_Tm_refine_2de20c066034c13bf76e9c0b94f4806c"
       ],
       0,
-      "72982ade2ad77c6d6d9ec2693bbfb509"
+      "dfd79c39bbf04ea8d3226f15f9bcbf69"
     ],
     [
       "Crypto.AEAD.create",
@@ -569,7 +569,7 @@
         "typing_Model.AEAD.footprint"
       ],
       0,
-      "76e454b862295522c301e3378220d32a"
+      "fd45d43a8d6802972c852d53ca64a48c"
     ],
     [
       "Crypto.AEAD.fresh_iv",
@@ -583,7 +583,7 @@
         "refinement_interpretation_Tm_refine_2de20c066034c13bf76e9c0b94f4806c"
       ],
       0,
-      "2b9cb7c844cfad015aa412fd76dd01a3"
+      "81af424e4d4f169b7d83c1c7c71ec531"
     ],
     [
       "Crypto.AEAD.frame_fresh_iv",
@@ -611,7 +611,7 @@
         "typing_Spec.GaloisField.__proj__GF__item__t"
       ],
       0,
-      "34138da715dbbc82718b1c2e5e89c70e"
+      "81abb7b8b4853584c2b1b984af2fca52"
     ],
     [
       "Crypto.AEAD.is_fresh_iv",
@@ -682,7 +682,7 @@
         "typing_Spec.Poly1305.size_key"
       ],
       0,
-      "87716c794c1e65705ad9c31313a5eafc"
+      "3b21f79b79e6d43c1bf39235ca4ac9f3"
     ],
     [
       "Crypto.AEAD.is_fresh_iv",
@@ -782,7 +782,7 @@
         "typing_Spec.Poly1305.size_key"
       ],
       0,
-      "db977153360d9cf82accb78bf3ce0707"
+      "ed5545386586452b654cdf1c8064ac7a"
     ],
     [
       "Crypto.AEAD.tag_len",
@@ -832,7 +832,7 @@
         "typing_Spec.AES.gf8", "typing_Spec.GaloisField.__proj__GF__item__t"
       ],
       0,
-      "0d600ca435dde8a18c49998e86883bae"
+      "61ffb73b9df7ac2fb9f88de4b94fb207"
     ],
     [
       "Crypto.AEAD.tag_len",
@@ -841,7 +841,7 @@
       1,
       [ "@query" ],
       0,
-      "f7de8b8a6486e3c422c4ef35fb99f1eb"
+      "f8e2bfb7a29f5b51f2347585d9e9c3b3"
     ],
     [
       "Crypto.AEAD.encrypt",
@@ -932,7 +932,7 @@
         "typing_Spec.Poly1305.size_block"
       ],
       0,
-      "c1d58638ec5bddab8a31a0abd30c41c4"
+      "ea3c10d7b7789b027fbf57e945bf1e91"
     ],
     [
       "Crypto.AEAD.encrypt",
@@ -941,7 +941,7 @@
       1,
       [ "@query" ],
       0,
-      "2e91f1c3b9012dd91ea60884dc17f722"
+      "a39cded3cfb001969d2b117b54ffdae0"
     ],
     [
       "Crypto.AEAD.encrypt",
@@ -1133,7 +1133,7 @@
         "unit_inversion", "unit_typing"
       ],
       0,
-      "82900c74344dc8dd01cb0861159cde47"
+      "ad44688cd152c925dfc7fc4c0f580356"
     ],
     [
       "Crypto.AEAD.decrypt",
@@ -1186,9 +1186,9 @@
         "equation_Spec.Poly1305.size_block",
         "function_token_typing_Declassify.declassify",
         "function_token_typing_FStar.UInt8.t",
-        "function_token_typing_Lib.IntTypes.uint8",
-        "lemma_FStar.UInt.pow2_values", "lemma_FStar.UInt32.uv_inv",
-        "lemma_FStar.UInt32.vu_inv",
+        "function_token_typing_Lib.IntTypes.uint8", "int_inversion",
+        "int_typing", "lemma_FStar.UInt.pow2_values",
+        "lemma_FStar.UInt32.uv_inv", "lemma_FStar.UInt32.vu_inv",
         "lemma_LowStar.Monotonic.Buffer.len_gsub",
         "lemma_LowStar.Monotonic.Buffer.length_as_seq",
         "lemma_LowStar.Monotonic.Buffer.length_null_1",
@@ -1226,7 +1226,7 @@
         "typing_Spec.Poly1305.size_block"
       ],
       0,
-      "83a66569275c63d88a050f0fb3eae73a"
+      "1bb809f7820577aab355d88ea78857ca"
     ],
     [
       "Crypto.AEAD.decrypt",
@@ -1235,7 +1235,7 @@
       1,
       [ "@query" ],
       0,
-      "a0b9becbc0c5301e4e31cbe373e458fa"
+      "270ca74cbddc14684bba72f5e85f6a0a"
     ],
     [
       "Crypto.AEAD.decrypt",
@@ -1434,7 +1434,7 @@
         "typing_tok_EverCrypt.Error.Success@tok"
       ],
       0,
-      "bdf4bb2fad299cb46d5fc12c27170bd1"
+      "40c521cb224d04300712ada83a30ec29"
     ],
     [
       "Crypto.AEAD.free",
@@ -1478,7 +1478,7 @@
         "typing_Spec.GaloisField.__proj__GF__item__t"
       ],
       0,
-      "3d01522f49201b42354a9b6519807b30"
+      "dc171e06c3b04f57ab7f52e0744392c0"
     ]
   ]
 ]
