@@ -96,7 +96,7 @@ let send_tch sto m =
   | Some r ->
     // TODO Jonathan trace from slice
     let b = MITLS.Repr.to_bytes r in
-    trace ("send "^hex_of_bytes b);
+    trace ("send (truncated) CH "^hex_of_bytes b);
     let sto = { sto with out_pos = r.MITLS.Repr.end_pos } in
     correct sto
 
@@ -117,7 +117,7 @@ let send_ch
   | Some r ->
     let t' = Transcript.extend stt (Transcript.LR_ClientHello r) t in
     let b = MITLS.Repr.to_bytes r in
-    trace ("send "^hex_of_bytes b);
+    trace ("send CH "^hex_of_bytes b);
     let sto = { sto with out_pos = r.MITLS.Repr.end_pos } in
     correct (sto, t')
 
@@ -134,7 +134,7 @@ let send_sh
   | Some r ->
     let t' = Transcript.extend stt (Transcript.LR_ServerHello r) t in
     let b = MITLS.Repr.to_bytes r in
-    trace ("send "^hex_of_bytes b);
+    trace ("send SH "^hex_of_bytes b);
     let sto = { sto with out_pos = r.MITLS.Repr.end_pos } in
     correct (sto, t')
 

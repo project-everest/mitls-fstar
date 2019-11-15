@@ -107,10 +107,13 @@ let client_ClientHello (Client region config r) =
 
   let ha = Negotiation.offered_ha offer0 in
   let ms = create_msg_state region ParseFlights.F_c_wait_ServerHello random ha in
+  let no_tx : trans 0 = Transcript.Start None in
+
+  // FIXME(adl) send_tch is buggy
   // Send the (possibly-truncated) ClientHello, without transcript so far.
-  match Send.send_tch ms.sending offer0 with
+  match Send.send_ch ms.digest no_tx ms.sending HSM.(M_client_hello offer0) with
   | Error z -> Error z
-  | Correct sending -> (
+  | Correct (sending, tx0) -> (
 
   // This is specification-only, ensuring that offer0 has the
   // canonical binders used to keep track of the tch transcript,
@@ -122,8 +125,8 @@ let client_ClientHello (Client region config r) =
   let full0 = {full_retry = None; full_ch = offer0} in
 
   // Allocate state with the "main" offered hash algorithm for the digest
-  assume False; //19-09-14 TBC
-  let tag, di, tx_tch = transcript_start region ha None offer0 false in
+//  assume False; //19-09-14 TBC
+//  let tag, di, tx_tch = transcript_start region ha None offer0 false in
   
   // Compute the binders
   let ks', offer1, sending = (
@@ -132,18 +135,19 @@ let client_ClientHello (Client region config r) =
     | (_,psks) -> (
       // Both derives the binder keys and stores the associated early secrets
       let ks', binder_keys = KS.ks_client13_get_binder_keys ks psks in
-      let binders = client_Binders region ha tx_tch di full0 binder_keys in
+      let binders = client_Binders region ha tx0 ms.digest full0 binder_keys in
       let offer1 = HSM.set_binders offer0 binders in
 
+      // FIXME(adl) not implemented, and probably incorrect
       // Extend the transcript from tx_tch with R_CompleteTCH, as
       // possibly required for 0RTT.
-      let tx1 = Send.patch_binders ms.digest tx_tch sending binders in
+      let tx1 = Send.patch_binders ms.digest tx0 sending binders in
 
       // Set up 0RTT keys if offered
       let sending =
         if Negotiation.find_early_data offer0 then (
           trace "setting up 0RTT";
-          let digest_CH = transcript_extract di tx1 in
+          let digest_CH = transcript_extract ms.digest tx1 in
           // TODO LATER consider doing export & register within KS
           let early_exporter_secret, edk = KS.ks_client13_ch ks digest_CH in
           export ms.epochs early_exporter_secret;
@@ -154,7 +158,7 @@ let client_ClientHello (Client region config r) =
 
   // assert(tx_tch == Ghost.hide (transcript_tch full0));
   r := C_wait_ServerHello full0 ms ks;
-  let ms = {ms with digest = di; sending = sending} in
+  let ms = {ms with sending = sending} in
 
   // In both cases, the transcript is now at [ClientHello None offer1]
   let h1 = get() in
@@ -269,10 +273,11 @@ let client_HelloRetryRequest (Client region config r) hrr =
 
 // #push-options "--max_ifuel 3 --z3rlimit 32"
 let client_ServerHello (Client region config r) sh =
+  push_frame ();
   trace "client_ServerHello";
   let cfg,_ = config in
   let C_wait_ServerHello offer ms ks = !r in
-  match Negotiation.client_accept_ServerHello cfg offer.full_ch sh with
+  let r = match Negotiation.client_accept_ServerHello cfg offer.full_ch sh with
   | Error z -> Receive.InError z
   | Correct (cs,pski) -> (
     //assert (Correct? (Negotiation.selected_version sh));
@@ -360,6 +365,7 @@ let client_ServerHello (Client region config r) sh =
       //   InAck false false
       // end
       ))
+  in pop_frame (); r
 
 // let client_ServerHello_HRR s ch1 hri sh =
 //   trace "client_ServerHello";
@@ -531,7 +537,7 @@ let client13_Finished1 hs ee client_cert_request server_cert_certverify finished
     // match Negotiation.clientComplete_13 hs.nego ee ocr oc ocv digestCert with
 
   let digest_maced = transcript_extract ms.digest transcript_maced in
-  match extend13 ms.sending ms.digest (HSM.M13_finished digest_maced) transcript_maced with
+  match extend13 ms.sending ms.digest (HSM.M13_finished finished) transcript_maced with
   | Error z -> Receive.InError z
   | Correct transcript_Finished1 -> (
   let digest_Finished1 = transcript_extract ms.digest transcript_Finished1 in
@@ -540,7 +546,7 @@ let client13_Finished1 hs ee client_cert_request server_cert_certverify finished
   // ADL: 4th returned value is the exporter master secret.
   // should be passed to application somehow --- store in Nego? We need agreement.
 
-  if not (HMAC.verify (dsnd sfin_key) digest_maced digest_maced)
+  if not (HMAC.verify (dsnd sfin_key) digest_maced finished)
   then
     Receive.InError (fatalAlert Decode_error, "Finished MAC did not verify: expected digest "^Bytes.print_bytes digest_maced)
   else (

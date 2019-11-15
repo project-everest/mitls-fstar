@@ -109,10 +109,10 @@ let parse_common
     if parsed_tag = tag then  //and this dynamic check gives us the lens postcondition
       let r = R.mk_from_const_slice b f_begin pos p132 in
       E.Correct (Some (r, pos))
-    else E.Error unexpected_flight_error
+    else (trace "Bad message type"; E.Error unexpected_flight_error)
   end
-  else if pos = LP.validator_error_not_enough_data then E.Correct None
-  else E.Error parsing_error
+  else if pos = LP.validator_error_not_enough_data then (trace "Not enough data"; E.Correct None)
+  else (trace "Parsing error"; E.Error parsing_error)
 
 
 /// Helper function to handle the case when there is an error or insufficient data
@@ -390,12 +390,16 @@ private let parse_hsm13_c_cv
 #set-options "--z3rlimit 50"
 let receive_c13_wait_Finished1 st b f_begin f_end
 = let flt = F_c13_wait_Finished1 in
-
+//  let ({LP.base = base; LP.len = _;}) = R.to_slice b in
+//  let tmp = Bytes.of_buffer (f_end - f_begin) (B.sub base f_begin (f_end - f_begin)) in
+//  trace ("Server finished flight (1.3)"^Bytes.hex_of_bytes tmp);
+  trace "Parsing EncryptedExtensions";
   let r = parse_hsm13_ee b f_begin in
   match r with
   | E.Error _ | E.Correct None ->
     err_or_insufficient_data r flt b f_begin f_end
   | E.Correct (Some (ee_repr, ee_end)) ->
+    trace "Parsing CertRequest";
     let r = parse_hsm13_cr b ee_end in
     match r with
     | E.Correct None ->
@@ -407,6 +411,7 @@ let receive_c13_wait_Finished1 st b f_begin f_end
        | E.Correct (Some (cr_repr, cr_end)) ->
          Some cr_repr, cr_end
      in
+     trace "Parsing Cert/CertVerify";
      let r = parse_hsm13_c_cv b c_cv_begin in
      match r with
      | E.Correct None ->
@@ -418,6 +423,7 @@ let receive_c13_wait_Finished1 st b f_begin f_end
          | E.Correct (Some (c_repr, cv_repr, c_cv_end)) ->
            Some (c_repr, cv_repr), c_cv_end
        in
+       trace "Parsing Finished";
        let r = parse_hsm13_fin b fin_begin in
        match r with
        | E.Error _ | E.Correct None ->

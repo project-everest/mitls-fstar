@@ -215,8 +215,9 @@ private let server_ClientHello_13 (ch:HSM.ch) (sh:HSM.sh) (ks:s_init)
 // Only if we are sure this is the 1st CH
 let server_ClientHello1 st offer
   : St Receive.incoming =
+  trace ("server_ClientHello "^(B.hex_of_bytes (HSM.clientHello_serializer32 offer)));
   let Server region config r = st in
-  let S_wait_ClientHello random = !r in
+  let S_wait_ClientHello random recv = !r in
   let soffer = {retry = None; s_ch = offer} in
 
   match Nego.server_ClientHello config offer with
@@ -254,7 +255,9 @@ let server_ClientHello1 st offer
     | Correct (tag1, di1, tx1) ->
       let pfs = if accept_0rtt then PF.F_s13_wait_EOED else PF.F_s13_wait_Finished2 in
       let ms0 : msg_state region pfs random ha =
-        {create_msg_state region pfs random ha with digest = di} in
+        {create_msg_state region pfs random ha with
+	  receiving = recv;
+	  digest = di} in
       if accept_0rtt then (
         let ees, ets = KS.ks_server13_0rtt_key ks tag1 in
          export ms0.epochs ees;
@@ -278,6 +281,7 @@ let server_ClientHello1 st offer
       }) in
       let tag_SH = LB.alloca 0z (H.hash_len ha) in
       let sd = Send.signals ms0.sending (Some (false, accept_0rtt)) false in
+      trace("ServerHello bytes: "^(Bytes.hex_of_bytes (HSM.serverHello_serializer32 sh)));
       match Send.send_tag_sh di #(Ghost.hide 1) tx1 sd (HSM.M_server_hello sh) tag_SH with
       | Error z -> Recv.InError z
       | Correct (sd, tx2) ->

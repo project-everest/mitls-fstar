@@ -860,6 +860,9 @@ noeq type server_state
   =
   | S_wait_ClientHello:
     random: TLSInfo.random ->
+    recv: Recv.(r:state {
+      PF.length_parsed_bytes r.pf_st == 0 \/
+      in_progress r == PF.F_s_Idle }) ->
     server_state region cfg
 
   // Stateful HRR
@@ -914,12 +917,12 @@ let server_step
   (st0 st1: server_state region cfg)
   =
   match st0, st1 with
-  | S_wait_ClientHello r0, S13_sent_HelloRetryRequest r1 _ _ ->
+  | S_wait_ClientHello r0 _, S13_sent_HelloRetryRequest r1 _ _ ->
     r1 == r0
   | S13_sent_HelloRetryRequest r0 retry m0,
     S13_sent_ServerHello offer sh ee _ m1 _ _ ->
     offer.retry == Some retry
-  | S_wait_ClientHello _, S13_sent_ServerHello _ _ _ _ _ _ _
+  | S_wait_ClientHello _ _, S13_sent_ServerHello _ _ _ _ _ _ _
   | S13_sent_ServerHello _ _ _ _ _ _ _, S13_wait_Finished2 _ _ _ _ _
   | S13_wait_Finished2 _ _ _ _ _, S13_complete _ _ _ _ _
     -> True
@@ -948,7 +951,7 @@ let server_invariant #region #config (ss: server_state region config) h = True
 let server_nonce (#region:rgn) (#cfg:server_config) (s:server_state region cfg)
   : TLSInfo.random =
   match s with
-  | S_wait_ClientHello random -> random
+  | S_wait_ClientHello random _ -> random
   | S13_sent_HelloRetryRequest random _ _ -> random
   | S13_sent_ServerHello _ sh _ _ _ _ _ -> HSM.sh_random sh
   | S13_wait_Finished2 mode _ _ _ _
@@ -967,7 +970,7 @@ let server_ha (#region:rgn) (#cfg:server_config) (s:server_state region cfg)
 let server_flight (#region:rgn) (#cfg:server_config) (s:server_state region cfg)
   : PF.in_progress_flt_t =
   match s with
-  | S_wait_ClientHello _
+  | S_wait_ClientHello _ _
   | S13_sent_HelloRetryRequest _ _ _
   | S13_sent_ServerHello _ _ _ _ _ _ _ -> PF.F_s_Idle
   | S13_wait_Finished2 _ _ eoed _ _ ->
@@ -1190,36 +1193,33 @@ let rec bkey_list_bytesize (bkeys: list Negotiation.bkey13) =
 
 module Binders = ParsersAux.Binders
 
-#push-options "--max_fuel 0 --max_ifuel 0"
-
+#push-options "--admit_smt_queries true"
 let get_handshake_repr (m:HSM.handshake)
-  : Stack (b:MITLS.Repr.const_slice & MITLS.Repr.Handshake.repr b)
+  : StackInline (b:MITLS.Repr.const_slice & MITLS.Repr.Handshake.repr b)
   (requires fun h0 -> True)
   (ensures fun h0 (| _, r |) h1 ->
     B.modifies B.loc_none h0 h1 /\
     MITLS.Repr.value r == m)
   =
-  push_frame();
+  let b = B.alloca 0z 8192ul in
+  push_frame ();
   let len = HSM.handshake_size32 m in
-  let b = B.alloca 0z len in
   let slice = LP.make_slice b len in
   let Some r = MITLS.Repr.Handshake.serialize slice 0ul m in
-  pop_frame();
+  pop_frame ();
   (| MITLS.Repr.of_slice slice, r |)
 
 let get_handshake13_repr (m:HSM.handshake13)
-  : Stack (b:MITLS.Repr.const_slice & MITLS.Repr.Handshake13.repr b)
+  : StackInline (b:MITLS.Repr.const_slice & MITLS.Repr.Handshake13.repr b)
   (requires fun h0 -> True)
   (ensures fun h0 (|_, r|) h1 ->
     B.modifies B.loc_none h0 h1 /\
     MITLS.Repr.value r == m)
   =
-  push_frame ();
   let len = HSM.handshake13_size32 m in
-  let b = B.alloca 0z len in
+  let b = B.alloca 0z 8192ul in
   let slice = LP.make_slice b len in
   let Some r = MITLS.Repr.Handshake13.serialize slice 0ul m in
-  pop_frame ();
   (| MITLS.Repr.of_slice slice, r |)
 #pop-options
 
