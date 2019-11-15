@@ -15,7 +15,7 @@
         "fuel_guarded_inversion_EverCrypt.ec_curve"
       ],
       0,
-      "ab75a4990ed672c2c4752165e81218ba"
+      "fa7419674a9e36f050b25c28ac2abd98"
     ],
     [
       "ECGroup.point",
@@ -30,7 +30,7 @@
         "typing_FStar.Bytes.bytes"
       ],
       0,
-      "edde7046ab40e953146725cbba115679"
+      "cf3773974f60ea63a4e5d215455c965f"
     ],
     [
       "ECGroup.ec_all_curve",
@@ -46,7 +46,7 @@
         "refinement_interpretation_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
       ],
       0,
-      "8386ec92ff1ffcb5026959185166238f"
+      "e089bcd0a9204457e5a331151626310c"
     ],
     [
       "ECGroup.__proj__EC_CORE__item___0",
@@ -59,7 +59,7 @@
         "refinement_interpretation_Tm_refine_88a982c45d92fce449f91a119832f38d"
       ],
       0,
-      "956c599ee9d20a0a968e50ddb13abc16"
+      "f73134c9695f933f9e7c0c2dee5a3dbf"
     ],
     [
       "ECGroup.__proj__EC_UNKNOWN__item___0",
@@ -72,7 +72,7 @@
         "refinement_interpretation_Tm_refine_eaf563ed7ffdac721a2ffd1c059631e6"
       ],
       0,
-      "7325f4d32aa476962cacc9f1a5bbe09f"
+      "be1bb73c86002deb19d38a1f899c2c04"
     ],
     [
       "ECGroup.pre_keyshare",
@@ -95,7 +95,7 @@
         "typing_ECGroup._key", "typing_FStar.Bytes.bytes"
       ],
       0,
-      "37e2cb33736c5c0522b680d81b466026"
+      "0e747e67873038a5e9b682f3b13aef05"
     ],
     [
       "ECGroup.__proj__KS_CC__item___0",
@@ -108,7 +108,7 @@
         "refinement_interpretation_Tm_refine_75033e3d62eeb30c851e43b03e75be19"
       ],
       0,
-      "8881f91758f044d5121e826749d361d0"
+      "d12478280f0568c4a92e00e6c480cc62"
     ],
     [
       "ECGroup.__proj__KS_CC__item___1",
@@ -121,7 +121,7 @@
         "refinement_interpretation_Tm_refine_75033e3d62eeb30c851e43b03e75be19"
       ],
       0,
-      "0cc576ec740dec817024f65e903cd345"
+      "ed7351c19302522af121816ccda93c43"
     ],
     [
       "ECGroup.__proj__KS_X25519__item___0",
@@ -134,7 +134,7 @@
         "refinement_interpretation_Tm_refine_81c6f60dc95eec95122f242ef166cd95"
       ],
       0,
-      "c7ee7caac724368b666df65ef1660873"
+      "c81ddf3743620326d148199e281b70d2"
     ],
     [
       "ECGroup.__proj__KS_X448__item__pub",
@@ -147,7 +147,7 @@
         "refinement_interpretation_Tm_refine_c9a2fe89d4710b6fd3ffa98ede9374a0"
       ],
       0,
-      "ff2c5daa4cc264d4a126f5d8d82c08be"
+      "f3c475a9e060d12d6ae09042b925eb71"
     ],
     [
       "ECGroup.__proj__KS_X448__item__priv",
@@ -160,7 +160,7 @@
         "refinement_interpretation_Tm_refine_c9a2fe89d4710b6fd3ffa98ede9374a0"
       ],
       0,
-      "c2ec110a070612bb724dac95cda3ae83"
+      "bc4fa3746a0b277b5bfc3dc236bdf66f"
     ],
     [
       "ECGroup.pre_share",
@@ -176,7 +176,7 @@
         "typing_FStar.Bytes.bytes"
       ],
       0,
-      "b63c0f1cf1616c0383ee947176f91576"
+      "4d2b768a2d0f48dee90e06f257bfa7e6"
     ],
     [
       "ECGroup.__proj__S_CC__item___0",
@@ -189,7 +189,7 @@
         "refinement_interpretation_Tm_refine_05591511480b117eab365732eb8db81f"
       ],
       0,
-      "77dcab9db43a3b28a40b2f7df829f37b"
+      "7ce417b8b30f198078c41145a6be645e"
     ],
     [
       "ECGroup.__proj__S_X25519__item___0",
@@ -202,7 +202,7 @@
         "refinement_interpretation_Tm_refine_3fe025d9655cfc205e806357ac63a5cb"
       ],
       0,
-      "e4baffc2c02f5d1c6ac06a900bc26d88"
+      "f82f829f1d67226488b151be348c1f80"
     ],
     [
       "ECGroup.__proj__S_X448__item___0",
@@ -215,7 +215,7 @@
         "refinement_interpretation_Tm_refine_699fa5fe2bf10284a105031d3185a838"
       ],
       0,
-      "00861a66235ad1d04f329893bfdb553d"
+      "348f6d6f24ac940e2684e380108650a5"
     ],
     [
       "ECGroup.pubshare",
@@ -243,7 +243,7 @@
         "typing_ECGroup.uu___is_KS_CC"
       ],
       0,
-      "eda14a98d6cf2f6f0e08ea1564324c7e"
+      "8dbae7a770bea9f835c4d328b1622c67"
     ],
     [
       "ECGroup.keygen",
@@ -329,7 +329,7 @@
         "typing_FStar.Set.mem", "typing_Spec.Poly1305.size_key"
       ],
       0,
-      "272acb92809e23936b8dc070ab0b004c"
+      "2f3ac37c22b8da74732a39ee6fad82eb"
     ],
     [
       "ECGroup.dh_initiator",
@@ -341,7 +341,10 @@
         "constructor_distinct_FStar.Integers.W16",
         "constructor_distinct_FStar.Integers.W31",
         "constructor_distinct_FStar.Integers.W8",
-        "constructor_distinct_Lib.IntTypes.U32", "data_elim_ECGroup.KS_CC",
+        "constructor_distinct_Lib.IntTypes.PUB",
+        "constructor_distinct_Lib.IntTypes.SEC",
+        "constructor_distinct_Lib.IntTypes.U32",
+        "constructor_distinct_Lib.IntTypes.U8", "data_elim_ECGroup.KS_CC",
         "data_elim_ECGroup.Mkpoint", "data_elim_ECGroup.S_CC",
         "disc_equation_ECGroup.KS_CC", "disc_equation_ECGroup.KS_X25519",
         "disc_equation_ECGroup.KS_X448", "disc_equation_ECGroup.S_CC",
@@ -350,9 +353,12 @@
         "disc_equation_EverCrypt.ECC_X448",
         "equality_tok_FStar.Integers.W16@tok",
         "equality_tok_FStar.Integers.W31@tok",
-        "equality_tok_FStar.Integers.W8@tok", "equation_ECGroup.bytelen",
-        "equation_ECGroup.group", "equation_ECGroup.keyshare",
-        "equation_ECGroup.secret", "equation_ECGroup.share",
+        "equality_tok_FStar.Integers.W8@tok",
+        "equality_tok_Lib.IntTypes.PUB@tok",
+        "equality_tok_Lib.IntTypes.U8@tok", "equation_ECGroup._key",
+        "equation_ECGroup.bytelen", "equation_ECGroup.group",
+        "equation_ECGroup.keyshare", "equation_ECGroup.secret",
+        "equation_ECGroup.share", "equation_EverCrypt.ecdh_state",
         "equation_FStar.Bytes.lbytes",
         "equation_FStar.HyperStack.ST.equal_stack_domains",
         "equation_FStar.HyperStack.ST.modifies_none",
@@ -364,12 +370,17 @@
         "equation_FStar.Monotonic.HyperStack.is_wf_with_ctr_and_tip",
         "equation_FStar.Monotonic.HyperStack.mem",
         "equation_FStar.Monotonic.HyperStack.modifies",
-        "equation_FStar.UInt.uint_t", "equation_Prims.nat",
+        "equation_FStar.UInt.uint_t", "equation_Lib.IntTypes.byte_t",
+        "equation_Lib.IntTypes.int_t", "equation_Lib.IntTypes.pub_int_t",
+        "equation_LowStar.Buffer.buffer", "equation_LowStar.Buffer.pointer",
+        "equation_LowStar.Buffer.trivial_preorder", "equation_Prims.nat",
         "equation_TLS.Curve25519.point",
         "fuel_guarded_inversion_ECGroup.point",
         "fuel_guarded_inversion_EverCrypt.ec_curve",
+        "function_token_typing_EverCrypt.ecdh_state_s",
         "function_token_typing_FStar.Monotonic.Heap.heap",
         "function_token_typing_FStar.UInt8.t",
+        "function_token_typing_Lib.IntTypes.byte_t",
         "lemma_FStar.HyperStack.ST.lemma_same_refs_in_stack_regions_intro",
         "lemma_FStar.Map.lemma_ContainsDom",
         "lemma_FStar.Map.lemma_InDomConcat",
@@ -380,7 +391,8 @@
         "lemma_FStar.Map.lemma_equal_intro",
         "lemma_FStar.Set.mem_complement", "lemma_FStar.Set.mem_empty",
         "lemma_FStar.Set.mem_subset", "lemma_FStar.UInt32.uv_inv",
-        "lemma_LowStar.Monotonic.Buffer.address_liveness_insensitive_buffer",
+        "lemma_LowStar.Monotonic.Buffer.lemma_live_equal_mem_domains",
+        "lemma_LowStar.Monotonic.Buffer.length_null_1",
         "lemma_LowStar.Monotonic.Buffer.loc_includes_none",
         "lemma_LowStar.Monotonic.Buffer.modifies_liveness_insensitive_buffer_weak",
         "primitive_Prims.op_AmpAmp", "primitive_Prims.op_BarBar",
@@ -389,6 +401,7 @@
         "projection_inverse_BoxBool_proj_0",
         "projection_inverse_BoxInt_proj_0",
         "projection_inverse_ECGroup.KS_CC__0",
+        "projection_inverse_ECGroup.KS_CC__1",
         "projection_inverse_ECGroup.S_CC__0",
         "projection_inverse_FStar.Integers.Signed__0",
         "projection_inverse_FStar.Integers.Unsigned__0",
@@ -397,11 +410,12 @@
         "refinement_interpretation_Tm_refine_1ef7293eba83d36b8048a3e7f4c953d9",
         "refinement_interpretation_Tm_refine_379d104eb4e93e4b7c171c2bc0c85c67",
         "refinement_interpretation_Tm_refine_542f9d4f129664613f2483a6c88bc7c2",
+        "refinement_interpretation_Tm_refine_567a055c7e103f88c2e27739cccfb387",
+        "refinement_interpretation_Tm_refine_573cfed777dae20cc82e8fef9622857e",
         "refinement_interpretation_Tm_refine_6acbd542a506e88ac4d5cc64073faf87",
         "refinement_interpretation_Tm_refine_71ea40360194fe02ee1272538c9cacbc",
         "refinement_interpretation_Tm_refine_a4ddaaa0c5ada3c52c38846ce399248a",
         "refinement_interpretation_Tm_refine_b43b16fcb582977fd56f68ee8088c262",
-        "refinement_interpretation_Tm_refine_c9903ed86819bb1602141d1a77bd124d",
         "refinement_interpretation_Tm_refine_f13070840248fced9d9d60d77bdae3ec",
         "typing_ECGroup.bytelen", "typing_FStar.Bytes.len",
         "typing_FStar.Map.concat", "typing_FStar.Map.contains",
@@ -413,11 +427,10 @@
         "typing_FStar.Set.complement", "typing_FStar.Set.empty",
         "typing_FStar.UInt32.v", "typing_LowStar.Buffer.trivial_preorder",
         "typing_LowStar.Monotonic.Buffer.address_liveness_insensitive_locs",
-        "typing_LowStar.Monotonic.Buffer.loc_buffer",
         "typing_LowStar.Monotonic.Buffer.loc_none"
       ],
       0,
-      "c41c0429e35a13bfcc2266ed14c74f94"
+      "d76b8b576d94a317df91dfd18ef17c2e"
     ],
     [
       "ECGroup.parse_curve",
@@ -429,7 +442,7 @@
         "primitive_Prims.op_LessThan"
       ],
       0,
-      "afd7c1703f3f6b933038f58155882b0f"
+      "5f06beab85203aa1780f9687aeb3679f"
     ],
     [
       "ECGroup.parse_point",
@@ -497,7 +510,7 @@
         "typing_Parsers.UncompressedPointRepresentation66.uncompressedPointRepresentation66_parser32"
       ],
       0,
-      "4e456ae9a5f8211eb8c2308e8cfc7c7d"
+      "9025865ff78186f1b3474ef1268235dc"
     ],
     [
       "ECGroup.parse_partial",
@@ -565,7 +578,7 @@
         "typing_Spec.Poly1305.size_key"
       ],
       0,
-      "9ca5c02f58a5aefb430cd5cf4869379e"
+      "100913693663fa5abe25a40ce50ae2aa"
     ],
     [
       "ECGroup.serialize_point",
@@ -632,7 +645,7 @@
         "typing_Spec.Poly1305.size_key"
       ],
       0,
-      "21f00a686a9fa9c2047f05dcf8ae786d"
+      "e64428cedbd56eb8fb71078be38e18ce"
     ],
     [
       "ECGroup.curve_id",
@@ -655,7 +668,7 @@
         "fuel_guarded_inversion_EverCrypt.ec_curve"
       ],
       0,
-      "2247ae71cfccdcbeb1bd378b75839517"
+      "effe199a2f15ce1016236ad7a3a88c15"
     ],
     [
       "ECGroup.serialize",
@@ -716,7 +729,7 @@
         "typing_Spec.Poly1305.size_key"
       ],
       0,
-      "d9593c42fc1dfc697c06df1803540cf4"
+      "efca26826d3add7cd379bb1d7ea33d3c"
     ]
   ]
 ]

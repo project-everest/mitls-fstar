@@ -107,13 +107,8 @@ let invalidateSession hs = ()
 // ServerHello in plaintext, we continue with encrypted traffic.
 // Otherwise, we just returns buffered messages and signals.
 
-<<<<<<< HEAD
 let rec next_fragment_bounded hs i (max32: UInt32.t) =
-  trace "next_fragment";
-=======
-let rec next_fragment_bounded hs i max =
   trace ("next_fragment_bounded["^(string_of_int max)^"]");
->>>>>>> Extend server side
   match hs with 
   | Client region config r -> (
     let st0 = !r in 
