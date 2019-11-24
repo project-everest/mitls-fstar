@@ -228,7 +228,7 @@ let rec recv_fragment hs #i rg f =
         | None -> Recv.InAck false false // nothing happened
         | Some (sh_msg,pos) ->
 	  update_recv_pos hs pos; // FIXME should have been done in Recv_SH
-          let shr = RH.serverHello (sh_msg.PF.sh_msg) in
+          let shr = RH.serverHello (sh_msg.PF.sh) in
 	  let sh = shr.R.vv in
           let h3 = HST.get() in
           if HSM.is_hrr sh then
@@ -249,11 +249,11 @@ let rec recv_fragment hs #i rg f =
         match sflight with
         | None -> Recv.InAck false false // nothing happened
         | Some sflight ->
-	  let ee = RH13.get_ee_repr sflight.PF.ee_msg in
-	  let fin = RH13.get_fin_repr (PF.Mkc13_wait_Finished1?.fin_msg sflight) in
-	  let ocr = match PF.Mkc13_wait_Finished1?.cr_msg sflight with
+	  let ee = RH13.get_ee_repr sflight.PF.c13_w_f1_ee in
+	  let fin = RH13.get_fin_repr sflight.PF.c13_w_f1_fin in
+	  let ocr = match sflight.PF.c13_w_f1_cr with
 	    | None -> None | Some cr -> let x = RH13.get_cr_repr cr in Some x.R.vv in
-	  let oc_cv = match PF.Mkc13_wait_Finished1?.c_cv_msg sflight with
+	  let oc_cv = match sflight.PF.c13_w_f1_c_cv with
 	    | None -> None | Some (c,cv) ->
 	      let x = RH13.get_c_repr c in
 	      let y = RH13.get_cv_repr cv in
@@ -275,7 +275,7 @@ let rec recv_fragment hs #i rg f =
         match nst with
         | None -> Recv.InAck false false // nothing happened
         | Some nst ->
-	  let nst = RH13.get_nst_repr (PF.Mkc13_Complete?.nst_msg nst) in
+	  let nst = RH13.get_nst_repr nst.PF.c13_c_nst in
 	  update_recv_pos hs (nst.R.end_pos); // FIXME(adl)!!
           Client.client13_NewSessionTicket hs (nst.R.vv)
      end
@@ -299,7 +299,7 @@ let rec recv_fragment hs #i rg f =
 	  r := S_wait_ClientHello n rcv2;
 	  Recv.InAck false false // nothing happened
         | Some ch ->
-          let chr = RH.clientHello (ch.PF.ch_msg) in
+          let chr = RH.clientHello (ch.PF.ch) in
 	  let ch = chr.R.vv in
           let h3 = HST.get() in
           let r = Server.server_ClientHello hs ch in
