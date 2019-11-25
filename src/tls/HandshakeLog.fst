@@ -83,8 +83,20 @@ let append_hs_transcript
 let extend_hs_transcript (l:erased_transcript) (m:msg { valid_transcript (reveal_log l @ [m]) } ) : Tot erased_transcript =
     append_hs_transcript l [m]
 
+
+private
+let coerce (t2: Type) (#t1: Type) (x1: t1)
+    : Pure t2 (requires (t1 == t2))
+              (ensures (fun y -> y == x1))
+    = x1
+
 let print_hsl (hsl:erased_transcript) : Tot bool =
     if false then
+    let hsl = coerce hs_transcript hsl in
+        (* ^ otherwise, a `reveal` coercion will be inserted below and
+         *   bump this function into GHOST. This only makes sense in an
+         *   unsatisfiable context (which we are from the `if false`) since
+         *   `erased_transcript` is an `erased _`, and cannot be a `list _`. *)
     let sl = List.Tot.map HandshakeMessages.string_of_handshakeMessage hsl in
     let s = List.Tot.fold_left (fun x y -> x^", "^y) "" sl in
     IO.debug_print_string ("Current log: " ^ s)

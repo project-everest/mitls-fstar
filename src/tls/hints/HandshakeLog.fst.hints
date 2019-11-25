@@ -1,5 +1,5 @@
 [
-  "\u001e[Ü¿¶*˘wÀ\u001e>Dk\u00010Í",
+  "–çó\u0017\b&ŒqTMú\u0017Ú–(¿",
   [
     [
       "HandshakeLog.gforall",
@@ -127,6 +127,18 @@
       "aa782eb15958f12404d6dd608d2de8d9"
     ],
     [
+      "HandshakeLog.coerce",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "refinement_interpretation_Tm_refine_de9aeb070296eed20d879692d0254af0"
+      ],
+      0,
+      "241408fed8b8d5ffc542e1e5572947bc"
+    ],
+    [
       "HandshakeLog.gforall_list_to_list_refined",
       1,
       2,
@@ -159,7 +171,7 @@
         "typing_HandshakeLog.gforall", "typing_TLSInfo.safe_region"
       ],
       0,
-      "e550bc2435766cc88ffccf2ca9be8a5a"
+      "64cc5dd7a0f2fdb32ab24fee95d087ce"
     ],
     [
       "HandshakeLog.valid_transcript_to_list_valid_hs_msg_aux",
@@ -198,7 +210,7 @@
         "typing_HandshakeLog.gforall", "typing_TLSInfo.safe_region"
       ],
       0,
-      "765a4c0a97100a94acb67bb123d33d95"
+      "a8757d394ee820fb93b7430ff6c32a93"
     ],
     [
       "HandshakeLog.valid_transcript_to_list_valid_hs_msg_aux_inj",
@@ -207,7 +219,7 @@
       1,
       [ "@query" ],
       0,
-      "20130f3eb2c82bc25b934ab07fed488f"
+      "7f8a23920863af734ef3b0a62f23c94e"
     ],
     [
       "HandshakeLog.valid_transcript_to_list_valid_hs_msg_aux_inj",
@@ -256,7 +268,7 @@
         "typing_HandshakeLog.gforall", "typing_TLSInfo.safe_region"
       ],
       0,
-      "3a3d412fde57a3b046880d454be57354"
+      "5835f114bc4d569a208d28b38731c506"
     ],
     [
       "HandshakeLog.transcript_bytes",
@@ -271,7 +283,7 @@
         "refinement_interpretation_Tm_refine_7913c46ed823df5e60659625cd966658"
       ],
       0,
-      "a8bd4dfa11c7618918aac30dd91e4fad"
+      "42a72e3d8dc9647cbf0d85df4daf59b6"
     ]
   ]
 ]
