@@ -1,23 +1,22 @@
 module TLS.Handshake.Client
 
-/// Implementing the transitions of the Client state machine:
-/// processing incoming flights of messages, issuing messages, and
-/// advancing the key schedule.
-///
+/// Implements the transitions of the Client state machine: processing
+/// input flights of messages, issuing output messages, and advancing
+/// the key schedule.
+
 open Mem
 open TLSConstants
 open TLSError
-open FStar.HyperStack.ST
+// open FStar.HyperStack.ST included in Mem
 
 module B = LowStar.Buffer // not FStar.Bytes
 module HS = FStar.HyperStack
-module HSM = HandshakeMessages
-module Nego = Negotiation
-module Hash = Hashing.Spec
-module HMAC = Old.HMAC.UFCMA
-module KS = Old.KeySchedule
 
+// module KS = Old.KeySchedule
+module Msg = HandshakeMessages
 open TLS.Handshake.Machine
+
+type tag = Hashing.Spec.anyTag
 
 (*** Hello messages ***)
 
@@ -50,14 +49,14 @@ val client_ClientHello:
               //(Nego.gs_of offer)
              ))
             else k = KS.(C(C12_Full_CH offer.CH.random)) /\
-          t = [HSL.Msg (HSM.M_client_hello offer)] ))
+          t = [HSL.Msg (Msg.M_client_hello offer)] ))
         | _ -> False )))
 *)
 
 /// C_wait_ServerHello (initial) ==> C_wait_ServerHello (retried)
 val client_HelloRetryRequest:
   hs: client ->
-  hrr: HSM.hrr ->
+  hrr: Msg.hrr ->
   ST Receive.incoming
   (requires fun h0 ->
     let Client _ _ r = hs in
@@ -69,7 +68,7 @@ val client_HelloRetryRequest:
 /// C_wait_ServerHello (any) ==> C13_wait_Finished1
 val client_ServerHello:
   hs: client ->
-  sh: HSM.sh ->
+  sh: Msg.sh ->
   ST Receive.incoming
   (requires fun h0 ->
     let Client rgn cfg r = hs in
@@ -89,16 +88,20 @@ val client_ServerHello:
 
 val client13_Finished2:
   hs: client ->
-  // cr: option HSM.certificateRequest13 ->
+  // cr: option Msg.certificateRequest13 ->
   ST (result unit)
   (requires fun h0 ->
     let Client _ _ r = hs in
     invariant hs h0 /\
-    C13_complete? (HS.sel h0 r))
+    (match HS.sel h0 r with
+    | C13_complete _ _ _ _ _ _ (Finished_pending _ _ false) -> True
+    | _ -> False ))
   (ensures fun h0 r h1 ->
     let Client _ _ r = hs in
     invariant hs h1 /\
-    C13_complete? (HS.sel h1 r) )
+    (match HS.sel h0 r with
+    | C13_complete _ _ _ _ _ _ (Finished_sent _ _) -> True
+    | _ -> False ))
 
 /// C13_wait_Finished1 ==> C13_complete
 ///
@@ -111,9 +114,9 @@ val client13_Finished2:
 ///
 val client13_Finished1:
   hs: client ->
-  ee: HSM.encryptedExtensions ->
-  ocr: option HSM.certificateRequest13 ->
-  ocvv: option (HSM.certificate13 & HSM.certificateVerify13) ->
+  ee: Msg.encryptedExtensions ->
+  ocr: option Msg.certificateRequest13 ->
+  ocvv: option (Msg.certificate13 & Msg.certificateVerify13) ->
   svd: Bytes.bytes ->
   ST Receive.incoming
   (requires fun h0 ->
@@ -128,7 +131,7 @@ val client13_Finished1:
 
 val client13_NewSessionTicket:
   hs: client ->
-  nst: HSM.newSessionTicket13 ->
+  nst: Msg.newSessionTicket13 ->
   ST Receive.incoming
   (requires fun h0 ->
     let Client _ _ r = hs in
@@ -149,9 +152,9 @@ val early_rejected:
 
 val client12_ServerHelloDone:
   hs: client ->
-  cert: HSM.certificate12 ->
+  cert: Msg.certificate12 ->
   ske_bytes: Bytes.bytes -> // delayed parsing
-  cr: option HSM.certificateRequest12 ->
+  cr: option Msg.certificateRequest12 ->
   ST Receive.incoming
   (requires fun h0 -> invariant hs h0)
   (ensures fun h0 i h1 -> invariant hs h1)
@@ -159,8 +162,8 @@ val client12_ServerHelloDone:
 val client12_R_ServerFinished:
   hs: client ->
   f: Bytes.bytes ->
-  digest_nst: Hash.anyTag ->
-  digest_sf: Hash.anyTag ->
+  digest_nst: tag ->
+  digest_sf: tag ->
   ST Receive.incoming
   (requires fun h0 -> invariant hs h0)
   (ensures fun h0 i h1 -> invariant hs h1)
@@ -168,7 +171,7 @@ val client12_R_ServerFinished:
 val client12_ServerFinished:
   hs: client ->
   fin: Bytes.bytes ->
-  digest: Hash.anyTag ->
+  digest: tag ->
   ST Receive.incoming
   (requires fun h0 -> invariant hs h0)
   (ensures fun h0 i h1 -> invariant hs h1)
@@ -176,8 +179,8 @@ val client12_ServerFinished:
 val client12_NewSessionTicket:
   hs: client ->
   resume: bool ->
-  digest: Hash.anyTag ->
-  nst: HSM.newSessionTicket12 ->
+  digest: tag ->
+  nst: Msg.newSessionTicket12 ->
   ST Receive.incoming
   (requires fun h0 -> invariant hs h0)
   (ensures fun h0 i h1 -> invariant hs h1)

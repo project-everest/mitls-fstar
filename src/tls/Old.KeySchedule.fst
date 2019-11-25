@@ -291,6 +291,7 @@ val ks_client_init:
   ST (ks_client * option keyShareClientHello)
   (requires fun h0 -> True)
   (ensures fun h0 (ks,ogxl) h1 -> 
+    C_wait_ServerHello? ks /\
     h0 == h1 /\ 
     (None? ogl ==> None? ogxl) /\
     (Some? ogl ==> (Some? ogxl /\ Some?.v ogl == List.Tot.map tag_of_keyShareEntry (Some?.v ogxl))))
@@ -316,7 +317,7 @@ let ks_client_init cr is_quic ogl =
     let gs = map_ST_keygen groups in
     let gxl = List.Tot.map serialize_share gs in
     C_wait_ServerHello cr is_quic [] gs, Some gxl
-
+ 
 type ticket13 = t:Ticket.ticket{Ticket.Ticket13? t}
 type bkey13 = psk_identifier * t:Ticket.ticket{Ticket.Ticket13? t}
 type binder_key = i:binderId & bk:binderKey i

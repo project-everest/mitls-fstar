@@ -61,11 +61,13 @@ let slice_t = b:LP.slice (B.trivial_preorder byte) (B.trivial_preorder byte){
 }
 
 noeq type state = {
-  pf_st    : PF.state;
-  rcv_b    : slice_t;
-  rcv_from : uint_32;
-  rcv_to   : i:uint_32{rcv_from <= i /\ i <= rcv_b.LP.len}
+  pf_st    : PF.state; // updated by parseFlight
+  rcv_b    : slice_t;  // provided by the application; should be a const slice
+  rcv_from : uint_32;  // TODO: incremented after parsing a flight.
+  rcv_to   : i:uint_32{rcv_from <= i /\ i <= rcv_b.LP.len} // incremented as we buffer incoming bytes. Could disappear from low-level API.
 }
+
+// proposed v1 API: keep pf_st within the machine; keep rcv_to only in HL wrapper; 
 
 let in_progress (s:state) = PF.in_progress_flt s.pf_st
 
@@ -365,6 +367,8 @@ let in_next_keys (r:incoming) = InAck? r && InAck?.next_keys r
 let in_complete (r:incoming)  = InAck? r && InAck?.complete r
 
 
+// QUIC API. 
+// We'll still return signals, but we'll write the generated keys in small application-provided buffers. 
 
 (*** Test ***)
 
