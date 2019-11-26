@@ -33,7 +33,6 @@ SOURCES = \
   Hacl_Ed25519.c \
   Hacl_Hash.c \
   Hacl_AES.c \
-  Hacl_Kremlib.c \
   Hacl_SHA3.c \
   Hacl_Poly1305_32.c \
   Hacl_Poly1305_128.c \
