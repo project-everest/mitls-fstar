@@ -50,7 +50,7 @@ else
 endif
 endif
 
-INCLUDE_DIRS 	= $(KREMLIN_HOME)/include include stub ffi .
+INCLUDE_DIRS 	= $(KREMLIN_HOME)/kremlib/dist/minimal $(KREMLIN_HOME)/include include stub ffi .
 
 # we are now packaging most miTLS modules into meaningful C compilation units
 # See src/tls/Makefile.Kremlin for the list of bundles that are used
