@@ -54,7 +54,7 @@ else ifeq ($(OS),Windows_NT)
   AR		= $(MARCH)-w64-mingw32-ar
   VARIANT	= -mingw
   SO		= dll
-  LDFLAGS	+= -Xlinker --version-script -Xlinker libmitls_internal_script -Wl,--out-implib,libmitls.dll.a
+  LDFLAGS	+= -Xlinker --version-script -Xlinker libmitls_internal_script -Wl,--out-implib,libmitls.dll.a -lbcrypt
   HEAD		= head
   export PATH := $(LD_PATH):$(PATH)
 endif
