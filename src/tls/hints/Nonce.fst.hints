@@ -49,6 +49,7 @@
         "projection_inverse_FStar.Integers.Unsigned__0",
         "refinement_interpretation_Tm_refine_05e15190c946858f68c69156f585f95a",
         "refinement_interpretation_Tm_refine_0ec011aea9f93256a3547ad9f0c667f1",
+        "refinement_interpretation_Tm_refine_365abba901205a01d0ef28ebf2198c47",
         "refinement_interpretation_Tm_refine_542f9d4f129664613f2483a6c88bc7c2",
         "refinement_interpretation_Tm_refine_54b601985451a2432a353b711858af42",
         "typing_FStar.Map.concat", "typing_FStar.Map.contains",
@@ -62,7 +63,20 @@
         "typing_Spec.Poly1305.size_key"
       ],
       0,
-      "41ceb3b22225981129abc1ffa18642ed"
+      "be1fadfdfb7b69ec8d693ebb8a6f0009"
+    ],
+    [
+      "Nonce.ex_rid",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "equation_Prims.eqtype",
+        "refinement_interpretation_Tm_refine_414d0a9f578ab0048252f8c8f552b99f",
+        "typing_FStar.Monotonic.HyperHeap.rid"
+      ],
+      0,
+      "c76f9383111c35154b3bc35f66ed6247"
     ],
     [
       "Nonce.injective",
@@ -77,7 +91,7 @@
         "typing_FStar.Bytes.bytes"
       ],
       0,
-      "5f1b74ba95be323f3c320053cb3caffa"
+      "6a94602248bb4b84456d9e63aca89994"
     ],
     [
       "Nonce.injective",
@@ -95,7 +109,7 @@
         "typing_FStar.Bytes.bytes", "typing_FStar.Monotonic.HyperHeap.rid"
       ],
       0,
-      "fb4449629cd480cda9d72d9d331cca31"
+      "0eab8c132ba12edc80a306a3b4cbe658"
     ],
     [
       "Nonce.nonce_rid_table",
@@ -132,7 +146,7 @@
         "typing_Tm_abs_26eef3985d99a56697f5a9d337882dba"
       ],
       0,
-      "3a2f6a4c04543fb022f9d59d6f48eccd"
+      "fd690aafd320f6252790881332b73bdb"
     ],
     [
       "Nonce.fresh",
@@ -154,7 +168,7 @@
         "typing_Nonce.n_rid"
       ],
       0,
-      "acb70c4cbf45489d04cc062df9d1a247"
+      "7dff080d6bfebc5dfb9c22e4ce44a032"
     ],
     [
       "Nonce.fresh_region",
@@ -176,7 +190,7 @@
         "typing_Nonce.n_rid"
       ],
       0,
-      "b6bf162a0da6ca866f7fef787f6a5d18"
+      "24a60de8d24138235b3ad448a72784b9"
     ],
     [
       "Nonce.registered",
@@ -191,7 +205,7 @@
         "typing_FStar.Bytes.bytes"
       ],
       0,
-      "00ed10e6fd70693e26f104229732af18"
+      "2f2d843e04af8ac452dba1692c1df5ca"
     ],
     [
       "Nonce.testify",
@@ -207,7 +221,7 @@
         "typing_FStar.Bytes.bytes"
       ],
       0,
-      "20a5d6efc1e1d9c1d38c53e1187be1d6"
+      "7855e9b09b67d7f7f54387bd99550821"
     ],
     [
       "Nonce.mkHelloRandom",
@@ -224,7 +238,7 @@
         "typing_FStar.Bytes.bytes"
       ],
       0,
-      "af8105defb4be0207ac6713472c1caf8"
+      "02fcb11c5bfd4be502f0c27d2559eb45"
     ],
     [
       "Nonce.mkHelloRandom",
@@ -328,6 +342,7 @@
         "refinement_interpretation_Tm_refine_0f442191ed8e9fcd2af22596d4d9e607",
         "refinement_interpretation_Tm_refine_1a1278f1aecd37594ba20d888b7fd230",
         "refinement_interpretation_Tm_refine_31bfde48b952b6d7959cd5a2aa36404e",
+        "refinement_interpretation_Tm_refine_365abba901205a01d0ef28ebf2198c47",
         "refinement_interpretation_Tm_refine_414d0a9f578ab0048252f8c8f552b99f",
         "refinement_interpretation_Tm_refine_4deaad73cd92bc948bb28924e869c4ab",
         "refinement_interpretation_Tm_refine_542f9d4f129664613f2483a6c88bc7c2",
@@ -366,7 +381,7 @@
         "typing_Nonce.n_rid", "typing_Spec.Poly1305.size_key"
       ],
       0,
-      "dd40381202aa03efcc02e2016d204f62"
+      "c07588b9750e44c7284c51b8b61bd40d"
     ],
     [
       "Nonce.lookup",
@@ -381,7 +396,7 @@
         "typing_FStar.Bytes.bytes"
       ],
       0,
-      "950fdec8841abc5804020f6f0f018f69"
+      "095f51ca49e3e405cd9f9c4b320f94d2"
     ],
     [
       "Nonce.nonce_rids_exists",
@@ -396,7 +411,7 @@
         "typing_FStar.Bytes.bytes"
       ],
       0,
-      "8502518d17440167661dd99256a2a0a6"
+      "900d9d769c41bffb4915ff404a74f0d4"
     ],
     [
       "Nonce.nonce_rids_exists",
@@ -412,7 +427,7 @@
         "typing_FStar.Bytes.bytes"
       ],
       0,
-      "92d80fbff50fa89f01f23c01c5f7b761"
+      "650451adf80be24289859ae8cc15e4f6"
     ],
     [
       "Nonce.new_region",
@@ -498,7 +513,7 @@
         "typing_Mem.tls_tables_region"
       ],
       0,
-      "8951ec5bb421737f3937a0d04cb8856b"
+      "fdeb8d42f5d2bc66cbf8f30f0aa62af5"
     ]
   ]
 ]

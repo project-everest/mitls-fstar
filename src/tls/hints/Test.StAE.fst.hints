@@ -10,15 +10,10 @@
         "@MaxIFuel_assumption", "@query", "bool_inversion",
         "equation_FStar.HyperStack.ST.is_eternal_region",
         "equation_FStar.Monotonic.HyperStack.is_heap_color",
-        "equation_FStar.Monotonic.HyperStack.is_wf_with_ctr_and_tip",
-        "equation_FStar.Monotonic.HyperStack.mem",
-        "equation_FStar.UInt.min_int", "equation_Mem.rgn",
-        "lemma_FStar.Monotonic.HyperHeap.lemma_root_has_color_zero",
-        "primitive_Prims.op_LessThanOrEqual", "primitive_Prims.op_Negation",
-        "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_05e15190c946858f68c69156f585f95a",
+        "equation_Mem.rgn", "primitive_Prims.op_LessThanOrEqual",
+        "primitive_Prims.op_Negation", "projection_inverse_BoxBool_proj_0",
         "refinement_interpretation_Tm_refine_31bfde48b952b6d7959cd5a2aa36404e",
-        "refinement_interpretation_Tm_refine_7f37da2c7bc73049d03abda609f5f8b3",
+        "refinement_interpretation_Tm_refine_365abba901205a01d0ef28ebf2198c47",
         "typing_FStar.Monotonic.HyperHeap.color",
         "typing_FStar.Monotonic.HyperHeap.rid_freeable",
         "typing_FStar.Monotonic.HyperHeap.root",
@@ -26,7 +21,7 @@
         "typing_TLSInfo.safe_region"
       ],
       0,
-      "f071db5b34c809eec60db8e6446ce43d"
+      "fb4c31ee89356d5773082838d44ce78e"
     ],
     [
       "Test.StAE.discard",
@@ -39,7 +34,7 @@
         "lemma_FStar.HyperStack.ST.lemma_same_refs_in_stack_regions_intro"
       ],
       0,
-      "17b4ce65e972c9fb5b8030b7ebcd9811"
+      "5057612165ce4e84e739a750a8dc227b"
     ],
     [
       "Test.StAE.eprint",
@@ -77,7 +72,7 @@
         "typing_FStar.Monotonic.HyperStack.is_mm"
       ],
       0,
-      "e429ff5f8e623e6926dca5535532ce3e"
+      "c7722bbf1e6a911311d1e80fafd1b3f5"
     ],
     [
       "Test.StAE.nprint",
@@ -86,7 +81,7 @@
       1,
       [ "@query" ],
       0,
-      "15e396baf406f4428344e630607cc606"
+      "8670633414842772bf286e61a83c56a9"
     ]
   ]
 ]
