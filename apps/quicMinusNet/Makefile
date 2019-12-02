@@ -21,7 +21,7 @@ ifeq ($(OS),Windows_NT)
     MLCRYPTO_HOME := $(shell cygpath -u ${MLCRYPTO_HOME})
     EVERCRYPT_HOME := $(shell cygpath -u ${EVERCRYPT_HOME})
   endif
-  LIBPATHS=$(EVERCRYPT_HOME)/../dist/compact:$(MITLS_HOME)/src/pki:$(MITLS_HOME)/src/tls/dist/compact:$(HACL_HOME)/providers/quic_provider:$(MLCRYPTO_HOME)/openssl
+  LIBPATHS=$(EVERCRYPT_HOME)/../dist/gcc-compatible:$(MITLS_HOME)/src/pki:$(MITLS_HOME)/src/tls/dist/compact:$(HACL_HOME)/providers/quic_provider:$(MLCRYPTO_HOME)/openssl
   PATH := $(LIBPATHS):$(PATH)
   CFLAGS+=-lbcrypt
   export PATH
@@ -29,7 +29,7 @@ else ifeq ($(UNAME),Darwin)
   LIBMITLS=libmitls.so
   LIBQC=libquiccrypto.so
   LIBPKI=libmipki.so
-  LIBPATHS=$(EVERCRYPT_HOME)/../dist/compact:$(MITLS_HOME)/src/pki:$(MITLS_HOME)/src/tls/dist/compact:$(HACL_HOME)/providers/quic_provider:$(MLCRYPTO_HOME)/openssl
+  LIBPATHS=$(EVERCRYPT_HOME)/../dist/gcc-compatible:$(MITLS_HOME)/src/pki:$(MITLS_HOME)/src/tls/dist/compact:$(HACL_HOME)/providers/quic_provider:$(MLCRYPTO_HOME)/openssl
   DYLD_LIBRARY_PATH := $(LIBPATHS):$(DYLD_LIBRARY_PATH)
   export DYLD_LIBRARY_PATH
 else ifeq ($(UNAME),Linux)
@@ -37,7 +37,7 @@ else ifeq ($(UNAME),Linux)
   LIBQC=libquiccrypto.so
   LIBPKI=libmipki.so
   CFLAGS+=-lpthread -pthread
-  LIBPATHS=$(EVERCRYPT_HOME)/../dist/compact:$(MITLS_HOME)/src/pki:$(MITLS_HOME)/src/tls/dist/compact:$(HACL_HOME)/providers/quic_provider:$(MLCRYPTO_HOME)/openssl
+  LIBPATHS=$(EVERCRYPT_HOME)/../dist/gcc-compatible:$(MITLS_HOME)/src/pki:$(MITLS_HOME)/src/tls/dist/compact:$(HACL_HOME)/providers/quic_provider:$(MLCRYPTO_HOME)/openssl
   LD_LIBRARY_PATH := $(LIBPATHS):$(LD_LIBRARY_PATH)
   export LD_LIBRARY_PATH
 endif

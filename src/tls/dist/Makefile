@@ -21,7 +21,7 @@ OPENSSL_HOME	?= $(MLCRYPTO_HOME)/openssl
 
 LD_DIRS 	= \
   $(OPENSSL_HOME) \
-  $(HACL_HOME)/dist/compact \
+  $(HACL_HOME)/dist/gcc-compatible \
   $(MITLS_HOME)/src/pki \
 
 LD_LIBS = evercrypt crypto mipki pthread
@@ -68,7 +68,7 @@ CFLAGS		+= -g -std=gnu11 -O3 \
 LDFLAGS 	+= $(addprefix -L,$(LD_DIRS)) $(addprefix -l,$(LD_LIBS)) \
 
 KREMLIB_A 	= $(KREMLIN_HOME)/kremlib/dist/generic/libkremlib.a
-EVERCRYPT_SO 	= $(HACL_HOME)/dist/compact/libevercrypt.$(SO)
+EVERCRYPT_SO 	= $(HACL_HOME)/dist/gcc-compatible/libevercrypt.$(SO)
 MIPKI_SO	= $(MITLS_HOME)/src/pki/libmipki.$(SO)
 
 $(KREMLIB_A) $(EVERCRYPT_SO) $(MIPKI_SO):
