@@ -102,6 +102,7 @@ let parse_common
          
 = fun b f_begin ->
   let lp_b = R.to_slice b in
+  assume (v lp_b.LP.len <= v LP.validator_max_length);
   let pos = validator lp_b f_begin in  //validator gives us the valid postcondition
 
   if pos <= LP.validator_max_length then begin
@@ -185,10 +186,10 @@ unfold let parse_common_wp
   (#p1:LP.parser k1 a1) (p132:LS.parser32 p1)
   (#a2:Type) (cl:LP.clens a1 a2)
   (b:R.const_slice) (f_begin:uint_32)
-:exn_wp_t (option (R.repr_p a1 b p132 & uint_32))
+:exn_wp_t (option (R.repr_pos_p a1 b p1 & uint_32))
 = fun p h0 ->
-  R.live h0 b /\
-  f_begin <= b.R.len /\
+  R.live_slice h0 b /\
+  f_begin <= b.R.slice_len /\
   (forall r h1.
      (B.modifies B.loc_none h0 h1 /\
       equal_domains h0 h1 /\
@@ -197,9 +198,9 @@ unfold let parse_common_wp
        | E.Correct None -> True
        | E.Correct (Some (repr, pos)) ->
          repr.R.start_pos == f_begin /\
-         repr.R.end_pos == pos /\
-         R.valid repr h1 /\
-         cl.LP.clens_cond (R.value repr))) ==> p r h1)
+         R.end_pos repr == pos /\
+         R.valid_repr_pos repr h1 /\
+         cl.LP.clens_cond (R.value_pos repr))) ==> p r h1)
 
 
 inline_for_extraction noextract
@@ -222,7 +223,7 @@ let parse_common__
       (tag_fn m == tag) <==> cl.LP.clens_cond m})
   (acc:LP.accessor gacc)
   (b:R.const_slice) (f_begin:uint_32)
-: exn_repr (option (R.repr_p a1 b p132 & uint_32))
+: exn_repr (option (R.repr_pos_p a1 b p1 & uint_32))
   (parse_common_wp #a1 #k1 #p1 p132 #a2 cl b f_begin)
 = fun _ -> parse_common p132 validator tag_fn tag acc b f_begin
 
@@ -246,7 +247,7 @@ let parse_common_
       (tag_fn m == tag) <==> cl.LP.clens_cond m})
   (acc:LP.accessor gacc)
   (b:R.const_slice) (f_begin:uint_32)
-: TLSEXN (option (R.repr_p a1 b p132 & uint_32))
+: TLSEXN (option (R.repr_pos_p a1 b p1 & uint_32))
   (parse_common_wp #a1 #k1 #p1 p132 #a2 cl b f_begin)
 = TLSEXN?.reflect (parse_common__ p132 validator tag_fn tag acc b f_begin)
 
