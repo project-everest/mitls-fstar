@@ -1,6 +1,32 @@
 [
-  "«‡\u0002\u0014”K\u0012,uŒÔ\u00187\u001b¶L",
+  "FØÜ\u000e5?&[\u0005Æ<?\u0017‡A8",
   [
+    [
+      "HSL.Common.discard",
+      1,
+      2,
+      1,
+      [
+        "@query", "equation_FStar.HyperStack.ST.equal_stack_domains",
+        "equation_FStar.Monotonic.Heap.equal_dom",
+        "lemma_FStar.HyperStack.ST.lemma_same_refs_in_stack_regions_intro"
+      ],
+      0,
+      "aad9ae710165f2ab229395c2399fba94"
+    ],
+    [
+      "HSL.Common.trace",
+      1,
+      2,
+      1,
+      [
+        "@query", "equation_FStar.HyperStack.ST.equal_stack_domains",
+        "equation_FStar.Monotonic.Heap.equal_dom",
+        "lemma_FStar.HyperStack.ST.lemma_same_refs_in_stack_regions_intro"
+      ],
+      0,
+      "921e68208a3ef4dfbcce22f396889fac"
+    ],
     [
       "HSL.Common.valid_parsing",
       1,
@@ -31,7 +57,7 @@
         "typing_FStar.UInt32.sub", "typing_FStar.UInt32.v"
       ],
       0,
-      "56c9fedc9c0d25cd0c24bb7032fbd9f7"
+      "7edf9433773055c3d0e6ca1cb0d119e8"
     ],
     [
       "HSL.Common.valid_parsing12",
@@ -63,7 +89,7 @@
         "typing_FStar.UInt32.sub", "typing_FStar.UInt32.v"
       ],
       0,
-      "a12bddacd85939d5cb26c7b12cf6b8d6"
+      "9d187acec846f775103da8da18c22e7d"
     ],
     [
       "HSL.Common.valid_parsing13",
@@ -95,7 +121,7 @@
         "typing_FStar.UInt32.sub", "typing_FStar.UInt32.v"
       ],
       0,
-      "41656325a6cb8bf6a94ad7a500158236"
+      "a14f18c2b005e7862fed25f0eaaa247e"
     ]
   ]
 ]

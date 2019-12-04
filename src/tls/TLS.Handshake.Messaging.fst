@@ -50,6 +50,16 @@ unfold let trace = if DebugFlags.debug_HS then print else (fun _ -> ())
 /// The resulting record of sub-states is dynamically allocated in the
 /// handshake, and kept in most subsequent states of the machine:
 
+
+// QUICified API proposal
+noeq type msg_state0 (region: rgn) (inflight: PF.in_progress_flt_t) random ha  = {
+  digest: Transcript.state ha;
+  sending: Send.send_state;
+  receiving: Recv.(r:state {
+    PF.length_parsed_bytes r.pf_st == 0 \/ in_progress r == inflight });
+  epochs: Epochs.epochs region random; }
+
+
 // TODO complete regional refinements
 // TODO stateful epochs (or wait for their refactoring?)
 noeq type msg_state' (region: rgn) (inflight: PF.in_progress_flt_t) random ha  = {
@@ -78,7 +88,7 @@ let msg_state_footprint #region #inflight #random #ha (ms:msg_state region infli
 let create_msg_state (region: rgn) (inflight: PF.in_progress_flt_t) random ha:
   ST (msg_state region inflight random ha)
   (requires fun h0 -> True)
-  (ensures fun h0 mst h1 -> True)
+  (ensures fun h0 mst h1 -> msg_invariant mst (Transcript.Start None) h1)
 = assume false;
   // TODO. Who should allocate this receive buffer?
   let in_buf_len = 16000ul in

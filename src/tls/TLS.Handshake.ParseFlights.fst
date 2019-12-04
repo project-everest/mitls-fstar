@@ -109,10 +109,10 @@ let parse_common
     if parsed_tag = tag then  //and this dynamic check gives us the lens postcondition
       let r = R.mk_repr_pos_from_const_slice p132 b f_begin pos in
       E.Correct (Some (r, pos))
-    else E.Error unexpected_flight_error
+    else (trace "Bad message type"; E.Error unexpected_flight_error)
   end
-  else if pos = LP.validator_error_not_enough_data then E.Correct None
-  else E.Error parsing_error
+  else if pos = LP.validator_error_not_enough_data then (trace "Not enough data"; E.Correct None)
+  else (trace "Parsing error"; E.Error parsing_error)
 
 
 /// Helper function to handle the case when there is an error or insufficient data
@@ -276,7 +276,7 @@ let receive_s_Idle st b f_begin f_end
   | E.Error _ | E.Correct None ->
     err_or_insufficient_data r flt b f_begin f_end
   | E.Correct (Some (ch_repr, pos)) ->
-    check_eq_end_index_and_return pos f_end ({ ch_msg = ch_repr })
+    check_eq_end_index_and_return pos f_end ({ ch = ch_repr })
 
 let receive_c_wait_ServerHello st b f_begin f_end
 = let flt = F_c_wait_ServerHello in
@@ -286,7 +286,7 @@ let receive_c_wait_ServerHello st b f_begin f_end
   | E.Error _ | E.Correct None ->
     err_or_insufficient_data r flt b f_begin f_end
   | E.Correct (Some (sh_repr, pos)) ->
-    check_leq_end_index_and_return pos f_end ({sh_msg = sh_repr})
+    check_leq_end_index_and_return pos f_end ({sh = sh_repr})
 
 
 (*** 1.3 flights ***)
@@ -390,12 +390,16 @@ private let parse_hsm13_c_cv
 #set-options "--z3rlimit 50"
 let receive_c13_wait_Finished1 st b f_begin f_end
 = let flt = F_c13_wait_Finished1 in
-
+//  let ({LP.base = base; LP.len = _;}) = R.to_slice b in
+//  let tmp = Bytes.of_buffer (f_end - f_begin) (B.sub base f_begin (f_end - f_begin)) in
+//  trace ("Server finished flight (1.3)"^Bytes.hex_of_bytes tmp);
+  trace "Parsing EncryptedExtensions";
   let r = parse_hsm13_ee b f_begin in
   match r with
   | E.Error _ | E.Correct None ->
     err_or_insufficient_data r flt b f_begin f_end
   | E.Correct (Some (ee_repr, ee_end)) ->
+    trace "Parsing CertRequest";
     let r = parse_hsm13_cr b ee_end in
     match r with
     | E.Correct None ->
@@ -407,6 +411,7 @@ let receive_c13_wait_Finished1 st b f_begin f_end
        | E.Correct (Some (cr_repr, cr_end)) ->
          Some cr_repr, cr_end
      in
+     trace "Parsing Cert/CertVerify";
      let r = parse_hsm13_c_cv b c_cv_begin in
      match r with
      | E.Correct None ->
@@ -418,16 +423,17 @@ let receive_c13_wait_Finished1 st b f_begin f_end
          | E.Correct (Some (c_repr, cv_repr, c_cv_end)) ->
            Some (c_repr, cv_repr), c_cv_end
        in
+       trace "Parsing Finished";
        let r = parse_hsm13_fin b fin_begin in
        match r with
        | E.Error _ | E.Correct None ->
          err_or_insufficient_data r flt b f_begin f_end
        | E.Correct (Some (fin_repr, fin_end)) ->
          check_eq_end_index_and_return fin_end f_end ({
-           ee_msg = ee_repr;
-           cr_msg = cr_repr;
-           c_cv_msg = c_cv_repr;
-           fin_msg = fin_repr
+           c13_w_f1_ee = ee_repr;
+           c13_w_f1_cr = cr_repr;
+           c13_w_f1_c_cv = c_cv_repr;
+           c13_w_f1_fin = fin_repr
          })
 
 let receive_s13_wait_Finished2 st b f_begin f_end
@@ -448,8 +454,8 @@ let receive_s13_wait_Finished2 st b f_begin f_end
     | E.Error _ | E.Correct None -> err_or_insufficient_data r flt b f_begin f_end
     | E.Correct (Some (fin_repr, fin_end)) ->
       check_eq_end_index_and_return fin_end f_end ({
-        c_cv_msg = c_cv_repr;
-        fin_msg = fin_repr
+        s13_w_f2_c_cv = c_cv_repr;
+        s13_w_f2_fin = fin_repr
       })
 
 let receive_s13_wait_EOED st b f_begin f_end
@@ -460,7 +466,7 @@ let receive_s13_wait_EOED st b f_begin f_end
   | E.Error _ | E.Correct None ->
     err_or_insufficient_data r flt b f_begin f_end
   | E.Correct (Some (eoed_repr, pos)) ->
-    check_eq_end_index_and_return pos f_end ({ eoed_msg = eoed_repr })
+    check_eq_end_index_and_return pos f_end ({ eoed = eoed_repr })
 
 let receive_c13_Complete st b f_begin f_end
 = let flt = F_c13_Complete in
@@ -470,7 +476,7 @@ let receive_c13_Complete st b f_begin f_end
   | E.Error _ | E.Correct None ->
     err_or_insufficient_data r flt b f_begin f_end
   | E.Correct (Some (nst_repr, pos)) ->
-    check_eq_end_index_and_return pos f_end ({ nst_msg = nst_repr })
+    check_eq_end_index_and_return pos f_end ({ c13_c_nst = nst_repr })
 
 
 (*** 1.2 flights ***)
@@ -566,10 +572,10 @@ let receive_c12_wait_ServerHelloDone st b f_begin f_end
           err_or_insufficient_data r flt b f_begin f_end
         | E.Correct (Some (shd_repr, pos)) ->
           check_eq_end_index_and_return pos f_end ({
-            c_msg = c_repr;
-            ske_msg = ske_repr;
-            cr_msg = cr_repr;
-            shd_msg = shd_repr
+            c = c_repr;
+            ske = ske_repr;
+            cr = cr_repr;
+            shd = shd_repr
           })
 
 let receive_cs12_wait_Finished st b f_begin f_end
@@ -580,7 +586,7 @@ let receive_cs12_wait_Finished st b f_begin f_end
   | E.Error _ | E.Correct None ->
     err_or_insufficient_data r flt b f_begin f_end
   | E.Correct (Some (fin_repr, pos)) ->
-    check_eq_end_index_and_return pos f_end ({ fin_msg = fin_repr })
+    check_eq_end_index_and_return pos f_end ({ fin = fin_repr })
 
 let receive_c12_wait_NST st b f_begin f_end
 = let flt = F_c12_wait_NST in
@@ -590,7 +596,7 @@ let receive_c12_wait_NST st b f_begin f_end
   | E.Error _ | E.Correct None ->
     err_or_insufficient_data r flt b f_begin f_end
   | E.Correct (Some (nst_repr, pos)) ->
-    check_eq_end_index_and_return pos f_end ({ nst_msg = nst_repr })
+    check_eq_end_index_and_return pos f_end ({ c12_w_n_nst = nst_repr })
 
 let receive_s12_wait_CCS1 st b f_begin f_end
 = let flt = F_s12_wait_CCS1 in
@@ -600,4 +606,4 @@ let receive_s12_wait_CCS1 st b f_begin f_end
   | E.Error _ | E.Correct None ->
     err_or_insufficient_data r flt b f_begin f_end
   | E.Correct (Some (cke_repr, pos)) ->
-    check_eq_end_index_and_return pos f_end ({ cke_msg = cke_repr })
+    check_eq_end_index_and_return pos f_end ({ cke = cke_repr })

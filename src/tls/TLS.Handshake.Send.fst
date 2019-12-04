@@ -8,6 +8,8 @@ open FStar.Bytes
 open TLSError
 
 open FStar.HyperStack.ST
+
+module G = FStar.Ghost
 module HS = FStar.HyperStack
 
 // TODO may require switching from Tot to Stack
@@ -31,7 +33,7 @@ let write_at_most sto i max
     if lo = 0ul then
       None, sto
     else
-      let lb = LowStar.Buffer.sub sto.out_slice.LowParse.Low.Base.base sto.out_start lo in
+      let lb = LowStar.Buffer.sub sto.out_slice.LowParse.Low.Base.base sto.out_start (G.hide lo) in
       let o = Bytes.of_buffer lo lb in
       let rg = mkfrange i (v lo) (v lo) in
       Some (| rg, o |), { sto with out_start = sto.out_start + lo } in
@@ -96,7 +98,7 @@ let send_tch sto m =
   | Some r ->
     // TODO Jonathan trace from slice
     let b = MITLS.Repr.to_bytes r in
-    trace ("send "^hex_of_bytes b);
+    trace ("send (truncated) CH "^hex_of_bytes b);
     let sto = { sto with out_pos = r.MITLS.Repr.end_pos } in
     correct sto
 
@@ -117,7 +119,7 @@ let send_ch
   | Some r ->
     let t' = Transcript.extend stt (Transcript.LR_ClientHello r) t in
     let b = MITLS.Repr.to_bytes r in
-    trace ("send "^hex_of_bytes b);
+    trace ("send CH "^hex_of_bytes b);
     let sto = { sto with out_pos = r.MITLS.Repr.end_pos } in
     correct (sto, t')
 
@@ -134,7 +136,7 @@ let send_sh
   | Some r ->
     let t' = Transcript.extend stt (Transcript.LR_ServerHello r) t in
     let b = MITLS.Repr.to_bytes r in
-    trace ("send "^hex_of_bytes b);
+    trace ("send SH "^hex_of_bytes b);
     let sto = { sto with out_pos = r.MITLS.Repr.end_pos } in
     correct (sto, t')
 

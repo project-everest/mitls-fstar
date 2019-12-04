@@ -231,7 +231,10 @@ let process_hs (hs:Machine.state) (ctx:hs_in) : ML hs_result =
     let len = length ctx.input in
     let rg : Range.frange i = (len, len) in
     let f : Range.rbytes rg = ctx.input in
-    match H.recv_fragment hs rg f with
+    // Do not call HS if fragment is empty
+    let r = if len = 0 then Receive.InAck false false
+            else H.recv_fragment hs rg f in
+    match r with
     | Receive.InQuery _ _ -> trace "Unexpected handshake query"; HS_ERROR 252us
     | Receive.InError z -> api_error z
     | Receive.InAck nk complete ->

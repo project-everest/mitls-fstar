@@ -15,7 +15,7 @@
         "typing_FStar.Bytes.bytes"
       ],
       0,
-      "4bd6a65a918172104379fa8abb036da3"
+      "7937584e78cbd9cdfe45849e594e3f1f"
     ],
     [
       "HMAC.hmac",
@@ -87,7 +87,6 @@
         "equation_Spec.Agile.HMAC.lbytes",
         "equation_Spec.Hash.Definitions.block_length",
         "equation_Spec.Hash.Definitions.block_word_length",
-        "equation_Spec.Hash.Definitions.bytes",
         "equation_Spec.Hash.Definitions.hash_length",
         "equation_Spec.Hash.Definitions.hash_word_length",
         "equation_Spec.Hash.Definitions.word_length",
@@ -178,7 +177,6 @@
         "refinement_interpretation_Tm_refine_b43b16fcb582977fd56f68ee8088c262",
         "refinement_interpretation_Tm_refine_b913a3f691ca99086652e0a655e72f17",
         "refinement_interpretation_Tm_refine_c7753baa38cd99c4f00a675631dc1dde",
-        "refinement_interpretation_Tm_refine_c9a16ca0d72aa78c4eab0758f7f638fc",
         "refinement_interpretation_Tm_refine_eb93eb16bc8f440163424c3a62e7e9d8",
         "refinement_interpretation_Tm_refine_f13070840248fced9d9d60d77bdae3ec",
         "refinement_interpretation_Tm_refine_f2f0f2e9a5870778fa3e574677dadde8",
@@ -215,12 +213,10 @@
         "typing_LowStar.Monotonic.Buffer.loc_regions",
         "typing_LowStar.Monotonic.Buffer.loc_union",
         "typing_LowStar.Monotonic.Buffer.mnull", "typing_Prims.pow2",
-        "typing_Spec.Agile.HMAC.hmac",
-        "typing_Spec.Hash.Definitions.block_length",
         "typing_Spec.Hash.Definitions.hash_length"
       ],
       0,
-      "1013ee651a6d7b5f0bbac510f16464da"
+      "bff958d2b4bc85704fbe238df5d74427"
     ],
     [
       "HMAC.hmacVerify",
@@ -236,7 +232,7 @@
         "typing_FStar.Bytes.bytes"
       ],
       0,
-      "932695ce0400643e086f1a4f9e3ffc22"
+      "1d46e300b7c21e0908e0c61e66e142ba"
     ],
     [
       "HMAC.tls_mac",
@@ -255,7 +251,7 @@
         "refinement_interpretation_Tm_refine_e765bd0e38344d2dd480053ca7431bc5"
       ],
       0,
-      "aa67066927c00e9fb7d390a2094b4372"
+      "255d53024fa98d957c4ef6074295e44e"
     ],
     [
       "HMAC.tls_macVerify",
@@ -275,7 +271,7 @@
         "refinement_interpretation_Tm_refine_d847d52d360fa517dfae39fc7848d35c"
       ],
       0,
-      "aa8c64d40003d65cb75e599c6363b4da"
+      "1a3555a5b75c04b534bf70e2329cc700"
     ]
   ]
 ]

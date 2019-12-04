@@ -61,11 +61,13 @@ let slice_t = b:LP.slice (B.trivial_preorder byte) (B.trivial_preorder byte){
 }
 
 noeq type state = {
-  pf_st    : PF.state;
-  rcv_b    : slice_t;
-  rcv_from : uint_32;
-  rcv_to   : i:uint_32{rcv_from <= i /\ i <= rcv_b.LP.len}
+  pf_st    : PF.state; // updated by parseFlight
+  rcv_b    : slice_t;  // provided by the application; should be a const slice
+  rcv_from : uint_32;  // TODO: incremented after parsing a flight.
+  rcv_to   : i:uint_32{rcv_from <= i /\ i <= rcv_b.LP.len} // incremented as we buffer incoming bytes. Could disappear from low-level API.
 }
+
+// proposed v1 API: keep pf_st within the machine; keep rcv_to only in HL wrapper; 
 
 let in_progress (s:state) = PF.in_progress_flt s.pf_st
 
@@ -132,6 +134,12 @@ let only_changes_pf_state (st1 st0:state) : Type0
   st1.rcv_from == st0.rcv_from /\
   st1.rcv_to == st0.rcv_to
 
+unfold
+let changes_pf_state_and_updates_rcv_from (st1 st0:state) (pos:uint_32{pos <= st0.rcv_to}) : Type0
+= st1.rcv_b == st0.rcv_b /\
+  st1.rcv_from == pos /\
+  st1.rcv_to == st0.rcv_to
+
 
 /// Postcondition of the receive functions
 
@@ -154,7 +162,7 @@ let receive_post
      in_progress rst == inflight
    | Correct (Some flt, rst) ->
      invariant rst h1 /\
-     rst `only_changes_pf_state` st /\
+     changes_pf_state_and_updates_rcv_from rst st st.rcv_to /\
      valid st.rcv_from st.rcv_to flt h1 /\
      in_progress rst == PF.F_none /\
      PF.parsed_bytes rst.pf_st == Seq.empty)
@@ -179,7 +187,7 @@ let receive_post_with_leftover_bytes
    | Correct (Some (flt, idx_end), rst) ->
      invariant rst h1 /\
      idx_end <= st.rcv_to /\
-     rst `only_changes_pf_state` st /\
+     changes_pf_state_and_updates_rcv_from rst st idx_end /\
      valid st.rcv_from idx_end flt h1 /\
      in_progress rst == PF.F_none /\
      PF.parsed_bytes rst.pf_st == Seq.empty)
@@ -193,7 +201,7 @@ let wrap_pf_st
 = match r with
   | E.Error e -> E.Error e
   | E.Correct (None, pf_st) -> E.Correct (None, { st with pf_st = pf_st })
-  | E.Correct (Some flt, pf_st) -> E.Correct (Some flt, { st with pf_st = pf_st })
+  | E.Correct (Some flt, pf_st) -> E.Correct (Some flt, { st with pf_st = pf_st; rcv_from = st.rcv_to })
 
 
 (*** Public API ***)
@@ -284,7 +292,11 @@ let receive_c_wait_ServerHello (st:state)
   (requires receive_pre st PF.F_c_wait_ServerHello)
   (ensures receive_post_with_leftover_bytes st PF.F_c_wait_ServerHello PF.valid_c_wait_ServerHello)
 = let r = PF.receive_c_wait_ServerHello st.pf_st (cslice_of st) st.rcv_from st.rcv_to in
-  wrap_pf_st st r
+  match r with
+  | E.Error e -> E.Error e
+  | E.Correct (None, pf_st) -> E.Correct (None, { st with pf_st = pf_st })
+  | E.Correct (Some (flt, pos), pf_st) ->
+    E.Correct (Some (flt, pos), { st with pf_st = pf_st; rcv_from = pos })  
 
 
 (*** 1.3 flights ***)
@@ -365,6 +377,8 @@ let in_next_keys (r:incoming) = InAck? r && InAck?.next_keys r
 let in_complete (r:incoming)  = InAck? r && InAck?.complete r
 
 
+// QUIC API. 
+// We'll still return signals, but we'll write the generated keys in small application-provided buffers. 
 
 (*** Test ***)
 

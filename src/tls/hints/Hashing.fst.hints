@@ -57,7 +57,7 @@
         "typing_FStar.Bytes.len", "typing_Hacl.Hash.Definitions.hash_len"
       ],
       0,
-      "597085c280ddc71d1d45e65b15259a02"
+      "651cdf9e286ec2810918cd0f26c8f6e3"
     ],
     [
       "Hashing.compute",
@@ -72,7 +72,7 @@
         "typing_FStar.Bytes.bytes"
       ],
       0,
-      "91513b81cfc58455accb05d6b335e03e"
+      "61a5e3c67aa493a61dd87aec15487281"
     ],
     [
       "Hashing.compute",
@@ -233,7 +233,7 @@
         "typing_FStar.Set.union", "typing_FStar.UInt.fits",
         "typing_FStar.UInt32.v", "typing_FStar.UInt8.uint_to_t",
         "typing_Hacl.Hash.Definitions.hash_len",
-        "typing_Hashing.Spec.max_hash_length", "typing_Lib.IntTypes.bits",
+        "typing_Hashing.Spec.max_hash_length",
         "typing_LowStar.Buffer.trivial_preorder",
         "typing_LowStar.Monotonic.Buffer.address_liveness_insensitive_locs",
         "typing_LowStar.Monotonic.Buffer.as_addr",
@@ -247,11 +247,10 @@
         "typing_LowStar.Monotonic.Buffer.loc_union",
         "typing_LowStar.Monotonic.Buffer.mnull", "typing_Prims.pow2",
         "typing_Spec.Hash.Definitions.hash_length",
-        "typing_Spec.Hash.Definitions.word_length",
-        "typing_tok_Lib.IntTypes.U32@tok"
+        "typing_Spec.Hash.Definitions.word_length"
       ],
       0,
-      "f2f8ce83b428147e4331eb2acca19329"
+      "b9c34ac88f44e82ec81a5e090e462542"
     ],
     [
       "Hashing.accv'",
@@ -265,7 +264,7 @@
         "typing_FStar.Bytes.bytes"
       ],
       0,
-      "4238a270f8959d472cae1b19ae1b26b1"
+      "17d0e96f4ec9bc543cf9a5eea3abbac3"
     ],
     [
       "Hashing.start",
@@ -274,7 +273,7 @@
       1,
       [ "@query" ],
       0,
-      "7a5fdf8cfda1a9ee4305110f341c81a6"
+      "ad97251cad713999c1d3d05248412194"
     ],
     [
       "Hashing.extend",
@@ -290,7 +289,7 @@
         "typing_Hashing.content"
       ],
       0,
-      "b88ff8344327cd219c5914abfbc2e6b8"
+      "c4b118d437288f10f5af242f7ff8cf20"
     ],
     [
       "Hashing.start",
@@ -325,7 +324,7 @@
         "typing_Spec.Hash.Definitions.max_input_length"
       ],
       0,
-      "e9577dae70a646eb7edea0f97be11112"
+      "1038a7d10eef6abe93d1813ef1f240cf"
     ],
     [
       "Hashing.extend",
@@ -352,7 +351,7 @@
         "typing_Hashing.content"
       ],
       0,
-      "04d832aef15bec2f39f419042e116a52"
+      "9f43b4b21de9c59af6657e876817bf28"
     ],
     [
       "Hashing.finalize",
@@ -368,7 +367,7 @@
         "projection_inverse_Hashing.Inputs_b"
       ],
       0,
-      "3298e6e6e33763681131ef1475ced9e4"
+      "2bc5689995f43c064862bf2be14c3952"
     ],
     [
       "Hashing.compute_MD5SHA1",
@@ -467,7 +466,7 @@
         "typing_tok_Spec.Hash.Definitions.SHA1@tok"
       ],
       0,
-      "42edb6195fdc2974c61f094dd506a2a9"
+      "cf9a0a3a7d9558d49ba07a2025a24df2"
     ]
   ]
 ]

@@ -399,6 +399,10 @@ int RecvCallback(void* pv, unsigned char *buffer, size_t buffer_size)
         printf("Error %d returned from socket recv()\n", WSAGetLastError());
 	return -1;
     }
+    if(r){
+      printf("  INCOMING PACKET[%d]:\n", r);
+      dump(buffer, r);
+    }
     return (int)r;
 }
 

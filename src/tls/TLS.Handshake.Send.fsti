@@ -85,6 +85,12 @@ module LP = LowParse.Low.Base
 /// The rest of the slice is available for formatting new messages.
 ///
 /// Overflows
+
+// QUIC API:
+// [out_slice] (with start = pos = 0) as [output, output_len] input
+// [pos] as [written] output; we may simplify and always have start=0.
+// we'll get rid of to_be_written: output overflows are fatal.
+
 noeq type send_state = {
   // outgoing data, already formatted and hashed. Overflows are fatal.
   out_slice: (out_slice: LP.slice (B.trivial_preorder _) (B.trivial_preorder _) {
@@ -100,6 +106,28 @@ noeq type send_state = {
   outgoing_next_keys: option (bool & option bytes & bool);
   outgoing_complete: bool;
 }
+
+// proposed v1 API, distributing [send_state] as follows:
+
+// buffer for outgoing data, provided by caller, filled by Send,
+// already formatted and hashed. Overflows are fatal.
+type out_buffer = TLS.Handshake.Receive.slice_t
+
+// we used to have a start position updated by the client;
+// we will use instead pointer arithmetic.
+// out_start: (pos: UInt32.t{
+//  v pos <= v out_slice.LP.len });
+
+// updated by Send, QD-style, and finally returned to the application.
+type out_pos (b:out_buffer) = p:UInt32.t{ p <= b.LP.len }
+
+// also returned to the application, still supporting the high-level
+// API to TLS and Record; as next_keys_use, with next fragment after
+// CCS
+type out_signals =
+  next_keys: option (bool & option bytes & bool) &
+  complete:bool
+
 
 let footprint
   (sto: send_state)
