@@ -50,6 +50,16 @@ unfold let trace = if DebugFlags.debug_HS then print else (fun _ -> ())
 /// The resulting record of sub-states is dynamically allocated in the
 /// handshake, and kept in most subsequent states of the machine:
 
+
+// QUICified API proposal
+noeq type msg_state0 (region: rgn) (inflight: PF.in_progress_flt_t) random ha  = {
+  digest: Transcript.state ha;
+  sending: Send.send_state;
+  receiving: Recv.(r:state {
+    PF.length_parsed_bytes r.pf_st == 0 \/ in_progress r == inflight });
+  epochs: Epochs.epochs region random; }
+
+
 // TODO complete regional refinements
 // TODO stateful epochs (or wait for their refactoring?)
 noeq type msg_state' (region: rgn) (inflight: PF.in_progress_flt_t) random ha  = {
@@ -64,14 +74,6 @@ let msg_state (region: rgn) (inflight: PF.in_progress_flt_t) random ha  =
      M.loc_disjoint (Transcript.footprint ms.digest) (Send.footprint ms.sending) /\
      M.loc_disjoint (Transcript.footprint ms.digest) (Recv.loc_recv ms.receiving) /\
      M.loc_disjoint (Send.footprint ms.sending) (Recv.loc_recv ms.receiving) }
-
-// QUICified API proposal
-noeq type msg_state0 (region: rgn) (inflight: PF.in_progress_flt_t) random ha  = {
-  digest: Transcript.state ha;
-  sending: Send.send_state;
-  receiving: Recv.(r:state {
-    PF.length_parsed_bytes r.pf_st == 0 \/ in_progress r == inflight });
-  epochs: Epochs.epochs region random; }
 
 let msg_invariant #region #inflight #random #ha (ms:msg_state region inflight random ha) transcript h =
     Transcript.invariant ms.digest transcript h /\

@@ -8,6 +8,8 @@ open FStar.Bytes
 open TLSError
 
 open FStar.HyperStack.ST
+
+module G = FStar.Ghost
 module HS = FStar.HyperStack
 
 // TODO may require switching from Tot to Stack
@@ -31,7 +33,7 @@ let write_at_most sto i max
     if lo = 0ul then
       None, sto
     else
-      let lb = LowStar.Buffer.sub sto.out_slice.LowParse.Low.Base.base sto.out_start lo in
+      let lb = LowStar.Buffer.sub sto.out_slice.LowParse.Low.Base.base sto.out_start (G.hide lo) in
       let o = Bytes.of_buffer lo lb in
       let rg = mkfrange i (v lo) (v lo) in
       Some (| rg, o |), { sto with out_start = sto.out_start + lo } in
