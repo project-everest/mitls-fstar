@@ -23,10 +23,11 @@ module B = LowStar.Buffer
 module HS = FStar.HyperStack
 module C = LowStar.ConstBuffer
 module U32 = FStar.UInt32
-module D = LowStar.Native.DynamicRegion
 
 open FStar.Integers
 open FStar.HyperStack.ST
+
+module ST = FStar.HyperStack.ST
 module I = LowStar.ImmutableBuffer
 
 (* Summary:
@@ -465,8 +466,8 @@ let sub_ptr_stable (#t0 #t1:_) (r0:repr_ptr t0) (r1:repr_ptr t1) (h:HS.mem)
       (let b0 = C.cast r0.b in
        let b1 = C.cast r1.b in
        B.frameOf b0 == B.frameOf b1 /\
-      (D.region_lifetime_buf (B.frameOf b0) b1 ==>
-       D.region_lifetime_buf (B.frameOf b0) b0)))
+      (B.region_lifetime_buf b1 ==>
+       B.region_lifetime_buf b0)))
     [SMTPat (r0 `sub_ptr` r1);
      SMTPat (valid_if_live r1);
      SMTPat (valid r0 h)]
@@ -483,7 +484,7 @@ let sub_ptr_stable (#t0 #t1:_) (r0:repr_ptr t0) (r1:repr_ptr t1) (h:HS.mem)
         [SMTPat (r0.b `C.const_sub_buffer i len` r1.b)]
       = I.sub_ptr_value_is b0 b1 h i len r1.meta.repr_bytes
     in
-    D.region_lifetime_sub #_ #_ #_ #(I.immutable_preorder _) (B.frameOf b1) b1 b0;
+    B.region_lifetime_sub #_ #_ #_ #(I.immutable_preorder _) b1 b0;
     valid_if_live_intro r0 h
 
 /// `recall_stable_repr_ptr` Main lemma: if the underlying buffer is live
@@ -518,42 +519,43 @@ let is_stable_in_region #t (p:repr_ptr t) =
   let r = B.frameOf (C.cast p.b) in
   valid_if_live p /\
   B.frameOf (C.cast p.b) == r /\
-  D.region_lifetime_buf r (C.cast p.b)
+  B.region_lifetime_buf (C.cast p.b)
 
-let stable_region_repr_ptr (r:D.drgn) (t:Type) =
+let stable_region_repr_ptr (r:ST.drgn) (t:Type) =
   p:repr_ptr t {
     is_stable_in_region p /\
-    B.frameOf (C.cast p.b) == D.rid_of_drgn r
+    B.frameOf (C.cast p.b) == ST.rid_of_drgn r
   }
 
-let recall_stable_region_repr_ptr #t (r:D.drgn) (p:stable_region_repr_ptr r t)
+let recall_stable_region_repr_ptr #t (r:ST.drgn) (p:stable_region_repr_ptr r t)
   : Stack unit
     (requires fun h ->
-      HS.live_region h (D.rid_of_drgn r))
+      HS.live_region h (ST.rid_of_drgn r))
     (ensures fun h0 _ h1 ->
       h0 == h1 /\
       valid p h1)
-  = D.recall_liveness_buf r (C.cast p.b);
+  = B.recall (C.cast p.b);
     recall_stable_repr_ptr p
 
 private
-let ralloc_and_blit (r:D.drgn) (src:C.const_buffer LP.byte) (len:U32.t)
+let ralloc_and_blit (r:ST.drgn) (src:C.const_buffer LP.byte) (len:U32.t)
   : ST (b:C.const_buffer LP.byte)
     (requires fun h0 ->
-      HS.live_region h0 (D.rid_of_drgn r) /\
+      HS.live_region h0 (ST.rid_of_drgn r) /\
       U32.v len == C.length src /\
       C.live h0 src)
     (ensures fun h0 b h1 ->
       let c = C.as_qbuf b in
       let s = Seq.slice (C.as_seq h0 src) 0 (U32.v len) in
-      let r = D.rid_of_drgn r in
+      let r = ST.rid_of_drgn r in
       C.qbuf_qual c == C.IMMUTABLE /\
       B.alloc_post_mem_common (C.to_ibuffer b) h0 h1 s /\
       C.to_ibuffer b `I.value_is` s /\
-      D.region_lifetime_buf r (C.cast b) /\
+      B.region_lifetime_buf (C.cast b) /\
       B.frameOf (C.cast b) == r)
   = let src_buf = C.cast src in
-    let b : I.ibuffer LP.byte = D.ralloc_and_blit_buf r src_buf 0ul len in
+    assume (U32.v len > 0);
+    let b : I.ibuffer LP.byte = B.mmalloc_drgn_and_blit r src_buf 0ul len in
     let h0 = get() in
     B.witness_p b (I.seq_eq (Ghost.hide (Seq.slice (B.as_seq h0 src_buf) 0 (U32.v len))));
     C.of_ibuffer b
@@ -561,11 +563,11 @@ let ralloc_and_blit (r:D.drgn) (src:C.const_buffer LP.byte) (len:U32.t)
 
 /// `stash`: Main stateful operation
 ///    Copies a repr_ptr into a fresh stable repr_ptr in the given region
-let stash (rgn:D.drgn) #t (r:repr_ptr t) (len:uint_32{len == r.meta.len})
+let stash (rgn:ST.drgn) #t (r:repr_ptr t) (len:uint_32{len == r.meta.len})
   : ST (stable_region_repr_ptr rgn t)
    (requires fun h ->
      valid r h /\
-     HS.live_region h (D.rid_of_drgn rgn))
+     HS.live_region h (ST.rid_of_drgn rgn))
    (ensures fun h0 r' h1 ->
      B.modifies B.loc_none h0 h1 /\
      valid r' h1 /\
@@ -718,21 +720,6 @@ let as_ptr_spec #t #b (p:repr_pos t b)
         (Pos?.length p)
 
 
-/// This is a variant of `sub` that takes an erased `len`
-/// Should be able to add this to the buffer model
-/// If not, we can use the `offset` function, which is less precise
-assume
-val sub (c:C.const_buffer 'a) (i:uint_32) (len:Ghost.erased uint_32)
-  : Stack (C.const_buffer 'a)
-    (requires fun h ->
-      C.live h c /\
-      U32.v i + U32.v (Ghost.reveal len) <= C.length c)
-    (ensures fun h0 c' h1 ->
-      let qc = C.as_qbuf c in
-      let qc' = C.as_qbuf c' in
-      h0 == h1 /\
-      c' `C.const_sub_buffer i (Ghost.reveal len)` c)
-
 let const_buffer_of_repr_pos #t #b (r:repr_pos t b)
   : GTot (C.const_buffer LP.byte)
   = C.gsub b.base r.start_pos r.meta.len
@@ -787,7 +774,7 @@ let as_ptr #t #b (r:repr_pos t b)
     (ensures fun h0 ptr h1 ->
       ptr == as_ptr_spec r /\
       h0 == h1)
-  = let b = sub b.base r.start_pos (Ghost.hide r.meta.len) in
+  = let b = C.sub b.base r.start_pos (Ghost.hide r.meta.len) in
     let m = r.meta in
     let v = r.vv_pos in
     let l = r.length in
