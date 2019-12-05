@@ -48,9 +48,8 @@
         "equation_FStar.Integers.int_t", "equation_FStar.Integers.uint_8",
         "equation_FStar.UInt.fits", "equation_FStar.UInt.max_int",
         "equation_FStar.UInt.min_int", "equation_FStar.UInt.size",
-        "equation_FStar.UInt.uint_t", "equation_Lib.IntTypes.minint",
-        "equation_Lib.IntTypes.uint8", "equation_Lib.IntTypes.unsigned",
-        "equation_LowStar.Buffer.buffer",
+        "equation_FStar.UInt.uint_t", "equation_Lib.IntTypes.uint8",
+        "equation_Lib.IntTypes.unsigned", "equation_LowStar.Buffer.buffer",
         "equation_LowStar.Buffer.trivial_preorder",
         "equation_LowStar.Monotonic.Buffer.length", "equation_Prims.eq2",
         "equation_Prims.nat", "equation_Prims.squash",
@@ -71,7 +70,8 @@
         "function_token_typing_Declassify.declassify",
         "function_token_typing_FStar.Integers.uint_8",
         "function_token_typing_Lib.IntTypes.uint8", "int_inversion",
-        "lemma_FStar.UInt.pow2_values", "lemma_FStar.UInt32.vu_inv",
+        "int_typing", "lemma_FStar.UInt.pow2_values",
+        "lemma_FStar.UInt32.vu_inv",
         "lemma_LowStar.Monotonic.Buffer.len_gsub",
         "lemma_LowStar.Monotonic.Buffer.length_as_seq",
         "primitive_Prims.op_Addition", "primitive_Prims.op_AmpAmp",
@@ -95,19 +95,17 @@
         "refinement_interpretation_Tm_refine_f13070840248fced9d9d60d77bdae3ec",
         "refinement_interpretation_Tm_refine_fb13d0ebf290a09e80ce585d9f084366",
         "typing_Crypto.AEAD.iv_len", "typing_FStar.UInt32.uint_to_t",
-        "typing_FStar.UInt32.v", "typing_Lib.IntTypes.minint",
-        "typing_LowStar.Buffer.trivial_preorder",
+        "typing_FStar.UInt32.v", "typing_LowStar.Buffer.trivial_preorder",
         "typing_LowStar.Monotonic.Buffer.len",
         "typing_LowStar.Monotonic.Buffer.length", "typing_Spec.AES.gf8",
         "typing_Spec.Agile.AEAD.is_supported_alg",
         "typing_Spec.Agile.AEAD.max_length",
         "typing_Spec.Agile.AEAD.tag_length",
         "typing_Spec.Chacha20.size_block", "typing_Spec.Chacha20.size_nonce",
-        "typing_Spec.GaloisField.__proj__GF__item__t",
-        "typing_tok_Lib.IntTypes.U8@tok"
+        "typing_Spec.GaloisField.__proj__GF__item__t"
       ],
       0,
-      "cb5bf540ed5e0e01ce181e3abf798cfc"
+      "56bb998012583dfa5b25d58586a71899"
     ]
   ]
 ]

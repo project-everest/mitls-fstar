@@ -12,7 +12,7 @@
         "lemma_FStar.HyperStack.ST.lemma_same_refs_in_stack_regions_intro"
       ],
       0,
-      "d46e4af2cbafbcc1d691beeefb77d393"
+      "5accc7d7cb1751f0deb1efe353ffc466"
     ],
     [
       "Crypto.CRF.trace",
@@ -25,7 +25,7 @@
         "lemma_FStar.HyperStack.ST.lemma_same_refs_in_stack_regions_intro"
       ],
       0,
-      "bcfcae767e4b74082c2ee5a4f35debcb"
+      "f67d869b2b5bf7bf7fb8d475ef9fba7d"
     ],
     [
       "Crypto.CRF.to_seq",
@@ -34,7 +34,7 @@
       0,
       [ "@query" ],
       0,
-      "003a1307d6fe6b10ca52431d54552d2d"
+      "9acaf533f8c230d777fd68a53fc72610"
     ],
     [
       "Crypto.CRF.of_seq",
@@ -48,7 +48,7 @@
         "refinement_interpretation_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
       ],
       0,
-      "f978b837bb7326bb16dfc165e5fe464f"
+      "32f76e921be938042f7eeaa8bade3619"
     ],
     [
       "Crypto.CRF.ideal",
@@ -61,7 +61,7 @@
         "typing_Flags.model"
       ],
       0,
-      "9cbaee5c3db1bf350883533a9c9390f2"
+      "e604d4602fe71ba4880ee23adfd2142b"
     ],
     [
       "Crypto.CRF.gideal",
@@ -74,7 +74,7 @@
         "typing_Flags.model"
       ],
       0,
-      "95c62d2335ac13fa7b08cab24221b6f6"
+      "be96ea5ffe1a1be9b65542879d0cb802"
     ],
     [
       "Crypto.CRF.real",
@@ -91,7 +91,7 @@
         "typing_Mem.is_tls_rgn", "typing_Mem.tls_region"
       ],
       0,
-      "9a7faba7ebadd7871c8dd4e9f463067f"
+      "41e87930f55c6da31056970252852c38"
     ],
     [
       "Crypto.CRF.greal",
@@ -108,7 +108,7 @@
         "typing_Mem.is_tls_rgn", "typing_Mem.tls_region"
       ],
       0,
-      "8810e6571d659c3696ace21a67a8c141"
+      "dafbf7ba4a192818e9d3018535646ae0"
     ],
     [
       "Crypto.CRF.freeable",
@@ -130,7 +130,7 @@
         "typing_FStar.Monotonic.HyperStack.get_tip", "typing_Flags.model"
       ],
       0,
-      "4981cab39ad9afdefb7d428aa0568c95"
+      "af119de0bcea4baeda31ead5f7b70eb8"
     ],
     [
       "Crypto.CRF.footprint",
@@ -152,7 +152,7 @@
         "typing_FStar.Monotonic.HyperStack.get_tip", "typing_Flags.model"
       ],
       0,
-      "c98a8decca67f251314dbc420f787452"
+      "192c3d276257d043f57559e7d4e758fc"
     ],
     [
       "Crypto.CRF.invariant",
@@ -174,26 +174,30 @@
         "typing_FStar.Monotonic.HyperStack.get_tip", "typing_Flags.model"
       ],
       0,
-      "b7a8096b8de14473c48fdeadbb696eba"
+      "1aa7bfeb3286d432586d8cf16280ee5a"
     ],
     [
       "Crypto.CRF.invariant_loc_in_footprint",
       1,
-      0,
-      0,
+      2,
+      1,
       [
-        "@MaxIFuel_assumption", "@query",
-        "Crypto.CRF_interpretation_Tm_arrow_626fead0e6d1e1585c4415f808aee93e",
-        "Prims_interpretation_Tm_arrow_2eaa01e78f73e9bab5d0955fc1a662da",
+        "@MaxIFuel_assumption", "@query", "data_elim_Prims.Mkdtuple2",
+        "equality_tok_Spec.Hash.Definitions.MD5@tok",
+        "equality_tok_Spec.Hash.Definitions.SHA1@tok",
+        "equality_tok_Spec.Hash.Definitions.SHA2_224@tok",
+        "equality_tok_Spec.Hash.Definitions.SHA2_256@tok",
+        "equality_tok_Spec.Hash.Definitions.SHA2_384@tok",
+        "equality_tok_Spec.Hash.Definitions.SHA2_512@tok",
         "equation_Crypto.CRF.footprint", "equation_Crypto.CRF.ideal",
         "equation_Crypto.CRF.invariant", "equation_Crypto.CRF.mstate",
         "equation_Crypto.CRF.real", "equation_Crypto.CRF.state",
-        "equation_FStar.Kremlin.Endianness.bytes",
-        "equation_FStar.Pervasives.dsnd", "equation_LowStar.Buffer.buffer",
-        "equation_LowStar.Buffer.pointer",
+        "equation_FStar.Endianness.bytes", "equation_FStar.Pervasives.dsnd",
+        "equation_LowStar.Buffer.buffer", "equation_LowStar.Buffer.pointer",
         "equation_LowStar.Monotonic.Buffer.loc_in",
         "equation_Model.CRF.bytes", "fuel_guarded_inversion_Prims.dtuple2",
-        "function_token_typing_FStar.Kremlin.Endianness.bytes",
+        "fuel_guarded_inversion_Spec.Hash.Definitions.hash_alg",
+        "function_token_typing_FStar.Endianness.bytes",
         "interpretation_Tm_abs_afb00d94733125e557a8c688cd509842",
         "l_and-interp",
         "lemma_EverCrypt.Hash.Incremental.invariant_loc_in_footprint",
@@ -201,14 +205,16 @@
         "proj_equation_Prims.Mkdtuple2__2",
         "refinement_interpretation_Tm_refine_40a6e73d618aa10a50e2439ecb2e51ed",
         "refinement_interpretation_Tm_refine_573cfed777dae20cc82e8fef9622857e",
-        "refinement_kinding_Tm_refine_40a6e73d618aa10a50e2439ecb2e51ed",
-        "refinement_kinding_Tm_refine_719d273fd78721ffb7bc2b18667e58c5",
-        "typing_FStar.Pervasives.dsnd",
         "typing_LowStar.Buffer.trivial_preorder",
-        "typing_Tm_abs_afb00d94733125e557a8c688cd509842"
+        "typing_tok_Spec.Hash.Definitions.MD5@tok",
+        "typing_tok_Spec.Hash.Definitions.SHA1@tok",
+        "typing_tok_Spec.Hash.Definitions.SHA2_224@tok",
+        "typing_tok_Spec.Hash.Definitions.SHA2_256@tok",
+        "typing_tok_Spec.Hash.Definitions.SHA2_384@tok",
+        "typing_tok_Spec.Hash.Definitions.SHA2_512@tok"
       ],
       0,
-      "77274251c9faabe6b4a78db54bd76867"
+      "4db25888f696126bfeb47f6d5f8c7fb6"
     ],
     [
       "Crypto.CRF.hashed",
@@ -234,7 +240,7 @@
         "typing_FStar.Monotonic.HyperStack.get_tip"
       ],
       0,
-      "d1985c286bfba5d725f9bb20762b83f8"
+      "872cc0d694405388dc4585483bc187ec"
     ],
     [
       "Crypto.CRF.hash_fits",
@@ -293,22 +299,26 @@
         "typing_tok_Spec.Hash.Definitions.SHA2_512@tok"
       ],
       0,
-      "daf8e2947cd522c0326333ee76ddd5ca"
+      "c1980079f5b38076c2a904844db2c1a3"
     ],
     [
       "Crypto.CRF.frame_invariant",
       1,
-      0,
-      0,
+      2,
+      1,
       [
-        "@MaxIFuel_assumption", "@query",
-        "Crypto.CRF_interpretation_Tm_arrow_626fead0e6d1e1585c4415f808aee93e",
-        "Prims_interpretation_Tm_arrow_2eaa01e78f73e9bab5d0955fc1a662da",
-        "b2t_def", "bool_inversion", "equation_Crypto.CRF.footprint",
-        "equation_Crypto.CRF.ideal", "equation_Crypto.CRF.invariant",
-        "equation_Crypto.CRF.mstate", "equation_Crypto.CRF.real",
-        "equation_Crypto.CRF.state", "equation_FStar.Bytes.lbytes",
-        "equation_FStar.Kremlin.Endianness.bytes",
+        "@MaxIFuel_assumption", "@query", "b2t_def", "bool_inversion",
+        "data_elim_Prims.Mkdtuple2",
+        "equality_tok_Spec.Hash.Definitions.MD5@tok",
+        "equality_tok_Spec.Hash.Definitions.SHA1@tok",
+        "equality_tok_Spec.Hash.Definitions.SHA2_224@tok",
+        "equality_tok_Spec.Hash.Definitions.SHA2_256@tok",
+        "equality_tok_Spec.Hash.Definitions.SHA2_384@tok",
+        "equality_tok_Spec.Hash.Definitions.SHA2_512@tok",
+        "equation_Crypto.CRF.footprint", "equation_Crypto.CRF.ideal",
+        "equation_Crypto.CRF.invariant", "equation_Crypto.CRF.mstate",
+        "equation_Crypto.CRF.real", "equation_Crypto.CRF.state",
+        "equation_FStar.Bytes.lbytes", "equation_FStar.Endianness.bytes",
         "equation_FStar.Monotonic.HyperHeap.hmap",
         "equation_FStar.Monotonic.HyperStack.is_tip",
         "equation_FStar.Monotonic.HyperStack.is_wf_with_ctr_and_tip",
@@ -319,7 +329,8 @@
         "equation_LowStar.Monotonic.Buffer.get", "equation_Model.CRF.bytes",
         "equation_Prims.eqtype", "equation_Prims.nat",
         "fuel_guarded_inversion_Prims.dtuple2",
-        "function_token_typing_FStar.Kremlin.Endianness.bytes",
+        "fuel_guarded_inversion_Spec.Hash.Definitions.hash_alg",
+        "function_token_typing_FStar.Endianness.bytes",
         "function_token_typing_FStar.Monotonic.Heap.heap",
         "function_token_typing_Prims.int",
         "haseqTm_refine_542f9d4f129664613f2483a6c88bc7c2",
@@ -340,39 +351,46 @@
         "refinement_interpretation_Tm_refine_573cfed777dae20cc82e8fef9622857e",
         "refinement_interpretation_Tm_refine_71ea40360194fe02ee1272538c9cacbc",
         "refinement_interpretation_Tm_refine_f13070840248fced9d9d60d77bdae3ec",
-        "refinement_kinding_Tm_refine_40a6e73d618aa10a50e2439ecb2e51ed",
         "refinement_kinding_Tm_refine_542f9d4f129664613f2483a6c88bc7c2",
-        "refinement_kinding_Tm_refine_719d273fd78721ffb7bc2b18667e58c5",
         "typing_Crypto.CRF.footprint", "typing_FStar.Bytes.empty_bytes",
         "typing_FStar.Bytes.len", "typing_FStar.Map.contains",
         "typing_FStar.Monotonic.HyperHeap.rid",
         "typing_FStar.Monotonic.HyperStack.get_hmap",
         "typing_FStar.Monotonic.HyperStack.get_tip",
-        "typing_FStar.Pervasives.dsnd", "typing_FStar.Set.singleton",
-        "typing_FStar.UInt32.v", "typing_LowStar.Buffer.trivial_preorder",
+        "typing_FStar.Set.singleton", "typing_FStar.UInt32.v",
+        "typing_LowStar.Buffer.trivial_preorder",
         "typing_LowStar.Monotonic.Buffer.as_addr",
         "typing_LowStar.Monotonic.Buffer.frameOf",
         "typing_LowStar.Monotonic.Buffer.loc_addresses",
         "typing_LowStar.Monotonic.Buffer.loc_buffer",
-        "typing_Tm_abs_afb00d94733125e557a8c688cd509842"
+        "typing_tok_Spec.Hash.Definitions.MD5@tok",
+        "typing_tok_Spec.Hash.Definitions.SHA1@tok",
+        "typing_tok_Spec.Hash.Definitions.SHA2_224@tok",
+        "typing_tok_Spec.Hash.Definitions.SHA2_256@tok",
+        "typing_tok_Spec.Hash.Definitions.SHA2_384@tok",
+        "typing_tok_Spec.Hash.Definitions.SHA2_512@tok"
       ],
       0,
-      "a06dca741afa407a2b9c0aa34de776ff"
+      "43166a61699ecc98f65127259eb7d94f"
     ],
     [
       "Crypto.CRF.frame_hashed",
       1,
-      0,
-      0,
+      2,
+      1,
       [
-        "@MaxIFuel_assumption", "@query",
-        "Crypto.CRF_interpretation_Tm_arrow_626fead0e6d1e1585c4415f808aee93e",
-        "Prims_interpretation_Tm_arrow_2eaa01e78f73e9bab5d0955fc1a662da",
-        "bool_inversion", "equation_Crypto.CRF.footprint",
-        "equation_Crypto.CRF.hashed", "equation_Crypto.CRF.ideal",
-        "equation_Crypto.CRF.invariant", "equation_Crypto.CRF.mstate",
-        "equation_Crypto.CRF.real", "equation_Crypto.CRF.state",
-        "equation_FStar.Kremlin.Endianness.bytes",
+        "@MaxIFuel_assumption", "@query", "bool_inversion",
+        "data_elim_Prims.Mkdtuple2",
+        "equality_tok_Spec.Hash.Definitions.MD5@tok",
+        "equality_tok_Spec.Hash.Definitions.SHA1@tok",
+        "equality_tok_Spec.Hash.Definitions.SHA2_224@tok",
+        "equality_tok_Spec.Hash.Definitions.SHA2_256@tok",
+        "equality_tok_Spec.Hash.Definitions.SHA2_384@tok",
+        "equality_tok_Spec.Hash.Definitions.SHA2_512@tok",
+        "equation_Crypto.CRF.footprint", "equation_Crypto.CRF.hashed",
+        "equation_Crypto.CRF.ideal", "equation_Crypto.CRF.invariant",
+        "equation_Crypto.CRF.mstate", "equation_Crypto.CRF.real",
+        "equation_Crypto.CRF.state", "equation_FStar.Endianness.bytes",
         "equation_FStar.Monotonic.HyperHeap.hmap",
         "equation_FStar.Monotonic.HyperStack.is_tip",
         "equation_FStar.Monotonic.HyperStack.is_wf_with_ctr_and_tip",
@@ -382,7 +400,8 @@
         "equation_LowStar.Monotonic.Buffer.get", "equation_Model.CRF.bytes",
         "equation_Prims.eqtype", "equation_Prims.nat",
         "fuel_guarded_inversion_Prims.dtuple2",
-        "function_token_typing_FStar.Kremlin.Endianness.bytes",
+        "fuel_guarded_inversion_Spec.Hash.Definitions.hash_alg",
+        "function_token_typing_FStar.Endianness.bytes",
         "function_token_typing_FStar.Monotonic.Heap.heap",
         "function_token_typing_Prims.int",
         "haseqTm_refine_542f9d4f129664613f2483a6c88bc7c2",
@@ -399,23 +418,26 @@
         "refinement_interpretation_Tm_refine_40a6e73d618aa10a50e2439ecb2e51ed",
         "refinement_interpretation_Tm_refine_414d0a9f578ab0048252f8c8f552b99f",
         "refinement_interpretation_Tm_refine_573cfed777dae20cc82e8fef9622857e",
-        "refinement_kinding_Tm_refine_40a6e73d618aa10a50e2439ecb2e51ed",
         "refinement_kinding_Tm_refine_542f9d4f129664613f2483a6c88bc7c2",
-        "refinement_kinding_Tm_refine_719d273fd78721ffb7bc2b18667e58c5",
         "typing_Crypto.CRF.footprint", "typing_FStar.Map.contains",
         "typing_FStar.Monotonic.HyperHeap.rid",
         "typing_FStar.Monotonic.HyperStack.get_hmap",
         "typing_FStar.Monotonic.HyperStack.get_tip",
-        "typing_FStar.Pervasives.dsnd", "typing_FStar.Set.singleton",
+        "typing_FStar.Set.singleton",
         "typing_LowStar.Buffer.trivial_preorder",
         "typing_LowStar.Monotonic.Buffer.as_addr",
         "typing_LowStar.Monotonic.Buffer.frameOf",
         "typing_LowStar.Monotonic.Buffer.loc_addresses",
         "typing_LowStar.Monotonic.Buffer.loc_buffer",
-        "typing_Tm_abs_afb00d94733125e557a8c688cd509842"
+        "typing_tok_Spec.Hash.Definitions.MD5@tok",
+        "typing_tok_Spec.Hash.Definitions.SHA1@tok",
+        "typing_tok_Spec.Hash.Definitions.SHA2_224@tok",
+        "typing_tok_Spec.Hash.Definitions.SHA2_256@tok",
+        "typing_tok_Spec.Hash.Definitions.SHA2_384@tok",
+        "typing_tok_Spec.Hash.Definitions.SHA2_512@tok"
       ],
       0,
-      "332bc2ccd34c504d008ea16377da58e9"
+      "8bb92eff617b723d348e4f11fd4a5c2a"
     ],
     [
       "Crypto.CRF.frame_freeable",
@@ -429,7 +451,7 @@
         "lemma_EverCrypt.Hash.Incremental.frame_freeable"
       ],
       0,
-      "d3ffe328bf0a593b8a73de0a5fe1f831"
+      "b03113ede9a45cd08507c6bd4b953d6b"
     ],
     [
       "Crypto.CRF.create_in",
@@ -446,8 +468,8 @@
         "equation_Crypto.CRF.invariant", "equation_Crypto.CRF.mstate",
         "equation_Crypto.CRF.real", "equation_Crypto.CRF.state",
         "equation_EverCrypt.Hash.Incremental.footprint",
+        "equation_FStar.Endianness.bytes",
         "equation_FStar.HyperStack.ST.erid",
-        "equation_FStar.Kremlin.Endianness.bytes",
         "equation_FStar.Monotonic.HyperStack.mem",
         "equation_FStar.Pervasives.dsnd",
         "equation_LowStar.Monotonic.Buffer.fresh_loc",
@@ -461,7 +483,7 @@
         "equation_Prims.squash",
         "fuel_guarded_inversion_Spec.Hash.Definitions.hash_alg",
         "function_token_typing_Declassify.declassify",
-        "function_token_typing_FStar.Kremlin.Endianness.bytes",
+        "function_token_typing_FStar.Endianness.bytes",
         "function_token_typing_FStar.UInt8.t",
         "function_token_typing_Prims.int",
         "haseqTm_refine_542f9d4f129664613f2483a6c88bc7c2", "int_typing",
@@ -501,7 +523,7 @@
         "typing_Mem.tls_tables_region"
       ],
       0,
-      "af7194881c69fec42710b6993240176c"
+      "513155604f546fb51086cd2cefcb4616"
     ],
     [
       "Crypto.CRF.init",
@@ -521,8 +543,7 @@
         "equation_Crypto.CRF.preserves_freeable", "equation_Crypto.CRF.real",
         "equation_Crypto.CRF.state",
         "equation_EverCrypt.Hash.Incremental.preserves_freeable",
-        "equation_EverCrypt.Hash.e_alg",
-        "equation_FStar.Kremlin.Endianness.bytes",
+        "equation_EverCrypt.Hash.e_alg", "equation_FStar.Endianness.bytes",
         "equation_FStar.Monotonic.HyperHeap.hmap",
         "equation_FStar.Monotonic.HyperStack.is_tip",
         "equation_FStar.Monotonic.HyperStack.is_wf_with_ctr_and_tip",
@@ -536,7 +557,7 @@
         "equation_Prims.squash", "fuel_guarded_inversion_Prims.dtuple2",
         "fuel_guarded_inversion_Spec.Hash.Definitions.hash_alg",
         "function_token_typing_Declassify.declassify",
-        "function_token_typing_FStar.Kremlin.Endianness.bytes",
+        "function_token_typing_FStar.Endianness.bytes",
         "function_token_typing_FStar.Monotonic.Heap.heap",
         "function_token_typing_FStar.UInt8.t",
         "function_token_typing_LowStar.Buffer.trivial_preorder",
@@ -584,7 +605,7 @@
         "typing_LowStar.Monotonic.Buffer.loc_buffer", "typing_Prims.pow2"
       ],
       0,
-      "b06e04d1e3a065fdb81e92714836f9a1"
+      "09c0167dc08b4fd1ff759aa6bdb5a15f"
     ],
     [
       "Crypto.CRF.update_pre",
@@ -593,7 +614,7 @@
       0,
       [ "@query" ],
       0,
-      "4cf166bf39d6d8e0d46d548582dc4341"
+      "f4c2234de585fa91cf1fa8ccf0d7f447"
     ],
     [
       "Crypto.CRF.update",
@@ -617,8 +638,7 @@
         "equation_Crypto.CRF.preserves_freeable", "equation_Crypto.CRF.real",
         "equation_Crypto.CRF.state",
         "equation_EverCrypt.Hash.Incremental.preserves_freeable",
-        "equation_EverCrypt.Hash.e_alg",
-        "equation_FStar.Kremlin.Endianness.bytes",
+        "equation_EverCrypt.Hash.e_alg", "equation_FStar.Endianness.bytes",
         "equation_FStar.Monotonic.HyperStack.live_region",
         "equation_FStar.Monotonic.HyperStack.mem",
         "equation_FStar.Pervasives.dsnd", "equation_LowStar.Buffer.buffer",
@@ -629,7 +649,7 @@
         "equation_Prims.squash",
         "fuel_guarded_inversion_Spec.Hash.Definitions.hash_alg",
         "function_token_typing_Declassify.declassify",
-        "function_token_typing_FStar.Kremlin.Endianness.bytes",
+        "function_token_typing_FStar.Endianness.bytes",
         "function_token_typing_FStar.UInt8.t",
         "function_token_typing_LowStar.Buffer.trivial_preorder",
         "function_token_typing_Prims.int",
@@ -645,6 +665,7 @@
         "lemma_LowStar.Monotonic.Buffer.lemma_live_equal_mem_domains",
         "lemma_LowStar.Monotonic.Buffer.length_as_seq",
         "lemma_LowStar.Monotonic.Buffer.live_region_frameOf",
+        "lemma_LowStar.Monotonic.Buffer.loc_disjoint_includes_r",
         "lemma_LowStar.Monotonic.Buffer.loc_disjoint_none_r",
         "lemma_LowStar.Monotonic.Buffer.loc_disjoint_sym_",
         "lemma_LowStar.Monotonic.Buffer.loc_includes_addresses_addresses_2",
@@ -692,7 +713,7 @@
         "typing_tok_Spec.Hash.Definitions.SHA2_512@tok"
       ],
       0,
-      "04b99d358f752df960e6835bd2d3e122"
+      "11cfb1ed59886d1f07f3829851b874d4"
     ],
     [
       "Crypto.CRF.finish_st",
@@ -708,7 +729,7 @@
         "refinement_interpretation_Tm_refine_e1e29cb0b38dfb3cd2ef20a69e983b74"
       ],
       0,
-      "6dda12c26215fe965c695bfc50758c79"
+      "480ff0aa6ad1df6353c67d61ecd95c4a"
     ],
     [
       "Crypto.CRF.finish",
@@ -724,11 +745,10 @@
         "equation_Crypto.CRF.preserves_freeable", "equation_Crypto.CRF.real",
         "equation_Crypto.CRF.state",
         "equation_EverCrypt.Hash.Incremental.preserves_freeable",
-        "equation_EverCrypt.Hash.e_alg",
+        "equation_EverCrypt.Hash.e_alg", "equation_FStar.Endianness.bytes",
         "equation_FStar.HyperStack.ST.equal_domains",
         "equation_FStar.HyperStack.ST.equal_stack_domains",
         "equation_FStar.HyperStack.ST.erid",
-        "equation_FStar.Kremlin.Endianness.bytes",
         "equation_FStar.Monotonic.Heap.equal_dom",
         "equation_FStar.Monotonic.HyperHeap.hmap",
         "equation_FStar.Monotonic.HyperStack.is_tip",
@@ -747,7 +767,7 @@
         "equation_Prims.squash", "equation_Spec.Hash.Definitions.bytes",
         "equation_Spec.Hash.Definitions.bytes_hash",
         "function_token_typing_Declassify.declassify",
-        "function_token_typing_FStar.Kremlin.Endianness.bytes",
+        "function_token_typing_FStar.Endianness.bytes",
         "function_token_typing_FStar.Monotonic.Heap.heap",
         "function_token_typing_FStar.UInt8.t",
         "function_token_typing_Lib.IntTypes.uint8",
@@ -806,7 +826,7 @@
         "typing_Mem.tls_tables_region"
       ],
       0,
-      "4282bf9536425c5bc79cf0632f40da85"
+      "4e44c6964a2f471b73f7ba1a56747aed"
     ],
     [
       "Crypto.CRF.free",
@@ -836,7 +856,7 @@
         "typing_FStar.Monotonic.HyperStack.get_tip"
       ],
       0,
-      "dba8b71adcd3f947e1f0c45d6888aec8"
+      "0b0a8b1accb6ba5426b6dfca1d6909b7"
     ]
   ]
 ]

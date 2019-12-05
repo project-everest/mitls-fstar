@@ -22,9 +22,11 @@
         "equation_LowStar.Monotonic.Buffer.length", "equation_Prims.nat",
         "equation_Prims.pos",
         "function_token_typing_FStar.Monotonic.Heap.heap",
+        "function_token_typing_FStar.UInt32.t",
         "function_token_typing_LowStar.Buffer.trivial_preorder",
         "int_inversion", "int_typing",
         "interpretation_Tm_abs_612136ee4143d24977831c80e4f470a1",
+        "lemma_FStar.Ghost.reveal_hide",
         "lemma_FStar.HyperStack.ST.lemma_same_refs_in_all_regions_intro",
         "lemma_FStar.Seq.Base.lemma_create_len",
         "lemma_FStar.Seq.Base.lemma_eq_elim",
@@ -70,7 +72,7 @@
         "typing_LowStar.Monotonic.Buffer.loc_none", "typing_Prims.pow2"
       ],
       0,
-      "ce355bca61527049e8f9ef657a35b85e"
+      "1d939d748a19894fda51a2e7f66cc79a"
     ],
     [
       "Model.Utils.put_buffer",
@@ -93,9 +95,11 @@
         "equation_LowStar.Buffer.trivial_preorder",
         "equation_LowStar.Monotonic.Buffer.length", "equation_Prims.nat",
         "function_token_typing_FStar.Monotonic.Heap.heap",
+        "function_token_typing_FStar.UInt32.t",
         "function_token_typing_LowStar.Buffer.trivial_preorder",
         "int_inversion", "int_typing",
         "interpretation_Tm_abs_612136ee4143d24977831c80e4f470a1",
+        "lemma_FStar.Ghost.reveal_hide",
         "lemma_FStar.HyperStack.ST.lemma_equal_domains_trans",
         "lemma_FStar.HyperStack.ST.lemma_same_refs_in_all_regions_intro",
         "lemma_FStar.Seq.Base.lemma_eq_elim",
@@ -148,7 +152,7 @@
         "unit_typing"
       ],
       0,
-      "5a0499dd3230b50c15ff613a3828b6bb"
+      "e6d720c07da18dc48cf785441e60ba9d"
     ]
   ]
 ]
