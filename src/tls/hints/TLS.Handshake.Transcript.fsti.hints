@@ -1,5 +1,5 @@
 [
-  "eG´˜\u001f mT›Øm\u0003\u0006ÊÃ$",
+  "µ¨–]\u0012Óp•žÖR:U…Üs",
   [
     [
       "TLS.Handshake.Transcript.max_transcript_size",
@@ -8,7 +8,7 @@
       1,
       [ "@query" ],
       0,
-      "2972a2b227439e3ea8f7aa441e3e924d"
+      "2f783fe6c7b84cda9f6cf685329b5573"
     ],
     [
       "TLS.Handshake.Transcript.max_message_size_lt_max_input_length",
@@ -48,7 +48,48 @@
         "refinement_interpretation_Tm_refine_542f9d4f129664613f2483a6c88bc7c2"
       ],
       0,
-      "a924f2a44d929ebddbf58881ceb5e23f"
+      "b09e39fe17a72f7bda33bdc8f8238ff1"
+    ],
+    [
+      "TLS.Handshake.Transcript.transcript_t",
+      1,
+      2,
+      1,
+      [
+        "@query", "assumption_FStar.Pervasives.Native.option__uu___haseq",
+        "assumption_FStar.Pervasives.Native.tuple2__uu___haseq",
+        "assumption_Parsers.ClientHello.clientHello__uu___haseq",
+        "assumption_Parsers.Handshake.handshake__uu___haseq",
+        "assumption_Parsers.Handshake12.handshake12__uu___haseq",
+        "assumption_Parsers.Handshake13.handshake13__uu___haseq",
+        "assumption_Parsers.ServerHello.serverHello__uu___haseq",
+        "assumption_Prims.list__uu___haseq",
+        "equation_HandshakeMessages.hrr", "equation_HandshakeMessages.sh",
+        "equation_HandshakeMessages.tch",
+        "equation_HandshakeMessages.valid_hrr",
+        "equation_ParsersAux.Binders.clientHello_with_binders",
+        "equation_TLS.Handshake.Transcript.any_hash_tag",
+        "equation_TLS.Handshake.Transcript.bounded_list",
+        "equation_TLS.Handshake.Transcript.retry",
+        "equation_TLS.Handshake.Transcript.sh12",
+        "equation_TLS.Handshake.Transcript.sh13",
+        "function_token_typing_TLS.Handshake.Transcript.retry",
+        "haseqTm_refine_0a664c7b9f4c6522dffb8c773dde859e",
+        "haseqTm_refine_45b7b963bd9830ec276b2e7a97a8b9f9",
+        "haseqTm_refine_4ecc068291c66fd292744b12934aae45",
+        "haseqTm_refine_6e57058ef569de90ae614e17eb80fb92",
+        "haseqTm_refine_6ef02521f154ee328142906ece7faaee",
+        "haseqTm_refine_97b5d0648d70b22a9061aeb250fab276",
+        "haseqTm_refine_bf4c9b71c5b7eaa64d5b015581194be0",
+        "haseqTm_refine_c78aac7798afeafd32bb136d57a065e5",
+        "haseqTm_refine_cc48ce71cdefeca170f34013bbd19dad",
+        "kinding_Parsers.Handshake12.handshake12@tok",
+        "kinding_Parsers.Handshake13.handshake13@tok",
+        "refinement_kinding_Tm_refine_4ecc068291c66fd292744b12934aae45",
+        "refinement_kinding_Tm_refine_c78aac7798afeafd32bb136d57a065e5"
+      ],
+      0,
+      "3ece30a7969df8fa11a0c386e15d2e6f"
     ],
     [
       "TLS.Handshake.Transcript.__proj__Start__item__retried",
@@ -62,7 +103,7 @@
         "refinement_interpretation_Tm_refine_ffc4a02e55f1c91ea027dfcbaa2e15c1"
       ],
       0,
-      "d6965f8f5d6717a12a37f0a50c938046"
+      "95643b157c99fffaf8ec83fc9dd54f4a"
     ],
     [
       "TLS.Handshake.Transcript.__proj__TruncatedClientHello__item__retried",
@@ -76,7 +117,7 @@
         "refinement_interpretation_Tm_refine_9bde2809258301c573c1330055f68191"
       ],
       0,
-      "eb5b23b6382bcc24f615ab520e3210ca"
+      "cccf0c595a9be5262071548918d0b719"
     ],
     [
       "TLS.Handshake.Transcript.__proj__TruncatedClientHello__item__tch",
@@ -90,7 +131,7 @@
         "refinement_interpretation_Tm_refine_9bde2809258301c573c1330055f68191"
       ],
       0,
-      "33986e461ae0917a45c78089b61f99c1"
+      "9fdb7622a495d20e9d0fa8a39b1544e1"
     ],
     [
       "TLS.Handshake.Transcript.__proj__ClientHello__item__retried",
@@ -104,7 +145,7 @@
         "refinement_interpretation_Tm_refine_c8478e3062a9793bb131c3a130e2b42e"
       ],
       0,
-      "4f66b272430d6e6d6d9d56d10a33ce32"
+      "575ea8e989798af04d19ad3299697bb8"
     ],
     [
       "TLS.Handshake.Transcript.__proj__ClientHello__item__ch",
@@ -118,7 +159,7 @@
         "refinement_interpretation_Tm_refine_c8478e3062a9793bb131c3a130e2b42e"
       ],
       0,
-      "87d3ac89dd828632fb38f34c3a07e582"
+      "8caaf0b3bddbd9ebf256aae95a37813e"
     ],
     [
       "TLS.Handshake.Transcript.__proj__Transcript12__item__ch",
@@ -132,7 +173,7 @@
         "refinement_interpretation_Tm_refine_0252a31f7a827e1b5956e4fa152c5952"
       ],
       0,
-      "4705ba28f0f30f3167ecc82c809fe24a"
+      "2c7b745cc641fa32dcb7b537e12e05c5"
     ],
     [
       "TLS.Handshake.Transcript.__proj__Transcript12__item__sh",
@@ -146,7 +187,7 @@
         "refinement_interpretation_Tm_refine_0252a31f7a827e1b5956e4fa152c5952"
       ],
       0,
-      "4791c1ac4bfe9d765b6ef35aed098dab"
+      "f8d9f6788a2b597f80ff8d6262b8cb78"
     ],
     [
       "TLS.Handshake.Transcript.__proj__Transcript12__item__rest",
@@ -160,7 +201,7 @@
         "refinement_interpretation_Tm_refine_0252a31f7a827e1b5956e4fa152c5952"
       ],
       0,
-      "f393a3300b4b228f513c5ff0198ac311"
+      "64b1dd2cc80f849f0213111ff9a2edc8"
     ],
     [
       "TLS.Handshake.Transcript.__proj__Transcript13__item__retried",
@@ -174,7 +215,7 @@
         "refinement_interpretation_Tm_refine_9306165f323861811a66284fa5f99fd3"
       ],
       0,
-      "8009f5b4f544b80f89ce2291b2808a65"
+      "fed76cecf93a4132d035d72636004c52"
     ],
     [
       "TLS.Handshake.Transcript.__proj__Transcript13__item__ch",
@@ -188,7 +229,7 @@
         "refinement_interpretation_Tm_refine_9306165f323861811a66284fa5f99fd3"
       ],
       0,
-      "09614af9b96125ee4d902523158e276c"
+      "26a89d72f812ef0211325be350eb54ab"
     ],
     [
       "TLS.Handshake.Transcript.__proj__Transcript13__item__sh",
@@ -202,7 +243,7 @@
         "refinement_interpretation_Tm_refine_9306165f323861811a66284fa5f99fd3"
       ],
       0,
-      "24f27780414dda2ad6a9be57b8445143"
+      "85829bbf61633b57228923ee305fefb1"
     ],
     [
       "TLS.Handshake.Transcript.__proj__Transcript13__item__rest",
@@ -216,7 +257,7 @@
         "refinement_interpretation_Tm_refine_9306165f323861811a66284fa5f99fd3"
       ],
       0,
-      "2a3a92d58ea4b7225f332c7a15ecc951"
+      "3b7f4c2b23cb135123d768c19ca63fe6"
     ],
     [
       "TLS.Handshake.Transcript.transcript_size",
@@ -233,7 +274,7 @@
         "fuel_guarded_inversion_TLS.Handshake.Transcript.transcript_t"
       ],
       0,
-      "7cd18f92b990c5ef5115de9bad6bb185"
+      "3dd021f078189612a77adfdb8ee80dff"
     ],
     [
       "TLS.Handshake.Transcript.__proj__L_ClientHello__item___0",
@@ -247,7 +288,7 @@
         "refinement_interpretation_Tm_refine_f51407ef74875ee27767468aa3823411"
       ],
       0,
-      "0276654ecd2954da1013ba8ea42035cf"
+      "097d112567d224e34e64cdc76a7ce53c"
     ],
     [
       "TLS.Handshake.Transcript.__proj__L_TCH__item___0",
@@ -261,7 +302,7 @@
         "refinement_interpretation_Tm_refine_0d3a62c08311ad3a3dfd5d0982546199"
       ],
       0,
-      "f4b3b425397caf5f5494b7356cfa0e49"
+      "8fc922eb92d65bf20444c60c33253e59"
     ],
     [
       "TLS.Handshake.Transcript.__proj__L_CompleteTCH__item___0",
@@ -275,7 +316,7 @@
         "refinement_interpretation_Tm_refine_b7a5db9e0b94dc392b5b3db6c99f4737"
       ],
       0,
-      "ac73711ac60cedcc863bd7d9a2917b1d"
+      "094c56f2477490c4e8aaebee0d74c6f5"
     ],
     [
       "TLS.Handshake.Transcript.__proj__L_ServerHello__item___0",
@@ -289,7 +330,7 @@
         "refinement_interpretation_Tm_refine_6404dee5021bdcf8f97f25467574622d"
       ],
       0,
-      "cad588e8ea81a380edd37253831eda07"
+      "98e917066016523003951d2ea6fe47df"
     ],
     [
       "TLS.Handshake.Transcript.__proj__L_HRR__item___0",
@@ -303,7 +344,7 @@
         "refinement_interpretation_Tm_refine_9d2a4a874ee57539d9035a829ec7ebd9"
       ],
       0,
-      "03653874a4cefa1a8b1c71e448c042bd"
+      "f2400a0a0871a4df5de226e919df5a6a"
     ],
     [
       "TLS.Handshake.Transcript.__proj__L_HSM12__item___0",
@@ -317,7 +358,7 @@
         "refinement_interpretation_Tm_refine_2e3cf0e619663aeacfbdfd87e14a5878"
       ],
       0,
-      "c891390f1013298ed5ab5571620d666b"
+      "4cee07dbbf57005893bc319662be6064"
     ],
     [
       "TLS.Handshake.Transcript.__proj__L_HSM13__item___0",
@@ -331,7 +372,7 @@
         "refinement_interpretation_Tm_refine_847f345b3fb4ea2894b69a660eabe1d2"
       ],
       0,
-      "5fb70e78e551cca78d7f4fae55eb9e56"
+      "dbaa6a97d99a9635282708a68cfd13ba"
     ],
     [
       "TLS.Handshake.Transcript.snoc12",
@@ -353,7 +394,7 @@
         "refinement_interpretation_Tm_refine_50111763a83a9c62065a91306df2288b"
       ],
       0,
-      "87e9e36ddb61a07b73d928e28c6cf011"
+      "e9415c5894b110afe06533800c782ac8"
     ],
     [
       "TLS.Handshake.Transcript.snoc13",
@@ -390,7 +431,7 @@
         "typing_TLS.Handshake.Transcript.transcript_size"
       ],
       0,
-      "b9fe87c13295b0464884a31fdd72d2ea"
+      "9fb19bfc3928321f090c85ac2ef43f67"
     ],
     [
       "TLS.Handshake.Transcript.transition",
@@ -445,7 +486,7 @@
         "typing_ParsersAux.Binders.ch_set_binders"
       ],
       0,
-      "ddc25342eb254c9475802ce4b14d158f"
+      "f050374a711997a5c260565f4e35148b"
     ],
     [
       "TLS.Handshake.Transcript.label_repr",
@@ -454,14 +495,49 @@
       1,
       [
         "@MaxIFuel_assumption", "@query",
+        "Parsers.HandshakeType_pretyping_4ae277eb4b83707366cb7ae1906c30cf",
+        "constructor_distinct_Parsers.HandshakeType.Certificate",
+        "constructor_distinct_Parsers.HandshakeType.Certificate_request",
+        "constructor_distinct_Parsers.HandshakeType.Certificate_verify",
+        "constructor_distinct_Parsers.HandshakeType.Client_hello",
+        "constructor_distinct_Parsers.HandshakeType.Client_key_exchange",
+        "constructor_distinct_Parsers.HandshakeType.Encrypted_extensions",
+        "constructor_distinct_Parsers.HandshakeType.End_of_early_data",
+        "constructor_distinct_Parsers.HandshakeType.Finished",
+        "constructor_distinct_Parsers.HandshakeType.Hello_request",
+        "constructor_distinct_Parsers.HandshakeType.Key_update",
+        "constructor_distinct_Parsers.HandshakeType.Message_hash",
+        "constructor_distinct_Parsers.HandshakeType.New_session_ticket",
+        "constructor_distinct_Parsers.HandshakeType.Server_hello",
+        "constructor_distinct_Parsers.HandshakeType.Server_hello_done",
+        "constructor_distinct_Parsers.HandshakeType.Server_key_exchange",
+        "data_typing_intro_Parsers.HandshakeType.Server_hello@tok",
         "disc_equation_Parsers.Handshake.M_server_hello",
+        "equality_tok_Parsers.HandshakeType.Certificate@tok",
+        "equality_tok_Parsers.HandshakeType.Certificate_request@tok",
+        "equality_tok_Parsers.HandshakeType.Certificate_verify@tok",
+        "equality_tok_Parsers.HandshakeType.Client_hello@tok",
+        "equality_tok_Parsers.HandshakeType.Client_key_exchange@tok",
+        "equality_tok_Parsers.HandshakeType.Encrypted_extensions@tok",
+        "equality_tok_Parsers.HandshakeType.End_of_early_data@tok",
+        "equality_tok_Parsers.HandshakeType.Finished@tok",
+        "equality_tok_Parsers.HandshakeType.Hello_request@tok",
+        "equality_tok_Parsers.HandshakeType.Key_update@tok",
+        "equality_tok_Parsers.HandshakeType.Message_hash@tok",
+        "equality_tok_Parsers.HandshakeType.New_session_ticket@tok",
+        "equality_tok_Parsers.HandshakeType.Server_hello@tok",
+        "equality_tok_Parsers.HandshakeType.Server_hello_done@tok",
+        "equality_tok_Parsers.HandshakeType.Server_key_exchange@tok",
         "equation_MITLS.Repr.Handshake.is_sh",
-        "equation_TLS.Handshake.Transcript.hs_sh_repr",
-        "fuel_guarded_inversion_MITLS.Repr.const_slice",
-        "refinement_interpretation_Tm_refine_e4ea5a37b313f4ab47fb5b2f070e19a9"
+        "equation_MITLS.Repr.Handshake.t",
+        "equation_Parsers.Handshake.tag_of_handshake",
+        "equation_TLS.Handshake.Transcript.sh_pos",
+        "fuel_guarded_inversion_Parsers.Handshake.handshake",
+        "primitive_Prims.op_Equality", "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Tm_refine_b7d020f18b32ce61167b72a56bc45c48"
       ],
       0,
-      "2c4f1949a0c9f3862e483903f9d29994"
+      "39b4aea0259c3eb60054dedb613fb36b"
     ],
     [
       "TLS.Handshake.Transcript.label_repr",
@@ -470,14 +546,49 @@
       1,
       [
         "@MaxIFuel_assumption", "@query",
+        "Parsers.HandshakeType_pretyping_4ae277eb4b83707366cb7ae1906c30cf",
+        "constructor_distinct_Parsers.HandshakeType.Certificate",
+        "constructor_distinct_Parsers.HandshakeType.Certificate_request",
+        "constructor_distinct_Parsers.HandshakeType.Certificate_verify",
+        "constructor_distinct_Parsers.HandshakeType.Client_hello",
+        "constructor_distinct_Parsers.HandshakeType.Client_key_exchange",
+        "constructor_distinct_Parsers.HandshakeType.Encrypted_extensions",
+        "constructor_distinct_Parsers.HandshakeType.End_of_early_data",
+        "constructor_distinct_Parsers.HandshakeType.Finished",
+        "constructor_distinct_Parsers.HandshakeType.Hello_request",
+        "constructor_distinct_Parsers.HandshakeType.Key_update",
+        "constructor_distinct_Parsers.HandshakeType.Message_hash",
+        "constructor_distinct_Parsers.HandshakeType.New_session_ticket",
+        "constructor_distinct_Parsers.HandshakeType.Server_hello",
+        "constructor_distinct_Parsers.HandshakeType.Server_hello_done",
+        "constructor_distinct_Parsers.HandshakeType.Server_key_exchange",
+        "data_typing_intro_Parsers.HandshakeType.Server_hello@tok",
         "disc_equation_Parsers.Handshake.M_client_hello",
+        "equality_tok_Parsers.HandshakeType.Certificate@tok",
+        "equality_tok_Parsers.HandshakeType.Certificate_request@tok",
+        "equality_tok_Parsers.HandshakeType.Certificate_verify@tok",
+        "equality_tok_Parsers.HandshakeType.Client_hello@tok",
+        "equality_tok_Parsers.HandshakeType.Client_key_exchange@tok",
+        "equality_tok_Parsers.HandshakeType.Encrypted_extensions@tok",
+        "equality_tok_Parsers.HandshakeType.End_of_early_data@tok",
+        "equality_tok_Parsers.HandshakeType.Finished@tok",
+        "equality_tok_Parsers.HandshakeType.Hello_request@tok",
+        "equality_tok_Parsers.HandshakeType.Key_update@tok",
+        "equality_tok_Parsers.HandshakeType.Message_hash@tok",
+        "equality_tok_Parsers.HandshakeType.New_session_ticket@tok",
+        "equality_tok_Parsers.HandshakeType.Server_hello@tok",
+        "equality_tok_Parsers.HandshakeType.Server_hello_done@tok",
+        "equality_tok_Parsers.HandshakeType.Server_key_exchange@tok",
         "equation_MITLS.Repr.Handshake.is_ch",
-        "equation_TLS.Handshake.Transcript.hs_ch_repr",
-        "fuel_guarded_inversion_MITLS.Repr.const_slice",
-        "refinement_interpretation_Tm_refine_d68285d0b4567c17b20f6e366afe9178"
+        "equation_MITLS.Repr.Handshake.t",
+        "equation_Parsers.Handshake.tag_of_handshake",
+        "equation_TLS.Handshake.Transcript.ch_pos",
+        "fuel_guarded_inversion_Parsers.Handshake.handshake",
+        "primitive_Prims.op_Equality", "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Tm_refine_65505faf5a1c87de764805533a4a7898"
       ],
       0,
-      "49a9f5d0fbd37a0d2d433575b24ba971"
+      "cd18a6022c8c10e86b01cd5518c0af23"
     ],
     [
       "TLS.Handshake.Transcript.label_repr",
@@ -486,14 +597,49 @@
       1,
       [
         "@MaxIFuel_assumption", "@query",
+        "Parsers.HandshakeType_pretyping_4ae277eb4b83707366cb7ae1906c30cf",
+        "constructor_distinct_Parsers.HandshakeType.Certificate",
+        "constructor_distinct_Parsers.HandshakeType.Certificate_request",
+        "constructor_distinct_Parsers.HandshakeType.Certificate_verify",
+        "constructor_distinct_Parsers.HandshakeType.Client_hello",
+        "constructor_distinct_Parsers.HandshakeType.Client_key_exchange",
+        "constructor_distinct_Parsers.HandshakeType.Encrypted_extensions",
+        "constructor_distinct_Parsers.HandshakeType.End_of_early_data",
+        "constructor_distinct_Parsers.HandshakeType.Finished",
+        "constructor_distinct_Parsers.HandshakeType.Hello_request",
+        "constructor_distinct_Parsers.HandshakeType.Key_update",
+        "constructor_distinct_Parsers.HandshakeType.Message_hash",
+        "constructor_distinct_Parsers.HandshakeType.New_session_ticket",
+        "constructor_distinct_Parsers.HandshakeType.Server_hello",
+        "constructor_distinct_Parsers.HandshakeType.Server_hello_done",
+        "constructor_distinct_Parsers.HandshakeType.Server_key_exchange",
+        "data_typing_intro_Parsers.HandshakeType.Server_hello@tok",
         "disc_equation_Parsers.Handshake.M_client_hello",
+        "equality_tok_Parsers.HandshakeType.Certificate@tok",
+        "equality_tok_Parsers.HandshakeType.Certificate_request@tok",
+        "equality_tok_Parsers.HandshakeType.Certificate_verify@tok",
+        "equality_tok_Parsers.HandshakeType.Client_hello@tok",
+        "equality_tok_Parsers.HandshakeType.Client_key_exchange@tok",
+        "equality_tok_Parsers.HandshakeType.Encrypted_extensions@tok",
+        "equality_tok_Parsers.HandshakeType.End_of_early_data@tok",
+        "equality_tok_Parsers.HandshakeType.Finished@tok",
+        "equality_tok_Parsers.HandshakeType.Hello_request@tok",
+        "equality_tok_Parsers.HandshakeType.Key_update@tok",
+        "equality_tok_Parsers.HandshakeType.Message_hash@tok",
+        "equality_tok_Parsers.HandshakeType.New_session_ticket@tok",
+        "equality_tok_Parsers.HandshakeType.Server_hello@tok",
+        "equality_tok_Parsers.HandshakeType.Server_hello_done@tok",
+        "equality_tok_Parsers.HandshakeType.Server_key_exchange@tok",
         "equation_MITLS.Repr.Handshake.is_ch",
-        "equation_TLS.Handshake.Transcript.hs_ch_repr",
-        "fuel_guarded_inversion_MITLS.Repr.const_slice",
-        "refinement_interpretation_Tm_refine_d68285d0b4567c17b20f6e366afe9178"
+        "equation_MITLS.Repr.Handshake.t",
+        "equation_Parsers.Handshake.tag_of_handshake",
+        "equation_TLS.Handshake.Transcript.ch_pos",
+        "fuel_guarded_inversion_Parsers.Handshake.handshake",
+        "primitive_Prims.op_Equality", "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Tm_refine_65505faf5a1c87de764805533a4a7898"
       ],
       0,
-      "2447a2af35ca6e0d2e2d857c1591da0c"
+      "2642e5dc406e4e7121c5daefd6febdb1"
     ],
     [
       "TLS.Handshake.Transcript.label_repr",
@@ -502,14 +648,49 @@
       1,
       [
         "@MaxIFuel_assumption", "@query",
+        "Parsers.HandshakeType_pretyping_4ae277eb4b83707366cb7ae1906c30cf",
+        "constructor_distinct_Parsers.HandshakeType.Certificate",
+        "constructor_distinct_Parsers.HandshakeType.Certificate_request",
+        "constructor_distinct_Parsers.HandshakeType.Certificate_verify",
+        "constructor_distinct_Parsers.HandshakeType.Client_hello",
+        "constructor_distinct_Parsers.HandshakeType.Client_key_exchange",
+        "constructor_distinct_Parsers.HandshakeType.Encrypted_extensions",
+        "constructor_distinct_Parsers.HandshakeType.End_of_early_data",
+        "constructor_distinct_Parsers.HandshakeType.Finished",
+        "constructor_distinct_Parsers.HandshakeType.Hello_request",
+        "constructor_distinct_Parsers.HandshakeType.Key_update",
+        "constructor_distinct_Parsers.HandshakeType.Message_hash",
+        "constructor_distinct_Parsers.HandshakeType.New_session_ticket",
+        "constructor_distinct_Parsers.HandshakeType.Server_hello",
+        "constructor_distinct_Parsers.HandshakeType.Server_hello_done",
+        "constructor_distinct_Parsers.HandshakeType.Server_key_exchange",
+        "data_typing_intro_Parsers.HandshakeType.Server_hello@tok",
         "disc_equation_Parsers.Handshake.M_server_hello",
+        "equality_tok_Parsers.HandshakeType.Certificate@tok",
+        "equality_tok_Parsers.HandshakeType.Certificate_request@tok",
+        "equality_tok_Parsers.HandshakeType.Certificate_verify@tok",
+        "equality_tok_Parsers.HandshakeType.Client_hello@tok",
+        "equality_tok_Parsers.HandshakeType.Client_key_exchange@tok",
+        "equality_tok_Parsers.HandshakeType.Encrypted_extensions@tok",
+        "equality_tok_Parsers.HandshakeType.End_of_early_data@tok",
+        "equality_tok_Parsers.HandshakeType.Finished@tok",
+        "equality_tok_Parsers.HandshakeType.Hello_request@tok",
+        "equality_tok_Parsers.HandshakeType.Key_update@tok",
+        "equality_tok_Parsers.HandshakeType.Message_hash@tok",
+        "equality_tok_Parsers.HandshakeType.New_session_ticket@tok",
+        "equality_tok_Parsers.HandshakeType.Server_hello@tok",
+        "equality_tok_Parsers.HandshakeType.Server_hello_done@tok",
+        "equality_tok_Parsers.HandshakeType.Server_key_exchange@tok",
         "equation_MITLS.Repr.Handshake.is_sh",
-        "equation_TLS.Handshake.Transcript.hs_sh_repr",
-        "fuel_guarded_inversion_MITLS.Repr.const_slice",
-        "refinement_interpretation_Tm_refine_e4ea5a37b313f4ab47fb5b2f070e19a9"
+        "equation_MITLS.Repr.Handshake.t",
+        "equation_Parsers.Handshake.tag_of_handshake",
+        "equation_TLS.Handshake.Transcript.sh_pos",
+        "fuel_guarded_inversion_Parsers.Handshake.handshake",
+        "primitive_Prims.op_Equality", "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Tm_refine_b7d020f18b32ce61167b72a56bc45c48"
       ],
       0,
-      "5120056eb46661f4269dc32703eae644"
+      "ac2bd11b50cc598bf16b7e26ba9e82a5"
     ],
     [
       "TLS.Handshake.Transcript.__proj__LR_ClientHello__item__b",
@@ -523,7 +704,7 @@
         "refinement_interpretation_Tm_refine_1f7456538ec5f38744f8193c4aac2137"
       ],
       0,
-      "fe17b05b6295df4ee8ea3d76bb6da43e"
+      "0693c8a9b3e0e573ba45aedd87450437"
     ],
     [
       "TLS.Handshake.Transcript.__proj__LR_ClientHello__item__ch",
@@ -549,7 +730,7 @@
         "typing_MITLS.Repr.Handshake.is_ch"
       ],
       0,
-      "32318400f1f70a753c4df41d44fcad48"
+      "bd73a072e5e6cddca01c1a157110dd2b"
     ],
     [
       "TLS.Handshake.Transcript.__proj__LR_ServerHello__item__b",
@@ -563,7 +744,7 @@
         "refinement_interpretation_Tm_refine_1937dac2be9184555572654e2bfa8f29"
       ],
       0,
-      "560754a176c74129d340728236e15b36"
+      "dcd8fe1decccaaee07f68d4bd69600ef"
     ],
     [
       "TLS.Handshake.Transcript.__proj__LR_ServerHello__item__sh",
@@ -572,14 +753,51 @@
       1,
       [
         "@MaxIFuel_assumption", "@query",
+        "Parsers.HandshakeType_pretyping_4ae277eb4b83707366cb7ae1906c30cf",
+        "constructor_distinct_Parsers.HandshakeType.Certificate",
+        "constructor_distinct_Parsers.HandshakeType.Certificate_request",
+        "constructor_distinct_Parsers.HandshakeType.Certificate_verify",
+        "constructor_distinct_Parsers.HandshakeType.Client_hello",
+        "constructor_distinct_Parsers.HandshakeType.Client_key_exchange",
+        "constructor_distinct_Parsers.HandshakeType.Encrypted_extensions",
+        "constructor_distinct_Parsers.HandshakeType.End_of_early_data",
+        "constructor_distinct_Parsers.HandshakeType.Finished",
+        "constructor_distinct_Parsers.HandshakeType.Hello_request",
+        "constructor_distinct_Parsers.HandshakeType.Key_update",
+        "constructor_distinct_Parsers.HandshakeType.Message_hash",
+        "constructor_distinct_Parsers.HandshakeType.New_session_ticket",
+        "constructor_distinct_Parsers.HandshakeType.Server_hello",
+        "constructor_distinct_Parsers.HandshakeType.Server_hello_done",
+        "constructor_distinct_Parsers.HandshakeType.Server_key_exchange",
+        "data_typing_intro_Parsers.HandshakeType.Server_hello@tok",
         "disc_equation_Parsers.Handshake.M_server_hello",
+        "equality_tok_Parsers.HandshakeType.Certificate@tok",
+        "equality_tok_Parsers.HandshakeType.Certificate_request@tok",
+        "equality_tok_Parsers.HandshakeType.Certificate_verify@tok",
+        "equality_tok_Parsers.HandshakeType.Client_hello@tok",
+        "equality_tok_Parsers.HandshakeType.Client_key_exchange@tok",
+        "equality_tok_Parsers.HandshakeType.Encrypted_extensions@tok",
+        "equality_tok_Parsers.HandshakeType.End_of_early_data@tok",
+        "equality_tok_Parsers.HandshakeType.Finished@tok",
+        "equality_tok_Parsers.HandshakeType.Hello_request@tok",
+        "equality_tok_Parsers.HandshakeType.Key_update@tok",
+        "equality_tok_Parsers.HandshakeType.Message_hash@tok",
+        "equality_tok_Parsers.HandshakeType.New_session_ticket@tok",
+        "equality_tok_Parsers.HandshakeType.Server_hello@tok",
+        "equality_tok_Parsers.HandshakeType.Server_hello_done@tok",
+        "equality_tok_Parsers.HandshakeType.Server_key_exchange@tok",
         "equation_MITLS.Repr.Handshake.is_sh",
-        "equation_TLS.Handshake.Transcript.hs_sh_repr",
+        "equation_MITLS.Repr.Handshake.t",
+        "equation_Parsers.Handshake.tag_of_handshake",
+        "equation_TLS.Handshake.Transcript.sh_pos",
+        "fuel_guarded_inversion_Parsers.Handshake.handshake",
+        "primitive_Prims.op_Equality",
         "proj_equation_TLS.Handshake.Transcript.LR_ServerHello_b",
-        "refinement_interpretation_Tm_refine_e4ea5a37b313f4ab47fb5b2f070e19a9"
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Tm_refine_b7d020f18b32ce61167b72a56bc45c48"
       ],
       0,
-      "d35bf10ff5aae73fdc59c60b77fc07ea"
+      "465978978143c6ebbe5474c0cb42bae4"
     ],
     [
       "TLS.Handshake.Transcript.__proj__LR_ServerHello__item__sh",
@@ -588,29 +806,72 @@
       1,
       [
         "@MaxIFuel_assumption", "@query",
+        "Parsers.HandshakeType_pretyping_4ae277eb4b83707366cb7ae1906c30cf",
+        "bool_inversion",
+        "constructor_distinct_Parsers.HandshakeType.Certificate",
+        "constructor_distinct_Parsers.HandshakeType.Certificate_request",
+        "constructor_distinct_Parsers.HandshakeType.Certificate_verify",
+        "constructor_distinct_Parsers.HandshakeType.Client_hello",
+        "constructor_distinct_Parsers.HandshakeType.Client_key_exchange",
+        "constructor_distinct_Parsers.HandshakeType.Encrypted_extensions",
+        "constructor_distinct_Parsers.HandshakeType.End_of_early_data",
+        "constructor_distinct_Parsers.HandshakeType.Finished",
+        "constructor_distinct_Parsers.HandshakeType.Hello_request",
+        "constructor_distinct_Parsers.HandshakeType.Key_update",
+        "constructor_distinct_Parsers.HandshakeType.Message_hash",
+        "constructor_distinct_Parsers.HandshakeType.New_session_ticket",
+        "constructor_distinct_Parsers.HandshakeType.Server_hello",
+        "constructor_distinct_Parsers.HandshakeType.Server_hello_done",
+        "constructor_distinct_Parsers.HandshakeType.Server_key_exchange",
         "data_elim_TLS.Handshake.Transcript.LR_ServerHello",
+        "data_typing_intro_Parsers.HandshakeType.Server_hello@tok",
         "disc_equation_Parsers.Handshake.M_server_hello",
         "disc_equation_Parsers.ServerHello_is_hrr.ServerHello_is_hrr_true",
         "disc_equation_TLS.Handshake.Transcript.LR_ServerHello",
+        "equality_tok_Parsers.HandshakeType.Certificate@tok",
+        "equality_tok_Parsers.HandshakeType.Certificate_request@tok",
+        "equality_tok_Parsers.HandshakeType.Certificate_verify@tok",
+        "equality_tok_Parsers.HandshakeType.Client_hello@tok",
+        "equality_tok_Parsers.HandshakeType.Client_key_exchange@tok",
+        "equality_tok_Parsers.HandshakeType.Encrypted_extensions@tok",
+        "equality_tok_Parsers.HandshakeType.End_of_early_data@tok",
+        "equality_tok_Parsers.HandshakeType.Finished@tok",
+        "equality_tok_Parsers.HandshakeType.Hello_request@tok",
+        "equality_tok_Parsers.HandshakeType.Key_update@tok",
+        "equality_tok_Parsers.HandshakeType.Message_hash@tok",
+        "equality_tok_Parsers.HandshakeType.New_session_ticket@tok",
+        "equality_tok_Parsers.HandshakeType.Server_hello@tok",
+        "equality_tok_Parsers.HandshakeType.Server_hello_done@tok",
+        "equality_tok_Parsers.HandshakeType.Server_key_exchange@tok",
+        "equation_FStar.HyperStack.ST.erid",
+        "equation_FStar.HyperStack.ST.is_eternal_region",
         "equation_HandshakeMessages.is_hrr",
+        "equation_LowParse.Repr.repr_pos_p",
+        "equation_LowParse.Repr.value_pos",
         "equation_MITLS.Repr.Handshake.is_sh",
-        "equation_MITLS.Repr.Handshake.repr",
-        "equation_MITLS.Repr.Handshake.t", "equation_MITLS.Repr.repr_p",
-        "equation_MITLS.Repr.value",
+        "equation_MITLS.Repr.Handshake.pos",
+        "equation_MITLS.Repr.Handshake.t", "equation_Mem.rgn",
         "equation_Parsers.Handshake.handshake_parser_kind",
-        "equation_TLS.Handshake.Transcript.hs_sh_repr",
-        "fuel_guarded_inversion_MITLS.Repr.const_slice",
+        "equation_Parsers.Handshake.tag_of_handshake",
+        "equation_TLS.Handshake.Transcript.sh_pos",
+        "fuel_guarded_inversion_LowParse.Repr.const_slice",
+        "fuel_guarded_inversion_Parsers.Handshake.handshake",
+        "primitive_Prims.op_Equality", "primitive_Prims.op_Negation",
         "proj_equation_TLS.Handshake.Transcript.LR_ServerHello_b",
         "projection_inverse_BoxBool_proj_0",
         "projection_inverse_TLS.Handshake.Transcript.LR_ServerHello_b",
         "projection_inverse_TLS.Handshake.Transcript.LR_ServerHello_sh",
         "refinement_interpretation_Tm_refine_1937dac2be9184555572654e2bfa8f29",
-        "refinement_interpretation_Tm_refine_aa80f263962b267213c4a763c11cb6a7",
-        "refinement_interpretation_Tm_refine_d0c586a86c5641491189f56116987d37",
-        "refinement_interpretation_Tm_refine_e4ea5a37b313f4ab47fb5b2f070e19a9"
+        "refinement_interpretation_Tm_refine_5aee6c1d5e606045d3f22072ebbfd523",
+        "refinement_interpretation_Tm_refine_6c5072d4c9562dd38fd2703ecfb013df",
+        "refinement_interpretation_Tm_refine_b1225279771c9378696310a748a198d9",
+        "refinement_interpretation_Tm_refine_b2d920440dc874c6054385f59e698a77",
+        "refinement_interpretation_Tm_refine_b7d020f18b32ce61167b72a56bc45c48",
+        "typing_FStar.Monotonic.HyperHeap.rid_freeable",
+        "typing_TLSInfo.safe_region"
       ],
       0,
-      "f110f9e40a39fb5424df4916769f4904"
+      "4e070685f528d9e51a02123d2a8fe7ef"
     ],
     [
       "TLS.Handshake.Transcript.__proj__LR_TCH__item__b",
@@ -624,7 +885,7 @@
         "refinement_interpretation_Tm_refine_22699358408c1342017135cead409697"
       ],
       0,
-      "3c7c356b5d4d1b2c02b5c209d22d3ebd"
+      "1ca2a75ef0c9ccd517f30973017c5a33"
     ],
     [
       "TLS.Handshake.Transcript.__proj__LR_TCH__item__ch",
@@ -633,14 +894,51 @@
       1,
       [
         "@MaxIFuel_assumption", "@query",
+        "Parsers.HandshakeType_pretyping_4ae277eb4b83707366cb7ae1906c30cf",
+        "constructor_distinct_Parsers.HandshakeType.Certificate",
+        "constructor_distinct_Parsers.HandshakeType.Certificate_request",
+        "constructor_distinct_Parsers.HandshakeType.Certificate_verify",
+        "constructor_distinct_Parsers.HandshakeType.Client_hello",
+        "constructor_distinct_Parsers.HandshakeType.Client_key_exchange",
+        "constructor_distinct_Parsers.HandshakeType.Encrypted_extensions",
+        "constructor_distinct_Parsers.HandshakeType.End_of_early_data",
+        "constructor_distinct_Parsers.HandshakeType.Finished",
+        "constructor_distinct_Parsers.HandshakeType.Hello_request",
+        "constructor_distinct_Parsers.HandshakeType.Key_update",
+        "constructor_distinct_Parsers.HandshakeType.Message_hash",
+        "constructor_distinct_Parsers.HandshakeType.New_session_ticket",
+        "constructor_distinct_Parsers.HandshakeType.Server_hello",
+        "constructor_distinct_Parsers.HandshakeType.Server_hello_done",
+        "constructor_distinct_Parsers.HandshakeType.Server_key_exchange",
+        "data_typing_intro_Parsers.HandshakeType.Server_hello@tok",
         "disc_equation_Parsers.Handshake.M_client_hello",
+        "equality_tok_Parsers.HandshakeType.Certificate@tok",
+        "equality_tok_Parsers.HandshakeType.Certificate_request@tok",
+        "equality_tok_Parsers.HandshakeType.Certificate_verify@tok",
+        "equality_tok_Parsers.HandshakeType.Client_hello@tok",
+        "equality_tok_Parsers.HandshakeType.Client_key_exchange@tok",
+        "equality_tok_Parsers.HandshakeType.Encrypted_extensions@tok",
+        "equality_tok_Parsers.HandshakeType.End_of_early_data@tok",
+        "equality_tok_Parsers.HandshakeType.Finished@tok",
+        "equality_tok_Parsers.HandshakeType.Hello_request@tok",
+        "equality_tok_Parsers.HandshakeType.Key_update@tok",
+        "equality_tok_Parsers.HandshakeType.Message_hash@tok",
+        "equality_tok_Parsers.HandshakeType.New_session_ticket@tok",
+        "equality_tok_Parsers.HandshakeType.Server_hello@tok",
+        "equality_tok_Parsers.HandshakeType.Server_hello_done@tok",
+        "equality_tok_Parsers.HandshakeType.Server_key_exchange@tok",
         "equation_MITLS.Repr.Handshake.is_ch",
-        "equation_TLS.Handshake.Transcript.hs_ch_repr",
+        "equation_MITLS.Repr.Handshake.t",
+        "equation_Parsers.Handshake.tag_of_handshake",
+        "equation_TLS.Handshake.Transcript.ch_pos",
+        "fuel_guarded_inversion_Parsers.Handshake.handshake",
+        "primitive_Prims.op_Equality",
         "proj_equation_TLS.Handshake.Transcript.LR_TCH_b",
-        "refinement_interpretation_Tm_refine_d68285d0b4567c17b20f6e366afe9178"
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Tm_refine_65505faf5a1c87de764805533a4a7898"
       ],
       0,
-      "176e0c3f2ebe86e84cc7ffba96dbe100"
+      "220887488af7d44d9313c7acfe19aae9"
     ],
     [
       "TLS.Handshake.Transcript.__proj__LR_TCH__item__ch",
@@ -649,29 +947,64 @@
       1,
       [
         "@MaxIFuel_assumption", "@query",
+        "Parsers.HandshakeType_pretyping_4ae277eb4b83707366cb7ae1906c30cf",
+        "constructor_distinct_Parsers.HandshakeType.Certificate",
+        "constructor_distinct_Parsers.HandshakeType.Certificate_request",
+        "constructor_distinct_Parsers.HandshakeType.Certificate_verify",
+        "constructor_distinct_Parsers.HandshakeType.Client_hello",
+        "constructor_distinct_Parsers.HandshakeType.Client_key_exchange",
+        "constructor_distinct_Parsers.HandshakeType.Encrypted_extensions",
+        "constructor_distinct_Parsers.HandshakeType.End_of_early_data",
+        "constructor_distinct_Parsers.HandshakeType.Finished",
+        "constructor_distinct_Parsers.HandshakeType.Hello_request",
+        "constructor_distinct_Parsers.HandshakeType.Key_update",
+        "constructor_distinct_Parsers.HandshakeType.Message_hash",
+        "constructor_distinct_Parsers.HandshakeType.New_session_ticket",
+        "constructor_distinct_Parsers.HandshakeType.Server_hello",
+        "constructor_distinct_Parsers.HandshakeType.Server_hello_done",
+        "constructor_distinct_Parsers.HandshakeType.Server_key_exchange",
         "data_elim_TLS.Handshake.Transcript.LR_TCH",
+        "data_typing_intro_Parsers.HandshakeType.Server_hello@tok",
         "disc_equation_Parsers.Handshake.M_client_hello",
         "disc_equation_TLS.Handshake.Transcript.LR_TCH",
+        "equality_tok_Parsers.HandshakeType.Certificate@tok",
+        "equality_tok_Parsers.HandshakeType.Certificate_request@tok",
+        "equality_tok_Parsers.HandshakeType.Certificate_verify@tok",
+        "equality_tok_Parsers.HandshakeType.Client_hello@tok",
+        "equality_tok_Parsers.HandshakeType.Client_key_exchange@tok",
+        "equality_tok_Parsers.HandshakeType.Encrypted_extensions@tok",
+        "equality_tok_Parsers.HandshakeType.End_of_early_data@tok",
+        "equality_tok_Parsers.HandshakeType.Finished@tok",
+        "equality_tok_Parsers.HandshakeType.Hello_request@tok",
+        "equality_tok_Parsers.HandshakeType.Key_update@tok",
+        "equality_tok_Parsers.HandshakeType.Message_hash@tok",
+        "equality_tok_Parsers.HandshakeType.New_session_ticket@tok",
+        "equality_tok_Parsers.HandshakeType.Server_hello@tok",
+        "equality_tok_Parsers.HandshakeType.Server_hello_done@tok",
+        "equality_tok_Parsers.HandshakeType.Server_key_exchange@tok",
+        "equation_LowParse.Repr.repr_pos_p",
+        "equation_LowParse.Repr.value_pos",
         "equation_MITLS.Repr.Handshake.is_ch",
-        "equation_MITLS.Repr.Handshake.repr",
-        "equation_MITLS.Repr.Handshake.t", "equation_MITLS.Repr.repr_p",
-        "equation_MITLS.Repr.value",
+        "equation_MITLS.Repr.Handshake.pos",
+        "equation_MITLS.Repr.Handshake.t",
         "equation_Parsers.Handshake.handshake_parser_kind",
+        "equation_Parsers.Handshake.tag_of_handshake",
         "equation_ParsersAux.Binders.ch_bound",
-        "equation_TLS.Handshake.Transcript.hs_ch_repr",
-        "fuel_guarded_inversion_MITLS.Repr.const_slice",
-        "primitive_Prims.op_AmpAmp",
+        "equation_TLS.Handshake.Transcript.ch_pos",
+        "fuel_guarded_inversion_LowParse.Repr.const_slice",
+        "fuel_guarded_inversion_Parsers.Handshake.handshake",
+        "primitive_Prims.op_AmpAmp", "primitive_Prims.op_Equality",
         "proj_equation_TLS.Handshake.Transcript.LR_TCH_b",
         "projection_inverse_BoxBool_proj_0",
         "projection_inverse_TLS.Handshake.Transcript.LR_TCH_b",
         "projection_inverse_TLS.Handshake.Transcript.LR_TCH_ch",
         "refinement_interpretation_Tm_refine_22699358408c1342017135cead409697",
-        "refinement_interpretation_Tm_refine_9ed0f6539c0c439d78fb25842dbe427d",
-        "refinement_interpretation_Tm_refine_d0c586a86c5641491189f56116987d37",
-        "refinement_interpretation_Tm_refine_d68285d0b4567c17b20f6e366afe9178"
+        "refinement_interpretation_Tm_refine_65505faf5a1c87de764805533a4a7898",
+        "refinement_interpretation_Tm_refine_b2d920440dc874c6054385f59e698a77",
+        "refinement_interpretation_Tm_refine_d725c35e4d723e40024eb2ca11d50d01"
       ],
       0,
-      "a83da05f3d2deabb046ffc1887d37842"
+      "4f866047c5ad4d35298df4cf15841982"
     ],
     [
       "TLS.Handshake.Transcript.__proj__LR_CompleteTCH__item__b",
@@ -685,7 +1018,7 @@
         "refinement_interpretation_Tm_refine_9ca8a43c1315dd178efc0ddbf3878f79"
       ],
       0,
-      "b16e791067938d950fb6123b70b9fa8f"
+      "cac3044b0e9c3bbfa37aaa857e0c4c16"
     ],
     [
       "TLS.Handshake.Transcript.__proj__LR_CompleteTCH__item__ch",
@@ -694,14 +1027,51 @@
       1,
       [
         "@MaxIFuel_assumption", "@query",
+        "Parsers.HandshakeType_pretyping_4ae277eb4b83707366cb7ae1906c30cf",
+        "constructor_distinct_Parsers.HandshakeType.Certificate",
+        "constructor_distinct_Parsers.HandshakeType.Certificate_request",
+        "constructor_distinct_Parsers.HandshakeType.Certificate_verify",
+        "constructor_distinct_Parsers.HandshakeType.Client_hello",
+        "constructor_distinct_Parsers.HandshakeType.Client_key_exchange",
+        "constructor_distinct_Parsers.HandshakeType.Encrypted_extensions",
+        "constructor_distinct_Parsers.HandshakeType.End_of_early_data",
+        "constructor_distinct_Parsers.HandshakeType.Finished",
+        "constructor_distinct_Parsers.HandshakeType.Hello_request",
+        "constructor_distinct_Parsers.HandshakeType.Key_update",
+        "constructor_distinct_Parsers.HandshakeType.Message_hash",
+        "constructor_distinct_Parsers.HandshakeType.New_session_ticket",
+        "constructor_distinct_Parsers.HandshakeType.Server_hello",
+        "constructor_distinct_Parsers.HandshakeType.Server_hello_done",
+        "constructor_distinct_Parsers.HandshakeType.Server_key_exchange",
+        "data_typing_intro_Parsers.HandshakeType.Server_hello@tok",
         "disc_equation_Parsers.Handshake.M_client_hello",
+        "equality_tok_Parsers.HandshakeType.Certificate@tok",
+        "equality_tok_Parsers.HandshakeType.Certificate_request@tok",
+        "equality_tok_Parsers.HandshakeType.Certificate_verify@tok",
+        "equality_tok_Parsers.HandshakeType.Client_hello@tok",
+        "equality_tok_Parsers.HandshakeType.Client_key_exchange@tok",
+        "equality_tok_Parsers.HandshakeType.Encrypted_extensions@tok",
+        "equality_tok_Parsers.HandshakeType.End_of_early_data@tok",
+        "equality_tok_Parsers.HandshakeType.Finished@tok",
+        "equality_tok_Parsers.HandshakeType.Hello_request@tok",
+        "equality_tok_Parsers.HandshakeType.Key_update@tok",
+        "equality_tok_Parsers.HandshakeType.Message_hash@tok",
+        "equality_tok_Parsers.HandshakeType.New_session_ticket@tok",
+        "equality_tok_Parsers.HandshakeType.Server_hello@tok",
+        "equality_tok_Parsers.HandshakeType.Server_hello_done@tok",
+        "equality_tok_Parsers.HandshakeType.Server_key_exchange@tok",
         "equation_MITLS.Repr.Handshake.is_ch",
-        "equation_TLS.Handshake.Transcript.hs_ch_repr",
+        "equation_MITLS.Repr.Handshake.t",
+        "equation_Parsers.Handshake.tag_of_handshake",
+        "equation_TLS.Handshake.Transcript.ch_pos",
+        "fuel_guarded_inversion_Parsers.Handshake.handshake",
+        "primitive_Prims.op_Equality",
         "proj_equation_TLS.Handshake.Transcript.LR_CompleteTCH_b",
-        "refinement_interpretation_Tm_refine_d68285d0b4567c17b20f6e366afe9178"
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Tm_refine_65505faf5a1c87de764805533a4a7898"
       ],
       0,
-      "b08dac353b30f1d89b86c8be5fd1e373"
+      "1c7f7f38f6345d23dbcb4d70d4ce5d72"
     ],
     [
       "TLS.Handshake.Transcript.__proj__LR_CompleteTCH__item__ch",
@@ -710,29 +1080,100 @@
       1,
       [
         "@MaxIFuel_assumption", "@query",
+        "Parsers.HandshakeType_pretyping_4ae277eb4b83707366cb7ae1906c30cf",
+        "constructor_distinct_Parsers.HandshakeType.Certificate",
+        "constructor_distinct_Parsers.HandshakeType.Certificate_request",
+        "constructor_distinct_Parsers.HandshakeType.Certificate_verify",
+        "constructor_distinct_Parsers.HandshakeType.Client_hello",
+        "constructor_distinct_Parsers.HandshakeType.Client_key_exchange",
+        "constructor_distinct_Parsers.HandshakeType.Encrypted_extensions",
+        "constructor_distinct_Parsers.HandshakeType.End_of_early_data",
+        "constructor_distinct_Parsers.HandshakeType.Finished",
+        "constructor_distinct_Parsers.HandshakeType.Hello_request",
+        "constructor_distinct_Parsers.HandshakeType.Key_update",
+        "constructor_distinct_Parsers.HandshakeType.Message_hash",
+        "constructor_distinct_Parsers.HandshakeType.New_session_ticket",
+        "constructor_distinct_Parsers.HandshakeType.Server_hello",
+        "constructor_distinct_Parsers.HandshakeType.Server_hello_done",
+        "constructor_distinct_Parsers.HandshakeType.Server_key_exchange",
         "data_elim_TLS.Handshake.Transcript.LR_CompleteTCH",
+        "data_typing_intro_Parsers.HandshakeType.Server_hello@tok",
         "disc_equation_Parsers.Handshake.M_client_hello",
         "disc_equation_TLS.Handshake.Transcript.LR_CompleteTCH",
+        "equality_tok_Parsers.HandshakeType.Certificate@tok",
+        "equality_tok_Parsers.HandshakeType.Certificate_request@tok",
+        "equality_tok_Parsers.HandshakeType.Certificate_verify@tok",
+        "equality_tok_Parsers.HandshakeType.Client_hello@tok",
+        "equality_tok_Parsers.HandshakeType.Client_key_exchange@tok",
+        "equality_tok_Parsers.HandshakeType.Encrypted_extensions@tok",
+        "equality_tok_Parsers.HandshakeType.End_of_early_data@tok",
+        "equality_tok_Parsers.HandshakeType.Finished@tok",
+        "equality_tok_Parsers.HandshakeType.Hello_request@tok",
+        "equality_tok_Parsers.HandshakeType.Key_update@tok",
+        "equality_tok_Parsers.HandshakeType.Message_hash@tok",
+        "equality_tok_Parsers.HandshakeType.New_session_ticket@tok",
+        "equality_tok_Parsers.HandshakeType.Server_hello@tok",
+        "equality_tok_Parsers.HandshakeType.Server_hello_done@tok",
+        "equality_tok_Parsers.HandshakeType.Server_key_exchange@tok",
+        "equation_LowParse.Repr.repr_pos_p",
+        "equation_LowParse.Repr.value_pos",
         "equation_MITLS.Repr.Handshake.is_ch",
-        "equation_MITLS.Repr.Handshake.repr",
-        "equation_MITLS.Repr.Handshake.t", "equation_MITLS.Repr.repr_p",
-        "equation_MITLS.Repr.value",
+        "equation_MITLS.Repr.Handshake.pos",
+        "equation_MITLS.Repr.Handshake.t",
         "equation_Parsers.Handshake.handshake_parser_kind",
+        "equation_Parsers.Handshake.tag_of_handshake",
         "equation_ParsersAux.Binders.ch_bound",
-        "equation_TLS.Handshake.Transcript.hs_ch_repr",
-        "fuel_guarded_inversion_MITLS.Repr.const_slice",
-        "primitive_Prims.op_AmpAmp",
+        "equation_TLS.Handshake.Transcript.ch_pos",
+        "fuel_guarded_inversion_LowParse.Repr.const_slice",
+        "fuel_guarded_inversion_Parsers.Handshake.handshake",
+        "primitive_Prims.op_AmpAmp", "primitive_Prims.op_Equality",
         "proj_equation_TLS.Handshake.Transcript.LR_CompleteTCH_b",
         "projection_inverse_BoxBool_proj_0",
         "projection_inverse_TLS.Handshake.Transcript.LR_CompleteTCH_b",
         "projection_inverse_TLS.Handshake.Transcript.LR_CompleteTCH_ch",
+        "refinement_interpretation_Tm_refine_65505faf5a1c87de764805533a4a7898",
         "refinement_interpretation_Tm_refine_9ca8a43c1315dd178efc0ddbf3878f79",
-        "refinement_interpretation_Tm_refine_9ed0f6539c0c439d78fb25842dbe427d",
-        "refinement_interpretation_Tm_refine_d0c586a86c5641491189f56116987d37",
-        "refinement_interpretation_Tm_refine_d68285d0b4567c17b20f6e366afe9178"
+        "refinement_interpretation_Tm_refine_b2d920440dc874c6054385f59e698a77",
+        "refinement_interpretation_Tm_refine_d725c35e4d723e40024eb2ca11d50d01"
       ],
       0,
-      "bc2ca7d475b51c7044e4cbb783bea730"
+      "096c87ae433cdf9a4c98cd8cebcbe2d1"
+    ],
+    [
+      "TLS.Handshake.Transcript.__proj__LR_HRR__item__b",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_TLS.Handshake.Transcript.LR_HRR",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Tm_refine_0e9d577a9fb18a64dd97d567858b7cb4"
+      ],
+      0,
+      "b5beefc7b3482bae320f2071aa191e86"
+    ],
+    [
+      "TLS.Handshake.Transcript.__proj__LR_HRR__item__ch_tag",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_TLS.Handshake.Transcript.LR_HRR",
+        "equation_LowParse.Repr.repr_pos_p",
+        "equation_MITLS.Repr.Handshake.pos",
+        "equation_MITLS.Repr.Handshake.t",
+        "equation_Parsers.Handshake.handshake_parser_kind",
+        "proj_equation_TLS.Handshake.Transcript.LR_HRR_b",
+        "projection_inverse_BoxBool_proj_0",
+        "projection_inverse_TLS.Handshake.Transcript.LR_HRR_b",
+        "refinement_interpretation_Tm_refine_0e9d577a9fb18a64dd97d567858b7cb4",
+        "refinement_interpretation_Tm_refine_63283e006a61bcfe679814587e28d72d",
+        "refinement_interpretation_Tm_refine_b2d920440dc874c6054385f59e698a77"
+      ],
+      0,
+      "8974ecce8567c29da0ea867eb0b7eb67"
     ],
     [
       "TLS.Handshake.Transcript.__proj__LR_HRR__item__b1",
@@ -746,87 +1187,125 @@
         "refinement_interpretation_Tm_refine_0e9d577a9fb18a64dd97d567858b7cb4"
       ],
       0,
-      "6afd9a5657fd237ccd840eac0f767096"
+      "4117f0d3e2819243f1d9eeddc9095986"
     ],
     [
-      "TLS.Handshake.Transcript.__proj__LR_HRR__item__ch_tag",
+      "TLS.Handshake.Transcript.__proj__LR_HRR__item__hrr",
       1,
       2,
       1,
       [
         "@MaxIFuel_assumption", "@query",
+        "Parsers.HandshakeType_pretyping_4ae277eb4b83707366cb7ae1906c30cf",
+        "constructor_distinct_Parsers.HandshakeType.Certificate",
+        "constructor_distinct_Parsers.HandshakeType.Certificate_request",
+        "constructor_distinct_Parsers.HandshakeType.Certificate_verify",
+        "constructor_distinct_Parsers.HandshakeType.Client_hello",
+        "constructor_distinct_Parsers.HandshakeType.Client_key_exchange",
+        "constructor_distinct_Parsers.HandshakeType.Encrypted_extensions",
+        "constructor_distinct_Parsers.HandshakeType.End_of_early_data",
+        "constructor_distinct_Parsers.HandshakeType.Finished",
+        "constructor_distinct_Parsers.HandshakeType.Hello_request",
+        "constructor_distinct_Parsers.HandshakeType.Key_update",
+        "constructor_distinct_Parsers.HandshakeType.Message_hash",
+        "constructor_distinct_Parsers.HandshakeType.New_session_ticket",
+        "constructor_distinct_Parsers.HandshakeType.Server_hello",
+        "constructor_distinct_Parsers.HandshakeType.Server_hello_done",
+        "constructor_distinct_Parsers.HandshakeType.Server_key_exchange",
+        "data_typing_intro_Parsers.HandshakeType.Server_hello@tok",
+        "disc_equation_Parsers.Handshake.M_server_hello",
+        "equality_tok_Parsers.HandshakeType.Certificate@tok",
+        "equality_tok_Parsers.HandshakeType.Certificate_request@tok",
+        "equality_tok_Parsers.HandshakeType.Certificate_verify@tok",
+        "equality_tok_Parsers.HandshakeType.Client_hello@tok",
+        "equality_tok_Parsers.HandshakeType.Client_key_exchange@tok",
+        "equality_tok_Parsers.HandshakeType.Encrypted_extensions@tok",
+        "equality_tok_Parsers.HandshakeType.End_of_early_data@tok",
+        "equality_tok_Parsers.HandshakeType.Finished@tok",
+        "equality_tok_Parsers.HandshakeType.Hello_request@tok",
+        "equality_tok_Parsers.HandshakeType.Key_update@tok",
+        "equality_tok_Parsers.HandshakeType.Message_hash@tok",
+        "equality_tok_Parsers.HandshakeType.New_session_ticket@tok",
+        "equality_tok_Parsers.HandshakeType.Server_hello@tok",
+        "equality_tok_Parsers.HandshakeType.Server_hello_done@tok",
+        "equality_tok_Parsers.HandshakeType.Server_key_exchange@tok",
+        "equation_MITLS.Repr.Handshake.is_sh",
+        "equation_MITLS.Repr.Handshake.t",
+        "equation_Parsers.Handshake.tag_of_handshake",
+        "equation_TLS.Handshake.Transcript.sh_pos",
+        "fuel_guarded_inversion_Parsers.Handshake.handshake",
+        "primitive_Prims.op_Equality",
+        "proj_equation_TLS.Handshake.Transcript.LR_HRR_b1",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Tm_refine_b7d020f18b32ce61167b72a56bc45c48"
+      ],
+      0,
+      "ee67aea7ec8b1ee67833ea59747d1438"
+    ],
+    [
+      "TLS.Handshake.Transcript.__proj__LR_HRR__item__hrr",
+      2,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "Parsers.HandshakeType_pretyping_4ae277eb4b83707366cb7ae1906c30cf",
+        "constructor_distinct_Parsers.HandshakeType.Certificate",
+        "constructor_distinct_Parsers.HandshakeType.Certificate_request",
+        "constructor_distinct_Parsers.HandshakeType.Certificate_verify",
+        "constructor_distinct_Parsers.HandshakeType.Client_hello",
+        "constructor_distinct_Parsers.HandshakeType.Client_key_exchange",
+        "constructor_distinct_Parsers.HandshakeType.Encrypted_extensions",
+        "constructor_distinct_Parsers.HandshakeType.End_of_early_data",
+        "constructor_distinct_Parsers.HandshakeType.Finished",
+        "constructor_distinct_Parsers.HandshakeType.Hello_request",
+        "constructor_distinct_Parsers.HandshakeType.Key_update",
+        "constructor_distinct_Parsers.HandshakeType.Message_hash",
+        "constructor_distinct_Parsers.HandshakeType.New_session_ticket",
+        "constructor_distinct_Parsers.HandshakeType.Server_hello",
+        "constructor_distinct_Parsers.HandshakeType.Server_hello_done",
+        "constructor_distinct_Parsers.HandshakeType.Server_key_exchange",
+        "data_elim_TLS.Handshake.Transcript.LR_HRR",
+        "data_typing_intro_Parsers.HandshakeType.Server_hello@tok",
+        "disc_equation_Parsers.Handshake.M_server_hello",
         "disc_equation_TLS.Handshake.Transcript.LR_HRR",
-        "equation_MITLS.Repr.Handshake.repr",
-        "equation_MITLS.Repr.Handshake.t", "equation_MITLS.Repr.repr_p",
+        "equality_tok_Parsers.HandshakeType.Certificate@tok",
+        "equality_tok_Parsers.HandshakeType.Certificate_request@tok",
+        "equality_tok_Parsers.HandshakeType.Certificate_verify@tok",
+        "equality_tok_Parsers.HandshakeType.Client_hello@tok",
+        "equality_tok_Parsers.HandshakeType.Client_key_exchange@tok",
+        "equality_tok_Parsers.HandshakeType.Encrypted_extensions@tok",
+        "equality_tok_Parsers.HandshakeType.End_of_early_data@tok",
+        "equality_tok_Parsers.HandshakeType.Finished@tok",
+        "equality_tok_Parsers.HandshakeType.Hello_request@tok",
+        "equality_tok_Parsers.HandshakeType.Key_update@tok",
+        "equality_tok_Parsers.HandshakeType.Message_hash@tok",
+        "equality_tok_Parsers.HandshakeType.New_session_ticket@tok",
+        "equality_tok_Parsers.HandshakeType.Server_hello@tok",
+        "equality_tok_Parsers.HandshakeType.Server_hello_done@tok",
+        "equality_tok_Parsers.HandshakeType.Server_key_exchange@tok",
+        "equation_LowParse.Repr.repr_pos_p",
+        "equation_LowParse.Repr.value_pos",
+        "equation_MITLS.Repr.Handshake.is_sh",
+        "equation_MITLS.Repr.Handshake.pos",
+        "equation_MITLS.Repr.Handshake.t",
         "equation_Parsers.Handshake.handshake_parser_kind",
+        "equation_Parsers.Handshake.tag_of_handshake",
+        "equation_TLS.Handshake.Transcript.sh_pos",
+        "fuel_guarded_inversion_LowParse.Repr.const_slice",
+        "fuel_guarded_inversion_Parsers.Handshake.handshake",
+        "primitive_Prims.op_Equality",
         "proj_equation_TLS.Handshake.Transcript.LR_HRR_b1",
         "projection_inverse_BoxBool_proj_0",
         "projection_inverse_TLS.Handshake.Transcript.LR_HRR_b1",
-        "refinement_interpretation_Tm_refine_0e9d577a9fb18a64dd97d567858b7cb4",
-        "refinement_interpretation_Tm_refine_d0c586a86c5641491189f56116987d37",
-        "refinement_interpretation_Tm_refine_d49790ba469ea110567fa4cc8b8f8f28"
-      ],
-      0,
-      "27c66614cf6c1885ce6077f484b1d394"
-    ],
-    [
-      "TLS.Handshake.Transcript.__proj__LR_HRR__item__b2",
-      1,
-      2,
-      1,
-      [
-        "@MaxIFuel_assumption", "@query",
-        "disc_equation_TLS.Handshake.Transcript.LR_HRR",
-        "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_0e9d577a9fb18a64dd97d567858b7cb4"
-      ],
-      0,
-      "56461bc3dc459f3957ec1702d3897d63"
-    ],
-    [
-      "TLS.Handshake.Transcript.__proj__LR_HRR__item__hrr",
-      1,
-      2,
-      1,
-      [
-        "@MaxIFuel_assumption", "@query",
-        "disc_equation_Parsers.Handshake.M_server_hello",
-        "equation_MITLS.Repr.Handshake.is_sh",
-        "equation_TLS.Handshake.Transcript.hs_sh_repr",
-        "proj_equation_TLS.Handshake.Transcript.LR_HRR_b2",
-        "refinement_interpretation_Tm_refine_e4ea5a37b313f4ab47fb5b2f070e19a9"
-      ],
-      0,
-      "c706a1930f2c4fc1fc1f44e8b82f3cb9"
-    ],
-    [
-      "TLS.Handshake.Transcript.__proj__LR_HRR__item__hrr",
-      2,
-      2,
-      1,
-      [
-        "@MaxIFuel_assumption", "@query",
-        "data_elim_TLS.Handshake.Transcript.LR_HRR",
-        "disc_equation_Parsers.Handshake.M_server_hello",
-        "disc_equation_TLS.Handshake.Transcript.LR_HRR",
-        "equation_MITLS.Repr.Handshake.is_sh",
-        "equation_MITLS.Repr.Handshake.repr",
-        "equation_MITLS.Repr.Handshake.t", "equation_MITLS.Repr.repr_p",
-        "equation_MITLS.Repr.value",
-        "equation_Parsers.Handshake.handshake_parser_kind",
-        "equation_TLS.Handshake.Transcript.hs_sh_repr",
-        "fuel_guarded_inversion_MITLS.Repr.const_slice",
-        "proj_equation_TLS.Handshake.Transcript.LR_HRR_b2",
-        "projection_inverse_BoxBool_proj_0",
-        "projection_inverse_TLS.Handshake.Transcript.LR_HRR_b2",
         "projection_inverse_TLS.Handshake.Transcript.LR_HRR_hrr",
         "refinement_interpretation_Tm_refine_0e9d577a9fb18a64dd97d567858b7cb4",
-        "refinement_interpretation_Tm_refine_23516aad9295ebc2541357849b46e188",
-        "refinement_interpretation_Tm_refine_d0c586a86c5641491189f56116987d37",
-        "refinement_interpretation_Tm_refine_e4ea5a37b313f4ab47fb5b2f070e19a9"
+        "refinement_interpretation_Tm_refine_16154a8b80d215c2153b57677023ecf7",
+        "refinement_interpretation_Tm_refine_b2d920440dc874c6054385f59e698a77",
+        "refinement_interpretation_Tm_refine_b7d020f18b32ce61167b72a56bc45c48"
       ],
       0,
-      "b4c0cb392153f30150862cab5a399b57"
+      "e553c395d2f58f30e5f12e85f6046a4d"
     ],
     [
       "TLS.Handshake.Transcript.__proj__LR_HSM12__item__b",
@@ -840,7 +1319,7 @@
         "refinement_interpretation_Tm_refine_69a033eb190832e07b9db2a9af356702"
       ],
       0,
-      "8ccc41986b780609e76174067c7b32cc"
+      "bf7b645750b8eb45c43f6d293b0acfd6"
     ],
     [
       "TLS.Handshake.Transcript.__proj__LR_HSM12__item__hs12",
@@ -860,7 +1339,7 @@
         "refinement_interpretation_Tm_refine_d0c586a86c5641491189f56116987d37"
       ],
       0,
-      "5abe60aba4786bbc868b6bf08ea67c98"
+      "320d8f50857abe5124079688b5773bfc"
     ],
     [
       "TLS.Handshake.Transcript.__proj__LR_HSM13__item__b",
@@ -874,7 +1353,7 @@
         "refinement_interpretation_Tm_refine_57899e97238b5f32e2b79ab917dddb0a"
       ],
       0,
-      "d03212b7cc31c2b8c761bcb8cfdc7e11"
+      "54fb1c6b21f387f88e1f3462eb488e38"
     ],
     [
       "TLS.Handshake.Transcript.__proj__LR_HSM13__item__hs13",
@@ -894,7 +1373,7 @@
         "refinement_interpretation_Tm_refine_d0c586a86c5641491189f56116987d37"
       ],
       0,
-      "495b575b9c9bd0d9ef29b25506b59a80"
+      "be35ceaebf1987706f8d2427e6b72dcb"
     ],
     [
       "TLS.Handshake.Transcript.label_of_label_repr",
@@ -903,6 +1382,23 @@
       1,
       [
         "@MaxIFuel_assumption", "@query",
+        "Parsers.HandshakeType_pretyping_4ae277eb4b83707366cb7ae1906c30cf",
+        "constructor_distinct_Parsers.HandshakeType.Certificate",
+        "constructor_distinct_Parsers.HandshakeType.Certificate_request",
+        "constructor_distinct_Parsers.HandshakeType.Certificate_verify",
+        "constructor_distinct_Parsers.HandshakeType.Client_hello",
+        "constructor_distinct_Parsers.HandshakeType.Client_key_exchange",
+        "constructor_distinct_Parsers.HandshakeType.Encrypted_extensions",
+        "constructor_distinct_Parsers.HandshakeType.End_of_early_data",
+        "constructor_distinct_Parsers.HandshakeType.Finished",
+        "constructor_distinct_Parsers.HandshakeType.Hello_request",
+        "constructor_distinct_Parsers.HandshakeType.Key_update",
+        "constructor_distinct_Parsers.HandshakeType.Message_hash",
+        "constructor_distinct_Parsers.HandshakeType.New_session_ticket",
+        "constructor_distinct_Parsers.HandshakeType.Server_hello",
+        "constructor_distinct_Parsers.HandshakeType.Server_hello_done",
+        "constructor_distinct_Parsers.HandshakeType.Server_key_exchange",
+        "data_typing_intro_Parsers.HandshakeType.Server_hello@tok",
         "disc_equation_Parsers.Handshake.M_client_hello",
         "disc_equation_Parsers.Handshake.M_server_hello",
         "disc_equation_TLS.Handshake.Transcript.LR_ClientHello",
@@ -912,21 +1408,40 @@
         "disc_equation_TLS.Handshake.Transcript.LR_HSM13",
         "disc_equation_TLS.Handshake.Transcript.LR_ServerHello",
         "disc_equation_TLS.Handshake.Transcript.LR_TCH",
+        "equality_tok_Parsers.HandshakeType.Certificate@tok",
+        "equality_tok_Parsers.HandshakeType.Certificate_request@tok",
+        "equality_tok_Parsers.HandshakeType.Certificate_verify@tok",
+        "equality_tok_Parsers.HandshakeType.Client_hello@tok",
+        "equality_tok_Parsers.HandshakeType.Client_key_exchange@tok",
+        "equality_tok_Parsers.HandshakeType.Encrypted_extensions@tok",
+        "equality_tok_Parsers.HandshakeType.End_of_early_data@tok",
+        "equality_tok_Parsers.HandshakeType.Finished@tok",
+        "equality_tok_Parsers.HandshakeType.Hello_request@tok",
+        "equality_tok_Parsers.HandshakeType.Key_update@tok",
+        "equality_tok_Parsers.HandshakeType.Message_hash@tok",
+        "equality_tok_Parsers.HandshakeType.New_session_ticket@tok",
+        "equality_tok_Parsers.HandshakeType.Server_hello@tok",
+        "equality_tok_Parsers.HandshakeType.Server_hello_done@tok",
+        "equality_tok_Parsers.HandshakeType.Server_key_exchange@tok",
         "equation_HandshakeMessages.is_valid_hrr",
         "equation_MITLS.Repr.Handshake.is_ch",
         "equation_MITLS.Repr.Handshake.is_sh",
-        "equation_TLS.Handshake.Transcript.hs_ch_repr",
-        "equation_TLS.Handshake.Transcript.hs_sh_repr",
+        "equation_MITLS.Repr.Handshake.t",
+        "equation_Parsers.Handshake.tag_of_handshake",
+        "equation_TLS.Handshake.Transcript.ch_pos",
+        "equation_TLS.Handshake.Transcript.sh_pos",
+        "fuel_guarded_inversion_Parsers.Handshake.handshake",
         "fuel_guarded_inversion_TLS.Handshake.Transcript.label_repr",
-        "refinement_interpretation_Tm_refine_23516aad9295ebc2541357849b46e188",
-        "refinement_interpretation_Tm_refine_9ed0f6539c0c439d78fb25842dbe427d",
-        "refinement_interpretation_Tm_refine_aa80f263962b267213c4a763c11cb6a7",
-        "refinement_interpretation_Tm_refine_d49790ba469ea110567fa4cc8b8f8f28",
-        "refinement_interpretation_Tm_refine_d68285d0b4567c17b20f6e366afe9178",
-        "refinement_interpretation_Tm_refine_e4ea5a37b313f4ab47fb5b2f070e19a9"
+        "primitive_Prims.op_Equality", "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Tm_refine_16154a8b80d215c2153b57677023ecf7",
+        "refinement_interpretation_Tm_refine_63283e006a61bcfe679814587e28d72d",
+        "refinement_interpretation_Tm_refine_65505faf5a1c87de764805533a4a7898",
+        "refinement_interpretation_Tm_refine_b1225279771c9378696310a748a198d9",
+        "refinement_interpretation_Tm_refine_b7d020f18b32ce61167b72a56bc45c48",
+        "refinement_interpretation_Tm_refine_d725c35e4d723e40024eb2ca11d50d01"
       ],
       0,
-      "ee7a81777466bb8cc2f4fd85950e350d"
+      "5c426b1de49c8016a80607e302ba0b63"
     ],
     [
       "TLS.Handshake.Transcript.valid_label_repr",
@@ -945,7 +1460,7 @@
         "fuel_guarded_inversion_TLS.Handshake.Transcript.label_repr"
       ],
       0,
-      "c9c51730e50345b3e32f8550dca853c4"
+      "3ed7802dc628d5b7812f1d2f0ca58b90"
     ],
     [
       "TLS.Handshake.Transcript.loc_of_label_repr",
@@ -964,7 +1479,7 @@
         "fuel_guarded_inversion_TLS.Handshake.Transcript.label_repr"
       ],
       0,
-      "8d7aa620bc1d5ba67925006f4aa46767"
+      "f539e149bf72705257c87a460deb9882"
     ],
     [
       "TLS.Handshake.Transcript.extend",
@@ -973,10 +1488,10 @@
       1,
       [
         "@MaxIFuel_assumption", "@query",
-        "refinement_interpretation_Tm_refine_09ca173dc672602e56cd270363e5ed6b"
+        "refinement_interpretation_Tm_refine_f621db545ce6c12eefabeafdf94c01cb"
       ],
       0,
-      "82a73100251db0053024965c2b831876"
+      "59cf046cc0bbd81fa05e242b65b91fbe"
     ]
   ]
 ]
