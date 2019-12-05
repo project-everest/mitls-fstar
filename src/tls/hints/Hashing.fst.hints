@@ -59,7 +59,7 @@
         "typing_FStar.Bytes.len", "typing_Hacl.Hash.Definitions.hash_len"
       ],
       0,
-      "f2bbc5385fbb678b4d0938ec0f1bd63c"
+      "199aad6f5e707fc847645aff81138587"
     ],
     [
       "Hashing.compute",
@@ -74,7 +74,7 @@
         "typing_FStar.Bytes.bytes"
       ],
       0,
-      "076d65dbfcadd47b0a22989c7333939f"
+      "90eaeb40be865eef1d406f2407111135"
     ],
     [
       "Hashing.compute",
@@ -100,6 +100,7 @@
         "equation_FStar.Bytes.lbytes32",
         "equation_FStar.HyperStack.ST.equal_domains",
         "equation_FStar.HyperStack.ST.inline_stack_inv",
+        "equation_FStar.HyperStack.ST.is_eternal_region",
         "equation_FStar.Monotonic.Heap.equal_dom",
         "equation_FStar.Monotonic.HyperHeap.hmap",
         "equation_FStar.Monotonic.HyperStack.fresh_frame",
@@ -110,9 +111,9 @@
         "equation_FStar.Monotonic.HyperStack.poppable",
         "equation_FStar.Monotonic.HyperStack.popped",
         "equation_FStar.Monotonic.HyperStack.remove_elt",
-        "equation_FStar.UInt.fits", "equation_FStar.UInt.max_int",
-        "equation_FStar.UInt.min_int", "equation_FStar.UInt.size",
-        "equation_FStar.UInt.uint_t",
+        "equation_FStar.Preorder.preorder", "equation_FStar.UInt.fits",
+        "equation_FStar.UInt.max_int", "equation_FStar.UInt.min_int",
+        "equation_FStar.UInt.size", "equation_FStar.UInt.uint_t",
         "equation_Hacl.Hash.Definitions.hash_len",
         "equation_Hashing.Spec.max_hash_length",
         "equation_Hashing.Spec.max_input_length", "equation_Hashing.h",
@@ -121,7 +122,8 @@
         "equation_Lib.IntTypes.maxint", "equation_Lib.IntTypes.pub_int_t",
         "equation_Lib.IntTypes.pub_int_v", "equation_Lib.IntTypes.unsigned",
         "equation_Lib.IntTypes.v", "equation_LowParse.Bytes32.reveal_empty_",
-        "equation_LowStar.Buffer.trivial_preorder", "equation_Prims.eq2",
+        "equation_LowStar.Buffer.trivial_preorder", "equation_Mem.rgn",
+        "equation_Mem.tls_rgn", "equation_Prims.eq2",
         "equation_Prims.eqtype", "equation_Prims.nat", "equation_Prims.pos",
         "equation_Prims.squash",
         "equation_Spec.Hash.Definitions.hash_length",
@@ -201,6 +203,8 @@
         "refinement_interpretation_Tm_refine_16f29a6f8b129d5f173344126014341c",
         "refinement_interpretation_Tm_refine_1cc6c9f8558dddb337b6c1187115cd6a",
         "refinement_interpretation_Tm_refine_2de20c066034c13bf76e9c0b94f4806c",
+        "refinement_interpretation_Tm_refine_31bfde48b952b6d7959cd5a2aa36404e",
+        "refinement_interpretation_Tm_refine_365abba901205a01d0ef28ebf2198c47",
         "refinement_interpretation_Tm_refine_3daf37ab3cd19c1e74e63f8f5e0fb16a",
         "refinement_interpretation_Tm_refine_414d0a9f578ab0048252f8c8f552b99f",
         "refinement_interpretation_Tm_refine_542f9d4f129664613f2483a6c88bc7c2",
@@ -210,13 +214,16 @@
         "refinement_interpretation_Tm_refine_774ba3f728d91ead8ef40be66c9802e5",
         "refinement_interpretation_Tm_refine_7a667868adfb0a6fe40f327e2c50ee74",
         "refinement_interpretation_Tm_refine_80b9fa1848cd4b08f626f8a84eef7f15",
+        "refinement_interpretation_Tm_refine_9393f41ccc9ce36df1080eefe33f6c53",
         "refinement_interpretation_Tm_refine_a795c43837a0650e1e3d1ca03b66444c",
         "refinement_interpretation_Tm_refine_ab7a34c52ec57200cbb883e479fbf207",
         "refinement_interpretation_Tm_refine_b43b16fcb582977fd56f68ee8088c262",
         "refinement_interpretation_Tm_refine_b913a3f691ca99086652e0a655e72f17",
+        "refinement_interpretation_Tm_refine_bd10f09297e0e7dc08314f7d9211801c",
         "refinement_interpretation_Tm_refine_c7753baa38cd99c4f00a675631dc1dde",
         "refinement_interpretation_Tm_refine_eb93eb16bc8f440163424c3a62e7e9d8",
         "refinement_interpretation_Tm_refine_f13070840248fced9d9d60d77bdae3ec",
+        "refinement_interpretation_Tm_refine_f5abdb4fca48db7ec5f96310aaf134ce",
         "refinement_interpretation_Tm_refine_f7a5fc4032e47f83ef6028c34c220e17",
         "refinement_kinding_Tm_refine_542f9d4f129664613f2483a6c88bc7c2",
         "typing_FStar.Bytes.empty_bytes", "typing_FStar.Bytes.len",
@@ -226,6 +233,7 @@
         "typing_FStar.Monotonic.HyperHeap.includes",
         "typing_FStar.Monotonic.HyperHeap.mod_set",
         "typing_FStar.Monotonic.HyperHeap.rid",
+        "typing_FStar.Monotonic.HyperHeap.rid_freeable",
         "typing_FStar.Monotonic.HyperHeap.root",
         "typing_FStar.Monotonic.HyperStack.get_hmap",
         "typing_FStar.Monotonic.HyperStack.get_tip",
@@ -248,13 +256,13 @@
         "typing_LowStar.Monotonic.Buffer.loc_not_unused_in",
         "typing_LowStar.Monotonic.Buffer.loc_regions",
         "typing_LowStar.Monotonic.Buffer.loc_union",
-        "typing_LowStar.Monotonic.Buffer.mnull", "typing_Prims.pow2",
-        "typing_Spec.Hash.Definitions.hash_length",
+        "typing_LowStar.Monotonic.Buffer.mnull", "typing_Mem.tls_region",
+        "typing_Prims.pow2", "typing_Spec.Hash.Definitions.hash_length",
         "typing_Spec.Hash.Definitions.word_length",
         "typing_tok_Lib.IntTypes.U32@tok"
       ],
       0,
-      "2b9c5e2ad801cb090f50ff575a6e843e"
+      "6bea2436200025ff8076be62cbe3acb6"
     ],
     [
       "Hashing.accv'",
@@ -268,7 +276,7 @@
         "typing_FStar.Bytes.bytes"
       ],
       0,
-      "731c99573cd5b52ca9d2cb9afbd17131"
+      "b5a26a52777cd95d7dce9fcf07d9b11c"
     ],
     [
       "Hashing.start",
@@ -277,7 +285,7 @@
       1,
       [ "@query" ],
       0,
-      "8737cedf3ee8a28c4d3b4417f9bf78f9"
+      "cccffc8cac1784778150b8f58f10b337"
     ],
     [
       "Hashing.extend",
@@ -293,7 +301,7 @@
         "typing_Hashing.content"
       ],
       0,
-      "7e5860b9fa7a7092e79f9342bda9a3a9"
+      "308a7fab7e6c16671edca4a0652e788e"
     ],
     [
       "Hashing.start",
@@ -334,7 +342,7 @@
         "typing_FStar.Bytes.empty_bytes"
       ],
       0,
-      "34e2e1696fddc169279ae4f38b766698"
+      "b9958474aae937ff89c0c5242af593ab"
     ],
     [
       "Hashing.extend",
@@ -361,7 +369,7 @@
         "typing_Hashing.content"
       ],
       0,
-      "3415871eb2e359f9cf2a3aab5a70a38a"
+      "6c12d519c266185e0716538955d7ceb3"
     ],
     [
       "Hashing.finalize",
@@ -377,7 +385,7 @@
         "projection_inverse_Hashing.Inputs_b"
       ],
       0,
-      "ebf37048e09ef015d1b91ff491a8e751"
+      "5e5a734e3847ac320d9a2a152edbc81e"
     ]
   ]
 ]
