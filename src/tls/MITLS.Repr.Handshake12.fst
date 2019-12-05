@@ -98,7 +98,7 @@ type cke12_pos (b:R.const_slice) = m:pos b{is_cke m}
 type nst12_pos (b:R.const_slice) = m:pos b{is_nst m}
 type fin12_pos (b:R.const_slice) = m:pos b{is_fin m}
 
-unfold
+unfold noextract
 let field_hello_request =
   R.FieldAccessor
     HSM12.handshake12_accessor_hello_request
@@ -106,7 +106,7 @@ let field_hello_request =
     HSM12.handshake12_m12_hello_request_parser32
 
 
-unfold
+unfold noextract
 let field_certificate =
   let acc1 =
     R.FieldAccessor
@@ -122,14 +122,14 @@ let field_certificate =
   in
   R.field_accessor_comp acc1 acc2
 
-unfold
+unfold noextract
 let field_ske =
   R.FieldAccessor
     HSM12.handshake12_accessor_server_key_exchange
     HSM12.handshake12_m12_server_key_exchange_jumper
     HSM12.handshake12_m12_server_key_exchange_parser32
 
-unfold
+unfold noextract
 let field_cr =
   let acc1 =
     R.FieldAccessor
@@ -146,14 +146,14 @@ let field_cr =
   R.field_accessor_comp acc1 acc2
 
 
-unfold
+unfold noextract
 let field_shd =
   R.FieldAccessor
     HSM12.handshake12_accessor_server_hello_done
     HSM12.handshake12_m12_server_hello_done_jumper
     HSM12.handshake12_m12_server_hello_done_parser32
 
-unfold
+unfold noextract
 let field_cv =
   let acc1 =
     R.FieldAccessor
@@ -169,14 +169,14 @@ let field_cv =
   in
   R.field_accessor_comp acc1 acc2
 
-unfold
+unfold noextract
 let field_cke =
   R.FieldAccessor
     HSM12.handshake12_accessor_client_key_exchange
     HSM12.handshake12_m12_client_key_exchange_jumper
     HSM12.handshake12_m12_client_key_exchange_parser32
 
-unfold
+unfold noextract
 let field_nst =
   let acc1 =
     R.FieldAccessor
@@ -192,7 +192,7 @@ let field_nst =
   in
   R.field_accessor_comp acc1 acc2
 
-unfold
+unfold noextract
 let field_fin =
   R.FieldAccessor
     HSM12.handshake12_accessor_finished

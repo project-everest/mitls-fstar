@@ -1192,14 +1192,15 @@ let rec bkey_list_bytesize (bkeys: list Negotiation.bkey13) =
 #pop-options
 
 module Binders = ParsersAux.Binders
+module R = LowParse.Repr
 
 #push-options "--admit_smt_queries true"
 let get_handshake_repr (m:HSM.handshake)
-  : StackInline (b:MITLS.Repr.const_slice & MITLS.Repr.Handshake.repr b)
+  : StackInline (b:R.const_slice & MITLS.Repr.Handshake.pos b)
   (requires fun h0 -> True)
   (ensures fun h0 (| _, r |) h1 ->
     B.modifies B.loc_none h0 h1 /\
-    MITLS.Repr.value r == m)
+    R.value (R.as_ptr_spec r) == m)
   =
   let b = B.alloca 0z 8192ul in
   push_frame ();
@@ -1207,20 +1208,20 @@ let get_handshake_repr (m:HSM.handshake)
   let slice = LP.make_slice b len in
   let Some r = MITLS.Repr.Handshake.serialize slice 0ul m in
   pop_frame ();
-  (| MITLS.Repr.of_slice slice, r |)
+  (| R.of_slice slice, r |)
 
 let get_handshake13_repr (m:HSM.handshake13)
-  : StackInline (b:MITLS.Repr.const_slice & MITLS.Repr.Handshake13.repr b)
+  : StackInline (b:R.const_slice & MITLS.Repr.Handshake13.pos b)
   (requires fun h0 -> True)
   (ensures fun h0 (|_, r|) h1 ->
     B.modifies B.loc_none h0 h1 /\
-    MITLS.Repr.value r == m)
+    R.value (R.as_ptr_spec r) == m)
   =
   let len = HSM.handshake13_size32 m in
   let b = B.alloca 0z 8192ul in
   let slice = LP.make_slice b len in
   let Some r = MITLS.Repr.Handshake13.serialize slice 0ul m in
-  (| MITLS.Repr.of_slice slice, r |)
+  (| R.of_slice slice, r |)
 #pop-options
 
 // ADL: I rewrote this to cover all transcript transitions from Start to Hello
@@ -1231,37 +1232,37 @@ let get_handshake13_repr (m:HSM.handshake13)
 let transcript_start (region:rgn) ha (retry:option Transcript.retry)
   (ch:HSM.clientHello) (ignore_binders:bool) =
   push_frame ();
-  let di, transcript0 = Transcript.create region ha in
-  let transcript1 =
+  let di = Transcript.create region ha in
+  begin
     match retry with
-    | None -> transcript0
+    | None -> ()
     | Some (chh, hrr) ->
       let t0 = chh in
       let t1 = HSM.M_server_hello hrr in
       let (| _, r0 |) = get_handshake_repr t0 in
       let (| _, r1 |) = get_handshake_repr t1 in
       let label = Transcript.LR_HRR r0 r1 in
-      Transcript.extend di label transcript0
-    in
+      Transcript.extend di label
+  end;
   let (| _, chr |) = get_handshake_repr (HSM.M_client_hello ch) in
   let label =
     if not ignore_binders && Binders.ch_bound ch then Transcript.LR_TCH chr
     else Transcript.LR_ClientHello chr in
-  let transcript1 = Transcript.extend di label transcript0 in
-  let tag = transcript_extract di transcript1 in
+  Transcript.extend di label;
+  let tag = transcript_extract di in
   pop_frame ();
-  (tag, di, transcript1)
+  (tag, di)
 #pop-options
 
 // Used to replace CH0 with M_message_hash - ignores binders
 #push-options "--admit_smt_queries true"
 let hash_ch0 (region:rgn) ha (ch:HSM.clientHello) =
   push_frame ();
-  let di, transcript0 = Transcript.create region ha in
+  let di = Transcript.create region ha in
   let (| _, chr |) = get_handshake_repr (HSM.M_client_hello ch) in
   let label = Transcript.LR_ClientHello chr in
-  let transcript1 = Transcript.extend di label transcript0 in
-  let tag = transcript_extract di transcript1 in
+  Transcript.extend di label;
+  let tag = transcript_extract di in
   // FIXME(adl) free_transcript di
   pop_frame ();
   HSM.M_message_hash tag

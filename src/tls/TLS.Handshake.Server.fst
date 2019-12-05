@@ -230,7 +230,7 @@ let server_ClientHello1 st offer
       | Nego.JUST_EDH g_gx cs -> cs, None, (Some g_gx)
       in
     let CipherSuite13 ae ha = cs in
-    let tag0, di, tx0 = transcript_start region ha None offer false in
+    let tag0, di = transcript_start region ha None offer false in
     trace ("ClientHello/Binder digest: "^(B.hex_of_bytes tag0));
     let (ks, ogy, obk) = KS.ks_server13_init random (offer.CH.random) cs config.is_quic opsk g_gx in
     let ogyb = match ogy with None -> None | Some gy -> Some (keyShareEntry_of_share gy) in
@@ -239,7 +239,7 @@ let server_ClientHello1 st offer
 
     // Verify selected binder, update tag, di, tx
     let binder_ok = match obk with
-      | None -> Correct (tag0, di, tx0)
+      | None -> Correct (tag0, di)
       | Some bk ->
         let open Parsers.OfferedPsks in
         let open Parsers.OfferedPsks_binders in
@@ -252,7 +252,7 @@ let server_ClientHello1 st offer
 
     match binder_ok with
     | Error z -> Recv.InError z
-    | Correct (tag1, di1, tx1) ->
+    | Correct (tag1, di1) ->
       let pfs = if accept_0rtt then PF.F_s13_wait_EOED else PF.F_s13_wait_Finished2 in
       let ms0 : msg_state region pfs random ha =
         {create_msg_state region pfs random ha with
@@ -282,9 +282,9 @@ let server_ClientHello1 st offer
       let tag_SH = LB.alloca 0z (H.hash_len ha) in
       let sd = Send.signals ms0.sending (Some (false, accept_0rtt)) false in
       trace("ServerHello bytes: "^(Bytes.hex_of_bytes (HSM.serverHello_serializer32 sh)));
-      match Send.send_tag_sh di #(Ghost.hide 1) tx1 sd (HSM.M_server_hello sh) tag_SH with
+      match Send.send_tag_sh di sd (HSM.M_server_hello sh) tag_SH with
       | Error z -> Recv.InError z
-      | Correct (sd, tx2) ->
+      | Correct sd ->
         let digest_SH = B.of_buffer (H.hash_len ha) tag_SH in
         let ks', hsk = KS.ks_server13_sh ks digest_SH in
 	trace ("Transcript ServerHello: "^(Bytes.hex_of_bytes digest_SH));
@@ -457,17 +457,16 @@ let server_ServerFinished_13 hs =
   let Server region config r = hs in
   let S13_sent_ServerHello soffer sh ee accept_0rtt ms cert ks = !r in
   let ha = Nego.selected_ha sh in
-  let tx = transcript13 ({full_ch=soffer.s_ch;full_retry=None}) sh [] in
   let eem = HSM.M13_encrypted_extensions ee in
   let tag_F = LB.alloca 0z (H.hash_len ha) in
-  match Send.send13 #ha ms.digest #(Ghost.hide 0) tx ms.sending eem with
+  match Send.send13 #ha ms.digest ms.sending eem with
   | Error z -> Error z
-  | Correct (send, tx) ->
+  | Correct send ->
     let send_cert =
       match cert with
       | None ->
-        Transcript.extract_hash ms.digest tag_F tx;
-        Correct (send, tx, NoServerCert)
+        Transcript.extract_hash ms.digest tag_F;
+        Correct (send, NoServerCert)
       | Some (cert_ptr, sa) ->
         let tag_C = LB.alloca 0z (H.hash_len ha) in
         let chain12 = TLS.Callbacks.cert_format_cb config.cert_callbacks cert_ptr in
@@ -475,9 +474,9 @@ let server_ServerFinished_13 hs =
 	  certificate_request_context = Bytes.empty_bytes;
 	  certificate_list = Cert.chain_up chain12;
 	  }) in
-	match Send.send_tag13 ms.digest tx send (HSM.M13_certificate chain) tag_C with
+	match Send.send_tag13 ms.digest send (HSM.M13_certificate chain) tag_C with
 	| Error z -> Error z
-	| Correct (send, tx) ->
+	| Correct send ->
 	  let digest_C = Bytes.of_buffer (H.hash_len ha) tag_C in
           trace ("Hash up to Cert: "^(Bytes.hex_of_bytes digest_C));
 	  let tbs = Nego.to_be_signed TLS_1p3 TLSConstants.Server None digest_C in
@@ -486,22 +485,22 @@ let server_ServerFinished_13 hs =
 	    (perror __SOURCE_FILE__ __LINE__ "Failed to sign with selected certificate.")
           | Some sigv ->
             let cv = HSM.(({algorithm = sa; signature = sigv})) in
-	    match Send.send_tag13 ms.digest tx send (HSM.M13_certificate_verify cv) tag_F with
+	    match Send.send_tag13 ms.digest send (HSM.M13_certificate_verify cv) tag_F with
 	    | Error z -> Error z
-	    | Correct (send, tx) ->
-	      Correct (send, tx, ServerCert cert_ptr chain cv)
+	    | Correct send ->
+	      Correct (send, ServerCert cert_ptr chain cv)
      in
     match send_cert with
     | Error z -> Error z
-    | Correct (send, tx, cert_ctx) ->
+    | Correct (send, cert_ctx) ->
       let (| sfinId, sfin_key |) = KS.ks_server13_get_sfk ks in
       let digest_F = Bytes.of_buffer (H.hash_len ha) tag_F in
       trace ("Hash for Finished: "^(Bytes.hex_of_bytes digest_F));
       let svd = HMAC.mac sfin_key digest_F in
       let fin = HSM.(M13_finished svd) in
-      match Send.send_tag13 ms.digest tx send fin tag_F with
+      match Send.send_tag13 ms.digest send fin tag_F with
       | Error z -> Error z
-      | Correct (send, tx) ->
+      | Correct send ->
         let digest_SF = Bytes.of_buffer (H.hash_len ha) tag_F in
         trace ("Hash up to SF: "^(Bytes.hex_of_bytes digest_SF));
         let ks, app_keys, ems = KS.ks_server13_sf ks digest_SF in 

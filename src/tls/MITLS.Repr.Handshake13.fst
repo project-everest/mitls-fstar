@@ -91,7 +91,7 @@ type cr13_pos (b:R.const_slice) = r:pos b{is_cr r}
 type eoed13_pos (b:R.const_slice) = r:pos b{is_eoed r}
 type nst13_pos (b:R.const_slice) = r:pos b{is_nst r}
 
-unfold
+unfold noextract
 let field_ee =
   let acc1 =
     R.FieldAccessor
@@ -107,7 +107,7 @@ let field_ee =
   in
   R.field_accessor_comp acc1 acc2
 
-unfold
+unfold noextract
 let field_certificate =
   let acc1 =
     R.FieldAccessor
@@ -139,14 +139,14 @@ let field_cv =
   in
   R.field_accessor_comp acc1 acc2
 
-unfold
+unfold noextract
 let field_fin =
   R.FieldAccessor
     HSM13.handshake13_accessor_finished
     HSM13.handshake13_m13_finished_jumper
     HSM13.handshake13_m13_finished_parser32
 
-unfold
+unfold noextract
 let field_cr =
   let acc1 =
     R.FieldAccessor
@@ -162,14 +162,14 @@ let field_cr =
   in
   R.field_accessor_comp acc1 acc2
 
-unfold
+unfold noextract
 let field_eoed =
   R.FieldAccessor
     HSM13.handshake13_accessor_end_of_early_data
     HSM13.handshake13_m13_end_of_early_data_jumper
     HSM13.handshake13_m13_end_of_early_data_parser32
 
-unfold
+unfold noextract
 let field_nst =
   let acc1 =
     R.FieldAccessor
@@ -187,4 +187,4 @@ let field_nst =
 
 (* Serializer from high-level value via intermediate-level formatter *)
 
-let serialize = R.mk_from_serialize HSM13.handshake13_parser32 HSM13.handshake13_serializer32 HSM13.handshake13_size32
+let serialize = R.mk_repr_pos_from_serialize HSM13.handshake13_parser32 HSM13.handshake13_serializer32 HSM13.handshake13_size32

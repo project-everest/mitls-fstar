@@ -603,7 +603,7 @@ type field_accessor (#k1 #k2:strong_parser_kind)
      (p2': LS.parser32 p2) ->
      field_accessor p1 p2
 
-unfold
+unfold noextract
 let field_accessor_comp (#k1 #k2 #k3:strong_parser_kind)
                         (#t1 #t2 #t3:Type)
                         (#p1 : LP.parser k1 t1)
@@ -617,7 +617,7 @@ let field_accessor_comp (#k1 #k2 #k3:strong_parser_kind)
      let acc13 = LP.accessor_compose acc12 acc23 () in
      FieldAccessor acc13 j3 p3'
 
-unfold
+unfold noextract
 let field_accessor_t
       (#k1:strong_parser_kind) #t1 (#p1:LP.parser k1 t1)
       (#k2: strong_parser_kind) (#t2:Type) (#p2:LP.parser k2 t2)

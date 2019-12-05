@@ -53,20 +53,29 @@ let handshakeType_clens
     { clens_cond = (fun _ -> True);
       clens_get = HSM.tag_of_handshake }
 
-let tag_gaccessor_body #k #t (p:LP.parser k t) (sl:LowParse.Bytes.bytes) =
+(*
+let tag_gaccessor_body (sl:LowParse.Bytes.bytes)
+  : Ghost (nat) (requires True) (ensures fun r -> 
+    LP.gaccessor_post' HSM.handshake_parser Parsers.HandshakeType.handshakeType_parser handshakeType_clens sl r
+  ) =
+  let k = HSM.handshake_parser_kind in
   if Some k.LP.parser_kind_low = k.LP.parser_kind_high
   && k.LP.parser_kind_low <= Seq.length sl
   then 0, k.LP.parser_kind_low
   else 0, 0
+*)
 
 let handshakeType_gaccessor
   : LL.gaccessor
              HSM.handshake_parser
              Parsers.HandshakeType.handshakeType_parser
              handshakeType_clens
-  = fun (sl:_) ->
-    admit();
-    tag_gaccessor_body Parsers.HandshakeType.handshakeType_parser sl
+  = assume false;
+  fun sl -> 0
+
+//  fun (sl:_) ->
+//    admit();
+//    tag_gaccessor_body (*Parsers.HandshakeType.handshakeType_parser*) sl
 
 let handshakeType_accessor
   : LL.accessor handshakeType_gaccessor
@@ -76,40 +85,43 @@ let handshakeType_accessor
     pos
 (* End workaround *)
 
+unfold noextract
 let field_handshakeType =
   R.FieldReader handshakeType_accessor Parsers.HandshakeType.handshakeType_reader
 
-private
+unfold private noextract
 let field_vldata_client_hello =
   R.FieldAccessor
     HSM.handshake_accessor_client_hello
     HSM.handshake_m_client_hello_jumper
     HSM.handshake_m_client_hello_parser32
 
-private
+unfold private noextract
 let field_m_client_hello_client_hello =
   R.FieldAccessor
     HSM.handshake_m_client_hello_accessor
     Parsers.ClientHello.clientHello_jumper
     Parsers.ClientHello.clientHello_parser32
 
+unfold noextract
 let field_clientHello =
   R.field_accessor_comp field_vldata_client_hello field_m_client_hello_client_hello
 
-private
+unfold private noextract
 let field_vldata_server_hello =
   R.FieldAccessor
     HSM.handshake_accessor_server_hello
     HSM.handshake_m_server_hello_jumper
     HSM.handshake_m_server_hello_parser32
 
-private
+unfold private noextract
 let field_m_server_hello_server_hello =
   R.FieldAccessor
     HSM.handshake_m_server_hello_accessor
     Parsers.ServerHello.serverHello_jumper
     Parsers.ServerHello.serverHello_parser32
 
+unfold noextract
 let field_serverHello =
   R.field_accessor_comp field_vldata_server_hello field_m_server_hello_server_hello
 
@@ -138,6 +150,8 @@ type sh_pos b = m:pos b{is_sh (R.value_pos m)}
 
 let get_handshakeType = R.read_field field_handshakeType
 
+inline_for_extraction noextract
 let get_clientHello = R.get_field field_clientHello
 
+inline_for_extraction noextract
 let get_serverHello = R.get_field field_serverHello

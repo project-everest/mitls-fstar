@@ -10,6 +10,7 @@ module B = FStar.Bytes
 module LB = LowStar.Buffer
 module LP = LowParse.Low.Base
 module M = LowStar.Modifies
+module R = LowParse.Repr
 
 module HSM = HandshakeMessages
 module Epochs = Old.Epochs
@@ -76,7 +77,7 @@ let msg_state (region: rgn) (inflight: PF.in_progress_flt_t) random ha  =
      M.loc_disjoint (Send.footprint ms.sending) (Recv.loc_recv ms.receiving) }
 
 let msg_invariant #region #inflight #random #ha (ms:msg_state region inflight random ha) transcript h =
-    Transcript.invariant ms.digest transcript h /\
+    Transcript.invariant ms.digest h /\
     Send.invariant ms.sending h /\
     Receive.invariant ms.receiving h
 
@@ -95,7 +96,7 @@ let create_msg_state (region: rgn) (inflight: PF.in_progress_flt_t) random ha:
   let out_buf_len = 16000ul in
   let b_in = LB.malloc region 0z in_buf_len in
   let b_out = LB.malloc region 0z out_buf_len in
-  let d, _ = Transcript.create region ha in
+  let d = Transcript.create region ha in
   { digest = d;
     sending = {Send.send_state0 with Send.out_slice = LP.make_slice b_out out_buf_len};
     receiving = Receive.create (LP.make_slice b_in in_buf_len);
@@ -106,14 +107,14 @@ let create_msg_state (region: rgn) (inflight: PF.in_progress_flt_t) random ha:
 // FIXME(adl) add bytes wrapper to Transcript interface?
 // Temporarily moved here to share between client and server
 #push-options "--max_fuel 0 --max_fuel 0 --z3rlimit 32"
-let transcript_extract
-  #ha
-  (di:Transcript.state ha)
-  (tx: Transcript.transcript_t):
-  ST B.bytes
-  (requires fun h0 -> Transcript.invariant di tx h0)
+let transcript_extract #ha (di:Transcript.state ha)
+  : ST B.bytes
+  (requires fun h0 -> Transcript.invariant di h0)
   (ensures fun h0 t h1 ->
-    Transcript.invariant di tx h1 /\
+    let tx = Transcript.transcript di h0 in
+    let tx' = Transcript.transcript di h1 in
+    Transcript.invariant di h1 /\
+    tx == tx' /\
     M.(modifies (
       Transcript.footprint di `loc_union`
       Mem.loc_tables_region ()) h0 h1) /\
@@ -122,16 +123,23 @@ let transcript_extract
   =
   // Show that the transcript state is disjoint from the new frame since it's not unused
   (**) let h0 = get() in
-  (**) Transcript.elim_invariant di tx h0;
+  (**) Transcript.elim_invariant di h0;
   push_frame();
   let ltag = EverCrypt.Hash.Incremental.hash_len ha in
   // AF: Why not allocate directly with size ltag?
   let btag0 = LB.alloca 0uy 64ul in // big enough for all tags
   let btag = LB.sub btag0 0ul ltag in
-  Transcript.extract_hash di btag tx;
+  let h1 = get () in
+  Transcript.frame_invariant di h0 h1 LB.loc_none;
+  Transcript.extract_hash di btag;
+  let h2 = get () in
   let tag = B.of_buffer ltag btag in
+  let h3 = get () in
+  Transcript.frame_invariant di h2 h3 LB.loc_none;
   trace ("Extracted a transcript hash "^B.hex_of_bytes tag);
   pop_frame();
+  let h4 = get () in
+  Transcript.frame_invariant di h3 h4 (LB.loc_region_only false (FStar.HyperStack.get_tip h1));
   tag
 #pop-options
 
@@ -169,36 +177,39 @@ let extend13
   (sending: Send.send_state)
   (di:Transcript.state ha)
   (msg: HSM.handshake13)
-  (tx0: Transcript.transcript_t)
-  : ST (result (Transcript.transcript_t))
+  : ST (result unit)
   (requires fun h0 ->
-    Transcript.Transcript13? tx0 /\
-    Transcript.transcript_size tx0 < Transcript.max_transcript_size - 1 /\
+    let tx = Transcript.transcript di h0 in
+    Transcript.Transcript13? tx /\
+    Transcript.extensible tx /\
     Send.footprint sending `M.loc_disjoint` Transcript.footprint di /\
     Send.invariant sending h0 /\
-    Transcript.invariant di tx0 h0)
+    Transcript.invariant di h0)
   (ensures fun h0 r h1 ->
+    let tx = Transcript.transcript di h0 in
+    let tx' = Transcript.transcript di h1 in
     M.modifies (Send.footprint sending `M.loc_union` Transcript.footprint di) h0 h1 /\
     Send.invariant sending h1 /\ (
     match r with
     | Error _ -> True
-    | Correct tx1 ->
-      Transcript.invariant di tx1 h1 /\
-      tx1 == Transcript.snoc13 tx0 msg ))
+    | Correct () ->
+      Transcript.invariant di h1 /\
+      tx' == Transcript.snoc13 tx msg ))
   =
   let h0 = get () in
   let r = MITLS.Repr.Handshake13.serialize sending.Send.out_slice sending.Send.out_pos msg in
   let h1 = get () in
-  Transcript.frame_invariant di tx0 h0 h1
+  Transcript.frame_invariant di h0 h1
     (LB.loc_buffer sending.Send.out_slice.LP.base);
   match r with
-  | None ->
-    fatal Internal_error "output buffer overflow"
+  | None -> fatal Internal_error "output buffer overflow"
   | Some r ->
-    List.lemma_snoc_length (Transcript.Transcript13?.rest tx0, msg);
-    let tx1 = Transcript.extend di (Transcript.LR_HSM13 r) tx0 in
-    let b = MITLS.Repr.to_bytes r in
+    List.lemma_snoc_length (Transcript.Transcript13?.rest (Transcript.transcript di h1), msg);
+    Transcript.extend di (Transcript.LR_HSM13 r);
+    let h2 = get () in
+    let b = R.to_bytes (R.as_ptr r) r.R.length in
+    let h3 = get () in
+    Transcript.frame_invariant di h2 h3 LB.loc_none;
     trace ("extended transcript with "^B.hex_of_bytes b);
-    // we do *not* return the modified indexes in [sending]
-    correct tx1
+    Correct ()
 #pop-options

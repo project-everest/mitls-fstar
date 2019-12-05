@@ -47,30 +47,29 @@ module Transcript = TLS.Handshake.Transcript
 val client_Binders:
   region:rgn ->
   ha0: EverCrypt.Hash.Incremental.alg ->
-  tx0: Transcript.transcript_t ->
   di: Transcript.state ha0 ->
   tch: full_offer { Msg.ch_bound tch.full_ch} ->
   bkey: list KS.binder_key ->
   ST Parsers.OfferedPsks_binders.(b:list Parsers.PskBinderEntry.pskBinderEntry {offeredPsks_binders_list_bytesize b = binder_key_list_bytesize bkey})
-  (requires fun h0 -> Transcript.invariant di tx0 h0)
+  (requires fun h0 -> Transcript.invariant di h0)
   (ensures fun h0 b h1 ->
     modifies_none h0 h1 //TBC
     )
 
 #push-options "--admit_smt_queries true" // list bytesizes
-let rec client_Binders region ha0 tx0 di0 tch bkeys =
+let rec client_Binders region ha0 di0 tch bkeys =
   match bkeys with
   | [] -> []
   | (| i, k |)::bkeys ->
     let ha = binderId_hash i in
     let tag =
-      if ha = ha0 then transcript_extract di0 tx0
+      if ha = ha0 then transcript_extract di0
       else
         let retry = match tch.full_retry with
 	  // We may try to optimize by computing once per ha
 	  | Some {ch0=ch0; sh0=hrr} -> Some (hash_ch0 region ha ch0, hrr)
 	  | None -> None in
-        let tag, _, _ = transcript_start region ha retry tch.full_ch false in
+        let tag, _ = transcript_start region ha retry tch.full_ch false in
 	tag
       in
 //    let tag =
@@ -81,7 +80,7 @@ let rec client_Binders region ha0 tx0 di0 tch bkeys =
 //        // TODO Transcript.free di
 //        tag in
     let binder = HMAC.mac k tag in
-    binder :: client_Binders region ha0 tx0 di0 tch bkeys
+    binder :: client_Binders region ha0 di0 tch bkeys
 #pop-options
 
 // TODO also return a slice in the sending buffer containing the
@@ -115,19 +114,20 @@ let client_ClientHello hs =
     Msg.ch_bound offer0 ==>
        Parsers.OfferedPsks.offeredPsks_binders_list_bytesize (Msg.ch_binders offer0) 
     == bkey_list_bytesize (snd resume));
+    
   let ha = Negotiation.offered_ha offer0 in
   let ms = create_msg_state region ParseFlights.F_c_wait_ServerHello random ha in
-  let no_tx : trans 0 = Transcript.Start None in
-  let h = get() in assert(Send.invariant ms.sending h);
+  let h = get() in
+  assert(Send.invariant ms.sending h);
   
   // FIXME(adl) send_tch is buggy
   // Send the (possibly-truncated) ClientHello, without transcript so far.
-  match Send.send_ch ms.digest no_tx ms.sending Msg.(M_client_hello offer0) with
+  match Send.send_ch ms.digest ms.sending Msg.(M_client_hello offer0) with
   | Error z -> 
     let h2 = get() in
     assume(invariant hs h2);
     Error z
-  | Correct (sending, tx0) -> (
+  | Correct sending -> (
 
   // This is specification-only, ensuring that offer0 has the
   // canonical binders used to keep track of the tch transcript,
@@ -149,19 +149,19 @@ let client_ClientHello hs =
     | (_,psks) -> (
       // Both derives the binder keys and stores the associated early secrets
       let ks', binder_keys = KS.ks_client13_get_binder_keys ks psks in
-      let binders = client_Binders region ha tx0 ms.digest full0 binder_keys in
+      let binders = client_Binders region ha ms.digest full0 binder_keys in
       let offer1 = Msg.set_binders offer0 binders in
 
       // FIXME(adl) not implemented, and probably incorrect
       // Extend the transcript from tx_tch with R_CompleteTCH, as
       // possibly required for 0RTT.
-      let tx1 = Send.patch_binders ms.digest tx0 sending binders in
+      let tx1 = Send.patch_binders ms.digest sending binders in
 
       // Set up 0RTT keys if offered
       let sending =
         if Negotiation.find_early_data offer0 then (
           trace "setting up 0RTT";
-          let digest_CH = transcript_extract ms.digest tx1 in
+          let digest_CH = transcript_extract ms.digest in
           // TODO LATER consider doing export & register within KS
           let early_exporter_secret, edk = KS.ks_client13_ch ks digest_CH in
           export ms.epochs early_exporter_secret;
@@ -170,14 +170,13 @@ let client_ClientHello hs =
         else sending in
       ks', offer1, sending )) in
 
-  // assert(tx_tch == Ghost.hide (transcript_tch full0));
   r := C_wait_ServerHello full0 ms ks;
   let ms = {ms with sending = sending} in
 
   // In both cases, the transcript is now at [ClientHello None offer1]
   let h1 = get() in
   let full1 = {full_retry=None; full_ch=offer1} in
-  assert (Transcript.invariant ms.digest (transcript_offer full1) h1);
+  assert (Transcript.invariant ms.digest h1);
 
   r := C_wait_ServerHello full1 ms ks';
   let h2 = get() in
@@ -232,7 +231,7 @@ let client_HelloRetryRequest hs hrr =
 
   // FIXME free old digest - we are restarting with retry
   assume False; //19-09-14 TBC after fixing client_transcript
-  let tag, di, tx_tch = transcript_start region ha retry offer1 false in
+  let tag, di = transcript_start region ha retry offer1 false in
   r := C_wait_ServerHello full1 ms ks;
 
   let cfg, resume = config in
@@ -243,15 +242,15 @@ let client_HelloRetryRequest hs hrr =
     | (_,[]) -> offer1, sending
     | (_,psks) -> (
       let ks', binder_keys = KS.ks_client13_get_binder_keys ks psks in
-      let binders = client_Binders region ha tx_tch di full1 binder_keys in
+      let binders = client_Binders region ha di full1 binder_keys in
       let offer = Msg.set_binders offer1 binders in
-      let tx1 = Send.patch_binders ms.digest tx_tch ms.sending binders in
+      Send.patch_binders ms.digest ms.sending binders;
 
       // Set up 0RTT keys if offered ---- is it enabled after HRR?
       let sending =
         if Negotiation.find_early_data offer then (
           trace "setting up 0RTT";
-          let digest_CH = transcript_extract di tx1 in
+          let digest_CH = transcript_extract di in
           // TODO LATER consider doing export & register within KS
           let early_exporter_secret, edk = KS.ks_client13_ch ks digest_CH in
           export ms.epochs early_exporter_secret;
@@ -312,18 +311,17 @@ let client_ServerHello (Client region config r) sh =
 	    match offer.full_retry with
 	    | None -> None
 	    | Some {ch0 = ch0; sh0 = hrr} -> Some (hash_ch0 region ha ch0, hrr) in
-	  let tag, di, _ = transcript_start region ha retry offer.full_ch true in
+	  let tag, di = transcript_start region ha retry offer.full_ch true in
 	  trace ("Server changed hash, new CH hash "^(Bytes.hex_of_bytes tag));
 	  {ms with digest = di} in
 
       let server_share = Negotiation.find_serverKeyShare sh in
       let (| _, shr |) = get_handshake_repr (Msg.M_server_hello sh) in
       let label = Transcript.LR_ServerHello shr in
-      let tx = transcript_offer offer in
-      let transcript_sh = Transcript.extend ms.digest label tx in
+      Transcript.extend ms.digest label;
 
       //assert(transcript_sh == transcript13 offer sh []);
-      let digest_ServerHello = transcript_extract ms.digest transcript_sh in
+      let digest_ServerHello = transcript_extract ms.digest in
       let ks, hs_keys = KS.ks_client13_sh region ks
         (Msg.sh_random sh)
         (CipherSuite13 ae ha)
@@ -412,12 +410,9 @@ let client13_Finished2 (Client region config r) =
   //     HandshakeLog.send_tag #ha hs.log (HSL.Msg13 (Msg.M13_certificate c))
   //   | None -> digestServerFinished in
 
-  // prepare & send Finished2
-  let transcript_Finished1: Transcript.transcript_n (Ghost.hide 0) = transcript13 offer sh [] in
-
   let h = get() in
-  assume(Transcript.invariant ms.digest transcript_Finished1 h);
-  let digest_Finished1 = transcript_extract ms.digest transcript_Finished1 in
+  assume(Transcript.invariant ms.digest h);
+  let digest_Finished1 = transcript_extract ms.digest in
 
   assume False; // missing too many stateful invariants
 
@@ -425,9 +420,9 @@ let client13_Finished2 (Client region config r) =
   let cvd = HMAC.mac (dsnd cfk) digest_Finished1 in
   let fin2 = Ghost.hide #Msg.finished cvd in
 
-  match Send.send_extract13 ms.digest transcript_Finished1 ms.sending (Msg.M13_finished cvd) with
+  match Send.send_extract13 ms.digest ms.sending (Msg.M13_finished cvd) with
   | Error z -> Error z
-  | Correct (sending, digest_Finished2, transcript_Finished2) ->
+  | Correct (sending, digest_Finished2) ->
   let ks = KS.ks_client13_cf ks digest_Finished2 in // post-handshake keying
   Epochs.incr_reader ms.epochs; // to ATK
   let sending = Send.signals sending (Some (true, false)) true in
@@ -468,25 +463,30 @@ private let coerce_crt crt = List.Tot.map coerce_asncert crt
 // process the certificate chain and verify the server signature
 
 // it may be more convenient to pass the whole ms with its invariant
-let client13_c_cv #ha sending (digest: Transcript.state ha) cfg offer (transcript_ee: Transcript.transcript_n (Ghost.hide 1))
+let client13_c_cv #ha sending (digest: Transcript.state ha) cfg offer
   (c: Parsers.Handshake13_m13_certificate.handshake13_m13_certificate)
   (cv: Msg.certificateVerify13) :
-  ST (result (Transcript.transcript_n (Ghost.hide 3)))
+  ST (result unit)
   (requires fun h0 ->
+    let t = Transcript.transcript digest h0 in
     Send.invariant sending h0 /\
-    Transcript.invariant digest transcript_ee h0 /\
+    Transcript.extensible t /\
+    Transcript.invariant digest h0 /\
     B.loc_disjoint (Transcript.footprint digest) (TLS.Handshake.Send.footprint sending) /\
-    Transcript.Transcript13? transcript_ee)
+    Transcript.Transcript13? t)
   (ensures fun h0 r h1 ->
     True)
   =
-  match extend13 sending digest (Msg.M13_certificate c) transcript_ee with
+  match extend13 sending digest (Msg.M13_certificate c) with
   | Error z -> Error z
-  | Correct transcript_c ->
-  let digest_signed = transcript_extract digest transcript_c in
-  match extend13 sending digest (Msg.M13_certificate_verify cv) transcript_c with
+  | Correct () ->
+  let digest_signed = transcript_extract digest in
+  let h = get () in
+  assume(Transcript.extensible (Transcript.transcript digest h));
+  
+  match extend13 sending digest (Msg.M13_certificate_verify cv) with
   | Error z -> Error z
-  | Correct transcript_cv ->
+  | Correct () ->
   // TODO ensure that valid_offer mandates signature extensions for 1.3
   let sal = match Negotiation.find_signature_algorithms offer with
   | Some sal -> sal
@@ -505,7 +505,7 @@ let client13_c_cv #ha sending (digest: Transcript.state ha) cfg offer (transcrip
         fatal Bad_certificate "Failed to validate signature or certificate" )
       else (
         trace("Certificate & signature 1.3 callback succeeded");
-        Correct transcript_cv )
+        Correct () )
 
 // #push-options "--max_ifuel 2 --max_fuel 2 --z3rlimit 32"
 #push-options "--admit_smt_queries true" // TODO prove invariant in postcondition
@@ -524,12 +524,10 @@ let client13_Finished1 hs ee client_cert_request server_cert_certverify finished
   let hlen = Hacl.Hash.Definitions.hash_len ha in
   let btag: Hacl.Hash.Definitions.hash_t ha =
     B.sub (B.alloca 0uy 64ul) 0ul hlen in // allocated large enough for any digest
-  let transcript_sh: Transcript.transcript_n (Ghost.hide 0) = transcript13 offer sh [] in
-
   let h0 = get() in assume(invariant hs h0);//TODO frame a few calls above
-  match extend13 ms.sending ms.digest (Msg.M13_encrypted_extensions ee) transcript_sh with
+  match extend13 ms.sending ms.digest (Msg.M13_encrypted_extensions ee) with
   | Error z -> Receive.InError z
-  | Correct transcript_ee ->
+  | Correct () ->
   let psk_based = Some? (Negotiation.find_serverPske sh) in
   let verified_server =
     match server_cert_certverify with
@@ -540,13 +538,13 @@ let client13_Finished1 hs ee client_cert_request server_cert_certverify finished
           // relying on a previously received & verified server
           // certificate chain & signature recorded for this PSK; TODO
           // confirm this context is available to the application.
-          Correct transcript_ee
+          Correct ()
 
     | Some (c,cv) ->
         if psk_based then
           fatal Handshake_failure "unexpected certificate chain and signature"
         else
-          client13_c_cv #ha ms.sending ms.digest cfg offer.full_ch transcript_ee c cv
+          client13_c_cv #ha ms.sending ms.digest cfg offer.full_ch c cv
   in
   match verified_server with
   | Error z -> Receive.InError z
@@ -557,11 +555,11 @@ let client13_Finished1 hs ee client_cert_request server_cert_certverify finished
     // let cfg = Negotiation.local_config hs.nego in
     // match Negotiation.clientComplete_13 hs.nego ee ocr oc ocv digestCert with
 
-  let digest_maced = transcript_extract ms.digest transcript_maced in
-  match extend13 ms.sending ms.digest (Msg.M13_finished finished) transcript_maced with
+  let digest_maced = transcript_extract ms.digest in
+  match extend13 ms.sending ms.digest (Msg.M13_finished finished) with
   | Error z -> Receive.InError z
-  | Correct transcript_Finished1 -> (
-  let digest_Finished1 = transcript_extract ms.digest transcript_Finished1 in
+  | Correct () -> (
+  let digest_Finished1 = transcript_extract ms.digest in
   let ks, (sfin_key, cfin_key, app_keys, exporter_master_secret) =
     KS.ks_client13_sf ks digest_Finished1 in
   // ADL: 4th returned value is the exporter master secret.
@@ -577,8 +575,8 @@ let client13_Finished1 hs ee client_cert_request server_cert_certverify finished
     let send_eoed = Negotiation.zeroRTT sh && not cfg.is_quic in
     if send_eoed then ( // EOED emitting (not used for QUIC)
       trace "Early data accepted; emitting EOED.";
-      match Send.send13 #ha ms.digest #(Ghost.hide 0) (admit()) ms.sending (Msg.M13_end_of_early_data ()) with
-      | Correct (sending, transcript) -> (
+      match Send.send13 #ha ms.digest ms.sending (Msg.M13_end_of_early_data ()) with
+      | Correct sending -> (
         let sending = Send.signals sending (Some (false, false)) false in
         let fin1 = Ghost.hide Bytes.empty_bytes in
         r := C13_complete offer sh ee server_cert_certverify fin1 ms
@@ -606,6 +604,7 @@ let client13_NewSessionTicket (Client region config r) st13 =
   let nonce = st13.ticket_nonce in
   let age_add = st13.ticket_age_add in
   trace ("Received ticket: "^Bytes.hex_of_bytes tid^" nonce: "^Bytes.hex_of_bytes nonce);
+  assume False; // FIXME some pre-conditions need updating
 
   let C13_complete offer sh ee server_id _fin1 _ms (Finished_sent _fin2 ks) = !r in
   let cs = Msg.sh_cipher_suite sh in
@@ -630,7 +629,6 @@ let client13_NewSessionTicket (Client region config r) st13 =
   assume(Some? snio); // TODO machine invariant? 
   let Some sni = snio in 
 
-  assume False;
   let cfg = fst config in
   let valid_ed =
     if cfg.is_quic then
