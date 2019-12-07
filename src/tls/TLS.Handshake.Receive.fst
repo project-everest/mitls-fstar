@@ -376,9 +376,29 @@ type incoming =
 let in_next_keys (r:incoming) = InAck? r && InAck?.next_keys r
 let in_complete (r:incoming)  = InAck? r && InAck?.complete r
 
-
-// QUIC API. 
+(*
+// v1 API. 
 // We'll still return signals, but we'll write the generated keys in small application-provided buffers. 
+// InQuery is deprecated, as we now rely on callbacks.
+
+// A struct including anything returned by the handshake API, except for the 
+type out_ctx = {
+  // how many bytes were consumed from the input buffer; 
+  // can it also encode a parsing error position?
+  out_consumed: UInt32.t; 
+
+  // how many bytes were written to the output buffer
+  out_written: UInt32.t;
+
+  // signals, to be unified 
+  // out_outgoing_send_first, ugly, not used anymore? 
+  out_send_next_keys: option TLS.Handshake.Send.next_key_use;
+  out_receive_next_keys: bool; 
+  out_complete: bool;
+}
+type incoming0 = result out_ctx
+*)
+
 
 (*** Test ***)
 

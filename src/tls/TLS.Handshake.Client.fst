@@ -598,6 +598,7 @@ let client13_Finished1 hs ee client_cert_request server_cert_certverify finished
       ))))
 #pop-options
 
+#push-options "--admit_smt_queries true" // TODO prove invariant in postcondition
 let client13_NewSessionTicket (Client region config r) st13 =
   let open TLS.Callbacks in
   let open Parsers.NewSessionTicket13 in
@@ -653,7 +654,7 @@ let early_rejected (Client region config r) =
     Negotiation.find_early_data offer.full_ch &&
     not (List.Tot.existsb Parsers.ServerHelloExtension.SHE_early_data? (Msg.sh_extensions sh))
   | _ -> false
-
+#pop-options 
 (*** TLS 1.2 ***)
 
 private let convert_kex = function
