@@ -93,13 +93,13 @@ type nst13_pos (b:R.const_slice) = r:pos b{is_nst r}
 
 unfold noextract
 let field_ee =
-  let acc1 =
+  [@inline_let] let acc1 =
     R.FieldAccessor
       HSM13.handshake13_accessor_encrypted_extensions
       HSM13.handshake13_m13_encrypted_extensions_jumper
       HSM13.handshake13_m13_encrypted_extensions_parser32
   in
-  let acc2 =
+  [@inline_let] let acc2 =
     R.FieldAccessor
       HSM13.handshake13_m13_encrypted_extensions_accessor
       Parsers.EncryptedExtensions.encryptedExtensions_jumper
@@ -109,13 +109,13 @@ let field_ee =
 
 unfold noextract
 let field_certificate =
-  let acc1 =
+  [@inline_let] let acc1 =
     R.FieldAccessor
       HSM13.handshake13_accessor_certificate
       HSM13.handshake13_m13_certificate_jumper
       HSM13.handshake13_m13_certificate_parser32
   in
-  let acc2 =
+  [@inline_let] let acc2 =
     R.FieldAccessor
       HSM13.handshake13_m13_certificate_accessor
       Parsers.Certificate13.certificate13_jumper
@@ -123,15 +123,15 @@ let field_certificate =
   in
   R.field_accessor_comp acc1 acc2
 
-unfold
+unfold noextract
 let field_cv =
-  let acc1 =
+  [@inline_let] let acc1 =
     R.FieldAccessor
       HSM13.handshake13_accessor_certificate_verify
       HSM13.handshake13_m13_certificate_verify_jumper
       HSM13.handshake13_m13_certificate_verify_parser32
   in
-  let acc2 =
+  [@inline_let] let acc2 =
     R.FieldAccessor
       HSM13.handshake13_m13_certificate_verify_accessor
       Parsers.CertificateVerify13.certificateVerify13_jumper
@@ -148,13 +148,13 @@ let field_fin =
 
 unfold noextract
 let field_cr =
-  let acc1 =
+  [@inline_let] let acc1 =
     R.FieldAccessor
       HSM13.handshake13_accessor_certificate_request
       HSM13.handshake13_m13_certificate_request_jumper
       HSM13.handshake13_m13_certificate_request_parser32
   in
-  let acc2 =
+  [@inline_let] let acc2 =
     R.FieldAccessor
       HSM13.handshake13_m13_certificate_request_accessor
       Parsers.CertificateRequest13.certificateRequest13_jumper
@@ -171,13 +171,13 @@ let field_eoed =
 
 unfold noextract
 let field_nst =
-  let acc1 =
+  [@inline_let] let acc1 =
     R.FieldAccessor
       HSM13.handshake13_accessor_new_session_ticket
       HSM13.handshake13_m13_new_session_ticket_jumper
       HSM13.handshake13_m13_new_session_ticket_parser32
   in
-  let acc2 =
+  [@inline_let] let acc2 =
     R.FieldAccessor
       HSM13.handshake13_m13_new_session_ticket_accessor
       Parsers.NewSessionTicket13.newSessionTicket13_jumper

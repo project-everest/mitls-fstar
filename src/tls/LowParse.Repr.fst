@@ -50,11 +50,12 @@ let strong_parser_kind =
 
 let preorder (c:C.const_buffer LP.byte) = C.qbuf_pre (C.as_qbuf c)
 
+inline_for_extraction noextract
 let slice_of_const_buffer (b:C.const_buffer LP.byte) (len:uint_32{U32.v len <= C.length b})
   : LP.slice (preorder b) (preorder b)
-  = let b = C.cast b in
+  =
     LP.({
-       base = b;
+       base = C.cast b;
        len = len
     })
 
@@ -177,6 +178,7 @@ let intro_sub_ptr (x:repr_ptr 'a) (y:repr_ptr 'b) (from to:uint_32)
 /// It is meant to support migration towards an EverParse API that
 /// will eventually provide accessors and jumpers for pointers rather
 /// than slices
+inline_for_extraction noextract
 let temp_slice_of_repr_ptr #t (p:repr_ptr t)
   : Tot (LP.slice (preorder p.b) (preorder p.b))
   = slice_of_const_buffer p.b p.length
@@ -248,7 +250,7 @@ let frame_valid #t (p:repr_ptr t) (l:B.loc) (h0 h1:HS.mem)
 ///      b.[from, to)
 ///    known to be valid for a given wire-format parser `p`
 #set-options "--z3rlimit 20"
-inline_for_extraction
+inline_for_extraction noextract
 let mk_from_const_slice
          (#k:strong_parser_kind) #t (#parser:LP.parser k t)
          (parser32:LS.parser32 parser)
@@ -293,6 +295,7 @@ let mk_from_const_slice
 ///      b.[from, to)
 ///    known to be valid for a given wire-format parser `p`
 inline_for_extraction
+noextract
 let mk (#k:strong_parser_kind) #t (#parser:LP.parser k t)
        (parser32:LS.parser32 parser)
        #q
@@ -590,7 +593,7 @@ let stash (rgn:ST.drgn) #t (r:repr_ptr t) (len:uint_32{len == r.meta.len})
 /// Instances of field_accessor should be marked `unfold`
 /// so that we get compact verification conditions for the lens conditions
 /// and to inline the code for extraction
-noeq
+noeq inline_for_extraction
 type field_accessor (#k1 #k2:strong_parser_kind)
                     (#t1 #t2:Type)
                     (p1 : LP.parser k1 t1)
@@ -612,9 +615,10 @@ let field_accessor_comp (#k1 #k2 #k3:strong_parser_kind)
                         (f12 : field_accessor p1 p2)
                         (f23 : field_accessor p2 p3)
    : field_accessor p1 p3
-   = let FieldAccessor acc12 j2 p2' = f12 in
-     let FieldAccessor acc23 j3 p3' = f23 in
-     let acc13 = LP.accessor_compose acc12 acc23 () in
+   =
+   [@inline_let] let FieldAccessor acc12 j2 p2' = f12 in
+   [@inline_let] let FieldAccessor acc23 j3 p3' = f23 in
+   [@inline_let] let acc13 = LP.accessor_compose acc12 acc23 () in
      FieldAccessor acc13 j3 p3'
 
 unfold noextract
@@ -641,7 +645,7 @@ let get_field (#k1:strong_parser_kind) #t1 (#p1:LP.parser k1 t1)
               (f:field_accessor p1 p2)
    : field_accessor_t f
    = fun p ->
-     let FieldAccessor acc jump p2' = f in
+     [@inline_let] let FieldAccessor acc jump p2' = f in
      let b = temp_slice_of_repr_ptr p in
      let pos = acc b 0ul in
      let pos_to = jump b pos in
@@ -900,7 +904,7 @@ let get_field_pos (#k1: strong_parser_kind) (#t1: Type) (#p1: LP.parser k1 t1)
                   (f:field_accessor p1 p2)
  : get_field_pos_t f
  = fun #b pp ->
-    let FieldAccessor acc jump p2' = f in
+    [@inline_let] let FieldAccessor acc jump p2' = f in
     let p = as_ptr pp in
     let bb = temp_slice_of_repr_ptr p in
     let pos = acc bb 0ul in
