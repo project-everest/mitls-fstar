@@ -73,6 +73,22 @@ let agile_transcript_footprint #a (t:agile_transcript a) =
   let fp2 = if Some? t.tx_sha384 then Transcript.footprint (Some?.v t.tx_sha384) else B.loc_none in
   B.loc_union fp1 fp2
 
+let agile_transcript_frame
+  #a
+  (t: agile_transcript a)
+  (l: B.loc)
+  (h0 h1: HS.mem)
+: Lemma
+  (requires (
+    agile_transcript_inv t h0 /\
+    B.modifies l h0 h1 /\
+    B.loc_disjoint l (agile_transcript_footprint t)
+  ))
+  (ensures (
+    agile_transcript_inv t h1
+  ))
+= ()
+
 // See TLS.Handshake.Machine for the definition of expected_initial_transcript
 let agile_transcript_initial #a (t:agile_transcript a) re ch h =
   (Some? t.tx_sha256 ==>
@@ -159,16 +175,30 @@ val client_Binders:
     B.modifies (agile_transcript_footprint di) h0 h1 /\
     agile_transcript_inv di h1)
 
-#push-options "--admit_smt_queries true" // list bytesizes
+#push-options "--z3rlimit 16 --max_fuel 1 --initial_fuel 1 --max_ifuel 1 --initial_ifuel 1"
+
 let rec client_Binders region ha0 di0 retry tch bkeys =
   match bkeys with
-  | [] -> []
-  | (| i, k |)::bkeys ->
+  | [] ->
+    []
+  | ik :: bkeys ->
+    let (| i, k |) = ik in
+    let h0 = get () in
     let ha = binderId_hash i in
     let di' = agile_transcript_extend di0 ha retry tch in
     let tag = transcript_extract (agile_transcript_variant di' ha) in
     let binder = HMAC.mac k tag in
-    binder :: client_Binders region ha0 di' retry tch bkeys
+    let h2 = get () in
+    assume (agile_transcript_inv di' h2);
+    assume (agile_transcript_initial di' retry tch h2);
+    let res =
+      binder :: client_Binders region ha0 di' retry tch bkeys
+    in
+    let h3 = get () in
+    assume (B.modifies (agile_transcript_footprint di0) h0 h3);
+    assume (agile_transcript_inv di0 h3);
+    res
+
 #pop-options
 
 // TODO also return a slice in the sending buffer containing the
