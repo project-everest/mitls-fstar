@@ -86,20 +86,29 @@ let msg_state_footprint #region #inflight #random #ha (ms:msg_state region infli
   `M.loc_union` (Send.footprint ms.sending)
   `M.loc_union` (Recv.loc_recv ms.receiving)
 
-let create_msg_state (region: rgn) (inflight: PF.in_progress_flt_t) random ha:
+// In some cases, the transcript state and input buffers must be created in advance
+let create_msg_state (region: rgn) (inflight: PF.in_progress_flt_t)
+  random ha (di0:option (Transcript.state ha)) (in0:option Recv.state) :
   ST (msg_state region inflight random ha)
   (requires fun h0 -> True)
   (ensures fun h0 mst h1 -> msg_invariant mst (Transcript.Start None) h1)
 = assume false;
   // TODO. Who should allocate this receive buffer?
-  let in_buf_len = 16000ul in
   let out_buf_len = 16000ul in
-  let b_in = LB.malloc region 0z in_buf_len in
   let b_out = LB.malloc region 0z out_buf_len in
-  let d = Transcript.create region ha in
+  let recv =
+    match in0 with
+    | None -> 
+      let in_buf_len = 16000ul in
+      let b_in = LB.malloc region 0z in_buf_len in
+      Receive.create (LP.make_slice b_in in_buf_len)
+    | Some st -> st in
+  let d = match di0 with
+    | None -> Transcript.create region ha
+    | Some di -> di in
   { digest = d;
     sending = {Send.send_state0 with Send.out_slice = LP.make_slice b_out out_buf_len};
-    receiving = Receive.create (LP.make_slice b_in in_buf_len);
+    receiving = recv;
     epochs = Epochs.create region random }
 
 (**** Transcript Bytes Wrappers ***)

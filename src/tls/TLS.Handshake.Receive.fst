@@ -173,7 +173,7 @@ let receive_post_with_leftover_bytes
   (st:state)
   (inflight:PF.in_progress_flt_t)
   (valid:uint_32 -> uint_32 -> flt -> HS.mem -> Type0)
-: HS.mem -> TLSError.result (option (flt & uint_32) & state) -> HS.mem -> Type0
+: HS.mem -> TLSError.result (option flt & state) -> HS.mem -> Type0
 = fun h0 r h1 ->
   receive_pre st inflight h0 /\
   B.(modifies loc_none h0 h1) /\
@@ -184,11 +184,11 @@ let receive_post_with_leftover_bytes
      invariant rst h1 /\
      rst `only_changes_pf_state` st /\
      in_progress rst == inflight
-   | Correct (Some (flt, idx_end), rst) ->
+   | Correct (Some flt, rst) ->
      invariant rst h1 /\
-     idx_end <= st.rcv_to /\
-     changes_pf_state_and_updates_rcv_from rst st idx_end /\
-     valid st.rcv_from idx_end flt h1 /\
+     rst.rcv_from <= st.rcv_to /\
+     changes_pf_state_and_updates_rcv_from rst st rst.rcv_from /\
+     valid st.rcv_from rst.rcv_from flt h1 /\
      in_progress rst == PF.F_none /\
      PF.parsed_bytes rst.pf_st == Seq.empty)
 
@@ -202,7 +202,6 @@ let wrap_pf_st
   | E.Error e -> E.Error e
   | E.Correct (None, pf_st) -> E.Correct (None, { st with pf_st = pf_st })
   | E.Correct (Some flt, pf_st) -> E.Correct (Some flt, { st with pf_st = pf_st; rcv_from = st.rcv_to })
-
 
 (*** Public API ***)
 
@@ -288,7 +287,7 @@ let receive_s_Idle (st:state)
   wrap_pf_st st r
 
 let receive_c_wait_ServerHello (st:state)
-: ST (TLSError.result (option (PF.c_wait_ServerHello (cslice_of st) & uint_32) & state))
+: ST (TLSError.result (option (PF.c_wait_ServerHello (cslice_of st)) & state))
   (requires receive_pre st PF.F_c_wait_ServerHello)
   (ensures receive_post_with_leftover_bytes st PF.F_c_wait_ServerHello PF.valid_c_wait_ServerHello)
 = let r = PF.receive_c_wait_ServerHello st.pf_st (cslice_of st) st.rcv_from st.rcv_to in
@@ -296,7 +295,7 @@ let receive_c_wait_ServerHello (st:state)
   | E.Error e -> E.Error e
   | E.Correct (None, pf_st) -> E.Correct (None, { st with pf_st = pf_st })
   | E.Correct (Some (flt, pos), pf_st) ->
-    E.Correct (Some (flt, pos), { st with pf_st = pf_st; rcv_from = pos })  
+    E.Correct (Some flt, { st with pf_st = pf_st; rcv_from = pos })
 
 
 (*** 1.3 flights ***)
@@ -326,9 +325,13 @@ let receive_s13_wait_EOED (st:state)
 let receive_c13_Complete (st:state)
 : ST (TLSError.result (option (PF.c13_Complete (cslice_of st)) & state))
   (requires receive_pre st PF.F_c13_Complete)
-  (ensures  receive_post st PF.F_c13_Complete PF.valid_c13_Complete)
+  (ensures  receive_post_with_leftover_bytes st PF.F_c13_Complete PF.valid_c13_Complete)
 = let r = PF.receive_c13_Complete st.pf_st (cslice_of st) st.rcv_from st.rcv_to in
-  wrap_pf_st st r
+  match r with
+  | E.Error e -> E.Error e
+  | E.Correct (None, pf_st) -> E.Correct (None, { st with pf_st = pf_st })
+  | E.Correct (Some (flt, pos), pf_st) ->
+    E.Correct (Some flt, { st with pf_st = pf_st; rcv_from = pos })
 
 
 (*** 1.2 flights ***)
@@ -419,9 +422,7 @@ let test (b:slice_t)
          //and so on ...
 
          ())
-    | Correct (Some (flt, idx_end), st) ->
-      //now we can parse ServerHelloDone
-      let st = { st with rcv_from = idx_end } in
+    | Correct (Some flt, st) ->
 
       let r = receive_c12_wait_ServerHelloDone st in
 

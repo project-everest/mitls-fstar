@@ -418,7 +418,7 @@ val elim_invariant (#a: _) (s:state a) (h:HS.mem)
 
 /// `region_of`: The internal state of the module is allocated in a
 /// user-provided region
-val region_of (#a: _) (s:state a) : GTot HS.rid
+val region_of (#a: _) (s:state a) : (r:Mem.rgn)//{r `HS.disjoint` Mem.tls_tables_region})
 
 /// `frame_invariant`: The invariant is maintained across
 /// footprint-preserving heap modifications

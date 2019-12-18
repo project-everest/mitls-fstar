@@ -213,18 +213,23 @@ let receive_post_with_leftover_bytes
 
 let parsing_error : TLSError.error = {
   Parsers.Alert.level = Parsers.AlertLevel.Fatal;
-  Parsers.Alert.description = Parsers.AlertDescription.Unexpected_message
-}, ""
+  Parsers.Alert.description = Parsers.AlertDescription.Decode_error
+}, "Failed to validate incoming message"
 
 let unexpected_flight_error : TLSError.error = {
   Parsers.Alert.level = Parsers.AlertLevel.Fatal;
   Parsers.Alert.description = Parsers.AlertDescription.Unexpected_message
-}, ""
+}, "A message was received in a state where it was not expected"
 
-let unexpected_end_index_error : TLSError.error = {
+let leftover_bytes_error : TLSError.error = {
   Parsers.Alert.level = Parsers.AlertLevel.Fatal;
-  Parsers.Alert.description = Parsers.AlertDescription.Unexpected_message
-}, ""
+  Parsers.Alert.description = Parsers.AlertDescription.Decode_error
+}, "Leftover bytes after a key-transitioning message (Binders, non-retry SH, EOED, Finished)"
+
+let message_overflow_error : TLSError.error = {
+  Parsers.Alert.level = Parsers.AlertLevel.Fatal;
+  Parsers.Alert.description = Parsers.AlertDescription.Decode_error
+}, "Received message overflows input buffer length"
 
 
 /// Ad-hoc flights receive functions
@@ -467,15 +472,14 @@ let valid_c13_Complete
 = let open R in
 
   flt.c13_c_nst.start_pos == f_begin /\
-  end_pos flt.c13_c_nst == f_end     /\
-
+  R.end_pos flt.c13_c_nst == f_end     /\
   valid_repr_pos flt.c13_c_nst h
 
 
 val receive_c13_Complete (st:state) (b:R.const_slice) (f_begin f_end:uint_32)
-: ST (TLSError.result (option (c13_Complete b) & state))
+: ST (TLSError.result (option (c13_Complete b & uint_32) & state))
   (requires receive_pre st b f_begin f_end F_c13_Complete)
-  (ensures  receive_post st b f_begin f_end F_c13_Complete valid_c13_Complete)
+  (ensures receive_post_with_leftover_bytes st b f_begin f_end F_c13_Complete valid_c13_Complete)
 
 
 (*** 1.2 flights ***)

@@ -827,6 +827,30 @@ let parseRenegotiationInfo b =
   else Error (AD_decode_error, perror __SOURCE_FILE__ __LINE__ "Renegotiation info bytes are too short")
 *)
 
+(*** Ticket ***)
+
+type tickets = list (psk_identifier * Ticket.ticket) 
+
+#push-options "--z3rlimit 50"
+private let rec unseal_tickets_
+  (acc: tickets)
+  (l:list (psk_identifier * ticket_seal)): 
+  St tickets 
+  = match l with
+  | [] -> List.Tot.rev acc
+  | (tid, seal) :: r -> (
+    let acc: tickets =
+      match Ticket.check_ticket true seal with
+      | Some t -> (tid, t) :: acc
+      | None -> trace ("WARNING: failed to unseal the session data for ticket "^print_bytes tid^" (check sealing key)"); acc in
+    unseal_tickets_ acc r )
+
+// FIXME(adl) proper error propagation instead of silent failure
+let unseal_tickets cfg =
+  assume false;
+  let resume = unseal_tickets_ [] cfg.use_tickets in
+  find_ticket12 None resume, filter_ticket13 [] resume
+
 #reset-options "--using_facts_from '* -LowParse'"
 
 
@@ -949,25 +973,7 @@ let rec encrypted_clientExtensions pv cfg cs ri pski ks resuming (ches:list clie
                  Some [E_renegotiation_info (FirstConnection)] //, {ne_default with ne_secure_renegotiation = RI_Valid})
               else None //, ne_default in
           in Correct cre
-*)
 
-type tickets = list (psk_identifier * Ticket.ticket) 
-
-#push-options "--z3rlimit 50"
-let rec unseal_tickets 
-  (acc: tickets)
-  (l:list (psk_identifier * ticket_seal)): 
-  St tickets 
-  = match l with
-  | [] -> List.Tot.rev acc
-  | (tid, seal) :: r -> (
-    let acc: tickets =
-      match Ticket.check_ticket true seal with
-      | Some t -> (tid, t) :: acc
-      | None -> trace ("WARNING: failed to unseal the session data for ticket "^print_bytes tid^" (check sealing key)"); acc in
-    unseal_tickets acc r )
-
-(*
 let create region r cfg nonce =
   let resume = unseal_tickets [] cfg.use_tickets in
   assume False; //18-12-16 ??
@@ -1247,11 +1253,20 @@ let client_ClientHello config nonce oks =
       Correct offer )
 
 private
-let choose_extension (s:share) (e:clientHelloExtension) =
+let choose_retry_extension (ctx:share & UInt32.t & list (PSK.pskid & pskInfo))
+  (e:clientHelloExtension) =
+  let s,now,psks = ctx in
   match e with
-  // 2018.03.08 SZ: TODO We must Update PSK extension if present
   // See https://tools.ietf.org/html/draft-ietf-tls-tls13-26#section-4.1.2
-  // | CHE_pre_shared_key psk -> FIXME() update ticket_age, remove incompatible PSKs
+  | CHE_pre_shared_key _ ->
+    let (pskids, pskinfos) : list PSK.pskid * list pskInfo = List.Tot.split psks in
+    let binders = List.Tot.map compute_binder_ph pskinfos in
+    let pskidentities = obfuscate_age now psks in
+    assume (let x = offeredPsks_identities_list_bytesize pskidentities in 7 <= x /\ x <= 65535);
+    assume (let x = offeredPsks_binders_list_bytesize binders in 33 <= x /\ x <= 65535);
+    let psk = ({ identities = pskidentities; binders = binders }) in
+    assume (let x = Parsers.PreSharedKeyClientExtension.preSharedKeyClientExtension_bytesize psk in 0 <= x /\ x <= 65535);
+    Some (CHE_pre_shared_key psk)
   | CHE_early_data _ -> None
   | CHE_key_share sl ->
     let (| g, gx |) = s in
@@ -1265,16 +1280,23 @@ let choose_extension (s:share) (e:clientHelloExtension) =
 
 let group_of_hrr = TLS.Cookie.find_keyshare
 
-let client_HelloRetryRequest ch1 hrr share =
+private let filter_retry_psk ha ((id,info):PSK.pskid & pskInfo) =
+  let CipherSuite13 _ ha' = info.early_cs in
+  ha' = ha
+
+let client_HelloRetryRequest ch1 hrr share now resume =
   match share with 
   | None -> fatal Internal_error "expected a share in HRR negtiation" 
   | Some s -> (
+  let psks = let _ = assume false in ticket13_pskinfo [] (snd resume) in
+  let psks = List.Helpers.filter_aux (HSM.hrr_ha hrr) filter_retry_psk psks in
   let sid = HSM.hrr_session_id hrr in
   let cs = HSM.hrr_cipher_suite hrr in
-  let el = HSM.hrr_extensions hrr in 
+  let el = HSM.hrr_extensions hrr in
   let old_shares = find_key_shares ch1 in
-  let old_psk = match find_pske ch1 with None -> [] | Some pskl -> pskl.identities in
-  let ext' = List.Helpers.choose_aux s choose_extension ch1.CH.extensions in
+  //let old_psk = match find_pske ch1 with None -> [] | Some pskl -> pskl.identities in
+  let ctx = (s,now,psks) in
+  let ext' = List.Helpers.choose_aux ctx choose_retry_extension ch1.CH.extensions in
   let ext', no_cookie : list clientHelloExtension * bool =
     match List.Tot.find HRRE_cookie? el with
     | Some (HRRE_cookie c) -> CHE_cookie c :: ext', false

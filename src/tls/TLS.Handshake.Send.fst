@@ -94,22 +94,24 @@ let tag #a stt =
   tag
 
 let send_tch sto m =
-  let h0 = get () in
   let r = MITLS.Repr.Handshake.serialize sto.out_slice sto.out_pos (HSM.M_client_hello m) in
   match r with
   | None ->
     fatal Internal_error "send_tch: output buffer overflow"
   | Some r ->
-    let rp = Repr.as_ptr r in
-    let b = Repr.to_bytes rp r.Repr.length in
-    trace ("send (truncated) CH "^hex_of_bytes b);
+    let b = Repr.to_bytes (Repr.as_ptr r) r.Repr.length in
+    trace ("send (placeholder binders) CH "^hex_of_bytes b);
     let sto = { sto with out_pos = Repr.end_pos r } in
     correct sto
 
-// FIXME(adl) required for PSK and 0-RTT to work!
+// FIXME(adl) can't be proved correct as is - check with Tahina
 let patch_binders #a stt sto binders
 =
-  admit()
+  assume false; // Need a rewrite to prove
+  let binders = Parsers.OfferedPsks.offeredPsks_binders_serializer32 binders in
+  let blen = Bytes.len binders in
+  let out_buf = B.sub sto.out_slice.LP.base (sto.out_pos - blen) blen in
+  Bytes.store_bytes binders out_buf
 
 let send_ch
   #a stt sto m

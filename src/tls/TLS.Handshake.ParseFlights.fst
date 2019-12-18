@@ -104,16 +104,24 @@ let parse_common
   let lp_b = R.to_slice b in
   assume (v lp_b.LP.len <= v LP.validator_max_length);
   let pos = validator lp_b f_begin in  //validator gives us the valid postcondition
+//  let lb = lp_b.LP.len - f_begin in
+//  let bb = Bytes.of_buffer lb (B.sub lp_b.LP.base f_begin lb) in
+//  trace ("Current flight buffer contents: "^(Bytes.hex_of_bytes bb));
 
-  if pos <= LP.validator_max_length then begin
+  if pos <= LP.validator_max_length then
+   begin
     let parsed_tag = HSMType.handshakeType_reader lp_b f_begin in
-    if parsed_tag = tag then  //and this dynamic check gives us the lens postcondition
+    if parsed_tag = tag then (  //and this dynamic check gives us the lens postcondition
+      trace ("Parsed a "^(HSMType.string_of_handshakeType parsed_tag));
       let r = R.mk_repr_pos_from_const_slice p132 b f_begin pos in
       E.Correct (Some (r, pos))
-    else (trace "Bad message type"; E.Error unexpected_flight_error)
-  end
-  else if pos = LP.validator_error_not_enough_data then (trace "Not enough data"; E.Correct None)
-  else (trace "Parsing error"; E.Error parsing_error)
+    ) else
+      (trace "Bad message type"; E.Error unexpected_flight_error)
+   end
+  else if pos = LP.validator_error_not_enough_data then
+    (trace "Not enough data"; E.Correct None)
+  else
+    (trace "Parsing error"; E.Error parsing_error)
 
 
 /// Helper function to handle the case when there is an error or insufficient data
@@ -160,17 +168,23 @@ let check_eq_end_index_and_return
   (pos f_end:uint_32)
   (flt:a)
 : TLSError.result (option a & state)
-= if pos <> f_end then E.Error unexpected_end_index_error
-  else E.Correct (Some flt, reset ())
+= if pos <> f_end then (
+//    trace "Leftover bytes after message";
+    E.Error leftover_bytes_error
+  ) else E.Correct (Some flt, reset ())
 
+// ADL: is this really necessary? The outermost check of the validator
+// will already guarantee this?
 inline_for_extraction noextract
 let check_leq_end_index_and_return
   (#a:Type)
   (pos f_end:uint_32)
   (flt:a)
 : TLSError.result (option (a & uint_32) & state)
-= if pos > f_end then E.Error unexpected_end_index_error
-  else E.Correct (Some (flt, pos), reset ())
+= if pos > f_end then (
+//    trace "Message overflows end of buffer";
+    E.Error message_overflow_error
+  ) else E.Correct (Some (flt, pos), reset ())
 
 
 (*** ClientHello and ServerHello flights ***)
@@ -477,7 +491,9 @@ let receive_c13_Complete st b f_begin f_end
   | E.Error _ | E.Correct None ->
     err_or_insufficient_data r flt b f_begin f_end
   | E.Correct (Some (nst_repr, pos)) ->
-    check_eq_end_index_and_return pos f_end ({ c13_c_nst = nst_repr })
+    // N.B. there is no final message in the Complete state,
+    // it is always possible to have pending fragments
+    check_leq_end_index_and_return pos f_end ({ c13_c_nst = nst_repr })
 
 
 (*** 1.2 flights ***)

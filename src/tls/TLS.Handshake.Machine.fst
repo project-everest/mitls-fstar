@@ -1194,6 +1194,9 @@ let rec bkey_list_bytesize (bkeys: list Negotiation.bkey13) =
 module Binders = ParsersAux.Binders
 module R = LowParse.Repr
 
+// FIXME(adl) annoying and unnecessary conversion to repr for hashing
+// (also limited to the size of the allocated size buffer, which can't be dynamic)
+// When the interface of TLS.Handhshake.Client/Server uses repr_pos, delete this
 #push-options "--admit_smt_queries true"
 let get_handshake_repr (m:HSM.handshake)
   : StackInline (b:R.const_slice & MITLS.Repr.Handshake.pos b)
@@ -1217,24 +1220,41 @@ let get_handshake13_repr (m:HSM.handshake13)
     B.modifies B.loc_none h0 h1 /\
     R.value (R.as_ptr_spec r) == m)
   =
-  let len = HSM.handshake13_size32 m in
   let b = B.alloca 0z 8192ul in
+  push_frame ();
+  let len = HSM.handshake13_size32 m in
   let slice = LP.make_slice b len in
   let Some r = MITLS.Repr.Handshake13.serialize slice 0ul m in
+  pop_frame ();
   (| R.of_slice slice, r |)
 #pop-options
+
+let expected_initial_transcript (re:option Transcript.retry) ch =
+  let open TLS.Handshake.Transcript in
+  if HSM.ch_bound ch then TruncatedClientHello re (HSM.clear_binders ch)
+  else ClientHello re ch
 
 // ADL: I rewrote this to cover all transcript transitions from Start to Hello
 // Note that this does not guarantee that the hash for the retry digest matches ha
 // The returned digest is for the truncated CH if it contains binders,
 // or the full CH if it does not
 #push-options "--admit_smt_queries true"
-let transcript_start (region:rgn) ha (retry:option Transcript.retry)
-  (ch:HSM.clientHello) (ignore_binders:bool) =
+let transcript_start (region:rgn) ha (re:option Transcript.retry)
+  (ch:HSM.clientHello) (ignore_binders:bool)
+  : ST (Transcript.state ha)
+  (requires fun h0 -> region `disjoint` Mem.tls_tables_region)
+  (ensures fun h0 s h1 ->
+    let open TLS.Handshake.Transcript in
+    transcript s h1 == expected_initial_transcript re ch /\
+    invariant s h1 /\
+    region_of s == region /\
+    B.modifies (footprint s) h0 h1 /\
+    B.fresh_loc (footprint s) h0 h1)
+  =
   push_frame ();
   let di = Transcript.create region ha in
   begin
-    match retry with
+    match re with
     | None -> ()
     | Some (chh, hrr) ->
       let t0 = chh in
@@ -1249,9 +1269,10 @@ let transcript_start (region:rgn) ha (retry:option Transcript.retry)
     if not ignore_binders && Binders.ch_bound ch then Transcript.LR_TCH chr
     else Transcript.LR_ClientHello chr in
   Transcript.extend di label;
-  let tag = transcript_extract di in
-  pop_frame ();
-  (tag, di)
+//  di
+//  let tag = transcript_extract di in
+  pop_frame (); di
+//  (tag, di)
 #pop-options
 
 // Used to replace CH0 with M_message_hash - ignores binders

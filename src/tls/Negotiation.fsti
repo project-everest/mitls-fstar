@@ -111,6 +111,11 @@ let ha_bkey13 (bk:bkey13) =
   let _, Ticket.Ticket13 (CipherSuite13 _ ha) li _ _ nonce created age_add custom = bk in
   ha
 
+val unseal_tickets: config ->
+  ST resumeInfo
+  (requires fun h0 -> True)
+  (ensures fun h0 _ h1 -> h0 == h1)
+
 (*
 val hashAlg: mode -> Hashing.Spec.alg
 val kexAlg: mode -> TLSConstants.kexAlg
@@ -243,6 +248,8 @@ val client_HelloRetryRequest:
   ch1: offer ->
   hrr: HSM.hrr ->
   s: option share ->
+  now: UInt32.t -> // to update obfuscated_age
+  resume: resumeInfo -> // to filter PSKs
   result (o:offer { HSM.is_valid_hrr hrr })
 
 val client_accept_second_ServerHello:

@@ -230,7 +230,8 @@ let server_ClientHello1 st offer
       | Nego.JUST_EDH g_gx cs -> cs, None, (Some g_gx)
       in
     let CipherSuite13 ae ha = cs in
-    let tag0, di = transcript_start region ha None offer false in
+    let di = transcript_start region ha None offer false in
+    let tag0 = transcript_extract di in
     trace ("ClientHello/Binder digest: "^(B.hex_of_bytes tag0));
     let (ks, ogy, obk) = KS.ks_server13_init random (offer.CH.random) cs config.is_quic opsk g_gx in
     let ogyb = match ogy with None -> None | Some gy -> Some (keyShareEntry_of_share gy) in
@@ -239,25 +240,29 @@ let server_ClientHello1 st offer
 
     // Verify selected binder, update tag, di, tx
     let binder_ok = match obk with
-      | None -> Correct (tag0, di)
+      | None -> Correct tag0
       | Some bk ->
         let open Parsers.OfferedPsks in
         let open Parsers.OfferedPsks_binders in
         let Some opsk = Nego.find_clientPske offer in
         let Some binder = List.Tot.nth opsk.binders (UInt16.v (Some?.v opski)) in
+
+        // Complete the TCH hash (wasteful, should be fixed when interface is repr_pos)
+        let (| _, chr |) = get_handshake_repr (HSM.M_client_hello offer) in
+	let lbl = Transcript.LR_CompleteTCH chr in
+	Transcript.extend di lbl;
+
         if HMAC.verify (dsnd bk) tag0 binder then
-          Correct (transcript_start region ha None offer true) // FIXME wasteful
+          Correct (transcript_extract di)
         else Error (fatalAlert Bad_record_mac, "Failed to verify selected binder")
       in
 
     match binder_ok with
     | Error z -> Recv.InError z
-    | Correct (tag1, di1) ->
+    | Correct tag1 ->
       let pfs = if accept_0rtt then PF.F_s13_wait_EOED else PF.F_s13_wait_Finished2 in
       let ms0 : msg_state region pfs random ha =
-        {create_msg_state region pfs random ha with
-	  receiving = recv;
-	  digest = di} in
+        create_msg_state region pfs random ha (Some di) (Some recv) in
       if accept_0rtt then (
         let ees, ets = KS.ks_server13_0rtt_key ks tag1 in
          export ms0.epochs ees;
