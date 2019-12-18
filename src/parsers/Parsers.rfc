@@ -595,7 +595,7 @@ struct {
   uint16 len;
   select(type)
   {
-    case server_name: Empty;
+    case server_name: ServerNameList;
     case max_fragment_length: MaxFragmentLength;
     case status_request: CertificateStatusRequest;
     case supported_groups: NamedGroupList;
