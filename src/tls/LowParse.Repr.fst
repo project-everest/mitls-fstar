@@ -770,6 +770,25 @@ let end_pos #t #b (r:repr_pos t b)
   : index b
   = r.start_pos + r.length
 
+abstract
+let valid_repr_pos_elim
+  (#t: Type)
+  (#b: const_slice)
+  (r: repr_pos t b)
+  (h: HS.mem)
+: Lemma
+  (requires (
+    valid_repr_pos r h
+  ))
+  (ensures (
+    LP.valid_content_pos r.meta.parser h (to_slice b) r.start_pos r.meta.v (end_pos r)
+  ))
+= let p : repr_ptr t = as_ptr_spec r in
+  let slice = slice_of_const_buffer (Ptr?.b p) (Ptr?.meta p).len in
+  LP.valid_facts r.meta.parser h slice 0ul;
+  LP.valid_facts r.meta.parser h (to_slice b) r.start_pos;
+  LP.parse_strong_prefix r.meta.parser (LP.bytes_of_slice_from h slice 0ul) (LP.bytes_of_slice_from h (to_slice b) r.start_pos)
+
 /// Mostly just by inheriting operations on pointers
 let as_ptr #t #b (r:repr_pos t b)
   : Stack (repr_ptr t)
