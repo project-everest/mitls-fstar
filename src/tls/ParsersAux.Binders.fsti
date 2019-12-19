@@ -177,12 +177,14 @@ let valid_truncate_clientHello
     has_binders (LP.contents H.handshake_parser h sl pos)
   ))
   (ensures (
+    LP.valid H.handshake_parser h sl pos /\
+    has_binders (LP.contents H.handshake_parser h sl pos) /\ (
     let m = LP.contents H.handshake_parser h sl pos in
     let pos' = LP.get_valid_pos H.handshake_parser h sl pos in
     U32.v pos + U32.v (binders_offset m) + Psks.offeredPsks_binders_bytesize (get_binders m) == U32.v pos' /\
     LP.bytes_of_slice_from_to h sl pos (pos `U32.add` binders_offset m) == BY.reveal (truncate_clientHello_bytes m) /\
     LP.valid_content_pos Psks.offeredPsks_binders_parser h sl (pos `U32.add` binders_offset m) (get_binders m) pos'
-  ))
+  )))
 = let m = LP.contents H.handshake_parser h sl pos in
   LP.serialized_length_eq H.handshake_serializer m;
   truncate_clientHello_bytes_correct m;

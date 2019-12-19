@@ -175,16 +175,19 @@ val signals:
 
 val send_tch
   (sto: send_state)
-  (m: HSM.clientHello)
-: Stack (result send_state)
+  (m: HSM.clientHello_with_binders)
+: Stack (result (send_state & MITLS.Repr.Handshake.ch_pos (LowParse.Repr.of_slice sto.out_slice)))
   (requires fun h -> invariant sto h)
   (ensures fun h res h' ->
     B.modifies (footprint sto) h h' /\ (
     match res with
-    | Correct sto' ->
+    | Correct (sto', ch) ->
       invariant sto' h' /\
       sto'.out_slice == sto.out_slice /\
-      sto'.out_pos >= sto.out_pos
+      sto'.out_pos >= sto.out_pos /\
+      ch.LowParse.Repr.meta.LowParse.Repr.v == Parsers.Handshake.M_client_hello m /\
+      sto'.out_pos == LowParse.Repr.end_pos ch /\
+      LowParse.Repr.valid_repr_pos ch h'
     | _ -> True
   ))
 
@@ -196,13 +199,20 @@ val patch_binders
   (#a:EverCrypt.Hash.alg)
   (stt: Transcript.state a)
   (sto: send_state)
+  (pch: MITLS.Repr.Handshake.ch_pos (LowParse.Repr.of_slice sto.out_slice))
   (m: HandshakeMessages.binders)
 : Stack unit
   (requires fun h ->
     invariant sto h /\
     Transcript.invariant stt h /\
-    Transcript.TruncatedClientHello? (Transcript.transcript stt h) /\
-    B.loc_disjoint (footprint sto) (Transcript.footprint stt))
+    Transcript.TruncatedClientHello? (Transcript.transcript stt h) /\ (
+    let Transcript.TruncatedClientHello retry tch = Transcript.transcript stt h in
+    tch == HSM.clear_binders (HSM.M_client_hello?._0 (pch.LowParse.Repr.meta.LowParse.Repr.v)) /\
+    FStar.UInt32.v (sto.out_pos) == FStar.UInt32.v (LowParse.Repr.end_pos pch) /\
+    LowParse.Repr.valid_repr_pos pch h /\
+    FStar.UInt32.v (HSM.ch_binders_len tch) == Parsers.OfferedPsks.offeredPsks_binders_bytesize m /\
+    B.loc_disjoint (footprint sto) (Transcript.footprint stt)
+  ))
   (ensures fun h t' h' ->
     B.modifies (footprint sto `B.loc_union` Transcript.footprint stt) h h' /\
     invariant sto h' /\

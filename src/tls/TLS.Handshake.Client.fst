@@ -248,7 +248,7 @@ let client_ClientHello hs =
     let h2 = get() in
     assume(invariant hs h2);
     Error z
-  | Correct sending -> (
+  | Correct (sending, ptch) -> (
 
   // This is specification-only, ensuring that offer0 has the
   // canonical binders used to keep track of the tch transcript,
@@ -268,7 +268,7 @@ let client_ClientHello hs =
       let ks', binder_keys = KS.ks_client13_get_binder_keys ks psks in
       let binders = client_Binders region ha di0 None offer0 binder_keys in
       let offer1 = Msg.set_binders offer0 binders in
-      Send.patch_binders ms.digest sending binders;
+      Send.patch_binders ms.digest sending ptch binders;
       // FIXME!! this should be internal to patch_binders
       let (| _, chr |) = get_handshake_repr (Msg.M_client_hello offer1) in
       let lbl = Transcript.LR_CompleteTCH chr in
@@ -356,7 +356,7 @@ let client_HelloRetryRequest hs hrr =
 
   match Send.send_tch ms.sending ch1 with
   | Error z -> Receive.InError z
-  | Correct sending ->
+  | Correct (sending, ptch) ->
 
   (* N.B. all of this should be erased *)
   let offer1 = Msg.clear_binders ch1 in
@@ -380,7 +380,7 @@ let client_HelloRetryRequest hs hrr =
       let ks', binder_keys = KS.ks_client13_get_binder_keys ks psks in
       let binders = client_Binders region ha1 di1 retry ch1 binder_keys in
       let offer = Msg.set_binders offer1 binders in
-      Send.patch_binders ms.digest ms.sending binders;
+      Send.patch_binders ms.digest ms.sending ptch binders;
       // FIXME!! this should be internal to patch_binders
       let (| _, chr |) = get_handshake_repr (Msg.M_client_hello offer) in
       let lbl = Transcript.LR_CompleteTCH chr in

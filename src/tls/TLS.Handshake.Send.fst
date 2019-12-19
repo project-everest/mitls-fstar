@@ -101,17 +101,39 @@ let send_tch sto m =
   | Some r ->
     let b = Repr.to_bytes (Repr.as_ptr r) r.Repr.length in
     trace ("send (placeholder binders) CH "^hex_of_bytes b);
-    let sto = { sto with out_pos = Repr.end_pos r } in
-    correct sto
+    let sto' = { sto with out_pos = Repr.end_pos r } in
+    correct (sto', r)
 
-// FIXME(adl) can't be proved correct as is - check with Tahina
-let patch_binders #a stt sto binders
+let patch_binders #a stt sto pch binders
 =
-  assume false; // Need a rewrite to prove
-  let binders = Parsers.OfferedPsks.offeredPsks_binders_serializer32 binders in
-  let blen = Bytes.len binders in
-  let out_buf = B.sub sto.out_slice.LP.base (sto.out_pos - blen) blen in
-  Bytes.store_bytes binders out_buf
+  let h = get () in
+  Parsers.OfferedPsks.offeredPsks_binders_bytesize_eq binders;
+  LowParse.Repr.valid_repr_pos_elim pch h;
+  ParsersAux.Binders.valid_truncate_clientHello h sto.out_slice pch.LowParse.Repr.start_pos;
+  let bpos = ParsersAux.Binders.binders_pos sto.out_slice pch.LowParse.Repr.start_pos in
+  let opbinders = LowParse.Repr.mk_repr_pos_from_serialize
+    Parsers.OfferedPsks_binders.offeredPsks_binders_parser32
+    Parsers.OfferedPsks.offeredPsks_binders_serializer32
+    Parsers.OfferedPsks.offeredPsks_binders_size32
+    sto.out_slice
+    bpos
+    binders
+  in
+  assert (Some? opbinders);
+  let Some pbinders = opbinders in
+  let h2 = get () in
+  LowParse.Repr.valid_repr_pos_elim pbinders h2;
+  ParsersAux.Binders.valid_binders_mutate h sto.out_slice pch.LowParse.Repr.start_pos bpos (LP.loc_slice_from sto.out_slice bpos) h2;
+  let pch' = LowParse.Repr.mk_repr_pos
+    HSM.handshake_parser32
+    sto.out_slice
+    pch.LowParse.Repr.start_pos
+    (LowParse.Repr.end_pos pch)
+  in
+  let h3 = get () in
+  Transcript.frame_invariant stt h h3 (footprint sto);
+  ParsersAux.Binders.set_binders_set_binders pch.LowParse.Repr.meta.LowParse.Repr.v binders (HSM.canonical_binders (pbinders.LowParse.Repr.length));
+  Transcript.extend stt (Transcript.LR_CompleteTCH pch')
 
 let send_ch
   #a stt sto m
