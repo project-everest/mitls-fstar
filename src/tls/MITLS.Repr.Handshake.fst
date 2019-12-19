@@ -21,103 +21,137 @@ module MITLS.Repr.Handshake
    This module encapsulates wire-format representations of
    Parsers.Handshake messages.
 
-   Its main type, `repr b` is an instance of MITLS.Repr.repr
+   Its main type, `ptr` is an instance of MITLS.Repr.repr_ptr
    instantiated with serverHello_parser
 *)
 module LP = LowParse.Low.Base
 module B = LowStar.Monotonic.Buffer
 module HS = FStar.HyperStack
-module R = MITLS.Repr
+module R = LowParse.Repr
 module HSM = Parsers.Handshake
 module RCH = MITLS.Repr.ClientHello
 module RSH = MITLS.Repr.ServerHello
+module HSTag = Parsers.HandshakeType
 open FStar.Integers
 open FStar.HyperStack.ST
 
 let t = HSM.handshake
 
-let repr (b:R.const_slice) =
-  R.repr_p t b HSM.handshake_parser32
+let ptr = R.repr_ptr_p t HSM.handshake_parser
 
-let handshakeType (#b:R.const_slice) (r:repr b)
-  : Stack Parsers.HandshakeType.handshakeType
-    (requires
-      R.valid r)
-    (ensures fun h0 ht h1 ->
-      B.modifies B.loc_none h0 h1 /\
-      ht == HSM.tag_of_handshake (R.value r))
-  = let open R in
-    let open Parsers.HandshakeType in
-    R.reveal_valid();
-    let b = R.to_slice b in
-    handshakeType_reader b r.start_pos
+let pos (b:R.const_slice) = R.repr_pos_p t b HSM.handshake_parser
 
-let is_ch (#b:R.const_slice) (r:repr b) : GTot bool =
-  HSM.M_client_hello? (R.value r)
+(* This is working around the inability to define null-accessors for
+   the tag of a sum type. It will eventually be provided by EverParse
+   *)
 
-let is_sh (#b:R.const_slice) (r:repr b) : GTot bool =
-  HSM.M_server_hello? (R.value r)
+module LL = LowParse.Low.Base
 
-type ch_repr (b:R.const_slice) = m:repr b{is_ch m}
-type sh_repr (b:R.const_slice) = m:repr b{is_sh m}
+let handshakeType_clens
+  : LL.clens t Parsers.HandshakeType.handshakeType
+  = let open LL in
+    { clens_cond = (fun _ -> True);
+      clens_get = HSM.tag_of_handshake }
 
-let clientHello (#b:R.const_slice) (r:repr b{is_ch r})
-  : Stack (RCH.repr b)
-    (requires fun h ->
-      R.valid r h)
-    (ensures fun h0 ch h1 ->
-      B.modifies B.loc_none h0 h1 /\
-      R.valid ch h1 /\
-      R.value ch == HSM.M_client_hello?._0 (R.value r))
-  = let open R in
-    let open Parsers.HandshakeType in
-    R.reveal_valid();
+(*
+let tag_gaccessor_body (sl:LowParse.Bytes.bytes)
+  : Ghost (nat) (requires True) (ensures fun r -> 
+    LP.gaccessor_post' HSM.handshake_parser Parsers.HandshakeType.handshakeType_parser handshakeType_clens sl r
+  ) =
+  let k = HSM.handshake_parser_kind in
+  if Some k.LP.parser_kind_low = k.LP.parser_kind_high
+  && k.LP.parser_kind_low <= Seq.length sl
+  then 0, k.LP.parser_kind_low
+  else 0, 0
+*)
+
+let handshakeType_gaccessor
+  : LL.gaccessor
+             HSM.handshake_parser
+             Parsers.HandshakeType.handshakeType_parser
+             handshakeType_clens
+  = assume false;
+  fun sl -> 0
+
+//  fun (sl:_) ->
+//    admit();
+//    tag_gaccessor_body (*Parsers.HandshakeType.handshakeType_parser*) sl
+
+let handshakeType_accessor
+  : LL.accessor handshakeType_gaccessor
+  = fun #rrel #rel sl pos ->
     let h = get () in
-    let s = R.to_slice b in
-    let pos = HSM.handshake_accessor_client_hello s r.start_pos in
-    let pos = HSM.handshake_m_client_hello_accessor s pos in
-    let end_pos = Parsers.ClientHello.clientHello_jumper s pos in
-    let ch_repr = R.mk_from_const_slice b pos end_pos Parsers.ClientHello.clientHello_parser32 in
-    ch_repr
+    LL.slice_access_eq h handshakeType_gaccessor sl pos;
+    pos
+(* End workaround *)
 
-let serverHello (#b:R.const_slice) (r:repr b{is_sh r})
-  : Stack (RSH.repr b)
-    (requires fun h ->
-      R.valid r h)
-    (ensures fun h0 sh h1 ->
-      B.modifies B.loc_none h0 h1 /\
-      R.valid sh h1 /\
-      R.value sh == HSM.M_server_hello?._0 (R.value r))
-  = let open R in
-    let open Parsers.HandshakeType in
-    R.reveal_valid();
-    let h = get () in
-    let s = R.to_slice b in
-    let pos = HSM.handshake_accessor_server_hello s r.start_pos in
-    let pos = HSM.handshake_m_server_hello_accessor s pos in
-    let end_pos = Parsers.ServerHello.serverHello_jumper s pos in
-    let sh_repr = R.mk_from_const_slice b pos end_pos Parsers.ServerHello.serverHello_parser32 in
-    sh_repr
+unfold noextract
+let field_handshakeType =
+  R.FieldReader handshakeType_accessor Parsers.HandshakeType.handshakeType_reader
+
+unfold private noextract
+let field_vldata_client_hello =
+  R.FieldAccessor
+    HSM.handshake_accessor_client_hello
+    HSM.handshake_m_client_hello_jumper
+    HSM.handshake_m_client_hello_parser32
+
+unfold private noextract
+let field_m_client_hello_client_hello =
+  R.FieldAccessor
+    HSM.handshake_m_client_hello_accessor
+    Parsers.ClientHello.clientHello_jumper
+    Parsers.ClientHello.clientHello_parser32
+
+unfold noextract
+let field_clientHello =
+  R.field_accessor_comp field_vldata_client_hello field_m_client_hello_client_hello
+
+unfold private noextract
+let field_vldata_server_hello =
+  R.FieldAccessor
+    HSM.handshake_accessor_server_hello
+    HSM.handshake_m_server_hello_jumper
+    HSM.handshake_m_server_hello_parser32
+
+unfold private noextract
+let field_m_server_hello_server_hello =
+  R.FieldAccessor
+    HSM.handshake_m_server_hello_accessor
+    Parsers.ServerHello.serverHello_jumper
+    Parsers.ServerHello.serverHello_parser32
+
+unfold noextract
+let field_serverHello =
+  R.field_accessor_comp field_vldata_server_hello field_m_server_hello_server_hello
 
 (* Serializer from high-level value via intermediate-level formatter *)
+let serialize =
+  R.mk_repr_pos_from_serialize
+    HSM.handshake_parser32
+    HSM.handshake_serializer32
+    HSM.handshake_size32
 
-let serialize
-  (b:LP.slice R.mut_p R.mut_p{ LP.(b.len <= validator_max_length) })
-  (from:R.index (R.of_slice b))
-  (x: t)
-: Stack (option (repr (R.of_slice b)))
-    (requires fun h ->
-      LP.live_slice h b)
-    (ensures fun h0 r h1 ->
-      B.modifies (LP.loc_slice_from b from) h0 h1 /\
-      begin match r with
-      | None ->
-        (* not enough space in output slice *)
-        Seq.length (LP.serialize HSM.handshake_serializer x) > FStar.UInt32.v (b.LP.len - from)
-      | Some r ->
-        R.valid r h1 /\
-        r.R.start_pos == from /\
-        R.value r == x
-      end
-    )
-= R.mk_from_serialize b from HSM.handshake_parser32 HSM.handshake_serializer32 HSM.handshake_size32 x
+////////////////////////////////////////////////////////////////////////////////
+// Some additional conveniences ... maybe not necessary?
+////////////////////////////////////////////////////////////////////////////////
+
+let is_ch (x:t) : GTot bool =
+  HSM.tag_of_handshake x = HSTag.Client_hello
+
+let is_sh (x:t) : GTot bool =
+  HSM.tag_of_handshake x = HSTag.Server_hello
+
+type ch_ptr = m:ptr{is_ch (R.value m)}
+type ch_pos b = m:pos b{is_ch (R.value_pos m)}
+
+type sh_ptr = m:ptr{is_sh (R.value m)}
+type sh_pos b = m:pos b{is_sh (R.value_pos m)}
+
+let get_handshakeType = R.read_field field_handshakeType
+
+inline_for_extraction noextract
+let get_clientHello = R.get_field field_clientHello
+
+inline_for_extraction noextract
+let get_serverHello = R.get_field field_serverHello

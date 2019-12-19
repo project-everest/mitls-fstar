@@ -27,13 +27,11 @@ module MITLS.Repr.EncryptedExtensions
 module LP = LowParse.Low.Base
 module B = LowStar.Monotonic.Buffer
 module HS = FStar.HyperStack
-module R = MITLS.Repr
-open FStar.Integers
-open FStar.HyperStack.ST
-
+module R = LowParse.Repr
 module EE = Parsers.EncryptedExtensions
 
 let t = EE.encryptedExtensions
 
-let repr (b:R.slice) =
-  R.repr_p t b EE.encryptedExtensions_parser32
+let ptr = R.repr_ptr_p t EE.encryptedExtensions_parser
+
+let repr (b:R.const_slice) = R.repr_pos_p t b EE.encryptedExtensions_parser

@@ -27,7 +27,7 @@ module MITLS.Repr.CertificateVerify13
 module LP = LowParse.Low.Base
 module B = LowStar.Monotonic.Buffer
 module HS = FStar.HyperStack
-module R = MITLS.Repr
+module R = LowParse.Repr
 open FStar.Integers
 open FStar.HyperStack.ST
 
@@ -35,5 +35,8 @@ module CV13 = Parsers.CertificateVerify13
 
 let t = CV13.certificateVerify13
 
-let repr (b:R.slice) =
-  R.repr_p t b CV13.certificateVerify13_parser32
+let ptr =
+  R.repr_ptr_p t CV13.certificateVerify13_parser
+
+let pos (b:R.const_slice) =
+  R.repr_pos_p t b CV13.certificateVerify13_parser

@@ -33,6 +33,8 @@ module Recv = TLS.Handshake.Receive
 module PF = TLS.Handshake.ParseFlights
 module LP = LowParse.Low.Base
 
+//ADL This file is a work in progress since Nov. 2019
+// verification will start when the internal APIs are lowered
 #set-options "--admit_smt_queries true"
 #set-options "--max_fuel 1 --max_ifuel 1 --z3rlimit 20"
 
@@ -71,8 +73,7 @@ let create (parent:rid) cfg role =
   let nonce = Nonce.mkHelloRandom role r in
   match role with
   | TLSConstants.Client ->
-    // FIXME(adl) Nego.unseal_tickets cfg.use_tickets
-    let resume = None, [] in
+    let resume = Nego.unseal_tickets cfg in
     let config: client_config = cfg, resume in 
     let state = ralloc r (C_init nonce) in
     Machine.Client r config state
@@ -172,27 +173,13 @@ let to_be_written hs =
 
 (* ----------------------- Incoming ----------------------- *)
 
-module R = MITLS.Repr
+module R = LowParse.Repr
 module RH = MITLS.Repr.Handshake
 module RH12 = MITLS.Repr.Handshake12
 module RH13 = MITLS.Repr.Handshake13
 
 inline_for_extraction noextract
 let overflow () = Recv.InError (fatalAlert Internal_error, "Overflow in input buffer")
-
-(* FIXME(adl): this should be automatic in wrap_pf_st! *)
-let update_recv_pos hs pos =
- match hs with
- | Client region config r ->
-   let st = !r in
-   let ms0 = client_ms st in
-   let ms1 = {ms0 with receiving = {ms0.receiving with Recv.rcv_from = pos}} in
-   r := set_client_ms st ms1
- | Server region config r ->
-   let st = !r in
-   let ms0 = server_ms st in
-   let ms1 = {ms0 with receiving = {ms0.receiving with Recv.rcv_from = pos}} in
-   r := set_server_ms st ms1
 
 #set-options "--max_fuel 0 --max_ifuel 1 --z3rlimit 20"
 // #set-options "--admit_smt_queries true"
@@ -219,16 +206,16 @@ let rec recv_fragment hs #i rg f =
       match Recv.buffer_received_fragment ms0.receiving f with
       | None -> overflow ()
       | Some rcv1 ->
-      trace "receive_c_wait_ServerHello";
-      match Recv.receive_c_wait_ServerHello rcv1 with
+      if rcv1.Recv.rcv_to = rcv1.Recv.rcv_from then 
+        Recv.InAck false false // No-op
+      else match Recv.receive_c_wait_ServerHello rcv1 with
       | Error z -> Recv.InError z
       | Correct (x, rcv2) ->
         r := C_wait_ServerHello offer0 ({ms0 with receiving = rcv2}) ks0;
         match x with
         | None -> Recv.InAck false false // nothing happened
-        | Some (sh_msg,pos) ->
-	  update_recv_pos hs pos; // FIXME should have been done in Recv_SH
-          let shr = RH.serverHello (sh_msg.PF.sh) in
+        | Some sh_msg ->
+          let shr = RH.get_serverHello (R.as_ptr sh_msg.PF.sh) in
 	  let sh = shr.R.vv in
           let h3 = HST.get() in
           if HSM.is_hrr sh then
@@ -249,16 +236,16 @@ let rec recv_fragment hs #i rg f =
         match sflight with
         | None -> Recv.InAck false false // nothing happened
         | Some sflight ->
-	  let ee = RH13.get_ee_repr sflight.PF.c13_w_f1_ee in
-	  let fin = RH13.get_fin_repr sflight.PF.c13_w_f1_fin in
+	  let ee = R.get_field RH13.field_ee (R.as_ptr sflight.PF.c13_w_f1_ee) in
+	  let fin = R.get_field RH13.field_fin (R.as_ptr sflight.PF.c13_w_f1_fin) in
 	  let ocr = match sflight.PF.c13_w_f1_cr with
-	    | None -> None | Some cr -> let x = RH13.get_cr_repr cr in Some x.R.vv in
+	    | None -> None | Some cr ->
+	      let x = R.get_field RH13.field_cr (R.as_ptr cr) in Some x.R.vv in
 	  let oc_cv = match sflight.PF.c13_w_f1_c_cv with
 	    | None -> None | Some (c,cv) ->
-	      let x = RH13.get_c_repr c in
-	      let y = RH13.get_cv_repr cv in
+	      let x = R.get_field RH13.field_certificate (R.as_ptr c) in
+	      let y = R.get_field RH13.field_cv (R.as_ptr cv) in
 	      Some (x.R.vv, y.R.vv) in
-	  update_recv_pos hs (fin.R.end_pos); // FIXME(adl)!!
           Client.client13_Finished1 hs (ee.R.vv) ocr oc_cv (fin.R.vv))
 
     | C13_complete offer sh ee server_id fin1 ms0 (Finished_sent fin2 ks) ->
@@ -266,20 +253,25 @@ let rec recv_fragment hs #i rg f =
       match Recv.buffer_received_fragment ms0.receiving f with
       | None -> overflow ()
       | Some rcv1 ->
-      trace "receive_c13_Complete";
-      match TLS.Handshake.Receive.receive_c13_Complete rcv1 with
-      | Error z -> Recv.InError z
-      | Correct (nst, rcv2) ->
-        r := C13_complete offer sh ee server_id fin1 ({ms0 with receiving = rcv2})
+        if rcv1.Recv.rcv_to = rcv1.Recv.rcv_from then 
+          Recv.InAck false false // No-op
+        else match TLS.Handshake.Receive.receive_c13_Complete rcv1 with
+        | Error z -> trace "Receive failed"; Recv.InError z
+        | Correct (nst, rcv2) ->
+         begin
+          trace "Processing a ticket";
+          r := C13_complete offer sh ee server_id fin1 ({ms0 with receiving = rcv2})
             (Finished_sent fin2 ks);
-        match nst with
-        | None -> Recv.InAck false false // nothing happened
-        | Some nst ->
-	  let nst = RH13.get_nst_repr nst.PF.c13_c_nst in
-	  update_recv_pos hs (nst.R.end_pos); // FIXME(adl)!!
-          Client.client13_NewSessionTicket hs (nst.R.vv)
+          match nst with
+          | None -> Recv.InAck false false // nothing happened
+          | Some nst ->
+            let nstr = R.get_field RH13.field_nst (R.as_ptr nst.PF.c13_c_nst) in
+            let r = Client.client13_NewSessionTicket hs (nstr.R.vv) in
+	    recv_again r
+         end
      end
     | _ ->
+      trace "Unexpected client state (should be excluded statically";
       Recv.InError (fatalAlert Unexpected_message, "TBC")
    end // Client
   | Server region config r ->
@@ -299,11 +291,10 @@ let rec recv_fragment hs #i rg f =
 	  r := S_wait_ClientHello n rcv2;
 	  Recv.InAck false false // nothing happened
         | Some ch ->
-          let chr = RH.clientHello (ch.PF.ch) in
-	  let ch = chr.R.vv in
+          let chr = RH.get_clientHello (R.as_ptr ch.PF.ch) in
+	  let ch0 = chr.R.vv in
           let h3 = HST.get() in
-          let r = Server.server_ClientHello hs ch in
-	  update_recv_pos hs chr.R.end_pos; // FIXME(adl)!!
+          let r = Server.server_ClientHello hs ch0 in
 	  r
      end	  
     | _ ->

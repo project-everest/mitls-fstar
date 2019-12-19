@@ -27,13 +27,11 @@ module MITLS.Repr.EndOfEarlyData13
 module LP = LowParse.Low.Base
 module B = LowStar.Monotonic.Buffer
 module HS = FStar.HyperStack
-module R = MITLS.Repr
-open FStar.Integers
-open FStar.HyperStack.ST
-
+module R = LowParse.Repr
 module HSM13 = Parsers.Handshake13
 
 let t = HSM13.handshake13_m13_end_of_early_data
 
-let repr (b:R.slice) =
-  R.repr_p t b HSM13.handshake13_m13_end_of_early_data_parser32
+let ptr = R.repr_ptr_p t HSM13.handshake13_m13_end_of_early_data_parser
+
+let repr (b:R.const_slice) = R.repr_pos_p t b HSM13.handshake13_m13_end_of_early_data_parser

@@ -36,7 +36,7 @@ module HSM12 = Parsers.Handshake12
 module HSM   = Parsers.Handshake
 
 module HSMType = Parsers.HandshakeType
-module R = MITLS.Repr
+module R = LowParse.Repr
 
 module HSM13R = MITLS.Repr.Handshake13
 module HSM12R = MITLS.Repr.Handshake12
@@ -85,10 +85,10 @@ let parse_common
       (tag_fn m == tag) <==> cl.LP.clens_cond m})
   (acc:LP.accessor gacc)
 : b:R.const_slice -> f_begin:uint_32 ->
-  Stack (TLSError.result (option (R.repr_p a1 b p132 & uint_32)))
+  Stack (TLSError.result (option (R.repr_pos_p a1 b p1 & uint_32)))
   (requires fun h ->
-    R.live h b /\
-    f_begin <= b.R.len)
+    R.live_slice h b /\
+    f_begin <= b.R.slice_len)
   (ensures fun h0 r h1 ->
     B.modifies B.loc_none h0 h1 /\
     (match r with
@@ -96,23 +96,32 @@ let parse_common
      | E.Correct None -> True
      | E.Correct (Some (repr, pos)) ->  //on a successful parse it returns a valid repr with lens condition
        repr.R.start_pos == f_begin /\
-       repr.R.end_pos == pos /\
-       R.valid repr h1 /\
-       cl.LP.clens_cond (R.value repr)))
+       R.end_pos repr == pos /\
+       R.valid_repr_pos repr h1 /\
+       cl.LP.clens_cond (R.value_pos repr)))
          
 = fun b f_begin ->
   let lp_b = R.to_slice b in
+  assume (v lp_b.LP.len <= v LP.validator_max_length);
   let pos = validator lp_b f_begin in  //validator gives us the valid postcondition
+//  let lb = lp_b.LP.len - f_begin in
+//  let bb = Bytes.of_buffer lb (B.sub lp_b.LP.base f_begin lb) in
+//  trace ("Current flight buffer contents: "^(Bytes.hex_of_bytes bb));
 
-  if pos <= LP.validator_max_length then begin
+  if pos <= LP.validator_max_length then
+   begin
     let parsed_tag = HSMType.handshakeType_reader lp_b f_begin in
-    if parsed_tag = tag then  //and this dynamic check gives us the lens postcondition
-      let r = R.mk_from_const_slice b f_begin pos p132 in
+    if parsed_tag = tag then (  //and this dynamic check gives us the lens postcondition
+      trace ("Parsed a "^(HSMType.string_of_handshakeType parsed_tag));
+      let r = R.mk_repr_pos_from_const_slice p132 b f_begin pos in
       E.Correct (Some (r, pos))
-    else (trace "Bad message type"; E.Error unexpected_flight_error)
-  end
-  else if pos = LP.validator_error_not_enough_data then (trace "Not enough data"; E.Correct None)
-  else (trace "Parsing error"; E.Error parsing_error)
+    ) else
+      (trace "Bad message type"; E.Error unexpected_flight_error)
+   end
+  else if pos = LP.validator_error_not_enough_data then
+    (trace "Not enough data"; E.Correct None)
+  else
+    (trace "Parsing error"; E.Error parsing_error)
 
 
 /// Helper function to handle the case when there is an error or insufficient data
@@ -124,8 +133,8 @@ private let err_or_insufficient_data
   (b:R.const_slice) (f_begin f_end:uint_32)
 : Stack (TLSError.result (option t & state))
   (requires fun h ->
-    R.live h b /\
-    f_begin <= f_end /\ f_end <= b.R.len /\
+    R.live_slice h b /\
+    f_begin <= f_end /\ f_end <= b.R.slice_len /\
     (match parse_result with
      | E.Error _ -> True
      | E.Correct opt -> opt == None))
@@ -137,7 +146,7 @@ private let err_or_insufficient_data
        (match r with
         | E.Correct (None, rst) ->          
           parsed_bytes rst ==
-            Seq.slice (R.as_seq h0 b) (v f_begin) (v f_end) /\
+            Seq.slice (R.slice_as_seq h0 b) (v f_begin) (v f_end) /\
           in_progress_flt rst == in_progress
         | _ -> False)))
 = match parse_result with
@@ -159,17 +168,23 @@ let check_eq_end_index_and_return
   (pos f_end:uint_32)
   (flt:a)
 : TLSError.result (option a & state)
-= if pos <> f_end then E.Error unexpected_end_index_error
-  else E.Correct (Some flt, reset ())
+= if pos <> f_end then (
+//    trace "Leftover bytes after message";
+    E.Error leftover_bytes_error
+  ) else E.Correct (Some flt, reset ())
 
+// ADL: is this really necessary? The outermost check of the validator
+// will already guarantee this?
 inline_for_extraction noextract
 let check_leq_end_index_and_return
   (#a:Type)
   (pos f_end:uint_32)
   (flt:a)
 : TLSError.result (option (a & uint_32) & state)
-= if pos > f_end then E.Error unexpected_end_index_error
-  else E.Correct (Some (flt, pos), reset ())
+= if pos > f_end then (
+//    trace "Message overflows end of buffer";
+    E.Error message_overflow_error
+  ) else E.Correct (Some (flt, pos), reset ())
 
 
 (*** ClientHello and ServerHello flights ***)
@@ -185,10 +200,10 @@ unfold let parse_common_wp
   (#p1:LP.parser k1 a1) (p132:LS.parser32 p1)
   (#a2:Type) (cl:LP.clens a1 a2)
   (b:R.const_slice) (f_begin:uint_32)
-:exn_wp_t (option (R.repr_p a1 b p132 & uint_32))
+:exn_wp_t (option (R.repr_pos_p a1 b p1 & uint_32))
 = fun p h0 ->
-  R.live h0 b /\
-  f_begin <= b.R.len /\
+  R.live_slice h0 b /\
+  f_begin <= b.R.slice_len /\
   (forall r h1.
      (B.modifies B.loc_none h0 h1 /\
       equal_domains h0 h1 /\
@@ -197,9 +212,9 @@ unfold let parse_common_wp
        | E.Correct None -> True
        | E.Correct (Some (repr, pos)) ->
          repr.R.start_pos == f_begin /\
-         repr.R.end_pos == pos /\
-         R.valid repr h1 /\
-         cl.LP.clens_cond (R.value repr))) ==> p r h1)
+         R.end_pos repr == pos /\
+         R.valid_repr_pos repr h1 /\
+         cl.LP.clens_cond (R.value_pos repr))) ==> p r h1)
 
 
 inline_for_extraction noextract
@@ -222,7 +237,7 @@ let parse_common__
       (tag_fn m == tag) <==> cl.LP.clens_cond m})
   (acc:LP.accessor gacc)
   (b:R.const_slice) (f_begin:uint_32)
-: exn_repr (option (R.repr_p a1 b p132 & uint_32))
+: exn_repr (option (R.repr_pos_p a1 b p1 & uint_32))
   (parse_common_wp #a1 #k1 #p1 p132 #a2 cl b f_begin)
 = fun _ -> parse_common p132 validator tag_fn tag acc b f_begin
 
@@ -246,7 +261,7 @@ let parse_common_
       (tag_fn m == tag) <==> cl.LP.clens_cond m})
   (acc:LP.accessor gacc)
   (b:R.const_slice) (f_begin:uint_32)
-: TLSEXN (option (R.repr_p a1 b p132 & uint_32))
+: TLSEXN (option (R.repr_pos_p a1 b p1 & uint_32))
   (parse_common_wp #a1 #k1 #p1 p132 #a2 cl b f_begin)
 = TLSEXN?.reflect (parse_common__ p132 validator tag_fn tag acc b f_begin)
 
@@ -360,10 +375,10 @@ let parse_hsm13_nst
 
 private let parse_hsm13_c_cv
   (b:R.const_slice) (f_begin:uint_32)
-: Stack (TLSError.result (option (HSM13R.c13_repr b & HSM13R.cv13_repr b & uint_32)))
+: Stack (TLSError.result (option (HSM13R.c13_pos b & HSM13R.cv13_pos b & uint_32)))
   (requires fun h ->
-    R.live h b /\
-    f_begin <= b.R.len)
+    R.live_slice h b /\
+    f_begin <= b.R.slice_len)
   (ensures fun h0 r h1 ->
     B.modifies B.loc_none h0 h1 /\
     (match r with
@@ -371,10 +386,10 @@ private let parse_hsm13_c_cv
      | E.Correct None -> True
      | E.Correct (Some (c13, cv13, pos)) ->
        c13.R.start_pos == f_begin /\
-       c13.R.end_pos == cv13.R.start_pos /\
-       cv13.R.end_pos == pos /\
-       R.valid c13 h1 /\
-       R.valid cv13 h1))
+       R.end_pos c13 == cv13.R.start_pos /\
+       R.end_pos cv13 == pos /\
+       R.valid_repr_pos c13 h1 /\
+       R.valid_repr_pos cv13 h1))
 = let r = parse_hsm13_c b f_begin in
   match r with
   | E.Error e -> E.Error e
@@ -476,7 +491,9 @@ let receive_c13_Complete st b f_begin f_end
   | E.Error _ | E.Correct None ->
     err_or_insufficient_data r flt b f_begin f_end
   | E.Correct (Some (nst_repr, pos)) ->
-    check_eq_end_index_and_return pos f_end ({ c13_c_nst = nst_repr })
+    // N.B. there is no final message in the Complete state,
+    // it is always possible to have pending fragments
+    check_leq_end_index_and_return pos f_end ({ c13_c_nst = nst_repr })
 
 
 (*** 1.2 flights ***)

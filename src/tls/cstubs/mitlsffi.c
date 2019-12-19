@@ -262,7 +262,6 @@ int MITLS_CALLCONV FFI_mitls_set_sealing_key(const char *alg, const unsigned cha
 
 int MITLS_CALLCONV FFI_mitls_configure_ticket(mitls_state *state, const mitls_ticket *ticket)
 {
-    int b = 0;
     ENTER_HEAP_REGION(state->rgn);
     FStar_Bytes_bytes tid, si;
     MakeFStar_Bytes_bytes(&tid, ticket->ticket, ticket->ticket_len);
@@ -272,7 +271,7 @@ int MITLS_CALLCONV FFI_mitls_configure_ticket(mitls_state *state, const mitls_ti
     if (HAD_OUT_OF_MEMORY) {
         return 0;
     }
-    return (b) ? 1 : 0;
+    return 1;
 }
 
 int MITLS_CALLCONV FFI_mitls_configure_cipher_suites(/* in */ mitls_state *state, const char * cs)

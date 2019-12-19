@@ -172,7 +172,10 @@ type read_result = // is it convenient?
 
 let rec read c : ML read_result =
   let i = currentId c Reader in
-  match TLS.read c i with
+  let read_r = TLS.read c i in
+  trace ("Read returned "^(TLS.string_of_ioresult_i read_r));
+  match read_r with
+  | Update _                  -> read c // because of 0-RTT we may complete again
   | Complete                  -> read c // because of 0.5-RTT the complete may come late
   | Read (Data d)             -> Received (appBytes d)
   | Read Close                -> Errno 0

@@ -2,6 +2,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <time.h>
+#include <assert.h>
 #if _WIN32 // Windows 32-bit or 64-bit... mingw
 #include <winsock2.h>
 typedef int socklen_t;
@@ -219,6 +220,22 @@ mitls_nego_action nego_callback(void *cb_state, mitls_version ver,
   return TLS_nego_accept;
 }
 
+mitls_ticket *qt = NULL;
+
+void ticket_cb(void *st, const char *sni, const mitls_ticket *ticket)
+{
+  printf("\n ##### New session ticket received! #####\n  Host: %s\n  Ticket:\n", sni);
+  qt = malloc(sizeof(mitls_ticket));
+  qt->ticket = malloc(ticket->ticket_len);
+  qt->session = malloc(ticket->session_len);
+  qt->ticket_len = ticket->ticket_len;
+  qt->session_len = ticket->session_len;
+  memcpy((void*)qt->ticket, ticket->ticket, qt->ticket_len);
+  memcpy((void*)qt->session, ticket->session, qt->session_len);
+  dump(qt->ticket, qt->ticket_len);
+  printf(" ########################################\n");
+}
+
 void* certificate_select(void *cbs, mitls_version ver, const unsigned char *sni, size_t sni_len, const unsigned char *alpn, size_t alpn_len, const mitls_signature_scheme *sigalgs, size_t sigalgs_len, mitls_signature_scheme *selected)
 {
   mipki_state *st = (mipki_state*)cbs;
@@ -302,10 +319,17 @@ int Configure(mitls_state **pstate)
 
     r = FFI_mitls_configure(&state, option_version, option_hostname);
     if(r) r = FFI_mitls_configure_cert_callbacks(state, pki, &cert_callbacks);
-
+    if(r) r = FFI_mitls_configure_ticket_callback(state, NULL, ticket_cb);
     if (r == 0) {
         printf("FFI_mitls_configure(%s,%s) failed.\n", option_version, option_hostname);
         return 2;
+    }
+
+    // Used during -reconnect
+    if(qt != NULL)
+    {
+      printf("Setting up ticket from previous connection...\n");
+      assert(FFI_mitls_configure_ticket(state, qt) == 1);
     }
 
     if (option_ciphers) {
@@ -676,6 +700,7 @@ int main(int argc, char **argv)
         r = TestServer();
     } else {
         r = TestClient();
+	if(option_reconnect) r = TestClient();
     }
     FFI_mitls_cleanup();
 

@@ -34,7 +34,7 @@ module LP = LowParse.Low.Base
 module LS = LowParse.SLow.Base
 module B  = LowStar.Buffer
 module HS = FStar.HyperStack
-module R  = MITLS.Repr
+module R  = LowParse.Repr
 
 open FStar.Integers
 open FStar.HyperStack.ST
@@ -51,186 +51,140 @@ module NSTRepr  = MITLS.Repr.NewSessionTicket13
 
 type t = HSM13.handshake13
 
-type repr (b:R.const_slice) =
-  R.repr_p t b HSM13.handshake13_parser32
+type ptr =
+  R.repr_ptr_p t HSM13.handshake13_parser
 
-let is_eoed (#b:R.const_slice) (r:repr b) : GTot bool =
-  HSM13.M13_end_of_early_data? (R.value r)
+type pos (b:R.const_slice) =
+  R.repr_pos_p t b HSM13.handshake13_parser
 
-let is_ee (#b:R.const_slice) (r:repr b) : GTot bool =
-  HSM13.M13_encrypted_extensions? (R.value r)
+open Parsers.HandshakeType
 
-let is_cr (#b:R.const_slice) (r:repr b) : GTot bool =
-  HSM13.M13_certificate_request? (R.value r)
+let is_eoed (#b:R.const_slice) (r:pos b) : GTot bool =
+  HSM13.tag_of_handshake13 (R.value_pos r) = End_of_early_data
 
-let is_c (#b:R.const_slice) (r:repr b) : GTot bool =
-  HSM13.M13_certificate? (R.value r)
+let is_ee (#b:R.const_slice) (r:pos b) : GTot bool =
+  HSM13.tag_of_handshake13 (R.value_pos r) = Encrypted_extensions
 
-let is_cv (#b:R.const_slice) (r:repr b) : GTot bool =
-  HSM13.M13_certificate_verify? (R.value r)
+let is_cr (#b:R.const_slice) (r:pos b) : GTot bool =
+  HSM13.tag_of_handshake13 (R.value_pos r) = Certificate_request
 
-let is_fin (#b:R.const_slice) (r:repr b) : GTot bool =
-  HSM13.M13_finished? (R.value r)
+let is_c (#b:R.const_slice) (r:pos b) : GTot bool =
+  HSM13.tag_of_handshake13 (R.value_pos r) = Certificate
 
-let is_nst (#b:R.const_slice) (r:repr b) : GTot bool =
-  HSM13.M13_new_session_ticket? (R.value r)
+let is_cv (#b:R.const_slice) (r:pos b) : GTot bool =
+  HSM13.tag_of_handshake13 (R.value_pos r) = Certificate_verify
 
-let is_kupd (#b:R.const_slice) (r:repr b) : GTot bool =
-  HSM13.M13_key_update? (R.value r)
+let is_fin (#b:R.const_slice) (r:pos b) : GTot bool =
+  HSM13.tag_of_handshake13 (R.value_pos r) = Finished
 
-type ee13_repr (b:R.const_slice) = r:repr b{is_ee r}
-type c13_repr (b:R.const_slice) = r:repr b{is_c r}
-type cv13_repr (b:R.const_slice) = r:repr b{is_cv r}
-type fin13_repr (b:R.const_slice) = r:repr b{is_fin r}
-type cr13_repr (b:R.const_slice) = r:repr b{is_cr r}
-type eoed13_repr (b:R.const_slice) = r:repr b{is_eoed r}
-type nst13_repr (b:R.const_slice) = r:repr b{is_nst r}
+let is_nst (#b:R.const_slice) (r:pos b) : GTot bool =
+  HSM13.tag_of_handshake13 (R.value_pos r) = New_session_ticket
 
+let is_kupd (#b:R.const_slice) (r:pos b) : GTot bool =
+  HSM13.tag_of_handshake13  (R.value_pos r) = Key_update
 
-(*
- * Common precondition for functions that return the
- *   reprs for specific instance types
- *)
-unfold let repr_pre (#b:R.const_slice) (r:repr b)
-  : HS.mem -> Type0
-  = fun h -> R.valid r h
+type ee13_pos (b:R.const_slice) = r:pos b{is_ee r}
+type c13_pos (b:R.const_slice) = r:pos b{is_c r}
+type cv13_pos (b:R.const_slice) = r:pos b{is_cv r}
+type fin13_pos (b:R.const_slice) = r:pos b{is_fin r}
+type cr13_pos (b:R.const_slice) = r:pos b{is_cr r}
+type eoed13_pos (b:R.const_slice) = r:pos b{is_eoed r}
+type nst13_pos (b:R.const_slice) = r:pos b{is_nst r}
 
-(*
- * Common postcondition for functions that return the
- *   reprs for specific instance types
- *)
-unfold let repr_post_common
-  (#b:R.const_slice)
-  (#a:Type) (#k:LP.parser_kind) (#p:LP.parser k a) (#p32:LS.parser32 p)
-  (r:repr b)  //input repr
-  : HS.mem -> R.repr_p a b p32 -> HS.mem -> Type0
-  = fun h0 rr h1 ->
-    let open R in
-    B.(modifies loc_none h0 h1) /\
-    valid rr h1 /\  //the returned repr is valid in h1
-    r.start_pos <= rr.start_pos /\  //slice indices for the instance repr are contained in the slice indices of r ...
-    rr.end_pos <= r.end_pos  //... useful for framing
+unfold noextract
+let field_ee =
+  [@inline_let] let acc1 =
+    R.FieldAccessor
+      HSM13.handshake13_accessor_encrypted_extensions
+      HSM13.handshake13_m13_encrypted_extensions_jumper
+      HSM13.handshake13_m13_encrypted_extensions_parser32
+  in
+  [@inline_let] let acc2 =
+    R.FieldAccessor
+      HSM13.handshake13_m13_encrypted_extensions_accessor
+      Parsers.EncryptedExtensions.encryptedExtensions_jumper
+      Parsers.EncryptedExtensions.encryptedExtensions_parser32
+  in
+  R.field_accessor_comp acc1 acc2
 
-let get_ee_repr (#b:R.const_slice) (r:repr b{is_ee r})
-  : Stack (EERepr.repr b)
-    (requires repr_pre r)
-    (ensures  fun h0 rr h1 ->
-      R.value r == HSM13.M13_encrypted_extensions (R.value rr) /\
-      repr_post_common r h0 rr h1)
-  = R.reveal_valid ();
-    let lp_b = R.to_slice b in
-    let pos = HSM13.handshake13_accessor_encrypted_extensions lp_b r.R.start_pos in
-    let pos = HSM13.handshake13_m13_encrypted_extensions_accessor lp_b pos in
-    let end_pos = Parsers.EncryptedExtensions.encryptedExtensions_jumper lp_b pos in
+unfold noextract
+let field_certificate =
+  [@inline_let] let acc1 =
+    R.FieldAccessor
+      HSM13.handshake13_accessor_certificate
+      HSM13.handshake13_m13_certificate_jumper
+      HSM13.handshake13_m13_certificate_parser32
+  in
+  [@inline_let] let acc2 =
+    R.FieldAccessor
+      HSM13.handshake13_m13_certificate_accessor
+      Parsers.Certificate13.certificate13_jumper
+      Parsers.Certificate13.certificate13_parser32
+  in
+  R.field_accessor_comp acc1 acc2
 
-    R.mk_from_const_slice b pos end_pos Parsers.EncryptedExtensions.encryptedExtensions_parser32
+unfold noextract
+let field_cv =
+  [@inline_let] let acc1 =
+    R.FieldAccessor
+      HSM13.handshake13_accessor_certificate_verify
+      HSM13.handshake13_m13_certificate_verify_jumper
+      HSM13.handshake13_m13_certificate_verify_parser32
+  in
+  [@inline_let] let acc2 =
+    R.FieldAccessor
+      HSM13.handshake13_m13_certificate_verify_accessor
+      Parsers.CertificateVerify13.certificateVerify13_jumper
+      Parsers.CertificateVerify13.certificateVerify13_parser32
+  in
+  R.field_accessor_comp acc1 acc2
 
-let get_c_repr (#b:R.const_slice) (r:repr b{is_c r})
-  : Stack (CRepr.repr b)
-    (requires repr_pre r)
-    (ensures  fun h0 rr h1 ->
-      let l = Parsers.Certificate13.certificate13_bytesize (R.value rr) in
-      0 <= l /\ l <= 16777215 /\
-      R.value r == HSM13.M13_certificate (R.value rr) /\
-      repr_post_common r h0 rr h1)
-  = R.reveal_valid ();
-    let lp_b = R.to_slice b in
-    let pos = HSM13.handshake13_accessor_certificate lp_b r.R.start_pos in
-    let pos = HSM13.handshake13_m13_certificate_accessor lp_b pos in
-    let end_pos = Parsers.Certificate13.certificate13_jumper lp_b pos in
+unfold noextract
+let field_fin =
+  R.FieldAccessor
+    HSM13.handshake13_accessor_finished
+    HSM13.handshake13_m13_finished_jumper
+    HSM13.handshake13_m13_finished_parser32
 
-    R.mk_from_const_slice b pos end_pos Parsers.Certificate13.certificate13_parser32
+unfold noextract
+let field_cr =
+  [@inline_let] let acc1 =
+    R.FieldAccessor
+      HSM13.handshake13_accessor_certificate_request
+      HSM13.handshake13_m13_certificate_request_jumper
+      HSM13.handshake13_m13_certificate_request_parser32
+  in
+  [@inline_let] let acc2 =
+    R.FieldAccessor
+      HSM13.handshake13_m13_certificate_request_accessor
+      Parsers.CertificateRequest13.certificateRequest13_jumper
+      Parsers.CertificateRequest13.certificateRequest13_parser32
+  in
+  R.field_accessor_comp acc1 acc2
 
-let get_cv_repr (#b:R.const_slice) (r:repr b{is_cv r})
-  : Stack (CVRepr.repr b)
-    (requires repr_pre r)
-    (ensures  fun h0 rr h1 ->
-      R.value r = HSM13.M13_certificate_verify (R.value rr) /\
-      repr_post_common r h0 rr h1)
-  = R.reveal_valid ();
-    let lp_b = R.to_slice b in
-    let pos = HSM13.handshake13_accessor_certificate_verify lp_b r.R.start_pos in
-    let pos = HSM13.handshake13_m13_certificate_verify_accessor lp_b pos in
-    let end_pos = Parsers.CertificateVerify13.certificateVerify13_jumper lp_b pos in
+unfold noextract
+let field_eoed =
+  R.FieldAccessor
+    HSM13.handshake13_accessor_end_of_early_data
+    HSM13.handshake13_m13_end_of_early_data_jumper
+    HSM13.handshake13_m13_end_of_early_data_parser32
 
-    R.mk_from_const_slice b pos end_pos Parsers.CertificateVerify13.certificateVerify13_parser32
-
-let get_fin_repr (#b:R.const_slice) (r:repr b{is_fin r})
-  : Stack (FinRepr.repr b)
-    (requires repr_pre r)
-    (ensures  fun h0 rr h1 ->
-      R.value r == HSM13.M13_finished (R.value rr) /\
-      repr_post_common r h0 rr h1)
-  = R.reveal_valid ();
-    let lp_b = R.to_slice b in
-    let pos = HSM13.handshake13_accessor_finished lp_b r.R.start_pos in
-    let end_pos = HSM13.handshake13_m13_finished_jumper lp_b pos in
-
-    R.mk_from_const_slice b pos end_pos HSM13.handshake13_m13_finished_parser32
-
-let get_cr_repr (#b:R.const_slice) (r:repr b{is_cr r})
-  : Stack (CRRepr.repr b)
-    (requires repr_pre r)
-    (ensures  fun h0 rr h1 ->
-      R.value r == HSM13.M13_certificate_request (R.value rr) /\
-      repr_post_common r h0 rr h1)
-  = R.reveal_valid ();
-    let lp_b = R.to_slice b in
-
-    let pos = HSM13.handshake13_accessor_certificate_request lp_b r.R.start_pos in
-    let pos = HSM13.handshake13_m13_certificate_request_accessor lp_b pos in
-    let end_pos = Parsers.CertificateRequest13.certificateRequest13_jumper lp_b pos in
-
-    R.mk_from_const_slice b pos end_pos Parsers.CertificateRequest13.certificateRequest13_parser32
-
-let get_eoed_repr (#b:R.const_slice) (r:repr b{is_eoed r})
-  : Stack (EoEDRepr.repr b)
-    (requires repr_pre r)
-    (ensures  fun h0 rr h1 ->
-      R.value r == HSM13.M13_end_of_early_data (R.value rr) /\
-      repr_post_common r h0 rr h1)
-  = R.reveal_valid ();
-    let lp_b = R.to_slice b in
-
-    let pos = HSM13.handshake13_accessor_end_of_early_data lp_b r.R.start_pos in
-    let end_pos = HSM13.handshake13_m13_end_of_early_data_jumper lp_b pos in
-
-    R.mk_from_const_slice b pos end_pos HSM13.handshake13_m13_end_of_early_data_parser32
-
-let get_nst_repr (#b:R.const_slice) (r:repr b{is_nst r})
-  : Stack (NSTRepr.repr b)
-    (requires repr_pre r)
-    (ensures  fun h0 rr h1 ->
-      R.value r == HSM13.M13_new_session_ticket (R.value rr) /\
-      repr_post_common r h0 rr h1)
-  = R.reveal_valid ();
-    let lp_b = R.to_slice b in
-
-    let pos = HSM13.handshake13_accessor_new_session_ticket lp_b r.R.start_pos in
-    let pos = HSM13.handshake13_m13_new_session_ticket_accessor lp_b pos in
-    let end_pos = Parsers.NewSessionTicket13.newSessionTicket13_jumper lp_b pos in
-
-    R.mk_from_const_slice b pos end_pos Parsers.NewSessionTicket13.newSessionTicket13_parser32
+unfold noextract
+let field_nst =
+  [@inline_let] let acc1 =
+    R.FieldAccessor
+      HSM13.handshake13_accessor_new_session_ticket
+      HSM13.handshake13_m13_new_session_ticket_jumper
+      HSM13.handshake13_m13_new_session_ticket_parser32
+  in
+  [@inline_let] let acc2 =
+    R.FieldAccessor
+      HSM13.handshake13_m13_new_session_ticket_accessor
+      Parsers.NewSessionTicket13.newSessionTicket13_jumper
+      Parsers.NewSessionTicket13.newSessionTicket13_parser32
+  in
+  R.field_accessor_comp acc1 acc2
 
 (* Serializer from high-level value via intermediate-level formatter *)
 
-let serialize
-  (b:LP.slice R.mut_p R.mut_p{ LP.(b.len <= validator_max_length) })
-  (from:R.index (R.of_slice b))
-  (x: t)
-: Stack (option (repr (R.of_slice b)))
-    (requires fun h ->
-      LP.live_slice h b)
-    (ensures fun h0 r h1 ->
-      B.modifies (LP.loc_slice_from b from) h0 h1 /\
-      begin match r with
-      | None ->
-        (* not enough space in output slice *)
-        Seq.length (LP.serialize HSM13.handshake13_serializer x) > FStar.UInt32.v (b.LP.len - from)
-      | Some r ->
-        R.valid r h1 /\
-        r.R.start_pos == from /\
-        R.value r == x
-      end
-    )
-= R.mk_from_serialize b from HSM13.handshake13_parser32 HSM13.handshake13_serializer32 HSM13.handshake13_size32 x
+let serialize = R.mk_repr_pos_from_serialize HSM13.handshake13_parser32 HSM13.handshake13_serializer32 HSM13.handshake13_size32
