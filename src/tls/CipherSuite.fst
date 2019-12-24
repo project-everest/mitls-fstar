@@ -20,8 +20,8 @@ let name_of_cipherSuite_of_name =
 
 let cipherSuite_of_name_of_cipherSuite c = ()
 
-#reset-options
-
+//#reset-options
+//#set-options "--admit_smt_queries true"
 let cipherSuiteName_of_cipherSuite13_of_cipherSuiteName _ = ()
 
 let cipherSuite13_of_cipherSuiteName_of_cipherSuite13 _ = ()

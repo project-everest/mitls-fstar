@@ -1,1 +1,220 @@
-[ "\u0010»Ób#&±ªîª“è·¿@(", [] ]
+[
+  "\u0010»Ób#&±ªîª“è·¿@(",
+  [
+    [
+      "TC.__proj__Refl__item__x",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "disc_equation_TC.Refl",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Tm_refine_e62da5b5ef8432bbdb836eda7b300df7"
+      ],
+      0,
+      "96bf57da55497791006055254a071424"
+    ],
+    [
+      "TC.__proj__Step__item__x",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "disc_equation_TC.Step",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Tm_refine_3d302c448cf959d0b5d939310536dbf3"
+      ],
+      0,
+      "6f708951f898942d421de61794bc5046"
+    ],
+    [
+      "TC.__proj__Step__item__y",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "disc_equation_TC.Step",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Tm_refine_3d302c448cf959d0b5d939310536dbf3"
+      ],
+      0,
+      "90c9d2640fe39efcd902cd72490c3adf"
+    ],
+    [
+      "TC.__proj__Step__item___2",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "disc_equation_TC.Step",
+        "proj_equation_TC.Step_x", "proj_equation_TC.Step_y",
+        "projection_inverse_BoxBool_proj_0", "projection_inverse_TC.Step_x",
+        "projection_inverse_TC.Step_y",
+        "refinement_interpretation_Tm_refine_3d302c448cf959d0b5d939310536dbf3"
+      ],
+      0,
+      "06e651935b518765d97160760d20a13b"
+    ],
+    [
+      "TC.__proj__Closure__item__x",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "disc_equation_TC.Closure",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Tm_refine_944fff9e9967e026fba7d60d29cb01e7"
+      ],
+      0,
+      "f59ff84e1870597a6d5290cba62d64f3"
+    ],
+    [
+      "TC.__proj__Closure__item__y",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "disc_equation_TC.Closure",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Tm_refine_944fff9e9967e026fba7d60d29cb01e7"
+      ],
+      0,
+      "c708c61acceec458c2fc096a76394f5f"
+    ],
+    [
+      "TC.__proj__Closure__item__z",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "disc_equation_TC.Closure",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Tm_refine_944fff9e9967e026fba7d60d29cb01e7"
+      ],
+      0,
+      "a163c6c782df97a3d4c4966f25ba7cd4"
+    ],
+    [
+      "TC.__proj__Closure__item___3",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "disc_equation_TC.Closure",
+        "proj_equation_TC.Closure_x", "proj_equation_TC.Closure_y",
+        "projection_inverse_BoxBool_proj_0",
+        "projection_inverse_TC.Closure_x", "projection_inverse_TC.Closure_y",
+        "refinement_interpretation_Tm_refine_944fff9e9967e026fba7d60d29cb01e7"
+      ],
+      0,
+      "b22397c69534f3b301f81b1534571d3d"
+    ],
+    [
+      "TC.__proj__Closure__item___4",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "disc_equation_TC.Closure",
+        "proj_equation_TC.Closure_y", "proj_equation_TC.Closure_z",
+        "projection_inverse_BoxBool_proj_0",
+        "projection_inverse_TC.Closure_y", "projection_inverse_TC.Closure_z",
+        "refinement_interpretation_Tm_refine_944fff9e9967e026fba7d60d29cb01e7"
+      ],
+      0,
+      "6f777ed054874a2cdafaf02120d6fbd2"
+    ],
+    [
+      "TC.closure_reflexive",
+      1,
+      2,
+      1,
+      [
+        "@query", "equation_FStar.Preorder.reflexive",
+        "token_correspondence_TC.closure@tok", "true_interp"
+      ],
+      0,
+      "f2afa5423aa6af5ac52c67213d16a95a"
+    ],
+    [
+      "TC.closure_transitive",
+      1,
+      2,
+      1,
+      [ "@query", "true_interp" ],
+      0,
+      "94c2099741fea89a40b20284921daa03"
+    ],
+    [
+      "TC.reflexive_transitive_closure",
+      1,
+      2,
+      1,
+      [ "@query", "equation_FStar.Preorder.preorder_rel" ],
+      0,
+      "989d6dd9215376967fb4c2bc316ef4c5"
+    ],
+    [
+      "TC.p",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "disc_equation_TC.A",
+        "disc_equation_TC.B", "disc_equation_TC.C",
+        "fuel_guarded_inversion_TC.state"
+      ],
+      0,
+      "7f6ef46ef6d4ca5ce267c705d54b6f5b"
+    ],
+    [
+      "TC.q",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "disc_equation_TC.A",
+        "disc_equation_TC.B", "disc_equation_TC.C",
+        "fuel_guarded_inversion_TC.state"
+      ],
+      0,
+      "7159df3c1dadd48e3159735f2f90332e"
+    ],
+    [
+      "TC.hp",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "TC_pretyping_624f7fa474a10abef2c30bcc42cb64de",
+        "constructor_distinct_TC.A", "constructor_distinct_TC.B",
+        "constructor_distinct_TC.C", "data_typing_intro_TC.B@tok",
+        "equation_TC.p", "equation_TC.r", "fuel_guarded_inversion_TC.state",
+        "projection_inverse_FStar.Pervasives.Native.Mktuple2__1",
+        "projection_inverse_FStar.Pervasives.Native.Mktuple2__2",
+        "refinement_interpretation_Tm_refine_39596c55cd79182dea5accd2db42dec8"
+      ],
+      0,
+      "117a01290440113a8007c66675a590ba"
+    ],
+    [
+      "TC.f",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "TC_pretyping_624f7fa474a10abef2c30bcc42cb64de",
+        "assumption_TC.state__uu___haseq", "constructor_distinct_TC.A",
+        "constructor_distinct_TC.B", "data_typing_intro_TC.B@tok",
+        "equality_tok_TC.A@tok", "equality_tok_TC.B@tok", "equation_TC.cl",
+        "equation_TC.p", "equation_TC.reflexive_transitive_closure",
+        "refinement_interpretation_Tm_refine_dd31c1fd6ff02611916b846719add3a0",
+        "token_correspondence_TC.closure@tok"
+      ],
+      0,
+      "f9e1968519b196024c53cc3f8bdf701a"
+    ]
+  ]
+]

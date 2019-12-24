@@ -74,6 +74,14 @@ inline_for_extraction
 noextract
 let transcript_idealization = Flags.model
 
+/// Trancripts are agile in their choice of hash algorithm.
+///
+/// For now that choice is restricted by the TLS 1.3 ciphersuites to
+/// either SHA256 or SHA384; this module does not depend on it, but
+/// statically enforces it for convenience in the rest of the code.
+
+type ha = Negotiation.ha
+
 //TODO: move to a separate module
 type sh13 = sh:HSM.sh{Negotiation.selected_version sh == Correct PV.TLS_1p3}
 type sh12 = sh:HSM.sh{Negotiation.selected_version sh == Correct PV.TLS_1p2}
@@ -388,7 +396,7 @@ let ( ~~> ) (t1 t2:transcript_t) =
 /// `state`: Abstract state of the module
 ///
 /// It maintains the transcript in mutable state.
-val state (a:HashDef.hash_alg) : Type0
+val state (_:ha) : Type0
 
 /// We may need a way to free the state also, although if it is
 /// allocated in a connection-granularity region, it will be reclaimed
@@ -442,7 +450,7 @@ val frame_invariant (#a:_) (s:state a) (h0 h1:HS.mem) (l:B.loc)
 ///   -- The instance is allocated in fresh state (so `modifies none`)
 ///
 ///   -- The transcript's initial state is empty
-val create (r:Mem.rgn) (a:HashDef.hash_alg)
+val create (r:Mem.rgn) (a:ha)
   : ST (state a)
        (requires fun _ -> B.(loc_disjoint (loc_region_only true r) (loc_region_only true Mem.tls_tables_region)))
        (ensures fun h0 s h1 ->
@@ -621,11 +629,11 @@ val extend (#a:_) (s:state a) (l:label_repr)
 
 /// `transcript_hash`: The specificational hash of the transcript
 val transcript_hash:
-  a:HashDef.hash_alg -> t:transcript_t -> GTot (HashDef.bytes_hash a)
+  a:ha -> t:transcript_t -> GTot (HashDef.bytes_hash a)
 
 /// `hashed a t`: An abstract predicate recording that the transcript
 /// has been hashed in ideal state, if idealization is on
-val hashed (a:HashDef.hash_alg) (t:transcript_t) : Type0
+val hashed (a:ha) (t:transcript_t) : Type0
 
 /// `extract_hash`:
 ///
@@ -660,7 +668,7 @@ val extract_hash
 /// `injectivity`: The main lemma provided by this module is a form of
 ///  collision resistance adapted to transcripts, i.e., if the hashes
 ///  of two transcripts match then the transcripts themselves do.
-val injectivity (a:HashDef.hash_alg) (tx1 tx2:Ghost.erased transcript_t)
+val injectivity (a:ha) (tx1 tx2:Ghost.erased transcript_t)
   : Stack unit
     (requires fun h ->
       hashed a tx1 /\

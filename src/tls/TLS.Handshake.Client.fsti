@@ -29,9 +29,10 @@ val client_ClientHello:
     invariant hs h0 /\
     C_init? (HS.sel h0 r))
   (ensures fun h0 r h1 ->
-    // see precise post-condition in the stateful invariant
     invariant hs h1)
 (*
+// precise pre- and post-condition are now defined in the stateful invariant
+
     let n = HS.sel h0 Nego.(s.nego.state) in
     let t = HSL.transcript h0 s.log in
     let k = HS.sel h1 s.ks.KS.state in

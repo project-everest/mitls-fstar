@@ -44,10 +44,13 @@ include Parsers.KeyExchangeAlgorithm
 module Binders = ParsersAux.Binders
 (* Parsers are generated automatically, see src/parsers/Parsers.rfc *)
 
-/// Selected specs shared with ParserAux
+/// Selected specs shared with ParserAux to deal with ClientHello with
+/// truncated binders.
 
-unfold let binders                  = Binders.binders
-unfold let binders_len              = Binders.binders_len
+unfold let binders: Type0           = Binders.binders
+unfold let binders_len: Type0       = Binders.binders_len
+
+// Does this ClientHello include PSKs? 
 unfold let ch_bound                 = Binders.ch_bound
 unfold let clientHello_with_binders = Binders.clientHello_with_binders
 unfold let ch_binders               = Binders.ch_binders 
@@ -55,15 +58,14 @@ unfold let set_binders              = Binders.ch_set_binders
 unfold let ch_binders_len           = Binders.ch_binders_len
 unfold let canonical_binders        = Binders.build_canonical_binders
 
-/// `tch` is a client hello with dummy binders: our specification of
-/// truncated ClientHello messages.
-
+/// `tch` is our specification type for truncated ClientHello
+/// messages: a (full) ClientHello with dummy binders.
 let tch = ch:clientHello_with_binders
   { ch_binders ch == canonical_binders (ch_binders_len ch) } 
 
-/// `truncate`: A specificational version of truncation
-/// which replaces the binders of a client hellow with canonical binders
-/// of the appropriate length
+/// `clear_binders`: a specificational version of truncation that
+/// replaces any binders in a ClientHello with canonical binders of
+/// the correct length.
 let clear_binders (ch:clientHello) = 
   if ch_bound ch then set_binders ch (canonical_binders (ch_binders_len ch)) else ch 
 
@@ -141,72 +143,6 @@ type valid_handshake = m: handshake {
   | M_server_hello sh -> (is_hrr sh ==> is_valid_hrr sh)
   | _ -> True }
 
-// prior, simpler types, but without a direct wire format: 
-// type sh = realServerHello
-// type hrr = helloRetryRequest
 
-// module RSH = Parsers.RealServerHello
-// module HRR = Parsers.HelloRetryRequest
+let certificate13 = handshake13_m13_certificate
 
-// let sh_version      (sh: sh) = sh.RSH.version
-// let sh_random       (sh: sh) = sh.RSH.random
-// let sh_session_id   (sh: sh) = sh.RSH.session_id
-// let sh_cipher_suite (sh: sh) = sh.RSH.cipher_suite 
-// let sh_extensions   (sh: sh) = sh.RSH.extensions 
-
-// let hrr_version     (sh: hrr) = sh.HRR.version
-// let hrr_session_id  (sh: hrr) = sh.HRR.session_id
-// let hrr_cipher_suite(sh: hrr) = sh.HRR.cipher_suite
-// let hrr_extensions  (sh: hrr) = sh.HRR.extensions 
-
-// /// The function below provides *temporary* conversions to the
-// /// simpler, synthetic types.
-
-// let get_hrr (m:serverHello{is_hrr m}) : hrr =
-//   let ServerHello_is_hrr_true hrr = m.is_hrr in
-//   let open Parsers.HelloRetryRequest in
-//   ({
-//     version = m.SH.version;
-//     session_id = hrr.HRK.session_id;
-//     cipher_suite = hrr.HRK.cipher_suite;
-//     legacy_compression = hrr.HRK.legacy_compression;
-//     extensions = hrr.HRK.extensions;
-//   })
-
-// let get_sh (m:serverHello{not (is_hrr m)}) : sh =
-//   let ServerHello_is_hrr_false sh = m.is_hrr in
-//   let open Parsers.RealServerHello in
-//   ({
-//     version = m.SH.version;
-//     random = sh.tag;
-//     session_id = sh.value.SHK.session_id;
-//     cipher_suite = sh.value.SHK.cipher_suite;
-//     compression_method = sh.value.SHK.compression_method;
-//     extensions = sh.value.SHK.extensions;
-//   })
-
-
-// let serverHello_of_sh (m:sh{m.RSH.random <> serverHello_is_hrr_cst}) =
-//   SH.({
-//     version = m.RSH.version;
-//     is_hrr = ServerHello_is_hrr_false Parsers.ServerHello_is_hrr.({
-//       tag = m.RSH.random;
-//       value = Parsers.SHKind.({
-//         session_id = m.RSH.session_id;
-// 	cipher_suite = m.RSH.cipher_suite;
-// 	compression_method = m.RSH.compression_method;
-// 	extensions = m.RSH.extensions;
-//       });
-//     });
-//   })
-
-// let serverHello_of_hrr (m:hrr) =
-//   SH.({
-//     version = m.HRR.version;
-//     is_hrr = ServerHello_is_hrr_true Parsers.HRRKind.({
-//       session_id = m.HRR.session_id;
-//       cipher_suite = m.HRR.cipher_suite;
-//       legacy_compression = m.HRR.legacy_compression;
-//       extensions = m.HRR.extensions;
-//     })
-//   })

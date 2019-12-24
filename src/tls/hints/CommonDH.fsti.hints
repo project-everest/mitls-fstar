@@ -1,1 +1,79 @@
-[ "W\t\u0004ú\n|ÁÙPÔõ8^ÞMR", [] ]
+[
+  "W\t\u0004ú\n|ÁÙPÔõ8^ÞMR",
+  [
+    [
+      "CommonDH.is_supported_group",
+      1,
+      2,
+      1,
+      [ "@query", "assumption_Parsers.NamedGroup.namedGroup__uu___haseq" ],
+      0,
+      "b13c55cba42f233ad59db206ce1c9dbb"
+    ],
+    [
+      "CommonDH.as_supportedNamedGroups",
+      1,
+      2,
+      1,
+      [
+        "@MaxFuel_assumption", "@MaxIFuel_assumption",
+        "@fuel_correspondence_FStar.List.Tot.Base.for_all.fuel_instrumented",
+        "@fuel_correspondence_FStar.List.Tot.Base.length.fuel_instrumented",
+        "@fuel_irrelevance_FStar.List.Tot.Base.for_all.fuel_instrumented",
+        "@query",
+        "FStar.List.Tot.Base_interpretation_Tm_arrow_84543425b818e2d10a976186b8e8c250",
+        "Parsers.NamedGroup_interpretation_Tm_arrow_56ff83ac3e61690cd44abeca5ff45d34",
+        "Parsers.NamedGroup_pretyping_51689e629059854dfadd4ad5cef239e1",
+        "bool_inversion", "constructor_distinct_Tm_unit",
+        "data_typing_intro_Parsers.NamedGroup.Sect233r1@tok",
+        "equation_CommonDH.namedGroups",
+        "equation_CommonDH.supportedNamedGroups",
+        "equation_FStar.HyperStack.ST.erid",
+        "equation_FStar.HyperStack.ST.is_eternal_region", "equation_Mem.rgn",
+        "equation_Mem.tls_rgn",
+        "equation_Parsers.NamedGroupList.namedGroupList",
+        "equation_with_fuel_FStar.List.Tot.Base.for_all.fuel_instrumented",
+        "equation_with_fuel_FStar.List.Tot.Base.length.fuel_instrumented",
+        "function_token_typing_CommonDH.is_supported_group",
+        "kinding_Parsers.NamedGroup.namedGroup@tok",
+        "primitive_Prims.op_Negation", "projection_inverse_BoxBool_proj_0",
+        "projection_inverse_BoxInt_proj_0",
+        "refinement_interpretation_Tm_refine_5aee6c1d5e606045d3f22072ebbfd523",
+        "refinement_interpretation_Tm_refine_6c5072d4c9562dd38fd2703ecfb013df",
+        "refinement_interpretation_Tm_refine_9393f41ccc9ce36df1080eefe33f6c53",
+        "refinement_interpretation_Tm_refine_b2c61cf0a4e63de4ffe2bd90e9c7343c",
+        "refinement_interpretation_Tm_refine_e5f8b76c26b9d42031e02e26b90ac1a4",
+        "token_correspondence_CommonDH.is_supported_group",
+        "typing_FStar.List.Tot.Base.for_all",
+        "typing_FStar.Monotonic.HyperHeap.rid_freeable",
+        "typing_Mem.tls_region"
+      ],
+      0,
+      "c922af66a3bad4171c273f36fd26423c"
+    ],
+    [
+      "CommonDH.rshare",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "equation_CommonDH.ishare",
+        "refinement_interpretation_Tm_refine_80eae8a46698bbad9b5d85b7fbe62b74"
+      ],
+      0,
+      "61db0a7647cd0cbbda5d5f760191fce9"
+    ],
+    [
+      "CommonDH.dh_responder",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "equation_CommonDH.ishare",
+        "refinement_interpretation_Tm_refine_80eae8a46698bbad9b5d85b7fbe62b74"
+      ],
+      0,
+      "909e94984f27103b321d3dd284acf9a1"
+    ]
+  ]
+]

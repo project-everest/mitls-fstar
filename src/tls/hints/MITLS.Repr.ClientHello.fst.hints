@@ -1,1 +1,49 @@
-[ "๙Pญ\\จsฃ\u007f\u0019\u00154Üภั<", [] ]
+[
+  "๙Pญ\\จsฃ\u007f\u0019\u00154Üภั<",
+  [
+    [
+      "MITLS.Repr.ClientHello.ptr",
+      1,
+      2,
+      1,
+      [
+        "@query", "equation_LowParse.Spec.Base.strong_parser_kind",
+        "equation_Parsers.ClientHello.clientHello_parser_kind",
+        "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind",
+        "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind"
+      ],
+      0,
+      "4e6017c2e20a0846124b9af92cddd8b9"
+    ],
+    [
+      "MITLS.Repr.ClientHello.version_reader",
+      1,
+      2,
+      1,
+      [
+        "@query", "equation_LowParse.Spec.Base.strong_parser_kind",
+        "equation_Parsers.ClientHello.clientHello_parser_kind",
+        "equation_Parsers.ProtocolVersion.protocolVersion_parser_kind",
+        "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind",
+        "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind"
+      ],
+      0,
+      "49d57b2bfe2bc1bbb4bd85d1cbdfa106"
+    ],
+    [
+      "MITLS.Repr.ClientHello.extensions_field",
+      1,
+      2,
+      1,
+      [
+        "@query", "equation_LowParse.Spec.Base.strong_parser_kind",
+        "equation_Parsers.ClientHello.clientHello_parser_kind",
+        "equation_Parsers.ClientHelloExtensions.clientHelloExtensions_parser_kind",
+        "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind",
+        "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind"
+      ],
+      0,
+      "557a53fced839eb035ad0fac4ab03d91"
+    ]
+  ]
+]

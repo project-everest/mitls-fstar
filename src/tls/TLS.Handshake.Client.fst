@@ -39,31 +39,40 @@ module Transcript = TLS.Handshake.Transcript
 // (there is no SHA2_512 ciphersuite yet). There is a lot left
 // to specify (disjointness and consistency)
 
+// CF [transcripts] a better name? It may be simpler to precompute them:
+// (1) create a truncated transcripts for all algorithms offered in a PSK (at most one for SHA256 and one for SHA384).
+// (2) emit the binders for all offered PSKs.
+// (3) once the server selects an algorithm, either extend one of them, if available, or create a new one. 
+
+// A shortcut: create both irrespective of the PSKs to prevent any branching 
+
+// CF define and use in Transcript?
+type binder_ha = a:HD.alg{a==HD.SHA2_256 \/ a == HD.SHA2_384}
+
 noeq type agile_transcript_ = {
   tx_sha256: option (Transcript.state HD.SHA2_256);
   tx_sha384: option (Transcript.state HD.SHA2_384);
 }
 
-let agile_transcript_defined (a:HD.alg) (t:agile_transcript_) = 
+let agile_transcript_defined (a:binder_ha) (t:agile_transcript_) = 
   match a with
   | HD.SHA2_256 -> Some? t.tx_sha256
   | HD.SHA2_384 -> Some? t.tx_sha384
-  | _ -> false
 
-type agile_transcript (a:HD.alg) =
+type agile_transcript (a:binder_ha) =
   t:agile_transcript_{agile_transcript_defined a t}
 
 let agile_transcript_inv #a (t:agile_transcript a) h =
   (Some? t.tx_sha256 ==> Transcript.invariant (Some?.v t.tx_sha256) h) /\
   (Some? t.tx_sha384 ==> Transcript.invariant (Some?.v t.tx_sha384) h)
 
-let agile_transcript_base #a (t:agile_transcript a) : (Transcript.state a) =
+let agile_transcript_base #a (t:agile_transcript a) : Transcript.state a =
   match a with
   | HD.SHA2_256 -> Some?.v t.tx_sha256
   | HD.SHA2_384 -> Some?.v t.tx_sha384
 
-let agile_transcript_variant #a (t:agile_transcript a)
-  (a':HD.alg{agile_transcript_defined a' t}) : (Transcript.state a') =
+let agile_transcript_variant (#a:binder_ha) (t:agile_transcript a)
+  (a':binder_ha{agile_transcript_defined a' t}) : (Transcript.state a') =
   match a' with
   | HD.SHA2_256 -> Some?.v t.tx_sha256
   | HD.SHA2_384 -> Some?.v t.tx_sha384
@@ -97,7 +106,7 @@ let agile_transcript_initial #a (t:agile_transcript a) re ch h =
     Transcript.transcript (Some?.v t.tx_sha384) h == expected_initial_transcript re ch)
 
 #push-options "--fuel 1"
-let agile_transcript_create (a:HD.alg{a==HD.SHA2_256 \/ a == HD.SHA2_384})
+let agile_transcript_create (a:binder_ha)
   (r:rgn) retry ch
   : ST (agile_transcript a)
   (requires fun h0 -> r `disjoint` Mem.tls_tables_region)
@@ -138,7 +147,7 @@ let agile_transcript_extend #a (t:agile_transcript a) a' retry ch
   assume(agile_transcript_inv t' h1); t'
 #pop-options
 
-// Should free all the temporary non-base states
+// TODO: should free all the temporary non-base states
 let agile_transcript_free #a (t:agile_transcript a)
   : ST (Transcript.state a)
   (requires fun h0 -> agile_transcript_inv t h0)
@@ -212,11 +221,13 @@ let client_ClientHello hs =
   let C_init random = !r in
   let groups =
     match cfg.max_version with
-    | TLS_1p3 -> trace "offering ClientHello 1.3"; Some cfg.offer_shares
-    | _       -> trace "offering ClientHello 1.2"; None in
-    // groups = None indicates a 1.2 handshake
+    | TLS_1p3 -> trace "ClientHello offering 1.3"; Some cfg.offer_shares
+    | _       -> trace "ClientHello offering only 1.2"; None in
+    // groups = None indicates TLS 1.2 only
     // groups = Some [] is valid, may be used to deliberately trigger HRR
   let ks, shares = KS.ks_client_init random cfg.is_quic groups in
+  //lower: KS will return a stashed serialized list of DH key shares.
+  //verify: [shares] must be indexed by [groups], must index the internal KS state [ks]
 
   match Negotiation.client_ClientHello config random shares with
   | Error z -> 
@@ -224,10 +235,8 @@ let client_ClientHello hs =
     assume(invariant hs h2);
     Error z
   | Correct offer0 ->
-
   // provable? the extraction of [now] in [offered0] seems too strict
   assume(offered0 config offer0); 
-  
   assume( // TODO in Negotiation.client_ClientHello
     Msg.ch_bound offer0 ==>
        Parsers.OfferedPsks.offeredPsks_binders_list_bytesize (Msg.ch_binders offer0) 
@@ -264,7 +273,7 @@ let client_ClientHello hs =
     match resume with
     | (_,[]) -> ks, offer0, sending
     | (_,psks) -> (
-      // Both derives the binder keys and stores the associated early secrets
+      // KS derives both early secrets (kept in its updated state) and binder keys.
       let ks', binder_keys = KS.ks_client13_get_binder_keys ks psks in
       let binders = client_Binders region ha di0 None offer0 binder_keys in
       let offer1 = Msg.set_binders offer0 binders in

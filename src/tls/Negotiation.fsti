@@ -72,14 +72,18 @@ val get_alpn: offer -> Tot Extensions.clientHelloExtension_CHE_application_layer
 
 /// HASH ALGORITHM NEGOTIATION.
 ///
+/// The TLS ciphersuites currently enable only two algorithms.
+/// 
 /// We distinguish a "main" offered algorithm, depending on first PSK
 /// or first ciphersuite. (Unclear what to do when the two disagree.)
 
-val offered_ha: offer -> EverCrypt.Hash.alg
+type ha = Spec.Hash.Definitions.(a:hash_alg {a == SHA2_256 \/ a == SHA2_384})
+
+val offered_ha: offer -> ha
 
 /// Selected algorithm, overwritten in SH (here) or HRR [HSM.hrr_ha]
 
-val selected_ha: HSM.serverHello -> EverCrypt.Hash.alg
+val selected_ha: HSM.serverHello -> ha
 
 
 /// CLIENT CERTIFICATE REQUESTS are currently disabled.
@@ -216,7 +220,7 @@ val client_offer:
 
 /// [C_Init ==> C_Offer]
 ///
-/// [ks] are the optional client key shares sampled by
+/// [oks] are the optional client key shares sampled by
 /// [ks_client_init], present when the client offers TLS 1.3 EDH.
 ///
 /// [now] is the current time (an underspecified read effect) used for

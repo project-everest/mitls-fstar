@@ -1,1 +1,66 @@
-[ "\u0003\u0012K®\u000b¶\tW¦®ºÚñîxÚ", [] ]
+[
+  "\u0003\u0012K®\u000b¶\tW¦®ºÚñîxÚ",
+  [
+    [
+      "Format.UncompressedPointRepresentation.uncompressedPointRepresentation",
+      1,
+      2,
+      1,
+      [ "@query", "assumption_FStar.UInt8.t__uu___haseq" ],
+      0,
+      "65b7d00f7944aaabe34ae9dfa041265d"
+    ],
+    [
+      "Format.UncompressedPointRepresentation.uncompressedPointRepresentation",
+      2,
+      2,
+      1,
+      [ "@query", "assumption_FStar.UInt8.t__uu___haseq" ],
+      0,
+      "e91c2cfc61312776ae0ee3f5ba146420"
+    ],
+    [
+      "Format.UncompressedPointRepresentation.uncompressedPointRepresentation",
+      3,
+      2,
+      1,
+      [ "@query", "assumption_FStar.UInt8.t__uu___haseq" ],
+      0,
+      "4928a7d056134e57dc458869337b62e7"
+    ],
+    [
+      "Format.UncompressedPointRepresentation.uncompressedPointRepresentation",
+      4,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "assumption_FStar.UInt8.t__uu___haseq",
+        "equation_FStar.Bytes.lbytes32",
+        "haseqTm_refine_01eac1db03c934bf91dcdae8ea4ae6a2",
+        "refinement_interpretation_Tm_refine_414d0a9f578ab0048252f8c8f552b99f",
+        "typing_FStar.Bytes.bytes"
+      ],
+      0,
+      "44a30b1ecc7368065c86fa5a7a72afd7"
+    ],
+    [
+      "Format.UncompressedPointRepresentation.__proj__MkuncompressedPointRepresentation__item__legacy_form",
+      1,
+      2,
+      1,
+      [ "@query", "assumption_FStar.UInt8.t__uu___haseq" ],
+      0,
+      "1db92c33e3dfcc402e6ee3ab8d296870"
+    ],
+    [
+      "Format.UncompressedPointRepresentation.__proj__MkuncompressedPointRepresentation__item__legacy_form",
+      2,
+      2,
+      1,
+      [ "@query", "assumption_FStar.UInt8.t__uu___haseq" ],
+      0,
+      "7b3890c73cf847d5c844cce1e821cd98"
+    ]
+  ]
+]

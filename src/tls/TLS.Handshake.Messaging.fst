@@ -52,14 +52,6 @@ unfold let trace = if DebugFlags.debug_HS then print else (fun _ -> ())
 /// handshake, and kept in most subsequent states of the machine:
 
 
-// QUICified API proposal
-noeq type msg_state0 (region: rgn) (inflight: PF.in_progress_flt_t) random ha  = {
-  digest: Transcript.state ha;
-  sending: Send.send_state;
-  receiving: Recv.(r:state {
-    PF.length_parsed_bytes r.pf_st == 0 \/ in_progress r == inflight });
-  epochs: Epochs.epochs region random; }
-
 
 // TODO complete regional refinements
 // TODO stateful epochs (or wait for their refactoring?)
