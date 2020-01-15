@@ -176,7 +176,7 @@ let rec r_fresh_forall #r0 #c l h0 h1 =
   | r :: l' -> r_fresh_forall l' h0 h1
 
 (** Allocates n pairwise disjoint subregions of tls_region *)
-val r_disjoint_alloc: r0: rgn -> c: int { HS.is_eternal_color c } -> n:nat -> ST (l:list (subrgn_with_color r0 c))
+val r_disjoint_alloc: r0: rgn -> c: int { HS.is_heap_color c } -> n:nat -> ST (l:list (subrgn_with_color r0 c))
   (requires fun h0 -> True)
   (ensures  fun h0 l h1 ->
     modifies_none h0 h1 /\
