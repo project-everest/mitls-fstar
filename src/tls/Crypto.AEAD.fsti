@@ -33,6 +33,16 @@ val invariant (#a: SC.supported_alg) (#phi: plain_pred) (h: HS.mem) (s: state a 
 
 val footprint (#a: SC.supported_alg) (#phi: plain_pred) (s: state a phi) : GTot B.loc
 
+val invariant_loc_in_footprint
+  (#a: SC.supported_alg)
+  (#phi: plain_pred)
+  (s: state a phi)
+  (m: HS.mem)
+: Lemma
+  (requires (invariant m s))
+  (ensures (B.loc_in (footprint s) m))
+  [SMTPat (invariant m s)]
+
 val frame_invariant
   (#a: SC.supported_alg) (#phi: plain_pred) (h: HS.mem) (s: state a phi)
   (l: B.loc) (h' : HS.mem)
@@ -170,7 +180,7 @@ val encrypt
     invariant h s /\
     B.live h plain /\
     B.live h cipher /\
-    phi (B.as_seq h plain) /\
+    (F.ideal_AEAD == true ==> phi (B.as_seq h plain)) /\
     B.loc_disjoint (footprint s) (B.loc_buffer plain) /\
     B.loc_disjoint (footprint s) (B.loc_buffer cipher) /\
     B.disjoint plain cipher /\

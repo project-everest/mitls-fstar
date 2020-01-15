@@ -30,6 +30,7 @@ val invariant_loc_in_footprint
 : Lemma
   (requires (invariant h s))
   (ensures (footprint s `B.loc_in` h))
+  [SMTPat (invariant h s)]
 
 val frame_invariant
   (#a: SC.supported_alg) (#phi: plain_pred) (h: HS.mem) (s: state a phi)
@@ -88,7 +89,7 @@ val encrypt
     Flags.model == true /\
     invariant h s /\
     (Flags.ideal_iv == true ==> fresh_iv h s iv) /\
-    phi plain
+    (Flags.ideal_AEAD == true ==> phi plain)
   ))
   (ensures (fun h cipher h' -> 
     B.modifies (footprint s) h h' /\

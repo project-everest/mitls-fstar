@@ -1,6 +1,6 @@
 module ConnectionTable
+include ConnectionTable_Aux
 
-open FStar.ReflexiveTransitiveClosure
 open FStar.Monotonic.DependentMap
 
 open FStar.HyperStack
@@ -13,8 +13,7 @@ module B = LowStar.Buffer
 module AEAD = Crypto.AEAD
 module AE = Crypto.AE
 module EE = EverCrypt.Error
-
-open ConnectionTable_Aux
+module TS = TLS.Store
 
 (*
   The connection table and ids are model artifacts that do not exist
@@ -57,84 +56,6 @@ open ConnectionTable_Aux
       nonce: if model then TLSInfo.random else unit -> 
       state: t {token_p st (fun h -> nonce_of st h == nonce)}
 *)
-
-let model = Flags.model && Flags.ideal_AEAD
-
-let maybe_id = if model then connection_id else unit
-
-noeq
-type connection =
-  | Init: cfg:configuration -> connection
-  | Sent_HRR: ch:client_hello -> connection
-  | Sent_ServerHello: ch:client_hello -> id1:maybe_id -> connection
-  | Complete: ch:client_hello -> id1:maybe_id -> connection
-
-let step (s1 s2:connection) : Type0 =
-  match s1, s2 with
-  | Init _, Sent_HRR _ -> True
-  | Init _, Sent_ServerHello _ _ -> True
-  | Sent_ServerHello ch id1, Complete ch' id1' -> ch == ch' /\ id1 == id1'
-  | _, _ -> False
-
-let rel : Preorder.preorder connection = closure step
-
-// Store the ID rather than making it a parameter?
-let connection_ref (id:maybe_id) = 
-  r:mmmref connection rel{frameOf r `extends` rgn}
-
-val minv: partial_dependent_map maybe_id connection_ref -> Type0
-
-unfold
-let _connection_table = t rgn maybe_id connection_ref minv
-
-unfold
-let connection_table = if model then _connection_table else unit
-
-inline_for_extraction noextract
-val empty: m:imap maybe_id connection_ref minv{m == T.empty}
-
-val inv: _connection_table -> mem -> Type0
-
-val framing: h0:mem -> t:_connection_table -> l:B.loc -> h1:mem -> Lemma
-  (requires B.modifies l h0 h1 /\ 
-            B.loc_disjoint l (B.loc_all_regions_from true rgn) /\
-            h0 `contains` t /\
-            (forall a rel (r:mreference a rel). 
-              frameOf r `extends` table_rgn ==> 
-              h1 `contains` r ==> h0 `contains` r) /\
-            inv t h0)
-  (ensures  inv t h1)
-
-inline_for_extraction
-val alloc: unit -> ST connection_table
-  (requires fun _ ->
-    if model then witnessed (region_contains_pred rgn)
-    else True)
-  (ensures  fun h0 t h1 -> 
-    if model then ralloc_post #_ #T.grows rgn empty h0 t h1 /\ inv t h1
-    else h0 == h1)
-
-val table : connection_table 
-
-let phi s = 
-  Seq.length s >= 32 /\
-  (if model then
-    let random = Seq.slice s 0 32 in
-    let id = id_of_random random in
-    let t:_connection_table = table in
-    token_p t (fun h -> 
-      T.defined t id h /\
-      (let c = T.value_of t id h in
-      token_p c (fun h' -> 
-        Sent_HRR? (sel h' c) /\
-        CH1 random == Sent_HRR?.ch (sel h' c))))
-   else True)
-
-val cookie_key : k:option (AE.state alg phi){
-  Some? k ==>
-    (let k = Some?.v k in 
-     (model ==> AE.safe k) /\
-     B.loc_includes (B.loc_region_only true cookie_rgn) (AE.footprint k))} 
 
 inline_for_extraction
 val create:
@@ -228,13 +149,12 @@ val validate_cookie:
   -> Stack (option (maybe_id & random))
   (requires fun h0 ->
     B.frameOf ck == other_rgn /\
-    Some? cookie_key /\
-    AE.invariant h0 (Some?.v cookie_key) /\ 
+    TS.inv h0 /\
     B.live h0 ck /\
     (model ==> inv table h0))
   (ensures  fun h0 o h1 ->
-    B.modifies (AE.footprint (Some?.v cookie_key)) h0 h1 /\
-    AE.invariant h1 (Some?.v cookie_key) /\ 
+    B.modifies (Mem.loc_store_region ()) h0 h1 /\
+    TS.inv h1 /\
     equal_domains h0 h1 /\
     (match o with
     | None -> True
@@ -255,8 +175,7 @@ val receive_client_hello2:
   -> ch2:client_hello{has_cookie ch2}
   -> ST bool
   (requires fun h0 ->
-    Some? cookie_key /\
-    AE.invariant h0 (Some?.v cookie_key) /\ 
+    TS.inv h0 /\
     B.live h0 (CH2?.ck ch2) /\
     (if model then
       let t:_connection_table = table in
@@ -268,7 +187,7 @@ val receive_client_hello2:
     Init? (sel h0 c) /\ 
     has_cookie ch2)
   (ensures  fun h0 b h1 ->
-    AE.invariant h1 (Some?.v cookie_key) /\ 
+    TS.inv h1 /\
     (if model then
       let t:_connection_table = table in
       inv t h1 /\
@@ -277,12 +196,12 @@ val receive_client_hello2:
     (let c' = sel h1 c in
      if b then      
        B.modifies (B.loc_union 
-         (AE.footprint (Some?.v cookie_key)) 
+         (Mem.loc_store_region ())
          (B.loc_mreference c)) h0 h1 /\
        Sent_ServerHello? c' /\
        Sent_ServerHello?.ch c' == ch2
      else 
-       B.modifies (AE.footprint (Some?.v cookie_key)) h0 h1))
+       B.modifies (Mem.loc_store_region ()) h0 h1))
 
 val receive_client_finished:
     id:maybe_id

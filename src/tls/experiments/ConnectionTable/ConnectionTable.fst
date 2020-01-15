@@ -1,4 +1,5 @@
 module ConnectionTable
+friend ConnectionTable_Aux
 
 open FStar.ReflexiveTransitiveClosure
 open FStar.Monotonic.DependentMap
@@ -14,86 +15,7 @@ module AEAD = Crypto.AEAD
 module AE = Crypto.AE
 module EE = EverCrypt.Error
 
-open ConnectionTable_Aux
-
 #set-options "--max_fuel 0 --max_ifuel 0 --z3rlimit 30"
-
-// References to connections live in pairwise disjoint regions
-let minv (m:partial_dependent_map maybe_id connection_ref) =
-  forall id1 id2.{:pattern (Some? (DM.sel m id1)); (Some? (DM.sel m id2))}
-    (id1 <> id2 /\ Some? (DM.sel m id1) /\ Some? (DM.sel m id2)) ==>
-    frameOf (Some?.v (DM.sel m id1)) `disjoint` frameOf (Some?.v (DM.sel m id2))
-
-let empty = T.empty
-
-val connection_inv:
-    T.imap maybe_id connection_ref minv
-  -> connection
-  -> Type0
-let connection_inv m c =
-  if model then
-    match c with
-    | Sent_ServerHello ch id1 | Complete ch id1 ->
-      if has_cookie ch then
-        match T.sel m id1 with
-        | Some c' ->
-          token_p c' (fun h0 ->
-            Sent_HRR? (sel h0 c') /\
-            ch_of_cookie ch == Sent_HRR?.ch (sel h0 c'))
-        | _ -> False
-      else True
-    | _ -> True
-  else True
-
-(*
-  Stateful invariant
-  Can't be attached to the table because it needs to dereference connections
-*)
-let inv t h =
-  h `contains` t /\
-  (let m = sel h t in
-  forall (id:maybe_id).{:pattern (T.defined t id h)}
-    (T.defined t id h /\ h `contains` (T.value_of t id h))
-    ==> connection_inv m (sel h (Some?.v (T.sel m id))))
-
-let framing h0 t l h1 =
-  assert (B.loc_includes (B.loc_all_regions_from true rgn) (B.loc_mreference t));
-  assert (forall (id:maybe_id).{:pattern (T.defined t id h1)}
-    (T.defined t id h1 /\ h1 `contains` (T.value_of t id h1)) ==>
-    B.loc_includes (B.loc_all_regions_from true rgn) 
-                   (B.loc_mreference (T.value_of t id h1)));
-  assert (forall (id:maybe_id).{:pattern (T.defined t id h1)}
-    (T.defined t id h0 /\ h0 `contains` (T.value_of t id h1)) ==>
-    B.loc_includes (B.loc_all_regions_from true rgn) 
-                   (B.loc_mreference (T.value_of t id h0)))
-
-let alloc _ =
-  if model then T.alloc () <: _connection_table
-
-let table = 
-  recall_region rgn;
-  witness_region rgn;
-  alloc ()
-
-// TODO: switch to use the cookie key from TLS.Store,
-// but decrypt is underspecified there.
-let cookie_key =
-  push_frame();
-  let key =
-    B.alloca_of_list
-    [ 0x00uy; 0x01uy; 0x02uy; 0x03uy;
-      0x04uy; 0x05uy; 0x06uy; 0x07uy;
-      0x08uy; 0x09uy; 0x0Auy; 0x0Buy;
-      0x0Cuy; 0x0Duy; 0x0Euy; 0x0Fuy ] 
-  in
-  let ck =
-    if model then
-      Some (AE.create cookie_rgn alg key phi)
-    else
-      AE.coerce cookie_rgn alg key phi 
-  in
-  pop_frame();
-  ck
 
 #push-options "--max_ifuel 1"
 
@@ -116,8 +38,11 @@ let create id cfg =
     let t:_connection_table = table in
     assert (forall (id:connection_id).
       T.defined t id h0 ==> ~(c == T.value_of t id h0));
+    let h1 = get () in
     T.extend t id c;
     let h2 = get() in
+    B.modifies_loc_regions_intro (Set.singleton (frameOf t)) h1 h2;
+    B.modifies_loc_addresses_intro (frameOf t) (Set.singleton (as_addr t)) B.loc_none h1 h2;
     assert (
       forall (id':connection_id).{:pattern (T.value_of t id' h2)}
         T.defined t id' h2 ==> (T.defined t id' h0 \/ T.value_of t id' h2 == c))
@@ -167,18 +92,13 @@ val _random_of_buffer: b:B.buffer UInt8.t -> ST random
 let random_of_buffer = _random_of_buffer
 
 let validate_cookie ck =
-  match cookie_key with
-  | None -> None
-  | Some cookie_key ->
     begin
     let h0 = get () in
     push_frame();
     let plain = B.alloca 0uy 64ul in
     let h1 = get () in
-    AE.frame_invariant h0 cookie_key B.loc_none h1;
     let res : option (maybe_id & random) =
-      match AE.decrypt cookie_key ck 92ul plain with
-      | EE.AuthenticationFailure -> None
+      match TS.decrypt TS.ServerCookie plain 64ul ck with
       | EE.Success ->
         let random = random_of_buffer plain in
         let id = id_of_random random in
@@ -192,11 +112,11 @@ let validate_cookie ck =
              CH1 random == Sent_HRR?.ch (sel h' c))));
           Some (id, random)
         else Some ((), random)
+      | _ -> None
     in
     let h3 = get () in
     pop_frame();
     let h4 = get () in
-    AE.frame_invariant h3 cookie_key (B.loc_region_only false (get_tip h3)) h4;
     res
     end
 
@@ -222,7 +142,6 @@ let receive_client_hello2 id c ch2 =
       let h0' = get () in
       c := Sent_ServerHello ch2 id0;
       let h1 = get () in
-      AE.frame_invariant h0' (Some?.v cookie_key) (B.loc_mreference c) h1;
       assert (
         if model then
         let t:_connection_table = table in
