@@ -14,7 +14,7 @@
         "typing_AEAD.ivlen", "typing_FStar.UInt32.v"
       ],
       0,
-      "8a092bd87f8cd7aa769daf9da6c9840a"
+      "22fa524f9db82f7577d1dafb166160db"
     ],
     [
       "AEAD.aadmax",
@@ -23,7 +23,7 @@
       1,
       [ "@query" ],
       0,
-      "bd7a6a8f73e1e05a6d06b92a54a7c67b"
+      "773dbe0d97e8688e1963079de63c22ed"
     ],
     [
       "AEAD.cipher",
@@ -41,7 +41,7 @@
         "typing_AEAD.taglen", "typing_FStar.UInt32.v"
       ],
       0,
-      "f7c363c86a687c3e82773088aa39fd25"
+      "fac2484aae3f6ef184ecf2974b7808e2"
     ],
     [
       "AEAD.cipher32",
@@ -66,7 +66,7 @@
         "typing_Spec.Poly1305.size_key"
       ],
       0,
-      "e93cbf3b96ead6777b9314272e5f49bc"
+      "4b8ca0832a8aa5e5ec53b2721d3a86a2"
     ],
     [
       "AEAD.mk_entry",
@@ -83,7 +83,7 @@
         "typing_Crypto.Plain.as_bytes"
       ],
       0,
-      "5016a1ad2482895b7ac28cee6cf4de86"
+      "6c695c6cd4ddffc00a1776f552f75067"
     ],
     [
       "AEAD.entry_injective",
@@ -107,7 +107,7 @@
         "typing_FStar.UInt32.v"
       ],
       0,
-      "86826ea7527fa1d1f11dc94d639bae1f"
+      "4aab8fbb0c73b3320ad8e7e1e9c0b810"
     ],
     [
       "AEAD.fresh_addresses",
@@ -122,7 +122,7 @@
         "refinement_interpretation_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
       ],
       0,
-      "1c2129d633389c871f5cdb4d799c299c"
+      "056fd93d935584b411c586cbb542aa1a"
     ],
     [
       "AEAD.fresh_addresses",
@@ -137,7 +137,7 @@
         "refinement_interpretation_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
       ],
       0,
-      "3ab2cbddbad45b39426c1b5b21e2f6ea"
+      "d7aed2228f09ca4f7b74cd5139b04fef"
     ],
     [
       "AEAD.ok_plain_len_32",
@@ -151,7 +151,7 @@
         "typing_FStar.UInt32.v"
       ],
       0,
-      "82177d1e9a3218a5ea9d438c95eb9643"
+      "af5431ee1e9b65ad6978315c92421287"
     ],
     [
       "AEAD.frame_log",
@@ -164,7 +164,7 @@
         "refinement_interpretation_Tm_refine_2de20c066034c13bf76e9c0b94f4806c"
       ],
       0,
-      "27d6973199028bd57c9220b803f59196"
+      "a91f940b8cc113807b8bc3e038986996"
     ],
     [
       "AEAD.gen",
@@ -179,7 +179,7 @@
         "refinement_interpretation_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
       ],
       0,
-      "e07811022c200e55992f3757615e3b80"
+      "e0b1edd366361f2cd0876abc65b97716"
     ]
   ]
 ]
