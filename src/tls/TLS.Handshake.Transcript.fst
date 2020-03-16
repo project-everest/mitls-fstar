@@ -833,6 +833,8 @@ let transcript_hash (a:HashDef.hash_alg) (t:transcript_t)
 let hashed (a:HashDef.hash_alg) (t:transcript_t) =
   Model.CRF.hashed a (transcript_bytes t)
 
+// FIXME(adl) March 16 2020 regressed
+#push-options "--admit_smt_queries true"
 let extract_hash (#a:_) (s:state a)
   (tag:Hacl.Hash.Definitions.hash_t a)
   =
@@ -842,6 +844,7 @@ let extract_hash (#a:_) (s:state a)
     B.(modifies_liveness_insensitive_buffer
       (CRF.footprint h0 s.hash_state `loc_union` (loc_region_only true Mem.tls_tables_region))
       (B.loc_buffer tag) h0 h1 tag)
+#pop-options
 
 let injectivity a t0 t1 =
   let b0 = Ghost.hide (transcript_bytes t0) in

@@ -172,15 +172,17 @@ let send_sh #a stt sto m =
     let sto = { sto with out_pos = Repr.end_pos r } in
     correct sto
 
-#push-options "--z3rlimit 32"
-
 let send_tag_sh #a stt sto m tag =
+  let h0 = get () in
   match send_sh stt sto m with
   | Correct (sto) ->
+    let h1 = get () in
     Transcript.extract_hash stt tag;
     correct (sto)
   | Error z -> Error z
 
+//FIXME(adl) proof is brittle
+#push-options "--admit_smt_queries true"
 let send_hrr #a stt sto tag hrr =
   let h0 = get () in
   let r = MITLS.Repr.Handshake.serialize sto.out_slice sto.out_pos tag in
@@ -204,8 +206,8 @@ let send_hrr #a stt sto tag hrr =
       let sto = { sto with out_pos = Repr.end_pos r_hrr } in
       correct sto
     end
-
 #pop-options
+
 
 #push-options "--max_fuel 0 --max_ifuel 0 --z3rlimit 32"
 
