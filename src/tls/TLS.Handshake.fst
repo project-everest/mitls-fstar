@@ -96,9 +96,7 @@ let send_ticket hs app_data =
   | Machine.Client _ _ _ -> false
   | Machine.Server _ _ s ->
     match !s with
-    | S13_complete _ _ _ _ ks ->
-//  let _ = server_Ticket13 hs app_data in true
-    false
+    | S13_complete _ _ _ _ ks -> Server.server_Ticket13 hs app_data
 
 let request s c = FStar.Error.unexpected "request: not yet implemented"
 
@@ -285,18 +283,39 @@ let rec recv_fragment hs #i rg f =
       match Recv.receive_s_Idle rcv1 with
       | Error z -> Recv.InError z
       | Correct (x, rcv2) ->
+        r := S_wait_ClientHello n rcv2;
         match x with
-        | None ->
-	  // Still in PF.F_s_Idle
-	  r := S_wait_ClientHello n rcv2;
-	  Recv.InAck false false // nothing happened
+        | None -> Recv.InAck false false // nothing happened
         | Some ch ->
           let chr = RH.get_clientHello (R.as_ptr ch.PF.ch) in
 	  let ch0 = chr.R.vv in
           let h3 = HST.get() in
           let r = Server.server_ClientHello hs ch0 in
 	  r
-     end	  
+     end
+    | S13_wait_Finished2 mode svd eoed_done ms ks ->
+     begin
+      match Recv.buffer_received_fragment ms.receiving f with
+      | None -> overflow ()
+      | Some rcv1 ->
+      if rcv1.Recv.rcv_to = rcv1.Recv.rcv_from then 
+        Recv.InAck false false // No-op
+      else match Recv.receive_s13_wait_Finished2 rcv1 with
+      | Error z -> Recv.InError z
+      | Correct (x, rcv2) ->
+        let ms1 : msg_state _ PF.F_s13_wait_Finished2 _ _ = {ms with receiving = rcv2} in
+        r := S13_wait_Finished2 mode svd eoed_done ms1 ks;
+	match x with
+        | None -> Recv.InAck false false // nothing happened
+	| Some cf ->
+	  let fin = R.get_field RH13.field_fin (R.as_ptr cf.PF.s13_w_f2_fin) in
+	  let oc_cv = match cf.PF.s13_w_f2_c_cv with
+	    | None -> None | Some (c,cv) ->
+	      let x = R.get_field RH13.field_certificate (R.as_ptr c) in
+	      let y = R.get_field RH13.field_cv (R.as_ptr cv) in
+	      Some (x.R.vv, y.R.vv) in
+          Server.server_ClientFinished_13 hs fin.R.vv oc_cv
+     end
     | _ ->
       Recv.InError (fatalAlert Unexpected_message,
         "Unexpected server state")

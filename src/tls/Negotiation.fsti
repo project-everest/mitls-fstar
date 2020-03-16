@@ -79,8 +79,15 @@ val offered_ha: offer -> EverCrypt.Hash.alg
 
 /// Selected algorithm, overwritten in SH (here) or HRR [HSM.hrr_ha]
 
+// capturing correlation with the selected protocol version.
+type selected_cs_t (sh:HSM.sh) = c:cipherSuite {
+  match selected_version sh with
+  | Correct TLS_1p2 -> CipherSuite? c
+  | Correct TLS_1p3 -> CipherSuite13? c
+  | _ -> False }
+  
 val selected_ha: HSM.serverHello -> EverCrypt.Hash.alg
-
+val selected_cipher_suite: sh:HSM.sh -> selected_cs_t sh
 
 /// CLIENT CERTIFICATE REQUESTS are currently disabled.
 
@@ -275,14 +282,6 @@ val client_accept_second_ServerHello:
 ///   let sh = Handshake.serverHello server_mode in
 ///   let client_mode = accept_ServerHello client_cfg offer sh in
 ///   server_mode == client_mode // excluding encrypted extensions, server_cert, etc
-
-
-// capturing correlation with the selected protocol version.
-type selected_cs_t (sh:HSM.sh) = c:cipherSuite {
-  match selected_version sh with
-  | Correct TLS_1p2 -> CipherSuite? c
-  | Correct TLS_1p3 -> CipherSuite13? c
-  | _ -> False }
 
 //lower noextract
 val client_accept_ServerHello:
