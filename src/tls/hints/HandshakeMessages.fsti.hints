@@ -1,1 +1,89 @@
-[ "»‘´×ý\b–SšHCeQJr÷", [] ]
+[
+  "»‘´×ý\b–SšHCeQJr÷",
+  [
+    [
+      "HandshakeMessages.clear_binders",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "fuel_guarded_inversion_Parsers.ClientHello.clientHello",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Tm_refine_d34415718a2c6ead8c15559aa19a7b53"
+      ],
+      0,
+      "51a7273acf1eb1a01a7cedb0843f28e4"
+    ],
+    [
+      "HandshakeMessages.sh_value",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_Parsers.ServerHello_is_hrr.ServerHello_is_hrr_false",
+        "disc_equation_Parsers.ServerHello_is_hrr.ServerHello_is_hrr_true",
+        "equation_HandshakeMessages.is_hrr", "equation_HandshakeMessages.sh",
+        "fuel_guarded_inversion_Parsers.ServerHello_is_hrr.serverHello_is_hrr",
+        "proj_equation_Parsers.ServerHello.MkserverHello_is_hrr",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Tm_refine_6ef02521f154ee328142906ece7faaee",
+        "typing_Parsers.ServerHello.__proj__MkserverHello__item__is_hrr"
+      ],
+      0,
+      "ccd2bad1ee16f1ce8a6bd423f1252161"
+    ],
+    [
+      "HandshakeMessages.hrr_value",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "bool_inversion", "bool_typing",
+        "disc_equation_Parsers.ServerHello_is_hrr.ServerHello_is_hrr_true",
+        "equation_HandshakeMessages.hrr",
+        "equation_HandshakeMessages.is_hrr",
+        "refinement_interpretation_Tm_refine_6e57058ef569de90ae614e17eb80fb92"
+      ],
+      0,
+      "c8623f3506cffe205e7f91b69d983a44"
+    ],
+    [
+      "HandshakeMessages.mk_hrr",
+      1,
+      2,
+      1,
+      [
+        "@query",
+        "constructor_distinct_Parsers.ServerHello_is_hrr.ServerHello_is_hrr_true",
+        "disc_equation_Parsers.ServerHello_is_hrr.ServerHello_is_hrr_true",
+        "equation_HandshakeMessages.is_hrr",
+        "proj_equation_Parsers.ServerHello.MkserverHello_is_hrr",
+        "projection_inverse_BoxBool_proj_0",
+        "projection_inverse_Parsers.ServerHello.MkserverHello_is_hrr",
+        "projection_inverse_Parsers.ServerHello_is_hrr.ServerHello_is_hrr_true__0"
+      ],
+      0,
+      "7524791dcff6d9264e684e6994711281"
+    ],
+    [
+      "HandshakeMessages.hrr_ha",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_CipherSuite.CipherSuite13",
+        "disc_equation_FStar.Pervasives.Native.Some",
+        "equation_CipherSuite.cipherSuite",
+        "equation_HandshakeMessages.is_valid_hrr",
+        "equation_HandshakeMessages.valid_hrr",
+        "proj_equation_FStar.Pervasives.Native.Some_v",
+        "refinement_interpretation_Tm_refine_c78aac7798afeafd32bb136d57a065e5"
+      ],
+      0,
+      "97a7c79b8f6a185c91895313c8812cdf"
+    ]
+  ]
+]

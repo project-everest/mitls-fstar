@@ -1,1 +1,31 @@
-[ "Ip€$€·\\Ì?á‹«àOÇ\u000b", [] ]
+[
+  "Ip€$€·\\Ì?á‹«àOÇ\u000b",
+  [
+    [
+      "TLS.Handshake.iT",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_TLSConstants.Reader",
+        "disc_equation_TLSConstants.Writer",
+        "fuel_guarded_inversion_TLSConstants.rw"
+      ],
+      0,
+      "37132d5dcb0097df01355bac77a08ba8"
+    ],
+    [
+      "TLS.Handshake.eT",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "refinement_interpretation_Tm_refine_e429decafa0d30118ba293afd08fd28a"
+      ],
+      0,
+      "575224def9eefb20a147b2b5d1f15908"
+    ]
+  ]
+]

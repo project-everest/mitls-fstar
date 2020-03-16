@@ -1,1 +1,316 @@
-[ "¨¹ÚêƒQ%\u001aqÅKè^\u0006/Ì", [] ]
+[
+  "¨¹ÚêƒQ%\u001aqÅKè^\u0006/Ì",
+  [
+    [
+      "TLSError.string_of_result",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "bool_inversion",
+        "disc_equation_FStar.Error.Correct",
+        "disc_equation_FStar.Error.Error", "equation_TLSError.error",
+        "function_token_typing_TLSError.error",
+        "lemma_FStar.Error.invertOptResult",
+        "projection_inverse_BoxBool_proj_0",
+        "typing_FStar.Error.uu___is_Correct"
+      ],
+      0,
+      "bfc7cc36139658512959b0bc7b26dac5"
+    ],
+    [
+      "TLSError.resT",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_FStar.Error.Correct", "equation_TLSError.error",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Tm_refine_a0dbf400a12f52d8e92a346ebf22efa9"
+      ],
+      0,
+      "a98db6959d6ba2569d7c5cad50aa8496"
+    ],
+    [
+      "TLSError.mapResult",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "bool_inversion",
+        "disc_equation_FStar.Error.Correct",
+        "disc_equation_FStar.Error.Error", "equation_TLSError.error",
+        "equation_TLSError.result", "function_token_typing_TLSError.error",
+        "lemma_FStar.Error.invertOptResult",
+        "typing_FStar.Error.uu___is_Correct",
+        "typing_FStar.Error.uu___is_Error"
+      ],
+      0,
+      "d7fa829cf54f1d5b742eee2ed0e1315e"
+    ],
+    [
+      "TLSError.bindResult",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "bool_inversion",
+        "disc_equation_FStar.Error.Correct",
+        "disc_equation_FStar.Error.Error", "equation_TLSError.error",
+        "equation_TLSError.result", "function_token_typing_TLSError.error",
+        "lemma_FStar.Error.invertOptResult",
+        "typing_FStar.Error.uu___is_Correct",
+        "typing_FStar.Error.uu___is_Error"
+      ],
+      0,
+      "e441835aea6b369254e9acd88aa1e03a"
+    ],
+    [
+      "TLSError.resultMap",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "bool_inversion",
+        "disc_equation_FStar.Error.Correct",
+        "disc_equation_FStar.Error.Error", "equation_TLSError.error",
+        "equation_TLSError.result", "function_token_typing_TLSError.error",
+        "lemma_FStar.Error.invertOptResult",
+        "typing_FStar.Error.uu___is_Correct",
+        "typing_FStar.Error.uu___is_Error"
+      ],
+      0,
+      "9e9f2ee2c4f24dff2f684f30cc769e8f"
+    ],
+    [
+      "TLSError.resultBind",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "bool_inversion",
+        "disc_equation_FStar.Error.Correct",
+        "disc_equation_FStar.Error.Error", "equation_TLSError.error",
+        "equation_TLSError.result", "function_token_typing_TLSError.error",
+        "lemma_FStar.Error.invertOptResult",
+        "typing_FStar.Error.uu___is_Correct",
+        "typing_FStar.Error.uu___is_Error"
+      ],
+      0,
+      "957a77bf1bedd61125723b92c0e0930a"
+    ],
+    [
+      "TLSError.option_of_result",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "bool_inversion",
+        "disc_equation_FStar.Error.Correct",
+        "disc_equation_FStar.Error.Error", "equation_TLSError.error",
+        "equation_TLSError.result", "function_token_typing_TLSError.error",
+        "lemma_FStar.Error.invertOptResult",
+        "typing_FStar.Error.uu___is_Correct",
+        "typing_FStar.Error.uu___is_Error"
+      ],
+      0,
+      "2543c43605d8368fc79c65589ad7789d"
+    ],
+    [
+      "TLSError.bind",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "bool_inversion",
+        "disc_equation_FStar.Error.Correct",
+        "disc_equation_FStar.Error.Error", "equation_TLSError.error",
+        "equation_TLSError.result", "function_token_typing_TLSError.error",
+        "lemma_FStar.Error.invertOptResult",
+        "typing_FStar.Error.uu___is_Correct",
+        "typing_FStar.Error.uu___is_Error"
+      ],
+      0,
+      "2c5ca8d97e7d06d68943cdaca70d4a4e"
+    ],
+    [
+      "TLSError.exn_return",
+      1,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "5ee5f0602754ef8c7f4b73939eea8fcf"
+    ],
+    [
+      "TLSError.exn_bind",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "FStar.Pervasives_interpretation_Tm_arrow_14435f7112db17792f8cd33f8f7ea859",
+        "TLSError_interpretation_Tm_arrow_4431c6c27f94aa18e0755bfb71be1b7f",
+        "TLSError_interpretation_Tm_arrow_c9fee20eb0494c5cbf29629774eae970",
+        "TLSError_interpretation_Tm_arrow_d6aad69fcc0b1926994137dbeb8d16f5",
+        "assumption_TLSError.WP_exn_monotonic", "b2t_def", "bool_inversion",
+        "disc_equation_FStar.Error.Correct",
+        "disc_equation_FStar.Error.Error", "equation_FStar.Bytes.lbytes",
+        "equation_FStar.Monotonic.HyperStack.is_wf_with_ctr_and_tip",
+        "equation_FStar.Monotonic.HyperStack.mem",
+        "equation_FStar.Pervasives.st_post_h",
+        "equation_FStar.Pervasives.st_post_h_", "equation_FStar.UInt.fits",
+        "equation_FStar.UInt.min_int", "equation_FStar.UInt.size",
+        "equation_FStar.UInt.uint_t", "equation_Prims.l_True",
+        "equation_Prims.logical", "equation_TLSError.error",
+        "equation_TLSError.result",
+        "fuel_guarded_inversion_FStar.Error.optResult",
+        "function_token_typing_TLSError.error",
+        "interpretation_Tm_abs_ed7b20fec66d834be39d581e2f007496",
+        "interpretation_Tm_abs_fd76b7dc51da26c5c96799f15578a28f",
+        "l_quant_interp_6d9acbf30c85c42b3e0a4e0744e11f4c",
+        "lemma_FStar.Error.invertOptResult", "primitive_Prims.op_AmpAmp",
+        "primitive_Prims.op_LessThanOrEqual",
+        "projection_inverse_BoxBool_proj_0",
+        "projection_inverse_FStar.Error.Correct__0",
+        "projection_inverse_FStar.Error.Error__0",
+        "refinement_interpretation_Tm_refine_05e15190c946858f68c69156f585f95a",
+        "refinement_interpretation_Tm_refine_365abba901205a01d0ef28ebf2198c47",
+        "refinement_interpretation_Tm_refine_71ea40360194fe02ee1272538c9cacbc",
+        "refinement_interpretation_Tm_refine_8d65e998a07dd53ec478e27017d9dba5",
+        "refinement_interpretation_Tm_refine_f13070840248fced9d9d60d77bdae3ec",
+        "true_interp", "typing_FStar.Bytes.empty_bytes",
+        "typing_FStar.Bytes.len", "typing_FStar.Error.uu___is_Correct",
+        "typing_FStar.Error.uu___is_Error",
+        "typing_FStar.Monotonic.HyperHeap.rid_freeable",
+        "typing_FStar.Monotonic.HyperHeap.root", "typing_FStar.UInt32.v",
+        "typing_Tm_abs_ed7b20fec66d834be39d581e2f007496",
+        "typing_Tm_abs_fd76b7dc51da26c5c96799f15578a28f"
+      ],
+      0,
+      "0df8c87d22909d40c49f6d8da557afe7"
+    ],
+    [
+      "TLSError.exn_subcomp",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "FStar.Pervasives_interpretation_Tm_arrow_14435f7112db17792f8cd33f8f7ea859",
+        "TLSError_interpretation_Tm_arrow_d6aad69fcc0b1926994137dbeb8d16f5",
+        "equation_FStar.Monotonic.HyperStack.mem",
+        "equation_FStar.Pervasives.st_post_h",
+        "equation_FStar.Pervasives.st_post_h_", "equation_Prims.l_True",
+        "equation_TLSError.exn_post_t", "equation_TLSError.exn_repr",
+        "equation_TLSError.result",
+        "refinement_interpretation_Tm_refine_8d65e998a07dd53ec478e27017d9dba5",
+        "true_interp"
+      ],
+      0,
+      "3553357144b5328ba4741860efb9e89f"
+    ],
+    [
+      "TLSError.TLSEXN",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "bool_inversion",
+        "disc_equation_FStar.Error.Correct",
+        "disc_equation_FStar.Error.Error", "equation_TLSError.error",
+        "equation_TLSError.result", "function_token_typing_TLSError.error",
+        "lemma_FStar.Error.invertOptResult",
+        "typing_FStar.Error.uu___is_Correct",
+        "typing_FStar.Error.uu___is_Error"
+      ],
+      0,
+      "8f92e1d0daccf3f192bb5a27723e80a4"
+    ],
+    [
+      "TLSError.TLSEXN",
+      2,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "bool_inversion",
+        "disc_equation_FStar.Error.Correct",
+        "disc_equation_FStar.Error.Error", "equation_TLSError.error",
+        "equation_TLSError.result", "function_token_typing_TLSError.error",
+        "lemma_FStar.Error.invertOptResult",
+        "typing_FStar.Error.uu___is_Correct",
+        "typing_FStar.Error.uu___is_Error"
+      ],
+      0,
+      "15f8d2789f14e184dc9490ef35416a32"
+    ],
+    [
+      "TLSError.TLSEXN",
+      3,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "bool_inversion",
+        "disc_equation_FStar.Error.Correct",
+        "disc_equation_FStar.Error.Error", "equation_TLSError.error",
+        "equation_TLSError.result", "function_token_typing_TLSError.error",
+        "lemma_FStar.Error.invertOptResult",
+        "typing_FStar.Error.uu___is_Correct",
+        "typing_FStar.Error.uu___is_Error"
+      ],
+      0,
+      "c1ac848d34d4cbdae6d6543a869cd117"
+    ],
+    [
+      "TLSError.TLSEXN",
+      4,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "7da55a72f0f81396add466e3b8e7510e"
+    ],
+    [
+      "TLSError.TLSEXN",
+      5,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "392609fa0e18d20c84a68fd05d7df15f"
+    ],
+    [
+      "TLSError.lift_div_tlsexn",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "Prims_interpretation_Tm_arrow_2eaa01e78f73e9bab5d0955fc1a662da",
+        "TLSError_interpretation_Tm_arrow_8aae13b96fb0be58b929fe6db466cb69",
+        "equation_Prims.logical",
+        "interpretation_Tm_abs_32d234ec19c323304fc1ff310d2cd67d",
+        "interpretation_Tm_abs_4c9174edd603eae0cd6aac824b6b574b",
+        "l_quant_interp_73626af0f99cbb54d620355156bf678c",
+        "refinement_interpretation_Tm_refine_9c79c4ef8bf28fdd5d01e604e0426830",
+        "typing_Tm_abs_32d234ec19c323304fc1ff310d2cd67d",
+        "typing_Tm_abs_4c9174edd603eae0cd6aac824b6b574b"
+      ],
+      0,
+      "a24fe06434e77870793e71f4bdb0cbd0"
+    ],
+    [
+      "TLSError.14959",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "refinement_interpretation_Tm_refine_9c79c4ef8bf28fdd5d01e604e0426830"
+      ],
+      0,
+      "dc0d808413ec888a5292df9c2f84c455"
+    ]
+  ]
+]

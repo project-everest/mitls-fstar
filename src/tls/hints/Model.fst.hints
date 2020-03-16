@@ -1,1 +1,161 @@
-[ "¿ž\\\u001b·T¥U·™UsW÷\u0003ß", [] ]
+[
+  "¿ž\\\u001b·T¥U·™UsW÷\u0003ß",
+  [
+    [
+      "Model.ideal_or_real",
+      1,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "20f094d2f9546df8446110621efd03b0"
+    ],
+    [
+      "Model.__proj__Ideal__item__v",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "disc_equation_Model.Ideal",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Tm_refine_f8f3d75a17721bb6e0dd00975446a581"
+      ],
+      0,
+      "fe4a68cd293c1698c5f2070a89d33c81"
+    ],
+    [
+      "Model.__proj__Real__item__v",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "disc_equation_Model.Real",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Tm_refine_8ba51edc114520debef30f4a30c696ca"
+      ],
+      0,
+      "2e67502727ce0bcb6ba77e837b124eac"
+    ],
+    [
+      "Model.model_on",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "bool_inversion",
+        "equation_Mem.model", "equation_Model.ir",
+        "refinement_interpretation_Tm_refine_80d1de3c2e0a2ab4646e4593ff8a440a",
+        "typing_Mem.model"
+      ],
+      0,
+      "556ab6613bfce5856655fd30a742ae99"
+    ],
+    [
+      "Model.ideal",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "bool_inversion",
+        "equation_Mem.model", "equation_Model.ir",
+        "refinement_interpretation_Tm_refine_80d1de3c2e0a2ab4646e4593ff8a440a",
+        "typing_Mem.model"
+      ],
+      0,
+      "071a6bfc5e47a133ad839e7057438e34"
+    ],
+    [
+      "Model.real",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "Prims_pretyping_ae567c2fb75be05905677af440075565",
+        "disc_equation_Model.Ideal", "disc_equation_Model.Real",
+        "equation_Mem.is_tls_rgn", "equation_Mem.tls_color",
+        "equation_Mem.tls_region", "equation_Mem.tls_rgn",
+        "equation_Model.ir", "fuel_guarded_inversion_Model.ideal_or_real",
+        "function_token_typing_Prims.__cache_version_number__",
+        "primitive_Prims.op_Equality", "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Tm_refine_80d1de3c2e0a2ab4646e4593ff8a440a",
+        "refinement_interpretation_Tm_refine_9393f41ccc9ce36df1080eefe33f6c53",
+        "typing_Mem.tls_region"
+      ],
+      0,
+      "7d01b7bdb261b622db02dbafd867b565"
+    ],
+    [
+      "Model.mk_ideal",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "bool_inversion",
+        "constructor_distinct_Model.Ideal",
+        "data_typing_intro_Model.Ideal@tok", "disc_equation_Model.Ideal",
+        "equation_Mem.model", "equation_Model.ir",
+        "projection_inverse_Model.Ideal_it",
+        "projection_inverse_Model.Ideal_rt",
+        "projection_inverse_Model.Ideal_v",
+        "refinement_interpretation_Tm_refine_80d1de3c2e0a2ab4646e4593ff8a440a",
+        "typing_Mem.model"
+      ],
+      0,
+      "2c61f360922eb0b4adbc0b2267a6f2e1"
+    ],
+    [
+      "Model.mk_real",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "Prims_pretyping_ae567c2fb75be05905677af440075565", "bool_inversion",
+        "constructor_distinct_Model.Real",
+        "data_typing_intro_Model.Real@tok", "disc_equation_Model.Ideal",
+        "equation_FStar.HyperStack.ST.erid",
+        "equation_FStar.HyperStack.ST.is_eternal_region",
+        "equation_Mem.is_tls_rgn", "equation_Mem.rgn",
+        "equation_Mem.tls_color", "equation_Mem.tls_region",
+        "equation_Mem.tls_rgn", "equation_Model.ir",
+        "function_token_typing_Prims.__cache_version_number__",
+        "primitive_Prims.op_Equality", "primitive_Prims.op_Negation",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Tm_refine_5aee6c1d5e606045d3f22072ebbfd523",
+        "refinement_interpretation_Tm_refine_6c5072d4c9562dd38fd2703ecfb013df",
+        "refinement_interpretation_Tm_refine_80d1de3c2e0a2ab4646e4593ff8a440a",
+        "refinement_interpretation_Tm_refine_9393f41ccc9ce36df1080eefe33f6c53",
+        "typing_FStar.Monotonic.HyperHeap.rid_freeable",
+        "typing_Mem.tls_region", "typing_TLSInfo.safe_region"
+      ],
+      0,
+      "eb9d3beaa685c0cd277c879b800128fb"
+    ],
+    [
+      "Model.is_safe",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "Prims_pretyping_ae567c2fb75be05905677af440075565", "bool_inversion",
+        "equation_FStar.HyperStack.ST.erid",
+        "equation_FStar.HyperStack.ST.is_eternal_region",
+        "equation_Mem.is_tls_rgn", "equation_Mem.model", "equation_Mem.rgn",
+        "equation_Mem.tls_color", "equation_Mem.tls_region",
+        "equation_Mem.tls_rgn",
+        "function_token_typing_Prims.__cache_version_number__",
+        "primitive_Prims.op_Equality", "primitive_Prims.op_Negation",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Tm_refine_5aee6c1d5e606045d3f22072ebbfd523",
+        "refinement_interpretation_Tm_refine_6c5072d4c9562dd38fd2703ecfb013df",
+        "refinement_interpretation_Tm_refine_9393f41ccc9ce36df1080eefe33f6c53",
+        "typing_FStar.Monotonic.HyperHeap.rid_freeable", "typing_Mem.model",
+        "typing_Mem.tls_region", "typing_TLSInfo.safe_region"
+      ],
+      0,
+      "e483302ee8fd1cccb410d1895950fd9b"
+    ]
+  ]
+]

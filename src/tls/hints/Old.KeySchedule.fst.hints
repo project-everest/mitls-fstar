@@ -1,1 +1,31 @@
-[ "«∞k•DÚŒ£Òc\u0000\u001d8\u000b¿ù", [] ]
+[
+  "«∞k•DÚŒ£Òc\u0000\u001d8\u000b¿ù",
+  [
+    [
+      "Old.KeySchedule.discard",
+      1,
+      2,
+      1,
+      [
+        "@query", "equation_FStar.HyperStack.ST.equal_stack_domains",
+        "equation_FStar.Monotonic.Heap.equal_dom",
+        "lemma_FStar.HyperStack.ST.lemma_same_refs_in_stack_regions_intro"
+      ],
+      0,
+      "7180ea91ec76057e268c75ff285906c3"
+    ],
+    [
+      "Old.KeySchedule.dbg",
+      1,
+      2,
+      1,
+      [
+        "@query", "equation_FStar.HyperStack.ST.equal_stack_domains",
+        "equation_FStar.Monotonic.Heap.equal_dom",
+        "lemma_FStar.HyperStack.ST.lemma_same_refs_in_stack_regions_intro"
+      ],
+      0,
+      "06a1f16f4ef9cf33f6a0be49a662b7d0"
+    ]
+  ]
+]
