@@ -21,6 +21,7 @@ friend Crypto.AEAD // needed because of the definition of state for model
 
 open Declassify
 
+#set-options "--fuel 0 --ifuel 0"
 let encrypt #a #phi s plain plain_len cipher = 
   let h0 = HST.get () in
   if safe s

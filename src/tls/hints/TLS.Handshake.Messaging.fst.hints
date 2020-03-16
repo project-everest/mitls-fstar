@@ -12,7 +12,7 @@
         "lemma_FStar.HyperStack.ST.lemma_same_refs_in_stack_regions_intro"
       ],
       0,
-      "6eb71bc3ada7a7a70dc61689f92a2456"
+      "8ad6a4275060f951cf772bcefc1c313e"
     ],
     [
       "TLS.Handshake.Messaging.trace",
@@ -25,7 +25,7 @@
         "lemma_FStar.HyperStack.ST.lemma_same_refs_in_stack_regions_intro"
       ],
       0,
-      "2cdf1b62eebee886f809cc4ec7214102"
+      "24346bb61d83300405fd8f6e33c85ea4"
     ],
     [
       "TLS.Handshake.Messaging.transcript_extract",
@@ -39,13 +39,15 @@
         "assumption_FStar.Monotonic.HyperHeap.Mod_set_def", "b2t_def",
         "bool_inversion", "bool_typing",
         "constructor_distinct_FStar.Integers.W16",
-        "constructor_distinct_FStar.Integers.W31",
+        "constructor_distinct_FStar.Integers.W32",
         "constructor_distinct_FStar.Integers.W8",
+        "constructor_distinct_FStar.Integers.Winfinite",
         "constructor_distinct_Lib.IntTypes.PUB",
         "constructor_distinct_Lib.IntTypes.U32", "eq2-interp",
         "equality_tok_FStar.Integers.W16@tok",
-        "equality_tok_FStar.Integers.W31@tok",
+        "equality_tok_FStar.Integers.W32@tok",
         "equality_tok_FStar.Integers.W8@tok",
+        "equality_tok_FStar.Integers.Winfinite@tok",
         "equality_tok_Lib.IntTypes.PUB@tok",
         "equality_tok_Lib.IntTypes.U32@tok", "equation_FStar.Bytes.lbytes",
         "equation_FStar.HyperStack.ST.equal_domains",
@@ -197,7 +199,7 @@
         "typing_TLSInfo.safe_region", "unit_typing"
       ],
       0,
-      "60f30ba8345cb765d0576cd4e9961b97"
+      "3c7a83a22552c3fe92a7771d8b01ed2a"
     ],
     [
       "TLS.Handshake.Messaging.extend13",
@@ -399,7 +401,7 @@
         "typing_tok_LowStar.ConstBuffer.MUTABLE@tok"
       ],
       0,
-      "71a79ee4266beecc56b176493e6f8560"
+      "a8e01b53f8e910c399cfc6e4cbc1c5e6"
     ]
   ]
 ]

@@ -17,7 +17,7 @@
         "projection_inverse_TLS.Handshake.Receive.Mkstate_rcv_from"
       ],
       0,
-      "0d444ec71a0ce5d9cda6e6b276324ae3"
+      "0727ededc740ec0cd07526af16b101e0"
     ],
     [
       "TLS.Handshake.Receive.invariant",
@@ -59,7 +59,7 @@
         "typing_TLS.Handshake.Receive.__proj__Mkstate__item__rcv_to"
       ],
       0,
-      "5207009267a4ddbbb1b23dd81bf8e2d2"
+      "286ce2233e3200d6276232917358d3a2"
     ],
     [
       "TLS.Handshake.Receive.frame_invariant",
@@ -85,7 +85,7 @@
         "typing_TLS.Handshake.Receive.__proj__Mkstate__item__rcv_b"
       ],
       0,
-      "92722801cd93339bacc9aab20abe98a3"
+      "caaf717a0b0f4e0907613d0a6d7c999c"
     ],
     [
       "TLS.Handshake.Receive.lemma_seq",
@@ -125,7 +125,7 @@
         "typing_Mem.tls_region"
       ],
       0,
-      "5739a03e11795688669543f8ceb917bf"
+      "2a03bac8e0e68f2d79d96c0e581b23b0"
     ],
     [
       "TLS.Handshake.Receive.cslice_of",
@@ -134,7 +134,7 @@
       0,
       [ "@query", "proj_equation_LowParse.Slice.Mkslice_len" ],
       0,
-      "d2d89c3204bfca7c7f7aecb33c727414"
+      "5703973aacbb9c3945745cefd2db5957"
     ],
     [
       "TLS.Handshake.Receive.only_changes_pf_state",
@@ -143,7 +143,7 @@
       0,
       [ "@query" ],
       0,
-      "1c773982f2b54b36bcecb954726ba9b8"
+      "ad79ab59d6acbf9232bbc39749ddd835"
     ],
     [
       "TLS.Handshake.Receive.changes_pf_state_and_updates_rcv_from",
@@ -152,7 +152,7 @@
       0,
       [ "@query" ],
       0,
-      "4ccbd71f44354fb8a4ad834e030bbf37"
+      "0ddee3dc3c18c922270edde45c8dc3d6"
     ],
     [
       "TLS.Handshake.Receive.receive_post",
@@ -194,7 +194,7 @@
         "typing_FStar.Pervasives.Native.__proj__Mktuple2__item___1"
       ],
       0,
-      "43b61de8386c86e3b2ba9a794d38265d"
+      "e66907f5bc7e4e75b7c4d9b3560abf3b"
     ],
     [
       "TLS.Handshake.Receive.receive_post_with_leftover_bytes",
@@ -233,7 +233,7 @@
         "typing_FStar.Pervasives.Native.__proj__Mktuple2__item___1"
       ],
       0,
-      "5543a137480227d4f0f3dd0fdf2ca79f"
+      "25e709b6fd0b33aabcc64ad1a0b677bd"
     ],
     [
       "TLS.Handshake.Receive.wrap_pf_st",
@@ -274,7 +274,7 @@
         "typing_TLS.Handshake.Receive.__proj__Mkstate__item__rcv_to"
       ],
       0,
-      "f16aee0fa8bda92034c4023f4447b5e0"
+      "01c1d4b4d4f537d78267609b9dca894f"
     ],
     [
       "TLS.Handshake.Receive.alloc_slice",
@@ -286,12 +286,14 @@
         "@fuel_correspondence_Prims.pow2.fuel_instrumented", "@query",
         "b2t_def", "bool_inversion", "bool_typing",
         "constructor_distinct_FStar.Integers.W16",
-        "constructor_distinct_FStar.Integers.W31",
+        "constructor_distinct_FStar.Integers.W32",
         "constructor_distinct_FStar.Integers.W8",
+        "constructor_distinct_FStar.Integers.Winfinite",
         "constructor_distinct_Lib.IntTypes.U32",
         "equality_tok_FStar.Integers.W16@tok",
-        "equality_tok_FStar.Integers.W31@tok",
+        "equality_tok_FStar.Integers.W32@tok",
         "equality_tok_FStar.Integers.W8@tok",
+        "equality_tok_FStar.Integers.Winfinite@tok",
         "equality_tok_Lib.IntTypes.U32@tok",
         "equation_FStar.HyperStack.ST.erid",
         "equation_FStar.Monotonic.HyperHeap.disjoint",
@@ -343,7 +345,7 @@
         "typing_Spec.Poly1305.size_key"
       ],
       0,
-      "574b1298b32437bb35f117f93778d873"
+      "f761daf155715a3afb0c2c8dc3fcdd10"
     ],
     [
       "TLS.Handshake.Receive.create",
@@ -558,7 +560,7 @@
         "typing_TLS.Handshake.Receive.__proj__Mkstate__item__rcv_to"
       ],
       0,
-      "fe74b000c7d4f03df53d6b834879b8ce"
+      "bb9455c72ca6636f035b75902ee0f97c"
     ],
     [
       "TLS.Handshake.Receive.receive_s_Idle",
@@ -703,7 +705,7 @@
         "typing_TLS.Handshake.Receive.__proj__Mkstate__item__rcv_to"
       ],
       0,
-      "a9b1b083b6becaced989b4755d321e1f"
+      "177cb8f87b54524930337cb8efbb9644"
     ],
     [
       "TLS.Handshake.Receive.receive_c_wait_ServerHello",
@@ -906,7 +908,7 @@
         "typing_TLS.Handshake.Receive.__proj__Mkstate__item__rcv_to"
       ],
       0,
-      "de5ca0fc31ba45b28d19511c7c1107fc"
+      "089013298c7be1b70f35646c428009f7"
     ],
     [
       "TLS.Handshake.Receive.receive_c13_wait_Finished1",
@@ -1053,7 +1055,7 @@
         "typing_TLS.Handshake.Receive.__proj__Mkstate__item__rcv_to"
       ],
       0,
-      "dc1e788952a591e4a947da968370fbc8"
+      "7d0582c19e5ea62ef52c5792571e074d"
     ],
     [
       "TLS.Handshake.Receive.receive_s13_wait_Finished2",
@@ -1202,7 +1204,7 @@
         "typing_TLS.Handshake.Receive.__proj__Mkstate__item__rcv_to"
       ],
       0,
-      "addbcaac21692f891478be02fea11e43"
+      "961d653bcac3d01cf9fbebd5f3ae31af"
     ],
     [
       "TLS.Handshake.Receive.receive_s13_wait_EOED",
@@ -1350,7 +1352,7 @@
         "typing_TLS.Handshake.Receive.__proj__Mkstate__item__rcv_to"
       ],
       0,
-      "d7d225ec8c2310390e430a0731d6c771"
+      "a9a690fb59dc88965ed6dc0316c8c138"
     ],
     [
       "TLS.Handshake.Receive.receive_c13_Complete",
@@ -1550,7 +1552,7 @@
         "typing_TLS.Handshake.Receive.__proj__Mkstate__item__rcv_to"
       ],
       0,
-      "702262727cf806f8eaf4519b1b86e1a9"
+      "e1650df42f9ff3f6d3ce0e48883e1c6a"
     ],
     [
       "TLS.Handshake.Receive.receive_c12_wait_ServerHelloDone",
@@ -1695,7 +1697,7 @@
         "typing_TLS.Handshake.Receive.__proj__Mkstate__item__rcv_to"
       ],
       0,
-      "e835adb06d82aa0bb34eea91568e1f7f"
+      "8f815cd2a0fdec433cc0087d84b2ac27"
     ],
     [
       "TLS.Handshake.Receive.receive_cs12_wait_Finished",
@@ -1841,7 +1843,7 @@
         "typing_TLS.Handshake.Receive.__proj__Mkstate__item__rcv_to"
       ],
       0,
-      "cca30b5c38b442c28a56467d7bb580f5"
+      "d71ba09a2958c2ee3effa7bc13789103"
     ],
     [
       "TLS.Handshake.Receive.receive_c12_wait_NST",
@@ -1987,7 +1989,7 @@
         "typing_TLS.Handshake.Receive.__proj__Mkstate__item__rcv_to"
       ],
       0,
-      "ca04425df6b8a406e64a19190bcb94c6"
+      "8502404de38f18ce64712e53c14e97c2"
     ],
     [
       "TLS.Handshake.Receive.receive_s12_wait_CCS1",
@@ -2132,7 +2134,7 @@
         "typing_TLS.Handshake.Receive.__proj__Mkstate__item__rcv_to"
       ],
       0,
-      "d03994d0960e1fb47b762454bb65851b"
+      "868be5610fb79c622c9296dc4f9824e1"
     ],
     [
       "TLS.Handshake.Receive.incoming",
@@ -2156,7 +2158,7 @@
         "typing_FStar.Bytes.bytes"
       ],
       0,
-      "53df239c6f3bda160ceee088608bfb38"
+      "2c09eb145ccb3d633a1b02fb6927a9b1"
     ],
     [
       "TLS.Handshake.Receive.__proj__InAck__item__next_keys",
@@ -2170,7 +2172,7 @@
         "refinement_interpretation_Tm_refine_0187b5417c9c2351bf3a71a528e73d8b"
       ],
       0,
-      "909303c8025220b502026dddf7e06aa8"
+      "b01af11bc89f81efdb4cb9d24a6e0941"
     ],
     [
       "TLS.Handshake.Receive.__proj__InAck__item__complete",
@@ -2184,7 +2186,7 @@
         "refinement_interpretation_Tm_refine_0187b5417c9c2351bf3a71a528e73d8b"
       ],
       0,
-      "7673623239755914df84969a5802b6bd"
+      "c17feabd3e4f30993c0f540d0b06f6b3"
     ],
     [
       "TLS.Handshake.Receive.__proj__InQuery__item___0",
@@ -2198,7 +2200,7 @@
         "refinement_interpretation_Tm_refine_21478709de77f86ea989f87b9a28b9af"
       ],
       0,
-      "ffb427529a42842c7560c7446d987246"
+      "62928cdcb28458aaa3fc1d2fee5cc928"
     ],
     [
       "TLS.Handshake.Receive.__proj__InQuery__item___1",
@@ -2212,7 +2214,7 @@
         "refinement_interpretation_Tm_refine_21478709de77f86ea989f87b9a28b9af"
       ],
       0,
-      "a83b70f6418a53f9669ed08af97dfa04"
+      "aea4610200d6cb81a352b4ab685b3885"
     ],
     [
       "TLS.Handshake.Receive.__proj__InError__item___0",
@@ -2226,7 +2228,7 @@
         "refinement_interpretation_Tm_refine_a78821cde3209183970ad665249c9348"
       ],
       0,
-      "a9356872cee8c0061f1dd7dd17486212"
+      "dcc2ffa5b8eddd42aaf6de04a6cbdf2d"
     ],
     [
       "TLS.Handshake.Receive.test",
@@ -2314,7 +2316,7 @@
         "typing_TLS.Handshake.Receive.bs", "unit_inversion", "unit_typing"
       ],
       0,
-      "5dce917d9373ba493d4a0dbe3af99b32"
+      "569bb1fc7422e27d35fa9b2f3d0d24d9"
     ]
   ]
 ]

@@ -12,7 +12,7 @@
         "lemma_FStar.HyperStack.ST.lemma_same_refs_in_stack_regions_intro"
       ],
       0,
-      "f434fe42e41fcf208b52440bab5945ba"
+      "6db8908348daee075466f2cab7741239"
     ],
     [
       "Record.trace",
@@ -25,7 +25,7 @@
         "lemma_FStar.HyperStack.ST.lemma_same_refs_in_stack_regions_intro"
       ],
       0,
-      "ac0f13f061e4f6c2741ea21aaa0da7f9"
+      "7bda8760443f0b4d423343e3c6e9ad52"
     ],
     [
       "Record.p_of_f",
@@ -39,7 +39,7 @@
         "refinement_interpretation_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
       ],
       0,
-      "1309908a23cafad165baf889600c5303"
+      "cd75cf27feef23b30f1d5450183be792"
     ],
     [
       "Record.f_of_p",
@@ -53,7 +53,7 @@
         "refinement_interpretation_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
       ],
       0,
-      "653a0a3ef013dc88d52fbf1c6e68381c"
+      "0c0d29c9baf7396cb432a16357d0f912"
     ],
     [
       "Record.parseCT",
@@ -65,7 +65,7 @@
         "refinement_interpretation_Tm_refine_71ea40360194fe02ee1272538c9cacbc"
       ],
       0,
-      "aa575adf75c7880fbe649fd5c66a3db8"
+      "2a11699621ba4a3db0119e37db953112"
     ],
     [
       "Record.parseVersion",
@@ -77,7 +77,7 @@
         "refinement_interpretation_Tm_refine_71ea40360194fe02ee1272538c9cacbc"
       ],
       0,
-      "11d19861f195939f8298819910473f96"
+      "9a55261cbdc4153e834aa008298d204b"
     ],
     [
       "Record.header",
@@ -91,7 +91,7 @@
         "typing_Record.headerLength"
       ],
       0,
-      "8b7d0c6f9f32a6fc188fce1fb8a9c3ac"
+      "64988ff5f5afe9ffe3e04b818340b5c3"
     ],
     [
       "Record.fake",
@@ -101,13 +101,15 @@
       [
         "@MaxIFuel_assumption", "@query", "b2t_def",
         "constructor_distinct_FStar.Integers.W16",
-        "constructor_distinct_FStar.Integers.W31",
+        "constructor_distinct_FStar.Integers.W32",
         "constructor_distinct_FStar.Integers.W8",
+        "constructor_distinct_FStar.Integers.Winfinite",
         "constructor_distinct_Lib.IntTypes.U32",
         "equality_tok_Content.Application_data@tok",
         "equality_tok_FStar.Integers.W16@tok",
-        "equality_tok_FStar.Integers.W31@tok",
+        "equality_tok_FStar.Integers.W32@tok",
         "equality_tok_FStar.Integers.W8@tok",
+        "equality_tok_FStar.Integers.Winfinite@tok",
         "equality_tok_Lib.IntTypes.U32@tok",
         "equality_tok_Parsers.ProtocolVersion.TLS_1p2@tok",
         "equation_FStar.Bytes.lbytes", "equation_FStar.UInt.fits",
@@ -132,7 +134,7 @@
         "typing_tok_Parsers.ProtocolVersion.TLS_1p2@tok"
       ],
       0,
-      "42e669e8082b7f03602b65146179c95c"
+      "61a5a3b72f760b8cb73194fbea6649ae"
     ],
     [
       "Record.makeHeader",
@@ -144,13 +146,15 @@
         "Prims_pretyping_ae567c2fb75be05905677af440075565", "b2t_def",
         "bool_inversion", "bool_typing",
         "constructor_distinct_FStar.Integers.W16",
-        "constructor_distinct_FStar.Integers.W31",
+        "constructor_distinct_FStar.Integers.W32",
         "constructor_distinct_FStar.Integers.W8",
+        "constructor_distinct_FStar.Integers.Winfinite",
         "constructor_distinct_Lib.IntTypes.U32",
         "equality_tok_Content.Application_data@tok",
         "equality_tok_FStar.Integers.W16@tok",
-        "equality_tok_FStar.Integers.W31@tok",
+        "equality_tok_FStar.Integers.W32@tok",
         "equality_tok_FStar.Integers.W8@tok",
+        "equality_tok_FStar.Integers.Winfinite@tok",
         "equality_tok_Lib.IntTypes.U32@tok",
         "equality_tok_Parsers.ProtocolVersion.TLS_1p2@tok",
         "equation_FStar.Bytes.lbytes", "equation_FStar.HyperStack.ST.erid",
@@ -214,7 +218,7 @@
         "typing_FStar.Bytes.len", "typing_FStar.UInt32.v"
       ],
       0,
-      "d2b86c0773679df0cd7bba679254fde9"
+      "adeb82fcd7a8540fe039fcd4ad31d168"
     ],
     [
       "Record.makePacket",
@@ -271,7 +275,7 @@
         "typing_Spec.Poly1305.size_key"
       ],
       0,
-      "35692eb200c345840a69a1c653ad4319"
+      "d0910c4925149b4795035412f64779cc"
     ],
     [
       "Record.sendPacket",
@@ -285,7 +289,7 @@
         "typing_FStar.Bytes.len", "typing_FStar.UInt32.v"
       ],
       0,
-      "3b1b440882c1bc58dda3577985f852da"
+      "df9ee2152517d290ee5ab36de9cb8436"
     ],
     [
       "Record.sendPacket",
@@ -324,7 +328,7 @@
         "typing_Spec.Poly1305.size_key"
       ],
       0,
-      "1ef094d0b7a8b279c16452831504782b"
+      "8465001c0570c23f606e018c543f1848"
     ],
     [
       "Record.parseHeader",
@@ -337,16 +341,18 @@
         "Prims_pretyping_ae567c2fb75be05905677af440075565", "b2t_def",
         "bool_inversion", "bool_typing",
         "constructor_distinct_FStar.Integers.W16",
-        "constructor_distinct_FStar.Integers.W31",
+        "constructor_distinct_FStar.Integers.W32",
         "constructor_distinct_FStar.Integers.W8",
+        "constructor_distinct_FStar.Integers.Winfinite",
         "constructor_distinct_Lib.IntTypes.U32",
         "data_typing_intro_Content.Alert@tok",
         "disc_equation_FStar.Error.Correct",
         "disc_equation_FStar.Error.Error",
         "disc_equation_Parsers.ProtocolVersion.Unknown_protocolVersion",
         "equality_tok_FStar.Integers.W16@tok",
-        "equality_tok_FStar.Integers.W31@tok",
+        "equality_tok_FStar.Integers.W32@tok",
         "equality_tok_FStar.Integers.W8@tok",
+        "equality_tok_FStar.Integers.Winfinite@tok",
         "equality_tok_Lib.IntTypes.U32@tok", "equation_FStar.Bytes.lbytes",
         "equation_FStar.HyperStack.ST.erid",
         "equation_FStar.HyperStack.ST.is_eternal_region",
@@ -407,7 +413,7 @@
         "typing_TLSInfo.safe_region"
       ],
       0,
-      "6695e1b9acaa1758980a81a692559fd4"
+      "512c7c7bc85e71e36a895453109c578b"
     ],
     [
       "Record.partial",
@@ -422,7 +428,7 @@
         "haseqTm_refine_12904f1a9e9e8436c394a25477098548"
       ],
       0,
-      "4199270cff7993b9a6ebca2e3ed28001"
+      "639d609ecd6b4bcd3f1cc7ea9ee902bf"
     ],
     [
       "Record.__proj__Body__item__ct",
@@ -435,7 +441,7 @@
         "refinement_interpretation_Tm_refine_47b5031cd5a447b785df8dbbeb58a08c"
       ],
       0,
-      "f991568d7c2c37100919b6d107070b9c"
+      "555e432302bfaaf442ed239cb3be8994"
     ],
     [
       "Record.__proj__Body__item__pv",
@@ -448,7 +454,7 @@
         "refinement_interpretation_Tm_refine_47b5031cd5a447b785df8dbbeb58a08c"
       ],
       0,
-      "3c10ea9cf132fe72c76ac1d8c891c744"
+      "6789b6670e541ef360cb06e01f53ac99"
     ],
     [
       "Record.maxlen",
@@ -506,7 +512,7 @@
         "typing_TLSInfo.safe_region"
       ],
       0,
-      "9c9de2a6edf7e4c78d42cca9f837d282"
+      "4cd5c321880977a61264ec086898d91c"
     ],
     [
       "Record.input_buffer",
@@ -515,7 +521,7 @@
       1,
       [ "@query" ],
       0,
-      "9949e6bf5ed87cfed73b035d50acc813"
+      "619571ddac80829cf1a50fcc121f9be4"
     ],
     [
       "Record.input_state",
@@ -524,7 +530,7 @@
       1,
       [ "@query" ],
       0,
-      "10dd0f116c51884012e77052bfbd7b6c"
+      "3bbe7b75c22eb0dec2c1f7458ca25013"
     ],
     [
       "Record.__proj__InputState__item__b",
@@ -533,7 +539,7 @@
       1,
       [ "@query" ],
       0,
-      "e621b2316c2150a56a186bd1c42a7d9b"
+      "0183d3a39afb1f5c6e04f9306d15b495"
     ],
     [
       "Record.__proj__InputState__item__b",
@@ -549,7 +555,7 @@
         "refinement_interpretation_Tm_refine_0211d8958d05d819cdda87cfa0d8f062"
       ],
       0,
-      "e07b08d73fe3f8ef837f6e229059d698"
+      "99324f620ca599810fbe341e7254dcff"
     ],
     [
       "Record.parseHeaderBuffer",
@@ -558,7 +564,7 @@
       1,
       [ "@query" ],
       0,
-      "5bf08afe1288b5a2d51ec355c6439f8a"
+      "a958df7070e9c3e44d5b0271d63612e6"
     ],
     [
       "Record.parseHeaderBuffer",
@@ -579,13 +585,15 @@
         "assumption_Parsers.ProtocolVersion.protocolVersion__uu___haseq",
         "b2t_def", "bool_inversion", "bool_typing",
         "constructor_distinct_FStar.Integers.W16",
-        "constructor_distinct_FStar.Integers.W31",
+        "constructor_distinct_FStar.Integers.W32",
         "constructor_distinct_FStar.Integers.W8",
+        "constructor_distinct_FStar.Integers.Winfinite",
         "constructor_distinct_Lib.IntTypes.U32",
         "data_typing_intro_Content.Alert@tok",
         "equality_tok_FStar.Integers.W16@tok",
-        "equality_tok_FStar.Integers.W31@tok",
+        "equality_tok_FStar.Integers.W32@tok",
         "equality_tok_FStar.Integers.W8@tok",
+        "equality_tok_FStar.Integers.Winfinite@tok",
         "equality_tok_Lib.IntTypes.U32@tok", "equation_FStar.Buffer.buffer",
         "equation_FStar.HyperStack.ST.equal_stack_domains",
         "equation_FStar.HyperStack.ST.erid",
@@ -643,7 +651,7 @@
         "typing_TLSInfo.safe_region"
       ],
       0,
-      "830815e7703ba8bb439822b776d0b9f1"
+      "45348d7a545a00599b5c77bdecdd4462"
     ],
     [
       "Record.input_inv",
@@ -690,7 +698,7 @@
         "typing_Record.__proj__InputState__item__pos", "typing_Record.maxlen"
       ],
       0,
-      "5f460a3f3ef4c0aad976a944c0f7e2f5"
+      "901c5dfb37423207dc532d30317904a4"
     ],
     [
       "Record.waiting_len",
@@ -747,7 +755,7 @@
         "typing_Record.__proj__InputState__item__pos", "typing_Record.maxlen"
       ],
       0,
-      "2991b3ee6eb3746b575fe86aae8fcfeb"
+      "8a796396a98ec04132239383eb8deb1e"
     ],
     [
       "Record.waiting_len",
@@ -760,14 +768,16 @@
         "Content_pretyping_b030e2c8e211c2e89c8f24e1774b7a05", "b2t_def",
         "bool_inversion", "bool_typing",
         "constructor_distinct_FStar.Integers.W16",
-        "constructor_distinct_FStar.Integers.W31",
+        "constructor_distinct_FStar.Integers.W32",
         "constructor_distinct_FStar.Integers.W8",
+        "constructor_distinct_FStar.Integers.Winfinite",
         "constructor_distinct_Lib.IntTypes.U32",
         "disc_equation_FStar.Error.Correct",
         "equality_tok_Content.Change_cipher_spec@tok",
         "equality_tok_FStar.Integers.W16@tok",
-        "equality_tok_FStar.Integers.W31@tok",
+        "equality_tok_FStar.Integers.W32@tok",
         "equality_tok_FStar.Integers.W8@tok",
+        "equality_tok_FStar.Integers.Winfinite@tok",
         "equality_tok_Lib.IntTypes.U32@tok", "equation_FStar.Buffer.length",
         "equation_FStar.Buffer.live", "equation_FStar.Buffer.sub",
         "equation_FStar.Heap.trivial_preorder",
@@ -832,7 +842,7 @@
         "typing_tok_Content.Change_cipher_spec@tok"
       ],
       0,
-      "71897b638628cad01873de1f58192e56"
+      "9ebcfbf938db0a0fc4cb6a07b8be3cc6"
     ],
     [
       "Record.alloc_input_state",
@@ -842,12 +852,14 @@
       [
         "@MaxIFuel_assumption", "@query", "b2t_def", "bool_inversion",
         "bool_typing", "constructor_distinct_FStar.Integers.W16",
-        "constructor_distinct_FStar.Integers.W31",
+        "constructor_distinct_FStar.Integers.W32",
         "constructor_distinct_FStar.Integers.W8",
+        "constructor_distinct_FStar.Integers.Winfinite",
         "constructor_distinct_Lib.IntTypes.U32",
         "equality_tok_FStar.Integers.W16@tok",
-        "equality_tok_FStar.Integers.W31@tok",
+        "equality_tok_FStar.Integers.W32@tok",
         "equality_tok_FStar.Integers.W8@tok",
+        "equality_tok_FStar.Integers.Winfinite@tok",
         "equality_tok_Lib.IntTypes.U32@tok", "equation_FStar.Buffer.as_addr",
         "equation_FStar.Buffer.buffer", "equation_FStar.Buffer.content",
         "equation_FStar.Buffer.disjoint_ref_1",
@@ -989,7 +1001,7 @@
         "typing_FStar.Bytes.bytes"
       ],
       0,
-      "50fa93c0188d239677cb00cf2b2ae41b"
+      "6ee9cbb331a8100180b48ddf905c3dcc"
     ],
     [
       "Record.__proj__ReadError__item___0",
@@ -1002,7 +1014,7 @@
         "refinement_interpretation_Tm_refine_059b4ebd634c0436a75b383f19a6c912"
       ],
       0,
-      "6a5713c4aefe1cfe58e8370d752e00ad"
+      "5b863fd49144563453a8431833bfa869"
     ],
     [
       "Record.__proj__Received__item__ct",
@@ -1015,7 +1027,7 @@
         "refinement_interpretation_Tm_refine_d8ee39247a67ad445eceb6885100e7b3"
       ],
       0,
-      "524f577c581a8d09d7858bf716cadf90"
+      "e0f76de83811270f690e428034431823"
     ],
     [
       "Record.__proj__Received__item__pv",
@@ -1028,7 +1040,7 @@
         "refinement_interpretation_Tm_refine_d8ee39247a67ad445eceb6885100e7b3"
       ],
       0,
-      "8370e2fdea38d6103d64ff73b4da224c"
+      "19b080dce0ef9abc3ef08ab0b5a3c65d"
     ],
     [
       "Record.__proj__Received__item__b",
@@ -1041,7 +1053,7 @@
         "refinement_interpretation_Tm_refine_d8ee39247a67ad445eceb6885100e7b3"
       ],
       0,
-      "d3a8aeaae7f65c457ef75d4ac1e993e4"
+      "1563f4e720a82757c72032a1a0fe85ca"
     ],
     [
       "Record.read",
@@ -1279,7 +1291,7 @@
         "typing_tok_Record.ReadWouldBlock@tok"
       ],
       0,
-      "cf9dfc1b0648ac933cedb795db32e682"
+      "0f249e98933b8b58f3cc3b979a20dac1"
     ]
   ]
 ]
