@@ -131,7 +131,7 @@ let rec next_fragment_bounded hs i (max32: UInt32.t) =
       match result, st1 with
       | Send.Outgoing None None false, 
         C13_complete offer sh ee server_id fin1 ms (Finished_pending _ _ _) ->
-	(match Client.client13_Finished2 hs with
+        (match Client.client13_Finished2 hs with
         | Error z -> Error z 
         | Correct _ -> next_fragment_bounded hs i max32 )
       | _ -> Correct result // nothing to do
@@ -214,7 +214,7 @@ let rec recv_fragment hs #i rg f =
         | None -> Recv.InAck false false // nothing happened
         | Some sh_msg ->
           let shr = RH.get_serverHello (R.as_ptr sh_msg.PF.sh) in
-	  let sh = shr.R.vv in
+          let sh = shr.R.vv in
           let h3 = HST.get() in
           if HSM.is_hrr sh then
             Client.client_HelloRetryRequest hs sh
@@ -234,16 +234,16 @@ let rec recv_fragment hs #i rg f =
         match sflight with
         | None -> Recv.InAck false false // nothing happened
         | Some sflight ->
-	  let ee = R.get_field RH13.field_ee (R.as_ptr sflight.PF.c13_w_f1_ee) in
-	  let fin = R.get_field RH13.field_fin (R.as_ptr sflight.PF.c13_w_f1_fin) in
-	  let ocr = match sflight.PF.c13_w_f1_cr with
-	    | None -> None | Some cr ->
-	      let x = R.get_field RH13.field_cr (R.as_ptr cr) in Some x.R.vv in
-	  let oc_cv = match sflight.PF.c13_w_f1_c_cv with
-	    | None -> None | Some (c,cv) ->
-	      let x = R.get_field RH13.field_certificate (R.as_ptr c) in
-	      let y = R.get_field RH13.field_cv (R.as_ptr cv) in
-	      Some (x.R.vv, y.R.vv) in
+          let ee = R.get_field RH13.field_ee (R.as_ptr sflight.PF.c13_w_f1_ee) in
+          let fin = R.get_field RH13.field_fin (R.as_ptr sflight.PF.c13_w_f1_fin) in
+          let ocr = match sflight.PF.c13_w_f1_cr with
+            | None -> None | Some cr ->
+              let x = R.get_field RH13.field_cr (R.as_ptr cr) in Some x.R.vv in
+          let oc_cv = match sflight.PF.c13_w_f1_c_cv with
+            | None -> None | Some (c,cv) ->
+              let x = R.get_field RH13.field_certificate (R.as_ptr c) in
+              let y = R.get_field RH13.field_cv (R.as_ptr cv) in
+              Some (x.R.vv, y.R.vv) in
           Client.client13_Finished1 hs (ee.R.vv) ocr oc_cv (fin.R.vv))
 
     | C13_complete offer sh ee server_id fin1 ms0 (Finished_sent fin2 ks) ->
@@ -265,7 +265,7 @@ let rec recv_fragment hs #i rg f =
           | Some nst ->
             let nstr = R.get_field RH13.field_nst (R.as_ptr nst.PF.c13_c_nst) in
             let r = Client.client13_NewSessionTicket hs (nstr.R.vv) in
-	    recv_again r
+            recv_again r
          end
      end
     | _ ->
@@ -288,10 +288,10 @@ let rec recv_fragment hs #i rg f =
         | None -> Recv.InAck false false // nothing happened
         | Some ch ->
           let chr = RH.get_clientHello (R.as_ptr ch.PF.ch) in
-	  let ch0 = chr.R.vv in
+          let ch0 = chr.R.vv in
           let h3 = HST.get() in
           let r = Server.server_ClientHello hs ch0 in
-	  r
+          r
      end
     | S13_wait_Finished2 mode svd eoed_done ms ks ->
      begin
@@ -305,15 +305,15 @@ let rec recv_fragment hs #i rg f =
       | Correct (x, rcv2) ->
         let ms1 : msg_state _ PF.F_s13_wait_Finished2 _ _ = {ms with receiving = rcv2} in
         r := S13_wait_Finished2 mode svd eoed_done ms1 ks;
-	match x with
+        match x with
         | None -> Recv.InAck false false // nothing happened
-	| Some cf ->
-	  let fin = R.get_field RH13.field_fin (R.as_ptr cf.PF.s13_w_f2_fin) in
-	  let oc_cv = match cf.PF.s13_w_f2_c_cv with
-	    | None -> None | Some (c,cv) ->
-	      let x = R.get_field RH13.field_certificate (R.as_ptr c) in
-	      let y = R.get_field RH13.field_cv (R.as_ptr cv) in
-	      Some (x.R.vv, y.R.vv) in
+        | Some cf ->
+          let fin = R.get_field RH13.field_fin (R.as_ptr cf.PF.s13_w_f2_fin) in
+          let oc_cv = match cf.PF.s13_w_f2_c_cv with
+            | None -> None | Some (c,cv) ->
+              let x = R.get_field RH13.field_certificate (R.as_ptr c) in
+              let y = R.get_field RH13.field_cv (R.as_ptr cv) in
+              Some (x.R.vv, y.R.vv) in
           Server.server_ClientFinished_13 hs fin.R.vv oc_cv
      end
     | _ ->
