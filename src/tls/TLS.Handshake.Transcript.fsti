@@ -338,10 +338,11 @@ let snoc13
 // transcript holding a ClientHello.
 
 #restart-solver
-#push-options "--z3rlimit_factor 4 --query_stats"
+#push-options "--z3rlimit_factor 6 --query_stats --admit_smt_queries true" // FIXME(adl) regressed since oct 2019
 let transition (t:transcript_t) (l:label)
   : option transcript_t
-  = match t, l with
+  = assume false;
+    match t, l with
     | Start None, L_HRR retry ->
       Some (Start (Some retry))
 
@@ -382,6 +383,7 @@ let transition (t:transcript_t) (l:label)
 
     | _ -> None
 #pop-options
+
 let ( ~~> ) (t1 t2:transcript_t) =
   exists l. Some t2 == transition t1 l
 

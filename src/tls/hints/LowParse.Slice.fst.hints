@@ -1,0 +1,69 @@
+[
+  "Ò«Pº\u001aMÌ5ı·i\u0006ı\u001fïﬁ",
+  [
+    [
+      "LowParse.Slice.buffer_srel_of_srel_of_buffer_srel",
+      1,
+      2,
+      1,
+      [
+        "@query", "equation_LowParse.Slice.buffer_srel_of_srel",
+        "equation_LowParse.Slice.srel_of_buffer_srel"
+      ],
+      0,
+      "fbfa2bd90dd6103713e927869c6ad867"
+    ],
+    [
+      "LowParse.Slice.__proj__Mkslice__item__len",
+      1,
+      2,
+      1,
+      [
+        "@query", "proj_equation_LowParse.Slice.Mkslice_base",
+        "projection_inverse_LowParse.Slice.Mkslice_base"
+      ],
+      0,
+      "e18e5eee59b9ea61b0ad7ade5d4f45e4"
+    ],
+    [
+      "LowParse.Slice.make_slice",
+      1,
+      2,
+      1,
+      [
+        "@query", "equation_LowParse.Bytes.byte",
+        "equation_LowParse.Slice.buffer_srel_of_srel",
+        "equation_LowParse.Slice.srel_of_buffer_srel"
+      ],
+      0,
+      "dac094a4bb0e71884e672a110c6943e9"
+    ],
+    [
+      "LowParse.Slice.bytes_of_slice_from",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "b2t_def",
+        "equation_FStar.UInt.fits", "equation_FStar.UInt.min_int",
+        "equation_FStar.UInt.size", "equation_FStar.UInt.uint_t",
+        "equation_LowParse.Bytes.byte",
+        "equation_LowParse.Slice.buffer_srel_of_srel",
+        "equation_LowParse.Slice.srel",
+        "function_token_typing_FStar.UInt8.t", "int_inversion",
+        "lemma_LowStar.Monotonic.Buffer.length_as_seq",
+        "primitive_Prims.op_AmpAmp", "primitive_Prims.op_LessThanOrEqual",
+        "proj_equation_LowParse.Slice.Mkslice_base",
+        "proj_equation_LowParse.Slice.Mkslice_len",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Tm_refine_3ae7934f7bb0b211572daa2c0f2cb446",
+        "refinement_interpretation_Tm_refine_f13070840248fced9d9d60d77bdae3ec",
+        "typing_FStar.UInt32.v",
+        "typing_LowParse.Slice.__proj__Mkslice__item__base",
+        "typing_LowParse.Slice.__proj__Mkslice__item__len"
+      ],
+      0,
+      "36469bfd8cce2f344c42b194aa82ad01"
+    ]
+  ]
+]

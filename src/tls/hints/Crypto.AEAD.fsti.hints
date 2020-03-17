@@ -1,5 +1,5 @@
 [
-  "ÿ÷f£ë,íÕ.èÒí:≤\n\u001e",
+  "_\u0013÷¥#Ò\u0014A\\º≠¥/'\u0010@",
   [
     [
       "Crypto.AEAD.sample",
@@ -8,7 +8,7 @@
       1,
       [ "@query" ],
       0,
-      "ef40b5f6447ba78536c91e1f029fc56a"
+      "ffcf66abb40b7549580f48e3e323cc85"
     ],
     [
       "Crypto.AEAD.coerce",
@@ -29,7 +29,7 @@
         "typing_FStar.Pervasives.Native.uu___is_Some"
       ],
       0,
-      "f19f283380be9f6c2bec640b8be6f99c"
+      "b3c82380c1f15f900fdd5d41c56ae8a7"
     ],
     [
       "Crypto.AEAD.create",
@@ -43,7 +43,7 @@
         "refinement_interpretation_Tm_refine_2de20c066034c13bf76e9c0b94f4806c"
       ],
       0,
-      "8d2562c9b4d7928471734311de5517e6"
+      "c90a0bf05c77d79c0bb6b3ca4e88c103"
     ],
     [
       "Crypto.AEAD.is_fresh_iv",
@@ -101,7 +101,7 @@
         "typing_Spec.GaloisField.__proj__GF__item__t"
       ],
       0,
-      "98c79859d646547e74441ebcbea60319"
+      "3627fb71fa64e13b08daee7c44f7e6b7"
     ],
     [
       "Crypto.AEAD.encrypt",
@@ -152,7 +152,8 @@
         "function_token_typing_Declassify.declassify",
         "function_token_typing_FStar.Integers.uint_8",
         "function_token_typing_Lib.IntTypes.uint8", "int_inversion",
-        "lemma_FStar.UInt.pow2_values", "lemma_FStar.UInt32.vu_inv",
+        "int_typing", "lemma_FStar.UInt.pow2_values",
+        "lemma_FStar.UInt32.vu_inv",
         "lemma_LowStar.Monotonic.Buffer.len_gsub",
         "lemma_LowStar.Monotonic.Buffer.length_as_seq",
         "lemma_LowStar.Monotonic.Buffer.length_null_1",
@@ -167,8 +168,8 @@
         "projection_inverse_FStar.Integers.Unsigned__0",
         "projection_inverse_Spec.GaloisField.GF_t",
         "refinement_interpretation_Tm_refine_2de20c066034c13bf76e9c0b94f4806c",
-        "refinement_interpretation_Tm_refine_52182b4d3a6f972721afa93a8ee6a5f1",
         "refinement_interpretation_Tm_refine_542f9d4f129664613f2483a6c88bc7c2",
+        "refinement_interpretation_Tm_refine_6ab44a21236a360cbf6532a7901b34e6",
         "refinement_interpretation_Tm_refine_7f6e44944ea3b349bb6ffd47ee9f5275",
         "refinement_interpretation_Tm_refine_90a1661541e4f009452ab107b47b5955",
         "refinement_interpretation_Tm_refine_9bbf7dbb6aa37e3e378ac892b5ad2ef1",
@@ -184,7 +185,6 @@
         "typing_LowStar.Monotonic.Buffer.len",
         "typing_LowStar.Monotonic.Buffer.length", "typing_Spec.AES.gf8",
         "typing_Spec.Agile.AEAD.is_supported_alg",
-        "typing_Spec.Agile.AEAD.max_length",
         "typing_Spec.Agile.AEAD.tag_length",
         "typing_Spec.Chacha20.size_block", "typing_Spec.Chacha20.size_key",
         "typing_Spec.Chacha20.size_nonce",
@@ -192,7 +192,7 @@
         "typing_tok_Lib.IntTypes.U8@tok"
       ],
       0,
-      "bac919c6ead86de18c257ce966525ade"
+      "9348ddf6624967f8ffad387a41d9ebda"
     ],
     [
       "Crypto.AEAD.decrypt",
@@ -244,7 +244,6 @@
         "equation_FStar.UInt.uint_t", "equation_Lib.IntTypes.uint8",
         "equation_Lib.IntTypes.unsigned", "equation_LowStar.Buffer.buffer",
         "equation_LowStar.Buffer.trivial_preorder",
-        "equation_LowStar.Monotonic.Buffer.disjoint",
         "equation_LowStar.Monotonic.Buffer.length", "equation_Prims.eq2",
         "equation_Prims.nat", "equation_Prims.squash",
         "equation_Spec.AES.gf8", "equation_Spec.AES.irred",
@@ -265,15 +264,10 @@
         "function_token_typing_Declassify.declassify",
         "function_token_typing_FStar.Integers.uint_8",
         "function_token_typing_Lib.IntTypes.uint8", "int_inversion",
-        "int_typing", "lemma_FStar.Seq.Base.lemma_len_slice",
-        "lemma_FStar.UInt.pow2_values", "lemma_FStar.UInt32.vu_inv",
-        "lemma_LowStar.Monotonic.Buffer.as_seq_gsub",
+        "int_typing", "lemma_FStar.UInt.pow2_values",
+        "lemma_FStar.UInt32.vu_inv",
         "lemma_LowStar.Monotonic.Buffer.len_gsub",
         "lemma_LowStar.Monotonic.Buffer.length_as_seq",
-        "lemma_LowStar.Monotonic.Buffer.loc_disjoint_sym_",
-        "lemma_LowStar.Monotonic.Buffer.loc_disjoint_union_r_",
-        "lemma_LowStar.Monotonic.Buffer.loc_union_comm",
-        "lemma_LowStar.Monotonic.Buffer.modifies_buffer_elim",
         "primitive_Prims.op_Addition", "primitive_Prims.op_AmpAmp",
         "primitive_Prims.op_LessThanOrEqual", "primitive_Prims.op_Multiply",
         "primitive_Prims.op_Subtraction",
@@ -287,7 +281,6 @@
         "refinement_interpretation_Tm_refine_3fc6fd66cb58a31edd9d12ba50118d34",
         "refinement_interpretation_Tm_refine_542f9d4f129664613f2483a6c88bc7c2",
         "refinement_interpretation_Tm_refine_7f6e44944ea3b349bb6ffd47ee9f5275",
-        "refinement_interpretation_Tm_refine_81407705a0828c2c1b1976675443f647",
         "refinement_interpretation_Tm_refine_90a1661541e4f009452ab107b47b5955",
         "refinement_interpretation_Tm_refine_9bbf7dbb6aa37e3e378ac892b5ad2ef1",
         "refinement_interpretation_Tm_refine_c6c18a7ceb46d419c35ff8551117551e",
@@ -295,13 +288,9 @@
         "refinement_interpretation_Tm_refine_de8080fdc4bd6678af723874a7d70466",
         "refinement_interpretation_Tm_refine_f13070840248fced9d9d60d77bdae3ec",
         "refinement_interpretation_Tm_refine_fb13d0ebf290a09e80ce585d9f084366",
-        "typing_Crypto.AEAD.footprint", "typing_Crypto.AEAD.iv_len",
-        "typing_FStar.UInt32.uint_to_t", "typing_FStar.UInt32.v",
-        "typing_LowStar.Buffer.trivial_preorder",
-        "typing_LowStar.Monotonic.Buffer.as_seq",
-        "typing_LowStar.Monotonic.Buffer.length",
-        "typing_LowStar.Monotonic.Buffer.loc_buffer",
-        "typing_LowStar.Monotonic.Buffer.loc_union", "typing_Spec.AES.gf8",
+        "typing_Crypto.AEAD.iv_len", "typing_FStar.UInt32.uint_to_t",
+        "typing_FStar.UInt32.v", "typing_LowStar.Buffer.trivial_preorder",
+        "typing_LowStar.Monotonic.Buffer.length", "typing_Spec.AES.gf8",
         "typing_Spec.Agile.AEAD.is_supported_alg",
         "typing_Spec.Agile.AEAD.max_length",
         "typing_Spec.Agile.AEAD.tag_length",
@@ -309,7 +298,7 @@
         "typing_Spec.GaloisField.__proj__GF__item__t"
       ],
       0,
-      "252b1627447d8db8e1ab8d6d8579f89b"
+      "9f5420468ea374a1fefa61733899ba12"
     ]
   ]
 ]

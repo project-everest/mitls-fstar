@@ -309,7 +309,7 @@ val send_tag_sh
     (~ (HSM.is_hrr (HSM.M_server_hello?._0 m))) /\
     B.loc_disjoint (footprint sto) (B.loc_buffer tag) /\
     B.loc_disjoint (Transcript.footprint stt) (B.loc_buffer tag) /\
-    B.loc_disjoint (B.loc_buffer tag) (B.loc_region_only true Mem.tls_tables_region) /\
+    B.loc_disjoint (B.loc_buffer tag) (Mem.loc_tables_region ()) /\
     B.live h tag /\
     Transcript.ClientHello? t /\
     begin match Negotiation.selected_version (HSM.M_server_hello?._0 m) with
@@ -468,7 +468,7 @@ val send_tag13
     B.loc_disjoint (footprint sto) (Transcript.footprint stt) /\
     B.loc_disjoint (footprint sto) (B.loc_buffer tag) /\
     B.loc_disjoint (Transcript.footprint stt) (B.loc_buffer tag) /\
-    B.loc_disjoint (B.loc_buffer tag) (B.loc_region_only true Mem.tls_tables_region) /\
+    B.loc_disjoint (B.loc_buffer tag) (Mem.loc_tables_region ()) /\
     B.live h tag /\
     Transcript.Transcript13? t
   ))

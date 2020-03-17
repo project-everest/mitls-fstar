@@ -72,19 +72,22 @@ val get_alpn: offer -> Tot Extensions.clientHelloExtension_CHE_application_layer
 
 /// HASH ALGORITHM NEGOTIATION.
 ///
-/// The TLS ciphersuites currently enable only two algorithms.
-/// 
 /// We distinguish a "main" offered algorithm, depending on first PSK
 /// or first ciphersuite. (Unclear what to do when the two disagree.)
 
-type ha = Spec.Hash.Definitions.(a:hash_alg {a == SHA2_256 \/ a == SHA2_384})
-
-val offered_ha: offer -> ha
+val offered_ha: offer -> EverCrypt.Hash.alg
 
 /// Selected algorithm, overwritten in SH (here) or HRR [HSM.hrr_ha]
 
-val selected_ha: HSM.serverHello -> ha
-
+// capturing correlation with the selected protocol version.
+type selected_cs_t (sh:HSM.sh) = c:cipherSuite {
+  match selected_version sh with
+  | Correct TLS_1p2 -> CipherSuite? c
+  | Correct TLS_1p3 -> CipherSuite13? c
+  | _ -> False }
+  
+val selected_ha: HSM.serverHello -> EverCrypt.Hash.alg
+val selected_cipher_suite: sh:HSM.sh -> selected_cs_t sh
 
 /// CLIENT CERTIFICATE REQUESTS are currently disabled.
 
@@ -220,7 +223,7 @@ val client_offer:
 
 /// [C_Init ==> C_Offer]
 ///
-/// [oks] are the optional client key shares sampled by
+/// [ks] are the optional client key shares sampled by
 /// [ks_client_init], present when the client offers TLS 1.3 EDH.
 ///
 /// [now] is the current time (an underspecified read effect) used for
@@ -279,14 +282,6 @@ val client_accept_second_ServerHello:
 ///   let sh = Handshake.serverHello server_mode in
 ///   let client_mode = accept_ServerHello client_cfg offer sh in
 ///   server_mode == client_mode // excluding encrypted extensions, server_cert, etc
-
-
-// capturing correlation with the selected protocol version.
-type selected_cs_t (sh:HSM.sh) = c:cipherSuite {
-  match selected_version sh with
-  | Correct TLS_1p2 -> CipherSuite? c
-  | Correct TLS_1p3 -> CipherSuite13? c
-  | _ -> False }
 
 //lower noextract
 val client_accept_ServerHello:

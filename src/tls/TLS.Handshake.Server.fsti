@@ -74,11 +74,9 @@ val server_EOED:
 val server_Ticket13:
   hs: hs ->
   app_data: Bytes.bytes ->
-  St unit
+  St bool
 
 val server_ClientFinished_13: hs ->
   cvd: Bytes.bytes ->
-  digest_SF: H.anyTag ->
-  digest_CF: H.anyTag ->
-  client_cert: option (HSM.certificate13 & HSM.certificateVerify13 & H.anyTag) ->
+  client_cert: option (HSM.certificate13 & HSM.certificateVerify13) ->
   St TLS.Handshake.Receive.incoming

@@ -88,7 +88,7 @@ val encrypt
   (requires (fun h ->
     Flags.model == true /\
     invariant h s /\
-    phi plain
+    (Flags.ideal_AEAD == true ==> phi plain)
   ))
   (ensures (fun h cipher h' -> 
     B.modifies (footprint s) h h' /\

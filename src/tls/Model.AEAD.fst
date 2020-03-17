@@ -25,7 +25,7 @@ let entry_value
   (phi: plain_pred)
   (iv: entry_key a)
 : Tot Type0
-= (cipher: SC.cipher a & (plain: SC.decrypted cipher { phi plain }))
+= (cipher: SC.cipher a & (plain: SC.decrypted cipher { F.ideal_AEAD == true ==> phi plain }))
 
 noextract
 inline_for_extraction

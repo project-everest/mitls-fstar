@@ -55,6 +55,7 @@ else ifeq ($(OS),Windows_NT)
   VARIANT	= -mingw
   SO		= dll
   LDFLAGS	+= -Xlinker --version-script -Xlinker libmitls_internal_script -Wl,--out-implib,libmitls.dll.a
+  LD_LIBS	+= bcrypt
   HEAD		= head
   export PATH := $(LD_PATH):$(PATH)
 endif
@@ -77,5 +78,5 @@ $(KREMLIB_A) $(EVERCRYPT_SO) $(MIPKI_SO):
 all: libmitls.$(SO)
 
 libmitls.$(SO): $(OBJS) $(KREMLIB_A) | $(EVERCRYPT_SO) $(MIPKI_SO)
-	$(CC) $(CFLAGS) -shared -o $@ $(OBJS) $(LDFLAGS) $(KREMLIB_A)
+	$(CC) $(CFLAGS) -shared -o $@ $(OBJS) $(KREMLIB_A) $(LDFLAGS)
 

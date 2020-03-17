@@ -72,6 +72,8 @@ let footprint (#a: SC.supported_alg) (#phi: plain_pred) (s: state a phi) : GTot 
   else match s with
   | Coerced st -> Ghost.reveal st.fp
 
+let invariant_loc_in_footprint #a #phi s m = ()
+
 let frame_invariant
   #a #phi h s l h'
 = if safe s

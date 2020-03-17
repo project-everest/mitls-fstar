@@ -522,10 +522,93 @@ let server_ServerFinished_13 hs =
 
 let server_EOED hs digestEOED = admit()
 
-let server_Ticket13 hs digestEOED = admit()
+let server_Ticket13 hs app_data =
+  let Server region cfg r = hs in
+  let S13_complete mode cvd svd ms ks = !r in
+  let (| li, rmsid, rms |) = KS.ks_server13_rms ks in
+  
+  let sh = S13_mode?.sh mode in
+  let cs = Nego.selected_cipher_suite sh in
+  let age_add = Random.sample32 4ul in
+  let age_add = Parse.uint32_of_bytes age_add in
 
-let server_ClientFinished_13 hs cvd digest_SF digest_F client_cert = admit()
+  let now = UInt32.uint_to_t (FStar.Date.secondsFromDawn()) in
+  let ticket = Ticket.Ticket13 cs li rmsid rms Bytes.empty_bytes now age_add app_data in
 
+  let tb = Ticket.create_ticket false ticket in
+  trace ("Sending ticket: "^(Bytes.print_bytes tb));
+  trace ("Application data in ticket: "^(Bytes.print_bytes app_data));
+  let ticket_ext =
+    let open Parsers.NewSessionTicketExtension in
+    match cfg.max_early_data with
+    | Some max_ed -> [NSTE_early_data max_ed]
+    | None -> [] in
+  let tnonce, _ = Bytes.split_ tb 12 in
+
+  let nst = Parsers.NewSessionTicket13.({
+    ticket_lifetime = 3600ul;
+    ticket_age_add = age_add;
+    ticket_nonce = tnonce;
+    ticket = tb;
+    extensions = ticket_ext;
+  }) in
+
+  match Send.send13 ms.digest ms.sending (HSM.M13_new_session_ticket nst) with
+  | Correct snd' ->
+    let ms1 = {ms with sending = snd'} in
+    r := S13_complete mode cvd svd ms1 ks;
+    true
+  | Error z -> false
+
+(*
+  let (| _, chr |) = get_handshake_repr (HSM.M_client_hello offer) in
+  let lbl = Transcript.LR_CompleteTCH chr in
+  Transcript.extend di lbl;
+  let ks', hsk = KS.ks_server13_sh ks digest_SH in
+  trace ("Transcript ServerHello: "^(Bytes.hex_of_bytes digest_SH));
+  register ms0.epochs hsk;
+  let ms1 : msg_state region pfs random ha = {ms0 with sending=sd} in
+  r := S13_sent_ServerHello soffer sh ee accept_0rtt ms1 cert ks';
+*)
+
+let server_ClientFinished_13 hs cvd client_cert =
+  trace "Process Client Finished";
+  let Server region config r = hs in
+  let S13_wait_Finished2 mode svd eoed_done ms ks = !r in
+  
+  let ha = Nego.selected_ha (S13_mode?.sh mode) in
+  let tag = LB.alloca 0z (H.hash_len ha) in
+  Transcript.extract_hash ms.digest tag;
+  let digest_CF = B.of_buffer (H.hash_len ha) tag in
+
+  // Add CF to transcript, get final tag
+  let (| _, cfr |) = get_handshake13_repr (HSM.M13_finished cvd) in
+  let lbl = Transcript.LR_HSM13 cfr in
+  Transcript.extend ms.digest lbl;
+  Transcript.extract_hash ms.digest tag;
+  let digest_F = B.of_buffer (H.hash_len ha) tag in
+
+   match client_cert with
+   | Some _ -> // (c,cv,digest) ->
+      Recv.InError(fatalAlert Internal_error,
+        perror __SOURCE_FILE__ __LINE__ "Client CertificateVerify validation not implemented")
+   | None ->
+     let (| i, cfin_key |) = KS.ks_server13_get_cfk ks in
+     if HMAC.verify cfin_key digest_CF cvd
+     then
+       begin
+       let ks = KS.ks_server13_cf ks digest_F in
+       let ms1 : msg_state region PF.F_s_Idle _ ha = ms in
+       r := S13_complete mode (Ghost.hide cvd) svd ms1 ks;
+       (match Nego.find_psk_key_exchange_modes (S13_mode?.offer mode).s_ch with
+       | [] -> trace ("Not sending a ticket: no PSK key exchange mode advertised")
+       | psk_kex ->
+         if Some? config.send_ticket then
+	   let _ = server_Ticket13 hs (Some?.v config.send_ticket)
+	 in ());
+       Recv.InAck true true  // Server 1.3 ATK
+       end
+     else Recv.InError (fatalAlert Bad_record_mac, "Finished MAC did not verify: expected digest "^Bytes.print_bytes cvd)
 
 (*
 let server_ServerFinished_13 hs =

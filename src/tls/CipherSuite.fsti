@@ -287,6 +287,8 @@ val name_of_cipherSuite_of_name : (n: Parsers.CipherSuite.cipherSuite) -> Tot (s
 val cipherSuite_of_name_of_cipherSuite (c: cipherSuite') : Lemma (match name_of_cipherSuite' c 
  with Correct n -> cipherSuite'_of_name n == Some c | _ -> True)
 
+private val _dummy : unit (* because of the poor management of #*-options in the .fst *)
+
 let validCipherSuite (c:cipherSuite') = Correct? (name_of_cipherSuite' c)
 
 inline_for_extraction
@@ -322,7 +324,7 @@ let name_of_cipherSuite (c: cipherSuite) : Tot cipherSuiteName =
 
 (* TODO: rewrite this function using a loop *)
 
-#reset-options "--using_facts_from '* -LowParse.Spec.Base'"
+#push-options "--using_facts_from '* -LowParse.Spec.Base'"
 
 let rec cipherSuites_of_nameList_aux (l: list cipherSuiteName) (accu: list cipherSuite) : Tot (l' : list cipherSuite { List.Tot.length l' <= List.Tot.length l + List.Tot.length accu } ) (decreases l) =
   match l with
@@ -351,7 +353,7 @@ let nameList_of_cipherSuites (l: list cipherSuite) : Tot (l' : list cipherSuiteN
 
 (* Parsers and serializers for cipherSuite *names*; used only in Ticket? *)
 
-#reset-options
+#pop-options
 
 type csbytes = b:Bytes.bytes {Bytes.length b = 2}
 
@@ -368,9 +370,9 @@ let parseCipherSuiteName: b:csbytes
 
 (* CipherSuite13 *)
 
-open Parsers.CipherSuite13
+open Parsers.CipherSuite13 // hides cipherSuite13
 
-#push-options "--z3rlimit 32"
+#push-options "--z3rlimit 64" // made higher because of the .fst
 
 let cipherSuite13_of_cipherSuiteName
   (c: cipherSuiteName { let c' = cipherSuite_of_name c in Some? c' /\ CipherSuite13? (Some?.v c') } )
@@ -381,6 +383,7 @@ let cipherSuite13_of_cipherSuiteName
   | TLS_CHACHA20_POLY1305_SHA256 -> Constraint_TLS_CHACHA20_POLY1305_SHA256 ()
   | TLS_AES_128_CCM_SHA256 -> Constraint_TLS_AES_128_CCM_SHA256 ()
   | TLS_AES_128_CCM_8_SHA256 -> Constraint_TLS_AES_128_CCM_8_SHA256 ()
+  | _ -> Constraint_TLS_AES_128_CCM_8_SHA256 () // dummy
 
 #pop-options
 
@@ -389,11 +392,19 @@ let cipherSuiteName_of_cipherSuite13
 : Tot (c1: cipherSuiteName { let c2 = cipherSuite_of_name c1 in Some? c2 /\ CipherSuite13? (Some?.v c2) } )
 = tag_of_cipherSuite13 c
 
-val cipherSuiteName_of_cipherSuite13_of_cipherSuiteName
+val cipherSuiteName_of_cipherSuite13_of_cipherSuiteName'
+  (c: Parsers.CipherSuite.cipherSuite)
+: Tot (squash (
+    let c' = cipherSuite_of_name c in (Some? c' /\ CipherSuite13? (Some?.v c')) ==> 
+    cipherSuiteName_of_cipherSuite13 (cipherSuite13_of_cipherSuiteName c) == c
+  ))
+
+let cipherSuiteName_of_cipherSuite13_of_cipherSuiteName
   (c: cipherSuiteName { let c' = cipherSuite_of_name c in Some? c' /\ CipherSuite13? (Some?.v c') } )
 : Lemma
   (cipherSuiteName_of_cipherSuite13 (cipherSuite13_of_cipherSuiteName c) == c)
   [SMTPat (cipherSuiteName_of_cipherSuite13 (cipherSuite13_of_cipherSuiteName c))]
+= cipherSuiteName_of_cipherSuite13_of_cipherSuiteName' c
 
 val cipherSuite13_of_cipherSuiteName_of_cipherSuite13
   (c: cipherSuite13)

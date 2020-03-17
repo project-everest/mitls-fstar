@@ -20,14 +20,14 @@ SOURCES = \
   fstar_io.c \
   fstar_string.c \
 #  fstar_uint128.c \
-  fstar_uint128_msvc.c \
+#  fstar_uint128_msvc.c \
   fstar_uint16.c \
   fstar_uint32.c \
   fstar_uint64.c \
   fstar_uint8.c \
   prims.c \
   testlib.c \
-  FStar_UInt_8_16_32_64.c
+#  FStar_UInt_8_16_32_64.c
 
 
 libkremlib.lib: $(SOURCES:.c=.obj)

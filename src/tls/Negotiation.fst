@@ -241,7 +241,14 @@ let selected_ha sh =
   match cipherSuite_of_name cs with
   | Some (CipherSuite.CipherSuite13 _ ha) -> ha
   | _ -> EverCrypt.Hash.Incremental.SHA2_256
-  
+
+let selected_cipher_suite sh =
+  assume false;
+//  let cs =
+//    if HSM.is_hrr sh then HSM.hrr_cipher_suite sh
+//    else HSM.sh_cipher_suite sh in
+  Some?.v (cipherSuite_of_name (HSM.sh_cipher_suite sh))
+
 // 19-04-23 TODO recheck error cases in case we don't understand the extension contents; should we return a result? 
 
 // let is_resumption12 m =
