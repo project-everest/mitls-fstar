@@ -7,6 +7,7 @@ open TLSConstants
 
 module HS = FStar.HyperStack
 module B = FStar.Bytes
+module C = LowStar.ConstBuffer
 module LB = LowStar.Buffer
 module LP = LowParse.Low.Base
 module M = LowStar.Modifies
@@ -19,16 +20,8 @@ module PF = TLS.Handshake.ParseFlights // only for flight names
 module Recv = TLS.Handshake.Receive
 module Send = TLS.Handshake.Send
 
-(* Debug output, shared by client and server *)
-val discard: bool -> ST unit
-  (requires (fun _ -> True))
-  (ensures (fun h0 _ h1 -> h0 == h1))
-let discard _ = ()
-let print s = discard (IO.debug_print_string ("HS | "^s^"\n"))
-unfold val trace: s:string -> ST unit
-  (requires (fun _ -> True))
-  (ensures (fun h0 _ h1 -> h0 == h1))
-unfold let trace = if DebugFlags.debug_HS then print else (fun _ -> ())
+inline_for_extraction noextract
+let trace = MITLS.Tracing.mk_trace "HS"
 
 /// * We keep [epochs] for now, to be replaced by multistreams.
 ///
@@ -145,7 +138,7 @@ let transcript_extract #ha (di:Transcript.state ha)
   let tag = B.of_buffer ltag btag in
   let h3 = get () in
   Transcript.frame_invariant di h2 h3 LB.loc_none;
-  trace ("Extracted a transcript hash "^B.hex_of_bytes tag);
+  trace "Extracted a transcript hash: %xuy" ltag btag LowStar.Printf.done;
   pop_frame();
   let h4 = get () in
   Transcript.frame_invariant di h3 h4 (LB.loc_region_only false (FStar.HyperStack.get_tip h1));
@@ -219,6 +212,7 @@ let extend13
     let b = R.to_bytes (R.as_ptr r) r.R.length in
     let h3 = get () in
     Transcript.frame_invariant di h2 h3 LB.loc_none;
-    trace ("extended transcript with "^B.hex_of_bytes b);
+    let workaround = MITLS.Tracing.mbuf_of_repr r in
+    trace "extended transcript with %xuy" r.R.length workaround LowStar.Printf.done;
     Correct ()
 #pop-options

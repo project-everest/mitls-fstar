@@ -1146,7 +1146,7 @@ let register (#region:rgn) (#n:random) (epochs:Epochs.epochs region n)
 let export (#region:rgn) (#n:random) (epochs:Epochs.epochs region n)
   (xk:KS.exportKey) : St unit
   =
-  trace "exporting a key";
+  trace "exporting a key" LowStar.Printf.done;
   FStar.Monotonic.Seq.i_write_at_end epochs.Epochs.exporter xk
 #pop-options
 

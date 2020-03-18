@@ -113,7 +113,7 @@ let invalidateSession hs = ()
 // Otherwise, we just returns buffered messages and signals.
 
 let rec next_fragment_bounded hs i (max32: UInt32.t) =
-  trace ("next_fragment_bounded");
+  trace "next_fragment_bounded" LowStar.Printf.done;
   match hs with 
   | Client region config r -> (
     let st0 = !r in 
@@ -182,7 +182,7 @@ let overflow () = Recv.InError (fatalAlert Internal_error, "Overflow in input bu
 #set-options "--max_fuel 0 --max_ifuel 1 --z3rlimit 20"
 // #set-options "--admit_smt_queries true"
 let rec recv_fragment hs #i rg f =
-  trace ("recv_fragment: "^hex_of_bytes f);
+  trace "recv_fragment: %a" MITLS.Tracing.print_bytes f LowStar.Printf.done;
   let open HandshakeMessages in
   // only case where the next incoming flight may already have been buffered.
   [@inline_let] let recv_again r =
@@ -195,7 +195,7 @@ let rec recv_fragment hs #i rg f =
    begin // Client
     match !r  with
     | C_init _ ->
-      trace "No CH sent (statically excluded)";
+      trace "No CH sent (statically excluded)" LowStar.Printf.done;
       Recv.InError (
       fatalAlert Unexpected_message,
       "Client hasn't sent hello yet (to be statically excluded)")
@@ -226,7 +226,7 @@ let rec recv_fragment hs #i rg f =
       match Recv.buffer_received_fragment ms0.receiving f with
       | None -> overflow ()
       | Some rcv1 ->
-      trace "receive_c13_wait_Finished1";
+      trace "receive_c13_wait_Finished1" LowStar.Printf.done;
       match TLS.Handshake.Receive.receive_c13_wait_Finished1 rcv1 with
       | Error z -> Recv.InError z
       | Correct (sflight, rcv2) ->
@@ -239,7 +239,7 @@ let rec recv_fragment hs #i rg f =
           let ocr = match sflight.PF.c13_w_f1_cr with
             | None -> None | Some cr ->
               let x = R.get_field RH13.field_cr (R.as_ptr cr) in Some x.R.vv in
-          let oc_cv = match sflight.PF.c13_w_f1_c_cv with
+              let oc_cv = match sflight.PF.c13_w_f1_c_cv with
             | None -> None | Some (c,cv) ->
               let x = R.get_field RH13.field_certificate (R.as_ptr c) in
               let y = R.get_field RH13.field_cv (R.as_ptr cv) in
@@ -254,10 +254,10 @@ let rec recv_fragment hs #i rg f =
         if rcv1.Recv.rcv_to = rcv1.Recv.rcv_from then 
           Recv.InAck false false // No-op
         else match TLS.Handshake.Receive.receive_c13_Complete rcv1 with
-        | Error z -> trace "Receive failed"; Recv.InError z
+        | Error z -> trace "Receive failed" LowStar.Printf.done; Recv.InError z
         | Correct (nst, rcv2) ->
          begin
-          trace "Processing a ticket";
+          trace "Processing a ticket" LowStar.Printf.done;
           r := C13_complete offer sh ee server_id fin1 ({ms0 with receiving = rcv2})
             (Finished_sent fin2 ks);
           match nst with
@@ -269,7 +269,7 @@ let rec recv_fragment hs #i rg f =
          end
      end
     | _ ->
-      trace "Unexpected client state (should be excluded statically";
+      trace "Unexpected client state (should be excluded statically" LowStar.Printf.done;
       Recv.InError (fatalAlert Unexpected_message, "TBC")
    end // Client
   | Server region config r ->

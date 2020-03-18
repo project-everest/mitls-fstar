@@ -16,6 +16,7 @@ module HS = FStar.HyperStack
 module Msg = HandshakeMessages
 open TLS.Handshake.Machine
 
+// This is bytes, not Low*
 type tag = Hashing.Spec.anyTag
 
 (*** Hello messages ***)
