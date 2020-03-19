@@ -494,8 +494,8 @@ let client_ServerHello (Client region config r) sh =
     )
     | CipherSuite kex sa ae -> (
       trace "Running classic TLS" LowStar.Printf.done;
-      trace "Offered SID=%a Server SID=%a" MITLS.Tracing.print_bytes offer.full_ch.CH.session_id
-        MITLS.Tracing.print_bytes (Msg.sh_session_id sh) LowStar.Printf.done;
+      trace "Offered SID=%a Server SID=%a" TLS.Tracing.print_bytes offer.full_ch.CH.session_id
+        TLS.Tracing.print_bytes (Msg.sh_session_id sh) LowStar.Printf.done;
       Receive.InError (fatalAlert Handshake_failure, "TLS 1.2 TBC")
       // if Negotiation.resume_12 mode then
       // begin // 1.2 resumption
@@ -740,7 +740,7 @@ let client13_NewSessionTicket (Client region config r) st13 =
   let tid = st13.ticket in
   let nonce = st13.ticket_nonce in
   let age_add = st13.ticket_age_add in
-  trace "Received ticket: %a nonce: %a" MITLS.Tracing.print_bytes tid MITLS.Tracing.print_bytes nonce LowStar.Printf.done;
+  trace "Received ticket: %a nonce: %a" TLS.Tracing.print_bytes tid TLS.Tracing.print_bytes nonce LowStar.Printf.done;
   assume False; // FIXME some pre-conditions need updating
 
   let C13_complete offer sh ee server_id _fin1 _ms (Finished_sent _fin2 ks) = !r in
@@ -883,7 +883,7 @@ let client12_ServerFinished hs f digestClientFinished =
 let client12_NewSessionTicket hs (resume:bool) (digest:Hashing.anyTag) (st: Msg.newSessionTicket12) =
   let open Parsers.NewSessionTicket12 in
   let open TLS.Callbacks in
-  trace "Processing ticket: %a" MITLS.Tracing.print_bytes st.ticket LowStar.Printf.done;
+  trace "Processing ticket: %a" TLS.Tracing.print_bytes st.ticket LowStar.Printf.done;
   Receive.InError (fatalAlert Internal_error, "TBC")
   // hs.state := C_wait_CCS (resume, digest);
   // let cfg = Negotiation.local_config hs.nego in

@@ -21,7 +21,7 @@ module Recv = TLS.Handshake.Receive
 module Send = TLS.Handshake.Send
 
 inline_for_extraction noextract
-let trace = MITLS.Tracing.mk_trace "HS"
+let trace = TLS.Tracing.mk_trace "HS"
 
 /// * We keep [epochs] for now, to be replaced by multistreams.
 ///
@@ -212,7 +212,7 @@ let extend13
     let b = R.to_bytes (R.as_ptr r) r.R.length in
     let h3 = get () in
     Transcript.frame_invariant di h2 h3 LB.loc_none;
-    let workaround = MITLS.Tracing.mbuf_of_repr r in
+    let workaround = TLS.Tracing.mbuf_of_repr r in
     trace "extended transcript with %xuy" r.R.length workaround LowStar.Printf.done;
     Correct ()
 #pop-options

@@ -1,4 +1,4 @@
-module MITLS.Tracing
+module TLS.Tracing
 
 /// A module to support printf-style debugging, guarded behind debug flags,
 /// compatible with C. This mostly reuses the machinery from LowStar.Printf,
@@ -17,12 +17,14 @@ module Printf = LowStar.Printf
 
 #set-options "--max_fuel 0 --max_ifuel 0"
 
+inline_for_extraction noextract
 let print_frags_t acc =
   (_: unit) ->
   Stack unit
     (requires fun h0 -> Printf.(live_frags h0 acc))
     (ensures fun h0 _ h1 -> h0 == h1)
 
+inline_for_extraction noextract
 let print_frags (acc: Printf.(list frag_t)): print_frags_t acc =
   fun _ ->
     Printf.print_frags acc

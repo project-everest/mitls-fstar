@@ -182,7 +182,7 @@ let overflow () = Recv.InError (fatalAlert Internal_error, "Overflow in input bu
 #set-options "--max_fuel 0 --max_ifuel 1 --z3rlimit 20"
 // #set-options "--admit_smt_queries true"
 let rec recv_fragment hs #i rg f =
-  trace "recv_fragment: %a" MITLS.Tracing.print_bytes f LowStar.Printf.done;
+  trace "recv_fragment: %a" TLS.Tracing.print_bytes f LowStar.Printf.done;
   let open HandshakeMessages in
   // only case where the next incoming flight may already have been buffered.
   [@inline_let] let recv_again r =
