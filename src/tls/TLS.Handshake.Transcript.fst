@@ -768,6 +768,7 @@ let extend_hsm12 : extend_t LR_HSM12? =
 
 
 
+#push-options "--z3rlimit 50"
 let extend_hsm13 : extend_t LR_HSM13? =
   fun #a s l ->
   assert_norm (pow2 32 < pow2 61);
@@ -808,6 +809,7 @@ let extend_hsm13 : extend_t LR_HSM13? =
     assert_norm ((max_transcript_size + 4) * max_message_size < pow2 61);
     CRF.frame_invariant (B.loc_mreference s.transcript) s.hash_state h0 h1;
     CRF.update (Ghost.hide a) s.hash_state (C.to_buffer hs13_data) hs13_len
+#pop-options
 
 
 #push-options "--fuel 0 --ifuel 0"
