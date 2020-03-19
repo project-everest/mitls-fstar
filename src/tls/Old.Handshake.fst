@@ -63,7 +63,7 @@ type machineState =
   | C_Sent_EOED:
     digest ->
     option HandshakeMessages.cr13 ->
-    i:finishedId & cfk:KeySchedule.fink i -> machineState // TLS 1.3#20 aggravation
+    i:finishedId & (*cfk:*)KeySchedule.fink i -> machineState // TLS 1.3#20 aggravation
   | C_Wait_CCS1 of digest      // TLS resume, digest to be MACed by server
   | C_Wait_R_Finished1 of digest // TLS resume, digest to be MACed by server
   | C_Wait_ServerHelloDone     // TLS classic
@@ -267,7 +267,7 @@ let clientHello offer = // pure; shared by Client and Server
 
 type binderId = HMAC_UFCMA.binderId
 
-type btag (binderKey:(i:binderId & bk:KeySchedule.binderKey i)) =
+type btag (binderKey:(i:binderId & KeySchedule.binderKey i)) =
   HMAC_UFCMA.tag (HMAC_UFCMA.HMAC_Binder (let (|i,_|) = binderKey in i))
 
 val map_ST2: 'c -> ('c -> 'a -> KeySchedule.ST0 'b) -> list 'a -> KeySchedule.ST0 (list 'b)
@@ -275,7 +275,7 @@ let rec map_ST2 env f x = match x with
   | [] -> []
   | a::tl -> f env a :: map_ST2 env f tl
 
-let compute_binder hs (bkey:(i:binderId & bk:KeySchedule.binderKey i)): ST (btag bkey)
+let compute_binder hs (bkey:(i:binderId & KeySchedule.binderKey i)): ST (btag bkey)
     (requires fun h0 -> True)
     (ensures fun h0 _ h1 -> modifies_none h0 h1)  // we'll need a complete spec to determine the transcript
   =
@@ -283,7 +283,7 @@ let compute_binder hs (bkey:(i:binderId & bk:KeySchedule.binderKey i)): ST (btag
   let digest_CH0 = HandshakeLog.hash_tag #(binderId_hash bid) hs.log in
   HMAC_UFCMA.mac bk digest_CH0
 
-let verify_binder hs (bkey:(i:binderId & bk:KeySchedule.binderKey i)) (tag:btag bkey) tlen: ST bool
+let verify_binder hs (bkey:(i:binderId & KeySchedule.binderKey i)) (tag:btag bkey) tlen: ST bool
     (requires fun h0 -> True)
     (ensures fun h0 _ h1 -> modifies_none h0 h1)
   =
@@ -509,7 +509,7 @@ let client_ServerHelloDone hs c ske ocr =
       InAck false false)
 
 #set-options "--admit_smt_queries true"
-private val client_ClientFinished_13: hs -> digest -> option HandshakeMessages.cr13 -> (i:finishedId & cfk:KeySchedule.fink i) -> bool -> St unit
+private val client_ClientFinished_13: hs -> digest -> option HandshakeMessages.cr13 -> (i:finishedId & (*cfk:*)KeySchedule.fink i) -> bool -> St unit
 let client_ClientFinished_13 hs digestServerFinished ocr cfin_key reject_0rtt =
   let mode = Nego.getMode hs.nego in
   let ha = verifyDataHashAlg_of_ciphersuite (mode.Nego.n_cipher_suite) in

@@ -89,8 +89,8 @@ noeq type state (i:id) (rw:rw) =
 // - gen is called at most once for each (i:id), generating distinct refs for each (i:id)
 // - the log is monotonic
 
-type writer i = s:state i Writer
-type reader i = s:state i Reader
+type writer i = state i Writer
+type reader i = state i Reader
 
 #set-options "--admit_smt_queries true"
 

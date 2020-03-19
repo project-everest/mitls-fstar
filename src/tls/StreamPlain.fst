@@ -44,7 +44,7 @@ val pad_zeros: payload:bytes
 let pad_zeros payload ct len len' = ()
 *)
 #set-options "--z3rlimit 100 --max_ifuel 1 --initial_ifuel 0 --max_fuel 1 --initial_fuel 0"
-val ghost_repr: #i:id -> #len: plainLen -> f:plain i len -> GTot (bs:lbytes len)
+val ghost_repr: #i:id -> #len: plainLen -> f:plain i len -> GTot (lbytes len)
 let ghost_repr #i #len f =
   let ct,_ = ct_rg i f in
   let payload = Content.ghost_repr #i f in

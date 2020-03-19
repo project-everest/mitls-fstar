@@ -141,7 +141,7 @@ private let p :
 
 // consider dropping the tls_ prefix
 noextract
-let tls_tables_region: r:tls_rgn =
+let tls_tables_region: tls_rgn =
   match p with | (| r, _, _ |) -> r
 
 noextract

@@ -170,7 +170,7 @@ type recordInstance =
     #id:TLSInfo.id ->
     r: StAE.reader (peerId id) ->
     w: StAE.writer id ->
-    pn: option bytes * option bytes ->
+    pn: (option bytes * option bytes) ->
     recordInstance
 
 (* 2 choices - I prefer the second:
@@ -199,8 +199,8 @@ type exportKey = (li:logInfo & i:exportId li & ems i)
 //  writer : role             // the role of the writer
 //  }
 
-type ks_alpha12 = pv:protocolVersion * cs:cipherSuite * ems:bool
-type ks_alpha13 = ae:aeadAlg * h:hash_alg
+type ks_alpha12 = (*pv:*)protocolVersion * (*cs:*)cipherSuite * (*ems:*)bool
+type ks_alpha13 = (*ae:*)aeadAlg * (*h:*)hash_alg
 
 type ks_client_state =
 | C_Init: cr:random -> ks_client_state
@@ -210,9 +210,9 @@ type ks_client_state =
 | C_12_has_MS: csr:csRands -> alpha:ks_alpha12 -> id:TLSInfo.msId -> ms:ms -> ks_client_state
 | C_13_wait_SH: cr:random -> esl: list (i:esId{~(NoPSK? i)} & es i) ->
                 gs:list (g:CommonDH.group & CommonDH.ikeyshare g) -> ks_client_state
-| C_13_wait_SF: alpha:ks_alpha13 -> (i:finishedId & cfk:fink i) -> (i:finishedId & sfk:fink i) ->
-                (i:asId & ams:ams i) -> ks_client_state
-| C_13_wait_CF: alpha:ks_alpha13 -> (i:finishedId & cfk:fink i) -> (i:asId & ams:ams i) ->
+| C_13_wait_SF: alpha:ks_alpha13 -> (i:finishedId & (*cfk:*)fink i) -> (i:finishedId & (*sfk:*)fink i) ->
+                (i:asId & (*ams:*)ams i) -> ks_client_state
+| C_13_wait_CF: alpha:ks_alpha13 -> (i:finishedId & (*cfk:*)fink i) -> (i:asId & (*ams:*)ams i) ->
                 (li:logInfo & i:rekeyId li & rekey_secrets i) -> ks_client_state
 | C_13_postHS: alpha:ks_alpha13 -> (li:logInfo & i:rekeyId li & rekey_secrets i) ->
                 (li:logInfo & i:rmsId li & rms i) -> ks_client_state
@@ -225,9 +225,9 @@ type ks_server_state =
 | S_12_has_MS: csr:csRands -> alpha:ks_alpha12 -> id:TLSInfo.msId -> ms:ms -> ks_server_state
 | S_13_wait_SH: alpha:ks_alpha13 -> cr:random -> sr:random -> es:(i:esId & es i) ->
                 hs:( i:hsId & hs i ) -> ks_server_state
-| S_13_wait_SF: alpha:ks_alpha13 -> ( i:finishedId & cfk:fink i ) -> ( i:finishedId & sfk:fink i ) ->
-                ( i:asId & ams:ams i ) -> ks_server_state
-| S_13_wait_CF: alpha:ks_alpha13 -> ( i:finishedId & cfk:fink i ) -> ( i:asId & ams i ) ->
+| S_13_wait_SF: alpha:ks_alpha13 -> ( i:finishedId & (*cfk:*)fink i ) -> ( i:finishedId & (*sfk:*)fink i ) ->
+                ( i:asId & (*ams:*)ams i ) -> ks_server_state
+| S_13_wait_CF: alpha:ks_alpha13 -> ( i:finishedId & (*cfk:*)fink i ) -> ( i:asId & ams i ) ->
                 ( li:logInfo & i:rekeyId li & rekey_secrets i ) ->  ks_server_state
 | S_13_postHS: alpha:ks_alpha13 -> ( li:logInfo & i:rekeyId li & rekey_secrets i ) ->
 	        ( li:logInfo & i:rmsId li & rms i) -> ks_server_state
@@ -352,7 +352,7 @@ let ks_client_init ks ogl =
 type ticket13 = t:Ticket.ticket{Ticket.Ticket13? t}
 
 private let mk_binder (#rid) (pskid:psk_identifier) (t:ticket13)
-  : ST ((i:binderId & bk:binderKey i) * (i:esId{~(NoPSK? i)} & es i))
+  : ST ((i:binderId & binderKey i) * (i:esId{~(NoPSK? i)} & es i))
   (requires fun h0 -> True)
   (ensures fun h0 _ h1 -> modifies_none h0 h1)
   =
@@ -375,7 +375,7 @@ private let mk_binder (#rid) (pskid:psk_identifier) (t:ticket13)
   (| bId, bk|), (| i, es |)
 
 private let rec tickets13 #rid acc (l:list (psk_identifier * Ticket.ticket))
-  : ST0 (list ((i:binderId & bk:binderKey i) * (i:esId{~(NoPSK? i)} & es i)))
+  : ST0 (list ((i:binderId & binderKey i) * (i:esId{~(NoPSK? i)} & es i)))
   = match l with
   | [] -> List.Tot.rev acc
   | (pskid, t) :: r -> tickets13 #rid (if Ticket.Ticket13? t then (mk_binder #rid pskid t)::acc else acc) r
@@ -670,7 +670,7 @@ let ks_server_13_client_finished ks
 // Will become private; public API will have
 // ks_client_12_keygen: ks -> (i:id * w:StatefulLHAE.writer i)
 // ks_server_12_keygen: ...
-val ks_12_finished_key: ks:ks -> ST (key:TLSPRF.key)
+val ks_12_finished_key: ks:ks -> ST TLSPRF.key
   (requires fun h0 ->
     let st = sel h0 (KS?.state ks) in
     match st with
@@ -874,7 +874,7 @@ let ks_client_13_sh ks sr cs log gy accept_psk =
   let salt = HKDF.derive_secret h es "derived" (H.emptyHash h) in
   dbg ("handshake salt:                  "^print_bytes salt);
 
-  let (| hsId, hs |): (hsId: pre_hsId & hs: hs hsId) =
+  let (| hsId, hs |): (hsId: pre_hsId & hs hsId) =
     match gy with
     | Some (| g, gy |) -> (* (PSK-)DHE *)
       let Some (| _, gx |) = List.Helpers.find_aux g group_matches gc in
@@ -945,7 +945,7 @@ let ks_client_13_sh ks sr cs log gy accept_psk =
 (******************************************************************)
 
 let ks_client_13_sf ks (log:bytes)
-  : ST (( i:finishedId & sfk:fink i ) * ( i:finishedId & cfk:fink i ) * recordInstance * exportKey)
+  : ST (( i:finishedId & (*sfk:*)fink i ) * ( i:finishedId & (*cfk:*)fink i ) * recordInstance * exportKey)
   (requires fun h0 ->
     let kss = sel h0 (KS?.state ks) in
     C? kss /\ C_13_wait_SF? (C?.s kss))

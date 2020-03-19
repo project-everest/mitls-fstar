@@ -1173,7 +1173,7 @@ val compute_cs13:
   psks: list (PSK.pskid * PSK.pskInfo) ->
   shares: list share (* pre-registered *) ->
   server_cert: bool (* is a certificate available for signing? *) ->
-  result (list (cs13 o) * option (CommonDH.namedGroup * cs:cipherSuite))
+  result (list (cs13 o) * option (CommonDH.namedGroup * cipherSuite))
 let compute_cs13 cfg o psks shares server_cert =
   // pick acceptable record ciphersuites
   let ncs = filter_cipherSuites13 cfg o.ch_cipher_suites in

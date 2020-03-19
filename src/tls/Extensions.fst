@@ -70,7 +70,7 @@ let rec binderListBytes_aux (bl:list binder)
       assume (UInt.fits (length b0 + length bt) 32);
       b0 @| bt
 
-val binderListBytes: binders -> Pure (b:bytes)
+val binderListBytes: binders -> Pure bytes
   (requires True)
   (ensures fun b -> length b >= 33 /\ length b <= 65535)
 let binderListBytes bs =
@@ -549,7 +549,7 @@ let is_unknown x =
   x <> twobytes (0x00z, 0x10z)
 
 (* Application extensions *)
-private val ext_of_custom_aux: acc:list extension -> el:custom_extensions -> Tot (l:list extension)
+private val ext_of_custom_aux: acc:list extension -> el:custom_extensions -> Tot (list extension)
 let rec ext_of_custom_aux acc = function
   | [] -> acc
   | (h, b) :: t -> 
@@ -561,7 +561,7 @@ let rec ext_of_custom_aux acc = function
 let ext_of_custom el = List.Tot.rev (ext_of_custom_aux [] el)
 
 #reset-options "--admit_smt_queries true"
-private val custom_of_ext_aux: acc:custom_extensions -> l:list extension -> Tot (el:custom_extensions)
+private val custom_of_ext_aux: acc:custom_extensions -> l:list extension -> Tot custom_extensions
 let rec custom_of_ext_aux acc = function
   | [] -> acc
   | (E_unknown_extension hd b) :: t -> custom_of_ext_aux ((uint16_of_bytes hd, b) :: acc) t

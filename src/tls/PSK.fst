@@ -31,7 +31,7 @@ let extend (h:hostname) (t:tlabel h) = MDM.extend tickets h t
 
 // SESSION TICKET DATABASE (TLS 1.2)
 // Note that this table also stores the master secret
-type session12 (tid:bytes) = protocolVersion * cipherSuite * ems:bool * ms:bytes
+type session12 (tid:bytes) = protocolVersion * cipherSuite * (*ems:*)bool * (*ms:*)bytes
 private let sessions12 : MDM.t tregion bytes session12 (fun _ -> True) =
   MDM.alloc ()
 

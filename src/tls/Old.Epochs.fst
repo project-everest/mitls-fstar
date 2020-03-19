@@ -71,7 +71,7 @@ noeq type epoch (hs_rgn:rgn) (n:random) =
       h :Negotiation.handshake ->
       r: reader (peerId i) ->
       w: writer i {epoch_region_inv' hs_rgn r w} ->
-      pn: option bytes * option bytes ->
+      pn: (option bytes * option bytes) ->
       epoch hs_rgn n
 
 // we would extend/adapt it for TLS 1.3,
@@ -178,7 +178,7 @@ let containsT (#r:rgn) (#n:random) (es:epochs r n) (h:mem) =
     MS.i_contains (MkEpochs?.es es) h
 
 val alloc_log_and_ctrs: #a:Type0 -> #p:(seq a -> Type0) -> r:rgn ->
-  ST (is:MS.i_seq r a p & c1:epoch_ctr r is & c2:epoch_ctr r is)
+  ST (is:MS.i_seq r a p & c1:epoch_ctr r is & (*c2:*)epoch_ctr r is)
     (requires (fun h -> p Seq.empty))
     (ensures (fun h0 x h1 ->
       modifies_one r h0 h1 /\

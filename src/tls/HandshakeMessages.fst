@@ -1523,9 +1523,9 @@ let rec handshakeMessagesBytes pv = function
 
 //#reset-options
 
-let lemma_handshakeMessagesBytes_def (pv:option protocolVersion) (li:list (msg:valid_hs_msg pv){Cons? li}) : Lemma (handshakeMessagesBytes pv li = ((handshakeMessageBytes pv (Cons?.hd li)) @| (handshakeMessagesBytes pv (Cons?.tl li)))) = ()
+let lemma_handshakeMessagesBytes_def (pv:option protocolVersion) (li:list (valid_hs_msg pv){Cons? li}) : Lemma (handshakeMessagesBytes pv li = ((handshakeMessageBytes pv (Cons?.hd li)) @| (handshakeMessagesBytes pv (Cons?.tl li)))) = ()
 
-let lemma_handshakeMessagesBytes_def2 (pv:option protocolVersion) (li:list (msg:valid_hs_msg pv){Nil? li}) : Lemma (handshakeMessagesBytes pv li = empty_bytes) = ()
+let lemma_handshakeMessagesBytes_def2 (pv:option protocolVersion) (li:list (valid_hs_msg pv){Nil? li}) : Lemma (handshakeMessagesBytes pv li = empty_bytes) = ()
 
 val lemma_handshakeMessageBytes_aux: pv:option protocolVersion -> msg1:valid_hs_msg pv -> msg2:valid_hs_msg pv ->
   Lemma (requires (let b1 = handshakeMessageBytes pv msg1 in
@@ -1581,7 +1581,7 @@ let lemma_aux_1 (a:bytes) (b:bytes) (c:bytes) (d:bytes) : Lemma
 
 let lemma_handshakeMessageBytes_min_length (pv:option protocolVersion) (msg:valid_hs_msg pv) : Lemma (length (handshakeMessageBytes pv msg) >= 4) = ()
 
-let lemma_aux_2 (pv:option protocolVersion) (l:list (msg:valid_hs_msg pv)) :
+let lemma_aux_2 (pv:option protocolVersion) (l:list (valid_hs_msg pv)) :
   Lemma (requires (Cons? l))
   (ensures (length (handshakeMessagesBytes pv l) > 0))
   = ()

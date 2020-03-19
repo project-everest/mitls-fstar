@@ -48,7 +48,7 @@ private let parseVersion (x: lbytes 2) = parseVersion (p_of_f x)
 
 private let headerLen = 5ul 
 private (* noextract *) let headerLength = v headerLen 
-private type header = b:lbytes headerLength // for all TLS versions
+private type header = lbytes headerLength // for all TLS versions
 
 #reset-options "--using_facts_from '* -LowParse.Spec.Base'"
 

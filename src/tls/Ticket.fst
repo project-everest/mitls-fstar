@@ -27,7 +27,7 @@ unfold let trace = if DebugFlags.debug_NGO then print else (fun _ -> ())
 
 // verification-only
 type hostname = string
-type tlabel (h:hostname) = t:bytes * tls13:bool
+type tlabel (h:hostname) = (*t:*)bytes * (*tls13:*)bool
 
 noextract
 private let region:rgn = new_region tls_tables_region

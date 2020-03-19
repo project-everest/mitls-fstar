@@ -118,7 +118,7 @@ noextract
 val create:
   ip:ipkg -> ha_of_i: (ip.Pkg.t -> ha) -> good_of_i: (i:ip.Pkg.t -> Hashing.macable (ha_of_i i) -> bool) ->
   i:ip.Pkg.t {ip.Pkg.registered i} ->
-  u:info {u.alg = ha_of_i i /\ u.good == good_of_i i} -> ST (k:key ip i)
+  u:info {u.alg = ha_of_i i /\ u.good == good_of_i i} -> ST (key ip i)
   (requires fun _ -> model)
   (ensures fun h0 k h1 ->
     modifies_none h0 h1 /\
@@ -175,7 +175,7 @@ val coerce:
   ip: ipkg -> ha_of_i: (ip.Pkg.t -> ha) -> good_of_i: (i:ip.Pkg.t -> Hashing.macable (ha_of_i i) -> bool) ->
   i: ip.Pkg.t {ip.Pkg.registered i /\ ~(safe i)} ->
   u: info {u.alg = ha_of_i i /\ u.good == good_of_i i} ->
-  kv: lbytes32 (keylen u) -> ST (k:key ip i)
+  kv: lbytes32 (keylen u) -> ST (key ip i)
   (requires fun _ -> True)
   (ensures fun h0 k h1 ->
     modifies_none h0 h1 /\

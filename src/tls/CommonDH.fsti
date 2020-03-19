@@ -61,8 +61,8 @@ val default_group: group
 /// parsing their wire format. This requires checking for collisions
 /// between honestly-generated shares.
 
-type pre_dhi = g:group & s:pre_share g
-type pre_dhr (i:pre_dhi) = s:pre_share (dfst i)
+type pre_dhi = g:group & pre_share g
+type pre_dhr (i:pre_dhi) = pre_share (dfst i)
 
 noextract
 val dh_region : rgn

@@ -45,7 +45,7 @@ let vlbytes2 (b:bytes {length b < pow2 16}) = lemma_repr_bytes_values (length b)
 val vlbytes_trunc: 
   lSize:nat {lSize <= 3} -> b:bytes -> 
   extra:nat {repr_bytes (length b + extra) <= lSize} ->
-  r: lbytes (lSize + length b)
+  lbytes (lSize + length b)
 let vlbytes_trunc lSize b extra =
   bytes_of_int lSize (length b + extra) @| b
 

@@ -425,7 +425,7 @@ let fragment_at_j_stable (#i:id) (#rw:rw) (s:state i rw{authId i}) (n:nat) (f:C.
 
 
 val decrypt: #i:id -> d:reader i -> c:C.decrypted i
-  -> ST (option (f:C.fragment i))
+  -> ST (option (C.fragment i))
     (requires (fun h0 -> incrementable d h0))
     (ensures  (fun h0 res h1 ->
    	        match res with

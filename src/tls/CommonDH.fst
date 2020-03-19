@@ -767,7 +767,7 @@ let parseServerKeyShare b =
   | Correct ks -> Correct (ServerKeyShare ks)
   | Error z -> Error z
 
-let helloRetryKeyShareBytes (k:keyShare): Tot (b:bytes) = 
+let helloRetryKeyShareBytes (k:keyShare): Tot bytes =
   match k with 
   | HRRKeyShare ng -> namedGroup_serializer32 ng
   | _ -> Bytes.empty_bytes 

@@ -645,7 +645,7 @@ type pskInfo = {
 }
 
 type ticketInfo =
-  | TicketInfo_12 of protocolVersion * cipherSuite * ems:bool
+  | TicketInfo_12 of protocolVersion * cipherSuite * (*ems:*)bool
   | TicketInfo_13 of pskInfo
 
 type ticket_seal = b:bytes{length b < 65536}

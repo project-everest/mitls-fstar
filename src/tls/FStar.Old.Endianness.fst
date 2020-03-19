@@ -35,14 +35,14 @@ let uint128_to_uint8 (a:UInt128.t) : Tot (b:UInt8.t{UInt8.v b = UInt128.v a % po
 open FStar.Seq
 
 (* Little endian integer value of a sequence of bytes *)
-let rec little_endian (b:bytes) : Tot (n:nat) (decreases (Seq.length b)) =
+let rec little_endian (b:bytes) : Tot nat (decreases (Seq.length b)) =
   if Seq.length b = 0 then 0
   else
     UInt8.v (head b) + pow2 8 * little_endian (tail b)
 
 (* Big endian integer value of a sequence of bytes *)
-let rec big_endian (b:bytes) : Tot (n:nat) (decreases (Seq.length b)) = 
-  if Seq.length b = 0 then 0 
+let rec big_endian (b:bytes) : Tot nat (decreases (Seq.length b)) =
+  if Seq.length b = 0 then 0
   else
     UInt8.v (last b) + pow2 8 * big_endian (Seq.slice b 0 (Seq.length b - 1))
 

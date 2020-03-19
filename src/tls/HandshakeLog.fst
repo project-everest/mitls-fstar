@@ -107,7 +107,7 @@ let rec gforall_list_to_list_refined
   (#a: Type)
   (f: (a -> GTot bool))
   (l: list a { gforall f l } )
-: Tot (l': list (x: a {f x}))
+: Tot (list (x: a {f x}))
 = match l with
   | [] -> []
   | x :: q -> x :: gforall_list_to_list_refined f q

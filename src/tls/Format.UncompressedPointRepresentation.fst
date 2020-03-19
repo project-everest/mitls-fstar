@@ -84,8 +84,8 @@ let lemma_ucp_of_uv_of_ucp #l
   = lemma_ucp_of_uv_is_injective #l
 #reset-options
 
-let ucp_of_cuv #l (cuv:constantByte 4uy * lbytes_pair l): Tot (ucp:uncompressedPointRepresentation l) = let c, uv = cuv in ucp_of_uv uv
-let cuv_of_ucp #l (ucp:uncompressedPointRepresentation l): Tot (cuv:constantByte 4uy * lbytes_pair l) = 4uy, (ucp.x, ucp.y)
+let ucp_of_cuv #l (cuv:(constantByte 4uy * lbytes_pair l)): Tot (uncompressedPointRepresentation l) = let c, uv = cuv in ucp_of_uv uv
+let cuv_of_ucp #l (ucp:uncompressedPointRepresentation l): Tot (constantByte 4uy * lbytes_pair l) = 4uy, (ucp.x, ucp.y)
 
 #reset-options "--using_facts_from '* -LowParse -FStar.Reflection -FStar.Tactics' --max_fuel 16 --initial_fuel 16 --max_ifuel 16 --initial_ifuel 16"
 let lemma_ucp_of_cuv_is_injective #l

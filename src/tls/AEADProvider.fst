@@ -90,8 +90,8 @@ let state (i:id) (r:rw) =
 let salt_of_state #i #r (s:state i r) : salt i = snd (snd s)
 let key_of_state #i #r (s:state i r) : key i = fst (snd s)
 
-type writer i = s:state i Writer
-type reader i = s:state i Reader
+type writer i = state i Writer
+type reader i = state i Reader
 
 let region #i #rw (s:state i rw) = tls_region
 let log_region #i #rw (s:state i rw) = tls_region
@@ -108,7 +108,7 @@ let coerce_iv (i:id) (b:lbytes (iv_length i)) : Tot (iv i) = b
 
 #reset-options "--using_facts_from '* -LowParse.Spec.Base'"
  
-let create_nonce (#i:id) (#rw:rw) (st:state i rw) (n:nonce i): Tot (i:iv i) =
+let create_nonce (#i:id) (#rw:rw) (st:state i rw) (n:nonce i): Tot (iv i) =
   let salt = salt_of_state st in
   match (pv_of_id i, alg i) with
   | (TLS_1p3, _) | (_, EverCrypt.CHACHA20_POLY1305) ->
@@ -200,7 +200,7 @@ let coerce (i:id) (r:rgn) (k:key i) (s:salt i)
 
 type plainlen = n:nat{n <= max_TLSPlaintext_fragment_length}
 (* irreducible *)
-type plain (i:id) (l:plainlen) = b:lbytes l
+type plain (i:id) (l:plainlen) = lbytes l
 let repr (#i:id) (#l:plainlen) (p:plain i l) : Tot (lbytes l) = p
 
 let adlen i = match pv_of_id i with
@@ -235,7 +235,7 @@ let from_bytes (b:bytes{length b <> 0}) : StackInline uint8_p
 
 #set-options "--admit_smt_queries true"
 let encrypt (#i:id) (#l:plainlen) (w:writer i) (iv:iv i) (ad:adata i) (plain:plain i l)
-  : ST (cipher:cipher i l)
+  : ST (cipher i l)
        (requires (fun h -> True))
        (ensures (fun h0 cipher h1 -> modifies_none h0 h1))
   =
@@ -261,7 +261,7 @@ let encrypt (#i:id) (#l:plainlen) (w:writer i) (iv:iv i) (ad:adata i) (plain:pla
   cipher_tag_res
 
 let decrypt (#i:id) (#l:plainlen) (st:reader i) (iv:iv i) (ad:adata i) (cipher:cipher i l)
-  : ST (co:option (plain i l))
+  : ST (option (plain i l))
        (requires (fun _ -> True))
 //  (requires (fun _ ->
 //    FStar.UInt.size (length ad) 32

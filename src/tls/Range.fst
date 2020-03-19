@@ -117,7 +117,7 @@ let valid_clen (i:id) (clen:nat) =
       clen - UInt32.v (hashLen h) <= max_TLSPlaintext_fragment_length
     end)
 
-let min0 (i:int) : Tot (n:nat) = if i >= 0 then i else 0
+let min0 (i:int) : Tot nat = if i >= 0 then i else 0
 let minP (n:int) : Tot (m:int{m <= n /\ m <= max_TLSPlaintext_fragment_length}) =
   if n >= max_TLSPlaintext_fragment_length then max_TLSPlaintext_fragment_length
   else n

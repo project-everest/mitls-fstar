@@ -19,8 +19,8 @@ type cert = b:bytes {length b < 16777216}
 type certes = cert * (exts:extensions{length (extensionListBytes exts) < 65536 /\ bindersLen exts == 0})
 // CertificateEntry certificate_list<0..2^24-1>;
 // See https://tlswg.github.io/tls13-spec/#rfc.section.4.4.2
-type chain = l:list cert // { ... }
-type chain13 = l:list certes // { ... }
+type chain = list cert // { ... }
+type chain13 = list certes // { ... }
 
 // we may use these types to keep track of un-extended chains,
 // e.g. to prove that their formatting is injective

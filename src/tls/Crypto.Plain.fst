@@ -62,12 +62,12 @@ noextract val slice: #i:id -> #l:plainLen -> p:plain i l -> s:nat -> j:nat{s <= 
 let slice #i #l p s j = Seq.slice p s j
 
 
-abstract type plainBuffer (i:id) (l:plainLen) = b:lbuffer l
+abstract type plainBuffer (i:id) (l:plainLen) = lbuffer l
 
 //usage?
 
 // ghost (was named bufferT; no need to be live)
-val as_buffer: #i:id -> #l:plainLen -> pb: plainBuffer i l -> GTot(lbuffer l)
+val as_buffer: #i:id -> #l:plainLen -> pb: plainBuffer i l -> GTot (lbuffer l)
 let as_buffer #i #l pb = pb
 
 // for tests
@@ -116,7 +116,7 @@ let create (i:id) (zero:UInt8.t) (len:UInt32.t) :
 
 let sub #id #l (b:plainBuffer id l)
                (i:UInt32.t{FStar.Buffer.(v i + idx (as_buffer b)) < pow2 n})
-               (len:UInt32.t{FStar.Buffer.(v len <= length (as_buffer b) /\ v i + v len <= length (as_buffer b))}) : Tot (b':plainBuffer id (v len))
+               (len:UInt32.t{FStar.Buffer.(v len <= length (as_buffer b) /\ v i + v len <= length (as_buffer b))}) : Tot (plainBuffer id (v len))
   = Buffer.sub b i len
 // ...
 

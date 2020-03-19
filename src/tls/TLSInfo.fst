@@ -181,7 +181,7 @@ type sessionID = b:bytes { length b <= 32 }
 noeq type sessionInfo = {
     init_crand: crand;
     init_srand: srand;
-    protocol_version: p:protocolVersion; // { p <> TLS_1p3 };
+    protocol_version: protocolVersion; // p:protocolVersion{ p <> TLS_1p3 };
     cipher_suite: cipherSuite;
     compression: compression;
     extended_ms: bool;
@@ -337,15 +337,15 @@ type logInfo_CH = {
 type logInfo_CH0 = {
   li_ch0_cr: crand;
   li_ch0_ed_psk: PSK.pskid;   // 0-RT PSK
-  li_ch0_ed_ae: a:aeadAlg;    // 0-RT AEAD alg
-  li_ch0_ed_hash: h:hash_alg; // 0-RT hash
+  li_ch0_ed_ae: aeadAlg;      // 0-RT AEAD alg
+  li_ch0_ed_hash: hash_alg;   // 0-RT hash
 }
 
 type logInfo_SH = {
   li_sh_cr: crand;
   li_sh_sr: srand;
-  li_sh_ae: a:aeadAlg;        // AEAD alg selected by the server
-  li_sh_hash: h:hash_alg;     // Handshake hash selected by the server
+  li_sh_ae: aeadAlg;          // AEAD alg selected by the server
+  li_sh_hash: hash_alg;       // Handshake hash selected by the server
   li_sh_psk: option PSK.pskid;// PSK selected by the server
 }
 
@@ -366,7 +366,7 @@ type logInfo =
 | LogInfo_SF of logInfo_SF
 | LogInfo_CF of logInfo_CF
 
-let logInfo_ae : x:logInfo{~(LogInfo_CH? x)} -> Tot (a:aeadAlg) = function
+let logInfo_ae : x:logInfo{~(LogInfo_CH? x)} -> Tot aeadAlg = function
 | LogInfo_CH0 x -> x.li_ch0_ed_ae
 | LogInfo_SH x -> x.li_sh_ae
 | LogInfo_SF x -> x.li_sf_sh.li_sh_ae

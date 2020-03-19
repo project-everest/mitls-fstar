@@ -146,7 +146,7 @@ noeq type ske = {
   ske_kex_s: kex_s;
   ske_signed_params: signature }
 
-type cv = sig:signature
+type cv = signature
 
 //17-03-11 Finished payload, carrying a fixed-length MAC; share with binders?
 type fin = { fin_vd: b:bytes{length b < 65536}; }
@@ -166,7 +166,7 @@ noeq type sticket13 = {
   ticket13_age_add: UInt32.t;
   ticket13_nonce: (b:bytes{length b > 0 /\ length b < 256});
   ticket13_ticket: (b:bytes{length b < 65535});
-  ticket13_extensions: es: list extension; }
+  ticket13_extensions: list extension; }
 
 
 noeq type hs_msg =
@@ -300,7 +300,7 @@ val serverHelloBytes_is_injective_strong:
 (* JK: should return a valid_sh to match the serialization function *)
 (* JK: same as parseClientHello, weakening spec to get verification *)
 val parseServerHello:
-  data:bytes{repr_bytes(length data) <= 3} -> Tot (result (x:valid_sh))
+  data:bytes{repr_bytes(length data) <= 3} -> Tot (result valid_sh)
 (* val parseServerHello: data:bytes{repr_bytes(length data) <= 3}   *)
 (*   -> Tot (result (x:sh{equal (serverHelloBytes x) (messageBytes HT_server_hello data)})) *)
 
@@ -372,14 +372,14 @@ val handshakeMessageBytes_is_injective:
   (requires equal (handshakeMessageBytes pv msg1) (handshakeMessageBytes pv msg2))
   (ensures msg1 == msg2)
 
-val handshakeMessagesBytes: pv:option protocolVersion -> list (msg:valid_hs_msg pv) -> bytes
+val handshakeMessagesBytes: pv:option protocolVersion -> list (valid_hs_msg pv) -> bytes
 // we may need to expose its definition to HandshakeLog
 
 #set-options "--admit_smt_queries true"
 val handshakeMessagesBytes_is_injective:
   pv: option protocolVersion -> 
-  l1: list (msg:valid_hs_msg pv) -> 
-  l2: list (msg:valid_hs_msg pv) -> Lemma 
+  l1: list (valid_hs_msg pv) ->
+  l2: list (valid_hs_msg pv) -> Lemma
   (requires equal (handshakeMessagesBytes pv l1) (handshakeMessagesBytes pv l2))
   (ensures l1 = l2)
 #reset-options
