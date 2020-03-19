@@ -15,15 +15,26 @@ module Printf = LowStar.Printf
 /// Low-level machinery (useless for clients)
 /// -----------------------------------------
 
-#push-options "--max_fuel 0 --max_ifuel 0"
+#set-options "--max_fuel 0 --max_ifuel 0"
+
+let print_frags_t acc =
+  (_: unit) ->
+  Stack unit
+    (requires fun h0 -> Printf.(live_frags h0 acc))
+    (ensures fun h0 _ h1 -> h0 == h1)
+
+let print_frags (acc: Printf.(list frag_t)): print_frags_t acc =
+  fun _ ->
+    Printf.print_frags acc
+
 inline_for_extraction noextract
-let trace_frags (prefix: Prims.string) (acc: Printf.(list frag_t)): Stack unit
+let trace_frags (prefix: string) (acc: Printf.(list frag_t)): Stack unit
   (requires fun h0 -> Printf.(live_frags h0 acc))
   (ensures fun h0 _ h1 -> h0 == h1)
 =
   if DebugFlags.debug_HS then begin
     Printf.(printf "%s |" prefix done);
-    normalize_term (Printf.print_frags acc);
+    (normalize_term #(print_frags_t acc) (print_frags acc)) ();
     Printf.print_string "\n"
   end else
     ()
