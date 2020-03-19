@@ -810,6 +810,7 @@ let extend_hsm13 : extend_t LR_HSM13? =
     CRF.update (Ghost.hide a) s.hash_state (C.to_buffer hs13_data) hs13_len
 
 
+#push-options "--fuel 0 --ifuel 0"
 let extend (#a:_) (s:state a) (l:label_repr) =
   match l with
   | LR_ClientHello _ ->
@@ -826,6 +827,7 @@ let extend (#a:_) (s:state a) (l:label_repr) =
     extend_hsm12 s l
   | LR_HSM13 _ ->
     extend_hsm13 s l
+#pop-options
 
 let transcript_hash (a:HashDef.hash_alg) (t:transcript_t)
   = Spec.Agile.Hash.hash a (transcript_bytes t)
