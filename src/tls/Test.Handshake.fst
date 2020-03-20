@@ -98,9 +98,9 @@ let test config: St unit =
         | Error z -> eprint ("Failed to process server finished flight: "^string_of_error z)
         | _ -> eprint "client failed to return finished flight")
       | _ -> eprint "server failed to return end of second flight")
-    | Error (_,s) -> eprint ("server failed to build second flight: "^s)
+    | Error z -> eprint ("server failed to build second flight: "^z.cause)
     | _ -> eprint ("server failed to return second flight."))
-  | Error (_,s) -> eprint ("client failed to build first flight: "^s)
+  | Error z -> eprint ("client failed to build first flight: "^z.cause)
   | _ -> eprint ("client failed to return first flight.")
 
 let main cafile cert key () = // could try with different client and server configs

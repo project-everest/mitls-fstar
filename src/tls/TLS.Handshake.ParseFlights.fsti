@@ -211,25 +211,21 @@ let receive_post_with_leftover_bytes
 
 /// Error codes returned by the receive functions
 
-let parsing_error : TLSError.error = {
-  Parsers.Alert.level = Parsers.AlertLevel.Fatal;
-  Parsers.Alert.description = Parsers.AlertDescription.Decode_error
-}, "Failed to validate incoming message"
+let parsing_error = TLSError.({
+  alert= Parsers.AlertDescription.Decode_error;
+  cause= "Failed to validate incoming message" })
 
-let unexpected_flight_error : TLSError.error = {
-  Parsers.Alert.level = Parsers.AlertLevel.Fatal;
-  Parsers.Alert.description = Parsers.AlertDescription.Unexpected_message
-}, "A message was received in a state where it was not expected"
+let unexpected_flight_error = TLSError.({
+  alert= Parsers.AlertDescription.Unexpected_message;
+  cause= "A message was received in a state where it was not expected" })
 
-let leftover_bytes_error : TLSError.error = {
-  Parsers.Alert.level = Parsers.AlertLevel.Fatal;
-  Parsers.Alert.description = Parsers.AlertDescription.Decode_error
-}, "Leftover bytes after a key-transitioning message (Binders, non-retry SH, EOED, Finished)"
+let leftover_bytes_error = TLSError.({
+  alert= Parsers.AlertDescription.Decode_error;
+  cause= "Leftover bytes after a key-transitioning message (Binders, non-retry SH, EOED, Finished)" })
 
-let message_overflow_error : TLSError.error = {
-  Parsers.Alert.level = Parsers.AlertLevel.Fatal;
-  Parsers.Alert.description = Parsers.AlertDescription.Decode_error
-}, "Received message overflows input buffer length"
+let message_overflow_error = TLSError.({
+  alert= Parsers.AlertDescription.Decode_error;
+  cause= "Received message overflows input buffer length" })
 
 
 /// Ad-hoc flights receive functions

@@ -46,20 +46,17 @@ module Transcript = TLS.Handshake.Transcript
 
 // A shortcut: create both irrespective of the PSKs to prevent any branching 
 
-// CF define and use in Transcript?
-type binder_ha = a:HD.alg{a==HD.SHA2_256 \/ a == HD.SHA2_384}
-
 noeq type agile_transcript_ = {
   tx_sha256: option (Transcript.state HD.SHA2_256);
   tx_sha384: option (Transcript.state HD.SHA2_384);
 }
 
-let agile_transcript_defined (a:binder_ha) (t:agile_transcript_) = 
+let agile_transcript_defined (a:Negotiation.ha) (t:agile_transcript_) = 
   match a with
   | HD.SHA2_256 -> Some? t.tx_sha256
   | HD.SHA2_384 -> Some? t.tx_sha384
 
-type agile_transcript (a:binder_ha) =
+type agile_transcript (a:Negotiation.ha) =
   t:agile_transcript_{agile_transcript_defined a t}
 
 let agile_transcript_inv #a (t:agile_transcript a) h =
@@ -71,8 +68,8 @@ let agile_transcript_base #a (t:agile_transcript a) : Transcript.state a =
   | HD.SHA2_256 -> Some?.v t.tx_sha256
   | HD.SHA2_384 -> Some?.v t.tx_sha384
 
-let agile_transcript_variant (#a:binder_ha) (t:agile_transcript a)
-  (a':binder_ha{agile_transcript_defined a' t}) : (Transcript.state a') =
+let agile_transcript_variant (#a:Negotiation.ha) (t:agile_transcript a)
+  (a':Negotiation.ha{agile_transcript_defined a' t}) : (Transcript.state a') =
   match a' with
   | HD.SHA2_256 -> Some?.v t.tx_sha256
   | HD.SHA2_384 -> Some?.v t.tx_sha384
@@ -106,7 +103,7 @@ let agile_transcript_initial #a (t:agile_transcript a) re ch h =
     Transcript.transcript (Some?.v t.tx_sha384) h == expected_initial_transcript re ch)
 
 #push-options "--fuel 1"
-let agile_transcript_create (a:binder_ha)
+let agile_transcript_create (a:Negotiation.ha)
   (r:rgn) retry ch
   : ST (agile_transcript a)
   (requires fun h0 -> r `disjoint` Mem.tls_tables_region)
@@ -171,7 +168,7 @@ let agile_transcript_free #a (t:agile_transcript a)
 // such that one CH digest is enough
 val client_Binders:
   region:rgn ->
-  ha0: HD.alg ->
+  ha0: Negotiation.ha ->
   di: agile_transcript ha0 ->
   retry: option Transcript.retry ->
   tch: Msg.ch { Msg.ch_bound tch} ->
@@ -194,6 +191,7 @@ let rec client_Binders region ha0 di0 retry tch bkeys =
     let (| i, k |) = ik in
     let h0 = get () in
     let ha = binderId_hash i in
+    assume(ha == HD.SHA2_256 \/ ha == HD.SHA2_384); // 20-03-20 old indexes are deprecated anyw
     let di' = agile_transcript_extend di0 ha retry tch in
     let tag = transcript_extract (agile_transcript_variant di' ha) in
     let binder = HMAC.mac k tag in
@@ -503,7 +501,7 @@ let client_ServerHello (Client region config r) sh =
     | CipherSuite kex sa ae -> (
       trace "Running classic TLS";
       trace FStar.Bytes.("Offered SID="^print_bytes offer.full_ch.CH.session_id^" Server SID="^print_bytes (Msg.sh_session_id sh));
-      Receive.InError (fatalAlert Handshake_failure, "TLS 1.2 TBC")
+      Receive.in_error Handshake_failure "TLS 1.2 TBC"
       // if Negotiation.resume_12 mode then
       // begin // 1.2 resumption
       //   trace "Server accepted our 1.2 ticket.";
@@ -660,7 +658,7 @@ let client13_Finished1 hs ee client_cert_request server_cert_certverify finished
   | Error z -> Receive.InError z
   | Correct _ ->
   match client_cert_request with
-  | Some _ -> Receive.InError (fatalAlert Handshake_failure,"unsupported client certificate request")
+  | Some _ -> Receive.in_error Handshake_failure "unsupported client certificate request"
   | None ->
 
   let C13_wait_Finished1 offer sh ms ks = !r in
@@ -711,7 +709,7 @@ let client13_Finished1 hs ee client_cert_request server_cert_certverify finished
 
   if not (HMAC.verify (dsnd sfin_key) digest_maced finished)
   then
-    Receive.InError (fatalAlert Decode_error, "Finished MAC did not verify: expected digest "^Bytes.print_bytes digest_maced)
+    Receive.in_error Decode_error ("Finished MAC did not verify: expected digest "^Bytes.print_bytes digest_maced)
   else (
     export ms.epochs exporter_master_secret;
     register ms.epochs app_keys; // ATKs are ready to use in both directions
@@ -787,7 +785,7 @@ let client13_NewSessionTicket (Client region config r) st13 =
     tcb.new_ticket tcb.ticket_context sni tid info psk;
     Receive.InAck false false)
   else
-    Receive.InError (fatalAlert Illegal_parameter, "QUIC tickets must allow 0xFFFFFFFF bytes of early data")
+    Receive.in_error Illegal_parameter "QUIC tickets must allow 0xFFFFFFFF bytes of early data"
 
 let early_rejected (Client region config r) =
   match !r with
@@ -796,7 +794,9 @@ let early_rejected (Client region config r) =
     Negotiation.find_early_data offer.full_ch &&
     not (List.Tot.existsb Parsers.ServerHelloExtension.SHE_early_data? (Msg.sh_extensions sh))
   | _ -> false
+
 #pop-options 
+
 (*** TLS 1.2 ***)
 
 private let convert_kex = function
@@ -807,7 +807,7 @@ private let convert_kex = function
 
 let client12_ServerHelloDone hs c ske_bytes ocr =
   trace "processing ...ServerHelloDone";
-  Receive.InError (fatalAlert Internal_error, "TBC")
+  Receive.in_error Internal_error (perror __SOURCE_FILE__ __LINE__ "TBC")
   // let kex = Negotiation.kexAlg (Negotiation.getMode hs.nego) in
   // match convert_kex kex with
   // | Error z -> InError z
@@ -858,7 +858,7 @@ let client12_ServerHelloDone hs c ske_bytes ocr =
 
 let client12_R_ServerFinished hs f digestNewSessionTicket digestServerFinished =
   trace "client_R_ServerFinished";
-  Receive.InError (fatalAlert Internal_error, "TBC")
+  Receive.in_error Internal_error (perror __SOURCE_FILE__ __LINE__ "TBC")
   // let sfin_key = KS.ks12_finished_key hs.ks in
   // let mode = Negotiation.getMode hs.nego in
   // let ha = verifyDataHashAlg_of_ciphersuite mode.Negotiation.n_cipher_suite in
@@ -874,7 +874,7 @@ let client12_R_ServerFinished hs f digestNewSessionTicket digestServerFinished =
   //   InError (fatalAlert Decode_error, "Finished MAC did not verify: expected digest "^Bytes.print_bytes digestNewSessionTicket)
 
 let client12_ServerFinished hs f digestClientFinished =
-  Receive.InError (fatalAlert Internal_error, "TBC")
+  Receive.in_error Internal_error (perror __SOURCE_FILE__ __LINE__ "TBC")
   // let sfin_key = KS.ks12_finished_key hs.ks in
   // let mode = Negotiation.getMode hs.nego in
   // let ha = verifyDataHashAlg_of_ciphersuite mode.Negotiation.n_cipher_suite in
@@ -892,7 +892,7 @@ let client12_NewSessionTicket hs (resume:bool) (digest:Hashing.anyTag) (st: Msg.
   let open Parsers.NewSessionTicket12 in
   let open TLS.Callbacks in
   trace ("Processing ticket: "^Bytes.print_bytes st.ticket);
-  Receive.InError (fatalAlert Internal_error, "TBC")
+  Receive.in_error Internal_error (perror __SOURCE_FILE__ __LINE__ "TBC")
   // hs.state := C_wait_CCS (resume, digest);
   // let cfg = Negotiation.local_config hs.nego in
   // let tcb = cfg.ticket_callback in

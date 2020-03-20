@@ -45,8 +45,10 @@ let fatalAlert ad = {level=Fatal; description=ad}
 //     | AD_no_application_protocol -> true
 //     | _ -> false
 
-type error = alert * string
-let string_of_error (a,s)= string_of_alertDescription a.description^" ("^s^")"
+// rewritten for lowering and nicer extraction, was [alert * string]
+type error = { alert: alertDescription; cause: string } 
+
+let string_of_error (e:error) = FStar.Printf.sprintf "%s: %s" (string_of_alertDescription e.alert) e.cause
 
 type result 'a = FStar.Error.optResult error 'a
 
@@ -56,7 +58,7 @@ let string_of_result f = function
   | Correct v -> f v
 
 
-let fatal #t a s: result t = Error(fatalAlert a, s)
+let fatal #t a s: result t = Error ({alert=a; cause=norm [primops] s})
 
 val resT: r:result 'a { FStar.Error.Correct? r } -> Tot 'a
 let resT (FStar.Error.Correct v) = v
@@ -109,6 +111,17 @@ let bind (#a:Type) (#b:Type)
     = match f with
       | Correct x -> g x
       | Error z -> Error z
+
+inline_for_extraction noextract 
+let perror
+    (file:string)
+    (line:int)
+    (text:string)
+  :  string
+  = normalize_term (Printf.sprintf "%s:%d %s" file line text)
+
+// let perror_unit_test = perror __SOURCE_FILE__ __LINE__ "test error"
+// compiles to "TLSError.fst:123 test error"
 
 
 (*** A layered exception effect over HST ***)

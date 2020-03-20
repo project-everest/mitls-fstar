@@ -401,7 +401,7 @@ let etx =
   else Ghost.erased transcript_t
 
 noeq
-type state (a:HashDef.hash_alg) = {
+type state (a:ha) = {
   region:Mem.rgn;
   loc: Ghost.erased B.loc;
   hash_state: CRF.state a;
@@ -413,7 +413,7 @@ let get_transcript #a (s:state a) (h:HS.mem) : GTot transcript_t =
   let etx = HS.sel h s.transcript in
   if transcript_idealization then etx else Ghost.reveal etx
 
-let invariant (#a:HashDef.hash_alg) (s:state a) (h:HS.mem) =
+let invariant (#a:ha) (s:state a) (h:HS.mem) =
   let tx = get_transcript s h in
   HS.contains h s.transcript /\
   CRF.hashed h s.hash_state `Seq.equal` transcript_bytes tx /\
@@ -425,7 +425,7 @@ let invariant (#a:HashDef.hash_alg) (s:state a) (h:HS.mem) =
   B.loc_disjoint (B.loc_region_only true Mem.tls_tables_region)
                  (B.loc_region_only true s.region)
 
-let footprint (#a:HashDef.hash_alg) (s:state a) = Ghost.reveal s.loc
+let footprint (#a:ha) (s:state a) = Ghost.reveal s.loc
 
 let transcript = get_transcript
 
@@ -767,7 +767,7 @@ let extend_hsm12 : extend_t LR_HSM12? =
     CRF.update (Ghost.hide a) s.hash_state (C.to_buffer hs12_data) hs12_len
 
 
-
+#push-options "--z3rlimit 100"
 let extend_hsm13 : extend_t LR_HSM13? =
   fun #a s l ->
   assert_norm (pow2 32 < pow2 61);
@@ -808,7 +808,7 @@ let extend_hsm13 : extend_t LR_HSM13? =
     assert_norm ((max_transcript_size + 4) * max_message_size < pow2 61);
     CRF.frame_invariant (B.loc_mreference s.transcript) s.hash_state h0 h1;
     CRF.update (Ghost.hide a) s.hash_state (C.to_buffer hs13_data) hs13_len
-
+#pop-options
 
 let extend (#a:_) (s:state a) (l:label_repr) =
   match l with
@@ -827,10 +827,10 @@ let extend (#a:_) (s:state a) (l:label_repr) =
   | LR_HSM13 _ ->
     extend_hsm13 s l
 
-let transcript_hash (a:HashDef.hash_alg) (t:transcript_t)
+let transcript_hash (a:ha) (t:transcript_t)
   = Spec.Agile.Hash.hash a (transcript_bytes t)
 
-let hashed (a:HashDef.hash_alg) (t:transcript_t) =
+let hashed (a:ha) (t:transcript_t) =
   Model.CRF.hashed a (transcript_bytes t)
 
 // FIXME(adl) March 16 2020 regressed

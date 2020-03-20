@@ -196,7 +196,7 @@ val send_tch
 // TODO unclear how we compute & pass the position to overwrite within stt
 
 val patch_binders
-  (#a:EverCrypt.Hash.alg)
+  (#a:Transcript.ha)
   (stt: Transcript.state a)
   (sto: send_state)
   (pch: MITLS.Repr.Handshake.ch_pos (LowParse.Repr.of_slice sto.out_slice))
@@ -227,7 +227,7 @@ val patch_binders
 /// transcript digest with it.
 
 val send_ch
-  (#a:EverCrypt.Hash.alg)
+  (#a:Transcript.ha)
   (stt: Transcript.state a)
   (sto: send_state)
   (m: Transcript.hs_ch)
@@ -256,7 +256,7 @@ val send_ch
 module PV = Parsers.ProtocolVersion
 
 val send_sh
-  (#a:EverCrypt.Hash.alg)
+  (#a: Transcript.ha)
   (stt: Transcript.state a)
   (sto: send_state)
   (m: Transcript.hs_sh)
@@ -295,7 +295,7 @@ val send_sh
   ))
 
 val send_tag_sh
-  (#a:EverCrypt.Hash.alg)
+  (#a: Transcript.ha)
   (stt: Transcript.state a)
   (sto: send_state)
   (m: Transcript.hs_sh)
@@ -343,7 +343,7 @@ val send_tag_sh
 
 #push-options "--z3rlimit 32"
 val send_hrr
-  (#a:EverCrypt.Hash.alg)
+  (#a: _)
   (stt: Transcript.state a)
   (sto: send_state)
   (tag: Transcript.any_hash_tag)
@@ -423,7 +423,7 @@ val extend_hrr
       t' == Transcript.Start(Some (retry_info_digest retry))))
 
 val send13
-  (#a:EverCrypt.Hash.alg)
+  (#a: _)
   (stt: Transcript.state a)
   (sto: send_state)
   (m: HSM.handshake13)
@@ -454,7 +454,7 @@ val send13
   ))
 
 val send_tag13
-  (#a:EverCrypt.Hash.alg)
+  (#a: _)
   (stt: Transcript.state a)
   (sto: send_state)
   (m: HSM.handshake13)
@@ -493,7 +493,7 @@ val send_tag13
   ))
 
 val send_extract13
-  (#a:EverCrypt.Hash.alg)
+  (#a: _)
   (stt: Transcript.state a)
   (sto: send_state)
   (m: HSM.handshake13)

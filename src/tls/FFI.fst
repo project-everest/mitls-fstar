@@ -473,7 +473,7 @@ let ffiTicketInfoBytes (info:ticketInfo) (key:bytes) =
 
 let ffiSplitChain (chain:bytes) : ML (list cert_repr) =
   match Cert.parseCertificateList chain with
-  | Error (_, msg) -> failwith ("ffiCertFormatCallback: formatted chain was invalid, "^msg)
+  | Error z -> failwith ("ffiCertFormatCallback: formatted chain was invalid, "^z.TLSError.cause)
   | Correct chain -> chain
 
 private let rec ext_filter (ext_type:UInt16.t) = function

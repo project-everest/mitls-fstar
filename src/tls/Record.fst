@@ -222,7 +222,7 @@ let rec read tcp s =
   //assert(p0 <^ headerLen \/ Buffer.disjoint header dest);
   //assert(p0 <^ headerLen \/ Buffer.as_seq h0 header == Buffer.as_seq h1 header);
   if res = -1l then
-    ReadError (fatalAlert Internal_error, "Transport.recv")
+    ReadError TLSError.({alert= Internal_error; cause= "Transport.recv"})
   else
   if res = 0l
   then ( trace "WouldBlock"; ReadWouldBlock )

@@ -75,7 +75,9 @@ val get_alpn: offer -> Tot Extensions.clientHelloExtension_CHE_application_layer
 /// We distinguish a "main" offered algorithm, depending on first PSK
 /// or first ciphersuite. (Unclear what to do when the two disagree.)
 
-val offered_ha: offer -> EverCrypt.Hash.alg
+type ha = a:EverCrypt.Hash.alg{ Spec.Hash.Definitions.( a==SHA2_256 \/ a == SHA2_384 )}
+
+val offered_ha: offer -> ha
 
 /// Selected algorithm, overwritten in SH (here) or HRR [HSM.hrr_ha]
 
@@ -86,7 +88,7 @@ type selected_cs_t (sh:HSM.sh) = c:cipherSuite {
   | Correct TLS_1p3 -> CipherSuite13? c
   | _ -> False }
   
-val selected_ha: HSM.serverHello -> EverCrypt.Hash.alg
+val selected_ha: HSM.serverHello -> ha
 val selected_cipher_suite: sh:HSM.sh -> selected_cs_t sh
 
 /// CLIENT CERTIFICATE REQUESTS are currently disabled.

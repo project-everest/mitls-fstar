@@ -75,7 +75,7 @@ let signals sto next_keys1 complete1 =
 
 // usable also on the receiving side; later, we will use instead a
 // lower-level caller-allocated output buffer.
-val tag: #a:EverCrypt.Hash.alg -> st:Transcript.state a ->
+val tag: #a: Transcript.ha -> st:Transcript.state a ->
   ST bytes
   (requires fun h0 -> Transcript.invariant st h0)
   (ensures fun h0 b h1 -> True)
@@ -323,7 +323,7 @@ let msg_repr_type (msg: msg) (b: Repr.const_slice)
 | Msg13 _ -> MITLS.Repr.Handshake13.pos b
 
 val send:
-  #a:EverCrypt.Hash.alg ->
+  #a: Transcript.ha ->
   Transcript.state a ->
   send_state -> msg ->
   St (result send_state)
@@ -372,8 +372,8 @@ let send #a stt (sto:send_state) msg =
     end
 
 val send_tag:
-  #a:EverCrypt.Hash.alg ->
-  st:Transcript.state a ->
+  #a: Transcript.ha ->
+  st: Transcript.state a ->
   send_state ->
   msg ->
   ST (result (send_state & bytes))

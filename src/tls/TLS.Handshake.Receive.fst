@@ -376,6 +376,8 @@ type incoming =
   | InQuery: Cert.chain -> bool -> incoming // could be part of InAck if no explicit user auth
   | InError: TLSError.error -> incoming // how underspecified should it be?
 
+let in_error ad txt = InError TLSError.({alert=ad; cause=txt})
+
 let in_next_keys (r:incoming) = InAck? r && InAck?.next_keys r
 let in_complete (r:incoming)  = InAck? r && InAck?.complete r
 

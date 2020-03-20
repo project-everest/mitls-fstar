@@ -44,21 +44,23 @@ include Parsers.KeyExchangeAlgorithm
 module Binders = ParsersAux.Binders
 (* Parsers are generated automatically, see src/parsers/Parsers.rfc *)
 
-/// Selected specs shared with ParserAux to deal with ClientHello with
-/// truncated binders.
+/// Selected specs shared with ParserAux,
+/// to deal with truncated binders in ClientHello
+/// 
 
 unfold let binders: Type0           = Binders.binders
 unfold let binders_len: Type0       = Binders.binders_len
 
-// Does this ClientHello include PSKs? 
+/// Tests whether a ClientHello carries PSKs and binders
 unfold let ch_bound                 = Binders.ch_bound
+
 unfold let clientHello_with_binders = Binders.clientHello_with_binders
 unfold let ch_binders               = Binders.ch_binders 
 unfold let set_binders              = Binders.ch_set_binders 
 unfold let ch_binders_len           = Binders.ch_binders_len
 unfold let canonical_binders        = Binders.build_canonical_binders
 
-/// `tch` is our specification type for truncated ClientHello
+/// `tch` is our type for specifying truncated ClientHello
 /// messages: a (full) ClientHello with dummy binders.
 let tch = ch:clientHello_with_binders
   { ch_binders ch == canonical_binders (ch_binders_len ch) } 

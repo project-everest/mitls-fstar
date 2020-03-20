@@ -41,8 +41,8 @@ let test_signatureSchemeListBytes ()
     if bytes = bytes'
     then None //all ok
     else Some (Inr (bytes, bytes')) //failed to round trip
-  | Error (ad, msg) ->
-    Some (Inl (bytes, string_of_alert ad, msg)) //failed to parse back
+  | Error z ->
+    Some (Inl (bytes, string_of_alertDescription z.alert, z.cause)) //failed to parse back
 
 let print s = FStar.HyperStack.IO.print_string s
 

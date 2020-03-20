@@ -177,7 +177,7 @@ module RH12 = MITLS.Repr.Handshake12
 module RH13 = MITLS.Repr.Handshake13
 
 inline_for_extraction noextract
-let overflow () = Recv.InError (fatalAlert Internal_error, "Overflow in input buffer")
+let overflow = Recv.in_error Internal_error "Overflow in input buffer"
 
 #set-options "--max_fuel 0 --max_ifuel 1 --z3rlimit 20"
 // #set-options "--admit_smt_queries true"
@@ -194,15 +194,13 @@ let rec recv_fragment hs #i rg f =
   | Client region config r ->
    begin // Client
     match !r  with
-    | C_init _ ->
+    | C_init _ -> (
       trace "No CH sent (statically excluded)";
-      Recv.InError (
-      fatalAlert Unexpected_message,
-      "Client hasn't sent hello yet (to be statically excluded)")
+      Recv.in_error Unexpected_message "Client hasn't sent hello yet (to be statically excluded)")
 
     | C_wait_ServerHello offer0 ms0 ks0 -> (
       match Recv.buffer_received_fragment ms0.receiving f with
-      | None -> overflow ()
+      | None -> overflow
       | Some rcv1 ->
       if rcv1.Recv.rcv_to = rcv1.Recv.rcv_from then 
         Recv.InAck false false // No-op
@@ -224,7 +222,7 @@ let rec recv_fragment hs #i rg f =
 
     | C13_wait_Finished1 offer sh ms0 ks -> (
       match Recv.buffer_received_fragment ms0.receiving f with
-      | None -> overflow ()
+      | None -> overflow
       | Some rcv1 ->
       trace "receive_c13_wait_Finished1";
       match TLS.Handshake.Receive.receive_c13_wait_Finished1 rcv1 with
@@ -249,7 +247,7 @@ let rec recv_fragment hs #i rg f =
     | C13_complete offer sh ee server_id fin1 ms0 (Finished_sent fin2 ks) ->
      begin
       match Recv.buffer_received_fragment ms0.receiving f with
-      | None -> overflow ()
+      | None -> overflow 
       | Some rcv1 ->
         if rcv1.Recv.rcv_to = rcv1.Recv.rcv_from then 
           Recv.InAck false false // No-op
@@ -270,7 +268,7 @@ let rec recv_fragment hs #i rg f =
      end
     | _ ->
       trace "Unexpected client state (should be excluded statically";
-      Recv.InError (fatalAlert Unexpected_message, "TBC")
+      Recv.in_error Unexpected_message "TBC"
    end // Client
   | Server region config r ->
    begin // Server
@@ -278,7 +276,7 @@ let rec recv_fragment hs #i rg f =
     | S_wait_ClientHello n rcv0 ->
      begin
       match Recv.buffer_received_fragment rcv0 f with
-      | None -> overflow ()
+      | None -> overflow
       | Some rcv1 ->
       match Recv.receive_s_Idle rcv1 with
       | Error z -> Recv.InError z
@@ -296,7 +294,7 @@ let rec recv_fragment hs #i rg f =
     | S13_wait_Finished2 mode svd eoed_done ms ks ->
      begin
       match Recv.buffer_received_fragment ms.receiving f with
-      | None -> overflow ()
+      | None -> overflow
       | Some rcv1 ->
       if rcv1.Recv.rcv_to = rcv1.Recv.rcv_from then 
         Recv.InAck false false // No-op
@@ -317,8 +315,7 @@ let rec recv_fragment hs #i rg f =
           Server.server_ClientFinished_13 hs fin.R.vv oc_cv
      end
     | _ ->
-      Recv.InError (fatalAlert Unexpected_message,
-        "Unexpected server state")
+      Recv.in_error Unexpected_message "Unexpected server state"
    end // Server
 
 (*

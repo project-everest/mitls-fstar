@@ -76,7 +76,7 @@ private let server_ServerHelloDone (hs:hs) : St incoming =
   let Some (chain, sa) = mode.Nego.n_server_cert in // Server cert chosen in Nego.server_ClientHello
   match mode.Nego.n_server_share with
   | None ->
-    InError (fatalAlert Handshake_failure, perror __SOURCE_FILE__ __LINE__ "no shared supported group")
+    in_error Handshake_failure (perror __SOURCE_FILE__ __LINE__ "no shared supported group")
   | Some (| g, gy |)  ->
     let sv = CommonDH.serialize gy in
     let tbs = Nego.to_be_signed mode.Nego.n_protocol_version Server (Some csr) sv in
@@ -141,7 +141,7 @@ let server_ClientHello_12 hs offer mode app_exts : St incoming =
       let ka = Nego.kexAlg mode in
       HSL.setParams hs.log pv ha (Some ka) None;
       server_ServerHelloDone hs
-  | _ -> InError (fatalAlert Handshake_failure, "Unsupported RSA key exchange")
+  | _ -> in_error Handshake_failure "Unsupported RSA key exchange"
 *)
 
 (*
@@ -254,7 +254,7 @@ let server_ClientHello1 st offer
 
         if HMAC.verify (dsnd bk) tag0 binder then
           Correct (transcript_extract di)
-        else Error (fatalAlert Bad_record_mac, "Failed to verify selected binder")
+        else fatal Bad_record_mac "Failed to verify selected binder"
       in
 
     match binder_ok with
@@ -347,13 +347,13 @@ let server_ClientHello hs offer =
     ^ string_of_int (List.length opsk.binders) ^ " binder(s)"));
   Nego.trace_offer offer;
   if not (consistent_truncation binders)
-    then InError (fatalAlert Illegal_parameter, "unexpected number of binders")
+    then in_error Illegal_parameter "unexpected number of binders"
   else
     match Nego.find_cookie offer with
     | None -> server_ClientHello1 hs offer
     | Some c ->
       match TLS.Cookie.decrypt c with
-      | Error z -> InError (fatalAlert Handshake_failure, "failed to decrypt cookie")
+      | Error z -> in_error Handshake_failure "failed to decrypt cookie"
       | Correct (digest, extra, hrr) ->
         trace ("Loaded stateless retry cookie with app_data="^hex_of_bytes extra);
         trace ("Setting transcript to CH1 hash "^hex_of_bytes digest);
@@ -393,15 +393,13 @@ let server_ClientCCS1 hs cke digestCCS1 =
     | Error z -> InError z
     | Correct kex ->
     match clientKeyExchange_parser32 kex cke with
-    | None -> InError (fatalAlert Decode_error, "failed parsing of untagged CKE")
+    | None -> in_error Decode_error "failed parsing of untagged CKE"
     | Some (Cke_ecdhe gyb, l)
     | Some (Cke_dhe gyb, l) ->
     trace ("Inner format: "^(hex_of_bytes gyb));
     match len cke = l, CommonDH.parse g gyb with
     | _, None
-    | false, _ -> InError(fatalAlert Decode_error,
-        perror __SOURCE_FILE__ __LINE__
-          "Cannot parse client share in CKE")
+    | false, _ -> in_error Decode_error (perror __SOURCE_FILE__ __LINE__ "Cannot parse client share in CKE")
     | true, Some gy ->
       let app_keys = KS.ks_server12_cke_dh hs.ks (| g, gy |) digestCCS1 in
       register hs app_keys;
@@ -439,7 +437,7 @@ let server_ClientFinished hs cvd digestCCS digestClientFinished =
     hs.state := S_Complete;
     InAck false false // Server 1.2 ATK; will switch write key and signal completion after sending
   else
-    InError (fatalAlert Decode_error, "Finished MAC did not verify: expected digest "^print_bytes digestClientFinished)
+    in_error Decode_error ("Finished MAC did not verify: expected digest "^print_bytes digestClientFinished)
 
 let server_ClientFinished2 hs cvd digestSF digestCF =
   trace "Process Client Finished";
@@ -452,7 +450,7 @@ let server_ClientFinished2 hs cvd digestSF digestCF =
   if cvd = expected_cvd then
     (hs.state := S_Complete; InAck false false)
   else
-    InError (fatalAlert Decode_error, "Client Finished MAC did not verify: expected digest "^print_bytes digestSF)
+    in_error Decode_error ("Client Finished MAC did not verify: expected digest "^print_bytes digestSF)
 *)
 
 (*** TLS 1.3 ***)
@@ -590,8 +588,7 @@ let server_ClientFinished_13 hs cvd client_cert =
 
    match client_cert with
    | Some _ -> // (c,cv,digest) ->
-      Recv.InError(fatalAlert Internal_error,
-        perror __SOURCE_FILE__ __LINE__ "Client CertificateVerify validation not implemented")
+      Recv.in_error Internal_error (perror __SOURCE_FILE__ __LINE__ "Client CertificateVerify validation not implemented")
    | None ->
      let (| i, cfin_key |) = KS.ks_server13_get_cfk ks in
      if HMAC.verify cfin_key digest_CF cvd
@@ -608,7 +605,7 @@ let server_ClientFinished_13 hs cvd client_cert =
 	 in ());
        Recv.InAck true true  // Server 1.3 ATK
        end
-     else Recv.InError (fatalAlert Bad_record_mac, "Finished MAC did not verify: expected digest "^Bytes.print_bytes cvd)
+     else Recv.in_error Bad_record_mac ("Finished MAC did not verify: expected digest "^Bytes.print_bytes cvd)
 
 (*
 let server_ServerFinished_13 hs =

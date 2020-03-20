@@ -108,7 +108,7 @@ let peekClientHello (ch:bytes) (has_record:bool) : ML (option chSummary) =
     if has_record then
       let hdr, ch = split ch 5ul in
       match Record.parseHeader hdr with
-      | Error (_, msg) -> trace ("peekClientHello: bad record header"); None
+      | Error z -> trace ("peekClientHello: bad record header"); None
       | Correct(ct, pv, len) ->
         if ct <> Content.Handshake || len <> length ch then
           (trace "peekClientHello: bad CT or length"; None)
@@ -192,9 +192,10 @@ private let handle_signals (hs:Machine.state) (sig:option Send.next_keys_use) : 
      end;
     use.Send.out_appdata
 
-private inline_for_extraction let api_error (ad, err) =
-  trace ("Returning HS error: "^err);
-  HS_ERROR (Parse.uint16_of_bytes (Alert.alertBytes ad))
+private inline_for_extraction let api_error z =
+  trace ("Returning HS error: "^TLSError.string_of_error z);
+  let a = Parsers.Alert.({level=Parsers.AlertLevel.Fatal; description=z.TLSError.alert}) in 
+  HS_ERROR (Parse.uint16_of_bytes (Alert.alertBytes a))
 
 let process_hs (hs:Machine.state) (ctx:hs_in) : ML hs_result =
   let tbw = H.to_be_written hs in

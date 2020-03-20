@@ -239,7 +239,7 @@ type ioresult_w =
 let string_of_ioresult_w = function
   | Written -> "Written"
   | WriteClose -> "WriteClose"
-  | WriteError (Some a) s -> "WriteError: "^string_of_error (a,s)
+  | WriteError (Some a) s -> "WriteError: "^string_of_error ({alert=a.description;cause=s})
   | WriteError None s -> "WriteError: "^s
   | WrittenHS nw c -> "WrittenHS "^(match nw with | Some true -> "new-writable " | Some false -> "new-hanshake-only " | None -> "")^(if c then "complete" else "")
 #set-options "--initial_ifuel 0 --max_ifuel 0 --initial_fuel 0 --max_fuel 0"
@@ -521,14 +521,14 @@ private let sendAlert (c:connection) (ad:alert) (reason:string)
 	       /\ sel h1 c.state = (fst st, Closed)
 	     | _ -> False)))
 =
-    trace ("sendAlert "^TLSError.string_of_error (ad,reason));
+    trace ("sendAlert "^TLSError.string_of_error ({alert=ad.description;cause=reason}));
     reveal_epoch_region_inv_all ();
     let i = currentId c Writer in
     let wopt = current_writer c i in
     let st = !c.state in
     let res = sendFragment c #i wopt (Content.CT_Alert #i (point 2) ad) in
     match res with
-    | Error xy -> unrecoverable c (snd xy) // or reason?
+    | Error xy -> unrecoverable c xy.cause // or reason?
     | Correct _   ->
         if ad.description = Close_notify then
           begin // graceful closure
@@ -711,7 +711,7 @@ let rec writeHandshake h_init c new_writer =
   trace ("writeHandshake"^(if Some? wopt then " (encrypted)" else " (plaintext)"));
   (* let h0 = get() in  *)
   match next_fragment i c with
-  | Error (ad,reason) -> sendAlert c ad reason
+  | Error z -> sendAlert c ({level=Fatal; description=z.alert}) z.cause
   | Correct(TLS.Handshake.Send.Outgoing om next_keys complete) ->
       //From Handshake.next_fragment ensures, we know that if next_keys = false
       //then current_writer didn't change;
@@ -736,9 +736,9 @@ let rec writeHandshake h_init c new_writer =
       match sendHandshake wopt om send_ccs with
       // we may have sent an handshake message and/or a CCS message;
       // as a post-condition of sendHandshake, we know that the deltas didn't change
-      | Error (ad,reason) -> (
+      | Error z -> (
           recall_current_writer c;
-          sendAlert c ad reason )
+          sendAlert c ({level=Fatal; description=z.alert}) z.cause)
       | _   -> (
           recall_current_writer c;
           let n = Machine.nonce c.hs in 
@@ -794,7 +794,7 @@ let write c #i #rg data =
       let frag = Content.CT_Data rg data in
       begin
         match sendFragment c #i wopt frag with
-        | Error(ad,reason) -> sendAlert c ad reason
+        | Error z -> sendAlert c ({level=Fatal; description=z.alert}) z.cause
         | _ -> Written
       end
   | r -> r
@@ -993,7 +993,7 @@ let string_of_ioresult_i (#i:id) = function
   | Read (DataStream.Data d) -> "Read "^string_of_int (length (DataStream.appBytes #i #Range.fragment_range d)) ^ " bytes of data"
   | Read DataStream.Close -> "Read Close"
   | Read (DataStream.Alert a) -> "Read Alert "^string_of_alert a
-  | ReadError (Some o) txt -> "ReadError "^string_of_error(o,txt)
+  | ReadError (Some o) txt -> "ReadError "^string_of_error({alert=o.description; cause=txt})
   | ReadError None txt -> "ReadError "^txt
   | CertQuery _ _ -> "CertQuery"
   | Update b -> "Update "^(if b then "writable" else "read-only")
@@ -1029,13 +1029,15 @@ type delta h c =
 // frequent error handler; note that i is the (unused) reader index
 //val alertFlush: TODO: WE REALLY NEED A VAL!
 // 18-10-30 called on close_notify warning, right?
-let alertFlush c ri (a:alert {a.level=Fatal}) (reason:string) =
-  let written = sendAlert c a reason in
+let alertFlush c ri (a:alert) cause =
+  let written = sendAlert c a cause in
   let r : ioresult_i ri =
     match written with
     | WriteClose      -> Read DataStream.Close // do we need this case?
     | WriteError x y -> ReadError x y in         // how to compose ad reason x y ?
   r
+
+let fatalFlush c ri z = alertFlush c ri ({level=Fatal; description=z.alert}) z.cause 
 
 //17-04-10 added an option for asynchrony; could flatten instead
 val readFragment: c:connection -> i:id -> ST (result (option (Content.fragment i)))
@@ -1129,14 +1131,14 @@ private val readOne: c:connection -> i:id -> St (ioresult_i i)
 let readOne c i =
   assume false; //16-05-19
   match readFragment c i with
-  | Error (x, y) ->
-    (match x.description with //18-10-30 TODO we should check the alert level!
+  | Error z ->
+    (match z.alert with //18-10-30 TODO we should check the alert level!
      | Internal_error ->
-       if y = "TCP close" then  // If TCP died, no point trying to send an alert
+       if z.cause = "TCP close" then  // If TCP died, no point trying to send an alert
          (disconnect c;
           ReadError None "TCP close")
-       else alertFlush c i x y
-     | _ -> alertFlush c i x y)
+       else fatalFlush c i z
+     | _ -> fatalFlush c i z)
   | Correct None -> ReadWouldBlock
   | Correct (Some f) -> (
     match f with
@@ -1164,7 +1166,7 @@ let readOne c i =
       begin
         trace "read Handshake fragment";
         match TLS.Handshake.recv_fragment c.hs rg f with
-        | TLS.Handshake.Receive.InError (x,y) -> alertFlush c i x y
+        | TLS.Handshake.Receive.InError z -> fatalFlush c i z
         | TLS.Handshake.Receive.InQuery q a   -> CertQuery q a
         | TLS.Handshake.Receive.InAck next_keys complete ->
             if complete
@@ -1186,7 +1188,7 @@ let readOne c i =
       begin
         trace "read CCS fragment";
         match Handshake.recv_ccs c.hs with
-        | TLS.Handshake.Receive.InError (x,y) -> alertFlush c i x y
+        | TLS.Handshake.Receive.InError z -> fatalFlush c i z
         | TLS.Handshake.Receive.InAck false false -> ReadAgain // FIXME TLS 1.3 CCS with HRR (!!!)
         | TLS.Handshake.Receive.InAck true false -> ReadAgainFinishing // specialized for HS 1.2
       end
