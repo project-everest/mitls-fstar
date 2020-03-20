@@ -81,6 +81,12 @@ test: quic.exe
 	./quic.exe 0rtt-reject
 	./quic.exe hrr
 
-debug: quic.exe
-	gdb ./quic.exe
+ifeq ($(shell uname),Darwin)
+  $(info remember to run process launch --environment DYLD_LIBRARY_PATH=$(DYLD_LIBRARY_PATH) inside lldb)
+  GDB=lldb
+else
+  GDB=gdb
+endif
 
+debug: quic.exe
+	$(GDB) ./quic.exe
