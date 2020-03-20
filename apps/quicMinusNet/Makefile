@@ -88,5 +88,7 @@ else
   GDB=gdb
 endif
 
+export MITLS_DEBUG=1
+
 debug: quic.exe
 	$(GDB) ./quic.exe
