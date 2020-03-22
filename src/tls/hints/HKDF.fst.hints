@@ -70,7 +70,7 @@
         "typing_FStar.Set.mem", "typing_Hashing.Spec.hmac"
       ],
       0,
-      "e0107e89fdfc2a4bc555fbbadbb0d125"
+      "a7e81350beda85268a5c4df7b1e7ab18"
     ],
     [
       "HKDF.expand",
@@ -112,7 +112,7 @@
         "typing_Hacl.Hash.Definitions.hash_len", "typing_Mem.tls_region"
       ],
       0,
-      "ffc4fea5b1605ed05d966a4b3cd997b0"
+      "e29588471dd9f1d43b5ddccf4140fb21"
     ],
     [
       "HKDF.expand",
@@ -132,7 +132,7 @@
         "typing_Spec.Hash.Definitions.word_length"
       ],
       0,
-      "4e70128d30d4a83b0119b156ed07a73a"
+      "6777c6057b260c8692da3900c45900fa"
     ],
     [
       "HKDF.expand",
@@ -298,7 +298,7 @@
         "typing_tok_Lib.IntTypes.PUB@tok", "typing_tok_Lib.IntTypes.U32@tok"
       ],
       0,
-      "11a7abcee0d3f2fc0312fde9e1a3b91e"
+      "e00b79a777a9757e010e9ed7cdd7444c"
     ],
     [
       "HKDF.tls13_prefix",
@@ -307,7 +307,7 @@
       1,
       [ "@query" ],
       0,
-      "9a56ade85b4d4fb24b472161ac28504b"
+      "c69e663322e3038e18bc8c32679c243d"
     ],
     [
       "HKDF.quic_prefix",
@@ -316,7 +316,7 @@
       1,
       [ "@query" ],
       0,
-      "a295e919c30fad9ef92f36f59583ecf2"
+      "12b3a1517689abf437c9cb95071d4c0f"
     ],
     [
       "HKDF.format",
@@ -371,7 +371,7 @@
         "typing_Parsers.HKDF.HkdfLabel.hkdfLabel_serializer"
       ],
       0,
-      "17d37b0c367e2a68188141b78c4021b3"
+      "ee855dc17c6b21acb5f99f3f741ddb65"
     ],
     [
       "HKDF.expand_label",
@@ -401,7 +401,7 @@
         "typing_Spec.Hash.Definitions.word_length"
       ],
       0,
-      "5a7ed33c31beb07d10f818a09eab74c7"
+      "7326c6155ac67e17dca3ca568787d88e"
     ],
     [
       "HKDF.expand_label",
@@ -431,7 +431,7 @@
         "typing_Spec.Hash.Definitions.word_length"
       ],
       0,
-      "42933879ee77d862467846daf5fc14e7"
+      "37ece418a832c21a4f55a50d956da057"
     ],
     [
       "HKDF.expand_label",
@@ -440,7 +440,7 @@
       1,
       [ "@query" ],
       0,
-      "84cfb2bc81e233cabf866654ad814e68"
+      "596f012607f04c13223f29ed32d49f38"
     ],
     [
       "HKDF.derive_secret",
@@ -470,7 +470,7 @@
         "typing_Spec.Hash.Definitions.word_length"
       ],
       0,
-      "ace6fd365a6076ebec2d3f979669a8c7"
+      "d2dd02d114ef7d24e015dbd18cc9fe80"
     ],
     [
       "HKDF.derive_secret",
@@ -500,7 +500,7 @@
         "typing_Spec.Hash.Definitions.word_length"
       ],
       0,
-      "6070a2e191bb0041a3b07d2b97d8525a"
+      "0a78d9312ad37cd611521b7317ea4608"
     ],
     [
       "HKDF.derive_secret",
@@ -561,7 +561,7 @@
         "typing_Hashing.Spec.max_hash_length"
       ],
       0,
-      "9b0d656e5e4e352de9aa93f04c739c24"
+      "984e4d897c04e83d54b1aaa8a8e53444"
     ]
   ]
 ]
