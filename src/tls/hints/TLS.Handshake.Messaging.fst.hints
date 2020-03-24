@@ -1,5 +1,5 @@
 [
-  "\u001b‰ˆd¢\u0010™F\u0000—i·Ö\u0003.Á",
+  "\u0007\u001d«¥Ì³Î\u0005LðcŸoúÊ\u001a",
   [
     [
       "TLS.Handshake.Messaging.transcript_extract",
@@ -13,15 +13,13 @@
         "assumption_FStar.Monotonic.HyperHeap.Mod_set_def", "b2t_def",
         "bool_inversion", "bool_typing",
         "constructor_distinct_FStar.Integers.W16",
-        "constructor_distinct_FStar.Integers.W32",
+        "constructor_distinct_FStar.Integers.W31",
         "constructor_distinct_FStar.Integers.W8",
-        "constructor_distinct_FStar.Integers.Winfinite",
         "constructor_distinct_Lib.IntTypes.PUB",
         "constructor_distinct_Lib.IntTypes.U32", "eq2-interp",
         "equality_tok_FStar.Integers.W16@tok",
-        "equality_tok_FStar.Integers.W32@tok",
+        "equality_tok_FStar.Integers.W31@tok",
         "equality_tok_FStar.Integers.W8@tok",
-        "equality_tok_FStar.Integers.Winfinite@tok",
         "equality_tok_Lib.IntTypes.PUB@tok",
         "equality_tok_Lib.IntTypes.U32@tok", "equation_FStar.Bytes.lbytes",
         "equation_FStar.HyperStack.ST.equal_domains",
@@ -175,7 +173,7 @@
         "typing_TLSInfo.safe_region", "unit_typing"
       ],
       0,
-      "415346df44f70ff0600b822e22aa102a"
+      "87be8d19e00c8a7b79690fea07f7dcf0"
     ],
     [
       "TLS.Handshake.Messaging.extend13",
@@ -377,7 +375,7 @@
         "typing_tok_LowStar.ConstBuffer.MUTABLE@tok"
       ],
       0,
-      "c908b0c4ac25fa85a44ccf16f415419b"
+      "0c4654a4b671f814ff02a2d8ac55806e"
     ]
   ]
 ]

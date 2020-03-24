@@ -1,5 +1,5 @@
 [
-  ">sS[»\u001fJb+s c¥\u0016Ó,",
+  "!ÝØ•5<o\u0004÷Oÿ…Ã#œª",
   [
     [
       "TLS.Handshake.Client.agile_transcript_base",
@@ -25,7 +25,7 @@
         "typing_TLS.Handshake.Client.agile_transcript_defined"
       ],
       0,
-      "9518a3ce4584d4552b5cf27f9e166db8"
+      "eaf8b9f7bcfb13ffc30b89175778fe6c"
     ],
     [
       "TLS.Handshake.Client.agile_transcript_variant",
@@ -52,7 +52,7 @@
         "typing_TLS.Handshake.Client.agile_transcript_defined"
       ],
       0,
-      "b22f35eb532b2e6e51370ce7a2fed90f"
+      "4b2e266e84ab08d4ca5160381e7744e8"
     ],
     [
       "TLS.Handshake.Client.agile_transcript_footprint",
@@ -67,7 +67,7 @@
         "typing_TLS.Handshake.Client.agile_transcript_defined"
       ],
       0,
-      "dae1dd942f0d036b2b9fe8ef5bfde26b"
+      "c0df82a3af01e1ae03b449acff1fdcf6"
     ],
     [
       "TLS.Handshake.Client.agile_transcript_frame",
@@ -108,7 +108,7 @@
         "typing_tok_Spec.Hash.Definitions.SHA2_384@tok"
       ],
       0,
-      "1141d3cd95ff95e94aee7eeecb680654"
+      "bb78473118d0993d5dba771ae19b4314"
     ],
     [
       "TLS.Handshake.Client.agile_transcript_create",
@@ -166,7 +166,7 @@
         "typing_tok_Spec.Hash.Definitions.SHA2_384@tok"
       ],
       0,
-      "5b00037e24aceeb1b11623a4244309c3"
+      "b5ef13bae55aa9a6ed7cb83d5e24b377"
     ],
     [
       "TLS.Handshake.Client.agile_transcript_free",
@@ -207,7 +207,7 @@
         "typing_TLS.Handshake.Client.agile_transcript_defined"
       ],
       0,
-      "03bd0058e0e4eb5abf4f6dd1856d32ed"
+      "9851b0ed6424d5f9baeec290f612eaff"
     ],
     [
       "TLS.Handshake.Client.client_Binders",
@@ -221,13 +221,12 @@
         "@fuel_irrelevance_TLS.Handshake.Machine.binder_key_list_bytesize.fuel_instrumented",
         "@query", "b2t_def", "bool_inversion", "bool_typing",
         "constructor_distinct_FStar.Integers.W16",
+        "constructor_distinct_FStar.Integers.W31",
         "constructor_distinct_FStar.Integers.W32",
-        "constructor_distinct_FStar.Integers.W64",
+        "constructor_distinct_FStar.Integers.W63",
         "constructor_distinct_FStar.Integers.W8",
-        "constructor_distinct_FStar.Integers.Winfinite",
         "constructor_distinct_Lib.IntTypes.PUB",
         "constructor_distinct_Lib.IntTypes.U1",
-        "constructor_distinct_Lib.IntTypes.U128",
         "constructor_distinct_Lib.IntTypes.U16",
         "constructor_distinct_Lib.IntTypes.U32",
         "constructor_distinct_Lib.IntTypes.U8",
@@ -238,10 +237,10 @@
         "disc_equation_Parsers.ClientHelloExtension.CHE_pre_shared_key",
         "disc_equation_Prims.Cons", "disc_equation_Prims.Nil", "eq2-interp",
         "equality_tok_FStar.Integers.W16@tok",
+        "equality_tok_FStar.Integers.W31@tok",
         "equality_tok_FStar.Integers.W32@tok",
-        "equality_tok_FStar.Integers.W64@tok",
+        "equality_tok_FStar.Integers.W63@tok",
         "equality_tok_FStar.Integers.W8@tok",
-        "equality_tok_FStar.Integers.Winfinite@tok",
         "equality_tok_Lib.IntTypes.PUB@tok",
         "equality_tok_Lib.IntTypes.U32@tok",
         "equality_tok_Spec.Hash.Definitions.SHA2_256@tok",
@@ -339,7 +338,7 @@
         "typing_tok_Spec.Hash.Definitions.SHA2_384@tok"
       ],
       0,
-      "a0fac71ef286d0511bd16405452dd95e"
+      "83ee01dc327096d7cf6acded6516a50f"
     ],
     [
       "TLS.Handshake.Client.client13_Finished2",
@@ -354,7 +353,7 @@
         "refinement_interpretation_Tm_refine_718c573ebd58cec9c9a14dccb75c6b8f"
       ],
       0,
-      "3b91b52b923081edb9f69e21deb9a34e"
+      "c828fba9638d1490edcc5e1abfd8daca"
     ],
     [
       "TLS.Handshake.Client.client13_Finished2",
@@ -377,7 +376,7 @@
         "refinement_interpretation_Tm_refine_aae46a3ac8bab0eae5b39c745f69e667"
       ],
       0,
-      "e21d009a5e923cc0456a436392a4b373"
+      "571b77480dae10012ad0d0237ff7ec50"
     ],
     [
       "TLS.Handshake.Client.client13_nego_cb",
@@ -414,7 +413,7 @@
         "typing_TLSInfo.safe_region"
       ],
       0,
-      "a571e66ecb38e70e94a127023852f400"
+      "97b4b37ff9a9707e30817e21675496a9"
     ]
   ]
 ]
