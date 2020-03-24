@@ -269,10 +269,6 @@ let client_ClientHello hs =
       let binders = client_Binders region ha di0 None offer0 binder_keys in
       let offer1 = Msg.set_binders offer0 binders in
       Send.patch_binders ms.digest sending ptch binders;
-      // FIXME!! this should be internal to patch_binders
-      let (| _, chr |) = get_handshake_repr (Msg.M_client_hello offer1) in
-      let lbl = Transcript.LR_CompleteTCH chr in
-      Transcript.extend ms.digest lbl;
 
       // Set up 0RTT keys if offered
       let sending =
@@ -709,7 +705,7 @@ let client13_Finished1 hs ee client_cert_request server_cert_certverify finished
     export ms.epochs exporter_master_secret;
     register ms.epochs app_keys; // ATKs are ready to use in both directions
 
-    let send_eoed = Negotiation.zeroRTT sh && not cfg.is_quic in
+    let send_eoed = Negotiation.zeroRTT ee && not cfg.is_quic in
     if send_eoed then ( // EOED emitting (not used for QUIC)
       trace "Early data accepted; emitting EOED." LowStar.Printf.done;
       match Send.send13 #ha ms.digest ms.sending (Msg.M13_end_of_early_data ()) with
@@ -721,7 +717,7 @@ let client13_Finished1 hs ee client_cert_request server_cert_certverify finished
         Receive.InAck false false )
       | Error z -> Receive.InError z )
     else (
-      (if Negotiation.zeroRTT sh
+      (if Negotiation.zeroRTT ee
       then trace "Early data accepted (QUIC, no EOED)." LowStar.Printf.done
       else trace "Early data rejected" LowStar.Printf.done);
       let fin1 = Ghost.hide Bytes.empty_bytes in

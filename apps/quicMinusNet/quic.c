@@ -138,6 +138,7 @@ int main(int argc, char **argv)
   char *errmsg = NULL;
   int erridx;
 
+  quic_crypto_init();
   mipki_state *pki = mipki_init(pki_config, 1, NULL, &erridx);
 
   if(!pki)
@@ -266,7 +267,7 @@ int main(int argc, char **argv)
       // Server half-round
       half_round(server.quic_state, &sctx, &cctx, &sr, &sw, plain, cipher, &plen, 1, &spn, &cpn);
 
-      if(COMPLETE(sctx)) FFI_mitls_quic_send_ticket(server.quic_state, "hello world", 11);
+      if(COMPLETE(cctx)) FFI_mitls_quic_send_ticket(server.quic_state, "hello world", 11);
       printf("\n == End round %d [CComplete=%d, SComplete=%d] ==\n\n", i, COMPLETE(cctx), COMPLETE(sctx));
     }
     

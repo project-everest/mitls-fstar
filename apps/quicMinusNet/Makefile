@@ -14,6 +14,7 @@ ifeq ($(OS),Windows_NT)
   LIBQC=libquiccrypto.dll
   LIBPKI=libmipki.dll
   OPENSSL=libcrypto-*.dll
+  LIBEVERCRYPT=libevercrypt.dll
   CC?=$(MARCH)-w64-mingw32-gcc
   ifeq ($(shell uname -o),Cygwin)
     MITLS_HOME := $(shell cygpath -u ${MITLS_HOME})
@@ -29,6 +30,7 @@ else ifeq ($(UNAME),Darwin)
   LIBMITLS=libmitls.so
   LIBQC=libquiccrypto.so
   LIBPKI=libmipki.so
+  LIBEVERCRYPT=libevercrypt.so
   LIBPATHS=$(EVERCRYPT_HOME)/../dist/gcc-compatible:$(MITLS_HOME)/src/pki:$(MITLS_HOME)/src/tls/dist/compact:$(HACL_HOME)/providers/quic_provider:$(MLCRYPTO_HOME)/openssl
   DYLD_LIBRARY_PATH := $(LIBPATHS):$(DYLD_LIBRARY_PATH)
   export DYLD_LIBRARY_PATH
@@ -36,6 +38,7 @@ else ifeq ($(UNAME),Linux)
   LIBMITLS=libmitls.so
   LIBQC=libquiccrypto.so
   LIBPKI=libmipki.so
+  LIBEVERCRYPT=libevercrypt.so
   CFLAGS+=-lpthread -pthread
   LIBPATHS=$(EVERCRYPT_HOME)/../dist/gcc-compatible:$(MITLS_HOME)/src/pki:$(MITLS_HOME)/src/tls/dist/compact:$(HACL_HOME)/providers/quic_provider:$(MLCRYPTO_HOME)/openssl
   LD_LIBRARY_PATH := $(LIBPATHS):$(LD_LIBRARY_PATH)
@@ -73,13 +76,14 @@ copy: $(MITLS_HOME)/src/pki/$(LIBPKI) $(MITLS_HOME)/src/tls/dist/compact/$(LIBMI
 	cp $(MITLS_HOME)/src/pki/$(LIBPKI) .
 	cp $(MLCRYPTO_HOME)/openssl/$(OPENSSL) .
 	cp $(MITLS_HOME)/src/tls/dist/compact/$(LIBMITLS) .
+	cp $(EVERCRYPT_HOME)/../dist/gcc-compatible/$(LIBEVERCRYPT) .
 	cp $(HACL_HOME)/providers/quic_provider/$(LIBQC) .
 
 test: quic.exe
 	./quic.exe
 	./quic.exe 0rtt
 	./quic.exe 0rtt-reject
-	./quic.exe hrr
+#	./quic.exe hrr
 
 ifeq ($(shell uname),Darwin)
   $(info remember to run process launch --environment DYLD_LIBRARY_PATH=$(DYLD_LIBRARY_PATH) inside lldb)

@@ -132,6 +132,9 @@ int MITLS_CALLCONV FFI_mitls_init(void)
       return 0;
   }
 
+  // CPUID detection of EverCrypt features
+  EverCrypt_AutoConfig2_init();
+
   #if IS_WINDOWS
     #ifdef _KERNEL_MODE
     ExInitializeFastMutex(&lock);

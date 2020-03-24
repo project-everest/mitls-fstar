@@ -238,6 +238,13 @@ let server_ClientHello1 st offer
     let accept_0rtt =  Some? config.max_early_data &&
       Some 0us = opski && Nego.find_early_data offer in
 
+    if HSM.ch_bound offer then
+     begin
+      let (| _, chr |) = get_handshake_repr (HSM.M_client_hello offer) in
+      let lbl = Transcript.LR_CompleteTCH chr in
+      Transcript.extend di lbl
+     end;
+
     // Verify selected binder, update tag, di, tx
     let binder_ok = match obk with
       | None -> Correct tag0
@@ -246,11 +253,6 @@ let server_ClientHello1 st offer
         let open Parsers.OfferedPsks_binders in
         let Some opsk = Nego.find_clientPske offer in
         let Some binder = List.Tot.nth opsk.binders (UInt16.v (Some?.v opski)) in
-
-        // Complete the TCH hash (wasteful, should be fixed when interface is repr_pos)
-        let (| _, chr |) = get_handshake_repr (HSM.M_client_hello offer) in
-	let lbl = Transcript.LR_CompleteTCH chr in
-	Transcript.extend di lbl;
 
         if HMAC.verify (dsnd bk) tag0 binder then
           Correct (transcript_extract di)
@@ -269,8 +271,19 @@ let server_ClientHello1 st offer
          register ms0.epochs ets
 //         Epochs.incr_reader ms0.epochs
       );
+      let uexts = Extensions.clientHelloExtensions_serializer32 (List.Tot.filter Extensions.CHE_Unknown_extensionType? offer.CH.extensions) in
+      trace ("Negotiation callback to handle unknown extensions: "^(B.hex_of_bytes uexts));
+      let open TLS.Callbacks in
+      let nego_cb = config.nego_callback in
+      match nego_cb.negotiate nego_cb.nego_context TLS_1p3 uexts None with
+      | Nego_abort ->
+        trace "Application requested to abort the handshake." LowStar.Printf.done;
+        Recv.InError (fatalAlert Handshake_failure,"handshake aborted by application")
+      | Nego_retry _ ->
+        Recv.InError (fatalAlert Internal_error, "Retry not implemented")
+      | Nego_accept sexts ->
       let she = Nego.server_clientExtensions TLS_1p3 config cs None opski ogyb false offer.CH.extensions in
-      let ee = Nego.encrypted_clientExtensions TLS_1p3 config cs None opski ogyb false offer.CH.extensions in
+      let ee =  Nego.encrypted_clientExtensions TLS_1p3 config cs None opski ogyb false sexts offer.CH.extensions in
       let sh = SH.({
         version = TLS_1p2;
 	is_hrr = Parsers.ServerHello_is_hrr.(
@@ -294,6 +307,7 @@ let server_ClientHello1 st offer
         let ks', hsk = KS.ks_server13_sh ks digest_SH in
         trace "Transcript ServerHello: %a" TLS.Tracing.print_bytes digest_SH LowStar.Printf.done;
         register ms0.epochs hsk;
+	Epochs.incr_reader ms0.epochs;
         let ms1 : msg_state region pfs random ha = {ms0 with sending=sd} in
         r := S13_sent_ServerHello soffer sh ee accept_0rtt ms1 cert ks';
         Recv.InAck false false
@@ -513,14 +527,25 @@ let server_ServerFinished_13 hs =
         register ms.epochs app_keys;
         let send = Send.signals send (Some (true,false)) false in
 	let mode = S13_mode soffer sh ee cert_ctx in
-	let eoed_done = not (Nego.zeroRTT sh) || config.is_quic in
-	let pf = if eoed_done then ParseFlights.F_s13_wait_Finished2
-	         else ParseFlights.F_s13_wait_EOED in
+	let eoed_done = not (Nego.zeroRTT ee) || config.is_quic in
+	let pf = // Expect EOED if 0-RTT accepted & QUIC not used
+	  if eoed_done then ParseFlights.F_s13_wait_Finished2
+	  else ParseFlights.F_s13_wait_EOED in
 	let ms : msg_state region pf _ ha = {ms with sending = send} in
+	// Automatic EOED reader++ in QUIC
+	if Nego.zeroRTT ee && config.is_quic then
+	  Epochs.incr_reader ms.epochs;
         r := S13_wait_Finished2 mode (Ghost.hide svd) eoed_done ms ks;
         Correct()
 
-let server_EOED hs digestEOED = admit()
+let server_EOED hs digestEOED =
+  trace "Process EOED (increment reader to HS key)" LowStar.Printf.done;
+  let Server region config r = hs in
+  let S13_wait_Finished2 m svd _ ms ks = !r in
+  Epochs.incr_reader ms.epochs;
+  let ms : msg_state region ParseFlights.F_s13_wait_Finished2 _ _ = ms in
+  r := S13_wait_Finished2 m svd true ms ks;
+  Recv.InAck false false
 
 let server_Ticket13 hs app_data =
   let Server region cfg r = hs in
@@ -606,7 +631,8 @@ let server_ClientFinished_13 hs cvd client_cert =
          if Some? config.send_ticket then
 	   let _ = server_Ticket13 hs (Some?.v config.send_ticket)
 	 in ());
-       Recv.InAck true true  // Server 1.3 ATK
+       Epochs.incr_reader ms.epochs; // Read with ATK
+       Recv.InAck true true
        end
      else Recv.InError (fatalAlert Bad_record_mac, "Finished MAC did not verify: expected digest "^Bytes.print_bytes cvd)
 
