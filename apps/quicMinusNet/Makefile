@@ -14,7 +14,6 @@ ifeq ($(OS),Windows_NT)
   LIBQC=libquiccrypto.dll
   LIBPKI=libmipki.dll
   OPENSSL=libcrypto-*.dll
-  LIBEVERCRYPT=libevercrypt.dll
   CC?=$(MARCH)-w64-mingw32-gcc
   ifeq ($(shell uname -o),Cygwin)
     MITLS_HOME := $(shell cygpath -u ${MITLS_HOME})
@@ -30,7 +29,6 @@ else ifeq ($(UNAME),Darwin)
   LIBMITLS=libmitls.so
   LIBQC=libquiccrypto.so
   LIBPKI=libmipki.so
-  LIBEVERCRYPT=libevercrypt.so
   LIBPATHS=$(EVERCRYPT_HOME)/../dist/gcc-compatible:$(MITLS_HOME)/src/pki:$(MITLS_HOME)/src/tls/dist/compact:$(HACL_HOME)/providers/quic_provider:$(MLCRYPTO_HOME)/openssl
   DYLD_LIBRARY_PATH := $(LIBPATHS):$(DYLD_LIBRARY_PATH)
   export DYLD_LIBRARY_PATH
@@ -38,7 +36,6 @@ else ifeq ($(UNAME),Linux)
   LIBMITLS=libmitls.so
   LIBQC=libquiccrypto.so
   LIBPKI=libmipki.so
-  LIBEVERCRYPT=libevercrypt.so
   CFLAGS+=-lpthread -pthread
   LIBPATHS=$(EVERCRYPT_HOME)/../dist/gcc-compatible:$(MITLS_HOME)/src/pki:$(MITLS_HOME)/src/tls/dist/compact:$(HACL_HOME)/providers/quic_provider:$(MLCRYPTO_HOME)/openssl
   LD_LIBRARY_PATH := $(LIBPATHS):$(LD_LIBRARY_PATH)
@@ -66,7 +63,7 @@ EXTERNAL_LIBS =\
         $(MITLS_HOME)/src/tls/dist/compact/$(LIBMITLS)
 
 quic.exe: quic.c $(EXTERNAL_HEADERS) $(EXTERNAL_LIBS)
-	$(CC) -fPIC -I$(EVERCRYPT_HOME)/../dist/evercrypt-external-headers -I$(MITLS_HOME)/src/tls/dist/compact \
+	$(CC) -fPIC -I$(MITLS_HOME)/src/tls/dist/compact \
 	  -I../../src/pki \
 	  -I../../libs/ffi -I$(HACL_HOME)/providers/quic_provider \
           -L$(subst :, -L,$(LIBPATHS)) \

@@ -138,7 +138,6 @@ int main(int argc, char **argv)
   char *errmsg = NULL;
   int erridx;
 
-  quic_crypto_init();
   mipki_state *pki = mipki_init(pki_config, 1, NULL, &erridx);
 
   if(!pki)
