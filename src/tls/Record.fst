@@ -4,11 +4,10 @@ module Record
 
 open FStar.Seq
 open FStar.Bytes
-open FStar.Error
 open FStar.UInt32
 
 open Mem
-open TLSError
+open TLS.Result
 open TLSInfo
 open TLSConstants
 open Range
@@ -82,8 +81,8 @@ let sendPacket tcp ct plain ver (data: (b:bytes { repr_bytes (length b) <= 2})) 
     let res = Transport.send tcp (BufferBytes.from_bytes data) (len data) in
     if Int32.v res = length data
     then Correct()
-    else Error(Printf.sprintf "Transport.send(header) returned %l" res)
-  else   Error(Printf.sprintf "Transport.send(payload) returned %l" res)
+    else fatal Internal_error (Printf.sprintf "Transport.send(header) returned %l" res)
+  else   fatal Internal_error (Printf.sprintf "Transport.send(payload) returned %l" res)
 
 private type parsed_header = result (contentType
                            * protocolVersion
@@ -184,7 +183,7 @@ let alloc_input_state r =
   InputState pos b
 
 type read_result =
-  | ReadError of TLSError.error
+  | ReadError of TLS.Result.error
   | ReadWouldBlock
   | Received:
       ct:contentType ->
@@ -222,7 +221,7 @@ let rec read tcp s =
   //assert(p0 <^ headerLen \/ Buffer.disjoint header dest);
   //assert(p0 <^ headerLen \/ Buffer.as_seq h0 header == Buffer.as_seq h1 header);
   if res = -1l then
-    ReadError TLSError.({alert= Internal_error; cause= "Transport.recv"})
+    ReadError TLS.Result.({alert= Internal_error; cause= "Transport.recv"})
   else
   if res = 0l
   then ( trace "WouldBlock"; ReadWouldBlock )

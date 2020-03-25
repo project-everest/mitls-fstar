@@ -45,4 +45,4 @@ val serialize: #g:group -> share g -> Tot B.bytes
 
 val serialize_public: #g:group -> s:share g -> l:nat{l < 65536 /\ B.length s <= l} -> Tot (B.lbytes l)
 
-val parse_partial: FStar.Bytes.bytes -> Tot (TLSError.result ((g:group & share g) * B.bytes))
+val parse_partial: FStar.Bytes.bytes -> Tot (TLS.Result.result ((g:group & share g) * B.bytes))

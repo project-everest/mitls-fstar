@@ -1,12 +1,11 @@
 module Test.CommonDH
 
 open FStar.Bytes
-open FStar.Error
 open FStar.Printf
 open FStar.HyperStack
 open FStar.HyperStack.ST
 
-open TLSError
+open TLS.Result
 open TLSConstants
 open Parsers.NamedGroup
 open Parsers.NamedGroupList

@@ -3,10 +3,9 @@ module HS = FStar.HyperStack //Added automatically
 
 open FStar.Seq
 open FStar.Bytes
-open FStar.Error
 
 open Mem
-open TLSError
+open TLS.Result
 open TLSConstants
 open TLSInfo
 
@@ -477,7 +476,7 @@ let sendFragment c #i wo f =
        trace ("Sending fragment of length " ^ string_of_int (length payload));
        let r = Record.sendPacket c.tcp ct (PlaintextID? i) pv payload in
        match r with
-       | Error x   -> fatal Internal_error x
+       | Error z   -> Error z
        | Correct _ -> Correct()
   end
 
@@ -521,7 +520,7 @@ private let sendAlert (c:connection) (ad:alert) (reason:string)
 	       /\ sel h1 c.state = (fst st, Closed)
 	     | _ -> False)))
 =
-    trace ("sendAlert "^TLSError.string_of_error ({alert=ad.description;cause=reason}));
+    trace ("sendAlert "^TLS.Result.string_of_error ({alert=ad.description;cause=reason}));
     reveal_epoch_region_inv_all ();
     let i = currentId c Writer in
     let wopt = current_writer c i in
@@ -575,7 +574,7 @@ let sendHandshake_post (#c:connection) (#i:id) (wopt:option (cwriter i c))
 		       then frags1==snoc frags0' (Content.CT_CCS #i (point 1))
 		       else frags1==frags0')))))
 
-#reset-options "--using_facts_from FStar --using_facts_from Prims --using_facts_from Range --using_facts_from Parse --using_facts_from Connection --using_facts_from Handshake --using_facts_from TLS --using_facts_from TLSError --using_facts_from TLSConstants --using_facts_from 'FStar Prims Range Parse Connection Handshake TLS TLSError TLSConstants'"
+#reset-options "--using_facts_from FStar --using_facts_from Prims --using_facts_from Range --using_facts_from Parse --using_facts_from Connection --using_facts_from Handshake --using_facts_from TLS --using_facts_from TLS.Result --using_facts_from TLSConstants --using_facts_from 'FStar Prims Range Parse Connection Handshake TLS TLS.Result TLSConstants'"
 #set-options "--z3rlimit 100 --initial_fuel 0 --max_fuel 0 --initial_ifuel 1 --max_ifuel 1 --admit_smt_queries true"
 
 private let sendHandshake
@@ -1144,7 +1143,7 @@ let readOne c i =
     match f with
     | Content.CT_Alert rg ad ->
       begin
-        trace ("read Alert fragment "^TLSError.string_of_alert ad);
+        trace ("read Alert fragment "^TLS.Result.string_of_alert ad);
         if ad.description = Close_notify then
           if Closed? (snd !c.state)
           then ( // received a notify response; cleanly close the connection.

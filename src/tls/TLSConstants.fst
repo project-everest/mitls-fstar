@@ -25,9 +25,8 @@ module TLSConstants
 open FStar.Seq
 open FStar.UInt32
 open FStar.Bytes
-open FStar.Error
-open TLSError
 
+open TLS.Result
 open Mem
 open Parse
 //include Parse

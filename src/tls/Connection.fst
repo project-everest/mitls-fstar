@@ -7,10 +7,9 @@ open FStar.HyperStack
 // JP: please stop using opening so much stuff in scope srsly
 open FStar.Seq
 open FStar.Bytes
-open FStar.Error
 
 open Mem
-open TLSError
+open TLS.Result
 open TLSConstants
 open TLSInfo
 

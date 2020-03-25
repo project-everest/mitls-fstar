@@ -1,6 +1,6 @@
 module CipherSuite
 
-open TLSError
+open TLS.Result
 
 /// Datatypes and wire formats for ciphersuites. In addition to QD
 /// types tracking the RFCs, we rely on a higher-level, more
@@ -362,7 +362,7 @@ let cipherSuiteNameBytes : cipherSuiteName -> Tot csbytes =
 
 inline_for_extraction
 let parse_cipherSuiteName_error_msg : string =
-  FStar.Error.perror __SOURCE_FILE__ __LINE__ ""
+  perror __SOURCE_FILE__ __LINE__ ""
 
 let parseCipherSuiteName: b:csbytes
   -> Tot (cm:cipherSuiteName{cipherSuiteNameBytes cm == b}) =

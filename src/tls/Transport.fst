@@ -5,8 +5,7 @@ module HS = FStar.HyperStack //Added automatically
 
 open FStar.HyperStack.All
 open FStar.Bytes
-open FStar.Error
-open TLSError
+open TLS.Result
 open Mem
 
 /// 18-01-23 We now have function pointers matching the types used in

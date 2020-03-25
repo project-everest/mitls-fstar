@@ -5,7 +5,7 @@ module TLS.Handshake.Send
 ///
 open FStar.Integers
 open FStar.Bytes
-open TLSError
+open TLS.Result
 
 open FStar.HyperStack.ST
 
@@ -209,7 +209,7 @@ let send_hrr #a stt sto tag hrr =
 #pop-options
 
 
-#push-options "--max_fuel 0 --max_ifuel 0 --z3rlimit 32"
+#push-options "--max_fuel 0 --max_ifuel 1 --z3rlimit 32"
 
 assume val any_hash_tag_of_buffer (b:B.buffer Lib.IntTypes.uint8) : Tot Transcript.any_hash_tag
 
@@ -281,7 +281,7 @@ let send_tag13 #a stt sto m tag =
     correct sto
   | Error z -> Error z
 
-#push-options "--max_fuel 0 --max_ifuel 0 --z3rlimit 32"
+#push-options "--max_fuel 0 --max_ifuel 1 --z3rlimit 32"
 
 let send_extract13 #ha stt sto m =
   (**) let h0 = get() in

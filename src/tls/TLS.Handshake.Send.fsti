@@ -3,7 +3,7 @@ module TLS.Handshake.Send
 /// Adding an interface to hoist definitions from HandshakeLog.fsti
 
 open FStar.HyperStack.ST
-open TLSError
+open TLS.Result
 
 module HSM = HandshakeMessages
 

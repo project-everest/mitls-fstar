@@ -1,113 +1,55 @@
-﻿module TLSError
-open FStar.String
+﻿module TLS.Result 
+
 (* TLS explicitly returns run-time errors:
    results carry either values or error descriptions *)
 
-include FStar.Error // avoids double-include in other modules, and prepares its elimination.
-
+// only for their datatypes
 include Parsers.AlertDescription
-include Parsers.AlertLevel
-include Parsers.Alert
 
-let string_of_alert (a:alert) = 
-  "level="^string_of_alertLevel a.level^
-  ", description="^string_of_alertDescription a.description
-
-let fatalAlert ad = {level=Fatal; description=ad}
-
-(* TODO functions checking consistency of levels and descriptions *)
-
-// let isFatal ad =
-//     match ad with
-//     | AD_unexpected_message
-//     | AD_bad_record_mac
-//     | AD_decryption_failed
-//     | AD_record_overflow
-//     | AD_decompression_failure
-//     | AD_handshake_failure
-//     | AD_bad_certificate_fatal
-//     | AD_unsupported_certificate_fatal
-//     | AD_certificate_revoked_fatal
-//     | AD_certificate_expired_fatal
-//     | AD_certificate_unknown_fatal
-//     | AD_illegal_parameter
-//     | AD_unknown_ca
-//     | AD_access_denied
-//     | AD_decode_error
-//     | AD_decrypt_error
-//     | AD_export_restriction
-//     | AD_protocol_version
-//     | AD_insufficient_security
-//     | AD_internal_error
-//     | AD_user_cancelled_fatal
-//     | AD_missing_extension
-//     | AD_unsupported_extension
-//     | AD_no_application_protocol -> true
-//     | _ -> false
 
 // rewritten for lowering and nicer extraction, was [alert * string]
 type error = { alert: alertDescription; cause: string } 
 
-let string_of_error (e:error) = FStar.Printf.sprintf "%s: %s" (string_of_alertDescription e.alert) e.cause
-
-type result 'a = FStar.Error.optResult error 'a
-
-open FStar.Error
-let string_of_result f = function
-  | Error z -> "Error: "^string_of_error z
-  | Correct v -> f v
+// this module will often be opened, for pattern-matching on results
+type result 'a =
+  | Correct of 'a
+  | Error of error
+// used to be specialized from FStar.Error
 
 // not inlined (in source C) for readability
-let fatal #t a s: result t = Error ({alert=a; cause=norm [primops] s})
+let correct (x:'a): result 'a = Correct x
+let fail #a z: result a = Error z
 
-val resT: r:result 'a { FStar.Error.Correct? r } -> Tot 'a
-let resT (FStar.Error.Correct v) = v
+let alert = Parsers.Alert.alert
+val string_of_alert: alert -> string 
+val fatalAlert: alertDescription -> alert
+
+val string_of_error: error -> string
+val string_of_result: #a:_ ->  (a -> string) -> result a -> string 
+
+// not inlined (in source C) for readability
+let fatal #a (ad:alertDescription) (s:string): result a = Error ({alert=ad; cause=norm [primops] s})
+
+val resT: r:result 'a { Correct? r } -> 'a
 
 inline_for_extraction
-val mapResult: ('a -> Tot 'b) -> result 'a -> Tot (result 'b)
-inline_for_extraction
-let mapResult f r =
-   (match r with
-    | Error z -> Error z
-    | Correct c -> Correct (f c))
-
-val bindResult: ('a -> Tot (result 'b)) -> result 'a -> Tot (result 'b)
-let bindResult f r =
-   (match r with
-    | Error z -> Error z
-    | Correct c -> f c)
-
-val resultMap: result 'a -> ('a -> Tot 'b) -> Tot (result 'b)
-let resultMap r f =
-   (match r with
-    | Error z -> Error z
-    | Correct c -> Correct (f c))
-
-val resultBind: result 'a -> ('a -> Tot (result 'b)) -> Tot (result 'b)
-let resultBind r f =
-   (match r with
-    | Error z -> Error z
-    | Correct c -> f c)
+val mapResult: ('a -> 'b) -> result 'a -> result 'b
+val bindResult: ('a -> result 'b) -> result 'a -> result 'b
+val resultMap: result 'a -> ('a -> Tot 'b) -> result 'b
+val resultBind: result 'a -> ('a -> result 'b) -> result 'b
 
 (* connecting with LowParse, which uses option *)
 
-let option_of_result (#t: Type) (r: result t) : Tot (option t) =
+let option_of_result (r: result 'a): option 'a =
   match r with
   | Error _ -> None
   | Correct c -> Some c
 
-
 (* lightweight error handling? *) 
-
-// masking the polymorphic one in FStar.Error
-
-// not inlined (in source C) for readability
-let correct #t x: result t = Correct x
-let fail #t z: result t = Error z
 
 inline_for_extraction
 let bind (#a:Type) (#b:Type)
-         (f:result a)
+         (f: result a)
          (g: a -> result b)
     : result b
     = match f with
@@ -123,11 +65,10 @@ let perror
   = normalize_term (Printf.sprintf "%s:%d %s" file line text)
 
 // let perror_unit_test = perror __SOURCE_FILE__ __LINE__ "test error"
-// compiles to "TLSError.fst:123 test error"
+// compiles to "TLS.Result.fst:123 test error"
 
 
 (*** A layered exception effect over HST ***)
-
 
 open FStar.HyperStack.ST
 

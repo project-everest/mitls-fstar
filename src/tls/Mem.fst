@@ -21,15 +21,13 @@ module Mem
 ///   unless its state is e.g. just a single transparent reference;
 ///   the caller usually tracks it using locations rather than regions.
 
-open FStar.Error
-
 include FStar.HyperStack
 include FStar.HyperStack.ST
 
 open LowStar.Buffer
 open LowStar.BufferOps
 
-open TLSError
+open TLS.Result
 
 /// 2019.06.20 SZ TODO: Port these to LowStar.Buffer
 module DM = FStar.DependentMap

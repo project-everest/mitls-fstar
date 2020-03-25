@@ -4,7 +4,7 @@ module TLS.Handshake.Client
 open Mem
 open TLSConstants
 open TLSInfo
-open TLSError
+open TLS.Result
 
 module HS = FStar.HyperStack
 open FStar.HyperStack.ST
@@ -12,8 +12,8 @@ open FStar.HyperStack.ST
 open TLS.Handshake.Messaging
 open TLS.Handshake.Machine
 
-module Send = TLS.Handshake.Send
-module Recv = TLS.Handshake.Receive
+//module Send = TLS.Handshake.Send
+//module Recv = TLS.Handshake.Receive
 
 module HD = Hashing.Spec
 module Nego = Negotiation 
@@ -24,9 +24,16 @@ module Msg = HandshakeMessages
 module PF = TLS.Handshake.ParseFlights // avoidable?
 module HMAC = Old.HMAC.UFCMA
 module KS = Old.KeySchedule
-module Transcript = TLS.Handshake.Transcript
+//module Transcript = TLS.Handshake.Transcript
 
 #set-options "--max_fuel 0 --max_ifuel 0"
+
+inline_for_extraction noextract 
+let trace = TLS.Tracing.mk_trace "HSC" 
+
+inline_for_extraction noextract 
+let done = LowStar.Printf.done 
+
 
 (*** Hello messages ***)
 
@@ -219,9 +226,9 @@ let client_ClientHello hs =
   let C_init random = !r in
   let groups =
     match cfg.max_version with
-    | TLS_1p3 -> trace "ClientHello offering 1.3"; Some cfg.offer_shares
-    | _       -> trace "ClientHello offering only 1.2"; None in
-    // groups = None indicates TLS 1.2 only
+    | TLS_1p3 -> trace "offering ClientHello 1.3" done; Some cfg.offer_shares
+    | _       -> trace "offering ClientHello 1.2" done; None in
+    // groups = None indicates a 1.2 handshake
     // groups = Some [] is valid, may be used to deliberately trigger HRR
   let ks, shares = KS.ks_client_init random cfg.is_quic groups in
   //lower: KS will return a stashed serialized list of DH key shares.
@@ -284,7 +291,7 @@ let client_ClientHello hs =
       // Set up 0RTT keys if offered
       let sending =
         if Negotiation.find_early_data offer0 then (
-          trace "setting up 0RTT";
+          trace "setting up 0RTT" done;
           let digest_CH = transcript_extract ms.digest in
           // TODO LATER consider doing export & register within KS
           let early_exporter_secret, edk = KS.ks_client13_ch ks' digest_CH in
@@ -315,7 +322,8 @@ let client_HelloRetryRequest hs hrr =
   let Client region config r = hs in
   let C_wait_ServerHello offer ms ks = !r in
   let open Parsers.HelloRetryRequest in
-  trace("HelloRetryRequest with extensions " ^ Nego.string_of_hrres (Msg.hrr_extensions hrr));
+  // JP: this is not Low* as it gc-allocates a string... should be fixed by defining Nego.print_hrres!
+  trace "HelloRetryRequest with extensions %s" (Nego.string_of_hrres (Msg.hrr_extensions hrr)) done;
 
   // We may need to change our mind about the hash
   let ch0 = offer.full_ch in
@@ -335,7 +343,7 @@ let client_HelloRetryRequest hs hrr =
       // this case should only ever happen in QUIC stateless retry address validation
       // FIXME(adl) deprecated in current QUIC with transport retry
       // is this still used for other purposes? Spec does not explicitly forbid it
-      trace "Server did not specify a group in HRR, re-using the previous choice";
+      trace "Server did not specify a group in HRR, re-using the previous choice" done;
       None, ks
     | Some ng ->
       match CommonDH.group_of_namedGroup ng with
@@ -396,7 +404,7 @@ let client_HelloRetryRequest hs hrr =
       // Set up 0RTT keys if offered ---- is it enabled after HRR?
       let sending =
         if Negotiation.find_early_data offer then (
-          trace "setting up 0RTT";
+          trace "setting up 0RTT" done;
           let digest_CH = transcript_extract (agile_transcript_base di1) in
           // TODO LATER consider doing export & register within KS
           let early_exporter_secret, edk = KS.ks_client13_ch ks digest_CH in
@@ -440,7 +448,7 @@ let client_HelloRetryRequest (Client region config r) hrr =
 //#push-options "--max_ifuel 3 --z3rlimit 32"
 let client_ServerHello (Client region config r) sh =
   push_frame ();
-  trace "client_ServerHello";
+  trace "client_ServerHello" done;
   let cfg,_ = config in
   let C_wait_ServerHello offer ms ks = !r in
   let r = match Negotiation.client_accept_ServerHello cfg offer.full_ch sh with
@@ -449,14 +457,14 @@ let client_ServerHello (Client region config r) sh =
     //assert (Correct? (Negotiation.selected_version sh));
     match cs with
     | CipherSuite13 ae ha -> (
-      trace "Running TLS 1.3";
+      trace "Running TLS 1.3" done;
       
       let ms = // we need to restart digest if server changes hash (ignoring binders)
         if ha = Nego.offered_ha offer.full_ch then ms
 	else
 	  // N.B. this can only happen if retry = None
 	  let di = transcript_start region ha None offer.full_ch true in
-	  trace ("Server changed hash");
+	  trace ("Server changed hash") done;
 	  {ms with digest = di} in
 
       let server_share = Negotiation.find_serverKeyShare sh in
@@ -478,10 +486,10 @@ let client_ServerHello (Client region config r) sh =
         Epochs.incr_reader ms.epochs;
         match pski with
         | None ->
-          trace "0-RTT rejected early (no PSK was selected)";
+          trace "0-RTT rejected early (no PSK was selected)" done;
           Epochs.incr_writer ms.epochs
         | Some _ ->
-          trace "0RTT potentially accepted (wait for EE to confirm)";
+          trace "0RTT potentially accepted (wait for EE to confirm)" done;
           // No EOED in QUIC, so we immediately enable HSK
           if cfg.is_quic then Epochs.incr_writer ms.epochs )
       else // No EOED to send in 0-RTT epoch
@@ -499,8 +507,9 @@ let client_ServerHello (Client region config r) sh =
       Receive.InAck true false // Client 1.3 HSK
     )
     | CipherSuite kex sa ae -> (
-      trace "Running classic TLS";
-      trace FStar.Bytes.("Offered SID="^print_bytes offer.full_ch.CH.session_id^" Server SID="^print_bytes (Msg.sh_session_id sh));
+      trace "Running classic TLS" done;
+      trace "Offered SID=%a Server SID=%a" TLS.Tracing.print_bytes offer.full_ch.CH.session_id
+        TLS.Tracing.print_bytes (Msg.sh_session_id sh) done;
       Receive.in_error Handshake_failure "TLS 1.2 TBC"
       // if Negotiation.resume_12 mode then
       // begin // 1.2 resumption
@@ -578,8 +587,8 @@ let client13_Finished2 (Client region config r) =
 
 #push-options "--max_ifuel 1"
 let client13_nego_cb cfg ee =
-  trace ("Received encrypted extensions "^Negotiation.string_of_ees ee);
-  trace ("Negotiation callback to process application extensions.");
+  trace "Received encrypted extensions %s" (Negotiation.string_of_ees ee) done;
+  trace "Negotiation callback to process application extensions." done;
   let uexts = List.Tot.filter Parsers.EncryptedExtension.EE_Unknown_extensionType? ee in
   // the length check below could be statically excluded from the definition of filtering
   if not (Parsers.EncryptedExtensions.check_encryptedExtensions_list_bytesize uexts)
@@ -643,10 +652,10 @@ let client13_c_cv #ha sending (digest: Transcript.state ha) cfg offer
       let chain = coerce_crt (Cert.chain_down c.Msg.certificate_list) in
       if not (TLS.Callbacks.cert_verify_cb cfg.cert_callbacks chain sa tbs cv.Msg.signature)
       then (
-        trace("Certificate & signature 1.3 callback failed");
+        trace("Certificate & signature 1.3 callback failed") done;
         fatal Bad_certificate "Failed to validate signature or certificate" )
       else (
-        trace("Certificate & signature 1.3 callback succeeded");
+        trace("Certificate & signature 1.3 callback succeeded") done;
         Correct () )
 
 // #push-options "--max_ifuel 2 --max_fuel 2 --z3rlimit 32"
@@ -716,7 +725,7 @@ let client13_Finished1 hs ee client_cert_request server_cert_certverify finished
 
     let send_eoed = Negotiation.zeroRTT sh && not cfg.is_quic in
     if send_eoed then ( // EOED emitting (not used for QUIC)
-      trace "Early data accepted; emitting EOED.";
+      trace "Early data accepted; emitting EOED." done;
       match Send.send13 #ha ms.digest ms.sending (Msg.M13_end_of_early_data ()) with
       | Correct sending -> (
         let sending = Send.signals sending (Some (false, false)) false in
@@ -727,8 +736,8 @@ let client13_Finished1 hs ee client_cert_request server_cert_certverify finished
       | Error z -> Receive.InError z )
     else (
       (if Negotiation.zeroRTT sh
-      then trace "Early data accepted (QUIC, no EOED)."
-      else trace "Early data rejected");
+      then trace "Early data accepted (QUIC, no EOED)." done
+      else trace "Early data rejected" done);
       let fin1 = Ghost.hide Bytes.empty_bytes in
       r := C13_complete offer sh ee server_cert_certverify fin1 ms
 	  (Finished_pending cfin_key ks false);
@@ -746,7 +755,7 @@ let client13_NewSessionTicket (Client region config r) st13 =
   let tid = st13.ticket in
   let nonce = st13.ticket_nonce in
   let age_add = st13.ticket_age_add in
-  trace ("Received ticket: "^Bytes.hex_of_bytes tid^" nonce: "^Bytes.hex_of_bytes nonce);
+  trace "Received ticket: %a nonce: %a" TLS.Tracing.print_bytes tid TLS.Tracing.print_bytes nonce done;
   assume False; // FIXME some pre-conditions need updating
 
   let C13_complete offer sh ee server_id _fin1 _ms (Finished_sent _fin2 ks) = !r in
@@ -806,7 +815,7 @@ private let convert_kex = function
   | _ -> fatal Internal_error "Incorrect key exchange selected for 1.2"
 
 let client12_ServerHelloDone hs c ske_bytes ocr =
-  trace "processing ...ServerHelloDone";
+  trace "processing ...ServerHelloDone" done;
   Receive.in_error Internal_error (perror __SOURCE_FILE__ __LINE__ "TBC")
   // let kex = Negotiation.kexAlg (Negotiation.getMode hs.nego) in
   // match convert_kex kex with
@@ -857,7 +866,7 @@ let client12_ServerHelloDone hs c ske_bytes ocr =
   //   InAck false false)
 
 let client12_R_ServerFinished hs f digestNewSessionTicket digestServerFinished =
-  trace "client_R_ServerFinished";
+  trace "client_R_ServerFinished" done;
   Receive.in_error Internal_error (perror __SOURCE_FILE__ __LINE__ "TBC")
   // let sfin_key = KS.ks12_finished_key hs.ks in
   // let mode = Negotiation.getMode hs.nego in
@@ -891,7 +900,7 @@ let client12_ServerFinished hs f digestClientFinished =
 let client12_NewSessionTicket hs (resume:bool) (digest:Hashing.anyTag) (st: Msg.newSessionTicket12) =
   let open Parsers.NewSessionTicket12 in
   let open TLS.Callbacks in
-  trace ("Processing ticket: "^Bytes.print_bytes st.ticket);
+  trace "Processing ticket: %a" TLS.Tracing.print_bytes st.ticket done;
   Receive.in_error Internal_error (perror __SOURCE_FILE__ __LINE__ "TBC")
   // hs.state := C_wait_CCS (resume, digest);
   // let cfg = Negotiation.local_config hs.nego in

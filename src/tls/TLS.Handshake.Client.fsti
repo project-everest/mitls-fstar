@@ -6,7 +6,7 @@ module TLS.Handshake.Client
 
 open Mem
 open TLSConstants
-open TLSError
+open TLS.Result
 // open FStar.HyperStack.ST included in Mem
 
 module B = LowStar.Buffer // not FStar.Bytes
@@ -16,6 +16,7 @@ module HS = FStar.HyperStack
 module Msg = HandshakeMessages
 open TLS.Handshake.Machine
 
+// This is bytes, not Low*
 type tag = Hashing.Spec.anyTag
 
 (*** Hello messages ***)

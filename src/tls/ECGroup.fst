@@ -1,7 +1,6 @@
 module ECGroup
 
-open FStar.Error
-open TLSError
+open TLS.Result
 open Mem
 open Parse
 

@@ -1,32 +1,6 @@
 [
-  "†„Í\u0012Ý\u001e7\r\t>öÆ'ð\u001a",
+  "\u001b‰ˆd¢\u0010™F\u0000—i·Ö\u0003.Á",
   [
-    [
-      "TLS.Handshake.Messaging.discard",
-      1,
-      2,
-      1,
-      [
-        "@query", "equation_FStar.HyperStack.ST.equal_stack_domains",
-        "equation_FStar.Monotonic.Heap.equal_dom",
-        "lemma_FStar.HyperStack.ST.lemma_same_refs_in_stack_regions_intro"
-      ],
-      0,
-      "8ad6a4275060f951cf772bcefc1c313e"
-    ],
-    [
-      "TLS.Handshake.Messaging.trace",
-      1,
-      2,
-      1,
-      [
-        "@query", "equation_FStar.HyperStack.ST.equal_stack_domains",
-        "equation_FStar.Monotonic.Heap.equal_dom",
-        "lemma_FStar.HyperStack.ST.lemma_same_refs_in_stack_regions_intro"
-      ],
-      0,
-      "24346bb61d83300405fd8f6e33c85ea4"
-    ],
     [
       "TLS.Handshake.Messaging.transcript_extract",
       1,
@@ -131,6 +105,7 @@
         "lemma_LowStar.Monotonic.Buffer.loc_includes_union_l_",
         "lemma_LowStar.Monotonic.Buffer.loc_includes_union_r_",
         "lemma_LowStar.Monotonic.Buffer.loc_union_comm",
+        "lemma_LowStar.Monotonic.Buffer.modifies_liveness_insensitive_buffer_weak",
         "lemma_LowStar.Monotonic.Buffer.modifies_loc_includes",
         "lemma_LowStar.Monotonic.Buffer.modifies_remove_fresh_frame",
         "lemma_LowStar.Monotonic.Buffer.modifies_trans_linear",
@@ -183,6 +158,7 @@
         "typing_FStar.UInt32.v", "typing_FStar.UInt8.uint_to_t",
         "typing_Hacl.Hash.Definitions.hash_len",
         "typing_LowStar.Buffer.trivial_preorder",
+        "typing_LowStar.Monotonic.Buffer.address_liveness_insensitive_locs",
         "typing_LowStar.Monotonic.Buffer.as_seq",
         "typing_LowStar.Monotonic.Buffer.len",
         "typing_LowStar.Monotonic.Buffer.loc_buffer",
@@ -199,7 +175,7 @@
         "typing_TLSInfo.safe_region", "unit_typing"
       ],
       0,
-      "3c7a83a22552c3fe92a7771d8b01ed2a"
+      "415346df44f70ff0600b822e22aa102a"
     ],
     [
       "TLS.Handshake.Messaging.extend13",
@@ -401,7 +377,7 @@
         "typing_tok_LowStar.ConstBuffer.MUTABLE@tok"
       ],
       0,
-      "a8e01b53f8e910c399cfc6e4cbc1c5e6"
+      "c908b0c4ac25fa85a44ccf16f415419b"
     ]
   ]
 ]

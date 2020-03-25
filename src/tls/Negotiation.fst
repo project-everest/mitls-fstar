@@ -9,11 +9,10 @@ module Negotiation
 // state types between the negotiation steps. In particular, [mode]
 // will be split into simpler, more precise types.
 
-open FStar.Error
 open FStar.Bytes
 
 open Mem
-open TLSError
+open TLS.Result
 open TLSInfo
 open TLS.Callbacks
 open TLSConstants
@@ -28,22 +27,13 @@ open Extensions // for its aggregated datatypes
 
 #reset-options "--using_facts_from '* -LowParse'"
 
-(**
-  Debugging flag.
-  F* normalizer will erase debug prints at extraction when set to false.
-*)
-val discard: bool -> ST unit
-  (requires (fun _ -> True))
-  (ensures (fun h0 _ h1 -> h0 == h1))
-let discard _ = ()
-let print s = discard (IO.debug_print_string ("NGO| "^s^"\n"))
-unfold val trace: s:string -> ST unit
-  (requires (fun _ -> True))
-  (ensures (fun h0 _ h1 -> h0 == h1))
-unfold let trace = if DebugFlags.debug_NGO then print else (fun _ -> ())
+inline_for_extraction noextract 
+let trace = TLS.Tracing.mk_trace "NGO" 
+inline_for_extraction noextract 
+let done = LowStar.Printf.done 
 
 
-// tracing; hopefully extracted only in debug-mode. 
+// tracing, not lowered yet; hopefully extracted only in debug-mode. 
 
 val string_of_list: 
   #a:Type0 -> f: (a -> string) -> string -> xs: list a -> Tot string (decreases (xs)) 
@@ -62,6 +52,7 @@ module LP = LowParse.Low.Base
 module U32 = FStar.UInt32
 module HST = FStar.HyperStack.ST
 module B = LowStar.Buffer
+module Printf = LowStar.Printf
 
 #reset-options
 
@@ -72,17 +63,18 @@ let print_namedGroupList
   #rrel #rel sl pos
 = let _ = namedGroupList_count sl pos in
   let pos' = namedGroupList_jumper sl pos in
-  print "[";
+  let open Printf in 
+  print_string "[";
   LP.print_list namedGroup_jumper
     (fun #rrel #rel sl pos ->
       let s = namedGroup_reader sl pos in
-      print (string_of_namedGroup s);
+      print_string (string_of_namedGroup s);
       let pos1 = namedGroup_jumper sl pos in
-      if pos1 <> pos' then print " ")
+      if pos1 <> pos' then print_string " ")
     sl
     (pos `U32.add` 2ul)
     pos';
-  print "]"
+  print_string "]"
 
 #reset-options "--using_facts_from '* -LowParse'"
 
@@ -392,7 +384,7 @@ let sigalgs_extension cfg: list clientHelloExtension =
 
 let sigalgs_extension_new cfg: Tot (result (list clientHelloExtension)) =
   if check_clientHelloExtension_CHE_signature_algorithms_bytesize cfg.CFG.signature_algorithms
-  then Correct [CHE_signature_algorithms cfg.CFG.signature_algorithms]
+  then correct [CHE_signature_algorithms cfg.CFG.signature_algorithms]
   else fatal Internal_error "sigalgs_extension: check_CHE_signature_algorithms_bytesize failed"
 
 let ec_extension cfg: list clientHelloExtension  = 
@@ -446,7 +438,7 @@ private let compute_binder_ph (pski:pskInfo) : Tot pskBinderEntry =
   assume (32 <= U32.v len /\ U32.v len <= 256); // hash must not be MD5 or SHA1...
   FStar.Bytes.create len 0uy
 
-#push-options "--z3rlimit 16"
+#push-options "--z3rlimit 32"
 
 (* a rewrite of the compute_binder_ph spec *)
 
@@ -622,15 +614,15 @@ let final_extensions_new
         if
           check_clientHelloExtension_CHE_pre_shared_key_bytesize ke
         then
-          Correct ([CHE_psk_key_exchange_modes psk_kex] @
+          correct ([CHE_psk_key_exchange_modes psk_kex] @
             (if edi then [CHE_early_data ()] else []) @
             [CHE_pre_shared_key ke]
           )
         else fatal Internal_error "final_extensions: check_preSharedKeyClientExtension_bytesize failed"
       end
     else
-      Correct [CHE_psk_key_exchange_modes [Psk_ke; Psk_dhe_ke]]
-  | _ -> Correct []
+      correct [CHE_psk_key_exchange_modes [Psk_ke; Psk_dhe_ke]]
+  | _ -> correct []
 
 (* TODO: sanity-check wrt. old final_extensions *)
 
@@ -660,7 +652,7 @@ let prepareClientExtensions
 = 
   match Negotiation.Version.support cfg with 
   | Error z -> Error z 
-  | Correct supported_versions -> Correct(
+  | Correct supported_versions -> correct(
 
   // 18-12-22 TODO cfg.safe_renegotiation is ignored? 
 
@@ -715,7 +707,7 @@ let prepareClientExtensions_new
       begin match final_extensions_new cfg edi psks now with
       | Error z -> Error z
       | Correct final_extensions ->
-        Correct begin
+        correct begin
           // 18-12-22 TODO cfg.safe_renegotiation is ignored? 
           Extensions.clientHelloExtensions_of_unknownExtensions cfg.CFG.custom_extensions @
           (* Always send supported extensions.
@@ -849,7 +841,9 @@ private let rec unseal_tickets_
     let acc: tickets =
       match Ticket.check_ticket true seal with
       | Some t -> (tid, t) :: acc
-      | None -> trace ("WARNING: failed to unseal the session data for ticket "^print_bytes tid^" (check sealing key)"); acc in
+      | None -> trace 
+        "WARNING: failed to unseal session data for ticket %a; check the sealing key"
+        TLS.Tracing.print_bytes tid done ; acc in
     unseal_tickets_ acc r )
 
 // FIXME(adl) proper error propagation instead of silent failure
@@ -1243,21 +1237,21 @@ let client_offer_new cfg nonce ks resume now =
 
 let client_ClientHello config nonce oks =
   let (cfg,resume) = config in 
-  trace(
+  trace "%s" (
     if (
       match ticket13_pskinfo [] (snd resume) with
       | (_, i) :: _ -> i.allow_early_data && Some? cfg.max_early_data // Must be the first PSK
       | _ -> false)
     then "Offering a PSK compatible with 0-RTT"
-    else "No PSK or 0-RTT disabled");
+    else "No PSK or 0-RTT disabled") done;
 
-    let now = UInt32.uint_to_t (FStar.Date.secondsFromDawn()) in
-    match client_offer config nonce oks now with 
-    | Error z -> Error z 
-    | Correct offer -> (
-      trace ("offering client extensions "^string_of_ches offer.CH.extensions);
-      trace ("offering cipher suites "^string_of_ciphersuitenames offer.CH.cipher_suites);
-      Correct offer )
+  let now = UInt32.uint_to_t (FStar.Date.secondsFromDawn()) in
+  match client_offer config nonce oks now with 
+  | Error z -> Error z 
+  | Correct offer -> (
+    trace "offering client extensions %s" (string_of_ches offer.CH.extensions) done;
+    trace "offering cipher suites %s" (string_of_ciphersuitenames offer.CH.cipher_suites) done;
+    Correct offer )
 
 private
 let choose_retry_extension (ctx:share & UInt32.t & list (PSK.pskid & pskInfo))
@@ -2025,8 +2019,10 @@ let rec filter_psk (l:list pskIdentity)
         Some (PSK.coerce id, info) :: (filter_psk t)
 //    | None ->
 //      (match PSK.psk_lookup id with
-//      | Some info -> trace ("Loaded PSK from ticket <"^print_bytes id^">"); Some (id, info) :: filter_psk t
-      | None -> trace ("WARNING: the PSK <"^print_bytes id^"> has been filtered"); None :: filter_psk t)
+//      | Some info -> trace "Loaded PSK from ticket <%a>" TLS.Tracing.print_bytes id done;
+//        Some (id, info) :: filter_psk t
+      | None -> trace "WARNING: the PSK <%a> has been filtered" TLS.Tracing.print_bytes id done;
+        None :: filter_psk t)
 //      )
 
 // Registration of DH shares
@@ -2108,16 +2104,16 @@ let computeServerMode12 cfg co =
 private let accum_string_of_pv s pv = s ^ " " ^ string_of_pv pv
 // Now called from Handshake
 let trace_offer offer =
-  trace ("offered client extensions "^string_of_ches offer.CH.extensions);
-  trace ("offered cipher suites "^string_of_ciphersuitenames offer.CH.cipher_suites);
-  trace (match find_supported_groups offer with
-    | Some ngl -> "offered groups "^string_of_namedGroups ngl(*^", supported groups "^string_of_namedGroups cfg.named_groups*)
-    | None -> "no groups offered, only PSK (1.3) and FFDH (1.2) can be used");
-  trace (match find_client_extension CHE_key_share? offer with
-    | Some (CHE_key_share ksl) -> "offered shares on groups "^string_of_keyShares ksl
-    | None -> "no key shares offered, only PSK and HRR possible");
-  trace (List.Tot.fold_left accum_string_of_pv "offered versions"
-    (Negotiation.Version.offered_versions offer))
+  trace "offered client extensions %s" (string_of_ches offer.CH.extensions) done;
+  trace "offered cipher suites %s" (string_of_ciphersuitenames offer.CH.cipher_suites) done;
+  (match find_supported_groups offer with
+    | Some ngl -> trace "offered groups %s" (string_of_namedGroups ngl) done(*^", supported groups "^string_of_namedGroups cfg.named_groups*)
+    | None -> trace "no groups offered, only PSK (1.3) and FFDH (1.2) can be used" done);
+  (match find_client_extension CHE_key_share? offer with
+    | Some (CHE_key_share ksl) -> trace "offered shares on groups %s " (string_of_keyShares ksl) done
+    | None -> trace "no key shares offered, only PSK and HRR possible" done);
+  trace "%s" (List.Tot.fold_left accum_string_of_pv "offered versions"
+    (Negotiation.Version.offered_versions offer)) done 
 
 #push-options "--z3rlimit 40 --admit_smt_queries true"
 let server_ClientHello cfg offer =
@@ -2136,7 +2132,7 @@ let server_ClientHello cfg offer =
       | None -> None
       | Some sigalgs ->
         if sigalgs = [] then
-	  (trace "No shared signature algorithm, restricting to PSK"; None)
+	  (trace "No shared signature algorithm, restricting to PSK" done; None)
         else 
           cert_select_cb cfg.cert_callbacks TLS_1p3 (get_sni offer) (nego_alpn offer cfg) sigalgs
       in    
@@ -2389,4 +2385,3 @@ let server_ServerShare #region ns oks app_ees =
     in
     ns.state := S_Mode mode cert;
     Correct mode ))
-*)

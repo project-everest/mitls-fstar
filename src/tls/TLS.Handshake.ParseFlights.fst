@@ -29,7 +29,7 @@ module B = LowStar.Buffer
 module LP = LowParse.Low.Base
 module LS = LowParse.SLow.Base
 
-module E = FStar.Error
+module E = TLS.Result 
 
 module HSM13 = Parsers.Handshake13
 module HSM12 = Parsers.Handshake12
@@ -65,6 +65,8 @@ let create () = reset ()
 ///
 /// A common function that we instantiate later for SH/CH, 12, and 13 messages
 
+#push-options "--max_ifuel 1"
+
 inline_for_extraction noextract
 let parse_common
   (#a1:Type) (#k1:R.strong_parser_kind)
@@ -85,7 +87,7 @@ let parse_common
       (tag_fn m == tag) <==> cl.LP.clens_cond m})
   (acc:LP.accessor gacc)
 : b:R.const_slice -> f_begin:uint_32 ->
-  Stack (TLSError.result (option (R.repr_pos_p a1 b p1 & uint_32)))
+  Stack (TLS.Result.result (option (R.repr_pos_p a1 b p1 & uint_32)))
   (requires fun h ->
     R.live_slice h b /\
     f_begin <= b.R.slice_len)
@@ -128,10 +130,10 @@ let parse_common
 
 private let err_or_insufficient_data
   (#a:Type) (#t:Type)
-  (parse_result:TLSError.result (option a))
+  (parse_result:TLS.Result.result (option a))
   (in_progress:in_progress_flt_t)
   (b:R.const_slice) (f_begin f_end:uint_32)
-: Stack (TLSError.result (option t & state))
+: Stack (TLS.Result.result (option t & state))
   (requires fun h ->
     R.live_slice h b /\
     f_begin <= f_end /\ f_end <= b.R.slice_len /\
@@ -167,7 +169,7 @@ let check_eq_end_index_and_return
   (#a:Type)
   (pos f_end:uint_32)
   (flt:a)
-: TLSError.result (option a & state)
+: TLS.Result.result (option a & state)
 = if pos <> f_end then (
 //    trace "Leftover bytes after message";
     E.Error leftover_bytes_error
@@ -180,7 +182,7 @@ let check_leq_end_index_and_return
   (#a:Type)
   (pos f_end:uint_32)
   (flt:a)
-: TLSError.result (option (a & uint_32) & state)
+: TLS.Result.result (option (a & uint_32) & state)
 = if pos > f_end then (
 //    trace "Message overflows end of buffer";
     E.Error message_overflow_error
@@ -193,7 +195,7 @@ let check_leq_end_index_and_return
 
 /// First inject parse_common into the effect
 
-open TLSError
+open TLS.Result
 
 unfold let parse_common_wp
   (#a1:Type) (#k1:R.strong_parser_kind)
@@ -375,7 +377,7 @@ let parse_hsm13_nst
 
 private let parse_hsm13_c_cv
   (b:R.const_slice) (f_begin:uint_32)
-: Stack (TLSError.result (option (HSM13R.c13_pos b & HSM13R.cv13_pos b & uint_32)))
+: Stack (TLS.Result.result (option (HSM13R.c13_pos b & HSM13R.cv13_pos b & uint_32)))
   (requires fun h ->
     R.live_slice h b /\
     f_begin <= b.R.slice_len)

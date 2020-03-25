@@ -32,10 +32,8 @@ module TLS.Handshake.Machine
 
 // v1: support for TLS 1.2 is disabled.
 
-open FStar.Error
-
 open Mem
-open TLSError
+open TLS.Result
 open TLSInfo
 open TLSConstants
 
@@ -1160,7 +1158,7 @@ let register (#region:rgn) (#n:random) (epochs:Epochs.epochs region n)
 let export (#region:rgn) (#n:random) (epochs:Epochs.epochs region n)
   (xk:KS.exportKey) : St unit
   =
-  trace "exporting a key";
+  trace "exporting a key" LowStar.Printf.done;
   FStar.Monotonic.Seq.i_write_at_end epochs.Epochs.exporter xk
 #pop-options
 

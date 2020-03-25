@@ -1,10 +1,9 @@
 module TLS.Handshake
 
-open FStar.Error
 open FStar.Bytes
 open FStar.HyperStack.ST
 
-open TLSError
+open TLS.Result
 open TLSConstants
 open TLSInfo
 open TLS.Callbacks
@@ -113,7 +112,7 @@ let invalidateSession hs = ()
 // Otherwise, we just returns buffered messages and signals.
 
 let rec next_fragment_bounded hs i (max32: UInt32.t) =
-  trace ("next_fragment_bounded");
+  trace "next_fragment_bounded" LowStar.Printf.done;
   match hs with 
   | Client region config r -> (
     let st0 = !r in 
@@ -131,7 +130,7 @@ let rec next_fragment_bounded hs i (max32: UInt32.t) =
       match result, st1 with
       | Send.Outgoing None None false, 
         C13_complete offer sh ee server_id fin1 ms (Finished_pending _ _ _) ->
-	(match Client.client13_Finished2 hs with
+        (match Client.client13_Finished2 hs with
         | Error z -> Error z 
         | Correct _ -> next_fragment_bounded hs i max32 )
       | _ -> Correct result // nothing to do
@@ -182,7 +181,7 @@ let overflow = Recv.in_error Internal_error "Overflow in input buffer"
 #set-options "--max_fuel 0 --max_ifuel 1 --z3rlimit 20"
 // #set-options "--admit_smt_queries true"
 let rec recv_fragment hs #i rg f =
-  trace ("recv_fragment: "^hex_of_bytes f);
+  trace "recv_fragment: %a" TLS.Tracing.print_bytes f LowStar.Printf.done;
   let open HandshakeMessages in
   // only case where the next incoming flight may already have been buffered.
   [@inline_let] let recv_again r =
@@ -195,7 +194,7 @@ let rec recv_fragment hs #i rg f =
    begin // Client
     match !r  with
     | C_init _ -> (
-      trace "No CH sent (statically excluded)";
+      trace "No CH sent (statically excluded)" LowStar.Printf.done;
       Recv.in_error Unexpected_message "Client hasn't sent hello yet (to be statically excluded)")
 
     | C_wait_ServerHello offer0 ms0 ks0 -> (
@@ -212,7 +211,7 @@ let rec recv_fragment hs #i rg f =
         | None -> Recv.InAck false false // nothing happened
         | Some sh_msg ->
           let shr = RH.get_serverHello (R.as_ptr sh_msg.PF.sh) in
-	  let sh = shr.R.vv in
+          let sh = shr.R.vv in
           let h3 = HST.get() in
           if HSM.is_hrr sh then
             Client.client_HelloRetryRequest hs sh
@@ -224,7 +223,7 @@ let rec recv_fragment hs #i rg f =
       match Recv.buffer_received_fragment ms0.receiving f with
       | None -> overflow
       | Some rcv1 ->
-      trace "receive_c13_wait_Finished1";
+      trace "receive_c13_wait_Finished1" LowStar.Printf.done;
       match TLS.Handshake.Receive.receive_c13_wait_Finished1 rcv1 with
       | Error z -> Recv.InError z
       | Correct (sflight, rcv2) ->
@@ -232,16 +231,16 @@ let rec recv_fragment hs #i rg f =
         match sflight with
         | None -> Recv.InAck false false // nothing happened
         | Some sflight ->
-	  let ee = R.get_field RH13.field_ee (R.as_ptr sflight.PF.c13_w_f1_ee) in
-	  let fin = R.get_field RH13.field_fin (R.as_ptr sflight.PF.c13_w_f1_fin) in
-	  let ocr = match sflight.PF.c13_w_f1_cr with
-	    | None -> None | Some cr ->
-	      let x = R.get_field RH13.field_cr (R.as_ptr cr) in Some x.R.vv in
-	  let oc_cv = match sflight.PF.c13_w_f1_c_cv with
-	    | None -> None | Some (c,cv) ->
-	      let x = R.get_field RH13.field_certificate (R.as_ptr c) in
-	      let y = R.get_field RH13.field_cv (R.as_ptr cv) in
-	      Some (x.R.vv, y.R.vv) in
+          let ee = R.get_field RH13.field_ee (R.as_ptr sflight.PF.c13_w_f1_ee) in
+          let fin = R.get_field RH13.field_fin (R.as_ptr sflight.PF.c13_w_f1_fin) in
+          let ocr = match sflight.PF.c13_w_f1_cr with
+            | None -> None | Some cr ->
+              let x = R.get_field RH13.field_cr (R.as_ptr cr) in Some x.R.vv in
+              let oc_cv = match sflight.PF.c13_w_f1_c_cv with
+            | None -> None | Some (c,cv) ->
+              let x = R.get_field RH13.field_certificate (R.as_ptr c) in
+              let y = R.get_field RH13.field_cv (R.as_ptr cv) in
+              Some (x.R.vv, y.R.vv) in
           Client.client13_Finished1 hs (ee.R.vv) ocr oc_cv (fin.R.vv))
 
     | C13_complete offer sh ee server_id fin1 ms0 (Finished_sent fin2 ks) ->
@@ -252,10 +251,10 @@ let rec recv_fragment hs #i rg f =
         if rcv1.Recv.rcv_to = rcv1.Recv.rcv_from then 
           Recv.InAck false false // No-op
         else match TLS.Handshake.Receive.receive_c13_Complete rcv1 with
-        | Error z -> trace "Receive failed"; Recv.InError z
+        | Error z -> trace "Receive failed" LowStar.Printf.done; Recv.InError z
         | Correct (nst, rcv2) ->
          begin
-          trace "Processing a ticket";
+          trace "Processing a ticket" LowStar.Printf.done;
           r := C13_complete offer sh ee server_id fin1 ({ms0 with receiving = rcv2})
             (Finished_sent fin2 ks);
           match nst with
@@ -263,11 +262,11 @@ let rec recv_fragment hs #i rg f =
           | Some nst ->
             let nstr = R.get_field RH13.field_nst (R.as_ptr nst.PF.c13_c_nst) in
             let r = Client.client13_NewSessionTicket hs (nstr.R.vv) in
-	    recv_again r
+            recv_again r
          end
      end
     | _ ->
-      trace "Unexpected client state (should be excluded statically";
+      trace "Unexpected client state (should be excluded statically" LowStar.Printf.done;
       Recv.in_error Unexpected_message "TBC"
    end // Client
   | Server region config r ->
@@ -286,10 +285,10 @@ let rec recv_fragment hs #i rg f =
         | None -> Recv.InAck false false // nothing happened
         | Some ch ->
           let chr = RH.get_clientHello (R.as_ptr ch.PF.ch) in
-	  let ch0 = chr.R.vv in
+          let ch0 = chr.R.vv in
           let h3 = HST.get() in
           let r = Server.server_ClientHello hs ch0 in
-	  r
+          r
      end
     | S13_wait_Finished2 mode svd eoed_done ms ks ->
      begin
@@ -303,15 +302,15 @@ let rec recv_fragment hs #i rg f =
       | Correct (x, rcv2) ->
         let ms1 : msg_state _ PF.F_s13_wait_Finished2 _ _ = {ms with receiving = rcv2} in
         r := S13_wait_Finished2 mode svd eoed_done ms1 ks;
-	match x with
+        match x with
         | None -> Recv.InAck false false // nothing happened
-	| Some cf ->
-	  let fin = R.get_field RH13.field_fin (R.as_ptr cf.PF.s13_w_f2_fin) in
-	  let oc_cv = match cf.PF.s13_w_f2_c_cv with
-	    | None -> None | Some (c,cv) ->
-	      let x = R.get_field RH13.field_certificate (R.as_ptr c) in
-	      let y = R.get_field RH13.field_cv (R.as_ptr cv) in
-	      Some (x.R.vv, y.R.vv) in
+        | Some cf ->
+          let fin = R.get_field RH13.field_fin (R.as_ptr cf.PF.s13_w_f2_fin) in
+          let oc_cv = match cf.PF.s13_w_f2_c_cv with
+            | None -> None | Some (c,cv) ->
+              let x = R.get_field RH13.field_certificate (R.as_ptr c) in
+              let y = R.get_field RH13.field_cv (R.as_ptr cv) in
+              Some (x.R.vv, y.R.vv) in
           Server.server_ClientFinished_13 hs fin.R.vv oc_cv
      end
     | _ ->

@@ -53,7 +53,7 @@ module G = FStar.Ghost
 open HandshakeMessages
 module HSM = HandshakeMessages
 
-open TLSError
+open TLS.Result
 
 module PV = Parsers.ProtocolVersion
 module LP = LowParse.Low.Base

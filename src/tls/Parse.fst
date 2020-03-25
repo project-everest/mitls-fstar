@@ -1,9 +1,7 @@
 module Parse
 
 open FStar.Bytes
-open FStar.Error
-
-open TLSError
+open TLS.Result
 
 include Mem // temporary, for code opening only TLSConstants
 

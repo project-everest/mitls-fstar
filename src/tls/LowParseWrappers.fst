@@ -1,6 +1,6 @@
 module LowParseWrappers
-include TLSError // for AD_decode_error
-include FStar.Error // for Correct, Error
+
+include TLS.Result // for AD_decode_error
 include Parse // for pinverse, lemma_(p?)inverse_*, etc.
 open LowParse.SLow.Base
 include FStar.Bytes // for bytes, lbytes, length, equal

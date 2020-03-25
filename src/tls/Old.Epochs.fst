@@ -11,10 +11,9 @@ open FStar.Heap
 open FStar.Seq // DO NOT move further below, it would shadow `FStar.HyperStack.mem`
 open FStar.HyperStack
 open FStar.Monotonic.Seq
-open FStar.Error
 open FStar.Bytes
 
-open TLSError
+open TLS.Result
 open TLSInfo
 open TLSConstants
 module Range = Range

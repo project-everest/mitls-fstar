@@ -3,7 +3,7 @@ module TLS.Cookie
 open Mem
 open FStar.Bytes // for the time being
 open TLSConstants
-open TLSError
+open TLS.Result
 
 module CH = Parsers.ClientHello
 

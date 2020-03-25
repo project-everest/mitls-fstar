@@ -6,15 +6,12 @@ module Negotiation
 /// Application-specific negotation relies on callbacks recorded in
 /// the configuration.
 
-open FStar.Error
-// open FStar.Bytes // still used for cookies, tickets, signatures...
-
 open Mem
 module B = LowStar.Buffer
 module HS = FStar.HyperStack
 module HST = FStar.HyperStack.ST
 
-open TLSError
+open TLS.Result
 open TLSInfo
 open TLS.Callbacks
 open TLSConstants

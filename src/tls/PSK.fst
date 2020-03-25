@@ -1,10 +1,9 @@
 module PSK
 
 open FStar.Bytes
-open FStar.Error
 
 open Mem
-open TLSError
+open TLS.Result
 open TLS.Callbacks // now defining psk_identifier, pskInfo, tickets... 
 open TLSConstants
 

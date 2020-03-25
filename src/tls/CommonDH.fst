@@ -10,10 +10,9 @@ share is for registered shares (for which is_honest is defined).
 *)
 
 open FStar.Bytes
-open FStar.Error
 
 open Parse
-open TLSError
+open TLS.Result
 open Mem 
 
 module HS = FStar.HyperStack
@@ -665,7 +664,7 @@ let key_params k =
     match p with
     | DHP_P(dhp) ->
       begin match dhdb with
-        | None -> Error (TLSError.AD_internal_error, "Not possible")
+        | None -> Error (TLS.Result.AD_internal_error, "Not possible")
         | Some db ->
             (match DHGroup.checkParams db minSize dhp.dh_p dhp.dh_g with
             | Error(x) -> Error(x)

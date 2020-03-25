@@ -3,7 +3,7 @@ module TLS.Handshake.Server
 open Mem
 open TLSConstants
 open TLSInfo
-open TLSError
+open TLS.Result
 
 open FStar.HyperStack.ST
 open TLS.Handshake.Machine
@@ -215,7 +215,7 @@ private let server_ClientHello_13 (ch:HSM.ch) (sh:HSM.sh) (ks:s_init)
 // Only if we are sure this is the 1st CH
 let server_ClientHello1 st offer
   : St Receive.incoming =
-  trace ("server_ClientHello "^(B.hex_of_bytes (HSM.clientHello_serializer32 offer)));
+  trace "server_ClientHello %a " TLS.Tracing.print_bytes (HSM.clientHello_serializer32 offer) LowStar.Printf.done;
   let Server region config r = st in
   let S_wait_ClientHello random recv = !r in
   let soffer = {retry = None; s_ch = offer} in
@@ -232,7 +232,7 @@ let server_ClientHello1 st offer
     let CipherSuite13 ae ha = cs in
     let di = transcript_start region ha None offer false in
     let tag0 = transcript_extract di in
-    trace ("ClientHello/Binder digest: "^(B.hex_of_bytes tag0));
+    trace "ClientHello/Binder digest: %a" TLS.Tracing.print_bytes tag0 LowStar.Printf.done;
     let (ks, ogy, obk) = KS.ks_server13_init random (offer.CH.random) cs config.is_quic opsk g_gx in
     let ogyb = match ogy with None -> None | Some gy -> Some (keyShareEntry_of_share gy) in
     let accept_0rtt =  Some? config.max_early_data &&
@@ -286,15 +286,15 @@ let server_ClientHello1 st offer
       }) in
       let tag_SH = LB.alloca 0z (H.hash_len ha) in
       let sd = Send.signals ms0.sending (Some (false, accept_0rtt)) false in
-      trace("ServerHello bytes: "^(Bytes.hex_of_bytes (HSM.serverHello_serializer32 sh)));
+      trace "ServerHello bytes: %a" TLS.Tracing.print_bytes (HSM.serverHello_serializer32 sh) LowStar.Printf.done;
       match Send.send_tag_sh di sd (HSM.M_server_hello sh) tag_SH with
       | Error z -> Recv.InError z
       | Correct sd ->
         let digest_SH = B.of_buffer (H.hash_len ha) tag_SH in
         let ks', hsk = KS.ks_server13_sh ks digest_SH in
-	trace ("Transcript ServerHello: "^(Bytes.hex_of_bytes digest_SH));
+        trace "Transcript ServerHello: %a" TLS.Tracing.print_bytes digest_SH LowStar.Printf.done;
         register ms0.epochs hsk;
-	let ms1 : msg_state region pfs random ha = {ms0 with sending=sd} in
+        let ms1 : msg_state region pfs random ha = {ms0 with sending=sd} in
         r := S13_sent_ServerHello soffer sh ee accept_0rtt ms1 cert ks';
         Recv.InAck false false
 
@@ -456,7 +456,7 @@ let server_ClientFinished2 hs cvd digestSF digestCF =
 (*** TLS 1.3 ***)
 
 let server_ServerFinished_13 hs =
-  trace ("server_ServerFinished_13");
+  trace "server_ServerFinished_13" LowStar.Printf.done;
   let Server region config r = hs in
   let S13_sent_ServerHello soffer sh ee accept_0rtt ms cert ks = !r in
   let ha = Nego.selected_ha sh in
@@ -481,7 +481,7 @@ let server_ServerFinished_13 hs =
 	| Error z -> Error z
 	| Correct send ->
 	  let digest_C = Bytes.of_buffer (H.hash_len ha) tag_C in
-          trace ("Hash up to Cert: "^(Bytes.hex_of_bytes digest_C));
+    trace "Hash up to Cert: %a" TLS.Tracing.print_bytes digest_C LowStar.Printf.done;
 	  let tbs = Nego.to_be_signed TLS_1p3 TLSConstants.Server None digest_C in
 	  match TLS.Callbacks.cert_sign_cb config.cert_callbacks cert_ptr sa tbs with
 	  | None -> fatal Bad_certificate
@@ -498,16 +498,16 @@ let server_ServerFinished_13 hs =
     | Correct (send, cert_ctx) ->
       let (| sfinId, sfin_key |) = KS.ks_server13_get_sfk ks in
       let digest_F = Bytes.of_buffer (H.hash_len ha) tag_F in
-      trace ("Hash for Finished: "^(Bytes.hex_of_bytes digest_F));
+      trace "Hash for Finished: %a" TLS.Tracing.print_bytes digest_F LowStar.Printf.done;
       let svd = HMAC.mac sfin_key digest_F in
       let fin = HSM.(M13_finished svd) in
       match Send.send_tag13 ms.digest send fin tag_F with
       | Error z -> Error z
       | Correct send ->
         let digest_SF = Bytes.of_buffer (H.hash_len ha) tag_F in
-        trace ("Hash up to SF: "^(Bytes.hex_of_bytes digest_SF));
+        trace "Hash up to SF: %a" TLS.Tracing.print_bytes digest_SF LowStar.Printf.done;
         let ks, app_keys, ems = KS.ks_server13_sf ks digest_SF in 
-	export ms.epochs ems;
+        export ms.epochs ems;
         register ms.epochs app_keys;
         let send = Send.signals send (Some (true,false)) false in
 	let mode = S13_mode soffer sh ee cert_ctx in
@@ -534,8 +534,8 @@ let server_Ticket13 hs app_data =
   let ticket = Ticket.Ticket13 cs li rmsid rms Bytes.empty_bytes now age_add app_data in
 
   let tb = Ticket.create_ticket false ticket in
-  trace ("Sending ticket: "^(Bytes.print_bytes tb));
-  trace ("Application data in ticket: "^(Bytes.print_bytes app_data));
+  trace "Sending ticket: %a" TLS.Tracing.print_bytes tb LowStar.Printf.done;
+  trace "Application data in ticket: %a" TLS.Tracing.print_bytes app_data LowStar.Printf.done;
   let ticket_ext =
     let open Parsers.NewSessionTicketExtension in
     match cfg.max_early_data with
@@ -570,7 +570,7 @@ let server_Ticket13 hs app_data =
 *)
 
 let server_ClientFinished_13 hs cvd client_cert =
-  trace "Process Client Finished";
+  trace "Process Client Finished" LowStar.Printf.done;
   let Server region config r = hs in
   let S13_wait_Finished2 mode svd eoed_done ms ks = !r in
   
@@ -598,7 +598,7 @@ let server_ClientFinished_13 hs cvd client_cert =
        let ms1 : msg_state region PF.F_s_Idle _ ha = ms in
        r := S13_complete mode (Ghost.hide cvd) svd ms1 ks;
        (match Nego.find_psk_key_exchange_modes (S13_mode?.offer mode).s_ch with
-       | [] -> trace ("Not sending a ticket: no PSK key exchange mode advertised")
+       | [] -> trace "Not sending a ticket: no PSK key exchange mode advertised" LowStar.Printf.done
        | psk_kex ->
          if Some? config.send_ticket then
 	   let _ = server_Ticket13 hs (Some?.v config.send_ticket)

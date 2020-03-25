@@ -2,7 +2,7 @@ module TLS.Handshake.Server
 
 open Mem
 open TLSConstants
-open TLSError
+open TLS.Result
 open FStar.HyperStack.ST
 
 module CH = Parsers.ClientHello

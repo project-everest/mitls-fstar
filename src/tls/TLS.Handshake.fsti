@@ -108,7 +108,7 @@ val invalidateSession: s:Machine.state -> ST unit
 
 (* ------------------ Outgoing -----------------------*)
 
-open TLSError //17-04-07 necessary to TC the | Correct pattern?
+open TLS.Result //17-04-07 necessary to TC the | Correct pattern?
 //val next_fragment: see .fsti
 let next_fragment_ensures (#i:TLSInfo.id) (s:Machine.state) h0 (result: result (Send.outgoing i)) h1 =
     let es = logT s h0 in

@@ -157,11 +157,11 @@ let receive_post
   (in_progress:in_progress_flt_t)
   (valid:uint_32 -> uint_32 -> flt -> HS.mem -> Type0)
   (h0:HS.mem)
-  (x:TLSError.result (option flt & state))
+  (x:TLS.Result.result (option flt & state))
   (h1:HS.mem)
 = receive_pre st b f_begin f_end in_progress h0 /\
   B.(modifies loc_none  h0 h1) /\
-  (let open FStar.Error in
+  (let open TLS.Result in
    match x with
    | Error _ -> True
    | Correct (None, rst) ->
@@ -190,11 +190,11 @@ let receive_post_with_leftover_bytes
   (in_progress:in_progress_flt_t)
   (valid:uint_32 -> uint_32 -> flt -> HS.mem -> Type0)
   (h0:HS.mem)
-  (x:TLSError.result (option (flt & uint_32) & state))
+  (x:TLS.Result.result (option (flt & uint_32) & state))
   (h1:HS.mem)
 = receive_pre st b f_begin f_end in_progress h0 /\
   B.(modifies loc_none h0 h1) /\
-  (let open FStar.Error in
+  (let open TLS.Result in
    match x with
    | Error _ -> True
    | Correct (None, rst) ->
@@ -211,19 +211,19 @@ let receive_post_with_leftover_bytes
 
 /// Error codes returned by the receive functions
 
-let parsing_error = TLSError.({
+let parsing_error = TLS.Result.({
   alert= Parsers.AlertDescription.Decode_error;
   cause= "Failed to validate incoming message" })
 
-let unexpected_flight_error = TLSError.({
+let unexpected_flight_error = TLS.Result.({
   alert= Parsers.AlertDescription.Unexpected_message;
   cause= "A message was received in a state where it was not expected" })
 
-let leftover_bytes_error = TLSError.({
+let leftover_bytes_error = TLS.Result.({
   alert= Parsers.AlertDescription.Decode_error;
   cause= "Leftover bytes after a key-transitioning message (Binders, non-retry SH, EOED, Finished)" })
 
-let message_overflow_error = TLSError.({
+let message_overflow_error = TLS.Result.({
   alert= Parsers.AlertDescription.Decode_error;
   cause= "Received message overflows input buffer length" })
 
@@ -263,7 +263,7 @@ let valid_s_Idle
 
 
 val receive_s_Idle (st:state) (b:R.const_slice) (f_begin f_end:uint_32)
-: ST (TLSError.result (option (s_Idle b) & state))
+: ST (TLS.Result.result (option (s_Idle b) & state))
   (requires receive_pre st b f_begin f_end F_s_Idle)
   (ensures  receive_post st b f_begin f_end F_s_Idle valid_s_Idle)
 
@@ -302,7 +302,7 @@ let valid_c_wait_ServerHello
  *)
 
 val receive_c_wait_ServerHello (st:state) (b:R.const_slice) (f_begin f_end:uint_32)
-: ST (TLSError.result (option (c_wait_ServerHello b & uint_32) & state))
+: ST (TLS.Result.result (option (c_wait_ServerHello b & uint_32) & state))
   (requires receive_pre st b f_begin f_end F_c_wait_ServerHello)
   (ensures  receive_post_with_leftover_bytes st b f_begin f_end F_c_wait_ServerHello valid_c_wait_ServerHello)
 
@@ -366,7 +366,7 @@ let valid_c13_wait_Finished1
 
 val receive_c13_wait_Finished1
   (st:state) (b:R.const_slice) (f_begin f_end:uint_32)
-: ST (TLSError.result (option (c13_wait_Finished1 b) & state))
+: ST (TLS.Result.result (option (c13_wait_Finished1 b) & state))
   (requires receive_pre st b f_begin f_end F_c13_wait_Finished1)
   (ensures  receive_post st b f_begin f_end F_c13_wait_Finished1 valid_c13_wait_Finished1)
 
@@ -410,7 +410,7 @@ let valid_s13_wait_Finished2
 
 
 val receive_s13_wait_Finished2 (st:state) (b:R.const_slice) (f_begin f_end:uint_32)
-: ST (TLSError.result (option (s13_wait_Finished2 b) & state))
+: ST (TLS.Result.result (option (s13_wait_Finished2 b) & state))
   (requires receive_pre st b f_begin f_end F_s13_wait_Finished2)
   (ensures  receive_post st b f_begin f_end F_s13_wait_Finished2 valid_s13_wait_Finished2)
 
@@ -442,7 +442,7 @@ let valid_s13_wait_EOED
   valid_repr_pos flt.eoed h
 
 val receive_s13_wait_EOED (st:state) (b:R.const_slice) (f_begin f_end:uint_32)
-: ST (TLSError.result (option (s13_wait_EOED b) & state))
+: ST (TLS.Result.result (option (s13_wait_EOED b) & state))
   (requires receive_pre st b f_begin f_end F_s13_wait_EOED)
   (ensures  receive_post st b f_begin f_end F_s13_wait_EOED valid_s13_wait_EOED)
 
@@ -473,7 +473,7 @@ let valid_c13_Complete
 
 
 val receive_c13_Complete (st:state) (b:R.const_slice) (f_begin f_end:uint_32)
-: ST (TLSError.result (option (c13_Complete b & uint_32) & state))
+: ST (TLS.Result.result (option (c13_Complete b & uint_32) & state))
   (requires receive_pre st b f_begin f_end F_c13_Complete)
   (ensures receive_post_with_leftover_bytes st b f_begin f_end F_c13_Complete valid_c13_Complete)
 
@@ -516,7 +516,7 @@ let valid_c12_wait_ServerHelloDone
   
 
 val receive_c12_wait_ServerHelloDone (st:state) (b:R.const_slice) (f_begin f_end:uint_32)
-: ST (TLSError.result (option (c12_wait_ServerHelloDone b) & state))
+: ST (TLS.Result.result (option (c12_wait_ServerHelloDone b) & state))
   (requires receive_pre st b f_begin f_end F_c12_wait_ServerHelloDone)
   (ensures  receive_post st b f_begin f_end F_c12_wait_ServerHelloDone valid_c12_wait_ServerHelloDone)
 
@@ -549,7 +549,7 @@ let valid_cs12_wait_Finished
 
 
 val receive_cs12_wait_Finished (st:state) (b:R.const_slice) (f_begin f_end:uint_32)
-: ST (TLSError.result (option (cs12_wait_Finished b) & state))
+: ST (TLS.Result.result (option (cs12_wait_Finished b) & state))
   (requires receive_pre st b f_begin f_end F_cs12_wait_Finished)
   (ensures  receive_post st b f_begin f_end F_cs12_wait_Finished valid_cs12_wait_Finished)
 
@@ -582,7 +582,7 @@ let valid_c12_wait_NST
 
 
 val receive_c12_wait_NST (st:state) (b:R.const_slice) (f_begin f_end:uint_32)
-: ST (TLSError.result (option (c12_wait_NST b) & state))
+: ST (TLS.Result.result (option (c12_wait_NST b) & state))
   (requires receive_pre st b f_begin f_end F_c12_wait_NST)
   (ensures  receive_post st b f_begin f_end F_c12_wait_NST valid_c12_wait_NST)
 
@@ -616,6 +616,6 @@ let valid_s12_wait_CCS1
 
 
 val receive_s12_wait_CCS1 (st:state) (b:R.const_slice) (f_begin f_end:uint_32)
-: ST (TLSError.result (option (s12_wait_CCS1 b) & state))
+: ST (TLS.Result.result (option (s12_wait_CCS1 b) & state))
   (requires receive_pre st b f_begin f_end F_s12_wait_CCS1)
   (ensures  receive_post st b f_begin f_end F_s12_wait_CCS1 valid_s12_wait_CCS1)

@@ -5,10 +5,9 @@ open FStar.HyperStack
 open FStar.HyperStack.ST
 open FStar.Seq
 open FStar.Bytes
-open FStar.Error
 //open FStar.Integers 
 
-open TLSError
+open TLS.Result
 open TLS.Callbacks
 open TLSConstants
 open Extensions

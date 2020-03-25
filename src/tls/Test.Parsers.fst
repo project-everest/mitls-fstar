@@ -1,7 +1,6 @@
 module Test.Parsers
 
 open C.String
-open FStar.Error
 open FStar.HyperStack.ST
 open LowStar.BufferOps
 
@@ -10,7 +9,7 @@ module LB = LowStar.Buffer
 module LPL = LowParse.Low.Base
 
 open FStar.Printf
-open TLSError
+open TLS.Result
 open TLSConstants
 
 // No need to verify test for now

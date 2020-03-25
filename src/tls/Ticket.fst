@@ -1,11 +1,10 @@
 module Ticket
 
 open FStar.Bytes
-open FStar.Error
 
 open Mem
 open Parse
-open TLSError
+open TLS.Result
 open TLSConstants
 open TLSInfo
 

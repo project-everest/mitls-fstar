@@ -8,11 +8,10 @@ module HST = FStar.HyperStack.ST //Added automatically
 open FStar.HyperStack
 open FStar.Seq
 open FStar.Monotonic.Seq
-open FStar.Error
 open FStar.Bytes
 
 open Mem
-open TLSError
+open TLS.Result
 open TLSConstants
 open TLSInfo
 open StreamPlain

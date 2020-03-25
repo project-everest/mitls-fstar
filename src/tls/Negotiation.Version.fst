@@ -4,8 +4,7 @@ open Parsers.ProtocolVersion
 open Parsers.ClientHelloExtension
 open TLSConstants // for leqPV and the configuration
 
-open FStar.Error
-open TLSError
+open TLS.Result
 
 module HSM = HandshakeMessages
 module CFG = Parsers.MiTLSConfig

@@ -2,11 +2,10 @@ module Negotiation.Writers
 
 friend Negotiation
 
-open FStar.Error
 open FStar.Bytes
 
 open Mem
-open TLSError
+open TLS.Result
 open TLSInfo
 open TLSConstants
 open HandshakeMessages

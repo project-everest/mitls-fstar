@@ -31,7 +31,7 @@ module TLS.Handshake.Receive
 open FStar.Integers
 open FStar.HyperStack.ST
 
-module E = FStar.Error
+open TLS.Result
 
 module G  = FStar.Ghost
 module Bytes = FStar.Bytes
@@ -47,7 +47,7 @@ module R = LowParse.Repr
 module C = LowStar.ConstBuffer
 
 
-#set-options "--max_fuel 0 --max_ifuel 0"
+#set-options "--max_fuel 0 --max_ifuel 1"
 
 type byte = FStar.Bytes.byte
 type bytes = FStar.Bytes.bytes
@@ -149,12 +149,11 @@ let receive_post
   (st:state)
   (inflight:PF.in_progress_flt_t)
   (valid:uint_32 -> uint_32 -> flt -> HS.mem -> Type0)
-: HS.mem -> TLSError.result (option flt & state) -> HS.mem -> Type0
+: HS.mem -> result (option flt & state) -> HS.mem -> Type0
 = fun h0 r h1 ->
   receive_pre st inflight h0 /\
   B.(modifies loc_none h0 h1) /\
-  (let open FStar.Error in
-   match r with
+  (match r with
    | Error _ -> True
    | Correct (None, rst) ->
      invariant rst h1 /\
@@ -173,12 +172,11 @@ let receive_post_with_leftover_bytes
   (st:state)
   (inflight:PF.in_progress_flt_t)
   (valid:uint_32 -> uint_32 -> flt -> HS.mem -> Type0)
-: HS.mem -> TLSError.result (option flt & state) -> HS.mem -> Type0
+: HS.mem -> result (option flt & state) -> HS.mem -> Type0
 = fun h0 r h1 ->
   receive_pre st inflight h0 /\
   B.(modifies loc_none h0 h1) /\
-  (let open FStar.Error in
-   match r with
+  (match r with
    | Error _ -> True
    | Correct (None, rst) ->
      invariant rst h1 /\
@@ -196,12 +194,12 @@ inline_for_extraction noextract
 let wrap_pf_st
   (#a:Type)
   (st:state)
-  (r:TLSError.result (option a & PF.state))
-: TLSError.result (option a & state)
+  (r:result (option a & PF.state))
+: result (option a & state)
 = match r with
-  | E.Error e -> E.Error e
-  | E.Correct (None, pf_st) -> E.Correct (None, { st with pf_st = pf_st })
-  | E.Correct (Some flt, pf_st) -> E.Correct (Some flt, { st with pf_st = pf_st; rcv_from = st.rcv_to })
+  | Error e -> Error e
+  | Correct (None, pf_st) -> Correct (None, { st with pf_st = pf_st })
+  | Correct (Some flt, pf_st) -> Correct (Some flt, { st with pf_st = pf_st; rcv_from = st.rcv_to })
 
 (*** Public API ***)
 
@@ -280,85 +278,85 @@ let buffer_received_fragment
 
 
 let receive_s_Idle (st:state)
-: ST (TLSError.result (option (PF.s_Idle (cslice_of st)) & state))
+: ST (result (option (PF.s_Idle (cslice_of st)) & state))
   (requires receive_pre st PF.F_s_Idle)
   (ensures receive_post st PF.F_s_Idle PF.valid_s_Idle)
 = let r = PF.receive_s_Idle st.pf_st (cslice_of st) st.rcv_from st.rcv_to in
   wrap_pf_st st r
 
 let receive_c_wait_ServerHello (st:state)
-: ST (TLSError.result (option (PF.c_wait_ServerHello (cslice_of st)) & state))
+: ST (result (option (PF.c_wait_ServerHello (cslice_of st)) & state))
   (requires receive_pre st PF.F_c_wait_ServerHello)
   (ensures receive_post_with_leftover_bytes st PF.F_c_wait_ServerHello PF.valid_c_wait_ServerHello)
 = let r = PF.receive_c_wait_ServerHello st.pf_st (cslice_of st) st.rcv_from st.rcv_to in
   match r with
-  | E.Error e -> E.Error e
-  | E.Correct (None, pf_st) -> E.Correct (None, { st with pf_st = pf_st })
-  | E.Correct (Some (flt, pos), pf_st) ->
-    E.Correct (Some flt, { st with pf_st = pf_st; rcv_from = pos })
+  | Error e -> Error e
+  | Correct (None, pf_st) -> Correct (None, { st with pf_st = pf_st })
+  | Correct (Some (flt, pos), pf_st) ->
+    Correct (Some flt, { st with pf_st = pf_st; rcv_from = pos })
 
 
 (*** 1.3 flights ***)
 
 
 let receive_c13_wait_Finished1 (st:state)
-: ST (TLSError.result (option (PF.c13_wait_Finished1 (cslice_of st)) & state))
+: ST (result (option (PF.c13_wait_Finished1 (cslice_of st)) & state))
   (requires receive_pre st PF.F_c13_wait_Finished1)
   (ensures receive_post st PF.F_c13_wait_Finished1 PF.valid_c13_wait_Finished1)
 = let r = PF.receive_c13_wait_Finished1 st.pf_st (cslice_of st) st.rcv_from st.rcv_to in
   wrap_pf_st st r
 
 let receive_s13_wait_Finished2 (st:state)
-: ST (TLSError.result (option (PF.s13_wait_Finished2 (cslice_of st)) & state))
+: ST (result (option (PF.s13_wait_Finished2 (cslice_of st)) & state))
   (requires receive_pre st PF.F_s13_wait_Finished2)
   (ensures  receive_post st PF.F_s13_wait_Finished2 PF.valid_s13_wait_Finished2)
 = let r = PF.receive_s13_wait_Finished2 st.pf_st (cslice_of st) st.rcv_from st.rcv_to in
   wrap_pf_st st r
 
 let receive_s13_wait_EOED (st:state)
-: ST (TLSError.result (option (PF.s13_wait_EOED (cslice_of st)) & state))
+: ST (result (option (PF.s13_wait_EOED (cslice_of st)) & state))
   (requires receive_pre st PF. F_s13_wait_EOED)
   (ensures  receive_post st PF.F_s13_wait_EOED PF.valid_s13_wait_EOED)
 = let r = PF.receive_s13_wait_EOED st.pf_st (cslice_of st) st.rcv_from st.rcv_to in
   wrap_pf_st st r
 
 let receive_c13_Complete (st:state)
-: ST (TLSError.result (option (PF.c13_Complete (cslice_of st)) & state))
+: ST (result (option (PF.c13_Complete (cslice_of st)) & state))
   (requires receive_pre st PF.F_c13_Complete)
   (ensures  receive_post_with_leftover_bytes st PF.F_c13_Complete PF.valid_c13_Complete)
 = let r = PF.receive_c13_Complete st.pf_st (cslice_of st) st.rcv_from st.rcv_to in
   match r with
-  | E.Error e -> E.Error e
-  | E.Correct (None, pf_st) -> E.Correct (None, { st with pf_st = pf_st })
-  | E.Correct (Some (flt, pos), pf_st) ->
-    E.Correct (Some flt, { st with pf_st = pf_st; rcv_from = pos })
+  | Error e -> Error e
+  | Correct (None, pf_st) -> Correct (None, { st with pf_st = pf_st })
+  | Correct (Some (flt, pos), pf_st) ->
+    Correct (Some flt, { st with pf_st = pf_st; rcv_from = pos })
 
 
 (*** 1.2 flights ***)
 
 let receive_c12_wait_ServerHelloDone (st:state)
-: ST (TLSError.result (option (PF.c12_wait_ServerHelloDone (cslice_of st)) & state))
+: ST (result (option (PF.c12_wait_ServerHelloDone (cslice_of st)) & state))
   (requires receive_pre st PF.F_c12_wait_ServerHelloDone)
   (ensures  receive_post st PF.F_c12_wait_ServerHelloDone PF.valid_c12_wait_ServerHelloDone)
 = let r = PF.receive_c12_wait_ServerHelloDone st.pf_st (cslice_of st) st.rcv_from st.rcv_to in
   wrap_pf_st st r
 
 let receive_cs12_wait_Finished (st:state)
-: ST (TLSError.result (option (PF.cs12_wait_Finished (cslice_of st)) & state))
+: ST (result (option (PF.cs12_wait_Finished (cslice_of st)) & state))
   (requires receive_pre st PF.F_cs12_wait_Finished)
   (ensures  receive_post st PF.F_cs12_wait_Finished PF.valid_cs12_wait_Finished)
 = let r = PF.receive_cs12_wait_Finished st.pf_st (cslice_of st) st.rcv_from st.rcv_to in
   wrap_pf_st st r
 
 let receive_c12_wait_NST (st:state)
-: ST (TLSError.result (option (PF.c12_wait_NST (cslice_of st)) & state))
+: ST (result (option (PF.c12_wait_NST (cslice_of st)) & state))
   (requires receive_pre st PF.F_c12_wait_NST)
   (ensures  receive_post st PF.F_c12_wait_NST PF.valid_c12_wait_NST)
 = let r = PF.receive_c12_wait_NST st.pf_st (cslice_of st) st.rcv_from st.rcv_to in
   wrap_pf_st st r
 
 let receive_s12_wait_CCS1 (st:state)
-: ST (TLSError.result (option (PF.s12_wait_CCS1 (cslice_of st)) & state))
+: ST (result (option (PF.s12_wait_CCS1 (cslice_of st)) & state))
   (requires receive_pre st PF.F_s12_wait_CCS1)
   (ensures  receive_post st PF.F_s12_wait_CCS1 PF.valid_s12_wait_CCS1)
 = let r = PF.receive_s12_wait_CCS1 st.pf_st (cslice_of st) st.rcv_from st.rcv_to in
@@ -374,9 +372,9 @@ type incoming =
       complete  : bool -> // the handshake is complete!
       incoming
   | InQuery: Cert.chain -> bool -> incoming // could be part of InAck if no explicit user auth
-  | InError: TLSError.error -> incoming // how underspecified should it be?
+  | InError: error -> incoming // how underspecified should it be?
 
-let in_error ad txt = InError TLSError.({alert=ad; cause=txt})
+let in_error ad txt = InError ({alert=ad; cause=txt})
 
 let in_next_keys (r:incoming) = InAck? r && InAck?.next_keys r
 let in_complete (r:incoming)  = InAck? r && InAck?.complete r
@@ -415,8 +413,7 @@ let test (b:slice_t)
 : ST unit
   (requires fun h -> B.live h b.LP.base)
   (ensures fun _ _ _ -> True)
-= let open FStar.Error in
-
+= 
   //create state
   let st = create b in
 

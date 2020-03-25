@@ -1,9 +1,8 @@
 module Test.TLSConstants
 
-open FStar.Error
 open FStar.HyperStack.ST
 
-open TLSError
+open TLS.Result
 open TLSConstants
 
 #set-options "--admit_smt_queries true"

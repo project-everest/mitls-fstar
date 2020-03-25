@@ -13,7 +13,6 @@ module QUIC
 /// Testing both in OCaml (TCP-based, TestQUIC ~ TestFFI) and in C.
 
 open FStar.Bytes
-open FStar.Error
 open FStar.HyperStack.All
 
 open TLSConstants
@@ -54,7 +53,7 @@ private let errno description txt: ST error
   (requires fun h0 -> True)
   (ensures fun h0 _ h1 -> h0 == h1)
 =
-  let open TLSError in 
+  let open TLS.Result in 
   trace ("returning error"^
     (match description with
     | Some ad -> " "^string_of_alert ad
@@ -193,8 +192,8 @@ private let handle_signals (hs:Machine.state) (sig:option Send.next_keys_use) : 
     use.Send.out_appdata
 
 private inline_for_extraction let api_error z =
-  trace ("Returning HS error: "^TLSError.string_of_error z);
-  let a = Parsers.Alert.({level=Parsers.AlertLevel.Fatal; description=z.TLSError.alert}) in 
+  trace ("Returning HS error: "^TLS.Result.string_of_error z);
+  let a = Parsers.Alert.({level=Parsers.AlertLevel.Fatal; description=z.TLS.Result.alert}) in 
   HS_ERROR (Parse.uint16_of_bytes (Alert.alertBytes a))
 
 let process_hs (hs:Machine.state) (ctx:hs_in) : ML hs_result =

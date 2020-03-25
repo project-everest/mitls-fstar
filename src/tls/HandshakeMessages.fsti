@@ -4,8 +4,7 @@ Handshake protocol messages
 *)
 module HandshakeMessages
 
-open FStar.Error
-open TLSError
+open TLS.Result
 open TLSConstants
 
 module E = Extensions
