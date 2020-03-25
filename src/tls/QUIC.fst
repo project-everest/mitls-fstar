@@ -103,6 +103,7 @@ module CK = TLS.Cookie
 
 let peekClientHello (ch:bytes) (has_record:bool) : ML (option chSummary) =
   if length ch < 40 then (trace "peekClientHello: too short"; None) else
+  let open TLS.Result in 
   let ch =
     if has_record then
       let hdr, ch = split ch 5ul in
@@ -197,6 +198,7 @@ private inline_for_extraction let api_error z =
   HS_ERROR (Parse.uint16_of_bytes (Alert.alertBytes a))
 
 let process_hs (hs:Machine.state) (ctx:hs_in) : ML hs_result =
+  let open TLS.Result in 
   let tbw = H.to_be_written hs in
   if tbw > 0 then
    begin

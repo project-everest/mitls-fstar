@@ -199,6 +199,7 @@ val encrypted_clientExtensions:
   option (pski:UInt16.t) -> 
   option Extensions.serverHelloExtension_SHE_key_share -> 
   bool -> 
+  Extensions.unknownExtensions ->
   Parsers.ClientHelloExtensions.clientHelloExtensions ->
   Parsers.EncryptedExtensions.encryptedExtensions
 
@@ -208,7 +209,7 @@ let client_config = config * resumeInfo
 
 /// The server's decision to accept or reject 0RTT application data.
 
-val zeroRTT: HSM.sh -> bool
+val zeroRTT: HSM.encryptedExtensions -> bool
 
 /// What the client initially offers based on its configuration.
 /// May fail on misconfigurations, e.g. offering only TLS 1.0.

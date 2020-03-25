@@ -147,7 +147,7 @@ let send_state0 = {
 
 // used within QUIC, to be revised with i/o buffer management policy.
 let to_be_written (s:send_state): nat =
-  UInt32.v s.out_pos
+  UInt32.v (s.out_pos `op_Subtraction #(Unsigned W32)` s.out_start)
 
 // returns a buffer outgoing fragment and signals.
 val write_at_most:

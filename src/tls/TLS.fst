@@ -238,7 +238,7 @@ type ioresult_w =
 let string_of_ioresult_w = function
   | Written -> "Written"
   | WriteClose -> "WriteClose"
-  | WriteError (Some a) s -> "WriteError: "^string_of_error ({alert=a.description;cause=s})
+  | WriteError (Some a) s -> "WriteError: "^string_of_error ({alert=a.Parsers.Alert.description;cause=s})
   | WriteError None s -> "WriteError: "^s
   | WrittenHS nw c -> "WrittenHS "^(match nw with | Some true -> "new-writable " | Some false -> "new-hanshake-only " | None -> "")^(if c then "complete" else "")
 #set-options "--initial_ifuel 0 --max_ifuel 0 --initial_fuel 0 --max_fuel 0"
@@ -520,7 +520,7 @@ private let sendAlert (c:connection) (ad:alert) (reason:string)
 	       /\ sel h1 c.state = (fst st, Closed)
 	     | _ -> False)))
 =
-    trace ("sendAlert "^TLS.Result.string_of_error ({alert=ad.description;cause=reason}));
+    trace ("sendAlert "^TLS.Result.string_of_error ({alert=ad.Parsers.Alert.description;cause=reason}));
     reveal_epoch_region_inv_all ();
     let i = currentId c Writer in
     let wopt = current_writer c i in
@@ -529,7 +529,7 @@ private let sendAlert (c:connection) (ad:alert) (reason:string)
     match res with
     | Error xy -> unrecoverable c xy.cause // or reason?
     | Correct _   ->
-        if ad.description = Close_notify then
+        if ad.Parsers.Alert.description = Close_notify then
           begin // graceful closure
             c.state := (fst st, Closed);
             WriteClose
@@ -710,7 +710,7 @@ let rec writeHandshake h_init c new_writer =
   trace ("writeHandshake"^(if Some? wopt then " (encrypted)" else " (plaintext)"));
   (* let h0 = get() in  *)
   match next_fragment i c with
-  | Error z -> sendAlert c ({level=Fatal; description=z.alert}) z.cause
+  | Error z -> sendAlert c (fatalAlert z.alert) z.cause
   | Correct(TLS.Handshake.Send.Outgoing om next_keys complete) ->
       //From Handshake.next_fragment ensures, we know that if next_keys = false
       //then current_writer didn't change;
@@ -737,7 +737,7 @@ let rec writeHandshake h_init c new_writer =
       // as a post-condition of sendHandshake, we know that the deltas didn't change
       | Error z -> (
           recall_current_writer c;
-          sendAlert c ({level=Fatal; description=z.alert}) z.cause)
+          sendAlert c (fatalAlert z.alert) z.cause)
       | _   -> (
           recall_current_writer c;
           let n = Machine.nonce c.hs in 
@@ -793,7 +793,7 @@ let write c #i #rg data =
       let frag = Content.CT_Data rg data in
       begin
         match sendFragment c #i wopt frag with
-        | Error z -> sendAlert c ({level=Fatal; description=z.alert}) z.cause
+        | Error z -> sendAlert c (fatalAlert z.alert) z.cause
         | _ -> Written
       end
   | r -> r
@@ -894,7 +894,7 @@ let write_ensures (c:connection) (i:id) (appdata: option (rg:frange i & DataStre
 
 let writeCloseNotify c =
   trace "writeCloseNotify";
-  sendAlert c ({level=Warning; description=Close_notify}) "full shutdown"
+  sendAlert c Parsers.Alert.({level=Parsers.AlertLevel.Warning; description=Close_notify}) "full shutdown"
 
 // We notify and don't wait for confirmation.
 // Less reliable. Makes the connection unwritable.
@@ -902,7 +902,7 @@ let writeCloseNotify c =
 //      or some unrecoverable error (in which case we don't know)
 
 let writeClose c =
-  let r = sendAlert c ({level=Warning; description=Close_notify}) "half shutdown" in
+  let r = sendAlert c Parsers.Alert.({level=Parsers.AlertLevel.Warning; description=Close_notify}) "half shutdown" in
   c.state := (Closed, Closed);
   r
 
@@ -992,7 +992,7 @@ let string_of_ioresult_i (#i:id) = function
   | Read (DataStream.Data d) -> "Read "^string_of_int (length (DataStream.appBytes #i #Range.fragment_range d)) ^ " bytes of data"
   | Read DataStream.Close -> "Read Close"
   | Read (DataStream.Alert a) -> "Read Alert "^string_of_alert a
-  | ReadError (Some o) txt -> "ReadError "^string_of_error({alert=o.description; cause=txt})
+  | ReadError (Some o) txt -> "ReadError "^string_of_error({alert=o.Parsers.Alert.description; cause=txt})
   | ReadError None txt -> "ReadError "^txt
   | CertQuery _ _ -> "CertQuery"
   | Update b -> "Update "^(if b then "writable" else "read-only")
@@ -1036,7 +1036,7 @@ let alertFlush c ri (a:alert) cause =
     | WriteError x y -> ReadError x y in         // how to compose ad reason x y ?
   r
 
-let fatalFlush c ri z = alertFlush c ri ({level=Fatal; description=z.alert}) z.cause 
+let fatalFlush c ri z = alertFlush c ri (fatalAlert z.alert) z.cause 
 
 //17-04-10 added an option for asynchrony; could flatten instead
 val readFragment: c:connection -> i:id -> ST (result (option (Content.fragment i)))
@@ -1144,7 +1144,7 @@ let readOne c i =
     | Content.CT_Alert rg ad ->
       begin
         trace ("read Alert fragment "^TLS.Result.string_of_alert ad);
-        if ad.description = Close_notify then
+        if ad.Parsers.Alert.description = Close_notify then
           if Closed? (snd !c.state)
           then ( // received a notify response; cleanly close the connection.
             c.state := (Closed, Closed);
@@ -1152,9 +1152,9 @@ let readOne c i =
             Read (DataStream.Close (* was: Alert ad *)))
           else ( // received first notification; immediately enqueue notify response [RFC 7.2.1]
             c.state := (Closed, snd !c.state);
-            alertFlush c i ({level=Warning; description=Close_notify}) "notify response")  // NB we could ignore write errors here.
+            alertFlush c i Parsers.Alert.({level=Parsers.AlertLevel.Warning; description=Close_notify}) "notify response")  // NB we could ignore write errors here.
         else (
-          if ad.level = Fatal then disconnect c;
+          if ad.Parsers.Alert.level = Parsers.AlertLevel.Fatal then disconnect c;
           Read (DataStream.Alert ad))
           // else we carry on; the user will know what to do
       end
@@ -1212,7 +1212,7 @@ let rec read c i =
     let r = writeHandshake h0 c None in
     match r with
     | WriteError x y -> ReadError x y           // TODO review errors; check this is not ambiguous
-    | WriteClose -> unexpected "Sent Close" // can't happen while sending?
+    | WriteClose -> LowStar.Failure.failwith "Sent Close" // can't happen while sending?
     | WrittenHS newWriter complete ->
         let st1 = !c.state in
         trace ("read: WrittenHS, "^string_of_state st1^", "^(

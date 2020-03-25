@@ -63,7 +63,7 @@ EXTERNAL_LIBS =\
         $(MITLS_HOME)/src/tls/dist/compact/$(LIBMITLS)
 
 quic.exe: quic.c $(EXTERNAL_HEADERS) $(EXTERNAL_LIBS)
-	$(CC) -fPIC -I$(EVERCRYPT_HOME)/../dist/evercrypt-external-headers -I$(MITLS_HOME)/src/tls/dist/compact \
+	$(CC) -fPIC -I$(MITLS_HOME)/src/tls/dist/compact \
 	  -I../../src/pki \
 	  -I../../libs/ffi -I$(HACL_HOME)/providers/quic_provider \
           -L$(subst :, -L,$(LIBPATHS)) \
@@ -73,13 +73,14 @@ copy: $(MITLS_HOME)/src/pki/$(LIBPKI) $(MITLS_HOME)/src/tls/dist/compact/$(LIBMI
 	cp $(MITLS_HOME)/src/pki/$(LIBPKI) .
 	cp $(MLCRYPTO_HOME)/openssl/$(OPENSSL) .
 	cp $(MITLS_HOME)/src/tls/dist/compact/$(LIBMITLS) .
+	cp $(EVERCRYPT_HOME)/../dist/gcc-compatible/$(LIBEVERCRYPT) .
 	cp $(HACL_HOME)/providers/quic_provider/$(LIBQC) .
 
 test: quic.exe
 	./quic.exe
 	./quic.exe 0rtt
 	./quic.exe 0rtt-reject
-	./quic.exe hrr
+#	./quic.exe hrr
 
 ifeq ($(shell uname),Darwin)
   $(info remember to run process launch --environment DYLD_LIBRARY_PATH=$(DYLD_LIBRARY_PATH) inside lldb)

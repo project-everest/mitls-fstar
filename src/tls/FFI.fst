@@ -12,11 +12,11 @@ module FFI
 //       exceptions, notably for incomplete pattern matching
 
 open FStar.Bytes
-open FStar.Error
 
 module HS = FStar.HyperStack
 module HST = FStar.HyperStack.ST
 
+open TLS.Result
 open TLS.Callbacks
 open TLSConstants
 open TLSInfo

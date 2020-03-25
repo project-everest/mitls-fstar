@@ -35,7 +35,7 @@ let trace_frags (prefix: string) (acc: Printf.(list frag_t)): Stack unit
   (ensures fun h0 _ h1 -> h0 == h1)
 =
   if DebugFlags.debug_HS then begin
-    Printf.(printf "%s |" prefix done);
+    Printf.print_string (normalize_term (FStar.Printf.sprintf "%s |" prefix));
     (normalize_term #(print_frags_t acc) (print_frags acc)) ();
     Printf.print_string "\n"
   end else

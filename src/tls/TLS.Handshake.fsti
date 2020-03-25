@@ -110,7 +110,7 @@ val invalidateSession: s:Machine.state -> ST unit
 
 open TLS.Result //17-04-07 necessary to TC the | Correct pattern?
 //val next_fragment: see .fsti
-let next_fragment_ensures (#i:TLSInfo.id) (s:Machine.state) h0 (result: result (Send.outgoing i)) h1 =
+let next_fragment_ensures (#i:TLSInfo.id) (s:Machine.state) h0 (r: result (Send.outgoing i)) h1 =
     let es = logT s h0 in
     let w0 = iT s Writer h0 in
     let w1 = iT s Writer h1 in
@@ -120,8 +120,7 @@ let next_fragment_ensures (#i:TLSInfo.id) (s:Machine.state) h0 (result: result (
     mods s h0 h1 /\
     r1 == r0 /\
     Seq.length (logT s h1) >= Seq.length (logT s h0) /\
-    ( let open FStar.Error in
-      match result with
+    ( match r with
       | Correct (Send.Outgoing frg nextKeys complete) ->
           w1 == (if Some? nextKeys then w0 + 1 else w0) /\
           (b2t complete ==> r1 = w1 /\ Seq.indexable (logT s h1) w1 (*/\ completed (eT s Writer h1)*) )

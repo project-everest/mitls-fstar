@@ -37,7 +37,8 @@ let write_at_most sto i max
       let lb = LowStar.Buffer.sub sto.out_slice.LowParse.Low.Base.base sto.out_start (G.hide lo) in
       let o = Bytes.of_buffer lo lb in
       let rg = mkfrange i (v lo) (v lo) in
-      Some (| rg, o |), { sto with out_start = sto.out_start + lo } in
+      Some (| rg, o |), { sto with out_start = sto.out_start + lo }
+    in
   if sto.out_start = sto.out_pos || max = 0ul // why this other case?
     then (
       // send signals only after flushing the output buffer

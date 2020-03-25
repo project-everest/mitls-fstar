@@ -946,6 +946,9 @@ let encrypted_clientExtension pv cfg cs ri pski ks resuming ce =
 
 // 19-01-05 boring, and not tail-recursive, use an iterator instead?
 // FIXME(adl) check length constraints for serialized list
+// FIXME(adl) we may have to fail dynamically if the serialization
+// is too long since unknown extensions from the app callback can
+// overflow
 #push-options "--admit_smt_queries true"
 let rec server_clientExtensions pv cfg cs ri pski ks resuming (ches:list clientHelloExtension) =
   match ches with
@@ -955,11 +958,12 @@ let rec server_clientExtensions pv cfg cs ri pski ks resuming (ches:list clientH
     match server_clientExtension pv cfg cs ri pski ks resuming che with
     | None -> es
     | Some e -> e::es
-let rec encrypted_clientExtensions pv cfg cs ri pski ks resuming (ches:list clientHelloExtension) =
+
+let rec encrypted_clientExtensions pv cfg cs ri pski ks resuming unk (ches:list clientHelloExtension) =
   match ches with
-  | [] -> []
+  | [] -> encryptedExtensions_of_unknownExtensions unk
   | che::ches ->
-    let es = encrypted_clientExtensions pv cfg cs ri pski ks resuming ches in 
+    let es = encrypted_clientExtensions pv cfg cs ri pski ks resuming unk ches in 
     match encrypted_clientExtension pv cfg cs ri pski ks resuming che with
     | None -> es
     | Some e -> e::es
@@ -1091,7 +1095,7 @@ let getSigningKey #a #region #role ns =
   Signature.lookup_key #a ns.cfg.private_key_file
 *)
 
-let zeroRTT sh = List.Tot.existsb SHE_early_data? (HSM.sh_extensions sh)
+let zeroRTT ee = List.Tot.existsb EE_early_data? ee
 
 private
 let const_true _ = true
@@ -1235,23 +1239,28 @@ let client_offer_new cfg nonce ks resume now =
       else
          fatal Internal_error "computeOffer: check_clientHelloExtensions_list_bytesize failed"
 
+// hoisted to prevent conditional-accessor extraction issue
+let trace_0rtt cfg resume = 
+  let offering_0rtt = 
+    match ticket13_pskinfo [] (snd resume) with
+    | (_, i) :: _ -> i.allow_early_data && Some? cfg.max_early_data // Must be the first PSK
+    | _ -> false in 
+  if offering_0rtt then 
+    trace "Offering a PSK compatible with 0-RTT" done
+  else
+    trace "No PSK or 0-RTT disabled" done      
+
 let client_ClientHello config nonce oks =
   let (cfg,resume) = config in 
-  trace "%s" (
-    if (
-      match ticket13_pskinfo [] (snd resume) with
-      | (_, i) :: _ -> i.allow_early_data && Some? cfg.max_early_data // Must be the first PSK
-      | _ -> false)
-    then "Offering a PSK compatible with 0-RTT"
-    else "No PSK or 0-RTT disabled") done;
+  if DebugFlags.debug_HS then trace_0rtt cfg resume; 
 
   let now = UInt32.uint_to_t (FStar.Date.secondsFromDawn()) in
   match client_offer config nonce oks now with 
-  | Error z -> Error z 
+  | Error z -> fail z 
   | Correct offer -> (
     trace "offering client extensions %s" (string_of_ches offer.CH.extensions) done;
     trace "offering cipher suites %s" (string_of_ciphersuitenames offer.CH.cipher_suites) done;
-    Correct offer )
+    correct offer )
 
 private
 let choose_retry_extension (ctx:share & UInt32.t & list (PSK.pskid & pskInfo))
@@ -2141,13 +2150,14 @@ let server_ClientHello cfg offer =
     match compute_cs13 cfg offer pske shares (Some? scert) with
     | None -> compute_hrr cfg offer 
     | Some r ->
-      let opsk = match r with
+      let opsk, scert = match r with
         | PSK_EDH j _ _->
 	  // FIXME(adl) pskInfo vs bkey13
           let Some (Some (pskid,_)) = List.Tot.nth pske (UInt16.v j) in
 	  let Some ticket = Ticket.check_ticket false (PSK.leak pskid) in
-          Some (PSK.leak pskid, ticket)
-        | _ -> None
+	  // Disable certificate when PSK is used
+          Some (PSK.leak pskid, ticket), None
+        | _ -> None, scert
         in
       Correct (ServerAccept13 scert r opsk))
 #pop-options
