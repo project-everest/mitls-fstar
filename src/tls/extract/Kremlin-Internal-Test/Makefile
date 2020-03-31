@@ -10,7 +10,7 @@ MLCRYPTO_HOME	?= ../../../../../MLCrypto
 EVERCRYPT_HOME	?= ../../../../../hacl-star/providers
 
 LDOPTS += -levercrypt
-LDOPTS += -L$(EVERCRYPT_HOME)/../dist/gcc-compatible
+LDOPTS += -L$(EVERCRYPT_HOME)/../dist/mitls
 LDOPTS += -L$(KREMLIN_HOME)/kremlib/dist/generic -lkremlib
 
 ifeq ($(OS),Windows_NT)
@@ -24,12 +24,12 @@ ifeq ($(OS),Windows_NT)
   export PATH
 else ifeq ($(UNAME),Darwin)
   VARIANT = -Darwin
-  DYLD_LIBRARY_PATH := $(EVERCRYPT_HOME)/../dist/gcc-compatible:$(MITLS_HOME)/src/pki:$(DYLD_LIBRARY_PATH)
+  DYLD_LIBRARY_PATH := $(EVERCRYPT_HOME)/../dist/mitls:$(MITLS_HOME)/src/pki:$(DYLD_LIBRARY_PATH)
   SO = so
   export DYLD_LIBRARY_PATH
 else ifeq ($(UNAME),Linux)
   VARIANT = -Linux
-  LD_LIBRARY_PATH := $(EVERCRYPT_HOME)/../dist/gcc-compatible:$(MITLS_HOME)/src/pki:$(LD_LIBRARY_PATH)
+  LD_LIBRARY_PATH := $(EVERCRYPT_HOME)/../dist/mitls:$(MITLS_HOME)/src/pki:$(LD_LIBRARY_PATH)
   LDOPTS += -lpthread
   SO = so
   export LD_LIBRARY_PATH
@@ -87,7 +87,7 @@ LDOPTS += -L$(MITLS_HOME)/src/pki -lmipki $(KREMLIN_HOME)/kremlib/dist/generic/l
 -include $(addsuffix .d,$(FILES))
 
 test.exe: $(addsuffix .o,$(FILES))
-	rm -rf $(EVERCRYPT_HOME)/../dist/gcc-compatible/*.dll.a # newer dynamic link is not properly setup on mitls/master ... persist with static linking
+	rm -rf $(EVERCRYPT_HOME)/../dist/mitls/*.dll.a # newer dynamic link is not properly setup on mitls/master ... persist with static linking
 	$(CC) $^ -o $@ $(LDOPTS)
 
 CERT_FILES=CAFile.pem server-ecdsa.crt server-ecdsa.key
