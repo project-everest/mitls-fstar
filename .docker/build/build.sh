@@ -101,7 +101,7 @@ function build_hacl_vale () {
     # This is only for libevercrypt.so for now,
     # not for checked files.
     make -C hacl-star vale-fst -j $threads &&
-    make -C hacl-star compile-gcc-compatible compile-portable-gcc-compatible compile-evercrypt-external-headers -j $threads
+    make -C hacl-star compile-gcc-compatible compile-mitls compile-portable-gcc-compatible compile-evercrypt-external-headers -j $threads
 }
 
 # By default, HACL* master works against F* stable. Can also be overridden.
