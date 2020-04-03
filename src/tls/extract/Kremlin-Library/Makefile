@@ -9,7 +9,7 @@ EVERCRYPT_HOME	?= ../../../../../hacl-star/providers
 KREMLIN_HOME    ?= ../../../../../kremlin
 
 LDOPTS += -levercrypt
-LDOPTS += -L$(EVERCRYPT_HOME)/../dist/gcc-compatible
+LDOPTS += -L$(EVERCRYPT_HOME)/../dist/mitls
 LDOPTS += -L$(KREMLIN_HOME)/kremlib/dist/generic -lkremlib
 
 ifeq ($(OS),Windows_NT)
@@ -83,7 +83,7 @@ all: libmitls.$(SO)
 -include $(addsuffix .d,$(FILES))
 
 libmitls.$(SO): $(addsuffix .o,$(FILES))
-	rm -rf $(EVERCRYPT_HOME)/../dist/gcc-compatible/*.dll.a # newer dynamic link is not properly setup on mitls/master ... persist with static linking
+	rm -rf $(EVERCRYPT_HOME)/../dist/mitls/*.dll.a # newer dynamic link is not properly setup on mitls/master ... persist with static linking
 	$(CC) $^ -shared -o $@ $(LDOPTS) $(KREMLIN_HOME)/kremlib/dist/generic/libkremlib.a
 
 clean:
