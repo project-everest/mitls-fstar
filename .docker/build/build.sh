@@ -101,7 +101,7 @@ function build_hacl_vale () {
     # This is only for libevercrypt.so for now,
     # not for checked files.
     make -C hacl-star vale-fst -j $threads &&
-    make -C hacl-star compile-gcc-compatible compile-portable compile-evercrypt-external-headers -j $threads &&
+    make -C hacl-star compile-gcc-compatible compile-mitls compile-portable compile-evercrypt-external-headers -j $threads &&
     make -C hacl-star/providers/quic_provider
 }
 
