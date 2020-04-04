@@ -2,25 +2,17 @@
   "\u000eD2È\u0013by µiå7.z\u000f\u0005",
   [
     [
-      "Parsers.NamedGroup.namedGroup_repr_eq",
-      1,
-      2,
-      1,
-      [
-        "@query", "assumption_FStar.UInt16.t__uu___haseq",
-        "equation_Parsers.NamedGroup.namedGroup_repr"
-      ],
-      0,
-      "f8aca431d724552c3fa2199ec1212a9f"
-    ],
-    [
       "Parsers.NamedGroup.namedGroup",
       1,
       2,
       1,
-      [ "@query", "assumption_FStar.UInt16.t__uu___haseq" ],
+      [
+        "@MaxIFuel_assumption", "@query", "equation_Prims.eqtype",
+        "refinement_interpretation_Tm_refine_414d0a9f578ab0048252f8c8f552b99f",
+        "typing_FStar.UInt16.t"
+      ],
       0,
-      "649930752dfba209082e1ff0298ec4f8"
+      "ba72324ac0c92c3376ca0e0302e63c13"
     ],
     [
       "Parsers.NamedGroup.__proj__Unknown_namedGroup__item___0",
@@ -34,7 +26,7 @@
         "refinement_interpretation_Tm_refine_f4ef8479470d7ef641d6261d6a5e84e5"
       ],
       0,
-      "7ab09a8328fa78c101566874b2f6e1e2"
+      "da71468b72a1af383a6820ab04c58859"
     ],
     [
       "Parsers.NamedGroup.string_of_namedGroup",
@@ -69,7 +61,7 @@
         "fuel_guarded_inversion_Parsers.NamedGroup.namedGroup"
       ],
       0,
-      "eea019d59d275ff72a17157d7afcda00"
+      "0c6d6305cb8e858959c06d03364acdfb"
     ],
     [
       "Parsers.NamedGroup.namedGroup_validator",
@@ -87,7 +79,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata"
       ],
       0,
-      "563358477e6311f229065b95e5790273"
+      "c0617b27fe33b85a0282451058306121"
     ],
     [
       "Parsers.NamedGroup.namedGroup_jumper",
@@ -103,7 +95,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_low"
       ],
       0,
-      "25c58d346b994698552c70abfaad2ed3"
+      "ab99b9db22545f3a49505d4184ad6080"
     ]
   ]
 ]

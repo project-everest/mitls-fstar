@@ -14,7 +14,7 @@
         "typing_AEAD.ivlen", "typing_FStar.UInt32.v"
       ],
       0,
-      "ca0fe889822664199badb307dad241a2"
+      "d71269a9c53c24bdf934dd403e480094"
     ],
     [
       "AEAD.aadmax",
@@ -23,7 +23,7 @@
       1,
       [ "@query" ],
       0,
-      "d9e6e511aa50a4ff2c7f6d0b712f358a"
+      "3f9840369449ab5c63be8a5974a67465"
     ],
     [
       "AEAD.cipher",
@@ -41,7 +41,7 @@
         "typing_AEAD.taglen", "typing_FStar.UInt32.v"
       ],
       0,
-      "b6be1dc68c78aa1e02b799b66b90d5d1"
+      "923f2301278d1e5646875dd5671c63f8"
     ],
     [
       "AEAD.cipher32",
@@ -60,13 +60,13 @@
         "projection_inverse_BoxBool_proj_0",
         "projection_inverse_BoxInt_proj_0",
         "refinement_interpretation_Tm_refine_0ec011aea9f93256a3547ad9f0c667f1",
-        "refinement_interpretation_Tm_refine_3efdadb657a0dd98795ba8a94a1dcdf4",
+        "refinement_interpretation_Tm_refine_8f76dbbe53d0401b82e1fc1dd1a1a245",
         "refinement_interpretation_Tm_refine_f13070840248fced9d9d60d77bdae3ec",
         "typing_FStar.UInt.fits", "typing_FStar.UInt32.v",
         "typing_Spec.Poly1305.size_key"
       ],
       0,
-      "537bbd5d728f3f7d93d707f6c154591c"
+      "a48089c5980bb66d94d0c24e49da7ab3"
     ],
     [
       "AEAD.mk_entry",
@@ -78,12 +78,12 @@
         "equation_AEAD.taglen", "equation_Crypto.Plain.as_bytes",
         "equation_Crypto.Symmetric.Bytes.lbytes",
         "primitive_Prims.op_Addition", "projection_inverse_BoxInt_proj_0",
-        "refinement_interpretation_Tm_refine_2938ae335f0e545c4cb6814a10f80d13",
+        "refinement_interpretation_Tm_refine_31dd7dd182feaaca31a5581d92a0ac85",
         "refinement_interpretation_Tm_refine_d8a87ef7054ef6b9dddf6412446572ea",
         "typing_Crypto.Plain.as_bytes"
       ],
       0,
-      "532bac91df053fa890abf94c448dead4"
+      "da9d1b821106eb6b754df3e3a26215b4"
     ],
     [
       "AEAD.entry_injective",
@@ -98,7 +98,7 @@
         "equation_FStar.Bytes.lbytes", "equation_FStar.UInt.uint_t",
         "equation_Prims.nat", "int_inversion", "primitive_Prims.op_Addition",
         "projection_inverse_BoxInt_proj_0",
-        "refinement_interpretation_Tm_refine_2938ae335f0e545c4cb6814a10f80d13",
+        "refinement_interpretation_Tm_refine_31dd7dd182feaaca31a5581d92a0ac85",
         "refinement_interpretation_Tm_refine_542f9d4f129664613f2483a6c88bc7c2",
         "refinement_interpretation_Tm_refine_71ea40360194fe02ee1272538c9cacbc",
         "refinement_interpretation_Tm_refine_d8a87ef7054ef6b9dddf6412446572ea",
@@ -107,7 +107,7 @@
         "typing_FStar.UInt32.v"
       ],
       0,
-      "4a34f32be4868ee13ae86f9913ef16b4"
+      "a1889b0a184de6506431a962bc743f0f"
     ],
     [
       "AEAD.fresh_addresses",
@@ -122,7 +122,7 @@
         "refinement_interpretation_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
       ],
       0,
-      "a91911f2389c684a94f42847b0299d7b"
+      "daa6557647215ee636e525fbdd2cf2db"
     ],
     [
       "AEAD.fresh_addresses",
@@ -137,7 +137,7 @@
         "refinement_interpretation_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
       ],
       0,
-      "35721915c6b15b6218279a4e2c9b94a0"
+      "f5c3f7b9fc34cc2e0309d0c47d321e06"
     ],
     [
       "AEAD.ok_plain_len_32",
@@ -151,7 +151,7 @@
         "typing_FStar.UInt32.v"
       ],
       0,
-      "d8abe2fb78f3ec9f90eb7830681183c1"
+      "9b8350813244e15ce2e5bd1f16af140c"
     ],
     [
       "AEAD.frame_log",
@@ -164,7 +164,7 @@
         "refinement_interpretation_Tm_refine_2de20c066034c13bf76e9c0b94f4806c"
       ],
       0,
-      "280b385d32abac4d95253f4cbdbf8c72"
+      "9fed21d88f91e4aa3d825706b9c68295"
     ],
     [
       "AEAD.gen",
@@ -179,7 +179,7 @@
         "refinement_interpretation_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
       ],
       0,
-      "7932c775c3fd7742a2d80e34267ca37b"
+      "86cf32cca3799d055410d16e4eecf0c6"
     ]
   ]
 ]

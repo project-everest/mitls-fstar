@@ -14,7 +14,7 @@
         "typing_FStar.Bytes.len", "typing_FStar.UInt32.v"
       ],
       0,
-      "8ef7d3be845a74d7bc932dd445a3000b"
+      "fab74b53266ec031035a1f693b47c688"
     ],
     [
       "HandshakeMessages.versionBytes_is_injective",
@@ -33,7 +33,7 @@
         "typing_FStar.Bytes.bytes"
       ],
       0,
-      "f35bf23a8a6e10f17a3527a8e6476ee9"
+      "832bf8dd3e3252e3ceb6a04f46bbe459"
     ],
     [
       "HandshakeMessages.parseServerHello",
@@ -47,7 +47,7 @@
         "typing_FStar.Bytes.len", "typing_FStar.UInt32.v"
       ],
       0,
-      "121a494da7e4260887ace304caf171a2"
+      "af3a15a08aa4d967d9ab80015d167a38"
     ],
     [
       "HandshakeMessages.valid_hs_msg_prop",
@@ -55,25 +55,36 @@
       2,
       1,
       [
-        "@MaxIFuel_assumption", "@query",
+        "@MaxIFuel_assumption", "@query", "bool_inversion",
+        "constructor_distinct_FStar.Integers.Unsigned",
+        "constructor_distinct_FStar.Integers.W8",
         "constructor_distinct_Parsers.ProtocolVersion.TLS_1p2",
         "disc_equation_Parsers.ProtocolVersion.Unknown_protocolVersion",
+        "equality_tok_FStar.Integers.W8@tok",
         "equality_tok_Parsers.ProtocolVersion.TLS_1p2@tok",
-        "equation_Extensions.extension", "equation_HandshakeMessages.ee",
-        "equation_Prims.nat", "function_token_typing_FStar.UInt8.t",
+        "equation_Extensions.extension",
+        "equation_FStar.HyperStack.ST.is_eternal_region",
+        "equation_FStar.Integers.int_t", "equation_FStar.Integers.uint_8",
+        "equation_HandshakeMessages.ee", "equation_Mem.rgn",
+        "equation_Prims.nat", "function_token_typing_FStar.Integers.uint_8",
         "lemma_FStar.Bytes.lemma_repr_bytes_values",
         "lemma_FStar.Bytes.length_reveal", "primitive_Prims.op_Addition",
-        "primitive_Prims.op_LessThan", "projection_inverse_BoxBool_proj_0",
+        "primitive_Prims.op_LessThan", "primitive_Prims.op_Negation",
+        "projection_inverse_BoxBool_proj_0",
         "projection_inverse_BoxInt_proj_0",
+        "projection_inverse_FStar.Integers.Unsigned__0",
         "refinement_interpretation_Tm_refine_19c668efb849ad45e180c6d1256d6bc7",
+        "refinement_interpretation_Tm_refine_31bfde48b952b6d7959cd5a2aa36404e",
         "refinement_interpretation_Tm_refine_542f9d4f129664613f2483a6c88bc7c2",
         "refinement_interpretation_Tm_refine_bbed9ec17e89f5a0b3efdb1e542c794e",
         "typing_Extensions.bindersLen",
         "typing_Extensions.extensionListBytes", "typing_Extensions.unknown",
-        "typing_FStar.Bytes.reveal", "typing_FStar.Seq.Base.length"
+        "typing_FStar.Bytes.reveal",
+        "typing_FStar.Monotonic.HyperHeap.rid_freeable",
+        "typing_FStar.Seq.Base.length", "typing_TLSInfo.safe_region"
       ],
       0,
-      "64396e86683f474b9970d39fbcbde927"
+      "a6028f1ae20bc9518555282e852d55bd"
     ],
     [
       "HandshakeMessages.parseHandshakeMessage",
@@ -87,7 +98,7 @@
         "typing_FStar.Bytes.len", "typing_FStar.UInt32.v"
       ],
       0,
-      "c7ada40dd02c1b230594796571e64463"
+      "d72b609fe4e229981414ee1720976043"
     ]
   ]
 ]

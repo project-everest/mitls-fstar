@@ -8,16 +8,16 @@
       1,
       [
         "@MaxIFuel_assumption", "@query",
-        "assumption_FStar.UInt16.t__uu___haseq",
         "equation_Parsers.HKDF.HkdfLabel_context.hkdfLabel_context",
         "equation_Parsers.HKDF.HkdfLabel_label.hkdfLabel_label",
+        "equation_Prims.eqtype",
         "haseqTm_refine_15ae3fadb6f4acac6a5678fabfdae153",
         "haseqTm_refine_8315578d748f693d99f92a2cf3c462d1",
         "refinement_interpretation_Tm_refine_414d0a9f578ab0048252f8c8f552b99f",
-        "typing_FStar.Bytes.bytes"
+        "typing_FStar.Bytes.bytes", "typing_FStar.UInt16.t"
       ],
       0,
-      "82f13e9cf728d3c8822c55f6099f99f1"
+      "6cf922342c9833c421317e46197f3567"
     ],
     [
       "Parsers.HKDF.HkdfLabel.hkdfLabel_valid",
@@ -30,7 +30,7 @@
         "refinement_interpretation_Tm_refine_2de20c066034c13bf76e9c0b94f4806c"
       ],
       0,
-      "a78e6da01ccb07a48f5122e10aef356f"
+      "fe57c4d4c1b40f8c6dff5f8a30bddbc4"
     ]
   ]
 ]
