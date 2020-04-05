@@ -454,7 +454,7 @@
         "unit_typing"
       ],
       0,
-      "bfcb2dee8faa382e34f71f831176e61f"
+      "7607ff83f85f27ec1df9eea796d9a78a"
     ],
     [
       "Range.cipherRangeClass",
@@ -810,6 +810,7 @@
       2,
       [
         "@MaxIFuel_assumption", "@query",
+        "CipherSuite_pretyping_15b8cc3dc6a436bd1dc4dc569086b0b5",
         "FStar.UInt32_pretyping_2ab3c8ba2d08b0172817fc70b5994868",
         "Prims_pretyping_f8666440faa91836cc5a13998af863fc", "b2t_def",
         "bool_inversion", "constructor_distinct_EverCrypt.AES128_GCM",
@@ -824,8 +825,7 @@
         "data_elim_CipherSuite.AEAD", "data_elim_CipherSuite.Block",
         "data_elim_CipherSuite.MACOnly", "data_elim_CipherSuite.MtE",
         "data_elim_TLSInfo.ID12", "disc_equation_CipherSuite.AEAD",
-        "disc_equation_TLSInfo.ID12", "disc_equation_TLSInfo.PlaintextID",
-        "equality_tok_FStar.Integers.W16@tok",
+        "disc_equation_TLSInfo.ID12", "equality_tok_FStar.Integers.W16@tok",
         "equality_tok_FStar.Integers.W32@tok",
         "equality_tok_FStar.Integers.W8@tok",
         "equality_tok_FStar.Integers.Winfinite@tok",
@@ -834,9 +834,9 @@
         "equality_tok_Parsers.ProtocolVersion.TLS_1p3@tok",
         "equation_AEADProvider.alg_",
         "equation_AEADProvider.explicit_iv_length",
-        "equation_AEADProvider.id", "equation_CipherSuite.aeadAlg",
-        "equation_CipherSuite.blockCipher", "equation_CipherSuite.hash_alg",
-        "equation_CipherSuite.macAlg", "equation_EverCrypt.aead_tagLen",
+        "equation_CipherSuite.aeadAlg", "equation_CipherSuite.blockCipher",
+        "equation_CipherSuite.hash_alg", "equation_CipherSuite.macAlg",
+        "equation_EverCrypt.aead_tagLen",
         "equation_EverCrypt.block_cipher_blockLen",
         "equation_FStar.Bytes.lbytes",
         "equation_FStar.HyperStack.ST.is_eternal_region",
@@ -848,9 +848,8 @@
         "equation_Lib.IntTypes.bits", "equation_Lib.IntTypes.pub_int_v",
         "equation_Lib.IntTypes.unsigned", "equation_Lib.IntTypes.v",
         "equation_Mem.rgn", "equation_Prims.nat",
-        "equation_Range.cipherRangeClass", "equation_Range.fixedPadSize",
-        "equation_Range.id2", "equation_Range.ivSize",
-        "equation_Range.maxPadSize", "equation_Range.minimalPadding",
+        "equation_Range.cipherRangeClass", "equation_Range.id2",
+        "equation_Range.ivSize", "equation_Range.maxPadSize",
         "equation_Range.range", "equation_Range.targetLength",
         "equation_Range.wider", "equation_Spec.Poly1305.size_block",
         "equation_Spec.Poly1305.size_key",
@@ -874,7 +873,6 @@
         "projection_inverse_FStar.Pervasives.Native.Mktuple2__1",
         "projection_inverse_FStar.Pervasives.Native.Mktuple2__2",
         "refinement_interpretation_Tm_refine_0ec011aea9f93256a3547ad9f0c667f1",
-        "refinement_interpretation_Tm_refine_27bc248aea929afc1c455a4ca114e85e",
         "refinement_interpretation_Tm_refine_2cfe0d4b83c769b6fffe22ca1dec6c33",
         "refinement_interpretation_Tm_refine_31bfde48b952b6d7959cd5a2aa36404e",
         "refinement_interpretation_Tm_refine_33c77bf558392d71098c5ee93f1d02de",
@@ -883,13 +881,11 @@
         "refinement_interpretation_Tm_refine_71ea40360194fe02ee1272538c9cacbc",
         "refinement_interpretation_Tm_refine_7412fe7effa679d9fdf5c21b36f28a2a",
         "refinement_interpretation_Tm_refine_8fcbdf9612ed9cda5a238ad00e36f8ee",
-        "refinement_interpretation_Tm_refine_9f948bc3ea58283edd778ba9c9ec878b",
         "refinement_interpretation_Tm_refine_c05ce9ff00b708cd92d521f714e36edc",
         "refinement_interpretation_Tm_refine_c0feb21e61205498a1ca0b179cfabc92",
         "refinement_interpretation_Tm_refine_c7753baa38cd99c4f00a675631dc1dde",
         "refinement_interpretation_Tm_refine_f13070840248fced9d9d60d77bdae3ec",
         "refinement_kinding_Tm_refine_542f9d4f129664613f2483a6c88bc7c2",
-        "typing_AEADProvider.explicit_iv_length",
         "typing_CipherSuite.macSize",
         "typing_EverCrypt.block_cipher_blockLen",
         "typing_FStar.Bytes.empty_bytes", "typing_FStar.Bytes.len",
@@ -898,12 +894,11 @@
         "typing_FStar.UInt32.v", "typing_Range.cipherRangeClass",
         "typing_Range.hashLen", "typing_Range.maxPadSize",
         "typing_Range.targetLength", "typing_Spec.Poly1305.size_block",
-        "typing_Spec.Poly1305.size_key", "typing_TLSInfo.aeAlg_of_id",
-        "typing_TLSInfo.macAlg_of_id", "typing_TLSInfo.safe_region",
-        "unit_typing"
+        "typing_Spec.Poly1305.size_key", "typing_TLSInfo.macAlg_of_id",
+        "typing_TLSInfo.safe_region", "unit_typing"
       ],
       0,
-      "5155d43f9a7a3c01096be6665e7f49f7"
+      "009e9043e9ece95c9be52e6963b22be2"
     ],
     [
       "Range.rangeClass",
