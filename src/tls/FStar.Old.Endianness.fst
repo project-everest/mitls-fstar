@@ -300,7 +300,6 @@ let lemma_little_endian_inj b b' =
   Seq.lemma_eq_intro b' (Seq.slice b' 0  len);
   lemma_little_endian_is_injective b b' len
 
-
 val uint32_bytes: 
   len:UInt32.t {v len <= 4} -> n:UInt32.t {UInt32.v n < pow2 (8 * v len)} -> 
   Tot (b:lbytes (v len) { UInt32.v n == little_endian b}) (decreases (v len))
@@ -320,7 +319,9 @@ let rec uint32_bytes len n =
     assert(v n' < pow2 (8 * v len ));
     let b' = uint32_bytes len n'
     in 
-    Seq.cons byte b'
+    let b'' = Seq.cons byte b' in
+    assert_norm (UInt8.v (head b'') + pow2 8 * little_endian (tail b'') == little_endian b'');
+    b''
 
 val uint32_be: 
   len:UInt32.t {v len <= 4} -> n:UInt32.t {UInt32.v n < pow2 (8 * v len)} -> 
