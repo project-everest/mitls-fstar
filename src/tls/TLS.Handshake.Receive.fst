@@ -235,6 +235,8 @@ let create (b:slice_t)
 
 /// Adds input bytes to rcv_b
 
+#push-options "--z3rlimit 16"
+
 let buffer_received_fragment
   (st:state) (bs:bytes)
 : Stack (option state)
@@ -270,6 +272,8 @@ let buffer_received_fragment
       (v st.rcv_to)
       (v st.rcv_from + PF.length_parsed_bytes st.pf_st);
     Some rst
+
+#pop-options
 
 
 /// Receive flights functions

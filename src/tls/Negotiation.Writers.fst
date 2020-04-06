@@ -719,6 +719,8 @@ let constr_clientHelloExtension_CHE_signature_algorithms
   | None -> None
   | Some x -> Some (CHE_signature_algorithms x)
 
+#push-options "--z3rlimit 16"
+
 inline_for_extraction
 noextract
 let write_constr_clientHelloExtension_CHE_signature_algorithms
@@ -745,6 +747,8 @@ let write_constr_clientHelloExtension_CHE_signature_algorithms
       end
     end
   )
+
+#pop-options
 
 inline_for_extraction
 noextract
