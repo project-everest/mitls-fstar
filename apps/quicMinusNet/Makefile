@@ -73,7 +73,7 @@ copy: $(MITLS_HOME)/src/pki/$(LIBPKI) $(MITLS_HOME)/src/tls/dist/compact/$(LIBMI
 	cp $(MITLS_HOME)/src/pki/$(LIBPKI) .
 	cp $(MLCRYPTO_HOME)/openssl/$(OPENSSL) .
 	cp $(MITLS_HOME)/src/tls/dist/compact/$(LIBMITLS) .
-	cp $(EVERCRYPT_HOME)/../dist/gcc-compatible/$(LIBEVERCRYPT) .
+	cp $(EVERCRYPT_HOME)/../dist/mitls/$(LIBEVERCRYPT) .
 	cp $(HACL_HOME)/providers/quic_provider/$(LIBQC) .
 
 test: quic.exe

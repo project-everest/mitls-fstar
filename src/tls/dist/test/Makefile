@@ -7,7 +7,7 @@ OPENSSL_HOME	?= $(MLCRYPTO_HOME)/openssl
 
 LD_DIRS 	= \
   $(OPENSSL_HOME) \
-  $(HACL_HOME)/dist/gcc-compatible \
+  $(HACL_HOME)/dist/mitls \
   $(MITLS_HOME)/src/tls/dist/compact \
   $(MITLS_HOME)/src/pki \
 
