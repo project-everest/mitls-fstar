@@ -22,10 +22,10 @@ module LP = LowParse.Low.Base
 //19-05-04 sample low-level printer, not used so far. Not extracted ?!
 val print_namedGroupList
   (#rrel #rel: _)
-  (sl: LP.slice rrel rel)
+  (sl: B.mbuffer LP.byte rrel rel)
   (pos: UInt32.t)
 : HST.Stack unit
-  (requires (fun h -> LP.valid Parsers.NamedGroupList.namedGroupList_parser h sl pos))
+  (requires (fun h -> LP.bvalid Parsers.NamedGroupList.namedGroupList_parser h sl pos))
   (ensures (fun h _ h' -> B.modifies B.loc_none h h'))
 
 val string_of_hrres: Parsers.HRRExtensions.hRRExtensions -> string

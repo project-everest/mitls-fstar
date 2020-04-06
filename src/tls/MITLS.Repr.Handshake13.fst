@@ -54,42 +54,42 @@ type t = HSM13.handshake13
 type ptr =
   R.repr_ptr_p t HSM13.handshake13_parser
 
-type pos (b:R.const_slice) =
+type pos (b:R.const_buffer) =
   R.repr_pos_p t b HSM13.handshake13_parser
 
 open Parsers.HandshakeType
 
-let is_eoed (#b:R.const_slice) (r:pos b) : GTot bool =
+let is_eoed (#b:R.const_buffer) (r:pos b) : GTot bool =
   HSM13.tag_of_handshake13 (R.value_pos r) = End_of_early_data
 
-let is_ee (#b:R.const_slice) (r:pos b) : GTot bool =
+let is_ee (#b:R.const_buffer) (r:pos b) : GTot bool =
   HSM13.tag_of_handshake13 (R.value_pos r) = Encrypted_extensions
 
-let is_cr (#b:R.const_slice) (r:pos b) : GTot bool =
+let is_cr (#b:R.const_buffer) (r:pos b) : GTot bool =
   HSM13.tag_of_handshake13 (R.value_pos r) = Certificate_request
 
-let is_c (#b:R.const_slice) (r:pos b) : GTot bool =
+let is_c (#b:R.const_buffer) (r:pos b) : GTot bool =
   HSM13.tag_of_handshake13 (R.value_pos r) = Certificate
 
-let is_cv (#b:R.const_slice) (r:pos b) : GTot bool =
+let is_cv (#b:R.const_buffer) (r:pos b) : GTot bool =
   HSM13.tag_of_handshake13 (R.value_pos r) = Certificate_verify
 
-let is_fin (#b:R.const_slice) (r:pos b) : GTot bool =
+let is_fin (#b:R.const_buffer) (r:pos b) : GTot bool =
   HSM13.tag_of_handshake13 (R.value_pos r) = Finished
 
-let is_nst (#b:R.const_slice) (r:pos b) : GTot bool =
+let is_nst (#b:R.const_buffer) (r:pos b) : GTot bool =
   HSM13.tag_of_handshake13 (R.value_pos r) = New_session_ticket
 
-let is_kupd (#b:R.const_slice) (r:pos b) : GTot bool =
+let is_kupd (#b:R.const_buffer) (r:pos b) : GTot bool =
   HSM13.tag_of_handshake13  (R.value_pos r) = Key_update
 
-type ee13_pos (b:R.const_slice) = r:pos b{is_ee r}
-type c13_pos (b:R.const_slice) = r:pos b{is_c r}
-type cv13_pos (b:R.const_slice) = r:pos b{is_cv r}
-type fin13_pos (b:R.const_slice) = r:pos b{is_fin r}
-type cr13_pos (b:R.const_slice) = r:pos b{is_cr r}
-type eoed13_pos (b:R.const_slice) = r:pos b{is_eoed r}
-type nst13_pos (b:R.const_slice) = r:pos b{is_nst r}
+type ee13_pos (b:R.const_buffer) = r:pos b{is_ee r}
+type c13_pos (b:R.const_buffer) = r:pos b{is_c r}
+type cv13_pos (b:R.const_buffer) = r:pos b{is_cv r}
+type fin13_pos (b:R.const_buffer) = r:pos b{is_fin r}
+type cr13_pos (b:R.const_buffer) = r:pos b{is_cr r}
+type eoed13_pos (b:R.const_buffer) = r:pos b{is_eoed r}
+type nst13_pos (b:R.const_buffer) = r:pos b{is_nst r}
 
 unfold noextract
 let field_ee =
@@ -187,4 +187,4 @@ let field_nst =
 
 (* Serializer from high-level value via intermediate-level formatter *)
 
-let serialize = R.mk_repr_pos_from_serialize HSM13.handshake13_parser32 HSM13.handshake13_serializer32 HSM13.handshake13_size32
+let serialize = R.mk_repr_pos_from_serialize HSM13.handshake13_parser32 HSM13.handshake13_serializer32 HSM13.handshake13_size32 HSM13.handshake13_jumper

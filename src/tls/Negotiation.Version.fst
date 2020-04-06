@@ -128,7 +128,7 @@ val write_supportedVersion
 #push-options "--z3rlimit 100"
 let write_supportedVersion min_version max_version pv out pl p0 =
   if supported_new min_version max_version pv then (
-    let p1 = protocolVersion_writer pv out p0 in
+    let p1 = leaf_writer_strong_to_slice_strong_prefix protocolVersion_writer pv out p0 in
     let h1 = get () in
     valid_list_snoc protocolVersion_parser h1 out pl p0;
     p1
@@ -161,9 +161,12 @@ let write_supportedVersions cfg out p0 =
   if pl = pl_supported_versions then fatal Internal_error "configuration must include a supported protocol version" else
     let h = get () in
     valid_list_cons_recip protocolVersion_parser h out pl_supported_versions pl;
-    Extensions.finalize_supportedVersions out pl_CHE_supported_versions pl;
-    Extensions.clientHelloExtension_CHE_supported_versions_finalize out pl_extension pl;
-    Extensions.finalize_clientHelloExtension_supported_versions out p0;
+    valid_list_ext protocolVersion_parser h out pl_supported_versions pl h (slice_of_buffer out.base) pl_supported_versions pl;
+    Extensions.finalize_supportedVersions out.base pl_CHE_supported_versions pl;
+    Extensions.clientHelloExtension_CHE_supported_versions_finalize out.base pl_extension pl;
+    Extensions.finalize_clientHelloExtension_supported_versions out.base p0;
+    let h' = get () in
+    bvalid_valid_strong_prefix clientHelloExtension_parser h' out p0;
     Correct pl
 // this kind of code is hard to get right, as the programmer needs to
 // know every detail of the wire format, including its byte offsets
@@ -222,7 +225,10 @@ let owrite_supportedVersions
         then
           LPW.max_uint32 `UInt32.sub` 1ul
         else begin
-          Extensions.finalize_supportedVersions sout sout_from res;
+          valid_list_ext protocolVersion_parser h sout (sout_from `UInt32.add` 1ul) res h (slice_of_buffer sout.base) (sout_from `UInt32.add` 1ul) res;
+          Extensions.finalize_supportedVersions sout.base sout_from res;
+          let h' = HST.get () in
+          bvalid_valid_strong_prefix Extensions.supportedVersions_parser h' sout sout_from;
           res
         end
       end
@@ -253,7 +259,11 @@ let owrite_clientHelloExtension_CHE_supported_versions
       if res `UInt32.gte` (LPW.max_uint32 `UInt32.sub` 1ul)
       then res
       else begin
-        clientHelloExtension_CHE_supported_versions_finalize sout sout_from res;
+        let h = HST.get () in
+        valid_bvalid_strong_prefix Extensions.supportedVersions_parser h sout (sout_from `UInt32.add` 2ul);
+        clientHelloExtension_CHE_supported_versions_finalize sout.base sout_from res;
+        let h' = HST.get () in
+        bvalid_valid_strong_prefix clientHelloExtension_CHE_supported_versions_parser h' sout sout_from;
         res
       end
   )
@@ -262,6 +272,8 @@ let omake_CHE_supported_versions (x: option clientHelloExtension_CHE_supported_v
   match x with
   | None -> None
   | Some y -> Some (CHE_supported_versions y)
+
+#push-options "--z3rlimit 16"
 
 inline_for_extraction
 noextract
@@ -285,10 +297,16 @@ let owrite_constr_clientHelloExtension_CHE_supported_versions
       if res `UInt32.gte` (LPW.max_uint32 `UInt32.sub` 1ul)
       then res
       else begin
-        finalize_clientHelloExtension_supported_versions sout sout_from;
+        let h = HST.get () in
+        valid_bvalid_strong_prefix clientHelloExtension_CHE_supported_versions_parser h sout (sout_from `UInt32.add` 2ul);
+        finalize_clientHelloExtension_supported_versions sout.base sout_from;
+        let h' = HST.get () in
+        bvalid_valid_strong_prefix clientHelloExtension_parser h' sout sout_from;
         res
       end
   )
+
+#pop-options
 
 (* step 2: assemble those combinators to actually implement "support" as a writer *)
 
@@ -316,16 +334,16 @@ inline_for_extraction
 noextract
 let write_supportedVersions_new
   #scfg_rrel #scfg_rel
-  (scfg: LPW.slice scfg_rrel scfg_rel)
+  (scfg: B.mbuffer LPW.byte scfg_rrel scfg_rel)
   (scfg_pos: UInt32.t)
   sout
   sout_from0
   (h0: HS.mem {
-    LPW.valid CFG.miTLSConfig_parser h0 scfg scfg_pos /\
-    B.loc_disjoint (LPW.loc_slice_from_to scfg scfg_pos (LPW.get_valid_pos CFG.miTLSConfig_parser h0 scfg scfg_pos)) (LPW.loc_slice_from sout sout_from0)
+    LPW.bvalid CFG.miTLSConfig_parser h0 scfg scfg_pos /\
+    B.loc_disjoint (B.loc_buffer_from_to scfg scfg_pos (LPW.bget_valid_pos CFG.miTLSConfig_parser h0 scfg scfg_pos)) (LPW.loc_slice_from sout sout_from0)
   })
 : Tot (e: LPW.owriter clientHelloExtension_serializer h0 sout sout_from0 {
-      LPW.owvalue e == option_of_result (support_new (LPW.contents CFG.miTLSConfig_parser h0 scfg scfg_pos))
+      LPW.owvalue e == option_of_result (support_new (LPW.bcontents CFG.miTLSConfig_parser h0 scfg scfg_pos))
   })
 = LPW.graccess CFG.accessor_miTLSConfig_min_version scfg scfg_pos _ _ _ `LPW.owbind` (fun pmin ->
   LPW.graccess CFG.accessor_miTLSConfig_max_version scfg scfg_pos _ _ _ `LPW.owbind` (fun pmax ->
@@ -345,7 +363,7 @@ let write_supportedVersions_new
 
 let test_write_supportedVersions_new
   #scfg_rrel #scfg_rel
-  (scfg: LPW.slice scfg_rrel scfg_rel)
+  (scfg: B.mbuffer LPW.byte scfg_rrel scfg_rel)
   (scfg_pos: UInt32.t)
   (sout: LPW.slice (LPW.srel_of_buffer_srel (LowStar.Buffer.trivial_preorder _)) (LPW.srel_of_buffer_srel (LowStar.Buffer.trivial_preorder _)))
   (sout_from: UInt32.t)

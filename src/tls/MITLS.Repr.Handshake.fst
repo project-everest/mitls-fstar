@@ -39,7 +39,7 @@ let t = HSM.handshake
 
 let ptr = R.repr_ptr_p t HSM.handshake_parser
 
-let pos (b:R.const_slice) = R.repr_pos_p t b HSM.handshake_parser
+let pos (b:R.const_buffer) = R.repr_pos_p t b HSM.handshake_parser
 
 (* This is working around the inability to define null-accessors for
    the tag of a sum type. It will eventually be provided by EverParse
@@ -131,6 +131,7 @@ let serialize =
     HSM.handshake_parser32
     HSM.handshake_serializer32
     HSM.handshake_size32
+    HSM.handshake_jumper
 
 ////////////////////////////////////////////////////////////////////////////////
 // Some additional conveniences ... maybe not necessary?

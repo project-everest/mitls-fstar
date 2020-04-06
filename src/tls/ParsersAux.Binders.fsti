@@ -229,18 +229,18 @@ module HST = FStar.HyperStack.ST
 
 val binders_pos
   (#rrel #rel: _)
-  (sl: LP.slice rrel rel)
+  (sl: B.mbuffer LP.byte rrel rel)
   (pos: U32.t)
 : HST.Stack U32.t
   (requires (fun h ->
-    LP.valid H.handshake_parser h sl pos /\
-    has_binders (LP.contents H.handshake_parser h sl pos)
+    LP.bvalid H.handshake_parser h sl pos /\
+    has_binders (LP.bcontents H.handshake_parser h sl pos)
   ))
   (ensures (fun h res h' ->
-    let m = LP.contents H.handshake_parser h sl pos in
+    let m = LP.bcontents H.handshake_parser h sl pos in
     B.modifies B.loc_none h h' /\
     U32.v pos + U32.v (binders_offset m) == U32.v res /\
-    LP.valid_content_pos Psks.offeredPsks_binders_parser h sl res (get_binders m) (LP.get_valid_pos H.handshake_parser h sl pos)
+    LP.bvalid_content_pos Psks.offeredPsks_binders_parser h sl res (get_binders m) (LP.bget_valid_pos H.handshake_parser h sl pos)
   ))
 
 let valid_binders_mutate

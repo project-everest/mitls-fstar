@@ -56,47 +56,47 @@ type t = HSM12.handshake12
 type ptr =
   R.repr_ptr_p t HSM12.handshake12_parser
 
-type pos (b:R.const_slice) =
+type pos (b:R.const_buffer) =
   R.repr_pos_p t b HSM12.handshake12_parser
 
 open Parsers.HandshakeType
 
-let is_hr (#b:R.const_slice) (r:pos b) : GTot bool =
+let is_hr (#b:R.const_buffer) (r:pos b) : GTot bool =
   HSM12.tag_of_handshake12 (R.value_pos r) = Hello_request
 
-let is_c (#b:R.const_slice) (r:pos b) : GTot bool =
+let is_c (#b:R.const_buffer) (r:pos b) : GTot bool =
   HSM12.tag_of_handshake12 (R.value_pos r) = Certificate
 
-let is_ske (#b:R.const_slice) (r:pos b) : GTot bool =
+let is_ske (#b:R.const_buffer) (r:pos b) : GTot bool =
   HSM12.tag_of_handshake12 (R.value_pos r) = Server_key_exchange
 
-let is_cr (#b:R.const_slice) (r:pos b) : GTot bool =
+let is_cr (#b:R.const_buffer) (r:pos b) : GTot bool =
   HSM12.tag_of_handshake12 (R.value_pos r) = Certificate_request
 
-let is_shd (#b:R.const_slice) (r:pos b) : GTot bool =
+let is_shd (#b:R.const_buffer) (r:pos b) : GTot bool =
   HSM12.tag_of_handshake12 (R.value_pos r) = Server_hello_done
 
-let is_cv (#b:R.const_slice) (r:pos b) : GTot bool =
+let is_cv (#b:R.const_buffer) (r:pos b) : GTot bool =
   HSM12.tag_of_handshake12  (R.value_pos r) = Certificate_verify
 
-let is_cke (#b:R.const_slice) (r:pos b) : GTot bool =
+let is_cke (#b:R.const_buffer) (r:pos b) : GTot bool =
   HSM12.tag_of_handshake12  (R.value_pos r) = Client_key_exchange
 
-let is_nst (#b:R.const_slice) (r:pos b) : GTot bool =
+let is_nst (#b:R.const_buffer) (r:pos b) : GTot bool =
   HSM12.tag_of_handshake12 (R.value_pos r) = New_session_ticket
 
-let is_fin (#b:R.const_slice) (r:pos b) : GTot bool =
+let is_fin (#b:R.const_buffer) (r:pos b) : GTot bool =
   HSM12.tag_of_handshake12 (R.value_pos r) = Finished
 
-type hr12_pos (b:R.const_slice) = m:pos b{is_hr m}
-type c12_pos (b:R.const_slice) = m:pos b{is_c m}
-type ske12_pos (b:R.const_slice) = m:pos b{is_ske m}
-type cr12_pos (b:R.const_slice) = m:pos b{is_cr m}
-type shd12_pos (b:R.const_slice) = m:pos b{is_shd m}
-type cv12_pos (b:R.const_slice) = m:pos b{is_cv m}
-type cke12_pos (b:R.const_slice) = m:pos b{is_cke m}
-type nst12_pos (b:R.const_slice) = m:pos b{is_nst m}
-type fin12_pos (b:R.const_slice) = m:pos b{is_fin m}
+type hr12_pos (b:R.const_buffer) = m:pos b{is_hr m}
+type c12_pos (b:R.const_buffer) = m:pos b{is_c m}
+type ske12_pos (b:R.const_buffer) = m:pos b{is_ske m}
+type cr12_pos (b:R.const_buffer) = m:pos b{is_cr m}
+type shd12_pos (b:R.const_buffer) = m:pos b{is_shd m}
+type cv12_pos (b:R.const_buffer) = m:pos b{is_cv m}
+type cke12_pos (b:R.const_buffer) = m:pos b{is_cke m}
+type nst12_pos (b:R.const_buffer) = m:pos b{is_nst m}
+type fin12_pos (b:R.const_buffer) = m:pos b{is_fin m}
 
 unfold noextract
 let field_hello_request =
@@ -206,3 +206,4 @@ let serialize =
         HSM12.handshake12_parser32
         HSM12.handshake12_serializer32
         HSM12.handshake12_size32
+        HSM12.handshake12_jumper

@@ -35,5 +35,5 @@ open FStar.HyperStack.ST
 let ptr =
   R.repr_ptr_p CHE.clientHelloExtensions CHE.clientHelloExtensions_parser
 
-let pos (b:R.const_slice) =
+let pos (b:R.const_buffer) =
   R.repr_pos_p CHE.clientHelloExtensions b CHE.clientHelloExtensions_parser

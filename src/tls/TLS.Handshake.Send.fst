@@ -34,7 +34,7 @@ let write_at_most sto i max
     if lo = 0ul then
       None, sto
     else
-      let lb = LowStar.Buffer.sub sto.out_slice.LowParse.Low.Base.base sto.out_start (G.hide lo) in
+      let lb = LowStar.Buffer.sub sto.out_buffer sto.out_start (G.hide lo) in
       let o = Bytes.of_buffer lo lb in
       let rg = mkfrange i (v lo) (v lo) in
       Some (| rg, o |), { sto with out_start = sto.out_start + lo }
@@ -94,15 +94,21 @@ let tag #a stt =
   pop_frame();
   tag
 
+inline_for_extraction
+let slice_of_output sto =
+  LowParse.Slice.make_slice sto.out_buffer sto.out_len
+
 let send_tch sto m =
-  let r = MITLS.Repr.Handshake.serialize sto.out_slice sto.out_pos (HSM.M_client_hello m) in
+  let r = MITLS.Repr.Handshake.serialize (slice_of_output sto) sto.out_pos (HSM.M_client_hello m) in
   match r with
   | None ->
     fatal Internal_error "send_tch: output buffer overflow"
   | Some r ->
-    let b = Repr.to_bytes (Repr.as_ptr r) r.Repr.length in
+    let rptr = Repr.as_ptr r in
+    let len = Repr.length rptr Parsers.Handshake.handshake_jumper in
+    let b = Repr.to_bytes rptr len in
     trace ("send (placeholder binders) CH "^hex_of_bytes b);
-    let sto' = { sto with out_pos = Repr.end_pos r } in
+    let sto' = { sto with out_pos = r.Repr.start_pos + len } in
     correct (sto', r)
 
 let patch_binders #a stt sto pch binders
@@ -110,67 +116,74 @@ let patch_binders #a stt sto pch binders
   let h = get () in
   Parsers.OfferedPsks.offeredPsks_binders_bytesize_eq binders;
   LowParse.Repr.valid_repr_pos_elim pch h;
-  ParsersAux.Binders.valid_truncate_clientHello h sto.out_slice pch.LowParse.Repr.start_pos;
-  let bpos = ParsersAux.Binders.binders_pos sto.out_slice pch.LowParse.Repr.start_pos in
+  ParsersAux.Binders.valid_truncate_clientHello h (slice_of_output sto) pch.LowParse.Repr.start_pos;
+  let bpos = ParsersAux.Binders.binders_pos sto.out_buffer pch.LowParse.Repr.start_pos in
   let opbinders = LowParse.Repr.mk_repr_pos_from_serialize
     Parsers.OfferedPsks_binders.offeredPsks_binders_parser32
     Parsers.OfferedPsks.offeredPsks_binders_serializer32
     Parsers.OfferedPsks.offeredPsks_binders_size32
-    sto.out_slice
+    Parsers.OfferedPsks_binders.offeredPsks_binders_jumper
+    (slice_of_output sto)
     bpos
     binders
   in
   assert (Some? opbinders);
   let Some pbinders = opbinders in
+  let binders_ptr = LowParse.Repr.as_ptr pbinders in
+  let binders_len = LowParse.Repr.length binders_ptr Parsers.OfferedPsks_binders.offeredPsks_binders_jumper in
   let h2 = get () in
   LowParse.Repr.valid_repr_pos_elim pbinders h2;
-  ParsersAux.Binders.valid_binders_mutate h sto.out_slice pch.LowParse.Repr.start_pos bpos (LP.loc_slice_from sto.out_slice bpos) h2;
+  ParsersAux.Binders.valid_binders_mutate h (slice_of_output sto) pch.LowParse.Repr.start_pos bpos (B.loc_buffer_from_to sto.out_buffer bpos sto.out_len) h2;
   let pch' = LowParse.Repr.mk_repr_pos
     HSM.handshake_parser32
-    sto.out_slice
+    HSM.handshake_jumper
+    sto.out_buffer
     pch.LowParse.Repr.start_pos
-    (LowParse.Repr.end_pos pch)
   in
   let h3 = get () in
   Transcript.frame_invariant stt h h3 (footprint sto);
-  ParsersAux.Binders.set_binders_set_binders pch.LowParse.Repr.meta.LowParse.Repr.v binders (HSM.canonical_binders (pbinders.LowParse.Repr.length));
+  ParsersAux.Binders.set_binders_set_binders pch.LowParse.Repr.meta.LowParse.Repr.v binders (HSM.canonical_binders binders_len);
   Transcript.extend stt (Transcript.LR_CompleteTCH pch')
 
 let send_ch
   #a stt sto m
 = let h0 = get () in
-  let r = MITLS.Repr.Handshake.serialize sto.out_slice sto.out_pos m in
+  let r = MITLS.Repr.Handshake.serialize (slice_of_output sto) sto.out_pos m in
   let h1 = get () in
-  Transcript.frame_invariant stt h0 h1 (B.loc_buffer sto.out_slice.LowParse.Low.Base.base);
+  Transcript.frame_invariant stt h0 h1 (B.loc_buffer sto.out_buffer);
   match r with
   | None ->
     fatal Internal_error "send_ch: output buffer overflow"
   | Some r ->
     Transcript.extend stt (Transcript.LR_ClientHello r);
     let h2 = get () in
-    let b = Repr.to_bytes (Repr.as_ptr r) r.Repr.length in
+    let rptr = Repr.as_ptr r in
+    let rlen = Repr.length rptr HSM.handshake_jumper in
+    let b = Repr.to_bytes rptr rlen in
     let h3 = get () in
     Transcript.frame_invariant stt h2 h3 B.loc_none;
     trace ("send CH "^hex_of_bytes b);
-    let sto = { sto with out_pos = Repr.end_pos r } in
+    let sto = { sto with out_pos = r.Repr.start_pos + rlen } in
     correct sto
 
 let send_sh #a stt sto m =
   let h0 = get () in
-  let r = MITLS.Repr.Handshake.serialize sto.out_slice sto.out_pos m in
+  let r = MITLS.Repr.Handshake.serialize (slice_of_output sto) sto.out_pos m in
   let h1 = get () in
-  Transcript.frame_invariant stt h0 h1 (B.loc_buffer sto.out_slice.LowParse.Low.Base.base);
+  Transcript.frame_invariant stt h0 h1 (B.loc_buffer sto.out_buffer);
   match r with
   | None ->
     fatal Internal_error "send_sh: output buffer overflow"
   | Some r ->
     Transcript.extend stt (Transcript.LR_ServerHello r);
     let h2 = get () in
-    let b = Repr.to_bytes (Repr.as_ptr r) r.Repr.length in
+    let rptr = Repr.as_ptr r in
+    let rlen = Repr.length rptr HSM.handshake_jumper in
+    let b = Repr.to_bytes rptr rlen in
     let h3 = get () in
     Transcript.frame_invariant stt h2 h3 B.loc_none;
     trace ("send SH "^hex_of_bytes b);
-    let sto = { sto with out_pos = Repr.end_pos r } in
+    let sto = { sto with out_pos = r.Repr.start_pos + rlen } in
     correct sto
 
 let send_tag_sh #a stt sto m tag =
@@ -182,32 +195,39 @@ let send_tag_sh #a stt sto m tag =
     correct (sto)
   | Error z -> Error z
 
-//FIXME(adl) proof is brittle
-#push-options "--admit_smt_queries true"
 let send_hrr #a stt sto tag hrr =
   let h0 = get () in
-  let r = MITLS.Repr.Handshake.serialize sto.out_slice sto.out_pos tag in
+  let r = MITLS.Repr.Handshake.serialize (slice_of_output sto) sto.out_pos tag in
   match r with
   | None ->
     fatal Internal_error "send_hrr: output buffer overflow for tag"
   | Some r_tag ->
-    let r = MITLS.Repr.Handshake.serialize sto.out_slice (Repr.end_pos r_tag) hrr in
+    let r_tag_ptr = Repr.as_ptr r_tag in
+    let r_tag_len = Repr.length r_tag_ptr HSM.handshake_jumper in
+    let r_tag_end = r_tag.Repr.start_pos + r_tag_len in
+    let r = MITLS.Repr.Handshake.serialize (slice_of_output sto) (r_tag_end) hrr in
     begin match r with
     | None ->
       fatal Internal_error "output_buffer_overflow for hrr"
     | Some r_hrr ->
+      let r_hrr_ptr = Repr.as_ptr r_hrr in
+      let r_hrr_len = Repr.length r_hrr_ptr HSM.handshake_jumper in
       let h1 = get () in
-      Transcript.frame_invariant stt h0 h1 (B.loc_buffer sto.out_slice.LowParse.Low.Base.base);
+      Transcript.frame_invariant stt h0 h1 (B.loc_buffer sto.out_buffer);
       Transcript.extend stt (Transcript.LR_HRR r_tag r_hrr);
       let h2 = get () in
-      let b1 = Repr.to_bytes (Repr.as_ptr r_tag) r_tag.Repr.length in
-      let b2 = Repr.to_bytes (Repr.as_ptr r_hrr) r_hrr.Repr.length in
+      let b1 = Repr.to_bytes (Repr.as_ptr r_tag) r_tag_len in
+      let b2 = Repr.to_bytes (Repr.as_ptr r_hrr) r_hrr_len in
       let h3 = get () in
       trace ("send "^hex_of_bytes (b1 @| b2));
-      let sto = { sto with out_pos = Repr.end_pos r_hrr } in
+      let sto = { sto with out_pos = r_hrr.Repr.start_pos + r_hrr_len } in
+      assume ( //FIXME(adl) proof is brittle
+        let hrr = HSM.M_server_hello?._0 hrr in
+        let t' = Transcript.transcript stt h3 in
+        t' == Transcript.Start (Some (tag, hrr))
+      );
       correct sto
     end
-#pop-options
 
 
 #push-options "--max_fuel 0 --max_ifuel 1 --z3rlimit 32"
@@ -256,9 +276,9 @@ let lemma_valid_transition #a (s:Transcript.state a) h l
   
 let send13 #a stt sto m
 = let h0 = get () in
-  let r = MITLS.Repr.Handshake13.serialize sto.out_slice sto.out_pos m in
+  let r = MITLS.Repr.Handshake13.serialize (slice_of_output sto) sto.out_pos m in
   let h1 = get () in
-  Transcript.frame_invariant stt h0 h1 (B.loc_buffer sto.out_slice.LowParse.Low.Base.base);
+  Transcript.frame_invariant stt h0 h1 (B.loc_buffer sto.out_buffer);
   match r with
   | None ->
     fatal Internal_error "send13: output buffer overflow"
@@ -266,11 +286,13 @@ let send13 #a stt sto m
     lemma_valid_transition stt h1 (Transcript.LR_HSM13 r);
     Transcript.extend stt (Transcript.LR_HSM13 r);
     let h2 = get () in
-    let b = Repr.to_bytes (Repr.as_ptr r) r.Repr.length in
+    let rptr = Repr.as_ptr r in
+    let rlen = Repr.length rptr Parsers.Handshake13.handshake13_jumper in
+    let b = Repr.to_bytes (Repr.as_ptr r) rlen in
     let h3 = get () in
     Transcript.frame_invariant stt h2 h3 B.loc_none;
     trace ("send "^hex_of_bytes b);
-    let sto = { sto with out_pos = Repr.end_pos r} in
+    let sto = { sto with out_pos = r.Repr.start_pos + rlen} in
     correct sto
 
 /// Serializes and buffers a message to be sent, and extends the
@@ -316,12 +338,40 @@ let msg_type (msg: msg)
 | Msg13 _ -> HSM.handshake13
 
 inline_for_extraction
-let msg_repr_type (msg: msg) (b: Repr.const_slice)
+let msg_repr_type (msg: msg) (b: CB.const_buffer LP.byte)
 : Tot Type
 = match msg with
 | Msg _ -> MITLS.Repr.Handshake.pos b
 | Msg12 _ -> MITLS.Repr.Handshake12.pos b
 | Msg13 _ -> MITLS.Repr.Handshake13.pos b
+
+let msg_repr_valid (#msg: msg) (#b: CB.const_buffer LP.byte) (r: msg_repr_type msg b) (h: HS.mem) : GTot Type0
+= match msg with
+  | Msg _ -> Repr.valid_repr_pos (r <: MITLS.Repr.Handshake.pos b) h
+  | Msg12 _ -> Repr.valid_repr_pos (r <: MITLS.Repr.Handshake12.pos b) h
+  | Msg13 _ -> Repr.valid_repr_pos (r <: MITLS.Repr.Handshake13.pos b) h
+
+inline_for_extraction
+let msg_repr_end_pos
+  (#msg: msg)
+  (#b: CB.const_buffer LP.byte)
+  (r: msg_repr_type msg b)
+: Stack uint_32
+  (requires (fun h ->
+    msg_repr_valid r h
+  ))
+  (ensures (fun h res h' ->
+    B.modifies B.loc_none h h' /\
+    res == begin match msg with
+    | Msg _ -> Repr.end_pos (r <: MITLS.Repr.Handshake.pos b)
+    | Msg12 _ -> Repr.end_pos (r <: MITLS.Repr.Handshake12.pos b)
+    | Msg13 _ -> Repr.end_pos (r <: MITLS.Repr.Handshake13.pos b)
+    end
+  ))
+= match msg with
+  | Msg _ -> Repr.compute_end_pos (r <: MITLS.Repr.Handshake.pos b) HSM.handshake_jumper
+  | Msg12 _ -> Repr.compute_end_pos (r <: MITLS.Repr.Handshake12.pos b) Parsers.Handshake12.handshake12_jumper
+  | Msg13 _ -> Repr.compute_end_pos (r <: MITLS.Repr.Handshake13.pos b) Parsers.Handshake13.handshake13_jumper
 
 val send:
   #a: Transcript.ha ->
@@ -332,15 +382,15 @@ val send:
 //#push-options "--z3rlimit 32"
 let send #a stt (sto:send_state) msg =
   let h0 = get () in
-  assume (LowParse.Low.Base.live_slice h0 sto.out_slice);
+  assume (B.live h0 sto.out_buffer);
   assume (Transcript.invariant stt h0);
-  assume (B.loc_disjoint (B.loc_buffer sto.out_slice.LowParse.Low.Base.base) (Transcript.footprint stt));
-  let r : option (msg_repr_type msg (Repr.of_slice sto.out_slice)) =
+  assume (B.loc_disjoint (B.loc_buffer sto.out_buffer) (Transcript.footprint stt));
+  let r : option (msg_repr_type msg (CB.of_qbuf sto.out_buffer)) =
     match msg with
     | Msg m ->
-      MITLS.Repr.Handshake.serialize sto.out_slice sto.out_pos m
-    | Msg12 m -> MITLS.Repr.Handshake12.serialize sto.out_slice sto.out_pos m
-    | Msg13 m -> MITLS.Repr.Handshake13.serialize sto.out_slice sto.out_pos m
+      MITLS.Repr.Handshake.serialize (slice_of_output sto) sto.out_pos m
+    | Msg12 m -> MITLS.Repr.Handshake12.serialize (slice_of_output sto) sto.out_pos m
+    | Msg13 m -> MITLS.Repr.Handshake13.serialize (slice_of_output sto) sto.out_pos m
   in  
   match r with
   | None ->
@@ -348,8 +398,10 @@ let send #a stt (sto:send_state) msg =
   | Some r ->
     //19-09-05
     // regression possibly due to the valid_sh refinement; no obvious fix.
+    let rend = msg_repr_end_pos r in
     assume(False);
-    let r : Repr.repr_pos (msg_type msg) (Repr.of_slice sto.out_slice) = r in
+    let r : Repr.repr_pos (msg_type msg) (CB.of_qbuf sto.out_buffer) = r in
+    let rlen = rend - r.Repr.start_pos in
     let olabel : option Transcript.label_repr = match msg with
     | Msg (Parsers.Handshake.M_client_hello _) -> Some (Transcript.LR_ClientHello r) (* TODO: LR_TCH? *)
     | Msg (Parsers.Handshake.M_server_hello sh) ->
@@ -361,13 +413,13 @@ let send #a stt (sto:send_state) msg =
     begin match olabel with
     | Some label ->
       let h1 = get () in
-      Transcript.frame_invariant stt h0 h1 (B.loc_buffer sto.out_slice.LowParse.Low.Base.base);
+      Transcript.frame_invariant stt h0 h1 (B.loc_buffer sto.out_buffer);
       assume (Transcript.extensible (Transcript.transcript stt h1));
       assume (Some? (Transcript.transition (Transcript.transcript stt h1) (Transcript.label_of_label_repr label)));
       Transcript.extend stt label;
-      let b = Repr.to_bytes (Repr.as_ptr r) r.Repr.length in
+      let b = Repr.to_bytes (Repr.as_ptr r) rlen in
       trace ("send "^hex_of_bytes b);
-      let sto = { sto with out_pos = Repr.end_pos r } in
+      let sto = { sto with out_pos = rend } in
       correct sto
     | _ -> fatal Internal_error "unsupported?"
     end

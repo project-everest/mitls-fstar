@@ -34,4 +34,4 @@ let t = HSM13.handshake13_m13_end_of_early_data
 
 let ptr = R.repr_ptr_p t HSM13.handshake13_m13_end_of_early_data_parser
 
-let repr (b:R.const_slice) = R.repr_pos_p t b HSM13.handshake13_m13_end_of_early_data_parser
+let repr (b:R.const_buffer) = R.repr_pos_p t b HSM13.handshake13_m13_end_of_early_data_parser

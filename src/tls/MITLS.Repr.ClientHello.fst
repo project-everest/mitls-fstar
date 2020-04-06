@@ -31,7 +31,7 @@ module CH = Parsers.ClientHello
 
 let ptr = R.repr_ptr_p CH.clientHello CH.clientHello_parser
 let stable_ptr = p:ptr { R.is_stable_in_region p }
-let pos (b:R.const_slice) = R.repr_pos_p CH.clientHello b CH.clientHello_parser
+let pos (b:R.const_buffer) = R.repr_pos_p CH.clientHello b CH.clientHello_parser
 
 /// Reader for the protocol version
 unfold

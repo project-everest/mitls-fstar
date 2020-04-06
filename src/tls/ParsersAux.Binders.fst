@@ -51,15 +51,15 @@ let offeredPsks_binders_offset
 inline_for_extraction
 let offeredPsks_binders_pos
   (#rrel #rel: _)
-  (sl: LP.slice rrel rel)
+  (sl: B.mbuffer LP.byte rrel rel)
   (pos: U32.t)
   (x: Ghost.erased Psks.offeredPsks)
 : HST.Stack U32.t
   (requires (fun h -> 
     let sq = LP.serialize Psks.offeredPsks_serializer (Ghost.reveal x) in
-    LP.live_slice h sl /\
-    U32.v pos <= U32.v sl.LP.len /\
-    (LP.bytes_of_slice_from h sl pos `LP.seq_starts_with` sq)
+    B.live h sl /\
+    U32.v pos <= B.length sl /\
+    (LP.bytes_of_buffer_from h sl pos `LP.seq_starts_with` sq)
   ))
   (ensures (fun h res h' ->
     B.modifies B.loc_none h h' /\
@@ -118,15 +118,15 @@ let clientHelloExtension_CHE_pre_shared_key_binders_offset
 inline_for_extraction
 let clientHelloExtension_CHE_pre_shared_key_binders_pos
   (#rrel #rel: _)
-  (sl: LP.slice rrel rel)
+  (sl: B.mbuffer LP.byte rrel rel)
   (pos: U32.t)
   (x: Ghost.erased CHE.clientHelloExtension_CHE_pre_shared_key)
 : HST.Stack U32.t
   (requires (fun h -> 
     let sq = LP.serialize CHE.clientHelloExtension_CHE_pre_shared_key_serializer (Ghost.reveal x) in
-    LP.live_slice h sl /\
-    U32.v pos <= U32.v sl.LP.len /\
-    (LP.bytes_of_slice_from h sl pos `LP.seq_starts_with` sq)
+    B.live h sl /\
+    U32.v pos <= B.length sl /\
+    (LP.bytes_of_buffer_from h sl pos `LP.seq_starts_with` sq)
   ))
   (ensures (fun h res h' ->
     B.modifies B.loc_none h h' /\
@@ -190,15 +190,15 @@ let clientHelloExtension_binders_offset
 inline_for_extraction
 let clientHelloExtension_binders_pos
   (#rrel #rel: _)
-  (sl: LP.slice rrel rel)
+  (sl: B.mbuffer LP.byte rrel rel)
   (pos: U32.t)
   (x: Ghost.erased CHE.clientHelloExtension { CHE.CHE_pre_shared_key? (Ghost.reveal x) } )
 : HST.Stack U32.t
   (requires (fun h -> 
     let sq = LP.serialize CHE.clientHelloExtension_serializer (Ghost.reveal x) in
-    LP.live_slice h sl /\
-    U32.v pos <= U32.v sl.LP.len /\
-    (LP.bytes_of_slice_from h sl pos `LP.seq_starts_with` sq)
+    B.live h sl /\
+    U32.v pos <= B.length sl /\
+    (LP.bytes_of_buffer_from h sl pos `LP.seq_starts_with` sq)
   ))
   (ensures (fun h res h' ->
     B.modifies B.loc_none h h' /\
@@ -291,7 +291,7 @@ let list_clientHelloExtension_binders_offset
 inline_for_extraction
 let list_clientHelloExtension_binders_pos
   (#rrel #rel: _)
-  (sl: LP.slice rrel rel)
+  (sl: B.mbuffer LP.byte rrel rel)
   (pos pos': U32.t)
   (x: Ghost.erased (list CHE.clientHelloExtension) {
     Cons? (Ghost.reveal x) /\
@@ -301,10 +301,10 @@ let list_clientHelloExtension_binders_pos
 : HST.Stack U32.t
   (requires (fun h -> 
     let sq = serialize_list_clientHelloExtension (Ghost.reveal x) in
-    LP.live_slice h sl /\
+    B.live h sl /\
     U32.v pos <= U32.v pos' /\
-    U32.v pos' <= U32.v sl.LP.len /\
-    (LP.bytes_of_slice_from_to h sl pos pos' `Seq.equal` sq)
+    U32.v pos' <= B.length sl /\
+    (LP.bytes_of_buffer_from_to h sl pos pos' `Seq.equal` sq)
   ))
   (ensures (fun h res h' ->
     B.modifies B.loc_none h h' /\
@@ -315,7 +315,7 @@ let list_clientHelloExtension_binders_pos
   let pos1 = list_clientHelloExtension_last_pos sl pos pos' x in
   assert (Seq.length (serialize_list_clientHelloExtension (Ghost.reveal x)) == U32.v pos' - U32.v pos);
   assert (Seq.length (serialize_list_clientHelloExtension (L.init (Ghost.reveal x))) == U32.v pos1 - U32.v pos);
-  assert (LP.bytes_of_slice_from_to h sl pos1 pos' `Seq.equal` Seq.slice (LP.bytes_of_slice_from_to h sl pos pos') (U32.v pos1 - U32.v pos) (U32.v pos' - U32.v pos));
+  assert (LP.bytes_of_buffer_from_to h sl pos1 pos' `Seq.equal` Seq.slice (LP.bytes_of_buffer_from_to h sl pos pos') (U32.v pos1 - U32.v pos) (U32.v pos' - U32.v pos));
   clientHelloExtension_binders_pos sl pos1 (Ghost.hide (L.last (Ghost.reveal x)))
 
 let truncate_list_clientHelloExtension
@@ -425,7 +425,7 @@ let clientHelloExtensions_binders_offset
 inline_for_extraction
 let clientHelloExtensions_binders_pos
   (#rrel #rel: _)
-  (sl: LP.slice rrel rel)
+  (sl: B.mbuffer LP.byte rrel rel)
   (pos: U32.t)
   (x: Ghost.erased CHEs.clientHelloExtensions {
     Cons? (Ghost.reveal x) /\
@@ -434,9 +434,9 @@ let clientHelloExtensions_binders_pos
 : HST.Stack U32.t
   (requires (fun h -> 
     let sq = LP.serialize CHEs.clientHelloExtensions_serializer (Ghost.reveal x) in
-    LP.live_slice h sl /\
-    U32.v pos <= U32.v sl.LP.len /\
-    (LP.bytes_of_slice_from h sl pos `LP.seq_starts_with` sq)
+    B.live h sl /\
+    U32.v pos <= B.length sl /\
+    (LP.bytes_of_buffer_from h sl pos `LP.seq_starts_with` sq)
   ))
   (ensures (fun h res h' ->
     B.modifies B.loc_none h h' /\
@@ -538,12 +538,12 @@ let clientHello_binders_offset
   Parsers.ClientHello_cipher_suites.clientHello_cipher_suites_size32 c.CH.cipher_suites `U32.add` Parsers.ClientHello_compression_methods.clientHello_compression_methods_size32 c.CH.compression_methods `U32.add`
   clientHelloExtensions_binders_offset c.CH.extensions
 
-#push-options "--z3rlimit 32 --max_fuel 1 --max_ifuel 0"
+#push-options "--z3rlimit 64 --max_fuel 1 --max_ifuel 0"
 
 inline_for_extraction
 let clientHello_binders_pos
   (#rrel #rel: _)
-  (sl: LP.slice rrel rel)
+  (sl: B.mbuffer LP.byte rrel rel)
   (pos: U32.t)
   (x: Ghost.erased CH.clientHello {
     let l = (Ghost.reveal x).CH.extensions in
@@ -553,9 +553,9 @@ let clientHello_binders_pos
 : HST.Stack U32.t
   (requires (fun h -> 
     let sq = LP.serialize CH.clientHello_serializer (Ghost.reveal x) in
-    LP.live_slice h sl /\
-    U32.v pos <= U32.v sl.LP.len /\
-    (LP.bytes_of_slice_from h sl pos `LP.seq_starts_with` sq)
+    B.live h sl /\
+    U32.v pos <= B.length sl /\
+    (LP.bytes_of_buffer_from h sl pos `LP.seq_starts_with` sq)
   ))
   (ensures (fun h res h' ->
     B.modifies B.loc_none h h' /\
@@ -741,7 +741,7 @@ let handshake_m_client_hello_binders_offset
 inline_for_extraction
 let handshake_m_client_hello_binders_pos
   (#rrel #rel: _)
-  (sl: LP.slice rrel rel)
+  (sl: B.mbuffer LP.byte rrel rel)
   (pos: U32.t)
   (c: Ghost.erased H.handshake_m_client_hello {
     let l = (Ghost.reveal c).CH.extensions in
@@ -751,9 +751,9 @@ let handshake_m_client_hello_binders_pos
 : HST.Stack U32.t
   (requires (fun h -> 
     let sq = LP.serialize H.handshake_m_client_hello_serializer (Ghost.reveal c) in
-    LP.live_slice h sl /\
-    U32.v pos <= U32.v sl.LP.len /\
-    (LP.bytes_of_slice_from h sl pos `LP.seq_starts_with` sq)
+    B.live h sl /\
+    U32.v pos <= B.length sl /\
+    (LP.bytes_of_buffer_from h sl pos `LP.seq_starts_with` sq)
   ))
   (ensures (fun h res h' ->
     B.modifies B.loc_none h h' /\
@@ -934,18 +934,18 @@ let truncate_clientHello_bytes_inj_binders_bytesize m1 m2 =
 #push-options "--z3rlimit 32"
 let binders_pos #rrel #rel sl pos =
   let h = HST.get () in
-  let x = Ghost.hide (LP.contents H.handshake_parser h sl pos) in
-  let gpos' = Ghost.hide (LP.get_valid_pos H.handshake_parser h sl pos) in 
-  LP.valid_valid_exact H.handshake_parser h sl pos;
-  LP.valid_exact_serialize H.handshake_serializer h sl pos (Ghost.reveal gpos');
+  let x = Ghost.hide (LP.bcontents H.handshake_parser h sl pos) in
+  let gpos' = Ghost.hide (LP.bget_valid_pos H.handshake_parser h sl pos) in 
+  LP.valid_valid_exact H.handshake_parser h (LP.slice_of_buffer sl) pos;
+  LP.valid_exact_serialize H.handshake_serializer h (LP.slice_of_buffer sl) pos (Ghost.reveal gpos');
   H.serialize_handshake_eq_client_hello (Ghost.reveal x);
-  assert (LP.bytes_of_slice_from h sl pos `LP.seq_starts_with` LP.bytes_of_slice_from_to h sl pos (Ghost.reveal gpos'));
+  assert (LP.bytes_of_buffer_from h sl pos `LP.seq_starts_with` LP.bytes_of_buffer_from_to h sl pos (Ghost.reveal gpos'));
   let pos1 = LP.jump_serializer HT.handshakeType_serializer HT.handshakeType_jumper sl pos (Ghost.hide HT.Client_hello) in
   let res = handshake_m_client_hello_binders_pos sl pos1 (Ghost.hide (H.M_client_hello?._0 (Ghost.reveal x))) in
   set_binders_get_binders (Ghost.reveal x);
   truncate_clientHello_bytes_correct (Ghost.reveal x);
-  LP.serialize_valid_exact Psks.offeredPsks_binders_serializer h sl (get_binders (Ghost.reveal x)) res (Ghost.reveal gpos');
-  LP.valid_exact_valid Psks.offeredPsks_binders_parser h sl res (Ghost.reveal gpos');
+  LP.serialize_valid_exact Psks.offeredPsks_binders_serializer h (LP.slice_of_buffer sl) (get_binders (Ghost.reveal x)) res (Ghost.reveal gpos');
+  LP.valid_exact_valid Psks.offeredPsks_binders_parser h (LP.slice_of_buffer sl) res (Ghost.reveal gpos');
   res
 #pop-options
 

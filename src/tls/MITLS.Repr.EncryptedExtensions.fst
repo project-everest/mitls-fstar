@@ -34,4 +34,4 @@ let t = EE.encryptedExtensions
 
 let ptr = R.repr_ptr_p t EE.encryptedExtensions_parser
 
-let repr (b:R.const_slice) = R.repr_pos_p t b EE.encryptedExtensions_parser
+let repr (b:R.const_buffer) = R.repr_pos_p t b EE.encryptedExtensions_parser

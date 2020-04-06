@@ -40,7 +40,7 @@ let t = SH.serverHello_is_hrr
 
 let ptr = R.repr_ptr_p t SH.serverHello_is_hrr_parser
 
-let pos (b:R.const_slice) = R.repr_pos_p t b SH.serverHello_is_hrr_parser
+let pos (b:R.const_buffer) = R.repr_pos_p t b SH.serverHello_is_hrr_parser
 
 let is_hrr_true =
   R.FieldAccessor
@@ -62,5 +62,4 @@ let is_hrr_test (p:ptr)
       B.modifies B.loc_none h0 h1 /\
       b = Parsers.ServerHello_is_hrr.ServerHello_is_hrr_true? (R.value p))
  = R.reveal_valid();
-   let b = R.temp_slice_of_repr_ptr p in
-   Parsers.ServerHello_is_hrr.serverHello_is_hrr_test b 0ul
+   Parsers.ServerHello_is_hrr.serverHello_is_hrr_test (LowStar.ConstBuffer.cast (R.Ptr?.b p)) 0ul

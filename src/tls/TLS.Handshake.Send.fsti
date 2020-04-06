@@ -79,8 +79,6 @@ module LP = LowParse.Low.Base
 /// - out_pos, with [out_star..out_pos[ holding formatted messages ready to be sent
 /// - out_len, with [out_pos..out_len[ available for formatting new messages.
 ///
-/// We group the base pointer and out_len in the LP slice
-///
 /// The first [out_pos] bytes of [out_slice] are ready to be written;
 /// The rest of the slice is available for formatting new messages.
 ///
@@ -91,15 +89,20 @@ module LP = LowParse.Low.Base
 // [pos] as [written] output; we may simplify and always have start=0.
 // we'll get rid of to_be_written: output overflows are fatal.
 
+// buffer for outgoing data, provided by caller, filled by Send,
+// already formatted and hashed. Overflows are fatal.
+// type out_buffer = (out_slice: LP.slice (B.trivial_preorder _) (B.trivial_preorder _) {
+//    out_slice.LP.len <= LP.validator_max_length })
+
 noeq type send_state = {
   // outgoing data, already formatted and hashed. Overflows are fatal.
-  out_slice: (out_slice: LP.slice (B.trivial_preorder _) (B.trivial_preorder _) {
-    out_slice.LP.len <= LP.validator_max_length }) ; // provided by caller, filled by Send
+  out_buffer: B.buffer LP.byte; // provided by caller, filled by Send
+  out_len:  (out_len: UInt32.t { out_len == B.len out_buffer });
   out_start: (pos: UInt32.t{
-    v pos <= v out_slice.LP.len }); // updated as the client sends data
+    v pos <= v out_len }); // updated as the client sends data
   out_pos:   (pos: UInt32.t{
     v out_start <= v pos /\
-    v pos <= v out_slice.LP.len }); // updated by Send, QD-style
+    v pos <= v out_len }); // updated by Send, QD-style
 
   // still supporting the high-level API to TLS and Record;
   // as next_keys_use, with next fragment after CCS
@@ -107,19 +110,13 @@ noeq type send_state = {
   outgoing_complete: bool;
 }
 
-// proposed v1 API, distributing [send_state] as follows:
-
-// buffer for outgoing data, provided by caller, filled by Send,
-// already formatted and hashed. Overflows are fatal.
-type out_buffer = TLS.Handshake.Receive.slice_t
-
 // we used to have a start position updated by the client;
 // we will use instead pointer arithmetic.
 // out_start: (pos: UInt32.t{
 //  v pos <= v out_slice.LP.len });
 
 // updated by Send, QD-style, and finally returned to the application.
-type out_pos (b:out_buffer) = p:UInt32.t{ p <= b.LP.len }
+// type out_pos (b:out_buffer) = p:UInt32.t{ p <= b.LP.len }
 
 // also returned to the application, still supporting the high-level
 // API to TLS and Record; as next_keys_use, with next fragment after
@@ -132,14 +129,15 @@ type out_signals =
 let footprint
   (sto: send_state)
 : GTot B.loc
-= B.loc_buffer sto.out_slice.LowParse.Low.Base.base
+= B.loc_buffer sto.out_buffer
 
 let invariant (sto: send_state) (h: _) =
   B.loc_disjoint (footprint sto) (B.loc_region_only true Mem.tls_tables_region) /\
-  LowParse.Low.Base.live_slice h sto.out_slice
+  B.live h sto.out_buffer
 
 let send_state0 = {
-  out_slice = LP.make_slice B.null 0ul;
+  out_buffer = B.null;
+  out_len = 0ul;
   out_start = 0ul;
   out_pos = 0ul;
   outgoing_next_keys = None;
@@ -173,17 +171,19 @@ val signals:
 /// whole message, even if it includes dummies.  We will probably need
 /// a resulting slice representing the message. No transcript yet.
 
+module CB = LowStar.ConstBuffer
+
 val send_tch
   (sto: send_state)
   (m: HSM.clientHello_with_binders)
-: Stack (result (send_state & MITLS.Repr.Handshake.ch_pos (LowParse.Repr.of_slice sto.out_slice)))
+: Stack (result (send_state & MITLS.Repr.Handshake.ch_pos (CB.of_qbuf sto.out_buffer)))
   (requires fun h -> invariant sto h)
   (ensures fun h res h' ->
     B.modifies (footprint sto) h h' /\ (
     match res with
     | Correct (sto', ch) ->
       invariant sto' h' /\
-      sto'.out_slice == sto.out_slice /\
+      sto'.out_buffer == sto.out_buffer /\
       sto'.out_pos >= sto.out_pos /\
       ch.LowParse.Repr.meta.LowParse.Repr.v == Parsers.Handshake.M_client_hello m /\
       sto'.out_pos == LowParse.Repr.end_pos ch /\
@@ -199,7 +199,7 @@ val patch_binders
   (#a:Transcript.ha)
   (stt: Transcript.state a)
   (sto: send_state)
-  (pch: MITLS.Repr.Handshake.ch_pos (LowParse.Repr.of_slice sto.out_slice))
+  (pch: MITLS.Repr.Handshake.ch_pos (CB.of_qbuf sto.out_buffer))
   (m: HandshakeMessages.binders)
 : Stack unit
   (requires fun h ->
@@ -245,7 +245,7 @@ val send_ch
       let t = Transcript.transcript stt h in
       let t' = Transcript.transcript stt h' in
       invariant sto' h' /\
-      sto'.out_slice == sto.out_slice /\
+      sto'.out_buffer == sto.out_buffer /\
       sto'.out_pos >= sto.out_pos /\
       Transcript.invariant stt h' /\
       t' == Transcript.ClientHello (Transcript.Start?.retried t) (HSM.M_client_hello?._0 m)
@@ -281,7 +281,7 @@ val send_sh
     begin match res with
     | Correct sto' ->
       invariant sto' h' /\
-      sto'.out_slice == sto.out_slice /\
+      sto'.out_buffer == sto.out_buffer /\
       sto'.out_pos >= sto.out_pos /\
       Transcript.invariant stt h' /\
       begin match Negotiation.selected_version (HSM.M_server_hello?._0 m) with
@@ -326,7 +326,7 @@ val send_tag_sh
     begin match res with
     | Correct sto' ->
       invariant sto' h' /\
-      sto'.out_slice == sto.out_slice /\
+      sto'.out_buffer == sto.out_buffer /\
       sto'.out_pos >= sto.out_pos /\
       Transcript.invariant stt h' /\
       begin match Negotiation.selected_version (HSM.M_server_hello?._0 m) with
@@ -365,7 +365,7 @@ val send_hrr
     | Correct sto' ->
       let hrr = HSM.M_server_hello?._0 hrr in
       invariant sto' h' /\
-      sto'.out_slice == sto.out_slice /\
+      sto'.out_buffer == sto.out_buffer /\
       sto'.out_pos >= sto.out_pos /\
       Transcript.invariant stt h' /\
       t' == Transcript.Start (Some (tag, hrr))
@@ -417,7 +417,7 @@ val extend_hrr
       // enabling ch0 CRF-based injectivity:
       Transcript.hashed ha t /\
       Transcript.invariant di h1 /\
-      sending'.out_slice == sending.out_slice /\
+      sending'.out_buffer == sending.out_buffer /\
       sending'.out_pos >= sending.out_pos /\
       invariant sending' h1 /\
       t' == Transcript.Start(Some (retry_info_digest retry))))
@@ -444,7 +444,7 @@ val send13
     match res with
     | Correct sto' ->
       invariant sto' h' /\
-      sto'.out_slice == sto.out_slice /\
+      sto'.out_buffer == sto.out_buffer /\
       sto'.out_pos >= sto.out_pos /\
 //      LowParse.Low.Base.bytes_of_slice_from_to h' sto.out_slice sto.out_pos sto'.out_pos == LowParse.Spec.Base.serialize handshake13_serializer m /\ // TODO: is this needed? if so, then TR needs to enrich MITLS.Repr.* with the suitable lemmas
       Transcript.invariant stt h' /\
@@ -481,7 +481,7 @@ val send_tag13
     begin match res with
     | Correct sto' ->
       invariant sto' h' /\
-      sto'.out_slice == sto.out_slice /\
+      sto'.out_buffer == sto.out_buffer /\
       sto'.out_pos >= sto.out_pos /\
 //      LowParse.Low.Base.bytes_of_slice_from_to h' sto.out_slice sto.out_pos sto'.out_pos == LowParse.Spec.Base.serialize handshake13_serializer m /\ // TODO: is this needed? if so, then TR needs to enrich MITLS.Repr.* with the suitable lemmas
       Transcript.invariant stt h' /\
@@ -514,7 +514,7 @@ val send_extract13
     begin match res with
     | Correct (sto', tag) ->
       invariant sto' h' /\
-      sto'.out_slice == sto.out_slice /\
+      sto'.out_buffer == sto.out_buffer /\
       sto'.out_pos >= sto.out_pos /\
 //      LowParse.Low.Base.bytes_of_slice_from_to h' sto.out_slice sto.out_pos sto'.out_pos == LowParse.Spec.Base.serialize handshake13_serializer m /\ // TODO: is this needed? if so, then TR needs to enrich MITLS.Repr.* with the suitable lemmas
       Transcript.invariant stt h' /\

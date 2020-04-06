@@ -56,15 +56,12 @@ type bytes = FStar.Bytes.bytes
 ///
 /// The interface provided by this module is in state-passing style
 
-let slice_t = b:LP.slice (B.trivial_preorder byte) (B.trivial_preorder byte){
-  b.LP.len <= LP.validator_max_length
-}
-
 noeq type state = {
   pf_st    : PF.state; // updated by parseFlight
-  rcv_b    : slice_t;  // provided by the application; should be a const slice
+  rcv_b    : B.buffer LP.byte;  // provided by the application; should be a const buffer
+  rcv_len  : (rcv_len: uint_32 { v rcv_len == B.length rcv_b });
   rcv_from : uint_32;  // TODO: incremented after parsing a flight.
-  rcv_to   : i:uint_32{rcv_from <= i /\ i <= rcv_b.LP.len} // incremented as we buffer incoming bytes. Could disappear from low-level API.
+  rcv_to   : i:uint_32{rcv_from <= i /\ i <= rcv_len} // incremented as we buffer incoming bytes. Could disappear from low-level API.
 }
 
 // proposed v1 API: keep pf_st within the machine; keep rcv_to only in HL wrapper; 
@@ -75,15 +72,15 @@ let in_progress (s:state) = PF.in_progress_flt s.pf_st
 /// Invariant that relates parsed_bytes in pf_st with rcv_b and its from and to indices
 
 let invariant (st:state) (h:HS.mem) : Type0
-= LP.live_slice h st.rcv_b /\
+= B.live h st.rcv_b /\
   PF.length_parsed_bytes st.pf_st <= (v st.rcv_to - v st.rcv_from) /\
   PF.parsed_bytes st.pf_st ==
-    Seq.slice (B.as_seq h st.rcv_b.LP.base) (v st.rcv_from) (v st.rcv_from + PF.length_parsed_bytes st.pf_st)
+    Seq.slice (B.as_seq h st.rcv_b) (v st.rcv_from) (v st.rcv_from + PF.length_parsed_bytes st.pf_st)
 
 
 /// Framing is trivial
 
-let loc_recv st = B.loc_buffer st.rcv_b.LP.base
+let loc_recv st = B.loc_buffer st.rcv_b
 
 
 let frame_invariant
@@ -93,7 +90,7 @@ let frame_invariant
     invariant st h0 /\
     B.(loc_disjoint (loc_recv st) l) /\
     B.modifies l h0 h1)
-  (ensures invariant st h1 /\ B.as_seq h0 st.rcv_b.LP.base == B.as_seq h1 st.rcv_b.LP.base)
+  (ensures invariant st h1 /\ B.as_seq h0 st.rcv_b == B.as_seq h1 st.rcv_b)
 = ()
 
 unfold
@@ -113,10 +110,6 @@ private let lemma_seq (#a:Type) (s1 s2:Seq.seq a) (from to:nat) (to':nat)
   (ensures Seq.equal (Seq.slice s1 from to') (Seq.slice s2 from to'))
 = assert (forall (i:nat). i < to - from ==> Seq.index (Seq.slice s1 from to) i == Seq.index (Seq.slice s2 from to) i)
 
-
-/// Helper function to create a const_slice from rcv_b
-
-unfold let cslice_of (st:state) : R.const_slice = R.of_slice st.rcv_b
 
 /// Precondition of the receive functions
 
@@ -204,6 +197,7 @@ let wrap_pf_st
 (*** Public API ***)
 
 
+(*
 /// Create an input buffer (until we figure out if the application allocates it)
 
 let alloc_slice (region: Mem.rgn):  ST slice_t 
@@ -214,12 +208,16 @@ let alloc_slice (region: Mem.rgn):  ST slice_t
 =
   let receiving_buffer = LowStar.Buffer.malloc region 0uy 12000ul in
   LowParse.Slice.make_slice receiving_buffer 12000ul
-  
+*)
+
 /// Create a state instance
 
-let create (b:slice_t)
+let create (b: B.buffer LP.byte) (len: uint_32)
 : Stack state
-  (requires fun h -> LP.live_slice h b)
+  (requires fun h ->
+    B.live h b /\
+    v len == B.length b
+  )
   (ensures fun h0 r h1 ->
     h0 == h1 /\
     r.pf_st == PF.create () /\
@@ -229,11 +227,14 @@ let create (b:slice_t)
     invariant r h1)
 = { pf_st = PF.create ();
     rcv_b = b;
+    rcv_len = len;
     rcv_from = 0ul;
     rcv_to = 0ul }
 
 
 /// Adds input bytes to rcv_b
+
+#push-options "--z3rlimit 16"
 
 let buffer_received_fragment
   (st:state) (bs:bytes)
@@ -242,35 +243,36 @@ let buffer_received_fragment
   (ensures fun h0 rst h1 ->
     if Bytes.length bs = 0
     then h0 == h1 /\ rst == Some st
-    else if Bytes.length bs > v st.rcv_b.LP.len - v st.rcv_to
+    else if Bytes.length bs > v st.rcv_len - v st.rcv_to
     then h0 == h1 /\ rst == None
     else
       Some? rst /\
       (let rst = Some?.v rst in
        rst `only_increments_rcv_to` st /\
        rst.rcv_to == st.rcv_to + Bytes.len bs /\
-       B.(modifies (loc_buffer (gsub st.rcv_b.LP.base st.rcv_to (Bytes.len bs)))) h0 h1 /\
-       Seq.slice (B.as_seq h1 rst.rcv_b.LP.base) (v st.rcv_to) (v rst.rcv_to) == Bytes.reveal bs /\
+       B.(modifies (B.loc_buffer (B.gsub st.rcv_b st.rcv_to (Bytes.len bs)))) h0 h1 /\
+       Seq.slice (B.as_seq h1 rst.rcv_b) (v st.rcv_to) (v rst.rcv_to) == Bytes.reveal bs /\
        invariant rst h1))
 = if Bytes.length bs = 0 then Some st
-  else if Bytes.len bs > st.rcv_b.LP.len - st.rcv_to then None
+  else if Bytes.len bs > st.rcv_len - st.rcv_to then None
   else
     let h0 = ST.get () in
-    let sub = B.sub st.rcv_b.LP.base st.rcv_to (Bytes.len bs) in
-    FStar.Bytes.store_bytes bs sub;
+    let sub = B.sub st.rcv_b st.rcv_to (Bytes.len bs) in
+    FStar.Bytes.store_bytes bs sub; // TODO: here a buffer is needed instead of a const_buffer
     let h1 = ST.get () in
     let rst = { st with rcv_to = st.rcv_to + Bytes.len bs } in
 
-    assert (Seq.equal (B.as_seq h1 (B.gsub rst.rcv_b.LP.base rst.rcv_from (st.rcv_to - rst.rcv_from)))
-                      (Seq.slice (B.as_seq h1 rst.rcv_b.LP.base) (v rst.rcv_from) (v st.rcv_to)));
+    assert (Seq.equal (B.as_seq h1 (B.gsub rst.rcv_b rst.rcv_from (st.rcv_to - rst.rcv_from)))
+                      (Seq.slice (B.as_seq h1 rst.rcv_b) (v rst.rcv_from) (v st.rcv_to)));
     lemma_seq
-      (B.as_seq h0 st.rcv_b.LP.base)
-      (B.as_seq h1 rst.rcv_b.LP.base)
+      (B.as_seq h0 st.rcv_b)
+      (B.as_seq h1 rst.rcv_b)
       (v st.rcv_from)
       (v st.rcv_to)
       (v st.rcv_from + PF.length_parsed_bytes st.pf_st);
     Some rst
 
+#pop-options
 
 /// Receive flights functions
 
@@ -278,17 +280,17 @@ let buffer_received_fragment
 
 
 let receive_s_Idle (st:state)
-: ST (result (option (PF.s_Idle (cslice_of st)) & state))
+: ST (result (option (PF.s_Idle (C.of_buffer st.rcv_b)) & state))
   (requires receive_pre st PF.F_s_Idle)
   (ensures receive_post st PF.F_s_Idle PF.valid_s_Idle)
-= let r = PF.receive_s_Idle st.pf_st (cslice_of st) st.rcv_from st.rcv_to in
+= let r = PF.receive_s_Idle st.pf_st (C.of_buffer st.rcv_b) st.rcv_len st.rcv_from st.rcv_to in
   wrap_pf_st st r
 
 let receive_c_wait_ServerHello (st:state)
-: ST (result (option (PF.c_wait_ServerHello (cslice_of st)) & state))
+: ST (result (option (PF.c_wait_ServerHello (C.of_buffer st.rcv_b)) & state))
   (requires receive_pre st PF.F_c_wait_ServerHello)
   (ensures receive_post_with_leftover_bytes st PF.F_c_wait_ServerHello PF.valid_c_wait_ServerHello)
-= let r = PF.receive_c_wait_ServerHello st.pf_st (cslice_of st) st.rcv_from st.rcv_to in
+= let r = PF.receive_c_wait_ServerHello st.pf_st (C.of_buffer st.rcv_b) st.rcv_len st.rcv_from st.rcv_to in
   match r with
   | Error e -> Error e
   | Correct (None, pf_st) -> Correct (None, { st with pf_st = pf_st })
@@ -300,31 +302,31 @@ let receive_c_wait_ServerHello (st:state)
 
 
 let receive_c13_wait_Finished1 (st:state)
-: ST (result (option (PF.c13_wait_Finished1 (cslice_of st)) & state))
+: ST (result (option (PF.c13_wait_Finished1 (C.of_buffer st.rcv_b)) & state))
   (requires receive_pre st PF.F_c13_wait_Finished1)
   (ensures receive_post st PF.F_c13_wait_Finished1 PF.valid_c13_wait_Finished1)
-= let r = PF.receive_c13_wait_Finished1 st.pf_st (cslice_of st) st.rcv_from st.rcv_to in
+= let r = PF.receive_c13_wait_Finished1 st.pf_st (C.of_buffer st.rcv_b) st.rcv_len st.rcv_from st.rcv_to in
   wrap_pf_st st r
 
 let receive_s13_wait_Finished2 (st:state)
-: ST (result (option (PF.s13_wait_Finished2 (cslice_of st)) & state))
+: ST (result (option (PF.s13_wait_Finished2 (C.of_buffer st.rcv_b)) & state))
   (requires receive_pre st PF.F_s13_wait_Finished2)
   (ensures  receive_post st PF.F_s13_wait_Finished2 PF.valid_s13_wait_Finished2)
-= let r = PF.receive_s13_wait_Finished2 st.pf_st (cslice_of st) st.rcv_from st.rcv_to in
+= let r = PF.receive_s13_wait_Finished2 st.pf_st (C.of_buffer st.rcv_b) st.rcv_len st.rcv_from st.rcv_to in
   wrap_pf_st st r
 
 let receive_s13_wait_EOED (st:state)
-: ST (result (option (PF.s13_wait_EOED (cslice_of st)) & state))
+: ST (result (option (PF.s13_wait_EOED (C.of_buffer st.rcv_b)) & state))
   (requires receive_pre st PF. F_s13_wait_EOED)
   (ensures  receive_post st PF.F_s13_wait_EOED PF.valid_s13_wait_EOED)
-= let r = PF.receive_s13_wait_EOED st.pf_st (cslice_of st) st.rcv_from st.rcv_to in
+= let r = PF.receive_s13_wait_EOED st.pf_st (C.of_buffer st.rcv_b) st.rcv_len st.rcv_from st.rcv_to in
   wrap_pf_st st r
 
 let receive_c13_Complete (st:state)
-: ST (result (option (PF.c13_Complete (cslice_of st)) & state))
+: ST (result (option (PF.c13_Complete (C.of_buffer st.rcv_b)) & state))
   (requires receive_pre st PF.F_c13_Complete)
   (ensures  receive_post_with_leftover_bytes st PF.F_c13_Complete PF.valid_c13_Complete)
-= let r = PF.receive_c13_Complete st.pf_st (cslice_of st) st.rcv_from st.rcv_to in
+= let r = PF.receive_c13_Complete st.pf_st (C.of_buffer st.rcv_b) st.rcv_len st.rcv_from st.rcv_to in
   match r with
   | Error e -> Error e
   | Correct (None, pf_st) -> Correct (None, { st with pf_st = pf_st })
@@ -335,31 +337,31 @@ let receive_c13_Complete (st:state)
 (*** 1.2 flights ***)
 
 let receive_c12_wait_ServerHelloDone (st:state)
-: ST (result (option (PF.c12_wait_ServerHelloDone (cslice_of st)) & state))
+: ST (result (option (PF.c12_wait_ServerHelloDone (C.of_buffer st.rcv_b)) & state))
   (requires receive_pre st PF.F_c12_wait_ServerHelloDone)
   (ensures  receive_post st PF.F_c12_wait_ServerHelloDone PF.valid_c12_wait_ServerHelloDone)
-= let r = PF.receive_c12_wait_ServerHelloDone st.pf_st (cslice_of st) st.rcv_from st.rcv_to in
+= let r = PF.receive_c12_wait_ServerHelloDone st.pf_st (C.of_buffer st.rcv_b) st.rcv_len st.rcv_from st.rcv_to in
   wrap_pf_st st r
 
 let receive_cs12_wait_Finished (st:state)
-: ST (result (option (PF.cs12_wait_Finished (cslice_of st)) & state))
+: ST (result (option (PF.cs12_wait_Finished (C.of_buffer st.rcv_b)) & state))
   (requires receive_pre st PF.F_cs12_wait_Finished)
   (ensures  receive_post st PF.F_cs12_wait_Finished PF.valid_cs12_wait_Finished)
-= let r = PF.receive_cs12_wait_Finished st.pf_st (cslice_of st) st.rcv_from st.rcv_to in
+= let r = PF.receive_cs12_wait_Finished st.pf_st (C.of_buffer st.rcv_b) st.rcv_len st.rcv_from st.rcv_to in
   wrap_pf_st st r
 
 let receive_c12_wait_NST (st:state)
-: ST (result (option (PF.c12_wait_NST (cslice_of st)) & state))
+: ST (result (option (PF.c12_wait_NST (C.of_buffer st.rcv_b)) & state))
   (requires receive_pre st PF.F_c12_wait_NST)
   (ensures  receive_post st PF.F_c12_wait_NST PF.valid_c12_wait_NST)
-= let r = PF.receive_c12_wait_NST st.pf_st (cslice_of st) st.rcv_from st.rcv_to in
+= let r = PF.receive_c12_wait_NST st.pf_st (C.of_buffer st.rcv_b) st.rcv_len st.rcv_from st.rcv_to in
   wrap_pf_st st r
 
 let receive_s12_wait_CCS1 (st:state)
-: ST (result (option (PF.s12_wait_CCS1 (cslice_of st)) & state))
+: ST (result (option (PF.s12_wait_CCS1 (C.of_buffer st.rcv_b)) & state))
   (requires receive_pre st PF.F_s12_wait_CCS1)
   (ensures  receive_post st PF.F_s12_wait_CCS1 PF.valid_s12_wait_CCS1)
-= let r = PF.receive_s12_wait_CCS1 st.pf_st (cslice_of st) st.rcv_from st.rcv_to in
+= let r = PF.receive_s12_wait_CCS1 st.pf_st (C.of_buffer st.rcv_b) st.rcv_len st.rcv_from st.rcv_to in
   wrap_pf_st st r
 
 
@@ -409,13 +411,13 @@ type incoming0 = result out_ctx
 assume val bs : bs:bytes{Bytes.length bs > 0}
 
 noextract
-let test (b:slice_t)
+let test (b: B.buffer LP.byte) (len: uint_32)
 : ST unit
-  (requires fun h -> B.live h b.LP.base)
+  (requires fun h -> B.live h b /\ len == B.len b)
   (ensures fun _ _ _ -> True)
 = 
   //create state
-  let st = create b in
+  let st = create b len in
 
   //at this point st.rcv_from and st.rcv_to are both 0, so append some bytes
   let st = buffer_received_fragment st bs in

@@ -38,5 +38,5 @@ let t = CV13.certificateVerify13
 let ptr =
   R.repr_ptr_p t CV13.certificateVerify13_parser
 
-let pos (b:R.const_slice) =
+let pos (b:R.const_buffer) =
   R.repr_pos_p t b CV13.certificateVerify13_parser

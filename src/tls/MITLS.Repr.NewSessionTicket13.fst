@@ -38,5 +38,5 @@ let t = NST13.newSessionTicket13
 let ptr =
   R.repr_ptr_p t NST13.newSessionTicket13_parser
 
-let pos (b:R.const_slice) =
+let pos (b:R.const_buffer) =
   R.repr_pos_p t b NST13.newSessionTicket13_parser

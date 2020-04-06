@@ -547,7 +547,7 @@ let extend_ch : extend_t LR_ClientHello? =
     //be able to remove this assume and the to_buffer cast
     //The same pattern appears in each case below.
     let ch_ptr = R.as_ptr ch in
-    let len = R.Pos?.length ch in
+    let len = R.length ch_ptr HSM.handshake_jumper in
     let data = R.Ptr?.b ch_ptr in
 
     assume (C.qbuf_qual (C.as_qbuf data) == C.MUTABLE);
@@ -555,11 +555,12 @@ let extend_ch : extend_t LR_ClientHello? =
     // These three lemmas prove that the data in the subbuffer data is
     // the serialized data corresponding to the client hello that is being added
     R.reveal_valid();
-    LP.valid_pos_valid_exact HSM.handshake_parser h0 (R.slice_of_const_buffer data len) 0ul len;
-    LP.valid_exact_serialize HSM.handshake_serializer h0 (R.slice_of_const_buffer data len) 0ul len;
+    LP.valid_pos_valid_exact HSM.handshake_parser h0 (LP.slice_of_buffer (C.cast data)) 0ul len;
+    LP.valid_exact_serialize HSM.handshake_serializer h0 (LP.slice_of_buffer (C.cast data)) 0ul len;
 
     CRF.update (Ghost.hide a) s.hash_state (C.to_buffer data) len;
     s.transcript := transition_etx (!s.transcript) (elabel_of_label_repr l)
+
 #push-options "--z3rlimit_factor 2"
 let extend_sh : extend_t LR_ServerHello? =
   fun #a s l ->
@@ -568,7 +569,7 @@ let extend_sh : extend_t LR_ServerHello? =
   match l with
   | LR_ServerHello sh ->
     let sh_ptr = R.as_ptr sh in
-    let len = R.Pos?.length sh in
+    let len = R.length sh_ptr HSM.handshake_jumper in
     let data = R.Ptr?.b sh_ptr in
 
     assume (C.qbuf_qual (C.as_qbuf data) == C.MUTABLE);
@@ -576,8 +577,8 @@ let extend_sh : extend_t LR_ServerHello? =
     // These three lemmas prove that the data in the subbuffer data is
     // the serialized data corresponding to the server hello that is being added
     R.reveal_valid();
-    LP.valid_pos_valid_exact HSM.handshake_parser h0 (R.slice_of_const_buffer data len) 0ul len;
-    LP.valid_exact_serialize HSM.handshake_serializer h0 (R.slice_of_const_buffer data len) 0ul len;
+    LP.valid_pos_valid_exact HSM.handshake_parser h0 (LP.slice_of_buffer (C.cast data)) 0ul len;
+    LP.valid_exact_serialize HSM.handshake_serializer h0 (LP.slice_of_buffer (C.cast data)) 0ul len;
 
     CRF.update (Ghost.hide a) s.hash_state (C.to_buffer data) len;
 
@@ -606,15 +607,14 @@ let extend_tch : extend_t LR_TCH? =
     R.reveal_valid();
     let tch_ptr = R.as_ptr tch in
     let data = R.Ptr?.b tch_ptr in
-    let len = R.Pos?.length tch in
     assume (C.qbuf_qual (C.as_qbuf data) == C.MUTABLE);
 
-    let slice = R.slice_of_const_buffer data len in
-    assert (LP.valid HSM.handshake_parser h0 slice 0ul);
-    let len = PB.binders_pos slice 0ul in
+    let data0 = C.cast data in
+    assert (LP.bvalid HSM.handshake_parser h0 data0 0ul);
+    let len = PB.binders_pos data0 0ul in
     let data = C.sub data 0ul len in
 
-    PB.valid_truncate_clientHello h0 slice 0ul;
+    PB.valid_truncate_clientHello h0 (LP.slice_of_buffer data0) 0ul;
     assert (C.as_seq h0 data == FStar.Bytes.reveal (PB.truncate_clientHello_bytes (R.value_pos tch)));
 
     let h1 = HyperStack.ST.get () in
@@ -638,23 +638,23 @@ let extend_complete_tch : extend_t LR_CompleteTCH? =
     R.reveal_valid();
     let tch_ptr = R.as_ptr tch in
     let data = R.Ptr?.b tch_ptr in
-    let len = R.Pos?.length tch in
     assume (C.qbuf_qual (C.as_qbuf data) == C.MUTABLE);
-    let slice = R.slice_of_const_buffer data len in
+    let len = R.length tch_ptr HSM.handshake_jumper in
+    let data0 = C.cast data in
 
     R.reveal_valid();
     // Needed to detect that the whole b.R.base between start and pos is actually serialize tch
-    LP.valid_pos_valid_exact HSM.handshake_parser h0 slice 0ul len;
-    LP.valid_exact_serialize HSM.handshake_serializer h0 slice 0ul len;
+    LP.valid_pos_valid_exact HSM.handshake_parser h0 (LP.slice_of_buffer data0) 0ul len;
+    LP.valid_exact_serialize HSM.handshake_serializer h0 (LP.slice_of_buffer data0) 0ul len;
 
-    assert (LP.valid HSM.handshake_parser h0 slice 0ul);
+    assert (LP.bvalid HSM.handshake_parser h0 data0 0ul);
 
-    let start_pos = PB.binders_pos slice 0ul in
+    let start_pos = PB.binders_pos data0 0ul in
 
     let len = len - start_pos in
     let data = C.sub data start_pos len in
 
-    PB.valid_truncate_clientHello h0 slice 0ul;
+    PB.valid_truncate_clientHello h0 (LP.slice_of_buffer data0) 0ul;
 
     let h1 = HyperStack.ST.get () in
     CRF.frame_invariant B.loc_none s.hash_state h0 h1;
@@ -675,6 +675,7 @@ let extend_complete_tch : extend_t LR_CompleteTCH? =
              transcript_bytes tx')
     in
     ()
+
 #pop-options
 
 let extend_hrr : extend_t LR_HRR? =
@@ -685,27 +686,29 @@ let extend_hrr : extend_t LR_HRR? =
   | LR_HRR ch_tag hrr ->
     let ch_ptr = R.as_ptr ch_tag in
     let ch_data = R.Ptr?.b ch_ptr in
-    let ch_len = R.Pos?.length ch_tag in
-    let ch_slice = R.slice_of_const_buffer ch_data ch_len in
+    let ch_len = R.length ch_ptr HSM.handshake_jumper in
 
     let hrr_ptr = R.as_ptr hrr in
     let hrr_data = R.Ptr?.b hrr_ptr in
-    let hrr_len = R.Pos?.length hrr in
-    let hrr_slice = R.slice_of_const_buffer hrr_data hrr_len in
+    let hrr_len = R.length hrr_ptr HSM.handshake_jumper in
 
     assume (C.qbuf_qual (C.as_qbuf ch_data) == C.MUTABLE);
     assume (C.qbuf_qual (C.as_qbuf hrr_data) == C.MUTABLE);
+    let ch_data0 = C.to_buffer ch_data in
+    let hrr_data0 = C.to_buffer hrr_data in
 
     // these three lemmas prove that the data in the subbuffer data is
     // the serialized data corresponding to the client hello that is being added
     R.reveal_valid();
 
-    LP.valid_pos_valid_exact HSM.handshake_parser h0 ch_slice 0ul ch_len;
-    LP.valid_exact_serialize HSM.handshake_serializer h0 ch_slice 0ul ch_len;
+    LP.valid_pos_valid_exact HSM.handshake_parser h0 (LP.slice_of_buffer ch_data0) 0ul ch_len;
+    LP.valid_exact_serialize HSM.handshake_serializer h0 (LP.slice_of_buffer ch_data0) 0ul ch_len;
 
-    LP.valid_pos_valid_exact HSM.handshake_parser h0 hrr_slice 0ul hrr_len;
-    LP.valid_exact_serialize HSM.handshake_serializer h0 hrr_slice 0ul hrr_len;
+    LP.valid_pos_valid_exact HSM.handshake_parser h0 (LP.slice_of_buffer hrr_data0) 0ul hrr_len;
+    LP.valid_exact_serialize HSM.handshake_serializer h0 (LP.slice_of_buffer hrr_data0) 0ul hrr_len;
 
+    let h1 = HyperStack.ST.get () in
+    CRF.frame_invariant B.loc_none s.hash_state h0 h1; // FIXME: WHY WHY WHY no pattern on footprint
     CRF.update (Ghost.hide a) s.hash_state (C.to_buffer ch_data) ch_len;
 
     assert ((Seq.empty `Seq.append`  LP.serialize HSM.handshake_serializer (R.value ch_ptr))
@@ -717,6 +720,7 @@ let extend_hrr : extend_t LR_HRR? =
     CRF.update (Ghost.hide a) s.hash_state (C.to_buffer hrr_data) hrr_len;
 
     s.transcript := transition_etx (!s.transcript) (elabel_of_label_repr l)
+
 #push-options "--query_stats"
 #restart-solver
 let extend_hsm12 : extend_t LR_HSM12? =
@@ -727,16 +731,16 @@ let extend_hsm12 : extend_t LR_HSM12? =
   | LR_HSM12 hs12 ->
     let hs12_ptr = R.as_ptr hs12 in
     let hs12_data = R.Ptr?.b hs12_ptr in
-    let hs12_len = R.Pos?.length hs12 in
-    let hs12_slice = R.slice_of_const_buffer hs12_data hs12_len in
+    let hs12_len = R.length hs12_ptr HSM.handshake12_jumper in
+    let hs12_data0 = C.cast hs12_data in
 
     assume (C.qbuf_qual (C.as_qbuf hs12_data) == C.MUTABLE);
 
     // These three lemmas prove that the data in the subbuffer data is
     // the serialized data corresponding to the client hello that is being added
     R.reveal_valid();
-    LP.valid_pos_valid_exact HSM.handshake12_parser h0 hs12_slice 0ul hs12_len;
-    LP.valid_exact_serialize HSM.handshake12_serializer h0 hs12_slice 0ul hs12_len;
+    LP.valid_pos_valid_exact HSM.handshake12_parser h0 (LP.slice_of_buffer hs12_data0) 0ul hs12_len;
+    LP.valid_exact_serialize HSM.handshake12_serializer h0 (LP.slice_of_buffer hs12_data0) 0ul hs12_len;
 
     // let len = hs12.R.end_pos - hs12.R.start_pos in
     // let data = C.sub b.R.base hs12.R.start_pos len in
@@ -776,16 +780,16 @@ let extend_hsm13 : extend_t LR_HSM13? =
   | LR_HSM13 hs13 ->
     let hs13_ptr = R.as_ptr hs13 in
     let hs13_data = R.Ptr?.b hs13_ptr in
-    let hs13_len = R.Pos?.length hs13 in
-    let hs13_slice = R.slice_of_const_buffer hs13_data hs13_len in
+    let hs13_len = R.length hs13_ptr HSM.handshake13_jumper in
+    let hs13_data0 = C.cast hs13_data in
 
     assume (C.qbuf_qual (C.as_qbuf hs13_data) == C.MUTABLE);
 
     // These three lemmas prove that the data in the subbuffer data is
     // the serialized data corresponding to the client hello that is being added
     R.reveal_valid();
-    LP.valid_pos_valid_exact HSM.handshake13_parser h0 hs13_slice 0ul hs13_len;
-    LP.valid_exact_serialize HSM.handshake13_serializer h0 hs13_slice 0ul hs13_len;
+    LP.valid_pos_valid_exact HSM.handshake13_parser h0 (LP.slice_of_buffer hs13_data0) 0ul hs13_len;
+    LP.valid_exact_serialize HSM.handshake13_serializer h0 (LP.slice_of_buffer hs13_data0) 0ul hs13_len;
 
     // let len = hs13.R.end_pos - hs13.R.start_pos in
     // let data = C.sub b.R.base hs13.R.start_pos len in

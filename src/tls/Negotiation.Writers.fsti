@@ -21,11 +21,11 @@ module B = LowStar.Buffer
 
 val test_write_final_extensions
   (#rrelcfg #relcfg: _)
-  (scfg: LP.slice rrelcfg relcfg)
+  (scfg: B.mbuffer LP.byte rrelcfg relcfg)
   (pcfg: U32.t)
   (edi: bool)
   (#rrel #rel: _)
-  (sin: LP.slice rrel rel)
+  (sin: B.mbuffer LP.byte rrel rel)
   (pin_from pin_to: U32.t)
   (now: U32.t)
   (sout: LP.slice (LP.srel_of_buffer_srel (B.trivial_preorder _)) (LP.srel_of_buffer_srel (B.trivial_preorder _)))

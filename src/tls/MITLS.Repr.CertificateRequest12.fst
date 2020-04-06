@@ -33,4 +33,4 @@ open FStar.HyperStack.ST
 module CR12 = Parsers.CertificateRequest12
 
 let ptr  = R.repr_ptr_p _ CR12.certificateRequest12_parser
-let pos (b:R.const_slice) = R.repr_pos_p _ b CR12.certificateRequest12_parser
+let pos (b:R.const_buffer) = R.repr_pos_p _ b CR12.certificateRequest12_parser

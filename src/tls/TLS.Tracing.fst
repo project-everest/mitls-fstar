@@ -62,7 +62,7 @@ let mk_trace prefix =
 inline_for_extraction noextract
 let mbuffer_type_of_repr_pos #t #b (r: R.repr_pos t b) =
   //C.(Printf.lmbuffer UInt8.t (qbuf_pre (as_qbuf b.R.base)) (qbuf_pre (as_qbuf b.R.base)) r.R.length)
-  C.(B.mbuffer UInt8.t (qbuf_pre (as_qbuf b.R.base)) (qbuf_pre (as_qbuf b.R.base)))
+  C.(B.mbuffer UInt8.t (qbuf_pre (as_qbuf b)) (qbuf_pre (as_qbuf b)))
 
 /// One often needs to convert a repr type to a raw buffer suitable for passing
 /// to the printf facility.
@@ -73,9 +73,9 @@ let mbuf_of_repr #t #b (r: R.repr_pos t b): Stack (mbuffer_type_of_repr_pos r)
   (ensures fun h0 b h1 ->
     h0 == h1 /\
     B.live h1 b /\
-    B.len b == r.R.length)
+    B.len b == r.R.meta.R.len)
 =
-  let R.Ptr b _ _ _ = R.as_ptr r in
+  let R.Ptr b _ _ = R.as_ptr r in
   LowStar.ConstBuffer.cast b
 
 /// As a temporary escape hatch, if one needs to print bytes, they can use "%a"

@@ -40,7 +40,7 @@ let t = SH.serverHello
 
 let ptr = R.repr_ptr_p t SH.serverHello_parser
 
-let pos (b:R.const_slice) = R.repr_pos_p SH.serverHello b SH.serverHello_parser
+let pos (b:R.const_buffer) = R.repr_pos_p SH.serverHello b SH.serverHello_parser
 
 let field_is_hrr =
   R.FieldAccessor

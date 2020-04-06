@@ -24,22 +24,21 @@ open Negotiation
 
 let write_binder_ph
   (#rrel #rel: _)
-  (sin: LP.slice rrel rel)
+  (sin: B.mbuffer LP.byte rrel rel)
   (pin: U32.t)
   (sout: LP.slice (LP.srel_of_buffer_srel (B.trivial_preorder _)) (LP.srel_of_buffer_srel (B.trivial_preorder _)))
   (pout_from: U32.t)
 : HST.Stack U32.t
   (requires (fun h ->
-    LP.live_slice h sin /\
     LP.live_slice h sout /\
     U32.v pout_from <= U32.v sout.LP.len /\
     U32.v sout.LP.len < U32.v LP.max_uint32 /\ // to error code
-    LP.valid Parsers.TicketContents13.ticketContents13_parser h sin pin /\
-    B.loc_disjoint (LP.loc_slice_from_to sin pin (LP.get_valid_pos Parsers.TicketContents13.ticketContents13_parser h sin pin)) (LP.loc_slice_from sout pout_from)
+    LP.bvalid Parsers.TicketContents13.ticketContents13_parser h sin pin /\
+    B.loc_disjoint (B.loc_buffer_from_to sin pin (LP.bget_valid_pos Parsers.TicketContents13.ticketContents13_parser h sin pin)) (LP.loc_slice_from sout pout_from)
   ))
   (ensures (fun h pout_to h' ->
     B.modifies (LP.loc_slice_from sout pout_from) h h' /\ (
-    let ph = compute_binder_ph_new (LP.contents Parsers.TicketContents13.ticketContents13_parser h sin pin) in
+    let ph = compute_binder_ph_new (LP.bcontents Parsers.TicketContents13.ticketContents13_parser h sin pin) in
     if pout_to = LP.max_uint32
     then
       U32.v pout_from + LP.serialized_length pskBinderEntry_serializer ph > U32.v sout.LP.len
@@ -47,7 +46,7 @@ let write_binder_ph
       LP.valid_content_pos pskBinderEntry_parser h' sout pout_from ph pout_to
   )))
 = let h0 = HST.get () in
-  let ph = Ghost.hide (compute_binder_ph_new (LP.contents Parsers.TicketContents13.ticketContents13_parser h0 sin pin)) in
+  let ph = Ghost.hide (compute_binder_ph_new (LP.bcontents Parsers.TicketContents13.ticketContents13_parser h0 sin pin)) in
   let c = CipherSuite.cipherSuite13_reader sin (Parsers.TicketContents13.accessor_ticketContents13_cs sin pin) in
   let (CipherSuite13 _ h) = cipherSuite_of_cipherSuite13 c in
   let len : U32.t = Hacl.Hash.Definitions.hash_len h in
@@ -60,36 +59,39 @@ let write_binder_ph
     let pout_payload = pout_from `U32.add` 1ul in
     // TODO: replace with a custom fill once target slice is replaced with the stash
     B.fill (B.sub sout.LP.base pout_payload len) 0uy len;
-    pskBinderEntry_finalize sout pout_from len
+    let res = pskBinderEntry_finalize sout.LP.base pout_from len in
+    let h = HST.get () in
+    LP.bvalid_valid_strong_prefix pskBinderEntry_parser h sout pout_from;
+    res
   end
 
 
-#push-options "--z3rlimit 32"
+#push-options "--z3rlimit 64"
 
 let write_obfuscate_age
   (now: U32.t)
   (#rrel #rel: _)
-  (sin: LP.slice rrel rel)
+  (sin: B.mbuffer LP.byte rrel rel)
   (pin: U32.t)
   (sout: LP.slice (LP.srel_of_buffer_srel (B.trivial_preorder _)) (LP.srel_of_buffer_srel (B.trivial_preorder _)))
   (pout_from: U32.t)
 : HST.Stack U32.t
   (requires (fun h ->
-    LP.valid Parsers.ResumeInfo13.resumeInfo13_parser h sin pin /\
-    B.loc_disjoint (LP.loc_slice_from_to sin pin (LP.get_valid_pos Parsers.ResumeInfo13.resumeInfo13_parser h sin pin)) (LP.loc_slice_from sout pout_from) /\
+    LP.bvalid Parsers.ResumeInfo13.resumeInfo13_parser h sin pin /\
+    B.loc_disjoint (B.loc_buffer_from_to sin pin (LP.bget_valid_pos Parsers.ResumeInfo13.resumeInfo13_parser h sin pin)) (LP.loc_slice_from sout pout_from) /\
     LP.live_slice h sout /\
     U32.v pout_from <= U32.v sout.LP.len /\
     U32.v sout.LP.len < U32.v LP.max_uint32
   ))
   (ensures (fun h res h' ->
-    let x = obfuscate_age_new now (LP.contents Parsers.ResumeInfo13.resumeInfo13_parser h sin pin) in
+    let x = obfuscate_age_new now (LP.bcontents Parsers.ResumeInfo13.resumeInfo13_parser h sin pin) in
     B.modifies (LP.loc_slice_from sout pout_from) h h' /\ (
     if res = LP.max_uint32
     then U32.v pout_from + LP.serialized_length pskIdentity_serializer x > U32.v sout.LP.len
     else LP.valid_content_pos pskIdentity_parser h' sout pout_from x res
   )))
 = let h = HST.get () in
-  let x = Ghost.hide (obfuscate_age_new now (LP.contents Parsers.ResumeInfo13.resumeInfo13_parser h sin pin)) in
+  let x = Ghost.hide (obfuscate_age_new now (LP.bcontents Parsers.ResumeInfo13.resumeInfo13_parser h sin pin)) in
   LP.serialized_length_eq pskIdentity_serializer (Ghost.reveal x);
   pskIdentity_bytesize_eq (Ghost.reveal x);
   let sin_id = Parsers.ResumeInfo13.accessor_resumeInfo13_identity sin pin in
@@ -106,7 +108,7 @@ let write_obfuscate_age
     let age = FStar.UInt32.((now -%^ creation_time) *%^ 1000ul) in
     let age_add = LowParse.Low.Int.read_u32 sin (Parsers.TicketContents13.accessor_ticketContents13_age_add sin pin_tkt) in
     let obfuscated_age = PSK.encode_age age age_add in
-    let pout_to = LowParse.Low.Int.write_u32 obfuscated_age sout pout_oage in
+    let pout_to = LP.leaf_writer_strong_to_slice_strong_prefix LowParse.Low.Int.write_u32 obfuscated_age sout pout_oage in
     let h' = HST.get () in
     pskIdentity_valid h' sout pout_from;
     pout_to
@@ -172,7 +174,11 @@ let write_offeredPsks_identities
         if len `U32.lt` 7ul || 65535ul `U32.lt` len
         then LP.max_uint32 `U32.sub` 1ul
         else begin
-          Parsers.OfferedPsks_identities.finalize_offeredPsks_identities sout pout_from res;
+          let h = HST.get () in
+          LP.valid_list_ext pskIdentity_parser h sout (pout_from `U32.add` 2ul) res h (LP.slice_of_buffer sout.LP.base) (pout_from `U32.add` 2ul) res;
+          Parsers.OfferedPsks_identities.finalize_offeredPsks_identities sout.LP.base pout_from res;
+          let h = HST.get () in
+          LP.bvalid_valid_strong_prefix offeredPsks_identities_parser h sout pout_from;
           res
         end
       end
@@ -234,7 +240,11 @@ let write_offeredPsks_binders
         if len `U32.lt` 33ul || 65535ul `U32.lt` len
         then LP.max_uint32 `U32.sub` 1ul
         else begin
-          Parsers.OfferedPsks_binders.finalize_offeredPsks_binders sout pout_from res;
+          let h = HST.get () in
+          LP.valid_list_ext pskBinderEntry_parser h sout (pout_from `U32.add` 2ul) res h (LP.slice_of_buffer sout.LP.base) (pout_from `U32.add` 2ul) res;
+          Parsers.OfferedPsks_binders.finalize_offeredPsks_binders sout.LP.base pout_from res;
+          let h = HST.get () in
+          LP.bvalid_valid_strong_prefix offeredPsks_binders_parser h sout pout_from;
           res
         end
       end
@@ -340,7 +350,11 @@ let write_clientHelloExtension_CHE_pre_shared_key
         if 65535ul `U32.lt` len
         then LP.max_uint32 `U32.sub` 1ul
         else begin
-          clientHelloExtension_CHE_pre_shared_key_finalize sout pout_from res;
+          let h = HST.get () in
+          LP.valid_bvalid_strong_prefix Parsers.PreSharedKeyClientExtension.preSharedKeyClientExtension_parser h sout (pout_from `U32.add` 2ul);
+          clientHelloExtension_CHE_pre_shared_key_finalize sout.LP.base pout_from res;
+          let h = HST.get () in
+          LP.bvalid_valid_strong_prefix clientHelloExtension_CHE_pre_shared_key_parser h sout pout_from;
           res
         end
     end
@@ -375,7 +389,11 @@ let write_constr_clientHelloExtension_CHE_pre_shared_key
       then begin
         res
       end else begin
-        finalize_clientHelloExtension_pre_shared_key sout pout_from;
+        let h = HST.get () in
+        LP.valid_bvalid_strong_prefix clientHelloExtension_CHE_pre_shared_key_parser h sout (pout_from `U32.add` 2ul);
+        finalize_clientHelloExtension_pre_shared_key sout.LP.base pout_from;
+        let h = HST.get () in
+        LP.bvalid_valid_strong_prefix clientHelloExtension_parser h sout pout_from;
         res
       end
     end
@@ -408,7 +426,11 @@ let write_pskKeyExchangeModes
         res
       end
       else begin
-        finalize_pskKeyExchangeModes sout pout_from res;
+        let h = HST.get () in
+        LP.valid_list_ext pskKeyExchangeMode_parser h sout (pout_from `U32.add` 1ul) res h (LP.slice_of_buffer sout.LP.base) (pout_from `U32.add` 1ul) res;
+        finalize_pskKeyExchangeModes sout.LP.base pout_from res;
+        let h = HST.get () in
+        LP.bvalid_valid_strong_prefix pskKeyExchangeModes_parser h sout pout_from;
         res
       end
   )
@@ -435,7 +457,11 @@ let write_clientHelloExtension_CHE_psk_key_exchange_modes
       if res = LP.max_uint32
       then res
       else begin
-        clientHelloExtension_CHE_psk_key_exchange_modes_finalize sout pout_from res;
+        let h = HST.get () in
+        LP.valid_bvalid_strong_prefix pskKeyExchangeModes_parser h sout (pout_from `U32.add` 2ul);
+        clientHelloExtension_CHE_psk_key_exchange_modes_finalize sout.LP.base pout_from res;
+        let h = HST.get () in
+        LP.bvalid_valid_strong_prefix clientHelloExtension_CHE_psk_key_exchange_modes_parser h sout pout_from;
         res
       end
   )
@@ -461,7 +487,11 @@ let write_constr_clientHelloExtension_CHE_psk_key_exchange_modes
       then begin
         res
       end else begin
-        finalize_clientHelloExtension_psk_key_exchange_modes sout pout_from;
+        let h = HST.get () in
+        LP.valid_bvalid_strong_prefix clientHelloExtension_CHE_psk_key_exchange_modes_parser h sout (pout_from `U32.add` 2ul);
+        finalize_clientHelloExtension_psk_key_exchange_modes sout.LP.base pout_from;
+        let h = HST.get () in
+        LP.bvalid_valid_strong_prefix clientHelloExtension_parser h sout pout_from;
         res
       end
     end
@@ -493,7 +523,11 @@ let write_constr_clientHelloExtension_CHE_early_data
       if res = LP.max_uint32
       then res
       else begin
-        finalize_clientHelloExtension_early_data sout pout_from;
+        let h = HST.get () in
+        LP.valid_bvalid_strong_prefix clientHelloExtension_CHE_early_data_parser h sout (pout_from `U32.add` 2ul);
+        finalize_clientHelloExtension_early_data sout.LP.base pout_from;
+        let h = HST.get () in
+        LP.bvalid_valid_strong_prefix clientHelloExtension_parser h sout pout_from;
         res
       end
   )
@@ -506,25 +540,25 @@ inline_for_extraction
 noextract
 let write_final_extensions
   (#rrelcfg #relcfg: _)
-  (scfg: LP.slice rrelcfg relcfg)
+  (scfg: B.mbuffer LP.byte rrelcfg relcfg)
   (pcfg: U32.t)
   (edi: bool)
   (#rrel #rel: _)
-  (sin: LP.slice rrel rel)
+  (sin: B.mbuffer LP.byte rrel rel)
   (pin_from pin_to: U32.t)
   (now: U32.t)
   (h0: HS.mem)
   (sout: LP.slice (LP.srel_of_buffer_srel (B.trivial_preorder _)) (LP.srel_of_buffer_srel (B.trivial_preorder _)))
   (pout_from0: U32.t {
-    LP.valid Parsers.MiTLSConfig.miTLSConfig_parser h0 scfg pcfg /\
-    LP.valid_list Parsers.ResumeInfo13.resumeInfo13_parser h0 sin pin_from pin_to /\
+    LP.bvalid Parsers.MiTLSConfig.miTLSConfig_parser h0 scfg pcfg /\
+    LP.bvalid_list Parsers.ResumeInfo13.resumeInfo13_parser h0 sin pin_from pin_to /\
     U32.v pout_from0 <= U32.v sout.LP.len /\
-    B.loc_disjoint (LP.loc_slice_from_to scfg pcfg (LP.get_valid_pos Parsers.MiTLSConfig.miTLSConfig_parser h0 scfg pcfg)) (LP.loc_slice_from sout pout_from0) /\
-    B.loc_disjoint (LP.loc_slice_from_to sin pin_from pin_to) (LP.loc_slice_from sout pout_from0)
+    B.loc_disjoint (B.loc_buffer_from_to scfg pcfg (LP.bget_valid_pos Parsers.MiTLSConfig.miTLSConfig_parser h0 scfg pcfg)) (LP.loc_slice_from sout pout_from0) /\
+    B.loc_disjoint (B.loc_buffer_from_to sin pin_from pin_to) (LP.loc_slice_from sout pout_from0)
   })
 : Tot (y: LPW.olwriter Parsers.ClientHelloExtension.clientHelloExtension_serializer h0 sout pout_from0 {
-    let cfg = LP.contents Parsers.MiTLSConfig.miTLSConfig_parser h0 scfg pcfg in
-    LPW.olwvalue y == option_of_result (final_extensions_new cfg edi (LP.contents_list Parsers.ResumeInfo13.resumeInfo13_parser h0 sin pin_from pin_to) now)
+    let cfg = LP.bcontents Parsers.MiTLSConfig.miTLSConfig_parser h0 scfg pcfg in
+    LPW.olwvalue y == option_of_result (final_extensions_new cfg edi (LP.bcontents_list Parsers.ResumeInfo13.resumeInfo13_parser h0 sin pin_from pin_to) now)
   })
 = [@inline_let]
   let list_length_append (#t: Type) (l1 l2: list t) : Lemma (L.length (l1 `L.append` l2) == L.length l1 + L.length l2) [SMTPat (L.length (l1 `L.append`  l2))] = L.append_length l1 l2 in
@@ -570,7 +604,7 @@ let write_final_extensions
                 h0
                 sout pout_from0
                 (fun pin ->
-                  LPW.Writer (Ghost.hide (compute_binder_ph_new (LP.contents Parsers.ResumeInfo13.resumeInfo13_parser h0 sin pin).Parsers.ResumeInfo13.ticket)) (fun pout ->
+                  LPW.Writer (Ghost.hide (compute_binder_ph_new (LP.bcontents Parsers.ResumeInfo13.resumeInfo13_parser h0 sin pin).Parsers.ResumeInfo13.ticket)) (fun pout ->
                   write_binder_ph sin (Parsers.ResumeInfo13.accessor_resumeInfo13_ticket sin pin) sout pout
                 ))
             in
@@ -584,7 +618,7 @@ let write_final_extensions
                 h0
                 sout pout_from0
                 (fun pin ->
-                  LPW.Writer (Ghost.hide (obfuscate_age_new now (LP.contents Parsers.ResumeInfo13.resumeInfo13_parser h0 sin pin))) (fun pout ->
+                  LPW.Writer (Ghost.hide (obfuscate_age_new now (LP.bcontents Parsers.ResumeInfo13.resumeInfo13_parser h0 sin pin))) (fun pout ->
                   write_obfuscate_age now sin pin sout pout
                 ))
             in
@@ -641,11 +675,11 @@ let write_final_extensions
 
 let test_write_final_extensions
   (#rrelcfg #relcfg: _)
-  (scfg: LP.slice rrelcfg relcfg)
+  scfg
   (pcfg: U32.t)
   (edi: bool)
   (#rrel #rel: _)
-  (sin: LP.slice rrel rel)
+  sin
   (pin_from pin_to: U32.t)
   (now: U32.t)
   (sout: LP.slice (LP.srel_of_buffer_srel (B.trivial_preorder _)) (LP.srel_of_buffer_srel (B.trivial_preorder _)))
@@ -703,7 +737,11 @@ let write_clientHelloExtension_CHE_signature_algorithms
         if 65535ul `U32.lt` len
         then LP.max_uint32 `U32.sub` 1ul
         else begin
-          clientHelloExtension_CHE_signature_algorithms_finalize sout pout_from res;
+          let h = HST.get () in
+          LP.valid_bvalid_strong_prefix signatureSchemeList_parser h sout (pout_from `U32.add` 2ul);
+          clientHelloExtension_CHE_signature_algorithms_finalize sout.LP.base pout_from res;
+          let h = HST.get () in
+          LP.bvalid_valid_strong_prefix clientHelloExtension_CHE_signature_algorithms_parser h sout pout_from;
           res
         end
     end
@@ -718,6 +756,8 @@ let constr_clientHelloExtension_CHE_signature_algorithms
 = match o with
   | None -> None
   | Some x -> Some (CHE_signature_algorithms x)
+
+#push-options "--z3rlimit 16"
 
 inline_for_extraction
 noextract
@@ -740,27 +780,33 @@ let write_constr_clientHelloExtension_CHE_signature_algorithms
       then begin
         res
       end else begin
-        finalize_clientHelloExtension_signature_algorithms sout pout_from;
+        let h = HST.get () in
+        LP.valid_bvalid_strong_prefix clientHelloExtension_CHE_signature_algorithms_parser h sout (pout_from `U32.add` 2ul);
+        finalize_clientHelloExtension_signature_algorithms sout.LP.base pout_from;
+        let h = HST.get () in
+        LP.bvalid_valid_strong_prefix clientHelloExtension_parser h sout pout_from;
         res
       end
     end
   )
 
+#pop-options
+
 inline_for_extraction
 noextract
 let write_sigalgs_extension
   (#rrelcfg #relcfg: _)
-  (scfg: LP.slice rrelcfg relcfg)
+  (scfg: B.mbuffer LP.byte rrelcfg relcfg)
   (pcfg: U32.t)
   (sout: LP.slice (LP.srel_of_buffer_srel (B.trivial_preorder _)) (LP.srel_of_buffer_srel (B.trivial_preorder _)))
   (sout_from0: U32.t)
   (h0: HS.mem {
-    LP.valid Parsers.MiTLSConfig.miTLSConfig_parser h0 scfg pcfg /\
-    B.loc_disjoint (LP.loc_slice_from_to scfg pcfg (LP.get_valid_pos Parsers.MiTLSConfig.miTLSConfig_parser h0 scfg pcfg)) (LP.loc_slice_from sout sout_from0)
+    LP.bvalid Parsers.MiTLSConfig.miTLSConfig_parser h0 scfg pcfg /\
+    B.loc_disjoint (B.loc_buffer_from_to scfg pcfg (LP.bget_valid_pos Parsers.MiTLSConfig.miTLSConfig_parser h0 scfg pcfg)) (LP.loc_slice_from sout sout_from0)
   })
 : Tot (
     w: LPW.olwriter clientHelloExtension_serializer h0 sout sout_from0 {
-    let cfg = LP.contents Parsers.MiTLSConfig.miTLSConfig_parser h0 scfg pcfg in
+    let cfg = LP.bcontents Parsers.MiTLSConfig.miTLSConfig_parser h0 scfg pcfg in
     LPW.olwvalue w == option_of_result (sigalgs_extension_new cfg)
   })
 = LPW.graccess Parsers.MiTLSConfig.accessor_miTLSConfig_signature_algorithms scfg pcfg _ _ _ `LPW.olwbind` (fun pin_from ->

@@ -13,7 +13,7 @@ open TLS.Result
 open TLSConstants
 
 // No need to verify test for now
-#set-options "--admit_smt_queries true"
+// #set-options "--admit_smt_queries true"
 
 let discard _ : ST unit (requires (fun _ -> True)) (ensures (fun h0 _ h1 -> h0 == h1)) = ()
 let bprint s = discard (FStar.IO.debug_print_string (s^"\n"))
@@ -39,9 +39,12 @@ module Handshake13 = Parsers.Handshake13
 module Handshake12 = Parsers.Handshake12
 module Handshake = Parsers.Handshake
 
+#push-options "--z3rlimit 32"
+
 let test_clientHello () : St bool =
   (* From Chrome 70 *)
   let chb = B.bytes_of_hex "0303c4168caa4297df69306988b842fe1f62f7cf07dcb2ad03aeb0012eae4b84e3cc203b03c8b3c20860716b6d8c405a9f64306ae660c77a51fe01f7c7c8f301458c9a00228a8a130113021303c02bc02fc02cc030cca9cca8c013c014009c009d002f0035000a010001914a4a0000ff010001000000000e000c0000096c6f63616c686f73740017000000230000000d00140012040308040401050308050501080606010201000500050100000000001200000010000e000c02683208687474702f312e3175500000000b000201000033002b00294a4a000100001d00209aad9849cf973510294b18ad9dfbcce2ee087b21276ba16f89570254796dcb75002d00020101002b000b0a9a9a0304030303020301000a000a00084a4a001d00170018001b00030200025a5a000100001500cb0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000" in
+  assume (2 `Prims.op_Multiply` B.length chb == 1016);
   print !$" - ClientHello (intermediate)\n";
   let b =
     match ClientHello.clientHello_parser32 chb with
@@ -58,20 +61,29 @@ let test_clientHello () : St bool =
   print !$" - ClientHello (low-level)\n";
   let b' =
     let open FStar.UInt32 in
+    let _ = push_frame () in
     let lb = from_bytes chb in
     let slice = LPL.make_slice lb (B.len chb) in
     let _ = Handshake13.handshake13_validator slice 0ul in
     let _ = Handshake12.handshake12_validator slice 0ul in
     let _ = Handshake.handshake_validator slice 0ul in
-    if ClientHello.clientHello_validator slice 0ul >^ LPL.validator_max_length then
-      (print !$"Validator failed on ClientHello!\n"; false)
-    else
-      let pos_random = ClientHello.accessor_clientHello_random slice 0ul in
-      let p_random = LB.sub lb pos_random 32ul in
-      bprint (sprintf " Read client_random: %s" (B.hex_of_bytes (B.of_buffer 32ul p_random)));
-      true
+    let res =
+      if ClientHello.clientHello_validator slice 0ul >^ LPL.validator_max_length then
+        (print !$"Validator failed on ClientHello!\n"; false)
+      else
+        let pos_random = LPL.access_from_valid_slice ClientHello.accessor_clientHello_random slice 0ul in
+        let p_random = LB.sub lb pos_random 32ul in
+        bprint (sprintf " Read client_random: %s" (B.hex_of_bytes (B.of_buffer 32ul p_random)));
+        true
     in
+    let _ = pop_frame () in
+    res
+  in
   b && b'
+
+#pop-options
+
+#push-options "--z3rlimit 16"
 
 let test_Certificate13 () : St bool =
   let b = 
@@ -85,6 +97,7 @@ let test_Certificate13 () : St bool =
         (bprint (sprintf " Parsed %d certificates, context %s!\n" (List.Tot.length cl) (B.hex_of_bytes ctx)); true)
       else
         (bprint "dangling bytes after certificate message"; false)
+    | Some _ -> bprint (" valid handshake13 but not a certificate chain!"); false
     | None -> bprint (" failed to pare certificate chain!"); false
     in
   let b' =
@@ -115,6 +128,8 @@ let test_Certificate13 () : St bool =
 	    true
     in
   b && b'
+
+#pop-options
 
 // called from Test.Main
 let main () : St C.exit_code =

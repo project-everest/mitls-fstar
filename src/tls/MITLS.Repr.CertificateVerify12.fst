@@ -36,4 +36,4 @@ module CV12 = Parsers.CertificateVerify12
 let t = CV12.certificateVerify12
 
 let ptr = R.repr_ptr_p t CV12.certificateVerify12_parser
-let pos (b:R.const_slice) = R.repr_pos_p t b CV12.certificateVerify12_parser
+let pos (b:R.const_buffer) = R.repr_pos_p t b CV12.certificateVerify12_parser

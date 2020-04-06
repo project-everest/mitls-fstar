@@ -38,5 +38,5 @@ let t = HSM12.handshake12_m12_hello_request
 let ptr =
   R.repr_ptr_p t HSM12.handshake12_m12_hello_request_parser
 
-let pos (b:R.const_slice) =
+let pos (b:R.const_buffer) =
   R.repr_pos_p t b HSM12.handshake12_m12_hello_request_parser

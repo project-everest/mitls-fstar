@@ -55,16 +55,16 @@ val size32_list_clientHelloExtension (l: list CHE.clientHelloExtension { Seq.len
 
 val list_clientHelloExtension_last_pos
   (#rrel #rel: _)
-  (sl: LL.slice rrel rel)
+  (sl: B.mbuffer LP.byte rrel rel)
   (pos pos' : U32.t)
   (gl: Ghost.erased (list CHE.clientHelloExtension))
 : HST.Stack U32.t
   (requires (fun h ->
     let l = Ghost.reveal gl in
-    LL.live_slice h sl /\
+    B.live h sl /\
     U32.v pos <= U32.v pos' /\
-    U32.v pos' <= U32.v sl.LL.len /\
-    serialize_list_clientHelloExtension l `Seq.equal` LL.bytes_of_slice_from_to h sl pos pos' /\
+    U32.v pos' <= B.length sl /\
+    serialize_list_clientHelloExtension l `Seq.equal` LL.bytes_of_buffer_from_to h sl pos pos' /\
     Cons? l
   ))
   (ensures (fun h res h' ->

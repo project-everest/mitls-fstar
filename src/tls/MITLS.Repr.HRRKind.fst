@@ -31,7 +31,7 @@ module HRK = Parsers.HRRKind
 
 let t = HRK.hRRKind
 let ptr = R.repr_ptr_p t HRK.hRRKind_parser
-let pos (b:R.const_slice) = R.repr_pos_p t b HRK.hRRKind_parser
+let pos (b:R.const_buffer) = R.repr_pos_p t b HRK.hRRKind_parser
 
 let field_cipherSuite =
   R.FieldReader

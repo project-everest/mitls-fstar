@@ -94,13 +94,16 @@ let create_msg_state (region: rgn) (inflight: PF.in_progress_flt_t)
     | None -> 
       let in_buf_len = 16000ul in
       let b_in = LB.malloc region 0z in_buf_len in
-      Receive.create (LP.make_slice b_in in_buf_len)
+      Receive.create b_in in_buf_len
     | Some st -> st in
   let d = match di0 with
     | None -> Transcript.create region ha
     | Some di -> di in
   { digest = d;
-    sending = {Send.send_state0 with Send.out_slice = LP.make_slice b_out out_buf_len};
+    sending = {Send.send_state0 with
+      Send.out_buffer = b_out;
+      Send.out_len = out_buf_len;
+    };
     receiving = recv;
     epochs = Epochs.create region random }
 
@@ -199,20 +202,22 @@ let extend13
       tx' == Transcript.snoc13 tx msg ))
   =
   let h0 = get () in
-  let r = MITLS.Repr.Handshake13.serialize sending.Send.out_slice sending.Send.out_pos msg in
+  let r = MITLS.Repr.Handshake13.serialize ({ LP.base = sending.Send.out_buffer; LP.len = sending.Send.out_len }) sending.Send.out_pos msg in
   let h1 = get () in
   Transcript.frame_invariant di h0 h1
-    (LB.loc_buffer sending.Send.out_slice.LP.base);
+    (LB.loc_buffer sending.Send.out_buffer);
   match r with
   | None -> fatal Internal_error "output buffer overflow"
   | Some r ->
     List.lemma_snoc_length (Transcript.Transcript13?.rest (Transcript.transcript di h1), msg);
     Transcript.extend di (Transcript.LR_HSM13 r);
     let h2 = get () in
-    let b = R.to_bytes (R.as_ptr r) r.R.length in
+    let rptr = R.as_ptr r in
+    let rlen = R.length rptr Parsers.Handshake13.handshake13_jumper in
+    let b = R.to_bytes rptr rlen in
     let h3 = get () in
     Transcript.frame_invariant di h2 h3 LB.loc_none;
     let workaround = TLS.Tracing.mbuf_of_repr r in
-    trace "extended transcript with %xuy" r.R.length workaround LowStar.Printf.done;
+    trace "extended transcript with %xuy" rlen workaround LowStar.Printf.done;
     Correct ()
 #pop-options

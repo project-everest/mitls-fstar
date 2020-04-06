@@ -289,16 +289,18 @@ let write_ticket12
     then LPB.max_uint32
     else begin
       let pos1 = pos `U32.add` 1ul in
-      let pos2 = Parsers.ProtocolVersion.protocolVersion_writer pv sl pos1 in
-      let pos3 = Parsers.CipherSuite.cipherSuite_writer (name_of_cipherSuite cs) sl pos2 in
-      let pos4 = Parsers.Boolean.boolean_writer (if ems then PB.B_true else PB.B_false) sl pos3 in
+      let pos2 = Parsers.ProtocolVersion.protocolVersion_writer pv sl.LPB.base pos1 in
+      let pos3 = Parsers.CipherSuite.cipherSuite_writer (name_of_cipherSuite cs) sl.LPB.base pos2 in
+      let pos4 = Parsers.Boolean.boolean_writer (if ems then PB.B_true else PB.B_false) sl.LPB.base pos3 in
       FStar.Bytes.store_bytes ms (B.sub sl.LPB.base pos4 48ul);
       let h = get () in
-      Parsers.TicketContents12_master_secret.ticketContents12_master_secret_intro h sl pos4;
+      Parsers.TicketContents12_master_secret.ticketContents12_master_secret_intro h (LPB.slice_of_buffer sl.LPB.base) pos4;
       let pos5 = pos4 `U32.add` 48ul in
       let h = get () in
-      Parsers.TicketContents12.ticketContents12_valid h sl pos1;
-      Parsers.TicketContents.finalize_ticketContents_ticket12 sl pos;
+      Parsers.TicketContents12.ticketContents12_valid h (LPB.slice_of_buffer sl.LPB.base) pos1;
+      Parsers.TicketContents.finalize_ticketContents_ticket12 sl.LPB.base pos;
+      let h' = get () in
+      LPB.bvalid_valid_strong_prefix TC.ticketContents_parser h' sl pos;
       pos5
     end
 
@@ -395,21 +397,23 @@ let write_ticket13
     then LPB.max_uint32
     else begin
       let pos1 = pos `U32.add` 1ul in
-      let pos2 = CipherSuite.cipherSuite13_writer (cipherSuite13_of_cipherSuite cs) sl pos1 in
+      let pos2 = CipherSuite.cipherSuite13_writer (cipherSuite13_of_cipherSuite cs) sl.LPB.base pos1 in
       let len_rms = len rms in
       let _ = FStar.Bytes.store_bytes rms (B.sub sl.LPB.base (pos2 `U32.add` 1ul) len_rms) in
-      let pos3 = Parsers.TicketContents13_rms.ticketContents13_rms_finalize sl pos2 len_rms in
+      let pos3 = Parsers.TicketContents13_rms.ticketContents13_rms_finalize sl.LPB.base pos2 len_rms in
       let len_nonce = len nonce in
       let _ = store_bytes_strong nonce (B.sub sl.LPB.base (pos3 `U32.add` 1ul) len_nonce) in
-      let pos4 = Parsers.TicketContents13_nonce.ticketContents13_nonce_finalize sl pos3 len_nonce in
-      let pos5 = LPI.write_u32 created sl pos4 in
-      let pos6 = LPI.write_u32 age sl pos5 in
+      let pos4 = Parsers.TicketContents13_nonce.ticketContents13_nonce_finalize sl.LPB.base pos3 len_nonce in
+      let pos5 = LPI.write_u32 created sl.LPB.base pos4 in
+      let pos6 = LPI.write_u32 age sl.LPB.base pos5 in
       let len_custom = len custom in
       let _ = store_bytes_strong custom (B.sub sl.LPB.base (pos6 `U32.add` 2ul) len_custom) in
-      let pos7 = Parsers.TicketContents13_custom_data.ticketContents13_custom_data_finalize sl pos6 len_custom in
+      let pos7 = Parsers.TicketContents13_custom_data.ticketContents13_custom_data_finalize sl.LPB.base pos6 len_custom in
       let h = get () in
-      Parsers.TicketContents13.ticketContents13_valid h sl (pos `U32.add` 1ul);
-      Parsers.TicketContents.finalize_ticketContents_ticket13 sl pos;
+      Parsers.TicketContents13.ticketContents13_valid h (LPB.slice_of_buffer sl.LPB.base) (pos `U32.add` 1ul);
+      Parsers.TicketContents.finalize_ticketContents_ticket13 sl.LPB.base pos;
+      let h' = get () in
+      LPB.bvalid_valid_strong_prefix TC.ticketContents_parser h' sl pos;
       pos7
     end
 
@@ -569,9 +573,9 @@ val check_ticket12_low:
 #push-options "--z3rlimit 128 --max_ifuel 1 --max_fuel 0"
 
 let check_ticket12_low #rrel #rel x pos = 
-  let pv_pos = accessor_ticketContents12_pv x pos in
-  let pv = protocolVersion_reader x pv_pos in
-  let ms_pos = accessor_ticketContents12_master_secret x pos in 
+  let pv_pos = LPB.access_from_valid_slice accessor_ticketContents12_pv x pos in
+  let pv = LPB.read_from_valid_slice protocolVersion_reader x pv_pos in
+  let ms_pos = LPB.access_from_valid_slice accessor_ticketContents12_master_secret x pos in 
   (pv, ms_pos)
 
 (* 19-01-25 better names? 

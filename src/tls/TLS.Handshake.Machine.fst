@@ -1211,7 +1211,7 @@ module R = LowParse.Repr
 // When the interface of TLS.Handhshake.Client/Server uses repr_pos, delete this
 #push-options "--admit_smt_queries true"
 let get_handshake_repr (m:Msg.handshake)
-  : StackInline (b:R.const_slice & MITLS.Repr.Handshake.pos b)
+  : StackInline (b: LowStar.ConstBuffer.const_buffer LP.byte & MITLS.Repr.Handshake.pos b)
   (requires fun h0 -> True)
   (ensures fun h0 (| _, r |) h1 ->
     B.modifies B.loc_none h0 h1 /\
@@ -1220,13 +1220,12 @@ let get_handshake_repr (m:Msg.handshake)
   let b = B.alloca 0z 8192ul in
   push_frame ();
   let len = Msg.handshake_size32 m in
-  let slice = LP.make_slice b len in
-  let Some r = MITLS.Repr.Handshake.serialize slice 0ul m in
+  let Some r = MITLS.Repr.Handshake.serialize ({ LP.base = b; LP.len = 8192ul; }) 0ul m in
   pop_frame ();
-  (| R.of_slice slice, r |)
+  (| LowStar.ConstBuffer.of_qbuf b, r |)
 
 let get_handshake13_repr (m:Msg.handshake13)
-  : StackInline (b:R.const_slice & MITLS.Repr.Handshake13.pos b)
+  : StackInline (b: LowStar.ConstBuffer.const_buffer LP.byte & MITLS.Repr.Handshake13.pos b)
   (requires fun h0 -> True)
   (ensures fun h0 (|_, r|) h1 ->
     B.modifies B.loc_none h0 h1 /\
@@ -1235,10 +1234,9 @@ let get_handshake13_repr (m:Msg.handshake13)
   let b = B.alloca 0z 8192ul in
   push_frame ();
   let len = Msg.handshake13_size32 m in
-  let slice = LP.make_slice b len in
-  let Some r = MITLS.Repr.Handshake13.serialize slice 0ul m in
+  let Some r = MITLS.Repr.Handshake13.serialize ({ LP.base = b; LP.len = 8192ul }) 0ul m in
   pop_frame ();
-  (| R.of_slice slice, r |)
+  (| LowStar.ConstBuffer.of_qbuf b, r |)
 #pop-options
 
 let expected_initial_transcript (re:option Transcript.retry) ch =

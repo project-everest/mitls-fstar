@@ -82,7 +82,7 @@ let create (parent:rid) cfg role =
     // because the hash is not known
     let in_buf_len = 16000ul in
     let b_in = LB.malloc r 0z in_buf_len in
-    let ms0 = Recv.create (LP.make_slice b_in in_buf_len) in
+    let ms0 = Recv.create b_in in_buf_len in
     let state = ralloc r (S_wait_ClientHello nonce ms0) in
     Machine.Server r cfg state
 
