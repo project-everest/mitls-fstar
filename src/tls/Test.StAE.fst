@@ -2,9 +2,8 @@ module Test.StAE
 // adapted from test/TestGCM
 
 open FStar.Bytes // for @|
-open FStar.Error
 open FStar.Printf
-open TLSError
+open TLS.Result
 open TLSConstants
 open TLSInfo
 open Range

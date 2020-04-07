@@ -10,6 +10,17 @@ module HS = FStar.HyperStack
 
 open FStar.HyperStack.ST
 
+(* Debug output, shared by client and server *)
+val discard: bool -> ST unit
+  (requires (fun _ -> True))
+  (ensures (fun h0 _ h1 -> h0 == h1))
+let discard _ = ()
+let print s = discard (IO.debug_print_string ("CRF| "^s^"\n"))
+unfold val trace: s:string -> ST unit
+  (requires (fun _ -> True))
+  (ensures (fun h0 _ h1 -> h0 == h1))
+unfold let trace = if DebugFlags.debug_HS then print else (fun _ -> ())
+
 /// Overview
 /// --------
 ///
@@ -142,7 +153,11 @@ let update a s data len =
     let (| _, s |) = gideal s in
     s *= (S.append !*s (to_seq data len))
   else
-    Concrete.update a (greal s) data len
+    (let h0 = get() in
+    trace ("UPDATE "^(Bytes.hex_of_bytes (Bytes.of_buffer len data)));
+    let h1 = get() in
+    frame_invariant B.loc_none s h0 h1;
+    Concrete.update a (greal s) data len)
 
 #push-options "--z3rlimit 50"
 let finish a st dst =

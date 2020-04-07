@@ -2,9 +2,7 @@ module StreamPlain
 
 open FStar.Seq
 open FStar.Bytes
-open FStar.Error
-
-open TLSError
+open TLS.Result
 open TLSConstants
 open TLSInfo
 open Content

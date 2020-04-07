@@ -28,7 +28,7 @@
         "token_correspondence_Parsers.MiTLSConfig_alpn_b_true.synth_miTLSConfig_alpn_b_true"
       ],
       0,
-      "dfca67af35a91b78e8585b70101d7bac"
+      "7a54fca55ab53919352e90a72bc0a6bc"
     ],
     [
       "ParsersAux.Eq.miTLSConfig_alpn_b_true_serializer_ext",
@@ -59,11 +59,10 @@
         "token_correspondence_Parsers.ClientHelloExtension_CHE_application_layer_protocol_negotiation.synth_clientHelloExtension_CHE_application_layer_protocol_negotiation",
         "token_correspondence_Parsers.ClientHelloExtension_CHE_application_layer_protocol_negotiation.synth_clientHelloExtension_CHE_application_layer_protocol_negotiation_recip",
         "token_correspondence_Parsers.MiTLSConfig_alpn_b_true.synth_miTLSConfig_alpn_b_true",
-        "token_correspondence_Parsers.MiTLSConfig_alpn_b_true.synth_miTLSConfig_alpn_b_true_recip",
-        "unit_inversion"
+        "token_correspondence_Parsers.MiTLSConfig_alpn_b_true.synth_miTLSConfig_alpn_b_true_recip"
       ],
       0,
-      "60aeed9fb6fb68eca30f9a878e539448"
+      "7ab57d867f0150828bb0cd9bfc75b476"
     ],
     [
       "ParsersAux.Eq.valid_miTLSConfig_alpn_b_true_ext",
@@ -72,7 +71,7 @@
       1,
       [ "@query" ],
       0,
-      "1d054cb115cb7611e720a662d90cd75e"
+      "893304e52ed257b647c70fa1db32e5fb"
     ],
     [
       "ParsersAux.Eq.valid_miTLSConfig_alpn_b_true_ext",
@@ -80,8 +79,7 @@
       2,
       1,
       [
-        "@MaxIFuel_assumption", "@query",
-        "Prims_pretyping_ae567c2fb75be05905677af440075565", "b2t_def",
+        "@MaxIFuel_assumption", "@query", "b2t_def",
         "constructor_distinct_FStar.Pervasives.Native.None",
         "constructor_distinct_FStar.Pervasives.Native.Some",
         "disc_equation_FStar.Pervasives.Native.Some",
@@ -105,10 +103,7 @@
         "equation_Parsers.MiTLSConfig_alpn_b_true.miTLSConfig_alpn_b_true_parser",
         "equation_Parsers.MiTLSConfig_alpn_b_true.miTLSConfig_alpn_b_true_parser_kind",
         "equation_Prims.nat", "fuel_guarded_inversion_LowParse.Slice.slice",
-        "function_token_typing_FStar.UInt8.t",
-        "function_token_typing_Parsers.ClientHelloExtension_CHE_application_layer_protocol_negotiation.clientHelloExtension_CHE_application_layer_protocol_negotiation",
-        "function_token_typing_Prims.__cache_version_number__",
-        "int_inversion", "int_typing",
+        "function_token_typing_FStar.UInt8.t", "int_inversion", "int_typing",
         "lemma_LowParse.Low.Base.get_valid_pos_post",
         "lemma_LowParse.Low.Base.valid_elim_",
         "lemma_LowStar.Monotonic.Buffer.length_null_1",
@@ -116,6 +111,7 @@
         "primitive_Prims.op_Addition", "primitive_Prims.op_AmpAmp",
         "primitive_Prims.op_GreaterThan", "primitive_Prims.op_LessThan",
         "primitive_Prims.op_LessThanOrEqual",
+        "proj_equation_FStar.Pervasives.Native.Some_v",
         "proj_equation_LowParse.Slice.Mkslice_base",
         "proj_equation_LowParse.Slice.Mkslice_len",
         "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_high",
@@ -128,8 +124,9 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_high",
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_low",
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata",
-        "refinement_interpretation_Tm_refine_5ac791f1cbd143f4ddee9b161489e638",
-        "refinement_interpretation_Tm_refine_a347709bfeba48709474ad26f4f6be87",
+        "refinement_interpretation_Tm_refine_3ae7934f7bb0b211572daa2c0f2cb446",
+        "refinement_interpretation_Tm_refine_f13070840248fced9d9d60d77bdae3ec",
+        "refinement_kinding_Tm_refine_8d8007246bd724db70d0c0f0e10fe5fd",
         "typing_FStar.UInt32.v",
         "typing_LowParse.Slice.__proj__Mkslice__item__base",
         "typing_LowParse.Slice.__proj__Mkslice__item__len",
@@ -139,7 +136,7 @@
         "typing_Parsers.MiTLSConfig_alpn_b_true.miTLSConfig_alpn_b_true_parser_kind"
       ],
       0,
-      "b33abae53c04c4bb08c3958f2f2de2de"
+      "ab027922b29ad4220cfd6138bbfa4929"
     ]
   ]
 ]

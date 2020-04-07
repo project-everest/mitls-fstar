@@ -8,7 +8,7 @@
       1,
       [ "@query", "assumption_Parsers.NamedGroup.namedGroup__uu___haseq" ],
       0,
-      "04d25c865abb9876209594546cd91f34"
+      "f24a1ca074c3fec1c164e116f11c8527"
     ],
     [
       "CommonDH.as_supportedNamedGroups",
@@ -28,20 +28,28 @@
         "data_typing_intro_Parsers.NamedGroup.Sect233r1@tok",
         "equation_CommonDH.namedGroups",
         "equation_CommonDH.supportedNamedGroups",
+        "equation_FStar.HyperStack.ST.erid",
+        "equation_FStar.HyperStack.ST.is_eternal_region", "equation_Mem.rgn",
+        "equation_Mem.tls_region", "equation_Mem.tls_rgn",
         "equation_Parsers.NamedGroupList.namedGroupList",
         "equation_with_fuel_FStar.List.Tot.Base.for_all.fuel_instrumented",
         "equation_with_fuel_FStar.List.Tot.Base.length.fuel_instrumented",
         "function_token_typing_CommonDH.is_supported_group",
         "kinding_Parsers.NamedGroup.namedGroup@tok",
-        "projection_inverse_BoxBool_proj_0",
+        "primitive_Prims.op_Negation", "projection_inverse_BoxBool_proj_0",
         "projection_inverse_BoxInt_proj_0",
+        "refinement_interpretation_Tm_refine_5aee6c1d5e606045d3f22072ebbfd523",
+        "refinement_interpretation_Tm_refine_6c5072d4c9562dd38fd2703ecfb013df",
+        "refinement_interpretation_Tm_refine_9393f41ccc9ce36df1080eefe33f6c53",
         "refinement_interpretation_Tm_refine_b2c61cf0a4e63de4ffe2bd90e9c7343c",
         "refinement_interpretation_Tm_refine_e5f8b76c26b9d42031e02e26b90ac1a4",
         "token_correspondence_CommonDH.is_supported_group",
-        "typing_FStar.List.Tot.Base.for_all"
+        "typing_FStar.List.Tot.Base.for_all",
+        "typing_FStar.Monotonic.HyperHeap.rid_freeable",
+        "typing_Mem.tls_region"
       ],
       0,
-      "1b4edaedc70887591df9fe1564cddc9a"
+      "04663dbcec1eb1119543b252319c9f4d"
     ],
     [
       "CommonDH.rshare",
@@ -53,7 +61,7 @@
         "refinement_interpretation_Tm_refine_80eae8a46698bbad9b5d85b7fbe62b74"
       ],
       0,
-      "cfff97acc662da21a3157af488f9031c"
+      "2a986df8f7a39eab6fd3bcd4baed4a1c"
     ],
     [
       "CommonDH.dh_responder",
@@ -65,7 +73,7 @@
         "refinement_interpretation_Tm_refine_80eae8a46698bbad9b5d85b7fbe62b74"
       ],
       0,
-      "fd8b6b28b1f12babc31b45a82416c196"
+      "c0e48d2526ac3c24d59f60db28ff57c0"
     ]
   ]
 ]

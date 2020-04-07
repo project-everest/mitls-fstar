@@ -4,11 +4,7 @@ module Negotiation.Writers
 // currently it is not integrated with the rest of miTLS
 // (it should be eventually)
 
-open FStar.Error
-open FStar.Bytes
-
 open Mem
-open TLSError
 open TLSInfo
 open TLSConstants
 open HandshakeMessages

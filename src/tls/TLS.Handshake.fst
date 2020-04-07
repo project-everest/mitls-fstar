@@ -1,22 +1,20 @@
 module TLS.Handshake
 
-open FStar.String
-open FStar.Heap
-open FStar.HyperStack
-open FStar.Seq
-open FStar.Error
 open FStar.Bytes
+open FStar.HyperStack.ST
 
-open TLSError
+open TLS.Result
+open TLSConstants
 open TLSInfo
 open TLS.Callbacks
-open TLSConstants
+
 open Range
 open Old.Epochs
 
-open TLS.Handshake.Client
-open TLS.Handshake.Server
+open TLS.Handshake.Machine
+open TLS.Handshake.Messaging
 
+module LB = LowStar.Buffer
 module U32 = FStar.UInt32
 module MS = FStar.Monotonic.Seq
 module HS = FStar.HyperStack
@@ -26,11 +24,18 @@ module Epochs = Old.Epochs
 module KS = Old.KeySchedule
 module HMAC_UFCMA = Old.HMAC.UFCMA
 module HSM = HandshakeMessages
-module HSL = HandshakeLog
-module CH = Parsers.ClientHello
-module SH = Parsers.RealServerHello
-module HRR = Parsers.HelloRetryRequest
-module FSH = Parsers.ServerHello
+
+module Client = TLS.Handshake.Client
+module Server = TLS.Handshake.Server
+module Send = TLS.Handshake.Send
+module Recv = TLS.Handshake.Receive 
+module PF = TLS.Handshake.ParseFlights
+module LP = LowParse.Low.Base
+
+//ADL This file is a work in progress since Nov. 2019
+// verification will start when the internal APIs are lowered
+#set-options "--admit_smt_queries true"
+#set-options "--max_fuel 1 --max_ifuel 1 --z3rlimit 20"
 
 // consider adding an optional (resume: option sid) on the client side
 // for now this bit is not explicitly authenticated.
@@ -45,29 +50,52 @@ module FSH = Parsers.ServerHello
 // abstract invariant; depending only on the HS state (not the epochs state)
 // no need for an epoch states invariant here: the HS never modifies them
 
-#set-options "--admit_smt_queries true"
+let is_0rtt_offered hs = false // FIXME
+
+#push-options "--max_ifuel 0 --z3rlimit 32"
+let xkeys_of hs = 
+  let n = Machine.nonce hs in
+  let es = Machine.epochs hs n in 
+  //let h = Mem.get() in assert(modifies_none h h);
+  FStar.Monotonic.Seq.i_read es.Epochs.exporter
+
+/// now integrating Outline.fst; see also
+/// https://github.com/project-everest/mitls-fstar/issues/231 and
+/// https://github.com/project-everest/mitls-fstar/blob/afromher_dev/src/tls/Test.TLS.Send.fst
 
 (* -------------------- Control Interface ---------------------- *)
 
+//19-09-11 we'll need to split it between clients and servers, since their config differ. 
+// FIXME(adl) keeping a single function for client and server to maintain current API
 let create (parent:rid) cfg role =
   let r = new_region parent in
-  let log = HSL.create r None (* cfg.max_version (Nego.hashAlg nego) *) in
-  //let nonce = Nonce.mkHelloRandom r r0 in //NS: should this really be Client?
-  let ks, nonce = KS.create #r role cfg.is_quic in
-  let nego = Nego.create r role cfg nonce in
-  let epochs = Epochs.create r nonce in
-  let state = ralloc r (if role = Client then C_init else S_Idle) in
-  let x: hs = HS role nego log ks epochs state in //17-04-17 why needed?
-  x
+  let nonce = Nonce.mkHelloRandom role r in
+  match role with
+  | TLSConstants.Client ->
+    let resume = Nego.unseal_tickets cfg in
+    let config: client_config = cfg, resume in 
+    let state = ralloc r (C_init nonce) in
+    Machine.Client r config state
+  | TLSConstants.Server ->
+    // We need to pre-allocate the receiving buffer
+    // but we can't pre-allocate the full msg_state
+    // because the hash is not known
+    let in_buf_len = 16000ul in
+    let b_in = LB.malloc r 0z in_buf_len in
+    let ms0 = Recv.create (LP.make_slice b_in in_buf_len) in
+    let state = ralloc r (S_wait_ClientHello nonce ms0) in
+    Machine.Server r cfg state
 
 let rehandshake s c = FStar.Error.unexpected "rehandshake: not yet implemented"
 
 let rekey s c = FStar.Error.unexpected "rekey: not yet implemented"
 
 let send_ticket hs app_data =
-  if is_post_handshake hs then
-    let _ = server_Ticket13 hs app_data in true
-  else false
+  match hs with
+  | Machine.Client _ _ _ -> false
+  | Machine.Server _ _ s ->
+    match !s with
+    | S13_complete _ _ _ _ ks -> Server.server_Ticket13 hs app_data
 
 let request s c = FStar.Error.unexpected "request: not yet implemented"
 
@@ -78,34 +106,243 @@ let invalidateSession hs = ()
 
 (* ------------------ Outgoing -----------------------*)
 
-let next_fragment_bounded (hs:hs) i (max:nat) =
-    trace "next_fragment";
-    let outgoing = HSL.write_at_most hs.log i max in
-    match outgoing, !hs.state with
-    // when the output buffer is empty, we send extra messages in two cases
-    // we prepare the initial ClientHello; or
-    // after sending ServerHello in plaintext, we continue with encrypted traffic
-    // otherwise, we just returns buffered messages and signals
-    | HSL.Outgoing None None false, C_init ->
-      (match client_ClientHello hs with
-      | Error z -> Error z
-      | Correct () -> Correct(HSL.write_at_most hs.log i max))
-    | HSL.Outgoing None None false, S13_sent_ServerHello ->
-      (match server_ServerFinished_13 hs with
-      | Error z -> Error z
-      | Correct () -> Correct(HSL.write_at_most hs.log i max))
-    | HSL.Outgoing None None false, C13_sent_EOED d ocr cfk ->
-      client_ClientFinished_13 hs d ocr cfk;
-      Correct(HSL.write_at_most hs.log i max)
-    | _ -> Correct outgoing // nothing to do
+// We send extra messages in three cases: we prepare the initial
+// ClientHello; or the output buffer is empty, after sending
+// ServerHello in plaintext, we continue with encrypted traffic.
+// Otherwise, we just returns buffered messages and signals.
 
-let next_fragment (hs:hs) i =
-  next_fragment_bounded hs i max_TLSPlaintext_fragment_length
+let rec next_fragment_bounded hs i (max32: UInt32.t) =
+  trace "next_fragment_bounded" LowStar.Printf.done;
+  match hs with 
+  | Client region config r -> (
+    let st0 = !r in 
+    if C_init? st0 then (
+      match Client.client_ClientHello hs with
+      | Error z -> Error z
+      | Correct () -> next_fragment_bounded hs i max32 )
+    else 
+      let ms0 = Machine.client_ms st0 in 
+      let sending, result = Send.write_at_most ms0.sending i max32 in
+      let ms1 = { ms0 with sending = sending } in 
+      let st1 = set_client_ms st0 ms1 in 
+      // any simpler way to update substate? 
+      r := st1; 
+      match result, st1 with
+      | Send.Outgoing None None false, 
+        C13_complete offer sh ee server_id fin1 ms (Finished_pending _ _ _) ->
+        (match Client.client13_Finished2 hs with
+        | Error z -> Error z 
+        | Correct _ -> next_fragment_bounded hs i max32 )
+      | _ -> Correct result // nothing to do
+    )
+  | Server region config r ->
+    let st0 = !r in
+    if S_wait_ClientHello? st0 then
+      // Allocation of the messaging state must be delayed until
+      // CH is received (to avoid re-allocation)
+      Correct (Send.Outgoing None None false)
+    else
+      let ms0 = Machine.server_ms st0 in 
+      let sending, result = Send.write_at_most ms0.sending i max32 in
+      let ms1 = { ms0 with sending = sending } in 
+      let st1 = set_server_ms st0 ms1 in 
+      r := st1; 
+      match result, st1 with
+      | Send.Outgoing None None false, 
+        S13_sent_ServerHello _ _ _ _ _ _ _ ->
+        (match Server.server_ServerFinished_13 hs with
+        | Error z -> Error z 
+        | Correct _ -> next_fragment_bounded hs i max32)
+      | _ -> Correct result
 
-let to_be_written (hs:hs) =
-  HSL.to_be_written hs.log
+let next_fragment hs i =
+  next_fragment_bounded hs i max_TLSPlaintext_fragment_length32
+
+let to_be_written hs =
+  if Machine.is_init hs then 0 else
+  let sto = 
+    match hs with
+    | Machine.Client region config r -> 
+      let st = !r in (client_ms st).sending
+    | Server region config r -> 
+      let st = !r in (server_ms st).sending in 
+  Send.to_be_written sto
 
 (* ----------------------- Incoming ----------------------- *)
+
+module R = LowParse.Repr
+module RH = MITLS.Repr.Handshake
+module RH12 = MITLS.Repr.Handshake12
+module RH13 = MITLS.Repr.Handshake13
+
+inline_for_extraction noextract
+let overflow = Recv.in_error Internal_error "Overflow in input buffer"
+
+#set-options "--max_fuel 0 --max_ifuel 1 --z3rlimit 20"
+// #set-options "--admit_smt_queries true"
+let rec recv_fragment hs #i rg f =
+  trace "recv_fragment: %a" TLS.Tracing.print_bytes f LowStar.Printf.done;
+  let open HandshakeMessages in
+  // only case where the next incoming flight may already have been buffered.
+  [@inline_let] let recv_again r =
+    match r with
+    | Recv.InAck false false -> recv_fragment hs #i (0,0) empty_bytes
+    | r -> r  in
+  let h0 = HST.get() in
+  match hs with 
+  | Client region config r ->
+   begin // Client
+    match !r  with
+    | C_init _ -> (
+      trace "No CH sent (statically excluded)" LowStar.Printf.done;
+      Recv.in_error Unexpected_message "Client hasn't sent hello yet (to be statically excluded)")
+
+    | C_wait_ServerHello offer0 ms0 ks0 -> (
+      match Recv.buffer_received_fragment ms0.receiving f with
+      | None -> overflow
+      | Some rcv1 ->
+      if rcv1.Recv.rcv_to = rcv1.Recv.rcv_from then 
+        Recv.InAck false false // No-op
+      else match Recv.receive_c_wait_ServerHello rcv1 with
+      | Error z -> Recv.InError z
+      | Correct (x, rcv2) ->
+        r := C_wait_ServerHello offer0 ({ms0 with receiving = rcv2}) ks0;
+        match x with
+        | None -> Recv.InAck false false // nothing happened
+        | Some sh_msg ->
+          let shr = RH.get_serverHello (R.as_ptr sh_msg.PF.sh) in
+          let sh = shr.R.vv in
+          let h3 = HST.get() in
+          if HSM.is_hrr sh then
+            Client.client_HelloRetryRequest hs sh
+          else
+            let r = Client.client_ServerHello hs sh in
+            recv_again r)
+
+    | C13_wait_Finished1 offer sh ms0 ks -> (
+      match Recv.buffer_received_fragment ms0.receiving f with
+      | None -> overflow
+      | Some rcv1 ->
+      trace "receive_c13_wait_Finished1" LowStar.Printf.done;
+      match TLS.Handshake.Receive.receive_c13_wait_Finished1 rcv1 with
+      | Error z -> Recv.InError z
+      | Correct (sflight, rcv2) ->
+        r := C13_wait_Finished1 offer sh ({ms0 with receiving = rcv2}) ks;
+        match sflight with
+        | None -> Recv.InAck false false // nothing happened
+        | Some sflight ->
+          let ee = R.get_field RH13.field_ee (R.as_ptr sflight.PF.c13_w_f1_ee) in
+          let fin = R.get_field RH13.field_fin (R.as_ptr sflight.PF.c13_w_f1_fin) in
+          let ocr = match sflight.PF.c13_w_f1_cr with
+            | None -> None | Some cr ->
+              let x = R.get_field RH13.field_cr (R.as_ptr cr) in Some x.R.vv in
+              let oc_cv = match sflight.PF.c13_w_f1_c_cv with
+            | None -> None | Some (c,cv) ->
+              let x = R.get_field RH13.field_certificate (R.as_ptr c) in
+              let y = R.get_field RH13.field_cv (R.as_ptr cv) in
+              Some (x.R.vv, y.R.vv) in
+          Client.client13_Finished1 hs (ee.R.vv) ocr oc_cv (fin.R.vv))
+
+    | C13_complete offer sh ee server_id fin1 ms0 (Finished_sent fin2 ks) ->
+     begin
+      match Recv.buffer_received_fragment ms0.receiving f with
+      | None -> overflow 
+      | Some rcv1 ->
+        if rcv1.Recv.rcv_to = rcv1.Recv.rcv_from then 
+          Recv.InAck false false // No-op
+        else match TLS.Handshake.Receive.receive_c13_Complete rcv1 with
+        | Error z -> trace "Receive failed" LowStar.Printf.done; Recv.InError z
+        | Correct (nst, rcv2) ->
+         begin
+          trace "Processing a ticket" LowStar.Printf.done;
+          r := C13_complete offer sh ee server_id fin1 ({ms0 with receiving = rcv2})
+            (Finished_sent fin2 ks);
+          match nst with
+          | None -> Recv.InAck false false // nothing happened
+          | Some nst ->
+            let nstr = R.get_field RH13.field_nst (R.as_ptr nst.PF.c13_c_nst) in
+            let r = Client.client13_NewSessionTicket hs (nstr.R.vv) in
+            recv_again r
+         end
+     end
+    | _ ->
+      trace "Unexpected client state (should be excluded statically" LowStar.Printf.done;
+      Recv.in_error Unexpected_message "TBC"
+   end // Client
+  | Server region config r ->
+   begin // Server
+    match !r  with
+    | S_wait_ClientHello n rcv0 ->
+     begin
+      match Recv.buffer_received_fragment rcv0 f with
+      | None -> overflow
+      | Some rcv1 ->
+      match Recv.receive_s_Idle rcv1 with
+      | Error z -> Recv.InError z
+      | Correct (x, rcv2) ->
+        r := S_wait_ClientHello n rcv2;
+        match x with
+        | None -> Recv.InAck false false // nothing happened
+        | Some ch ->
+          let chr = RH.get_clientHello (R.as_ptr ch.PF.ch) in
+          let ch0 = chr.R.vv in
+          let h3 = HST.get() in
+          let r = Server.server_ClientHello hs ch0 in
+          r
+     end
+    | S13_wait_Finished2 mode svd eoed_done ms ks ->
+     begin
+      match Recv.buffer_received_fragment ms.receiving f with
+      | None -> overflow
+      | Some rcv1 ->
+      if rcv1.Recv.rcv_to = rcv1.Recv.rcv_from then 
+        Recv.InAck false false // No-op
+      else match Recv.receive_s13_wait_Finished2 rcv1 with
+      | Error z -> Recv.InError z
+      | Correct (x, rcv2) ->
+        let ms1 : msg_state _ PF.F_s13_wait_Finished2 _ _ = {ms with receiving = rcv2} in
+        r := S13_wait_Finished2 mode svd eoed_done ms1 ks;
+        match x with
+        | None -> Recv.InAck false false // nothing happened
+        | Some cf ->
+          let fin = R.get_field RH13.field_fin (R.as_ptr cf.PF.s13_w_f2_fin) in
+          let oc_cv = match cf.PF.s13_w_f2_c_cv with
+            | None -> None | Some (c,cv) ->
+              let x = R.get_field RH13.field_certificate (R.as_ptr c) in
+              let y = R.get_field RH13.field_cv (R.as_ptr cv) in
+              Some (x.R.vv, y.R.vv) in
+          Server.server_ClientFinished_13 hs fin.R.vv oc_cv
+     end
+    | _ ->
+      Recv.in_error Unexpected_message "Unexpected server state"
+   end // Server
+
+(*
+    | C13_Complete _ _ _ _ _ _ _ ms0 _ ->
+    let ms1 = buffer_received_fragment ms0 #i rg f in
+    // TODO two sub-states: waiting for fin2 or for the post-handshake ticket.
+    match HSL.Receive.receive_c_wait_ServerHello 12_wait_ServerHelloDone st b f_begin f_end with
+    | Error z -> InError z
+    | Correct None -> InAck false false // nothing happened
+    | Correct (Some x) ->
+
+  , [Msg13 (M13_new_session_ticket st13)], [_] ->
+      client_NewSessionTicket_13 hs st13
+
+  // 1.2 full: wrap these two into a single received flight with optional [cr]
+    | C_wait_Finished2 digestClientFinished, [Msg12 (M12_finished f)], [digestServerFinished] ->
+      client_ServerFinished hs f digestClientFinished
+
+    | C_wait_NST resume, [Msg12 (M12_new_session_ticket st)], [digestNewSessionTicket] ->
+      client_NewSessionTicket_12 hs resume digestNewSessionTicket st
+
+    // 1.2 resumption
+    | C_wait_R_Finished1 digestNewSessionTicket, [Msg12 (M12_finished f)], [digestServerFinished] ->
+      client_R_ServerFinished hs f digestNewSessionTicket digestServerFinished
+*)
+
+
+(* The old, but more complete version, to be merged: 
 
 let rec recv_fragment (hs:hs) #i rg f =
   let open HandshakeLog in
@@ -130,46 +367,46 @@ let rec recv_fragment (hs:hs) #i rg f =
 
     | C_wait_ServerHello, [Msg (M_server_hello sh)], [] ->
       if HSM.is_hrr sh then
-        client_HelloRetryRequest hs (HSM.get_hrr sh)
+        client_HelloRetryRequest hs sh
       else
-        recv_again (client_ServerHello hs (HSM.get_sh sh))
+        recv_again (client_ServerHello hs sh)
 
     | C13_sent_CH2 ch1 hrr, [Msg (M_server_hello sh)], [] ->
       if HSM.is_hrr sh then 
         InError (fatalAlert Unexpected_message, "server sent a second retry request")
       else
-        recv_again (client_ServerHello_HRR hs ch1 hrr (HSM.get_sh sh))
+        recv_again (client_ServerHello_HRR hs ch1 hrr sh)
 
     // 1.2 full: wrap these two into a single received flight with optional [cr]
     | C_wait_ServerHelloDone, [Msg12 (M12_certificate c); Msg12 (M12_server_key_exchange ske); Msg12 (M12_server_hello_done ())], [_] ->
-      client_ServerHelloDone hs c ske None
+      client12_ServerHelloDone hs c ske None
 
     | C_wait_ServerHelloDone, [Msg12 (M12_certificate c); Msg12 (M12_server_key_exchange ske); Msg12 (M12_certificate_request cr); Msg12 (M12_server_hello_done ())], [_] ->
-      client_ServerHelloDone hs c ske (Some cr)
+      client12_ServerHelloDone hs c ske (Some cr)
 
     | C_wait_Finished2 digestClientFinished, [Msg12 (M12_finished f)], [digestServerFinished] ->
-      client_ServerFinished hs f digestClientFinished
+      client12_ServerFinished hs f digestClientFinished
 
     | C_wait_NST resume, [Msg12 (M12_new_session_ticket st)], [digestNewSessionTicket] ->
-      client_NewSessionTicket_12 hs resume digestNewSessionTicket st
+      client12_NewSessionTicket hs resume digestNewSessionTicket st
 
     // 1.3; wrap these three into single flight with optional cr and optional (c;cv).
     | C13_wait_Finished1, [Msg13 (M13_encrypted_extensions ee); Msg13 (M13_certificate c); Msg13 (M13_certificate_verify cv); Msg13 (M13_finished f)],
       [_; digestCert; digestCertVerify; digestServerFinished] ->
-      client_ServerFinished_13 hs ee None (Some c) (Some cv) f
+      client13_Finished1 hs ee None (Some c) (Some cv) f
                                (Some digestCert) digestCertVerify digestServerFinished
 
     | C13_wait_Finished1, [Msg13 (M13_encrypted_extensions ee); Msg13 (M13_certificate_request cr); Msg13 (M13_certificate c); Msg13 (M13_certificate_verify cv); Msg13 (M13_finished f)],
       [_; digestCert; digestCertVerify; digestServerFinished] ->
-      client_ServerFinished_13 hs ee (Some cr) (Some c) (Some cv) f
+      client13_Finished1 hs ee (Some cr) (Some c) (Some cv) f
                                (Some digestCert) digestCertVerify digestServerFinished
 
     | C13_wait_Finished1, [Msg13 (M13_encrypted_extensions ee); Msg13 (M13_finished f)],
                         [digestEE; digestServerFinished] ->
-      client_ServerFinished_13 hs ee None None None f None digestEE digestServerFinished
+      client13_Finished1 hs ee None None None f None digestEE digestServerFinished
 
     | C_Complete, [Msg13 (M13_new_session_ticket st13)], [_] ->
-      client_NewSessionTicket_13 hs st13
+      client13_NewSessionTicket hs st13
 
     // 1.2 resumption
     | C_wait_R_Finished1 digestNewSessionTicket, [Msg12 (M12_finished f)], [digestServerFinished] ->
@@ -206,11 +443,13 @@ let rec recv_fragment (hs:hs) #i rg f =
     | _,  _, _ ->
 //      trace "DISCARD FLIGHT"; InAck false false
       InError(fatalAlert Unexpected_message, "unexpected flight")
+*)
 
 // TODO check CCS once committed to TLS 1.3 yields an alert
-let recv_ccs (hs:hs) =
-  let open HandshakeLog in
-  let open HandshakeMessages in
+let recv_ccs hs =
+  admit()
+  //19-09-13 TBC 
+(*  
   trace "recv_ccs";
   // Draft 22 CCS during HRR
   // Because of stateless HRR, this may also happen as the very first message before CH (!!!)
@@ -247,6 +486,7 @@ let recv_ccs (hs:hs) =
       | _, _, _ ->
         trace "WARNING: bad CCS";
         InError(fatalAlert Unexpected_message, "CCS received at wrong time")
+*)
 
 
 let authorize s ch = FStar.Error.unexpected "authorize: not yet implemented"

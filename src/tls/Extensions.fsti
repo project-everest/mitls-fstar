@@ -24,8 +24,7 @@ Their semantics is handled in Negotiation.
 module Extensions
 
 open FStar.Bytes
-open FStar.Error
-open TLSError
+open TLS.Result
 open TLSConstants
 
 (* Extension tag *)

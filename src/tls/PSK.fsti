@@ -10,10 +10,9 @@ itself when model is off).
 *)
 
 open FStar.Bytes
-open FStar.Error
 
 open Mem
-open TLSError
+open TLS.Result
 open TLSConstants
 
 module DM = FStar.DependentMap

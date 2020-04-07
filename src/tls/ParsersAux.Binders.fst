@@ -737,6 +737,7 @@ let handshake_m_client_hello_binders_offset
   3ul `U32.add` clientHello_binders_offset c
 #pop-options
 
+#push-options "--z3rlimit 32"
 inline_for_extraction
 let handshake_m_client_hello_binders_pos
   (#rrel #rel: _)
@@ -762,6 +763,7 @@ let handshake_m_client_hello_binders_pos
   let pos1 = LP.jump_serializer (LI.serialize_bounded_integer 3) (LP.jump_constant_size (LI.parse_bounded_integer 3) 3ul ()) sl pos (Ghost.hide (U32.uint_to_t
    (CH.clientHello_bytesize (Ghost.reveal c)))) in
   clientHello_binders_pos sl pos1 (Ghost.hide (Ghost.reveal c))
+#pop-options
 
 let truncate_handshake_m_client_hello
   (c: H.handshake_m_client_hello {
@@ -860,10 +862,13 @@ let truncate_handshake_m_client_hello_inj_binders_bytesize
   LP.serialize_strong_prefix (LI.serialize_bounded_integer 3) (U32.uint_to_t (CH.clientHello_bytesize c1)) (U32.uint_to_t (CH.clientHello_bytesize c2)) (truncate_clientHello c1) (truncate_clientHello c2);
   truncate_clientHello_inj_binders_bytesize c1 c2
 
+let ch_set_binders c b' = 
+  handshake_m_client_hello_set_binders c b'
+
 let set_binders m b' =
   let c = H.M_client_hello?._0 m in
-  H.M_client_hello (handshake_m_client_hello_set_binders c b')
-
+  H.M_client_hello (ch_set_binders c b')
+  
 let set_binders_bytesize m b' = ()
 
 let binders_offset h =

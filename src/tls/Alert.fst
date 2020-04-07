@@ -2,10 +2,9 @@ module Alert
 
 open FStar.Heap
 open FStar.Seq
-open FStar.Error
 open FStar.Bytes
 
-open TLSError
+open TLS.Result
 open TLSConstants
 open TLSInfo
 open Parse
@@ -14,7 +13,8 @@ open Mem
 module Range = Range
 open Range
 
-//16-05-29 not much protocol left; consider merging with TLSError
+open Parsers.Alert
+//16-05-29 not much protocol left; consider merging with TLS.Result
 
 (* Conversions *)
 
@@ -26,7 +26,7 @@ val parse: pinverse_t alertBytes
 // eta-expansion required for kremlin extraction
 let parse x = 
   LowParseWrappers.wrap_parser32_constant_length 
-    alert_serializer32 2 () alert_parser32
+    Parsers.Alert.alert_serializer32 2 () alert_parser32
     "" //(perror __SOURCE_FILE__ __LINE__ "")
     x
 

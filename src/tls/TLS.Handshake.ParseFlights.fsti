@@ -36,7 +36,7 @@ open HSL.Common
 
 module HSM = HandshakeMessages
 
-module R = MITLS.Repr
+module R = LowParse.Repr
 
 module HSM13R = MITLS.Repr.Handshake13
 module HSM12R = MITLS.Repr.Handshake12
@@ -77,6 +77,7 @@ type in_progress_flt_t =
   | F_c13_wait_Finished1
   | F_s13_wait_Finished2
   | F_s13_wait_EOED
+  // FIXME(adl) missing F_s13_postHS / complete
   | F_c13_Complete
   | F_c12_wait_ServerHelloDone
   | F_cs12_wait_Finished
@@ -130,11 +131,11 @@ let receive_pre (st:state) (b:R.const_slice) (f_begin f_end:uint_32) (in_progres
 = fun h ->
   let open B in let open R in
 
-  R.live h b /\
+  R.live_slice h b /\
   v f_begin + length_parsed_bytes st <= v f_end /\
-  v f_end <= v b.len /\
+  v f_end <= v b.slice_len /\
 
-  Seq.equal (Seq.slice (R.as_seq h b) (v f_begin) (v f_begin + length_parsed_bytes st))
+  Seq.equal (Seq.slice (R.slice_as_seq h b) (v f_begin) (v f_begin + length_parsed_bytes st))
             (parsed_bytes st) /\
 
   (length_parsed_bytes st == 0 \/ in_progress_flt st == in_progress)
@@ -156,16 +157,16 @@ let receive_post
   (in_progress:in_progress_flt_t)
   (valid:uint_32 -> uint_32 -> flt -> HS.mem -> Type0)
   (h0:HS.mem)
-  (x:TLSError.result (option flt & state))
+  (x:TLS.Result.result (option flt & state))
   (h1:HS.mem)
 = receive_pre st b f_begin f_end in_progress h0 /\
   B.(modifies loc_none  h0 h1) /\
-  (let open FStar.Error in
+  (let open TLS.Result in
    match x with
    | Error _ -> True
    | Correct (None, rst) ->
      in_progress_flt rst == in_progress /\
-     parsed_bytes rst == Seq.slice (R.as_seq h0 b) (v f_begin) (v f_end)
+     parsed_bytes rst == Seq.slice (R.slice_as_seq h0 b) (v f_begin) (v f_end)
    | Correct (Some flt, rst) ->
      valid f_begin f_end flt h1 /\
      parsed_bytes rst == Seq.empty /\
@@ -189,16 +190,16 @@ let receive_post_with_leftover_bytes
   (in_progress:in_progress_flt_t)
   (valid:uint_32 -> uint_32 -> flt -> HS.mem -> Type0)
   (h0:HS.mem)
-  (x:TLSError.result (option (flt & uint_32) & state))
+  (x:TLS.Result.result (option (flt & uint_32) & state))
   (h1:HS.mem)
 = receive_pre st b f_begin f_end in_progress h0 /\
   B.(modifies loc_none h0 h1) /\
-  (let open FStar.Error in
+  (let open TLS.Result in
    match x with
    | Error _ -> True
    | Correct (None, rst) ->
      in_progress_flt rst == in_progress /\
-     parsed_bytes rst == Seq.slice (R.as_seq h0 b) (v f_begin) (v f_end)
+     parsed_bytes rst == Seq.slice (R.slice_as_seq h0 b) (v f_begin) (v f_end)
    | Correct (Some (flt, idx_end), rst) ->
      idx_end <= f_end /\
      valid f_begin idx_end flt h1 /\
@@ -210,20 +211,21 @@ let receive_post_with_leftover_bytes
 
 /// Error codes returned by the receive functions
 
-let parsing_error : TLSError.error = {
-  Parsers.Alert.level = Parsers.AlertLevel.Fatal;
-  Parsers.Alert.description = Parsers.AlertDescription.Unexpected_message
-}, ""
+let parsing_error = TLS.Result.({
+  alert= Parsers.AlertDescription.Decode_error;
+  cause= "Failed to validate incoming message" })
 
-let unexpected_flight_error : TLSError.error = {
-  Parsers.Alert.level = Parsers.AlertLevel.Fatal;
-  Parsers.Alert.description = Parsers.AlertDescription.Unexpected_message
-}, ""
+let unexpected_flight_error = TLS.Result.({
+  alert= Parsers.AlertDescription.Unexpected_message;
+  cause= "A message was received in a state where it was not expected" })
 
-let unexpected_end_index_error : TLSError.error = {
-  Parsers.Alert.level = Parsers.AlertLevel.Fatal;
-  Parsers.Alert.description = Parsers.AlertDescription.Unexpected_message
-}, ""
+let leftover_bytes_error = TLS.Result.({
+  alert= Parsers.AlertDescription.Decode_error;
+  cause= "Leftover bytes after a key-transitioning message (Binders, non-retry SH, EOED, Finished)" })
+
+let message_overflow_error = TLS.Result.({
+  alert= Parsers.AlertDescription.Decode_error;
+  cause= "Received message overflows input buffer length" })
 
 
 /// Ad-hoc flights receive functions
@@ -245,7 +247,7 @@ let unexpected_end_index_error : TLSError.error = {
 
 
 noeq type s_Idle (b:R.const_slice) = {
-  ch_msg : HSMR.ch_repr b
+  ch : HSMR.ch_pos b
 }
 
 unfold
@@ -254,14 +256,14 @@ let valid_s_Idle
   (flt:s_Idle b) (h:HS.mem)
 = let open R in
 
-  flt.ch_msg.start_pos == f_begin /\
-  flt.ch_msg.end_pos == f_end /\
+  flt.ch.start_pos == f_begin /\
+  R.end_pos flt.ch == f_end /\
 
-  valid flt.ch_msg h
+  R.valid_repr_pos flt.ch h
 
 
 val receive_s_Idle (st:state) (b:R.const_slice) (f_begin f_end:uint_32)
-: ST (TLSError.result (option (s_Idle b) & state))
+: ST (TLS.Result.result (option (s_Idle b) & state))
   (requires receive_pre st b f_begin f_end F_s_Idle)
   (ensures  receive_post st b f_begin f_end F_s_Idle valid_s_Idle)
 
@@ -276,7 +278,7 @@ val receive_s_Idle (st:state) (b:R.const_slice) (f_begin f_end:uint_32)
 /// The following flight type covers this case
 
 noeq type c_wait_ServerHello (b:R.const_slice) = {
-  sh_msg : m:HSMR.sh_repr b
+  sh : m:HSMR.sh_pos b
 }
 
 unfold
@@ -285,10 +287,10 @@ let valid_c_wait_ServerHello
   (flt:c_wait_ServerHello b) (h:HS.mem)
 = let open R in
 
-  flt.sh_msg.start_pos == f_begin /\
-  flt.sh_msg.end_pos == f_end /\
+  flt.sh.start_pos == f_begin /\
+  R.end_pos flt.sh == f_end /\
 
-  valid flt.sh_msg h
+  valid_repr_pos flt.sh h
 
 (*
  * AR: 07/23: Cedric mentioned that for this flight, the buffer may have leftover bytes
@@ -300,7 +302,7 @@ let valid_c_wait_ServerHello
  *)
 
 val receive_c_wait_ServerHello (st:state) (b:R.const_slice) (f_begin f_end:uint_32)
-: ST (TLSError.result (option (c_wait_ServerHello b & uint_32) & state))
+: ST (TLS.Result.result (option (c_wait_ServerHello b & uint_32) & state))
   (requires receive_pre st b f_begin f_end F_c_wait_ServerHello)
   (ensures  receive_post_with_leftover_bytes st b f_begin f_end F_c_wait_ServerHello valid_c_wait_ServerHello)
 
@@ -309,11 +311,12 @@ val receive_c_wait_ServerHello (st:state) (b:R.const_slice) (f_begin f_end:uint_
 
 
 unfold let in_range_and_valid
-  (#a:Type0) (#b:R.const_slice) (r:R.repr a b)
+  (#a:Type0) (#b:R.const_slice) (r:R.repr_pos a b)
   (f_begin f_end:uint_32) (h:HS.mem)
 = let open R in
-  f_begin <= r.start_pos /\ r.end_pos <= f_end /\  //in-range
-  valid r h  //valid
+  f_begin <= r.start_pos /\ 
+  R.end_pos r <= f_end /\  //in-range
+  valid_repr_pos r h  //valid
 
 
 (****** Handshake state C13_wait_Finished1 ******)
@@ -330,10 +333,10 @@ unfold let in_range_and_valid
 /// The following type covers all these cases
 
 noeq type c13_wait_Finished1 (b:R.const_slice) = {
-  ee_msg   : HSM13R.ee13_repr b;
-  cr_msg   : option (HSM13R.cr13_repr b);
-  c_cv_msg : option (HSM13R.c13_repr b & HSM13R.cv13_repr b);
-  fin_msg  : HSM13R.fin13_repr b
+  c13_w_f1_ee   : HSM13R.ee13_pos b;
+  c13_w_f1_cr   : option (HSM13R.cr13_pos b);
+  c13_w_f1_c_cv : option (HSM13R.c13_pos b & HSM13R.cv13_pos b);
+  c13_w_f1_fin  : HSM13R.fin13_pos b
 }
 
 
@@ -346,24 +349,24 @@ unfold
 let valid_c13_wait_Finished1
   (#b:R.const_slice) (f_begin f_end:uint_32)
   (flt:c13_wait_Finished1 b) (h:HS.mem)
-= R.(flt.ee_msg.start_pos == f_begin /\
-     flt.fin_msg.end_pos == f_end)   /\  //flight begins at from and finishes at to
+= R.(flt.c13_w_f1_ee.start_pos == f_begin /\
+     end_pos flt.c13_w_f1_fin == f_end)   /\  //flight begins at from and finishes at to
 
-  in_range_and_valid flt.ee_msg f_begin f_end h /\
+  in_range_and_valid flt.c13_w_f1_ee f_begin f_end h /\
     
-  (Some? flt.cr_msg ==> in_range_and_valid (Some?.v flt.cr_msg) f_begin f_end h) /\
+  (Some? flt.c13_w_f1_cr ==> in_range_and_valid (Some?.v flt.c13_w_f1_cr) f_begin f_end h) /\
     
-  (Some? flt.c_cv_msg ==>
-    (let c13_msg, cv13_msg = Some?.v flt.c_cv_msg in
+  (Some? flt.c13_w_f1_c_cv ==>
+    (let c13_msg, cv13_msg = Some?.v flt.c13_w_f1_c_cv in
      in_range_and_valid c13_msg f_begin f_end h /\
      in_range_and_valid cv13_msg f_begin f_end h)) /\
 
-  in_range_and_valid flt.fin_msg f_begin f_end h
+  in_range_and_valid flt.c13_w_f1_fin f_begin f_end h
 
 
 val receive_c13_wait_Finished1
   (st:state) (b:R.const_slice) (f_begin f_end:uint_32)
-: ST (TLSError.result (option (c13_wait_Finished1 b) & state))
+: ST (TLS.Result.result (option (c13_wait_Finished1 b) & state))
   (requires receive_pre st b f_begin f_end F_c13_wait_Finished1)
   (ensures  receive_post st b f_begin f_end F_c13_wait_Finished1 valid_c13_wait_Finished1)
 
@@ -380,34 +383,34 @@ val receive_c13_wait_Finished1
 
 
 noeq type s13_wait_Finished2 (b:R.const_slice) = {
-  c_cv_msg : option (HSM13R.c13_repr b & HSM13R.cv13_repr b);
-  fin_msg  : HSM13R.fin13_repr b
+  s13_w_f2_c_cv : option (HSM13R.c13_pos b & HSM13R.cv13_pos b);
+  s13_w_f2_fin  : HSM13R.fin13_pos b
 }
 
 unfold
 let valid_s13_wait_Finished2
   (#b:R.const_slice) (f_begin f_end:uint_32)
   (flt:s13_wait_Finished2 b) (h:HS.mem)
-= match flt.c_cv_msg with
+= match flt.s13_w_f2_c_cv with
   | Some (c_msg, cv_msg) ->
     R.(c_msg.start_pos == f_begin    /\
-       flt.fin_msg.end_pos == f_end) /\
+       end_pos flt.s13_w_f2_fin == f_end) /\
 
     in_range_and_valid c_msg f_begin f_end h /\
 
     in_range_and_valid cv_msg f_begin f_end h /\
 
-    in_range_and_valid flt.fin_msg f_begin f_end h
+    in_range_and_valid flt.s13_w_f2_fin f_begin f_end h
 
   | None ->
-    R.(flt.fin_msg.start_pos == f_begin /\
-       flt.fin_msg.end_pos   == f_end)  /\
+    R.(flt.s13_w_f2_fin.start_pos == f_begin /\
+       end_pos flt.s13_w_f2_fin   == f_end)  /\
 
-    in_range_and_valid flt.fin_msg f_begin f_end h
+    in_range_and_valid flt.s13_w_f2_fin f_begin f_end h
 
 
 val receive_s13_wait_Finished2 (st:state) (b:R.const_slice) (f_begin f_end:uint_32)
-: ST (TLSError.result (option (s13_wait_Finished2 b) & state))
+: ST (TLS.Result.result (option (s13_wait_Finished2 b) & state))
   (requires receive_pre st b f_begin f_end F_s13_wait_Finished2)
   (ensures  receive_post st b f_begin f_end F_s13_wait_Finished2 valid_s13_wait_Finished2)
 
@@ -423,7 +426,7 @@ val receive_s13_wait_Finished2 (st:state) (b:R.const_slice) (f_begin f_end:uint_
 
 
 noeq type s13_wait_EOED (b:R.const_slice) = {
-  eoed_msg : HSM13R.eoed13_repr b
+  eoed : HSM13R.eoed13_pos b
 }
 
 
@@ -433,13 +436,13 @@ let valid_s13_wait_EOED
   (flt:s13_wait_EOED b) (h:HS.mem)
 = let open R in
 
-  flt.eoed_msg.start_pos == f_begin /\
-  flt.eoed_msg.end_pos == f_end     /\
+  flt.eoed.start_pos == f_begin /\
+  end_pos flt.eoed == f_end     /\
 
-  valid flt.eoed_msg h
+  valid_repr_pos flt.eoed h
 
 val receive_s13_wait_EOED (st:state) (b:R.const_slice) (f_begin f_end:uint_32)
-: ST (TLSError.result (option (s13_wait_EOED b) & state))
+: ST (TLS.Result.result (option (s13_wait_EOED b) & state))
   (requires receive_pre st b f_begin f_end F_s13_wait_EOED)
   (ensures  receive_post st b f_begin f_end F_s13_wait_EOED valid_s13_wait_EOED)
 
@@ -455,7 +458,7 @@ val receive_s13_wait_EOED (st:state) (b:R.const_slice) (f_begin f_end:uint_32)
 
 
 noeq type c13_Complete (b:R.const_slice) = {
-  nst_msg : HSM13R.nst13_repr b
+  c13_c_nst : HSM13R.nst13_pos b
 }
 
 unfold
@@ -464,16 +467,15 @@ let valid_c13_Complete
   (flt:c13_Complete b) (h:HS.mem)
 = let open R in
 
-  flt.nst_msg.start_pos == f_begin /\
-  flt.nst_msg.end_pos == f_end     /\
-
-  valid flt.nst_msg h
+  flt.c13_c_nst.start_pos == f_begin /\
+  R.end_pos flt.c13_c_nst == f_end     /\
+  valid_repr_pos flt.c13_c_nst h
 
 
 val receive_c13_Complete (st:state) (b:R.const_slice) (f_begin f_end:uint_32)
-: ST (TLSError.result (option (c13_Complete b) & state))
+: ST (TLS.Result.result (option (c13_Complete b & uint_32) & state))
   (requires receive_pre st b f_begin f_end F_c13_Complete)
-  (ensures  receive_post st b f_begin f_end F_c13_Complete valid_c13_Complete)
+  (ensures receive_post_with_leftover_bytes st b f_begin f_end F_c13_Complete valid_c13_Complete)
 
 
 (*** 1.2 flights ***)
@@ -491,30 +493,30 @@ val receive_c13_Complete (st:state) (b:R.const_slice) (f_begin f_end:uint_32)
 
 
 noeq type c12_wait_ServerHelloDone (b:R.const_slice) = {
-  c_msg   : HSM12R.c12_repr b;
-  ske_msg : HSM12R.ske12_repr b;
-  cr_msg  : option (HSM12R.cr12_repr b);
-  shd_msg : HSM12R.shd12_repr b
+  c   : HSM12R.c12_pos b;
+  ske : HSM12R.ske12_pos b;
+  cr  : option (HSM12R.cr12_pos b);
+  shd : HSM12R.shd12_pos b
 }
 
 unfold
 let valid_c12_wait_ServerHelloDone
   (#b:R.const_slice) (f_begin f_end:uint_32)
   (flt:c12_wait_ServerHelloDone b) (h:HS.mem)
-= R.(flt.c_msg.start_pos == f_begin /\
-     flt.shd_msg.end_pos == f_end)  /\
+= R.(flt.c.start_pos == f_begin /\
+     end_pos flt.shd == f_end)  /\
 
-  in_range_and_valid flt.c_msg f_begin f_end h /\
+  in_range_and_valid flt.c f_begin f_end h /\
 
-  in_range_and_valid flt.ske_msg f_begin f_end h /\
+  in_range_and_valid flt.ske f_begin f_end h /\
 
-  (Some? flt.cr_msg ==> in_range_and_valid (Some?.v flt.cr_msg) f_begin f_end h) /\
+  (Some? flt.cr ==> in_range_and_valid (Some?.v flt.cr) f_begin f_end h) /\
 
-  in_range_and_valid flt.shd_msg f_begin f_end h
+  in_range_and_valid flt.shd f_begin f_end h
   
 
 val receive_c12_wait_ServerHelloDone (st:state) (b:R.const_slice) (f_begin f_end:uint_32)
-: ST (TLSError.result (option (c12_wait_ServerHelloDone b) & state))
+: ST (TLS.Result.result (option (c12_wait_ServerHelloDone b) & state))
   (requires receive_pre st b f_begin f_end F_c12_wait_ServerHelloDone)
   (ensures  receive_post st b f_begin f_end F_c12_wait_ServerHelloDone valid_c12_wait_ServerHelloDone)
 
@@ -530,7 +532,7 @@ val receive_c12_wait_ServerHelloDone (st:state) (b:R.const_slice) (f_begin f_end
 
 
 noeq type cs12_wait_Finished (b:R.const_slice) = {
-  fin_msg : HSM12R.fin12_repr b
+  fin : HSM12R.fin12_pos b
 }
 
 
@@ -540,14 +542,14 @@ let valid_cs12_wait_Finished
   (flt:cs12_wait_Finished b) (h:HS.mem)
 = let open R in
 
-  flt.fin_msg.start_pos == f_begin /\
-  flt.fin_msg.end_pos == f_end /\
+  flt.fin.start_pos == f_begin /\
+  end_pos flt.fin == f_end /\
 
-  valid flt.fin_msg h
+  valid_repr_pos flt.fin h
 
 
 val receive_cs12_wait_Finished (st:state) (b:R.const_slice) (f_begin f_end:uint_32)
-: ST (TLSError.result (option (cs12_wait_Finished b) & state))
+: ST (TLS.Result.result (option (cs12_wait_Finished b) & state))
   (requires receive_pre st b f_begin f_end F_cs12_wait_Finished)
   (ensures  receive_post st b f_begin f_end F_cs12_wait_Finished valid_cs12_wait_Finished)
 
@@ -562,7 +564,7 @@ val receive_cs12_wait_Finished (st:state) (b:R.const_slice) (f_begin f_end:uint_
 /// The following flight type covers this case
 
 noeq type c12_wait_NST (b:R.const_slice) = {
-  nst_msg : HSM12R.nst12_repr b
+  c12_w_n_nst : HSM12R.nst12_pos b
 }
 
 
@@ -572,15 +574,15 @@ let valid_c12_wait_NST
   (flt:c12_wait_NST b) (h:HS.mem)
 = let open R in
 
-  flt.nst_msg.start_pos == f_begin /\
+  flt.c12_w_n_nst.start_pos == f_begin /\
 
-  flt.nst_msg.end_pos == f_end /\
+  end_pos flt.c12_w_n_nst == f_end /\
 
-  valid flt.nst_msg h
+  valid_repr_pos flt.c12_w_n_nst h
 
 
 val receive_c12_wait_NST (st:state) (b:R.const_slice) (f_begin f_end:uint_32)
-: ST (TLSError.result (option (c12_wait_NST b) & state))
+: ST (TLS.Result.result (option (c12_wait_NST b) & state))
   (requires receive_pre st b f_begin f_end F_c12_wait_NST)
   (ensures  receive_post st b f_begin f_end F_c12_wait_NST valid_c12_wait_NST)
 
@@ -597,7 +599,7 @@ val receive_c12_wait_NST (st:state) (b:R.const_slice) (f_begin f_end:uint_32)
 
 
 noeq type s12_wait_CCS1 (b:R.const_slice) = {
-  cke_msg : HSM12R.cke12_repr b
+  cke : HSM12R.cke12_pos b
 }
 
 
@@ -607,13 +609,13 @@ let valid_s12_wait_CCS1
   (flt:s12_wait_CCS1 b) (h:HS.mem)
 = let open R in
 
-  flt.cke_msg.start_pos == f_begin /\
-  flt.cke_msg.end_pos == f_end /\
+  flt.cke.start_pos == f_begin /\
+  end_pos flt.cke == f_end /\
 
-  valid flt.cke_msg h
+  valid_repr_pos flt.cke h
 
 
 val receive_s12_wait_CCS1 (st:state) (b:R.const_slice) (f_begin f_end:uint_32)
-: ST (TLSError.result (option (s12_wait_CCS1 b) & state))
+: ST (TLS.Result.result (option (s12_wait_CCS1 b) & state))
   (requires receive_pre st b f_begin f_end F_s12_wait_CCS1)
   (ensures  receive_post st b f_begin f_end F_s12_wait_CCS1 valid_s12_wait_CCS1)

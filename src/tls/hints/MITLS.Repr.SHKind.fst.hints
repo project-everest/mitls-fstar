@@ -1,0 +1,34 @@
+[
+  "»r+é—Çê9\u00194D÷“½",
+  [
+    [
+      "MITLS.Repr.SHKind.ptr",
+      1,
+      2,
+      1,
+      [
+        "@query", "equation_LowParse.Spec.Base.strong_parser_kind",
+        "equation_Parsers.SHKind.sHKind_parser_kind",
+        "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind",
+        "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind"
+      ],
+      0,
+      "d9c4538afbee278ae56a01e31599b94d"
+    ],
+    [
+      "MITLS.Repr.SHKind.field_cipherSuite",
+      1,
+      2,
+      1,
+      [
+        "@query", "equation_LowParse.Spec.Base.strong_parser_kind",
+        "equation_Parsers.CipherSuite.cipherSuite_parser_kind",
+        "equation_Parsers.SHKind.sHKind_parser_kind",
+        "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind",
+        "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind"
+      ],
+      0,
+      "bae72649a9bc3da501812cba494ecbc0"
+    ]
+  ]
+]

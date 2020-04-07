@@ -1,5 +1,15 @@
 module ParsersAux.Binders
 
+/// This is the only API for the ParsersAux files, used in Transcript etc.
+///
+/// Their purpose is to specify ClientHello messages with truncated
+/// binders, and implement the overwriting of the binders in a
+/// previously-serialized message, once its prefix has been hashed to
+/// compute the binders.
+///
+/// For convenience, we include this interface in HandshakeMessages,
+/// although it only uses its first definitions.
+///
 module Seq = FStar.Seq
 module LP = LowParse.Low.Base
 module HS = FStar.HyperStack
@@ -13,31 +23,56 @@ module CH = Parsers.ClientHello
 module CHE = Parsers.ClientHelloExtension
 module Psks = Parsers.OfferedPsks
 
+module List = FStar.List.Tot
+
+type binders = Psks.offeredPsks_binders
+
+/// First dealing with binders as a ClientHello property
+
+let ch_bound (ch:CH.clientHello): bool =
+  let es = ch.CH.extensions in
+  es <> [] && CHE.CHE_pre_shared_key? (List.last es)
+
+let clientHello_with_binders = ch: CH.clientHello{ ch_bound ch }
+
+let ch_psks (ch: clientHello_with_binders): Psks.offeredPsks  =
+  let es = ch.CH.extensions in
+  let CHE.CHE_pre_shared_key psks = List.last es in
+  psks
+
+let ch_binders (ch: clientHello_with_binders): binders =
+  (ch_psks ch).Psks.binders
+
+val ch_set_binders
+  (ch0: clientHello_with_binders)
+  (b1 : binders { Psks.offeredPsks_binders_bytesize b1 == Psks.offeredPsks_binders_bytesize (ch_binders ch0)})
+  : Tot (ch1: clientHello_with_binders {
+    let open CH in
+    ch1.version == ch0.version /\
+    ch1.random == ch0.random /\
+    ch1.session_id == ch0.session_id /\
+    ch1.cipher_suites == ch0.cipher_suites /\
+    ch1.compression_methods == ch0.compression_methods /\
+    List.init ch1.extensions == List.init ch0.extensions /\
+    (ch_psks ch1).Psks.identities == (ch_psks ch0).Psks.identities /\
+    ch_binders ch1 = b1 })
+
+
+/// Adding the M_client_hello message constructor
+
 let has_binders (m: H.handshake) : Tot bool = (* TODO: harmonize with HSL.Transcript.client_hello_has_psk *)
-  H.M_client_hello? m && (
-  let c = H.M_client_hello?._0 m in
-  Cons? (c.CH.extensions) &&
-  CHE.CHE_pre_shared_key? (L.last c.CH.extensions)
-  )
+  H.M_client_hello? m &&
+  ch_bound (H.M_client_hello?._0 m)
 
-let get_binders (m: H.handshake {has_binders m}) : Tot Psks.offeredPsks_binders =
-  let c = H.M_client_hello?._0 m in
-  (CHE.CHE_pre_shared_key?._0 (L.last c.CH.extensions)).Psks.binders
+let get_binders (m: H.handshake {has_binders m}) : Tot binders =
+  let c = H.M_client_hello?._0 m in ch_binders c
 
-val set_binders (m: H.handshake {has_binders m}) (b' : Psks.offeredPsks_binders { Psks.offeredPsks_binders_bytesize b' == Psks.offeredPsks_binders_bytesize (get_binders m)})
+val set_binders (m: H.handshake {has_binders m}) (b' : binders { Psks.offeredPsks_binders_bytesize b' == Psks.offeredPsks_binders_bytesize (get_binders m)})
   : Tot (m' : H.handshake {
     has_binders m' /\ (
     let c = H.M_client_hello?._0 m in
     let c' = H.M_client_hello?._0 m' in
-    c'.CH.version == c.CH.version /\
-    c'.CH.random == c.CH.random /\
-    c'.CH.session_id == c.CH.session_id /\
-    c'.CH.cipher_suites == c.CH.cipher_suites /\
-    c'.CH.compression_methods == c.CH.compression_methods /\
-    Cons? c'.CH.extensions /\
-    L.init c'.CH.extensions == L.init c.CH.extensions /\
-    CHE.CHE_pre_shared_key? (L.last c'.CH.extensions) /\
-    (CHE.CHE_pre_shared_key?._0 (L.last c'.CH.extensions)).Psks.identities == (CHE.CHE_pre_shared_key?._0 (L.last c.CH.extensions)).Psks.identities /\
+    c' = ch_set_binders c b' /\
     get_binders m' == b'
   )})
 
@@ -142,12 +177,14 @@ let valid_truncate_clientHello
     has_binders (LP.contents H.handshake_parser h sl pos)
   ))
   (ensures (
+    LP.valid H.handshake_parser h sl pos /\
+    has_binders (LP.contents H.handshake_parser h sl pos) /\ (
     let m = LP.contents H.handshake_parser h sl pos in
     let pos' = LP.get_valid_pos H.handshake_parser h sl pos in
     U32.v pos + U32.v (binders_offset m) + Psks.offeredPsks_binders_bytesize (get_binders m) == U32.v pos' /\
     LP.bytes_of_slice_from_to h sl pos (pos `U32.add` binders_offset m) == BY.reveal (truncate_clientHello_bytes m) /\
     LP.valid_content_pos Psks.offeredPsks_binders_parser h sl (pos `U32.add` binders_offset m) (get_binders m) pos'
-  ))
+  )))
 = let m = LP.contents H.handshake_parser h sl pos in
   LP.serialized_length_eq H.handshake_serializer m;
   truncate_clientHello_bytes_correct m;
@@ -247,6 +284,26 @@ let valid_binders_mutate
 
 (* Build a (dummy, but) canonical list of binders, for a given size *)
 
-val build_canonical_binders (len: U32.t) : Pure Psks.offeredPsks_binders
-  (requires (35 <= U32.v len /\ U32.v len <= 65537))
+type binders_len = len:UInt32.t {
+  35 <= UInt32.v len /\
+  UInt32.v len <= 65537
+}
+
+/// The length of the binders in a clientHello
+let ch_binders_len (ch:clientHello_with_binders)
+  : Tot (b:binders_len {
+           UInt32.v b =
+           Psks.offeredPsks_binders_bytesize (ch_binders ch) /\
+           UInt32.v b =
+           Seq.length
+             (LP.serialize
+               Psks.offeredPsks_binders_serializer (ch_binders ch))
+         })
+  = Psks.offeredPsks_binders_bytesize_eq (ch_binders ch);
+    Psks.offeredPsks_binders_size32 (ch_binders ch)
+    // An alternative way to compute it in GTot
+    // UInt32.uint_to_t (Psks.offeredPsks_binders_bytesize (PB.get_binders ch))
+
+val build_canonical_binders (len: binders_len): Pure binders
+  (requires True)
   (ensures (fun y -> Psks.offeredPsks_binders_bytesize y == U32.v len))

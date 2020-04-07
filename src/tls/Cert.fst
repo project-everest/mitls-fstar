@@ -2,9 +2,8 @@
 module Cert
 
 open FStar.Bytes
-open FStar.Error
 
-open TLSError
+open TLS.Result
 open TLSConstants
 open Parse
  

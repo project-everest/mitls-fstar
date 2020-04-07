@@ -45,8 +45,6 @@
         "equation_Parsers.ClientHelloExtension_CHE_default.clientHelloExtension_CHE_default",
         "equation_Parsers.ClientHelloExtension_CHE_pre_shared_key.clientHelloExtension_CHE_pre_shared_key",
         "equation_Parsers.ClientHelloExtension_CHE_server_name.clientHelloExtension_CHE_server_name",
-        "equation_Parsers.ExtensionType.extensionType_parser",
-        "equation_Parsers.ExtensionType.extensionType_parser_kind",
         "equation_Parsers.ExtensionType.extensionType_repr_parser",
         "equation_Parsers.ExtensionType.extensionType_serializer",
         "equation_Parsers.ExtensionType.parse_maybe_extensionType_key",
@@ -81,11 +79,10 @@
         "token_correspondence_Parsers.ClientHelloExtension.key_of_clientHelloExtension",
         "token_correspondence_Parsers.ClientHelloExtension.synth_clientHelloExtension_cases_recip",
         "typing_Parsers.ClientHelloExtension.clientHelloExtension_clens__pre_shared_key",
-        "typing_Parsers.ClientHelloExtension.clientHelloExtension_clens__server_name",
-        "unit_inversion"
+        "typing_Parsers.ClientHelloExtension.clientHelloExtension_clens__server_name"
       ],
       0,
-      "8a6f9fa4380a5d58c51aa1c5e8f8c32f"
+      "a41d0a5718ee183717ec98c1c84b93e8"
     ]
   ]
 ]

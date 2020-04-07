@@ -27,39 +27,64 @@ module MITLS.Repr.ServerHello
 module LP = LowParse.Low.Base
 module B = LowStar.Monotonic.Buffer
 module HS = FStar.HyperStack
-module R = MITLS.Repr
+module R = LowParse.Repr
 module SH = Parsers.ServerHello
 module SHB = Parsers.ServerHello_is_hrr
-module SHK = Parsers.SHKind
-module HRK = Parsers.HRRKind
+module SHK = MITLS.Repr.SHKind
+module HRK = MITLS.Repr.HRRKind
 
 open FStar.Integers
 open FStar.HyperStack.ST
 
 let t = SH.serverHello
 
-let repr (b:R.const_slice) =
-  R.repr_p SH.serverHello b SH.serverHello_parser
+let ptr = R.repr_ptr_p t SH.serverHello_parser
 
-#push-options "--z3rlimit 16 --max_fuel 1 --max_ifuel 1"
-let cipherSuite (#b:R.const_slice) (r:repr b)
+let pos (b:R.const_slice) = R.repr_pos_p SH.serverHello b SH.serverHello_parser
+
+let field_is_hrr =
+  R.FieldAccessor
+    SH.accessor_serverHello_is_hrr
+    SH.serverHello_is_hrr_jumper
+    SH.serverHello_is_hrr_parser32
+
+let cipherSuite (p:ptr)
   : Stack Parsers.CipherSuite.cipherSuite
-    (requires R.valid r)
+    (requires R.valid p)
     (ensures fun h0 cs h1 ->
       B.modifies B.loc_none h0 h1 /\
-      cs == (match SH.((R.value r).is_hrr) with
-      | SHB.ServerHello_is_hrr_true hrr -> HRK.(hrr.cipher_suite)
-      | SHB.ServerHello_is_hrr_false sh -> SHK.(sh.SHB.value.cipher_suite)))
-  = let open R in
-    R.reveal_valid();
-    let b = R.to_slice b in
-    let pos0 = SH.accessor_serverHello_is_hrr b r.start_pos in
-    if SHB.serverHello_is_hrr_test b pos0 then
-      let pos1 = SH.serverHello_is_hrr_accessor_true b pos0 in
-      let pos2 = HRK.accessor_hRRKind_cipher_suite b pos1 in
-      Parsers.CipherSuite.cipherSuite_reader b pos2
-    else
-      let pos1 = SH.serverHello_is_hrr_accessor_false b pos0 in
-      let pos2 = SHK.accessor_sHKind_cipher_suite b pos1 in
-      Parsers.CipherSuite.cipherSuite_reader b pos2
-#pop-options
+      cs == (match (R.value p).SH.is_hrr with
+             | SHB.ServerHello_is_hrr_true hrr -> HRK.(hrr.cipher_suite)
+             | SHB.ServerHello_is_hrr_false sh -> SHK.(sh.SHB.value.cipher_suite)))
+  = let open MITLS.Repr.ServerHello_is_hrr in
+    let sh_is_hrr = R.get_field field_is_hrr p in
+    let b = is_hrr_test sh_is_hrr in
+    if b
+    then let hrrk = R.get_field is_hrr_true sh_is_hrr in
+         R.read_field HRK.field_cipherSuite hrrk
+    else let shk = R.get_field is_hrr_false sh_is_hrr in
+         R.read_field SHK.field_cipherSuite shk
+
+// The low-level way:
+// #push-options "--max_fuel 1 --max_ifuel 1 --z3rlimit_factor 3"
+// let cipherSuite (p:ptr)
+//   : Stack Parsers.CipherSuite.cipherSuite
+//     (requires R.valid p)
+//     (ensures fun h0 cs h1 ->
+//       B.modifies B.loc_none h0 h1 /\
+//       cs == (match (R.value p).SH.is_hrr with
+//              | SHB.ServerHello_is_hrr_true hrr -> HRK.(hrr.cipher_suite)
+//              | SHB.ServerHello_is_hrr_false sh -> SHK.(sh.SHB.value.cipher_suite)))
+//   = let open R in
+//     R.reveal_valid();
+//     let b = R.temp_slice_of_repr_ptr p in
+//     let pos0 = SH.accessor_serverHello_is_hrr b 0ul in
+//     if SHB.serverHello_is_hrr_test b pos0 then
+//       let pos1 = SH.serverHello_is_hrr_accessor_true b pos0 in
+//       let pos2 = HRK.accessor_hRRKind_cipher_suite b pos1 in
+//       Parsers.CipherSuite.cipherSuite_reader b pos2
+//     else
+//       let pos1 = SH.serverHello_is_hrr_accessor_false b pos0 in
+//       let pos2 = SHK.accessor_sHKind_cipher_suite b pos1 in
+//       Parsers.CipherSuite.cipherSuite_reader b pos2
+// #pop-options

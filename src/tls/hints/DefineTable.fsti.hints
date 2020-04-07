@@ -8,10 +8,10 @@
       1,
       [
         "@MaxIFuel_assumption", "@query", "bool_inversion",
-        "equation_DefineTable.dt", "equation_Mem.model", "typing_Flags.model"
+        "equation_DefineTable.dt", "equation_Mem.model", "typing_Mem.model"
       ],
       0,
-      "0b8d7d9139575027227ae3798759d22b"
+      "8ff5d1bd3d631592ec96ddb9a6bbfa26"
     ],
     [
       "DefineTable.real",
@@ -19,15 +19,18 @@
       2,
       1,
       [
-        "@MaxIFuel_assumption", "@query", "bool_inversion",
+        "@MaxIFuel_assumption", "@query",
+        "Prims_pretyping_ae567c2fb75be05905677af440075565",
         "equation_DefineTable.dt", "equation_Mem.is_tls_rgn",
-        "equation_Mem.model", "equation_Mem.rgn", "equation_Mem.tls_rgn",
-        "refinement_interpretation_Tm_refine_b5163a5c7eb2f4891aa85b6bd19b6e5e",
-        "refinement_interpretation_Tm_refine_c358ce785c6b462b7618aa4f08d5c31e",
-        "typing_Mem.is_tls_rgn", "typing_Mem.tls_region"
+        "equation_Mem.model", "equation_Mem.tls_color",
+        "equation_Mem.tls_region", "equation_Mem.tls_rgn",
+        "function_token_typing_Prims.__cache_version_number__",
+        "primitive_Prims.op_Equality", "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Tm_refine_9393f41ccc9ce36df1080eefe33f6c53",
+        "typing_Mem.tls_region"
       ],
       0,
-      "969ef1294e76a167cc84a71ff979cce9"
+      "ba5b1338600235859fb9b89b49aabc30"
     ],
     [
       "DefineTable.loc",
@@ -36,7 +39,7 @@
       1,
       [ "@query", "projection_inverse_BoxBool_proj_0" ],
       0,
-      "ef2e180e80313621ff9401d8265bddd3"
+      "17bc64690c71d9cc0535e6cf2a43266b"
     ],
     [
       "DefineTable.lemma_fresh_frame",
@@ -61,7 +64,7 @@
         "projection_inverse_BoxBool_proj_0",
         "refinement_interpretation_Tm_refine_1a1278f1aecd37594ba20d888b7fd230",
         "refinement_interpretation_Tm_refine_34b275b4fd20bfd100574b013cced800",
-        "refinement_interpretation_Tm_refine_ecfe710eaddaa768c46a7d024350dcbc",
+        "refinement_interpretation_Tm_refine_4deaad73cd92bc948bb28924e869c4ab",
         "refinement_interpretation_Tm_refine_f596a1e23d65ebe54b463345ece4e00f",
         "typing_DefineTable.ideal", "typing_DefineTable.loc",
         "typing_FStar.Monotonic.DependentMap.grows",
@@ -69,7 +72,7 @@
         "typing_Tm_abs_8360f68b1ef1ebd2579ae5799903dc5e"
       ],
       0,
-      "3196688a5e1fbd0c1c71972c8adff319"
+      "f9759f06729f1f82262e5fa835e82110"
     ],
     [
       "DefineTable.extended",
@@ -78,7 +81,7 @@
       1,
       [ "@query", "projection_inverse_BoxBool_proj_0" ],
       0,
-      "477f365cff99b3fcd3e6cbd6682a61d3"
+      "a9832fcfd162627ef4eca655db9e1603"
     ],
     [
       "DefineTable.unchanged",
@@ -87,7 +90,7 @@
       1,
       [ "@query" ],
       0,
-      "31315bb25bb1bdbf0372f27d122ed0fb"
+      "f878e40adf0210d8ee7d1d4515cbe67f"
     ],
     [
       "DefineTable.lemma_unchanged_frame",
@@ -96,36 +99,6 @@
       1,
       [
         "@MaxIFuel_assumption", "@query", "bool_inversion",
-        "equation_DefineTable.dt", "equation_DefineTable.ideal",
-        "equation_DefineTable.live", "equation_DefineTable.loc",
-        "equation_DefineTable.table", "equation_DefineTable.unchanged",
-        "equation_FStar.HyperStack.ST.m_rref",
-        "equation_FStar.HyperStack.ST.mref",
-        "equation_FStar.Monotonic.DependentMap.imap",
-        "equation_FStar.Monotonic.DependentMap.t",
-        "equation_FStar.Monotonic.HyperStack.mref", "equation_Mem.model",
-        "equation_Mem.tls_define_region",
-        "lemma_LowStar.Monotonic.Buffer.loc_disjoint_sym_",
-        "lemma_LowStar.Monotonic.Buffer.modifies_mreference_elim",
-        "refinement_interpretation_Tm_refine_1a1278f1aecd37594ba20d888b7fd230",
-        "refinement_interpretation_Tm_refine_ecfe710eaddaa768c46a7d024350dcbc",
-        "refinement_interpretation_Tm_refine_f596a1e23d65ebe54b463345ece4e00f",
-        "typing_DefineTable.loc",
-        "typing_FStar.Monotonic.DependentMap.grows",
-        "typing_FStar.Monotonic.DependentMap.imap", "typing_Mem.model",
-        "typing_Tm_abs_8360f68b1ef1ebd2579ae5799903dc5e"
-      ],
-      0,
-      "688b9c967807bfac89123b782a1a41eb"
-    ],
-    [
-      "DefineTable.lemma_disjoint_unchanged",
-      1,
-      2,
-      1,
-      [
-        "@MaxIFuel_assumption", "@query", "bool_inversion",
-        "equation_DefineTable.disjoint", "equation_DefineTable.dt",
         "equation_DefineTable.ideal", "equation_DefineTable.live",
         "equation_DefineTable.loc", "equation_DefineTable.table",
         "equation_DefineTable.unchanged",
@@ -138,15 +111,46 @@
         "lemma_LowStar.Monotonic.Buffer.loc_disjoint_sym_",
         "lemma_LowStar.Monotonic.Buffer.modifies_mreference_elim",
         "refinement_interpretation_Tm_refine_1a1278f1aecd37594ba20d888b7fd230",
-        "refinement_interpretation_Tm_refine_ecfe710eaddaa768c46a7d024350dcbc",
+        "refinement_interpretation_Tm_refine_34b275b4fd20bfd100574b013cced800",
+        "refinement_interpretation_Tm_refine_4deaad73cd92bc948bb28924e869c4ab",
         "refinement_interpretation_Tm_refine_f596a1e23d65ebe54b463345ece4e00f",
-        "typing_DefineTable.loc",
+        "typing_DefineTable.ideal", "typing_DefineTable.loc",
         "typing_FStar.Monotonic.DependentMap.grows",
         "typing_FStar.Monotonic.DependentMap.imap", "typing_Mem.model",
         "typing_Tm_abs_8360f68b1ef1ebd2579ae5799903dc5e"
       ],
       0,
-      "853e138096c2909f48c7aa079400552d"
+      "0ab6e5f45fa34e240d3952586648da57"
+    ],
+    [
+      "DefineTable.lemma_disjoint_unchanged",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "bool_inversion",
+        "equation_DefineTable.disjoint", "equation_DefineTable.ideal",
+        "equation_DefineTable.live", "equation_DefineTable.loc",
+        "equation_DefineTable.table", "equation_DefineTable.unchanged",
+        "equation_FStar.HyperStack.ST.m_rref",
+        "equation_FStar.HyperStack.ST.mref",
+        "equation_FStar.Monotonic.DependentMap.imap",
+        "equation_FStar.Monotonic.DependentMap.t",
+        "equation_FStar.Monotonic.HyperStack.mref", "equation_Mem.model",
+        "equation_Mem.tls_define_region",
+        "lemma_LowStar.Monotonic.Buffer.loc_disjoint_sym_",
+        "lemma_LowStar.Monotonic.Buffer.modifies_mreference_elim",
+        "refinement_interpretation_Tm_refine_1a1278f1aecd37594ba20d888b7fd230",
+        "refinement_interpretation_Tm_refine_34b275b4fd20bfd100574b013cced800",
+        "refinement_interpretation_Tm_refine_4deaad73cd92bc948bb28924e869c4ab",
+        "refinement_interpretation_Tm_refine_f596a1e23d65ebe54b463345ece4e00f",
+        "typing_DefineTable.ideal", "typing_DefineTable.loc",
+        "typing_FStar.Monotonic.DependentMap.grows",
+        "typing_FStar.Monotonic.DependentMap.imap", "typing_Mem.model",
+        "typing_Tm_abs_8360f68b1ef1ebd2579ae5799903dc5e"
+      ],
+      0,
+      "cb065c65fedab90d70222c8892e68e42"
     ],
     [
       "DefineTable.lookup",
@@ -163,7 +167,7 @@
         "projection_inverse_BoxBool_proj_0"
       ],
       0,
-      "52d78deff890fd7b6a1a296bfc6dd82c"
+      "cd0f2c3a2f3fad33307020f91fce5740"
     ]
   ]
 ]

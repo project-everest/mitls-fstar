@@ -11,10 +11,9 @@ open FStar.Heap
 open FStar.Seq // DO NOT move further below, it would shadow `FStar.HyperStack.mem`
 open FStar.HyperStack
 open FStar.Monotonic.Seq
-open FStar.Error
 open FStar.Bytes
 
-open TLSError
+open TLS.Result
 open TLSInfo
 open TLSConstants
 module Range = Range
@@ -75,7 +74,7 @@ noeq type epoch (hs_rgn:rgn) (n:random) =
       epoch hs_rgn n
 
 // we would extend/adapt it for TLS 1.3,
-// e.g. to notify 0RTT/forwad-privacy transitions
+// e.g. to notify 0RTT/forward-privacy transitions
 // for now epoch completion is a total function on handshake --- should be stateful
 
 let epoch_id #r #n (e:epoch r n) : StAE.stae_id = Epoch?.i e

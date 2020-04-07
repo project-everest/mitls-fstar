@@ -12,7 +12,7 @@
         "fuel_guarded_inversion_Ticket.ticket"
       ],
       0,
-      "1fa35fe8dc7fda2ba5331afa3e9e253e"
+      "e1e396a6506bb0ef7b3c266f55c24281"
     ],
     [
       "Ticket.write_ticket12",
@@ -23,12 +23,14 @@
         "@MaxFuel_assumption", "@MaxIFuel_assumption",
         "@fuel_correspondence_Prims.pow2.fuel_instrumented", "@query",
         "Parsers.Boolean_pretyping_8c45475001e5597aab6e44cf4ba9d3c7",
+        "Parsers.TicketContents12_pretyping_922625fdee5747902f6e70df224d7916",
         "assumption_FStar.UInt32.t__uu___haseq", "b2t_def", "bool_inversion",
         "bool_typing", "constructor_distinct_FStar.Integers.W16",
         "constructor_distinct_FStar.Integers.W31",
         "constructor_distinct_FStar.Integers.W8",
         "constructor_distinct_FStar.Pervasives.Native.Some",
         "constructor_distinct_Lib.IntTypes.U32",
+        "data_typing_intro_Parsers.Boolean.B_true@tok",
         "disc_equation_FStar.Error.Correct", "disc_equation_Ticket.Ticket12",
         "equality_tok_FStar.Integers.W16@tok",
         "equality_tok_FStar.Integers.W31@tok",
@@ -44,6 +46,7 @@
         "equation_FStar.Bytes.lbytes",
         "equation_FStar.HyperStack.ST.equal_domains",
         "equation_FStar.Monotonic.Heap.equal_dom",
+        "equation_FStar.Monotonic.HyperHeap.disjoint",
         "equation_FStar.Monotonic.HyperHeap.hmap",
         "equation_FStar.Monotonic.HyperStack.mem",
         "equation_FStar.UInt.fits", "equation_FStar.UInt.lt",
@@ -64,6 +67,7 @@
         "equation_LowParse.Spec.Base.strong_parser_kind",
         "equation_LowStar.Buffer.trivial_preorder",
         "equation_LowStar.Monotonic.Buffer.length",
+        "equation_Mem.store_region", "equation_Mem.tls_region",
         "equation_Parsers.Boolean.boolean_parser_kind",
         "equation_Parsers.CipherSuite.cipherSuite_parser_kind",
         "equation_Parsers.ProtocolVersion.protocolVersion_parser_kind",
@@ -76,6 +80,7 @@
         "equation_Ticket.ticketContents_of_ticket",
         "fuel_guarded_inversion_LowParse.Slice.slice",
         "function_token_typing_FStar.Monotonic.Heap.heap",
+        "function_token_typing_FStar.UInt32.t",
         "function_token_typing_FStar.UInt8.t",
         "function_token_typing_LowStar.Buffer.trivial_preorder",
         "function_token_typing_Parsers.TicketContents12_master_secret.ticketContents12_master_secret",
@@ -88,6 +93,7 @@
         "l_and-interp", "l_imp-interp",
         "l_quant_interp_702e988c6b3b01c0777bad6ab7596f28",
         "lemma_FStar.Buffer.lemma_size", "lemma_FStar.Bytes.hide_reveal",
+        "lemma_FStar.Ghost.reveal_hide",
         "lemma_FStar.HyperStack.ST.lemma_equal_domains_trans",
         "lemma_FStar.HyperStack.ST.lemma_same_refs_in_all_regions_intro",
         "lemma_FStar.Seq.Base.lemma_eq_elim",
@@ -113,7 +119,7 @@
         "lemma_LowStar.Monotonic.Buffer.modifies_trans_linear",
         "primitive_Prims.op_Addition", "primitive_Prims.op_AmpAmp",
         "primitive_Prims.op_Equality", "primitive_Prims.op_LessThan",
-        "primitive_Prims.op_LessThanOrEqual",
+        "primitive_Prims.op_LessThanOrEqual", "primitive_Prims.op_Negation",
         "primitive_Prims.op_Subtraction",
         "proj_equation_LowParse.Slice.Mkslice_base",
         "proj_equation_LowParse.Slice.Mkslice_len",
@@ -133,6 +139,7 @@
         "projection_inverse_Ticket.Ticket12_ms",
         "projection_inverse_Ticket.Ticket12_msId",
         "projection_inverse_Ticket.Ticket12_pv",
+        "refinement_interpretation_Tm_refine_0293669e3551b06bf284909872d618f3",
         "refinement_interpretation_Tm_refine_05e15190c946858f68c69156f585f95a",
         "refinement_interpretation_Tm_refine_0ec011aea9f93256a3547ad9f0c667f1",
         "refinement_interpretation_Tm_refine_12904f1a9e9e8436c394a25477098548",
@@ -147,6 +154,7 @@
         "refinement_interpretation_Tm_refine_71ea40360194fe02ee1272538c9cacbc",
         "refinement_interpretation_Tm_refine_7fd2044b3db773ba109fc0c45fa01d74",
         "refinement_interpretation_Tm_refine_b8b6aeb489b761b86c0ce3170a6f72d6",
+        "refinement_interpretation_Tm_refine_c16bc1b61f58b349bf6fc1c94dcaf83b",
         "refinement_interpretation_Tm_refine_c20f061073624c71e0f6daba66b14461",
         "refinement_interpretation_Tm_refine_f13070840248fced9d9d60d77bdae3ec",
         "refinement_interpretation_Tm_refine_ff3f214a1d72a8cdeaa968f7e92cedb4",
@@ -155,7 +163,8 @@
         "typing_FStar.Map.domain", "typing_FStar.Monotonic.HyperHeap.rid",
         "typing_FStar.Monotonic.HyperStack.get_hmap",
         "typing_FStar.UInt.fits", "typing_FStar.UInt32.sub",
-        "typing_FStar.UInt32.v", "typing_LowParse.Low.Base.get_valid_pos",
+        "typing_FStar.UInt32.v", "typing_LowParse.Low.Base.contents",
+        "typing_LowParse.Low.Base.get_valid_pos",
         "typing_LowParse.Low.Base.max_uint32",
         "typing_LowParse.Low.Base.serialized_length",
         "typing_LowParse.Slice.__proj__Mkslice__item__base",
@@ -167,7 +176,7 @@
         "typing_LowStar.Monotonic.Buffer.as_seq",
         "typing_LowStar.Monotonic.Buffer.len",
         "typing_LowStar.Monotonic.Buffer.loc_buffer",
-        "typing_Parsers.Boolean.boolean_parser",
+        "typing_Mem.store_region", "typing_Parsers.Boolean.boolean_parser",
         "typing_Parsers.Boolean.boolean_parser_kind",
         "typing_Parsers.Boolean.boolean_serializer",
         "typing_Parsers.CipherSuite.cipherSuite_parser",
@@ -185,7 +194,7 @@
         "typing_tok_Parsers.Boolean.B_true@tok"
       ],
       0,
-      "6cafd799b8dde9fddae66c98c841686e"
+      "32a9c5d8446962a2c47397cc69e93c21"
     ],
     [
       "Ticket.store_bytes_strong",
@@ -237,7 +246,7 @@
         "typing_LowStar.Monotonic.Buffer.loc_buffer"
       ],
       0,
-      "af3ac355119c1111e2c6ed0ef13d6031"
+      "bb1bd67e318ad845330b24d36bdf4aab"
     ],
     [
       "Ticket.write_ticket13",
@@ -248,7 +257,6 @@
         "@MaxIFuel_assumption", "@query",
         "Parsers.CipherSuite13_pretyping_df51d0a9cc2dbf0a5163c60af6b4294b",
         "Parsers.TicketContents13_pretyping_55f72821d5007bb7858ccf502683a6e5",
-        "Parsers.TicketContents_pretyping_a1abfed375b708d5bd178922a5d4aab7",
         "assumption_FStar.UInt32.t__uu___haseq", "b2t_def", "bool_inversion",
         "bool_typing", "constructor_distinct_FStar.Integers.W16",
         "constructor_distinct_FStar.Integers.W31",
@@ -264,6 +272,7 @@
         "equation_CipherSuite.cipherSuite13_of_cipherSuite",
         "equation_CipherSuite.name_of_cipherSuite_",
         "equation_CipherSuite.validCipherSuite",
+        "equation_FStar.Monotonic.HyperHeap.disjoint",
         "equation_FStar.Monotonic.HyperStack.mem",
         "equation_FStar.UInt.fits", "equation_FStar.UInt.lt",
         "equation_FStar.UInt.max_int", "equation_FStar.UInt.min_int",
@@ -285,9 +294,8 @@
         "equation_LowParse.Spec.Int.parse_u32_kind",
         "equation_LowStar.Buffer.trivial_preorder",
         "equation_LowStar.Monotonic.Buffer.length",
-        "equation_Parsers.CipherSuite.cipherSuite_parser_kind",
+        "equation_Mem.store_region", "equation_Mem.tls_region",
         "equation_Parsers.CipherSuite13.cipherSuite13_parser_kind",
-        "equation_Parsers.TicketContents.ticketContents_parser_kind",
         "equation_Parsers.TicketContents13.ticketContents13_parser_kind",
         "equation_Parsers.TicketContents13_custom_data.ticketContents13_custom_data",
         "equation_Parsers.TicketContents13_custom_data.ticketContents13_custom_data_parser_kind",
@@ -305,13 +313,12 @@
         "function_token_typing_LowStar.Buffer.trivial_preorder",
         "int_inversion", "int_typing",
         "interpretation_Tm_abs_612136ee4143d24977831c80e4f470a1",
-        "kinding_Parsers.CipherSuite.cipherSuite@tok",
         "kinding_Parsers.CipherSuite13.cipherSuite13@tok",
-        "kinding_Parsers.TicketContents.ticketContents@tok",
         "kinding_Parsers.TicketContents13.ticketContents13@tok",
         "l_and-interp", "l_imp-interp",
         "l_quant_interp_702e988c6b3b01c0777bad6ab7596f28",
         "lemma_FStar.Buffer.lemma_size", "lemma_FStar.Bytes.hide_reveal",
+        "lemma_FStar.Ghost.reveal_hide",
         "lemma_FStar.HyperStack.ST.lemma_equal_domains_trans",
         "lemma_FStar.Seq.Base.lemma_eq_elim", "lemma_FStar.UInt32.uv_inv",
         "lemma_FStar.UInt32.vu_inv",
@@ -328,15 +335,15 @@
         "lemma_LowStar.Monotonic.Buffer.live_gsub",
         "lemma_LowStar.Monotonic.Buffer.loc_buffer_from_to_eq",
         "lemma_LowStar.Monotonic.Buffer.loc_disjoint_gsub_buffer",
+        "lemma_LowStar.Monotonic.Buffer.loc_disjoint_includes_r",
         "lemma_LowStar.Monotonic.Buffer.loc_disjoint_sym_",
         "lemma_LowStar.Monotonic.Buffer.loc_includes_gsub_buffer_l",
         "lemma_LowStar.Monotonic.Buffer.modifies_loc_includes",
         "lemma_LowStar.Monotonic.Buffer.modifies_refl",
         "lemma_LowStar.Monotonic.Buffer.modifies_trans_linear",
-        "lemma_Parsers.CipherSuite13.lemma_valid_cipherSuite13_valid_cipherSuite",
         "primitive_Prims.op_Addition", "primitive_Prims.op_AmpAmp",
         "primitive_Prims.op_Equality", "primitive_Prims.op_LessThan",
-        "primitive_Prims.op_LessThanOrEqual",
+        "primitive_Prims.op_LessThanOrEqual", "primitive_Prims.op_Negation",
         "primitive_Prims.op_Subtraction",
         "proj_equation_LowParse.Slice.Mkslice_base",
         "proj_equation_LowParse.Slice.Mkslice_len",
@@ -347,6 +354,7 @@
         "projection_inverse_BoxInt_proj_0",
         "projection_inverse_FStar.Integers.Signed__0",
         "projection_inverse_FStar.Integers.Unsigned__0",
+        "projection_inverse_FStar.Pervasives.Native.Some_a",
         "projection_inverse_FStar.Pervasives.Native.Some_v",
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_high",
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_low",
@@ -359,8 +367,10 @@
         "projection_inverse_Ticket.Ticket13_rmsId",
         "projection_inverse_Ticket.Ticket13_ticket_age_add",
         "projection_inverse_Ticket.Ticket13_ticket_created",
+        "refinement_interpretation_Tm_refine_0293669e3551b06bf284909872d618f3",
         "refinement_interpretation_Tm_refine_096dcb399122345db27f37346c43e5dc",
         "refinement_interpretation_Tm_refine_0e2323c35b90973b8b07d8d47ae3c6c5",
+        "refinement_interpretation_Tm_refine_0ec011aea9f93256a3547ad9f0c667f1",
         "refinement_interpretation_Tm_refine_1afc85baa7cde4c5ffc806e27db40aaa",
         "refinement_interpretation_Tm_refine_33191a9f51e100ecf6b60c7a223f77ec",
         "refinement_interpretation_Tm_refine_3ae7934f7bb0b211572daa2c0f2cb446",
@@ -369,9 +379,9 @@
         "refinement_interpretation_Tm_refine_542f9d4f129664613f2483a6c88bc7c2",
         "refinement_interpretation_Tm_refine_59c3c511fab69cd40cdc781ec85d3b5f",
         "refinement_interpretation_Tm_refine_711c82de27c4295454c4d5d29eb1e833",
+        "refinement_interpretation_Tm_refine_870dc8a73b27151e0403bb23ded8a971",
         "refinement_interpretation_Tm_refine_907e6b7a50b3bb9c8b46f1e627ec7630",
         "refinement_interpretation_Tm_refine_96bb68f076c56de57b7ba2a52535df90",
-        "refinement_interpretation_Tm_refine_a78e81a34494fa620ef91991a1267b1f",
         "refinement_interpretation_Tm_refine_b1a408ada68c6ceb4df9b66b56919143",
         "refinement_interpretation_Tm_refine_b43b16fcb582977fd56f68ee8088c262",
         "refinement_interpretation_Tm_refine_b8b6aeb489b761b86c0ce3170a6f72d6",
@@ -387,6 +397,7 @@
         "typing_FStar.UInt.fits", "typing_FStar.UInt.max_int",
         "typing_FStar.UInt32.add", "typing_FStar.UInt32.sub",
         "typing_FStar.UInt32.uint_to_t", "typing_FStar.UInt32.v",
+        "typing_LowParse.Low.Base.content_length",
         "typing_LowParse.Low.Base.contents",
         "typing_LowParse.Low.Base.get_valid_pos",
         "typing_LowParse.Low.Base.max_uint32",
@@ -401,15 +412,11 @@
         "typing_LowParse.Spec.Int.serialize_u32",
         "typing_LowStar.Buffer.trivial_preorder",
         "typing_LowStar.Monotonic.Buffer.as_seq",
-        "typing_LowStar.Monotonic.Buffer.len",
         "typing_LowStar.Monotonic.Buffer.loc_buffer",
-        "typing_Parsers.CipherSuite.cipherSuite_parser",
-        "typing_Parsers.CipherSuite.cipherSuite_parser_kind",
+        "typing_Mem.store_region",
         "typing_Parsers.CipherSuite13.cipherSuite13_parser",
         "typing_Parsers.CipherSuite13.cipherSuite13_parser_kind",
         "typing_Parsers.CipherSuite13.cipherSuite13_serializer",
-        "typing_Parsers.TicketContents.ticketContents_parser",
-        "typing_Parsers.TicketContents.ticketContents_parser_kind",
         "typing_Parsers.TicketContents13.ticketContents13_parser",
         "typing_Parsers.TicketContents13.ticketContents13_parser_kind",
         "typing_Parsers.TicketContents13_custom_data.ticketContents13_custom_data_parser",
@@ -421,7 +428,7 @@
         "typing_Spec.Poly1305.size_key", "typing_Ticket.uu___is_Ticket13"
       ],
       0,
-      "90f92f5ce154d439234a869b24b54e23"
+      "7fdbac1f215d14e63ab1460dafed1f12"
     ],
     [
       "Ticket.write_ticket",
@@ -449,7 +456,7 @@
         "typing_FStar.Monotonic.HyperStack.get_tip"
       ],
       0,
-      "6827de22dbfbf123a1309ad202f19f02"
+      "84e768c584607bbf52f71199fa1138f8"
     ],
     [
       "Ticket.ticketContents_pskinfo_ticketContents_of_ticket",
@@ -460,30 +467,21 @@
         "@MaxIFuel_assumption", "@query",
         "constructor_distinct_Parsers.TicketContents.T_ticket12",
         "constructor_distinct_Parsers.TicketContents.T_ticket13",
-        "constructor_distinct_Tm_unit",
-        "data_elim_FStar.Pervasives.Native.Some",
         "data_elim_Ticket.Ticket13",
-        "disc_equation_CipherSuite.CipherSuite13",
-        "equation_CipherSuite.cipherSuite",
         "equation_Ticket.ticketContents13_pskinfo",
         "equation_Ticket.ticketContents_of_ticket",
         "equation_Ticket.ticketContents_pskinfo",
         "equation_Ticket.ticket_pskinfo",
-        "fuel_guarded_inversion_TLS.Callbacks.pskInfo",
         "fuel_guarded_inversion_Ticket.ticket",
         "lemma_CipherSuite.cipherSuite_of_cipherSuite13_of_cipherSuite",
-        "projection_inverse_BoxBool_proj_0",
         "projection_inverse_Parsers.TicketContents.T_ticket13__0",
         "projection_inverse_Parsers.TicketContents13.MkticketContents13_age_add",
         "projection_inverse_Parsers.TicketContents13.MkticketContents13_creation_time",
         "projection_inverse_Parsers.TicketContents13.MkticketContents13_cs",
-        "projection_inverse_Parsers.TicketContents13.MkticketContents13_nonce",
-        "refinement_interpretation_Tm_refine_d6e956c4df6cd621ba07a6bf7481b86a",
-        "typing_Ticket.ticketContents_of_ticket",
-        "typing_Ticket.ticketContents_pskinfo"
+        "projection_inverse_Parsers.TicketContents13.MkticketContents13_nonce"
       ],
       0,
-      "e25b0972a59ec7083722af3d5754b159"
+      "6fbfd5a24c5e162ac37cf8bce377df9f"
     ],
     [
       "Ticket.check_ticket12_low",
@@ -495,7 +493,7 @@
         "refinement_interpretation_Tm_refine_ba66e9a6a5d248a55437ac060425816b"
       ],
       0,
-      "35c9af3c04244361a9d27d9a3679dd12"
+      "8104aa1b94f80220e0edbaa8a1ecd3d9"
     ],
     [
       "Ticket.check_ticket12_low",
@@ -521,7 +519,7 @@
         "kinding_Parsers.ProtocolVersion.protocolVersion@tok",
         "kinding_Parsers.TicketContents12.ticketContents12@tok",
         "lemma_FStar.HyperStack.ST.lemma_equal_domains_trans",
-        "lemma_LowParse.Low.Base.slice_access_frame",
+        "lemma_LowParse.Low.Base.slice_access_frame_strong",
         "lemma_LowParse.Low.Base.slice_access_post",
         "lemma_LowParse.Low.Base.valid_elim_",
         "lemma_LowParse.Low.Base.valid_frame",
@@ -540,10 +538,10 @@
         "projection_inverse_LowParse.Low.Base.Mkclens_clens_get",
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind",
         "refinement_interpretation_Tm_refine_1afc85baa7cde4c5ffc806e27db40aaa",
+        "refinement_interpretation_Tm_refine_5ac10f09070abcdcbea57ea17e21b64c",
         "refinement_interpretation_Tm_refine_9050b8653943ea86e35a9fc2fbf729fb",
-        "refinement_interpretation_Tm_refine_b7550003f072bfc0f15fddf32511cfde",
         "refinement_interpretation_Tm_refine_ba66e9a6a5d248a55437ac060425816b",
-        "refinement_interpretation_Tm_refine_cd1ec3f0265017f67c49de71629e0f8c",
+        "refinement_interpretation_Tm_refine_c9905c0d9f2d0c7c1d603b63f73e5629",
         "token_correspondence_LowParse.Low.Base.__proj__Mkclens__item__clens_cond",
         "token_correspondence_LowParse.Low.Base.__proj__Mkclens__item__clens_get",
         "token_correspondence_Parsers.TicketContents12.__proj__MkticketContents12__item__master_secret",
@@ -564,7 +562,7 @@
         "typing_Parsers.TicketContents12_master_secret.ticketContents12_master_secret_parser_kind"
       ],
       0,
-      "ffe079b6f137e5fcb3e175e6f744afd6"
+      "807e56c6dd379ae85c253cc3c3c28e8f"
     ]
   ]
 ]
