@@ -1,1 +1,39 @@
-[ "≤8ÜS¡Úı\\”\u00147\u0004› zN", [] ]
+[
+  "ßí{+Gº%xÁÈÀwèô4r",
+  [
+    [
+      "Old.Epochs.discard",
+      1,
+      2,
+      1,
+      [
+        "@query", "equation_FStar.HyperStack.ST.equal_stack_domains",
+        "equation_FStar.Monotonic.Heap.equal_dom",
+        "lemma_FStar.HyperStack.ST.lemma_same_refs_in_stack_regions_intro"
+      ],
+      0,
+      "a90de805c8bd105771f4d6f22556e376"
+    ],
+    [
+      "Old.Epochs.trace",
+      1,
+      2,
+      1,
+      [
+        "@query", "equation_DebugFlags.debug",
+        "equation_DebugFlags.debug_Epochs"
+      ],
+      0,
+      "9b5e555ce0679ea1e9405539febda576"
+    ],
+    [
+      "Old.Epochs.epoch_region_inv",
+      1,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "031abc1748ce10f94c5d3f9373420333"
+    ]
+  ]
+]

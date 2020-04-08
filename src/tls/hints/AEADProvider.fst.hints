@@ -1,5 +1,5 @@
 [
-  "ˆ=‘zöT§S½³Î™2>G",
+  "GX‡º»»\"—Q\u0013.Ì\u0007«¡\u0013",
   [
     [
       "AEADProvider.discard",
@@ -12,7 +12,7 @@
         "lemma_FStar.HyperStack.ST.lemma_same_refs_in_stack_regions_intro"
       ],
       0,
-      "703b9abf3572b673c675fd8925bf68d5"
+      "cce426131fa53e163e6b97c9d2708a7c"
     ],
     [
       "AEADProvider.dbg",
@@ -24,7 +24,7 @@
         "equation_DebugFlags.debug_AEP"
       ],
       0,
-      "a7fbc24144e2977c545925eb5b733fd8"
+      "bb54b50eb8922af1c283ce8453a16552"
     ],
     [
       "AEADProvider.alg",
@@ -38,7 +38,7 @@
         "typing_CipherSuite.uu___is_AEAD"
       ],
       0,
-      "11d383fc7beef98e625f38773fef0cb5"
+      "7abac85696434396d85ba83b7953f145"
     ],
     [
       "AEADProvider.alg'",
@@ -52,7 +52,7 @@
         "typing_CipherSuite.uu___is_AEAD"
       ],
       0,
-      "1518005ac9c92d6a267bcf97ee533ab1"
+      "f05f1d18f157ee1eea058733fc348a94"
     ],
     [
       "AEADProvider.aeadAlg_for_evercrypt",
@@ -64,7 +64,7 @@
         "refinement_interpretation_Tm_refine_aeb42dbe7bcd8439bc45e996e277ed62"
       ],
       0,
-      "6eb8788a5e5cb0b15e03fc24362033dc"
+      "8688a736b6f34f30b7ecd1854e1e63d4"
     ],
     [
       "AEADProvider.iv",
@@ -76,7 +76,7 @@
         "equation_AEADProvider.iv_length", "projection_inverse_BoxInt_proj_0"
       ],
       0,
-      "2423c66f8b53d18f276b10fc4381b38c"
+      "a31aa92aef100cd8e65fe54b37dced46"
     ],
     [
       "AEADProvider.salt_length",
@@ -97,7 +97,7 @@
         "typing_AEADProvider.alg_"
       ],
       0,
-      "7cc88d4a5aa66f0d92b530773717027a"
+      "7882792163e7d3e8b0cf9cf21957cd53"
     ],
     [
       "AEADProvider.explicit_iv_length",
@@ -118,7 +118,7 @@
         "typing_AEADProvider.alg_"
       ],
       0,
-      "211241cc7c960082e21d361c27f5b752"
+      "66e93bac6ff33667874621a9183f0781"
     ],
     [
       "AEADProvider.key",
@@ -132,7 +132,7 @@
         "typing_AEADProvider.key_length"
       ],
       0,
-      "52e9b262b95542bcc857781e080538f7"
+      "b0c0fa25fcdbee91784e2679ffa219a7"
     ],
     [
       "AEADProvider.salt",
@@ -146,7 +146,7 @@
         "projection_inverse_BoxInt_proj_0", "typing_AEADProvider.salt_length"
       ],
       0,
-      "870992d0c14274d2e54d811576f0b40b"
+      "e67863a577c07f280c48599e5d99a666"
     ],
     [
       "AEADProvider.noncelen",
@@ -155,7 +155,7 @@
       1,
       [ "@query" ],
       0,
-      "c8d95da9a794a3a7a0b1d553d1642427"
+      "04716c8525b3c651bbad28f0ade99441"
     ],
     [
       "AEADProvider.nonce",
@@ -171,7 +171,7 @@
         "typing_AEADProvider.salt_length"
       ],
       0,
-      "d1a8f44868ce335d685a4eeabedb858a"
+      "a08b1eb2caa786565957b32359a46295"
     ],
     [
       "AEADProvider.coerce_iv",
@@ -183,7 +183,19 @@
         "equation_AEADProvider.iv_length", "projection_inverse_BoxInt_proj_0"
       ],
       0,
-      "71005fd7248b79ef1eea42e0b8e2239c"
+      "c1f8cdd6b04407de81cf8dce69e57092"
+    ],
+    [
+      "AEADProvider.coerce_iv",
+      2,
+      2,
+      1,
+      [
+        "@query", "equation_AEADProvider.id",
+        "equation_AEADProvider.iv_length", "projection_inverse_BoxInt_proj_0"
+      ],
+      0,
+      "c592a0af1c99a315c61c2a8cf71defaf"
     ],
     [
       "AEADProvider.create_nonce",
@@ -242,7 +254,7 @@
         "typing_FStar.UInt32.v", "typing_Spec.Poly1305.size_key"
       ],
       0,
-      "385775f5933fc3c5c1efff2c722eda69"
+      "8f6a5ef3a03505d4c2c12884ae311ce4"
     ],
     [
       "AEADProvider.leak",
@@ -281,7 +293,46 @@
         "typing_FStar.Set.complement", "typing_FStar.Set.empty"
       ],
       0,
-      "8925a22652ef380b9ad48fb041f5c0a0"
+      "4da1cce5a579a12aafbf44665b076df8"
+    ],
+    [
+      "AEADProvider.genReader",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "bool_inversion",
+        "disc_equation_TLSInfo.PlaintextID", "equation_AEADProvider.id",
+        "equation_FStar.HyperStack.ST.equal_stack_domains",
+        "equation_FStar.HyperStack.ST.modifies_none",
+        "equation_FStar.Monotonic.Heap.equal_dom",
+        "equation_FStar.Monotonic.HyperHeap.hmap",
+        "equation_FStar.Monotonic.HyperHeap.modifies_just",
+        "equation_FStar.Monotonic.HyperStack.mem",
+        "equation_FStar.Monotonic.HyperStack.modifies",
+        "function_token_typing_FStar.Monotonic.Heap.heap",
+        "lemma_FStar.HyperStack.ST.lemma_same_refs_in_stack_regions_intro",
+        "lemma_FStar.Map.lemma_ContainsDom",
+        "lemma_FStar.Map.lemma_InDomConcat",
+        "lemma_FStar.Map.lemma_InDomRestrict",
+        "lemma_FStar.Map.lemma_SelConcat1",
+        "lemma_FStar.Map.lemma_SelConcat2",
+        "lemma_FStar.Map.lemma_SelRestrict",
+        "lemma_FStar.Map.lemma_equal_intro",
+        "lemma_FStar.Set.mem_complement", "lemma_FStar.Set.mem_empty",
+        "lemma_FStar.Set.mem_subset", "primitive_Prims.op_AmpAmp",
+        "primitive_Prims.op_BarBar", "primitive_Prims.op_Negation",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Tm_refine_05e15190c946858f68c69156f585f95a",
+        "refinement_interpretation_Tm_refine_27bc248aea929afc1c455a4ca114e85e",
+        "typing_FStar.Map.concat", "typing_FStar.Map.contains",
+        "typing_FStar.Map.domain", "typing_FStar.Map.restrict",
+        "typing_FStar.Monotonic.HyperHeap.rid",
+        "typing_FStar.Monotonic.HyperStack.get_hmap",
+        "typing_FStar.Set.complement", "typing_FStar.Set.empty"
+      ],
+      0,
+      "804f1c96aead8e6efc8f106a2ff85366"
     ],
     [
       "AEADProvider.adata",
@@ -293,7 +344,7 @@
         "projection_inverse_BoxInt_proj_0"
       ],
       0,
-      "fd0b61937f1376d65f3766920529cdd0"
+      "80a00680310f4dd47486cfa12bd01e3b"
     ],
     [
       "AEADProvider.cipherlen",
@@ -312,13 +363,13 @@
         "typing_AEADProvider.taglen"
       ],
       0,
-      "a99aac8199a789802bd65660a01c0636"
+      "173f8f887e241a5cd3f7683eb49565de"
     ],
     [
       "AEADProvider.from_bytes",
       1,
-      0,
-      0,
+      2,
+      1,
       [
         "@MaxIFuel_assumption", "@query", "bool_inversion",
         "constructor_distinct_FStar.Integers.Unsigned",
@@ -385,7 +436,7 @@
         "typing_TLSInfo.safe_region"
       ],
       0,
-      "22780a6a187ebc2dddf5f8e49c1fec05"
+      "837492ec80a074837c017d685c66bffa"
     ]
   ]
 ]
