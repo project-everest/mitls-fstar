@@ -30,9 +30,8 @@ let is_classic_chain (l:chain13): bool =
 type chain12 = l:chain13 {is_classic_chain l}
 
 // 2018.03.10 SZ: The types in Extensions.fsti are too weak to prove the refinement in [certes]
-#set-options "--admit_smt_queries true"
 // todo: prove it is a chain12
-let chain_up_aux (c:cert) : certes = c, []
+let chain_up_aux (c:cert) : certes = admit (); c, []  //AR: 04/08: moving admit inside
 #reset-options
 
 let chain_up (l:chain): chain13= List.Tot.map #cert #certes chain_up_aux l

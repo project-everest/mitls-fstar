@@ -24,6 +24,8 @@ module H = Hashing.Spec
 
 module HMAC_UFCMA = Old.HMAC.UFCMA
 
+#set-options "--admit_smt_queries true"
+
 let psk (i:esId) =
   b:bytes{len b = Hacl.Hash.Definitions.hash_len (esId_hash i)}
 
