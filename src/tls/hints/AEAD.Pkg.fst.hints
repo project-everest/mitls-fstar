@@ -1,5 +1,5 @@
 [
-  "πú(¯\tØÚ\u001b9XΩÓ\f¥\u0016™",
+  "q$_”Mj’P\\ê|‰u\u001eÊΩ",
   [
     [
       "AEAD.Pkg.ideal",
@@ -8,7 +8,7 @@
       1,
       [ "@query" ],
       0,
-      "cce8311f8fa6a9a83f4d198756408e13"
+      "c81bce2c2c42c96f9fb1d8de20baa4b3"
     ],
     [
       "AEAD.Pkg.is_safe",
@@ -50,7 +50,7 @@
         "typing_TLSInfo.safe_region"
       ],
       0,
-      "ea7cc11a2757b9e3a5f20f5092028ff5"
+      "971547157e4327cdeec62dee421f6c13"
     ],
     [
       "AEAD.Pkg.info",
@@ -66,10 +66,10 @@
         "typing_FStar.Monotonic.HyperHeap.rid"
       ],
       0,
-      "b563f0810923be6109d1d18405122cbf"
+      "484f9583093acab3edc07fa6f0baef7a"
     ],
     [
-      "AEAD.Pkg.aead_pkg_keylen",
+      "AEAD.Pkg.keylen",
       1,
       2,
       1,
@@ -80,7 +80,7 @@
         "fuel_guarded_inversion_AEAD.Pkg.aeadAlg"
       ],
       0,
-      "89c9eb6196337387fe334ad038c64f47"
+      "a4bd4ea1e61982b919a7f9270e03711b"
     ],
     [
       "AEAD.Pkg.__proj__AEAD__item__k",
@@ -92,7 +92,7 @@
         "projection_inverse_AEAD.Pkg.AEAD_u"
       ],
       0,
-      "b92a605285728dfba9d0d320bc23ce0a"
+      "81ac38b21451f47e95e1ad0bf7aefd30"
     ],
     [
       "AEAD.Pkg.__proj__Ideal__item__ck",
@@ -105,7 +105,7 @@
         "refinement_interpretation_Tm_refine_2f47e4e77732b0c7320113be77bdc955"
       ],
       0,
-      "a2260e537cd8bf2ea956c1f03d3965a2"
+      "6bd63cdd10a7b3452da0e4140f336af8"
     ],
     [
       "AEAD.Pkg.__proj__Ideal__item__state",
@@ -118,7 +118,7 @@
         "refinement_interpretation_Tm_refine_2f47e4e77732b0c7320113be77bdc955"
       ],
       0,
-      "2523168dc1b4722a08a781b9071c3451"
+      "8bbec4d540b8c84b0f66699e83cfcca2"
     ],
     [
       "AEAD.Pkg.__proj__Real__item__ck",
@@ -131,7 +131,7 @@
         "refinement_interpretation_Tm_refine_f188697aeaf2d3748a8dd8ff5e07e864"
       ],
       0,
-      "97bf40e770a326bee88e3115ae95d233"
+      "305d323cca93b8e4f0f16b182d9b3623"
     ],
     [
       "AEAD.Pkg.usage",
@@ -143,10 +143,10 @@
         "disc_equation_AEAD.Pkg.Real", "equation_AEAD.Pkg.key",
         "fuel_guarded_inversion_AEAD.Pkg._key",
         "fuel_guarded_inversion_Pkg.ipkg",
-        "refinement_interpretation_Tm_refine_5e0cab8f1e9c2f5bdd937bfd23d1604c"
+        "refinement_interpretation_Tm_refine_ad51d55195e7f1f701ce50bc38680944"
       ],
       0,
-      "acd726fa4a58a80fff17e7c268060053"
+      "6582985301e8952c087425d86c2eca4f"
     ],
     [
       "AEAD.Pkg.keyval",
@@ -156,10 +156,10 @@
       [
         "@MaxIFuel_assumption", "@query", "bool_inversion",
         "constructor_distinct_AEAD.Pkg.Real", "disc_equation_AEAD.Pkg.Ideal",
-        "disc_equation_AEAD.Pkg.Real", "equation_AEAD.Pkg.is_ideal",
-        "equation_AEAD.Pkg.key", "equation_AEAD.Pkg.usage",
+        "disc_equation_AEAD.Pkg.Real", "equation_AEAD.Pkg.key",
+        "equation_AEAD.Pkg.usage",
         "equation_FStar.HyperStack.ST.is_eternal_region",
-        "equation_FStar.Monotonic.HyperStack.is_heap_color",
+        "equation_FStar.Monotonic.HyperStack.is_eternal_color",
         "equation_Mem.rgn", "fuel_guarded_inversion_AEAD.Pkg._key",
         "fuel_guarded_inversion_Pkg.ipkg",
         "projection_inverse_AEAD.Pkg.Ideal_ck",
@@ -168,14 +168,14 @@
         "projection_inverse_AEAD.Pkg.Real_index_of_i",
         "projection_inverse_AEAD.Pkg.Real_ip",
         "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_31bfde48b952b6d7959cd5a2aa36404e",
-        "refinement_interpretation_Tm_refine_5e0cab8f1e9c2f5bdd937bfd23d1604c",
+        "refinement_interpretation_Tm_refine_ad51d55195e7f1f701ce50bc38680944",
+        "refinement_interpretation_Tm_refine_b5163a5c7eb2f4891aa85b6bd19b6e5e",
         "typing_FStar.Monotonic.HyperHeap.color",
-        "typing_FStar.Monotonic.HyperStack.is_heap_color",
+        "typing_FStar.Monotonic.HyperStack.is_eternal_color",
         "typing_TLSInfo.safe_region"
       ],
       0,
-      "e72df6fc1439894433e214d2fd75a30c"
+      "ea578a4a85e086c062d25cc7c1d27b28"
     ],
     [
       "AEAD.Pkg.shared_footprint",
@@ -187,7 +187,7 @@
         "typing_FStar.Monotonic.HyperHeap.rid"
       ],
       0,
-      "317e1930478778709e96c09b13691d6f"
+      "67932f8d250e25570942fc1a0401097a"
     ],
     [
       "AEAD.Pkg.footprint",
@@ -198,23 +198,19 @@
         "@MaxIFuel_assumption", "@query", "bool_inversion",
         "disc_equation_AEAD.Pkg.Ideal", "disc_equation_AEAD.Pkg.Real",
         "equation_AEAD.Pkg.key", "equation_AEAD.Pkg.shared_footprint",
-        "equation_FStar.HyperStack.ST.is_eternal_region",
-        "equation_FStar.Set.disjoint", "equation_Mem.rgn",
-        "equation_Mem.rset", "fuel_guarded_inversion_AEAD.Pkg._key",
+        "equation_FStar.Set.disjoint", "equation_Mem.rset",
+        "fuel_guarded_inversion_AEAD.Pkg._key",
         "fuel_guarded_inversion_Pkg.ipkg", "lemma_FStar.Set.mem_empty",
         "lemma_FStar.Set.mem_intersect", "primitive_Prims.op_AmpAmp",
-        "primitive_Prims.op_Negation", "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_31bfde48b952b6d7959cd5a2aa36404e",
-        "refinement_interpretation_Tm_refine_5e0cab8f1e9c2f5bdd937bfd23d1604c",
+        "projection_inverse_BoxBool_proj_0",
         "refinement_interpretation_Tm_refine_a47381174e33e2cc9aadc8201d6ad727",
+        "refinement_interpretation_Tm_refine_ad51d55195e7f1f701ce50bc38680944",
         "typing_AEAD.Pkg.shared_footprint",
-        "typing_FStar.Monotonic.HyperHeap.rid",
-        "typing_FStar.Monotonic.HyperHeap.rid_freeable",
-        "typing_FStar.Set.empty", "typing_FStar.Set.mem",
-        "typing_TLSInfo.safe_region"
+        "typing_FStar.Monotonic.HyperHeap.rid", "typing_FStar.Set.empty",
+        "typing_FStar.Set.mem"
       ],
       0,
-      "aa94468c509c2e4cac1fc950caa76abb"
+      "4786d03ea67bf847bec629e081782574"
     ],
     [
       "AEAD.Pkg.invariant",
@@ -226,10 +222,10 @@
         "disc_equation_AEAD.Pkg.Real", "equation_AEAD.Pkg.key",
         "fuel_guarded_inversion_AEAD.Pkg._key",
         "fuel_guarded_inversion_Pkg.ipkg",
-        "refinement_interpretation_Tm_refine_5e0cab8f1e9c2f5bdd937bfd23d1604c"
+        "refinement_interpretation_Tm_refine_ad51d55195e7f1f701ce50bc38680944"
       ],
       0,
-      "fa648205f8f41c41624e391a295a5d17"
+      "cb454b7dfc7cc5116fa6e12a1727c4c3"
     ],
     [
       "AEAD.Pkg.invariant_framing",
@@ -240,32 +236,24 @@
         "@MaxIFuel_assumption", "@query", "bool_inversion",
         "constructor_distinct_AEAD.Pkg.Real", "disc_equation_AEAD.Pkg.Ideal",
         "disc_equation_AEAD.Pkg.Real", "equation_AEAD.Pkg.footprint",
-        "equation_AEAD.Pkg.invariant", "equation_AEAD.Pkg.is_ideal",
-        "equation_AEAD.Pkg.key", "equation_AEAD.Pkg.shared_footprint",
-        "equation_FStar.Monotonic.HyperHeap.hmap",
-        "equation_FStar.Monotonic.HyperStack.is_tip",
-        "equation_FStar.Monotonic.HyperStack.is_wf_with_ctr_and_tip",
-        "equation_FStar.Monotonic.HyperStack.mem", "equation_Mem.rset",
+        "equation_AEAD.Pkg.invariant", "equation_AEAD.Pkg.key",
+        "equation_AEAD.Pkg.shared_footprint", "equation_Mem.rset",
+        "equation_Mem.tls_tables_region",
         "fuel_guarded_inversion_AEAD.Pkg._key",
         "fuel_guarded_inversion_AEAD.Pkg.concrete_key",
         "fuel_guarded_inversion_Pkg.ipkg",
-        "function_token_typing_FStar.Monotonic.Heap.heap",
-        "lemma_FStar.Map.lemma_ContainsDom",
         "projection_inverse_AEAD.Pkg.Ideal_state",
         "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_05e15190c946858f68c69156f585f95a",
-        "refinement_interpretation_Tm_refine_4825b6ac2e83170b3552779e47876fac",
-        "refinement_interpretation_Tm_refine_5e0cab8f1e9c2f5bdd937bfd23d1604c",
-        "refinement_interpretation_Tm_refine_a47381174e33e2cc9aadc8201d6ad727",
+        "refinement_interpretation_Tm_refine_3bc2a75141300db9cd37fe40c536c533",
+        "refinement_interpretation_Tm_refine_6644b83922da4932ccf7a98cc0314800",
+        "refinement_interpretation_Tm_refine_ad51d55195e7f1f701ce50bc38680944",
         "true_interp", "typing_AEAD.Pkg.footprint",
-        "typing_AEAD.Pkg.shared_footprint", "typing_FStar.Map.contains",
-        "typing_FStar.Monotonic.HyperHeap.rid",
-        "typing_FStar.Monotonic.HyperStack.get_hmap",
-        "typing_FStar.Monotonic.HyperStack.get_tip", "typing_FStar.Set.mem",
+        "typing_AEAD.Pkg.shared_footprint",
+        "typing_FStar.Monotonic.HyperHeap.rid", "typing_FStar.Set.mem",
         "unit_inversion", "unit_typing"
       ],
       0,
-      "43e32a8cc7b9e487a9d4e21a27b6715c"
+      "6e51b53fd90b3c9c24392860b15c191b"
     ],
     [
       "AEAD.Pkg.empty_log",
@@ -278,10 +266,10 @@
         "fuel_guarded_inversion_AEAD.Pkg._key",
         "fuel_guarded_inversion_Pkg.ipkg",
         "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_5e0cab8f1e9c2f5bdd937bfd23d1604c"
+        "refinement_interpretation_Tm_refine_ad51d55195e7f1f701ce50bc38680944"
       ],
       0,
-      "5fda8bb19029879e96246013f5b6ba44"
+      "b1fef9c4d55b8a3dc7cd0314877ad979"
     ],
     [
       "AEAD.Pkg.empty_log_framing",
@@ -289,40 +277,34 @@
       2,
       1,
       [
-        "@MaxIFuel_assumption", "@query", "bool_inversion",
-        "constructor_distinct_AEAD.Pkg.Real", "disc_equation_AEAD.Pkg.Ideal",
-        "disc_equation_AEAD.Pkg.Real", "eq2-interp",
-        "equation_AEAD.Pkg.empty_log", "equation_AEAD.Pkg.footprint",
-        "equation_AEAD.Pkg.info1", "equation_AEAD.Pkg.is_ideal",
-        "equation_AEAD.Pkg.key",
-        "equation_FStar.HyperStack.ST.is_eternal_region",
-        "equation_FStar.Monotonic.HyperHeap.hmap",
-        "equation_FStar.Monotonic.HyperStack.is_tip",
-        "equation_FStar.Monotonic.HyperStack.is_wf_with_ctr_and_tip",
-        "equation_FStar.Monotonic.HyperStack.mem", "equation_Mem.rgn",
-        "equation_Mem.rset", "fuel_guarded_inversion_AEAD.Pkg._key",
+        "@MaxIFuel_assumption", "@query",
+        "Prims_pretyping_ae567c2fb75be05905677af440075565", "bool_inversion",
+        "constructor_distinct_AEAD.Pkg.Real", "data_elim_AEAD.Pkg.Mkinfo",
+        "disc_equation_AEAD.Pkg.Ideal", "disc_equation_AEAD.Pkg.Real",
+        "eq2-interp", "equation_AEAD.Pkg.empty_log",
+        "equation_AEAD.Pkg.footprint", "equation_AEAD.Pkg.info1",
+        "equation_AEAD.Pkg.key", "equation_Mem.is_tls_rgn",
+        "equation_Mem.rgn", "equation_Mem.rset", "equation_Mem.tls_color",
+        "equation_Mem.tls_tables_region",
+        "fuel_guarded_inversion_AEAD.Pkg._key",
         "fuel_guarded_inversion_AEAD.Pkg.concrete_key",
         "fuel_guarded_inversion_AEAD.Pkg.info",
         "fuel_guarded_inversion_Pkg.ipkg",
-        "function_token_typing_FStar.Monotonic.Heap.heap",
-        "lemma_FStar.Map.lemma_ContainsDom", "primitive_Prims.op_Negation",
+        "function_token_typing_Prims.__cache_version_number__",
+        "primitive_Prims.op_Equality", "proj_equation_AEAD.Pkg.Mkinfo_alg",
         "projection_inverse_AEAD.Pkg.Ideal_state",
         "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_05e15190c946858f68c69156f585f95a",
         "refinement_interpretation_Tm_refine_1a7967054f488d5203134e13451c1365",
-        "refinement_interpretation_Tm_refine_31bfde48b952b6d7959cd5a2aa36404e",
-        "refinement_interpretation_Tm_refine_4825b6ac2e83170b3552779e47876fac",
-        "refinement_interpretation_Tm_refine_5e0cab8f1e9c2f5bdd937bfd23d1604c",
-        "refinement_interpretation_Tm_refine_a47381174e33e2cc9aadc8201d6ad727",
+        "refinement_interpretation_Tm_refine_3bc2a75141300db9cd37fe40c536c533",
+        "refinement_interpretation_Tm_refine_6644b83922da4932ccf7a98cc0314800",
+        "refinement_interpretation_Tm_refine_ad51d55195e7f1f701ce50bc38680944",
+        "refinement_interpretation_Tm_refine_e435e80303d5e61fdd89d528aa58d952",
         "true_interp", "typing_AEAD.Pkg.footprint",
-        "typing_FStar.Map.contains", "typing_FStar.Monotonic.HyperHeap.rid",
-        "typing_FStar.Monotonic.HyperHeap.rid_freeable",
-        "typing_FStar.Monotonic.HyperStack.get_hmap",
-        "typing_FStar.Monotonic.HyperStack.get_tip", "typing_FStar.Set.mem",
-        "typing_TLSInfo.safe_region", "unit_inversion", "unit_typing"
+        "typing_FStar.Monotonic.HyperHeap.rid", "typing_FStar.Set.mem",
+        "unit_inversion", "unit_typing"
       ],
       0,
-      "9370b84381d71183e6b053a27da95d53"
+      "ffe0d9188f5f453c1a25a8c292cbc90f"
     ],
     [
       "AEAD.Pkg.create_key",
@@ -338,7 +320,7 @@
         "typing_AEAD.Pkg.__proj__Mkinfo__item__parent"
       ],
       0,
-      "aa6e596507bf5de873cc327fbf215426"
+      "59d2496ac34eca0b835417fc58b9318a"
     ],
     [
       "AEAD.Pkg.coerceT_key",
@@ -347,16 +329,7 @@
       1,
       [ "@query" ],
       0,
-      "c9d3706843469e299b57a0fa6759ac24"
-    ],
-    [
-      "AEAD.Pkg.coerceT_key",
-      2,
-      2,
-      1,
-      [ "@query" ],
-      0,
-      "43fff20ce667c6e7cf971c9392e3c4e7"
+      "6a640fe65a337603bbe222c267584132"
     ],
     [
       "AEAD.Pkg.coerce_key",
@@ -365,16 +338,7 @@
       1,
       [ "@query" ],
       0,
-      "10894802beba31a02bc98bc80083b543"
-    ],
-    [
-      "AEAD.Pkg.coerce_key",
-      2,
-      2,
-      1,
-      [ "@query" ],
-      0,
-      "c234cf4083da20b8e5bbf45735aca026"
+      "71fa11fd06b954991ea5ea707fc7f415"
     ],
     [
       "AEAD.Pkg.local_ae_pkg",
@@ -383,7 +347,7 @@
       1,
       [ "@query" ],
       0,
-      "c8eb55526c22b171e8d9a4979f2182bd"
+      "e5b667679fa54ec47475b7c79c78a357"
     ],
     [
       "AEAD.Pkg.mp",
@@ -397,7 +361,7 @@
         "refinement_interpretation_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
       ],
       0,
-      "a2d5c0d5e4d63590de1cd927f46ae5f4"
+      "6695bc1fe13104891fef02b583e55429"
     ],
     [
       "AEAD.Pkg.encrypt",
@@ -446,7 +410,7 @@
         "typing_TLSInfo.safe_region"
       ],
       0,
-      "ce795b466e2e7b136151aeda95532e0f"
+      "e1211983ffef31d9ceb3d63f96da9dfc"
     ]
   ]
 ]

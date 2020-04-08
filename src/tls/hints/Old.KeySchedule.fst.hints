@@ -1,5 +1,5 @@
 [
-  "Â€Õ|©¯¢(=ü]•°énb",
+  "¦u®—˜Ó6€WÄÑ$·üØ\u0006",
   [
     [
       "Old.KeySchedule.discard",
@@ -12,7 +12,7 @@
         "lemma_FStar.HyperStack.ST.lemma_same_refs_in_stack_regions_intro"
       ],
       0,
-      "20f0cc2231fcda76271e29447e666875"
+      "98e7336ae2696c0fa5b0f73e541e7499"
     ],
     [
       "Old.KeySchedule.dbg",
@@ -23,48 +23,7 @@
         "@query", "equation_DebugFlags.debug", "equation_DebugFlags.debug_KS"
       ],
       0,
-      "2c0853b71f5f99b059b91ceebe1f14ef"
-    ],
-    [
-      "Old.KeySchedule.print_share",
-      1,
-      2,
-      1,
-      [
-        "@MaxIFuel_assumption", "@query", "bool_inversion",
-        "equation_FStar.HyperStack.ST.is_eternal_region",
-        "equation_FStar.HyperStack.ST.modifies_none",
-        "equation_FStar.Monotonic.HyperHeap.hmap",
-        "equation_FStar.Monotonic.HyperHeap.modifies_just",
-        "equation_FStar.Monotonic.HyperStack.is_heap_color",
-        "equation_FStar.Monotonic.HyperStack.mem",
-        "equation_FStar.Monotonic.HyperStack.modifies", "equation_Mem.rgn",
-        "function_token_typing_FStar.Monotonic.Heap.heap",
-        "lemma_FStar.Map.lemma_ContainsDom",
-        "lemma_FStar.Map.lemma_InDomConcat",
-        "lemma_FStar.Map.lemma_InDomRestrict",
-        "lemma_FStar.Map.lemma_SelConcat1",
-        "lemma_FStar.Map.lemma_SelConcat2",
-        "lemma_FStar.Map.lemma_SelRestrict",
-        "lemma_FStar.Map.lemma_equal_intro",
-        "lemma_FStar.Set.mem_complement", "lemma_FStar.Set.mem_empty",
-        "lemma_FStar.Set.mem_subset", "primitive_Prims.op_AmpAmp",
-        "primitive_Prims.op_BarBar", "primitive_Prims.op_Negation",
-        "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_05e15190c946858f68c69156f585f95a",
-        "refinement_interpretation_Tm_refine_31bfde48b952b6d7959cd5a2aa36404e",
-        "typing_FStar.Map.concat", "typing_FStar.Map.contains",
-        "typing_FStar.Map.domain", "typing_FStar.Map.restrict",
-        "typing_FStar.Monotonic.HyperHeap.color",
-        "typing_FStar.Monotonic.HyperHeap.rid",
-        "typing_FStar.Monotonic.HyperHeap.rid_freeable",
-        "typing_FStar.Monotonic.HyperStack.get_hmap",
-        "typing_FStar.Monotonic.HyperStack.is_heap_color",
-        "typing_FStar.Set.complement", "typing_FStar.Set.empty",
-        "typing_TLSInfo.safe_region"
-      ],
-      0,
-      "20c2e94e62dbf50527599c4881535e0d"
+      "feb0d35fbd585e13a8bcde38e1eaa601"
     ]
   ]
 ]
