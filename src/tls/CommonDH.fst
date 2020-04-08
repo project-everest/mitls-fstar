@@ -129,6 +129,8 @@ let is_ffdhe (ng:namedGroup): Tot bool = List.mem ng [ Ffdhe2048; Ffdhe3072; Ffd
 
 let default_group = ECDH (EC.ECC_X25519)
 
+
+
 noextract
 let dh_region = new_region tls_tables_region
 
@@ -138,7 +140,7 @@ noeq type ilog_entry (i:pre_dhi) =
 
 private type i_ilog = MDM.t dh_region pre_dhi ilog_entry (fun _ -> True)
 private type ishare_table = (if Flags.model then i_ilog else unit)
-abstract let ilog: ishare_table =
+let ilog: ishare_table =
   if Flags.model then MDM.alloc () <: i_ilog else ()
 
 type registered_dhi i =

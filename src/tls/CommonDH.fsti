@@ -67,6 +67,10 @@ type pre_dhr (i:pre_dhi) = s:pre_share (dfst i)
 noextract
 val dh_region : rgn
 
+
+private val ishare_table : Type0
+val ilog: ishare_table
+
 val registered_dhi: pre_dhi -> GTot Type0
 val fresh_dhi: pre_dhi -> mem -> GTot Type0
 val honest_dhi: pre_dhi -> GTot Type0
