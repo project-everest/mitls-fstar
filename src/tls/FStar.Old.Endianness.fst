@@ -323,6 +323,8 @@ let rec uint32_bytes len n =
     assert_norm (UInt8.v (head b'') + pow2 8 * little_endian (tail b'') == little_endian b'');
     b''
 
+#restart-solver
+
 val uint32_be: 
   len:UInt32.t {v len <= 4} -> n:UInt32.t {UInt32.v n < pow2 (8 * v len)} -> 
   Tot (b:lbytes (v len) { UInt32.v n == big_endian b}) (decreases (v len))

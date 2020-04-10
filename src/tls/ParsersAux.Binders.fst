@@ -538,7 +538,8 @@ let clientHello_binders_offset
   Parsers.ClientHello_cipher_suites.clientHello_cipher_suites_size32 c.CH.cipher_suites `U32.add` Parsers.ClientHello_compression_methods.clientHello_compression_methods_size32 c.CH.compression_methods `U32.add`
   clientHelloExtensions_binders_offset c.CH.extensions
 
-#push-options "--z3rlimit 32 --max_fuel 1 --max_ifuel 0"
+#push-options "--z3rlimit 128 --max_fuel 1 --max_ifuel 1"
+#restart-solver
 
 inline_for_extraction
 let clientHello_binders_pos
@@ -839,6 +840,9 @@ let truncate_handshake_m_client_hello_eq_left
   ))
 = serialize_handshake_m_client_hello_eq c
 
+#push-options "--z3rlimit 16"
+#restart-solver
+
 let truncate_handshake_m_client_hello_inj_binders_bytesize
   (c1: H.handshake_m_client_hello {
     let l = c1.CH.extensions in
@@ -861,6 +865,8 @@ let truncate_handshake_m_client_hello_inj_binders_bytesize
   truncate_handshake_m_client_hello_eq_left c2;
   LP.serialize_strong_prefix (LI.serialize_bounded_integer 3) (U32.uint_to_t (CH.clientHello_bytesize c1)) (U32.uint_to_t (CH.clientHello_bytesize c2)) (truncate_clientHello c1) (truncate_clientHello c2);
   truncate_clientHello_inj_binders_bytesize c1 c2
+
+#pop-options
 
 let ch_set_binders c b' = 
   handshake_m_client_hello_set_binders c b'
