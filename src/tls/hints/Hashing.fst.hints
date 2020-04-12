@@ -1,5 +1,5 @@
 [
-  "ΕΜae…Ί\b‘ Skc/§id",
+  "IΎ\u001cα{„t<\u007fργ$1",
   [
     [
       "Hashing.h",
@@ -63,17 +63,20 @@
     [
       "Hashing.compute",
       1,
-      2,
-      1,
+      0,
+      0,
       [
-        "@MaxIFuel_assumption", "@query", "equation_FStar.Bytes.lbytes32",
-        "equation_Hacl.Hash.Definitions.hash_len", "equation_Hashing.tag",
-        "haseqTm_refine_01eac1db03c934bf91dcdae8ea4ae6a2",
+        "@MaxIFuel_assumption", "@query", "equation_FStar.Bytes.lbytes",
+        "equation_FStar.UInt.uint_t", "equation_Hashing.Spec.tag",
+        "equation_Spec.Hash.Definitions.hash_length",
         "refinement_interpretation_Tm_refine_414d0a9f578ab0048252f8c8f552b99f",
-        "typing_FStar.Bytes.bytes"
+        "refinement_interpretation_Tm_refine_71ea40360194fe02ee1272538c9cacbc",
+        "refinement_interpretation_Tm_refine_f13070840248fced9d9d60d77bdae3ec",
+        "typing_FStar.Bytes.bytes", "typing_FStar.Bytes.len",
+        "typing_FStar.UInt32.v"
       ],
       0,
-      "901cb75d5304fdf705ca094c347e0f8d"
+      "ffc24740560e17fc5cb8ac3b36d4dc7a"
     ],
     [
       "Hashing.compute",
@@ -91,6 +94,7 @@
         "constructor_distinct_FStar.Integers.W8",
         "constructor_distinct_FStar.Integers.Winfinite",
         "constructor_distinct_Lib.IntTypes.PUB",
+        "constructor_distinct_Lib.IntTypes.S16",
         "constructor_distinct_Lib.IntTypes.U32",
         "constructor_distinct_Tm_unit", "eq2-interp",
         "equality_tok_FStar.Integers.W16@tok",
@@ -99,7 +103,6 @@
         "equality_tok_FStar.Integers.Winfinite@tok",
         "equality_tok_Lib.IntTypes.PUB@tok",
         "equality_tok_Lib.IntTypes.U32@tok", "equation_FStar.Bytes.lbytes",
-        "equation_FStar.Bytes.lbytes32",
         "equation_FStar.HyperStack.ST.equal_domains",
         "equation_FStar.HyperStack.ST.inline_stack_inv",
         "equation_FStar.HyperStack.ST.is_eternal_region",
@@ -119,17 +122,17 @@
         "equation_FStar.UInt.size", "equation_FStar.UInt.uint_t",
         "equation_Hacl.Hash.Definitions.hash_len",
         "equation_Hashing.Spec.max_hash_length",
-        "equation_Hashing.Spec.max_input_length", "equation_Hashing.h",
-        "equation_Hashing.hashable", "equation_Hashing.tag",
-        "equation_Lib.IntTypes.bits", "equation_Lib.IntTypes.int_t",
-        "equation_Lib.IntTypes.maxint", "equation_Lib.IntTypes.pub_int_t",
-        "equation_Lib.IntTypes.pub_int_v", "equation_Lib.IntTypes.unsigned",
+        "equation_Hashing.Spec.max_input_length",
+        "equation_Hashing.Spec.tag", "equation_Hashing.h",
+        "equation_Hashing.hashable", "equation_Lib.IntTypes.int_t",
+        "equation_Lib.IntTypes.pub_int_t", "equation_Lib.IntTypes.pub_int_v",
         "equation_Lib.IntTypes.v", "equation_LowParse.Bytes32.reveal_empty_",
         "equation_Mem.rgn", "equation_Mem.tls_rgn", "equation_Prims.eq2",
         "equation_Prims.eqtype", "equation_Prims.nat", "equation_Prims.pos",
         "equation_Prims.squash",
         "equation_Spec.Hash.Definitions.hash_length",
         "equation_Spec.Hash.Definitions.hash_word_length",
+        "equation_Spec.Hash.Definitions.max_input_length",
         "equation_Spec.Hash.Definitions.word_length",
         "function_token_typing_Declassify.declassify",
         "function_token_typing_FStar.Integers.uint_8",
@@ -146,13 +149,14 @@
         "lemma_FStar.HyperStack.ST.lemma_same_refs_in_non_tip_regions_elim",
         "lemma_FStar.Map.lemma_ContainsDom",
         "lemma_FStar.Map.lemma_InDomRestrict",
-        "lemma_FStar.Map.lemma_InDomUpd1", "lemma_FStar.Map.lemma_InDomUpd2",
+        "lemma_FStar.Map.lemma_InDomUpd1",
         "lemma_FStar.Map.lemma_SelRestrict", "lemma_FStar.Map.lemma_SelUpd2",
         "lemma_FStar.Map.lemma_UpdDomain",
         "lemma_FStar.Map.lemma_equal_elim",
         "lemma_FStar.Monotonic.HyperHeap.lemma_extends_includes",
         "lemma_FStar.Monotonic.HyperHeap.lemma_extends_parent",
         "lemma_FStar.Monotonic.HyperHeap.lemma_includes_refl",
+        "lemma_FStar.Monotonic.HyperStack.lemma_mk_mem__projectors",
         "lemma_FStar.Seq.Base.lemma_eq_elim",
         "lemma_FStar.Set.lemma_equal_elim",
         "lemma_FStar.Set.lemma_equal_intro",
@@ -198,7 +202,6 @@
         "projection_inverse_BoxInt_proj_0",
         "projection_inverse_FStar.Integers.Signed__0",
         "projection_inverse_FStar.Integers.Unsigned__0",
-        "refinement_interpretation_Tm_refine_01eac1db03c934bf91dcdae8ea4ae6a2",
         "refinement_interpretation_Tm_refine_05e15190c946858f68c69156f585f95a",
         "refinement_interpretation_Tm_refine_156c49afb7e1e070fbb2e47dc0e3d4b2",
         "refinement_interpretation_Tm_refine_16f29a6f8b129d5f173344126014341c",
@@ -237,6 +240,7 @@
         "typing_FStar.Monotonic.HyperHeap.rid_freeable",
         "typing_FStar.Monotonic.HyperHeap.root",
         "typing_FStar.Monotonic.HyperStack.get_hmap",
+        "typing_FStar.Monotonic.HyperStack.get_rid_ctr",
         "typing_FStar.Monotonic.HyperStack.get_tip",
         "typing_FStar.Monotonic.HyperStack.remove_elt",
         "typing_FStar.Seq.Base.length", "typing_FStar.Set.complement",
@@ -245,7 +249,7 @@
         "typing_FStar.UInt.fits", "typing_FStar.UInt32.v",
         "typing_FStar.UInt8.uint_to_t",
         "typing_Hacl.Hash.Definitions.hash_len",
-        "typing_Hashing.Spec.max_hash_length", "typing_Lib.IntTypes.bits",
+        "typing_Hashing.Spec.max_hash_length",
         "typing_LowStar.Buffer.trivial_preorder",
         "typing_LowStar.Monotonic.Buffer.address_liveness_insensitive_locs",
         "typing_LowStar.Monotonic.Buffer.as_addr",
@@ -259,11 +263,10 @@
         "typing_LowStar.Monotonic.Buffer.loc_union",
         "typing_LowStar.Monotonic.Buffer.mnull", "typing_Mem.tls_region",
         "typing_Prims.pow2", "typing_Spec.Hash.Definitions.hash_length",
-        "typing_Spec.Hash.Definitions.word_length",
-        "typing_tok_Lib.IntTypes.U32@tok"
+        "typing_Spec.Hash.Definitions.max_input_length"
       ],
       0,
-      "07b06afe0caf4536831b2e98696e9d6b"
+      "93917ace7a18587c3ea976f4ce9c53f9"
     ],
     [
       "Hashing.accv'",
@@ -277,7 +280,7 @@
         "typing_FStar.Bytes.bytes"
       ],
       0,
-      "a1ec1efd54962d590ad8e8d1c67c5a4c"
+      "d22b39e5da65213d269ce0aad1946cfd"
     ],
     [
       "Hashing.start",
@@ -286,23 +289,7 @@
       1,
       [ "@query" ],
       0,
-      "c37d87d7c26dd9b29855759c4550f29c"
-    ],
-    [
-      "Hashing.extend",
-      1,
-      2,
-      1,
-      [
-        "@MaxIFuel_assumption", "@query", "equation_FStar.UInt.uint_t",
-        "equation_Hashing.content", "equation_Hashing.hashable",
-        "refinement_interpretation_Tm_refine_ab7a34c52ec57200cbb883e479fbf207",
-        "refinement_interpretation_Tm_refine_f13070840248fced9d9d60d77bdae3ec",
-        "typing_FStar.Bytes.len", "typing_FStar.UInt32.v",
-        "typing_Hashing.content"
-      ],
-      0,
-      "5e5ba1b17c3051200ae044e3a051f05c"
+      "a53c9fbcd1a1b3e9fdb744ad24800fe4"
     ],
     [
       "Hashing.start",
@@ -343,7 +330,23 @@
         "typing_FStar.Bytes.empty_bytes"
       ],
       0,
-      "64e5aa8e4041c4f20f2d172be17c622f"
+      "bf8843487aecac39c8f8709e06dbb183"
+    ],
+    [
+      "Hashing.extend",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "equation_FStar.UInt.uint_t",
+        "equation_Hashing.content", "equation_Hashing.hashable",
+        "refinement_interpretation_Tm_refine_ab7a34c52ec57200cbb883e479fbf207",
+        "refinement_interpretation_Tm_refine_f13070840248fced9d9d60d77bdae3ec",
+        "typing_FStar.Bytes.len", "typing_FStar.UInt32.v",
+        "typing_Hashing.content"
+      ],
+      0,
+      "af966ba3070f247f305521bdc7773e95"
     ],
     [
       "Hashing.extend",
@@ -375,7 +378,7 @@
         "typing_Hashing.content"
       ],
       0,
-      "1399a1a8da16f3f9a4ff9f2f151f88d9"
+      "8b4b5edde556793f48da9f5b3b934a76"
     ],
     [
       "Hashing.finalize",
@@ -383,15 +386,40 @@
       2,
       1,
       [
-        "@query", "equation_FStar.HyperStack.ST.equal_domains",
-        "equation_FStar.HyperStack.ST.equal_stack_domains",
-        "equation_Hashing.content",
-        "lemma_FStar.HyperStack.ST.lemma_same_refs_in_all_regions_elim",
-        "lemma_FStar.HyperStack.ST.lemma_same_refs_in_stack_regions_intro",
-        "projection_inverse_Hashing.Inputs_b"
+        "@MaxIFuel_assumption", "@query", "equation_FStar.Bytes.lbytes",
+        "equation_FStar.UInt.uint_t", "equation_Hashing.Spec.tag",
+        "equation_Hashing.accv",
+        "equation_Spec.Hash.Definitions.hash_length",
+        "fuel_guarded_inversion_Hashing.accv_",
+        "refinement_interpretation_Tm_refine_71ea40360194fe02ee1272538c9cacbc",
+        "refinement_interpretation_Tm_refine_f13070840248fced9d9d60d77bdae3ec",
+        "typing_FStar.Bytes.len", "typing_FStar.UInt32.v"
       ],
       0,
-      "80b4e97c83b322608fa8e055cdfa5831"
+      "02ec4306395877dcf17d66e934dc970e"
+    ],
+    [
+      "Hashing.finalize",
+      2,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "equation_FStar.Bytes.lbytes",
+        "equation_FStar.HyperStack.ST.equal_domains",
+        "equation_FStar.HyperStack.ST.equal_stack_domains",
+        "equation_FStar.UInt.uint_t", "equation_Hashing.Spec.tag",
+        "equation_Hashing.accv", "equation_Hashing.content",
+        "equation_Spec.Hash.Definitions.hash_length",
+        "fuel_guarded_inversion_Hashing.accv_",
+        "lemma_FStar.HyperStack.ST.lemma_same_refs_in_all_regions_elim",
+        "lemma_FStar.HyperStack.ST.lemma_same_refs_in_stack_regions_intro",
+        "projection_inverse_Hashing.Inputs_b",
+        "refinement_interpretation_Tm_refine_71ea40360194fe02ee1272538c9cacbc",
+        "refinement_interpretation_Tm_refine_f13070840248fced9d9d60d77bdae3ec",
+        "typing_FStar.Bytes.len", "typing_FStar.UInt32.v"
+      ],
+      0,
+      "2c89ae6b6d56fd2f8aa292c002c0cbdf"
     ]
   ]
 ]
