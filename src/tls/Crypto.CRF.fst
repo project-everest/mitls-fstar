@@ -79,25 +79,25 @@ inline_for_extraction noextract let greal (#a:e_alg) (s:state (G.reveal a))
   : Pure (Concrete.state (G.reveal a)) (requires not model) (ensures fun _ -> True)
   = s
 
-let freeable #a h (s:state a) =
-  if model then
-    let (| a, s |) = ideal s in
-    B.freeable s
-  else
-    Concrete.freeable h (real s)
+noextract let klass = Concrete.evercrypt_hash
+
+let concrete_footprint #a = Hacl.Streaming.Functor.footprint klass a
+let concrete_invariant #a = Hacl.Streaming.Functor.invariant klass a
+let concrete_hashed #a = Hacl.Streaming.Functor.seen klass a
 
 let footprint #a h (s: state a) =
   if model then
     B.loc_addr_of_buffer (dsnd (ideal s))
   else
-    Concrete.footprint h (real s)
+    concrete_footprint h (real s)
 
 let invariant #a h (s: state a) =
   if model then
     let (| _, s |) = ideal s in
+    B.freeable s /\
     B.live h s /\ S.length (B.deref h s) < pow2 61
   else
-    Concrete.invariant h (real s)
+    concrete_invariant h (real s)
 
 let invariant_loc_in_footprint #_ _ _ = ()
 
@@ -106,13 +106,13 @@ let hashed #a h (s: state a) =
     let (| _, s |) = ideal s in
     B.deref h s
   else
-    Concrete.hashed h (real s)
+    concrete_hashed h (real s)
 
-#push-options "--max_ifuel 1"
-let hash_fits #_ _ _ =
-  assert_norm (pow2 61 < pow2 125);
-  ()
-#pop-options
+let hash_fits #a h s =
+  if not model then
+    Hacl.Streaming.Functor.seen_bounded klass a h s
+  else
+    assert_norm (pow2 61 < pow2 125)
 
 let frame_invariant #_ _ _ _ _ = ()
 let frame_hashed #_ _ _ _ _ = ()
@@ -138,6 +138,9 @@ let init a s =
 
 let update a s data len =
   let open LowStar.BufferOps in
+  let _ = allow_inversion Spec.Agile.Hash.hash_alg in
+  assert_norm (pow2 61 - 1 < pow2 64);
+  assert_norm (pow2 64 < pow2 125 - 1);
   if model then
     let (| _, s |) = gideal s in
     s *= (S.append !*s (to_seq data len))

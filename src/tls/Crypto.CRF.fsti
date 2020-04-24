@@ -52,21 +52,16 @@ unfold noextract
 let bytes = Model.CRF.bytes
 
 unfold noextract
-let alg = Concrete.alg
+let alg = Spec.Agile.Hash.hash_alg
 
 unfold noextract
-let e_alg = Concrete.e_alg
+let e_alg = G.erased alg
 
 /// Overriding things
 /// -----------------
 
 inline_for_extraction
 val state: alg -> Type0
-
-val freeable: #a:alg -> HS.mem -> state a -> Type0
-
-let preserves_freeable #a (s: state a) (h0 h1: HS.mem) =
-  freeable h0 s ==> freeable h1 s
 
 val footprint: #a:alg -> HS.mem -> state a -> GTot B.loc
 
@@ -108,15 +103,6 @@ val frame_hashed (#a: alg) (l: B.loc) (s: state a) (h0 h1: HS.mem): Lemma
   (ensures (hashed h0 s == hashed h1 s))
   [ SMTPat (hashed h1 s); SMTPat (B.modifies l h0 h1) ]
 
-val frame_freeable (#a: alg) (l: B.loc) (s: state a) (h0 h1: HS.mem): Lemma
-  (requires (
-    invariant h0 s /\
-    freeable h0 s /\
-    B.loc_disjoint l (footprint h0 s) /\
-    B.modifies l h0 h1))
-  (ensures (freeable h1 s))
-  [ SMTPat (freeable h1 s); SMTPat (B.modifies l h0 h1) ]
-
 /// Stateful API
 /// ------------
 
@@ -132,8 +118,7 @@ val create_in (a: alg) (r: HS.rid): ST (state a)
     hashed h1 s == S.empty /\
     B.(modifies loc_none h0 h1) /\
     fresh_loc (footprint h1 s) h0 h1 /\
-    B.(loc_includes (loc_region_only true r) (footprint h1 s)) /\
-    freeable h1 s))
+    B.(loc_includes (loc_region_only true r) (footprint h1 s))))
 
 (** @type: true
 *)
@@ -143,7 +128,6 @@ val init: a:e_alg -> (
   (requires (fun h0 ->
     invariant h0 s))
   (ensures (fun h0 _ h1 ->
-    preserves_freeable s h0 h1 /\
     invariant h1 s /\
     hashed h1 s == S.empty /\
     footprint h0 s == footprint h1 s /\
@@ -171,7 +155,6 @@ let update_post
   (len: UInt32.t)
   (h0 h1: HS.mem)
 =
-  preserves_freeable s h0 h1 /\
   invariant h1 s /\
   B.(modifies (footprint h0 s) h0 h1) /\
   footprint h0 s == footprint h1 s /\
@@ -204,7 +187,6 @@ let finish_st (a: Hash.alg) =
       // NEW! ↓
       B.(loc_disjoint (loc_buffer dst) (loc_region_only true Mem.tls_tables_region)))
     (ensures fun h0 s' h1 ->
-      preserves_freeable s h0 h1 /\
       invariant h1 s /\
       hashed h0 s == hashed h1 s /\
       footprint h0 s == footprint h1 s /\
@@ -229,7 +211,6 @@ val free:
   s:state a ->
   ST unit
   (requires fun h0 ->
-    freeable h0 s /\
     invariant h0 s)
   (ensures fun h0 _ h1 ->
     B.modifies (footprint h0 s) h0 h1))
