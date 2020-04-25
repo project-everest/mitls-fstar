@@ -57,7 +57,7 @@ val dh_initiator: #g:group -> gx:keyshare g -> gy:share g -> HST.ST (secret g)
 
 val parse_point: g:group -> B.bytes -> Tot (option (share g))
 
-val parse_partial: B.bytes -> Tot (TLSError.result ((g:group & share g) * B.bytes))
+val parse_partial: B.bytes -> Tot (TLS.Result.result ((g:group & share g) * B.bytes))
 
 val serialize_point: #g:group -> e:share g -> Tot (r:B.bytes{1 <= B.length r /\ B.length r <= 255})
 

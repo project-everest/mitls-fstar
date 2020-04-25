@@ -13,7 +13,6 @@ module QUIC
 /// Testing both in OCaml (TCP-based, TestQUIC ~ TestFFI) and in C.
 
 open FStar.Bytes
-open FStar.Error
 open FStar.HyperStack.All
 
 open TLSConstants
@@ -26,6 +25,10 @@ module HS = FStar.HyperStack
 module FFI = FFI
 module Range = Range
 open Range
+
+module Send = TLS.Handshake.Send 
+module Receive = TLS.Handshake.Receive
+module Machine = TLS.Handshake.Machine 
 
 #set-options "--admit_smt_queries true"
 
@@ -50,7 +53,7 @@ private let errno description txt: ST error
   (requires fun h0 -> True)
   (ensures fun h0 _ h1 -> h0 == h1)
 =
-  let open TLSError in 
+  let open TLS.Result in 
   trace ("returning error"^
     (match description with
     | Some ad -> " "^string_of_alert ad
@@ -100,11 +103,12 @@ module CK = TLS.Cookie
 
 let peekClientHello (ch:bytes) (has_record:bool) : ML (option chSummary) =
   if length ch < 40 then (trace "peekClientHello: too short"; None) else
+  let open TLS.Result in 
   let ch =
     if has_record then
       let hdr, ch = split ch 5ul in
       match Record.parseHeader hdr with
-      | Error (_, msg) -> trace ("peekClientHello: bad record header"); None
+      | Error z -> trace ("peekClientHello: bad record header"); None
       | Correct(ct, pv, len) ->
         if ct <> Content.Handshake || len <> length ch then
           (trace "peekClientHello: bad CT or length"; None)
@@ -136,9 +140,9 @@ let peekClientHello (ch:bytes) (has_record:bool) : ML (option chSummary) =
     | _ -> trace ("peekClientHello: not a client hello!"); None
 
 module H = TLS.Handshake
-module HSL = HandshakeLog
+module HM = TLS.Handshake.Machine
 
-let create_hs (is_server:bool) config : ML H.hs =
+let create_hs (is_server:bool) config : ML Machine.state =
   quic_check config;
   let r = new_region HS.root in
   let role = if is_server then Server else Client in
@@ -163,33 +167,38 @@ type hs_result =
   | HS_SUCCESS of hs_out
   | HS_ERROR of UInt16.t
 
-private let currentId (hs:H.hs) (rw:rw) : St TLSInfo.id =
+private let currentId (hs:Machine.state) (rw:rw) : St TLSInfo.id =
+  let n = Machine.nonce hs in
   let j = H.i hs rw in
-  if j<0 then PlaintextID (H.nonce hs)
+  if j<0 then PlaintextID n
   else
-    let e = Old.Epochs.get_current_epoch (H.epochs_of hs) rw in
+    let e = Old.Epochs.get_current_epoch (Machine.epochs hs n) rw in
     Old.Epochs.epoch_id e
 
-let get_epochs (hs:H.hs) : ML (int * int) =
+let get_epochs (hs:Machine.state) : ML (int * int) =
   H.i hs Reader, H.i hs Writer
 
-private let handle_signals (hs:H.hs) (sig:option HSL.next_keys_use) : ML bool =
+private let handle_signals (hs:Machine.state) (sig:option Send.next_keys_use) : ML bool =
   match sig with
   | None -> false
   | Some use ->
-    Old.Epochs.incr_writer (H.epochs_of hs);
-    if use.HSL.out_skip_0RTT then
+    let n = Machine.nonce hs in
+    let epochs = Machine.epochs hs n in
+    Old.Epochs.incr_writer epochs;
+    if use.Send.out_skip_0RTT then
      begin
       trace "Skip 0-RTT (incr writer)";
-      Old.Epochs.incr_writer (H.epochs_of hs)
+      Old.Epochs.incr_writer epochs
      end;
-    use.HSL.out_appdata
+    use.Send.out_appdata
 
-private inline_for_extraction let api_error (ad, err) =
-  trace ("Returning HS error: "^err);
-  HS_ERROR (Parse.uint16_of_bytes (Alert.alertBytes ad))
+private inline_for_extraction let api_error z =
+  trace ("Returning HS error: "^TLS.Result.string_of_error z);
+  let a = Parsers.Alert.({level=Parsers.AlertLevel.Fatal; description=z.TLS.Result.alert}) in 
+  HS_ERROR (Parse.uint16_of_bytes (Alert.alertBytes a))
 
-let process_hs (hs:H.hs) (ctx:hs_in) : ML hs_result =
+let process_hs (hs:Machine.state) (ctx:hs_in) : ML hs_result =
+  let open TLS.Result in 
   let tbw = H.to_be_written hs in
   if tbw > 0 then
    begin
@@ -205,9 +214,9 @@ let process_hs (hs:H.hs) (ctx:hs_in) : ML hs_result =
       })
     else
       let i = currentId hs Writer in
-      match H.next_fragment_bounded hs i (UInt32.v ctx.max_output) with
+      match H.next_fragment_bounded hs i ctx.max_output with
       | Error z -> api_error z
-      | Correct (HSL.Outgoing (Some frag) sig complete) ->
+      | Correct (Send.Outgoing (Some frag) sig complete) ->
         let is_writable = handle_signals hs sig in
         HS_SUCCESS ({
 	  consumed = 0ul;
@@ -224,24 +233,30 @@ let process_hs (hs:H.hs) (ctx:hs_in) : ML hs_result =
     let len = length ctx.input in
     let rg : Range.frange i = (len, len) in
     let f : Range.rbytes rg = ctx.input in
-    match H.recv_fragment hs rg f with
-    | H.InQuery _ _ -> trace "Unexpected handshake query"; HS_ERROR 252us
-    | H.InError z -> api_error z
-    | H.InAck nk complete ->
+    // Do not call HS if fragment is empty
+    let r = if len = 0 then Receive.InAck false false
+            else H.recv_fragment hs rg f in
+    match r with
+    | Receive.InQuery _ _ -> trace "Unexpected handshake query"; HS_ERROR 252us
+    | Receive.InError z -> api_error z
+    | Receive.InAck nk complete ->
       let consumed = UInt32.uint_to_t len in
       let j = H.i hs Writer in
-      let post_hs = H.is_post_handshake hs in
+
+      //19-09-14 TODO recheck semantics 
+      let post_hs =
+        match hs with
+	| HM.Client _ _ r -> HM.C13_complete? !r
+	| HM.Server _ _ r -> HM.S13_complete? !r
+	| _ -> false in
       let reject_0rtt = 
-        if H.role_of hs = Client && j = 2 then // FIXME: early reject vs. late reject
-	  let mode = H.get_mode hs in
-	  Negotiation.zeroRTToffer mode.Negotiation.n_offer
-	    && not (Negotiation.zeroRTT mode)
+        if HM.Client? hs && j = 2 then // FIXME: early reject vs. late reject
+	  TLS.Handshake.Client.early_rejected hs 
 	else false in
       let i = currentId hs Writer in
-      let max_o = UInt32.v ctx.max_output in
-      match H.next_fragment_bounded hs i max_o with
+      match H.next_fragment_bounded hs i ctx.max_output with
       | Error z -> api_error z
-      | Correct (HSL.Outgoing frag sig complete' ) ->
+      | Correct (Send.Outgoing frag sig complete' ) ->
         let is_writable = handle_signals hs sig in
         HS_SUCCESS ({
           consumed = consumed;
@@ -260,8 +275,10 @@ type raw_key = {
   pn_key: bytes;
 }
 
-let get_key (hs:TLS.Handshake.hs) (ectr:nat) (rw:bool) : ML (option raw_key) =
-  let epochs = Monotonic.Seq.i_read (Old.Epochs.get_epochs (Handshake.epochs_of hs)) in
+let get_key (hs:HM.state) (ectr:nat) (rw:bool) : ML (option raw_key) =
+  let n = HM.nonce hs in
+  let epochs = Monotonic.Seq.i_read
+    (Old.Epochs.get_epochs (HM.epochs hs n)) in
   if Seq.length epochs <= ectr then None
   else
     let e = Seq.index epochs ectr in
@@ -284,5 +301,5 @@ let get_key (hs:TLS.Handshake.hs) (ectr:nat) (rw:bool) : ML (option raw_key) =
       pn_key = pn;
     })
     
-let send_ticket (hs:TLS.Handshake.hs) (b:bytes) : ML bool =
+let send_ticket (hs:HM.state) (b:bytes) : ML bool =
   TLS.Handshake.send_ticket hs b

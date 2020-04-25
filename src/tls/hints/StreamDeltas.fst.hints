@@ -27,7 +27,7 @@
         "typing_FStar.UInt32.v"
       ],
       0,
-      "ccf86ffd66f74d75c3684f6933965acf"
+      "012af9b7ba695847c547dd8cb6ebab97"
     ],
     [
       "StreamDeltas.stream_deltas_snoc",
@@ -39,7 +39,7 @@
         "equation_StreamDeltas.project_deltas"
       ],
       0,
-      "b1ee2223916992f18ffe372639f865d0"
+      "ff89930bfcbc36441af853a47aeb40eb"
     ],
     [
       "StreamDeltas.project_fragment_deltas",
@@ -48,7 +48,7 @@
       1,
       [ "@query" ],
       0,
-      "034b36999fd916fa83c24de7a74b2d41"
+      "94688636752243f7ec0c153f44c1cfae"
     ],
     [
       "StreamDeltas.project_fragment_deltas",
@@ -56,20 +56,20 @@
       1,
       1,
       [
-        "@MaxIFuel_assumption", "@query", "bool_inversion",
-        "disc_equation_TLSInfo.PlaintextID",
-        "equation_FStar.HyperStack.ST.is_eternal_region",
-        "equation_FStar.Monotonic.HyperStack.is_eternal_color",
-        "equation_Mem.rgn", "equation_StreamDeltas.id",
+        "@MaxIFuel_assumption", "@query",
+        "Prims_pretyping_ae567c2fb75be05905677af440075565", "bool_inversion",
+        "disc_equation_TLSInfo.PlaintextID", "equation_Mem.is_tls_rgn",
+        "equation_Mem.tls_color", "equation_Mem.tls_region",
+        "equation_Mem.tls_rgn", "equation_StreamDeltas.id",
         "equation_TLSInfo.authId",
+        "function_token_typing_Prims.__cache_version_number__",
+        "primitive_Prims.op_Equality", "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Tm_refine_9393f41ccc9ce36df1080eefe33f6c53",
         "refinement_interpretation_Tm_refine_9f948bc3ea58283edd778ba9c9ec878b",
-        "refinement_interpretation_Tm_refine_b5163a5c7eb2f4891aa85b6bd19b6e5e",
-        "typing_FStar.Monotonic.HyperHeap.color",
-        "typing_FStar.Monotonic.HyperStack.is_eternal_color",
-        "typing_TLSInfo.safe_region", "typing_TLSInfo.uu___is_PlaintextID"
+        "typing_Mem.tls_region", "typing_TLSInfo.uu___is_PlaintextID"
       ],
       0,
-      "888f523d0cfaedacd8e3276f2ba8683c"
+      "21030040538b633d9dca1a49149afced"
     ],
     [
       "StreamDeltas.stream_deltas_snoc2",
@@ -79,18 +79,22 @@
       [
         "@MaxIFuel_assumption", "@query", "bool_inversion",
         "disc_equation_TLSInfo.PlaintextID",
-        "equation_FStar.HyperStack.ST.is_eternal_region",
-        "equation_FStar.Monotonic.HyperStack.is_eternal_color",
-        "equation_Mem.rgn", "equation_StreamDeltas.id",
-        "equation_TLSInfo.authId",
+        "equation_FStar.Monotonic.HyperHeap.hmap",
+        "equation_FStar.Monotonic.HyperStack.is_tip",
+        "equation_FStar.Monotonic.HyperStack.is_wf_with_ctr_and_tip",
+        "equation_FStar.Monotonic.HyperStack.mem",
+        "equation_StreamDeltas.id", "equation_TLSInfo.authId",
+        "function_token_typing_FStar.Monotonic.Heap.heap",
+        "lemma_FStar.Map.lemma_ContainsDom",
+        "refinement_interpretation_Tm_refine_05e15190c946858f68c69156f585f95a",
         "refinement_interpretation_Tm_refine_9f948bc3ea58283edd778ba9c9ec878b",
-        "refinement_interpretation_Tm_refine_b5163a5c7eb2f4891aa85b6bd19b6e5e",
-        "typing_FStar.Monotonic.HyperHeap.color",
-        "typing_FStar.Monotonic.HyperStack.is_eternal_color",
-        "typing_TLSInfo.safe_region", "typing_TLSInfo.uu___is_PlaintextID"
+        "typing_FStar.Map.contains", "typing_FStar.Monotonic.HyperHeap.rid",
+        "typing_FStar.Monotonic.HyperStack.get_hmap",
+        "typing_FStar.Monotonic.HyperStack.get_tip",
+        "typing_TLSInfo.uu___is_PlaintextID"
       ],
       0,
-      "b47541ce81229c8e04bdeba4a94e9624"
+      "2177f4190346847fcdad3df608f5e87c"
     ],
     [
       "StreamDeltas.encrypt",
@@ -99,7 +103,7 @@
       1,
       [ "@query" ],
       0,
-      "e09f8b82466adb37f248fd03c7664449"
+      "dbfc42c392a44a4c2f3e0a05f0e234ad"
     ],
     [
       "StreamDeltas.encrypt",
@@ -117,7 +121,7 @@
         "typing_TLSInfo.uu___is_PlaintextID"
       ],
       0,
-      "13d58a040f6d2e2419b7474dd4516a5e"
+      "d496aa3c49e97dbb3025f59e3af93418"
     ]
   ]
 ]

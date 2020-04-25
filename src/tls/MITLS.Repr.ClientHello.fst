@@ -25,26 +25,24 @@ module MITLS.Repr.ClientHello
    instantiated with clientHello_parser
 *)
 module LP = LowParse.Low.Base
-module B = LowStar.Monotonic.Buffer
-module HS = FStar.HyperStack
-module R = MITLS.Repr
+module R = LowParse.Repr
 module CH = Parsers.ClientHello
-open FStar.Integers
-open FStar.HyperStack.ST
 
-let t = CH.clientHello
 
-let repr (b:R.const_slice) =
-  R.repr_p CH.clientHello b CH.clientHello_parser
+let ptr = R.repr_ptr_p CH.clientHello CH.clientHello_parser
+let stable_ptr = p:ptr { R.is_stable_in_region p }
+let pos (b:R.const_slice) = R.repr_pos_p CH.clientHello b CH.clientHello_parser
 
-let version (#b:R.const_slice) (r:repr b)
-  : Stack Parsers.ProtocolVersion.protocolVersion
-    (requires R.valid r)
-    (ensures fun h0 pv h1 ->
-      B.modifies B.loc_none h0 h1 /\
-      pv == CH.((R.value r).version))
-  = let open R in
-    R.reveal_valid();
-    let b = R.to_slice b in
-    let pos = CH.accessor_clientHello_version b r.start_pos in
-    Parsers.ProtocolVersion.protocolVersion_reader b pos
+/// Reader for the protocol version
+unfold
+let version_reader =
+  R.FieldReader
+    CH.accessor_clientHello_version
+    Parsers.ProtocolVersion.protocolVersion_reader
+
+/// Accessor for the extensions
+unfold
+let extensions_field =
+  R.FieldAccessor CH.accessor_clientHello_extensions
+                  Parsers.ClientHelloExtensions.clientHelloExtensions_jumper
+                  Parsers.ClientHelloExtensions.clientHelloExtensions_parser32

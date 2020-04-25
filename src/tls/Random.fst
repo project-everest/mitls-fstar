@@ -1,10 +1,8 @@
 module Random
 
 open FStar.Bytes
-open FStar.Error
 
 open Mem
-open TLSError
 
 val discard: bool -> ST unit
   (requires (fun _ -> True))

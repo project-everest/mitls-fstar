@@ -14,9 +14,8 @@ module CommonDH
 
 open FStar.HyperStack
 open FStar.Bytes
-open FStar.Error
 open Parse
-open TLSError
+open TLS.Result
 open FStar.HyperStack.ST
 
 include Parsers.NamedGroup

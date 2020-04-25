@@ -1,6 +1,6 @@
 module LowParseWrappers
-include TLSError // for AD_decode_error
-include FStar.Error // for Correct, Error
+
+include TLS.Result // for AD_decode_error
 include Parse // for pinverse, lemma_(p?)inverse_*, etc.
 open LowParse.SLow.Base
 include FStar.Bytes // for bytes, lbytes, length, equal
@@ -56,7 +56,7 @@ let wrap_parser32_constant_length
   (len: nat)
   (u: unit { wrap_serializer32_constant_length_precond s32 len } )
   (p32: parser32 p)
-  (msg: string)
+  (msg: _)
 : Tot (pinverse_t (wrap_serializer32_constant_length s32 len u))
 = fun (x: lbytes len) ->
   match p32 x with
@@ -109,7 +109,7 @@ let lemma_pinverse_serializer32_parser32_constant_length
   (len: nat)
   (u: unit { wrap_serializer32_constant_length_precond s32 len } )
   (p32: parser32 p)
-  (msg: string)
+  (msg: _)
   (x: lbytes len)
 : Lemma
   (lemma_pinverse_f_g #t #(lbytes len) eq2 (wrap_serializer32_constant_length s32 len u) (wrap_parser32_constant_length s32 len u p32 msg) x)
@@ -128,7 +128,7 @@ let lemma_inverse_serializer32_parser32_constant_length
   (len: nat)
   (u: unit { wrap_serializer32_constant_length_precond s32 len } )
   (p32: parser32 p)
-  (msg: string)
+  (msg: _)
   (x: t)
 : Lemma
   (lemma_inverse_g_f (wrap_serializer32_constant_length s32 len u) (wrap_parser32_constant_length s32 len u p32 msg) x)
@@ -140,7 +140,7 @@ let wrap_parser32
   (#t: Type0)
   (#p: parser k t)
   (p32: parser32 p)
-  (msg: string)
+  (msg: _)
   (x: bytes32)
 : Tot (result t)
 = match p32 x with
@@ -165,7 +165,7 @@ let lemma_inverse_serializer32_parser32
   (#s: serializer p)
   (s32: serializer32 s)
   (p32: parser32 p)
-  (msg: string)
+  (msg: _)
   (x: t)
 : Lemma
   (lemma_inverse_g_f (wrap_serializer32 s32) (wrap_parser32 p32 msg) x)

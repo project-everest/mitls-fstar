@@ -214,7 +214,6 @@ KRML_FLAGS = \
   -bundle Lib.*[rename=Hacl_Lib] \
   -bundle TLSConstants=QD.TLS_protocolVersion,List.Helpers \
   -bundle Hashing=Hashing.Spec,Hashing,Hashing.CRF,HMAC,HKDF,HMAC.UFCMA \
-  -bundle HandshakeLog,TLS.Handshake.Send[rename=HandshakeLog] \
   -bundle 'TLS.Handshake=TLS.Handshake.\*,Old.HMAC.UFCMA,Old.Epochs,Old.KeySchedule[rename=Handshake]' \
   -bundle StatefulLHAE=AEAD_GCM,LHAEPlain,StatefulPlain \
   -bundle StreamPlain+StreamAE=[rename=StreamAE] \
@@ -269,7 +268,6 @@ dist/test/Makefile.basic: $(ALL_KRML_FILES)
 	  -bundle 'Test.Main=Test.*[rename=Test]' \
 	  -bundle '\*[rename=Test_miTLS]' \
 	  -library $(MITLS_MODULES) \
-	  -library 'Parsers,Parsers.\*' \
 	  -tmpdir $(dir $@) -skip-compilation \
 	  -silent \
 	  -warn-error -4-6+9 \

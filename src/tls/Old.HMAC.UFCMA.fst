@@ -8,10 +8,9 @@ open FStar.HyperStack
 open FStar.HyperStack.All
 open FStar.Seq
 open FStar.Bytes
-open FStar.Error
 
 open Mem
-open TLSError
+open TLS.Result
 open TLSInfo
 
 module M = LowStar.Modifies

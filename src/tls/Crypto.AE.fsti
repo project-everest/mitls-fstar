@@ -26,7 +26,7 @@ val encrypt
     invariant h s /\
     B.live h plain /\
     B.live h cipher /\
-    phi (B.as_seq h plain) /\
+    (F.ideal_AEAD == true ==> phi (B.as_seq h plain)) /\
     B.loc_disjoint (footprint s) (B.loc_buffer plain) /\
     B.loc_disjoint (footprint s) (B.loc_buffer cipher) /\
     B.disjoint plain cipher /\

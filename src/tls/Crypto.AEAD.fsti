@@ -1,5 +1,7 @@
 module Crypto.AEAD
 
+// TODO: rename this module? currently we do not have "additional data"
+
 module U8 = FStar.UInt8
 module Seq = FStar.Seq
 module EC = EverCrypt.AEAD
@@ -19,6 +21,9 @@ type plain_pred = (plain: Seq.seq U8.t) -> Tot Type0
 inline_for_extraction
 val state (a: SC.supported_alg) (phi: plain_pred) : Tot Type0
 
+inline_for_extraction
+val safe (#a: _) (#phi: _) (s: state a phi) : Tot (b: bool { b == true ==> F.model == true })
+
 val state_kv
   (#a: SC.supported_alg) (#phi: plain_pred)
   (s: state a phi)
@@ -28,12 +33,79 @@ val invariant (#a: SC.supported_alg) (#phi: plain_pred) (h: HS.mem) (s: state a 
 
 val footprint (#a: SC.supported_alg) (#phi: plain_pred) (s: state a phi) : GTot B.loc
 
+val invariant_loc_in_footprint
+  (#a: SC.supported_alg)
+  (#phi: plain_pred)
+  (s: state a phi)
+  (m: HS.mem)
+: Lemma
+  (requires (invariant m s))
+  (ensures (B.loc_in (footprint s) m))
+  [SMTPat (invariant m s)]
+
 val frame_invariant
   (#a: SC.supported_alg) (#phi: plain_pred) (h: HS.mem) (s: state a phi)
   (l: B.loc) (h' : HS.mem)
 : Lemma
   (requires B.modifies l h h' /\ B.loc_disjoint l (footprint s) /\ invariant h s)
   (ensures  invariant h' s)
+
+val sample
+  (a: SC.supported_alg)
+  (k: B.buffer U8.t) // destination buffer to store the generated key
+: HST.ST unit
+  (requires fun h ->
+    B.live h k /\
+    B.length k == SC.key_length a
+  )
+  (ensures fun h res h' ->
+    B.modifies (B.loc_buffer k) h h'
+  )
+
+val coerce
+  (r: HS.rid)
+  (a: SC.supported_alg)
+  (k: B.buffer U8.t) // contains the key
+  (phi: plain_pred)
+: HST.ST (option (state a phi))
+  (requires fun h ->
+    HST.is_eternal_region r /\
+    B.live h k /\
+    B.length k == SC.key_length a
+  )
+  (ensures fun h res h' ->
+    B.modifies B.loc_none h h' /\
+    begin match res with
+    | None -> True // supported_alg is not enough to ensure that EverCrypt.AEAD.create_in will succeed (cf. EverCrypt.AEAD.fst: Vale with bad config)
+    | Some s ->
+      B.fresh_loc (footprint s) h h' /\
+      B.loc_includes (B.loc_region_only true r) (footprint s) /\
+      invariant h' s /\
+      state_kv s == B.as_seq h k
+    end
+  )
+
+noextract
+val create
+  (r: HS.rid)
+  (a: SC.supported_alg)
+  (k: B.buffer U8.t) // destination buffer to store the generated key
+  (phi: plain_pred)
+: HST.ST (state a phi)
+  (requires fun h ->
+    HST.is_eternal_region r /\
+    B.live h k /\
+    B.length k == SC.key_length a /\
+    F.model == true
+  )
+  (ensures fun h res h' ->
+    B.modifies (B.loc_buffer k) h h' /\
+    safe res /\
+    B.fresh_loc (footprint res) h h' /\
+    B.loc_includes (B.loc_region_only true r) (footprint res) /\
+    invariant h' res /\
+    state_kv res == B.as_seq h' k
+  )
 
 inline_for_extraction
 let iv_len = 12ul
@@ -108,7 +180,7 @@ val encrypt
     invariant h s /\
     B.live h plain /\
     B.live h cipher /\
-    phi (B.as_seq h plain) /\
+    (F.ideal_AEAD == true ==> phi (B.as_seq h plain)) /\
     B.loc_disjoint (footprint s) (B.loc_buffer plain) /\
     B.loc_disjoint (footprint s) (B.loc_buffer cipher) /\
     B.disjoint plain cipher /\
@@ -152,7 +224,7 @@ val decrypt
       B.modifies (B.loc_union (footprint s) (B.loc_buffer plain)) h h' /\
       invariant h' s /\ (
         if F.ideal_AEAD
-        then phi (B.as_seq h' plain)
+        then (safe s ==> phi (B.as_seq h' plain))
         else SC.decrypt (state_kv s) (B.as_seq h iv') Seq.empty (B.as_seq h cipher') == Some (B.as_seq h' plain)
       )
     | EE.AuthenticationFailure ->
@@ -161,29 +233,6 @@ val decrypt
       (F.ideal_AEAD == false ==> 
        SC.decrypt (state_kv s) (B.as_seq h iv') Seq.empty (B.as_seq h cipher') == None)
     | _ -> False
-  )
-
-val create
-  (r: HS.rid)
-  (#a: SC.supported_alg)
-  (k: B.buffer U8.t) // contains the key
-  (phi: plain_pred)
-: HST.ST (option (state a phi))
-  (requires fun h ->
-    HST.is_eternal_region r /\
-    B.live h k /\
-    B.length k == SC.key_length a
-  )
-  (ensures fun h res h' ->
-    B.modifies B.loc_none h h' /\
-    begin match res with
-    | None -> True // supported_alg is not enough to ensure that EverCrypt.AEAD.create_in will succeed (cf. EverCrypt.AEAD.fst: Vale with bad config)
-    | Some s ->
-      B.fresh_loc (footprint s) h h' /\
-      B.loc_includes (B.loc_region_only true r) (footprint s) /\
-      invariant h' s /\
-      state_kv s == B.as_seq h k
-    end
   )
 
 val free

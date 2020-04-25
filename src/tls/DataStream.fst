@@ -10,10 +10,9 @@ open FStar.Heap
 open FStar.HyperStack
 open FStar.Seq
 open FStar.Bytes
-open FStar.Error
 
 open Mem
-open TLSError
+open TLS.Result
 open TLSConstants
 open TLSInfo
 module Range = Range
@@ -76,7 +75,7 @@ let final i d =
   match d with
   | Data f  -> false
   | Close   -> true
-  | Alert a -> a.level = Fatal
+  | Alert a -> a.Parsers.Alert.level = Parsers.AlertLevel.Fatal
 
 let rec finalized (i:id) (s:list (delta i)): bool =
   match s with 

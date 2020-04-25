@@ -67,11 +67,12 @@ endif
 ifeq ($(VS_BIN),)
 LIBFILE=
 else
-LIBFILE=libmipki.lib
-libmipki.lib: libmipki.dll
+LIBFILE=static/libmipki.lib
+$(LIBFILE): libmipki.dll
+	mkdir -p $(dir $@)
 	"$(VS_BIN)/dumpbin.exe" /nologo /exports libmipki.dll | awk -F " " 'BEGIN {print "LIBRARY libmipki"; print "EXPORTS";} $$4 ~/mipki_/{print $$4}' > libmipki.def
 	"$(VS_BIN)/lib.exe" /nologo /def:libmipki.def /out:$@ /machine:$(LIB_MACHINE)
-	-rm *.def *.exp
+	-rm static/*.def static/*.exp
 endif
 
 .PHONY: test clean

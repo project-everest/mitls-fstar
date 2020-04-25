@@ -27,7 +27,7 @@ module MITLS.Repr.HelloRequest12
 module LP = LowParse.Low.Base
 module B = LowStar.Monotonic.Buffer
 module HS = FStar.HyperStack
-module R = MITLS.Repr
+module R = LowParse.Repr
 open FStar.Integers
 open FStar.HyperStack.ST
 
@@ -35,5 +35,8 @@ module HSM12 = Parsers.Handshake12
 
 let t = HSM12.handshake12_m12_hello_request
 
-let repr (b:R.slice) =
-  R.repr_p t b HSM12.handshake12_m12_hello_request_parser
+let ptr =
+  R.repr_ptr_p t HSM12.handshake12_m12_hello_request_parser
+
+let pos (b:R.const_slice) =
+  R.repr_pos_p t b HSM12.handshake12_m12_hello_request_parser

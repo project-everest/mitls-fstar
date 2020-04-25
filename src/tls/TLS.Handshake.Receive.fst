@@ -31,7 +31,7 @@ module TLS.Handshake.Receive
 open FStar.Integers
 open FStar.HyperStack.ST
 
-module E = FStar.Error
+open TLS.Result
 
 module G  = FStar.Ghost
 module Bytes = FStar.Bytes
@@ -43,11 +43,11 @@ module LP = LowParse.Low.Base
 
 module PF = TLS.Handshake.ParseFlights
 
-module R = MITLS.Repr
+module R = LowParse.Repr
 module C = LowStar.ConstBuffer
 
 
-#set-options "--max_fuel 0 --max_ifuel 0"
+#set-options "--max_fuel 0 --max_ifuel 1"
 
 type byte = FStar.Bytes.byte
 type bytes = FStar.Bytes.bytes
@@ -61,11 +61,15 @@ let slice_t = b:LP.slice (B.trivial_preorder byte) (B.trivial_preorder byte){
 }
 
 noeq type state = {
-  pf_st    : PF.state;
-  rcv_b    : slice_t;
-  rcv_from : uint_32;
-  rcv_to   : i:uint_32{rcv_from <= i /\ i <= rcv_b.LP.len}
+  pf_st    : PF.state; // updated by parseFlight
+  rcv_b    : slice_t;  // provided by the application; should be a const slice
+  rcv_from : uint_32;  // TODO: incremented after parsing a flight.
+  rcv_to   : i:uint_32{rcv_from <= i /\ i <= rcv_b.LP.len} // incremented as we buffer incoming bytes. Could disappear from low-level API.
 }
+
+// proposed v1 API: keep pf_st within the machine; keep rcv_to only in HL wrapper; 
+
+let in_progress (s:state) = PF.in_progress_flt s.pf_st
 
 
 /// Invariant that relates parsed_bytes in pf_st with rcv_b and its from and to indices
@@ -79,12 +83,15 @@ let invariant (st:state) (h:HS.mem) : Type0
 
 /// Framing is trivial
 
+let loc_recv st = B.loc_buffer st.rcv_b.LP.base
+
+
 let frame_invariant
   (st:state) (l:B.loc) (h0 h1:HS.mem)
 : Lemma
   (requires
     invariant st h0 /\
-    B.(loc_disjoint (loc_buffer st.rcv_b.LP.base) l) /\
+    B.(loc_disjoint (loc_recv st) l) /\
     B.modifies l h0 h1)
   (ensures invariant st h1 /\ B.as_seq h0 st.rcv_b.LP.base == B.as_seq h1 st.rcv_b.LP.base)
 = ()
@@ -115,16 +122,22 @@ unfold let cslice_of (st:state) : R.const_slice = R.of_slice st.rcv_b
 
 unfold
 let receive_pre
-  (st:state) (in_progress:PF.in_progress_flt_t)
+  (st:state) (inflight:PF.in_progress_flt_t)
 : HS.mem -> Type0
 = fun h ->
   invariant st h /\
-  PF.(length_parsed_bytes st.pf_st == 0 \/ in_progress_flt st.pf_st == in_progress)
+  PF.(length_parsed_bytes st.pf_st == 0 \/ in_progress st == inflight)
 
 unfold
 let only_changes_pf_state (st1 st0:state) : Type0
 = st1.rcv_b == st0.rcv_b /\
   st1.rcv_from == st0.rcv_from /\
+  st1.rcv_to == st0.rcv_to
+
+unfold
+let changes_pf_state_and_updates_rcv_from (st1 st0:state) (pos:uint_32{pos <= st0.rcv_to}) : Type0
+= st1.rcv_b == st0.rcv_b /\
+  st1.rcv_from == pos /\
   st1.rcv_to == st0.rcv_to
 
 
@@ -134,66 +147,74 @@ unfold
 let receive_post
   (#flt:Type)
   (st:state)
-  (in_progress:PF.in_progress_flt_t)
+  (inflight:PF.in_progress_flt_t)
   (valid:uint_32 -> uint_32 -> flt -> HS.mem -> Type0)
-: HS.mem -> TLSError.result (option flt & state) -> HS.mem -> Type0
+: HS.mem -> result (option flt & state) -> HS.mem -> Type0
 = fun h0 r h1 ->
-  receive_pre st in_progress h0 /\
+  receive_pre st inflight h0 /\
   B.(modifies loc_none h0 h1) /\
-  (let open FStar.Error in
-   match r with
+  (match r with
    | Error _ -> True
    | Correct (None, rst) ->
      invariant rst h1 /\
      rst `only_changes_pf_state` st /\
-     PF.(in_progress_flt rst.pf_st == in_progress)
+     in_progress rst == inflight
    | Correct (Some flt, rst) ->
      invariant rst h1 /\
-     rst `only_changes_pf_state` st /\
+     changes_pf_state_and_updates_rcv_from rst st st.rcv_to /\
      valid st.rcv_from st.rcv_to flt h1 /\
-     PF.(in_progress_flt rst.pf_st == F_none /\
-         parsed_bytes rst.pf_st == Seq.empty))
+     in_progress rst == PF.F_none /\
+     PF.parsed_bytes rst.pf_st == Seq.empty)
 
 unfold
 let receive_post_with_leftover_bytes
   (#flt:Type)
   (st:state)
-  (in_progress:PF.in_progress_flt_t)
+  (inflight:PF.in_progress_flt_t)
   (valid:uint_32 -> uint_32 -> flt -> HS.mem -> Type0)
-: HS.mem -> TLSError.result (option (flt & uint_32) & state) -> HS.mem -> Type0
+: HS.mem -> result (option flt & state) -> HS.mem -> Type0
 = fun h0 r h1 ->
-  receive_pre st in_progress h0 /\
+  receive_pre st inflight h0 /\
   B.(modifies loc_none h0 h1) /\
-  (let open FStar.Error in
-   match r with
+  (match r with
    | Error _ -> True
    | Correct (None, rst) ->
      invariant rst h1 /\
      rst `only_changes_pf_state` st /\
-     PF.(in_progress_flt rst.pf_st == in_progress)
-   | Correct (Some (flt, idx_end), rst) ->
+     in_progress rst == inflight
+   | Correct (Some flt, rst) ->
      invariant rst h1 /\
-     idx_end <= st.rcv_to /\
-     rst `only_changes_pf_state` st /\
-     valid st.rcv_from idx_end flt h1 /\
-     PF.(in_progress_flt rst.pf_st == F_none /\
-         parsed_bytes rst.pf_st == Seq.empty))
+     rst.rcv_from <= st.rcv_to /\
+     changes_pf_state_and_updates_rcv_from rst st rst.rcv_from /\
+     valid st.rcv_from rst.rcv_from flt h1 /\
+     in_progress rst == PF.F_none /\
+     PF.parsed_bytes rst.pf_st == Seq.empty)
 
 inline_for_extraction noextract
 let wrap_pf_st
   (#a:Type)
   (st:state)
-  (r:TLSError.result (option a & PF.state))
-: TLSError.result (option a & state)
+  (r:result (option a & PF.state))
+: result (option a & state)
 = match r with
-  | E.Error e -> E.Error e
-  | E.Correct (None, pf_st) -> E.Correct (None, { st with pf_st = pf_st })
-  | E.Correct (Some flt, pf_st) -> E.Correct (Some flt, { st with pf_st = pf_st })
-
+  | Error e -> Error e
+  | Correct (None, pf_st) -> Correct (None, { st with pf_st = pf_st })
+  | Correct (Some flt, pf_st) -> Correct (Some flt, { st with pf_st = pf_st; rcv_from = st.rcv_to })
 
 (*** Public API ***)
 
 
+/// Create an input buffer (until we figure out if the application allocates it)
+
+let alloc_slice (region: Mem.rgn):  ST slice_t 
+  (requires fun h0 -> True)
+  (ensures fun h0 b h1 -> 
+    // TODO track freshness and region
+    LP.live_slice h1 b)
+=
+  let receiving_buffer = LowStar.Buffer.malloc region 0uy 12000ul in
+  LowParse.Slice.make_slice receiving_buffer 12000ul
+  
 /// Create a state instance
 
 let create (b:slice_t)
@@ -213,6 +234,8 @@ let create (b:slice_t)
 
 
 /// Adds input bytes to rcv_b
+
+#push-options "--z3rlimit 16"
 
 let buffer_received_fragment
   (st:state) (bs:bytes)
@@ -250,6 +273,8 @@ let buffer_received_fragment
       (v st.rcv_from + PF.length_parsed_bytes st.pf_st);
     Some rst
 
+#pop-options
+
 
 /// Receive flights functions
 
@@ -257,81 +282,129 @@ let buffer_received_fragment
 
 
 let receive_s_Idle (st:state)
-: ST (TLSError.result (option (PF.s_Idle (cslice_of st)) & state))
+: ST (result (option (PF.s_Idle (cslice_of st)) & state))
   (requires receive_pre st PF.F_s_Idle)
   (ensures receive_post st PF.F_s_Idle PF.valid_s_Idle)
 = let r = PF.receive_s_Idle st.pf_st (cslice_of st) st.rcv_from st.rcv_to in
   wrap_pf_st st r
 
 let receive_c_wait_ServerHello (st:state)
-: ST (TLSError.result (option (PF.c_wait_ServerHello (cslice_of st) & uint_32) & state))
+: ST (result (option (PF.c_wait_ServerHello (cslice_of st)) & state))
   (requires receive_pre st PF.F_c_wait_ServerHello)
   (ensures receive_post_with_leftover_bytes st PF.F_c_wait_ServerHello PF.valid_c_wait_ServerHello)
 = let r = PF.receive_c_wait_ServerHello st.pf_st (cslice_of st) st.rcv_from st.rcv_to in
-  wrap_pf_st st r
+  match r with
+  | Error e -> Error e
+  | Correct (None, pf_st) -> Correct (None, { st with pf_st = pf_st })
+  | Correct (Some (flt, pos), pf_st) ->
+    Correct (Some flt, { st with pf_st = pf_st; rcv_from = pos })
 
 
 (*** 1.3 flights ***)
 
 
 let receive_c13_wait_Finished1 (st:state)
-: ST (TLSError.result (option (PF.c13_wait_Finished1 (cslice_of st)) & state))
+: ST (result (option (PF.c13_wait_Finished1 (cslice_of st)) & state))
   (requires receive_pre st PF.F_c13_wait_Finished1)
   (ensures receive_post st PF.F_c13_wait_Finished1 PF.valid_c13_wait_Finished1)
 = let r = PF.receive_c13_wait_Finished1 st.pf_st (cslice_of st) st.rcv_from st.rcv_to in
   wrap_pf_st st r
 
 let receive_s13_wait_Finished2 (st:state)
-: ST (TLSError.result (option (PF.s13_wait_Finished2 (cslice_of st)) & state))
+: ST (result (option (PF.s13_wait_Finished2 (cslice_of st)) & state))
   (requires receive_pre st PF.F_s13_wait_Finished2)
   (ensures  receive_post st PF.F_s13_wait_Finished2 PF.valid_s13_wait_Finished2)
 = let r = PF.receive_s13_wait_Finished2 st.pf_st (cslice_of st) st.rcv_from st.rcv_to in
   wrap_pf_st st r
 
 let receive_s13_wait_EOED (st:state)
-: ST (TLSError.result (option (PF.s13_wait_EOED (cslice_of st)) & state))
+: ST (result (option (PF.s13_wait_EOED (cslice_of st)) & state))
   (requires receive_pre st PF. F_s13_wait_EOED)
   (ensures  receive_post st PF.F_s13_wait_EOED PF.valid_s13_wait_EOED)
 = let r = PF.receive_s13_wait_EOED st.pf_st (cslice_of st) st.rcv_from st.rcv_to in
   wrap_pf_st st r
 
 let receive_c13_Complete (st:state)
-: ST (TLSError.result (option (PF.c13_Complete (cslice_of st)) & state))
+: ST (result (option (PF.c13_Complete (cslice_of st)) & state))
   (requires receive_pre st PF.F_c13_Complete)
-  (ensures  receive_post st PF.F_c13_Complete PF.valid_c13_Complete)
+  (ensures  receive_post_with_leftover_bytes st PF.F_c13_Complete PF.valid_c13_Complete)
 = let r = PF.receive_c13_Complete st.pf_st (cslice_of st) st.rcv_from st.rcv_to in
-  wrap_pf_st st r
+  match r with
+  | Error e -> Error e
+  | Correct (None, pf_st) -> Correct (None, { st with pf_st = pf_st })
+  | Correct (Some (flt, pos), pf_st) ->
+    Correct (Some flt, { st with pf_st = pf_st; rcv_from = pos })
 
 
 (*** 1.2 flights ***)
 
 let receive_c12_wait_ServerHelloDone (st:state)
-: ST (TLSError.result (option (PF.c12_wait_ServerHelloDone (cslice_of st)) & state))
+: ST (result (option (PF.c12_wait_ServerHelloDone (cslice_of st)) & state))
   (requires receive_pre st PF.F_c12_wait_ServerHelloDone)
   (ensures  receive_post st PF.F_c12_wait_ServerHelloDone PF.valid_c12_wait_ServerHelloDone)
 = let r = PF.receive_c12_wait_ServerHelloDone st.pf_st (cslice_of st) st.rcv_from st.rcv_to in
   wrap_pf_st st r
 
 let receive_cs12_wait_Finished (st:state)
-: ST (TLSError.result (option (PF.cs12_wait_Finished (cslice_of st)) & state))
+: ST (result (option (PF.cs12_wait_Finished (cslice_of st)) & state))
   (requires receive_pre st PF.F_cs12_wait_Finished)
   (ensures  receive_post st PF.F_cs12_wait_Finished PF.valid_cs12_wait_Finished)
 = let r = PF.receive_cs12_wait_Finished st.pf_st (cslice_of st) st.rcv_from st.rcv_to in
   wrap_pf_st st r
 
 let receive_c12_wait_NST (st:state)
-: ST (TLSError.result (option (PF.c12_wait_NST (cslice_of st)) & state))
+: ST (result (option (PF.c12_wait_NST (cslice_of st)) & state))
   (requires receive_pre st PF.F_c12_wait_NST)
   (ensures  receive_post st PF.F_c12_wait_NST PF.valid_c12_wait_NST)
 = let r = PF.receive_c12_wait_NST st.pf_st (cslice_of st) st.rcv_from st.rcv_to in
   wrap_pf_st st r
 
 let receive_s12_wait_CCS1 (st:state)
-: ST (TLSError.result (option (PF.s12_wait_CCS1 (cslice_of st)) & state))
+: ST (result (option (PF.s12_wait_CCS1 (cslice_of st)) & state))
   (requires receive_pre st PF.F_s12_wait_CCS1)
   (ensures  receive_post st PF.F_s12_wait_CCS1 PF.valid_s12_wait_CCS1)
 = let r = PF.receive_s12_wait_CCS1 st.pf_st (cslice_of st) st.rcv_from st.rcv_to in
   wrap_pf_st st r
+
+
+
+/// unchanged from our stable Handshake API.
+
+type incoming =
+  | InAck: // the fragment is accepted, and...
+      next_keys : bool -> // the reader index increases;
+      complete  : bool -> // the handshake is complete!
+      incoming
+  | InQuery: Cert.chain -> bool -> incoming // could be part of InAck if no explicit user auth
+  | InError: error -> incoming // how underspecified should it be?
+
+let in_error ad txt = InError ({alert=ad; cause=txt})
+
+let in_next_keys (r:incoming) = InAck? r && InAck?.next_keys r
+let in_complete (r:incoming)  = InAck? r && InAck?.complete r
+
+(*
+// v1 API. 
+// We'll still return signals, but we'll write the generated keys in small application-provided buffers. 
+// InQuery is deprecated, as we now rely on callbacks.
+
+// A struct including anything returned by the handshake API, except for the 
+type out_ctx = {
+  // how many bytes were consumed from the input buffer; 
+  // can it also encode a parsing error position?
+  out_consumed: UInt32.t; 
+
+  // how many bytes were written to the output buffer
+  out_written: UInt32.t;
+
+  // signals, to be unified 
+  // out_outgoing_send_first, ugly, not used anymore? 
+  out_send_next_keys: option TLS.Handshake.Send.next_key_use;
+  out_receive_next_keys: bool; 
+  out_complete: bool;
+}
+type incoming0 = result out_ctx
+*)
 
 
 (*** Test ***)
@@ -344,8 +417,7 @@ let test (b:slice_t)
 : ST unit
   (requires fun h -> B.live h b.LP.base)
   (ensures fun _ _ _ -> True)
-= let open FStar.Error in
-
+= 
   //create state
   let st = create b in
 
@@ -373,11 +445,10 @@ let test (b:slice_t)
          //and so on ...
 
          ())
-    | Correct (Some (flt, idx_end), st) ->
-      //now we can parse ServerHelloDone
-      let st = { st with rcv_from = idx_end } in
+    | Correct (Some flt, st) ->
 
       let r = receive_c12_wait_ServerHelloDone st in
 
       //and so on ...
       ()
+

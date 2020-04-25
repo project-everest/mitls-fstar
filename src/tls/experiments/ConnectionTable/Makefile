@@ -1,5 +1,7 @@
-FSTAR_HOME   ?= ../../../../FStar
-KREMLIN_HOME ?= ../../../../kremlin
+HACL_HOME    ?= ../../../../../hacl-star
+FSTAR_HOME   ?= ../../../../../FStar
+KREMLIN_HOME ?= ../../../../../kremlin
+QD_HOME      ?= ../../../../../quackyducky
 
 CACHE_DIR     ?= .
 HINT_DIR      ?= .
@@ -21,7 +23,15 @@ stage1: $(GENERATED_DIR)/Makefile.include
 stage2: $(OUT_DIR)/test.exe
 	$(OUT_DIR)/test.exe
 
+#include $(HACL_HOME)/Makefile.common
+
 FSTAR_INCLUDE_DIRS = \
+  $(HACL_HOME)/lib \
+  $(HACL_HOME)/specs \
+  $(HACL_HOME)/providers/evercrypt \
+  ../.. \
+  ../../../parsers/generated \
+  $(QD_HOME)/src/lowparse \
   $(KREMLIN_HOME)/kremlib
 
 FSTAR_FLAGS = $(OTHERFLAGS) --cmi \
@@ -48,6 +58,11 @@ include .depend
 %.checked: | .depend $(HINT_DIR) $(CACHE_DIR)
 	$(FSTAR) $< $(ENABLE_HINTS) --hint_file $(HINT_DIR)/$(notdir $*).hints && \
 	touch -c $@
+
+LowParse.%.checked Parsers.%.checked: | .depend $(HINT_DIR) $(CACHE_DIR)
+	$(FSTAR) --admit_smt_queries true $< $(ENABLE_HINTS) --hint_file $(HINT_DIR)/$(notdir $*).hints && \
+	touch -c $@
+
 
 $(OUTPUT_DIR)/%.krml: | .depend $(OUTPUT_DIR)
 	$(FSTAR) --codegen Kremlin \

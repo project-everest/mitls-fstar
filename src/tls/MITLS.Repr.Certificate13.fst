@@ -27,14 +27,11 @@ module MITLS.Repr.Certificate13
 module LP = LowParse.Low.Base
 module B = LowStar.Monotonic.Buffer
 module HS = FStar.HyperStack
-module R = MITLS.Repr
+module R = LowParse.Repr
 open FStar.Integers
 open FStar.HyperStack.ST
-
 module C13 = Parsers.Certificate13
 
-let t = C13.certificate13
-
-let repr (b:R.slice) =
-  R.repr_p t b C13.certificate13_parser
+let ptr = R.repr_ptr_p _ C13.certificate13_parser
+let pos (b:R.const_slice) = R.repr_pos_p _ b C13.certificate13_parser
  

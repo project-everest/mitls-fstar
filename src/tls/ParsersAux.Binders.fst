@@ -538,7 +538,8 @@ let clientHello_binders_offset
   Parsers.ClientHello_cipher_suites.clientHello_cipher_suites_size32 c.CH.cipher_suites `U32.add` Parsers.ClientHello_compression_methods.clientHello_compression_methods_size32 c.CH.compression_methods `U32.add`
   clientHelloExtensions_binders_offset c.CH.extensions
 
-#push-options "--z3rlimit 32 --max_fuel 1 --max_ifuel 0"
+#push-options "--z3rlimit 128 --max_fuel 1 --max_ifuel 1"
+#restart-solver
 
 inline_for_extraction
 let clientHello_binders_pos
@@ -737,6 +738,7 @@ let handshake_m_client_hello_binders_offset
   3ul `U32.add` clientHello_binders_offset c
 #pop-options
 
+#push-options "--z3rlimit 32"
 inline_for_extraction
 let handshake_m_client_hello_binders_pos
   (#rrel #rel: _)
@@ -762,6 +764,7 @@ let handshake_m_client_hello_binders_pos
   let pos1 = LP.jump_serializer (LI.serialize_bounded_integer 3) (LP.jump_constant_size (LI.parse_bounded_integer 3) 3ul ()) sl pos (Ghost.hide (U32.uint_to_t
    (CH.clientHello_bytesize (Ghost.reveal c)))) in
   clientHello_binders_pos sl pos1 (Ghost.hide (Ghost.reveal c))
+#pop-options
 
 let truncate_handshake_m_client_hello
   (c: H.handshake_m_client_hello {
@@ -837,6 +840,9 @@ let truncate_handshake_m_client_hello_eq_left
   ))
 = serialize_handshake_m_client_hello_eq c
 
+#push-options "--z3rlimit 16"
+#restart-solver
+
 let truncate_handshake_m_client_hello_inj_binders_bytesize
   (c1: H.handshake_m_client_hello {
     let l = c1.CH.extensions in
@@ -860,10 +866,15 @@ let truncate_handshake_m_client_hello_inj_binders_bytesize
   LP.serialize_strong_prefix (LI.serialize_bounded_integer 3) (U32.uint_to_t (CH.clientHello_bytesize c1)) (U32.uint_to_t (CH.clientHello_bytesize c2)) (truncate_clientHello c1) (truncate_clientHello c2);
   truncate_clientHello_inj_binders_bytesize c1 c2
 
+#pop-options
+
+let ch_set_binders c b' = 
+  handshake_m_client_hello_set_binders c b'
+
 let set_binders m b' =
   let c = H.M_client_hello?._0 m in
-  H.M_client_hello (handshake_m_client_hello_set_binders c b')
-
+  H.M_client_hello (ch_set_binders c b')
+  
 let set_binders_bytesize m b' = ()
 
 let binders_offset h =

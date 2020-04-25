@@ -4,8 +4,7 @@ Handshake protocol messages
 *)
 module HandshakeMessages
 
-open FStar.Error
-open TLSError
+open TLS.Result
 open TLSConstants
 
 module E = Extensions
@@ -41,74 +40,110 @@ include Parsers.ClientKeyExchange
 include Parsers.KeyUpdate
 include Parsers.KeyExchangeAlgorithm
 
+module Binders = ParsersAux.Binders
 (* Parsers are generated automatically, see src/parsers/Parsers.rfc *)
 
-// trivial message for convenience; these could also be bound as named types in the RFC.
-type finished = FStar.Seq.(b: seq UInt8.t {0 <= length b /\ length b <= 16777215})
+/// Selected specs shared with ParserAux,
+/// to deal with truncated binders in ClientHello
+/// 
+
+unfold let binders: Type0           = Binders.binders
+unfold let binders_len: Type0       = Binders.binders_len
+
+/// Tests whether a ClientHello carries PSKs and binders
+unfold let ch_bound                 = Binders.ch_bound
+
+unfold let clientHello_with_binders = Binders.clientHello_with_binders
+unfold let ch_binders               = Binders.ch_binders 
+unfold let set_binders              = Binders.ch_set_binders 
+unfold let ch_binders_len           = Binders.ch_binders_len
+unfold let canonical_binders        = Binders.build_canonical_binders
+
+/// `tch` is our type for specifying truncated ClientHello
+/// messages: a (full) ClientHello with dummy binders.
+let tch = ch:clientHello_with_binders
+  { ch_binders ch == canonical_binders (ch_binders_len ch) } 
+
+/// `clear_binders`: a specificational version of truncation that
+/// replaces any binders in a ClientHello with canonical binders of
+/// the correct length.
+let clear_binders (ch:clientHello) = 
+  if ch_bound ch then set_binders ch (canonical_binders (ch_binders_len ch)) else ch 
+
+
+/// Trivial message for convenience; these could also be bound as named types in the RFC.
+type finished = b:Bytes.bytes {0 <= Bytes.length b /\ Bytes.length b <= 16777215}
 type eoed = unit 
 
-type sh = realServerHello
-type hrr = helloRetryRequest
-
-/// TODO: this is the same as HSL.Transcript.is_hrr; decide which one to keep.
-/// In fact, I claim that we should redefine `hrr` above as (sh: serverHello { is_hrr sh })
-/// and so get rid of the conversion functions below.
-let is_hrr (m:serverHello) =
-  match m.is_hrr with
-  | ServerHello_is_hrr_false _ -> false
-  | ServerHello_is_hrr_true _ -> true
 
 module SH = Parsers.ServerHello
+
 module HRK = Parsers.HRRKind
 module SHK = Parsers.SHKind
 
-let get_hrr (m:serverHello{is_hrr m}) : hrr =
-  let ServerHello_is_hrr_true hrr = m.is_hrr in
-  let open Parsers.HelloRetryRequest in
-  ({
-    version = m.SH.version;
-    session_id = hrr.HRK.session_id;
-    cipher_suite = hrr.HRK.cipher_suite;
-    legacy_compression = hrr.HRK.legacy_compression;
-    extensions = hrr.HRK.extensions;
-  })
+/// `is_hrr`: a pure function to
+/// decide if a server-hello message is a hello-retry-request (hrr)
 
-let get_sh (m:serverHello{not (is_hrr m)}) : sh =
-  let ServerHello_is_hrr_false sh = m.is_hrr in
-  let open Parsers.RealServerHello in
-  ({
-    version = m.SH.version;
-    random = sh.tag;
-    session_id = sh.value.SHK.session_id;
-    cipher_suite = sh.value.SHK.cipher_suite;
-    compression_method = sh.value.SHK.compression_method;
-    extensions = sh.value.SHK.extensions;
-  })
+inline_for_extraction
+let is_hrr (m:serverHello): bool =
+  ServerHello_is_hrr_true? m.is_hrr
 
-module RSH = Parsers.RealServerHello
-module HRR = Parsers.HelloRetryRequest
+/// These are the "semantic" server hello contents and HRR payloads;
+/// we don't define sh13 yet because it depends on Nego.
 
-let serverHello_of_sh (m:sh{m.RSH.random <> serverHello_is_hrr_cst}) =
+type ch = clientHello 
+type sh  = sh: serverHello {~(is_hrr sh)}
+type hrr = sh: serverHello {is_hrr sh}
+
+/// These types are awkward in specifications and high-level code, so
+/// we also provide spec-level ad hoc accessors.
+
+// Make these functions opaque? Fuse with Repr.ServerHello? 
+
+private let sh_value (sh: sh) = 
+  match sh.SH.is_hrr  with 
+  | ServerHello_is_hrr_false v -> v
+private let hrr_value (sh: hrr) = 
+  match sh.SH.is_hrr  with 
+  | ServerHello_is_hrr_true v -> v
+
+let sh_version (sh: sh) = sh.SH.version 
+let sh_random       (sh: sh) = (sh_value sh).tag 
+let sh_session_id   (sh: sh) = (sh_value sh).value.SHK.session_id
+let sh_cipher_suite (sh: sh) = (sh_value sh).value.SHK.cipher_suite 
+let sh_extensions   (sh: sh) = (sh_value sh).value.SHK.extensions 
+
+let hrr_version     (sh: hrr) = sh.SH.version 
+let hrr_session_id  (sh: hrr) = (hrr_value sh).HRK.session_id
+let hrr_cipher_suite(sh: hrr) = (hrr_value sh).HRK.cipher_suite
+let hrr_extensions  (sh: hrr) = (hrr_value sh).HRK.extensions 
+
+let mk_hrr v sid cs es : hrr = 
   SH.({
-    version = m.RSH.version;
-    is_hrr = ServerHello_is_hrr_false Parsers.ServerHello_is_hrr.({
-      tag = m.RSH.random;
-      value = Parsers.SHKind.({
-        session_id = m.RSH.session_id;
-	cipher_suite = m.RSH.cipher_suite;
-	compression_method = m.RSH.compression_method;
-	extensions = m.RSH.extensions;
-      });
-    });
-  })
+    version = v;
+    is_hrr = ServerHello_is_hrr_true HRK.({
+      session_id = sid;
+      cipher_suite = cs;
+      legacy_compression = Parsers.LegacyCompression.NullCompression;
+      extensions = es }) })
 
-let serverHello_of_hrr (m:hrr) =
-  SH.({
-    version = m.HRR.version;
-    is_hrr = ServerHello_is_hrr_true Parsers.HRRKind.({
-      session_id = m.HRR.session_id;
-      cipher_suite = m.HRR.cipher_suite;
-      legacy_compression = m.HRR.legacy_compression;
-      extensions = m.HRR.extensions;
-    })
-  })
+let is_valid_hrr (sh: serverHello) = 
+  is_hrr sh /\
+  CipherSuite.(
+    match cipherSuite_of_name (hrr_cipher_suite sh) with 
+    | Some (CipherSuite13 _ _) -> True
+    | _ -> False)
+type valid_hrr = sh: hrr { is_valid_hrr sh }
+ 
+let hrr_ha (sh: valid_hrr) = 
+  match cipherSuite_of_name (hrr_cipher_suite sh) with 
+    | Some (CipherSuite13 _ ha) -> ha
+
+type valid_handshake = m: handshake {
+  match m with 
+  | M_server_hello sh -> (is_hrr sh ==> is_valid_hrr sh)
+  | _ -> True }
+
+
+let certificate13 = handshake13_m13_certificate
+

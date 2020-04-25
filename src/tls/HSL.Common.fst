@@ -2,6 +2,7 @@ module HSL.Common
 
 open FStar.Integers
 
+open FStar.HyperStack.ST
 module HS = FStar.HyperStack
 module B = LowStar.Buffer
 
@@ -10,6 +11,17 @@ module HSM12 = Parsers.Handshake12
 module HSM13 = Parsers.Handshake13
 
 type bytes = LowParse.Bytes.bytes
+
+(* Debug output, shared by client and server *)
+val discard: bool -> ST unit
+  (requires (fun _ -> True))
+  (ensures (fun h0 _ h1 -> h0 == h1))
+let discard _ = ()
+let print s = discard (IO.debug_print_string ("HSL| "^s^"\n"))
+unfold val trace: s:string -> ST unit
+  (requires (fun _ -> True))
+  (ensures (fun h0 _ h1 -> h0 == h1))
+unfold let trace = if DebugFlags.debug_HSL then print else (fun _ -> ())
 
 #set-options "--max_fuel 0 --max_ifuel 0"
 

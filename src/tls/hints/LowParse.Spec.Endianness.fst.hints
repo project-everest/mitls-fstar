@@ -1,0 +1,211 @@
+[
+  "\u0011 «E√qù#‘ÔªiÓ\u001a∞`",
+  [
+    [
+      "LowParse.Spec.Endianness.uinttype",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "equation_Prims.nat",
+        "int_inversion", "primitive_Prims.op_Multiply",
+        "projection_inverse_BoxInt_proj_0",
+        "refinement_interpretation_Tm_refine_542f9d4f129664613f2483a6c88bc7c2"
+      ],
+      0,
+      "97b4d313dfba4ded7aa8b431ba68c6bf"
+    ],
+    [
+      "LowParse.Spec.Endianness.__proj__UIntType__item__v",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "equation_Prims.nat",
+        "primitive_Prims.op_Multiply", "projection_inverse_BoxInt_proj_0",
+        "refinement_interpretation_Tm_refine_542f9d4f129664613f2483a6c88bc7c2"
+      ],
+      0,
+      "3b12fc6a2d90e067719c53604890af65"
+    ],
+    [
+      "LowParse.Spec.Endianness.__proj__UIntType__item__v",
+      2,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "equation_Prims.nat",
+        "primitive_Prims.op_Multiply", "projection_inverse_BoxInt_proj_0",
+        "refinement_interpretation_Tm_refine_542f9d4f129664613f2483a6c88bc7c2"
+      ],
+      0,
+      "542c6978a42c553f967e2f4afc360978"
+    ],
+    [
+      "LowParse.Spec.Endianness.__proj__UIntType__item__to_byte",
+      1,
+      2,
+      1,
+      [
+        "@query", "proj_equation_LowParse.Spec.Endianness.UIntType_v",
+        "projection_inverse_LowParse.Spec.Endianness.UIntType_v",
+        "token_correspondence_LowParse.Spec.Endianness.__proj__UIntType__item__v"
+      ],
+      0,
+      "ddeb1b602342d6f66357458dd1b275b6"
+    ],
+    [
+      "LowParse.Spec.Endianness.__proj__UIntType__item__from_byte",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "equation_Prims.nat",
+        "primitive_Prims.op_Multiply", "projection_inverse_BoxInt_proj_0",
+        "refinement_interpretation_Tm_refine_542f9d4f129664613f2483a6c88bc7c2"
+      ],
+      0,
+      "19a3e308bca567947da34473b91ba37f"
+    ],
+    [
+      "LowParse.Spec.Endianness.__proj__UIntType__item__from_byte",
+      2,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "equation_Prims.nat",
+        "fuel_guarded_inversion_LowParse.Spec.Endianness.uinttype",
+        "primitive_Prims.op_Multiply",
+        "proj_equation_LowParse.Spec.Endianness.UIntType_v",
+        "projection_inverse_BoxInt_proj_0",
+        "projection_inverse_LowParse.Spec.Endianness.UIntType_v",
+        "refinement_interpretation_Tm_refine_542f9d4f129664613f2483a6c88bc7c2",
+        "token_correspondence_LowParse.Spec.Endianness.__proj__UIntType__item__v"
+      ],
+      0,
+      "1d3d3ea871fc7aa4252d385e788f2106"
+    ],
+    [
+      "LowParse.Spec.Endianness.__proj__UIntType__item__zero",
+      1,
+      2,
+      1,
+      [
+        "@query", "proj_equation_LowParse.Spec.Endianness.UIntType_v",
+        "projection_inverse_LowParse.Spec.Endianness.UIntType_v",
+        "token_correspondence_LowParse.Spec.Endianness.__proj__UIntType__item__v"
+      ],
+      0,
+      "cd610c0a866474139c6dd3d818c776a8"
+    ],
+    [
+      "LowParse.Spec.Endianness.__proj__UIntType__item__v_inj",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "equation_Prims.nat",
+        "fuel_guarded_inversion_LowParse.Spec.Endianness.uinttype",
+        "primitive_Prims.op_Multiply", "projection_inverse_BoxInt_proj_0",
+        "refinement_interpretation_Tm_refine_542f9d4f129664613f2483a6c88bc7c2"
+      ],
+      0,
+      "d9af6536ddb62fe33c9070b36107d7fd"
+    ],
+    [
+      "LowParse.Spec.Endianness.__proj__UIntType__item__v_inj",
+      2,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "equation_Prims.nat",
+        "fuel_guarded_inversion_LowParse.Spec.Endianness.uinttype",
+        "primitive_Prims.op_Multiply",
+        "proj_equation_LowParse.Spec.Endianness.UIntType_v",
+        "projection_inverse_BoxInt_proj_0",
+        "projection_inverse_LowParse.Spec.Endianness.UIntType_v",
+        "refinement_interpretation_Tm_refine_542f9d4f129664613f2483a6c88bc7c2",
+        "token_correspondence_LowParse.Spec.Endianness.__proj__UIntType__item__v"
+      ],
+      0,
+      "d94d097d0fad69c19bf5c6da15e3c1c1"
+    ],
+    [
+      "LowParse.Spec.Endianness.__proj__UIntType__item__add",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "equation_Prims.nat",
+        "fuel_guarded_inversion_LowParse.Spec.Endianness.uinttype",
+        "primitive_Prims.op_Multiply", "projection_inverse_BoxInt_proj_0",
+        "refinement_interpretation_Tm_refine_542f9d4f129664613f2483a6c88bc7c2"
+      ],
+      0,
+      "1ad4fbf435f22348a9848c4bc5fd3716"
+    ],
+    [
+      "LowParse.Spec.Endianness.__proj__UIntType__item__add",
+      2,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "equation_Prims.nat",
+        "fuel_guarded_inversion_LowParse.Spec.Endianness.uinttype",
+        "primitive_Prims.op_Multiply",
+        "proj_equation_LowParse.Spec.Endianness.UIntType_v",
+        "projection_inverse_BoxInt_proj_0",
+        "projection_inverse_LowParse.Spec.Endianness.UIntType_v",
+        "refinement_interpretation_Tm_refine_542f9d4f129664613f2483a6c88bc7c2",
+        "token_correspondence_LowParse.Spec.Endianness.__proj__UIntType__item__v"
+      ],
+      0,
+      "4b781238ccd81c02ec261810fd9bebe4"
+    ],
+    [
+      "LowParse.Spec.Endianness.__proj__UIntType__item__mul256",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "equation_Prims.nat",
+        "fuel_guarded_inversion_LowParse.Spec.Endianness.uinttype",
+        "primitive_Prims.op_Multiply", "projection_inverse_BoxInt_proj_0",
+        "refinement_interpretation_Tm_refine_542f9d4f129664613f2483a6c88bc7c2"
+      ],
+      0,
+      "349533ce2fc0e50a42ffe1959ebd247c"
+    ],
+    [
+      "LowParse.Spec.Endianness.__proj__UIntType__item__mul256",
+      2,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "equation_Prims.nat",
+        "fuel_guarded_inversion_LowParse.Spec.Endianness.uinttype",
+        "primitive_Prims.op_Multiply",
+        "proj_equation_LowParse.Spec.Endianness.UIntType_v",
+        "projection_inverse_BoxInt_proj_0",
+        "projection_inverse_LowParse.Spec.Endianness.UIntType_v",
+        "refinement_interpretation_Tm_refine_542f9d4f129664613f2483a6c88bc7c2",
+        "token_correspondence_LowParse.Spec.Endianness.__proj__UIntType__item__v"
+      ],
+      0,
+      "9e466a0389ca0a98bc821b61d0a11323"
+    ],
+    [
+      "LowParse.Spec.Endianness.__proj__UIntType__item__div256",
+      1,
+      2,
+      1,
+      [
+        "@query", "proj_equation_LowParse.Spec.Endianness.UIntType_v",
+        "projection_inverse_LowParse.Spec.Endianness.UIntType_v",
+        "token_correspondence_LowParse.Spec.Endianness.__proj__UIntType__item__v"
+      ],
+      0,
+      "a5a6bb68ba380d6e64ad9e2a4e513e2e"
+    ]
+  ]
+]
