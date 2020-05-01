@@ -38,7 +38,7 @@
         "typing_FStar.Set.complement", "typing_FStar.Set.empty"
       ],
       0,
-      "4a68338b7e3ca5b6ff968a35d3cb8379"
+      "f8360c66719115a967bd2c2c4f6085e3"
     ],
     [
       "Token.UF1CMA.keylen",
@@ -105,7 +105,7 @@
         "typing_tok_Lib.IntTypes.U32@tok"
       ],
       0,
-      "2f75778d2834ecf72e0db74cfc90fa33"
+      "8cfe5ec196ef19596f5a28786b20cbab"
     ],
     [
       "Token.UF1CMA.keyrepr",
@@ -128,7 +128,7 @@
         "typing_Token.UF1CMA.__proj__Mkinfo__item__alg"
       ],
       0,
-      "fe4188a75df329b3a4104ed1bedb84d9"
+      "cf829b05f1592bd2de97e32b872ca1b2"
     ],
     [
       "Token.UF1CMA.log_t",
@@ -137,7 +137,7 @@
       1,
       [ "@query" ],
       0,
-      "c7d7fada6c148a710ab80934c046cb73"
+      "5cbd61305bf21a918d97d70c9c87d27f"
     ],
     [
       "Token.UF1CMA.__proj__MAC__item__k",
@@ -149,7 +149,7 @@
         "projection_inverse_Token.UF1CMA.MAC_u"
       ],
       0,
-      "2fa596aee13625010e749838f345247a"
+      "a2d496b20cbaecf26f55c7ce38c87243"
     ],
     [
       "Token.UF1CMA.__proj__IdealKey__item__ck",
@@ -163,7 +163,7 @@
         "refinement_interpretation_Tm_refine_41840a448e3c4c0a711c7e435b6854d9"
       ],
       0,
-      "69806a00b9109ce548a13c6d26601089"
+      "3caa3a0fcd86fa2170fc53bd27bce95b"
     ],
     [
       "Token.UF1CMA.__proj__IdealKey__item__region",
@@ -180,7 +180,7 @@
         "refinement_interpretation_Tm_refine_41840a448e3c4c0a711c7e435b6854d9"
       ],
       0,
-      "11f4bbaa9989d00ea5829995916aab06"
+      "b8443587ba402e9bb8941224b0b22423"
     ],
     [
       "Token.UF1CMA.__proj__IdealKey__item__log",
@@ -219,7 +219,7 @@
         "typing_FStar.Monotonic.HyperStack.is_eternal_color"
       ],
       0,
-      "c900676165d41dd8c81e385e5c937cc6"
+      "e7e05c4802ae478912043050cf7fc7c2"
     ],
     [
       "Token.UF1CMA.__proj__RealKey__item__ck",
@@ -233,7 +233,7 @@
         "refinement_interpretation_Tm_refine_c51cfa53ada8810f00d183686fa26508"
       ],
       0,
-      "820769ad4d19d4d010cc978d766f2383"
+      "667852bafa6e5f68e93cfcdff2b50a60"
     ],
     [
       "Token.UF1CMA.usage",
@@ -249,7 +249,7 @@
         "refinement_interpretation_Tm_refine_a8125be696a7e8ae66ddb3901a539380"
       ],
       0,
-      "0e674fbf8bff6803d0c65d58ffe071aa"
+      "c5c987ababd2014eccb4e34d12502240"
     ],
     [
       "Token.UF1CMA.keyval",
@@ -276,7 +276,7 @@
         "typing_Mem.is_tls_rgn", "typing_Mem.tls_region"
       ],
       0,
-      "29526b736a627457eeadf45ee3b5fd3c"
+      "2b001e8ea87f4679fe6fd7aa1944187d"
     ],
     [
       "Token.UF1CMA.region",
@@ -300,7 +300,7 @@
         "typing_Mem.model", "typing_Token.UF1CMA.ideal"
       ],
       0,
-      "26458f332b826e95365283c4a531109f"
+      "995a621fe39864d94c0d904180969038"
     ],
     [
       "Token.UF1CMA.shared_footprint",
@@ -312,7 +312,7 @@
         "typing_FStar.Monotonic.HyperHeap.rid"
       ],
       0,
-      "c69b597e86bf9c99e09e38ce6a1b5249"
+      "c3c2ebb72bc63cfc005186f7b7db2379"
     ],
     [
       "Token.UF1CMA.create",
@@ -321,7 +321,7 @@
       1,
       [ "@query", "assumption_Spec.Hash.Definitions.hash_alg__uu___haseq" ],
       0,
-      "c19a32a8cb9f874afc8f3f5a42af4348"
+      "20fcb9ef346f28729bcf9d8241a1c0d9"
     ],
     [
       "Token.UF1CMA.create",
@@ -330,7 +330,7 @@
       1,
       [ "@query", "assumption_Spec.Hash.Definitions.hash_alg__uu___haseq" ],
       0,
-      "ae7f352dc06b349b52a138e4657fba3f"
+      "53a1692d2f5ea6a7265e482ac011cf40"
     ],
     [
       "Token.UF1CMA.create",
@@ -500,7 +500,7 @@
         "typing_Spec.Poly1305.size_key", "typing_Token.UF1CMA.goodish"
       ],
       0,
-      "87caf2623b52eb90c2198bd2aaf507ad"
+      "855050a32afa73f6a338156b387c0c75"
     ],
     [
       "Token.UF1CMA.coerceT",
@@ -509,7 +509,7 @@
       1,
       [ "@query", "assumption_Spec.Hash.Definitions.hash_alg__uu___haseq" ],
       0,
-      "fd17bb137c79e7228beb67b61d74b53d"
+      "8ecae2e08e5b6446438edf7f90921caf"
     ],
     [
       "Token.UF1CMA.coerceT",
@@ -518,7 +518,7 @@
       1,
       [ "@query", "assumption_Spec.Hash.Definitions.hash_alg__uu___haseq" ],
       0,
-      "62871617ef07ddc95d3e6f954ceaeaa4"
+      "9c4b664598eccf288892e6bce4ebdfa4"
     ],
     [
       "Token.UF1CMA.coerceT",
@@ -598,7 +598,7 @@
         "typing_tok_Lib.IntTypes.U32@tok"
       ],
       0,
-      "e335402dbca751150ed222de1d5fe533"
+      "990775f6340534d83128ff4ab84de3ca"
     ],
     [
       "Token.UF1CMA.coerce",
@@ -607,7 +607,7 @@
       1,
       [ "@query", "assumption_Spec.Hash.Definitions.hash_alg__uu___haseq" ],
       0,
-      "f27a6e1877fa270d2c7499b6dc46c006"
+      "ee324c979ca35fa2d59c5ee20887a017"
     ],
     [
       "Token.UF1CMA.coerce",
@@ -616,7 +616,7 @@
       1,
       [ "@query", "assumption_Spec.Hash.Definitions.hash_alg__uu___haseq" ],
       0,
-      "f28dae400336c2ef3d925d926dba8797"
+      "91e2295fed5409ff9f02409304bebb05"
     ],
     [
       "Token.UF1CMA.coerce",
@@ -722,7 +722,7 @@
         "typing_tok_Lib.IntTypes.U32@tok"
       ],
       0,
-      "672ec594dee5d0506bf035c4215f5df0"
+      "6a0b3649f929ec5b1b684149ef44a4cd"
     ],
     [
       "Token.UF1CMA.get_key",
@@ -738,7 +738,7 @@
         "refinement_interpretation_Tm_refine_a8125be696a7e8ae66ddb3901a539380"
       ],
       0,
-      "9149fb6eb66c1b0e729986fa613d7e57"
+      "a11f9089c06be370e41f0c3705a38d56"
     ],
     [
       "Token.UF1CMA.token",
@@ -868,7 +868,7 @@
         "typing_Token.UF1CMA.usage", "unit_inversion"
       ],
       0,
-      "e5f236c8dca59e2053f4079a899f7f39"
+      "913529fbf10e2f213c3531a9a26403b2"
     ],
     [
       "Token.UF1CMA.verify",
@@ -934,7 +934,7 @@
         "typing_Token.UF1CMA.usage"
       ],
       0,
-      "6676f9dc18da82c9e2647b8d491035c3"
+      "3e3a04f0b094014b35b534512902c81d"
     ],
     [
       "Token.UF1CMA.info1",
@@ -943,7 +943,7 @@
       1,
       [ "@query", "assumption_Spec.Hash.Definitions.hash_alg__uu___haseq" ],
       0,
-      "4d9125962f7e20cde71a964d22742d19"
+      "85ce3e85c06fbe45cd20e88347591970"
     ],
     [
       "Token.UF1CMA.localpkg",
@@ -986,7 +986,7 @@
         "typing_Token.UF1CMA.keylen"
       ],
       0,
-      "9c4b7f5bbb4e9f3f76b53d4ba850a192"
+      "b94a59b5a207f481745c90c273f8de70"
     ],
     [
       "Token.UF1CMA.coerce_eq2",
@@ -995,7 +995,7 @@
       1,
       [ "@query" ],
       0,
-      "5e9855f6e8dfd5142aa97ca05654ea5c"
+      "c57e2928ea35d3deaf6845fadc6c265c"
     ],
     [
       "Token.UF1CMA.ip",
@@ -1014,7 +1014,7 @@
         "refinement_interpretation_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
       ],
       0,
-      "8e95ff6a713b80ab38910871096a2bd6"
+      "a8e21edf422eb9ebcd3112888c6d2373"
     ],
     [
       "Token.UF1CMA.test",
@@ -1132,7 +1132,7 @@
         "typing_Tm_abs_26eef3985d99a56697f5a9d337882dba"
       ],
       0,
-      "956625a74315eee965b3047027fde061"
+      "c30847db016ac2a9d2012b39a77bf8b5"
     ]
   ]
 ]
