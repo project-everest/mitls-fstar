@@ -18,11 +18,9 @@ open FStar.HyperStack.All
 open TLSConstants
 open TLSInfo
 open DataStream
-open TLS
 open FFICallbacks
 
 module HS = FStar.HyperStack
-module FFI = FFI
 module Range = Range
 open Range
 
