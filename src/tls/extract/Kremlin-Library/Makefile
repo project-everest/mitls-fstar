@@ -60,7 +60,7 @@ FILES = $(patsubst %.c,%,$(wildcard *.c)) \
 
 CFLAGS := $(addprefix -I,$(INCLUDE_DIRS)) $(CFLAGS) -Wall -Werror -Wno-deprecated-declarations \
   -Wno-unused-variable -Wno-parentheses -Wno-unknown-warning-option \
-  -Wno-unused-but-set-variable -Wno-infinite-recursion -g -fwrapv -fstack-check \
+  -Wno-unused-but-set-variable -Wno-infinite-recursion -g -fwrapv  \
   -D_BSD_SOURCE -D_DEFAULT_SOURCE -D__USE_MINGW_ANSI_STDIO \
   -Wno-missing-braces -Wno-error-tautological-compare -Wno-error-int-to-void-pointer-cast \
   -Wno-error-enum-conversion
