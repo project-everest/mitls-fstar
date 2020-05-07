@@ -113,6 +113,15 @@ ifndef MAKE_RESTARTS
 endif
 endif
 
+prune-dep-graph: dep.graph
+	cat dep.graph | grep -v fstar_| grep -v prims | grep -v parsers_ | grep -v lowstar_ | grep -v lowparse_ | grep -v evercrypt | grep -v hacl  | grep -v vale | grep -v lib_ | grep -v spec_ | grep -v tlsconstants | grep -v mem | grep -v tls_result |  grep -v debug | grep -v flags | grep -v tlsinfo | grep -v mitls_repr | grep -v hashing_spec | grep -v declassify | grep -v handshakemessages | grep -v format_ | grep -v tls_tracing | grep -v parse | grep -v _crf | grep -v "\"c_" | grep -v "\"crypto_" | grep -v meta_ | grep -v "\"tls_handshake_transcript\" ->" | grep -v "\"aeadprovider\" ->" | grep -v digraph | sort -u > dep.graph.tmp
+	echo "digraph {" > quic-dep.graph
+	cat dep.graph.tmp >> quic-dep.graph
+	echo "If you have GraphViz, run 'fdp -Tpng -oquic-dep.png quic-dep.graph'"
+
+quic-dep-graph: parsers
+	$(FSTAR_NO_FLAGS) --dep graph QUIC.fst
+	$(MAKE) prune-dep-graph
 # Known targets that don't need to trigger dependency regeneration
 ifeq ($(MAKECMDGOALS),clean)
   SKIPDEPEND=1
