@@ -424,7 +424,7 @@ int RecvCallback(void* pv, unsigned char *buffer, size_t buffer_size)
 	return -1;
     }
     if(r){
-      printf("  INCOMING PACKET[%d]:\n", r);
+      printf("  INCOMING PACKET[%ld]:\n", r);
       dump(buffer, r);
     }
     return (int)r;
