@@ -18,7 +18,7 @@ open Negotiation
 
 #reset-options "--z3cliopt smt.arith.nl=false"
 
-#push-options "--z3rlimit 16"
+#push-options "--z3rlimit 64"
 
 (* implementation of the new spec *)
 
@@ -62,9 +62,6 @@ let write_binder_ph
     B.fill (B.sub sout.LP.base pout_payload len) 0uy len;
     pskBinderEntry_finalize sout pout_from len
   end
-
-
-#push-options "--z3rlimit 32"
 
 let write_obfuscate_age
   (now: U32.t)
@@ -111,8 +108,6 @@ let write_obfuscate_age
     pskIdentity_valid h' sout pout_from;
     pout_to
   end
-
-#pop-options
 
 (* then, the writer *)
 
@@ -247,8 +242,6 @@ let make_preSharedKeyClientExtension
 = match oi, ob with
   | Some i, Some b -> Some ({ Parsers.OfferedPsks.identities = i; Parsers.OfferedPsks.binders = b; })
   | _ -> None
-
-#push-options "--z3rlimit 16"
 
 inline_for_extraction
 noextract
@@ -637,8 +630,6 @@ let write_final_extensions
 
 #pop-options
 
-#pop-options
-
 let test_write_final_extensions
   (#rrelcfg #relcfg: _)
   (scfg: LP.slice rrelcfg relcfg)
@@ -656,8 +647,6 @@ let test_write_final_extensions
 = let h0 = HST.get () in
   LPW.olwrite (write_final_extensions scfg pcfg edi sin pin_from pin_to now h0 sout pout_from) pout_from
 
-#pop-options
-
 open Negotiation.Version // for write_supportedVersions
 
 
@@ -673,8 +662,6 @@ let make_clientHelloExtension_CHE_signature_algorithms
       Some x
     else
       None
-
-#push-options "--z3rlimit 24"
 
 inline_for_extraction
 noextract
@@ -709,8 +696,6 @@ let write_clientHelloExtension_CHE_signature_algorithms
     end
   )
 
-#pop-options
-
 inline_for_extraction
 let constr_clientHelloExtension_CHE_signature_algorithms
   (o: option clientHelloExtension_CHE_signature_algorithms)
@@ -718,8 +703,6 @@ let constr_clientHelloExtension_CHE_signature_algorithms
 = match o with
   | None -> None
   | Some x -> Some (CHE_signature_algorithms x)
-
-#push-options "--z3rlimit 16"
 
 inline_for_extraction
 noextract
@@ -747,8 +730,6 @@ let write_constr_clientHelloExtension_CHE_signature_algorithms
       end
     end
   )
-
-#pop-options
 
 inline_for_extraction
 noextract
