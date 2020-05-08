@@ -12,7 +12,7 @@
         "assumption_Parsers.TicketContents13.ticketContents13__uu___haseq"
       ],
       0,
-      "c885d5f2b5e1faa54383090e06fc243e"
+      "02bb6e2b647d52dc7d763a40321ad4d0"
     ],
     [
       "Parsers.TicketContents.__proj__T_ticket12__item___0",
@@ -26,7 +26,7 @@
         "refinement_interpretation_Tm_refine_b299865d9bccd2c126569cc5790eb2d3"
       ],
       0,
-      "a8934f39a3ff586bdebe7e85163f4e93"
+      "282cc2a860f07f8dd7f7e0522af1413a"
     ],
     [
       "Parsers.TicketContents.__proj__T_ticket13__item___0",
@@ -40,7 +40,7 @@
         "refinement_interpretation_Tm_refine_25cd0b2d227621ce4018fcecfa2c2182"
       ],
       0,
-      "df6e033a1a440a1df5e1d7da43fdc92b"
+      "243670c2fa32a1b3f5e23d49c0c1031b"
     ],
     [
       "Parsers.TicketContents.tag_of_ticketContents",
@@ -54,7 +54,7 @@
         "fuel_guarded_inversion_Parsers.TicketContents.ticketContents"
       ],
       0,
-      "752a15aea273a39dcbb58fd3133b83e2"
+      "214bfcfb8e69a1330b1159d451b5313e"
     ],
     [
       "Parsers.TicketContents.ticketVersion_as_enum_key",
@@ -67,7 +67,7 @@
         "projection_inverse_BoxBool_proj_0"
       ],
       0,
-      "49a765828b11dec964a6a3bfddcdc95e"
+      "d30315d937a66cec4c9808115680c2cb"
     ],
     [
       "Parsers.TicketContents.key_of_ticketContents",
@@ -83,7 +83,7 @@
         "fuel_guarded_inversion_Parsers.TicketContents.ticketContents"
       ],
       0,
-      "5abd840eff727835939041111de1d022"
+      "d92f01c1f31831e20241a1c4ea4170c4"
     ],
     [
       "Parsers.TicketContents.ticketContents_case_of_ticketVersion",
@@ -97,7 +97,7 @@
         "fuel_guarded_inversion_Parsers.TicketVersion.ticketVersion"
       ],
       0,
-      "653df58cc7bc886955bcf486aabc2b57"
+      "28a72fc9c1c0520b72f637516a061070"
     ],
     [
       "Parsers.TicketContents.to_ticketContents_case_of_ticketVersion",
@@ -113,7 +113,7 @@
         "refinement_interpretation_Tm_refine_3a9f51e7dcd2b47cd09d576fe8d9be5f"
       ],
       0,
-      "531d2f2274e73ab438bff8bf913edb79"
+      "258a6a5b920159cda888d68afefab63d"
     ],
     [
       "Parsers.TicketContents.ticketContents_refine",
@@ -125,7 +125,7 @@
         "assumption_Parsers.TicketVersion.ticketVersion__uu___haseq"
       ],
       0,
-      "10c5fca30c1988f283f750bf5ff6142d"
+      "05646d41aec3e81be057915b910b187e"
     ],
     [
       "Parsers.TicketContents.ticketContents_refine",
@@ -142,7 +142,7 @@
         "refinement_interpretation_Tm_refine_48952fc8a7123119c9cb0bef7b8c022c"
       ],
       0,
-      "b90a40e9a0103d570dfff459add2545a"
+      "6652d3d884dac7cf2dae176358064f77"
     ],
     [
       "Parsers.TicketContents.synth_ticketContents_cases",
@@ -154,7 +154,7 @@
         "assumption_Parsers.TicketVersion.ticketVersion__uu___haseq"
       ],
       0,
-      "d4711b6b8f0def787e5b85ac922dfddd"
+      "5f8fb84356274532201745fb956cd996"
     ],
     [
       "Parsers.TicketContents.synth_ticketContents_cases",
@@ -183,7 +183,7 @@
         "typing_FStar.UInt32.v"
       ],
       0,
-      "ceb1fd08f8d59544902b32a5c12fd0d4"
+      "64b1384b51b73129a2dd5cc201c7cce2"
     ],
     [
       "Parsers.TicketContents.from_ticketContents_case_of_ticketVersion",
@@ -197,7 +197,7 @@
         "refinement_interpretation_Tm_refine_74709bebf8ef42f7ff3a0231bbee7819"
       ],
       0,
-      "454eb6cfb04563c4427327df45d1c95e"
+      "79b229812d10d1914d89a8f414e35b8b"
     ],
     [
       "Parsers.TicketContents.synth_ticketContents_cases_recip_pre",
@@ -209,7 +209,7 @@
         "assumption_Parsers.TicketVersion.ticketVersion__uu___haseq"
       ],
       0,
-      "629f53a307bc377fcffc4cc53b3e67cf"
+      "530c955a81e4d95720ef28d543bb39f2"
     ],
     [
       "Parsers.TicketContents.synth_ticketContents_cases_recip_pre",
@@ -226,7 +226,7 @@
         "refinement_interpretation_Tm_refine_f63a4a268f020733364bf5736477d275"
       ],
       0,
-      "ec6a73123715f17e78ba6f80439f579e"
+      "72d917f66f0038973ddb0fa8ce6e1f48"
     ],
     [
       "Parsers.TicketContents.synth_ticketContents_cases_recip_pre_intro",
@@ -238,7 +238,7 @@
         "assumption_Parsers.TicketVersion.ticketVersion__uu___haseq"
       ],
       0,
-      "9995395e7e1cd337eaa3e9621e38a4b9"
+      "4fcc2cccaceedd52a19079cfd38d35e1"
     ],
     [
       "Parsers.TicketContents.synth_ticketContents_cases_recip_pre_intro",
@@ -264,7 +264,7 @@
         "token_correspondence_Parsers.TicketContents.key_of_ticketContents"
       ],
       0,
-      "1770890bd5af3e0fbce88b8ab69b3c88"
+      "1958726caa65d22f6ec17f7e82f1daf2"
     ],
     [
       "Parsers.TicketContents.synth_ticketContents_cases_recip",
@@ -276,7 +276,7 @@
         "assumption_Parsers.TicketVersion.ticketVersion__uu___haseq"
       ],
       0,
-      "b3af2c8a1d081fa4493a864c5943727f"
+      "1245f86516d47f335bfe5b83ffaad14f"
     ],
     [
       "Parsers.TicketContents.synth_ticketContents_cases_recip",
@@ -312,7 +312,7 @@
         "typing_FStar.UInt32.v"
       ],
       0,
-      "4f8a59af1f1e62af170687eee34423b2"
+      "151597377040d07768a6af7c69b397ad"
     ],
     [
       "Parsers.TicketContents.ticketContents_sum",
@@ -324,7 +324,7 @@
         "assumption_Parsers.TicketVersion.ticketVersion__uu___haseq"
       ],
       0,
-      "e4cebd2bcad91cc5ced4d2f67cc4c9ed"
+      "ed28d3628f48ac5b5306137de5211e2c"
     ],
     [
       "Parsers.TicketContents.parse_ticketContents_cases",
@@ -365,7 +365,7 @@
         "typing_FStar.UInt32.v"
       ],
       0,
-      "47ca3f95f745312308b07b3671036ce3"
+      "7b6bf410191f6d7926d5ad06d118db20"
     ],
     [
       "Parsers.TicketContents.serialize_ticketContents_cases",
@@ -409,7 +409,7 @@
         "typing_FStar.UInt32.v"
       ],
       0,
-      "7ea6408cd9a550e5521be98e716f449f"
+      "a6bb8236903ec96d81d959afdf954502"
     ],
     [
       "Parsers.TicketContents.parse32_ticketContents_cases",
@@ -453,7 +453,7 @@
         "typing_FStar.UInt32.v"
       ],
       0,
-      "1780cfd0de8fb6b2af58fe0f09cba3fa"
+      "bfce780b76e02323d2d6fd6139437b8e"
     ],
     [
       "Parsers.TicketContents.serialize32_ticketContents_cases",
@@ -497,7 +497,7 @@
         "typing_FStar.UInt32.v"
       ],
       0,
-      "76a71acf13d9738560a5937cf4ed90a8"
+      "3340456a8f509ba9bb94143541a30760"
     ],
     [
       "Parsers.TicketContents.size32_ticketContents_cases",
@@ -541,7 +541,7 @@
         "typing_FStar.UInt32.v"
       ],
       0,
-      "32e06a950dc746a0717e44c966718b9c"
+      "128e740737143772c988cf439e051690"
     ],
     [
       "Parsers.TicketContents.validate_ticketContents_cases",
@@ -585,7 +585,7 @@
         "typing_FStar.UInt32.v"
       ],
       0,
-      "c7701260e1e866773f7e646be59cacee"
+      "95fdae668cd4b3f76aa9106bb11f2117"
     ],
     [
       "Parsers.TicketContents.jump_ticketContents_cases",
@@ -629,7 +629,7 @@
         "typing_FStar.UInt32.v"
       ],
       0,
-      "923c2df4f6682c8adf4601dba8e622bc"
+      "d2a7c50106bc59916f2f209f6c25e8e7"
     ],
     [
       "Parsers.TicketContents.ticketContents_parser",
@@ -646,7 +646,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind"
       ],
       0,
-      "5164a427c003e2e72ba45c6030b700c4"
+      "769852e3c9f005a7da7d8007363d972c"
     ],
     [
       "Parsers.TicketContents.ticketContents_serializer",
@@ -670,7 +670,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind"
       ],
       0,
-      "ccc600fa5d5d08f9d0ad302c87079765"
+      "6e6217a1bbbc1a44ace9001aed32bc17"
     ],
     [
       "Parsers.TicketContents.ticketContents_bytesize_eq",
@@ -682,7 +682,7 @@
         "equation_Parsers.TicketContents.ticketContents_bytesize"
       ],
       0,
-      "4eddb558044efe61cac30b9888fde2ef"
+      "1a929327805c898e5c7248ea47635a7a"
     ],
     [
       "Parsers.TicketContents.ticketContents_parser32",
@@ -703,7 +703,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind"
       ],
       0,
-      "e25bde21126fa0c8cf9ec40816f69df4"
+      "bb010a8c8b443041f7d81ff21331c3a4"
     ],
     [
       "Parsers.TicketContents.ticketContents_serializer32",
@@ -732,7 +732,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind"
       ],
       0,
-      "b88f4fb37e9b1ac95afe283e4e8e37c7"
+      "e3f228adc008465af27dd9755a233aa7"
     ],
     [
       "Parsers.TicketContents.ticketContents_size32",
@@ -761,7 +761,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind"
       ],
       0,
-      "f269fa5c8a9335cc097a82f8ba926e4f"
+      "64f7723d6aa8a7c717b9cf2aebe4fc4e"
     ],
     [
       "Parsers.TicketContents.ticketContents_validator",
@@ -782,7 +782,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind"
       ],
       0,
-      "a69566d226ff84125f34df831d5c0237"
+      "505791b929c8872f0615b6ae90dab6b0"
     ],
     [
       "Parsers.TicketContents.ticketContents_jumper",
@@ -803,7 +803,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind"
       ],
       0,
-      "c187b20d5c0848e419461215160fc125"
+      "cc30a51b40d765e4eb13afd5afe7bb8f"
     ],
     [
       "Parsers.TicketContents.lemma_valid_ticketContents_valid_ticketVersion",
@@ -815,7 +815,7 @@
         "refinement_interpretation_Tm_refine_2de20c066034c13bf76e9c0b94f4806c"
       ],
       0,
-      "c1d15552aa26b68bc3ec2742d77f1b32"
+      "280c3d1e0fb28a6107325874d13d583f"
     ],
     [
       "Parsers.TicketContents.lemma_valid_ticketContents_valid_ticketVersion",
@@ -825,10 +825,12 @@
       [
         "@MaxIFuel_assumption", "@query",
         "LowParse.Spec.Base_pretyping_753dfb8f8ba156874c914a94190399fd",
+        "Parsers.TicketVersion_pretyping_10613e435fdbe4354d34ba37e42fb0a8",
         "assumption_Parsers.TicketVersion.ticketVersion__uu___haseq",
         "constructor_distinct_LowParse.Spec.Base.ParserKindMetadataFail",
         "constructor_distinct_LowParse.Spec.Base.ParserKindMetadataTotal",
         "data_typing_intro_LowParse.Spec.Base.ParserKindMetadataFail@tok",
+        "data_typing_intro_Parsers.TicketVersion.Ticket13@tok",
         "equality_tok_LowParse.Spec.Base.ParserKindMetadataTotal@tok",
         "equality_tok_LowParse.Spec.Sum.Sum@tok",
         "equation_LowParse.Low.Base.Spec.valid_content",
@@ -882,7 +884,7 @@
         "typing_Parsers.TicketContents.ticketContents_parser_kind"
       ],
       0,
-      "8964d97f76a11059c2fe526f01281a9c"
+      "db4cba3ba21b5da465c85cb9fa53122c"
     ],
     [
       "Parsers.TicketContents.ticketContents_gaccessor_tag",
@@ -1165,7 +1167,7 @@
         "typing_tok_Parsers.TicketVersion.Ticket12@tok"
       ],
       0,
-      "5389302e20f5e6fb6e0f22abf37b669a"
+      "282e4461824414c4ee500bb21a1d4f47"
     ],
     [
       "Parsers.TicketContents.ticketContents_bytesize_eqn_ticket13",
@@ -1302,7 +1304,7 @@
         "typing_Tm_abs_ad535dda6a2a521abf841b27b89efc46"
       ],
       0,
-      "90fa2fca95a0d9bf285188c7d529155f"
+      "a80ecf85ae9dc4cbde009c0e63bce61e"
     ],
     [
       "Parsers.TicketContents.ticketContents_clens_ticket12",
@@ -1320,7 +1322,7 @@
         "fuel_guarded_inversion_Parsers.TicketContents.ticketContents"
       ],
       0,
-      "88cd3452f19b240f35b6bfd91e2db1e1"
+      "448f4b76c24ae6d29111bf077b7d3dcf"
     ],
     [
       "Parsers.TicketContents.ticketContents_gaccessor'_ticket12",
@@ -1337,7 +1339,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind"
       ],
       0,
-      "9dccd38e1dc4604e4ad8c39e945554d8"
+      "ea7c646766f792b8ac02b092b7dd358e"
     ],
     [
       "Parsers.TicketContents.ticketContents_accessor'_ticket12",
@@ -1359,7 +1361,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind"
       ],
       0,
-      "5e9ebc7528d0bae05c19ffdfed54e6a1"
+      "486e6ba990972d234de85422cff78242"
     ],
     [
       "Parsers.TicketContents.ticketContents_clens_eq_ticket12",
@@ -1372,7 +1374,7 @@
         "refinement_interpretation_Tm_refine_2de20c066034c13bf76e9c0b94f4806c"
       ],
       0,
-      "354af02cd5bd9b699df7b280167a8983"
+      "d7a9eb96e3af443fc5cb6ad53a2e262d"
     ],
     [
       "Parsers.TicketContents.ticketContents_clens_ticket13",
@@ -1390,7 +1392,7 @@
         "fuel_guarded_inversion_Parsers.TicketContents.ticketContents"
       ],
       0,
-      "828ec89311212d659369680b45695977"
+      "b0ed8973d03dd43e9be9ed81babea7e2"
     ],
     [
       "Parsers.TicketContents.ticketContents_gaccessor'_ticket13",
@@ -1407,7 +1409,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind"
       ],
       0,
-      "48655380de9f1fd7ff3c2ac27af67f96"
+      "1f281269dd07f7c398b59fd155a123aa"
     ],
     [
       "Parsers.TicketContents.ticketContents_accessor'_ticket13",
@@ -1429,7 +1431,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind"
       ],
       0,
-      "b244efd5e6abea47f013883e78e40030"
+      "9071d97c2609a16d0e2678ead4e183a9"
     ],
     [
       "Parsers.TicketContents.ticketContents_clens_eq_ticket13",
@@ -1442,7 +1444,7 @@
         "refinement_interpretation_Tm_refine_2de20c066034c13bf76e9c0b94f4806c"
       ],
       0,
-      "e960c0ec38cca7f7f951182f70e69bc3"
+      "c5cd1d0944c7da2f1892e015970fabef"
     ],
     [
       "Parsers.TicketContents.finalize_ticketContents_ticket12",
@@ -1511,7 +1513,7 @@
         "typing_Parsers.TicketVersion.ticketVersion_enum"
       ],
       0,
-      "e12a392deefafddb64adaf48f628e9b9"
+      "6a4e99f7eaa296ef8a324ee4a9b66026"
     ],
     [
       "Parsers.TicketContents.finalize_ticketContents_ticket12",
@@ -1520,10 +1522,12 @@
       1,
       [
         "@MaxIFuel_assumption", "@query",
+        "Parsers.TicketVersion_pretyping_10613e435fdbe4354d34ba37e42fb0a8",
         "assumption_Parsers.TicketVersion.ticketVersion__uu___haseq",
         "b2t_def", "bool_inversion", "bool_typing",
         "constructor_distinct_FStar.Pervasives.Native.Some",
         "constructor_distinct_Parsers.TicketVersion.Ticket12",
+        "data_typing_intro_Parsers.TicketVersion.Ticket13@tok",
         "equality_tok_LowParse.Spec.Sum.Sum@tok",
         "equality_tok_Parsers.TicketVersion.Ticket12@tok",
         "equation_FStar.Pervasives.dsnd", "equation_FStar.UInt.fits",
@@ -1644,7 +1648,7 @@
         "typing_Parsers.TicketVersion.ticketVersion_enum"
       ],
       0,
-      "7a92e05ab413da3d00768549474c1381"
+      "9d08d2993426808652a01a2124aeb849"
     ],
     [
       "Parsers.TicketContents.finalize_ticketContents_ticket13",
@@ -1653,10 +1657,12 @@
       1,
       [
         "@MaxIFuel_assumption", "@query",
+        "Parsers.TicketVersion_pretyping_10613e435fdbe4354d34ba37e42fb0a8",
         "assumption_Parsers.TicketVersion.ticketVersion__uu___haseq",
         "b2t_def", "bool_inversion", "bool_typing",
         "constructor_distinct_FStar.Pervasives.Native.Some",
         "constructor_distinct_Parsers.TicketVersion.Ticket13",
+        "data_typing_intro_Parsers.TicketVersion.Ticket13@tok",
         "equality_tok_LowParse.Spec.Sum.Sum@tok",
         "equality_tok_Parsers.TicketVersion.Ticket12@tok",
         "equality_tok_Parsers.TicketVersion.Ticket13@tok",
