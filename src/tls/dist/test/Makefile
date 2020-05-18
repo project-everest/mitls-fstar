@@ -26,7 +26,7 @@ MARCH		= x86_64
 ifeq ($(UNAME),Darwin)
   LD_EXTRA = DYLD_LIBRARY_PATH=$(LD_PATH):$$DYLD_LIBRARY_PATH
 else ifeq ($(UNAME),Linux)
-  CFLAGS	+= -fPIC -fstack-check
+  CFLAGS	+= -fPIC
   LD_EXTRA = LD_LIBRARY_PATH=$(LD_PATH):$$LD_LIBRARY_PATH
 else ifeq ($(OS),Windows_NT)
   CFLAGS        += -fno-asynchronous-unwind-tables
