@@ -1,6 +1,27 @@
 [
-  "®π⁄ÍÉQ%\u001aq≈KË^\u0006/Ã",
+  "Ø\u0013ë†èÇ&Uâ˛©\u001b‚˘j∫",
   [
+    [
+      "TLSError.error",
+      1,
+      2,
+      1,
+      [
+        "@query",
+        "assumption_Parsers.AlertDescription.alertDescription__uu___haseq"
+      ],
+      0,
+      "8497b1ea7f3707e4809a805e98b8178f"
+    ],
+    [
+      "TLSError.string_of_error",
+      1,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "c1d51e1ed5fe2303e933204f17de9d51"
+    ],
     [
       "TLSError.string_of_result",
       1,
@@ -9,14 +30,13 @@
       [
         "@MaxIFuel_assumption", "@query", "bool_inversion",
         "disc_equation_FStar.Error.Correct",
-        "disc_equation_FStar.Error.Error", "equation_TLSError.error",
-        "function_token_typing_TLSError.error",
+        "disc_equation_FStar.Error.Error", "kinding_TLSError.error@tok",
         "lemma_FStar.Error.invertOptResult",
         "projection_inverse_BoxBool_proj_0",
         "typing_FStar.Error.uu___is_Correct"
       ],
       0,
-      "5480628c1c32f017abb574380db96f2b"
+      "928ac3ef29a4257ea0453b0e1fb27369"
     ],
     [
       "TLSError.resT",
@@ -30,7 +50,7 @@
         "refinement_interpretation_Tm_refine_a0dbf400a12f52d8e92a346ebf22efa9"
       ],
       0,
-      "21d9f30c71f7e2121e537f7b6ce25d02"
+      "5c6e8698e6d763c3f583212680023a87"
     ],
     [
       "TLSError.mapResult",
@@ -40,14 +60,13 @@
       [
         "@MaxIFuel_assumption", "@query", "bool_inversion",
         "disc_equation_FStar.Error.Correct",
-        "disc_equation_FStar.Error.Error", "equation_TLSError.error",
-        "equation_TLSError.result", "function_token_typing_TLSError.error",
-        "lemma_FStar.Error.invertOptResult",
+        "disc_equation_FStar.Error.Error", "equation_TLSError.result",
+        "kinding_TLSError.error@tok", "lemma_FStar.Error.invertOptResult",
         "typing_FStar.Error.uu___is_Correct",
         "typing_FStar.Error.uu___is_Error"
       ],
       0,
-      "9b2d9047b323f0c68591399bd90bfdbe"
+      "9357cf2e0c07cdce0aee7050b431be11"
     ],
     [
       "TLSError.bindResult",
@@ -57,14 +76,13 @@
       [
         "@MaxIFuel_assumption", "@query", "bool_inversion",
         "disc_equation_FStar.Error.Correct",
-        "disc_equation_FStar.Error.Error", "equation_TLSError.error",
-        "equation_TLSError.result", "function_token_typing_TLSError.error",
-        "lemma_FStar.Error.invertOptResult",
+        "disc_equation_FStar.Error.Error", "equation_TLSError.result",
+        "kinding_TLSError.error@tok", "lemma_FStar.Error.invertOptResult",
         "typing_FStar.Error.uu___is_Correct",
         "typing_FStar.Error.uu___is_Error"
       ],
       0,
-      "c8099b52ade60e0f9438aec76af63abd"
+      "8dd7157bacebded6e23cd5cd0392237b"
     ],
     [
       "TLSError.resultMap",
@@ -74,14 +92,13 @@
       [
         "@MaxIFuel_assumption", "@query", "bool_inversion",
         "disc_equation_FStar.Error.Correct",
-        "disc_equation_FStar.Error.Error", "equation_TLSError.error",
-        "equation_TLSError.result", "function_token_typing_TLSError.error",
-        "lemma_FStar.Error.invertOptResult",
+        "disc_equation_FStar.Error.Error", "equation_TLSError.result",
+        "kinding_TLSError.error@tok", "lemma_FStar.Error.invertOptResult",
         "typing_FStar.Error.uu___is_Correct",
         "typing_FStar.Error.uu___is_Error"
       ],
       0,
-      "21cac2bc6903cab44d20db0867794f73"
+      "6a73098ed4cb0b81ed22060517b0f0e3"
     ],
     [
       "TLSError.resultBind",
@@ -91,14 +108,13 @@
       [
         "@MaxIFuel_assumption", "@query", "bool_inversion",
         "disc_equation_FStar.Error.Correct",
-        "disc_equation_FStar.Error.Error", "equation_TLSError.error",
-        "equation_TLSError.result", "function_token_typing_TLSError.error",
-        "lemma_FStar.Error.invertOptResult",
+        "disc_equation_FStar.Error.Error", "equation_TLSError.result",
+        "kinding_TLSError.error@tok", "lemma_FStar.Error.invertOptResult",
         "typing_FStar.Error.uu___is_Correct",
         "typing_FStar.Error.uu___is_Error"
       ],
       0,
-      "f62aa3257d79a5a366c21b70adcee4b7"
+      "229b43a645d356b52b82c8ec1fcdba49"
     ],
     [
       "TLSError.option_of_result",
@@ -108,14 +124,13 @@
       [
         "@MaxIFuel_assumption", "@query", "bool_inversion",
         "disc_equation_FStar.Error.Correct",
-        "disc_equation_FStar.Error.Error", "equation_TLSError.error",
-        "equation_TLSError.result", "function_token_typing_TLSError.error",
-        "lemma_FStar.Error.invertOptResult",
+        "disc_equation_FStar.Error.Error", "equation_TLSError.result",
+        "kinding_TLSError.error@tok", "lemma_FStar.Error.invertOptResult",
         "typing_FStar.Error.uu___is_Correct",
         "typing_FStar.Error.uu___is_Error"
       ],
       0,
-      "a3b21119b26c230729b50797380179b8"
+      "109740afbfbd0c8ecc4c48bb42630b7a"
     ],
     [
       "TLSError.bind",
@@ -125,14 +140,22 @@
       [
         "@MaxIFuel_assumption", "@query", "bool_inversion",
         "disc_equation_FStar.Error.Correct",
-        "disc_equation_FStar.Error.Error", "equation_TLSError.error",
-        "equation_TLSError.result", "function_token_typing_TLSError.error",
-        "lemma_FStar.Error.invertOptResult",
+        "disc_equation_FStar.Error.Error", "equation_TLSError.result",
+        "kinding_TLSError.error@tok", "lemma_FStar.Error.invertOptResult",
         "typing_FStar.Error.uu___is_Correct",
         "typing_FStar.Error.uu___is_Error"
       ],
       0,
-      "a4dd3f1498174f63208d51fc8ce2dbc3"
+      "d8910ac368e5e295100cb618018456cf"
+    ],
+    [
+      "TLSError.perror",
+      1,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "829fa6c4365b7301a63706ee28944f64"
     ],
     [
       "TLSError.exn_return",
@@ -141,7 +164,7 @@
       1,
       [ "@query" ],
       0,
-      "2bc5c33c5832db8f8e9c2de4a635639f"
+      "9b35477d9c905b3a69f1a131c9074d4d"
     ],
     [
       "TLSError.exn_bind",
@@ -154,42 +177,32 @@
         "TLSError_interpretation_Tm_arrow_4431c6c27f94aa18e0755bfb71be1b7f",
         "TLSError_interpretation_Tm_arrow_c9fee20eb0494c5cbf29629774eae970",
         "TLSError_interpretation_Tm_arrow_d6aad69fcc0b1926994137dbeb8d16f5",
-        "assumption_TLSError.WP_exn_monotonic", "b2t_def", "bool_inversion",
+        "assumption_TLSError.WP_exn_monotonic", "bool_inversion",
+        "constructor_distinct_FStar.Error.Error",
         "disc_equation_FStar.Error.Correct",
-        "disc_equation_FStar.Error.Error", "equation_FStar.Bytes.lbytes",
-        "equation_FStar.Monotonic.HyperStack.is_wf_with_ctr_and_tip",
+        "disc_equation_FStar.Error.Error",
         "equation_FStar.Monotonic.HyperStack.mem",
         "equation_FStar.Pervasives.st_post_h",
-        "equation_FStar.Pervasives.st_post_h_", "equation_FStar.UInt.fits",
-        "equation_FStar.UInt.min_int", "equation_FStar.UInt.size",
-        "equation_FStar.UInt.uint_t", "equation_Prims.l_True",
-        "equation_Prims.logical", "equation_TLSError.error",
-        "equation_TLSError.result",
+        "equation_FStar.Pervasives.st_post_h_", "equation_Prims.l_True",
+        "equation_Prims.logical", "equation_TLSError.result",
         "fuel_guarded_inversion_FStar.Error.optResult",
-        "function_token_typing_TLSError.error",
-        "interpretation_Tm_abs_ed7b20fec66d834be39d581e2f007496",
+        "interpretation_Tm_abs_59a3d27670a993e7043db0e33da990b8",
         "interpretation_Tm_abs_fd76b7dc51da26c5c96799f15578a28f",
-        "l_quant_interp_6d9acbf30c85c42b3e0a4e0744e11f4c",
-        "lemma_FStar.Error.invertOptResult", "primitive_Prims.op_AmpAmp",
-        "primitive_Prims.op_LessThanOrEqual",
-        "projection_inverse_BoxBool_proj_0",
+        "kinding_TLSError.error@tok",
+        "l_quant_interp_7195ebd35e875dab16178b975d966e40",
+        "lemma_FStar.Error.invertOptResult",
         "projection_inverse_FStar.Error.Correct__0",
         "projection_inverse_FStar.Error.Error__0",
-        "refinement_interpretation_Tm_refine_05e15190c946858f68c69156f585f95a",
-        "refinement_interpretation_Tm_refine_365abba901205a01d0ef28ebf2198c47",
-        "refinement_interpretation_Tm_refine_71ea40360194fe02ee1272538c9cacbc",
+        "projection_inverse_FStar.Error.Error__a",
+        "projection_inverse_FStar.Error.Error__b",
         "refinement_interpretation_Tm_refine_8d65e998a07dd53ec478e27017d9dba5",
-        "refinement_interpretation_Tm_refine_f13070840248fced9d9d60d77bdae3ec",
-        "true_interp", "typing_FStar.Bytes.empty_bytes",
-        "typing_FStar.Bytes.len", "typing_FStar.Error.uu___is_Correct",
+        "true_interp", "typing_FStar.Error.uu___is_Correct",
         "typing_FStar.Error.uu___is_Error",
-        "typing_FStar.Monotonic.HyperHeap.rid_freeable",
-        "typing_FStar.Monotonic.HyperHeap.root", "typing_FStar.UInt32.v",
-        "typing_Tm_abs_ed7b20fec66d834be39d581e2f007496",
+        "typing_Tm_abs_59a3d27670a993e7043db0e33da990b8",
         "typing_Tm_abs_fd76b7dc51da26c5c96799f15578a28f"
       ],
       0,
-      "13a7f07387ae2f669b91edf98b3a8132"
+      "0077a4f654ef1d33791e11e42bcea5f0"
     ],
     [
       "TLSError.exn_subcomp",
@@ -209,7 +222,7 @@
         "true_interp"
       ],
       0,
-      "bea41c93e801e609f52d40630ccae375"
+      "b26aefa824fc59bf0b85bcc4fe8d75df"
     ],
     [
       "TLSError.TLSEXN",
@@ -219,14 +232,13 @@
       [
         "@MaxIFuel_assumption", "@query", "bool_inversion",
         "disc_equation_FStar.Error.Correct",
-        "disc_equation_FStar.Error.Error", "equation_TLSError.error",
-        "equation_TLSError.result", "function_token_typing_TLSError.error",
-        "lemma_FStar.Error.invertOptResult",
+        "disc_equation_FStar.Error.Error", "equation_TLSError.result",
+        "kinding_TLSError.error@tok", "lemma_FStar.Error.invertOptResult",
         "typing_FStar.Error.uu___is_Correct",
         "typing_FStar.Error.uu___is_Error"
       ],
       0,
-      "28442b9ddf91e02d2503bc83d93e7687"
+      "9898fcb1ba94aafc506029a3a49e300f"
     ],
     [
       "TLSError.TLSEXN",
@@ -236,14 +248,13 @@
       [
         "@MaxIFuel_assumption", "@query", "bool_inversion",
         "disc_equation_FStar.Error.Correct",
-        "disc_equation_FStar.Error.Error", "equation_TLSError.error",
-        "equation_TLSError.result", "function_token_typing_TLSError.error",
-        "lemma_FStar.Error.invertOptResult",
+        "disc_equation_FStar.Error.Error", "equation_TLSError.result",
+        "kinding_TLSError.error@tok", "lemma_FStar.Error.invertOptResult",
         "typing_FStar.Error.uu___is_Correct",
         "typing_FStar.Error.uu___is_Error"
       ],
       0,
-      "65ace293564a3719090a649da9176ec1"
+      "ffc6f0441272ea8ce1d6965f06742b56"
     ],
     [
       "TLSError.TLSEXN",
@@ -253,14 +264,13 @@
       [
         "@MaxIFuel_assumption", "@query", "bool_inversion",
         "disc_equation_FStar.Error.Correct",
-        "disc_equation_FStar.Error.Error", "equation_TLSError.error",
-        "equation_TLSError.result", "function_token_typing_TLSError.error",
-        "lemma_FStar.Error.invertOptResult",
+        "disc_equation_FStar.Error.Error", "equation_TLSError.result",
+        "kinding_TLSError.error@tok", "lemma_FStar.Error.invertOptResult",
         "typing_FStar.Error.uu___is_Correct",
         "typing_FStar.Error.uu___is_Error"
       ],
       0,
-      "77c6f076ecfe508827ec7229ceb73e41"
+      "023396f86250f0e3f3846f4b8e557eb2"
     ],
     [
       "TLSError.TLSEXN",
@@ -269,7 +279,7 @@
       1,
       [ "@query" ],
       0,
-      "b99dd08d9174363e9da4950d8f2f58b5"
+      "e30a3f0f258f5fe2e4bb2300d5dd8fb2"
     ],
     [
       "TLSError.TLSEXN",
@@ -278,7 +288,7 @@
       1,
       [ "@query" ],
       0,
-      "361bb18f8f49ea6f636b6661db0736ed"
+      "0614b5d1b63e4678857560321e27aaba"
     ],
     [
       "TLSError.lift_div_tlsexn",
@@ -298,10 +308,10 @@
         "typing_Tm_abs_4c9174edd603eae0cd6aac824b6b574b"
       ],
       0,
-      "0421d36990c99471ede7a0ffd4fa804e"
+      "714a11701019212e6c70ff71ee0a94a0"
     ],
     [
-      "TLSError.15099",
+      "TLSError.15333",
       1,
       2,
       1,
@@ -310,7 +320,7 @@
         "refinement_interpretation_Tm_refine_9c79c4ef8bf28fdd5d01e604e0426830"
       ],
       0,
-      "5bcad0e08f0eefc94e6ca2dd7ad5399c"
+      "9db86ab630a525eb550376e33559c5a9"
     ]
   ]
 ]

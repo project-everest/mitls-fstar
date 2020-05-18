@@ -18,12 +18,12 @@
         "projection_inverse_BoxBool_proj_0",
         "projection_inverse_BoxInt_proj_0",
         "refinement_interpretation_Tm_refine_71ea40360194fe02ee1272538c9cacbc",
-        "refinement_interpretation_Tm_refine_b68f4c630774b7e33fc3061e0399dbfd",
+        "refinement_interpretation_Tm_refine_ece308b486f56272505513c516f4b89a",
         "refinement_interpretation_Tm_refine_f13070840248fced9d9d60d77bdae3ec",
         "typing_FStar.Bytes.len", "typing_FStar.UInt32.v"
       ],
       0,
-      "0410584c1b4baad83e4d9c283d9312cf"
+      "741b18ffdc407497250c602f58180323"
     ],
     [
       "BufferBytes.store_bytes",
@@ -32,7 +32,7 @@
       1,
       [ "@query" ],
       0,
-      "1e3214cdcd273734e1258a148f0ccda3"
+      "5194dfad26a9f3339472606f0a36c593"
     ],
     [
       "BufferBytes.from_bytes",
@@ -42,19 +42,21 @@
       [
         "@MaxIFuel_assumption", "@query", "equation_BufferBytes.lbuffer",
         "equation_FStar.UInt.fits", "equation_FStar.UInt.max_int",
-        "equation_Prims.nat", "function_token_typing_FStar.UInt8.t",
+        "equation_Prims.eqtype", "equation_Prims.nat",
         "lemma_FStar.Bytes.length_reveal", "primitive_Prims.op_AmpAmp",
         "primitive_Prims.op_LessThanOrEqual",
         "primitive_Prims.op_Subtraction",
         "projection_inverse_BoxBool_proj_0",
         "projection_inverse_BoxInt_proj_0",
+        "refinement_interpretation_Tm_refine_414d0a9f578ab0048252f8c8f552b99f",
         "refinement_interpretation_Tm_refine_4f26bbfb64075f9d6470c558e28cdc27",
         "refinement_interpretation_Tm_refine_542f9d4f129664613f2483a6c88bc7c2",
-        "refinement_interpretation_Tm_refine_b68f4c630774b7e33fc3061e0399dbfd",
-        "typing_FStar.Bytes.reveal", "typing_FStar.Seq.Base.length"
+        "refinement_interpretation_Tm_refine_ece308b486f56272505513c516f4b89a",
+        "typing_FStar.Bytes.reveal", "typing_FStar.Seq.Base.length",
+        "typing_FStar.UInt8.t"
       ],
       0,
-      "f05eee4b85ad8fcd5c8df5a39ed89fe5"
+      "2cc0cc6cd09f9592c0d91e58d2accc44"
     ]
   ]
 ]

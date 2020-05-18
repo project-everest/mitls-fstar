@@ -1,5 +1,5 @@
 [
-  "Wvj\u0016\u001fÅı^Î”p®Ÿ\u0017P¢",
+  "Æh\u0002n]¢_Nõ;izû¸î¥",
   [
     [
       "TLS.Cookie.hrr_ha",
@@ -15,7 +15,7 @@
         "refinement_interpretation_Tm_refine_9604540f38f8bf12fd4431280b2777d5"
       ],
       0,
-      "6b36586ecf146c335d0781492cf9d11a"
+      "d3e3b51420e9fa42b924b24b24fb5ea0"
     ],
     [
       "TLS.Cookie.hrr0",
@@ -43,9 +43,8 @@
         "constructor_distinct_EverCrypt.AES256_GCM",
         "constructor_distinct_EverCrypt.CHACHA20_POLY1305",
         "constructor_distinct_EverCrypt.TDES_EDE_CBC",
-        "constructor_distinct_FStar.Error.Error",
         "constructor_distinct_FStar.Integers.W16",
-        "constructor_distinct_FStar.Integers.W32",
+        "constructor_distinct_FStar.Integers.W64",
         "constructor_distinct_FStar.Integers.W8",
         "constructor_distinct_FStar.Pervasives.Native.None",
         "constructor_distinct_FStar.Pervasives.Native.Some",
@@ -61,6 +60,7 @@
         "constructor_distinct_Spec.Hash.Definitions.SHA1",
         "constructor_distinct_Spec.Hash.Definitions.SHA2_256",
         "constructor_distinct_Spec.Hash.Definitions.SHA2_384",
+        "constructor_distinct_TLS.Result.Error",
         "constructor_distinct_Tm_unit",
         "data_elim_FStar.Pervasives.Native.Some",
         "data_typing_intro_CipherSuite.DSA@tok",
@@ -68,7 +68,7 @@
         "data_typing_intro_Parsers.HRRExtension.HRRE_supported_versions@tok",
         "data_typing_intro_Prims.Nil@tok",
         "disc_equation_CipherSuite.CipherSuite13",
-        "disc_equation_FStar.Error.Correct", "eq2-interp",
+        "disc_equation_TLS.Result.Correct", "eq2-interp",
         "equality_tok_CipherSuite.ECDSA@tok",
         "equality_tok_CipherSuite.Kex_DHE@tok",
         "equality_tok_CipherSuite.Kex_ECDHE@tok",
@@ -85,7 +85,7 @@
         "equality_tok_EverCrypt.RC4_128@tok",
         "equality_tok_EverCrypt.TDES_EDE_CBC@tok",
         "equality_tok_FStar.Integers.W16@tok",
-        "equality_tok_FStar.Integers.W32@tok",
+        "equality_tok_FStar.Integers.W64@tok",
         "equality_tok_FStar.Integers.W8@tok",
         "equality_tok_Parsers.AlertDescription.Illegal_parameter@tok",
         "equality_tok_Parsers.CipherSuite.TLS_AES_128_CCM_8_SHA256@tok",
@@ -94,6 +94,7 @@
         "equality_tok_Parsers.CipherSuite.TLS_AES_256_GCM_SHA384@tok",
         "equality_tok_Parsers.CipherSuite.TLS_CHACHA20_POLY1305_SHA256@tok",
         "equality_tok_Parsers.CipherSuite.TLS_DHE_RSA_WITH_CHACHA20_POLY1305_SHA256@tok",
+        "equality_tok_Parsers.CipherSuite.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256@tok",
         "equality_tok_Parsers.CipherSuite.TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256@tok",
         "equality_tok_Parsers.CipherSuite.TLS_ECDHE_RSA_WITH_3DES_EDE_CBC_SHA@tok",
         "equality_tok_Parsers.CipherSuite.TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA256@tok",
@@ -124,11 +125,10 @@
         "equation_HandshakeMessages.mk_hrr",
         "equation_Parsers.HRRExtension_HRRE_supported_versions.hRRExtension_HRRE_supported_versions",
         "equation_Prims.eq2", "equation_Prims.nat", "equation_Prims.squash",
-        "equation_TLS.Cookie.hrr_len", "equation_TLSError.error",
-        "equation_TLSError.fatal",
-        "fuel_guarded_inversion_FStar.Error.optResult",
+        "equation_TLS.Cookie.hrr_len", "equation_TLS.Result.fatal",
         "fuel_guarded_inversion_FStar.Pervasives.Native.option",
         "fuel_guarded_inversion_Parsers.CipherSuite.cipherSuite",
+        "fuel_guarded_inversion_TLS.Result.result",
         "function_token_typing_Parsers.HRRExtensions.hRRExtensions_list_bytesize_nil",
         "kinding_Parsers.HRRExtension.hRRExtension@tok",
         "lemma_Parsers.HRRExtension.hRRExtension_bytesize_eqn_supported_versions",
@@ -145,13 +145,14 @@
         "projection_inverse_CipherSuite.AEAD__0",
         "projection_inverse_CipherSuite.AEAD__1",
         "projection_inverse_CipherSuite.Block__0",
+        "projection_inverse_CipherSuite.CipherSuite13__0",
+        "projection_inverse_CipherSuite.CipherSuite13__1",
         "projection_inverse_CipherSuite.CipherSuite__0",
         "projection_inverse_CipherSuite.CipherSuite__1",
         "projection_inverse_CipherSuite.CipherSuite__2",
         "projection_inverse_CipherSuite.MtE__0",
         "projection_inverse_CipherSuite.MtE__1",
         "projection_inverse_CipherSuite.Stream__0",
-        "projection_inverse_FStar.Error.Correct__0",
         "projection_inverse_FStar.Integers.Signed__0",
         "projection_inverse_FStar.Integers.Unsigned__0",
         "projection_inverse_FStar.Pervasives.Native.None_a",
@@ -161,6 +162,7 @@
         "projection_inverse_Parsers.HRRKind.MkhRRKind_extensions",
         "projection_inverse_Parsers.ServerHello.MkserverHello_is_hrr",
         "projection_inverse_Parsers.ServerHello_is_hrr.ServerHello_is_hrr_true__0",
+        "projection_inverse_TLS.Result.Correct__0",
         "refinement_interpretation_Tm_refine_2de20c066034c13bf76e9c0b94f4806c",
         "refinement_interpretation_Tm_refine_4efafdaa406d7e0dd35ef4b76469edf6",
         "refinement_interpretation_Tm_refine_542f9d4f129664613f2483a6c88bc7c2",
@@ -175,7 +177,7 @@
         "typing_tok_Parsers.ProtocolVersion.TLS_1p3@tok"
       ],
       0,
-      "6f69488c6e8cd27955fe2a12e48b8f37"
+      "26ef43bbbe660087020b19ff8f07866b"
     ],
     [
       "TLS.Cookie.append_extension",
@@ -223,7 +225,7 @@
         "typing_Parsers.HRRExtension.hRRExtension_bytesize"
       ],
       0,
-      "2dc5da51218288ed13c0915d42a825f2"
+      "06dae50e297d346235d452f2c0a3e2f3"
     ],
     [
       "TLS.Cookie.append_keyshare",
@@ -242,7 +244,7 @@
         "primitive_Prims.op_Addition", "projection_inverse_BoxInt_proj_0"
       ],
       0,
-      "3b034abadb71ccbef83458e8b5a887df"
+      "5def43738fc380534062e44db95c0cd0"
     ],
     [
       "TLS.Cookie.append",
@@ -256,7 +258,7 @@
         "primitive_Prims.op_Addition", "projection_inverse_BoxInt_proj_0"
       ],
       0,
-      "3d90e7aec54b273d274e7d054f5b8718"
+      "878f8388a4a73a7bc2d520cacbc0146a"
     ],
     [
       "TLS.Cookie.decrypt",
@@ -270,7 +272,7 @@
         "primitive_Prims.op_Addition", "projection_inverse_BoxInt_proj_0"
       ],
       0,
-      "d637fcf1f1591be03adaefd7acfe2ffa"
+      "54c208b3eca3bf08805c7c04358e4a8f"
     ]
   ]
 ]

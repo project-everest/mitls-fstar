@@ -65,7 +65,7 @@
         "typing_Spec.Poly1305.size_key"
       ],
       0,
-      "237ab47987b92c949e64c5b07636b82f"
+      "5cedc9b04e1a3b5fb1105e2e06813493"
     ],
     [
       "Nonce.ex_rid",
@@ -78,7 +78,7 @@
         "typing_FStar.Monotonic.HyperHeap.rid"
       ],
       0,
-      "494712aadff2bfc2b18524343d74112f"
+      "113e67bbf8230a0bdca6983fe03a5b42"
     ],
     [
       "Nonce.injective",
@@ -93,7 +93,7 @@
         "typing_FStar.Bytes.bytes"
       ],
       0,
-      "9ad713d28d2747d20494917ec7aff006"
+      "bb5c9ab003b1e7450b36705985c6933b"
     ],
     [
       "Nonce.injective",
@@ -113,7 +113,7 @@
         "typing_FStar.Monotonic.HyperHeap.root"
       ],
       0,
-      "4b015af8f75964b528790b834262b9bc"
+      "c4571b51ef45a27c07a088e8f0c85b2d"
     ],
     [
       "Nonce.nonce_rid_table",
@@ -159,7 +159,7 @@
         "typing_Tm_abs_26eef3985d99a56697f5a9d337882dba"
       ],
       0,
-      "83da58964da377991e32d51a1ebd5a10"
+      "b8bb0fc84148663f35a6d5bc02e7846a"
     ],
     [
       "Nonce.fresh",
@@ -181,7 +181,7 @@
         "typing_Nonce.n_rid"
       ],
       0,
-      "e2ad4dcb93dea9d72cd14a34540e219e"
+      "7f33b72c80a970b9e017f49a280a519d"
     ],
     [
       "Nonce.fresh_region",
@@ -203,7 +203,7 @@
         "typing_Nonce.n_rid"
       ],
       0,
-      "d75be21acde2c95c3258f63936f40b25"
+      "3db4f108d802e46967743327005dfb35"
     ],
     [
       "Nonce.registered",
@@ -218,7 +218,7 @@
         "typing_FStar.Bytes.bytes"
       ],
       0,
-      "be1524e2696315947ee21daa18b1d3a7"
+      "12bbdfb33790e7ae5ef40006dac5b0de"
     ],
     [
       "Nonce.testify",
@@ -234,7 +234,7 @@
         "typing_FStar.Bytes.bytes"
       ],
       0,
-      "e60c4e750fd40b0ff3d26b0524c1f79f"
+      "d1cffbe60f7dc4e7d1e6911bd09ac795"
     ],
     [
       "Nonce.mkHelloRandom",
@@ -251,7 +251,7 @@
         "typing_FStar.Bytes.bytes"
       ],
       0,
-      "88b3aebcb99bf39c15d818a0a8953632"
+      "e3f9d7966035119dd9e9dfe00b21c9b8"
     ],
     [
       "Nonce.mkHelloRandom",
@@ -264,6 +264,7 @@
         "Nonce_interpretation_Tm_arrow_2bf5fa3ec284b01abce1b5b41ced5ea8",
         "Prims_interpretation_Tm_arrow_2eaa01e78f73e9bab5d0955fc1a662da",
         "b2t_def", "bool_inversion", "bool_typing",
+        "constructor_distinct_FStar.Integers.Unsigned",
         "constructor_distinct_FStar.Integers.W16",
         "constructor_distinct_FStar.Integers.W32",
         "constructor_distinct_FStar.Integers.W8",
@@ -285,7 +286,8 @@
         "equation_FStar.HyperStack.ST.is_eternal_region",
         "equation_FStar.HyperStack.ST.m_rref",
         "equation_FStar.HyperStack.ST.modifies_none",
-        "equation_FStar.HyperStack.ST.mref",
+        "equation_FStar.HyperStack.ST.mref", "equation_FStar.Integers.int_t",
+        "equation_FStar.Integers.uint_8",
         "equation_FStar.Monotonic.DependentMap.imap",
         "equation_FStar.Monotonic.DependentMap.opt",
         "equation_FStar.Monotonic.DependentMap.partial_dependent_map",
@@ -322,9 +324,9 @@
         "equation_Spec.Poly1305.size_key",
         "fuel_guarded_inversion_FStar.Pervasives.Native.option",
         "fuel_guarded_inversion_TLSConstants.role",
+        "function_token_typing_FStar.Integers.uint_8",
         "function_token_typing_FStar.Monotonic.DependentMap.opt",
         "function_token_typing_FStar.Monotonic.Heap.heap",
-        "function_token_typing_FStar.UInt8.t",
         "function_token_typing_Nonce.n_rid",
         "function_token_typing_Parsers.MontgomeryPoint32.montgomeryPoint32",
         "haseqTm_refine_71ea40360194fe02ee1272538c9cacbc", "int_typing",
@@ -355,7 +357,6 @@
         "projection_inverse_FStar.Integers.Unsigned__0",
         "projection_inverse_FStar.Pervasives.Native.Mktuple2__1",
         "projection_inverse_FStar.Pervasives.Native.Mktuple2__2",
-        "projection_inverse_FStar.Pervasives.Native.None_a",
         "refinement_interpretation_Tm_refine_0293669e3551b06bf284909872d618f3",
         "refinement_interpretation_Tm_refine_05e15190c946858f68c69156f585f95a",
         "refinement_interpretation_Tm_refine_0ec011aea9f93256a3547ad9f0c667f1",
@@ -400,7 +401,7 @@
         "typing_Nonce.n_rid", "typing_Spec.Poly1305.size_key"
       ],
       0,
-      "f2977f27e82dcf2eb6a3b5590efef4b5"
+      "800053d9adc05910bb36ea084358808f"
     ],
     [
       "Nonce.lookup",
@@ -415,7 +416,7 @@
         "typing_FStar.Bytes.bytes"
       ],
       0,
-      "29f9687438877836697ebb7dfb528a87"
+      "7c8cb27f43e4a9f1372e6041104db894"
     ],
     [
       "Nonce.nonce_rids_exists",
@@ -430,7 +431,7 @@
         "typing_FStar.Bytes.bytes"
       ],
       0,
-      "831bc5f450fb30b1908b3adb5f3f166c"
+      "94a77d8c000a875d9a200f600a1c57f2"
     ],
     [
       "Nonce.nonce_rids_exists",
@@ -446,7 +447,7 @@
         "typing_FStar.Bytes.bytes"
       ],
       0,
-      "06850330333cfae54e5d3986148de710"
+      "cb1191ed7d946710abd813b6fa134bfe"
     ],
     [
       "Nonce.new_region",
@@ -537,7 +538,7 @@
         "typing_Mem.tls_tables_region"
       ],
       0,
-      "a39d7d3db658f60ac22a8df51d54c0ad"
+      "86ce45a1c96b7837fe070d9aa4c0c953"
     ]
   ]
 ]
