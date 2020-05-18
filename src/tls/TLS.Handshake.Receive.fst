@@ -324,6 +324,7 @@ let receive_s13_wait_EOED (st:state)
 = let r = PF.receive_s13_wait_EOED st.pf_st (cslice_of st) st.rcv_from st.rcv_to in
   wrap_pf_st st r
 
+#push-options "--z3rlimit 40"
 let receive_c13_Complete (st:state)
 : ST (result (option (PF.c13_Complete (cslice_of st)) & state))
   (requires receive_pre st PF.F_c13_Complete)
@@ -334,7 +335,7 @@ let receive_c13_Complete (st:state)
   | Correct (None, pf_st) -> Correct (None, { st with pf_st = pf_st })
   | Correct (Some (flt, pos), pf_st) ->
     Correct (Some flt, { st with pf_st = pf_st; rcv_from = pos })
-
+#pop-options
 
 (*** 1.2 flights ***)
 
