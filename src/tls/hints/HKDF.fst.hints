@@ -34,7 +34,7 @@
         "equation_FStar.Monotonic.HyperStack.is_wf_with_ctr_and_tip",
         "equation_FStar.Monotonic.HyperStack.mem",
         "equation_FStar.Monotonic.HyperStack.modifies",
-        "equation_Hashing.Spec.macable",
+        "equation_Hashing.Spec.hkey", "equation_Hashing.Spec.macable",
         "equation_Hashing.Spec.max_hash_length",
         "equation_Hashing.Spec.max_input_length",
         "equation_Hashing.Spec.tag", "equation_Prims.nat",
@@ -63,6 +63,7 @@
         "refinement_interpretation_Tm_refine_2bdf871324b477f38e180d50b5b0b08f",
         "refinement_interpretation_Tm_refine_365abba901205a01d0ef28ebf2198c47",
         "refinement_interpretation_Tm_refine_542f9d4f129664613f2483a6c88bc7c2",
+        "refinement_interpretation_Tm_refine_6638c674d68e1baa10bcee3e5bd5fdf0",
         "refinement_interpretation_Tm_refine_71ea40360194fe02ee1272538c9cacbc",
         "refinement_interpretation_Tm_refine_957d85d6808df825bcac638eebbd8935",
         "typing_EverCrypt.HMAC.is_supported_alg",
@@ -77,7 +78,7 @@
         "typing_FStar.Set.empty", "typing_Hashing.Spec.hmac"
       ],
       0,
-      "b787240d806ca8f6739f94ee29f7566f"
+      "cf83704a6fbf0cc616e4d20c4f5e1498"
     ],
     [
       "HKDF.expand",
@@ -119,7 +120,7 @@
         "typing_Hacl.Hash.Definitions.hash_len", "typing_Mem.tls_region"
       ],
       0,
-      "ea11bd81dc7983caedfd810142b7c0aa"
+      "b7abf9f9c4abc8c2b509ad61ac3efa56"
     ],
     [
       "HKDF.expand",
@@ -139,7 +140,7 @@
         "typing_Spec.Hash.Definitions.word_length"
       ],
       0,
-      "bc8a3451b15f3bbfc28fd436a3f1accb"
+      "59acad7b9a82700afb5f7c5d0251fd5f"
     ],
     [
       "HKDF.expand",
@@ -306,7 +307,7 @@
         "typing_tok_Lib.IntTypes.U32@tok"
       ],
       0,
-      "b6a151124fec2a55a1492598e06a8aa2"
+      "75bbab50fef89d5c1047c5eb44b6d5b4"
     ],
     [
       "HKDF.tls13_prefix",
@@ -315,7 +316,7 @@
       1,
       [ "@query" ],
       0,
-      "e14c852eb92bbf24d577e6c49c56d593"
+      "2e782f59a37647f8f1787b0594a8b986"
     ],
     [
       "HKDF.quic_prefix",
@@ -324,7 +325,7 @@
       1,
       [ "@query" ],
       0,
-      "a326e34347203614212d1e5f4c2efee0"
+      "c05681f1b5fe505e980757e64dfb50b4"
     ],
     [
       "HKDF.format",
@@ -388,7 +389,7 @@
         "typing_Parsers.HKDF.HkdfLabel.hkdfLabel_serializer"
       ],
       0,
-      "37c10bfbd9e95f5102a05fa51b9ea2d9"
+      "59e63799828d3797e91bc3227ed35510"
     ],
     [
       "HKDF.expand_label",
@@ -418,7 +419,7 @@
         "typing_Spec.Hash.Definitions.word_length"
       ],
       0,
-      "17019d93b8793ea3754e6fbf641bf891"
+      "ae203c2664820b06958788931615e3e4"
     ],
     [
       "HKDF.expand_label",
@@ -448,7 +449,7 @@
         "typing_Spec.Hash.Definitions.word_length"
       ],
       0,
-      "4e529834a1e6988645101e625c8859f2"
+      "52c92aabdf77a38da53e0b8aee4e8b8e"
     ],
     [
       "HKDF.expand_label",
@@ -457,7 +458,7 @@
       1,
       [ "@query" ],
       0,
-      "a914e51f5660c86440e170af4996eb78"
+      "7c874f8fa99a0091fc66d30b8ddf911b"
     ],
     [
       "HKDF.derive_secret",
@@ -487,7 +488,7 @@
         "typing_Spec.Hash.Definitions.word_length"
       ],
       0,
-      "000495291c3e151444d967383c8236e0"
+      "f104ef5b07100f2f56520ea665b07b4c"
     ],
     [
       "HKDF.derive_secret",
@@ -517,7 +518,7 @@
         "typing_Spec.Hash.Definitions.word_length"
       ],
       0,
-      "d65d3906b8a5a7314e41a5d7aa33b648"
+      "f5936a5da066f12588fe2ddf78766786"
     ],
     [
       "HKDF.derive_secret",
@@ -578,7 +579,7 @@
         "typing_Hashing.Spec.max_hash_length"
       ],
       0,
-      "afb4e21e55c133c45a8dd36fcce92976"
+      "977d16bdd54d07f31349480f754be6cd"
     ]
   ]
 ]

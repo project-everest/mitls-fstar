@@ -27,7 +27,7 @@
         "typing_Mem.tls_tables_region"
       ],
       0,
-      "7c543f8fc5266a30b2be16da899025fe"
+      "701cd58c82517dce65358f8ebd92e941"
     ],
     [
       "PSK.tickets",
@@ -39,7 +39,7 @@
         "refinement_interpretation_Tm_refine_31bfde48b952b6d7959cd5a2aa36404e"
       ],
       0,
-      "13a6f3008abdb4b0804bb1475d7cb51e"
+      "778b6e5850bf2043e30620566d29d8eb"
     ],
     [
       "PSK.sessions12",
@@ -51,7 +51,7 @@
         "refinement_interpretation_Tm_refine_31bfde48b952b6d7959cd5a2aa36404e"
       ],
       0,
-      "9444acead04996ba9fb72db5edefd352"
+      "33bad41aeefae995432ae15788c69b30"
     ],
     [
       "PSK.psk_table_invariant",
@@ -66,7 +66,7 @@
         "typing_FStar.Bytes.bytes"
       ],
       0,
-      "e4e04e181109354330617029f6ed6683"
+      "78648ea3e3380f9cf6f4485a77c52d16"
     ],
     [
       "PSK.psk_region",
@@ -94,7 +94,7 @@
         "typing_Mem.tls_tables_region"
       ],
       0,
-      "8a2934f296d74d88c0149412cf808720"
+      "513cbd26bb83e555fc42b23487edffcd"
     ],
     [
       "PSK.app_psk_table",
@@ -111,7 +111,7 @@
         "typing_FStar.Bytes.bytes"
       ],
       0,
-      "93ff40dfac5fcb25453ff666fd6088b5"
+      "659eaaaa3472d89d16327b53b11fe06f"
     ],
     [
       "PSK.registered_psk",
@@ -126,7 +126,7 @@
         "typing_FStar.Bytes.bytes"
       ],
       0,
-      "fb67a5120ddfb6039866a4bf688ad65e"
+      "ff5bd739471e67b2e40f46b5799c2a0c"
     ],
     [
       "PSK.valid_app_psk",
@@ -142,7 +142,7 @@
         "typing_FStar.Bytes.bytes"
       ],
       0,
-      "a013202a4dd945f60866dbdaf06f16ca"
+      "39a60a7c68709d780afd70a20c35fa1d"
     ],
     [
       "PSK.psk_value",
@@ -196,7 +196,7 @@
         "typing_PSK.app_psk_table", "typing_PSK.psk_region"
       ],
       0,
-      "c03c92adfb1b44777a7cd4d6aed591ee"
+      "19e0929bc5b934e326443216c45eff7f"
     ],
     [
       "PSK.psk_info",
@@ -250,7 +250,7 @@
         "typing_PSK.app_psk_table", "typing_PSK.psk_region"
       ],
       0,
-      "df7ca9ca7ab1fa88656a006943be6e62"
+      "bada8700c6c0fdb3437d14a5e0cdcb21"
     ],
     [
       "PSK.psk_lookup",
@@ -258,29 +258,27 @@
       2,
       1,
       [
-        "@MaxIFuel_assumption", "@query", "b2t_def", "bool_inversion",
+        "@MaxIFuel_assumption", "@query", "bool_inversion",
         "constructor_distinct_FStar.Pervasives.Native.None",
         "constructor_distinct_FStar.Pervasives.Native.Some",
+        "data_typing_intro_FStar.Pervasives.Native.Some@tok",
         "disc_equation_FStar.Pervasives.Native.None",
         "disc_equation_FStar.Pervasives.Native.Some",
         "equation_FStar.HyperStack.ST.m_rref",
         "equation_FStar.HyperStack.ST.modifies_none",
-        "equation_FStar.Monotonic.DependentMap.defined",
+        "equation_FStar.Monotonic.DependentMap.contains",
         "equation_FStar.Monotonic.DependentMap.t",
         "equation_FStar.Monotonic.HyperHeap.hmap",
         "equation_FStar.Monotonic.HyperHeap.modifies_just",
         "equation_FStar.Monotonic.HyperStack.is_tip",
         "equation_FStar.Monotonic.HyperStack.is_wf_with_ctr_and_tip",
         "equation_FStar.Monotonic.HyperStack.mem",
-        "equation_FStar.Monotonic.HyperStack.modifies",
-        "equation_FStar.UInt.fits", "equation_FStar.UInt.size",
-        "equation_FStar.UInt.uint_t", "equation_Mem.rgn",
+        "equation_FStar.Monotonic.HyperStack.modifies", "equation_Mem.rgn",
         "equation_PSK.pskInfo", "equation_PSK.registered_psk",
-        "equation_Spec.Poly1305.size_key",
         "equation_TLSConstants.psk_identifier",
         "function_token_typing_FStar.Monotonic.Heap.heap",
-        "function_token_typing_PSK.app_psk_entry",
         "haseqTm_refine_c7ebbc37dc32b1f8cda9a9413184629d",
+        "kinding_TLSConstants.pskInfo@tok",
         "lemma_FStar.Map.lemma_ContainsDom",
         "lemma_FStar.Map.lemma_InDomConcat",
         "lemma_FStar.Map.lemma_InDomRestrict",
@@ -294,29 +292,23 @@
         "primitive_Prims.op_BarBar", "primitive_Prims.op_Negation",
         "projection_inverse_BoxBool_proj_0",
         "refinement_interpretation_Tm_refine_05e15190c946858f68c69156f585f95a",
-        "refinement_interpretation_Tm_refine_0ec011aea9f93256a3547ad9f0c667f1",
         "refinement_interpretation_Tm_refine_31bfde48b952b6d7959cd5a2aa36404e",
         "refinement_interpretation_Tm_refine_365abba901205a01d0ef28ebf2198c47",
         "refinement_interpretation_Tm_refine_414d0a9f578ab0048252f8c8f552b99f",
-        "refinement_interpretation_Tm_refine_c7ebbc37dc32b1f8cda9a9413184629d",
-        "refinement_interpretation_Tm_refine_f13070840248fced9d9d60d77bdae3ec",
         "refinement_interpretation_Tm_refine_f596a1e23d65ebe54b463345ece4e00f",
-        "typing_FStar.Bytes.bytes", "typing_FStar.Bytes.len",
-        "typing_FStar.Map.concat", "typing_FStar.Map.contains",
-        "typing_FStar.Map.domain", "typing_FStar.Map.restrict",
-        "typing_FStar.Monotonic.HyperHeap.rid",
+        "typing_FStar.Bytes.bytes", "typing_FStar.Map.concat",
+        "typing_FStar.Map.contains", "typing_FStar.Map.domain",
+        "typing_FStar.Map.restrict", "typing_FStar.Monotonic.HyperHeap.rid",
         "typing_FStar.Monotonic.HyperHeap.rid_freeable",
         "typing_FStar.Monotonic.HyperHeap.root",
         "typing_FStar.Monotonic.HyperStack.get_hmap",
         "typing_FStar.Monotonic.HyperStack.get_tip",
         "typing_FStar.Pervasives.Native.uu___is_Some",
         "typing_FStar.Set.complement", "typing_FStar.Set.empty",
-        "typing_FStar.UInt.fits", "typing_FStar.UInt32.v",
-        "typing_PSK.app_psk_entry", "typing_PSK.psk_region",
-        "typing_Spec.Poly1305.size_key"
+        "typing_PSK.app_psk_entry", "typing_PSK.psk_region"
       ],
       0,
-      "bdebff378dfdd887980fd03a45b07acf"
+      "ce08739c5edd51370f7eb2c834a40ad7"
     ],
     [
       "PSK.honest_st",
@@ -331,7 +323,7 @@
         "typing_FStar.Bytes.bytes"
       ],
       0,
-      "19fe11ce20d652a6095297f6e30bf940"
+      "319015020748813f9d501d945305ca39"
     ],
     [
       "PSK.fresh_psk_id",
@@ -346,7 +338,7 @@
         "typing_FStar.Bytes.bytes"
       ],
       0,
-      "0e464704d574d11003e50d066c893684"
+      "771eb8ed1adb6057b72453d61317930d"
     ],
     [
       "PSK.fresh_psk_id",
@@ -419,7 +411,7 @@
         "typing_FStar.Set.mem", "typing_PSK.app_psk_table"
       ],
       0,
-      "896f6b688325cf31e7a769d222af976f"
+      "17d343191d7b6b641dfc2a4d360ab675"
     ],
     [
       "PSK.gen_psk",
@@ -532,7 +524,7 @@
         "typing_Spec.Poly1305.size_key"
       ],
       0,
-      "b06b334a0b8b0c0768b8415e2b8da3e2"
+      "33e8ad5b15a0dcd9e0236bc7acc950d1"
     ],
     [
       "PSK.coerce_psk",
@@ -589,7 +581,7 @@
         "typing_PSK.app_psk_table", "typing_PSK.psk_region"
       ],
       0,
-      "b9b27279150a202ec1e581e3fc281222"
+      "bcb4109f0b0a860331cbc8e5cac3bfde"
     ],
     [
       "PSK.compatible_hash_ae_st",
@@ -607,7 +599,7 @@
         "typing_FStar.Bytes.bytes"
       ],
       0,
-      "0183c771599a1acee00a17674a627f39"
+      "f1e5308e661b5961535a055da0859ba4"
     ],
     [
       "PSK.compatible_info_st",
@@ -623,7 +615,7 @@
         "typing_FStar.Bytes.bytes"
       ],
       0,
-      "16611583ee73031a604bdda5482862f6"
+      "f129358dce604e210aeea4ec79c5deb5"
     ],
     [
       "PSK.verify_hash_ae",
@@ -686,7 +678,7 @@
         "typing_PSK.app_psk_table", "typing_PSK.psk_region"
       ],
       0,
-      "0fc8b748db36b1561ebe743e8985326e"
+      "1e1335512e84c5245fdae85442041359"
     ],
     [
       "PSK.inverse_mask",
@@ -738,7 +730,7 @@
         "typing_Spec.Poly1305.size_key"
       ],
       0,
-      "5344d1f5fca29c5ef3e148ebf47b9797"
+      "dc533dc6fadb058fde15ce531ba0c8f8"
     ]
   ]
 ]

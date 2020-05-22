@@ -8,7 +8,7 @@
       1,
       [ "@query" ],
       0,
-      "6d9cadc433bfd088b034e40042e2057a"
+      "8d7928b412d6650dfb4b41b9a67aa677"
     ],
     [
       "AEAD.Pkg.is_safe",
@@ -16,7 +16,7 @@
       2,
       1,
       [
-        "@MaxIFuel_assumption", "@query", "bool_inversion",
+        "@MaxIFuel_assumption", "@query", "bool_inversion", "bool_typing",
         "equation_AEAD.Pkg.safe",
         "equation_FStar.HyperStack.ST.is_eternal_region",
         "equation_FStar.HyperStack.ST.modifies_none",
@@ -51,7 +51,7 @@
         "typing_TLSInfo.safe_region"
       ],
       0,
-      "48ca6dc9896725e535b928c533cac8f9"
+      "4c11ca9769f25754127205a5d3ede39d"
     ],
     [
       "AEAD.Pkg.info",
@@ -67,7 +67,7 @@
         "typing_FStar.Monotonic.HyperHeap.rid"
       ],
       0,
-      "630a711a9b3f4eb11d1934f543fdd94e"
+      "43fc5e72dfaf1c0528811da85a102999"
     ],
     [
       "AEAD.Pkg.aead_pkg_keylen",
@@ -81,7 +81,7 @@
         "fuel_guarded_inversion_AEAD.Pkg.aeadAlg"
       ],
       0,
-      "6ebdd84e48004795ca8048f05e6bec9e"
+      "17054b205bf92361223630cf532d0c45"
     ],
     [
       "AEAD.Pkg.shared_footprint",
@@ -93,7 +93,7 @@
         "typing_FStar.Monotonic.HyperHeap.rid"
       ],
       0,
-      "bdef01b3a375be119f530b0fa39d9c27"
+      "a06a4a255ac4428923b6fd669b1992d8"
     ],
     [
       "AEAD.Pkg.coerceT_key",
@@ -102,7 +102,7 @@
       1,
       [ "@query" ],
       0,
-      "02eede9d1e142a767cd10826f6373ca1"
+      "c63a7a33ee10629e52c3603085a9c917"
     ],
     [
       "AEAD.Pkg.coerce_key",
@@ -111,7 +111,7 @@
       1,
       [ "@query" ],
       0,
-      "4b25ee34485f6530614ea15a1e246f50"
+      "2a8bc1e84fbd7e708e1363229222d7be"
     ],
     [
       "AEAD.Pkg.local_ae_pkg",
@@ -120,7 +120,7 @@
       1,
       [ "@query" ],
       0,
-      "84061cc5af59da5ba0e518409c4a4ed2"
+      "b9ba252fc95ddf819890c968cb02211c"
     ],
     [
       "AEAD.Pkg.mp",
@@ -134,7 +134,7 @@
         "refinement_interpretation_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
       ],
       0,
-      "3aecf594c6b506d5fbe021e795fc6820"
+      "864376ef6ab78af6538d8013b466fe1e"
     ]
   ]
 ]

@@ -8,7 +8,7 @@
       1,
       [ "@query" ],
       0,
-      "d708186eb9d01d9525afba3b0e0825ba"
+      "4ab40604f9f63d6ee070c02d5a389ed3"
     ],
     [
       "AEAD.Pkg.is_safe",
@@ -16,13 +16,13 @@
       2,
       1,
       [
-        "@MaxIFuel_assumption", "@query", "bool_inversion",
+        "@MaxIFuel_assumption", "@query", "bool_inversion", "bool_typing",
         "equation_AEAD.Pkg.safe",
         "equation_FStar.HyperStack.ST.is_eternal_region",
         "equation_FStar.HyperStack.ST.modifies_none",
         "equation_FStar.Monotonic.HyperHeap.hmap",
         "equation_FStar.Monotonic.HyperHeap.modifies_just",
-        "equation_FStar.Monotonic.HyperStack.is_eternal_color",
+        "equation_FStar.Monotonic.HyperStack.is_heap_color",
         "equation_FStar.Monotonic.HyperStack.mem",
         "equation_FStar.Monotonic.HyperStack.modifies", "equation_Mem.rgn",
         "fuel_guarded_inversion_Pkg.ipkg",
@@ -44,13 +44,14 @@
         "typing_FStar.Map.domain", "typing_FStar.Map.restrict",
         "typing_FStar.Monotonic.HyperHeap.color",
         "typing_FStar.Monotonic.HyperHeap.rid",
+        "typing_FStar.Monotonic.HyperHeap.rid_freeable",
         "typing_FStar.Monotonic.HyperStack.get_hmap",
-        "typing_FStar.Monotonic.HyperStack.is_eternal_color",
+        "typing_FStar.Monotonic.HyperStack.is_heap_color",
         "typing_FStar.Set.complement", "typing_FStar.Set.empty",
         "typing_TLSInfo.safe_region"
       ],
       0,
-      "7a8de1360aa5bc52e559d92f94da2844"
+      "0c6901df5de281e252328758f77a167d"
     ],
     [
       "AEAD.Pkg.info",
@@ -66,7 +67,7 @@
         "typing_FStar.Monotonic.HyperHeap.rid"
       ],
       0,
-      "04b8bd1968300f3917f08603f09bd4cd"
+      "6301a06e5ec16ecce5015fc4600042c4"
     ],
     [
       "AEAD.Pkg.aead_pkg_keylen",
@@ -80,7 +81,7 @@
         "fuel_guarded_inversion_AEAD.Pkg.aeadAlg"
       ],
       0,
-      "5ad2eb58d08752fda8b4629ca5f0bf11"
+      "4882986f9f44b649cf8ea742b79b7eb2"
     ],
     [
       "AEAD.Pkg.__proj__AEAD__item__k",
@@ -92,7 +93,7 @@
         "projection_inverse_AEAD.Pkg.AEAD_u"
       ],
       0,
-      "c2102ea9c97dc6b0270386f79a4560b9"
+      "f5e0bb4236d02b2e91b603b62818af51"
     ],
     [
       "AEAD.Pkg.__proj__Ideal__item__ck",
@@ -105,7 +106,7 @@
         "refinement_interpretation_Tm_refine_2f47e4e77732b0c7320113be77bdc955"
       ],
       0,
-      "525b5756d0d1e7ab62fdfcedc21f7f60"
+      "dc8dd22a118d0d41864d666a026d7e98"
     ],
     [
       "AEAD.Pkg.__proj__Ideal__item__state",
@@ -118,7 +119,7 @@
         "refinement_interpretation_Tm_refine_2f47e4e77732b0c7320113be77bdc955"
       ],
       0,
-      "c43439ee8a202014f3078c664106039f"
+      "06bb2a3961416aa356dd8b026e84fd63"
     ],
     [
       "AEAD.Pkg.__proj__Real__item__ck",
@@ -131,7 +132,7 @@
         "refinement_interpretation_Tm_refine_f188697aeaf2d3748a8dd8ff5e07e864"
       ],
       0,
-      "71672c139dc5e9f70d5fabb950862528"
+      "b0e2c1e62e2bca9c238fc6bcfbf94ed0"
     ],
     [
       "AEAD.Pkg.usage",
@@ -146,7 +147,7 @@
         "refinement_interpretation_Tm_refine_5e0cab8f1e9c2f5bdd937bfd23d1604c"
       ],
       0,
-      "9ffa94fb22034f0d116c987f5be4187f"
+      "e0c87689a59240bc8971fee4b7fa2fb7"
     ],
     [
       "AEAD.Pkg.keyval",
@@ -172,7 +173,7 @@
         "refinement_interpretation_Tm_refine_5e0cab8f1e9c2f5bdd937bfd23d1604c"
       ],
       0,
-      "84a94b8da2ab674699628704c0d8b71e"
+      "eaaa7a3a1092750a18afc2bb7becdacc"
     ],
     [
       "AEAD.Pkg.shared_footprint",
@@ -184,7 +185,7 @@
         "typing_FStar.Monotonic.HyperHeap.rid"
       ],
       0,
-      "87cdcf346bc767750422ef1f4c9b7eb4"
+      "190009ff999e4ae796d152c834356b5f"
     ],
     [
       "AEAD.Pkg.footprint",
@@ -211,7 +212,7 @@
         "typing_TLSInfo.safe_region"
       ],
       0,
-      "3e1d2245234741806379358e03a441f1"
+      "9d310d53f7873829faaedea016cd268c"
     ],
     [
       "AEAD.Pkg.invariant",
@@ -226,7 +227,7 @@
         "refinement_interpretation_Tm_refine_5e0cab8f1e9c2f5bdd937bfd23d1604c"
       ],
       0,
-      "1f9296bfd2c660b423138b41d85da53e"
+      "81e6df4be70c3f78eaaa20a5379621cc"
     ],
     [
       "AEAD.Pkg.invariant_framing",
@@ -261,7 +262,7 @@
         "unit_inversion", "unit_typing"
       ],
       0,
-      "4e7c2485f56a77b4561a9bde7a272efc"
+      "b74562e56b3724f023f0024efd89ed50"
     ],
     [
       "AEAD.Pkg.empty_log",
@@ -277,7 +278,7 @@
         "refinement_interpretation_Tm_refine_5e0cab8f1e9c2f5bdd937bfd23d1604c"
       ],
       0,
-      "420996eceb17588065dcb0e3001e2cb7"
+      "63f2fe352d6e444c551c26f3b6fe497e"
     ],
     [
       "AEAD.Pkg.empty_log_framing",
@@ -326,7 +327,7 @@
         "typing_TLSInfo.safe_region", "unit_inversion", "unit_typing"
       ],
       0,
-      "60f041f774ca143b2a7e881c419db727"
+      "1ffa21c2fe62c881b0aaa8f746aa7d8e"
     ],
     [
       "AEAD.Pkg.create_key",
@@ -342,7 +343,7 @@
         "typing_AEAD.Pkg.__proj__Mkinfo__item__parent"
       ],
       0,
-      "6e77dafbad8c1c3747cc981809034b8e"
+      "f6c78db69db32a87b70cb5921754bebf"
     ],
     [
       "AEAD.Pkg.coerceT_key",
@@ -351,7 +352,7 @@
       1,
       [ "@query" ],
       0,
-      "b79fbe2ca75cf82e4d2face91c95cc85"
+      "6ee1769257c0d42c41c21c5da180b997"
     ],
     [
       "AEAD.Pkg.coerceT_key",
@@ -360,7 +361,7 @@
       1,
       [ "@query" ],
       0,
-      "bdc6e4eec313be76c4ed56b4c76d9024"
+      "738ee25697e5d32f7fcd8cb5f9d1a6e8"
     ],
     [
       "AEAD.Pkg.coerce_key",
@@ -369,7 +370,7 @@
       1,
       [ "@query" ],
       0,
-      "2724dbf9c3a465fd0278f2775fe20a16"
+      "54299837129abde34db9a6eac8990caf"
     ],
     [
       "AEAD.Pkg.coerce_key",
@@ -378,7 +379,7 @@
       1,
       [ "@query" ],
       0,
-      "d4e9eb9a83e537c45c6a5bfbd0267313"
+      "d4fa002609f83c26cf1fc5471a248b06"
     ],
     [
       "AEAD.Pkg.local_ae_pkg",
@@ -387,7 +388,7 @@
       1,
       [ "@query" ],
       0,
-      "1b1164d5b63f12afa810717c526ca773"
+      "8c5d8658e774dc3dda485a61e3cae17b"
     ],
     [
       "AEAD.Pkg.mp",
@@ -401,7 +402,7 @@
         "refinement_interpretation_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
       ],
       0,
-      "91770aeaea76fab859361abbc309baae"
+      "9b72e7850a69c775e77a3d4546914136"
     ],
     [
       "AEAD.Pkg.encrypt",
@@ -450,7 +451,7 @@
         "typing_TLSInfo.safe_region"
       ],
       0,
-      "5687a911e75290e89015681c275c5184"
+      "4d806abd752773f735b0294bdc8b2836"
     ]
   ]
 ]
