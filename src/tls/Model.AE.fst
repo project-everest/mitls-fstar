@@ -127,7 +127,10 @@ val decrypt
     let cipher' = Seq.slice cipher iv_length (Seq.length cipher) in
     let iv = Seq.slice cipher 0 iv_length in
     (Flags.ideal_AEAD == false ==> (
-      SC.decrypt (state_kv s) iv Seq.empty cipher' == res
+      SC.decrypt (state_kv s) iv Seq.empty cipher' == begin match res with
+      | None -> None
+      | Some x -> Some x
+      end
     )) /\
     invariant h' s /\
     begin match res with
@@ -137,8 +140,14 @@ val decrypt
     end
   )))
 
+#push-options "--z3rlimit 16 --query_stats"
+
 let decrypt
   #a #phi s cipher
 = let iv' = Seq.slice cipher 0 iv_length in
   let cipher' = Seq.slice cipher iv_length (Seq.length cipher) in
-  decrypt s iv' cipher'
+  match decrypt s iv' cipher' with
+  | None -> None
+  | Some x -> Some x
+
+#pop-options
