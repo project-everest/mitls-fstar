@@ -213,7 +213,7 @@ KRML_FLAGS = \
   -add-early-include '"log_to_choice.h"' \
   -bundle 'EverCrypt,EverCrypt.\*[rename=EverCrypt]' \
   -bundle 'Vale.*,Hacl.*[rename=Unused1]' \
-  -bundle 'LowParse.\*,LowParseWrappers[rename=LowParse]' \
+  -bundle 'LowParse.\*,LowParseWrappers,LowParseWriters,LowParseWriters.\*[rename=LowParse]' \
   -bundle 'Format.\*' \
   -bundle 'FStar.\*,LowStar.\*,C,C.\*[rename=Mitls_Kremlib]' \
   -bundle 'Parsers.ClientHello=Parsers.\*,ParsersAux.\*[rename=Parsers]' \

@@ -13,12 +13,34 @@ open HandshakeMessages
 module HS = FStar.HyperStack
 module HST = FStar.HyperStack.ST
 
+module LWP = LowParseWriters.Parsers
+module Aux = Negotiation.Writers.Aux
+
 open Extensions
 open Negotiation
 
 #reset-options "--z3cliopt smt.arith.nl=false"
 
-#push-options "--z3rlimit 64"
+#push-options "--z3rlimit 16 --query_stats"
+
+let write_binder_ph'
+  (#inv: LWP.memory_invariant)
+  (tc: LWP.ptr Parsers.TicketContents13.lwp_ticketContents13 inv)
+: LWP.Write unit LWP.emp lwp_pskBinderEntry (fun _ -> True) (fun _ _ out -> out == compute_binder_ph_new (LWP.deref_spec tc)) inv
+=
+  let c = LWP.deref CipherSuite.cipherSuite13_reader (LWP.access Parsers.TicketContents13.lwp_ticketContents13 Parsers.CipherSuite13.lwp_cipherSuite13 Parsers.TicketContents13.accessor_ticketContents13_cs tc) in
+  let (CipherSuite13 _ h) = cipherSuite_of_cipherSuite13 c in
+  let len : U32.t = Hacl.Hash.Definitions.hash_len h in
+  LWP.put_vlbytes 32ul 255ul len (Seq.create (U32.v len) 0uy) (fun b ->
+    B.fill b 0uy len
+  );
+  LWP.valid_synth _ _ _ _ _ Aux.valid_pskBinderEntry_intro
+
+#pop-options
+
+#push-options "--z3rlimit 64 --query_stats"
+
+#restart-solver
 
 (* implementation of the new spec *)
 
