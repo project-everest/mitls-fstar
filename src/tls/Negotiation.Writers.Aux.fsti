@@ -134,3 +134,26 @@ val valid_clientHelloExtension_CHE_pre_shared_key_intro : LWP.valid_synth_t
     x)
 
   (* NOTE: I could also define the elim but QuackyDucky already defines an accessor *)
+
+module L = FStar.List.Tot
+
+let rec list_size_pskKeyExchangeMode
+  (l: list Parsers.PskKeyExchangeMode.pskKeyExchangeMode)
+: Lemma
+  (LWP.list_size Parsers.PskKeyExchangeMode.lwp_pskKeyExchangeMode l == 1 `Prims.op_Multiply` L.length l)
+  [SMTPat (LWP.list_size Parsers.PskKeyExchangeMode.lwp_pskKeyExchangeMode l)]
+= match l with
+  | [] -> ()
+  | a :: q -> list_size_pskKeyExchangeMode q
+
+val valid_synth_pskKeyExchangeModes_intro : LWP.valid_synth_t
+  (LWP.parse_vllist Parsers.PskKeyExchangeMode.lwp_pskKeyExchangeMode 1ul 255ul)
+  Parsers.PskKeyExchangeModes.lwp_pskKeyExchangeModes
+  (fun _ -> True)
+  (fun x -> x)
+
+val valid_synth_pskKeyExchangeModes_elim : LWP.valid_synth_t
+  Parsers.PskKeyExchangeModes.lwp_pskKeyExchangeModes
+  (LWP.parse_vllist Parsers.PskKeyExchangeMode.lwp_pskKeyExchangeMode 1ul 255ul)
+  (fun _ -> True)
+  (fun x -> x)

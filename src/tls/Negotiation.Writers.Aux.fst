@@ -6,6 +6,7 @@ friend Parsers.OfferedPsks_identities
 friend Parsers.OfferedPsks_binders
 friend Parsers.OfferedPsks
 friend Parsers.ClientHelloExtension_CHE_pre_shared_key
+friend Parsers.PskKeyExchangeModes
 
 module LWP = LowParseWriters.Compat
 module LP = LowParse.Spec
@@ -100,3 +101,16 @@ let valid_clientHelloExtension_CHE_pre_shared_key_intro =
       (LWP.valid_synth_parser_eq _ _)
     )
   _ _
+
+let valid_synth_pskKeyExchangeModes_intro =
+//  [@inline_let] let _ = assert_norm (LP.vldata_vlarray_precond 1 255 Parsers.PskKeyExchangeMode.pskKeyExchangeMode_parser 1 255 == true) in
+  LWP.valid_synth_parse_vlarray_intro
+    _
+    Parsers.PskKeyExchangeMode.lwp_pskKeyExchangeMode
+    1ul 255ul 1 255 ()
+
+let valid_synth_pskKeyExchangeModes_elim =
+  LWP.valid_synth_parse_vlarray_elim
+    _
+    Parsers.PskKeyExchangeMode.lwp_pskKeyExchangeMode
+    1ul 255ul 1 255 ()
