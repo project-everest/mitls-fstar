@@ -15,6 +15,7 @@ module HST = FStar.HyperStack.ST
 
 module LWP = LowParseWriters.Parsers
 module Aux = Negotiation.Writers.Aux
+module Aux2 = Negotiation.Writers.Aux2
 
 open Extensions
 open Negotiation
