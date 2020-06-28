@@ -23,7 +23,7 @@ let write_binder_ph'
   ()
 : LWP.Write unit LWP.emp lwp_pskBinderEntry (fun _ -> True) (fun _ _ out -> out == compute_binder_ph_new (LWP.deref_spec tc)) inv
 =
-  let c = LWP.deref CipherSuite.cipherSuite13_reader (LWP.access Parsers.TicketContents13.lwp_ticketContents13 Parsers.CipherSuite13.lwp_cipherSuite13 Parsers.TicketContents13.accessor_ticketContents13_cs tc) in
+  let c = LWP.deref CipherSuite.cipherSuite13_reader (Parsers.TicketContents13.lwp_accessor_ticketContents13_cs tc) in
   let (CipherSuite13 _ h) = cipherSuite_of_cipherSuite13 c in
   let len : U32.t = Hacl.Hash.Definitions.hash_len h in
   LWP.put_vlbytes 32ul 255ul len (Seq.create (U32.v len) 0uy) (fun b ->
@@ -38,11 +38,11 @@ let write_obfuscate_age'
   ()
 : LWP.Write unit LWP.emp Parsers.PskIdentity.lwp_pskIdentity (fun _ -> True) (fun _ _ out -> out == obfuscate_age_new now (LWP.deref_spec ri)) inv
 =
-  LWP.cat (LWP.access Parsers.ResumeInfo13.lwp_resumeInfo13 Parsers.PskIdentity.lwp_pskIdentity_identity Parsers.ResumeInfo13.accessor_resumeInfo13_identity ri);
-  let tk = LWP.access Parsers.ResumeInfo13.lwp_resumeInfo13 Parsers.TicketContents13.lwp_ticketContents13 Parsers.ResumeInfo13.accessor_resumeInfo13_ticket ri in
-  let creation_time = LWP.deref LowParse.Low.Int.read_u32 (LWP.access Parsers.TicketContents13.lwp_ticketContents13 LWP.parse_u32 Parsers.TicketContents13.accessor_ticketContents13_creation_time tk) in
+  LWP.cat (Parsers.ResumeInfo13.lwp_accessor_resumeInfo13_identity ri);
+  let tk = Parsers.ResumeInfo13.lwp_accessor_resumeInfo13_ticket ri in
+  let creation_time = LWP.deref LowParse.Low.Int.read_u32 (Parsers.TicketContents13.lwp_accessor_ticketContents13_creation_time tk) in
   let age = FStar.UInt32.((now -%^ creation_time) *%^ 1000ul) in
-  let age_add = LWP.deref LowParse.Low.Int.read_u32 (LWP.access Parsers.TicketContents13.lwp_ticketContents13 LWP.parse_u32 Parsers.TicketContents13.accessor_ticketContents13_age_add tk) in
+  let age_add = LWP.deref LowParse.Low.Int.read_u32 (Parsers.TicketContents13.lwp_accessor_ticketContents13_age_add tk) in
   let obfuscated_age = PSK.encode_age age age_add in
   LWP.append LWP.parse_u32 LowParse.Low.Int.write_u32 obfuscated_age;
   LWP.valid_synth _ _ _ _ _ Aux.valid_pskIdentity_intro
