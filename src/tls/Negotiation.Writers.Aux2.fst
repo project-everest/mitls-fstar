@@ -35,13 +35,28 @@ let che_enum : LWP.pparser _ _ _ (LP.serialize_maybe_enum_key _ che_dsum.LWP.dsu
 
 #push-options "--z3rlimit 128"
 
-let valid_synth_constr_clientHelloExtension_CHE_pre_shared_key =
+#restart-solver
+
+let valid_synth_constr_clientHelloExtension
+  (k: Parsers.ExtensionType.extensionType { LP.list_mem k (LP.list_map fst Parsers.ExtensionType.extensionType_enum) })
+  (p: LWP.pparser
+       (Parsers.ClientHelloExtension.clientHelloExtension_case_of_extensionType k)
+       _
+       (dsnd (Parsers.ClientHelloExtension.parse_clientHelloExtension_cases k))
+       (Parsers.ClientHelloExtension.serialize_clientHelloExtension_cases k)
+  )
+: Tot (LWP.valid_synth_t
+  (Parsers.ExtensionType.lwp_extensionType `LWP.star` p)
+  Parsers.ClientHelloExtension.lwp_clientHelloExtension
+  (fun (k', _) -> k' == k)
+  (fun (_, ext) -> Parsers.ClientHelloExtension.synth_known_clientHelloExtension_cases k ext)
+)
+=
   let open Parsers.ClientHelloExtension in
   let open Parsers.ExtensionType in
   assert_norm (LP.parse_dsum_kind (LP.get_parser_kind extensionType_repr_parser) clientHelloExtension_sum parse_clientHelloExtension_cases (LP.get_parser_kind clientHelloExtension_CHE_default_parser) == clientHelloExtension_parser_kind);
   lemma_synth_extensionType_inj ();
   lemma_synth_extensionType_inv ();
-  assert_norm (LP.list_mem Pre_shared_key (LP.list_map fst extensionType_enum) == true);
   LWP.valid_synth_implies _ _ _ _
   (LWP.valid_synth_compose
     _ _ _ _
@@ -59,10 +74,36 @@ let valid_synth_constr_clientHelloExtension_CHE_pre_shared_key =
       che_dsum
       _
       _
-      Pre_shared_key
+      k
       _
     )
   )
   _ _
 
 #pop-options
+
+#restart-solver
+
+let valid_synth_constr_clientHelloExtension_CHE_pre_shared_key =
+  let open Parsers.ClientHelloExtension in
+  let open Parsers.ExtensionType in
+  assert_norm (LP.list_mem Pre_shared_key (LP.list_map fst extensionType_enum) == true);
+  LWP.valid_synth_implies _ _ _ _
+    (valid_synth_constr_clientHelloExtension Pre_shared_key lwp_clientHelloExtension_CHE_pre_shared_key)
+    _ _
+
+let valid_synth_constr_clientHelloExtension_CHE_psk_key_exchange_modes =
+  let open Parsers.ClientHelloExtension in
+  let open Parsers.ExtensionType in
+  assert_norm (LP.list_mem Psk_key_exchange_modes (LP.list_map fst extensionType_enum) == true);
+  LWP.valid_synth_implies _ _ _ _
+    (valid_synth_constr_clientHelloExtension Psk_key_exchange_modes lwp_clientHelloExtension_CHE_psk_key_exchange_modes)
+    _ _
+
+let valid_synth_constr_clientHelloExtension_CHE_early_data =
+  let open Parsers.ClientHelloExtension in
+  let open Parsers.ExtensionType in
+  assert_norm (LP.list_mem Early_data (LP.list_map fst extensionType_enum) == true);
+  LWP.valid_synth_implies _ _ _ _
+    (valid_synth_constr_clientHelloExtension Early_data lwp_clientHelloExtension_CHE_early_data)
+    _ _

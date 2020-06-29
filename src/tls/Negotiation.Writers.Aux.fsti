@@ -157,3 +157,17 @@ val valid_synth_pskKeyExchangeModes_elim : LWP.valid_synth_t
   (LWP.parse_vllist Parsers.PskKeyExchangeMode.lwp_pskKeyExchangeMode 1ul 255ul)
   (fun _ -> True)
   (fun x -> x)
+
+val valid_clientHelloExtension_CHE_psk_key_exchange_modes_intro : LWP.valid_synth_t
+  (LWP.parse_vldata Parsers.PskKeyExchangeModes.lwp_pskKeyExchangeModes 0ul 65535ul)
+  Parsers.ClientHelloExtension.lwp_clientHelloExtension_CHE_psk_key_exchange_modes
+  (fun _ -> True)
+  (fun x ->
+    Parsers.PskKeyExchangeModes.pskKeyExchangeModes_bytesize_eq x;
+    x)
+
+val valid_clientHelloExtension_CHE_early_data_intro : LWP.valid_synth_t
+  (LWP.parse_vldata LWP.emp 0ul 65535ul)
+  Parsers.ClientHelloExtension.lwp_clientHelloExtension_CHE_early_data
+  (fun _ -> True)
+  (fun x -> x)

@@ -5,7 +5,6 @@ module Negotiation.Writers.Aux2
 module LWP = LowParseWriters.Parsers
 module LPI = LowParse.Low.Int
 
-
 val valid_synth_constr_clientHelloExtension_CHE_pre_shared_key : LWP.valid_synth_t
   (Parsers.ExtensionType.lwp_extensionType `LWP.star` Parsers.ClientHelloExtension.lwp_clientHelloExtension_CHE_pre_shared_key)
   Parsers.ClientHelloExtension.lwp_clientHelloExtension
@@ -44,3 +43,49 @@ let constr_clientHelloExtension_CHE_pre_shared_key
 = LWP.start Parsers.ExtensionType.lwp_extensionType Parsers.ExtensionType.extensionType_writer Parsers.ExtensionType.Pre_shared_key;
   LWP.frame _ _ _ _ _ _ _ (fun _ -> LWP.recast_writer _ _ _ _ _ _ _ f);
   LWP.valid_synth _ _ _ _ _ valid_synth_constr_clientHelloExtension_CHE_pre_shared_key
+
+val valid_synth_constr_clientHelloExtension_CHE_psk_key_exchange_modes : LWP.valid_synth_t
+  (Parsers.ExtensionType.lwp_extensionType `LWP.star` Parsers.ClientHelloExtension.lwp_clientHelloExtension_CHE_psk_key_exchange_modes)
+  Parsers.ClientHelloExtension.lwp_clientHelloExtension
+  (fun (k, _) -> k == Parsers.ExtensionType.Psk_key_exchange_modes)
+  (fun (_, ext) -> Parsers.ClientHelloExtension.CHE_psk_key_exchange_modes ext)
+
+inline_for_extraction
+noextract
+let constr_clientHelloExtension_CHE_psk_key_exchange_modes
+  #inv #pre #post #post_err
+  ($f: (unit -> LWP.EWrite unit LWP.emp Parsers.ClientHelloExtension.lwp_clientHelloExtension_CHE_psk_key_exchange_modes pre post post_err inv))
+  ()
+: LWP.EWrite
+    unit
+    LWP.emp
+    Parsers.ClientHelloExtension.lwp_clientHelloExtension
+    (fun _ -> pre ())
+    (fun _ _ msg ->
+      pre () /\
+      begin match LWP.destr_repr_spec _ _ _ _ _ _ _ f () with
+      | LWP.Correct (_, pl) ->
+        post () () pl /\
+        msg == Parsers.ClientHelloExtension.CHE_psk_key_exchange_modes pl
+      | _ -> False
+      end
+    )
+    (fun _ ->
+      pre () /\
+      begin match LWP.destr_repr_spec _ _ _ _ _ _ _ f () with
+      | LWP.Error _ ->
+        post_err ()
+      | _ -> False
+      end
+    )
+    inv
+= LWP.start Parsers.ExtensionType.lwp_extensionType Parsers.ExtensionType.extensionType_writer Parsers.ExtensionType.Psk_key_exchange_modes;
+  LWP.frame _ _ _ _ _ _ _ (fun _ -> LWP.recast_writer _ _ _ _ _ _ _ f);
+  LWP.valid_synth _ _ _ _ _ valid_synth_constr_clientHelloExtension_CHE_psk_key_exchange_modes
+
+val valid_synth_constr_clientHelloExtension_CHE_early_data : LWP.valid_synth_t
+  (Parsers.ExtensionType.lwp_extensionType `LWP.star` Parsers.ClientHelloExtension.lwp_clientHelloExtension_CHE_early_data)
+  Parsers.ClientHelloExtension.lwp_clientHelloExtension
+  (fun (k, _) -> k == Parsers.ExtensionType.Early_data)
+  (fun (_, ext) -> Parsers.ClientHelloExtension.CHE_early_data ext)
+
