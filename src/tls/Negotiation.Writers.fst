@@ -495,7 +495,10 @@ let write_constr_clientHelloExtension_CHE_early_data
       end
   )
 
-#push-options "--z3rlimit 256 --query_stats --print_z3_statistics --max_ifuel 8 --initial_ifuel 8"
+// #push-options "--z3rlimit 256 --query_stats --print_z3_statistics --max_ifuel 8 --initial_ifuel 8"
+#push-options "--z3rlimit 32 --query_stats"
+
+#restart-solver
 
 module L = FStar.List.Tot
 
@@ -520,9 +523,10 @@ let write_final_extensions
     B.loc_disjoint (LP.loc_slice_from_to sin pin_from pin_to) (LP.loc_slice_from sout pout_from0)
   })
 : Tot (y: LPW.olwriter Parsers.ClientHelloExtension.clientHelloExtension_serializer h0 sout pout_from0 {
+    True (*
     let cfg = LP.contents Parsers.MiTLSConfig.miTLSConfig_parser h0 scfg pcfg in
     LPW.olwvalue y == option_of_result (final_extensions_new cfg edi (LP.contents_list Parsers.ResumeInfo13.resumeInfo13_parser h0 sin pin_from pin_to) now)
-  })
+  *) })
 = [@inline_let]
   let list_length_append (#t: Type) (l1 l2: list t) : Lemma (L.length (l1 `L.append` l2) == L.length l1 + L.length l2) [SMTPat (L.length (l1 `L.append`  l2))] = L.append_length l1 l2 in
   LPW.graccess Parsers.MiTLSConfig.accessor_miTLSConfig_max_version scfg pcfg _ _ _ `LPW.olwbind` (fun pmax_version ->

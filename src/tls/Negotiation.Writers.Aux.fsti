@@ -125,13 +125,32 @@ let valid_preSharedKeyClientExtension_elim : LWP.valid_synth_t
   Parsers.PreSharedKeyClientExtension.preSharedKeyClientExtension_parser_serializer_eq ();
   LWP.valid_synth_parser_eq _ _
 
+unfold
+let mk_clientHelloExtension_CHE_pre_shared_key_intro
+  (x: dfst (LWP.parse_vldata Parsers.PreSharedKeyClientExtension.lwp_preSharedKeyClientExtension 0ul 65535ul))
+: Tot (dfst (Parsers.ClientHelloExtension.lwp_clientHelloExtension_CHE_pre_shared_key))
+= Parsers.PreSharedKeyClientExtension.preSharedKeyClientExtension_bytesize_eq x;
+  x
+
 val valid_clientHelloExtension_CHE_pre_shared_key_intro : LWP.valid_synth_t
   (LWP.parse_vldata Parsers.PreSharedKeyClientExtension.lwp_preSharedKeyClientExtension 0ul 65535ul)
   Parsers.ClientHelloExtension.lwp_clientHelloExtension_CHE_pre_shared_key
   (fun _ -> True)
-  (fun x ->
-    Parsers.PreSharedKeyClientExtension.preSharedKeyClientExtension_bytesize_eq x;
-    x)
+  mk_clientHelloExtension_CHE_pre_shared_key_intro
+
+inline_for_extraction
+let clientHelloExtension_CHE_pre_shared_key_intro #inv () : LWP.Write
+  unit
+  (LWP.parse_vldata Parsers.PreSharedKeyClientExtension.lwp_preSharedKeyClientExtension 0ul 65535ul)
+  Parsers.ClientHelloExtension.lwp_clientHelloExtension_CHE_pre_shared_key
+  (fun _ -> True)
+  (fun x _ y -> (x <: Parsers.OfferedPsks.offeredPsks) == (y <: Parsers.OfferedPsks.offeredPsks))
+  inv
+=
+  let x = LWP.get_state () in
+  Parsers.PreSharedKeyClientExtension.preSharedKeyClientExtension_bytesize_eq x;
+  LWP.valid_synth _ _ _ _ _
+    valid_clientHelloExtension_CHE_pre_shared_key_intro
 
   (* NOTE: I could also define the elim but QuackyDucky already defines an accessor *)
 
