@@ -80,6 +80,7 @@ effect TWrite
 
 #restart-solver
 
+noextract
 let write_final_extensions
   (#inv: LWP.memory_invariant)
   (cfg: LWP.ptr Parsers.MiTLSConfig.lwp_miTLSConfig inv)

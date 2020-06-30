@@ -238,6 +238,8 @@ KRML_FLAGS = \
 
 BUILD_FILES=dist/Makefile $(wildcard dist/libmitls_*_script)
 
+ALL_KRML_FILES := $(filter-out obj/Negotiation_Writers_LayeredEffects.krml,$(ALL_KRML_FILES))
+
 .PHONY: compile-%
 compile-%: $(BUILD_FILES) dist/%/Makefile.basic
 	[ "$*" != "test" ] && cp $(BUILD_FILES) dist/$*/ || true
