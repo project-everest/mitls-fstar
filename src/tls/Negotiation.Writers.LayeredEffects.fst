@@ -173,11 +173,9 @@ let write_final_extensions
       then
         LWP.parse_vllist_snoc_weak_ho' _ _ _
           write_clientHelloExtension_CHE_early_data;
-(*
       LWP.parse_vllist_snoc_weak_ho' _ _ _ (fun _ ->
         Aux2.constr_clientHelloExtension_CHE_pre_shared_key' ke
       );
-*)
       ()
     end else begin
       LWP.parse_vllist_snoc_weak_ho' // FIXME: this should be parse_vllist_snoc_ho', but I can't reason on reify

@@ -139,3 +139,60 @@ val valid_synth_constr_clientHelloExtension_CHE_early_data : LWP.valid_synth_t
   (fun (k, _) -> k == Parsers.ExtensionType.Early_data)
   (fun (_, ext) -> Parsers.ClientHelloExtension.CHE_early_data ext)
 
+inline_for_extraction
+noextract
+let constr_clientHelloExtension_CHE_early_data
+  #inv #pre #post #post_err
+  ($f: (unit -> LWP.EWrite unit LWP.emp Parsers.ClientHelloExtension.lwp_clientHelloExtension_CHE_early_data pre post post_err inv))
+  ()
+: LWP.EWrite
+    unit
+    LWP.emp
+    Parsers.ClientHelloExtension.lwp_clientHelloExtension
+    (fun _ -> pre ())
+    (fun _ _ msg ->
+      pre () /\
+      begin match LWP.destr_repr_spec _ _ _ _ _ _ _ f () with
+      | LWP.Correct (_, pl) ->
+        post () () pl /\
+        msg == Parsers.ClientHelloExtension.CHE_early_data pl
+      | _ -> False
+      end
+    )
+    (fun _ ->
+      pre () /\
+      begin match LWP.destr_repr_spec _ _ _ _ _ _ _ f () with
+      | LWP.Error _ ->
+        post_err ()
+      | _ -> False
+      end
+    )
+    inv
+= LWP.start Parsers.ExtensionType.lwp_extensionType Parsers.ExtensionType.extensionType_writer Parsers.ExtensionType.Early_data;
+  LWP.frame _ _ _ _ _ _ _ (fun _ -> LWP.recast_writer _ _ _ _ _ _ _ f);
+  LWP.valid_synth _ _ _ _ _ valid_synth_constr_clientHelloExtension_CHE_early_data
+
+inline_for_extraction
+noextract
+let constr_clientHelloExtension_CHE_early_data'
+  #inv
+  (f: (unit -> LWP.EWrite unit LWP.emp Parsers.ClientHelloExtension.lwp_clientHelloExtension_CHE_early_data (fun _ -> True) (fun _ _ _ -> True) (fun _ -> True) inv))
+: LWP.EWrite
+    unit
+    LWP.emp
+    Parsers.ClientHelloExtension.lwp_clientHelloExtension
+    (fun _ -> True)
+    (fun _ _ msg ->
+      begin match LWP.destr_repr_spec _ _ _ _ _ _ _ f () with
+      | LWP.Correct (_, pl) ->
+        msg == Parsers.ClientHelloExtension.CHE_early_data pl
+      | _ -> False
+      end
+    )
+    (fun _ ->
+      LWP.Error? (LWP.destr_repr_spec _ _ _ _ _ _ _ f ())
+    )
+    inv
+= LWP.start Parsers.ExtensionType.lwp_extensionType Parsers.ExtensionType.extensionType_writer Parsers.ExtensionType.Early_data;
+  LWP.frame _ _ _ _ _ _ _ (fun _ -> LWP.recast_writer _ _ _ _ _ _ _ f);
+  LWP.valid_synth _ _ _ _ _ valid_synth_constr_clientHelloExtension_CHE_early_data
