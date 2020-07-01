@@ -127,8 +127,8 @@ let valid_preSharedKeyClientExtension_elim : LWP.valid_synth_t
 
 unfold
 let mk_clientHelloExtension_CHE_pre_shared_key_intro
-  (x: dfst (LWP.parse_vldata Parsers.PreSharedKeyClientExtension.lwp_preSharedKeyClientExtension 0ul 65535ul))
-: Tot (dfst (Parsers.ClientHelloExtension.lwp_clientHelloExtension_CHE_pre_shared_key))
+  (x: LWP.Parser?.t (LWP.parse_vldata Parsers.PreSharedKeyClientExtension.lwp_preSharedKeyClientExtension 0ul 65535ul))
+: Tot (LWP.Parser?.t (Parsers.ClientHelloExtension.lwp_clientHelloExtension_CHE_pre_shared_key))
 = Parsers.PreSharedKeyClientExtension.preSharedKeyClientExtension_bytesize_eq x;
   x
 
@@ -139,6 +139,7 @@ val valid_clientHelloExtension_CHE_pre_shared_key_intro : LWP.valid_synth_t
   mk_clientHelloExtension_CHE_pre_shared_key_intro
 
 inline_for_extraction
+noextract
 let clientHelloExtension_CHE_pre_shared_key_intro #inv () : LWP.Write
   unit
   (LWP.parse_vldata Parsers.PreSharedKeyClientExtension.lwp_preSharedKeyClientExtension 0ul 65535ul)
