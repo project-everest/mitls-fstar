@@ -132,7 +132,7 @@ inline_for_extraction
 let exn_if_then_else (a:Type)
   (wp_then:exn_wp_t a) (wp_else:exn_wp_t a)
   (f:exn_repr a wp_then) (g:exn_repr a wp_else)
-  (p:Type0)
+  (p:bool)
 : Type
 = exn_repr a (fun post h ->
     (p ==> wp_then post h) /\
@@ -159,9 +159,11 @@ layered_effect {
 /// Lift from DIV to TLSSTATEEXN
 
 inline_for_extraction
-let lift_div_tlsexn (a:Type) (wp:pure_wp a{forall p q. (forall x. p x ==> q x) ==> (wp p ==> wp q)}) (f:unit -> DIV a wp)
+let lift_div_tlsexn (a:Type) (wp:pure_wp a) (f:eqtype_as_type unit -> DIV a wp)
 : exn_repr a (fun p h -> wp (fun x -> p (Correct x) h))
-= fun _ -> Correct (f ())
+= fun _ ->
+  FStar.Monotonic.Pure.wp_monotonic_pure ();
+  Correct (f ())
 
 sub_effect DIV ~> TLSEXN = lift_div_tlsexn
 
