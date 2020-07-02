@@ -35,7 +35,7 @@
         "refinement_interpretation_Tm_refine_4827db5024c3e10eae504364efb3de9b"
       ],
       0,
-      "7e3315304fa69a84bd33c5a571a28c0c"
+      "9f065a1c8c936f7ad29e7ef47bfd3498"
     ],
     [
       "Idx.__proj__IDH__item__gY",
@@ -51,7 +51,7 @@
         "refinement_interpretation_Tm_refine_4827db5024c3e10eae504364efb3de9b"
       ],
       0,
-      "ef6aae2455ae54502bc15ab2e431512a"
+      "52ec94c7f36a36c1d6cbaec7bf0abaf5"
     ],
     [
       "Idx.context",
@@ -82,7 +82,7 @@
         "refinement_interpretation_Tm_refine_160aba959d7c6c671d15e95c03d38d89"
       ],
       0,
-      "56319dc149d8f6b2f5b3d438095a9975"
+      "4d821b2ce58922f85fd45c608015efb8"
     ],
     [
       "Idx.__proj__ExpandLog__item__info",
@@ -95,7 +95,7 @@
         "refinement_interpretation_Tm_refine_30052c92005643a4725697d612c14751"
       ],
       0,
-      "9a7366dc851391ab1acd7d27f43b5eb4"
+      "33156260f0fc4701571ccac18a40f390"
     ],
     [
       "Idx.__proj__ExpandLog__item__hv",
@@ -108,7 +108,7 @@
         "refinement_interpretation_Tm_refine_30052c92005643a4725697d612c14751"
       ],
       0,
-      "2f4dd096f764b13d5b76734264aa5e5b"
+      "1f4829dec5240c020d5a78419ae93660"
     ],
     [
       "Idx.pre_id",
@@ -142,7 +142,7 @@
         "refinement_interpretation_Tm_refine_413563b682008a5f5e138d3c3b1a0f0f"
       ],
       0,
-      "302a268d24e74fd516c6273dec5e30d2"
+      "d9c7fbce7d24baee670f539bf48976df"
     ],
     [
       "Idx.__proj__Preshared__item___1",
@@ -155,7 +155,7 @@
         "refinement_interpretation_Tm_refine_413563b682008a5f5e138d3c3b1a0f0f"
       ],
       0,
-      "08e9f2a612a2099f79c8ba05666797be"
+      "cc038fdd7449bb42ce48aaf72321a742"
     ],
     [
       "Idx.__proj__Derive__item__i",
@@ -168,7 +168,7 @@
         "refinement_interpretation_Tm_refine_902495569fcdfaf86eb271ef093af3ba"
       ],
       0,
-      "a81750f9597c6e04d6d35b5f4ebec974"
+      "1d8a53bf7fe12e31edbc36a61ef97c52"
     ],
     [
       "Idx.__proj__Derive__item__l",
@@ -181,7 +181,7 @@
         "refinement_interpretation_Tm_refine_902495569fcdfaf86eb271ef093af3ba"
       ],
       0,
-      "59e7025f3e83b26594f65b948168cb6f"
+      "86d56c1cbece11a8b41d1d93a7abc605"
     ],
     [
       "Idx.__proj__Derive__item___2",
@@ -194,7 +194,7 @@
         "refinement_interpretation_Tm_refine_902495569fcdfaf86eb271ef093af3ba"
       ],
       0,
-      "f278e16b85e958462d9aedba09669299"
+      "8273bef42facd415ee5f580e7a7b461b"
     ],
     [
       "Idx.ha_of_id",
@@ -209,7 +209,7 @@
         "fuel_guarded_inversion_Idx.pre_id", "subterm_ordering_Idx.Derive"
       ],
       0,
-      "f78c88c01405138ad7e2314c98f8b3cb"
+      "c9ecd4f8b7c354ee61204423cf2877b1"
     ],
     [
       "Idx.digest_info",
@@ -241,7 +241,7 @@
         "fuel_guarded_inversion_Idx.pre_id", "subterm_ordering_Idx.Derive"
       ],
       0,
-      "ded17ca6041f64bb7321793fb2d1f17d"
+      "c3d64743bdb99f34b4a6ee2b39828eeb"
     ],
     [
       "Idx.wellformed_id",
@@ -292,7 +292,7 @@
         "projection_inverse_BoxBool_proj_0", "typing_Idx.uu___is_ExtractDH"
       ],
       0,
-      "aec2fb9576571ebc6c4be38e98e6606f"
+      "dcd231fc0aa0920632b434f0308516aa"
     ],
     [
       "Idx.honesty_invariant",
@@ -499,7 +499,7 @@
         "unit_typing"
       ],
       0,
-      "2494c3fa8e4bc75d213fe099f4cc046a"
+      "01af371a73a0253a71dd95c124f1b6a6"
     ],
     [
       "Idx.lemma_not_honest_and_corrupt",
@@ -552,7 +552,7 @@
         "typing_TLSInfo.safe_region", "unit_inversion", "unit_typing"
       ],
       0,
-      "b7df2b3cd4f6cb0a4c1265c9dc8cdd09"
+      "069db97ebc3751c39c5d6d81c6bd2c1f"
     ],
     [
       "Idx.lemma_honest_corrupt_st",
@@ -603,7 +603,8 @@
         "haseqTm_refine_470156e17d4b4d396e6287bc60cb11f6",
         "interpretation_Tm_abs_a193f29bdd704a2d92c1b3c481aff39c",
         "lemma_FStar.HyperStack.ST.lemma_same_refs_in_stack_regions_intro",
-        "primitive_Prims.op_Negation", "projection_inverse_BoxBool_proj_0",
+        "primitive_Prims.op_Equality", "primitive_Prims.op_Negation",
+        "projection_inverse_BoxBool_proj_0",
         "projection_inverse_FStar.Pervasives.Native.Some_v",
         "refinement_interpretation_Tm_refine_0ec011aea9f93256a3547ad9f0c667f1",
         "refinement_interpretation_Tm_refine_1a1278f1aecd37594ba20d888b7fd230",
@@ -634,7 +635,7 @@
         "unit_typing"
       ],
       0,
-      "7a2794171c1f04a6a23bf3ce610d1965"
+      "55e23d7ec3eb6a4d97b9f978ddafd7da"
     ],
     [
       "Idx.get_honesty",
@@ -693,7 +694,7 @@
         "typing_TLSInfo.safe_region", "unit_inversion"
       ],
       0,
-      "be2b526ad98763a4b000a48b6653c95d"
+      "004c636f45b17173f24a6bdf171c26b6"
     ],
     [
       "Idx.lemma_honesty_update",
