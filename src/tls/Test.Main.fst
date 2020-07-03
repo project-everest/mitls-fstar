@@ -5,7 +5,7 @@ open FStar.HyperStack.IO
 
 module NW = Negotiation.Writers // for extraction purposes only
 module NW2 = Negotiation.Writers.LayeredEffects // for verification purposes only
-module NWS = Negotiation.Writers.Sealed // for verification purposes only
+module NWS = Negotiation.Writers.Sealed
 module PBinders = ParsersAux.Binders // for verification purposes only
 
 #set-options "--admit_smt_queries true"

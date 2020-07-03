@@ -238,7 +238,7 @@ KRML_FLAGS = \
 
 BUILD_FILES=dist/Makefile $(wildcard dist/libmitls_*_script)
 
-ALL_KRML_FILES := $(filter-out $(OUTPUT_DIR)/Negotiation_Writers_LayeredEffects.krml $(OUTPUT_DIR)/Negotiation_Writers_Sealed.krml,$(ALL_KRML_FILES))
+ALL_KRML_FILES := $(filter-out $(OUTPUT_DIR)/Negotiation_Writers_LayeredEffects.krml,$(ALL_KRML_FILES))
 
 .PHONY: compile-%
 compile-%: $(BUILD_FILES) dist/%/Makefile.basic
