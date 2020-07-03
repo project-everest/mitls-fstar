@@ -190,8 +190,8 @@ let write_final_extensions1
 = let max_version = LWP.deref Parsers.ProtocolVersion.protocolVersion_reader (Parsers.KnownProtocolVersion.lwps_knownProtocolVersion_accessor_tag (Parsers.MiTLSConfig.lwps_accessor_miTLSConfig_max_version cfg)) in
   match max_version with
   | TLS_1p3 ->
-    let allow_psk_resumption = true in // LWP.list_exists (fun _ -> true) lri in
-    let allow_dhe_resumption = true in // LWP.list_exists (fun _ -> true) lri in
+    let allow_psk_resumption = LWP.list_exists (fun _ -> true) lri in
+    let allow_dhe_resumption = LWP.list_exists (fun _ -> true) lri in
     if allow_psk_resumption || allow_dhe_resumption
     then begin
 (*
