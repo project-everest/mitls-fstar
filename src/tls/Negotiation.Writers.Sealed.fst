@@ -29,8 +29,9 @@ let compute_binder_ph1
   let len : U32.t = Hacl.Hash.Definitions.hash_len h in
   LWP.put_vlbytes 32ul 255ul len (Seq.create (U32.v len) 0uy) (fun b ->
     B.fill b 0uy len
-  );
-  LWP.valid_synth Aux.valid_pskBinderEntry_intro'
+  )
+  
+ // ; LWP.valid_synth Aux.valid_pskBinderEntry_intro' // automatic thanks to subcomp
 
 noextract
 let compute_binder_ph2 = compute_binder_ph1 // to avoid inline_for_extraction in effect indices, implicit args, etc.
@@ -67,7 +68,7 @@ let obfuscate_age1
   let age_add = LWP.deref LowParse.Low.Int.read_u32 (Parsers.TicketContents13.lwps_accessor_ticketContents13_age_add tk) in
   let obfuscated_age = PSK.encode_age age age_add in
   LWP.append LWP.parse_u32 LowParse.Low.Int.write_u32 obfuscated_age;
-  LWP.valid_synth Aux.valid_pskIdentity_intro'
+  LWP.valid_synth Aux.valid_pskIdentity_intro' // FIXME: WHY WHY WHY not automatic through subcomp?
 
 noextract
 let obfuscate_age2 = obfuscate_age1
@@ -110,10 +111,10 @@ let write_psk_key_exchange_modes1
             LWP.parse_vllist_recast _ _ _ 1ul 255ul;
             LWP.valid_synth
               Aux.valid_synth_pskKeyExchangeModes_intro'
-        );
+        ) (* ;
           LWP.valid_synth
-            Aux.valid_clientHelloExtension_CHE_psk_key_exchange_modes_intro';
-          ()
+            Aux.valid_clientHelloExtension_CHE_psk_key_exchange_modes_intro'; // automatic thanks to subcomp
+          () *)
   )
 
 noextract
@@ -148,7 +149,7 @@ let write_clientHelloExtension_CHE_early_data1
   Aux2.constr_clientHelloExtension_CHE_early_data (fun _ ->
     LWP.parse_vldata_intro_weak_ho'
       LWP.emp 0ul 65535ul (fun _ -> ());
-    LWP.valid_synth Aux.valid_clientHelloExtension_CHE_early_data_intro'
+    () // LWP.valid_synth Aux.valid_clientHelloExtension_CHE_early_data_intro' // automatic thanks to subcomp
   )
 
 noextract
