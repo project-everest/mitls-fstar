@@ -176,6 +176,184 @@ let write_clientHelloExtension_CHE_early_data
 
 inline_for_extraction
 noextract
+let write_psk_kex1
+  (inv: LWP.memory_invariant)
+  (allow_psk_resumption: bool)
+  (allow_dhe_resumption: bool)
+  ()
+: LWP.TWrite
+    unit
+    LWP.emp
+    Parsers.ClientHelloExtension.lwp_clientHelloExtension
+    inv
+=
+        Aux2.constr_clientHelloExtension_CHE_psk_key_exchange_modes (fun _ ->
+          LWP.parse_vldata_intro_weak_ho' lwp_pskKeyExchangeModes 0ul 65535ul (fun _ -> // FIXME: should be parse_vldata_intro_ho', but I can't reason on reify
+            LWP.parse_vllist_nil lwp_pskKeyExchangeMode 255ul;
+            if allow_psk_resumption
+            then
+              LWP.parse_vllist_snoc_weak_ho' _ _ _ (fun _ ->
+                LWP.start _ pskKeyExchangeMode_writer Psk_ke
+              );
+            if allow_dhe_resumption
+            then
+              LWP.parse_vllist_snoc_weak_ho' _ _ _ (fun _ ->
+                LWP.start _ pskKeyExchangeMode_writer Psk_dhe_ke
+              );
+            LWP.parse_vllist_recast _ _ _ 1ul 255ul;
+            () // LWP.valid_synth Aux.valid_synth_pskKeyExchangeModes_intro' // automatic thanks to subcomp
+          );
+          () // LWP.valid_synth Aux.valid_clientHelloExtension_CHE_psk_key_exchange_modes_intro' // automatic thanks to subcomp
+        )
+
+noextract
+let write_psk_kex2 = write_psk_kex1
+
+let extract_write_psk_kex
+  (inv: LWP.memory_invariant)
+  (allow_psk_resumption: bool)
+  (allow_dhe_resumption: bool)
+: Tot (LWP.extract_t inv (write_psk_kex2 inv allow_psk_resumption allow_dhe_resumption))
+= LWP.extract inv (write_psk_kex1 inv allow_psk_resumption allow_dhe_resumption)
+
+inline_for_extraction
+noextract
+let write_psk_kex
+  (#inv: LWP.memory_invariant)
+  (allow_psk_resumption: bool)
+  (allow_dhe_resumption: bool)
+: LWP.TWrite 
+    unit
+    LWP.emp
+    Parsers.ClientHelloExtension.lwp_clientHelloExtension
+    inv
+=
+  LWP.wrap_extracted_impl _ _ (extract_write_psk_kex inv allow_psk_resumption allow_dhe_resumption)
+
+#restart-solver
+
+inline_for_extraction
+noextract
+let write_binders1
+  (inv: LWP.memory_invariant)
+  (lri: LWP.lptr Parsers.ResumeInfo13.lwp_resumeInfo13 inv)
+  ()
+: LWP.TWrite unit LWP.emp lwp_offeredPsks_binders inv
+=
+        LWP.list_map
+          Parsers.ResumeInfo13.lwp_resumeInfo13
+          lwp_pskBinderEntry
+          (fun r -> compute_binder_ph (Parsers.ResumeInfo13.lwps_accessor_resumeInfo13_ticket r))
+          33ul 65535ul
+          lri
+          ;
+        () // LWP.valid_synth Aux.valid_offeredPsks_binders_intro'
+
+noextract
+let write_binders2 = write_binders1
+
+let extract_write_binders
+  (inv: LWP.memory_invariant)
+  (lri: LWP.lptr Parsers.ResumeInfo13.lwp_resumeInfo13 inv)
+: Tot (LWP.extract_t inv (write_binders2 inv lri))
+= LWP.extract inv (write_binders1 inv lri)
+
+inline_for_extraction
+noextract
+let write_binders
+  (#inv: LWP.memory_invariant)
+  (lri: LWP.lptr Parsers.ResumeInfo13.lwp_resumeInfo13 inv)
+: LWP.TWrite unit LWP.emp lwp_offeredPsks_binders inv
+= LWP.wrap_extracted_impl _ _ (extract_write_binders inv lri)
+
+inline_for_extraction
+noextract
+let write_pskidentities1
+  (inv: LWP.memory_invariant)
+  (lri: LWP.lptr Parsers.ResumeInfo13.lwp_resumeInfo13 inv)
+  (now: U32.t)
+  ()
+: LWP.TWrite unit LWP.emp lwp_offeredPsks_identities inv
+=
+        LWP.list_map
+          Parsers.ResumeInfo13.lwp_resumeInfo13
+          lwp_pskIdentity
+          (obfuscate_age now)
+          7ul 65535ul
+          lri
+          ;
+        () // LWP.valid_synth Aux.valid_offeredPsks_identities_intro'
+
+noextract
+let write_pskidentities2 = write_pskidentities1
+
+let extract_write_pskidentities
+  (inv: LWP.memory_invariant)
+  (lri: LWP.lptr Parsers.ResumeInfo13.lwp_resumeInfo13 inv)
+  (now: U32.t)
+: Tot (LWP.extract_t inv (write_pskidentities2 inv lri now))
+= LWP.extract inv (write_pskidentities1 inv lri now)
+
+inline_for_extraction
+noextract
+let write_pskidentities
+  (#inv: LWP.memory_invariant)
+  (lri: LWP.lptr Parsers.ResumeInfo13.lwp_resumeInfo13 inv)
+  (now: U32.t)
+: LWP.TWrite unit LWP.emp lwp_offeredPsks_identities inv
+= LWP.wrap_extracted_impl _ _ (extract_write_pskidentities inv lri now)
+
+inline_for_extraction
+noextract
+let write_pre_shared_key1
+  (inv: LWP.memory_invariant)
+  (lri: LWP.lptr Parsers.ResumeInfo13.lwp_resumeInfo13 inv)
+  (now: U32.t)
+  ()
+: LWP.TWrite 
+    unit
+    LWP.emp
+    Parsers.ClientHelloExtension.lwp_clientHelloExtension
+    inv
+=
+      Aux2.constr_clientHelloExtension_CHE_pre_shared_key (fun _ ->
+        LWP.parse_vldata_intro_weak_ho' Parsers.PreSharedKeyClientExtension.lwp_preSharedKeyClientExtension 0ul 65535ul (fun _ -> // FIXME: this should be parse_vldata_intro_ho', but I can't reason on reify
+          write_pskidentities lri now;
+          LWP.frame (fun _ -> write_binders lri);
+          LWP.valid_synth Aux.valid_offeredPsks_intro' // FIXME: we might need something like valid_synth_trans
+          // LWP.valid_synth Aux.valid_preSharedKeyClientExtension_intro'
+        );
+        () // LWP.valid_synth Aux.valid_clientHelloExtension_CHE_pre_shared_key_intro' // automatic thanks to subcomp
+      )
+
+noextract
+let write_pre_shared_key2 = write_pre_shared_key1
+
+let extract_write_pre_shared_key
+  (inv: LWP.memory_invariant)
+  (lri: LWP.lptr Parsers.ResumeInfo13.lwp_resumeInfo13 inv)
+  (now: U32.t)
+: Tot (LWP.extract_t inv (write_pre_shared_key2 inv lri now))
+= LWP.extract inv (write_pre_shared_key1 inv lri now)
+
+inline_for_extraction
+noextract
+let write_pre_shared_key
+  (#inv: LWP.memory_invariant)
+  (lri: LWP.lptr Parsers.ResumeInfo13.lwp_resumeInfo13 inv)
+  (now: U32.t)
+: LWP.TWrite 
+    unit
+    LWP.emp
+    Parsers.ClientHelloExtension.lwp_clientHelloExtension
+    inv
+=
+  LWP.wrap_extracted_impl _ _ (extract_write_pre_shared_key inv lri now)
+
+#restart-solver
+
+inline_for_extraction
+noextract
 let write_final_extensions1
   (inv: LWP.memory_invariant)
   (cfg: LWP.ptr Parsers.MiTLSConfig.lwp_miTLSConfig inv)
@@ -195,65 +373,16 @@ let write_final_extensions1
     let allow_dhe_resumption = LWP.list_exists (fun _ -> true) lri in
     if allow_psk_resumption || allow_dhe_resumption
     then begin
-(*
-      let psk_kex () : LWP.TWrite unit LWP.emp Parsers.ClientHelloExtension.lwp_clientHelloExtension_CHE_psk_key_exchange_modes inv =
-        LWP.parse_vldata_intro_weak_ho' lwp_pskKeyExchangeModes 0ul 65535ul (fun _ -> // FIXME: should be parse_vldata_intro_ho', but I can't reason on reify
-          LWP.parse_vllist_nil lwp_pskKeyExchangeMode 255ul;
-          if allow_psk_resumption
-          then
-            LWP.parse_vllist_snoc_weak_ho' _ _ _ (fun _ ->
-              LWP.start _ pskKeyExchangeMode_writer Psk_ke
-            );
-          if allow_dhe_resumption
-          then
-            LWP.parse_vllist_snoc_weak_ho' _ _ _ (fun _ ->
-              LWP.start _ pskKeyExchangeMode_writer Psk_dhe_ke
-            );
-          LWP.parse_vllist_recast _ _ _ 1ul _;
-          LWP.valid_synth Aux.valid_synth_pskKeyExchangeModes_intro'
-        );
-        LWP.valid_synth Aux.valid_clientHelloExtension_CHE_psk_key_exchange_modes_intro'
-      in
-      let binders () : LWP.TWrite unit LWP.emp lwp_offeredPsks_binders inv =
-        LWP.list_map
-          Parsers.ResumeInfo13.lwp_resumeInfo13
-          lwp_pskBinderEntry
-          (fun r -> compute_binder_ph (Parsers.ResumeInfo13.lwps_accessor_resumeInfo13_ticket r))
-          33ul 65535ul
-          lri
-          ;
-        LWP.valid_synth Aux.valid_offeredPsks_binders_intro'
-      in
-      let pskidentities () : LWP.TWrite unit LWP.emp lwp_offeredPsks_identities inv =
-        LWP.list_map
-          Parsers.ResumeInfo13.lwp_resumeInfo13
-          lwp_pskIdentity
-          (obfuscate_age now)
-          7ul 65535ul
-          lri
-          ;
-        LWP.valid_synth Aux.valid_offeredPsks_identities_intro'
-      in
-      let ke () : LWP.TWrite unit LWP.emp  Parsers.ClientHelloExtension.lwp_clientHelloExtension_CHE_pre_shared_key inv =
-        LWP.parse_vldata_intro_weak_ho' Parsers.PreSharedKeyClientExtension.lwp_preSharedKeyClientExtension 0ul 65535ul (fun _ -> // FIXME: this should be parse_vldata_intro_ho', but I can't reason on reify
-          pskidentities ();
-          LWP.frame binders;
-          LWP.valid_synth Aux.valid_offeredPsks_intro';
-          LWP.valid_synth Aux.valid_preSharedKeyClientExtension_intro'
-        );
-        LWP.valid_synth Aux.valid_clientHelloExtension_CHE_pre_shared_key_intro'
-      in
       LWP.parse_vllist_snoc_weak_ho' _ _ _ (fun _ ->
-        Aux2.constr_clientHelloExtension_CHE_psk_key_exchange_modes psk_kex
+        write_psk_kex allow_psk_resumption allow_dhe_resumption
       );
       if edi
       then
         LWP.parse_vllist_snoc_weak_ho' _ _ _
           write_clientHelloExtension_CHE_early_data;
       LWP.parse_vllist_snoc_weak_ho' _ _ _ (fun _ ->
-        Aux2.constr_clientHelloExtension_CHE_pre_shared_key ke
+        write_pre_shared_key lri now
       );
-*)
       ()
     end else begin
       LWP.parse_vllist_snoc_weak_ho' // FIXME: this should be parse_vllist_snoc_ho', but I can't reason on reify
@@ -262,7 +391,6 @@ let write_final_extensions1
       )
     end
   | _ -> ()
-//    L.append_l_nil (Ghost.reveal vin <: list Parsers.ClientHelloExtension.clientHelloExtension)
 
 noextract
 let write_final_extensions2 = write_final_extensions1
