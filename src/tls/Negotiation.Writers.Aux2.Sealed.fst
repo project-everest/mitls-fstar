@@ -11,10 +11,10 @@ inline_for_extraction
 noextract
 let constr_clientHelloExtension_CHE_pre_shared_key
   #inv
-  (f: (unit -> LWPS.TWrite unit LWP.emp Parsers.ClientHelloExtension.lwp_clientHelloExtension_CHE_pre_shared_key inv))
+  (f: (unit -> LWPS.TWrite unit LWP.parse_empty Parsers.ClientHelloExtension.lwp_clientHelloExtension_CHE_pre_shared_key inv))
 : LWPS.TWrite
     unit
-    LWP.emp
+    LWP.parse_empty
     Parsers.ClientHelloExtension.lwp_clientHelloExtension
     inv
 = 
@@ -24,10 +24,10 @@ inline_for_extraction
 noextract
 let constr_clientHelloExtension_CHE_psk_key_exchange_modes
   #inv
-  (f: (unit -> LWPS.TWrite unit LWP.emp Parsers.ClientHelloExtension.lwp_clientHelloExtension_CHE_psk_key_exchange_modes inv))
+  (f: (unit -> LWPS.TWrite unit LWP.parse_empty Parsers.ClientHelloExtension.lwp_clientHelloExtension_CHE_psk_key_exchange_modes inv))
 : LWPS.TWrite
     unit
-    LWP.emp
+    LWP.parse_empty
     Parsers.ClientHelloExtension.lwp_clientHelloExtension
     inv
 =
@@ -37,10 +37,10 @@ inline_for_extraction
 noextract
 let constr_clientHelloExtension_CHE_early_data
   #inv
-  (f: (unit -> LWPS.TWrite unit LWP.emp Parsers.ClientHelloExtension.lwp_clientHelloExtension_CHE_early_data inv))
+  (f: (unit -> LWPS.TWrite unit LWP.parse_empty Parsers.ClientHelloExtension.lwp_clientHelloExtension_CHE_early_data inv))
 : LWPS.TWrite
     unit
-    LWP.emp
+    LWP.parse_empty
     Parsers.ClientHelloExtension.lwp_clientHelloExtension
     inv
 = LWPS.twrite_of_ewrite (fun _ -> constr_clientHelloExtension_CHE_early_data' (fun _ -> LWPS.ewrite_of_twrite f))

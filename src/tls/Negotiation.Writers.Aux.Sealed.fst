@@ -8,31 +8,31 @@ module LWPS = LowParseWriters.Sealed
 module LPI = LowParse.Low.Int
 
 let valid_pskBinderEntry_intro' =
-  LWPS.tvalid_synth_of_evalid_synth valid_pskBinderEntry_intro
+  LWPS.tvalid_rewrite_of_evalid_rewrite valid_pskBinderEntry_intro
 
 let valid_pskIdentity_intro' =
-  LWPS.tvalid_synth_of_evalid_synth valid_pskIdentity_intro
+  LWPS.tvalid_rewrite_of_evalid_rewrite valid_pskIdentity_intro
 
 let valid_offeredPsks_binders_intro' =
-  LWPS.tvalid_synth_of_evalid_synth valid_offeredPsks_binders_intro
+  LWPS.tvalid_rewrite_of_evalid_rewrite valid_offeredPsks_binders_intro
 
 let valid_offeredPsks_identities_intro' =
-  LWPS.tvalid_synth_of_evalid_synth valid_offeredPsks_identities_intro
+  LWPS.tvalid_rewrite_of_evalid_rewrite valid_offeredPsks_identities_intro
 
 let valid_offeredPsks_intro' =
-  LWPS.tvalid_synth_of_evalid_synth valid_offeredPsks_intro
+  LWPS.tvalid_rewrite_of_evalid_rewrite valid_offeredPsks_intro
 
 let valid_preSharedKeyClientExtension_intro' =
-  LWPS.tvalid_synth_of_evalid_synth valid_preSharedKeyClientExtension_intro
+  LWPS.tvalid_rewrite_of_evalid_rewrite valid_preSharedKeyClientExtension_intro
 
 let valid_clientHelloExtension_CHE_pre_shared_key_intro' =
-  LWPS.tvalid_synth_of_evalid_synth valid_clientHelloExtension_CHE_pre_shared_key_intro
+  LWPS.tvalid_rewrite_of_evalid_rewrite valid_clientHelloExtension_CHE_pre_shared_key_intro
 
-let valid_synth_pskKeyExchangeModes_intro' =
-  LWPS.tvalid_synth_of_evalid_synth valid_synth_pskKeyExchangeModes_intro
+let valid_rewrite_pskKeyExchangeModes_intro' =
+  LWPS.tvalid_rewrite_of_evalid_rewrite valid_rewrite_pskKeyExchangeModes_intro
 
 let valid_clientHelloExtension_CHE_psk_key_exchange_modes_intro' =
-  LWPS.tvalid_synth_of_evalid_synth valid_clientHelloExtension_CHE_psk_key_exchange_modes_intro
+  LWPS.tvalid_rewrite_of_evalid_rewrite valid_clientHelloExtension_CHE_psk_key_exchange_modes_intro
 
 let valid_clientHelloExtension_CHE_early_data_intro' =
-  LWPS.tvalid_synth_of_evalid_synth valid_clientHelloExtension_CHE_early_data_intro
+  LWPS.tvalid_rewrite_of_evalid_rewrite valid_clientHelloExtension_CHE_early_data_intro
