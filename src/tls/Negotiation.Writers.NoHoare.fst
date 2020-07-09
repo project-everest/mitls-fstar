@@ -1,8 +1,8 @@
-module Negotiation.Writers.Sealed
+module Negotiation.Writers.NoHoare
 
-module LWP = LowParseWriters.Sealed
-module Aux = Negotiation.Writers.Aux.Sealed
-module Aux2 = Negotiation.Writers.Aux2.Sealed
+module LWP = LowParseWriters.NoHoare.Parsers
+module Aux = Negotiation.Writers.NoHoare.Aux
+module Aux2 = Negotiation.Writers.NoHoare.Aux2
 
 #reset-options "--z3cliopt smt.arith.nl=false"
 
