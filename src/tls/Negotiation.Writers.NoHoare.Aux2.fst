@@ -44,3 +44,27 @@ let constr_clientHelloExtension_CHE_early_data
     Parsers.ClientHelloExtension.lwp_clientHelloExtension
     inv
 = LWPS.twrite_of_ewrite (fun _ -> constr_clientHelloExtension_CHE_early_data' (fun _ -> LWPS.ewrite_of_twrite f))
+
+inline_for_extraction
+noextract
+let constr_clientHelloExtension_CHE_key_share
+  #inv
+  (f: (unit -> LWPS.TWrite unit LWP.parse_empty Parsers.ClientHelloExtension.lwp_clientHelloExtension_CHE_key_share inv))
+: LWPS.TWrite
+    unit
+    LWP.parse_empty
+    Parsers.ClientHelloExtension.lwp_clientHelloExtension
+    inv
+= LWPS.twrite_of_ewrite (fun _ -> constr_clientHelloExtension_CHE_key_share' (fun _ -> LWPS.ewrite_of_twrite f))
+
+inline_for_extraction
+noextract
+let constr_clientHelloExtension_CHE_server_name
+  #inv
+  (f: (unit -> LWPS.TWrite unit LWP.parse_empty Parsers.ClientHelloExtension.lwp_clientHelloExtension_CHE_server_name inv))
+: LWPS.TWrite
+    unit
+    LWP.parse_empty
+    Parsers.ClientHelloExtension.lwp_clientHelloExtension
+    inv
+= LWPS.twrite_of_ewrite (fun _ -> constr_clientHelloExtension_CHE_server_name' (fun _ -> LWPS.ewrite_of_twrite f))

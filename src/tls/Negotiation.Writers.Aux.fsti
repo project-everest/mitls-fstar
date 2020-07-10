@@ -191,3 +191,39 @@ val valid_clientHelloExtension_CHE_early_data_intro : LWP.valid_rewrite_t
   Parsers.ClientHelloExtension.lwp_clientHelloExtension_CHE_early_data
   (fun _ -> True)
   (fun x -> x)
+
+val valid_rewrite_constr_sni_host_name : LWP.valid_rewrite_t
+  (Parsers.NameType.lwp_nameType `LWP.parse_pair` Parsers.HostName.lwp_hostName)
+  Parsers.ServerName.lwp_serverName
+  (fun (k, _) -> k == Parsers.NameType.Host_name)
+  (fun (_, ext) -> Parsers.ServerName.Sni_host_name ext)
+
+inline_for_extraction
+noextract
+let constr_sni_host_name
+  #inv
+  (f: (unit -> LWP.EWrite unit LWP.parse_empty Parsers.HostName.lwp_hostName (fun _ -> True) (fun _ _ _ -> True) (fun _ -> True) inv))
+: LWP.EWrite
+    unit
+    LWP.parse_empty
+    Parsers.ServerName.lwp_serverName
+    (fun _ -> True)
+    (fun _ _ _ -> True)
+    (fun _ -> True)
+    inv
+= LWP.start Parsers.NameType.lwp_nameType Parsers.NameType.nameType_writer Parsers.NameType.Host_name;
+  LWP.frame _ _ _ _ _ _ _ f;
+  LWP.valid_rewrite _ _ _ _ _ valid_rewrite_constr_sni_host_name
+
+unfold
+let mk_clientHelloExtension_CHE_server_name_intro
+  (x: LWP.Parser?.t (LWP.parse_vldata Parsers.ServerNameList.lwp_serverNameList 0ul 65535ul))
+: Tot (LWP.Parser?.t (Parsers.ClientHelloExtension.lwp_clientHelloExtension_CHE_server_name))
+= Parsers.ServerNameList.serverNameList_bytesize_eq x;
+  x
+
+val valid_clientHelloExtension_CHE_server_name_intro : LWP.valid_rewrite_t
+  (LWP.parse_vldata Parsers.ServerNameList.lwp_serverNameList 0ul 65535ul)
+  Parsers.ClientHelloExtension.lwp_clientHelloExtension_CHE_server_name
+  (fun _ -> True)
+  mk_clientHelloExtension_CHE_server_name_intro

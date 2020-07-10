@@ -36,3 +36,15 @@ let valid_clientHelloExtension_CHE_psk_key_exchange_modes_intro' =
 
 let valid_clientHelloExtension_CHE_early_data_intro' =
   LWPS.tvalid_rewrite_of_evalid_rewrite valid_clientHelloExtension_CHE_early_data_intro
+
+inline_for_extraction
+noextract
+let constr_sni_host_name
+  #inv
+  (f: (unit -> LWPS.TWrite unit LWP.parse_empty Parsers.HostName.lwp_hostName inv))
+: LWPS.TWrite
+    unit
+    LWP.parse_empty
+    Parsers.ServerName.lwp_serverName
+    inv
+= LWPS.twrite_of_ewrite (fun _ -> constr_sni_host_name (fun _ -> LWPS.ewrite_of_twrite f))

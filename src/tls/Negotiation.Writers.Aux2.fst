@@ -107,3 +107,34 @@ let valid_rewrite_constr_clientHelloExtension_CHE_early_data =
   LWP.valid_rewrite_implies _ _ _ _
     (valid_rewrite_constr_clientHelloExtension Early_data lwp_clientHelloExtension_CHE_early_data)
     _ _
+
+let valid_rewrite_constr_clientHelloExtension_CHE_key_share =
+  let open Parsers.ClientHelloExtension in
+  let open Parsers.ExtensionType in
+  assert_norm (LP.list_mem Key_share (LP.list_map fst extensionType_enum) == true);
+  LWP.valid_rewrite_implies _ _ _ _
+    (valid_rewrite_constr_clientHelloExtension Key_share lwp_clientHelloExtension_CHE_key_share)
+    _ _
+
+let valid_rewrite_constr_clientHelloExtension_CHE_server_name =
+  let open Parsers.ClientHelloExtension in
+  let open Parsers.ExtensionType in
+  assert_norm (LP.list_mem Server_name (LP.list_map fst extensionType_enum) == true);
+  LWP.valid_rewrite_implies _ _ _ _
+    (valid_rewrite_constr_clientHelloExtension Server_name lwp_clientHelloExtension_CHE_server_name)
+    _ _
+
+friend Parsers.ServerNameList
+
+let valid_serverNameList_intro =
+  let open Parsers.ServerName in
+  let open Parsers.ServerNameList in
+  Classical.forall_intro serverName_bytesize_eq;
+  LWP.valid_rewrite_implies _ _ _ _
+    (LWP.valid_rewrite_compose
+      _ _ _ _
+      (LWP.valid_rewrite_parse_synth (LWP.parse_vllist lwp_serverName 1ul 65535ul) synth_serverNameList synth_serverNameList_recip ())
+      _ _ _
+      (LWP.valid_rewrite_parser_eq _ _)
+    )
+  _ _
