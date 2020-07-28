@@ -11,6 +11,7 @@ INCLUDE_PATHS 	= \
   $(ALL_HACL_DIRS) \
   $(KREMLIN_HOME)/include \
   $(KREMLIN_HOME)/kremlib/compat \
+  $(KREMLIN_HOME)/kremlib/obj \
   $(KREMLIN_HOME)/kremlib \
   $(MITLS_HOME)/libs/ffi \
   $(QD_HOME)/src/lowparse \
