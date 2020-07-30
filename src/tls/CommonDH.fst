@@ -128,6 +128,8 @@ let is_ffdhe (ng:namedGroup): Tot bool = List.mem ng [ Ffdhe2048; Ffdhe3072; Ffd
 
 let default_group = ECDH (EC.ECC_X25519)
 
+
+
 noextract
 let dh_region = new_region tls_tables_region
 
@@ -137,7 +139,7 @@ noeq type ilog_entry (i:pre_dhi) =
 
 private type i_ilog = MDM.t dh_region pre_dhi ilog_entry (fun _ -> True)
 private type ishare_table = (if Flags.model then i_ilog else unit)
-abstract let ilog: ishare_table =
+let ilog: ishare_table =
   if Flags.model then MDM.alloc () <: i_ilog else ()
 
 type registered_dhi i =
@@ -393,7 +395,16 @@ let register_dhi #g gx =
     let log: i_ilog = ilog in
     let i = (| g, gx |) in
     recall log;
-    if None? (MDM.lookup log i) then MDM.extend log i Corrupt;
+    if None? (MDM.lookup log i) then begin
+      let h0 = HST.get () in
+      MDM.extend log i Corrupt;
+      let h1 = HST.get () in
+      let t0 = HS.sel h0 log in
+      let t1 = HS.sel h1 log in
+      assert (MDM.repr (MDM.upd t0 i Corrupt) ==
+              DM.upd (MDM.repr t0) i (Some Corrupt));
+      assert (MDM.sel t1 i == DM.sel (MDM.repr t1) i)
+    end;
     assume(stable_on_t log (MDM.defined log i));
     mr_witness log (MDM.defined log i); gx
   else gx

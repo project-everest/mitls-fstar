@@ -23,6 +23,12 @@
     "NotificationChannel" : "#mitls-build",
     "PublicBranches" : [ "master", "dev" ],
 
+    "CompressBuildFolder": true,
+    "FolderToCompress" : "mitls-fstar",
+    "FoldersToExclude" : [ ],
+    
+    "TrackPerformance" : true,
+
     "RepoVersions" : {
         "kremlin_version" : "origin/master",
         "hacl_version" : "origin/master",

@@ -24,34 +24,15 @@ module H = Hashing.Spec
 
 module HMAC_UFCMA = Old.HMAC.UFCMA
 
-type finishedId = HMAC_UFCMA.finishedId
-
-(* A flag for runtime debugging of computed keys.
-   The F* normalizer will erase debug prints at extraction
-   when this flag is set to false *)
-let discard (b:bool): ST unit (requires (fun _ -> True))
- (ensures (fun h0 _ h1 -> h0 == h1)) = ()
-let print s = discard (IO.debug_print_string ("KS | "^s^"\n"))
-unfold let dbg : string -> ST unit (requires (fun _ -> True))
-  (ensures (fun h0 _ h1 -> h0 == h1)) =
-  if DebugFlags.debug_KS then print else (fun _ -> ())
-
 #set-options "--admit_smt_queries true"
-
-let print_share (#g:CommonDH.group) (s:CommonDH.share g) : ST unit
-  (requires (fun h0 -> True))
-  (ensures (fun h0 _ h1 -> modifies_none h0 h1))
-  =
-  let kb = CommonDH.serialize_raw #g s in
-  let kh = FStar.Bytes.hex_of_bytes kb in
-  dbg ("Share: "^kh)
 
 // PSK (internal/external multiplex, abstract)
 // Note that application PSK is externally defined but should
 // be idealized together with KS
-abstract let psk (i:esId) =
+let psk (i:esId) =
   b:bytes{len b = Hacl.Hash.Definitions.hash_len (esId_hash i)}
 
+(*
 type binderId = i:pre_binderId{valid (I_BINDER i)}
 type hsId = i:TLSInfo.pre_hsId{valid (I_HS i)}
 type asId = i:pre_asId{valid (I_AS i)}
@@ -80,188 +61,34 @@ and secretId_rc : (secretId -> St bytes) = function
 // TODO rework old 1.2 types
 type ms = bytes
 type pms = bytes
+*)
 
 // Early secret (abstract)
-abstract type es (i:esId) = H.tag (esId_hash i)
+type es (i:esId) = H.tag (esId_hash i)
 
 // Handshake secret (abstract)
-abstract type hs (i:hsId) = H.tag (hsId_hash i)
+type hs (i:hsId) = H.tag (hsId_hash i)
+
+(*
 type fink (i:finishedId) = HMAC_UFCMA.key (HMAC_UFCMA.HMAC_Finished i) (fun _ -> True)
 let trivial (_: bytes) = True
 type binderKey (i:binderId) = HMAC_UFCMA.key (HMAC_UFCMA.HMAC_Binder i) trivial
+*)
 
 // TLS 1.3 master secret (abstract)
-abstract type ams (i:asId) = H.tag (asId_hash i)
+type ams (i:asId) = H.tag (asId_hash i)
 
+(*
 type rekeyId (li:logInfo) = i:expandId li{
   (let ExpandedSecret _ t _ = i in
     ApplicationTrafficSecret? t \/
     ClientApplicationTrafficSecret? t \/
     ServerApplicationTrafficSecret? t)}
-
-abstract type rekey_secrets #li (i:expandId li) =
-  H.tag (expandId_hash i) * H.tag (expandId_hash i)
-
-// Leaked to HS for tickets
-(*abstract*) type rms #li (i:rmsId li) = H.tag (rmsId_hash i)
-
-type ems #li (i:exportId li) = H.tag (exportId_hash i)
-
-// TODO this is superseeded by StAE.state i
-// but I'm waiting for it to be tested to switch over
-// TODO use the newer index types
-type recordInstance =
-  | StAEInstance: 
-    #id:TLSInfo.id ->
-    r: StAE.reader (peerId id) ->
-    w: StAE.writer id ->
-    pn: option bytes * option bytes ->
-    recordInstance
-
-(* 2 choices - I prefer the second:
-     (1) replace recordInstance in this module with Epochs.epoch, but that requires dependence on more than just $id
-   (2) redefine recordInstance as follows, and then import epoch_region_inv over here from Epochs:
-type recordInstance (rgn:rid) (n:TLSInfo.random) =
-| RI: #id:StAE.id -> r:StAE.reader (peerId id) -> w:StAE.writer id{epoch_region_inv' rgn r w /\ I.nonce_of_id id = n} -> recordInstance rgn n
-
-In (2) we would define Epochs.epoch as:
-type epoch (hs_rgn:rgn) (n:TLSInfo.random) =
-  | Epoch: h:handshake ->
-           r:recordInstance hs_rgn n ->
-           epich hs_rgn n
 *)
 
-type exportKey = (li:logInfo & i:exportId li & ems i)
+type rekey_secrets #li (i:expandId li) =
+  H.tag (expandId_hash i) * H.tag (expandId_hash i)
 
-// Note from old miTLS (in TLSInfo.fst)
-// type id = {
-//  msId   : msId;            // the index of the master secret used for key derivation
-//  kdfAlg : kdfAlg_t;          // the KDF algorithm used for key derivation
-//  pv     : protocolVersion; // should be part of aeAlg
-//  aeAlg  : aeAlg;           // the authenticated-encryption algorithms
-//  csrConn: csRands;         // the client-server random of the connection
-//  ext: negotiatedExtensions;// the extensions negotiated for the current session
-//  writer : role             // the role of the writer
-//  }
-
-type ks_info12 =
-| Info12: pv:protocolVersion -> cs:cipherSuite -> ems:bool -> ks_info12
-type ks_info13 =
-| Info13: is_quic:bool -> ae:aeadAlg -> h:hash_alg -> ks_info13
- 
-/// 19-07-05 Notes towards verified state-passing refactoring: each of
-///          these cases will become its own type (or possibly cover a
-///          couple of cases within the same Handshake state),
-///          parametrized by a single "main" key index and ad hoc
-///          parts of the state determined by the Handshake messages
-///          (such as nonces, public shares, and alpha)
-
-type ks_client =
-| C_wait_ServerHello:
-  cr:random ->
-  is_quic: bool ->
-  esl: list (i:esId{~(NoPSK? i)} & es i) ->
-  gs:list (g:CommonDH.group & CommonDH.ikeyshare g) ->
-  ks_client
-
-| C13_wait_Finished1:
-  info:ks_info13 -> 
-  (i:finishedId & cfk:fink i) -> 
-  (i:finishedId & sfk:fink i) ->
-  (i:asId & ams:ams i) ->
-  ks_client
-
-| C13_wait_Finished2:
-  info: ks_info13 ->
-  (i:finishedId & cfk:fink i) -> // still indexed by [..ServerHello] 
-  (i:asId & ams:ams i) -> // indexed by [..Finished1] 
-  (li:logInfo & i:rekeyId li & rekey_secrets i) ->
-  ks_client
-
-| C13_Complete: 
-  info:ks_info13 -> 
-  (li:logInfo & i:rekeyId li & rekey_secrets i) -> // indexed by [..Finished1] 
-  (li:logInfo & i:rmsId li & rms i) -> // indexed by [..Finished2]
-  ks_client
-
-| C12_Full_CH: // To be removed
-  cr:random ->
-  ks_client
-
-| C12_Resume_CH:
-  cr:random ->
-  si:sessionInfo ->
-  msId:TLSInfo.msId ->
-  ms:ms ->
-  ks_client
-
-| C12_wait_MS:
-  csr:csRands ->
-  info: ks_info12 ->
-  id:TLSInfo.pmsId -> 
-  pms:pms ->
-  ks_client
-  
-| C12_has_MS:
-  csr:csRands ->
-  info:ks_info12 ->
-  id:TLSInfo.msId ->
-  ms:ms ->
-  ks_client
-
-type ks_server =
-| S12_wait_CKE_DH:
-  csr:csRands ->
-  info:ks_info12 ->
-  our_share: (g:CommonDH.group & CommonDH.ikeyshare g) ->
-  ks_server
-
-| S12_has_MS:
-  csr:csRands ->
-  info:ks_info12 ->
-  id:TLSInfo.msId ->
-  ms:ms ->
-  ks_server
-
-| S13_wait_SH:
-  info:ks_info13 ->
-  cr:random ->
-  sr:random ->
-  es:(i:esId & es i) ->
-  hs:(i:hsId & hs i) ->
-  ks_server
-
-| S13_wait_SF:
-  info:ks_info13 ->
-  sfk:(i:finishedId & cfk:fink i) ->
-  cfk:(i:finishedId & sfk:fink i) ->
-  ams:(i:asId & ams:ams i) ->
-  ks_server
-
-| S13_wait_CF:
-  info:ks_info13 ->
-  cfk:(i:finishedId & cfk:fink i) ->
-  ams:(i:asId & ams i) ->
-  rk:(li:logInfo & i:rekeyId li & rekey_secrets i) ->
-  ks_server
-
-| S13_postHS:
-  info:ks_info13 ->
-  rki:(li:logInfo & i:rekeyId li & rekey_secrets i) ->
-  rms:(li:logInfo & i:rmsId li & rms i) ->
-  ks_server
-
-// Extract keys and IVs from a derived 1.3 secret
-private let keygen_13 h secret ae is_quic : St (bytes * bytes * option bytes) =
-  let kS = EverCrypt.aead_keyLen ae in
-  let iS = 12ul in // IV length
-  let lk, liv = if is_quic then "quic key", "quic iv" else "key", "iv" in
-  let kb = HKDF.expand_label #h secret lk empty_bytes kS in
-  let ib = HKDF.expand_label #h secret liv empty_bytes iS in
-  let pn = if is_quic then
-      Some (HKDF.expand_label #h secret "quic hp" empty_bytes kS)
-    else None in
-  (kb, ib, pn)
 
 // Extract finished keys
 private let finished_13 h secret : St (bytes) =
@@ -272,9 +99,6 @@ private let group_of_valid_namedGroup
   : CommonDH.group
   = Some?.v (CommonDH.group_of_namedGroup g)
 
-effect ST0 (a:Type) = ST a (fun _ -> True) (fun h0 _ h1 -> modifies_none h0 h1)
-
-val map_ST: ('a -> ST0 'b) -> list 'a -> ST0 (list 'b)
 let rec map_ST f x = match x with
   | [] -> []
   | a::tl -> f a :: map_ST f tl
@@ -282,18 +106,6 @@ let rec map_ST f x = match x with
 private let keygen (g:CommonDH.group)
   : St (g:CommonDH.group & CommonDH.ikeyshare g)
   = (| g, CommonDH.keygen g |)
-
-val ks_client_init: 
-  cr: random ->
-  is_quic: bool ->
-  ogl: option CommonDH.supportedNamedGroups -> 
-  ST (ks_client * option keyShareClientHello)
-  (requires fun h0 -> True)
-  (ensures fun h0 (ks,ogxl) h1 -> 
-    C_wait_ServerHello? ks /\
-    h0 == h1 /\ 
-    (None? ogl ==> None? ogxl) /\
-    (Some? ogl ==> (Some? ogxl /\ Some?.v ogl == List.Tot.map tag_of_keyShareEntry (Some?.v ogxl))))
 
 private
 let serialize_share (gx:(g:CommonDH.group & CommonDH.ikeyshare g)) =
@@ -316,11 +128,6 @@ let ks_client_init cr is_quic ogl =
     let gs = map_ST_keygen groups in
     let gxl = List.Tot.map serialize_share gs in
     C_wait_ServerHello cr is_quic [] gs, Some gxl
- 
-type ticket13 = t:Ticket.ticket{Ticket.Ticket13? t}
-type bkey13 = psk_identifier * t:Ticket.ticket{Ticket.Ticket13? t}
-type binder_key = i:binderId & bk:binderKey i
-type early_secret = i:esId{~(NoPSK? i)} & es i
 
 private let mk_binder (bk:bkey13)
   : ST (binder_key * early_secret)
@@ -412,15 +219,6 @@ let ks_client13_ch client_state (log:bytes)
   let early_d = StAEInstance r rw (pn, pn) in
   exporter0, early_d
 
-val ks_server12_init_dh: sr:random -> cr:random ->
-  pv:protocolVersion -> cs:cipherSuite -> ems:bool ->
-  g:CommonDH.group ->
-  ST (CommonDH.share g * ks_server)
-  (requires fun h0 -> CipherSuite? cs
-    /\ (let CipherSuite kex _ _ = cs in
-      (kex = Kex_DHE \/ kex = Kex_ECDHE)))
-  (ensures fun h0 (gx,s) h1 -> S12_wait_CKE_DH? s)
-
 let ks_server12_init_dh sr cr pv cs ems g =
   dbg "ks_server12_init_dh";
   let CipherSuite kex sa ae = cs in
@@ -430,25 +228,6 @@ let ks_server12_init_dh sr cr pv cs ems g =
   let csr = cr @| sr in
   let st = S12_wait_CKE_DH csr info (| g, our_share |) in
   CommonDH.ipubshare our_share, st
-
-val ks_server13_init:
-  sr:random ->
-  cr:random ->
-  cs:cipherSuite ->
-  is_quic:bool ->
-  pskid:option bkey13 ->
-  g_gx:option (g:CommonDH.group & CommonDH.share g) ->
-  ST (ks_server *
-      option (g:CommonDH.group & CommonDH.share g) *
-      option (i:binderId & binderKey i))
-  (requires fun h0 -> (Some? g_gx \/ Some? pskid)
-    /\ (Some? g_gx ==> Some? (CommonDH.namedGroup_of_group (dfst (Some?.v g_gx))))
-    /\ CipherSuite13? cs)
-  (ensures fun h0 (ks', gy, bk) h1 ->
-    modifies_none h0 h1
-    /\ (Some? bk <==> Some? pskid)
-    /\ (Some? gy \/ Some? bk)
-    /\ S13_wait_SH? ks')
 
 let ks_server13_init sr cr cs is_quic pskid g_gx =
   dbg ("ks_server_init");
@@ -536,12 +315,6 @@ let ks_server13_0rtt_key (s:ks_server) (log:bytes)
   let early_d = StAEInstance r rw (pn, pn) in
   (| li, expId, early_export |), early_d
 
-val ks_server13_sh: s:ks_server -> log:bytes ->
-  ST (ks_server * recordInstance)
-  (requires fun h0 -> S13_wait_SH? s)
-  (ensures fun h0 (s', _) h1 -> modifies_none h0 h1
-    /\ S13_wait_SF? s')
-
 let ks_server13_sh s log =
   dbg ("ks_server13_sh, hashed log = "^print_bytes log);
   let S13_wait_SH info cr sr _ (| hsId, hs |) = s in
@@ -603,15 +376,6 @@ let ks_server13_sh s log =
 
   let s' = S13_wait_SF info (| cfkId, cfk1 |) (| sfkId, sfk1 |) (| amsId, ams |) in
   s', StAEInstance r w (cpn, spn) 
-
-let ks_server13_get_sfk (S13_wait_SF _ _ sfk _) = sfk
-let ks_server13_get_cfk (S13_wait_CF _ cfk _ _) = cfk
-
-let ks_client12_finished_key (C12_has_MS _ _ _ ms) = TLSPRF.coerce ms
-let ks_server12_finished_key (S12_has_MS _ _ _ ms) = TLSPRF.coerce ms
-
-let ks_client12_ms (C12_has_MS _ _ msId ms) = (msId, ms)
-let ks_server12_ms (S12_has_MS _ _ msId ms) = (msId, ms)
 
 private let ks12_record_key role csr info msId ms
   : St recordInstance =
@@ -684,16 +448,6 @@ let ks_server12_resume (sr:random) (cr:random)
   let info = Info12 pv cs ems in
   S12_has_MS csr info msId ms
 
-val ks_server12_cke_dh: s:ks_server ->
-  gy:(g:CommonDH.group & CommonDH.share g) ->
-  log:bytes ->
-  ST ks_server
-  (requires fun h0 -> S12_wait_CKE_DH? s /\
-    (let S12_wait_CKE_DH _ _ (| g', _ |) = s in
-    g' = dfst gy)) // Responder share must be over the same group as initiator's
-  (ensures fun h0 s' h1 -> modifies_none h0 h1
-    /\ S12_has_MS? s')
-
 let ks_server12_cke_dh s gy hashed_log =
   dbg "ks_server12_cke_dh";
   let S12_wait_CKE_DH csr alpha (| g, gx |) = s in
@@ -730,28 +484,6 @@ private let group_matches (g:CommonDH.group)
 //   1. they use different arguemtns
 //   2. they use different return types
 //   3. they are called at different locations
-
-val ks_client13_sh: Mem.rgn -> ks:ks_client ->
-  sr:random -> cs:cipherSuite ->
-  h:bytes -> // [..ServerHello]
-  gy:option (g:CommonDH.group & CommonDH.share g) ->
-  accept_psk:option UInt16.t ->
-  ST (ks_client * recordInstance)
-  (requires fun h0 ->
-    match ks with 
-    | C_wait_ServerHello _ _ ei gc ->
-      // Ensure that the PSK accepted is one offered
-     (match gy with
-     | Some (| g, _ |) -> List.Tot.existsb (fun gx -> g = dfst gx) gc
-     | None -> True)
-     /\
-     (match ei, accept_psk with
-      | [], None -> True
-      | _::_ , Some n -> UInt16.v n < List.Tot.length ei
-      | _ -> False)
-    | _ -> False )  
-  (ensures fun h0 (s',_) h1 -> modifies_none h0 h1
-    /\ C13_wait_Finished1? s')
 
 let ks_client13_sh region ks sr cs log gy accept_psk =
   dbg ("ks_client13_sh hashed_log = "^print_bytes log);
@@ -946,8 +678,6 @@ let ks_server13_cf (s:ks_server) (log:bytes)
   dbg ("resumption master secret:        "^print_bytes rms);
   S13_postHS info rekey_info (| li, rmsId, rms |)
 
-let ks_server13_rms (S13_postHS _ _ rms) = rms
-
 let ks_client13_cf (s:ks_client) (log:bytes)
   : ST ks_client
   (requires fun h0 -> C13_wait_Finished2? s)
@@ -1067,5 +797,4 @@ let ks_client12_set_session_hash (s:ks_client) (log:bytes)
   C12_has_MS csr info msId ms
 
 // Used by Epochs to read index of recordInstance
-val getId: recordInstance -> GTot id
 let getId (StAEInstance #i _ _ _) = i

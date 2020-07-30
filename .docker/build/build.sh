@@ -101,7 +101,7 @@ function build_hacl_vale () {
     # This is only for libevercrypt.so for now,
     # not for checked files.
     make -C hacl-star vale-fst -j $threads &&
-    make -C hacl-star compile-gcc-compatible compile-mitls compile-portable compile-evercrypt-external-headers -j $threads &&
+    make -C hacl-star compile-gcc-compatible compile-mitls compile-portable-gcc-compatible compile-evercrypt-external-headers -j $threads &&
     make -C hacl-star/providers/quic_provider
 }
 
@@ -231,8 +231,10 @@ function mitls_verify() {
     fetch_hacl &&
     fetch_vale &&
     OTHERFLAGS="--admit_smt_queries true $OTHERFLAGS" build_hacl_vale &&
+    make -C libs/ffi -j $threads &&
     build_pki_if &&
-    make -j $threads test -k
+    make -C src/tls -j $threads all -k &&
+    make -C src/tls -j $threads test -k
 }
 
 function mitls_verify_and_hints() {

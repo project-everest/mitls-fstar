@@ -11,44 +11,12 @@ module M = LowStar.Modifies
 module DT = DefineTable
 module H = Hashing.Spec
 
-// this file is adapted from HMAC.UFCMA but simpler, and yield
-// probabilistic security: the advantage of an adversary guessing the
-// random token is just 1/#tokens. (Do we need to enforce a single
-// verification attempt?)
-
-inline_for_extraction noextract
-let ideal = Flags.ideal_HMAC
-// secret idealization flag for the UF1CMA assumption
-//TODO use a separate flag
-
-type safe (#ip:ipkg) (i:ip.t) = b2t ideal /\ ip.honest i
-
 private let is_safe (#ip:ipkg) (i:regid ip) : ST bool
   (requires fun h0 -> True)
   (ensures fun h0 b h1 -> modifies_none h0 h1 /\ (b <==> safe i))
   =
   let b = ip.get_honesty i in
   ideal && b
-
-#set-options "--initial_fuel 1 --max_fuel 1 --initial_ifuel 1 --max_ifuel 1"
-
-// formally agile in the KDF algorithm, which controls the token length.
-type ha = H.alg
-
-// initial parameters
-noeq type info =
-| Info: 
-  parent: rgn {~ (is_tls_rgn parent)} ->
-  alg: ha -> 
-  good: bool ->
-  info
-
-type info0 (#ip:ipkg) (ha_of_i: ip.t -> ha) (good_of_i: ip.t -> bool) (i:ip.t) =
-  a:info{a.alg == ha_of_i i /\ a.good == good_of_i i}
-
-let keylen (a:H.alg) : keylen = H.hash_len a
-type keyrepr (a:H.alg) = lbytes32 (keylen a)
-type tag (a:H.alg) = lbytes32 (keylen a)
 
 let goodish (#ip:ipkg) (i:ip.Pkg.t) (u:info) =
   squash (safe i ==>  u.good)
@@ -57,7 +25,7 @@ private type log_t (#ip:ipkg) (i:ip.Pkg.t) (u:info) (r:rgn) =
   m_rref r (option (goodish #ip i u)) ssa
 
 // runtime (concrete) type of MAC instances
-noeq abstract
+noeq
 type concrete_key (#ip:ipkg) (ha_of_i: ip.t -> ha) (good_of_i: ip.t -> bool) (i:ip.t) =
   | MAC: u:info0 ha_of_i good_of_i i -> k:keyrepr u.alg -> concrete_key ha_of_i good_of_i i
 
@@ -102,19 +70,6 @@ let footprint #ip #hofi #gofi : DT.local_fp (key #ip hofi gofi)
     | RealKey _ -> M.loc_none
   else M.loc_none
 
-val create:
-  #ip:ipkg ->
-  ha_of_i: (i:ip.t -> ha) ->
-  good_of_i: (ip.t -> bool) ->
-  i: regid ip ->
-  u: info0 ha_of_i good_of_i i ->
-  ST (k:key ha_of_i good_of_i i)
-  (requires fun _ -> model)
-  (ensures fun h0 k h1 ->
-    M.modifies M.loc_none h0 h1 /\
-    usage k == u /\
-    fresh_loc (footprint k) h0 h1)
-
 let create #ip hofi gofi i u =
   assume false;
   assert_norm (pow2 32 < pow2 61);
@@ -133,7 +88,7 @@ let create #ip hofi gofi i u =
 
 let coerceT (#ip: ipkg) (ha_of_i: ip.Pkg.t -> ha) (good_of_i: ip.Pkg.t -> bool)
   (i: regid ip{~(safe i)}) (u: info0 ha_of_i good_of_i i)
-  (kv: lbytes32 (keylen u.alg)) : GTot (key ha_of_i good_of_i i)
+  (kv: lbytes32 (uf1cma_keylen u.alg)) : GTot (key ha_of_i good_of_i i)
   =
   assert_norm (pow2 32 < pow2 61);
   assert_norm (pow2 61 < pow2 125);
@@ -142,20 +97,6 @@ let coerceT (#ip: ipkg) (ha_of_i: ip.Pkg.t -> ha) (good_of_i: ip.Pkg.t -> bool)
   if model then
     let k : ir_key ha_of_i good_of_i i = RealKey ck in k
   else ck
-
-val coerce:
-  #ip: ipkg ->
-  ha_of_i: (ip.Pkg.t -> ha) ->
-  good_of_i: (ip.Pkg.t -> bool) ->
-  i: regid ip{~(safe i)} ->
-  u: info0 ha_of_i good_of_i i ->
-  kv: lbytes32 (keylen u.alg) -> ST (k:key ha_of_i good_of_i i)
-  (requires fun _ -> True)
-  (ensures fun h0 k h1 ->
-    M.modifies M.loc_none h0 h1 /\
-    k == coerceT ha_of_i good_of_i i u kv /\
-    usage k == u /\
-    fresh_loc (footprint k) h0 h1)
 
 let coerce #ip hofi gofi i u kv =
   assert_norm (pow2 32 < pow2 61);
@@ -167,7 +108,7 @@ let coerce #ip hofi gofi i u kv =
   else ck
 
 // not quite doable without reification?
-// assert_norm(forall ip i u. (create #ip i u == coerce #ip i u (CoreCrypto.random (UInt32.v (keylen u)))))
+// assert_norm(forall ip i u. (create #ip i u == coerce #ip i u (CoreCrypto.random (UInt32.v (uf1cma_keylen u)))))
 
 private let get_key #ip #hofi #gofi #i (k:key #ip hofi gofi i)
   : concrete_key hofi gofi i
@@ -179,16 +120,6 @@ private let get_key #ip #hofi #gofi #i (k:key #ip hofi gofi i)
     | RealKey rk -> rk
   else k
 
-val token:
-  #ip:ipkg ->
-  #ha_of_i: (ip.Pkg.t -> ha) ->
-  #good_of_i: (ip.Pkg.t -> bool) ->
-  #i:regid ip ->
-  k:key ha_of_i good_of_i i ->
-  ST (tag (usage k).alg)
-  (requires fun h0 -> safe i ==> (usage k).good)
-  (ensures fun h0 t h1 -> M.modifies (footprint k) h0 h1)
-
 // we may be more precise to prove ideal functional correctness,
 let token #ip #hofi #gofi #i k =
   let MAC _ t = get_key k in
@@ -196,19 +127,6 @@ let token #ip #hofi #gofi #i k =
     (let IdealKey _ _ log = k <: ir_key hofi gofi i in
     log := Some ());
   t
-
-val verify:
-  #ip:ipkg ->
-  #ha_of_i: (ip.Pkg.t -> ha) ->
-  #good_of_i: (ip.Pkg.t -> bool) ->
-  #i:regid ip ->
-  k:key ha_of_i good_of_i i ->
-  t: tag (usage k).alg ->
-  ST bool
-  (requires fun _ -> True)
-  (ensures fun h0 b h1 ->
-    M.modifies M.loc_none h0 h1 /\
-    (b /\ safe i ==> (usage k).good))
 
 let verify #ip #hofi #gofi #i k t =
   let MAC _ t' = get_key k in
@@ -224,33 +142,14 @@ let verify #ip #hofi #gofi #i k t =
   else
     verified
 
-let localpkg (ip: ipkg) (ha_of_i: (i:ip.Pkg.t -> ha)) (good_of_i: ip.Pkg.t -> bool)
-  : Pure (Pkg.local_pkg ip)
-  (requires True) (ensures fun p ->
-    p.Pkg.key == key ha_of_i good_of_i /\
-    p.Pkg.info == info0 ha_of_i good_of_i)
-  =
-  Pkg.LocalPkg
-    (key ha_of_i good_of_i)
-    (info0 ha_of_i good_of_i)
-    (usage #ip #ha_of_i #good_of_i)
-    (fun #i u -> keylen u.alg)
-    (b2t ideal)
-    (footprint #ip #ha_of_i #good_of_i) // local footprint
-    (fun #_ k h -> True) // local invariant
-    (fun #i k h0 l h1 -> ()) // Local invariant framing
-    (create ha_of_i good_of_i)
-    (coerceT ha_of_i good_of_i)
-    (coerce ha_of_i good_of_i)
-
 //TODO (later) support dynamic key compromise
 
 
 (** The rest of the file is a unit test for the packaging of UFCMA *)
 
-val coerce_eq2: a: (nat -> Type0) -> b: (nat -> Type0) -> v:a 0 -> Pure (b 0)
+let coerce_eq2 (a: (nat -> Type0)) (b: (nat -> Type0)) (v:a 0) : Pure (b 0)
   (requires a == b) (ensures fun _ -> True)
-let coerce_eq2 _ _ v = v // this works; many similar variants did not.
+= v // this works; many similar variants did not.
 
 #set-options "--initial_fuel 1 --max_fuel 2 --initial_ifuel 1 --max_ifuel 2"
 open FStar.Tactics
