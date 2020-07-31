@@ -17,6 +17,16 @@ type params = {
   safe_prime : bool;
 }
 
+val ffdhe2048 : params
+
+val ffdhe3072 : params
+
+val ffdhe4096 : params
+
+val ffdhe6144 : params
+
+val ffdhe8192 : params
+
 type group =
   | Named    of ffdhe
   | Explicit of params
