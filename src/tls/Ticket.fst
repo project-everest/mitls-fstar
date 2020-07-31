@@ -57,7 +57,7 @@ private let sealing_enc : reference (option ticket_key) = ralloc region None
 private let keygen () : St ticket_key =
   let id0 = dummy_id EverCrypt.CHACHA20_POLY1305 in
   let salt : AE.salt id0 = Random.sample (AE.iv_length id0) in
-  let key : AE.key id0 = Random.sample (AE.key_length id0) in
+  let key : AE.key id0 = Random.sample (AE.aead_provider_key_length id0) in
   let wr = AE.coerce id0 region key salt in
   let rd = AE.genReader region #id0 wr in
   Key id0 wr rd
@@ -81,8 +81,8 @@ private let get_sealing_key () : St ticket_key =
 
 private let set_internal_key (sealing:bool) (a:aeadAlg) (kv:bytes) : St bool =
   let tid = dummy_id a in
-  if length kv = AE.key_length tid + AE.iv_length tid then
-    let k, s = split_ kv (AE.key_length tid) in
+  if length kv = AE.aead_provider_key_length tid + AE.iv_length tid then
+    let k, s = split_ kv (AE.aead_provider_key_length tid) in
     let wr = AE.coerce tid region k s in
     let rd = AE.genReader region wr in
     let _ =

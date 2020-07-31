@@ -8,7 +8,7 @@ open FStar.Bytes
 
 open Mem
 open TLSConstants
-open TLSInfo
+// open TLSInfo
 open FStar.UInt32
 
 module HS = FStar.HyperStack
@@ -20,97 +20,15 @@ module CI = Crypto.Indexing
 module Plain = Crypto.Plain
 module CB = Crypto.Symmetric.Bytes
 
-let discard (b:bool) : ST unit (requires (fun _ -> True)) (ensures (fun h0 _ h1 -> h0 == h1)) = ()
-let print (s:string) : ST unit (requires fun _ -> True) (ensures (fun h0 _ h1 -> h0 == h1)) =
-  discard (IO.debug_print_string ("AEP| "^s^"\n"))
-unfold let dbg : string -> ST unit (requires (fun _ -> True)) (ensures (fun h0 _ h1 -> h0 == h1)) =
-  if DebugFlags.debug_AEP then print else (fun _ -> ())
+let iv (i:id) = lbytes (iv_length i)
 
-(***********************************************************************)
+let coerce_iv i b = b
 
-type id = i:id{~(PlaintextID? i) /\ AEAD? (aeAlg_of_id i)}
-let alg (i:id): aeadAlg = let AEAD aead _ = aeAlg_of_id i in aead
-
-//18-09-04  unclear what's shadowing alg below
-let alg' (i:id): aeadAlg = let AEAD aead _ = aeAlg_of_id i in aead
-
-let evercrypt_aeadAlg_option_of_aead_cipher : aeadAlg -> option EverCrypt.aead_alg =
-  let open EverCrypt in 
-  function
-  | AES128_GCM        -> Some AES128_GCM
-  | AES256_GCM        -> Some AES256_GCM
-  | CHACHA20_POLY1305 -> Some CHACHA20_POLY1305
-  | _                 -> None
-let aeadAlg_for_evercrypt (a:aeadAlg{Some? (evercrypt_aeadAlg_option_of_aead_cipher a)})
-  : EverCrypt.aead_alg
-  = Some?.v (evercrypt_aeadAlg_option_of_aead_cipher a)
-
-// Real IVs must be created with the internal
-// salting function below.
-let iv_length i = 12 // CC.aeadRealIVSize (alg i)
-abstract type iv (i:id) = lbytes (iv_length i)
-let key_length i = UInt32.v (EverCrypt.aead_keyLen(alg i))
-
-// Salt is the static part of IVs
-let salt_length (i:id) =
-  match pv_of_id i with
-  | TLS_1p3 -> iv_length i
-  | _ ->
-    let open EverCrypt in 
-    match alg' i with
-    | AES128_GCM
-    | AES128_CCM
-    | AES128_CCM8
-    | AES256_GCM
-    | AES256_CCM
-    | AES256_CCM8       ->  4
-    | CHACHA20_POLY1305 -> 12
-
-// Length of the explicit (sent on wire) IV
-let explicit_iv_length (i:id) =
-  match pv_of_id i with
-  | TLS_1p3 -> 0
-  | _ ->
-    let open EverCrypt in 
-    match alg' i with
-    | AES128_GCM  
-    | AES128_CCM  
-    | AES128_CCM8 
-    | AES256_GCM  
-    | AES256_CCM  
-    | AES256_CCM8       -> 8
-    | CHACHA20_POLY1305 -> 0
-
-type key  (i:id) = lbytes (key_length i)
-type salt (i:id) = lbytes (salt_length i)
-
-let state (i:id) (r:rw) =
-    EverCrypt.aead_state * (key i * salt i)
-
-let salt_of_state #i #r (s:state i r) : salt i = snd (snd s)
-let key_of_state #i #r (s:state i r) : key i = fst (snd s)
-
-type writer i = s:state i Writer
-type reader i = s:state i Reader
-
-let region #i #rw (s:state i rw) = tls_region
-let log_region #i #rw (s:state i rw) = tls_region
-
-let noncelen (i:id) =
-  match (pv_of_id i, alg i) with
-  | (TLS_1p3, _) | (_, EverCrypt.CHACHA20_POLY1305) ->
-    iv_length i
-  | _ -> (iv_length i) - (salt_length i)
-
-type nonce i = lbytes (noncelen i)
-
-let coerce_iv (i:id) (b:lbytes (iv_length i)) : Tot (iv i) = b
-
-#reset-options "--using_facts_from '* -LowParse.Spec.Base'"
+#reset-options "--using_facts_from '* -LowParse.Spec.Base' --z3rlimit 32"
  
 let create_nonce (#i:id) (#rw:rw) (st:state i rw) (n:nonce i): Tot (i:iv i) =
   let salt = salt_of_state st in
-  match (pv_of_id i, alg i) with
+  match (TLSInfo.pv_of_id i, alg i) with
   | (TLS_1p3, _) | (_, EverCrypt.CHACHA20_POLY1305) ->
     xor_ #(iv_length i) n salt
   | _ ->
@@ -118,22 +36,19 @@ let create_nonce (#i:id) (#rw:rw) (st:state i rw) (n:nonce i): Tot (i:iv i) =
     salt @| n
 
 (* Necessary for injectivity of the nonce-to-IV construction in TLS 1.3 *)
-#set-options "--z3rlimit 100 --initial_fuel 1 --max_fuel 1 --initial_ifuel 1 --max_ifuel 1 --admit_smt_queries true"
+#push-options "--z3rlimit 100 --initial_fuel 1 --max_fuel 1 --initial_ifuel 1 --max_ifuel 1 --admit_smt_queries true"
 let lemma_nonce_iv (#i:id) (#rw:rw) (st:state i rw) (n1:nonce i) (n2:nonce i)
   : Lemma (create_nonce st n1 = create_nonce st n2 ==> n1 = n2)
   =
   let salt = salt_of_state st in
-  match (pv_of_id i, alg' i) with
+  match (TLSInfo.pv_of_id i, alg' i) with
   | (TLS_1p3, _) | (_, EverCrypt.CHACHA20_POLY1305) ->
     xor_idempotent (UInt32.uint_to_t (iv_length i)) n1 salt;
     xor_idempotent (UInt32.uint_to_t (iv_length i)) n2 salt
   | _ ->
     if (salt @| n1) = (salt @| n2) then
       () //lemma_append_inj salt n1 salt n2 //TODO bytes NS 09/27
-#reset-options
-
-let genPost (#i:id) (parent:rgn) h0 (w:writer i) h1 =
-  modifies_none h0 h1
+#pop-options
 
 #set-options "--max_fuel 0 --max_ifuel 1"
 let gen (i:id) (r:rgn) : ST (state i Writer)
@@ -160,7 +75,7 @@ let gen (i:id) (r:rgn) : ST (state i Writer)
 
 let leak (#i:id) (#rw:rw) (st:state i rw)
   : ST (key i * salt i)
-  (requires (fun h0 -> ~(authId i)))
+  (requires (fun h0 -> ~(TLSInfo.authId i)))
   (ensures (fun h0 _ h1 -> modifies_none h0 h1))
   =
   snd st
@@ -170,19 +85,19 @@ let leak (#i:id) (#rw:rw) (st:state i rw)
 // to the low-level crypto which currently shares the region between
 // the reader and writer (this is not sound for some buffers in that
 // region, for instance, the writer may write the the reader's key buffer)
-#set-options "--z3rlimit 100 --initial_fuel 1 --max_fuel 1 --initial_ifuel 1 --max_ifuel 1 --admit_smt_queries true"
+#push-options "--z3rlimit 100 --initial_fuel 1 --max_fuel 1 --initial_ifuel 1 --max_ifuel 1 --admit_smt_queries true"
 let genReader (parent:rgn) (#i:id) (st:writer i) : ST (reader i)
   (requires (fun h -> True))
   (ensures (fun h0 _ h1 -> modifies_none h0 h1))
   =
   let (s, k) = st in
   (s, k) <: reader i
-#reset-options
+#pop-options
 
-#reset-options "--z3rlimit 100 --initial_fuel 1 --max_fuel 1 --initial_ifuel 1 --max_ifuel 1"
+#push-options "--z3rlimit 100 --initial_fuel 1 --max_fuel 1 --initial_ifuel 1 --max_ifuel 1"
 let coerce (i:id) (r:rgn) (k:key i) (s:salt i)
   : ST (state i Writer)
-  (requires (fun h -> ~(authId i)))
+  (requires (fun h -> ~(TLSInfo.authId i)))
   (ensures (fun h0 _ h1 -> modifies_none h0 h1))
   =
   push_frame ();
@@ -196,21 +111,7 @@ let coerce (i:id) (r:rgn) (k:key i) (s:salt i)
   let st = EverCrypt.aead_create (aeadAlg_for_evercrypt (alg i)) kvb in
   pop_frame ();
   st, (k,s)
-#reset-options
-
-type plainlen = n:nat{n <= max_TLSPlaintext_fragment_length}
-(* irreducible *)
-type plain (i:id) (l:plainlen) = b:lbytes l
-let repr (#i:id) (#l:plainlen) (p:plain i l) : Tot (lbytes l) = p
-
-let adlen i = match pv_of_id i with
-  | TLS_1p3 -> 0 | _ -> 13
-type adata i = lbytes (adlen i)
-
-//18-09-04 consider switching to UInt32
-let taglen i = UInt32.v (EverCrypt.aead_tagLen (alg i))
-let cipherlen i (l:plainlen) : n:nat{n >= taglen i} = l + taglen i
-type cipher i (l:plainlen) = lbytes (cipherlen i l)
+#pop-options
 
 open EverCrypt.Helpers
 module LM = LowStar.Modifies

@@ -137,7 +137,7 @@ noeq type ilog_entry (i:pre_dhi) =
 
 private type i_ilog = MDM.t dh_region pre_dhi ilog_entry (fun _ -> True)
 private type ishare_table = (if Flags.model then i_ilog else unit)
-abstract let ilog: ishare_table =
+let ilog: ishare_table =
   if Flags.model then MDM.alloc () <: i_ilog else ()
 
 type registered_dhi i =
@@ -178,7 +178,7 @@ type corrupt_dhi i =
    else True)
 
 // cwinter: quic2c
-// abstract let share_log: share_table =
+// let share_log: share_table =
 //   (if Flags.ideal_KEF then
 //     MDM.alloc () <: ideal_log
 //   else

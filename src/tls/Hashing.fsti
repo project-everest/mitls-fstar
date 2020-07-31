@@ -4,7 +4,7 @@ module Hashing
 open Declassify
 open Mem
 
-open Hashing.Spec
+include Hashing.Spec
 
 open FStar.HyperStack.ST
 open FStar.Bytes
@@ -14,34 +14,25 @@ module ST = FStar.HyperStack.ST
 
 module B = LowStar.Buffer
 
-#push-options "--max_fuel 0 --max_ifuel 0 --z3rlimit 40"
-let compute a text =
-  let h00 = ST.get() in
-  push_frame();
-  let tlen = Hacl.Hash.Definitions.hash_len a in
-  let output = LowStar.Buffer.alloca 0uy tlen in
-  let len = Bytes.len text in
-  if len = 0ul then
-    begin
-    let input = LowStar.Buffer.null in
-    //18-09-01 this could follow from LowStar.Buffer or Bytes properties
-    let h0 = ST.get() in
-    Seq.lemma_eq_intro (reveal text) (LowStar.Buffer.as_seq h0 input);
-    EverCrypt.Hash.hash a output input len
-    end
-  else
-    begin
-    let h0 = ST.get() in
-    push_frame();
-    let input = LowStar.Buffer.alloca 0uy len in
-    store_bytes text input;
-    EverCrypt.Hash.hash a output input len;
-    pop_frame()
-    end;
-  let t = Bytes.of_buffer tlen output in
-  pop_frame();
-  t
-#pop-options
+// defining those on FStar.Bytes, not on EverCrypt's seq Uin8.t
+type hashable (a:alg) = b:bytes {length b <= max_input_length a}
+type tag (a:alg) = lbytes32 (Hacl.Hash.Definitions.hash_len a)
+
+// 18-08-31 pure hash specification;
+// renamed from [hash] already included from EverCrypt.Hash
+let h_ (a:alg) (b:hashable a): GTot (tag a) =
+  let v = Spec.Agile.Hash.hash a (Bytes.reveal b) in
+  Bytes.hide v
+
+/// bytes wrapper for [EverCrypt.Hash.hash]
+val compute: a:alg -> text:hashable a -> Stack (tag a)
+  (requires fun h0 -> True)
+  (ensures fun h0 t h1 ->
+    let v = reveal text in
+    B.modifies B.loc_none h0 h1 /\
+    Seq.length v <= max_input_length a /\
+    t == h_ a text)
+
 
 (* IMPLEMENTATION PLACEHOLDER,
     simply buffering the bytes underneath *)
@@ -51,18 +42,19 @@ let compute a text =
 // functions from pure to modifiying an abstract footprint...
 
 //17-01-26 two steps required for abstraction for datatypes
-private type accv' (a:alg) =  | Inputs: b: hashable a -> accv' a
-type accv (a:alg) = accv' a
+val accv (a:alg) : Tot Type0
 
-let content #a v =
-  match v with Inputs b -> b
+val content: #a:alg -> accv a -> Tot (hashable a)
 
-let start a = Inputs empty_bytes
-let extend #a (Inputs b0) b1 =
-  assume (FStar.UInt.fits (length b0 + length b1) 32);
-  assume (length b0 + length b1 < Hashing.Spec.max_input_length a);
-  Inputs (b0 @| b1)
-let finalize #a (Inputs b) = compute a b
+val start: a:alg -> Tot (v:accv a {content v == empty_bytes})
+val extend: #a:alg -> v:accv a -> b:bytes -> Tot (v':accv a {length (content v) + length b = length (content v') /\  content v' == content v @| b})
+
+val finalize: #a:alg -> v:accv a -> ST (t:tag a {t == h_ a (content v)})
+  (requires (fun h0 -> True))
+  (ensures (fun h0 t h1 -> B.(modifies loc_none h0 h1)))
+
+(* older construction, still used in sig *)
+let compute_MD5SHA1 data = compute MD5 data @| compute SHA1 data
 
 (*
 // 18-08-29 was in Hashing.OpenSSL
