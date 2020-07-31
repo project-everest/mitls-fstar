@@ -60,10 +60,10 @@ let test_clientHello () : St bool =
     let open FStar.UInt32 in
     let lb = from_bytes chb in
     let slice = LPL.make_slice lb (B.len chb) in
-    let _ = Handshake13.handshake13_validator slice 0ul in
-    let _ = Handshake12.handshake12_validator slice 0ul in
-    let _ = Handshake.handshake_validator slice 0ul in
-    if ClientHello.clientHello_validator slice 0ul >^ LPL.validator_max_length then
+    let _ = Handshake13.handshake13_validator slice 0uL in
+    let _ = Handshake12.handshake12_validator slice 0uL in
+    let _ = Handshake.handshake_validator slice 0uL in
+    if LowParse.Low.Base.is_error (ClientHello.clientHello_validator slice 0uL) then
       (print !$"Validator failed on ClientHello!\n"; false)
     else
       let pos_random = ClientHello.accessor_clientHello_random slice 0ul in

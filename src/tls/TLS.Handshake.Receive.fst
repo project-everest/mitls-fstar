@@ -56,9 +56,7 @@ type bytes = FStar.Bytes.bytes
 ///
 /// The interface provided by this module is in state-passing style
 
-let slice_t = b:LP.slice (B.trivial_preorder byte) (B.trivial_preorder byte){
-  b.LP.len <= LP.validator_max_length
-}
+let slice_t = LP.slice (B.trivial_preorder byte) (B.trivial_preorder byte)
 
 noeq type state = {
   pf_st    : PF.state; // updated by parseFlight
