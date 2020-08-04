@@ -9,6 +9,8 @@
 
 #define DEBUG 0
 
+#define FStar_Pervasives_Native_option__K___uint64_t_Parsers_SignatureScheme_signatureScheme Negotiation_certNego
+
 static size_t list_sa_len(Prims_list__Parsers_SignatureScheme_signatureScheme *l)
 {
   if (l->tag == Prims_Cons)

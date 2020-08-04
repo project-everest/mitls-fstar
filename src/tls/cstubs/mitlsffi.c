@@ -28,7 +28,8 @@
 
 // Code was written against old auto-generated names
 #define FStar_Pervasives_Native_option__K___uint64_t_Parsers_SignatureScheme_signatureScheme Negotiation_certNego
-#define K___Prims_int_Prims_int Spec_Curve25519_proj_point
+#define K___Prims_int_Prims_int FFI_pair_of_ints
+
 // This file is hand-written C code, to wrap the Kremlin-extracted
 // code to match the mitlsffi.h interface.
 //
