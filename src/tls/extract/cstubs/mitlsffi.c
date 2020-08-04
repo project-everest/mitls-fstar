@@ -29,7 +29,7 @@
 
 // Code was written against old auto-generated names
 #define FStar_Pervasives_Native_option__K___uint64_t_Parsers_SignatureScheme_signatureScheme Negotiation_certNego
-#define K___Prims_int_Prims_int Spec_Curve25519_proj_point
+#define K___Prims_int_Prims_int FFI_pair_of_ints
 
 // Convert internal to external algorithm representations
 #define CONVERT_HASH(h) (h == Spec_Hash_Definitions_MD5 ? TLS_hash_MD5 : (h == Spec_Hash_Definitions_SHA1 ? TLS_hash_SHA1 : (h == Spec_Hash_Definitions_SHA2_224 ? TLS_hash_SHA224 : (h == Spec_Hash_Definitions_SHA2_256 ? TLS_hash_SHA256 : (h == Spec_Hash_Definitions_SHA2_384 ? TLS_hash_SHA384 : TLS_hash_SHA512)))))
