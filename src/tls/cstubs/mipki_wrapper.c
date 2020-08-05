@@ -9,7 +9,10 @@
 
 #define DEBUG 0
 
-#define FStar_Pervasives_Native_option__K___uint64_t_Parsers_SignatureScheme_signatureScheme Negotiation_certNego
+// Code was written against old auto-generated names
+#define FStar_Pervasives_Native_option__K___uint64_t_Parsers_SignatureScheme_signatureScheme FStar_Pervasives_Native_option__Negotiation_cert_choice
+#define K___uint64_t_Parsers_SignatureScheme_signatureScheme Negotiation_cert_choice
+#define K___Prims_int_Prims_int FFI_pair_of_ints
 
 static size_t list_sa_len(Prims_list__Parsers_SignatureScheme_signatureScheme *l)
 {
