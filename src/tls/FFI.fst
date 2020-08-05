@@ -31,6 +31,8 @@ open FStar.HyperStack.All
 type cbytes = string
 #set-options "--admit_smt_queries true"
 
+let pair_of_ints = int & int
+
 (* A flag for runtime debugging of ffi data.
    The F* normalizer will erase debug prints at extraction
    when this flag is set to false. *)
