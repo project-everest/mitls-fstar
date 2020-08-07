@@ -1,5 +1,7 @@
 module List.Helpers
 
+open FStar.List.Tot
+
 (* Some basic utility functions for closure converting arguments
    to the higher-order combinators in the list library ...
    for use with KreMLin extraction *)
@@ -8,11 +10,11 @@ let rec filter_aux (#a:Type)
                    (env:b)
                    (f:(b -> a -> Tot bool))
                    (l: list a)
-    : Tot (m:list a { forall u . FStar.List.Tot.mem_filter_spec (f env) m u } ) =
+    : Tot (m:list a{forall x. memP x m ==> f env x}) =
       match l with
       | [] -> []
       | hd::tl -> if f env hd then hd::filter_aux env f tl else filter_aux env f tl
-                                                                                             
+
 let rec find_aux (#a:Type)
                  (#b:Type)
                  (env:b)
