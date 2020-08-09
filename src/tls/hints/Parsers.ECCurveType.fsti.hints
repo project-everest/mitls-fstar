@@ -1,5 +1,5 @@
 [
-  "„\\eº¥pu—\u0000àþŠH²!j",
+  "8½\u001b‘…±ÀËö\u0005\u000fEn\u0018ê–",
   [
     [
       "Parsers.ECCurveType.string_of_eCCurveType",
@@ -14,7 +14,7 @@
         "fuel_guarded_inversion_Parsers.ECCurveType.eCCurveType"
       ],
       0,
-      "e85a08e5bb1e8842f15f46fbc6821520"
+      "2b8c152dce7c4ed2df57b6b4dc118616"
     ],
     [
       "Parsers.ECCurveType.eCCurveType_jumper",
@@ -30,7 +30,21 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_low"
       ],
       0,
-      "d2fe941893b9ac35d4adddf20f4bfebc"
+      "b113e2e848d7d14a6a6b7cfa4b1051c7"
+    ],
+    [
+      "Parsers.ECCurveType.lwp_eCCurveType",
+      1,
+      2,
+      1,
+      [
+        "@query", "equation_LowParse.Spec.Base.strong_parser_kind",
+        "equation_Parsers.ECCurveType.eCCurveType_parser_kind",
+        "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind",
+        "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind"
+      ],
+      0,
+      "232ebbcb190c606e8e77a74c1bccfed1"
     ]
   ]
 ]

@@ -1,5 +1,5 @@
 [
-  "¿Üã…Œ°²Öéc¿2'å\\Ç",
+  "ZŸ-Ì€\b®Ù\u0018‚\r\u00122 >B",
   [
     [
       "Parsers.AlertDescription.string_of_alertDescription",
@@ -38,7 +38,7 @@
         "fuel_guarded_inversion_Parsers.AlertDescription.alertDescription"
       ],
       0,
-      "e926c5223a73cbc01c9232bd425da2ee"
+      "708f65d8aefef4413c88d70367f0575a"
     ],
     [
       "Parsers.AlertDescription.alertDescription_jumper",
@@ -54,7 +54,21 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_low"
       ],
       0,
-      "ebef5ca543921c40f784ab19308c2b4a"
+      "f2167e229c86629188a5dff03363d9d1"
+    ],
+    [
+      "Parsers.AlertDescription.lwp_alertDescription",
+      1,
+      2,
+      1,
+      [
+        "@query", "equation_LowParse.Spec.Base.strong_parser_kind",
+        "equation_Parsers.AlertDescription.alertDescription_parser_kind",
+        "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind",
+        "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind"
+      ],
+      0,
+      "6812868f52482fa8eff2fc9a7e2b3795"
     ]
   ]
 ]

@@ -1,5 +1,5 @@
 [
-  "M2HÚïŽûYÑ\u0001ˆPíY7ú",
+  "°ªõ\u001bØLW\u0007˜ž>·´4+\u0000",
   [
     [
       "Parsers.TicketContents13_rms.ticketContents13_rms_parser",
@@ -13,7 +13,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata"
       ],
       0,
-      "8842a7ecbcfe7261c7aaea8cfaa28198"
+      "6c68d6f6d97bd391a1a31d0180c9dd60"
     ],
     [
       "Parsers.TicketContents13_rms.ticketContents13_rms_serializer",
@@ -27,7 +27,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata"
       ],
       0,
-      "623140b56cd843514f43baa90be60932"
+      "62e1e40ab8f9c8114c47f2406ec16828"
     ],
     [
       "Parsers.TicketContents13_rms.ticketContents13_rms_bytesize_eq",
@@ -40,7 +40,7 @@
         "equation_Parsers.TicketContents13_rms.ticketContents13_rms_bytesize"
       ],
       0,
-      "025bbd83edce531a63851d2e9b14f73a"
+      "9a340db179e4b286687f3c45c8072278"
     ],
     [
       "Parsers.TicketContents13_rms.ticketContents13_rms_parser32",
@@ -54,7 +54,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata"
       ],
       0,
-      "c1e487bd606fb3d8da6ce410c0606f8a"
+      "da21717686841d16bd29b811547f3925"
     ],
     [
       "Parsers.TicketContents13_rms.ticketContents13_rms_serializer32",
@@ -68,7 +68,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata"
       ],
       0,
-      "0045ed228e178fea596357d6baed43d9"
+      "ef980e9049cdc3169766010443d8fd09"
     ],
     [
       "Parsers.TicketContents13_rms.ticketContents13_rms_size32",
@@ -82,7 +82,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata"
       ],
       0,
-      "542e0afcc1f2a9abb7cf7ecc04d9aaa0"
+      "b4d68054b03270d7ec6000d95c3f2ed0"
     ],
     [
       "Parsers.TicketContents13_rms.ticketContents13_rms_validator",
@@ -96,7 +96,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata"
       ],
       0,
-      "09f97c6a44166cd63b41012947719c88"
+      "63a4b27819b8c5c222f682ab881d76a2"
     ],
     [
       "Parsers.TicketContents13_rms.ticketContents13_rms_jumper",
@@ -110,7 +110,21 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata"
       ],
       0,
-      "238e49e4d921b84a59396491f4d21d64"
+      "2796d0f829813da6062e8e7d4d7d1c6a"
+    ],
+    [
+      "Parsers.TicketContents13_rms.lwp_ticketContents13_rms",
+      1,
+      2,
+      1,
+      [
+        "@query", "equation_LowParse.Spec.Base.strong_parser_kind",
+        "equation_Parsers.TicketContents13_rms.ticketContents13_rms_parser_kind",
+        "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind",
+        "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind"
+      ],
+      0,
+      "05e295c09e05ae426560d3562c2bad87"
     ],
     [
       "Parsers.TicketContents13_rms.ticketContents13_rms_bytesize_eqn",
@@ -136,7 +150,7 @@
         "typing_FStar.Bytes.len", "typing_FStar.UInt32.v"
       ],
       0,
-      "c81c7529b2030be9d0bcb6d104341552"
+      "0fe02b19db60f8ff1e0cc046be76a5b5"
     ],
     [
       "Parsers.TicketContents13_rms.ticketContents13_rms_length",
@@ -179,7 +193,7 @@
         "typing_Parsers.TicketContents13_rms.ticketContents13_rms_parser_kind"
       ],
       0,
-      "5637d0d5024167f6c5abcaf256035823"
+      "78f93510ef9c1015ed8e45eed4a71283"
     ],
     [
       "Parsers.TicketContents13_rms.ticketContents13_rms_length",
@@ -254,7 +268,7 @@
         "typing_LowParse.Spec.VLData.parse_bounded_vldata_strong_kind"
       ],
       0,
-      "1d4c2cfeb05f7f88d68ef84c5ebac8e2"
+      "5dd43023de6d20b0e153b1438804ee3b"
     ],
     [
       "Parsers.TicketContents13_rms.ticketContents13_rms_finalize",
@@ -302,7 +316,7 @@
         "typing_LowStar.Monotonic.Buffer.len"
       ],
       0,
-      "b54f3682a448d221365cd12cf55eece4"
+      "e5187aa4a6468a69705137075e4240c9"
     ],
     [
       "Parsers.TicketContents13_rms.ticketContents13_rms_finalize",
@@ -361,7 +375,7 @@
         "typing_LowParse.Slice.__proj__Mkslice__item__len"
       ],
       0,
-      "462088a61c96b43928a04043b4475f48"
+      "9e5db36330a895ff81370bef90b1a4b0"
     ]
   ]
 ]

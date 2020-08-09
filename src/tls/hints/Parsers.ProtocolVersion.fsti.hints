@@ -1,5 +1,5 @@
 [
-  "kßTA\u0015L\u0005\u007f+ï>†äG\u0014#",
+  "\u001deð°gÆ8}Woj¬¿H\u001b\u0006",
   [
     [
       "Parsers.ProtocolVersion.protocolVersion",
@@ -12,7 +12,7 @@
         "typing_FStar.UInt16.t"
       ],
       0,
-      "89451e5d5bcf50ffea70ede689169530"
+      "36b40f604e19356f76b74eaa68d779c5"
     ],
     [
       "Parsers.ProtocolVersion.__proj__Unknown_protocolVersion__item___0",
@@ -26,7 +26,7 @@
         "refinement_interpretation_Tm_refine_de0484a62d509e9de813bfe30726d436"
       ],
       0,
-      "2f0fb46e389a1b79fe6631cceeb9c36c"
+      "f6720a09c14f12da4531b67df22ad4da"
     ],
     [
       "Parsers.ProtocolVersion.string_of_protocolVersion",
@@ -44,7 +44,7 @@
         "fuel_guarded_inversion_Parsers.ProtocolVersion.protocolVersion"
       ],
       0,
-      "423200b197d995eecaf9ed1b0d81af77"
+      "ea928eee11346250fab850c5d40da422"
     ],
     [
       "Parsers.ProtocolVersion.protocolVersion_validator",
@@ -62,7 +62,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata"
       ],
       0,
-      "97e554e6cde858c2c708f4ed4029b501"
+      "941c0985d71505dca730a5733466c769"
     ],
     [
       "Parsers.ProtocolVersion.protocolVersion_jumper",
@@ -78,7 +78,21 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_low"
       ],
       0,
-      "d5caaf1f416e81fa7a9daa2e23e58ec6"
+      "77f7333c2d2f9ee4415a10e2c12dba46"
+    ],
+    [
+      "Parsers.ProtocolVersion.lwp_protocolVersion",
+      1,
+      2,
+      1,
+      [
+        "@query", "equation_LowParse.Spec.Base.strong_parser_kind",
+        "equation_Parsers.ProtocolVersion.protocolVersion_parser_kind",
+        "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind",
+        "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind"
+      ],
+      0,
+      "990893de02eed0e1adfb9d1bd18b27ea"
     ]
   ]
 ]

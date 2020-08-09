@@ -1,5 +1,5 @@
 [
-  "’:F\u007f∑*Äß\u0011±Î≈”% 5",
+  "≤\r»Ï_ÈYu\u001c‰◊¢\u0017r©E",
   [
     [
       "Parsers.NamedGroup.namedGroup",
@@ -12,7 +12,7 @@
         "typing_FStar.UInt16.t"
       ],
       0,
-      "f2616dd4d37c6369384f6c329febeb97"
+      "6265694ba58d9492ae4572c96ac576e2"
     ],
     [
       "Parsers.NamedGroup.__proj__Unknown_namedGroup__item___0",
@@ -26,7 +26,7 @@
         "refinement_interpretation_Tm_refine_f4ef8479470d7ef641d6261d6a5e84e5"
       ],
       0,
-      "698f6c4e3ae7067ab7c15eb0c83c843b"
+      "66fd4d5a17f90345bd50fbde16192311"
     ],
     [
       "Parsers.NamedGroup.string_of_namedGroup",
@@ -61,7 +61,7 @@
         "fuel_guarded_inversion_Parsers.NamedGroup.namedGroup"
       ],
       0,
-      "645e46a4f16346cab35e76e16ee9e0bd"
+      "85470dba3cf3e4963b409c7ec3a3dae1"
     ],
     [
       "Parsers.NamedGroup.namedGroup_validator",
@@ -79,7 +79,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata"
       ],
       0,
-      "44bb68fee667e13817317f7437ef77cd"
+      "52e0f231972794a716bd84edf2ec7b33"
     ],
     [
       "Parsers.NamedGroup.namedGroup_jumper",
@@ -95,7 +95,21 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_low"
       ],
       0,
-      "6cb094bddb077466fcef029899114596"
+      "108d06c0b24f5fcc0c1f97d1118aede5"
+    ],
+    [
+      "Parsers.NamedGroup.lwp_namedGroup",
+      1,
+      2,
+      1,
+      [
+        "@query", "equation_LowParse.Spec.Base.strong_parser_kind",
+        "equation_Parsers.NamedGroup.namedGroup_parser_kind",
+        "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind",
+        "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind"
+      ],
+      0,
+      "8cf22724406e93cf5ff41568e5856770"
     ]
   ]
 ]

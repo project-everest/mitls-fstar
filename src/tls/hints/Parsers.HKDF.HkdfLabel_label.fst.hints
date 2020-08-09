@@ -1,5 +1,5 @@
 [
-  "ä~å¿ÊG%R¡dók\u001fÏ\u0006Ê",
+  "\"÷º×:\nÚÃ«†”š\u001f@\u0012\u0007",
   [
     [
       "Parsers.HKDF.HkdfLabel_label.hkdfLabel_label_parser",
@@ -13,7 +13,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata"
       ],
       0,
-      "1d0ae5a30c4c5362a570fa3722c5ca2e"
+      "dac02fed74841bf15a3617f43cf89f85"
     ],
     [
       "Parsers.HKDF.HkdfLabel_label.hkdfLabel_label_serializer",
@@ -27,7 +27,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata"
       ],
       0,
-      "4cd1d58d020005921d7b1fff9030123c"
+      "d98c5daf50b4b4bf47fefb5b16408ef1"
     ],
     [
       "Parsers.HKDF.HkdfLabel_label.hkdfLabel_label_bytesize_eq",
@@ -40,7 +40,7 @@
         "equation_Parsers.HKDF.HkdfLabel_label.hkdfLabel_label_bytesize"
       ],
       0,
-      "357d23a9c64b640bc30afdaad0d2060d"
+      "97b47e9776aa9e64f5f225e620b2cd2d"
     ],
     [
       "Parsers.HKDF.HkdfLabel_label.hkdfLabel_label_parser32",
@@ -54,7 +54,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata"
       ],
       0,
-      "3ee0a79f1ba8e5382a3c6dfecaa69698"
+      "f5803c85b67cdcff0590962a76b988b8"
     ],
     [
       "Parsers.HKDF.HkdfLabel_label.hkdfLabel_label_serializer32",
@@ -68,7 +68,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata"
       ],
       0,
-      "2e9b977ae15357a160fb7794ebf06efd"
+      "d629e470e5bce3210d914de265c19fd1"
     ],
     [
       "Parsers.HKDF.HkdfLabel_label.hkdfLabel_label_size32",
@@ -82,7 +82,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata"
       ],
       0,
-      "e0b25412eb695b04063b0ea94ec0c988"
+      "59d0f856818130d92d372e74ee996f0d"
     ],
     [
       "Parsers.HKDF.HkdfLabel_label.hkdfLabel_label_validator",
@@ -96,7 +96,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata"
       ],
       0,
-      "d8b8e58607a07f0e01628eedcad0d0c0"
+      "f5a107b9fdb1b6be6522d38c8bcdab71"
     ],
     [
       "Parsers.HKDF.HkdfLabel_label.hkdfLabel_label_jumper",
@@ -110,7 +110,21 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata"
       ],
       0,
-      "4c74c861242243b80cbec37b66f5877b"
+      "f4d4f6d563ac3ce880afb341acb21a2e"
+    ],
+    [
+      "Parsers.HKDF.HkdfLabel_label.lwp_hkdfLabel_label",
+      1,
+      2,
+      1,
+      [
+        "@query", "equation_LowParse.Spec.Base.strong_parser_kind",
+        "equation_Parsers.HKDF.HkdfLabel_label.hkdfLabel_label_parser_kind",
+        "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind",
+        "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind"
+      ],
+      0,
+      "538c7e3125cb80a40a1e9332bd467367"
     ],
     [
       "Parsers.HKDF.HkdfLabel_label.hkdfLabel_label_bytesize_eqn",
@@ -136,7 +150,7 @@
         "typing_FStar.Bytes.len", "typing_FStar.UInt32.v"
       ],
       0,
-      "fa161660d4c92b42ce4d20362bed344a"
+      "f746a4168f2b7d3d7d022f63fae614a0"
     ],
     [
       "Parsers.HKDF.HkdfLabel_label.hkdfLabel_label_length",
@@ -179,7 +193,7 @@
         "typing_Parsers.HKDF.HkdfLabel_label.hkdfLabel_label_parser_kind"
       ],
       0,
-      "6aa69f5a889fa84e8ff68a7785f19324"
+      "8960e7e920ffd5a3bcd703d3dbfd8213"
     ],
     [
       "Parsers.HKDF.HkdfLabel_label.hkdfLabel_label_length",
@@ -251,7 +265,7 @@
         "typing_LowParse.Spec.VLData.parse_bounded_vldata_strong_kind"
       ],
       0,
-      "113fab36924338dbc00a971c7f7f0ec3"
+      "6b7051d81f95cf7c632e30c86a2d7dec"
     ],
     [
       "Parsers.HKDF.HkdfLabel_label.hkdfLabel_label_finalize",
@@ -299,7 +313,7 @@
         "typing_LowStar.Monotonic.Buffer.len"
       ],
       0,
-      "8a85cf08244f6d7f3595f69d2f636d4d"
+      "aecf546870168aa6c63cbfe16b88daa3"
     ],
     [
       "Parsers.HKDF.HkdfLabel_label.hkdfLabel_label_finalize",
@@ -358,7 +372,7 @@
         "typing_LowParse.Slice.__proj__Mkslice__item__len"
       ],
       0,
-      "8de0a07c76a2361091fffd60663ef1c2"
+      "ce7794ba6dbfa2f1e685a174d9a9be82"
     ]
   ]
 ]

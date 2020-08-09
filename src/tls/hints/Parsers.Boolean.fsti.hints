@@ -1,5 +1,5 @@
 [
-  "Õ\u0013‹1\nê)n∫ñ€%®)\u0014†",
+  "uñov\nèï€.ã≥!\u0011i¨ê",
   [
     [
       "Parsers.Boolean.string_of_boolean",
@@ -13,7 +13,7 @@
         "fuel_guarded_inversion_Parsers.Boolean.boolean"
       ],
       0,
-      "6d88c0b0aef6f041c4a5dc52fb15baf7"
+      "0bca9fb29a52b36985d8e17656c20324"
     ],
     [
       "Parsers.Boolean.boolean_jumper",
@@ -29,7 +29,21 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_low"
       ],
       0,
-      "abb4104fb9d509119a71e0301b045f8f"
+      "ec00c1e1ded9019972db9347461d9dce"
+    ],
+    [
+      "Parsers.Boolean.lwp_boolean",
+      1,
+      2,
+      1,
+      [
+        "@query", "equation_LowParse.Spec.Base.strong_parser_kind",
+        "equation_Parsers.Boolean.boolean_parser_kind",
+        "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind",
+        "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind"
+      ],
+      0,
+      "e966a444009a1b85d404a1914cbbe732"
     ]
   ]
 ]

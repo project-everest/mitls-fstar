@@ -1,5 +1,5 @@
 [
-  "öˇ,†\u001f≠h2\u0011Ü\u001d0Ê0Fí",
+  "˝⁄lWzc!!n§6à\bÃÅ»",
   [
     [
       "Parsers.TicketContents13_nonce.ticketContents13_nonce_parser",
@@ -13,7 +13,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata"
       ],
       0,
-      "862d052e5ee738f0b946b9a1e2e880dc"
+      "a13128b6ae15273a14f356306b62a5cb"
     ],
     [
       "Parsers.TicketContents13_nonce.ticketContents13_nonce_serializer",
@@ -27,7 +27,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata"
       ],
       0,
-      "6624064432277368ae640549f89434ba"
+      "3b7dcdc34bd2d4f9d9a792fbcdbc4229"
     ],
     [
       "Parsers.TicketContents13_nonce.ticketContents13_nonce_bytesize_eq",
@@ -40,7 +40,7 @@
         "equation_Parsers.TicketContents13_nonce.ticketContents13_nonce_bytesize"
       ],
       0,
-      "9546f010873276ec41b8d266811889b2"
+      "da1ee00e5a8ed8687e1c12e21bb3f330"
     ],
     [
       "Parsers.TicketContents13_nonce.ticketContents13_nonce_parser32",
@@ -54,7 +54,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata"
       ],
       0,
-      "1be249ba68a0aa2026f2e7e643ea2d7d"
+      "6c72e9751b214d40f2d8c2b9e994cd35"
     ],
     [
       "Parsers.TicketContents13_nonce.ticketContents13_nonce_serializer32",
@@ -68,7 +68,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata"
       ],
       0,
-      "06ec6a99b5ec7d88a26a7523a5f46f59"
+      "df027d2200b6e28068654f4913f96485"
     ],
     [
       "Parsers.TicketContents13_nonce.ticketContents13_nonce_size32",
@@ -82,7 +82,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata"
       ],
       0,
-      "777709cab5797f8dc43255fca33d8457"
+      "bd1c700f71616cff716bae7f442b64ed"
     ],
     [
       "Parsers.TicketContents13_nonce.ticketContents13_nonce_validator",
@@ -96,7 +96,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata"
       ],
       0,
-      "88fe61f8e55e962d7607b1a98b20522d"
+      "ed0985931422b57406025fc60589010b"
     ],
     [
       "Parsers.TicketContents13_nonce.ticketContents13_nonce_jumper",
@@ -110,7 +110,21 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata"
       ],
       0,
-      "0aafa478641603c95f40226dd0c4a4b6"
+      "ec9e63daa56598d80363c651a5482778"
+    ],
+    [
+      "Parsers.TicketContents13_nonce.lwp_ticketContents13_nonce",
+      1,
+      2,
+      1,
+      [
+        "@query", "equation_LowParse.Spec.Base.strong_parser_kind",
+        "equation_Parsers.TicketContents13_nonce.ticketContents13_nonce_parser_kind",
+        "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind",
+        "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind"
+      ],
+      0,
+      "bc2c37fb088e4dca08b15f6dd4609ed5"
     ],
     [
       "Parsers.TicketContents13_nonce.ticketContents13_nonce_bytesize_eqn",
@@ -137,7 +151,7 @@
         "typing_FStar.Bytes.len", "typing_FStar.UInt32.v"
       ],
       0,
-      "9278d5d8f35f289c84f0f8d4e98ab28e"
+      "5484cbfa64843073bbb41146644b8ec6"
     ],
     [
       "Parsers.TicketContents13_nonce.ticketContents13_nonce_length",
@@ -180,7 +194,7 @@
         "typing_Parsers.TicketContents13_nonce.ticketContents13_nonce_parser_kind"
       ],
       0,
-      "24f1c2174e9390481ad2d5898b952473"
+      "4b9a686284fb7e17eace6dda3f231c68"
     ],
     [
       "Parsers.TicketContents13_nonce.ticketContents13_nonce_length",
@@ -255,7 +269,7 @@
         "typing_Parsers.TicketContents13_nonce.ticketContents13_nonce_parser_kind"
       ],
       0,
-      "1608dbf382aea4bb5e068f4e394aaee7"
+      "9e6e3ce9d50f074c1322fa58149251ef"
     ],
     [
       "Parsers.TicketContents13_nonce.ticketContents13_nonce_finalize",
@@ -304,7 +318,7 @@
         "typing_LowStar.Monotonic.Buffer.len"
       ],
       0,
-      "4791b84b7c9a28316d092a84ef694ebc"
+      "83e13b2b4a96d727d5cdd2b300adca2f"
     ],
     [
       "Parsers.TicketContents13_nonce.ticketContents13_nonce_finalize",
@@ -366,7 +380,7 @@
         "typing_LowParse.Slice.__proj__Mkslice__item__len"
       ],
       0,
-      "49c27c2f482b12c477a7b4738166a03f"
+      "2a4b389a33a89e1969fafb079fe67a7f"
     ]
   ]
 ]

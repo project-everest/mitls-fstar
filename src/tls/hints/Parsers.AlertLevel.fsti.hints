@@ -1,5 +1,5 @@
 [
-  "¿?4Ø°fëßùÈ»ï\tŒƒ0",
+  "\u0000ªj#`∑\u001al≥∏\u001d}í¢Ç\u001a",
   [
     [
       "Parsers.AlertLevel.string_of_alertLevel",
@@ -13,7 +13,7 @@
         "fuel_guarded_inversion_Parsers.AlertLevel.alertLevel"
       ],
       0,
-      "b884d93b4e6d4d5249c9bc5ee485d923"
+      "c8b523941c9b47527787daadcf7cb14e"
     ],
     [
       "Parsers.AlertLevel.alertLevel_jumper",
@@ -29,7 +29,21 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_low"
       ],
       0,
-      "f3c2a79740c1ec2c3ffe1dbc3f4d7db0"
+      "894693db4b400fb64301ed016e44f06f"
+    ],
+    [
+      "Parsers.AlertLevel.lwp_alertLevel",
+      1,
+      2,
+      1,
+      [
+        "@query", "equation_LowParse.Spec.Base.strong_parser_kind",
+        "equation_Parsers.AlertLevel.alertLevel_parser_kind",
+        "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind",
+        "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind"
+      ],
+      0,
+      "66d973b8a307d0de8dedc31eabfddb88"
     ]
   ]
 ]

@@ -1,5 +1,5 @@
 [
-  "\u0017\u001bÃ\u0000tœß£Ä≈l\u0019\u001eô∏V",
+  " ⁄>çØ~*9™\n◊u“kUØ",
   [
     [
       "Parsers.SignatureScheme.signatureScheme",
@@ -12,7 +12,7 @@
         "typing_FStar.UInt16.t"
       ],
       0,
-      "55725aaa11c87d34cac0f5c40800171d"
+      "5cd6d4e87f16c9d964b72faa06f35601"
     ],
     [
       "Parsers.SignatureScheme.__proj__Unknown_signatureScheme__item___0",
@@ -26,7 +26,7 @@
         "refinement_interpretation_Tm_refine_6afb231d92048d3d933f911d448a58e1"
       ],
       0,
-      "5a2436d2093dec7969dcc44054a3629b"
+      "b46f9954b62e3892aed35f65cedb084a"
     ],
     [
       "Parsers.SignatureScheme.string_of_signatureScheme",
@@ -57,7 +57,7 @@
         "fuel_guarded_inversion_Parsers.SignatureScheme.signatureScheme"
       ],
       0,
-      "887f6778362dda3420ab6fdb3dc4312d"
+      "21318e9ad07e6368434256c4f98ef845"
     ],
     [
       "Parsers.SignatureScheme.signatureScheme_validator",
@@ -75,7 +75,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata"
       ],
       0,
-      "08235861bca2dacd4fcc2c9e2835eda1"
+      "fc6839aa6700e418b352cc904f5bef82"
     ],
     [
       "Parsers.SignatureScheme.signatureScheme_jumper",
@@ -91,7 +91,21 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_low"
       ],
       0,
-      "b333555569252ecc389393fcbec99789"
+      "a671a5bc82d8140e7988f059af64f571"
+    ],
+    [
+      "Parsers.SignatureScheme.lwp_signatureScheme",
+      1,
+      2,
+      1,
+      [
+        "@query", "equation_LowParse.Spec.Base.strong_parser_kind",
+        "equation_Parsers.SignatureScheme.signatureScheme_parser_kind",
+        "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind",
+        "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind"
+      ],
+      0,
+      "1f4dcc109da0dda7b010b858c23bdc73"
     ]
   ]
 ]
