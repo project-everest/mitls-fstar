@@ -51,6 +51,8 @@ friend Parsers.TaggedUnknownExtension
 friend Parsers.ClientHelloExtension_CHE_default
 friend Parsers.TaggedUnknownExtension_payload_default
 
+#push-options "--z3rlimit 16"
+
 let valid_clientHelloExtension_of_tagged_unknown_extension
   (h: HS.mem)
   (#rrel #rel: _)
@@ -65,6 +67,8 @@ let valid_clientHelloExtension_of_tagged_unknown_extension
   assert_norm (taggedUnknownExtension_payload_default_parser == clientHelloExtension_CHE_default_parser);
   assert_norm (LP.parse_dsum_kind (LP.get_parser_kind extensionType_repr_parser) clientHelloExtension_sum parse_clientHelloExtension_cases (LP.get_parser_kind clientHelloExtension_CHE_default_parser) == clientHelloExtension_parser_kind);
   LP.valid_dsum_intro_unknown h clientHelloExtension_sum extensionType_repr_parser parse_clientHelloExtension_cases clientHelloExtension_CHE_default_parser sl pos
+
+#pop-options
 
 let clientHelloExtensions_of_unknownExtensions_list l = 
   List.Tot.map clientHelloExtension_of_tagged_unknown_extension l
