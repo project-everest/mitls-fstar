@@ -7,7 +7,7 @@ open FStar.HyperStack.ST
 
 #set-options "--max_fuel 0 --max_ifuel 0 --z3rlimit 20"
 
-let ha = EverCrypt.HMAC.supported_alg
+let ha = a:EverCrypt.HMAC.supported_alg{Spec.Hash.Definitions.is_md a}
 
 (* Parametric keyed HMAC; could be coded up from two HASH calls. *)
 

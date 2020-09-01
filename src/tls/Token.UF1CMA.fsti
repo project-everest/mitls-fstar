@@ -204,7 +204,7 @@ private let test (r:rgn {~(is_tls_rgn r)}) (t': Hashing.Spec.tag Hashing.SHA2_25
   (ensures fun h0 _ h1 -> True)
   =
   // testing usability of local packages
-  let a = Hashing.SHA2_256 in
+  let a:ha = Hashing.SHA2_256 in
   let ha_of_i (i:ip.Pkg.t) = a in
   let good_of_i (i:ip.Pkg.t) = true in // a property worth MACing!
 

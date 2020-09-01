@@ -16,6 +16,8 @@ open Declassify
 
 #set-options "--max_fuel 0 --max_ifuel 0 --z3rlimit 10"
 
+let alg = a:alg { is_md a }
+
 let hash_len (a:alg)
   : n:UInt32.t{UInt32.v n == hash_length a}
   =
@@ -110,7 +112,7 @@ let tls_tagLen = function
   | Hash a  -> Hacl.Hash.Definitions.hash_len a
   | MD5SHA1 -> Hacl.Hash.Definitions.hash_len MD5 + Hacl.Hash.Definitions.hash_len SHA1
 
-type tls_macAlg = EverCrypt.HMAC.supported_alg
+type tls_macAlg = a:EverCrypt.HMAC.supported_alg{Spec.Hash.Definitions.is_md a}
 
 (* for reference, a bytes spec of HMAC:
 let hmac a key message = EverCrypt.Hash.

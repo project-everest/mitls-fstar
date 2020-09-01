@@ -27,7 +27,7 @@ type id_dhe =
 
 // The "ciphersuite hash algorithms" eligible for TLS 1.3 key derivation.
 // We will be more restrictive.
-type kdfa = EverCrypt.HMAC.supported_alg
+type kdfa = a:EverCrypt.HMAC.supported_alg { Spec.Hash.Definitions.is_md a }
 
 /// Runtime key-derivation parameters, to be adjusted.
 ///
