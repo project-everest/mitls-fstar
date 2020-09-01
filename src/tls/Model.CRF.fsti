@@ -9,6 +9,10 @@ open Spec.Hash.Definitions
 open EverCrypt.Hash
 open EverCrypt.Hash.Incremental // only for the specs (renamings)
 
+val flush_interleaving: unit
+
+let alg = a:alg { is_md a }
+
 module MDM = FStar.Monotonic.DependentMap
 
 #set-options "--max_fuel 0 --max_ifuel 0"

@@ -10,6 +10,8 @@ module HS = FStar.HyperStack
 
 open FStar.HyperStack.ST
 
+let flush_interleaving = ()
+
 (* Debug output, shared by client and server *)
 val discard: bool -> ST unit
   (requires (fun _ -> True))
@@ -119,7 +121,8 @@ let hashed #a h (s: state a) =
   else
     concrete_hashed h (real s)
 
-let hash_fits #a h s =
+let hash_fits (#a: alg) h s =
+  assert (Spec.Hash.Definitions.is_md a);
   if not model then
     Hacl.Streaming.Functor.seen_bounded klass a h s
   else

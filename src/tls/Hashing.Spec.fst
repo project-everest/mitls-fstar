@@ -14,6 +14,8 @@ open FStar.Bytes
 
 open Declassify
 
+let alg = a:alg { is_md a }
+
 let hash_len (a:alg)
   : n:UInt32.t{UInt32.v n == hash_length a}
   =

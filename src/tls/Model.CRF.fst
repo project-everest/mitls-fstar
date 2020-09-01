@@ -11,6 +11,8 @@ open EverCrypt.Hash.Incremental // only for the specs (renamings)
 
 module MDM = FStar.Monotonic.DependentMap
 
+let flush_interleaving = ()
+
 #set-options "--max_fuel 0 --max_ifuel 0"
 
 /// Verification is parametric in this specification function. Its
@@ -78,9 +80,12 @@ open LowStar.Buffer
 
 module ST = FStar.HyperStack.ST
 
+#push-options "--fuel 0 --ifuel 0 --z3rlimit 200"
 let hash a v =
   let h0 = ST.get() in
   assert_norm (pow2 61 < pow2 125);
+  let _ = allow_inversion alg in
+  assert (is_md a);
   assert(Seq.length v <= max_input_length a);
   let t = Spec.Agile.Hash.hash a v in
   if crf a then (
@@ -103,3 +108,4 @@ let test a b0 b1 =
   let t1 = hash a b1 in
   injective a (Ghost.hide b0) (Ghost.hide b1);
   if model && t0 = t1 then assert(b0 == b1)
+  

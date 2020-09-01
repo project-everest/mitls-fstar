@@ -23,6 +23,8 @@ module G = FStar.Ghost
 open Mem
 open FStar.HyperStack.ST
 
+val flush_interleaving: unit
+
 inline_for_extraction noextract
 let model = Flags.model
 // not sure where to put the flags, or if we need a separate one
@@ -51,8 +53,8 @@ let model = Flags.model
 unfold noextract
 let bytes = Model.CRF.bytes
 
-unfold noextract
-let alg = Spec.Agile.Hash.hash_alg
+noextract
+let alg = a:Spec.Agile.Hash.hash_alg { Spec.Hash.Definitions.is_md a }
 
 unfold noextract
 let e_alg = G.erased alg
@@ -135,7 +137,7 @@ val init: a:e_alg -> (
 
 unfold
 let update_pre
-  (a: Hash.alg)
+  (a: alg)
   (s: state a)
   (data: B.buffer UInt8.t)
   (len: UInt32.t)
@@ -149,7 +151,7 @@ let update_pre
 
 unfold
 let update_post
-  (a: Hash.alg)
+  (a: alg)
   (s: state a)
   (data: B.buffer UInt8.t)
   (len: UInt32.t)
@@ -175,7 +177,7 @@ val update:
 /// Note: the state is left to be reused by the caller to feed more data into
 /// the hash.
 inline_for_extraction
-let finish_st (a: Hash.alg) =
+let finish_st (a: alg) =
   s:state a ->
   dst: Hacl.Hash.Definitions.hash_t a ->
   // NEW! ↓ Constrained to ST because Model.CRF.hash updates a global table.
