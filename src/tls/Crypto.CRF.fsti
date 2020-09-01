@@ -53,7 +53,7 @@ let model = Flags.model
 unfold noextract
 let bytes = Model.CRF.bytes
 
-noextract
+inline_for_extraction noextract
 let alg = a:Spec.Agile.Hash.hash_alg { Spec.Hash.Definitions.is_md a }
 
 // Note to future self: NEVER put refinements underneath an erased.

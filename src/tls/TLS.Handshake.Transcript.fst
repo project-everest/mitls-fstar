@@ -470,7 +470,7 @@ let ideal_transcript #a s =
 
 unfold
 let extend_t (cond:label_repr -> bool) =
-   (#a:_) ->
+   (#a:Negotiation.ha) ->
    (s:state a) ->
    (l:label_repr{cond l}) ->
    Stack unit
@@ -721,6 +721,7 @@ let extend_hrr : extend_t LR_HRR? =
 #restart-solver
 let extend_hsm12 : extend_t LR_HSM12? =
   fun #a s l ->
+  let _ = allow_inversion Spec.Hash.Definitions.hash_alg in
   assert_norm (pow2 32 < pow2 61);
   let h0 = HyperStack.ST.get() in
   match l with
