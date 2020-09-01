@@ -56,8 +56,9 @@ let bytes = Model.CRF.bytes
 noextract
 let alg = a:Spec.Agile.Hash.hash_alg { Spec.Hash.Definitions.is_md a }
 
+// Note to future self: NEVER put refinements underneath an erased.
 unfold noextract
-let e_alg = G.erased alg
+let e_alg = a:G.erased (Spec.Agile.Hash.hash_alg) { Spec.Hash.Definitions.is_md a }
 
 /// Overriding things
 /// -----------------

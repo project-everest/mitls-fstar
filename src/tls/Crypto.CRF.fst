@@ -95,7 +95,7 @@ inline_for_extraction noextract let greal (#a:e_alg) (s:state (G.reveal a))
 noextract let klass = Concrete.evercrypt_hash
 
 let concrete_footprint #a = Hacl.Streaming.Functor.footprint klass a
-let concrete_invariant #a = Hacl.Streaming.Functor.invariant klass a
+let concrete_invariant #a x y = Hacl.Streaming.Functor.(invariant klass a x y /\ freeable klass a x y)
 let concrete_hashed #a = Hacl.Streaming.Functor.seen klass a
 
 let footprint #a h (s: state a) =
@@ -148,8 +148,9 @@ let init a s =
   if model then
     dsnd (gideal s) *= S.empty
   else
-    Concrete.init a (greal s)
+    Concrete.init a (greal #a s)
 
+#push-options "--z3rlimit 50"
 let update a s data len =
   let open LowStar.BufferOps in
   let _ = allow_inversion Spec.Agile.Hash.hash_alg in
@@ -165,7 +166,6 @@ let update a s data len =
     frame_invariant B.loc_none s h0 h1;
     Concrete.update a (greal s) data len)
 
-#push-options "--z3rlimit 50"
 let finish a st dst =
   let open LowStar.BufferOps in
   if model then

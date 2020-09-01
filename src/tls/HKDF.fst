@@ -34,7 +34,7 @@ HKDF-Extract(salt, IKM) -> PRK
 
 inline_for_extraction
 val extract:
-  #ha: EverCrypt.HMAC.supported_alg ->
+  #ha: Hashing.Spec.tls_macAlg ->
   salt: hkey ha ->
   ikm: macable ha ->
   ST (hkey ha)
@@ -79,7 +79,7 @@ assume val expand_spec:
   GTot (lbytes32 len)
 
 val expand:
-  #ha:EverCrypt.HMAC.supported_alg ->
+  #ha:Hashing.Spec.tls_macAlg ->
   prk: lbytes (Spec.Hash.Definitions.hash_length ha) ->
   info: bytes {Bytes.length info < 1024 (* somewhat arbitrary *) } ->
   len: UInt32.t {0 < v len /\ v len <= op_Multiply 255 (hash_length ha)} ->
@@ -248,7 +248,7 @@ let format ha label digest len =
 /// used for computing all derived keys; 
 
 val expand_label:
-  #ha: EverCrypt.HMAC.supported_alg ->
+  #ha: Hashing.Spec.tls_macAlg ->
   secret: lbytes (Spec.Hash.Definitions.hash_length ha) ->
   label: string{length (bytes_of_string label) < 256 - 6} -> // -9?
   hv: bytes{length hv < 256} ->
@@ -271,7 +271,7 @@ let expand_label #ha secret label digest len =
 /// used in both hanshakes for deriving intermediate HKDF keys.
 
 val derive_secret:
-  ha: EverCrypt.HMAC.supported_alg ->
+  ha: Hashing.Spec.tls_macAlg ->
   secret: lbytes (Spec.Hash.Definitions.hash_length ha) ->
   label: string{length (bytes_of_string label) < 256-6} ->
   digest: bytes{length digest < 256} ->

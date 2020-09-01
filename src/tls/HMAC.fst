@@ -6,7 +6,7 @@ open Mem
 module M = LowStar.Modifies
 open FStar.HyperStack.ST
 
-let ha = EverCrypt.HMAC.supported_alg
+let ha = a:EverCrypt.HMAC.supported_alg{Spec.Hash.Definitions.is_md a}
 
 (* Parametric keyed HMAC; could be coded up from two HASH calls. *)
 
