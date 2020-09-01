@@ -93,8 +93,8 @@ module LP = LowParse.Low.Base
 
 noeq type send_state = {
   // outgoing data, already formatted and hashed. Overflows are fatal.
-  out_slice: (out_slice: LP.slice (B.trivial_preorder _) (B.trivial_preorder _) {
-    out_slice.LP.len <= LP.validator_max_length }) ; // provided by caller, filled by Send
+  out_slice: LP.slice (B.trivial_preorder _) (B.trivial_preorder _)
+    ; // provided by caller, filled by Send
   out_start: (pos: UInt32.t{
     v pos <= v out_slice.LP.len }); // updated as the client sends data
   out_pos:   (pos: UInt32.t{

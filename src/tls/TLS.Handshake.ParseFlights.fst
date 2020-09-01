@@ -104,23 +104,23 @@ let parse_common
          
 = fun b f_begin ->
   let lp_b = R.to_slice b in
-  assume (v lp_b.LP.len <= v LP.validator_max_length);
-  let pos = validator lp_b f_begin in  //validator gives us the valid postcondition
+  let pos = validator lp_b (FStar.Int.Cast.uint32_to_uint64 f_begin) in  //validator gives us the valid postcondition
 //  let lb = lp_b.LP.len - f_begin in
 //  let bb = Bytes.of_buffer lb (B.sub lp_b.LP.base f_begin lb) in
 //  trace ("Current flight buffer contents: "^(Bytes.hex_of_bytes bb));
 
-  if pos <= LP.validator_max_length then
+  if LP.is_success pos then
    begin
     let parsed_tag = HSMType.handshakeType_reader lp_b f_begin in
     if parsed_tag = tag then (  //and this dynamic check gives us the lens postcondition
       trace ("Parsed a "^(HSMType.string_of_handshakeType parsed_tag));
+      let pos = LP.uint64_to_uint32 pos in
       let r = R.mk_repr_pos_from_const_slice p132 b f_begin pos in
       E.Correct (Some (r, pos))
     ) else
       (trace "Bad message type"; E.Error unexpected_flight_error)
    end
-  else if pos = LP.validator_error_not_enough_data then
+  else if LP.get_validator_error_kind pos = LP.validator_error_not_enough_data then
     (trace "Not enough data"; E.Correct None)
   else
     (trace "Parsing error"; E.Error parsing_error)

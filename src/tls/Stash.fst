@@ -11,10 +11,13 @@ module LP = LowParse.Low.Base
 (* Type definition and constructor *)
 
 inline_for_extraction
+let max_stash_length = 4294967291ul (* constrained by LowStar.PrefixFreezablebuffer *)
+
+inline_for_extraction
 noextract
 type stash = (s: LP.slice (LP.srel_of_buffer_srel FB.prefix_freezable_preorder) (LP.srel_of_buffer_srel FB.prefix_freezable_preorder) {
   B.length s.LP.base >= 4 /\
-  U32.v s.LP.len <= U32.v LP.validator_max_length /\
+  U32.v s.LP.len <= U32.v max_stash_length /\
   B.witnessed s.LP.base (FB.frozen_until_at_least 4)
 })
 
@@ -22,7 +25,7 @@ inline_for_extraction
 noextract
 let make_stash
   (b: FB.buffer)
-  (len: U32.t { U32.v len <= B.length b /\ U32.v len <= U32.v LP.validator_max_length /\ B.witnessed b (FB.frozen_until_at_least 4) } )
+  (len: U32.t { U32.v len <= B.length b /\ U32.v len <= U32.v max_stash_length /\ B.witnessed b (FB.frozen_until_at_least 4) } )
 : Tot stash
 = LP.make_slice b len
 
@@ -34,7 +37,7 @@ let malloc_pre
   (len: U32.t)
 : GTot Type0
 = B.malloc_pre r len /\
-  U32.v len <= U32.v LP.validator_max_length
+  U32.v len <= U32.v max_stash_length
 
 unfold
 let alloc_post_mem_common
@@ -70,7 +73,7 @@ unfold
 let alloca_pre
   (len: U32.t)
 : GTot Type0
-= U32.v len <= U32.v LP.validator_max_length /\
+= U32.v len <= U32.v max_stash_length /\
   B.alloca_pre len
 
 inline_for_extraction
