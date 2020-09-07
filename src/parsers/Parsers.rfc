@@ -1822,3 +1822,13 @@ struct {
   opaque clientHelloDigest<0..64>;
   opaque extra<0..32767>;
 } MiTLSCookieContents;
+
+struct {
+  CipherSuite early_cs;
+  CipherSuite cs;
+  opaque client_es[64];
+  opaque client_hs[64];
+  opaque server_hs[64];
+  opaque client_as[64];
+  opaque server_as[64];
+} MiTLSSecrets;
