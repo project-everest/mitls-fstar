@@ -19,17 +19,17 @@ unfold type uint16_t = UInt16.t
 
 // CEnum
 type early_data_status =
-| OMITTED
-| PROPOSED
-| ACCEPTED
-| REJECTED
+| OMITTED  // the client won't send early data
+| PROPOSED // the client is sending early data
+| ACCEPTED // ... and the server is receiving it
+| REJECTED // ... but the server will ignore it
 
 // CEnum
 type traffic_secret_epoch =
-| INITIAL
-| EARLY
-| HANDSHAKE
-| APPLICATION
+| INITIAL     // unprotected Hello messages
+| EARLY       // early application data (only client --> server)
+| HANDSHAKE   // handshake messages only
+| APPLICATION // open connection (application + late handshake)
 
 // Calling convention
 // ----------------------------
@@ -53,11 +53,11 @@ noeq type hs_ctx = {
   out_buffer_pos: uint32_t; // input/output
 
   // Output values
-  early_cipher_suite: uint16_t;
-  cipher_suite: uint16_t;
-  secrets: uint8_p;
-  early_data: early_data_status;
-  error_msg: C.String.t; // uint_p
+  early_cipher_suite: uint16_t; // assigned before EARLY
+  cipher_suite: uint16_t;       // assigned before HANDSHAKE
+  secrets: uint8_p;             // assigned before advancing epoch
+  early_data: early_data_status;// see state machine above
+  error_msg: C.String.t; // uint_p, assigned before returning a fatal alert description as result.
 }
 
 // Can send application data
