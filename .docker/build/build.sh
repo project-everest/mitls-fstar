@@ -185,16 +185,7 @@ function fetch_qd() {
 
 function fetch_and_make_qd() {
     fetch_qd
-
-    # Default build target is all (quackyducky lowparse), unless specified otherwise
-    local target
-    if [[ $1 == "" ]]; then
-        target="all"
-    else
-        target="$1"
-    fi
-
-    OTHERFLAGS='--admit_smt_queries true' make -C qd -j $threads $target
+    OTHERFLAGS='--admit_smt_queries true' make -C qd -j $threads quackyducky lowparse
 }
 
 function build_pki_if() {
