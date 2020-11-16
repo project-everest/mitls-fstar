@@ -79,7 +79,7 @@ FSTAR_HINTS ?= --use_hints --use_hint_hashes --record_hints
 #      verify... see https://github.com/FStarLang/FStar/issues/1652
 FSTAR_NO_FLAGS = $(FSTAR_HOME)/bin/fstar.exe $(FSTAR_HINTS) \
   --odir $(OUTPUT_DIR) --cache_checked_modules $(FSTAR_INCLUDES) --cmi \
-  --already_cached 'Prims FStar LowStar C Spec.Loops TestLib WasmSupport Hacl EverCrypt Vale LowParse Lib Spec Meta -FStar.Old.Endianness -FStar.Test -C.Compat' \
+  --already_cached 'Prims FStar LowStar C Spec.Loops TestLib WasmSupport Hacl EverCrypt Vale LowParse LowParseWriters Lib Spec Meta -FStar.Old.Endianness -FStar.Test -C.Compat' \
   --warn_error '+241@247-272+285' \
   --cache_dir $(OUTPUT_DIR)
 
@@ -213,7 +213,7 @@ KRML_FLAGS = \
   -add-early-include '"log_to_choice.h"' \
   -bundle 'EverCrypt,EverCrypt.\*[rename=EverCrypt]' \
   -bundle 'Vale.*,Hacl.*[rename=Unused1]' \
-  -bundle 'LowParse.\*,LowParseWrappers[rename=LowParse]' \
+  -bundle 'LowParse.\*,LowParseWrappers,LowParseWriters,LowParseWriters.\*[rename=LowParse]' \
   -bundle 'Format.\*' \
   -bundle 'FStar.\*,LowStar.\*,C,C.\*[rename=Mitls_Kremlib]' \
   -bundle 'Parsers.ClientHello=Parsers.\*,ParsersAux.\*[rename=Parsers]' \
@@ -237,6 +237,8 @@ KRML_FLAGS = \
   -bundle 'Token.UF1CMA,AEAD,AEAD.Pkg'
 
 BUILD_FILES=dist/Makefile $(wildcard dist/libmitls_*_script)
+
+ALL_KRML_FILES := $(filter-out $(OUTPUT_DIR)/Negotiation_Writers_LayeredEffects.krml,$(ALL_KRML_FILES))
 
 .PHONY: compile-%
 compile-%: $(BUILD_FILES) dist/%/Makefile.basic

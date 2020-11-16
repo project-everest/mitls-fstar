@@ -308,12 +308,14 @@ let receive_c13_wait_Finished1 (st:state)
 = let r = PF.receive_c13_wait_Finished1 st.pf_st (cslice_of st) st.rcv_from st.rcv_to in
   wrap_pf_st st r
 
+#push-options "--z3rlimit 16"
 let receive_s13_wait_Finished2 (st:state)
 : ST (result (option (PF.s13_wait_Finished2 (cslice_of st)) & state))
   (requires receive_pre st PF.F_s13_wait_Finished2)
   (ensures  receive_post st PF.F_s13_wait_Finished2 PF.valid_s13_wait_Finished2)
 = let r = PF.receive_s13_wait_Finished2 st.pf_st (cslice_of st) st.rcv_from st.rcv_to in
   wrap_pf_st st r
+#pop-options
 
 let receive_s13_wait_EOED (st:state)
 : ST (result (option (PF.s13_wait_EOED (cslice_of st)) & state))
