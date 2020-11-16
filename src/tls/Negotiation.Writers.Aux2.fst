@@ -3,7 +3,7 @@ module Negotiation.Writers.Aux2
 friend Parsers.ExtensionType
 friend Parsers.ClientHelloExtension
 
-module LWP = LowParseWriters.Compat
+module LWP = LowParse.Writers.Instances
 module LP = LowParse.Spec
 
 #set-options "--z3rlimit 32" // necessary due to cluttered context (too many `friend`s)

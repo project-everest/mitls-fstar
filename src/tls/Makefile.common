@@ -16,7 +16,6 @@ INCLUDE_PATHS 	= \
   $(FSTAR_HOME)/examples/layeredeffects \
   $(MITLS_HOME)/libs/ffi \
   $(QD_HOME)/src/lowparse \
-  $(QD_HOME)/tests/layeff \
   $(MITLS_HOME)/src/parsers/generated \
   $(MITLS_HOME)/src/tls \
   $(MITLS_HOME)/src/tls/obj

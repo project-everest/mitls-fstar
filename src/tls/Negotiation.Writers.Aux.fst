@@ -13,7 +13,7 @@ friend Parsers.ServerName
 friend Parsers.NameType
 friend Parsers.ClientHelloExtension_CHE_server_name
 
-module LWP = LowParseWriters.Compat
+module LWP = LowParse.Writers.Instances
 module LP = LowParse.Spec
 
 let valid_pskBinderEntry_intro =

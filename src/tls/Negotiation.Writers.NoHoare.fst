@@ -1,6 +1,6 @@
 module Negotiation.Writers.NoHoare
 
-module LWP = LowParseWriters.NoHoare.Parsers
+module LWP = LowParse.Writers.NoHoare.Combinators
 module Aux = Negotiation.Writers.NoHoare.Aux
 module Aux2 = Negotiation.Writers.NoHoare.Aux2
 
@@ -24,7 +24,7 @@ let compute_binder_ph1
   ()
 : LWP.TWrite unit LWP.parse_empty lwp_pskBinderEntry inv
 =
-  let cs = Parsers.TicketContents13.lwps_accessor_ticketContents13_cs tc in
+  let cs = Parsers.TicketContents13.lwp_accessor_ticketContents13_cs tc in
   let c = LWP.deref CipherSuite.cipherSuite13_reader cs in
   let (CipherSuite13 _ h) = cipherSuite_of_cipherSuite13 c in
   let len : U32.t = Hacl.Hash.Definitions.hash_len h in
@@ -62,13 +62,13 @@ let obfuscate_age1
   ()
 : LWP.TWrite unit LWP.parse_empty Parsers.PskIdentity.lwp_pskIdentity inv
 =
-  let id = Parsers.ResumeInfo13.lwps_accessor_resumeInfo13_identity ri in
+  let id = Parsers.ResumeInfo13.lwp_accessor_resumeInfo13_identity ri in
   LWP.cat id;
-  let tk = Parsers.ResumeInfo13.lwps_accessor_resumeInfo13_ticket ri in
-  let ct = Parsers.TicketContents13.lwps_accessor_ticketContents13_creation_time tk in
+  let tk = Parsers.ResumeInfo13.lwp_accessor_resumeInfo13_ticket ri in
+  let ct = Parsers.TicketContents13.lwp_accessor_ticketContents13_creation_time tk in
   let creation_time = LWP.deref LowParse.Low.Int.read_u32 ct in
   let age = FStar.UInt32.((now -%^ creation_time) *%^ 1000ul) in
-  let aa = Parsers.TicketContents13.lwps_accessor_ticketContents13_age_add tk in
+  let aa = Parsers.TicketContents13.lwp_accessor_ticketContents13_age_add tk in
   let age_add = LWP.deref LowParse.Low.Int.read_u32 aa in
   let obfuscated_age = PSK.encode_age age age_add in
   LWP.append LWP.parse_u32 LowParse.Low.Int.write_u32 obfuscated_age;
@@ -247,7 +247,7 @@ let write_binders1
         LWP.list_map
           Parsers.ResumeInfo13.lwp_resumeInfo13
           lwp_pskBinderEntry
-          (fun r -> let tk = Parsers.ResumeInfo13.lwps_accessor_resumeInfo13_ticket r in compute_binder_ph tk)
+          (fun r -> let tk = Parsers.ResumeInfo13.lwp_accessor_resumeInfo13_ticket r in compute_binder_ph tk)
           33ul 65535ul
           lri
           ;
@@ -370,8 +370,8 @@ let write_final_extensions1
     (LWP.parse_vllist Parsers.ClientHelloExtension.lwp_clientHelloExtension 0ul 65535ul)
     (LWP.parse_vllist Parsers.ClientHelloExtension.lwp_clientHelloExtension 0ul 65535ul)
     inv
-= let mv = Parsers.MiTLSConfig.lwps_accessor_miTLSConfig_max_version cfg in
-  let mv = Parsers.KnownProtocolVersion.lwps_knownProtocolVersion_accessor_tag mv in
+= let mv = Parsers.MiTLSConfig.lwp_accessor_miTLSConfig_max_version cfg in
+  let mv = Parsers.KnownProtocolVersion.lwp_knownProtocolVersion_accessor_tag mv in
   let max_version = LWP.deref Parsers.ProtocolVersion.protocolVersion_reader mv in
   match max_version with
   | TLS_1p3 ->
@@ -434,8 +434,8 @@ let keyshares1
   ()
 : LWP.TWrite unit (LWP.parse_vllist lwp_clientHelloExtension 0ul 65535ul) (LWP.parse_vllist lwp_clientHelloExtension 0ul 65535ul) inv
 =
-  let mv = Parsers.MiTLSConfig.lwps_accessor_miTLSConfig_max_version cfg in
-  let mv = Parsers.KnownProtocolVersion.lwps_knownProtocolVersion_accessor_tag mv in
+  let mv = Parsers.MiTLSConfig.lwp_accessor_miTLSConfig_max_version cfg in
+  let mv = Parsers.KnownProtocolVersion.lwp_knownProtocolVersion_accessor_tag mv in
   let max_version = LWP.deref Parsers.ProtocolVersion.protocolVersion_reader mv in
   match max_version, ks with
   | TLS_1p3, Some ks ->

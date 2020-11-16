@@ -2,7 +2,7 @@ module Negotiation.Writers.LayeredEffects
 
 friend Negotiation
 
-module LWP = LowParseWriters.Parsers
+module LWP = LowParse.Writers.Combinators
 module Aux = Negotiation.Writers.Aux
 module Aux2 = Negotiation.Writers.Aux2
 
