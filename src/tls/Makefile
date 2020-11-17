@@ -79,7 +79,7 @@ FSTAR_HINTS ?= --use_hints --use_hint_hashes --record_hints
 #      verify... see https://github.com/FStarLang/FStar/issues/1652
 FSTAR_NO_FLAGS = $(FSTAR_HOME)/bin/fstar.exe $(FSTAR_HINTS) \
   --odir $(OUTPUT_DIR) --cache_checked_modules $(FSTAR_INCLUDES) --cmi \
-  --already_cached 'Prims FStar LowStar C Spec.Loops TestLib WasmSupport Hacl EverCrypt Vale LowParse Lib Spec Meta -FStar.Old.Endianness -FStar.Test -C.Compat' \
+  --already_cached 'Prims FStar LowStar C Spec.Loops TestLib WasmSupport Hacl EverCrypt Vale LowParse Lib Spec Meta Parsers -FStar.Old.Endianness -FStar.Test -C.Compat' \
   --warn_error '+241@247-272+285' \
   --cache_dir $(OUTPUT_DIR)
 
@@ -140,14 +140,6 @@ endif
 
 hints:
 	mkdir -p $@
-
-ifndef VERIFY_PARSERS
-$(OUTPUT_DIR)/Parsers_%.krml \
-$(OUTPUT_DIR)/Parsers.%.checked: FSTAR_FLAGS=--admit_smt_queries true \
-  --__temp_fast_implicits
-$(OUTPUT_DIR)/Parsers_%.krml \
-$(OUTPUT_DIR)/Parsers.%.checked: FSTAR_HINTS=
-endif
 
 %.checked: FSTAR_FLAGS=
 %.checked: | hints

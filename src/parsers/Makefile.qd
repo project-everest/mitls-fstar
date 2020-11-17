@@ -28,6 +28,7 @@ CHECKED_EXT=.checked$(LAX_EXT)
 
 FSTAR_OPTIONS = --odir kremlin --cache_dir $(CACHE_DIR) $(LAX_OPT) --cache_checked_modules --query_stats \
                 --already_cached *,-Parsers \
+                --admit_smt_queries true --cmi \
 		--include $(LOWPARSE_HOME) --include $(KREMLIN_HOME)/kremlib  --include $(KREMLIN_HOME)/kremlib/obj $(OTHERFLAGS)
 
 FSTAR = $(FSTAR_HOME)/bin/fstar.exe --trace_error $(FSTAR_OPTIONS)
@@ -44,7 +45,7 @@ KREMLIN = $(KREMLIN_HOME)/krml \
 
 QD_FILES = $(wildcard *.fst *.fsti)
 
-all: depend verify extract
+all: verify
 
 $(CACHE_DIR)/%$(CHECKED_EXT):
 	$(FSTAR) $(HINT_FILE) $<

@@ -5,7 +5,7 @@ QD_HOME ?= ../../../quackyducky
 # miTLS dependency system will take care of collecting which generated
 # modules are actually needed.
 
-all: gen # verify
+all: verify
 
 gen: parsers.gen
 
