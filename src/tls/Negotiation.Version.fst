@@ -263,6 +263,8 @@ let omake_CHE_supported_versions (x: option clientHelloExtension_CHE_supported_v
   | None -> None
   | Some y -> Some (CHE_supported_versions y)
 
+#push-options "--z3rlimit 16"
+
 inline_for_extraction
 noextract
 let owrite_constr_clientHelloExtension_CHE_supported_versions
@@ -401,6 +403,8 @@ let choose cfg ch =
       match List.Helpers.find_aux cfg supported vs with
       | Some v -> correct v
       | None -> fatal Protocol_version "Client offered no supported protocol version"
+
+#pop-options
 
 (*
 // 19-01-26 TODO lowering this function requires two iterators on the
