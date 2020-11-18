@@ -1,10 +1,5 @@
 QD_HOME ?= ../../../quackyducky
 
-# all: DO NOT enable `verify` for now, not everything currently
-# verifies. Anyway, for miTLS, we don't need to verify everything, the
-# miTLS dependency system will take care of collecting which generated
-# modules are actually needed.
-
 all: verify
 
 gen: parsers.gen
@@ -20,6 +15,9 @@ genmakefile: generated/Makefile
 verify: gen genmakefile
 	+$(MAKE) -C generated verify
 
+test: verify
+	+$(MAKE) -C test
+
 generated/Makefile: Makefile.qd
 	mkdir -p generated
 	cp Makefile.qd $@
@@ -27,4 +25,4 @@ generated/Makefile: Makefile.qd
 clean:
 	rm -rf *.gen generated
 
-.PHONY: all gen genmakefile clean verify
+.PHONY: all gen genmakefile clean verify test
