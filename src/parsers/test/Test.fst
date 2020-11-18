@@ -147,16 +147,36 @@ let write_psk_kex1
   Parsers.ClientHelloExtension.clientHelloExtension_psk_key_exchange_modes_lwriter (fun _ ->
     Parsers.ClientHelloExtension_CHE_psk_key_exchange_modes.clientHelloExtension_CHE_psk_key_exchange_modes_lwp_writer (fun _ ->
             LWP.write_vllist_nil _ _;
+(* // FIXME: the following does not extract properly, it extracts to ((if allow_psk_resumption then f) buf len) instead of (if allow_psk_resumption then (f buf len))
             if allow_psk_resumption
             then
               LWP.extend_vllist_snoc_ho _ _ _ (fun _ ->
                 LWP.start _ Parsers.PskKeyExchangeMode.pskKeyExchangeMode_writer Parsers.PskKeyExchangeMode.Psk_ke
               );
+*)
+            LWP.ifthenelse_combinator
+              allow_psk_resumption
+              (fun _ -> 
+                LWP.extend_vllist_snoc_ho _ _ _ (fun _ ->
+                  LWP.start _ Parsers.PskKeyExchangeMode.pskKeyExchangeMode_writer Parsers.PskKeyExchangeMode.Psk_ke
+                )
+              )
+              (fun _ -> ());
+(* same here
             if allow_dhe_resumption
             then
               LWP.extend_vllist_snoc_ho _ _ _ (fun _ ->
                 LWP.start _ Parsers.PskKeyExchangeMode.pskKeyExchangeMode_writer Parsers.PskKeyExchangeMode.Psk_dhe_ke
               );
+*)
+            LWP.ifthenelse_combinator
+              allow_dhe_resumption
+              (fun _ ->
+                LWP.extend_vllist_snoc_ho _ _ _ (fun _ ->
+                  LWP.start _ Parsers.PskKeyExchangeMode.pskKeyExchangeMode_writer Parsers.PskKeyExchangeMode.Psk_dhe_ke
+                )
+              )
+              (fun _ -> ());
             Parsers.PskKeyExchangeModes.pskKeyExchangeModes_lwp_write ()
           )
         )
