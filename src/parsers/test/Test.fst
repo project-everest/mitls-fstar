@@ -438,6 +438,44 @@ let keyshares
 : LWP.TWrite unit (LWP.parse_vllist Parsers.ClientHelloExtension.lwp_clientHelloExtension 0ul 65535ul) (LWP.parse_vllist Parsers.ClientHelloExtension.lwp_clientHelloExtension 0ul 65535ul) inv
 = LWP.wrap_extracted_impl _ _ (extract_keyshares inv cfg ks)
 
+#push-options "--z3rlimit 16"
+inline_for_extraction
+noextract
+let clientHelloExtensions_of_unknown_extensions1
+  (inv: LWP.memory_invariant)
+  (l: LWP.ptr Parsers.UnknownExtensions.lwp_unknownExtensions inv)
+  ()
+: LWP.TWrite unit 
+    (LWP.parse_vllist Parsers.ClientHelloExtension.lwp_clientHelloExtension 0ul 65535ul)
+    (LWP.parse_vllist Parsers.ClientHelloExtension.lwp_clientHelloExtension 0ul 65535ul)
+    inv
+=
+  let l = LWP.cast (Parsers.UnknownExtensions.unknownExtensions_lwp_write_recip ()) l in
+  let l = LWP.lptr_of_vllist_ptr _ _ _ l in
+  LWP.list_map'
+    _ _
+    (fun x ->
+      let tg = Parsers.TaggedUnknownExtension.lwp_taggedUnknownExtension_accessor_tag x in
+      let tg = LWP.deref Parsers.ExtensionType.extensionType_reader tg in
+      let tg = Parsers.ExtensionType.Unknown_extensionType?._0 tg in
+      Parsers.ClientHelloExtension.clientHelloExtension_lwriter_unknown tg (fun _ ->
+        let pl = Parsers.TaggedUnknownExtension.lwp_taggedUnknownExtension_accessor_Unknown x in
+        LWP.cat (LWP.cast (Parsers.TaggedUnknownExtension_payload_default.taggedUnknownExtension_payload_default_lwp_rewrite_recip ()) pl)
+      )
+    )
+    _ _
+    l
+#pop-options
+
+noextract
+let clientHelloExtensions_of_unknown_extensions2 = clientHelloExtensions_of_unknown_extensions1
+
+let extract_clientHelloExtensions_of_unknown_extensions
+  (inv: LWP.memory_invariant)
+  (l: LWP.ptr Parsers.UnknownExtensions.lwp_unknownExtensions inv)
+: Tot (LWP.extract_t _ (clientHelloExtensions_of_unknown_extensions2 inv l))
+= LWP.extract _ (clientHelloExtensions_of_unknown_extensions1 _ _)
+
 inline_for_extraction
 noextract
 let write_extensions1
