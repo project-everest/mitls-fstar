@@ -69,6 +69,7 @@ dist/Makefile.basic: $(filter-out %prims.krml,$(ALL_KRML_FILES))
 	  $(filter %.krml,$^) \
 	  -warn-error @4@5@18 \
 	  -fparentheses \
+	  -fnoreturn-else \
 	  -header header.txt \
 	  -bundle 'Test=Parsers.*,LowParse.*,LowStar.*,FStar.*,C,C.\*,Prims' \
 	  -o test.exe \
