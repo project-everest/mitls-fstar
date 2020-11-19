@@ -484,6 +484,78 @@ let clientHelloExtensions_of_unknown_extensions
 : LWP.TWrite unit (LWP.parse_vllist Parsers.ClientHelloExtension.lwp_clientHelloExtension 0ul 65535ul) (LWP.parse_vllist Parsers.ClientHelloExtension.lwp_clientHelloExtension 0ul 65535ul) inv
 = LWP.wrap_extracted_impl _ _ (extract_clientHelloExtensions_of_unknown_extensions inv l)
 
+module PV = Parsers.ProtocolVersion
+module KPV = Parsers.KnownProtocolVersion
+
+let implemented (pv: PV.protocolVersion) = pv = PV.TLS_1p2 || pv = PV.TLS_1p3
+
+(** Determine the oldest protocol versions for TLS *)
+let minPV (a b: Parsers.ProtocolVersion.protocolVersion) =
+  let open PV in
+  match a,b with
+  | SSL_3p0, _  | _, SSL_3p0 -> SSL_3p0
+  | TLS_1p0, _  | _, TLS_1p0 -> TLS_1p0
+  | TLS_1p1, _  | _, TLS_1p1 -> TLS_1p1
+  | TLS_1p2, _  | _, TLS_1p2 -> TLS_1p2
+  | TLS_1p3, _  | _, TLS_1p3 -> TLS_1p3
+  | Unknown_protocolVersion x, 
+    Unknown_protocolVersion y -> Unknown_protocolVersion (if x `FStar.UInt16.lt` y then x else y)
+
+let leqPV a b = (a = minPV a b)
+let geqPV a b = (b = minPV a b)
+
+let supported (min_version max_version pv: PV.protocolVersion) : Tot bool =
+  implemented pv &&
+  min_version `leqPV` pv && pv `leqPV` max_version
+
+inline_for_extraction
+noextract
+let supported_versions1
+  (inv: LWP.memory_invariant)
+  (cfg: LWP.ptr Parsers.MiTLSConfig.lwp_miTLSConfig inv)
+  ()
+: LWP.TWrite unit LWP.parse_empty Parsers.ClientHelloExtension.lwp_clientHelloExtension inv
+=
+  let minv = Parsers.MiTLSConfig.lwp_accessor_miTLSConfig_min_version cfg in
+  let minv = LWP.deref KPV.knownProtocolVersion_reader minv in
+  let minv = KPV.tag_of_knownProtocolVersion minv in
+  let maxv = Parsers.MiTLSConfig.lwp_accessor_miTLSConfig_max_version cfg in
+  let maxv = LWP.deref KPV.knownProtocolVersion_reader maxv in
+  let maxv = KPV.tag_of_knownProtocolVersion maxv in
+  Parsers.ClientHelloExtension.clientHelloExtension_supported_versions_lwriter (fun _ ->
+    Parsers.ClientHelloExtension_CHE_supported_versions.clientHelloExtension_CHE_supported_versions_lwp_writer (fun _ ->
+      LWP.write_vllist_nil _ _;
+      LWP.ifthenelse_combinator
+        (supported minv maxv PV.TLS_1p3)
+        (fun _ -> LWP.extend_vllist_snoc_ho _ _ _ (fun _ -> LWP.start _ PV.protocolVersion_writer PV.TLS_1p2))
+        (fun _ -> ());
+      LWP.ifthenelse_combinator
+        (supported minv maxv PV.TLS_1p3)
+        (fun _ -> LWP.extend_vllist_snoc_ho _ _ _ (fun _ -> LWP.start _ PV.protocolVersion_writer PV.TLS_1p2))
+        (fun _ -> ());
+      Parsers.SupportedVersions.supportedVersions_lwp_write ()
+    )
+  )
+
+noextract
+let supported_versions2 = supported_versions1
+
+let extract_supported_versions
+  (inv: LWP.memory_invariant)
+  (cfg: LWP.ptr Parsers.MiTLSConfig.lwp_miTLSConfig inv)
+: Tot (LWP.extract_t _ (supported_versions2 inv cfg))
+= LWP.extract _ (supported_versions1 _ _)
+
+inline_for_extraction
+noextract
+let supported_versions
+  (#inv: LWP.memory_invariant)
+  (cfg: LWP.ptr Parsers.MiTLSConfig.lwp_miTLSConfig inv)
+: LWP.TWrite unit LWP.parse_empty Parsers.ClientHelloExtension.lwp_clientHelloExtension inv
+= LWP.wrap_extracted_impl _ _ (extract_supported_versions _ cfg)
+
+(* From: src/tls/Negotiation.fst: prepareClientextensions *)
+
 inline_for_extraction
 noextract
 let write_extensions1
@@ -503,6 +575,7 @@ let write_extensions1
   LWP.write_vllist_nil _ _;
   let custom_exts = Parsers.MiTLSConfig.lwp_accessor_miTLSConfig_custom_extensions cfg in
   clientHelloExtensions_of_unknown_extensions custom_exts;
+  LWP.extend_vllist_snoc_ho _ _ _ (fun _ -> supported_versions cfg);
   keyshares cfg ks;
   write_final_extensions cfg edi lri now;
   Parsers.ClientHelloExtensions.clientHelloExtensions_lwp_write ()
