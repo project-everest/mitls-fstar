@@ -50,23 +50,26 @@ obj:
 	mkdir -p $@
 
 %.checked: | obj
-	$(FSTAR) $< && touch -c $@
+	time $(FSTAR) $< && touch -c $@
 
 # Extraction
 # ----------
 
 .PRECIOUS: %.krml
 %.krml:
-	$(FSTAR) $(notdir $(subst .checked,,$<)) --codegen Kremlin \
+	time $(FSTAR) $(notdir $(subst .checked,,$<)) --codegen Kremlin \
 	--extract_module $(basename $(notdir $(subst .checked,,$<)))
 
 # F* --> C
 # --------
 
-dist/Makefile.basic: $(filter-out %prims.krml,$(ALL_KRML_FILES))
+obj/kremlin.rsp: $(filter-out %prims.krml,$(ALL_KRML_FILES))
+	for f in $(filter %.krml,$^) ; do echo $$f ; done > $@
+
+dist/Makefile.basic: obj/kremlin.rsp
 	mkdir -p $(dir $@)
 	$(KRML) -tmpdir $(dir $@) -skip-compilation \
-	  $(filter %.krml,$^) \
+	  @$< \
 	  -warn-error @4@5@18 \
 	  -fparentheses \
 	  -fnoreturn-else \
