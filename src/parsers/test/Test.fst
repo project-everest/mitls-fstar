@@ -478,6 +478,14 @@ let extract_clientHelloExtensions_of_unknown_extensions
 
 inline_for_extraction
 noextract
+let clientHelloExtensions_of_unknown_extensions
+  (#inv: LWP.memory_invariant)
+  (l: LWP.ptr Parsers.UnknownExtensions.lwp_unknownExtensions inv)
+: LWP.TWrite unit (LWP.parse_vllist Parsers.ClientHelloExtension.lwp_clientHelloExtension 0ul 65535ul) (LWP.parse_vllist Parsers.ClientHelloExtension.lwp_clientHelloExtension 0ul 65535ul) inv
+= LWP.wrap_extracted_impl _ _ (extract_clientHelloExtensions_of_unknown_extensions inv l)
+
+inline_for_extraction
+noextract
 let write_extensions1
   (inv: LWP.memory_invariant)
   (cfg: LWP.ptr Parsers.MiTLSConfig.lwp_miTLSConfig inv)
@@ -489,12 +497,15 @@ let write_extensions1
 : LWP.TWrite
     unit
     LWP.parse_empty
-    (LWP.parse_vllist Parsers.ClientHelloExtension.lwp_clientHelloExtension 0ul 65535ul)
+    Parsers.ClientHelloExtensions.lwp_clientHelloExtensions
     inv
 =
   LWP.write_vllist_nil _ _;
+  let custom_exts = Parsers.MiTLSConfig.lwp_accessor_miTLSConfig_custom_extensions cfg in
+  clientHelloExtensions_of_unknown_extensions custom_exts;
   keyshares cfg ks;
-  write_final_extensions cfg edi lri now
+  write_final_extensions cfg edi lri now;
+  Parsers.ClientHelloExtensions.clientHelloExtensions_lwp_write ()
 
 noextract
 let write_extensions2 = write_extensions1
@@ -508,6 +519,5 @@ let write_extensions
   (now: U32.t)
 : Tot (LWP.extract_t _ (write_extensions2 inv cfg ks edi lri now))
 = LWP.extract _ (write_extensions1 _ _ _ _ _ _)
-
 
 let main () : Tot C.exit_code = C.EXIT_SUCCESS
