@@ -1,0 +1,39 @@
+PARSERS_HOME ?= ..
+
+TARGET_DIR=$(PARSERS_HOME)/test.nolayeff/obj
+
+ifeq (,$(FSTAR_HOME))
+  $(error FSTAR_HOME is not defined)
+endif
+
+ifeq (,$(KREMLIN_HOME))
+  $(error KREMLIN_HOME is not defined)
+endif
+
+ifeq (,$(QD_HOME))
+  $(error Please define QD_HOME)
+endif
+
+KRML := $(KREMLIN_HOME)/krml
+dummy := $(shell test -e $(KRML))
+ifneq ($(.SHELLSTATUS),0)
+  KRML := $(QD_HOME)/bin/krml
+endif
+
+SOURCE_DIRS = .
+
+INCLUDE_DIRS = \
+  $(TARGET_DIR) \
+  $(PARSERS_HOME)/generated \
+  $(PARSERS_HOME)/generated/cache \
+  $(PARSERS_HOME)/test.ocaml \
+  $(KREMLIN_HOME)/kremlib \
+  $(KREMLIN_HOME)/kremlib/obj \
+  $(QD_HOME)/src/lowparse
+
+FSTAR_INCLUDES = $(addprefix --include ,$(INCLUDE_DIRS))
+
+FSTAR_OPTIONS = \
+  $(FSTAR_INCLUDES) \
+  --already_cached '*,-TestSpecs,-Test' \
+  $(OTHERFLAGS)
