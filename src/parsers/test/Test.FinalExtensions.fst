@@ -13,6 +13,7 @@ let hash_len (c: Parsers.CipherSuite13.cipherSuite13) : Tot (u: U32.t { 32 <= U3
   | Constraint_TLS_AES_128_CCM_SHA256 _ -> 32ul
   | Constraint_TLS_AES_128_CCM_8_SHA256 _ -> 32ul
 
+[@@ noextract_to "Kremlin"]
 inline_for_extraction
 noextract
 let compute_binder_ph1
@@ -30,6 +31,7 @@ let compute_binder_ph1
 
  //  ; LWP.valid_rewrite Parsers.PskBinderEntry.pskBinderEntry_lwp_rewrite // automatic thanks to subcomp
 
+[@@ noextract_to "Kremlin"]
 noextract
 let compute_binder_ph2 = compute_binder_ph1 // to avoid inline_for_extraction in effect indices, implicit args, etc.
 
@@ -41,6 +43,7 @@ let extract_compute_binder
 = LWP.extract _ (compute_binder_ph1 inv tc)
 
 // this will be inlined as an explicit function call
+[@@ noextract_to "Kremlin"]
 inline_for_extraction
 noextract
 let compute_binder_ph
@@ -49,9 +52,11 @@ let compute_binder_ph
 : LWP.TWrite unit LWP.parse_empty Parsers.PskBinderEntry.lwp_pskBinderEntry inv
 = LWP.wrap_extracted_impl _ _ (extract_compute_binder inv tc)
 
+[@@ noextract_to "Kremlin"]
 inline_for_extraction
 let encode_age age mask = U32.(age +%^ mask)
 
+[@@ noextract_to "Kremlin"]
 inline_for_extraction
 noextract
 let obfuscate_age1
@@ -73,6 +78,7 @@ let obfuscate_age1
     (fun _ -> LWP.cat id)
     (fun _ -> LWP.start LWP.parse_u32 LowParse.Low.Int.write_u32 obfuscated_age)
 
+[@@ noextract_to "Kremlin"]
 noextract
 let obfuscate_age2 = obfuscate_age1
 
@@ -83,6 +89,7 @@ let extract_obfuscate_age
 : Tot (LWP.extract_t inv (obfuscate_age2 inv now ri))
 = LWP.extract inv (obfuscate_age1 inv now ri)
 
+[@@ noextract_to "Kremlin"]
 inline_for_extraction
 noextract
 let obfuscate_age
@@ -92,7 +99,7 @@ let obfuscate_age
 : LWP.TWrite unit LWP.parse_empty Parsers.PskIdentity.lwp_pskIdentity inv
 = LWP.wrap_extracted_impl _ _ (extract_obfuscate_age inv now ri)
 
-
+[@@ noextract_to "Kremlin"]
 inline_for_extraction
 noextract
 let write_psk_key_exchange_modes1
@@ -113,6 +120,7 @@ let write_psk_key_exchange_modes1
             Parsers.PskKeyExchangeModes.pskKeyExchangeModes_lwp_write ()
   ))
 
+[@@ noextract_to "Kremlin"]
 noextract
 let write_psk_key_exchange_modes2 = write_psk_key_exchange_modes1
 
@@ -121,6 +129,7 @@ let extract_write_psk_key_exchange_modes
 : Tot (LWP.extract_t inv (write_psk_key_exchange_modes2 inv))
 = LWP.extract _ (write_psk_key_exchange_modes1 inv)
 
+[@@ noextract_to "Kremlin"]
 inline_for_extraction
 noextract
 let write_psk_key_exchange_modes
@@ -131,6 +140,7 @@ let write_psk_key_exchange_modes
 
 #restart-solver
 
+[@@ noextract_to "Kremlin"]
 inline_for_extraction
 noextract
 let write_psk_kex1
@@ -148,12 +158,12 @@ let write_psk_kex1
     Parsers.ClientHelloExtension_CHE_psk_key_exchange_modes.clientHelloExtension_CHE_psk_key_exchange_modes_lwp_writer (fun _ ->
             LWP.write_vllist_nil _ _;
 (* // FIXME: the following does not extract properly, it extracts to ((if allow_psk_resumption then f) buf len) instead of (if allow_psk_resumption then (f buf len))
-            if allow_psk_resumption
-            then
-              LWP.extend_vllist_snoc_ho _ _ _ (fun _ ->
-                LWP.start _ Parsers.PskKeyExchangeMode.pskKeyExchangeMode_writer Parsers.PskKeyExchangeMode.Psk_ke
-              );
-*)
+//             if allow_psk_resumption
+//             then
+//               LWP.extend_vllist_snoc_ho _ _ _ (fun _ ->
+//                 LWP.start _ Parsers.PskKeyExchangeMode.pskKeyExchangeMode_writer Parsers.PskKeyExchangeMode.Psk_ke
+//               );
+// *)
             LWP.ifthenelse_combinator
               allow_psk_resumption
               (fun _ -> 
@@ -163,12 +173,12 @@ let write_psk_kex1
               )
               (fun _ -> ());
 (* same here
-            if allow_dhe_resumption
-            then
-              LWP.extend_vllist_snoc_ho _ _ _ (fun _ ->
-                LWP.start _ Parsers.PskKeyExchangeMode.pskKeyExchangeMode_writer Parsers.PskKeyExchangeMode.Psk_dhe_ke
-              );
-*)
+//             if allow_dhe_resumption
+//             then
+//               LWP.extend_vllist_snoc_ho _ _ _ (fun _ ->
+//                 LWP.start _ Parsers.PskKeyExchangeMode.pskKeyExchangeMode_writer Parsers.PskKeyExchangeMode.Psk_dhe_ke
+//               );
+// *)
             LWP.ifthenelse_combinator
               allow_dhe_resumption
               (fun _ ->
@@ -181,6 +191,7 @@ let write_psk_kex1
           )
         )
 
+[@@ noextract_to "Kremlin"]
 noextract
 let write_psk_kex2 = write_psk_kex1
 
@@ -191,6 +202,7 @@ let extract_write_psk_kex
 : Tot (LWP.extract_t inv (write_psk_kex2 inv allow_psk_resumption allow_dhe_resumption))
 = LWP.extract inv (write_psk_kex1 inv allow_psk_resumption allow_dhe_resumption)
 
+[@@ noextract_to "Kremlin"]
 inline_for_extraction
 noextract
 let write_psk_kex
@@ -207,6 +219,7 @@ let write_psk_kex
 
 #restart-solver
 
+[@@ noextract_to "Kremlin"]
 inline_for_extraction
 noextract
 let write_binders1
@@ -224,6 +237,7 @@ let write_binders1
           ;
         Parsers.OfferedPsks_binders.offeredPsks_binders_lwp_write ()
 
+[@@ noextract_to "Kremlin"]
 noextract
 let write_binders2 = write_binders1
 
@@ -233,6 +247,7 @@ let extract_write_binders
 : Tot (LWP.extract_t inv (write_binders2 inv lri))
 = LWP.extract inv (write_binders1 inv lri)
 
+[@@ noextract_to "Kremlin"]
 inline_for_extraction
 noextract
 let write_binders
@@ -241,6 +256,7 @@ let write_binders
 : LWP.TWrite unit LWP.parse_empty Parsers.OfferedPsks.lwp_offeredPsks_binders inv
 = LWP.wrap_extracted_impl _ _ (extract_write_binders inv lri)
 
+[@@ noextract_to "Kremlin"]
 inline_for_extraction
 noextract
 let write_pskidentities1
@@ -259,6 +275,7 @@ let write_pskidentities1
           ;
         Parsers.OfferedPsks_identities.offeredPsks_identities_lwp_write ()
 
+[@@ noextract_to "Kremlin"]
 noextract
 let write_pskidentities2 = write_pskidentities1
 
@@ -269,6 +286,7 @@ let extract_write_pskidentities
 : Tot (LWP.extract_t inv (write_pskidentities2 inv lri now))
 = LWP.extract inv (write_pskidentities1 inv lri now)
 
+[@@ noextract_to "Kremlin"]
 inline_for_extraction
 noextract
 let write_pskidentities
@@ -278,6 +296,7 @@ let write_pskidentities
 : LWP.TWrite unit LWP.parse_empty Parsers.OfferedPsks.lwp_offeredPsks_identities inv
 = LWP.wrap_extracted_impl _ _ (extract_write_pskidentities inv lri now)
 
+[@@ noextract_to "Kremlin"]
 inline_for_extraction
 noextract
 let write_pre_shared_key1
@@ -303,6 +322,7 @@ let write_pre_shared_key1
     )
   )
 
+[@@ noextract_to "Kremlin"]
 noextract
 let write_pre_shared_key2 = write_pre_shared_key1
 
@@ -313,6 +333,7 @@ let extract_write_pre_shared_key
 : Tot (LWP.extract_t inv (write_pre_shared_key2 inv lri now))
 = LWP.extract inv (write_pre_shared_key1 inv lri now)
 
+[@@ noextract_to "Kremlin"]
 inline_for_extraction
 noextract
 let write_pre_shared_key
@@ -329,6 +350,7 @@ let write_pre_shared_key
 
 #restart-solver
 
+[@@ noextract_to "Kremlin"]
 inline_for_extraction
 noextract
 let write_final_extensions1
@@ -374,6 +396,7 @@ let write_final_extensions1
     end
   | _ -> ()
 
+[@@ noextract_to "Kremlin"]
 noextract
 let write_final_extensions2 = write_final_extensions1
 
@@ -386,6 +409,7 @@ let extract_write_final_extensions
 : Tot (LWP.extract_t inv (write_final_extensions2 inv cfg edi lri now))
 = LWP.extract inv (write_final_extensions1 inv cfg edi lri now)
 
+[@@ noextract_to "Kremlin"]
 inline_for_extraction
 noextract
 let write_final_extensions

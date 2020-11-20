@@ -6,6 +6,7 @@ module U32 = FStar.UInt32
 module B = LowStar.Buffer
 
 
+[@@ noextract_to "Kremlin"]
 inline_for_extraction
 noextract
 let write_extensions1
@@ -47,6 +48,7 @@ let write_extensions1
 
   Parsers.ClientHelloExtensions.clientHelloExtensions_lwp_write ()
 
+[@@ noextract_to "Kremlin"]
 noextract
 let write_extensions2 = write_extensions1
 
