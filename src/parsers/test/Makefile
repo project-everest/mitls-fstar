@@ -58,7 +58,7 @@ obj:
 .PRECIOUS: %.krml
 %.krml:
 	time $(FSTAR) $(notdir $(subst .checked,,$<)) --codegen Kremlin \
-	--extract $(basename $(notdir $(subst .checked,,$<)))
+	--extract_module $(basename $(notdir $(subst .checked,,$<)))
 
 # F* --> C
 # --------
