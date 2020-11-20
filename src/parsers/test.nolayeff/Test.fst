@@ -15,6 +15,8 @@ module LPW = LowParse.Low.Writers
 
 #restart-solver
 
+inline_for_extraction
+noextract
 let write_binder_ph
   (#rrel #rel: _)
   (sin: LP.slice rrel rel)
@@ -32,14 +34,15 @@ let write_binder_ph
   ))
   (ensures (fun h pout_to h' ->
     B.modifies (LP.loc_slice_from sout pout_from) h h' /\ (
-    let ph = compute_binder_ph (LP.contents Parsers.TicketContents13.ticketContents13_parser h sin pin) in
+    let ph = Ghost.hide (compute_binder_ph (LP.contents Parsers.TicketContents13.ticketContents13_parser h sin pin)) in
     if pout_to = LP.max_uint32
     then
       U32.v pout_from + LP.serialized_length Parsers.PskBinderEntry.pskBinderEntry_serializer ph > U32.v sout.LP.len
     else
       LP.valid_content_pos Parsers.PskBinderEntry.pskBinderEntry_parser h' sout pout_from ph pout_to
   )))
-= let h0 = HST.get () in
+=
+  let h0 = HST.get () in
   let ph = Ghost.hide (compute_binder_ph (LP.contents Parsers.TicketContents13.ticketContents13_parser h0 sin pin)) in
   let c = Parsers.CipherSuite13.cipherSuite13_reader sin (Parsers.TicketContents13.accessor_ticketContents13_cs sin pin) in
   let len : U32.t = hash_len c in
@@ -57,6 +60,8 @@ let write_binder_ph
 
 #restart-solver
 
+inline_for_extraction
+noextract
 let write_obfuscate_age
   (now: U32.t)
   (#rrel #rel: _)
@@ -243,21 +248,26 @@ let write_final_extensions
 #pop-options
 
 let test_write_final_extensions
-  (#rrelcfg #relcfg: _)
-  (scfg: LP.slice rrelcfg relcfg)
+  (scfg: LP.slice  (LP.srel_of_buffer_srel (B.trivial_preorder _)) (LP.srel_of_buffer_srel (B.trivial_preorder _)))
   (pcfg: U32.t)
   (edi: bool)
-  (#rrel #rel: _)
-  (sin: LP.slice rrel rel)
+  (sin: LP.slice  (LP.srel_of_buffer_srel (B.trivial_preorder _)) (LP.srel_of_buffer_srel (B.trivial_preorder _)))
   (pin_from pin_to: U32.t)
   (now: U32.t)
   (sout: LP.slice (LP.srel_of_buffer_srel (B.trivial_preorder _)) (LP.srel_of_buffer_srel (B.trivial_preorder _)))
   (pout_from: U32.t)
 : HST.Stack U32.t
-  (requires (fun _ -> False))
+  (requires (fun h0 ->
+    LP.live_slice h0 sout /\
+    U32.v sout.LP.len < U32.v LP.max_uint32 - 1 /\
+    LP.valid Parsers.MiTLSConfig.miTLSConfig_parser h0 scfg pcfg /\
+    LP.valid_list Parsers.ResumeInfo13.resumeInfo13_parser h0 sin pin_from pin_to /\
+    U32.v pout_from <= U32.v sout.LP.len /\
+    B.loc_disjoint (LP.loc_slice_from_to scfg pcfg (LP.get_valid_pos Parsers.MiTLSConfig.miTLSConfig_parser h0 scfg pcfg)) (LP.loc_slice_from sout pout_from) /\
+    B.loc_disjoint (LP.loc_slice_from_to sin pin_from pin_to) (LP.loc_slice_from sout pout_from)
+  ))
   (ensures (fun _ _ _ -> True))
 = let h0 = HST.get () in
   LPW.olwrite (write_final_extensions scfg pcfg edi sin pin_from pin_to now h0 sout pout_from) pout_from
-
 
 let main () : Tot C.exit_code = C.EXIT_SUCCESS
