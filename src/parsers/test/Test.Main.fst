@@ -1,4 +1,4 @@
-module Test
+module Test.Main
 include Test.FinalExtensions
 
 module LWP = LowParse.Writers.NoHoare.Combinators
