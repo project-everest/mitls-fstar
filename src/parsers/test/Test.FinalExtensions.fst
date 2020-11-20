@@ -14,7 +14,7 @@ let hash_len (c: Parsers.CipherSuite13.cipherSuite13) : Tot (u: U32.t { 32 <= U3
   | Constraint_TLS_AES_128_CCM_8_SHA256 _ -> 32ul
 
 inline_for_extraction
-noextract
+[@@ noextract_to "Kremlin"] noextract
 let compute_binder_ph1
   (inv: LWP.memory_invariant)
   (tc: LWP.ptr Parsers.TicketContents13.lwp_ticketContents13 inv)
@@ -30,7 +30,7 @@ let compute_binder_ph1
 
  //  ; LWP.valid_rewrite Parsers.PskBinderEntry.pskBinderEntry_lwp_rewrite // automatic thanks to subcomp
 
-noextract
+[@@ noextract_to "Kremlin"] noextract
 let compute_binder_ph2 = compute_binder_ph1 // to avoid inline_for_extraction in effect indices, implicit args, etc.
 
 // this will be extracted as a C function
@@ -42,7 +42,7 @@ let extract_compute_binder
 
 // this will be inlined as an explicit function call
 inline_for_extraction
-noextract
+[@@ noextract_to "Kremlin"] noextract
 let compute_binder_ph
   (#inv: LWP.memory_invariant)
   (tc: LWP.ptr Parsers.TicketContents13.lwp_ticketContents13 inv)
@@ -53,7 +53,7 @@ inline_for_extraction
 let encode_age age mask = U32.(age +%^ mask)
 
 inline_for_extraction
-noextract
+[@@ noextract_to "Kremlin"] noextract
 let obfuscate_age1
   (inv: LWP.memory_invariant)
   (now: U32.t)
@@ -73,7 +73,7 @@ let obfuscate_age1
     (fun _ -> LWP.cat id)
     (fun _ -> LWP.start LWP.parse_u32 LowParse.Low.Int.write_u32 obfuscated_age)
 
-noextract
+[@@ noextract_to "Kremlin"] noextract
 let obfuscate_age2 = obfuscate_age1
 
 let extract_obfuscate_age
@@ -84,7 +84,7 @@ let extract_obfuscate_age
 = LWP.extract inv (obfuscate_age1 inv now ri)
 
 inline_for_extraction
-noextract
+[@@ noextract_to "Kremlin"] noextract
 let obfuscate_age
   (#inv: LWP.memory_invariant)
   (now: U32.t)
@@ -94,7 +94,7 @@ let obfuscate_age
 
 
 inline_for_extraction
-noextract
+[@@ noextract_to "Kremlin"] noextract
 let write_psk_key_exchange_modes1
   (inv: LWP.memory_invariant)
   (_: unit)
@@ -113,7 +113,7 @@ let write_psk_key_exchange_modes1
             Parsers.PskKeyExchangeModes.pskKeyExchangeModes_lwp_write ()
   ))
 
-noextract
+[@@ noextract_to "Kremlin"] noextract
 let write_psk_key_exchange_modes2 = write_psk_key_exchange_modes1
 
 let extract_write_psk_key_exchange_modes
@@ -122,7 +122,7 @@ let extract_write_psk_key_exchange_modes
 = LWP.extract _ (write_psk_key_exchange_modes1 inv)
 
 inline_for_extraction
-noextract
+[@@ noextract_to "Kremlin"] noextract
 let write_psk_key_exchange_modes
   (#inv: LWP.memory_invariant)
   (_: unit)
@@ -132,7 +132,7 @@ let write_psk_key_exchange_modes
 #restart-solver
 
 inline_for_extraction
-noextract
+[@@ noextract_to "Kremlin"] noextract
 let write_psk_kex1
   (inv: LWP.memory_invariant)
   (allow_psk_resumption: bool)
@@ -181,7 +181,7 @@ let write_psk_kex1
           )
         )
 
-noextract
+[@@ noextract_to "Kremlin"] noextract
 let write_psk_kex2 = write_psk_kex1
 
 let extract_write_psk_kex
@@ -192,7 +192,7 @@ let extract_write_psk_kex
 = LWP.extract inv (write_psk_kex1 inv allow_psk_resumption allow_dhe_resumption)
 
 inline_for_extraction
-noextract
+[@@ noextract_to "Kremlin"] noextract
 let write_psk_kex
   (#inv: LWP.memory_invariant)
   (allow_psk_resumption: bool)
@@ -208,7 +208,7 @@ let write_psk_kex
 #restart-solver
 
 inline_for_extraction
-noextract
+[@@ noextract_to "Kremlin"] noextract
 let write_binders1
   (inv: LWP.memory_invariant)
   (lri: LWP.lptr Parsers.ResumeInfo13.lwp_resumeInfo13 inv)
@@ -224,7 +224,7 @@ let write_binders1
           ;
         Parsers.OfferedPsks_binders.offeredPsks_binders_lwp_write ()
 
-noextract
+[@@ noextract_to "Kremlin"] noextract
 let write_binders2 = write_binders1
 
 let extract_write_binders
@@ -234,7 +234,7 @@ let extract_write_binders
 = LWP.extract inv (write_binders1 inv lri)
 
 inline_for_extraction
-noextract
+[@@ noextract_to "Kremlin"] noextract
 let write_binders
   (#inv: LWP.memory_invariant)
   (lri: LWP.lptr Parsers.ResumeInfo13.lwp_resumeInfo13 inv)
@@ -242,7 +242,7 @@ let write_binders
 = LWP.wrap_extracted_impl _ _ (extract_write_binders inv lri)
 
 inline_for_extraction
-noextract
+[@@ noextract_to "Kremlin"] noextract
 let write_pskidentities1
   (inv: LWP.memory_invariant)
   (lri: LWP.lptr Parsers.ResumeInfo13.lwp_resumeInfo13 inv)
@@ -259,7 +259,7 @@ let write_pskidentities1
           ;
         Parsers.OfferedPsks_identities.offeredPsks_identities_lwp_write ()
 
-noextract
+[@@ noextract_to "Kremlin"] noextract
 let write_pskidentities2 = write_pskidentities1
 
 let extract_write_pskidentities
@@ -270,7 +270,7 @@ let extract_write_pskidentities
 = LWP.extract inv (write_pskidentities1 inv lri now)
 
 inline_for_extraction
-noextract
+[@@ noextract_to "Kremlin"] noextract
 let write_pskidentities
   (#inv: LWP.memory_invariant)
   (lri: LWP.lptr Parsers.ResumeInfo13.lwp_resumeInfo13 inv)
@@ -279,7 +279,7 @@ let write_pskidentities
 = LWP.wrap_extracted_impl _ _ (extract_write_pskidentities inv lri now)
 
 inline_for_extraction
-noextract
+[@@ noextract_to "Kremlin"] noextract
 let write_pre_shared_key1
   (inv: LWP.memory_invariant)
   (lri: LWP.lptr Parsers.ResumeInfo13.lwp_resumeInfo13 inv)
@@ -303,7 +303,7 @@ let write_pre_shared_key1
     )
   )
 
-noextract
+[@@ noextract_to "Kremlin"] noextract
 let write_pre_shared_key2 = write_pre_shared_key1
 
 let extract_write_pre_shared_key
@@ -314,7 +314,7 @@ let extract_write_pre_shared_key
 = LWP.extract inv (write_pre_shared_key1 inv lri now)
 
 inline_for_extraction
-noextract
+[@@ noextract_to "Kremlin"] noextract
 let write_pre_shared_key
   (#inv: LWP.memory_invariant)
   (lri: LWP.lptr Parsers.ResumeInfo13.lwp_resumeInfo13 inv)
@@ -330,7 +330,7 @@ let write_pre_shared_key
 #restart-solver
 
 inline_for_extraction
-noextract
+[@@ noextract_to "Kremlin"] noextract
 let write_final_extensions1
   (inv: LWP.memory_invariant)
   (cfg: LWP.ptr Parsers.MiTLSConfig.lwp_miTLSConfig inv)
@@ -374,7 +374,7 @@ let write_final_extensions1
     end
   | _ -> ()
 
-noextract
+[@@ noextract_to "Kremlin"] noextract
 let write_final_extensions2 = write_final_extensions1
 
 let extract_write_final_extensions
@@ -387,7 +387,7 @@ let extract_write_final_extensions
 = LWP.extract inv (write_final_extensions1 inv cfg edi lri now)
 
 inline_for_extraction
-noextract
+[@@ noextract_to "Kremlin"] noextract
 let write_final_extensions
   (#inv: LWP.memory_invariant)
   (cfg: LWP.ptr Parsers.MiTLSConfig.lwp_miTLSConfig inv)

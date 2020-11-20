@@ -6,7 +6,7 @@ module U32 = FStar.UInt32
 module B = LowStar.Buffer
 
 inline_for_extraction
-noextract
+[@@ noextract_to "Kremlin"] noextract
 let keyshares1
   (inv: LWP.memory_invariant)
   (cfg: LWP.ptr Parsers.MiTLSConfig.lwp_miTLSConfig inv)
@@ -23,7 +23,7 @@ let keyshares1
     LWP.extend_vllist_snoc _ _ _
   | _ -> ()
 
-noextract
+[@@ noextract_to "Kremlin"] noextract
 let keyshares2 = keyshares1
 
 let extract_keyshares
@@ -34,7 +34,7 @@ let extract_keyshares
 = LWP.extract _ (keyshares1 _ _ _)
 
 inline_for_extraction
-noextract
+[@@ noextract_to "Kremlin"] noextract
 let keyshares
   (#inv: LWP.memory_invariant)
   (cfg: LWP.ptr Parsers.MiTLSConfig.lwp_miTLSConfig inv)
@@ -44,7 +44,7 @@ let keyshares
 
 #push-options "--z3rlimit 16"
 inline_for_extraction
-noextract
+[@@ noextract_to "Kremlin"] noextract
 let clientHelloExtensions_of_unknown_extensions1
   (inv: LWP.memory_invariant)
   (l: LWP.ptr Parsers.UnknownExtensions.lwp_unknownExtensions inv)
@@ -71,7 +71,7 @@ let clientHelloExtensions_of_unknown_extensions1
     l
 #pop-options
 
-noextract
+[@@ noextract_to "Kremlin"] noextract
 let clientHelloExtensions_of_unknown_extensions2 = clientHelloExtensions_of_unknown_extensions1
 
 let extract_clientHelloExtensions_of_unknown_extensions
@@ -81,7 +81,7 @@ let extract_clientHelloExtensions_of_unknown_extensions
 = LWP.extract _ (clientHelloExtensions_of_unknown_extensions1 _ _)
 
 inline_for_extraction
-noextract
+[@@ noextract_to "Kremlin"] noextract
 let clientHelloExtensions_of_unknown_extensions
   (#inv: LWP.memory_invariant)
   (l: LWP.ptr Parsers.UnknownExtensions.lwp_unknownExtensions inv)
@@ -113,7 +113,7 @@ let supported (min_version max_version pv: PV.protocolVersion) : Tot bool =
   min_version `leqPV` pv && pv `leqPV` max_version
 
 inline_for_extraction
-noextract
+[@@ noextract_to "Kremlin"] noextract
 let supported_versions1
   (inv: LWP.memory_invariant)
   (cfg: LWP.ptr Parsers.MiTLSConfig.lwp_miTLSConfig inv)
@@ -141,7 +141,7 @@ let supported_versions1
     )
   )
 
-noextract
+[@@ noextract_to "Kremlin"] noextract
 let supported_versions2 = supported_versions1
 
 let extract_supported_versions
@@ -151,7 +151,7 @@ let extract_supported_versions
 = LWP.extract _ (supported_versions1 _ _)
 
 inline_for_extraction
-noextract
+[@@ noextract_to "Kremlin"] noextract
 let supported_versions
   (#inv: LWP.memory_invariant)
   (cfg: LWP.ptr Parsers.MiTLSConfig.lwp_miTLSConfig inv)
@@ -161,7 +161,7 @@ let supported_versions
 (* From: src/tls/Negotiation.fst: prepareClientextensions *)
 
 inline_for_extraction
-noextract
+[@@ noextract_to "Kremlin"] noextract
 let write_extensions1
   (inv: LWP.memory_invariant)
   (cfg: LWP.ptr Parsers.MiTLSConfig.lwp_miTLSConfig inv)
@@ -184,7 +184,7 @@ let write_extensions1
   write_final_extensions cfg edi lri now;
   Parsers.ClientHelloExtensions.clientHelloExtensions_lwp_write ()
 
-noextract
+[@@ noextract_to "Kremlin"] noextract
 let write_extensions2 = write_extensions1
 
 let write_extensions
