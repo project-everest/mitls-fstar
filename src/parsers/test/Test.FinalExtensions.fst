@@ -278,55 +278,6 @@ let write_pskidentities
 : LWP.TWrite unit LWP.parse_empty Parsers.OfferedPsks.lwp_offeredPsks_identities inv
 = LWP.wrap_extracted_impl _ _ (extract_write_pskidentities inv lri now)
 
-inline_for_extraction
-[@@ noextract_to "Kremlin"] noextract
-let write_pre_shared_key1
-  (inv: LWP.memory_invariant)
-  (lri: LWP.lptr Parsers.ResumeInfo13.lwp_resumeInfo13 inv)
-  (now: U32.t)
-  ()
-: LWP.TWrite 
-    unit
-    LWP.parse_empty
-    Parsers.ClientHelloExtension.lwp_clientHelloExtension
-    inv
-=
-  Parsers.ClientHelloExtension.clientHelloExtension_pre_shared_key_lwriter (fun _ ->
-    Parsers.ClientHelloExtension_CHE_pre_shared_key.clientHelloExtension_CHE_pre_shared_key_lwp_writer (fun _ ->
-    Parsers.OfferedPsks.offeredPsks_lwriter
-      (fun _ ->
-          write_pskidentities lri now
-      )
-      (fun _ ->
-        write_binders lri
-      )
-    )
-  )
-
-[@@ noextract_to "Kremlin"] noextract
-let write_pre_shared_key2 = write_pre_shared_key1
-
-let extract_write_pre_shared_key
-  (inv: LWP.memory_invariant)
-  (lri: LWP.lptr Parsers.ResumeInfo13.lwp_resumeInfo13 inv)
-  (now: U32.t)
-: Tot (LWP.extract_t inv (write_pre_shared_key2 inv lri now))
-= LWP.extract inv (write_pre_shared_key1 inv lri now)
-
-inline_for_extraction
-[@@ noextract_to "Kremlin"] noextract
-let write_pre_shared_key
-  (#inv: LWP.memory_invariant)
-  (lri: LWP.lptr Parsers.ResumeInfo13.lwp_resumeInfo13 inv)
-  (now: U32.t)
-: LWP.TWrite 
-    unit
-    LWP.parse_empty
-    Parsers.ClientHelloExtension.lwp_clientHelloExtension
-    inv
-=
-  LWP.wrap_extracted_impl _ _ (extract_write_pre_shared_key inv lri now)
-
 #restart-solver
 
 inline_for_extraction
@@ -363,7 +314,17 @@ let write_final_extensions1
           )
         );
       LWP.extend_vllist_snoc_ho _ _ _ (fun _ ->
-        write_pre_shared_key lri now
+        Parsers.ClientHelloExtension.clientHelloExtension_pre_shared_key_lwriter (fun _ ->
+          Parsers.ClientHelloExtension_CHE_pre_shared_key.clientHelloExtension_CHE_pre_shared_key_lwp_writer (fun _ ->
+          Parsers.OfferedPsks.offeredPsks_lwriter
+            (fun _ ->
+              write_pskidentities lri now
+            )
+            (fun _ ->
+              write_binders lri
+            )
+          )
+        )
       );
       ()
     end else begin
