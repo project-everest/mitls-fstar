@@ -74,7 +74,7 @@ dist/Makefile.basic: obj/kremlin.rsp
 	  -fparentheses \
 	  -fnoreturn-else \
 	  -header header.txt \
-	  -bundle 'Test=TestSpecs,Test.*,Parsers.*,LowParse.*,LowStar.*,FStar.*,C,C.\*,Prims' \
+	  -bundle 'Test=Test.*,Parsers.*,LowParse.*,LowStar.*,FStar.*,C,C.\*,Prims' \
 	  -o test.exe \
 	  -no-prefix Test \
 	  -ccopt -Wno-type-limits

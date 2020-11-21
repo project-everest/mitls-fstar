@@ -26,7 +26,6 @@ INCLUDE_DIRS = \
   $(TARGET_DIR) \
   $(PARSERS_HOME)/generated \
   $(PARSERS_HOME)/generated/cache \
-  $(PARSERS_HOME)/test.ocaml \
   $(KREMLIN_HOME)/kremlib \
   $(KREMLIN_HOME)/kremlib/obj \
   $(QD_HOME)/src/lowparse
