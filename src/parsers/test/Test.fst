@@ -5,6 +5,109 @@ module LWP = LowParse.Writers.NoHoare.Combinators
 module U32 = FStar.UInt32
 module B = LowStar.Buffer
 
+(* Benchmark *)
+
+inline_for_extraction
+[@@ noextract_to "Kremlin"] noextract
+let test
+  #inv
+  (cfg: LWP.ptr Parsers.MiTLSConfig.lwp_miTLSConfig inv)
+  (edi: bool)
+  (lri: LWP.ptr (LWP.parse_vllist Parsers.ResumeInfo13.lwp_resumeInfo13 0ul 127ul) inv)
+  (now: U32.t)
+: LWP.TWrite unit LWP.parse_empty (LWP.parse_vllist Parsers.ClientHelloExtension.lwp_clientHelloExtension 0ul 65535ul) inv
+= let lri = LWP.lptr_of_vllist_ptr _ _ _ lri in
+  LWP.write_vllist_nil _ _;
+  write_final_extensions cfg edi lri now
+
+inline_for_extraction
+[@@ noextract_to "Kremlin"] noextract
+let mk_cfg
+  #inv
+  ()
+: LWP.TWrite unit LWP.parse_empty Parsers.MiTLSConfig.lwp_miTLSConfig inv
+=
+  Parsers.MiTLSConfig.miTLSConfig_lwriter
+    (fun _ -> Parsers.KnownProtocolVersion.knownProtocolVersion_TLS_1p2_lwriter (fun _ -> ()))
+    (fun _ -> Parsers.KnownProtocolVersion.knownProtocolVersion_TLS_1p3_lwriter (fun _ -> ()))
+    (fun _ -> LWP.start _ Parsers.Boolean.boolean_writer Parsers.Boolean.B_false)
+    (fun _ -> LWP.write_vllist_nil _ _; Parsers.MiTLSConfig.miTLSConfig_cipher_suites_lwp_write ())
+    (fun _ -> LWP.write_vllist_nil _ _; Parsers.UnknownExtensions.unknownExtensions_lwp_write ())
+
+module HST = FStar.HyperStack.ST
+module HS = FStar.HyperStack
+
+#push-options "--z3rlimit 64"
+let main () : HST.Stack C.exit_code
+  (requires (fun _ -> True))
+  (ensures (fun _ _ _ -> True))
+=
+  HST.push_frame ();
+  let cfg = B.alloca 0uy 256ul in
+  HST.push_frame ();
+  let lri = B.alloca 0uy 16ul in
+  assert (B.loc_disjoint (B.loc_buffer cfg) (B.loc_buffer lri));
+  HST.push_frame ();
+  let out = B.alloca 0uy 1024ul in
+  assert (B.loc_disjoint (B.loc_buffer out) (B.loc_buffer cfg `B.loc_union` B.loc_buffer lri));
+  HST.push_frame ();
+  let h0 = HST.get () in
+  let inv = { LWP.h0 = Ghost.hide h0; LWP.lwrite = Ghost.hide (B.loc_buffer cfg) } in 
+  begin match LWP.extract inv (fun _ -> mk_cfg ()) cfg 256ul 0ul with
+  | LWP.ICorrect _ pos_cfg ->
+    let h0 = HST.get () in
+    LWP.valid_ext Parsers.MiTLSConfig.lwp_miTLSConfig h0 cfg 0ul pos_cfg h0 (B.gsub cfg 0ul pos_cfg) 0ul pos_cfg;
+    let cfg = B.sub cfg 0ul pos_cfg in
+    let inv = { LWP.h0 = Ghost.hide h0; LWP.lwrite = Ghost.hide (B.loc_buffer lri) } in 
+    begin match LWP.extract inv (fun _ -> LWP.write_vllist_nil Parsers.ResumeInfo13.lwp_resumeInfo13 127ul) lri 16ul 0ul with
+    | LWP.ICorrect _ pos_lri ->
+      let h1 = HST.get () in
+      LWP.valid_ext (LWP.parse_vllist Parsers.ResumeInfo13.lwp_resumeInfo13 0ul 127ul) h1 lri 0ul pos_lri h1 (B.gsub lri 0ul pos_lri) 0ul pos_lri;
+      LWP.valid_frame Parsers.MiTLSConfig.lwp_miTLSConfig h0 cfg 0ul pos_cfg (B.loc_buffer lri) h1;
+      let lri = B.sub lri 0ul pos_lri in
+      C.Loops.for 0ul 131072ul
+        (fun h _ ->
+          HS.get_tip h == HS.get_tip h0 /\
+          B.modifies (B.loc_buffer out) h1 h
+        )
+        (fun now ->
+          let h = HST.get () in
+          LWP.valid_frame Parsers.MiTLSConfig.lwp_miTLSConfig h1 cfg 0ul pos_cfg (B.loc_buffer out) h;
+          LWP.valid_frame (LWP.parse_vllist Parsers.ResumeInfo13.lwp_resumeInfo13 0ul 127ul) h1 lri 0ul pos_lri (B.loc_buffer out) h;
+          let inv = { LWP.h0 = Ghost.hide h; LWP.lwrite = Ghost.hide (B.loc_buffer out) } in
+          let cfg = LWP.mk_ptr Parsers.MiTLSConfig.lwp_miTLSConfig inv cfg pos_cfg in
+          let lri = LWP.mk_ptr (LWP.parse_vllist Parsers.ResumeInfo13.lwp_resumeInfo13 0ul 127ul) inv lri pos_lri in
+          LowStar.Printf.print_u32 now;
+          begin match LWP.extract inv (fun _ -> test cfg true lri now) out 1024ul 0ul with
+          | LWP.IError _ -> LowStar.Printf.print_string " error"
+          | LWP.ICorrect _ _ ->
+            LowStar.Printf.print_string " correct ";
+            let i = B.index out 0ul in
+            LowStar.Printf.print_u8 i
+          | _ -> LowStar.Printf.print_string " overflow"
+          end;
+          LowStar.Printf.print_string "\n"
+        )
+(*
+          let h = HST.get () in
+          let inv = { LWP.h0 = Ghost.hide h; LWP.lwrite = Ghost.hide (B.loc_buffer out) } in
+          let cfg = LWP.mk_ptr Parsers.MiTLSConfig.lwp_miTLSConfig cfg 0ul pos_cfg in
+          let
+          let _ = LWP.extract inv (fun _ -> test 
+*)
+    | _ -> ()
+    end
+  | _ -> ()
+  end;
+  HST.pop_frame ();
+  HST.pop_frame ();
+  HST.pop_frame ();
+  HST.pop_frame ();
+  C.EXIT_SUCCESS
+#pop-options
+
+(* Extra, for the sake of testing C extraction and compilation
+
 inline_for_extraction
 [@@ noextract_to "Kremlin"] noextract
 let keyshares1
@@ -196,5 +299,4 @@ let write_extensions
   (now: U32.t)
 : Tot (LWP.extract_t _ (write_extensions2 inv cfg ks edi lri now))
 = LWP.extract _ (write_extensions1 _ _ _ _ _ _)
-
-let main () : Tot C.exit_code = C.EXIT_SUCCESS
+*)
