@@ -37,6 +37,10 @@ let mk_cfg
 module HST = FStar.HyperStack.ST
 module HS = FStar.HyperStack
 
+inline_for_extraction
+noextract
+let total_count = 1048576ul
+
 #push-options "--z3rlimit 64"
 let main () : HST.Stack C.exit_code
   (requires (fun _ -> True))
@@ -65,7 +69,7 @@ let main () : HST.Stack C.exit_code
       LWP.valid_ext (LWP.parse_vllist Parsers.ResumeInfo13.lwp_resumeInfo13 0ul 127ul) h1 lri 0ul pos_lri h1 (B.gsub lri 0ul pos_lri) 0ul pos_lri;
       LWP.valid_frame Parsers.MiTLSConfig.lwp_miTLSConfig h0 cfg 0ul pos_cfg (B.loc_buffer lri) h1;
       let lri = B.sub lri 0ul pos_lri in
-      C.Loops.for 0ul 131072ul
+      C.Loops.for 0ul total_count
         (fun h _ ->
           HS.get_tip h == HS.get_tip h0 /\
           B.modifies (B.loc_buffer out) h1 h

@@ -71,6 +71,8 @@ let write_extensions
     then Correct fe
     else Error "write_extensions: out of bounds"
 
+let total_count = 1048576ul
+
 let rec test
   (cfg: CFG.miTLSConfig) (edi: bool) (l: list Parsers.ResumeInfo13.resumeInfo13) (now: U32.t)
 : FStar.All.ML unit
@@ -85,8 +87,8 @@ let rec test
       FStar.IO.print_uint8 (FStar.Bytes.get s 0ul)
     end;
     FStar.IO.print_newline ();
-    if now `U32.gt` 0ul
-    then test cfg edi l (now `U32.sub` 1ul)
+    if now `U32.lt` total_count
+    then test cfg edi l (now `U32.add` 1ul)
 
 let _ =
   let cfg = {
@@ -96,4 +98,4 @@ let _ =
     Parsers.MiTLSConfig.cipher_suites = [];
     Parsers.MiTLSConfig.custom_extensions = [];
   } in
-  test cfg true [] 131072ul
+  test cfg true [] 0ul
