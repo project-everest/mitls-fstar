@@ -15,8 +15,16 @@ genmakefile: generated/Makefile
 verify: gen genmakefile
 	+$(MAKE) -C generated verify
 
-test: verify
+test.nolayeff: verify
+	+$(MAKE) -C test.nolayeff
+
+test.ocaml:
+	+$(MAKE) -C test.ocaml
+
+test.layeff: verify
 	+$(MAKE) -C test
+
+test: test.layeff test.nolayeff test.ocaml
 
 generated/Makefile: Makefile.qd
 	mkdir -p generated
@@ -25,4 +33,4 @@ generated/Makefile: Makefile.qd
 clean:
 	rm -rf *.gen generated
 
-.PHONY: all gen genmakefile clean verify test
+.PHONY: all gen genmakefile clean verify test.layeff test test.nolayeff test.ocaml
