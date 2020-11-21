@@ -60,3 +60,40 @@ let final_extensions
     else
       Correct [Parsers.ClientHelloExtension.CHE_psk_key_exchange_modes [Parsers.PskKeyExchangeMode.Psk_ke; Parsers.PskKeyExchangeMode.Psk_dhe_ke]]
   | _ -> Correct []
+
+let write_extensions
+  (cfg: CFG.miTLSConfig) (edi: bool) (l: list Parsers.ResumeInfo13.resumeInfo13) (now: U32.t)
+: Tot (result Parsers.ClientHelloExtensions.clientHelloExtensions)
+= match final_extensions cfg edi l now with
+  | Error e -> Error e
+  | Correct fe ->
+    if Parsers.ClientHelloExtensions.check_clientHelloExtensions_list_bytesize fe
+    then Correct fe
+    else Error "write_extensions: out of bounds"
+
+let rec test
+  (cfg: CFG.miTLSConfig) (edi: bool) (l: list Parsers.ResumeInfo13.resumeInfo13) (now: U32.t)
+: FStar.All.ML unit
+=
+    FStar.IO.print_uint32 now;
+    begin match write_extensions cfg edi l now with
+    | Error e ->
+      FStar.IO.print_string " error"
+    | Correct fe ->
+      let s = Parsers.ClientHelloExtensions.clientHelloExtensions_serializer32 fe in
+      FStar.IO.print_string " correct, first byte is ";
+      FStar.IO.print_uint8 (FStar.Bytes.get s 0ul)
+    end;
+    FStar.IO.print_newline ();
+    if now `U32.gt` 0ul
+    then test cfg edi l (now `U32.sub` 1ul)
+
+let _ =
+  let cfg = {
+    Parsers.MiTLSConfig.min_version = Parsers.KnownProtocolVersion.Constraint_TLS_1p2 ();
+    Parsers.MiTLSConfig.max_version = Parsers.KnownProtocolVersion.Constraint_TLS_1p3 ();
+    Parsers.MiTLSConfig.is_quic = Parsers.Boolean.B_false;
+    Parsers.MiTLSConfig.cipher_suites = [];
+    Parsers.MiTLSConfig.custom_extensions = [];
+  } in
+  test cfg true [] 131072ul

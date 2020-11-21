@@ -96,4 +96,4 @@ obj/%.cmx: obj/%.ml
 
 test.exe: $(ALL_CMX_FILES)
 	$(OCAMLOPT) $^ -o $@
-	./$@
+	time ./$@ > /dev/null
