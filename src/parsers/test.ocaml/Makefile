@@ -1,6 +1,6 @@
 # From https://fstarlang.github.io/lowstar/html/Setup.html#build
 
-all: test
+all: test.exe
 
 include Makefile.include
 
@@ -30,7 +30,7 @@ FSTAR_EXTRACT=--extract '* -Prims -FStar'
 ifndef MAKE_RESTARTS
 obj/.depend: .FORCE
 	mkdir -p obj
-	$(QD_HOME)/qd -high -prefix Parsers. -odir $(TARGET_DIR) $(PARSERS_HOME)/Parsers.rfc
+	+$(MAKE) -f Makefile.qd
 	$(FSTAR_NO_FLAGS) --dep full $(notdir $(FSTAR_ROOTS)) $(FSTAR_EXTRACT) > $@
 
 .PHONY: .FORCE
@@ -38,8 +38,6 @@ obj/.depend: .FORCE
 endif
 
 include obj/.depend
-
-test: $(ALL_ML_FILES)
 
 # Verification
 # ------------
@@ -69,3 +67,33 @@ obj/Parsers.%.checked: FSTAR_FLAGS=--admit_smt_queries true
 
 # Compiling the generated OCaml code
 # ----------------------------------
+
+# This is much more difficult, and you're probably better off calling OCamlbuild
+# or Dune at this stage. Nonetheless, I still show how to compile the generate
+# OCaml code with only GNU make and without relying on an external tool or an
+# extra dependency analysis.
+
+# First complication... no comment.
+ifeq ($(OS),Windows_NT)
+  export OCAMLPATH := $(FSTAR_HOME)/bin;$(OCAMLPATH)
+else
+  export OCAMLPATH := $(FSTAR_HOME)/bin:$(OCAMLPATH)
+endif
+
+# Second complication: F* generates a list of ML files in the reverse linking
+# order. No POSIX-portable way of reversing the order of a list.
+TAC = $(shell which tac >/dev/null 2>&1 && echo "tac" || echo "tail -r")
+
+ALL_CMX_FILES = $(patsubst %.ml,%.cmx,$(shell echo $(ALL_ML_FILES) | $(TAC)))
+
+# Finally, how to compile things...
+
+OCAMLOPT = ocamlfind opt -package fstarlib -linkpkg -g -I $(TARGET_DIR) -w -8-20-26
+
+.PRECIOUS: obj/%.cmx
+obj/%.cmx: obj/%.ml
+	$(OCAMLOPT) -c $< -o $@
+
+test.exe: $(ALL_CMX_FILES)
+	$(OCAMLOPT) $^ -o $@
+	./$@

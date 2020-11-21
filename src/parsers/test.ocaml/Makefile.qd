@@ -1,0 +1,10 @@
+all: obj/qd
+
+include Makefile.include
+
+obj/qd: $(PARSERS_HOME)/Parsers.rfc $(QD_HOME)/qd
+	mkdir -p obj
+	$(QD_HOME)/qd -high -prefix Parsers. -odir $(TARGET_DIR) $<
+	touch $@
+
+.PHONY: all
