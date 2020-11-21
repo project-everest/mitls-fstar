@@ -77,16 +77,14 @@ let rec test
   (cfg: CFG.miTLSConfig) (edi: bool) (l: list Parsers.ResumeInfo13.resumeInfo13) (now: U32.t)
 : FStar.All.ML unit
 =
-    FStar.IO.print_uint32 now;
     begin match write_extensions cfg edi l now with
     | Error e ->
-      FStar.IO.print_string " error"
+      FStar.IO.print_string " error "
     | Correct fe ->
       let s = Parsers.ClientHelloExtensions.clientHelloExtensions_serializer32 fe in
-      FStar.IO.print_string " correct, first byte is ";
-      FStar.IO.print_uint8 (FStar.Bytes.get s 0ul)
+//      FStar.IO.print_string " correct ";
+      if FStar.Bytes.get s 0ul <> 0uy then FStar.IO.print_string " nonzero "
     end;
-    FStar.IO.print_newline ();
     if now `U32.lt` total_count
     then test cfg edi l (now `U32.add` 1ul)
 

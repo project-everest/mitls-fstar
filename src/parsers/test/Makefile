@@ -84,4 +84,4 @@ dist/Makefile.basic: obj/kremlin.rsp
 
 dist/test.exe: dist/Makefile.basic
 	$(MAKE) -C $(dir $@) -f $(notdir $<)
-	$@
+	time $@

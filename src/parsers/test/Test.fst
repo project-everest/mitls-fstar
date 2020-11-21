@@ -81,16 +81,14 @@ let main () : HST.Stack C.exit_code
           let inv = { LWP.h0 = Ghost.hide h; LWP.lwrite = Ghost.hide (B.loc_buffer out) } in
           let cfg = LWP.mk_ptr Parsers.MiTLSConfig.lwp_miTLSConfig inv cfg pos_cfg in
           let lri = LWP.mk_ptr (LWP.parse_vllist Parsers.ResumeInfo13.lwp_resumeInfo13 0ul 127ul) inv lri pos_lri in
-          LowStar.Printf.print_u32 now;
           begin match LWP.extract inv (fun _ -> test cfg true lri now) out 1024ul 0ul with
-          | LWP.IError _ -> LowStar.Printf.print_string " error"
+          | LWP.IError _ -> LowStar.Printf.print_string " error "
           | LWP.ICorrect _ _ ->
-            LowStar.Printf.print_string " correct ";
             let i = B.index out 0ul in
-            LowStar.Printf.print_u8 i
+            if i <> 0uy
+            then LowStar.Printf.print_string " nonzero "
           | _ -> LowStar.Printf.print_string " overflow"
-          end;
-          LowStar.Printf.print_string "\n"
+          end
         )
 (*
           let h = HST.get () in
