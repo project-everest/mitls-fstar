@@ -4,8 +4,6 @@ all: test
 
 include Makefile.include
 
-test: $(ALL_CHECKED_FILES)
-
 clean:
 	rm -rf obj dist
 
@@ -21,6 +19,8 @@ FSTAR_NO_FLAGS = $(FSTAR_HOME)/bin/fstar.exe $(FSTAR_OPTIONS) \
 FSTAR_ROOTS = $(wildcard $(addsuffix /*.fsti,$(SOURCE_DIRS))) \
   $(wildcard $(addsuffix /*.fst,$(SOURCE_DIRS))) \
 
+FSTAR_EXTRACT=--extract '* -Prims -FStar'
+
 # This is the only bulletproof way that I know of forcing a regeneration of the
 # .depend file every single time. Why, you may ask? Well, it's frequent enough
 # to add a new file that you don't want to decipher a cryptic error only to
@@ -30,6 +30,7 @@ FSTAR_ROOTS = $(wildcard $(addsuffix /*.fsti,$(SOURCE_DIRS))) \
 ifndef MAKE_RESTARTS
 obj/.depend: .FORCE
 	mkdir -p obj
+	$(QD_HOME)/qd -high -prefix Parsers. -odir $(TARGET_DIR) $(PARSERS_HOME)/Parsers.rfc
 	$(FSTAR_NO_FLAGS) --dep full $(notdir $(FSTAR_ROOTS)) $(FSTAR_EXTRACT) > $@
 
 .PHONY: .FORCE
@@ -37,6 +38,8 @@ obj/.depend: .FORCE
 endif
 
 include obj/.depend
+
+test: $(ALL_ML_FILES)
 
 # Verification
 # ------------
@@ -49,8 +52,11 @@ FSTAR = $(FSTAR_NO_FLAGS) $(OTHERFLAGS)
 obj:
 	mkdir -p $@
 
+obj/Parsers.%.checked: FSTAR_FLAGS=--admit_smt_queries true
+
+%.checked: FSTAR_FLAGS=
 %.checked: | obj
-	time $(FSTAR) $< && touch -c $@
+	time $(FSTAR) $(FSTAR_FLAGS) $< && touch -c $@
 
 # Extraction
 # ----------
@@ -58,6 +64,7 @@ obj:
 .PRECIOUS: %.ml
 %.ml:
 	time $(FSTAR) $(notdir $(subst .checked,,$<)) --codegen OCaml \
+	--warn_error -342 \
 	--extract_module $(basename $(notdir $(subst .checked,,$<)))
 
 # Compiling the generated OCaml code

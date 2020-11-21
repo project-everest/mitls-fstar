@@ -1,4 +1,4 @@
-module TestSpecs
+module Test
 module U32 = FStar.UInt32
 module LP = LowParse.Spec.Base
 open FStar.Error
