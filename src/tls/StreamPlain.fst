@@ -17,8 +17,6 @@ open Content
 
 type id = i:id { ID13? i }
 
-#set-options "--use_two_phase_tc true"
-
 (*** plain := fragment | CT | 0*  ***)
 
 // naming: we switch from fragment to plain as we are no longer TLS-specific
