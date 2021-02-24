@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 ## This script applies the renamings described above to all *fst and
 ## *fsti files in the current directory.

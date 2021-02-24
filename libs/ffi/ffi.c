@@ -7,7 +7,10 @@
 #include <sys/errno.h> // OS/X only provides include/sys/errno.h
 #else
 #include <errno.h> // MinGW only provides include/errno.h
+#if __FreeBSD__
+#else
 #include <malloc.h>
+#endif
 #endif
 #include <caml/callback.h>
 #include <caml/alloc.h>

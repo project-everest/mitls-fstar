@@ -219,6 +219,8 @@ else ifeq ($(UNAME),Darwin)
   PREFIX = DYLD_LIBRARY_PATH=$(MLCRYPTO_HOME)/openssl:$(EVERCRYPT_HOME)/out:$(MITLS_HOME)/src/pki:$(DYLD_LIBRARY_PATH)
 else ifeq ($(UNAME),Linux)
   export LD_LIBRARY_PATH := $(MLCRYPTO_HOME)/openssl:$(EVERCRYPT_HOME)/out:$(MITLS_HOME)/src/pki:$(LD_LIBRARY_PATH)
+else ifeq ($(UNAME),FreeBSD)
+  export LD_LIBRARY_PATH := $(MLCRYPTO_HOME)/openssl:$(EVERCRYPT_HOME)/out:$(MITLS_HOME)/src/pki:$(LD_LIBRARY_PATH)
 endif
 
 test: mitls.exe $(CERT_FILES)

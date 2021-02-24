@@ -11,7 +11,10 @@ typedef int socklen_t;
 #include <sys/socket.h>
 #include <netdb.h>
 #include <errno.h>
+#if __FreeBSD__
+#else
 #include <alloca.h>
+#endif
 #define _alloca alloca
 typedef int SOCKET;
 #define SOCKET_ERROR (-1)

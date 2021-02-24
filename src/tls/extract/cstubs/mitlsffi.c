@@ -4,7 +4,10 @@
 #include <sys/errno.h> // OS/X only provides include/sys/errno.h
 #else
 #include <errno.h> // MinGW only provides include/errno.h
+#if __FreeBSD__
+#else
 #include <malloc.h>
+#endif
 #endif
 #if defined(_MSC_VER) || defined(__MINGW32__)
 #define IS_WINDOWS 1

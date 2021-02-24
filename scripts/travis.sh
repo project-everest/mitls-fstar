@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then
   sudo /etc/init.d/postgresql stop;

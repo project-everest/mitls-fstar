@@ -33,6 +33,12 @@ else ifeq ($(UNAME),Linux)
   LDOPTS += -lpthread
   SO = so
   export LD_LIBRARY_PATH
+else ifeq ($(UNAME),FreeBSD)
+  VARIANT = -FreeBSD
+  LD_LIBRARY_PATH := $(EVERCRYPT_HOME)/../dist/mitls:$(MITLS_HOME)/src/pki:$(LD_LIBRARY_PATH)
+  LDOPTS += -lpthread
+  SO = so
+  export LD_LIBRARY_PATH
 endif
 
 ifeq (,$(wildcard $(MITLS_HOME)/src/pki/libmipki.$(SO)))

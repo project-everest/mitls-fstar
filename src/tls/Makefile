@@ -10,7 +10,7 @@ clean-depend:
 refresh-depend: clean-depend
 	+$(MAKE) -C ../parsers gen
 
-SHELL=/bin/bash
+SHELL:=$(shell which bash)
 
 .PHONY: clean-%
 clean-c:

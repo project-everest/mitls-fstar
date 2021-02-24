@@ -37,6 +37,14 @@ else ifeq ($(UNAME),Linux)
   LIBPATHS=$(EVERCRYPT_HOME)/../dist/mitls:$(MITLS_HOME)/src/pki:$(MITLS_HOME)/src/tls/extract/Kremlin-Library:$(MLCRYPTO_HOME)/openssl
   LD_LIBRARY_PATH := $(LIBPATHS):$(LD_LIBRARY_PATH)
   export LD_LIBRARY_PATH
+else ifeq ($(UNAME),FreeBSD)
+  LIBMITLS=libmitls.so
+  LIBPKI=libmipki.so
+  PIC=-fPIC -lpthread
+  WINSOCK=
+  LIBPATHS=$(EVERCRYPT_HOME)/../dist/mitls:$(MITLS_HOME)/src/pki:$(MITLS_HOME)/src/tls/extract/Kremlin-Library:$(MLCRYPTO_HOME)/openssl
+  LD_LIBRARY_PATH := $(LIBPATHS):$(LD_LIBRARY_PATH)
+  export LD_LIBRARY_PATH
 endif
 
 all: cmitls.exe

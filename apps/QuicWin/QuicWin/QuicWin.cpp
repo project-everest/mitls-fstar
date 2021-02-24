@@ -8,7 +8,10 @@ extern "C" {
 #include <assert.h>
 #include <sys/stat.h>
 #include <errno.h>
+#if __FreeBSD__
+#else
 #include <malloc.h>
+#endif
 
 void dump(unsigned char buffer[], size_t len) {
     int i;
