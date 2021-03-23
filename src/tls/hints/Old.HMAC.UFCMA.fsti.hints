@@ -1,0 +1,124 @@
+[
+  "•◊\u0000è}z…@\rÉ.wàßg\u0007",
+  [
+    [
+      "Old.HMAC.UFCMA.id",
+      1,
+      1,
+      1,
+      [
+        "@query", "assumption_TLSInfo.pre_binderId__uu___haseq",
+        "assumption_TLSInfo.pre_finishedId__uu___haseq",
+        "equation_Old.HMAC.UFCMA.binderId",
+        "equation_Old.HMAC.UFCMA.finishedId",
+        "haseqTm_refine_4db3b07bcc5dbb45c8a681d7d2c56860",
+        "haseqTm_refine_7ba5f1b760afe5ed8a71d6a3fc5f9a18"
+      ],
+      0,
+      "fef4f04119a90aaba7faa64d0d1cea84"
+    ],
+    [
+      "Old.HMAC.UFCMA.__proj__HMAC_Finished__item___0",
+      1,
+      1,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "refinement_interpretation_Tm_refine_8ad453a33e14e7e82a58b73ded495346"
+      ],
+      0,
+      "7f5874ea974aa63eb77a3246267fecc3"
+    ],
+    [
+      "Old.HMAC.UFCMA.__proj__HMAC_Binder__item___0",
+      1,
+      1,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "refinement_interpretation_Tm_refine_3efd608abfc651d2c63d8637ff06cddc"
+      ],
+      0,
+      "3a6d3f544740b5a50d345f359d3c5c92"
+    ],
+    [
+      "Old.HMAC.UFCMA.alg",
+      1,
+      1,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_Old.HMAC.UFCMA.HMAC_Binder",
+        "disc_equation_Old.HMAC.UFCMA.HMAC_Finished",
+        "fuel_guarded_inversion_Old.HMAC.UFCMA.id",
+        "projection_inverse_BoxBool_proj_0"
+      ],
+      0,
+      "f82557ea4b3ef2225ea7617ceb081a14"
+    ],
+    [
+      "Old.HMAC.UFCMA.__proj__Key__item__log",
+      1,
+      1,
+      1,
+      [
+        "@query", "proj_equation_Old.HMAC.UFCMA.Key_region",
+        "projection_inverse_Old.HMAC.UFCMA.Key_region"
+      ],
+      0,
+      "7b6d4892a05f4550cc5cadb1054e1909"
+    ],
+    [
+      "Old.HMAC.UFCMA.leak",
+      1,
+      1,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "equation_FStar.Bytes.lbytes32",
+        "equation_Old.HMAC.UFCMA.keyrepr", "equation_Old.HMAC.UFCMA.keysize",
+        "equation_Old.HMAC.UFCMA.keyval",
+        "fuel_guarded_inversion_Old.HMAC.UFCMA.key",
+        "haseqTm_refine_01eac1db03c934bf91dcdae8ea4ae6a2",
+        "refinement_interpretation_Tm_refine_414d0a9f578ab0048252f8c8f552b99f",
+        "refinement_interpretation_Tm_refine_c0528ddda3fbbf1584337ea203ea479f",
+        "typing_FStar.Bytes.bytes"
+      ],
+      0,
+      "a7ef2ce4c99198af939584075aa872f4"
+    ],
+    [
+      "Old.HMAC.UFCMA.log_entry_matches_p",
+      1,
+      1,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "binder_x_00a44c8bc7a75171a3e264ca0340a78e_1",
+        "binder_x_98174c444259bd75966b11079c899161_0",
+        "binder_x_ae34da0ea258a1011f43c01568c9aaf8_2",
+        "constructor_distinct_Lib.IntTypes.U8",
+        "equality_tok_Lib.IntTypes.U1@tok",
+        "equality_tok_Lib.IntTypes.U8@tok",
+        "equation_FStar.Seq.Properties.tail",
+        "equation_Lib.IntTypes.unsigned", "equation_Prims.nat",
+        "equation_Spec.AES.gf8", "equation_Spec.AES.irred",
+        "equation_Spec.GaloisField.gf", "int_inversion", "int_typing",
+        "lemma_FStar.Seq.Base.lemma_len_slice",
+        "primitive_Prims.op_Equality", "primitive_Prims.op_LessThanOrEqual",
+        "primitive_Prims.op_Subtraction",
+        "proj_equation_Spec.GaloisField.GF_t",
+        "projection_inverse_BoxBool_proj_0",
+        "projection_inverse_BoxInt_proj_0",
+        "projection_inverse_Spec.GaloisField.GF_t",
+        "refinement_interpretation_Tm_refine_542f9d4f129664613f2483a6c88bc7c2",
+        "refinement_interpretation_Tm_refine_81407705a0828c2c1b1976675443f647",
+        "refinement_interpretation_Tm_refine_de8080fdc4bd6678af723874a7d70466",
+        "typing_FStar.Seq.Base.length", "typing_Old.HMAC.UFCMA.entry",
+        "typing_Spec.AES.gf8", "typing_Spec.GaloisField.__proj__GF__item__t",
+        "well-founded-ordering-on-nat"
+      ],
+      0,
+      "fa64429dd5f7c5a7066bf95237af2c8e"
+    ]
+  ]
+]

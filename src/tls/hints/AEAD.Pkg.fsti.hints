@@ -1,0 +1,79 @@
+[
+  "k\t≤\u0016?çØ\u0012¬JwÌêΩ∏",
+  [
+    [
+      "AEAD.Pkg.ideal",
+      1,
+      2,
+      1,
+      [ "@query", "equation_Mem.model" ],
+      0,
+      "dc131ce5a9881cf4152b6d9f41dd53c5"
+    ],
+    [
+      "AEAD.Pkg.info",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "assumption_AEAD.Pkg.aeadAlg__uu___haseq",
+        "equation_FStar.HyperStack.ST.erid", "equation_Mem.rgn",
+        "equation_Prims.eqtype",
+        "haseqTm_refine_5aee6c1d5e606045d3f22072ebbfd523",
+        "haseqTm_refine_6c5072d4c9562dd38fd2703ecfb013df",
+        "refinement_interpretation_Tm_refine_414d0a9f578ab0048252f8c8f552b99f",
+        "typing_FStar.Monotonic.HyperHeap.rid"
+      ],
+      0,
+      "5fb2c9976369d5d5b06e6ed0d06e3600"
+    ],
+    [
+      "AEAD.Pkg.aead_pkg_keylen",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_AEAD.Pkg.AES_GCM128",
+        "disc_equation_AEAD.Pkg.AES_GCM256",
+        "fuel_guarded_inversion_AEAD.Pkg.aeadAlg",
+        "projection_inverse_BoxBool_proj_0"
+      ],
+      0,
+      "267c12a002b5e19cc7d665bc7bd1823f"
+    ],
+    [
+      "AEAD.Pkg.footprint",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "equation_Prims.eqtype",
+        "proj_equation_Pkg.Idx_t",
+        "refinement_interpretation_Tm_refine_414d0a9f578ab0048252f8c8f552b99f",
+        "typing_Pkg.__proj__Idx__item__t"
+      ],
+      0,
+      "0f15f103107071e695b2e98a9351f155"
+    ],
+    [
+      "AEAD.Pkg.coerceT_key",
+      1,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "477ddb3ffb151d33baa1b3adfd390495"
+    ],
+    [
+      "AEAD.Pkg.coerce_key",
+      1,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "1821267a9d6fbeaf15792d890ba5e228"
+    ]
+  ]
+]

@@ -42,7 +42,7 @@
         "token_correspondence_Parsers.OfferedPsks.synth_offeredPsks_recip"
       ],
       0,
-      "9d7f260c6a5c39c4d0da2137fbddd6b9"
+      "1e6fe912e05b0bfc219c5eec14c05997"
     ],
     [
       "ParsersAux.Binders.Aux.serialize_clientHelloExtension_CHE_pre_shared_key_eq",
@@ -99,7 +99,7 @@
         "typing_Parsers.PreSharedKeyClientExtension.preSharedKeyClientExtension_parser_kind"
       ],
       0,
-      "e982c533ac2544a34a44b4c71aae45a2"
+      "19f3af82eb9fb1dba561c1c198ad521f"
     ],
     [
       "ParsersAux.Binders.Aux.serialize_clientHelloExtension_CHE_pre_shared_key_eq",
@@ -149,7 +149,7 @@
         "token_correspondence_Parsers.ClientHelloExtension_CHE_pre_shared_key.synth_clientHelloExtension_CHE_pre_shared_key_recip"
       ],
       0,
-      "d2757197e31c76925dedb78445c5494a"
+      "2e02d224c86bc5e64d39d3e29318a685"
     ],
     [
       "ParsersAux.Binders.Aux.serialize_list_clientHelloExtension",
@@ -177,7 +177,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind"
       ],
       0,
-      "bc3ceeb74523b8a34ba3bd851489f860"
+      "aa18e021e67abfb5fa666303badd6751"
     ],
     [
       "ParsersAux.Binders.Aux.serialize_list_clientHelloExtension_eq",
@@ -201,7 +201,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind"
       ],
       0,
-      "4546ee80459cf36bbdbb4dc0c8215376"
+      "be4f49b033a61f122f99314acb816f2d"
     ],
     [
       "ParsersAux.Binders.Aux.serialize_list_clientHelloExtension_inj_prefix",
@@ -219,7 +219,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind"
       ],
       0,
-      "f66553a0594f58d6088ea01bc97c42b9"
+      "edc3326c9acaf55d3a26689950536cc1"
     ],
     [
       "ParsersAux.Binders.Aux.size32_list_clientHelloExtension",
@@ -228,7 +228,7 @@
       1,
       [ "@query" ],
       0,
-      "daf3d2eb1e3b854da37ffeb2f3a3077a"
+      "644050e0d57c8ec82b49c6fbb1fd5d47"
     ],
     [
       "ParsersAux.Binders.Aux.size32_list_clientHelloExtension",
@@ -279,7 +279,7 @@
         "typing_FStar.Bytes.empty_bytes", "typing_FStar.Bytes.len"
       ],
       0,
-      "95014c64d2efbdbab5d210d1bb3645fa"
+      "a1206e6caecd5518eb430015e168a608"
     ],
     [
       "ParsersAux.Binders.Aux.list_clientHelloExtension_last_pos",
@@ -292,7 +292,7 @@
         "refinement_interpretation_Tm_refine_b2fa11317c73afed083e5f984d5ee8a5"
       ],
       0,
-      "6f0eba6324f5064ac66a6d4a03bd6b98"
+      "7fe95d7c89db1af40dca9587deb3c031"
     ],
     [
       "ParsersAux.Binders.Aux.list_clientHelloExtension_last_pos",
@@ -328,7 +328,7 @@
         "typing_ParsersAux.Binders.Aux.serialize_list_clientHelloExtension"
       ],
       0,
-      "afb715edefc79a6370c570c2e7777a7e"
+      "e53874e9e5537b4a02d485dbe53ef022"
     ],
     [
       "ParsersAux.Binders.Aux.clientHelloExtensions_list_bytesize_eq'",
@@ -341,7 +341,7 @@
         "equation_ParsersAux.Binders.Aux.serialize_list_clientHelloExtension"
       ],
       0,
-      "29ba8fdf7867b10af5d470714fe7dbe0"
+      "ef9aa01b3e663fb6c8dd77e8f4e90780"
     ],
     [
       "ParsersAux.Binders.Aux.serialize_clientHelloExtensions_eq",
@@ -381,7 +381,7 @@
         "refinement_interpretation_Tm_refine_542f9d4f129664613f2483a6c88bc7c2"
       ],
       0,
-      "91e837dd203986caac40113c5f63555c"
+      "decd13c8793ce3bac84d5b5eb5f84c90"
     ],
     [
       "ParsersAux.Binders.Aux.serialize_clientHelloExtensions_eq",
@@ -435,7 +435,7 @@
         "token_correspondence_Parsers.ClientHelloExtensions.synth_clientHelloExtensions_recip"
       ],
       0,
-      "736aef76da56526d076844365d166964"
+      "f4ee8dd6b6c20256df248e65d2e1bfab"
     ],
     [
       "ParsersAux.Binders.Aux.serialize_clientHello_eq",
@@ -445,6 +445,7 @@
       [
         "@MaxIFuel_assumption", "@query",
         "LowParse.Spec.Base_pretyping_e24e8cabdb5c58cdc1d812d5f6f285ec",
+        "bool_inversion",
         "constructor_distinct_FStar.Pervasives.Native.Some",
         "constructor_distinct_LowParse.Spec.Base.ParserConsumesAll",
         "constructor_distinct_LowParse.Spec.Base.ParserStrong",
@@ -454,12 +455,14 @@
         "equality_tok_LowParse.Spec.Base.ParserConsumesAll@tok",
         "equality_tok_LowParse.Spec.Base.ParserStrong@tok",
         "equation_LowParse.Bytes.byte", "equation_LowParse.Bytes.bytes",
+        "equation_LowParse.Spec.Base.parser_kind",
         "equation_LowParse.Spec.Base.serialize",
         "equation_LowParse.Spec.Base.strong_parser_kind",
         "equation_LowParse.Spec.Combinators.and_then_kind",
         "equation_LowParse.Spec.Combinators.bare_serialize_nondep_then",
         "equation_LowParse.Spec.Combinators.synth_injective",
         "equation_LowParse.Spec.Combinators.synth_inverse",
+        "equation_LowParse.Writers.Parser.u8",
         "equation_Parsers.ClientHello.clientHello_",
         "equation_Parsers.ClientHello.clientHello__parser",
         "equation_Parsers.ClientHello.clientHello__serializer",
@@ -481,9 +484,10 @@
         "equation_Parsers.Random.random_parser_kind",
         "equation_Parsers.SessionID.sessionID",
         "equation_Parsers.SessionID.sessionID_parser_kind",
-        "equation_Prims.eqtype", "equation_Prims.nat",
+        "equation_Prims.nat",
         "fuel_guarded_inversion_FStar.Pervasives.Native.tuple2",
         "fuel_guarded_inversion_Parsers.ClientHello.clientHello",
+        "function_token_typing_LowParse.Writers.Parser.u8",
         "function_token_typing_Parsers.ClientHello.clientHello_",
         "function_token_typing_Parsers.Random.random", "int_inversion",
         "int_typing",
@@ -523,19 +527,25 @@
         "projection_inverse_Parsers.ClientHello.MkclientHello_random",
         "projection_inverse_Parsers.ClientHello.MkclientHello_session_id",
         "projection_inverse_Parsers.ClientHello.MkclientHello_version",
-        "refinement_interpretation_Tm_refine_414d0a9f578ab0048252f8c8f552b99f",
+        "refinement_interpretation_Tm_refine_41220e6bcefbf498bb997286517845c2",
+        "refinement_interpretation_Tm_refine_42417c0a732848736b70205b54b36236",
         "refinement_interpretation_Tm_refine_542f9d4f129664613f2483a6c88bc7c2",
+        "refinement_interpretation_Tm_refine_9570fecf666a6e39c07cb510aecea8ba",
         "refinement_interpretation_Tm_refine_ac201cf927190d39c033967b63cb957b",
         "refinement_interpretation_Tm_refine_d83f8da8ef6c1cb9f71d1465c1bb1c55",
         "refinement_kinding_Tm_refine_1506f9bd8a9f298520f6ac5f043b46bc",
         "refinement_kinding_Tm_refine_2bae5c3803c6c608e1680d3a46547c16",
+        "refinement_kinding_Tm_refine_542f9d4f129664613f2483a6c88bc7c2",
         "refinement_kinding_Tm_refine_7ecfee61ad5954fd130d64a2dba634f0",
         "refinement_kinding_Tm_refine_beec71e2de9ddfab99931e183d4c495c",
         "token_correspondence_LowParse.Spec.Combinators.bare_serialize_nondep_then",
         "token_correspondence_Parsers.ClientHello.synth_clientHello",
         "token_correspondence_Parsers.ClientHello.synth_clientHello_recip",
         "typing_FStar.Seq.Base.append", "typing_FStar.Seq.Base.length",
-        "typing_FStar.UInt8.t", "typing_LowParse.Spec.Base.serialize",
+        "typing_LowParse.Spec.Base.__proj__Mkparser_kind___item__parser_kind_high",
+        "typing_LowParse.Spec.Base.bool_and",
+        "typing_LowParse.Spec.Base.is_some",
+        "typing_LowParse.Spec.Base.serialize",
         "typing_LowParse.Spec.Combinators.and_then_kind",
         "typing_LowParse.Spec.Combinators.nondep_then",
         "typing_Parsers.ClientHello.__proj__MkclientHello__item__cipher_suites",
@@ -564,7 +574,7 @@
         "typing_Parsers.SessionID.sessionID_parser_kind"
       ],
       0,
-      "e8facd1d3dc8ca16a51be4d8aa8d43ca"
+      "35ebbd0b9b61244bc2731790d17e9636"
     ],
     [
       "ParsersAux.Binders.Aux.serialize_handshake_m_client_hello_eq",
@@ -575,7 +585,9 @@
         "@MaxFuel_assumption", "@MaxIFuel_assumption",
         "@fuel_correspondence_Prims.pow2.fuel_instrumented",
         "@fuel_irrelevance_Prims.pow2.fuel_instrumented", "@query",
-        "b2t_def", "constructor_distinct_FStar.Pervasives.Native.Some",
+        "b2t_def", "bool_inversion",
+        "constructor_distinct_FStar.Pervasives.Native.None",
+        "constructor_distinct_FStar.Pervasives.Native.Some",
         "disc_equation_FStar.Pervasives.Native.Some",
         "equation_FStar.UInt.fits", "equation_FStar.UInt.max_int",
         "equation_FStar.UInt.min_int", "equation_FStar.UInt.size",
@@ -584,46 +596,41 @@
         "equation_LowParse.Spec.Base.strong_parser_kind",
         "equation_LowParse.Spec.BoundedInt.bounded_integer_prop",
         "equation_LowParse.Spec.BoundedInt.log256_",
-        "equation_LowParse.Spec.Combinators.and_then_kind",
         "equation_Parsers.ClientHello.clientHello_bytesize",
         "equation_Parsers.ClientHello.clientHello_parser",
         "equation_Parsers.ClientHello.clientHello_parser_kind",
         "equation_Parsers.ClientHello.clientHello_serializer",
-        "equation_Parsers.ClientHelloExtensions.clientHelloExtensions_parser_kind",
-        "equation_Parsers.ClientHello_cipher_suites.clientHello_cipher_suites_parser_kind",
-        "equation_Parsers.ClientHello_compression_methods.clientHello_compression_methods_parser_kind",
         "equation_Parsers.Handshake_m_client_hello.handshake_m_client_hello",
         "equation_Parsers.OfferedPsks_binders.offeredPsks_binders_parser_kind",
-        "equation_Parsers.OfferedPsks_identities.offeredPsks_identities_parser_kind",
-        "equation_Parsers.ProtocolVersion.protocolVersion_parser_kind",
-        "equation_Parsers.Random.random_parser_kind",
-        "equation_Parsers.SessionID.sessionID_parser_kind",
-        "equation_Prims.nat",
+        "equation_Parsers.Random.random_parser_kind", "equation_Prims.nat",
         "equation_with_fuel_Prims.pow2.fuel_instrumented",
         "fuel_guarded_inversion_Parsers.ClientHello.clientHello",
         "int_typing", "kinding_Parsers.ClientHello.clientHello@tok",
         "lemma_FStar.UInt.pow2_values",
         "lemma_LowParse.Spec.Base.serialize_length",
-        "primitive_Prims.op_Addition", "primitive_Prims.op_AmpAmp",
-        "primitive_Prims.op_LessThan", "primitive_Prims.op_LessThanOrEqual",
-        "primitive_Prims.op_Multiply", "primitive_Prims.op_Subtraction",
-        "proj_equation_FStar.Pervasives.Native.Some_v",
+        "primitive_Prims.op_AmpAmp", "primitive_Prims.op_LessThan",
+        "primitive_Prims.op_LessThanOrEqual", "primitive_Prims.op_Multiply",
+        "primitive_Prims.op_Subtraction",
         "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_high",
         "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_low",
         "projection_inverse_BoxBool_proj_0",
         "projection_inverse_BoxInt_proj_0",
+        "projection_inverse_FStar.Pervasives.Native.None_a",
         "projection_inverse_FStar.Pervasives.Native.Some_a",
         "projection_inverse_FStar.Pervasives.Native.Some_v",
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_high",
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_low",
+        "refinement_interpretation_Tm_refine_41220e6bcefbf498bb997286517845c2",
         "refinement_interpretation_Tm_refine_42417c0a732848736b70205b54b36236",
         "refinement_interpretation_Tm_refine_542f9d4f129664613f2483a6c88bc7c2",
+        "refinement_kinding_Tm_refine_542f9d4f129664613f2483a6c88bc7c2",
+        "typing_LowParse.Spec.Base.__proj__Mkparser_kind___item__parser_kind_high",
         "typing_LowParse.Spec.Base.__proj__Mkparser_kind___item__parser_kind_low",
-        "typing_LowParse.Spec.Combinators.and_then_kind",
+        "typing_LowParse.Spec.Base.is_some",
         "typing_Parsers.ClientHello.clientHello_parser",
         "typing_Parsers.ClientHello.clientHello_parser_kind",
         "typing_Parsers.ClientHello.clientHello_serializer",
-        "typing_Parsers.ProtocolVersion.protocolVersion_parser_kind",
+        "typing_Parsers.OfferedPsks_binders.offeredPsks_binders_parser_kind",
         "typing_Parsers.Random.random_parser_kind"
       ],
       0,
@@ -690,7 +697,7 @@
         "unit_typing"
       ],
       0,
-      "eab4534bef236a127b0b160cdb3c9d47"
+      "e99273ea1f8df7aeb4f3d9fb5968c536"
     ]
   ]
 ]

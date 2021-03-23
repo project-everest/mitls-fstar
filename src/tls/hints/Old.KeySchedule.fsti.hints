@@ -1,0 +1,31 @@
+[
+  "Iô\\4_Æo\u0005pm\u000bÙ\u007f\u001eYå",
+  [
+    [
+      "Old.KeySchedule.discard",
+      1,
+      2,
+      1,
+      [
+        "@query", "equation_FStar.HyperStack.ST.equal_stack_domains",
+        "equation_FStar.Monotonic.Heap.equal_dom",
+        "lemma_FStar.HyperStack.ST.lemma_same_refs_in_stack_regions_intro"
+      ],
+      0,
+      "cc3ad425bbfa4098a4846698e179068c"
+    ],
+    [
+      "Old.KeySchedule.dbg",
+      1,
+      2,
+      1,
+      [
+        "@query", "equation_FStar.HyperStack.ST.equal_stack_domains",
+        "equation_FStar.Monotonic.Heap.equal_dom",
+        "lemma_FStar.HyperStack.ST.lemma_same_refs_in_stack_regions_intro"
+      ],
+      0,
+      "06a1f16f4ef9cf33f6a0be49a662b7d0"
+    ]
+  ]
+]

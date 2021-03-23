@@ -1,0 +1,248 @@
+[
+  "ÛC´ì#\u001fœÌµ\u0011à^Õ»RÚ",
+  [
+    [
+      "AEADProvider.discard",
+      1,
+      2,
+      1,
+      [
+        "@query", "equation_FStar.HyperStack.ST.equal_stack_domains",
+        "equation_FStar.Monotonic.Heap.equal_dom",
+        "lemma_FStar.HyperStack.ST.lemma_same_refs_in_stack_regions_intro"
+      ],
+      0,
+      "4d2f5699f34805d168b574a9a992320d"
+    ],
+    [
+      "AEADProvider.dbg",
+      1,
+      2,
+      1,
+      [
+        "@query", "equation_FStar.HyperStack.ST.equal_stack_domains",
+        "equation_FStar.Monotonic.Heap.equal_dom",
+        "lemma_FStar.HyperStack.ST.lemma_same_refs_in_stack_regions_intro"
+      ],
+      0,
+      "c4f2cf48149bff58662ce57def8462d9"
+    ],
+    [
+      "AEADProvider.alg",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "equation_AEADProvider.id",
+        "refinement_interpretation_Tm_refine_27bc248aea929afc1c455a4ca114e85e"
+      ],
+      0,
+      "ec590183e312bff0654d43e453e2d13e"
+    ],
+    [
+      "AEADProvider.alg'",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "equation_AEADProvider.id",
+        "refinement_interpretation_Tm_refine_27bc248aea929afc1c455a4ca114e85e"
+      ],
+      0,
+      "01f5186c96e42b4c99ffa48debe5aecb"
+    ],
+    [
+      "AEADProvider.aeadAlg_for_evercrypt",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "refinement_interpretation_Tm_refine_aeb42dbe7bcd8439bc45e996e277ed62"
+      ],
+      0,
+      "b1c1e2275ac48c2ea0e70ae744bd97e7"
+    ],
+    [
+      "AEADProvider.coerce_iv",
+      1,
+      2,
+      1,
+      [
+        "@query", "equation_AEADProvider.id",
+        "equation_AEADProvider.iv_length", "projection_inverse_BoxInt_proj_0"
+      ],
+      0,
+      "397d0bb45f354250224d264f00f58518"
+    ],
+    [
+      "AEADProvider.salt_length",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_EverCrypt.AES128_CCM",
+        "disc_equation_EverCrypt.AES128_CCM8",
+        "disc_equation_EverCrypt.AES128_GCM",
+        "disc_equation_EverCrypt.AES256_CCM",
+        "disc_equation_EverCrypt.AES256_CCM8",
+        "disc_equation_EverCrypt.AES256_GCM",
+        "disc_equation_EverCrypt.CHACHA20_POLY1305",
+        "equation_AEADProvider.alg_", "equation_CipherSuite.aeadAlg",
+        "fuel_guarded_inversion_EverCrypt.aead_alg",
+        "projection_inverse_BoxBool_proj_0", "typing_AEADProvider.alg_"
+      ],
+      0,
+      "9e07938421a4c642f53807f755c823f0"
+    ],
+    [
+      "AEADProvider.explicit_iv_length",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_EverCrypt.AES128_CCM",
+        "disc_equation_EverCrypt.AES128_CCM8",
+        "disc_equation_EverCrypt.AES128_GCM",
+        "disc_equation_EverCrypt.AES256_CCM",
+        "disc_equation_EverCrypt.AES256_CCM8",
+        "disc_equation_EverCrypt.AES256_GCM",
+        "disc_equation_EverCrypt.CHACHA20_POLY1305",
+        "equation_AEADProvider.alg_", "equation_CipherSuite.aeadAlg",
+        "fuel_guarded_inversion_EverCrypt.aead_alg",
+        "projection_inverse_BoxBool_proj_0", "typing_AEADProvider.alg_"
+      ],
+      0,
+      "f3858079122a736fc3e8bccb2b9cb02e"
+    ],
+    [
+      "AEADProvider.key",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "equation_AEADProvider.aead_provider_key_length",
+        "equation_FStar.UInt.uint_t", "lemma_FStar.Buffer.lemma_size",
+        "refinement_interpretation_Tm_refine_f13070840248fced9d9d60d77bdae3ec",
+        "typing_AEADProvider.aead_provider_key_length"
+      ],
+      0,
+      "aefb6b77d793afcd12a5a2d3ddada918"
+    ],
+    [
+      "AEADProvider.salt",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "constructor_distinct_Tm_unit",
+        "equation_AEADProvider.id", "equation_AEADProvider.iv_length",
+        "equation_AEADProvider.salt_length", "int_inversion",
+        "projection_inverse_BoxInt_proj_0", "typing_AEADProvider.salt_length"
+      ],
+      0,
+      "d84f2aad162ab34bcf12ae78f4758374"
+    ],
+    [
+      "AEADProvider.noncelen",
+      1,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "3d0edf697d164987f5e77550e8d33275"
+    ],
+    [
+      "AEADProvider.nonce",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "constructor_distinct_Tm_unit",
+        "equation_AEADProvider.id", "equation_AEADProvider.iv_length",
+        "equation_AEADProvider.noncelen",
+        "equation_AEADProvider.salt_length", "int_inversion",
+        "primitive_Prims.op_Subtraction", "projection_inverse_BoxInt_proj_0",
+        "typing_AEADProvider.salt_length"
+      ],
+      0,
+      "abef1f1375c52e76c6fc688fdef24a4b"
+    ],
+    [
+      "AEADProvider.lemma_nonce_iv",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "equation_AEADProvider.nonce",
+        "equation_AEADProvider.noncelen", "equation_FStar.Bytes.lbytes",
+        "haseqTm_refine_71ea40360194fe02ee1272538c9cacbc",
+        "refinement_interpretation_Tm_refine_414d0a9f578ab0048252f8c8f552b99f",
+        "typing_FStar.Bytes.bytes"
+      ],
+      0,
+      "0192ea034f9897bd0cd069506eca546a"
+    ],
+    [
+      "AEADProvider.adata",
+      1,
+      2,
+      1,
+      [
+        "@query", "equation_AEADProvider.adlen",
+        "projection_inverse_BoxInt_proj_0"
+      ],
+      0,
+      "38932c114d2761d7e17967a91a362714"
+    ],
+    [
+      "AEADProvider.cipherlen",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "equation_AEADProvider.plainlen",
+        "equation_AEADProvider.taglen", "equation_FStar.UInt.uint_t",
+        "equation_Prims.nat", "int_inversion",
+        "lemma_FStar.Buffer.lemma_size", "primitive_Prims.op_Addition",
+        "projection_inverse_BoxInt_proj_0",
+        "refinement_interpretation_Tm_refine_109bfa1037f58a3bf97a3856d0a6ed0a",
+        "refinement_interpretation_Tm_refine_542f9d4f129664613f2483a6c88bc7c2",
+        "refinement_interpretation_Tm_refine_f13070840248fced9d9d60d77bdae3ec",
+        "typing_AEADProvider.taglen"
+      ],
+      0,
+      "21c253d8aa7d99e9440836ed7734f63a"
+    ],
+    [
+      "AEADProvider.from_bytes",
+      1,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "be4b78b566a33c7bc920cbfde94c298d"
+    ],
+    [
+      "AEADProvider.encrypt",
+      1,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "b6c008faff90cb5a94390c954fa37257"
+    ],
+    [
+      "AEADProvider.decrypt",
+      1,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "d6932ff35a9a6377d2cbba98af244820"
+    ]
+  ]
+]

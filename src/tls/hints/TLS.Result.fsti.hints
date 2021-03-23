@@ -1,5 +1,5 @@
 [
-  "Û‘\u007f(eª?–H\u000fDÞ¤¹À7",
+  "\u0003\u001aàZ¨'Î\u0012¡¨Ý‚\\Êi\u000e",
   [
     [
       "TLS.Result.error",
@@ -11,7 +11,7 @@
         "assumption_Parsers.AlertDescription.alertDescription__uu___haseq"
       ],
       0,
-      "c19d6521301f61b39cd3ebdb672e20f9"
+      "2c618faf67f4ca8fc7f03f20fd8dabda"
     ],
     [
       "TLS.Result.result",
@@ -20,7 +20,7 @@
       1,
       [ "@query", "assumption_TLS.Result.error__uu___haseq" ],
       0,
-      "b757db53721d258d30311f45a4d5caa9"
+      "bd97e4841d829e0081ace59a61e6bef8"
     ],
     [
       "TLS.Result.__proj__Correct__item___0",
@@ -33,7 +33,7 @@
         "refinement_interpretation_Tm_refine_345217215afa0682c7c9f9c62984aaa9"
       ],
       0,
-      "734e64d7b7717b2a2aed28e513a3128a"
+      "e7e8b7998b70b172febf421e8a2660b4"
     ],
     [
       "TLS.Result.__proj__Error__item___0",
@@ -46,7 +46,7 @@
         "refinement_interpretation_Tm_refine_a0814220b3b0ddc9c8590578f3081d7f"
       ],
       0,
-      "032a9a2ef715a105f7dbe88d5ff384d0"
+      "6a4a83ca6922e15f90ee9a5ca47e6edc"
     ],
     [
       "TLS.Result.option_of_result",
@@ -59,7 +59,7 @@
         "fuel_guarded_inversion_TLS.Result.result"
       ],
       0,
-      "92bcf66b293f46d828ce30cbdd6b90a7"
+      "19256e16aa9df7ef451756e84fbf4f5c"
     ],
     [
       "TLS.Result.bind",
@@ -72,7 +72,7 @@
         "fuel_guarded_inversion_TLS.Result.result"
       ],
       0,
-      "ac9062d68c731edf0f3626e3fc9df9c0"
+      "ebec3c972f6ee2e6867ccd773b7f868b"
     ],
     [
       "TLS.Result.perror",
@@ -81,7 +81,7 @@
       1,
       [ "@query" ],
       0,
-      "cdc33c50842798049b1ab42d6605a8e4"
+      "56a81c5c5f3faeaabf4b8083f9f07a86"
     ],
     [
       "TLS.Result.exn_return",
@@ -90,7 +90,7 @@
       1,
       [ "@query" ],
       0,
-      "0f811b3e942a7308718350385c853ed4"
+      "c3acc51d81fa9f1b281a8d63234444d9"
     ],
     [
       "TLS.Result.exn_bind",
@@ -110,17 +110,18 @@
         "equation_FStar.Pervasives.st_post_h",
         "equation_FStar.Pervasives.st_post_h_", "equation_Prims.l_True",
         "equation_Prims.logical", "fuel_guarded_inversion_TLS.Result.result",
-        "interpretation_Tm_abs_7160837a17811cb3817c111f8a448aef",
         "interpretation_Tm_abs_c0a9f5fe4b3121980b475e769dcd0f34",
-        "l_quant_interp_8abb1f428e53e550906b4b94557a5004",
+        "interpretation_Tm_abs_cb48af36f5cf8aad5e1ddc8de660fdf3",
+        "l_quant_interp_c3533ed8379f892bd25f7d69567acf7a",
+        "projection_inverse_BoxBool_proj_0",
         "projection_inverse_TLS.Result.Correct__0",
         "projection_inverse_TLS.Result.Error__0",
         "refinement_interpretation_Tm_refine_8d65e998a07dd53ec478e27017d9dba5",
-        "true_interp", "typing_Tm_abs_7160837a17811cb3817c111f8a448aef",
-        "typing_Tm_abs_c0a9f5fe4b3121980b475e769dcd0f34"
+        "true_interp", "typing_Tm_abs_c0a9f5fe4b3121980b475e769dcd0f34",
+        "typing_Tm_abs_cb48af36f5cf8aad5e1ddc8de660fdf3"
       ],
       0,
-      "3445eea60a31167bbc79ddd67ed748fb"
+      "3d5c5f1e9f9de2162b1c31a007e89ba6"
     ],
     [
       "TLS.Result.exn_subcomp",
@@ -139,7 +140,7 @@
         "true_interp"
       ],
       0,
-      "d5c4b88859a51b0b283a3791d45738b5"
+      "c52b7bf7763249a0b58ecc059f397b4f"
     ],
     [
       "TLS.Result.TLSEXN",
@@ -152,7 +153,7 @@
         "fuel_guarded_inversion_TLS.Result.result"
       ],
       0,
-      "c39eb9342f9292cf907a2c018570e4f2"
+      "8b5193e7d5d4c16d9f54e830b456c18c"
     ],
     [
       "TLS.Result.TLSEXN",
@@ -165,7 +166,7 @@
         "fuel_guarded_inversion_TLS.Result.result"
       ],
       0,
-      "b28f486616477af16f0af54db8fd8550"
+      "ac8cef8df4a0b93b0b607555a12596aa"
     ],
     [
       "TLS.Result.TLSEXN",
@@ -178,25 +179,31 @@
         "fuel_guarded_inversion_TLS.Result.result"
       ],
       0,
-      "80add90d9479b0addb5bb196f2408939"
+      "e0dcba61b3137f12e820aa26f272ac95"
     ],
     [
       "TLS.Result.TLSEXN",
       4,
       2,
       1,
-      [ "@query" ],
+      [
+        "@MaxIFuel_assumption", "@query", "b2t_def", "equation_Prims.squash",
+        "refinement_interpretation_Tm_refine_2de20c066034c13bf76e9c0b94f4806c"
+      ],
       0,
-      "2c473524b8a811154e9c59ed02acb89c"
+      "3e6e310ae2399ce91de027b9a229c9d8"
     ],
     [
       "TLS.Result.TLSEXN",
       5,
       2,
       1,
-      [ "@query" ],
+      [
+        "@MaxIFuel_assumption", "@query",
+        "refinement_interpretation_Tm_refine_de09779676242898794a0b057d5f5bb4"
+      ],
       0,
-      "201f18c58a70ba3602fe0ee656a2c757"
+      "f85ab187d74cfa91fe48f0c0778e4d0a"
     ],
     [
       "TLS.Result.lift_div_tlsexn",
@@ -206,29 +213,18 @@
       [
         "@MaxIFuel_assumption", "@query",
         "Prims_interpretation_Tm_arrow_2eaa01e78f73e9bab5d0955fc1a662da",
-        "TLS.Result_interpretation_Tm_arrow_8aae13b96fb0be58b929fe6db466cb69",
-        "equation_Prims.logical",
+        "Prims_interpretation_Tm_arrow_92458cff82f9ffee1f6e26a1c0c579f3",
+        "equation_Prims.l_True", "equation_Prims.pure_post",
+        "equation_Prims.pure_post_",
         "interpretation_Tm_abs_305dd697e2270ffe5f01e21f20c358fc",
         "interpretation_Tm_abs_7a0b99cf0aa11727b0690e11e40f1441",
         "l_quant_interp_011cb4b67babcb1231f98782a5e72eae",
-        "refinement_interpretation_Tm_refine_9c79c4ef8bf28fdd5d01e604e0426830",
+        "refinement_interpretation_Tm_refine_8d65e998a07dd53ec478e27017d9dba5",
         "typing_Tm_abs_305dd697e2270ffe5f01e21f20c358fc",
         "typing_Tm_abs_7a0b99cf0aa11727b0690e11e40f1441"
       ],
       0,
-      "383d15ff1a97ac680f31318720cb6c4a"
-    ],
-    [
-      "TLS.Result.13986",
-      1,
-      2,
-      1,
-      [
-        "@MaxIFuel_assumption", "@query",
-        "refinement_interpretation_Tm_refine_9c79c4ef8bf28fdd5d01e604e0426830"
-      ],
-      0,
-      "c93eb912f8aadb1ef217d2bce89fdf31"
+      "92c4ae534e9c7342c1aeac7285320516"
     ]
   ]
 ]

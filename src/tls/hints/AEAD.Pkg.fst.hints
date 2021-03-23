@@ -1,5 +1,5 @@
 [
-  "iiÆáõlà8†JáÚ\u001b %\u0013",
+  "uµ‰š‰zéÍM y“U%\u0006\u0015",
   [
     [
       "AEAD.Pkg.ideal",
@@ -8,7 +8,40 @@
       1,
       [ "@query", "equation_Mem.model" ],
       0,
-      "d1ae645ccf553e266338042069156c0c"
+      "089789e8ccae001e6b7f9b941842d66b"
+    ],
+    [
+      "AEAD.Pkg.info",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "assumption_AEAD.Pkg.aeadAlg__uu___haseq",
+        "equation_FStar.HyperStack.ST.erid", "equation_Mem.rgn",
+        "equation_Prims.eqtype",
+        "haseqTm_refine_5aee6c1d5e606045d3f22072ebbfd523",
+        "haseqTm_refine_6c5072d4c9562dd38fd2703ecfb013df",
+        "refinement_interpretation_Tm_refine_414d0a9f578ab0048252f8c8f552b99f",
+        "typing_FStar.Monotonic.HyperHeap.rid"
+      ],
+      0,
+      "d34403be428250bccb69ed16ea1aa81e"
+    ],
+    [
+      "AEAD.Pkg.aead_pkg_keylen",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_AEAD.Pkg.AES_GCM128",
+        "disc_equation_AEAD.Pkg.AES_GCM256",
+        "fuel_guarded_inversion_AEAD.Pkg.aeadAlg",
+        "projection_inverse_BoxBool_proj_0"
+      ],
+      0,
+      "6dfbbd61ac88516368a9589c66622bd9"
     ],
     [
       "AEAD.Pkg.is_safe",
@@ -50,39 +83,7 @@
         "typing_FStar.Set.complement", "typing_FStar.Set.empty"
       ],
       0,
-      "02b5475fa7d6e9b4c23d2c21383e07d3"
-    ],
-    [
-      "AEAD.Pkg.info",
-      1,
-      2,
-      1,
-      [
-        "@MaxIFuel_assumption", "@query",
-        "assumption_AEAD.Pkg.aeadAlg__uu___haseq",
-        "equation_FStar.HyperStack.ST.erid", "equation_Mem.rgn",
-        "equation_Prims.eqtype",
-        "haseqTm_refine_5aee6c1d5e606045d3f22072ebbfd523",
-        "haseqTm_refine_6c5072d4c9562dd38fd2703ecfb013df",
-        "refinement_interpretation_Tm_refine_414d0a9f578ab0048252f8c8f552b99f",
-        "typing_FStar.Monotonic.HyperHeap.rid"
-      ],
-      0,
-      "d61d5a7f243e07d67e5979dd647463b6"
-    ],
-    [
-      "AEAD.Pkg.keylen",
-      1,
-      2,
-      1,
-      [
-        "@MaxIFuel_assumption", "@query",
-        "disc_equation_AEAD.Pkg.AES_GCM128",
-        "disc_equation_AEAD.Pkg.AES_GCM256",
-        "fuel_guarded_inversion_AEAD.Pkg.aeadAlg"
-      ],
-      0,
-      "8b92ea6acf724d0b424d65612b8737c4"
+      "079979ab69cab063d56df500579108a2"
     ],
     [
       "AEAD.Pkg.__proj__AEAD__item__k",
@@ -94,7 +95,7 @@
         "projection_inverse_AEAD.Pkg.AEAD_u"
       ],
       0,
-      "95528ae54237031c9549977b3ce173f7"
+      "bcdb739c90bfe9a5867765248ea939f0"
     ],
     [
       "AEAD.Pkg.__proj__Ideal__item__ck",
@@ -107,7 +108,7 @@
         "refinement_interpretation_Tm_refine_2f47e4e77732b0c7320113be77bdc955"
       ],
       0,
-      "7f293fe3bbba09256d51260277548ddc"
+      "ab7f1901e4a127728f8ad52e7be35597"
     ],
     [
       "AEAD.Pkg.__proj__Ideal__item__state",
@@ -120,7 +121,7 @@
         "refinement_interpretation_Tm_refine_2f47e4e77732b0c7320113be77bdc955"
       ],
       0,
-      "3bd60ad7d9babf9c0b59a7d5480696e4"
+      "4ac8aa418b8481b1f0f918dfbbf79370"
     ],
     [
       "AEAD.Pkg.__proj__Real__item__ck",
@@ -133,7 +134,7 @@
         "refinement_interpretation_Tm_refine_f188697aeaf2d3748a8dd8ff5e07e864"
       ],
       0,
-      "36447a1bd28bea07ebbd8e9f27cee2ea"
+      "2988feffd3b671cc0fc7aee18789c779"
     ],
     [
       "AEAD.Pkg.usage",
@@ -148,7 +149,7 @@
         "refinement_interpretation_Tm_refine_ad51d55195e7f1f701ce50bc38680944"
       ],
       0,
-      "4947e64036a1b2d43ed1f42e7b5244de"
+      "9ea67cf3324aa17c18b4fc0f705f5e3d"
     ],
     [
       "AEAD.Pkg.keyval",
@@ -174,7 +175,7 @@
         "refinement_interpretation_Tm_refine_ad51d55195e7f1f701ce50bc38680944"
       ],
       0,
-      "ebe183f37b0f72859f9fc73f4db3f418"
+      "e74f2d0d9cf86ac367b9d2cbfd1ed08a"
     ],
     [
       "AEAD.Pkg.footprint",
@@ -188,7 +189,7 @@
         "typing_Pkg.__proj__Idx__item__t"
       ],
       0,
-      "8fa1585d5a14107303667fe3119bcb67"
+      "6bf6162f022082a40c94ec1ff967e624"
     ],
     [
       "AEAD.Pkg.footprint",
@@ -203,7 +204,7 @@
         "refinement_interpretation_Tm_refine_ad51d55195e7f1f701ce50bc38680944"
       ],
       0,
-      "ad2d563075588ff8e34c22cdeb339009"
+      "d546d5fd50c7427a0254ea99184d2e29"
     ],
     [
       "AEAD.Pkg.invariant",
@@ -218,7 +219,7 @@
         "refinement_interpretation_Tm_refine_ad51d55195e7f1f701ce50bc38680944"
       ],
       0,
-      "2327dc1698570e9cec7502acc21deaba"
+      "a03e37ed5785a13d59208f13603802e8"
     ],
     [
       "AEAD.Pkg.invariant_framing",
@@ -236,7 +237,7 @@
         "true_interp", "unit_inversion", "unit_typing"
       ],
       0,
-      "9322d23add4bb3e73304bbaadc3c8499"
+      "bfef35a6900809a4ef4645e0ba9a8564"
     ],
     [
       "AEAD.Pkg.empty_log",
@@ -252,7 +253,7 @@
         "refinement_interpretation_Tm_refine_ad51d55195e7f1f701ce50bc38680944"
       ],
       0,
-      "0f484710413d0cead0a17ad64ff52d3d"
+      "23f0ba29dcbacab8b97f37072ae84a00"
     ],
     [
       "AEAD.Pkg.empty_log_framing",
@@ -294,7 +295,7 @@
         "unit_typing"
       ],
       0,
-      "6a958eaccadb9e8b7f71e7a1bda69ed5"
+      "a83bc366e8aa66b37a27f3bfb851ae0b"
     ],
     [
       "AEAD.Pkg.create_key",
@@ -312,7 +313,7 @@
         "typing_AEAD.Pkg.__proj__Mkinfo__item__parent"
       ],
       0,
-      "13c70b7a298528741dd4cd8821ccaa58"
+      "32c08426c64743e1239785ce221c6102"
     ],
     [
       "AEAD.Pkg.coerceT_key",
@@ -321,7 +322,16 @@
       1,
       [ "@query" ],
       0,
-      "8e4bbf30a4833292c920948141fe0710"
+      "65a1fe334cc7712aa9c70d014fc91ae5"
+    ],
+    [
+      "AEAD.Pkg.coerceT_key",
+      2,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "3421699d9a32d713697420160b03a6a4"
     ],
     [
       "AEAD.Pkg.coerce_key",
@@ -330,7 +340,16 @@
       1,
       [ "@query" ],
       0,
-      "d9828fcb5cddca0b7048d1e7d3b40354"
+      "ee5907af3a71c3d9853206a9663b75c1"
+    ],
+    [
+      "AEAD.Pkg.coerce_key",
+      2,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "a7d5906e2712529eccaad6c09c379d44"
     ]
   ]
 ]

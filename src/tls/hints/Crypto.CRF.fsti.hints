@@ -1,6 +1,18 @@
 [
-  "\u0006zlÒ—%£¯≈/ê}~\u0016Œh",
+  "c\nT–Çw\u0015ë'Hõ\u000b8˚^J",
   [
+    [
+      "Crypto.CRF.init",
+      1,
+      0,
+      0,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "refinement_interpretation_Tm_refine_bc12531dbc30b4e7646929a5995d1f17"
+      ],
+      0,
+      "fdad581d600c019220fff2ea116906bb"
+    ],
     [
       "Crypto.CRF.update_pre",
       1,
@@ -8,7 +20,19 @@
       0,
       [ "@query" ],
       0,
-      "8ad9e9995d4bbe9943e89a6dc9eed1d3"
+      "2085fe8db1bf80cf7512e63a0db8548e"
+    ],
+    [
+      "Crypto.CRF.update",
+      1,
+      0,
+      0,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "refinement_interpretation_Tm_refine_bc12531dbc30b4e7646929a5995d1f17"
+      ],
+      0,
+      "f7393373553bcca0c330c6a92c273a5a"
     ],
     [
       "Crypto.CRF.finish_st",
@@ -24,7 +48,31 @@
         "refinement_interpretation_Tm_refine_e1e29cb0b38dfb3cd2ef20a69e983b74"
       ],
       0,
-      "c9bbe5d99a3b38f07ac6087c2c060ec0"
+      "4ed704a6f3e5a544e46dec9d24f043f9"
+    ],
+    [
+      "Crypto.CRF.finish",
+      1,
+      0,
+      0,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "refinement_interpretation_Tm_refine_bc12531dbc30b4e7646929a5995d1f17"
+      ],
+      0,
+      "3bd77ffce3028c7aade3d2bfa92fe271"
+    ],
+    [
+      "Crypto.CRF.free",
+      1,
+      0,
+      0,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "refinement_interpretation_Tm_refine_bc12531dbc30b4e7646929a5995d1f17"
+      ],
+      0,
+      "c1a16332174e79f4a92b9ee32b1531a3"
     ]
   ]
 ]

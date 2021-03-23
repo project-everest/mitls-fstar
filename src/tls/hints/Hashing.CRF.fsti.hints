@@ -1,0 +1,38 @@
+[
+  "²Ãü½!?Ð]¬\u0019%7û]†E",
+  [
+    [
+      "Hashing.CRF.crf_injective",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "bool_inversion",
+        "equation_FStar.Monotonic.HyperStack.is_wf_with_ctr_and_tip",
+        "equation_FStar.Monotonic.HyperStack.mem",
+        "equation_Hashing.CRF.crf",
+        "refinement_interpretation_Tm_refine_05e15190c946858f68c69156f585f95a",
+        "refinement_interpretation_Tm_refine_365abba901205a01d0ef28ebf2198c47",
+        "typing_FStar.Monotonic.HyperHeap.rid_freeable",
+        "typing_FStar.Monotonic.HyperHeap.root"
+      ],
+      0,
+      "1707643534bbaf566252d667a3e6e6f3"
+    ],
+    [
+      "Hashing.CRF.finalize",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "equation_FStar.Bytes.lbytes32",
+        "equation_Hacl.Hash.Definitions.hash_len", "equation_Hashing.tag",
+        "haseqTm_refine_01eac1db03c934bf91dcdae8ea4ae6a2",
+        "refinement_interpretation_Tm_refine_414d0a9f578ab0048252f8c8f552b99f",
+        "typing_FStar.Bytes.bytes"
+      ],
+      0,
+      "978a3465d6327abcc2599222deb06fb1"
+    ]
+  ]
+]

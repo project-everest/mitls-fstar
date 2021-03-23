@@ -13,7 +13,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind"
       ],
       0,
-      "13e619f99932a9f94a083ad19fd432a7"
+      "ccb159deb08d6145951bd5ad403357c2"
     ],
     [
       "MITLS.Repr.Handshake.handshakeType_accessor",
@@ -21,12 +21,9 @@
       2,
       1,
       [
-        "@MaxIFuel_assumption", "@query", "b2t_def",
-        "equation_FStar.Bytes.lbytes", "equation_FStar.UInt.fits",
-        "equation_FStar.UInt.max_int", "equation_FStar.UInt.min_int",
-        "equation_FStar.UInt.size", "equation_FStar.UInt.uint_t",
+        "@MaxIFuel_assumption", "@query", "equation_FStar.Bytes.lbytes",
+        "equation_FStar.UInt.uint_t",
         "equation_LowParse.Low.Base.Spec.slice_access_",
-        "equation_LowParse.Spec.Base.strong_parser_kind",
         "equation_MITLS.Repr.Handshake.handshakeType_clens",
         "equation_MITLS.Repr.Handshake.handshakeType_gaccessor",
         "equation_MITLS.Repr.Handshake.t",
@@ -37,20 +34,12 @@
         "kinding_Parsers.Handshake.handshake@tok",
         "kinding_Parsers.HandshakeType.handshakeType@tok",
         "lemma_FStar.UInt32.uv_inv",
-        "lemma_LowParse.Low.Base.Spec.slice_access_post",
-        "lemma_LowParse.Low.Base.Spec.valid_elim_",
         "lemma_LowStar.Monotonic.Buffer.modifies_refl",
-        "primitive_Prims.op_Addition", "primitive_Prims.op_AmpAmp",
-        "primitive_Prims.op_LessThanOrEqual",
+        "primitive_Prims.op_Addition",
         "proj_equation_LowParse.Low.Base.Spec.Mkclens_clens_cond",
-        "proj_equation_LowParse.Slice.Mkslice_len",
-        "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_low",
-        "projection_inverse_BoxBool_proj_0",
         "projection_inverse_BoxInt_proj_0",
         "projection_inverse_LowParse.Low.Base.Spec.Mkclens_clens_cond",
-        "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_low",
         "refinement_interpretation_Tm_refine_2a09206f295f4c6cc78efffb207cb79f",
-        "refinement_interpretation_Tm_refine_401637ec06016fc5273a7cba7194b00f",
         "refinement_interpretation_Tm_refine_709aff84c75b0fff77dcbf3b529649dd",
         "refinement_interpretation_Tm_refine_71ea40360194fe02ee1272538c9cacbc",
         "refinement_interpretation_Tm_refine_be6ca79e08cbafe6f6fcf7e8d5114e5f",
@@ -60,7 +49,6 @@
         "typing_FStar.Bytes.len", "typing_FStar.UInt32.add",
         "typing_FStar.UInt32.v",
         "typing_LowParse.Low.Base.Spec.slice_access_",
-        "typing_LowParse.Slice.__proj__Mkslice__item__len",
         "typing_LowStar.Monotonic.Buffer.loc_none",
         "typing_MITLS.Repr.Handshake.handshakeType_clens",
         "typing_MITLS.Repr.Handshake.handshakeType_gaccessor",
@@ -70,7 +58,7 @@
         "typing_Parsers.HandshakeType.handshakeType_parser_kind"
       ],
       0,
-      "8c529f3711beeb5587aa143af76bcdb1"
+      "b98ecf165ef88738c0389b10950a3c64"
     ],
     [
       "MITLS.Repr.Handshake.field_handshakeType",
@@ -85,7 +73,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind"
       ],
       0,
-      "6ac829f0c24f329076e4adc573a66d4b"
+      "4a8d662fa9547e60ede3ec0350309a20"
     ],
     [
       "MITLS.Repr.Handshake.field_vldata_client_hello",
@@ -100,7 +88,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind"
       ],
       0,
-      "bbab9457345fea02f3d1dce527f6dbc9"
+      "87be46c93300218f7c07b833fa78c02d"
     ],
     [
       "MITLS.Repr.Handshake.field_m_client_hello_client_hello",
@@ -115,7 +103,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind"
       ],
       0,
-      "25b741db196b63b466cf440f8ac7dfd8"
+      "f614767eb8c795f2a59d574041b73559"
     ],
     [
       "MITLS.Repr.Handshake.field_clientHello",
@@ -131,7 +119,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind"
       ],
       0,
-      "a5225adcd8404c4b18b95696acd11f3c"
+      "1780f07cde34d4d5a978a290f480acf1"
     ],
     [
       "MITLS.Repr.Handshake.field_vldata_server_hello",
@@ -146,7 +134,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind"
       ],
       0,
-      "bd306e9fb442cb3d169c5d0fa5f68e82"
+      "9abf54a7cac372842d784f365302be19"
     ],
     [
       "MITLS.Repr.Handshake.field_m_server_hello_server_hello",
@@ -161,7 +149,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind"
       ],
       0,
-      "ebc50ad05d838c1a832933919a7720e6"
+      "51030bad3e108ef039ca706d555dfa0c"
     ],
     [
       "MITLS.Repr.Handshake.field_serverHello",
@@ -177,7 +165,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind"
       ],
       0,
-      "f4dd4a0f8aa064ae9a64e516916f0c47"
+      "40c986d2e28c65478bc7174670a67adc"
     ],
     [
       "MITLS.Repr.Handshake.serialize",
@@ -191,7 +179,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind"
       ],
       0,
-      "877d63d67b56c32568dda416b05fdd14"
+      "f557197b34567fb03b2afd924fd0b0ae"
     ],
     [
       "MITLS.Repr.Handshake.is_ch",
@@ -203,7 +191,7 @@
         "assumption_Parsers.HandshakeType.handshakeType__uu___haseq"
       ],
       0,
-      "14607e9d9b78c5c0e0a7f6deba0c7764"
+      "1fdbb0345dab78b21f9dd6c99beb9352"
     ],
     [
       "MITLS.Repr.Handshake.is_sh",
@@ -215,7 +203,7 @@
         "assumption_Parsers.HandshakeType.handshakeType__uu___haseq"
       ],
       0,
-      "a9f703aa85e533efdf3e5a3a0767fa31"
+      "79b5c6b818c640e99337d7c1feaea25b"
     ],
     [
       "MITLS.Repr.Handshake.get_handshakeType",
@@ -229,7 +217,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind"
       ],
       0,
-      "e169178acf1decaa55521ee06c82fe42"
+      "4654e14e8c3112f8eb2400074c1f2d52"
     ],
     [
       "MITLS.Repr.Handshake.get_clientHello",
@@ -244,7 +232,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind"
       ],
       0,
-      "d61d347e8a20432e600f762d09188a23"
+      "5759b67590ed7b4203f548d4d865599f"
     ],
     [
       "MITLS.Repr.Handshake.get_serverHello",
@@ -259,7 +247,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind"
       ],
       0,
-      "333ec97bca2109f8c9b9aa165195f95e"
+      "406f7cf95a6c2c53a1c174a0b48d8e74"
     ]
   ]
 ]
