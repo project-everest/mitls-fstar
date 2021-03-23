@@ -768,7 +768,7 @@ let extend_hsm12 : extend_t LR_HSM12? =
     CRF.update (Ghost.hide a) s.hash_state (C.to_buffer hs12_data) hs12_len
 
 
-#push-options "--z3rlimit 100"
+#push-options "--z3rlimit 256"
 let extend_hsm13 : extend_t LR_HSM13? =
   fun #a s l ->
   assert_norm (pow2 32 < pow2 61);
