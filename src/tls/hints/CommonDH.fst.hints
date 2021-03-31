@@ -1642,31 +1642,11 @@
         "typing_FStar.Bytes.reveal", "typing_FStar.Seq.Base.length"
       ],
       0,
-      "215d40d87c2bc6d4ee5f7d2358b1771d"
+      "c51a237cc62c3cdc11b4a246a43cf93a"
     ],
     [
       "CommonDH.keyShareEntry",
       3,
-      2,
-      1,
-      [
-        "@MaxIFuel_assumption", "@query",
-        "constructor_distinct_FStar.Integers.Unsigned",
-        "constructor_distinct_FStar.Integers.W8",
-        "equality_tok_FStar.Integers.W8@tok",
-        "equation_FStar.Integers.int_t", "equation_FStar.Integers.uint_8",
-        "equation_Prims.nat", "function_token_typing_FStar.Integers.uint_8",
-        "lemma_FStar.Bytes.length_reveal",
-        "projection_inverse_FStar.Integers.Unsigned__0",
-        "refinement_interpretation_Tm_refine_542f9d4f129664613f2483a6c88bc7c2",
-        "typing_FStar.Bytes.reveal", "typing_FStar.Seq.Base.length"
-      ],
-      0,
-      "8ac3dd1e556ea4808eeaf55cac35451f"
-    ],
-    [
-      "CommonDH.keyShareEntry",
-      4,
       2,
       1,
       [
@@ -1680,7 +1660,7 @@
         "typing_FStar.Bytes.bytes"
       ],
       0,
-      "428ba1bd27b7823671f6413cf214bc3b"
+      "cdede7148a18621fdc6f78df2641b784"
     ],
     [
       "CommonDH.__proj__Share__item__g",
@@ -1693,7 +1673,7 @@
         "refinement_interpretation_Tm_refine_419290ad1633289796ca4faa3415e88c"
       ],
       0,
-      "64be25882c07f0a90031eaae2d78a79a"
+      "0632ee217cfa2fa61c75939fc1ea9233"
     ],
     [
       "CommonDH.__proj__Share__item___1",
@@ -1708,7 +1688,7 @@
         "refinement_interpretation_Tm_refine_419290ad1633289796ca4faa3415e88c"
       ],
       0,
-      "577f6a25c7ff090504b5dbd8f28a5190"
+      "b35986d108902a3de48fdf5a6f8bd6d6"
     ],
     [
       "CommonDH.__proj__UnknownShare__item__ng",
@@ -1722,7 +1702,7 @@
         "refinement_interpretation_Tm_refine_c024b0a21c9b8f09957845060b9823fc"
       ],
       0,
-      "c8ac41b628f8428ff64a14b28a24b30d"
+      "d7a0b0f095fa8af6d140180a951abf47"
     ],
     [
       "CommonDH.__proj__UnknownShare__item__b",
@@ -1742,7 +1722,7 @@
         "typing_FStar.Bytes.reveal", "typing_FStar.Seq.Base.length"
       ],
       0,
-      "a74ec9bc9af360addd6c9732aa7f7165"
+      "83929bd5cca542fae1c8ad32574715bc"
     ],
     [
       "CommonDH.__proj__UnknownShare__item__b",
@@ -1765,7 +1745,7 @@
         "typing_FStar.Bytes.reveal", "typing_FStar.Seq.Base.length"
       ],
       0,
-      "ccbb4e5804a49b04b669b73383018d26"
+      "a51065059acd54eb37129d66004697f8"
     ],
     [
       "CommonDH.__proj__ClientKeyShare__item___0",
@@ -1779,7 +1759,7 @@
         "refinement_interpretation_Tm_refine_6def7493d05b3fbcbe82678fc375d428"
       ],
       0,
-      "ac6def989aae49180fc8e6c5e1b4cee0"
+      "f0109f5d1ac12b0e1cf38d7095294406"
     ],
     [
       "CommonDH.__proj__ServerKeyShare__item___0",
@@ -1793,7 +1773,7 @@
         "refinement_interpretation_Tm_refine_9cc025d1d8ed93fe703d76a8ddd03286"
       ],
       0,
-      "d774b207d6c2f7e6465f6d6f202d5730"
+      "dd1f1e890adf04a8231d62c55079e0fd"
     ],
     [
       "CommonDH.__proj__HRRKeyShare__item___0",
@@ -1807,7 +1787,7 @@
         "refinement_interpretation_Tm_refine_24f91d366aff84b0df73177175f3b8ef"
       ],
       0,
-      "1c34d6f1718985ef32af95751460c9e6"
+      "6ec10e12566f7709c12772264c9806eb"
     ],
     [
       "CommonDH.keyShareEntryBytes",
@@ -1867,7 +1847,7 @@
         "typing_Prims.pow2", "typing_Spec.Poly1305.size_key"
       ],
       0,
-      "45d56d2007f41ede8f324a585c93eda4"
+      "c473a3a6edb8018dd6227fff4dc3bd59"
     ],
     [
       "CommonDH.parseKeyShareEntry",
@@ -1968,7 +1948,7 @@
         "typing_tok_Parsers.NamedGroup.X448@tok"
       ],
       0,
-      "c23e3eeece0573ea244866dc34687ff4"
+      "2cddb2b4b718f654a00714fced66fa05"
     ],
     [
       "CommonDH.keyShareEntriesBytes_aux",
@@ -2033,7 +2013,7 @@
         "typing_FStar.UInt32.v", "typing_Spec.Poly1305.size_key"
       ],
       0,
-      "872af10ede4237dab97b5256b4a21fc6"
+      "1c2ad0d359fd250c269e99cd9530c6ea"
     ],
     [
       "CommonDH.keyShareEntriesBytes",
@@ -2057,7 +2037,7 @@
         "typing_FStar.Seq.Base.length"
       ],
       0,
-      "3db14ba8744bc52777a87a858c225a9e"
+      "79be67a590ab891a71c59e7987e44f2b"
     ],
     [
       "CommonDH.parseKeyShareEntries_aux",
@@ -2133,7 +2113,7 @@
         "well-founded-ordering-on-nat"
       ],
       0,
-      "6d3a6f31d22b30ae912ee31ea0002f9d"
+      "5a69f20e871812dc0f3228d2654762aa"
     ],
     [
       "CommonDH.parseKeyShareEntries",
@@ -2150,7 +2130,7 @@
         "projection_inverse_BoxBool_proj_0"
       ],
       0,
-      "b0764965c6a4dc0d98249840e355afe4"
+      "0a3eeee35ef06fe50f4dbeb6d9cb9add"
     ],
     [
       "CommonDH.parseClientKeyShare",
@@ -2177,7 +2157,7 @@
         "typing_FStar.Monotonic.HyperStack.is_eternal_color"
       ],
       0,
-      "5511cd814d3622c6495bf18a79215135"
+      "50619a528a4ee90693766567919626ed"
     ],
     [
       "CommonDH.parseServerKeyShare",
@@ -2197,7 +2177,7 @@
         "typing_CommonDH.parseKeyShareEntry"
       ],
       0,
-      "542eb53c2d94424acd35e2f9821e064d"
+      "7baef4008ea43f81e0694543f80b24d2"
     ],
     [
       "CommonDH.keyShareBytes",
@@ -2215,7 +2195,7 @@
         "typing_CommonDH.uu___is_ClientKeyShare"
       ],
       0,
-      "58f19467fa932680e0392199db35053a"
+      "6513d38ea6d0a3ea625fa8540d6800c7"
     ]
   ]
 ]
