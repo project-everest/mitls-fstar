@@ -12,7 +12,7 @@
         "projection_inverse_BoxBool_proj_0"
       ],
       0,
-      "4fed8f58c8c87a57a5f769f7758a4c7b"
+      "0d766b066aaa313c9a8fe181b9cf5fde"
     ],
     [
       "AEAD_GCM.alg",
@@ -26,7 +26,7 @@
         "refinement_interpretation_Tm_refine_0c6cc1b1b7b773e2c98d2acffaf038e6"
       ],
       0,
-      "b5003c1ec550c2cabab14bb6fc9f1a5a"
+      "072bb51cc9d948567d287a1c70964567"
     ],
     [
       "AEAD_GCM.cipher",
@@ -40,7 +40,7 @@
         "typing_FStar.Bytes.len", "typing_FStar.UInt32.v"
       ],
       0,
-      "55720b8e6295a7961db415ddfe6cb4c2"
+      "97f80dfbf2f078bb24b930dd01fde11a"
     ],
     [
       "AEAD_GCM.key",
@@ -53,7 +53,7 @@
         "projection_inverse_BoxBool_proj_0"
       ],
       0,
-      "a2dcfa50f2d54148056dc8dec889dfbf"
+      "ba668b371b7c46ee7729bcace9aa7bb2"
     ],
     [
       "AEAD_GCM.iv",
@@ -66,7 +66,7 @@
         "projection_inverse_BoxBool_proj_0"
       ],
       0,
-      "55d6d1d7c60fbb5208cabe2a2f7481ec"
+      "aaf6fc5173c45c81c98166496b566e1b"
     ],
     [
       "AEAD_GCM.max_ctr",
@@ -75,7 +75,7 @@
       1,
       [ "@query", "projection_inverse_BoxInt_proj_0" ],
       0,
-      "c8c137b557e03519c6425fabe0f2892a"
+      "d017083090fd66e0508591b4fb2b992c"
     ],
     [
       "AEAD_GCM.dplain",
@@ -93,7 +93,7 @@
         "typing_FStar.Bytes.len", "typing_FStar.UInt32.v"
       ],
       0,
-      "6c201fb46ee5c3f68c1204932e8ae8c1"
+      "4eeea145ad65ced57bae4123cdf70c25"
     ],
     [
       "AEAD_GCM.entry",
@@ -129,7 +129,7 @@
         "typing_FStar.Seq.Base.length", "typing_Range.cipherRangeClass"
       ],
       0,
-      "66a3b980e8c2dfaf7fa7e022c4efb0d3"
+      "dce40933e7abaaf23012ca7e992c97be"
     ],
     [
       "AEAD_GCM.__proj__Entry__item__p",
@@ -143,7 +143,7 @@
         "projection_inverse_AEAD_GCM.Entry_c"
       ],
       0,
-      "a39299df450cf6862eff0ab3cf1315d9"
+      "e97a3d5d38b55082b735c53fa033309c"
     ],
     [
       "AEAD_GCM.ilog",
@@ -156,7 +156,7 @@
         "refinement_interpretation_Tm_refine_1a550ee78acf3c05cdaf52f117149073"
       ],
       0,
-      "62b87b1241358bb2f0728776ac7f11df"
+      "09ec063e3fce82228268d91389844be6"
     ],
     [
       "AEAD_GCM.concrete_ctr",
@@ -172,7 +172,7 @@
         "token_correspondence_FStar.Monotonic.Seq.increases"
       ],
       0,
-      "bae8c46476662939c827c94f0e128132"
+      "61916d919806d13cd3c5ca059056bfa5"
     ],
     [
       "AEAD_GCM.ctr_ref",
@@ -189,7 +189,7 @@
         "token_correspondence_FStar.Monotonic.Seq.increases"
       ],
       0,
-      "1f66433c5da3d84c2efd3bd13803356a"
+      "f05d9c7652bdfd2710449e152429e640"
     ],
     [
       "AEAD_GCM.ctr",
@@ -234,7 +234,7 @@
         "typing_Mem.store_region"
       ],
       0,
-      "039e50257dcba421215201c438786671"
+      "99151e4bc3ac3d6e195df76247b972cf"
     ],
     [
       "AEAD_GCM.state",
@@ -255,7 +255,7 @@
         "typing_FStar.Monotonic.HyperHeap.rid"
       ],
       0,
-      "514296a4db13a656eea6e9d120824967"
+      "6ee331d81646d31bc040ae720a34c587"
     ],
     [
       "AEAD_GCM.__proj__State__item__log_region",
@@ -273,7 +273,7 @@
         "typing_FStar.Monotonic.HyperHeap.rid"
       ],
       0,
-      "93d362e4fd32a2539761948a949b8c67"
+      "d4f82de672c7aa91dcc226c836e0a300"
     ],
     [
       "AEAD_GCM.__proj__State__item__log_region",
@@ -293,7 +293,7 @@
         "typing_FStar.Monotonic.HyperHeap.rid"
       ],
       0,
-      "314af52a82c6f070d829ed6f18300a16"
+      "f59d200f700a626a75918e316c661880"
     ],
     [
       "AEAD_GCM.__proj__State__item__aead",
@@ -306,7 +306,7 @@
         "projection_inverse_BoxBool_proj_0"
       ],
       0,
-      "2caca3ce45978780ee8b07119709fcbc"
+      "353358116acf8c4a66c6228f683d06e6"
     ],
     [
       "AEAD_GCM.__proj__State__item__aead",
@@ -319,7 +319,7 @@
         "projection_inverse_BoxBool_proj_0"
       ],
       0,
-      "fc98a136884bb435610d58a9dfb28902"
+      "52e855c66f126c69626de53837608a25"
     ],
     [
       "AEAD_GCM.__proj__State__item__log",
@@ -331,7 +331,7 @@
         "projection_inverse_BoxBool_proj_0"
       ],
       0,
-      "b8130833d3bc99382f4eeb66f4e5ac51"
+      "fecbb68092bb32a2db382ea7f6d12e3e"
     ],
     [
       "AEAD_GCM.__proj__State__item__counter",
@@ -345,7 +345,7 @@
         "projection_inverse_BoxBool_proj_0"
       ],
       0,
-      "c81885255442878fe54af1e841b9080d"
+      "a52e838c020ac69d8342ddfc874767de"
     ],
     [
       "AEAD_GCM.genPost",
@@ -410,7 +410,7 @@
         "typing_tok_TLSConstants.Writer@tok"
       ],
       0,
-      "2cf22d698beccb13523b0ae6f262d6db"
+      "c6614737483886500ce46035bf223129"
     ],
     [
       "AEAD_GCM.gen",
@@ -550,7 +550,7 @@
         "typing_Mem.store_region"
       ],
       0,
-      "18023862e7ac7891d3ed6c578e73ed55"
+      "70f9a7e14a9c829d3c2bb806e9ef0e3b"
     ],
     [
       "AEAD_GCM.genReader",
@@ -606,7 +606,7 @@
         "typing_tok_TLSConstants.Writer@tok", "unit_inversion", "unit_typing"
       ],
       0,
-      "92a153464d8e4018133176aebfcdbb9f"
+      "05d70f882a735c118cce8ee49b672d7d"
     ],
     [
       "AEAD_GCM.genReader",
@@ -760,7 +760,7 @@
         "typing_tok_TLSConstants.Writer@tok", "unit_inversion"
       ],
       0,
-      "f72117e79a04a0a247eb9dba74ee7a1d"
+      "42e148f451137be9d84d8725ed5ac856"
     ],
     [
       "AEAD_GCM.leak",
@@ -779,7 +779,7 @@
         "refinement_interpretation_Tm_refine_ad9ed9faa656cb3eda1a04e4d6c32f7b"
       ],
       0,
-      "91de4b899dc5875290cf041eec32e3ad"
+      "077348500317e554e4cd84f91f5e22a8"
     ],
     [
       "AEAD_GCM.lemma_12",
@@ -805,7 +805,7 @@
         "typing_TLSInfo.safe_region"
       ],
       0,
-      "ad79f02fbc504df5061447888d5ae9f9"
+      "dfb37317c8746e6891aec01673651e77"
     ],
     [
       "AEAD_GCM.encrypt",
@@ -888,7 +888,7 @@
         "typing_tok_TLSConstants.Writer@tok"
       ],
       0,
-      "4ecdad93a630bb104eaf0c95380a611f"
+      "5b43e00a8b6c249d361e4f45ce344f75"
     ],
     [
       "AEAD_GCM.encrypt",
@@ -902,7 +902,7 @@
         "refinement_interpretation_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
       ],
       0,
-      "b74e909ed12e765cfa817312c9e9d866"
+      "86edea3c9234dde79fe537dc6343cd55"
     ],
     [
       "AEAD_GCM.encrypt",
@@ -1036,7 +1036,7 @@
         "typing_tok_TLSConstants.Writer@tok"
       ],
       0,
-      "a55665639521daaa4913e2af8cc30ac3"
+      "cdaa1e012c290577814c4e19f121b116"
     ],
     [
       "AEAD_GCM.matches",
@@ -1054,7 +1054,7 @@
         "typing_FStar.Bytes.bytes"
       ],
       0,
-      "a1ae0819ca5e0148e51d3eddcd55055c"
+      "9b12adb3c969ca3df51cf4f01f7aa00b"
     ],
     [
       "AEAD_GCM.decrypt",
@@ -1083,7 +1083,7 @@
         "token_correspondence_FStar.Monotonic.Seq.increases"
       ],
       0,
-      "02188b0fd6aef6dd44794e53356c1f12"
+      "803bd8cb065759fd5b49c8fa210e6ddf"
     ],
     [
       "AEAD_GCM.decrypt",
@@ -1242,6 +1242,7 @@
         "lemma_FStar.Pervasives.invertOption",
         "lemma_FStar.Seq.Base.lemma_len_append",
         "lemma_FStar.Seq.Base.lemma_len_slice",
+        "lemma_FStar.Seq.Properties.slice_is_empty",
         "lemma_FStar.Seq.Properties.slice_length",
         "lemma_FStar.Seq.Properties.slice_slice",
         "lemma_FStar.Set.lemma_equal_elim", "lemma_FStar.Set.mem_complement",
@@ -1306,6 +1307,7 @@
         "refinement_interpretation_Tm_refine_891b61457738eb1e1e00f3e6e1d818f9",
         "refinement_interpretation_Tm_refine_8fcbdf9612ed9cda5a238ad00e36f8ee",
         "refinement_interpretation_Tm_refine_ac6edb774778b9994c24a58478b5d708",
+        "refinement_interpretation_Tm_refine_b361ba8089a6e963921008d537e799a1",
         "refinement_interpretation_Tm_refine_b913a3f691ca99086652e0a655e72f17",
         "refinement_interpretation_Tm_refine_bd10f09297e0e7dc08314f7d9211801c",
         "refinement_interpretation_Tm_refine_ccdce44f1798daaee5053f39080dfc8c",
@@ -1348,7 +1350,7 @@
         "typing_FStar.Monotonic.HyperStack.live_region",
         "typing_FStar.Monotonic.HyperStack.mk_mem",
         "typing_FStar.Monotonic.HyperStack.sel",
-        "typing_FStar.Pervasives.Native.fst", "typing_FStar.Seq.Base.empty",
+        "typing_FStar.Pervasives.Native.snd", "typing_FStar.Seq.Base.empty",
         "typing_FStar.Seq.Base.length", "typing_FStar.Set.complement",
         "typing_FStar.Set.empty", "typing_FStar.Set.mem",
         "typing_FStar.Set.singleton",

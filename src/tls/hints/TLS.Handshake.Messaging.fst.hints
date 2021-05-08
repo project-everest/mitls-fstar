@@ -24,7 +24,6 @@
         "constructor_distinct_Lib.IntTypes.U32",
         "constructor_distinct_Lib.IntTypes.U8",
         "constructor_distinct_Spec.Blake2.Blake2B",
-        "constructor_distinct_Spec.Blake2.Blake2S",
         "constructor_distinct_Spec.Hash.Definitions.SHA2_256",
         "constructor_distinct_Spec.Hash.Definitions.SHA2_384", "eq2-interp",
         "equality_tok_FStar.Integers.W16@tok",
@@ -77,7 +76,7 @@
         "equation_Prims.eq2", "equation_Prims.eqtype", "equation_Prims.nat",
         "equation_Prims.squash", "equation_Spec.AES.gf8",
         "equation_Spec.AES.irred", "equation_Spec.Blake2.max_key",
-        "equation_Spec.Blake2.wt", "equation_Spec.GaloisField.gf",
+        "equation_Spec.GaloisField.gf",
         "equation_Spec.Hash.Definitions.bytes_hash",
         "equation_Spec.Hash.Definitions.is_md",
         "equation_Spec.Poly1305.size_key",
@@ -213,7 +212,7 @@
         "typing_tok_Spec.Hash.Definitions.SHA2_384@tok", "unit_typing"
       ],
       0,
-      "07d82f57e78371777079e73735f762c4"
+      "c11a1446d56f17f2c55e81d5c6d1339d"
     ],
     [
       "TLS.Handshake.Messaging.extend13",
@@ -438,7 +437,7 @@
         "typing_tok_LowStar.ConstBuffer.MUTABLE@tok", "unit_typing"
       ],
       0,
-      "321cfd5254184e5c627d07af0e721cfa"
+      "cae61cb17177db877b4101a683dd7142"
     ]
   ]
 ]
