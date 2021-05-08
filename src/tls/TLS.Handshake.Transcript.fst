@@ -628,7 +628,7 @@ let extend_tch : extend_t LR_TCH? =
        (PB.build_canonical_binders (ch_binders_len (HSM.M_client_hello?._0 (R.value tch_ptr))))
 
 
-#push-options "--z3rlimit_factor 8 --max_fuel 0 --query_stats"
+#push-options "--z3rlimit_factor 16 --max_fuel 0 --query_stats"
 let extend_complete_tch : extend_t LR_CompleteTCH? =
   fun #a s l ->
   assert_norm (pow2 32 < pow2 61);
