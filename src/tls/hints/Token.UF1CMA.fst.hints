@@ -41,7 +41,7 @@
         "typing_FStar.Set.complement", "typing_FStar.Set.empty"
       ],
       0,
-      "8772d678a85c59d1fe67c412c14a352c"
+      "a4232f3375700d0a61c661d26f583d09"
     ],
     [
       "Token.UF1CMA.keylen",
@@ -127,7 +127,7 @@
         "typing_tok_Lib.IntTypes.U32@tok"
       ],
       0,
-      "58de495aca678f2105b9f268935b9c85"
+      "80bb923db94962d419f6a5b8bb6f191c"
     ],
     [
       "Token.UF1CMA.keyrepr",
@@ -150,7 +150,7 @@
         "typing_Token.UF1CMA.__proj__Mkinfo__item__alg"
       ],
       0,
-      "eca099405a100581f2d9ee48381b9a1c"
+      "20eb186e71bce6150e2d88694dd22426"
     ],
     [
       "Token.UF1CMA.log_t",
@@ -159,7 +159,7 @@
       1,
       [ "@query" ],
       0,
-      "8b2f035689cca077844865636388e492"
+      "fa1d3705e0ad0de67274551e3b84afb9"
     ],
     [
       "Token.UF1CMA.__proj__MAC__item__k",
@@ -171,7 +171,7 @@
         "projection_inverse_Token.UF1CMA.MAC_u"
       ],
       0,
-      "c7236db1ed44f88d057b7e626351be7f"
+      "854ceb5fa82ff9b04d9180fcd651b352"
     ],
     [
       "Token.UF1CMA.__proj__IdealKey__item__ck",
@@ -185,7 +185,7 @@
         "refinement_interpretation_Tm_refine_41840a448e3c4c0a711c7e435b6854d9"
       ],
       0,
-      "5775260a43cb55dbd7dd484017984565"
+      "8540de6820b5ce92efc089d96d591d4d"
     ],
     [
       "Token.UF1CMA.__proj__IdealKey__item__region",
@@ -202,7 +202,7 @@
         "refinement_interpretation_Tm_refine_41840a448e3c4c0a711c7e435b6854d9"
       ],
       0,
-      "73859245ab8e2167f583f083ada98058"
+      "308dfe595ae496f94a7b558dd838a2db"
     ],
     [
       "Token.UF1CMA.__proj__IdealKey__item__log",
@@ -241,7 +241,7 @@
         "typing_FStar.Monotonic.HyperStack.is_eternal_color"
       ],
       0,
-      "21284c5156e811a1c96333540b10fed8"
+      "0e6108a432764e25ceb853952f47cda7"
     ],
     [
       "Token.UF1CMA.__proj__RealKey__item__ck",
@@ -255,7 +255,7 @@
         "refinement_interpretation_Tm_refine_c51cfa53ada8810f00d183686fa26508"
       ],
       0,
-      "990ec89b3f2dca603a55b786bb4c32c7"
+      "7cfe8ce9640567e5d2ef6e57acde0aa7"
     ],
     [
       "Token.UF1CMA.usage",
@@ -271,7 +271,7 @@
         "refinement_interpretation_Tm_refine_a8125be696a7e8ae66ddb3901a539380"
       ],
       0,
-      "efd3873c636ff4466421d86db6e588c5"
+      "f4fe652df82a0afae705b9724e7e1ca5"
     ],
     [
       "Token.UF1CMA.keyval",
@@ -298,7 +298,7 @@
         "refinement_interpretation_Tm_refine_a8125be696a7e8ae66ddb3901a539380"
       ],
       0,
-      "371f47e887ef51fb4cb7d7b362bfba63"
+      "68e5e7441747af730bcf8392953d8ea3"
     ],
     [
       "Token.UF1CMA.region",
@@ -322,7 +322,7 @@
         "typing_Mem.model", "typing_Token.UF1CMA.ideal"
       ],
       0,
-      "6766b040a4453e42f1ab63f52c7a68e3"
+      "8b250e4f89316bb937cf8e033b278a31"
     ],
     [
       "Token.UF1CMA.shared_footprint",
@@ -334,7 +334,7 @@
         "typing_FStar.Monotonic.HyperHeap.rid"
       ],
       0,
-      "d57e9e33fa415a5cdbdced8309dfda71"
+      "41e36722e5df26a9dd5bc3c7d424198b"
     ],
     [
       "Token.UF1CMA.create",
@@ -347,7 +347,7 @@
         "haseqTm_refine_e7c5f4e71af26642dc90739b89f6278e"
       ],
       0,
-      "049482a6f10594839d40c293fbf1ae89"
+      "dd23f5ac31a1414cd7ee183edc136459"
     ],
     [
       "Token.UF1CMA.create",
@@ -360,7 +360,7 @@
         "haseqTm_refine_e7c5f4e71af26642dc90739b89f6278e"
       ],
       0,
-      "a6115914af6317c7ebf49b2d5da0a10e"
+      "0d37278f3981e5aebc0ad948b72516e6"
     ],
     [
       "Token.UF1CMA.create",
@@ -542,7 +542,7 @@
         "typing_Spec.Poly1305.size_key", "typing_Token.UF1CMA.goodish"
       ],
       0,
-      "1ef9e29a610f9a20b31dcd1b9f9c0ab5"
+      "d9f2540c11ab88bbdefc884594f63f78"
     ],
     [
       "Token.UF1CMA.coerceT",
@@ -555,7 +555,7 @@
         "haseqTm_refine_e7c5f4e71af26642dc90739b89f6278e"
       ],
       0,
-      "7c5aa8c9606da83817ab31130f75ea1a"
+      "c21310d79e1260eb58b0a37d86c2932e"
     ],
     [
       "Token.UF1CMA.coerceT",
@@ -568,7 +568,7 @@
         "haseqTm_refine_e7c5f4e71af26642dc90739b89f6278e"
       ],
       0,
-      "cf68c3d842dabbbca6c0594ec3d77cd7"
+      "9892ff163da07c422383c9fcdb427b41"
     ],
     [
       "Token.UF1CMA.coerceT",
@@ -663,7 +663,7 @@
         "typing_tok_Lib.IntTypes.U32@tok"
       ],
       0,
-      "c21d804fb0c349f62cccaa750bcd9222"
+      "2891cae6af5fb97217aafa7a5eb3a089"
     ],
     [
       "Token.UF1CMA.coerce",
@@ -676,7 +676,7 @@
         "haseqTm_refine_e7c5f4e71af26642dc90739b89f6278e"
       ],
       0,
-      "e4c976227716408d3c416fb1ab050c0b"
+      "8bed3048bf9abc6e9002faa9fb62a5e1"
     ],
     [
       "Token.UF1CMA.coerce",
@@ -689,7 +689,7 @@
         "haseqTm_refine_e7c5f4e71af26642dc90739b89f6278e"
       ],
       0,
-      "ff5ae7964a2014feac95140f9e91d5e3"
+      "0e98c37e94c5ed02b2ca6722f0210ce9"
     ],
     [
       "Token.UF1CMA.coerce",
@@ -807,7 +807,7 @@
         "typing_tok_Lib.IntTypes.PUB@tok", "typing_tok_Lib.IntTypes.U32@tok"
       ],
       0,
-      "16b3e7e7ef155adb0507e70af93c5cef"
+      "add5360547d6493bd2a051600fe5dda0"
     ],
     [
       "Token.UF1CMA.get_key",
@@ -823,7 +823,7 @@
         "refinement_interpretation_Tm_refine_a8125be696a7e8ae66ddb3901a539380"
       ],
       0,
-      "29a97ef7991238e942547245a4c7b869"
+      "bd6a1ba29f3d45b05be344ade4d07b5e"
     ],
     [
       "Token.UF1CMA.token",
@@ -967,7 +967,7 @@
         "typing_Token.UF1CMA.usage", "unit_inversion"
       ],
       0,
-      "0bfb895af18e15b9aa728d1875918ba0"
+      "6cca06ca6f396c257c61e3c3df6f236c"
     ],
     [
       "Token.UF1CMA.verify",
@@ -1033,7 +1033,7 @@
         "typing_Token.UF1CMA.usage"
       ],
       0,
-      "be7ddef8c0d99cd34d788163be420718"
+      "a299ab4e350b44efdb4610a80814d2c8"
     ],
     [
       "Token.UF1CMA.info1",
@@ -1046,7 +1046,7 @@
         "haseqTm_refine_e7c5f4e71af26642dc90739b89f6278e"
       ],
       0,
-      "a581cb9ef8875b965b565c698712b8e1"
+      "9647699e8d219f344e661665b24c2e01"
     ],
     [
       "Token.UF1CMA.localpkg",
@@ -1089,7 +1089,7 @@
         "typing_Token.UF1CMA.keylen"
       ],
       0,
-      "664b00e60449c0974314797de284cc7b"
+      "807aba690369c836390ec7d68b3624cf"
     ],
     [
       "Token.UF1CMA.coerce_eq2",
@@ -1098,7 +1098,7 @@
       1,
       [ "@query" ],
       0,
-      "a6d0c5262ab3557011c1268eb212574e"
+      "c68795bbf635c7e01cd886e9dfd9c8ae"
     ],
     [
       "Token.UF1CMA.ip",
@@ -1117,7 +1117,7 @@
         "refinement_interpretation_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
       ],
       0,
-      "e0b73636185df4f44f34552cf4a4ac23"
+      "7d0acc70d7f253956568d215fcbcc0df"
     ],
     [
       "Token.UF1CMA.test",
@@ -1144,7 +1144,7 @@
         "typing_Spec.AES.gf8", "typing_Spec.GaloisField.__proj__GF__item__t"
       ],
       0,
-      "046315fd0e2dce436eec1c459a246a5f"
+      "785e11a4757cebcfc5d98c6d6562f247"
     ],
     [
       "Token.UF1CMA.test",
