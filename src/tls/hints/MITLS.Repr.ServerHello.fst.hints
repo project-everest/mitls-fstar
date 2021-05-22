@@ -13,7 +13,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind"
       ],
       0,
-      "2029ae4249d3a09b84a793a414f4d7e3"
+      "10536283861a24756fb133e682e4ed91"
     ],
     [
       "MITLS.Repr.ServerHello.field_is_hrr",
@@ -28,7 +28,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind"
       ],
       0,
-      "3f178232f0f76f312e369b2dc954c7a6"
+      "03e8d929fe55d19cca90733d154bbed6"
     ],
     [
       "MITLS.Repr.ServerHello.cipherSuite",
@@ -71,10 +71,13 @@
         "fuel_guarded_inversion_Parsers.ServerHello.serverHello",
         "fuel_guarded_inversion_Parsers.ServerHello_is_hrr.serverHello_is_hrr",
         "interpretation_Tm_abs_02473a4ce0cb8e58c0ec8c426df4ffea",
+        "interpretation_Tm_abs_08ea94a4e26b29c0a091f5b880a1c7e7",
+        "interpretation_Tm_abs_3fa9bd342b9d72d439e1a36f0adc5825",
         "interpretation_Tm_abs_470299ed71c4af8d449c3969110f8adf",
         "interpretation_Tm_abs_7d297f81f0172b3f88b95cf2c926fb4f",
         "interpretation_Tm_abs_825104bfd1a609d86ae8373138b395a1",
         "interpretation_Tm_abs_bc8a9768324a93508d83e219243a22a0",
+        "interpretation_Tm_abs_c156b39c3a8b748db946c532fc03091d",
         "interpretation_Tm_abs_c73bf65f3a8c801391633d2b42bb0517",
         "interpretation_Tm_abs_d478061b345ace51bdd48711026a5e51",
         "kinding_Parsers.ServerHello.serverHello@tok",
@@ -111,9 +114,6 @@
         "refinement_interpretation_Tm_refine_f13070840248fced9d9d60d77bdae3ec",
         "token_correspondence_LowParse.Low.Base.Spec.__proj__Mkclens__item__clens_cond",
         "token_correspondence_LowParse.Low.Base.Spec.__proj__Mkclens__item__clens_get",
-        "token_correspondence_Parsers.HRRKind.__proj__MkhRRKind__item__cipher_suite",
-        "token_correspondence_Parsers.SHKind.__proj__MksHKind__item__cipher_suite",
-        "token_correspondence_Parsers.ServerHello.__proj__MkserverHello__item__is_hrr",
         "true_interp", "typing_FStar.Bytes.empty_bytes",
         "typing_FStar.Bytes.len", "typing_FStar.UInt32.v",
         "typing_LowParse.Repr.__proj__Mkmeta__item__parser_kind",
@@ -122,7 +122,7 @@
         "typing_LowStar.Monotonic.Buffer.loc_none"
       ],
       0,
-      "fb5baaaadbc85e36f11a274b30440432"
+      "88fe375faddd7896785b8ee884e329d0"
     ]
   ]
 ]

@@ -88,7 +88,7 @@
         "typing_Spec.Poly1305.size_block"
       ],
       0,
-      "e6547db9bad3abe9023257b2967ba1bb"
+      "e524f638b1c5f6db3ca11273ecea9cc3"
     ],
     [
       "Crypto.AE.encrypt",
@@ -97,7 +97,7 @@
       1,
       [ "@query" ],
       0,
-      "157d37aa38f484dab97de7f8a17d82e4"
+      "af365bdaaf0712da6ca331d674ab3dac"
     ],
     [
       "Crypto.AE.encrypt",
@@ -160,7 +160,6 @@
         "lemma_FStar.HyperStack.ST.lemma_equal_domains_trans",
         "lemma_FStar.Seq.Base.lemma_eq_elim",
         "lemma_FStar.Seq.Base.lemma_eq_intro",
-        "lemma_FStar.Seq.Base.lemma_eq_refl",
         "lemma_FStar.Seq.Base.lemma_index_slice",
         "lemma_FStar.Seq.Base.lemma_len_slice", "lemma_FStar.UInt32.uv_inv",
         "lemma_FStar.UInt32.vu_inv",

@@ -11,7 +11,7 @@
         "equation_DefineTable.dt", "equation_Mem.model", "typing_Mem.model"
       ],
       0,
-      "637ced15712a1d44c39e198623d31435"
+      "29f97f05b7781b084214e1a842bd52f3"
     ],
     [
       "DefineTable.real",
@@ -30,7 +30,7 @@
         "typing_Mem.tls_region"
       ],
       0,
-      "d824933c4abd4a58116a924b0265a52b"
+      "fa25e24e61ee0e2b9285305aacaba69b"
     ],
     [
       "DefineTable.loc",
@@ -39,7 +39,7 @@
       1,
       [ "@query", "projection_inverse_BoxBool_proj_0" ],
       0,
-      "3c1506fa83e7caac894b001ce8bb7ff4"
+      "fb649d782ad4be13053ddb604a041236"
     ],
     [
       "DefineTable.lemma_fresh_frame",
@@ -73,7 +73,7 @@
         "typing_Tm_abs_8360f68b1ef1ebd2579ae5799903dc5e"
       ],
       0,
-      "8698a7c860ba09ab2be4df38baf56280"
+      "8313e4ed5b3ef8746ff82683f39e9f94"
     ],
     [
       "DefineTable.extended",
@@ -82,7 +82,7 @@
       1,
       [ "@query", "projection_inverse_BoxBool_proj_0" ],
       0,
-      "d4b1cd0bcc70da17bbf9989e41c6d643"
+      "709990b458a2eeb76011a3f791a23758"
     ],
     [
       "DefineTable.unchanged",
@@ -91,7 +91,7 @@
       1,
       [ "@query" ],
       0,
-      "3eda711887b929596562993cace035ee"
+      "1768f046a331aafdce5c6689eeb16903"
     ],
     [
       "DefineTable.lemma_unchanged_frame",
@@ -121,7 +121,7 @@
         "typing_Tm_abs_8360f68b1ef1ebd2579ae5799903dc5e"
       ],
       0,
-      "2eddf2c18b87e41ecc13576c93b66ad7"
+      "c58ad7cf296a4cade1eecf6f5816cf60"
     ],
     [
       "DefineTable.lemma_disjoint_unchanged",
@@ -152,7 +152,7 @@
         "typing_Tm_abs_8360f68b1ef1ebd2579ae5799903dc5e"
       ],
       0,
-      "051cd7cc41dc7ae9a6dafe8f65324f26"
+      "d2c34b8bd23f314926db8b91b95d75db"
     ],
     [
       "DefineTable.alloc",
@@ -254,7 +254,7 @@
         "typing_Tm_abs_8360f68b1ef1ebd2579ae5799903dc5e", "unit_typing"
       ],
       0,
-      "98f40389d7bce29305f979260591951f"
+      "bed857961f9ed9458a1984ab79aa92c6"
     ],
     [
       "DefineTable.lookup",
@@ -271,7 +271,7 @@
         "projection_inverse_BoxBool_proj_0"
       ],
       0,
-      "01857f97321f1599e0c6c82d39ef50a6"
+      "613254c2d9b2ac0c3c03b2e91e5bf9b5"
     ],
     [
       "DefineTable.lookup",
@@ -353,7 +353,7 @@
         "typing_Mem.tls_define_region", "unit_inversion"
       ],
       0,
-      "07ae2eabb3dc86b3261dc84d27bb77de"
+      "4a70396ea9b425ec32597df4ecdc5a3d"
     ],
     [
       "DefineTable.extend",
@@ -472,7 +472,7 @@
         "unit_typing"
       ],
       0,
-      "b244039b8d5a007bfbeed0296dc0c7bd"
+      "09f6028976d229115762bbff4631ffcc"
     ],
     [
       "DefineTable.fold_gtot",
@@ -487,7 +487,7 @@
         "subterm_ordering_Prims.Cons"
       ],
       0,
-      "4a371fcd7b951904cc4ce929a98da944"
+      "4f9dbdaebf56c6027ec2d2098005bf67"
     ],
     [
       "DefineTable.lemma_empty_fp_none",
@@ -500,7 +500,7 @@
         "token_correspondence_DefineTable.empty_fp"
       ],
       0,
-      "8f7ba48275abf0ce3dab0d80eb8585cf"
+      "0e71f80bdaa74de3871e1b8729850c22"
     ],
     [
       "DefineTable.lemma_fold_constant",
@@ -513,29 +513,29 @@
         "@fuel_irrelevance_DefineTable.fold_gtot.fuel_instrumented",
         "@query",
         "DefineTable_interpretation_Tm_arrow_77b14586b32b669eef9b136e2fe3f36f",
-        "DefineTable_interpretation_Tm_ghost_arrow_b368f0335660c2ca4de56c874b56b78e",
+        "DefineTable_interpretation_Tm_ghost_arrow_8638895a956d891bb70363176d15b671",
         "DefineTable_interpretation_Tm_ghost_arrow_cab63744daa3c87acfc292f6089476d1",
         "Prims_interpretation_Tm_arrow_2eaa01e78f73e9bab5d0955fc1a662da",
-        "binder_x_4d0abed149b4c5f34c4ebc928ceda3a0_2",
+        "binder_x_1035a436816b7f087f666893a3330176_5",
         "binder_x_8358b93aec0670665ebb4c0f52fc04b7_4",
         "binder_x_9cd1733a5204f989dbb2f01d5984df93_1",
-        "binder_x_baaa88c4b499bf84d4fcfccd0b0a7ff8_5",
-        "binder_x_d010a2a53db81f5b746864239b6b5475_3",
+        "binder_x_b0da20d3f3386ca382ca70af26731256_3",
         "constructor_distinct_Prims.Cons", "constructor_distinct_Prims.Nil",
         "disc_equation_Prims.Cons", "disc_equation_Prims.Nil",
-        "equality_tok_Prims.LexTop@tok", "equation_Prims.eqtype",
+        "equation_Prims.eqtype",
         "equation_with_fuel_DefineTable.fold_gtot.fuel_instrumented",
-        "fuel_guarded_inversion_Prims.dtuple2",
         "fuel_guarded_inversion_Prims.list",
         "function_token_typing_LowStar.Monotonic.Buffer.loc",
-        "kinding_Prims.dtuple2@tok", "projection_inverse_Prims.Cons_a",
+        "kinding_Prims.dtuple2@tok", "projection_inverse_BoxBool_proj_0",
+        "projection_inverse_Prims.Cons_a",
         "projection_inverse_Prims.Cons_hd",
         "projection_inverse_Prims.Cons_tl", "projection_inverse_Prims.Nil_a",
         "refinement_interpretation_Tm_refine_414d0a9f578ab0048252f8c8f552b99f",
-        "subterm_ordering_Prims.Cons"
+        "subterm_ordering_Prims.Cons",
+        "typing_Tm_abs_a4b551d234dd70a803776de0dccac7a0"
       ],
       0,
-      "93a828106d28ca2915c1df16abac23c3"
+      "c17d23a287e7ab7b8fd1477fd9756e98"
     ],
     [
       "DefineTable.footprint",
@@ -544,7 +544,7 @@
       1,
       [ "@query", "projection_inverse_BoxBool_proj_0" ],
       0,
-      "da08a3f8619dd74255117bb431b9557b"
+      "5b3a86d91d6e700a5555d3ee1d6fc8c8"
     ],
     [
       "DefineTable.lemma_footprint_empty_fp",
@@ -570,7 +570,7 @@
         "typing_FStar.Monotonic.HyperStack.get_tip", "unit_inversion"
       ],
       0,
-      "e8bb3ceaf38e747eee33eee1e32b37f4"
+      "b0caa3fbcf3d01c75d1857b179b99ae6"
     ],
     [
       "DefineTable.lemma_footprint_empty",
@@ -581,7 +581,7 @@
         "@MaxFuel_assumption", "@MaxIFuel_assumption",
         "@fuel_correspondence_DefineTable.fold_gtot.fuel_instrumented",
         "@query",
-        "DefineTable_interpretation_Tm_ghost_arrow_1932a32f516678b943de72283a7e79ee",
+        "DefineTable_interpretation_Tm_ghost_arrow_ba924d3d4cc075b43d020da2b326bf2f",
         "DefineTable_interpretation_Tm_ghost_arrow_cab63744daa3c87acfc292f6089476d1",
         "constructor_distinct_Prims.Nil", "equation_DefineTable.empty",
         "equation_DefineTable.footprint",
@@ -596,10 +596,11 @@
         "refinement_interpretation_Tm_refine_414d0a9f578ab0048252f8c8f552b99f",
         "refinement_interpretation_Tm_refine_8e1a63f5f0eda9c61cb76c338f52ad38",
         "typing_FStar.Monotonic.DependentMap.empty",
-        "typing_LowStar.Monotonic.Buffer.loc_none"
+        "typing_LowStar.Monotonic.Buffer.loc_none",
+        "typing_Tm_abs_6ba36691ee58dee85cd144324b083848"
       ],
       0,
-      "80975a561a43147b40ece5bd9ad28791"
+      "9cbcbaa571de370d64df5c98696cc717"
     ],
     [
       "DefineTable.lemma_footprint_frame",
@@ -621,7 +622,7 @@
         "typing_FStar.Monotonic.HyperStack.get_tip"
       ],
       0,
-      "270438c61b5f39bd8b4c6d4766019d94"
+      "4276d577bb71e9e5b891322e856e22bd"
     ],
     [
       "DefineTable.lemma_footprint_extend",
@@ -633,8 +634,8 @@
         "@fuel_correspondence_DefineTable.fold_gtot.fuel_instrumented",
         "@fuel_irrelevance_DefineTable.fold_gtot.fuel_instrumented",
         "@query",
-        "DefineTable_interpretation_Tm_ghost_arrow_1932a32f516678b943de72283a7e79ee",
         "DefineTable_interpretation_Tm_ghost_arrow_79feda11ccb342d4769d1f5abeba824a",
+        "DefineTable_interpretation_Tm_ghost_arrow_ba924d3d4cc075b43d020da2b326bf2f",
         "DefineTable_interpretation_Tm_ghost_arrow_cab63744daa3c87acfc292f6089476d1",
         "bool_inversion", "constructor_distinct_Prims.Cons", "eq2-interp",
         "equation_DefineTable.dt", "equation_DefineTable.extended",
@@ -671,10 +672,11 @@
         "typing_FStar.Monotonic.DependentMap.imap",
         "typing_FStar.Monotonic.HyperStack.sel",
         "typing_LowStar.Monotonic.Buffer.loc_none", "typing_Mem.model",
+        "typing_Tm_abs_6ba36691ee58dee85cd144324b083848",
         "typing_Tm_abs_8360f68b1ef1ebd2579ae5799903dc5e"
       ],
       0,
-      "aa20fcc1cd57a8067f44160c6ec1e840"
+      "9e70719e6580f0b043802d5f44cd4fe4"
     ],
     [
       "DefineTable.lemma_fp_includes",
@@ -689,12 +691,13 @@
         "@fuel_irrelevance_FStar.Monotonic.DependentMap.sel.fuel_instrumented",
         "@query",
         "DefineTable_interpretation_Tm_arrow_77b14586b32b669eef9b136e2fe3f36f",
-        "DefineTable_interpretation_Tm_ghost_arrow_1932a32f516678b943de72283a7e79ee",
         "DefineTable_interpretation_Tm_ghost_arrow_79feda11ccb342d4769d1f5abeba824a",
+        "DefineTable_interpretation_Tm_ghost_arrow_ba924d3d4cc075b43d020da2b326bf2f",
         "DefineTable_interpretation_Tm_ghost_arrow_cab63744daa3c87acfc292f6089476d1",
         "Prims_interpretation_Tm_arrow_2eaa01e78f73e9bab5d0955fc1a662da",
+        "Prims_pretyping_09d9235a8068627898e77b75945bdc5c",
+        "Prims_pretyping_3862c4e8ff39bfc3871b6a47e7ff5b2e",
         "Prims_pretyping_ae567c2fb75be05905677af440075565",
-        "Prims_pretyping_e4836109f73687024ac3edd113084865",
         "binder_x_173a675e9d268a3bda9d1f9c0f344b35_4",
         "binder_x_4d0abed149b4c5f34c4ebc928ceda3a0_2",
         "binder_x_9745eb2bc0672247ecfb65b2529f1f30_6",
@@ -704,7 +707,8 @@
         "constructor_distinct_FStar.Pervasives.Native.None",
         "constructor_distinct_FStar.Pervasives.Native.Some",
         "constructor_distinct_Prims.Cons", "constructor_distinct_Prims.Nil",
-        "disc_equation_Prims.Cons", "equality_tok_Prims.LexTop@tok",
+        "constructor_distinct_Tm_unit", "data_elim_Prims.Cons",
+        "disc_equation_Prims.Cons", "disc_equation_Prims.Nil",
         "equation_DefineTable.fp_add", "equation_DefineTable.local_fp",
         "equation_FStar.Monotonic.DependentMap.map",
         "equation_Mem.is_tls_rgn", "equation_Mem.tls_color",
@@ -712,7 +716,6 @@
         "equation_Prims.eqtype",
         "equation_with_fuel_DefineTable.fold_gtot.fuel_instrumented",
         "equation_with_fuel_FStar.Monotonic.DependentMap.sel.fuel_instrumented",
-        "fuel_guarded_inversion_Prims.list",
         "function_token_typing_DefineTable.fp_add",
         "function_token_typing_LowStar.Monotonic.Buffer.loc",
         "function_token_typing_Prims.__cache_version_number__",
@@ -733,11 +736,13 @@
         "subterm_ordering_Prims.Cons",
         "token_correspondence_DefineTable.fold_gtot.fuel_instrumented",
         "token_correspondence_DefineTable.fp_add",
+        "typing_DefineTable.fold_gtot",
         "typing_LowStar.Monotonic.Buffer.loc_none", "typing_Mem.tls_region",
-        "typing_tok_Prims.LexTop@tok", "unit_inversion", "unit_typing"
+        "typing_Tm_abs_6ba36691ee58dee85cd144324b083848", "unit_inversion",
+        "unit_typing"
       ],
       0,
-      "72b59ad66989f0acb0fa29a746330039"
+      "4a67fff7203c1698d1a2515832b126db"
     ],
     [
       "DefineTable.lemma_footprint_includes",
@@ -766,7 +771,7 @@
         "unit_inversion", "unit_typing"
       ],
       0,
-      "8c9268d4aeb226ca46543fceb147a40e"
+      "b7901b2acc02744379bdd9c943028def"
     ],
     [
       "DefineTable.lemma_forall_empty",
@@ -788,7 +793,7 @@
         "typing_FStar.Monotonic.DependentMap.empty"
       ],
       0,
-      "8cbba75e72eb1d41bcf2316f652052e2"
+      "b2dc127bed80430b30fbb6d3f4fea13d"
     ],
     [
       "DefineTable.lemma_forall_elim",
@@ -797,7 +802,7 @@
       1,
       [ "@query", "equation_DefineTable.dt_forall" ],
       0,
-      "88e9d6feb8cc852ec885abd179c7dc82"
+      "57dcf23f04a3672bc0e734a99dfa7e89"
     ],
     [
       "DefineTable.lemma_forall_extend",
@@ -857,7 +862,7 @@
         "typing_Tm_abs_8360f68b1ef1ebd2579ae5799903dc5e", "unit_inversion"
       ],
       0,
-      "e6838f626b09ddf5cc8c0b3c638760ca"
+      "8b01ab2363099f488d6f210cbcf4e9bc"
     ],
     [
       "DefineTable.lemma_forall_frame",
@@ -904,7 +909,7 @@
         "typing_Tm_abs_8360f68b1ef1ebd2579ae5799903dc5e", "unit_inversion"
       ],
       0,
-      "823dcef5e3106d8abe88b7eb2a55d709"
+      "5106feb3ce6a8a0339dfba4f7373de26"
     ]
   ]
 ]
