@@ -221,7 +221,7 @@ inline_for_extraction
 let lift_div_tlsexn (a:Type) (wp:pure_wp a) (f: eqtype_as_type unit -> DIV a wp)
 : exn_repr a (fun p h -> wp (fun x -> p (Correct x) h))
 = fun _ ->
-  FStar.Monotonic.Pure.wp_monotonic_pure ();
+  FStar.Monotonic.Pure.elim_pure_wp_monotonicity wp;
   Correct (f ())
 
 sub_effect DIV ~> TLSEXN = lift_div_tlsexn
