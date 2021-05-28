@@ -1,4 +1,5 @@
 QD_HOME ?= ../../../quackyducky
+QD_BIN = $(QD_HOME)/bin/qd.exe
 
 # all: DO NOT enable `verify` for now, not everything currently
 # verifies. Anyway, for miTLS, we don't need to verify everything, the
@@ -9,10 +10,10 @@ all: gen # verify
 
 gen: parsers.gen
 
-parsers.gen: $(wildcard *.rfc) $(QD_HOME)/qd
+parsers.gen: $(wildcard *.rfc) $(QD_BIN)
 	mkdir -p generated
 	rm -rf generated/*.fst generated/*.fsti
-	for f in $(wildcard *.rfc) ; do	$(QD_HOME)/qd -prefix $$(basename $$f .rfc). -odir generated $$f ; done
+	for f in $(wildcard *.rfc) ; do	$(QD_BIN) -prefix $$(basename $$f .rfc). -odir generated $$f ; done
 	touch $@
 
 genmakefile: generated/Makefile
