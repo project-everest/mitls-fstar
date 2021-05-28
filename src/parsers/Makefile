@@ -1,4 +1,5 @@
 QD_HOME ?= ../../../quackyducky
+QD_BIN = $(QD_HOME)/bin/qd.exe
 
 # all: DO NOT enable `verify` for now, not everything currently
 # verifies. Anyway, for miTLS, we don't need to verify everything, the
@@ -18,10 +19,10 @@ generated/Makefile: Makefile.qd
 	mkdir -p generated
 	cp Makefile.qd $@
 
-%.gen: % $(QD_HOME)/qd
+%.gen: % $(QD_BIN)
 	mkdir -p generated
 #	-rm generated/$(patsubst %.rfc, %, $(basename $<)).*.{fst,fsti}
-	$(QD_HOME)/qd -prefix $(basename $<). -odir generated $<
+	$(QD_BIN) -prefix $(basename $<). -odir generated $<
 	touch $@
 
 clean:
