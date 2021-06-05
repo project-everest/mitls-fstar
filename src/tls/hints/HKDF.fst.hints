@@ -78,7 +78,7 @@
         "typing_FStar.Set.empty", "typing_Hashing.Spec.hmac"
       ],
       0,
-      "ceeb4abe4c977b1784f7ea960511326a"
+      "a81df6168029c303b8c927d439438f1a"
     ],
     [
       "HKDF.extract",
@@ -87,7 +87,7 @@
       1,
       [ "@query" ],
       0,
-      "20c5669e203befc984575a39e0087c81"
+      "32f3f42745b6f4194d985b47bc4441af"
     ],
     [
       "HKDF.extract",
@@ -180,7 +180,7 @@
         "typing_Spec.Hash.Definitions.is_md"
       ],
       0,
-      "cb00565ca50ee25e984a7152c2cc3a07"
+      "a0f9b42564211499d0e555480ba1c3c4"
     ],
     [
       "HKDF.expand",
@@ -222,7 +222,7 @@
         "typing_Hacl.Hash.Definitions.hash_len", "typing_Mem.tls_region"
       ],
       0,
-      "5391f32c7e89ae59e5ef21be07e46ef3"
+      "3772f249097acea8a1af692b073bbc20"
     ],
     [
       "HKDF.expand",
@@ -242,7 +242,7 @@
         "typing_Spec.Hash.Definitions.word_length"
       ],
       0,
-      "b62a06565d652121a94961e85195290d"
+      "5b84ce42d8191ab24a6fd25594e4f568"
     ],
     [
       "HKDF.expand",
@@ -436,7 +436,7 @@
         "typing_tok_Spec.Hash.Definitions.SHA2_512@tok"
       ],
       0,
-      "d8c520a90a617d8b7ea1f10db3925f62"
+      "74b1a52444628347eefad252b45569d6"
     ],
     [
       "HKDF.tls13_prefix",
@@ -445,7 +445,7 @@
       1,
       [ "@query" ],
       0,
-      "31cdc15f6b084b46fe73fe6d3db5b24a"
+      "153ab96d017b621971f3ea83061c2015"
     ],
     [
       "HKDF.quic_prefix",
@@ -454,7 +454,7 @@
       1,
       [ "@query" ],
       0,
-      "16f8bdc57ad342fcecdf8a40bb015df9"
+      "97d976962f2f18c8eeae1f9cec6c8d2d"
     ],
     [
       "HKDF.format",
@@ -518,7 +518,7 @@
         "typing_Parsers.HKDF.HkdfLabel.hkdfLabel_serializer"
       ],
       0,
-      "b8dd3cf8b3d7463a46e5aa55b0b6de15"
+      "aac5d66dd4ac41df11370638271efa79"
     ],
     [
       "HKDF.expand_label",
@@ -548,7 +548,7 @@
         "typing_Spec.Hash.Definitions.word_length"
       ],
       0,
-      "d879aa7c2b7a6164ad5d7530a79e59bc"
+      "cc855229520dac4b9787212b2a71d35f"
     ],
     [
       "HKDF.expand_label",
@@ -578,7 +578,7 @@
         "typing_Spec.Hash.Definitions.word_length"
       ],
       0,
-      "4ccc9d488f802d5579b99203f1a78c2c"
+      "140b481eeb43676a657eee0bc18feb22"
     ],
     [
       "HKDF.expand_label",
@@ -587,7 +587,7 @@
       1,
       [ "@query" ],
       0,
-      "2372f561957644d9bcf71394cfb77765"
+      "5d45c2d4c5b353e95a5114213a6f523f"
     ],
     [
       "HKDF.derive_secret",
@@ -617,7 +617,7 @@
         "typing_Spec.Hash.Definitions.word_length"
       ],
       0,
-      "57a00712fdf6190b354ba11023cb6973"
+      "38845f880708699a367bdda0d9487776"
     ],
     [
       "HKDF.derive_secret",
@@ -647,7 +647,7 @@
         "typing_Spec.Hash.Definitions.word_length"
       ],
       0,
-      "3006c362c8af61ba4f6a47f536b9e01c"
+      "4398d473f7dcc7a7fa5e4926a5fa48cd"
     ],
     [
       "HKDF.derive_secret",
@@ -726,7 +726,7 @@
         "typing_Spec.Hash.Definitions.is_md"
       ],
       0,
-      "815712cea9e0e9c350543d38e7216afa"
+      "998420bf4a40d5d562f69cd3a75220ad"
     ]
   ]
 ]
