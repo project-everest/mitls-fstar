@@ -51,7 +51,7 @@ $(HINT_DIR):
 	mkdir -p $@
 
 .depend:
-	$(FSTAR) --dep full $(ROOTS) --extract '* -LowStar -FStar' > $@
+	$(FSTAR) --dep full $(ROOTS) --extract 'OCaml:* -LowStar -FStar; Kremlin:*' > $@
 
 include .depend
 
