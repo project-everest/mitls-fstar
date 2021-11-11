@@ -36,7 +36,7 @@ MITLS_BUNDLES = \
 FLAVOR		= Kremlin$(CONCRETE_FLAVOR)
 EXTENSION	= krml
 # Don't extract modules from mitls that are implemented in C
-EXTRACT		= '* -DHDB -FFICallbacks -BufferBytes'
+EXTRACT		= 'OCaml:* -DHDB -FFICallbacks -BufferBytes; Kremlin:*'
 SPECINC     	= $(MITLS_HOME)/src/tls/concrete-flags $(MITLS_HOME)/src/tls/concrete-flags/$(FLAVOR)
 
 # SMT verification is disabled, so do not record hints
