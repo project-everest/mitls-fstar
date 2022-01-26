@@ -13,7 +13,7 @@
         "fuel_guarded_inversion_Prims.list", "subterm_ordering_Prims.Cons"
       ],
       0,
-      "b841d46e7480601c7d27ea289055e2f0"
+      "efbf15f66a899bb64da18144f76f7157"
     ],
     [
       "HandshakeLog.append_transcript",
@@ -25,7 +25,7 @@
         "refinement_interpretation_Tm_refine_72e5a2aa76f3c2442b018562b3272ee5"
       ],
       0,
-      "307bb2ec2775fa3efebd39029f65e986"
+      "5dc98b5fd0104d47f110c001445d2742"
     ],
     [
       "HandshakeLog.discard",
@@ -38,7 +38,7 @@
         "lemma_FStar.HyperStack.ST.lemma_same_refs_in_stack_regions_intro"
       ],
       0,
-      "f28cd81e39eb964f6011fec71113773a"
+      "e5ae4dbb913567c43c33eb948990bf6c"
     ],
     [
       "HandshakeLog.trace",
@@ -50,7 +50,7 @@
         "equation_DebugFlags.debug_HSL"
       ],
       0,
-      "9410d158542314c3e18d58879d928cb3"
+      "eeec0932adc2f5b737317601613c26e8"
     ],
     [
       "HandshakeLog.elift1_def",
@@ -63,7 +63,7 @@
         "typing_FStar.Ghost.elift1"
       ],
       0,
-      "e9949f6ab19f12b08fc78fd61dac3654"
+      "8403bd318d474ae6420dcc443293b46a"
     ],
     [
       "HandshakeLog.bind_log",
@@ -75,7 +75,7 @@
         "equation_HandshakeLog.reveal_log"
       ],
       0,
-      "20bb7e002ba6784270346636adcfb593"
+      "628ad12f32df41ba2a95b1daba1b6213"
     ],
     [
       "HandshakeLog.empty_hs_transcript",
@@ -100,7 +100,7 @@
         "token_correspondence_HandshakeMessages.valid_hs_msg_prop"
       ],
       0,
-      "856c7e3a41de409a645cd344b7d7eb7d"
+      "a733313e4db0525f31a8748a657d8554"
     ],
     [
       "HandshakeLog.append_hs_transcript",
@@ -112,7 +112,7 @@
         "refinement_interpretation_Tm_refine_3e2c9291fd3b066a107ccf5a30cfc03a"
       ],
       0,
-      "9533bd3016c34c18be288626f86e169e"
+      "919cc21fde4ce59d626e05ec08dfb1a8"
     ],
     [
       "HandshakeLog.extend_hs_transcript",
@@ -124,7 +124,7 @@
         "refinement_interpretation_Tm_refine_71752dd75c462e2f1a8dac5147cb3746"
       ],
       0,
-      "7ffa88b90c7f16129af5dcd80aa44f14"
+      "cc5b8aff72870c895686bd8ae04cfe27"
     ],
     [
       "HandshakeLog.coerce",
@@ -136,7 +136,7 @@
         "refinement_interpretation_Tm_refine_de9aeb070296eed20d879692d0254af0"
       ],
       0,
-      "aa881bf2e166ab2c5658096735bd3423"
+      "5f5187d79df97bd1072cb4e32ebdc081"
     ],
     [
       "HandshakeLog.gforall_list_to_list_refined",
@@ -171,7 +171,7 @@
         "typing_HandshakeLog.gforall", "typing_TLSInfo.safe_region"
       ],
       0,
-      "3387e6f4ff5c63df668413132bda2e98"
+      "b5964777bbb624807dda81ad4cbe4337"
     ],
     [
       "HandshakeLog.valid_transcript_to_list_valid_hs_msg_aux",
@@ -186,31 +186,33 @@
         "HandshakeMessages_interpretation_Tm_ghost_arrow_54e02bd4c11efb798fe4ec4f356417f6",
         "binder_x_1a103abad8ed8024fcdd4ad199fc3846_0",
         "binder_x_b1b73bab281a8321f2b361152b87ea9d_1", "bool_inversion",
-        "constructor_distinct_Prims.Cons", "constructor_distinct_Tm_unit",
-        "disc_equation_Prims.Cons", "disc_equation_Prims.Nil",
-        "equality_tok_Prims.LexTop@tok",
-        "equation_FStar.HyperStack.ST.is_eternal_region",
-        "equation_FStar.Monotonic.HyperStack.is_eternal_color",
-        "equation_Mem.rgn", "equation_TLSConstants.protocolVersion",
+        "constructor_distinct_Lib.IntTypes.U8",
+        "constructor_distinct_Prims.Cons", "disc_equation_Prims.Cons",
+        "disc_equation_Prims.Nil", "equality_tok_Lib.IntTypes.U1@tok",
+        "equality_tok_Lib.IntTypes.U8@tok", "equation_Lib.IntTypes.unsigned",
+        "equation_Prims.op_Equals_Equals_Equals", "equation_Spec.AES.gf8",
+        "equation_Spec.AES.irred", "equation_Spec.GaloisField.gf",
+        "equation_TLSConstants.protocolVersion",
         "equation_with_fuel_HandshakeLog.gforall.fuel_instrumented",
         "fuel_guarded_inversion_FStar.Pervasives.Native.option",
         "fuel_guarded_inversion_Prims.list",
         "function_token_typing_HandshakeMessages.valid_hs_msg_prop",
         "kinding_HandshakeMessages.hs_msg@tok", "primitive_Prims.op_AmpAmp",
+        "proj_equation_Spec.GaloisField.GF_t",
         "projection_inverse_BoxBool_proj_0",
+        "projection_inverse_Prims.Cons_a",
         "projection_inverse_Prims.Cons_hd",
         "projection_inverse_Prims.Cons_tl",
-        "refinement_interpretation_Tm_refine_31bfde48b952b6d7959cd5a2aa36404e",
+        "projection_inverse_Spec.GaloisField.GF_t",
         "refinement_interpretation_Tm_refine_3a60f682bb5078aacf9eea139e635f3c",
+        "refinement_interpretation_Tm_refine_de8080fdc4bd6678af723874a7d70466",
         "subterm_ordering_Prims.Cons",
         "token_correspondence_HandshakeLog.gforall.fuel_instrumented",
         "token_correspondence_HandshakeMessages.valid_hs_msg_prop",
-        "typing_FStar.Monotonic.HyperHeap.color",
-        "typing_FStar.Monotonic.HyperStack.is_eternal_color",
-        "typing_HandshakeLog.gforall", "typing_TLSInfo.safe_region"
+        "typing_Spec.AES.gf8", "typing_Spec.GaloisField.__proj__GF__item__t"
       ],
       0,
-      "98f1f770d48e002483fffff2c0ba3494"
+      "5ee9e9014c32dac9da889421d949afce"
     ],
     [
       "HandshakeLog.valid_transcript_to_list_valid_hs_msg_aux_inj",
@@ -219,7 +221,7 @@
       1,
       [ "@query" ],
       0,
-      "0269bb9ea181d9ed716268c297c06b37"
+      "a430ec20af8a4099c3a9f30af12c9936"
     ],
     [
       "HandshakeLog.valid_transcript_to_list_valid_hs_msg_aux_inj",
@@ -238,11 +240,15 @@
         "binder_x_1a103abad8ed8024fcdd4ad199fc3846_0",
         "binder_x_b1b73bab281a8321f2b361152b87ea9d_1",
         "binder_x_b1b73bab281a8321f2b361152b87ea9d_2", "bool_inversion",
+        "constructor_distinct_Lib.IntTypes.U8",
         "constructor_distinct_Prims.Cons", "constructor_distinct_Prims.Nil",
-        "disc_equation_Prims.Cons",
+        "disc_equation_Prims.Cons", "equality_tok_Lib.IntTypes.U1@tok",
+        "equality_tok_Lib.IntTypes.U8@tok",
         "equation_FStar.HyperStack.ST.is_eternal_region",
-        "equation_FStar.Monotonic.HyperStack.is_eternal_color",
-        "equation_HandshakeMessages.valid_hs_msg", "equation_Mem.rgn",
+        "equation_HandshakeMessages.valid_hs_msg",
+        "equation_Lib.IntTypes.unsigned", "equation_Mem.rgn",
+        "equation_Prims.op_Equals_Equals_Equals", "equation_Spec.AES.gf8",
+        "equation_Spec.AES.irred", "equation_Spec.GaloisField.gf",
         "equation_TLSConstants.protocolVersion",
         "equation_with_fuel_HandshakeLog.gforall.fuel_instrumented",
         "equation_with_fuel_HandshakeLog.valid_transcript_to_list_valid_hs_msg_aux.fuel_instrumented",
@@ -250,25 +256,30 @@
         "fuel_guarded_inversion_Prims.list",
         "function_token_typing_HandshakeMessages.valid_hs_msg_prop",
         "kinding_HandshakeMessages.hs_msg@tok", "primitive_Prims.op_AmpAmp",
+        "primitive_Prims.op_Negation",
         "proj_equation_FStar.Pervasives.Native.Mktuple2__1",
         "proj_equation_FStar.Pervasives.Native.Mktuple2__2",
+        "proj_equation_Spec.GaloisField.GF_t",
         "projection_inverse_BoxBool_proj_0",
         "projection_inverse_FStar.Pervasives.Native.Mktuple2__1",
         "projection_inverse_FStar.Pervasives.Native.Mktuple2__2",
         "projection_inverse_Prims.Cons_a",
         "projection_inverse_Prims.Cons_hd",
         "projection_inverse_Prims.Cons_tl",
+        "projection_inverse_Spec.GaloisField.GF_t",
         "refinement_interpretation_Tm_refine_2f48b2411bdb84eca59b17b22724d64d",
         "refinement_interpretation_Tm_refine_31bfde48b952b6d7959cd5a2aa36404e",
         "refinement_interpretation_Tm_refine_3a60f682bb5078aacf9eea139e635f3c",
+        "refinement_interpretation_Tm_refine_de8080fdc4bd6678af723874a7d70466",
         "subterm_ordering_Prims.Cons",
         "token_correspondence_HandshakeMessages.valid_hs_msg_prop",
-        "typing_FStar.Monotonic.HyperHeap.color",
-        "typing_FStar.Monotonic.HyperStack.is_eternal_color",
-        "typing_HandshakeLog.gforall", "typing_TLSInfo.safe_region"
+        "typing_FStar.Monotonic.HyperHeap.rid_freeable",
+        "typing_HandshakeLog.gforall", "typing_Spec.AES.gf8",
+        "typing_Spec.GaloisField.__proj__GF__item__t",
+        "typing_TLSInfo.safe_region"
       ],
       0,
-      "21ead1e534e1c7d48d5ece2f01070726"
+      "8370d479d553c6354768c79df77633b5"
     ],
     [
       "HandshakeLog.transcript_bytes",
@@ -283,7 +294,7 @@
         "refinement_interpretation_Tm_refine_7913c46ed823df5e60659625cd966658"
       ],
       0,
-      "6162e242f4774748977803808e10497c"
+      "c88608614f29adac46b1a65efc407f74"
     ]
   ]
 ]
