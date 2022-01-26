@@ -39,7 +39,7 @@ private let pre_id (role:role) =
   let msid = StandardMS PMS.DummyPMS (cr @| sr) kdf in
   ID12 TLS_1p2 msid kdf (AEAD EverCrypt.AES256_GCM Hashing.Spec.SHA2_256) cr sr role
 
-let id12 = pre_id Client
+let id12 () = pre_id Client
 
 let encryptRecord (#id:StAE.stae_id) (wr:StAE.writer id) ct plain : St bytes =
   let rg: Range.frange id = (length plain, length plain) in
@@ -114,6 +114,6 @@ let test id =
 
 // Called from Test.Main
 let main () =
-  test id12;
+  test (id12 ());
   test (Test.AEAD.id13 EverCrypt.AES128_GCM);
   if !ok then C.EXIT_SUCCESS else C.EXIT_FAILURE

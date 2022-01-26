@@ -53,7 +53,7 @@ let first_bytes b =
 // TLS handshake prefix
 let test config: St unit =
   let rid = new_region root in
-  let i = Test.StAE.id12 in
+  let i = Test.StAE.id12 () in
   let client = Handshake.create rid config Client in
   let out0 = Handshake.next_fragment client i in
   match out0 with
