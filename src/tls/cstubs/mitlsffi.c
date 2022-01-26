@@ -21,6 +21,7 @@
 #endif
 
 #include "EverCrypt.h"
+#include "internal/EverCrypt.h"
 #include "FFI.h"
 #include "QUIC.h"
 #include "mitlsffi.h"
