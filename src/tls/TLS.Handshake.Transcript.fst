@@ -560,7 +560,7 @@ let extend_ch : extend_t LR_ClientHello? =
 
     CRF.update (Ghost.hide a) s.hash_state (C.to_buffer data) len;
     s.transcript := transition_etx (!s.transcript) (elabel_of_label_repr l)
-#push-options "--z3rlimit_factor 2"
+#push-options "--z3rlimit_factor 4"
 let extend_sh : extend_t LR_ServerHello? =
   fun #a s l ->
   assert_norm (pow2 32 < pow2 61);
