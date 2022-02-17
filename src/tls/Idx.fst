@@ -174,7 +174,7 @@ private let lemma_honest_or_corrupt (i:regid)
   :ST unit (requires (fun _ -> True)) (ensures (fun h0 _ h1 -> h0 == h1 /\ (honest i \/ corrupt i)))
   = if model then begin
       let log:i_honesty_table = honesty_table in
-      let aux :(h:mem) -> (c_or (MDM.contains log i true h) (~ (MDM.contains log i true h)))
+      let aux :(h:mem) -> (sum (MDM.contains log i true h) (~ (MDM.contains log i true h)))
                -> ST (squash (honest i \/ corrupt i))
 	            (requires (fun h0     -> h == h0))
 		        (ensures (fun h0 _ h1 -> h0 == h1))
@@ -200,7 +200,7 @@ private let lemma_not_honest_and_corrupt (i:regid)
   :ST unit (requires (fun _ -> True)) (ensures (fun h0 _ h1 -> h0 == h1 /\ (~ (honest i /\ corrupt i))))
   = if model then begin
       let log:i_honesty_table = honesty_table in
-      let aux :(c_or (honest i /\ corrupt i) (~ (honest i /\ corrupt i)))
+      let aux :(sum (honest i /\ corrupt i) (~ (honest i /\ corrupt i)))
                -> ST (squash (~ (honest i /\ corrupt i)))
 	            (requires (fun h0     -> True))
 		    (ensures (fun h0 _ h1 -> h0 == h1))
@@ -276,7 +276,7 @@ let get_honesty (i:id {registered i}) : ST bool
         let aux (b:bool) : ST unit
                              (requires (fun h0     -> MDM.contains log i b h0))
 	    		     (ensures (fun h0 _ h1 -> h0 == h1 /\ (honest i ==> b)))
-          = let f :(b:bool) -> (c_or (honest i) (~ (honest i)))
+          = let f :(b:bool) -> (sum (honest i) (~ (honest i)))
 	           -> ST (squash (honest i ==> b2t b))
 	                (requires (fun h0      -> MDM.contains log i b h0))
                         (ensures  (fun h0 _ h1 -> h0 == h1))
