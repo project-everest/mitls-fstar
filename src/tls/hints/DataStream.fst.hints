@@ -12,7 +12,7 @@
         "refinement_interpretation_Tm_refine_f13070840248fced9d9d60d77bdae3ec"
       ],
       0,
-      "e54514870a5f6e1886555e2b4cd106b2"
+      "c2a9a9726bfc12466bfc85f0dcfe683b"
     ],
     [
       "DataStream.repr",
@@ -21,7 +21,7 @@
       1,
       [ "@query", "equation_DataStream.ghost_repr" ],
       0,
-      "f110f081523892f8a8ff103278f1c7fc"
+      "6f9bd354d7009cb42135bb5bc3ab8a78"
     ],
     [
       "DataStream.mk_fragment",
@@ -33,7 +33,7 @@
         "primitive_Prims.op_AmpAmp", "projection_inverse_BoxBool_proj_0"
       ],
       0,
-      "3975c0863eb18493c7b472cb0272af35"
+      "353cbec102b4c0441ba39b98d93f2a6e"
     ],
     [
       "DataStream.appFragment",
@@ -42,7 +42,7 @@
       1,
       [ "@query", "equation_DataStream.ghost_repr" ],
       0,
-      "2a07fa0bac57aebd031f80c3b78a4ddc"
+      "bed5b66cac13e80978535a253c428bb1"
     ],
     [
       "DataStream.appBytes",
@@ -51,7 +51,7 @@
       1,
       [ "@query", "equation_DataStream.ghost_repr" ],
       0,
-      "7e70ae84736f91b532eba0f4430d650e"
+      "5f9ecfadeb436611a15c8003b609de66"
     ],
     [
       "DataStream.delta",
@@ -68,7 +68,7 @@
         "typing_FStar.Bytes.bytes"
       ],
       0,
-      "38bd78a35b74335b5a9ce7d0243b4820"
+      "81b99777a4ccdfc39dd738f00160791e"
     ],
     [
       "DataStream.__proj__Data__item___0",
@@ -81,7 +81,7 @@
         "refinement_interpretation_Tm_refine_0d466ae495b3961c5a09f777ca3640cd"
       ],
       0,
-      "b979d376d3e47c0409f55af2e486621b"
+      "2e4dc55fc35a3af11281d26d5401c1ff"
     ],
     [
       "DataStream.__proj__Alert__item___0",
@@ -94,7 +94,7 @@
         "refinement_interpretation_Tm_refine_36ed55116eca5cfa741045f75917d7b2"
       ],
       0,
-      "d28dab34e0297e89590337a49934b722"
+      "4478296d1adc35e1861d880e75521698"
     ],
     [
       "DataStream.final",
@@ -109,7 +109,7 @@
         "fuel_guarded_inversion_DataStream.delta"
       ],
       0,
-      "d66442241861270fbbd69cc9535b3a01"
+      "61d690c980e71e87b5625e7e030ef410"
     ],
     [
       "DataStream.finalized",
@@ -127,7 +127,7 @@
         "projection_inverse_BoxBool_proj_0", "subterm_ordering_Prims.Cons"
       ],
       0,
-      "8c54834da5fba273583469c27a543f4e"
+      "b2ef4e261d4f67de4586a3d151bf4f4e"
     ],
     [
       "DataStream.wellformed",
@@ -141,7 +141,7 @@
         "fuel_guarded_inversion_Prims.list"
       ],
       0,
-      "d28cef8462113b2672adb0731ff4b7f3"
+      "98f34f9bb80cafe83fdb652783800e19"
     ],
     [
       "DataStream.empty_is_well_formed",
@@ -164,35 +164,7 @@
         "typing_TLSInfo.safe_region"
       ],
       0,
-      "380fba782cdff4a7400dc5cc6fe18064"
-    ],
-    [
-      "DataStream.__proj__State__item__log",
-      1,
-      2,
-      1,
-      [
-        "@MaxIFuel_assumption", "@query", "bool_inversion", "bool_typing",
-        "disc_equation_FStar.Pervasives.Native.Some",
-        "equation_TLSInfo.authId", "proj_equation_DataStream.State_region",
-        "projection_inverse_BoxBool_proj_0",
-        "projection_inverse_DataStream.State_region",
-        "refinement_interpretation_Tm_refine_ce76b661643d2140682dd3c2b703af52"
-      ],
-      0,
-      "ed8c574d6d7194f7b568910f81fc3cd8"
-    ],
-    [
-      "DataStream.__proj__State__item__ctr",
-      1,
-      2,
-      1,
-      [
-        "@query", "proj_equation_DataStream.State_region",
-        "projection_inverse_DataStream.State_region"
-      ],
-      0,
-      "70a0847f26d955e8c8fd43c73c106176"
+      "4f7ba48229630ac0cfefefbd2c481740"
     ],
     [
       "DataStream.gen",
@@ -219,7 +191,7 @@
         "typing_FStar.Monotonic.HyperHeap.includes"
       ],
       0,
-      "227e5141573377bde88944f66400a8c0"
+      "c1383e967ea3fb561a3ddf30b5a1f737"
     ]
   ]
 ]

@@ -8,7 +8,7 @@
       1,
       [ "@query" ],
       0,
-      "596e11d5cf15908096890db3dda0c2e8"
+      "2ebb501ceb529805f1ed359194e7e432"
     ],
     [
       "AEAD.Pkg.is_safe",
@@ -51,7 +51,7 @@
         "typing_TLSInfo.safe_region"
       ],
       0,
-      "0825b0c84b9c1cb9f3f52aff1524ae54"
+      "095b51a524881b06fb5ab5e7e25b9758"
     ],
     [
       "AEAD.Pkg.info",
@@ -67,7 +67,7 @@
         "typing_FStar.Monotonic.HyperHeap.rid"
       ],
       0,
-      "e9ac73c3edd642b3db2d354e894d9df8"
+      "4e06644fddc26ad31a6e89d355d7950a"
     ],
     [
       "AEAD.Pkg.aead_pkg_keylen",
@@ -81,19 +81,7 @@
         "fuel_guarded_inversion_AEAD.Pkg.aeadAlg"
       ],
       0,
-      "6275c78f5772ad5c9be8afda8bf34f8a"
-    ],
-    [
-      "AEAD.Pkg.__proj__AEAD__item__k",
-      1,
-      2,
-      1,
-      [
-        "@query", "proj_equation_AEAD.Pkg.AEAD_u",
-        "projection_inverse_AEAD.Pkg.AEAD_u"
-      ],
-      0,
-      "661461fcdc6859a72fc4b4819705b4b2"
+      "746a11a1af5f254fafb3214d63e64463"
     ],
     [
       "AEAD.Pkg.__proj__Ideal__item__ck",
@@ -106,7 +94,7 @@
         "refinement_interpretation_Tm_refine_2f47e4e77732b0c7320113be77bdc955"
       ],
       0,
-      "bd7143c3b1cdaebd5aba088e481ff2cc"
+      "e4cc50b9060638c585f841eaf0cf2460"
     ],
     [
       "AEAD.Pkg.__proj__Ideal__item__state",
@@ -119,7 +107,7 @@
         "refinement_interpretation_Tm_refine_2f47e4e77732b0c7320113be77bdc955"
       ],
       0,
-      "78b479878d8b207732ff87a37730b38c"
+      "903906bf52854611679348e54eca8f8e"
     ],
     [
       "AEAD.Pkg.__proj__Real__item__ck",
@@ -132,7 +120,7 @@
         "refinement_interpretation_Tm_refine_f188697aeaf2d3748a8dd8ff5e07e864"
       ],
       0,
-      "5c8be49dbb2d1dfc2d34799391ff420f"
+      "4b4d8c5cd5a9cdc20b98f9508e5e2faf"
     ],
     [
       "AEAD.Pkg.usage",
@@ -147,7 +135,7 @@
         "refinement_interpretation_Tm_refine_5e0cab8f1e9c2f5bdd937bfd23d1604c"
       ],
       0,
-      "681021f61d2d5d5b4d59fbe1ae33bb0b"
+      "0e31d97b243d6a10dac84fab7ea0e4a6"
     ],
     [
       "AEAD.Pkg.keyval",
@@ -173,7 +161,7 @@
         "refinement_interpretation_Tm_refine_5e0cab8f1e9c2f5bdd937bfd23d1604c"
       ],
       0,
-      "f65d14ed3c69620517271502863b36d8"
+      "14c618f3b3ecafb8e2de75de1d66b95a"
     ],
     [
       "AEAD.Pkg.shared_footprint",
@@ -185,7 +173,7 @@
         "typing_FStar.Monotonic.HyperHeap.rid"
       ],
       0,
-      "cf10884c6c4dc509fcbc64a9023696f5"
+      "1f1ba7d80a3e9cd9a8af6372581312d6"
     ],
     [
       "AEAD.Pkg.footprint",
@@ -212,7 +200,7 @@
         "typing_TLSInfo.safe_region"
       ],
       0,
-      "1f7feead51ec952ffa9c982e58becc58"
+      "c00e59570fe2a981352a0821c5a945e3"
     ],
     [
       "AEAD.Pkg.invariant",
@@ -227,7 +215,7 @@
         "refinement_interpretation_Tm_refine_5e0cab8f1e9c2f5bdd937bfd23d1604c"
       ],
       0,
-      "47e5ee80f27dcaab58de579d67baac2d"
+      "7fd5e88b7630a4017c0f2bb2d34d98cf"
     ],
     [
       "AEAD.Pkg.invariant_framing",
@@ -262,7 +250,7 @@
         "unit_inversion", "unit_typing"
       ],
       0,
-      "3e83890c6a8894015d876296e31f2495"
+      "07eb05070ca840ae6dd32fcafe0252fb"
     ],
     [
       "AEAD.Pkg.empty_log",
@@ -278,7 +266,7 @@
         "refinement_interpretation_Tm_refine_5e0cab8f1e9c2f5bdd937bfd23d1604c"
       ],
       0,
-      "5909f0df5f672f90b7eccc2f022c8b33"
+      "ab8fd49a009c759ca7f4ebf39aca7ec0"
     ],
     [
       "AEAD.Pkg.empty_log_framing",
@@ -327,7 +315,7 @@
         "typing_TLSInfo.safe_region", "unit_inversion", "unit_typing"
       ],
       0,
-      "4dd912d7beddb84f0ac470014a04caf4"
+      "688c32415801fc2468d3925740e3732c"
     ],
     [
       "AEAD.Pkg.create_key",
@@ -343,7 +331,7 @@
         "typing_AEAD.Pkg.__proj__Mkinfo__item__parent"
       ],
       0,
-      "ce9fa63f064fb58e716ab53606c4abfc"
+      "3df8414c04ab3ed3269362c6cab8f801"
     ],
     [
       "AEAD.Pkg.coerceT_key",
@@ -352,7 +340,7 @@
       1,
       [ "@query" ],
       0,
-      "c5d3da27fd7c66710ab5cc9a6508c76a"
+      "b13540349a46663829e5eb4761abf55f"
     ],
     [
       "AEAD.Pkg.coerceT_key",
@@ -361,7 +349,7 @@
       1,
       [ "@query" ],
       0,
-      "243e532f9dc74fa8df3ac7917f759f3c"
+      "7573a384952865c3b548ff3e22ccec6a"
     ],
     [
       "AEAD.Pkg.coerce_key",
@@ -370,7 +358,7 @@
       1,
       [ "@query" ],
       0,
-      "8c04c7a32786b45f7007ba465f183682"
+      "24c81feac24d0a51acbcc88c72475311"
     ],
     [
       "AEAD.Pkg.coerce_key",
@@ -379,7 +367,7 @@
       1,
       [ "@query" ],
       0,
-      "6766640c19298cb7ff0b59fb687cbea5"
+      "ad614a81ec077c22bc7b61a745ac1e0d"
     ],
     [
       "AEAD.Pkg.local_ae_pkg",
@@ -388,7 +376,7 @@
       1,
       [ "@query" ],
       0,
-      "b4e55aa2c180b46c30964d5f729e9677"
+      "58c757d56fa8d20f3f22a18a95f6ac5e"
     ],
     [
       "AEAD.Pkg.mp",
@@ -402,7 +390,7 @@
         "refinement_interpretation_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
       ],
       0,
-      "494ce9cd08d09507e64265af7ebaa8c5"
+      "a4367ee60d72f2747a0468164d365d31"
     ],
     [
       "AEAD.Pkg.encrypt",
@@ -451,7 +439,7 @@
         "typing_TLSInfo.safe_region"
       ],
       0,
-      "6c418e072bfcbbea1afe3cec74188497"
+      "f2b51904248b02e4a65df0ccb42e4bbc"
     ]
   ]
 ]

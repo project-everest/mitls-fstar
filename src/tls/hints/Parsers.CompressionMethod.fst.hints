@@ -12,7 +12,7 @@
         "typing_FStar.UInt8.t"
       ],
       0,
-      "6c3ee95b2d2d1f8b2aed516fa0bb89df"
+      "e789182934e1458b9fbf1b5ef239da93"
     ],
     [
       "Parsers.CompressionMethod.__proj__Unknown_compressionMethod__item___0",
@@ -26,7 +26,7 @@
         "refinement_interpretation_Tm_refine_024d66cc355bb4f5c02304d3ef6c059f"
       ],
       0,
-      "1ec7d479d376740499e44955e25d5bab"
+      "49d8b3bda68b22c5527a607cfeb011a6"
     ],
     [
       "Parsers.CompressionMethod.string_of_compressionMethod",
@@ -40,7 +40,7 @@
         "fuel_guarded_inversion_Parsers.CompressionMethod.compressionMethod"
       ],
       0,
-      "2ddc9d04eda674ac0eb586aa663ae983"
+      "c3fbfc87abd212b101d792be08b3f491"
     ],
     [
       "Parsers.CompressionMethod.compressionMethod_enum",
@@ -52,7 +52,7 @@
         "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq"
       ],
       0,
-      "1a098bb2bb6c0d62f96c1064a32035e1"
+      "8ed45ced492b299257307fb734eb50dd"
     ],
     [
       "Parsers.CompressionMethod.synth_compressionMethod",
@@ -64,7 +64,7 @@
         "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq"
       ],
       0,
-      "3aaa982186c99aeb7be1d4e63d71d41a"
+      "5e21adfe2a7cdd4c0e5669a1be4fade7"
     ],
     [
       "Parsers.CompressionMethod.synth_compressionMethod",
@@ -85,7 +85,7 @@
         "refinement_interpretation_Tm_refine_42952339d1ff6a9a240497d58590f0b2"
       ],
       0,
-      "ccb76236896d2502e5632eca46433b43"
+      "c7f89e2ff125909efde172738a9016c8"
     ],
     [
       "Parsers.CompressionMethod.synth_compressionMethod",
@@ -97,7 +97,7 @@
         "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq"
       ],
       0,
-      "f349cdc405f42eaf8cee5d8e75616756"
+      "33f3559b2e71e4f812ae26704cf14dbe"
     ],
     [
       "Parsers.CompressionMethod.synth_compressionMethod",
@@ -109,7 +109,31 @@
         "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq"
       ],
       0,
-      "742f65006d35c7f4a9b4e0cc77a6a16f"
+      "a59d33bd1fd8d4cff73e1737ba14ffe4"
+    ],
+    [
+      "Parsers.CompressionMethod.synth_compressionMethod",
+      5,
+      2,
+      1,
+      [
+        "@query",
+        "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq"
+      ],
+      0,
+      "c475dea195af348c7ddcc9bee65ba283"
+    ],
+    [
+      "Parsers.CompressionMethod.synth_compressionMethod",
+      6,
+      2,
+      1,
+      [
+        "@query",
+        "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq"
+      ],
+      0,
+      "24e9f9d07524cf0c32bf000ad4eedc1d"
     ],
     [
       "Parsers.CompressionMethod.synth_compressionMethod_inv",
@@ -129,7 +153,7 @@
         "typing_Parsers.CompressionMethod.uu___is_Unknown_compressionMethod"
       ],
       0,
-      "7d1f3067cf723952f9153ff2eaec73fc"
+      "c354476a70f4986a59a67997b2e787ac"
     ],
     [
       "Parsers.CompressionMethod.lemma_synth_compressionMethod_inv'",
@@ -147,7 +171,7 @@
         "token_correspondence_Parsers.CompressionMethod.synth_compressionMethod_inv"
       ],
       0,
-      "b8ce7caa12d39f93ce09188d749c8573"
+      "0d89424fa953ff47fa072e845c8aee65"
     ],
     [
       "Parsers.CompressionMethod.lemma_synth_compressionMethod_inj",
@@ -159,7 +183,7 @@
         "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq"
       ],
       0,
-      "a25cc8c1462fe94b88db55a8b246abf6"
+      "6d21ebe1ba2b8b33dcc363c18eb1749e"
     ],
     [
       "Parsers.CompressionMethod.lemma_synth_compressionMethod_inv",
@@ -192,7 +216,7 @@
         "typing_tok_Parsers.CompressionMethod.NullCompression@tok"
       ],
       0,
-      "d2b51987a656887ee1ae89d2bc0f2332"
+      "79fb31c5126962ac56670812583a99a9"
     ],
     [
       "Parsers.CompressionMethod.parse_maybe_compressionMethod_key",
@@ -204,7 +228,7 @@
         "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq"
       ],
       0,
-      "a1315d32f21314b1f528ce488073f1f5"
+      "8fe3db35ac3732279246bfca7cf2de11"
     ],
     [
       "Parsers.CompressionMethod.serialize_maybe_compressionMethod_key",
@@ -216,7 +240,7 @@
         "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq"
       ],
       0,
-      "d0de9a7316cafd593dd584ecaf1e9fa5"
+      "a1770b0a20ed3ccade5e1e6fc5b9822d"
     ],
     [
       "Parsers.CompressionMethod.compressionMethod_parser",
@@ -228,7 +252,7 @@
         "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq"
       ],
       0,
-      "5485b3ed43d044066dc50e821f036b39"
+      "e0cd3ee8ac5ed68a96b0cd24a29dd2ae"
     ],
     [
       "Parsers.CompressionMethod.compressionMethod_serializer",
@@ -240,7 +264,7 @@
         "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq"
       ],
       0,
-      "f838cc5a6467f85ff0954d6a1eab02bd"
+      "4408f665f884ad6abdf54db198d3927f"
     ],
     [
       "Parsers.CompressionMethod.compressionMethod_bytesize_eq",
@@ -252,7 +276,7 @@
         "equation_Parsers.CompressionMethod.compressionMethod_bytesize"
       ],
       0,
-      "42625c2960de16c538bc9a4a79bb619e"
+      "c4645e8beb91c92672683c1684a6ab81"
     ],
     [
       "Parsers.CompressionMethod.parse32_maybe_compressionMethod_key",
@@ -270,7 +294,7 @@
         "projection_inverse_Prims.Cons_tl"
       ],
       0,
-      "e62361a9402e907ab5c4323b2e6d469e"
+      "04f824afb026f4dd2454421fc0907a2c"
     ],
     [
       "Parsers.CompressionMethod.parse32_maybe_compressionMethod_key",
@@ -288,7 +312,7 @@
         "projection_inverse_Prims.Cons_tl"
       ],
       0,
-      "2f13786de4eb5924fef3d023b5eaf8f4"
+      "bf2bb772d2e3e8b4fe5feb83d8fcfd6a"
     ],
     [
       "Parsers.CompressionMethod.parse32_maybe_compressionMethod_key",
@@ -300,7 +324,7 @@
         "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq"
       ],
       0,
-      "40ff4e6263ce6d12bd866a6b23d2b517"
+      "317f930eb4a3b5376e2250c44528b10f"
     ],
     [
       "Parsers.CompressionMethod.parse32_maybe_compressionMethod_key",
@@ -312,7 +336,7 @@
         "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq"
       ],
       0,
-      "9eaf49b0ebba52f18f89bfa797bdd75c"
+      "4069a3f7c6dee69b4fba6ca068524218"
     ],
     [
       "Parsers.CompressionMethod.compressionMethod_parser32",
@@ -324,7 +348,7 @@
         "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq"
       ],
       0,
-      "206a5bac8fa83a1c2d44ae3040b2a59b"
+      "7e67e7ef2f7c7b088fbbe92822636f5d"
     ],
     [
       "Parsers.CompressionMethod.serialize32_maybe_compressionMethod_key",
@@ -342,7 +366,7 @@
         "projection_inverse_Prims.Cons_tl"
       ],
       0,
-      "f50e15117822565857bfd92ec808e0a8"
+      "5a34fe4fbd529372c360533279dbffb4"
     ],
     [
       "Parsers.CompressionMethod.serialize32_maybe_compressionMethod_key",
@@ -360,7 +384,7 @@
         "projection_inverse_Prims.Cons_tl"
       ],
       0,
-      "b5ea4a625f3358213b48927c9490f885"
+      "7f636c77879f9d19efb1943bc7068511"
     ],
     [
       "Parsers.CompressionMethod.serialize32_maybe_compressionMethod_key",
@@ -372,7 +396,7 @@
         "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq"
       ],
       0,
-      "885f80ddf8cbe2193d3afac4bd7dbd9f"
+      "044313cf5be44d70fd0727cd1a31bcb6"
     ],
     [
       "Parsers.CompressionMethod.serialize32_maybe_compressionMethod_key",
@@ -384,7 +408,7 @@
         "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq"
       ],
       0,
-      "16add031c73a6d798c64278d4c9128ed"
+      "7aa17468337122f2046f059a7a21a9c5"
     ],
     [
       "Parsers.CompressionMethod.compressionMethod_serializer32",
@@ -396,7 +420,7 @@
         "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq"
       ],
       0,
-      "54f662d7ca8c9681abcc99cb17c25bb6"
+      "5b59047f42f4b1e9dd958a4827d7885c"
     ],
     [
       "Parsers.CompressionMethod.compressionMethod_size32",
@@ -405,7 +429,7 @@
       1,
       [ "@query" ],
       0,
-      "e43d10a2a719f6e08e69930f0160b223"
+      "a1f7bcd04ddfe521bd848a3de61cc527"
     ],
     [
       "Parsers.CompressionMethod.compressionMethod_validator",
@@ -423,7 +447,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata"
       ],
       0,
-      "b605514b0e949b068c750b0b095f26bc"
+      "b4f31dedb3e978dc18a2c7c54b8735b3"
     ],
     [
       "Parsers.CompressionMethod.compressionMethod_jumper",
@@ -439,7 +463,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_low"
       ],
       0,
-      "1173cc500c0c1771275825400f75d203"
+      "8499894774c5f34a2813e34ee9b83cab"
     ],
     [
       "Parsers.CompressionMethod.lwp_compressionMethod",
@@ -453,7 +477,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind"
       ],
       0,
-      "05e51c2e5735d0b226d39f266540664d"
+      "4fe801296f2da4094dd9d4604e52ef49"
     ],
     [
       "Parsers.CompressionMethod.read_maybe_compressionMethod_key",
@@ -465,7 +489,7 @@
         "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq"
       ],
       0,
-      "a7656a6ffd6e282895d1ea1692f7dc49"
+      "7a5c77093f52ccb8edd79cbe91c3fd54"
     ],
     [
       "Parsers.CompressionMethod.compressionMethod_reader",
@@ -477,7 +501,7 @@
         "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq"
       ],
       0,
-      "0041849f3bf08f82e3e41fb3de97ba68"
+      "3f29038bb74dc9ad47b7a8fe28fade4f"
     ],
     [
       "Parsers.CompressionMethod.write_maybe_compressionMethod_key",
@@ -489,7 +513,7 @@
         "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq"
       ],
       0,
-      "1944af996f860169f06b16cef934cb7b"
+      "9c401ae55713d274eb22be60bca67fd8"
     ],
     [
       "Parsers.CompressionMethod.lserialize_maybe_compressionMethod_key",
@@ -510,7 +534,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind"
       ],
       0,
-      "635f12aac5d8ba9fc02886c6f8f87d37"
+      "363fe9be5f8f9a3422dcc64eb8b27ce5"
     ],
     [
       "Parsers.CompressionMethod.compressionMethod_writer",
@@ -522,7 +546,7 @@
         "assumption_Parsers.CompressionMethod.compressionMethod__uu___haseq"
       ],
       0,
-      "494256490f1a643083c35d1061fde206"
+      "febbeb49a88a1479f316ea0407257ce4"
     ],
     [
       "Parsers.CompressionMethod.compressionMethod_lserializer",
@@ -540,7 +564,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind"
       ],
       0,
-      "b9ec8a11a5dcbf898b728f4f92d822b3"
+      "4db1b1c629bef4d444cc1ffb99a92681"
     ],
     [
       "Parsers.CompressionMethod.compressionMethod_bytesize_eqn",
@@ -568,7 +592,7 @@
         "typing_Parsers.CompressionMethod.compressionMethod_serializer"
       ],
       0,
-      "04ff609054d8aab588bff7447f44f961"
+      "7d2f6b60b406db5c6f07506255cf6042"
     ]
   ]
 ]
