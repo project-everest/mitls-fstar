@@ -12,7 +12,7 @@
         "typing_FStar.UInt16.t"
       ],
       0,
-      "d1b3d3073f13f35e1073579ecac56c9f"
+      "4117867e8f4a6cb773a626930f2df2d9"
     ],
     [
       "Parsers.CipherSuite.__proj__Unknown_cipherSuite__item___0",
@@ -26,7 +26,7 @@
         "refinement_interpretation_Tm_refine_9440a8e44f3f2e8c1b37d1e73887a302"
       ],
       0,
-      "bf9b464e9a5d79649aa1320cce87c3ae"
+      "69900652c5489f3c4fc6728b46186201"
     ],
     [
       "Parsers.CipherSuite.string_of_cipherSuite",
@@ -99,7 +99,7 @@
         "fuel_guarded_inversion_Parsers.CipherSuite.cipherSuite"
       ],
       0,
-      "a636b011a5df6a835aee8d695250cd2a"
+      "db92a62a55f0054c467c86b9d28a62b4"
     ],
     [
       "Parsers.CipherSuite.cipherSuite_enum",
@@ -111,7 +111,7 @@
         "assumption_Parsers.CipherSuite.cipherSuite__uu___haseq"
       ],
       0,
-      "59cdac95a450a86da6585fefbcceec61"
+      "5ffd92433fd3a0ec1093d1ca147fa020"
     ],
     [
       "Parsers.CipherSuite.synth_cipherSuite",
@@ -123,7 +123,7 @@
         "assumption_Parsers.CipherSuite.cipherSuite__uu___haseq"
       ],
       0,
-      "a1b2cb322a1062ee2b313b71f60e785e"
+      "e79ab27497f6127457e8cdae7490c8ce"
     ],
     [
       "Parsers.CipherSuite.synth_cipherSuite",
@@ -146,7 +146,7 @@
         "refinement_interpretation_Tm_refine_42952339d1ff6a9a240497d58590f0b2"
       ],
       0,
-      "ae5f6c024c731ab365827f0cda6b374f"
+      "54924b9b214140a21c33ae8b393a8754"
     ],
     [
       "Parsers.CipherSuite.synth_cipherSuite",
@@ -155,7 +155,7 @@
       1,
       [ "@query", "assumption_Parsers.CipherSuite.cipherSuite__uu___haseq" ],
       0,
-      "5e4b863fe8e7378d776dfa93a0f7aaab"
+      "57d4175469bb3f366ef8eae39f2b23cc"
     ],
     [
       "Parsers.CipherSuite.synth_cipherSuite",
@@ -164,7 +164,7 @@
       1,
       [ "@query", "assumption_Parsers.CipherSuite.cipherSuite__uu___haseq" ],
       0,
-      "279d839a9ed025144e289f2cec909a48"
+      "63590c1a22ce1c862e7772e99d94407b"
     ],
     [
       "Parsers.CipherSuite.synth_cipherSuite",
@@ -173,7 +173,7 @@
       1,
       [ "@query", "assumption_Parsers.CipherSuite.cipherSuite__uu___haseq" ],
       0,
-      "5c290c3c6e8cec6daef6c8651581fd94"
+      "2922beb6aa6cc9b493e9d79ddcdb309a"
     ],
     [
       "Parsers.CipherSuite.synth_cipherSuite",
@@ -182,7 +182,7 @@
       1,
       [ "@query", "assumption_Parsers.CipherSuite.cipherSuite__uu___haseq" ],
       0,
-      "8cf44274b19fa263b2f7c0e84e9a7533"
+      "a474c3c0ad688c272183e23463366f3a"
     ],
     [
       "Parsers.CipherSuite.synth_cipherSuite_inv",
@@ -191,18 +191,14 @@
       1,
       [
         "@MaxIFuel_assumption", "@query",
-        "assumption_Parsers.CipherSuite.cipherSuite__uu___haseq", "b2t_def",
-        "bool_inversion",
+        "assumption_Parsers.CipherSuite.cipherSuite__uu___haseq",
         "equation_Parsers.CipherSuite.known_cipherSuite_repr",
-        "equation_Prims.l_imp", "equation_Prims.squash", "l_imp-interp",
-        "primitive_Prims.op_BarBar", "primitive_Prims.op_Negation",
-        "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_2de20c066034c13bf76e9c0b94f4806c",
+        "primitive_Prims.op_BarBar", "projection_inverse_BoxBool_proj_0",
         "refinement_interpretation_Tm_refine_348a2f9331c5b3146325414812947515",
-        "typing_Parsers.CipherSuite.uu___is_Unknown_cipherSuite"
+        "refinement_interpretation_Tm_refine_f72e0d7e38a942439914e2ae31525bde"
       ],
       0,
-      "d6d2f8a3d4577844cbe4c638f67326e7"
+      "af02f65dba68cd3c1524705a0e132a9b"
     ],
     [
       "Parsers.CipherSuite.lemma_synth_cipherSuite_inv'",
@@ -213,14 +209,12 @@
         "@MaxIFuel_assumption", "@query",
         "assumption_Parsers.CipherSuite.cipherSuite__uu___haseq",
         "equation_LowParse.Spec.Combinators.synth_inverse",
-        "equation_Prims.l_Forall", "equation_Prims.squash",
-        "l_quant_interp_ded3a3f649f72993b1bb654de5148e63",
-        "refinement_interpretation_Tm_refine_2de20c066034c13bf76e9c0b94f4806c",
+        "refinement_interpretation_Tm_refine_ddf9c4b957dd300b810f073c45db2490",
         "token_correspondence_Parsers.CipherSuite.synth_cipherSuite",
         "token_correspondence_Parsers.CipherSuite.synth_cipherSuite_inv"
       ],
       0,
-      "0e906d72852486583a7bbce10e047974"
+      "bd7a66151bd1e3c138553866f3ecc4f8"
     ],
     [
       "Parsers.CipherSuite.lemma_synth_cipherSuite_inj",
@@ -232,7 +226,7 @@
         "assumption_Parsers.CipherSuite.cipherSuite__uu___haseq"
       ],
       0,
-      "f80b8a9f18286a57b04393f252e57445"
+      "dc538eafbcb2d3d76085065eb20357a4"
     ],
     [
       "Parsers.CipherSuite.lemma_synth_cipherSuite_inv",
@@ -264,7 +258,7 @@
         "typing_tok_Parsers.CipherSuite.TLS_NULL_WITH_NULL_NULL@tok"
       ],
       0,
-      "757a406044b2cf0ef0b24ff310e70dbf"
+      "47df6f9746ae21ed9b763f3b473794ed"
     ],
     [
       "Parsers.CipherSuite.parse_maybe_cipherSuite_key",
@@ -276,7 +270,7 @@
         "assumption_Parsers.CipherSuite.cipherSuite__uu___haseq"
       ],
       0,
-      "142234f8953be7185f18a8557bbd0bd7"
+      "11def2a0e75fb6b5a234a17cc05e6e31"
     ],
     [
       "Parsers.CipherSuite.serialize_maybe_cipherSuite_key",
@@ -288,7 +282,7 @@
         "assumption_Parsers.CipherSuite.cipherSuite__uu___haseq"
       ],
       0,
-      "ef5527bdb172d8b2e0c0b308914cfba1"
+      "b61b4b9a95f18ebd44530ead124b4b6e"
     ],
     [
       "Parsers.CipherSuite.cipherSuite_parser",
@@ -300,7 +294,7 @@
         "assumption_Parsers.CipherSuite.cipherSuite__uu___haseq"
       ],
       0,
-      "216deb58ec54916b345b47b8d79f2f97"
+      "aaf92e53ee913dc0348b8d88dd2e320d"
     ],
     [
       "Parsers.CipherSuite.cipherSuite_serializer",
@@ -312,7 +306,7 @@
         "assumption_Parsers.CipherSuite.cipherSuite__uu___haseq"
       ],
       0,
-      "2dde22a7a6141877b98e39de063748c5"
+      "e134666b70be046d4c9fcff4218b03b1"
     ],
     [
       "Parsers.CipherSuite.cipherSuite_bytesize_eq",
@@ -324,7 +318,7 @@
         "equation_Parsers.CipherSuite.cipherSuite_bytesize"
       ],
       0,
-      "35da6596cf038d045096411cb108d389"
+      "dc51bbdc473a7b7cc334c9730b68591d"
     ],
     [
       "Parsers.CipherSuite.parse32_maybe_cipherSuite_key",
@@ -342,7 +336,7 @@
         "projection_inverse_Prims.Cons_tl"
       ],
       0,
-      "5216e8cae2ebb874ac85e1da744e3480"
+      "c2ae285c7d4aed222a34fd05582e8a1b"
     ],
     [
       "Parsers.CipherSuite.parse32_maybe_cipherSuite_key",
@@ -360,7 +354,7 @@
         "projection_inverse_Prims.Cons_tl"
       ],
       0,
-      "e15e2867750b6c1298d3327b33ab9e37"
+      "f5b5a3bff7f94fe550351a12edfb80e1"
     ],
     [
       "Parsers.CipherSuite.parse32_maybe_cipherSuite_key",
@@ -372,7 +366,7 @@
         "assumption_Parsers.CipherSuite.cipherSuite__uu___haseq"
       ],
       0,
-      "b1cc24ca4ee4a45e4d470173db47d479"
+      "e198229030cd65f474c4b937cbb2f098"
     ],
     [
       "Parsers.CipherSuite.parse32_maybe_cipherSuite_key",
@@ -384,7 +378,7 @@
         "assumption_Parsers.CipherSuite.cipherSuite__uu___haseq"
       ],
       0,
-      "965f19392b241266dfa150d742b3356a"
+      "0a74bc0fad452a685def2e922c6e9ca7"
     ],
     [
       "Parsers.CipherSuite.cipherSuite_parser32",
@@ -396,7 +390,7 @@
         "assumption_Parsers.CipherSuite.cipherSuite__uu___haseq"
       ],
       0,
-      "7b1282d60d994caa615bc145e97bc552"
+      "2428d1568df698632c88cce9e7a815f9"
     ],
     [
       "Parsers.CipherSuite.serialize32_maybe_cipherSuite_key",
@@ -414,7 +408,7 @@
         "projection_inverse_Prims.Cons_tl"
       ],
       0,
-      "17950272753c5f1c553add47bf99e8fd"
+      "764cdebdea93e6dc83d83703e7716736"
     ],
     [
       "Parsers.CipherSuite.serialize32_maybe_cipherSuite_key",
@@ -432,7 +426,7 @@
         "projection_inverse_Prims.Cons_tl"
       ],
       0,
-      "3cb2ab8afa3f8b4a00e7b8ddcad123a8"
+      "1273e552f8cd39c21bd28667403ae02e"
     ],
     [
       "Parsers.CipherSuite.serialize32_maybe_cipherSuite_key",
@@ -444,7 +438,7 @@
         "assumption_Parsers.CipherSuite.cipherSuite__uu___haseq"
       ],
       0,
-      "485c165b484fe1ee69df823c77dd093c"
+      "24a4c4f7a3e9facc84ebf83ce166fb28"
     ],
     [
       "Parsers.CipherSuite.serialize32_maybe_cipherSuite_key",
@@ -456,7 +450,7 @@
         "assumption_Parsers.CipherSuite.cipherSuite__uu___haseq"
       ],
       0,
-      "30094c6fc5673d1d41d622a3bf650e32"
+      "3da077fdae1208749074afc8c069997d"
     ],
     [
       "Parsers.CipherSuite.cipherSuite_serializer32",
@@ -468,7 +462,7 @@
         "assumption_Parsers.CipherSuite.cipherSuite__uu___haseq"
       ],
       0,
-      "fedeb87f5bd84df98bc3c07985f63644"
+      "30dc4cdc61b58e2a52cdaf3256169976"
     ],
     [
       "Parsers.CipherSuite.cipherSuite_size32",
@@ -477,7 +471,7 @@
       1,
       [ "@query" ],
       0,
-      "a5e1a51d6589cb62c608bdbfa01a1d14"
+      "7e84f7a259490690ea5e160104eb5984"
     ],
     [
       "Parsers.CipherSuite.cipherSuite_validator",
@@ -500,7 +494,7 @@
         "typing_LowParse.Low.Base.validator_max_length"
       ],
       0,
-      "0c65a65ca6b318c00f6c5910b5bf93b1"
+      "1da1e5e0b930452d2392271fcdca2f58"
     ],
     [
       "Parsers.CipherSuite.cipherSuite_jumper",
@@ -516,7 +510,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_low"
       ],
       0,
-      "6e0ecaacb2b2e9ecad4b2172d64a7541"
+      "c50f419aea50bcb1a5ef2f49805b16f9"
     ],
     [
       "Parsers.CipherSuite.lwp_cipherSuite",
@@ -530,7 +524,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind"
       ],
       0,
-      "b79cac280627f64e6cd711a8b888c60e"
+      "8303b09824b09cce2a1c1d4671a873c9"
     ],
     [
       "Parsers.CipherSuite.read_maybe_cipherSuite_key",
@@ -542,7 +536,7 @@
         "assumption_Parsers.CipherSuite.cipherSuite__uu___haseq"
       ],
       0,
-      "74cb1fde4a17c4645dc052fbfb12925d"
+      "dbec503b50b3d52285708688ceaf401c"
     ],
     [
       "Parsers.CipherSuite.cipherSuite_reader",
@@ -554,7 +548,7 @@
         "assumption_Parsers.CipherSuite.cipherSuite__uu___haseq"
       ],
       0,
-      "d55345f075065a1ffca10abd5f10541e"
+      "af41a531623cc46aa8c3142556e9b924"
     ],
     [
       "Parsers.CipherSuite.write_maybe_cipherSuite_key",
@@ -566,7 +560,7 @@
         "assumption_Parsers.CipherSuite.cipherSuite__uu___haseq"
       ],
       0,
-      "0d3d8a056d56fb417eb5e43fc1f6f7a2"
+      "136ffce6ba61c25704ae507705b1addc"
     ],
     [
       "Parsers.CipherSuite.lserialize_maybe_cipherSuite_key",
@@ -586,7 +580,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind"
       ],
       0,
-      "be2f4f5cf78a7453335d5e7a489d6688"
+      "12d87ece51b27799913017c5a4124201"
     ],
     [
       "Parsers.CipherSuite.cipherSuite_writer",
@@ -598,7 +592,7 @@
         "assumption_Parsers.CipherSuite.cipherSuite__uu___haseq"
       ],
       0,
-      "c9994735d8ad2a42cd702eaf3beba947"
+      "57260c1a96ea2b8fad3c8bb8820088aa"
     ],
     [
       "Parsers.CipherSuite.cipherSuite_lserializer",
@@ -616,7 +610,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind"
       ],
       0,
-      "621544fe8c2cfe24061c9684cb7b5f42"
+      "858d867627a246a5f9de5d7ab3bf827e"
     ],
     [
       "Parsers.CipherSuite.cipherSuite_bytesize_eqn",
@@ -644,7 +638,7 @@
         "typing_Parsers.CipherSuite.cipherSuite_serializer"
       ],
       0,
-      "7e79742f2ff88d594e4005bbe0ac7f5f"
+      "63bdff29d1d7171ac33817d397599b39"
     ]
   ]
 ]

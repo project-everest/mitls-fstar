@@ -15,7 +15,7 @@
         "typing_FStar.Bytes.bytes"
       ],
       0,
-      "d525667361c2f9aae5f2b200c7c11e0e"
+      "b73d3000c1c2768f2c94c02823c3598a"
     ],
     [
       "HMAC.hmac",
@@ -231,7 +231,7 @@
         "typing_tok_Lib.IntTypes.PUB@tok", "typing_tok_Lib.IntTypes.U32@tok"
       ],
       0,
-      "3111ea4f6b46f131bd0d8cb1cfa28634"
+      "c55c23ab2518ece88bb793ad3852ed46"
     ],
     [
       "HMAC.hmac",
@@ -252,7 +252,7 @@
         "constructor_distinct_Lib.IntTypes.S16",
         "constructor_distinct_Lib.IntTypes.U128",
         "constructor_distinct_Lib.IntTypes.U32",
-        "constructor_distinct_Lib.IntTypes.U8", "eq2-interp",
+        "constructor_distinct_Lib.IntTypes.U8",
         "equality_tok_FStar.Integers.W128@tok",
         "equality_tok_FStar.Integers.W16@tok",
         "equality_tok_FStar.Integers.W32@tok",
@@ -264,7 +264,7 @@
         "equality_tok_Lib.IntTypes.U8@tok",
         "equation_EverCrypt.HMAC.is_supported_alg",
         "equation_EverCrypt.HMAC.supported_alg",
-        "equation_FStar.Bytes.lbytes",
+        "equation_EverCrypt.Helpers.uint8_t", "equation_FStar.Bytes.lbytes",
         "equation_FStar.HyperStack.ST.equal_domains",
         "equation_FStar.HyperStack.ST.inline_stack_inv",
         "equation_FStar.HyperStack.ST.modifies_none",
@@ -294,12 +294,12 @@
         "equation_Lib.IntTypes.v", "equation_Lib.Sequence.seq",
         "equation_LowParse.Bytes32.reveal_empty_",
         "equation_LowParse.Writers.Parser.u8",
-        "equation_LowStar.Monotonic.Buffer.disjoint", "equation_Prims.eq2",
+        "equation_LowStar.Buffer.buffer",
+        "equation_LowStar.Monotonic.Buffer.disjoint",
         "equation_Prims.eqtype", "equation_Prims.nat",
-        "equation_Prims.squash", "equation_Spec.AES.elem",
         "equation_Spec.AES.gf8", "equation_Spec.AES.irred",
-        "equation_Spec.Agile.HMAC.lbytes", "equation_Spec.GaloisField.felem",
-        "equation_Spec.GaloisField.gf",
+        "equation_Spec.Agile.HMAC.keysized",
+        "equation_Spec.Agile.HMAC.lbytes", "equation_Spec.GaloisField.gf",
         "equation_Spec.Hash.Definitions.block_length",
         "equation_Spec.Hash.Definitions.block_word_length",
         "equation_Spec.Hash.Definitions.hash_length",
@@ -311,7 +311,6 @@
         "function_token_typing_LowParse.Bytes32.reveal_empty_",
         "function_token_typing_LowParse.Writers.Parser.u8",
         "function_token_typing_Prims.int",
-        "function_token_typing_Spec.AES.elem",
         "haseqTm_refine_542f9d4f129664613f2483a6c88bc7c2",
         "haseqTm_refine_f13070840248fced9d9d60d77bdae3ec", "int_inversion",
         "int_typing", "lemma_FStar.Bytes.empty_unique",
@@ -385,6 +384,7 @@
         "refinement_interpretation_Tm_refine_05e15190c946858f68c69156f585f95a",
         "refinement_interpretation_Tm_refine_0803109b57c1d7ff6d718eadfd44ea16",
         "refinement_interpretation_Tm_refine_16f29a6f8b129d5f173344126014341c",
+        "refinement_interpretation_Tm_refine_17c981ef323e12f766f430e31d66e778",
         "refinement_interpretation_Tm_refine_182efe239776588e16adcd3300cba56d",
         "refinement_interpretation_Tm_refine_1cc6c9f8558dddb337b6c1187115cd6a",
         "refinement_interpretation_Tm_refine_22cd46bfa9701240f3c51fb554271fe4",
@@ -392,7 +392,6 @@
         "refinement_interpretation_Tm_refine_25c72d704900d626b30894312c325451",
         "refinement_interpretation_Tm_refine_29c27ac7c716b2238749315b70c9eca3",
         "refinement_interpretation_Tm_refine_2bdf871324b477f38e180d50b5b0b08f",
-        "refinement_interpretation_Tm_refine_2de20c066034c13bf76e9c0b94f4806c",
         "refinement_interpretation_Tm_refine_365abba901205a01d0ef28ebf2198c47",
         "refinement_interpretation_Tm_refine_3daf37ab3cd19c1e74e63f8f5e0fb16a",
         "refinement_interpretation_Tm_refine_414d0a9f578ab0048252f8c8f552b99f",
@@ -404,6 +403,7 @@
         "refinement_interpretation_Tm_refine_7a667868adfb0a6fe40f327e2c50ee74",
         "refinement_interpretation_Tm_refine_83845a86f2550cdf941eeb1d9b59602b",
         "refinement_interpretation_Tm_refine_957d85d6808df825bcac638eebbd8935",
+        "refinement_interpretation_Tm_refine_9622b3811cb9912b4802e95afd612d3d",
         "refinement_interpretation_Tm_refine_a795c43837a0650e1e3d1ca03b66444c",
         "refinement_interpretation_Tm_refine_b913a3f691ca99086652e0a655e72f17",
         "refinement_interpretation_Tm_refine_bd10f09297e0e7dc08314f7d9211801c",
@@ -459,7 +459,7 @@
         "typing_tok_Lib.IntTypes.U8@tok"
       ],
       0,
-      "8a557c5ac73cbce7bc10c0960ccc3e79"
+      "f6783f111ec6d289b90764f38c1c7c91"
     ],
     [
       "HMAC.hmacVerify",
@@ -480,7 +480,7 @@
         "typing_FStar.Bytes.bytes"
       ],
       0,
-      "107fe10039468bb96a81f6868ffb271e"
+      "a9d5f5bf02a726c40b0cfedfec37fe08"
     ],
     [
       "HMAC.hmacVerify",
@@ -489,7 +489,7 @@
       0,
       [ "@query" ],
       0,
-      "eb7c58f494c09c61dab92453b9f7d0b8"
+      "fefa3606f148b7d97ebbf7df6b021955"
     ],
     [
       "HMAC.hmacVerify",
@@ -510,7 +510,7 @@
         "typing_FStar.Bytes.bytes"
       ],
       0,
-      "e8b5f2e5983637abc0374e4eac9e2c67"
+      "bb0f2d50d2ab3578fb97bb931604a433"
     ],
     [
       "HMAC.tls_mac",
@@ -534,7 +534,7 @@
         "refinement_interpretation_Tm_refine_d847d52d360fa517dfae39fc7848d35c"
       ],
       0,
-      "df9ab9ebfaf3c70e77022cda4665dfba"
+      "86d62c2f02dbc7e30083ecd42054bfd5"
     ],
     [
       "HMAC.tls_mac",
@@ -543,7 +543,7 @@
       0,
       [ "@query" ],
       0,
-      "eeed05318771d6a18ff4e8af6abeccad"
+      "73e42f89b09a3043e1420ac33499435d"
     ],
     [
       "HMAC.tls_mac",
@@ -570,7 +570,7 @@
         "refinement_interpretation_Tm_refine_e7c5f4e71af26642dc90739b89f6278e"
       ],
       0,
-      "6802af3b878f2050914373ff6a7379b8"
+      "65442c9d80dc7c4088d294770f371882"
     ],
     [
       "HMAC.tls_macVerify",
@@ -599,7 +599,7 @@
         "refinement_interpretation_Tm_refine_d847d52d360fa517dfae39fc7848d35c"
       ],
       0,
-      "3c9f6b194dcb773945d6e449408b98e8"
+      "22edd41c7bfc273817fa325558a320ee"
     ],
     [
       "HMAC.tls_macVerify",
@@ -608,7 +608,7 @@
       0,
       [ "@query" ],
       0,
-      "6935722296bd48ddc948d8173c18b5e6"
+      "f2fc5b7e76b263dc56c28bc51dcd37cd"
     ],
     [
       "HMAC.tls_macVerify",
@@ -631,7 +631,7 @@
         "refinement_interpretation_Tm_refine_e7c5f4e71af26642dc90739b89f6278e"
       ],
       0,
-      "81d2f60ea9ea50ca5d98f0ad2c17fa8d"
+      "83ed1b8e9ac4e3df41bf3f5bece405c5"
     ]
   ]
 ]

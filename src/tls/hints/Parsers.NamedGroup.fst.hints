@@ -12,7 +12,7 @@
         "typing_FStar.UInt16.t"
       ],
       0,
-      "99e26a6db68dfaafafa454487eebbc59"
+      "32b1f5b47f6b4ee9cf4d03b306822841"
     ],
     [
       "Parsers.NamedGroup.__proj__Unknown_namedGroup__item___0",
@@ -26,7 +26,7 @@
         "refinement_interpretation_Tm_refine_f4ef8479470d7ef641d6261d6a5e84e5"
       ],
       0,
-      "3f54cfdd7a31796272e6ebafe848db42"
+      "f8572f70a73dc621435061e0e6d0b4c4"
     ],
     [
       "Parsers.NamedGroup.string_of_namedGroup",
@@ -61,7 +61,7 @@
         "fuel_guarded_inversion_Parsers.NamedGroup.namedGroup"
       ],
       0,
-      "b19633864a0adfe5dcbc4729c79e9c26"
+      "17b2beb50a0599cd51aebc148904f2bf"
     ],
     [
       "Parsers.NamedGroup.namedGroup_enum",
@@ -73,7 +73,7 @@
         "assumption_Parsers.NamedGroup.namedGroup__uu___haseq"
       ],
       0,
-      "bb1dcc16eeb2bd9a1ae2d8bef6a032c8"
+      "11ec662656967c9b32cd7e6301284ec8"
     ],
     [
       "Parsers.NamedGroup.synth_namedGroup",
@@ -85,7 +85,7 @@
         "assumption_Parsers.NamedGroup.namedGroup__uu___haseq"
       ],
       0,
-      "2237a5a0b23a8e810d8d62666a600467"
+      "b9e397a2e5840ba4e6b0e7b21c35e672"
     ],
     [
       "Parsers.NamedGroup.synth_namedGroup",
@@ -108,7 +108,7 @@
         "refinement_interpretation_Tm_refine_42952339d1ff6a9a240497d58590f0b2"
       ],
       0,
-      "ef49f27b90fe2fa310b25c174484d624"
+      "4ca2f4801c3238f4940e5c6111ba672f"
     ],
     [
       "Parsers.NamedGroup.synth_namedGroup",
@@ -117,7 +117,7 @@
       1,
       [ "@query", "assumption_Parsers.NamedGroup.namedGroup__uu___haseq" ],
       0,
-      "cd3aab7c38bed720909e673b8725686c"
+      "f977ebbe28c2611f51702ee991144543"
     ],
     [
       "Parsers.NamedGroup.synth_namedGroup",
@@ -126,7 +126,7 @@
       1,
       [ "@query", "assumption_Parsers.NamedGroup.namedGroup__uu___haseq" ],
       0,
-      "62d306383f523ec32f8b70d58f96e343"
+      "a5644bfa60070acde39637e983f1b696"
     ],
     [
       "Parsers.NamedGroup.synth_namedGroup",
@@ -135,7 +135,7 @@
       1,
       [ "@query", "assumption_Parsers.NamedGroup.namedGroup__uu___haseq" ],
       0,
-      "7680914256d62342c73681951f6b3596"
+      "ed9a81d7420e60e4db5cfabc05432d1f"
     ],
     [
       "Parsers.NamedGroup.synth_namedGroup",
@@ -144,7 +144,7 @@
       1,
       [ "@query", "assumption_Parsers.NamedGroup.namedGroup__uu___haseq" ],
       0,
-      "c92668c37b122095d95d421ee195c315"
+      "ab27dd17d7d8b63337ae4bb129bff88f"
     ],
     [
       "Parsers.NamedGroup.synth_namedGroup_inv",
@@ -153,18 +153,14 @@
       1,
       [
         "@MaxIFuel_assumption", "@query",
-        "assumption_Parsers.NamedGroup.namedGroup__uu___haseq", "b2t_def",
-        "bool_inversion",
+        "assumption_Parsers.NamedGroup.namedGroup__uu___haseq",
         "equation_Parsers.NamedGroup.known_namedGroup_repr",
-        "equation_Prims.l_imp", "equation_Prims.squash", "l_imp-interp",
-        "primitive_Prims.op_BarBar", "primitive_Prims.op_Negation",
-        "projection_inverse_BoxBool_proj_0",
+        "primitive_Prims.op_BarBar", "projection_inverse_BoxBool_proj_0",
         "refinement_interpretation_Tm_refine_1d37f8b8caca7e9466bc5d3b095ac5d8",
-        "refinement_interpretation_Tm_refine_2de20c066034c13bf76e9c0b94f4806c",
-        "typing_Parsers.NamedGroup.uu___is_Unknown_namedGroup"
+        "refinement_interpretation_Tm_refine_596318b3c8c3f17dddb984aaca2cae25"
       ],
       0,
-      "e0dc37620a4aac151391097166d7d1ae"
+      "70404cda55fae3212e22e3e3c8266bbb"
     ],
     [
       "Parsers.NamedGroup.lemma_synth_namedGroup_inv'",
@@ -175,14 +171,12 @@
         "@MaxIFuel_assumption", "@query",
         "assumption_Parsers.NamedGroup.namedGroup__uu___haseq",
         "equation_LowParse.Spec.Combinators.synth_inverse",
-        "equation_Prims.l_Forall", "equation_Prims.squash",
-        "l_quant_interp_ee0016a7646d89647507ffa552d4e167",
-        "refinement_interpretation_Tm_refine_2de20c066034c13bf76e9c0b94f4806c",
+        "refinement_interpretation_Tm_refine_090e1f5395dc77bf78fb6f9a6d810cdf",
         "token_correspondence_Parsers.NamedGroup.synth_namedGroup",
         "token_correspondence_Parsers.NamedGroup.synth_namedGroup_inv"
       ],
       0,
-      "1892453b95f0f1709002997422969cdb"
+      "fc82bbec9e64faef22d1182123109678"
     ],
     [
       "Parsers.NamedGroup.lemma_synth_namedGroup_inj",
@@ -194,7 +188,7 @@
         "assumption_Parsers.NamedGroup.namedGroup__uu___haseq"
       ],
       0,
-      "073ae9fe3acd5761f4c2dc44c4df46cb"
+      "4bcec80e6c56234ab2db0e73f5f08c76"
     ],
     [
       "Parsers.NamedGroup.lemma_synth_namedGroup_inv",
@@ -226,7 +220,7 @@
         "typing_tok_Parsers.NamedGroup.Sect233k1@tok"
       ],
       0,
-      "a1e7001c99fa0ce2070f4309d86ae811"
+      "51881acbe61b9d4da0ebb7dbdf9436bd"
     ],
     [
       "Parsers.NamedGroup.parse_maybe_namedGroup_key",
@@ -238,7 +232,7 @@
         "assumption_Parsers.NamedGroup.namedGroup__uu___haseq"
       ],
       0,
-      "d94afeef1a0c7888adfbeb786cc47e89"
+      "df25c31f7df4eec859deca9edf9e1efe"
     ],
     [
       "Parsers.NamedGroup.serialize_maybe_namedGroup_key",
@@ -250,7 +244,7 @@
         "assumption_Parsers.NamedGroup.namedGroup__uu___haseq"
       ],
       0,
-      "ec3e8cc4a814193a8f383e332d00d870"
+      "c9b6080891df4fde46c4b885b6653720"
     ],
     [
       "Parsers.NamedGroup.namedGroup_parser",
@@ -262,7 +256,7 @@
         "assumption_Parsers.NamedGroup.namedGroup__uu___haseq"
       ],
       0,
-      "bef32a921a7bebc2193119cd9895bee8"
+      "8f940a94274891bc98c6c0d177c76ce3"
     ],
     [
       "Parsers.NamedGroup.namedGroup_serializer",
@@ -274,7 +268,7 @@
         "assumption_Parsers.NamedGroup.namedGroup__uu___haseq"
       ],
       0,
-      "640689913e3e3ee034bdb4312fb28569"
+      "ab6d28df26f7b47325a9e751bd8757f5"
     ],
     [
       "Parsers.NamedGroup.namedGroup_bytesize_eq",
@@ -286,7 +280,7 @@
         "equation_Parsers.NamedGroup.namedGroup_bytesize"
       ],
       0,
-      "d684178417e84137168bc90033ec4eaa"
+      "c2020fb3c41e43efc85345edee187558"
     ],
     [
       "Parsers.NamedGroup.parse32_maybe_namedGroup_key",
@@ -304,7 +298,7 @@
         "projection_inverse_Prims.Cons_tl"
       ],
       0,
-      "9963c2a30af339f4480b080f7b89cb94"
+      "2577bc24d91d059acf0cac99d7053c5b"
     ],
     [
       "Parsers.NamedGroup.parse32_maybe_namedGroup_key",
@@ -322,7 +316,7 @@
         "projection_inverse_Prims.Cons_tl"
       ],
       0,
-      "06c5081d15b9f0218ecd1e33a769cf26"
+      "7ec7db54092525a4b8b4ee26b223c4dc"
     ],
     [
       "Parsers.NamedGroup.parse32_maybe_namedGroup_key",
@@ -334,7 +328,7 @@
         "assumption_Parsers.NamedGroup.namedGroup__uu___haseq"
       ],
       0,
-      "c56130b2459a363dbbee192ec92c1cfc"
+      "c9dad01112742cca91b9dab7095b7984"
     ],
     [
       "Parsers.NamedGroup.parse32_maybe_namedGroup_key",
@@ -346,7 +340,7 @@
         "assumption_Parsers.NamedGroup.namedGroup__uu___haseq"
       ],
       0,
-      "5a8c5c837121b24159cb1ddd095546f9"
+      "98c13a32b9e22daf8fca1dcc955633a1"
     ],
     [
       "Parsers.NamedGroup.namedGroup_parser32",
@@ -358,7 +352,7 @@
         "assumption_Parsers.NamedGroup.namedGroup__uu___haseq"
       ],
       0,
-      "68e1b6bb13c99df39c86df2b0c8d825e"
+      "840fcdcf6f866b6163f6bcd92243129a"
     ],
     [
       "Parsers.NamedGroup.serialize32_maybe_namedGroup_key",
@@ -376,7 +370,7 @@
         "projection_inverse_Prims.Cons_tl"
       ],
       0,
-      "2a9e10be7a1517dfb9e7280d0ff40778"
+      "56ef9b655b5459b1da6af489d01221e5"
     ],
     [
       "Parsers.NamedGroup.serialize32_maybe_namedGroup_key",
@@ -394,7 +388,7 @@
         "projection_inverse_Prims.Cons_tl"
       ],
       0,
-      "204dafc68261287b8ffd45a8fd071e5a"
+      "e4306ef7207b7c8ac591ffd6ce4f9d3e"
     ],
     [
       "Parsers.NamedGroup.serialize32_maybe_namedGroup_key",
@@ -406,7 +400,7 @@
         "assumption_Parsers.NamedGroup.namedGroup__uu___haseq"
       ],
       0,
-      "009f4596feb2c5476ca43c6d930958d2"
+      "400a48791eeeeecda5d3651d82973fd4"
     ],
     [
       "Parsers.NamedGroup.serialize32_maybe_namedGroup_key",
@@ -418,7 +412,7 @@
         "assumption_Parsers.NamedGroup.namedGroup__uu___haseq"
       ],
       0,
-      "fbcea38921137491b31e4a760bc98c9b"
+      "e95c27fe6dfb262751477c820c8cc20d"
     ],
     [
       "Parsers.NamedGroup.namedGroup_serializer32",
@@ -430,7 +424,7 @@
         "assumption_Parsers.NamedGroup.namedGroup__uu___haseq"
       ],
       0,
-      "bec75cf77a11910dac97528e8c3dfb9b"
+      "a8f2ea8a6767f52423e29723a23cc571"
     ],
     [
       "Parsers.NamedGroup.namedGroup_size32",
@@ -439,7 +433,7 @@
       1,
       [ "@query" ],
       0,
-      "cce73895dacab70631f2e456e32b73d7"
+      "7aeae89eb21cb9f16e0b6d109af8fcaa"
     ],
     [
       "Parsers.NamedGroup.namedGroup_validator",
@@ -457,7 +451,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata"
       ],
       0,
-      "de43854eccbefa975d6abae3a6aeb045"
+      "f0550e7fb170f0d97b00c1dfcea45689"
     ],
     [
       "Parsers.NamedGroup.namedGroup_jumper",
@@ -473,7 +467,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_low"
       ],
       0,
-      "435d66f5f7c733c16c032e3e25e6e367"
+      "f0184d9c96b274c520414c15b274b486"
     ],
     [
       "Parsers.NamedGroup.lwp_namedGroup",
@@ -487,7 +481,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind"
       ],
       0,
-      "c6ef9c59d4fc786c62cb3c78a20b62f0"
+      "e892bac7ecc04f2ffcefb5bffb75a969"
     ],
     [
       "Parsers.NamedGroup.read_maybe_namedGroup_key",
@@ -499,7 +493,7 @@
         "assumption_Parsers.NamedGroup.namedGroup__uu___haseq"
       ],
       0,
-      "60651969300f5883a8d949f6808fe0a9"
+      "a89cd3233e89304bcea6720a9f3258c3"
     ],
     [
       "Parsers.NamedGroup.namedGroup_reader",
@@ -511,7 +505,7 @@
         "assumption_Parsers.NamedGroup.namedGroup__uu___haseq"
       ],
       0,
-      "b7ac371aa88df2c1ee07f8139c35465e"
+      "2e88aee74c18badd47304cf73414cce8"
     ],
     [
       "Parsers.NamedGroup.write_maybe_namedGroup_key",
@@ -523,7 +517,7 @@
         "assumption_Parsers.NamedGroup.namedGroup__uu___haseq"
       ],
       0,
-      "c493f277521b86a5fe2471c7891889b0"
+      "3febb7e3acb3ce1cd20d261788f3e764"
     ],
     [
       "Parsers.NamedGroup.lserialize_maybe_namedGroup_key",
@@ -543,7 +537,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind"
       ],
       0,
-      "e7b4b291ef6a3658813bb177c60a6198"
+      "2a956a90db4af2a0bbb168c2c2d2bf3a"
     ],
     [
       "Parsers.NamedGroup.namedGroup_writer",
@@ -555,7 +549,7 @@
         "assumption_Parsers.NamedGroup.namedGroup__uu___haseq"
       ],
       0,
-      "2de08c11a67e7080edbaad024f389ea7"
+      "8e7565c2ca1061016756906a3a34fcc8"
     ],
     [
       "Parsers.NamedGroup.namedGroup_lserializer",
@@ -573,7 +567,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind"
       ],
       0,
-      "77e49f2d65d90b07805134da1a990fec"
+      "e6045649fd82c3bd55f17f48b962da07"
     ],
     [
       "Parsers.NamedGroup.namedGroup_bytesize_eqn",
@@ -601,7 +595,7 @@
         "typing_Parsers.NamedGroup.namedGroup_serializer"
       ],
       0,
-      "255ed0829e37fe174b20987e376482ae"
+      "482c901cbfd3e3ced41f3e8bb82bbab5"
     ]
   ]
 ]

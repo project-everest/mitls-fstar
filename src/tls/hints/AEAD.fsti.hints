@@ -14,7 +14,7 @@
         "typing_AEAD.ivlen", "typing_FStar.UInt32.v"
       ],
       0,
-      "750b2d576828071dcbb551a7a5f57074"
+      "5265cac828f92691a6fba85f96daa964"
     ],
     [
       "AEAD.aadmax",
@@ -23,7 +23,7 @@
       1,
       [ "@query" ],
       0,
-      "b303e0101d2e7e3a461a58c1f9d090da"
+      "f891ff4c8f3f32bb94e3d6eb6ce77a58"
     ],
     [
       "AEAD.cipher",
@@ -41,7 +41,7 @@
         "typing_AEAD.taglen", "typing_FStar.UInt32.v"
       ],
       0,
-      "ded5aecbb4c4395ee80445971082d68c"
+      "d729d5d985e881d014326a9970b177fd"
     ],
     [
       "AEAD.cipher32",
@@ -66,7 +66,7 @@
         "typing_Spec.Poly1305.size_key"
       ],
       0,
-      "9a98d5365e7a206351420eb08c57e4b2"
+      "7ec304df57fa0f0693488fee8e10c737"
     ],
     [
       "AEAD.mk_entry",
@@ -83,7 +83,7 @@
         "typing_Crypto.Plain.as_bytes"
       ],
       0,
-      "9b00e0e93e712d9039eed3e36391c743"
+      "dc2432f33f43000b991133ceb759a684"
     ],
     [
       "AEAD.entry_injective",
@@ -107,7 +107,7 @@
         "typing_FStar.UInt32.v"
       ],
       0,
-      "a403fabd727f861bf713bb61a4869756"
+      "5e6c891574cdd4cc3699a0d744545d78"
     ],
     [
       "AEAD.fresh_addresses",
@@ -122,7 +122,7 @@
         "refinement_interpretation_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
       ],
       0,
-      "0bd73c440ef063270d8df11e99440b06"
+      "1ac25b4be381e480585b8dba04c65727"
     ],
     [
       "AEAD.fresh_addresses",
@@ -137,7 +137,7 @@
         "refinement_interpretation_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
       ],
       0,
-      "14124b6e2514b1d16d66b6ae6bac08dc"
+      "5982e914309581b6a889f9744c2821b1"
     ],
     [
       "AEAD.ok_plain_len_32",
@@ -151,7 +151,7 @@
         "typing_FStar.UInt32.v"
       ],
       0,
-      "b669793d5d368c666feb557e4a20f725"
+      "531afcb7f3456cca94a0ede38d7bbbf6"
     ],
     [
       "AEAD.frame_log",
@@ -159,12 +159,11 @@
       2,
       1,
       [
-        "@MaxIFuel_assumption", "@query", "b2t_def", "equation_Prims.l_and",
-        "equation_Prims.squash", "l_and-interp",
-        "refinement_interpretation_Tm_refine_2de20c066034c13bf76e9c0b94f4806c"
+        "@MaxIFuel_assumption", "@query",
+        "refinement_interpretation_Tm_refine_04b296cb8d5ff9306fd5bf15008bf0dd"
       ],
       0,
-      "518d5aa44761df9b9e75e987ffad0fb7"
+      "efb393e3dc789258dc83c827d5b2f6a6"
     ],
     [
       "AEAD.gen",
@@ -179,7 +178,7 @@
         "refinement_interpretation_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
       ],
       0,
-      "76644cb635d69974fbd9fa6be78ac473"
+      "c78691d64e39ecad523991731d62ab64"
     ]
   ]
 ]
