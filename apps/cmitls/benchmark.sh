@@ -3,7 +3,7 @@
 rm -f results
 
 for i in $(seq 10); do \
-    DYLD_LIBRARY_PATH=../../src/tls/extract/Kremlin-Library:../../src/pki:../../../MLCrypto/openssl \
+    DYLD_LIBRARY_PATH=../../src/tls/extract/Karamel-Library:../../src/pki:../../../MLCrypto/openssl \
                      gtime -f '%U' ./cmitls.exe 0.0.0.0 4443 100000 -quiet 2>&1 | tail -1 | tee -a results;
 done
 
