@@ -1096,7 +1096,7 @@ vector is permitted.
    For instance, PSK, HS, etc extensions should all be done in one function each.
    This seems to make this prepareExtensions more modular. *)
 
-// We define these functions at top-level so that Kremlin can compute their pointers
+// We define these functions at top-level so that KaRaMeL can compute their pointers
 // when passed to higher-order functions.
 // REMARK: could use __proj__MkpskInfo__item__allow_psk_resumption, but it's a mouthful.
 private let allow_psk_resumption x = x.allow_psk_resumption

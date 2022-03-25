@@ -30,7 +30,7 @@ unfold val trace: s:string -> ST unit
   (ensures (fun h0 _ h1 -> h0 == h1))
 unfold let trace = if DebugFlags.debug_HSL then print else (fun _ -> ())
 
-// FIXME(ADL): the ghost transcript is buggy in the Kremlin-extracted version
+// FIXME(ADL): the ghost transcript is buggy in the KaRaMeL-extracted version
 
 let erased_transcript : Type0 =
     if false then hs_transcript

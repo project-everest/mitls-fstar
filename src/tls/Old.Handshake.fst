@@ -82,7 +82,7 @@ type machineState =
   | S_Complete
 
 //17-03-24 consider using instead "if role = Client then clientState else serverServer"
-//17-03-24 but that may break extraction to Kremlin and complicate typechecking
+//17-03-24 but that may break extraction to KaRaMeL and complicate typechecking
 //17-03-24 we could also use two refinements.
 
 // Removed error states, consider adding again to ensure the machine is stuck?

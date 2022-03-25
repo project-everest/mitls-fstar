@@ -4,7 +4,7 @@ open FStar.List.Tot
 
 (* Some basic utility functions for closure converting arguments
    to the higher-order combinators in the list library ...
-   for use with KreMLin extraction *)
+   for use with KaRaMeL extraction *)
 let rec filter_aux (#a:Type)
                    (#b:Type)
                    (env:b)
