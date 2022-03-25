@@ -18,7 +18,7 @@
         "refinement_interpretation_Tm_refine_3b696352b7083d7cdedaf5f16a488c07"
       ],
       0,
-      "fb8e84dbdf56343c88531f706f280164"
+      "60853c07b74e1444508b98c50c78fd6d"
     ],
     [
       "TLS.Handshake.Client.agile_transcript_base",
@@ -46,7 +46,7 @@
         "refinement_interpretation_Tm_refine_b4edb39fc58de02b09fca497ce7da315"
       ],
       0,
-      "fc0336f6fdb8b8d42e109a91356a4985"
+      "11382283c214010991f8dbb52019dac8"
     ],
     [
       "TLS.Handshake.Client.agile_transcript_variant",
@@ -75,7 +75,7 @@
         "typing_TLS.Handshake.Client.agile_transcript_defined"
       ],
       0,
-      "2ab5c57071c333b716df2e7986a8fc6b"
+      "0a6245b2f87c82e683cbb1df7248cbc0"
     ],
     [
       "TLS.Handshake.Client.agile_transcript_footprint",
@@ -90,7 +90,7 @@
         "typing_TLS.Handshake.Client.agile_transcript_defined"
       ],
       0,
-      "22ab8fcd81224ba745b782181b8bdc6b"
+      "87afc2c1fa4e07188be365be4709a79c"
     ],
     [
       "TLS.Handshake.Client.agile_transcript_frame",
@@ -129,7 +129,7 @@
         "typing_tok_Spec.Hash.Definitions.SHA2_384@tok"
       ],
       0,
-      "2a1294838624fc97186ca6322d5fe7aa"
+      "0a7bc548899d21d1937fcbbf0f225612"
     ],
     [
       "TLS.Handshake.Client.agile_transcript_create",
@@ -191,7 +191,7 @@
         "typing_tok_LowParse.Spec.Base.ParserStrong@tok"
       ],
       0,
-      "cb2b4e71bad6b5c617b767c66c5f9a3f"
+      "bfe0f2cb14b0db6c8fbdb9a6f7eeb542"
     ],
     [
       "TLS.Handshake.Client.agile_transcript_free",
@@ -232,7 +232,7 @@
         "typing_TLS.Handshake.Client.agile_transcript_defined"
       ],
       0,
-      "4de930cd558b1b2d370f416169c2f5d7"
+      "7cc2d2afea1b4d305d90275ff7e46899"
     ],
     [
       "TLS.Handshake.Client.client_Binders",
@@ -251,6 +251,7 @@
         "constructor_distinct_FStar.Integers.W8",
         "constructor_distinct_FStar.Integers.Winfinite",
         "constructor_distinct_Lib.IntTypes.PUB",
+        "constructor_distinct_Lib.IntTypes.S16",
         "constructor_distinct_Lib.IntTypes.U1",
         "constructor_distinct_Lib.IntTypes.U128",
         "constructor_distinct_Lib.IntTypes.U16",
@@ -258,6 +259,8 @@
         "constructor_distinct_Lib.IntTypes.U8",
         "constructor_distinct_Old.HMAC.UFCMA.HMAC_Binder",
         "constructor_distinct_Prims.Cons", "constructor_distinct_Prims.Nil",
+        "constructor_distinct_Spec.Blake2.Blake2B",
+        "constructor_distinct_Spec.Blake2.Blake2S",
         "constructor_distinct_Spec.Hash.Definitions.SHA2_256",
         "constructor_distinct_Spec.Hash.Definitions.SHA2_384",
         "data_elim_Old.HMAC.UFCMA.Key",
@@ -265,7 +268,7 @@
         "data_elim_Prims.Cons",
         "data_typing_intro_Old.HMAC.UFCMA.HMAC_Binder@tok",
         "disc_equation_Parsers.ClientHelloExtension.CHE_pre_shared_key",
-        "disc_equation_Prims.Cons", "disc_equation_Prims.Nil", "eq2-interp",
+        "disc_equation_Prims.Cons", "disc_equation_Prims.Nil",
         "equality_tok_FStar.Integers.W16@tok",
         "equality_tok_FStar.Integers.W32@tok",
         "equality_tok_FStar.Integers.W64@tok",
@@ -273,6 +276,7 @@
         "equality_tok_FStar.Integers.Winfinite@tok",
         "equality_tok_Lib.IntTypes.PUB@tok",
         "equality_tok_Lib.IntTypes.U32@tok",
+        "equality_tok_Spec.Blake2.Blake2S@tok",
         "equality_tok_Spec.Hash.Definitions.SHA2_256@tok",
         "equality_tok_Spec.Hash.Definitions.SHA2_384@tok",
         "equation_EverCrypt.HMAC.supported_alg",
@@ -287,9 +291,9 @@
         "equation_FStar.UInt.size", "equation_FStar.UInt.uint_t",
         "equation_HMAC.ha", "equation_Hacl.Hash.Definitions.hash_len",
         "equation_HandshakeMessages.ch", "equation_Lib.IntTypes.bits",
-        "equation_Lib.IntTypes.pub_int_v", "equation_Lib.IntTypes.unsigned",
-        "equation_Lib.IntTypes.v", "equation_Negotiation.ha",
-        "equation_Old.HMAC.UFCMA.alg", "equation_Old.HMAC.UFCMA.binderId",
+        "equation_Lib.IntTypes.pub_int_v", "equation_Lib.IntTypes.v",
+        "equation_Negotiation.ha", "equation_Old.HMAC.UFCMA.alg",
+        "equation_Old.HMAC.UFCMA.binderId",
         "equation_Old.HMAC.UFCMA.keyrepr", "equation_Old.HMAC.UFCMA.keysize",
         "equation_Old.HMAC.UFCMA.tag", "equation_Old.KeySchedule.binderId",
         "equation_Old.KeySchedule.binderKey",
@@ -297,10 +301,8 @@
         "equation_Old.KeySchedule.trivial",
         "equation_Parsers.PskBinderEntry.pskBinderEntry",
         "equation_Parsers.Random.random",
-        "equation_ParsersAux.Binders.ch_bound", "equation_Prims.eq2",
-        "equation_Prims.nat", "equation_Prims.squash",
-        "equation_Spec.Hash.Definitions.word_length",
-        "equation_Spec.Poly1305.size_key",
+        "equation_ParsersAux.Binders.ch_bound", "equation_Prims.nat",
+        "equation_Spec.Blake2.wt", "equation_Spec.Poly1305.size_key",
         "equation_TLS.Handshake.Client.agile_transcript",
         "equation_TLS.Handshake.Client.agile_transcript_defined",
         "equation_TLS.Handshake.Client.agile_transcript_footprint",
@@ -342,9 +344,11 @@
         "projection_inverse_Prims.Nil_a",
         "refinement_interpretation_Tm_refine_01eac1db03c934bf91dcdae8ea4ae6a2",
         "refinement_interpretation_Tm_refine_05e15190c946858f68c69156f585f95a",
+        "refinement_interpretation_Tm_refine_0803109b57c1d7ff6d718eadfd44ea16",
         "refinement_interpretation_Tm_refine_0ec011aea9f93256a3547ad9f0c667f1",
         "refinement_interpretation_Tm_refine_22cd46bfa9701240f3c51fb554271fe4",
-        "refinement_interpretation_Tm_refine_2de20c066034c13bf76e9c0b94f4806c",
+        "refinement_interpretation_Tm_refine_355e0d8be8685b42438297f920e7f419",
+        "refinement_interpretation_Tm_refine_387e6d282145573240ab7b8a4b94cce5",
         "refinement_interpretation_Tm_refine_3b696352b7083d7cdedaf5f16a488c07",
         "refinement_interpretation_Tm_refine_3cba5c8585eece6ba50d0a3a4260abf7",
         "refinement_interpretation_Tm_refine_454f95a02bb1160ff9aa8f34fa16c66e",
@@ -358,14 +362,17 @@
         "refinement_interpretation_Tm_refine_f13070840248fced9d9d60d77bdae3ec",
         "typing_FStar.Bytes.len",
         "typing_FStar.Monotonic.HyperStack.get_tip",
-        "typing_Old.HMAC.UFCMA.alg", "typing_Old.HMAC.UFCMA.keysize",
+        "typing_Lib.IntTypes.unsigned", "typing_Old.HMAC.UFCMA.alg",
+        "typing_Old.HMAC.UFCMA.keysize", "typing_Spec.Blake2.wt",
         "typing_Spec.Poly1305.size_key",
         "typing_TLS.Handshake.Client.agile_transcript_footprint",
+        "typing_tok_Lib.IntTypes.U32@tok",
+        "typing_tok_Spec.Blake2.Blake2S@tok",
         "typing_tok_Spec.Hash.Definitions.SHA2_256@tok",
         "typing_tok_Spec.Hash.Definitions.SHA2_384@tok"
       ],
       0,
-      "14bd489ac451f05b59c19395d88b52a1"
+      "cae2dd875d6d48a2a1e5bdecfe4d070a"
     ],
     [
       "TLS.Handshake.Client.client13_Finished2",
@@ -380,7 +387,7 @@
         "refinement_interpretation_Tm_refine_718c573ebd58cec9c9a14dccb75c6b8f"
       ],
       0,
-      "d805fae95432b1110bcb5184d5cd74ef"
+      "4bbf7f0a4a4f09fa71211d17fe32bc79"
     ],
     [
       "TLS.Handshake.Client.client13_Finished2",
@@ -403,7 +410,7 @@
         "refinement_interpretation_Tm_refine_aae46a3ac8bab0eae5b39c745f69e667"
       ],
       0,
-      "4141a5f3cd46e69e5ffe0678d1c71af5"
+      "135aa4cb22e32bf999b473f4a601f71a"
     ],
     [
       "TLS.Handshake.Client.client13_nego_cb",
@@ -440,7 +447,7 @@
         "typing_TLSInfo.safe_region"
       ],
       0,
-      "90f0b0595d085a00544b0fafd40a7577"
+      "c0a5c3140cb3305a09435c3253755195"
     ]
   ]
 ]

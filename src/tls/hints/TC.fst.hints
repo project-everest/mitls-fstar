@@ -12,7 +12,7 @@
         "refinement_interpretation_Tm_refine_e62da5b5ef8432bbdb836eda7b300df7"
       ],
       0,
-      "c64846d0ffab2e75df66f659350c9112"
+      "aad4ee36ada22863caffed6e6c2342d7"
     ],
     [
       "TC.__proj__Step__item__x",
@@ -25,7 +25,7 @@
         "refinement_interpretation_Tm_refine_3d302c448cf959d0b5d939310536dbf3"
       ],
       0,
-      "2808a3f849b18fd12a4e8b4a39818205"
+      "237e4f37e0e0f21e21fc4247b01751a7"
     ],
     [
       "TC.__proj__Step__item__y",
@@ -38,7 +38,7 @@
         "refinement_interpretation_Tm_refine_3d302c448cf959d0b5d939310536dbf3"
       ],
       0,
-      "99ffd56e478f96547a78dad5b4944801"
+      "207240a1c47447d3ffaf7a1fb0aa827a"
     ],
     [
       "TC.__proj__Step__item___2",
@@ -46,14 +46,11 @@
       2,
       1,
       [
-        "@MaxIFuel_assumption", "@query", "disc_equation_TC.Step",
-        "proj_equation_TC.Step_x", "proj_equation_TC.Step_y",
-        "projection_inverse_BoxBool_proj_0", "projection_inverse_TC.Step_x",
-        "projection_inverse_TC.Step_y",
+        "@MaxIFuel_assumption", "@query", "data_elim_TC.Step",
         "refinement_interpretation_Tm_refine_3d302c448cf959d0b5d939310536dbf3"
       ],
       0,
-      "8e5dafae2646d71a556c4fe6f5a930f1"
+      "d89fd3f08905f2307603d5ea773a0251"
     ],
     [
       "TC.__proj__Closure__item__x",
@@ -66,7 +63,7 @@
         "refinement_interpretation_Tm_refine_944fff9e9967e026fba7d60d29cb01e7"
       ],
       0,
-      "c7dc7cf449340d68c0231b2987166d5e"
+      "f5b88120b3da82f664a226f1c95015c0"
     ],
     [
       "TC.__proj__Closure__item__y",
@@ -79,7 +76,7 @@
         "refinement_interpretation_Tm_refine_944fff9e9967e026fba7d60d29cb01e7"
       ],
       0,
-      "49d3528d300777369f3f95be22e98a65"
+      "e1caaa73edefaec09f46855f078b08e6"
     ],
     [
       "TC.__proj__Closure__item__z",
@@ -92,7 +89,7 @@
         "refinement_interpretation_Tm_refine_944fff9e9967e026fba7d60d29cb01e7"
       ],
       0,
-      "c68d65b6d4f39ece3e404466b74de143"
+      "21952cda252f274af400e59ba827fbfb"
     ],
     [
       "TC.__proj__Closure__item___3",
@@ -100,14 +97,11 @@
       2,
       1,
       [
-        "@MaxIFuel_assumption", "@query", "disc_equation_TC.Closure",
-        "proj_equation_TC.Closure_x", "proj_equation_TC.Closure_y",
-        "projection_inverse_BoxBool_proj_0",
-        "projection_inverse_TC.Closure_x", "projection_inverse_TC.Closure_y",
+        "@MaxIFuel_assumption", "@query", "data_elim_TC.Closure",
         "refinement_interpretation_Tm_refine_944fff9e9967e026fba7d60d29cb01e7"
       ],
       0,
-      "e6261d26a0e518716a11175af9aa862d"
+      "f72e40a4b38b8452684518b010376781"
     ],
     [
       "TC.__proj__Closure__item___4",
@@ -115,14 +109,11 @@
       2,
       1,
       [
-        "@MaxIFuel_assumption", "@query", "disc_equation_TC.Closure",
-        "proj_equation_TC.Closure_y", "proj_equation_TC.Closure_z",
-        "projection_inverse_BoxBool_proj_0",
-        "projection_inverse_TC.Closure_y", "projection_inverse_TC.Closure_z",
+        "@MaxIFuel_assumption", "@query", "data_elim_TC.Closure",
         "refinement_interpretation_Tm_refine_944fff9e9967e026fba7d60d29cb01e7"
       ],
       0,
-      "5ef83773d28af5fa12334d26c9e5eb8a"
+      "3da76518eb4f77a4b38d62cf3ccefc95"
     ],
     [
       "TC.closure_reflexive",
@@ -134,7 +125,7 @@
         "token_correspondence_TC.closure@tok", "true_interp"
       ],
       0,
-      "fafbada418929524c71b33bb140bc340"
+      "826ed6ed65698570b174338329d43ed6"
     ],
     [
       "TC.closure_transitive",
@@ -143,7 +134,7 @@
       1,
       [ "@query", "true_interp" ],
       0,
-      "a8151515e4c34f4cb02715733ee925cb"
+      "4e7e9e2dbef32949b45a008e24e2d7e6"
     ],
     [
       "TC.reflexive_transitive_closure",
@@ -152,7 +143,7 @@
       1,
       [ "@query", "equation_FStar.Preorder.preorder_rel" ],
       0,
-      "a277aeb8c9e67d2f82f3763fa73c1961"
+      "ec285b81526f284129fca1da323c9831"
     ],
     [
       "TC.p",
@@ -165,7 +156,7 @@
         "fuel_guarded_inversion_TC.state"
       ],
       0,
-      "a9fdae537a7e5c567d16a675d2667302"
+      "883ce793db9d11d61ef8ac2c77221365"
     ],
     [
       "TC.q",
@@ -178,7 +169,7 @@
         "fuel_guarded_inversion_TC.state"
       ],
       0,
-      "c318569314aac346f05557e9d093a8fb"
+      "cb21e83a8b2494f1b05b6e3a1c698f80"
     ],
     [
       "TC.hp",
@@ -196,7 +187,7 @@
         "refinement_interpretation_Tm_refine_39596c55cd79182dea5accd2db42dec8"
       ],
       0,
-      "3f5d9fccb72d0a2c176251763df47cbd"
+      "9e2a0f472a031aa58938f714227c85bd"
     ],
     [
       "TC.f",
@@ -214,7 +205,7 @@
         "token_correspondence_TC.closure@tok"
       ],
       0,
-      "869280c304a14ee69d1b0a1c08a6af48"
+      "bb9807fa0f78327109bb73f48daa1ae0"
     ]
   ]
 ]

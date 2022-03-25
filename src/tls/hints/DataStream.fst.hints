@@ -12,7 +12,7 @@
         "refinement_interpretation_Tm_refine_f13070840248fced9d9d60d77bdae3ec"
       ],
       0,
-      "dd27533c67d74f2ee4e3134eb7ae06e9"
+      "2b1fa1be61b95b05bd37aec60dee20e4"
     ],
     [
       "DataStream.repr",
@@ -21,7 +21,7 @@
       1,
       [ "@query", "equation_DataStream.ghost_repr" ],
       0,
-      "570f585d3b2f4115f6c521c4cd2d0020"
+      "d688acbb80d102d56febe34e9cfca093"
     ],
     [
       "DataStream.mk_fragment",
@@ -33,7 +33,7 @@
         "primitive_Prims.op_AmpAmp", "projection_inverse_BoxBool_proj_0"
       ],
       0,
-      "33b2daf1e32218a83f77eb1c5a96663a"
+      "be2e365c36c203d5654b6c4d377a5f19"
     ],
     [
       "DataStream.appFragment",
@@ -42,7 +42,7 @@
       1,
       [ "@query", "equation_DataStream.ghost_repr" ],
       0,
-      "34d5f8edb2f4b04afddb6043b683ffec"
+      "f1ab8c34742743d2b63f5ad590c9cdc0"
     ],
     [
       "DataStream.appBytes",
@@ -51,7 +51,7 @@
       1,
       [ "@query", "equation_DataStream.ghost_repr" ],
       0,
-      "b49ebc7406537647c65675268bf318e2"
+      "28b13bce2b525b55f8478904e95022b9"
     ],
     [
       "DataStream.delta",
@@ -68,7 +68,7 @@
         "typing_FStar.Bytes.bytes"
       ],
       0,
-      "efa465cd4697e1b4e07e70ee47cece49"
+      "ac30ad94071d559ebde2c69fb3461a29"
     ],
     [
       "DataStream.__proj__Data__item___0",
@@ -81,7 +81,7 @@
         "refinement_interpretation_Tm_refine_0d466ae495b3961c5a09f777ca3640cd"
       ],
       0,
-      "343c629fa600e37943fb5e061c7345ee"
+      "ec55f669f10a9294dda0c474516eef8e"
     ],
     [
       "DataStream.__proj__Alert__item___0",
@@ -94,7 +94,7 @@
         "refinement_interpretation_Tm_refine_36ed55116eca5cfa741045f75917d7b2"
       ],
       0,
-      "a9a3a6897269b52c658e84cc22a50050"
+      "f98cdfd271d0d838109ba9dc33302155"
     ],
     [
       "DataStream.final",
@@ -109,7 +109,7 @@
         "fuel_guarded_inversion_DataStream.delta"
       ],
       0,
-      "d64089322a4fc68aabad04aa500014ce"
+      "7aa7c41eb8acd76580db2b1049a9ae32"
     ],
     [
       "DataStream.finalized",
@@ -122,11 +122,12 @@
         "binder_x_0afe7076ab7c3944b08749f79d359184_0",
         "binder_x_8734431131df6dd46aa9962779a47103_1",
         "disc_equation_Prims.Cons", "disc_equation_Prims.Nil",
-        "equality_tok_Prims.LexTop@tok", "fuel_guarded_inversion_Prims.list",
-        "subterm_ordering_Prims.Cons"
+        "equation_Prims.op_Equals_Equals_Equals",
+        "fuel_guarded_inversion_Prims.list",
+        "projection_inverse_BoxBool_proj_0", "subterm_ordering_Prims.Cons"
       ],
       0,
-      "7e6ba19174e01a92004a294a11a96dec"
+      "956983e9b28cf17626cd327eeda8c3a6"
     ],
     [
       "DataStream.wellformed",
@@ -140,7 +141,7 @@
         "fuel_guarded_inversion_Prims.list"
       ],
       0,
-      "0c6380b368b5c69a3e0cbc5d30897635"
+      "1a936e5cdff4efa8b78c2c36d84e6909"
     ],
     [
       "DataStream.empty_is_well_formed",
@@ -163,35 +164,7 @@
         "typing_Mem.tls_region"
       ],
       0,
-      "65d894c6a18160bed01b6152a1900df6"
-    ],
-    [
-      "DataStream.__proj__State__item__log",
-      1,
-      2,
-      1,
-      [
-        "@MaxIFuel_assumption", "@query", "bool_inversion", "bool_typing",
-        "disc_equation_FStar.Pervasives.Native.Some",
-        "equation_TLSInfo.authId", "proj_equation_DataStream.State_region",
-        "projection_inverse_BoxBool_proj_0",
-        "projection_inverse_DataStream.State_region",
-        "refinement_interpretation_Tm_refine_ce76b661643d2140682dd3c2b703af52"
-      ],
-      0,
-      "ba903c5d3f6f10d043f2996a78a4d9c7"
-    ],
-    [
-      "DataStream.__proj__State__item__ctr",
-      1,
-      2,
-      1,
-      [
-        "@query", "proj_equation_DataStream.State_region",
-        "projection_inverse_DataStream.State_region"
-      ],
-      0,
-      "96d6b0971e659811acabaa6e9f4e3cda"
+      "8e55edee72eb1c51caad720c12d09cbd"
     ],
     [
       "DataStream.gen",
@@ -218,7 +191,7 @@
         "typing_FStar.Monotonic.HyperHeap.rid_freeable"
       ],
       0,
-      "fb58009a57b46ad8e7663a2110c17ccf"
+      "aa1dd63f45b3cda668ffe58f84999487"
     ]
   ]
 ]

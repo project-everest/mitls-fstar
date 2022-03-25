@@ -89,7 +89,7 @@
         "typing_Spec.Poly1305.size_key"
       ],
       0,
-      "75ad6f68ec65182e3a8423c42e24b3ae"
+      "554d9b906980b0fbb479d91794e45c2a"
     ],
     [
       "Model.AE.generate_iv",
@@ -258,6 +258,7 @@
         "equality_tok_Lib.IntTypes.U32@tok",
         "equality_tok_Lib.IntTypes.U8@tok", "equation_FStar.Integers.int_t",
         "equation_Lib.IntTypes.bits", "equation_Lib.IntTypes.uint8",
+        "equation_LowParse.Bytes32.reveal_empty_",
         "equation_LowParse.Writers.Parser.u8", "equation_Model.AE.iv_length",
         "equation_Prims.nat", "equation_Spec.AES.gf8",
         "equation_Spec.AES.irred", "equation_Spec.Agile.AEAD.iv_length",
@@ -269,6 +270,8 @@
         "equation_Spec.Chacha20.size_block",
         "equation_Spec.Chacha20.size_nonce", "equation_Spec.GaloisField.gf",
         "function_token_typing_Lib.IntTypes.uint8",
+        "function_token_typing_LowParse.Bytes32.reveal_empty_",
+        "function_token_typing_LowParse.Writers.Parser.size_parse_empty",
         "function_token_typing_LowParse.Writers.Parser.u8", "int_inversion",
         "lemma_FStar.Seq.Base.lemma_len_slice",
         "lemma_FStar.UInt.pow2_values", "primitive_Prims.op_Addition",
@@ -280,10 +283,12 @@
         "projection_inverse_FStar.Integers.Signed__0",
         "projection_inverse_FStar.Integers.Unsigned__0",
         "projection_inverse_Spec.GaloisField.GF_t",
+        "refinement_interpretation_Tm_refine_4af05b5e47cae5268604015582b5a0c3",
         "refinement_interpretation_Tm_refine_542f9d4f129664613f2483a6c88bc7c2",
         "refinement_interpretation_Tm_refine_77b0fa83edbe8eb50f3ab2c1d856125e",
         "refinement_interpretation_Tm_refine_81407705a0828c2c1b1976675443f647",
         "refinement_interpretation_Tm_refine_90a1661541e4f009452ab107b47b5955",
+        "refinement_interpretation_Tm_refine_9622b3811cb9912b4802e95afd612d3d",
         "refinement_interpretation_Tm_refine_b19a1c83769dccbdda4cf44bd4e3d295",
         "refinement_interpretation_Tm_refine_b913a3f691ca99086652e0a655e72f17",
         "refinement_interpretation_Tm_refine_ce5a1bd8437baa640019cd70bf466fc0",
@@ -378,7 +383,7 @@
         "typing_Spec.GaloisField.__proj__GF__item__t"
       ],
       0,
-      "7d61dbfe12c25dbf1b2deedddbdf8d2d"
+      "4d6bb8751fec4e32ff68d9318157baac"
     ],
     [
       "Model.AE.decrypt",
@@ -458,7 +463,7 @@
         "typing_Spec.GaloisField.__proj__GF__item__t"
       ],
       0,
-      "3c3f4cb5e72f2db9f567d045df26ad63"
+      "6482e79478c7219ba12767174552bea8"
     ],
     [
       "Model.AE.decrypt",
@@ -496,6 +501,7 @@
         "equation_FStar.Monotonic.HyperStack.mem",
         "equation_Lib.IntTypes.bits", "equation_Lib.IntTypes.uint8",
         "equation_Lib.IntTypes.unsigned",
+        "equation_LowParse.Bytes32.reveal_empty_",
         "equation_LowParse.Writers.Parser.u8", "equation_Model.AE.iv_length",
         "equation_Prims.nat", "equation_Spec.AES.gf8",
         "equation_Spec.AES.irred", "equation_Spec.Agile.AEAD.cipher",
@@ -510,6 +516,8 @@
         "equation_Spec.Chacha20.size_block",
         "equation_Spec.Chacha20.size_nonce", "equation_Spec.GaloisField.gf",
         "function_token_typing_Lib.IntTypes.uint8",
+        "function_token_typing_LowParse.Bytes32.reveal_empty_",
+        "function_token_typing_LowParse.Writers.Parser.size_parse_empty",
         "function_token_typing_LowParse.Writers.Parser.u8", "int_inversion",
         "lemma_FStar.Seq.Base.lemma_len_slice",
         "lemma_FStar.UInt.pow2_values", "primitive_Prims.op_Addition",
@@ -528,10 +536,12 @@
         "refinement_interpretation_Tm_refine_1cc41c3630856663dcfa11216c896f06",
         "refinement_interpretation_Tm_refine_353c259ac0249b0aee43feeeedb295e9",
         "refinement_interpretation_Tm_refine_365abba901205a01d0ef28ebf2198c47",
+        "refinement_interpretation_Tm_refine_4af05b5e47cae5268604015582b5a0c3",
         "refinement_interpretation_Tm_refine_542f9d4f129664613f2483a6c88bc7c2",
         "refinement_interpretation_Tm_refine_81407705a0828c2c1b1976675443f647",
         "refinement_interpretation_Tm_refine_82d6066c0f45dbdc3c6f8a2fb221678c",
         "refinement_interpretation_Tm_refine_90a1661541e4f009452ab107b47b5955",
+        "refinement_interpretation_Tm_refine_9622b3811cb9912b4802e95afd612d3d",
         "refinement_interpretation_Tm_refine_b913a3f691ca99086652e0a655e72f17",
         "refinement_interpretation_Tm_refine_ce5a1bd8437baa640019cd70bf466fc0",
         "refinement_interpretation_Tm_refine_de8080fdc4bd6678af723874a7d70466",

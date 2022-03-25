@@ -24,7 +24,7 @@
         "typing_LowStar.PrefixFreezableBuffer.prefix_freezable_preorder"
       ],
       0,
-      "d35d3e6245e759d5d06eb5389ec4d3d0"
+      "0eca7f0d7f9643171353ee60bb381907"
     ],
     [
       "Stash.alloc_post_mem_common",
@@ -39,7 +39,7 @@
         "refinement_interpretation_Tm_refine_4503e54b32f534ac7f257835081d8551"
       ],
       0,
-      "88686c5cb3d1549b277622ad0212046a"
+      "86a3b1c462d3738d322e8b69cdae25ee"
     ],
     [
       "Stash.gcmalloc",
@@ -82,7 +82,7 @@
         "typing_FStar.UInt.fits", "typing_FStar.UInt32.v"
       ],
       0,
-      "daf7b9bd20162524254446fe41d4c8e6"
+      "312f66d50faaac5497261cd1c65d0a49"
     ],
     [
       "Stash.malloc",
@@ -125,7 +125,7 @@
         "typing_FStar.UInt.fits", "typing_FStar.UInt32.v"
       ],
       0,
-      "34ea30708a79955fbc8bdbd4da235cd9"
+      "1dff8f5b61dd43e344f5bf8b524a5f9f"
     ],
     [
       "Stash.alloca",
@@ -165,7 +165,7 @@
         "typing_FStar.UInt32.v"
       ],
       0,
-      "27891261c1f30ef429360a8c0483bb3f"
+      "fd42a8651f9118efcfb4e3b843e8baf5"
     ],
     [
       "Stash.witness_compl",
@@ -177,7 +177,7 @@
         "equation_LowStar.PrefixFreezableBuffer.u8"
       ],
       0,
-      "84dd94d9409d6bb8cec7bde3fa7ef931"
+      "7d4bc7be54767c45a8381ecab30cac51"
     ],
     [
       "Stash.wvalid_stable",
@@ -235,7 +235,7 @@
         "typing_LowStar.PrefixFreezableBuffer.prefix_freezable_preorder"
       ],
       0,
-      "33aeaaf862424a6ebfa3f7def6c85232"
+      "d3639817dce3d1a887832043ab3560a5"
     ],
     [
       "Stash.buffer_frozen_until",
@@ -253,7 +253,7 @@
         "typing_LowStar.PrefixFreezableBuffer.prefix_freezable_preorder"
       ],
       0,
-      "6df446efb2d1ddb7705c5d411b7f6166"
+      "273fc2a05a659f4ad8dafbdc008f0668"
     ],
     [
       "Stash.witness_valid",
@@ -302,7 +302,7 @@
         "typing_LowStar.PrefixFreezableBuffer.prefix_freezable_preorder"
       ],
       0,
-      "21cad67d7b2102793ecaf0602989146f"
+      "b2c6f5e9948699f93c677a19f839b131"
     ],
     [
       "Stash.recall_valid",
@@ -310,27 +310,25 @@
       2,
       1,
       [
-        "@MaxIFuel_assumption", "@query", "b2t_def",
+        "@MaxIFuel_assumption", "@query",
         "data_elim_LowParse.Low.Base.IRepr", "equation_LowParse.Bytes.byte",
         "equation_LowParse.Low.Base.irepr_pos",
         "equation_LowParse.Slice.buffer_srel_of_srel",
         "equation_LowParse.Slice.srel_of_buffer_srel",
         "equation_LowParse.Spec.Base.parser_kind",
-        "equation_LowStar.PrefixFreezableBuffer.u8", "equation_Prims.squash",
+        "equation_LowStar.PrefixFreezableBuffer.u8",
         "equation_Stash.buffer_frozen_until", "equation_Stash.irepr",
         "equation_Stash.stash", "equation_Stash.witness_compl",
         "fuel_guarded_inversion_LowParse.Low.Base.irepr",
         "fuel_guarded_inversion_LowParse.Spec.Base.parser_kind_",
-        "l_and-interp", "primitive_Prims.op_LessThanOrEqual",
         "proj_equation_LowParse.Low.Base.IRepr_pos",
         "proj_equation_LowParse.Slice.Mkslice_base",
-        "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_2de20c066034c13bf76e9c0b94f4806c",
         "refinement_interpretation_Tm_refine_42417c0a732848736b70205b54b36236",
-        "refinement_interpretation_Tm_refine_4503e54b32f534ac7f257835081d8551"
+        "refinement_interpretation_Tm_refine_4503e54b32f534ac7f257835081d8551",
+        "refinement_interpretation_Tm_refine_4bdf870972fd184910443d65c7a5e63e"
       ],
       0,
-      "90187f430fcd0b7b3b284cecb3fcec3b"
+      "185d584406ac997951baaa9b033753ed"
     ],
     [
       "Stash.iaccess",
@@ -394,7 +392,7 @@
         "typing_Stash.max_stash_length"
       ],
       0,
-      "15213e9906506768fcaaf1d20b6f7946"
+      "d9fa76daac7bebf9e8378457d7402287"
     ],
     [
       "Stash.iread",
@@ -416,7 +414,7 @@
         "refinement_interpretation_Tm_refine_ff86bcc1e34eca6f35fe8b7f1b4a7d95"
       ],
       0,
-      "84598850e35250a1ba377db8de397419"
+      "07ad7fad133fd216eabd481796958257"
     ],
     [
       "Stash.ijump",
@@ -446,7 +444,7 @@
         "typing_FStar.Ghost.reveal", "typing_FStar.UInt32.t"
       ],
       0,
-      "19fea247d6887272e38031797153a289"
+      "5911b66f7ae867be5bcad5e1e5a2b98f"
     ],
     [
       "Stash.freezable_buffer_writable_intro",
@@ -503,7 +501,7 @@
         "typing_LowStar.PrefixFreezableBuffer.prefix_freezable_preorder"
       ],
       0,
-      "4e26f752c3af6a34c4d389a82c3a8894"
+      "1b3fdd665c7a8e6c372bb0839fa06a9a"
     ],
     [
       "Stash.freeze_valid",
@@ -585,7 +583,7 @@
         "typing_Stash.max_stash_length"
       ],
       0,
-      "3ae5ab3f93063d2ee1219ceed20e3030"
+      "13ddccee365ca7c85a011fa5607920fe"
     ],
     [
       "Stash.frozen_until_frame",
@@ -630,7 +628,7 @@
         "typing_Stash.max_stash_length"
       ],
       0,
-      "11700f6b1214c7089b4e1fc9f4443914"
+      "e2a0c6a94bbdece8d3377083c2355179"
     ],
     [
       "Stash.iwrite",
@@ -708,7 +706,7 @@
         "typing_Stash.max_stash_length"
       ],
       0,
-      "e0ec7bb1b3b4c1be67612eb759bae81f"
+      "30250f018b0ce4cd3caadc87f09d06e0"
     ],
     [
       "Stash.icopy",
@@ -789,7 +787,7 @@
         "typing_Stash.max_stash_length"
       ],
       0,
-      "9bbf539f78d2448c71533909f9576632"
+      "f5c16520033560102127919f2a0aebc4"
     ]
   ]
 ]

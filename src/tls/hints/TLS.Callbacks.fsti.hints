@@ -23,7 +23,7 @@
         "typing_FStar.Bytes.bytes", "typing_FStar.UInt32.t"
       ],
       0,
-      "56a2b98c82ec3ae3ab3fffb6fab5d8bc"
+      "3557ff783789c87d91e4522de646c89c"
     ],
     [
       "TLS.Callbacks.ticketInfo",
@@ -44,7 +44,7 @@
         "refinement_kinding_Tm_refine_4efafdaa406d7e0dd35ef4b76469edf6"
       ],
       0,
-      "4fc3624db81181d7057a911b17d938e3"
+      "8b6e7e29d35d074abb89f821a7582f87"
     ],
     [
       "TLS.Callbacks.__proj__TicketInfo_12__item___0",
@@ -58,7 +58,7 @@
         "refinement_interpretation_Tm_refine_fd38f55f421e64f6425fae42481a904b"
       ],
       0,
-      "9fb49af11d2672ec18b37a61a4bb06c2"
+      "56b26d8e076911db61ce46a69ba9a8b2"
     ],
     [
       "TLS.Callbacks.__proj__TicketInfo_13__item___0",
@@ -72,7 +72,7 @@
         "refinement_interpretation_Tm_refine_6df7baa2141df663431627b6f4f2b142"
       ],
       0,
-      "6166d8f839f85e5eb48c92c160a3ca54"
+      "7dbc17ab2518cdcc0c1c0f0b8fdcab60"
     ],
     [
       "TLS.Callbacks.empty_custom_extensions",
@@ -80,14 +80,13 @@
       2,
       1,
       [
-        "@MaxIFuel_assumption", "@query", "eq2-interp", "equation_Prims.eq2",
-        "equation_Prims.squash",
+        "@MaxIFuel_assumption", "@query",
         "function_token_typing_Parsers.UnknownExtensions.unknownExtensions_list_bytesize_nil",
         "projection_inverse_BoxInt_proj_0",
-        "refinement_interpretation_Tm_refine_2de20c066034c13bf76e9c0b94f4806c"
+        "refinement_interpretation_Tm_refine_1c7fb7c557e66f97d0794e747af1c707"
       ],
       0,
-      "c6c0b0a0a58e2d5ce7d5304c57fd2448"
+      "cdca58cc96b1b95a03a15a0db1db70f9"
     ],
     [
       "TLS.Callbacks.add_custom_extension",
@@ -109,7 +108,7 @@
         "typing_FStar.Bytes.reveal", "typing_FStar.Seq.Base.length"
       ],
       0,
-      "8dc0aa00838e71aa4c36d88ba1aa8430"
+      "8f30d5ea74331117ffae443cf3d30ca2"
     ],
     [
       "TLS.Callbacks.nego_action",
@@ -130,7 +129,7 @@
         "typing_FStar.Bytes.bytes"
       ],
       0,
-      "f2fc796d8e640cceb6444d2b115529e1"
+      "1037d3c6f0e604c043c8ab76ade70920"
     ],
     [
       "TLS.Callbacks.__proj__Nego_retry__item__cookie_extra",
@@ -144,7 +143,7 @@
         "refinement_interpretation_Tm_refine_f3ba8d5f2a05d1289e19ebf2dac3fb3c"
       ],
       0,
-      "6d51715ae2d93ef48684e5c30a9ab4ad"
+      "feaa8853878560d01015831d0cbb3703"
     ],
     [
       "TLS.Callbacks.__proj__Nego_accept__item__extra_ext",
@@ -158,7 +157,7 @@
         "refinement_interpretation_Tm_refine_9665927b65cd31c97c29ee6cbb7133a4"
       ],
       0,
-      "2e98bf8632de25634f7eba9ab8dedab8"
+      "73f8d0c34bc66398da767e80310f1261"
     ],
     [
       "TLS.Callbacks.cert_select_cb_fun",
@@ -179,7 +178,7 @@
         "typing_FStar.UInt64.t"
       ],
       0,
-      "d701afbe4f34cad354e316fd5bd907e3"
+      "31aeaf32b85182c14a684870b28dfebf"
     ],
     [
       "TLS.Callbacks.cert_verify_cb_fun",
@@ -194,7 +193,7 @@
         "typing_TLS.Callbacks.cert_parse"
       ],
       0,
-      "a22279a16e84c4c3462ebe93d7a6eee0"
+      "352a7b04bc909f8c52897fa2be59bd3c"
     ]
   ]
 ]

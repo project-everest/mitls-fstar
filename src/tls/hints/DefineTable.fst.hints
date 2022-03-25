@@ -11,7 +11,7 @@
         "equation_DefineTable.dt", "equation_Mem.model", "typing_Mem.model"
       ],
       0,
-      "29f97f05b7781b084214e1a842bd52f3"
+      "0d9105113a10b25ef450ede1bf73d4b9"
     ],
     [
       "DefineTable.real",
@@ -30,7 +30,7 @@
         "typing_Mem.tls_region"
       ],
       0,
-      "fa25e24e61ee0e2b9285305aacaba69b"
+      "2b9c4825c4a622a596d28582710de5bb"
     ],
     [
       "DefineTable.loc",
@@ -39,7 +39,7 @@
       1,
       [ "@query", "projection_inverse_BoxBool_proj_0" ],
       0,
-      "fb649d782ad4be13053ddb604a041236"
+      "82f84ba1eda1674e1015ada91bc62995"
     ],
     [
       "DefineTable.lemma_fresh_frame",
@@ -73,7 +73,7 @@
         "typing_Tm_abs_8360f68b1ef1ebd2579ae5799903dc5e"
       ],
       0,
-      "8313e4ed5b3ef8746ff82683f39e9f94"
+      "6c7101861de8e743b99ee2b7531d977e"
     ],
     [
       "DefineTable.extended",
@@ -82,7 +82,7 @@
       1,
       [ "@query", "projection_inverse_BoxBool_proj_0" ],
       0,
-      "709990b458a2eeb76011a3f791a23758"
+      "1db7c47bef4d55403da6a899ad4f3675"
     ],
     [
       "DefineTable.unchanged",
@@ -91,7 +91,7 @@
       1,
       [ "@query" ],
       0,
-      "1768f046a331aafdce5c6689eeb16903"
+      "e6d36bf515af47c5a91dc8e76b35bd22"
     ],
     [
       "DefineTable.lemma_unchanged_frame",
@@ -121,7 +121,7 @@
         "typing_Tm_abs_8360f68b1ef1ebd2579ae5799903dc5e"
       ],
       0,
-      "c58ad7cf296a4cade1eecf6f5816cf60"
+      "bfb92a61c989d1afd8c31e396e2a9a75"
     ],
     [
       "DefineTable.lemma_disjoint_unchanged",
@@ -152,7 +152,7 @@
         "typing_Tm_abs_8360f68b1ef1ebd2579ae5799903dc5e"
       ],
       0,
-      "d2c34b8bd23f314926db8b91b95d75db"
+      "ee985ea41d374ce5ea782a8aa834d617"
     ],
     [
       "DefineTable.alloc",
@@ -254,7 +254,7 @@
         "typing_Tm_abs_8360f68b1ef1ebd2579ae5799903dc5e", "unit_typing"
       ],
       0,
-      "bed857961f9ed9458a1984ab79aa92c6"
+      "6a4e8ea5cd1015eb759ee53988a782bb"
     ],
     [
       "DefineTable.lookup",
@@ -271,7 +271,7 @@
         "projection_inverse_BoxBool_proj_0"
       ],
       0,
-      "613254c2d9b2ac0c3c03b2e91e5bf9b5"
+      "ab420d8f2ec614d6e529bf3d343e9e9a"
     ],
     [
       "DefineTable.lookup",
@@ -353,7 +353,7 @@
         "typing_Mem.tls_define_region", "unit_inversion"
       ],
       0,
-      "4a70396ea9b425ec32597df4ecdc5a3d"
+      "0688b8018045b956d6afb4b24334fb2b"
     ],
     [
       "DefineTable.extend",
@@ -472,7 +472,7 @@
         "unit_typing"
       ],
       0,
-      "09f6028976d229115762bbff4631ffcc"
+      "dcddb980210bbd130b066a755db945a2"
     ],
     [
       "DefineTable.fold_gtot",
@@ -487,7 +487,7 @@
         "subterm_ordering_Prims.Cons"
       ],
       0,
-      "4f9dbdaebf56c6027ec2d2098005bf67"
+      "245ca6680d7bf83db9aebcd8dd3e0655"
     ],
     [
       "DefineTable.lemma_empty_fp_none",
@@ -500,7 +500,7 @@
         "token_correspondence_DefineTable.empty_fp"
       ],
       0,
-      "0e71f80bdaa74de3871e1b8729850c22"
+      "52e013c508fafc67045b579a9a15a8ec"
     ],
     [
       "DefineTable.lemma_fold_constant",
@@ -522,8 +522,9 @@
         "binder_x_b0da20d3f3386ca382ca70af26731256_3",
         "constructor_distinct_Prims.Cons", "constructor_distinct_Prims.Nil",
         "disc_equation_Prims.Cons", "disc_equation_Prims.Nil",
-        "equation_Prims.eqtype",
+        "equation_Prims.eqtype", "equation_Prims.op_Equals_Equals_Equals",
         "equation_with_fuel_DefineTable.fold_gtot.fuel_instrumented",
+        "fuel_guarded_inversion_Prims.dtuple2",
         "fuel_guarded_inversion_Prims.list",
         "function_token_typing_LowStar.Monotonic.Buffer.loc",
         "kinding_Prims.dtuple2@tok", "projection_inverse_BoxBool_proj_0",
@@ -535,7 +536,7 @@
         "typing_Tm_abs_a4b551d234dd70a803776de0dccac7a0"
       ],
       0,
-      "c17d23a287e7ab7b8fd1477fd9756e98"
+      "7e00fe0ccb8e1430f0b49b424cdf6258"
     ],
     [
       "DefineTable.footprint",
@@ -544,7 +545,7 @@
       1,
       [ "@query", "projection_inverse_BoxBool_proj_0" ],
       0,
-      "5b3a86d91d6e700a5555d3ee1d6fc8c8"
+      "f2db25c89dd693f463ff815f38f84a52"
     ],
     [
       "DefineTable.lemma_footprint_empty_fp",
@@ -570,7 +571,7 @@
         "typing_FStar.Monotonic.HyperStack.get_tip", "unit_inversion"
       ],
       0,
-      "b0caa3fbcf3d01c75d1857b179b99ae6"
+      "6db5b2db0f4474af1ec9c2daeab45ac4"
     ],
     [
       "DefineTable.lemma_footprint_empty",
@@ -600,7 +601,7 @@
         "typing_Tm_abs_6ba36691ee58dee85cd144324b083848"
       ],
       0,
-      "9cbcbaa571de370d64df5c98696cc717"
+      "980079a9953eba9a18342d00d37e452a"
     ],
     [
       "DefineTable.lemma_footprint_frame",
@@ -622,7 +623,7 @@
         "typing_FStar.Monotonic.HyperStack.get_tip"
       ],
       0,
-      "4276d577bb71e9e5b891322e856e22bd"
+      "34620036b22f2733530916b5fdb8c619"
     ],
     [
       "DefineTable.lemma_footprint_extend",
@@ -676,7 +677,7 @@
         "typing_Tm_abs_8360f68b1ef1ebd2579ae5799903dc5e"
       ],
       0,
-      "9e70719e6580f0b043802d5f44cd4fe4"
+      "46e35f609ba07b4bcd4570152898ade5"
     ],
     [
       "DefineTable.lemma_fp_includes",
@@ -742,7 +743,7 @@
         "unit_typing"
       ],
       0,
-      "4a67fff7203c1698d1a2515832b126db"
+      "ea218e271d5f60f8c1a7bee6cacec997"
     ],
     [
       "DefineTable.lemma_footprint_includes",
@@ -771,7 +772,7 @@
         "unit_inversion", "unit_typing"
       ],
       0,
-      "b7901b2acc02744379bdd9c943028def"
+      "2de59e2f7efec59ffb2852e11a52590c"
     ],
     [
       "DefineTable.lemma_forall_empty",
@@ -793,7 +794,7 @@
         "typing_FStar.Monotonic.DependentMap.empty"
       ],
       0,
-      "b2dc127bed80430b30fbb6d3f4fea13d"
+      "6450950870659fc5b2225636746388aa"
     ],
     [
       "DefineTable.lemma_forall_elim",
@@ -802,7 +803,7 @@
       1,
       [ "@query", "equation_DefineTable.dt_forall" ],
       0,
-      "57dcf23f04a3672bc0e734a99dfa7e89"
+      "4545093ec78815fe82b5a7294d333416"
     ],
     [
       "DefineTable.lemma_forall_extend",
@@ -862,7 +863,7 @@
         "typing_Tm_abs_8360f68b1ef1ebd2579ae5799903dc5e", "unit_inversion"
       ],
       0,
-      "8b01ab2363099f488d6f210cbcf4e9bc"
+      "b3d898fb44feca4a5cd3f1d1ace554ee"
     ],
     [
       "DefineTable.lemma_forall_frame",
@@ -909,7 +910,7 @@
         "typing_Tm_abs_8360f68b1ef1ebd2579ae5799903dc5e", "unit_inversion"
       ],
       0,
-      "5106feb3ce6a8a0339dfba4f7373de26"
+      "a8503f66d96769fec1ab427fda03d00f"
     ]
   ]
 ]

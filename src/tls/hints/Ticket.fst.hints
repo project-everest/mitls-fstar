@@ -12,7 +12,7 @@
         "fuel_guarded_inversion_Ticket.ticket"
       ],
       0,
-      "68631664e1f22b279ef5d027292f81fa"
+      "8296b91dede24ff06f400c2c186cd22d"
     ],
     [
       "Ticket.write_ticket12",
@@ -194,7 +194,7 @@
         "typing_tok_Parsers.Boolean.B_true@tok"
       ],
       0,
-      "204e9e067208a47aca2e648cbe1e90ab"
+      "5531d87c57cd0648c193a19383eca80f"
     ],
     [
       "Ticket.store_bytes_strong",
@@ -202,65 +202,68 @@
       0,
       1,
       [
-        "@MaxIFuel_assumption", "@query", "bool_inversion",
-        "constructor_distinct_FStar.Integers.Unsigned",
+        "@MaxIFuel_assumption", "@query",
         "constructor_distinct_FStar.Integers.W16",
         "constructor_distinct_FStar.Integers.W32",
         "constructor_distinct_FStar.Integers.W8",
         "constructor_distinct_Lib.IntTypes.PUB",
-        "constructor_distinct_Lib.IntTypes.U32", "eq2-interp",
+        "constructor_distinct_Lib.IntTypes.U32",
+        "constructor_distinct_Lib.IntTypes.U8",
         "equality_tok_FStar.Integers.W16@tok",
         "equality_tok_FStar.Integers.W32@tok",
         "equality_tok_FStar.Integers.W8@tok",
         "equality_tok_Lib.IntTypes.PUB@tok",
+        "equality_tok_Lib.IntTypes.U1@tok",
         "equality_tok_Lib.IntTypes.U32@tok",
+        "equality_tok_Lib.IntTypes.U8@tok",
         "equation_EverCrypt.Helpers.uint8_t", "equation_FStar.Bytes.lbuffer",
         "equation_FStar.Bytes.lbytes",
         "equation_FStar.HyperStack.ST.equal_domains",
-        "equation_FStar.Integers.int_t", "equation_FStar.Integers.uint_8",
         "equation_FStar.Monotonic.Heap.equal_dom",
         "equation_FStar.Monotonic.HyperHeap.hmap",
-        "equation_FStar.Monotonic.HyperStack.is_tip",
-        "equation_FStar.Monotonic.HyperStack.is_wf_with_ctr_and_tip",
         "equation_FStar.Monotonic.HyperStack.mem",
         "equation_Lib.IntTypes.int_t", "equation_Lib.IntTypes.pub_int_t",
+        "equation_Lib.IntTypes.unsigned",
         "equation_LowParse.Bytes32.reveal_empty_",
+        "equation_LowParse.Writers.Parser.u8",
         "equation_LowStar.Buffer.buffer",
-        "equation_LowStar.Buffer.trivial_preorder", "equation_Prims.eq2",
-        "equation_Prims.nat", "equation_Prims.squash",
-        "function_token_typing_FStar.Integers.uint_8",
+        "equation_LowStar.Buffer.trivial_preorder", "equation_Prims.nat",
+        "equation_Spec.AES.gf8", "equation_Spec.AES.irred",
+        "equation_Spec.GaloisField.gf",
         "function_token_typing_FStar.Monotonic.Heap.heap",
         "function_token_typing_LowParse.Bytes32.reveal_empty_",
+        "function_token_typing_LowParse.Writers.Parser.u8",
         "lemma_FStar.Bytes.empty_unique",
         "lemma_FStar.HyperStack.ST.lemma_same_refs_in_all_regions_intro",
-        "lemma_FStar.Map.lemma_ContainsDom",
         "lemma_FStar.Seq.Base.lemma_eq_intro",
         "lemma_FStar.Set.lemma_equal_refl", "lemma_FStar.UInt32.uv_inv",
         "lemma_LowStar.Monotonic.Buffer.length_as_seq",
         "lemma_LowStar.Monotonic.Buffer.modifies_refl",
-        "primitive_Prims.op_Equality", "projection_inverse_BoxBool_proj_0",
+        "primitive_Prims.op_Equality", "proj_equation_Spec.GaloisField.GF_t",
+        "projection_inverse_BoxBool_proj_0",
         "projection_inverse_FStar.Integers.Signed__0",
         "projection_inverse_FStar.Integers.Unsigned__0",
+        "projection_inverse_Spec.GaloisField.GF_t",
         "refinement_interpretation_Tm_refine_05e15190c946858f68c69156f585f95a",
         "refinement_interpretation_Tm_refine_182efe239776588e16adcd3300cba56d",
-        "refinement_interpretation_Tm_refine_2de20c066034c13bf76e9c0b94f4806c",
         "refinement_interpretation_Tm_refine_542f9d4f129664613f2483a6c88bc7c2",
         "refinement_interpretation_Tm_refine_71ea40360194fe02ee1272538c9cacbc",
+        "refinement_interpretation_Tm_refine_9622b3811cb9912b4802e95afd612d3d",
         "refinement_interpretation_Tm_refine_b913a3f691ca99086652e0a655e72f17",
         "refinement_interpretation_Tm_refine_ccb75c52c008723aac3295be8b941f4e",
         "refinement_interpretation_Tm_refine_d83f8da8ef6c1cb9f71d1465c1bb1c55",
+        "refinement_interpretation_Tm_refine_de8080fdc4bd6678af723874a7d70466",
         "typing_FStar.Bytes.empty_bytes", "typing_FStar.Bytes.len",
-        "typing_FStar.Bytes.reveal", "typing_FStar.Map.contains",
         "typing_FStar.Map.domain", "typing_FStar.Monotonic.HyperHeap.rid",
         "typing_FStar.Monotonic.HyperStack.get_hmap",
-        "typing_FStar.Monotonic.HyperStack.get_tip",
         "typing_FStar.Seq.Base.empty",
         "typing_LowStar.Buffer.trivial_preorder",
         "typing_LowStar.Monotonic.Buffer.as_seq",
-        "typing_LowStar.Monotonic.Buffer.loc_buffer"
+        "typing_LowStar.Monotonic.Buffer.loc_buffer", "typing_Spec.AES.gf8",
+        "typing_Spec.GaloisField.__proj__GF__item__t"
       ],
       0,
-      "8205852c7027ed6f4ea3236f9556253c"
+      "22e482abe5abfafac725ced1c9d4b969"
     ],
     [
       "Ticket.write_ticket13",
@@ -454,7 +457,7 @@
         "typing_Spec.Poly1305.size_key"
       ],
       0,
-      "618716d6b0ba415da47911fa68876316"
+      "5690f3393bd08dbd366b3236c19c9b2e"
     ],
     [
       "Ticket.write_ticket",
@@ -487,7 +490,7 @@
         "refinement_interpretation_Tm_refine_dfbbf1e16a8a694b7ac6278e1c9a8535"
       ],
       0,
-      "0619d6873bee56415301b1885509462f"
+      "39569e7f703433533172f8627ce8a3d2"
     ],
     [
       "Ticket.ticketContents_pskinfo_ticketContents_of_ticket",
@@ -512,7 +515,7 @@
         "projection_inverse_Parsers.TicketContents13.MkticketContents13_nonce"
       ],
       0,
-      "e4853f3c757d675e4214b2c6c9b21a1b"
+      "da652f85b51f49b987e12dfb3217bb01"
     ],
     [
       "Ticket.check_ticket12_low",
@@ -524,7 +527,7 @@
         "refinement_interpretation_Tm_refine_c096e3f4bd066a09b80d0dd10debaa71"
       ],
       0,
-      "a28b2fd176a3bc68d56dbc8057f6a0cf"
+      "fe83ec6aaaa97d0293f309082f96e7d7"
     ],
     [
       "Ticket.check_ticket12_low",
@@ -597,7 +600,7 @@
         "typing_Parsers.TicketContents12_master_secret.ticketContents12_master_secret_parser_kind"
       ],
       0,
-      "a6918e321c840c333210093648c0beed"
+      "0a4665b07c2c7339cc39b509622fc2b5"
     ]
   ]
 ]
