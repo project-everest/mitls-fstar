@@ -1,12 +1,12 @@
 FSTAR_HOME    ?= ../FStar
-KREMLIN_HOME  ?= ../kremlin
+KRML_HOME  ?= ../karamel
 HACL_HOME     ?= ../hacl-star
 MLCRYPTO_HOME ?= ../MLCrypto
 MITLS_HOME    ?= .
 
-all: model-all ocaml-all kremlin-all test
+all: model-all ocaml-all karamel-all test
 
-model-% verify-% ocaml-% kremlin-% quic-%:
+model-% verify-% ocaml-% karamel-% quic-%:
 	$(MAKE) -C $(MITLS_HOME)/src/tls $*
 
 test clean:
