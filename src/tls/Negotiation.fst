@@ -590,6 +590,8 @@ let final_extensions_alt
   | _ -> Correct []
 *)
 
+#push-options "--z3rlimit 32"
+
 noextract
 let final_extensions_new
   (cfg: CFG.miTLSConfig) (edi: bool) (l: list Parsers.ResumeInfo13.resumeInfo13) (now: U32.t)
@@ -623,6 +625,8 @@ let final_extensions_new
     else
       correct [CHE_psk_key_exchange_modes [Psk_ke; Psk_dhe_ke]]
   | _ -> correct []
+
+#pop-options
 
 (* TODO: sanity-check wrt. old final_extensions *)
 
