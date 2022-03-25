@@ -2,10 +2,10 @@ EXTRACT='Nothing'
 FLAVOR?=Model
 
 # ADL (31 Aug. 2018) Disabling ocaml-all during transition to EverCrypt
-all: refresh-depend model-all kremlin-all #ocaml-all
+all: refresh-depend model-all karamel-all #ocaml-all
 
 clean-depend:
-	rm -f cache/OCaml/.depend cache/Kremlin/.depend cache/Model/.depend
+	rm -f cache/OCaml/.depend cache/Karamel/.depend cache/Model/.depend
 
 refresh-depend: clean-depend
 	+$(MAKE) -C ../parsers gen
@@ -14,13 +14,13 @@ SHELL=/bin/bash
 
 .PHONY: clean-%
 clean-c:
-	rm -rf extract/Kremlin-{Library,Internal-Test}/{*.c,*/*.c}
+	rm -rf extract/Karamel-{Library,Internal-Test}/{*.c,*/*.c}
 
 ocaml-%: refresh-depend
 	+$(MAKE) -f Makefile.OCaml $*
 
-kremlin-%: refresh-depend
-	+$(MAKE) -f Makefile.Kremlin $*
+karamel-%: refresh-depend
+	+$(MAKE) -f Makefile.Karamel $*
 
 model-% verify-%: refresh-depend
 	+$(MAKE) -f Makefile.Model $*
@@ -29,10 +29,10 @@ quic-%: refresh-depend
 	+$(MAKE) -C ../../apps/quicMinusNet $* -k
 
 #ADL (31 Aug. 2018) Disabling ocaml-test during transition to EverCrypt
-test: refresh-depend kremlin-test quic-test #model-test ocaml-test
+test: refresh-depend karamel-test quic-test #model-test ocaml-test
 
-clean: ocaml-clean kremlin-clean quic-clean model-clean
-	rm -rf extract/Kremlin extract/OCaml extract/copied
+clean: ocaml-clean karamel-clean quic-clean model-clean
+	rm -rf extract/Karamel extract/OCaml extract/copied
 	+$(MAKE) -C ../parsers clean
 
 VFLAGS=

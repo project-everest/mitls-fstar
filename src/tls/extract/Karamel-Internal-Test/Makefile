@@ -1,17 +1,17 @@
-# Note: please backport any changes here to ../Kremlin-Library/Makefile
+# Note: please backport any changes here to ../Karamel-Library/Makefile
 all: test.exe
 
 UNAME		= $(shell uname)
 MARCH		?= x86_64
 
 MITLS_HOME 	= ../../../..
-KREMLIN_HOME    ?= ../../../../../kremlin
+KRML_HOME    ?= ../../../../../karamel
 MLCRYPTO_HOME	?= ../../../../../MLCrypto
 EVERCRYPT_HOME	?= ../../../../../hacl-star/providers
 
 LDOPTS += -levercrypt
 LDOPTS += -L$(EVERCRYPT_HOME)/../dist/mitls
-LDOPTS += -L$(KREMLIN_HOME)/kremlib/dist/generic -lkremlib
+LDOPTS += -L$(KRML_HOME)/krmllib/dist/generic -lkrmllib
 
 ifeq ($(OS),Windows_NT)
   ifeq ($(shell uname -o),Cygwin)
@@ -53,9 +53,9 @@ else
 endif
 endif
 
-INCLUDE_DIRS 	= $(KREMLIN_HOME)/kremlib/dist/minimal $(KREMLIN_HOME)/include include stub pki ffi .
+INCLUDE_DIRS 	= $(KRML_HOME)/krmllib/dist/minimal $(KRML_HOME)/include include stub pki ffi .
 
-# Note: see comment in Makefile.Kremlin to see why we're re-extracting
+# Note: see comment in Makefile.Karamel to see why we're re-extracting
 # Crypto.Symmetric.Bytes rather than using the one from secure/
 
 FILES = $(patsubst %.c,%,$(wildcard *.c)) \
@@ -76,7 +76,7 @@ else
 CFLAGS += -DNO_OPENSSL
 endif
 
-LDOPTS += -L$(MITLS_HOME)/src/pki -lmipki $(KREMLIN_HOME)/kremlib/dist/generic/libkremlib.a
+LDOPTS += -L$(MITLS_HOME)/src/pki -lmipki $(KRML_HOME)/krmllib/dist/generic/libkrmllib.a
 
 %.d: %.c
 	@set -e; rm -f $@; \

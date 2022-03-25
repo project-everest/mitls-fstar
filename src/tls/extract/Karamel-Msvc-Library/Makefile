@@ -1,4 +1,4 @@
-# Note: please backport any changes here to ../Kremlin-Internal-Test/Makefile
+# Note: please backport any changes here to ../Karamel-Internal-Test/Makefile
 
 UNAME		= $(shell uname)
 MARCH		?= x86_64
@@ -6,11 +6,11 @@ MARCH		?= x86_64
 MITLS_HOME 	= ../../../..
 MLCRYPTO_HOME	?= ../../../../../MLCrypto
 EVERCRYPT_HOME	?= ../../../../../hacl-star/providers
-KREMLIN_HOME    ?= ../../../../../kremlin
+KRML_HOME    ?= ../../../../../karamel
 
 LDOPTS += -levercrypt
 LDOPTS += -L$(EVERCRYPT_HOME)/../dist/mitls
-LDOPTS += -L$(KREMLIN_HOME)/kremlib/dist/generic -lkremlib
+LDOPTS += -L$(KRML_HOME)/krmllib/dist/generic -lkrmllib
 
 ifeq ($(OS),Windows_NT)
   PATH := $(MITLS_HOME)/src/pki:$(PATH)
@@ -50,10 +50,10 @@ else
 endif
 endif
 
-INCLUDE_DIRS 	= $(KREMLIN_HOME)/kremlib/dist/minimal $(KREMLIN_HOME)/include include stub ffi .
+INCLUDE_DIRS 	= $(KRML_HOME)/krmllib/dist/minimal $(KRML_HOME)/include include stub ffi .
 
 # we are now packaging most miTLS modules into meaningful C compilation units
-# See src/tls/Makefile.Kremlin for the list of bundles that are used
+# See src/tls/Makefile.Karamel for the list of bundles that are used
 # All extracted C files should be part of the DLL
 FILES = $(patsubst %.c,%,$(wildcard *.c)) \
   stub/mitlsffi stub/buffer_bytes stub/RegionAllocator
@@ -84,7 +84,7 @@ all: libmitls.$(SO)
 
 libmitls.$(SO): $(addsuffix .o,$(FILES))
 	rm -rf $(EVERCRYPT_HOME)/../dist/mitls/*.dll.a # newer dynamic link is not properly setup on mitls/master ... persist with static linking
-	$(CC) $^ -shared -o $@ $(LDOPTS) $(KREMLIN_HOME)/kremlib/dist/generic/libkremlib.a
+	$(CC) $^ -shared -o $@ $(LDOPTS) $(KRML_HOME)/krmllib/dist/generic/libkrmllib.a
 
 clean:
 	rm -fr $(addsuffix .o,$(FILES)) $(addsuffix .c,$(FILES)) libmitls.$(SO)

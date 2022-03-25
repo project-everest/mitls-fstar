@@ -1,7 +1,7 @@
 HACL_HOME       ?= ../../../hacl-star
 FSTAR_HOME      ?= ../../../FStar
 MITLS_HOME      ?= ../..
-KREMLIN_HOME    ?= ../../../kremlin
+KRML_HOME    ?= ../../../karamel
 MLCRYPTO_HOME   ?= ../../../MLCrypto
 EVERCRYPT_HOME	?= $(HACL_HOME)/providers
 ifndef LOWPARSE_HOME
@@ -21,10 +21,10 @@ include $(HACL_HOME)/Makefile.include
 
 INCLUDE_PATHS = \
   $(ALL_HACL_DIRS) \
-  $(KREMLIN_HOME)/include \
-  $(KREMLIN_HOME)/kremlib/compat \
-  $(KREMLIN_HOME)/kremlib/obj \
-  $(KREMLIN_HOME)/kremlib \
+  $(KRML_HOME)/include \
+  $(KRML_HOME)/krmllib/compat \
+  $(KRML_HOME)/krmllib/obj \
+  $(KRML_HOME)/krmllib \
   $(MITLS_HOME)/libs/ffi \
   $(LOWPARSE_HOME) \
   $(MITLS_HOME)/src/parsers/generated \
@@ -177,13 +177,13 @@ endif
 			$(notdir $(subst .checked,,$<)) \
 	)
 
-# Avoids polluting the KreMLin source tree with a random .o file
-extract/copied/%.c: $(KREMLIN_HOME)/kremlib/%.c
+# Avoids polluting the KaRaMeL source tree with a random .o file
+extract/copied/%.c: $(KRML_HOME)/krmllib/%.c
 	mkdir -p $(dir $@)
 	cp $< $@
 
 # Don't delete these files otherwise one can't run Makefile.OCaml and
-# Makefile.Kremlin in parallel
+# Makefile.Karamel in parallel
 .PRECIOUS: extract/copied/%.c
 
 

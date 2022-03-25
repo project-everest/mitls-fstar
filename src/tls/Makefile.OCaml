@@ -10,7 +10,7 @@ FLAVOR=OCaml
 EXTENSION=ml
 #Don't extract modules from fstarlib (NOEXTRACT_MODULES)
 #And also some specific ones from mitls that are implemented in C
-EXTRACT='OCaml:* -Prims -FStar -LowStar +FStar.Test +FStar.Kremlin.Endianness -CoreCrypto -CryptoTypes -EverCrypt.Bytes -EverCrypt -DHDB -LowCProvider -HaclProvider -FFICallbacks -Crypto.AEAD -Crypto.Symmetric -Crypto.Plain -Spec.Loops -Buffer.Utils -C +C.Loops -LowParse.TacLib -LowParse.SLow.Tac -LowParse.Spec.Tac -BufferBytes'
+EXTRACT='OCaml:* -Prims -FStar -LowStar +FStar.Test +FStar.Krml.Endianness -CoreCrypto -CryptoTypes -EverCrypt.Bytes -EverCrypt -DHDB -LowCProvider -HaclProvider -FFICallbacks -Crypto.AEAD -Crypto.Symmetric -Crypto.Plain -Spec.Loops -Buffer.Utils -C +C.Loops -LowParse.TacLib -LowParse.SLow.Tac -LowParse.Spec.Tac -BufferBytes'
 SPECINC=$(MITLS_HOME)/src/tls/concrete-flags  $(MITLS_HOME)/src/tls/concrete-flags/OCaml
 
 # SMT verification is disabled, so do not record hints
@@ -30,7 +30,7 @@ OCAMLOPTS0	= -g \
 		  -I $(FFI_HOME) \
 		  -I $(HACL_HOME)/secure_api/LowCProvider \
 		  -I $(HACL_HOME)/secure_api/out/runtime_switch/ \
-		  -I $(KREMLIN_HOME)/_build/kremlib \
+		  -I $(KRML_HOME)/_build/krmllib \
 		  -I test \
 		  -I extract/mlstubs \
 		  -I $(EVERCRYPT_HOME)/evercrypt/ml \
@@ -43,38 +43,38 @@ OCAMLMKLIB	= OCAMLPATH="$(FSTAR_HOME)/bin" ocamlfind mklib $(OCAMLOPTS0)
 IMPL_CHOICE 	?= runtime_switch
 
 %.o: %.c
-	$(CC) -I $(KREMLIN_HOME)/include $^ -o $@ -c
+	$(CC) -I $(KRML_HOME)/include $^ -o $@ -c
 
-LIBKREMLIB = $(KREMLIN_HOME)/kremlib/out/libkremlib.a
+LIBKRMLLIB = $(KRML_HOME)/krmllib/out/libkrmllib.a
 
 # We must insert PKI.cmx at the right spot in the list of inputs
 MITLS_INPUTS=\
     $(EXTRACT_DIR)/BufferBytes.cmx \
     $(EXTRACT_DIR)/Crypto_AEAD_Main.cmx \
-    $(KREMLIN_HOME)/_build/kremlib/C.cmx \
+    $(KRML_HOME)/_build/krmllib/C.cmx \
     $(MLCRYPTO_HOME)/CoreCrypto.cmxa \
     $(LOWC_HOME)/LowC.cmxa \
     $(FFI_HOME)/FFICallbacks.cmxa \
     $(EVERCRYPT_HOME)/out/evercrypt.cmxa \
     $(subst .ml,.cmx,$(subst TLSConstants.ml,TLSConstants.ml extract/OCaml/PKI.ml,$(ALL_ML_FILES))) \
     $(EXTRACT_DIR)/FFIRegister.cmx \
-    $(LIBKREMLIB)
+    $(LIBKRMLLIB)
 
 MITLS_BYTE_INPUTS=\
     $(EXTRACT_DIR)/BufferBytes.cmo \
     $(EXTRACT_DIR)/Crypto_AEAD_Main.cmo \
-    $(KREMLIN_HOME)/_build/kremlib/C.cmo \
+    $(KRML_HOME)/_build/krmllib/C.cmo \
     $(MLCRYPTO_HOME)/CoreCrypto.cma \
     $(LOWC_HOME)/LowC.cma \
     $(FFI_HOME)/FFICallbacks.a \
     $(subst .ml,.cmo,$(subst TLSConstants.ml,TLSConstants.ml extract/OCaml/PKI.ml,$(ALL_ML_FILES))) \
     $(EXTRACT_DIR)/FFIRegister.cmo \
-    extract/copied/kremstr.o
+    extract/copied/krmlstr.o
 
-$(LIBKREMLIB):
-	$(error Please run make -C $(KREMLIN_HOME)/kremlib to generate libkremlib.a)
+$(LIBKRMLLIB):
+	$(error Please run make -C $(KRML_HOME)/krmllib to generate libkrmllib.a)
 
-mitls.exe: $(MITLS_INPUTS) $(LIBKREMLIB)
+mitls.exe: $(MITLS_INPUTS) $(LIBKRMLLIB)
 	$(OCAMLOPT) -cclib -L../pki -cclib -lmipki \
 	  -cclib -L$(EVERCRYPT_HOME)/out -cclib -levercrypt -linkall \
 	  -linkpkg -g $^ -o $@ -thread
@@ -86,10 +86,10 @@ $(LOWC_HOME)/LowC.cmxa:
 
 # fstarlib.cmxa MUST NOT be a direct dependency of mitls.exe (if it
 # is, then it will appear several times at linking.) So we make it an
-# indirect dependency, say via kremlib.
+# indirect dependency, say via krmllib.
 
-$(KREMLIN_HOME)/_build/kremlib/C.cmx:
-	$(error KREMLIN_HOME is $(KREMLIN_HOME) and I cannot find $(KREMLIN_HOME)/_build/kremlib/C.cmx -- please run make in kremlin!)
+$(KRML_HOME)/_build/krmllib/C.cmx:
+	$(error KRML_HOME is $(KRML_HOME) and I cannot find $(KRML_HOME)/_build/krmllib/C.cmx -- please run make in karamel!)
 
 $(FSTAR_HOME)/bin/fstarlib/fstarlib.cmxa:
 	$(error FSTAR_HOME is $(FSTAR_HOME) and I cannot find $(FSTAR_HOME)/bin/fstarlib/fstarlib.cmxa -- please run make in $(FSTAR_HOME)/ulib/ml)
