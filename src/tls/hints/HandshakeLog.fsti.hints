@@ -10,10 +10,11 @@
         "@MaxIFuel_assumption", "@query",
         "binder_x_0a56e3de562c08d8ab59f4ac6f626a98_3",
         "disc_equation_Prims.Cons", "disc_equation_Prims.Nil",
-        "fuel_guarded_inversion_Prims.list", "subterm_ordering_Prims.Cons"
+        "fuel_guarded_inversion_Prims.list",
+        "projection_inverse_BoxBool_proj_0", "subterm_ordering_Prims.Cons"
       ],
       0,
-      "6e0a25367227f6c2fff2ff5860acbd4c"
+      "da0d830723874f9afb27c0d81be8f01f"
     ],
     [
       "HandshakeLog.append_transcript",
@@ -25,16 +26,16 @@
         "refinement_interpretation_Tm_refine_72e5a2aa76f3c2442b018562b3272ee5"
       ],
       0,
-      "48c35342acb7b7ae52a5bbd9c1dc8da2"
+      "e514fcb9cbafcf9cce4a1d65bfb84d14"
     ],
     [
       "HandshakeLog.narrowTag",
       1,
       2,
       1,
-      [ "@query", "assumption_FStar.UInt32.t__uu___haseq" ],
+      [ "@query" ],
       0,
-      "31045ca996c4a6f91467a364094bad53"
+      "4d1f24fb903bde2740432951418f4b78"
     ],
     [
       "HandshakeLog.modifies_one",
@@ -48,7 +49,7 @@
         "refinement_interpretation_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
       ],
       0,
-      "b6b0e4b22798cce12982abbe2f9499b0"
+      "679be6d00c2c0be3fef0fe08e66ecb9a"
     ]
   ]
 ]

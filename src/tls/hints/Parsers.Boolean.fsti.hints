@@ -10,10 +10,11 @@
         "@MaxIFuel_assumption", "@query",
         "disc_equation_Parsers.Boolean.B_false",
         "disc_equation_Parsers.Boolean.B_true",
-        "fuel_guarded_inversion_Parsers.Boolean.boolean"
+        "fuel_guarded_inversion_Parsers.Boolean.boolean",
+        "projection_inverse_BoxBool_proj_0"
       ],
       0,
-      "56be9f325a2c16e4ad28e3853944cd4c"
+      "bf5ac08e5de1844b4dd2b3de07dac926"
     ],
     [
       "Parsers.Boolean.boolean_jumper",
@@ -29,7 +30,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_low"
       ],
       0,
-      "9a4b29ebd052a8f84a3ccac56c1fa050"
+      "ad4dea41d40a795fc3c81c08a2a441f4"
     ],
     [
       "Parsers.Boolean.lwp_boolean",
@@ -43,7 +44,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind"
       ],
       0,
-      "e0b7f4aff0455029b3011b7809445a0d"
+      "5ca246d65129942b058fd4fa7fcb6d71"
     ]
   ]
 ]

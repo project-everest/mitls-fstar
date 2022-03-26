@@ -11,34 +11,29 @@
         "disc_equation_Parsers.ECCurveType.Explicit_char2",
         "disc_equation_Parsers.ECCurveType.Explicit_prime",
         "disc_equation_Parsers.ECCurveType.Named_curve",
-        "fuel_guarded_inversion_Parsers.ECCurveType.eCCurveType"
+        "fuel_guarded_inversion_Parsers.ECCurveType.eCCurveType",
+        "projection_inverse_BoxBool_proj_0"
       ],
       0,
-      "b403400e39dfe3c5cb808288801afdda"
+      "e012ad3e9c3e3936419a51d89b6b91a0"
     ],
     [
       "Parsers.ECCurveType.eCCurveType_enum",
       1,
       2,
       1,
-      [
-        "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.ECCurveType.eCCurveType__uu___haseq"
-      ],
+      [ "@query", "assumption_Parsers.ECCurveType.eCCurveType__uu___haseq" ],
       0,
-      "7d0081f32537c077a22b26f8b353f659"
+      "d6e036023f1aa0e6a5d5c02ba4eb3ba3"
     ],
     [
       "Parsers.ECCurveType.synth_eCCurveType",
       1,
       2,
       1,
-      [
-        "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.ECCurveType.eCCurveType__uu___haseq"
-      ],
+      [ "@query", "assumption_Parsers.ECCurveType.eCCurveType__uu___haseq" ],
       0,
-      "a44ba63ac7b3d127b613d5375a9f6138"
+      "ab5a38ff67fac2f3a7b23fdff5ecb436"
     ],
     [
       "Parsers.ECCurveType.synth_eCCurveType_inv",
@@ -47,13 +42,12 @@
       1,
       [
         "@MaxIFuel_assumption", "@query",
-        "assumption_FStar.UInt8.t__uu___haseq",
         "assumption_Parsers.ECCurveType.eCCurveType__uu___haseq", "b2t_def",
         "equation_Prims.squash",
         "refinement_interpretation_Tm_refine_2de20c066034c13bf76e9c0b94f4806c"
       ],
       0,
-      "8204b308f51e9f110c8addeb68b45bf8"
+      "216fa531cefb0ecbe6b10318064e3eb4"
     ],
     [
       "Parsers.ECCurveType.lemma_synth_eCCurveType_inj",
@@ -61,14 +55,13 @@
       2,
       1,
       [
-        "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.ECCurveType.eCCurveType__uu___haseq",
+        "@query", "assumption_Parsers.ECCurveType.eCCurveType__uu___haseq",
         "equation_LowParse.Spec.Combinators.synth_injective",
         "equation_Parsers.ECCurveType.synth_eCCurveType",
         "token_correspondence_Parsers.ECCurveType.synth_eCCurveType"
       ],
       0,
-      "1d33b5efcdf506d6f53338bf38252199"
+      "ddb2ac6ec6693fb50181fa97fb9b2175"
     ],
     [
       "Parsers.ECCurveType.lemma_synth_eCCurveType_inv",
@@ -76,8 +69,7 @@
       2,
       1,
       [
-        "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.ECCurveType.eCCurveType__uu___haseq",
+        "@query", "assumption_Parsers.ECCurveType.eCCurveType__uu___haseq",
         "equation_LowParse.Spec.Combinators.synth_inverse",
         "equation_Parsers.ECCurveType.synth_eCCurveType",
         "equation_Parsers.ECCurveType.synth_eCCurveType_inv",
@@ -85,31 +77,25 @@
         "token_correspondence_Parsers.ECCurveType.synth_eCCurveType_inv"
       ],
       0,
-      "f4bb6f91c73ff54ce672cfe03f77ce96"
+      "6579a791ee8740a11d3b0fa6f3abe0b8"
     ],
     [
       "Parsers.ECCurveType.parse_eCCurveType_key",
       1,
       2,
       1,
-      [
-        "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.ECCurveType.eCCurveType__uu___haseq"
-      ],
+      [ "@query", "assumption_Parsers.ECCurveType.eCCurveType__uu___haseq" ],
       0,
-      "77c1c6f309e5d77b07cb9013e40bd0c3"
+      "1c959782b0c4e8b00dc5fcc19402e27a"
     ],
     [
       "Parsers.ECCurveType.serialize_eCCurveType_key",
       1,
       2,
       1,
-      [
-        "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.ECCurveType.eCCurveType__uu___haseq"
-      ],
+      [ "@query", "assumption_Parsers.ECCurveType.eCCurveType__uu___haseq" ],
       0,
-      "e86d531df8184bba930410d86419bfb0"
+      "b2f59ba48cfddc294ec4e452da0a6db3"
     ],
     [
       "Parsers.ECCurveType.eCCurveType_parser",
@@ -117,8 +103,7 @@
       2,
       1,
       [
-        "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.ECCurveType.eCCurveType__uu___haseq",
+        "@query", "assumption_Parsers.ECCurveType.eCCurveType__uu___haseq",
         "constructor_distinct_LowParse.Spec.Base.ParserKindMetadataFail",
         "constructor_distinct_LowParse.Spec.Base.ParserKindMetadataTotal",
         "equality_tok_LowParse.Spec.Base.ParserKindMetadataTotal@tok",
@@ -130,7 +115,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata"
       ],
       0,
-      "ab2acb2e74180d1732d441a7500cf975"
+      "d36ca0727c70ff867217b4ab8ce9ce0d"
     ],
     [
       "Parsers.ECCurveType.eCCurveType_serializer",
@@ -138,8 +123,7 @@
       2,
       1,
       [
-        "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.ECCurveType.eCCurveType__uu___haseq",
+        "@query", "assumption_Parsers.ECCurveType.eCCurveType__uu___haseq",
         "constructor_distinct_LowParse.Spec.Base.ParserKindMetadataFail",
         "constructor_distinct_LowParse.Spec.Base.ParserKindMetadataTotal",
         "equality_tok_LowParse.Spec.Base.ParserKindMetadataTotal@tok",
@@ -151,7 +135,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata"
       ],
       0,
-      "1d127528ed2bb11f7e8ea7595309ba77"
+      "5878e137b72159144918bc51062d1b15"
     ],
     [
       "Parsers.ECCurveType.eCCurveType_bytesize_eq",
@@ -163,67 +147,52 @@
         "equation_Parsers.ECCurveType.eCCurveType_bytesize"
       ],
       0,
-      "839600314cb3a9ecc19a3efecc67e5d4"
+      "511f8bb4743ba23c3da7cba8e8ecdd5b"
     ],
     [
       "Parsers.ECCurveType.parse32_eCCurveType_key",
       1,
       2,
       1,
-      [
-        "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.ECCurveType.eCCurveType__uu___haseq"
-      ],
+      [ "@query", "assumption_Parsers.ECCurveType.eCCurveType__uu___haseq" ],
       0,
-      "60b30044451b8ff2b644d37610ee5471"
+      "4cc3aa7a333786c7072320fb45c5d5cf"
     ],
     [
       "Parsers.ECCurveType.parse32_eCCurveType_key",
       2,
       2,
       1,
-      [
-        "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.ECCurveType.eCCurveType__uu___haseq"
-      ],
+      [ "@query", "assumption_Parsers.ECCurveType.eCCurveType__uu___haseq" ],
       0,
-      "8ad5a8170737c05ef6a932572687c141"
+      "a171b2dfc38411eafda620c42820f45b"
     ],
     [
       "Parsers.ECCurveType.parse32_eCCurveType_key",
       3,
       2,
       1,
-      [
-        "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.ECCurveType.eCCurveType__uu___haseq"
-      ],
+      [ "@query", "assumption_Parsers.ECCurveType.eCCurveType__uu___haseq" ],
       0,
-      "2fcf0ead82e7049ef27303d44d882439"
+      "470b79ca52ed2dfad0950ad65abdb2dd"
     ],
     [
       "Parsers.ECCurveType.parse32_eCCurveType_key",
       4,
       2,
       1,
-      [
-        "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.ECCurveType.eCCurveType__uu___haseq"
-      ],
+      [ "@query", "assumption_Parsers.ECCurveType.eCCurveType__uu___haseq" ],
       0,
-      "dfa70baf6c90021dc2c3ce151a473cc2"
+      "010328d43e6286e989c85ce0ee8541dd"
     ],
     [
       "Parsers.ECCurveType.parse32_eCCurveType_key",
       5,
       2,
       1,
-      [
-        "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.ECCurveType.eCCurveType__uu___haseq"
-      ],
+      [ "@query", "assumption_Parsers.ECCurveType.eCCurveType__uu___haseq" ],
       0,
-      "fe462154c758c3910933df89ee1b098e"
+      "d19610440bae347c071a35df10e82a26"
     ],
     [
       "Parsers.ECCurveType.eCCurveType_parser32",
@@ -231,8 +200,7 @@
       2,
       1,
       [
-        "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.ECCurveType.eCCurveType__uu___haseq",
+        "@query", "assumption_Parsers.ECCurveType.eCCurveType__uu___haseq",
         "constructor_distinct_LowParse.Spec.Base.ParserKindMetadataFail",
         "constructor_distinct_LowParse.Spec.Base.ParserKindMetadataTotal",
         "equality_tok_LowParse.Spec.Base.ParserKindMetadataTotal@tok",
@@ -244,7 +212,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata"
       ],
       0,
-      "9bda5119502c1546a61821283dde2488"
+      "1b134417af6196f455cafa8fe8871946"
     ],
     [
       "Parsers.ECCurveType.serialize32_eCCurveType_key",
@@ -252,8 +220,7 @@
       2,
       1,
       [
-        "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.ECCurveType.eCCurveType__uu___haseq",
+        "@query", "assumption_Parsers.ECCurveType.eCCurveType__uu___haseq",
         "constructor_distinct_Prims.Cons", "disc_equation_Prims.Cons",
         "equation_Parsers.ECCurveType.eCCurveType_enum",
         "projection_inverse_BoxBool_proj_0",
@@ -262,7 +229,7 @@
         "projection_inverse_Prims.Cons_tl"
       ],
       0,
-      "669de492246c8c22720d2517debce7e9"
+      "6ecc2f7dcf30d2601afa6d92547ed05f"
     ],
     [
       "Parsers.ECCurveType.serialize32_eCCurveType_key",
@@ -270,8 +237,7 @@
       2,
       1,
       [
-        "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.ECCurveType.eCCurveType__uu___haseq",
+        "@query", "assumption_Parsers.ECCurveType.eCCurveType__uu___haseq",
         "constructor_distinct_Prims.Cons", "disc_equation_Prims.Cons",
         "equation_Parsers.ECCurveType.eCCurveType_enum",
         "projection_inverse_BoxBool_proj_0",
@@ -280,31 +246,25 @@
         "projection_inverse_Prims.Cons_tl"
       ],
       0,
-      "6a6e274daae89846571594c62666a5a5"
+      "93d192b0f2c41bc18dd321225e96618f"
     ],
     [
       "Parsers.ECCurveType.serialize32_eCCurveType_key",
       3,
       2,
       1,
-      [
-        "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.ECCurveType.eCCurveType__uu___haseq"
-      ],
+      [ "@query", "assumption_Parsers.ECCurveType.eCCurveType__uu___haseq" ],
       0,
-      "4faa4b649d5a3d67849ac1202032c874"
+      "8dcadace9c6ca005d528dd063d4d7e92"
     ],
     [
       "Parsers.ECCurveType.serialize32_eCCurveType_key",
       4,
       2,
       1,
-      [
-        "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.ECCurveType.eCCurveType__uu___haseq"
-      ],
+      [ "@query", "assumption_Parsers.ECCurveType.eCCurveType__uu___haseq" ],
       0,
-      "609bd567f19b6415f5e718c0a60bfd3f"
+      "4e1c7674eb039d0db2bf388a48de48ac"
     ],
     [
       "Parsers.ECCurveType.eCCurveType_serializer32",
@@ -312,8 +272,7 @@
       2,
       1,
       [
-        "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.ECCurveType.eCCurveType__uu___haseq",
+        "@query", "assumption_Parsers.ECCurveType.eCCurveType__uu___haseq",
         "constructor_distinct_LowParse.Spec.Base.ParserKindMetadataFail",
         "constructor_distinct_LowParse.Spec.Base.ParserKindMetadataTotal",
         "equality_tok_LowParse.Spec.Base.ParserKindMetadataTotal@tok",
@@ -325,7 +284,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata"
       ],
       0,
-      "a319a456ee2b8191ab9aa806431556e7"
+      "a4a5e8168d3002f684e0d8caf5c66e0c"
     ],
     [
       "Parsers.ECCurveType.eCCurveType_size32",
@@ -334,19 +293,16 @@
       1,
       [ "@query" ],
       0,
-      "21e34049d1b97ccae7e1db97225b314e"
+      "37ad93f4877ad5a3ea72c0ba4a29a28d"
     ],
     [
       "Parsers.ECCurveType.validate_eCCurveType_key",
       1,
       2,
       1,
-      [
-        "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.ECCurveType.eCCurveType__uu___haseq"
-      ],
+      [ "@query", "assumption_Parsers.ECCurveType.eCCurveType__uu___haseq" ],
       0,
-      "8a8af6aeab74b6a5ffc60e3aaa52ffed"
+      "541fc3cae883447a236e667502aebdbc"
     ],
     [
       "Parsers.ECCurveType.eCCurveType_validator",
@@ -354,8 +310,7 @@
       2,
       1,
       [
-        "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.ECCurveType.eCCurveType__uu___haseq",
+        "@query", "assumption_Parsers.ECCurveType.eCCurveType__uu___haseq",
         "constructor_distinct_LowParse.Spec.Base.ParserKindMetadataFail",
         "constructor_distinct_LowParse.Spec.Base.ParserKindMetadataTotal",
         "equality_tok_LowParse.Spec.Base.ParserKindMetadataTotal@tok",
@@ -367,7 +322,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata"
       ],
       0,
-      "820e593120b4783e0b039737fdcd3459"
+      "7be799f9909822011b9504675c5c7174"
     ],
     [
       "Parsers.ECCurveType.eCCurveType_jumper",
@@ -383,7 +338,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_low"
       ],
       0,
-      "48c0a2f9ab294872c7eaf4b32dc8ee50"
+      "1b27a8ec5802f44d045eb18702729584"
     ],
     [
       "Parsers.ECCurveType.lwp_eCCurveType",
@@ -397,7 +352,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind"
       ],
       0,
-      "fd5126d73dcdbce659efa84c19352dae"
+      "909fa65c738d1f17b8c00f3c05e4afd0"
     ],
     [
       "Parsers.ECCurveType.read_eCCurveType_key",
@@ -405,8 +360,7 @@
       2,
       1,
       [
-        "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.ECCurveType.eCCurveType__uu___haseq",
+        "@query", "assumption_Parsers.ECCurveType.eCCurveType__uu___haseq",
         "constructor_distinct_Prims.Cons", "disc_equation_Prims.Cons",
         "equation_Parsers.ECCurveType.eCCurveType_enum",
         "projection_inverse_BoxBool_proj_0",
@@ -415,7 +369,7 @@
         "projection_inverse_Prims.Cons_tl"
       ],
       0,
-      "f4308c80fb85b238f5edca2e1ca46caf"
+      "c4e24cf226d666f36553da560c179825"
     ],
     [
       "Parsers.ECCurveType.eCCurveType_reader",
@@ -423,8 +377,7 @@
       2,
       1,
       [
-        "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.ECCurveType.eCCurveType__uu___haseq",
+        "@query", "assumption_Parsers.ECCurveType.eCCurveType__uu___haseq",
         "constructor_distinct_LowParse.Spec.Base.ParserKindMetadataFail",
         "constructor_distinct_LowParse.Spec.Base.ParserKindMetadataTotal",
         "equality_tok_LowParse.Spec.Base.ParserKindMetadataTotal@tok",
@@ -436,19 +389,16 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata"
       ],
       0,
-      "7f55db0088ac27f51f9f2c67e7675820"
+      "f411a03c35106a0fb175240d35b8d2da"
     ],
     [
       "Parsers.ECCurveType.write_eCCurveType_key",
       1,
       2,
       1,
-      [
-        "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.ECCurveType.eCCurveType__uu___haseq"
-      ],
+      [ "@query", "assumption_Parsers.ECCurveType.eCCurveType__uu___haseq" ],
       0,
-      "6c37b22b1428760886caf57f75a2a421"
+      "26dca0dc55b3b1ce605b97d57e108b70"
     ],
     [
       "Parsers.ECCurveType.lserialize_eCCurveType_key",
@@ -469,7 +419,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind"
       ],
       0,
-      "bee2b1f1ba37709a58ead38dc69676e9"
+      "85b49caf5b1e15b82148ae2ff25b92ea"
     ],
     [
       "Parsers.ECCurveType.eCCurveType_writer",
@@ -477,8 +427,7 @@
       2,
       1,
       [
-        "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.ECCurveType.eCCurveType__uu___haseq",
+        "@query", "assumption_Parsers.ECCurveType.eCCurveType__uu___haseq",
         "constructor_distinct_LowParse.Spec.Base.ParserKindMetadataFail",
         "constructor_distinct_LowParse.Spec.Base.ParserKindMetadataTotal",
         "equality_tok_LowParse.Spec.Base.ParserKindMetadataTotal@tok",
@@ -490,7 +439,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata"
       ],
       0,
-      "6548b107983dc293b2602ef4d7990cf9"
+      "b7297672dd6220cac93ce046ec26f19a"
     ],
     [
       "Parsers.ECCurveType.eCCurveType_lserializer",
@@ -508,7 +457,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind"
       ],
       0,
-      "0e08cb486609479a2f59f680d9ccccc8"
+      "e5eaf33c0a86d737be75c4ae2ed49c4c"
     ],
     [
       "Parsers.ECCurveType.eCCurveType_bytesize_eqn",
@@ -536,7 +485,7 @@
         "typing_Parsers.ECCurveType.eCCurveType_serializer"
       ],
       0,
-      "2489cd7e87ea4e619747959b9ed79359"
+      "2aa2bd0953c4cff2c997829d980e4862"
     ]
   ]
 ]

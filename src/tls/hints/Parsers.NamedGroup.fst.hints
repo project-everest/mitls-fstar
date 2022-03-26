@@ -12,7 +12,7 @@
         "typing_FStar.UInt16.t"
       ],
       0,
-      "b2b0368ade670bb356aefe4752813575"
+      "7dd612056757b6db5b9aa407f45d4197"
     ],
     [
       "Parsers.NamedGroup.__proj__Unknown_namedGroup__item___0",
@@ -21,12 +21,10 @@
       1,
       [
         "@MaxIFuel_assumption", "@query",
-        "disc_equation_Parsers.NamedGroup.Unknown_namedGroup",
-        "projection_inverse_BoxBool_proj_0",
         "refinement_interpretation_Tm_refine_f4ef8479470d7ef641d6261d6a5e84e5"
       ],
       0,
-      "d806761d58402e45813b7c03ca57148a"
+      "d3233cf0c4199b99f54b5704e2912bc0"
     ],
     [
       "Parsers.NamedGroup.string_of_namedGroup",
@@ -58,34 +56,29 @@
         "disc_equation_Parsers.NamedGroup.Unknown_namedGroup",
         "disc_equation_Parsers.NamedGroup.X25519",
         "disc_equation_Parsers.NamedGroup.X448",
-        "fuel_guarded_inversion_Parsers.NamedGroup.namedGroup"
+        "fuel_guarded_inversion_Parsers.NamedGroup.namedGroup",
+        "projection_inverse_BoxBool_proj_0"
       ],
       0,
-      "a56b0cdd4dbca65f7e1df97bf63efea9"
+      "81322bcddb894a2c963041c3723d3335"
     ],
     [
       "Parsers.NamedGroup.namedGroup_enum",
       1,
       2,
       1,
-      [
-        "@query", "assumption_FStar.UInt16.t__uu___haseq",
-        "assumption_Parsers.NamedGroup.namedGroup__uu___haseq"
-      ],
+      [ "@query", "assumption_Parsers.NamedGroup.namedGroup__uu___haseq" ],
       0,
-      "4f7ade2f0c5ccf263f1d6ca3b519116e"
+      "b439c32d64713e3dd54f4accdc1b6855"
     ],
     [
       "Parsers.NamedGroup.synth_namedGroup",
       1,
       2,
       1,
-      [
-        "@query", "assumption_FStar.UInt16.t__uu___haseq",
-        "assumption_Parsers.NamedGroup.namedGroup__uu___haseq"
-      ],
+      [ "@query", "assumption_Parsers.NamedGroup.namedGroup__uu___haseq" ],
       0,
-      "239cb929f5c96202333da1a0b1ef0094"
+      "bb7148eda6b68fbbdb7ad7f0432ff5fc"
     ],
     [
       "Parsers.NamedGroup.synth_namedGroup",
@@ -95,7 +88,6 @@
       [
         "@MaxIFuel_assumption", "@query",
         "Parsers.NamedGroup_pretyping_51689e629059854dfadd4ad5cef239e1",
-        "assumption_FStar.UInt16.t__uu___haseq",
         "data_elim_LowParse.Spec.Enum.Unknown",
         "data_typing_intro_Parsers.NamedGroup.Sect233r1@tok",
         "disc_equation_LowParse.Spec.Enum.Known",
@@ -104,11 +96,10 @@
         "equation_Parsers.NamedGroup.namedGroup_enum",
         "fuel_guarded_inversion_LowParse.Spec.Enum.maybe_enum_key",
         "projection_inverse_BoxBool_proj_0",
-        "projection_inverse_LowParse.Spec.Enum.Unknown__0",
         "refinement_interpretation_Tm_refine_42952339d1ff6a9a240497d58590f0b2"
       ],
       0,
-      "f01b431bac26d7d9e7c636be214da809"
+      "46911a1d269689007204fdd070896926"
     ],
     [
       "Parsers.NamedGroup.synth_namedGroup",
@@ -117,7 +108,7 @@
       1,
       [ "@query", "assumption_Parsers.NamedGroup.namedGroup__uu___haseq" ],
       0,
-      "656fccbc0db655a1739c586e33ec60a2"
+      "8c4b54489fc0fb4f767aee92c3747d88"
     ],
     [
       "Parsers.NamedGroup.synth_namedGroup",
@@ -126,7 +117,7 @@
       1,
       [ "@query", "assumption_Parsers.NamedGroup.namedGroup__uu___haseq" ],
       0,
-      "3ed4b34a4033b78a81ab3b9702fd88c7"
+      "55d54fb516e181736e01729c00d5b832"
     ],
     [
       "Parsers.NamedGroup.synth_namedGroup",
@@ -135,7 +126,7 @@
       1,
       [ "@query", "assumption_Parsers.NamedGroup.namedGroup__uu___haseq" ],
       0,
-      "b146b1e6d57ffa77a12c69f420c76560"
+      "415fac6fc8e687d73d3eab16dfc503f7"
     ],
     [
       "Parsers.NamedGroup.synth_namedGroup",
@@ -144,7 +135,7 @@
       1,
       [ "@query", "assumption_Parsers.NamedGroup.namedGroup__uu___haseq" ],
       0,
-      "0f77f1ed0238e3022af8e3f3809ccdc0"
+      "ac67cd208b4d8eae41baffd1b3073098"
     ],
     [
       "Parsers.NamedGroup.synth_namedGroup_inv",
@@ -160,7 +151,7 @@
         "refinement_interpretation_Tm_refine_596318b3c8c3f17dddb984aaca2cae25"
       ],
       0,
-      "8f5cbb6ae2e81bd7d5c0498ceb11844e"
+      "c85981f7cbb895b9b126ccddb44073fb"
     ],
     [
       "Parsers.NamedGroup.lemma_synth_namedGroup_inv'",
@@ -176,19 +167,16 @@
         "token_correspondence_Parsers.NamedGroup.synth_namedGroup_inv"
       ],
       0,
-      "2060b82123f06ba616781788ea1f1e35"
+      "fc82bbec9e64faef22d1182123109678"
     ],
     [
       "Parsers.NamedGroup.lemma_synth_namedGroup_inj",
       1,
       2,
       1,
-      [
-        "@query", "assumption_FStar.UInt16.t__uu___haseq",
-        "assumption_Parsers.NamedGroup.namedGroup__uu___haseq"
-      ],
+      [ "@query", "assumption_Parsers.NamedGroup.namedGroup__uu___haseq" ],
       0,
-      "fa80d622fcfda290b8911fd1d3a29b2c"
+      "a923041f81ffdc8d429764e2f70416dd"
     ],
     [
       "Parsers.NamedGroup.lemma_synth_namedGroup_inv",
@@ -198,7 +186,6 @@
       [
         "@MaxIFuel_assumption", "@query",
         "Parsers.NamedGroup_pretyping_51689e629059854dfadd4ad5cef239e1",
-        "assumption_FStar.UInt16.t__uu___haseq",
         "assumption_Parsers.NamedGroup.namedGroup__uu___haseq",
         "constructor_distinct_LowParse.Spec.Enum.Known",
         "constructor_distinct_LowParse.Spec.Enum.Unknown",
@@ -220,55 +207,43 @@
         "typing_tok_Parsers.NamedGroup.Sect233k1@tok"
       ],
       0,
-      "69e8487ced4d056ba074a1ef0c571f4d"
+      "31a47e6c0b08b3b73de5b01da4229cdd"
     ],
     [
       "Parsers.NamedGroup.parse_maybe_namedGroup_key",
       1,
       2,
       1,
-      [
-        "@query", "assumption_FStar.UInt16.t__uu___haseq",
-        "assumption_Parsers.NamedGroup.namedGroup__uu___haseq"
-      ],
+      [ "@query", "assumption_Parsers.NamedGroup.namedGroup__uu___haseq" ],
       0,
-      "6209a1360185d4853d6a0c089d165a57"
+      "c9c94dd7b6887b4e200709c8622ee1d8"
     ],
     [
       "Parsers.NamedGroup.serialize_maybe_namedGroup_key",
       1,
       2,
       1,
-      [
-        "@query", "assumption_FStar.UInt16.t__uu___haseq",
-        "assumption_Parsers.NamedGroup.namedGroup__uu___haseq"
-      ],
+      [ "@query", "assumption_Parsers.NamedGroup.namedGroup__uu___haseq" ],
       0,
-      "969df49bdd7d797f99412c142f2c44a0"
+      "17b8516ad0f843cf88816b2f6492c7a2"
     ],
     [
       "Parsers.NamedGroup.namedGroup_parser",
       1,
       2,
       1,
-      [
-        "@query", "assumption_FStar.UInt16.t__uu___haseq",
-        "assumption_Parsers.NamedGroup.namedGroup__uu___haseq"
-      ],
+      [ "@query", "assumption_Parsers.NamedGroup.namedGroup__uu___haseq" ],
       0,
-      "faf23018713b4e41c63be78dc44fd70a"
+      "ff1d291755a4d09147e2637fc8362189"
     ],
     [
       "Parsers.NamedGroup.namedGroup_serializer",
       1,
       2,
       1,
-      [
-        "@query", "assumption_FStar.UInt16.t__uu___haseq",
-        "assumption_Parsers.NamedGroup.namedGroup__uu___haseq"
-      ],
+      [ "@query", "assumption_Parsers.NamedGroup.namedGroup__uu___haseq" ],
       0,
-      "64d979b15211ab205680375fab96018d"
+      "f2843a4b8cfa6c7dbb55771204110a08"
     ],
     [
       "Parsers.NamedGroup.namedGroup_bytesize_eq",
@@ -280,7 +255,7 @@
         "equation_Parsers.NamedGroup.namedGroup_bytesize"
       ],
       0,
-      "8ee4c4b5bb01c7f175796cf27fc94cdd"
+      "d4a847847f9e6b2e754c01e68b867191"
     ],
     [
       "Parsers.NamedGroup.parse32_maybe_namedGroup_key",
@@ -288,8 +263,7 @@
       2,
       1,
       [
-        "@query", "assumption_FStar.UInt16.t__uu___haseq",
-        "assumption_Parsers.NamedGroup.namedGroup__uu___haseq",
+        "@query", "assumption_Parsers.NamedGroup.namedGroup__uu___haseq",
         "constructor_distinct_Prims.Cons", "disc_equation_Prims.Cons",
         "equation_Parsers.NamedGroup.namedGroup_enum",
         "projection_inverse_BoxBool_proj_0",
@@ -298,7 +272,7 @@
         "projection_inverse_Prims.Cons_tl"
       ],
       0,
-      "702eca564b19ea0c2e219c4c01a9327d"
+      "ef70119f471181fe5c40192a82af50de"
     ],
     [
       "Parsers.NamedGroup.parse32_maybe_namedGroup_key",
@@ -306,8 +280,7 @@
       2,
       1,
       [
-        "@query", "assumption_FStar.UInt16.t__uu___haseq",
-        "assumption_Parsers.NamedGroup.namedGroup__uu___haseq",
+        "@query", "assumption_Parsers.NamedGroup.namedGroup__uu___haseq",
         "constructor_distinct_Prims.Cons", "disc_equation_Prims.Cons",
         "equation_Parsers.NamedGroup.namedGroup_enum",
         "projection_inverse_BoxBool_proj_0",
@@ -316,43 +289,34 @@
         "projection_inverse_Prims.Cons_tl"
       ],
       0,
-      "5a3598f701daf4a5ddb00586efcac6d0"
+      "d760edba1f723c6eb1237694fd3ea262"
     ],
     [
       "Parsers.NamedGroup.parse32_maybe_namedGroup_key",
       3,
       2,
       1,
-      [
-        "@query", "assumption_FStar.UInt16.t__uu___haseq",
-        "assumption_Parsers.NamedGroup.namedGroup__uu___haseq"
-      ],
+      [ "@query", "assumption_Parsers.NamedGroup.namedGroup__uu___haseq" ],
       0,
-      "6bf1c016bf03995e15f2be3b58f2c6d1"
+      "1bb6a1c5364b6c515278efe5ef75375c"
     ],
     [
       "Parsers.NamedGroup.parse32_maybe_namedGroup_key",
       4,
       2,
       1,
-      [
-        "@query", "assumption_FStar.UInt16.t__uu___haseq",
-        "assumption_Parsers.NamedGroup.namedGroup__uu___haseq"
-      ],
+      [ "@query", "assumption_Parsers.NamedGroup.namedGroup__uu___haseq" ],
       0,
-      "ea32f19fd1adb1d2fa3afc39d16c793b"
+      "0328280ad0fa84460c58015011492dce"
     ],
     [
       "Parsers.NamedGroup.namedGroup_parser32",
       1,
       2,
       1,
-      [
-        "@query", "assumption_FStar.UInt16.t__uu___haseq",
-        "assumption_Parsers.NamedGroup.namedGroup__uu___haseq"
-      ],
+      [ "@query", "assumption_Parsers.NamedGroup.namedGroup__uu___haseq" ],
       0,
-      "91563357864f5bdbcb7886fea60ab2bf"
+      "feede71bf9bec2a19fe4e128ab76a192"
     ],
     [
       "Parsers.NamedGroup.serialize32_maybe_namedGroup_key",
@@ -360,8 +324,7 @@
       2,
       1,
       [
-        "@query", "assumption_FStar.UInt16.t__uu___haseq",
-        "assumption_Parsers.NamedGroup.namedGroup__uu___haseq",
+        "@query", "assumption_Parsers.NamedGroup.namedGroup__uu___haseq",
         "constructor_distinct_Prims.Cons", "disc_equation_Prims.Cons",
         "equation_Parsers.NamedGroup.namedGroup_enum",
         "projection_inverse_BoxBool_proj_0",
@@ -370,7 +333,7 @@
         "projection_inverse_Prims.Cons_tl"
       ],
       0,
-      "7dfece50e121f863ed6623234afa96ff"
+      "eb3b3597e7f2b36f0898f012bdfaeac7"
     ],
     [
       "Parsers.NamedGroup.serialize32_maybe_namedGroup_key",
@@ -378,8 +341,7 @@
       2,
       1,
       [
-        "@query", "assumption_FStar.UInt16.t__uu___haseq",
-        "assumption_Parsers.NamedGroup.namedGroup__uu___haseq",
+        "@query", "assumption_Parsers.NamedGroup.namedGroup__uu___haseq",
         "constructor_distinct_Prims.Cons", "disc_equation_Prims.Cons",
         "equation_Parsers.NamedGroup.namedGroup_enum",
         "projection_inverse_BoxBool_proj_0",
@@ -388,43 +350,34 @@
         "projection_inverse_Prims.Cons_tl"
       ],
       0,
-      "bd601ed25dd993b4acadd1f0ddaf7fca"
+      "fdffbb6bb6020e89a3eb76d515543a34"
     ],
     [
       "Parsers.NamedGroup.serialize32_maybe_namedGroup_key",
       3,
       2,
       1,
-      [
-        "@query", "assumption_FStar.UInt16.t__uu___haseq",
-        "assumption_Parsers.NamedGroup.namedGroup__uu___haseq"
-      ],
+      [ "@query", "assumption_Parsers.NamedGroup.namedGroup__uu___haseq" ],
       0,
-      "d91fdc8d12e4f13b5f40498d4d0239da"
+      "2106275861d78c6fe82355645198167e"
     ],
     [
       "Parsers.NamedGroup.serialize32_maybe_namedGroup_key",
       4,
       2,
       1,
-      [
-        "@query", "assumption_FStar.UInt16.t__uu___haseq",
-        "assumption_Parsers.NamedGroup.namedGroup__uu___haseq"
-      ],
+      [ "@query", "assumption_Parsers.NamedGroup.namedGroup__uu___haseq" ],
       0,
-      "e84d6073d750b35cd60add37152448e8"
+      "1067884cb3fdba115ff05c08a6f9a6fc"
     ],
     [
       "Parsers.NamedGroup.namedGroup_serializer32",
       1,
       2,
       1,
-      [
-        "@query", "assumption_FStar.UInt16.t__uu___haseq",
-        "assumption_Parsers.NamedGroup.namedGroup__uu___haseq"
-      ],
+      [ "@query", "assumption_Parsers.NamedGroup.namedGroup__uu___haseq" ],
       0,
-      "d0deaa3635314191473e72f35681f211"
+      "ce020cdf8964bd74c342069cde3fd61a"
     ],
     [
       "Parsers.NamedGroup.namedGroup_size32",
@@ -433,7 +386,7 @@
       1,
       [ "@query" ],
       0,
-      "17186d8cdbfcfb06e63b2bacd83f2562"
+      "875068695237ed50a31513ed311fcfbe"
     ],
     [
       "Parsers.NamedGroup.namedGroup_validator",
@@ -451,7 +404,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata"
       ],
       0,
-      "526ba7f56228c33eccbeb7cd41f1fffb"
+      "5685870243508511bd5e0d7034f53f7d"
     ],
     [
       "Parsers.NamedGroup.namedGroup_jumper",
@@ -467,7 +420,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_low"
       ],
       0,
-      "e01821615515f80a4d601ccb72bfe169"
+      "b812bbad8ae72fa08eac915744676b09"
     ],
     [
       "Parsers.NamedGroup.lwp_namedGroup",
@@ -481,43 +434,34 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind"
       ],
       0,
-      "77cd9bd5bc6a092fd3e833e2b4fcaaf8"
+      "e0779164204037ce189c5841b5236b49"
     ],
     [
       "Parsers.NamedGroup.read_maybe_namedGroup_key",
       1,
       2,
       1,
-      [
-        "@query", "assumption_FStar.UInt16.t__uu___haseq",
-        "assumption_Parsers.NamedGroup.namedGroup__uu___haseq"
-      ],
+      [ "@query", "assumption_Parsers.NamedGroup.namedGroup__uu___haseq" ],
       0,
-      "21c0fe24224c844e890da8da8274604d"
+      "d9dd1111c2d2115267e577d353d7db7f"
     ],
     [
       "Parsers.NamedGroup.namedGroup_reader",
       1,
       2,
       1,
-      [
-        "@query", "assumption_FStar.UInt16.t__uu___haseq",
-        "assumption_Parsers.NamedGroup.namedGroup__uu___haseq"
-      ],
+      [ "@query", "assumption_Parsers.NamedGroup.namedGroup__uu___haseq" ],
       0,
-      "6ffdee262e989b44a58d9dcc0ce3952a"
+      "1d1d77d78cb68bcb2e663ec842122715"
     ],
     [
       "Parsers.NamedGroup.write_maybe_namedGroup_key",
       1,
       2,
       1,
-      [
-        "@query", "assumption_FStar.UInt16.t__uu___haseq",
-        "assumption_Parsers.NamedGroup.namedGroup__uu___haseq"
-      ],
+      [ "@query", "assumption_Parsers.NamedGroup.namedGroup__uu___haseq" ],
       0,
-      "063a351289bcb70e12992cb6c359c5ba"
+      "e37850743795371af52f092ac2c42f17"
     ],
     [
       "Parsers.NamedGroup.lserialize_maybe_namedGroup_key",
@@ -537,19 +481,16 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind"
       ],
       0,
-      "eebd7687ed7d42dcdf2fafea6f57d8ca"
+      "b5bbe28e0c8726091500129cae317a15"
     ],
     [
       "Parsers.NamedGroup.namedGroup_writer",
       1,
       2,
       1,
-      [
-        "@query", "assumption_FStar.UInt16.t__uu___haseq",
-        "assumption_Parsers.NamedGroup.namedGroup__uu___haseq"
-      ],
+      [ "@query", "assumption_Parsers.NamedGroup.namedGroup__uu___haseq" ],
       0,
-      "d324b59033ff720b424a71d33d838b9d"
+      "516a8133152340c9e8627d45985bab8e"
     ],
     [
       "Parsers.NamedGroup.namedGroup_lserializer",
@@ -567,7 +508,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind"
       ],
       0,
-      "fb358c031c472b05e8b263ea48c1a70a"
+      "42bb51b368d6c64181cbe90546c996db"
     ],
     [
       "Parsers.NamedGroup.namedGroup_bytesize_eqn",
@@ -595,7 +536,7 @@
         "typing_Parsers.NamedGroup.namedGroup_serializer"
       ],
       0,
-      "788461748fa6a002aab9395d81eba6d4"
+      "2ef2ea87e293207b9ffc79bb505b2806"
     ]
   ]
 ]

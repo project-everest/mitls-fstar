@@ -10,34 +10,29 @@
         "@MaxIFuel_assumption", "@query",
         "disc_equation_Parsers.AlertLevel.Fatal",
         "disc_equation_Parsers.AlertLevel.Warning",
-        "fuel_guarded_inversion_Parsers.AlertLevel.alertLevel"
+        "fuel_guarded_inversion_Parsers.AlertLevel.alertLevel",
+        "projection_inverse_BoxBool_proj_0"
       ],
       0,
-      "f1deb0631faaf69dbf6ee4a5a08d3a9b"
+      "c5e29b722114c9e5de6793f9a16cf57c"
     ],
     [
       "Parsers.AlertLevel.alertLevel_enum",
       1,
       2,
       1,
-      [
-        "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.AlertLevel.alertLevel__uu___haseq"
-      ],
+      [ "@query", "assumption_Parsers.AlertLevel.alertLevel__uu___haseq" ],
       0,
-      "2fdca5daabd4c85b9cc83d34c363ba7a"
+      "8ddb6cef221e1cd14459253a874dfb3c"
     ],
     [
       "Parsers.AlertLevel.synth_alertLevel",
       1,
       2,
       1,
-      [
-        "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.AlertLevel.alertLevel__uu___haseq"
-      ],
+      [ "@query", "assumption_Parsers.AlertLevel.alertLevel__uu___haseq" ],
       0,
-      "f1c4777744f832563722fb29f2087a6a"
+      "6cc620bde2b2212418bbfdc6f6b6714b"
     ],
     [
       "Parsers.AlertLevel.synth_alertLevel_inv",
@@ -46,13 +41,12 @@
       1,
       [
         "@MaxIFuel_assumption", "@query",
-        "assumption_FStar.UInt8.t__uu___haseq",
         "assumption_Parsers.AlertLevel.alertLevel__uu___haseq", "b2t_def",
         "equation_Prims.squash",
         "refinement_interpretation_Tm_refine_2de20c066034c13bf76e9c0b94f4806c"
       ],
       0,
-      "a354edbcc9c4dc4aa55c7b414e972399"
+      "00d02659d030d99f5767e94e211f00ad"
     ],
     [
       "Parsers.AlertLevel.lemma_synth_alertLevel_inj",
@@ -60,14 +54,13 @@
       2,
       1,
       [
-        "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.AlertLevel.alertLevel__uu___haseq",
+        "@query", "assumption_Parsers.AlertLevel.alertLevel__uu___haseq",
         "equation_LowParse.Spec.Combinators.synth_injective",
         "equation_Parsers.AlertLevel.synth_alertLevel",
         "token_correspondence_Parsers.AlertLevel.synth_alertLevel"
       ],
       0,
-      "abb8699926d8e4a159ebc25cbf35d5da"
+      "dd49e53ff77db65cd8695d84f242fd99"
     ],
     [
       "Parsers.AlertLevel.lemma_synth_alertLevel_inv",
@@ -75,8 +68,7 @@
       2,
       1,
       [
-        "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.AlertLevel.alertLevel__uu___haseq",
+        "@query", "assumption_Parsers.AlertLevel.alertLevel__uu___haseq",
         "equation_LowParse.Spec.Combinators.synth_inverse",
         "equation_Parsers.AlertLevel.synth_alertLevel",
         "equation_Parsers.AlertLevel.synth_alertLevel_inv",
@@ -84,31 +76,25 @@
         "token_correspondence_Parsers.AlertLevel.synth_alertLevel_inv"
       ],
       0,
-      "7d048a798ca10c740d7b5124f32e846d"
+      "9bb3367ef9da74eb8f4301cd9849e79a"
     ],
     [
       "Parsers.AlertLevel.parse_alertLevel_key",
       1,
       2,
       1,
-      [
-        "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.AlertLevel.alertLevel__uu___haseq"
-      ],
+      [ "@query", "assumption_Parsers.AlertLevel.alertLevel__uu___haseq" ],
       0,
-      "ff8926a0bbbe57796e246e2c4673ab5b"
+      "8b83a743282ef895115780d55091ea5a"
     ],
     [
       "Parsers.AlertLevel.serialize_alertLevel_key",
       1,
       2,
       1,
-      [
-        "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.AlertLevel.alertLevel__uu___haseq"
-      ],
+      [ "@query", "assumption_Parsers.AlertLevel.alertLevel__uu___haseq" ],
       0,
-      "a70345389c043dedb4e020711455db5f"
+      "fa33339e44ad31b2ef043a5fcaa5b022"
     ],
     [
       "Parsers.AlertLevel.alertLevel_parser",
@@ -116,8 +102,7 @@
       2,
       1,
       [
-        "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.AlertLevel.alertLevel__uu___haseq",
+        "@query", "assumption_Parsers.AlertLevel.alertLevel__uu___haseq",
         "constructor_distinct_LowParse.Spec.Base.ParserKindMetadataFail",
         "constructor_distinct_LowParse.Spec.Base.ParserKindMetadataTotal",
         "equality_tok_LowParse.Spec.Base.ParserKindMetadataTotal@tok",
@@ -129,7 +114,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata"
       ],
       0,
-      "5aa00a6ec7e234a8ceb8dc6862e4e0a9"
+      "4773372296a1dad914e117cbb6fd3dd0"
     ],
     [
       "Parsers.AlertLevel.alertLevel_serializer",
@@ -137,8 +122,7 @@
       2,
       1,
       [
-        "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.AlertLevel.alertLevel__uu___haseq",
+        "@query", "assumption_Parsers.AlertLevel.alertLevel__uu___haseq",
         "constructor_distinct_LowParse.Spec.Base.ParserKindMetadataFail",
         "constructor_distinct_LowParse.Spec.Base.ParserKindMetadataTotal",
         "equality_tok_LowParse.Spec.Base.ParserKindMetadataTotal@tok",
@@ -150,7 +134,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata"
       ],
       0,
-      "05c7beee09f941672a678686652d0a24"
+      "19c5b81741188d9e813f9c8e44864a16"
     ],
     [
       "Parsers.AlertLevel.alertLevel_bytesize_eq",
@@ -162,67 +146,52 @@
         "equation_Parsers.AlertLevel.alertLevel_bytesize"
       ],
       0,
-      "5cc914069f35096863f7741b335d1971"
+      "aebd14908937b71225d57c50d2408330"
     ],
     [
       "Parsers.AlertLevel.parse32_alertLevel_key",
       1,
       2,
       1,
-      [
-        "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.AlertLevel.alertLevel__uu___haseq"
-      ],
+      [ "@query", "assumption_Parsers.AlertLevel.alertLevel__uu___haseq" ],
       0,
-      "d4ea83ce1bf2c07409780734680f3461"
+      "a19d7b41ac342f9a23d20b3a3b32b6c7"
     ],
     [
       "Parsers.AlertLevel.parse32_alertLevel_key",
       2,
       2,
       1,
-      [
-        "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.AlertLevel.alertLevel__uu___haseq"
-      ],
+      [ "@query", "assumption_Parsers.AlertLevel.alertLevel__uu___haseq" ],
       0,
-      "7a3185e14d72aa5327422327637e9724"
+      "17824760c897f7e25a3bf4a2c67395f0"
     ],
     [
       "Parsers.AlertLevel.parse32_alertLevel_key",
       3,
       2,
       1,
-      [
-        "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.AlertLevel.alertLevel__uu___haseq"
-      ],
+      [ "@query", "assumption_Parsers.AlertLevel.alertLevel__uu___haseq" ],
       0,
-      "7537ded070d33b835b6f6cef9ff86fde"
+      "80abb772f808efba2858b0bc1d76273b"
     ],
     [
       "Parsers.AlertLevel.parse32_alertLevel_key",
       4,
       2,
       1,
-      [
-        "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.AlertLevel.alertLevel__uu___haseq"
-      ],
+      [ "@query", "assumption_Parsers.AlertLevel.alertLevel__uu___haseq" ],
       0,
-      "ec7f1116200a40052f08ac2bbc8e451e"
+      "67c8d72181a04f2ef6abec4da30f3bae"
     ],
     [
       "Parsers.AlertLevel.parse32_alertLevel_key",
       5,
       2,
       1,
-      [
-        "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.AlertLevel.alertLevel__uu___haseq"
-      ],
+      [ "@query", "assumption_Parsers.AlertLevel.alertLevel__uu___haseq" ],
       0,
-      "73d62780b4cad1a8b7be5b8da503175e"
+      "c81267118ac7d047299088c6384cdeaf"
     ],
     [
       "Parsers.AlertLevel.alertLevel_parser32",
@@ -230,8 +199,7 @@
       2,
       1,
       [
-        "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.AlertLevel.alertLevel__uu___haseq",
+        "@query", "assumption_Parsers.AlertLevel.alertLevel__uu___haseq",
         "constructor_distinct_LowParse.Spec.Base.ParserKindMetadataFail",
         "constructor_distinct_LowParse.Spec.Base.ParserKindMetadataTotal",
         "equality_tok_LowParse.Spec.Base.ParserKindMetadataTotal@tok",
@@ -243,7 +211,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata"
       ],
       0,
-      "b72722731cb4995c7c548e3fd5a0b4b9"
+      "16767e83040b819c5c33d95d731609eb"
     ],
     [
       "Parsers.AlertLevel.serialize32_alertLevel_key",
@@ -251,8 +219,7 @@
       2,
       1,
       [
-        "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.AlertLevel.alertLevel__uu___haseq",
+        "@query", "assumption_Parsers.AlertLevel.alertLevel__uu___haseq",
         "constructor_distinct_Prims.Cons", "disc_equation_Prims.Cons",
         "equation_Parsers.AlertLevel.alertLevel_enum",
         "projection_inverse_BoxBool_proj_0",
@@ -261,7 +228,7 @@
         "projection_inverse_Prims.Cons_tl"
       ],
       0,
-      "433a3d1f6099a3b146ea620edd15712f"
+      "6d7b99081d2dfaf812bf4215958e3632"
     ],
     [
       "Parsers.AlertLevel.serialize32_alertLevel_key",
@@ -269,8 +236,7 @@
       2,
       1,
       [
-        "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.AlertLevel.alertLevel__uu___haseq",
+        "@query", "assumption_Parsers.AlertLevel.alertLevel__uu___haseq",
         "constructor_distinct_Prims.Cons", "disc_equation_Prims.Cons",
         "equation_Parsers.AlertLevel.alertLevel_enum",
         "projection_inverse_BoxBool_proj_0",
@@ -279,31 +245,25 @@
         "projection_inverse_Prims.Cons_tl"
       ],
       0,
-      "ccc85b90a100bbd355238a40ea22685f"
+      "793bccc867c9a84fcfba05c07ab2b249"
     ],
     [
       "Parsers.AlertLevel.serialize32_alertLevel_key",
       3,
       2,
       1,
-      [
-        "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.AlertLevel.alertLevel__uu___haseq"
-      ],
+      [ "@query", "assumption_Parsers.AlertLevel.alertLevel__uu___haseq" ],
       0,
-      "f38f906bfe1ee6fd8cb4829de9caa9a8"
+      "3b39aaf5efb3946fc05040c0bbfffb07"
     ],
     [
       "Parsers.AlertLevel.serialize32_alertLevel_key",
       4,
       2,
       1,
-      [
-        "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.AlertLevel.alertLevel__uu___haseq"
-      ],
+      [ "@query", "assumption_Parsers.AlertLevel.alertLevel__uu___haseq" ],
       0,
-      "065242d3c78beff5cd8ee57204703483"
+      "7dc52a5775e2a9a0be2f56bdc83c64df"
     ],
     [
       "Parsers.AlertLevel.alertLevel_serializer32",
@@ -311,8 +271,7 @@
       2,
       1,
       [
-        "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.AlertLevel.alertLevel__uu___haseq",
+        "@query", "assumption_Parsers.AlertLevel.alertLevel__uu___haseq",
         "constructor_distinct_LowParse.Spec.Base.ParserKindMetadataFail",
         "constructor_distinct_LowParse.Spec.Base.ParserKindMetadataTotal",
         "equality_tok_LowParse.Spec.Base.ParserKindMetadataTotal@tok",
@@ -324,7 +283,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata"
       ],
       0,
-      "b7d0400bf34a89f2200bc154f88409ec"
+      "e0d0e988eb7a9aa240483f5ca983291c"
     ],
     [
       "Parsers.AlertLevel.alertLevel_size32",
@@ -333,19 +292,16 @@
       1,
       [ "@query" ],
       0,
-      "bf0f48d7b2a093d3b3d4eba487a283ce"
+      "ccdab0320424cf164f18096a68aae1a0"
     ],
     [
       "Parsers.AlertLevel.validate_alertLevel_key",
       1,
       2,
       1,
-      [
-        "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.AlertLevel.alertLevel__uu___haseq"
-      ],
+      [ "@query", "assumption_Parsers.AlertLevel.alertLevel__uu___haseq" ],
       0,
-      "f40a4fad9b6fd435bbae675a81931919"
+      "02fbe10a30686e2b209cfc628b9cf182"
     ],
     [
       "Parsers.AlertLevel.alertLevel_validator",
@@ -353,8 +309,7 @@
       2,
       1,
       [
-        "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.AlertLevel.alertLevel__uu___haseq",
+        "@query", "assumption_Parsers.AlertLevel.alertLevel__uu___haseq",
         "constructor_distinct_LowParse.Spec.Base.ParserKindMetadataFail",
         "constructor_distinct_LowParse.Spec.Base.ParserKindMetadataTotal",
         "equality_tok_LowParse.Spec.Base.ParserKindMetadataTotal@tok",
@@ -366,7 +321,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata"
       ],
       0,
-      "eb8a1c08c6bc35aca85eff29c9b256a2"
+      "0d35004e55e5dce5ef19e0db0a6d66f7"
     ],
     [
       "Parsers.AlertLevel.alertLevel_jumper",
@@ -382,7 +337,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_low"
       ],
       0,
-      "25c8dd7c252a63342936bcd67714b219"
+      "fe1414bce67e9ff261b6e9f780af5d9b"
     ],
     [
       "Parsers.AlertLevel.lwp_alertLevel",
@@ -396,7 +351,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind"
       ],
       0,
-      "0be77e8c3c0d1d489cefd9a4a998ce23"
+      "9c5bf77cfbae215d92c4edbe09716437"
     ],
     [
       "Parsers.AlertLevel.read_alertLevel_key",
@@ -404,8 +359,7 @@
       2,
       1,
       [
-        "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.AlertLevel.alertLevel__uu___haseq",
+        "@query", "assumption_Parsers.AlertLevel.alertLevel__uu___haseq",
         "constructor_distinct_Prims.Cons", "disc_equation_Prims.Cons",
         "equation_Parsers.AlertLevel.alertLevel_enum",
         "projection_inverse_BoxBool_proj_0",
@@ -414,7 +368,7 @@
         "projection_inverse_Prims.Cons_tl"
       ],
       0,
-      "1af5ec34ddb4f9bc461b2a1a96d4d1e3"
+      "9bce29d309dae9f78e0d656bdc2f10c9"
     ],
     [
       "Parsers.AlertLevel.alertLevel_reader",
@@ -422,8 +376,7 @@
       2,
       1,
       [
-        "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.AlertLevel.alertLevel__uu___haseq",
+        "@query", "assumption_Parsers.AlertLevel.alertLevel__uu___haseq",
         "constructor_distinct_LowParse.Spec.Base.ParserKindMetadataFail",
         "constructor_distinct_LowParse.Spec.Base.ParserKindMetadataTotal",
         "equality_tok_LowParse.Spec.Base.ParserKindMetadataTotal@tok",
@@ -435,19 +388,16 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata"
       ],
       0,
-      "95399914bd9adca92724b0c37580b417"
+      "924c752d2b299bd2ecfe584f0f99d315"
     ],
     [
       "Parsers.AlertLevel.write_alertLevel_key",
       1,
       2,
       1,
-      [
-        "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.AlertLevel.alertLevel__uu___haseq"
-      ],
+      [ "@query", "assumption_Parsers.AlertLevel.alertLevel__uu___haseq" ],
       0,
-      "6b2ffabe72d22b47eb59885d77b3c715"
+      "ff20b8d0471e6424779abafcff590784"
     ],
     [
       "Parsers.AlertLevel.lserialize_alertLevel_key",
@@ -468,7 +418,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind"
       ],
       0,
-      "0f1acb9cb90513f6480c17854b0685f7"
+      "7874adbad92b99fe7461d63e505128b3"
     ],
     [
       "Parsers.AlertLevel.alertLevel_writer",
@@ -476,8 +426,7 @@
       2,
       1,
       [
-        "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.AlertLevel.alertLevel__uu___haseq",
+        "@query", "assumption_Parsers.AlertLevel.alertLevel__uu___haseq",
         "constructor_distinct_LowParse.Spec.Base.ParserKindMetadataFail",
         "constructor_distinct_LowParse.Spec.Base.ParserKindMetadataTotal",
         "equality_tok_LowParse.Spec.Base.ParserKindMetadataTotal@tok",
@@ -489,7 +438,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata"
       ],
       0,
-      "6a4b412bd523b2b808c6d4d3baf6c473"
+      "0b68ae5463410d48d896d523ff0aaf45"
     ],
     [
       "Parsers.AlertLevel.alertLevel_lserializer",
@@ -507,7 +456,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind"
       ],
       0,
-      "81efb4314a7d2070a4cc6dca7c0cad32"
+      "d4b93c5d38ea1de3210a55fd6276bf1c"
     ],
     [
       "Parsers.AlertLevel.alertLevel_bytesize_eqn",
@@ -535,7 +484,7 @@
         "typing_Parsers.AlertLevel.alertLevel_serializer"
       ],
       0,
-      "7d36e8cdc3ba30a0b2e8252fd7151102"
+      "4464d83bb13075f86f2faf465427c7f4"
     ]
   ]
 ]

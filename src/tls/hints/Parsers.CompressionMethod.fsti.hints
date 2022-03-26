@@ -12,7 +12,7 @@
         "typing_FStar.UInt8.t"
       ],
       0,
-      "63329ac018de7089177a8d8002b87015"
+      "a0f71d151bbd6cc307ff7bfe6639044d"
     ],
     [
       "Parsers.CompressionMethod.__proj__Unknown_compressionMethod__item___0",
@@ -21,12 +21,10 @@
       1,
       [
         "@MaxIFuel_assumption", "@query",
-        "disc_equation_Parsers.CompressionMethod.Unknown_compressionMethod",
-        "projection_inverse_BoxBool_proj_0",
         "refinement_interpretation_Tm_refine_024d66cc355bb4f5c02304d3ef6c059f"
       ],
       0,
-      "9fb1be1605912efd2e49da0c146cf257"
+      "c5ebb30c250e697820a7a21f5ee704d8"
     ],
     [
       "Parsers.CompressionMethod.string_of_compressionMethod",
@@ -37,10 +35,11 @@
         "@MaxIFuel_assumption", "@query",
         "disc_equation_Parsers.CompressionMethod.NullCompression",
         "disc_equation_Parsers.CompressionMethod.Unknown_compressionMethod",
-        "fuel_guarded_inversion_Parsers.CompressionMethod.compressionMethod"
+        "fuel_guarded_inversion_Parsers.CompressionMethod.compressionMethod",
+        "projection_inverse_BoxBool_proj_0"
       ],
       0,
-      "736890f800697c6cad9245b06c79700f"
+      "6c166d6df1f58cf7d98069165ba5586e"
     ],
     [
       "Parsers.CompressionMethod.compressionMethod_validator",
@@ -58,7 +57,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata"
       ],
       0,
-      "6fe20f57817db0bb58b018455e4552cf"
+      "141dbd97c800d8f2d83ee815355cc408"
     ],
     [
       "Parsers.CompressionMethod.compressionMethod_jumper",
@@ -74,7 +73,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_low"
       ],
       0,
-      "f454db93fc0e61ad0f7d68e275b51d78"
+      "0e32bd4a72541fa24511ce8de7fd484a"
     ],
     [
       "Parsers.CompressionMethod.lwp_compressionMethod",
@@ -88,7 +87,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind"
       ],
       0,
-      "e7b12221fdeef0b27fcdb027904603e9"
+      "b67bef30162c63268603cfe18d630f83"
     ]
   ]
 ]

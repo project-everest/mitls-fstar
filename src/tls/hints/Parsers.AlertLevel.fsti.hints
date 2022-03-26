@@ -10,10 +10,11 @@
         "@MaxIFuel_assumption", "@query",
         "disc_equation_Parsers.AlertLevel.Fatal",
         "disc_equation_Parsers.AlertLevel.Warning",
-        "fuel_guarded_inversion_Parsers.AlertLevel.alertLevel"
+        "fuel_guarded_inversion_Parsers.AlertLevel.alertLevel",
+        "projection_inverse_BoxBool_proj_0"
       ],
       0,
-      "cd5926d0c6767cdd320a0bfaa88861be"
+      "23aaca61f97c73c6a3d77f50b8ab66a6"
     ],
     [
       "Parsers.AlertLevel.alertLevel_jumper",
@@ -29,7 +30,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_low"
       ],
       0,
-      "938d28754197ccf9eff8dee6466919c4"
+      "9d32c5cf3b313f4c97b6e051ae66a8a8"
     ],
     [
       "Parsers.AlertLevel.lwp_alertLevel",
@@ -43,7 +44,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind"
       ],
       0,
-      "5c278c6031c2b6b9a3d66775a97cdf61"
+      "42ecd1100a4957725affd7f8ca6764c8"
     ]
   ]
 ]
