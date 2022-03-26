@@ -168,7 +168,7 @@ ifdef VERBOSE
 endif
 	$(subst \\,, \
 		$(FSTAR) $(VFLAGS) $(CMI) \
-			--codegen $(firstword $(subst -, ,$(FLAVOR))) \
+			--codegen $(CODEGEN_FLAVOR) \
 			--cache_dir $(CACHE_DIR) \
 			$(HINTS_OPTS) \
 			--odir $(EXTRACT_DIR) \

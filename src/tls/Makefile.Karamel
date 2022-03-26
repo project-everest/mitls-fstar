@@ -34,6 +34,7 @@ MITLS_BUNDLES = \
 # To include Makefile.common, you need to specify
 # the following five variables
 FLAVOR		= Karamel$(CONCRETE_FLAVOR)
+CODEGEN_FLAVOR  = krml
 EXTENSION	= krml
 # Don't extract modules from mitls that are implemented in C
 EXTRACT		= 'OCaml:* -DHDB -FFICallbacks -BufferBytes; krml:*'

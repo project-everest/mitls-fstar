@@ -7,6 +7,7 @@ include $(FSTAR_HOME)/ulib/ml/Makefile.include
 #To include Makefile.common, you need to specify
 #the following five variables
 FLAVOR=OCaml
+CODEGEN_FLAVOR=OCaml
 EXTENSION=ml
 #Don't extract modules from fstarlib (NOEXTRACT_MODULES)
 #And also some specific ones from mitls that are implemented in C
