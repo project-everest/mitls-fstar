@@ -407,7 +407,7 @@ let ec_extension_new cfg: list clientHelloExtension  =
 
 #reset-options "--using_facts_from '* -LowParse'"
 
-// We define these functions at top-level so that Kremlin can compute their pointers
+// We define these functions at top-level so that Karamel can compute their pointers
 // when passed to higher-order functions.
 // REMARK: could use __proj__MkpskInfo__item__allow_psk_resumption, but it's a mouthful.
 private let allow_psk_resumption x = x.allow_psk_resumption
@@ -1760,7 +1760,7 @@ let to_be_signed pv role csr tbs =
     Some?.v csr @| tbs
 #pop-options 
 
-// 19-01-06 we can't use || and && because of Kremlin's let bindings :(
+// 19-01-06 we can't use || and && because of Karamel's let bindings :(
 inline_for_extraction let kor a b = if a then b else true 
 inline_for_extraction let kand a b = if a then b else false 
 

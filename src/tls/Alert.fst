@@ -23,7 +23,7 @@ let alertBytes =
   LowParseWrappers.wrap_serializer32_constant_length alert_serializer32 2 ()
 
 val parse: pinverse_t alertBytes 
-// eta-expansion required for kremlin extraction
+// eta-expansion required for karamel extraction
 let parse x = 
   LowParseWrappers.wrap_parser32_constant_length 
     Parsers.Alert.alert_serializer32 2 () alert_parser32

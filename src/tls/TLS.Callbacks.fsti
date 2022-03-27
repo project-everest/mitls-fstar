@@ -280,7 +280,7 @@ noeq type nego_cb = {
 /// signatureSchemeList to the types expected by the application.
 ///
 /// This explicit representation of closures is necessary for
-/// compiling this to C via KreMLin. The representation is hidden from
+/// compiling this to C via KaRaMeL. The representation is hidden from
 /// callers and the wrappers are provided below to implement it.
 
 type cert_repr = Parsers.ASN1Cert.aSN1Cert // aka b:bytes {length b < 16777216} but with another syntax 

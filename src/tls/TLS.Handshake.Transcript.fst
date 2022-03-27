@@ -543,7 +543,7 @@ let extend_ch : extend_t LR_ClientHello? =
   | LR_ClientHello ch ->
     //NS: 09/16 This assume is to justify the `to_buffer` cast a few lines below
     //That case is needed because CRF.update expects a buffer, not a const buffer
-    //Once we have support for const buffers in KreMLin and in HACL*, we will
+    //Once we have support for const buffers in KaRaMeL and in HACL*, we will
     //be able to remove this assume and the to_buffer cast
     //The same pattern appears in each case below.
     let ch_ptr = R.as_ptr ch in
