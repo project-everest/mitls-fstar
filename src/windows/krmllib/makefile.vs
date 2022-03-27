@@ -1,8 +1,8 @@
 CCOPTS = /nologo /O2 /Gy /GF /Gw /GA /MD /Zi -I. -I../include /FICommonInclude.h
 
-all: libkremlib.lib
+all: libkrmllib.lib
 
-# ls kremlin/kremlib/*.c | xargs basename -a
+# ls krml/krmllib/*.c | xargs basename -a
 # remove fstar_uint128.c
 SOURCES = \
   RegionAllocator.c \
@@ -30,8 +30,8 @@ SOURCES = \
 #  FStar_UInt_8_16_32_64.c
 
 
-libkremlib.lib: $(SOURCES:.c=.obj)
-  lib /nologo /out:libkremlib.lib $**
+libkrmllib.lib: $(SOURCES:.c=.obj)
+  lib /nologo /out:libkrmllib.lib $**
 
 .c.obj::
     cl $(CCOPTS) -c $<

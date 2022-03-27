@@ -18,7 +18,7 @@
 #else
 #include <windows.h>
 #endif
-__declspec(noreturn) extern void KremlExit(int n);
+__declspec(noreturn) extern void KrmlExit(int n);
 
 #define USE_HEAP_REGIONS 1
 #include "RegionAllocator.h"
