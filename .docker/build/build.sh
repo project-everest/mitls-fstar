@@ -163,28 +163,28 @@ function fetch_and_make_karamel() {
     export PATH="$(pwd)/karamel:$PATH"
 }
 
-function fetch_qd() {
-    if [ ! -d qd ]; then
-        git clone https://github.com/project-everest/quackyducky qd
+function fetch_everparse() {
+    if [ ! -d everparse ]; then
+        git clone https://github.com/project-everest/everparse everparse
     fi
 
-    cd qd
+    cd everparse
     git fetch origin
-    local ref=$(jq -c -r '.RepoVersions["qd_version"]' "$rootPath/.docker/build/config.json" )
+    local ref=$(jq -c -r '.RepoVersions["everparse_version"]' "$rootPath/.docker/build/config.json" )
     if [[ $ref == "" || $ref == "null" ]]; then
-        echo "Unable to find RepoVersions.qd_version on $rootPath/.docker/build/config.json"
+        echo "Unable to find RepoVersions.everparse_version on $rootPath/.docker/build/config.json"
         return -1
     fi
 
-    echo Switching to QuackyDucky $ref
+    echo Switching to EverParse $ref
     git reset --hard $ref
     cd ..
-    export_home QD "$(pwd)/qd"
+    export_home EVERPARSE "$(pwd)/everparse"
 }
 
-function fetch_and_make_qd() {
-    fetch_qd
-    OTHERFLAGS='--admit_smt_queries true' make -C qd -j $threads quackyducky lowparse
+function fetch_and_make_everparse() {
+    fetch_everparse
+    OTHERFLAGS='--admit_smt_queries true' make -C everparse -j $threads quackyducky lowparse
 }
 
 function build_pki_if() {
@@ -216,7 +216,7 @@ function mitls_verify() {
     echo "Current branch_name=$CI_BRANCH"
 
     fetch_and_make_karamel all &&
-    fetch_and_make_qd &&
+    fetch_and_make_everparse &&
     fetch_and_make_mlcrypto &&
     fetch_hacl &&
     fetch_vale &&

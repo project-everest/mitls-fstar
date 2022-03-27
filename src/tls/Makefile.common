@@ -5,8 +5,8 @@ KRML_HOME    ?= ../../../karamel
 MLCRYPTO_HOME   ?= ../../../MLCrypto
 EVERCRYPT_HOME	?= $(HACL_HOME)/providers
 ifndef LOWPARSE_HOME
-  ifdef QD_HOME
-    LOWPARSE_HOME=$(QD_HOME)/src/lowparse
+  ifdef EVERPARSE_HOME
+    LOWPARSE_HOME=$(EVERPARSE_HOME)/src/lowparse
   else
     LOWPARSE_HOME=../../../quackyducky/src/lowparse
   endif
