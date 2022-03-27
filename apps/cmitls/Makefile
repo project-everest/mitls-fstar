@@ -53,7 +53,7 @@ $(MITLS_HOME)/src/pki/$(LIBPKI):
 	$(MAKE) -C ../../src/pki
 
 $(MITLS_HOME)/src/tls/dist/compact/$(LIBMITLS):
-	$(MAKE) -j8 -C ../../src/tls -f Makefile.Kremlin build-library
+	$(MAKE) -j8 -C ../../src/tls -f Makefile.Karamel build-library
 
 cmitls.exe: cmitls.c ../../libs/ffi/mitlsffi.h ../../src/pki/mipki.h \
 	$(MITLS_HOME)/src/pki/$(LIBPKI) \
