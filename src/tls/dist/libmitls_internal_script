@@ -1,7 +1,7 @@
 # This version script is used on CI because the test needs access to internal
 # functions and helpers. We hide whatever will for sure cause a conflict with
 # the symbols defined in the test driver (we now do separate compilation for the
-# test driver and library). Note that we IGNORE the kremlin-generated .def file
+# test driver and library). Note that we IGNORE the karamel-generated .def file
 # since it contains too much (all the __eq__* monomorphizations). Eliminating
 # FStar and Prims ensures that libmitls.dll does not export more than it needs
 # -- F* clients doing separate compilation might have trouble linking against it
@@ -16,7 +16,7 @@ LIBMITLS_0.1 {
     global:
       *;
     local:
-      kremlinit_globals;
+      krmlinit_globals;
       __eq__*;
       __neq__*;
       FStar_*;

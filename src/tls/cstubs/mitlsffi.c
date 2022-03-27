@@ -32,7 +32,7 @@
 #define K___uint64_t_Parsers_SignatureScheme_signatureScheme Negotiation_cert_choice
 #define K___Prims_int_Prims_int FFI_pair_of_ints
 
-// This file is hand-written C code, to wrap the Kremlin-extracted
+// This file is hand-written C code, to wrap the Karamel-extracted
 // code to match the mitlsffi.h interface.
 //
 // So it uses KRML_HOST_MALLOC and KRML_HOST_FREE in order to
@@ -178,7 +178,7 @@ int MITLS_CALLCONV FFI_mitls_init(void)
 #endif
 
   ENTER_GLOBAL_HEAP_REGION();
-  kremlinit_globals();
+  krmlinit_globals();
   LEAVE_GLOBAL_HEAP_REGION();
   
   if (HAD_OUT_OF_MEMORY) {

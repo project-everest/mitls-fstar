@@ -1,5 +1,5 @@
-#include "Mitls_Kremlib.h"
-#include "internal/Mitls_Kremlib.h"
+#include "Mitls_Krmllib.h"
+#include "internal/Mitls_Krmllib.h"
 
 FStar_Bytes_bytes BufferBytes_to_bytes(Prims_nat l, uint8_t *buf) {
   if (buf == NULL || l == 0)
