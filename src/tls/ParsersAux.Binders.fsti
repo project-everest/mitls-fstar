@@ -199,8 +199,8 @@ let valid_truncate_clientHello
   LP.serialize_valid_exact Psks.offeredPsks_binders_serializer h sl b pos1 pos' ;
   LP.valid_exact_valid Psks.offeredPsks_binders_parser h sl pos1 pos'
 
-let truncate_clientHello_valid
-  (#rrel #rel: _)
+val truncate_clientHello_valid
+  (#rrel: _) (#rel: _)
   (h: HS.mem)
   (sl: LP.slice rrel rel)
   (pos: U32.t)
@@ -217,12 +217,6 @@ let truncate_clientHello_valid
   (ensures (
     LP.valid_content_pos H.handshake_parser h sl pos m pos'
   ))
-= let b = get_binders m in
-  LP.valid_valid_exact Psks.offeredPsks_binders_parser h sl pos1 ;
-  LP.valid_exact_serialize Psks.offeredPsks_binders_serializer h sl pos1 pos' ;
-  truncate_clientHello_bytes_correct m;
-  LP.serialize_valid_exact H.handshake_serializer h sl m pos pos' ;
-  LP.valid_exact_valid H.handshake_parser h sl pos pos'
 
 module B = LowStar.Monotonic.Buffer
 module HST = FStar.HyperStack.ST

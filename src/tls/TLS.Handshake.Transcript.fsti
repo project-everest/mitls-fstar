@@ -491,6 +491,7 @@ val ideal_transcript (#a:_) (s:state a)
 let ch_pos b = ch:R_HS.pos b { R_HS.is_ch (R.value_pos ch) }
 let sh_pos b = sh:R_HS.pos b { R_HS.is_sh (R.value_pos sh) }
 
+#push-options "--z3rlimit_factor 6"
 noeq
 type label_repr =
   | LR_ClientHello:
@@ -529,6 +530,7 @@ type label_repr =
       #b:_ ->
       hs13:HS13.pos b ->
       label_repr
+#pop-options
 
 let label_of_label_repr (l:label_repr)
   : GTot label

@@ -63,6 +63,7 @@ let print_contents (x:Contents.miTLSCookieContents) =
 /// Failures within this code should be prevented by authenticated
 /// encryption, since it covers all contents produced above.
 
+#push-options "--z3rlimit 16"
 let reconstruct_hrr
   (raw: encrypted_cookie)
   (contents: Contents.miTLSCookieContents): result (hrr_leq extensions_max_length)
@@ -82,6 +83,7 @@ let reconstruct_hrr
     | []  -> correct #(hrr_leq 16) hrr
     | _   -> fatal Handshake_failure "invalid cookie contents" );
   correct #(hrr_leq extensions_max_length) (append_extension 16 hrr (HRRE_cookie raw))
+#pop-options
 
 let append chd app hrr =
   let plain = Contents.miTLSCookieContents_serializer32 (prepare_contents chd app hrr) in

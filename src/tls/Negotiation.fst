@@ -25,7 +25,7 @@ module CH = Parsers.ClientHello
 
 open Extensions // for its aggregated datatypes
 
-#reset-options "--using_facts_from '* -LowParse'"
+#push-options "--using_facts_from '* -LowParse'"
 
 inline_for_extraction noextract 
 let trace = TLS.Tracing.mk_trace "NGO" 
@@ -54,11 +54,12 @@ module HST = FStar.HyperStack.ST
 module B = LowStar.Buffer
 module Printf = LowStar.Printf
 
-#reset-options
+#pop-options
 
 // 19-05-17 Sample low-level printer for namedGroupList. We will need
 // plenty of the same, we still don't know what to automate.
 
+#push-options "--z3rlimit 16"
 let print_namedGroupList
   #rrel #rel sl pos
 = let _ = namedGroupList_count sl pos in
@@ -75,8 +76,9 @@ let print_namedGroupList
     (pos `U32.add` 2ul)
     pos';
   print_string "]"
+#pop-options
 
-#reset-options "--using_facts_from '* -LowParse'"
+#push-options "--using_facts_from '* -LowParse'"
 
 // ~> HandshakeMessages? 
 let string_of_namedGroups xs = string_of_list string_of_namedGroup "[" xs
@@ -338,7 +340,7 @@ assume val sz_CHE_server_name: sns: Parsers.ServerNameList.serverNameList -> Lem
   [SMTPat (clientHelloExtension_bytesize (CHE_server_name sns))]
 
 
-#reset-options
+#pop-options
 
 let sni cfg: list clientHelloExtension = 
   match cfg.peer_name with 
@@ -405,7 +407,7 @@ let ec_extension_new cfg: list clientHelloExtension  =
   then [CHE_ec_point_formats [Uncompressed]]
   else []
 
-#reset-options "--using_facts_from '* -LowParse'"
+#push-options "--using_facts_from '* -LowParse'"
 
 // We define these functions at top-level so that Karamel can compute their pointers
 // when passed to higher-order functions.
@@ -472,8 +474,6 @@ let supported_group_extension_new cfg: list clientHelloExtension =
   if List.Tot.existsb send_supported_groups_new cfg.CFG.cipher_suites
   then [CHE_supported_groups cfg.CFG.named_groups] 
   else [] 
-
-#reset-options "--using_facts_from '* -LowParse'"
 
 private val obfuscate_age: UInt32.t -> list (PSK.pskid * pskInfo) -> list pskIdentity
 let rec obfuscate_age now = function
@@ -551,7 +551,7 @@ noextract
 let allow_dhe_resumption_new (r: Parsers.ResumeInfo13.resumeInfo13) : Tot bool =
   (Ticket.ticketContents13_pskinfo r.Parsers.ResumeInfo13.ticket).allow_dhe_resumption
 
-#reset-options
+#pop-options
 
 (*
 noextract
@@ -630,7 +630,7 @@ let final_extensions_new
 
 (* TODO: sanity-check wrt. old final_extensions *)
 
-#reset-options "--using_facts_from '* -LowParse'"
+#push-options "--using_facts_from '* -LowParse'"
 
 /// The extensions included in ClientHello
 /// (specification + high-level implementation)
@@ -855,9 +855,6 @@ let unseal_tickets cfg =
   assume false;
   let resume = unseal_tickets_ [] cfg.use_tickets in
   find_ticket12 None resume, filter_ticket13 [] resume
-
-#reset-options "--using_facts_from '* -LowParse'"
-
 
 /// Negotiating server extensions.
 /// pure code as spec & implementation so far.
@@ -1182,7 +1179,7 @@ let client_offer (cfg,resume) nonce ks now =
     extensions = (assume False; extensions)
   })
 
-#reset-options
+#pop-options
 
 //19-05-04 ?
 val client_offer_new:
@@ -1896,6 +1893,7 @@ let is_allowed_kex ((info:PSK.pskInfo), (share:bool)) kex =
 
 // The PSK sets the ciphersuite and constrains the kex.
 // The ciphersuite must also be offered and acceptable 
+#push-options "--z3rlimit 16"
 let select_psk 
   (cfg:config)
   (o:offer) 
@@ -1913,6 +1911,7 @@ let select_psk
   | None -> None 
   | Some Psk_ke -> Some (PSK_EDH i None cs)
   | Some Psk_dhe_ke -> assert (Some? g_gx); Some (PSK_EDH i g_gx cs) 
+#pop-options
 
 // heavy-handed? we need to keep the two aligned 
 type psks (o:offer) = 
@@ -1931,7 +1930,7 @@ val compute_cs13_aux
   i:nat{ i <= List.length psks } (* PSK index to try next *) ->
   Tot (option (cs13 server_cert cfg o)) (decreases ( (List.length psks - i) <: nat ))
 
-#reset-options "--z3rlimit 40"
+#push-options "--z3rlimit 40"
 // to be lowered as a vlbyte loop on psks
 let rec compute_cs13_aux cfg o psks g_gx server_cert i =
   if i = List.length psks || i >= 65536 then

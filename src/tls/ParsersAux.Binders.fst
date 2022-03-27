@@ -920,7 +920,7 @@ let truncate_clientHello_bytes_correct m =
 
 let truncate_clientHello_bytes_set_binders m b' = binders_offset_handshake_set_binders m b'
 
-#set-options "--z3rlimit 16"
+#push-options "--z3rlimit 16"
 
 let truncate_handshake_eq_left
   (c: H.handshake { has_binders c })
@@ -937,7 +937,33 @@ let truncate_clientHello_bytes_inj_binders_bytesize m1 m2 =
   LP.serialize_strong_prefix HT.handshakeType_serializer HT.Client_hello HT.Client_hello (truncate_handshake_m_client_hello (H.M_client_hello?._0 m1)) (truncate_handshake_m_client_hello (H.M_client_hello?._0 m2));
   truncate_handshake_m_client_hello_inj_binders_bytesize (H.M_client_hello?._0 m1) (H.M_client_hello?._0 m2)
 
+#pop-options
+let truncate_clientHello_valid
+  (#rrel #rel: _)
+  (h: HS.mem)
+  (sl: LP.slice rrel rel)
+  (pos: U32.t)
+  (pos1: U32.t)
+  (pos' : U32.t)
+  (m: H.handshake {has_binders m})
+: Lemma
+  (requires (
+    LP.live_slice h sl /\
+    U32.v pos <= U32.v pos1 /\
+    LP.valid_content_pos Psks.offeredPsks_binders_parser h sl pos1 (get_binders m) pos' /\
+    LP.bytes_of_slice_from_to h sl pos pos1 `Seq.equal` BY.reveal (truncate_clientHello_bytes m)
+  ))
+  (ensures (
+    LP.valid_content_pos H.handshake_parser h sl pos m pos'
+  ))
+= let b = get_binders m in
+  LP.valid_valid_exact Psks.offeredPsks_binders_parser h sl pos1 ;
+  LP.valid_exact_serialize Psks.offeredPsks_binders_serializer h sl pos1 pos' ;
+  truncate_clientHello_bytes_correct m;
+  LP.serialize_valid_exact H.handshake_serializer h sl m pos pos' ;
+  LP.valid_exact_valid H.handshake_parser h sl pos pos'
 #push-options "--z3rlimit 32"
+
 let binders_pos #rrel #rel sl pos =
   let h = HST.get () in
   let x = Ghost.hide (LP.contents H.handshake_parser h sl pos) in
