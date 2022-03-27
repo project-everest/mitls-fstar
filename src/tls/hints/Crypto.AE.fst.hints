@@ -90,11 +90,11 @@
     [
       "Crypto.AE.encrypt",
       2,
-      2,
-      1,
+      0,
+      0,
       [ "@query" ],
       0,
-      "2c20ed88d0d86bf9b414c4286c363503"
+      "eae38affead77326b492445fa563b405"
     ],
     [
       "Crypto.AE.encrypt",
@@ -146,7 +146,10 @@
         "interpretation_Tm_abs_612136ee4143d24977831c80e4f470a1",
         "lemma_FStar.HyperStack.ST.lemma_equal_domains_trans",
         "lemma_FStar.Seq.Base.lemma_eq_elim",
-        "lemma_FStar.Seq.Base.lemma_eq_refl", "lemma_FStar.UInt32.uv_inv",
+        "lemma_FStar.Seq.Base.lemma_eq_intro",
+        "lemma_FStar.Seq.Base.lemma_eq_refl",
+        "lemma_FStar.Seq.Base.lemma_index_slice",
+        "lemma_FStar.Seq.Base.lemma_len_slice", "lemma_FStar.UInt32.uv_inv",
         "lemma_FStar.UInt32.vu_inv",
         "lemma_LowStar.Monotonic.Buffer.address_liveness_insensitive_buffer",
         "lemma_LowStar.Monotonic.Buffer.as_seq_gsub",
@@ -181,6 +184,7 @@
         "refinement_interpretation_Tm_refine_0ec011aea9f93256a3547ad9f0c667f1",
         "refinement_interpretation_Tm_refine_0f442191ed8e9fcd2af22596d4d9e607",
         "refinement_interpretation_Tm_refine_17c981ef323e12f766f430e31d66e778",
+        "refinement_interpretation_Tm_refine_35a0739c434508f48d0bb1d5cd5df9e8",
         "refinement_interpretation_Tm_refine_4fa8e2dd96f8bb1e23e6574326e9e019",
         "refinement_interpretation_Tm_refine_542f9d4f129664613f2483a6c88bc7c2",
         "refinement_interpretation_Tm_refine_6a6f8086ac3c22d372810c55b0752edc",
@@ -195,6 +199,8 @@
         "refinement_interpretation_Tm_refine_bd3fdb448883324e77558d275dcee4ed",
         "refinement_interpretation_Tm_refine_ce5a1bd8437baa640019cd70bf466fc0",
         "refinement_interpretation_Tm_refine_d13a2b85c8b6a42f9bf79bdc455b8079",
+        "refinement_interpretation_Tm_refine_d3d07693cd71377864ef84dc97d10ec1",
+        "refinement_interpretation_Tm_refine_d83f8da8ef6c1cb9f71d1465c1bb1c55",
         "refinement_interpretation_Tm_refine_e990cfb887e8f6c73df9f76fd855ddb5",
         "refinement_interpretation_Tm_refine_ea43748627b30554760fb69106d36071",
         "refinement_interpretation_Tm_refine_f13070840248fced9d9d60d77bdae3ec",
@@ -218,7 +224,7 @@
         "unit_inversion", "unit_typing"
       ],
       0,
-      "3ec9ab4e02c7c5c5faed66153f69a22f"
+      "5f45ad52b3ee55471c54f618047da2f2"
     ]
   ]
 ]

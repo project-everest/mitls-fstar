@@ -12,7 +12,7 @@
         "refinement_interpretation_Tm_refine_f13070840248fced9d9d60d77bdae3ec"
       ],
       0,
-      "2b1fa1be61b95b05bd37aec60dee20e4"
+      "68434c78e97c970ac2d058171046a88b"
     ],
     [
       "DataStream.repr",
@@ -21,7 +21,7 @@
       1,
       [ "@query", "equation_DataStream.ghost_repr" ],
       0,
-      "d688acbb80d102d56febe34e9cfca093"
+      "e2bcc84cf23635448fa35cd6bd9469b8"
     ],
     [
       "DataStream.mk_fragment",
@@ -33,7 +33,7 @@
         "primitive_Prims.op_AmpAmp", "projection_inverse_BoxBool_proj_0"
       ],
       0,
-      "be2e365c36c203d5654b6c4d377a5f19"
+      "8e2783965c80c46bd17784b9256b1c52"
     ],
     [
       "DataStream.appFragment",
@@ -42,7 +42,7 @@
       1,
       [ "@query", "equation_DataStream.ghost_repr" ],
       0,
-      "f1ab8c34742743d2b63f5ad590c9cdc0"
+      "782a5194ee8493a28f21d270704655ad"
     ],
     [
       "DataStream.appBytes",
@@ -51,7 +51,7 @@
       1,
       [ "@query", "equation_DataStream.ghost_repr" ],
       0,
-      "28b13bce2b525b55f8478904e95022b9"
+      "b1a8b9a8fa2e960a191ef0da94e162fd"
     ],
     [
       "DataStream.delta",
@@ -68,7 +68,7 @@
         "typing_FStar.Bytes.bytes"
       ],
       0,
-      "ac30ad94071d559ebde2c69fb3461a29"
+      "ec09a8ed510749efe9e2ffce9d1196f8"
     ],
     [
       "DataStream.__proj__Data__item___0",
@@ -76,12 +76,11 @@
       2,
       1,
       [
-        "@MaxIFuel_assumption", "@query", "disc_equation_DataStream.Data",
-        "projection_inverse_BoxBool_proj_0",
+        "@MaxIFuel_assumption", "@query",
         "refinement_interpretation_Tm_refine_0d466ae495b3961c5a09f777ca3640cd"
       ],
       0,
-      "ec55f669f10a9294dda0c474516eef8e"
+      "4c9d8f1217767672266e3b9e9f7a1db0"
     ],
     [
       "DataStream.__proj__Alert__item___0",
@@ -89,12 +88,11 @@
       2,
       1,
       [
-        "@MaxIFuel_assumption", "@query", "disc_equation_DataStream.Alert",
-        "projection_inverse_BoxBool_proj_0",
+        "@MaxIFuel_assumption", "@query",
         "refinement_interpretation_Tm_refine_36ed55116eca5cfa741045f75917d7b2"
       ],
       0,
-      "f98cdfd271d0d838109ba9dc33302155"
+      "1aab7180a979b3deedac0f894834dd7e"
     ],
     [
       "DataStream.final",
@@ -106,10 +104,11 @@
         "assumption_Parsers.AlertLevel.alertLevel__uu___haseq",
         "disc_equation_DataStream.Alert", "disc_equation_DataStream.Close",
         "disc_equation_DataStream.Data",
-        "fuel_guarded_inversion_DataStream.delta"
+        "fuel_guarded_inversion_DataStream.delta",
+        "projection_inverse_BoxBool_proj_0"
       ],
       0,
-      "7aa7c41eb8acd76580db2b1049a9ae32"
+      "5624fc603b695bd77d9f7b88160424ed"
     ],
     [
       "DataStream.finalized",
@@ -127,7 +126,7 @@
         "projection_inverse_BoxBool_proj_0", "subterm_ordering_Prims.Cons"
       ],
       0,
-      "956983e9b28cf17626cd327eeda8c3a6"
+      "05a1973f9fc44bd605e58dc077ef4e92"
     ],
     [
       "DataStream.wellformed",
@@ -138,10 +137,11 @@
         "@MaxIFuel_assumption", "@query",
         "binder_x_8734431131df6dd46aa9962779a47103_1",
         "disc_equation_Prims.Cons", "disc_equation_Prims.Nil",
-        "fuel_guarded_inversion_Prims.list"
+        "fuel_guarded_inversion_Prims.list",
+        "projection_inverse_BoxBool_proj_0"
       ],
       0,
-      "1a936e5cdff4efa8b78c2c36d84e6909"
+      "dc513c0165ed5cf83c34c3e33af1daa6"
     ],
     [
       "DataStream.empty_is_well_formed",
@@ -151,20 +151,23 @@
       [
         "@MaxFuel_assumption", "@MaxIFuel_assumption",
         "@fuel_correspondence_DataStream.wellformed.fuel_instrumented",
-        "@query", "Prims_pretyping_ae567c2fb75be05905677af440075565",
+        "@query", "constructor_distinct_Lib.IntTypes.U8",
         "constructor_distinct_Prims.Nil", "data_typing_intro_Prims.Nil@tok",
-        "equation_Mem.is_tls_rgn", "equation_Mem.tls_color",
-        "equation_Mem.tls_region", "equation_Mem.tls_rgn",
+        "equality_tok_Lib.IntTypes.U1@tok",
+        "equality_tok_Lib.IntTypes.U8@tok", "equation_Lib.IntTypes.unsigned",
+        "equation_Spec.AES.gf8", "equation_Spec.AES.irred",
+        "equation_Spec.GaloisField.gf",
         "equation_with_fuel_DataStream.wellformed.fuel_instrumented",
-        "function_token_typing_Prims.__cache_version_number__",
-        "kinding_DataStream.delta@tok", "primitive_Prims.op_Equality",
+        "kinding_DataStream.delta@tok",
+        "proj_equation_Spec.GaloisField.GF_t",
         "projection_inverse_BoxBool_proj_0",
         "projection_inverse_Prims.Nil_a",
-        "refinement_interpretation_Tm_refine_9393f41ccc9ce36df1080eefe33f6c53",
-        "typing_Mem.tls_region"
+        "projection_inverse_Spec.GaloisField.GF_t",
+        "refinement_interpretation_Tm_refine_de8080fdc4bd6678af723874a7d70466",
+        "typing_Spec.AES.gf8", "typing_Spec.GaloisField.__proj__GF__item__t"
       ],
       0,
-      "8e55edee72eb1c51caad720c12d09cbd"
+      "2ee245d84849cd30819aae28b2642647"
     ],
     [
       "DataStream.gen",
@@ -191,7 +194,7 @@
         "typing_FStar.Monotonic.HyperHeap.rid_freeable"
       ],
       0,
-      "aa1dd63f45b3cda668ffe58f84999487"
+      "105c99e970c35c87197b9118a3e64138"
     ]
   ]
 ]

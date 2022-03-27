@@ -25,7 +25,7 @@
         "typing_LowStar.Monotonic.Buffer.loc_unused_in"
       ],
       0,
-      "9eb1a236b96c33a113aeb77aff94ddc1"
+      "06095acd911ffc189fb9eb314a69e26f"
     ],
     [
       "IV.coerceT_raw",
@@ -39,7 +39,7 @@
         "refinement_interpretation_Tm_refine_6f1708ae61c9b7a5f39bbac36aef8b6a"
       ],
       0,
-      "4d4a1679ff7ed1412d9bcb2f390e9b05"
+      "b84636b0c41120d20e077d81770aa502"
     ],
     [
       "IV.coerce_raw",
@@ -60,7 +60,7 @@
         "typing_LowStar.Monotonic.Buffer.loc_none"
       ],
       0,
-      "ef401caeb668418b1856b639973a2bdc"
+      "bd1c26cee9083bc89fb573aa60a14db3"
     ],
     [
       "IV.local_raw_pkg",
@@ -91,7 +91,7 @@
         "typing_LowStar.Monotonic.Buffer.loc_unused_in"
       ],
       0,
-      "a2d73966bb59324b2f47cbde6c4e1d05"
+      "102db98f2b67240c7a200ff06972812e"
     ],
     [
       "IV.rp",
@@ -107,7 +107,7 @@
         "refinement_interpretation_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
       ],
       0,
-      "9d06dcd2466c0b1981b4230d0cff5222"
+      "2286af469f2456894d5fec1ab43eb022"
     ],
     [
       "IV.discard",
@@ -120,7 +120,7 @@
         "lemma_FStar.HyperStack.ST.lemma_same_refs_in_stack_regions_intro"
       ],
       0,
-      "5d43c908e0711452c092ac605a56925b"
+      "885dd85275430c072657c4f7856f4fab"
     ],
     [
       "IV.ip",
@@ -140,7 +140,7 @@
         "refinement_interpretation_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
       ],
       0,
-      "f8275e6f9d80217874dd855a0a07a87d"
+      "a8acc664a66a6f016fc02b58f50a3dae"
     ],
     [
       "IV.id_len",
@@ -149,7 +149,7 @@
       1,
       [ "@query" ],
       0,
-      "6a7a384a8bee6c4f5b76c82683ae412f"
+      "19b10a9286af16070016c7f4016457b8"
     ],
     [
       "IV.test",
@@ -161,20 +161,22 @@
         "Pkg_interpretation_Tm_arrow_e71198341ae1e3c3e0dc5f0370874a99",
         "Prims_interpretation_Tm_arrow_2eaa01e78f73e9bab5d0955fc1a662da",
         "bool_inversion", "bool_typing",
-        "constructor_distinct_FStar.Integers.Unsigned",
         "constructor_distinct_FStar.Integers.W16",
         "constructor_distinct_FStar.Integers.W32",
         "constructor_distinct_FStar.Integers.W8",
         "constructor_distinct_FStar.Integers.Winfinite",
-        "constructor_distinct_Lib.IntTypes.U32", "data_elim_Pkg.LocalPkg",
+        "constructor_distinct_Lib.IntTypes.PUB",
+        "constructor_distinct_Lib.IntTypes.U32",
+        "constructor_distinct_Lib.IntTypes.U8", "data_elim_Pkg.LocalPkg",
         "equality_tok_FStar.Integers.W16@tok",
         "equality_tok_FStar.Integers.W32@tok",
         "equality_tok_FStar.Integers.W8@tok",
         "equality_tok_FStar.Integers.Winfinite@tok",
-        "equation_DefineTable.fresh", "equation_DefineTable.loc",
-        "equation_FStar.Bytes.lbytes",
+        "equality_tok_Lib.IntTypes.PUB@tok",
+        "equality_tok_Lib.IntTypes.U1@tok",
+        "equality_tok_Lib.IntTypes.U8@tok", "equation_DefineTable.fresh",
+        "equation_DefineTable.loc", "equation_FStar.Bytes.lbytes",
         "equation_FStar.HyperStack.ST.equal_stack_domains",
-        "equation_FStar.Integers.int_t", "equation_FStar.Integers.uint_8",
         "equation_FStar.Monotonic.Heap.equal_dom",
         "equation_FStar.Monotonic.HyperHeap.disjoint",
         "equation_FStar.Monotonic.HyperStack.is_tip",
@@ -183,10 +185,13 @@
         "equation_FStar.UInt32.lt", "equation_IV.coerceT_raw",
         "equation_IV.id", "equation_IV.id_len", "equation_IV.info",
         "equation_IV.ip", "equation_IV.local_raw_pkg", "equation_IV.raw",
-        "equation_Mem.store_region", "equation_Mem.tls_region",
-        "equation_Pkg.memoization", "equation_Pkg.regid",
-        "equation_Prims.eqtype", "equation_Prims.nat",
-        "function_token_typing_FStar.Integers.uint_8",
+        "equation_Lib.IntTypes.byte_t", "equation_Lib.IntTypes.int_t",
+        "equation_Lib.IntTypes.pub_int_t", "equation_Mem.store_region",
+        "equation_Mem.tls_region", "equation_Pkg.memoization",
+        "equation_Pkg.regid", "equation_Prims.eqtype", "equation_Prims.nat",
+        "equation_Spec.AES.gf8", "equation_Spec.AES.irred",
+        "equation_Spec.GaloisField.gf",
+        "function_token_typing_Lib.IntTypes.byte_t",
         "function_token_typing_Pkg.__proj__LocalPkg__item__key",
         "function_token_typing_Prims.int",
         "haseqTm_refine_31c7d3d85d92cb942c95a78642e657c7",
@@ -212,6 +217,7 @@
         "proj_equation_Pkg.Pkg_coerceT", "proj_equation_Pkg.Pkg_ideal",
         "proj_equation_Pkg.Pkg_info", "proj_equation_Pkg.Pkg_len",
         "proj_equation_Pkg.Pkg_package_invariant",
+        "proj_equation_Spec.GaloisField.GF_t",
         "projection_inverse_BoxBool_proj_0",
         "projection_inverse_BoxInt_proj_0",
         "projection_inverse_FStar.Integers.Signed__0",
@@ -227,6 +233,7 @@
         "projection_inverse_Pkg.Pkg_ideal",
         "projection_inverse_Pkg.Pkg_info", "projection_inverse_Pkg.Pkg_len",
         "projection_inverse_Pkg.Pkg_package_invariant",
+        "projection_inverse_Spec.GaloisField.GF_t",
         "refinement_interpretation_Tm_refine_0293669e3551b06bf284909872d618f3",
         "refinement_interpretation_Tm_refine_05e15190c946858f68c69156f585f95a",
         "refinement_interpretation_Tm_refine_0a582e791209f7f5e4b97f544f75500e",
@@ -237,6 +244,7 @@
         "refinement_interpretation_Tm_refine_414d0a9f578ab0048252f8c8f552b99f",
         "refinement_interpretation_Tm_refine_6f1708ae61c9b7a5f39bbac36aef8b6a",
         "refinement_interpretation_Tm_refine_71ea40360194fe02ee1272538c9cacbc",
+        "refinement_interpretation_Tm_refine_de8080fdc4bd6678af723874a7d70466",
         "token_correspondence_IV.coerceT_raw",
         "token_correspondence_IV.id_len", "token_correspondence_IV.info",
         "token_correspondence_IV.raw",
@@ -252,10 +260,11 @@
         "typing_FStar.Bytes.reveal",
         "typing_FStar.Monotonic.HyperStack.get_tip",
         "typing_FStar.Seq.Base.length", "typing_IV.ip",
-        "typing_Mem.store_region", "typing_Pkg.regid"
+        "typing_Mem.store_region", "typing_Pkg.regid", "typing_Spec.AES.gf8",
+        "typing_Spec.GaloisField.__proj__GF__item__t"
       ],
       0,
-      "c788c4fe56bc467ac67c87cbeffa97a4"
+      "25734a3f223fba7af3984c98f294cb01"
     ]
   ]
 ]

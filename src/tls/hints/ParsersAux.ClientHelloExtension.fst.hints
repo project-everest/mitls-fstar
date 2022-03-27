@@ -8,7 +8,6 @@
       0,
       [
         "@MaxIFuel_assumption", "@query",
-        "assumption_FStar.UInt16.t__uu___haseq",
         "assumption_Parsers.ExtensionType.extensionType__uu___haseq",
         "constructor_distinct_LowParse.Spec.Enum.Known",
         "constructor_distinct_Parsers.ExtensionType.Pre_shared_key",
@@ -16,10 +15,8 @@
         "equality_tok_LowParse.Spec.Sum.DSum@tok",
         "equality_tok_Parsers.ExtensionType.Pre_shared_key@tok",
         "equality_tok_Parsers.ExtensionType.Server_name@tok",
-        "equation_FStar.Pervasives.dsnd",
         "equation_LowParse.Low.Sum.clens_dsum_payload",
         "equation_LowParse.Spec.Base.get_parser_kind",
-        "equation_LowParse.Spec.Base.parser_kind",
         "equation_LowParse.Spec.Base.serialize",
         "equation_LowParse.Spec.Base.strong_parser_kind",
         "equation_LowParse.Spec.Base.total_constant_size_parser_kind",
@@ -50,15 +47,13 @@
         "equation_Parsers.ExtensionType.parse_maybe_extensionType_key",
         "equation_Parsers.ExtensionType.serialize_maybe_extensionType_key",
         "equation_Parsers.ExtensionType.synth_extensionType_inv",
-        "fuel_guarded_inversion_LowParse.Low.Base.clens",
+        "fuel_guarded_inversion_LowParse.Low.Base.Spec.clens",
         "function_token_typing_LowParse.Spec.Sum.dsum_type_of_known_tag",
         "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind",
         "proj_equation_Parsers.ClientHelloExtension.CHE_pre_shared_key__0",
-        "proj_equation_Prims.Mkdtuple2__1",
-        "proj_equation_Prims.Mkdtuple2__2",
         "projection_inverse_BoxBool_proj_0",
-        "projection_inverse_LowParse.Low.Base.Mkclens_t1",
-        "projection_inverse_LowParse.Low.Base.Mkclens_t2",
+        "projection_inverse_LowParse.Low.Base.Spec.Mkclens_t1",
+        "projection_inverse_LowParse.Low.Base.Spec.Mkclens_t2",
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind",
         "projection_inverse_LowParse.Spec.Enum.Known__0",
         "projection_inverse_LowParse.Spec.Enum.Known_e",
@@ -82,7 +77,7 @@
         "typing_Parsers.ClientHelloExtension.clientHelloExtension_clens__server_name"
       ],
       0,
-      "3312dc9ae088abe2950fa3bafbfcf9c2"
+      "50b35475855b0c6ba7e1fb75cb707346"
     ]
   ]
 ]

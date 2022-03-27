@@ -10,10 +10,11 @@
         "@MaxIFuel_assumption", "@query",
         "disc_equation_TLSConstants.Reader",
         "disc_equation_TLSConstants.Writer",
-        "fuel_guarded_inversion_TLSConstants.rw"
+        "fuel_guarded_inversion_TLSConstants.rw",
+        "projection_inverse_BoxBool_proj_0"
       ],
       0,
-      "94594c3da2394877d7989ccf43386ee4"
+      "d0b5f6d69697aca6fe50aa9a8b1e85ae"
     ],
     [
       "Crypto.Indexing.aeadAlg_of_id",
@@ -21,13 +22,11 @@
       2,
       1,
       [
-        "@MaxIFuel_assumption", "@query", "bool_inversion",
-        "disc_equation_CipherSuite.AEAD", "equation_Crypto.Indexing.id",
-        "refinement_interpretation_Tm_refine_27bc248aea929afc1c455a4ca114e85e",
-        "typing_CipherSuite.uu___is_AEAD"
+        "@MaxIFuel_assumption", "@query", "equation_Crypto.Indexing.id",
+        "refinement_interpretation_Tm_refine_27bc248aea929afc1c455a4ca114e85e"
       ],
       0,
-      "89d9d3689d974a2bdadce7205f9471c0"
+      "3694fc8e9b76895e5feba667c863ceae"
     ],
     [
       "Crypto.Indexing.macAlg_of_id",
@@ -41,10 +40,11 @@
         "disc_equation_Crypto.Indexing.CHACHA20_POLY1305",
         "equation_Crypto.Indexing.aeadAlg_of_id",
         "fuel_guarded_inversion_Crypto.Indexing.aeadAlg",
+        "projection_inverse_BoxBool_proj_0",
         "typing_Crypto.Indexing.aeadAlg_of_id"
       ],
       0,
-      "94ce2d6704b1e029993cfcb1cbb9c0ac"
+      "125843eea4124ed1c8ff6b75e4a97787"
     ],
     [
       "Crypto.Indexing.cipherAlg_of_id",
@@ -58,10 +58,11 @@
         "disc_equation_Crypto.Indexing.CHACHA20_POLY1305",
         "equation_Crypto.Indexing.aeadAlg_of_id",
         "fuel_guarded_inversion_Crypto.Indexing.aeadAlg",
+        "projection_inverse_BoxBool_proj_0",
         "typing_Crypto.Indexing.aeadAlg_of_id"
       ],
       0,
-      "5113487a8d5e30c4dad3b02321ae68ef"
+      "b287d2662d1e930f27c30fade870599e"
     ],
     [
       "Crypto.Indexing.aeadAlg_cipherAlg",
@@ -78,7 +79,7 @@
         "equation_Crypto.Indexing.cipherAlg_of_id"
       ],
       0,
-      "7e5b32b4ccba2e069a9b0612845174ac"
+      "a170a1192dc29fd5a05873b90b9afb05"
     ]
   ]
 ]

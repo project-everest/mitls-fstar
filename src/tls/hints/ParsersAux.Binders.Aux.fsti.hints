@@ -10,29 +10,22 @@
         "@MaxFuel_assumption", "@MaxIFuel_assumption",
         "@fuel_correspondence_Prims.pow2.fuel_instrumented",
         "@fuel_irrelevance_Prims.pow2.fuel_instrumented", "@query",
-        "b2t_def", "equation_FStar.Bytes.lbytes", "equation_FStar.UInt.fits",
-        "equation_FStar.UInt.max_int", "equation_FStar.UInt.min_int",
-        "equation_FStar.UInt.size", "equation_FStar.UInt.uint_t",
+        "b2t_def", "equation_FStar.UInt.fits", "equation_FStar.UInt.max_int",
+        "equation_FStar.UInt.min_int", "equation_FStar.UInt.size",
         "equation_LowParse.Spec.BoundedInt.bounded_integer_prop",
         "equation_Parsers.ClientHelloExtension_CHE_pre_shared_key.clientHelloExtension_CHE_pre_shared_key",
-        "equation_Prims.nat",
-        "equation_with_fuel_Prims.pow2.fuel_instrumented", "int_typing",
-        "lemma_FStar.UInt.pow2_values",
+        "equation_Prims.nat", "int_typing", "lemma_FStar.UInt.pow2_values",
         "lemma_Parsers.PreSharedKeyClientExtension.preSharedKeyClientExtension_bytesize_eqn",
         "primitive_Prims.op_AmpAmp", "primitive_Prims.op_LessThan",
-        "primitive_Prims.op_LessThanOrEqual", "primitive_Prims.op_Multiply",
+        "primitive_Prims.op_LessThanOrEqual",
         "primitive_Prims.op_Subtraction",
         "projection_inverse_BoxBool_proj_0",
         "projection_inverse_BoxInt_proj_0",
         "refinement_interpretation_Tm_refine_542f9d4f129664613f2483a6c88bc7c2",
-        "refinement_interpretation_Tm_refine_54d8e4368ef4be5e2ddd5dfe39051b03",
-        "refinement_interpretation_Tm_refine_71ea40360194fe02ee1272538c9cacbc",
-        "refinement_interpretation_Tm_refine_f13070840248fced9d9d60d77bdae3ec",
-        "typing_FStar.Bytes.empty_bytes", "typing_FStar.Bytes.len",
-        "typing_FStar.UInt32.v"
+        "refinement_interpretation_Tm_refine_54d8e4368ef4be5e2ddd5dfe39051b03"
       ],
       0,
-      "a1d57f1ff73935b400d5a9d432fd2c53"
+      "4f5350c675a0daba45b63aebfad70e31"
     ],
     [
       "ParsersAux.Binders.Aux.size32_list_clientHelloExtension",
@@ -41,7 +34,7 @@
       1,
       [ "@query" ],
       0,
-      "7fa719ede1ed76f9a4073c62c724058b"
+      "72edfb986d740275c8b08b93c39ba078"
     ],
     [
       "ParsersAux.Binders.Aux.list_clientHelloExtension_last_pos",
@@ -54,7 +47,7 @@
         "refinement_interpretation_Tm_refine_b2fa11317c73afed083e5f984d5ee8a5"
       ],
       0,
-      "9fa4e1f2fe686611f3d69622f8d126fd"
+      "45c7905558e0a8ed5e489e77f14a74dc"
     ],
     [
       "ParsersAux.Binders.Aux.serialize_clientHelloExtensions_eq",
@@ -65,27 +58,21 @@
         "@MaxFuel_assumption", "@MaxIFuel_assumption",
         "@fuel_correspondence_Prims.pow2.fuel_instrumented",
         "@fuel_irrelevance_Prims.pow2.fuel_instrumented", "@query",
-        "b2t_def", "equation_FStar.Bytes.lbytes", "equation_FStar.UInt.fits",
-        "equation_FStar.UInt.max_int", "equation_FStar.UInt.min_int",
-        "equation_FStar.UInt.size", "equation_FStar.UInt.uint_t",
+        "b2t_def", "equation_FStar.UInt.fits", "equation_FStar.UInt.max_int",
+        "equation_FStar.UInt.min_int", "equation_FStar.UInt.size",
         "equation_LowParse.Spec.BoundedInt.bounded_integer_prop",
         "equation_Parsers.ClientHelloExtensions.clientHelloExtensions",
-        "equation_Prims.nat",
-        "equation_with_fuel_Prims.pow2.fuel_instrumented", "int_typing",
-        "lemma_FStar.UInt.pow2_values", "primitive_Prims.op_AmpAmp",
-        "primitive_Prims.op_LessThan", "primitive_Prims.op_LessThanOrEqual",
-        "primitive_Prims.op_Multiply", "primitive_Prims.op_Subtraction",
+        "equation_Prims.nat", "int_typing", "lemma_FStar.UInt.pow2_values",
+        "primitive_Prims.op_AmpAmp", "primitive_Prims.op_LessThan",
+        "primitive_Prims.op_LessThanOrEqual",
+        "primitive_Prims.op_Subtraction",
         "projection_inverse_BoxBool_proj_0",
         "projection_inverse_BoxInt_proj_0",
         "refinement_interpretation_Tm_refine_2bae5c3803c6c608e1680d3a46547c16",
-        "refinement_interpretation_Tm_refine_542f9d4f129664613f2483a6c88bc7c2",
-        "refinement_interpretation_Tm_refine_71ea40360194fe02ee1272538c9cacbc",
-        "refinement_interpretation_Tm_refine_f13070840248fced9d9d60d77bdae3ec",
-        "typing_FStar.Bytes.empty_bytes", "typing_FStar.Bytes.len",
-        "typing_FStar.UInt32.v"
+        "refinement_interpretation_Tm_refine_542f9d4f129664613f2483a6c88bc7c2"
       ],
       0,
-      "0602bca5567c8fe94042b64f646c6a2a"
+      "8839446cab8376563dc04bfb4f7f5288"
     ],
     [
       "ParsersAux.Binders.Aux.serialize_handshake_m_client_hello_eq",
@@ -100,7 +87,7 @@
         "@fuel_irrelevance_Prims.pow2.fuel_instrumented", "@query",
         "Parsers.CipherSuite_pretyping_9c6d586fdf50864ba03b45206b761561",
         "Parsers.CompressionMethod_pretyping_0b005f481768a7bd4dd503e17d391cea",
-        "b2t_def",
+        "b2t_def", "bool_inversion",
         "data_typing_intro_Parsers.CipherSuite.TLS_RSA_WITH_NULL_MD5@tok",
         "equality_tok_Parsers.CompressionMethod.NullCompression@tok",
         "equation_FStar.Bytes.lbytes", "equation_FStar.UInt.fits",
@@ -113,7 +100,6 @@
         "equation_Parsers.Handshake_m_client_hello.handshake_m_client_hello",
         "equation_Parsers.Random.random",
         "equation_Parsers.SessionID.sessionID", "equation_Prims.nat",
-        "equation_with_fuel_Prims.pow2.fuel_instrumented",
         "fuel_guarded_inversion_Parsers.ClientHello.clientHello",
         "int_typing", "lemma_FStar.UInt.pow2_values",
         "lemma_Parsers.ClientHello.clientHello_bytesize_eqn",
@@ -141,7 +127,7 @@
         "refinement_interpretation_Tm_refine_beec71e2de9ddfab99931e183d4c495c",
         "refinement_interpretation_Tm_refine_f13070840248fced9d9d60d77bdae3ec",
         "typing_FStar.Bytes.empty_bytes", "typing_FStar.Bytes.len",
-        "typing_FStar.UInt32.v",
+        "typing_FStar.UInt.fits", "typing_FStar.UInt32.v",
         "typing_Parsers.ClientHello.__proj__MkclientHello__item__cipher_suites",
         "typing_Parsers.ClientHello.__proj__MkclientHello__item__compression_methods",
         "typing_Parsers.ClientHello.__proj__MkclientHello__item__extensions",
@@ -152,7 +138,7 @@
         "typing_tok_Parsers.CompressionMethod.NullCompression@tok"
       ],
       0,
-      "57f7fb9a97c0984ca5a7484388464cdc"
+      "cb7e18ea9b38f2df414c7d56bb5800a0"
     ]
   ]
 ]
