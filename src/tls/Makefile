@@ -162,7 +162,7 @@ endif
 
 $(OUTPUT_DIR)/%.krml:
 	$(call run-with-log,\
-	  $(FSTAR) --codegen Kremlin \
+	  $(FSTAR) --codegen krml \
 	    --extract_module $(basename $(notdir $(subst .checked,,$<))) \
 	    $(notdir $(subst .checked,,$<)) && \
 	  touch $@ \
@@ -170,12 +170,12 @@ $(OUTPUT_DIR)/%.krml:
 
 
 #############################
-# KreMLin and C compilation #
+# KaRaMeL and C compilation #
 #############################
 
 compile-all: compile-compact compile-compact-msvc compile-test
 
-KRML = $(KREMLIN_HOME)/krml
+KRML = $(KRML_HOME)/krml
 
 HAND_WRITTEN_C_FILES = $(wildcard cstubs/*.c)
 HAND_WRITTEN_H_FILES = $(wildcard cstubs/*.h) ../../libs/ffi/mitlsffi.h ../pki/mipki.h
@@ -185,7 +185,7 @@ HAND_WRITTEN_FILES = $(HAND_WRITTEN_C_FILES) $(HAND_WRITTEN_H_FILES)
 # Notes:
 # - Token.UF1CMA does not extract
 # - AEAD.Pkg does not extract (type-checks against a fictitious AEAD interface)
-# - KreMLin bug in anonymous unions, hence the -fno-anonymous-unions
+# - KaRaMeL bug in anonymous unions, hence the -fno-anonymous-unions
 # - many void* pointers being assigned due to debug flags; is the code even
 #   runnable without debug?
 # - spurious error: StreamAE.c: In function ‘StreamAE_decrypt’:
@@ -200,7 +200,7 @@ KRML_OPTS = \
   -skip-compilation \
   -silent \
   -warn-error -9-7-6@4-14-15+11-20 \
-  -add-include '"kremlin/internal/compat.h"' \
+  -add-include '"krml/internal/compat.h"' \
   -ccopts -Wno-type-limits,-Wno-unused,-Wno-uninitialized \
   -ccopts $(DEBUG_FLAGS) \
   -fnoanonymous-unions -fparentheses -fno-shadow -fcurly-braces \
@@ -215,7 +215,7 @@ KRML_FLAGS = \
   -bundle 'Vale.*,Hacl.*[rename=Unused1]' \
   -bundle 'LowParse.\*,LowParseWrappers[rename=LowParse]' \
   -bundle 'Format.\*' \
-  -bundle 'FStar.\*,LowStar.\*,C,C.\*[rename=Mitls_Kremlib]' \
+  -bundle 'FStar.\*,LowStar.\*,C,C.\*[rename=Mitls_Krmllib]' \
   -bundle 'Parsers.ClientHello=Parsers.\*,ParsersAux.\*[rename=Parsers]' \
   -bundle 'Spec.\*' \
   -bundle 'Test.\*' \

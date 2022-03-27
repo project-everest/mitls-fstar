@@ -1,6 +1,6 @@
 MITLS_HOME	?= ../..
 FSTAR_HOME	?= $(MITLS_HOME)/../FStar
-KREMLIN_HOME	?= $(MITLS_HOME)/../kremlin
+KRML_HOME	?= $(MITLS_HOME)/../karamel
 HACL_HOME	?= $(MITLS_HOME)/../hacl-star
 MLCRYPTO_HOME	?= $(MITLS_HOME)/../MLCrypto
 QD_HOME		?= $(MITLS_HOME)/../quackyducky
@@ -9,10 +9,10 @@ include $(HACL_HOME)/Makefile.include
 
 INCLUDE_PATHS 	= \
   $(ALL_HACL_DIRS) \
-  $(KREMLIN_HOME)/include \
-  $(KREMLIN_HOME)/kremlib/compat \
-  $(KREMLIN_HOME)/kremlib/obj \
-  $(KREMLIN_HOME)/kremlib \
+  $(KRML_HOME)/include \
+  $(KRML_HOME)/krmllib/compat \
+  $(KRML_HOME)/krmllib/obj \
+  $(KRML_HOME)/krmllib \
   $(MITLS_HOME)/libs/ffi \
   $(QD_HOME)/src/lowparse \
   $(MITLS_HOME)/src/parsers/generated \
