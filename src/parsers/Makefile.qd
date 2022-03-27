@@ -2,10 +2,10 @@ FSTAR_HOME ?= ../../../../FStar
 MITLS_HOME ?= ../../../../mitls-fstar
 KRML_HOME ?= ../../../../karamel
 ifndef LOWPARSE_HOME
-  ifdef QD_HOME
-    LOWPARSE_HOME=$(QD_HOME)/src/lowparse
+  ifdef EVERPARSE_HOME
+    LOWPARSE_HOME=$(EVERPARSE_HOME)/src/lowparse
   else
-    LOWPARSE_HOME=../../../../quackyducky/src/lowparse
+    LOWPARSE_HOME=../../../../everparse/src/lowparse
   endif
 endif
 

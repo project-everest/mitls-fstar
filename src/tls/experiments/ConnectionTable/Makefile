@@ -1,7 +1,7 @@
 HACL_HOME    ?= ../../../../../hacl-star
 FSTAR_HOME   ?= ../../../../../FStar
 KRML_HOME ?= ../../../../../karamel
-QD_HOME      ?= ../../../../../quackyducky
+EVERPARSE_HOME      ?= ../../../../../everparse
 
 CACHE_DIR     ?= .
 HINT_DIR      ?= .
@@ -31,7 +31,7 @@ FSTAR_INCLUDE_DIRS = \
   $(HACL_HOME)/providers/evercrypt \
   ../.. \
   ../../../parsers/generated \
-  $(QD_HOME)/src/lowparse \
+  $(EVERPARSE_HOME)/src/lowparse \
   $(KRML_HOME)/krmllib
 
 FSTAR_FLAGS = $(OTHERFLAGS) --cmi \

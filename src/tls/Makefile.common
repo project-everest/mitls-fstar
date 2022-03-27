@@ -3,7 +3,7 @@ FSTAR_HOME	?= $(MITLS_HOME)/../FStar
 KRML_HOME	?= $(MITLS_HOME)/../karamel
 HACL_HOME	?= $(MITLS_HOME)/../hacl-star
 MLCRYPTO_HOME	?= $(MITLS_HOME)/../MLCrypto
-QD_HOME		?= $(MITLS_HOME)/../quackyducky
+EVERPARSE_HOME		?= $(MITLS_HOME)/../everparse
 
 include $(HACL_HOME)/Makefile.include
 
@@ -14,7 +14,7 @@ INCLUDE_PATHS 	= \
   $(KRML_HOME)/krmllib/obj \
   $(KRML_HOME)/krmllib \
   $(MITLS_HOME)/libs/ffi \
-  $(QD_HOME)/src/lowparse \
+  $(EVERPARSE_HOME)/src/lowparse \
   $(MITLS_HOME)/src/parsers/generated \
   $(MITLS_HOME)/src/tls \
   $(MITLS_HOME)/src/tls/obj
