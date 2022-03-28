@@ -1,7 +1,7 @@
 HACL_HOME    ?= ../../../../../hacl-star
 FSTAR_HOME   ?= ../../../../../FStar
-KREMLIN_HOME ?= ../../../../../kremlin
-QD_HOME      ?= ../../../../../quackyducky
+KRML_HOME ?= ../../../../../karamel
+EVERPARSE_HOME      ?= ../../../../../everparse
 
 CACHE_DIR     ?= .
 HINT_DIR      ?= .
@@ -31,8 +31,8 @@ FSTAR_INCLUDE_DIRS = \
   $(HACL_HOME)/providers/evercrypt \
   ../.. \
   ../../../parsers/generated \
-  $(QD_HOME)/src/lowparse \
-  $(KREMLIN_HOME)/kremlib
+  $(EVERPARSE_HOME)/src/lowparse \
+  $(KRML_HOME)/krmllib
 
 FSTAR_FLAGS = $(OTHERFLAGS) --cmi \
   --cache_checked_modules --cache_dir $(CACHE_DIR) --odir $(OUTPUT_DIR) \
@@ -51,7 +51,7 @@ $(HINT_DIR):
 	mkdir -p $@
 
 .depend:
-	$(FSTAR) --dep full $(ROOTS) --extract 'OCaml:* -LowStar -FStar; Kremlin:*' > $@
+	$(FSTAR) --dep full $(ROOTS) --extract 'OCaml:* -LowStar -FStar; krml:*' > $@
 
 include .depend
 
@@ -65,18 +65,18 @@ LowParse.%.checked Parsers.%.checked: | .depend $(HINT_DIR) $(CACHE_DIR)
 
 
 $(OUTPUT_DIR)/%.krml: | .depend $(OUTPUT_DIR)
-	$(FSTAR) --codegen Kremlin \
+	$(FSTAR) --codegen krml \
 	  --extract_module $(basename $(notdir $(subst .checked,,$<))) \
 	  $(notdir $(subst .checked,,$<)) && \
 	touch $@
 
 # 2. Generation of .c files
 
-KREMLIN=$(KREMLIN_HOME)/krml
+KRML=$(KRML_HOME)/krml
 
 # We use -drop (deprecated) only to avoid creating unnecessary .c,.h files
 $(GENERATED_DIR)/Makefile.include: $(ALL_KRML_FILES) | .depend
-	$(KREMLIN) -skip-compilation \
+	$(KRML) -skip-compilation \
 	-no-prefix 'ConnectionTable' \
 	-no-prefix 'ConnectionTable_Aux' \
 	-no-prefix 'Test' \
@@ -97,9 +97,9 @@ ALL_SOURCES = $(ALL_GENERATED_FILES)
 ALL_OBJS = $(patsubst %.c,%.o,$(ALL_SOURCES))
 
 INCLUDE_DIRS = \
-  $(KREMLIN_HOME)/include \
-  $(KREMLIN_HOME)/kremlib \
-  $(KREMLIN_HOME)/kremlib/dist/generic
+  $(KRML_HOME)/include \
+  $(KRML_HOME)/krmllib \
+  $(KRML_HOME)/krmllib/dist/generic
 
 CFLAGS += -O3 -march=native -mtune=native -funroll-loops
 CFLAGS += $(addprefix -I ,$(INCLUDE_DIRS)) -Wall -Wextra -Werror \
@@ -120,7 +120,7 @@ $(OUT_DIR):
 $(OUT_DIR)/test.exe: $(ALL_OBJS) | $(OUT_DIR)
 	$(info ALL_SOURCES is $(ALL_SOURCES))
 	cp driver.c $(GENERATED_DIR)
-	$(CC) $(CFLAGS) -o $@ $^ -L $(KREMLIN_HOME)/kremlib/dist/generic -lkremlib $(GENERATED_DIR)/driver.c
+	$(CC) $(CFLAGS) -o $@ $^ -L $(KRML_HOME)/krmllib/dist/generic -lkrmllib $(GENERATED_DIR)/driver.c
 
 .PRECIOUS: %.o
 

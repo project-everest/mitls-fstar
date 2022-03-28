@@ -40,14 +40,14 @@
       2,
       1,
       [
-        "@MaxIFuel_assumption", "@query", "bool_inversion", "bool_typing",
+        "@MaxIFuel_assumption", "@query",
         "disc_equation_Parsers.ServerHello_is_hrr.ServerHello_is_hrr_true",
         "equation_HandshakeMessages.hrr",
         "equation_HandshakeMessages.is_hrr",
         "refinement_interpretation_Tm_refine_6e57058ef569de90ae614e17eb80fb92"
       ],
       0,
-      "462f75e34a19ed3a2dbd69fa1cd719c5"
+      "21baec7993abc4b353836c6ce54fc2dc"
     ],
     [
       "HandshakeMessages.mk_hrr",
@@ -74,16 +74,26 @@
       1,
       [
         "@MaxIFuel_assumption", "@query",
+        "constructor_distinct_Lib.IntTypes.U8",
         "disc_equation_CipherSuite.CipherSuite13",
         "disc_equation_FStar.Pervasives.Native.Some",
+        "equality_tok_Lib.IntTypes.U1@tok",
+        "equality_tok_Lib.IntTypes.U8@tok",
         "equation_CipherSuite.cipherSuite",
         "equation_HandshakeMessages.is_valid_hrr",
         "equation_HandshakeMessages.valid_hrr",
+        "equation_Lib.IntTypes.unsigned", "equation_Spec.AES.gf8",
+        "equation_Spec.AES.irred", "equation_Spec.GaloisField.gf",
         "proj_equation_FStar.Pervasives.Native.Some_v",
-        "refinement_interpretation_Tm_refine_c78aac7798afeafd32bb136d57a065e5"
+        "proj_equation_Spec.GaloisField.GF_t",
+        "projection_inverse_BoxBool_proj_0",
+        "projection_inverse_Spec.GaloisField.GF_t",
+        "refinement_interpretation_Tm_refine_c78aac7798afeafd32bb136d57a065e5",
+        "refinement_interpretation_Tm_refine_de8080fdc4bd6678af723874a7d70466",
+        "typing_Spec.AES.gf8", "typing_Spec.GaloisField.__proj__GF__item__t"
       ],
       0,
-      "44a56768fe7346fca41b2b58f0558f92"
+      "81a71a0b5ee5c5c15f3403b5fb8d1e85"
     ]
   ]
 ]

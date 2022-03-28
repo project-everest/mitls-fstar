@@ -13,7 +13,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind"
       ],
       0,
-      "3cb8d00bc238071c0ab6c3f61575a612"
+      "b0e06b9b342aa171cde7505d2fa29bdb"
     ],
     [
       "MITLS.Repr.ServerHello.field_is_hrr",
@@ -28,7 +28,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind"
       ],
       0,
-      "27c74e916258982d5eec6a4e044d63c2"
+      "ed27be81eaf5e6de9f2aa788bfbd269f"
     ],
     [
       "MITLS.Repr.ServerHello.cipherSuite",
@@ -38,7 +38,7 @@
       [
         "@MaxIFuel_assumption", "@query",
         "Parsers.CipherSuite_pretyping_9c6d586fdf50864ba03b45206b761561",
-        "b2t_def", "data_elim_LowParse.Repr.Ptr",
+        "b2t_def", "bool_inversion", "data_elim_LowParse.Repr.Ptr",
         "data_typing_intro_Parsers.CipherSuite.TLS_RSA_WITH_NULL_MD5@tok",
         "disc_equation_Parsers.ServerHello_is_hrr.ServerHello_is_hrr_false",
         "disc_equation_Parsers.ServerHello_is_hrr.ServerHello_is_hrr_true",
@@ -67,9 +67,11 @@
         "equation_Parsers.ServerHello_is_hrr.serverHello_is_hrr_clens_false",
         "equation_Parsers.ServerHello_is_hrr.serverHello_is_hrr_clens_true",
         "equation_Parsers.ServerHello_is_hrr.serverHello_is_hrr_parser_kind",
+        "equation_Prims.nat",
         "fuel_guarded_inversion_LowParse.Repr.repr_ptr",
         "fuel_guarded_inversion_Parsers.ServerHello.serverHello",
         "fuel_guarded_inversion_Parsers.ServerHello_is_hrr.serverHello_is_hrr",
+        "int_typing",
         "interpretation_Tm_abs_02473a4ce0cb8e58c0ec8c426df4ffea",
         "interpretation_Tm_abs_08ea94a4e26b29c0a091f5b880a1c7e7",
         "interpretation_Tm_abs_3fa9bd342b9d72d439e1a36f0adc5825",
@@ -87,7 +89,7 @@
         "lemma_LowStar.Monotonic.Buffer.loc_disjoint_none_r",
         "lemma_LowStar.Monotonic.Buffer.loc_includes_none",
         "lemma_LowStar.Monotonic.Buffer.modifies_trans_linear",
-        "primitive_Prims.op_AmpAmp", "primitive_Prims.op_LessThanOrEqual",
+        "primitive_Prims.op_LessThanOrEqual",
         "proj_equation_LowParse.Low.Base.Spec.Mkclens_clens_cond",
         "proj_equation_LowParse.Low.Base.Spec.Mkclens_clens_get",
         "proj_equation_LowParse.Repr.FieldAccessor_cl",
@@ -95,6 +97,7 @@
         "proj_equation_LowParse.Repr.Ptr_meta",
         "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind",
         "projection_inverse_BoxBool_proj_0",
+        "projection_inverse_BoxInt_proj_0",
         "projection_inverse_LowParse.Low.Base.Spec.Mkclens_clens_cond",
         "projection_inverse_LowParse.Low.Base.Spec.Mkclens_clens_get",
         "projection_inverse_LowParse.Repr.FieldAccessor_cl",
@@ -102,6 +105,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind",
         "refinement_interpretation_Tm_refine_038aff9aae265624e8a5b7acaf08d3fa",
         "refinement_interpretation_Tm_refine_4092f8b76f14f2fe5cbd0a2758666b5f",
+        "refinement_interpretation_Tm_refine_542f9d4f129664613f2483a6c88bc7c2",
         "refinement_interpretation_Tm_refine_5eaad0bf198ccf6159239023356b04dc",
         "refinement_interpretation_Tm_refine_71ea40360194fe02ee1272538c9cacbc",
         "refinement_interpretation_Tm_refine_7454c1efb76cb952e73217f656082462",
@@ -115,14 +119,15 @@
         "token_correspondence_LowParse.Low.Base.Spec.__proj__Mkclens__item__clens_cond",
         "token_correspondence_LowParse.Low.Base.Spec.__proj__Mkclens__item__clens_get",
         "true_interp", "typing_FStar.Bytes.empty_bytes",
-        "typing_FStar.Bytes.len", "typing_FStar.UInt32.v",
+        "typing_FStar.Bytes.len", "typing_FStar.UInt.fits",
+        "typing_FStar.UInt32.v",
         "typing_LowParse.Repr.__proj__Mkmeta__item__parser_kind",
         "typing_LowParse.Repr.__proj__Ptr__item__meta",
         "typing_LowParse.Repr.fp", "typing_LowParse.Repr.value",
         "typing_LowStar.Monotonic.Buffer.loc_none"
       ],
       0,
-      "5bd9a839e49c42e75f88790296dc2d0d"
+      "c6f64d522f1cf5b3d1fe0dcf7c7044a6"
     ]
   ]
 ]

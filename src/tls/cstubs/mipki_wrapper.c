@@ -1,7 +1,7 @@
 #ifdef LOG_TO_CHOICE
 #include "log_to_choice.h"
 #endif
-#include <kremlib.h>
+#include <krmllib.h>
 #include <mipki.h>
 #include <mitlsffi.h>
 #include <PKI.h>

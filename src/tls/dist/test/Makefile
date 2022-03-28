@@ -1,5 +1,5 @@
 MITLS_HOME 	?= ../../../..
-KREMLIN_HOME	?= $(MITLS_HOME)/../kremlin
+KRML_HOME	?= $(MITLS_HOME)/../karamel
 FSTAR_HOME	?= $(MITLS_HOME)/../FStar
 HACL_HOME	?= $(MITLS_HOME)/../hacl-star
 MLCRYPTO_HOME	?= $(MITLS_HOME)/../MLCrypto
@@ -35,7 +35,7 @@ else ifeq ($(OS),Windows_NT)
 endif
 
 LDFLAGS 	+= $(addprefix -L,$(LD_DIRS)) $(addprefix -l,$(LD_LIBS)) \
-  $(KREMLIN_HOME)/kremlib/dist/generic/libkremlib.a
+  $(KRML_HOME)/krmllib/dist/generic/libkrmllib.a
 
 CFLAGS += -Wno-deprecated-declarations
 

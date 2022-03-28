@@ -15,7 +15,7 @@
         "refinement_interpretation_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
       ],
       0,
-      "351ba69bd3400d0020fc61f2336a11c9"
+      "97792529f7dc4990003a765860adee81"
     ],
     [
       "Pkg.__proj__Pkg__item__define_table",
@@ -31,7 +31,7 @@
         "typing_Pkg.__proj__Idx__item__t"
       ],
       0,
-      "7060c1ef6c0013d3daee7ec5afec1053"
+      "46588eaf50ca5190af61d1e49476e90f"
     ],
     [
       "Pkg.__proj__Pkg__item__define_table",
@@ -40,16 +40,15 @@
       1,
       [
         "@MaxIFuel_assumption", "@query", "data_elim_Pkg.Idx",
-        "equation_DefineTable.dt", "equation_Pkg.regid",
-        "equation_Prims.eqtype", "fuel_guarded_inversion_Pkg.ipkg",
-        "fuel_guarded_inversion_Pkg.pkg",
+        "equation_Pkg.regid", "equation_Prims.eqtype",
+        "fuel_guarded_inversion_Pkg.ipkg", "fuel_guarded_inversion_Pkg.pkg",
         "haseqTm_refine_3a27f645dec4cdae0c85acae767af7f3",
         "proj_equation_Pkg.Idx_t", "proj_equation_Pkg.Pkg_key",
         "projection_inverse_Pkg.Pkg_key",
         "refinement_interpretation_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
       ],
       0,
-      "71e6d779a8a46ce913538cc729b30959"
+      "21b5a254fa5e153739cece3bb7f5d15a"
     ],
     [
       "Pkg.__proj__Pkg__item__footprint_framing",
@@ -65,7 +64,7 @@
         "refinement_interpretation_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
       ],
       0,
-      "7fb0c17e234d394cb9efed868abe80b5"
+      "11cc43381fef3a48a62b85af8aa8f67b"
     ],
     [
       "Pkg.__proj__Pkg__item__footprint_framing",
@@ -77,16 +76,11 @@
         "equation_Pkg.regid", "equation_Prims.eqtype",
         "fuel_guarded_inversion_Pkg.ipkg", "fuel_guarded_inversion_Pkg.pkg",
         "haseqTm_refine_3a27f645dec4cdae0c85acae767af7f3",
-        "proj_equation_Pkg.Idx_t", "proj_equation_Pkg.Pkg_define_table",
-        "proj_equation_Pkg.Pkg_footprint", "proj_equation_Pkg.Pkg_key",
-        "projection_inverse_Pkg.Pkg_define_table",
-        "projection_inverse_Pkg.Pkg_footprint",
-        "projection_inverse_Pkg.Pkg_key",
-        "refinement_interpretation_Tm_refine_414d0a9f578ab0048252f8c8f552b99f",
-        "token_correspondence_Pkg.__proj__Pkg__item__footprint"
+        "proj_equation_Pkg.Idx_t",
+        "refinement_interpretation_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
       ],
       0,
-      "6e6f7c84293e210bc1a6c9c32e7a43be"
+      "d483aece48bd6b7de6297c046b8ce9da"
     ],
     [
       "Pkg.__proj__Pkg__item__package_invariant_framing",
@@ -102,7 +96,7 @@
         "refinement_interpretation_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
       ],
       0,
-      "67eb2872feaa92bde19ae8c5b5ab3072"
+      "f79ee6ef80620e574d985decd43f4dae"
     ],
     [
       "Pkg.__proj__Pkg__item__package_invariant_framing",
@@ -114,19 +108,11 @@
         "equation_Pkg.regid", "equation_Prims.eqtype",
         "fuel_guarded_inversion_Pkg.ipkg", "fuel_guarded_inversion_Pkg.pkg",
         "haseqTm_refine_3a27f645dec4cdae0c85acae767af7f3",
-        "proj_equation_Pkg.Idx_t", "proj_equation_Pkg.Pkg_define_table",
-        "proj_equation_Pkg.Pkg_footprint", "proj_equation_Pkg.Pkg_key",
-        "proj_equation_Pkg.Pkg_package_invariant",
-        "projection_inverse_Pkg.Pkg_define_table",
-        "projection_inverse_Pkg.Pkg_footprint",
-        "projection_inverse_Pkg.Pkg_key",
-        "projection_inverse_Pkg.Pkg_package_invariant",
-        "refinement_interpretation_Tm_refine_414d0a9f578ab0048252f8c8f552b99f",
-        "token_correspondence_Pkg.__proj__Pkg__item__footprint",
-        "token_correspondence_Pkg.__proj__Pkg__item__package_invariant"
+        "proj_equation_Pkg.Idx_t",
+        "refinement_interpretation_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
       ],
       0,
-      "ad298a50a25f478e0aadc95d58082bf3"
+      "613d162a5fb45be74b5df641033ae099"
     ],
     [
       "Pkg.__proj__Pkg__item__post_framing",
@@ -142,7 +128,7 @@
         "refinement_interpretation_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
       ],
       0,
-      "a5a3f4cdeb63b764ee2cb7020b421278"
+      "64ae85df47f8410c1903f109c1e45e1d"
     ],
     [
       "Pkg.__proj__Pkg__item__post_framing",
@@ -154,21 +140,11 @@
         "equation_Pkg.regid", "equation_Prims.eqtype",
         "fuel_guarded_inversion_Pkg.ipkg", "fuel_guarded_inversion_Pkg.pkg",
         "haseqTm_refine_3a27f645dec4cdae0c85acae767af7f3",
-        "proj_equation_Pkg.Idx_t", "proj_equation_Pkg.Pkg_define_table",
-        "proj_equation_Pkg.Pkg_footprint", "proj_equation_Pkg.Pkg_info",
-        "proj_equation_Pkg.Pkg_key", "proj_equation_Pkg.Pkg_post",
-        "projection_inverse_Pkg.Pkg_define_table",
-        "projection_inverse_Pkg.Pkg_footprint",
-        "projection_inverse_Pkg.Pkg_info", "projection_inverse_Pkg.Pkg_key",
-        "projection_inverse_Pkg.Pkg_post",
-        "refinement_interpretation_Tm_refine_414d0a9f578ab0048252f8c8f552b99f",
-        "token_correspondence_Pkg.__proj__Pkg__item__footprint",
-        "token_correspondence_Pkg.__proj__Pkg__item__info",
-        "token_correspondence_Pkg.__proj__Pkg__item__key",
-        "token_correspondence_Pkg.__proj__Pkg__item__post"
+        "proj_equation_Pkg.Idx_t",
+        "refinement_interpretation_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
       ],
       0,
-      "43c030917a071b28136120c93969c69f"
+      "8087dc991de3c2791a071296ba418d70"
     ],
     [
       "Pkg.__proj__Pkg__item__create",
@@ -184,7 +160,7 @@
         "refinement_interpretation_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
       ],
       0,
-      "1171351644d854f73cd83e1126da3dd8"
+      "e236e2212d3c06aa60868127e9aefe6b"
     ],
     [
       "Pkg.__proj__Pkg__item__create",
@@ -196,29 +172,11 @@
         "equation_Pkg.regid", "equation_Prims.eqtype",
         "fuel_guarded_inversion_Pkg.ipkg", "fuel_guarded_inversion_Pkg.pkg",
         "haseqTm_refine_3a27f645dec4cdae0c85acae767af7f3",
-        "proj_equation_Pkg.Idx_t", "proj_equation_Pkg.Pkg_define_table",
-        "proj_equation_Pkg.Pkg_footprint", "proj_equation_Pkg.Pkg_get_info",
-        "proj_equation_Pkg.Pkg_info", "proj_equation_Pkg.Pkg_key",
-        "proj_equation_Pkg.Pkg_package_invariant",
-        "proj_equation_Pkg.Pkg_post",
-        "projection_inverse_Pkg.Pkg_define_table",
-        "projection_inverse_Pkg.Pkg_footprint",
-        "projection_inverse_Pkg.Pkg_get_info",
-        "projection_inverse_Pkg.Pkg_info", "projection_inverse_Pkg.Pkg_key",
-        "projection_inverse_Pkg.Pkg_package_invariant",
-        "projection_inverse_Pkg.Pkg_post",
-        "refinement_interpretation_Tm_refine_414d0a9f578ab0048252f8c8f552b99f",
-        "refinement_interpretation_Tm_refine_f70d959a60193acc5cfcc6b3ea336734",
-        "refinement_interpretation_Tm_refine_f7a9128640c810cf036353b0828e0abc",
-        "token_correspondence_Pkg.__proj__Pkg__item__footprint",
-        "token_correspondence_Pkg.__proj__Pkg__item__get_info",
-        "token_correspondence_Pkg.__proj__Pkg__item__info",
-        "token_correspondence_Pkg.__proj__Pkg__item__key",
-        "token_correspondence_Pkg.__proj__Pkg__item__package_invariant",
-        "token_correspondence_Pkg.__proj__Pkg__item__post"
+        "proj_equation_Pkg.Idx_t",
+        "refinement_interpretation_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
       ],
       0,
-      "92061327023cfd673dcc1839bb1f4904"
+      "8b341cff6b1c0c485abed69bcc5369a3"
     ],
     [
       "Pkg.__proj__Pkg__item__coerce",
@@ -234,7 +192,7 @@
         "refinement_interpretation_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
       ],
       0,
-      "3892fcd4aa34ed5741bab041d185dfd2"
+      "cac0eef5efce79dc2f213085ab4d95b4"
     ],
     [
       "Pkg.__proj__Pkg__item__coerce",
@@ -246,35 +204,11 @@
         "equation_Pkg.regid", "equation_Prims.eqtype",
         "fuel_guarded_inversion_Pkg.ipkg", "fuel_guarded_inversion_Pkg.pkg",
         "haseqTm_refine_3a27f645dec4cdae0c85acae767af7f3",
-        "proj_equation_Pkg.Idx_t", "proj_equation_Pkg.Pkg_coerceT",
-        "proj_equation_Pkg.Pkg_define_table",
-        "proj_equation_Pkg.Pkg_footprint", "proj_equation_Pkg.Pkg_get_info",
-        "proj_equation_Pkg.Pkg_ideal", "proj_equation_Pkg.Pkg_info",
-        "proj_equation_Pkg.Pkg_key", "proj_equation_Pkg.Pkg_len",
-        "proj_equation_Pkg.Pkg_package_invariant",
-        "proj_equation_Pkg.Pkg_post", "projection_inverse_Pkg.Pkg_coerceT",
-        "projection_inverse_Pkg.Pkg_define_table",
-        "projection_inverse_Pkg.Pkg_footprint",
-        "projection_inverse_Pkg.Pkg_get_info",
-        "projection_inverse_Pkg.Pkg_ideal",
-        "projection_inverse_Pkg.Pkg_info", "projection_inverse_Pkg.Pkg_key",
-        "projection_inverse_Pkg.Pkg_len",
-        "projection_inverse_Pkg.Pkg_package_invariant",
-        "projection_inverse_Pkg.Pkg_post",
-        "refinement_interpretation_Tm_refine_414d0a9f578ab0048252f8c8f552b99f",
-        "refinement_interpretation_Tm_refine_73060790b3e8d33561ee7f10e7f7ce8a",
-        "refinement_interpretation_Tm_refine_a19ed239d2c0356f10623974e62bf106",
-        "token_correspondence_Pkg.__proj__Pkg__item__coerceT",
-        "token_correspondence_Pkg.__proj__Pkg__item__footprint",
-        "token_correspondence_Pkg.__proj__Pkg__item__get_info",
-        "token_correspondence_Pkg.__proj__Pkg__item__info",
-        "token_correspondence_Pkg.__proj__Pkg__item__key",
-        "token_correspondence_Pkg.__proj__Pkg__item__len",
-        "token_correspondence_Pkg.__proj__Pkg__item__package_invariant",
-        "token_correspondence_Pkg.__proj__Pkg__item__post"
+        "proj_equation_Pkg.Idx_t",
+        "refinement_interpretation_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
       ],
       0,
-      "7ddbe469de5b3e33bf597f28b07cf073"
+      "91215ef320c7f1dcd215d2d01863261b"
     ],
     [
       "Pkg.local_pkg",
@@ -290,7 +224,7 @@
         "typing_Pkg.__proj__Idx__item__t"
       ],
       0,
-      "d40463392cb3169419423ddac7e56cc1"
+      "7dc7203080688aeb8c7a81012e2b75a9"
     ],
     [
       "Pkg.__proj__LocalPkg__item__local_footprint",
@@ -306,7 +240,7 @@
         "typing_Pkg.__proj__Idx__item__t"
       ],
       0,
-      "119a23ab1691a8763865be973c55e05b"
+      "d1d9e36ade8a03d86dcc5d30419b3716"
     ],
     [
       "Pkg.__proj__LocalPkg__item__local_footprint",
@@ -319,13 +253,11 @@
         "fuel_guarded_inversion_Pkg.ipkg",
         "fuel_guarded_inversion_Pkg.local_pkg",
         "haseqTm_refine_3a27f645dec4cdae0c85acae767af7f3",
-        "proj_equation_Pkg.Idx_t", "proj_equation_Pkg.LocalPkg_key",
-        "projection_inverse_Pkg.LocalPkg_key",
-        "refinement_interpretation_Tm_refine_414d0a9f578ab0048252f8c8f552b99f",
-        "token_correspondence_Pkg.__proj__LocalPkg__item__key"
+        "proj_equation_Pkg.Idx_t",
+        "refinement_interpretation_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
       ],
       0,
-      "8d66763f51f7ace127d288d3165a2d02"
+      "9e8f4acdf7aa7713154b6761debeba61"
     ],
     [
       "Pkg.memoization",
@@ -341,7 +273,7 @@
         "typing_Pkg.__proj__Idx__item__t"
       ],
       0,
-      "b3e87247c9e3ec7b900b3a9b9159f860"
+      "b3621d863cd1c7e174c84924bbd9f2ac"
     ],
     [
       "Pkg.memoization",
@@ -386,15 +318,15 @@
         "equation_Mem.subtls", "equation_Mem.tls_color",
         "equation_Mem.tls_define_region", "equation_Mem.tls_region",
         "equation_Mem.tls_rgn", "equation_Pkg.regid", "equation_Prims.eq2",
-        "equation_Prims.eqtype",
+        "equation_Prims.eqtype", "equation_Prims.nat",
         "fuel_guarded_inversion_FStar.Monotonic.HyperStack.mreference_",
         "fuel_guarded_inversion_Pkg.ipkg",
         "fuel_guarded_inversion_Pkg.local_pkg",
         "function_token_typing_Pkg.__proj__LocalPkg__item__key",
         "function_token_typing_Pkg.__proj__LocalPkg__item__local_footprint",
         "function_token_typing_Prims.__cache_version_number__",
-        "haseqTm_refine_3a27f645dec4cdae0c85acae767af7f3", "l_and-interp",
-        "l_imp-interp",
+        "haseqTm_refine_3a27f645dec4cdae0c85acae767af7f3", "int_typing",
+        "l_and-interp", "l_imp-interp",
         "lemma_FStar.HyperStack.ST.lemma_same_refs_in_stack_regions_elim",
         "lemma_FStar.HyperStack.ST.lemma_same_refs_in_stack_regions_intro",
         "lemma_FStar.Monotonic.HyperStack.lemma_tip_top_smt",
@@ -408,12 +340,12 @@
         "lemma_LowStar.Monotonic.Buffer.modifies_mreference_elim",
         "lemma_LowStar.Monotonic.Buffer.modifies_trans_linear",
         "lemma_LowStar.Monotonic.Buffer.mreference_live_loc_not_unused_in",
-        "primitive_Prims.op_AmpAmp", "primitive_Prims.op_Equality",
-        "primitive_Prims.op_Negation",
+        "primitive_Prims.op_Equality", "primitive_Prims.op_Negation",
         "proj_equation_FStar.Monotonic.HyperStack.MkRef_frame",
         "proj_equation_Pkg.Idx_t", "proj_equation_Pkg.LocalPkg_key",
         "proj_equation_Pkg.LocalPkg_local_footprint",
         "projection_inverse_BoxBool_proj_0",
+        "projection_inverse_BoxInt_proj_0",
         "projection_inverse_FStar.Pervasives.Native.Some_a",
         "projection_inverse_FStar.Pervasives.Native.Some_v",
         "refinement_interpretation_Tm_refine_003b485f9125812f8728ed54154e6318",
@@ -422,6 +354,7 @@
         "refinement_interpretation_Tm_refine_3692e5d4bc95faba478158d004f3f983",
         "refinement_interpretation_Tm_refine_414d0a9f578ab0048252f8c8f552b99f",
         "refinement_interpretation_Tm_refine_4deaad73cd92bc948bb28924e869c4ab",
+        "refinement_interpretation_Tm_refine_542f9d4f129664613f2483a6c88bc7c2",
         "refinement_interpretation_Tm_refine_5aee6c1d5e606045d3f22072ebbfd523",
         "refinement_interpretation_Tm_refine_6c5072d4c9562dd38fd2703ecfb013df",
         "refinement_interpretation_Tm_refine_70f81e223d115c86e600efc833d747dd",
@@ -436,15 +369,16 @@
         "typing_FStar.Monotonic.DependentMap.grows",
         "typing_FStar.Monotonic.DependentMap.imap",
         "typing_FStar.Monotonic.HyperHeap.rid_freeable",
-        "typing_FStar.UInt32.v", "typing_LowStar.Monotonic.Buffer.loc_none",
-        "typing_Mem.model", "typing_Mem.tls_define_region",
-        "typing_Mem.tls_region", "typing_Pkg.__proj__LocalPkg__item__key",
+        "typing_FStar.UInt.fits", "typing_FStar.UInt32.v",
+        "typing_LowStar.Monotonic.Buffer.loc_none", "typing_Mem.model",
+        "typing_Mem.tls_define_region", "typing_Mem.tls_region",
+        "typing_Pkg.__proj__LocalPkg__item__key",
         "typing_Pkg.__proj__LocalPkg__item__local_footprint",
         "typing_Tm_abs_8360f68b1ef1ebd2579ae5799903dc5e", "unit_inversion",
         "unit_typing"
       ],
       0,
-      "eb045b403eff2702080ef9b5041e5a68"
+      "86c3c2fc73f938d8698914ea9e21813d"
     ],
     [
       "Pkg.locally_packaged",
@@ -453,7 +387,7 @@
       1,
       [ "@query" ],
       0,
-      "9f6966e2696bbdde5e79c81e746f91aa"
+      "843a1caf83877903a7a0251cd8217993"
     ],
     [
       "Pkg.memoization_ST",
@@ -483,7 +417,7 @@
         "typing_DefineTable.loc"
       ],
       0,
-      "dea678e92988efa7ee07c2e4e0e59fad"
+      "96cf9ec10f2be313b5c8b3dd4b3eed27"
     ]
   ]
 ]

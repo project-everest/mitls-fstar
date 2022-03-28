@@ -28,7 +28,7 @@
       1,
       [ "@query" ],
       0,
-      "7ae7d3b1c13470a25df13894bcf56629"
+      "3c5bb98ae3767790b5392eb66b4c8a5b"
     ],
     [
       "Model.AEAD.__proj__Mkstate__item__table",
@@ -37,7 +37,7 @@
       1,
       [ "@query", "typing_Model.AEAD.__proj__Mkstate__item__region" ],
       0,
-      "98c40698ad6a09a75ddb27c121d8e01d"
+      "5d51cf2ff9e1da43b02b548f4e347031"
     ],
     [
       "Model.AEAD.__proj__Mkstate__item__table",
@@ -45,14 +45,14 @@
       2,
       1,
       [
-        "@MaxIFuel_assumption", "@query", "data_elim_Model.AEAD.Mkstate",
+        "@MaxIFuel_assumption", "@query",
         "fuel_guarded_inversion_Model.AEAD.state",
         "proj_equation_Model.AEAD.Mkstate_region",
         "projection_inverse_Model.AEAD.Mkstate_region",
         "typing_Model.AEAD.__proj__Mkstate__item__region"
       ],
       0,
-      "515a1c722c883f44e9e8052e1caa0c1b"
+      "af030dd3afb44b5b742118fa77cd8475"
     ],
     [
       "Model.AEAD.state_region",
@@ -65,7 +65,7 @@
         "typing_Model.AEAD.__proj__Mkstate__item__region"
       ],
       0,
-      "e7556d89e8d5f853954a55a743147c72"
+      "dd69bc3c88659f6b04bd00b96b60297b"
     ],
     [
       "Model.AEAD.state_table",
@@ -78,7 +78,7 @@
         "typing_Model.AEAD.__proj__Mkstate__item__table"
       ],
       0,
-      "343c1b4b0c9d1bfeafc00c590d208753"
+      "9e264832081c0a8046c0d90f563b0b8f"
     ],
     [
       "Model.AEAD.invariant",
@@ -87,7 +87,7 @@
       1,
       [ "@query" ],
       0,
-      "9382ba3dd7238d5038b5fd9cebc1c78e"
+      "14aacbc253edb44fb2db380ba1af7df0"
     ],
     [
       "Model.AEAD.footprint",
@@ -96,7 +96,7 @@
       1,
       [ "@query" ],
       0,
-      "d2c2dd18b09bfd560601513fb7c47fdd"
+      "07334f21dc9945fa969f0dfb5047362b"
     ],
     [
       "Model.AEAD.invariant_loc_in_footprint",
@@ -129,7 +129,7 @@
         "typing_Model.AEAD.__proj__Mkstate__item__table"
       ],
       0,
-      "991d8b62b6a1adc43f9ac486ca3efa79"
+      "c2e925f0187a07ce813d2008ad6eebac"
     ],
     [
       "Model.AEAD.frame_invariant",
@@ -198,7 +198,7 @@
         "typing_tok_Lib.IntTypes.U8@tok"
       ],
       0,
-      "ccbb6da75eb08cc70b723c0126013b0e"
+      "d7c2d3f97c65c306b4d571d6d3856df6"
     ],
     [
       "Model.AEAD.fresh_iv",
@@ -207,7 +207,7 @@
       1,
       [ "@query" ],
       0,
-      "e0c29d06e270744e3cc152cc93701d76"
+      "1805e6b6f6a3b20178242c1a3cad44e9"
     ],
     [
       "Model.AEAD.frame_fresh_iv",
@@ -292,7 +292,7 @@
         "typing_tok_Lib.IntTypes.U8@tok"
       ],
       0,
-      "f1d1fb0fea29defbe97c051cfb403256"
+      "b34cd0658237b074d990717a4c21a3ae"
     ],
     [
       "Model.AEAD.is_fresh_iv",
@@ -327,7 +327,7 @@
         "typing_Model.AEAD.entry_value"
       ],
       0,
-      "ed09741a7f624db1465eb0dd846f9038"
+      "703c1d9a7013b78d7ec15d1644b65fec"
     ],
     [
       "Model.AEAD.encrypt",
@@ -342,7 +342,7 @@
         "typing_Spec.Agile.AEAD.max_length"
       ],
       0,
-      "e441fdc0085a9a19c1d8ae9071b4c882"
+      "8c727938ec4697b762b6f7f5c12440e7"
     ],
     [
       "Model.AEAD.encrypt",
@@ -483,7 +483,7 @@
         "typing_tok_Lib.IntTypes.SEC@tok", "typing_tok_Lib.IntTypes.U8@tok"
       ],
       0,
-      "e717818108a718aa436354d1dfaea25e"
+      "28d24a764a39dc6201d3f721204b9e69"
     ],
     [
       "Model.AEAD.decrypt",
@@ -491,30 +491,26 @@
       2,
       1,
       [
-        "@MaxIFuel_assumption", "@query", "bool_inversion",
+        "@MaxIFuel_assumption", "@query",
         "constructor_distinct_Lib.IntTypes.U8",
-        "disc_equation_FStar.Pervasives.Native.None",
-        "disc_equation_FStar.Pervasives.Native.Some",
         "equality_tok_Lib.IntTypes.U1@tok",
         "equality_tok_Lib.IntTypes.U8@tok", "equation_Lib.IntTypes.minint",
         "equation_Lib.IntTypes.unsigned", "equation_Spec.AES.gf8",
         "equation_Spec.AES.irred", "equation_Spec.Agile.AEAD.cipher",
-        "equation_Spec.Agile.AEAD.decrypted", "equation_Spec.GaloisField.gf",
+        "equation_Spec.GaloisField.gf",
         "fuel_guarded_inversion_Model.AEAD.state",
         "lemma_FStar.Pervasives.invertOption", "primitive_Prims.op_Addition",
         "proj_equation_Spec.GaloisField.GF_t",
-        "projection_inverse_BoxBool_proj_0",
         "projection_inverse_BoxInt_proj_0",
         "projection_inverse_Spec.GaloisField.GF_t",
         "refinement_interpretation_Tm_refine_1cc41c3630856663dcfa11216c896f06",
         "refinement_interpretation_Tm_refine_2a5baaeccb6b50d92d793d09091c6346",
         "refinement_interpretation_Tm_refine_de8080fdc4bd6678af723874a7d70466",
-        "typing_FStar.Pervasives.Native.uu___is_Some", "typing_Spec.AES.gf8",
-        "typing_Spec.Agile.AEAD.decrypted",
+        "typing_Spec.AES.gf8", "typing_Spec.Agile.AEAD.decrypted",
         "typing_Spec.GaloisField.__proj__GF__item__t"
       ],
       0,
-      "8b75a57a11ca94157e9ce8a74442fa0f"
+      "e68927e2f41c24d8e41ffe44db584804"
     ],
     [
       "Model.AEAD.decrypt",
@@ -581,7 +577,7 @@
         "typing_Spec.GaloisField.__proj__GF__item__t"
       ],
       0,
-      "b391fa1be8dbd3151cccad3a1a5662d2"
+      "9c0c3e14d00d05f296ce66eefb48054f"
     ],
     [
       "Model.AEAD.create",
@@ -701,7 +697,7 @@
         "typing_Model.AEAD.footprint"
       ],
       0,
-      "2ef10f028890e0e87ccb8e8c4592d2bc"
+      "e24b9f01ca3cc2ba87bc344f06b65104"
     ]
   ]
 ]

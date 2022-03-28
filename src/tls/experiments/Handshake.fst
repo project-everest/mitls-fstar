@@ -120,7 +120,7 @@ type machineState =
 
 // 17-03-24 considered using instead "if role = Client then
 // clientState else serverServer" but that may break extraction to
-// Kremlin and complicate typechecking; we could also use refinements.
+// Karamel and complicate typechecking; we could also use refinements.
 
 // Removed error states, consider adding again to ensure the machine is stuck?
 

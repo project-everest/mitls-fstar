@@ -1,5 +1,5 @@
 MITLS_HOME 	?= ../../../..
-KREMLIN_HOME	?= $(MITLS_HOME)/../kremlin
+KRML_HOME	?= $(MITLS_HOME)/../karamel
 FSTAR_HOME	?= $(MITLS_HOME)/../FStar
 HACL_HOME	?= $(MITLS_HOME)/../hacl-star
 MLCRYPTO_HOME	?= $(MITLS_HOME)/../MLCrypto
@@ -15,7 +15,7 @@ OPENSSL_HOME	?= $(MLCRYPTO_HOME)/openssl
 #
 # This Makefile is configured to build libmitls with custom logging. This
 # entails:
-# - adding -add-early-include '"log_to_choice.h"' to the kremlin invocation
+# - adding -add-early-include '"log_to_choice.h"' to the karamel invocation
 # - ignoring function cast type errors
 # - defining LOG_TO_CHOICE
 
@@ -67,16 +67,16 @@ CFLAGS		+= -g -std=gnu11 -O3 \
   -DLOG_TO_CHOICE
 LDFLAGS 	+= $(addprefix -L,$(LD_DIRS)) $(addprefix -l,$(LD_LIBS)) \
 
-KREMLIB_A 	= $(KREMLIN_HOME)/kremlib/dist/generic/libkremlib.a
+KRMLLIB_A 	= $(KRML_HOME)/krmllib/dist/generic/libkrmllib.a
 EVERCRYPT_SO 	= $(HACL_HOME)/dist/mitls/libevercrypt.$(SO)
 MIPKI_SO	= $(MITLS_HOME)/src/pki/libmipki.$(SO)
 
-$(KREMLIB_A) $(EVERCRYPT_SO) $(MIPKI_SO):
+$(KRMLLIB_A) $(EVERCRYPT_SO) $(MIPKI_SO):
 	@echo "Please run make in the $(dir $@) directory before invoking this Makefile" && false
 
 
 all: libmitls.$(SO)
 
-libmitls.$(SO): $(OBJS) $(KREMLIB_A) | $(EVERCRYPT_SO) $(MIPKI_SO)
-	$(CC) $(CFLAGS) -shared -o $@ $(OBJS) $(KREMLIB_A) $(LDFLAGS)
+libmitls.$(SO): $(OBJS) $(KRMLLIB_A) | $(EVERCRYPT_SO) $(MIPKI_SO)
+	$(CC) $(CFLAGS) -shared -o $@ $(OBJS) $(KRMLLIB_A) $(LDFLAGS)
 

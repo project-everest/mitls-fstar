@@ -1,5 +1,5 @@
-QD_HOME ?= ../../../quackyducky
-QD_BIN = $(QD_HOME)/bin/qd.exe
+EVERPARSE_HOME ?= ../../../everparse
+QD_BIN = $(EVERPARSE_HOME)/bin/qd.exe
 
 # all: DO NOT enable `verify` for now, not everything currently
 # verifies. Anyway, for miTLS, we don't need to verify everything, the

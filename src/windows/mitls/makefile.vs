@@ -31,12 +31,12 @@ SOURCES = \
   KDF.c \
   KDF_Rekey.c \
   KDF_Salt_ODH.c \
-  kremlinit.c \
+  krmlinit.c \
   LowParse.c \
   Mem.c \
   mipki_wrapper.c \
   MITLS_Init.c \
-  MiTls_Kremlib.c \
+  MiTls_Krmllib.c \
   MITLS_Repr.c \
   mitlsffi.c \
   Negotiation.c \
@@ -66,8 +66,8 @@ SOURCES = \
 libmitls_code.lib: $(SOURCES:.c=.obj) $(PLATFORM_OBJS)
   lib /nologo /out:libmitls_code.lib $**
 
-libmitls.dll: libmitls_code.lib libmitls.def dllmain.obj ../kremlib/libkremlib.lib ../evercrypt/libevercrypt.lib
-  link /nologo /dll /debug:full /out:libmitls.dll libmitls_code.lib dllmain.obj /def:libmitls.def ntdll.lib advapi32.lib bcrypt.lib ../kremlib/libkremlib.lib ../evercrypt/libevercrypt.lib /OPT:ICF /OPT:REF
+libmitls.dll: libmitls_code.lib libmitls.def dllmain.obj ../krmllib/libkrmllib.lib ../evercrypt/libevercrypt.lib
+  link /nologo /dll /debug:full /out:libmitls.dll libmitls_code.lib dllmain.obj /def:libmitls.def ntdll.lib advapi32.lib bcrypt.lib ../krmllib/libkrmllib.lib ../evercrypt/libevercrypt.lib /OPT:ICF /OPT:REF
 
 .c.obj::
     cl $(CCOPTS) -c $<

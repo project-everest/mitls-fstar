@@ -27,7 +27,7 @@ unfold let trace = if DebugFlags.debug_HS then print else (fun _ -> ())
 /// --------
 ///
 /// This module is not meant to be extracted. To that end, we use -bundle
-/// Model.* in the arguments passed to KreMLin. Combined with elimination at
+/// Model.* in the arguments passed to KaRaMeL. Combined with elimination at
 /// extraction-time of ideal code, none of the remaining declarations in this module
 /// should be reachable.
 
