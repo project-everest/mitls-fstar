@@ -15,7 +15,7 @@
         "typing_FStar.Bytes.bytes"
       ],
       0,
-      "838ef15e715d4ef3f17e5c72b8bd161b"
+      "abd7703a1b732f216e946f77ea74cbc1"
     ],
     [
       "DHGroup.group",
@@ -27,7 +27,7 @@
         "assumption_DHGroup.params__uu___haseq"
       ],
       0,
-      "00b07beaf57b7419ebc916a6b663b86b"
+      "0e5136683ed693d597bb1cf1d05368a3"
     ],
     [
       "DHGroup.__proj__Named__item___0",
@@ -35,12 +35,11 @@
       2,
       1,
       [
-        "@MaxIFuel_assumption", "@query", "disc_equation_DHGroup.Named",
-        "projection_inverse_BoxBool_proj_0",
+        "@MaxIFuel_assumption", "@query",
         "refinement_interpretation_Tm_refine_1f67f6deaf7b51138cd35ad2f4568e94"
       ],
       0,
-      "584ae4572495a8babcf02c4ba9ac481b"
+      "83945b9c0ac12f9db18ca604d739296f"
     ],
     [
       "DHGroup.__proj__Explicit__item___0",
@@ -48,12 +47,11 @@
       2,
       1,
       [
-        "@MaxIFuel_assumption", "@query", "disc_equation_DHGroup.Explicit",
-        "projection_inverse_BoxBool_proj_0",
+        "@MaxIFuel_assumption", "@query",
         "refinement_interpretation_Tm_refine_dc91833cf9fb025d258378587c7faffb"
       ],
       0,
-      "5c0b8cda785e02a52908705f560c7311"
+      "a86270ae836515eea273e59fdf8def21"
     ]
   ]
 ]

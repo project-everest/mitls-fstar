@@ -7,12 +7,11 @@
       2,
       1,
       [
-        "@MaxIFuel_assumption", "@query", "disc_equation_Pkg.Tree.Leaf",
-        "projection_inverse_BoxBool_proj_0",
+        "@MaxIFuel_assumption", "@query",
         "refinement_interpretation_Tm_refine_b53ae398bac700dcd61b3b5668ccba51"
       ],
       0,
-      "df04880c40f3757d8fed6b180f8f7a17"
+      "942d600f64bbf487d22d5853edde7a81"
     ],
     [
       "Pkg.Tree.__proj__Node__item__node",
@@ -20,12 +19,11 @@
       2,
       1,
       [
-        "@MaxIFuel_assumption", "@query", "disc_equation_Pkg.Tree.Node",
-        "projection_inverse_BoxBool_proj_0",
+        "@MaxIFuel_assumption", "@query",
         "refinement_interpretation_Tm_refine_38d2bec63e374d1a01ada0c25be39dfe"
       ],
       0,
-      "47a6c686e0636ef8a2a0317cda6eef08"
+      "91d64f56c0ba0d119de64ea0699af0a0"
     ],
     [
       "Pkg.Tree.__proj__Node__item__children",
@@ -33,14 +31,11 @@
       2,
       1,
       [
-        "@MaxIFuel_assumption", "@query", "disc_equation_Pkg.Tree.Node",
-        "proj_equation_Pkg.Tree.Node_node",
-        "projection_inverse_BoxBool_proj_0",
-        "projection_inverse_Pkg.Tree.Node_node",
+        "@MaxIFuel_assumption", "@query",
         "refinement_interpretation_Tm_refine_38d2bec63e374d1a01ada0c25be39dfe"
       ],
       0,
-      "5455d4f2d3b7cb8d152f31f0ce3dd754"
+      "245079f9ded7aa34b6e8191d24352ab1"
     ],
     [
       "Pkg.Tree.depth",
@@ -52,12 +47,13 @@
         "binder_x_eede97d783918db738c62da6082dd56d_1",
         "disc_equation_Pkg.Tree.Leaf", "disc_equation_Pkg.Tree.Node",
         "equation_Prims.nat", "fuel_guarded_inversion_Pkg.Tree.tree_",
-        "primitive_Prims.op_Addition", "projection_inverse_BoxInt_proj_0",
+        "primitive_Prims.op_Addition", "projection_inverse_BoxBool_proj_0",
+        "projection_inverse_BoxInt_proj_0",
         "refinement_interpretation_Tm_refine_542f9d4f129664613f2483a6c88bc7c2",
         "subterm_ordering_Pkg.Tree.Node"
       ],
       0,
-      "8df0aa627d974971d3ac143392588b7e"
+      "45708bc39941bff5b87719980d8191e8"
     ],
     [
       "Pkg.Tree.depth",
@@ -71,13 +67,13 @@
         "disc_equation_Prims.Nil", "equation_Idx.label",
         "equation_Pkg.Tree.children_", "equation_Pkg.Tree.max",
         "equation_Prims.nat", "fuel_guarded_inversion_Prims.list",
-        "projection_inverse_Prims.Cons_tl",
+        "projection_inverse_BoxBool_proj_0",
         "refinement_interpretation_Tm_refine_542f9d4f129664613f2483a6c88bc7c2",
         "subterm_ordering_FStar.Pervasives.Native.Mktuple2",
         "subterm_ordering_Prims.Cons"
       ],
       0,
-      "10b61a46cb3e0c6c1649e5defe711f66"
+      "32545f94bfc6287f7f0440a28856adf4"
     ],
     [
       "Pkg.Tree.find_lbl",
@@ -94,12 +90,12 @@
         "fuel_guarded_inversion_Prims.list",
         "function_token_typing_Prims.string",
         "haseqTm_refine_ea0aee2a4942a75634c88e815c4b29c4",
-        "primitive_Prims.op_Negation",
+        "primitive_Prims.op_Negation", "projection_inverse_BoxBool_proj_0",
         "refinement_interpretation_Tm_refine_414d0a9f578ab0048252f8c8f552b99f",
         "subterm_ordering_Prims.Cons", "typing_Mem.model"
       ],
       0,
-      "6d1f5e29edb7bcd22ac4bc8b200aa6e5"
+      "8dc6ee738775fa5b9b51ddacff6c2080"
     ],
     [
       "Pkg.Tree.down",
@@ -113,7 +109,7 @@
         "refinement_interpretation_Tm_refine_95875d9bc0e59fedcfafd2bbbfd60990"
       ],
       0,
-      "1255556fb246277ebd31030a9cf9050f"
+      "2e248a9c492cef0b406806c0f8ee56fb"
     ],
     [
       "Pkg.Tree.child",
@@ -125,11 +121,12 @@
         "disc_equation_Pkg.Tree.Leaf", "disc_equation_Pkg.Tree.Node",
         "equation_Mem.model", "equation_Pkg.Tree.tree",
         "fuel_guarded_inversion_Pkg.Tree.tree_",
+        "projection_inverse_BoxBool_proj_0",
         "refinement_interpretation_Tm_refine_347e23d2a41bc6d18ff8e45aed784ee1",
         "typing_Mem.model"
       ],
       0,
-      "145f4e071c50efe18afb09b0ca8674e2"
+      "500901931a08f498021318b65d24655f"
     ]
   ]
 ]

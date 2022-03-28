@@ -126,28 +126,28 @@ function fetch_hacl() {
     export_home EVERCRYPT "$(pwd)/hacl-star/providers"
 }
 
-# By default, kremlin master works against F* stable. Can also be overridden.
-function fetch_kremlin() {
-    if [ ! -d kremlin ]; then
-        git clone https://github.com/FStarLang/kremlin kremlin
+# By default, karamel master works against F* stable. Can also be overridden.
+function fetch_karamel() {
+    if [ ! -d karamel ]; then
+        git clone https://github.com/FStarLang/karamel karamel
     fi
 
-    cd kremlin
+    cd karamel
     git fetch origin
-    local ref=$(jq -c -r '.RepoVersions["kremlin_version"]' "$rootPath/.docker/build/config.json" )
+    local ref=$(jq -c -r '.RepoVersions["karamel_version"]' "$rootPath/.docker/build/config.json" )
     if [[ $ref == "" || $ref == "null" ]]; then
-        echo "Unable to find RepoVersions.kremlin_version on $rootPath/.docker/build/config.json"
+        echo "Unable to find RepoVersions.karamel_version on $rootPath/.docker/build/config.json"
         return -1
     fi
 
-    echo Switching to KreMLin $ref
+    echo Switching to KaRaMeL $ref
     git reset --hard $ref
     cd ..
-    export_home KREMLIN "$(pwd)/kremlin"
+    export_home KRML "$(pwd)/karamel"
 }
 
-function fetch_and_make_kremlin() {
-    fetch_kremlin
+function fetch_and_make_karamel() {
+    fetch_karamel
 
     # Default build target is minimal, unless specified otherwise
     local target
@@ -157,34 +157,34 @@ function fetch_and_make_kremlin() {
         target="$1"
     fi
 
-    make -C kremlin -j $threads $target ||
-        (cd kremlin && git clean -fdx && make -j $threads $target)
-    OTHERFLAGS='--admit_smt_queries true' make -C kremlin/kremlib -j $threads
-    export PATH="$(pwd)/kremlin:$PATH"
+    make -C karamel -j $threads $target ||
+        (cd karamel && git clean -fdx && make -j $threads $target)
+    OTHERFLAGS='--admit_smt_queries true' make -C karamel/krmllib -j $threads
+    export PATH="$(pwd)/karamel:$PATH"
 }
 
-function fetch_qd() {
-    if [ ! -d qd ]; then
-        git clone https://github.com/project-everest/quackyducky qd
+function fetch_everparse() {
+    if [ ! -d everparse ]; then
+        git clone https://github.com/project-everest/everparse everparse
     fi
 
-    cd qd
+    cd everparse
     git fetch origin
-    local ref=$(jq -c -r '.RepoVersions["qd_version"]' "$rootPath/.docker/build/config.json" )
+    local ref=$(jq -c -r '.RepoVersions["everparse_version"]' "$rootPath/.docker/build/config.json" )
     if [[ $ref == "" || $ref == "null" ]]; then
-        echo "Unable to find RepoVersions.qd_version on $rootPath/.docker/build/config.json"
+        echo "Unable to find RepoVersions.everparse_version on $rootPath/.docker/build/config.json"
         return -1
     fi
 
-    echo Switching to QuackyDucky $ref
+    echo Switching to EverParse $ref
     git reset --hard $ref
     cd ..
-    export_home QD "$(pwd)/qd"
+    export_home EVERPARSE "$(pwd)/everparse"
 }
 
-function fetch_and_make_qd() {
-    fetch_qd
-    OTHERFLAGS='--admit_smt_queries true' make -C qd -j $threads quackyducky lowparse
+function fetch_and_make_everparse() {
+    fetch_everparse
+    OTHERFLAGS='--admit_smt_queries true' make -C everparse -j $threads quackyducky lowparse
 }
 
 function build_pki_if() {
@@ -215,8 +215,8 @@ function mitls_verify() {
     CI_BRANCH=${branchname##refs/heads/}
     echo "Current branch_name=$CI_BRANCH"
 
-    fetch_and_make_kremlin all &&
-    fetch_and_make_qd &&
+    fetch_and_make_karamel all &&
+    fetch_and_make_everparse &&
     fetch_and_make_mlcrypto &&
     fetch_hacl &&
     fetch_vale &&

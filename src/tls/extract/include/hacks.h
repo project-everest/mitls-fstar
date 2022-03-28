@@ -1,6 +1,6 @@
 #ifndef __HACKS_H
 #define __HACKS_H
-#include "kremlib.h"
+#include "krmllib.h"
 
 typedef uint32_t FStar_Char_char_, FStar_Char;
 

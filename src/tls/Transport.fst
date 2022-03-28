@@ -10,7 +10,7 @@ open TLSError
 open Mem
 
 /// 18-01-23 We now have function pointers matching the types used in
-/// mitls.h. After hoisting for Kremlin extraction, we treat the
+/// mitls.h. After hoisting for KaRaMeL extraction, we treat the
 /// explicit context as a dyn to avoid climbing in universes.
 type pvoid = FStar.Dyn.dyn
 type size_t = UInt32.t 

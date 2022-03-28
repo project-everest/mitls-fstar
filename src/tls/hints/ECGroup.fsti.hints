@@ -12,10 +12,11 @@
         "disc_equation_EverCrypt.ECC_P521",
         "disc_equation_EverCrypt.ECC_X25519",
         "disc_equation_EverCrypt.ECC_X448", "equation_ECGroup.group",
-        "fuel_guarded_inversion_EverCrypt.ec_curve"
+        "fuel_guarded_inversion_EverCrypt.ec_curve",
+        "projection_inverse_BoxBool_proj_0"
       ],
       0,
-      "28fd9732ad535cf75574feb17d036d54"
+      "fe842885ec708e441d67368e0f6a1957"
     ],
     [
       "ECGroup.point",
@@ -30,7 +31,7 @@
         "typing_FStar.Bytes.bytes"
       ],
       0,
-      "2603dfc8d8f9c547ffcac74e07a06e6d"
+      "3545ddeffe7f27813fc3c4f5c14005dc"
     ],
     [
       "ECGroup.pre_keyshare",
@@ -51,7 +52,7 @@
         "typing_ECGroup._key", "typing_FStar.Bytes.bytes"
       ],
       0,
-      "5cdf1801444cfed73f54407b16bdbe3e"
+      "29a1d1e23a1d2498e1ac72dd68a1d8e4"
     ],
     [
       "ECGroup.__proj__KS_CC__item___0",
@@ -59,12 +60,11 @@
       2,
       1,
       [
-        "@MaxIFuel_assumption", "@query", "disc_equation_ECGroup.KS_CC",
-        "projection_inverse_BoxBool_proj_0",
+        "@MaxIFuel_assumption", "@query",
         "refinement_interpretation_Tm_refine_75033e3d62eeb30c851e43b03e75be19"
       ],
       0,
-      "4973f2cdc931176b7d4c7a516cce6038"
+      "d17c2caa1e04c10b31322c43f824f2ad"
     ],
     [
       "ECGroup.__proj__KS_CC__item___1",
@@ -72,12 +72,11 @@
       2,
       1,
       [
-        "@MaxIFuel_assumption", "@query", "disc_equation_ECGroup.KS_CC",
-        "projection_inverse_BoxBool_proj_0",
+        "@MaxIFuel_assumption", "@query",
         "refinement_interpretation_Tm_refine_75033e3d62eeb30c851e43b03e75be19"
       ],
       0,
-      "f65151d9ee1fa0f64506e45d8b4f3bce"
+      "eaea5b3a27f453669db08bcfb9b265f3"
     ],
     [
       "ECGroup.__proj__KS_X25519__item___0",
@@ -85,12 +84,11 @@
       2,
       1,
       [
-        "@MaxIFuel_assumption", "@query", "disc_equation_ECGroup.KS_X25519",
-        "projection_inverse_BoxBool_proj_0",
+        "@MaxIFuel_assumption", "@query",
         "refinement_interpretation_Tm_refine_81c6f60dc95eec95122f242ef166cd95"
       ],
       0,
-      "12578f159165382e14d6a428079243ff"
+      "7a5d4fde4a0059d3bf9dcf8cf63194f3"
     ],
     [
       "ECGroup.__proj__KS_X448__item__pub",
@@ -98,12 +96,11 @@
       2,
       1,
       [
-        "@MaxIFuel_assumption", "@query", "disc_equation_ECGroup.KS_X448",
-        "projection_inverse_BoxBool_proj_0",
+        "@MaxIFuel_assumption", "@query",
         "refinement_interpretation_Tm_refine_c9a2fe89d4710b6fd3ffa98ede9374a0"
       ],
       0,
-      "3c8d3c091368ba1947c01df8772a9ede"
+      "86a71112b5c5c2e1e530f13f3596cea9"
     ],
     [
       "ECGroup.__proj__KS_X448__item__priv",
@@ -111,12 +108,11 @@
       2,
       1,
       [
-        "@MaxIFuel_assumption", "@query", "disc_equation_ECGroup.KS_X448",
-        "projection_inverse_BoxBool_proj_0",
+        "@MaxIFuel_assumption", "@query",
         "refinement_interpretation_Tm_refine_c9a2fe89d4710b6fd3ffa98ede9374a0"
       ],
       0,
-      "f09dbac6960e7f6c139be8dc200f1d2b"
+      "88accab004de632b514f62e91ee261fe"
     ],
     [
       "ECGroup.pre_share",
@@ -132,7 +128,7 @@
         "typing_FStar.Bytes.bytes"
       ],
       0,
-      "6dc6294843ab51f23e855522087e042c"
+      "80b8cb2b7a80d0161dbb68d536c58681"
     ],
     [
       "ECGroup.__proj__S_CC__item___0",
@@ -140,12 +136,11 @@
       2,
       1,
       [
-        "@MaxIFuel_assumption", "@query", "disc_equation_ECGroup.S_CC",
-        "projection_inverse_BoxBool_proj_0",
+        "@MaxIFuel_assumption", "@query",
         "refinement_interpretation_Tm_refine_05591511480b117eab365732eb8db81f"
       ],
       0,
-      "fa5185b47faae88a0a835e17bd79b52b"
+      "6e184420b1dffc0584e00fed05c4b456"
     ],
     [
       "ECGroup.__proj__S_X25519__item___0",
@@ -153,12 +148,11 @@
       2,
       1,
       [
-        "@MaxIFuel_assumption", "@query", "disc_equation_ECGroup.S_X25519",
-        "projection_inverse_BoxBool_proj_0",
+        "@MaxIFuel_assumption", "@query",
         "refinement_interpretation_Tm_refine_3fe025d9655cfc205e806357ac63a5cb"
       ],
       0,
-      "0eecbfb07954f66f8db8a2cff70b4a09"
+      "4287c68797578a2fbe680d6de6595113"
     ],
     [
       "ECGroup.__proj__S_X448__item___0",
@@ -166,12 +160,11 @@
       2,
       1,
       [
-        "@MaxIFuel_assumption", "@query", "disc_equation_ECGroup.S_X448",
-        "projection_inverse_BoxBool_proj_0",
+        "@MaxIFuel_assumption", "@query",
         "refinement_interpretation_Tm_refine_699fa5fe2bf10284a105031d3185a838"
       ],
       0,
-      "22be3faf21a61550cdc2a7bcb9e58d6b"
+      "896ef43b3fdb807ee54c657a32528d93"
     ]
   ]
 ]

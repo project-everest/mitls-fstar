@@ -10,10 +10,11 @@
         "@MaxIFuel_assumption", "@query",
         "disc_equation_Parsers.TicketVersion.Ticket12",
         "disc_equation_Parsers.TicketVersion.Ticket13",
-        "fuel_guarded_inversion_Parsers.TicketVersion.ticketVersion"
+        "fuel_guarded_inversion_Parsers.TicketVersion.ticketVersion",
+        "projection_inverse_BoxBool_proj_0"
       ],
       0,
-      "6e9c68b6a4da5d4a5bde04bd1729fdf5"
+      "e99d860a273a9473e580662858ac9d58"
     ],
     [
       "Parsers.TicketVersion.ticketVersion_jumper",
@@ -29,7 +30,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_low"
       ],
       0,
-      "36d30fc988414edb03c7941e7214d887"
+      "f95ac26fd9886024add469a3934566d0"
     ],
     [
       "Parsers.TicketVersion.lwp_ticketVersion",
@@ -43,7 +44,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind"
       ],
       0,
-      "d4fa6a9eeff8c7254b702909d88730e1"
+      "0a615a73c05d9b3d04725526cabd8a28"
     ]
   ]
 ]

@@ -21,7 +21,7 @@ ifeq ($(OS),Windows_NT)
     MLCRYPTO_HOME := $(shell cygpath -u ${MLCRYPTO_HOME})
     EVERCRYPT_HOME := $(shell cygpath -u ${EVERCRYPT_HOME})
   endif
-  LIBPATHS=$(EVERCRYPT_HOME)/../dist/mitls:$(MITLS_HOME)/src/pki:$(MITLS_HOME)/src/tls/extract/Kremlin-Library:$(HACL_HOME)/providers/quic_provider:$(MLCRYPTO_HOME)/openssl
+  LIBPATHS=$(EVERCRYPT_HOME)/../dist/mitls:$(MITLS_HOME)/src/pki:$(MITLS_HOME)/src/tls/extract/Karamel-Library:$(HACL_HOME)/providers/quic_provider:$(MLCRYPTO_HOME)/openssl
   PATH := $(LIBPATHS):$(PATH)
   CFLAGS+=-lbcrypt
   export PATH
@@ -29,7 +29,7 @@ else ifeq ($(UNAME),Darwin)
   LIBMITLS=libmitls.so
   LIBQC=libquiccrypto.so
   LIBPKI=libmipki.so
-  LIBPATHS=$(EVERCRYPT_HOME)/../dist/mitls:$(MITLS_HOME)/src/pki:$(MITLS_HOME)/src/tls/extract/Kremlin-Library:$(HACL_HOME)/providers/quic_provider:$(MLCRYPTO_HOME)/openssl
+  LIBPATHS=$(EVERCRYPT_HOME)/../dist/mitls:$(MITLS_HOME)/src/pki:$(MITLS_HOME)/src/tls/extract/Karamel-Library:$(HACL_HOME)/providers/quic_provider:$(MLCRYPTO_HOME)/openssl
   DYLD_LIBRARY_PATH := $(LIBPATHS):$(DYLD_LIBRARY_PATH)
   export DYLD_LIBRARY_PATH
 else ifeq ($(UNAME),Linux)
@@ -37,7 +37,7 @@ else ifeq ($(UNAME),Linux)
   LIBQC=libquiccrypto.so
   LIBPKI=libmipki.so
   CFLAGS+=-lpthread -pthread
-  LIBPATHS=$(EVERCRYPT_HOME)/../dist/mitls:$(MITLS_HOME)/src/pki:$(MITLS_HOME)/src/tls/extract/Kremlin-Library:$(HACL_HOME)/providers/quic_provider:$(MLCRYPTO_HOME)/openssl
+  LIBPATHS=$(EVERCRYPT_HOME)/../dist/mitls:$(MITLS_HOME)/src/pki:$(MITLS_HOME)/src/tls/extract/Karamel-Library:$(HACL_HOME)/providers/quic_provider:$(MLCRYPTO_HOME)/openssl
   LD_LIBRARY_PATH := $(LIBPATHS):$(LD_LIBRARY_PATH)
   export LD_LIBRARY_PATH
 endif
@@ -50,8 +50,8 @@ clean:
 $(MITLS_HOME)/src/pki/$(LIBPKI):
 	$(MAKE) -C ../../src/pki
 
-$(MITLS_HOME)/src/tls/extract/Kremlin-Library/$(LIBMITLS):
-	$(MAKE) -j8 -C ../../src/tls -f Makefile.Kremlin build-library
+$(MITLS_HOME)/src/tls/extract/Karamel-Library/$(LIBMITLS):
+	$(MAKE) -j8 -C ../../src/tls -f Makefile.Karamel build-library
 
 $(HACL_HOME)/providers/quic_provider/$(LIBQC):
 	$(MAKE) -j8 -C $(HACL_HOME)/providers/quic_provider
@@ -64,11 +64,11 @@ EXTERNAL_HEADERS=\
 EXTERNAL_LIBS =\
         $(MITLS_HOME)/src/pki/$(LIBPKI) \
         $(HACL_HOME)/providers/quic_provider/$(LIBQC) \
-        $(MITLS_HOME)/src/tls/extract/Kremlin-Library/$(LIBMITLS)
+        $(MITLS_HOME)/src/tls/extract/Karamel-Library/$(LIBMITLS)
 
 quic.exe: quic.c $(EXTERNAL_HEADERS) $(EXTERNAL_LIBS)
-	$(CC) -fPIC -I$(EVERCRYPT_HOME)/../dist/evercrypt-external-headers -I$(MITLS_HOME)/src/tls/extract/Kremlin-Library/include \
-	  -I$(MITLS_HOME)/src/tls/extract/Kremlin-Library/stub -I../../src/pki \
+	$(CC) -fPIC -I$(EVERCRYPT_HOME)/../dist/evercrypt-external-headers -I$(MITLS_HOME)/src/tls/extract/Karamel-Library/include \
+	  -I$(MITLS_HOME)/src/tls/extract/Karamel-Library/stub -I../../src/pki \
 	  -I../../libs/ffi -I$(HACL_HOME)/providers/quic_provider \
           -L$(subst :, -L,$(LIBPATHS)) \
 	  $< -lmitls -lquiccrypto -lmipki $(CFLAGS) -o $@

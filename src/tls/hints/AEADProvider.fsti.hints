@@ -12,7 +12,7 @@
         "lemma_FStar.HyperStack.ST.lemma_same_refs_in_stack_regions_intro"
       ],
       0,
-      "8a03d0802571d7e25dc3d333d1b6a0e6"
+      "ac291e556347f6d9c7407f8d837fb654"
     ],
     [
       "AEADProvider.dbg",
@@ -24,7 +24,7 @@
         "equation_DebugFlags.debug_AEP"
       ],
       0,
-      "a0cac29385478739ae52194834b1d522"
+      "c4f2cf48149bff58662ce57def8462d9"
     ],
     [
       "AEADProvider.alg",
@@ -32,13 +32,11 @@
       2,
       1,
       [
-        "@MaxIFuel_assumption", "@query", "bool_inversion",
-        "disc_equation_CipherSuite.AEAD", "equation_AEADProvider.id",
-        "refinement_interpretation_Tm_refine_27bc248aea929afc1c455a4ca114e85e",
-        "typing_CipherSuite.uu___is_AEAD"
+        "@MaxIFuel_assumption", "@query", "equation_AEADProvider.id",
+        "refinement_interpretation_Tm_refine_27bc248aea929afc1c455a4ca114e85e"
       ],
       0,
-      "94b2367f0e92e3180cbe09c01e2ecfe8"
+      "ec590183e312bff0654d43e453e2d13e"
     ],
     [
       "AEADProvider.alg'",
@@ -46,13 +44,11 @@
       2,
       1,
       [
-        "@MaxIFuel_assumption", "@query", "bool_inversion",
-        "disc_equation_CipherSuite.AEAD", "equation_AEADProvider.id",
-        "refinement_interpretation_Tm_refine_27bc248aea929afc1c455a4ca114e85e",
-        "typing_CipherSuite.uu___is_AEAD"
+        "@MaxIFuel_assumption", "@query", "equation_AEADProvider.id",
+        "refinement_interpretation_Tm_refine_27bc248aea929afc1c455a4ca114e85e"
       ],
       0,
-      "59ee7d685266b1dc0f1a93f7b53d2392"
+      "01f5186c96e42b4c99ffa48debe5aecb"
     ],
     [
       "AEADProvider.aeadAlg_for_evercrypt",
@@ -64,7 +60,7 @@
         "refinement_interpretation_Tm_refine_aeb42dbe7bcd8439bc45e996e277ed62"
       ],
       0,
-      "bc7272ea5305a8a71d9b6aac5de1a064"
+      "b1c1e2275ac48c2ea0e70ae744bd97e7"
     ],
     [
       "AEADProvider.salt_length",
@@ -82,10 +78,10 @@
         "disc_equation_EverCrypt.CHACHA20_POLY1305",
         "equation_AEADProvider.alg_", "equation_CipherSuite.aeadAlg",
         "fuel_guarded_inversion_EverCrypt.aead_alg",
-        "typing_AEADProvider.alg_"
+        "projection_inverse_BoxBool_proj_0", "typing_AEADProvider.alg_"
       ],
       0,
-      "0fbd54543e6f6685ac0eb04ba2ad2fc7"
+      "cc604472b759aa052481f9ef3c09c841"
     ],
     [
       "AEADProvider.explicit_iv_length",
@@ -103,10 +99,10 @@
         "disc_equation_EverCrypt.CHACHA20_POLY1305",
         "equation_AEADProvider.alg_", "equation_CipherSuite.aeadAlg",
         "fuel_guarded_inversion_EverCrypt.aead_alg",
-        "typing_AEADProvider.alg_"
+        "projection_inverse_BoxBool_proj_0", "typing_AEADProvider.alg_"
       ],
       0,
-      "c140facad040735dcd81d184217a0aec"
+      "58b285cf954b63f4a80f276a630082d3"
     ],
     [
       "AEADProvider.key",
@@ -120,7 +116,7 @@
         "typing_AEADProvider.key_length"
       ],
       0,
-      "b5e02a1af57f28a5b0292ee50d521eac"
+      "bb108c554602a434ed0ed58cbb7fd0cf"
     ],
     [
       "AEADProvider.salt",
@@ -134,7 +130,7 @@
         "projection_inverse_BoxInt_proj_0", "typing_AEADProvider.salt_length"
       ],
       0,
-      "4987a1ff456ab5a21d467510bbc78213"
+      "9b0969a184979db3e3764bed0cf8807d"
     ],
     [
       "AEADProvider.noncelen",
@@ -143,7 +139,7 @@
       1,
       [ "@query" ],
       0,
-      "87148b8fe23b94023c86d2cbef0fd9cd"
+      "8cb2552aedfdec11df10c0f789c82528"
     ],
     [
       "AEADProvider.nonce",
@@ -159,7 +155,7 @@
         "typing_AEADProvider.salt_length"
       ],
       0,
-      "eae5732872faa7a10a245572ea7e8e35"
+      "742b07dbed67e683c70912306e93c8cb"
     ],
     [
       "AEADProvider.coerce_iv",
@@ -171,7 +167,7 @@
         "equation_AEADProvider.iv_length", "projection_inverse_BoxInt_proj_0"
       ],
       0,
-      "8fb774f3ad0656c8f8cf25f85ffc6856"
+      "901e0cf465bdac3a861c1de5cfacaaab"
     ],
     [
       "AEADProvider.leak",
@@ -210,7 +206,7 @@
         "typing_FStar.Set.complement", "typing_FStar.Set.empty"
       ],
       0,
-      "71bc7e33751768102924ae72dc81ad1a"
+      "508ab0ad0686d59a78f3ab95add24ae0"
     ],
     [
       "AEADProvider.adata",
@@ -222,7 +218,7 @@
         "projection_inverse_BoxInt_proj_0"
       ],
       0,
-      "2aa8582c127c30a8da3b49c862c44f4d"
+      "4d7f389e846b97c17a3111a3be701c93"
     ],
     [
       "AEADProvider.cipherlen",
@@ -241,7 +237,7 @@
         "typing_AEADProvider.taglen"
       ],
       0,
-      "718a6ea36e47be08229ffbf2b4225ef3"
+      "e530e1ea50f04264f33d7ee26c43396a"
     ],
     [
       "AEADProvider.from_bytes",
@@ -310,7 +306,7 @@
         "typing_TLSInfo.safe_region"
       ],
       0,
-      "cf136640e4e6f944421eb9a280f724f3"
+      "250d2437cdca76db6bb702b746f1bddf"
     ]
   ]
 ]

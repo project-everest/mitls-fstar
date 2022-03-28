@@ -329,8 +329,6 @@ let name_of_cipherSuite (c: cipherSuite) : Tot cipherSuiteName =
 
 (* TODO: rewrite this function using a loop *)
 
-#reset-options "--using_facts_from '* -LowParse.Spec.Base'"
-
 let rec cipherSuites_of_nameList_aux (l: list cipherSuiteName) (accu: list cipherSuite) : Tot (l' : list cipherSuite { List.Tot.length l' <= List.Tot.length l + List.Tot.length accu } ) (decreases l) =
   match l with
   | [] ->
@@ -356,8 +354,6 @@ let nameList_of_cipherSuites (l: list cipherSuite) : Tot (l' : list cipherSuiteN
   nameList_of_cipherSuites_aux l []
 
 (* Parsers and serializers for cipherSuite *names* *)
-
-#reset-options
 
 let cipherSuiteNameBytes : cipherSuiteName -> Tot (lbytes 2) =
   LowParseWrappers.wrap_serializer32_constant_length cipherSuite_serializer32 2 ()

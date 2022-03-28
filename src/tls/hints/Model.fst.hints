@@ -8,7 +8,7 @@
       1,
       [ "@query" ],
       0,
-      "fa8ef5df7964fb53973b3f6708a388df"
+      "8dc1623aa0b097ed4775eed33e9974ac"
     ],
     [
       "Model.__proj__Ideal__item__v",
@@ -16,12 +16,11 @@
       2,
       1,
       [
-        "@MaxIFuel_assumption", "@query", "disc_equation_Model.Ideal",
-        "projection_inverse_BoxBool_proj_0",
+        "@MaxIFuel_assumption", "@query",
         "refinement_interpretation_Tm_refine_f8f3d75a17721bb6e0dd00975446a581"
       ],
       0,
-      "efce799371fbd161f5d495b80c6df26a"
+      "12f1c9b8be48566734b272d9fcc4bc4d"
     ],
     [
       "Model.__proj__Real__item__v",
@@ -29,12 +28,11 @@
       2,
       1,
       [
-        "@MaxIFuel_assumption", "@query", "disc_equation_Model.Real",
-        "projection_inverse_BoxBool_proj_0",
+        "@MaxIFuel_assumption", "@query",
         "refinement_interpretation_Tm_refine_8ba51edc114520debef30f4a30c696ca"
       ],
       0,
-      "20ad7557415f5b15ccad4e6f8d98c940"
+      "64a82b3ee9abd1e8b001c5d165a94acc"
     ],
     [
       "Model.ir",
@@ -43,7 +41,7 @@
       1,
       [ "@query", "projection_inverse_BoxBool_proj_0" ],
       0,
-      "271b625af969aa03c8969b00f5a5eb9d"
+      "dd13bbeac0549099b4b97cccc30e387a"
     ],
     [
       "Model.model_on",
@@ -58,7 +56,7 @@
         "typing_Mem.model"
       ],
       0,
-      "88a88232d485efeacc903e57fd6c61be"
+      "c7500b9556c5e2098561c0809dd26da5"
     ],
     [
       "Model.ideal",
@@ -73,7 +71,7 @@
         "typing_Mem.model", "unit_inversion"
       ],
       0,
-      "378cc0d6d64fe7f61ff758aae58fdf77"
+      "b6527700e9bfb87e664ece90960be45d"
     ],
     [
       "Model.real",
@@ -81,21 +79,22 @@
       2,
       1,
       [
-        "@MaxIFuel_assumption", "@query", "bool_inversion",
-        "disc_equation_Model.Ideal", "disc_equation_Model.Real",
-        "equation_FStar.HyperStack.ST.is_eternal_region",
-        "equation_FStar.Monotonic.HyperStack.is_eternal_color",
-        "equation_Mem.rgn", "equation_Model.ir",
+        "@MaxIFuel_assumption", "@query",
+        "constructor_distinct_Lib.IntTypes.U8", "disc_equation_Model.Ideal",
+        "disc_equation_Model.Real", "equality_tok_Lib.IntTypes.U1@tok",
+        "equality_tok_Lib.IntTypes.U8@tok", "equation_Lib.IntTypes.unsigned",
+        "equation_Model.ir", "equation_Spec.AES.gf8",
+        "equation_Spec.AES.irred", "equation_Spec.GaloisField.gf",
         "fuel_guarded_inversion_Model.ideal_or_real",
+        "proj_equation_Spec.GaloisField.GF_t",
         "projection_inverse_BoxBool_proj_0",
+        "projection_inverse_Spec.GaloisField.GF_t",
         "refinement_interpretation_Tm_refine_3a337cb56cd3c8b5d5f50adb86c4c664",
-        "refinement_interpretation_Tm_refine_b5163a5c7eb2f4891aa85b6bd19b6e5e",
-        "typing_FStar.Monotonic.HyperHeap.color",
-        "typing_FStar.Monotonic.HyperStack.is_eternal_color",
-        "typing_TLSInfo.safe_region"
+        "refinement_interpretation_Tm_refine_de8080fdc4bd6678af723874a7d70466",
+        "typing_Spec.AES.gf8", "typing_Spec.GaloisField.__proj__GF__item__t"
       ],
       0,
-      "12f7e93472065afc8e365c86db32eba5"
+      "127de2a23a076090d02a716f5ab9465c"
     ],
     [
       "Model.mk_ideal",
@@ -114,7 +113,7 @@
         "typing_Mem.model", "unit_inversion"
       ],
       0,
-      "27cb1d00a9a52c2c13e666d887feb944"
+      "43d7aff2f2a8d0575a56089114616b8c"
     ],
     [
       "Model.mk_real",
@@ -123,27 +122,26 @@
       1,
       [
         "@MaxIFuel_assumption", "@query", "bool_inversion",
+        "constructor_distinct_Lib.IntTypes.U8",
         "constructor_distinct_Model.Real", "disc_equation_Model.Ideal",
+        "equality_tok_Lib.IntTypes.U1@tok",
+        "equality_tok_Lib.IntTypes.U8@tok",
         "equation_FStar.HyperStack.ST.is_eternal_region",
-        "equation_FStar.Monotonic.HyperHeap.disjoint",
-        "equation_FStar.Monotonic.HyperStack.is_eternal_color",
-        "equation_Mem.disjoint", "equation_Mem.rgn",
-        "equation_Mem.tls_honest_region", "equation_Mem.tls_rgn",
-        "equation_Mem.tls_tables_region", "equation_Model.ir",
-        "primitive_Prims.op_AmpAmp", "primitive_Prims.op_Negation",
+        "equation_Lib.IntTypes.unsigned", "equation_Mem.rgn",
+        "equation_Model.ir", "equation_Spec.AES.gf8",
+        "equation_Spec.AES.irred", "equation_Spec.GaloisField.gf",
+        "primitive_Prims.op_Negation", "proj_equation_Spec.GaloisField.GF_t",
         "projection_inverse_BoxBool_proj_0",
+        "projection_inverse_Spec.GaloisField.GF_t",
+        "refinement_interpretation_Tm_refine_31bfde48b952b6d7959cd5a2aa36404e",
         "refinement_interpretation_Tm_refine_3a337cb56cd3c8b5d5f50adb86c4c664",
-        "refinement_interpretation_Tm_refine_9c2710de196223ef94d05497fb654514",
-        "refinement_interpretation_Tm_refine_b5163a5c7eb2f4891aa85b6bd19b6e5e",
-        "refinement_interpretation_Tm_refine_c358ce785c6b462b7618aa4f08d5c31e",
-        "typing_FStar.Monotonic.HyperHeap.color",
-        "typing_FStar.Monotonic.HyperHeap.includes",
-        "typing_FStar.Monotonic.HyperStack.is_eternal_color",
-        "typing_Mem.tls_honest_region", "typing_Mem.tls_tables_region",
+        "refinement_interpretation_Tm_refine_de8080fdc4bd6678af723874a7d70466",
+        "typing_FStar.Monotonic.HyperHeap.rid_freeable",
+        "typing_Spec.AES.gf8", "typing_Spec.GaloisField.__proj__GF__item__t",
         "typing_TLSInfo.safe_region"
       ],
       0,
-      "95579a6e6f581ddf39335d6a5599282c"
+      "0c3e14b10c6bd2ff0c2f4a316093fbe3"
     ],
     [
       "Model.is_safe",
@@ -152,24 +150,24 @@
       1,
       [
         "@MaxIFuel_assumption", "@query", "bool_inversion",
+        "constructor_distinct_Lib.IntTypes.U8",
+        "equality_tok_Lib.IntTypes.U1@tok",
+        "equality_tok_Lib.IntTypes.U8@tok",
         "equation_FStar.HyperStack.ST.is_eternal_region",
-        "equation_FStar.Monotonic.HyperHeap.disjoint",
-        "equation_FStar.Monotonic.HyperStack.is_eternal_color",
-        "equation_Mem.disjoint", "equation_Mem.model", "equation_Mem.rgn",
-        "equation_Mem.tls_honest_region", "equation_Mem.tls_rgn",
-        "equation_Mem.tls_tables_region", "primitive_Prims.op_AmpAmp",
-        "primitive_Prims.op_Negation", "projection_inverse_BoxBool_proj_0",
-        "refinement_interpretation_Tm_refine_9c2710de196223ef94d05497fb654514",
-        "refinement_interpretation_Tm_refine_b5163a5c7eb2f4891aa85b6bd19b6e5e",
-        "refinement_interpretation_Tm_refine_c358ce785c6b462b7618aa4f08d5c31e",
-        "typing_FStar.Monotonic.HyperHeap.color",
-        "typing_FStar.Monotonic.HyperHeap.includes",
-        "typing_FStar.Monotonic.HyperStack.is_eternal_color",
-        "typing_Flags.model", "typing_Mem.tls_honest_region",
-        "typing_Mem.tls_tables_region", "typing_TLSInfo.safe_region"
+        "equation_Lib.IntTypes.unsigned", "equation_Mem.model",
+        "equation_Mem.rgn", "equation_Spec.AES.gf8",
+        "equation_Spec.AES.irred", "equation_Spec.GaloisField.gf",
+        "primitive_Prims.op_Negation", "proj_equation_Spec.GaloisField.GF_t",
+        "projection_inverse_BoxBool_proj_0",
+        "projection_inverse_Spec.GaloisField.GF_t",
+        "refinement_interpretation_Tm_refine_31bfde48b952b6d7959cd5a2aa36404e",
+        "refinement_interpretation_Tm_refine_de8080fdc4bd6678af723874a7d70466",
+        "typing_FStar.Monotonic.HyperHeap.rid_freeable", "typing_Mem.model",
+        "typing_Spec.AES.gf8", "typing_Spec.GaloisField.__proj__GF__item__t",
+        "typing_TLSInfo.safe_region"
       ],
       0,
-      "0421f0c11f40a6d1e21ca0114411f0f3"
+      "13e06763d180d330312b38fc1820e45e"
     ]
   ]
 ]

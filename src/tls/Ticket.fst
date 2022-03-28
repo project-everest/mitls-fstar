@@ -48,7 +48,7 @@ private let dummy_id (a:aeadAlg) : St AE.id =
   ID13 (KeyID #li (ExpandedSecret (EarlySecretID (NoPSK h)) ApplicationTrafficSecret log))
 
 // The ticket encryption key is a module global, but it must be lazily initialized
-// because the RNG may not yet be seeded when kremlinit_globals is called
+// because the RNG may not yet be seeded when krmlinit_globals is called
 private let ticket_enc : reference (option ticket_key) = ralloc region None
 
 // Sealing key (for client-side sealing, e.g. of session local state)

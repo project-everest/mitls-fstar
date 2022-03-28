@@ -20,7 +20,7 @@ SOURCES = \
   HandshakeLog.c \
   HandshakeMessages.c \
   Hashing.c \
-  kremlinit.c \
+  krmlinit.c \
   LowParse.c \
   Mem.c \
   mitlsffi.c \
@@ -42,13 +42,13 @@ SOURCES = \
   TLSConstants.c \
   TLSError.c \
   TLSInfo.c \
-  Mitls_Kremlib.c
+  Mitls_Krmllib.c
 
 libmitls_code.lib: $(SOURCES:.c=.obj) $(PLATFORM_OBJS)
   lib /nologo /out:libmitls_code.lib $**
   
-libmitls.dll: libmitls_code.lib libmitls.def dllmain.obj ../kremlib/libkremlib.lib ../evercrypt/libevercrypt.lib
-  link /nologo /dll /debug:full /out:libmitls.dll libmitls_code.lib dllmain.obj /def:libmitls.def ntdll.lib advapi32.lib bcrypt.lib ../kremlib/libkremlib.lib ../evercrypt/libevercrypt.lib /OPT:ICF /OPT:REF
+libmitls.dll: libmitls_code.lib libmitls.def dllmain.obj ../krmllib/libkrmllib.lib ../evercrypt/libevercrypt.lib
+  link /nologo /dll /debug:full /out:libmitls.dll libmitls_code.lib dllmain.obj /def:libmitls.def ntdll.lib advapi32.lib bcrypt.lib ../krmllib/libkrmllib.lib ../evercrypt/libevercrypt.lib /OPT:ICF /OPT:REF
 
 .c.obj::
     cl $(CCOPTS) -c $<

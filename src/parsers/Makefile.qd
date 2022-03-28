@@ -1,9 +1,9 @@
 FSTAR_HOME ?= ../../../../FStar
 MITLS_HOME ?= ../../../../mitls-fstar
-KREMLIN_HOME ?= ../../../../kremlin
+KRML_HOME ?= ../../../../karamel
 ifndef LOWPARSE_HOME
-  ifdef QD_HOME
-    LOWPARSE_HOME=$(QD_HOME)/src/lowparse
+  ifdef EVERPARSE_HOME
+    LOWPARSE_HOME=$(EVERPARSE_HOME)/src/lowparse
   else
     LOWPARSE_HOME=../../../../quackyducky/src/lowparse
   endif
@@ -11,7 +11,7 @@ endif
 
 export FSTAR_HOME
 export MITLS_HOME
-export KREMLIN_HOME
+export KRML_HOME
 export LOWPARSE_HOME
 
 ifdef NO_QD_VERIFY
@@ -27,15 +27,15 @@ CACHE_DIR=cache$(LAX_EXT)
 CHECKED_EXT=.checked$(LAX_EXT)
 
 HINT_FILE=--hint_file hints/$(notdir $(subst .checked,,$<)).hints
-FSTAR_OPTIONS = --odir kremlin --cache_dir $(CACHE_DIR) $(LAX_OPT) --cache_checked_modules --use_hints \
+FSTAR_OPTIONS = --odir krml --cache_dir $(CACHE_DIR) $(LAX_OPT) --cache_checked_modules --use_hints \
                 --already_cached '* -Parsers' \
-		--include $(LOWPARSE_HOME) --include $(KREMLIN_HOME)/kremlib --include $(KREMLIN_HOME)/kremlib/obj $(OTHERFLAGS)
+		--include $(LOWPARSE_HOME) --include $(KRML_HOME)/krmllib --include $(KRML_HOME)/krmllib/obj $(OTHERFLAGS)
 
 FSTAR = $(FSTAR_HOME)/bin/fstar.exe --trace_error $(FSTAR_OPTIONS)
 
-HEADERS = $(addprefix -add-include ,'"kremlin/internal/compat.h"')
+HEADERS = $(addprefix -add-include ,'"krml/internal/compat.h"')
 
-KREMLIN = $(KREMLIN_HOME)/krml \
+KRML = $(KRML_HOME)/krml \
 	 -ccopt "-Ofast" \
 	 -drop 'FStar.Tactics.\*' -drop FStar.Tactics -drop 'FStar.Reflection.\*' \
 	 -tmpdir out \
@@ -51,8 +51,8 @@ $(CACHE_DIR)/%$(CHECKED_EXT):
 	$(FSTAR) $(HINT_FILE) --record_hints $<
 	@touch -c $@
 
-kremlin/%.krml:
-	$(FSTAR) --codegen Kremlin $(patsubst %$(CHECKED_EXT),%,$(notdir $<)) --extract_module $(basename $(patsubst %$(CHECKED_EXT),%,$(notdir $<))) --warn_error '@241'
+krml/%.krml:
+	$(FSTAR) --codegen krml $(patsubst %$(CHECKED_EXT),%,$(notdir $<)) --extract_module $(basename $(patsubst %$(CHECKED_EXT),%,$(notdir $<))) --warn_error '@241'
 	@touch -c $@
 
 $(DEPEND_FILE): $(QD_FILES) Makefile hints
@@ -72,7 +72,7 @@ verify: $(patsubst %,$(CACHE_DIR)/%$(CHECKED_EXT),$(QD_FILES))
 	echo $*
 endif
 
-ALL_KRML_FILES := $(filter-out kremlin/prims.krml,$(ALL_KRML_FILES))
+ALL_KRML_FILES := $(filter-out krml/prims.krml,$(ALL_KRML_FILES))
 
 extract: $(ALL_KRML_FILES) # from .depend
 

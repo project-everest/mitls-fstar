@@ -1,5 +1,5 @@
 FSTAR_HOME=../../../../FStar
-KREMLIN_HOME=../../../../kremlin
+KRML_HOME=../../../../karamel
 HACL_HOME=../../../../hacl-star
 MITLS_HOME=../../..
 include ../Makefile

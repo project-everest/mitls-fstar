@@ -35,7 +35,7 @@
 #define CONVERT_HASH(h) (h == Spec_Hash_Definitions_MD5 ? TLS_hash_MD5 : (h == Spec_Hash_Definitions_SHA1 ? TLS_hash_SHA1 : (h == Spec_Hash_Definitions_SHA2_224 ? TLS_hash_SHA224 : (h == Spec_Hash_Definitions_SHA2_256 ? TLS_hash_SHA256 : (h == Spec_Hash_Definitions_SHA2_384 ? TLS_hash_SHA384 : TLS_hash_SHA512)))))
 #define CONVERT_AEAD(ae) (ae == EverCrypt_AES128_GCM ? TLS_aead_AES_128_GCM : (ae == EverCrypt_AES256_GCM ? TLS_aead_AES_256_GCM : TLS_aead_CHACHA20_POLY1305))
 
-// This file is hand-written C code, to wrap the Kremlin-extracted
+// This file is hand-written C code, to wrap the Karamel-extracted
 // code to match the mitlsffi.h interface.
 //
 // So it uses KRML_HOST_MALLOC and KRML_HOST_FREE in order to
@@ -178,7 +178,7 @@ int MITLS_CALLCONV FFI_mitls_init(void)
 #endif
 
   ENTER_GLOBAL_HEAP_REGION();
-  kremlinit_globals();
+  krmlinit_globals();
   LEAVE_GLOBAL_HEAP_REGION();
   
   if (HAD_OUT_OF_MEMORY) {

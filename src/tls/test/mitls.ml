@@ -2,7 +2,7 @@
 open TLSConstants
 open TLSInfo
 
-(*** CLI; most tests are now shared with Kremlin in Test.Main.fst *)
+(*** CLI; most tests are now shared with Karamel in Test.Main.fst *)
 
 let _ =
   let res = Test_Main.main() in

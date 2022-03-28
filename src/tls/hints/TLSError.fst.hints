@@ -7,16 +7,12 @@
       2,
       1,
       [
-        "@MaxIFuel_assumption", "@query", "bool_inversion",
-        "disc_equation_FStar.Error.Correct",
-        "disc_equation_FStar.Error.Error", "equation_TLSError.error",
+        "@query", "equation_TLSError.error",
         "function_token_typing_TLSError.error",
-        "lemma_FStar.Error.invertOptResult",
-        "projection_inverse_BoxBool_proj_0",
-        "typing_FStar.Error.uu___is_Correct"
+        "lemma_FStar.Error.invertOptResult"
       ],
       0,
-      "2cae86475652f3c953398450aabc9da6"
+      "93dbb10ff3f82117c7274ec6266cf490"
     ],
     [
       "TLSError.resT",
@@ -25,12 +21,10 @@
       1,
       [
         "@MaxIFuel_assumption", "@query",
-        "disc_equation_FStar.Error.Correct", "equation_TLSError.error",
-        "projection_inverse_BoxBool_proj_0",
         "refinement_interpretation_Tm_refine_a0dbf400a12f52d8e92a346ebf22efa9"
       ],
       0,
-      "42cc7e898556220e4ba5e24596588aa6"
+      "217097731318880464184705cf4b8ea9"
     ],
     [
       "TLSError.mapResult",
@@ -38,16 +32,13 @@
       2,
       1,
       [
-        "@MaxIFuel_assumption", "@query", "bool_inversion",
-        "disc_equation_FStar.Error.Correct",
+        "@query", "disc_equation_FStar.Error.Correct",
         "disc_equation_FStar.Error.Error", "equation_TLSError.error",
         "equation_TLSError.result", "function_token_typing_TLSError.error",
-        "lemma_FStar.Error.invertOptResult",
-        "typing_FStar.Error.uu___is_Correct",
-        "typing_FStar.Error.uu___is_Error"
+        "lemma_FStar.Error.invertOptResult"
       ],
       0,
-      "b402931515ab37fea3bc055f15cc96ef"
+      "ce6538734f3e253a83dae1d58781dcae"
     ],
     [
       "TLSError.bindResult",
@@ -55,16 +46,13 @@
       2,
       1,
       [
-        "@MaxIFuel_assumption", "@query", "bool_inversion",
-        "disc_equation_FStar.Error.Correct",
+        "@query", "disc_equation_FStar.Error.Correct",
         "disc_equation_FStar.Error.Error", "equation_TLSError.error",
         "equation_TLSError.result", "function_token_typing_TLSError.error",
-        "lemma_FStar.Error.invertOptResult",
-        "typing_FStar.Error.uu___is_Correct",
-        "typing_FStar.Error.uu___is_Error"
+        "lemma_FStar.Error.invertOptResult"
       ],
       0,
-      "d49e44bfc690f4c1a09826df302bae96"
+      "29867a066f863b937d60a3cb50e6097a"
     ],
     [
       "TLSError.resultMap",
@@ -72,16 +60,13 @@
       2,
       1,
       [
-        "@MaxIFuel_assumption", "@query", "bool_inversion",
-        "disc_equation_FStar.Error.Correct",
+        "@query", "disc_equation_FStar.Error.Correct",
         "disc_equation_FStar.Error.Error", "equation_TLSError.error",
         "equation_TLSError.result", "function_token_typing_TLSError.error",
-        "lemma_FStar.Error.invertOptResult",
-        "typing_FStar.Error.uu___is_Correct",
-        "typing_FStar.Error.uu___is_Error"
+        "lemma_FStar.Error.invertOptResult"
       ],
       0,
-      "e9909616edb7525f3c8422cfe61939aa"
+      "b3d602900eb776a967f5b8ae55e8b44f"
     ],
     [
       "TLSError.resultBind",
@@ -89,16 +74,13 @@
       2,
       1,
       [
-        "@MaxIFuel_assumption", "@query", "bool_inversion",
-        "disc_equation_FStar.Error.Correct",
+        "@query", "disc_equation_FStar.Error.Correct",
         "disc_equation_FStar.Error.Error", "equation_TLSError.error",
         "equation_TLSError.result", "function_token_typing_TLSError.error",
-        "lemma_FStar.Error.invertOptResult",
-        "typing_FStar.Error.uu___is_Correct",
-        "typing_FStar.Error.uu___is_Error"
+        "lemma_FStar.Error.invertOptResult"
       ],
       0,
-      "fc047dd95deb53430330d09f7612e337"
+      "e50cdd9f537b49630bc9550411f9477f"
     ]
   ]
 ]

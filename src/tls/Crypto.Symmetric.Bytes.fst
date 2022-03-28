@@ -1,5 +1,5 @@
 (*--build-config
-options:--trace_error --max_fuel 4 --initial_fuel 0 --max_ifuel 2 --initial_ifuel 0 --z3rlimit 20 --use_hints --include ../../code/bignum --include ../../code/experimental/aesgcm --include ../../code/lib/kremlin --include ../../code/poly1305 --include ../../code/salsa-family --include ../../secure_api/aead --include ../../secure_api/prf --include ../../secure_api/vale --include ../../secure_api/uf1cma --include ../../secure_api/utils --include ../../specs --include ../../../kremlin/kremlib
+options:--trace_error --max_fuel 4 --initial_fuel 0 --max_ifuel 2 --initial_ifuel 0 --z3rlimit 20 --use_hints --include ../../code/bignum --include ../../code/experimental/aesgcm --include ../../code/lib/karamel --include ../../code/poly1305 --include ../../code/salsa-family --include ../../secure_api/aead --include ../../secure_api/prf --include ../../secure_api/vale --include ../../secure_api/uf1cma --include ../../secure_api/utils --include ../../specs --include ../../../karamel/krmllib
 --*)
 module Crypto.Symmetric.Bytes
 
@@ -117,7 +117,7 @@ let store_bytes l buf b = store_bytes_aux l buf 0ul b
 
 // TODO: Dummy.
 // Should be external and relocated in some library with a crypto-grade
-// implementation in both OCaml and KreMLin,
+// implementation in both OCaml and KaRaMeL,
 val random: len:nat -> b:lbuffer len -> Stack unit
   (requires (fun h -> live h b))
   (ensures  (fun h0 _ h1 -> live h1 b /\ modifies_1 b h0 h1))
@@ -340,7 +340,7 @@ let rec load_big64 len buf =
     FStar.UInt64.(uint8_to_uint64 b +^ 256UL *^ n')
 
 
-(* TODO: Add to FStar.Int.Cast and Kremlin and OCaml implementations *)
+(* TODO: Add to FStar.Int.Cast and KaRaMeL and OCaml implementations *)
 val uint8_to_uint128: a:UInt8.t -> Tot (b:UInt128.t{UInt128.v b == UInt8.v a})
 let uint8_to_uint128 a = uint64_to_uint128 (uint8_to_uint64 a)
 

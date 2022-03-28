@@ -27,7 +27,7 @@
         "typing_FStar.UInt32.v"
       ],
       0,
-      "3c55716db72be942e3da8e814a0fa43d"
+      "d19461295f8c4238681753fc0005b8cd"
     ],
     [
       "StreamDeltas.stream_deltas_snoc",
@@ -39,7 +39,7 @@
         "equation_StreamDeltas.project_deltas"
       ],
       0,
-      "a4d0dd8f647440aff87b16e1ea2ff9f8"
+      "2343af34433c95d820a804f53af7deca"
     ],
     [
       "StreamDeltas.project_fragment_deltas",
@@ -48,7 +48,7 @@
       1,
       [ "@query" ],
       0,
-      "996a7c02faf2f34965f6ea445a0e0719"
+      "fe17f21d7a8bad4404b2e8e1705fcc67"
     ],
     [
       "StreamDeltas.project_fragment_deltas",
@@ -57,19 +57,22 @@
       1,
       [
         "@MaxIFuel_assumption", "@query", "bool_inversion",
+        "constructor_distinct_Lib.IntTypes.U8",
         "disc_equation_TLSInfo.PlaintextID",
-        "equation_FStar.HyperStack.ST.is_eternal_region",
-        "equation_FStar.Monotonic.HyperStack.is_eternal_color",
-        "equation_Mem.rgn", "equation_StreamDeltas.id",
-        "equation_TLSInfo.authId",
+        "equality_tok_Lib.IntTypes.U1@tok",
+        "equality_tok_Lib.IntTypes.U8@tok", "equation_Lib.IntTypes.unsigned",
+        "equation_Spec.AES.gf8", "equation_Spec.AES.irred",
+        "equation_Spec.GaloisField.gf", "equation_StreamDeltas.id",
+        "equation_TLSInfo.authId", "proj_equation_Spec.GaloisField.GF_t",
+        "projection_inverse_BoxBool_proj_0",
+        "projection_inverse_Spec.GaloisField.GF_t",
         "refinement_interpretation_Tm_refine_9f948bc3ea58283edd778ba9c9ec878b",
-        "refinement_interpretation_Tm_refine_b5163a5c7eb2f4891aa85b6bd19b6e5e",
-        "typing_FStar.Monotonic.HyperHeap.color",
-        "typing_FStar.Monotonic.HyperStack.is_eternal_color",
-        "typing_TLSInfo.safe_region", "typing_TLSInfo.uu___is_PlaintextID"
+        "refinement_interpretation_Tm_refine_de8080fdc4bd6678af723874a7d70466",
+        "typing_Spec.AES.gf8", "typing_Spec.GaloisField.__proj__GF__item__t",
+        "typing_TLSInfo.uu___is_PlaintextID"
       ],
       0,
-      "2a166dfc2fda43066d90bd1ebc95eacc"
+      "6dd7b9681eebb75c999c6542aa1c5e75"
     ],
     [
       "StreamDeltas.stream_deltas_snoc2",
@@ -78,19 +81,22 @@
       1,
       [
         "@MaxIFuel_assumption", "@query", "bool_inversion",
+        "constructor_distinct_Lib.IntTypes.U8",
         "disc_equation_TLSInfo.PlaintextID",
-        "equation_FStar.HyperStack.ST.is_eternal_region",
-        "equation_FStar.Monotonic.HyperStack.is_eternal_color",
-        "equation_Mem.rgn", "equation_StreamDeltas.id",
-        "equation_TLSInfo.authId",
+        "equality_tok_Lib.IntTypes.U1@tok",
+        "equality_tok_Lib.IntTypes.U8@tok", "equation_Lib.IntTypes.unsigned",
+        "equation_Spec.AES.gf8", "equation_Spec.AES.irred",
+        "equation_Spec.GaloisField.gf", "equation_StreamDeltas.id",
+        "equation_TLSInfo.authId", "proj_equation_Spec.GaloisField.GF_t",
+        "projection_inverse_BoxBool_proj_0",
+        "projection_inverse_Spec.GaloisField.GF_t",
         "refinement_interpretation_Tm_refine_9f948bc3ea58283edd778ba9c9ec878b",
-        "refinement_interpretation_Tm_refine_b5163a5c7eb2f4891aa85b6bd19b6e5e",
-        "typing_FStar.Monotonic.HyperHeap.color",
-        "typing_FStar.Monotonic.HyperStack.is_eternal_color",
-        "typing_TLSInfo.safe_region", "typing_TLSInfo.uu___is_PlaintextID"
+        "refinement_interpretation_Tm_refine_de8080fdc4bd6678af723874a7d70466",
+        "typing_Spec.AES.gf8", "typing_Spec.GaloisField.__proj__GF__item__t",
+        "typing_TLSInfo.uu___is_PlaintextID"
       ],
       0,
-      "a669088c1c51feb116571a79df75f4d3"
+      "851b38e8640117c6829ce49195b810e5"
     ],
     [
       "StreamDeltas.encrypt",
@@ -99,7 +105,7 @@
       1,
       [ "@query" ],
       0,
-      "15aabd4b02af52eecbe45cb7559afc1e"
+      "040eba456e4e3934f2036a442199949a"
     ],
     [
       "StreamDeltas.encrypt",
@@ -117,7 +123,7 @@
         "typing_TLSInfo.uu___is_PlaintextID"
       ],
       0,
-      "c4777f9ce4e567627c1837211605cddf"
+      "334b8e143b8d3c158ca26bd6007f2428"
     ]
   ]
 ]

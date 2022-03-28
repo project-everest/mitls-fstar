@@ -1,0 +1,246 @@
+all: build
+
+build: build-internal-test build-library build-msvc-library build-external-test
+
+test: test-internal-test test-library test-msvc-library test-external-test
+
+ifneq (,$(MITLS_USE_OPENSSL))
+CONCRETE_FLAVOR = -OpenSSL
+endif
+
+# Target C compilation units for miTLS sources. Requires -minimal
+MITLS_BUNDLES = \
+  -bundle 'LowParse.\*,LowParseWrappers[rename=LowParse]' \
+  -bundle 'Format.\*' \
+  -bundle 'EverCrypt=EverCrypt,EverCrypt.\*' \
+  -bundle 'FStar.\*,LowStar.\*,C,C.\*[rename=Mitls_Krmllib]' \
+  -bundle 'Parsers.\*' \
+  -bundle 'Spec.\*' \
+  -bundle 'Meta.\*' \
+  -bundle Lib.*[rename=Hacl_Lib] \
+  -bundle TLSConstants=TLSConstants,QD.TLS_protocolVersion,List.Helpers \
+  -bundle Hashing=Hashing.Spec,Hashing,Hashing.CRF,HMAC,HKDF,HMAC.UFCMA \
+  -bundle Old.Handshake=Old.HMAC.UFCMA,Old.Epochs,Old.KeySchedule,Old.Handshake \
+  -bundle StatefulLHAE=AEAD_GCM,LHAEPlain,StatefulPlain,StatefulLHAE \
+  -bundle StreamAE=StreamPlain,StreamAE \
+  -bundle CommonDH=TLS.Curve25519,DHGroup,ECGroup,CommonDH \
+  -bundle Content=Content,DataStream \
+  -bundle Record=Record,StAE,Transport,StreamDeltas \
+  -bundle PMS=PMS,RSAKey,TLSPRF \
+  -bundle Crypto.Plain=Buffer.Utils,Crypto.Indexing,Crypto.Plain,Crypto.Symmetric.Bytes \
+  -bundle Flags=DebugFlags,Flags,Flag,TLSInfoFlags \
+  $(VALE_BUNDLES)
+
+# To include Makefile.common, you need to specify
+# the following five variables
+FLAVOR		= Karamel$(CONCRETE_FLAVOR)
+CODEGEN_FLAVOR  = krml
+EXTENSION	= krml
+# Don't extract modules from mitls that are implemented in C
+EXTRACT		= 'OCaml:* -DHDB -FFICallbacks -BufferBytes; krml:*'
+SPECINC     	= $(MITLS_HOME)/src/tls/concrete-flags $(MITLS_HOME)/src/tls/concrete-flags/$(FLAVOR)
+
+# SMT verification is disabled, so do not record hints
+OTHERFLAGS := $(filter-out --record_hints,$(OTHERFLAGS))
+
+include Makefile.common
+VFLAGS     += --admit_smt_queries true
+
+clean: clean-internal-test clean-library clean-msvc-library clean-external-test
+	rm -f $(DEP_FILE)
+
+# Tiny bit of autodetection to grab the right Vale files
+UNAME		= $(shell uname)
+MARCH		?= x86_64
+ifeq ($(UNAME),Darwin)
+  VARIANT=-Darwin
+else ifeq ($(UNAME),Linux)
+  VARIANT=-Linux
+endif
+
+################################################################################
+# Support for building without __int128
+
+ifneq (,$(EVEREST_WINDOWS))
+KOPTS+=-falloca -ftail-calls
+endif
+
+################################################################################
+# A common KaRaMeL invocation
+
+# The Crypto.* modules have already been extracted (in hacl-star/secure_api).
+DROP_MODULES 	= $(addprefix -drop , MonotoneMap MonotoneMapNonDep \
+  'FStar.Tactics.\*' FStar.Tactics \
+  'Crypto.AEAD.\*' Crypto.HKDF Crypto.HMAC)
+
+# But we ask for their headers to be in scope.
+HEADERS 	= $(addprefix -add-include ,'"hacks.h"' \
+  '"krml/internal/compat.h"')
+
+# Note: we could do the same with Crypto_Symmetric_Bytes, but it defines (hidden
+# behind the .h) the enum type for Option, which once again causes name clashes.
+# Rather than include it via a glue, we let it be extracted by KaRaMeL since
+# it's in the dependency graph of TLS anyhow.
+#
+# Note: Crypto.Plain is not pre-extracted by secure_api.
+
+KRML_COMMAND	= $(KRML_HOME)/krml -minimal \
+  -add-include '"krmllib.h"' \
+  -fnoanonymous-unions -warn-error -9-7-6@4-14-15 \
+  -fsopts --debug,yes -verbose \
+  -library EverCrypt,EverCrypt.*,Hacl.*,Interop_assumptions,Check_sha_stdcall,Sha_update_bytes_stdcall,Check_aesni_stdcall \
+  $(DROP_MODULES) $(HEADERS) \
+  $(MITLS_BUNDLES) $(KOPTS)
+
+ifndef NO_OPENSSL
+  KRML_COMMAND += -ldopts -L,$(MLCRYPTO_HOME)/openssl,-lcrypto,-lssl
+else
+  KRML_COMMAND += -ldopts -lbcrypt
+endif
+
+################################################################################
+# Sanity checks and shared directories definitions
+
+SECURE_OUT	= $(HACL_HOME)/secure_api/out/hacl_aes_abstract_id/crypto
+UINT128_DIR	= $(HACL_HOME)/secure_api/out/runtime_switch/uint128
+
+define COPY_template
+$(1)/%: $(2)/%
+	mkdir -p $$(dir $$@)
+	cp $$< $$@
+endef
+
+# All the files that we bring from external projects
+ALL_EXTERNAL_FILES	= \
+  $(addprefix stub/,log_to_choice.h buffer_bytes.c RegionAllocator.c RegionAllocator.h) \
+  $(addprefix include/,hacks.h regions.h) \
+  $(addprefix pki/,mipki.h) \
+  $(addprefix ffi/,mitlsffi.h)
+
+################################################################################
+
+# The internal test pokes at the modules directly, without going through the
+# FFI; the entry point is in Test.Main and the build outputs all the C files in
+# $(INTERNAL_TEST_DIR), which contains another Makefile to compile them and run
+# them
+
+INTERNAL_TEST_DIR=extract/Karamel-Internal-Test
+
+$(eval $(call COPY_template,$(INTERNAL_TEST_DIR)/secure,$(SECURE_OUT)))
+$(eval $(call COPY_template,$(INTERNAL_TEST_DIR)/include,extract/include))
+$(eval $(call COPY_template,$(INTERNAL_TEST_DIR)/stub,extract/cstubs))
+$(eval $(call COPY_template,$(INTERNAL_TEST_DIR)/ffi,$(MITLS_HOME)/libs/ffi))
+$(eval $(call COPY_template,$(INTERNAL_TEST_DIR)/pki,$(MITLS_HOME)/src/pki))
+$(eval $(call COPY_template,$(INTERNAL_TEST_DIR)/uint128,$(UINT128_DIR)))
+
+$(INTERNAL_TEST_DIR)/Test_Main.c: $(filter-out $(EXTRACT_DIR)/prims.krml,$(ALL_KRML_FILES))
+ifdef VERBOSE
+	@echo -e "\033[1;32m=== Extracting $@ ...\033[;37m"
+endif
+	$(KRML_COMMAND) $^ -tmpdir $(INTERNAL_TEST_DIR) -no-prefix Test.Main \
+	  -skip-compilation -bundle 'Test.Main=Test.\*'
+
+internal-test-copy: $(addprefix $(INTERNAL_TEST_DIR)/,$(ALL_EXTERNAL_FILES)) $(INTERNAL_TEST_DIR)/stub/mipki_wrapper.c
+
+output-internal-test: internal-test-copy $(INTERNAL_TEST_DIR)/Test_Main.c
+
+build-internal-test: output-internal-test
+	EVEREST_WINDOWS=$(EVEREST_WINDOWS) $(MAKE) -C $(INTERNAL_TEST_DIR)
+
+test-internal-test: output-internal-test
+	EVEREST_WINDOWS=$(EVEREST_WINDOWS) $(MAKE) -C $(INTERNAL_TEST_DIR) test
+
+clean-internal-test:
+	-@find $(INTERNAL_TEST_DIR) -type f -and -not -name Makefile -and -not -name .gitignore \
+        | xargs rm -f
+
+################################################################################
+# The library does not perform bundling
+
+LIBRARY_DIR=extract/Karamel-Library
+
+$(eval $(call COPY_template,$(LIBRARY_DIR)/secure,$(SECURE_OUT)))
+$(eval $(call COPY_template,$(LIBRARY_DIR)/include,extract/include))
+$(eval $(call COPY_template,$(LIBRARY_DIR)/stub,extract/cstubs))
+$(eval $(call COPY_template,$(LIBRARY_DIR)/ffi,$(MITLS_HOME)/libs/ffi))
+$(eval $(call COPY_template,$(LIBRARY_DIR)/uint128,$(UINT128_DIR)))
+
+$(LIBRARY_DIR)/TLS.c: $(filter-out $(EXTRACT_DIR)/prims.krml $(EXTRACT_DIR)/PKI.krml $(EXTRACT_DIR)/Test_%.krml,$(ALL_KRML_FILES))
+ifdef VERBOSE
+	@echo -e "\033[1;32m=== Extracting $@ ...\033[;37m"
+endif
+	$(KRML_COMMAND) $^ -tmpdir $(LIBRARY_DIR) -skip-compilation
+
+library-copy: $(addprefix $(LIBRARY_DIR)/, $(filter-out pki/mipki.h, $(ALL_EXTERNAL_FILES))) \
+  $(LIBRARY_DIR)/stub/mitlsffi.c \
+  $(LIBRARY_DIR)/stub/RegionAllocator.c $(LIBRARY_DIR)/stub/RegionAllocator.h
+
+# Sanity-checks, replaced with dependencies
+
+$(LIBRARY_DIR)/Crypto_AEAD_Main.h: $(SECURE_OUT)/Crypto_AEAD_Main.h
+
+$(SECURE_OUT)/Crypto_AEAD_Main.h:
+	$(error HACL_HOME is $(HACL_HOME) and I cannot find $(SECURE_OUT)/Crypto_AEAD_Main.h -- please run make in $(HACL_HOME)/secure_api -- thanks)
+
+output-library: library-copy $(LIBRARY_DIR)/TLS.c
+
+build-library: output-library
+	EVEREST_WINDOWS=$(EVEREST_WINDOWS) $(MAKE) -C $(LIBRARY_DIR)
+
+test-library: output-library
+	EVEREST_WINDOWS=$(EVEREST_WINDOWS) $(MAKE) -C $(LIBRARY_DIR) test
+
+clean-library:
+	-@find $(LIBRARY_DIR) -type f -and -not -name Makefile -and -not -name .gitignore \
+        | xargs rm -f
+
+################################################################################
+# The library does not perform bundling
+
+MSVC_LIBRARY_DIR=extract/Karamel-Msvc-Library
+
+$(eval $(call COPY_template,$(MSVC_LIBRARY_DIR)/secure,$(SECURE_OUT)))
+$(eval $(call COPY_template,$(MSVC_LIBRARY_DIR)/include,extract/include))
+$(eval $(call COPY_template,$(MSVC_LIBRARY_DIR)/stub,extract/cstubs))
+$(eval $(call COPY_template,$(MSVC_LIBRARY_DIR)/ffi,$(MITLS_HOME)/libs/ffi))
+$(eval $(call COPY_template,$(MSVC_LIBRARY_DIR)/uint128,$(UINT128_DIR)))
+
+$(MSVC_LIBRARY_DIR)/TLS.c: $(filter-out $(EXTRACT_DIR)/prims.krml $(EXTRACT_DIR)/PKI.krml $(EXTRACT_DIR)/Test_%.krml,$(ALL_KRML_FILES))
+ifdef VERBOSE
+	@echo -e "\033[1;32m=== Extracting $@ ...\033[;37m"
+endif
+	$(KRML_COMMAND) $^ -falloca -ftail-calls -tmpdir $(MSVC_LIBRARY_DIR) -skip-compilation
+
+msvc-library-copy: $(addprefix $(MSVC_LIBRARY_DIR)/, $(filter-out pki/mipki.h, $(ALL_EXTERNAL_FILES))) \
+  $(MSVC_LIBRARY_DIR)/stub/mitlsffi.c \
+  $(MSVC_LIBRARY_DIR)/stub/RegionAllocator.c $(MSVC_LIBRARY_DIR)/stub/RegionAllocator.h
+
+# Sanity-checks, replaced with dependencies
+
+$(MSVC_LIBRARY_DIR)/Crypto_AEAD_Main.h: $(SECURE_OUT)/Crypto_AEAD_Main.h
+
+$(SECURE_OUT)/Crypto_AEAD_Main.h:
+	$(error HACL_HOME is $(HACL_HOME) and I cannot find $(SECURE_OUT)/Crypto_AEAD_Main.h -- please run make in $(HACL_HOME)/secure_api -- thanks)
+
+output-msvc-library: msvc-library-copy $(MSVC_LIBRARY_DIR)/TLS.c
+
+build-msvc-library: output-msvc-library
+	EVEREST_WINDOWS=$(EVEREST_WINDOWS) $(MAKE) -C $(MSVC_LIBRARY_DIR)
+
+test-msvc-library: output-library
+	EVEREST_WINDOWS=$(EVEREST_WINDOWS) $(MAKE) -C $(MSVC_LIBRARY_DIR) test
+
+clean-msvc-library:
+	-@find $(LIBRARY_DIR) -type f -and -not -name Makefile -and -not -name .gitignore \
+        | xargs rm -f
+
+################################################################################
+# An external test that uses "mitlsffi.h"
+
+output-external-test:
+
+build-external-test:
+
+test-external-test:
+
+clean-external-test:

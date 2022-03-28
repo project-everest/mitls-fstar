@@ -15,7 +15,7 @@
         "haseqTm_refine_7ba5f1b760afe5ed8a71d6a3fc5f9a18"
       ],
       0,
-      "c2931a5c0af92c680d2b4c470fd752bc"
+      "6c11bf67c6eead600d7bb9267369b6f1"
     ],
     [
       "Old.HMAC.UFCMA.__proj__HMAC_Finished__item___0",
@@ -24,12 +24,10 @@
       1,
       [
         "@MaxIFuel_assumption", "@query",
-        "disc_equation_Old.HMAC.UFCMA.HMAC_Finished",
-        "projection_inverse_BoxBool_proj_0",
         "refinement_interpretation_Tm_refine_8ad453a33e14e7e82a58b73ded495346"
       ],
       0,
-      "972a630f7f6b1228bf68536eac8d4591"
+      "7f5874ea974aa63eb77a3246267fecc3"
     ],
     [
       "Old.HMAC.UFCMA.__proj__HMAC_Binder__item___0",
@@ -38,12 +36,10 @@
       1,
       [
         "@MaxIFuel_assumption", "@query",
-        "disc_equation_Old.HMAC.UFCMA.HMAC_Binder",
-        "projection_inverse_BoxBool_proj_0",
         "refinement_interpretation_Tm_refine_3efd608abfc651d2c63d8637ff06cddc"
       ],
       0,
-      "db7a4d10302da19d35bed454df381ed5"
+      "3a6d3f544740b5a50d345f359d3c5c92"
     ],
     [
       "Old.HMAC.UFCMA.alg",
@@ -54,10 +50,11 @@
         "@MaxIFuel_assumption", "@query",
         "disc_equation_Old.HMAC.UFCMA.HMAC_Binder",
         "disc_equation_Old.HMAC.UFCMA.HMAC_Finished",
-        "fuel_guarded_inversion_Old.HMAC.UFCMA.id"
+        "fuel_guarded_inversion_Old.HMAC.UFCMA.id",
+        "projection_inverse_BoxBool_proj_0"
       ],
       0,
-      "25ef5a31a3fd0cbf1079adb6fc24ba3b"
+      "f82557ea4b3ef2225ea7617ceb081a14"
     ],
     [
       "Old.HMAC.UFCMA.gen0",
@@ -77,7 +74,6 @@
         "equation_FStar.HyperStack.ST.ralloc_post",
         "equation_FStar.Monotonic.HyperHeap.hmap",
         "equation_FStar.Monotonic.HyperHeap.modifies_just",
-        "equation_FStar.Monotonic.HyperStack.contains",
         "equation_FStar.Monotonic.HyperStack.fresh_region",
         "equation_FStar.Monotonic.HyperStack.is_heap_color",
         "equation_FStar.Monotonic.HyperStack.is_stack_region",
@@ -149,7 +145,7 @@
         "typing_Old.HMAC.UFCMA.entry"
       ],
       0,
-      "d55fed462cc86202aa8031961506d6b2"
+      "6586e3c4d59a4b828324754f72c6cbd0"
     ],
     [
       "Old.HMAC.UFCMA.leak",
@@ -164,7 +160,7 @@
         "typing_FStar.Bytes.bytes"
       ],
       0,
-      "c4d3f0fb0461fb2952c38e63aad09e2f"
+      "3b9558e2ea073c83168ccf06fae9abfc"
     ]
   ]
 ]

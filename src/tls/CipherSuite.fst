@@ -16,7 +16,7 @@ let name_of_cipherSuite_of_name =
      trivial ()
    )
 
-#reset-options "--max_ifuel 8 --initial_ifuel 8 --max_fuel 2 --initial_fuel 2 --z3cliopt smt.arith.nl=false --z3rlimit 256 --using_facts_from '* -LowParse.Spec.Base'"
+#reset-options "--max_ifuel 8 --initial_ifuel 8 --max_fuel 2 --initial_fuel 2 --z3cliopt smt.arith.nl=false --z3rlimit 256" // --using_facts_from '* -LowParse.Spec.Base'"
 
 let cipherSuite_of_name_of_cipherSuite c = ()
 

@@ -10,34 +10,29 @@
         "@MaxIFuel_assumption", "@query",
         "disc_equation_Parsers.Boolean.B_false",
         "disc_equation_Parsers.Boolean.B_true",
-        "fuel_guarded_inversion_Parsers.Boolean.boolean"
+        "fuel_guarded_inversion_Parsers.Boolean.boolean",
+        "projection_inverse_BoxBool_proj_0"
       ],
       0,
-      "5d97ba2529639e692eb9cc0ec14ba0fb"
+      "af62a5a642b7e962b61b25a5d3edad83"
     ],
     [
       "Parsers.Boolean.boolean_enum",
       1,
       2,
       1,
-      [
-        "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.Boolean.boolean__uu___haseq"
-      ],
+      [ "@query", "assumption_Parsers.Boolean.boolean__uu___haseq" ],
       0,
-      "3265ad400a551b8ab7af38da8a474057"
+      "4d2ef2605085d9d2d8ed7b080b6550f2"
     ],
     [
       "Parsers.Boolean.synth_boolean",
       1,
       2,
       1,
-      [
-        "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.Boolean.boolean__uu___haseq"
-      ],
+      [ "@query", "assumption_Parsers.Boolean.boolean__uu___haseq" ],
       0,
-      "57023af0d102794ad5b5dd9f33c48a85"
+      "460f468f37ae7bc86824927b1ebc222e"
     ],
     [
       "Parsers.Boolean.synth_boolean_inv",
@@ -46,13 +41,12 @@
       1,
       [
         "@MaxIFuel_assumption", "@query",
-        "assumption_FStar.UInt8.t__uu___haseq",
         "assumption_Parsers.Boolean.boolean__uu___haseq", "b2t_def",
         "equation_Prims.squash",
         "refinement_interpretation_Tm_refine_2de20c066034c13bf76e9c0b94f4806c"
       ],
       0,
-      "ce1b322e328e64ad2403a6571481bdcd"
+      "b68abc0e23d07d5583e21a2cc156777a"
     ],
     [
       "Parsers.Boolean.lemma_synth_boolean_inj",
@@ -60,14 +54,13 @@
       2,
       1,
       [
-        "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.Boolean.boolean__uu___haseq",
+        "@query", "assumption_Parsers.Boolean.boolean__uu___haseq",
         "equation_LowParse.Spec.Combinators.synth_injective",
         "equation_Parsers.Boolean.synth_boolean",
         "token_correspondence_Parsers.Boolean.synth_boolean"
       ],
       0,
-      "8862086029945284ebd8449e8ee99047"
+      "f58eb207ad24a49ff905e4283cda99d5"
     ],
     [
       "Parsers.Boolean.lemma_synth_boolean_inv",
@@ -75,8 +68,7 @@
       2,
       1,
       [
-        "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.Boolean.boolean__uu___haseq",
+        "@query", "assumption_Parsers.Boolean.boolean__uu___haseq",
         "equation_LowParse.Spec.Combinators.synth_inverse",
         "equation_Parsers.Boolean.synth_boolean",
         "equation_Parsers.Boolean.synth_boolean_inv",
@@ -84,31 +76,25 @@
         "token_correspondence_Parsers.Boolean.synth_boolean_inv"
       ],
       0,
-      "60c9e6e323d2db72a48ffb5cf1f8b29b"
+      "97d53b23fd9910a3e970d71f9d9377b7"
     ],
     [
       "Parsers.Boolean.parse_boolean_key",
       1,
       2,
       1,
-      [
-        "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.Boolean.boolean__uu___haseq"
-      ],
+      [ "@query", "assumption_Parsers.Boolean.boolean__uu___haseq" ],
       0,
-      "f1db2e2803efbc449e4a9d2cea4f835a"
+      "fcb6a22004dddc37d46cae232272a755"
     ],
     [
       "Parsers.Boolean.serialize_boolean_key",
       1,
       2,
       1,
-      [
-        "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.Boolean.boolean__uu___haseq"
-      ],
+      [ "@query", "assumption_Parsers.Boolean.boolean__uu___haseq" ],
       0,
-      "a43f7f8ef3fca4bf36e447c516996e10"
+      "820567361bb28d0de01973d57ee57002"
     ],
     [
       "Parsers.Boolean.boolean_parser",
@@ -116,8 +102,7 @@
       2,
       1,
       [
-        "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.Boolean.boolean__uu___haseq",
+        "@query", "assumption_Parsers.Boolean.boolean__uu___haseq",
         "constructor_distinct_LowParse.Spec.Base.ParserKindMetadataFail",
         "constructor_distinct_LowParse.Spec.Base.ParserKindMetadataTotal",
         "equality_tok_LowParse.Spec.Base.ParserKindMetadataTotal@tok",
@@ -129,7 +114,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata"
       ],
       0,
-      "073584aad89cc649e62beebd5e81fdb7"
+      "ee0487913b7dbce6994acab81dbacb4b"
     ],
     [
       "Parsers.Boolean.boolean_serializer",
@@ -137,8 +122,7 @@
       2,
       1,
       [
-        "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.Boolean.boolean__uu___haseq",
+        "@query", "assumption_Parsers.Boolean.boolean__uu___haseq",
         "constructor_distinct_LowParse.Spec.Base.ParserKindMetadataFail",
         "constructor_distinct_LowParse.Spec.Base.ParserKindMetadataTotal",
         "equality_tok_LowParse.Spec.Base.ParserKindMetadataTotal@tok",
@@ -150,7 +134,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata"
       ],
       0,
-      "9ac4d5b1f8ca0f206d4d7f4e4e08208b"
+      "e4ffc17a81317befef2b1b47772efe39"
     ],
     [
       "Parsers.Boolean.boolean_bytesize_eq",
@@ -162,67 +146,52 @@
         "equation_Parsers.Boolean.boolean_bytesize"
       ],
       0,
-      "15051785d22818bad3d9f2e82bfad3c8"
+      "b8723b629797e1663235b4cff51f5e8c"
     ],
     [
       "Parsers.Boolean.parse32_boolean_key",
       1,
       2,
       1,
-      [
-        "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.Boolean.boolean__uu___haseq"
-      ],
+      [ "@query", "assumption_Parsers.Boolean.boolean__uu___haseq" ],
       0,
-      "e25e6b3bbec87f2f9771c16205401b06"
+      "30ad7018e2f0b1ba55a6bb316f5a4e8c"
     ],
     [
       "Parsers.Boolean.parse32_boolean_key",
       2,
       2,
       1,
-      [
-        "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.Boolean.boolean__uu___haseq"
-      ],
+      [ "@query", "assumption_Parsers.Boolean.boolean__uu___haseq" ],
       0,
-      "3f733920f1e9b0b3e8c3e2063dd197ad"
+      "b5dd86502adf3c666c2631e83e2ca720"
     ],
     [
       "Parsers.Boolean.parse32_boolean_key",
       3,
       2,
       1,
-      [
-        "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.Boolean.boolean__uu___haseq"
-      ],
+      [ "@query", "assumption_Parsers.Boolean.boolean__uu___haseq" ],
       0,
-      "60d7a7b3def0e56fd45186cef9197b81"
+      "ee9ff339b373906cc4a75fb3963a3522"
     ],
     [
       "Parsers.Boolean.parse32_boolean_key",
       4,
       2,
       1,
-      [
-        "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.Boolean.boolean__uu___haseq"
-      ],
+      [ "@query", "assumption_Parsers.Boolean.boolean__uu___haseq" ],
       0,
-      "ef4fa4d597e55e5e9bca5f5c4aefe9d6"
+      "86671824f4fedc557e533c686cb7ba27"
     ],
     [
       "Parsers.Boolean.parse32_boolean_key",
       5,
       2,
       1,
-      [
-        "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.Boolean.boolean__uu___haseq"
-      ],
+      [ "@query", "assumption_Parsers.Boolean.boolean__uu___haseq" ],
       0,
-      "13036450f8d9f5df8cdf7b23bd02d7e9"
+      "9eb0c1ceb8944d5695fb20c2b949b9b7"
     ],
     [
       "Parsers.Boolean.boolean_parser32",
@@ -230,8 +199,7 @@
       2,
       1,
       [
-        "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.Boolean.boolean__uu___haseq",
+        "@query", "assumption_Parsers.Boolean.boolean__uu___haseq",
         "constructor_distinct_LowParse.Spec.Base.ParserKindMetadataFail",
         "constructor_distinct_LowParse.Spec.Base.ParserKindMetadataTotal",
         "equality_tok_LowParse.Spec.Base.ParserKindMetadataTotal@tok",
@@ -243,7 +211,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata"
       ],
       0,
-      "b019bbf11f4d1fbfb9e18c1a418c68dc"
+      "95dbcf218259e132dc58f2fb987e6f5c"
     ],
     [
       "Parsers.Boolean.serialize32_boolean_key",
@@ -251,8 +219,7 @@
       2,
       1,
       [
-        "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.Boolean.boolean__uu___haseq",
+        "@query", "assumption_Parsers.Boolean.boolean__uu___haseq",
         "constructor_distinct_Prims.Cons", "disc_equation_Prims.Cons",
         "equation_Parsers.Boolean.boolean_enum",
         "projection_inverse_BoxBool_proj_0",
@@ -261,7 +228,7 @@
         "projection_inverse_Prims.Cons_tl"
       ],
       0,
-      "d8182d65ff5ff22f03796092d6051b57"
+      "4b758d4c34a3abb1230a59e3467fc3e2"
     ],
     [
       "Parsers.Boolean.serialize32_boolean_key",
@@ -269,8 +236,7 @@
       2,
       1,
       [
-        "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.Boolean.boolean__uu___haseq",
+        "@query", "assumption_Parsers.Boolean.boolean__uu___haseq",
         "constructor_distinct_Prims.Cons", "disc_equation_Prims.Cons",
         "equation_Parsers.Boolean.boolean_enum",
         "projection_inverse_BoxBool_proj_0",
@@ -279,31 +245,25 @@
         "projection_inverse_Prims.Cons_tl"
       ],
       0,
-      "57b32ab5215982a2f707547a3a2beec2"
+      "804560ca9f6cdef80758b7b122bd525c"
     ],
     [
       "Parsers.Boolean.serialize32_boolean_key",
       3,
       2,
       1,
-      [
-        "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.Boolean.boolean__uu___haseq"
-      ],
+      [ "@query", "assumption_Parsers.Boolean.boolean__uu___haseq" ],
       0,
-      "87655662f512a0ddb081fa67b30c2583"
+      "7ff390c16c7003c8c1394278dfaf03ad"
     ],
     [
       "Parsers.Boolean.serialize32_boolean_key",
       4,
       2,
       1,
-      [
-        "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.Boolean.boolean__uu___haseq"
-      ],
+      [ "@query", "assumption_Parsers.Boolean.boolean__uu___haseq" ],
       0,
-      "fe6d92769bce45aa5678df46ffbb5a9f"
+      "8f03bc9fab11300f12b8dd42ad0ce84a"
     ],
     [
       "Parsers.Boolean.boolean_serializer32",
@@ -311,8 +271,7 @@
       2,
       1,
       [
-        "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.Boolean.boolean__uu___haseq",
+        "@query", "assumption_Parsers.Boolean.boolean__uu___haseq",
         "constructor_distinct_LowParse.Spec.Base.ParserKindMetadataFail",
         "constructor_distinct_LowParse.Spec.Base.ParserKindMetadataTotal",
         "equality_tok_LowParse.Spec.Base.ParserKindMetadataTotal@tok",
@@ -324,7 +283,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata"
       ],
       0,
-      "adc8fa3f638876a37fd625df465b89d2"
+      "d693418723f1c8400cfd3bc06dbe3a59"
     ],
     [
       "Parsers.Boolean.boolean_size32",
@@ -333,19 +292,16 @@
       1,
       [ "@query" ],
       0,
-      "996652c0c5850fed4ff75a95cd04a66f"
+      "f9923b2f7530b950750250086e9e4cce"
     ],
     [
       "Parsers.Boolean.validate_boolean_key",
       1,
       2,
       1,
-      [
-        "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.Boolean.boolean__uu___haseq"
-      ],
+      [ "@query", "assumption_Parsers.Boolean.boolean__uu___haseq" ],
       0,
-      "319bc857b36a41a13f07ca94dc253476"
+      "7d7a31578c141a77b35e19de7f8cbccc"
     ],
     [
       "Parsers.Boolean.boolean_validator",
@@ -353,8 +309,7 @@
       2,
       1,
       [
-        "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.Boolean.boolean__uu___haseq",
+        "@query", "assumption_Parsers.Boolean.boolean__uu___haseq",
         "constructor_distinct_LowParse.Spec.Base.ParserKindMetadataFail",
         "constructor_distinct_LowParse.Spec.Base.ParserKindMetadataTotal",
         "equality_tok_LowParse.Spec.Base.ParserKindMetadataTotal@tok",
@@ -366,7 +321,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata"
       ],
       0,
-      "c83a576828b8c1fbae8514bf803aacc2"
+      "fd523bd9a7cde4dd1c6322e46bd60b80"
     ],
     [
       "Parsers.Boolean.boolean_jumper",
@@ -382,7 +337,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_low"
       ],
       0,
-      "33cf3175c1e3ab160b606e2226e83137"
+      "332536414ead733ec90ef768252c3537"
     ],
     [
       "Parsers.Boolean.lwp_boolean",
@@ -396,7 +351,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind"
       ],
       0,
-      "a66b1ae5113e260d55bc8fd6d60f6657"
+      "8c59e6d8797bcf57c90166f6c7c3328c"
     ],
     [
       "Parsers.Boolean.read_boolean_key",
@@ -404,8 +359,7 @@
       2,
       1,
       [
-        "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.Boolean.boolean__uu___haseq",
+        "@query", "assumption_Parsers.Boolean.boolean__uu___haseq",
         "constructor_distinct_Prims.Cons", "disc_equation_Prims.Cons",
         "equation_Parsers.Boolean.boolean_enum",
         "projection_inverse_BoxBool_proj_0",
@@ -414,7 +368,7 @@
         "projection_inverse_Prims.Cons_tl"
       ],
       0,
-      "589f0a4da6bd7c37e0b8104003c6d419"
+      "7c8fe2049677af0eb391bec98c42b3fd"
     ],
     [
       "Parsers.Boolean.boolean_reader",
@@ -422,8 +376,7 @@
       2,
       1,
       [
-        "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.Boolean.boolean__uu___haseq",
+        "@query", "assumption_Parsers.Boolean.boolean__uu___haseq",
         "constructor_distinct_LowParse.Spec.Base.ParserKindMetadataFail",
         "constructor_distinct_LowParse.Spec.Base.ParserKindMetadataTotal",
         "equality_tok_LowParse.Spec.Base.ParserKindMetadataTotal@tok",
@@ -435,19 +388,16 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata"
       ],
       0,
-      "3c48e206eac2e2808ce1d4bf6abad2d0"
+      "3f9d4bdedf52a09a5711d0db3ef45590"
     ],
     [
       "Parsers.Boolean.write_boolean_key",
       1,
       2,
       1,
-      [
-        "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.Boolean.boolean__uu___haseq"
-      ],
+      [ "@query", "assumption_Parsers.Boolean.boolean__uu___haseq" ],
       0,
-      "d39f753af3c3ea841ba8ad53ae6c1cf5"
+      "d650680a27eaf5b631985d1f80078fbd"
     ],
     [
       "Parsers.Boolean.lserialize_boolean_key",
@@ -468,7 +418,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind"
       ],
       0,
-      "6f84c71c5b730bfaa21804087790a7b5"
+      "983b3709deead102cc97f427e5ca1b2a"
     ],
     [
       "Parsers.Boolean.boolean_writer",
@@ -476,8 +426,7 @@
       2,
       1,
       [
-        "@query", "assumption_FStar.UInt8.t__uu___haseq",
-        "assumption_Parsers.Boolean.boolean__uu___haseq",
+        "@query", "assumption_Parsers.Boolean.boolean__uu___haseq",
         "constructor_distinct_LowParse.Spec.Base.ParserKindMetadataFail",
         "constructor_distinct_LowParse.Spec.Base.ParserKindMetadataTotal",
         "equality_tok_LowParse.Spec.Base.ParserKindMetadataTotal@tok",
@@ -489,7 +438,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata"
       ],
       0,
-      "4ce5d5fd9f9035e3deedd6ba59dc8eaf"
+      "ef462e7bce1cf632ca6f4a11031f047b"
     ],
     [
       "Parsers.Boolean.boolean_lserializer",
@@ -507,7 +456,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind"
       ],
       0,
-      "4442cdeafab1361a73e3184ae90c2e3e"
+      "bdb0560b843dcc4fa35f077bce72b890"
     ],
     [
       "Parsers.Boolean.boolean_bytesize_eqn",
@@ -534,7 +483,7 @@
         "typing_Parsers.Boolean.boolean_serializer"
       ],
       0,
-      "4cb66c4a41f9d83fd2a514260ff5cd0f"
+      "557cf9e7a771ca854701c4b80024e303"
     ]
   ]
 ]

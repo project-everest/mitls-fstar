@@ -55,7 +55,7 @@ type cert_cb = {
      to the types expected by the application.
 
      This explicit representation of closures is necessary for compiling this
-     to C via KreMLin. The representation is hidden from callers and the wrappers
+     to C via KaRaMeL. The representation is hidden from callers and the wrappers
      are provided below to implement it.
    *)
   cert_select_ptr: FStar.Dyn.dyn;
