@@ -12,7 +12,7 @@ type closure (#a:Type0) (r:relation a) : a -> a -> Type0 =
 val closure_reflexive: #a:Type0 -> r:relation a -> Lemma (reflexive (closure r))
 let closure_reflexive #a r =
   assert (forall x. closure r x x) by
-    (let x = forall_intro () in mapply (quote Refl))
+    (let x = forall_intro () in mapply (`Refl))
 
 val closure_transitive: #a:Type0 -> r:relation a -> Lemma (transitive (closure r))
 let closure_transitive #a r =
