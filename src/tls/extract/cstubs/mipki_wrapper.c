@@ -3,12 +3,17 @@
 #include <mitlsffi.h>
 #include <PKI.h>
 #include <TLSConstants.h>
+#include <Negotiation.h>
 
 #define DEBUG 0
 
-#define FStar_Pervasives_Native_option__K___uint64_t_Parsers_SignatureScheme_signatureScheme Negotiation_certNego
+/* Accumulating a few aliases at krml's code-gen changes for monomorphized types
+ * (hint: PICK A TYPE ABBREVIATION OF YOUR CHOICE INSTEAD OF RELYING ON THE
+ * AUTO-GENERATED NAMES!!) */
+#define FStar_Pervasives_Native_option___uint64_t_Parsers_SignatureScheme_signatureScheme Negotiation_certNego
+typedef TLSConstants_alpn_gc Prims_list__FStar_Bytes_bytes;
 
-static size_t list_sa_len(Prims_list__Parsers_SignatureScheme_signatureScheme *l)
+static size_t list_sa_len(Parsers_SignatureSchemeList_signatureSchemeList l)
 {
   if (l->tag == Prims_Cons)
   {
@@ -95,8 +100,8 @@ static mitls_signature_scheme pki_of_tls(Parsers_SignatureScheme_signatureScheme
 
 void
 PKI_select_(FStar_Dyn_dyn cbs, FStar_Dyn_dyn st, Parsers_ProtocolVersion_protocolVersion pv,
-  FStar_Bytes_bytes sni, FStar_Bytes_bytes alpn, Prims_list__Parsers_SignatureScheme_signatureScheme *sal,
-  FStar_Pervasives_Native_option__K___uint64_t_Parsers_SignatureScheme_signatureScheme *res)
+  FStar_Bytes_bytes sni, FStar_Bytes_bytes alpn, Parsers_SignatureSchemeList_signatureSchemeList sal,
+  FStar_Pervasives_Native_option___uint64_t_Parsers_SignatureScheme_signatureScheme *res)
 {
   mitls_signature_scheme sel;
   mipki_state *pki = (mipki_state*)cbs;
@@ -107,7 +112,7 @@ PKI_select_(FStar_Dyn_dyn cbs, FStar_Dyn_dyn st, Parsers_ProtocolVersion_protoco
 
   size_t sigalgs_len = list_sa_len(sal);
   mitls_signature_scheme *sigalgs = alloca(sigalgs_len*sizeof(mitls_signature_scheme));
-  Prims_list__Parsers_SignatureScheme_signatureScheme *cur = sal;
+  Parsers_SignatureSchemeList_signatureSchemeList cur = sal;
 
   for(size_t i = 0; i < sigalgs_len; i++)
   {
@@ -139,12 +144,12 @@ PKI_select_(FStar_Dyn_dyn cbs, FStar_Dyn_dyn st, Parsers_ProtocolVersion_protoco
   }
 }
 
-FStar_Pervasives_Native_option__K___uint64_t_Parsers_SignatureScheme_signatureScheme
+FStar_Pervasives_Native_option___uint64_t_Parsers_SignatureScheme_signatureScheme
 PKI_select(FStar_Dyn_dyn cbs, FStar_Dyn_dyn st, Parsers_ProtocolVersion_protocolVersion pv,
   FStar_Bytes_bytes sni, FStar_Bytes_bytes alpn,
-  Prims_list__Parsers_SignatureScheme_signatureScheme *sal)
+  Parsers_SignatureSchemeList_signatureSchemeList sal)
 {
-  FStar_Pervasives_Native_option__K___uint64_t_Parsers_SignatureScheme_signatureScheme dst;
+  FStar_Pervasives_Native_option___uint64_t_Parsers_SignatureScheme_signatureScheme dst;
   PKI_select_(cbs, st, pv, sni, alpn, sal, &dst);
   return dst;
 }
@@ -277,7 +282,7 @@ bool PKI_verify(FStar_Dyn_dyn cbs, FStar_Dyn_dyn st,
   return PKI_verify_(cbs, st, certs, &sa, tbs, sig);
 }
 
-static uint32_t config_len(Prims_list__K___Prims_string_Prims_string_bool *l)
+static uint32_t config_len(Prims_list__Prims_string___Prims_string___bool *l)
 {
   if (l->tag == Prims_Cons)
   {
@@ -286,10 +291,10 @@ static uint32_t config_len(Prims_list__K___Prims_string_Prims_string_bool *l)
   return 0;
 }
 
-FStar_Dyn_dyn PKI_init(Prims_string cafile, Prims_list__K___Prims_string_Prims_string_bool *certs)
+FStar_Dyn_dyn PKI_init(Prims_string cafile, Prims_list__Prims_string___Prims_string___bool *certs)
 {
   uint32_t len = config_len(certs);
-  Prims_list__K___Prims_string_Prims_string_bool* cur = certs;
+  Prims_list__Prims_string___Prims_string___bool* cur = certs;
   mipki_config_entry *pki_config = alloca(len*sizeof(mipki_config_entry));
   int err;
 
