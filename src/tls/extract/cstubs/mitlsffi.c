@@ -319,12 +319,12 @@ int MITLS_CALLCONV FFI_mitls_configure_named_groups(/* in */ mitls_state *state,
 
 static TLSConstants_alpn alpn_list_of_array(const mitls_alpn *alpn, size_t alpn_count)
 {
-  TLSConstants_alpn apl = KRML_HOST_MALLOC(sizeof(Prims_list__FStar_Bytes_bytes));
+  TLSConstants_alpn apl = KRML_HOST_MALLOC(sizeof(TLSConstants_alpn_gc));
   apl->tag = Prims_Nil;
 
   for(int i = (alpn_count & 255) - 1; i >= 0; i--)
   {
-    TLSConstants_alpn new = KRML_HOST_MALLOC(sizeof(Prims_list__FStar_Bytes_bytes));
+    TLSConstants_alpn new = KRML_HOST_MALLOC(sizeof(TLSConstants_alpn_gc));
     new->tag = Prims_Cons;
     new->hd.length = alpn[i].alpn_len & 255;
     new->hd.data = KRML_HOST_MALLOC(new->hd.length);
@@ -566,7 +566,7 @@ static mitls_signature_scheme pki_of_tls(Parsers_SignatureScheme_signatureScheme
   }
 }
 
-static size_t list_sa_len(Prims_list__Parsers_SignatureScheme_signatureScheme *l)
+static size_t list_sa_len(Parsers_SignatureSchemeList_signatureSchemeList l)
 {
   if (l->tag == Prims_Cons)
   {
@@ -578,13 +578,13 @@ static size_t list_sa_len(Prims_list__Parsers_SignatureScheme_signatureScheme *l
 static FStar_Pervasives_Native_option__K___uint64_t_Parsers_SignatureScheme_signatureScheme
   wrapped_select(FStar_Dyn_dyn cbs, FStar_Dyn_dyn st, Parsers_ProtocolVersion_protocolVersion pv,
     FStar_Bytes_bytes sni, FStar_Bytes_bytes alpn,
-    Prims_list__Parsers_SignatureScheme_signatureScheme *sal)
+    Parsers_SignatureSchemeList_signatureSchemeList sal)
 {
   wrapped_cert_cb* s = (wrapped_cert_cb*)cbs;
   size_t sigalgs_len = list_sa_len(sal);
   mitls_signature_scheme selected;
   mitls_signature_scheme *sigalgs = alloca(sigalgs_len*sizeof(mitls_signature_scheme));
-  Prims_list__Parsers_SignatureScheme_signatureScheme *cur = sal;
+  Parsers_SignatureSchemeList_signatureSchemeList cur = sal;
 
   for(size_t i = 0; i < sigalgs_len; i++)
   {
@@ -612,7 +612,7 @@ static FStar_Pervasives_Native_option__K___uint64_t_Parsers_SignatureScheme_sign
   return res;
 }
 
-static Prims_list__FStar_Bytes_bytes* wrapped_format(FStar_Dyn_dyn cbs, FStar_Dyn_dyn st, uint64_t cert)
+static TLSConstants_alpn wrapped_format(FStar_Dyn_dyn cbs, FStar_Dyn_dyn st, uint64_t cert)
 {
   wrapped_cert_cb* s = (wrapped_cert_cb*)cbs;
   unsigned char *buffer = KRML_HOST_MALLOC(MAX_CHAIN_LEN);
@@ -643,7 +643,7 @@ static FStar_Pervasives_Native_option__FStar_Bytes_bytes wrapped_sign(
 }
 
 static bool wrapped_verify(FStar_Dyn_dyn cbs, FStar_Dyn_dyn st,
-  Prims_list__FStar_Bytes_bytes *certs, Parsers_SignatureScheme_signatureScheme sa,
+  TLSConstants_alpn certs, Parsers_SignatureScheme_signatureScheme sa,
   FStar_Bytes_bytes tbs, FStar_Bytes_bytes sig)
 {
   wrapped_cert_cb* s = (wrapped_cert_cb*)cbs;
@@ -826,7 +826,7 @@ unsigned char *MITLS_CALLCONV FFI_mitls_receive(/* in */ mitls_state *state, /* 
 
 static int get_exporter(Connection_connection cxn, int early, /* out */ mitls_secret *secret)
 {
-  FStar_Pervasives_Native_option__K___Spec_Hash_Definitions_hash_alg_EverCrypt_aead_alg_FStar_Bytes_bytes ret;
+  FStar_Pervasives_Native_option__Spec_Hash_Definitions_hash_alg___EverCrypt_aead_alg___FStar_Bytes_bytes ret;
 
   ret = FFI_ffiGetExporter(cxn, (early) ? true : false);
   if (ret.tag != FStar_Pervasives_Native_Some) {
