@@ -8,7 +8,7 @@ ifndef LOWPARSE_HOME
   ifdef EVERPARSE_HOME
     LOWPARSE_HOME=$(EVERPARSE_HOME)/src/lowparse
   else
-    LOWPARSE_HOME=../../../quackyducky/src/lowparse
+    LOWPARSE_HOME=../../../everparse/src/lowparse
   endif
 endif
 FLAVOR          ?= Model
@@ -30,7 +30,6 @@ INCLUDE_PATHS = \
   $(MITLS_HOME)/src/parsers/generated \
   $(EVERCRYPT_HOME)/evercrypt \
   $(EVERCRYPT_HOME)/evercrypt/fst \
-  $(EVERCRYPT_HOME)/evercrypt/config/$(EVERCRYPT_CONFIG) \
   $(SPECINC)
 
 ifeq (,$(MITLS_NODEBUG))
