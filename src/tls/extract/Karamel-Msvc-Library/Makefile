@@ -9,7 +9,7 @@ EVERCRYPT_HOME	?= ../../../../../hacl-star/providers
 KRML_HOME    ?= ../../../../../karamel
 
 LDOPTS += -levercrypt
-LDOPTS += -L$(EVERCRYPT_HOME)/../dist/mitls
+LDOPTS += -L$(EVERCRYPT_HOME)/../dist/gcc-compatible
 LDOPTS += -L$(KRML_HOME)/krmllib/dist/generic -lkrmllib
 
 ifeq ($(OS),Windows_NT)
@@ -83,7 +83,7 @@ all: libmitls.$(SO)
 -include $(addsuffix .d,$(FILES))
 
 libmitls.$(SO): $(addsuffix .o,$(FILES))
-	rm -rf $(EVERCRYPT_HOME)/../dist/mitls/*.dll.a # newer dynamic link is not properly setup on mitls/master ... persist with static linking
+	rm -rf $(EVERCRYPT_HOME)/../dist/gcc-compatible/*.dll.a # newer dynamic link is not properly setup on mitls/master ... persist with static linking
 	$(CC) $^ -shared -o $@ $(LDOPTS) $(KRML_HOME)/krmllib/dist/generic/libkrmllib.a
 
 clean:
