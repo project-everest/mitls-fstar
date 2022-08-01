@@ -12,7 +12,7 @@ endif
 MITLS_BUNDLES = \
   -bundle 'LowParse.\*,LowParseWrappers[rename=LowParse]' \
   -bundle 'Format.\*' \
-  -bundle 'EverCrypt=EverCrypt,EverCrypt.\*' \
+  -bundle 'EverCrypt.\*[rename=EverCrypt_Lib]' \
   -bundle 'FStar.\*,LowStar.\*,C,C.\*[rename=Mitls_Krmllib]' \
   -bundle 'Parsers.\*' \
   -bundle 'Spec.\*' \
@@ -29,6 +29,7 @@ MITLS_BUNDLES = \
   -bundle PMS=PMS,RSAKey,TLSPRF \
   -bundle Crypto.Plain=Buffer.Utils,Crypto.Indexing,Crypto.Plain,Crypto.Symmetric.Bytes \
   -bundle Flags=DebugFlags,Flags,Flag,TLSInfoFlags \
+  -no-prefix 'EverCrypt.Vale' \
   $(VALE_BUNDLES)
 
 # To include Makefile.common, you need to specify
@@ -88,7 +89,7 @@ KRML_COMMAND	= $(KRML_HOME)/krml -minimal \
   -add-include '"krmllib.h"' \
   -fnoanonymous-unions -warn-error -9-7-6@4-14-15 \
   -fsopts --debug,yes -verbose \
-  -library EverCrypt,EverCrypt.*,Hacl.*,Interop_assumptions,Check_sha_stdcall,Sha_update_bytes_stdcall,Check_aesni_stdcall \
+  -library EverCrypt.*,Hacl.*,Interop_assumptions,Check_sha_stdcall,Sha_update_bytes_stdcall,Check_aesni_stdcall \
   $(DROP_MODULES) $(HEADERS) \
   $(MITLS_BUNDLES) $(KOPTS)
 
@@ -112,7 +113,9 @@ endef
 
 # All the files that we bring from external projects
 ALL_EXTERNAL_FILES	= \
-  $(addprefix stub/,log_to_choice.h buffer_bytes.c RegionAllocator.c RegionAllocator.h) \
+  $(addprefix stub/,log_to_choice.h buffer_bytes.c RegionAllocator.c RegionAllocator.h evercrypt_openssl.c \
+    evercrypt_vale_stubs.c $(addprefix oldaesgcm-x86_64-,darwin.S linux.S mingw.S msvc.asm) \
+    $(addprefix aes-x86_64-,darwin.S linux.S mingw.S msvc.asm) Hacl_AES.c Hacl_AES.h) \
   $(addprefix include/,hacks.h regions.h) \
   $(addprefix pki/,mipki.h) \
   $(addprefix ffi/,mitlsffi.h)

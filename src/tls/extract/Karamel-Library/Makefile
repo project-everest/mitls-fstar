@@ -18,11 +18,13 @@ ifeq ($(OS),Windows_NT)
   CC ?= x86_64-w64-mingw32-gcc
   CFLAGS := -pthread $(CFLAGS) -include log_to_choice.h
   LDOPTS += -lntdll -lbcrypt
+  ASMS=$(wildcard stub/*-mingw.S)
   export PATH
 else ifeq ($(UNAME),Darwin)
   VARIANT = -Darwin
   DYLD_LIBRARY_PATH :=$(MITLS_HOME)/src/pki:$(DYLD_LIBRARY_PATH)
   SO = so
+  ASMS=$(wildcard stub/*-darwin.S)
   export DYLD_LIBRARY_PATH
 else ifeq ($(UNAME),Linux)
   VARIANT = -Linux
@@ -30,6 +32,7 @@ else ifeq ($(UNAME),Linux)
   LD_LIBRARY_PATH :=  $(MITLS_HOME)/src/pki:$(LD_LIBRARY_PATH)
   LDOPTS := -lpthread -Xlinker -z -Xlinker noexecstack -Xlinker --version-script -Xlinker $(MITLS_HOME)/src/tls/libmitls_version_script -Wl,-z,defs $(LDOPTS)
   SO = so
+  ASMS=$(wildcard stub/*-linux.S)
   export LD_LIBRARY_PATH
 endif
 
@@ -56,7 +59,8 @@ INCLUDE_DIRS 	= $(KRML_HOME)/krmllib/dist/minimal $(KRML_HOME)/include include s
 # See src/tls/Makefile.Karamel for the list of bundles that are used
 # All extracted C files should be part of the DLL
 FILES = $(patsubst %.c,%,$(wildcard *.c)) \
-  stub/mitlsffi stub/buffer_bytes stub/RegionAllocator
+  stub/mitlsffi stub/buffer_bytes stub/RegionAllocator stub/evercrypt_openssl stub/evercrypt_vale_stubs \
+  stub/Hacl_AES $(patsubst %.S,%,$(ASMS))
 
 CFLAGS := $(addprefix -I,$(INCLUDE_DIRS)) $(CFLAGS) -Wall -Werror -Wno-deprecated-declarations \
   -Wno-unused-variable -Wno-parentheses -Wno-unknown-warning-option \
