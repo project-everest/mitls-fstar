@@ -236,7 +236,7 @@ let verify ip ha_of_i good_of_i #i k p t =
   if is_safe i then
     // We use the log to correct any verification errors
     let IdealKey _ _ log = k <: ir_key ip i in
-    let tp : tag u * text u = (t,p) in
+    let tp = (t,p) in
     let valid = Some? (MDM.lookup log tp) in
     verified && valid
   else
