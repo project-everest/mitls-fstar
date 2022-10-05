@@ -9,7 +9,6 @@ module Hashing.Spec
 include EverCrypt.Hash
 include Spec.Hash.Definitions
 
-open FStar.Integers
 open FStar.Bytes
 
 open Declassify
@@ -20,15 +19,7 @@ let alg = a:alg { is_md a }
 
 let hash_len (a:alg)
   : n:UInt32.t{UInt32.v n == hash_length a}
-  =
-  allow_inversion alg;
-  match a with
-  | MD5 -> assert_norm(hash_length MD5 == 16); 16ul
-  | SHA1 -> assert_norm(hash_length SHA1 == 20); 20ul
-  | SHA2_224 -> assert_norm(hash_length SHA2_224 == 28); 28ul
-  | SHA2_256 -> assert_norm(hash_length SHA2_256 == 32); 32ul
-  | SHA2_384 -> assert_norm(hash_length SHA2_384 == 48); 48ul
-  | SHA2_512 -> assert_norm(hash_length SHA2_512 == 64); 64ul
+  = Hacl.Hash.Definitions.hash_len a
 
 type tag (a:alg) = Bytes.lbytes (hash_length a)
 
@@ -49,10 +40,6 @@ private let lemma_blockLength (a:alg)
   [SMTPat (block_length a)]
   = ()
 
-// JP: override the definition from evercrypt (which uses <) with miTLS
-// compatible definitions (which uses <=)
-let max_input_length a = max_input_length a - 1
-
 let macable a = b:bytes {length b + block_length a < pow2 32}
 // 32-bit implementation restriction
 
@@ -72,7 +59,7 @@ val hmac:
   text:macable a ->
   GTot (t:tag a{
     let text = Bytes.reveal text in
-    Seq.length text + block_length a <= max_input_length a /\
+    (Seq.length text + block_length a) `less_than_max_input_length` a /\
     Bytes.reveal t = Spec.Agile.HMAC.hmac a (Bytes.reveal k) text})
 
 let hmac a k text =
@@ -80,7 +67,7 @@ let hmac a k text =
   let text = Bytes.reveal text in
   assert_norm (pow2 32 < pow2 61);
   assert_norm (pow2 61 < pow2 125);
-  assert (Seq.length text + block_length a <= max_input_length a);
+  //assert (Seq.length text + block_length a <= max_input_length a);
   let t: bytes_hash a = Spec.Agile.HMAC.hmac a k text in
   Bytes.hide t
 
@@ -110,7 +97,7 @@ type tls_alg =
 val tls_tagLen: h:tls_alg{h<>NULL} -> Tot UInt32.t
 let tls_tagLen = function
   | Hash a  -> Hacl.Hash.Definitions.hash_len a
-  | MD5SHA1 -> Hacl.Hash.Definitions.hash_len MD5 + Hacl.Hash.Definitions.hash_len SHA1
+  | MD5SHA1 -> Hacl.Hash.Definitions.hash_len MD5 `FStar.UInt32.add` Hacl.Hash.Definitions.hash_len SHA1
 
 type tls_macAlg = a:EverCrypt.HMAC.supported_alg{Spec.Hash.Definitions.is_md a}
 

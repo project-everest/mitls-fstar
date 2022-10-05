@@ -21,7 +21,7 @@ module MDM = FStar.Monotonic.DependentMap
 // the precise types guarantee that the table stays empty when crf _ = false
 private type range = | Computed: a: alg {crf a} -> t: tag a -> range
 private type domain (r:range) =
-  b:bytes {let Computed a t = r in length b <= max_input_length a /\ h a b = t}
+  b:bytes {let Computed a t = r in length b `less_than_max_input_length` a /\ h a b = t}
 
 private let inv (f:MDM.partial_dependent_map range domain) = True // a bit overkill?
 private let table : MDM.t tls_tables_region range domain inv = MDM.alloc()
@@ -58,4 +58,4 @@ val finalize: #a:alg -> v:accv a -> ST (tag a)
 private val test 
   (a:alg) 
   (b0: hashable a)
-  (b1: bytes {length b1 + length b1 <= max_input_length a}): St unit
+  (b1: bytes {(length b1 + length b1) `less_than_max_input_length` a}): St unit

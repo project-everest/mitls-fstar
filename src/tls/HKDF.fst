@@ -100,14 +100,14 @@ let expand #ha prk info len =
 
   if infolen = 0ul then (
     let info_p = LowStar.Buffer.null in
-    EverCrypt.HKDF.hkdf_expand ha tag_p prk_p tlen info_p infolen len
+    EverCrypt.HKDF.expand ha tag_p prk_p tlen info_p infolen len
   )
   else (
     push_frame();
     let info_p = LowStar.Buffer.alloca 0uy infolen in
     store_bytes info info_p;
     assert(hash_length ha + v infolen + 1 + block_length ha < pow2 32);
-    EverCrypt.HKDF.hkdf_expand ha tag_p prk_p tlen info_p infolen len;
+    EverCrypt.HKDF.expand ha tag_p prk_p tlen info_p infolen len;
     pop_frame ()
   );
 

@@ -41,7 +41,6 @@ let compute a text =
   let t = Bytes.of_buffer tlen output in
   pop_frame();
   t
-#pop-options
 
 
 (* IMPLEMENTATION PLACEHOLDER,
@@ -61,9 +60,10 @@ let content #a v =
 let start a = Inputs empty_bytes
 let extend #a (Inputs b0) b1 =
   assume (FStar.UInt.fits (length b0 + length b1) 32);
-  assume (length b0 + length b1 < Hashing.Spec.max_input_length a);
+  assume ((length b0 + length b1) `Spec.Agile.Hash.less_than_max_input_length` a);
   Inputs (b0 @| b1)
 let finalize #a (Inputs b) = compute a b
+#pop-options
 
 (*
 // 18-08-29 was in Hashing.OpenSSL

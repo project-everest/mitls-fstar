@@ -378,7 +378,7 @@ let unit_test(): St bool =
   let here = new_colored_region root hs_color in
   let b0 = 
     let a = Hashing.SHA1 in 
-    assert_norm(Hashing.Spec.block_length a <= Hashing.Spec.max_input_length a);
+    assert_norm(Hashing.Spec.block_length a `Spec.Agile.Hash.less_than_max_input_length` a);
     test a here empty_bytes (Bytes.create (Hacl.Hash.Definitions.hash_len a) 42z) in
   let b1 = 
     let a = Hashing.SHA1 in 

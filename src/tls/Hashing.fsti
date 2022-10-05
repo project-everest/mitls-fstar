@@ -15,7 +15,7 @@ module ST = FStar.HyperStack.ST
 module B = LowStar.Buffer
 
 // defining those on FStar.Bytes, not on EverCrypt's seq Uin8.t
-type hashable (a:alg) = b:bytes {length b <= max_input_length a}
+type hashable (a:alg) = b:bytes {length b `less_than_max_input_length` a}
 type tag (a:alg) = lbytes32 (Hacl.Hash.Definitions.hash_len a)
 
 // 18-08-31 pure hash specification;
@@ -30,7 +30,7 @@ val compute: a:alg -> text:hashable a -> Stack (tag a)
   (ensures fun h0 t h1 ->
     let v = reveal text in
     B.modifies B.loc_none h0 h1 /\
-    Seq.length v <= max_input_length a /\
+    Seq.length v `less_than_max_input_length` a /\
     t = h a text)
 
 (* IMPLEMENTATION PLACEHOLDER,
