@@ -27,7 +27,7 @@ let compute a text =
     //18-09-01 this could follow from LowStar.Buffer or Bytes properties
     let h0 = ST.get() in
     Seq.lemma_eq_intro (reveal text) (LowStar.Buffer.as_seq h0 input);
-    EverCrypt.Hash.hash a output input len
+    EverCrypt.Hash.Incremental.hash a output input len
     end
   else
     begin
@@ -35,7 +35,7 @@ let compute a text =
     push_frame();
     let input = LowStar.Buffer.alloca 0uy len in
     store_bytes text input;
-    EverCrypt.Hash.hash a output input len;
+    EverCrypt.Hash.Incremental.hash a output input len;
     pop_frame()
     end;
   let t = Bytes.of_buffer tlen output in
