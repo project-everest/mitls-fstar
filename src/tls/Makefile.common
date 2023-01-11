@@ -154,11 +154,14 @@ $(CACHE_DIR)/Vale.%.checked \
 $(CACHE_DIR)/Lib.%.checked \
 : OTHERFLAGS := $(filter-out --record_hints,$(OTHERFLAGS))
 
+$(EXTRACT_DIR)/EverCrypt_Hash_Incremental.krml \
+$(EXTRACT_DIR)/EverCrypt_Hash.krml \
 $(EXTRACT_DIR)/EverCrypt_HMAC.krml \
 $(EXTRACT_DIR)/EverCrypt_HKDF.krml \
 $(EXTRACT_DIR)/Hashing.krml \
 $(EXTRACT_DIR)/HMAC.krml \
 $(EXTRACT_DIR)/HKDF.krml\
+$(EXTRACT_DIR)/Lib_IntTypes.krml\
 : CMI = --cmi
 
 $(EXTRACT_DIR)/%.$(EXTENSION):
