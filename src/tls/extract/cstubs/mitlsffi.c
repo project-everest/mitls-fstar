@@ -747,7 +747,7 @@ int MITLS_CALLCONV FFI_mitls_connect(void *send_recv_ctx, pfn_FFI_send psend, pf
     tcb->send = psend;
     tcb->recv = precv;
 
-    K___Connection_connection_Prims_int result = FFI_connect((FStar_Dyn_dyn)tcb, wrapped_send, wrapped_recv, state->cfg);
+    K___Connection_connection_krml_checked_int_t result = FFI_connect((FStar_Dyn_dyn)tcb, wrapped_send, wrapped_recv, state->cfg);
     state->cxn = result.fst;
     ret = (result.snd == 0);
 
@@ -771,7 +771,7 @@ int MITLS_CALLCONV FFI_mitls_accept_connected(void *send_recv_ctx, pfn_FFI_send 
     tcb->send = psend;
     tcb->recv = precv;
 
-    K___Connection_connection_Prims_int result = FFI_ffiAcceptConnected((FStar_Dyn_dyn)tcb, wrapped_send, wrapped_recv, state->cfg);
+    K___Connection_connection_krml_checked_int_t result = FFI_ffiAcceptConnected((FStar_Dyn_dyn)tcb, wrapped_send, wrapped_recv, state->cfg);
     state->cxn = result.fst;
     ret = (result.snd == 0) ? 1 : 0; // return success (1) if result.snd is 0.
 
