@@ -26,6 +26,7 @@ module HS = FStar.HyperStack
 module FFI = FFI
 module Range = Range
 open Range
+module Parse = Parse
 
 #set-options "--admit_smt_queries true"
 

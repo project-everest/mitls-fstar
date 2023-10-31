@@ -7,6 +7,7 @@ open FStar.Error
 open TLSError
 open TLSConstants
 open Extensions // defining cert, cert13, chain
+module Parse = Parse
 open Parse
  
 let rec certificateListBytes = function

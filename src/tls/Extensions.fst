@@ -14,6 +14,7 @@ open FStar.Error
 
 open TLSError
 open TLSConstants
+module Parse = Parse
 open Parse
 
 #set-options "--initial_fuel 2 --max_fuel 2 --initial_ifuel 1 --max_ifuel 1 --z3rlimit 10"

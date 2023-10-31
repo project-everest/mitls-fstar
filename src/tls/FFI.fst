@@ -21,6 +21,7 @@ open TLSConstants
 open TLSInfo
 module Range = Range
 open Range
+module Parse = Parse
 
 open Mem
 open DataStream

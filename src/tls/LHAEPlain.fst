@@ -7,6 +7,7 @@ open FStar.Error
 open TLSError
 open TLSConstants
 open TLSInfo
+module Parse = Parse
 open Parse
 
 module Range = Range

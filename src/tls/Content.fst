@@ -14,6 +14,7 @@ open TLSConstants
 open TLSInfo
 open Range
 open DataStream
+module Parse = Parse
 open Parse
 module Range = Range
 

@@ -7,6 +7,7 @@ module HS = FStar.HyperStack
 module Range = Range
 module Epochs = Old.Epochs
 module KeySchedule = Old.KeySchedule
+module Parse = Parse
 
 #set-options "--admit_smt_queries true"
 

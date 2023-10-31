@@ -3,6 +3,7 @@ module ECGroup
 open FStar.Error
 open TLSError
 open Mem
+module Parse = Parse
 open Parse
 
 module B = FStar.Bytes
