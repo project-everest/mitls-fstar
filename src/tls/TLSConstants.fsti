@@ -29,6 +29,7 @@ open FStar.Error
 open TLSError
 
 open Mem
+module Parse = Parse
 open Parse
 //include Parse
 

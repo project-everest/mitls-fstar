@@ -8,6 +8,7 @@ open FStar.Bytes
 open TLSError
 open TLSConstants
 open TLSInfo
+module Parse = Parse
 open Parse
 open Mem
 

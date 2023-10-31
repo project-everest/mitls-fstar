@@ -5,7 +5,7 @@ open FStar.Error
 
 open TLSError
 open Mem
-open Parse
+module Parse = Parse
 
 module LP = LowParse.SLow
 

@@ -7,7 +7,7 @@ open FStar.Error
 open TLSError
 open TLSConstants
 open Extensions // defining cert, cert13, chain
-open Parse
+module Parse = Parse
  
 (* The chain format changes between TLS 1.2 and TLS 1.3; we separate
 then in messages, but at least for now, we merge the two in

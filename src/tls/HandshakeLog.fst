@@ -14,6 +14,7 @@ open Hashing
 open Hashing.CRF // now using incremental, collision-resistant, agile Hashing.
 open FStar.Bytes //18-08-31 reordered 
 open Range  // cwinter: the extracted OCaml file contains a reference to this, which is not reflected in the .depend file?
+module Parse = Parse
 
 module HS = FStar.HyperStack
 

@@ -12,7 +12,7 @@ share is for registered shares (for which is_honest is defined).
 open FStar.Bytes
 open FStar.Error
 
-open Parse
+module Parse = Parse
 open TLSError
 open Mem 
 

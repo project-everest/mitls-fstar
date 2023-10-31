@@ -4,6 +4,7 @@ open FStar.Bytes
 open FStar.Error
 
 open Mem
+module Parse = Parse
 open Parse
 open TLSError
 open TLSConstants
