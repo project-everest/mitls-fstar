@@ -201,13 +201,13 @@ let test_rekey(): St C.exit_code
 
   let i1 = derive i2 "RE" Expand in
   let a1 : KDF.info0 i1 = KDF.Info Hashing.Spec.SHA2_256 None in
-  [@inline_let] let cpkg' = concrete_pkg t2 "RE" in
+  [@inline_let] let cpkg' = concrete_pkg #2 t2 "RE" in
   let (| (), kdf1 |) = KDF.derive #(flagKDF 3) #t2 #i2 kdf2 "RE" Expand cpkg' a1 in
   let t1 = _down t2 in
 
   let i1' = derive i2 "IV" Expand in
   let a1' = ivlen i1' in
-  [@inline_let] let cpkg' = concrete_pkg t2 "IV" in
+  [@inline_let] let cpkg' = concrete_pkg #2 t2 "IV" in
   let (| (), iv1 |) = KDF.derive #(flagKDF 2) #t #i2 kdf2 "IV" Expand cpkg' a1' in
   print ("IV1: "^(Bytes.hex_of_bytes iv1));
 
