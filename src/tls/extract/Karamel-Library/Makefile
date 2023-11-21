@@ -53,7 +53,7 @@ else
 endif
 endif
 
-INCLUDE_DIRS 	= $(KRML_HOME)/krmllib/dist/minimal $(KRML_HOME)/include include stub ffi .
+INCLUDE_DIRS 	= $(KRML_HOME)/krmllib/dist/minimal $(KRML_HOME)/include $(HACL_HOME)/dist/gcc-compatible/clients include stub ffi .
 
 # we are now packaging most miTLS modules into meaningful C compilation units
 # See src/tls/Makefile.Karamel for the list of bundles that are used

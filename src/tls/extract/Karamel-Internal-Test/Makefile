@@ -56,7 +56,7 @@ else
 endif
 endif
 
-INCLUDE_DIRS 	= $(KRML_HOME)/krmllib/dist/minimal $(KRML_HOME)/include include stub pki ffi .
+INCLUDE_DIRS 	= $(KRML_HOME)/krmllib/dist/minimal $(KRML_HOME)/include $(HACL_HOME)/dist/gcc-compatible/clients include stub pki ffi .
 
 # Note: see comment in Makefile.Karamel to see why we're re-extracting
 # Crypto.Symmetric.Bytes rather than using the one from secure/

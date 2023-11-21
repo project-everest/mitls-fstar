@@ -382,7 +382,7 @@ let aead_encrypt pkey iv ad adlen plaintext len cipher tag =
     vale_aes256_gcm_encrypt xk iv ad adlen plaintext len cipher tag
   else if AEAD_CHACHA20_POLY1305_HACL? k then
     let key = AEAD_CHACHA20_POLY1305_HACL?.k k in
-    Hacl.Chacha20Poly1305_32.aead_encrypt key iv adlen ad len plaintext cipher tag
+    Hacl.Chacha20Poly1305_32.encrypt cipher tag plaintext len ad adlen key iv
   else if AEAD_OPENSSL? k then
     let key = AEAD_OPENSSL?.st k in
     OpenSSL.aead_encrypt key iv ad adlen plaintext len cipher tag
@@ -399,7 +399,7 @@ let aead_decrypt pkey iv ad adlen plaintext len cipher tag =
     vale_aes256_gcm_decrypt xk iv ad adlen plaintext len cipher tag
   else if AEAD_CHACHA20_POLY1305_HACL? k then
     let key = AEAD_CHACHA20_POLY1305_HACL?.k k in
-    let r = Hacl.Chacha20Poly1305_32.aead_decrypt key iv adlen ad len plaintext cipher tag in
+    let r = Hacl.Chacha20Poly1305_32.decrypt plaintext cipher len ad adlen key iv tag in
     U32.(1ul -^ r)
   else if AEAD_OPENSSL? k then
     let key = AEAD_OPENSSL?.st k in
