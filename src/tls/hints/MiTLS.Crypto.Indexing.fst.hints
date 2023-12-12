@@ -1,0 +1,86 @@
+[
+  "5\u0007Ÿ\u0011€Æîöõ\u0005ú¬\u001f­U[",
+  [
+    [
+      "MiTLS.Crypto.Indexing.rw2rw",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_MiTLS.TLSConstants.Reader",
+        "disc_equation_MiTLS.TLSConstants.Writer",
+        "fuel_guarded_inversion_MiTLS.TLSConstants.rw",
+        "projection_inverse_BoxBool_proj_0"
+      ],
+      0,
+      "c1314c93aac6b60206527b9729974550"
+    ],
+    [
+      "MiTLS.Crypto.Indexing.aeadAlg_of_id",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "equation_MiTLS.Crypto.Indexing.id",
+        "refinement_interpretation_Tm_refine_741809d5482f7ba87541e6219dd9dbb5"
+      ],
+      0,
+      "bf1a9cd78f1fd9f4cc1c1c66ae1280c6"
+    ],
+    [
+      "MiTLS.Crypto.Indexing.macAlg_of_id",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_MiTLS.Crypto.Indexing.AES_128_GCM",
+        "disc_equation_MiTLS.Crypto.Indexing.AES_256_GCM",
+        "disc_equation_MiTLS.Crypto.Indexing.CHACHA20_POLY1305",
+        "equation_MiTLS.Crypto.Indexing.aeadAlg_of_id",
+        "fuel_guarded_inversion_MiTLS.Crypto.Indexing.aeadAlg",
+        "projection_inverse_BoxBool_proj_0",
+        "typing_MiTLS.Crypto.Indexing.aeadAlg_of_id"
+      ],
+      0,
+      "71b3ddebac5cbd262e555971baaa4051"
+    ],
+    [
+      "MiTLS.Crypto.Indexing.cipherAlg_of_id",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_MiTLS.Crypto.Indexing.AES_128_GCM",
+        "disc_equation_MiTLS.Crypto.Indexing.AES_256_GCM",
+        "disc_equation_MiTLS.Crypto.Indexing.CHACHA20_POLY1305",
+        "equation_MiTLS.Crypto.Indexing.aeadAlg_of_id",
+        "fuel_guarded_inversion_MiTLS.Crypto.Indexing.aeadAlg",
+        "projection_inverse_BoxBool_proj_0",
+        "typing_MiTLS.Crypto.Indexing.aeadAlg_of_id"
+      ],
+      0,
+      "7c65afcb812071ae82ce84cc9401f12f"
+    ],
+    [
+      "MiTLS.Crypto.Indexing.aeadAlg_cipherAlg",
+      1,
+      2,
+      1,
+      [
+        "@query", "constructor_distinct_MiTLS.Crypto.Indexing.AES_128_GCM",
+        "constructor_distinct_MiTLS.Crypto.Indexing.AES_256_GCM",
+        "constructor_distinct_MiTLS.Crypto.Indexing.CHACHA20_POLY1305",
+        "equality_tok_MiTLS.Crypto.Indexing.AES_128_GCM@tok",
+        "equality_tok_MiTLS.Crypto.Indexing.AES_256_GCM@tok",
+        "equality_tok_MiTLS.Crypto.Indexing.CHACHA20_POLY1305@tok",
+        "equation_MiTLS.Crypto.Indexing.cipherAlg_of_id"
+      ],
+      0,
+      "fd228ae1a2cdcc30971feab77d41e026"
+    ]
+  ]
+]

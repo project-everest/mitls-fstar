@@ -10,26 +10,26 @@ endif
 
 # Target C compilation units for miTLS sources. Requires -minimal
 MITLS_BUNDLES = \
-  -bundle 'LowParse.\*,LowParseWrappers[rename=LowParse]' \
-  -bundle 'Format.\*' \
-  -bundle 'EverCrypt.\*[rename=EverCrypt_Lib]' \
+  -bundle 'LowParse.\*,MiTLS.LowParseWrappers[rename=LowParse]' \
+  -bundle 'MiTLS.Format.\*' \
+  -bundle 'EverCrypt.\*,MiTLS.EverCrypt.\*[rename=EverCrypt_Lib]' \
   -bundle 'FStar.\*,LowStar.\*,C,C.\*[rename=Mitls_Krmllib]' \
-  -bundle 'Parsers.\*' \
+  -bundle 'MiTLS.Parsers.\*' \
   -bundle 'Spec.\*' \
   -bundle 'Meta.\*' \
   -bundle Lib.*[rename=Hacl_Lib] \
-  -bundle TLSConstants=TLSConstants,QD.TLS_protocolVersion,List.Helpers \
-  -bundle Hashing=Hashing.Spec,Hashing,Hashing.CRF,HMAC,HKDF,HMAC.UFCMA \
-  -bundle Old.Handshake=Old.HMAC.UFCMA,Old.Epochs,Old.KeySchedule,Old.Handshake \
-  -bundle StatefulLHAE=AEAD_GCM,LHAEPlain,StatefulPlain,StatefulLHAE \
-  -bundle StreamAE=StreamPlain,StreamAE \
-  -bundle CommonDH=TLS.Curve25519,DHGroup,ECGroup,CommonDH \
-  -bundle Content=Content,DataStream \
-  -bundle Record=Record,StAE,Transport,StreamDeltas \
-  -bundle PMS=PMS,RSAKey,TLSPRF \
-  -bundle Crypto.Plain=Buffer.Utils,Crypto.Indexing,Crypto.Plain,Crypto.Symmetric.Bytes \
-  -bundle Flags=DebugFlags,Flags,Flag,TLSInfoFlags \
-  -no-prefix 'EverCrypt.Vale' \
+  -bundle MiTLS.TLSConstants=MiTLS.TLSConstants,QD.TLS_protocolVersion,MiTLS.List.Helpers \
+  -bundle MiTLS.Hashing=MiTLS.Hashing.Spec,MiTLS.Hashing,MiTLS.Hashing.CRF,MiTLS.HMAC,MiTLS.HKDF,MiTLS.HMAC.UFCMA \
+  -bundle MiTLS.Old.Handshake=MiTLS.Old.HMAC.UFCMA,MiTLS.Old.Epochs,MiTLS.Old.KeySchedule,MiTLS.Old.Handshake \
+  -bundle MiTLS.StatefulLHAE=MiTLS.AEAD_GCM,MiTLS.LHAEPlain,MiTLS.StatefulPlain,MiTLS.StatefulLHAE \
+  -bundle MiTLS.StreamAE=MiTLS.StreamPlain,MiTLS.StreamAE \
+  -bundle MiTLS.CommonDH=MiTLS.TLS.Curve25519,MiTLS.DHGroup,MiTLS.ECGroup,MiTLS.CommonDH \
+  -bundle MiTLS.Content=MiTLS.Content,MiTLS.DataStream \
+  -bundle MiTLS.Record=MiTLS.Record,MiTLS.StAE,MiTLS.Transport,MiTLS.StreamDeltas \
+  -bundle MiTLS.PMS=MiTLS.PMS,MiTLS.RSAKey,MiTLS.TLSPRF \
+  -bundle MiTLS.Crypto.Plain=MiTLS.Buffer.Utils,MiTLS.Crypto.Indexing,MiTLS.Crypto.Plain,MiTLS.Crypto.Symmetric.Bytes \
+  -bundle MiTLS.Flags=MiTLS.DebugFlags,MiTLS.Flags,MiTLS.Flag,MiTLS.TLSInfoFlags \
+  -no-prefix 'MiTLS.EverCrypt.Vale' \
   $(VALE_BUNDLES)
 
 # To include Makefile.common, you need to specify
@@ -141,8 +141,8 @@ $(INTERNAL_TEST_DIR)/Test_Main.c: $(filter-out $(EXTRACT_DIR)/prims.krml,$(ALL_K
 ifdef VERBOSE
 	@echo -e "\033[1;32m=== Extracting $@ ...\033[;37m"
 endif
-	$(KRML_COMMAND) $^ -tmpdir $(INTERNAL_TEST_DIR) -no-prefix Test.Main \
-	  -skip-compilation -bundle 'Test.Main=Test.\*'
+	$(KRML_COMMAND) $^ -tmpdir $(INTERNAL_TEST_DIR) -no-prefix MiTLS.Test.Main \
+	  -skip-compilation -bundle 'MiTLS.Test.Main=MiTLS.Test.\*'
 
 internal-test-copy: $(addprefix $(INTERNAL_TEST_DIR)/,$(ALL_EXTERNAL_FILES)) $(INTERNAL_TEST_DIR)/stub/mipki_wrapper.c
 
@@ -169,7 +169,7 @@ $(eval $(call COPY_template,$(LIBRARY_DIR)/stub,extract/cstubs))
 $(eval $(call COPY_template,$(LIBRARY_DIR)/ffi,$(MITLS_HOME)/libs/ffi))
 $(eval $(call COPY_template,$(LIBRARY_DIR)/uint128,$(UINT128_DIR)))
 
-$(LIBRARY_DIR)/TLS.c: $(filter-out $(EXTRACT_DIR)/prims.krml $(EXTRACT_DIR)/PKI.krml $(EXTRACT_DIR)/Test_%.krml,$(ALL_KRML_FILES))
+$(LIBRARY_DIR)/TLS.c: $(filter-out $(EXTRACT_DIR)/prims.krml $(EXTRACT_DIR)/MiTLS_PKI.krml $(EXTRACT_DIR)/MiTLS_Test_%.krml,$(ALL_KRML_FILES))
 ifdef VERBOSE
 	@echo -e "\033[1;32m=== Extracting $@ ...\033[;37m"
 endif
@@ -209,7 +209,7 @@ $(eval $(call COPY_template,$(MSVC_LIBRARY_DIR)/stub,extract/cstubs))
 $(eval $(call COPY_template,$(MSVC_LIBRARY_DIR)/ffi,$(MITLS_HOME)/libs/ffi))
 $(eval $(call COPY_template,$(MSVC_LIBRARY_DIR)/uint128,$(UINT128_DIR)))
 
-$(MSVC_LIBRARY_DIR)/TLS.c: $(filter-out $(EXTRACT_DIR)/prims.krml $(EXTRACT_DIR)/PKI.krml $(EXTRACT_DIR)/Test_%.krml,$(ALL_KRML_FILES))
+$(MSVC_LIBRARY_DIR)/TLS.c: $(filter-out $(EXTRACT_DIR)/prims.krml $(EXTRACT_DIR)/MiTLS_PKI.krml $(EXTRACT_DIR)/MiTLS_Test_%.krml,$(ALL_KRML_FILES))
 ifdef VERBOSE
 	@echo -e "\033[1;32m=== Extracting $@ ...\033[;37m"
 endif

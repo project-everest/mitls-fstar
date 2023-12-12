@@ -1,0 +1,38 @@
+[
+  "òÅÉíãdsÅtbK†\u0012Œîd",
+  [
+    [
+      "MiTLS.Parsers.TicketContents13.ticketContents13",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "assumption_MiTLS.Parsers.CipherSuite.cipherSuite__uu___haseq",
+        "equation_MiTLS.Parsers.TicketContents13_custom_data.ticketContents13_custom_data",
+        "equation_MiTLS.Parsers.TicketContents13_nonce.ticketContents13_nonce",
+        "equation_MiTLS.Parsers.TicketContents13_rms.ticketContents13_rms",
+        "equation_Prims.eqtype",
+        "haseqTm_refine_11cc7f5656ce89136014ec18edef1a39",
+        "haseqTm_refine_8315578d748f693d99f92a2cf3c462d1",
+        "haseqTm_refine_9a5867ee735299a7d440e4d6898018d1",
+        "refinement_interpretation_Tm_refine_414d0a9f578ab0048252f8c8f552b99f",
+        "typing_FStar.Bytes.bytes", "typing_FStar.UInt32.t"
+      ],
+      0,
+      "78523fb1dc9a49e09823d600554176bf"
+    ],
+    [
+      "MiTLS.Parsers.TicketContents13.ticketContents13_valid",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "refinement_interpretation_Tm_refine_d664f28e9e7bee8049390f41ed4f4d43"
+      ],
+      0,
+      "f9dc93cd537df212133408557e350e08"
+    ]
+  ]
+]

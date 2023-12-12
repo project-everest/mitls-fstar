@@ -18,13 +18,13 @@ FStar.Seq.fst #FStar.Int64.fst
 CODEGEN_LIBS=CoreCrypto Platform Classical Seq.Base HyperHeap
 FSTAR=$(FSTAR_HOME)/bin/fstar.exe $(STDLIB) $(addprefix --codegen-lib , $(CODEGEN_LIBS))
 
-PDIR=$(FSTAR_HOME)/contrib/Platform/fst/
-PDIR_ML=$(FSTAR_HOME)/contrib/Platform/ml/
+PDIR=$(FSTAR_HOME)/ucontrib/Platform/fst/
+PDIR_ML=$(FSTAR_HOME)/ucontrib/Platform/ml/
 
 PLATFORM=$(addprefix $(PDIR)Platform.,Bytes.fst Date.fst Error.fst Tcp.fst)
 
-CDIR=$(FSTAR_HOME)/contrib/CoreCrypto/fst/
-CDIR_ML=$(FSTAR_HOME)/contrib/CoreCrypto/ml/
+CDIR=$(FSTAR_HOME)/ucontrib/CoreCrypto/fst/
+CDIR_ML=$(FSTAR_HOME)/ucontrib/CoreCrypto/ml/
 
 CRYPTO=$(CDIR)CoreCrypto.fst $(CDIR)DHDB.fst
 
@@ -35,7 +35,7 @@ LIBFILES = $(PLATFORM) $(CRYPTO) $(DHDB)
 ADMITTED=$(addprefix --admit_fsi ,$(addprefix FStar., $(STDLIB_ADMITS)) SessionDB UntrustedCert DHDB CoreCrypto Cert StatefulLHAE Handshake)
 
 # these files should lax-typecheck in F pls document the purpose of the rest
-TLSLAX= $(addprefix tls-lax/,TLSError.fst Nonce.p.fst TLSConstants.fst \
+TLSLAX= $(addprefix tls-lax/MiTLS.,TLSError.fst Nonce.p.fst TLSConstants.fst \
   RSAKey.fst DHGroup.p.fst ECGroup.p.fst CommonDH.p.fst PMS.p.fst HASH.fst \
 	HMAC.p.fst  Sig.p.fst UntrustedCert.p.fsti Cert.p.fsti TLSInfo.fst \
 	TLSExtensions.p.fst TLSPRF.p.fst Range.p.fst DataStream.p.fst \

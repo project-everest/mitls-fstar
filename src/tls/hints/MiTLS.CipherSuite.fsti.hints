@@ -1,0 +1,461 @@
+[
+  "Œ<õÞÍ\rü^iGd–8h{\u001e",
+  [
+    [
+      "MiTLS.CipherSuite.encAlg",
+      1,
+      2,
+      1,
+      [
+        "@query", "assumption_MiTLS.EverCrypt.block_cipher_alg__uu___haseq",
+        "assumption_MiTLS.EverCrypt.stream_cipher_alg__uu___haseq",
+        "equation_MiTLS.CipherSuite.blockCipher",
+        "equation_MiTLS.CipherSuite.streamCipher"
+      ],
+      0,
+      "525529fa47ec1789f4f13172043af604"
+    ],
+    [
+      "MiTLS.CipherSuite.__proj__Block__item___0",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "refinement_interpretation_Tm_refine_2debd533340a94d46c288cba7244ee6e"
+      ],
+      0,
+      "7cd8693c92b99b537ac40504f1f56cb1"
+    ],
+    [
+      "MiTLS.CipherSuite.__proj__Stream__item___0",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "refinement_interpretation_Tm_refine_e784055c44dca3625a455a3f82508972"
+      ],
+      0,
+      "74d991d85c75027d285fe00e768d9295"
+    ],
+    [
+      "MiTLS.CipherSuite.aeAlg",
+      1,
+      2,
+      1,
+      [
+        "@query", "assumption_MiTLS.CipherSuite.encAlg__uu___haseq",
+        "assumption_MiTLS.EverCrypt.aead_alg__uu___haseq",
+        "assumption_Spec.Hash.Definitions.hash_alg__uu___haseq",
+        "equation_MiTLS.CipherSuite.aeadAlg",
+        "equation_MiTLS.CipherSuite.hash_alg",
+        "equation_MiTLS.Hashing.Spec.alg",
+        "equation_Spec.Hash.Definitions.fixed_len_alg",
+        "haseqTm_refine_042ec925769949f282ab80a26a462500",
+        "haseqTm_refine_882ac9af123f24ceb1bfe9a029c155dd"
+      ],
+      0,
+      "ac235d3975a40cf41ecbada6025ea5f9"
+    ],
+    [
+      "MiTLS.CipherSuite.__proj__MACOnly__item___0",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "refinement_interpretation_Tm_refine_03b7100251a2268789b01edb0d7d4990"
+      ],
+      0,
+      "37afc0807c3ad0b61b1396fafc145db7"
+    ],
+    [
+      "MiTLS.CipherSuite.__proj__MtE__item___0",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "refinement_interpretation_Tm_refine_984a87bcf101339fc7d5a6e3c1b2e58a"
+      ],
+      0,
+      "28f415a2e75a454053f2fccd7e0adf70"
+    ],
+    [
+      "MiTLS.CipherSuite.__proj__MtE__item___1",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "refinement_interpretation_Tm_refine_984a87bcf101339fc7d5a6e3c1b2e58a"
+      ],
+      0,
+      "12a6046fe18c15dc27d5a6737152e23a"
+    ],
+    [
+      "MiTLS.CipherSuite.__proj__AEAD__item___0",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "refinement_interpretation_Tm_refine_2b6feba2324aa3cd152f65ce98ed7ded"
+      ],
+      0,
+      "db9ed5a957130f6b4583d702c8f15636"
+    ],
+    [
+      "MiTLS.CipherSuite.__proj__AEAD__item___1",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "refinement_interpretation_Tm_refine_2b6feba2324aa3cd152f65ce98ed7ded"
+      ],
+      0,
+      "2bb4c9a59bc28452dd05cae91b54ebb2"
+    ],
+    [
+      "MiTLS.CipherSuite.cipherSuite'",
+      1,
+      2,
+      1,
+      [
+        "@query",
+        "MiTLS.CipherSuite_pretyping_95b2894df2854e95f1cfae23be11f952",
+        "assumption_FStar.Pervasives.Native.option__uu___haseq",
+        "assumption_MiTLS.CipherSuite.aeAlg__uu___haseq",
+        "assumption_MiTLS.CipherSuite.kexAlg__uu___haseq",
+        "assumption_MiTLS.CipherSuite.sigAlg__uu___haseq",
+        "assumption_MiTLS.EverCrypt.aead_alg__uu___haseq",
+        "assumption_Spec.Hash.Definitions.hash_alg__uu___haseq",
+        "data_typing_intro_MiTLS.CipherSuite.DSA@tok",
+        "equation_MiTLS.CipherSuite.aeadAlg",
+        "equation_MiTLS.CipherSuite.hash_alg",
+        "equation_MiTLS.Hashing.Spec.alg",
+        "equation_Spec.Hash.Definitions.fixed_len_alg",
+        "haseqTm_refine_042ec925769949f282ab80a26a462500",
+        "haseqTm_refine_882ac9af123f24ceb1bfe9a029c155dd",
+        "kinding_MiTLS.CipherSuite.sigAlg@tok"
+      ],
+      0,
+      "8cdd544926063b9cbe72501a3e6660a2"
+    ],
+    [
+      "MiTLS.CipherSuite.__proj__CipherSuite__item___0",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "refinement_interpretation_Tm_refine_3a8194baff3d562301d6ce30e8b66861"
+      ],
+      0,
+      "c85f0e78b7c735285cc1552137657e52"
+    ],
+    [
+      "MiTLS.CipherSuite.__proj__CipherSuite__item___1",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "refinement_interpretation_Tm_refine_3a8194baff3d562301d6ce30e8b66861"
+      ],
+      0,
+      "2ac903879138e4f5f9f4935517045089"
+    ],
+    [
+      "MiTLS.CipherSuite.__proj__CipherSuite__item___2",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "refinement_interpretation_Tm_refine_3a8194baff3d562301d6ce30e8b66861"
+      ],
+      0,
+      "86a76b1663aa822d1b1b58d27324b412"
+    ],
+    [
+      "MiTLS.CipherSuite.__proj__CipherSuite13__item___0",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "refinement_interpretation_Tm_refine_5552626439ff0932000393b2bb8571a8"
+      ],
+      0,
+      "2954312dc18b4a068787e83299c85a5e"
+    ],
+    [
+      "MiTLS.CipherSuite.__proj__CipherSuite13__item___1",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "refinement_interpretation_Tm_refine_5552626439ff0932000393b2bb8571a8"
+      ],
+      0,
+      "7b81075753f4e8851dc551dc1ff1db72"
+    ],
+    [
+      "MiTLS.CipherSuite.cipherSuite'_of_name",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "constructor_distinct_FStar.Integers.W16",
+        "constructor_distinct_FStar.Integers.W64",
+        "constructor_distinct_FStar.Integers.W8",
+        "constructor_distinct_Lib.IntTypes.U1",
+        "constructor_distinct_Lib.IntTypes.U128",
+        "constructor_distinct_Lib.IntTypes.U16",
+        "constructor_distinct_Lib.IntTypes.U8",
+        "constructor_distinct_Spec.Hash.Definitions.MD5",
+        "constructor_distinct_Spec.Hash.Definitions.SHA1",
+        "constructor_distinct_Spec.Hash.Definitions.SHA2_256",
+        "constructor_distinct_Spec.Hash.Definitions.SHA2_384",
+        "disc_equation_MiTLS.Parsers.CipherSuite.TLS_NULL_WITH_NULL_NULL",
+        "equality_tok_FStar.Integers.W16@tok",
+        "equality_tok_FStar.Integers.W64@tok",
+        "equality_tok_FStar.Integers.W8@tok",
+        "equality_tok_Lib.IntTypes.U1@tok",
+        "equality_tok_Lib.IntTypes.U8@tok",
+        "equality_tok_Spec.Hash.Definitions.MD5@tok",
+        "equality_tok_Spec.Hash.Definitions.SHA1@tok",
+        "equality_tok_Spec.Hash.Definitions.SHA2_256@tok",
+        "equality_tok_Spec.Hash.Definitions.SHA2_384@tok",
+        "equation_Lib.IntTypes.unsigned", "equation_Spec.AES.gf8",
+        "equation_Spec.AES.irred", "equation_Spec.GaloisField.gf",
+        "equation_Spec.Hash.Definitions.is_md",
+        "equation_Spec.Hash.Definitions.is_shake",
+        "proj_equation_Spec.GaloisField.GF_t",
+        "projection_inverse_BoxBool_proj_0",
+        "projection_inverse_FStar.Integers.Signed__0",
+        "projection_inverse_FStar.Integers.Unsigned__0",
+        "projection_inverse_Spec.GaloisField.GF_t",
+        "refinement_interpretation_Tm_refine_de8080fdc4bd6678af723874a7d70466",
+        "typing_Spec.AES.gf8", "typing_Spec.GaloisField.__proj__GF__item__t"
+      ],
+      0,
+      "7fa4e1dfa54502b7526d0c718bca54b4"
+    ],
+    [
+      "MiTLS.CipherSuite.name_of_cipherSuite_of_name'",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "constructor_distinct_FStar.Pervasives.Native.Some", "eq2-interp",
+        "equation_MiTLS.CipherSuite.name_of_cipherSuite_of_name_post",
+        "equation_Prims.squash",
+        "projection_inverse_FStar.Pervasives.Native.Some_a",
+        "projection_inverse_FStar.Pervasives.Native.Some_v",
+        "refinement_interpretation_Tm_refine_2de20c066034c13bf76e9c0b94f4806c"
+      ],
+      0,
+      "c976f8a3d62e3e98c20bcc8f433fba94"
+    ],
+    [
+      "MiTLS.CipherSuite.cipherSuite_of_name",
+      1,
+      2,
+      1,
+      [
+        "@query",
+        "MiTLS.CipherSuite_pretyping_a07564f18e78edd22167a9f40557e249",
+        "constructor_distinct_FStar.Error.Correct",
+        "data_typing_intro_MiTLS.CipherSuite.SCSV@tok",
+        "disc_equation_FStar.Error.Correct",
+        "disc_equation_FStar.Pervasives.Native.None",
+        "disc_equation_FStar.Pervasives.Native.Some",
+        "equation_MiTLS.CipherSuite.cipherSuite__of_name",
+        "equation_MiTLS.CipherSuite.validCipherSuite",
+        "equation_MiTLS.TLSError.error",
+        "kinding_MiTLS.CipherSuite.cipherSuite_@tok",
+        "lemma_FStar.Pervasives.invertOption",
+        "projection_inverse_BoxBool_proj_0",
+        "projection_inverse_FStar.Error.Correct__0",
+        "projection_inverse_FStar.Error.Correct__a",
+        "projection_inverse_FStar.Error.Correct__b",
+        "typing_MiTLS.CipherSuite.cipherSuite__of_name"
+      ],
+      0,
+      "50a4cd58b062727ef7e3d268b9206477"
+    ],
+    [
+      "MiTLS.CipherSuite.name_of_cipherSuite",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_FStar.Error.Correct",
+        "equation_MiTLS.CipherSuite.cipherSuite",
+        "equation_MiTLS.CipherSuite.validCipherSuite",
+        "equation_MiTLS.TLSError.error",
+        "refinement_interpretation_Tm_refine_6f7270c23f2e9766a1406053bb2b386d"
+      ],
+      0,
+      "437ac857728fc6f8b42985f8d7c12140"
+    ],
+    [
+      "MiTLS.CipherSuite.cipherSuites_of_nameList_aux",
+      1,
+      2,
+      1,
+      [
+        "@MaxFuel_assumption", "@MaxIFuel_assumption",
+        "@fuel_correspondence_FStar.List.Tot.Base.length.fuel_instrumented",
+        "@fuel_irrelevance_FStar.List.Tot.Base.length.fuel_instrumented",
+        "@query", "binder_x_27c4ee905827f771e62aa64f1de02000_0",
+        "constructor_distinct_Prims.Cons",
+        "disc_equation_FStar.Pervasives.Native.None",
+        "disc_equation_FStar.Pervasives.Native.Some",
+        "disc_equation_Prims.Cons", "disc_equation_Prims.Nil",
+        "equation_MiTLS.CipherSuite.cipherSuite",
+        "equation_MiTLS.CipherSuite.cipherSuiteName",
+        "equation_MiTLS.CipherSuite.cipherSuite_of_name",
+        "equation_Prims.nat",
+        "equation_with_fuel_FStar.List.Tot.Base.length.fuel_instrumented",
+        "fuel_guarded_inversion_Prims.list",
+        "kinding_MiTLS.Parsers.CipherSuite.cipherSuite@tok",
+        "lemma_FStar.Pervasives.invertOption", "primitive_Prims.op_Addition",
+        "projection_inverse_BoxBool_proj_0",
+        "projection_inverse_BoxInt_proj_0",
+        "projection_inverse_Prims.Cons_a",
+        "projection_inverse_Prims.Cons_hd",
+        "projection_inverse_Prims.Cons_tl",
+        "refinement_interpretation_Tm_refine_542f9d4f129664613f2483a6c88bc7c2",
+        "refinement_interpretation_Tm_refine_b2f463f12943f2a57750a526273091a5",
+        "refinement_kinding_Tm_refine_6f7270c23f2e9766a1406053bb2b386d",
+        "subterm_ordering_Prims.Cons", "typing_FStar.List.Tot.Base.length",
+        "typing_MiTLS.CipherSuite.cipherSuite_of_name"
+      ],
+      0,
+      "4f5d48d8bfc9e3aeab2c10387ce853af"
+    ],
+    [
+      "MiTLS.CipherSuite.cipherSuites_of_nameList",
+      1,
+      2,
+      1,
+      [
+        "@MaxFuel_assumption", "@MaxIFuel_assumption",
+        "@fuel_correspondence_FStar.List.Tot.Base.length.fuel_instrumented",
+        "@query", "constructor_distinct_Prims.Nil",
+        "data_typing_intro_Prims.Nil@tok",
+        "equation_MiTLS.CipherSuite.cipherSuite",
+        "equation_with_fuel_FStar.List.Tot.Base.length.fuel_instrumented",
+        "primitive_Prims.op_Addition", "projection_inverse_BoxInt_proj_0",
+        "projection_inverse_Prims.Nil_a",
+        "refinement_kinding_Tm_refine_6f7270c23f2e9766a1406053bb2b386d"
+      ],
+      0,
+      "25d969b29c4a673601e7b6bfb1d3111f"
+    ],
+    [
+      "MiTLS.CipherSuite.nameList_of_cipherSuites_aux",
+      1,
+      2,
+      1,
+      [
+        "@MaxFuel_assumption", "@MaxIFuel_assumption",
+        "@fuel_correspondence_FStar.List.Tot.Base.length.fuel_instrumented",
+        "@fuel_irrelevance_FStar.List.Tot.Base.length.fuel_instrumented",
+        "@query", "binder_x_27c4ee905827f771e62aa64f1de02000_1",
+        "binder_x_873f7cc66ed94d9e673640dccf445866_0",
+        "constructor_distinct_Prims.Cons", "constructor_distinct_Prims.Nil",
+        "data_typing_intro_Prims.Nil@tok", "disc_equation_Prims.Cons",
+        "disc_equation_Prims.Nil", "equation_FStar.List.Tot.Base.rev",
+        "equation_MiTLS.CipherSuite.cipherSuite",
+        "equation_MiTLS.CipherSuite.cipherSuiteName", "equation_Prims.nat",
+        "equation_with_fuel_FStar.List.Tot.Base.length.fuel_instrumented",
+        "fuel_guarded_inversion_Prims.list", "int_inversion",
+        "kinding_MiTLS.Parsers.CipherSuite.cipherSuite@tok",
+        "primitive_Prims.op_Addition", "projection_inverse_BoxBool_proj_0",
+        "projection_inverse_BoxInt_proj_0",
+        "projection_inverse_Prims.Cons_a",
+        "projection_inverse_Prims.Cons_hd",
+        "projection_inverse_Prims.Cons_tl", "projection_inverse_Prims.Nil_a",
+        "refinement_interpretation_Tm_refine_542f9d4f129664613f2483a6c88bc7c2",
+        "refinement_interpretation_Tm_refine_b4cd56c1aaf176837a36c740a7f43f43",
+        "refinement_kinding_Tm_refine_6f7270c23f2e9766a1406053bb2b386d",
+        "subterm_ordering_Prims.Cons", "typing_FStar.List.Tot.Base.length",
+        "typing_FStar.List.Tot.Base.rev",
+        "typing_FStar.List.Tot.Base.rev_acc"
+      ],
+      0,
+      "a42dc028c20e6e1cd5fe1af6ac4ca317"
+    ],
+    [
+      "MiTLS.CipherSuite.nameList_of_cipherSuites",
+      1,
+      2,
+      1,
+      [
+        "@MaxFuel_assumption", "@MaxIFuel_assumption",
+        "@fuel_correspondence_FStar.List.Tot.Base.length.fuel_instrumented",
+        "@query", "constructor_distinct_Prims.Nil",
+        "data_typing_intro_Prims.Nil@tok",
+        "equation_MiTLS.CipherSuite.cipherSuite",
+        "equation_MiTLS.CipherSuite.cipherSuiteName", "equation_Prims.nat",
+        "equation_with_fuel_FStar.List.Tot.Base.length.fuel_instrumented",
+        "int_inversion", "kinding_MiTLS.Parsers.CipherSuite.cipherSuite@tok",
+        "primitive_Prims.op_Addition", "projection_inverse_BoxInt_proj_0",
+        "projection_inverse_Prims.Nil_a",
+        "refinement_interpretation_Tm_refine_542f9d4f129664613f2483a6c88bc7c2",
+        "refinement_kinding_Tm_refine_6f7270c23f2e9766a1406053bb2b386d",
+        "typing_FStar.List.Tot.Base.length"
+      ],
+      0,
+      "e44bc7faf7298a9a4da5d55837eaf452"
+    ],
+    [
+      "MiTLS.CipherSuite.cipherSuiteNameBytes",
+      1,
+      2,
+      1,
+      [
+        "@query", "equation_LowParse.Spec.Base.strong_parser_kind",
+        "equation_MiTLS.LowParseWrappers.wrap_serializer32_constant_length_precond",
+        "equation_MiTLS.Parsers.CipherSuite.cipherSuite_parser_kind",
+        "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_high",
+        "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_low",
+        "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_high",
+        "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_low"
+      ],
+      0,
+      "5963de32f07ae5af363558be45e42af2"
+    ],
+    [
+      "MiTLS.CipherSuite.parseCipherSuiteName",
+      1,
+      2,
+      1,
+      [
+        "@query", "equation_LowParse.Spec.Base.strong_parser_kind",
+        "equation_MiTLS.CipherSuite.cipherSuiteNameBytes",
+        "equation_MiTLS.LowParseWrappers.wrap_parser32_total_constant_length_precond",
+        "equation_MiTLS.LowParseWrappers.wrap_serializer32_constant_length",
+        "equation_MiTLS.Parsers.CipherSuite.cipherSuite_parser_kind",
+        "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_high",
+        "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_low",
+        "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata",
+        "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_high",
+        "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_low",
+        "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata"
+      ],
+      0,
+      "e02a14ac06aeb180801caaea42ab4461"
+    ]
+  ]
+]

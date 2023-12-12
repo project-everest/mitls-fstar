@@ -1,0 +1,173 @@
+[
+  "ÿÄ¥ñ\u0012ZÄc]˜,\u0014ü\u000e\u001co",
+  [
+    [
+      "MiTLS.ECGroup.bytelen",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_MiTLS.EverCrypt.ECC_P256",
+        "disc_equation_MiTLS.EverCrypt.ECC_P384",
+        "disc_equation_MiTLS.EverCrypt.ECC_P521",
+        "disc_equation_MiTLS.EverCrypt.ECC_X25519",
+        "disc_equation_MiTLS.EverCrypt.ECC_X448",
+        "equation_MiTLS.ECGroup.group",
+        "fuel_guarded_inversion_MiTLS.EverCrypt.ec_curve",
+        "projection_inverse_BoxBool_proj_0"
+      ],
+      0,
+      "1ca883adf0620f623c890f13c81db564"
+    ],
+    [
+      "MiTLS.ECGroup.point",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "equation_FStar.Bytes.lbytes",
+        "equation_MiTLS.ECGroup.bytelen",
+        "haseqTm_refine_71ea40360194fe02ee1272538c9cacbc",
+        "refinement_interpretation_Tm_refine_414d0a9f578ab0048252f8c8f552b99f",
+        "typing_FStar.Bytes.bytes"
+      ],
+      0,
+      "ff364af7c88a432baedf03275a00b499"
+    ],
+    [
+      "MiTLS.ECGroup.pre_keyshare",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "assumption_FStar.Pervasives.Native.tuple2__uu___haseq",
+        "assumption_MiTLS.ECGroup.point__uu___haseq",
+        "equation_FStar.Bytes.lbytes",
+        "equation_MiTLS.TLS.Curve25519.keyshare",
+        "equation_MiTLS.TLS.Curve25519.point",
+        "equation_MiTLS.TLS.Curve25519.scalar", "equation_Prims.eqtype",
+        "fuel_guarded_inversion_MiTLS.ECGroup.point",
+        "function_token_typing_MiTLS.TLS.Curve25519.scalar",
+        "haseqTm_refine_71ea40360194fe02ee1272538c9cacbc",
+        "refinement_interpretation_Tm_refine_414d0a9f578ab0048252f8c8f552b99f",
+        "typing_FStar.Bytes.bytes", "typing_MiTLS.ECGroup._key"
+      ],
+      0,
+      "bc622d10f1da50e8cd7ff3607a5ff08b"
+    ],
+    [
+      "MiTLS.ECGroup.__proj__KS_CC__item___0",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "refinement_interpretation_Tm_refine_797bc55390f65555941d1a9d2269a291"
+      ],
+      0,
+      "69fdcda84a47ff8a9bd8e20452d73faf"
+    ],
+    [
+      "MiTLS.ECGroup.__proj__KS_CC__item___1",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "refinement_interpretation_Tm_refine_797bc55390f65555941d1a9d2269a291"
+      ],
+      0,
+      "f9d4eba82005ffa98d30e0998f8185ff"
+    ],
+    [
+      "MiTLS.ECGroup.__proj__KS_X25519__item___0",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "refinement_interpretation_Tm_refine_3c94e762ad564c2887ad538f86c9bbf1"
+      ],
+      0,
+      "7a75a9aec9fb3f3fb84b9c73ea1684cd"
+    ],
+    [
+      "MiTLS.ECGroup.__proj__KS_X448__item__pub",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "refinement_interpretation_Tm_refine_7eda0378011f7147ec4f58cdd90f4ce6"
+      ],
+      0,
+      "6eeabd48e5f710f9b9efc66ee7016ef4"
+    ],
+    [
+      "MiTLS.ECGroup.__proj__KS_X448__item__priv",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "refinement_interpretation_Tm_refine_7eda0378011f7147ec4f58cdd90f4ce6"
+      ],
+      0,
+      "17f140ef1d33e1e57561b95b7e5f14a7"
+    ],
+    [
+      "MiTLS.ECGroup.pre_share",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "assumption_MiTLS.ECGroup.point__uu___haseq",
+        "equation_FStar.Bytes.lbytes", "equation_MiTLS.TLS.Curve25519.point",
+        "haseqTm_refine_71ea40360194fe02ee1272538c9cacbc",
+        "refinement_interpretation_Tm_refine_414d0a9f578ab0048252f8c8f552b99f",
+        "typing_FStar.Bytes.bytes"
+      ],
+      0,
+      "6296012e877840b0cd26ed787ce13a6f"
+    ],
+    [
+      "MiTLS.ECGroup.__proj__S_CC__item___0",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "refinement_interpretation_Tm_refine_39a6c8185b145aec5759e09aa3fa2722"
+      ],
+      0,
+      "fe784b444938cbd7b96535e754c85f97"
+    ],
+    [
+      "MiTLS.ECGroup.__proj__S_X25519__item___0",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "refinement_interpretation_Tm_refine_7a9118266d508f7ea825dc54988caa99"
+      ],
+      0,
+      "eee6742197867eabbf45c59641c34b94"
+    ],
+    [
+      "MiTLS.ECGroup.__proj__S_X448__item___0",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "refinement_interpretation_Tm_refine_6ea7146bbb01e34991626493d99d7ce0"
+      ],
+      0,
+      "b1b032fc5837877f0f7c58494301f45d"
+    ]
+  ]
+]

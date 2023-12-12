@@ -1,0 +1,143 @@
+[
+  ",ò^žà…\u0000J¦€ÌÜÖfÀª",
+  [
+    [
+      "MiTLS.AEAD.Pkg.ideal",
+      1,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "c373c156525d0b0c6d41630b6df2d884"
+    ],
+    [
+      "MiTLS.AEAD.Pkg.is_safe",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "bool_inversion", "bool_typing",
+        "constructor_distinct_Lib.IntTypes.U8",
+        "equality_tok_Lib.IntTypes.U1@tok",
+        "equality_tok_Lib.IntTypes.U8@tok",
+        "equation_FStar.HyperStack.ST.modifies_none",
+        "equation_FStar.Monotonic.HyperHeap.hmap",
+        "equation_FStar.Monotonic.HyperHeap.modifies_just",
+        "equation_FStar.Monotonic.HyperStack.mem",
+        "equation_FStar.Monotonic.HyperStack.modifies",
+        "equation_Lib.IntTypes.unsigned", "equation_MiTLS.AEAD.Pkg.safe",
+        "equation_Spec.AES.gf8", "equation_Spec.AES.irred",
+        "equation_Spec.GaloisField.gf",
+        "fuel_guarded_inversion_MiTLS.Pkg.ipkg",
+        "function_token_typing_FStar.Monotonic.Heap.heap",
+        "lemma_FStar.Map.lemma_ContainsDom",
+        "lemma_FStar.Map.lemma_InDomConcat",
+        "lemma_FStar.Map.lemma_InDomRestrict",
+        "lemma_FStar.Map.lemma_SelConcat1",
+        "lemma_FStar.Map.lemma_SelConcat2",
+        "lemma_FStar.Map.lemma_SelRestrict",
+        "lemma_FStar.Map.lemma_equal_intro",
+        "lemma_FStar.Set.mem_complement", "lemma_FStar.Set.mem_empty",
+        "lemma_FStar.Set.mem_subset", "primitive_Prims.op_AmpAmp",
+        "primitive_Prims.op_BarBar", "primitive_Prims.op_Negation",
+        "proj_equation_Spec.GaloisField.GF_t",
+        "projection_inverse_BoxBool_proj_0",
+        "projection_inverse_Spec.GaloisField.GF_t",
+        "refinement_interpretation_Tm_refine_05e15190c946858f68c69156f585f95a",
+        "refinement_interpretation_Tm_refine_de8080fdc4bd6678af723874a7d70466",
+        "typing_FStar.Map.concat", "typing_FStar.Map.contains",
+        "typing_FStar.Map.domain", "typing_FStar.Map.restrict",
+        "typing_FStar.Monotonic.HyperHeap.rid",
+        "typing_FStar.Monotonic.HyperStack.get_hmap",
+        "typing_FStar.Set.complement", "typing_FStar.Set.empty",
+        "typing_Spec.AES.gf8", "typing_Spec.GaloisField.__proj__GF__item__t"
+      ],
+      0,
+      "046c6672e1230ab7e01138ac3951ad10"
+    ],
+    [
+      "MiTLS.AEAD.Pkg.info",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "assumption_MiTLS.AEAD.Pkg.aeadAlg__uu___haseq",
+        "equation_MiTLS.Mem.rgn", "equation_Prims.eqtype",
+        "haseqTm_refine_31bfde48b952b6d7959cd5a2aa36404e",
+        "refinement_interpretation_Tm_refine_414d0a9f578ab0048252f8c8f552b99f",
+        "typing_FStar.Monotonic.HyperHeap.rid"
+      ],
+      0,
+      "79f3faa2a150919586f76aa3b8639305"
+    ],
+    [
+      "MiTLS.AEAD.Pkg.aead_pkg_keylen",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_MiTLS.AEAD.Pkg.AES_GCM128",
+        "disc_equation_MiTLS.AEAD.Pkg.AES_GCM256",
+        "fuel_guarded_inversion_MiTLS.AEAD.Pkg.aeadAlg",
+        "projection_inverse_BoxBool_proj_0"
+      ],
+      0,
+      "6526e473d9dd537309f75dab21d4b117"
+    ],
+    [
+      "MiTLS.AEAD.Pkg.shared_footprint",
+      1,
+      2,
+      1,
+      [
+        "@query", "lemma_FStar.Set.mem_empty",
+        "typing_FStar.Monotonic.HyperHeap.rid"
+      ],
+      0,
+      "5edd8b3b3fa9f26ccb5019d41a06eeb2"
+    ],
+    [
+      "MiTLS.AEAD.Pkg.coerceT_key",
+      1,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "30ab355399f76060a16081073f2cbcd8"
+    ],
+    [
+      "MiTLS.AEAD.Pkg.coerce_key",
+      1,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "38cb4b08c8a09fba47b3bdf7ec9c85ce"
+    ],
+    [
+      "MiTLS.AEAD.Pkg.local_ae_pkg",
+      1,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "1aaf538cf1c37b73828275061bfbad27"
+    ],
+    [
+      "MiTLS.AEAD.Pkg.mp",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "data_elim_MiTLS.Pkg.Idx",
+        "equation_Prims.eqtype", "fuel_guarded_inversion_MiTLS.Pkg.ipkg",
+        "proj_equation_MiTLS.Pkg.Idx_t",
+        "refinement_interpretation_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
+      ],
+      0,
+      "8327209bd830c367d8a599f4919fc923"
+    ]
+  ]
+]

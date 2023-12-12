@@ -1,0 +1,35 @@
+[
+  "ÏaÎ‘~\u0014ž\u000fú,Ùäié¢Ë",
+  [
+    [
+      "MiTLS.Parsers.HKDF.HkdfLabel.hkdfLabel",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "equation_MiTLS.Parsers.HKDF.HkdfLabel_context.hkdfLabel_context",
+        "equation_MiTLS.Parsers.HKDF.HkdfLabel_label.hkdfLabel_label",
+        "equation_Prims.eqtype",
+        "haseqTm_refine_15ae3fadb6f4acac6a5678fabfdae153",
+        "haseqTm_refine_8315578d748f693d99f92a2cf3c462d1",
+        "refinement_interpretation_Tm_refine_414d0a9f578ab0048252f8c8f552b99f",
+        "typing_FStar.Bytes.bytes", "typing_FStar.UInt16.t"
+      ],
+      0,
+      "b388a40681ff1da3413fed9c8acda157"
+    ],
+    [
+      "MiTLS.Parsers.HKDF.HkdfLabel.hkdfLabel_valid",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "refinement_interpretation_Tm_refine_d7d8d831ab5c58e8ee4d9b2276a8682f"
+      ],
+      0,
+      "8208963a6efc79158a2498513802cc36"
+    ]
+  ]
+]

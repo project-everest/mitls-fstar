@@ -1,0 +1,39 @@
+[
+  "£4D \u0015\u00120ÊÕY\u0007Kt÷')",
+  [
+    [
+      "MiTLS.Old.Epochs.discard",
+      1,
+      2,
+      1,
+      [
+        "@query", "equation_FStar.HyperStack.ST.equal_stack_domains",
+        "equation_FStar.Monotonic.Heap.equal_dom",
+        "lemma_FStar.HyperStack.ST.lemma_same_refs_in_stack_regions_intro"
+      ],
+      0,
+      "4aa5c225d6daf69e3df571c64d751330"
+    ],
+    [
+      "MiTLS.Old.Epochs.trace",
+      1,
+      2,
+      1,
+      [
+        "@query", "equation_MiTLS.DebugFlags.debug",
+        "equation_MiTLS.DebugFlags.debug_Epochs"
+      ],
+      0,
+      "a3ead5cba5eecd6b2db20b04e2b21ad0"
+    ],
+    [
+      "MiTLS.Old.Epochs.epoch_region_inv",
+      1,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "6f43abc76bf62046420999165cec2472"
+    ]
+  ]
+]

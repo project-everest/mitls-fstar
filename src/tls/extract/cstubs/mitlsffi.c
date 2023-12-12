@@ -20,20 +20,20 @@
 #include <pthread.h>
 #endif
 
-#include "EverCrypt.h"
+#include "MiTLS_EverCrypt.h"
 #include "Spec.h"
-#include "FFI.h"
-#include "QUIC.h"
+#include "MiTLS_FFI.h"
+#include "MiTLS_QUIC.h"
 #include "mitlsffi.h"
 #include "RegionAllocator.h"
 
 // Code was written against old auto-generated names
-#define FStar_Pervasives_Native_option__K___uint64_t_Parsers_SignatureScheme_signatureScheme Negotiation_certNego
-#define K___Prims_int_Prims_int FFI_pair_of_ints
+#define FStar_Pervasives_Native_option__K___uint64_t_MiTLS_Parsers_SignatureScheme_signatureScheme MiTLS_Negotiation_certNego
+#define K___Prims_int_Prims_int MiTLS_FFI_pair_of_ints
 
 // Convert internal to external algorithm representations
 #define CONVERT_HASH(h) (h == Spec_Hash_Definitions_MD5 ? TLS_hash_MD5 : (h == Spec_Hash_Definitions_SHA1 ? TLS_hash_SHA1 : (h == Spec_Hash_Definitions_SHA2_224 ? TLS_hash_SHA224 : (h == Spec_Hash_Definitions_SHA2_256 ? TLS_hash_SHA256 : (h == Spec_Hash_Definitions_SHA2_384 ? TLS_hash_SHA384 : TLS_hash_SHA512)))))
-#define CONVERT_AEAD(ae) (ae == EverCrypt_AES128_GCM ? TLS_aead_AES_128_GCM : (ae == EverCrypt_AES256_GCM ? TLS_aead_AES_256_GCM : TLS_aead_CHACHA20_POLY1305))
+#define CONVERT_AEAD(ae) (ae == MiTLS_EverCrypt_AES128_GCM ? TLS_aead_AES_128_GCM : (ae == MiTLS_EverCrypt_AES256_GCM ? TLS_aead_AES_256_GCM : TLS_aead_CHACHA20_POLY1305))
 
 // This file is hand-written C code, to wrap the Karamel-extracted
 // code to match the mitlsffi.h interface.
@@ -48,8 +48,8 @@ p_log g_LogPrint;
 
 struct mitls_state {
   HEAP_REGION rgn;
-  TLSConstants_config cfg;
-  Connection_connection cxn;
+  MiTLS_TLSConstants_config cfg;
+  MiTLS_Connection_connection cxn;
 };
 
 // BUGBUG: temporary global lock to protect global
@@ -115,7 +115,7 @@ void TracePrintf(const char *fmt, ...)
 //
 // Hosts may provide a callback function for debug tracing.
 //
-void MITLS_CALLCONV FFI_mitls_set_trace_callback(pfn_mitls_trace_callback cb)
+void MITLS_CALLCONV MiTLS_FFI_mitls_set_trace_callback(pfn_mitls_trace_callback cb)
 {
     trace_callback = cb;
 #if LOG_TO_CHOICE
@@ -130,13 +130,13 @@ void MITLS_CALLCONV FFI_mitls_set_trace_callback(pfn_mitls_trace_callback cb)
 //
 //  Returns:  0 for error, nonzero for success
 //
-int MITLS_CALLCONV FFI_mitls_init(void)
+int MITLS_CALLCONV MiTLS_FFI_mitls_init(void)
 {
   if (HeapRegionInitialize() == 0) {
       return 0;
   }
 
-  if (Random_init() != 1) {
+  if (MiTLS_Random_init() != 1) {
       HeapRegionCleanup();
       return 0;
   }
@@ -189,9 +189,9 @@ int MITLS_CALLCONV FFI_mitls_init(void)
   return 1; // success
 }
 
-void MITLS_CALLCONV FFI_mitls_cleanup(void)
+void MITLS_CALLCONV MiTLS_FFI_mitls_cleanup(void)
 {
-  Random_cleanup();
+  MiTLS_Random_cleanup();
     
 #if IS_WINDOWS
   #ifndef _KERNEL_MODE
@@ -205,7 +205,7 @@ void MITLS_CALLCONV FFI_mitls_cleanup(void)
 }
 
 // Called by the host app to configure miTLS ahead of creating a connection
-int MITLS_CALLCONV FFI_mitls_configure(mitls_state **state, const char *tls_version, const char *host_name)
+int MITLS_CALLCONV MiTLS_FFI_mitls_configure(mitls_state **state, const char *tls_version, const char *host_name)
 {
     int ret = 0;
 
@@ -220,7 +220,7 @@ int MITLS_CALLCONV FFI_mitls_configure(mitls_state **state, const char *tls_vers
     Prims_string host = CopyPrimsString(host_name);
     Prims_string version = CopyPrimsString(tls_version);
 
-    TLSConstants_config config = FFI_ffiConfig(version, (FStar_Bytes_bytes){.data=host,.length=strlen(host_name)});
+    MiTLS_TLSConstants_config config = MiTLS_FFI_ffiConfig(version, (FStar_Bytes_bytes){.data=host,.length=strlen(host_name)});
 
     // Allocate space on the heap, to store an OCaml value
     mitls_state *s = (mitls_state*)KRML_HOST_MALLOC(sizeof(mitls_state));
@@ -237,14 +237,14 @@ int MITLS_CALLCONV FFI_mitls_configure(mitls_state **state, const char *tls_vers
     return ret;
 }
 
-int MITLS_CALLCONV FFI_mitls_set_ticket_key(const char *alg, const unsigned char *tk, size_t klen)
+int MITLS_CALLCONV MiTLS_FFI_mitls_set_ticket_key(const char *alg, const unsigned char *tk, size_t klen)
 {
     int b = 0;
     LOCK_MUTEX(&lock);
     ENTER_GLOBAL_HEAP_REGION();
     FStar_Bytes_bytes key;
     MakeFStar_Bytes_bytes(&key, tk, klen);
-    b = FFI_ffiSetTicketKey(alg, key);
+    b = MiTLS_FFI_ffiSetTicketKey(alg, key);
     LEAVE_GLOBAL_HEAP_REGION();
     UNLOCK_MUTEX(&lock);
     if (HAD_OUT_OF_MEMORY) {
@@ -253,14 +253,14 @@ int MITLS_CALLCONV FFI_mitls_set_ticket_key(const char *alg, const unsigned char
     return (b) ? 1 : 0;
 }
 
-int MITLS_CALLCONV FFI_mitls_set_sealing_key(const char *alg, const unsigned char *tk, size_t klen)
+int MITLS_CALLCONV MiTLS_FFI_mitls_set_sealing_key(const char *alg, const unsigned char *tk, size_t klen)
 {
     int b = 0;
     LOCK_MUTEX(&lock);
     ENTER_GLOBAL_HEAP_REGION();
     FStar_Bytes_bytes key;
     MakeFStar_Bytes_bytes(&key, tk, klen);
-    b = FFI_ffiSetSealingKey(alg, key);
+    b = MiTLS_FFI_ffiSetSealingKey(alg, key);
     LEAVE_GLOBAL_HEAP_REGION();
     UNLOCK_MUTEX(&lock);
     if (HAD_OUT_OF_MEMORY) {
@@ -269,14 +269,14 @@ int MITLS_CALLCONV FFI_mitls_set_sealing_key(const char *alg, const unsigned cha
     return (b) ? 1 : 0;
 }
 
-int MITLS_CALLCONV FFI_mitls_configure_ticket(mitls_state *state, const mitls_ticket *ticket)
+int MITLS_CALLCONV MiTLS_FFI_mitls_configure_ticket(mitls_state *state, const mitls_ticket *ticket)
 {
     int b = 0;
     ENTER_HEAP_REGION(state->rgn);
     FStar_Bytes_bytes tid, si;
     MakeFStar_Bytes_bytes(&tid, ticket->ticket, ticket->ticket_len);
     MakeFStar_Bytes_bytes(&si, ticket->session, ticket->session_len);
-    state->cfg = FFI_ffiSetTicket(state->cfg, tid, si);
+    state->cfg = MiTLS_FFI_ffiSetTicket(state->cfg, tid, si);
     LEAVE_HEAP_REGION();
     if (HAD_OUT_OF_MEMORY) {
         return 0;
@@ -284,10 +284,10 @@ int MITLS_CALLCONV FFI_mitls_configure_ticket(mitls_state *state, const mitls_ti
     return (b) ? 1 : 0;
 }
 
-int MITLS_CALLCONV FFI_mitls_configure_cipher_suites(/* in */ mitls_state *state, const char * cs)
+int MITLS_CALLCONV MiTLS_FFI_mitls_configure_cipher_suites(/* in */ mitls_state *state, const char * cs)
 {
     ENTER_HEAP_REGION(state->rgn);
-    state->cfg = FFI_ffiSetCipherSuites(state->cfg, cs);
+    state->cfg = MiTLS_FFI_ffiSetCipherSuites(state->cfg, cs);
     LEAVE_HEAP_REGION();
     if (HAD_OUT_OF_MEMORY) {
         return 0;
@@ -295,10 +295,10 @@ int MITLS_CALLCONV FFI_mitls_configure_cipher_suites(/* in */ mitls_state *state
     return 1;
 }
 
-int MITLS_CALLCONV FFI_mitls_configure_signature_algorithms(/* in */ mitls_state *state, const char * sa)
+int MITLS_CALLCONV MiTLS_FFI_mitls_configure_signature_algorithms(/* in */ mitls_state *state, const char * sa)
 {
     ENTER_HEAP_REGION(state->rgn);
-    state->cfg = FFI_ffiSetSignatureAlgorithms(state->cfg, sa);
+    state->cfg = MiTLS_FFI_ffiSetSignatureAlgorithms(state->cfg, sa);
     LEAVE_HEAP_REGION();
     if (HAD_OUT_OF_MEMORY) {
         return 0;
@@ -306,10 +306,10 @@ int MITLS_CALLCONV FFI_mitls_configure_signature_algorithms(/* in */ mitls_state
     return 1;
 }
 
-int MITLS_CALLCONV FFI_mitls_configure_named_groups(/* in */ mitls_state *state, const char * ng)
+int MITLS_CALLCONV MiTLS_FFI_mitls_configure_named_groups(/* in */ mitls_state *state, const char * ng)
 {
     ENTER_HEAP_REGION(state->rgn);
-    state->cfg = FFI_ffiSetNamedGroups(state->cfg, ng);
+    state->cfg = MiTLS_FFI_ffiSetNamedGroups(state->cfg, ng);
     LEAVE_HEAP_REGION();
     if (HAD_OUT_OF_MEMORY) {
         return 0;
@@ -317,14 +317,14 @@ int MITLS_CALLCONV FFI_mitls_configure_named_groups(/* in */ mitls_state *state,
     return 1;
 }
 
-static TLSConstants_alpn alpn_list_of_array(const mitls_alpn *alpn, size_t alpn_count)
+static MiTLS_TLSConstants_alpn alpn_list_of_array(const mitls_alpn *alpn, size_t alpn_count)
 {
-  TLSConstants_alpn apl = KRML_HOST_MALLOC(sizeof(TLSConstants_alpn_gc));
+  MiTLS_TLSConstants_alpn apl = KRML_HOST_MALLOC(sizeof(MiTLS_TLSConstants_alpn_gc));
   apl->tag = Prims_Nil;
 
   for(int i = (alpn_count & 255) - 1; i >= 0; i--)
   {
-    TLSConstants_alpn new = KRML_HOST_MALLOC(sizeof(TLSConstants_alpn_gc));
+    MiTLS_TLSConstants_alpn new = KRML_HOST_MALLOC(sizeof(MiTLS_TLSConstants_alpn_gc));
     new->tag = Prims_Cons;
     new->hd.length = alpn[i].alpn_len & 255;
     new->hd.data = KRML_HOST_MALLOC(new->hd.length);
@@ -336,11 +336,11 @@ static TLSConstants_alpn alpn_list_of_array(const mitls_alpn *alpn, size_t alpn_
   return apl;
 }
 
-int MITLS_CALLCONV FFI_mitls_configure_alpn(/* in */ mitls_state *state, const mitls_alpn *alpn, size_t alpn_count)
+int MITLS_CALLCONV MiTLS_FFI_mitls_configure_alpn(/* in */ mitls_state *state, const mitls_alpn *alpn, size_t alpn_count)
 {
     ENTER_HEAP_REGION(state->rgn);
-    TLSConstants_alpn apl = alpn_list_of_array(alpn, alpn_count);
-    state->cfg = FFI_ffiSetALPN(state->cfg, apl);
+    MiTLS_TLSConstants_alpn apl = alpn_list_of_array(alpn, alpn_count);
+    state->cfg = MiTLS_FFI_ffiSetALPN(state->cfg, apl);
     LEAVE_HEAP_REGION();
     if (HAD_OUT_OF_MEMORY) {
         return 0;
@@ -348,14 +348,14 @@ int MITLS_CALLCONV FFI_mitls_configure_alpn(/* in */ mitls_state *state, const m
     return 1;
 }
 
-int MITLS_CALLCONV FFI_mitls_configure_custom_extensions(/* in */ mitls_state *state, const mitls_extension *exts, size_t exts_count)
+int MITLS_CALLCONV MiTLS_FFI_mitls_configure_custom_extensions(/* in */ mitls_state *state, const mitls_extension *exts, size_t exts_count)
 {
   ENTER_HEAP_REGION(state->rgn);
   for(size_t i = 0; i < exts_count; i++)
   {
     char *c = KRML_HOST_MALLOC(exts->ext_data_len);
     memcpy(c, exts->ext_data, exts->ext_data_len);
-    state->cfg = FFI_ffiAddCustomExtension(state->cfg, exts->ext_type, (FStar_Bytes_bytes){.data = c, .length = exts->ext_data_len});
+    state->cfg = MiTLS_FFI_ffiAddCustomExtension(state->cfg, exts->ext_type, (FStar_Bytes_bytes){.data = c, .length = exts->ext_data_len});
     exts++;
   }
   LEAVE_HEAP_REGION();
@@ -371,10 +371,10 @@ typedef struct {
   pfn_FFI_ticket_cb cb;
 } wrapped_ticket_cb;
 
-static void ticket_cb_proxy(FStar_Dyn_dyn cbs, Prims_string sni, FStar_Bytes_bytes ticket, TLSConstants_ticketInfo info, FStar_Bytes_bytes rawkey)
+static void ticket_cb_proxy(FStar_Dyn_dyn cbs, Prims_string sni, FStar_Bytes_bytes ticket, MiTLS_TLSConstants_ticketInfo info, FStar_Bytes_bytes rawkey)
 {
   wrapped_ticket_cb *cb = (wrapped_ticket_cb*)cbs;
-  FStar_Bytes_bytes session = FFI_ffiTicketInfoBytes(info, rawkey);
+  FStar_Bytes_bytes session = MiTLS_FFI_ffiTicketInfoBytes(info, rawkey);
   mitls_ticket t = {
     .ticket_len = ticket.length,
     .ticket = (unsigned char*)ticket.data,
@@ -385,13 +385,13 @@ static void ticket_cb_proxy(FStar_Dyn_dyn cbs, Prims_string sni, FStar_Bytes_byt
   cb->cb(cb->cb_state, sni, &t);
 }
 
-int MITLS_CALLCONV FFI_mitls_configure_ticket_callback(/* in */ mitls_state *state, void *cb_state, pfn_FFI_ticket_cb ticket_cb)
+int MITLS_CALLCONV MiTLS_FFI_mitls_configure_ticket_callback(/* in */ mitls_state *state, void *cb_state, pfn_FFI_ticket_cb ticket_cb)
 {
     ENTER_HEAP_REGION(state->rgn);
     wrapped_ticket_cb *cbs = KRML_HOST_MALLOC(sizeof(wrapped_ticket_cb));
     cbs->cb_state = cb_state;
     cbs->cb = ticket_cb;
-    state->cfg = FFI_ffiSetTicketCallback(state->cfg, (void*)cbs, ticket_cb_proxy);
+    state->cfg = MiTLS_FFI_ffiSetTicketCallback(state->cfg, (void*)cbs, ticket_cb_proxy);
     LEAVE_HEAP_REGION();
     if (HAD_OUT_OF_MEMORY) {
         return 0;
@@ -404,19 +404,19 @@ typedef struct {
   pfn_FFI_nego_cb cb;
 } wrapped_nego_cb;
 
-static mitls_version convert_pv(Parsers_ProtocolVersion_protocolVersion pv)
+static mitls_version convert_pv(MiTLS_Parsers_ProtocolVersion_protocolVersion pv)
 {
   switch(pv.tag)
   {
-    case Parsers_ProtocolVersion_SSL_3p0:
+    case MiTLS_Parsers_ProtocolVersion_SSL_3p0:
       return TLS_SSL3;
-    case Parsers_ProtocolVersion_TLS_1p0:
+    case MiTLS_Parsers_ProtocolVersion_TLS_1p0:
       return TLS_1p0;
-    case Parsers_ProtocolVersion_TLS_1p1:
+    case MiTLS_Parsers_ProtocolVersion_TLS_1p1:
       return TLS_1p1;
-    case Parsers_ProtocolVersion_TLS_1p2:
+    case MiTLS_Parsers_ProtocolVersion_TLS_1p2:
       return TLS_1p2;
-    case Parsers_ProtocolVersion_TLS_1p3:
+    case MiTLS_Parsers_ProtocolVersion_TLS_1p3:
       return TLS_1p3;
     default:
       return TLS_SSL3;
@@ -424,15 +424,15 @@ static mitls_version convert_pv(Parsers_ProtocolVersion_protocolVersion pv)
   return TLS_SSL3; // unreachable
 }
 
-static TLSConstants_nego_action nego_cb_proxy(FStar_Dyn_dyn cbs, Parsers_ProtocolVersion_protocolVersion pv,
+static MiTLS_TLSConstants_nego_action nego_cb_proxy(FStar_Dyn_dyn cbs, MiTLS_Parsers_ProtocolVersion_protocolVersion pv,
   FStar_Bytes_bytes extb, FStar_Pervasives_Native_option__FStar_Bytes_bytes cookie)
 {
   wrapped_nego_cb *cb = (wrapped_nego_cb*)cbs;
   unsigned char *app_cookie = NULL, *c;
   mitls_extension *extra_exts = NULL;
   size_t i, app_cookie_len = 0, extra_exts_len = 0;
-  TLSConstants_nego_action a;
-  TLSConstants_custom_extensions cexts;
+  MiTLS_TLSConstants_nego_action a;
+  MiTLS_TLSConstants_custom_extensions cexts;
 
   if(cookie.tag == FStar_Pervasives_Native_Some)
   {
@@ -447,16 +447,16 @@ static TLSConstants_nego_action nego_cb_proxy(FStar_Dyn_dyn cbs, Parsers_Protoco
   switch(r)
   {
     case TLS_nego_abort:
-      a.tag = TLSConstants_Nego_abort;
+      a.tag = MiTLS_TLSConstants_Nego_abort;
       break;
     case TLS_nego_accept:
-      a.tag = TLSConstants_Nego_accept;
-      cexts = TLSConstants_empty_custom_extensions();
+      a.tag = MiTLS_TLSConstants_Nego_accept;
+      cexts = MiTLS_TLSConstants_empty_custom_extensions();
       if(extra_exts != NULL && extra_exts_len > 0)
       {
         for(i=0; i<extra_exts_len; i++)
         {
-          cexts = TLSConstants_add_custom_extension(cexts, extra_exts->ext_type,
+          cexts = MiTLS_TLSConstants_add_custom_extension(cexts, extra_exts->ext_type,
             (FStar_Bytes_bytes){.data = (const char*)extra_exts->ext_data, .length = extra_exts->ext_data_len});
           extra_exts++;
         }
@@ -464,7 +464,7 @@ static TLSConstants_nego_action nego_cb_proxy(FStar_Dyn_dyn cbs, Parsers_Protoco
       a.val.case_Nego_accept = cexts;
       break;
     case TLS_nego_retry:
-      a.tag = TLSConstants_Nego_retry;
+      a.tag = MiTLS_TLSConstants_Nego_retry;
       c = KRML_HOST_MALLOC(app_cookie_len);
       if(app_cookie != NULL) memcpy(c, app_cookie, app_cookie_len);
       a.val.case_Nego_retry = (FStar_Bytes_bytes){.data = (const char*)c, .length = app_cookie_len};
@@ -477,13 +477,13 @@ static TLSConstants_nego_action nego_cb_proxy(FStar_Dyn_dyn cbs, Parsers_Protoco
   return a;
 }
 
-int MITLS_CALLCONV FFI_mitls_configure_nego_callback(mitls_state *state, void *cb_state, pfn_FFI_nego_cb nego_cb)
+int MITLS_CALLCONV MiTLS_FFI_mitls_configure_nego_callback(mitls_state *state, void *cb_state, pfn_FFI_nego_cb nego_cb)
 {
   ENTER_HEAP_REGION(state->rgn);
   wrapped_nego_cb *cbs = KRML_HOST_MALLOC(sizeof(wrapped_nego_cb));
   cbs->cb_state = cb_state;
   cbs->cb = nego_cb;
-  state->cfg = FFI_ffiSetNegoCallback(state->cfg, (void*)cbs, nego_cb_proxy);
+  state->cfg = MiTLS_FFI_ffiSetNegoCallback(state->cfg, (void*)cbs, nego_cb_proxy);
   LEAVE_HEAP_REGION();
   if (HAD_OUT_OF_MEMORY) {
     return 0;
@@ -499,32 +499,32 @@ typedef struct {
   pfn_FFI_cert_verify_cb verify;
 } wrapped_cert_cb;
 
-static Parsers_SignatureScheme_signatureScheme_tags tls_of_pki(mitls_signature_scheme sa)
+static MiTLS_Parsers_SignatureScheme_signatureScheme_tags tls_of_pki(mitls_signature_scheme sa)
 {
   switch(sa)
   {
     //  rsa_pkcs1_sha1(0x0201),
-    case 0x0201: return Parsers_SignatureScheme_Rsa_pkcs1_sha1;
+    case 0x0201: return MiTLS_Parsers_SignatureScheme_Rsa_pkcs1_sha1;
     //  rsa_pkcs1_sha256(0x0401),
-    case 0x0401: return Parsers_SignatureScheme_Rsa_pkcs1_sha256;
+    case 0x0401: return MiTLS_Parsers_SignatureScheme_Rsa_pkcs1_sha256;
     //  rsa_pkcs1_sha384(0x0501),
-    case 0x0501: return Parsers_SignatureScheme_Rsa_pkcs1_sha384;
+    case 0x0501: return MiTLS_Parsers_SignatureScheme_Rsa_pkcs1_sha384;
     //  rsa_pkcs1_sha512(0x0601),
-    case 0x0601: return Parsers_SignatureScheme_Rsa_pkcs1_sha512;
+    case 0x0601: return MiTLS_Parsers_SignatureScheme_Rsa_pkcs1_sha512;
     //  rsa_pss_sha256(0x0804),
-    case 0x0804: return Parsers_SignatureScheme_Rsa_pss_rsae_sha256;
+    case 0x0804: return MiTLS_Parsers_SignatureScheme_Rsa_pss_rsae_sha256;
     //  rsa_pss_sha384(0x0805),
-    case 0x0805: return Parsers_SignatureScheme_Rsa_pss_rsae_sha384;
+    case 0x0805: return MiTLS_Parsers_SignatureScheme_Rsa_pss_rsae_sha384;
     //  rsa_pss_sha512(0x0806),
-    case 0x0806: return Parsers_SignatureScheme_Rsa_pss_rsae_sha512;
+    case 0x0806: return MiTLS_Parsers_SignatureScheme_Rsa_pss_rsae_sha512;
     //  ecdsa_sha1(0x0203),
-    case 0x0203: return Parsers_SignatureScheme_Ecdsa_sha1;
+    case 0x0203: return MiTLS_Parsers_SignatureScheme_Ecdsa_sha1;
     //  ecdsa_secp256r1_sha256(0x0403),
-    case 0x0403: return Parsers_SignatureScheme_Ecdsa_secp256r1_sha256;
+    case 0x0403: return MiTLS_Parsers_SignatureScheme_Ecdsa_secp256r1_sha256;
     //  ecdsa_secp384r1_sha384(0x0503),
-    case 0x0503: return Parsers_SignatureScheme_Ecdsa_secp384r1_sha384;
+    case 0x0503: return MiTLS_Parsers_SignatureScheme_Ecdsa_secp384r1_sha384;
     //  ecdsa_secp521r1_sha512(0x0603),
-    case 0x0603: return Parsers_SignatureScheme_Ecdsa_secp521r1_sha512;
+    case 0x0603: return MiTLS_Parsers_SignatureScheme_Ecdsa_secp521r1_sha512;
     //  ed25519(0x0807),
     //  ed448(0x0808),
     default:
@@ -533,32 +533,32 @@ static Parsers_SignatureScheme_signatureScheme_tags tls_of_pki(mitls_signature_s
   }
 }
 
-static mitls_signature_scheme pki_of_tls(Parsers_SignatureScheme_signatureScheme_tags sa)
+static mitls_signature_scheme pki_of_tls(MiTLS_Parsers_SignatureScheme_signatureScheme_tags sa)
 {
   switch(sa)
   {
     //  rsa_pkcs1_sha1(0x0201),
-    case Parsers_SignatureScheme_Rsa_pkcs1_sha1: return 0x0201;
+    case MiTLS_Parsers_SignatureScheme_Rsa_pkcs1_sha1: return 0x0201;
     //  rsa_pkcs1_sha256(0x0401),
-    case Parsers_SignatureScheme_Rsa_pkcs1_sha256: return 0x0401;
+    case MiTLS_Parsers_SignatureScheme_Rsa_pkcs1_sha256: return 0x0401;
     //  rsa_pkcs1_sha384(0x0501),
-    case Parsers_SignatureScheme_Rsa_pkcs1_sha384: return 0x0501;
+    case MiTLS_Parsers_SignatureScheme_Rsa_pkcs1_sha384: return 0x0501;
     //  rsa_pkcs1_sha512(0x0601),
-    case Parsers_SignatureScheme_Rsa_pkcs1_sha512: return 0x0601;
+    case MiTLS_Parsers_SignatureScheme_Rsa_pkcs1_sha512: return 0x0601;
     //  rsa_pss_sha256(0x0804),
-    case Parsers_SignatureScheme_Rsa_pss_rsae_sha256: return 0x0804;
+    case MiTLS_Parsers_SignatureScheme_Rsa_pss_rsae_sha256: return 0x0804;
     //  rsa_pss_sha384(0x0805),
-    case Parsers_SignatureScheme_Rsa_pss_rsae_sha384: return 0x0805;
+    case MiTLS_Parsers_SignatureScheme_Rsa_pss_rsae_sha384: return 0x0805;
     //  rsa_pss_sha512(0x0806),
-    case Parsers_SignatureScheme_Rsa_pss_rsae_sha512: return 0x0806;
+    case MiTLS_Parsers_SignatureScheme_Rsa_pss_rsae_sha512: return 0x0806;
     //  ecdsa_sha1(0x0203),
-    case Parsers_SignatureScheme_Ecdsa_sha1: return 0x0203;
+    case MiTLS_Parsers_SignatureScheme_Ecdsa_sha1: return 0x0203;
     //  ecdsa_secp256r1_sha256(0x0403),
-    case Parsers_SignatureScheme_Ecdsa_secp256r1_sha256: return 0x0403;
+    case MiTLS_Parsers_SignatureScheme_Ecdsa_secp256r1_sha256: return 0x0403;
     //  ecdsa_secp384r1_sha384(0x0503),
-    case Parsers_SignatureScheme_Ecdsa_secp384r1_sha384: return 0x0503;
+    case MiTLS_Parsers_SignatureScheme_Ecdsa_secp384r1_sha384: return 0x0503;
     //  ecdsa_secp521r1_sha512(0x0603),
-    case Parsers_SignatureScheme_Ecdsa_secp521r1_sha512: return 0x0603;
+    case MiTLS_Parsers_SignatureScheme_Ecdsa_secp521r1_sha512: return 0x0603;
     //  ed25519(0x0807), ed448(0x0808),
     default:
       KRML_HOST_PRINTF("pki_of_tls: unsupported (%d)\n", sa);
@@ -566,7 +566,7 @@ static mitls_signature_scheme pki_of_tls(Parsers_SignatureScheme_signatureScheme
   }
 }
 
-static size_t list_sa_len(Parsers_SignatureSchemeList_signatureSchemeList l)
+static size_t list_sa_len(MiTLS_Parsers_SignatureSchemeList_signatureSchemeList l)
 {
   if (l->tag == Prims_Cons)
   {
@@ -575,16 +575,16 @@ static size_t list_sa_len(Parsers_SignatureSchemeList_signatureSchemeList l)
   return 0;
 }
 
-static FStar_Pervasives_Native_option__K___uint64_t_Parsers_SignatureScheme_signatureScheme
-  wrapped_select(FStar_Dyn_dyn cbs, FStar_Dyn_dyn st, Parsers_ProtocolVersion_protocolVersion pv,
+static FStar_Pervasives_Native_option__K___uint64_t_MiTLS_Parsers_SignatureScheme_signatureScheme
+  wrapped_select(FStar_Dyn_dyn cbs, FStar_Dyn_dyn st, MiTLS_Parsers_ProtocolVersion_protocolVersion pv,
     FStar_Bytes_bytes sni, FStar_Bytes_bytes alpn,
-    Parsers_SignatureSchemeList_signatureSchemeList sal)
+    MiTLS_Parsers_SignatureSchemeList_signatureSchemeList sal)
 {
   wrapped_cert_cb* s = (wrapped_cert_cb*)cbs;
   size_t sigalgs_len = list_sa_len(sal);
   mitls_signature_scheme selected;
   mitls_signature_scheme *sigalgs = alloca(sigalgs_len*sizeof(mitls_signature_scheme));
-  Parsers_SignatureSchemeList_signatureSchemeList cur = sal;
+  MiTLS_Parsers_SignatureSchemeList_signatureSchemeList cur = sal;
 
   for(size_t i = 0; i < sigalgs_len; i++)
   {
@@ -592,7 +592,7 @@ static FStar_Pervasives_Native_option__K___uint64_t_Parsers_SignatureScheme_sign
     cur = cur->tl;
   }
 
-  FStar_Pervasives_Native_option__K___uint64_t_Parsers_SignatureScheme_signatureScheme res;
+  FStar_Pervasives_Native_option__K___uint64_t_MiTLS_Parsers_SignatureScheme_signatureScheme res;
   void* chain = s->select(s->cb_state, convert_pv(pv),
     (const unsigned char*)sni.data, sni.length,
     (const unsigned char*)alpn.data, alpn.length,
@@ -601,7 +601,7 @@ static FStar_Pervasives_Native_option__K___uint64_t_Parsers_SignatureScheme_sign
   if(chain == NULL) {
     res.tag = FStar_Pervasives_Native_None;
   } else {
-    K___uint64_t_Parsers_SignatureScheme_signatureScheme sig;
+    K___uint64_t_MiTLS_Parsers_SignatureScheme_signatureScheme sig;
     // silence a GCC warning about sig.snd._0.length possibly uninitialized
     memset(&sig, 0, sizeof(sig));
     res.tag = FStar_Pervasives_Native_Some;
@@ -612,19 +612,19 @@ static FStar_Pervasives_Native_option__K___uint64_t_Parsers_SignatureScheme_sign
   return res;
 }
 
-static TLSConstants_alpn wrapped_format(FStar_Dyn_dyn cbs, FStar_Dyn_dyn st, uint64_t cert)
+static MiTLS_TLSConstants_alpn wrapped_format(FStar_Dyn_dyn cbs, FStar_Dyn_dyn st, uint64_t cert)
 {
   wrapped_cert_cb* s = (wrapped_cert_cb*)cbs;
   unsigned char *buffer = KRML_HOST_MALLOC(MAX_CHAIN_LEN);
   size_t r = s->format(s->cb_state, (const void *)(size_t)cert, buffer);
   FStar_Bytes_bytes b = {.length = r, .data = (const char*)buffer};
-  return FFI_ffiSplitChain(b);
+  return MiTLS_FFI_ffiSplitChain(b);
 }
 
 
 static FStar_Pervasives_Native_option__FStar_Bytes_bytes wrapped_sign(
   FStar_Dyn_dyn cbs, FStar_Dyn_dyn st, uint64_t cert,
-  Parsers_SignatureScheme_signatureScheme sa, FStar_Bytes_bytes tbs)
+  MiTLS_Parsers_SignatureScheme_signatureScheme sa, FStar_Bytes_bytes tbs)
 {
   wrapped_cert_cb* s = (wrapped_cert_cb*)cbs;
   unsigned char* sig = KRML_HOST_MALLOC(MAX_SIGNATURE_LEN);
@@ -643,11 +643,11 @@ static FStar_Pervasives_Native_option__FStar_Bytes_bytes wrapped_sign(
 }
 
 static bool wrapped_verify(FStar_Dyn_dyn cbs, FStar_Dyn_dyn st,
-  TLSConstants_alpn certs, Parsers_SignatureScheme_signatureScheme sa,
+  MiTLS_TLSConstants_alpn certs, MiTLS_Parsers_SignatureScheme_signatureScheme sa,
   FStar_Bytes_bytes tbs, FStar_Bytes_bytes sig)
 {
   wrapped_cert_cb* s = (wrapped_cert_cb*)cbs;
-  FStar_Bytes_bytes chain = Cert_certificateListBytes(certs);
+  FStar_Bytes_bytes chain = MiTLS_Cert_certificateListBytes(certs);
   mitls_signature_scheme sigalg = pki_of_tls(sa.tag);
 
   int r = (s->verify(s->cb_state,
@@ -658,7 +658,7 @@ static bool wrapped_verify(FStar_Dyn_dyn cbs, FStar_Dyn_dyn st,
   return r;
 }
 
-int MITLS_CALLCONV FFI_mitls_configure_cert_callbacks(/* in */ mitls_state *state, void *cb_state, mitls_cert_cb *cert_cb)
+int MITLS_CALLCONV MiTLS_FFI_mitls_configure_cert_callbacks(/* in */ mitls_state *state, void *cb_state, mitls_cert_cb *cert_cb)
 {
   ENTER_HEAP_REGION(state->rgn);
   wrapped_cert_cb* cbs = KRML_HOST_MALLOC(sizeof(wrapped_cert_cb));
@@ -669,7 +669,7 @@ int MITLS_CALLCONV FFI_mitls_configure_cert_callbacks(/* in */ mitls_state *stat
   cbs->sign = cert_cb->sign;
   cbs->verify = cert_cb->verify;
 
-  TLSConstants_cert_cb cb = {
+  MiTLS_TLSConstants_cert_cb cb = {
     .app_context = (void*)cbs,
     .cert_select_ptr = NULL,
     .cert_select_cb = wrapped_select,
@@ -681,7 +681,7 @@ int MITLS_CALLCONV FFI_mitls_configure_cert_callbacks(/* in */ mitls_state *stat
     .cert_verify_cb = wrapped_verify
   };
 
-  state->cfg = FFI_ffiSetCertCallbacks(state->cfg, cb);
+  state->cfg = MiTLS_FFI_ffiSetCertCallbacks(state->cfg, cb);
   LEAVE_HEAP_REGION();
   if (HAD_OUT_OF_MEMORY) {
     return 0;
@@ -689,10 +689,10 @@ int MITLS_CALLCONV FFI_mitls_configure_cert_callbacks(/* in */ mitls_state *stat
   return 1;
 }
 
-int MITLS_CALLCONV FFI_mitls_configure_early_data(/* in */ mitls_state *state, uint32_t max_early_data)
+int MITLS_CALLCONV MiTLS_FFI_mitls_configure_early_data(/* in */ mitls_state *state, uint32_t max_early_data)
 {
     ENTER_HEAP_REGION(state->rgn);
-    state->cfg = FFI_ffiSetEarlyData(state->cfg, max_early_data);
+    state->cfg = MiTLS_FFI_ffiSetEarlyData(state->cfg, max_early_data);
     LEAVE_HEAP_REGION();
     if (HAD_OUT_OF_MEMORY) {
         return 0;
@@ -700,8 +700,8 @@ int MITLS_CALLCONV FFI_mitls_configure_early_data(/* in */ mitls_state *state, u
     return 1;
 }
 
-// Called by the host app to free a mitls_state allocated by FFI_mitls_configure()
-void MITLS_CALLCONV FFI_mitls_close(mitls_state *state)
+// Called by the host app to free a mitls_state allocated by MiTLS_FFI_mitls_configure()
+void MITLS_CALLCONV MiTLS_FFI_mitls_close(mitls_state *state)
 {
     if (state) {
         HEAP_REGION rgn = state->rgn;
@@ -710,7 +710,7 @@ void MITLS_CALLCONV FFI_mitls_close(mitls_state *state)
     }
 }
 
-void MITLS_CALLCONV FFI_mitls_free(/* in */ mitls_state *state, void* pv)
+void MITLS_CALLCONV MiTLS_FFI_mitls_free(/* in */ mitls_state *state, void* pv)
 {
     ENTER_HEAP_REGION(state->rgn);
     KRML_HOST_FREE(pv);
@@ -736,7 +736,7 @@ static int32_t wrapped_recv(void* ctx, uint8_t* buffer, uint32_t len)
 }
 
 // Called by the host app to create a TLS connection.
-int MITLS_CALLCONV FFI_mitls_connect(void *send_recv_ctx, pfn_FFI_send psend, pfn_FFI_recv precv, /* in */ mitls_state *state)
+int MITLS_CALLCONV MiTLS_FFI_mitls_connect(void *send_recv_ctx, pfn_FFI_send psend, pfn_FFI_recv precv, /* in */ mitls_state *state)
 {
     int ret = 0;
     LOCK_MUTEX(&lock);
@@ -747,7 +747,7 @@ int MITLS_CALLCONV FFI_mitls_connect(void *send_recv_ctx, pfn_FFI_send psend, pf
     tcb->send = psend;
     tcb->recv = precv;
 
-    K___Connection_connection_krml_checked_int_t result = FFI_connect((FStar_Dyn_dyn)tcb, wrapped_send, wrapped_recv, state->cfg);
+    K___MiTLS_Connection_connection_krml_checked_int_t result = MiTLS_FFI_connect((FStar_Dyn_dyn)tcb, wrapped_send, wrapped_recv, state->cfg);
     state->cxn = result.fst;
     ret = (result.snd == 0);
 
@@ -760,7 +760,7 @@ int MITLS_CALLCONV FFI_mitls_connect(void *send_recv_ctx, pfn_FFI_send psend, pf
 }
 
 // Called by the host server app, after a client has connected to a socket and the calling server has accepted the TCP connection.
-int MITLS_CALLCONV FFI_mitls_accept_connected(void *send_recv_ctx, pfn_FFI_send psend, pfn_FFI_recv precv, /* in */ mitls_state *state)
+int MITLS_CALLCONV MiTLS_FFI_mitls_accept_connected(void *send_recv_ctx, pfn_FFI_send psend, pfn_FFI_recv precv, /* in */ mitls_state *state)
 {
     int ret = 0;
     LOCK_MUTEX(&lock);
@@ -771,7 +771,7 @@ int MITLS_CALLCONV FFI_mitls_accept_connected(void *send_recv_ctx, pfn_FFI_send 
     tcb->send = psend;
     tcb->recv = precv;
 
-    K___Connection_connection_krml_checked_int_t result = FFI_ffiAcceptConnected((FStar_Dyn_dyn)tcb, wrapped_send, wrapped_recv, state->cfg);
+    K___MiTLS_Connection_connection_krml_checked_int_t result = MiTLS_FFI_ffiAcceptConnected((FStar_Dyn_dyn)tcb, wrapped_send, wrapped_recv, state->cfg);
     state->cxn = result.fst;
     ret = (result.snd == 0) ? 1 : 0; // return success (1) if result.snd is 0.
 
@@ -784,13 +784,13 @@ int MITLS_CALLCONV FFI_mitls_accept_connected(void *send_recv_ctx, pfn_FFI_send 
 }
 
 // Called by the host app transmit a packet
-int MITLS_CALLCONV FFI_mitls_send(/* in */ mitls_state *state, const unsigned char *buffer, size_t buffer_size)
+int MITLS_CALLCONV MiTLS_FFI_mitls_send(/* in */ mitls_state *state, const unsigned char *buffer, size_t buffer_size)
 {
     int ret;
 
     ENTER_HEAP_REGION(state->rgn);
     LOCK_MUTEX(&lock);
-    ret = FFI_ffiSend(state->cxn, (FStar_Bytes_bytes){.data = (const char*)buffer, .length = buffer_size});
+    ret = MiTLS_FFI_ffiSend(state->cxn, (FStar_Bytes_bytes){.data = (const char*)buffer, .length = buffer_size});
     UNLOCK_MUTEX(&lock);
     LEAVE_HEAP_REGION();
     if (HAD_OUT_OF_MEMORY) {
@@ -801,7 +801,7 @@ int MITLS_CALLCONV FFI_mitls_send(/* in */ mitls_state *state, const unsigned ch
 }
 
 // Called by the host app to receive a packet
-unsigned char *MITLS_CALLCONV FFI_mitls_receive(/* in */ mitls_state *state, /* out */ size_t *packet_size)
+unsigned char *MITLS_CALLCONV MiTLS_FFI_mitls_receive(/* in */ mitls_state *state, /* out */ size_t *packet_size)
 {
     unsigned char *p = NULL;
     FStar_Bytes_bytes ret = {.data=NULL,.length=0};
@@ -810,7 +810,7 @@ unsigned char *MITLS_CALLCONV FFI_mitls_receive(/* in */ mitls_state *state, /* 
     LOCK_MUTEX(&lock);
     ENTER_HEAP_REGION(state->rgn);
 
-    ret = FFI_ffiRecv(state->cxn);
+    ret = MiTLS_FFI_ffiRecv(state->cxn);
     if (ret.length) {
       p = KRML_HOST_MALLOC(ret.length);
       memcpy((char*)p, ret.data, ret.length);
@@ -824,11 +824,11 @@ unsigned char *MITLS_CALLCONV FFI_mitls_receive(/* in */ mitls_state *state, /* 
     return p;
 }
 
-static int get_exporter(Connection_connection cxn, int early, /* out */ mitls_secret *secret)
+static int get_exporter(MiTLS_Connection_connection cxn, int early, /* out */ mitls_secret *secret)
 {
-  FStar_Pervasives_Native_option__Spec_Hash_Definitions_hash_alg___EverCrypt_aead_alg___FStar_Bytes_bytes ret;
+  FStar_Pervasives_Native_option__Spec_Hash_Definitions_hash_alg___MiTLS_EverCrypt_aead_alg___FStar_Bytes_bytes ret;
 
-  ret = FFI_ffiGetExporter(cxn, (early) ? true : false);
+  ret = MiTLS_FFI_ffiGetExporter(cxn, (early) ? true : false);
   if (ret.tag != FStar_Pervasives_Native_Some) {
      KRML_HOST_PRINTF("the requested secret is not yet available");
      return 0;
@@ -845,7 +845,7 @@ static int get_exporter(Connection_connection cxn, int early, /* out */ mitls_se
 }
 
 
-int MITLS_CALLCONV FFI_mitls_get_exporter(/* in */ mitls_state *state, int early, /* out */ mitls_secret *secret)
+int MITLS_CALLCONV MiTLS_FFI_mitls_get_exporter(/* in */ mitls_state *state, int early, /* out */ mitls_secret *secret)
 {
   int ret=0;
   ENTER_HEAP_REGION(state->rgn);
@@ -857,11 +857,11 @@ int MITLS_CALLCONV FFI_mitls_get_exporter(/* in */ mitls_state *state, int early
   return ret;
 }
 
-void *MITLS_CALLCONV FFI_mitls_get_cert(/* in */ mitls_state *state, /* out */ size_t *cert_size)
+void *MITLS_CALLCONV MiTLS_FFI_mitls_get_cert(/* in */ mitls_state *state, /* out */ size_t *cert_size)
 {
     FStar_Bytes_bytes ret = {.length = 0, .data = NULL};
     ENTER_HEAP_REGION(state->rgn);
-    ret = FFI_getCert(state->cxn);
+    ret = MiTLS_FFI_getCert(state->cxn);
     *cert_size = ret.length;
     LEAVE_HEAP_REGION();
     if (HAD_OUT_OF_MEMORY) {
@@ -879,35 +879,35 @@ typedef struct quic_state {
    uint8_t is_server;
    uint8_t is_complete;
    uint8_t is_post_hs;
-   Old_Handshake_hs hs;
+   MiTLS_Old_Handshake_hs hs;
 } quic_state;
 
-static TLSConstants_config quic_set_config(TLSConstants_config c0, const quic_config *cfg)
+static MiTLS_TLSConstants_config quic_set_config(MiTLS_TLSConstants_config c0, const quic_config *cfg)
 {
-    TLSConstants_config c = c0;
+    MiTLS_TLSConstants_config c = c0;
 
     if(cfg->enable_0rtt) {
-      c = FFI_ffiSetEarlyData(c, 0xffffffff);
+      c = MiTLS_FFI_ffiSetEarlyData(c, 0xffffffff);
     }
  
     if (cfg->cipher_suites) {
        Prims_string str = CopyPrimsString(cfg->cipher_suites);
-       c = FFI_ffiSetCipherSuites(c, str);
+       c = MiTLS_FFI_ffiSetCipherSuites(c, str);
     }
 
     if (cfg->named_groups) {
        Prims_string str = CopyPrimsString(cfg->named_groups);
-       c = FFI_ffiSetNamedGroups(c, str);
+       c = MiTLS_FFI_ffiSetNamedGroups(c, str);
     }
 
     if (cfg->signature_algorithms) {
        Prims_string str = CopyPrimsString(cfg->signature_algorithms);
-       c = FFI_ffiSetSignatureAlgorithms(c, str);
+       c = MiTLS_FFI_ffiSetSignatureAlgorithms(c, str);
     }
 
     if (cfg->alpn) {
-       TLSConstants_alpn apl = alpn_list_of_array(cfg->alpn, cfg->alpn_count);
-       c = FFI_ffiSetALPN(c, apl);
+       MiTLS_TLSConstants_alpn apl = alpn_list_of_array(cfg->alpn, cfg->alpn_count);
+       c = MiTLS_FFI_ffiSetALPN(c, apl);
     }
 
     if(cfg->exts != NULL && cfg->exts_count > 0)
@@ -917,7 +917,7 @@ static TLSConstants_config quic_set_config(TLSConstants_config c0, const quic_co
       {
         char *ext = KRML_HOST_MALLOC(cur->ext_data_len);
         memcpy(ext, cur->ext_data, cur->ext_data_len);
-        c = FFI_ffiAddCustomExtension(c, cur->ext_type,
+        c = MiTLS_FFI_ffiAddCustomExtension(c, cur->ext_type,
           (FStar_Bytes_bytes){.data = ext, .length = cur->ext_data_len});
       }
     }
@@ -927,7 +927,7 @@ static TLSConstants_config quic_set_config(TLSConstants_config c0, const quic_co
         bool b;
         MakeFStar_Bytes_bytes(&key, cfg->ticket_key, cfg->ticket_key_len);
         LOCK_MUTEX(&lock);
-        FFI_ffiSetTicketKey(cfg->ticket_enc_alg, key);
+        MiTLS_FFI_ffiSetTicketKey(cfg->ticket_enc_alg, key);
         UNLOCK_MUTEX(&lock);
     }
 
@@ -935,21 +935,21 @@ static TLSConstants_config quic_set_config(TLSConstants_config c0, const quic_co
       FStar_Bytes_bytes tid, si;
       MakeFStar_Bytes_bytes(&tid, cfg->server_ticket->ticket, cfg->server_ticket->ticket_len);
       MakeFStar_Bytes_bytes(&si, cfg->server_ticket->session, cfg->server_ticket->session_len);
-      c = FFI_ffiSetTicket(c, tid, si);
+      c = MiTLS_FFI_ffiSetTicket(c, tid, si);
     }
 
     if (cfg->ticket_callback) {
       wrapped_ticket_cb *cbs = KRML_HOST_MALLOC(sizeof(wrapped_ticket_cb));
       cbs->cb_state = cfg->callback_state;
       cbs->cb = cfg->ticket_callback;
-      c = FFI_ffiSetTicketCallback(c, (void*)cbs, ticket_cb_proxy);
+      c = MiTLS_FFI_ffiSetTicketCallback(c, (void*)cbs, ticket_cb_proxy);
     }
 
     if (cfg->nego_callback) {
       wrapped_nego_cb *cbs = KRML_HOST_MALLOC(sizeof(wrapped_nego_cb));
       cbs->cb_state = cfg->callback_state;
       cbs->cb = cfg->nego_callback;
-      c = FFI_ffiSetNegoCallback(c, (void*)cbs, nego_cb_proxy);
+      c = MiTLS_FFI_ffiSetNegoCallback(c, (void*)cbs, nego_cb_proxy);
     }
 
     if(cfg->cert_callbacks) {
@@ -961,7 +961,7 @@ static TLSConstants_config quic_set_config(TLSConstants_config c0, const quic_co
       cbs->sign = cfg->cert_callbacks->sign;
       cbs->verify = cfg->cert_callbacks->verify;
 
-      TLSConstants_cert_cb cb = {
+      MiTLS_TLSConstants_cert_cb cb = {
         .app_context = (void*)cbs,
         .cert_select_ptr = NULL,
         .cert_select_cb = wrapped_select,
@@ -973,13 +973,13 @@ static TLSConstants_config quic_set_config(TLSConstants_config c0, const quic_co
         .cert_verify_cb = wrapped_verify
       };
 
-      c = FFI_ffiSetCertCallbacks(c, cb);
+      c = MiTLS_FFI_ffiSetCertCallbacks(c, cb);
     }
 
     return c;
 }
 
-int MITLS_CALLCONV FFI_mitls_quic_create(quic_state **state, const quic_config *cfg)
+int MITLS_CALLCONV MiTLS_FFI_mitls_quic_create(quic_state **state, const quic_config *cfg)
 {
     quic_state* st = NULL;
     *state = NULL;
@@ -995,10 +995,10 @@ int MITLS_CALLCONV FFI_mitls_quic_create(quic_state **state, const quic_config *
     st->is_server = cfg->is_server;
 
     Prims_string host_name = CopyPrimsString(cfg->host_name != NULL ? cfg->host_name : "");
-    TLSConstants_config config = QUIC_ffiConfig((FStar_Bytes_bytes){.data=host_name,.length=strlen(host_name)});
+    MiTLS_TLSConstants_config config = MiTLS_QUIC_ffiConfig((FStar_Bytes_bytes){.data=host_name,.length=strlen(host_name)});
     
     config = quic_set_config(config, cfg);
-    st->hs = QUIC_create_hs(st->is_server, config);
+    st->hs = MiTLS_QUIC_create_hs(st->is_server, config);
 
     LEAVE_HEAP_REGION();
     if (HAD_OUT_OF_MEMORY || st == NULL) {
@@ -1014,24 +1014,24 @@ int MITLS_CALLCONV FFI_mitls_quic_create(quic_state **state, const quic_config *
 #ifdef _KERNEL_MODE
 typedef struct {
     quic_state *state;
-    QUIC_hs_in *in;
-    QUIC_hs_result *r;
+    MiTLS_QUIC_hs_in *in;
+    MiTLS_QUIC_hs_result *r;
 } quic_process_state;
 
 static VOID quic_process_callout(PVOID Parameter)
 {
     quic_process_state *s = (quic_process_state*)Parameter;
-    *s->r = QUIC_process_hs(s->state->hs, *s->in);
+    *s->r = MiTLS_QUIC_process_hs(s->state->hs, *s->in);
 }
 #endif
 
-int MITLS_CALLCONV FFI_mitls_quic_process(quic_state *st, quic_process_ctx *ctx)
+int MITLS_CALLCONV MiTLS_FFI_mitls_quic_process(quic_state *st, quic_process_ctx *ctx)
 {
   int r = 0;
   ENTER_HEAP_REGION(st->rgn);
   unsigned char z = 0;
   
-  QUIC_hs_in in;
+  MiTLS_QUIC_hs_in in;
   in.input = (FStar_Bytes_bytes){
     .data = (char*)(ctx->input == NULL ? &z : ctx->input),
     .length = ctx->input_len
@@ -1039,7 +1039,7 @@ int MITLS_CALLCONV FFI_mitls_quic_process(quic_state *st, quic_process_ctx *ctx)
   in.max_output = ctx->output_len;  
 
 #ifdef _KERNEL_MODE
-  QUIC_hs_result res;
+  MiTLS_QUIC_hs_result res;
   quic_process_state s = {.state = st, .in = &in, .r = &res };
   NTSTATUS status = KeExpandKernelStackAndCallout(quic_process_callout, &s, MAXIMUM_EXPANSION_SIZE);
   
@@ -1049,13 +1049,13 @@ int MITLS_CALLCONV FFI_mitls_quic_process(quic_state *st, quic_process_ctx *ctx)
     return 0;
   }
 #else
-  QUIC_hs_result res = QUIC_process_hs(st->hs, in);
+  MiTLS_QUIC_hs_result res = MiTLS_QUIC_process_hs(st->hs, in);
 #endif
 
   ctx->flags = 0;
-  if(res.tag == QUIC_HS_SUCCESS)
+  if(res.tag == MiTLS_QUIC_HS_SUCCESS)
   {
-    QUIC_hs_out out = res.val.case_HS_SUCCESS;
+    MiTLS_QUIC_hs_out out = res.val.case_HS_SUCCESS;
     ctx->consumed_bytes = out.consumed;
     ctx->to_be_written = out.to_be_written;
     ctx->output_len = out.output.length;
@@ -1075,7 +1075,7 @@ int MITLS_CALLCONV FFI_mitls_quic_process(quic_state *st, quic_process_ctx *ctx)
     ctx->consumed_bytes = 0;
   }
 
-  K___Prims_int_Prims_int epochs = QUIC_get_epochs(st->hs);
+  K___Prims_int_Prims_int epochs = MiTLS_QUIC_get_epochs(st->hs);
   ctx->cur_reader_key = epochs.fst;
   ctx->cur_writer_key = epochs.snd;
   if(st->is_complete) ctx->flags |= QFLAG_COMPLETE;
@@ -1085,17 +1085,17 @@ int MITLS_CALLCONV FFI_mitls_quic_process(quic_state *st, quic_process_ctx *ctx)
   return r;
 }
 
-int MITLS_CALLCONV FFI_mitls_quic_get_record_key(quic_state *st, quic_raw_key *key, int32_t epoch, quic_direction rw)
+int MITLS_CALLCONV MiTLS_FFI_mitls_quic_get_record_key(quic_state *st, quic_raw_key *key, int32_t epoch, quic_direction rw)
 {
   int res = 0;
-  FStar_Pervasives_Native_option__QUIC_raw_key r;
+  FStar_Pervasives_Native_option__MiTLS_QUIC_raw_key r;
   
   ENTER_HEAP_REGION(st->rgn);
-  r = QUIC_get_key(st->hs, epoch, (int)rw);
+  r = MiTLS_QUIC_get_key(st->hs, epoch, (int)rw);
   
   if(r.tag == FStar_Pervasives_Native_Some)
   {
-    QUIC_raw_key k = r.v;
+    MiTLS_QUIC_raw_key k = r.v;
     key->alg = CONVERT_AEAD(k.alg);
     memcpy(key->aead_key, k.aead_key.data, k.aead_key.length);
     memcpy(key->aead_iv, k.aead_iv.data, k.aead_iv.length);
@@ -1107,17 +1107,17 @@ int MITLS_CALLCONV FFI_mitls_quic_get_record_key(quic_state *st, quic_raw_key *k
   return res;
 }
 
-int MITLS_CALLCONV FFI_mitls_quic_get_record_secrets(quic_state *st, quic_secret *crs, quic_secret *srs)
+int MITLS_CALLCONV MiTLS_FFI_mitls_quic_get_record_secrets(quic_state *st, quic_secret *crs, quic_secret *srs)
 {
   int res = 0;
-  FStar_Pervasives_Native_option__Old_KeySchedule_raw_rekey_secrets r;
+  FStar_Pervasives_Native_option__MiTLS_Old_KeySchedule_raw_rekey_secrets r;
   
   ENTER_HEAP_REGION(st->rgn);
-  r = QUIC_get_secrets(st->hs);
+  r = MiTLS_QUIC_get_secrets(st->hs);
   
   if(r.tag == FStar_Pervasives_Native_Some)
   {
-    Old_KeySchedule_raw_rekey_secrets s = r.v;
+    MiTLS_Old_KeySchedule_raw_rekey_secrets s = r.v;
     srs->ae = crs->ae = CONVERT_AEAD(s.rekey_aead);
     srs->hash = crs->hash = CONVERT_HASH(s.rekey_hash);
     memcpy(crs->secret, s.rekey_client.data, s.rekey_client.length);
@@ -1129,7 +1129,7 @@ int MITLS_CALLCONV FFI_mitls_quic_get_record_secrets(quic_state *st, quic_secret
   return res;
 }
 
-int MITLS_CALLCONV FFI_mitls_quic_send_ticket(quic_state *st, const unsigned char *ticket_data, size_t ticket_data_len)
+int MITLS_CALLCONV MiTLS_FFI_mitls_quic_send_ticket(quic_state *st, const unsigned char *ticket_data, size_t ticket_data_len)
 {
   int r = 0;
   ENTER_HEAP_REGION(st->rgn);
@@ -1138,12 +1138,12 @@ int MITLS_CALLCONV FFI_mitls_quic_send_ticket(quic_state *st, const unsigned cha
    .length = ticket_data_len
   };
   memcpy((unsigned char*)data.data, ticket_data, ticket_data_len);
-  r = QUIC_send_ticket(st->hs, data);
+  r = MiTLS_QUIC_send_ticket(st->hs, data);
   LEAVE_HEAP_REGION();
   return r;
 }
 
-void MITLS_CALLCONV FFI_mitls_quic_free(quic_state *state)
+void MITLS_CALLCONV MiTLS_FFI_mitls_quic_free(quic_state *state)
 {
     HEAP_REGION rgn = state->rgn;
     ENTER_HEAP_REGION(state->rgn);
@@ -1153,7 +1153,7 @@ void MITLS_CALLCONV FFI_mitls_quic_free(quic_state *state)
 }
 
 
-static const unsigned char *FFI_mitls_memmem(
+static const unsigned char *MiTLS_FFI_mitls_memmem(
   const unsigned char *b, size_t blen,
   const unsigned char *search, size_t slen)
 {
@@ -1168,7 +1168,7 @@ static const unsigned char *FFI_mitls_memmem(
 	return NULL;
 }
 
-int MITLS_CALLCONV FFI_mitls_get_hello_summary(
+int MITLS_CALLCONV MiTLS_FFI_mitls_get_hello_summary(
   const unsigned char *buffer, size_t buffer_len,
   int has_record, mitls_hello_summary *summary,
   unsigned char **cookie, size_t *cookie_len,
@@ -1176,7 +1176,7 @@ int MITLS_CALLCONV FFI_mitls_get_hello_summary(
 {
   HEAP_REGION rgn;
   int ret = 0;
-  FStar_Pervasives_Native_option__QUIC_chSummary ch;
+  FStar_Pervasives_Native_option__MiTLS_QUIC_chSummary ch;
 
   *cookie = NULL; *cookie_len = 0;
   *ticket_data = NULL; *ticket_data_len = 0;
@@ -1188,21 +1188,21 @@ int MITLS_CALLCONV FFI_mitls_get_hello_summary(
   }
 
   FStar_Bytes_bytes b = {.data = (const char*)buffer, .length = buffer_len};
-  ch = QUIC_peekClientHello(b, has_record);
+  ch = MiTLS_QUIC_peekClientHello(b, has_record);
 
   memset(summary, 0, sizeof(mitls_hello_summary));
   if(ch.tag == FStar_Pervasives_Native_Some)
   {
-    QUIC_chSummary s = ch.v;
-    summary->sni = FFI_mitls_memmem(buffer, buffer_len,
+    MiTLS_QUIC_chSummary s = ch.v;
+    summary->sni = MiTLS_FFI_mitls_memmem(buffer, buffer_len,
       (const unsigned char*)s.ch_sni.data, s.ch_sni.length);
     summary->sni_len = s.ch_sni.length;
 
-    summary->alpn = FFI_mitls_memmem(buffer, buffer_len,
+    summary->alpn = MiTLS_FFI_mitls_memmem(buffer, buffer_len,
       (const unsigned char*)s.ch_alpn.data, s.ch_alpn.length);
     summary->alpn_len = s.ch_alpn.length;
 
-    summary->extensions = FFI_mitls_memmem(buffer, buffer_len,
+    summary->extensions = MiTLS_FFI_mitls_memmem(buffer, buffer_len,
       (const unsigned char*)s.ch_extensions.data, s.ch_extensions.length);
     summary->extensions_len = s.ch_extensions.length;
     ret = 1;
@@ -1231,7 +1231,7 @@ int MITLS_CALLCONV FFI_mitls_get_hello_summary(
   return ret;
 }
 
-int MITLS_CALLCONV FFI_mitls_find_custom_extension(int is_server, const unsigned char *exts, size_t exts_len, uint16_t ext_type, unsigned char **ext_data, size_t *ext_data_len)
+int MITLS_CALLCONV MiTLS_FFI_mitls_find_custom_extension(int is_server, const unsigned char *exts, size_t exts_len, uint16_t ext_type, unsigned char **ext_data, size_t *ext_data_len)
 {
   HEAP_REGION rgn;
   int ret = 0;
@@ -1243,13 +1243,13 @@ int MITLS_CALLCONV FFI_mitls_find_custom_extension(int is_server, const unsigned
 
   FStar_Bytes_bytes b = {.data = (const char*)exts, .length = exts_len};
   FStar_Pervasives_Native_option__FStar_Bytes_bytes ob;
-  ob = FFI_ffiFindCustomExtension((bool)is_server, b, ext_type);
+  ob = MiTLS_FFI_ffiFindCustomExtension((bool)is_server, b, ext_type);
 
   *ext_data = NULL; *ext_data_len = 0;
   if(ob.tag == FStar_Pervasives_Native_Some)
   {
     *ext_data_len = ob.v.length;
-    *ext_data = (unsigned char*)FFI_mitls_memmem(exts, exts_len, (const unsigned char*)ob.v.data, *ext_data_len);
+    *ext_data = (unsigned char*)MiTLS_FFI_mitls_memmem(exts, exts_len, (const unsigned char*)ob.v.data, *ext_data_len);
     ret = 1;
   }
 
@@ -1262,7 +1262,7 @@ int MITLS_CALLCONV FFI_mitls_find_custom_extension(int is_server, const unsigned
   return ret;
 }
 
-extern void MITLS_CALLCONV FFI_mitls_global_free(void* pv)
+extern void MITLS_CALLCONV MiTLS_FFI_mitls_global_free(void* pv)
 {
   ENTER_GLOBAL_HEAP_REGION();
   KRML_HOST_FREE(pv);

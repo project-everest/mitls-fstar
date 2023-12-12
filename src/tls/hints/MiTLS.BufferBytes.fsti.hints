@@ -1,0 +1,62 @@
+[
+  "τ\u0011φai€\u0016£0ψ\u0007Γιρ•ª",
+  [
+    [
+      "MiTLS.BufferBytes.to_bytes",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption",
+        "@fuel_correspondence_Prims.pow2.fuel_instrumented", "@query",
+        "b2t_def", "equation_FStar.Buffer.length",
+        "equation_FStar.UInt.fits", "equation_FStar.UInt.max_int",
+        "equation_FStar.UInt.size", "equation_FStar.UInt.uint_t",
+        "equation_MiTLS.BufferBytes.lbuffer", "primitive_Prims.op_AmpAmp",
+        "primitive_Prims.op_LessThanOrEqual",
+        "primitive_Prims.op_Subtraction",
+        "projection_inverse_BoxBool_proj_0",
+        "projection_inverse_BoxInt_proj_0",
+        "refinement_interpretation_Tm_refine_71ea40360194fe02ee1272538c9cacbc",
+        "refinement_interpretation_Tm_refine_ece308b486f56272505513c516f4b89a",
+        "refinement_interpretation_Tm_refine_f13070840248fced9d9d60d77bdae3ec",
+        "typing_FStar.Bytes.len", "typing_FStar.UInt32.v"
+      ],
+      0,
+      "890b3468baf1c5dd06cdede3782fb3d4"
+    ],
+    [
+      "MiTLS.BufferBytes.store_bytes",
+      1,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "55706f609661fffb69f14d9158b69830"
+    ],
+    [
+      "MiTLS.BufferBytes.from_bytes",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "equation_FStar.UInt.fits",
+        "equation_FStar.UInt.max_int", "equation_MiTLS.BufferBytes.lbuffer",
+        "equation_Prims.eqtype", "equation_Prims.nat",
+        "lemma_FStar.Bytes.length_reveal", "primitive_Prims.op_AmpAmp",
+        "primitive_Prims.op_LessThanOrEqual",
+        "primitive_Prims.op_Subtraction",
+        "projection_inverse_BoxBool_proj_0",
+        "projection_inverse_BoxInt_proj_0",
+        "refinement_interpretation_Tm_refine_414d0a9f578ab0048252f8c8f552b99f",
+        "refinement_interpretation_Tm_refine_4f26bbfb64075f9d6470c558e28cdc27",
+        "refinement_interpretation_Tm_refine_542f9d4f129664613f2483a6c88bc7c2",
+        "refinement_interpretation_Tm_refine_ece308b486f56272505513c516f4b89a",
+        "typing_FStar.Bytes.reveal", "typing_FStar.Seq.Base.length",
+        "typing_FStar.UInt8.t"
+      ],
+      0,
+      "2bdaf4d2507f2c0176bc6dfdfc8aa912"
+    ]
+  ]
+]
