@@ -2,33 +2,22 @@
 
 open MiTLS.Hashing.Spec // for the algorithm names, instead of CoreCrypt
 open MiTLS.Mem
+friend Lib.IntTypes
 
 open FStar.HyperStack.ST
 
 #set-options "--max_fuel 0 --max_ifuel 0 --z3rlimit 20"
 
-let ha = a:EverCrypt.HMAC.supported_alg{Spec.Hash.Definitions.is_md a}
-
 (* Parametric keyed HMAC; could be coded up from two HASH calls. *)
-
-val hmac:
-  a:ha ->
-  k:hkey a ->
-  m:macable a ->
-  Stack (tag a)
-  (requires fun h0 -> True)
-  (ensures fun h0 t h1 ->
-    modifies_none h0 h1 /\
-    t = Hashing.Spec.hmac a k m)
 
 let hmac a k m =
   let h00 = get() in
   push_frame();
   let lt = Hacl.Hash.Definitions.hash_len a in
   let lk = Bytes.len k in
-  let bk: Bytes.lbuffer lk = LowStar.Buffer.alloca 0uy lk in
+  let bk = LowStar.Buffer.alloca 0uy lk in
   Bytes.store_bytes k bk;
-  let bt: Bytes.lbuffer lt = LowStar.Buffer.alloca 0uy lt in
+  let bt = LowStar.Buffer.alloca 0uy lt in
   let lm = Bytes.len m in
 
   if lm = 0ul then (
@@ -60,10 +49,6 @@ let hmac a k m =
   t
 
 //18-09-02 TODO lower code to avoid bytes-allocating the tag.
-
-val hmacVerify: a:ha -> k:hkey a -> m:macable a -> t: tag a -> ST (b:bool {b <==> (t == Hashing.Spec.hmac a k m)})
-  (requires (fun h0 -> True))
-  (ensures (fun h0 t h1 -> FStar.HyperStack.modifies Set.empty h0 h1))
 
 let hmacVerify a k p t =
   let result = hmac a k p in
@@ -112,28 +97,3 @@ let sslKeyedHashVerify a k p t =
     let res = sslKeyedHash a k p in
     res=t
 *)
-
-(*** Old TLS 1.2 HMAC ***)
-
-/// Agile bytes-friendly MAC function
-
-type macable = b:Bytes.bytes {Bytes.length b + 128 < pow2 32} // [==> pre of hmac for all algorithms]
-
-val tls_mac: a:
-  tls_macAlg ->
-  k: hkey a  ->
-  msg:macable ->
-  ST (tag a)
-  (requires fun h0 -> True)
-  (ensures fun h0 t h1 -> FStar.HyperStack.modifies Set.empty h0 h1)
-let tls_mac a k msg  = hmac a k msg
-
-val tls_macVerify:
-  a:tls_macAlg ->
-  k: hkey a  ->
-  msg:macable ->
-  tag a ->
-  ST bool
-  (requires fun h0 -> True)
-  (ensures (fun h0 t h1 -> FStar.HyperStack.modifies Set.empty h0 h1))
-let tls_macVerify a k d t = hmacVerify a k d t

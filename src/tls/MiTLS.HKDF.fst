@@ -3,6 +3,8 @@ TLS 1.3 HKDF extract and expand constructions, parametrized by their hash algori
 *)
 module MiTLS.HKDF
 open MiTLS
+open MiTLS.Declassify
+friend Lib.IntTypes
 
 open MiTLS.Mem
 
@@ -31,18 +33,6 @@ HKDF-Extract(salt, IKM) -> PRK
    PRK = HMAC-Hash(salt, IKM)
 *)
 
-inline_for_extraction
-val extract:
-  #ha: Hashing.Spec.tls_macAlg ->
-  salt: hkey ha ->
-  ikm: macable ha ->
-  ST (hkey ha)
-  (requires (fun h0 -> True))
-  (ensures (fun h0 t h1 -> FStar.HyperStack.modifies Set.empty h0 h1))
-
-inline_for_extraction
-let extract #ha salt ikm = HMAC.hmac ha salt ikm
-
 (*-------------------------------------------------------------------*)
 (*
 HKDF-Expand(PRK, info, L) -> OKM
@@ -70,22 +60,14 @@ HKDF-Expand(PRK, info, L) -> OKM
    ...
 *)
 
-assume val expand_spec:
+assume val expand_spec':
   #ha:Hashing.alg ->
   prk: Hashing.Spec.tag ha ->
   info: bytes {Bytes.length info < 1024 (* somewhat arbitrary *) } ->
   len: UInt32.t {0 < v len /\ v len <= op_Multiply 255 (hash_length ha)} ->
   GTot (lbytes32 len)
 
-val expand:
-  #ha:Hashing.Spec.tls_macAlg ->
-  prk: lbytes (Spec.Hash.Definitions.hash_length ha) ->
-  info: bytes {Bytes.length info < 1024 (* somewhat arbitrary *) } ->
-  len: UInt32.t {0 < v len /\ v len <= op_Multiply 255 (hash_length ha)} ->
-  ST (lbytes32 len)
-  (requires (fun h0 -> True))
-  (ensures (fun h0 t h1 -> modifies_none h0 h1 /\
-    t == expand_spec #ha prk info len))
+let expand_spec = expand_spec'
 
 #set-options "--z3rlimit 100" 
 let expand #ha prk info len =
@@ -96,7 +78,7 @@ let expand #ha prk info len =
   store_bytes prk prk_p;
   assert_norm(Spec.Agile.HMAC.keysized ha (Spec.Hash.Definitions.hash_length ha));
 
-  let tag_p: Bytes.lbuffer len = LowStar.Buffer.alloca 0uy len in
+  let tag_p = LowStar.Buffer.alloca 0uy len in
   let infolen = Bytes.len info in
 
   if infolen = 0ul then (
@@ -242,15 +224,6 @@ let format ha label digest len =
 
 /// used for computing all derived keys; 
 
-val expand_label:
-  #ha: Hashing.Spec.tls_macAlg ->
-  secret: lbytes (Spec.Hash.Definitions.hash_length ha) ->
-  label: string{length (bytes_of_string label) < 256 - 6} -> // -9?
-  hv: bytes{length hv < 256} ->
-  len: UInt32.t {0 < v len /\ v len <= op_Multiply 255 (hash_length ha)} ->
-  ST (lbytes32 len)
-  (requires (fun h0 -> True))
-  (ensures (fun h0 t h1 -> modifies_none h0 h1))
 
 let expand_label #ha secret label digest len =
   let info = format ha label digest len in
@@ -264,15 +237,6 @@ let expand_label #ha secret label digest len =
 *)
 
 /// used in both hanshakes for deriving intermediate HKDF keys.
-
-val derive_secret:
-  ha: Hashing.Spec.tls_macAlg ->
-  secret: lbytes (Spec.Hash.Definitions.hash_length ha) ->
-  label: string{length (bytes_of_string label) < 256-6} ->
-  digest: bytes{length digest < 256} ->
-  ST (lbytes32 (Hacl.Hash.Definitions.hash_len ha))
-  (requires fun h -> True)
-  (ensures fun h0 _ h1 -> modifies_none h0 h1)
 
 let derive_secret ha secret label digest =
   let len = Hacl.Hash.Definitions.hash_len ha in

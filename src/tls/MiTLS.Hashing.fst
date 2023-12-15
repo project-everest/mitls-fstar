@@ -1,6 +1,7 @@
 ﻿(* Copyright (C) 2012--2015 Microsoft Research and INRIA *)
 module MiTLS.Hashing
 open MiTLS
+friend Lib.IntTypes
 
 open MiTLS.Declassify
 open MiTLS.Mem
@@ -20,7 +21,7 @@ let compute a text =
   let h00 = ST.get() in
   push_frame();
   let tlen = Hacl.Hash.Definitions.hash_len a in
-  let output: Bytes.lbuffer tlen = LowStar.Buffer.alloca 0uy tlen in
+  let output = LowStar.Buffer.alloca 0uy tlen in
   let len = Bytes.len text in
   if len = 0ul then
     begin
