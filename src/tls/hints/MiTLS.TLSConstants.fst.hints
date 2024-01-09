@@ -1,0 +1,152 @@
+[
+  "êé˜L¶Ôs\u0004Î·»\u007fy$X{",
+  [
+    [
+      "MiTLS.TLSConstants.fold_string",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "binder_x_0a56e3de562c08d8ab59f4ac6f626a98_5",
+        "disc_equation_Prims.Cons", "disc_equation_Prims.Nil",
+        "fuel_guarded_inversion_Prims.list",
+        "projection_inverse_BoxBool_proj_0", "subterm_ordering_Prims.Cons"
+      ],
+      0,
+      "c19271d6d04d60357abea3feade8e804"
+    ],
+    [
+      "MiTLS.TLSConstants.dualRole",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_MiTLS.TLSConstants.Client",
+        "disc_equation_MiTLS.TLSConstants.Server",
+        "fuel_guarded_inversion_MiTLS.TLSConstants.role",
+        "projection_inverse_BoxBool_proj_0"
+      ],
+      0,
+      "82d4708505148bf89558a9c53b16048b"
+    ],
+    [
+      "MiTLS.TLSConstants.versionBytes",
+      1,
+      2,
+      1,
+      [
+        "@query", "equation_LowParse.Spec.Base.strong_parser_kind",
+        "equation_MiTLS.LowParseWrappers.wrap_serializer32_constant_length_precond",
+        "equation_MiTLS.Parsers.ProtocolVersion.protocolVersion_parser_kind",
+        "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_high",
+        "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_low",
+        "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_high",
+        "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_low"
+      ],
+      0,
+      "94dce35343009ccb06f498437b0f4220"
+    ],
+    [
+      "MiTLS.TLSConstants.parseVersion",
+      1,
+      2,
+      1,
+      [
+        "@query", "equation_LowParse.Spec.Base.strong_parser_kind",
+        "equation_MiTLS.LowParseWrappers.wrap_serializer32_constant_length_precond",
+        "equation_MiTLS.Parsers.ProtocolVersion.protocolVersion_parser_kind",
+        "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_high",
+        "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_low",
+        "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_high",
+        "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_low"
+      ],
+      0,
+      "099c287f4364cf13e498103752de5161"
+    ],
+    [
+      "MiTLS.TLSConstants.minPV",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_MiTLS.Parsers.ProtocolVersion.SSL_3p0",
+        "disc_equation_MiTLS.Parsers.ProtocolVersion.TLS_1p0",
+        "disc_equation_MiTLS.Parsers.ProtocolVersion.TLS_1p1",
+        "disc_equation_MiTLS.Parsers.ProtocolVersion.TLS_1p2",
+        "disc_equation_MiTLS.Parsers.ProtocolVersion.TLS_1p3",
+        "disc_equation_MiTLS.Parsers.ProtocolVersion.Unknown_protocolVersion",
+        "equation_MiTLS.TLSConstants.protocolVersion",
+        "equation_MiTLS.TLSConstants.protocolVersion_",
+        "fuel_guarded_inversion_MiTLS.Parsers.ProtocolVersion.protocolVersion",
+        "proj_equation_FStar.Pervasives.Native.Mktuple2__1",
+        "projection_inverse_BoxBool_proj_0",
+        "projection_inverse_FStar.Pervasives.Native.Mktuple2__1",
+        "refinement_interpretation_Tm_refine_d79618facb166201709985f202c53fd7"
+      ],
+      0,
+      "73bd18dd4612c6afb7ba2b8313d40021"
+    ],
+    [
+      "MiTLS.TLSConstants.geqPV",
+      1,
+      2,
+      1,
+      [
+        "@query",
+        "assumption_MiTLS.Parsers.ProtocolVersion.protocolVersion__uu___haseq"
+      ],
+      0,
+      "386964865528a9b77264d367204a0673"
+    ],
+    [
+      "MiTLS.TLSConstants.aeAlg_hash",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_MiTLS.CipherSuite.AEAD",
+        "disc_equation_MiTLS.CipherSuite.MACOnly",
+        "disc_equation_MiTLS.CipherSuite.MtE",
+        "fuel_guarded_inversion_MiTLS.CipherSuite.aeAlg",
+        "projection_inverse_BoxBool_proj_0"
+      ],
+      0,
+      "fff5434891532047bf5e3a02513c31d9"
+    ],
+    [
+      "MiTLS.TLSConstants.lhae",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "constructor_distinct_Lib.IntTypes.U8",
+        "disc_equation_MiTLS.CipherSuite.AEAD",
+        "disc_equation_MiTLS.CipherSuite.Block",
+        "disc_equation_MiTLS.CipherSuite.MACOnly",
+        "disc_equation_MiTLS.CipherSuite.MtE",
+        "disc_equation_MiTLS.CipherSuite.Stream",
+        "equality_tok_Lib.IntTypes.U1@tok",
+        "equality_tok_Lib.IntTypes.U8@tok", "equation_Lib.IntTypes.unsigned",
+        "equation_Spec.AES.gf8", "equation_Spec.AES.irred",
+        "equation_Spec.GaloisField.gf",
+        "fuel_guarded_inversion_MiTLS.CipherSuite.aeAlg",
+        "fuel_guarded_inversion_MiTLS.CipherSuite.encAlg",
+        "proj_equation_MiTLS.CipherSuite.MtE__0",
+        "proj_equation_Spec.GaloisField.GF_t",
+        "projection_inverse_BoxBool_proj_0",
+        "projection_inverse_Spec.GaloisField.GF_t",
+        "refinement_interpretation_Tm_refine_984a87bcf101339fc7d5a6e3c1b2e58a",
+        "refinement_interpretation_Tm_refine_de8080fdc4bd6678af723874a7d70466",
+        "typing_MiTLS.CipherSuite.__proj__MtE__item___0",
+        "typing_Spec.AES.gf8", "typing_Spec.GaloisField.__proj__GF__item__t"
+      ],
+      0,
+      "e6f9bf063aaa3626054dbb5ca85ed2e4"
+    ]
+  ]
+]

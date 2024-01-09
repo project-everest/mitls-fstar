@@ -1,0 +1,135 @@
+[
+  "7\u001dw4\u0001Í¾l\u0013Æ¢\u007f\u0006ù\u0007±",
+  [
+    [
+      "MiTLS.Pkg.Tree.__proj__Leaf__item__package",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "refinement_interpretation_Tm_refine_fc897dc639ffac638f88b648651c0141"
+      ],
+      0,
+      "ffba2deab0ade8eb3c23ce3852278d66"
+    ],
+    [
+      "MiTLS.Pkg.Tree.__proj__Node__item__node",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "refinement_interpretation_Tm_refine_de5bb23c0079cbf0563c7b46c057f52e"
+      ],
+      0,
+      "a7201e2a1f7cb0cc040726a781c04cf3"
+    ],
+    [
+      "MiTLS.Pkg.Tree.__proj__Node__item__children",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "refinement_interpretation_Tm_refine_de5bb23c0079cbf0563c7b46c057f52e"
+      ],
+      0,
+      "e6deff814779474f2d8faf502b4d4075"
+    ],
+    [
+      "MiTLS.Pkg.Tree.depth",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "binder_x_af0c15f3d78b2fb508a10cbecfbdb474_1",
+        "disc_equation_MiTLS.Pkg.Tree.Leaf",
+        "disc_equation_MiTLS.Pkg.Tree.Node", "equation_Prims.nat",
+        "fuel_guarded_inversion_MiTLS.Pkg.Tree.tree_",
+        "primitive_Prims.op_Addition", "projection_inverse_BoxBool_proj_0",
+        "projection_inverse_BoxInt_proj_0",
+        "refinement_interpretation_Tm_refine_542f9d4f129664613f2483a6c88bc7c2",
+        "subterm_ordering_MiTLS.Pkg.Tree.Node"
+      ],
+      0,
+      "ec2e66a5f262e0f47cdc54540dffcd37"
+    ],
+    [
+      "MiTLS.Pkg.Tree.depth",
+      2,
+      2,
+      2,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "binder_x_1d38f007744d3fd347fb0c3b6c6549d2_1",
+        "data_elim_Prims.Cons", "disc_equation_Prims.Cons",
+        "disc_equation_Prims.Nil", "equation_MiTLS.Idx.label",
+        "equation_MiTLS.Pkg.Tree.children_", "equation_MiTLS.Pkg.Tree.max",
+        "equation_Prims.nat", "fuel_guarded_inversion_Prims.list",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Tm_refine_542f9d4f129664613f2483a6c88bc7c2",
+        "subterm_ordering_FStar.Pervasives.Native.Mktuple2",
+        "subterm_ordering_Prims.Cons"
+      ],
+      0,
+      "113904373427bf391f6ada427e1b6ab3"
+    ],
+    [
+      "MiTLS.Pkg.Tree.find_lbl",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "binder_x_02e721760434a7f54a1d2633d546267a_1", "bool_inversion",
+        "disc_equation_Prims.Cons", "disc_equation_Prims.Nil",
+        "equation_MiTLS.Idx.label", "equation_MiTLS.Mem.model",
+        "equation_MiTLS.Pkg.Tree.children",
+        "equation_MiTLS.Pkg.Tree.children_", "equation_MiTLS.Pkg.Tree.tree",
+        "equation_Prims.eqtype", "fuel_guarded_inversion_Prims.list",
+        "function_token_typing_Prims.string",
+        "haseqTm_refine_ea0aee2a4942a75634c88e815c4b29c4",
+        "primitive_Prims.op_Negation", "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Tm_refine_414d0a9f578ab0048252f8c8f552b99f",
+        "subterm_ordering_Prims.Cons", "typing_MiTLS.Mem.model"
+      ],
+      0,
+      "afb691ebf3545b4c4682a95f3508f108"
+    ],
+    [
+      "MiTLS.Pkg.Tree.down",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_FStar.Pervasives.Native.Some",
+        "equation_MiTLS.Pkg.Tree.has_lbl",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Tm_refine_346e473489612e87c123a193cf6bc448"
+      ],
+      0,
+      "87d465b70fb6ffda8ba5dc5bf0ca3fa4"
+    ],
+    [
+      "MiTLS.Pkg.Tree.child",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "bool_inversion",
+        "disc_equation_MiTLS.Pkg.Tree.Leaf",
+        "disc_equation_MiTLS.Pkg.Tree.Node", "equation_MiTLS.Mem.model",
+        "equation_MiTLS.Pkg.Tree.tree",
+        "fuel_guarded_inversion_MiTLS.Pkg.Tree.tree_",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Tm_refine_6ca228b6512ca1520f17092d7145cd0d",
+        "typing_MiTLS.Mem.model"
+      ],
+      0,
+      "ee962a6020e7a27186ee8636bf50c846"
+    ]
+  ]
+]

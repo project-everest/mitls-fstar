@@ -1,0 +1,77 @@
+[
+  "ŽWé,kBrŒ\u0000\u0017AV\u0017\u00049!",
+  [
+    [
+      "MiTLS.EverCrypt.block_cipher_keyLen",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_MiTLS.EverCrypt.AES128_CBC",
+        "disc_equation_MiTLS.EverCrypt.AES256_CBC",
+        "disc_equation_MiTLS.EverCrypt.TDES_EDE_CBC",
+        "fuel_guarded_inversion_MiTLS.EverCrypt.block_cipher_alg",
+        "projection_inverse_BoxBool_proj_0"
+      ],
+      0,
+      "ed27e84ad9b1427deb4e3f1dfab42cb6"
+    ],
+    [
+      "MiTLS.EverCrypt.block_cipher_blockLen",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_MiTLS.EverCrypt.AES128_CBC",
+        "disc_equation_MiTLS.EverCrypt.AES256_CBC",
+        "disc_equation_MiTLS.EverCrypt.TDES_EDE_CBC",
+        "fuel_guarded_inversion_MiTLS.EverCrypt.block_cipher_alg",
+        "projection_inverse_BoxBool_proj_0"
+      ],
+      0,
+      "218fcf54527b8d4ac09f37cbb598b7cc"
+    ],
+    [
+      "MiTLS.EverCrypt.aead_keyLen",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_MiTLS.EverCrypt.AES128_CCM",
+        "disc_equation_MiTLS.EverCrypt.AES128_CCM8",
+        "disc_equation_MiTLS.EverCrypt.AES128_GCM",
+        "disc_equation_MiTLS.EverCrypt.AES256_CCM",
+        "disc_equation_MiTLS.EverCrypt.AES256_CCM8",
+        "disc_equation_MiTLS.EverCrypt.AES256_GCM",
+        "disc_equation_MiTLS.EverCrypt.CHACHA20_POLY1305",
+        "fuel_guarded_inversion_MiTLS.EverCrypt.aead_alg",
+        "projection_inverse_BoxBool_proj_0"
+      ],
+      0,
+      "4b5903f26a11cd0c8fb9e8fabcf6befa"
+    ],
+    [
+      "MiTLS.EverCrypt.aead_tagLen",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_MiTLS.EverCrypt.AES128_CCM",
+        "disc_equation_MiTLS.EverCrypt.AES128_CCM8",
+        "disc_equation_MiTLS.EverCrypt.AES128_GCM",
+        "disc_equation_MiTLS.EverCrypt.AES256_CCM",
+        "disc_equation_MiTLS.EverCrypt.AES256_CCM8",
+        "disc_equation_MiTLS.EverCrypt.AES256_GCM",
+        "disc_equation_MiTLS.EverCrypt.CHACHA20_POLY1305",
+        "fuel_guarded_inversion_MiTLS.EverCrypt.aead_alg",
+        "projection_inverse_BoxBool_proj_0"
+      ],
+      0,
+      "6dbb740a0d8db3615753a73b6024fabd"
+    ]
+  ]
+]

@@ -1,0 +1,130 @@
+[
+  "r‰≠\u0016ae`@èˆ”ôs¢¢”",
+  [
+    [
+      "MiTLS.StreamDeltas.project_one_frag",
+      1,
+      1,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "b2t_def",
+        "equation_FStar.Pervasives.Native.fst", "equation_FStar.UInt.fits",
+        "equation_FStar.UInt.min_int", "equation_FStar.UInt.size",
+        "equation_FStar.UInt.uint_t", "equation_MiTLS.DataStream.fragment",
+        "equation_MiTLS.Range.fragment_range", "equation_MiTLS.Range.frange",
+        "equation_MiTLS.Range.wider", "equation_MiTLS.Range.within",
+        "equation_MiTLS.StreamDeltas.id", "equation_Prims.nat",
+        "primitive_Prims.op_AmpAmp", "primitive_Prims.op_LessThanOrEqual",
+        "proj_equation_FStar.Pervasives.Native.Mktuple2__1",
+        "projection_inverse_BoxBool_proj_0",
+        "projection_inverse_FStar.Pervasives.Native.Mktuple2__1",
+        "refinement_interpretation_Tm_refine_173b638d30a6384fecf24c77111650ce",
+        "refinement_interpretation_Tm_refine_309a25d2d809147945de2491e54d88a5",
+        "refinement_interpretation_Tm_refine_3ed218345eae833265f016bb13bb974a",
+        "refinement_interpretation_Tm_refine_f13070840248fced9d9d60d77bdae3ec",
+        "typing_FStar.Bytes.len", "typing_FStar.UInt32.v",
+        "typing_MiTLS.DataStream.ghost_repr"
+      ],
+      0,
+      "b749c8cf533530f4ccfcc9ac16cca7e8"
+    ],
+    [
+      "MiTLS.StreamDeltas.stream_deltas_snoc",
+      1,
+      1,
+      1,
+      [
+        "@query", "equation_FStar.Seq.Properties.snoc",
+        "equation_MiTLS.StreamDeltas.project_deltas"
+      ],
+      0,
+      "99fd0a05a4dd0e8213b5dfa3c4f334d7"
+    ],
+    [
+      "MiTLS.StreamDeltas.project_fragment_deltas",
+      1,
+      1,
+      1,
+      [ "@query" ],
+      0,
+      "66061084abacbe251f262b95dda408af"
+    ],
+    [
+      "MiTLS.StreamDeltas.project_fragment_deltas",
+      2,
+      1,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "bool_inversion",
+        "constructor_distinct_Lib.IntTypes.U8",
+        "disc_equation_MiTLS.TLSInfo.PlaintextID",
+        "equality_tok_Lib.IntTypes.U1@tok",
+        "equality_tok_Lib.IntTypes.U8@tok", "equation_Lib.IntTypes.unsigned",
+        "equation_MiTLS.StreamDeltas.id", "equation_MiTLS.TLSInfo.authId",
+        "equation_Spec.AES.gf8", "equation_Spec.AES.irred",
+        "equation_Spec.GaloisField.gf",
+        "proj_equation_Spec.GaloisField.GF_t",
+        "projection_inverse_BoxBool_proj_0",
+        "projection_inverse_Spec.GaloisField.GF_t",
+        "refinement_interpretation_Tm_refine_3ed218345eae833265f016bb13bb974a",
+        "refinement_interpretation_Tm_refine_de8080fdc4bd6678af723874a7d70466",
+        "typing_MiTLS.TLSInfo.uu___is_PlaintextID", "typing_Spec.AES.gf8",
+        "typing_Spec.GaloisField.__proj__GF__item__t"
+      ],
+      0,
+      "3efdc2fbfee81dd5be855fc150cce41b"
+    ],
+    [
+      "MiTLS.StreamDeltas.stream_deltas_snoc2",
+      1,
+      1,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "bool_inversion",
+        "constructor_distinct_Lib.IntTypes.U8",
+        "disc_equation_MiTLS.TLSInfo.PlaintextID",
+        "equality_tok_Lib.IntTypes.U1@tok",
+        "equality_tok_Lib.IntTypes.U8@tok", "equation_Lib.IntTypes.unsigned",
+        "equation_MiTLS.StreamDeltas.id", "equation_MiTLS.TLSInfo.authId",
+        "equation_Spec.AES.gf8", "equation_Spec.AES.irred",
+        "equation_Spec.GaloisField.gf",
+        "proj_equation_Spec.GaloisField.GF_t",
+        "projection_inverse_BoxBool_proj_0",
+        "projection_inverse_Spec.GaloisField.GF_t",
+        "refinement_interpretation_Tm_refine_3ed218345eae833265f016bb13bb974a",
+        "refinement_interpretation_Tm_refine_de8080fdc4bd6678af723874a7d70466",
+        "typing_MiTLS.TLSInfo.uu___is_PlaintextID", "typing_Spec.AES.gf8",
+        "typing_Spec.GaloisField.__proj__GF__item__t"
+      ],
+      0,
+      "541698af583052048db576ebf918996a"
+    ],
+    [
+      "MiTLS.StreamDeltas.encrypt",
+      1,
+      1,
+      1,
+      [ "@query" ],
+      0,
+      "1514f4ff5dd3d377b9a327b899f4107a"
+    ],
+    [
+      "MiTLS.StreamDeltas.encrypt",
+      2,
+      1,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "bool_inversion",
+        "disc_equation_MiTLS.TLSInfo.PlaintextID",
+        "equality_tok_MiTLS.TLSConstants.Writer@tok",
+        "equation_MiTLS.StAE.incrementable",
+        "equation_MiTLS.StreamDeltas.id", "equation_MiTLS.TLSInfo.authId",
+        "primitive_Prims.op_LessThan", "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Tm_refine_3ed218345eae833265f016bb13bb974a",
+        "typing_MiTLS.TLSInfo.uu___is_PlaintextID"
+      ],
+      0,
+      "8f7e094572547ce6128b5055a74f5741"
+    ]
+  ]
+]

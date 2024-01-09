@@ -1,0 +1,57 @@
+[
+  "™Ø\u0015'|-÷;:\u001f\u0005¿!fˆí",
+  [
+    [
+      "MiTLS.Extensions.__proj__ClientPSK__item__identities",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "refinement_interpretation_Tm_refine_e09b13d6b06caaa29d45192a1ed70226"
+      ],
+      0,
+      "60bfc91d22e42c5bc97c56da089faf53"
+    ],
+    [
+      "MiTLS.Extensions.__proj__ClientPSK__item__binders_len",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "refinement_interpretation_Tm_refine_e09b13d6b06caaa29d45192a1ed70226"
+      ],
+      0,
+      "2e6c09ec37f74fc9219f2d72a1d10ad8"
+    ],
+    [
+      "MiTLS.Extensions.__proj__ServerPSK__item___0",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "refinement_interpretation_Tm_refine_03d8f35eb8b476a142599493cf93729c"
+      ],
+      0,
+      "9bc2cc90a24a9aa7c4417e5fa3f5dedf"
+    ],
+    [
+      "MiTLS.Extensions.client_psk_kexes",
+      1,
+      2,
+      1,
+      [
+        "@query",
+        "MiTLS.Extensions_pretyping_16dbea36a54e8811951c1c72c80a0947",
+        "assumption_MiTLS.Extensions.psk_kex__uu___haseq",
+        "assumption_Prims.list__uu___haseq",
+        "data_typing_intro_MiTLS.Extensions.PSK_DHE_KE@tok",
+        "kinding_MiTLS.Extensions.psk_kex@tok"
+      ],
+      0,
+      "3119f48533ece1e25e8a24572bc57ce2"
+    ]
+  ]
+]

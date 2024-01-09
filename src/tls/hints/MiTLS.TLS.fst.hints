@@ -1,0 +1,30 @@
+[
+  "\u007f\u0002Ž\nÅ\u0016¥TÄ\u001d_C\u0006³‡È",
+  [
+    [
+      "MiTLS.TLS.discard",
+      1,
+      2,
+      1,
+      [
+        "@query", "equation_FStar.HyperStack.ST.equal_stack_domains",
+        "equation_FStar.Monotonic.Heap.equal_dom",
+        "lemma_FStar.HyperStack.ST.lemma_same_refs_in_stack_regions_intro"
+      ],
+      0,
+      "09cb93c658e192470d50aa9edd76ed85"
+    ],
+    [
+      "MiTLS.TLS.trace",
+      1,
+      2,
+      1,
+      [
+        "@query", "equation_MiTLS.DebugFlags.debug",
+        "equation_MiTLS.DebugFlags.debug_TLS"
+      ],
+      0,
+      "6632cc422c1ba8f6f349b26c7ce63b16"
+    ]
+  ]
+]

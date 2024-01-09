@@ -1,0 +1,178 @@
+[
+  "\u0018®¼í(#{ùâ8²‘ñ\u0015T­",
+  [
+    [
+      "MiTLS.Model.ideal_or_real",
+      1,
+      2,
+      1,
+      [ "@query" ],
+      0,
+      "3d942bfd1cfb8bd4b63e6e3e5ae1afb0"
+    ],
+    [
+      "MiTLS.Model.__proj__Ideal__item__v",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "refinement_interpretation_Tm_refine_eca056e23677c2cd54044d6b04125793"
+      ],
+      0,
+      "b9e36fd27dd60025c1ec071c9c48bca5"
+    ],
+    [
+      "MiTLS.Model.__proj__Real__item__v",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "refinement_interpretation_Tm_refine_49396a3c0e50242c1641a99385df472a"
+      ],
+      0,
+      "d1e0ea452e6cbd8ffdf1bbb5ab6b9384"
+    ],
+    [
+      "MiTLS.Model.ir",
+      1,
+      2,
+      1,
+      [ "@query", "projection_inverse_BoxBool_proj_0" ],
+      0,
+      "7d8b05ac28ee8e99870233ee06ccf3cf"
+    ],
+    [
+      "MiTLS.Model.model_on",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "b2t_def", "bool_inversion",
+        "equation_MiTLS.Mem.model", "equation_MiTLS.Model.ir",
+        "equation_Prims.squash",
+        "refinement_interpretation_Tm_refine_2de20c066034c13bf76e9c0b94f4806c",
+        "refinement_interpretation_Tm_refine_7709d03e1dbfad58cbf378262cf1324a",
+        "typing_MiTLS.Mem.model"
+      ],
+      0,
+      "40ffc79c43486769df947abcdc50c3a5"
+    ],
+    [
+      "MiTLS.Model.ideal",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "b2t_def", "bool_inversion",
+        "equation_MiTLS.Mem.model", "equation_MiTLS.Model.ir",
+        "equation_Prims.squash",
+        "refinement_interpretation_Tm_refine_2de20c066034c13bf76e9c0b94f4806c",
+        "refinement_interpretation_Tm_refine_7709d03e1dbfad58cbf378262cf1324a",
+        "typing_MiTLS.Mem.model", "unit_inversion"
+      ],
+      0,
+      "a229e09488be648b6812cfceefac5504"
+    ],
+    [
+      "MiTLS.Model.real",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "constructor_distinct_Lib.IntTypes.U8",
+        "disc_equation_MiTLS.Model.Ideal", "disc_equation_MiTLS.Model.Real",
+        "equality_tok_Lib.IntTypes.U1@tok",
+        "equality_tok_Lib.IntTypes.U8@tok", "equation_Lib.IntTypes.unsigned",
+        "equation_MiTLS.Model.ir", "equation_Spec.AES.gf8",
+        "equation_Spec.AES.irred", "equation_Spec.GaloisField.gf",
+        "fuel_guarded_inversion_MiTLS.Model.ideal_or_real",
+        "proj_equation_Spec.GaloisField.GF_t",
+        "projection_inverse_BoxBool_proj_0",
+        "projection_inverse_Spec.GaloisField.GF_t",
+        "refinement_interpretation_Tm_refine_7709d03e1dbfad58cbf378262cf1324a",
+        "refinement_interpretation_Tm_refine_de8080fdc4bd6678af723874a7d70466",
+        "typing_Spec.AES.gf8", "typing_Spec.GaloisField.__proj__GF__item__t"
+      ],
+      0,
+      "459ce6e5da8354320fee3bac83942cc6"
+    ],
+    [
+      "MiTLS.Model.mk_ideal",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "b2t_def", "bool_inversion",
+        "constructor_distinct_MiTLS.Model.Ideal",
+        "disc_equation_MiTLS.Model.Ideal", "equation_MiTLS.Mem.model",
+        "equation_MiTLS.Model.ir", "equation_Prims.squash",
+        "projection_inverse_MiTLS.Model.Ideal_it",
+        "projection_inverse_MiTLS.Model.Ideal_rt",
+        "projection_inverse_MiTLS.Model.Ideal_v",
+        "refinement_interpretation_Tm_refine_2de20c066034c13bf76e9c0b94f4806c",
+        "refinement_interpretation_Tm_refine_7709d03e1dbfad58cbf378262cf1324a",
+        "typing_MiTLS.Mem.model", "unit_inversion"
+      ],
+      0,
+      "387358aebbcb60136beb23cdf1aacf33"
+    ],
+    [
+      "MiTLS.Model.mk_real",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "bool_inversion",
+        "constructor_distinct_Lib.IntTypes.U8",
+        "constructor_distinct_MiTLS.Model.Real",
+        "disc_equation_MiTLS.Model.Ideal",
+        "equality_tok_Lib.IntTypes.U1@tok",
+        "equality_tok_Lib.IntTypes.U8@tok",
+        "equation_FStar.HyperStack.ST.is_eternal_region",
+        "equation_Lib.IntTypes.unsigned", "equation_MiTLS.Mem.rgn",
+        "equation_MiTLS.Model.ir", "equation_Spec.AES.gf8",
+        "equation_Spec.AES.irred", "equation_Spec.GaloisField.gf",
+        "primitive_Prims.op_Negation", "proj_equation_Spec.GaloisField.GF_t",
+        "projection_inverse_BoxBool_proj_0",
+        "projection_inverse_Spec.GaloisField.GF_t",
+        "refinement_interpretation_Tm_refine_31bfde48b952b6d7959cd5a2aa36404e",
+        "refinement_interpretation_Tm_refine_7709d03e1dbfad58cbf378262cf1324a",
+        "refinement_interpretation_Tm_refine_de8080fdc4bd6678af723874a7d70466",
+        "typing_FStar.Monotonic.HyperHeap.rid_freeable",
+        "typing_MiTLS.TLSInfo.safe_region", "typing_Spec.AES.gf8",
+        "typing_Spec.GaloisField.__proj__GF__item__t"
+      ],
+      0,
+      "fcb252a35ee01efc771cab06328c7bd5"
+    ],
+    [
+      "MiTLS.Model.is_safe",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "bool_inversion",
+        "constructor_distinct_Lib.IntTypes.U8",
+        "equality_tok_Lib.IntTypes.U1@tok",
+        "equality_tok_Lib.IntTypes.U8@tok",
+        "equation_FStar.HyperStack.ST.is_eternal_region",
+        "equation_Lib.IntTypes.unsigned", "equation_MiTLS.Mem.model",
+        "equation_MiTLS.Mem.rgn", "equation_Spec.AES.gf8",
+        "equation_Spec.AES.irred", "equation_Spec.GaloisField.gf",
+        "primitive_Prims.op_Negation", "proj_equation_Spec.GaloisField.GF_t",
+        "projection_inverse_BoxBool_proj_0",
+        "projection_inverse_Spec.GaloisField.GF_t",
+        "refinement_interpretation_Tm_refine_31bfde48b952b6d7959cd5a2aa36404e",
+        "refinement_interpretation_Tm_refine_de8080fdc4bd6678af723874a7d70466",
+        "typing_FStar.Monotonic.HyperHeap.rid_freeable",
+        "typing_MiTLS.Mem.model", "typing_MiTLS.TLSInfo.safe_region",
+        "typing_Spec.AES.gf8", "typing_Spec.GaloisField.__proj__GF__item__t"
+      ],
+      0,
+      "6b3ed625b549b01f13adb476d6053752"
+    ]
+  ]
+]

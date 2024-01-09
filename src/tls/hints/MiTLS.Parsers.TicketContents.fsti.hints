@@ -1,0 +1,171 @@
+[
+  "\njyªè\u0000˘\n)˜\u0007ˇﬂ¨âñ",
+  [
+    [
+      "MiTLS.Parsers.TicketContents.ticketContents",
+      1,
+      2,
+      1,
+      [
+        "@query",
+        "assumption_MiTLS.Parsers.TicketContents12.ticketContents12__uu___haseq",
+        "assumption_MiTLS.Parsers.TicketContents13.ticketContents13__uu___haseq"
+      ],
+      0,
+      "f7386e8ecc4739177c677a370beca2d7"
+    ],
+    [
+      "MiTLS.Parsers.TicketContents.__proj__T_ticket12__item___0",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "refinement_interpretation_Tm_refine_609612f08c6d9403811b23fb0e2e69c2"
+      ],
+      0,
+      "35158882bd601d50e5cbf1602a310a23"
+    ],
+    [
+      "MiTLS.Parsers.TicketContents.__proj__T_ticket13__item___0",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "refinement_interpretation_Tm_refine_7da4d435933853d773b3377e5a11b35e"
+      ],
+      0,
+      "368258960de903879889ad5a6d5179ec"
+    ],
+    [
+      "MiTLS.Parsers.TicketContents.tag_of_ticketContents",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_MiTLS.Parsers.TicketContents.T_ticket12",
+        "disc_equation_MiTLS.Parsers.TicketContents.T_ticket13",
+        "fuel_guarded_inversion_MiTLS.Parsers.TicketContents.ticketContents",
+        "projection_inverse_BoxBool_proj_0"
+      ],
+      0,
+      "962e4ffc1236d774acc680b90bdcd3c5"
+    ],
+    [
+      "MiTLS.Parsers.TicketContents.lemma_valid_ticketContents_valid_ticketVersion",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "equation_Prims.squash",
+        "refinement_interpretation_Tm_refine_2de20c066034c13bf76e9c0b94f4806c"
+      ],
+      0,
+      "9f539d7bc8c5cd9094d662ef2f6f4d27"
+    ],
+    [
+      "MiTLS.Parsers.TicketContents.ticketContents_clens_ticket12",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "constructor_distinct_MiTLS.Parsers.TicketVersion.Ticket12",
+        "constructor_distinct_MiTLS.Parsers.TicketVersion.Ticket13",
+        "disc_equation_MiTLS.Parsers.TicketContents.T_ticket12",
+        "equality_tok_MiTLS.Parsers.TicketVersion.Ticket12@tok",
+        "equality_tok_MiTLS.Parsers.TicketVersion.Ticket13@tok",
+        "equation_MiTLS.Parsers.TicketContents.tag_of_ticketContents",
+        "fuel_guarded_inversion_MiTLS.Parsers.TicketContents.ticketContents",
+        "projection_inverse_BoxBool_proj_0"
+      ],
+      0,
+      "0997d8c28d2532d9920c665c9b26b4f7"
+    ],
+    [
+      "MiTLS.Parsers.TicketContents.ticketContents_clens_ticket13",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "constructor_distinct_MiTLS.Parsers.TicketVersion.Ticket12",
+        "constructor_distinct_MiTLS.Parsers.TicketVersion.Ticket13",
+        "disc_equation_MiTLS.Parsers.TicketContents.T_ticket13",
+        "equality_tok_MiTLS.Parsers.TicketVersion.Ticket12@tok",
+        "equality_tok_MiTLS.Parsers.TicketVersion.Ticket13@tok",
+        "equation_MiTLS.Parsers.TicketContents.tag_of_ticketContents",
+        "fuel_guarded_inversion_MiTLS.Parsers.TicketContents.ticketContents",
+        "projection_inverse_BoxBool_proj_0"
+      ],
+      0,
+      "76fc6168852735625d6cf85c1f0795c9"
+    ],
+    [
+      "MiTLS.Parsers.TicketContents.finalize_ticketContents_ticket12",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption",
+        "@fuel_correspondence_Prims.pow2.fuel_instrumented", "@query",
+        "b2t_def", "bool_inversion",
+        "equation_FStar.Monotonic.HyperStack.is_wf_with_ctr_and_tip",
+        "equation_FStar.Monotonic.HyperStack.mem",
+        "equation_FStar.UInt.fits", "equation_FStar.UInt.max_int",
+        "equation_FStar.UInt.min_int", "equation_FStar.UInt.size",
+        "equation_FStar.UInt.uint_t", "equation_Prims.nat",
+        "fuel_guarded_inversion_LowParse.Slice.slice", "int_inversion",
+        "int_typing", "primitive_Prims.op_Addition",
+        "primitive_Prims.op_AmpAmp", "primitive_Prims.op_LessThanOrEqual",
+        "primitive_Prims.op_Subtraction",
+        "projection_inverse_BoxBool_proj_0",
+        "projection_inverse_BoxInt_proj_0",
+        "refinement_interpretation_Tm_refine_05e15190c946858f68c69156f585f95a",
+        "refinement_interpretation_Tm_refine_365abba901205a01d0ef28ebf2198c47",
+        "refinement_interpretation_Tm_refine_542f9d4f129664613f2483a6c88bc7c2",
+        "refinement_interpretation_Tm_refine_5d431e6602ec37e860e9fb053d57ae2e",
+        "refinement_interpretation_Tm_refine_f13070840248fced9d9d60d77bdae3ec",
+        "typing_FStar.Monotonic.HyperHeap.rid_freeable",
+        "typing_FStar.Monotonic.HyperHeap.root", "typing_FStar.UInt.fits",
+        "typing_FStar.UInt32.v"
+      ],
+      0,
+      "0f1b8e6c23d22e8d20f26990d34346db"
+    ],
+    [
+      "MiTLS.Parsers.TicketContents.finalize_ticketContents_ticket13",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption",
+        "@fuel_correspondence_Prims.pow2.fuel_instrumented", "@query",
+        "b2t_def", "bool_inversion",
+        "equation_FStar.Monotonic.HyperStack.is_wf_with_ctr_and_tip",
+        "equation_FStar.Monotonic.HyperStack.mem",
+        "equation_FStar.UInt.fits", "equation_FStar.UInt.max_int",
+        "equation_FStar.UInt.min_int", "equation_FStar.UInt.size",
+        "equation_FStar.UInt.uint_t", "equation_Prims.nat",
+        "fuel_guarded_inversion_LowParse.Slice.slice", "int_inversion",
+        "int_typing", "primitive_Prims.op_Addition",
+        "primitive_Prims.op_AmpAmp", "primitive_Prims.op_LessThanOrEqual",
+        "primitive_Prims.op_Subtraction",
+        "projection_inverse_BoxBool_proj_0",
+        "projection_inverse_BoxInt_proj_0",
+        "refinement_interpretation_Tm_refine_05e15190c946858f68c69156f585f95a",
+        "refinement_interpretation_Tm_refine_365abba901205a01d0ef28ebf2198c47",
+        "refinement_interpretation_Tm_refine_542f9d4f129664613f2483a6c88bc7c2",
+        "refinement_interpretation_Tm_refine_710d4e2c38a534efb26b1a7e1f8d1055",
+        "refinement_interpretation_Tm_refine_f13070840248fced9d9d60d77bdae3ec",
+        "typing_FStar.Monotonic.HyperHeap.rid_freeable",
+        "typing_FStar.Monotonic.HyperHeap.root", "typing_FStar.UInt.fits",
+        "typing_FStar.UInt32.v"
+      ],
+      0,
+      "09e22c673569e57b31421602436fa6cd"
+    ]
+  ]
+]

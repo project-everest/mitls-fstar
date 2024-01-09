@@ -26,13 +26,13 @@
 
 /* OpenSSL PRNG */
 
-uint32_t EverCrypt_OpenSSL_random_init()
+uint32_t MiTLS_EverCrypt_OpenSSL_random_init()
 {
   if(RAND_status()) return 1;
   return RAND_poll();
 }
 
-void EverCrypt_OpenSSL_random_sample(uint32_t len, uint8_t *out)
+void MiTLS_EverCrypt_OpenSSL_random_sample(uint32_t len, uint8_t *out)
 {
   if(1 != RAND_bytes(out, len))
     handleErrors();
@@ -102,7 +102,7 @@ static int openssl_aead(EVP_CIPHER_CTX *ctx,
   return 1;
 }
 
-void EverCrypt_OpenSSL_aes128_gcm_encrypt(uint8_t *key, uint8_t *iv, uint8_t *aad, uint32_t aad_len,
+void MiTLS_EverCrypt_OpenSSL_aes128_gcm_encrypt(uint8_t *key, uint8_t *iv, uint8_t *aad, uint32_t aad_len,
                                           uint8_t *plaintext, uint32_t plaintext_len, uint8_t *ciphertext, uint8_t *tag)
 {
   EVP_CIPHER_CTX *ctx = openssl_create(EVP_aes_128_gcm(), key);
@@ -111,7 +111,7 @@ void EverCrypt_OpenSSL_aes128_gcm_encrypt(uint8_t *key, uint8_t *iv, uint8_t *aa
   openssl_free(ctx);
 }
 
-uint32_t EverCrypt_OpenSSL_aes128_gcm_decrypt(uint8_t *key, uint8_t *iv, uint8_t *aad, uint32_t aad_len,
+uint32_t MiTLS_EverCrypt_OpenSSL_aes128_gcm_decrypt(uint8_t *key, uint8_t *iv, uint8_t *aad, uint32_t aad_len,
                                               uint8_t *plaintext, uint32_t plaintext_len, uint8_t *ciphertext, uint8_t *tag)
 {
   EVP_CIPHER_CTX *ctx = openssl_create(EVP_aes_128_gcm(), key);
@@ -120,7 +120,7 @@ uint32_t EverCrypt_OpenSSL_aes128_gcm_decrypt(uint8_t *key, uint8_t *iv, uint8_t
   return ret;
 }
 
-void EverCrypt_OpenSSL_aes256_gcm_encrypt(uint8_t *key, uint8_t *iv, uint8_t *aad, uint32_t aad_len,
+void MiTLS_EverCrypt_OpenSSL_aes256_gcm_encrypt(uint8_t *key, uint8_t *iv, uint8_t *aad, uint32_t aad_len,
                                           uint8_t *plaintext, uint32_t plaintext_len, uint8_t *ciphertext, uint8_t *tag)
 {
   EVP_CIPHER_CTX *ctx = openssl_create(EVP_aes_256_gcm(), key);
@@ -129,7 +129,7 @@ void EverCrypt_OpenSSL_aes256_gcm_encrypt(uint8_t *key, uint8_t *iv, uint8_t *aa
   openssl_free(ctx);
 }
 
-uint32_t EverCrypt_OpenSSL_aes256_gcm_decrypt(uint8_t *key, uint8_t *iv, uint8_t *aad, uint32_t aad_len,
+uint32_t MiTLS_EverCrypt_OpenSSL_aes256_gcm_decrypt(uint8_t *key, uint8_t *iv, uint8_t *aad, uint32_t aad_len,
                                               uint8_t *plaintext, uint32_t plaintext_len, uint8_t *ciphertext, uint8_t *tag)
 {
   EVP_CIPHER_CTX *ctx = openssl_create(EVP_aes_256_gcm(), key);
@@ -138,7 +138,7 @@ uint32_t EverCrypt_OpenSSL_aes256_gcm_decrypt(uint8_t *key, uint8_t *iv, uint8_t
   return ret;
 }
 
-void EverCrypt_OpenSSL_chacha20_poly1305_encrypt(uint8_t *key, uint8_t *iv, uint8_t *aad, uint32_t aad_len,
+void MiTLS_EverCrypt_OpenSSL_chacha20_poly1305_encrypt(uint8_t *key, uint8_t *iv, uint8_t *aad, uint32_t aad_len,
                                                  uint8_t *plaintext, uint32_t plaintext_len, uint8_t *ciphertext, uint8_t *tag)
 {
 #ifdef OPENSSL_IS_BORINGSSL
@@ -151,7 +151,7 @@ void EverCrypt_OpenSSL_chacha20_poly1305_encrypt(uint8_t *key, uint8_t *iv, uint
 #endif
 }
 
-uint32_t EverCrypt_OpenSSL_chacha20_poly1305_decrypt(uint8_t *key, uint8_t *iv, uint8_t *aad, uint32_t aad_len,
+uint32_t MiTLS_EverCrypt_OpenSSL_chacha20_poly1305_decrypt(uint8_t *key, uint8_t *iv, uint8_t *aad, uint32_t aad_len,
                                                      uint8_t *plaintext, uint32_t plaintext_len, uint8_t *ciphertext, uint8_t *tag)
 {
 #ifdef OPENSSL_IS_BORINGSSL
@@ -165,7 +165,7 @@ uint32_t EverCrypt_OpenSSL_chacha20_poly1305_decrypt(uint8_t *key, uint8_t *iv, 
 #endif
 }
 
-void* EverCrypt_OpenSSL_aead_create(uint8_t alg, uint8_t *key)
+void* MiTLS_EverCrypt_OpenSSL_aead_create(uint8_t alg, uint8_t *key)
 {
   const EVP_CIPHER *a;
   EVP_CIPHER_CTX *ctx;
@@ -183,27 +183,27 @@ void* EverCrypt_OpenSSL_aead_create(uint8_t alg, uint8_t *key)
   return (void*)ctx;
 }
 
-void EverCrypt_OpenSSL_aead_encrypt(void* ctx, uint8_t *iv, uint8_t *aad, uint32_t aad_len,
+void MiTLS_EverCrypt_OpenSSL_aead_encrypt(void* ctx, uint8_t *iv, uint8_t *aad, uint32_t aad_len,
                                     uint8_t *plaintext, uint32_t plaintext_len, uint8_t *ciphertext, uint8_t *tag)
 {
   if(!openssl_aead((EVP_CIPHER_CTX*)ctx, 1, iv, aad, aad_len, plaintext, plaintext_len, ciphertext, tag))
     handleErrors();
 }
 
-uint32_t EverCrypt_OpenSSL_aead_decrypt(void* ctx, uint8_t *iv, uint8_t *aad, uint32_t aad_len,
+uint32_t MiTLS_EverCrypt_OpenSSL_aead_decrypt(void* ctx, uint8_t *iv, uint8_t *aad, uint32_t aad_len,
                                     uint8_t *plaintext, uint32_t plaintext_len, uint8_t *ciphertext, uint8_t *tag)
 {
   return openssl_aead((EVP_CIPHER_CTX*)ctx, 0, iv, aad, aad_len, plaintext, plaintext_len, ciphertext, tag);
 }
 
-void EverCrypt_OpenSSL_aead_free(void* ctx)
+void MiTLS_EverCrypt_OpenSSL_aead_free(void* ctx)
 {
   openssl_free((EVP_CIPHER_CTX *)ctx);
 }
 
 /* Diffie-Hellman */
 
-void* EverCrypt_OpenSSL_dh_load_group(
+void* MiTLS_EverCrypt_OpenSSL_dh_load_group(
   uint8_t *dh_p,  uint32_t dh_p_len,
   uint8_t *dh_g,  uint32_t dh_g_len,
   uint8_t *dh_q,  uint32_t dh_q_len)
@@ -219,12 +219,12 @@ void* EverCrypt_OpenSSL_dh_load_group(
   return (void*)dh;
 }
 
-void EverCrypt_OpenSSL_dh_free_group(void *g)
+void MiTLS_EverCrypt_OpenSSL_dh_free_group(void *g)
 {
   DH_free((DH*)g);
 }
 
-uint32_t EverCrypt_OpenSSL_dh_keygen(void *st, uint8_t *pub)
+uint32_t MiTLS_EverCrypt_OpenSSL_dh_keygen(void *st, uint8_t *pub)
 {
   DH *dh = (DH*)st;
   const BIGNUM *opub, *opriv;
@@ -234,7 +234,7 @@ uint32_t EverCrypt_OpenSSL_dh_keygen(void *st, uint8_t *pub)
   return BN_num_bytes(opub);
 }
 
-uint32_t EverCrypt_OpenSSL_dh_compute(void *g,
+uint32_t MiTLS_EverCrypt_OpenSSL_dh_compute(void *g,
   uint8_t *pub, uint32_t pub_len,
   uint8_t *out)
 {
@@ -247,28 +247,28 @@ uint32_t EverCrypt_OpenSSL_dh_compute(void *g,
   return DH_size((DH*)g);
 }
 
-void* EverCrypt_OpenSSL_ecdh_load_curve(EverCrypt_OpenSSL_ec_curve g)
+void* MiTLS_EverCrypt_OpenSSL_ecdh_load_curve(MiTLS_EverCrypt_OpenSSL_ec_curve g)
 {
   EC_KEY *k = NULL;
   switch (g) {
-    case EverCrypt_OpenSSL_ECC_P256:
+    case MiTLS_EverCrypt_OpenSSL_ECC_P256:
       k = EC_KEY_new_by_curve_name(NID_X9_62_prime256v1);
       break;
-    case EverCrypt_OpenSSL_ECC_P384:
+    case MiTLS_EverCrypt_OpenSSL_ECC_P384:
       k = EC_KEY_new_by_curve_name(NID_secp384r1);
       break;
-    case EverCrypt_OpenSSL_ECC_P521:
+    case MiTLS_EverCrypt_OpenSSL_ECC_P521:
       k = EC_KEY_new_by_curve_name(NID_secp521r1);
       break;
-    case EverCrypt_OpenSSL_ECC_X25519:
+    case MiTLS_EverCrypt_OpenSSL_ECC_X25519:
       k = EC_KEY_new_by_curve_name(NID_X25519);
       break;
 #ifdef OPENSSL_IS_BORINGSSL
-    case EverCrypt_OpenSSL_ECC_X448:
+    case MiTLS_EverCrypt_OpenSSL_ECC_X448:
       handleErrors();
       break;
 #else
-    case EverCrypt_OpenSSL_ECC_X448:
+    case MiTLS_EverCrypt_OpenSSL_ECC_X448:
       k = EC_KEY_new_by_curve_name(NID_X448);
       break;
 #endif
@@ -276,7 +276,7 @@ void* EverCrypt_OpenSSL_ecdh_load_curve(EverCrypt_OpenSSL_ec_curve g)
   return (void*)k;
 }
 
-void EverCrypt_OpenSSL_ecdh_free_curve(void* st)
+void MiTLS_EverCrypt_OpenSSL_ecdh_free_curve(void* st)
 {
   EC_KEY_free((EC_KEY*)st);
 }
@@ -290,7 +290,7 @@ void dump(const unsigned char buffer[], size_t len)
   }
 }
 
-void EverCrypt_OpenSSL_ecdh_keygen(void* st, uint8_t *outx, uint8_t *outy)
+void MiTLS_EverCrypt_OpenSSL_ecdh_keygen(void* st, uint8_t *outx, uint8_t *outy)
 {
   EC_KEY *k = (EC_KEY*)st;
   EC_KEY_generate_key(k);
@@ -314,7 +314,7 @@ void EverCrypt_OpenSSL_ecdh_keygen(void* st, uint8_t *outx, uint8_t *outy)
   BN_free(x);
 }
 
-uint32_t EverCrypt_OpenSSL_ecdh_compute(void* st,
+uint32_t MiTLS_EverCrypt_OpenSSL_ecdh_compute(void* st,
   uint8_t *inx, uint8_t *iny, uint8_t *out)
 {
   EC_KEY *k = (EC_KEY*)st;

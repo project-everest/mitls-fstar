@@ -1,0 +1,36 @@
+[
+  "\rÚ'”\u0016ùaIBZM\u000f°Tœ\"",
+  [
+    [
+      "MiTLS.Parsers.TicketVersion.string_of_ticketVersion",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_MiTLS.Parsers.TicketVersion.Ticket12",
+        "disc_equation_MiTLS.Parsers.TicketVersion.Ticket13",
+        "fuel_guarded_inversion_MiTLS.Parsers.TicketVersion.ticketVersion",
+        "projection_inverse_BoxBool_proj_0"
+      ],
+      0,
+      "f81f90aa017e1809af93b8993c5baa39"
+    ],
+    [
+      "MiTLS.Parsers.TicketVersion.ticketVersion_jumper",
+      1,
+      2,
+      1,
+      [
+        "@query", "equation_LowParse.Spec.Base.strong_parser_kind",
+        "equation_MiTLS.Parsers.TicketVersion.ticketVersion_parser_kind",
+        "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_high",
+        "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_low",
+        "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_high",
+        "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_low"
+      ],
+      0,
+      "6bd50284d0bbb69213ba9c8aa4dfbd45"
+    ]
+  ]
+]

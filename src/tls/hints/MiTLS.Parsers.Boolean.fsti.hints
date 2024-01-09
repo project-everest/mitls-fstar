@@ -1,0 +1,36 @@
+[
+  "Í‡\u0018Ôþ¡Â\n˜|’··ér†",
+  [
+    [
+      "MiTLS.Parsers.Boolean.string_of_boolean",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "disc_equation_MiTLS.Parsers.Boolean.B_false",
+        "disc_equation_MiTLS.Parsers.Boolean.B_true",
+        "fuel_guarded_inversion_MiTLS.Parsers.Boolean.boolean",
+        "projection_inverse_BoxBool_proj_0"
+      ],
+      0,
+      "71d9162f159da1fec91544b90efe4e0a"
+    ],
+    [
+      "MiTLS.Parsers.Boolean.boolean_jumper",
+      1,
+      2,
+      1,
+      [
+        "@query", "equation_LowParse.Spec.Base.strong_parser_kind",
+        "equation_MiTLS.Parsers.Boolean.boolean_parser_kind",
+        "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_high",
+        "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_low",
+        "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_high",
+        "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_low"
+      ],
+      0,
+      "81e417e369929aa884a86fd061c40565"
+    ]
+  ]
+]

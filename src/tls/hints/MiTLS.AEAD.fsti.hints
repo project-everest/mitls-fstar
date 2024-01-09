@@ -1,0 +1,175 @@
+[
+  "~‰0”Êš´\u0013…+à=õP\u0001Í",
+  [
+    [
+      "MiTLS.AEAD.iv",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "equation_FStar.UInt.uint_t",
+        "equation_MiTLS.AEAD.ivlen", "lemma_FStar.Buffer.lemma_size",
+        "primitive_Prims.op_Multiply", "projection_inverse_BoxInt_proj_0",
+        "refinement_interpretation_Tm_refine_f13070840248fced9d9d60d77bdae3ec",
+        "typing_FStar.UInt32.v", "typing_MiTLS.AEAD.ivlen"
+      ],
+      0,
+      "581856fc957a6d68cb53b29afdc8ea72"
+    ],
+    [
+      "MiTLS.AEAD.cipher",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "equation_FStar.UInt.uint_t",
+        "equation_MiTLS.AEAD.taglen", "equation_Prims.nat",
+        "lemma_FStar.Buffer.lemma_size", "primitive_Prims.op_Addition",
+        "projection_inverse_BoxInt_proj_0",
+        "refinement_interpretation_Tm_refine_4967b8af32bad21ad6bce050983e8e8a",
+        "refinement_interpretation_Tm_refine_542f9d4f129664613f2483a6c88bc7c2",
+        "refinement_interpretation_Tm_refine_f13070840248fced9d9d60d77bdae3ec",
+        "typing_FStar.UInt32.v", "typing_MiTLS.AEAD.taglen"
+      ],
+      0,
+      "96b648a0675b6a97c0114f5a189003fa"
+    ],
+    [
+      "MiTLS.AEAD.cipher32",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "b2t_def", "bool_inversion",
+        "bool_typing", "equation_FStar.UInt.fits",
+        "equation_FStar.UInt.max_int", "equation_FStar.UInt.min_int",
+        "equation_FStar.UInt.size", "equation_FStar.UInt.uint_t",
+        "equation_MiTLS.AEAD.taglen", "equation_Spec.Poly1305.size_block",
+        "equation_Spec.Poly1305.size_key", "int_typing",
+        "lemma_FStar.UInt32.vu_inv", "primitive_Prims.op_Addition",
+        "primitive_Prims.op_AmpAmp", "primitive_Prims.op_LessThanOrEqual",
+        "projection_inverse_BoxBool_proj_0",
+        "projection_inverse_BoxInt_proj_0",
+        "refinement_interpretation_Tm_refine_8f76dbbe53d0401b82e1fc1dd1a1a245",
+        "refinement_interpretation_Tm_refine_c8dd98bb91cb1ba6963e5299b3babaa4",
+        "refinement_interpretation_Tm_refine_f13070840248fced9d9d60d77bdae3ec",
+        "typing_FStar.UInt.fits", "typing_Spec.Poly1305.size_block",
+        "typing_Spec.Poly1305.size_key"
+      ],
+      0,
+      "2b5554a828784f5c55c68b16bc9f317b"
+    ],
+    [
+      "MiTLS.AEAD.mk_entry",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "equation_MiTLS.AEAD.plainLen",
+        "equation_MiTLS.AEAD.taglen",
+        "equation_MiTLS.Crypto.Symmetric.Bytes.lbytes",
+        "primitive_Prims.op_Addition", "projection_inverse_BoxInt_proj_0",
+        "refinement_interpretation_Tm_refine_5c9df6951e6eed9f40aaac3f28f1e225",
+        "refinement_interpretation_Tm_refine_93d12c44ec7ed72dd0442a1a14a1c307",
+        "typing_MiTLS.Crypto.Plain.as_bytes"
+      ],
+      0,
+      "1fb8859326d9207c5f5c7d2b9ae84e92"
+    ],
+    [
+      "MiTLS.AEAD.entry_injective",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "equation_FStar.Bytes.lbytes",
+        "equation_FStar.UInt.uint_t", "equation_MiTLS.AEAD.cipher",
+        "equation_MiTLS.AEAD.plainLen",
+        "equation_MiTLS.Crypto.Plain.plainLen",
+        "equation_MiTLS.Crypto.Symmetric.Bytes.lbytes", "equation_Prims.nat",
+        "int_inversion", "primitive_Prims.op_Addition",
+        "projection_inverse_BoxInt_proj_0",
+        "refinement_interpretation_Tm_refine_542f9d4f129664613f2483a6c88bc7c2",
+        "refinement_interpretation_Tm_refine_5c9df6951e6eed9f40aaac3f28f1e225",
+        "refinement_interpretation_Tm_refine_71ea40360194fe02ee1272538c9cacbc",
+        "refinement_interpretation_Tm_refine_93d12c44ec7ed72dd0442a1a14a1c307",
+        "refinement_interpretation_Tm_refine_f13070840248fced9d9d60d77bdae3ec",
+        "typing_FStar.Bytes.len", "typing_FStar.UInt32.v",
+        "typing_MiTLS.Crypto.Plain.as_bytes"
+      ],
+      0,
+      "b84d7158ca8792f5251d9da554c8c4d7"
+    ],
+    [
+      "MiTLS.AEAD.fresh_addresses",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "equation_MiTLS.AEAD.address",
+        "equation_Prims.eqtype", "equation_Prims.nat",
+        "function_token_typing_Prims.int",
+        "haseqTm_refine_542f9d4f129664613f2483a6c88bc7c2",
+        "refinement_interpretation_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
+      ],
+      0,
+      "371922efb12dcd895fc4ddefc275d5e6"
+    ],
+    [
+      "MiTLS.AEAD.fresh_addresses",
+      2,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "equation_MiTLS.AEAD.address",
+        "equation_Prims.eqtype", "equation_Prims.nat",
+        "function_token_typing_Prims.int",
+        "haseqTm_refine_542f9d4f129664613f2483a6c88bc7c2",
+        "refinement_interpretation_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
+      ],
+      0,
+      "f3e0cbeeb9e2e8a8cf340855ca5f6186"
+    ],
+    [
+      "MiTLS.AEAD.ok_plain_len_32",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "equation_FStar.UInt.uint_t",
+        "lemma_FStar.Buffer.lemma_size",
+        "refinement_interpretation_Tm_refine_f13070840248fced9d9d60d77bdae3ec",
+        "typing_FStar.UInt32.v"
+      ],
+      0,
+      "c3ec33f7a64c5a4beaf3a8b7485e1644"
+    ],
+    [
+      "MiTLS.AEAD.frame_log",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "refinement_interpretation_Tm_refine_12258ba2b1765c74205bf2d57d2c4623"
+      ],
+      0,
+      "41728aa58d810a348668f43d8b25966b"
+    ],
+    [
+      "MiTLS.AEAD.gen",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "equation_MiTLS.AEAD.address",
+        "equation_Prims.eqtype", "equation_Prims.nat",
+        "function_token_typing_Prims.int",
+        "haseqTm_refine_542f9d4f129664613f2483a6c88bc7c2",
+        "refinement_interpretation_Tm_refine_414d0a9f578ab0048252f8c8f552b99f"
+      ],
+      0,
+      "3ac8347a42ec8457ee9d6177755e55c6"
+    ]
+  ]
+]

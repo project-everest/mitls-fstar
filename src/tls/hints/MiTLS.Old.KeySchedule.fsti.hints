@@ -1,0 +1,30 @@
+[
+  "¯½›«\tüšm¶z¥½Õà±Þ",
+  [
+    [
+      "MiTLS.Old.KeySchedule.discard",
+      1,
+      2,
+      1,
+      [
+        "@query", "equation_FStar.HyperStack.ST.equal_stack_domains",
+        "equation_FStar.Monotonic.Heap.equal_dom",
+        "lemma_FStar.HyperStack.ST.lemma_same_refs_in_stack_regions_intro"
+      ],
+      0,
+      "3099a1d04c80eba99ae65fa64d399582"
+    ],
+    [
+      "MiTLS.Old.KeySchedule.dbg",
+      1,
+      2,
+      1,
+      [
+        "@query", "equation_MiTLS.DebugFlags.debug",
+        "equation_MiTLS.DebugFlags.debug_KS"
+      ],
+      0,
+      "c28065a5a4c749d407021a80cc5dd4c5"
+    ]
+  ]
+]

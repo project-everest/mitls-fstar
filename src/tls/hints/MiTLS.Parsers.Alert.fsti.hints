@@ -1,0 +1,46 @@
+[
+  "¥\u0019èáÔT\u0005ÿ`d9\u0011ö&àa",
+  [
+    [
+      "MiTLS.Parsers.Alert.alert",
+      1,
+      2,
+      1,
+      [
+        "@query",
+        "assumption_MiTLS.Parsers.AlertDescription.alertDescription__uu___haseq",
+        "assumption_MiTLS.Parsers.AlertLevel.alertLevel__uu___haseq"
+      ],
+      0,
+      "9d92e8d5ef95be215a35a5bf8c2fa390"
+    ],
+    [
+      "MiTLS.Parsers.Alert.alert_jumper",
+      1,
+      2,
+      1,
+      [
+        "@query", "equation_LowParse.Spec.Base.strong_parser_kind",
+        "equation_MiTLS.Parsers.Alert.alert_parser_kind",
+        "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_high",
+        "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_low",
+        "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_high",
+        "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_low"
+      ],
+      0,
+      "961ee874c222a9d7036e77d45507c550"
+    ],
+    [
+      "MiTLS.Parsers.Alert.alert_valid",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "refinement_interpretation_Tm_refine_1b5fbf809641709985653a47a5238aac"
+      ],
+      0,
+      "80d399a7098f500484837651c6eacbfc"
+    ]
+  ]
+]

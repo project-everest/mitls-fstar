@@ -1,0 +1,57 @@
+[
+  "ø‡óÝ€>\u0004QÕÂ\u0019êÞI…Å",
+  [
+    [
+      "MiTLS.DHGroup.params",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "assumption_FStar.Pervasives.Native.option__uu___haseq",
+        "haseqTm_refine_c7ebbc37dc32b1f8cda9a9413184629d",
+        "refinement_interpretation_Tm_refine_414d0a9f578ab0048252f8c8f552b99f",
+        "refinement_kinding_Tm_refine_c7ebbc37dc32b1f8cda9a9413184629d",
+        "typing_FStar.Bytes.bytes"
+      ],
+      0,
+      "7155e4b364e3ecee15ebf78c6b17f3ba"
+    ],
+    [
+      "MiTLS.DHGroup.group",
+      1,
+      2,
+      1,
+      [
+        "@query", "assumption_MiTLS.DHGroup.ffdhe__uu___haseq",
+        "assumption_MiTLS.DHGroup.params__uu___haseq"
+      ],
+      0,
+      "f4eee34d5475a76c72a654ba34a955a6"
+    ],
+    [
+      "MiTLS.DHGroup.__proj__Named__item___0",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "refinement_interpretation_Tm_refine_7608cdf4cee378c96d3ee5b16994d943"
+      ],
+      0,
+      "8fc2cf2e30a581861f8391817fb4518e"
+    ],
+    [
+      "MiTLS.DHGroup.__proj__Explicit__item___0",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "refinement_interpretation_Tm_refine_d8bd62134d6a274fbc07fadd0fbe67e5"
+      ],
+      0,
+      "3156bf1b7bfd61486e636627322a0c22"
+    ]
+  ]
+]

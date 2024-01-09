@@ -1,0 +1,52 @@
+[
+  "«¨(°Z]ÿí’}ÓNW‘»\u0013",
+  [
+    [
+      "MiTLS.Parsers.TicketContents12.ticketContents12",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "assumption_MiTLS.Parsers.Boolean.boolean__uu___haseq",
+        "assumption_MiTLS.Parsers.CipherSuite.cipherSuite__uu___haseq",
+        "assumption_MiTLS.Parsers.ProtocolVersion.protocolVersion__uu___haseq",
+        "equation_FStar.Bytes.lbytes",
+        "equation_MiTLS.Parsers.TicketContents12_master_secret.ticketContents12_master_secret",
+        "haseqTm_refine_71ea40360194fe02ee1272538c9cacbc",
+        "refinement_interpretation_Tm_refine_414d0a9f578ab0048252f8c8f552b99f",
+        "typing_FStar.Bytes.bytes"
+      ],
+      0,
+      "d397e839922f12ba71863092b0c2c172"
+    ],
+    [
+      "MiTLS.Parsers.TicketContents12.ticketContents12_jumper",
+      1,
+      2,
+      1,
+      [
+        "@query", "equation_LowParse.Spec.Base.strong_parser_kind",
+        "equation_MiTLS.Parsers.TicketContents12.ticketContents12_parser_kind",
+        "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_high",
+        "proj_equation_LowParse.Spec.Base.Mkparser_kind__parser_kind_low",
+        "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_high",
+        "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_low"
+      ],
+      0,
+      "b16df9a499215a29a2663dc75ea0fdbd"
+    ],
+    [
+      "MiTLS.Parsers.TicketContents12.ticketContents12_valid",
+      1,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query",
+        "refinement_interpretation_Tm_refine_7635b34c3856114cacb6e70ff40b7408"
+      ],
+      0,
+      "ed9ef9df7fe3d7cde7ad810e9487b6ee"
+    ]
+  ]
+]
