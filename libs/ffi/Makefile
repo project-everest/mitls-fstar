@@ -1,20 +1,20 @@
 FSTAR_HOME ?= ../../../FStar
 include $(FSTAR_HOME)/ulib/ml/Makefile.include
 
-all: FFICallbacks.cmxa # FFICallbacks.cma
+all: MiTLS_FFICallbacks.cmxa # MiTLS_FFICallbacks.cma
 
 clean:
-	rm -rf dllFFICallbacks.dll FFICallbacks.a FFICallbacks.cmi FFICallbacks.cmx FFICallbacks.cmxa FFICallbacks.o libFFICallbacks.a FFIRegister.cmi FFIRegister.cmx FFIRegister.o *~
+	rm -rf dllMiTLS_FFICallbacks.dll MiTLS_FFICallbacks.a MiTLS_FFICallbacks.cmi MiTLS_FFICallbacks.cmx MiTLS_FFICallbacks.cmxa MiTLS_FFICallbacks.o libMiTLS_FFICallbacks.a MiTLS_FFIRegister.cmi MiTLS_FFIRegister.cmx MiTLS_FFIRegister.o *~
 
-FFICallbacks.cmi: FFICallbacks.mli
-	$(OCAMLC) -package batteries,zarith -c FFICallbacks.mli
+MiTLS_FFICallbacks.cmi: MiTLS_FFICallbacks.mli
+	$(OCAMLC) -package batteries,zarith -c MiTLS_FFICallbacks.mli
 
-ffi.o FFICallbacks.cmo FFICallbacks.cmx: FFICallbacks.ml ffi.c FFICallbacks.cmi ffi.c mitlsffi.h
-	$(OCAMLC) -package batteries,zarith -c FFICallbacks.ml -ccopt -Wall -ccopt -fPIC ffi.c
-	$(OCAMLOPT) -package batteries,zarith -c FFICallbacks.ml -ccopt -Wall -ccopt -fPIC ffi.c
+ffi.o MiTLS_FFICallbacks.cmo MiTLS_FFICallbacks.cmx: MiTLS_FFICallbacks.ml ffi.c MiTLS_FFICallbacks.cmi ffi.c mitlsffi.h
+	$(OCAMLC) -package batteries,zarith -c MiTLS_FFICallbacks.ml -ccopt -Wall -ccopt -fPIC ffi.c
+	$(OCAMLOPT) -package batteries,zarith -c MiTLS_FFICallbacks.ml -ccopt -Wall -ccopt -fPIC ffi.c
 
-FFICallbacks.cmxa: FFICallbacks.cmx ffi.o
-	OCAMLPATH="$(FSTAR_HOME)/bin" ocamlfind mklib -o FFICallbacks FFICallbacks.cmx ffi.o
+MiTLS_FFICallbacks.cmxa: MiTLS_FFICallbacks.cmx ffi.o
+	OCAMLPATH="$(FSTAR_HOME)/bin" ocamlfind mklib -o MiTLS_FFICallbacks MiTLS_FFICallbacks.cmx ffi.o
 
-FFICallbacks.cma: FFICallbacks.cmo ffi.o
-	OCAMLPATH="$(FSTAR_HOME)/bin" ocamlfind mklib -o FFICallbacks FFICallbacks.cmo ffi.o
+MiTLS_FFICallbacks.cma: MiTLS_FFICallbacks.cmo ffi.o
+	OCAMLPATH="$(FSTAR_HOME)/bin" ocamlfind mklib -o MiTLS_FFICallbacks MiTLS_FFICallbacks.cmo ffi.o
