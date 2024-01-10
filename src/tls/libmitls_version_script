@@ -1,5 +1,5 @@
 VERS_0.1 {
-    # only make symbols prefixed by "FFI_" accessible from outside of the .so
-    global:FFI_*;
+    # only make symbols prefixed by "MiTLS_FFI_" accessible from outside of the .so
+    global:MiTLS_FFI_*;
     local:*;
 };

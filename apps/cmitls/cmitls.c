@@ -193,7 +193,7 @@ mitls_nego_action nego_callback(void *cb_state, mitls_version ver,
   
   unsigned char *qtp = NULL;
   size_t qtp_len;
-  if(FFI_mitls_find_custom_extension(1, cexts, cexts_len, (uint16_t)0x1A, &qtp, &qtp_len))
+  if(MiTLS_FFI_mitls_find_custom_extension(1, cexts, cexts_len, (uint16_t)0x1A, &qtp, &qtp_len))
   {
     printf("Transport parameters:\n");
     dump(qtp, qtp_len);
@@ -300,40 +300,40 @@ int Configure(mitls_state **pstate)
       return 1;
     }
 
-    r = FFI_mitls_configure(&state, option_version, option_hostname);
-    if(r) r = FFI_mitls_configure_cert_callbacks(state, pki, &cert_callbacks);
+    r = MiTLS_FFI_mitls_configure(&state, option_version, option_hostname);
+    if(r) r = MiTLS_FFI_mitls_configure_cert_callbacks(state, pki, &cert_callbacks);
 
     if (r == 0) {
-        printf("FFI_mitls_configure(%s,%s) failed.\n", option_version, option_hostname);
+        printf("MiTLS_FFI_mitls_configure(%s,%s) failed.\n", option_version, option_hostname);
         return 2;
     }
 
     if (option_ciphers) {
-        r = FFI_mitls_configure_cipher_suites(state, option_ciphers);
+        r = MiTLS_FFI_mitls_configure_cipher_suites(state, option_ciphers);
         if (r == 0) {
-            printf("FFI_mitls_configure_cipher_suites(%s) failed.\n", option_ciphers);
+            printf("MiTLS_FFI_mitls_configure_cipher_suites(%s) failed.\n", option_ciphers);
             return 2;
         }
     }
     if (option_sigalgs) {
-        r = FFI_mitls_configure_signature_algorithms(state, option_sigalgs);
+        r = MiTLS_FFI_mitls_configure_signature_algorithms(state, option_sigalgs);
         if (r == 0) {
-            printf("FFI_mitls_configure_signature_algorithms(%s) failed.\n", option_sigalgs);
+            printf("MiTLS_FFI_mitls_configure_signature_algorithms(%s) failed.\n", option_sigalgs);
             return 2;
         }
     }
     if (option_groups) {
-        r = FFI_mitls_configure_named_groups(state, option_groups);
+        r = MiTLS_FFI_mitls_configure_named_groups(state, option_groups);
         if (r == 0) {
-            printf("FFI_mitls_configure_named_groups(%s) failed.\n", option_groups);
+            printf("MiTLS_FFI_mitls_configure_named_groups(%s) failed.\n", option_groups);
             return 2;
         }
     }
 
     if (option_0rtt) {
-        r = FFI_mitls_configure_early_data(state, 1024*16);
+        r = MiTLS_FFI_mitls_configure_early_data(state, 1024*16);
         if (r == 0) {
-            printf("FFI_mitls_configure_early_data(1024*16) failed.\n");
+            printf("MiTLS_FFI_mitls_configure_early_data(1024*16) failed.\n");
             return 2;
         }
     }
@@ -358,16 +358,16 @@ int Configure(mitls_state **pstate)
           .alpn = (unsigned char*)option_alpn,
 	  .alpn_len = strlen(option_alpn)
 	};
-        r = FFI_mitls_configure_alpn(state, &alpn, 1);
+        r = MiTLS_FFI_mitls_configure_alpn(state, &alpn, 1);
         if (r == 0) {
-            printf("FFI_mitls_configure_alpn(%s) failed.\n", option_alpn);
+            printf("MiTLS_FFI_mitls_configure_alpn(%s) failed.\n", option_alpn);
             return 2;
         }
     }
 
-    r = FFI_mitls_configure_nego_callback(state, NULL, nego_callback);
+    r = MiTLS_FFI_mitls_configure_nego_callback(state, NULL, nego_callback);
     if(!r) {
-      printf("FFI_mitls_configure_nego_callback(%p)\n", nego_callback);
+      printf("MiTLS_FFI_mitls_configure_nego_callback(%p)\n", nego_callback);
       return 2;
     }
 
@@ -417,14 +417,14 @@ int SingleServer(mitls_state *state, SOCKET clientfd)
                             "Content-Type: text/plain; charset=utf-8\r\n\r\n";
 
     ctx.sockfd = clientfd;
-    r = FFI_mitls_accept_connected(&ctx, SendCallback, RecvCallback, state);
+    r = MiTLS_FFI_mitls_accept_connected(&ctx, SendCallback, RecvCallback, state);
     if (r == 0) {
-        printf("FFI_mitls_accept_connected() failed\n");
+        printf("MiTLS_FFI_mitls_accept_connected() failed\n");
         return 1;
     }
-    db = FFI_mitls_receive(state, &db_length);
+    db = MiTLS_FFI_mitls_receive(state, &db_length);
     if (db == NULL) {
-        printf("FFI_mitls_receive() failed\n");
+        printf("MiTLS_FFI_mitls_receive() failed\n");
         return 1;
     }
     printf("Received data:\n");
@@ -444,13 +444,13 @@ int SingleServer(mitls_state *state, SOCKET clientfd)
     strcat(payload, ctext);
     strncat(payload, (const char*)db, db_length);
 
-    FFI_mitls_free(state, db);
-    r = FFI_mitls_send(state, (unsigned char*)payload, strlen(payload));
+    MiTLS_FFI_mitls_free(state, db);
+    r = MiTLS_FFI_mitls_send(state, (unsigned char*)payload, strlen(payload));
     if (r == 0) {
-        printf("FFI_mitls_send() failed\n");
+        printf("MiTLS_FFI_mitls_send() failed\n");
         return 1;
     }
-    FFI_mitls_close(state);
+    MiTLS_FFI_mitls_close(state);
     return 0;
 }
 
@@ -582,16 +582,16 @@ int TestClient(void)
     }
 
     ctx.sockfd = sockfd;
-    r = FFI_mitls_connect(&ctx, SendCallback, RecvCallback, state);
+    r = MiTLS_FFI_mitls_connect(&ctx, SendCallback, RecvCallback, state);
     if (r == 0) {
-        printf("FFI_mitls_connect() failed\n");
+        printf("MiTLS_FFI_mitls_connect() failed\n");
         return 1;
     }
 
     printf("Read OK, sending HTTP request...\n");
-    r = FFI_mitls_send(state, (unsigned char*)request, requestlength);
+    r = MiTLS_FFI_mitls_send(state, (unsigned char*)request, requestlength);
     if (r == 0) {
-        printf("FFI_mitls_send() failed\n");
+        printf("MiTLS_FFI_mitls_send() failed\n");
         closesocket(sockfd);
         return 1;
     }
@@ -601,9 +601,9 @@ int TestClient(void)
     size_t total_length = 0;
 
     while (1) {
-      response = FFI_mitls_receive(state, &response_length);
+      response = MiTLS_FFI_mitls_receive(state, &response_length);
       if (response == NULL) {
-          printf("FFI_mitls_receive() failed\n");
+          printf("MiTLS_FFI_mitls_receive() failed\n");
           closesocket(sockfd);
           return 1;
       }
@@ -617,14 +617,14 @@ int TestClient(void)
       // otherwise, don't.
       if (!*option_file)
         puts((const char *)response);
-      FFI_mitls_free(state, response);
+      MiTLS_FFI_mitls_free(state, response);
       // JP: TODO: how to determine when we have nothing left to read?
       if (response_length < 16384)
         break;
     }
 
     printf("Closing connection, irrespective of the response\n");
-    FFI_mitls_close(state);
+    MiTLS_FFI_mitls_close(state);
     closesocket(sockfd);
 
     return 0;
@@ -655,14 +655,14 @@ int main(int argc, char **argv)
 
     if (option_minversion) {
         if (strcmp(option_minversion, option_version)) {
-            printf("Warning: -mv is not supported via FFI yet.  Ignored.\n");
+            printf("Warning: -mv is not supported via MiTLS_FFI yet.  Ignored.\n");
         }
     }
 
-    printf("cmitls.exe calling FFI_mitls_init\n");
-    r = FFI_mitls_init();
+    printf("cmitls.exe calling MiTLS_FFI_mitls_init\n");
+    r = MiTLS_FFI_mitls_init();
     if (r == 0) {
-        printf("FFI_mitls_init() failed!\n");
+        printf("MiTLS_FFI_mitls_init() failed!\n");
         return 2;
     }
 
@@ -672,7 +672,7 @@ int main(int argc, char **argv)
     } else {
         r = TestClient();
     }
-    FFI_mitls_cleanup();
+    MiTLS_FFI_mitls_cleanup();
 
     return r;
 }

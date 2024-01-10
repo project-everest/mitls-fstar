@@ -38,7 +38,7 @@ FLAVOR		= Karamel$(CONCRETE_FLAVOR)
 CODEGEN_FLAVOR  = krml
 EXTENSION	= krml
 # Don't extract modules from mitls that are implemented in C
-EXTRACT		= 'OCaml:* -DHDB -FFICallbacks -BufferBytes; krml:*'
+EXTRACT		= 'OCaml:* -DHDB -MiTLS.FFICallbacks -BufferBytes; krml:*'
 SPECINC     	= $(MITLS_HOME)/src/tls/concrete-flags $(MITLS_HOME)/src/tls/concrete-flags/$(FLAVOR)
 
 # SMT verification is disabled, so do not record hints
