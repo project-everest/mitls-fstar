@@ -18,7 +18,7 @@ More information on F\* can be found at www.fstar-lang.org
   * [Building](#building)
   * [Directory structure](#directory-structure)
   	* [Legacy, imported from mitls-f7](#legacy-imported-from-mitls-f7)
-  * [Configuring Emacs and Atom F* modes](#configuring-emacs-and-atom-f-modes)
+  * [Configuring Emacs F* mode](#configuring-emacs-mode)
 
 ### Building
 
