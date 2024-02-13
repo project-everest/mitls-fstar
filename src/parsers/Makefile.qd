@@ -28,7 +28,7 @@ CHECKED_EXT=.checked$(LAX_EXT)
 
 HINT_FILE=--hint_file hints/$(notdir $(subst .checked,,$<)).hints
 FSTAR_OPTIONS = --odir krml --cache_dir $(CACHE_DIR) $(LAX_OPT) --cache_checked_modules --use_hints \
-                --already_cached '* -Parsers' \
+                --already_cached '* -MiTLS.Parsers' \
 		--include $(LOWPARSE_HOME) --include $(KRML_HOME)/krmllib --include $(KRML_HOME)/krmllib/obj $(OTHERFLAGS)
 
 FSTAR = $(FSTAR_HOME)/bin/fstar.exe --trace_error $(FSTAR_OPTIONS)
@@ -47,7 +47,7 @@ QD_FILES = $(wildcard *.fst *.fsti)
 
 all: depend verify extract
 
-$(CACHE_DIR)/%$(CHECKED_EXT):
+$(CACHE_DIR)/%$(CHECKED_EXT): %
 	$(FSTAR) $(HINT_FILE) --record_hints $<
 	@touch -c $@
 
