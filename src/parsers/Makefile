@@ -1,12 +1,12 @@
 EVERPARSE_HOME ?= ../../../everparse
 QD_BIN = $(EVERPARSE_HOME)/bin/qd.exe
 
-# all: DO NOT enable `verify` for now, not everything currently
-# verifies. Anyway, for miTLS, we don't need to verify everything, the
-# miTLS dependency system will take care of collecting which generated
+# The verify dependency is not strictly necessary here.
+# For miTLS, we don't need to verify everything, the
+# miTLS dependency system would take care of collecting which generated
 # modules are actually needed.
 
-all: gen # verify
+all: gen verify
 
 gen: $(addsuffix .gen,$(wildcard *.rfc))
 
