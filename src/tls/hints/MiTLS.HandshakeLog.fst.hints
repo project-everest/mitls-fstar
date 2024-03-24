@@ -14,7 +14,7 @@
         "projection_inverse_BoxBool_proj_0", "subterm_ordering_Prims.Cons"
       ],
       0,
-      "f2db9c3716c6dbbbcc07fdf3b5fa0e1b"
+      "9e17ed108a74eb9593ce5ee888699082"
     ],
     [
       "MiTLS.HandshakeLog.append_transcript",
@@ -26,7 +26,7 @@
         "refinement_interpretation_Tm_refine_4415441dd016ea7f8a8392df82cd0a92"
       ],
       0,
-      "e76e3c57fe633180eb06ff57a67488d9"
+      "07bc4bec9327b1c7be65c47de7b4c7e8"
     ],
     [
       "MiTLS.HandshakeLog.discard",
@@ -39,7 +39,7 @@
         "lemma_FStar.HyperStack.ST.lemma_same_refs_in_stack_regions_intro"
       ],
       0,
-      "61d60c432b92dfa9cc00c1dc08734e87"
+      "63c984d79c330aa9351dfa47144cd96b"
     ],
     [
       "MiTLS.HandshakeLog.trace",
@@ -51,7 +51,7 @@
         "equation_MiTLS.DebugFlags.debug_HSL"
       ],
       0,
-      "24656554aa86eebee02cf5e37da78998"
+      "20bd3f6545a067dc590b30510de3decb"
     ],
     [
       "MiTLS.HandshakeLog.elift1_def",
@@ -64,7 +64,7 @@
         "typing_FStar.Ghost.elift1"
       ],
       0,
-      "668924197d05795b0c620530f9733b69"
+      "ed0ea8b5acc998123b45e8954b41537e"
     ],
     [
       "MiTLS.HandshakeLog.bind_log",
@@ -76,7 +76,7 @@
         "equation_MiTLS.HandshakeLog.reveal_log"
       ],
       0,
-      "867557fd8747372c2c0fbe258217d056"
+      "a3ec0df3d087e55fcfd6560ccec22e4b"
     ],
     [
       "MiTLS.HandshakeLog.empty_hs_transcript",
@@ -101,7 +101,7 @@
         "token_correspondence_MiTLS.HandshakeMessages.valid_hs_msg_prop"
       ],
       0,
-      "b2fb8031916088198f4fd14fcb16b7a0"
+      "6bb561a87e4f7fe34879ebb1abc33d6f"
     ],
     [
       "MiTLS.HandshakeLog.append_hs_transcript",
@@ -113,7 +113,7 @@
         "refinement_interpretation_Tm_refine_af2e9f7d9e7c35f43454d2c05c9237e8"
       ],
       0,
-      "4d232f1a0fbd8004d3b6973959db29d8"
+      "ca2ba404a0a8f045e27ce4045132b2fd"
     ],
     [
       "MiTLS.HandshakeLog.extend_hs_transcript",
@@ -125,7 +125,7 @@
         "refinement_interpretation_Tm_refine_fc93b6cac531404a5d0773a4879c19e9"
       ],
       0,
-      "e919714faa3389a3669d0e05491c716c"
+      "d73564e62359d7c21c430bfe6d747551"
     ],
     [
       "MiTLS.HandshakeLog.coerce",
@@ -137,7 +137,7 @@
         "refinement_interpretation_Tm_refine_de9aeb070296eed20d879692d0254af0"
       ],
       0,
-      "7174c7b68b12c50ac743659e43dcfdd1"
+      "22ecd49bd7259afd30ca2c4a6f7f4636"
     ],
     [
       "MiTLS.HandshakeLog.gforall_list_to_list_refined",
@@ -176,7 +176,7 @@
         "typing_Spec.GaloisField.__proj__GF__item__t"
       ],
       0,
-      "ca58b286686e982f25eefe4085fff9a9"
+      "39a216e53b80df83e61100f4a643c115"
     ],
     [
       "MiTLS.HandshakeLog.valid_transcript_to_list_valid_hs_msg_aux",
@@ -218,16 +218,66 @@
         "typing_Spec.AES.gf8", "typing_Spec.GaloisField.__proj__GF__item__t"
       ],
       0,
-      "a17df28b5e4e3796950316772d52fa1b"
+      "c6f08210f5215794a780db0e036d374d"
     ],
     [
       "MiTLS.HandshakeLog.valid_transcript_to_list_valid_hs_msg_aux_inj",
       1,
       2,
       1,
-      [ "@query" ],
+      [
+        "@MaxFuel_assumption", "@MaxIFuel_assumption",
+        "@fuel_correspondence_MiTLS.HandshakeLog.gforall.fuel_instrumented",
+        "@fuel_correspondence_MiTLS.HandshakeLog.valid_transcript_to_list_valid_hs_msg_aux.fuel_instrumented",
+        "@fuel_irrelevance_MiTLS.HandshakeLog.gforall.fuel_instrumented",
+        "@fuel_irrelevance_MiTLS.HandshakeLog.valid_transcript_to_list_valid_hs_msg_aux.fuel_instrumented",
+        "@query",
+        "FStar.Seq.Properties_interpretation_Tm_ghost_arrow_9a34a9deaac3ca72ad48c3ec79b6656c",
+        "MiTLS.HandshakeMessages_interpretation_Tm_ghost_arrow_7e8d7d5f95c642eb203f8aa498aee715",
+        "binder_x_7bd20fb5568811775f0f9250ebdac4c7_1",
+        "binder_x_7bd20fb5568811775f0f9250ebdac4c7_2",
+        "binder_x_dd8bfbafdc762ebab377d3463ed7b63e_0", "bool_inversion",
+        "constructor_distinct_Lib.IntTypes.U8",
+        "constructor_distinct_Prims.Cons", "constructor_distinct_Prims.Nil",
+        "disc_equation_Prims.Cons", "equality_tok_Lib.IntTypes.U1@tok",
+        "equality_tok_Lib.IntTypes.U8@tok",
+        "equation_FStar.HyperStack.ST.is_eternal_region",
+        "equation_Lib.IntTypes.unsigned",
+        "equation_MiTLS.HandshakeMessages.valid_hs_msg",
+        "equation_MiTLS.Mem.rgn",
+        "equation_MiTLS.TLSConstants.protocolVersion",
+        "equation_Spec.AES.gf8", "equation_Spec.AES.irred",
+        "equation_Spec.GaloisField.gf",
+        "equation_with_fuel_MiTLS.HandshakeLog.gforall.fuel_instrumented",
+        "equation_with_fuel_MiTLS.HandshakeLog.valid_transcript_to_list_valid_hs_msg_aux.fuel_instrumented",
+        "fuel_guarded_inversion_FStar.Pervasives.Native.option",
+        "fuel_guarded_inversion_Prims.list",
+        "function_token_typing_MiTLS.HandshakeMessages.valid_hs_msg_prop",
+        "kinding_MiTLS.HandshakeMessages.hs_msg@tok",
+        "primitive_Prims.op_AmpAmp", "primitive_Prims.op_Negation",
+        "proj_equation_FStar.Pervasives.Native.Mktuple2__1",
+        "proj_equation_FStar.Pervasives.Native.Mktuple2__2",
+        "proj_equation_Spec.GaloisField.GF_t",
+        "projection_inverse_BoxBool_proj_0",
+        "projection_inverse_FStar.Pervasives.Native.Mktuple2__1",
+        "projection_inverse_FStar.Pervasives.Native.Mktuple2__2",
+        "projection_inverse_Prims.Cons_a",
+        "projection_inverse_Prims.Cons_hd",
+        "projection_inverse_Prims.Cons_tl",
+        "projection_inverse_Spec.GaloisField.GF_t",
+        "refinement_interpretation_Tm_refine_2651c76972dfa5f7c83af1f2d3887202",
+        "refinement_interpretation_Tm_refine_31bfde48b952b6d7959cd5a2aa36404e",
+        "refinement_interpretation_Tm_refine_321728a8cb7dcc7ce9de1eafe0171399",
+        "refinement_interpretation_Tm_refine_de8080fdc4bd6678af723874a7d70466",
+        "subterm_ordering_Prims.Cons",
+        "token_correspondence_MiTLS.HandshakeMessages.valid_hs_msg_prop",
+        "typing_FStar.Monotonic.HyperHeap.rid_freeable",
+        "typing_MiTLS.HandshakeLog.gforall",
+        "typing_MiTLS.TLSInfo.safe_region", "typing_Spec.AES.gf8",
+        "typing_Spec.GaloisField.__proj__GF__item__t"
+      ],
       0,
-      "673e6a89470c3290be29e53b1031102c"
+      "b7964abe11588579cdcbd2a181b2a92f"
     ],
     [
       "MiTLS.HandshakeLog.valid_transcript_to_list_valid_hs_msg_aux_inj",
@@ -286,7 +336,7 @@
         "typing_Spec.GaloisField.__proj__GF__item__t"
       ],
       0,
-      "d4d6f8db31fc43df3f81d1ebcb0e2585"
+      "7c8cd26875b688829bdd92ebaee496bc"
     ],
     [
       "MiTLS.HandshakeLog.transcript_bytes",
@@ -301,7 +351,7 @@
         "refinement_interpretation_Tm_refine_1fb3fc05466d66a3d9490b9b6bcb8bc4"
       ],
       0,
-      "c02d46e307fb2cce660eec7c0a72dabe"
+      "8ef4245d22b62c99e426506444c023ce"
     ]
   ]
 ]

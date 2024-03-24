@@ -25,7 +25,7 @@
         "typing_FStar.Bytes.bytes"
       ],
       0,
-      "79656f78cdc04abbf86e0b20d16f7251"
+      "40cc31db904efc744bbf2fd00e1d209f"
     ],
     [
       "MiTLS.Content.__proj__CT_Alert__item__rg",
@@ -37,7 +37,7 @@
         "refinement_interpretation_Tm_refine_5b1e1b6dd28c64d969f883dbe34c9059"
       ],
       0,
-      "681d903cf22c3074e6ce3c26bc456bd4"
+      "75c24673534a46180d6c860b8420ad6e"
     ],
     [
       "MiTLS.Content.__proj__CT_Alert__item___1",
@@ -49,7 +49,7 @@
         "refinement_interpretation_Tm_refine_5b1e1b6dd28c64d969f883dbe34c9059"
       ],
       0,
-      "52f02e685a3bfb10b48c2a20f2a219bc"
+      "7ce7d361b8b8cdd2f30424f3c986ca03"
     ],
     [
       "MiTLS.Content.__proj__CT_Handshake__item__rg",
@@ -61,7 +61,7 @@
         "refinement_interpretation_Tm_refine_8019e55fda77b31d6bc9872dc443e7ce"
       ],
       0,
-      "40fe5ee4200ba879c66a7eaba69ba23a"
+      "3271ad814c716d53129fdd67fa5df929"
     ],
     [
       "MiTLS.Content.__proj__CT_Handshake__item__f",
@@ -73,7 +73,7 @@
         "refinement_interpretation_Tm_refine_8019e55fda77b31d6bc9872dc443e7ce"
       ],
       0,
-      "4b373ccee7d5dce00ef4b5b2869e5dfc"
+      "8cf2353e9031c5dc4d7421e1c5d38372"
     ],
     [
       "MiTLS.Content.__proj__CT_CCS__item__rg",
@@ -85,7 +85,7 @@
         "refinement_interpretation_Tm_refine_652a49a3abf8e35d1a369b3284717055"
       ],
       0,
-      "ea04f8edda139a6107c1e72a439d8002"
+      "eb0dd5fee8e08f02140b05de6ddf5c60"
     ],
     [
       "MiTLS.Content.__proj__CT_Data__item__rg",
@@ -97,7 +97,7 @@
         "refinement_interpretation_Tm_refine_e2135484660d3d28a999da46380d075a"
       ],
       0,
-      "bcba410ff618b21685f478e1bccd32e0"
+      "4a2e977fcfe992c20ac78b9bbfb0b3f2"
     ],
     [
       "MiTLS.Content.__proj__CT_Data__item__f",
@@ -109,7 +109,7 @@
         "refinement_interpretation_Tm_refine_e2135484660d3d28a999da46380d075a"
       ],
       0,
-      "f94807b0088273b9af1296b43b164574"
+      "32c6e1a6e539ddbe820b2abc5453e833"
     ],
     [
       "MiTLS.Content.split",
@@ -136,7 +136,7 @@
         "typing_Spec.GaloisField.__proj__GF__item__t"
       ],
       0,
-      "025bd464c5db7103ca1153ae3015b6cd"
+      "bbb4c740dba95695f765f3b1930f6781"
     ],
     [
       "MiTLS.Content.project",
@@ -192,7 +192,7 @@
         "well-founded-ordering-on-nat"
       ],
       0,
-      "980cfedf469a7c7c7fb06dac26b95e71"
+      "9c50bf0b19ad60abed99f80ac9b66b43"
     ],
     [
       "MiTLS.Content.project_ignores_Handshake",
@@ -211,7 +211,7 @@
         "typing_FStar.Seq.Base.length"
       ],
       0,
-      "79d3ade023db4017e8f76914e3d55af0"
+      "2581d2954ff8f98d534691797bdbd0ca"
     ],
     [
       "MiTLS.Content.project_ignores_Handshake",
@@ -219,14 +219,29 @@
       2,
       1,
       [
-        "@MaxIFuel_assumption", "@query", "equation_Prims.nat",
-        "int_inversion", "kinding_MiTLS.Content.fragment@tok",
-        "primitive_Prims.op_Subtraction", "projection_inverse_BoxInt_proj_0",
-        "refinement_interpretation_Tm_refine_542f9d4f129664613f2483a6c88bc7c2",
-        "typing_FStar.Seq.Base.length"
+        "@MaxFuel_assumption", "@MaxIFuel_assumption",
+        "@fuel_correspondence_MiTLS.Content.project.fuel_instrumented",
+        "@fuel_irrelevance_MiTLS.Content.project.fuel_instrumented",
+        "@query",
+        "FStar.Seq.Base_pretyping_7efa52b424e80c83ad68a652aa3561e4",
+        "Prims_pretyping_ae567c2fb75be05905677af440075565", "bool_inversion",
+        "disc_equation_MiTLS.Content.CT_Handshake",
+        "equation_FStar.HyperStack.ST.is_eternal_region",
+        "equation_MiTLS.Content.split", "equation_MiTLS.Mem.rgn",
+        "equation_with_fuel_MiTLS.Content.project.fuel_instrumented",
+        "function_token_typing_Prims.__cache_version_number__",
+        "primitive_Prims.op_Equality", "primitive_Prims.op_Negation",
+        "primitive_Prims.op_Subtraction",
+        "projection_inverse_BoxBool_proj_0",
+        "projection_inverse_FStar.Pervasives.Native.Mktuple2__1",
+        "projection_inverse_FStar.Pervasives.Native.Mktuple2__2",
+        "refinement_interpretation_Tm_refine_31bfde48b952b6d7959cd5a2aa36404e",
+        "refinement_interpretation_Tm_refine_79cd012787342125049bed2a8f2dfbff",
+        "typing_FStar.Monotonic.HyperHeap.rid_freeable",
+        "typing_MiTLS.TLSInfo.safe_region"
       ],
       0,
-      "85170150c97dc0515f8ddce6e125021f"
+      "a5c30a5a03053a74d0fb7083fb7ce11f"
     ],
     [
       "MiTLS.Content.project_ignores_Handshake",
@@ -256,7 +271,7 @@
         "typing_MiTLS.TLSInfo.safe_region"
       ],
       0,
-      "ceca4397546656675ca96b6a43d7aea8"
+      "f0f53904a90e02bc1beff063f56f3e67"
     ],
     [
       "MiTLS.Content.contentType13",
@@ -265,7 +280,7 @@
       1,
       [ "@query", "assumption_MiTLS.Content.contentType__uu___haseq" ],
       0,
-      "54b2f82b655aa682fadf4ea9286ad153"
+      "74041010db51fe316b6a1dc8a7088b1c"
     ],
     [
       "MiTLS.Content.ctBytes",
@@ -282,7 +297,7 @@
         "projection_inverse_BoxBool_proj_0"
       ],
       0,
-      "069b9954f77ef67e3d280ba83e5268e6"
+      "a59d05c18b6b35911e9a6f210a264013"
     ],
     [
       "MiTLS.Content.parseCT",
@@ -295,7 +310,7 @@
         "refinement_interpretation_Tm_refine_71ea40360194fe02ee1272538c9cacbc"
       ],
       0,
-      "8768ad4b7bd0a0521dd905a2975b9880"
+      "131b9ac85316a02f619602f95614a04b"
     ],
     [
       "MiTLS.Content.ctToString",
@@ -312,7 +327,7 @@
         "projection_inverse_BoxBool_proj_0"
       ],
       0,
-      "dcfb130127dcc102ecffd9179da9b59f"
+      "85965791ee658c6b4b4bb59e0943f96a"
     ],
     [
       "MiTLS.Content.rg",
@@ -329,7 +344,7 @@
         "projection_inverse_BoxBool_proj_0"
       ],
       0,
-      "8c291538a9c1c2b14bdf61f0f3a96d15"
+      "b253584e8340cbdb2064c40542b80aec"
     ],
     [
       "MiTLS.Content.ct",
@@ -346,7 +361,7 @@
         "projection_inverse_BoxBool_proj_0"
       ],
       0,
-      "18fedb30d41bdd618ae13f0096ff0ea3"
+      "36803c520788ab0b2e50364e12f726a3"
     ],
     [
       "MiTLS.Content.cipherLen",
@@ -407,7 +422,7 @@
         "typing_Spec.GaloisField.__proj__GF__item__t"
       ],
       0,
-      "71f648dd3de65f95e96f9818a4d13c34"
+      "25123329bcff053628ed42d26f5c9e6b"
     ],
     [
       "MiTLS.Content.decrypted",
@@ -421,7 +436,7 @@
         "typing_FStar.Bytes.len", "typing_FStar.UInt32.v"
       ],
       0,
-      "914f942c5ece257e824e0b7823726237"
+      "c7170e879b4116f9af8ca3500ff703b7"
     ],
     [
       "MiTLS.Content.ghost_repr",
@@ -491,7 +506,7 @@
         "typing_Spec.Poly1305.size_key"
       ],
       0,
-      "58fa8e1c2f2232ae00166420c9839e71"
+      "ec20591bbfd7a9eef992919f0068d876"
     ],
     [
       "MiTLS.Content.repr",
@@ -524,7 +539,7 @@
         "projection_inverse_MiTLS.Content.CT_Handshake_rg"
       ],
       0,
-      "f6b7467345eee8d27c3d360a90ecb007"
+      "34afc464941ed942e5703cf35965fa5b"
     ],
     [
       "MiTLS.Content.fragmentRepr",
@@ -546,7 +561,7 @@
         "typing_FStar.Seq.Base.length"
       ],
       0,
-      "1eadd1be2df45c7a15d7efda22045ac5"
+      "4bc9799311dd4460f25cb3f9ff342c5b"
     ],
     [
       "MiTLS.Content.mk_fragment",
@@ -562,7 +577,7 @@
         "typing_FStar.UInt32.v"
       ],
       0,
-      "b35d68d8ee8d03eab6868a184e6ca907"
+      "3703a830c34d80cdb3cb94e1c681c014"
     ],
     [
       "MiTLS.Content.mk_fragment",
@@ -616,7 +631,7 @@
         "typing_FStar.UInt32.v"
       ],
       0,
-      "c9e2cfeb484c4353502cf6eb34dfa180"
+      "8035354c1e5ff3d2548547de53afd16d"
     ],
     [
       "MiTLS.Content.mk_ct_rg",
@@ -640,7 +655,7 @@
         "typing_MiTLS.Range.frange"
       ],
       0,
-      "db813e5ba0ddaab0e5a5144d4a37bf44"
+      "14d564075e6117fe1ab9063cd775269b"
     ],
     [
       "MiTLS.Content.mk_ct_rg",
@@ -680,7 +695,7 @@
         "typing_MiTLS.Content.mk_fragment"
       ],
       0,
-      "5848156dd7123542f88a99d0348e50fc"
+      "7c01e47b7acf5652efab626e9f448c62"
     ]
   ]
 ]

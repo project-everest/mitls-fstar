@@ -24,7 +24,7 @@
         "typing_MiTLS.TLSInfo.safe_region"
       ],
       0,
-      "c623047bfffc6d9ee6d6e2aa5a5855f8"
+      "7f8485df0f23a66db7f0dbf308cab3b4"
     ],
     [
       "MiTLS.StreamAE.ltag",
@@ -41,7 +41,7 @@
         "typing_MiTLS.StreamAE.alg"
       ],
       0,
-      "f4e3d62e6a2fd690abbeb91a4e51d2e6"
+      "14dc279b512b8bceba3f5b3a46fe076e"
     ],
     [
       "MiTLS.StreamAE.cipherLen",
@@ -58,7 +58,7 @@
         "typing_MiTLS.StreamAE.ltag"
       ],
       0,
-      "5f4543454bb8a46a8002e972ddf06057"
+      "c8e3dbe8666fac7037b9c3f960fcc98b"
     ],
     [
       "MiTLS.StreamAE.lenCipher",
@@ -71,7 +71,7 @@
         "refinement_interpretation_Tm_refine_11c4997d03a513078ced14614fb52b91"
       ],
       0,
-      "9d29eb30838462d121fe6a7e6007ddbf"
+      "0190c0429ea3a21dc5c9b3dad7c8f724"
     ],
     [
       "MiTLS.StreamAE.entry",
@@ -98,7 +98,7 @@
         "typing_FStar.Bytes.bytes"
       ],
       0,
-      "6c13350578939d3a5ead46f8bc67efdb"
+      "dca4c34b660918b827aa0ad6083e2148"
     ],
     [
       "MiTLS.StreamAE.key",
@@ -121,7 +121,7 @@
         "typing_MiTLS.TLSInfo.safe_region"
       ],
       0,
-      "87c00dfb12aecea23988060dedef3c81"
+      "fa85c53fdfd8d4983479b818f8301e1d"
     ],
     [
       "MiTLS.StreamAE.iv",
@@ -144,7 +144,7 @@
         "typing_MiTLS.TLSInfo.safe_region"
       ],
       0,
-      "b76da126dc027188012bb1109f2ac389"
+      "4bd32fcea9ef9228e6ae884b901fe1e7"
     ],
     [
       "MiTLS.StreamAE.ilog",
@@ -157,7 +157,7 @@
         "refinement_interpretation_Tm_refine_2770415624dae45d0294ea399c877173"
       ],
       0,
-      "88ffd4e9f1e0d0c1db4a16631a9aa7f9"
+      "189c4f13586f4989ce73e7ab1f512964"
     ],
     [
       "MiTLS.StreamAE.max_ctr",
@@ -166,7 +166,7 @@
       1,
       [ "@query", "projection_inverse_BoxInt_proj_0" ],
       0,
-      "1c9bbb6dc216544decd13009ffee3155"
+      "fbf6e73ebd49fb7d7b7b06750ba19578"
     ],
     [
       "MiTLS.StreamAE.concrete_ctr",
@@ -182,7 +182,7 @@
         "token_correspondence_FStar.Monotonic.Seq.increases"
       ],
       0,
-      "cfe72a49d70113a6ce532bd03e8e7955"
+      "ca7e286a76a729ab783a6df821ddf837"
     ],
     [
       "MiTLS.StreamAE.ctr_ref",
@@ -199,7 +199,7 @@
         "token_correspondence_FStar.Monotonic.Seq.increases"
       ],
       0,
-      "f01dee697a43fd15a4f4e75c2ef268bd"
+      "2190ec106ebdeedb2085b6faea6fd3d2"
     ],
     [
       "MiTLS.StreamAE.ctr",
@@ -247,7 +247,7 @@
         "typing_Spec.Poly1305.size_key"
       ],
       0,
-      "0c8deb14cac27d564fe1c9dccb951200"
+      "410894bf68028cc8f6a65435af42c8cc"
     ],
     [
       "MiTLS.StreamAE.state",
@@ -275,7 +275,7 @@
         "typing_FStar.Monotonic.HyperHeap.rid_freeable"
       ],
       0,
-      "5c761ffa7461b4121627bd81ff7d2457"
+      "42de023a9eb0f86014c40d7d14bb7427"
     ],
     [
       "MiTLS.StreamAE.__proj__State__item__log_region",
@@ -291,7 +291,7 @@
         "typing_FStar.Monotonic.HyperHeap.rid"
       ],
       0,
-      "ac5fc71b885a201a6e9f27d52d09b611"
+      "b4e2ac357d85b9c18cbf0ce332eb8b6d"
     ],
     [
       "MiTLS.StreamAE.__proj__State__item__log_region",
@@ -307,7 +307,7 @@
         "typing_FStar.Monotonic.HyperHeap.rid"
       ],
       0,
-      "4f116eb40a44cf97a187765a2e2441f0"
+      "76bb26142379c40d7aec1caf79dd6435"
     ],
     [
       "MiTLS.StreamAE.__proj__State__item__aead",
@@ -332,7 +332,7 @@
         "typing_MiTLS.TLSInfo.safe_region"
       ],
       0,
-      "9597264fd0a2ba39de706ed17d524081"
+      "706f61af1d79cf595b5dd105c72ebd45"
     ],
     [
       "MiTLS.StreamAE.__proj__State__item__aead",
@@ -354,7 +354,7 @@
         "refinement_interpretation_Tm_refine_e1acd0abe5a31ea7c43d473659af1eeb"
       ],
       0,
-      "9cdc6fd6684b73a40d2d3e4a1ddf571d"
+      "1725657cb127a88e4e75e52c74e6003a"
     ],
     [
       "MiTLS.StreamAE.__proj__State__item__log",
@@ -363,7 +363,7 @@
       1,
       [ "@query" ],
       0,
-      "bac1d19c44df111b18f31bdaa2d22f91"
+      "402c333bf2654c9281f90c54f918784d"
     ],
     [
       "MiTLS.StreamAE.__proj__State__item__log",
@@ -372,7 +372,7 @@
       1,
       [ "@query" ],
       0,
-      "aff380f1f7f5d2dd58c7a0bdd423dfbb"
+      "03b9bed1aa3f7b4119da8c1677a6d539"
     ],
     [
       "MiTLS.StreamAE.__proj__State__item__counter",
@@ -381,7 +381,7 @@
       1,
       [ "@query" ],
       0,
-      "9cb7fccced3e8c34c2e71cc9acf4e218"
+      "54fd2a48c053813243396543100a4962"
     ],
     [
       "MiTLS.StreamAE.__proj__State__item__counter",
@@ -390,7 +390,7 @@
       1,
       [ "@query" ],
       0,
-      "b73f4e94ae1a358ec2bc6db83f3b3d03"
+      "16644129bf470bca7d0e42f82be4c137"
     ]
   ]
 ]

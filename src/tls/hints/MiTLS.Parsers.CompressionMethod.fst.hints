@@ -12,7 +12,7 @@
         "typing_FStar.UInt8.t"
       ],
       0,
-      "d9df48c2ceb7705d0fbe4de0c62290e5"
+      "c91c90778a9eb5ee4de10b7661cfe2c5"
     ],
     [
       "MiTLS.Parsers.CompressionMethod.__proj__Unknown_compressionMethod__item___0",
@@ -24,7 +24,7 @@
         "refinement_interpretation_Tm_refine_347738d49e384eed591f5865dd9238ca"
       ],
       0,
-      "0bec5ec991034ad38916bd655a117c98"
+      "d68f4ad532cc30ac58b32a01efddabb4"
     ],
     [
       "MiTLS.Parsers.CompressionMethod.string_of_compressionMethod",
@@ -39,7 +39,7 @@
         "projection_inverse_BoxBool_proj_0"
       ],
       0,
-      "0cc8b3bf2d80b5b77a8f071490580c5f"
+      "79e3630c99e48fc4d04537afcf987c9f"
     ],
     [
       "MiTLS.Parsers.CompressionMethod.compressionMethod_enum",
@@ -51,7 +51,7 @@
         "assumption_MiTLS.Parsers.CompressionMethod.compressionMethod__uu___haseq"
       ],
       0,
-      "80f22de8645adbf603ed55ded8e5d524"
+      "f57a9573fb0ad331f781472ad64d7e75"
     ],
     [
       "MiTLS.Parsers.CompressionMethod.synth_compressionMethod",
@@ -59,11 +59,19 @@
       2,
       1,
       [
-        "@query",
-        "assumption_MiTLS.Parsers.CompressionMethod.compressionMethod__uu___haseq"
+        "@MaxIFuel_assumption", "@query",
+        "assumption_MiTLS.Parsers.CompressionMethod.compressionMethod__uu___haseq",
+        "data_elim_LowParse.Spec.Enum.Unknown",
+        "disc_equation_LowParse.Spec.Enum.Known",
+        "disc_equation_LowParse.Spec.Enum.Unknown",
+        "equation_LowParse.Spec.Enum.unknown_enum_repr",
+        "equation_MiTLS.Parsers.CompressionMethod.compressionMethod_enum",
+        "fuel_guarded_inversion_LowParse.Spec.Enum.maybe_enum_key",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Tm_refine_42952339d1ff6a9a240497d58590f0b2"
       ],
       0,
-      "ba9275b56bf06796f10d9e409e31df3a"
+      "739bd855a90d1598c77c48b769cf2c6b"
     ],
     [
       "MiTLS.Parsers.CompressionMethod.synth_compressionMethod",
@@ -83,7 +91,7 @@
         "refinement_interpretation_Tm_refine_42952339d1ff6a9a240497d58590f0b2"
       ],
       0,
-      "649b4d87f8fefc79c7d30884ed04b55c"
+      "481181282f88069959c4139991ef2b06"
     ],
     [
       "MiTLS.Parsers.CompressionMethod.synth_compressionMethod_inv",
@@ -99,7 +107,7 @@
         "refinement_interpretation_Tm_refine_e2d1966ed6f4fd3dcc1df0759c50ae28"
       ],
       0,
-      "a15c4a638b4cbb54f2f65be80620d60b"
+      "7e24fa5401a1abae55e7030352033cce"
     ],
     [
       "MiTLS.Parsers.CompressionMethod.lemma_synth_compressionMethod_inv'",
@@ -115,7 +123,7 @@
         "token_correspondence_MiTLS.Parsers.CompressionMethod.synth_compressionMethod_inv"
       ],
       0,
-      "8d8c37e18e167f017a528cbb1ad73f21"
+      "ac316f483f6b9f7a68d16c93bc620095"
     ],
     [
       "MiTLS.Parsers.CompressionMethod.lemma_synth_compressionMethod_inj",
@@ -127,7 +135,7 @@
         "assumption_MiTLS.Parsers.CompressionMethod.compressionMethod__uu___haseq"
       ],
       0,
-      "9f41ff64ee2d82659e872212b5849b3d"
+      "bc5772dc5f69788c671b0a550f2aa962"
     ],
     [
       "MiTLS.Parsers.CompressionMethod.lemma_synth_compressionMethod_inv",
@@ -159,7 +167,7 @@
         "typing_tok_MiTLS.Parsers.CompressionMethod.NullCompression@tok"
       ],
       0,
-      "f8feaa05d778a012437e5732def987c3"
+      "c491a40fbb7716ae8ace3d9be0173def"
     ],
     [
       "MiTLS.Parsers.CompressionMethod.parse_maybe_compressionMethod_key",
@@ -171,7 +179,7 @@
         "assumption_MiTLS.Parsers.CompressionMethod.compressionMethod__uu___haseq"
       ],
       0,
-      "3d2a60e6e5e8f51d86a36176e7166c1d"
+      "e9f7064f391f0734b8703ff05172790c"
     ],
     [
       "MiTLS.Parsers.CompressionMethod.serialize_maybe_compressionMethod_key",
@@ -183,7 +191,7 @@
         "assumption_MiTLS.Parsers.CompressionMethod.compressionMethod__uu___haseq"
       ],
       0,
-      "5d8d3fe3c47c76e41e682527dc957cc0"
+      "e746881d9b8832a3733337d9f1476182"
     ],
     [
       "MiTLS.Parsers.CompressionMethod.compressionMethod_parser",
@@ -195,7 +203,7 @@
         "assumption_MiTLS.Parsers.CompressionMethod.compressionMethod__uu___haseq"
       ],
       0,
-      "787ba61e5fb9e7fc39b68a4df4163f63"
+      "5aa9a3350b2c09c37c50f57b5dc6d9e1"
     ],
     [
       "MiTLS.Parsers.CompressionMethod.compressionMethod_serializer",
@@ -207,7 +215,7 @@
         "assumption_MiTLS.Parsers.CompressionMethod.compressionMethod__uu___haseq"
       ],
       0,
-      "e4bb62f8a9a48c457f68c3315b1c8312"
+      "fa5061f6386fd3cf8fbbb422d54ef8c9"
     ],
     [
       "MiTLS.Parsers.CompressionMethod.compressionMethod_bytesize_eq",
@@ -219,7 +227,7 @@
         "equation_MiTLS.Parsers.CompressionMethod.compressionMethod_bytesize"
       ],
       0,
-      "ae1117899d4ea04ea9b13c0042b24f79"
+      "cc7c9f1c58d5c6299a64c38a1342d46d"
     ],
     [
       "MiTLS.Parsers.CompressionMethod.parse32_maybe_compressionMethod_key",
@@ -237,7 +245,7 @@
         "projection_inverse_Prims.Cons_tl"
       ],
       0,
-      "35da76f618bcb6207ac67c64b0f086df"
+      "744c6314843fff18f6c0a1db425c39f2"
     ],
     [
       "MiTLS.Parsers.CompressionMethod.parse32_maybe_compressionMethod_key",
@@ -255,7 +263,7 @@
         "projection_inverse_Prims.Cons_tl"
       ],
       0,
-      "35da76f618bcb6207ac67c64b0f086df"
+      "744c6314843fff18f6c0a1db425c39f2"
     ],
     [
       "MiTLS.Parsers.CompressionMethod.parse32_maybe_compressionMethod_key",
@@ -267,7 +275,7 @@
         "assumption_MiTLS.Parsers.CompressionMethod.compressionMethod__uu___haseq"
       ],
       0,
-      "a32ef21a241808dee8536dc8c1853b7b"
+      "d6c27bf3286b74410ff68d117cf1ae15"
     ],
     [
       "MiTLS.Parsers.CompressionMethod.parse32_maybe_compressionMethod_key",
@@ -279,7 +287,7 @@
         "assumption_MiTLS.Parsers.CompressionMethod.compressionMethod__uu___haseq"
       ],
       0,
-      "a32ef21a241808dee8536dc8c1853b7b"
+      "d6c27bf3286b74410ff68d117cf1ae15"
     ],
     [
       "MiTLS.Parsers.CompressionMethod.compressionMethod_parser32",
@@ -291,7 +299,7 @@
         "assumption_MiTLS.Parsers.CompressionMethod.compressionMethod__uu___haseq"
       ],
       0,
-      "afe42f4ff6845a28c08b372d7f8287e1"
+      "ccd12b4c30daa510dc8c0d19db0e9c23"
     ],
     [
       "MiTLS.Parsers.CompressionMethod.serialize32_maybe_compressionMethod_key",
@@ -309,7 +317,7 @@
         "projection_inverse_Prims.Cons_tl"
       ],
       0,
-      "ceac13d3eb4641071288202a2e76fc39"
+      "16c4fb119439e9eb6a19b28068e36d10"
     ],
     [
       "MiTLS.Parsers.CompressionMethod.serialize32_maybe_compressionMethod_key",
@@ -327,7 +335,7 @@
         "projection_inverse_Prims.Cons_tl"
       ],
       0,
-      "ceac13d3eb4641071288202a2e76fc39"
+      "16c4fb119439e9eb6a19b28068e36d10"
     ],
     [
       "MiTLS.Parsers.CompressionMethod.serialize32_maybe_compressionMethod_key",
@@ -339,7 +347,7 @@
         "assumption_MiTLS.Parsers.CompressionMethod.compressionMethod__uu___haseq"
       ],
       0,
-      "f0355ad3376fbf0df0cfc3b0477c54a8"
+      "d922a71cf20bc0de7b97e193e6c9b009"
     ],
     [
       "MiTLS.Parsers.CompressionMethod.serialize32_maybe_compressionMethod_key",
@@ -351,7 +359,7 @@
         "assumption_MiTLS.Parsers.CompressionMethod.compressionMethod__uu___haseq"
       ],
       0,
-      "f0355ad3376fbf0df0cfc3b0477c54a8"
+      "d922a71cf20bc0de7b97e193e6c9b009"
     ],
     [
       "MiTLS.Parsers.CompressionMethod.compressionMethod_serializer32",
@@ -363,7 +371,7 @@
         "assumption_MiTLS.Parsers.CompressionMethod.compressionMethod__uu___haseq"
       ],
       0,
-      "dd67ad3910bb07c45952d97a94b2fce6"
+      "9290deeede253f696ddcfe955dec9bcd"
     ],
     [
       "MiTLS.Parsers.CompressionMethod.compressionMethod_size32",
@@ -372,7 +380,7 @@
       1,
       [ "@query" ],
       0,
-      "595653c41b3fb115fa4309f84fea57e5"
+      "3bbfe6365e3e47de9fc5f47ad7c11449"
     ],
     [
       "MiTLS.Parsers.CompressionMethod.compressionMethod_validator",
@@ -390,7 +398,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata"
       ],
       0,
-      "dd55183916fa9ea18eb35df210ade955"
+      "69728b582b9bec4e873a30eb838040e3"
     ],
     [
       "MiTLS.Parsers.CompressionMethod.compressionMethod_jumper",
@@ -406,7 +414,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_low"
       ],
       0,
-      "292c5091e41fddaf02a951ceab6b631c"
+      "d953838a9d5d721fcecfac31844ed343"
     ],
     [
       "MiTLS.Parsers.CompressionMethod.read_maybe_compressionMethod_key",
@@ -418,7 +426,7 @@
         "assumption_MiTLS.Parsers.CompressionMethod.compressionMethod__uu___haseq"
       ],
       0,
-      "573bf7770d60cb1bda06a4086ee0fc8d"
+      "7a6708b855b4975df2aac1b8885d5584"
     ],
     [
       "MiTLS.Parsers.CompressionMethod.compressionMethod_reader",
@@ -430,7 +438,7 @@
         "assumption_MiTLS.Parsers.CompressionMethod.compressionMethod__uu___haseq"
       ],
       0,
-      "3ff2844a7e9f5d1a789cabc980827dbe"
+      "20f45abd4033732197ccbb5d1d28e901"
     ],
     [
       "MiTLS.Parsers.CompressionMethod.write_maybe_compressionMethod_key",
@@ -442,7 +450,7 @@
         "assumption_MiTLS.Parsers.CompressionMethod.compressionMethod__uu___haseq"
       ],
       0,
-      "7a9b6b8f44e70dfd9a60cf7060780203"
+      "1aff668b972dfeb94363a880895a9086"
     ],
     [
       "MiTLS.Parsers.CompressionMethod.write_maybe_compressionMethod_key",
@@ -454,7 +462,7 @@
         "assumption_MiTLS.Parsers.CompressionMethod.compressionMethod__uu___haseq"
       ],
       0,
-      "7a9b6b8f44e70dfd9a60cf7060780203"
+      "1aff668b972dfeb94363a880895a9086"
     ],
     [
       "MiTLS.Parsers.CompressionMethod.lserialize_maybe_compressionMethod_key",
@@ -475,7 +483,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind"
       ],
       0,
-      "c33e428d8be0f41629a6709341a40c9f"
+      "a69a53e23e5ff72974463efab79d09a0"
     ],
     [
       "MiTLS.Parsers.CompressionMethod.compressionMethod_writer",
@@ -487,7 +495,7 @@
         "assumption_MiTLS.Parsers.CompressionMethod.compressionMethod__uu___haseq"
       ],
       0,
-      "0526b3fe1a88e8ebdd2d6a4d7ab8bdf1"
+      "0bc0d2f914b7fc95e633f9fdad64a750"
     ],
     [
       "MiTLS.Parsers.CompressionMethod.compressionMethod_lserializer",
@@ -505,7 +513,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind"
       ],
       0,
-      "d33ace0bbe66f2a09fe5c478d82672b0"
+      "212e69d9802d3257bb8ca38f03bb832b"
     ],
     [
       "MiTLS.Parsers.CompressionMethod.compressionMethod_bytesize_eqn",
@@ -533,7 +541,7 @@
         "typing_MiTLS.Parsers.CompressionMethod.compressionMethod_serializer"
       ],
       0,
-      "bc46b97bc0acaf50c98919f0a821a1ba"
+      "13f96ad79a69507e0023703c608eaacd"
     ]
   ]
 ]

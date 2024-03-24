@@ -55,7 +55,7 @@
         "typing_Spec.Poly1305.size_key"
       ],
       0,
-      "5b4ffa0752002e14cf82c30052a5817f"
+      "3563f13e608c411f07bca0c1da4f0e33"
     ],
     [
       "MiTLS.Nonce.ex_rid",
@@ -68,7 +68,7 @@
         "typing_FStar.Monotonic.HyperHeap.rid"
       ],
       0,
-      "dc35b2472e89899fe2e44a86db1d4c15"
+      "a3f7b478868c07b17f96d2431b1826fe"
     ],
     [
       "MiTLS.Nonce.n_rid",
@@ -81,7 +81,7 @@
         "typing_FStar.Monotonic.HyperHeap.rid"
       ],
       0,
-      "7af13cb3b8b3ed3b07b7114a2d6ebdfc"
+      "d9333b264868bada74551b4c4d0c884e"
     ],
     [
       "MiTLS.Nonce.injective",
@@ -90,13 +90,18 @@
       1,
       [
         "@MaxIFuel_assumption", "@query", "equation_FStar.Bytes.lbytes",
-        "equation_MiTLS.Nonce.random",
+        "equation_FStar.HyperStack.ST.erid",
+        "equation_FStar.HyperStack.ST.ex_rid", "equation_MiTLS.Nonce.random",
+        "equation_Prims.eqtype",
+        "haseqTm_refine_6c5072d4c9562dd38fd2703ecfb013df",
         "haseqTm_refine_71ea40360194fe02ee1272538c9cacbc",
+        "refinement_interpretation_Tm_refine_365abba901205a01d0ef28ebf2198c47",
         "refinement_interpretation_Tm_refine_414d0a9f578ab0048252f8c8f552b99f",
-        "typing_FStar.Bytes.bytes"
+        "typing_FStar.Bytes.bytes", "typing_FStar.Monotonic.HyperHeap.rid",
+        "typing_FStar.Monotonic.HyperHeap.root"
       ],
       0,
-      "93e62aa6c9968b0efc50ebeaa61f133d"
+      "d95aaa685d9192bbaf3315f0384c4d10"
     ],
     [
       "MiTLS.Nonce.injective",
@@ -116,7 +121,7 @@
         "typing_FStar.Monotonic.HyperHeap.root"
       ],
       0,
-      "2120fa1e85aa623260761f58a67814a2"
+      "8b146568f3f27ff383d655a0a2a0999e"
     ],
     [
       "MiTLS.Nonce.nonce_rid_table",
@@ -153,7 +158,7 @@
         "typing_Tm_abs_26eef3985d99a56697f5a9d337882dba"
       ],
       0,
-      "48c1bbed7e8be433baa8214715218eb0"
+      "9f6ac38eb4fcb45f8b733bcb849e091f"
     ],
     [
       "MiTLS.Nonce.fresh",
@@ -174,7 +179,7 @@
         "typing_MiTLS.Nonce.n_rid"
       ],
       0,
-      "ff6f15b61b66b37773ab671f21e50442"
+      "bce2fea2810390d84cd821422d1cc1b9"
     ],
     [
       "MiTLS.Nonce.fresh_region_nonce",
@@ -182,12 +187,20 @@
       2,
       1,
       [
-        "@MaxIFuel_assumption", "@query", "equation_Prims.eqtype",
+        "@MaxIFuel_assumption", "@query",
+        "assumption_FStar.Pervasives.Native.option__uu___haseq",
+        "equation_FStar.Bytes.lbytes", "equation_FStar.HyperStack.ST.erid",
+        "equation_FStar.HyperStack.ST.ex_rid", "equation_MiTLS.Nonce.n_rid",
+        "equation_MiTLS.Nonce.random", "equation_Prims.eqtype",
+        "haseqTm_refine_6c5072d4c9562dd38fd2703ecfb013df",
+        "haseqTm_refine_71ea40360194fe02ee1272538c9cacbc",
+        "haseqTm_refine_c58920e347975109a384d8f407e685bc",
         "refinement_interpretation_Tm_refine_414d0a9f578ab0048252f8c8f552b99f",
-        "typing_FStar.Monotonic.HyperHeap.rid"
+        "typing_FStar.Bytes.bytes", "typing_FStar.Monotonic.HyperHeap.rid",
+        "typing_MiTLS.Nonce.n_rid"
       ],
       0,
-      "16f8618f2c8f45f592ad2c23cd08ae89"
+      "72f4557b4b1c8c33d658234f92a62e2d"
     ],
     [
       "MiTLS.Nonce.fresh_region_nonce",
@@ -208,24 +221,11 @@
         "typing_MiTLS.Nonce.n_rid"
       ],
       0,
-      "342de4e1b5d55853ec994ef9a8c8d475"
+      "ced72d83daa1ec57c2a2bf6b680f0777"
     ],
     [
       "MiTLS.Nonce.registered",
       1,
-      2,
-      1,
-      [
-        "@MaxIFuel_assumption", "@query", "equation_Prims.eqtype",
-        "refinement_interpretation_Tm_refine_414d0a9f578ab0048252f8c8f552b99f",
-        "typing_FStar.Monotonic.HyperHeap.rid"
-      ],
-      0,
-      "431dc621bc223e3f6b04a8152b28bc54"
-    ],
-    [
-      "MiTLS.Nonce.registered",
-      2,
       2,
       1,
       [
@@ -236,11 +236,11 @@
         "typing_FStar.Bytes.bytes"
       ],
       0,
-      "dd805fd5ca29672b6292ae26ee815c39"
+      "eaf6728a2774cda0beec6410659cab00"
     ],
     [
-      "MiTLS.Nonce.testify",
-      1,
+      "MiTLS.Nonce.registered",
+      2,
       2,
       1,
       [
@@ -249,11 +249,11 @@
         "typing_FStar.Monotonic.HyperHeap.rid"
       ],
       0,
-      "70651572db983b845c1f5ffdfb342f3b"
+      "04cb8d82d9307726f07e2847ed42dc61"
     ],
     [
       "MiTLS.Nonce.testify",
-      2,
+      1,
       2,
       1,
       [
@@ -265,7 +265,20 @@
         "typing_FStar.Bytes.bytes"
       ],
       0,
-      "92533cd78d79029f2df3e6275bddfb67"
+      "2693060e851ebb1415e0e75cd6bcc42a"
+    ],
+    [
+      "MiTLS.Nonce.testify",
+      2,
+      2,
+      1,
+      [
+        "@MaxIFuel_assumption", "@query", "equation_Prims.eqtype",
+        "refinement_interpretation_Tm_refine_414d0a9f578ab0048252f8c8f552b99f",
+        "typing_FStar.Monotonic.HyperHeap.rid"
+      ],
+      0,
+      "04cb8d82d9307726f07e2847ed42dc61"
     ],
     [
       "MiTLS.Nonce.role_nonce",
@@ -278,7 +291,7 @@
         "typing_FStar.Monotonic.HyperHeap.rid"
       ],
       0,
-      "f4076b768d3b5f86ddb7842e02d1e1f3"
+      "7ec5007e2032a31e4198335c306dcc4a"
     ],
     [
       "MiTLS.Nonce.mkHelloRandom",
@@ -297,7 +310,7 @@
         "typing_FStar.Monotonic.HyperHeap.root"
       ],
       0,
-      "5961ab9f2aca22bafec4e04e53a1e707"
+      "93fec9a891e415c3d0e7a6d631cefd52"
     ],
     [
       "MiTLS.Nonce.lookup",
@@ -312,7 +325,7 @@
         "typing_FStar.Monotonic.HyperHeap.root"
       ],
       0,
-      "13cfd353445031574be82ae4e7e38ff9"
+      "dc55d2a8642d3f05a7cbd8798769be03"
     ],
     [
       "MiTLS.Nonce.nonce_rids_exists",
@@ -324,10 +337,11 @@
         "equation_MiTLS.Nonce.random",
         "haseqTm_refine_71ea40360194fe02ee1272538c9cacbc",
         "refinement_interpretation_Tm_refine_414d0a9f578ab0048252f8c8f552b99f",
+        "refinement_interpretation_Tm_refine_83a91e4831f772d35d862d2ca716b16d",
         "typing_FStar.Bytes.bytes"
       ],
       0,
-      "836b3b5fd78e4e16414460d8b85b87ef"
+      "65efd5f118c081f90b0c5910aa4b5343"
     ],
     [
       "MiTLS.Nonce.nonce_rids_exists",
@@ -343,7 +357,7 @@
         "typing_FStar.Bytes.bytes"
       ],
       0,
-      "8c557afb1b44dde671e5fbc6bb9c3385"
+      "b21f79a14f00b9d1f9b9ac4c08ba83d8"
     ],
     [
       "MiTLS.Nonce.new_region",
@@ -358,7 +372,7 @@
         "typing_FStar.Monotonic.HyperHeap.root"
       ],
       0,
-      "fe3db17ad4c0d77482b5572fb8535f11"
+      "66742ca57226d0189e883205eaf8eae4"
     ]
   ]
 ]
