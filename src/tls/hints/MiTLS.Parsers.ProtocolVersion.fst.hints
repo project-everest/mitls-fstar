@@ -12,7 +12,7 @@
         "typing_FStar.UInt16.t"
       ],
       0,
-      "823fc2f4b1d7680b2a365badd1e2cadc"
+      "3276fda17fdb65d4cfc19ab15668e04f"
     ],
     [
       "MiTLS.Parsers.ProtocolVersion.__proj__Unknown_protocolVersion__item___0",
@@ -24,7 +24,7 @@
         "refinement_interpretation_Tm_refine_647ba34e0fd2a3e39666000c84cb9c38"
       ],
       0,
-      "ea2f7f944bc8f73684ca02b0f01e8984"
+      "613e548739b9a9668a18a28ba3e0f8ca"
     ],
     [
       "MiTLS.Parsers.ProtocolVersion.string_of_protocolVersion",
@@ -43,7 +43,7 @@
         "projection_inverse_BoxBool_proj_0"
       ],
       0,
-      "5efa026840dfb1867aeb5347a4fb7cac"
+      "9d1046fb552c9c29f68b5198d91be041"
     ],
     [
       "MiTLS.Parsers.ProtocolVersion.protocolVersion_enum",
@@ -55,7 +55,7 @@
         "assumption_MiTLS.Parsers.ProtocolVersion.protocolVersion__uu___haseq"
       ],
       0,
-      "082aac29bb60d7c67d7fe2985962220e"
+      "d16e7e25bd0064b57ec45acb3abd6770"
     ],
     [
       "MiTLS.Parsers.ProtocolVersion.synth_protocolVersion",
@@ -63,11 +63,21 @@
       2,
       1,
       [
-        "@query",
-        "assumption_MiTLS.Parsers.ProtocolVersion.protocolVersion__uu___haseq"
+        "@MaxIFuel_assumption", "@query",
+        "MiTLS.Parsers.ProtocolVersion_pretyping_61c7071b980ab3c8b725a996404933f0",
+        "assumption_MiTLS.Parsers.ProtocolVersion.protocolVersion__uu___haseq",
+        "data_elim_LowParse.Spec.Enum.Unknown",
+        "data_typing_intro_MiTLS.Parsers.ProtocolVersion.TLS_1p0@tok",
+        "disc_equation_LowParse.Spec.Enum.Known",
+        "disc_equation_LowParse.Spec.Enum.Unknown",
+        "equation_LowParse.Spec.Enum.unknown_enum_repr",
+        "equation_MiTLS.Parsers.ProtocolVersion.protocolVersion_enum",
+        "fuel_guarded_inversion_LowParse.Spec.Enum.maybe_enum_key",
+        "projection_inverse_BoxBool_proj_0",
+        "refinement_interpretation_Tm_refine_42952339d1ff6a9a240497d58590f0b2"
       ],
       0,
-      "600f115fd1d22d604bb1041cd68855e9"
+      "64c2bb5697c360899dceb7c06b41ff3a"
     ],
     [
       "MiTLS.Parsers.ProtocolVersion.synth_protocolVersion",
@@ -89,7 +99,7 @@
         "refinement_interpretation_Tm_refine_42952339d1ff6a9a240497d58590f0b2"
       ],
       0,
-      "aa925f9467ea53d22a812d9c25b7d83d"
+      "898b64fb870ea261b8ec3e90474c6083"
     ],
     [
       "MiTLS.Parsers.ProtocolVersion.synth_protocolVersion_inv",
@@ -105,7 +115,7 @@
         "refinement_interpretation_Tm_refine_bbc84b4ce427beea2c630dcb929e6562"
       ],
       0,
-      "6e5d79f4bb53717b3f1f977b9c88be06"
+      "255935ecc831055fdb99a6819360ed19"
     ],
     [
       "MiTLS.Parsers.ProtocolVersion.lemma_synth_protocolVersion_inv'",
@@ -121,7 +131,7 @@
         "token_correspondence_MiTLS.Parsers.ProtocolVersion.synth_protocolVersion_inv"
       ],
       0,
-      "4a33f108b27491165377e5efefea8431"
+      "906dea15d7e6e30832e0817fdd2fec55"
     ],
     [
       "MiTLS.Parsers.ProtocolVersion.lemma_synth_protocolVersion_inj",
@@ -133,7 +143,7 @@
         "assumption_MiTLS.Parsers.ProtocolVersion.protocolVersion__uu___haseq"
       ],
       0,
-      "af82331f2a278aaf89e9fcad6474649a"
+      "695a96f3d80042463dd766471153ace3"
     ],
     [
       "MiTLS.Parsers.ProtocolVersion.lemma_synth_protocolVersion_inv",
@@ -164,7 +174,7 @@
         "typing_tok_MiTLS.Parsers.ProtocolVersion.SSL_3p0@tok"
       ],
       0,
-      "b2d9701f97836fdda2c92381a4f90f55"
+      "2651e8ebc686d31a21d53f21be835ea1"
     ],
     [
       "MiTLS.Parsers.ProtocolVersion.parse_maybe_protocolVersion_key",
@@ -176,7 +186,7 @@
         "assumption_MiTLS.Parsers.ProtocolVersion.protocolVersion__uu___haseq"
       ],
       0,
-      "dd0f5819721ebb7111c3c3482acbb7f7"
+      "11d240f6d2f0c545be0a49b239179bf1"
     ],
     [
       "MiTLS.Parsers.ProtocolVersion.serialize_maybe_protocolVersion_key",
@@ -188,7 +198,7 @@
         "assumption_MiTLS.Parsers.ProtocolVersion.protocolVersion__uu___haseq"
       ],
       0,
-      "ae1ba0b9197782df00ef68492b0561d3"
+      "88e676044047d56a948e15e3b066d2f6"
     ],
     [
       "MiTLS.Parsers.ProtocolVersion.protocolVersion_parser",
@@ -200,7 +210,7 @@
         "assumption_MiTLS.Parsers.ProtocolVersion.protocolVersion__uu___haseq"
       ],
       0,
-      "19eea2c29f7d54b278996f66233a945d"
+      "a2ff9e177939df342c1e2ab32043a791"
     ],
     [
       "MiTLS.Parsers.ProtocolVersion.protocolVersion_serializer",
@@ -212,7 +222,7 @@
         "assumption_MiTLS.Parsers.ProtocolVersion.protocolVersion__uu___haseq"
       ],
       0,
-      "a1a420dbed88f12d969c18d7a4c46e36"
+      "501fdaeade35e6b2937ff33bbc09bd24"
     ],
     [
       "MiTLS.Parsers.ProtocolVersion.protocolVersion_bytesize_eq",
@@ -224,7 +234,7 @@
         "equation_MiTLS.Parsers.ProtocolVersion.protocolVersion_bytesize"
       ],
       0,
-      "de4cf332bbff9466759ebf26157c0a4f"
+      "bafa42c3681d3810c33cbd91f675f52a"
     ],
     [
       "MiTLS.Parsers.ProtocolVersion.parse32_maybe_protocolVersion_key",
@@ -242,7 +252,7 @@
         "projection_inverse_Prims.Cons_tl"
       ],
       0,
-      "dde1ff7fc8001607b749c3a664f5b4b0"
+      "9dc2e0a00b2792b5e0cb947da1bba05c"
     ],
     [
       "MiTLS.Parsers.ProtocolVersion.parse32_maybe_protocolVersion_key",
@@ -260,7 +270,7 @@
         "projection_inverse_Prims.Cons_tl"
       ],
       0,
-      "dde1ff7fc8001607b749c3a664f5b4b0"
+      "9dc2e0a00b2792b5e0cb947da1bba05c"
     ],
     [
       "MiTLS.Parsers.ProtocolVersion.parse32_maybe_protocolVersion_key",
@@ -272,7 +282,7 @@
         "assumption_MiTLS.Parsers.ProtocolVersion.protocolVersion__uu___haseq"
       ],
       0,
-      "b2340b307938442b9f2f3bb0e528ce78"
+      "0657bc39a0d7cff54a9c97ff30d48a4e"
     ],
     [
       "MiTLS.Parsers.ProtocolVersion.parse32_maybe_protocolVersion_key",
@@ -284,7 +294,7 @@
         "assumption_MiTLS.Parsers.ProtocolVersion.protocolVersion__uu___haseq"
       ],
       0,
-      "b2340b307938442b9f2f3bb0e528ce78"
+      "0657bc39a0d7cff54a9c97ff30d48a4e"
     ],
     [
       "MiTLS.Parsers.ProtocolVersion.parse32_maybe_protocolVersion_key",
@@ -296,7 +306,7 @@
         "assumption_MiTLS.Parsers.ProtocolVersion.protocolVersion__uu___haseq"
       ],
       0,
-      "b2340b307938442b9f2f3bb0e528ce78"
+      "0657bc39a0d7cff54a9c97ff30d48a4e"
     ],
     [
       "MiTLS.Parsers.ProtocolVersion.parse32_maybe_protocolVersion_key",
@@ -308,7 +318,7 @@
         "assumption_MiTLS.Parsers.ProtocolVersion.protocolVersion__uu___haseq"
       ],
       0,
-      "b2340b307938442b9f2f3bb0e528ce78"
+      "0657bc39a0d7cff54a9c97ff30d48a4e"
     ],
     [
       "MiTLS.Parsers.ProtocolVersion.parse32_maybe_protocolVersion_key",
@@ -320,7 +330,7 @@
         "assumption_MiTLS.Parsers.ProtocolVersion.protocolVersion__uu___haseq"
       ],
       0,
-      "b2340b307938442b9f2f3bb0e528ce78"
+      "0657bc39a0d7cff54a9c97ff30d48a4e"
     ],
     [
       "MiTLS.Parsers.ProtocolVersion.parse32_maybe_protocolVersion_key",
@@ -332,7 +342,7 @@
         "assumption_MiTLS.Parsers.ProtocolVersion.protocolVersion__uu___haseq"
       ],
       0,
-      "b2340b307938442b9f2f3bb0e528ce78"
+      "0657bc39a0d7cff54a9c97ff30d48a4e"
     ],
     [
       "MiTLS.Parsers.ProtocolVersion.protocolVersion_parser32",
@@ -344,7 +354,7 @@
         "assumption_MiTLS.Parsers.ProtocolVersion.protocolVersion__uu___haseq"
       ],
       0,
-      "a992d4acea117d858b1beb31a4b04ba7"
+      "3405bcc1b21e361a451c5ed9c281a481"
     ],
     [
       "MiTLS.Parsers.ProtocolVersion.serialize32_maybe_protocolVersion_key",
@@ -362,7 +372,7 @@
         "projection_inverse_Prims.Cons_tl"
       ],
       0,
-      "647708c57f3603c6f47f794c39bcd738"
+      "1fde3c925fe67da45059f74d0f6ef1c0"
     ],
     [
       "MiTLS.Parsers.ProtocolVersion.serialize32_maybe_protocolVersion_key",
@@ -380,7 +390,7 @@
         "projection_inverse_Prims.Cons_tl"
       ],
       0,
-      "647708c57f3603c6f47f794c39bcd738"
+      "1fde3c925fe67da45059f74d0f6ef1c0"
     ],
     [
       "MiTLS.Parsers.ProtocolVersion.serialize32_maybe_protocolVersion_key",
@@ -392,7 +402,7 @@
         "assumption_MiTLS.Parsers.ProtocolVersion.protocolVersion__uu___haseq"
       ],
       0,
-      "05a67044a100c17a6f80fb6a8e0409fe"
+      "a6725f5b262cb31a618dc4da70398d8b"
     ],
     [
       "MiTLS.Parsers.ProtocolVersion.serialize32_maybe_protocolVersion_key",
@@ -404,7 +414,7 @@
         "assumption_MiTLS.Parsers.ProtocolVersion.protocolVersion__uu___haseq"
       ],
       0,
-      "05a67044a100c17a6f80fb6a8e0409fe"
+      "a6725f5b262cb31a618dc4da70398d8b"
     ],
     [
       "MiTLS.Parsers.ProtocolVersion.serialize32_maybe_protocolVersion_key",
@@ -416,7 +426,7 @@
         "assumption_MiTLS.Parsers.ProtocolVersion.protocolVersion__uu___haseq"
       ],
       0,
-      "05a67044a100c17a6f80fb6a8e0409fe"
+      "a6725f5b262cb31a618dc4da70398d8b"
     ],
     [
       "MiTLS.Parsers.ProtocolVersion.serialize32_maybe_protocolVersion_key",
@@ -428,7 +438,7 @@
         "assumption_MiTLS.Parsers.ProtocolVersion.protocolVersion__uu___haseq"
       ],
       0,
-      "05a67044a100c17a6f80fb6a8e0409fe"
+      "a6725f5b262cb31a618dc4da70398d8b"
     ],
     [
       "MiTLS.Parsers.ProtocolVersion.serialize32_maybe_protocolVersion_key",
@@ -440,7 +450,7 @@
         "assumption_MiTLS.Parsers.ProtocolVersion.protocolVersion__uu___haseq"
       ],
       0,
-      "05a67044a100c17a6f80fb6a8e0409fe"
+      "a6725f5b262cb31a618dc4da70398d8b"
     ],
     [
       "MiTLS.Parsers.ProtocolVersion.serialize32_maybe_protocolVersion_key",
@@ -452,7 +462,7 @@
         "assumption_MiTLS.Parsers.ProtocolVersion.protocolVersion__uu___haseq"
       ],
       0,
-      "05a67044a100c17a6f80fb6a8e0409fe"
+      "a6725f5b262cb31a618dc4da70398d8b"
     ],
     [
       "MiTLS.Parsers.ProtocolVersion.protocolVersion_serializer32",
@@ -464,7 +474,7 @@
         "assumption_MiTLS.Parsers.ProtocolVersion.protocolVersion__uu___haseq"
       ],
       0,
-      "91382ac0f9b576cad03b11dcb44a989b"
+      "a438ca4e9d4d46a58cfa0696b4b4e831"
     ],
     [
       "MiTLS.Parsers.ProtocolVersion.protocolVersion_size32",
@@ -473,7 +483,7 @@
       1,
       [ "@query" ],
       0,
-      "540611aca63eb1663d1468b9a8c809f0"
+      "b979d0b7f6818cd614aed04d2bc8f4b1"
     ],
     [
       "MiTLS.Parsers.ProtocolVersion.protocolVersion_validator",
@@ -491,7 +501,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_metadata"
       ],
       0,
-      "2daff9997e0055baec1c27f59297ff34"
+      "9c3af911488ccbf7dbb14d9a2d9b1167"
     ],
     [
       "MiTLS.Parsers.ProtocolVersion.protocolVersion_jumper",
@@ -507,7 +517,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_low"
       ],
       0,
-      "72d2795bb352148dda72deea03c1c89f"
+      "4c955fd337538ff664838b631be17b16"
     ],
     [
       "MiTLS.Parsers.ProtocolVersion.read_maybe_protocolVersion_key",
@@ -519,7 +529,7 @@
         "assumption_MiTLS.Parsers.ProtocolVersion.protocolVersion__uu___haseq"
       ],
       0,
-      "d997649f74969f28e4a31c196f76eacd"
+      "5866510961f8601e4d971acb1859d4b1"
     ],
     [
       "MiTLS.Parsers.ProtocolVersion.protocolVersion_reader",
@@ -531,7 +541,7 @@
         "assumption_MiTLS.Parsers.ProtocolVersion.protocolVersion__uu___haseq"
       ],
       0,
-      "e25018cc3d219cc7a243ceff7aeefbd6"
+      "7fdfb28e95e7a424463d2fd9bccf8b0f"
     ],
     [
       "MiTLS.Parsers.ProtocolVersion.write_maybe_protocolVersion_key",
@@ -543,7 +553,7 @@
         "assumption_MiTLS.Parsers.ProtocolVersion.protocolVersion__uu___haseq"
       ],
       0,
-      "372f722b73f07c7daae220dc9c90bc78"
+      "cccb3f4a233d2edc866fa98d3e5c0786"
     ],
     [
       "MiTLS.Parsers.ProtocolVersion.write_maybe_protocolVersion_key",
@@ -555,7 +565,7 @@
         "assumption_MiTLS.Parsers.ProtocolVersion.protocolVersion__uu___haseq"
       ],
       0,
-      "372f722b73f07c7daae220dc9c90bc78"
+      "cccb3f4a233d2edc866fa98d3e5c0786"
     ],
     [
       "MiTLS.Parsers.ProtocolVersion.write_maybe_protocolVersion_key",
@@ -567,7 +577,7 @@
         "assumption_MiTLS.Parsers.ProtocolVersion.protocolVersion__uu___haseq"
       ],
       0,
-      "372f722b73f07c7daae220dc9c90bc78"
+      "cccb3f4a233d2edc866fa98d3e5c0786"
     ],
     [
       "MiTLS.Parsers.ProtocolVersion.write_maybe_protocolVersion_key",
@@ -579,7 +589,7 @@
         "assumption_MiTLS.Parsers.ProtocolVersion.protocolVersion__uu___haseq"
       ],
       0,
-      "372f722b73f07c7daae220dc9c90bc78"
+      "cccb3f4a233d2edc866fa98d3e5c0786"
     ],
     [
       "MiTLS.Parsers.ProtocolVersion.write_maybe_protocolVersion_key",
@@ -591,7 +601,7 @@
         "assumption_MiTLS.Parsers.ProtocolVersion.protocolVersion__uu___haseq"
       ],
       0,
-      "372f722b73f07c7daae220dc9c90bc78"
+      "cccb3f4a233d2edc866fa98d3e5c0786"
     ],
     [
       "MiTLS.Parsers.ProtocolVersion.write_maybe_protocolVersion_key",
@@ -603,7 +613,7 @@
         "assumption_MiTLS.Parsers.ProtocolVersion.protocolVersion__uu___haseq"
       ],
       0,
-      "372f722b73f07c7daae220dc9c90bc78"
+      "cccb3f4a233d2edc866fa98d3e5c0786"
     ],
     [
       "MiTLS.Parsers.ProtocolVersion.lserialize_maybe_protocolVersion_key",
@@ -624,7 +634,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind"
       ],
       0,
-      "9274a1a49635aa6df2d51826d171db60"
+      "11cb9b39d0492a716c1828a5d21c515e"
     ],
     [
       "MiTLS.Parsers.ProtocolVersion.protocolVersion_writer",
@@ -636,7 +646,7 @@
         "assumption_MiTLS.Parsers.ProtocolVersion.protocolVersion__uu___haseq"
       ],
       0,
-      "5ceac940cac969443da69808f28330f4"
+      "85a69848553926bf34eba83f4bd57b1b"
     ],
     [
       "MiTLS.Parsers.ProtocolVersion.protocolVersion_lserializer",
@@ -654,7 +664,7 @@
         "projection_inverse_LowParse.Spec.Base.Mkparser_kind__parser_kind_subkind"
       ],
       0,
-      "efe40d3bc85f011985b1f1597ee5e1ea"
+      "4f4298838a4d6d97417f591806790721"
     ],
     [
       "MiTLS.Parsers.ProtocolVersion.protocolVersion_bytesize_eqn",
@@ -682,7 +692,7 @@
         "typing_MiTLS.Parsers.ProtocolVersion.protocolVersion_serializer"
       ],
       0,
-      "61a63dbf910ee1b6b87e70a7b208fab0"
+      "4cf8373fd496f2727507785545d930f6"
     ]
   ]
 ]

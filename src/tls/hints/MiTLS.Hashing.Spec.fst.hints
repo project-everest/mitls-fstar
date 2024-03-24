@@ -23,7 +23,7 @@
         "projection_inverse_FStar.Integers.Unsigned__0"
       ],
       0,
-      "a126efa4fc8108981a25b1e1aa0c61ad"
+      "2d1d4f0f7196bd12248f78727c94dfb0"
     ],
     [
       "MiTLS.Hashing.Spec.tag",
@@ -32,7 +32,7 @@
       0,
       [ "@query" ],
       0,
-      "aaf412fad47b5676acd593d73d675b92"
+      "92d141ffa4604d0492ccd85f915757bc"
     ],
     [
       "MiTLS.Hashing.Spec.anyTag",
@@ -44,7 +44,7 @@
         "projection_inverse_BoxInt_proj_0"
       ],
       0,
-      "938843aba443d03776ad63b6c14d2126"
+      "7609d17d54de36a2ea7008f77dabff58"
     ],
     [
       "MiTLS.Hashing.Spec.lemma_tagLen",
@@ -78,7 +78,7 @@
         "typing_Spec.Hash.Definitions.is_shake"
       ],
       0,
-      "92f6d445f2dfc64065b31caa254d7e71"
+      "0150e67e3911638c95d7d96c93dc919b"
     ],
     [
       "MiTLS.Hashing.Spec.lemma_blockLength",
@@ -119,7 +119,7 @@
         "typing_Spec.Hash.Definitions.is_shake"
       ],
       0,
-      "32227069f486147b8c1ce669e8373f13"
+      "07701448a2613173b8f869e74dadab3c"
     ],
     [
       "MiTLS.Hashing.Spec.hkey",
@@ -128,7 +128,7 @@
       0,
       [ "@query" ],
       0,
-      "5790fbfc2501c44d169a010e6e401cd0"
+      "c587366a864197cf9b4dd527dae602f2"
     ],
     [
       "MiTLS.Hashing.Spec.hmac",
@@ -154,7 +154,7 @@
         "typing_FStar.UInt8.t"
       ],
       0,
-      "83f11eca6b5968021ede954363553538"
+      "5d063dfbe9f3d049f205c9313063e0a3"
     ],
     [
       "MiTLS.Hashing.Spec.hmac",
@@ -205,7 +205,7 @@
         "typing_Spec.Hash.Definitions.is_shake"
       ],
       0,
-      "03f8a341d453c4497148ddf0e65417b6"
+      "bbb0eea2feb0bda2544c7f3705d606c0"
     ],
     [
       "MiTLS.Hashing.Spec.zeroHash",
@@ -269,7 +269,7 @@
         "typing_tok_Lib.IntTypes.U32@tok", "typing_tok_Lib.IntTypes.U8@tok"
       ],
       0,
-      "5006989c94a618cfe091eae08402a821"
+      "cb89723f3f587c91bf07bc3b1fe1bce1"
     ],
     [
       "MiTLS.Hashing.Spec.tls_alg",
@@ -284,7 +284,7 @@
         "haseqTm_refine_882ac9af123f24ceb1bfe9a029c155dd"
       ],
       0,
-      "856355ec21f1ef2c5d262aa5a948ef48"
+      "15282911a194635eb14cf898c68201c7"
     ],
     [
       "MiTLS.Hashing.Spec.__proj__Hash__item___0",
@@ -296,7 +296,7 @@
         "refinement_interpretation_Tm_refine_bf455a180bb9575fe9a4063a69998104"
       ],
       0,
-      "7d9df5714e23243ada48ea5d601d71d3"
+      "1a939fdbf7760e3524db865063bed5c6"
     ],
     [
       "MiTLS.Hashing.Spec.tls_tagLen",
@@ -305,20 +305,11 @@
       1,
       [ "@query", "assumption_MiTLS.Hashing.Spec.tls_alg__uu___haseq" ],
       0,
-      "b2de74f21dcbf0ff3b6f7cf3df0bf988"
+      "995c13ed1de13bec35fb3b1fdfb1ca10"
     ],
     [
       "MiTLS.Hashing.Spec.tls_tagLen",
       2,
-      2,
-      1,
-      [ "@query", "assumption_MiTLS.Hashing.Spec.tls_alg__uu___haseq" ],
-      0,
-      "635121e6205def05653186b942e4250d"
-    ],
-    [
-      "MiTLS.Hashing.Spec.tls_tagLen",
-      3,
       2,
       1,
       [
@@ -385,7 +376,16 @@
         "typing_tok_Lib.IntTypes.PUB@tok", "typing_tok_Lib.IntTypes.U32@tok"
       ],
       0,
-      "b068061bd2231914c0fc5011d092572c"
+      "060fe6713b674055739fc9c5b0bdf80a"
+    ],
+    [
+      "MiTLS.Hashing.Spec.tls_tagLen",
+      3,
+      2,
+      1,
+      [ "@query", "assumption_MiTLS.Hashing.Spec.tls_alg__uu___haseq" ],
+      0,
+      "7b1d88cbeb9f27b5ebf4d981900715cc"
     ]
   ]
 ]
