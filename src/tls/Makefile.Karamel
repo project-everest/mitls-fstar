@@ -12,7 +12,7 @@ endif
 MITLS_BUNDLES = \
   -bundle 'LowParse.\*,MiTLS.LowParseWrappers[rename=LowParse]' \
   -bundle 'MiTLS.Format.\*' \
-  -bundle 'EverCrypt.\*,MiTLS.EverCrypt.\*[rename=EverCrypt_Lib]' \
+  -bundle 'EverCrypt.\*,MiTLS.EverCrypt.\*,Hacl.\*[rename=EverCrypt_Lib]' \
   -bundle 'FStar.\*,LowStar.\*,C,C.\*[rename=Mitls_Krmllib]' \
   -bundle 'MiTLS.Parsers.\*' \
   -bundle 'Spec.\*' \
