@@ -1,4 +1,5 @@
-all: build
+all: #build
+	echo "Build and extraction disabled in miTLS"
 
 build: build-internal-test build-library build-msvc-library build-external-test
 
