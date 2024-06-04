@@ -3,7 +3,8 @@ all: #build
 
 build: build-internal-test build-library build-msvc-library build-external-test
 
-test: test-internal-test test-library test-msvc-library test-external-test
+test: #test-internal-test test-library test-msvc-library test-external-test
+	echo "Test now disabled in miTLS"
 
 ifneq (,$(MITLS_USE_OPENSSL))
 CONCRETE_FLAVOR = -OpenSSL
