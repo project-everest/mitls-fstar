@@ -38,11 +38,13 @@ else
   INCLUDE_PATHS += ./concrete-flags/NoDebug
 endif
 
+FSTAR_EXE ?= fstar.exe
+
 HINTS_DIR  ?= hints
 CACHE_DIR   = cache/$(FLAVOR)
 EXTRACT_DIR = extract/$(FLAVOR)
 DEP_FILE    = $(CACHE_DIR)/.depend
-FSTAR       = $(FSTAR_HOME)/bin/fstar.exe --cache_dir $(CACHE_DIR) --cache_checked_modules --trivial_pre_for_unannotated_effectful_fns false $(OTHERFLAGS)
+FSTAR       = $(FSTAR_EXE) --cache_dir $(CACHE_DIR) --cache_checked_modules --trivial_pre_for_unannotated_effectful_fns false $(OTHERFLAGS)
 VFLAGS     ?= --warn_error -272-241
 
 ifneq (,$(HINTS_DIR))

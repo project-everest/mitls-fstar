@@ -11,8 +11,8 @@ FSTAR_HOME=../../../../FStar
 OPTIONS=--fstar_home $(FSTAR_HOME)
 
 FSTARFLAGS=$(OPTIONS) $(OTHERFLAGS)
-FSTAR=$(FSTAR_HOME)/bin/fstar.exe \
-      $(FSTARFLAGS)
+FSTAR_EXE ?= fstar.exe
+FSTAR=$(FSTAR_EXE) $(FSTARFLAGS)
 
 CONTRIB=ucontrib
 
