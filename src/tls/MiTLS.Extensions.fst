@@ -458,7 +458,7 @@ let parseServerName mt b =
 
 let bindersLen (#p: (lbytes 2 -> GTot Type0)) (el: list (extension' p)) : nat =
   match List.Tot.find E_pre_shared_key? el with
-  | Some (Extensions.E_pre_shared_key (ClientPSK _ len)) -> 2 + len
+  | Some (E_pre_shared_key (ClientPSK _ len)) -> 2 + len
   | _ -> 0
 
 let string_of_extension (#p: (lbytes 2 -> GTot Type0)) (e: extension' p) = match e with

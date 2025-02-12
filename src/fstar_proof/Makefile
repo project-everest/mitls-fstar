@@ -1,11 +1,5 @@
-ifeq ($(OS),Windows_NT)
-	BIN=FStar.exe
-else FSTAR
-	BIN=fstar.exe
-endif
-
-#FSTAR_HOME=~/tmp/FStar
-FSTAR=$(FSTAR_HOME)/bin/$(BIN) $(OTHERFLAGS)
+FSTAR_EXE ?= fstar.exe
+FSTAR=$(FSTAR_EXE) $(OTHERFLAGS)
 
 ARGS=--z3timeout 3600 --admit_fsi FStar.Set --admit_fsi FStar.Seq.Base
 

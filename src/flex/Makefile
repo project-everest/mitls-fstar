@@ -13,7 +13,7 @@ all: build
 lax:
 # FlexTLS
 	@echo $(CYAN)"[Make] Lax-typechecking FlexTLS."$(NORMAL)
-	$(FSTAR) \
+	$(FSTAR_EXE) \
 	$(addprefix --include ,$(FSTAR_INCLUDES)) \
 	--explicit_deps \
 	--lax \
@@ -23,7 +23,7 @@ codegen:
 # FlexTLS
 	@echo $(CYAN)"[Make] Lax-extracting FlexTLS."$(NORMAL)
 	@mkdir -p $(PATH_ML)
-	@$(FSTAR) \
+	@$(FSTAR_EXE) \
 	--odir $(PATH_ML) \
 	$(addprefix --include ,$(FSTAR_INCLUDES)) \
 	$(addprefix --codegen-lib ,$(FSTAR_CODEGENLIB)) \
@@ -185,7 +185,7 @@ MITLS_R= $(addprefix $(MITLS_HOME)/src/tls/,$(MITLS))
 
 # F* and OCaml
 
-FSTAR= $(FSTAR_HOME)/bin/fstar.exe
+FSTAR_EXE ?= fstar.exe
 FSTAR_OPTIONS= #--universes
 
 OCAML= ocamlfind ocamlopt

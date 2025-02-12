@@ -31,7 +31,8 @@ FSTAR_OPTIONS = --odir krml --cache_dir $(CACHE_DIR) $(LAX_OPT) --cache_checked_
                 --already_cached '* -Parsers' \
 		--include $(LOWPARSE_HOME) --include $(KRML_HOME)/krmllib --include $(KRML_HOME)/krmllib/obj $(OTHERFLAGS)
 
-FSTAR = $(FSTAR_HOME)/bin/fstar.exe --trace_error $(FSTAR_OPTIONS)
+FSTAR_EXE ?= fstar.exe
+FSTAR = $(FSTAR_EXE) --trace_error $(FSTAR_OPTIONS)
 
 HEADERS = $(addprefix -add-include ,'"krml/internal/compat.h"')
 
@@ -56,7 +57,7 @@ krml/%.krml:
 	@touch -c $@
 
 $(DEPEND_FILE): $(QD_FILES) Makefile hints
-	$(FSTAR) --dep full $(QD_FILES) > $@
+	$(FSTAR) --dep full $(QD_FILES) --output_deps_to $@
 
 depend: $(DEPEND_FILE)
 
