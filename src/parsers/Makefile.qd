@@ -57,7 +57,7 @@ krml/%.krml:
 	@touch -c $@
 
 $(DEPEND_FILE): $(QD_FILES) Makefile hints
-	$(FSTAR) --dep full $(QD_FILES) > $@
+	$(FSTAR) --dep full $(QD_FILES) --output_deps_to $@
 
 depend: $(DEPEND_FILE)
 

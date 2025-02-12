@@ -73,7 +73,7 @@ endif
 		$(FSTAR) --cache_dir $(CACHE_DIR) --odir $(EXTRACT_DIR) --extract $(EXTRACT) \
 			--dep full \
 			$(addprefix --include , $(INCLUDE_PATHS)) \
-			$(ROOTS) > $(DEP_FILE) \
+			$(ROOTS) --output_deps_to $(DEP_FILE) \
 	)
 	sed -i.opt -e "s/cmx/cmo/g" -e "s/source/old/g" $(DEP_FILE)
 
@@ -85,7 +85,7 @@ endif
 		$(FSTAR) --extract $(EXTRACT) \
 			--dep graph \
 			$(addprefix --include , $(INCLUDE_PATHS)) \
-			$(ROOTS) > /dev/null \
+			$(ROOTS) --output_deps_to /dev/null \
 	)
 	mv dep.graph $@
 
