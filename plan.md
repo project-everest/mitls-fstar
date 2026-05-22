@@ -390,6 +390,6 @@ Before any public HTTPS endpoint, add a local OpenSSL interop test that exercise
 11. [pending] Implement and verify top-level connection read/write/close APIs.
 12. [pending] Configure extraction and C linking with HACL* and OpenSSL.
 13. [pending] Add RFC 8448 and extracted C vector tests.
-14. [pending] Add the controlled OpenSSL TLS echo interop test as the first end-to-end networking target.
+14. [in progress] Add the controlled OpenSSL TLS echo interop test as the first end-to-end networking target. A local OpenSSL TLS 1.3 echo server and `openssl s_client` smoke script exist for the pinned X25519/`TLS_CHACHA20_POLY1305_SHA256` server side; the extracted verified client still needs to replace `s_client`.
 15. [pending] Add public HTTPS interop tests only after the controlled echo test is stable.
 16. [pending] Audit specs, interfaces, file sizes, proof stability, trusted boundaries, rlimits, and extraction output before declaring the implementation complete.

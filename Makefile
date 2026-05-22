@@ -48,7 +48,7 @@ IMPL_FILES = \
 
 ALL_FILES = $(SPEC_FILES) $(IMPL_FILES)
 
-.PHONY: all verify test check-c-stubs test-hacl-stubs test-openssl-stubs test-wire-stubs test-io-stubs check-toolchain check-deps clean
+.PHONY: all verify test check-c-stubs test-hacl-stubs test-openssl-stubs test-wire-stubs test-io-stubs test-openssl-echo check-toolchain check-deps clean
 
 all: verify
 
@@ -110,8 +110,15 @@ test/test_openssl_stubs: c_stubs/tls13_openssl_stubs.c c_stubs/tls13_openssl_stu
 	  c_stubs/tls13_openssl_stubs.c test/test_openssl_stubs.c \
 	  -lssl -lcrypto -o $@
 
+test/openssl_echo_server: test/openssl_echo_server.c | check-deps
+	$(CC) -Wall -Wextra test/openssl_echo_server.c \
+	  -lssl -lcrypto -o $@
+
 test-openssl-stubs: test/test_openssl_stubs test/certs/chain.pem test/certs/ca.pem
 	./test/test_openssl_stubs test/certs/ca.pem test/certs/chain.pem
+
+test-openssl-echo: test/openssl_echo_server
+	scripts/test-openssl-echo.sh
 
 test/test_wire_stubs: c_stubs/tls13_wire_stubs.c c_stubs/tls13_wire_stubs.h test/test_wire_stubs.c
 	$(CC) -Wall -Wextra -I c_stubs \
@@ -131,5 +138,5 @@ test-io-stubs: test/test_io_stubs
 
 clean:
 	rm -rf $(CACHE_DIR) $(OUTPUT_DIR) $(EXTRACT_DIR)
-	rm -f test/test_hacl_stubs test/test_openssl_stubs test/test_wire_stubs test/test_io_stubs
+	rm -f test/test_hacl_stubs test/test_openssl_stubs test/test_wire_stubs test/test_io_stubs test/openssl_echo_server
 	find src test -name '*.checked' -delete
