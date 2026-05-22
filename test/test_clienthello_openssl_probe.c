@@ -8,6 +8,9 @@
 #include <stdlib.h>
 #include <string.h>
 
+#define PROBE_ECHO_PAYLOAD_LEN 40000u
+#define PROBE_APP_RECORD_CHUNK_LEN 4096u
+
 static uint8_t *read_file(const char *path, size_t *len_out) {
   FILE *f = fopen(path, "rb");
   if (f == NULL) {
@@ -793,29 +796,42 @@ int main(int argc, char **argv) {
     goto done;
   }
 
-  static const uint8_t echo_payload[] = {
-      'a', 'g', 'e', 'n', 't', 'i', 'c', ' ', 't', 'l', 's', ' ', 'p', 'r', 'o', 'b', 'e'};
-  if (seal_record(
-          client_application_key,
-          client_application_iv,
-          0,
-          23,
-          echo_payload,
-          sizeof echo_payload,
-          client_record,
-          sizeof client_record,
-          &client_record_len) != 0 ||
-      write_all(fd, client_record, client_record_len) != 0) {
-    fprintf(stderr, "failed to send application-data probe record\n");
-    goto done;
+  static uint8_t echo_payload[PROBE_ECHO_PAYLOAD_LEN];
+  static const uint8_t echo_pattern[] = "agentic tls multi-record probe\n";
+  for (size_t i = 0; i < sizeof echo_payload; ++i) {
+    echo_payload[i] = echo_pattern[i % (sizeof echo_pattern - 1u)];
   }
 
-  bool saw_echo = false;
+  uint64_t client_application_sequence_number = 0;
+  size_t sent_payload_len = 0;
+  while (sent_payload_len < sizeof echo_payload) {
+    size_t remaining = sizeof echo_payload - sent_payload_len;
+    size_t chunk_len = remaining < PROBE_APP_RECORD_CHUNK_LEN
+                          ? remaining
+                          : PROBE_APP_RECORD_CHUNK_LEN;
+    if (seal_record(
+           client_application_key,
+           client_application_iv,
+           client_application_sequence_number++,
+           23,
+           echo_payload + sent_payload_len,
+           chunk_len,
+           client_record,
+           sizeof client_record,
+           &client_record_len) != 0 ||
+       write_all(fd, client_record, client_record_len) != 0) {
+      fprintf(stderr, "failed to send application-data probe record\n");
+      goto done;
+    }
+    sent_payload_len += chunk_len;
+  }
+
+  size_t received_payload_len = 0;
   uint64_t server_application_sequence_number = 0;
-  for (unsigned attempts = 0; attempts < 8 && !saw_echo; ++attempts) {
+  for (unsigned attempts = 0; attempts < 128 && received_payload_len < sizeof echo_payload; ++attempts) {
     if (read_record(
-            fd,
-            encrypted_header,
+           fd,
+           encrypted_header,
             encrypted_fragment,
             sizeof encrypted_fragment,
             &content_type,
@@ -855,14 +871,15 @@ int main(int argc, char **argv) {
       continue;
     }
     if (inner_content_type != 23 ||
-        response_len != sizeof echo_payload ||
-        memcmp(inner_plaintext, echo_payload, sizeof echo_payload) != 0) {
+        response_len == 0 ||
+        response_len > sizeof echo_payload - received_payload_len ||
+        memcmp(inner_plaintext, echo_payload + received_payload_len, response_len) != 0) {
       fprintf(stderr, "OpenSSL echo application data mismatch\n");
       goto done;
     }
-    saw_echo = true;
+    received_payload_len += response_len;
   }
-  if (!saw_echo) {
+  if (received_payload_len != sizeof echo_payload) {
     fprintf(stderr, "OpenSSL echo application data was not received\n");
     goto done;
   }
