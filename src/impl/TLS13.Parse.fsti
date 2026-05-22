@@ -22,6 +22,18 @@ fn parse_supported_server_hello (input: array U8.t) (input_len: SZ.t)
   ensures pts_to input 'bytes **
           pure (parsed == W.parse_supported_server_hello (Ghost.reveal 'bytes))
 
+fn parse_certificate_leaf_der (input: array U8.t) (input_len: SZ.t)
+  requires pts_to input 'bytes ** pure (B.length 'bytes == SZ.v input_len)
+  returns parsed: option B.bytes
+  ensures pts_to input 'bytes **
+          pure (parsed == W.parse_certificate_leaf_der (Ghost.reveal 'bytes))
+
+fn parse_certificate_verify (input: array U8.t) (input_len: SZ.t)
+  requires pts_to input 'bytes ** pure (B.length 'bytes == SZ.v input_len)
+  returns parsed: option H.certificate_verify
+  ensures pts_to input 'bytes **
+          pure (parsed == W.parse_certificate_verify (Ghost.reveal 'bytes))
+
 fn parse_record (input: array U8.t) (input_len: SZ.t)
   requires pts_to input 'bytes ** pure (B.length 'bytes == SZ.v input_len)
   returns parsed: option (TLS13.Types.content_type & TLS13.Record.Spec.sealed_record & nat)
