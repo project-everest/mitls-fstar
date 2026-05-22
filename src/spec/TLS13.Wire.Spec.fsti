@@ -31,6 +31,10 @@ val serialize_handshake:
   msg:H.handshake_msg ->
   Tot B.bytes
 
+val serialize_server_certificate_verify_input:
+  transcript_hash:B.bytes ->
+  Tot B.bytes
+
 val parse_record:
   input:B.bytes ->
   Tot (option (T.content_type & R.sealed_record & nat))

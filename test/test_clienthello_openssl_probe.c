@@ -253,28 +253,6 @@ static int verify_server_finished(
   return memcmp(expected, finished_verify_data, 32) == 0 ? 0 : -1;
 }
 
-static int build_certificate_verify_input(
-    const uint8_t transcript_hash[32],
-    uint8_t *out,
-    size_t out_capacity,
-    size_t *out_len) {
-  static const uint8_t context[] = "TLS 1.3, server CertificateVerify";
-  const size_t needed = 64u + sizeof context - 1u + 1u + 32u;
-  if (transcript_hash == NULL || out == NULL || out_len == NULL || out_capacity < needed) {
-    return -1;
-  }
-  size_t pos = 0;
-  memset(out + pos, 0x20, 64);
-  pos += 64;
-  memcpy(out + pos, context, sizeof context - 1u);
-  pos += sizeof context - 1u;
-  out[pos++] = 0;
-  memcpy(out + pos, transcript_hash, 32);
-  pos += 32;
-  *out_len = pos;
-  return 0;
-}
-
 static int verify_server_authentication(
     const uint8_t *ca_pem,
     size_t ca_pem_len,
@@ -365,8 +343,7 @@ static int verify_server_authentication(
   tls13_peer_identity *peer = NULL;
   int rc = -1;
   uint8_t transcript_hash[32];
-  uint8_t certificate_verify_input[130];
-  size_t certificate_verify_input_len = 0;
+  uint8_t certificate_verify_input[TLS13_WIRE_CERTIFICATE_VERIFY_INPUT_LEN];
   if (!tls13_openssl_validate_leaf_der(
           "localhost", ca_pem, ca_pem_len, leaf_der, leaf_der_len, &peer) ||
       peer == NULL) {
@@ -381,11 +358,8 @@ static int verify_server_authentication(
           server_handshake_messages,
           certificate_verify_offset,
           transcript_hash) != 0 ||
-      build_certificate_verify_input(
-          transcript_hash,
-          certificate_verify_input,
-          sizeof certificate_verify_input,
-          &certificate_verify_input_len) != 0) {
+      !tls13_wire_build_server_certificate_verify_input(
+          certificate_verify_input, transcript_hash)) {
     fprintf(stderr, "failed to build CertificateVerify input\n");
     goto done;
   }
@@ -393,7 +367,7 @@ static int verify_server_authentication(
           peer,
           signature_scheme,
           certificate_verify_input,
-          certificate_verify_input_len,
+          sizeof certificate_verify_input,
           signature,
           signature_len)) {
     fprintf(stderr, "failed to verify server CertificateVerify\n");

@@ -376,6 +376,41 @@ static int test_certificate_verify_parser_rejects_malformed(void) {
   return 0;
 }
 
+static int test_certificate_verify_input_builder(void) {
+  uint8_t transcript_hash[32];
+  uint8_t input[TLS13_WIRE_CERTIFICATE_VERIFY_INPUT_LEN];
+  static const uint8_t context[] = "TLS 1.3, server CertificateVerify";
+
+  for (size_t i = 0; i < sizeof transcript_hash; ++i) {
+    transcript_hash[i] = (uint8_t)(0xa0u + i);
+  }
+
+  if (!tls13_wire_build_server_certificate_verify_input(input, transcript_hash)) {
+    fprintf(stderr, "failed to build server CertificateVerify input\n");
+    return 1;
+  }
+  for (size_t i = 0; i < 64; ++i) {
+    if (input[i] != 0x20) {
+      fprintf(stderr, "server CertificateVerify input prefix mismatch\n");
+      return 1;
+    }
+  }
+  if (memcmp(input + 64, context, sizeof context - 1u) != 0 ||
+      input[64 + sizeof context - 1u] != 0 ||
+      memcmp(input + TLS13_WIRE_CERTIFICATE_VERIFY_INPUT_LEN - 32,
+             transcript_hash,
+             sizeof transcript_hash) != 0) {
+    fprintf(stderr, "server CertificateVerify input fields mismatch\n");
+    return 1;
+  }
+  if (tls13_wire_build_server_certificate_verify_input(NULL, transcript_hash) ||
+      tls13_wire_build_server_certificate_verify_input(input, NULL)) {
+    fprintf(stderr, "accepted malformed CertificateVerify input builder arguments\n");
+    return 1;
+  }
+  return 0;
+}
+
 static int test_supported_client_hello_serializer(void) {
   static const uint8_t hostname[] = {'l', 'o', 'c', 'a', 'l', 'h', 'o', 's', 't'};
   uint8_t random[32];
@@ -561,6 +596,7 @@ int main(void) {
   failed |= test_certificate_parser_rejects_malformed();
   failed |= test_certificate_verify_parser();
   failed |= test_certificate_verify_parser_rejects_malformed();
+  failed |= test_certificate_verify_input_builder();
   failed |= test_supported_client_hello_serializer();
   failed |= test_supported_client_hello_rejects_malformed();
   failed |= test_inner_plaintext_roundtrip();

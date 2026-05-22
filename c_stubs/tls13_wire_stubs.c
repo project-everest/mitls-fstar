@@ -265,6 +265,25 @@ bool tls13_wire_parse_certificate_verify(
   return true;
 }
 
+bool tls13_wire_build_server_certificate_verify_input(
+    uint8_t out[TLS13_WIRE_CERTIFICATE_VERIFY_INPUT_LEN],
+    const uint8_t transcript_hash[32]) {
+  static const uint8_t context[] = "TLS 1.3, server CertificateVerify";
+  if (out == NULL || transcript_hash == NULL) {
+    return false;
+  }
+
+  size_t pos = 0;
+  memset(out + pos, 0x20, 64);
+  pos += 64;
+  memcpy(out + pos, context, sizeof context - 1u);
+  pos += sizeof context - 1u;
+  out[pos++] = 0;
+  memcpy(out + pos, transcript_hash, 32);
+  pos += 32;
+  return pos == TLS13_WIRE_CERTIFICATE_VERIFY_INPUT_LEN;
+}
+
 bool tls13_wire_serialize_supported_client_hello(
     uint8_t *out,
     size_t out_len,

@@ -10,6 +10,7 @@
 #define TLS13_WIRE_MAX_RECORD_FRAGMENT_LEN 16384u
 #define TLS13_WIRE_MAX_HANDSHAKE_BODY_LEN 0x00ffffffu
 #define TLS13_WIRE_MAX_HOSTNAME_LEN 255u
+#define TLS13_WIRE_CERTIFICATE_VERIFY_INPUT_LEN 130u
 
 bool tls13_wire_parse_record_header(
     const uint8_t *input,
@@ -53,6 +54,10 @@ bool tls13_wire_parse_certificate_verify(
     uint16_t *signature_scheme,
     const uint8_t **signature,
     size_t *signature_len);
+
+bool tls13_wire_build_server_certificate_verify_input(
+    uint8_t out[TLS13_WIRE_CERTIFICATE_VERIFY_INPUT_LEN],
+    const uint8_t transcript_hash[32]);
 
 bool tls13_wire_serialize_supported_client_hello(
     uint8_t *out,
