@@ -35,7 +35,8 @@ SPEC_FILES = \
   src/spec/TLS13.Record.Spec.fst \
   src/spec/TLS13.Handshake.Spec.fst \
   src/spec/TLS13.Wire.Spec.fsti \
-  src/spec/TLS13.StateMachine.fst
+  src/spec/TLS13.StateMachine.fst \
+  src/spec/TLS13.StateMachine.Lemmas.fst
 
 IMPL_FILES = \
   src/impl/TLS13.LowTypes.fsti \
