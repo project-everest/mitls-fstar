@@ -57,11 +57,11 @@ EXTRACT_SMOKE_KRML = $(EXTRACT_SMOKE_DIR)/out.krml
 EXTRACT_SMOKE_C    = $(EXTRACT_SMOKE_DIR)/TLS13_Extract_Smoke.c
 EXTRACT_SMOKE_H    = $(EXTRACT_SMOKE_DIR)/TLS13_Extract_Smoke.h
 
-.PHONY: all verify test extract-smoke test-extract-smoke check-c-stubs test-hacl-stubs test-openssl-stubs test-wire-stubs test-io-stubs test-openssl-echo check-toolchain check-deps clean
+.PHONY: all verify test extract-smoke test-extract-smoke check-c-stubs test-hacl-stubs test-openssl-stubs test-wire-stubs test-record-stubs test-io-stubs test-openssl-echo check-toolchain check-deps clean
 
 all: verify
 
-test: verify check-c-stubs test-hacl-stubs test-openssl-stubs test-wire-stubs test-io-stubs test-extract-smoke
+test: verify check-c-stubs test-hacl-stubs test-openssl-stubs test-wire-stubs test-record-stubs test-io-stubs test-extract-smoke
 
 check-toolchain:
 	@if ! command -v $(FSTAR_EXE) >/dev/null 2>&1; then \
@@ -93,9 +93,8 @@ check-c-stubs:
 	  -I c_stubs -I $(HACL_DIR) -I $(HACL_DIR)/internal -I $(HACL_KI) -I $(HACL_KL) \
 	  c_stubs/*.c
 
-HACL_STUB_TEST_SOURCES = \
+HACL_WRAPPER_SOURCES = \
   c_stubs/tls13_hacl_stubs.c \
-  test/test_hacl_stubs.c \
   $(HACL_DIR)/Hacl_Hash_SHA2.c \
   $(HACL_DIR)/Hacl_HMAC.c \
   $(HACL_DIR)/Hacl_HKDF.c \
@@ -104,6 +103,10 @@ HACL_STUB_TEST_SOURCES = \
   $(HACL_DIR)/Hacl_Chacha20.c \
   $(HACL_DIR)/Hacl_MAC_Poly1305.c \
   $(HACL_DIR)/Lib_RandomBuffer_System.c
+
+HACL_STUB_TEST_SOURCES = \
+  test/test_hacl_stubs.c \
+  $(HACL_WRAPPER_SOURCES)
 
 test/test_hacl_stubs: $(HACL_STUB_TEST_SOURCES) c_stubs/tls13_hacl_stubs.h | check-deps
 	$(CC) -Wall -Wextra -Wno-deprecated-declarations \
@@ -140,6 +143,16 @@ test/test_wire_stubs: c_stubs/tls13_wire_stubs.c c_stubs/tls13_wire_stubs.h test
 test-wire-stubs: test/test_wire_stubs
 	./test/test_wire_stubs
 
+test/test_record_stubs: $(HACL_WRAPPER_SOURCES) c_stubs/tls13_hacl_stubs.h c_stubs/tls13_wire_stubs.c c_stubs/tls13_wire_stubs.h test/test_record_stubs.c | check-deps
+	$(CC) -Wall -Wextra -Wno-deprecated-declarations \
+	  -ffunction-sections -fdata-sections \
+	  -I c_stubs -I $(HACL_DIR) -I $(HACL_DIR)/internal -I $(HACL_KI) -I $(HACL_KL) \
+	  $(HACL_WRAPPER_SOURCES) c_stubs/tls13_wire_stubs.c test/test_record_stubs.c \
+	  -Wl,--gc-sections -o $@
+
+test-record-stubs: test/test_record_stubs
+	./test/test_record_stubs
+
 test/test_io_stubs: c_stubs/tls13_io_stubs.c c_stubs/tls13_io_stubs.h test/test_io_stubs.c
 	$(CC) -Wall -Wextra -I c_stubs \
 	  c_stubs/tls13_io_stubs.c test/test_io_stubs.c \
@@ -174,5 +187,5 @@ test-extract-smoke: test/test_extract_smoke
 
 clean:
 	rm -rf $(CACHE_DIR) $(OUTPUT_DIR) $(EXTRACT_DIR)
-	rm -f test/test_hacl_stubs test/test_openssl_stubs test/test_wire_stubs test/test_io_stubs test/test_extract_smoke test/openssl_echo_server
+	rm -f test/test_hacl_stubs test/test_openssl_stubs test/test_wire_stubs test/test_record_stubs test/test_io_stubs test/test_extract_smoke test/openssl_echo_server
 	find src test -name '*.checked' -delete
