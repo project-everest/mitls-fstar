@@ -16,13 +16,18 @@ fn application_echo_roundtrip
   (received:B.bytes)
   requires ST.current st s
   requires pure (s.S.phase == S.ApplicationData)
-  ensures ST.current st s **
+  ensures exists* s'.
+          ST.current st s' **
           ST.snapshot st s **
-          pure (S.conn_evolves s s)
+          pure (S.conn_evolves s s' /\ s'.S.phase == S.ApplicationData)
 {
   ST.take_snapshot st;
-  ST.advance st (S.SendApplicationData sent) s;
-  ST.advance st (S.RecvApplicationData received) s;
+  let sent_s = S.advance_write_record s;
+  ST.advance st (S.SendApplicationData sent) sent_s;
+
+  let received_s = S.advance_read_record sent_s;
+  ST.advance st (S.RecvApplicationData received) received_s;
+
   ST.recall_snapshot st;
 }
 
@@ -39,10 +44,10 @@ fn close_after_application_data
 {
   ST.take_snapshot st;
 
-  let closing = S.with_phase s S.Closing;
+  let closing = S.send_close_state s;
   ST.advance st S.SendCloseNotify closing;
 
-  let closed = S.with_phase closing S.Closed;
+  let closed = S.recv_close_state closing;
   ST.advance st S.RecvCloseNotify closed;
 
   ST.recall_snapshot st;

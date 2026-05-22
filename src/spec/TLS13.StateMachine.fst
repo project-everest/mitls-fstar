@@ -71,6 +71,18 @@ let with_phase (s:conn_state) (p:phase) : conn_state =
 let with_validated_peer (s:conn_state) (peer:X.peer_identity) : conn_state =
   { s with phase = CertificateValidated; peer = Some peer }
 
+let advance_write_record (s:conn_state) : conn_state =
+  { s with write_state = R.next_seq s.write_state }
+
+let advance_read_record (s:conn_state) : conn_state =
+  { s with read_state = R.next_seq s.read_state }
+
+let send_close_state (s:conn_state) : conn_state =
+  { advance_write_record s with phase = Closing }
+
+let recv_close_state (s:conn_state) : conn_state =
+  { advance_read_record s with phase = Closed }
+
 let step (s:conn_state) (e:event) : option conn_state =
   match s.phase, e with
   | Start, SendClientHello _ ->
@@ -94,13 +106,13 @@ let step (s:conn_state) (e:event) : option conn_state =
   | ServerFinishedVerified, SendClientFinished _ ->
     Some { s with phase = ApplicationData }
   | ApplicationData, SendApplicationData _ ->
-    Some s
+    Some (advance_write_record s)
   | ApplicationData, RecvApplicationData _ ->
-    Some s
+    Some (advance_read_record s)
   | ApplicationData, SendCloseNotify ->
-    Some { s with phase = Closing }
+    Some (send_close_state s)
   | Closing, RecvCloseNotify ->
-    Some { s with phase = Closed }
+    Some (recv_close_state s)
   | _, Fail err ->
     Some (fail s err)
   | _, _ ->

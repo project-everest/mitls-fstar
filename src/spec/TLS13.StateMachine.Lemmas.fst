@@ -85,27 +85,31 @@ let lemma_controlled_handshake_reaches_application_data
 let lemma_application_data_send_stays_application (s:S.conn_state) (bytes:TLS13.Bytes.bytes)
   : Lemma (requires s.S.phase == S.ApplicationData)
           (ensures (match S.step s (S.SendApplicationData bytes) with
-                    | Some s' -> s' == s
+                    | Some s' -> s' == S.advance_write_record s /\
+                                 s'.S.phase == S.ApplicationData
                     | None -> False))
   = ()
 
 let lemma_send_close_notify_progress (s:S.conn_state)
   : Lemma (requires s.S.phase == S.ApplicationData)
           (ensures (match S.step s S.SendCloseNotify with
-                    | Some s' -> s'.S.phase == S.Closing
+                    | Some s' -> s' == S.send_close_state s /\
+                                 s'.S.phase == S.Closing
                     | None -> False))
   = ()
 
 let lemma_recv_close_notify_progress (s:S.conn_state)
   : Lemma (requires s.S.phase == S.Closing)
           (ensures (match S.step s S.RecvCloseNotify with
-                    | Some s' -> s'.S.phase == S.Closed
+                    | Some s' -> s' == S.recv_close_state s /\
+                                 s'.S.phase == S.Closed
                     | None -> False))
   = ()
 
 let lemma_application_data_recv_stays_application (s:S.conn_state) (bytes:TLS13.Bytes.bytes)
   : Lemma (requires s.S.phase == S.ApplicationData)
           (ensures (match S.step s (S.RecvApplicationData bytes) with
-                    | Some s' -> s' == s
+                    | Some s' -> s' == S.advance_read_record s /\
+                                 s'.S.phase == S.ApplicationData
                     | None -> False))
   = ()
