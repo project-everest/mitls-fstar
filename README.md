@@ -33,8 +33,8 @@ make test
 ```
 
 The `make test` target also runs `test-extract-smoke`, mock binding tests for
-the extracted handshake and connection drivers, and an extracted key-schedule
-binding test against the HACL* C snapshot. These checks verify small
+the extracted handshake and connection drivers, and extracted key-schedule and
+record-layer binding tests against the HACL* C snapshot. These checks verify small
 extraction-safe F* modules, translate verified Pulse/F* code through KaRaMeL,
 compile the generated C, and exercise the generated code through explicit
 trusted C ABIs.

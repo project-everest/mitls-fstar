@@ -113,9 +113,8 @@ fn tls13_record_nonce (static_iv: array U8.t) (sequence_number: U64.t) (out: arr
            pure (B.length 'iv_bytes == 12 /\ B.length 'old == 12)
   returns ok: bool
   ensures pts_to static_iv 'iv_bytes **
-          (if ok
-           then pts_to out (C.tls13_record_nonce 'iv_bytes (U64.v sequence_number))
-           else pts_to out 'old)
+          pts_to out (C.tls13_record_nonce 'iv_bytes (U64.v sequence_number)) **
+          pure ok
 
 fn chacha20_poly1305_seal
   (key: array U8.t)
@@ -161,11 +160,14 @@ fn chacha20_poly1305_open
                  B.length 'cipher_bytes == SZ.v cipher_len /\
                  B.length 'old + 16 == SZ.v cipher_len)
   returns ok: bool
-  ensures pts_to key 'key_bytes **
+  ensures exists* out_bytes.
+          pts_to key 'key_bytes **
           pts_to nonce 'nonce_bytes **
           pts_to aad 'aad_bytes **
           pts_to cipher 'cipher_bytes **
-          pure (B.length 'cipher_bytes >= 16) **
-          (match C.chacha20_poly1305_open 'key_bytes 'nonce_bytes 'aad_bytes 'cipher_bytes with
-           | Some plain -> pts_to out plain ** pure ok
-           | None -> pts_to out 'old ** pure (not ok))
+          pts_to out out_bytes **
+          pure (B.length 'cipher_bytes >= 16 /\
+                (ok ==> Some? (C.chacha20_poly1305_open 'key_bytes 'nonce_bytes 'aad_bytes 'cipher_bytes) /\
+                         out_bytes == Some?.v (C.chacha20_poly1305_open 'key_bytes 'nonce_bytes 'aad_bytes 'cipher_bytes)) /\
+                (not ok ==> C.chacha20_poly1305_open 'key_bytes 'nonce_bytes 'aad_bytes 'cipher_bytes == None /\
+                            out_bytes == 'old))

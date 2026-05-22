@@ -50,6 +50,7 @@ IMPL_FILES = \
   src/impl/TLS13.KeySchedule.fst \
   src/impl/TLS13.X509.fsti \
   src/impl/TLS13.Record.fsti \
+  src/impl/TLS13.Record.fst \
   src/impl/TLS13.Parse.fsti \
   src/impl/TLS13.Serialize.fsti \
   src/impl/TLS13.IO.fsti \
@@ -76,12 +77,16 @@ EXTRACT_KEY_SCHEDULE_DIR  = $(EXTRACT_DIR)/key-schedule
 EXTRACT_KEY_SCHEDULE_KRML = $(EXTRACT_KEY_SCHEDULE_DIR)/TLS13_KeySchedule.krml
 EXTRACT_KEY_SCHEDULE_C    = $(EXTRACT_KEY_SCHEDULE_DIR)/TLS13_KeySchedule.c
 EXTRACT_KEY_SCHEDULE_H    = $(EXTRACT_KEY_SCHEDULE_DIR)/TLS13_KeySchedule.h
+EXTRACT_RECORD_DIR  = $(EXTRACT_DIR)/record
+EXTRACT_RECORD_KRML = $(EXTRACT_RECORD_DIR)/TLS13_Record.krml
+EXTRACT_RECORD_C    = $(EXTRACT_RECORD_DIR)/TLS13_Record.c
+EXTRACT_RECORD_H    = $(EXTRACT_RECORD_DIR)/TLS13_Record.h
 
-.PHONY: all verify test extract-smoke extract-connection-driver-krml extract-connection-driver-c extract-handshake-driver-krml extract-handshake-driver-c extract-key-schedule-krml extract-key-schedule-c test-extract-smoke test-connection-driver-bindings test-handshake-driver-bindings test-key-schedule-bindings check-c-stubs test-hacl-stubs test-openssl-stubs test-wire-stubs test-record-stubs test-io-stubs test-openssl-echo check-toolchain check-deps clean
+.PHONY: all verify test extract-smoke extract-connection-driver-krml extract-connection-driver-c extract-handshake-driver-krml extract-handshake-driver-c extract-key-schedule-krml extract-key-schedule-c extract-record-krml extract-record-c test-extract-smoke test-connection-driver-bindings test-handshake-driver-bindings test-key-schedule-bindings test-record-bindings check-c-stubs test-hacl-stubs test-openssl-stubs test-wire-stubs test-record-stubs test-io-stubs test-openssl-echo check-toolchain check-deps clean
 
 all: verify
 
-test: verify check-c-stubs test-hacl-stubs test-openssl-stubs test-wire-stubs test-record-stubs test-io-stubs test-extract-smoke test-connection-driver-bindings test-handshake-driver-bindings test-key-schedule-bindings
+test: verify check-c-stubs test-hacl-stubs test-openssl-stubs test-wire-stubs test-record-stubs test-io-stubs test-extract-smoke test-connection-driver-bindings test-handshake-driver-bindings test-key-schedule-bindings test-record-bindings
 
 check-toolchain:
 	@if ! command -v $(FSTAR_EXE) >/dev/null 2>&1; then \
@@ -108,6 +113,9 @@ $(EXTRACT_HANDSHAKE_DRIVER_DIR):
 	mkdir -p $@
 
 $(EXTRACT_KEY_SCHEDULE_DIR):
+	mkdir -p $@
+
+$(EXTRACT_RECORD_DIR):
 	mkdir -p $@
 
 verify: check-deps check-toolchain $(CACHE_DIR) $(OUTPUT_DIR)
@@ -281,6 +289,22 @@ $(EXTRACT_KEY_SCHEDULE_C) $(EXTRACT_KEY_SCHEDULE_H): $(EXTRACT_KEY_SCHEDULE_KRML
 
 extract-key-schedule-c: $(EXTRACT_KEY_SCHEDULE_C) $(EXTRACT_KEY_SCHEDULE_H)
 
+$(EXTRACT_RECORD_KRML): src/impl/TLS13.Record.fst verify | $(EXTRACT_RECORD_DIR)
+	$(FSTAR_EXE) --cache_checked_modules --cache_dir $(CACHE_DIR) --odir $(OUTPUT_DIR) \
+	  --warn_error -321 --report_assumes warn \
+	  --already_cached 'Prims,FStar,Pulse,PulseCore -TLS13' \
+	  $(INCLUDES) --codegen krml --extract_module TLS13.Record \
+	  --krmloutput $@ $<
+
+extract-record-krml: $(EXTRACT_RECORD_KRML)
+
+$(EXTRACT_RECORD_C) $(EXTRACT_RECORD_H): $(EXTRACT_RECORD_KRML) c_stubs/tls13_crypto_external.h | $(EXTRACT_RECORD_DIR)
+	$(KRML_EXE) -skip-compilation -skip-makefiles -warn-error -2 \
+	  -add-include '"tls13_crypto_external.h"' \
+	  -tmpdir $(EXTRACT_RECORD_DIR) $(EXTRACT_RECORD_KRML)
+
+extract-record-c: $(EXTRACT_RECORD_C) $(EXTRACT_RECORD_H)
+
 test/test_extract_smoke: test/test_extract_smoke.c $(EXTRACT_SMOKE_C) $(EXTRACT_SMOKE_H)
 	$(CC) -Wall -Wextra \
 	  -I $(EXTRACT_SMOKE_DIR) -I $(KRML_HOME)/include -I $(KRML_HOME)/krmllib/dist/minimal \
@@ -319,7 +343,18 @@ test/test_key_schedule_bindings: test/test_key_schedule_bindings.c $(EXTRACT_KEY
 test-key-schedule-bindings: test/test_key_schedule_bindings
 	./test/test_key_schedule_bindings
 
+test/test_record_bindings: test/test_record_bindings.c $(EXTRACT_RECORD_C) $(EXTRACT_RECORD_H) c_stubs/tls13_crypto_external.h c_stubs/tls13_pulse_shims.c $(HACL_WRAPPER_SOURCES) | check-deps
+	$(CC) -Wall -Wextra -Wno-deprecated-declarations \
+	  -ffunction-sections -fdata-sections \
+	  -I $(EXTRACT_RECORD_DIR) -I c_stubs -I $(KRML_HOME)/include -I $(KRML_HOME)/krmllib/dist/minimal \
+	  -I $(HACL_DIR) -I $(HACL_DIR)/internal -I $(HACL_KI) -I $(HACL_KL) \
+	  $(EXTRACT_RECORD_C) test/test_record_bindings.c c_stubs/tls13_pulse_shims.c $(HACL_WRAPPER_SOURCES) \
+	  -Wl,--gc-sections -o $@
+
+test-record-bindings: test/test_record_bindings
+	./test/test_record_bindings
+
 clean:
 	rm -rf $(CACHE_DIR) $(OUTPUT_DIR) $(EXTRACT_DIR)
-	rm -f test/test_hacl_stubs test/test_openssl_stubs test/test_wire_stubs test/test_record_stubs test/test_io_stubs test/test_extract_smoke test/test_connection_driver_bindings test/test_handshake_driver_bindings test/test_key_schedule_bindings test/test_clienthello_openssl_probe test/test_extracted_connection_driver_openssl test/openssl_echo_server
+	rm -f test/test_hacl_stubs test/test_openssl_stubs test/test_wire_stubs test/test_record_stubs test/test_record_bindings test/test_io_stubs test/test_extract_smoke test/test_connection_driver_bindings test/test_handshake_driver_bindings test/test_key_schedule_bindings test/test_clienthello_openssl_probe test/test_extracted_connection_driver_openssl test/openssl_echo_server
 	find src test -name '*.checked' -delete

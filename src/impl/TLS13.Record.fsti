@@ -11,6 +11,7 @@ module R = TLS13.Record.Spec
 module SZ = FStar.SizeT
 module T = TLS13.Types
 module U8 = FStar.UInt8
+module U64 = FStar.UInt64
 
 val record_state : Type0
 
@@ -26,7 +27,7 @@ fn record_state_free (st: record_state)
 
 fn install_keys
   (st: record_state)
-  (epoch: R.epoch)
+  (#epoch: R.epoch)
   (key: array U8.t)
   (iv: array U8.t)
   requires is_record_state st 's **
@@ -50,23 +51,27 @@ fn seal_application
            pts_to out 'old **
            pure (B.length 'aad_bytes == SZ.v aad_len /\
                  B.length 'plain_bytes == SZ.v plain_len /\
-                 B.length 'old == SZ.v plain_len + 16)
+                 B.length 'old == SZ.v plain_len + 16 /\
+                 U64.fits ('s.R.seq + 1))
   returns ok: bool
-  ensures pts_to aad 'aad_bytes **
+  ensures exists* s' out_bytes.
+          is_record_state st s' **
+          pts_to aad 'aad_bytes **
           pts_to plain 'plain_bytes **
-          (match R.seal
-                   's
-                   (Ghost.reveal 'aad_bytes)
-                   { R.content_type = T.ApplicationData;
-                     R.fragment = Ghost.reveal 'plain_bytes } with
-           | Some (sealed, s') ->
-             is_record_state st s' **
-             pts_to out sealed **
-             pure (ok /\ B.length sealed == B.length 'old)
-           | None ->
-             is_record_state st 's **
-             pts_to out 'old **
-             pure (not ok))
+          pts_to out out_bytes **
+          pure ((ok ==> R.seal
+                           's
+                           (Ghost.reveal 'aad_bytes)
+                           { R.content_type = T.ApplicationData;
+                             R.fragment = Ghost.reveal 'plain_bytes } == Some (out_bytes, s') /\
+                         B.length out_bytes == B.length 'old) /\
+                (not ok ==> s' == 's /\
+                            out_bytes == 'old /\
+                            R.seal
+                              's
+                              (Ghost.reveal 'aad_bytes)
+                              { R.content_type = T.ApplicationData;
+                                R.fragment = Ghost.reveal 'plain_bytes } == None))
 
 fn open_application
   (st: record_state)
@@ -81,16 +86,17 @@ fn open_application
            pts_to out 'old **
            pure (B.length 'aad_bytes == SZ.v aad_len /\
                  B.length 'cipher_bytes == SZ.v cipher_len /\
-                 B.length 'old + 16 == SZ.v cipher_len)
+                 B.length 'old + 16 == SZ.v cipher_len /\
+                 U64.fits ('s.R.seq + 1))
   returns ok: bool
-  ensures pts_to aad 'aad_bytes **
+  ensures exists* s' out_bytes.
+          is_record_state st s' **
+          pts_to aad 'aad_bytes **
           pts_to cipher 'cipher_bytes **
-          (match R.open_record 's (Ghost.reveal 'aad_bytes) (Ghost.reveal 'cipher_bytes) with
-           | Some (plain, s') ->
-             is_record_state st s' **
-             pts_to out plain **
-             pure (ok /\ B.length plain == B.length 'old)
-           | None ->
-             is_record_state st 's **
-             pts_to out 'old **
-             pure (not ok))
+          pts_to out out_bytes **
+          pure ((ok ==> Some? (R.open_record 's (Ghost.reveal 'aad_bytes) (Ghost.reveal 'cipher_bytes)) /\
+                         (let opened = Some?.v (R.open_record 's (Ghost.reveal 'aad_bytes) (Ghost.reveal 'cipher_bytes)) in
+                          out_bytes == fst opened /\ s' == snd opened /\ B.length out_bytes == B.length 'old)) /\
+                (not ok ==> s' == 's /\
+                            out_bytes == 'old /\
+                            R.open_record 's (Ghost.reveal 'aad_bytes) (Ghost.reveal 'cipher_bytes) == None))
