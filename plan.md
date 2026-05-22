@@ -388,7 +388,7 @@ Before any public HTTPS endpoint, add a local OpenSSL interop test that exercise
 9. [pending] Implement and verify ChaCha20-Poly1305 record protection/unprotection.
 10. [pending] Implement and verify the scoped client handshake.
 11. [in progress] Implement and verify top-level connection read/write/close APIs. The top-level Pulse `.fsti` connection contract exists and ties allocation, connect, read, write, close, and free to `TLS13.StateMachine` phases and the trusted I/O boundary; implementation remains pending.
-12. [pending] Configure extraction and C linking with HACL* and OpenSSL.
+12. [in progress] Configure extraction and C linking with HACL* and OpenSSL. A first `extract-smoke`/`test-extract-smoke` path verifies a small extraction-safe F* module, emits C through KaRaMeL, compiles it, and checks exported TLS version/cipher-suite constants; full `TLS13.Connection` extraction and trusted-stub linking remain pending.
 13. [pending] Add RFC 8448 and extracted C vector tests.
 14. [in progress] Add the controlled OpenSSL TLS echo interop test as the first end-to-end networking target. A local OpenSSL TLS 1.3 echo server and `openssl s_client` smoke script exist for the pinned X25519/`TLS_CHACHA20_POLY1305_SHA256` server side; the extracted verified client still needs to replace `s_client`.
 15. [pending] Add public HTTPS interop tests only after the controlled echo test is stable.

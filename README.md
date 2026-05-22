@@ -31,3 +31,7 @@ Run all current checks with:
 ```sh
 make test
 ```
+
+The `make test` target also runs `test-extract-smoke`, which verifies a small
+F* module, extracts it through KaRaMeL, compiles the generated C, and checks the
+exported TLS version/cipher-suite constants.

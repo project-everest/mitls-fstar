@@ -40,6 +40,7 @@ SPEC_FILES = \
 
 IMPL_FILES = \
   src/impl/TLS13.LowTypes.fsti \
+  src/impl/TLS13.Extract.Smoke.fst \
   src/impl/TLS13.Crypto.fsti \
   src/impl/TLS13.X509.fsti \
   src/impl/TLS13.Parse.fsti \
@@ -49,11 +50,16 @@ IMPL_FILES = \
 
 ALL_FILES = $(SPEC_FILES) $(IMPL_FILES)
 
-.PHONY: all verify test check-c-stubs test-hacl-stubs test-openssl-stubs test-wire-stubs test-io-stubs test-openssl-echo check-toolchain check-deps clean
+EXTRACT_SMOKE_DIR  = $(EXTRACT_DIR)/smoke
+EXTRACT_SMOKE_KRML = $(EXTRACT_SMOKE_DIR)/out.krml
+EXTRACT_SMOKE_C    = $(EXTRACT_SMOKE_DIR)/TLS13_Extract_Smoke.c
+EXTRACT_SMOKE_H    = $(EXTRACT_SMOKE_DIR)/TLS13_Extract_Smoke.h
+
+.PHONY: all verify test extract-smoke test-extract-smoke check-c-stubs test-hacl-stubs test-openssl-stubs test-wire-stubs test-io-stubs test-openssl-echo check-toolchain check-deps clean
 
 all: verify
 
-test: verify check-c-stubs test-hacl-stubs test-openssl-stubs test-wire-stubs test-io-stubs
+test: verify check-c-stubs test-hacl-stubs test-openssl-stubs test-wire-stubs test-io-stubs test-extract-smoke
 
 check-toolchain:
 	@if ! command -v $(FSTAR_EXE) >/dev/null 2>&1; then \
@@ -68,6 +74,9 @@ check-deps:
 	@test -f third_party/rfc/rfc8448.txt || { echo "Missing RFC 8448 cache; run scripts/fetch-rfcs.sh"; exit 1; }
 
 $(CACHE_DIR) $(OUTPUT_DIR) $(EXTRACT_DIR):
+	mkdir -p $@
+
+$(EXTRACT_SMOKE_DIR):
 	mkdir -p $@
 
 verify: check-deps check-toolchain $(CACHE_DIR) $(OUTPUT_DIR)
@@ -137,7 +146,31 @@ test/test_io_stubs: c_stubs/tls13_io_stubs.c c_stubs/tls13_io_stubs.h test/test_
 test-io-stubs: test/test_io_stubs
 	./test/test_io_stubs
 
+$(EXTRACT_SMOKE_KRML): src/impl/TLS13.Extract.Smoke.fst | check-toolchain $(EXTRACT_SMOKE_DIR)
+	$(FSTAR_EXE) --cache_checked_modules --cache_dir $(EXTRACT_SMOKE_DIR) --odir $(EXTRACT_SMOKE_DIR) \
+	  --warn_error -321 --report_assumes warn \
+	  --already_cached 'Prims,FStar,Pulse,PulseCore -TLS13' \
+	  --include src/impl $<
+	$(FSTAR_EXE) --cache_checked_modules --cache_dir $(EXTRACT_SMOKE_DIR) --odir $(EXTRACT_SMOKE_DIR) \
+	  --warn_error -321 --report_assumes warn \
+	  --already_cached 'Prims,FStar,Pulse,PulseCore -TLS13' \
+	  --include src/impl --codegen krml --extract 'TLS13.Extract.Smoke' --krmloutput $@ $<
+
+$(EXTRACT_SMOKE_C) $(EXTRACT_SMOKE_H): $(EXTRACT_SMOKE_KRML) | $(EXTRACT_SMOKE_DIR)
+	$(KRML_EXE) -skip-compilation -skip-makefiles -tmpdir $(EXTRACT_SMOKE_DIR) $(EXTRACT_SMOKE_KRML)
+
+extract-smoke: $(EXTRACT_SMOKE_C) $(EXTRACT_SMOKE_H)
+
+test/test_extract_smoke: test/test_extract_smoke.c $(EXTRACT_SMOKE_C) $(EXTRACT_SMOKE_H)
+	$(CC) -Wall -Wextra \
+	  -I $(EXTRACT_SMOKE_DIR) -I $(KRML_HOME)/include -I $(KRML_HOME)/krmllib/dist/minimal \
+	  $(EXTRACT_SMOKE_C) test/test_extract_smoke.c \
+	  -o $@
+
+test-extract-smoke: test/test_extract_smoke
+	./test/test_extract_smoke
+
 clean:
 	rm -rf $(CACHE_DIR) $(OUTPUT_DIR) $(EXTRACT_DIR)
-	rm -f test/test_hacl_stubs test/test_openssl_stubs test/test_wire_stubs test/test_io_stubs test/openssl_echo_server
+	rm -f test/test_hacl_stubs test/test_openssl_stubs test/test_wire_stubs test/test_io_stubs test/test_extract_smoke test/openssl_echo_server
 	find src test -name '*.checked' -delete
