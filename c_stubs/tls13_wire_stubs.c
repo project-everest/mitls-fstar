@@ -18,6 +18,10 @@ static uint16_t read_u16(const uint8_t *p) {
   return ((uint16_t)p[0] << 8) | (uint16_t)p[1];
 }
 
+static uint32_t read_u24(const uint8_t *p) {
+  return ((uint32_t)p[0] << 16) | ((uint32_t)p[1] << 8) | (uint32_t)p[2];
+}
+
 static void write_u16(uint8_t *p, uint16_t x) {
   p[0] = (uint8_t)(x >> 8);
   p[1] = (uint8_t)x;
@@ -180,6 +184,84 @@ bool tls13_wire_parse_supported_server_hello(
   }
   memcpy(random, parsed_random, sizeof parsed_random);
   memcpy(key_share, parsed_key_share, sizeof parsed_key_share);
+  return true;
+}
+
+bool tls13_wire_parse_certificate_leaf_der(
+    const uint8_t *certificate_body,
+    size_t certificate_body_len,
+    const uint8_t **leaf_der,
+    size_t *leaf_der_len) {
+  if (certificate_body == NULL || leaf_der == NULL || leaf_der_len == NULL ||
+      certificate_body_len < 4) {
+    return false;
+  }
+  *leaf_der = NULL;
+  *leaf_der_len = 0;
+
+  size_t pos = 0;
+  uint8_t request_context_len = certificate_body[pos++];
+  if (certificate_body_len - pos < request_context_len + 3u) {
+    return false;
+  }
+  pos += request_context_len;
+
+  uint32_t certificate_list_len = read_u24(certificate_body + pos);
+  pos += 3;
+  if (certificate_list_len == 0 || certificate_list_len > certificate_body_len - pos) {
+    return false;
+  }
+  size_t end = pos + (size_t)certificate_list_len;
+  if (end != certificate_body_len) {
+    return false;
+  }
+
+  while (pos < end) {
+    if (end - pos < 5) {
+      return false;
+    }
+    uint32_t cert_data_len = read_u24(certificate_body + pos);
+    pos += 3;
+    if (cert_data_len == 0 || cert_data_len > end - pos) {
+      return false;
+    }
+    if (*leaf_der == NULL) {
+      *leaf_der = certificate_body + pos;
+      *leaf_der_len = (size_t)cert_data_len;
+    }
+    pos += cert_data_len;
+    if (end - pos < 2) {
+      return false;
+    }
+    uint16_t extensions_len = read_u16(certificate_body + pos);
+    pos += 2;
+    if (extensions_len > end - pos) {
+      return false;
+    }
+    pos += extensions_len;
+  }
+
+  return *leaf_der != NULL;
+}
+
+bool tls13_wire_parse_certificate_verify(
+    const uint8_t *certificate_verify_body,
+    size_t certificate_verify_body_len,
+    uint16_t *signature_scheme,
+    const uint8_t **signature,
+    size_t *signature_len) {
+  if (certificate_verify_body == NULL || signature_scheme == NULL || signature == NULL ||
+      signature_len == NULL || certificate_verify_body_len < 4) {
+    return false;
+  }
+  uint16_t scheme = read_u16(certificate_verify_body);
+  uint16_t sig_len = read_u16(certificate_verify_body + 2);
+  if ((size_t)sig_len != certificate_verify_body_len - 4u) {
+    return false;
+  }
+  *signature_scheme = scheme;
+  *signature = certificate_verify_body + 4;
+  *signature_len = sig_len;
   return true;
 }
 

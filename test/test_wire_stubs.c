@@ -246,6 +246,136 @@ static int test_supported_server_hello_rejects_malformed(void) {
   return 0;
 }
 
+static int test_certificate_parser(void) {
+  static const uint8_t certificate_body[] = {
+      0x00,                         /* empty request context */
+      0x00, 0x00, 0x08,             /* certificate_list length */
+      0x00, 0x00, 0x03,             /* leaf cert length */
+      0xaa, 0xbb, 0xcc,             /* leaf DER bytes */
+      0x00, 0x00};                  /* empty certificate extensions */
+  const uint8_t *leaf_der = NULL;
+  size_t leaf_der_len = 0;
+
+  if (!tls13_wire_parse_certificate_leaf_der(
+          certificate_body, sizeof certificate_body, &leaf_der, &leaf_der_len)) {
+    fprintf(stderr, "failed to parse Certificate leaf DER\n");
+    return 1;
+  }
+  if (leaf_der != certificate_body + 7 || leaf_der_len != 3 ||
+      memcmp(leaf_der, certificate_body + 7, leaf_der_len) != 0) {
+    fprintf(stderr, "parsed Certificate leaf DER mismatch\n");
+    return 1;
+  }
+  return 0;
+}
+
+static int test_certificate_parser_rejects_malformed(void) {
+  static const uint8_t valid_certificate_body[] = {
+      0x00, 0x00, 0x00, 0x08, 0x00, 0x00,
+      0x03, 0xaa, 0xbb, 0xcc, 0x00, 0x00};
+  uint8_t bad[sizeof valid_certificate_body];
+  const uint8_t *leaf_der = NULL;
+  size_t leaf_der_len = 0;
+
+  if (tls13_wire_parse_certificate_leaf_der(
+          NULL, sizeof valid_certificate_body, &leaf_der, &leaf_der_len) ||
+      tls13_wire_parse_certificate_leaf_der(
+          valid_certificate_body, sizeof valid_certificate_body, NULL, &leaf_der_len) ||
+      tls13_wire_parse_certificate_leaf_der(
+          valid_certificate_body, sizeof valid_certificate_body, &leaf_der, NULL) ||
+      tls13_wire_parse_certificate_leaf_der(
+          valid_certificate_body, 3, &leaf_der, &leaf_der_len)) {
+    fprintf(stderr, "accepted malformed Certificate parser arguments\n");
+    return 1;
+  }
+
+  memcpy(bad, valid_certificate_body, sizeof bad);
+  bad[3] = 0x09;
+  if (tls13_wire_parse_certificate_leaf_der(bad, sizeof bad, &leaf_der, &leaf_der_len)) {
+    fprintf(stderr, "accepted Certificate with bad list length\n");
+    return 1;
+  }
+
+  memcpy(bad, valid_certificate_body, sizeof bad);
+  bad[11] = 0x01;
+  if (tls13_wire_parse_certificate_leaf_der(bad, sizeof bad, &leaf_der, &leaf_der_len)) {
+    fprintf(stderr, "accepted Certificate with truncated extensions\n");
+    return 1;
+  }
+
+  memcpy(bad, valid_certificate_body, sizeof bad);
+  bad[6] = 0x00;
+  if (tls13_wire_parse_certificate_leaf_der(bad, sizeof bad, &leaf_der, &leaf_der_len)) {
+    fprintf(stderr, "accepted Certificate with empty leaf DER\n");
+    return 1;
+  }
+  return 0;
+}
+
+static int test_certificate_verify_parser(void) {
+  static const uint8_t certificate_verify_body[] = {
+      0x08, 0x04, 0x00, 0x03, 0xaa, 0xbb, 0xcc};
+  uint16_t signature_scheme = 0;
+  const uint8_t *signature = NULL;
+  size_t signature_len = 0;
+
+  if (!tls13_wire_parse_certificate_verify(
+          certificate_verify_body,
+          sizeof certificate_verify_body,
+          &signature_scheme,
+          &signature,
+          &signature_len)) {
+    fprintf(stderr, "failed to parse CertificateVerify\n");
+    return 1;
+  }
+  if (signature_scheme != 0x0804 || signature != certificate_verify_body + 4 ||
+      signature_len != 3 || memcmp(signature, certificate_verify_body + 4, signature_len) != 0) {
+    fprintf(stderr, "parsed CertificateVerify fields mismatch\n");
+    return 1;
+  }
+  return 0;
+}
+
+static int test_certificate_verify_parser_rejects_malformed(void) {
+  static const uint8_t valid_certificate_verify_body[] = {
+      0x08, 0x04, 0x00, 0x03, 0xaa, 0xbb, 0xcc};
+  uint8_t bad[sizeof valid_certificate_verify_body];
+  uint16_t signature_scheme = 0;
+  const uint8_t *signature = NULL;
+  size_t signature_len = 0;
+
+  if (tls13_wire_parse_certificate_verify(
+          NULL,
+          sizeof valid_certificate_verify_body,
+          &signature_scheme,
+          &signature,
+          &signature_len) ||
+      tls13_wire_parse_certificate_verify(
+          valid_certificate_verify_body,
+          sizeof valid_certificate_verify_body,
+          NULL,
+          &signature,
+          &signature_len) ||
+      tls13_wire_parse_certificate_verify(
+          valid_certificate_verify_body,
+          3,
+          &signature_scheme,
+          &signature,
+          &signature_len)) {
+    fprintf(stderr, "accepted malformed CertificateVerify parser arguments\n");
+    return 1;
+  }
+
+  memcpy(bad, valid_certificate_verify_body, sizeof bad);
+  bad[3] = 0x04;
+  if (tls13_wire_parse_certificate_verify(
+          bad, sizeof bad, &signature_scheme, &signature, &signature_len)) {
+    fprintf(stderr, "accepted CertificateVerify with bad signature length\n");
+    return 1;
+  }
+  return 0;
+}
+
 static int test_supported_client_hello_serializer(void) {
   static const uint8_t hostname[] = {'l', 'o', 'c', 'a', 'l', 'h', 'o', 's', 't'};
   uint8_t random[32];
@@ -427,6 +557,10 @@ int main(void) {
   failed |= test_handshake_header_rejects_malformed();
   failed |= test_supported_server_hello_scoped();
   failed |= test_supported_server_hello_rejects_malformed();
+  failed |= test_certificate_parser();
+  failed |= test_certificate_parser_rejects_malformed();
+  failed |= test_certificate_verify_parser();
+  failed |= test_certificate_verify_parser_rejects_malformed();
   failed |= test_supported_client_hello_serializer();
   failed |= test_supported_client_hello_rejects_malformed();
   failed |= test_inner_plaintext_roundtrip();

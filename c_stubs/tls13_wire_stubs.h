@@ -41,6 +41,19 @@ bool tls13_wire_parse_supported_server_hello(
     uint8_t random[32],
     uint8_t key_share[32]);
 
+bool tls13_wire_parse_certificate_leaf_der(
+    const uint8_t *certificate_body,
+    size_t certificate_body_len,
+    const uint8_t **leaf_der,
+    size_t *leaf_der_len);
+
+bool tls13_wire_parse_certificate_verify(
+    const uint8_t *certificate_verify_body,
+    size_t certificate_verify_body_len,
+    uint16_t *signature_scheme,
+    const uint8_t **signature,
+    size_t *signature_len);
+
 bool tls13_wire_serialize_supported_client_hello(
     uint8_t *out,
     size_t out_len,
