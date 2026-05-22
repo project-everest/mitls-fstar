@@ -1,0 +1,102 @@
+module TLS13.Handshake
+
+#lang-pulse
+
+open Pulse.Lib.Pervasives
+
+module H = TLS13.Handshake.Spec
+module IO = TLS13.IO
+module S = TLS13.StateMachine
+
+val handshake_context : Type0
+
+val is_handshake_context: handshake_context -> S.conn_state -> slprop
+
+fn handshake_context_new ()
+  returns ctx: handshake_context
+  ensures is_handshake_context ctx S.initial
+
+fn handshake_context_free (ctx: handshake_context)
+  requires is_handshake_context ctx 's
+  ensures emp
+
+fn send_client_hello (ctx: handshake_context) (ch: IO.channel)
+  requires is_handshake_context ctx 's **
+           IO.is_channel ch **
+           pure ('s.S.phase == S.Start)
+  ensures exists* client_hello s'.
+          is_handshake_context ctx s' **
+          IO.is_channel ch **
+          pure (S.step 's (S.SendClientHello client_hello) == Some s')
+
+fn recv_server_hello (ctx: handshake_context) (ch: IO.channel)
+  requires is_handshake_context ctx 's **
+           IO.is_channel ch **
+           pure ('s.S.phase == S.ClientHelloSent)
+  returns ok: bool
+  ensures exists* server_hello s'.
+          is_handshake_context ctx s' **
+          IO.is_channel ch **
+          pure (S.step 's (S.RecvServerHello server_hello) == Some s' /\
+                (ok ==> s'.S.phase == S.ServerHelloReceived) /\
+                (not ok ==> s'.S.phase == S.Failed))
+
+fn recv_encrypted_extensions (ctx: handshake_context) (ch: IO.channel)
+  requires is_handshake_context ctx 's **
+           IO.is_channel ch **
+           pure ('s.S.phase == S.ServerHelloReceived)
+  returns ok: bool
+  ensures exists* encrypted_extensions s'.
+          is_handshake_context ctx s' **
+          IO.is_channel ch **
+          pure (S.step 's (S.RecvEncryptedExtensions encrypted_extensions) == Some s' /\
+                (ok ==> s'.S.phase == S.EncryptedExtensionsReceived) /\
+                (not ok ==> s'.S.phase == S.Failed))
+
+fn recv_certificate (ctx: handshake_context) (ch: IO.channel)
+  requires is_handshake_context ctx 's **
+           IO.is_channel ch **
+           pure ('s.S.phase == S.EncryptedExtensionsReceived)
+  returns ok: bool
+  ensures exists* cert s'.
+          is_handshake_context ctx s' **
+          IO.is_channel ch **
+          pure (S.step 's (S.RecvCertificate cert) == Some s' /\
+                (ok ==> s'.S.phase == S.CertificateReceived) /\
+                (not ok ==> s'.S.phase == S.Failed))
+
+fn recv_certificate_verify (ctx: handshake_context) (ch: IO.channel)
+  requires is_handshake_context ctx 's **
+           IO.is_channel ch **
+           pure ('s.S.phase == S.CertificateReceived)
+  returns ok: bool
+  ensures exists* cert_verify s'.
+          is_handshake_context ctx s' **
+          IO.is_channel ch **
+          pure (S.step 's (S.RecvCertificateVerify cert_verify) == Some s' /\
+                (ok ==> s'.S.phase == S.CertificateVerified) /\
+                (not ok ==> s'.S.phase == S.Failed))
+
+fn recv_server_finished (ctx: handshake_context) (ch: IO.channel)
+  requires is_handshake_context ctx 's **
+           IO.is_channel ch **
+           pure ('s.S.phase == S.CertificateVerified)
+  returns ok: bool
+  ensures exists* finished s'.
+          is_handshake_context ctx s' **
+          IO.is_channel ch **
+          pure (S.step 's (S.RecvServerFinished finished) == Some s' /\
+                (ok ==> s'.S.phase == S.ServerFinishedVerified) /\
+                (not ok ==> s'.S.phase == S.Failed))
+
+fn send_client_finished (ctx: handshake_context) (ch: IO.channel)
+  requires is_handshake_context ctx 's **
+           IO.is_channel ch **
+           pure ('s.S.phase == S.ServerFinishedVerified)
+  returns ok: bool
+  ensures exists* finished s'.
+          is_handshake_context ctx s' **
+          IO.is_channel ch **
+          pure (S.step 's (S.SendClientFinished finished) == Some s' /\
+                (ok ==> s'.S.phase == S.ApplicationData) /\
+                (not ok ==> s'.S.phase == S.Failed))
