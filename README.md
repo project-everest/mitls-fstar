@@ -32,9 +32,11 @@ Run all current checks with:
 make test
 ```
 
-The `make test` target also runs `test-extract-smoke`, which verifies a small
-F* module, extracts it through KaRaMeL, compiles the generated C, and checks the
-exported TLS version/cipher-suite constants.
+The `make test` target also runs `test-extract-smoke` and mock binding tests for
+the extracted handshake and connection drivers. These checks verify small
+extraction-safe F* modules, translate the verified control-flow spines through
+KaRaMeL, compile the generated C, and exercise success and failure paths through
+explicit trusted C ABIs.
 
 Run the controlled OpenSSL interop smoke with:
 
@@ -43,11 +45,13 @@ make test-openssl-echo
 ```
 
 That target starts the local TLS 1.3/X25519/`TLS_CHACHA20_POLY1305_SHA256`
-echo server, runs a scoped C probe that sends this repository's serialized
-ClientHello, validates OpenSSL's DER leaf certificate against the generated
-test CA, verifies CertificateVerify and server Finished against the transcript,
-sends client Finished, and checks exact echoed application data across multiple
-client records. It also checks that the probe rejects the same server under the
-wrong test CA, and retains the `openssl s_client` short and multi-record payload
-smoke as a server-side compatibility check. The full extracted verified client
-is still a later milestone.
+echo server, runs a scoped HACL*/wire/OpenSSL C backend that sends this
+repository's serialized ClientHello, validates OpenSSL's DER leaf certificate
+against the generated test CA, verifies CertificateVerify and server Finished
+against the transcript, sends client Finished, and checks exact echoed
+application data across multiple client records. It runs both the direct C probe
+and the extracted verified connection-driver path over that backend, checks that
+both reject the same server under the wrong test CA, and retains the
+`openssl s_client` short and multi-record payload smoke as a server-side
+compatibility check. Replacing the temporary trusted C connection backend with
+extracted verified byte-level connection code is still a later milestone.
