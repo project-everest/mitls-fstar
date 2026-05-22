@@ -42,6 +42,7 @@ IMPL_FILES = \
   src/impl/TLS13.LowTypes.fsti \
   src/impl/TLS13.Extract.Smoke.fst \
   src/impl/TLS13.Crypto.fsti \
+  src/impl/TLS13.KeySchedule.fsti \
   src/impl/TLS13.X509.fsti \
   src/impl/TLS13.Record.fsti \
   src/impl/TLS13.Parse.fsti \

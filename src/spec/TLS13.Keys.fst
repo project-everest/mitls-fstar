@@ -44,7 +44,7 @@ let zero_secret : C.secret = B.zeros 32
 let empty_hash : C.digest32 = C.sha256 B.empty
 
 let derive_secret
-  (secret:C.secret)
+  (secret:B.bytes)
   (label:B.bytes)
   (context:B.bytes)
   : traffic_secret =
@@ -53,53 +53,53 @@ let derive_secret
 let early_secret (psk:B.bytes) : C.secret =
   C.hkdf_extract B.empty psk
 
-let derived_secret (secret:C.secret) : C.secret =
+let derived_secret (secret:B.bytes) : C.secret =
   derive_secret secret label_derived empty_hash
 
-let handshake_secret (early:C.secret) (shared_secret:B.bytes) : C.secret =
+let handshake_secret (early:B.bytes) (shared_secret:B.bytes) : C.secret =
   C.hkdf_extract (derived_secret early) shared_secret
 
-let master_secret (handshake:C.secret) : C.secret =
+let master_secret (handshake:B.bytes) : C.secret =
   C.hkdf_extract (derived_secret handshake) zero_secret
 
 let client_handshake_traffic_secret
-  (handshake:C.secret)
-  (transcript_hash:C.digest32)
+  (handshake:B.bytes)
+  (transcript_hash:B.bytes)
   : traffic_secret =
   derive_secret handshake label_c_hs_traffic transcript_hash
 
 let server_handshake_traffic_secret
-  (handshake:C.secret)
-  (transcript_hash:C.digest32)
+  (handshake:B.bytes)
+  (transcript_hash:B.bytes)
   : traffic_secret =
   derive_secret handshake label_s_hs_traffic transcript_hash
 
 let client_application_traffic_secret
-  (master:C.secret)
-  (transcript_hash:C.digest32)
+  (master:B.bytes)
+  (transcript_hash:B.bytes)
   : traffic_secret =
   derive_secret master label_c_ap_traffic transcript_hash
 
 let server_application_traffic_secret
-  (master:C.secret)
-  (transcript_hash:C.digest32)
+  (master:B.bytes)
+  (transcript_hash:B.bytes)
   : traffic_secret =
   derive_secret master label_s_ap_traffic transcript_hash
 
 let exporter_master_secret
-  (master:C.secret)
-  (transcript_hash:C.digest32)
+  (master:B.bytes)
+  (transcript_hash:B.bytes)
   : C.secret =
   derive_secret master label_exp_master transcript_hash
 
 let resumption_master_secret
-  (master:C.secret)
-  (transcript_hash:C.digest32)
+  (master:B.bytes)
+  (transcript_hash:B.bytes)
   : C.secret =
   derive_secret master label_res_master transcript_hash
 
-let derive_aead_key (secret:C.secret) : C.aead_key =
+let derive_aead_key (secret:B.bytes) : C.aead_key =
   C.hkdf_expand_label secret label_key B.empty 32
 
-let derive_aead_iv (secret:C.secret) : C.aead_nonce =
+let derive_aead_iv (secret:B.bytes) : C.aead_nonce =
   C.hkdf_expand_label secret label_iv B.empty 12
