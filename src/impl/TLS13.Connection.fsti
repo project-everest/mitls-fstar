@@ -37,9 +37,11 @@ fn client_connect (c: connection) (ch: IO.channel)
   requires is_connection c 'st 's **
            IO.is_channel ch **
            pure ('s.S.phase == S.Start)
+  returns ok: bool
   ensures exists* s'. is_connection c 'st s' **
           IO.is_channel ch **
-          pure (s'.S.phase == S.ApplicationData \/ s'.S.phase == S.Failed)
+          pure ((ok ==> s'.S.phase == S.ApplicationData) /\
+                (not ok ==> s'.S.phase == S.Failed))
 
 fn client_write (c: connection) (ch: IO.channel) (buf: array U8.t) (len: SZ.t)
   requires is_connection c 'st 's **
