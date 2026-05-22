@@ -6,7 +6,9 @@ open Pulse.Lib.Pervasives
 open Pulse.Lib.Array.PtsTo
 
 module B = TLS13.Bytes
+module C = TLS13.Crypto.Spec
 module SZ = FStar.SizeT
+module T = TLS13.Types
 module U8 = FStar.UInt8
 module X = TLS13.X509.Spec
 
@@ -33,3 +35,23 @@ fn validate_chain
                           'validation_time
                           'trust_store
                           [Ghost.reveal 'cert_bytes])
+
+fn verify_peer_signature
+  (peer: X.peer_identity)
+  (scheme: T.signature_scheme)
+  (message: array U8.t)
+  (message_len: SZ.t)
+  (signature: array U8.t)
+  (signature_len: SZ.t)
+  requires pts_to message 'message_bytes **
+          pts_to signature 'signature_bytes **
+          pure (B.length 'message_bytes == SZ.v message_len /\
+                B.length 'signature_bytes == SZ.v signature_len)
+  returns ok: bool
+  ensures pts_to message 'message_bytes **
+          pts_to signature 'signature_bytes **
+          pure (ok == C.verify_signature
+                        scheme
+                        peer.X.leaf_public_key
+                        (Ghost.reveal 'message_bytes)
+                        (Ghost.reveal 'signature_bytes))

@@ -103,7 +103,7 @@ test/test_hacl_stubs: $(HACL_STUB_TEST_SOURCES) c_stubs/tls13_hacl_stubs.h | che
 test-hacl-stubs: test/test_hacl_stubs
 	./test/test_hacl_stubs
 
-test/certs/chain.pem test/certs/ca.pem: scripts/generate-test-certs.sh
+test/certs/chain.pem test/certs/ca.pem test/certs/leaf.key: scripts/generate-test-certs.sh
 	scripts/generate-test-certs.sh test/certs
 
 test/test_openssl_stubs: c_stubs/tls13_openssl_stubs.c c_stubs/tls13_openssl_stubs.h test/test_openssl_stubs.c | check-deps
@@ -115,8 +115,8 @@ test/openssl_echo_server: test/openssl_echo_server.c | check-deps
 	$(CC) -Wall -Wextra test/openssl_echo_server.c \
 	  -lssl -lcrypto -o $@
 
-test-openssl-stubs: test/test_openssl_stubs test/certs/chain.pem test/certs/ca.pem
-	./test/test_openssl_stubs test/certs/ca.pem test/certs/chain.pem
+test-openssl-stubs: test/test_openssl_stubs test/certs/chain.pem test/certs/ca.pem test/certs/leaf.key
+	./test/test_openssl_stubs test/certs/ca.pem test/certs/chain.pem test/certs/leaf.key
 
 test-openssl-echo: test/openssl_echo_server
 	scripts/test-openssl-echo.sh

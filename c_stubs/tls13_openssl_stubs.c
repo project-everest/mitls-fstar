@@ -4,6 +4,7 @@
 #include <openssl/err.h>
 #include <openssl/evp.h>
 #include <openssl/pem.h>
+#include <openssl/rsa.h>
 #include <openssl/x509.h>
 #include <openssl/x509_vfy.h>
 
@@ -80,6 +81,53 @@ done:
   X509_free(leaf);
   X509_free(trust_anchor);
   return ok;
+}
+
+static bool verify_rsa_pss_rsae_sha256(
+    EVP_PKEY *public_key,
+    const uint8_t *message,
+    size_t message_len,
+    const uint8_t *signature,
+    size_t signature_len) {
+  if (public_key == NULL || EVP_PKEY_base_id(public_key) != EVP_PKEY_RSA) {
+    return false;
+  }
+
+  bool ok = false;
+  EVP_MD_CTX *ctx = EVP_MD_CTX_new();
+  EVP_PKEY_CTX *pkey_ctx = NULL;
+  if (ctx == NULL ||
+      EVP_DigestVerifyInit(ctx, &pkey_ctx, EVP_sha256(), NULL, public_key) != 1 ||
+      pkey_ctx == NULL ||
+      EVP_PKEY_CTX_set_rsa_padding(pkey_ctx, RSA_PKCS1_PSS_PADDING) != 1 ||
+      EVP_PKEY_CTX_set_rsa_pss_saltlen(pkey_ctx, RSA_PSS_SALTLEN_DIGEST) != 1 ||
+      EVP_PKEY_CTX_set_rsa_mgf1_md(pkey_ctx, EVP_sha256()) != 1) {
+    goto done;
+  }
+  ok = EVP_DigestVerify(ctx, signature, signature_len, message, message_len) == 1;
+
+done:
+  EVP_MD_CTX_free(ctx);
+  return ok;
+}
+
+bool tls13_openssl_peer_verify_signature(
+    const tls13_peer_identity *peer,
+    uint16_t signature_scheme,
+    const uint8_t *message,
+    size_t message_len,
+    const uint8_t *signature,
+    size_t signature_len) {
+  if (peer == NULL || message == NULL || signature == NULL) {
+    return false;
+  }
+  switch (signature_scheme) {
+  case TLS13_SIG_RSA_PSS_RSAE_SHA256:
+    return verify_rsa_pss_rsae_sha256(
+        peer->leaf_public_key, message, message_len, signature, signature_len);
+  default:
+    return false;
+  }
 }
 
 void tls13_openssl_peer_identity_free(tls13_peer_identity *peer) {
