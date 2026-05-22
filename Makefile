@@ -64,12 +64,14 @@ EXTRACT_SMOKE_C    = $(EXTRACT_SMOKE_DIR)/TLS13_Extract_Smoke.c
 EXTRACT_SMOKE_H    = $(EXTRACT_SMOKE_DIR)/TLS13_Extract_Smoke.h
 EXTRACT_CONNECTION_DRIVER_DIR  = $(EXTRACT_DIR)/connection-driver
 EXTRACT_CONNECTION_DRIVER_KRML = $(EXTRACT_CONNECTION_DRIVER_DIR)/out.krml
+EXTRACT_CONNECTION_DRIVER_C    = $(EXTRACT_CONNECTION_DRIVER_DIR)/TLS13_Connection_Driver.c
+EXTRACT_CONNECTION_DRIVER_H    = $(EXTRACT_CONNECTION_DRIVER_DIR)/TLS13_Connection_Driver.h
 
-.PHONY: all verify test extract-smoke extract-connection-driver-krml test-extract-smoke check-c-stubs test-hacl-stubs test-openssl-stubs test-wire-stubs test-record-stubs test-io-stubs test-openssl-echo check-toolchain check-deps clean
+.PHONY: all verify test extract-smoke extract-connection-driver-krml extract-connection-driver-c test-extract-smoke test-connection-driver-bindings check-c-stubs test-hacl-stubs test-openssl-stubs test-wire-stubs test-record-stubs test-io-stubs test-openssl-echo check-toolchain check-deps clean
 
 all: verify
 
-test: verify check-c-stubs test-hacl-stubs test-openssl-stubs test-wire-stubs test-record-stubs test-io-stubs test-extract-smoke
+test: verify check-c-stubs test-hacl-stubs test-openssl-stubs test-wire-stubs test-record-stubs test-io-stubs test-extract-smoke test-connection-driver-bindings
 
 check-toolchain:
 	@if ! command -v $(FSTAR_EXE) >/dev/null 2>&1; then \
@@ -202,6 +204,13 @@ $(EXTRACT_CONNECTION_DRIVER_KRML): src/impl/TLS13.Connection.Driver.fst verify |
 
 extract-connection-driver-krml: $(EXTRACT_CONNECTION_DRIVER_KRML)
 
+$(EXTRACT_CONNECTION_DRIVER_C) $(EXTRACT_CONNECTION_DRIVER_H): $(EXTRACT_CONNECTION_DRIVER_KRML) c_stubs/tls13_connection_external.h | $(EXTRACT_CONNECTION_DRIVER_DIR)
+	$(KRML_EXE) -skip-compilation -skip-makefiles -warn-error -2 \
+	  -add-include '"tls13_connection_external.h"' \
+	  -tmpdir $(EXTRACT_CONNECTION_DRIVER_DIR) $(EXTRACT_CONNECTION_DRIVER_KRML)
+
+extract-connection-driver-c: $(EXTRACT_CONNECTION_DRIVER_C) $(EXTRACT_CONNECTION_DRIVER_H)
+
 test/test_extract_smoke: test/test_extract_smoke.c $(EXTRACT_SMOKE_C) $(EXTRACT_SMOKE_H)
 	$(CC) -Wall -Wextra \
 	  -I $(EXTRACT_SMOKE_DIR) -I $(KRML_HOME)/include -I $(KRML_HOME)/krmllib/dist/minimal \
@@ -211,7 +220,16 @@ test/test_extract_smoke: test/test_extract_smoke.c $(EXTRACT_SMOKE_C) $(EXTRACT_
 test-extract-smoke: test/test_extract_smoke
 	./test/test_extract_smoke
 
+test/test_connection_driver_bindings: test/test_connection_driver_bindings.c $(EXTRACT_CONNECTION_DRIVER_C) $(EXTRACT_CONNECTION_DRIVER_H) c_stubs/tls13_connection_external.h
+	$(CC) -Wall -Wextra \
+	  -I $(EXTRACT_CONNECTION_DRIVER_DIR) -I c_stubs -I $(KRML_HOME)/include -I $(KRML_HOME)/krmllib/dist/minimal \
+	  $(EXTRACT_CONNECTION_DRIVER_C) test/test_connection_driver_bindings.c \
+	  -o $@
+
+test-connection-driver-bindings: test/test_connection_driver_bindings
+	./test/test_connection_driver_bindings
+
 clean:
 	rm -rf $(CACHE_DIR) $(OUTPUT_DIR) $(EXTRACT_DIR)
-	rm -f test/test_hacl_stubs test/test_openssl_stubs test/test_wire_stubs test/test_record_stubs test/test_io_stubs test/test_extract_smoke test/test_clienthello_openssl_probe test/openssl_echo_server
+	rm -f test/test_hacl_stubs test/test_openssl_stubs test/test_wire_stubs test/test_record_stubs test/test_io_stubs test/test_extract_smoke test/test_connection_driver_bindings test/test_clienthello_openssl_probe test/openssl_echo_server
 	find src test -name '*.checked' -delete
