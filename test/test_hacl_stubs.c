@@ -1,5 +1,6 @@
 #include "tls13_hacl_stubs.h"
 
+#include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -9,6 +10,41 @@ static int expect_bytes(const char *name, const uint8_t *got, const uint8_t *wan
   }
   fprintf(stderr, "%s mismatch\n", name);
   return 1;
+}
+
+static int hex_value(char c) {
+  if (c >= '0' && c <= '9') {
+    return c - '0';
+  }
+  if (c >= 'a' && c <= 'f') {
+    return c - 'a' + 10;
+  }
+  if (c >= 'A' && c <= 'F') {
+    return c - 'A' + 10;
+  }
+  return -1;
+}
+
+static bool decode_hex_string(const char *hex, uint8_t *out, size_t out_len) {
+  size_t produced = 0;
+  int high = -1;
+
+  for (const char *p = hex; *p != '\0'; ++p) {
+    int value = hex_value(*p);
+    if (value < 0) {
+      return false;
+    }
+    if (high < 0) {
+      high = value;
+    } else {
+      if (produced == out_len) {
+        return false;
+      }
+      out[produced++] = (uint8_t)((high << 4) | value);
+      high = -1;
+    }
+  }
+  return high < 0 && produced == out_len;
 }
 
 static int test_sha256_empty(void) {
@@ -179,6 +215,103 @@ static int test_tls13_hkdf_rfc8448_simple_handshake(void) {
       sizeof client_hs_traffic);
 }
 
+static int test_tls13_finished_rfc8448_simple_handshake(void) {
+  static const char transcript_hex[] =
+      "010000c00303cb34ecb1e78163ba1c38c6dacb196a6dffa21a8d9912ec18a2ef6283024dece700000613011303130201"
+      "0000910000000b0009000006736572766572ff01000100000a00140012001d0017001800190100010101020103010400"
+      "230000003300260024001d002099381de560e4bd43d23d8e435a7dbafeb3c06e51c13cae4d5413691e529aaf2c002b00"
+      "03020304000d0020001e040305030603020308040805080604010501060102010402050206020202002d00020101001c"
+      "00024001020000560303a6af06a4121860dc5e6e60249cd34c95930c8ac5cb1434dac155772ed3e2692800130100002e"
+      "00330024001d0020c9828876112095fe66762bdbf7c672e156d6cc253b833df1dd69b1b04e751f0f002b000203040800"
+      "00240022000a00140012001d00170018001901000101010201030104001c00024001000000000b0001b9000001b50001"
+      "b0308201ac30820115a003020102020102300d06092a864886f70d01010b0500300e310c300a06035504031303727361"
+      "301e170d3136303733303031323335395a170d3236303733303031323335395a300e310c300a06035504031303727361"
+      "30819f300d06092a864886f70d010101050003818d0030818902818100b4bb498f8279303d980836399b36c6988c0c68"
+      "de55e1bdb826d3901a2461eafd2de49a91d015abbc9a95137ace6c1af19eaa6af98c7ced43120998e187a80ee0ccb052"
+      "4b1b018c3e0b63264d449a6d38e22a5fda430846748030530ef0461c8ca9d9efbfae8ea6d1d03e2bd193eff0ab9a8002"
+      "c47428a6d35a8d88d79f7f1e3f0203010001a31a301830090603551d1304023000300b0603551d0f0404030205a0300d"
+      "06092a864886f70d01010b05000381810085aad2a0e5b9276b908c65f73a7267170618a54c5f8a7b337d2df7a5943654"
+      "17f2eae8f8a58c8f8172f9319cf36b7fd6c55b80f21a03015156726096fd335e5e67f2dbf102702e608ccae6bec1fc63"
+      "a42a99be5c3eb7107c3c54e9b9eb2bd5203b1c3b84e0a8b2f759409ba3eac9d91d402dcc0cc8f8961229ac9187b42b4d"
+      "e100000f000084080400805a747c5d88fa9bd2e55ab085a61015b7211f824cd484145ab3ff52f1fda8477b0b7abc90db"
+      "78e2d33a5c141a078653fa6bef780c5ea248eeaaa785c4f394cab6d30bbe8d4859ee511f602957b15411ac027671459e"
+      "46445c9ea58c181e818e95b8c3fb0bf3278409d3be152a3da5043e063dda65cdf5aea20d53dfacd42f74f3";
+  static const uint8_t server_handshake_traffic_secret[32] = {
+      0xb6, 0x7b, 0x7d, 0x69, 0x0c, 0xc1, 0x6c, 0x4e,
+      0x75, 0xe5, 0x42, 0x13, 0xcb, 0x2d, 0x37, 0xb4,
+      0xe9, 0xc9, 0x12, 0xbc, 0xde, 0xd9, 0x10, 0x5d,
+      0x42, 0xbe, 0xfd, 0x59, 0xd3, 0x91, 0xad, 0x38};
+  static const uint8_t expected_transcript_hash[32] = {
+      0xed, 0xb7, 0x72, 0x5f, 0xa7, 0xa3, 0x47, 0x3b,
+      0x03, 0x1e, 0xc8, 0xef, 0x65, 0xa2, 0x48, 0x54,
+      0x93, 0x90, 0x01, 0x38, 0xa2, 0xb9, 0x12, 0x91,
+      0x40, 0x7d, 0x79, 0x51, 0xa0, 0x61, 0x10, 0xed};
+  static const uint8_t expected_finished_key[32] = {
+      0x00, 0x8d, 0x3b, 0x66, 0xf8, 0x16, 0xea, 0x55,
+      0x9f, 0x96, 0xb5, 0x37, 0xe8, 0x85, 0xc3, 0x1f,
+      0xc0, 0x68, 0xbf, 0x49, 0x2c, 0x65, 0x2f, 0x01,
+      0xf2, 0x88, 0xa1, 0xd8, 0xcd, 0xc1, 0x9f, 0xc8};
+  static const uint8_t expected_finished[32] = {
+      0x9b, 0x9b, 0x14, 0x1d, 0x90, 0x63, 0x37, 0xfb,
+      0xd2, 0xcb, 0xdc, 0xe7, 0x1d, 0xf4, 0xde, 0xda,
+      0x4a, 0xb4, 0x2c, 0x30, 0x95, 0x72, 0xcb, 0x7f,
+      0xff, 0xee, 0x54, 0x54, 0xb7, 0x8f, 0x07, 0x18};
+  static const uint8_t label_finished[] = {'f', 'i', 'n', 'i', 's', 'h', 'e', 'd'};
+  uint8_t transcript[907];
+  uint8_t transcript_hash[32];
+  uint8_t finished_key[32];
+  uint8_t finished[32];
+
+  if (!decode_hex_string(transcript_hex, transcript, sizeof transcript)) {
+    fprintf(stderr, "failed to decode RFC 8448 Finished transcript\n");
+    return 1;
+  }
+  if (!tls13_hacl_sha256(transcript_hash, transcript, sizeof transcript)) {
+    fprintf(stderr, "failed to hash RFC 8448 Finished transcript\n");
+    return 1;
+  }
+  if (expect_bytes(
+          "RFC8448 Finished transcript hash",
+          transcript_hash,
+          expected_transcript_hash,
+          sizeof transcript_hash) != 0) {
+    return 1;
+  }
+  if (!tls13_hacl_hkdf_expand_label_sha256(
+          finished_key,
+          sizeof finished_key,
+          server_handshake_traffic_secret,
+          label_finished,
+          sizeof label_finished,
+          NULL,
+          0)) {
+    fprintf(stderr, "failed to derive RFC 8448 server Finished key\n");
+    return 1;
+  }
+  if (expect_bytes(
+          "RFC8448 server Finished key",
+          finished_key,
+          expected_finished_key,
+          sizeof finished_key) != 0) {
+    return 1;
+  }
+  if (!tls13_hacl_finished_verify_data_sha256(
+          finished, server_handshake_traffic_secret, transcript_hash)) {
+    fprintf(stderr, "failed to calculate RFC 8448 server Finished\n");
+    return 1;
+  }
+  if (expect_bytes("RFC8448 server Finished", finished, expected_finished, sizeof finished) != 0) {
+    return 1;
+  }
+  if (tls13_hacl_finished_verify_data_sha256(NULL, server_handshake_traffic_secret, transcript_hash) ||
+      tls13_hacl_finished_verify_data_sha256(finished, NULL, transcript_hash) ||
+      tls13_hacl_finished_verify_data_sha256(finished, server_handshake_traffic_secret, NULL)) {
+    fprintf(stderr, "Finished helper accepted a null buffer\n");
+    return 1;
+  }
+  return 0;
+}
+
 static int test_x25519_rfc7748(void) {
   static const uint8_t alice_sk[32] = {
       0x77, 0x07, 0x6d, 0x0a, 0x73, 0x18, 0xa5, 0x7d,
@@ -337,6 +470,7 @@ int main(void) {
   failed |= test_hkdf_sha256_rfc5869_case1();
   failed |= test_tls13_hkdf_expand_label_encoding();
   failed |= test_tls13_hkdf_rfc8448_simple_handshake();
+  failed |= test_tls13_finished_rfc8448_simple_handshake();
   failed |= test_x25519_rfc7748();
   failed |= test_tls13_record_nonce();
   failed |= test_chacha20_poly1305_roundtrip();

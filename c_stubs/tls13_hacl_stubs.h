@@ -39,6 +39,11 @@ bool tls13_hacl_hkdf_expand_label_sha256(
     const uint8_t *context,
     size_t context_len);
 
+bool tls13_hacl_finished_verify_data_sha256(
+    uint8_t out[32],
+    const uint8_t base_key[32],
+    const uint8_t transcript_hash[32]);
+
 bool tls13_hacl_x25519_public_from_private(uint8_t out[32], const uint8_t sk[32]);
 
 bool tls13_hacl_x25519_shared(uint8_t out[32], const uint8_t sk[32], const uint8_t pk[32]);

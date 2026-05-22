@@ -102,11 +102,32 @@ bool tls13_hacl_hkdf_expand_label_sha256(
   info[1] = (uint8_t)out_len;
   info[2] = (uint8_t)full_label_len;
   memcpy(&info[3], prefix, sizeof prefix);
-  memcpy(&info[3 + sizeof prefix], label, label_len);
+  if (label_len != 0) {
+    memcpy(&info[3 + sizeof prefix], label, label_len);
+  }
   info[3 + full_label_len] = (uint8_t)context_len;
-  memcpy(&info[4 + full_label_len], context, context_len);
+  if (context_len != 0) {
+    memcpy(&info[4 + full_label_len], context, context_len);
+  }
 
   return tls13_hacl_hkdf_expand_sha256(out, out_len, prk, info, info_len);
+}
+
+bool tls13_hacl_finished_verify_data_sha256(
+    uint8_t out[32],
+    const uint8_t base_key[32],
+    const uint8_t transcript_hash[32]) {
+  static const uint8_t label[] = {'f', 'i', 'n', 'i', 's', 'h', 'e', 'd'};
+  uint8_t finished_key[32];
+
+  if (out == NULL || base_key == NULL || transcript_hash == NULL) {
+    return false;
+  }
+  if (!tls13_hacl_hkdf_expand_label_sha256(
+          finished_key, sizeof finished_key, base_key, label, sizeof label, NULL, 0)) {
+    return false;
+  }
+  return tls13_hacl_hmac_sha256(out, finished_key, sizeof finished_key, transcript_hash, 32);
 }
 
 bool tls13_hacl_x25519_public_from_private(uint8_t out[32], const uint8_t sk[32]) {

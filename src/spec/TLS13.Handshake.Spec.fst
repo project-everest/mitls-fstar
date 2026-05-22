@@ -2,6 +2,7 @@ module TLS13.Handshake.Spec
 
 module B = TLS13.Bytes
 module C = TLS13.Crypto.Spec
+module K = TLS13.Keys
 module Seq = FStar.Seq
 module T = TLS13.Types
 module U8 = FStar.UInt8
@@ -81,3 +82,13 @@ let verify_certificate_verify
     peer.X.leaf_public_key
     (certificate_verify_input transcript_hash)
     cv.signature
+
+let expected_finished (base_key:C.secret) (transcript_hash:C.digest32) : finished =
+  { verify_data = K.finished_verify_data base_key transcript_hash }
+
+let verify_finished
+  (base_key:C.secret)
+  (transcript_hash:C.digest32)
+  (fin:finished)
+  : GTot bool =
+  Seq.equal fin.verify_data (K.finished_verify_data base_key transcript_hash)

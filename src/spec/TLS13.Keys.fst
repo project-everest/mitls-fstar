@@ -35,6 +35,10 @@ let label_res_master : B.bytes =
   B.of_list [b 0x72; b 0x65; b 0x73; b 0x20; b 0x6d; b 0x61;
              b 0x73; b 0x74; b 0x65; b 0x72]
 
+let label_finished : B.bytes =
+  B.of_list [b 0x66; b 0x69; b 0x6e; b 0x69; b 0x73; b 0x68;
+             b 0x65; b 0x64]
+
 let label_key : B.bytes = B.of_list [b 0x6b; b 0x65; b 0x79]
 
 let label_iv : B.bytes = B.of_list [b 0x69; b 0x76]
@@ -97,6 +101,12 @@ let resumption_master_secret
   (transcript_hash:B.bytes)
   : C.secret =
   derive_secret master label_res_master transcript_hash
+
+let finished_key (base_key:B.bytes) : C.secret =
+  derive_secret base_key label_finished B.empty
+
+let finished_verify_data (base_key:B.bytes) (transcript_hash:B.bytes) : C.digest32 =
+  C.hmac_sha256 (finished_key base_key) transcript_hash
 
 let derive_aead_key (secret:B.bytes) : C.aead_key =
   C.hkdf_expand_label secret label_key B.empty 32

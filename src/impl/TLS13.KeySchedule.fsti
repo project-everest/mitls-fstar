@@ -98,11 +98,27 @@ fn server_application_traffic_secret
                         (Ghost.reveal 'master_bytes)
                         (Ghost.reveal 'hash_bytes))
 
+fn finished_verify_data
+  (base_key: array U8.t)
+  (transcript_hash: array U8.t)
+  (out: array U8.t)
+  requires pts_to base_key 'base_key_bytes **
+          pts_to transcript_hash 'hash_bytes **
+          pts_to out 'old **
+          pure (B.length 'base_key_bytes == 32 /\
+                B.length 'hash_bytes == 32 /\
+                B.length 'old == 32)
+  ensures pts_to base_key 'base_key_bytes **
+          pts_to transcript_hash 'hash_bytes **
+          pts_to out (K.finished_verify_data
+                       (Ghost.reveal 'base_key_bytes)
+                       (Ghost.reveal 'hash_bytes))
+
 fn derive_traffic_key
   (traffic_secret: array U8.t)
   (out: array U8.t)
   requires pts_to traffic_secret 'secret_bytes **
-           pts_to out 'old **
+          pts_to out 'old **
            pure (B.length 'secret_bytes == 32 /\ B.length 'old == 32)
   ensures pts_to traffic_secret 'secret_bytes **
           pts_to out (K.derive_aead_key (Ghost.reveal 'secret_bytes))
