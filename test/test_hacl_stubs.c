@@ -80,15 +80,105 @@ static int test_hkdf_sha256_rfc5869_case1(void) {
   return expect_bytes("hkdf-expand RFC5869 case 1", okm, expected_okm, sizeof okm);
 }
 
+static int test_x25519_rfc7748(void) {
+  static const uint8_t alice_sk[32] = {
+      0x77, 0x07, 0x6d, 0x0a, 0x73, 0x18, 0xa5, 0x7d,
+      0x3c, 0x16, 0xc1, 0x72, 0x51, 0xb2, 0x66, 0x45,
+      0xdf, 0x4c, 0x2f, 0x87, 0xeb, 0xc0, 0x99, 0x2a,
+      0xb1, 0x77, 0xfb, 0xa5, 0x1d, 0xb9, 0x2c, 0x2a};
+  static const uint8_t alice_pk_expected[32] = {
+      0x85, 0x20, 0xf0, 0x09, 0x89, 0x30, 0xa7, 0x54,
+      0x74, 0x8b, 0x7d, 0xdc, 0xb4, 0x3e, 0xf7, 0x5a,
+      0x0d, 0xbf, 0x3a, 0x0d, 0x26, 0x38, 0x1a, 0xf4,
+      0xeb, 0xa4, 0xa9, 0x8e, 0xaa, 0x9b, 0x4e, 0x6a};
+  static const uint8_t bob_sk[32] = {
+      0x5d, 0xab, 0x08, 0x7e, 0x62, 0x4a, 0x8a, 0x4b,
+      0x79, 0xe1, 0x7f, 0x8b, 0x83, 0x80, 0x0e, 0xe6,
+      0x6f, 0x3b, 0xb1, 0x29, 0x26, 0x18, 0xb6, 0xfd,
+      0x1c, 0x2f, 0x8b, 0x27, 0xff, 0x88, 0xe0, 0xeb};
+  static const uint8_t bob_pk_expected[32] = {
+      0xde, 0x9e, 0xdb, 0x7d, 0x7b, 0x7d, 0xc1, 0xb4,
+      0xd3, 0x5b, 0x61, 0xc2, 0xec, 0xe4, 0x35, 0x37,
+      0x3f, 0x83, 0x43, 0xc8, 0x5b, 0x78, 0x67, 0x4d,
+      0xad, 0xfc, 0x7e, 0x14, 0x6f, 0x88, 0x2b, 0x4f};
+  static const uint8_t shared_expected[32] = {
+      0x4a, 0x5d, 0x9d, 0x5b, 0xa4, 0xce, 0x2d, 0xe1,
+      0x72, 0x8e, 0x3b, 0xf4, 0x80, 0x35, 0x0f, 0x25,
+      0xe0, 0x7e, 0x21, 0xc9, 0x47, 0xd1, 0x9e, 0x33,
+      0x76, 0xf0, 0x9b, 0x3c, 0x1e, 0x16, 0x17, 0x42};
+  uint8_t alice_pk[32];
+  uint8_t bob_pk[32];
+  uint8_t shared1[32];
+  uint8_t shared2[32];
+
+  if (!tls13_hacl_x25519_public_from_private(alice_pk, alice_sk) ||
+      !tls13_hacl_x25519_public_from_private(bob_pk, bob_sk)) {
+    fprintf(stderr, "x25519 public key derivation failed\n");
+    return 1;
+  }
+  if (expect_bytes("x25519 Alice public", alice_pk, alice_pk_expected, sizeof alice_pk) != 0 ||
+      expect_bytes("x25519 Bob public", bob_pk, bob_pk_expected, sizeof bob_pk) != 0) {
+    return 1;
+  }
+  if (!tls13_hacl_x25519_shared(shared1, alice_sk, bob_pk) ||
+      !tls13_hacl_x25519_shared(shared2, bob_sk, alice_pk)) {
+    fprintf(stderr, "x25519 shared secret failed\n");
+    return 1;
+  }
+  if (expect_bytes("x25519 shared Alice", shared1, shared_expected, sizeof shared1) != 0 ||
+      expect_bytes("x25519 shared Bob", shared2, shared_expected, sizeof shared2) != 0) {
+    return 1;
+  }
+  return 0;
+}
+
+static int test_chacha20_poly1305_roundtrip(void) {
+  uint8_t key[32];
+  uint8_t nonce[12];
+  uint8_t aad[13];
+  uint8_t plaintext[129];
+  uint8_t ciphertext[sizeof plaintext];
+  uint8_t decrypted[sizeof plaintext];
+  uint8_t tag[16];
+
+  for (size_t i = 0; i < sizeof key; ++i) key[i] = (uint8_t)i;
+  for (size_t i = 0; i < sizeof nonce; ++i) nonce[i] = (uint8_t)(0xa0 + i);
+  for (size_t i = 0; i < sizeof aad; ++i) aad[i] = (uint8_t)(0x50 + i);
+  for (size_t i = 0; i < sizeof plaintext; ++i) plaintext[i] = (uint8_t)(i * 3u + 1u);
+  memset(decrypted, 0, sizeof decrypted);
+
+  if (!tls13_hacl_chacha20_poly1305_seal(
+          ciphertext, tag, key, nonce, aad, sizeof aad, plaintext, sizeof plaintext)) {
+    fprintf(stderr, "chacha20-poly1305 seal failed\n");
+    return 1;
+  }
+  if (!tls13_hacl_chacha20_poly1305_open(
+          decrypted, key, nonce, aad, sizeof aad, ciphertext, sizeof ciphertext, tag)) {
+    fprintf(stderr, "chacha20-poly1305 open failed\n");
+    return 1;
+  }
+  if (expect_bytes("chacha20-poly1305 roundtrip", decrypted, plaintext, sizeof plaintext) != 0) {
+    return 1;
+  }
+  tag[0] ^= 1u;
+  if (tls13_hacl_chacha20_poly1305_open(
+          decrypted, key, nonce, aad, sizeof aad, ciphertext, sizeof ciphertext, tag)) {
+    fprintf(stderr, "chacha20-poly1305 accepted a tampered tag\n");
+    return 1;
+  }
+  return 0;
+}
+
 int main(void) {
   int failed = 0;
   failed |= test_sha256_empty();
   failed |= test_hmac_sha256_rfc4231_case1();
   failed |= test_hkdf_sha256_rfc5869_case1();
+  failed |= test_x25519_rfc7748();
+  failed |= test_chacha20_poly1305_roundtrip();
   if (failed != 0) {
     return 1;
   }
   printf("HACL* stub tests passed\n");
   return 0;
 }
-
