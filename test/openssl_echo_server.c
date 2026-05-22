@@ -8,6 +8,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
+#include <sys/time.h>
 #include <unistd.h>
 
 static int make_listener(uint16_t requested_port, uint16_t *actual_port) {
@@ -104,20 +105,39 @@ int main(int argc, char **argv) {
     goto done;
   }
 
-  uint8_t buf[4096];
-  int n = SSL_read(ssl, buf, sizeof buf);
-  if (n <= 0) {
-    ERR_print_errors_fp(stderr);
+  struct timeval read_timeout = {.tv_sec = 1, .tv_usec = 0};
+  if (setsockopt(client_fd, SOL_SOCKET, SO_RCVTIMEO, &read_timeout, sizeof read_timeout) != 0) {
+    perror("setsockopt SO_RCVTIMEO");
     goto done;
   }
-  int written = 0;
-  while (written < n) {
-    int m = SSL_write(ssl, buf + written, n - written);
-    if (m <= 0) {
+
+  uint8_t buf[4096];
+  bool saw_data = false;
+  for (;;) {
+    int n = SSL_read(ssl, buf, sizeof buf);
+    if (n <= 0) {
+      int err = SSL_get_error(ssl, n);
+      if (err == SSL_ERROR_ZERO_RETURN || (err == SSL_ERROR_SYSCALL && errno == 0)) {
+        break;
+      }
+      if (saw_data &&
+          (err == SSL_ERROR_WANT_READ ||
+           (err == SSL_ERROR_SYSCALL && (errno == EAGAIN || errno == EWOULDBLOCK)))) {
+        break;
+      }
       ERR_print_errors_fp(stderr);
       goto done;
     }
-    written += m;
+    saw_data = true;
+    int written = 0;
+    while (written < n) {
+      int m = SSL_write(ssl, buf + written, n - written);
+      if (m <= 0) {
+        ERR_print_errors_fp(stderr);
+        goto done;
+      }
+      written += m;
+    }
   }
 
   SSL_shutdown(ssl);
@@ -130,4 +150,3 @@ done:
   SSL_CTX_free(ctx);
   return rc;
 }
-
