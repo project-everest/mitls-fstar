@@ -58,7 +58,9 @@ IMPL_FILES = \
   src/impl/TLS13.Handshake.fsti \
   src/impl/TLS13.Handshake.fst \
   src/impl/TLS13.Handshake.Driver.fst \
+  src/impl/TLS13.Connection.External.fsti \
   src/impl/TLS13.Connection.fsti \
+  src/impl/TLS13.Connection.fst \
   src/impl/TLS13.Connection.Driver.fst
 
 ALL_FILES = $(SPEC_FILES) $(IMPL_FILES)
@@ -71,6 +73,10 @@ EXTRACT_CONNECTION_DRIVER_DIR  = $(EXTRACT_DIR)/connection-driver
 EXTRACT_CONNECTION_DRIVER_KRML = $(EXTRACT_CONNECTION_DRIVER_DIR)/TLS13_Connection_Driver.krml
 EXTRACT_CONNECTION_DRIVER_C    = $(EXTRACT_CONNECTION_DRIVER_DIR)/TLS13_Connection_Driver.c
 EXTRACT_CONNECTION_DRIVER_H    = $(EXTRACT_CONNECTION_DRIVER_DIR)/TLS13_Connection_Driver.h
+EXTRACT_CONNECTION_DIR  = $(EXTRACT_DIR)/connection
+EXTRACT_CONNECTION_KRML = $(EXTRACT_CONNECTION_DIR)/TLS13_Connection.krml
+EXTRACT_CONNECTION_C    = $(EXTRACT_CONNECTION_DIR)/TLS13_Connection.c
+EXTRACT_CONNECTION_H    = $(EXTRACT_CONNECTION_DIR)/TLS13_Connection.h
 EXTRACT_HANDSHAKE_DRIVER_DIR  = $(EXTRACT_DIR)/handshake-driver
 EXTRACT_HANDSHAKE_DRIVER_KRML = $(EXTRACT_HANDSHAKE_DRIVER_DIR)/TLS13_Handshake_Driver.krml
 EXTRACT_HANDSHAKE_DRIVER_C    = $(EXTRACT_HANDSHAKE_DRIVER_DIR)/TLS13_Handshake_Driver.c
@@ -88,11 +94,11 @@ EXTRACT_RECORD_KRML = $(EXTRACT_RECORD_DIR)/TLS13_Record.krml
 EXTRACT_RECORD_C    = $(EXTRACT_RECORD_DIR)/TLS13_Record.c
 EXTRACT_RECORD_H    = $(EXTRACT_RECORD_DIR)/TLS13_Record.h
 
-.PHONY: all verify test extract-smoke extract-connection-driver-krml extract-connection-driver-c extract-handshake-driver-krml extract-handshake-driver-c extract-handshake-krml extract-handshake-c extract-key-schedule-krml extract-key-schedule-c extract-record-krml extract-record-c test-extract-smoke test-connection-driver-bindings test-handshake-driver-bindings test-handshake-bindings test-key-schedule-bindings test-record-bindings check-c-stubs test-hacl-stubs test-openssl-stubs test-wire-stubs test-record-stubs test-io-stubs test-openssl-echo check-toolchain check-deps clean
+.PHONY: all verify test extract-smoke extract-connection-driver-krml extract-connection-driver-c extract-connection-krml extract-connection-c extract-handshake-driver-krml extract-handshake-driver-c extract-handshake-krml extract-handshake-c extract-key-schedule-krml extract-key-schedule-c extract-record-krml extract-record-c test-extract-smoke test-connection-driver-bindings test-connection-bindings test-handshake-driver-bindings test-handshake-bindings test-key-schedule-bindings test-record-bindings check-c-stubs test-hacl-stubs test-openssl-stubs test-wire-stubs test-record-stubs test-io-stubs test-openssl-echo check-toolchain check-deps clean
 
 all: verify
 
-test: verify check-c-stubs test-hacl-stubs test-openssl-stubs test-wire-stubs test-record-stubs test-io-stubs test-extract-smoke test-connection-driver-bindings test-handshake-driver-bindings test-handshake-bindings test-key-schedule-bindings test-record-bindings
+test: verify check-c-stubs test-hacl-stubs test-openssl-stubs test-wire-stubs test-record-stubs test-io-stubs test-extract-smoke test-connection-driver-bindings test-connection-bindings test-handshake-driver-bindings test-handshake-bindings test-key-schedule-bindings test-record-bindings
 
 check-toolchain:
 	@if ! command -v $(FSTAR_EXE) >/dev/null 2>&1; then \
@@ -113,6 +119,9 @@ $(EXTRACT_SMOKE_DIR):
 	mkdir -p $@
 
 $(EXTRACT_CONNECTION_DRIVER_DIR):
+	mkdir -p $@
+
+$(EXTRACT_CONNECTION_DIR):
 	mkdir -p $@
 
 $(EXTRACT_HANDSHAKE_DRIVER_DIR):
@@ -266,6 +275,22 @@ $(EXTRACT_CONNECTION_DRIVER_C) $(EXTRACT_CONNECTION_DRIVER_H): $(EXTRACT_CONNECT
 
 extract-connection-driver-c: $(EXTRACT_CONNECTION_DRIVER_C) $(EXTRACT_CONNECTION_DRIVER_H)
 
+$(EXTRACT_CONNECTION_KRML): src/impl/TLS13.Connection.fst verify | $(EXTRACT_CONNECTION_DIR)
+	$(FSTAR_EXE) --cache_checked_modules --cache_dir $(CACHE_DIR) --odir $(OUTPUT_DIR) \
+	  --warn_error -321 --report_assumes warn \
+	  --already_cached 'Prims,FStar,Pulse,PulseCore -TLS13' \
+	  $(INCLUDES) --codegen krml --extract_module TLS13.Connection \
+	  --krmloutput $@ $<
+
+extract-connection-krml: $(EXTRACT_CONNECTION_KRML)
+
+$(EXTRACT_CONNECTION_C) $(EXTRACT_CONNECTION_H): $(EXTRACT_CONNECTION_KRML) c_stubs/tls13_connection_external_layer.h | $(EXTRACT_CONNECTION_DIR)
+	$(KRML_EXE) -skip-compilation -skip-makefiles -warn-error -2 \
+	  -add-include '"tls13_connection_external_layer.h"' \
+	  -tmpdir $(EXTRACT_CONNECTION_DIR) $(EXTRACT_CONNECTION_KRML)
+
+extract-connection-c: $(EXTRACT_CONNECTION_C) $(EXTRACT_CONNECTION_H)
+
 $(EXTRACT_HANDSHAKE_DRIVER_KRML): src/impl/TLS13.Handshake.Driver.fst verify | $(EXTRACT_HANDSHAKE_DRIVER_DIR)
 	$(FSTAR_EXE) --cache_checked_modules --cache_dir $(CACHE_DIR) --odir $(OUTPUT_DIR) \
 	  --warn_error -321 --report_assumes warn \
@@ -348,6 +373,15 @@ test/test_connection_driver_bindings: test/test_connection_driver_bindings.c $(E
 test-connection-driver-bindings: test/test_connection_driver_bindings
 	./test/test_connection_driver_bindings
 
+test/test_connection_bindings: test/test_connection_bindings.c $(EXTRACT_CONNECTION_C) $(EXTRACT_CONNECTION_H) c_stubs/tls13_connection_external_layer.h
+	$(CC) -Wall -Wextra \
+	  -I $(EXTRACT_CONNECTION_DIR) -I c_stubs -I $(KRML_HOME)/include -I $(KRML_HOME)/krmllib/dist/minimal \
+	  $(EXTRACT_CONNECTION_C) test/test_connection_bindings.c \
+	  -o $@
+
+test-connection-bindings: test/test_connection_bindings
+	./test/test_connection_bindings
+
 test/test_handshake_driver_bindings: test/test_handshake_driver_bindings.c $(EXTRACT_HANDSHAKE_DRIVER_C) $(EXTRACT_HANDSHAKE_DRIVER_H) c_stubs/tls13_handshake_external.h c_stubs/tls13_connection_external.h
 	$(CC) -Wall -Wextra \
 	  -I $(EXTRACT_HANDSHAKE_DRIVER_DIR) -I c_stubs -I $(KRML_HOME)/include -I $(KRML_HOME)/krmllib/dist/minimal \
@@ -390,5 +424,5 @@ test-record-bindings: test/test_record_bindings
 
 clean:
 	rm -rf $(CACHE_DIR) $(OUTPUT_DIR) $(EXTRACT_DIR)
-	rm -f test/test_hacl_stubs test/test_openssl_stubs test/test_wire_stubs test/test_record_stubs test/test_record_bindings test/test_io_stubs test/test_extract_smoke test/test_connection_driver_bindings test/test_handshake_driver_bindings test/test_handshake_bindings test/test_key_schedule_bindings test/test_clienthello_openssl_probe test/test_extracted_connection_driver_openssl test/openssl_echo_server
+	rm -f test/test_hacl_stubs test/test_openssl_stubs test/test_wire_stubs test/test_record_stubs test/test_record_bindings test/test_io_stubs test/test_extract_smoke test/test_connection_driver_bindings test/test_connection_bindings test/test_handshake_driver_bindings test/test_handshake_bindings test/test_key_schedule_bindings test/test_clienthello_openssl_probe test/test_extracted_connection_driver_openssl test/openssl_echo_server
 	find src test -name '*.checked' -delete

@@ -21,7 +21,7 @@ val is_connection: connection -> ST.state_ref -> S.conn_state -> slprop
 fn client_new
   (hostname: array U8.t)
   (hostname_len: SZ.t)
-  (trust_store: X.trust_store)
+  (#trust_store: X.trust_store)
   requires pts_to hostname 'hostname_bytes **
            pure (B.length 'hostname_bytes == SZ.v hostname_len)
   returns c: connection
@@ -97,7 +97,7 @@ fn client_read_exact (c: connection) (ch: IO.channel) (out: array U8.t) (len: SZ
 fn client_close (c: connection) (ch: IO.channel)
   requires is_connection c 'st 's **
            IO.is_channel ch **
-           pure ('s.S.phase == S.ApplicationData \/ 's.S.phase == S.Closing)
+           pure ('s.S.phase == S.ApplicationData)
   ensures exists* s'. is_connection c 'st s' **
           IO.is_channel ch **
-          pure (s'.S.phase == S.Closing \/ s'.S.phase == S.Closed \/ s'.S.phase == S.Failed)
+          pure (s'.S.phase == S.Closing \/ s'.S.phase == S.Failed)
