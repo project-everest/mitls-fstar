@@ -2,11 +2,8 @@ module TLS13.Keys
 
 module B = TLS13.Bytes
 module C = TLS13.Crypto.Spec
-module U8 = FStar.UInt8
 
 type traffic_secret = C.secret
-
-let b (n:nat{n < 256}) : B.byte = U8.uint_to_t n
 
 let label_derived : B.bytes =
   Seq.upd
@@ -15,57 +12,57 @@ let label_derived : B.bytes =
         (Seq.upd
           (Seq.upd
             (Seq.upd
-              (Seq.upd (B.zeros 7) 0 (b 0x64))
-              1 (b 0x65))
-            2 (b 0x72))
-          3 (b 0x69))
-        4 (b 0x76))
-      5 (b 0x65))
-    6 (b 0x64)
+              (Seq.upd (B.zeros 7) 0 0x64uy)
+              1 0x65uy)
+            2 0x72uy)
+          3 0x69uy)
+        4 0x76uy)
+      5 0x65uy)
+    6 0x64uy
 
 let label_c_hs_traffic : B.bytes =
   Seq.upd (Seq.upd (Seq.upd (Seq.upd (Seq.upd (Seq.upd
   (Seq.upd (Seq.upd (Seq.upd (Seq.upd (Seq.upd (Seq.upd (B.zeros 12)
-    0 (b 0x63)) 1 (b 0x20)) 2 (b 0x68)) 3 (b 0x73)) 4 (b 0x20)) 5 (b 0x74))
-    6 (b 0x72)) 7 (b 0x61)) 8 (b 0x66)) 9 (b 0x66)) 10 (b 0x69)) 11 (b 0x63)
+    0 0x63uy) 1 0x20uy) 2 0x68uy) 3 0x73uy) 4 0x20uy) 5 0x74uy)
+    6 0x72uy) 7 0x61uy) 8 0x66uy) 9 0x66uy) 10 0x69uy) 11 0x63uy
 
 let label_s_hs_traffic : B.bytes =
   Seq.upd (Seq.upd (Seq.upd (Seq.upd (Seq.upd (Seq.upd
   (Seq.upd (Seq.upd (Seq.upd (Seq.upd (Seq.upd (Seq.upd (B.zeros 12)
-    0 (b 0x73)) 1 (b 0x20)) 2 (b 0x68)) 3 (b 0x73)) 4 (b 0x20)) 5 (b 0x74))
-    6 (b 0x72)) 7 (b 0x61)) 8 (b 0x66)) 9 (b 0x66)) 10 (b 0x69)) 11 (b 0x63)
+    0 0x73uy) 1 0x20uy) 2 0x68uy) 3 0x73uy) 4 0x20uy) 5 0x74uy)
+    6 0x72uy) 7 0x61uy) 8 0x66uy) 9 0x66uy) 10 0x69uy) 11 0x63uy
 
 let label_c_ap_traffic : B.bytes =
   Seq.upd (Seq.upd (Seq.upd (Seq.upd (Seq.upd (Seq.upd
   (Seq.upd (Seq.upd (Seq.upd (Seq.upd (Seq.upd (Seq.upd (B.zeros 12)
-    0 (b 0x63)) 1 (b 0x20)) 2 (b 0x61)) 3 (b 0x70)) 4 (b 0x20)) 5 (b 0x74))
-    6 (b 0x72)) 7 (b 0x61)) 8 (b 0x66)) 9 (b 0x66)) 10 (b 0x69)) 11 (b 0x63)
+    0 0x63uy) 1 0x20uy) 2 0x61uy) 3 0x70uy) 4 0x20uy) 5 0x74uy)
+    6 0x72uy) 7 0x61uy) 8 0x66uy) 9 0x66uy) 10 0x69uy) 11 0x63uy
 
 let label_s_ap_traffic : B.bytes =
   Seq.upd (Seq.upd (Seq.upd (Seq.upd (Seq.upd (Seq.upd
   (Seq.upd (Seq.upd (Seq.upd (Seq.upd (Seq.upd (Seq.upd (B.zeros 12)
-    0 (b 0x73)) 1 (b 0x20)) 2 (b 0x61)) 3 (b 0x70)) 4 (b 0x20)) 5 (b 0x74))
-    6 (b 0x72)) 7 (b 0x61)) 8 (b 0x66)) 9 (b 0x66)) 10 (b 0x69)) 11 (b 0x63)
+    0 0x73uy) 1 0x20uy) 2 0x61uy) 3 0x70uy) 4 0x20uy) 5 0x74uy)
+    6 0x72uy) 7 0x61uy) 8 0x66uy) 9 0x66uy) 10 0x69uy) 11 0x63uy
 
 let label_exp_master : B.bytes =
-  B.of_list [b 0x65; b 0x78; b 0x70; b 0x20; b 0x6d; b 0x61;
-             b 0x73; b 0x74; b 0x65; b 0x72]
+  B.of_list [0x65uy; 0x78uy; 0x70uy; 0x20uy; 0x6duy; 0x61uy;
+             0x73uy; 0x74uy; 0x65uy; 0x72uy]
 
 let label_res_master : B.bytes =
-  B.of_list [b 0x72; b 0x65; b 0x73; b 0x20; b 0x6d; b 0x61;
-             b 0x73; b 0x74; b 0x65; b 0x72]
+  B.of_list [0x72uy; 0x65uy; 0x73uy; 0x20uy; 0x6duy; 0x61uy;
+             0x73uy; 0x74uy; 0x65uy; 0x72uy]
 
 let label_finished : B.bytes =
   Seq.upd (Seq.upd (Seq.upd (Seq.upd
   (Seq.upd (Seq.upd (Seq.upd (Seq.upd (B.zeros 8)
-    0 (b 0x66)) 1 (b 0x69)) 2 (b 0x6e)) 3 (b 0x69))
-    4 (b 0x73)) 5 (b 0x68)) 6 (b 0x65)) 7 (b 0x64)
+    0 0x66uy) 1 0x69uy) 2 0x6euy) 3 0x69uy)
+    4 0x73uy) 5 0x68uy) 6 0x65uy) 7 0x64uy
 
 let label_key : B.bytes =
-  Seq.upd (Seq.upd (Seq.upd (B.zeros 3) 0 (b 0x6b)) 1 (b 0x65)) 2 (b 0x79)
+  Seq.upd (Seq.upd (Seq.upd (B.zeros 3) 0 0x6buy) 1 0x65uy) 2 0x79uy
 
 let label_iv : B.bytes =
-  Seq.upd (Seq.upd (B.zeros 2) 0 (b 0x69)) 1 (b 0x76)
+  Seq.upd (Seq.upd (B.zeros 2) 0 0x69uy) 1 0x76uy
 
 let zero_secret : C.secret = B.zeros 32
 

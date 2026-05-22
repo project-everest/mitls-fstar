@@ -32,11 +32,12 @@ Run all current checks with:
 make test
 ```
 
-The `make test` target also runs `test-extract-smoke` and mock binding tests for
-the extracted handshake and connection drivers. These checks verify small
-extraction-safe F* modules, translate the verified control-flow spines through
-KaRaMeL, compile the generated C, and exercise success and failure paths through
-explicit trusted C ABIs.
+The `make test` target also runs `test-extract-smoke`, mock binding tests for
+the extracted handshake and connection drivers, and an extracted key-schedule
+binding test against the HACL* C snapshot. These checks verify small
+extraction-safe F* modules, translate verified Pulse/F* code through KaRaMeL,
+compile the generated C, and exercise the generated code through explicit
+trusted C ABIs.
 
 Run the controlled OpenSSL interop smoke with:
 
