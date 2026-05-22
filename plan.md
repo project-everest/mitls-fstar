@@ -377,19 +377,19 @@ Before any public HTTPS endpoint, add a local OpenSSL interop test that exercise
 
 ## Todos
 
-1. Use the pinned initial scope decisions: client-only, X25519, `TLS_CHACHA20_POLY1305_SHA256`, supported signature schemes, HRR abort behavior, controlled OpenSSL echo parameters, later public HTTPS endpoint, and trusted parser/serializer boundary for v1.
-2. Add dependency helpers and local caches: HACL* submodule, RFC 8446/RFC 8448 fetch script, OpenSSL availability check, and gitignore rules for downloaded/generated artifacts.
-3. Create the repository skeleton, `setup.sh`, Makefile, cache/extraction directories, and minimal verify/extract smoke modules using `tools/FStar`.
-4. Implement the pure TLS byte/types/state-machine specification modules.
-5. Define pure crypto and X.509 spec interfaces, including trusted-boundary documentation.
-6. Add Pulse `.fsti` contracts and C stubs for HACL*, OpenSSL, parser/serializer, randomness, clock, and I/O.
-7. Implement trusted C parser/serializer support for the scoped TLS messages and extensions, with `.fsti` contracts and vector tests.
-8. Implement and verify transcript hash and TLS 1.3 key schedule; validate with RFC 8448 vectors.
-9. Implement and verify ChaCha20-Poly1305 record protection/unprotection.
-10. Implement and verify the scoped client handshake.
-11. Implement and verify top-level connection read/write/close APIs.
-12. Configure extraction and C linking with HACL* and OpenSSL.
-13. Add RFC 8448 and extracted C vector tests.
-14. Add the controlled OpenSSL TLS echo interop test as the first end-to-end networking target.
-15. Add public HTTPS interop tests only after the controlled echo test is stable.
-16. Audit specs, interfaces, file sizes, proof stability, trusted boundaries, rlimits, and extraction output before declaring the implementation complete.
+1. [done] Use the pinned initial scope decisions: client-only, X25519, `TLS_CHACHA20_POLY1305_SHA256`, supported signature schemes, HRR abort behavior, controlled OpenSSL echo parameters, later public HTTPS endpoint, and trusted parser/serializer boundary for v1.
+2. [done] Add dependency helpers and local caches: HACL* submodule, RFC 8446/RFC 8448 fetch script, OpenSSL availability check, and gitignore rules for downloaded/generated artifacts.
+3. [done] Create the repository skeleton, `setup.sh`, Makefile, cache/extraction directories, and minimal verify/extract smoke modules using `tools/FStar`.
+4. [in progress] Implement the pure TLS byte/types/state-machine specification modules. Initial abstract byte, TLS type, crypto spec, X.509 spec, transcript, key, record, handshake, and state-machine modules verify with the system F* bootstrap toolchain.
+5. [pending] Define pure crypto and X.509 spec interfaces, including trusted-boundary documentation.
+6. [pending] Add Pulse `.fsti` contracts and C stubs for HACL*, OpenSSL, parser/serializer, randomness, clock, and I/O.
+7. [pending] Implement trusted C parser/serializer support for the scoped TLS messages and extensions, with `.fsti` contracts and vector tests.
+8. [pending] Implement and verify transcript hash and TLS 1.3 key schedule; validate with RFC 8448 vectors.
+9. [pending] Implement and verify ChaCha20-Poly1305 record protection/unprotection.
+10. [pending] Implement and verify the scoped client handshake.
+11. [pending] Implement and verify top-level connection read/write/close APIs.
+12. [pending] Configure extraction and C linking with HACL* and OpenSSL.
+13. [pending] Add RFC 8448 and extracted C vector tests.
+14. [pending] Add the controlled OpenSSL TLS echo interop test as the first end-to-end networking target.
+15. [pending] Add public HTTPS interop tests only after the controlled echo test is stable.
+16. [pending] Audit specs, interfaces, file sizes, proof stability, trusted boundaries, rlimits, and extraction output before declaring the implementation complete.

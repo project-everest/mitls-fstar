@@ -17,3 +17,11 @@ scripts/check-openssl.sh
 ```
 
 Do not try to reverify HACL* or depend on HACL* F* specs as part of this project. The TLS development uses local pure F* specs for the needed crypto behavior and trusted Pulse `.fsti` contracts around calls into the HACL* C snapshot.
+
+During bootstrapping, the checked-in Makefile can be run with the system toolchain:
+
+```sh
+make verify FSTAR_EXE=/home/nswamy/.local/bin/fstar.exe KRML_EXE=/home/nswamy/.local/bin/krml
+```
+
+After `./setup.sh`, plain `make verify` uses the repository-local toolchain in `tools/FStar`.
