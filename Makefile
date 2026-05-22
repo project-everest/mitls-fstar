@@ -47,7 +47,7 @@ IMPL_FILES = \
 
 ALL_FILES = $(SPEC_FILES) $(IMPL_FILES)
 
-.PHONY: all verify check-c-stubs test-hacl-stubs test-openssl-stubs test-wire-stubs check-toolchain check-deps clean
+.PHONY: all verify check-c-stubs test-hacl-stubs test-openssl-stubs test-wire-stubs test-io-stubs check-toolchain check-deps clean
 
 all: verify
 
@@ -118,7 +118,15 @@ test/test_wire_stubs: c_stubs/tls13_wire_stubs.c c_stubs/tls13_wire_stubs.h test
 test-wire-stubs: test/test_wire_stubs
 	./test/test_wire_stubs
 
+test/test_io_stubs: c_stubs/tls13_io_stubs.c c_stubs/tls13_io_stubs.h test/test_io_stubs.c
+	$(CC) -Wall -Wextra -I c_stubs \
+	  c_stubs/tls13_io_stubs.c test/test_io_stubs.c \
+	  -o $@
+
+test-io-stubs: test/test_io_stubs
+	./test/test_io_stubs
+
 clean:
 	rm -rf $(CACHE_DIR) $(OUTPUT_DIR) $(EXTRACT_DIR)
-	rm -f test/test_hacl_stubs test/test_openssl_stubs test/test_wire_stubs
+	rm -f test/test_hacl_stubs test/test_openssl_stubs test/test_wire_stubs test/test_io_stubs
 	find src test -name '*.checked' -delete
