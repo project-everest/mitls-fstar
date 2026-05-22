@@ -1,3 +1,4 @@
+#include "tls13_hacl_stubs.h"
 #include "tls13_io_stubs.h"
 #include "tls13_wire_stubs.h"
 
@@ -26,6 +27,111 @@ static int read_exact(int fd, uint8_t *buf, size_t len) {
       return -1;
     }
     off += (size_t)n;
+  }
+  return 0;
+}
+
+static int read_record(
+    int fd,
+    uint8_t header[TLS13_WIRE_RECORD_HEADER_LEN],
+    uint8_t *fragment,
+    size_t fragment_capacity,
+    uint8_t *content_type,
+    uint16_t *legacy_version,
+    uint16_t *fragment_len) {
+  if (read_exact(fd, header, TLS13_WIRE_RECORD_HEADER_LEN) != 0) {
+    return -1;
+  }
+  if (!tls13_wire_parse_record_header(
+          header, TLS13_WIRE_RECORD_HEADER_LEN, content_type, legacy_version, fragment_len) ||
+      *fragment_len > fragment_capacity) {
+    return -1;
+  }
+  return read_exact(fd, fragment, *fragment_len);
+}
+
+static int derive_server_handshake_keys(
+    const uint8_t *client_hello,
+    size_t client_hello_len,
+    const uint8_t *server_hello,
+    size_t server_hello_len,
+    const uint8_t server_key_share[32],
+    uint8_t server_key[32],
+    uint8_t server_iv[12]) {
+  static const uint8_t client_private_key[32] = {
+      0x49, 0xaf, 0x42, 0xba, 0x7f, 0x79, 0x94, 0x85,
+      0x2d, 0x71, 0x3e, 0xf2, 0x78, 0x4b, 0xcb, 0xca,
+      0xa7, 0x91, 0x1d, 0xe2, 0x6a, 0xdc, 0x56, 0x42,
+      0xcb, 0x63, 0x45, 0x40, 0xe7, 0xea, 0x50, 0x05};
+  static const uint8_t zero_secret[32] = {0};
+  static const uint8_t label_derived[] = {'d', 'e', 'r', 'i', 'v', 'e', 'd'};
+  static const uint8_t label_s_hs_traffic[] = {
+      's', ' ', 'h', 's', ' ', 't', 'r', 'a', 'f', 'f', 'i', 'c'};
+  static const uint8_t label_key[] = {'k', 'e', 'y'};
+  static const uint8_t label_iv[] = {'i', 'v'};
+
+  uint8_t empty_hash[32];
+  uint8_t early_secret[32];
+  uint8_t derived_secret[32];
+  uint8_t shared_secret[32];
+  uint8_t handshake_secret[32];
+  uint8_t transcript[1024];
+  uint8_t transcript_hash[32];
+  uint8_t server_handshake_traffic_secret[32];
+
+  if (client_hello_len > sizeof transcript ||
+      server_hello_len > sizeof transcript - client_hello_len) {
+    return -1;
+  }
+  if (!tls13_hacl_sha256(empty_hash, NULL, 0) ||
+      !tls13_hacl_hkdf_extract_sha256(
+          early_secret, NULL, 0, zero_secret, sizeof zero_secret) ||
+      !tls13_hacl_hkdf_expand_label_sha256(
+          derived_secret,
+          sizeof derived_secret,
+          early_secret,
+          label_derived,
+          sizeof label_derived,
+          empty_hash,
+          sizeof empty_hash) ||
+      !tls13_hacl_x25519_shared(shared_secret, client_private_key, server_key_share) ||
+      !tls13_hacl_hkdf_extract_sha256(
+          handshake_secret,
+          derived_secret,
+          sizeof derived_secret,
+          shared_secret,
+          sizeof shared_secret)) {
+    return -1;
+  }
+
+  memcpy(transcript, client_hello, client_hello_len);
+  memcpy(transcript + client_hello_len, server_hello, server_hello_len);
+  if (!tls13_hacl_sha256(transcript_hash, transcript, client_hello_len + server_hello_len) ||
+      !tls13_hacl_hkdf_expand_label_sha256(
+          server_handshake_traffic_secret,
+          sizeof server_handshake_traffic_secret,
+          handshake_secret,
+          label_s_hs_traffic,
+          sizeof label_s_hs_traffic,
+          transcript_hash,
+          sizeof transcript_hash) ||
+      !tls13_hacl_hkdf_expand_label_sha256(
+          server_key,
+          32,
+          server_handshake_traffic_secret,
+          label_key,
+          sizeof label_key,
+          NULL,
+          0) ||
+      !tls13_hacl_hkdf_expand_label_sha256(
+          server_iv,
+          12,
+          server_handshake_traffic_secret,
+          label_iv,
+          sizeof label_iv,
+          NULL,
+          0)) {
+    return -1;
   }
   return 0;
 }
@@ -86,7 +192,9 @@ int main(int argc, char **argv) {
 
   int rc = 1;
   uint8_t header[TLS13_WIRE_RECORD_HEADER_LEN];
-  uint8_t fragment[4096];
+  uint8_t server_hello_fragment[4096];
+  uint8_t encrypted_fragment[20000];
+  uint8_t encrypted_header[TLS13_WIRE_RECORD_HEADER_LEN];
   uint8_t content_type = 0;
   uint16_t legacy_version = 0;
   uint16_t fragment_len = 0;
@@ -97,27 +205,104 @@ int main(int argc, char **argv) {
     perror("write ClientHello");
     goto done;
   }
-  if (read_exact(fd, header, sizeof header) != 0) {
-    perror("read ServerHello header");
-    goto done;
-  }
-  if (!tls13_wire_parse_record_header(
-          header, sizeof header, &content_type, &legacy_version, &fragment_len) ||
-      content_type != 22 || fragment_len > sizeof fragment) {
+  if (read_record(
+          fd,
+          header,
+          server_hello_fragment,
+          sizeof server_hello_fragment,
+          &content_type,
+          &legacy_version,
+          &fragment_len) != 0 ||
+      content_type != 22) {
     fprintf(stderr, "bad ServerHello record header\n");
     goto done;
   }
-  if (read_exact(fd, fragment, fragment_len) != 0) {
-    perror("read ServerHello fragment");
-    goto done;
-  }
   if (!tls13_wire_parse_supported_server_hello(
-          fragment, fragment_len, server_random, server_key_share)) {
+          server_hello_fragment, fragment_len, server_random, server_key_share)) {
     fprintf(stderr, "failed to parse supported OpenSSL ServerHello\n");
     goto done;
   }
 
-  printf("ClientHello/OpenSSL ServerHello probe passed\n");
+  uint8_t server_key[32];
+  uint8_t server_iv[12];
+  if (derive_server_handshake_keys(
+          client_hello,
+          client_hello_len,
+          server_hello_fragment,
+          fragment_len,
+          server_key_share,
+          server_key,
+          server_iv) != 0) {
+    fprintf(stderr, "failed to derive server handshake traffic keys\n");
+    goto done;
+  }
+
+  for (unsigned attempts = 0; attempts < 4; ++attempts) {
+    if (read_record(
+            fd,
+            encrypted_header,
+            encrypted_fragment,
+            sizeof encrypted_fragment,
+            &content_type,
+            &legacy_version,
+            &fragment_len) != 0) {
+      fprintf(stderr, "failed to read encrypted handshake record\n");
+      goto done;
+    }
+    if (content_type == 20 && fragment_len == 1 && encrypted_fragment[0] == 1) {
+      continue;
+    }
+    if (content_type == 23) {
+      break;
+    }
+    fprintf(stderr, "unexpected record type before encrypted handshake: %u\n", content_type);
+    goto done;
+  }
+  if (content_type != 23 || fragment_len < 16) {
+    fprintf(stderr, "missing encrypted handshake record\n");
+    goto done;
+  }
+
+  uint8_t nonce[12];
+  uint8_t inner_plaintext[20000];
+  size_t inner_plaintext_len = (size_t)fragment_len - 16u;
+  if (!tls13_record_nonce(nonce, server_iv, 0) ||
+      !tls13_hacl_chacha20_poly1305_open_combined(
+          inner_plaintext,
+          inner_plaintext_len,
+          server_key,
+          nonce,
+          encrypted_header,
+          TLS13_WIRE_RECORD_HEADER_LEN,
+          encrypted_fragment,
+          fragment_len)) {
+    fprintf(stderr, "failed to decrypt OpenSSL encrypted handshake record\n");
+    goto done;
+  }
+
+  uint8_t inner_content_type = 0;
+  size_t handshake_plaintext_len = 0;
+  if (!tls13_wire_decode_inner_plaintext(
+          inner_plaintext, inner_plaintext_len, &inner_content_type, &handshake_plaintext_len) ||
+      inner_content_type != 22 || handshake_plaintext_len < TLS13_WIRE_HANDSHAKE_HEADER_LEN) {
+    fprintf(stderr, "failed to decode OpenSSL handshake inner plaintext\n");
+    goto done;
+  }
+
+  uint8_t handshake_type = 0;
+  uint32_t handshake_body_len = 0;
+  if (!tls13_wire_parse_handshake_header(
+          inner_plaintext,
+          handshake_plaintext_len,
+          &handshake_type,
+          &handshake_body_len) ||
+      handshake_type != 8 ||
+      handshake_body_len > handshake_plaintext_len - TLS13_WIRE_HANDSHAKE_HEADER_LEN) {
+    fprintf(stderr, "decrypted first OpenSSL handshake message is not EncryptedExtensions\n");
+    goto done;
+  }
+
+  printf("ClientHello/OpenSSL encrypted handshake probe passed\n");
   rc = 0;
 
 done:

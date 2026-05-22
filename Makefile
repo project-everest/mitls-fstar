@@ -130,10 +130,12 @@ test/openssl_echo_server: test/openssl_echo_server.c | check-deps
 	$(CC) -Wall -Wextra test/openssl_echo_server.c \
 	  -lssl -lcrypto -o $@
 
-test/test_clienthello_openssl_probe: c_stubs/tls13_wire_stubs.c c_stubs/tls13_wire_stubs.h c_stubs/tls13_io_stubs.c c_stubs/tls13_io_stubs.h test/test_clienthello_openssl_probe.c
-	$(CC) -Wall -Wextra -I c_stubs \
-	  c_stubs/tls13_wire_stubs.c c_stubs/tls13_io_stubs.c test/test_clienthello_openssl_probe.c \
-	  -o $@
+test/test_clienthello_openssl_probe: $(HACL_WRAPPER_SOURCES) c_stubs/tls13_hacl_stubs.h c_stubs/tls13_wire_stubs.c c_stubs/tls13_wire_stubs.h c_stubs/tls13_io_stubs.c c_stubs/tls13_io_stubs.h test/test_clienthello_openssl_probe.c | check-deps
+	$(CC) -Wall -Wextra -Wno-deprecated-declarations \
+	  -ffunction-sections -fdata-sections \
+	  -I c_stubs -I $(HACL_DIR) -I $(HACL_DIR)/internal -I $(HACL_KI) -I $(HACL_KL) \
+	  $(HACL_WRAPPER_SOURCES) c_stubs/tls13_wire_stubs.c c_stubs/tls13_io_stubs.c test/test_clienthello_openssl_probe.c \
+	  -Wl,--gc-sections -o $@
 
 test-openssl-stubs: test/test_openssl_stubs test/certs/chain.pem test/certs/ca.pem test/certs/leaf.key
 	./test/test_openssl_stubs test/certs/ca.pem test/certs/chain.pem test/certs/leaf.key
