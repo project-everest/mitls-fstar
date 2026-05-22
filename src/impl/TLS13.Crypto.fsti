@@ -23,6 +23,11 @@ fn sha256 (input: array U8.t) (input_len: SZ.t) (out: array U8.t)
            pure (B.length 'msg == SZ.v input_len /\ B.length 'old == 32)
   ensures pts_to input 'msg ** pts_to out (C.sha256 'msg)
 
+fn sha256_empty (out: array U8.t)
+  requires pts_to out 'old **
+           pure (B.length 'old == 32)
+  ensures pts_to out (C.sha256 B.empty)
+
 fn hmac_sha256 (key: array U8.t) (key_len: SZ.t) (msg: array U8.t) (msg_len: SZ.t) (out: array U8.t)
   requires pts_to key 'key_bytes **
            pts_to msg 'msg_bytes **
@@ -66,6 +71,23 @@ fn hkdf_expand_label
           pts_to context 'context_bytes **
           pure (B.length (C.hkdf_expand_label 'secret_bytes 'label_bytes 'context_bytes (SZ.v out_len)) == SZ.v out_len) **
           pts_to out (C.hkdf_expand_label 'secret_bytes 'label_bytes 'context_bytes (SZ.v out_len))
+
+fn hkdf_expand_label_empty_context
+  (secret: array U8.t)
+  (lbl: array U8.t)
+  (label_len: SZ.t)
+  (out: array U8.t)
+  (out_len: SZ.t)
+  requires pts_to secret 'secret_bytes **
+          pts_to lbl 'label_bytes **
+          pts_to out 'old **
+          pure (B.length 'secret_bytes == 32 /\
+                B.length 'label_bytes == SZ.v label_len /\
+                B.length 'old == SZ.v out_len)
+  ensures pts_to secret 'secret_bytes **
+          pts_to lbl 'label_bytes **
+          pure (B.length (C.hkdf_expand_label 'secret_bytes 'label_bytes B.empty (SZ.v out_len)) == SZ.v out_len) **
+          pts_to out (C.hkdf_expand_label 'secret_bytes 'label_bytes B.empty (SZ.v out_len))
 
 fn x25519_public_from_private (sk: array U8.t) (out: array U8.t)
   requires pts_to sk 'sk_bytes **

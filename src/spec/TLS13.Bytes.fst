@@ -8,13 +8,13 @@ type bytes = Seq.seq byte
 
 let length (b:bytes) : nat = Seq.length b
 
-let empty : bytes = Seq.empty
+let zero : byte = U8.uint_to_t 0
+
+let empty : bytes = Seq.create 0 zero
 
 let of_list (l:list byte) : bytes = Seq.seq_of_list l
 
 let append (a:bytes) (b:bytes) : bytes = Seq.append a b
-
-let zero : byte = U8.uint_to_t 0
 
 let zeros (n:nat) : bytes = Seq.create n zero
 

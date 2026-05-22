@@ -9,23 +9,43 @@ type traffic_secret = C.secret
 let b (n:nat{n < 256}) : B.byte = U8.uint_to_t n
 
 let label_derived : B.bytes =
-  B.of_list [b 0x64; b 0x65; b 0x72; b 0x69; b 0x76; b 0x65; b 0x64]
+  Seq.upd
+    (Seq.upd
+      (Seq.upd
+        (Seq.upd
+          (Seq.upd
+            (Seq.upd
+              (Seq.upd (B.zeros 7) 0 (b 0x64))
+              1 (b 0x65))
+            2 (b 0x72))
+          3 (b 0x69))
+        4 (b 0x76))
+      5 (b 0x65))
+    6 (b 0x64)
 
 let label_c_hs_traffic : B.bytes =
-  B.of_list [b 0x63; b 0x20; b 0x68; b 0x73; b 0x20; b 0x74;
-             b 0x72; b 0x61; b 0x66; b 0x66; b 0x69; b 0x63]
+  Seq.upd (Seq.upd (Seq.upd (Seq.upd (Seq.upd (Seq.upd
+  (Seq.upd (Seq.upd (Seq.upd (Seq.upd (Seq.upd (Seq.upd (B.zeros 12)
+    0 (b 0x63)) 1 (b 0x20)) 2 (b 0x68)) 3 (b 0x73)) 4 (b 0x20)) 5 (b 0x74))
+    6 (b 0x72)) 7 (b 0x61)) 8 (b 0x66)) 9 (b 0x66)) 10 (b 0x69)) 11 (b 0x63)
 
 let label_s_hs_traffic : B.bytes =
-  B.of_list [b 0x73; b 0x20; b 0x68; b 0x73; b 0x20; b 0x74;
-             b 0x72; b 0x61; b 0x66; b 0x66; b 0x69; b 0x63]
+  Seq.upd (Seq.upd (Seq.upd (Seq.upd (Seq.upd (Seq.upd
+  (Seq.upd (Seq.upd (Seq.upd (Seq.upd (Seq.upd (Seq.upd (B.zeros 12)
+    0 (b 0x73)) 1 (b 0x20)) 2 (b 0x68)) 3 (b 0x73)) 4 (b 0x20)) 5 (b 0x74))
+    6 (b 0x72)) 7 (b 0x61)) 8 (b 0x66)) 9 (b 0x66)) 10 (b 0x69)) 11 (b 0x63)
 
 let label_c_ap_traffic : B.bytes =
-  B.of_list [b 0x63; b 0x20; b 0x61; b 0x70; b 0x20; b 0x74;
-             b 0x72; b 0x61; b 0x66; b 0x66; b 0x69; b 0x63]
+  Seq.upd (Seq.upd (Seq.upd (Seq.upd (Seq.upd (Seq.upd
+  (Seq.upd (Seq.upd (Seq.upd (Seq.upd (Seq.upd (Seq.upd (B.zeros 12)
+    0 (b 0x63)) 1 (b 0x20)) 2 (b 0x61)) 3 (b 0x70)) 4 (b 0x20)) 5 (b 0x74))
+    6 (b 0x72)) 7 (b 0x61)) 8 (b 0x66)) 9 (b 0x66)) 10 (b 0x69)) 11 (b 0x63)
 
 let label_s_ap_traffic : B.bytes =
-  B.of_list [b 0x73; b 0x20; b 0x61; b 0x70; b 0x20; b 0x74;
-             b 0x72; b 0x61; b 0x66; b 0x66; b 0x69; b 0x63]
+  Seq.upd (Seq.upd (Seq.upd (Seq.upd (Seq.upd (Seq.upd
+  (Seq.upd (Seq.upd (Seq.upd (Seq.upd (Seq.upd (Seq.upd (B.zeros 12)
+    0 (b 0x73)) 1 (b 0x20)) 2 (b 0x61)) 3 (b 0x70)) 4 (b 0x20)) 5 (b 0x74))
+    6 (b 0x72)) 7 (b 0x61)) 8 (b 0x66)) 9 (b 0x66)) 10 (b 0x69)) 11 (b 0x63)
 
 let label_exp_master : B.bytes =
   B.of_list [b 0x65; b 0x78; b 0x70; b 0x20; b 0x6d; b 0x61;
@@ -36,12 +56,16 @@ let label_res_master : B.bytes =
              b 0x73; b 0x74; b 0x65; b 0x72]
 
 let label_finished : B.bytes =
-  B.of_list [b 0x66; b 0x69; b 0x6e; b 0x69; b 0x73; b 0x68;
-             b 0x65; b 0x64]
+  Seq.upd (Seq.upd (Seq.upd (Seq.upd
+  (Seq.upd (Seq.upd (Seq.upd (Seq.upd (B.zeros 8)
+    0 (b 0x66)) 1 (b 0x69)) 2 (b 0x6e)) 3 (b 0x69))
+    4 (b 0x73)) 5 (b 0x68)) 6 (b 0x65)) 7 (b 0x64)
 
-let label_key : B.bytes = B.of_list [b 0x6b; b 0x65; b 0x79]
+let label_key : B.bytes =
+  Seq.upd (Seq.upd (Seq.upd (B.zeros 3) 0 (b 0x6b)) 1 (b 0x65)) 2 (b 0x79)
 
-let label_iv : B.bytes = B.of_list [b 0x69; b 0x76]
+let label_iv : B.bytes =
+  Seq.upd (Seq.upd (B.zeros 2) 0 (b 0x69)) 1 (b 0x76)
 
 let zero_secret : C.secret = B.zeros 32
 
