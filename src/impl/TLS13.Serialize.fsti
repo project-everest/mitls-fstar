@@ -12,6 +12,13 @@ module T = TLS13.Types
 module U8 = FStar.UInt8
 module W = TLS13.Wire.Spec
 
+fn serialize_supported_client_hello (hello: H.client_hello) (out: array U8.t) (out_len: SZ.t)
+  requires pts_to out 'old **
+           pure (B.length 'old == SZ.v out_len /\
+                 B.length (W.serialize_supported_client_hello hello) == SZ.v out_len)
+  returns ok: bool
+  ensures pts_to out (W.serialize_supported_client_hello hello) ** pure ok
+
 fn serialize_handshake (msg: H.handshake_msg) (out: array U8.t) (out_len: SZ.t)
   requires pts_to out 'old **
            pure (B.length 'old == SZ.v out_len /\

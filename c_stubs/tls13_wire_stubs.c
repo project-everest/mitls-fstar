@@ -9,9 +9,18 @@
 #define TLS13_WIRE_NAMED_GROUP_X25519 0x001du
 #define TLS13_WIRE_EXT_SUPPORTED_VERSIONS 0x002bu
 #define TLS13_WIRE_EXT_KEY_SHARE 0x0033u
+#define TLS13_WIRE_EXT_SERVER_NAME 0x0000u
+#define TLS13_WIRE_EXT_SUPPORTED_GROUPS 0x000au
+#define TLS13_WIRE_EXT_SIGNATURE_ALGORITHMS 0x000du
+#define TLS13_WIRE_SIGNATURE_RSA_PSS_RSAE_SHA256 0x0804u
 
 static uint16_t read_u16(const uint8_t *p) {
   return ((uint16_t)p[0] << 8) | (uint16_t)p[1];
+}
+
+static void write_u16(uint8_t *p, uint16_t x) {
+  p[0] = (uint8_t)(x >> 8);
+  p[1] = (uint8_t)x;
 }
 
 bool tls13_wire_parse_record_header(
@@ -171,6 +180,112 @@ bool tls13_wire_parse_supported_server_hello(
   }
   memcpy(random, parsed_random, sizeof parsed_random);
   memcpy(key_share, parsed_key_share, sizeof parsed_key_share);
+  return true;
+}
+
+bool tls13_wire_serialize_supported_client_hello(
+    uint8_t *out,
+    size_t out_len,
+    const uint8_t random[32],
+    const uint8_t key_share[32],
+    const uint8_t *hostname,
+    size_t hostname_len,
+    size_t *written) {
+  if (out == NULL || random == NULL || key_share == NULL || written == NULL ||
+      (hostname_len != 0 && hostname == NULL) ||
+      hostname_len > TLS13_WIRE_MAX_HOSTNAME_LEN) {
+    return false;
+  }
+
+  size_t sni_extension_len = hostname_len == 0 ? 0 : 9u + hostname_len;
+  size_t extensions_len =
+      sni_extension_len +
+      8u +   /* supported_groups */
+      8u +   /* signature_algorithms */
+      42u +  /* key_share */
+      7u;    /* supported_versions */
+  size_t body_len = 43u + extensions_len;
+  size_t total_len = TLS13_WIRE_HANDSHAKE_HEADER_LEN + body_len;
+  if (body_len > TLS13_WIRE_MAX_HANDSHAKE_BODY_LEN || out_len < total_len) {
+    return false;
+  }
+
+  size_t pos = 0;
+  out[pos++] = 1u;
+  out[pos++] = (uint8_t)(body_len >> 16);
+  out[pos++] = (uint8_t)(body_len >> 8);
+  out[pos++] = (uint8_t)body_len;
+  write_u16(out + pos, TLS13_WIRE_LEGACY_VERSION_TLS12);
+  pos += 2;
+  memcpy(out + pos, random, 32);
+  pos += 32;
+  out[pos++] = 0u;
+  write_u16(out + pos, 2u);
+  pos += 2;
+  write_u16(out + pos, TLS13_WIRE_CIPHER_SUITE_CHACHA20_POLY1305_SHA256);
+  pos += 2;
+  out[pos++] = 1u;
+  out[pos++] = 0u;
+  write_u16(out + pos, (uint16_t)extensions_len);
+  pos += 2;
+
+  if (hostname_len != 0) {
+    write_u16(out + pos, TLS13_WIRE_EXT_SERVER_NAME);
+    pos += 2;
+    write_u16(out + pos, (uint16_t)(5u + hostname_len));
+    pos += 2;
+    write_u16(out + pos, (uint16_t)(3u + hostname_len));
+    pos += 2;
+    out[pos++] = 0u;
+    write_u16(out + pos, (uint16_t)hostname_len);
+    pos += 2;
+    memcpy(out + pos, hostname, hostname_len);
+    pos += hostname_len;
+  }
+
+  write_u16(out + pos, TLS13_WIRE_EXT_SUPPORTED_GROUPS);
+  pos += 2;
+  write_u16(out + pos, 4u);
+  pos += 2;
+  write_u16(out + pos, 2u);
+  pos += 2;
+  write_u16(out + pos, TLS13_WIRE_NAMED_GROUP_X25519);
+  pos += 2;
+
+  write_u16(out + pos, TLS13_WIRE_EXT_SIGNATURE_ALGORITHMS);
+  pos += 2;
+  write_u16(out + pos, 4u);
+  pos += 2;
+  write_u16(out + pos, 2u);
+  pos += 2;
+  write_u16(out + pos, TLS13_WIRE_SIGNATURE_RSA_PSS_RSAE_SHA256);
+  pos += 2;
+
+  write_u16(out + pos, TLS13_WIRE_EXT_KEY_SHARE);
+  pos += 2;
+  write_u16(out + pos, 38u);
+  pos += 2;
+  write_u16(out + pos, 36u);
+  pos += 2;
+  write_u16(out + pos, TLS13_WIRE_NAMED_GROUP_X25519);
+  pos += 2;
+  write_u16(out + pos, 32u);
+  pos += 2;
+  memcpy(out + pos, key_share, 32);
+  pos += 32;
+
+  write_u16(out + pos, TLS13_WIRE_EXT_SUPPORTED_VERSIONS);
+  pos += 2;
+  write_u16(out + pos, 3u);
+  pos += 2;
+  out[pos++] = 2u;
+  write_u16(out + pos, TLS13_WIRE_VERSION_TLS13);
+  pos += 2;
+
+  if (pos != total_len) {
+    return false;
+  }
+  *written = total_len;
   return true;
 }
 

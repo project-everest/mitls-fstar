@@ -3,6 +3,35 @@
 #include <stdio.h>
 #include <string.h>
 
+static uint16_t load_u16(const uint8_t *p) {
+  return ((uint16_t)p[0] << 8) | (uint16_t)p[1];
+}
+
+static const uint8_t *find_extension(
+    const uint8_t *extensions,
+    size_t extensions_len,
+    uint16_t extension_type,
+    uint16_t *extension_len) {
+  size_t pos = 0;
+  while (pos < extensions_len) {
+    if (extensions_len - pos < 4) {
+      return NULL;
+    }
+    uint16_t got_type = load_u16(extensions + pos);
+    uint16_t got_len = load_u16(extensions + pos + 2);
+    pos += 4;
+    if (extensions_len - pos < got_len) {
+      return NULL;
+    }
+    if (got_type == extension_type) {
+      *extension_len = got_len;
+      return extensions + pos;
+    }
+    pos += got_len;
+  }
+  return NULL;
+}
+
 static int test_record_header_roundtrip(void) {
   uint8_t header[TLS13_WIRE_RECORD_HEADER_LEN];
   uint8_t content_type = 0;
@@ -217,6 +246,124 @@ static int test_supported_server_hello_rejects_malformed(void) {
   return 0;
 }
 
+static int test_supported_client_hello_serializer(void) {
+  static const uint8_t hostname[] = {'l', 'o', 'c', 'a', 'l', 'h', 'o', 's', 't'};
+  uint8_t random[32];
+  uint8_t key_share[32];
+  uint8_t out[256];
+  size_t written = 0;
+
+  for (size_t i = 0; i < sizeof random; ++i) {
+    random[i] = (uint8_t)(0xa0 + i);
+    key_share[i] = (uint8_t)(0xc0 + i);
+  }
+
+  if (!tls13_wire_serialize_supported_client_hello(
+          out, sizeof out, random, key_share, hostname, sizeof hostname, &written)) {
+    fprintf(stderr, "failed to serialize scoped ClientHello\n");
+    return 1;
+  }
+
+  uint8_t msg_type = 0;
+  uint32_t body_len = 0;
+  if (!tls13_wire_parse_handshake_header(out, written, &msg_type, &body_len) ||
+      msg_type != 1 || body_len + TLS13_WIRE_HANDSHAKE_HEADER_LEN != written) {
+    fprintf(stderr, "serialized ClientHello has bad handshake header\n");
+    return 1;
+  }
+
+  if (load_u16(out + 4) != 0x0303 || memcmp(out + 6, random, sizeof random) != 0 ||
+      out[38] != 0 || load_u16(out + 39) != 2 || load_u16(out + 41) != 0x1303 ||
+      out[43] != 1 || out[44] != 0) {
+    fprintf(stderr, "serialized ClientHello fixed fields mismatch\n");
+    return 1;
+  }
+
+  uint16_t extensions_len = load_u16(out + 45);
+  const uint8_t *extensions = out + 47;
+  if ((size_t)extensions_len + 47u != written) {
+    fprintf(stderr, "serialized ClientHello extension length mismatch\n");
+    return 1;
+  }
+
+  uint16_t ext_len = 0;
+  const uint8_t *ext = find_extension(extensions, extensions_len, 0x0000, &ext_len);
+  if (ext == NULL || ext_len != 5u + sizeof hostname ||
+      load_u16(ext) != 3u + sizeof hostname || ext[2] != 0 ||
+      load_u16(ext + 3) != sizeof hostname ||
+      memcmp(ext + 5, hostname, sizeof hostname) != 0) {
+    fprintf(stderr, "serialized ClientHello SNI extension mismatch\n");
+    return 1;
+  }
+
+  ext = find_extension(extensions, extensions_len, 0x000a, &ext_len);
+  if (ext == NULL || ext_len != 4 || load_u16(ext) != 2 || load_u16(ext + 2) != 0x001d) {
+    fprintf(stderr, "serialized ClientHello supported_groups extension mismatch\n");
+    return 1;
+  }
+
+  ext = find_extension(extensions, extensions_len, 0x000d, &ext_len);
+  if (ext == NULL || ext_len != 4 || load_u16(ext) != 2 || load_u16(ext + 2) != 0x0804) {
+    fprintf(stderr, "serialized ClientHello signature_algorithms extension mismatch\n");
+    return 1;
+  }
+
+  ext = find_extension(extensions, extensions_len, 0x0033, &ext_len);
+  if (ext == NULL || ext_len != 38 || load_u16(ext) != 36 ||
+      load_u16(ext + 2) != 0x001d || load_u16(ext + 4) != 32 ||
+      memcmp(ext + 6, key_share, sizeof key_share) != 0) {
+    fprintf(stderr, "serialized ClientHello key_share extension mismatch\n");
+    return 1;
+  }
+
+  ext = find_extension(extensions, extensions_len, 0x002b, &ext_len);
+  if (ext == NULL || ext_len != 3 || ext[0] != 2 || load_u16(ext + 1) != 0x0304) {
+    fprintf(stderr, "serialized ClientHello supported_versions extension mismatch\n");
+    return 1;
+  }
+
+  if (!tls13_wire_serialize_supported_client_hello(
+          out, sizeof out, random, key_share, NULL, 0, &written)) {
+    fprintf(stderr, "failed to serialize ClientHello without SNI\n");
+    return 1;
+  }
+  extensions_len = load_u16(out + 45);
+  extensions = out + 47;
+  if (find_extension(extensions, extensions_len, 0x0000, &ext_len) != NULL) {
+    fprintf(stderr, "serialized SNI extension for empty hostname\n");
+    return 1;
+  }
+  return 0;
+}
+
+static int test_supported_client_hello_rejects_malformed(void) {
+  uint8_t random[32] = {0};
+  uint8_t key_share[32] = {0};
+  uint8_t out[256];
+  uint8_t long_hostname[TLS13_WIRE_MAX_HOSTNAME_LEN + 1u];
+  size_t written = 0;
+  memset(long_hostname, 'a', sizeof long_hostname);
+
+  if (tls13_wire_serialize_supported_client_hello(
+          NULL, sizeof out, random, key_share, NULL, 0, &written) ||
+      tls13_wire_serialize_supported_client_hello(
+          out, sizeof out, NULL, key_share, NULL, 0, &written) ||
+      tls13_wire_serialize_supported_client_hello(
+          out, sizeof out, random, NULL, NULL, 0, &written) ||
+      tls13_wire_serialize_supported_client_hello(
+          out, sizeof out, random, key_share, NULL, 1, &written) ||
+      tls13_wire_serialize_supported_client_hello(
+          out, sizeof out, random, key_share, long_hostname, sizeof long_hostname, &written) ||
+      tls13_wire_serialize_supported_client_hello(
+          out, 8, random, key_share, NULL, 0, &written) ||
+      tls13_wire_serialize_supported_client_hello(
+          out, sizeof out, random, key_share, NULL, 0, NULL)) {
+    fprintf(stderr, "accepted malformed ClientHello serialization arguments\n");
+    return 1;
+  }
+  return 0;
+}
+
 static int test_inner_plaintext_roundtrip(void) {
   static const uint8_t plaintext[] = {'h', 'e', 'l', 'l', 'o'};
   uint8_t inner[sizeof plaintext + 1 + 3];
@@ -280,6 +427,8 @@ int main(void) {
   failed |= test_handshake_header_rejects_malformed();
   failed |= test_supported_server_hello_scoped();
   failed |= test_supported_server_hello_rejects_malformed();
+  failed |= test_supported_client_hello_serializer();
+  failed |= test_supported_client_hello_rejects_malformed();
   failed |= test_inner_plaintext_roundtrip();
   failed |= test_inner_plaintext_rejects_malformed();
   if (failed != 0) {

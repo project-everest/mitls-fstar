@@ -15,6 +15,10 @@ val parse_supported_server_hello:
   input:B.bytes ->
   Tot (option H.server_hello)
 
+val serialize_supported_client_hello:
+  hello:H.client_hello ->
+  Tot B.bytes
+
 val serialize_handshake:
   msg:H.handshake_msg ->
   Tot B.bytes
