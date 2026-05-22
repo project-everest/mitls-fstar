@@ -1,5 +1,7 @@
 #include "tls13_wire_stubs.h"
 
+#include <string.h>
+
 bool tls13_wire_parse_record_header(
     const uint8_t *input,
     size_t input_len,
@@ -63,5 +65,46 @@ bool tls13_wire_serialize_handshake_header(
   out[1] = (uint8_t)(body_len >> 16);
   out[2] = (uint8_t)(body_len >> 8);
   out[3] = (uint8_t)body_len;
+  return true;
+}
+
+bool tls13_wire_encode_inner_plaintext(
+    uint8_t *out,
+    size_t out_len,
+    const uint8_t *plaintext,
+    size_t plaintext_len,
+    uint8_t content_type,
+    size_t padding_len) {
+  if (plaintext_len > SIZE_MAX - 1 || plaintext_len + 1 > SIZE_MAX - padding_len ||
+      out_len != plaintext_len + 1 + padding_len ||
+      (out_len != 0 && out == NULL) ||
+      (plaintext_len != 0 && plaintext == NULL)) {
+    return false;
+  }
+  memcpy(out, plaintext, plaintext_len);
+  out[plaintext_len] = content_type;
+  memset(out + plaintext_len + 1, 0, padding_len);
+  return true;
+}
+
+bool tls13_wire_decode_inner_plaintext(
+    const uint8_t *inner_plaintext,
+    size_t inner_plaintext_len,
+    uint8_t *content_type,
+    size_t *plaintext_len) {
+  if (inner_plaintext == NULL || content_type == NULL || plaintext_len == NULL ||
+      inner_plaintext_len == 0) {
+    return false;
+  }
+
+  size_t i = inner_plaintext_len;
+  while (i > 0 && inner_plaintext[i - 1] == 0) {
+    --i;
+  }
+  if (i == 0) {
+    return false;
+  }
+  *content_type = inner_plaintext[i - 1];
+  *plaintext_len = i - 1;
   return true;
 }

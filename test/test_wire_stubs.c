@@ -107,12 +107,69 @@ static int test_handshake_header_rejects_malformed(void) {
   return 0;
 }
 
+static int test_inner_plaintext_roundtrip(void) {
+  static const uint8_t plaintext[] = {'h', 'e', 'l', 'l', 'o'};
+  uint8_t inner[sizeof plaintext + 1 + 3];
+  uint8_t content_type = 0;
+  size_t plaintext_len = 0;
+
+  if (!tls13_wire_encode_inner_plaintext(
+          inner, sizeof inner, plaintext, sizeof plaintext, 23, 3)) {
+    fprintf(stderr, "encode TLSInnerPlaintext failed\n");
+    return 1;
+  }
+  static const uint8_t expected[] = {'h', 'e', 'l', 'l', 'o', 23, 0, 0, 0};
+  if (memcmp(inner, expected, sizeof inner) != 0) {
+    fprintf(stderr, "encoded TLSInnerPlaintext mismatch\n");
+    return 1;
+  }
+  if (!tls13_wire_decode_inner_plaintext(inner, sizeof inner, &content_type, &plaintext_len)) {
+    fprintf(stderr, "decode TLSInnerPlaintext failed\n");
+    return 1;
+  }
+  if (content_type != 23 || plaintext_len != sizeof plaintext ||
+      memcmp(inner, plaintext, plaintext_len) != 0) {
+    fprintf(stderr, "decoded TLSInnerPlaintext fields mismatch\n");
+    return 1;
+  }
+  return 0;
+}
+
+static int test_inner_plaintext_rejects_malformed(void) {
+  uint8_t out[4];
+  uint8_t content_type = 0;
+  size_t plaintext_len = 0;
+  static const uint8_t all_padding[] = {0, 0, 0};
+  static const uint8_t plaintext[] = {1, 2, 3};
+
+  if (tls13_wire_encode_inner_plaintext(out, sizeof out - 1, plaintext, sizeof plaintext, 23, 0)) {
+    fprintf(stderr, "encoded TLSInnerPlaintext with bad output length\n");
+    return 1;
+  }
+  if (tls13_wire_encode_inner_plaintext(NULL, sizeof plaintext + 1, plaintext, sizeof plaintext, 23, 0)) {
+    fprintf(stderr, "encoded TLSInnerPlaintext to null output\n");
+    return 1;
+  }
+  if (tls13_wire_decode_inner_plaintext(all_padding, sizeof all_padding, &content_type, &plaintext_len)) {
+    fprintf(stderr, "decoded all-padding TLSInnerPlaintext\n");
+    return 1;
+  }
+  if (tls13_wire_decode_inner_plaintext(NULL, 1, &content_type, &plaintext_len) ||
+      tls13_wire_decode_inner_plaintext(all_padding, 0, &content_type, &plaintext_len)) {
+    fprintf(stderr, "decoded malformed TLSInnerPlaintext input\n");
+    return 1;
+  }
+  return 0;
+}
+
 int main(void) {
   int failed = 0;
   failed |= test_record_header_roundtrip();
   failed |= test_record_header_rejects_malformed();
   failed |= test_handshake_header_roundtrip();
   failed |= test_handshake_header_rejects_malformed();
+  failed |= test_inner_plaintext_roundtrip();
+  failed |= test_inner_plaintext_rejects_malformed();
   if (failed != 0) {
     return 1;
   }
