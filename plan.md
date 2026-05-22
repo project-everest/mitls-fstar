@@ -35,6 +35,7 @@ This project should be structured from the start to avoid large verification con
 7. Use proof-stability techniques deliberately: split lemmas into smaller modules, use `assert_spinoff` for expensive facts, add `#restart-solver` between large definitions when needed, use `--using_facts_from` to prune problematic facts, keep fuel/ifuel low, and introduce quantified facts manually rather than relying on global triggers.
 8. Treat every `.fsti` as a proof-performance boundary as well as an API boundary. A good interface should make callers' VCs smaller and more stable.
 9. Do not spawn sub-agents for deep reasoning, design, or proof work. Sub-agents are acceptable only for short, shallow, non-deep tasks; the main agent must own the core reasoning, verification strategy, and proving work.
+10. Commit changes frequently as coherent milestones land: after project setup, each verified module or trusted stub, each test harness, and each proof-stability cleanup. Prefer small, reviewable commits with passing relevant checks over large mixed commits.
 
 ## Proposed repository layout
 
