@@ -19,7 +19,7 @@ The task is clear enough to proceed with the following pinned initial choices, w
 7. The primary correctness claim is functional/state-machine correctness and memory safety for the Pulse implementation, plus byte-level agreement with the abstract specs. This is not, by itself, a cryptographic security proof for TLS.
 8. HACL* and OpenSSL are trusted FFI components. Their Pulse `.fsti` files must specify their expected behavior precisely, but the C implementations remain in the trusted computing base.
 9. Pick concrete interop targets early: first a controlled localhost OpenSSL echo server, then a public HTTPS endpoint only after the echo path is stable. Use RFC 8448 test vectors before attempting either network interop target.
-10. For the first version, parser/serializer code is deliberately scoped behind trusted `.fsti` interfaces and implemented directly in unverified C stubs. Verified EverParse/LowParse parser generation is deferred to a later phase so the first milestone can focus on the core protocol state machine, key schedule, record layer, and handshake logic.
+10. For the first version, parser/serializer code is deliberately scoped behind trusted `.fsti` interfaces and implemented directly in unverified C stubs. Verified parser/serializer implementation is deferred to a later phase so the first milestone can focus on the core protocol state machine, key schedule, record layer, and handshake logic; do not plan on Low* or LowParse for this project unless that direction is explicitly reintroduced later.
 11. The first interop target is a controlled local TLS echo test against OpenSSL, not public HTTPS. Use a local OpenSSL-backed echo server, generated test CA/leaf certificates for `localhost`, TLS 1.3, X25519, `TLS_CHACHA20_POLY1305_SHA256`, no client auth, no PSK/resumption/0-RTT, and no HTTP semantics. Public HTTPS interop is deferred until the controlled echo path is stable.
 
 ## Reference material and dependency policy
@@ -66,8 +66,7 @@ tls/
 │   │   ├── TLS13.Handshake.Spec.fst
 │   │   └── TLS13.StateMachine.fst
 │   └── impl/
-│       ├── TLS13.LowTypes.fsti
-│       ├── TLS13.LowTypes.fst
+│       ├── TLS13.MachineTypes.fsti
 │       ├── TLS13.Buffer.fsti
 │       ├── TLS13.Buffer.fst
 │       ├── TLS13.Parse.fsti      # trusted FFI contract in v1
@@ -143,7 +142,7 @@ spec state S' such that StateMachine.step* S event S' holds, and any
 returned bytes/messages equal the pure spec result for that transition.
 ```
 
-This includes transcript consistency, key-schedule consistency, record protection/unprotection correctness relative to the AEAD spec, and correct binding between validated certificate identity, CertificateVerify, and the transcript. In v1, wire parser/serializer byte-level correctness is assumed through trusted `.fsti` contracts and validated with C/vector tests; the C parser/serializer implementation itself is not verified until the later EverParse/LowParse phase.
+This includes transcript consistency, key-schedule consistency, record protection/unprotection correctness relative to the AEAD spec, and correct binding between validated certificate identity, CertificateVerify, and the transcript. In v1, wire parser/serializer byte-level correctness is assumed through trusted `.fsti` contracts and validated with C/vector tests; the C parser/serializer implementation itself is not verified until a later parser/serializer verification phase.
 
 ## Trusted FFI specifications
 
@@ -188,15 +187,15 @@ Create `TLS13.Parse.fsti` and `TLS13.Serialize.fsti` as Pulse/F* interfaces over
 4. Serialize failure corresponds to explicit output-buffer-too-small or unsupported-message results.
 5. Contracts include all length bounds, output buffer ownership, cursor advancement, and mutation effects.
 
-The verified core protocol code should operate on the abstract messages and byte sequences exposed by these contracts. Replacing these trusted stubs with EverParse/LowParse-generated verified code is a separate later phase.
+The verified core protocol code should operate on the abstract messages and byte sequences exposed by these contracts. Replacing these trusted stubs with verified parser/serializer code is a separate later phase, but Low* and LowParse are not part of the current plan.
 
 ## Implementation architecture
 
-### Low-level representation
+### Extraction-ready representation
 
 Use only extraction-ready concrete types in implementation code: `UInt8.t`, `UInt16.t`, `UInt32.t`, `UInt64.t`, `SizeT.t`, `bool`, stack arrays, heap boxes/vectors, and erased ghost state. Avoid `nat`, `int`, `list`, `string`, and `Seq.seq` in extractable positions.
 
-Reuse existing Pulse, Low*, and F* libraries wherever possible instead of rebuilding basic data structures or proofs from scratch. Use the standard libraries for arrays/buffers, references, machine integers, options/results, sequences, lists, and common list/sequence/length lemmas; pure `FStar.Seq`/`FStar.List.Tot`-style structures are appropriate in specs and ghost code, while extraction-facing code should use the existing Pulse/Low* array, buffer, ownership, and integer libraries. Add a local wrapper only when it gives a TLS-specific abstraction or narrows an interface, not to reimplement a generic container such as an array, linked list, vector, option, or byte buffer.
+Reuse existing Pulse and F* libraries wherever possible instead of rebuilding basic data structures or proofs from scratch. Use the standard libraries for arrays/buffers, references, machine integers, options/results, sequences, lists, and common list/sequence/length lemmas; pure `FStar.Seq`/`FStar.List.Tot`-style structures are appropriate in specs and ghost code, while extraction-facing code should use the existing Pulse/F* array, buffer, ownership, and integer libraries. Add a local wrapper only when it gives a TLS-specific abstraction or narrows an interface, not to reimplement a generic container such as an array, linked list, vector, option, or byte buffer. Do not introduce Low* as a project implementation strategy.
 
 Core predicates:
 
@@ -215,7 +214,7 @@ The v1 parser/serializer plan is:
 2. Expose trusted `.fsti` contracts that connect C parser/serializer stubs to those pure specs.
 3. Implement the parser/serializer directly in C for the scoped message surface.
 4. Test the C parser/serializer with RFC 8448 vectors and malformed-input cases.
-5. Treat parser/serializer C code as part of the trusted computing base until a later EverParse/LowParse phase replaces it.
+5. Treat parser/serializer C code as part of the trusted computing base until a later verified parser/serializer phase replaces it.
 
 ### Record layer
 
@@ -308,7 +307,7 @@ Before any public HTTPS endpoint, add a local OpenSSL interop test that exercise
    - Write `TLS13.Parse.fsti` and `TLS13.Serialize.fsti` contracts for supported messages and extensions.
    - Implement scoped parser/serializer C stubs behind those contracts.
    - Add C/vector tests for round-trip behavior, RFC 8448 inputs, and malformed-input rejection.
-   - Defer EverParse/LowParse verification to a later phase.
+   - Defer parser/serializer verification to a later phase; do not plan on LowParse for this project.
 
 6. Transcript and key schedule
    - Implement transcript hashing and TLS 1.3 key schedule.
@@ -362,12 +361,12 @@ Before any public HTTPS endpoint, add a local OpenSSL interop test that exercise
 9. Use `--query_stats --split_queries always` for failures before increasing rlimits; use `--log_queries --z3refresh` and Z3 quantifier profiling for slow or flaky queries.
 10. Avoid broad error fallbacks. Every error result should correspond to a specified state-machine failure transition.
 11. Treat HACL*, OpenSSL, parser/serializer C stubs, randomness, clock, trust store, and socket I/O as trusted boundaries with precise `.fsti` contracts.
-12. Before introducing a custom data structure, helper library, or lemma family, check the existing Pulse, Low*, and F* libraries and reuse their arrays, buffers, references, lists, sequences, machine integers, options/results, and proof lemmas when they fit.
+12. Before introducing a custom data structure, helper library, or lemma family, check the existing Pulse and F* libraries and reuse their arrays, buffers, references, lists, sequences, machine integers, options/results, and proof lemmas when they fit.
 
 ## Main risks
 
 1. Real HTTPS interop is substantially more work than the controlled OpenSSL TLS echo test because public endpoints require a non-trivial extension, WebPKI certificate, signature, ALPN, fragmentation, and I/O surface; keep it out of the first end-to-end gate.
-2. Parser/serializer C code is trusted in v1; tests can reduce interop risk but do not provide a proof. EverParse/LowParse should replace this trusted boundary in a later phase.
+2. Parser/serializer C code is trusted in v1; tests can reduce interop risk but do not provide a proof. A later verified parser/serializer should replace this trusted boundary, without assuming a Low* or LowParse direction.
 3. OpenSSL X.509 verification is a trusted boundary; the proof can only show correct use of the validated identity, not correctness of OpenSSL itself.
 4. HACL* FFI specs must match the checked-in C snapshot preconditions exactly, including buffer sizes, disjointness, aliasing, and failure behavior, without assuming HACL* is reverified in this repository.
 5. Transcript/key-schedule byte exactness is fragile; RFC 8448 vector validation should precede network testing.

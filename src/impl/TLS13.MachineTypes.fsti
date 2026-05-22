@@ -1,4 +1,4 @@
-module TLS13.LowTypes
+module TLS13.MachineTypes
 
 module U8 = FStar.UInt8
 module U16 = FStar.UInt16

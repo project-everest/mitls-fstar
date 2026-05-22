@@ -39,7 +39,7 @@ SPEC_FILES = \
   src/spec/TLS13.StateMachine.Lemmas.fst
 
 IMPL_FILES = \
-  src/impl/TLS13.LowTypes.fsti \
+  src/impl/TLS13.MachineTypes.fsti \
   src/impl/TLS13.Extract.Smoke.fst \
   src/impl/TLS13.State.fst \
   src/impl/TLS13.Handshake.StateDriver.fst \
