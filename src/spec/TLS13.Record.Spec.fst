@@ -11,8 +11,8 @@ type epoch =
 
 type direction_state = {
   epoch: epoch;
-  key: option C.aead_key;
-  static_iv: option C.aead_nonce;
+  key: option B.bytes;
+  static_iv: option B.bytes;
   seq: nat;
 }
 
@@ -29,8 +29,8 @@ let initial_direction_state : direction_state =
 let install_keys
   (st:direction_state)
   (epoch:epoch)
-  (key:C.aead_key)
-  (iv:C.aead_nonce)
+  (key:B.bytes)
+  (iv:B.bytes)
   : direction_state =
   { epoch = epoch; key = Some key; static_iv = Some iv; seq = 0 }
 
