@@ -44,10 +44,10 @@ IMPL_FILES = \
   src/impl/TLS13.Crypto.fsti \
   src/impl/TLS13.X509.fsti \
   src/impl/TLS13.Record.fsti \
-  src/impl/TLS13.Handshake.fsti \
   src/impl/TLS13.Parse.fsti \
   src/impl/TLS13.Serialize.fsti \
   src/impl/TLS13.IO.fsti \
+  src/impl/TLS13.Handshake.fsti \
   src/impl/TLS13.Connection.fsti
 
 ALL_FILES = $(SPEC_FILES) $(IMPL_FILES)
