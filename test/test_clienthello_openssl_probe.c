@@ -1,11 +1,51 @@
 #include "tls13_hacl_stubs.h"
 #include "tls13_io_stubs.h"
+#include "tls13_openssl_stubs.h"
 #include "tls13_wire_stubs.h"
 
 #include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+static uint16_t read_u16(const uint8_t *p) {
+  return ((uint16_t)p[0] << 8) | (uint16_t)p[1];
+}
+
+static uint32_t read_u24(const uint8_t *p) {
+  return ((uint32_t)p[0] << 16) | ((uint32_t)p[1] << 8) | (uint32_t)p[2];
+}
+
+static uint8_t *read_file(const char *path, size_t *len_out) {
+  FILE *f = fopen(path, "rb");
+  if (f == NULL) {
+    perror(path);
+    return NULL;
+  }
+  if (fseek(f, 0, SEEK_END) != 0) {
+    fclose(f);
+    return NULL;
+  }
+  long len = ftell(f);
+  if (len < 0) {
+    fclose(f);
+    return NULL;
+  }
+  rewind(f);
+  uint8_t *buf = malloc((size_t)len);
+  if (buf == NULL) {
+    fclose(f);
+    return NULL;
+  }
+  if (fread(buf, 1, (size_t)len, f) != (size_t)len) {
+    free(buf);
+    fclose(f);
+    return NULL;
+  }
+  fclose(f);
+  *len_out = (size_t)len;
+  return buf;
+}
 
 static int write_all(int fd, const uint8_t *buf, size_t len) {
   size_t off = 0;
@@ -218,6 +258,235 @@ static int verify_server_finished(
   return memcmp(expected, finished_verify_data, 32) == 0 ? 0 : -1;
 }
 
+static int parse_certificate_message(
+    const uint8_t *body,
+    size_t body_len,
+    const uint8_t **leaf_der,
+    size_t *leaf_der_len) {
+  if (body == NULL || leaf_der == NULL || leaf_der_len == NULL || body_len < 4) {
+    return -1;
+  }
+  *leaf_der = NULL;
+  *leaf_der_len = 0;
+
+  size_t pos = 0;
+  uint8_t request_context_len = body[pos++];
+  if (body_len - pos < request_context_len + 3u) {
+    return -1;
+  }
+  pos += request_context_len;
+
+  uint32_t certificate_list_len = read_u24(body + pos);
+  pos += 3;
+  if (certificate_list_len == 0 || certificate_list_len > body_len - pos) {
+    return -1;
+  }
+  size_t end = pos + (size_t)certificate_list_len;
+  if (end != body_len) {
+    return -1;
+  }
+
+  while (pos < end) {
+    if (end - pos < 5) {
+      return -1;
+    }
+    uint32_t cert_data_len = read_u24(body + pos);
+    pos += 3;
+    if (cert_data_len == 0 || cert_data_len > end - pos) {
+      return -1;
+    }
+    if (*leaf_der == NULL) {
+      *leaf_der = body + pos;
+      *leaf_der_len = (size_t)cert_data_len;
+    }
+    pos += cert_data_len;
+    if (end - pos < 2) {
+      return -1;
+    }
+    uint16_t extensions_len = read_u16(body + pos);
+    pos += 2;
+    if (extensions_len > end - pos) {
+      return -1;
+    }
+    pos += extensions_len;
+  }
+
+  return *leaf_der != NULL ? 0 : -1;
+}
+
+static int parse_certificate_verify_message(
+    const uint8_t *body,
+    size_t body_len,
+    uint16_t *signature_scheme,
+    const uint8_t **signature,
+    size_t *signature_len) {
+  if (body == NULL || signature_scheme == NULL || signature == NULL || signature_len == NULL ||
+      body_len < 4) {
+    return -1;
+  }
+  uint16_t scheme = read_u16(body);
+  uint16_t sig_len = read_u16(body + 2);
+  if ((size_t)sig_len != body_len - 4u) {
+    return -1;
+  }
+  *signature_scheme = scheme;
+  *signature = body + 4;
+  *signature_len = sig_len;
+  return 0;
+}
+
+static int build_certificate_verify_input(
+    const uint8_t transcript_hash[32],
+    uint8_t *out,
+    size_t out_capacity,
+    size_t *out_len) {
+  static const uint8_t context[] = "TLS 1.3, server CertificateVerify";
+  const size_t needed = 64u + sizeof context - 1u + 1u + 32u;
+  if (transcript_hash == NULL || out == NULL || out_len == NULL || out_capacity < needed) {
+    return -1;
+  }
+  size_t pos = 0;
+  memset(out + pos, 0x20, 64);
+  pos += 64;
+  memcpy(out + pos, context, sizeof context - 1u);
+  pos += sizeof context - 1u;
+  out[pos++] = 0;
+  memcpy(out + pos, transcript_hash, 32);
+  pos += 32;
+  *out_len = pos;
+  return 0;
+}
+
+static int verify_server_authentication(
+    const uint8_t *ca_pem,
+    size_t ca_pem_len,
+    const uint8_t *client_hello,
+    size_t client_hello_len,
+    const uint8_t *server_hello,
+    size_t server_hello_len,
+    const uint8_t *server_handshake_messages,
+    size_t server_handshake_before_finished_len) {
+  size_t pos = 0;
+  bool saw_encrypted_extensions = false;
+  bool saw_certificate = false;
+  bool saw_certificate_verify = false;
+  const uint8_t *leaf_der = NULL;
+  size_t leaf_der_len = 0;
+  uint16_t signature_scheme = 0;
+  const uint8_t *signature = NULL;
+  size_t signature_len = 0;
+  size_t certificate_verify_offset = 0;
+
+  while (pos < server_handshake_before_finished_len) {
+    if (server_handshake_before_finished_len - pos < TLS13_WIRE_HANDSHAKE_HEADER_LEN) {
+      fprintf(stderr, "truncated decrypted server handshake message\n");
+      return -1;
+    }
+    uint8_t handshake_type = 0;
+    uint32_t handshake_body_len = 0;
+    if (!tls13_wire_parse_handshake_header(
+            server_handshake_messages + pos,
+            server_handshake_before_finished_len - pos,
+            &handshake_type,
+            &handshake_body_len)) {
+      fprintf(stderr, "failed to parse server authentication handshake header\n");
+      return -1;
+    }
+    size_t message_len = TLS13_WIRE_HANDSHAKE_HEADER_LEN + (size_t)handshake_body_len;
+    if (message_len > server_handshake_before_finished_len - pos) {
+      fprintf(stderr, "truncated server authentication handshake body\n");
+      return -1;
+    }
+    const uint8_t *body = server_handshake_messages + pos + TLS13_WIRE_HANDSHAKE_HEADER_LEN;
+
+    switch (handshake_type) {
+    case 8:
+      if (pos != 0 || saw_encrypted_extensions) {
+        fprintf(stderr, "unexpected EncryptedExtensions ordering\n");
+        return -1;
+      }
+      saw_encrypted_extensions = true;
+      break;
+    case 11:
+      if (!saw_encrypted_extensions || saw_certificate) {
+        fprintf(stderr, "unexpected Certificate ordering\n");
+        return -1;
+      }
+      if (parse_certificate_message(body, handshake_body_len, &leaf_der, &leaf_der_len) != 0) {
+        fprintf(stderr, "failed to parse server Certificate\n");
+        return -1;
+      }
+      saw_certificate = true;
+      break;
+    case 15:
+      if (!saw_certificate || saw_certificate_verify) {
+        fprintf(stderr, "unexpected CertificateVerify ordering\n");
+        return -1;
+      }
+      certificate_verify_offset = pos;
+      if (parse_certificate_verify_message(
+              body, handshake_body_len, &signature_scheme, &signature, &signature_len) != 0) {
+        fprintf(stderr, "failed to parse server CertificateVerify\n");
+        return -1;
+      }
+      saw_certificate_verify = true;
+      break;
+    default:
+      fprintf(stderr, "unexpected server handshake message before Finished: %u\n", handshake_type);
+      return -1;
+    }
+    pos += message_len;
+  }
+
+  if (!saw_encrypted_extensions || !saw_certificate || !saw_certificate_verify) {
+    fprintf(stderr, "server authentication handshake messages incomplete\n");
+    return -1;
+  }
+
+  tls13_peer_identity *peer = NULL;
+  int rc = -1;
+  uint8_t transcript_hash[32];
+  uint8_t certificate_verify_input[130];
+  size_t certificate_verify_input_len = 0;
+  if (!tls13_openssl_validate_leaf_der(
+          "localhost", ca_pem, ca_pem_len, leaf_der, leaf_der_len, &peer) ||
+      peer == NULL) {
+    fprintf(stderr, "failed to validate server certificate\n");
+    goto done;
+  }
+  if (compute_transcript_hash(
+          client_hello,
+          client_hello_len,
+          server_hello,
+          server_hello_len,
+          server_handshake_messages,
+          certificate_verify_offset,
+          transcript_hash) != 0 ||
+      build_certificate_verify_input(
+          transcript_hash,
+          certificate_verify_input,
+          sizeof certificate_verify_input,
+          &certificate_verify_input_len) != 0) {
+    fprintf(stderr, "failed to build CertificateVerify input\n");
+    goto done;
+  }
+  if (!tls13_openssl_peer_verify_signature(
+          peer,
+          signature_scheme,
+          certificate_verify_input,
+          certificate_verify_input_len,
+          signature,
+          signature_len)) {
+    fprintf(stderr, "failed to verify server CertificateVerify\n");
+    goto done;
+  }
+  rc = 0;
+
+done:
+  tls13_openssl_peer_identity_free(peer);
+  return rc;
+}
+
 static int derive_application_keys(
     const uint8_t handshake_secret[32],
     const uint8_t transcript_hash[32],
@@ -318,8 +587,8 @@ static int seal_record(
 }
 
 int main(int argc, char **argv) {
-  if (argc != 3) {
-    fprintf(stderr, "usage: %s HOST PORT\n", argv[0]);
+  if (argc != 4) {
+    fprintf(stderr, "usage: %s HOST PORT CA_PEM\n", argv[0]);
     return 1;
   }
 
@@ -327,6 +596,12 @@ int main(int argc, char **argv) {
   long port_long = strtol(argv[2], &end, 10);
   if (*argv[2] == '\0' || *end != '\0' || port_long <= 0 || port_long > 65535) {
     fprintf(stderr, "invalid port\n");
+    return 1;
+  }
+
+  size_t ca_pem_len = 0;
+  uint8_t *ca_pem = read_file(argv[3], &ca_pem_len);
+  if (ca_pem == NULL) {
     return 1;
   }
 
@@ -368,6 +643,7 @@ int main(int argc, char **argv) {
   int fd = tls13_io_connect_tcp(argv[1], (uint16_t)port_long);
   if (fd < 0) {
     perror("connect");
+    free(ca_pem);
     return 1;
   }
 
@@ -525,6 +801,15 @@ int main(int argc, char **argv) {
   }
 
   if (!saw_finished ||
+      verify_server_authentication(
+          ca_pem,
+          ca_pem_len,
+          client_hello,
+          client_hello_len,
+          server_hello_fragment,
+          server_hello_len,
+          server_handshake_messages,
+          server_handshake_before_finished_len) != 0 ||
       verify_server_finished(
           client_hello,
           client_hello_len,
@@ -671,5 +956,6 @@ int main(int argc, char **argv) {
 
 done:
   tls13_io_close_fd(fd);
+  free(ca_pem);
   return rc;
 }

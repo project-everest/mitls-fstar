@@ -91,18 +91,21 @@ done:
 }
 
 int main(int argc, char **argv) {
-  if (argc != 4) {
-    fprintf(stderr, "usage: %s CA_PEM CHAIN_PEM LEAF_KEY_PEM\n", argv[0]);
+  if (argc != 5) {
+    fprintf(stderr, "usage: %s CA_PEM CHAIN_PEM LEAF_KEY_PEM LEAF_DER\n", argv[0]);
     return 1;
   }
 
   size_t ca_len = 0;
   size_t chain_len = 0;
+  size_t leaf_der_len = 0;
   uint8_t *ca = read_file(argv[1], &ca_len);
   uint8_t *chain = read_file(argv[2], &chain_len);
-  if (ca == NULL || chain == NULL) {
+  uint8_t *leaf_der = read_file(argv[4], &leaf_der_len);
+  if (ca == NULL || chain == NULL || leaf_der == NULL) {
     free(ca);
     free(chain);
+    free(leaf_der);
     return 1;
   }
 
@@ -112,8 +115,21 @@ int main(int argc, char **argv) {
     fprintf(stderr, "expected localhost certificate validation to succeed\n");
     free(ca);
     free(chain);
+    free(leaf_der);
     return 1;
   }
+
+  tls13_peer_identity *der_peer = NULL;
+  ok = tls13_openssl_validate_leaf_der("localhost", ca, ca_len, leaf_der, leaf_der_len, &der_peer);
+  if (!ok || der_peer == NULL) {
+    fprintf(stderr, "expected localhost DER certificate validation to succeed\n");
+    tls13_openssl_peer_identity_free(peer);
+    free(ca);
+    free(chain);
+    free(leaf_der);
+    return 1;
+  }
+  tls13_openssl_peer_identity_free(der_peer);
 
   const uint8_t message[] = "TLS 1.3 CertificateVerify test message";
   EVP_PKEY *leaf_key = read_private_key_pem(argv[3]);
@@ -127,6 +143,7 @@ int main(int argc, char **argv) {
     tls13_openssl_peer_identity_free(peer);
     free(ca);
     free(chain);
+    free(leaf_der);
     return 1;
   }
 
@@ -143,6 +160,7 @@ int main(int argc, char **argv) {
     tls13_openssl_peer_identity_free(peer);
     free(ca);
     free(chain);
+    free(leaf_der);
     return 1;
   }
 
@@ -160,6 +178,7 @@ int main(int argc, char **argv) {
     tls13_openssl_peer_identity_free(peer);
     free(ca);
     free(chain);
+    free(leaf_der);
     return 1;
   }
 
@@ -177,6 +196,7 @@ int main(int argc, char **argv) {
     tls13_openssl_peer_identity_free(peer);
     free(ca);
     free(chain);
+    free(leaf_der);
     return 1;
   }
   signature[0] ^= 0xffu;
@@ -189,6 +209,7 @@ int main(int argc, char **argv) {
     tls13_openssl_peer_identity_free(peer);
     free(ca);
     free(chain);
+    free(leaf_der);
     return 1;
   }
 
@@ -203,11 +224,24 @@ int main(int argc, char **argv) {
     tls13_openssl_peer_identity_free(peer);
     free(ca);
     free(chain);
+    free(leaf_der);
+    return 1;
+  }
+
+  peer = NULL;
+  ok = tls13_openssl_validate_leaf_der("not-localhost.example", ca, ca_len, leaf_der, leaf_der_len, &peer);
+  if (ok || peer != NULL) {
+    fprintf(stderr, "expected wrong-hostname DER certificate validation to fail\n");
+    tls13_openssl_peer_identity_free(peer);
+    free(ca);
+    free(chain);
+    free(leaf_der);
     return 1;
   }
 
   free(ca);
   free(chain);
+  free(leaf_der);
   printf("OpenSSL X.509 and signature stub tests passed\n");
   return 0;
 }

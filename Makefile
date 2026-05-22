@@ -121,7 +121,7 @@ test/test_hacl_stubs: $(HACL_STUB_TEST_SOURCES) c_stubs/tls13_hacl_stubs.h | che
 test-hacl-stubs: test/test_hacl_stubs
 	./test/test_hacl_stubs
 
-test/certs/chain.pem test/certs/ca.pem test/certs/leaf.key: scripts/generate-test-certs.sh
+test/certs/chain.pem test/certs/ca.pem test/certs/leaf.key test/certs/leaf.der: scripts/generate-test-certs.sh
 	scripts/generate-test-certs.sh test/certs
 
 test/test_openssl_stubs: c_stubs/tls13_openssl_stubs.c c_stubs/tls13_openssl_stubs.h test/test_openssl_stubs.c | check-deps
@@ -133,15 +133,15 @@ test/openssl_echo_server: test/openssl_echo_server.c | check-deps
 	$(CC) -Wall -Wextra test/openssl_echo_server.c \
 	  -lssl -lcrypto -o $@
 
-test/test_clienthello_openssl_probe: $(HACL_WRAPPER_SOURCES) c_stubs/tls13_hacl_stubs.h c_stubs/tls13_wire_stubs.c c_stubs/tls13_wire_stubs.h c_stubs/tls13_io_stubs.c c_stubs/tls13_io_stubs.h test/test_clienthello_openssl_probe.c | check-deps
+test/test_clienthello_openssl_probe: $(HACL_WRAPPER_SOURCES) c_stubs/tls13_hacl_stubs.h c_stubs/tls13_wire_stubs.c c_stubs/tls13_wire_stubs.h c_stubs/tls13_io_stubs.c c_stubs/tls13_io_stubs.h c_stubs/tls13_openssl_stubs.c c_stubs/tls13_openssl_stubs.h test/test_clienthello_openssl_probe.c | check-deps
 	$(CC) -Wall -Wextra -Wno-deprecated-declarations \
 	  -ffunction-sections -fdata-sections \
 	  -I c_stubs -I $(HACL_DIR) -I $(HACL_DIR)/internal -I $(HACL_KI) -I $(HACL_KL) \
-	  $(HACL_WRAPPER_SOURCES) c_stubs/tls13_wire_stubs.c c_stubs/tls13_io_stubs.c test/test_clienthello_openssl_probe.c \
-	  -Wl,--gc-sections -o $@
+	  $(HACL_WRAPPER_SOURCES) c_stubs/tls13_wire_stubs.c c_stubs/tls13_io_stubs.c c_stubs/tls13_openssl_stubs.c test/test_clienthello_openssl_probe.c \
+	  -Wl,--gc-sections -lssl -lcrypto -o $@
 
-test-openssl-stubs: test/test_openssl_stubs test/certs/chain.pem test/certs/ca.pem test/certs/leaf.key
-	./test/test_openssl_stubs test/certs/ca.pem test/certs/chain.pem test/certs/leaf.key
+test-openssl-stubs: test/test_openssl_stubs test/certs/chain.pem test/certs/ca.pem test/certs/leaf.key test/certs/leaf.der
+	./test/test_openssl_stubs test/certs/ca.pem test/certs/chain.pem test/certs/leaf.key test/certs/leaf.der
 
 test-openssl-echo: test/openssl_echo_server
 	scripts/test-openssl-echo.sh

@@ -44,8 +44,9 @@ make test-openssl-echo
 
 That target starts the local TLS 1.3/X25519/`TLS_CHACHA20_POLY1305_SHA256`
 echo server, runs a scoped C probe that sends this repository's serialized
-ClientHello, verifies OpenSSL's server Finished, sends client Finished, and
-checks an exact echoed application-data record. It also retains the
+ClientHello, validates OpenSSL's DER leaf certificate against the generated
+test CA, verifies CertificateVerify and server Finished against the transcript,
+sends client Finished, and checks an exact echoed application-data record. It also retains the
 `openssl s_client` short and multi-record payload smoke as a server-side
 compatibility check. The full extracted verified client is still a later
 milestone.

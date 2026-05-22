@@ -34,6 +34,7 @@ openssl x509 -req -days 30 \
   -out "$dest_dir/leaf.pem" \
   >/dev/null 2>&1
 
+openssl x509 -in "$dest_dir/leaf.pem" -outform DER -out "$dest_dir/leaf.der" >/dev/null 2>&1
+
 cat "$dest_dir/leaf.pem" > "$dest_dir/chain.pem"
 echo "Generated test certificates in $dest_dir"
-

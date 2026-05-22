@@ -17,6 +17,14 @@ bool tls13_openssl_validate_chain_pem(
     size_t chain_pem_len,
     tls13_peer_identity **out_peer);
 
+bool tls13_openssl_validate_leaf_der(
+    const char *hostname,
+    const uint8_t *trust_anchor_pem,
+    size_t trust_anchor_pem_len,
+    const uint8_t *leaf_der,
+    size_t leaf_der_len,
+    tls13_peer_identity **out_peer);
+
 bool tls13_openssl_peer_verify_signature(
     const tls13_peer_identity *peer,
     uint16_t signature_scheme,
