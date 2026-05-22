@@ -6,6 +6,12 @@
 #include "tls13_openssl_stubs.h"
 #include "tls13_wire_stubs.h"
 
+#ifdef TLS13_CONNECTION_PROBE_USE_EXTRACTED_CONNECTION_WRAPPER
+#include "TLS13_KeySchedule.h"
+#include "TLS13_Record.h"
+#include "tls13_connection_external_layer.h"
+#endif
+
 #ifdef TLS13_CONNECTION_PROBE_USE_EXTRACTED_HANDSHAKE
 #include "TLS13_Handshake_Driver.h"
 #endif
@@ -17,6 +23,11 @@
 #include <string.h>
 
 #define PROBE_APP_RECORD_CHUNK_LEN 4096u
+
+#ifdef TLS13_CONNECTION_PROBE_USE_EXTRACTED_CONNECTION_WRAPPER
+#define TLS13_Connection_connection TLS13_Connection_External_connection
+#define TLS13_Connection_connection_s TLS13_Connection_External_connection_s
+#endif
 
 struct TLS13_Connection_connection_s {
   const char *host;
@@ -179,7 +190,33 @@ static int derive_server_handshake_keys(
   if (!tls13_hacl_sha256(empty_hash, NULL, 0) ||
       !tls13_hacl_hkdf_extract_sha256(
           early_secret, NULL, 0, zero_secret, sizeof zero_secret) ||
-      !tls13_hacl_hkdf_expand_label_sha256(
+      !tls13_hacl_x25519_shared(shared_secret, client_private_key, server_key_share)) {
+    return -1;
+  }
+
+  memcpy(transcript, client_hello, client_hello_len);
+  memcpy(transcript + client_hello_len, server_hello, server_hello_len);
+  if (!tls13_hacl_sha256(transcript_hash, transcript, client_hello_len + server_hello_len)) {
+    return -1;
+  }
+
+#ifdef TLS13_CONNECTION_PROBE_USE_EXTRACTED_KEY_SCHEDULE
+  TLS13_KeySchedule_handshake_secret(
+      early_secret, shared_secret, sizeof shared_secret, handshake_secret);
+  TLS13_KeySchedule_client_handshake_traffic_secret(
+      handshake_secret, transcript_hash, client_handshake_traffic_secret);
+  TLS13_KeySchedule_server_handshake_traffic_secret(
+      handshake_secret, transcript_hash, server_handshake_traffic_secret);
+  TLS13_KeySchedule_derive_traffic_key(
+      client_handshake_traffic_secret, client_key);
+  TLS13_KeySchedule_derive_traffic_iv(
+      client_handshake_traffic_secret, client_iv);
+  TLS13_KeySchedule_derive_traffic_key(
+      server_handshake_traffic_secret, server_key);
+  TLS13_KeySchedule_derive_traffic_iv(
+      server_handshake_traffic_secret, server_iv);
+#else
+  if (!tls13_hacl_hkdf_expand_label_sha256(
           derived_secret,
           sizeof derived_secret,
           early_secret,
@@ -187,19 +224,12 @@ static int derive_server_handshake_keys(
           sizeof label_derived,
           empty_hash,
           sizeof empty_hash) ||
-      !tls13_hacl_x25519_shared(shared_secret, client_private_key, server_key_share) ||
       !tls13_hacl_hkdf_extract_sha256(
           handshake_secret,
           derived_secret,
           sizeof derived_secret,
           shared_secret,
-          sizeof shared_secret)) {
-    return -1;
-  }
-
-  memcpy(transcript, client_hello, client_hello_len);
-  memcpy(transcript + client_hello_len, server_hello, server_hello_len);
-  if (!tls13_hacl_sha256(transcript_hash, transcript, client_hello_len + server_hello_len) ||
+          sizeof shared_secret) ||
       !tls13_hacl_hkdf_expand_label_sha256(
           client_handshake_traffic_secret,
           32,
@@ -250,6 +280,7 @@ static int derive_server_handshake_keys(
           0)) {
     return -1;
   }
+#endif
   return 0;
 }
 
@@ -327,8 +358,22 @@ static int derive_application_keys(
   uint8_t client_application_traffic_secret[32];
   uint8_t server_application_traffic_secret[32];
 
-  if (!tls13_hacl_sha256(empty_hash, NULL, 0) ||
-      !tls13_hacl_hkdf_expand_label_sha256(
+  if (!tls13_hacl_sha256(empty_hash, NULL, 0)) {
+    return -1;
+  }
+
+#ifdef TLS13_CONNECTION_PROBE_USE_EXTRACTED_KEY_SCHEDULE
+  TLS13_KeySchedule_master_secret((uint8_t *)handshake_secret, master_secret);
+  TLS13_KeySchedule_client_application_traffic_secret(
+      master_secret, (uint8_t *)transcript_hash, client_application_traffic_secret);
+  TLS13_KeySchedule_server_application_traffic_secret(
+      master_secret, (uint8_t *)transcript_hash, server_application_traffic_secret);
+  TLS13_KeySchedule_derive_traffic_key(client_application_traffic_secret, client_key);
+  TLS13_KeySchedule_derive_traffic_iv(client_application_traffic_secret, client_iv);
+  TLS13_KeySchedule_derive_traffic_key(server_application_traffic_secret, server_key);
+  TLS13_KeySchedule_derive_traffic_iv(server_application_traffic_secret, server_iv);
+#else
+  if (!tls13_hacl_hkdf_expand_label_sha256(
           derived_secret,
           sizeof derived_secret,
           handshake_secret,
@@ -364,6 +409,7 @@ static int derive_application_keys(
           server_iv, 12, server_application_traffic_secret, label_iv, sizeof label_iv, NULL, 0)) {
     return -1;
   }
+#endif
   return 0;
 }
 
@@ -941,6 +987,7 @@ void tls13_connection_probe_free(TLS13_Connection_connection c) {
   free(c);
 }
 
+#ifndef TLS13_CONNECTION_PROBE_USE_EXTRACTED_CONNECTION_WRAPPER
 bool TLS13_Connection_client_connect(
     TLS13_Connection_connection c,
     TLS13_IO_channel ch,
@@ -974,7 +1021,9 @@ bool TLS13_Connection_client_connect(
   }
   return true;
 }
+#endif
 
+#ifndef TLS13_CONNECTION_PROBE_USE_EXTRACTED_CONNECTION_WRAPPER
 bool TLS13_Connection_client_write_all(
     TLS13_Connection_connection c,
     TLS13_IO_channel ch,
@@ -1018,7 +1067,9 @@ bool TLS13_Connection_client_write_all(
   }
   return true;
 }
+#endif
 
+#ifndef TLS13_CONNECTION_PROBE_USE_EXTRACTED_CONNECTION_WRAPPER
 bool TLS13_Connection_client_read_exact(
     TLS13_Connection_connection c,
     TLS13_IO_channel ch,
@@ -1103,3 +1154,231 @@ bool TLS13_Connection_client_read_exact(
   }
   return true;
 }
+#endif
+
+#ifdef TLS13_CONNECTION_PROBE_USE_EXTRACTED_CONNECTION_WRAPPER
+TLS13_Connection_External_connection TLS13_Connection_External_client_new(
+    uint8_t *hostname,
+    size_t hostname_len,
+    TLS13_X509_Spec_trust_store trust_store,
+    void *hostname_bytes) {
+  (void)trust_store;
+  (void)hostname_bytes;
+  char host[256];
+  if (hostname == NULL || hostname_len == 0 || hostname_len >= sizeof host) {
+    return NULL;
+  }
+  memcpy(host, hostname, hostname_len);
+  host[hostname_len] = '\0';
+  return tls13_connection_probe_new(host, 443, "");
+}
+
+void TLS13_Connection_External_client_free(TLS13_Connection_External_connection c) {
+  tls13_connection_probe_free(c);
+}
+
+bool TLS13_Connection_External_client_connect(
+    TLS13_Connection_External_connection c,
+    TLS13_IO_channel ch) {
+  if (c == NULL || c->application_ready || c->fd >= 0) {
+    return false;
+  }
+  c->handshake_failed = false;
+
+#ifdef TLS13_CONNECTION_PROBE_USE_EXTRACTED_HANDSHAKE
+  bool ok = TLS13_Handshake_Driver_run_client_handshake(
+      (TLS13_Handshake_handshake_context)c, ch);
+#else
+  TLS13_Handshake_send_client_hello((TLS13_Handshake_handshake_context)c, ch, NULL, NULL);
+  bool ok =
+      TLS13_Handshake_recv_server_hello((TLS13_Handshake_handshake_context)c, ch, NULL, NULL) &&
+      TLS13_Handshake_recv_encrypted_extensions((TLS13_Handshake_handshake_context)c, ch, NULL, NULL) &&
+      TLS13_Handshake_recv_certificate((TLS13_Handshake_handshake_context)c, ch, NULL, NULL) &&
+      TLS13_Handshake_validate_certificate((TLS13_Handshake_handshake_context)c, NULL, NULL) &&
+      TLS13_Handshake_recv_certificate_verify((TLS13_Handshake_handshake_context)c, ch, NULL, NULL) &&
+      TLS13_Handshake_recv_server_finished((TLS13_Handshake_handshake_context)c, ch, NULL, NULL) &&
+      TLS13_Handshake_send_client_finished((TLS13_Handshake_handshake_context)c, ch, NULL, NULL);
+#endif
+
+  if (!ok || c->handshake_failed || !c->application_ready) {
+    fail_handshake(c);
+    return false;
+  }
+  return true;
+}
+
+size_t TLS13_Connection_External_client_write(
+    TLS13_Connection_External_connection c,
+    TLS13_IO_channel ch,
+    uint8_t *buf,
+    size_t len,
+    void *bytes) {
+  (void)bytes;
+  return TLS13_Connection_External_client_write_all(c, ch, buf, len, bytes) ? len : 0;
+}
+
+bool TLS13_Connection_External_client_write_all(
+    TLS13_Connection_External_connection c,
+    TLS13_IO_channel ch,
+    uint8_t *buf,
+    size_t len,
+    void *bytes) {
+  (void)ch;
+  (void)bytes;
+  if (c == NULL || !c->application_ready || c->fd < 0 || (len != 0 && buf == NULL)) {
+    return false;
+  }
+
+  TLS13_Record_record_state record_state = TLS13_Record_record_state_new();
+  TLS13_Record_install_keys(record_state, 2, c->client_application_key, c->client_application_iv);
+
+  uint8_t record[20000];
+  size_t sent = 0;
+  while (sent < len) {
+    uint8_t inner_plaintext[PROBE_APP_RECORD_CHUNK_LEN + 1u];
+    size_t remaining = len - sent;
+    size_t chunk_len = remaining < PROBE_APP_RECORD_CHUNK_LEN
+                           ? remaining
+                           : PROBE_APP_RECORD_CHUNK_LEN;
+    size_t inner_plaintext_len = chunk_len + 1u;
+    size_t ciphertext_len = inner_plaintext_len + 16u;
+    size_t record_len = TLS13_WIRE_RECORD_HEADER_LEN + ciphertext_len;
+    if (sizeof record < record_len ||
+        chunk_len > sizeof inner_plaintext - 1u ||
+        !tls13_wire_serialize_record_header(record, 23, 0x0303, (uint16_t)ciphertext_len)) {
+      TLS13_Record_record_state_free(record_state);
+      c->application_ready = false;
+      return false;
+    }
+    memcpy(inner_plaintext, buf + sent, chunk_len);
+    inner_plaintext[chunk_len] = 23;
+    if (!TLS13_Record_seal_application(
+            record_state,
+            record,
+            TLS13_WIRE_RECORD_HEADER_LEN,
+            inner_plaintext,
+            inner_plaintext_len,
+            record + TLS13_WIRE_RECORD_HEADER_LEN) ||
+        write_all_fd(c->fd, record, record_len) != 0) {
+      TLS13_Record_record_state_free(record_state);
+      fprintf(stderr, "failed to send application-data record\n");
+      c->application_ready = false;
+      return false;
+    }
+    sent += chunk_len;
+  }
+  TLS13_Record_record_state_free(record_state);
+  return true;
+}
+
+size_t TLS13_Connection_External_client_read(
+    TLS13_Connection_External_connection c,
+    TLS13_IO_channel ch,
+    uint8_t *out,
+    size_t max_len,
+    void *old_bytes) {
+  (void)old_bytes;
+  return TLS13_Connection_External_client_read_exact(c, ch, out, max_len, old_bytes) ? max_len : 0;
+}
+
+bool TLS13_Connection_External_client_read_exact(
+    TLS13_Connection_External_connection c,
+    TLS13_IO_channel ch,
+    uint8_t *out,
+    size_t len,
+    void *old_bytes) {
+  (void)ch;
+  (void)old_bytes;
+  if (c == NULL || !c->application_ready || c->fd < 0 || (len != 0 && out == NULL)) {
+    return false;
+  }
+
+  TLS13_Record_record_state record_state = TLS13_Record_record_state_new();
+  TLS13_Record_install_keys(record_state, 2, c->server_application_key, c->server_application_iv);
+
+  size_t received = 0;
+  unsigned max_attempts = (unsigned)(len / PROBE_APP_RECORD_CHUNK_LEN + 128u);
+  for (unsigned attempts = 0; attempts < max_attempts && received < len; ++attempts) {
+    uint8_t header[TLS13_WIRE_RECORD_HEADER_LEN];
+    uint8_t encrypted_fragment[20000];
+    uint8_t inner_plaintext[20000];
+    uint8_t content_type = 0;
+    uint16_t legacy_version = 0;
+    uint16_t fragment_len = 0;
+    if (read_record(
+            c->fd,
+            header,
+            encrypted_fragment,
+            sizeof encrypted_fragment,
+            &content_type,
+            &legacy_version,
+            &fragment_len) != 0 ||
+        content_type != 23 ||
+        fragment_len < 16 ||
+        (size_t)fragment_len - 16u > sizeof inner_plaintext) {
+      TLS13_Record_record_state_free(record_state);
+      fprintf(stderr, "failed to read application-data response record\n");
+      c->application_ready = false;
+      return false;
+    }
+
+    size_t inner_plaintext_len = (size_t)fragment_len - 16u;
+    if (!TLS13_Record_open_application(
+            record_state,
+            header,
+            TLS13_WIRE_RECORD_HEADER_LEN,
+            encrypted_fragment,
+            fragment_len,
+            inner_plaintext)) {
+      TLS13_Record_record_state_free(record_state);
+      fprintf(stderr, "failed to decrypt application-data response record\n");
+      c->application_ready = false;
+      return false;
+    }
+
+    uint8_t inner_content_type = 0;
+    size_t response_len = 0;
+    if (!tls13_wire_decode_inner_plaintext(
+            inner_plaintext, inner_plaintext_len, &inner_content_type, &response_len)) {
+      TLS13_Record_record_state_free(record_state);
+      fprintf(stderr, "failed to decode application-data response record\n");
+      c->application_ready = false;
+      return false;
+    }
+    if (inner_content_type == 22) {
+      continue;
+    }
+    if (inner_content_type != 23 || response_len > len - received) {
+      TLS13_Record_record_state_free(record_state);
+      fprintf(stderr, "unexpected application-data response record\n");
+      c->application_ready = false;
+      return false;
+    }
+    memcpy(out + received, inner_plaintext, response_len);
+    received += response_len;
+  }
+
+  TLS13_Record_record_state_free(record_state);
+  if (received != len) {
+    fprintf(stderr, "OpenSSL echo application data was not received\n");
+    c->application_ready = false;
+    return false;
+  }
+  return true;
+}
+
+bool TLS13_Connection_External_client_close(
+    TLS13_Connection_External_connection c,
+    TLS13_IO_channel ch) {
+  (void)ch;
+  if (c == NULL) {
+    return false;
+  }
+  if (c->fd >= 0) {
+    tls13_io_close_fd(c->fd);
+    c->fd = -1;
+  }
+  c->application_ready = false;
+  return true;
+}
+#endif

@@ -51,9 +51,11 @@ echo server, runs a scoped HACL*/wire/OpenSSL C backend that sends this
 repository's serialized ClientHello, validates OpenSSL's DER leaf certificate
 against the generated test CA, verifies CertificateVerify and server Finished
 against the transcript, sends client Finished, and checks exact echoed
-application data across multiple client records. It runs both the direct C probe
-and the extracted verified connection-plus-handshake driver path over that
-backend, checks that both reject the same server under the wrong test CA, and
-retains the `openssl s_client` short and multi-record payload smoke as a server-side
-compatibility check. Replacing the temporary trusted C connection backend with
-extracted verified byte-level connection code is still a later milestone.
+application data across multiple client records. It runs the direct C probe, the
+older extracted connection-plus-handshake driver path, and the newer extracted
+connection wrapper path that also routes key-schedule derivation and application
+record seal/open through extracted verified code. Both extracted paths reject the
+same server under the wrong test CA, and the target retains the `openssl
+s_client` short and multi-record payload smoke as a server-side compatibility
+check. Replacing the remaining temporary trusted byte parser, X.509, crypto, and
+I/O backend pieces is still a later milestone.
