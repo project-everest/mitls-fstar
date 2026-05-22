@@ -25,7 +25,7 @@ The task is clear enough to proceed with the following pinned initial choices, w
 ## Reference material and dependency policy
 
 1. Cache RFC 8446 and RFC 8448 locally for offline reference and test-vector work using `scripts/fetch-rfcs.sh`. Store downloaded RFC text under gitignored `third_party/rfc/`; do not commit RFC text snapshots unless there is a later explicit reason to vendor them.
-2. Pin HACL* as a Git submodule under `third_party/hacl-star`, but use only its checked-in C snapshot under `dist/gcc-compatible`. Do not try to reverify HACL* from source, and do not make this project depend on HACL* F* specs; model the required crypto behavior in local pure specs and trusted Pulse `.fsti` contracts.
+2. Pin HACL* as a Git submodule under `third_party/hacl-star`, but use only its checked-in C snapshot under `dist/gcc-compatible`. Do not try to reverify HACL* from source, and do not make this project depend on HACL* F* specs; model the required crypto behavior with local abstract/uninterpreted spec functions and trusted Pulse `.fsti` contracts.
 3. Treat OpenSSL as a system dependency, not vendored source. Require an installed OpenSSL 3.x executable, headers, and libraries; validate availability with `scripts/check-openssl.sh`.
 4. Keep downloaded toolchains, RFC caches, generated extraction output, query logs, and build artifacts out of git.
 
@@ -149,6 +149,8 @@ This includes transcript consistency, key-schedule consistency, record protectio
 ### HACL* C snapshot crypto interface
 
 Create `TLS13.Crypto.fsti` as a Pulse interface over trusted C stubs linked to the HACL* checked-in C snapshot at `third_party/hacl-star/dist/gcc-compatible`. The interface should be extraction-safe and expose pure postconditions tied to local `TLS13.Crypto.Spec` definitions, not to HACL* F* spec modules.
+
+`TLS13.Crypto.Spec` should be an abstract specification layer for the trusted C snapshot, not a reimplementation or proof of the cryptographic algorithms. For example, expose uninterpreted functions such as `sha256 : bytes -> digest32`, `hkdf_extract : salt -> ikm -> secret`, `hkdf_expand_label : secret -> label -> context -> len -> bytes`, `x25519_shared : private_key -> public_key -> option shared_secret`, and AEAD functions for ChaCha20-Poly1305 seal/open. The Pulse `.fsti` wrappers for HACL* C calls should prove memory safety, ownership, length, aliasing, and state-machine integration, and should specify that successful outputs equal these abstract spec functions. Only add axioms or lemmas for structural facts needed by TLS, such as output lengths, determinism of pure functions, and success/failure shape; do not assert cryptographic security properties or import HACL* proof internals.
 
 Initial functions:
 
@@ -293,7 +295,7 @@ Before any public HTTPS endpoint, add a local OpenSSL interop test that exercise
    - Add lemmas for determinism and safety of selected transitions.
 
 3. Crypto and X.509 abstract specs
-   - Define local pure specs for SHA-256, HKDF labels, transcript hashes, X25519, signatures, and ChaCha20-Poly1305 sufficient for TLS proof obligations. Do not attempt to reverify HACL* or import HACL* F* specs into this project.
+   - Define local abstract specs for SHA-256, HKDF labels, transcript hashes, X25519, signatures, and ChaCha20-Poly1305 sufficient for TLS proof obligations, using uninterpreted functions where appropriate. Do not attempt to reverify HACL*, reimplement crypto algorithms in F*, or import HACL* F* specs into this project.
    - Define X.509 validation as an abstract trusted relation returning peer identity and leaf public key.
 
 4. FFI shells and C stubs
