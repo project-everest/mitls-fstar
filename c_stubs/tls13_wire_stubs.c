@@ -38,3 +38,30 @@ bool tls13_wire_serialize_record_header(
   return true;
 }
 
+bool tls13_wire_parse_handshake_header(
+    const uint8_t *input,
+    size_t input_len,
+    uint8_t *msg_type,
+    uint32_t *body_len) {
+  if (input == NULL || msg_type == NULL || body_len == NULL ||
+      input_len < TLS13_WIRE_HANDSHAKE_HEADER_LEN) {
+    return false;
+  }
+  *msg_type = input[0];
+  *body_len = ((uint32_t)input[1] << 16) | ((uint32_t)input[2] << 8) | (uint32_t)input[3];
+  return true;
+}
+
+bool tls13_wire_serialize_handshake_header(
+    uint8_t out[TLS13_WIRE_HANDSHAKE_HEADER_LEN],
+    uint8_t msg_type,
+    uint32_t body_len) {
+  if (out == NULL || body_len > TLS13_WIRE_MAX_HANDSHAKE_BODY_LEN) {
+    return false;
+  }
+  out[0] = msg_type;
+  out[1] = (uint8_t)(body_len >> 16);
+  out[2] = (uint8_t)(body_len >> 8);
+  out[3] = (uint8_t)body_len;
+  return true;
+}
