@@ -43,6 +43,7 @@ This project should be structured from the start to avoid large verification con
 8. Treat every `.fsti` as a proof-performance boundary as well as an API boundary. A good interface should make callers' VCs smaller and more stable.
 9. Do not spawn sub-agents for deep reasoning, design, or proof work. Sub-agents are acceptable only for short, shallow, non-deep tasks; the main agent must own the core reasoning, verification strategy, and proving work.
 10. Commit changes frequently as coherent milestones land: after project setup, each verified module or trusted stub, each test harness, and each proof-stability cleanup. Prefer small, reviewable commits with passing relevant checks over large mixed commits.
+11. Represent the Pulse-level connection state machine with monotonic ghost state, following the `Pulse.Lib.MonotonicGhostRef` pattern from `Example.SimpleDBModel`: define the pure TLS transition closure as a preorder, store the current ghost state in a monotonic reference, expose duplicable snapshots for previously observed states, and require every state update to prove a legal `TLS13.StateMachine.step` (or its reflexive/transitive closure) before calling the monotonic update. The top-level connection and handshake predicates should carry this ghost token so implementations cannot silently skip or reorder state-machine transitions.
 
 ## Proposed repository layout
 

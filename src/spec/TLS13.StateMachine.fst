@@ -3,6 +3,7 @@ module TLS13.StateMachine
 module B = TLS13.Bytes
 module H = TLS13.Handshake.Spec
 module R = TLS13.Record.Spec
+module RTC = FStar.ReflexiveTransitiveClosure
 module T = TLS13.Types
 module Tr = TLS13.Transcript
 module X = TLS13.X509.Spec
@@ -103,3 +104,9 @@ let rec step_many (s:conn_state) (events:list event)
     (match step s e with
      | None -> None
      | Some s' -> step_many s' rest)
+
+let state_single_step : RTC.binrel conn_state =
+  fun s0 s1 -> exists e. step s0 e == Some s1
+
+let conn_evolves : RTC.preorder conn_state =
+  RTC.closure state_single_step
