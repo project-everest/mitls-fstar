@@ -83,7 +83,7 @@ run_probe() {
   done
 
   if ! test/test_clienthello_openssl_probe 127.0.0.1 "$port" >>"$log" 2>&1; then
-    echo "ClientHello/OpenSSL ServerHello probe failed" >&2
+    echo "ClientHello/OpenSSL handshake probe failed" >&2
     echo "server/probe log:" >&2
     cat "$log" >&2
     exit 1

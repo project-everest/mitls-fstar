@@ -56,6 +56,7 @@ static int derive_server_handshake_keys(
     const uint8_t *server_hello,
     size_t server_hello_len,
     const uint8_t server_key_share[32],
+    uint8_t server_handshake_traffic_secret[32],
     uint8_t server_key[32],
     uint8_t server_iv[12]) {
   static const uint8_t client_private_key[32] = {
@@ -77,7 +78,6 @@ static int derive_server_handshake_keys(
   uint8_t handshake_secret[32];
   uint8_t transcript[1024];
   uint8_t transcript_hash[32];
-  uint8_t server_handshake_traffic_secret[32];
 
   if (client_hello_len > sizeof transcript ||
       server_hello_len > sizeof transcript - client_hello_len) {
@@ -109,7 +109,7 @@ static int derive_server_handshake_keys(
   if (!tls13_hacl_sha256(transcript_hash, transcript, client_hello_len + server_hello_len) ||
       !tls13_hacl_hkdf_expand_label_sha256(
           server_handshake_traffic_secret,
-          sizeof server_handshake_traffic_secret,
+          32,
           handshake_secret,
           label_s_hs_traffic,
           sizeof label_s_hs_traffic,
@@ -134,6 +134,41 @@ static int derive_server_handshake_keys(
     return -1;
   }
   return 0;
+}
+
+static int verify_server_finished(
+    const uint8_t *client_hello,
+    size_t client_hello_len,
+    const uint8_t *server_hello,
+    size_t server_hello_len,
+    const uint8_t *server_handshake_messages,
+    size_t server_handshake_before_finished_len,
+    const uint8_t finished_verify_data[32],
+    const uint8_t server_handshake_traffic_secret[32]) {
+  uint8_t transcript[32768];
+  uint8_t transcript_hash[32];
+  uint8_t expected[32];
+
+  if (client_hello_len > sizeof transcript ||
+      server_hello_len > sizeof transcript - client_hello_len ||
+      server_handshake_before_finished_len >
+          sizeof transcript - client_hello_len - server_hello_len) {
+    return -1;
+  }
+  size_t pos = 0;
+  memcpy(transcript + pos, client_hello, client_hello_len);
+  pos += client_hello_len;
+  memcpy(transcript + pos, server_hello, server_hello_len);
+  pos += server_hello_len;
+  memcpy(transcript + pos, server_handshake_messages, server_handshake_before_finished_len);
+  pos += server_handshake_before_finished_len;
+
+  if (!tls13_hacl_sha256(transcript_hash, transcript, pos) ||
+      !tls13_hacl_finished_verify_data_sha256(
+          expected, server_handshake_traffic_secret, transcript_hash)) {
+    return -1;
+  }
+  return memcmp(expected, finished_verify_data, 32) == 0 ? 0 : -1;
 }
 
 int main(int argc, char **argv) {
@@ -222,22 +257,33 @@ int main(int argc, char **argv) {
     fprintf(stderr, "failed to parse supported OpenSSL ServerHello\n");
     goto done;
   }
+  size_t server_hello_len = fragment_len;
 
+  uint8_t server_handshake_traffic_secret[32];
   uint8_t server_key[32];
   uint8_t server_iv[12];
   if (derive_server_handshake_keys(
           client_hello,
           client_hello_len,
           server_hello_fragment,
-          fragment_len,
+          server_hello_len,
           server_key_share,
+          server_handshake_traffic_secret,
           server_key,
           server_iv) != 0) {
     fprintf(stderr, "failed to derive server handshake traffic keys\n");
     goto done;
   }
 
-  for (unsigned attempts = 0; attempts < 4; ++attempts) {
+  uint8_t server_handshake_messages[32768];
+  size_t server_handshake_len = 0;
+  size_t parsed_handshake_len = 0;
+  size_t server_handshake_before_finished_len = 0;
+  uint8_t server_finished_verify_data[32];
+  bool saw_finished = false;
+  uint64_t server_sequence_number = 0;
+
+  for (unsigned attempts = 0; attempts < 8 && !saw_finished; ++attempts) {
     if (read_record(
             fd,
             encrypted_header,
@@ -252,57 +298,91 @@ int main(int argc, char **argv) {
     if (content_type == 20 && fragment_len == 1 && encrypted_fragment[0] == 1) {
       continue;
     }
-    if (content_type == 23) {
-      break;
+    if (content_type != 23 || fragment_len < 16) {
+      fprintf(stderr, "unexpected record before server Finished: %u\n", content_type);
+      goto done;
     }
-    fprintf(stderr, "unexpected record type before encrypted handshake: %u\n", content_type);
-    goto done;
+
+    uint8_t nonce[12];
+    uint8_t inner_plaintext[20000];
+    size_t inner_plaintext_len = (size_t)fragment_len - 16u;
+    if (!tls13_record_nonce(nonce, server_iv, server_sequence_number++) ||
+        !tls13_hacl_chacha20_poly1305_open_combined(
+            inner_plaintext,
+            inner_plaintext_len,
+            server_key,
+            nonce,
+            encrypted_header,
+            TLS13_WIRE_RECORD_HEADER_LEN,
+            encrypted_fragment,
+            fragment_len)) {
+      fprintf(stderr, "failed to decrypt OpenSSL encrypted handshake record\n");
+      goto done;
+    }
+
+    uint8_t inner_content_type = 0;
+    size_t handshake_plaintext_len = 0;
+    if (!tls13_wire_decode_inner_plaintext(
+            inner_plaintext, inner_plaintext_len, &inner_content_type, &handshake_plaintext_len) ||
+        inner_content_type != 22 ||
+        handshake_plaintext_len > sizeof server_handshake_messages - server_handshake_len) {
+      fprintf(stderr, "failed to decode OpenSSL handshake inner plaintext\n");
+      goto done;
+    }
+    memcpy(server_handshake_messages + server_handshake_len, inner_plaintext, handshake_plaintext_len);
+    server_handshake_len += handshake_plaintext_len;
+
+    while (server_handshake_len - parsed_handshake_len >= TLS13_WIRE_HANDSHAKE_HEADER_LEN) {
+      uint8_t handshake_type = 0;
+      uint32_t handshake_body_len = 0;
+      if (!tls13_wire_parse_handshake_header(
+              server_handshake_messages + parsed_handshake_len,
+              server_handshake_len - parsed_handshake_len,
+              &handshake_type,
+              &handshake_body_len)) {
+        fprintf(stderr, "failed to parse decrypted handshake header\n");
+        goto done;
+      }
+      size_t message_len = TLS13_WIRE_HANDSHAKE_HEADER_LEN + (size_t)handshake_body_len;
+      if (message_len > server_handshake_len - parsed_handshake_len) {
+        break;
+      }
+      if (parsed_handshake_len == 0 && handshake_type != 8) {
+        fprintf(stderr, "decrypted first OpenSSL handshake message is not EncryptedExtensions\n");
+        goto done;
+      }
+      if (handshake_type == 20) {
+        if (handshake_body_len != 32) {
+          fprintf(stderr, "OpenSSL Finished has unexpected length\n");
+          goto done;
+        }
+        server_handshake_before_finished_len = parsed_handshake_len;
+        memcpy(
+            server_finished_verify_data,
+            server_handshake_messages + parsed_handshake_len + TLS13_WIRE_HANDSHAKE_HEADER_LEN,
+            sizeof server_finished_verify_data);
+        saw_finished = true;
+        break;
+      }
+      parsed_handshake_len += message_len;
+    }
   }
-  if (content_type != 23 || fragment_len < 16) {
-    fprintf(stderr, "missing encrypted handshake record\n");
+
+  if (!saw_finished ||
+      verify_server_finished(
+          client_hello,
+          client_hello_len,
+          server_hello_fragment,
+          server_hello_len,
+          server_handshake_messages,
+          server_handshake_before_finished_len,
+          server_finished_verify_data,
+          server_handshake_traffic_secret) != 0) {
+    fprintf(stderr, "failed to verify OpenSSL server Finished\n");
     goto done;
   }
 
-  uint8_t nonce[12];
-  uint8_t inner_plaintext[20000];
-  size_t inner_plaintext_len = (size_t)fragment_len - 16u;
-  if (!tls13_record_nonce(nonce, server_iv, 0) ||
-      !tls13_hacl_chacha20_poly1305_open_combined(
-          inner_plaintext,
-          inner_plaintext_len,
-          server_key,
-          nonce,
-          encrypted_header,
-          TLS13_WIRE_RECORD_HEADER_LEN,
-          encrypted_fragment,
-          fragment_len)) {
-    fprintf(stderr, "failed to decrypt OpenSSL encrypted handshake record\n");
-    goto done;
-  }
-
-  uint8_t inner_content_type = 0;
-  size_t handshake_plaintext_len = 0;
-  if (!tls13_wire_decode_inner_plaintext(
-          inner_plaintext, inner_plaintext_len, &inner_content_type, &handshake_plaintext_len) ||
-      inner_content_type != 22 || handshake_plaintext_len < TLS13_WIRE_HANDSHAKE_HEADER_LEN) {
-    fprintf(stderr, "failed to decode OpenSSL handshake inner plaintext\n");
-    goto done;
-  }
-
-  uint8_t handshake_type = 0;
-  uint32_t handshake_body_len = 0;
-  if (!tls13_wire_parse_handshake_header(
-          inner_plaintext,
-          handshake_plaintext_len,
-          &handshake_type,
-          &handshake_body_len) ||
-      handshake_type != 8 ||
-      handshake_body_len > handshake_plaintext_len - TLS13_WIRE_HANDSHAKE_HEADER_LEN) {
-    fprintf(stderr, "decrypted first OpenSSL handshake message is not EncryptedExtensions\n");
-    goto done;
-  }
-
-  printf("ClientHello/OpenSSL encrypted handshake probe passed\n");
+  printf("ClientHello/OpenSSL server Finished probe passed\n");
   rc = 0;
 
 done:
