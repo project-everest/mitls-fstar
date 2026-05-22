@@ -47,7 +47,7 @@ IMPL_FILES = \
 
 ALL_FILES = $(SPEC_FILES) $(IMPL_FILES)
 
-.PHONY: all verify check-c-stubs test-hacl-stubs check-toolchain check-deps clean
+.PHONY: all verify check-c-stubs test-hacl-stubs test-openssl-stubs check-toolchain check-deps clean
 
 all: verify
 
@@ -99,7 +99,18 @@ test/test_hacl_stubs: $(HACL_STUB_TEST_SOURCES) c_stubs/tls13_hacl_stubs.h | che
 test-hacl-stubs: test/test_hacl_stubs
 	./test/test_hacl_stubs
 
+test/certs/chain.pem test/certs/ca.pem: scripts/generate-test-certs.sh
+	scripts/generate-test-certs.sh test/certs
+
+test/test_openssl_stubs: c_stubs/tls13_openssl_stubs.c c_stubs/tls13_openssl_stubs.h test/test_openssl_stubs.c | check-deps
+	$(CC) -Wall -Wextra -I c_stubs \
+	  c_stubs/tls13_openssl_stubs.c test/test_openssl_stubs.c \
+	  -lssl -lcrypto -o $@
+
+test-openssl-stubs: test/test_openssl_stubs test/certs/chain.pem test/certs/ca.pem
+	./test/test_openssl_stubs test/certs/ca.pem test/certs/chain.pem
+
 clean:
 	rm -rf $(CACHE_DIR) $(OUTPUT_DIR) $(EXTRACT_DIR)
-	rm -f test/test_hacl_stubs
+	rm -f test/test_hacl_stubs test/test_openssl_stubs
 	find src test -name '*.checked' -delete
