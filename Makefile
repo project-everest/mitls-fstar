@@ -121,6 +121,18 @@ HACL_STUB_TEST_SOURCES = \
   test/test_hacl_stubs.c \
   $(HACL_WRAPPER_SOURCES)
 
+CONNECTION_PROBE_SOURCES = \
+  c_stubs/tls13_connection_probe.c \
+  c_stubs/tls13_connection_probe.h \
+  c_stubs/tls13_connection_external.h \
+  c_stubs/tls13_wire_stubs.c \
+  c_stubs/tls13_wire_stubs.h \
+  c_stubs/tls13_io_stubs.c \
+  c_stubs/tls13_io_stubs.h \
+  c_stubs/tls13_openssl_stubs.c \
+  c_stubs/tls13_openssl_stubs.h \
+  $(HACL_WRAPPER_SOURCES)
+
 test/test_hacl_stubs: $(HACL_STUB_TEST_SOURCES) c_stubs/tls13_hacl_stubs.h | check-deps
 	$(CC) -Wall -Wextra -Wno-deprecated-declarations \
 	  -ffunction-sections -fdata-sections \
@@ -142,17 +154,25 @@ test/openssl_echo_server: test/openssl_echo_server.c | check-deps
 	$(CC) -Wall -Wextra test/openssl_echo_server.c \
 	  -lssl -lcrypto -o $@
 
-test/test_clienthello_openssl_probe: $(HACL_WRAPPER_SOURCES) c_stubs/tls13_hacl_stubs.h c_stubs/tls13_wire_stubs.c c_stubs/tls13_wire_stubs.h c_stubs/tls13_io_stubs.c c_stubs/tls13_io_stubs.h c_stubs/tls13_openssl_stubs.c c_stubs/tls13_openssl_stubs.h test/test_clienthello_openssl_probe.c | check-deps
+test/test_clienthello_openssl_probe: $(CONNECTION_PROBE_SOURCES) test/test_clienthello_openssl_probe.c | check-deps
 	$(CC) -Wall -Wextra -Wno-deprecated-declarations \
 	  -ffunction-sections -fdata-sections \
 	  -I c_stubs -I $(HACL_DIR) -I $(HACL_DIR)/internal -I $(HACL_KI) -I $(HACL_KL) \
-	  $(HACL_WRAPPER_SOURCES) c_stubs/tls13_wire_stubs.c c_stubs/tls13_io_stubs.c c_stubs/tls13_openssl_stubs.c test/test_clienthello_openssl_probe.c \
+	  $(HACL_WRAPPER_SOURCES) c_stubs/tls13_wire_stubs.c c_stubs/tls13_io_stubs.c c_stubs/tls13_openssl_stubs.c c_stubs/tls13_connection_probe.c test/test_clienthello_openssl_probe.c \
 	  -Wl,--gc-sections -lssl -lcrypto -o $@
 
 test-openssl-stubs: test/test_openssl_stubs test/certs/chain.pem test/certs/ca.pem test/certs/leaf.key test/certs/leaf.der
 	./test/test_openssl_stubs test/certs/ca.pem test/certs/chain.pem test/certs/leaf.key test/certs/leaf.der
 
-test-openssl-echo: test/openssl_echo_server
+test/test_extracted_connection_driver_openssl: $(CONNECTION_PROBE_SOURCES) test/test_extracted_connection_driver_openssl.c $(EXTRACT_CONNECTION_DRIVER_C) $(EXTRACT_CONNECTION_DRIVER_H) | check-deps
+	$(CC) -Wall -Wextra -Wno-deprecated-declarations \
+	  -ffunction-sections -fdata-sections \
+	  -I $(EXTRACT_CONNECTION_DRIVER_DIR) -I c_stubs -I $(KRML_HOME)/include -I $(KRML_HOME)/krmllib/dist/minimal \
+	  -I $(HACL_DIR) -I $(HACL_DIR)/internal -I $(HACL_KI) -I $(HACL_KL) \
+	  $(EXTRACT_CONNECTION_DRIVER_C) $(HACL_WRAPPER_SOURCES) c_stubs/tls13_wire_stubs.c c_stubs/tls13_io_stubs.c c_stubs/tls13_openssl_stubs.c c_stubs/tls13_connection_probe.c test/test_extracted_connection_driver_openssl.c \
+	  -Wl,--gc-sections -lssl -lcrypto -o $@
+
+test-openssl-echo: test/openssl_echo_server test/test_clienthello_openssl_probe test/test_extracted_connection_driver_openssl
 	scripts/test-openssl-echo.sh
 
 test/test_wire_stubs: c_stubs/tls13_wire_stubs.c c_stubs/tls13_wire_stubs.h test/test_wire_stubs.c
@@ -231,5 +251,5 @@ test-connection-driver-bindings: test/test_connection_driver_bindings
 
 clean:
 	rm -rf $(CACHE_DIR) $(OUTPUT_DIR) $(EXTRACT_DIR)
-	rm -f test/test_hacl_stubs test/test_openssl_stubs test/test_wire_stubs test/test_record_stubs test/test_io_stubs test/test_extract_smoke test/test_connection_driver_bindings test/test_clienthello_openssl_probe test/openssl_echo_server
+	rm -f test/test_hacl_stubs test/test_openssl_stubs test/test_wire_stubs test/test_record_stubs test/test_io_stubs test/test_extract_smoke test/test_connection_driver_bindings test/test_clienthello_openssl_probe test/test_extracted_connection_driver_openssl test/openssl_echo_server
 	find src test -name '*.checked' -delete
