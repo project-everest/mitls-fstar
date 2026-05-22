@@ -54,7 +54,9 @@ IMPL_FILES = \
   src/impl/TLS13.Parse.fsti \
   src/impl/TLS13.Serialize.fsti \
   src/impl/TLS13.IO.fsti \
+  src/impl/TLS13.Handshake.External.fsti \
   src/impl/TLS13.Handshake.fsti \
+  src/impl/TLS13.Handshake.fst \
   src/impl/TLS13.Handshake.Driver.fst \
   src/impl/TLS13.Connection.fsti \
   src/impl/TLS13.Connection.Driver.fst
@@ -73,6 +75,10 @@ EXTRACT_HANDSHAKE_DRIVER_DIR  = $(EXTRACT_DIR)/handshake-driver
 EXTRACT_HANDSHAKE_DRIVER_KRML = $(EXTRACT_HANDSHAKE_DRIVER_DIR)/TLS13_Handshake_Driver.krml
 EXTRACT_HANDSHAKE_DRIVER_C    = $(EXTRACT_HANDSHAKE_DRIVER_DIR)/TLS13_Handshake_Driver.c
 EXTRACT_HANDSHAKE_DRIVER_H    = $(EXTRACT_HANDSHAKE_DRIVER_DIR)/TLS13_Handshake_Driver.h
+EXTRACT_HANDSHAKE_DIR  = $(EXTRACT_DIR)/handshake
+EXTRACT_HANDSHAKE_KRML = $(EXTRACT_HANDSHAKE_DIR)/TLS13_Handshake.krml
+EXTRACT_HANDSHAKE_C    = $(EXTRACT_HANDSHAKE_DIR)/TLS13_Handshake.c
+EXTRACT_HANDSHAKE_H    = $(EXTRACT_HANDSHAKE_DIR)/TLS13_Handshake.h
 EXTRACT_KEY_SCHEDULE_DIR  = $(EXTRACT_DIR)/key-schedule
 EXTRACT_KEY_SCHEDULE_KRML = $(EXTRACT_KEY_SCHEDULE_DIR)/TLS13_KeySchedule.krml
 EXTRACT_KEY_SCHEDULE_C    = $(EXTRACT_KEY_SCHEDULE_DIR)/TLS13_KeySchedule.c
@@ -82,11 +88,11 @@ EXTRACT_RECORD_KRML = $(EXTRACT_RECORD_DIR)/TLS13_Record.krml
 EXTRACT_RECORD_C    = $(EXTRACT_RECORD_DIR)/TLS13_Record.c
 EXTRACT_RECORD_H    = $(EXTRACT_RECORD_DIR)/TLS13_Record.h
 
-.PHONY: all verify test extract-smoke extract-connection-driver-krml extract-connection-driver-c extract-handshake-driver-krml extract-handshake-driver-c extract-key-schedule-krml extract-key-schedule-c extract-record-krml extract-record-c test-extract-smoke test-connection-driver-bindings test-handshake-driver-bindings test-key-schedule-bindings test-record-bindings check-c-stubs test-hacl-stubs test-openssl-stubs test-wire-stubs test-record-stubs test-io-stubs test-openssl-echo check-toolchain check-deps clean
+.PHONY: all verify test extract-smoke extract-connection-driver-krml extract-connection-driver-c extract-handshake-driver-krml extract-handshake-driver-c extract-handshake-krml extract-handshake-c extract-key-schedule-krml extract-key-schedule-c extract-record-krml extract-record-c test-extract-smoke test-connection-driver-bindings test-handshake-driver-bindings test-handshake-bindings test-key-schedule-bindings test-record-bindings check-c-stubs test-hacl-stubs test-openssl-stubs test-wire-stubs test-record-stubs test-io-stubs test-openssl-echo check-toolchain check-deps clean
 
 all: verify
 
-test: verify check-c-stubs test-hacl-stubs test-openssl-stubs test-wire-stubs test-record-stubs test-io-stubs test-extract-smoke test-connection-driver-bindings test-handshake-driver-bindings test-key-schedule-bindings test-record-bindings
+test: verify check-c-stubs test-hacl-stubs test-openssl-stubs test-wire-stubs test-record-stubs test-io-stubs test-extract-smoke test-connection-driver-bindings test-handshake-driver-bindings test-handshake-bindings test-key-schedule-bindings test-record-bindings
 
 check-toolchain:
 	@if ! command -v $(FSTAR_EXE) >/dev/null 2>&1; then \
@@ -110,6 +116,9 @@ $(EXTRACT_CONNECTION_DRIVER_DIR):
 	mkdir -p $@
 
 $(EXTRACT_HANDSHAKE_DRIVER_DIR):
+	mkdir -p $@
+
+$(EXTRACT_HANDSHAKE_DIR):
 	mkdir -p $@
 
 $(EXTRACT_KEY_SCHEDULE_DIR):
@@ -273,6 +282,22 @@ $(EXTRACT_HANDSHAKE_DRIVER_C) $(EXTRACT_HANDSHAKE_DRIVER_H): $(EXTRACT_HANDSHAKE
 
 extract-handshake-driver-c: $(EXTRACT_HANDSHAKE_DRIVER_C) $(EXTRACT_HANDSHAKE_DRIVER_H)
 
+$(EXTRACT_HANDSHAKE_KRML): src/impl/TLS13.Handshake.fst verify | $(EXTRACT_HANDSHAKE_DIR)
+	$(FSTAR_EXE) --cache_checked_modules --cache_dir $(CACHE_DIR) --odir $(OUTPUT_DIR) \
+	  --warn_error -321 --report_assumes warn \
+	  --already_cached 'Prims,FStar,Pulse,PulseCore -TLS13' \
+	  $(INCLUDES) --codegen krml --extract_module TLS13.Handshake \
+	  --krmloutput $@ $<
+
+extract-handshake-krml: $(EXTRACT_HANDSHAKE_KRML)
+
+$(EXTRACT_HANDSHAKE_C) $(EXTRACT_HANDSHAKE_H): $(EXTRACT_HANDSHAKE_KRML) c_stubs/tls13_handshake_external_layer.h | $(EXTRACT_HANDSHAKE_DIR)
+	$(KRML_EXE) -skip-compilation -skip-makefiles -warn-error -2 \
+	  -add-include '"tls13_handshake_external_layer.h"' \
+	  -tmpdir $(EXTRACT_HANDSHAKE_DIR) $(EXTRACT_HANDSHAKE_KRML)
+
+extract-handshake-c: $(EXTRACT_HANDSHAKE_C) $(EXTRACT_HANDSHAKE_H)
+
 $(EXTRACT_KEY_SCHEDULE_KRML): src/impl/TLS13.KeySchedule.fst verify | $(EXTRACT_KEY_SCHEDULE_DIR)
 	$(FSTAR_EXE) --cache_checked_modules --cache_dir $(CACHE_DIR) --odir $(OUTPUT_DIR) \
 	  --warn_error -321 --report_assumes warn \
@@ -332,6 +357,15 @@ test/test_handshake_driver_bindings: test/test_handshake_driver_bindings.c $(EXT
 test-handshake-driver-bindings: test/test_handshake_driver_bindings
 	./test/test_handshake_driver_bindings
 
+test/test_handshake_bindings: test/test_handshake_bindings.c $(EXTRACT_HANDSHAKE_C) $(EXTRACT_HANDSHAKE_H) c_stubs/tls13_handshake_external_layer.h
+	$(CC) -Wall -Wextra \
+	  -I $(EXTRACT_HANDSHAKE_DIR) -I c_stubs -I $(KRML_HOME)/include -I $(KRML_HOME)/krmllib/dist/minimal \
+	  $(EXTRACT_HANDSHAKE_C) test/test_handshake_bindings.c \
+	  -o $@
+
+test-handshake-bindings: test/test_handshake_bindings
+	./test/test_handshake_bindings
+
 test/test_key_schedule_bindings: test/test_key_schedule_bindings.c $(EXTRACT_KEY_SCHEDULE_C) $(EXTRACT_KEY_SCHEDULE_H) c_stubs/tls13_crypto_external.h $(HACL_WRAPPER_SOURCES) | check-deps
 	$(CC) -Wall -Wextra -Wno-deprecated-declarations \
 	  -ffunction-sections -fdata-sections \
@@ -356,5 +390,5 @@ test-record-bindings: test/test_record_bindings
 
 clean:
 	rm -rf $(CACHE_DIR) $(OUTPUT_DIR) $(EXTRACT_DIR)
-	rm -f test/test_hacl_stubs test/test_openssl_stubs test/test_wire_stubs test/test_record_stubs test/test_record_bindings test/test_io_stubs test/test_extract_smoke test/test_connection_driver_bindings test/test_handshake_driver_bindings test/test_key_schedule_bindings test/test_clienthello_openssl_probe test/test_extracted_connection_driver_openssl test/openssl_echo_server
+	rm -f test/test_hacl_stubs test/test_openssl_stubs test/test_wire_stubs test/test_record_stubs test/test_record_bindings test/test_io_stubs test/test_extract_smoke test/test_connection_driver_bindings test/test_handshake_driver_bindings test/test_handshake_bindings test/test_key_schedule_bindings test/test_clienthello_openssl_probe test/test_extracted_connection_driver_openssl test/openssl_echo_server
 	find src test -name '*.checked' -delete
