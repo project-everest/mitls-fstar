@@ -25,3 +25,9 @@ make verify FSTAR_EXE=/home/nswamy/.local/bin/fstar.exe KRML_EXE=/home/nswamy/.l
 ```
 
 After `./setup.sh`, plain `make verify` uses the repository-local toolchain in `tools/FStar`.
+
+Run all current checks with:
+
+```sh
+make test
+```

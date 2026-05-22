@@ -48,9 +48,11 @@ IMPL_FILES = \
 
 ALL_FILES = $(SPEC_FILES) $(IMPL_FILES)
 
-.PHONY: all verify check-c-stubs test-hacl-stubs test-openssl-stubs test-wire-stubs test-io-stubs check-toolchain check-deps clean
+.PHONY: all verify test check-c-stubs test-hacl-stubs test-openssl-stubs test-wire-stubs test-io-stubs check-toolchain check-deps clean
 
 all: verify
+
+test: verify check-c-stubs test-hacl-stubs test-openssl-stubs test-wire-stubs test-io-stubs
 
 check-toolchain:
 	@if ! command -v $(FSTAR_EXE) >/dev/null 2>&1; then \
