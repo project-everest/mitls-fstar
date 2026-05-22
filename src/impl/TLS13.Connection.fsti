@@ -8,6 +8,7 @@ open Pulse.Lib.Array.PtsTo
 module B = TLS13.Bytes
 module IO = TLS13.IO
 module S = TLS13.StateMachine
+module ST = TLS13.State
 module SZ = FStar.SizeT
 module T = TLS13.Types
 module U8 = FStar.UInt8
@@ -15,7 +16,7 @@ module X = TLS13.X509.Spec
 
 val connection : Type0
 
-val is_connection: connection -> S.conn_state -> slprop
+val is_connection: connection -> ST.state_ref -> S.conn_state -> slprop
 
 fn client_new
   (hostname: array U8.t)
@@ -24,40 +25,41 @@ fn client_new
   requires pts_to hostname 'hostname_bytes **
            pure (B.length 'hostname_bytes == SZ.v hostname_len)
   returns c: connection
-  ensures pts_to hostname 'hostname_bytes **
-          is_connection c S.initial
+  ensures exists* st.
+          pts_to hostname 'hostname_bytes **
+          is_connection c st S.initial
 
 fn client_free (c: connection)
-  requires is_connection c 's
+  requires is_connection c 'st 's
   ensures emp
 
 fn client_connect (c: connection) (ch: IO.channel)
-  requires is_connection c 's **
+  requires is_connection c 'st 's **
            IO.is_channel ch **
            pure ('s.S.phase == S.Start)
-  ensures exists* s'. is_connection c s' **
+  ensures exists* s'. is_connection c 'st s' **
           IO.is_channel ch **
           pure (s'.S.phase == S.ApplicationData \/ s'.S.phase == S.Failed)
 
 fn client_write (c: connection) (ch: IO.channel) (buf: array U8.t) (len: SZ.t)
-  requires is_connection c 's **
+  requires is_connection c 'st 's **
            IO.is_channel ch **
            pts_to buf 'bytes **
            pure ('s.S.phase == S.ApplicationData /\ B.length 'bytes == SZ.v len)
   returns written: SZ.t
-  ensures exists* s'. is_connection c s' **
+  ensures exists* s'. is_connection c 'st s' **
           IO.is_channel ch **
           pts_to buf 'bytes **
           pure (SZ.v written <= SZ.v len /\
                 (s'.S.phase == S.ApplicationData \/ s'.S.phase == S.Failed))
 
 fn client_read (c: connection) (ch: IO.channel) (out: array U8.t) (max_len: SZ.t)
-  requires is_connection c 's **
+  requires is_connection c 'st 's **
            IO.is_channel ch **
            pts_to out 'old **
            pure ('s.S.phase == S.ApplicationData /\ B.length 'old == SZ.v max_len)
   returns n: SZ.t
-  ensures exists* s' bytes. is_connection c s' **
+  ensures exists* s' bytes. is_connection c 'st s' **
           IO.is_channel ch **
           pts_to out bytes **
           pure (B.length bytes == SZ.v max_len /\
@@ -66,9 +68,9 @@ fn client_read (c: connection) (ch: IO.channel) (out: array U8.t) (max_len: SZ.t
                  s'.S.phase == S.Closed \/ s'.S.phase == S.Failed))
 
 fn client_close (c: connection) (ch: IO.channel)
-  requires is_connection c 's **
+  requires is_connection c 'st 's **
            IO.is_channel ch **
            pure ('s.S.phase == S.ApplicationData \/ 's.S.phase == S.Closing)
-  ensures exists* s'. is_connection c s' **
+  ensures exists* s'. is_connection c 'st s' **
           IO.is_channel ch **
           pure (s'.S.phase == S.Closing \/ s'.S.phase == S.Closed \/ s'.S.phase == S.Failed)
