@@ -22,6 +22,13 @@ The task is clear enough to proceed with the following pinned initial choices, w
 10. For the first version, parser/serializer code is deliberately scoped behind trusted `.fsti` interfaces and implemented directly in unverified C stubs. Verified EverParse/LowParse parser generation is deferred to a later phase so the first milestone can focus on the core protocol state machine, key schedule, record layer, and handshake logic.
 11. The first interop target is a controlled local TLS echo test against OpenSSL, not public HTTPS. Use a local OpenSSL-backed echo server, generated test CA/leaf certificates for `localhost`, TLS 1.3, X25519, `TLS_CHACHA20_POLY1305_SHA256`, no client auth, no PSK/resumption/0-RTT, and no HTTP semantics. Public HTTPS interop is deferred until the controlled echo path is stable.
 
+## Reference material and dependency policy
+
+1. Cache RFC 8446 and RFC 8448 locally for offline reference and test-vector work using `scripts/fetch-rfcs.sh`. Store downloaded RFC text under gitignored `third_party/rfc/`; do not commit RFC text snapshots unless there is a later explicit reason to vendor them.
+2. Pin HACL* as a Git submodule under `third_party/hacl-star`, but use only its checked-in C snapshot under `dist/gcc-compatible`. Do not try to reverify HACL* from source, and do not make this project depend on HACL* F* specs; model the required crypto behavior in local pure specs and trusted Pulse `.fsti` contracts.
+3. Treat OpenSSL as a system dependency, not vendored source. Require an installed OpenSSL 3.x executable, headers, and libraries; validate availability with `scripts/check-openssl.sh`.
+4. Keep downloaded toolchains, RFC caches, generated extraction output, query logs, and build artifacts out of git.
+
 ## Prominent proof-engineering rule: keep modules small and proofs isolated
 
 This project should be structured from the start to avoid large verification contexts. TLS is big enough that proof instability will become the main engineering risk if files accumulate unrelated definitions, helper lemmas, parser details, and Pulse code in one module.
@@ -139,9 +146,9 @@ This includes transcript consistency, key-schedule consistency, record protectio
 
 ## Trusted FFI specifications
 
-### HACL* crypto interface
+### HACL* C snapshot crypto interface
 
-Create `TLS13.Crypto.fsti` as a Pulse interface over trusted C stubs linked to HACL* `dist/gcc-compatible`. The interface should be extraction-safe and expose pure postconditions tied to `TLS13.Crypto.Spec`.
+Create `TLS13.Crypto.fsti` as a Pulse interface over trusted C stubs linked to the HACL* checked-in C snapshot at `third_party/hacl-star/dist/gcc-compatible`. The interface should be extraction-safe and expose pure postconditions tied to local `TLS13.Crypto.Spec` definitions, not to HACL* F* spec modules.
 
 Initial functions:
 
@@ -151,7 +158,7 @@ Initial functions:
 4. HKDF-Extract, HKDF-Expand, and TLS 1.3 HKDF label expansion.
 5. HMAC-SHA256.
 6. ChaCha20-Poly1305 seal/open with TLS 1.3 nonce construction.
-7. Signature verification for the selected initial signature schemes, either through HACL* where practical or OpenSSL EVP if HACL* coverage is insufficient for deployed certificate algorithms.
+7. Signature verification for the selected initial signature schemes, either through the HACL* C snapshot where practical or OpenSSL EVP if HACL* coverage is insufficient for deployed certificate algorithms.
 
 Each `.fsti` declaration must specify buffer lengths, aliasing/disjointness requirements, ownership, mutation effects, and exact pure functional result. The C stubs are trusted to implement these declarations and must map failures explicitly to verified error results.
 
@@ -264,13 +271,14 @@ Before any public HTTPS endpoint, add a local OpenSSL interop test that exercise
 ## Build, verification, and extraction plan
 
 1. Add `.gitignore`, `setup.sh`, `Makefile`, and directory skeleton.
-2. Implement `setup.sh` to download the latest F* binary release into `tools/FStar`, with an optional version override for reproducibility, and create the local KaRaMeL compatibility layout.
-3. Configure the Makefile with `FSTAR_HOME ?= tools/FStar`, `FSTAR_EXE ?= $(FSTAR_HOME)/bin/fstar.exe`, and `KRML_EXE`/`KRML_HOME` pointing at the local install. The build should fail with a clear message if `./setup.sh` has not been run.
-4. Configure verification with the local `fstar.exe`, cache directories, includes for `src/spec` and `src/impl`, and separate `.fsti` then `.fst` verification.
-5. Configure extraction with one `.krml` file per extracted module, bundle spec/proof modules away, expose only `TLS13.Connection` as the public C API, and link trusted external stubs for crypto, X.509, wire parsing/serialization, randomness, clock, and I/O.
-6. Add C build rules linking extracted C with HACL* gcc-compatible, OpenSSL, and trusted C stubs.
-7. Add snapshot generation for extracted C headers/source.
-8. Add test targets for pure spec tests, RFC 8448 vector tests, extracted C vector tests, parser/serializer C tests, controlled OpenSSL TLS echo interop tests, and later HTTPS interop tests.
+2. Add dependency helpers for local RFC caches, the HACL* submodule, and OpenSSL system-dependency checks.
+3. Implement `setup.sh` to download the latest F* binary release into `tools/FStar`, with an optional version override for reproducibility, and create the local KaRaMeL compatibility layout.
+4. Configure the Makefile with `FSTAR_HOME ?= tools/FStar`, `FSTAR_EXE ?= $(FSTAR_HOME)/bin/fstar.exe`, and `KRML_EXE`/`KRML_HOME` pointing at the local install. The build should fail with a clear message if `./setup.sh` has not been run.
+5. Configure verification with the local `fstar.exe`, cache directories, includes for `src/spec` and `src/impl`, and separate `.fsti` then `.fst` verification.
+6. Configure extraction with one `.krml` file per extracted module, bundle spec/proof modules away, expose only `TLS13.Connection` as the public C API, and link trusted external stubs for crypto, X.509, wire parsing/serialization, randomness, clock, and I/O.
+7. Add C build rules linking extracted C with the HACL* `dist/gcc-compatible` C snapshot, OpenSSL, and trusted C stubs.
+8. Add snapshot generation for extracted C headers/source.
+9. Add test targets for pure spec tests, RFC 8448 vector tests, extracted C vector tests, parser/serializer C tests, controlled OpenSSL TLS echo interop tests, and later HTTPS interop tests.
 
 ## Incremental milestones
 
@@ -285,7 +293,7 @@ Before any public HTTPS endpoint, add a local OpenSSL interop test that exercise
    - Add lemmas for determinism and safety of selected transitions.
 
 3. Crypto and X.509 abstract specs
-   - Define pure specs for SHA-256, HKDF labels, transcript hashes, X25519, signatures, and ChaCha20-Poly1305, reusing HACL* spec modules where practical.
+   - Define local pure specs for SHA-256, HKDF labels, transcript hashes, X25519, signatures, and ChaCha20-Poly1305 sufficient for TLS proof obligations. Do not attempt to reverify HACL* or import HACL* F* specs into this project.
    - Define X.509 validation as an abstract trusted relation returning peer identity and leaf public key.
 
 4. FFI shells and C stubs
@@ -358,7 +366,7 @@ Before any public HTTPS endpoint, add a local OpenSSL interop test that exercise
 1. Real HTTPS interop is substantially more work than the controlled OpenSSL TLS echo test because public endpoints require a non-trivial extension, WebPKI certificate, signature, ALPN, fragmentation, and I/O surface; keep it out of the first end-to-end gate.
 2. Parser/serializer C code is trusted in v1; tests can reduce interop risk but do not provide a proof. EverParse/LowParse should replace this trusted boundary in a later phase.
 3. OpenSSL X.509 verification is a trusted boundary; the proof can only show correct use of the validated identity, not correctness of OpenSSL itself.
-4. HACL* FFI specs must match C preconditions exactly, including buffer sizes, disjointness, and aliasing.
+4. HACL* FFI specs must match the checked-in C snapshot preconditions exactly, including buffer sizes, disjointness, aliasing, and failure behavior, without assuming HACL* is reverified in this repository.
 5. Transcript/key-schedule byte exactness is fragile; RFC 8448 vector validation should precede network testing.
 6. Partial network I/O must be modeled in the state machine from the start.
 7. Downloading the latest F* release improves freshness but can reduce reproducibility; once a baseline verifies, pin a known-good release through a `setup.sh --version` path.
@@ -368,17 +376,18 @@ Before any public HTTPS endpoint, add a local OpenSSL interop test that exercise
 ## Todos
 
 1. Use the pinned initial scope decisions: client-only, X25519, `TLS_CHACHA20_POLY1305_SHA256`, supported signature schemes, HRR abort behavior, controlled OpenSSL echo parameters, later public HTTPS endpoint, and trusted parser/serializer boundary for v1.
-2. Create the repository skeleton, `setup.sh`, Makefile, cache/extraction directories, and minimal verify/extract smoke modules using `tools/FStar`.
-3. Implement the pure TLS byte/types/state-machine specification modules.
-4. Define pure crypto and X.509 spec interfaces, including trusted-boundary documentation.
-5. Add Pulse `.fsti` contracts and C stubs for HACL*, OpenSSL, parser/serializer, randomness, clock, and I/O.
-6. Implement trusted C parser/serializer support for the scoped TLS messages and extensions, with `.fsti` contracts and vector tests.
-7. Implement and verify transcript hash and TLS 1.3 key schedule; validate with RFC 8448 vectors.
-8. Implement and verify ChaCha20-Poly1305 record protection/unprotection.
-9. Implement and verify the scoped client handshake.
-10. Implement and verify top-level connection read/write/close APIs.
-11. Configure extraction and C linking with HACL* and OpenSSL.
-12. Add RFC 8448 and extracted C vector tests.
-13. Add the controlled OpenSSL TLS echo interop test as the first end-to-end networking target.
-14. Add public HTTPS interop tests only after the controlled echo test is stable.
-15. Audit specs, interfaces, file sizes, proof stability, trusted boundaries, rlimits, and extraction output before declaring the implementation complete.
+2. Add dependency helpers and local caches: HACL* submodule, RFC 8446/RFC 8448 fetch script, OpenSSL availability check, and gitignore rules for downloaded/generated artifacts.
+3. Create the repository skeleton, `setup.sh`, Makefile, cache/extraction directories, and minimal verify/extract smoke modules using `tools/FStar`.
+4. Implement the pure TLS byte/types/state-machine specification modules.
+5. Define pure crypto and X.509 spec interfaces, including trusted-boundary documentation.
+6. Add Pulse `.fsti` contracts and C stubs for HACL*, OpenSSL, parser/serializer, randomness, clock, and I/O.
+7. Implement trusted C parser/serializer support for the scoped TLS messages and extensions, with `.fsti` contracts and vector tests.
+8. Implement and verify transcript hash and TLS 1.3 key schedule; validate with RFC 8448 vectors.
+9. Implement and verify ChaCha20-Poly1305 record protection/unprotection.
+10. Implement and verify the scoped client handshake.
+11. Implement and verify top-level connection read/write/close APIs.
+12. Configure extraction and C linking with HACL* and OpenSSL.
+13. Add RFC 8448 and extracted C vector tests.
+14. Add the controlled OpenSSL TLS echo interop test as the first end-to-end networking target.
+15. Add public HTTPS interop tests only after the controlled echo test is stable.
+16. Audit specs, interfaces, file sizes, proof stability, trusted boundaries, rlimits, and extraction output before declaring the implementation complete.
