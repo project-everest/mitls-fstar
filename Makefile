@@ -63,11 +63,11 @@ EXTRACT_SMOKE_KRML = $(EXTRACT_SMOKE_DIR)/out.krml
 EXTRACT_SMOKE_C    = $(EXTRACT_SMOKE_DIR)/TLS13_Extract_Smoke.c
 EXTRACT_SMOKE_H    = $(EXTRACT_SMOKE_DIR)/TLS13_Extract_Smoke.h
 EXTRACT_CONNECTION_DRIVER_DIR  = $(EXTRACT_DIR)/connection-driver
-EXTRACT_CONNECTION_DRIVER_KRML = $(EXTRACT_CONNECTION_DRIVER_DIR)/out.krml
+EXTRACT_CONNECTION_DRIVER_KRML = $(EXTRACT_CONNECTION_DRIVER_DIR)/TLS13_Connection_Driver.krml
 EXTRACT_CONNECTION_DRIVER_C    = $(EXTRACT_CONNECTION_DRIVER_DIR)/TLS13_Connection_Driver.c
 EXTRACT_CONNECTION_DRIVER_H    = $(EXTRACT_CONNECTION_DRIVER_DIR)/TLS13_Connection_Driver.h
 EXTRACT_HANDSHAKE_DRIVER_DIR  = $(EXTRACT_DIR)/handshake-driver
-EXTRACT_HANDSHAKE_DRIVER_KRML = $(EXTRACT_HANDSHAKE_DRIVER_DIR)/out.krml
+EXTRACT_HANDSHAKE_DRIVER_KRML = $(EXTRACT_HANDSHAKE_DRIVER_DIR)/TLS13_Handshake_Driver.krml
 EXTRACT_HANDSHAKE_DRIVER_C    = $(EXTRACT_HANDSHAKE_DRIVER_DIR)/TLS13_Handshake_Driver.c
 EXTRACT_HANDSHAKE_DRIVER_H    = $(EXTRACT_HANDSHAKE_DRIVER_DIR)/TLS13_Handshake_Driver.h
 
@@ -228,7 +228,8 @@ $(EXTRACT_CONNECTION_DRIVER_KRML): src/impl/TLS13.Connection.Driver.fst verify |
 	$(FSTAR_EXE) --cache_checked_modules --cache_dir $(CACHE_DIR) --odir $(OUTPUT_DIR) \
 	  --warn_error -321 --report_assumes warn \
 	  --already_cached 'Prims,FStar,Pulse,PulseCore -TLS13' \
-	  $(INCLUDES) --codegen krml --extract 'TLS13.Connection.Driver' --krmloutput $@ $<
+	  $(INCLUDES) --codegen krml --extract_module TLS13.Connection.Driver \
+	  --krmloutput $@ $<
 
 extract-connection-driver-krml: $(EXTRACT_CONNECTION_DRIVER_KRML)
 
@@ -243,7 +244,8 @@ $(EXTRACT_HANDSHAKE_DRIVER_KRML): src/impl/TLS13.Handshake.Driver.fst verify | $
 	$(FSTAR_EXE) --cache_checked_modules --cache_dir $(CACHE_DIR) --odir $(OUTPUT_DIR) \
 	  --warn_error -321 --report_assumes warn \
 	  --already_cached 'Prims,FStar,Pulse,PulseCore -TLS13' \
-	  $(INCLUDES) --codegen krml --extract 'TLS13.Handshake.Driver' --krmloutput $@ $<
+	  $(INCLUDES) --codegen krml --extract_module TLS13.Handshake.Driver \
+	  --krmloutput $@ $<
 
 extract-handshake-driver-krml: $(EXTRACT_HANDSHAKE_DRIVER_KRML)
 
