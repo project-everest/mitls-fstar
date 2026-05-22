@@ -62,8 +62,10 @@ EXTRACT_SMOKE_DIR  = $(EXTRACT_DIR)/smoke
 EXTRACT_SMOKE_KRML = $(EXTRACT_SMOKE_DIR)/out.krml
 EXTRACT_SMOKE_C    = $(EXTRACT_SMOKE_DIR)/TLS13_Extract_Smoke.c
 EXTRACT_SMOKE_H    = $(EXTRACT_SMOKE_DIR)/TLS13_Extract_Smoke.h
+EXTRACT_CONNECTION_DRIVER_DIR  = $(EXTRACT_DIR)/connection-driver
+EXTRACT_CONNECTION_DRIVER_KRML = $(EXTRACT_CONNECTION_DRIVER_DIR)/out.krml
 
-.PHONY: all verify test extract-smoke test-extract-smoke check-c-stubs test-hacl-stubs test-openssl-stubs test-wire-stubs test-record-stubs test-io-stubs test-openssl-echo check-toolchain check-deps clean
+.PHONY: all verify test extract-smoke extract-connection-driver-krml test-extract-smoke check-c-stubs test-hacl-stubs test-openssl-stubs test-wire-stubs test-record-stubs test-io-stubs test-openssl-echo check-toolchain check-deps clean
 
 all: verify
 
@@ -85,6 +87,9 @@ $(CACHE_DIR) $(OUTPUT_DIR) $(EXTRACT_DIR):
 	mkdir -p $@
 
 $(EXTRACT_SMOKE_DIR):
+	mkdir -p $@
+
+$(EXTRACT_CONNECTION_DRIVER_DIR):
 	mkdir -p $@
 
 verify: check-deps check-toolchain $(CACHE_DIR) $(OUTPUT_DIR)
@@ -188,6 +193,14 @@ $(EXTRACT_SMOKE_C) $(EXTRACT_SMOKE_H): $(EXTRACT_SMOKE_KRML) | $(EXTRACT_SMOKE_D
 	$(KRML_EXE) -skip-compilation -skip-makefiles -tmpdir $(EXTRACT_SMOKE_DIR) $(EXTRACT_SMOKE_KRML)
 
 extract-smoke: $(EXTRACT_SMOKE_C) $(EXTRACT_SMOKE_H)
+
+$(EXTRACT_CONNECTION_DRIVER_KRML): src/impl/TLS13.Connection.Driver.fst verify | $(EXTRACT_CONNECTION_DRIVER_DIR)
+	$(FSTAR_EXE) --cache_checked_modules --cache_dir $(CACHE_DIR) --odir $(OUTPUT_DIR) \
+	  --warn_error -321 --report_assumes warn \
+	  --already_cached 'Prims,FStar,Pulse,PulseCore -TLS13' \
+	  $(INCLUDES) --codegen krml --extract 'TLS13.Connection.Driver' --krmloutput $@ $<
+
+extract-connection-driver-krml: $(EXTRACT_CONNECTION_DRIVER_KRML)
 
 test/test_extract_smoke: test/test_extract_smoke.c $(EXTRACT_SMOKE_C) $(EXTRACT_SMOKE_H)
 	$(CC) -Wall -Wextra \
