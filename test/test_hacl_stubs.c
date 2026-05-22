@@ -80,6 +80,44 @@ static int test_hkdf_sha256_rfc5869_case1(void) {
   return expect_bytes("hkdf-expand RFC5869 case 1", okm, expected_okm, sizeof okm);
 }
 
+static int test_tls13_hkdf_expand_label_encoding(void) {
+  uint8_t prk[32];
+  uint8_t via_label[48];
+  uint8_t via_info[48];
+  static const uint8_t label[] = {'c', ' ', 'h', 's', ' ', 't', 'r', 'a', 'f', 'f', 'i', 'c'};
+  static const uint8_t context[32] = {
+      0xe3, 0xb0, 0xc4, 0x42, 0x98, 0xfc, 0x1c, 0x14,
+      0x9a, 0xfb, 0xf4, 0xc8, 0x99, 0x6f, 0xb9, 0x24,
+      0x27, 0xae, 0x41, 0xe4, 0x64, 0x9b, 0x93, 0x4c,
+      0xa4, 0x95, 0x99, 0x1b, 0x78, 0x52, 0xb8, 0x55};
+  uint8_t info[2 + 1 + 6 + sizeof label + 1 + sizeof context];
+  size_t p = 0;
+
+  for (size_t i = 0; i < sizeof prk; ++i) prk[i] = (uint8_t)(0xa0 + i);
+
+  info[p++] = 0x00;
+  info[p++] = sizeof via_label;
+  info[p++] = 6 + sizeof label;
+  memcpy(&info[p], "tls13 ", 6);
+  p += 6;
+  memcpy(&info[p], label, sizeof label);
+  p += sizeof label;
+  info[p++] = sizeof context;
+  memcpy(&info[p], context, sizeof context);
+  p += sizeof context;
+
+  if (!tls13_hacl_hkdf_expand_label_sha256(
+          via_label, sizeof via_label, prk, label, sizeof label, context, sizeof context)) {
+    fprintf(stderr, "HKDF-Expand-Label wrapper failed\n");
+    return 1;
+  }
+  if (!tls13_hacl_hkdf_expand_sha256(via_info, sizeof via_info, prk, info, p)) {
+    fprintf(stderr, "direct HKDF-Expand for label test failed\n");
+    return 1;
+  }
+  return expect_bytes("TLS 1.3 HKDF label encoding", via_label, via_info, sizeof via_label);
+}
+
 static int test_x25519_rfc7748(void) {
   static const uint8_t alice_sk[32] = {
       0x77, 0x07, 0x6d, 0x0a, 0x73, 0x18, 0xa5, 0x7d,
@@ -174,6 +212,7 @@ int main(void) {
   failed |= test_sha256_empty();
   failed |= test_hmac_sha256_rfc4231_case1();
   failed |= test_hkdf_sha256_rfc5869_case1();
+  failed |= test_tls13_hkdf_expand_label_encoding();
   failed |= test_x25519_rfc7748();
   failed |= test_chacha20_poly1305_roundtrip();
   if (failed != 0) {
