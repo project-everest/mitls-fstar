@@ -43,6 +43,7 @@ IMPL_FILES = \
   src/impl/TLS13.Extract.Smoke.fst \
   src/impl/TLS13.State.fst \
   src/impl/TLS13.Handshake.StateDriver.fst \
+  src/impl/TLS13.Connection.StateDriver.fst \
   src/impl/TLS13.Crypto.fsti \
   src/impl/TLS13.KeySchedule.fsti \
   src/impl/TLS13.X509.fsti \
