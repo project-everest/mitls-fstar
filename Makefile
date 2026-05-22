@@ -52,6 +52,7 @@ IMPL_FILES = \
   src/impl/TLS13.Serialize.fsti \
   src/impl/TLS13.IO.fsti \
   src/impl/TLS13.Handshake.fsti \
+  src/impl/TLS13.Handshake.Driver.fst \
   src/impl/TLS13.Connection.fsti
 
 ALL_FILES = $(SPEC_FILES) $(IMPL_FILES)
