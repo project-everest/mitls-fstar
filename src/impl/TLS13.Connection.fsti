@@ -55,6 +55,18 @@ fn client_write (c: connection) (ch: IO.channel) (buf: array U8.t) (len: SZ.t)
           pure (SZ.v written <= SZ.v len /\
                 (s'.S.phase == S.ApplicationData \/ s'.S.phase == S.Failed))
 
+fn client_write_all (c: connection) (ch: IO.channel) (buf: array U8.t) (len: SZ.t)
+  requires is_connection c 'st 's **
+           IO.is_channel ch **
+           pts_to buf 'bytes **
+           pure ('s.S.phase == S.ApplicationData /\ B.length 'bytes == SZ.v len)
+  returns ok: bool
+  ensures exists* s'. is_connection c 'st s' **
+          IO.is_channel ch **
+          pts_to buf 'bytes **
+          pure ((ok ==> s'.S.phase == S.ApplicationData) /\
+                (not ok ==> s'.S.phase == S.Failed))
+
 fn client_read (c: connection) (ch: IO.channel) (out: array U8.t) (max_len: SZ.t)
   requires is_connection c 'st 's **
            IO.is_channel ch **
@@ -68,6 +80,19 @@ fn client_read (c: connection) (ch: IO.channel) (out: array U8.t) (max_len: SZ.t
                 SZ.v n <= SZ.v max_len /\
                 (s'.S.phase == S.ApplicationData \/ s'.S.phase == S.Closing \/
                  s'.S.phase == S.Closed \/ s'.S.phase == S.Failed))
+
+fn client_read_exact (c: connection) (ch: IO.channel) (out: array U8.t) (len: SZ.t)
+  requires is_connection c 'st 's **
+           IO.is_channel ch **
+           pts_to out 'old **
+           pure ('s.S.phase == S.ApplicationData /\ B.length 'old == SZ.v len)
+  returns ok: bool
+  ensures exists* s' bytes. is_connection c 'st s' **
+          IO.is_channel ch **
+          pts_to out bytes **
+          pure (B.length bytes == SZ.v len /\
+                (ok ==> s'.S.phase == S.ApplicationData) /\
+                (not ok ==> s'.S.phase == S.Failed))
 
 fn client_close (c: connection) (ch: IO.channel)
   requires is_connection c 'st 's **
