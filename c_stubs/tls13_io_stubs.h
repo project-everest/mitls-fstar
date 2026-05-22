@@ -6,8 +6,12 @@
 #include <stdint.h>
 #include <sys/types.h>
 
+int tls13_io_connect_tcp(const char *hostname, uint16_t port);
+
 ssize_t tls13_io_read_fd(int fd, uint8_t *out, size_t max_len);
 
 ssize_t tls13_io_write_fd(int fd, const uint8_t *buf, size_t len);
+
+int tls13_io_close_fd(int fd);
 
 #endif
