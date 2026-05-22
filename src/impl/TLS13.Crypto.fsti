@@ -10,6 +10,7 @@ module C = TLS13.Crypto.Spec
 module Seq = FStar.Seq
 module SZ = FStar.SizeT
 module U8 = FStar.UInt8
+module U64 = FStar.UInt64
 
 fn random_bytes (out: array U8.t) (out_len: SZ.t)
   requires pts_to out 'old ** pure (B.length 'old == SZ.v out_len)
@@ -83,6 +84,16 @@ fn x25519_shared (sk: array U8.t) (pk: array U8.t) (out: array U8.t)
           (match C.x25519_shared 'sk_bytes 'pk_bytes with
            | Some shared -> pts_to out shared ** pure ok
            | None -> pts_to out 'old ** pure (not ok))
+
+fn tls13_record_nonce (static_iv: array U8.t) (sequence_number: U64.t) (out: array U8.t)
+  requires pts_to static_iv 'iv_bytes **
+           pts_to out 'old **
+           pure (B.length 'iv_bytes == 12 /\ B.length 'old == 12)
+  returns ok: bool
+  ensures pts_to static_iv 'iv_bytes **
+          (if ok
+           then pts_to out (C.tls13_record_nonce 'iv_bytes (U64.v sequence_number))
+           else pts_to out 'old)
 
 fn chacha20_poly1305_seal
   (key: array U8.t)

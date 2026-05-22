@@ -124,6 +124,18 @@ bool tls13_hacl_x25519_shared(uint8_t out[32], const uint8_t sk[32], const uint8
   return Hacl_Curve25519_51_ecdh(out, (uint8_t *)sk, (uint8_t *)pk);
 }
 
+bool tls13_record_nonce(uint8_t out[12], const uint8_t static_iv[12], uint64_t sequence_number) {
+  if (out == NULL || static_iv == NULL) {
+    return false;
+  }
+  memcpy(out, static_iv, 12);
+  for (size_t i = 0; i < 8; ++i) {
+    uint8_t seq_byte = (uint8_t)(sequence_number >> (56 - 8 * i));
+    out[4 + i] ^= seq_byte;
+  }
+  return true;
+}
+
 bool tls13_hacl_chacha20_poly1305_seal(
     uint8_t *ciphertext,
     uint8_t tag[16],

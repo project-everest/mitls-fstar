@@ -207,6 +207,39 @@ static int test_chacha20_poly1305_roundtrip(void) {
   return 0;
 }
 
+static int test_tls13_record_nonce(void) {
+  static const uint8_t static_iv[12] = {
+      0x00, 0x01, 0x02, 0x03, 0x04, 0x05,
+      0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b};
+  static const uint8_t expected_zero[12] = {
+      0x00, 0x01, 0x02, 0x03, 0x04, 0x05,
+      0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b};
+  static const uint8_t expected_seq[12] = {
+      0x00, 0x01, 0x02, 0x03, 0x05, 0x07,
+      0x05, 0x03, 0x0d, 0x0f, 0x0d, 0x03};
+  uint8_t out[12];
+
+  if (!tls13_record_nonce(out, static_iv, 0)) {
+    fprintf(stderr, "TLS record nonce rejected sequence zero\n");
+    return 1;
+  }
+  if (expect_bytes("TLS record nonce seq 0", out, expected_zero, sizeof out) != 0) {
+    return 1;
+  }
+  if (!tls13_record_nonce(out, static_iv, UINT64_C(0x0102030405060708))) {
+    fprintf(stderr, "TLS record nonce rejected non-zero sequence\n");
+    return 1;
+  }
+  if (expect_bytes("TLS record nonce seq non-zero", out, expected_seq, sizeof out) != 0) {
+    return 1;
+  }
+  if (tls13_record_nonce(NULL, static_iv, 0) || tls13_record_nonce(out, NULL, 0)) {
+    fprintf(stderr, "TLS record nonce accepted a null buffer\n");
+    return 1;
+  }
+  return 0;
+}
+
 int main(void) {
   int failed = 0;
   failed |= test_sha256_empty();
@@ -214,6 +247,7 @@ int main(void) {
   failed |= test_hkdf_sha256_rfc5869_case1();
   failed |= test_tls13_hkdf_expand_label_encoding();
   failed |= test_x25519_rfc7748();
+  failed |= test_tls13_record_nonce();
   failed |= test_chacha20_poly1305_roundtrip();
   if (failed != 0) {
     return 1;
