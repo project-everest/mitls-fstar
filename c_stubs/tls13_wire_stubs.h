@@ -34,6 +34,12 @@ bool tls13_wire_serialize_handshake_header(
     uint8_t msg_type,
     uint32_t body_len);
 
+bool tls13_wire_parse_supported_server_hello(
+    const uint8_t *input,
+    size_t input_len,
+    uint8_t random[32],
+    uint8_t key_share[32]);
+
 bool tls13_wire_encode_inner_plaintext(
     uint8_t *out,
     size_t out_len,
