@@ -46,7 +46,8 @@ That target starts the local TLS 1.3/X25519/`TLS_CHACHA20_POLY1305_SHA256`
 echo server, runs a scoped C probe that sends this repository's serialized
 ClientHello, validates OpenSSL's DER leaf certificate against the generated
 test CA, verifies CertificateVerify and server Finished against the transcript,
-sends client Finished, and checks an exact echoed application-data record. It also retains the
-`openssl s_client` short and multi-record payload smoke as a server-side
-compatibility check. The full extracted verified client is still a later
-milestone.
+sends client Finished, and checks an exact echoed application-data record. It
+also checks that the probe rejects the same server under the wrong test CA, and
+retains the `openssl s_client` short and multi-record payload smoke as a
+server-side compatibility check. The full extracted verified client is still a
+later milestone.
