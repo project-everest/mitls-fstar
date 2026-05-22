@@ -55,9 +55,10 @@ let open_record
   : option (B.bytes & direction_state) =
   match st.key, st.static_iv with
   | Some key, Some iv ->
-    let nonce = C.tls13_record_nonce iv st.seq in
-    (match C.chacha20_poly1305_open key nonce aad ct with
-     | Some pt -> Some (pt, next_seq st)
-     | None -> None)
+    if B.length ct >= 16 then
+      let nonce = C.tls13_record_nonce iv st.seq in
+      (match C.chacha20_poly1305_open key nonce aad ct with
+       | Some pt -> Some (pt, next_seq st)
+       | None -> None)
+    else None
   | _, _ -> None
-

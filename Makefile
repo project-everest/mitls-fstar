@@ -31,14 +31,20 @@ SPEC_FILES = \
   src/spec/TLS13.Keys.fst \
   src/spec/TLS13.Record.Spec.fst \
   src/spec/TLS13.Handshake.Spec.fst \
+  src/spec/TLS13.Wire.Spec.fsti \
   src/spec/TLS13.StateMachine.fst
 
 IMPL_FILES = \
-  src/impl/TLS13.LowTypes.fst
+  src/impl/TLS13.LowTypes.fsti \
+  src/impl/TLS13.Crypto.fsti \
+  src/impl/TLS13.X509.fsti \
+  src/impl/TLS13.Parse.fsti \
+  src/impl/TLS13.Serialize.fsti \
+  src/impl/TLS13.IO.fsti
 
 ALL_FILES = $(SPEC_FILES) $(IMPL_FILES)
 
-.PHONY: all verify check-toolchain check-deps clean
+.PHONY: all verify check-c-stubs check-toolchain check-deps clean
 
 all: verify
 
@@ -63,6 +69,9 @@ verify: check-deps check-toolchain $(CACHE_DIR) $(OUTPUT_DIR)
 	  $(FSTAR) $$f; \
 	done
 	@echo "All F* modules verified"
+
+check-c-stubs:
+	$(CC) -fsyntax-only -Wall -Wextra -I c_stubs c_stubs/*.c
 
 clean:
 	rm -rf $(CACHE_DIR) $(OUTPUT_DIR) $(EXTRACT_DIR)

@@ -22,39 +22,39 @@ val hmac_sha256: key:B.bytes -> msg:B.bytes -> Tot digest32
 val hkdf_extract: salt:B.bytes -> ikm:B.bytes -> Tot secret
 
 val hkdf_expand_label:
-  secret:secret ->
+  secret:B.bytes ->
   label:B.bytes ->
   context:B.bytes ->
   len:nat ->
   Tot (bytes_of_len len)
 
 val x25519_public_from_private:
-  sk:x25519_private ->
+  sk:B.bytes ->
   Tot x25519_public
 
 val x25519_shared:
-  sk:x25519_private ->
-  pk:x25519_public ->
+  sk:B.bytes ->
+  pk:B.bytes ->
   Tot (option x25519_shared_secret)
 
 val tls13_record_nonce:
-  static_iv:aead_nonce ->
+  static_iv:B.bytes ->
   seq:nat ->
   Tot aead_nonce
 
 val chacha20_poly1305_seal:
-  key:aead_key ->
-  nonce:aead_nonce ->
+  key:B.bytes ->
+  nonce:B.bytes ->
   aad:B.bytes ->
   plaintext:B.bytes ->
   Tot (bytes_of_len (B.length plaintext + 16))
 
 val chacha20_poly1305_open:
-  key:aead_key ->
-  nonce:aead_nonce ->
+  key:B.bytes ->
+  nonce:B.bytes ->
   aad:B.bytes ->
   ciphertext:B.bytes ->
-  Tot (option B.bytes)
+  Tot (option (plaintext:B.bytes{B.length plaintext + 16 == B.length ciphertext}))
 
 val verify_signature:
   scheme:T.signature_scheme ->
@@ -62,4 +62,3 @@ val verify_signature:
   message:B.bytes ->
   signature:signature ->
   Tot bool
-
