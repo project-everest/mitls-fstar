@@ -719,8 +719,11 @@ int main(int argc, char **argv) {
     }
   }
 
-  if (!saw_finished ||
-      verify_server_authentication(
+  if (!saw_finished) {
+    fprintf(stderr, "OpenSSL server Finished was not received\n");
+    goto done;
+  }
+  if (verify_server_authentication(
           ca_pem,
           ca_pem_len,
           client_hello,
@@ -728,8 +731,11 @@ int main(int argc, char **argv) {
           server_hello_fragment,
           server_hello_len,
           server_handshake_messages,
-          server_handshake_before_finished_len) != 0 ||
-      verify_server_finished(
+          server_handshake_before_finished_len) != 0) {
+    fprintf(stderr, "failed to authenticate OpenSSL server\n");
+    goto done;
+  }
+  if (verify_server_finished(
           client_hello,
           client_hello_len,
           server_hello_fragment,
