@@ -8,6 +8,7 @@ module H = TLS13.Handshake.Spec
 module IO = TLS13.IO
 module S = TLS13.StateMachine
 module ST = TLS13.State
+module X = TLS13.X509.Spec
 
 val handshake_context : Type0
 
@@ -66,17 +67,30 @@ fn recv_certificate (ctx: handshake_context) (ch: IO.channel)
                 (ok ==> s'.S.phase == S.CertificateReceived) /\
                 (not ok ==> s'.S.phase == S.Failed))
 
+fn validate_certificate (ctx: handshake_context)
+  requires is_handshake_context ctx 'st 's **
+           pure ('s.S.phase == S.CertificateReceived)
+  returns ok: bool
+  ensures exists* peer s'.
+          is_handshake_context ctx 'st s' **
+          pure ((ok ==> S.step 's (S.ValidateCertificate peer) == Some s' /\
+                        s'.S.phase == S.CertificateValidated /\
+                        s'.S.peer == Some peer) /\
+                (not ok ==> S.step 's (S.Fail TLS13.Types.BadCertificate) == Some s' /\
+                           s'.S.phase == S.Failed))
+
 fn recv_certificate_verify (ctx: handshake_context) (ch: IO.channel)
   requires is_handshake_context ctx 'st 's **
            IO.is_channel ch **
-           pure ('s.S.phase == S.CertificateReceived)
+           pure ('s.S.phase == S.CertificateValidated)
   returns ok: bool
   ensures exists* cert_verify s'.
           is_handshake_context ctx 'st s' **
           IO.is_channel ch **
-          pure (S.step 's (S.RecvCertificateVerify cert_verify) == Some s' /\
-                (ok ==> s'.S.phase == S.CertificateVerified) /\
-                (not ok ==> s'.S.phase == S.Failed))
+          pure ((ok ==> S.step 's (S.RecvCertificateVerify cert_verify) == Some s' /\
+                         s'.S.phase == S.CertificateVerified) /\
+                (not ok ==> S.step 's (S.Fail TLS13.Types.BadCertificateVerify) == Some s' /\
+                            s'.S.phase == S.Failed))
 
 fn recv_server_finished (ctx: handshake_context) (ch: IO.channel)
   requires is_handshake_context ctx 'st 's **

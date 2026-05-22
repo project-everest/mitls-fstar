@@ -17,6 +17,7 @@ type phase =
   | ServerHelloReceived
   | EncryptedExtensionsReceived
   | CertificateReceived
+  | CertificateValidated
   | CertificateVerified
   | ServerFinishedVerified
   | ClientFinishedSent
@@ -40,6 +41,7 @@ type event =
   | RecvServerHello of H.server_hello
   | RecvEncryptedExtensions of H.encrypted_extensions
   | RecvCertificate of H.certificate_msg
+  | ValidateCertificate of X.peer_identity
   | RecvCertificateVerify of H.certificate_verify
   | RecvServerFinished of H.finished
   | SendClientFinished of H.finished
@@ -66,6 +68,9 @@ let fail (s:conn_state) (e:T.tls_error) : conn_state =
 let with_phase (s:conn_state) (p:phase) : conn_state =
   { s with phase = p }
 
+let with_validated_peer (s:conn_state) (peer:X.peer_identity) : conn_state =
+  { s with phase = CertificateValidated; peer = Some peer }
+
 let step (s:conn_state) (e:event) : option conn_state =
   match s.phase, e with
   | Start, SendClientHello _ ->
@@ -78,8 +83,12 @@ let step (s:conn_state) (e:event) : option conn_state =
     Some { s with phase = EncryptedExtensionsReceived }
   | EncryptedExtensionsReceived, RecvCertificate _ ->
     Some { s with phase = CertificateReceived }
-  | CertificateReceived, RecvCertificateVerify _ ->
-    Some { s with phase = CertificateVerified }
+  | CertificateReceived, ValidateCertificate peer ->
+    Some (with_validated_peer s peer)
+  | CertificateValidated, RecvCertificateVerify _ ->
+    (match s.peer with
+     | Some _ -> Some { s with phase = CertificateVerified }
+     | None -> Some (fail s T.BadCertificate))
   | CertificateVerified, RecvServerFinished _ ->
     Some { s with phase = ServerFinishedVerified }
   | ServerFinishedVerified, SendClientFinished _ ->

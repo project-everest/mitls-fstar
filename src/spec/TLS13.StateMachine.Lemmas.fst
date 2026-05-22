@@ -4,6 +4,7 @@ module H = TLS13.Handshake.Spec
 module S = TLS13.StateMachine
 module T = TLS13.Types
 module B = TLS13.Bytes
+module X = TLS13.X509.Spec
 
 let lemma_initial_phase ()
   : Lemma (S.initial.S.phase == S.Start /\
@@ -45,6 +46,7 @@ let controlled_handshake_events
   (sh:H.server_hello)
   (ee:H.encrypted_extensions)
   (cert:H.certificate_msg)
+  (peer:X.peer_identity)
   (cv:H.certificate_verify)
   (sf:H.finished)
   (cf:H.finished)
@@ -54,6 +56,7 @@ let controlled_handshake_events
     S.RecvServerHello sh;
     S.RecvEncryptedExtensions ee;
     S.RecvCertificate cert;
+    S.ValidateCertificate peer;
     S.RecvCertificateVerify cv;
     S.RecvServerFinished sf;
     S.SendClientFinished cf
@@ -64,15 +67,20 @@ let lemma_controlled_handshake_reaches_application_data
   (sh:H.server_hello)
   (ee:H.encrypted_extensions)
   (cert:H.certificate_msg)
+  (peer:X.peer_identity)
   (cv:H.certificate_verify)
   (sf:H.finished)
   (cf:H.finished)
   : Lemma (requires H.is_supported_cipher_suite sh.H.cipher_suite == true)
           (ensures (match S.step_many S.initial
-                            (controlled_handshake_events ch sh ee cert cv sf cf) with
+                            (controlled_handshake_events ch sh ee cert peer cv sf cf) with
                     | Some s -> s.S.phase == S.ApplicationData /\ s.S.failure == None
                     | None -> False))
-  = ()
+  =
+  assert_norm (match S.step_many S.initial
+                       (controlled_handshake_events ch sh ee cert peer cv sf cf) with
+               | Some s -> s.S.phase == S.ApplicationData /\ s.S.failure == None
+               | None -> False)
 
 let lemma_application_data_send_stays_application (s:S.conn_state) (bytes:TLS13.Bytes.bytes)
   : Lemma (requires s.S.phase == S.ApplicationData)

@@ -7,6 +7,7 @@ open Pulse.Lib.Pervasives
 module H = TLS13.Handshake.Spec
 module S = TLS13.StateMachine
 module ST = TLS13.State
+module X = TLS13.X509.Spec
 
 ghost
 fn run_controlled_handshake
@@ -15,6 +16,7 @@ fn run_controlled_handshake
   (sh:H.server_hello)
   (ee:H.encrypted_extensions)
   (cert:H.certificate_msg)
+  (peer:X.peer_identity)
   (cv:H.certificate_verify)
   (sf:H.finished)
   (cf:H.finished)
@@ -39,14 +41,17 @@ fn run_controlled_handshake
   let s4 = S.with_phase s3 S.CertificateReceived;
   ST.advance st (S.RecvCertificate cert) s4;
 
-  let s5 = S.with_phase s4 S.CertificateVerified;
-  ST.advance st (S.RecvCertificateVerify cv) s5;
+  let s5 = S.with_validated_peer s4 peer;
+  ST.advance st (S.ValidateCertificate peer) s5;
 
-  let s6 = S.with_phase s5 S.ServerFinishedVerified;
-  ST.advance st (S.RecvServerFinished sf) s6;
+  let s6 = S.with_phase s5 S.CertificateVerified;
+  ST.advance st (S.RecvCertificateVerify cv) s6;
 
-  let s7 = S.with_phase s6 S.ApplicationData;
-  ST.advance st (S.SendClientFinished cf) s7;
+  let s7 = S.with_phase s6 S.ServerFinishedVerified;
+  ST.advance st (S.RecvServerFinished sf) s7;
+
+  let s8 = S.with_phase s7 S.ApplicationData;
+  ST.advance st (S.SendClientFinished cf) s8;
 
   ST.recall_snapshot st;
 }
