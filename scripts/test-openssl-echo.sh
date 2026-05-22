@@ -6,6 +6,7 @@ cd "$repo_root"
 
 scripts/generate-test-certs.sh test/certs >/dev/null
 make test/openssl_echo_server >/dev/null
+make test/test_clienthello_openssl_probe >/dev/null
 
 tmp_dir="$(mktemp -d test/openssl-echo.XXXXXX)"
 server_pid=""
@@ -66,6 +67,33 @@ run_case() {
   fi
 }
 
+run_probe() {
+  local port log
+  port="$(pick_port)"
+  log="$tmp_dir/clienthello-probe.log"
+
+  test/openssl_echo_server "$port" test/certs/leaf.pem test/certs/leaf.key >"$log" 2>&1 &
+  server_pid=$!
+
+  for _ in $(seq 1 50); do
+    if grep -q "^[0-9][0-9]*$" "$log" 2>/dev/null; then
+      break
+    fi
+    sleep 0.1
+  done
+
+  if ! test/test_clienthello_openssl_probe 127.0.0.1 "$port" >>"$log" 2>&1; then
+    echo "ClientHello/OpenSSL ServerHello probe failed" >&2
+    echo "server/probe log:" >&2
+    cat "$log" >&2
+    exit 1
+  fi
+
+  kill "$server_pid" 2>/dev/null || true
+  wait "$server_pid" 2>/dev/null || true
+  server_pid=""
+}
+
 short_payload="$tmp_dir/short.in"
 large_payload="$tmp_dir/large.in"
 printf 'agentic tls echo smoke' >"$short_payload"
@@ -78,6 +106,7 @@ with open(path, "wb") as f:
         f.write(pattern)
 PY
 
+run_probe
 run_case short "$short_payload"
 run_case large "$large_payload"
 

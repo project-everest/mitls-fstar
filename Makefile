@@ -130,6 +130,11 @@ test/openssl_echo_server: test/openssl_echo_server.c | check-deps
 	$(CC) -Wall -Wextra test/openssl_echo_server.c \
 	  -lssl -lcrypto -o $@
 
+test/test_clienthello_openssl_probe: c_stubs/tls13_wire_stubs.c c_stubs/tls13_wire_stubs.h c_stubs/tls13_io_stubs.c c_stubs/tls13_io_stubs.h test/test_clienthello_openssl_probe.c
+	$(CC) -Wall -Wextra -I c_stubs \
+	  c_stubs/tls13_wire_stubs.c c_stubs/tls13_io_stubs.c test/test_clienthello_openssl_probe.c \
+	  -o $@
+
 test-openssl-stubs: test/test_openssl_stubs test/certs/chain.pem test/certs/ca.pem test/certs/leaf.key
 	./test/test_openssl_stubs test/certs/ca.pem test/certs/chain.pem test/certs/leaf.key
 
@@ -188,5 +193,5 @@ test-extract-smoke: test/test_extract_smoke
 
 clean:
 	rm -rf $(CACHE_DIR) $(OUTPUT_DIR) $(EXTRACT_DIR)
-	rm -f test/test_hacl_stubs test/test_openssl_stubs test/test_wire_stubs test/test_record_stubs test/test_io_stubs test/test_extract_smoke test/openssl_echo_server
+	rm -f test/test_hacl_stubs test/test_openssl_stubs test/test_wire_stubs test/test_record_stubs test/test_io_stubs test/test_extract_smoke test/test_clienthello_openssl_probe test/openssl_echo_server
 	find src test -name '*.checked' -delete

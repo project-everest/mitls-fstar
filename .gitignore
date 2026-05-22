@@ -12,6 +12,7 @@ test/test_wire_stubs
 test/test_record_stubs
 test/test_io_stubs
 test/test_extract_smoke
+test/test_clienthello_openssl_probe
 test/openssl_echo_server
 test/openssl_echo_server.log
 test/openssl-echo.*
