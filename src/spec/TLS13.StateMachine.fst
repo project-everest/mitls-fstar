@@ -63,6 +63,9 @@ let initial : conn_state =
 let fail (s:conn_state) (e:T.tls_error) : conn_state =
   { s with phase = Failed; failure = Some e }
 
+let with_phase (s:conn_state) (p:phase) : conn_state =
+  { s with phase = p }
+
 let step (s:conn_state) (e:event) : option conn_state =
   match s.phase, e with
   | Start, SendClientHello _ ->
