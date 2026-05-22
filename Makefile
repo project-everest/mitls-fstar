@@ -6,6 +6,9 @@ KRML_EXE   ?= $(KRML_HOME)/krml
 CACHE_DIR   = _cache
 OUTPUT_DIR  = _output
 EXTRACT_DIR = _extract
+HACL_DIR    = third_party/hacl-star/dist/gcc-compatible
+HACL_KI     = third_party/hacl-star/dist/karamel/include
+HACL_KL     = third_party/hacl-star/dist/karamel/krmllib/dist/minimal
 
 INCLUDES = \
   --include src/spec \
@@ -44,7 +47,7 @@ IMPL_FILES = \
 
 ALL_FILES = $(SPEC_FILES) $(IMPL_FILES)
 
-.PHONY: all verify check-c-stubs check-toolchain check-deps clean
+.PHONY: all verify check-c-stubs test-hacl-stubs check-toolchain check-deps clean
 
 all: verify
 
@@ -71,8 +74,32 @@ verify: check-deps check-toolchain $(CACHE_DIR) $(OUTPUT_DIR)
 	@echo "All F* modules verified"
 
 check-c-stubs:
-	$(CC) -fsyntax-only -Wall -Wextra -I c_stubs c_stubs/*.c
+	$(CC) -fsyntax-only -Wall -Wextra -Wno-deprecated-declarations \
+	  -I c_stubs -I $(HACL_DIR) -I $(HACL_DIR)/internal -I $(HACL_KI) -I $(HACL_KL) \
+	  c_stubs/*.c
+
+HACL_STUB_TEST_SOURCES = \
+  c_stubs/tls13_hacl_stubs.c \
+  test/test_hacl_stubs.c \
+  $(HACL_DIR)/Hacl_Hash_SHA2.c \
+  $(HACL_DIR)/Hacl_HMAC.c \
+  $(HACL_DIR)/Hacl_HKDF.c \
+  $(HACL_DIR)/Hacl_Curve25519_51.c \
+  $(HACL_DIR)/Hacl_AEAD_Chacha20Poly1305.c \
+  $(HACL_DIR)/Hacl_Chacha20.c \
+  $(HACL_DIR)/Hacl_MAC_Poly1305.c \
+  $(HACL_DIR)/Lib_RandomBuffer_System.c
+
+test/test_hacl_stubs: $(HACL_STUB_TEST_SOURCES) c_stubs/tls13_hacl_stubs.h | check-deps
+	$(CC) -Wall -Wextra -Wno-deprecated-declarations \
+	  -ffunction-sections -fdata-sections \
+	  -I c_stubs -I $(HACL_DIR) -I $(HACL_DIR)/internal -I $(HACL_KI) -I $(HACL_KL) \
+	  $(HACL_STUB_TEST_SOURCES) -Wl,--gc-sections -o $@
+
+test-hacl-stubs: test/test_hacl_stubs
+	./test/test_hacl_stubs
 
 clean:
 	rm -rf $(CACHE_DIR) $(OUTPUT_DIR) $(EXTRACT_DIR)
+	rm -f test/test_hacl_stubs
 	find src test -name '*.checked' -delete
