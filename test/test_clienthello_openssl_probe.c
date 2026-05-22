@@ -56,7 +56,11 @@ static int derive_server_handshake_keys(
     const uint8_t *server_hello,
     size_t server_hello_len,
     const uint8_t server_key_share[32],
+    uint8_t handshake_secret[32],
+    uint8_t client_handshake_traffic_secret[32],
     uint8_t server_handshake_traffic_secret[32],
+    uint8_t client_key[32],
+    uint8_t client_iv[12],
     uint8_t server_key[32],
     uint8_t server_iv[12]) {
   static const uint8_t client_private_key[32] = {
@@ -66,6 +70,8 @@ static int derive_server_handshake_keys(
       0xcb, 0x63, 0x45, 0x40, 0xe7, 0xea, 0x50, 0x05};
   static const uint8_t zero_secret[32] = {0};
   static const uint8_t label_derived[] = {'d', 'e', 'r', 'i', 'v', 'e', 'd'};
+  static const uint8_t label_c_hs_traffic[] = {
+      'c', ' ', 'h', 's', ' ', 't', 'r', 'a', 'f', 'f', 'i', 'c'};
   static const uint8_t label_s_hs_traffic[] = {
       's', ' ', 'h', 's', ' ', 't', 'r', 'a', 'f', 'f', 'i', 'c'};
   static const uint8_t label_key[] = {'k', 'e', 'y'};
@@ -75,7 +81,6 @@ static int derive_server_handshake_keys(
   uint8_t early_secret[32];
   uint8_t derived_secret[32];
   uint8_t shared_secret[32];
-  uint8_t handshake_secret[32];
   uint8_t transcript[1024];
   uint8_t transcript_hash[32];
 
@@ -108,6 +113,14 @@ static int derive_server_handshake_keys(
   memcpy(transcript + client_hello_len, server_hello, server_hello_len);
   if (!tls13_hacl_sha256(transcript_hash, transcript, client_hello_len + server_hello_len) ||
       !tls13_hacl_hkdf_expand_label_sha256(
+          client_handshake_traffic_secret,
+          32,
+          handshake_secret,
+          label_c_hs_traffic,
+          sizeof label_c_hs_traffic,
+          transcript_hash,
+          sizeof transcript_hash) ||
+      !tls13_hacl_hkdf_expand_label_sha256(
           server_handshake_traffic_secret,
           32,
           handshake_secret,
@@ -115,6 +128,22 @@ static int derive_server_handshake_keys(
           sizeof label_s_hs_traffic,
           transcript_hash,
           sizeof transcript_hash) ||
+      !tls13_hacl_hkdf_expand_label_sha256(
+          client_key,
+          32,
+          client_handshake_traffic_secret,
+          label_key,
+          sizeof label_key,
+          NULL,
+          0) ||
+      !tls13_hacl_hkdf_expand_label_sha256(
+          client_iv,
+          12,
+          client_handshake_traffic_secret,
+          label_iv,
+          sizeof label_iv,
+          NULL,
+          0) ||
       !tls13_hacl_hkdf_expand_label_sha256(
           server_key,
           32,
@@ -136,6 +165,30 @@ static int derive_server_handshake_keys(
   return 0;
 }
 
+static int compute_transcript_hash(
+    const uint8_t *client_hello,
+    size_t client_hello_len,
+    const uint8_t *server_hello,
+    size_t server_hello_len,
+    const uint8_t *server_handshake_messages,
+    size_t server_handshake_len,
+    uint8_t transcript_hash[32]) {
+  uint8_t transcript[32768];
+  if (client_hello_len > sizeof transcript ||
+      server_hello_len > sizeof transcript - client_hello_len ||
+      server_handshake_len > sizeof transcript - client_hello_len - server_hello_len) {
+    return -1;
+  }
+  size_t pos = 0;
+  memcpy(transcript + pos, client_hello, client_hello_len);
+  pos += client_hello_len;
+  memcpy(transcript + pos, server_hello, server_hello_len);
+  pos += server_hello_len;
+  memcpy(transcript + pos, server_handshake_messages, server_handshake_len);
+  pos += server_handshake_len;
+  return tls13_hacl_sha256(transcript_hash, transcript, pos) ? 0 : -1;
+}
+
 static int verify_server_finished(
     const uint8_t *client_hello,
     size_t client_hello_len,
@@ -145,30 +198,123 @@ static int verify_server_finished(
     size_t server_handshake_before_finished_len,
     const uint8_t finished_verify_data[32],
     const uint8_t server_handshake_traffic_secret[32]) {
-  uint8_t transcript[32768];
   uint8_t transcript_hash[32];
   uint8_t expected[32];
 
-  if (client_hello_len > sizeof transcript ||
-      server_hello_len > sizeof transcript - client_hello_len ||
-      server_handshake_before_finished_len >
-          sizeof transcript - client_hello_len - server_hello_len) {
+  if (compute_transcript_hash(
+          client_hello,
+          client_hello_len,
+          server_hello,
+          server_hello_len,
+          server_handshake_messages,
+          server_handshake_before_finished_len,
+          transcript_hash) != 0) {
     return -1;
   }
-  size_t pos = 0;
-  memcpy(transcript + pos, client_hello, client_hello_len);
-  pos += client_hello_len;
-  memcpy(transcript + pos, server_hello, server_hello_len);
-  pos += server_hello_len;
-  memcpy(transcript + pos, server_handshake_messages, server_handshake_before_finished_len);
-  pos += server_handshake_before_finished_len;
-
-  if (!tls13_hacl_sha256(transcript_hash, transcript, pos) ||
-      !tls13_hacl_finished_verify_data_sha256(
+  if (!tls13_hacl_finished_verify_data_sha256(
           expected, server_handshake_traffic_secret, transcript_hash)) {
     return -1;
   }
   return memcmp(expected, finished_verify_data, 32) == 0 ? 0 : -1;
+}
+
+static int derive_application_keys(
+    const uint8_t handshake_secret[32],
+    const uint8_t transcript_hash[32],
+    uint8_t client_key[32],
+    uint8_t client_iv[12],
+    uint8_t server_key[32],
+    uint8_t server_iv[12]) {
+  static const uint8_t zero_secret[32] = {0};
+  static const uint8_t label_derived[] = {'d', 'e', 'r', 'i', 'v', 'e', 'd'};
+  static const uint8_t label_c_ap_traffic[] = {
+      'c', ' ', 'a', 'p', ' ', 't', 'r', 'a', 'f', 'f', 'i', 'c'};
+  static const uint8_t label_s_ap_traffic[] = {
+      's', ' ', 'a', 'p', ' ', 't', 'r', 'a', 'f', 'f', 'i', 'c'};
+  static const uint8_t label_key[] = {'k', 'e', 'y'};
+  static const uint8_t label_iv[] = {'i', 'v'};
+  uint8_t empty_hash[32];
+  uint8_t derived_secret[32];
+  uint8_t master_secret[32];
+  uint8_t client_application_traffic_secret[32];
+  uint8_t server_application_traffic_secret[32];
+
+  if (!tls13_hacl_sha256(empty_hash, NULL, 0) ||
+      !tls13_hacl_hkdf_expand_label_sha256(
+          derived_secret,
+          sizeof derived_secret,
+          handshake_secret,
+          label_derived,
+          sizeof label_derived,
+          empty_hash,
+          sizeof empty_hash) ||
+      !tls13_hacl_hkdf_extract_sha256(
+          master_secret, derived_secret, sizeof derived_secret, zero_secret, sizeof zero_secret) ||
+      !tls13_hacl_hkdf_expand_label_sha256(
+          client_application_traffic_secret,
+          sizeof client_application_traffic_secret,
+          master_secret,
+          label_c_ap_traffic,
+          sizeof label_c_ap_traffic,
+          transcript_hash,
+          32) ||
+      !tls13_hacl_hkdf_expand_label_sha256(
+          server_application_traffic_secret,
+          sizeof server_application_traffic_secret,
+          master_secret,
+          label_s_ap_traffic,
+          sizeof label_s_ap_traffic,
+          transcript_hash,
+          32) ||
+      !tls13_hacl_hkdf_expand_label_sha256(
+          client_key, 32, client_application_traffic_secret, label_key, sizeof label_key, NULL, 0) ||
+      !tls13_hacl_hkdf_expand_label_sha256(
+          client_iv, 12, client_application_traffic_secret, label_iv, sizeof label_iv, NULL, 0) ||
+      !tls13_hacl_hkdf_expand_label_sha256(
+          server_key, 32, server_application_traffic_secret, label_key, sizeof label_key, NULL, 0) ||
+      !tls13_hacl_hkdf_expand_label_sha256(
+          server_iv, 12, server_application_traffic_secret, label_iv, sizeof label_iv, NULL, 0)) {
+    return -1;
+  }
+  return 0;
+}
+
+static int seal_record(
+    const uint8_t key[32],
+    const uint8_t iv[12],
+    uint64_t sequence_number,
+    uint8_t inner_content_type,
+    const uint8_t *plaintext,
+    size_t plaintext_len,
+    uint8_t *record,
+    size_t record_capacity,
+    size_t *record_len) {
+  uint8_t inner_plaintext[20000];
+  uint8_t nonce[12];
+  if (plaintext_len > sizeof inner_plaintext - 1u ||
+      plaintext_len > UINT16_MAX - 17u ||
+      record_capacity < TLS13_WIRE_RECORD_HEADER_LEN + plaintext_len + 1u + 16u) {
+    return -1;
+  }
+  memcpy(inner_plaintext, plaintext, plaintext_len);
+  inner_plaintext[plaintext_len] = inner_content_type;
+  size_t inner_plaintext_len = plaintext_len + 1u;
+  size_t ciphertext_len = inner_plaintext_len + 16u;
+  if (!tls13_wire_serialize_record_header(record, 23, 0x0303, (uint16_t)ciphertext_len) ||
+      !tls13_record_nonce(nonce, iv, sequence_number) ||
+      !tls13_hacl_chacha20_poly1305_seal_combined(
+          record + TLS13_WIRE_RECORD_HEADER_LEN,
+          ciphertext_len,
+          key,
+          nonce,
+          record,
+          TLS13_WIRE_RECORD_HEADER_LEN,
+          inner_plaintext,
+          inner_plaintext_len)) {
+    return -1;
+  }
+  *record_len = TLS13_WIRE_RECORD_HEADER_LEN + ciphertext_len;
+  return 0;
 }
 
 int main(int argc, char **argv) {
@@ -259,19 +405,27 @@ int main(int argc, char **argv) {
   }
   size_t server_hello_len = fragment_len;
 
+  uint8_t handshake_secret[32];
+  uint8_t client_handshake_traffic_secret[32];
   uint8_t server_handshake_traffic_secret[32];
-  uint8_t server_key[32];
-  uint8_t server_iv[12];
+  uint8_t client_handshake_key[32];
+  uint8_t client_handshake_iv[12];
+  uint8_t server_handshake_key[32];
+  uint8_t server_handshake_iv[12];
   if (derive_server_handshake_keys(
           client_hello,
           client_hello_len,
           server_hello_fragment,
           server_hello_len,
           server_key_share,
+          handshake_secret,
+          client_handshake_traffic_secret,
           server_handshake_traffic_secret,
-          server_key,
-          server_iv) != 0) {
-    fprintf(stderr, "failed to derive server handshake traffic keys\n");
+          client_handshake_key,
+          client_handshake_iv,
+          server_handshake_key,
+          server_handshake_iv) != 0) {
+    fprintf(stderr, "failed to derive handshake traffic keys\n");
     goto done;
   }
 
@@ -279,6 +433,7 @@ int main(int argc, char **argv) {
   size_t server_handshake_len = 0;
   size_t parsed_handshake_len = 0;
   size_t server_handshake_before_finished_len = 0;
+  size_t server_handshake_through_finished_len = 0;
   uint8_t server_finished_verify_data[32];
   bool saw_finished = false;
   uint64_t server_sequence_number = 0;
@@ -306,11 +461,11 @@ int main(int argc, char **argv) {
     uint8_t nonce[12];
     uint8_t inner_plaintext[20000];
     size_t inner_plaintext_len = (size_t)fragment_len - 16u;
-    if (!tls13_record_nonce(nonce, server_iv, server_sequence_number++) ||
+    if (!tls13_record_nonce(nonce, server_handshake_iv, server_sequence_number++) ||
         !tls13_hacl_chacha20_poly1305_open_combined(
             inner_plaintext,
             inner_plaintext_len,
-            server_key,
+            server_handshake_key,
             nonce,
             encrypted_header,
             TLS13_WIRE_RECORD_HEADER_LEN,
@@ -357,6 +512,7 @@ int main(int argc, char **argv) {
           goto done;
         }
         server_handshake_before_finished_len = parsed_handshake_len;
+        server_handshake_through_finished_len = parsed_handshake_len + message_len;
         memcpy(
             server_finished_verify_data,
             server_handshake_messages + parsed_handshake_len + TLS13_WIRE_HANDSHAKE_HEADER_LEN,
@@ -382,7 +538,135 @@ int main(int argc, char **argv) {
     goto done;
   }
 
-  printf("ClientHello/OpenSSL server Finished probe passed\n");
+  uint8_t transcript_hash_through_server_finished[32];
+  if (compute_transcript_hash(
+          client_hello,
+          client_hello_len,
+          server_hello_fragment,
+          server_hello_len,
+          server_handshake_messages,
+          server_handshake_through_finished_len,
+          transcript_hash_through_server_finished) != 0) {
+    fprintf(stderr, "failed to hash transcript through server Finished\n");
+    goto done;
+  }
+
+  uint8_t client_finished[36] = {20, 0, 0, 32};
+  if (!tls13_hacl_finished_verify_data_sha256(
+          client_finished + TLS13_WIRE_HANDSHAKE_HEADER_LEN,
+          client_handshake_traffic_secret,
+          transcript_hash_through_server_finished)) {
+    fprintf(stderr, "failed to compute client Finished\n");
+    goto done;
+  }
+
+  uint8_t client_record[20000];
+  size_t client_record_len = 0;
+  if (seal_record(
+          client_handshake_key,
+          client_handshake_iv,
+          0,
+          22,
+          client_finished,
+          sizeof client_finished,
+          client_record,
+          sizeof client_record,
+          &client_record_len) != 0 ||
+      write_all(fd, client_record, client_record_len) != 0) {
+    fprintf(stderr, "failed to send client Finished\n");
+    goto done;
+  }
+
+  uint8_t client_application_key[32];
+  uint8_t client_application_iv[12];
+  uint8_t server_application_key[32];
+  uint8_t server_application_iv[12];
+  if (derive_application_keys(
+          handshake_secret,
+          transcript_hash_through_server_finished,
+          client_application_key,
+          client_application_iv,
+          server_application_key,
+          server_application_iv) != 0) {
+    fprintf(stderr, "failed to derive application traffic keys\n");
+    goto done;
+  }
+
+  static const uint8_t echo_payload[] = {
+      'a', 'g', 'e', 'n', 't', 'i', 'c', ' ', 't', 'l', 's', ' ', 'p', 'r', 'o', 'b', 'e'};
+  if (seal_record(
+          client_application_key,
+          client_application_iv,
+          0,
+          23,
+          echo_payload,
+          sizeof echo_payload,
+          client_record,
+          sizeof client_record,
+          &client_record_len) != 0 ||
+      write_all(fd, client_record, client_record_len) != 0) {
+    fprintf(stderr, "failed to send application-data probe record\n");
+    goto done;
+  }
+
+  bool saw_echo = false;
+  uint64_t server_application_sequence_number = 0;
+  for (unsigned attempts = 0; attempts < 8 && !saw_echo; ++attempts) {
+    if (read_record(
+            fd,
+            encrypted_header,
+            encrypted_fragment,
+            sizeof encrypted_fragment,
+            &content_type,
+            &legacy_version,
+            &fragment_len) != 0 ||
+        content_type != 23 ||
+        fragment_len < 16) {
+      fprintf(stderr, "failed to read application-data response record\n");
+      goto done;
+    }
+
+    uint8_t nonce[12];
+    uint8_t inner_plaintext[20000];
+    size_t inner_plaintext_len = (size_t)fragment_len - 16u;
+    if (!tls13_record_nonce(nonce, server_application_iv, server_application_sequence_number++) ||
+        !tls13_hacl_chacha20_poly1305_open_combined(
+            inner_plaintext,
+            inner_plaintext_len,
+            server_application_key,
+            nonce,
+            encrypted_header,
+            TLS13_WIRE_RECORD_HEADER_LEN,
+            encrypted_fragment,
+            fragment_len)) {
+      fprintf(stderr, "failed to decrypt application-data response record\n");
+      goto done;
+    }
+
+    uint8_t inner_content_type = 0;
+    size_t response_len = 0;
+    if (!tls13_wire_decode_inner_plaintext(
+            inner_plaintext, inner_plaintext_len, &inner_content_type, &response_len)) {
+      fprintf(stderr, "failed to decode application-data response record\n");
+      goto done;
+    }
+    if (inner_content_type == 22) {
+      continue;
+    }
+    if (inner_content_type != 23 ||
+        response_len != sizeof echo_payload ||
+        memcmp(inner_plaintext, echo_payload, sizeof echo_payload) != 0) {
+      fprintf(stderr, "OpenSSL echo application data mismatch\n");
+      goto done;
+    }
+    saw_echo = true;
+  }
+  if (!saw_echo) {
+    fprintf(stderr, "OpenSSL echo application data was not received\n");
+    goto done;
+  }
+
+  printf("ClientHello/OpenSSL TLS echo probe passed\n");
   rc = 0;
 
 done:
