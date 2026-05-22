@@ -186,3 +186,49 @@ bool tls13_hacl_chacha20_poly1305_open(
              (uint8_t *)nonce,
              (uint8_t *)tag) == 0;
 }
+
+bool tls13_hacl_chacha20_poly1305_seal_combined(
+    uint8_t *ciphertext_and_tag,
+    size_t ciphertext_and_tag_len,
+    const uint8_t key[32],
+    const uint8_t nonce[12],
+    const uint8_t *aad,
+    size_t aad_len,
+    const uint8_t *plaintext,
+    size_t plaintext_len) {
+  if (plaintext_len > SIZE_MAX - 16 || ciphertext_and_tag_len != plaintext_len + 16) {
+    return false;
+  }
+  return tls13_hacl_chacha20_poly1305_seal(
+      ciphertext_and_tag,
+      ciphertext_and_tag + plaintext_len,
+      key,
+      nonce,
+      aad,
+      aad_len,
+      plaintext,
+      plaintext_len);
+}
+
+bool tls13_hacl_chacha20_poly1305_open_combined(
+    uint8_t *plaintext,
+    size_t plaintext_len,
+    const uint8_t key[32],
+    const uint8_t nonce[12],
+    const uint8_t *aad,
+    size_t aad_len,
+    const uint8_t *ciphertext_and_tag,
+    size_t ciphertext_and_tag_len) {
+  if (plaintext_len > SIZE_MAX - 16 || ciphertext_and_tag_len != plaintext_len + 16) {
+    return false;
+  }
+  return tls13_hacl_chacha20_poly1305_open(
+      plaintext,
+      key,
+      nonce,
+      aad,
+      aad_len,
+      ciphertext_and_tag,
+      plaintext_len,
+      ciphertext_and_tag + plaintext_len);
+}

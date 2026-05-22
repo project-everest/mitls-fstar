@@ -204,6 +204,35 @@ static int test_chacha20_poly1305_roundtrip(void) {
     fprintf(stderr, "chacha20-poly1305 accepted a tampered tag\n");
     return 1;
   }
+
+  uint8_t combined[sizeof plaintext + 16];
+  memset(decrypted, 0, sizeof decrypted);
+  if (!tls13_hacl_chacha20_poly1305_seal_combined(
+          combined, sizeof combined, key, nonce, aad, sizeof aad, plaintext, sizeof plaintext)) {
+    fprintf(stderr, "combined chacha20-poly1305 seal failed\n");
+    return 1;
+  }
+  if (!tls13_hacl_chacha20_poly1305_open_combined(
+          decrypted, sizeof decrypted, key, nonce, aad, sizeof aad, combined, sizeof combined)) {
+    fprintf(stderr, "combined chacha20-poly1305 open failed\n");
+    return 1;
+  }
+  if (expect_bytes("combined chacha20-poly1305 roundtrip", decrypted, plaintext, sizeof plaintext) != 0) {
+    return 1;
+  }
+  combined[sizeof combined - 1] ^= 1u;
+  if (tls13_hacl_chacha20_poly1305_open_combined(
+          decrypted, sizeof decrypted, key, nonce, aad, sizeof aad, combined, sizeof combined)) {
+    fprintf(stderr, "combined chacha20-poly1305 accepted a tampered tag\n");
+    return 1;
+  }
+  if (tls13_hacl_chacha20_poly1305_seal_combined(
+          combined, sizeof combined - 1, key, nonce, aad, sizeof aad, plaintext, sizeof plaintext) ||
+      tls13_hacl_chacha20_poly1305_open_combined(
+          decrypted, sizeof decrypted, key, nonce, aad, sizeof aad, combined, sizeof combined - 1)) {
+    fprintf(stderr, "combined chacha20-poly1305 accepted a bad length\n");
+    return 1;
+  }
   return 0;
 }
 
