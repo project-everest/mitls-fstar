@@ -22,3 +22,28 @@ fn build_server_certificate_verify_input
           pts_to transcript_hash 'hash_bytes **
           pts_to out out_bytes **
           pure (B.length out_bytes == 130)
+
+fn parse_handshake_header
+  (input: array U8.t)
+  (input_len: SZ.t)
+  (msg_type_out: array U8.t)
+  (msg_type_out_len: SZ.t)
+  (body_len_out: array U8.t)
+  (body_len_out_len: SZ.t)
+  requires pts_to input 'input_bytes **
+           pts_to msg_type_out 'old_msg_type **
+           pts_to body_len_out 'old_body_len **
+           pure (B.length 'input_bytes == SZ.v input_len /\
+                 B.length 'old_msg_type == SZ.v msg_type_out_len /\
+                 B.length 'old_body_len == SZ.v body_len_out_len /\
+                 SZ.v msg_type_out_len == 1 /\
+                 SZ.v body_len_out_len == 3)
+  returns ok: bool
+  ensures exists* msg_type_bytes body_len_bytes.
+          pts_to input 'input_bytes **
+          pts_to msg_type_out msg_type_bytes **
+          pts_to body_len_out body_len_bytes **
+          pure (B.length msg_type_bytes == 1 /\
+                B.length body_len_bytes == 3 /\
+                (ok ==> SZ.v input_len >= 4) /\
+                (not ok ==> SZ.v input_len < 4))

@@ -708,6 +708,17 @@ bool TLS13_Handshake_recv_encrypted_extensions(
     c->server_handshake_len += handshake_plaintext_len;
 
     while (c->server_handshake_len - parsed_handshake_len >= TLS13_WIRE_HANDSHAKE_HEADER_LEN) {
+      uint8_t handshake_type_buf[1] = {0};
+      uint8_t handshake_body_len_buf[3] = {0};
+#ifdef TLS13_CONNECTION_PROBE_USE_EXTRACTED_HANDSHAKE_FRAMING
+      if (!TLS13_Handshake_Framing_parse_handshake_header(
+              c->server_handshake_messages + parsed_handshake_len,
+              c->server_handshake_len - parsed_handshake_len,
+              handshake_type_buf,
+              sizeof handshake_type_buf,
+              handshake_body_len_buf,
+              sizeof handshake_body_len_buf)) {
+#else
       uint8_t handshake_type = 0;
       uint32_t handshake_body_len = 0;
       if (!tls13_wire_parse_handshake_header(
@@ -715,10 +726,18 @@ bool TLS13_Handshake_recv_encrypted_extensions(
               c->server_handshake_len - parsed_handshake_len,
               &handshake_type,
               &handshake_body_len)) {
+#endif
         fprintf(stderr, "failed to parse decrypted handshake header\n");
         fail_handshake(c);
         return false;
       }
+#ifdef TLS13_CONNECTION_PROBE_USE_EXTRACTED_HANDSHAKE_FRAMING
+      uint8_t handshake_type = handshake_type_buf[0];
+      uint32_t handshake_body_len =
+          ((uint32_t)handshake_body_len_buf[0] << 16) |
+          ((uint32_t)handshake_body_len_buf[1] << 8) |
+          (uint32_t)handshake_body_len_buf[2];
+#endif
       size_t message_len = TLS13_WIRE_HANDSHAKE_HEADER_LEN + (size_t)handshake_body_len;
       if (message_len > c->server_handshake_len - parsed_handshake_len) {
         break;
