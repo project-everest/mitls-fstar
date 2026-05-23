@@ -46,7 +46,6 @@ struct TLS13_Connection_connection_s {
   bool application_ready;
   tls13_peer_identity *peer;
   TLS13_Record_record_state server_handshake_record_state;
-  bool server_handshake_record_state_initialized;
   TLS13_Handshake_FlightState_flight_state server_handshake_flight_state;
   bool server_handshake_flight_state_initialized;
 };
@@ -356,8 +355,7 @@ static bool read_next_encrypted_handshake_record(TLS13_Connection_connection c) 
 
   uint8_t inner_plaintext[20000];
   size_t inner_plaintext_len = (size_t)fragment_len - 16u;
-  if (!c->server_handshake_record_state_initialized ||
-      !TLS13_Record_open_application(
+  if (!TLS13_Record_open_application(
           c->server_handshake_record_state,
           encrypted_header,
           TLS13_WIRE_RECORD_HEADER_LEN,
@@ -1043,7 +1041,6 @@ TLS13_Connection_connection tls13_connection_probe_new(
   c->ca_pem_path = ca_pem_path;
   c->fd = -1;
   c->server_handshake_record_state = TLS13_Record_record_state_new();
-  c->server_handshake_record_state_initialized = true;
   c->server_handshake_flight_state = TLS13_Handshake_FlightState_flight_state_new();
   c->server_handshake_flight_state_initialized = true;
   return c;
@@ -1056,9 +1053,7 @@ void tls13_connection_probe_free(TLS13_Connection_connection c) {
   if (c->fd >= 0) {
     tls13_io_close_fd(c->fd);
   }
-  if (c->server_handshake_record_state_initialized) {
-    TLS13_Record_record_state_free(c->server_handshake_record_state, NULL);
-  }
+  TLS13_Record_record_state_free(c->server_handshake_record_state, NULL);
   if (c->server_handshake_flight_state_initialized) {
     TLS13_Handshake_FlightState_flight_state_free(c->server_handshake_flight_state);
   }
@@ -1353,10 +1348,6 @@ void TLS13_Handshake_ByteDriver_External_reset_encrypted_handshake(
     c->server_handshake_flight_state_initialized = true;
   }
   TLS13_Handshake_FlightState_reset(c->server_handshake_flight_state);
-  if (!c->server_handshake_record_state_initialized) {
-    c->server_handshake_record_state = TLS13_Record_record_state_new();
-    c->server_handshake_record_state_initialized = true;
-  }
   uint8_t server_handshake_key[32] = {0};
   uint8_t server_handshake_iv[12] = {0};
   TLS13_Handshake_FlightState_copy_server_handshake_key_iv(
