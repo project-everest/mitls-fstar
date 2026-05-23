@@ -103,3 +103,43 @@ fn serialize_application_data_header
   out.(3sz) <- Cast.uint16_to_uint8 (U16.shift_right fragment_len 8ul);
   out.(4sz) <- Cast.uint16_to_uint8 fragment_len;
 }
+
+fn parse_record_header
+  (header: array U8.t)
+  (header_len: SZ.t)
+  (content_type_out: array U8.t)
+  (content_type_out_len: SZ.t)
+  (fragment_len_out: array U8.t)
+  (fragment_len_out_len: SZ.t)
+  requires pts_to header 'header_bytes **
+           pts_to content_type_out 'old_content_type **
+           pts_to fragment_len_out 'old_fragment_len **
+           pure (B.length 'header_bytes == SZ.v header_len /\
+                 B.length 'old_content_type == SZ.v content_type_out_len /\
+                 B.length 'old_fragment_len == SZ.v fragment_len_out_len /\
+                 SZ.v header_len == 5 /\
+                 SZ.v content_type_out_len == 1 /\
+                 SZ.v fragment_len_out_len == 2)
+  returns ok: bool
+  ensures exists* content_type_bytes fragment_len_bytes.
+          pts_to header 'header_bytes **
+          pts_to content_type_out content_type_bytes **
+          pts_to fragment_len_out fragment_len_bytes **
+          pure (B.length content_type_bytes == 1 /\
+                B.length fragment_len_bytes == 2)
+{
+  pts_to_len header;
+  pts_to_len content_type_out;
+  pts_to_len fragment_len_out;
+  let ct = header.(0sz);
+  let v0 = header.(1sz);
+  let v1 = header.(2sz);
+  let l0 = header.(3sz);
+  let l1 = header.(4sz);
+  content_type_out.(0sz) <- ct;
+  fragment_len_out.(0sz) <- l0;
+  fragment_len_out.(1sz) <- l1;
+  (ct = 0x14uy || ct = 0x15uy || ct = 0x16uy || ct = 0x17uy) &&
+  v0 = 0x03uy &&
+  (v1 = 0x01uy || v1 = 0x03uy)
+}

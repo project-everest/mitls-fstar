@@ -142,11 +142,31 @@ static int read_record(
   if (read_exact_fd(fd, header, TLS13_WIRE_RECORD_HEADER_LEN) != 0) {
     return -1;
   }
+#ifdef TLS13_CONNECTION_PROBE_USE_EXTRACTED_CONNECTION_WRAPPER
+  uint8_t content_type_buf[1] = {0};
+  uint8_t fragment_len_buf[2] = {0};
+  if (!TLS13_Record_Framing_parse_record_header(
+          header,
+          TLS13_WIRE_RECORD_HEADER_LEN,
+          content_type_buf,
+          sizeof content_type_buf,
+          fragment_len_buf,
+          sizeof fragment_len_buf)) {
+    return -1;
+  }
+  *content_type = content_type_buf[0];
+  *legacy_version = 0x0303;
+  *fragment_len = ((uint16_t)fragment_len_buf[0] << 8) | fragment_len_buf[1];
+  if (*fragment_len > fragment_capacity) {
+    return -1;
+  }
+#else
   if (!tls13_wire_parse_record_header(
           header, TLS13_WIRE_RECORD_HEADER_LEN, content_type, legacy_version, fragment_len) ||
       *fragment_len > fragment_capacity) {
     return -1;
   }
+#endif
   return read_exact_fd(fd, fragment, *fragment_len);
 }
 

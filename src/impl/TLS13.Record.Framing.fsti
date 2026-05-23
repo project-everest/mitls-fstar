@@ -65,3 +65,27 @@ fn serialize_application_data_header
   ensures exists* header_bytes.
           pts_to out header_bytes **
           pure (B.length header_bytes == 5)
+
+fn parse_record_header
+  (header: array U8.t)
+  (header_len: SZ.t)
+  (content_type_out: array U8.t)
+  (content_type_out_len: SZ.t)
+  (fragment_len_out: array U8.t)
+  (fragment_len_out_len: SZ.t)
+  requires pts_to header 'header_bytes **
+           pts_to content_type_out 'old_content_type **
+           pts_to fragment_len_out 'old_fragment_len **
+           pure (B.length 'header_bytes == SZ.v header_len /\
+                 B.length 'old_content_type == SZ.v content_type_out_len /\
+                 B.length 'old_fragment_len == SZ.v fragment_len_out_len /\
+                 SZ.v header_len == 5 /\
+                 SZ.v content_type_out_len == 1 /\
+                 SZ.v fragment_len_out_len == 2)
+  returns ok: bool
+  ensures exists* content_type_bytes fragment_len_bytes.
+          pts_to header 'header_bytes **
+          pts_to content_type_out content_type_bytes **
+          pts_to fragment_len_out fragment_len_bytes **
+          pure (B.length content_type_bytes == 1 /\
+                B.length fragment_len_bytes == 2)
