@@ -92,6 +92,125 @@ fn build_server_certificate_verify_input
   assert (pure (Seq.length out_s == 130));
 }
 
+fn serialize_client_hello_record_header
+  (out: array U8.t)
+  (out_len: SZ.t)
+  requires pts_to out 'old_bytes **
+           pure (B.length 'old_bytes == SZ.v out_len /\
+                 SZ.v out_len == 5)
+  ensures exists* out_bytes.
+          pts_to out out_bytes **
+          pure (B.length out_bytes == 5)
+{
+  pts_to_len out;
+  out.(0sz) <- 0x16uy;
+  out.(1sz) <- 0x03uy;
+  out.(2sz) <- 0x01uy;
+  out.(3sz) <- 0uy;
+  out.(4sz) <- 0x82uy;
+}
+
+fn build_supported_client_hello_localhost
+  (random: array U8.t)
+  (key_share: array U8.t)
+  (out: array U8.t)
+  (out_len: SZ.t)
+  requires pts_to random 'random_bytes **
+           pts_to key_share 'key_share_bytes **
+           pts_to out 'old_bytes **
+           pure (B.length 'random_bytes == 32 /\
+                 B.length 'key_share_bytes == 32 /\
+                 B.length 'old_bytes == SZ.v out_len)
+  returns ok: bool
+  ensures exists* out_bytes.
+          pts_to random 'random_bytes **
+          pts_to key_share 'key_share_bytes **
+          pts_to out out_bytes **
+          pure (B.length out_bytes == SZ.v out_len /\
+                (ok ==> SZ.v out_len >= 130))
+{
+  pts_to_len random;
+  pts_to_len key_share;
+  pts_to_len out;
+  if SZ.(out_len <^ 130sz) {
+    false
+  } else {
+    out.(0sz) <- 0x01uy; out.(1sz) <- 0uy; out.(2sz) <- 0uy; out.(3sz) <- 0x7euy;
+    out.(4sz) <- 0x03uy; out.(5sz) <- 0x03uy;
+    out.(6sz) <- random.(0sz); out.(7sz) <- random.(1sz);
+    out.(8sz) <- random.(2sz); out.(9sz) <- random.(3sz);
+    out.(10sz) <- random.(4sz); out.(11sz) <- random.(5sz);
+    out.(12sz) <- random.(6sz); out.(13sz) <- random.(7sz);
+    out.(14sz) <- random.(8sz); out.(15sz) <- random.(9sz);
+    with out_s. assert (pts_to out out_s);
+    assert (pure (Seq.length out_s == SZ.v out_len));
+    out.(16sz) <- random.(10sz); out.(17sz) <- random.(11sz);
+    out.(18sz) <- random.(12sz); out.(19sz) <- random.(13sz);
+    out.(20sz) <- random.(14sz); out.(21sz) <- random.(15sz);
+    out.(22sz) <- random.(16sz); out.(23sz) <- random.(17sz);
+    out.(24sz) <- random.(18sz); out.(25sz) <- random.(19sz);
+    out.(26sz) <- random.(20sz); out.(27sz) <- random.(21sz);
+    out.(28sz) <- random.(22sz); out.(29sz) <- random.(23sz);
+    out.(30sz) <- random.(24sz); out.(31sz) <- random.(25sz);
+    with out_s. assert (pts_to out out_s);
+    assert (pure (Seq.length out_s == SZ.v out_len));
+    out.(32sz) <- random.(26sz); out.(33sz) <- random.(27sz);
+    out.(34sz) <- random.(28sz); out.(35sz) <- random.(29sz);
+    out.(36sz) <- random.(30sz); out.(37sz) <- random.(31sz);
+    out.(38sz) <- 0uy; out.(39sz) <- 0uy; out.(40sz) <- 0x02uy;
+    out.(41sz) <- 0x13uy; out.(42sz) <- 0x03uy;
+    out.(43sz) <- 0x01uy; out.(44sz) <- 0uy;
+    out.(45sz) <- 0uy; out.(46sz) <- 0x53uy;
+    with out_s. assert (pts_to out out_s);
+    assert (pure (Seq.length out_s == SZ.v out_len));
+
+    out.(47sz) <- 0uy; out.(48sz) <- 0uy; out.(49sz) <- 0uy; out.(50sz) <- 0x0euy;
+    out.(51sz) <- 0uy; out.(52sz) <- 0x0cuy; out.(53sz) <- 0uy; out.(54sz) <- 0uy;
+    out.(55sz) <- 0x09uy;
+    out.(56sz) <- 0x6cuy; out.(57sz) <- 0x6fuy; out.(58sz) <- 0x63uy; out.(59sz) <- 0x61uy;
+    out.(60sz) <- 0x6cuy; out.(61sz) <- 0x68uy; out.(62sz) <- 0x6fuy; out.(63sz) <- 0x73uy;
+    with out_s. assert (pts_to out out_s);
+    assert (pure (Seq.length out_s == SZ.v out_len));
+    out.(64sz) <- 0x74uy;
+    out.(65sz) <- 0uy; out.(66sz) <- 0x0auy; out.(67sz) <- 0uy; out.(68sz) <- 0x04uy;
+    out.(69sz) <- 0uy; out.(70sz) <- 0x02uy; out.(71sz) <- 0uy; out.(72sz) <- 0x1duy;
+    out.(73sz) <- 0uy; out.(74sz) <- 0x0duy; out.(75sz) <- 0uy; out.(76sz) <- 0x04uy;
+    out.(77sz) <- 0uy; out.(78sz) <- 0x02uy; out.(79sz) <- 0x08uy; out.(80sz) <- 0x04uy;
+    with out_s. assert (pts_to out out_s);
+    assert (pure (Seq.length out_s == SZ.v out_len));
+
+    out.(81sz) <- 0uy; out.(82sz) <- 0x33uy; out.(83sz) <- 0uy; out.(84sz) <- 0x26uy;
+    out.(85sz) <- 0uy; out.(86sz) <- 0x24uy; out.(87sz) <- 0uy; out.(88sz) <- 0x1duy;
+    out.(89sz) <- 0uy; out.(90sz) <- 0x20uy;
+    out.(91sz) <- key_share.(0sz); out.(92sz) <- key_share.(1sz);
+    out.(93sz) <- key_share.(2sz); out.(94sz) <- key_share.(3sz);
+    out.(95sz) <- key_share.(4sz); out.(96sz) <- key_share.(5sz);
+    with out_s. assert (pts_to out out_s);
+    assert (pure (Seq.length out_s == SZ.v out_len));
+    out.(97sz) <- key_share.(6sz); out.(98sz) <- key_share.(7sz);
+    out.(99sz) <- key_share.(8sz); out.(100sz) <- key_share.(9sz);
+    out.(101sz) <- key_share.(10sz); out.(102sz) <- key_share.(11sz);
+    out.(103sz) <- key_share.(12sz); out.(104sz) <- key_share.(13sz);
+    out.(105sz) <- key_share.(14sz); out.(106sz) <- key_share.(15sz);
+    out.(107sz) <- key_share.(16sz); out.(108sz) <- key_share.(17sz);
+    out.(109sz) <- key_share.(18sz); out.(110sz) <- key_share.(19sz);
+    out.(111sz) <- key_share.(20sz); out.(112sz) <- key_share.(21sz);
+    with out_s. assert (pts_to out out_s);
+    assert (pure (Seq.length out_s == SZ.v out_len));
+    out.(113sz) <- key_share.(22sz); out.(114sz) <- key_share.(23sz);
+    out.(115sz) <- key_share.(24sz); out.(116sz) <- key_share.(25sz);
+    out.(117sz) <- key_share.(26sz); out.(118sz) <- key_share.(27sz);
+    out.(119sz) <- key_share.(28sz); out.(120sz) <- key_share.(29sz);
+    out.(121sz) <- key_share.(30sz); out.(122sz) <- key_share.(31sz);
+    out.(123sz) <- 0uy; out.(124sz) <- 0x2buy; out.(125sz) <- 0uy; out.(126sz) <- 0x03uy;
+    out.(127sz) <- 0x02uy; out.(128sz) <- 0x03uy; out.(129sz) <- 0x04uy;
+    pts_to_len out;
+    with out_s. assert (pts_to out out_s);
+    assert (pure (Seq.length out_s == SZ.v out_len));
+    true
+  }
+}
+
 fn parse_handshake_header
   (input: array U8.t)
   (input_len: SZ.t)

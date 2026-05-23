@@ -682,8 +682,22 @@ void TLS13_Handshake_send_client_hello(
       0xd2, 0x3d, 0x8e, 0x43, 0x5a, 0x7d, 0xba, 0xfe,
       0xb3, 0xc0, 0x6e, 0x51, 0xc1, 0x3c, 0xae, 0x4d,
       0x54, 0x13, 0x69, 0x1e, 0x52, 0x9a, 0xaf, 0x2c};
+#ifndef TLS13_CONNECTION_PROBE_USE_EXTRACTED_HANDSHAKE_FRAMING
   static const uint8_t hostname[] = {'l', 'o', 'c', 'a', 'l', 'h', 'o', 's', 't'};
+#endif
 
+#ifdef TLS13_CONNECTION_PROBE_USE_EXTRACTED_HANDSHAKE_FRAMING
+  if (!TLS13_Handshake_Framing_build_supported_client_hello_localhost(
+          (uint8_t *)random,
+          (uint8_t *)key_share,
+          c->client_hello,
+          sizeof c->client_hello)) {
+    fprintf(stderr, "failed to serialize ClientHello\n");
+    fail_handshake(c);
+    return;
+  }
+  c->client_hello_len = 130;
+#else
   if (!tls13_wire_serialize_supported_client_hello(
           c->client_hello,
           sizeof c->client_hello,
@@ -696,14 +710,20 @@ void TLS13_Handshake_send_client_hello(
     fail_handshake(c);
     return;
   }
+#endif
 
   uint8_t record[TLS13_WIRE_RECORD_HEADER_LEN + sizeof c->client_hello];
+#ifdef TLS13_CONNECTION_PROBE_USE_EXTRACTED_HANDSHAKE_FRAMING
+  TLS13_Handshake_Framing_serialize_client_hello_record_header(
+      record, TLS13_WIRE_RECORD_HEADER_LEN);
+#else
   if (!tls13_wire_serialize_record_header(
           record, 22, 0x0301, (uint16_t)c->client_hello_len)) {
     fprintf(stderr, "failed to serialize ClientHello record header\n");
     fail_handshake(c);
     return;
   }
+#endif
   memcpy(record + TLS13_WIRE_RECORD_HEADER_LEN, c->client_hello, c->client_hello_len);
   size_t record_len = TLS13_WIRE_RECORD_HEADER_LEN + c->client_hello_len;
 

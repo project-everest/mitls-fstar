@@ -23,6 +23,35 @@ fn build_server_certificate_verify_input
           pts_to out out_bytes **
           pure (B.length out_bytes == 130)
 
+fn serialize_client_hello_record_header
+  (out: array U8.t)
+  (out_len: SZ.t)
+  requires pts_to out 'old_bytes **
+          pure (B.length 'old_bytes == SZ.v out_len /\
+                SZ.v out_len == 5)
+  ensures exists* out_bytes.
+          pts_to out out_bytes **
+          pure (B.length out_bytes == 5)
+
+fn build_supported_client_hello_localhost
+  (random: array U8.t)
+  (key_share: array U8.t)
+  (out: array U8.t)
+  (out_len: SZ.t)
+  requires pts_to random 'random_bytes **
+          pts_to key_share 'key_share_bytes **
+          pts_to out 'old_bytes **
+          pure (B.length 'random_bytes == 32 /\
+                B.length 'key_share_bytes == 32 /\
+                B.length 'old_bytes == SZ.v out_len)
+  returns ok: bool
+  ensures exists* out_bytes.
+          pts_to random 'random_bytes **
+          pts_to key_share 'key_share_bytes **
+          pts_to out out_bytes **
+          pure (B.length out_bytes == SZ.v out_len /\
+               (ok ==> SZ.v out_len >= 130))
+
 fn parse_handshake_header
   (input: array U8.t)
   (input_len: SZ.t)
