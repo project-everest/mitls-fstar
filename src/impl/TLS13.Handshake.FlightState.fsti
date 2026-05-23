@@ -49,6 +49,30 @@ fn copy_handshake_secret
           pts_to out out_bytes **
           pure (B.length out_bytes == 32)
 
+fn set_server_handshake_traffic_secret
+  (st: flight_state)
+  (secret: array U8.t)
+  (secret_len: SZ.t)
+  requires is_flight_state st **
+           pts_to secret 'secret_bytes **
+           pure (B.length 'secret_bytes == SZ.v secret_len /\
+                 SZ.v secret_len == 32)
+  ensures is_flight_state st **
+          pts_to secret 'secret_bytes
+
+fn copy_server_handshake_traffic_secret
+  (st: flight_state)
+  (out: array U8.t)
+  (out_len: SZ.t)
+  requires is_flight_state st **
+           pts_to out 'old_out **
+           pure (B.length 'old_out == SZ.v out_len /\
+                 SZ.v out_len == 32)
+  ensures exists* out_bytes.
+          is_flight_state st **
+          pts_to out out_bytes **
+          pure (B.length out_bytes == 32)
+
 fn handshake_len (st: flight_state)
   requires is_flight_state st
   returns len: SZ.t

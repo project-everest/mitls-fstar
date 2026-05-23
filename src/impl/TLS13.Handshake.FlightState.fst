@@ -26,6 +26,7 @@ type flight_state = {
   certificate_verify_signature_offset_box: box SZ.t;
   certificate_verify_signature_len_box: box SZ.t;
   handshake_secret: V.vec U8.t;
+  server_handshake_traffic_secret: V.vec U8.t;
   server_finished_verify_data: V.vec U8.t;
   before_finished_len_box: box SZ.t;
   through_finished_len_box: box SZ.t;
@@ -38,7 +39,7 @@ type flight_state = {
 let is_flight_state ([@@@mkey] st: flight_state) : slprop =
   exists* handshake_len parsed_len certificate_verify_offset certificate_leaf_offset certificate_leaf_len
           certificate_verify_signature_scheme certificate_verify_signature_offset certificate_verify_signature_len
-          handshake_secret server_finished_verify_data
+          handshake_secret server_handshake_traffic_secret server_finished_verify_data
           before_finished_len through_finished_len
           saw_encrypted_extensions saw_certificate saw_certificate_verify saw_finished.
     Box.pts_to st.handshake_len_box handshake_len **
@@ -50,6 +51,7 @@ let is_flight_state ([@@@mkey] st: flight_state) : slprop =
     Box.pts_to st.certificate_verify_signature_offset_box certificate_verify_signature_offset **
     Box.pts_to st.certificate_verify_signature_len_box certificate_verify_signature_len **
     V.pts_to st.handshake_secret handshake_secret **
+    V.pts_to st.server_handshake_traffic_secret server_handshake_traffic_secret **
     V.pts_to st.server_finished_verify_data server_finished_verify_data **
     Box.pts_to st.before_finished_len_box before_finished_len **
     Box.pts_to st.through_finished_len_box through_finished_len **
@@ -58,8 +60,10 @@ let is_flight_state ([@@@mkey] st: flight_state) : slprop =
     Box.pts_to st.saw_certificate_verify_box saw_certificate_verify **
     Box.pts_to st.saw_finished_box saw_finished **
     pure (V.is_full_vec st.handshake_secret /\
+          V.is_full_vec st.server_handshake_traffic_secret /\
           V.is_full_vec st.server_finished_verify_data /\
           V.length st.handshake_secret == 32 /\
+          V.length st.server_handshake_traffic_secret == 32 /\
           V.length st.server_finished_verify_data == 32)
 
 fn flight_state_new ()
@@ -75,6 +79,7 @@ fn flight_state_new ()
   let certificate_verify_signature_offset_box = Box.alloc 0sz;
   let certificate_verify_signature_len_box = Box.alloc 0sz;
   let handshake_secret = V.alloc 0uy 32sz;
+  let server_handshake_traffic_secret = V.alloc 0uy 32sz;
   let server_finished_verify_data = V.alloc 0uy 32sz;
   let before_finished_len_box = Box.alloc 0sz;
   let through_finished_len_box = Box.alloc 0sz;
@@ -92,6 +97,7 @@ fn flight_state_new ()
     certificate_verify_signature_offset_box;
     certificate_verify_signature_len_box;
     handshake_secret;
+    server_handshake_traffic_secret;
     server_finished_verify_data;
     before_finished_len_box;
     through_finished_len_box;
@@ -109,6 +115,7 @@ fn flight_state_new ()
   with v. rewrite (Box.pts_to certificate_verify_signature_offset_box v) as (Box.pts_to st.certificate_verify_signature_offset_box v);
   with v. rewrite (Box.pts_to certificate_verify_signature_len_box v) as (Box.pts_to st.certificate_verify_signature_len_box v);
   with v. rewrite (V.pts_to handshake_secret v) as (V.pts_to st.handshake_secret v);
+  with v. rewrite (V.pts_to server_handshake_traffic_secret v) as (V.pts_to st.server_handshake_traffic_secret v);
   with v. rewrite (V.pts_to server_finished_verify_data v) as (V.pts_to st.server_finished_verify_data v);
   with v. rewrite (Box.pts_to before_finished_len_box v) as (Box.pts_to st.before_finished_len_box v);
   with v. rewrite (Box.pts_to through_finished_len_box v) as (Box.pts_to st.through_finished_len_box v);
@@ -134,6 +141,7 @@ fn flight_state_free (st: flight_state)
   Box.free st.certificate_verify_signature_offset_box;
   Box.free st.certificate_verify_signature_len_box;
   V.free st.handshake_secret;
+  V.free st.server_handshake_traffic_secret;
   V.free st.server_finished_verify_data;
   Box.free st.before_finished_len_box;
   Box.free st.through_finished_len_box;
@@ -208,6 +216,54 @@ fn copy_handshake_secret
   assert (pure (Pulse.Lib.Array.Core.length (V.vec_to_array st.handshake_secret) == 32));
   Arr.memcpy 32sz (V.vec_to_array st.handshake_secret) out;
   V.to_vec_pts_to st.handshake_secret;
+  with out_s. assert (pts_to out out_s);
+  assert (pure (Seq.length out_s == 32));
+  fold (is_flight_state st);
+}
+
+fn set_server_handshake_traffic_secret
+  (st: flight_state)
+  (secret: array U8.t)
+  (secret_len: SZ.t)
+  requires is_flight_state st **
+           pts_to secret 'secret_bytes **
+           pure (B.length 'secret_bytes == SZ.v secret_len /\
+                 SZ.v secret_len == 32)
+  ensures is_flight_state st **
+          pts_to secret 'secret_bytes
+{
+  unfold (is_flight_state st);
+  pts_to_len secret;
+  V.pts_to_len st.server_handshake_traffic_secret;
+  assert (pure (V.length st.server_handshake_traffic_secret == 32));
+  V.to_array_pts_to st.server_handshake_traffic_secret;
+  assert (pure (Pulse.Lib.Array.Core.length (V.vec_to_array st.server_handshake_traffic_secret) == 32));
+  Arr.memcpy 32sz secret (V.vec_to_array st.server_handshake_traffic_secret);
+  V.to_vec_pts_to st.server_handshake_traffic_secret;
+  fold (is_flight_state st);
+}
+
+fn copy_server_handshake_traffic_secret
+  (st: flight_state)
+  (out: array U8.t)
+  (out_len: SZ.t)
+  requires is_flight_state st **
+           pts_to out 'old_out **
+           pure (B.length 'old_out == SZ.v out_len /\
+                 SZ.v out_len == 32)
+  ensures exists* out_bytes.
+          is_flight_state st **
+          pts_to out out_bytes **
+          pure (B.length out_bytes == 32)
+{
+  unfold (is_flight_state st);
+  pts_to_len out;
+  V.pts_to_len st.server_handshake_traffic_secret;
+  assert (pure (V.length st.server_handshake_traffic_secret == 32));
+  V.to_array_pts_to st.server_handshake_traffic_secret;
+  assert (pure (Pulse.Lib.Array.Core.length (V.vec_to_array st.server_handshake_traffic_secret) == 32));
+  Arr.memcpy 32sz (V.vec_to_array st.server_handshake_traffic_secret) out;
+  V.to_vec_pts_to st.server_handshake_traffic_secret;
   with out_s. assert (pts_to out out_s);
   assert (pure (Seq.length out_s == 32));
   fold (is_flight_state st);

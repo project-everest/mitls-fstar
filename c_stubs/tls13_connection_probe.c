@@ -46,7 +46,6 @@ struct TLS13_Connection_connection_s {
   uint8_t server_hello_fragment[4096];
   size_t server_hello_len;
   uint8_t client_handshake_traffic_secret[32];
-  uint8_t server_handshake_traffic_secret[32];
   uint8_t client_handshake_key[32];
   uint8_t client_handshake_iv[12];
   uint8_t server_handshake_key[32];
@@ -518,6 +517,7 @@ static bool probe_handshake_recv_server_hello(
   }
   c->server_hello_len = fragment_len;
   uint8_t handshake_secret[32];
+  uint8_t server_handshake_traffic_secret[32];
   if (derive_server_handshake_keys(
           c->client_hello,
           c->client_hello_len,
@@ -526,7 +526,7 @@ static bool probe_handshake_recv_server_hello(
           server_key_share,
           handshake_secret,
           c->client_handshake_traffic_secret,
-          c->server_handshake_traffic_secret,
+          server_handshake_traffic_secret,
           c->client_handshake_key,
           c->client_handshake_iv,
           c->server_handshake_key,
@@ -537,6 +537,10 @@ static bool probe_handshake_recv_server_hello(
   }
   TLS13_Handshake_FlightState_set_handshake_secret(
       c->server_handshake_flight_state, handshake_secret, sizeof handshake_secret);
+  TLS13_Handshake_FlightState_set_server_handshake_traffic_secret(
+      c->server_handshake_flight_state,
+      server_handshake_traffic_secret,
+      sizeof server_handshake_traffic_secret);
   return true;
 }
 
@@ -689,10 +693,15 @@ static bool probe_handshake_recv_server_finished(
     return false;
   }
   uint8_t server_finished_verify_data[32] = {0};
+  uint8_t server_handshake_traffic_secret[32] = {0};
   TLS13_Handshake_FlightState_copy_server_finished_verify_data(
       c->server_handshake_flight_state,
       server_finished_verify_data,
       sizeof server_finished_verify_data);
+  TLS13_Handshake_FlightState_copy_server_handshake_traffic_secret(
+      c->server_handshake_flight_state,
+      server_handshake_traffic_secret,
+      sizeof server_handshake_traffic_secret);
   if (verify_server_finished(
           c->client_hello,
           c->client_hello_len,
@@ -701,7 +710,7 @@ static bool probe_handshake_recv_server_finished(
           c->server_handshake_messages,
           TLS13_Handshake_FlightState_server_before_finished_len(c->server_handshake_flight_state),
           server_finished_verify_data,
-          c->server_handshake_traffic_secret) != 0) {
+          server_handshake_traffic_secret) != 0) {
     fprintf(stderr, "failed to verify OpenSSL server Finished\n");
     fail_handshake(c);
     return false;
