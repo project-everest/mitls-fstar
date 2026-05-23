@@ -4,8 +4,10 @@ module TLS13.Connection
 
 open Pulse.Lib.Pervasives
 open Pulse.Lib.Array.PtsTo
+open Pulse.Lib.Box { box, (!), (:=) }
 
 module B = TLS13.Bytes
+module Box = Pulse.Lib.Box
 module E = TLS13.Connection.External
 module H = TLS13.Handshake.Spec
 module IO = TLS13.IO
@@ -16,10 +18,15 @@ module T = TLS13.Types
 module U8 = FStar.UInt8
 module X = TLS13.X509.Spec
 
-type connection = E.connection
+noeq
+type connection = {
+  backend: E.connection;
+  live: box bool;
+}
 
 let is_connection (c:connection) (st:ST.state_ref) (s:S.conn_state) : slprop =
-  E.is_connection c ** ST.current st s
+  exists* live.
+    E.is_connection c.backend ** Box.pts_to c.live live ** ST.current st s
 
 let zeros32 : B.bytes = B.zeros 32
 
@@ -96,8 +103,12 @@ fn client_new
           pts_to hostname 'hostname_bytes **
           is_connection c st S.initial
 {
-  let c = E.client_new hostname hostname_len #trust_store;
+  let backend = E.client_new hostname hostname_len #trust_store;
+  let live = Box.alloc true;
   let st = ST.alloc_initial ();
+  let c = { backend; live };
+  with backend_s. rewrite (E.is_connection backend) as (E.is_connection c.backend);
+  with live_s. rewrite (Box.pts_to live live_s) as (Box.pts_to c.live live_s);
   fold (is_connection c st S.initial);
   c
 }
@@ -107,7 +118,8 @@ fn client_free (c: connection)
   ensures emp
 {
   unfold (is_connection c 'st 's);
-  E.client_free c;
+  E.client_free c.backend;
+  Box.free c.live;
   drop_ (ST.current 'st 's);
 }
 
@@ -122,7 +134,7 @@ fn client_connect (c: connection) (ch: IO.channel)
                 (not ok ==> s'.S.phase == S.Failed))
 {
   unfold (is_connection c 'st 's);
-  let ok = E.client_connect c ch;
+  let ok = E.client_connect c.backend ch;
   if ok {
     advance_successful_handshake 'st;
     fold (is_connection c 'st (hs_application_data 's));
@@ -147,7 +159,7 @@ fn client_write (c: connection) (ch: IO.channel) (buf: array U8.t) (len: SZ.t)
                 (s'.S.phase == S.ApplicationData \/ s'.S.phase == S.Failed))
 {
   unfold (is_connection c 'st 's);
-  let written = E.client_write c ch buf len;
+  let written = E.client_write c.backend ch buf len;
   if (written = len) {
     ST.advance 'st (S.SendApplicationData (Ghost.reveal 'bytes)) (S.advance_write_record 's);
     fold (is_connection c 'st (S.advance_write_record 's));
@@ -172,7 +184,7 @@ fn client_write_all (c: connection) (ch: IO.channel) (buf: array U8.t) (len: SZ.
                 (not ok ==> s'.S.phase == S.Failed))
 {
   unfold (is_connection c 'st 's);
-  let ok = E.client_write_all c ch buf len;
+  let ok = E.client_write_all c.backend ch buf len;
   if ok {
     ST.advance 'st (S.SendApplicationData (Ghost.reveal 'bytes)) (S.advance_write_record 's);
     fold (is_connection c 'st (S.advance_write_record 's));
@@ -199,7 +211,7 @@ fn client_read (c: connection) (ch: IO.channel) (out: array U8.t) (max_len: SZ.t
                  s'.S.phase == S.Closed \/ s'.S.phase == S.Failed))
 {
   unfold (is_connection c 'st 's);
-  let n = E.client_read c ch out max_len;
+  let n = E.client_read c.backend ch out max_len;
   with bytes. assert (pts_to out bytes);
   if (n = 0sz) {
     ST.advance_fail 'st T.IoError;
@@ -226,7 +238,7 @@ fn client_read_exact (c: connection) (ch: IO.channel) (out: array U8.t) (len: SZ
                 (not ok ==> s'.S.phase == S.Failed))
 {
   unfold (is_connection c 'st 's);
-  let ok = E.client_read_exact c ch out len;
+  let ok = E.client_read_exact c.backend ch out len;
   with bytes. assert (pts_to out bytes);
   if ok {
     ST.advance 'st (S.RecvApplicationData bytes) (S.advance_read_record 's);
@@ -248,7 +260,7 @@ fn client_close (c: connection) (ch: IO.channel)
           pure (s'.S.phase == S.Closing \/ s'.S.phase == S.Failed)
 {
   unfold (is_connection c 'st 's);
-  let ok = E.client_close c ch;
+  let ok = E.client_close c.backend ch;
   if ok {
     ST.advance 'st S.SendCloseNotify (S.send_close_state 's);
     fold (is_connection c 'st (S.send_close_state 's));

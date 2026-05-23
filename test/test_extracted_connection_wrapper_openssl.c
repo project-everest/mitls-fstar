@@ -36,13 +36,17 @@ int main(int argc, char **argv) {
   }
   fill_wrapper_payload(outbound, EXTRACTED_WRAPPER_ECHO_PAYLOAD_LEN);
 
-  TLS13_Connection_External_connection c =
+  TLS13_Connection_External_connection backend =
       tls13_connection_probe_new(argv[1], (uint16_t)port_long, argv[3]);
-  if (c == NULL) {
+  if (backend == NULL) {
     free(outbound);
     free(inbound);
     return 1;
   }
+  TLS13_Connection_connection c = {
+      .backend = backend,
+      .live = NULL,
+  };
 
   int rc = 1;
   if (!TLS13_Connection_client_connect(c, NULL) ||
@@ -61,7 +65,7 @@ int main(int argc, char **argv) {
   rc = 0;
 
 done:
-  tls13_connection_probe_free(c);
+  TLS13_Connection_client_free(c);
   free(outbound);
   free(inbound);
   return rc;

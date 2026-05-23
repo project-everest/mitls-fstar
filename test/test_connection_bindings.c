@@ -121,10 +121,10 @@ static int test_success_path(void) {
   uint8_t hostname[] = "localhost";
   uint8_t buf[] = "hello";
   uint8_t out[sizeof buf] = {0};
-  TLS13_Connection_External_connection c =
+  TLS13_Connection_connection c =
       TLS13_Connection_client_new(hostname, sizeof hostname - 1, NULL);
-  TLS13_IO_channel ch = (TLS13_IO_channel)c;
-  if (c == NULL) {
+  TLS13_IO_channel ch = (TLS13_IO_channel)c.backend;
+  if (c.backend == NULL) {
     return 1;
   }
 
@@ -136,11 +136,11 @@ static int test_success_path(void) {
 
   int failed =
       !ok ||
-      c->new_calls != 1 ||
-      c->connect_calls != 1 ||
-      c->write_all_calls != 1 ||
-      c->read_exact_calls != 1 ||
-      c->close_calls != 1 ||
+      c.backend->new_calls != 1 ||
+      c.backend->connect_calls != 1 ||
+      c.backend->write_all_calls != 1 ||
+      c.backend->read_exact_calls != 1 ||
+      c.backend->close_calls != 1 ||
       out[0] != 0x5a;
   TLS13_Connection_client_free(c);
   if (failed) {
@@ -152,15 +152,15 @@ static int test_success_path(void) {
 
 static int test_failure_return(void) {
   uint8_t hostname[] = "localhost";
-  TLS13_Connection_External_connection c =
+  TLS13_Connection_connection c =
       TLS13_Connection_client_new(hostname, sizeof hostname - 1, NULL);
-  TLS13_IO_channel ch = (TLS13_IO_channel)c;
-  if (c == NULL) {
+  TLS13_IO_channel ch = (TLS13_IO_channel)c.backend;
+  if (c.backend == NULL) {
     return 1;
   }
-  c->connect_ok = false;
+  c.backend->connect_ok = false;
   bool ok = TLS13_Connection_client_connect(c, ch);
-  int failed = ok || c->connect_calls != 1;
+  int failed = ok || c.backend->connect_calls != 1;
   TLS13_Connection_client_free(c);
   if (failed) {
     fprintf(stderr, "connection wrapper failure path failed\n");
