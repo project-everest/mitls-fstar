@@ -299,6 +299,10 @@ fn set_certificate_verify_signature
   requires is_flight_state st
   ensures is_flight_state st
 
+fn mark_certificate_verify_verified (st: flight_state)
+  requires is_flight_state st
+  ensures is_flight_state st
+
 fn accept_finished (st: flight_state) (message_len: SZ.t) (body_len: SZ.t)
   requires is_flight_state st
   returns ok: bool
@@ -376,6 +380,11 @@ fn saw_certificate (st: flight_state)
 fn saw_certificate_verify (st: flight_state)
   requires is_flight_state st
   returns saw: bool
+  ensures is_flight_state st
+
+fn certificate_verify_verified (st: flight_state)
+  requires is_flight_state st
+  returns verified: bool
   ensures is_flight_state st
 
 fn saw_finished (st: flight_state)

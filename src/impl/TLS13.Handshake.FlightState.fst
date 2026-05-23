@@ -43,6 +43,7 @@ type flight_state = {
   saw_encrypted_extensions_box: box bool;
   saw_certificate_box: box bool;
   saw_certificate_verify_box: box bool;
+  certificate_verify_verified_box: box bool;
   saw_finished_box: box bool;
 }
 
@@ -53,7 +54,7 @@ let is_flight_state ([@@@mkey] st: flight_state) : slprop =
           handshake_secret client_handshake_traffic_secret client_handshake_key client_handshake_iv server_handshake_traffic_secret
           server_handshake_key server_handshake_iv server_finished_verify_data
           before_finished_len through_finished_len
-          saw_encrypted_extensions saw_certificate saw_certificate_verify saw_finished.
+          saw_encrypted_extensions saw_certificate saw_certificate_verify certificate_verify_verified saw_finished.
     Box.pts_to st.handshake_len_box handshake_len **
     Box.pts_to st.parsed_len_box parsed_len **
     Box.pts_to st.client_hello_len_box client_hello_len **
@@ -80,6 +81,7 @@ let is_flight_state ([@@@mkey] st: flight_state) : slprop =
     Box.pts_to st.saw_encrypted_extensions_box saw_encrypted_extensions **
     Box.pts_to st.saw_certificate_box saw_certificate **
     Box.pts_to st.saw_certificate_verify_box saw_certificate_verify **
+    Box.pts_to st.certificate_verify_verified_box certificate_verify_verified **
     Box.pts_to st.saw_finished_box saw_finished **
     pure (V.is_full_vec st.client_hello /\
           V.is_full_vec st.server_hello /\
@@ -134,6 +136,7 @@ fn flight_state_new ()
   let saw_encrypted_extensions_box = Box.alloc false;
   let saw_certificate_box = Box.alloc false;
   let saw_certificate_verify_box = Box.alloc false;
+  let certificate_verify_verified_box = Box.alloc false;
   let saw_finished_box = Box.alloc false;
   let st = {
     handshake_len_box;
@@ -162,6 +165,7 @@ fn flight_state_new ()
     saw_encrypted_extensions_box;
     saw_certificate_box;
     saw_certificate_verify_box;
+    certificate_verify_verified_box;
     saw_finished_box
   };
   with v. rewrite (Box.pts_to handshake_len_box v) as (Box.pts_to st.handshake_len_box v);
@@ -190,6 +194,7 @@ fn flight_state_new ()
   with v. rewrite (Box.pts_to saw_encrypted_extensions_box v) as (Box.pts_to st.saw_encrypted_extensions_box v);
   with v. rewrite (Box.pts_to saw_certificate_box v) as (Box.pts_to st.saw_certificate_box v);
   with v. rewrite (Box.pts_to saw_certificate_verify_box v) as (Box.pts_to st.saw_certificate_verify_box v);
+  with v. rewrite (Box.pts_to certificate_verify_verified_box v) as (Box.pts_to st.certificate_verify_verified_box v);
   with v. rewrite (Box.pts_to saw_finished_box v) as (Box.pts_to st.saw_finished_box v);
   fold (is_flight_state st);
   st
@@ -226,6 +231,7 @@ fn flight_state_free (st: flight_state)
   Box.free st.saw_encrypted_extensions_box;
   Box.free st.saw_certificate_box;
   Box.free st.saw_certificate_verify_box;
+  Box.free st.certificate_verify_verified_box;
   Box.free st.saw_finished_box;
 }
 
@@ -247,6 +253,7 @@ fn reset (st: flight_state)
   st.saw_encrypted_extensions_box := false;
   st.saw_certificate_box := false;
   st.saw_certificate_verify_box := false;
+  st.certificate_verify_verified_box := false;
   st.saw_finished_box := false;
   fold (is_flight_state st);
 }
@@ -861,6 +868,15 @@ fn set_certificate_verify_signature
   fold (is_flight_state st);
 }
 
+fn mark_certificate_verify_verified (st: flight_state)
+  requires is_flight_state st
+  ensures is_flight_state st
+{
+  unfold (is_flight_state st);
+  st.certificate_verify_verified_box := true;
+  fold (is_flight_state st);
+}
+
 fn accept_finished (st: flight_state) (message_len: SZ.t) (body_len: SZ.t)
   requires is_flight_state st
   returns ok: bool
@@ -1045,6 +1061,17 @@ fn saw_certificate_verify (st: flight_state)
   let saw = !st.saw_certificate_verify_box;
   fold (is_flight_state st);
   saw
+}
+
+fn certificate_verify_verified (st: flight_state)
+  requires is_flight_state st
+  returns verified: bool
+  ensures is_flight_state st
+{
+  unfold (is_flight_state st);
+  let verified = !st.certificate_verify_verified_box;
+  fold (is_flight_state st);
+  verified
 }
 
 fn saw_finished (st: flight_state)

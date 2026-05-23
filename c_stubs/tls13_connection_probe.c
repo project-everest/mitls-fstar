@@ -42,7 +42,6 @@ struct TLS13_Connection_connection_s {
   uint16_t port;
   const char *ca_pem_path;
   int fd;
-  tls13_peer_identity *peer;
   TLS13_Record_record_state server_handshake_record_state;
   TLS13_Handshake_FlightState_flight_state server_handshake_flight_state;
 };
@@ -693,8 +692,6 @@ static bool probe_handshake_validate_certificate(
     fail_handshake(c);
     return false;
   }
-  tls13_openssl_peer_identity_free(c->peer);
-  c->peer = NULL;
   size_t leaf_der_offset =
       TLS13_Handshake_FlightState_certificate_leaf_offset(c->server_handshake_flight_state);
   size_t leaf_der_len =
@@ -706,29 +703,12 @@ static bool probe_handshake_validate_certificate(
     return false;
   }
   const uint8_t *leaf_der = server_handshake_messages + leaf_der_offset;
+  tls13_peer_identity *peer = NULL;
   bool ok = tls13_openssl_validate_leaf_der(
-      "localhost", ca_pem, ca_pem_len, leaf_der, leaf_der_len, &c->peer);
+      "localhost", ca_pem, ca_pem_len, leaf_der, leaf_der_len, &peer);
   free(ca_pem);
-  if (!ok || c->peer == NULL) {
+  if (!ok || peer == NULL) {
     fprintf(stderr, "failed to validate server certificate\n");
-    fail_handshake(c);
-    return false;
-  }
-  return true;
-}
-
-static bool probe_handshake_recv_certificate_verify(
-    TLS13_Handshake_handshake_context ctx,
-    TLS13_IO_channel ch,
-    void *erased_state_ref,
-    void *erased_state) {
-  (void)ch;
-  (void)erased_state_ref;
-  (void)erased_state;
-  TLS13_Connection_connection c = from_handshake_context(ctx);
-  if (!handshake_can_continue(c) ||
-      !TLS13_Handshake_FlightState_saw_certificate_verify(c->server_handshake_flight_state) ||
-      c->peer == NULL) {
     fail_handshake(c);
     return false;
   }
@@ -745,12 +725,7 @@ static bool probe_handshake_recv_certificate_verify(
           server_hello_fragment,
           &server_hello_len)) {
     fprintf(stderr, "failed to copy hello transcript bytes\n");
-    fail_handshake(c);
-    return false;
-  }
-  uint8_t server_handshake_messages[PROBE_SERVER_HANDSHAKE_CAPACITY];
-  if (!copy_server_handshake_messages(c, server_handshake_messages)) {
-    fprintf(stderr, "failed to copy server handshake transcript bytes\n");
+    tls13_openssl_peer_identity_free(peer);
     fail_handshake(c);
     return false;
   }
@@ -763,6 +738,7 @@ static bool probe_handshake_recv_certificate_verify(
           TLS13_Handshake_FlightState_certificate_verify_offset(c->server_handshake_flight_state),
           transcript_hash) != 0) {
     fprintf(stderr, "failed to build CertificateVerify input\n");
+    tls13_openssl_peer_identity_free(peer);
     fail_handshake(c);
     return false;
   }
@@ -780,14 +756,34 @@ static bool probe_handshake_recv_certificate_verify(
       TLS13_Handshake_FlightState_certificate_verify_signature_len(
           c->server_handshake_flight_state);
   const uint8_t *signature = server_handshake_messages + signature_offset;
-  if (!tls13_openssl_peer_verify_signature(
-          c->peer,
+  bool signature_ok = tls13_openssl_peer_verify_signature(
+          peer,
           signature_scheme,
           certificate_verify_input,
           sizeof certificate_verify_input,
           signature,
-          signature_len)) {
+          signature_len);
+  tls13_openssl_peer_identity_free(peer);
+  if (!signature_ok) {
     fprintf(stderr, "failed to verify server CertificateVerify\n");
+    fail_handshake(c);
+    return false;
+  }
+  TLS13_Handshake_FlightState_mark_certificate_verify_verified(c->server_handshake_flight_state);
+  return true;
+}
+
+static bool probe_handshake_recv_certificate_verify(
+    TLS13_Handshake_handshake_context ctx,
+    TLS13_IO_channel ch,
+    void *erased_state_ref,
+    void *erased_state) {
+  (void)ch;
+  (void)erased_state_ref;
+  (void)erased_state;
+  TLS13_Connection_connection c = from_handshake_context(ctx);
+  if (!handshake_can_continue(c) ||
+      !TLS13_Handshake_FlightState_certificate_verify_verified(c->server_handshake_flight_state)) {
     fail_handshake(c);
     return false;
   }
@@ -1049,7 +1045,6 @@ void tls13_connection_probe_free(TLS13_Connection_connection c) {
   }
   TLS13_Record_record_state_free(c->server_handshake_record_state, NULL);
   TLS13_Handshake_FlightState_flight_state_free(c->server_handshake_flight_state);
-  tls13_openssl_peer_identity_free(c->peer);
   free(c->host);
   free(c);
 }
