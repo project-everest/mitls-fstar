@@ -566,11 +566,19 @@ static bool read_next_encrypted_handshake_record(TLS13_Connection_connection c) 
     return false;
   }
 
-  uint8_t inner_content_type = 0;
-  size_t handshake_plaintext_len = 0;
-  if (!tls13_wire_decode_inner_plaintext(
-          inner_plaintext, inner_plaintext_len, &inner_content_type, &handshake_plaintext_len) ||
-      inner_content_type != 22 ||
+  uint8_t inner_content_type_buf[1] = {0};
+  if (inner_plaintext_len == 0) {
+    fprintf(stderr, "failed to decode OpenSSL handshake inner plaintext\n");
+    return false;
+  }
+  size_t handshake_plaintext_len =
+      TLS13_Record_Framing_decode_inner_plaintext_no_padding(
+          inner_plaintext,
+          inner_plaintext_len,
+          inner_content_type_buf,
+          sizeof inner_content_type_buf);
+  uint8_t inner_content_type = inner_content_type_buf[0];
+  if (inner_content_type != 22 ||
       handshake_plaintext_len > sizeof c->server_handshake_messages - c->server_handshake_len) {
     fprintf(stderr, "failed to decode OpenSSL handshake inner plaintext\n");
     return false;
