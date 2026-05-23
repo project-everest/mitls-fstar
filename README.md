@@ -54,10 +54,16 @@ against the transcript, sends client Finished, and checks exact echoed
 application data across multiple client records. Its primary client path is the
 extracted connection wrapper route, which also routes key-schedule derivation,
 Finished verify-data, record seal/open, and record framing through extracted
-verified code before reaching the remaining trusted byte backend. The older
-extracted connection-plus-handshake driver path and the direct C probe remain as
-regression/diagnostic checks. Both extracted paths reject the same server under
-the wrong test CA, and the target retains the `openssl s_client` short and
+verified code before reaching the remaining trusted byte backend. The wrapper
+path rejects the same server under the wrong test CA, and the target retains the
+`openssl s_client` short and
 multi-record payload smoke as a server-side compatibility check. Replacing the
 remaining trusted byte parser, X.509, crypto, and I/O backend pieces is still a
 later milestone.
+
+To also run the older extracted-driver route and the direct C probe as
+diagnostic regressions, set:
+
+```sh
+TLS13_RUN_LEGACY_INTEROP=1 make test-openssl-echo
+```

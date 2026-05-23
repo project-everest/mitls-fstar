@@ -6,9 +6,11 @@ cd "$repo_root"
 
 scripts/generate-test-certs.sh test/certs >/dev/null
 make test/openssl_echo_server >/dev/null
-make test/test_clienthello_openssl_probe >/dev/null
-make test/test_extracted_connection_driver_openssl >/dev/null
 make test/test_extracted_connection_wrapper_openssl >/dev/null
+if [ "${TLS13_RUN_LEGACY_INTEROP:-0}" = "1" ]; then
+  make test/test_clienthello_openssl_probe >/dev/null
+  make test/test_extracted_connection_driver_openssl >/dev/null
+fi
 
 tmp_dir="$(mktemp -d test/openssl-echo.XXXXXX)"
 server_pid=""
@@ -254,11 +256,13 @@ PY
 run_extracted_wrapper
 run_extracted_wrapper_rejects_wrong_ca
 
-# Regression/diagnostic paths for comparing against earlier interop layers.
-run_extracted_driver
-run_extracted_driver_rejects_wrong_ca
-run_probe
-run_probe_rejects_wrong_ca
+if [ "${TLS13_RUN_LEGACY_INTEROP:-0}" = "1" ]; then
+  # Regression/diagnostic paths for comparing against earlier interop layers.
+  run_extracted_driver
+  run_extracted_driver_rejects_wrong_ca
+  run_probe
+  run_probe_rejects_wrong_ca
+fi
 
 run_case short "$short_payload"
 run_case large "$large_payload"
