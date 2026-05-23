@@ -76,6 +76,10 @@ struct TLS13_Connection_connection_s {
   uint64_t server_application_sequence_number;
   size_t parsed_handshake_len;
   uint64_t server_handshake_sequence_number;
+#ifdef TLS13_CONNECTION_PROBE_USE_EXTRACTED_CONNECTION_WRAPPER
+  TLS13_Record_record_state server_handshake_record_state;
+  bool server_handshake_record_state_initialized;
+#endif
 };
 
 struct TLS13_IO_channel_s {
@@ -546,22 +550,16 @@ static bool read_next_encrypted_handshake_record(TLS13_Connection_connection c) 
     return false;
   }
 
-  uint8_t nonce[12];
   uint8_t inner_plaintext[20000];
   size_t inner_plaintext_len = (size_t)fragment_len - 16u;
-  if (!tls13_record_nonce(
-          nonce,
-          c->server_handshake_iv,
-          c->server_handshake_sequence_number++) ||
-      !tls13_hacl_chacha20_poly1305_open_combined(
-          inner_plaintext,
-          inner_plaintext_len,
-          c->server_handshake_key,
-          nonce,
+  if (!c->server_handshake_record_state_initialized ||
+      !TLS13_Record_open_application(
+          c->server_handshake_record_state,
           encrypted_header,
           TLS13_WIRE_RECORD_HEADER_LEN,
           encrypted_fragment,
-          fragment_len)) {
+          fragment_len,
+          inner_plaintext)) {
     fprintf(stderr, "failed to decrypt OpenSSL encrypted handshake record\n");
     return false;
   }
@@ -1197,6 +1195,10 @@ TLS13_Connection_connection tls13_connection_probe_new(
   c->port = port;
   c->ca_pem_path = ca_pem_path;
   c->fd = -1;
+#ifdef TLS13_CONNECTION_PROBE_USE_EXTRACTED_CONNECTION_WRAPPER
+  c->server_handshake_record_state = TLS13_Record_record_state_new();
+  c->server_handshake_record_state_initialized = true;
+#endif
   return c;
 }
 
@@ -1207,6 +1209,11 @@ void tls13_connection_probe_free(TLS13_Connection_connection c) {
   if (c->fd >= 0) {
     tls13_io_close_fd(c->fd);
   }
+#ifdef TLS13_CONNECTION_PROBE_USE_EXTRACTED_CONNECTION_WRAPPER
+  if (c->server_handshake_record_state_initialized) {
+    TLS13_Record_record_state_free(c->server_handshake_record_state);
+  }
+#endif
   tls13_openssl_peer_identity_free(c->peer);
   free(c);
 }
@@ -1641,6 +1648,12 @@ void TLS13_Handshake_ByteDriver_External_reset_encrypted_handshake(
   c->certificate_verify_offset = 0;
   c->parsed_handshake_len = 0;
   c->server_handshake_sequence_number = 0;
+  if (!c->server_handshake_record_state_initialized) {
+    c->server_handshake_record_state = TLS13_Record_record_state_new();
+    c->server_handshake_record_state_initialized = true;
+  }
+  TLS13_Record_install_keys(
+      c->server_handshake_record_state, 1, c->server_handshake_key, c->server_handshake_iv);
 }
 
 bool TLS13_Handshake_ByteDriver_External_read_next_encrypted_handshake_record(
