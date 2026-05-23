@@ -5,6 +5,7 @@ module TLS13.Handshake.FlightState
 open Pulse.Lib.Pervasives
 
 module SZ = FStar.SizeT
+module U16 = FStar.UInt16
 
 val flight_state : Type0
 val is_flight_state: flight_state -> slprop
@@ -46,9 +47,21 @@ fn accept_certificate (st: flight_state) (message_len: SZ.t)
   returns ok: bool
   ensures is_flight_state st
 
+fn set_certificate_leaf (st: flight_state) (leaf_offset: SZ.t) (leaf_len: SZ.t)
+  requires is_flight_state st
+  ensures is_flight_state st
+
 fn accept_certificate_verify (st: flight_state) (message_len: SZ.t)
   requires is_flight_state st
   returns ok: bool
+  ensures is_flight_state st
+
+fn set_certificate_verify_signature
+  (st: flight_state)
+  (signature_scheme: U16.t)
+  (signature_offset: SZ.t)
+  (signature_len: SZ.t)
+  requires is_flight_state st
   ensures is_flight_state st
 
 fn accept_finished (st: flight_state) (message_len: SZ.t) (body_len: SZ.t)
@@ -59,6 +72,31 @@ fn accept_finished (st: flight_state) (message_len: SZ.t) (body_len: SZ.t)
 fn certificate_verify_offset (st: flight_state)
   requires is_flight_state st
   returns offset: SZ.t
+  ensures is_flight_state st
+
+fn certificate_leaf_offset (st: flight_state)
+  requires is_flight_state st
+  returns offset: SZ.t
+  ensures is_flight_state st
+
+fn certificate_leaf_len (st: flight_state)
+  requires is_flight_state st
+  returns len: SZ.t
+  ensures is_flight_state st
+
+fn certificate_verify_signature_scheme (st: flight_state)
+  requires is_flight_state st
+  returns scheme: U16.t
+  ensures is_flight_state st
+
+fn certificate_verify_signature_offset (st: flight_state)
+  requires is_flight_state st
+  returns offset: SZ.t
+  ensures is_flight_state st
+
+fn certificate_verify_signature_len (st: flight_state)
+  requires is_flight_state st
+  returns len: SZ.t
   ensures is_flight_state st
 
 fn server_before_finished_len (st: flight_state)

@@ -1082,8 +1082,18 @@ static bool probe_handshake_validate_certificate(
   }
   tls13_openssl_peer_identity_free(c->peer);
   c->peer = NULL;
+#ifdef TLS13_CONNECTION_PROBE_USE_EXTRACTED_HANDSHAKE_BYTE_DRIVER
+  size_t leaf_der_offset =
+      TLS13_Handshake_FlightState_certificate_leaf_offset(c->server_handshake_flight_state);
+  size_t leaf_der_len =
+      TLS13_Handshake_FlightState_certificate_leaf_len(c->server_handshake_flight_state);
+  const uint8_t *leaf_der = c->server_handshake_messages + leaf_der_offset;
+  bool ok = tls13_openssl_validate_leaf_der(
+      "localhost", ca_pem, ca_pem_len, leaf_der, leaf_der_len, &c->peer);
+#else
   bool ok = tls13_openssl_validate_leaf_der(
       "localhost", ca_pem, ca_pem_len, c->leaf_der, c->leaf_der_len, &c->peer);
+#endif
   free(ca_pem);
   if (!ok || c->peer == NULL) {
     fprintf(stderr, "failed to validate server certificate\n");
@@ -1143,13 +1153,29 @@ static bool probe_handshake_recv_certificate_verify(
     return false;
   }
 #endif
+#ifdef TLS13_CONNECTION_PROBE_USE_EXTRACTED_HANDSHAKE_BYTE_DRIVER
+  uint16_t signature_scheme =
+      TLS13_Handshake_FlightState_certificate_verify_signature_scheme(
+          c->server_handshake_flight_state);
+  size_t signature_offset =
+      TLS13_Handshake_FlightState_certificate_verify_signature_offset(
+          c->server_handshake_flight_state);
+  size_t signature_len =
+      TLS13_Handshake_FlightState_certificate_verify_signature_len(
+          c->server_handshake_flight_state);
+  const uint8_t *signature = c->server_handshake_messages + signature_offset;
+#else
+  uint16_t signature_scheme = c->signature_scheme;
+  const uint8_t *signature = c->signature;
+  size_t signature_len = c->signature_len;
+#endif
   if (!tls13_openssl_peer_verify_signature(
           c->peer,
-          c->signature_scheme,
+          signature_scheme,
           certificate_verify_input,
           sizeof certificate_verify_input,
-          c->signature,
-          c->signature_len)) {
+          signature,
+          signature_len)) {
     fprintf(stderr, "failed to verify server CertificateVerify\n");
     fail_handshake(c);
     return false;
@@ -1998,8 +2024,12 @@ bool TLS13_Handshake_ByteDriver_External_accept_certificate(
     return false;
   }
   size_t leaf_offset = ((size_t)leaf_offset_bytes[0] << 8) | (size_t)leaf_offset_bytes[1];
-  c->leaf_der_len = ((size_t)leaf_len_bytes[0] << 8) | (size_t)leaf_len_bytes[1];
-  c->leaf_der = body + leaf_offset;
+  size_t leaf_len = ((size_t)leaf_len_bytes[0] << 8) | (size_t)leaf_len_bytes[1];
+  size_t certificate_body_offset = (size_t)(body - c->server_handshake_messages);
+  TLS13_Handshake_FlightState_set_certificate_leaf(
+      c->server_handshake_flight_state,
+      certificate_body_offset + leaf_offset,
+      leaf_len);
 #else
   if (!tls13_wire_parse_certificate_leaf_der(body, body_len, &c->leaf_der, &c->leaf_der_len)) {
     fprintf(stderr, "failed to parse server Certificate\n");
@@ -2043,6 +2073,12 @@ bool TLS13_Handshake_ByteDriver_External_accept_certificate_verify(
   c->signature_len =
       ((size_t)signature_len_bytes[0] << 8) | (size_t)signature_len_bytes[1];
   c->signature = body + 4;
+  size_t signature_body_offset = (size_t)(body - c->server_handshake_messages);
+  TLS13_Handshake_FlightState_set_certificate_verify_signature(
+      c->server_handshake_flight_state,
+      c->signature_scheme,
+      signature_body_offset + 4u,
+      c->signature_len);
 #else
   if (!tls13_wire_parse_certificate_verify(
           body,

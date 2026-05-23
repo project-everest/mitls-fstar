@@ -7,12 +7,18 @@ open Pulse.Lib.Box { box, (!), (:=) }
 
 module Box = Pulse.Lib.Box
 module SZ = FStar.SizeT
+module U16 = FStar.UInt16
 
 noeq
 type flight_state = {
   handshake_len_box: box SZ.t;
   parsed_len_box: box SZ.t;
   certificate_verify_offset_box: box SZ.t;
+  certificate_leaf_offset_box: box SZ.t;
+  certificate_leaf_len_box: box SZ.t;
+  certificate_verify_signature_scheme_box: box U16.t;
+  certificate_verify_signature_offset_box: box SZ.t;
+  certificate_verify_signature_len_box: box SZ.t;
   before_finished_len_box: box SZ.t;
   through_finished_len_box: box SZ.t;
   saw_encrypted_extensions_box: box bool;
@@ -22,11 +28,18 @@ type flight_state = {
 }
 
 let is_flight_state ([@@@mkey] st: flight_state) : slprop =
-  exists* handshake_len parsed_len certificate_verify_offset before_finished_len through_finished_len
+  exists* handshake_len parsed_len certificate_verify_offset certificate_leaf_offset certificate_leaf_len
+          certificate_verify_signature_scheme certificate_verify_signature_offset certificate_verify_signature_len
+          before_finished_len through_finished_len
           saw_encrypted_extensions saw_certificate saw_certificate_verify saw_finished.
     Box.pts_to st.handshake_len_box handshake_len **
     Box.pts_to st.parsed_len_box parsed_len **
     Box.pts_to st.certificate_verify_offset_box certificate_verify_offset **
+    Box.pts_to st.certificate_leaf_offset_box certificate_leaf_offset **
+    Box.pts_to st.certificate_leaf_len_box certificate_leaf_len **
+    Box.pts_to st.certificate_verify_signature_scheme_box certificate_verify_signature_scheme **
+    Box.pts_to st.certificate_verify_signature_offset_box certificate_verify_signature_offset **
+    Box.pts_to st.certificate_verify_signature_len_box certificate_verify_signature_len **
     Box.pts_to st.before_finished_len_box before_finished_len **
     Box.pts_to st.through_finished_len_box through_finished_len **
     Box.pts_to st.saw_encrypted_extensions_box saw_encrypted_extensions **
@@ -41,6 +54,11 @@ fn flight_state_new ()
   let handshake_len_box = Box.alloc 0sz;
   let parsed_len_box = Box.alloc 0sz;
   let certificate_verify_offset_box = Box.alloc 0sz;
+  let certificate_leaf_offset_box = Box.alloc 0sz;
+  let certificate_leaf_len_box = Box.alloc 0sz;
+  let certificate_verify_signature_scheme_box = Box.alloc 0us;
+  let certificate_verify_signature_offset_box = Box.alloc 0sz;
+  let certificate_verify_signature_len_box = Box.alloc 0sz;
   let before_finished_len_box = Box.alloc 0sz;
   let through_finished_len_box = Box.alloc 0sz;
   let saw_encrypted_extensions_box = Box.alloc false;
@@ -51,6 +69,11 @@ fn flight_state_new ()
     handshake_len_box;
     parsed_len_box;
     certificate_verify_offset_box;
+    certificate_leaf_offset_box;
+    certificate_leaf_len_box;
+    certificate_verify_signature_scheme_box;
+    certificate_verify_signature_offset_box;
+    certificate_verify_signature_len_box;
     before_finished_len_box;
     through_finished_len_box;
     saw_encrypted_extensions_box;
@@ -61,6 +84,11 @@ fn flight_state_new ()
   with v. rewrite (Box.pts_to handshake_len_box v) as (Box.pts_to st.handshake_len_box v);
   with v. rewrite (Box.pts_to parsed_len_box v) as (Box.pts_to st.parsed_len_box v);
   with v. rewrite (Box.pts_to certificate_verify_offset_box v) as (Box.pts_to st.certificate_verify_offset_box v);
+  with v. rewrite (Box.pts_to certificate_leaf_offset_box v) as (Box.pts_to st.certificate_leaf_offset_box v);
+  with v. rewrite (Box.pts_to certificate_leaf_len_box v) as (Box.pts_to st.certificate_leaf_len_box v);
+  with v. rewrite (Box.pts_to certificate_verify_signature_scheme_box v) as (Box.pts_to st.certificate_verify_signature_scheme_box v);
+  with v. rewrite (Box.pts_to certificate_verify_signature_offset_box v) as (Box.pts_to st.certificate_verify_signature_offset_box v);
+  with v. rewrite (Box.pts_to certificate_verify_signature_len_box v) as (Box.pts_to st.certificate_verify_signature_len_box v);
   with v. rewrite (Box.pts_to before_finished_len_box v) as (Box.pts_to st.before_finished_len_box v);
   with v. rewrite (Box.pts_to through_finished_len_box v) as (Box.pts_to st.through_finished_len_box v);
   with v. rewrite (Box.pts_to saw_encrypted_extensions_box v) as (Box.pts_to st.saw_encrypted_extensions_box v);
@@ -79,6 +107,11 @@ fn flight_state_free (st: flight_state)
   Box.free st.handshake_len_box;
   Box.free st.parsed_len_box;
   Box.free st.certificate_verify_offset_box;
+  Box.free st.certificate_leaf_offset_box;
+  Box.free st.certificate_leaf_len_box;
+  Box.free st.certificate_verify_signature_scheme_box;
+  Box.free st.certificate_verify_signature_offset_box;
+  Box.free st.certificate_verify_signature_len_box;
   Box.free st.before_finished_len_box;
   Box.free st.through_finished_len_box;
   Box.free st.saw_encrypted_extensions_box;
@@ -95,6 +128,11 @@ fn reset (st: flight_state)
   st.handshake_len_box := 0sz;
   st.parsed_len_box := 0sz;
   st.certificate_verify_offset_box := 0sz;
+  st.certificate_leaf_offset_box := 0sz;
+  st.certificate_leaf_len_box := 0sz;
+  st.certificate_verify_signature_scheme_box := 0us;
+  st.certificate_verify_signature_offset_box := 0sz;
+  st.certificate_verify_signature_len_box := 0sz;
   st.before_finished_len_box := 0sz;
   st.through_finished_len_box := 0sz;
   st.saw_encrypted_extensions_box := false;
@@ -193,6 +231,16 @@ fn accept_certificate (st: flight_state) (message_len: SZ.t)
   }
 }
 
+fn set_certificate_leaf (st: flight_state) (leaf_offset: SZ.t) (leaf_len: SZ.t)
+  requires is_flight_state st
+  ensures is_flight_state st
+{
+  unfold (is_flight_state st);
+  st.certificate_leaf_offset_box := leaf_offset;
+  st.certificate_leaf_len_box := leaf_len;
+  fold (is_flight_state st);
+}
+
 fn accept_certificate_verify (st: flight_state) (message_len: SZ.t)
   requires is_flight_state st
   returns ok: bool
@@ -217,6 +265,21 @@ fn accept_certificate_verify (st: flight_state) (message_len: SZ.t)
     fold (is_flight_state st);
     false
   }
+}
+
+fn set_certificate_verify_signature
+  (st: flight_state)
+  (signature_scheme: U16.t)
+  (signature_offset: SZ.t)
+  (signature_len: SZ.t)
+  requires is_flight_state st
+  ensures is_flight_state st
+{
+  unfold (is_flight_state st);
+  st.certificate_verify_signature_scheme_box := signature_scheme;
+  st.certificate_verify_signature_offset_box := signature_offset;
+  st.certificate_verify_signature_len_box := signature_len;
+  fold (is_flight_state st);
 }
 
 fn accept_finished (st: flight_state) (message_len: SZ.t) (body_len: SZ.t)
@@ -256,6 +319,61 @@ fn certificate_verify_offset (st: flight_state)
   let offset = !st.certificate_verify_offset_box;
   fold (is_flight_state st);
   offset
+}
+
+fn certificate_leaf_offset (st: flight_state)
+  requires is_flight_state st
+  returns offset: SZ.t
+  ensures is_flight_state st
+{
+  unfold (is_flight_state st);
+  let offset = !st.certificate_leaf_offset_box;
+  fold (is_flight_state st);
+  offset
+}
+
+fn certificate_leaf_len (st: flight_state)
+  requires is_flight_state st
+  returns len: SZ.t
+  ensures is_flight_state st
+{
+  unfold (is_flight_state st);
+  let len = !st.certificate_leaf_len_box;
+  fold (is_flight_state st);
+  len
+}
+
+fn certificate_verify_signature_scheme (st: flight_state)
+  requires is_flight_state st
+  returns scheme: U16.t
+  ensures is_flight_state st
+{
+  unfold (is_flight_state st);
+  let scheme = !st.certificate_verify_signature_scheme_box;
+  fold (is_flight_state st);
+  scheme
+}
+
+fn certificate_verify_signature_offset (st: flight_state)
+  requires is_flight_state st
+  returns offset: SZ.t
+  ensures is_flight_state st
+{
+  unfold (is_flight_state st);
+  let offset = !st.certificate_verify_signature_offset_box;
+  fold (is_flight_state st);
+  offset
+}
+
+fn certificate_verify_signature_len (st: flight_state)
+  requires is_flight_state st
+  returns len: SZ.t
+  ensures is_flight_state st
+{
+  unfold (is_flight_state st);
+  let len = !st.certificate_verify_signature_len_box;
+  fold (is_flight_state st);
+  len
 }
 
 fn server_before_finished_len (st: flight_state)
