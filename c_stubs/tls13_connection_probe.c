@@ -1,7 +1,11 @@
 #include "tls13_connection_probe.h"
 
 #include "tls13_hacl_stubs.h"
+#ifdef TLS13_CONNECTION_PROBE_USE_EXTRACTED_HANDSHAKE_LAYER
+#include "tls13_handshake_external_layer.h"
+#else
 #include "tls13_handshake_external.h"
+#endif
 #include "tls13_io_stubs.h"
 #include "tls13_openssl_stubs.h"
 #include "tls13_wire_stubs.h"
@@ -32,6 +36,11 @@
 #define TLS13_Connection_connection TLS13_Connection_External_connection
 #define TLS13_Connection_connection_s TLS13_Connection_External_connection_s
 #define TLS13_Handshake_ByteDriver_External_context_s TLS13_Connection_External_connection_s
+#endif
+
+#ifdef TLS13_CONNECTION_PROBE_USE_EXTRACTED_HANDSHAKE_LAYER
+#define TLS13_Handshake_External_handshake_context_s TLS13_Connection_connection_s
+typedef TLS13_Handshake_External_handshake_context TLS13_Handshake_handshake_context;
 #endif
 
 struct TLS13_Connection_connection_s {
@@ -658,7 +667,7 @@ static bool pending_handshake_body(
 }
 #endif
 
-void TLS13_Handshake_send_client_hello(
+static void probe_handshake_send_client_hello(
     TLS13_Handshake_handshake_context ctx,
     TLS13_IO_channel ch,
     void *erased_state_ref,
@@ -739,7 +748,7 @@ void TLS13_Handshake_send_client_hello(
   }
 }
 
-bool TLS13_Handshake_recv_server_hello(
+static bool probe_handshake_recv_server_hello(
     TLS13_Handshake_handshake_context ctx,
     TLS13_IO_channel ch,
     void *erased_state_ref,
@@ -808,7 +817,7 @@ bool TLS13_Handshake_recv_server_hello(
   return true;
 }
 
-bool TLS13_Handshake_recv_encrypted_extensions(
+static bool probe_handshake_recv_encrypted_extensions(
     TLS13_Handshake_handshake_context ctx,
     TLS13_IO_channel ch,
     void *erased_state_ref,
@@ -1010,7 +1019,7 @@ bool TLS13_Handshake_recv_encrypted_extensions(
 #endif
 }
 
-bool TLS13_Handshake_recv_certificate(
+static bool probe_handshake_recv_certificate(
     TLS13_Handshake_handshake_context ctx,
     TLS13_IO_channel ch,
     void *erased_state_ref,
@@ -1026,7 +1035,7 @@ bool TLS13_Handshake_recv_certificate(
   return true;
 }
 
-bool TLS13_Handshake_validate_certificate(
+static bool probe_handshake_validate_certificate(
     TLS13_Handshake_handshake_context ctx,
     void *erased_state_ref,
     void *erased_state) {
@@ -1056,7 +1065,7 @@ bool TLS13_Handshake_validate_certificate(
   return true;
 }
 
-bool TLS13_Handshake_recv_certificate_verify(
+static bool probe_handshake_recv_certificate_verify(
     TLS13_Handshake_handshake_context ctx,
     TLS13_IO_channel ch,
     void *erased_state_ref,
@@ -1110,7 +1119,7 @@ bool TLS13_Handshake_recv_certificate_verify(
   return true;
 }
 
-bool TLS13_Handshake_recv_server_finished(
+static bool probe_handshake_recv_server_finished(
     TLS13_Handshake_handshake_context ctx,
     TLS13_IO_channel ch,
     void *erased_state_ref,
@@ -1139,7 +1148,7 @@ bool TLS13_Handshake_recv_server_finished(
   return true;
 }
 
-bool TLS13_Handshake_send_client_finished(
+static bool probe_handshake_send_client_finished(
     TLS13_Handshake_handshake_context ctx,
     TLS13_IO_channel ch,
     void *erased_state_ref,
@@ -1257,6 +1266,121 @@ bool TLS13_Handshake_send_client_finished(
   c->server_application_sequence_number = 0;
   return true;
 }
+
+#ifdef TLS13_CONNECTION_PROBE_USE_EXTRACTED_HANDSHAKE_LAYER
+void TLS13_Handshake_External_send_client_hello(
+    TLS13_Handshake_External_handshake_context ctx,
+    TLS13_IO_channel ch) {
+  probe_handshake_send_client_hello((TLS13_Handshake_handshake_context)ctx, ch, NULL, NULL);
+}
+
+bool TLS13_Handshake_External_recv_server_hello(
+    TLS13_Handshake_External_handshake_context ctx,
+    TLS13_IO_channel ch) {
+  return probe_handshake_recv_server_hello((TLS13_Handshake_handshake_context)ctx, ch, NULL, NULL);
+}
+
+bool TLS13_Handshake_External_recv_encrypted_extensions(
+    TLS13_Handshake_External_handshake_context ctx,
+    TLS13_IO_channel ch) {
+  return probe_handshake_recv_encrypted_extensions(
+      (TLS13_Handshake_handshake_context)ctx, ch, NULL, NULL);
+}
+
+bool TLS13_Handshake_External_recv_certificate(
+    TLS13_Handshake_External_handshake_context ctx,
+    TLS13_IO_channel ch) {
+  return probe_handshake_recv_certificate((TLS13_Handshake_handshake_context)ctx, ch, NULL, NULL);
+}
+
+bool TLS13_Handshake_External_validate_certificate(
+    TLS13_Handshake_External_handshake_context ctx) {
+  return probe_handshake_validate_certificate((TLS13_Handshake_handshake_context)ctx, NULL, NULL);
+}
+
+bool TLS13_Handshake_External_recv_certificate_verify(
+    TLS13_Handshake_External_handshake_context ctx,
+    TLS13_IO_channel ch) {
+  return probe_handshake_recv_certificate_verify(
+      (TLS13_Handshake_handshake_context)ctx, ch, NULL, NULL);
+}
+
+bool TLS13_Handshake_External_recv_server_finished(
+    TLS13_Handshake_External_handshake_context ctx,
+    TLS13_IO_channel ch) {
+  return probe_handshake_recv_server_finished(
+      (TLS13_Handshake_handshake_context)ctx, ch, NULL, NULL);
+}
+
+bool TLS13_Handshake_External_send_client_finished(
+    TLS13_Handshake_External_handshake_context ctx,
+    TLS13_IO_channel ch) {
+  return probe_handshake_send_client_finished((TLS13_Handshake_handshake_context)ctx, ch, NULL, NULL);
+}
+#else
+void TLS13_Handshake_send_client_hello(
+    TLS13_Handshake_handshake_context ctx,
+    TLS13_IO_channel ch,
+    void *erased_state_ref,
+    void *erased_state) {
+  probe_handshake_send_client_hello(ctx, ch, erased_state_ref, erased_state);
+}
+
+bool TLS13_Handshake_recv_server_hello(
+    TLS13_Handshake_handshake_context ctx,
+    TLS13_IO_channel ch,
+    void *erased_state_ref,
+    void *erased_state) {
+  return probe_handshake_recv_server_hello(ctx, ch, erased_state_ref, erased_state);
+}
+
+bool TLS13_Handshake_recv_encrypted_extensions(
+    TLS13_Handshake_handshake_context ctx,
+    TLS13_IO_channel ch,
+    void *erased_state_ref,
+    void *erased_state) {
+  return probe_handshake_recv_encrypted_extensions(ctx, ch, erased_state_ref, erased_state);
+}
+
+bool TLS13_Handshake_recv_certificate(
+    TLS13_Handshake_handshake_context ctx,
+    TLS13_IO_channel ch,
+    void *erased_state_ref,
+    void *erased_state) {
+  return probe_handshake_recv_certificate(ctx, ch, erased_state_ref, erased_state);
+}
+
+bool TLS13_Handshake_validate_certificate(
+    TLS13_Handshake_handshake_context ctx,
+    void *erased_state_ref,
+    void *erased_state) {
+  return probe_handshake_validate_certificate(ctx, erased_state_ref, erased_state);
+}
+
+bool TLS13_Handshake_recv_certificate_verify(
+    TLS13_Handshake_handshake_context ctx,
+    TLS13_IO_channel ch,
+    void *erased_state_ref,
+    void *erased_state) {
+  return probe_handshake_recv_certificate_verify(ctx, ch, erased_state_ref, erased_state);
+}
+
+bool TLS13_Handshake_recv_server_finished(
+    TLS13_Handshake_handshake_context ctx,
+    TLS13_IO_channel ch,
+    void *erased_state_ref,
+    void *erased_state) {
+  return probe_handshake_recv_server_finished(ctx, ch, erased_state_ref, erased_state);
+}
+
+bool TLS13_Handshake_send_client_finished(
+    TLS13_Handshake_handshake_context ctx,
+    TLS13_IO_channel ch,
+    void *erased_state_ref,
+    void *erased_state) {
+  return probe_handshake_send_client_finished(ctx, ch, erased_state_ref, erased_state);
+}
+#endif
 
 TLS13_Connection_connection tls13_connection_probe_new(
     const char *host,
