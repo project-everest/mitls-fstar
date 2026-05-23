@@ -751,8 +751,18 @@ bool TLS13_Handshake_recv_server_hello(
     fail_handshake(c);
     return false;
   }
+#ifdef TLS13_CONNECTION_PROBE_USE_EXTRACTED_HANDSHAKE_FRAMING
+  if (!TLS13_Handshake_Framing_parse_supported_server_hello(
+          c->server_hello_fragment,
+          fragment_len,
+          server_random,
+          sizeof server_random,
+          server_key_share,
+          sizeof server_key_share)) {
+#else
   if (!tls13_wire_parse_supported_server_hello(
           c->server_hello_fragment, fragment_len, server_random, server_key_share)) {
+#endif
     fprintf(stderr, "failed to parse supported OpenSSL ServerHello\n");
     fail_handshake(c);
     return false;

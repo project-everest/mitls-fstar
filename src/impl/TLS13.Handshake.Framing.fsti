@@ -48,6 +48,30 @@ fn parse_handshake_header
                 (ok ==> SZ.v input_len >= 4) /\
                 (not ok ==> SZ.v input_len < 4))
 
+fn parse_supported_server_hello
+  (input: array U8.t)
+  (input_len: SZ.t)
+  (random_out: array U8.t)
+  (random_out_len: SZ.t)
+  (key_share_out: array U8.t)
+  (key_share_out_len: SZ.t)
+  requires pts_to input 'input_bytes **
+           pts_to random_out 'old_random **
+           pts_to key_share_out 'old_key_share **
+           pure (B.length 'input_bytes == SZ.v input_len /\
+                B.length 'old_random == SZ.v random_out_len /\
+                B.length 'old_key_share == SZ.v key_share_out_len /\
+                SZ.v random_out_len == 32 /\
+                SZ.v key_share_out_len == 32)
+  returns ok: bool
+  ensures exists* random_bytes key_share_bytes.
+          pts_to input 'input_bytes **
+          pts_to random_out random_bytes **
+          pts_to key_share_out key_share_bytes **
+          pure (B.length random_bytes == 32 /\
+                B.length key_share_bytes == 32 /\
+                (ok ==> SZ.v input_len == 90))
+
 fn parse_certificate_verify_body
   (input: array U8.t)
   (input_len: SZ.t)

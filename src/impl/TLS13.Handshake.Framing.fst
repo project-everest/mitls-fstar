@@ -135,6 +135,187 @@ fn parse_handshake_header
   }
 }
 
+fn copy_server_hello_random
+  (input: array U8.t)
+  (random_out: array U8.t)
+  requires pts_to input 'input_bytes **
+           pts_to random_out 'old_random **
+           pure (B.length 'input_bytes == 90 /\ B.length 'old_random == 32)
+  ensures exists* random_bytes.
+          pts_to input 'input_bytes **
+          pts_to random_out random_bytes **
+          pure (B.length random_bytes == 32)
+{
+  random_out.(0sz) <- input.(6sz); random_out.(1sz) <- input.(7sz);
+  random_out.(2sz) <- input.(8sz); random_out.(3sz) <- input.(9sz);
+  random_out.(4sz) <- input.(10sz); random_out.(5sz) <- input.(11sz);
+  random_out.(6sz) <- input.(12sz); random_out.(7sz) <- input.(13sz);
+  random_out.(8sz) <- input.(14sz); random_out.(9sz) <- input.(15sz);
+  random_out.(10sz) <- input.(16sz); random_out.(11sz) <- input.(17sz);
+  random_out.(12sz) <- input.(18sz); random_out.(13sz) <- input.(19sz);
+  random_out.(14sz) <- input.(20sz); random_out.(15sz) <- input.(21sz);
+  with random_s. assert (pts_to random_out random_s);
+  assert (pure (Seq.length random_s == 32));
+  random_out.(16sz) <- input.(22sz); random_out.(17sz) <- input.(23sz);
+  random_out.(18sz) <- input.(24sz); random_out.(19sz) <- input.(25sz);
+  random_out.(20sz) <- input.(26sz); random_out.(21sz) <- input.(27sz);
+  random_out.(22sz) <- input.(28sz); random_out.(23sz) <- input.(29sz);
+  random_out.(24sz) <- input.(30sz); random_out.(25sz) <- input.(31sz);
+  random_out.(26sz) <- input.(32sz); random_out.(27sz) <- input.(33sz);
+  random_out.(28sz) <- input.(34sz); random_out.(29sz) <- input.(35sz);
+  random_out.(30sz) <- input.(36sz); random_out.(31sz) <- input.(37sz);
+}
+
+fn copy_server_key_share_at_52
+  (input: array U8.t)
+  (key_share_out: array U8.t)
+  requires pts_to input 'input_bytes **
+           pts_to key_share_out 'old_key_share **
+           pure (B.length 'input_bytes == 90 /\ B.length 'old_key_share == 32)
+  ensures exists* key_share_bytes.
+          pts_to input 'input_bytes **
+          pts_to key_share_out key_share_bytes **
+          pure (B.length key_share_bytes == 32)
+{
+  key_share_out.(0sz) <- input.(52sz); key_share_out.(1sz) <- input.(53sz);
+  key_share_out.(2sz) <- input.(54sz); key_share_out.(3sz) <- input.(55sz);
+  key_share_out.(4sz) <- input.(56sz); key_share_out.(5sz) <- input.(57sz);
+  key_share_out.(6sz) <- input.(58sz); key_share_out.(7sz) <- input.(59sz);
+  key_share_out.(8sz) <- input.(60sz); key_share_out.(9sz) <- input.(61sz);
+  key_share_out.(10sz) <- input.(62sz); key_share_out.(11sz) <- input.(63sz);
+  key_share_out.(12sz) <- input.(64sz); key_share_out.(13sz) <- input.(65sz);
+  key_share_out.(14sz) <- input.(66sz); key_share_out.(15sz) <- input.(67sz);
+  with key_share_s. assert (pts_to key_share_out key_share_s);
+  assert (pure (Seq.length key_share_s == 32));
+  key_share_out.(16sz) <- input.(68sz); key_share_out.(17sz) <- input.(69sz);
+  key_share_out.(18sz) <- input.(70sz); key_share_out.(19sz) <- input.(71sz);
+  key_share_out.(20sz) <- input.(72sz); key_share_out.(21sz) <- input.(73sz);
+  key_share_out.(22sz) <- input.(74sz); key_share_out.(23sz) <- input.(75sz);
+  key_share_out.(24sz) <- input.(76sz); key_share_out.(25sz) <- input.(77sz);
+  key_share_out.(26sz) <- input.(78sz); key_share_out.(27sz) <- input.(79sz);
+  key_share_out.(28sz) <- input.(80sz); key_share_out.(29sz) <- input.(81sz);
+  key_share_out.(30sz) <- input.(82sz); key_share_out.(31sz) <- input.(83sz);
+}
+
+fn copy_server_key_share_at_58
+  (input: array U8.t)
+  (key_share_out: array U8.t)
+  requires pts_to input 'input_bytes **
+           pts_to key_share_out 'old_key_share **
+           pure (B.length 'input_bytes == 90 /\ B.length 'old_key_share == 32)
+  ensures exists* key_share_bytes.
+          pts_to input 'input_bytes **
+          pts_to key_share_out key_share_bytes **
+          pure (B.length key_share_bytes == 32)
+{
+  key_share_out.(0sz) <- input.(58sz); key_share_out.(1sz) <- input.(59sz);
+  key_share_out.(2sz) <- input.(60sz); key_share_out.(3sz) <- input.(61sz);
+  key_share_out.(4sz) <- input.(62sz); key_share_out.(5sz) <- input.(63sz);
+  key_share_out.(6sz) <- input.(64sz); key_share_out.(7sz) <- input.(65sz);
+  key_share_out.(8sz) <- input.(66sz); key_share_out.(9sz) <- input.(67sz);
+  key_share_out.(10sz) <- input.(68sz); key_share_out.(11sz) <- input.(69sz);
+  key_share_out.(12sz) <- input.(70sz); key_share_out.(13sz) <- input.(71sz);
+  key_share_out.(14sz) <- input.(72sz); key_share_out.(15sz) <- input.(73sz);
+  with key_share_s. assert (pts_to key_share_out key_share_s);
+  assert (pure (Seq.length key_share_s == 32));
+  key_share_out.(16sz) <- input.(74sz); key_share_out.(17sz) <- input.(75sz);
+  key_share_out.(18sz) <- input.(76sz); key_share_out.(19sz) <- input.(77sz);
+  key_share_out.(20sz) <- input.(78sz); key_share_out.(21sz) <- input.(79sz);
+  key_share_out.(22sz) <- input.(80sz); key_share_out.(23sz) <- input.(81sz);
+  key_share_out.(24sz) <- input.(82sz); key_share_out.(25sz) <- input.(83sz);
+  key_share_out.(26sz) <- input.(84sz); key_share_out.(27sz) <- input.(85sz);
+  key_share_out.(28sz) <- input.(86sz); key_share_out.(29sz) <- input.(87sz);
+  key_share_out.(30sz) <- input.(88sz); key_share_out.(31sz) <- input.(89sz);
+}
+
+fn parse_supported_server_hello
+  (input: array U8.t)
+  (input_len: SZ.t)
+  (random_out: array U8.t)
+  (random_out_len: SZ.t)
+  (key_share_out: array U8.t)
+  (key_share_out_len: SZ.t)
+  requires pts_to input 'input_bytes **
+           pts_to random_out 'old_random **
+           pts_to key_share_out 'old_key_share **
+           pure (B.length 'input_bytes == SZ.v input_len /\
+                 B.length 'old_random == SZ.v random_out_len /\
+                 B.length 'old_key_share == SZ.v key_share_out_len /\
+                 SZ.v random_out_len == 32 /\
+                 SZ.v key_share_out_len == 32)
+  returns ok: bool
+  ensures exists* random_bytes key_share_bytes.
+          pts_to input 'input_bytes **
+          pts_to random_out random_bytes **
+          pts_to key_share_out key_share_bytes **
+          pure (B.length random_bytes == 32 /\
+                B.length key_share_bytes == 32 /\
+                (ok ==> SZ.v input_len == 90))
+{
+  pts_to_len input;
+  pts_to_len random_out;
+  pts_to_len key_share_out;
+  if SZ.(input_len =^ 90sz) {
+    let header_ok =
+      (input.(0sz) = 0x02uy) && (input.(1sz) = 0uy) &&
+      (input.(2sz) = 0uy) && (input.(3sz) = 0x56uy) &&
+      (input.(4sz) = 0x03uy) && (input.(5sz) = 0x03uy) &&
+      (input.(38sz) = 0uy) &&
+      (input.(39sz) = 0x13uy) && (input.(40sz) = 0x03uy) &&
+      (input.(41sz) = 0uy) &&
+      (input.(42sz) = 0uy) && (input.(43sz) = 0x2euy);
+    let hrr =
+      (input.(6sz) = 0xcfuy) && (input.(7sz) = 0x21uy) &&
+      (input.(8sz) = 0xaduy) && (input.(9sz) = 0x74uy) &&
+      (input.(10sz) = 0xe5uy) && (input.(11sz) = 0x9auy) &&
+      (input.(12sz) = 0x61uy) && (input.(13sz) = 0x11uy) &&
+      (input.(14sz) = 0xbeuy) && (input.(15sz) = 0x1duy) &&
+      (input.(16sz) = 0x8cuy) && (input.(17sz) = 0x02uy) &&
+      (input.(18sz) = 0x1euy) && (input.(19sz) = 0x65uy) &&
+      (input.(20sz) = 0xb8uy) && (input.(21sz) = 0x91uy) &&
+      (input.(22sz) = 0xc2uy) && (input.(23sz) = 0xa2uy) &&
+      (input.(24sz) = 0x11uy) && (input.(25sz) = 0x16uy) &&
+      (input.(26sz) = 0x7auy) && (input.(27sz) = 0xbbuy) &&
+      (input.(28sz) = 0x8cuy) && (input.(29sz) = 0x5euy) &&
+      (input.(30sz) = 0x07uy) && (input.(31sz) = 0x9euy) &&
+      (input.(32sz) = 0x09uy) && (input.(33sz) = 0xe2uy) &&
+      (input.(34sz) = 0xc8uy) && (input.(35sz) = 0xa8uy) &&
+      (input.(36sz) = 0x33uy) && (input.(37sz) = 0x9cuy);
+    let key_share_first =
+      (input.(44sz) = 0uy) && (input.(45sz) = 0x33uy) &&
+      (input.(46sz) = 0uy) && (input.(47sz) = 0x24uy) &&
+      (input.(48sz) = 0uy) && (input.(49sz) = 0x1duy) &&
+      (input.(50sz) = 0uy) && (input.(51sz) = 0x20uy) &&
+      (input.(84sz) = 0uy) && (input.(85sz) = 0x2buy) &&
+      (input.(86sz) = 0uy) && (input.(87sz) = 0x02uy) &&
+      (input.(88sz) = 0x03uy) && (input.(89sz) = 0x04uy);
+    let supported_versions_first =
+      (input.(44sz) = 0uy) && (input.(45sz) = 0x2buy) &&
+      (input.(46sz) = 0uy) && (input.(47sz) = 0x02uy) &&
+      (input.(48sz) = 0x03uy) && (input.(49sz) = 0x04uy) &&
+      (input.(50sz) = 0uy) && (input.(51sz) = 0x33uy) &&
+      (input.(52sz) = 0uy) && (input.(53sz) = 0x24uy) &&
+      (input.(54sz) = 0uy) && (input.(55sz) = 0x1duy) &&
+      (input.(56sz) = 0uy) && (input.(57sz) = 0x20uy);
+    if (header_ok && (not hrr)) {
+      copy_server_hello_random input random_out;
+      if key_share_first {
+        copy_server_key_share_at_52 input key_share_out;
+        true
+      } else if supported_versions_first {
+        copy_server_key_share_at_58 input key_share_out;
+        true
+      } else {
+        false
+      }
+    } else {
+      false
+    }
+  } else {
+    false
+  }
+}
+
 fn parse_certificate_verify_body
   (input: array U8.t)
   (input_len: SZ.t)
