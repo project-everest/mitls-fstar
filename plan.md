@@ -393,6 +393,31 @@ The remaining trusted TLS-owned backend pieces to eliminate, in order, are:
 8. Large modules and globally visible proof helpers can make verification slow or flaky; enforce small modules, `.fsti` boundaries, low rlimits, and early SMT profiling from the beginning.
 9. The GitHub MCP semantic-search requirement is not currently satisfiable in this CLI environment because no MCP semantic-search tool is exposed.
 
+## Current trusted boundary audit
+
+The default `make test-openssl-echo` client path now uses extracted verified wrappers for the connection, extracted handshake driver control flow, extracted key schedule, extracted record seal/open, extracted no-padding TLSInnerPlaintext encode/decode, extracted record header construction/parsing, extracted handshake header parsing, and extracted CertificateVerify input construction. The remaining trusted code in the default wrapper interop path is:
+
+1. `tls13_connection_probe.c`
+   - Raw socket orchestration, record-read loop, encrypted-handshake buffering, transcript buffer concatenation, handshake message dispatch, certificate/CertificateVerify/Finished offsets, and application read/write loop scaffolding.
+   - Remaining TLS-owned work to replace: transcript accumulator, encrypted-handshake byte driver, handshake message body dispatch, partial-I/O/multi-record buffering, close_notify and fragmentation handling.
+2. `tls13_wire_stubs.c`
+   - Still trusted for scoped ClientHello serialization, ServerHello body parsing, Certificate leaf-DER extraction, CertificateVerify body parsing, and legacy diagnostic paths.
+   - Replaced in the wrapper path so far: record header write/read, TLSInnerPlaintext no-padding write/read, handshake header parse, and CertificateVerify input construction.
+3. `tls13_hacl_stubs.c` plus HACL* C snapshot
+   - Trusted for SHA-256, HMAC, HKDF, X25519, nonce construction in non-wrapper paths, and ChaCha20-Poly1305 primitives. Extracted wrappers now orchestrate key schedule and record state, but cryptographic algorithms remain HACL* C.
+4. `tls13_crypto_external.c`
+   - Trusted ABI glue from extracted key-schedule/record modules to the HACL* C wrappers.
+5. `tls13_openssl_stubs.c` plus OpenSSL
+   - Trusted X.509 chain/hostname validation and signature verification.
+6. `tls13_io_stubs.c`
+   - Trusted TCP connect/read/write/close wrapper.
+7. `tls13_pulse_shims.c`
+   - Trusted shim for extracted Pulse array-copy helper.
+8. Test harnesses
+   - `test/openssl_echo_server.c`, generated test certificates, and the shell harness are test infrastructure, not verified code.
+
+The next highest-value implementation step is the extracted handshake byte driver: move transcript accumulation, encrypted handshake record read/decrypt scheduling, handshake message body dispatch, and Finished transcript checkpoints out of `tls13_connection_probe.c`, while keeping HACL*, OpenSSL, raw I/O, and any not-yet-replaced parsers behind explicit trusted ABIs.
+
 ## Todos
 
 1. [done] Use the pinned initial scope decisions: client-only, X25519, `TLS_CHACHA20_POLY1305_SHA256`, supported signature schemes, HRR abort behavior, controlled OpenSSL echo parameters, later public HTTPS endpoint, and trusted parser/serializer boundary for v1.
