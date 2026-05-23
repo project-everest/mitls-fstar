@@ -3,9 +3,12 @@ module TLS13.Handshake.FlightState
 #lang-pulse
 
 open Pulse.Lib.Pervasives
+open Pulse.Lib.Array.PtsTo
 
+module B = TLS13.Bytes
 module SZ = FStar.SizeT
 module U16 = FStar.UInt16
+module U8 = FStar.UInt8
 
 val flight_state : Type0
 val is_flight_state: flight_state -> slprop
@@ -68,6 +71,30 @@ fn accept_finished (st: flight_state) (message_len: SZ.t) (body_len: SZ.t)
   requires is_flight_state st
   returns ok: bool
   ensures is_flight_state st
+
+fn set_server_finished_verify_data
+  (st: flight_state)
+  (verify_data: array U8.t)
+  (verify_data_len: SZ.t)
+  requires is_flight_state st **
+           pts_to verify_data 'verify_data_bytes **
+           pure (B.length 'verify_data_bytes == SZ.v verify_data_len /\
+                 SZ.v verify_data_len == 32)
+  ensures is_flight_state st **
+          pts_to verify_data 'verify_data_bytes
+
+fn copy_server_finished_verify_data
+  (st: flight_state)
+  (out: array U8.t)
+  (out_len: SZ.t)
+  requires is_flight_state st **
+           pts_to out 'old_out **
+           pure (B.length 'old_out == SZ.v out_len /\
+                 SZ.v out_len == 32)
+  ensures exists* out_bytes.
+          is_flight_state st **
+          pts_to out out_bytes **
+          pure (B.length out_bytes == 32)
 
 fn certificate_verify_offset (st: flight_state)
   requires is_flight_state st

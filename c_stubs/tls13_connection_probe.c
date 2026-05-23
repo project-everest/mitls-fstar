@@ -1202,6 +1202,15 @@ static bool probe_handshake_recv_server_finished(
     fail_handshake(c);
     return false;
   }
+#ifdef TLS13_CONNECTION_PROBE_USE_EXTRACTED_HANDSHAKE_BYTE_DRIVER
+  uint8_t server_finished_verify_data[32] = {0};
+  TLS13_Handshake_FlightState_copy_server_finished_verify_data(
+      c->server_handshake_flight_state,
+      server_finished_verify_data,
+      sizeof server_finished_verify_data);
+#else
+  const uint8_t *server_finished_verify_data = c->server_finished_verify_data;
+#endif
   if (verify_server_finished(
           c->client_hello,
           c->client_hello_len,
@@ -1213,7 +1222,7 @@ static bool probe_handshake_recv_server_finished(
 #else
           c->server_handshake_before_finished_len,
 #endif
-          c->server_finished_verify_data,
+          server_finished_verify_data,
           c->server_handshake_traffic_secret) != 0) {
     fprintf(stderr, "failed to verify OpenSSL server Finished\n");
     fail_handshake(c);
@@ -2121,7 +2130,12 @@ bool TLS13_Handshake_ByteDriver_External_accept_finished(
       TLS13_Handshake_FlightState_server_before_finished_len(c->server_handshake_flight_state);
   c->server_handshake_through_finished_len =
       TLS13_Handshake_FlightState_server_through_finished_len(c->server_handshake_flight_state);
+#ifdef TLS13_CONNECTION_PROBE_USE_EXTRACTED_HANDSHAKE_BYTE_DRIVER
+  TLS13_Handshake_FlightState_set_server_finished_verify_data(
+      c->server_handshake_flight_state, (uint8_t *)body, body_len);
+#else
   memcpy(c->server_finished_verify_data, body, sizeof c->server_finished_verify_data);
+#endif
   c->saw_finished = true;
   return true;
 }

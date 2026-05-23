@@ -3,11 +3,17 @@ module TLS13.Handshake.FlightState
 #lang-pulse
 
 open Pulse.Lib.Pervasives
+open Pulse.Lib.Array.PtsTo
 open Pulse.Lib.Box { box, (!), (:=) }
 
+module Arr = Pulse.Lib.Array
+module B = TLS13.Bytes
 module Box = Pulse.Lib.Box
+module Seq = FStar.Seq
 module SZ = FStar.SizeT
 module U16 = FStar.UInt16
+module U8 = FStar.UInt8
+module V = Pulse.Lib.Vec
 
 noeq
 type flight_state = {
@@ -19,6 +25,7 @@ type flight_state = {
   certificate_verify_signature_scheme_box: box U16.t;
   certificate_verify_signature_offset_box: box SZ.t;
   certificate_verify_signature_len_box: box SZ.t;
+  server_finished_verify_data: V.vec U8.t;
   before_finished_len_box: box SZ.t;
   through_finished_len_box: box SZ.t;
   saw_encrypted_extensions_box: box bool;
@@ -30,6 +37,7 @@ type flight_state = {
 let is_flight_state ([@@@mkey] st: flight_state) : slprop =
   exists* handshake_len parsed_len certificate_verify_offset certificate_leaf_offset certificate_leaf_len
           certificate_verify_signature_scheme certificate_verify_signature_offset certificate_verify_signature_len
+          server_finished_verify_data
           before_finished_len through_finished_len
           saw_encrypted_extensions saw_certificate saw_certificate_verify saw_finished.
     Box.pts_to st.handshake_len_box handshake_len **
@@ -40,12 +48,15 @@ let is_flight_state ([@@@mkey] st: flight_state) : slprop =
     Box.pts_to st.certificate_verify_signature_scheme_box certificate_verify_signature_scheme **
     Box.pts_to st.certificate_verify_signature_offset_box certificate_verify_signature_offset **
     Box.pts_to st.certificate_verify_signature_len_box certificate_verify_signature_len **
+    V.pts_to st.server_finished_verify_data server_finished_verify_data **
     Box.pts_to st.before_finished_len_box before_finished_len **
     Box.pts_to st.through_finished_len_box through_finished_len **
     Box.pts_to st.saw_encrypted_extensions_box saw_encrypted_extensions **
     Box.pts_to st.saw_certificate_box saw_certificate **
     Box.pts_to st.saw_certificate_verify_box saw_certificate_verify **
-    Box.pts_to st.saw_finished_box saw_finished
+    Box.pts_to st.saw_finished_box saw_finished **
+    pure (V.is_full_vec st.server_finished_verify_data /\
+          V.length st.server_finished_verify_data == 32)
 
 fn flight_state_new ()
   returns st: flight_state
@@ -59,6 +70,7 @@ fn flight_state_new ()
   let certificate_verify_signature_scheme_box = Box.alloc 0us;
   let certificate_verify_signature_offset_box = Box.alloc 0sz;
   let certificate_verify_signature_len_box = Box.alloc 0sz;
+  let server_finished_verify_data = V.alloc 0uy 32sz;
   let before_finished_len_box = Box.alloc 0sz;
   let through_finished_len_box = Box.alloc 0sz;
   let saw_encrypted_extensions_box = Box.alloc false;
@@ -74,6 +86,7 @@ fn flight_state_new ()
     certificate_verify_signature_scheme_box;
     certificate_verify_signature_offset_box;
     certificate_verify_signature_len_box;
+    server_finished_verify_data;
     before_finished_len_box;
     through_finished_len_box;
     saw_encrypted_extensions_box;
@@ -89,6 +102,7 @@ fn flight_state_new ()
   with v. rewrite (Box.pts_to certificate_verify_signature_scheme_box v) as (Box.pts_to st.certificate_verify_signature_scheme_box v);
   with v. rewrite (Box.pts_to certificate_verify_signature_offset_box v) as (Box.pts_to st.certificate_verify_signature_offset_box v);
   with v. rewrite (Box.pts_to certificate_verify_signature_len_box v) as (Box.pts_to st.certificate_verify_signature_len_box v);
+  with v. rewrite (V.pts_to server_finished_verify_data v) as (V.pts_to st.server_finished_verify_data v);
   with v. rewrite (Box.pts_to before_finished_len_box v) as (Box.pts_to st.before_finished_len_box v);
   with v. rewrite (Box.pts_to through_finished_len_box v) as (Box.pts_to st.through_finished_len_box v);
   with v. rewrite (Box.pts_to saw_encrypted_extensions_box v) as (Box.pts_to st.saw_encrypted_extensions_box v);
@@ -112,6 +126,7 @@ fn flight_state_free (st: flight_state)
   Box.free st.certificate_verify_signature_scheme_box;
   Box.free st.certificate_verify_signature_offset_box;
   Box.free st.certificate_verify_signature_len_box;
+  V.free st.server_finished_verify_data;
   Box.free st.before_finished_len_box;
   Box.free st.through_finished_len_box;
   Box.free st.saw_encrypted_extensions_box;
@@ -308,6 +323,48 @@ fn accept_finished (st: flight_state) (message_len: SZ.t) (body_len: SZ.t)
     fold (is_flight_state st);
     false
   }
+}
+
+fn set_server_finished_verify_data
+  (st: flight_state)
+  (verify_data: array U8.t)
+  (verify_data_len: SZ.t)
+  requires is_flight_state st **
+           pts_to verify_data 'verify_data_bytes **
+           pure (B.length 'verify_data_bytes == SZ.v verify_data_len /\
+                 SZ.v verify_data_len == 32)
+  ensures is_flight_state st **
+          pts_to verify_data 'verify_data_bytes
+{
+  unfold (is_flight_state st);
+  pts_to_len verify_data;
+  V.pts_to_len st.server_finished_verify_data;
+  V.to_array_pts_to st.server_finished_verify_data;
+  Arr.memcpy 32sz verify_data (V.vec_to_array st.server_finished_verify_data);
+  V.to_vec_pts_to st.server_finished_verify_data;
+  fold (is_flight_state st);
+}
+
+fn copy_server_finished_verify_data
+  (st: flight_state)
+  (out: array U8.t)
+  (out_len: SZ.t)
+  requires is_flight_state st **
+           pts_to out 'old_out **
+           pure (B.length 'old_out == SZ.v out_len /\
+                 SZ.v out_len == 32)
+  ensures exists* out_bytes.
+          is_flight_state st **
+          pts_to out out_bytes **
+          pure (B.length out_bytes == 32)
+{
+  unfold (is_flight_state st);
+  pts_to_len out;
+  V.pts_to_len st.server_finished_verify_data;
+  V.to_array_pts_to st.server_finished_verify_data;
+  Arr.memcpy 32sz (V.vec_to_array st.server_finished_verify_data) out;
+  V.to_vec_pts_to st.server_finished_verify_data;
+  fold (is_flight_state st);
 }
 
 fn certificate_verify_offset (st: flight_state)
