@@ -7,10 +7,6 @@ cd "$repo_root"
 scripts/generate-test-certs.sh test/certs >/dev/null
 make test/openssl_echo_server >/dev/null
 make test/test_extracted_connection_wrapper_openssl >/dev/null
-if [ "${TLS13_RUN_LEGACY_INTEROP:-0}" = "1" ]; then
-  make test/test_clienthello_openssl_probe >/dev/null
-  make test/test_extracted_connection_driver_openssl >/dev/null
-fi
 
 tmp_dir="$(mktemp -d test/openssl-echo.XXXXXX)"
 server_pid=""
@@ -69,118 +65,6 @@ run_case() {
     cat "$log" >&2
     exit 1
   fi
-}
-
-run_probe() {
-  local port log
-  port="$(pick_port)"
-  log="$tmp_dir/clienthello-probe.log"
-
-  test/openssl_echo_server "$port" test/certs/leaf.pem test/certs/leaf.key >"$log" 2>&1 &
-  server_pid=$!
-
-  for _ in $(seq 1 50); do
-    if grep -q "^[0-9][0-9]*$" "$log" 2>/dev/null; then
-      break
-    fi
-    sleep 0.1
-  done
-
-  if ! test/test_clienthello_openssl_probe 127.0.0.1 "$port" test/certs/ca.pem >>"$log" 2>&1; then
-    echo "ClientHello/OpenSSL handshake probe failed" >&2
-    echo "server/probe log:" >&2
-    cat "$log" >&2
-    exit 1
-  fi
-
-  kill "$server_pid" 2>/dev/null || true
-  wait "$server_pid" 2>/dev/null || true
-  server_pid=""
-}
-
-run_probe_rejects_wrong_ca() {
-  local port log wrong_certs
-  port="$(pick_port)"
-  log="$tmp_dir/clienthello-probe-wrong-ca.log"
-  wrong_certs="$tmp_dir/wrong-certs"
-  scripts/generate-test-certs.sh "$wrong_certs" >/dev/null
-
-  test/openssl_echo_server "$port" test/certs/leaf.pem test/certs/leaf.key >"$log" 2>&1 &
-  server_pid=$!
-
-  for _ in $(seq 1 50); do
-    if grep -q "^[0-9][0-9]*$" "$log" 2>/dev/null; then
-      break
-    fi
-    sleep 0.1
-  done
-
-  if test/test_clienthello_openssl_probe 127.0.0.1 "$port" "$wrong_certs/ca.pem" >>"$log" 2>&1; then
-    echo "ClientHello/OpenSSL probe unexpectedly accepted wrong CA" >&2
-    echo "server/probe log:" >&2
-    cat "$log" >&2
-    exit 1
-  fi
-
-  kill "$server_pid" 2>/dev/null || true
-  wait "$server_pid" 2>/dev/null || true
-  server_pid=""
-}
-
-run_extracted_driver() {
-  local port log
-  port="$(pick_port)"
-  log="$tmp_dir/extracted-driver.log"
-
-  test/openssl_echo_server "$port" test/certs/leaf.pem test/certs/leaf.key >"$log" 2>&1 &
-  server_pid=$!
-
-  for _ in $(seq 1 50); do
-    if grep -q "^[0-9][0-9]*$" "$log" 2>/dev/null; then
-      break
-    fi
-    sleep 0.1
-  done
-
-  if ! test/test_extracted_connection_driver_openssl 127.0.0.1 "$port" test/certs/ca.pem >>"$log" 2>&1; then
-    echo "extracted connection driver OpenSSL echo failed" >&2
-    echo "server/driver log:" >&2
-    cat "$log" >&2
-    exit 1
-  fi
-
-  kill "$server_pid" 2>/dev/null || true
-  wait "$server_pid" 2>/dev/null || true
-  server_pid=""
-}
-
-run_extracted_driver_rejects_wrong_ca() {
-  local port log wrong_certs
-  port="$(pick_port)"
-  log="$tmp_dir/extracted-driver-wrong-ca.log"
-  wrong_certs="$tmp_dir/extracted-driver-wrong-certs"
-  scripts/generate-test-certs.sh "$wrong_certs" >/dev/null
-
-  test/openssl_echo_server "$port" test/certs/leaf.pem test/certs/leaf.key >"$log" 2>&1 &
-  server_pid=$!
-
-  for _ in $(seq 1 50); do
-    if grep -q "^[0-9][0-9]*$" "$log" 2>/dev/null; then
-      break
-    fi
-    sleep 0.1
-  done
-
-  if test/test_extracted_connection_driver_openssl 127.0.0.1 "$port" "$wrong_certs/ca.pem" >>"$log" 2>&1; then
-    echo "extracted connection driver unexpectedly accepted wrong CA" >&2
-    echo "server/driver log:" >&2
-    cat "$log" >&2
-    exit 1
-  fi
-
-  kill "$server_pid" 2>/dev/null || true
-  wait "$server_pid" 2>/dev/null || true
-  server_pid=""
 }
 
 run_extracted_wrapper() {
@@ -251,18 +135,8 @@ with open(path, "wb") as f:
         f.write(pattern)
 PY
 
-# Primary client path: extracted verified wrappers with extracted key schedule,
-# record wrapper, and record framing around the remaining trusted byte backend.
 run_extracted_wrapper
 run_extracted_wrapper_rejects_wrong_ca
-
-if [ "${TLS13_RUN_LEGACY_INTEROP:-0}" = "1" ]; then
-  # Regression/diagnostic paths for comparing against earlier interop layers.
-  run_extracted_driver
-  run_extracted_driver_rejects_wrong_ca
-  run_probe
-  run_probe_rejects_wrong_ca
-fi
 
 run_case short "$short_payload"
 run_case large "$large_payload"

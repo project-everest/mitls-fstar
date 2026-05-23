@@ -60,10 +60,3 @@ path rejects the same server under the wrong test CA, and the target retains the
 multi-record payload smoke as a server-side compatibility check. Replacing the
 remaining trusted byte parser, X.509, crypto, and I/O backend pieces is still a
 later milestone.
-
-To also run the older extracted-driver route and the direct C probe as
-diagnostic regressions, set:
-
-```sh
-TLS13_RUN_LEGACY_INTEROP=1 make test-openssl-echo
-```

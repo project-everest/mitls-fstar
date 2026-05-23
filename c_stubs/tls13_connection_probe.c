@@ -1,16 +1,11 @@
 #include "tls13_connection_probe.h"
 
 #include "tls13_hacl_stubs.h"
-#ifdef TLS13_CONNECTION_PROBE_USE_EXTRACTED_HANDSHAKE_LAYER
 #include "tls13_handshake_external_layer.h"
-#else
-#include "tls13_handshake_external.h"
-#endif
 #include "tls13_io_stubs.h"
 #include "tls13_openssl_stubs.h"
 #include "tls13_wire_stubs.h"
 
-#ifdef TLS13_CONNECTION_PROBE_USE_EXTRACTED_CONNECTION_WRAPPER
 #include "TLS13_KeySchedule.h"
 #include "TLS13_Handshake_Framing.h"
 #include "TLS13_Handshake_FlightState.h"
@@ -19,11 +14,8 @@
 #include "TLS13_Record_Framing.h"
 #include "TLS13_Record.h"
 #include "tls13_connection_external_layer.h"
-#endif
 
-#ifdef TLS13_CONNECTION_PROBE_USE_EXTRACTED_HANDSHAKE
 #include "TLS13_Handshake_Driver.h"
-#endif
 
 #include <errno.h>
 #include <limits.h>
@@ -33,16 +25,12 @@
 
 #define PROBE_APP_RECORD_CHUNK_LEN 4096u
 
-#ifdef TLS13_CONNECTION_PROBE_USE_EXTRACTED_CONNECTION_WRAPPER
 #define TLS13_Connection_connection TLS13_Connection_External_connection
 #define TLS13_Connection_connection_s TLS13_Connection_External_connection_s
 #define TLS13_Handshake_ByteDriver_External_context_s TLS13_Connection_External_connection_s
-#endif
 
-#ifdef TLS13_CONNECTION_PROBE_USE_EXTRACTED_HANDSHAKE_LAYER
 #define TLS13_Handshake_External_handshake_context_s TLS13_Connection_connection_s
 typedef TLS13_Handshake_External_handshake_context TLS13_Handshake_handshake_context;
-#endif
 
 struct TLS13_Connection_connection_s {
   const char *host;
@@ -66,13 +54,10 @@ struct TLS13_Connection_connection_s {
   size_t server_handshake_len;
   size_t server_handshake_before_finished_len;
   size_t server_handshake_through_finished_len;
-  uint8_t server_finished_verify_data[32];
   bool saw_encrypted_extensions;
   bool saw_certificate;
   bool saw_certificate_verify;
   bool saw_finished;
-  const uint8_t *leaf_der;
-  size_t leaf_der_len;
   uint16_t signature_scheme;
   const uint8_t *signature;
   size_t signature_len;
@@ -82,16 +67,11 @@ struct TLS13_Connection_connection_s {
   uint8_t client_application_iv[12];
   uint8_t server_application_key[32];
   uint8_t server_application_iv[12];
-  uint64_t client_application_sequence_number;
-  uint64_t server_application_sequence_number;
   size_t parsed_handshake_len;
-  uint64_t server_handshake_sequence_number;
-#ifdef TLS13_CONNECTION_PROBE_USE_EXTRACTED_CONNECTION_WRAPPER
   TLS13_Record_record_state server_handshake_record_state;
   bool server_handshake_record_state_initialized;
   TLS13_Handshake_FlightState_flight_state server_handshake_flight_state;
   bool server_handshake_flight_state_initialized;
-#endif
 };
 
 struct TLS13_IO_channel_s {
@@ -164,7 +144,6 @@ static int read_record(
   if (read_exact_fd(fd, header, TLS13_WIRE_RECORD_HEADER_LEN) != 0) {
     return -1;
   }
-#ifdef TLS13_CONNECTION_PROBE_USE_EXTRACTED_CONNECTION_WRAPPER
   uint8_t content_type_buf[1] = {0};
   uint8_t fragment_len_buf[2] = {0};
   if (!TLS13_Record_Framing_parse_record_header(
@@ -182,13 +161,6 @@ static int read_record(
   if (*fragment_len > fragment_capacity) {
     return -1;
   }
-#else
-  if (!tls13_wire_parse_record_header(
-          header, TLS13_WIRE_RECORD_HEADER_LEN, content_type, legacy_version, fragment_len) ||
-      *fragment_len > fragment_capacity) {
-    return -1;
-  }
-#endif
   return read_exact_fd(fd, fragment, *fragment_len);
 }
 
@@ -211,28 +183,17 @@ static int derive_server_handshake_keys(
       0xa7, 0x91, 0x1d, 0xe2, 0x6a, 0xdc, 0x56, 0x42,
       0xcb, 0x63, 0x45, 0x40, 0xe7, 0xea, 0x50, 0x05};
   static const uint8_t zero_secret[32] = {0};
-  static const uint8_t label_derived[] = {'d', 'e', 'r', 'i', 'v', 'e', 'd'};
-  static const uint8_t label_c_hs_traffic[] = {
-      'c', ' ', 'h', 's', ' ', 't', 'r', 'a', 'f', 'f', 'i', 'c'};
-  static const uint8_t label_s_hs_traffic[] = {
-      's', ' ', 'h', 's', ' ', 't', 'r', 'a', 'f', 'f', 'i', 'c'};
-  static const uint8_t label_key[] = {'k', 'e', 'y'};
-  static const uint8_t label_iv[] = {'i', 'v'};
 
-  uint8_t empty_hash[32];
   uint8_t early_secret[32];
-  uint8_t derived_secret[32];
   uint8_t shared_secret[32];
   uint8_t transcript_hash[32];
 
-  if (!tls13_hacl_sha256(empty_hash, NULL, 0) ||
-      !tls13_hacl_hkdf_extract_sha256(
+  if (!tls13_hacl_hkdf_extract_sha256(
           early_secret, NULL, 0, zero_secret, sizeof zero_secret) ||
       !tls13_hacl_x25519_shared(shared_secret, client_private_key, server_key_share)) {
     return -1;
   }
 
-#ifdef TLS13_CONNECTION_PROBE_USE_EXTRACTED_HANDSHAKE_TRANSCRIPT
   if (!TLS13_Handshake_Transcript_hash_client_server_hello(
           (uint8_t *)client_hello,
           client_hello_len,
@@ -241,20 +202,7 @@ static int derive_server_handshake_keys(
           transcript_hash)) {
     return -1;
   }
-#else
-  uint8_t transcript[1024];
-  if (client_hello_len > sizeof transcript ||
-      server_hello_len > sizeof transcript - client_hello_len) {
-    return -1;
-  }
-  memcpy(transcript, client_hello, client_hello_len);
-  memcpy(transcript + client_hello_len, server_hello, server_hello_len);
-  if (!tls13_hacl_sha256(transcript_hash, transcript, client_hello_len + server_hello_len)) {
-    return -1;
-  }
-#endif
 
-#ifdef TLS13_CONNECTION_PROBE_USE_EXTRACTED_KEY_SCHEDULE
   TLS13_KeySchedule_handshake_secret(
       early_secret, shared_secret, sizeof shared_secret, handshake_secret);
   TLS13_KeySchedule_client_handshake_traffic_secret(
@@ -269,72 +217,6 @@ static int derive_server_handshake_keys(
       server_handshake_traffic_secret, server_key);
   TLS13_KeySchedule_derive_traffic_iv(
       server_handshake_traffic_secret, server_iv);
-#else
-  if (!tls13_hacl_hkdf_expand_label_sha256(
-          derived_secret,
-          sizeof derived_secret,
-          early_secret,
-          label_derived,
-          sizeof label_derived,
-          empty_hash,
-          sizeof empty_hash) ||
-      !tls13_hacl_hkdf_extract_sha256(
-          handshake_secret,
-          derived_secret,
-          sizeof derived_secret,
-          shared_secret,
-          sizeof shared_secret) ||
-      !tls13_hacl_hkdf_expand_label_sha256(
-          client_handshake_traffic_secret,
-          32,
-          handshake_secret,
-          label_c_hs_traffic,
-          sizeof label_c_hs_traffic,
-          transcript_hash,
-          sizeof transcript_hash) ||
-      !tls13_hacl_hkdf_expand_label_sha256(
-          server_handshake_traffic_secret,
-          32,
-          handshake_secret,
-          label_s_hs_traffic,
-          sizeof label_s_hs_traffic,
-          transcript_hash,
-          sizeof transcript_hash) ||
-      !tls13_hacl_hkdf_expand_label_sha256(
-          client_key,
-          32,
-          client_handshake_traffic_secret,
-          label_key,
-          sizeof label_key,
-          NULL,
-          0) ||
-      !tls13_hacl_hkdf_expand_label_sha256(
-          client_iv,
-          12,
-          client_handshake_traffic_secret,
-          label_iv,
-          sizeof label_iv,
-          NULL,
-          0) ||
-      !tls13_hacl_hkdf_expand_label_sha256(
-          server_key,
-          32,
-          server_handshake_traffic_secret,
-          label_key,
-          sizeof label_key,
-          NULL,
-          0) ||
-      !tls13_hacl_hkdf_expand_label_sha256(
-          server_iv,
-          12,
-          server_handshake_traffic_secret,
-          label_iv,
-          sizeof label_iv,
-          NULL,
-          0)) {
-    return -1;
-  }
-#endif
   return 0;
 }
 
@@ -346,7 +228,6 @@ static int compute_transcript_hash(
     const uint8_t *server_handshake_messages,
     size_t server_handshake_len,
     uint8_t transcript_hash[32]) {
-#ifdef TLS13_CONNECTION_PROBE_USE_EXTRACTED_HANDSHAKE_TRANSCRIPT
   return TLS13_Handshake_Transcript_hash_client_server_handshake(
              (uint8_t *)client_hello,
              client_hello_len,
@@ -357,22 +238,6 @@ static int compute_transcript_hash(
              transcript_hash)
              ? 0
              : -1;
-#else
-  uint8_t transcript[32768];
-  if (client_hello_len > sizeof transcript ||
-      server_hello_len > sizeof transcript - client_hello_len ||
-      server_handshake_len > sizeof transcript - client_hello_len - server_hello_len) {
-    return -1;
-  }
-  size_t pos = 0;
-  memcpy(transcript + pos, client_hello, client_hello_len);
-  pos += client_hello_len;
-  memcpy(transcript + pos, server_hello, server_hello_len);
-  pos += server_hello_len;
-  memcpy(transcript + pos, server_handshake_messages, server_handshake_len);
-  pos += server_handshake_len;
-  return tls13_hacl_sha256(transcript_hash, transcript, pos) ? 0 : -1;
-#endif
 }
 
 static int verify_server_finished(
@@ -397,20 +262,9 @@ static int verify_server_finished(
           transcript_hash) != 0) {
     return -1;
   }
-#ifdef TLS13_CONNECTION_PROBE_USE_EXTRACTED_KEY_SCHEDULE
   TLS13_KeySchedule_finished_verify_data(
       (uint8_t *)server_handshake_traffic_secret, transcript_hash, expected);
-#else
-  if (!tls13_hacl_finished_verify_data_sha256(
-          expected, server_handshake_traffic_secret, transcript_hash)) {
-    return -1;
-  }
-#endif
-#ifdef TLS13_CONNECTION_PROBE_USE_EXTRACTED_HANDSHAKE_TRANSCRIPT
   return TLS13_Handshake_Transcript_equal32(expected, (uint8_t *)finished_verify_data) ? 0 : -1;
-#else
-  return memcmp(expected, finished_verify_data, 32) == 0 ? 0 : -1;
-#endif
 }
 
 static int derive_application_keys(
@@ -420,25 +274,10 @@ static int derive_application_keys(
     uint8_t client_iv[12],
     uint8_t server_key[32],
     uint8_t server_iv[12]) {
-  static const uint8_t zero_secret[32] = {0};
-  static const uint8_t label_derived[] = {'d', 'e', 'r', 'i', 'v', 'e', 'd'};
-  static const uint8_t label_c_ap_traffic[] = {
-      'c', ' ', 'a', 'p', ' ', 't', 'r', 'a', 'f', 'f', 'i', 'c'};
-  static const uint8_t label_s_ap_traffic[] = {
-      's', ' ', 'a', 'p', ' ', 't', 'r', 'a', 'f', 'f', 'i', 'c'};
-  static const uint8_t label_key[] = {'k', 'e', 'y'};
-  static const uint8_t label_iv[] = {'i', 'v'};
-  uint8_t empty_hash[32];
-  uint8_t derived_secret[32];
   uint8_t master_secret[32];
   uint8_t client_application_traffic_secret[32];
   uint8_t server_application_traffic_secret[32];
 
-  if (!tls13_hacl_sha256(empty_hash, NULL, 0)) {
-    return -1;
-  }
-
-#ifdef TLS13_CONNECTION_PROBE_USE_EXTRACTED_KEY_SCHEDULE
   TLS13_KeySchedule_master_secret((uint8_t *)handshake_secret, master_secret);
   TLS13_KeySchedule_client_application_traffic_secret(
       master_secret, (uint8_t *)transcript_hash, client_application_traffic_secret);
@@ -448,82 +287,6 @@ static int derive_application_keys(
   TLS13_KeySchedule_derive_traffic_iv(client_application_traffic_secret, client_iv);
   TLS13_KeySchedule_derive_traffic_key(server_application_traffic_secret, server_key);
   TLS13_KeySchedule_derive_traffic_iv(server_application_traffic_secret, server_iv);
-#else
-  if (!tls13_hacl_hkdf_expand_label_sha256(
-          derived_secret,
-          sizeof derived_secret,
-          handshake_secret,
-          label_derived,
-          sizeof label_derived,
-          empty_hash,
-          sizeof empty_hash) ||
-      !tls13_hacl_hkdf_extract_sha256(
-          master_secret, derived_secret, sizeof derived_secret, zero_secret, sizeof zero_secret) ||
-      !tls13_hacl_hkdf_expand_label_sha256(
-          client_application_traffic_secret,
-          sizeof client_application_traffic_secret,
-          master_secret,
-          label_c_ap_traffic,
-          sizeof label_c_ap_traffic,
-          transcript_hash,
-          32) ||
-      !tls13_hacl_hkdf_expand_label_sha256(
-          server_application_traffic_secret,
-          sizeof server_application_traffic_secret,
-          master_secret,
-          label_s_ap_traffic,
-          sizeof label_s_ap_traffic,
-          transcript_hash,
-          32) ||
-      !tls13_hacl_hkdf_expand_label_sha256(
-          client_key, 32, client_application_traffic_secret, label_key, sizeof label_key, NULL, 0) ||
-      !tls13_hacl_hkdf_expand_label_sha256(
-          client_iv, 12, client_application_traffic_secret, label_iv, sizeof label_iv, NULL, 0) ||
-      !tls13_hacl_hkdf_expand_label_sha256(
-          server_key, 32, server_application_traffic_secret, label_key, sizeof label_key, NULL, 0) ||
-      !tls13_hacl_hkdf_expand_label_sha256(
-          server_iv, 12, server_application_traffic_secret, label_iv, sizeof label_iv, NULL, 0)) {
-    return -1;
-  }
-#endif
-  return 0;
-}
-
-static int seal_record(
-    const uint8_t key[32],
-    const uint8_t iv[12],
-    uint64_t sequence_number,
-    uint8_t inner_content_type,
-    const uint8_t *plaintext,
-    size_t plaintext_len,
-    uint8_t *record,
-    size_t record_capacity,
-    size_t *record_len) {
-  uint8_t inner_plaintext[20000];
-  uint8_t nonce[12];
-  if (plaintext_len > sizeof inner_plaintext - 1u ||
-      plaintext_len > UINT16_MAX - 17u ||
-      record_capacity < TLS13_WIRE_RECORD_HEADER_LEN + plaintext_len + 1u + 16u) {
-    return -1;
-  }
-  memcpy(inner_plaintext, plaintext, plaintext_len);
-  inner_plaintext[plaintext_len] = inner_content_type;
-  size_t inner_plaintext_len = plaintext_len + 1u;
-  size_t ciphertext_len = inner_plaintext_len + 16u;
-  if (!tls13_wire_serialize_record_header(record, 23, 0x0303, (uint16_t)ciphertext_len) ||
-      !tls13_record_nonce(nonce, iv, sequence_number) ||
-      !tls13_hacl_chacha20_poly1305_seal_combined(
-          record + TLS13_WIRE_RECORD_HEADER_LEN,
-          ciphertext_len,
-          key,
-          nonce,
-          record,
-          TLS13_WIRE_RECORD_HEADER_LEN,
-          inner_plaintext,
-          inner_plaintext_len)) {
-    return -1;
-  }
-  *record_len = TLS13_WIRE_RECORD_HEADER_LEN + ciphertext_len;
   return 0;
 }
 
@@ -547,7 +310,6 @@ static void fail_handshake(TLS13_Connection_connection c) {
   }
 }
 
-#ifdef TLS13_CONNECTION_PROBE_USE_EXTRACTED_HANDSHAKE_BYTE_DRIVER
 static bool read_next_encrypted_handshake_record(TLS13_Connection_connection c) {
   uint8_t encrypted_header[TLS13_WIRE_RECORD_HEADER_LEN];
   uint8_t encrypted_fragment[20000];
@@ -635,7 +397,6 @@ static bool pending_handshake_metadata(
 
   uint8_t handshake_type_buf[1] = {0};
   uint8_t handshake_body_len_buf[3] = {0};
-#ifdef TLS13_CONNECTION_PROBE_USE_EXTRACTED_HANDSHAKE_FRAMING
   if (!TLS13_Handshake_Framing_parse_handshake_header(
           c->server_handshake_messages + parsed_handshake_len,
           server_handshake_len - parsed_handshake_len,
@@ -643,22 +404,13 @@ static bool pending_handshake_metadata(
           sizeof handshake_type_buf,
           handshake_body_len_buf,
           sizeof handshake_body_len_buf)) {
-#else
-  if (!tls13_wire_parse_handshake_header(
-          c->server_handshake_messages + c->parsed_handshake_len,
-          c->server_handshake_len - c->parsed_handshake_len,
-          handshake_type,
-          handshake_body_len)) {
-#endif
     return false;
   }
-#ifdef TLS13_CONNECTION_PROBE_USE_EXTRACTED_HANDSHAKE_FRAMING
   *handshake_type = handshake_type_buf[0];
   *handshake_body_len =
         ((uint32_t)handshake_body_len_buf[0] << 16) |
         ((uint32_t)handshake_body_len_buf[1] << 8) |
         (uint32_t)handshake_body_len_buf[2];
-#endif
   *message_len = TLS13_WIRE_HANDSHAKE_HEADER_LEN + (size_t)*handshake_body_len;
   return *message_len <= server_handshake_len - parsed_handshake_len;
 }
@@ -681,7 +433,6 @@ static bool pending_handshake_body(
           TLS13_WIRE_HANDSHAKE_HEADER_LEN;
   return true;
 }
-#endif
 
 static void probe_handshake_send_client_hello(
     TLS13_Handshake_handshake_context ctx,
@@ -707,11 +458,7 @@ static void probe_handshake_send_client_hello(
       0xd2, 0x3d, 0x8e, 0x43, 0x5a, 0x7d, 0xba, 0xfe,
       0xb3, 0xc0, 0x6e, 0x51, 0xc1, 0x3c, 0xae, 0x4d,
       0x54, 0x13, 0x69, 0x1e, 0x52, 0x9a, 0xaf, 0x2c};
-#ifndef TLS13_CONNECTION_PROBE_USE_EXTRACTED_HANDSHAKE_FRAMING
-  static const uint8_t hostname[] = {'l', 'o', 'c', 'a', 'l', 'h', 'o', 's', 't'};
-#endif
 
-#ifdef TLS13_CONNECTION_PROBE_USE_EXTRACTED_HANDSHAKE_FRAMING
   if (!TLS13_Handshake_Framing_build_supported_client_hello_localhost(
           (uint8_t *)random,
           (uint8_t *)key_share,
@@ -722,33 +469,10 @@ static void probe_handshake_send_client_hello(
     return;
   }
   c->client_hello_len = 130;
-#else
-  if (!tls13_wire_serialize_supported_client_hello(
-          c->client_hello,
-          sizeof c->client_hello,
-          random,
-          key_share,
-          hostname,
-          sizeof hostname,
-          &c->client_hello_len)) {
-    fprintf(stderr, "failed to serialize ClientHello\n");
-    fail_handshake(c);
-    return;
-  }
-#endif
 
   uint8_t record[TLS13_WIRE_RECORD_HEADER_LEN + sizeof c->client_hello];
-#ifdef TLS13_CONNECTION_PROBE_USE_EXTRACTED_HANDSHAKE_FRAMING
   TLS13_Handshake_Framing_serialize_client_hello_record_header(
       record, TLS13_WIRE_RECORD_HEADER_LEN);
-#else
-  if (!tls13_wire_serialize_record_header(
-          record, 22, 0x0301, (uint16_t)c->client_hello_len)) {
-    fprintf(stderr, "failed to serialize ClientHello record header\n");
-    fail_handshake(c);
-    return;
-  }
-#endif
   memcpy(record + TLS13_WIRE_RECORD_HEADER_LEN, c->client_hello, c->client_hello_len);
   size_t record_len = TLS13_WIRE_RECORD_HEADER_LEN + c->client_hello_len;
 
@@ -796,7 +520,6 @@ static bool probe_handshake_recv_server_hello(
     fail_handshake(c);
     return false;
   }
-#ifdef TLS13_CONNECTION_PROBE_USE_EXTRACTED_HANDSHAKE_FRAMING
   if (!TLS13_Handshake_Framing_parse_supported_server_hello(
           c->server_hello_fragment,
           fragment_len,
@@ -804,10 +527,6 @@ static bool probe_handshake_recv_server_hello(
           sizeof server_random,
           server_key_share,
           sizeof server_key_share)) {
-#else
-  if (!tls13_wire_parse_supported_server_hello(
-          c->server_hello_fragment, fragment_len, server_random, server_key_share)) {
-#endif
     fprintf(stderr, "failed to parse supported OpenSSL ServerHello\n");
     fail_handshake(c);
     return false;
@@ -846,193 +565,12 @@ static bool probe_handshake_recv_encrypted_extensions(
     return false;
   }
 
-#ifdef TLS13_CONNECTION_PROBE_USE_EXTRACTED_HANDSHAKE_BYTE_DRIVER
   bool ok = TLS13_Handshake_ByteDriver_recv_encrypted_handshake(
       (TLS13_Handshake_ByteDriver_External_context)c, ch);
   if (!ok) {
     fail_handshake(c);
   }
   return ok;
-#else
-  c->server_handshake_len = 0;
-  c->server_handshake_before_finished_len = 0;
-  c->server_handshake_through_finished_len = 0;
-  c->saw_encrypted_extensions = false;
-  c->saw_certificate = false;
-  c->saw_certificate_verify = false;
-  c->saw_finished = false;
-  c->leaf_der = NULL;
-  c->leaf_der_len = 0;
-  c->signature = NULL;
-  c->signature_len = 0;
-  c->certificate_verify_offset = 0;
-
-  size_t parsed_handshake_len = 0;
-  uint64_t server_sequence_number = 0;
-  for (unsigned attempts = 0; attempts < 8 && !c->saw_finished; ++attempts) {
-    uint8_t encrypted_header[TLS13_WIRE_RECORD_HEADER_LEN];
-    uint8_t encrypted_fragment[20000];
-    uint8_t content_type = 0;
-    uint16_t legacy_version = 0;
-    uint16_t fragment_len = 0;
-    if (read_record(
-            c->fd,
-            encrypted_header,
-            encrypted_fragment,
-            sizeof encrypted_fragment,
-            &content_type,
-            &legacy_version,
-            &fragment_len) != 0) {
-      fprintf(stderr, "failed to read encrypted handshake record\n");
-      fail_handshake(c);
-      return false;
-    }
-    if (content_type == 20 && fragment_len == 1 && encrypted_fragment[0] == 1) {
-      continue;
-    }
-    if (content_type != 23 || fragment_len < 16) {
-      fprintf(stderr, "unexpected record before server Finished: %u\n", content_type);
-      fail_handshake(c);
-      return false;
-    }
-
-    uint8_t nonce[12];
-    uint8_t inner_plaintext[20000];
-    size_t inner_plaintext_len = (size_t)fragment_len - 16u;
-    if (!tls13_record_nonce(nonce, c->server_handshake_iv, server_sequence_number++) ||
-        !tls13_hacl_chacha20_poly1305_open_combined(
-            inner_plaintext,
-            inner_plaintext_len,
-            c->server_handshake_key,
-            nonce,
-            encrypted_header,
-            TLS13_WIRE_RECORD_HEADER_LEN,
-            encrypted_fragment,
-            fragment_len)) {
-      fprintf(stderr, "failed to decrypt OpenSSL encrypted handshake record\n");
-      fail_handshake(c);
-      return false;
-    }
-
-    uint8_t inner_content_type = 0;
-    size_t handshake_plaintext_len = 0;
-    if (!tls13_wire_decode_inner_plaintext(
-            inner_plaintext, inner_plaintext_len, &inner_content_type, &handshake_plaintext_len) ||
-        inner_content_type != 22 ||
-        handshake_plaintext_len > sizeof c->server_handshake_messages - c->server_handshake_len) {
-      fprintf(stderr, "failed to decode OpenSSL handshake inner plaintext\n");
-      fail_handshake(c);
-      return false;
-    }
-    memcpy(
-        c->server_handshake_messages + c->server_handshake_len,
-        inner_plaintext,
-        handshake_plaintext_len);
-    c->server_handshake_len += handshake_plaintext_len;
-
-    while (c->server_handshake_len - parsed_handshake_len >= TLS13_WIRE_HANDSHAKE_HEADER_LEN) {
-      uint8_t handshake_type_buf[1] = {0};
-      uint8_t handshake_body_len_buf[3] = {0};
-#ifdef TLS13_CONNECTION_PROBE_USE_EXTRACTED_HANDSHAKE_FRAMING
-      if (!TLS13_Handshake_Framing_parse_handshake_header(
-              c->server_handshake_messages + parsed_handshake_len,
-              c->server_handshake_len - parsed_handshake_len,
-              handshake_type_buf,
-              sizeof handshake_type_buf,
-              handshake_body_len_buf,
-              sizeof handshake_body_len_buf)) {
-#else
-      uint8_t handshake_type = 0;
-      uint32_t handshake_body_len = 0;
-      if (!tls13_wire_parse_handshake_header(
-              c->server_handshake_messages + parsed_handshake_len,
-              c->server_handshake_len - parsed_handshake_len,
-              &handshake_type,
-              &handshake_body_len)) {
-#endif
-        fprintf(stderr, "failed to parse decrypted handshake header\n");
-        fail_handshake(c);
-        return false;
-      }
-#ifdef TLS13_CONNECTION_PROBE_USE_EXTRACTED_HANDSHAKE_FRAMING
-      uint8_t handshake_type = handshake_type_buf[0];
-      uint32_t handshake_body_len =
-          ((uint32_t)handshake_body_len_buf[0] << 16) |
-          ((uint32_t)handshake_body_len_buf[1] << 8) |
-          (uint32_t)handshake_body_len_buf[2];
-#endif
-      size_t message_len = TLS13_WIRE_HANDSHAKE_HEADER_LEN + (size_t)handshake_body_len;
-      if (message_len > c->server_handshake_len - parsed_handshake_len) {
-        break;
-      }
-      if (parsed_handshake_len == 0 && handshake_type != 8) {
-        fprintf(stderr, "decrypted first OpenSSL handshake message is not EncryptedExtensions\n");
-        fail_handshake(c);
-        return false;
-      }
-
-      const uint8_t *body =
-          c->server_handshake_messages + parsed_handshake_len + TLS13_WIRE_HANDSHAKE_HEADER_LEN;
-      switch (handshake_type) {
-      case 8:
-        c->saw_encrypted_extensions = true;
-        break;
-      case 11:
-        if (!tls13_wire_parse_certificate_leaf_der(
-                body, handshake_body_len, &c->leaf_der, &c->leaf_der_len)) {
-          fprintf(stderr, "failed to parse server Certificate\n");
-          fail_handshake(c);
-          return false;
-        }
-        c->saw_certificate = true;
-        break;
-      case 15:
-        c->certificate_verify_offset = parsed_handshake_len;
-        if (!tls13_wire_parse_certificate_verify(
-                body,
-                handshake_body_len,
-                &c->signature_scheme,
-                &c->signature,
-                &c->signature_len)) {
-          fprintf(stderr, "failed to parse server CertificateVerify\n");
-          fail_handshake(c);
-          return false;
-        }
-        c->saw_certificate_verify = true;
-        break;
-      case 20:
-        if (handshake_body_len != 32) {
-          fprintf(stderr, "OpenSSL Finished has unexpected length\n");
-          fail_handshake(c);
-          return false;
-        }
-        c->server_handshake_before_finished_len = parsed_handshake_len;
-        c->server_handshake_through_finished_len = parsed_handshake_len + message_len;
-        memcpy(
-            c->server_finished_verify_data,
-            c->server_handshake_messages + parsed_handshake_len + TLS13_WIRE_HANDSHAKE_HEADER_LEN,
-            sizeof c->server_finished_verify_data);
-        c->saw_finished = true;
-        break;
-      default:
-        fprintf(stderr, "unexpected server handshake message before Finished: %u\n", handshake_type);
-        fail_handshake(c);
-        return false;
-      }
-      if (c->saw_finished) {
-        break;
-      }
-      parsed_handshake_len += message_len;
-    }
-  }
-
-  if (!c->saw_finished || !c->saw_encrypted_extensions) {
-    fprintf(stderr, "OpenSSL encrypted handshake messages were incomplete\n");
-    fail_handshake(c);
-    return false;
-  }
-  return true;
-#endif
 }
 
 static bool probe_handshake_recv_certificate(
@@ -1045,11 +583,7 @@ static bool probe_handshake_recv_certificate(
   (void)erased_state;
   TLS13_Connection_connection c = from_handshake_context(ctx);
   if (!handshake_can_continue(c) ||
-#ifdef TLS13_CONNECTION_PROBE_USE_EXTRACTED_HANDSHAKE_BYTE_DRIVER
       !TLS13_Handshake_FlightState_saw_certificate(c->server_handshake_flight_state)
-#else
-      !c->saw_certificate
-#endif
       ) {
     fail_handshake(c);
     return false;
@@ -1065,11 +599,7 @@ static bool probe_handshake_validate_certificate(
   (void)erased_state;
   TLS13_Connection_connection c = from_handshake_context(ctx);
   if (!handshake_can_continue(c) ||
-#ifdef TLS13_CONNECTION_PROBE_USE_EXTRACTED_HANDSHAKE_BYTE_DRIVER
       !TLS13_Handshake_FlightState_saw_certificate(c->server_handshake_flight_state)
-#else
-      !c->saw_certificate
-#endif
       ) {
     fail_handshake(c);
     return false;
@@ -1082,7 +612,6 @@ static bool probe_handshake_validate_certificate(
   }
   tls13_openssl_peer_identity_free(c->peer);
   c->peer = NULL;
-#ifdef TLS13_CONNECTION_PROBE_USE_EXTRACTED_HANDSHAKE_BYTE_DRIVER
   size_t leaf_der_offset =
       TLS13_Handshake_FlightState_certificate_leaf_offset(c->server_handshake_flight_state);
   size_t leaf_der_len =
@@ -1090,10 +619,6 @@ static bool probe_handshake_validate_certificate(
   const uint8_t *leaf_der = c->server_handshake_messages + leaf_der_offset;
   bool ok = tls13_openssl_validate_leaf_der(
       "localhost", ca_pem, ca_pem_len, leaf_der, leaf_der_len, &c->peer);
-#else
-  bool ok = tls13_openssl_validate_leaf_der(
-      "localhost", ca_pem, ca_pem_len, c->leaf_der, c->leaf_der_len, &c->peer);
-#endif
   free(ca_pem);
   if (!ok || c->peer == NULL) {
     fprintf(stderr, "failed to validate server certificate\n");
@@ -1113,11 +638,7 @@ static bool probe_handshake_recv_certificate_verify(
   (void)erased_state;
   TLS13_Connection_connection c = from_handshake_context(ctx);
   if (!handshake_can_continue(c) ||
-#ifdef TLS13_CONNECTION_PROBE_USE_EXTRACTED_HANDSHAKE_BYTE_DRIVER
       !TLS13_Handshake_FlightState_saw_certificate_verify(c->server_handshake_flight_state) ||
-#else
-      !c->saw_certificate_verify ||
-#endif
       c->peer == NULL) {
     fail_handshake(c);
     return false;
@@ -1130,30 +651,16 @@ static bool probe_handshake_recv_certificate_verify(
           c->server_hello_fragment,
           c->server_hello_len,
           c->server_handshake_messages,
-#ifdef TLS13_CONNECTION_PROBE_USE_EXTRACTED_HANDSHAKE_BYTE_DRIVER
           TLS13_Handshake_FlightState_certificate_verify_offset(c->server_handshake_flight_state),
-#else
-          c->certificate_verify_offset,
-#endif
           transcript_hash) != 0) {
     fprintf(stderr, "failed to build CertificateVerify input\n");
     fail_handshake(c);
     return false;
   }
-#ifdef TLS13_CONNECTION_PROBE_USE_EXTRACTED_HANDSHAKE_FRAMING
   TLS13_Handshake_Framing_build_server_certificate_verify_input(
       transcript_hash,
       certificate_verify_input,
       sizeof certificate_verify_input);
-#else
-  if (!tls13_wire_build_server_certificate_verify_input(
-          certificate_verify_input, transcript_hash)) {
-    fprintf(stderr, "failed to build CertificateVerify input\n");
-    fail_handshake(c);
-    return false;
-  }
-#endif
-#ifdef TLS13_CONNECTION_PROBE_USE_EXTRACTED_HANDSHAKE_BYTE_DRIVER
   uint16_t signature_scheme =
       TLS13_Handshake_FlightState_certificate_verify_signature_scheme(
           c->server_handshake_flight_state);
@@ -1164,11 +671,6 @@ static bool probe_handshake_recv_certificate_verify(
       TLS13_Handshake_FlightState_certificate_verify_signature_len(
           c->server_handshake_flight_state);
   const uint8_t *signature = c->server_handshake_messages + signature_offset;
-#else
-  uint16_t signature_scheme = c->signature_scheme;
-  const uint8_t *signature = c->signature;
-  size_t signature_len = c->signature_len;
-#endif
   if (!tls13_openssl_peer_verify_signature(
           c->peer,
           signature_scheme,
@@ -1193,35 +695,23 @@ static bool probe_handshake_recv_server_finished(
   (void)erased_state;
   TLS13_Connection_connection c = from_handshake_context(ctx);
   if (!handshake_can_continue(c) ||
-#ifdef TLS13_CONNECTION_PROBE_USE_EXTRACTED_HANDSHAKE_BYTE_DRIVER
       !TLS13_Handshake_FlightState_saw_finished(c->server_handshake_flight_state)
-#else
-      !c->saw_finished
-#endif
       ) {
     fail_handshake(c);
     return false;
   }
-#ifdef TLS13_CONNECTION_PROBE_USE_EXTRACTED_HANDSHAKE_BYTE_DRIVER
   uint8_t server_finished_verify_data[32] = {0};
   TLS13_Handshake_FlightState_copy_server_finished_verify_data(
       c->server_handshake_flight_state,
       server_finished_verify_data,
       sizeof server_finished_verify_data);
-#else
-  const uint8_t *server_finished_verify_data = c->server_finished_verify_data;
-#endif
   if (verify_server_finished(
           c->client_hello,
           c->client_hello_len,
           c->server_hello_fragment,
           c->server_hello_len,
           c->server_handshake_messages,
-#ifdef TLS13_CONNECTION_PROBE_USE_EXTRACTED_HANDSHAKE_BYTE_DRIVER
           TLS13_Handshake_FlightState_server_before_finished_len(c->server_handshake_flight_state),
-#else
-          c->server_handshake_before_finished_len,
-#endif
           server_finished_verify_data,
           c->server_handshake_traffic_secret) != 0) {
     fprintf(stderr, "failed to verify OpenSSL server Finished\n");
@@ -1252,11 +742,7 @@ static bool probe_handshake_send_client_finished(
           c->server_hello_fragment,
           c->server_hello_len,
           c->server_handshake_messages,
-#ifdef TLS13_CONNECTION_PROBE_USE_EXTRACTED_HANDSHAKE_BYTE_DRIVER
           TLS13_Handshake_FlightState_server_through_finished_len(c->server_handshake_flight_state),
-#else
-          c->server_handshake_through_finished_len,
-#endif
           transcript_hash_through_server_finished) != 0) {
     fprintf(stderr, "failed to hash transcript through server Finished\n");
     fail_handshake(c);
@@ -1264,25 +750,13 @@ static bool probe_handshake_send_client_finished(
   }
 
   uint8_t client_finished[36] = {20, 0, 0, 32};
-#ifdef TLS13_CONNECTION_PROBE_USE_EXTRACTED_KEY_SCHEDULE
   TLS13_KeySchedule_finished_verify_data(
       c->client_handshake_traffic_secret,
       transcript_hash_through_server_finished,
       client_finished + TLS13_WIRE_HANDSHAKE_HEADER_LEN);
-#else
-  if (!tls13_hacl_finished_verify_data_sha256(
-          client_finished + TLS13_WIRE_HANDSHAKE_HEADER_LEN,
-          c->client_handshake_traffic_secret,
-          transcript_hash_through_server_finished)) {
-    fprintf(stderr, "failed to compute client Finished\n");
-    fail_handshake(c);
-    return false;
-  }
-#endif
 
   uint8_t client_record[20000];
   size_t client_record_len = 0;
-#ifdef TLS13_CONNECTION_PROBE_USE_EXTRACTED_CONNECTION_WRAPPER
   uint8_t client_inner_plaintext[sizeof client_finished + 1u];
   size_t client_inner_plaintext_len = sizeof client_finished + 1u;
   size_t client_ciphertext_len = client_inner_plaintext_len + 16u;
@@ -1318,23 +792,6 @@ static bool probe_handshake_send_client_finished(
     fail_handshake(c);
     return false;
   }
-#else
-  if (seal_record(
-          c->client_handshake_key,
-          c->client_handshake_iv,
-          0,
-          22,
-          client_finished,
-          sizeof client_finished,
-          client_record,
-          sizeof client_record,
-          &client_record_len) != 0 ||
-      write_all_fd(c->fd, client_record, client_record_len) != 0) {
-    fprintf(stderr, "failed to send client Finished\n");
-    fail_handshake(c);
-    return false;
-  }
-#endif
 
   if (derive_application_keys(
           c->handshake_secret,
@@ -1349,12 +806,9 @@ static bool probe_handshake_send_client_finished(
   }
 
   c->application_ready = true;
-  c->client_application_sequence_number = 0;
-  c->server_application_sequence_number = 0;
   return true;
 }
 
-#ifdef TLS13_CONNECTION_PROBE_USE_EXTRACTED_HANDSHAKE_LAYER
 void TLS13_Handshake_External_send_client_hello(
     TLS13_Handshake_External_handshake_context ctx,
     TLS13_IO_channel ch) {
@@ -1404,70 +858,6 @@ bool TLS13_Handshake_External_send_client_finished(
     TLS13_IO_channel ch) {
   return probe_handshake_send_client_finished((TLS13_Handshake_handshake_context)ctx, ch, NULL, NULL);
 }
-#else
-void TLS13_Handshake_send_client_hello(
-    TLS13_Handshake_handshake_context ctx,
-    TLS13_IO_channel ch,
-    void *erased_state_ref,
-    void *erased_state) {
-  probe_handshake_send_client_hello(ctx, ch, erased_state_ref, erased_state);
-}
-
-bool TLS13_Handshake_recv_server_hello(
-    TLS13_Handshake_handshake_context ctx,
-    TLS13_IO_channel ch,
-    void *erased_state_ref,
-    void *erased_state) {
-  return probe_handshake_recv_server_hello(ctx, ch, erased_state_ref, erased_state);
-}
-
-bool TLS13_Handshake_recv_encrypted_extensions(
-    TLS13_Handshake_handshake_context ctx,
-    TLS13_IO_channel ch,
-    void *erased_state_ref,
-    void *erased_state) {
-  return probe_handshake_recv_encrypted_extensions(ctx, ch, erased_state_ref, erased_state);
-}
-
-bool TLS13_Handshake_recv_certificate(
-    TLS13_Handshake_handshake_context ctx,
-    TLS13_IO_channel ch,
-    void *erased_state_ref,
-    void *erased_state) {
-  return probe_handshake_recv_certificate(ctx, ch, erased_state_ref, erased_state);
-}
-
-bool TLS13_Handshake_validate_certificate(
-    TLS13_Handshake_handshake_context ctx,
-    void *erased_state_ref,
-    void *erased_state) {
-  return probe_handshake_validate_certificate(ctx, erased_state_ref, erased_state);
-}
-
-bool TLS13_Handshake_recv_certificate_verify(
-    TLS13_Handshake_handshake_context ctx,
-    TLS13_IO_channel ch,
-    void *erased_state_ref,
-    void *erased_state) {
-  return probe_handshake_recv_certificate_verify(ctx, ch, erased_state_ref, erased_state);
-}
-
-bool TLS13_Handshake_recv_server_finished(
-    TLS13_Handshake_handshake_context ctx,
-    TLS13_IO_channel ch,
-    void *erased_state_ref,
-    void *erased_state) {
-  return probe_handshake_recv_server_finished(ctx, ch, erased_state_ref, erased_state);
-}
-
-bool TLS13_Handshake_send_client_finished(
-    TLS13_Handshake_handshake_context ctx,
-    TLS13_IO_channel ch,
-    void *erased_state_ref,
-    void *erased_state) {
-  return probe_handshake_send_client_finished(ctx, ch, erased_state_ref, erased_state);
-}
-#endif
 
 TLS13_Connection_connection tls13_connection_probe_new(
     const char *host,
@@ -1485,12 +875,10 @@ TLS13_Connection_connection tls13_connection_probe_new(
   c->port = port;
   c->ca_pem_path = ca_pem_path;
   c->fd = -1;
-#ifdef TLS13_CONNECTION_PROBE_USE_EXTRACTED_CONNECTION_WRAPPER
   c->server_handshake_record_state = TLS13_Record_record_state_new();
   c->server_handshake_record_state_initialized = true;
   c->server_handshake_flight_state = TLS13_Handshake_FlightState_flight_state_new();
   c->server_handshake_flight_state_initialized = true;
-#endif
   return c;
 }
 
@@ -1501,188 +889,19 @@ void tls13_connection_probe_free(TLS13_Connection_connection c) {
   if (c->fd >= 0) {
     tls13_io_close_fd(c->fd);
   }
-#ifdef TLS13_CONNECTION_PROBE_USE_EXTRACTED_CONNECTION_WRAPPER
   if (c->server_handshake_record_state_initialized) {
     TLS13_Record_record_state_free(c->server_handshake_record_state);
   }
   if (c->server_handshake_flight_state_initialized) {
     TLS13_Handshake_FlightState_flight_state_free(c->server_handshake_flight_state);
   }
-#endif
   tls13_openssl_peer_identity_free(c->peer);
   free(c);
 }
 
-#ifndef TLS13_CONNECTION_PROBE_USE_EXTRACTED_CONNECTION_WRAPPER
-bool TLS13_Connection_client_connect(
-    TLS13_Connection_connection c,
-    TLS13_IO_channel ch,
-    void *erased_state_ref,
-    void *erased_state) {
-  (void)erased_state_ref;
-  (void)erased_state;
-  if (c == NULL || c->application_ready || c->fd >= 0) {
-    return false;
-  }
-  c->handshake_failed = false;
 
-#ifdef TLS13_CONNECTION_PROBE_USE_EXTRACTED_HANDSHAKE
-  bool ok = TLS13_Handshake_Driver_run_client_handshake(
-      (TLS13_Handshake_handshake_context)c, ch);
-#else
-  TLS13_Handshake_send_client_hello((TLS13_Handshake_handshake_context)c, ch, NULL, NULL);
-  bool ok =
-      TLS13_Handshake_recv_server_hello((TLS13_Handshake_handshake_context)c, ch, NULL, NULL) &&
-      TLS13_Handshake_recv_encrypted_extensions((TLS13_Handshake_handshake_context)c, ch, NULL, NULL) &&
-      TLS13_Handshake_recv_certificate((TLS13_Handshake_handshake_context)c, ch, NULL, NULL) &&
-      TLS13_Handshake_validate_certificate((TLS13_Handshake_handshake_context)c, NULL, NULL) &&
-      TLS13_Handshake_recv_certificate_verify((TLS13_Handshake_handshake_context)c, ch, NULL, NULL) &&
-      TLS13_Handshake_recv_server_finished((TLS13_Handshake_handshake_context)c, ch, NULL, NULL) &&
-      TLS13_Handshake_send_client_finished((TLS13_Handshake_handshake_context)c, ch, NULL, NULL);
-#endif
 
-  if (!ok || c->handshake_failed || !c->application_ready) {
-    fail_handshake(c);
-    return false;
-  }
-  return true;
-}
-#endif
 
-#ifndef TLS13_CONNECTION_PROBE_USE_EXTRACTED_CONNECTION_WRAPPER
-bool TLS13_Connection_client_write_all(
-    TLS13_Connection_connection c,
-    TLS13_IO_channel ch,
-    uint8_t *buf,
-    size_t len,
-    void *erased_bytes,
-    void *erased_state_ref,
-    void *erased_state) {
-  (void)ch;
-  (void)erased_bytes;
-  (void)erased_state_ref;
-  (void)erased_state;
-  if (c == NULL || !c->application_ready || c->fd < 0 || (len != 0 && buf == NULL)) {
-    return false;
-  }
-
-  uint8_t record[20000];
-  size_t sent = 0;
-  while (sent < len) {
-    size_t remaining = len - sent;
-    size_t chunk_len = remaining < PROBE_APP_RECORD_CHUNK_LEN
-                           ? remaining
-                           : PROBE_APP_RECORD_CHUNK_LEN;
-    size_t record_len = 0;
-    if (seal_record(
-            c->client_application_key,
-            c->client_application_iv,
-            c->client_application_sequence_number++,
-            23,
-            buf + sent,
-            chunk_len,
-            record,
-            sizeof record,
-            &record_len) != 0 ||
-        write_all_fd(c->fd, record, record_len) != 0) {
-      fprintf(stderr, "failed to send application-data record\n");
-      c->application_ready = false;
-      return false;
-    }
-    sent += chunk_len;
-  }
-  return true;
-}
-#endif
-
-#ifndef TLS13_CONNECTION_PROBE_USE_EXTRACTED_CONNECTION_WRAPPER
-bool TLS13_Connection_client_read_exact(
-    TLS13_Connection_connection c,
-    TLS13_IO_channel ch,
-    uint8_t *out,
-    size_t len,
-    void *erased_old_bytes,
-    void *erased_state_ref,
-    void *erased_state) {
-  (void)ch;
-  (void)erased_old_bytes;
-  (void)erased_state_ref;
-  (void)erased_state;
-  if (c == NULL || !c->application_ready || c->fd < 0 || (len != 0 && out == NULL)) {
-    return false;
-  }
-
-  size_t received = 0;
-  unsigned max_attempts = (unsigned)(len / PROBE_APP_RECORD_CHUNK_LEN + 128u);
-  for (unsigned attempts = 0; attempts < max_attempts && received < len; ++attempts) {
-    uint8_t header[TLS13_WIRE_RECORD_HEADER_LEN];
-    uint8_t encrypted_fragment[20000];
-    uint8_t content_type = 0;
-    uint16_t legacy_version = 0;
-    uint16_t fragment_len = 0;
-    if (read_record(
-            c->fd,
-            header,
-            encrypted_fragment,
-            sizeof encrypted_fragment,
-            &content_type,
-            &legacy_version,
-            &fragment_len) != 0 ||
-        content_type != 23 ||
-        fragment_len < 16) {
-      fprintf(stderr, "failed to read application-data response record\n");
-      c->application_ready = false;
-      return false;
-    }
-
-    uint8_t nonce[12];
-    uint8_t inner_plaintext[20000];
-    size_t inner_plaintext_len = (size_t)fragment_len - 16u;
-    if (!tls13_record_nonce(nonce, c->server_application_iv, c->server_application_sequence_number++) ||
-        !tls13_hacl_chacha20_poly1305_open_combined(
-            inner_plaintext,
-            inner_plaintext_len,
-            c->server_application_key,
-            nonce,
-            header,
-            TLS13_WIRE_RECORD_HEADER_LEN,
-            encrypted_fragment,
-            fragment_len)) {
-      fprintf(stderr, "failed to decrypt application-data response record\n");
-      c->application_ready = false;
-      return false;
-    }
-
-    uint8_t inner_content_type = 0;
-    size_t response_len = 0;
-    if (!tls13_wire_decode_inner_plaintext(
-            inner_plaintext, inner_plaintext_len, &inner_content_type, &response_len)) {
-      fprintf(stderr, "failed to decode application-data response record\n");
-      c->application_ready = false;
-      return false;
-    }
-    if (inner_content_type == 22) {
-      continue;
-    }
-    if (inner_content_type != 23 || response_len > len - received) {
-      fprintf(stderr, "unexpected application-data response record\n");
-      c->application_ready = false;
-      return false;
-    }
-    memcpy(out + received, inner_plaintext, response_len);
-    received += response_len;
-  }
-
-  if (received != len) {
-    fprintf(stderr, "OpenSSL echo application data was not received\n");
-    c->application_ready = false;
-    return false;
-  }
-  return true;
-}
-#endif
-
-#ifdef TLS13_CONNECTION_PROBE_USE_EXTRACTED_CONNECTION_WRAPPER
 TLS13_Connection_External_connection TLS13_Connection_External_client_new(
     uint8_t *hostname,
     size_t hostname_len,
@@ -1715,20 +934,8 @@ bool TLS13_Connection_External_client_connect(
   }
   c->handshake_failed = false;
 
-#ifdef TLS13_CONNECTION_PROBE_USE_EXTRACTED_HANDSHAKE
   bool ok = TLS13_Handshake_Driver_run_client_handshake(
       (TLS13_Handshake_handshake_context)c, ch);
-#else
-  TLS13_Handshake_send_client_hello((TLS13_Handshake_handshake_context)c, ch, NULL, NULL);
-  bool ok =
-      TLS13_Handshake_recv_server_hello((TLS13_Handshake_handshake_context)c, ch, NULL, NULL) &&
-      TLS13_Handshake_recv_encrypted_extensions((TLS13_Handshake_handshake_context)c, ch, NULL, NULL) &&
-      TLS13_Handshake_recv_certificate((TLS13_Handshake_handshake_context)c, ch, NULL, NULL) &&
-      TLS13_Handshake_validate_certificate((TLS13_Handshake_handshake_context)c, NULL, NULL) &&
-      TLS13_Handshake_recv_certificate_verify((TLS13_Handshake_handshake_context)c, ch, NULL, NULL) &&
-      TLS13_Handshake_recv_server_finished((TLS13_Handshake_handshake_context)c, ch, NULL, NULL) &&
-      TLS13_Handshake_send_client_finished((TLS13_Handshake_handshake_context)c, ch, NULL, NULL);
-#endif
 
   if (!ok || c->handshake_failed || !c->application_ready) {
     fail_handshake(c);
@@ -1949,9 +1156,7 @@ bool TLS13_Connection_External_client_close(
   c->application_ready = false;
   return true;
 }
-#endif
 
-#ifdef TLS13_CONNECTION_PROBE_USE_EXTRACTED_HANDSHAKE_BYTE_DRIVER
 void TLS13_Handshake_ByteDriver_External_reset_encrypted_handshake(
     TLS13_Handshake_ByteDriver_External_context ctx,
     void *old_progress) {
@@ -1964,11 +1169,8 @@ void TLS13_Handshake_ByteDriver_External_reset_encrypted_handshake(
   c->saw_certificate = false;
   c->saw_certificate_verify = false;
   c->saw_finished = false;
-  c->leaf_der = NULL;
-  c->leaf_der_len = 0;
   c->signature = NULL;
   c->signature_len = 0;
-  c->server_handshake_sequence_number = 0;
   if (!c->server_handshake_flight_state_initialized) {
     c->server_handshake_flight_state = TLS13_Handshake_FlightState_flight_state_new();
     c->server_handshake_flight_state_initialized = true;
@@ -2048,7 +1250,6 @@ bool TLS13_Handshake_ByteDriver_External_accept_certificate(
     fprintf(stderr, "failed to parse server Certificate\n");
     return false;
   }
-#ifdef TLS13_CONNECTION_PROBE_USE_EXTRACTED_HANDSHAKE_FRAMING
   uint8_t leaf_offset_bytes[2] = {0};
   uint8_t leaf_len_bytes[2] = {0};
   if (!TLS13_Handshake_Framing_parse_certificate_leaf_der_offsets(
@@ -2068,12 +1269,6 @@ bool TLS13_Handshake_ByteDriver_External_accept_certificate(
       c->server_handshake_flight_state,
       certificate_body_offset + leaf_offset,
       leaf_len);
-#else
-  if (!tls13_wire_parse_certificate_leaf_der(body, body_len, &c->leaf_der, &c->leaf_der_len)) {
-    fprintf(stderr, "failed to parse server Certificate\n");
-    return false;
-  }
-#endif
   if (!TLS13_Handshake_FlightState_accept_certificate(
           c->server_handshake_flight_state, message_len)) {
     fprintf(stderr, "failed to parse server Certificate\n");
@@ -2093,7 +1288,6 @@ bool TLS13_Handshake_ByteDriver_External_accept_certificate_verify(
     fprintf(stderr, "failed to parse server CertificateVerify\n");
     return false;
   }
-#ifdef TLS13_CONNECTION_PROBE_USE_EXTRACTED_HANDSHAKE_FRAMING
   uint8_t signature_scheme_bytes[2] = {0};
   uint8_t signature_len_bytes[2] = {0};
   if (!TLS13_Handshake_Framing_parse_certificate_verify_body(
@@ -2117,17 +1311,6 @@ bool TLS13_Handshake_ByteDriver_External_accept_certificate_verify(
       c->signature_scheme,
       signature_body_offset + 4u,
       c->signature_len);
-#else
-  if (!tls13_wire_parse_certificate_verify(
-          body,
-          body_len,
-          &c->signature_scheme,
-          &c->signature,
-          &c->signature_len)) {
-    fprintf(stderr, "failed to parse server CertificateVerify\n");
-    return false;
-  }
-#endif
   if (!TLS13_Handshake_FlightState_accept_certificate_verify(
           c->server_handshake_flight_state, message_len)) {
     fprintf(stderr, "failed to parse server CertificateVerify\n");
@@ -2159,12 +1342,8 @@ bool TLS13_Handshake_ByteDriver_External_accept_finished(
       TLS13_Handshake_FlightState_server_before_finished_len(c->server_handshake_flight_state);
   c->server_handshake_through_finished_len =
       TLS13_Handshake_FlightState_server_through_finished_len(c->server_handshake_flight_state);
-#ifdef TLS13_CONNECTION_PROBE_USE_EXTRACTED_HANDSHAKE_BYTE_DRIVER
   TLS13_Handshake_FlightState_set_server_finished_verify_data(
       c->server_handshake_flight_state, (uint8_t *)body, body_len);
-#else
-  memcpy(c->server_finished_verify_data, body, sizeof c->server_finished_verify_data);
-#endif
   c->saw_finished = true;
   return true;
 }
@@ -2178,4 +1357,3 @@ bool TLS13_Handshake_ByteDriver_External_encrypted_handshake_complete(
          TLS13_Handshake_FlightState_encrypted_handshake_complete(
              c->server_handshake_flight_state);
 }
-#endif

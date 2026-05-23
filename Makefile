@@ -200,7 +200,7 @@ verify: check-deps check-toolchain $(CACHE_DIR) $(OUTPUT_DIR)
 check-c-stubs:
 	$(CC) -fsyntax-only -Wall -Wextra -Wno-deprecated-declarations \
 	  -I c_stubs -I $(HACL_DIR) -I $(HACL_DIR)/internal -I $(HACL_KI) -I $(HACL_KL) \
-	  c_stubs/*.c
+	  $(filter-out c_stubs/tls13_connection_probe.c,$(wildcard c_stubs/*.c))
 
 HACL_WRAPPER_SOURCES = \
   c_stubs/tls13_hacl_stubs.c \
@@ -220,8 +220,7 @@ HACL_STUB_TEST_SOURCES = \
 CONNECTION_PROBE_SOURCES = \
   c_stubs/tls13_connection_probe.c \
   c_stubs/tls13_connection_probe.h \
-  c_stubs/tls13_connection_external.h \
-  c_stubs/tls13_wire_stubs.c \
+  c_stubs/tls13_connection_external_layer.h \
   c_stubs/tls13_wire_stubs.h \
   c_stubs/tls13_io_stubs.c \
   c_stubs/tls13_io_stubs.h \
@@ -250,45 +249,22 @@ test/openssl_echo_server: test/openssl_echo_server.c | check-deps
 	$(CC) -Wall -Wextra test/openssl_echo_server.c \
 	  -lssl -lcrypto -o $@
 
-test/test_clienthello_openssl_probe: $(CONNECTION_PROBE_SOURCES) test/test_clienthello_openssl_probe.c | check-deps
-	$(CC) -Wall -Wextra -Wno-deprecated-declarations \
-	  -ffunction-sections -fdata-sections \
-	  -I c_stubs -I $(HACL_DIR) -I $(HACL_DIR)/internal -I $(HACL_KI) -I $(HACL_KL) \
-	  $(HACL_WRAPPER_SOURCES) c_stubs/tls13_wire_stubs.c c_stubs/tls13_io_stubs.c c_stubs/tls13_openssl_stubs.c c_stubs/tls13_connection_probe.c test/test_clienthello_openssl_probe.c \
-	  -Wl,--gc-sections -lssl -lcrypto -o $@
-
 test-openssl-stubs: test/test_openssl_stubs test/certs/chain.pem test/certs/ca.pem test/certs/leaf.key test/certs/leaf.der
 	./test/test_openssl_stubs test/certs/ca.pem test/certs/chain.pem test/certs/leaf.key test/certs/leaf.der
-
-test/test_extracted_connection_driver_openssl: $(CONNECTION_PROBE_SOURCES) test/test_extracted_connection_driver_openssl.c $(EXTRACT_CONNECTION_DRIVER_C) $(EXTRACT_CONNECTION_DRIVER_H) $(EXTRACT_HANDSHAKE_DRIVER_C) $(EXTRACT_HANDSHAKE_DRIVER_H) c_stubs/tls13_handshake_external.h | check-deps
-	$(CC) -Wall -Wextra -Wno-deprecated-declarations \
-	  -ffunction-sections -fdata-sections \
-	  -DTLS13_CONNECTION_PROBE_USE_EXTRACTED_HANDSHAKE \
-	  -I $(EXTRACT_CONNECTION_DRIVER_DIR) -I $(EXTRACT_HANDSHAKE_DRIVER_DIR) -I c_stubs -I $(KRML_HOME)/include -I $(KRML_HOME)/krmllib/dist/minimal \
-	  -I $(HACL_DIR) -I $(HACL_DIR)/internal -I $(HACL_KI) -I $(HACL_KL) \
-	  $(EXTRACT_CONNECTION_DRIVER_C) $(EXTRACT_HANDSHAKE_DRIVER_C) $(HACL_WRAPPER_SOURCES) c_stubs/tls13_wire_stubs.c c_stubs/tls13_io_stubs.c c_stubs/tls13_openssl_stubs.c c_stubs/tls13_connection_probe.c test/test_extracted_connection_driver_openssl.c \
-	  -Wl,--gc-sections -lssl -lcrypto -o $@
 
 test/test_extracted_connection_wrapper_openssl: $(CONNECTION_PROBE_SOURCES) test/test_extracted_connection_wrapper_openssl.c $(EXTRACT_CONNECTION_C) $(EXTRACT_CONNECTION_H) $(EXTRACT_HANDSHAKE_LAYERED_C) $(EXTRACT_HANDSHAKE_LAYERED_H) $(EXTRACT_HANDSHAKE_LAYERED_DRIVER_C) $(EXTRACT_HANDSHAKE_LAYERED_DRIVER_H) $(EXTRACT_HANDSHAKE_FRAMING_C) $(EXTRACT_HANDSHAKE_FRAMING_H) $(EXTRACT_HANDSHAKE_FLIGHT_STATE_C) $(EXTRACT_HANDSHAKE_FLIGHT_STATE_H) $(EXTRACT_HANDSHAKE_TRANSCRIPT_C) $(EXTRACT_HANDSHAKE_TRANSCRIPT_H) $(EXTRACT_HANDSHAKE_BYTE_DRIVER_C) $(EXTRACT_HANDSHAKE_BYTE_DRIVER_H) $(EXTRACT_KEY_SCHEDULE_C) $(EXTRACT_KEY_SCHEDULE_H) $(EXTRACT_RECORD_C) $(EXTRACT_RECORD_H) $(EXTRACT_RECORD_FRAMING_C) $(EXTRACT_RECORD_FRAMING_H) c_stubs/tls13_connection_external_layer.h c_stubs/tls13_handshake_external_layer.h c_stubs/tls13_crypto_external.c c_stubs/tls13_pulse_shims.c c_stubs/tls13_handshake_byte_driver_external.h c_stubs/tls13_handshake_transcript_external.c c_stubs/tls13_handshake_transcript_external.h | check-deps
 	$(CC) -Wall -Wextra -Wno-deprecated-declarations \
 	  -ffunction-sections -fdata-sections \
-	  -DTLS13_CONNECTION_PROBE_USE_EXTRACTED_CONNECTION_WRAPPER \
-	  -DTLS13_CONNECTION_PROBE_USE_EXTRACTED_HANDSHAKE \
-	  -DTLS13_CONNECTION_PROBE_USE_EXTRACTED_HANDSHAKE_LAYER \
-	  -DTLS13_CONNECTION_PROBE_USE_EXTRACTED_KEY_SCHEDULE \
-	  -DTLS13_CONNECTION_PROBE_USE_EXTRACTED_HANDSHAKE_FRAMING \
-	  -DTLS13_CONNECTION_PROBE_USE_EXTRACTED_HANDSHAKE_TRANSCRIPT \
-	  -DTLS13_CONNECTION_PROBE_USE_EXTRACTED_HANDSHAKE_BYTE_DRIVER \
 	  -I $(EXTRACT_CONNECTION_DIR) -I $(EXTRACT_HANDSHAKE_LAYERED_DIR) -I $(EXTRACT_HANDSHAKE_FRAMING_DIR) -I $(EXTRACT_HANDSHAKE_FLIGHT_STATE_DIR) -I $(EXTRACT_HANDSHAKE_TRANSCRIPT_DIR) -I $(EXTRACT_HANDSHAKE_BYTE_DRIVER_DIR) -I $(EXTRACT_KEY_SCHEDULE_DIR) -I $(EXTRACT_RECORD_DIR) -I $(EXTRACT_RECORD_FRAMING_DIR) \
 	  -I c_stubs -I $(KRML_HOME)/include -I $(KRML_HOME)/krmllib/dist/minimal \
 	  -I $(HACL_DIR) -I $(HACL_DIR)/internal -I $(HACL_KI) -I $(HACL_KL) \
 	  $(EXTRACT_CONNECTION_C) $(EXTRACT_HANDSHAKE_LAYERED_C) $(EXTRACT_HANDSHAKE_LAYERED_DRIVER_C) $(EXTRACT_HANDSHAKE_FRAMING_C) $(EXTRACT_HANDSHAKE_FLIGHT_STATE_C) $(EXTRACT_HANDSHAKE_TRANSCRIPT_C) $(EXTRACT_HANDSHAKE_BYTE_DRIVER_C) $(EXTRACT_KEY_SCHEDULE_C) $(EXTRACT_RECORD_C) $(EXTRACT_RECORD_FRAMING_C) \
 	  $(HACL_WRAPPER_SOURCES) c_stubs/tls13_crypto_external.c c_stubs/tls13_handshake_transcript_external.c c_stubs/tls13_pulse_shims.c \
-	  c_stubs/tls13_wire_stubs.c c_stubs/tls13_io_stubs.c c_stubs/tls13_openssl_stubs.c c_stubs/tls13_connection_probe.c \
+	  c_stubs/tls13_io_stubs.c c_stubs/tls13_openssl_stubs.c c_stubs/tls13_connection_probe.c \
 	  test/test_extracted_connection_wrapper_openssl.c \
 	  -Wl,--gc-sections -lssl -lcrypto -o $@
 
-test-openssl-echo: test/openssl_echo_server test/test_clienthello_openssl_probe test/test_extracted_connection_driver_openssl test/test_extracted_connection_wrapper_openssl
+test-openssl-echo: test/openssl_echo_server test/test_extracted_connection_wrapper_openssl
 	scripts/test-openssl-echo.sh
 
 test/test_wire_stubs: c_stubs/tls13_wire_stubs.c c_stubs/tls13_wire_stubs.h test/test_wire_stubs.c
@@ -582,5 +558,5 @@ test-record-bindings: test/test_record_bindings
 
 clean:
 	rm -rf $(CACHE_DIR) $(OUTPUT_DIR) $(EXTRACT_DIR)
-	rm -f test/test_hacl_stubs test/test_openssl_stubs test/test_wire_stubs test/test_record_stubs test/test_record_bindings test/test_io_stubs test/test_extract_smoke test/test_connection_driver_bindings test/test_connection_bindings test/test_handshake_driver_bindings test/test_handshake_bindings test/test_key_schedule_bindings test/test_clienthello_openssl_probe test/test_extracted_connection_driver_openssl test/test_extracted_connection_wrapper_openssl test/openssl_echo_server
+	rm -f test/test_hacl_stubs test/test_openssl_stubs test/test_wire_stubs test/test_record_stubs test/test_record_bindings test/test_io_stubs test/test_extract_smoke test/test_connection_driver_bindings test/test_connection_bindings test/test_handshake_driver_bindings test/test_handshake_bindings test/test_key_schedule_bindings test/test_extracted_connection_wrapper_openssl test/openssl_echo_server
 	find src test -name '*.checked' -delete
