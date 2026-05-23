@@ -1258,11 +1258,15 @@ bool TLS13_Connection_External_client_write_all(
     size_t record_len = TLS13_WIRE_RECORD_HEADER_LEN + ciphertext_len;
     if (sizeof record < record_len ||
         chunk_len > sizeof inner_plaintext - 1u ||
-        !tls13_wire_serialize_record_header(record, 23, 0x0303, (uint16_t)ciphertext_len)) {
+        ciphertext_len > UINT16_MAX) {
       TLS13_Record_record_state_free(record_state);
       c->application_ready = false;
       return false;
     }
+    TLS13_Record_Framing_serialize_application_data_header(
+        (uint16_t)ciphertext_len,
+        record,
+        TLS13_WIRE_RECORD_HEADER_LEN);
     TLS13_Record_Framing_encode_inner_plaintext_no_padding(
         buf + sent,
         chunk_len,

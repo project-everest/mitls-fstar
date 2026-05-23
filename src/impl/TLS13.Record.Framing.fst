@@ -7,8 +7,11 @@ open Pulse.Lib.Array.PtsTo
 
 module Arr = Pulse.Lib.Array
 module B = TLS13.Bytes
+module Cast = FStar.Int.Cast
 module Seq = FStar.Seq
 module SZ = FStar.SizeT
+module U16 = FStar.UInt16
+module U32 = FStar.UInt32
 module U8 = FStar.UInt8
 
 let inner_plaintext_no_padding_result
@@ -80,4 +83,23 @@ fn decode_inner_plaintext_no_padding
   let content_type = inner.(payload_len);
   content_type_out.(0sz) <- content_type;
   payload_len
+}
+
+fn serialize_application_data_header
+  (fragment_len: U16.t)
+  (out: array U8.t)
+  (out_len: SZ.t)
+  requires pts_to out 'old_bytes **
+           pure (B.length 'old_bytes == SZ.v out_len /\
+                 SZ.v out_len == 5)
+  ensures exists* header_bytes.
+          pts_to out header_bytes **
+          pure (B.length header_bytes == 5)
+{
+  pts_to_len out;
+  out.(0sz) <- 0x17uy;
+  out.(1sz) <- 0x03uy;
+  out.(2sz) <- 0x03uy;
+  out.(3sz) <- Cast.uint16_to_uint8 (U16.shift_right fragment_len 8ul);
+  out.(4sz) <- Cast.uint16_to_uint8 fragment_len;
 }
