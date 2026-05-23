@@ -1145,6 +1145,43 @@ bool TLS13_Handshake_send_client_finished(
 
   uint8_t client_record[20000];
   size_t client_record_len = 0;
+#ifdef TLS13_CONNECTION_PROBE_USE_EXTRACTED_CONNECTION_WRAPPER
+  uint8_t client_inner_plaintext[sizeof client_finished + 1u];
+  size_t client_inner_plaintext_len = sizeof client_finished + 1u;
+  size_t client_ciphertext_len = client_inner_plaintext_len + 16u;
+  client_record_len = TLS13_WIRE_RECORD_HEADER_LEN + client_ciphertext_len;
+  if (client_ciphertext_len > UINT16_MAX || client_record_len > sizeof client_record) {
+    fprintf(stderr, "failed to send client Finished\n");
+    fail_handshake(c);
+    return false;
+  }
+  TLS13_Record_Framing_serialize_application_data_header(
+      (uint16_t)client_ciphertext_len,
+      client_record,
+      TLS13_WIRE_RECORD_HEADER_LEN);
+  TLS13_Record_Framing_encode_inner_plaintext_no_padding(
+      client_finished,
+      sizeof client_finished,
+      22,
+      client_inner_plaintext,
+      client_inner_plaintext_len);
+  TLS13_Record_record_state client_handshake_record_state = TLS13_Record_record_state_new();
+  TLS13_Record_install_keys(
+      client_handshake_record_state, 1, c->client_handshake_key, c->client_handshake_iv);
+  bool sealed = TLS13_Record_seal_application(
+      client_handshake_record_state,
+      client_record,
+      TLS13_WIRE_RECORD_HEADER_LEN,
+      client_inner_plaintext,
+      client_inner_plaintext_len,
+      client_record + TLS13_WIRE_RECORD_HEADER_LEN);
+  TLS13_Record_record_state_free(client_handshake_record_state);
+  if (!sealed || write_all_fd(c->fd, client_record, client_record_len) != 0) {
+    fprintf(stderr, "failed to send client Finished\n");
+    fail_handshake(c);
+    return false;
+  }
+#else
   if (seal_record(
           c->client_handshake_key,
           c->client_handshake_iv,
@@ -1160,6 +1197,7 @@ bool TLS13_Handshake_send_client_finished(
     fail_handshake(c);
     return false;
   }
+#endif
 
   if (derive_application_keys(
           c->handshake_secret,
