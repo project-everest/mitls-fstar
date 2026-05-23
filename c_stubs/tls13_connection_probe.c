@@ -54,14 +54,6 @@ struct TLS13_Connection_connection_s {
   size_t server_handshake_len;
   size_t server_handshake_before_finished_len;
   size_t server_handshake_through_finished_len;
-  bool saw_encrypted_extensions;
-  bool saw_certificate;
-  bool saw_certificate_verify;
-  bool saw_finished;
-  uint16_t signature_scheme;
-  const uint8_t *signature;
-  size_t signature_len;
-  size_t certificate_verify_offset;
   tls13_peer_identity *peer;
   uint8_t client_application_key[32];
   uint8_t client_application_iv[12];
@@ -1156,12 +1148,6 @@ void TLS13_Handshake_ByteDriver_External_reset_encrypted_handshake(
   if (c == NULL) {
     return;
   }
-  c->saw_encrypted_extensions = false;
-  c->saw_certificate = false;
-  c->saw_certificate_verify = false;
-  c->saw_finished = false;
-  c->signature = NULL;
-  c->signature_len = 0;
   if (!c->server_handshake_flight_state_initialized) {
     c->server_handshake_flight_state = TLS13_Handshake_FlightState_flight_state_new();
     c->server_handshake_flight_state_initialized = true;
@@ -1227,7 +1213,6 @@ bool TLS13_Handshake_ByteDriver_External_accept_encrypted_extensions(
   }
   (void)body;
   (void)body_len;
-  c->saw_encrypted_extensions = true;
   return true;
 }
 
@@ -1265,7 +1250,6 @@ bool TLS13_Handshake_ByteDriver_External_accept_certificate(
     fprintf(stderr, "failed to parse server Certificate\n");
     return false;
   }
-  c->saw_certificate = true;
   return true;
 }
 
@@ -1291,25 +1275,21 @@ bool TLS13_Handshake_ByteDriver_External_accept_certificate_verify(
     fprintf(stderr, "failed to parse server CertificateVerify\n");
     return false;
   }
-  c->signature_scheme =
+  uint16_t signature_scheme =
       ((uint16_t)signature_scheme_bytes[0] << 8) | (uint16_t)signature_scheme_bytes[1];
-  c->signature_len =
+  size_t signature_len =
       ((size_t)signature_len_bytes[0] << 8) | (size_t)signature_len_bytes[1];
-  c->signature = body + 4;
   size_t signature_body_offset = (size_t)(body - c->server_handshake_messages);
   TLS13_Handshake_FlightState_set_certificate_verify_signature(
       c->server_handshake_flight_state,
-      c->signature_scheme,
+      signature_scheme,
       signature_body_offset + 4u,
-      c->signature_len);
+      signature_len);
   if (!TLS13_Handshake_FlightState_accept_certificate_verify(
           c->server_handshake_flight_state, message_len)) {
     fprintf(stderr, "failed to parse server CertificateVerify\n");
     return false;
   }
-  c->certificate_verify_offset =
-      TLS13_Handshake_FlightState_certificate_verify_offset(c->server_handshake_flight_state);
-  c->saw_certificate_verify = true;
   return true;
 }
 
@@ -1335,7 +1315,6 @@ bool TLS13_Handshake_ByteDriver_External_accept_finished(
       TLS13_Handshake_FlightState_server_through_finished_len(c->server_handshake_flight_state);
   TLS13_Handshake_FlightState_set_server_finished_verify_data(
       c->server_handshake_flight_state, (uint8_t *)body, body_len);
-  c->saw_finished = true;
   return true;
 }
 
