@@ -1145,10 +1145,7 @@ bool TLS13_Connection_External_client_write_application_record(
   (void)ch;
   (void)record_state_s;
   (void)bytes;
-  if (c == NULL || c->fd < 0 ||
-      record_state.key == NULL || record_state.iv == NULL ||
-      record_state.seq == NULL || record_state.installed == NULL ||
-      buf == NULL ||
+  if (c == NULL || c->fd < 0 || buf == NULL ||
       chunk_len == 0 || chunk_len > PROBE_APP_RECORD_CHUNK_LEN ||
       offset > total_len || chunk_len > total_len - offset) {
     return false;
@@ -1201,10 +1198,7 @@ size_t TLS13_Connection_External_client_read_application_record(
   (void)ch;
   (void)record_state_s;
   (void)old_bytes;
-  if (c == NULL || c->fd < 0 ||
-      record_state.key == NULL || record_state.iv == NULL ||
-      record_state.seq == NULL || record_state.installed == NULL ||
-      out == NULL ||
+  if (c == NULL || c->fd < 0 || out == NULL ||
       remaining == 0 || offset > total_len || remaining > total_len - offset) {
     return 0;
   }
