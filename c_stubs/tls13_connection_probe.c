@@ -45,8 +45,6 @@ struct TLS13_Connection_connection_s {
   size_t client_hello_len;
   uint8_t server_hello_fragment[4096];
   size_t server_hello_len;
-  uint8_t client_handshake_key[32];
-  uint8_t client_handshake_iv[12];
   uint8_t server_handshake_messages[32768];
   tls13_peer_identity *peer;
   TLS13_Record_record_state server_handshake_record_state;
@@ -515,6 +513,8 @@ static bool probe_handshake_recv_server_hello(
   c->server_hello_len = fragment_len;
   uint8_t handshake_secret[32];
   uint8_t client_handshake_traffic_secret[32];
+  uint8_t client_handshake_key[32];
+  uint8_t client_handshake_iv[12];
   uint8_t server_handshake_traffic_secret[32];
   uint8_t server_handshake_key[32];
   uint8_t server_handshake_iv[12];
@@ -527,8 +527,8 @@ static bool probe_handshake_recv_server_hello(
           handshake_secret,
           client_handshake_traffic_secret,
           server_handshake_traffic_secret,
-          c->client_handshake_key,
-          c->client_handshake_iv,
+          client_handshake_key,
+          client_handshake_iv,
           server_handshake_key,
           server_handshake_iv) != 0) {
     fprintf(stderr, "failed to derive handshake traffic keys\n");
@@ -541,6 +541,12 @@ static bool probe_handshake_recv_server_hello(
       c->server_handshake_flight_state,
       client_handshake_traffic_secret,
       sizeof client_handshake_traffic_secret);
+  TLS13_Handshake_FlightState_set_client_handshake_key_iv(
+      c->server_handshake_flight_state,
+      client_handshake_key,
+      sizeof client_handshake_key,
+      client_handshake_iv,
+      sizeof client_handshake_iv);
   TLS13_Handshake_FlightState_set_server_handshake_traffic_secret(
       c->server_handshake_flight_state,
       server_handshake_traffic_secret,
@@ -789,8 +795,16 @@ static bool probe_handshake_send_client_finished(
       client_inner_plaintext,
       client_inner_plaintext_len);
   TLS13_Record_record_state client_handshake_record_state = TLS13_Record_record_state_new();
+  uint8_t client_handshake_key[32] = {0};
+  uint8_t client_handshake_iv[12] = {0};
+  TLS13_Handshake_FlightState_copy_client_handshake_key_iv(
+      c->server_handshake_flight_state,
+      client_handshake_key,
+      sizeof client_handshake_key,
+      client_handshake_iv,
+      sizeof client_handshake_iv);
   TLS13_Record_install_keys(
-      client_handshake_record_state, 1, c->client_handshake_key, c->client_handshake_iv);
+      client_handshake_record_state, 1, client_handshake_key, client_handshake_iv);
   bool sealed = TLS13_Record_seal_application(
       client_handshake_record_state,
       client_record,

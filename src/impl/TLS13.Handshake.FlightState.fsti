@@ -73,6 +73,43 @@ fn copy_client_handshake_traffic_secret
           pts_to out out_bytes **
           pure (B.length out_bytes == 32)
 
+fn set_client_handshake_key_iv
+  (st: flight_state)
+  (key: array U8.t)
+  (key_len: SZ.t)
+  (iv: array U8.t)
+  (iv_len: SZ.t)
+  requires is_flight_state st **
+           pts_to key 'key_bytes **
+           pts_to iv 'iv_bytes **
+           pure (B.length 'key_bytes == SZ.v key_len /\
+                 B.length 'iv_bytes == SZ.v iv_len /\
+                 SZ.v key_len == 32 /\
+                 SZ.v iv_len == 12)
+  ensures is_flight_state st **
+          pts_to key 'key_bytes **
+          pts_to iv 'iv_bytes
+
+fn copy_client_handshake_key_iv
+  (st: flight_state)
+  (key_out: array U8.t)
+  (key_out_len: SZ.t)
+  (iv_out: array U8.t)
+  (iv_out_len: SZ.t)
+  requires is_flight_state st **
+           pts_to key_out 'old_key **
+           pts_to iv_out 'old_iv **
+           pure (B.length 'old_key == SZ.v key_out_len /\
+                 B.length 'old_iv == SZ.v iv_out_len /\
+                 SZ.v key_out_len == 32 /\
+                 SZ.v iv_out_len == 12)
+  ensures exists* key_bytes iv_bytes.
+          is_flight_state st **
+          pts_to key_out key_bytes **
+          pts_to iv_out iv_bytes **
+          pure (B.length key_bytes == 32 /\
+                B.length iv_bytes == 12)
+
 fn set_server_handshake_traffic_secret
   (st: flight_state)
   (secret: array U8.t)
