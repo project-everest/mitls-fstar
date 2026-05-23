@@ -45,7 +45,6 @@ struct TLS13_Connection_connection_s {
   size_t client_hello_len;
   uint8_t server_hello_fragment[4096];
   size_t server_hello_len;
-  uint8_t client_handshake_traffic_secret[32];
   uint8_t client_handshake_key[32];
   uint8_t client_handshake_iv[12];
   uint8_t server_handshake_key[32];
@@ -517,6 +516,7 @@ static bool probe_handshake_recv_server_hello(
   }
   c->server_hello_len = fragment_len;
   uint8_t handshake_secret[32];
+  uint8_t client_handshake_traffic_secret[32];
   uint8_t server_handshake_traffic_secret[32];
   if (derive_server_handshake_keys(
           c->client_hello,
@@ -525,7 +525,7 @@ static bool probe_handshake_recv_server_hello(
           c->server_hello_len,
           server_key_share,
           handshake_secret,
-          c->client_handshake_traffic_secret,
+          client_handshake_traffic_secret,
           server_handshake_traffic_secret,
           c->client_handshake_key,
           c->client_handshake_iv,
@@ -537,6 +537,10 @@ static bool probe_handshake_recv_server_hello(
   }
   TLS13_Handshake_FlightState_set_handshake_secret(
       c->server_handshake_flight_state, handshake_secret, sizeof handshake_secret);
+  TLS13_Handshake_FlightState_set_client_handshake_traffic_secret(
+      c->server_handshake_flight_state,
+      client_handshake_traffic_secret,
+      sizeof client_handshake_traffic_secret);
   TLS13_Handshake_FlightState_set_server_handshake_traffic_secret(
       c->server_handshake_flight_state,
       server_handshake_traffic_secret,
@@ -733,9 +737,6 @@ static bool probe_handshake_send_client_finished(
   }
 
   uint8_t transcript_hash_through_server_finished[32];
-  uint8_t handshake_secret[32] = {0};
-  TLS13_Handshake_FlightState_copy_handshake_secret(
-      c->server_handshake_flight_state, handshake_secret, sizeof handshake_secret);
   if (compute_transcript_hash(
           c->client_hello,
           c->client_hello_len,
@@ -750,8 +751,13 @@ static bool probe_handshake_send_client_finished(
   }
 
   uint8_t client_finished[36] = {20, 0, 0, 32};
+  uint8_t client_handshake_traffic_secret[32] = {0};
+  TLS13_Handshake_FlightState_copy_client_handshake_traffic_secret(
+      c->server_handshake_flight_state,
+      client_handshake_traffic_secret,
+      sizeof client_handshake_traffic_secret);
   TLS13_KeySchedule_finished_verify_data(
-      c->client_handshake_traffic_secret,
+      client_handshake_traffic_secret,
       transcript_hash_through_server_finished,
       client_finished + TLS13_WIRE_HANDSHAKE_HEADER_LEN);
 
