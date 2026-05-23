@@ -1712,6 +1712,25 @@ bool TLS13_Handshake_ByteDriver_External_accept_certificate_verify(
     return false;
   }
   c->certificate_verify_offset = c->parsed_handshake_len;
+#ifdef TLS13_CONNECTION_PROBE_USE_EXTRACTED_HANDSHAKE_FRAMING
+  uint8_t signature_scheme_bytes[2] = {0};
+  uint8_t signature_len_bytes[2] = {0};
+  if (!TLS13_Handshake_Framing_parse_certificate_verify_body(
+          (uint8_t *)body,
+          body_len,
+          signature_scheme_bytes,
+          sizeof signature_scheme_bytes,
+          signature_len_bytes,
+          sizeof signature_len_bytes)) {
+    fprintf(stderr, "failed to parse server CertificateVerify\n");
+    return false;
+  }
+  c->signature_scheme =
+      ((uint16_t)signature_scheme_bytes[0] << 8) | (uint16_t)signature_scheme_bytes[1];
+  c->signature_len =
+      ((size_t)signature_len_bytes[0] << 8) | (size_t)signature_len_bytes[1];
+  c->signature = body + 4;
+#else
   if (!tls13_wire_parse_certificate_verify(
           body,
           body_len,
@@ -1721,6 +1740,7 @@ bool TLS13_Handshake_ByteDriver_External_accept_certificate_verify(
     fprintf(stderr, "failed to parse server CertificateVerify\n");
     return false;
   }
+#endif
   c->saw_certificate_verify = true;
   c->parsed_handshake_len += message_len;
   return true;

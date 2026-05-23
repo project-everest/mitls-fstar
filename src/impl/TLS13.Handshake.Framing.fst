@@ -6,8 +6,10 @@ open Pulse.Lib.Pervasives
 open Pulse.Lib.Array.PtsTo
 
 module B = TLS13.Bytes
+module Cast = FStar.Int.Cast
 module Seq = FStar.Seq
 module SZ = FStar.SizeT
+module U16 = FStar.UInt16
 module U8 = FStar.UInt8
 
 fn build_server_certificate_verify_input
@@ -130,5 +132,52 @@ fn parse_handshake_header
     body_len_out.(1sz) <- b2;
     body_len_out.(2sz) <- b3;
     true
+  }
+}
+
+fn parse_certificate_verify_body
+  (input: array U8.t)
+  (input_len: SZ.t)
+  (signature_scheme_out: array U8.t)
+  (signature_scheme_out_len: SZ.t)
+  (signature_len_out: array U8.t)
+  (signature_len_out_len: SZ.t)
+  requires pts_to input 'input_bytes **
+           pts_to signature_scheme_out 'old_signature_scheme **
+           pts_to signature_len_out 'old_signature_len **
+           pure (B.length 'input_bytes == SZ.v input_len /\
+                 B.length 'old_signature_scheme == SZ.v signature_scheme_out_len /\
+                 B.length 'old_signature_len == SZ.v signature_len_out_len /\
+                 SZ.v signature_scheme_out_len == 2 /\
+                 SZ.v signature_len_out_len == 2)
+  returns ok: bool
+  ensures exists* signature_scheme_bytes signature_len_bytes.
+          pts_to input 'input_bytes **
+          pts_to signature_scheme_out signature_scheme_bytes **
+          pts_to signature_len_out signature_len_bytes **
+          pure (B.length signature_scheme_bytes == 2 /\
+                B.length signature_len_bytes == 2 /\
+                (ok ==> SZ.v input_len >= 4))
+{
+  pts_to_len input;
+  pts_to_len signature_scheme_out;
+  pts_to_len signature_len_out;
+  if SZ.(input_len <^ 4sz) {
+    false
+  } else {
+    let b0 = input.(0sz);
+    let b1 = input.(1sz);
+    let b2 = input.(2sz);
+    let b3 = input.(3sz);
+    signature_scheme_out.(0sz) <- b0;
+    signature_scheme_out.(1sz) <- b1;
+    signature_len_out.(0sz) <- b2;
+    signature_len_out.(1sz) <- b3;
+    let sig_len_hi = Cast.uint8_to_uint16 b2;
+    let sig_len_lo = Cast.uint8_to_uint16 b3;
+    let sig_len = U16.logor (U16.shift_left sig_len_hi 8ul) sig_len_lo;
+    let expected_payload_len = SZ.uint16_to_sizet sig_len;
+    let actual_payload_len = SZ.(input_len -^ 4sz);
+    SZ.(actual_payload_len =^ expected_payload_len)
   }
 }

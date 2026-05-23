@@ -47,3 +47,27 @@ fn parse_handshake_header
                 B.length body_len_bytes == 3 /\
                 (ok ==> SZ.v input_len >= 4) /\
                 (not ok ==> SZ.v input_len < 4))
+
+fn parse_certificate_verify_body
+  (input: array U8.t)
+  (input_len: SZ.t)
+  (signature_scheme_out: array U8.t)
+  (signature_scheme_out_len: SZ.t)
+  (signature_len_out: array U8.t)
+  (signature_len_out_len: SZ.t)
+  requires pts_to input 'input_bytes **
+           pts_to signature_scheme_out 'old_signature_scheme **
+           pts_to signature_len_out 'old_signature_len **
+           pure (B.length 'input_bytes == SZ.v input_len /\
+                B.length 'old_signature_scheme == SZ.v signature_scheme_out_len /\
+                B.length 'old_signature_len == SZ.v signature_len_out_len /\
+                SZ.v signature_scheme_out_len == 2 /\
+                SZ.v signature_len_out_len == 2)
+  returns ok: bool
+  ensures exists* signature_scheme_bytes signature_len_bytes.
+          pts_to input 'input_bytes **
+          pts_to signature_scheme_out signature_scheme_bytes **
+          pts_to signature_len_out signature_len_bytes **
+          pure (B.length signature_scheme_bytes == 2 /\
+                B.length signature_len_bytes == 2 /\
+                (ok ==> SZ.v input_len >= 4))
