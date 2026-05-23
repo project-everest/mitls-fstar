@@ -8,6 +8,7 @@
 
 #ifdef TLS13_CONNECTION_PROBE_USE_EXTRACTED_CONNECTION_WRAPPER
 #include "TLS13_KeySchedule.h"
+#include "TLS13_Handshake_Framing.h"
 #include "TLS13_Record_Framing.h"
 #include "TLS13_Record.h"
 #include "tls13_connection_external_layer.h"
@@ -859,13 +860,24 @@ bool TLS13_Handshake_recv_certificate_verify(
           c->server_hello_len,
           c->server_handshake_messages,
           c->certificate_verify_offset,
-          transcript_hash) != 0 ||
-      !tls13_wire_build_server_certificate_verify_input(
+          transcript_hash) != 0) {
+    fprintf(stderr, "failed to build CertificateVerify input\n");
+    fail_handshake(c);
+    return false;
+  }
+#ifdef TLS13_CONNECTION_PROBE_USE_EXTRACTED_HANDSHAKE_FRAMING
+  TLS13_Handshake_Framing_build_server_certificate_verify_input(
+      transcript_hash,
+      certificate_verify_input,
+      sizeof certificate_verify_input);
+#else
+  if (!tls13_wire_build_server_certificate_verify_input(
           certificate_verify_input, transcript_hash)) {
     fprintf(stderr, "failed to build CertificateVerify input\n");
     fail_handshake(c);
     return false;
   }
+#endif
   if (!tls13_openssl_peer_verify_signature(
           c->peer,
           c->signature_scheme,
