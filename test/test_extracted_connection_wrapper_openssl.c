@@ -36,17 +36,17 @@ int main(int argc, char **argv) {
   }
   fill_wrapper_payload(outbound, EXTRACTED_WRAPPER_ECHO_PAYLOAD_LEN);
 
-  TLS13_Connection_External_connection backend =
-      tls13_connection_probe_new(argv[1], (uint16_t)port_long, argv[3]);
-  if (backend == NULL) {
+  TLS13_Connection_External_config config = {
+      .port = (uint16_t)port_long,
+      .ca_pem_path = argv[3],
+  };
+  TLS13_Connection_connection c =
+      TLS13_Connection_client_new((uint8_t *)argv[1], strlen(argv[1]), &config);
+  if (c.backend == NULL) {
     free(outbound);
     free(inbound);
     return 1;
   }
-  TLS13_Connection_connection c = {
-      .backend = backend,
-      .live = NULL,
-  };
 
   int rc = 1;
   if (!TLS13_Connection_client_connect(c, NULL) ||

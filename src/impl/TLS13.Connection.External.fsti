@@ -33,6 +33,33 @@ fn client_connect (c: connection) (ch: IO.channel)
   returns ok: bool
   ensures is_connection c ** IO.is_channel ch
 
+fn export_application_keys
+  (c: connection)
+  (client_key: array U8.t)
+  (client_iv: array U8.t)
+  (server_key: array U8.t)
+  (server_iv: array U8.t)
+  requires is_connection c **
+           pts_to client_key 'old_client_key **
+           pts_to client_iv 'old_client_iv **
+           pts_to server_key 'old_server_key **
+           pts_to server_iv 'old_server_iv **
+           pure (B.length 'old_client_key == 32 /\
+                 B.length 'old_client_iv == 12 /\
+                 B.length 'old_server_key == 32 /\
+                 B.length 'old_server_iv == 12)
+  returns ok: bool
+  ensures exists* client_key_bytes client_iv_bytes server_key_bytes server_iv_bytes.
+          is_connection c **
+          pts_to client_key client_key_bytes **
+          pts_to client_iv client_iv_bytes **
+          pts_to server_key server_key_bytes **
+          pts_to server_iv server_iv_bytes **
+          pure (B.length client_key_bytes == 32 /\
+                B.length client_iv_bytes == 12 /\
+                B.length server_key_bytes == 32 /\
+                B.length server_iv_bytes == 12)
+
 fn client_write (c: connection) (ch: IO.channel) (buf: array U8.t) (len: SZ.t)
   requires is_connection c **
            IO.is_channel ch **

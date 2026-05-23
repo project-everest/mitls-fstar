@@ -1688,7 +1688,6 @@ TLS13_Connection_External_connection TLS13_Connection_External_client_new(
     size_t hostname_len,
     TLS13_X509_Spec_trust_store trust_store,
     void *hostname_bytes) {
-  (void)trust_store;
   (void)hostname_bytes;
   char host[256];
   if (hostname == NULL || hostname_len == 0 || hostname_len >= sizeof host) {
@@ -1696,7 +1695,12 @@ TLS13_Connection_External_connection TLS13_Connection_External_client_new(
   }
   memcpy(host, hostname, hostname_len);
   host[hostname_len] = '\0';
-  return tls13_connection_probe_new(host, 443, "");
+  TLS13_Connection_External_config *config =
+      (TLS13_Connection_External_config *)trust_store;
+  uint16_t port = config == NULL || config->port == 0 ? 443 : config->port;
+  const char *ca_pem_path =
+      config == NULL || config->ca_pem_path == NULL ? "" : config->ca_pem_path;
+  return tls13_connection_probe_new(host, port, ca_pem_path);
 }
 
 void TLS13_Connection_External_client_free(TLS13_Connection_External_connection c) {
@@ -1730,6 +1734,31 @@ bool TLS13_Connection_External_client_connect(
     fail_handshake(c);
     return false;
   }
+  return true;
+}
+
+bool TLS13_Connection_External_export_application_keys(
+    TLS13_Connection_External_connection c,
+    uint8_t *client_key,
+    uint8_t *client_iv,
+    uint8_t *server_key,
+    uint8_t *server_iv,
+    void *old_client_key,
+    void *old_client_iv,
+    void *old_server_key,
+    void *old_server_iv) {
+  (void)old_client_key;
+  (void)old_client_iv;
+  (void)old_server_key;
+  (void)old_server_iv;
+  if (c == NULL || !c->application_ready ||
+      client_key == NULL || client_iv == NULL || server_key == NULL || server_iv == NULL) {
+    return false;
+  }
+  memcpy(client_key, c->client_application_key, 32);
+  memcpy(client_iv, c->client_application_iv, 12);
+  memcpy(server_key, c->server_application_key, 32);
+  memcpy(server_iv, c->server_application_iv, 12);
   return true;
 }
 

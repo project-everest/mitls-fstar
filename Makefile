@@ -531,10 +531,10 @@ test/test_connection_driver_bindings: test/test_connection_driver_bindings.c $(E
 test-connection-driver-bindings: test/test_connection_driver_bindings
 	./test/test_connection_driver_bindings
 
-test/test_connection_bindings: test/test_connection_bindings.c $(EXTRACT_CONNECTION_C) $(EXTRACT_CONNECTION_H) c_stubs/tls13_connection_external_layer.h
+test/test_connection_bindings: test/test_connection_bindings.c $(EXTRACT_CONNECTION_C) $(EXTRACT_CONNECTION_H) c_stubs/tls13_connection_external_layer.h c_stubs/tls13_pulse_shims.c
 	$(CC) -Wall -Wextra \
 	  -I $(EXTRACT_CONNECTION_DIR) -I c_stubs -I $(KRML_HOME)/include -I $(KRML_HOME)/krmllib/dist/minimal \
-	  $(EXTRACT_CONNECTION_C) test/test_connection_bindings.c \
+	  $(EXTRACT_CONNECTION_C) c_stubs/tls13_pulse_shims.c test/test_connection_bindings.c \
 	  -o $@
 
 test-connection-bindings: test/test_connection_bindings

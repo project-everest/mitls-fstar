@@ -6,6 +6,7 @@ open Pulse.Lib.Pervasives
 open Pulse.Lib.Array.PtsTo
 open Pulse.Lib.Box { box, (!), (:=) }
 
+module Arr = Pulse.Lib.Array
 module B = TLS13.Bytes
 module Box = Pulse.Lib.Box
 module E = TLS13.Connection.External
@@ -16,17 +17,38 @@ module ST = TLS13.State
 module SZ = FStar.SizeT
 module T = TLS13.Types
 module U8 = FStar.UInt8
+module V = Pulse.Lib.Vec
 module X = TLS13.X509.Spec
 
 noeq
 type connection = {
   backend: E.connection;
   live: box bool;
+  client_application_key: V.vec U8.t;
+  client_application_iv: V.vec U8.t;
+  server_application_key: V.vec U8.t;
+  server_application_iv: V.vec U8.t;
+  application_keys_installed: box bool;
 }
 
 let is_connection (c:connection) (st:ST.state_ref) (s:S.conn_state) : slprop =
-  exists* live.
-    E.is_connection c.backend ** Box.pts_to c.live live ** ST.current st s
+  exists* live app_keys_installed client_key client_iv server_key server_iv.
+    E.is_connection c.backend **
+    Box.pts_to c.live live **
+    Box.pts_to c.application_keys_installed app_keys_installed **
+    V.pts_to c.client_application_key client_key **
+    V.pts_to c.client_application_iv client_iv **
+    V.pts_to c.server_application_key server_key **
+    V.pts_to c.server_application_iv server_iv **
+    ST.current st s **
+    pure (V.is_full_vec c.client_application_key /\
+          V.is_full_vec c.client_application_iv /\
+          V.is_full_vec c.server_application_key /\
+          V.is_full_vec c.server_application_iv /\
+          V.length c.client_application_key == 32 /\
+          V.length c.client_application_iv == 12 /\
+          V.length c.server_application_key == 32 /\
+          V.length c.server_application_iv == 12)
 
 let zeros32 : B.bytes = B.zeros 32
 
@@ -105,10 +127,28 @@ fn client_new
 {
   let backend = E.client_new hostname hostname_len #trust_store;
   let live = Box.alloc true;
+  let app_keys_installed = Box.alloc false;
+  let client_application_key = V.alloc 0uy 32sz;
+  let client_application_iv = V.alloc 0uy 12sz;
+  let server_application_key = V.alloc 0uy 32sz;
+  let server_application_iv = V.alloc 0uy 12sz;
   let st = ST.alloc_initial ();
-  let c = { backend; live };
+  let c = {
+    backend;
+    live;
+    client_application_key;
+    client_application_iv;
+    server_application_key;
+    server_application_iv;
+    application_keys_installed = app_keys_installed;
+  };
   with backend_s. rewrite (E.is_connection backend) as (E.is_connection c.backend);
   with live_s. rewrite (Box.pts_to live live_s) as (Box.pts_to c.live live_s);
+  with installed_s. rewrite (Box.pts_to app_keys_installed installed_s) as (Box.pts_to c.application_keys_installed installed_s);
+  with ck_s. rewrite (V.pts_to client_application_key ck_s) as (V.pts_to c.client_application_key ck_s);
+  with ci_s. rewrite (V.pts_to client_application_iv ci_s) as (V.pts_to c.client_application_iv ci_s);
+  with sk_s. rewrite (V.pts_to server_application_key sk_s) as (V.pts_to c.server_application_key sk_s);
+  with si_s. rewrite (V.pts_to server_application_iv si_s) as (V.pts_to c.server_application_iv si_s);
   fold (is_connection c st S.initial);
   c
 }
@@ -120,6 +160,11 @@ fn client_free (c: connection)
   unfold (is_connection c 'st 's);
   E.client_free c.backend;
   Box.free c.live;
+  Box.free c.application_keys_installed;
+  V.free c.client_application_key;
+  V.free c.client_application_iv;
+  V.free c.server_application_key;
+  V.free c.server_application_iv;
   drop_ (ST.current 'st 's);
 }
 
@@ -136,9 +181,41 @@ fn client_connect (c: connection) (ch: IO.channel)
   unfold (is_connection c 'st 's);
   let ok = E.client_connect c.backend ch;
   if ok {
-    advance_successful_handshake 'st;
-    fold (is_connection c 'st (hs_application_data 's));
-    true
+    let mut client_key = [| 0uy; 32sz |];
+    let mut client_iv = [| 0uy; 12sz |];
+    let mut server_key = [| 0uy; 32sz |];
+    let mut server_iv = [| 0uy; 12sz |];
+    let exported = E.export_application_keys c.backend client_key client_iv server_key server_iv;
+    if exported {
+      pts_to_len client_key;
+      pts_to_len client_iv;
+      pts_to_len server_key;
+      pts_to_len server_iv;
+      V.pts_to_len c.client_application_key;
+      V.pts_to_len c.client_application_iv;
+      V.pts_to_len c.server_application_key;
+      V.pts_to_len c.server_application_iv;
+      V.to_array_pts_to c.client_application_key;
+      V.to_array_pts_to c.client_application_iv;
+      V.to_array_pts_to c.server_application_key;
+      V.to_array_pts_to c.server_application_iv;
+      Arr.memcpy 32sz client_key (V.vec_to_array c.client_application_key);
+      Arr.memcpy 12sz client_iv (V.vec_to_array c.client_application_iv);
+      Arr.memcpy 32sz server_key (V.vec_to_array c.server_application_key);
+      Arr.memcpy 12sz server_iv (V.vec_to_array c.server_application_iv);
+      V.to_vec_pts_to c.client_application_key;
+      V.to_vec_pts_to c.client_application_iv;
+      V.to_vec_pts_to c.server_application_key;
+      V.to_vec_pts_to c.server_application_iv;
+      c.application_keys_installed := true;
+      advance_successful_handshake 'st;
+      fold (is_connection c 'st (hs_application_data 's));
+      true
+    } else {
+      ST.advance_fail 'st T.IoError;
+      fold (is_connection c 'st (S.fail 's T.IoError));
+      false
+    }
   } else {
     ST.advance_fail 'st T.IoError;
     fold (is_connection c 'st (S.fail 's T.IoError));

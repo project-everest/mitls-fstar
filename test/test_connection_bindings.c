@@ -14,6 +14,7 @@ struct TLS13_Connection_External_connection_s {
   size_t read_result;
   unsigned new_calls;
   unsigned connect_calls;
+  unsigned export_keys_calls;
   unsigned write_calls;
   unsigned write_all_calls;
   unsigned read_calls;
@@ -51,6 +52,28 @@ bool TLS13_Connection_External_client_connect(
     TLS13_IO_channel ch) {
   (void)ch;
   c->connect_calls++;
+  return c->connect_ok;
+}
+
+bool TLS13_Connection_External_export_application_keys(
+    TLS13_Connection_External_connection c,
+    uint8_t *client_key,
+    uint8_t *client_iv,
+    uint8_t *server_key,
+    uint8_t *server_iv,
+    void *old_client_key,
+    void *old_client_iv,
+    void *old_server_key,
+    void *old_server_iv) {
+  (void)old_client_key;
+  (void)old_client_iv;
+  (void)old_server_key;
+  (void)old_server_iv;
+  c->export_keys_calls++;
+  memset(client_key, 0x11, 32);
+  memset(client_iv, 0x22, 12);
+  memset(server_key, 0x33, 32);
+  memset(server_iv, 0x44, 12);
   return c->connect_ok;
 }
 
@@ -138,6 +161,7 @@ static int test_success_path(void) {
       !ok ||
       c.backend->new_calls != 1 ||
       c.backend->connect_calls != 1 ||
+      c.backend->export_keys_calls != 1 ||
       c.backend->write_all_calls != 1 ||
       c.backend->read_exact_calls != 1 ||
       c.backend->close_calls != 1 ||
