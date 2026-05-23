@@ -58,6 +58,8 @@ IMPL_FILES = \
   src/impl/TLS13.IO.fsti \
   src/impl/TLS13.Handshake.Framing.fsti \
   src/impl/TLS13.Handshake.Framing.fst \
+  src/impl/TLS13.Handshake.ByteDriver.External.fsti \
+  src/impl/TLS13.Handshake.ByteDriver.fst \
   src/impl/TLS13.Handshake.External.fsti \
   src/impl/TLS13.Handshake.fsti \
   src/impl/TLS13.Handshake.fst \
@@ -93,6 +95,10 @@ EXTRACT_HANDSHAKE_FRAMING_DIR  = $(EXTRACT_DIR)/handshake-framing
 EXTRACT_HANDSHAKE_FRAMING_KRML = $(EXTRACT_HANDSHAKE_FRAMING_DIR)/TLS13_Handshake_Framing.krml
 EXTRACT_HANDSHAKE_FRAMING_C    = $(EXTRACT_HANDSHAKE_FRAMING_DIR)/TLS13_Handshake_Framing.c
 EXTRACT_HANDSHAKE_FRAMING_H    = $(EXTRACT_HANDSHAKE_FRAMING_DIR)/TLS13_Handshake_Framing.h
+EXTRACT_HANDSHAKE_BYTE_DRIVER_DIR  = $(EXTRACT_DIR)/handshake-byte-driver
+EXTRACT_HANDSHAKE_BYTE_DRIVER_KRML = $(EXTRACT_HANDSHAKE_BYTE_DRIVER_DIR)/TLS13_Handshake_ByteDriver.krml
+EXTRACT_HANDSHAKE_BYTE_DRIVER_C    = $(EXTRACT_HANDSHAKE_BYTE_DRIVER_DIR)/TLS13_Handshake_ByteDriver.c
+EXTRACT_HANDSHAKE_BYTE_DRIVER_H    = $(EXTRACT_HANDSHAKE_BYTE_DRIVER_DIR)/TLS13_Handshake_ByteDriver.h
 EXTRACT_KEY_SCHEDULE_DIR  = $(EXTRACT_DIR)/key-schedule
 EXTRACT_KEY_SCHEDULE_KRML = $(EXTRACT_KEY_SCHEDULE_DIR)/TLS13_KeySchedule.krml
 EXTRACT_KEY_SCHEDULE_C    = $(EXTRACT_KEY_SCHEDULE_DIR)/TLS13_KeySchedule.c
@@ -106,7 +112,7 @@ EXTRACT_RECORD_FRAMING_KRML = $(EXTRACT_RECORD_FRAMING_DIR)/TLS13_Record_Framing
 EXTRACT_RECORD_FRAMING_C    = $(EXTRACT_RECORD_FRAMING_DIR)/TLS13_Record_Framing.c
 EXTRACT_RECORD_FRAMING_H    = $(EXTRACT_RECORD_FRAMING_DIR)/TLS13_Record_Framing.h
 
-.PHONY: all verify test extract-smoke extract-connection-driver-krml extract-connection-driver-c extract-connection-krml extract-connection-c extract-handshake-driver-krml extract-handshake-driver-c extract-handshake-krml extract-handshake-c extract-handshake-framing-krml extract-handshake-framing-c extract-key-schedule-krml extract-key-schedule-c extract-record-krml extract-record-c extract-record-framing-krml extract-record-framing-c test-extract-smoke test-connection-driver-bindings test-connection-bindings test-handshake-driver-bindings test-handshake-bindings test-key-schedule-bindings test-record-bindings check-c-stubs test-hacl-stubs test-openssl-stubs test-wire-stubs test-record-stubs test-io-stubs test-openssl-echo check-toolchain check-deps clean
+.PHONY: all verify test extract-smoke extract-connection-driver-krml extract-connection-driver-c extract-connection-krml extract-connection-c extract-handshake-driver-krml extract-handshake-driver-c extract-handshake-krml extract-handshake-c extract-handshake-framing-krml extract-handshake-framing-c extract-handshake-byte-driver-krml extract-handshake-byte-driver-c extract-key-schedule-krml extract-key-schedule-c extract-record-krml extract-record-c extract-record-framing-krml extract-record-framing-c test-extract-smoke test-connection-driver-bindings test-connection-bindings test-handshake-driver-bindings test-handshake-bindings test-key-schedule-bindings test-record-bindings check-c-stubs test-hacl-stubs test-openssl-stubs test-wire-stubs test-record-stubs test-io-stubs test-openssl-echo check-toolchain check-deps clean
 
 all: verify
 
@@ -143,6 +149,9 @@ $(EXTRACT_HANDSHAKE_DIR):
 	mkdir -p $@
 
 $(EXTRACT_HANDSHAKE_FRAMING_DIR):
+	mkdir -p $@
+
+$(EXTRACT_HANDSHAKE_BYTE_DRIVER_DIR):
 	mkdir -p $@
 
 $(EXTRACT_KEY_SCHEDULE_DIR):
@@ -233,17 +242,18 @@ test/test_extracted_connection_driver_openssl: $(CONNECTION_PROBE_SOURCES) test/
 	  $(EXTRACT_CONNECTION_DRIVER_C) $(EXTRACT_HANDSHAKE_DRIVER_C) $(HACL_WRAPPER_SOURCES) c_stubs/tls13_wire_stubs.c c_stubs/tls13_io_stubs.c c_stubs/tls13_openssl_stubs.c c_stubs/tls13_connection_probe.c test/test_extracted_connection_driver_openssl.c \
 	  -Wl,--gc-sections -lssl -lcrypto -o $@
 
-test/test_extracted_connection_wrapper_openssl: $(CONNECTION_PROBE_SOURCES) test/test_extracted_connection_wrapper_openssl.c $(EXTRACT_CONNECTION_C) $(EXTRACT_CONNECTION_H) $(EXTRACT_HANDSHAKE_DRIVER_C) $(EXTRACT_HANDSHAKE_DRIVER_H) $(EXTRACT_HANDSHAKE_FRAMING_C) $(EXTRACT_HANDSHAKE_FRAMING_H) $(EXTRACT_KEY_SCHEDULE_C) $(EXTRACT_KEY_SCHEDULE_H) $(EXTRACT_RECORD_C) $(EXTRACT_RECORD_H) $(EXTRACT_RECORD_FRAMING_C) $(EXTRACT_RECORD_FRAMING_H) c_stubs/tls13_connection_external_layer.h c_stubs/tls13_crypto_external.c c_stubs/tls13_pulse_shims.c | check-deps
+test/test_extracted_connection_wrapper_openssl: $(CONNECTION_PROBE_SOURCES) test/test_extracted_connection_wrapper_openssl.c $(EXTRACT_CONNECTION_C) $(EXTRACT_CONNECTION_H) $(EXTRACT_HANDSHAKE_DRIVER_C) $(EXTRACT_HANDSHAKE_DRIVER_H) $(EXTRACT_HANDSHAKE_FRAMING_C) $(EXTRACT_HANDSHAKE_FRAMING_H) $(EXTRACT_HANDSHAKE_BYTE_DRIVER_C) $(EXTRACT_HANDSHAKE_BYTE_DRIVER_H) $(EXTRACT_KEY_SCHEDULE_C) $(EXTRACT_KEY_SCHEDULE_H) $(EXTRACT_RECORD_C) $(EXTRACT_RECORD_H) $(EXTRACT_RECORD_FRAMING_C) $(EXTRACT_RECORD_FRAMING_H) c_stubs/tls13_connection_external_layer.h c_stubs/tls13_crypto_external.c c_stubs/tls13_pulse_shims.c c_stubs/tls13_handshake_byte_driver_external.h | check-deps
 	$(CC) -Wall -Wextra -Wno-deprecated-declarations \
 	  -ffunction-sections -fdata-sections \
 	  -DTLS13_CONNECTION_PROBE_USE_EXTRACTED_CONNECTION_WRAPPER \
 	  -DTLS13_CONNECTION_PROBE_USE_EXTRACTED_HANDSHAKE \
 	  -DTLS13_CONNECTION_PROBE_USE_EXTRACTED_KEY_SCHEDULE \
 	  -DTLS13_CONNECTION_PROBE_USE_EXTRACTED_HANDSHAKE_FRAMING \
-	  -I $(EXTRACT_CONNECTION_DIR) -I $(EXTRACT_HANDSHAKE_DRIVER_DIR) -I $(EXTRACT_HANDSHAKE_FRAMING_DIR) -I $(EXTRACT_KEY_SCHEDULE_DIR) -I $(EXTRACT_RECORD_DIR) -I $(EXTRACT_RECORD_FRAMING_DIR) \
+	  -DTLS13_CONNECTION_PROBE_USE_EXTRACTED_HANDSHAKE_BYTE_DRIVER \
+	  -I $(EXTRACT_CONNECTION_DIR) -I $(EXTRACT_HANDSHAKE_DRIVER_DIR) -I $(EXTRACT_HANDSHAKE_FRAMING_DIR) -I $(EXTRACT_HANDSHAKE_BYTE_DRIVER_DIR) -I $(EXTRACT_KEY_SCHEDULE_DIR) -I $(EXTRACT_RECORD_DIR) -I $(EXTRACT_RECORD_FRAMING_DIR) \
 	  -I c_stubs -I $(KRML_HOME)/include -I $(KRML_HOME)/krmllib/dist/minimal \
 	  -I $(HACL_DIR) -I $(HACL_DIR)/internal -I $(HACL_KI) -I $(HACL_KL) \
-	  $(EXTRACT_CONNECTION_C) $(EXTRACT_HANDSHAKE_DRIVER_C) $(EXTRACT_HANDSHAKE_FRAMING_C) $(EXTRACT_KEY_SCHEDULE_C) $(EXTRACT_RECORD_C) $(EXTRACT_RECORD_FRAMING_C) \
+	  $(EXTRACT_CONNECTION_C) $(EXTRACT_HANDSHAKE_DRIVER_C) $(EXTRACT_HANDSHAKE_FRAMING_C) $(EXTRACT_HANDSHAKE_BYTE_DRIVER_C) $(EXTRACT_KEY_SCHEDULE_C) $(EXTRACT_RECORD_C) $(EXTRACT_RECORD_FRAMING_C) \
 	  $(HACL_WRAPPER_SOURCES) c_stubs/tls13_crypto_external.c c_stubs/tls13_pulse_shims.c \
 	  c_stubs/tls13_wire_stubs.c c_stubs/tls13_io_stubs.c c_stubs/tls13_openssl_stubs.c c_stubs/tls13_connection_probe.c \
 	  test/test_extracted_connection_wrapper_openssl.c \
@@ -371,6 +381,22 @@ $(EXTRACT_HANDSHAKE_FRAMING_C) $(EXTRACT_HANDSHAKE_FRAMING_H): $(EXTRACT_HANDSHA
 	  -tmpdir $(EXTRACT_HANDSHAKE_FRAMING_DIR) $(EXTRACT_HANDSHAKE_FRAMING_KRML)
 
 extract-handshake-framing-c: $(EXTRACT_HANDSHAKE_FRAMING_C) $(EXTRACT_HANDSHAKE_FRAMING_H)
+
+$(EXTRACT_HANDSHAKE_BYTE_DRIVER_KRML): src/impl/TLS13.Handshake.ByteDriver.fst verify | $(EXTRACT_HANDSHAKE_BYTE_DRIVER_DIR)
+	$(FSTAR_EXE) --cache_checked_modules --cache_dir $(CACHE_DIR) --odir $(OUTPUT_DIR) \
+	  --warn_error -321 --report_assumes warn \
+	  --already_cached 'Prims,FStar,Pulse,PulseCore -TLS13' \
+	  $(INCLUDES) --codegen krml --extract_module TLS13.Handshake.ByteDriver \
+	  --krmloutput $@ $<
+
+extract-handshake-byte-driver-krml: $(EXTRACT_HANDSHAKE_BYTE_DRIVER_KRML)
+
+$(EXTRACT_HANDSHAKE_BYTE_DRIVER_C) $(EXTRACT_HANDSHAKE_BYTE_DRIVER_H): $(EXTRACT_HANDSHAKE_BYTE_DRIVER_KRML) c_stubs/tls13_handshake_byte_driver_external.h | $(EXTRACT_HANDSHAKE_BYTE_DRIVER_DIR)
+	$(KRML_EXE) -skip-compilation -skip-makefiles -warn-error -2 \
+	  -add-include '"tls13_handshake_byte_driver_external.h"' \
+	  -tmpdir $(EXTRACT_HANDSHAKE_BYTE_DRIVER_DIR) $(EXTRACT_HANDSHAKE_BYTE_DRIVER_KRML)
+
+extract-handshake-byte-driver-c: $(EXTRACT_HANDSHAKE_BYTE_DRIVER_C) $(EXTRACT_HANDSHAKE_BYTE_DRIVER_H)
 
 $(EXTRACT_KEY_SCHEDULE_KRML): src/impl/TLS13.KeySchedule.fst verify | $(EXTRACT_KEY_SCHEDULE_DIR)
 	$(FSTAR_EXE) --cache_checked_modules --cache_dir $(CACHE_DIR) --odir $(OUTPUT_DIR) \
