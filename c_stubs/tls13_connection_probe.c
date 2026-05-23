@@ -47,7 +47,6 @@ struct TLS13_Connection_connection_s {
   tls13_peer_identity *peer;
   TLS13_Record_record_state server_handshake_record_state;
   TLS13_Handshake_FlightState_flight_state server_handshake_flight_state;
-  bool server_handshake_flight_state_initialized;
 };
 
 struct TLS13_IO_channel_s {
@@ -1042,7 +1041,6 @@ TLS13_Connection_connection tls13_connection_probe_new(
   c->fd = -1;
   c->server_handshake_record_state = TLS13_Record_record_state_new();
   c->server_handshake_flight_state = TLS13_Handshake_FlightState_flight_state_new();
-  c->server_handshake_flight_state_initialized = true;
   return c;
 }
 
@@ -1054,9 +1052,7 @@ void tls13_connection_probe_free(TLS13_Connection_connection c) {
     tls13_io_close_fd(c->fd);
   }
   TLS13_Record_record_state_free(c->server_handshake_record_state, NULL);
-  if (c->server_handshake_flight_state_initialized) {
-    TLS13_Handshake_FlightState_flight_state_free(c->server_handshake_flight_state);
-  }
+  TLS13_Handshake_FlightState_flight_state_free(c->server_handshake_flight_state);
   tls13_openssl_peer_identity_free(c->peer);
   free(c->host);
   free(c);
@@ -1342,10 +1338,6 @@ void TLS13_Handshake_ByteDriver_External_reset_encrypted_handshake(
   TLS13_Connection_connection c = (TLS13_Connection_connection)ctx;
   if (c == NULL) {
     return;
-  }
-  if (!c->server_handshake_flight_state_initialized) {
-    c->server_handshake_flight_state = TLS13_Handshake_FlightState_flight_state_new();
-    c->server_handshake_flight_state_initialized = true;
   }
   TLS13_Handshake_FlightState_reset(c->server_handshake_flight_state);
   uint8_t server_handshake_key[32] = {0};
