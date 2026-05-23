@@ -339,7 +339,9 @@ fn set_server_finished_verify_data
   unfold (is_flight_state st);
   pts_to_len verify_data;
   V.pts_to_len st.server_finished_verify_data;
+  assert (pure (V.length st.server_finished_verify_data == 32));
   V.to_array_pts_to st.server_finished_verify_data;
+  assert (pure (Pulse.Lib.Array.Core.length (V.vec_to_array st.server_finished_verify_data) == 32));
   Arr.memcpy 32sz verify_data (V.vec_to_array st.server_finished_verify_data);
   V.to_vec_pts_to st.server_finished_verify_data;
   fold (is_flight_state st);
@@ -361,9 +363,13 @@ fn copy_server_finished_verify_data
   unfold (is_flight_state st);
   pts_to_len out;
   V.pts_to_len st.server_finished_verify_data;
+  assert (pure (V.length st.server_finished_verify_data == 32));
   V.to_array_pts_to st.server_finished_verify_data;
+  assert (pure (Pulse.Lib.Array.Core.length (V.vec_to_array st.server_finished_verify_data) == 32));
   Arr.memcpy 32sz (V.vec_to_array st.server_finished_verify_data) out;
   V.to_vec_pts_to st.server_finished_verify_data;
+  with out_s. assert (pts_to out out_s);
+  assert (pure (Seq.length out_s == 32));
   fold (is_flight_state st);
 }
 
