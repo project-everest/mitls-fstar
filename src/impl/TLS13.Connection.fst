@@ -217,6 +217,14 @@ fn client_connect (c: connection) (ch: IO.channel)
       Arr.memcpy 12sz client_iv (V.vec_to_array c.client_application_iv);
       Arr.memcpy 32sz server_key (V.vec_to_array c.server_application_key);
       Arr.memcpy 12sz server_iv (V.vec_to_array c.server_application_iv);
+      Rec.install_application_keys_runtime
+        c.client_application_record_state
+        (V.vec_to_array c.client_application_key)
+        (V.vec_to_array c.client_application_iv);
+      Rec.install_application_keys_runtime
+        c.server_application_record_state
+        (V.vec_to_array c.server_application_key)
+        (V.vec_to_array c.server_application_iv);
       V.to_vec_pts_to c.client_application_key;
       V.to_vec_pts_to c.client_application_iv;
       V.to_vec_pts_to c.server_application_key;
@@ -236,29 +244,21 @@ fn rec client_write_application_records
   (backend: E.connection)
   (ch: IO.channel)
   (record_state: Rec.record_state)
-  (key: array U8.t)
-  (iv: array U8.t)
   (buf: array U8.t)
   (total_len: SZ.t)
   (offset: SZ.t)
   (remaining: SZ.t)
-  requires E.is_connection backend **
-           Rec.is_record_state record_state 'record_s **
-           IO.is_channel ch **
-           pts_to key 'key_bytes **
-           pts_to iv 'iv_bytes **
-           pts_to buf 'bytes **
-           pure (B.length 'key_bytes == 32 /\
-                 B.length 'iv_bytes == 12 /\
-                 B.length 'bytes == SZ.v total_len /\
-                 SZ.v offset + SZ.v remaining == SZ.v total_len)
+  requires   E.is_connection backend **
+  Rec.is_record_state record_state 'record_s **
+  IO.is_channel ch **
+  pts_to buf 'bytes **
+  pure (B.length 'bytes == SZ.v total_len /\
+        SZ.v offset + SZ.v remaining == SZ.v total_len)
   returns ok: bool
   ensures exists* record_s'.
           E.is_connection backend **
           Rec.is_record_state record_state record_s' **
           IO.is_channel ch **
-          pts_to key 'key_bytes **
-          pts_to iv 'iv_bytes **
           pts_to buf 'bytes
   decreases (SZ.v remaining)
 {
@@ -279,8 +279,6 @@ fn rec client_write_application_records
         backend
         ch
         record_state
-        key
-        iv
         buf
         total_len
         offset
@@ -290,7 +288,7 @@ fn rec client_write_application_records
       let remaining' = SZ.(remaining -^ chunk_len);
       assert (pure (SZ.v remaining' < SZ.v remaining));
       assert (pure (SZ.v offset' + SZ.v remaining' == SZ.v total_len));
-      client_write_application_records backend ch record_state key iv buf total_len offset' remaining'
+      client_write_application_records backend ch record_state buf total_len offset' remaining'
     } else {
       false
     }
@@ -312,29 +310,17 @@ fn client_write_all (c: connection) (ch: IO.channel) (buf: array U8.t) (len: SZ.
   unfold (is_connection c 'st 's);
   let keys_installed = !c.application_keys_installed;
   if keys_installed {
-    V.pts_to_len c.client_application_key;
-    V.pts_to_len c.client_application_iv;
-    with client_key_bytes. assert (V.pts_to c.client_application_key client_key_bytes);
-    with client_iv_bytes. assert (V.pts_to c.client_application_iv client_iv_bytes);
-    assert (pure (B.length client_key_bytes == 32));
-    assert (pure (B.length client_iv_bytes == 12));
     assert (pure (B.length 'bytes == SZ.v len));
     assert (pure (0 + SZ.v len == SZ.v len));
-    V.to_array_pts_to c.client_application_key;
-    V.to_array_pts_to c.client_application_iv;
     let ok =
       client_write_application_records
         c.backend
         ch
         c.client_application_record_state
-        (V.vec_to_array c.client_application_key)
-        (V.vec_to_array c.client_application_iv)
         buf
         len
         0sz
         len;
-    V.to_vec_pts_to c.client_application_key;
-    V.to_vec_pts_to c.client_application_iv;
     if ok {
       ST.advance 'st (S.SendApplicationData (Ghost.reveal 'bytes)) (S.advance_write_record 's);
       fold (is_connection c 'st (S.advance_write_record 's));
@@ -375,30 +361,22 @@ fn rec client_read_application_records
   (backend: E.connection)
   (ch: IO.channel)
   (record_state: Rec.record_state)
-  (key: array U8.t)
-  (iv: array U8.t)
   (out: array U8.t)
   (total_len: SZ.t)
   (offset: SZ.t)
   (remaining: SZ.t)
   (fuel: U8.t)
-  requires E.is_connection backend **
-           Rec.is_record_state record_state 'record_s **
-           IO.is_channel ch **
-           pts_to key 'key_bytes **
-           pts_to iv 'iv_bytes **
-           pts_to out 'old **
-           pure (B.length 'key_bytes == 32 /\
-                 B.length 'iv_bytes == 12 /\
-                 B.length 'old == SZ.v total_len /\
-                 SZ.v offset + SZ.v remaining == SZ.v total_len)
+  requires   E.is_connection backend **
+  Rec.is_record_state record_state 'record_s **
+  IO.is_channel ch **
+  pts_to out 'old **
+  pure (B.length 'old == SZ.v total_len /\
+        SZ.v offset + SZ.v remaining == SZ.v total_len)
   returns ok: bool
   ensures exists* record_s' bytes.
           E.is_connection backend **
           Rec.is_record_state record_state record_s' **
           IO.is_channel ch **
-          pts_to key 'key_bytes **
-          pts_to iv 'iv_bytes **
           pts_to out bytes **
           pure (B.length bytes == SZ.v total_len)
   decreases (U8.v fuel)
@@ -414,8 +392,6 @@ fn rec client_read_application_records
         backend
         ch
         record_state
-        key
-        iv
         out
         total_len
         offset
@@ -426,7 +402,7 @@ fn rec client_read_application_records
     let remaining' = SZ.(remaining -^ n);
     assert (pure (U8.v fuel' < U8.v fuel));
     assert (pure (SZ.v offset' + SZ.v remaining' == SZ.v total_len));
-    client_read_application_records backend ch record_state key iv out total_len offset' remaining' fuel'
+    client_read_application_records backend ch record_state out total_len offset' remaining' fuel'
   }
 }
 
@@ -446,30 +422,18 @@ fn client_read_exact (c: connection) (ch: IO.channel) (out: array U8.t) (len: SZ
   unfold (is_connection c 'st 's);
   let keys_installed = !c.application_keys_installed;
   if keys_installed {
-    V.pts_to_len c.server_application_key;
-    V.pts_to_len c.server_application_iv;
-    with server_key_bytes. assert (V.pts_to c.server_application_key server_key_bytes);
-    with server_iv_bytes. assert (V.pts_to c.server_application_iv server_iv_bytes);
-    assert (pure (B.length server_key_bytes == 32));
-    assert (pure (B.length server_iv_bytes == 12));
     assert (pure (B.length 'old == SZ.v len));
     assert (pure (0 + SZ.v len == SZ.v len));
-    V.to_array_pts_to c.server_application_key;
-    V.to_array_pts_to c.server_application_iv;
     let ok =
       client_read_application_records
         c.backend
         ch
         c.server_application_record_state
-        (V.vec_to_array c.server_application_key)
-        (V.vec_to_array c.server_application_iv)
         out
         len
         0sz
         len
         max_application_read_records;
-    V.to_vec_pts_to c.server_application_key;
-    V.to_vec_pts_to c.server_application_iv;
   with bytes. assert (pts_to out bytes);
   if ok {
     ST.advance 'st (S.RecvApplicationData bytes) (S.advance_read_record 's);

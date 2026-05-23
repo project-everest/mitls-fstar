@@ -149,6 +149,40 @@ fn install_handshake_keys_runtime
   fold (is_record_state st (R.install_keys 's R.Handshake (Ghost.reveal 'key_bytes) (Ghost.reveal 'iv_bytes)));
 }
 
+fn install_application_keys_runtime
+  (st: record_state)
+  (key: array U8.t)
+  (iv: array U8.t)
+  requires is_record_state st 's **
+           pts_to key 'key_bytes **
+           pts_to iv 'iv_bytes **
+           pure (B.length 'key_bytes == 32 /\ B.length 'iv_bytes == 12)
+  ensures exists* s'.
+          is_record_state st s' **
+          pts_to key 'key_bytes **
+          pts_to iv 'iv_bytes
+{
+  unfold (is_record_state st 's);
+  pts_to_len key;
+  pts_to_len iv;
+  V.pts_to_len st.key;
+  V.pts_to_len st.iv;
+  V.to_array_pts_to st.key;
+  V.to_array_pts_to st.iv;
+  Arr.memcpy 32sz key (V.vec_to_array st.key);
+  Arr.memcpy 12sz iv (V.vec_to_array st.iv);
+  V.to_vec_pts_to st.key;
+  V.to_vec_pts_to st.iv;
+  st.seq := 0UL;
+  st.installed := true;
+  with key_s. assert (V.pts_to st.key key_s);
+  with iv_s. assert (V.pts_to st.iv iv_s);
+  assert (pure (key_s == 'key_bytes));
+  assert (pure (iv_s == 'iv_bytes));
+  assert (pure (state_matches true 0UL key_s iv_s (R.install_keys 's R.Application (Ghost.reveal 'key_bytes) (Ghost.reveal 'iv_bytes))));
+  fold (is_record_state st (R.install_keys 's R.Application (Ghost.reveal 'key_bytes) (Ghost.reveal 'iv_bytes)));
+}
+
 fn seal_application
   (st: record_state)
   (aad: array U8.t)

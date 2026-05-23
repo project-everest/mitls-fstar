@@ -51,6 +51,19 @@ fn install_handshake_keys_runtime
           pts_to key 'key_bytes **
           pts_to iv 'iv_bytes
 
+fn install_application_keys_runtime
+  (st: record_state)
+  (key: array U8.t)
+  (iv: array U8.t)
+  requires is_record_state st 's **
+           pts_to key 'key_bytes **
+           pts_to iv 'iv_bytes **
+           pure (B.length 'key_bytes == 32 /\ B.length 'iv_bytes == 12)
+  ensures exists* s'.
+          is_record_state st s' **
+          pts_to key 'key_bytes **
+          pts_to iv 'iv_bytes
+
 fn seal_application
   (st: record_state)
   (aad: array U8.t)

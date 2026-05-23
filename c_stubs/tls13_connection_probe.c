@@ -1149,25 +1149,19 @@ bool TLS13_Connection_External_client_write_application_record(
     TLS13_Connection_External_connection c,
     TLS13_IO_channel ch,
     TLS13_Record_record_state record_state,
-    uint8_t *key,
-    uint8_t *iv,
     uint8_t *buf,
     size_t total_len,
     size_t offset,
     size_t chunk_len,
     void *record_state_s,
-    void *key_bytes,
-    void *iv_bytes,
     void *bytes) {
   (void)ch;
   (void)record_state_s;
-  (void)key_bytes;
-  (void)iv_bytes;
   (void)bytes;
   if (c == NULL || c->fd < 0 ||
       record_state.key == NULL || record_state.iv == NULL ||
       record_state.seq == NULL || record_state.installed == NULL ||
-      key == NULL || iv == NULL || buf == NULL ||
+      buf == NULL ||
       chunk_len == 0 || chunk_len > PROBE_APP_RECORD_CHUNK_LEN ||
       offset > total_len || chunk_len > total_len - offset) {
     return false;
@@ -1187,9 +1181,6 @@ bool TLS13_Connection_External_client_write_application_record(
       (uint16_t)ciphertext_len,
       record,
       TLS13_WIRE_RECORD_HEADER_LEN);
-  if (!*record_state.installed) {
-    TLS13_Record_install_keys(record_state, 2, key, iv);
-  }
   TLS13_Record_Framing_encode_inner_plaintext_no_padding(
       buf + offset,
       chunk_len,
@@ -1214,25 +1205,19 @@ size_t TLS13_Connection_External_client_read_application_record(
     TLS13_Connection_External_connection c,
     TLS13_IO_channel ch,
     TLS13_Record_record_state record_state,
-    uint8_t *key,
-    uint8_t *iv,
     uint8_t *out,
     size_t total_len,
     size_t offset,
     size_t remaining,
     void *record_state_s,
-    void *key_bytes,
-    void *iv_bytes,
     void *old_bytes) {
   (void)ch;
   (void)record_state_s;
-  (void)key_bytes;
-  (void)iv_bytes;
   (void)old_bytes;
   if (c == NULL || c->fd < 0 ||
       record_state.key == NULL || record_state.iv == NULL ||
       record_state.seq == NULL || record_state.installed == NULL ||
-      key == NULL || iv == NULL || out == NULL ||
+      out == NULL ||
       remaining == 0 || offset > total_len || remaining > total_len - offset) {
     return 0;
   }
@@ -1258,9 +1243,6 @@ size_t TLS13_Connection_External_client_read_application_record(
     return 0;
   }
 
-  if (!*record_state.installed) {
-    TLS13_Record_install_keys(record_state, 2, key, iv);
-  }
   size_t inner_plaintext_len = (size_t)fragment_len - 16u;
   if (!TLS13_Record_open_application(
           record_state,

@@ -63,22 +63,16 @@ fn client_write_application_record
   (c: connection)
   (ch: IO.channel)
   (record_state: Rec.record_state)
-  (key: array U8.t)
-  (iv: array U8.t)
   (buf: array U8.t)
   (total_len: SZ.t)
   (offset: SZ.t)
   (chunk_len: SZ.t)
-  requires is_connection c **
-           Rec.is_record_state record_state 'record_s **
-           IO.is_channel ch **
-           pts_to key 'key_bytes **
-           pts_to iv 'iv_bytes **
-           pts_to buf 'bytes **
-           pure (B.length 'key_bytes == 32 /\
-                 B.length 'iv_bytes == 12 /\
-                 B.length 'bytes == SZ.v total_len /\
-                 SZ.v chunk_len > 0 /\
+  requires   is_connection c **
+  Rec.is_record_state record_state 'record_s **
+  IO.is_channel ch **
+  pts_to buf 'bytes **
+  pure (B.length 'bytes == SZ.v total_len /\
+        SZ.v chunk_len > 0 /\
                  SZ.v chunk_len <= 4096 /\
                  SZ.v offset + SZ.v chunk_len <= SZ.v total_len)
   returns ok: bool
@@ -86,38 +80,28 @@ fn client_write_application_record
           is_connection c **
           Rec.is_record_state record_state record_s' **
           IO.is_channel ch **
-          pts_to key 'key_bytes **
-          pts_to iv 'iv_bytes **
           pts_to buf 'bytes
 
 fn client_read_application_record
   (c: connection)
   (ch: IO.channel)
   (record_state: Rec.record_state)
-  (key: array U8.t)
-  (iv: array U8.t)
   (out: array U8.t)
   (total_len: SZ.t)
   (offset: SZ.t)
   (remaining: SZ.t)
-  requires is_connection c **
-           Rec.is_record_state record_state 'record_s **
-           IO.is_channel ch **
-           pts_to key 'key_bytes **
-           pts_to iv 'iv_bytes **
-           pts_to out 'old **
-           pure (B.length 'key_bytes == 32 /\
-                 B.length 'iv_bytes == 12 /\
-                 B.length 'old == SZ.v total_len /\
-                 SZ.v remaining > 0 /\
+  requires   is_connection c **
+  Rec.is_record_state record_state 'record_s **
+  IO.is_channel ch **
+  pts_to out 'old **
+  pure (B.length 'old == SZ.v total_len /\
+        SZ.v remaining > 0 /\
                  SZ.v offset + SZ.v remaining == SZ.v total_len)
   returns n: SZ.t
   ensures exists* record_s' bytes.
           is_connection c **
           Rec.is_record_state record_state record_s' **
           IO.is_channel ch **
-          pts_to key 'key_bytes **
-          pts_to iv 'iv_bytes **
           pts_to out bytes **
           pure (B.length bytes == SZ.v total_len /\
                 SZ.v n <= SZ.v remaining)
