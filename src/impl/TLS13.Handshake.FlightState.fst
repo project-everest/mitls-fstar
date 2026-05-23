@@ -610,6 +610,50 @@ fn copy_client_handshake_key_iv
   fold (is_flight_state st);
 }
 
+fn seal_client_handshake_record
+  (st: flight_state)
+  (aad: array U8.t)
+  (aad_len: SZ.t)
+  (plain: array U8.t)
+  (plain_len: SZ.t)
+  (out: array U8.t)
+  requires is_flight_state st **
+           pts_to aad 'aad_bytes **
+           pts_to plain 'plain_bytes **
+           pts_to out 'old_out **
+           pure (B.length 'aad_bytes == SZ.v aad_len /\
+                 B.length 'plain_bytes == SZ.v plain_len /\
+                 B.length 'old_out == SZ.v plain_len + 16)
+  returns ok: bool
+  ensures exists* out_bytes.
+          is_flight_state st **
+          pts_to aad 'aad_bytes **
+          pts_to plain 'plain_bytes **
+          pts_to out out_bytes **
+          pure (B.length out_bytes == B.length 'old_out)
+{
+  unfold (is_flight_state st);
+  let record_state = Rec.record_state_new ();
+  V.pts_to_len st.client_handshake_key;
+  V.pts_to_len st.client_handshake_iv;
+  assert (pure (V.length st.client_handshake_key == 32));
+  assert (pure (V.length st.client_handshake_iv == 12));
+  V.to_array_pts_to st.client_handshake_key;
+  V.to_array_pts_to st.client_handshake_iv;
+  Rec.install_handshake_keys_runtime
+    record_state
+    (V.vec_to_array st.client_handshake_key)
+    (V.vec_to_array st.client_handshake_iv);
+  V.to_vec_pts_to st.client_handshake_key;
+  V.to_vec_pts_to st.client_handshake_iv;
+  let ok = Rec.seal_application_runtime record_state aad aad_len plain plain_len out;
+  with out_s. assert (pts_to out out_s);
+  assert (pure (B.length out_s == B.length 'old_out));
+  Rec.record_state_free record_state;
+  fold (is_flight_state st);
+  ok
+}
+
 fn set_server_handshake_traffic_secret
   (st: flight_state)
   (secret: array U8.t)

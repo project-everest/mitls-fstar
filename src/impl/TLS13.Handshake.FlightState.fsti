@@ -197,6 +197,28 @@ fn copy_client_handshake_key_iv
           pure (B.length key_bytes == 32 /\
                 B.length iv_bytes == 12)
 
+fn seal_client_handshake_record
+  (st: flight_state)
+  (aad: array U8.t)
+  (aad_len: SZ.t)
+  (plain: array U8.t)
+  (plain_len: SZ.t)
+  (out: array U8.t)
+  requires is_flight_state st **
+           pts_to aad 'aad_bytes **
+           pts_to plain 'plain_bytes **
+           pts_to out 'old_out **
+           pure (B.length 'aad_bytes == SZ.v aad_len /\
+                 B.length 'plain_bytes == SZ.v plain_len /\
+                 B.length 'old_out == SZ.v plain_len + 16)
+  returns ok: bool
+  ensures exists* out_bytes.
+          is_flight_state st **
+          pts_to aad 'aad_bytes **
+          pts_to plain 'plain_bytes **
+          pts_to out out_bytes **
+          pure (B.length out_bytes == B.length 'old_out)
+
 fn set_server_handshake_traffic_secret
   (st: flight_state)
   (secret: array U8.t)

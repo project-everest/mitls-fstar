@@ -930,25 +930,13 @@ static bool probe_handshake_send_client_finished(
       22,
       client_inner_plaintext,
       client_inner_plaintext_len);
-  TLS13_Record_record_state client_handshake_record_state = TLS13_Record_record_state_new();
-  uint8_t client_handshake_key[32] = {0};
-  uint8_t client_handshake_iv[12] = {0};
-  TLS13_Handshake_FlightState_copy_client_handshake_key_iv(
+  bool sealed = TLS13_Handshake_FlightState_seal_client_handshake_record(
       c->server_handshake_flight_state,
-      client_handshake_key,
-      sizeof client_handshake_key,
-      client_handshake_iv,
-      sizeof client_handshake_iv);
-  TLS13_Record_install_keys(
-      client_handshake_record_state, 1, client_handshake_key, client_handshake_iv);
-  bool sealed = TLS13_Record_seal_application(
-      client_handshake_record_state,
       client_record,
       TLS13_WIRE_RECORD_HEADER_LEN,
       client_inner_plaintext,
       client_inner_plaintext_len,
       client_record + TLS13_WIRE_RECORD_HEADER_LEN);
-  TLS13_Record_record_state_free(client_handshake_record_state, NULL);
   if (!sealed || write_all_fd(c->fd, client_record, client_record_len) != 0) {
     fprintf(stderr, "failed to send client Finished\n");
     fail_handshake(c);

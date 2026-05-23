@@ -99,6 +99,28 @@ fn seal_application
                               { R.content_type = T.ApplicationData;
                                 R.fragment = Ghost.reveal 'plain_bytes } == None))
 
+fn seal_application_runtime
+  (st: record_state)
+  (aad: array U8.t)
+  (aad_len: SZ.t)
+  (plain: array U8.t)
+  (plain_len: SZ.t)
+  (out: array U8.t)
+  requires is_record_state st 's **
+           pts_to aad 'aad_bytes **
+           pts_to plain 'plain_bytes **
+           pts_to out 'old **
+           pure (B.length 'aad_bytes == SZ.v aad_len /\
+                 B.length 'plain_bytes == SZ.v plain_len /\
+                 B.length 'old == SZ.v plain_len + 16)
+  returns ok: bool
+  ensures exists* s' out_bytes.
+          is_record_state st s' **
+          pts_to aad 'aad_bytes **
+          pts_to plain 'plain_bytes **
+          pts_to out out_bytes **
+          pure (B.length out_bytes == B.length 'old)
+
 fn open_application
   (st: record_state)
   (aad: array U8.t)

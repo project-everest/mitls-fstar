@@ -260,6 +260,61 @@ fn seal_application
   }
 }
 
+fn seal_application_runtime
+  (st: record_state)
+  (aad: array U8.t)
+  (aad_len: SZ.t)
+  (plain: array U8.t)
+  (plain_len: SZ.t)
+  (out: array U8.t)
+  requires is_record_state st 's **
+           pts_to aad 'aad_bytes **
+           pts_to plain 'plain_bytes **
+           pts_to out 'old **
+           pure (B.length 'aad_bytes == SZ.v aad_len /\
+                 B.length 'plain_bytes == SZ.v plain_len /\
+                 B.length 'old == SZ.v plain_len + 16)
+  returns ok: bool
+  ensures exists* s' out_bytes.
+          is_record_state st s' **
+          pts_to aad 'aad_bytes **
+          pts_to plain 'plain_bytes **
+          pts_to out out_bytes **
+          pure (B.length out_bytes == B.length 'old)
+{
+  unfold (is_record_state st 's);
+  let installed = !st.installed;
+  if installed {
+    let seq = !st.seq;
+    let mut nonce = [| 0uy; 12sz |];
+    V.to_array_pts_to st.key;
+    V.to_array_pts_to st.iv;
+    let nonce_ok = Crypto.tls13_record_nonce (V.vec_to_array st.iv) seq nonce;
+    assert (pure nonce_ok);
+    Crypto.chacha20_poly1305_seal (V.vec_to_array st.key) nonce aad aad_len plain plain_len out;
+    V.to_vec_pts_to st.key;
+    V.to_vec_pts_to st.iv;
+    let next_seq = U64.add_underspec seq 1UL;
+    st.seq := next_seq;
+    with key_s. assert (V.pts_to st.key key_s);
+    with iv_s. assert (V.pts_to st.iv iv_s);
+    with out_s. assert (pts_to out out_s);
+    assert (pure (state_matches true seq key_s iv_s 's));
+    assert (pure (B.length out_s == B.length 'old));
+    assert (pure (state_matches true next_seq key_s iv_s ({ 's with R.seq = U64.v next_seq })));
+    fold (is_record_state st ({ 's with R.seq = U64.v next_seq }));
+    true
+  } else {
+    with key_s. assert (V.pts_to st.key key_s);
+    with iv_s. assert (V.pts_to st.iv iv_s);
+    with seq_s. assert (Box.pts_to st.seq seq_s);
+    with out_s. assert (pts_to out out_s);
+    assert (pure (out_s == 'old));
+    fold (is_record_state st 's);
+    false
+  }
+}
+
 fn open_application
   (st: record_state)
   (aad: array U8.t)
