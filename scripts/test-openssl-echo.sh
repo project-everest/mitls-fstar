@@ -249,12 +249,17 @@ with open(path, "wb") as f:
         f.write(pattern)
 PY
 
-run_probe
-run_probe_rejects_wrong_ca
-run_extracted_driver
-run_extracted_driver_rejects_wrong_ca
+# Primary client path: extracted verified wrappers with extracted key schedule,
+# record wrapper, and record framing around the remaining trusted byte backend.
 run_extracted_wrapper
 run_extracted_wrapper_rejects_wrong_ca
+
+# Regression/diagnostic paths for comparing against earlier interop layers.
+run_extracted_driver
+run_extracted_driver_rejects_wrong_ca
+run_probe
+run_probe_rejects_wrong_ca
+
 run_case short "$short_payload"
 run_case large "$large_payload"
 
