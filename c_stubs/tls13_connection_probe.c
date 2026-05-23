@@ -72,6 +72,10 @@ struct TLS13_Connection_connection_s {
   bool server_handshake_record_state_initialized;
   TLS13_Handshake_FlightState_flight_state server_handshake_flight_state;
   bool server_handshake_flight_state_initialized;
+  TLS13_Record_record_state client_application_record_state;
+  bool client_application_record_state_initialized;
+  TLS13_Record_record_state server_application_record_state;
+  bool server_application_record_state_initialized;
 };
 
 struct TLS13_IO_channel_s {
@@ -895,6 +899,12 @@ void tls13_connection_probe_free(TLS13_Connection_connection c) {
   if (c->server_handshake_flight_state_initialized) {
     TLS13_Handshake_FlightState_flight_state_free(c->server_handshake_flight_state);
   }
+  if (c->client_application_record_state_initialized) {
+    TLS13_Record_record_state_free(c->client_application_record_state);
+  }
+  if (c->server_application_record_state_initialized) {
+    TLS13_Record_record_state_free(c->server_application_record_state);
+  }
   tls13_openssl_peer_identity_free(c->peer);
   free(c);
 }
@@ -969,177 +979,156 @@ bool TLS13_Connection_External_export_application_keys(
   return true;
 }
 
-size_t TLS13_Connection_External_client_write(
+bool TLS13_Connection_External_client_write_application_record(
     TLS13_Connection_External_connection c,
     TLS13_IO_channel ch,
+    uint8_t *key,
+    uint8_t *iv,
     uint8_t *buf,
-    size_t len,
-    void *bytes) {
-  (void)bytes;
-  return TLS13_Connection_External_client_write_all(c, ch, buf, len, bytes) ? len : 0;
-}
-
-bool TLS13_Connection_External_client_write_all(
-    TLS13_Connection_External_connection c,
-    TLS13_IO_channel ch,
-    uint8_t *buf,
-    size_t len,
+    size_t total_len,
+    size_t offset,
+    size_t chunk_len,
+    void *key_bytes,
+    void *iv_bytes,
     void *bytes) {
   (void)ch;
+  (void)key_bytes;
+  (void)iv_bytes;
   (void)bytes;
-  if (c == NULL || !c->application_ready || c->fd < 0 || (len != 0 && buf == NULL)) {
+  if (c == NULL || !c->application_ready || c->fd < 0 ||
+      key == NULL || iv == NULL || buf == NULL ||
+      chunk_len == 0 || chunk_len > PROBE_APP_RECORD_CHUNK_LEN ||
+      offset > total_len || chunk_len > total_len - offset) {
     return false;
   }
-
-  TLS13_Record_record_state record_state = TLS13_Record_record_state_new();
-  TLS13_Record_install_keys(record_state, 2, c->client_application_key, c->client_application_iv);
 
   uint8_t record[20000];
-  size_t sent = 0;
-  while (sent < len) {
-    uint8_t inner_plaintext[PROBE_APP_RECORD_CHUNK_LEN + 1u];
-    size_t remaining = len - sent;
-    size_t chunk_len = remaining < PROBE_APP_RECORD_CHUNK_LEN
-                           ? remaining
-                           : PROBE_APP_RECORD_CHUNK_LEN;
-    size_t inner_plaintext_len = chunk_len + 1u;
-    size_t ciphertext_len = inner_plaintext_len + 16u;
-    size_t record_len = TLS13_WIRE_RECORD_HEADER_LEN + ciphertext_len;
-    if (sizeof record < record_len ||
-        chunk_len > sizeof inner_plaintext - 1u ||
-        ciphertext_len > UINT16_MAX) {
-      TLS13_Record_record_state_free(record_state);
-      c->application_ready = false;
-      return false;
-    }
-    TLS13_Record_Framing_serialize_application_data_header(
-        (uint16_t)ciphertext_len,
-        record,
-        TLS13_WIRE_RECORD_HEADER_LEN);
-    TLS13_Record_Framing_encode_inner_plaintext_no_padding(
-        buf + sent,
-        chunk_len,
-        23,
-        inner_plaintext,
-        inner_plaintext_len);
-    if (!TLS13_Record_seal_application(
-            record_state,
-            record,
-            TLS13_WIRE_RECORD_HEADER_LEN,
-            inner_plaintext,
-            inner_plaintext_len,
-            record + TLS13_WIRE_RECORD_HEADER_LEN) ||
-        write_all_fd(c->fd, record, record_len) != 0) {
-      TLS13_Record_record_state_free(record_state);
-      fprintf(stderr, "failed to send application-data record\n");
-      c->application_ready = false;
-      return false;
-    }
-    sent += chunk_len;
-  }
-  TLS13_Record_record_state_free(record_state);
-  return true;
-}
-
-size_t TLS13_Connection_External_client_read(
-    TLS13_Connection_External_connection c,
-    TLS13_IO_channel ch,
-    uint8_t *out,
-    size_t max_len,
-    void *old_bytes) {
-  (void)old_bytes;
-  return TLS13_Connection_External_client_read_exact(c, ch, out, max_len, old_bytes) ? max_len : 0;
-}
-
-bool TLS13_Connection_External_client_read_exact(
-    TLS13_Connection_External_connection c,
-    TLS13_IO_channel ch,
-    uint8_t *out,
-    size_t len,
-    void *old_bytes) {
-  (void)ch;
-  (void)old_bytes;
-  if (c == NULL || !c->application_ready || c->fd < 0 || (len != 0 && out == NULL)) {
+  uint8_t inner_plaintext[PROBE_APP_RECORD_CHUNK_LEN + 1u];
+  size_t inner_plaintext_len = chunk_len + 1u;
+  size_t ciphertext_len = inner_plaintext_len + 16u;
+  size_t record_len = TLS13_WIRE_RECORD_HEADER_LEN + ciphertext_len;
+  if (sizeof record < record_len ||
+      chunk_len > sizeof inner_plaintext - 1u ||
+      ciphertext_len > UINT16_MAX) {
+    c->application_ready = false;
     return false;
   }
-
-  TLS13_Record_record_state record_state = TLS13_Record_record_state_new();
-  TLS13_Record_install_keys(record_state, 2, c->server_application_key, c->server_application_iv);
-
-  size_t received = 0;
-  unsigned max_attempts = (unsigned)(len / PROBE_APP_RECORD_CHUNK_LEN + 128u);
-  for (unsigned attempts = 0; attempts < max_attempts && received < len; ++attempts) {
-    uint8_t header[TLS13_WIRE_RECORD_HEADER_LEN];
-    uint8_t encrypted_fragment[20000];
-    uint8_t inner_plaintext[20000];
-    uint8_t content_type = 0;
-    uint16_t legacy_version = 0;
-    uint16_t fragment_len = 0;
-    if (read_record(
-            c->fd,
-            header,
-            encrypted_fragment,
-            sizeof encrypted_fragment,
-            &content_type,
-            &legacy_version,
-            &fragment_len) != 0 ||
-        content_type != 23 ||
-        fragment_len < 16 ||
-        (size_t)fragment_len - 16u > sizeof inner_plaintext) {
-      TLS13_Record_record_state_free(record_state);
-      fprintf(stderr, "failed to read application-data response record\n");
-      c->application_ready = false;
-      return false;
-    }
-
-    size_t inner_plaintext_len = (size_t)fragment_len - 16u;
-    if (!TLS13_Record_open_application(
-            record_state,
-            header,
-            TLS13_WIRE_RECORD_HEADER_LEN,
-            encrypted_fragment,
-            fragment_len,
-            inner_plaintext)) {
-      TLS13_Record_record_state_free(record_state);
-      fprintf(stderr, "failed to decrypt application-data response record\n");
-      c->application_ready = false;
-      return false;
-    }
-
-    uint8_t inner_content_type_buf[1] = {0};
-    if (inner_plaintext_len == 0) {
-      TLS13_Record_record_state_free(record_state);
-      fprintf(stderr, "failed to decode application-data response record\n");
-      c->application_ready = false;
-      return false;
-    }
-    size_t response_len =
-        TLS13_Record_Framing_decode_inner_plaintext_no_padding(
-            inner_plaintext,
-            inner_plaintext_len,
-            inner_content_type_buf,
-            sizeof inner_content_type_buf);
-    uint8_t inner_content_type = inner_content_type_buf[0];
-    if (inner_content_type == 22) {
-      continue;
-    }
-    if (inner_content_type != 23 || response_len > len - received) {
-      TLS13_Record_record_state_free(record_state);
-      fprintf(stderr, "unexpected application-data response record\n");
-      c->application_ready = false;
-      return false;
-    }
-    memcpy(out + received, inner_plaintext, response_len);
-    received += response_len;
+  if (!c->client_application_record_state_initialized) {
+    c->client_application_record_state = TLS13_Record_record_state_new();
+    c->client_application_record_state_initialized = true;
+    TLS13_Record_install_keys(c->client_application_record_state, 2, key, iv);
   }
-
-  TLS13_Record_record_state_free(record_state);
-  if (received != len) {
-    fprintf(stderr, "OpenSSL echo application data was not received\n");
+  TLS13_Record_Framing_serialize_application_data_header(
+      (uint16_t)ciphertext_len,
+      record,
+      TLS13_WIRE_RECORD_HEADER_LEN);
+  TLS13_Record_Framing_encode_inner_plaintext_no_padding(
+      buf + offset,
+      chunk_len,
+      23,
+      inner_plaintext,
+      inner_plaintext_len);
+  if (!TLS13_Record_seal_application(
+          c->client_application_record_state,
+          record,
+          TLS13_WIRE_RECORD_HEADER_LEN,
+          inner_plaintext,
+          inner_plaintext_len,
+          record + TLS13_WIRE_RECORD_HEADER_LEN) ||
+      write_all_fd(c->fd, record, record_len) != 0) {
+    fprintf(stderr, "failed to send application-data record\n");
     c->application_ready = false;
     return false;
   }
   return true;
+}
+
+size_t TLS13_Connection_External_client_read_application_record(
+    TLS13_Connection_External_connection c,
+    TLS13_IO_channel ch,
+    uint8_t *key,
+    uint8_t *iv,
+    uint8_t *out,
+    size_t total_len,
+    size_t offset,
+    size_t remaining,
+    void *key_bytes,
+    void *iv_bytes,
+    void *old_bytes) {
+  (void)ch;
+  (void)key_bytes;
+  (void)iv_bytes;
+  (void)old_bytes;
+  if (c == NULL || !c->application_ready || c->fd < 0 ||
+      key == NULL || iv == NULL || out == NULL ||
+      remaining == 0 || offset > total_len || remaining > total_len - offset) {
+    return 0;
+  }
+
+  if (!c->server_application_record_state_initialized) {
+    c->server_application_record_state = TLS13_Record_record_state_new();
+    c->server_application_record_state_initialized = true;
+    TLS13_Record_install_keys(c->server_application_record_state, 2, key, iv);
+  }
+
+  uint8_t header[TLS13_WIRE_RECORD_HEADER_LEN];
+  uint8_t encrypted_fragment[20000];
+  uint8_t inner_plaintext[20000];
+  uint8_t content_type = 0;
+  uint16_t legacy_version = 0;
+  uint16_t fragment_len = 0;
+  if (read_record(
+          c->fd,
+          header,
+          encrypted_fragment,
+          sizeof encrypted_fragment,
+          &content_type,
+          &legacy_version,
+          &fragment_len) != 0 ||
+      content_type != 23 ||
+      fragment_len < 16 ||
+      (size_t)fragment_len - 16u > sizeof inner_plaintext) {
+    fprintf(stderr, "failed to read application-data response record\n");
+    c->application_ready = false;
+    return 0;
+  }
+
+  size_t inner_plaintext_len = (size_t)fragment_len - 16u;
+  if (!TLS13_Record_open_application(
+          c->server_application_record_state,
+          header,
+          TLS13_WIRE_RECORD_HEADER_LEN,
+          encrypted_fragment,
+          fragment_len,
+          inner_plaintext)) {
+    fprintf(stderr, "failed to decrypt application-data response record\n");
+    c->application_ready = false;
+    return 0;
+  }
+
+  uint8_t inner_content_type_buf[1] = {0};
+  if (inner_plaintext_len == 0) {
+    fprintf(stderr, "failed to decode application-data response record\n");
+    c->application_ready = false;
+    return 0;
+  }
+  size_t response_len =
+      TLS13_Record_Framing_decode_inner_plaintext_no_padding(
+          inner_plaintext,
+          inner_plaintext_len,
+          inner_content_type_buf,
+          sizeof inner_content_type_buf);
+  uint8_t inner_content_type = inner_content_type_buf[0];
+  if (inner_content_type == 22) {
+    return 0;
+  }
+  if (inner_content_type != 23 || response_len > remaining) {
+    fprintf(stderr, "unexpected application-data response record\n");
+    c->application_ready = false;
+    return 0;
+  }
+  memcpy(out + offset, inner_plaintext, response_len);
+  return response_len;
 }
 
 bool TLS13_Connection_External_client_close(

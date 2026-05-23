@@ -7,18 +7,14 @@
 
 struct TLS13_Connection_External_connection_s {
   bool connect_ok;
-  bool write_all_ok;
+  bool write_record_ok;
   bool read_exact_ok;
   bool close_ok;
-  size_t write_result;
-  size_t read_result;
   unsigned new_calls;
   unsigned connect_calls;
   unsigned export_keys_calls;
-  unsigned write_calls;
-  unsigned write_all_calls;
-  unsigned read_calls;
-  unsigned read_exact_calls;
+  unsigned write_record_calls;
+  unsigned read_record_calls;
   unsigned close_calls;
 };
 
@@ -34,10 +30,9 @@ TLS13_Connection_External_connection TLS13_Connection_External_client_new(
   struct TLS13_Connection_External_connection_s *c = calloc(1, sizeof *c);
   if (c != NULL) {
     c->connect_ok = true;
-    c->write_all_ok = true;
+    c->write_record_ok = true;
     c->read_exact_ok = true;
     c->close_ok = true;
-    c->read_result = 1;
     c->new_calls = 1;
   }
   return c;
@@ -77,59 +72,58 @@ bool TLS13_Connection_External_export_application_keys(
   return c->connect_ok;
 }
 
-size_t TLS13_Connection_External_client_write(
+bool TLS13_Connection_External_client_write_application_record(
     TLS13_Connection_External_connection c,
     TLS13_IO_channel ch,
+    uint8_t *key,
+    uint8_t *iv,
     uint8_t *buf,
-    size_t len,
+    size_t total_len,
+    size_t offset,
+    size_t chunk_len,
+    void *key_bytes,
+    void *iv_bytes,
     void *bytes) {
   (void)ch;
+  (void)key;
+  (void)iv;
   (void)buf;
+  (void)total_len;
+  (void)offset;
+  (void)chunk_len;
+  (void)key_bytes;
+  (void)iv_bytes;
   (void)bytes;
-  c->write_calls++;
-  return c->write_result == 0 ? len : c->write_result;
+  c->write_record_calls++;
+  return c->write_record_ok;
 }
 
-bool TLS13_Connection_External_client_write_all(
+size_t TLS13_Connection_External_client_read_application_record(
     TLS13_Connection_External_connection c,
     TLS13_IO_channel ch,
-    uint8_t *buf,
-    size_t len,
-    void *bytes) {
-  (void)ch;
-  (void)buf;
-  (void)len;
-  (void)bytes;
-  c->write_all_calls++;
-  return c->write_all_ok;
-}
-
-size_t TLS13_Connection_External_client_read(
-    TLS13_Connection_External_connection c,
-    TLS13_IO_channel ch,
+    uint8_t *key,
+    uint8_t *iv,
     uint8_t *out,
-    size_t max_len,
+    size_t total_len,
+    size_t offset,
+    size_t remaining,
+    void *key_bytes,
+    void *iv_bytes,
     void *old_bytes) {
   (void)ch;
+  (void)key;
+  (void)iv;
+  (void)total_len;
+  (void)key_bytes;
+  (void)iv_bytes;
   (void)old_bytes;
-  c->read_calls++;
-  if (max_len != 0) {
-    out[0] = 0xa5;
+  c->read_record_calls++;
+  if (!c->read_exact_ok) {
+    return 0;
   }
-  return c->read_result;
-}
-
-bool TLS13_Connection_External_client_read_exact(
-    TLS13_Connection_External_connection c,
-    TLS13_IO_channel ch,
-    uint8_t *out,
-    size_t len,
-    void *old_bytes) {
-  (void)ch;
-  (void)old_bytes;
-  c->read_exact_calls++;
-  memset(out, 0x5a, len);
-  return c->read_exact_ok;
+  size_t n = remaining < 4096 ? remaining : 4096;
+  memset(out + offset, 0x5a, n);
+  return n;
 }
 
 bool TLS13_Connection_External_client_close(
@@ -162,8 +156,8 @@ static int test_success_path(void) {
       c.backend->new_calls != 1 ||
       c.backend->connect_calls != 1 ||
       c.backend->export_keys_calls != 1 ||
-      c.backend->write_all_calls != 1 ||
-      c.backend->read_exact_calls != 1 ||
+      c.backend->write_record_calls != 1 ||
+      c.backend->read_record_calls != 1 ||
       c.backend->close_calls != 1 ||
       out[0] != 0x5a;
   TLS13_Connection_client_free(c);

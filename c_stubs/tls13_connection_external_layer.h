@@ -45,32 +45,30 @@ bool TLS13_Connection_External_export_application_keys(
     void *old_server_key,
     void *old_server_iv);
 
-size_t TLS13_Connection_External_client_write(
+bool TLS13_Connection_External_client_write_application_record(
     TLS13_Connection_External_connection c,
     TLS13_IO_channel ch,
+    uint8_t *key,
+    uint8_t *iv,
     uint8_t *buf,
-    size_t len,
+    size_t total_len,
+    size_t offset,
+    size_t chunk_len,
+    void *key_bytes,
+    void *iv_bytes,
     void *bytes);
 
-bool TLS13_Connection_External_client_write_all(
+size_t TLS13_Connection_External_client_read_application_record(
     TLS13_Connection_External_connection c,
     TLS13_IO_channel ch,
-    uint8_t *buf,
-    size_t len,
-    void *bytes);
-
-size_t TLS13_Connection_External_client_read(
-    TLS13_Connection_External_connection c,
-    TLS13_IO_channel ch,
+    uint8_t *key,
+    uint8_t *iv,
     uint8_t *out,
-    size_t max_len,
-    void *old_bytes);
-
-bool TLS13_Connection_External_client_read_exact(
-    TLS13_Connection_External_connection c,
-    TLS13_IO_channel ch,
-    uint8_t *out,
-    size_t len,
+    size_t total_len,
+    size_t offset,
+    size_t remaining,
+    void *key_bytes,
+    void *iv_bytes,
     void *old_bytes);
 
 bool TLS13_Connection_External_client_close(

@@ -51,6 +51,8 @@ let is_connection (c:connection) (st:ST.state_ref) (s:S.conn_state) : slprop =
           V.length c.server_application_iv == 12)
 
 let zeros32 : B.bytes = B.zeros 32
+let app_record_chunk_len : SZ.t = 4096sz
+let max_application_read_records : U8.t = 255uy
 
 let dummy_client_hello : H.client_hello = {
   H.random = zeros32;
@@ -223,28 +225,54 @@ fn client_connect (c: connection) (ch: IO.channel)
   }
 }
 
-fn client_write (c: connection) (ch: IO.channel) (buf: array U8.t) (len: SZ.t)
-  requires is_connection c 'st 's **
+fn rec client_write_application_records
+  (backend: E.connection)
+  (ch: IO.channel)
+  (key: array U8.t)
+  (iv: array U8.t)
+  (buf: array U8.t)
+  (total_len: SZ.t)
+  (offset: SZ.t)
+  (remaining: SZ.t)
+  requires E.is_connection backend **
            IO.is_channel ch **
+           pts_to key 'key_bytes **
+           pts_to iv 'iv_bytes **
            pts_to buf 'bytes **
-           pure ('s.S.phase == S.ApplicationData /\ B.length 'bytes == SZ.v len)
-  returns written: SZ.t
-  ensures exists* s'. is_connection c 'st s' **
+           pure (B.length 'key_bytes == 32 /\
+                 B.length 'iv_bytes == 12 /\
+                 B.length 'bytes == SZ.v total_len /\
+                 SZ.v offset + SZ.v remaining == SZ.v total_len)
+  returns ok: bool
+  ensures E.is_connection backend **
           IO.is_channel ch **
-          pts_to buf 'bytes **
-          pure (SZ.v written <= SZ.v len /\
-                (s'.S.phase == S.ApplicationData \/ s'.S.phase == S.Failed))
+          pts_to key 'key_bytes **
+          pts_to iv 'iv_bytes **
+          pts_to buf 'bytes
+  decreases (SZ.v remaining)
 {
-  unfold (is_connection c 'st 's);
-  let written = E.client_write c.backend ch buf len;
-  if (written = len) {
-    ST.advance 'st (S.SendApplicationData (Ghost.reveal 'bytes)) (S.advance_write_record 's);
-    fold (is_connection c 'st (S.advance_write_record 's));
-    written
+  if (remaining = 0sz) {
+    true
   } else {
-    ST.advance_fail 'st T.IoError;
-    fold (is_connection c 'st (S.fail 's T.IoError));
-    written
+    let chunk_len =
+      if SZ.(remaining <^ app_record_chunk_len) {
+        remaining
+      } else {
+        app_record_chunk_len
+      };
+    assert (pure (SZ.v chunk_len > 0));
+    assert (pure (SZ.v chunk_len <= 4096));
+    assert (pure (SZ.v offset + SZ.v chunk_len <= SZ.v total_len));
+    let ok = E.client_write_application_record backend ch key iv buf total_len offset chunk_len;
+    if ok {
+      let offset' = SZ.(offset +^ chunk_len);
+      let remaining' = SZ.(remaining -^ chunk_len);
+      assert (pure (SZ.v remaining' < SZ.v remaining));
+      assert (pure (SZ.v offset' + SZ.v remaining' == SZ.v total_len));
+      client_write_application_records backend ch key iv buf total_len offset' remaining'
+    } else {
+      false
+    }
   }
 }
 
@@ -261,11 +289,161 @@ fn client_write_all (c: connection) (ch: IO.channel) (buf: array U8.t) (len: SZ.
                 (not ok ==> s'.S.phase == S.Failed))
 {
   unfold (is_connection c 'st 's);
-  let ok = E.client_write_all c.backend ch buf len;
+  let keys_installed = !c.application_keys_installed;
+  if keys_installed {
+    V.pts_to_len c.client_application_key;
+    V.pts_to_len c.client_application_iv;
+    with client_key_bytes. assert (V.pts_to c.client_application_key client_key_bytes);
+    with client_iv_bytes. assert (V.pts_to c.client_application_iv client_iv_bytes);
+    assert (pure (B.length client_key_bytes == 32));
+    assert (pure (B.length client_iv_bytes == 12));
+    assert (pure (B.length 'bytes == SZ.v len));
+    assert (pure (0 + SZ.v len == SZ.v len));
+    V.to_array_pts_to c.client_application_key;
+    V.to_array_pts_to c.client_application_iv;
+    let ok =
+      client_write_application_records
+        c.backend
+        ch
+        (V.vec_to_array c.client_application_key)
+        (V.vec_to_array c.client_application_iv)
+        buf
+        len
+        0sz
+        len;
+    V.to_vec_pts_to c.client_application_key;
+    V.to_vec_pts_to c.client_application_iv;
+    if ok {
+      ST.advance 'st (S.SendApplicationData (Ghost.reveal 'bytes)) (S.advance_write_record 's);
+      fold (is_connection c 'st (S.advance_write_record 's));
+      true
+    } else {
+      ST.advance_fail 'st T.IoError;
+      fold (is_connection c 'st (S.fail 's T.IoError));
+      false
+    }
+  } else {
+    ST.advance_fail 'st T.IoError;
+    fold (is_connection c 'st (S.fail 's T.IoError));
+    false
+  }
+}
+
+fn client_write (c: connection) (ch: IO.channel) (buf: array U8.t) (len: SZ.t)
+  requires is_connection c 'st 's **
+           IO.is_channel ch **
+           pts_to buf 'bytes **
+           pure ('s.S.phase == S.ApplicationData /\ B.length 'bytes == SZ.v len)
+  returns written: SZ.t
+  ensures exists* s'. is_connection c 'st s' **
+          IO.is_channel ch **
+          pts_to buf 'bytes **
+          pure (SZ.v written <= SZ.v len /\
+                (s'.S.phase == S.ApplicationData \/ s'.S.phase == S.Failed))
+{
+  let ok = client_write_all c ch buf len;
   if ok {
-    ST.advance 'st (S.SendApplicationData (Ghost.reveal 'bytes)) (S.advance_write_record 's);
-    fold (is_connection c 'st (S.advance_write_record 's));
+    len
+  } else {
+    0sz
+  }
+}
+
+fn rec client_read_application_records
+  (backend: E.connection)
+  (ch: IO.channel)
+  (key: array U8.t)
+  (iv: array U8.t)
+  (out: array U8.t)
+  (total_len: SZ.t)
+  (offset: SZ.t)
+  (remaining: SZ.t)
+  (fuel: U8.t)
+  requires E.is_connection backend **
+           IO.is_channel ch **
+           pts_to key 'key_bytes **
+           pts_to iv 'iv_bytes **
+           pts_to out 'old **
+           pure (B.length 'key_bytes == 32 /\
+                 B.length 'iv_bytes == 12 /\
+                 B.length 'old == SZ.v total_len /\
+                 SZ.v offset + SZ.v remaining == SZ.v total_len)
+  returns ok: bool
+  ensures exists* bytes.
+          E.is_connection backend **
+          IO.is_channel ch **
+          pts_to key 'key_bytes **
+          pts_to iv 'iv_bytes **
+          pts_to out bytes **
+          pure (B.length bytes == SZ.v total_len)
+  decreases (U8.v fuel)
+{
+  if (remaining = 0sz) {
     true
+  } else if (fuel = 0uy) {
+    false
+  } else {
+    assert (pure (SZ.v remaining > 0));
+    let n = E.client_read_application_record backend ch key iv out total_len offset remaining;
+    with bytes. assert (pts_to out bytes);
+    let fuel' = U8.(fuel -^ 1uy);
+    let offset' = SZ.(offset +^ n);
+    let remaining' = SZ.(remaining -^ n);
+    assert (pure (U8.v fuel' < U8.v fuel));
+    assert (pure (SZ.v offset' + SZ.v remaining' == SZ.v total_len));
+    client_read_application_records backend ch key iv out total_len offset' remaining' fuel'
+  }
+}
+
+fn client_read_exact (c: connection) (ch: IO.channel) (out: array U8.t) (len: SZ.t)
+  requires is_connection c 'st 's **
+           IO.is_channel ch **
+           pts_to out 'old **
+           pure ('s.S.phase == S.ApplicationData /\ B.length 'old == SZ.v len)
+  returns ok: bool
+  ensures exists* s' bytes. is_connection c 'st s' **
+          IO.is_channel ch **
+          pts_to out bytes **
+          pure (B.length bytes == SZ.v len /\
+                (ok ==> s'.S.phase == S.ApplicationData) /\
+                (not ok ==> s'.S.phase == S.Failed))
+{
+  unfold (is_connection c 'st 's);
+  let keys_installed = !c.application_keys_installed;
+  if keys_installed {
+    V.pts_to_len c.server_application_key;
+    V.pts_to_len c.server_application_iv;
+    with server_key_bytes. assert (V.pts_to c.server_application_key server_key_bytes);
+    with server_iv_bytes. assert (V.pts_to c.server_application_iv server_iv_bytes);
+    assert (pure (B.length server_key_bytes == 32));
+    assert (pure (B.length server_iv_bytes == 12));
+    assert (pure (B.length 'old == SZ.v len));
+    assert (pure (0 + SZ.v len == SZ.v len));
+    V.to_array_pts_to c.server_application_key;
+    V.to_array_pts_to c.server_application_iv;
+    let ok =
+      client_read_application_records
+        c.backend
+        ch
+        (V.vec_to_array c.server_application_key)
+        (V.vec_to_array c.server_application_iv)
+        out
+        len
+        0sz
+        len
+        max_application_read_records;
+    V.to_vec_pts_to c.server_application_key;
+    V.to_vec_pts_to c.server_application_iv;
+  with bytes. assert (pts_to out bytes);
+  if ok {
+    ST.advance 'st (S.RecvApplicationData bytes) (S.advance_read_record 's);
+    fold (is_connection c 'st (S.advance_read_record 's));
+    true
+  } else {
+    ST.advance_fail 'st T.IoError;
+    fold (is_connection c 'st (S.fail 's T.IoError));
+    false
+  }
   } else {
     ST.advance_fail 'st T.IoError;
     fold (is_connection c 'st (S.fail 's T.IoError));
@@ -287,44 +465,11 @@ fn client_read (c: connection) (ch: IO.channel) (out: array U8.t) (max_len: SZ.t
                 (s'.S.phase == S.ApplicationData \/ s'.S.phase == S.Closing \/
                  s'.S.phase == S.Closed \/ s'.S.phase == S.Failed))
 {
-  unfold (is_connection c 'st 's);
-  let n = E.client_read c.backend ch out max_len;
-  with bytes. assert (pts_to out bytes);
-  if (n = 0sz) {
-    ST.advance_fail 'st T.IoError;
-    fold (is_connection c 'st (S.fail 's T.IoError));
-    n
-  } else {
-    ST.advance 'st (S.RecvApplicationData bytes) (S.advance_read_record 's);
-    fold (is_connection c 'st (S.advance_read_record 's));
-    n
-  }
-}
-
-fn client_read_exact (c: connection) (ch: IO.channel) (out: array U8.t) (len: SZ.t)
-  requires is_connection c 'st 's **
-           IO.is_channel ch **
-           pts_to out 'old **
-           pure ('s.S.phase == S.ApplicationData /\ B.length 'old == SZ.v len)
-  returns ok: bool
-  ensures exists* s' bytes. is_connection c 'st s' **
-          IO.is_channel ch **
-          pts_to out bytes **
-          pure (B.length bytes == SZ.v len /\
-                (ok ==> s'.S.phase == S.ApplicationData) /\
-                (not ok ==> s'.S.phase == S.Failed))
-{
-  unfold (is_connection c 'st 's);
-  let ok = E.client_read_exact c.backend ch out len;
-  with bytes. assert (pts_to out bytes);
+  let ok = client_read_exact c ch out max_len;
   if ok {
-    ST.advance 'st (S.RecvApplicationData bytes) (S.advance_read_record 's);
-    fold (is_connection c 'st (S.advance_read_record 's));
-    true
+    max_len
   } else {
-    ST.advance_fail 'st T.IoError;
-    fold (is_connection c 'st (S.fail 's T.IoError));
-    false
+    0sz
   }
 }
 
