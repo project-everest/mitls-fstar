@@ -52,10 +52,6 @@ struct TLS13_Connection_connection_s {
   uint8_t server_handshake_iv[12];
   uint8_t server_handshake_messages[32768];
   tls13_peer_identity *peer;
-  uint8_t client_application_key[32];
-  uint8_t client_application_iv[12];
-  uint8_t server_application_key[32];
-  uint8_t server_application_iv[12];
   TLS13_Record_record_state server_handshake_record_state;
   bool server_handshake_record_state_initialized;
   TLS13_Handshake_FlightState_flight_state server_handshake_flight_state;
@@ -781,18 +777,6 @@ static bool probe_handshake_send_client_finished(
     return false;
   }
 
-  if (derive_application_keys(
-          c->handshake_secret,
-          transcript_hash_through_server_finished,
-          c->client_application_key,
-          c->client_application_iv,
-          c->server_application_key,
-          c->server_application_iv) != 0) {
-    fprintf(stderr, "failed to derive application traffic keys\n");
-    fail_handshake(c);
-    return false;
-  }
-
   c->application_ready = true;
   return true;
 }
@@ -923,24 +907,7 @@ void TLS13_Connection_External_client_free(TLS13_Connection_External_connection 
 
 bool TLS13_Connection_External_client_connect(
     TLS13_Connection_External_connection c,
-    TLS13_IO_channel ch) {
-  if (c == NULL || c->application_ready || c->fd >= 0) {
-    return false;
-  }
-  c->handshake_failed = false;
-
-  bool ok = TLS13_Handshake_Driver_run_client_handshake(
-      (TLS13_Handshake_handshake_context)c, ch);
-
-  if (!ok || c->handshake_failed || !c->application_ready) {
-    fail_handshake(c);
-    return false;
-  }
-  return true;
-}
-
-bool TLS13_Connection_External_export_application_keys(
-    TLS13_Connection_External_connection c,
+    TLS13_IO_channel ch,
     uint8_t *client_key,
     uint8_t *client_iv,
     uint8_t *server_key,
@@ -953,14 +920,39 @@ bool TLS13_Connection_External_export_application_keys(
   (void)old_client_iv;
   (void)old_server_key;
   (void)old_server_iv;
-  if (c == NULL || !c->application_ready ||
+  if (c == NULL || c->application_ready || c->fd >= 0 ||
       client_key == NULL || client_iv == NULL || server_key == NULL || server_iv == NULL) {
     return false;
   }
-  memcpy(client_key, c->client_application_key, 32);
-  memcpy(client_iv, c->client_application_iv, 12);
-  memcpy(server_key, c->server_application_key, 32);
-  memcpy(server_iv, c->server_application_iv, 12);
+  c->handshake_failed = false;
+
+  bool ok = TLS13_Handshake_Driver_run_client_handshake(
+      (TLS13_Handshake_handshake_context)c, ch);
+
+  if (!ok || c->handshake_failed || !c->application_ready) {
+    fail_handshake(c);
+    return false;
+  }
+  uint8_t transcript_hash_through_server_finished[32];
+  if (compute_transcript_hash(
+          c->client_hello,
+          c->client_hello_len,
+          c->server_hello_fragment,
+          c->server_hello_len,
+          c->server_handshake_messages,
+          TLS13_Handshake_FlightState_server_through_finished_len(c->server_handshake_flight_state),
+          transcript_hash_through_server_finished) != 0 ||
+      derive_application_keys(
+          c->handshake_secret,
+          transcript_hash_through_server_finished,
+          client_key,
+          client_iv,
+          server_key,
+          server_iv) != 0) {
+    fprintf(stderr, "failed to derive application traffic keys\n");
+    fail_handshake(c);
+    return false;
+  }
   return true;
 }
 

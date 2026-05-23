@@ -36,10 +36,7 @@ void TLS13_Connection_External_client_free(TLS13_Connection_External_connection 
 
 bool TLS13_Connection_External_client_connect(
     TLS13_Connection_External_connection c,
-    TLS13_IO_channel ch);
-
-bool TLS13_Connection_External_export_application_keys(
-    TLS13_Connection_External_connection c,
+    TLS13_IO_channel ch,
     uint8_t *client_key,
     uint8_t *client_iv,
     uint8_t *server_key,

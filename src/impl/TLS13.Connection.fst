@@ -192,18 +192,16 @@ fn client_connect (c: connection) (ch: IO.channel)
   ensures exists* s'. is_connection c 'st s' **
           IO.is_channel ch **
           pure ((ok ==> s'.S.phase == S.ApplicationData) /\
-                (not ok ==> s'.S.phase == S.Failed))
+                        (not ok ==> s'.S.phase == S.Failed))
 {
-  unfold (is_connection c 'st 's);
-  let ok = E.client_connect c.backend ch;
-  if ok {
-    let mut client_key = [| 0uy; 32sz |];
-    let mut client_iv = [| 0uy; 12sz |];
-    let mut server_key = [| 0uy; 32sz |];
-    let mut server_iv = [| 0uy; 12sz |];
-    let exported = E.export_application_keys c.backend client_key client_iv server_key server_iv;
-    if exported {
-      pts_to_len client_key;
+          unfold (is_connection c 'st 's);
+          let mut client_key = [| 0uy; 32sz |];
+          let mut client_iv = [| 0uy; 12sz |];
+          let mut server_key = [| 0uy; 32sz |];
+          let mut server_iv = [| 0uy; 12sz |];
+          let ok = E.client_connect c.backend ch client_key client_iv server_key server_iv;
+          if ok {
+              pts_to_len client_key;
       pts_to_len client_iv;
       pts_to_len server_key;
       pts_to_len server_iv;
@@ -227,11 +225,6 @@ fn client_connect (c: connection) (ch: IO.channel)
       advance_successful_handshake 'st;
       fold (is_connection c 'st (hs_application_data 's));
       true
-    } else {
-      ST.advance_fail 'st T.IoError;
-      fold (is_connection c 'st (S.fail 's T.IoError));
-      false
-    }
   } else {
     ST.advance_fail 'st T.IoError;
     fold (is_connection c 'st (S.fail 's T.IoError));
