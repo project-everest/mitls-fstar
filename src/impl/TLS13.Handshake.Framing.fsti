@@ -71,3 +71,27 @@ fn parse_certificate_verify_body
           pure (B.length signature_scheme_bytes == 2 /\
                 B.length signature_len_bytes == 2 /\
                 (ok ==> SZ.v input_len >= 4))
+
+fn parse_certificate_leaf_der_offsets
+  (input: array U8.t)
+  (input_len: SZ.t)
+  (leaf_offset_out: array U8.t)
+  (leaf_offset_out_len: SZ.t)
+  (leaf_len_out: array U8.t)
+  (leaf_len_out_len: SZ.t)
+  requires pts_to input 'input_bytes **
+           pts_to leaf_offset_out 'old_leaf_offset **
+           pts_to leaf_len_out 'old_leaf_len **
+           pure (B.length 'input_bytes == SZ.v input_len /\
+                 B.length 'old_leaf_offset == SZ.v leaf_offset_out_len /\
+                 B.length 'old_leaf_len == SZ.v leaf_len_out_len /\
+                 SZ.v leaf_offset_out_len == 2 /\
+                 SZ.v leaf_len_out_len == 2)
+  returns ok: bool
+  ensures exists* leaf_offset_bytes leaf_len_bytes.
+          pts_to input 'input_bytes **
+          pts_to leaf_offset_out leaf_offset_bytes **
+          pts_to leaf_len_out leaf_len_bytes **
+          pure (B.length leaf_offset_bytes == 2 /\
+                B.length leaf_len_bytes == 2 /\
+                (ok ==> SZ.v input_len >= 9))

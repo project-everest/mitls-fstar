@@ -181,3 +181,87 @@ fn parse_certificate_verify_body
     SZ.(actual_payload_len =^ expected_payload_len)
   }
 }
+
+fn parse_certificate_leaf_der_offsets
+  (input: array U8.t)
+  (input_len: SZ.t)
+  (leaf_offset_out: array U8.t)
+  (leaf_offset_out_len: SZ.t)
+  (leaf_len_out: array U8.t)
+  (leaf_len_out_len: SZ.t)
+  requires pts_to input 'input_bytes **
+           pts_to leaf_offset_out 'old_leaf_offset **
+           pts_to leaf_len_out 'old_leaf_len **
+           pure (B.length 'input_bytes == SZ.v input_len /\
+                 B.length 'old_leaf_offset == SZ.v leaf_offset_out_len /\
+                 B.length 'old_leaf_len == SZ.v leaf_len_out_len /\
+                 SZ.v leaf_offset_out_len == 2 /\
+                 SZ.v leaf_len_out_len == 2)
+  returns ok: bool
+  ensures exists* leaf_offset_bytes leaf_len_bytes.
+          pts_to input 'input_bytes **
+          pts_to leaf_offset_out leaf_offset_bytes **
+          pts_to leaf_len_out leaf_len_bytes **
+          pure (B.length leaf_offset_bytes == 2 /\
+                B.length leaf_len_bytes == 2 /\
+                (ok ==> SZ.v input_len >= 9))
+{
+  pts_to_len input;
+  pts_to_len leaf_offset_out;
+  pts_to_len leaf_len_out;
+  if SZ.(input_len <^ 9sz) {
+    false
+  } else {
+    let request_context_len = input.(0sz);
+    let list_len_hi = input.(1sz);
+    let list_len_b0 = input.(2sz);
+    let list_len_b1 = input.(3sz);
+    let cert_len_hi = input.(4sz);
+    let cert_len_b0 = input.(5sz);
+    let cert_len_b1 = input.(6sz);
+    if ((request_context_len = 0uy) && (list_len_hi = 0uy) && (cert_len_hi = 0uy)) {
+      let list_len_hi16 = Cast.uint8_to_uint16 list_len_b0;
+      let list_len_lo16 = Cast.uint8_to_uint16 list_len_b1;
+      let list_len16 = U16.logor (U16.shift_left list_len_hi16 8ul) list_len_lo16;
+      let list_len = SZ.uint16_to_sizet list_len16;
+      let actual_list_len = SZ.(input_len -^ 4sz);
+      if SZ.(actual_list_len =^ list_len) {
+        let cert_len_hi16 = Cast.uint8_to_uint16 cert_len_b0;
+        let cert_len_lo16 = Cast.uint8_to_uint16 cert_len_b1;
+        let cert_len16 = U16.logor (U16.shift_left cert_len_hi16 8ul) cert_len_lo16;
+        let cert_len = SZ.uint16_to_sizet cert_len16;
+        let payload_after_cert_header = SZ.(input_len -^ 7sz);
+        if (SZ.(cert_len =^ 0sz) || SZ.(payload_after_cert_header <^ cert_len)) {
+          false
+        } else {
+          let rest_after_cert = SZ.(payload_after_cert_header -^ cert_len);
+          if SZ.(rest_after_cert <^ 2sz) {
+            false
+          } else {
+            let rest_after_first_ext_len_byte = SZ.(rest_after_cert -^ 1sz);
+            let ext_len_b0 = input.(SZ.(input_len -^ rest_after_cert));
+            let ext_len_b1 = input.(SZ.(input_len -^ rest_after_first_ext_len_byte));
+            let ext_len_hi16 = Cast.uint8_to_uint16 ext_len_b0;
+            let ext_len_lo16 = Cast.uint8_to_uint16 ext_len_b1;
+            let ext_len16 = U16.logor (U16.shift_left ext_len_hi16 8ul) ext_len_lo16;
+            let ext_len = SZ.uint16_to_sizet ext_len16;
+            let actual_ext_len = SZ.(rest_after_cert -^ 2sz);
+            if SZ.(actual_ext_len =^ ext_len) {
+              leaf_offset_out.(0sz) <- 0uy;
+              leaf_offset_out.(1sz) <- 7uy;
+              leaf_len_out.(0sz) <- cert_len_b0;
+              leaf_len_out.(1sz) <- cert_len_b1;
+              true
+            } else {
+              false
+            }
+          }
+        }
+      } else {
+        false
+      }
+    } else {
+      false
+    }
+  }
+}
