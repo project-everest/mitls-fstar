@@ -1,5 +1,4 @@
-#include "tls13_connection_probe.h"
-
+#include "tls13_connection_external_layer.h"
 #include "tls13_hacl_stubs.h"
 #include "tls13_handshake_external_layer.h"
 #include "tls13_io_stubs.h"
@@ -996,7 +995,7 @@ bool TLS13_Handshake_External_send_client_finished(
   return probe_handshake_send_client_finished((TLS13_Handshake_handshake_context)ctx, ch, NULL, NULL);
 }
 
-TLS13_Connection_connection tls13_connection_probe_new(
+static TLS13_Connection_connection tls13_connection_probe_new(
     const char *host,
     uint16_t port,
     const char *ca_pem_path) {
@@ -1022,7 +1021,7 @@ TLS13_Connection_connection tls13_connection_probe_new(
   return c;
 }
 
-void tls13_connection_probe_free(TLS13_Connection_connection c) {
+static void tls13_connection_probe_free(TLS13_Connection_connection c) {
   if (c == NULL) {
     return;
   }

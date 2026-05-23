@@ -219,7 +219,6 @@ HACL_STUB_TEST_SOURCES = \
 
 CONNECTION_PROBE_SOURCES = \
   c_stubs/tls13_connection_probe.c \
-  c_stubs/tls13_connection_probe.h \
   c_stubs/tls13_connection_external_layer.h \
   c_stubs/tls13_io_stubs.c \
   c_stubs/tls13_io_stubs.h \
