@@ -51,15 +51,11 @@ struct TLS13_Connection_connection_s {
   uint8_t server_handshake_key[32];
   uint8_t server_handshake_iv[12];
   uint8_t server_handshake_messages[32768];
-  size_t server_handshake_len;
-  size_t server_handshake_before_finished_len;
-  size_t server_handshake_through_finished_len;
   tls13_peer_identity *peer;
   uint8_t client_application_key[32];
   uint8_t client_application_iv[12];
   uint8_t server_application_key[32];
   uint8_t server_application_iv[12];
-  size_t parsed_handshake_len;
   TLS13_Record_record_state server_handshake_record_state;
   bool server_handshake_record_state_initialized;
   TLS13_Handshake_FlightState_flight_state server_handshake_flight_state;
@@ -1309,10 +1305,6 @@ bool TLS13_Handshake_ByteDriver_External_accept_finished(
     fprintf(stderr, "OpenSSL Finished has unexpected length\n");
     return false;
   }
-  c->server_handshake_before_finished_len =
-      TLS13_Handshake_FlightState_server_before_finished_len(c->server_handshake_flight_state);
-  c->server_handshake_through_finished_len =
-      TLS13_Handshake_FlightState_server_through_finished_len(c->server_handshake_flight_state);
   TLS13_Handshake_FlightState_set_server_finished_verify_data(
       c->server_handshake_flight_state, (uint8_t *)body, body_len);
   return true;
