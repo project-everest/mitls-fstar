@@ -6,6 +6,7 @@ open Pulse.Lib.Pervasives
 open Pulse.Lib.Array.PtsTo
 
 module B = TLS13.Bytes
+module Rec = TLS13.Record
 module SZ = FStar.SizeT
 module U16 = FStar.UInt16
 module U8 = FStar.UInt8
@@ -256,6 +257,41 @@ fn copy_server_handshake_key_iv
           pts_to iv_out iv_bytes **
           pure (B.length key_bytes == 32 /\
                 B.length iv_bytes == 12)
+
+fn install_server_handshake_record_keys
+  (st: flight_state)
+  (key: array U8.t)
+  (iv: array U8.t)
+  requires is_flight_state st **
+           pts_to key 'key_bytes **
+           pts_to iv 'iv_bytes **
+           pure (B.length 'key_bytes == 32 /\
+                 B.length 'iv_bytes == 12)
+  ensures is_flight_state st **
+          pts_to key 'key_bytes **
+          pts_to iv 'iv_bytes
+
+fn open_server_handshake_record
+  (st: flight_state)
+  (aad: array U8.t)
+  (aad_len: SZ.t)
+  (cipher: array U8.t)
+  (cipher_len: SZ.t)
+  (out: array U8.t)
+  requires is_flight_state st **
+           pts_to aad 'aad_bytes **
+           pts_to cipher 'cipher_bytes **
+           pts_to out 'old_out **
+           pure (B.length 'aad_bytes == SZ.v aad_len /\
+                 B.length 'cipher_bytes == SZ.v cipher_len /\
+                 B.length 'old_out + 16 == SZ.v cipher_len)
+  returns ok: bool
+  ensures exists* out_bytes.
+          is_flight_state st **
+          pts_to aad 'aad_bytes **
+          pts_to cipher 'cipher_bytes **
+          pts_to out out_bytes **
+          pure (B.length out_bytes == B.length 'old_out)
 
 fn handshake_len (st: flight_state)
   requires is_flight_state st

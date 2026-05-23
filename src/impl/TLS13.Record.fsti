@@ -38,6 +38,19 @@ fn install_keys
           pts_to key 'key_bytes **
           pts_to iv 'iv_bytes
 
+fn install_handshake_keys_runtime
+  (st: record_state)
+  (key: array U8.t)
+  (iv: array U8.t)
+  requires is_record_state st 's **
+           pts_to key 'key_bytes **
+           pts_to iv 'iv_bytes **
+           pure (B.length 'key_bytes == 32 /\ B.length 'iv_bytes == 12)
+  ensures exists* s'.
+          is_record_state st s' **
+          pts_to key 'key_bytes **
+          pts_to iv 'iv_bytes
+
 fn seal_application
   (st: record_state)
   (aad: array U8.t)
@@ -100,3 +113,25 @@ fn open_application
                 (not ok ==> s' == 's /\
                             out_bytes == 'old /\
                             R.open_record 's (Ghost.reveal 'aad_bytes) (Ghost.reveal 'cipher_bytes) == None))
+
+fn open_application_runtime
+  (st: record_state)
+  (aad: array U8.t)
+  (aad_len: SZ.t)
+  (cipher: array U8.t)
+  (cipher_len: SZ.t)
+  (out: array U8.t)
+  requires is_record_state st 's **
+           pts_to aad 'aad_bytes **
+           pts_to cipher 'cipher_bytes **
+           pts_to out 'old **
+           pure (B.length 'aad_bytes == SZ.v aad_len /\
+                 B.length 'cipher_bytes == SZ.v cipher_len /\
+                 B.length 'old + 16 == SZ.v cipher_len)
+  returns ok: bool
+  ensures exists* s' out_bytes.
+          is_record_state st s' **
+          pts_to aad 'aad_bytes **
+          pts_to cipher 'cipher_bytes **
+          pts_to out out_bytes **
+          pure (B.length out_bytes == B.length 'old)

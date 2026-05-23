@@ -115,6 +115,40 @@ fn install_keys
   fold (is_record_state st (R.install_keys 's epoch (Ghost.reveal 'key_bytes) (Ghost.reveal 'iv_bytes)));
 }
 
+fn install_handshake_keys_runtime
+  (st: record_state)
+  (key: array U8.t)
+  (iv: array U8.t)
+  requires is_record_state st 's **
+           pts_to key 'key_bytes **
+           pts_to iv 'iv_bytes **
+           pure (B.length 'key_bytes == 32 /\ B.length 'iv_bytes == 12)
+  ensures exists* s'.
+          is_record_state st s' **
+          pts_to key 'key_bytes **
+          pts_to iv 'iv_bytes
+{
+  unfold (is_record_state st 's);
+  pts_to_len key;
+  pts_to_len iv;
+  V.pts_to_len st.key;
+  V.pts_to_len st.iv;
+  V.to_array_pts_to st.key;
+  V.to_array_pts_to st.iv;
+  Arr.memcpy 32sz key (V.vec_to_array st.key);
+  Arr.memcpy 12sz iv (V.vec_to_array st.iv);
+  V.to_vec_pts_to st.key;
+  V.to_vec_pts_to st.iv;
+  st.seq := 0UL;
+  st.installed := true;
+  with key_s. assert (V.pts_to st.key key_s);
+  with iv_s. assert (V.pts_to st.iv iv_s);
+  assert (pure (key_s == 'key_bytes));
+  assert (pure (iv_s == 'iv_bytes));
+  assert (pure (state_matches true 0UL key_s iv_s (R.install_keys 's R.Handshake (Ghost.reveal 'key_bytes) (Ghost.reveal 'iv_bytes))));
+  fold (is_record_state st (R.install_keys 's R.Handshake (Ghost.reveal 'key_bytes) (Ghost.reveal 'iv_bytes)));
+}
+
 fn seal_application
   (st: record_state)
   (aad: array U8.t)
@@ -259,6 +293,69 @@ fn open_application
     with iv_s. assert (V.pts_to st.iv iv_s);
     with seq_s. assert (Box.pts_to st.seq seq_s);
     assert (pure (R.open_record 's (Ghost.reveal 'aad_bytes) (Ghost.reveal 'cipher_bytes) == None));
+    fold (is_record_state st 's);
+    false
+  }
+}
+
+fn open_application_runtime
+  (st: record_state)
+  (aad: array U8.t)
+  (aad_len: SZ.t)
+  (cipher: array U8.t)
+  (cipher_len: SZ.t)
+  (out: array U8.t)
+  requires is_record_state st 's **
+           pts_to aad 'aad_bytes **
+           pts_to cipher 'cipher_bytes **
+           pts_to out 'old **
+           pure (B.length 'aad_bytes == SZ.v aad_len /\
+                 B.length 'cipher_bytes == SZ.v cipher_len /\
+                 B.length 'old + 16 == SZ.v cipher_len)
+  returns ok: bool
+  ensures exists* s' out_bytes.
+          is_record_state st s' **
+          pts_to aad 'aad_bytes **
+          pts_to cipher 'cipher_bytes **
+          pts_to out out_bytes **
+          pure (B.length out_bytes == B.length 'old)
+{
+  unfold (is_record_state st 's);
+  let installed = !st.installed;
+  if installed {
+    let seq = !st.seq;
+    let mut nonce = [| 0uy; 12sz |];
+    V.to_array_pts_to st.key;
+    V.to_array_pts_to st.iv;
+    let nonce_ok = Crypto.tls13_record_nonce (V.vec_to_array st.iv) seq nonce;
+    assert (pure nonce_ok);
+    let opened = Crypto.chacha20_poly1305_open (V.vec_to_array st.key) nonce aad aad_len cipher cipher_len out;
+    V.to_vec_pts_to st.key;
+    V.to_vec_pts_to st.iv;
+    with key_s. assert (V.pts_to st.key key_s);
+    with iv_s. assert (V.pts_to st.iv iv_s);
+    assert (pure (state_matches true seq key_s iv_s 's));
+    assert (pure (B.length key_s == 32 /\ B.length iv_s == 12));
+    if opened {
+      let next_seq = U64.add_underspec seq 1UL;
+      st.seq := next_seq;
+      with out_s. assert (pts_to out out_s);
+      assert (pure (B.length out_s == B.length 'old));
+      assert (pure (state_matches true next_seq key_s iv_s ({ 's with R.seq = U64.v next_seq })));
+      fold (is_record_state st ({ 's with R.seq = U64.v next_seq }));
+      true
+    } else {
+      with out_s. assert (pts_to out out_s);
+      assert (pure (out_s == 'old));
+      fold (is_record_state st 's);
+      false
+    }
+  } else {
+    with key_s. assert (V.pts_to st.key key_s);
+    with iv_s. assert (V.pts_to st.iv iv_s);
+    with seq_s. assert (Box.pts_to st.seq seq_s);
+    with out_s. assert (pts_to out out_s);
+    assert (pure (out_s == 'old));
     fold (is_record_state st 's);
     false
   }

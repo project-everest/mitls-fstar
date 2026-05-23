@@ -42,7 +42,6 @@ struct TLS13_Connection_connection_s {
   uint16_t port;
   const char *ca_pem_path;
   int fd;
-  TLS13_Record_record_state server_handshake_record_state;
   TLS13_Handshake_FlightState_flight_state server_handshake_flight_state;
 };
 
@@ -348,10 +347,10 @@ static bool read_next_encrypted_handshake_record(TLS13_Connection_connection c) 
     return false;
   }
 
-  uint8_t inner_plaintext[20000];
   size_t inner_plaintext_len = (size_t)fragment_len - 16u;
-  if (!TLS13_Record_open_application(
-          c->server_handshake_record_state,
+  uint8_t inner_plaintext[inner_plaintext_len];
+  if (!TLS13_Handshake_FlightState_open_server_handshake_record(
+          c->server_handshake_flight_state,
           encrypted_header,
           TLS13_WIRE_RECORD_HEADER_LEN,
           encrypted_fragment,
@@ -1031,7 +1030,6 @@ TLS13_Connection_connection tls13_connection_probe_new(
   c->port = port;
   c->ca_pem_path = ca_pem_path;
   c->fd = -1;
-  c->server_handshake_record_state = TLS13_Record_record_state_new();
   c->server_handshake_flight_state = TLS13_Handshake_FlightState_flight_state_new();
   return c;
 }
@@ -1043,7 +1041,6 @@ void tls13_connection_probe_free(TLS13_Connection_connection c) {
   if (c->fd >= 0) {
     tls13_io_close_fd(c->fd);
   }
-  TLS13_Record_record_state_free(c->server_handshake_record_state, NULL);
   TLS13_Handshake_FlightState_flight_state_free(c->server_handshake_flight_state);
   free(c->host);
   free(c);
@@ -1330,8 +1327,10 @@ void TLS13_Handshake_ByteDriver_External_reset_encrypted_handshake(
       sizeof server_handshake_key,
       server_handshake_iv,
       sizeof server_handshake_iv);
-  TLS13_Record_install_keys(
-      c->server_handshake_record_state, 1, server_handshake_key, server_handshake_iv);
+  TLS13_Handshake_FlightState_install_server_handshake_record_keys(
+      c->server_handshake_flight_state,
+      server_handshake_key,
+      server_handshake_iv);
 }
 
 bool TLS13_Handshake_ByteDriver_External_read_next_encrypted_handshake_record(

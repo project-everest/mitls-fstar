@@ -9,6 +9,7 @@ open Pulse.Lib.Box { box, (!), (:=) }
 module Arr = Pulse.Lib.Array
 module B = TLS13.Bytes
 module Box = Pulse.Lib.Box
+module Rec = TLS13.Record
 module Seq = FStar.Seq
 module SZ = FStar.SizeT
 module U16 = FStar.UInt16
@@ -37,6 +38,7 @@ type flight_state = {
   server_handshake_traffic_secret: V.vec U8.t;
   server_handshake_key: V.vec U8.t;
   server_handshake_iv: V.vec U8.t;
+  server_handshake_record_state: Rec.record_state;
   server_finished_verify_data: V.vec U8.t;
   before_finished_len_box: box SZ.t;
   through_finished_len_box: box SZ.t;
@@ -52,7 +54,7 @@ let is_flight_state ([@@@mkey] st: flight_state) : slprop =
           certificate_verify_offset certificate_leaf_offset certificate_leaf_len
           certificate_verify_signature_scheme certificate_verify_signature_offset certificate_verify_signature_len
           handshake_secret client_handshake_traffic_secret client_handshake_key client_handshake_iv server_handshake_traffic_secret
-          server_handshake_key server_handshake_iv server_finished_verify_data
+          server_handshake_key server_handshake_iv server_handshake_record_state server_finished_verify_data
           before_finished_len through_finished_len
           saw_encrypted_extensions saw_certificate saw_certificate_verify certificate_verify_verified saw_finished.
     Box.pts_to st.handshake_len_box handshake_len **
@@ -75,6 +77,7 @@ let is_flight_state ([@@@mkey] st: flight_state) : slprop =
     V.pts_to st.server_handshake_traffic_secret server_handshake_traffic_secret **
     V.pts_to st.server_handshake_key server_handshake_key **
     V.pts_to st.server_handshake_iv server_handshake_iv **
+    Rec.is_record_state st.server_handshake_record_state server_handshake_record_state **
     V.pts_to st.server_finished_verify_data server_finished_verify_data **
     Box.pts_to st.before_finished_len_box before_finished_len **
     Box.pts_to st.through_finished_len_box through_finished_len **
@@ -130,6 +133,7 @@ fn flight_state_new ()
   let server_handshake_traffic_secret = V.alloc 0uy 32sz;
   let server_handshake_key = V.alloc 0uy 32sz;
   let server_handshake_iv = V.alloc 0uy 12sz;
+  let server_handshake_record_state = Rec.record_state_new ();
   let server_finished_verify_data = V.alloc 0uy 32sz;
   let before_finished_len_box = Box.alloc 0sz;
   let through_finished_len_box = Box.alloc 0sz;
@@ -159,6 +163,7 @@ fn flight_state_new ()
     server_handshake_traffic_secret;
     server_handshake_key;
     server_handshake_iv;
+    server_handshake_record_state;
     server_finished_verify_data;
     before_finished_len_box;
     through_finished_len_box;
@@ -188,6 +193,7 @@ fn flight_state_new ()
   with v. rewrite (V.pts_to server_handshake_traffic_secret v) as (V.pts_to st.server_handshake_traffic_secret v);
   with v. rewrite (V.pts_to server_handshake_key v) as (V.pts_to st.server_handshake_key v);
   with v. rewrite (V.pts_to server_handshake_iv v) as (V.pts_to st.server_handshake_iv v);
+  with v. rewrite (Rec.is_record_state server_handshake_record_state v) as (Rec.is_record_state st.server_handshake_record_state v);
   with v. rewrite (V.pts_to server_finished_verify_data v) as (V.pts_to st.server_finished_verify_data v);
   with v. rewrite (Box.pts_to before_finished_len_box v) as (Box.pts_to st.before_finished_len_box v);
   with v. rewrite (Box.pts_to through_finished_len_box v) as (Box.pts_to st.through_finished_len_box v);
@@ -225,6 +231,7 @@ fn flight_state_free (st: flight_state)
   V.free st.server_handshake_traffic_secret;
   V.free st.server_handshake_key;
   V.free st.server_handshake_iv;
+  Rec.record_state_free st.server_handshake_record_state;
   V.free st.server_finished_verify_data;
   Box.free st.before_finished_len_box;
   Box.free st.through_finished_len_box;
@@ -726,6 +733,54 @@ fn copy_server_handshake_key_iv
   assert (pure (Seq.length key_s == 32));
   assert (pure (Seq.length iv_s == 12));
   fold (is_flight_state st);
+}
+
+fn install_server_handshake_record_keys
+  (st: flight_state)
+  (key: array U8.t)
+  (iv: array U8.t)
+  requires is_flight_state st **
+           pts_to key 'key_bytes **
+           pts_to iv 'iv_bytes **
+           pure (B.length 'key_bytes == 32 /\
+                 B.length 'iv_bytes == 12)
+  ensures is_flight_state st **
+          pts_to key 'key_bytes **
+          pts_to iv 'iv_bytes
+{
+  unfold (is_flight_state st);
+  Rec.install_handshake_keys_runtime st.server_handshake_record_state key iv;
+  fold (is_flight_state st);
+}
+
+fn open_server_handshake_record
+  (st: flight_state)
+  (aad: array U8.t)
+  (aad_len: SZ.t)
+  (cipher: array U8.t)
+  (cipher_len: SZ.t)
+  (out: array U8.t)
+  requires is_flight_state st **
+           pts_to aad 'aad_bytes **
+           pts_to cipher 'cipher_bytes **
+           pts_to out 'old_out **
+           pure (B.length 'aad_bytes == SZ.v aad_len /\
+                 B.length 'cipher_bytes == SZ.v cipher_len /\
+                 B.length 'old_out + 16 == SZ.v cipher_len)
+  returns ok: bool
+  ensures exists* out_bytes.
+          is_flight_state st **
+          pts_to aad 'aad_bytes **
+          pts_to cipher 'cipher_bytes **
+          pts_to out out_bytes **
+          pure (B.length out_bytes == B.length 'old_out)
+{
+  unfold (is_flight_state st);
+  let ok = Rec.open_application_runtime st.server_handshake_record_state aad aad_len cipher cipher_len out;
+  with out_s. assert (pts_to out out_s);
+  assert (pure (B.length out_s == B.length 'old_out));
+  fold (is_flight_state st);
+  ok
 }
 
 fn handshake_len (st: flight_state)
