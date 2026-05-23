@@ -7,6 +7,7 @@ open Pulse.Lib.Array.PtsTo
 
 module B = TLS13.Bytes
 module C = TLS13.Crypto.Spec
+module Seq = FStar.Seq
 module SZ = FStar.SizeT
 module U8 = FStar.UInt8
 
@@ -35,6 +36,27 @@ fn hash_client_server_handshake
           pts_to out out_bytes **
           pure (B.length out_bytes == 32 /\
                 (ok ==> out_bytes == C.sha256 (B.append (B.append 'client_hello_bytes 'server_hello_bytes) 'server_handshake_bytes)))
+
+fn hash_client_server_hello
+  (client_hello: array U8.t)
+  (client_hello_len: SZ.t)
+  (server_hello: array U8.t)
+  (server_hello_len: SZ.t)
+  (out: array U8.t)
+  requires pts_to client_hello 'client_hello_bytes **
+           pts_to server_hello 'server_hello_bytes **
+           pts_to out 'old_out **
+           pure (B.length 'client_hello_bytes == SZ.v client_hello_len /\
+                 B.length 'server_hello_bytes == SZ.v server_hello_len /\
+                 B.length 'old_out == 32 /\
+                 SZ.v client_hello_len + SZ.v server_hello_len <= 32768)
+  returns ok: bool
+  ensures exists* out_bytes.
+          pts_to client_hello 'client_hello_bytes **
+          pts_to server_hello 'server_hello_bytes **
+          pts_to out out_bytes **
+          pure (B.length out_bytes == 32 /\
+                (ok ==> out_bytes == C.sha256 (B.append (B.append 'client_hello_bytes 'server_hello_bytes) (Seq.create 0 0uy))))
 
 fn equal32
   (a: array U8.t)

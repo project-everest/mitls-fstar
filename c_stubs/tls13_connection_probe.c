@@ -211,13 +211,8 @@ static int derive_server_handshake_keys(
   uint8_t early_secret[32];
   uint8_t derived_secret[32];
   uint8_t shared_secret[32];
-  uint8_t transcript[1024];
   uint8_t transcript_hash[32];
 
-  if (client_hello_len > sizeof transcript ||
-      server_hello_len > sizeof transcript - client_hello_len) {
-    return -1;
-  }
   if (!tls13_hacl_sha256(empty_hash, NULL, 0) ||
       !tls13_hacl_hkdf_extract_sha256(
           early_secret, NULL, 0, zero_secret, sizeof zero_secret) ||
@@ -225,11 +220,27 @@ static int derive_server_handshake_keys(
     return -1;
   }
 
+#ifdef TLS13_CONNECTION_PROBE_USE_EXTRACTED_HANDSHAKE_TRANSCRIPT
+  if (!TLS13_Handshake_Transcript_hash_client_server_hello(
+          (uint8_t *)client_hello,
+          client_hello_len,
+          (uint8_t *)server_hello,
+          server_hello_len,
+          transcript_hash)) {
+    return -1;
+  }
+#else
+  uint8_t transcript[1024];
+  if (client_hello_len > sizeof transcript ||
+      server_hello_len > sizeof transcript - client_hello_len) {
+    return -1;
+  }
   memcpy(transcript, client_hello, client_hello_len);
   memcpy(transcript + client_hello_len, server_hello, server_hello_len);
   if (!tls13_hacl_sha256(transcript_hash, transcript, client_hello_len + server_hello_len)) {
     return -1;
   }
+#endif
 
 #ifdef TLS13_CONNECTION_PROBE_USE_EXTRACTED_KEY_SCHEDULE
   TLS13_KeySchedule_handshake_secret(

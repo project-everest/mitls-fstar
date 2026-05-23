@@ -45,6 +45,35 @@ fn hash_client_server_handshake
     out
 }
 
+fn hash_client_server_hello
+  (client_hello: array U8.t)
+  (client_hello_len: SZ.t)
+  (server_hello: array U8.t)
+  (server_hello_len: SZ.t)
+  (out: array U8.t)
+  requires pts_to client_hello 'client_hello_bytes **
+           pts_to server_hello 'server_hello_bytes **
+           pts_to out 'old_out **
+           pure (B.length 'client_hello_bytes == SZ.v client_hello_len /\
+                 B.length 'server_hello_bytes == SZ.v server_hello_len /\
+                 B.length 'old_out == 32 /\
+                 SZ.v client_hello_len + SZ.v server_hello_len <= 32768)
+  returns ok: bool
+  ensures exists* out_bytes.
+          pts_to client_hello 'client_hello_bytes **
+          pts_to server_hello 'server_hello_bytes **
+          pts_to out out_bytes **
+          pure (B.length out_bytes == 32 /\
+                (ok ==> out_bytes == C.sha256 (B.append (B.append 'client_hello_bytes 'server_hello_bytes) (Seq.create 0 0uy))))
+{
+  let mut empty = [| 0uy; 0sz |];
+  E.sha256_three
+    client_hello client_hello_len
+    server_hello server_hello_len
+    empty 0sz
+    out;
+}
+
 fn equal32
   (a: array U8.t)
   (b: array U8.t)
