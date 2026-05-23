@@ -25,6 +25,68 @@ fn reset (st: flight_state)
   requires is_flight_state st
   ensures is_flight_state st
 
+fn set_client_hello
+  (st: flight_state)
+  (hello: array U8.t)
+  (hello_capacity: SZ.t)
+  (hello_len: SZ.t)
+  requires is_flight_state st **
+           pts_to hello 'hello_bytes **
+           pure (B.length 'hello_bytes == SZ.v hello_capacity /\
+                 SZ.v hello_capacity == 512 /\
+                 SZ.v hello_len <= SZ.v hello_capacity)
+  ensures is_flight_state st **
+          pts_to hello 'hello_bytes
+
+fn copy_client_hello
+  (st: flight_state)
+  (out: array U8.t)
+  (out_capacity: SZ.t)
+  requires is_flight_state st **
+           pts_to out 'old_out **
+           pure (B.length 'old_out == SZ.v out_capacity /\
+                 SZ.v out_capacity == 512)
+  ensures exists* out_bytes.
+          is_flight_state st **
+          pts_to out out_bytes **
+          pure (B.length out_bytes == 512)
+
+fn client_hello_len (st: flight_state)
+  requires is_flight_state st
+  returns len: SZ.t
+  ensures is_flight_state st
+
+fn set_server_hello
+  (st: flight_state)
+  (hello: array U8.t)
+  (hello_capacity: SZ.t)
+  (hello_len: SZ.t)
+  requires is_flight_state st **
+           pts_to hello 'hello_bytes **
+           pure (B.length 'hello_bytes == SZ.v hello_capacity /\
+                 SZ.v hello_capacity == 4096 /\
+                 SZ.v hello_len <= SZ.v hello_capacity)
+  ensures is_flight_state st **
+          pts_to hello 'hello_bytes
+
+fn copy_server_hello
+  (st: flight_state)
+  (out: array U8.t)
+  (out_capacity: SZ.t)
+  requires is_flight_state st **
+           pts_to out 'old_out **
+           pure (B.length 'old_out == SZ.v out_capacity /\
+                 SZ.v out_capacity == 4096)
+  ensures exists* out_bytes.
+          is_flight_state st **
+          pts_to out out_bytes **
+          pure (B.length out_bytes == 4096)
+
+fn server_hello_len (st: flight_state)
+  requires is_flight_state st
+  returns len: SZ.t
+  ensures is_flight_state st
+
 fn set_handshake_secret
   (st: flight_state)
   (secret: array U8.t)

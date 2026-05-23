@@ -19,6 +19,10 @@ noeq
 type flight_state = {
   handshake_len_box: box SZ.t;
   parsed_len_box: box SZ.t;
+  client_hello_len_box: box SZ.t;
+  server_hello_len_box: box SZ.t;
+  client_hello: V.vec U8.t;
+  server_hello: V.vec U8.t;
   certificate_verify_offset_box: box SZ.t;
   certificate_leaf_offset_box: box SZ.t;
   certificate_leaf_len_box: box SZ.t;
@@ -42,7 +46,8 @@ type flight_state = {
 }
 
 let is_flight_state ([@@@mkey] st: flight_state) : slprop =
-  exists* handshake_len parsed_len certificate_verify_offset certificate_leaf_offset certificate_leaf_len
+  exists* handshake_len parsed_len client_hello_len server_hello_len client_hello server_hello
+          certificate_verify_offset certificate_leaf_offset certificate_leaf_len
           certificate_verify_signature_scheme certificate_verify_signature_offset certificate_verify_signature_len
           handshake_secret client_handshake_traffic_secret client_handshake_key client_handshake_iv server_handshake_traffic_secret
           server_handshake_key server_handshake_iv server_finished_verify_data
@@ -50,6 +55,10 @@ let is_flight_state ([@@@mkey] st: flight_state) : slprop =
           saw_encrypted_extensions saw_certificate saw_certificate_verify saw_finished.
     Box.pts_to st.handshake_len_box handshake_len **
     Box.pts_to st.parsed_len_box parsed_len **
+    Box.pts_to st.client_hello_len_box client_hello_len **
+    Box.pts_to st.server_hello_len_box server_hello_len **
+    V.pts_to st.client_hello client_hello **
+    V.pts_to st.server_hello server_hello **
     Box.pts_to st.certificate_verify_offset_box certificate_verify_offset **
     Box.pts_to st.certificate_leaf_offset_box certificate_leaf_offset **
     Box.pts_to st.certificate_leaf_len_box certificate_leaf_len **
@@ -70,7 +79,9 @@ let is_flight_state ([@@@mkey] st: flight_state) : slprop =
     Box.pts_to st.saw_certificate_box saw_certificate **
     Box.pts_to st.saw_certificate_verify_box saw_certificate_verify **
     Box.pts_to st.saw_finished_box saw_finished **
-    pure (V.is_full_vec st.handshake_secret /\
+    pure (V.is_full_vec st.client_hello /\
+          V.is_full_vec st.server_hello /\
+          V.is_full_vec st.handshake_secret /\
           V.is_full_vec st.client_handshake_traffic_secret /\
     V.is_full_vec st.client_handshake_key /\
     V.is_full_vec st.client_handshake_iv /\
@@ -78,6 +89,8 @@ let is_flight_state ([@@@mkey] st: flight_state) : slprop =
           V.is_full_vec st.server_handshake_key /\
           V.is_full_vec st.server_handshake_iv /\
           V.is_full_vec st.server_finished_verify_data /\
+          V.length st.client_hello == 512 /\
+          V.length st.server_hello == 4096 /\
           V.length st.handshake_secret == 32 /\
           V.length st.client_handshake_traffic_secret == 32 /\
           V.length st.client_handshake_key == 32 /\
@@ -93,6 +106,10 @@ fn flight_state_new ()
 {
   let handshake_len_box = Box.alloc 0sz;
   let parsed_len_box = Box.alloc 0sz;
+  let client_hello_len_box = Box.alloc 0sz;
+  let server_hello_len_box = Box.alloc 0sz;
+  let client_hello = V.alloc 0uy 512sz;
+  let server_hello = V.alloc 0uy 4096sz;
   let certificate_verify_offset_box = Box.alloc 0sz;
   let certificate_leaf_offset_box = Box.alloc 0sz;
   let certificate_leaf_len_box = Box.alloc 0sz;
@@ -116,6 +133,10 @@ fn flight_state_new ()
   let st = {
     handshake_len_box;
     parsed_len_box;
+    client_hello_len_box;
+    server_hello_len_box;
+    client_hello;
+    server_hello;
     certificate_verify_offset_box;
     certificate_leaf_offset_box;
     certificate_leaf_len_box;
@@ -139,6 +160,10 @@ fn flight_state_new ()
   };
   with v. rewrite (Box.pts_to handshake_len_box v) as (Box.pts_to st.handshake_len_box v);
   with v. rewrite (Box.pts_to parsed_len_box v) as (Box.pts_to st.parsed_len_box v);
+  with v. rewrite (Box.pts_to client_hello_len_box v) as (Box.pts_to st.client_hello_len_box v);
+  with v. rewrite (Box.pts_to server_hello_len_box v) as (Box.pts_to st.server_hello_len_box v);
+  with v. rewrite (V.pts_to client_hello v) as (V.pts_to st.client_hello v);
+  with v. rewrite (V.pts_to server_hello v) as (V.pts_to st.server_hello v);
   with v. rewrite (Box.pts_to certificate_verify_offset_box v) as (Box.pts_to st.certificate_verify_offset_box v);
   with v. rewrite (Box.pts_to certificate_leaf_offset_box v) as (Box.pts_to st.certificate_leaf_offset_box v);
   with v. rewrite (Box.pts_to certificate_leaf_len_box v) as (Box.pts_to st.certificate_leaf_len_box v);
@@ -170,6 +195,10 @@ fn flight_state_free (st: flight_state)
   unfold (is_flight_state st);
   Box.free st.handshake_len_box;
   Box.free st.parsed_len_box;
+  Box.free st.client_hello_len_box;
+  Box.free st.server_hello_len_box;
+  V.free st.client_hello;
+  V.free st.server_hello;
   Box.free st.certificate_verify_offset_box;
   Box.free st.certificate_leaf_offset_box;
   Box.free st.certificate_leaf_len_box;
@@ -212,6 +241,130 @@ fn reset (st: flight_state)
   st.saw_certificate_verify_box := false;
   st.saw_finished_box := false;
   fold (is_flight_state st);
+}
+
+fn set_client_hello
+  (st: flight_state)
+  (hello: array U8.t)
+  (hello_capacity: SZ.t)
+  (hello_len: SZ.t)
+  requires is_flight_state st **
+           pts_to hello 'hello_bytes **
+           pure (B.length 'hello_bytes == SZ.v hello_capacity /\
+                 SZ.v hello_capacity == 512 /\
+                 SZ.v hello_len <= SZ.v hello_capacity)
+  ensures is_flight_state st **
+          pts_to hello 'hello_bytes
+{
+  unfold (is_flight_state st);
+  pts_to_len hello;
+  V.pts_to_len st.client_hello;
+  assert (pure (V.length st.client_hello == 512));
+  V.to_array_pts_to st.client_hello;
+  assert (pure (Pulse.Lib.Array.Core.length (V.vec_to_array st.client_hello) == 512));
+  Arr.memcpy 512sz hello (V.vec_to_array st.client_hello);
+  V.to_vec_pts_to st.client_hello;
+  st.client_hello_len_box := hello_len;
+  fold (is_flight_state st);
+}
+
+fn copy_client_hello
+  (st: flight_state)
+  (out: array U8.t)
+  (out_capacity: SZ.t)
+  requires is_flight_state st **
+           pts_to out 'old_out **
+           pure (B.length 'old_out == SZ.v out_capacity /\
+                 SZ.v out_capacity == 512)
+  ensures exists* out_bytes.
+          is_flight_state st **
+          pts_to out out_bytes **
+          pure (B.length out_bytes == 512)
+{
+  unfold (is_flight_state st);
+  pts_to_len out;
+  V.pts_to_len st.client_hello;
+  assert (pure (V.length st.client_hello == 512));
+  V.to_array_pts_to st.client_hello;
+  assert (pure (Pulse.Lib.Array.Core.length (V.vec_to_array st.client_hello) == 512));
+  Arr.memcpy 512sz (V.vec_to_array st.client_hello) out;
+  V.to_vec_pts_to st.client_hello;
+  with out_s. assert (pts_to out out_s);
+  assert (pure (Seq.length out_s == 512));
+  fold (is_flight_state st);
+}
+
+fn client_hello_len (st: flight_state)
+  requires is_flight_state st
+  returns len: SZ.t
+  ensures is_flight_state st
+{
+  unfold (is_flight_state st);
+  let len = !st.client_hello_len_box;
+  fold (is_flight_state st);
+  len
+}
+
+fn set_server_hello
+  (st: flight_state)
+  (hello: array U8.t)
+  (hello_capacity: SZ.t)
+  (hello_len: SZ.t)
+  requires is_flight_state st **
+           pts_to hello 'hello_bytes **
+           pure (B.length 'hello_bytes == SZ.v hello_capacity /\
+                 SZ.v hello_capacity == 4096 /\
+                 SZ.v hello_len <= SZ.v hello_capacity)
+  ensures is_flight_state st **
+          pts_to hello 'hello_bytes
+{
+  unfold (is_flight_state st);
+  pts_to_len hello;
+  V.pts_to_len st.server_hello;
+  assert (pure (V.length st.server_hello == 4096));
+  V.to_array_pts_to st.server_hello;
+  assert (pure (Pulse.Lib.Array.Core.length (V.vec_to_array st.server_hello) == 4096));
+  Arr.memcpy 4096sz hello (V.vec_to_array st.server_hello);
+  V.to_vec_pts_to st.server_hello;
+  st.server_hello_len_box := hello_len;
+  fold (is_flight_state st);
+}
+
+fn copy_server_hello
+  (st: flight_state)
+  (out: array U8.t)
+  (out_capacity: SZ.t)
+  requires is_flight_state st **
+           pts_to out 'old_out **
+           pure (B.length 'old_out == SZ.v out_capacity /\
+                 SZ.v out_capacity == 4096)
+  ensures exists* out_bytes.
+          is_flight_state st **
+          pts_to out out_bytes **
+          pure (B.length out_bytes == 4096)
+{
+  unfold (is_flight_state st);
+  pts_to_len out;
+  V.pts_to_len st.server_hello;
+  assert (pure (V.length st.server_hello == 4096));
+  V.to_array_pts_to st.server_hello;
+  assert (pure (Pulse.Lib.Array.Core.length (V.vec_to_array st.server_hello) == 4096));
+  Arr.memcpy 4096sz (V.vec_to_array st.server_hello) out;
+  V.to_vec_pts_to st.server_hello;
+  with out_s. assert (pts_to out out_s);
+  assert (pure (Seq.length out_s == 4096));
+  fold (is_flight_state st);
+}
+
+fn server_hello_len (st: flight_state)
+  requires is_flight_state st
+  returns len: SZ.t
+  ensures is_flight_state st
+{
+  unfold (is_flight_state st);
+  let len = !st.server_hello_len_box;
+  fold (is_flight_state st);
+  len
 }
 
 fn set_handshake_secret
