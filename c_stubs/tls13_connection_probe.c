@@ -330,10 +330,15 @@ static int verify_server_finished(
           transcript_hash) != 0) {
     return -1;
   }
+#ifdef TLS13_CONNECTION_PROBE_USE_EXTRACTED_KEY_SCHEDULE
+  TLS13_KeySchedule_finished_verify_data(
+      (uint8_t *)server_handshake_traffic_secret, transcript_hash, expected);
+#else
   if (!tls13_hacl_finished_verify_data_sha256(
           expected, server_handshake_traffic_secret, transcript_hash)) {
     return -1;
   }
+#endif
   return memcmp(expected, finished_verify_data, 32) == 0 ? 0 : -1;
 }
 
@@ -912,6 +917,12 @@ bool TLS13_Handshake_send_client_finished(
   }
 
   uint8_t client_finished[36] = {20, 0, 0, 32};
+#ifdef TLS13_CONNECTION_PROBE_USE_EXTRACTED_KEY_SCHEDULE
+  TLS13_KeySchedule_finished_verify_data(
+      c->client_handshake_traffic_secret,
+      transcript_hash_through_server_finished,
+      client_finished + TLS13_WIRE_HANDSHAKE_HEADER_LEN);
+#else
   if (!tls13_hacl_finished_verify_data_sha256(
           client_finished + TLS13_WIRE_HANDSHAKE_HEADER_LEN,
           c->client_handshake_traffic_secret,
@@ -920,6 +931,7 @@ bool TLS13_Handshake_send_client_finished(
     fail_handshake(c);
     return false;
   }
+#endif
 
   uint8_t client_record[20000];
   size_t client_record_len = 0;
