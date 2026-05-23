@@ -45,7 +45,6 @@ struct TLS13_Connection_connection_s {
   size_t client_hello_len;
   uint8_t server_hello_fragment[4096];
   size_t server_hello_len;
-  uint8_t handshake_secret[32];
   uint8_t client_handshake_traffic_secret[32];
   uint8_t server_handshake_traffic_secret[32];
   uint8_t client_handshake_key[32];
@@ -518,13 +517,14 @@ static bool probe_handshake_recv_server_hello(
     return false;
   }
   c->server_hello_len = fragment_len;
+  uint8_t handshake_secret[32];
   if (derive_server_handshake_keys(
           c->client_hello,
           c->client_hello_len,
           c->server_hello_fragment,
           c->server_hello_len,
           server_key_share,
-          c->handshake_secret,
+          handshake_secret,
           c->client_handshake_traffic_secret,
           c->server_handshake_traffic_secret,
           c->client_handshake_key,
@@ -535,6 +535,8 @@ static bool probe_handshake_recv_server_hello(
     fail_handshake(c);
     return false;
   }
+  TLS13_Handshake_FlightState_set_handshake_secret(
+      c->server_handshake_flight_state, handshake_secret, sizeof handshake_secret);
   return true;
 }
 
@@ -722,6 +724,9 @@ static bool probe_handshake_send_client_finished(
   }
 
   uint8_t transcript_hash_through_server_finished[32];
+  uint8_t handshake_secret[32] = {0};
+  TLS13_Handshake_FlightState_copy_handshake_secret(
+      c->server_handshake_flight_state, handshake_secret, sizeof handshake_secret);
   if (compute_transcript_hash(
           c->client_hello,
           c->client_hello_len,
@@ -936,6 +941,9 @@ bool TLS13_Connection_External_client_connect(
     return false;
   }
   uint8_t transcript_hash_through_server_finished[32];
+  uint8_t handshake_secret[32] = {0};
+  TLS13_Handshake_FlightState_copy_handshake_secret(
+      c->server_handshake_flight_state, handshake_secret, sizeof handshake_secret);
   if (compute_transcript_hash(
           c->client_hello,
           c->client_hello_len,
@@ -945,7 +953,7 @@ bool TLS13_Connection_External_client_connect(
           TLS13_Handshake_FlightState_server_through_finished_len(c->server_handshake_flight_state),
           transcript_hash_through_server_finished) != 0 ||
       derive_application_keys(
-          c->handshake_secret,
+          handshake_secret,
           transcript_hash_through_server_finished,
           client_key,
           client_iv,
