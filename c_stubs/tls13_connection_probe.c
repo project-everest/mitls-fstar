@@ -4,7 +4,6 @@
 #include "tls13_handshake_external_layer.h"
 #include "tls13_io_stubs.h"
 #include "tls13_openssl_stubs.h"
-#include "tls13_wire_stubs.h"
 
 #include "TLS13_KeySchedule.h"
 #include "TLS13_Handshake_Framing.h"
@@ -24,6 +23,9 @@
 #include <string.h>
 
 #define PROBE_APP_RECORD_CHUNK_LEN 4096u
+#define TLS13_WIRE_RECORD_HEADER_LEN 5u
+#define TLS13_WIRE_HANDSHAKE_HEADER_LEN 4u
+#define TLS13_WIRE_CERTIFICATE_VERIFY_INPUT_LEN 130u
 
 #define TLS13_Connection_connection TLS13_Connection_External_connection
 #define TLS13_Connection_connection_s TLS13_Connection_External_connection_s
