@@ -42,7 +42,6 @@ struct TLS13_Connection_connection_s {
   uint16_t port;
   const char *ca_pem_path;
   int fd;
-  bool handshake_failed;
   bool application_ready;
   tls13_peer_identity *peer;
   TLS13_Record_record_state server_handshake_record_state;
@@ -271,14 +270,13 @@ static TLS13_Connection_connection from_handshake_context(
 }
 
 static bool handshake_can_continue(TLS13_Connection_connection c) {
-  return c != NULL && !c->handshake_failed && !c->application_ready;
+  return c != NULL && c->fd >= 0 && !c->application_ready;
 }
 
 static void fail_handshake(TLS13_Connection_connection c) {
   if (c == NULL) {
     return;
   }
-  c->handshake_failed = true;
   if (c->fd >= 0) {
     tls13_io_close_fd(c->fd);
     c->fd = -1;
@@ -1104,12 +1102,10 @@ bool TLS13_Connection_External_client_connect(
       client_key == NULL || client_iv == NULL || server_key == NULL || server_iv == NULL) {
     return false;
   }
-  c->handshake_failed = false;
-
   bool ok = TLS13_Handshake_Driver_run_client_handshake(
       (TLS13_Handshake_handshake_context)c, ch);
 
-  if (!ok || c->handshake_failed || !c->application_ready) {
+  if (!ok || !c->application_ready) {
     fail_handshake(c);
     return false;
   }
