@@ -14,9 +14,9 @@ fn rec ensure_pending_handshake_message_with_fuel
   (ctx: E.context)
   (ch: IO.channel)
   (fuel: U8.t)
-  requires E.is_context ctx ** IO.is_channel ch
+  requires E.is_context ctx 'p ** IO.is_channel ch
   returns ok: bool
-  ensures E.is_context ctx ** IO.is_channel ch
+  ensures E.is_context ctx 'p ** IO.is_channel ch
   decreases (U8.v fuel)
 {
   let pending = E.pending_handshake_message_complete ctx;
@@ -36,17 +36,18 @@ fn rec ensure_pending_handshake_message_with_fuel
 }
 
 fn ensure_pending_handshake_message (ctx: E.context) (ch: IO.channel)
-  requires E.is_context ctx ** IO.is_channel ch
+  requires E.is_context ctx 'p ** IO.is_channel ch
   returns ok: bool
-  ensures E.is_context ctx ** IO.is_channel ch
+  ensures E.is_context ctx 'p ** IO.is_channel ch
 {
   ensure_pending_handshake_message_with_fuel ctx ch max_encrypted_records_per_message
 }
 
 fn recv_encrypted_handshake (ctx: E.context) (ch: IO.channel)
-  requires E.is_context ctx ** IO.is_channel ch
+  requires E.is_context ctx 'p ** IO.is_channel ch
   returns ok: bool
-  ensures E.is_context ctx ** IO.is_channel ch
+  ensures exists* p'. E.is_context ctx p' ** IO.is_channel ch **
+          pure (ok ==> p' == E.Complete)
 {
   E.reset_encrypted_handshake ctx;
 

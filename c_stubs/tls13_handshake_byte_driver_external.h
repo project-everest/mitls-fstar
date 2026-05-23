@@ -10,17 +10,21 @@ typedef struct TLS13_Handshake_ByteDriver_External_context_s
     *TLS13_Handshake_ByteDriver_External_context;
 
 void TLS13_Handshake_ByteDriver_External_reset_encrypted_handshake(
-    TLS13_Handshake_ByteDriver_External_context ctx);
+    TLS13_Handshake_ByteDriver_External_context ctx,
+    void *old_progress);
 
 bool TLS13_Handshake_ByteDriver_External_read_next_encrypted_handshake_record(
     TLS13_Handshake_ByteDriver_External_context ctx,
-    TLS13_IO_channel ch);
+    TLS13_IO_channel ch,
+    void *progress);
 
 bool TLS13_Handshake_ByteDriver_External_pending_handshake_message_complete(
-    TLS13_Handshake_ByteDriver_External_context ctx);
+    TLS13_Handshake_ByteDriver_External_context ctx,
+    void *progress);
 
 uint8_t TLS13_Handshake_ByteDriver_External_pending_handshake_message_type(
-    TLS13_Handshake_ByteDriver_External_context ctx);
+    TLS13_Handshake_ByteDriver_External_context ctx,
+    void *progress);
 
 bool TLS13_Handshake_ByteDriver_External_accept_encrypted_extensions(
     TLS13_Handshake_ByteDriver_External_context ctx);
@@ -35,6 +39,7 @@ bool TLS13_Handshake_ByteDriver_External_accept_finished(
     TLS13_Handshake_ByteDriver_External_context ctx);
 
 bool TLS13_Handshake_ByteDriver_External_encrypted_handshake_complete(
-    TLS13_Handshake_ByteDriver_External_context ctx);
+    TLS13_Handshake_ByteDriver_External_context ctx,
+    void *progress);
 
 #endif

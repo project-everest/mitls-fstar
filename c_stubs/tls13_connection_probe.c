@@ -1708,7 +1708,9 @@ bool TLS13_Connection_External_client_close(
 
 #ifdef TLS13_CONNECTION_PROBE_USE_EXTRACTED_HANDSHAKE_BYTE_DRIVER
 void TLS13_Handshake_ByteDriver_External_reset_encrypted_handshake(
-    TLS13_Handshake_ByteDriver_External_context ctx) {
+    TLS13_Handshake_ByteDriver_External_context ctx,
+    void *old_progress) {
+  (void)old_progress;
   TLS13_Connection_connection c = (TLS13_Connection_connection)ctx;
   if (c == NULL) {
     return;
@@ -1737,8 +1739,10 @@ void TLS13_Handshake_ByteDriver_External_reset_encrypted_handshake(
 
 bool TLS13_Handshake_ByteDriver_External_read_next_encrypted_handshake_record(
     TLS13_Handshake_ByteDriver_External_context ctx,
-    TLS13_IO_channel ch) {
+    TLS13_IO_channel ch,
+    void *progress) {
   (void)ch;
+  (void)progress;
   TLS13_Connection_connection c = (TLS13_Connection_connection)ctx;
   if (!handshake_can_continue(c) || c->fd < 0) {
     return false;
@@ -1747,7 +1751,9 @@ bool TLS13_Handshake_ByteDriver_External_read_next_encrypted_handshake_record(
 }
 
 bool TLS13_Handshake_ByteDriver_External_pending_handshake_message_complete(
-    TLS13_Handshake_ByteDriver_External_context ctx) {
+    TLS13_Handshake_ByteDriver_External_context ctx,
+    void *progress) {
+  (void)progress;
   TLS13_Connection_connection c = (TLS13_Connection_connection)ctx;
   uint8_t handshake_type = 0;
   uint32_t handshake_body_len = 0;
@@ -1756,7 +1762,9 @@ bool TLS13_Handshake_ByteDriver_External_pending_handshake_message_complete(
 }
 
 uint8_t TLS13_Handshake_ByteDriver_External_pending_handshake_message_type(
-    TLS13_Handshake_ByteDriver_External_context ctx) {
+    TLS13_Handshake_ByteDriver_External_context ctx,
+    void *progress) {
+  (void)progress;
   TLS13_Connection_connection c = (TLS13_Connection_connection)ctx;
   uint8_t handshake_type = 0;
   uint32_t handshake_body_len = 0;
@@ -1887,7 +1895,9 @@ bool TLS13_Handshake_ByteDriver_External_accept_finished(
 }
 
 bool TLS13_Handshake_ByteDriver_External_encrypted_handshake_complete(
-    TLS13_Handshake_ByteDriver_External_context ctx) {
+    TLS13_Handshake_ByteDriver_External_context ctx,
+    void *progress) {
+  (void)progress;
   TLS13_Connection_connection c = (TLS13_Connection_connection)ctx;
   return c != NULL && c->saw_finished && c->saw_encrypted_extensions;
 }
