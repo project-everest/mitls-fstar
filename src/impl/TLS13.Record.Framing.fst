@@ -56,3 +56,28 @@ fn encode_inner_plaintext_no_padding
   assert (pure (Seq.length copied == SZ.v out_len));
   out.(plain_len) <- content_type;
 }
+
+fn decode_inner_plaintext_no_padding
+  (inner: array U8.t)
+  (inner_len: SZ.t)
+  (content_type_out: array U8.t)
+  (content_type_out_len: SZ.t)
+  requires pts_to inner 'inner_bytes **
+           pts_to content_type_out 'old_content_type **
+           pure (B.length 'inner_bytes == SZ.v inner_len /\
+                 B.length 'old_content_type == SZ.v content_type_out_len /\
+                 SZ.v inner_len > 0 /\
+                 SZ.v content_type_out_len == 1)
+  returns payload_len: (p:SZ.t{SZ.v p + 1 == SZ.v inner_len})
+  ensures exists* content_type_bytes.
+          pts_to inner 'inner_bytes **
+          pts_to content_type_out content_type_bytes **
+          pure (B.length content_type_bytes == 1)
+{
+  let payload_len = SZ.(inner_len -^ 1sz);
+  pts_to_len inner;
+  pts_to_len content_type_out;
+  let content_type = inner.(payload_len);
+  content_type_out.(0sz) <- content_type;
+  payload_len
+}

@@ -1353,15 +1353,20 @@ bool TLS13_Connection_External_client_read_exact(
       return false;
     }
 
-    uint8_t inner_content_type = 0;
-    size_t response_len = 0;
-    if (!tls13_wire_decode_inner_plaintext(
-            inner_plaintext, inner_plaintext_len, &inner_content_type, &response_len)) {
+    uint8_t inner_content_type_buf[1] = {0};
+    if (inner_plaintext_len == 0) {
       TLS13_Record_record_state_free(record_state);
       fprintf(stderr, "failed to decode application-data response record\n");
       c->application_ready = false;
       return false;
     }
+    size_t response_len =
+        TLS13_Record_Framing_decode_inner_plaintext_no_padding(
+            inner_plaintext,
+            inner_plaintext_len,
+            inner_content_type_buf,
+            sizeof inner_content_type_buf);
+    uint8_t inner_content_type = inner_content_type_buf[0];
     if (inner_content_type == 22) {
       continue;
     }
