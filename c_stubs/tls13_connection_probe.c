@@ -42,7 +42,6 @@ struct TLS13_Connection_connection_s {
   uint16_t port;
   const char *ca_pem_path;
   int fd;
-  bool application_ready;
   tls13_peer_identity *peer;
   TLS13_Record_record_state server_handshake_record_state;
   TLS13_Handshake_FlightState_flight_state server_handshake_flight_state;
@@ -270,7 +269,7 @@ static TLS13_Connection_connection from_handshake_context(
 }
 
 static bool handshake_can_continue(TLS13_Connection_connection c) {
-  return c != NULL && c->fd >= 0 && !c->application_ready;
+  return c != NULL && c->fd >= 0;
 }
 
 static void fail_handshake(TLS13_Connection_connection c) {
@@ -474,7 +473,7 @@ static void probe_handshake_send_client_hello(
   (void)erased_state_ref;
   (void)erased_state;
   TLS13_Connection_connection c = from_handshake_context(ctx);
-  if (c == NULL || c->application_ready || c->fd >= 0) {
+  if (c == NULL || c->fd >= 0) {
     fail_handshake(c);
     return;
   }
@@ -961,7 +960,6 @@ static bool probe_handshake_send_client_finished(
     return false;
   }
 
-  c->application_ready = true;
   return true;
 }
 
@@ -1098,14 +1096,14 @@ bool TLS13_Connection_External_client_connect(
   (void)old_client_iv;
   (void)old_server_key;
   (void)old_server_iv;
-  if (c == NULL || c->application_ready || c->fd >= 0 ||
+  if (c == NULL || c->fd >= 0 ||
       client_key == NULL || client_iv == NULL || server_key == NULL || server_iv == NULL) {
     return false;
   }
   bool ok = TLS13_Handshake_Driver_run_client_handshake(
       (TLS13_Handshake_handshake_context)c, ch);
 
-  if (!ok || !c->application_ready) {
+  if (!ok) {
     fail_handshake(c);
     return false;
   }
@@ -1174,7 +1172,7 @@ bool TLS13_Connection_External_client_write_application_record(
   (void)key_bytes;
   (void)iv_bytes;
   (void)bytes;
-  if (c == NULL || !c->application_ready || c->fd < 0 ||
+  if (c == NULL || c->fd < 0 ||
       record_state.key == NULL || record_state.iv == NULL ||
       record_state.seq == NULL || record_state.installed == NULL ||
       key == NULL || iv == NULL || buf == NULL ||
@@ -1191,7 +1189,6 @@ bool TLS13_Connection_External_client_write_application_record(
   if (sizeof record < record_len ||
       chunk_len > sizeof inner_plaintext - 1u ||
       ciphertext_len > UINT16_MAX) {
-    c->application_ready = false;
     return false;
   }
   TLS13_Record_Framing_serialize_application_data_header(
@@ -1216,7 +1213,6 @@ bool TLS13_Connection_External_client_write_application_record(
           record + TLS13_WIRE_RECORD_HEADER_LEN) ||
       write_all_fd(c->fd, record, record_len) != 0) {
     fprintf(stderr, "failed to send application-data record\n");
-    c->application_ready = false;
     return false;
   }
   return true;
@@ -1241,7 +1237,7 @@ size_t TLS13_Connection_External_client_read_application_record(
   (void)key_bytes;
   (void)iv_bytes;
   (void)old_bytes;
-  if (c == NULL || !c->application_ready || c->fd < 0 ||
+  if (c == NULL || c->fd < 0 ||
       record_state.key == NULL || record_state.iv == NULL ||
       record_state.seq == NULL || record_state.installed == NULL ||
       key == NULL || iv == NULL || out == NULL ||
@@ -1267,7 +1263,6 @@ size_t TLS13_Connection_External_client_read_application_record(
       fragment_len < 16 ||
       (size_t)fragment_len - 16u > sizeof inner_plaintext) {
     fprintf(stderr, "failed to read application-data response record\n");
-    c->application_ready = false;
     return 0;
   }
 
@@ -1283,14 +1278,12 @@ size_t TLS13_Connection_External_client_read_application_record(
           fragment_len,
           inner_plaintext)) {
     fprintf(stderr, "failed to decrypt application-data response record\n");
-    c->application_ready = false;
     return 0;
   }
 
   uint8_t inner_content_type_buf[1] = {0};
   if (inner_plaintext_len == 0) {
     fprintf(stderr, "failed to decode application-data response record\n");
-    c->application_ready = false;
     return 0;
   }
   size_t response_len =
@@ -1305,7 +1298,6 @@ size_t TLS13_Connection_External_client_read_application_record(
   }
   if (inner_content_type != 23 || response_len > remaining) {
     fprintf(stderr, "unexpected application-data response record\n");
-    c->application_ready = false;
     return 0;
   }
   memcpy(out + offset, inner_plaintext, response_len);
@@ -1323,7 +1315,6 @@ bool TLS13_Connection_External_client_close(
     tls13_io_close_fd(c->fd);
     c->fd = -1;
   }
-  c->application_ready = false;
   return true;
 }
 
