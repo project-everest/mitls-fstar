@@ -65,24 +65,22 @@ bool TLS13_Connection_External_client_connect(
   return c->connect_ok;
 }
 
-bool TLS13_Connection_External_client_write_application_record(
+bool TLS13_Connection_External_client_write_raw_record(
     TLS13_Connection_External_connection c,
     TLS13_IO_channel ch,
-    TLS13_Record_record_state record_state,
-    uint8_t *buf,
-    size_t total_len,
-    size_t offset,
-    size_t chunk_len,
-    void *record_state_s,
-    void *bytes) {
+    uint8_t *header,
+    size_t header_len,
+    uint8_t *cipher,
+    size_t cipher_len,
+    void *header_bytes,
+    void *cipher_bytes) {
   (void)ch;
-  (void)record_state;
-  (void)buf;
-  (void)total_len;
-  (void)offset;
-  (void)chunk_len;
-  (void)record_state_s;
-  (void)bytes;
+  (void)header;
+  (void)header_len;
+  (void)cipher;
+  (void)cipher_len;
+  (void)header_bytes;
+  (void)cipher_bytes;
   c->write_record_calls++;
   return c->write_record_ok;
 }

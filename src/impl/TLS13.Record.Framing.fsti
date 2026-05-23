@@ -38,6 +38,25 @@ fn encode_inner_plaintext_no_padding
                         (SZ.v out_len)
                         content_type)
 
+fn encode_inner_plaintext_no_padding_slice
+  (plain: array U8.t)
+  (plain_total_len: SZ.t)
+  (plain_offset: SZ.t)
+  (plain_len: SZ.t)
+  (content_type: U8.t)
+  (out: array U8.t)
+  (out_len: SZ.t)
+  requires pts_to plain 'plain_bytes **
+           pts_to out 'old_bytes **
+           pure (B.length 'plain_bytes == SZ.v plain_total_len /\
+                 B.length 'old_bytes == SZ.v out_len /\
+                 SZ.v out_len == SZ.v plain_len + 1 /\
+                 SZ.v plain_offset + SZ.v plain_len <= SZ.v plain_total_len)
+  ensures exists* out_bytes.
+          pts_to plain 'plain_bytes **
+          pts_to out out_bytes **
+          pure (B.length out_bytes == SZ.v out_len)
+
 fn decode_inner_plaintext_no_padding
   (inner: array U8.t)
   (inner_len: SZ.t)

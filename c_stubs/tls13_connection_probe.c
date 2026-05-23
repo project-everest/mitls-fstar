@@ -922,7 +922,8 @@ static bool probe_handshake_send_client_finished(
   TLS13_Record_Framing_serialize_application_data_header(
       (uint16_t)client_ciphertext_len,
       client_record,
-      TLS13_WIRE_RECORD_HEADER_LEN);
+      TLS13_WIRE_RECORD_HEADER_LEN,
+      NULL);
   TLS13_Record_Framing_encode_inner_plaintext_no_padding(
       client_finished,
       sizeof client_finished,
@@ -1132,53 +1133,23 @@ bool TLS13_Connection_External_client_connect(
   return true;
 }
 
-bool TLS13_Connection_External_client_write_application_record(
+bool TLS13_Connection_External_client_write_raw_record(
     TLS13_Connection_External_connection c,
     TLS13_IO_channel ch,
-    TLS13_Record_record_state record_state,
-    uint8_t *buf,
-    size_t total_len,
-    size_t offset,
-    size_t chunk_len,
-    void *record_state_s,
-    void *bytes) {
+    uint8_t *header,
+    size_t header_len,
+    uint8_t *cipher,
+    size_t cipher_len,
+    void *header_bytes,
+    void *cipher_bytes) {
   (void)ch;
-  (void)record_state_s;
-  (void)bytes;
-  if (c == NULL || c->fd < 0 || buf == NULL ||
-      chunk_len == 0 || chunk_len > PROBE_APP_RECORD_CHUNK_LEN ||
-      offset > total_len || chunk_len > total_len - offset) {
+  (void)header_bytes;
+  (void)cipher_bytes;
+  if (c == NULL || c->fd < 0 || header == NULL || cipher == NULL) {
     return false;
   }
-
-  uint8_t record[20000];
-  uint8_t inner_plaintext[PROBE_APP_RECORD_CHUNK_LEN + 1u];
-  size_t inner_plaintext_len = chunk_len + 1u;
-  size_t ciphertext_len = inner_plaintext_len + 16u;
-  size_t record_len = TLS13_WIRE_RECORD_HEADER_LEN + ciphertext_len;
-  if (sizeof record < record_len ||
-      chunk_len > sizeof inner_plaintext - 1u ||
-      ciphertext_len > UINT16_MAX) {
-    return false;
-  }
-  TLS13_Record_Framing_serialize_application_data_header(
-      (uint16_t)ciphertext_len,
-      record,
-      TLS13_WIRE_RECORD_HEADER_LEN);
-  TLS13_Record_Framing_encode_inner_plaintext_no_padding(
-      buf + offset,
-      chunk_len,
-      23,
-      inner_plaintext,
-      inner_plaintext_len);
-  if (!TLS13_Record_seal_application(
-          record_state,
-          record,
-          TLS13_WIRE_RECORD_HEADER_LEN,
-          inner_plaintext,
-          inner_plaintext_len,
-          record + TLS13_WIRE_RECORD_HEADER_LEN) ||
-      write_all_fd(c->fd, record, record_len) != 0) {
+  if (write_all_fd(c->fd, header, header_len) != 0 ||
+      write_all_fd(c->fd, cipher, cipher_len) != 0) {
     fprintf(stderr, "failed to send application-data record\n");
     return false;
   }

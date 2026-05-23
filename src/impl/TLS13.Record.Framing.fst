@@ -8,6 +8,7 @@ open Pulse.Lib.Array.PtsTo
 module Arr = Pulse.Lib.Array
 module B = TLS13.Bytes
 module Cast = FStar.Int.Cast
+module Ref = Pulse.Lib.Reference
 module Seq = FStar.Seq
 module SZ = FStar.SizeT
 module U16 = FStar.UInt16
@@ -58,6 +59,55 @@ fn encode_inner_plaintext_no_padding
   with copied. assert (pts_to out copied);
   assert (pure (Seq.length copied == SZ.v out_len));
   out.(plain_len) <- content_type;
+}
+
+fn encode_inner_plaintext_no_padding_slice
+  (plain: array U8.t)
+  (plain_total_len: SZ.t)
+  (plain_offset: SZ.t)
+  (plain_len: SZ.t)
+  (content_type: U8.t)
+  (out: array U8.t)
+  (out_len: SZ.t)
+  requires pts_to plain 'plain_bytes **
+           pts_to out 'old_bytes **
+           pure (B.length 'plain_bytes == SZ.v plain_total_len /\
+                 B.length 'old_bytes == SZ.v out_len /\
+                 SZ.v out_len == SZ.v plain_len + 1 /\
+                 SZ.v plain_offset + SZ.v plain_len <= SZ.v plain_total_len)
+  ensures exists* out_bytes.
+          pts_to plain 'plain_bytes **
+          pts_to out out_bytes **
+          pure (B.length out_bytes == SZ.v out_len)
+{
+  pts_to_len plain;
+  pts_to_len out;
+  let mut i = 0sz;
+  while (SZ.lt !i plain_len)
+    invariant exists* vi out_bytes.
+      Ref.pts_to i vi **
+      pts_to plain 'plain_bytes **
+      pts_to out out_bytes **
+      pure (SZ.v vi <= SZ.v plain_len /\
+            B.length 'plain_bytes == SZ.v plain_total_len /\
+            B.length out_bytes == SZ.v out_len /\
+            SZ.v out_len == SZ.v plain_len + 1 /\
+            SZ.v plain_offset + SZ.v plain_len <= SZ.v plain_total_len)
+  {
+    let vi = !i;
+    assert (pure (SZ.v vi < SZ.v plain_len));
+    assert (pure (SZ.v plain_offset + SZ.v vi < SZ.v plain_total_len));
+    let src_index = SZ.(plain_offset +^ vi);
+    let b = plain.(src_index);
+    out.(vi) <- b;
+    i := SZ.(vi +^ 1sz);
+  };
+  with copied. assert (pts_to out copied);
+  assert (pure (Seq.length copied == SZ.v out_len));
+  assert (pure (SZ.v plain_len < SZ.v out_len));
+  out.(plain_len) <- content_type;
+  with final_bytes. assert (pts_to out final_bytes);
+  assert (pure (Seq.length final_bytes == SZ.v out_len));
 }
 
 fn decode_inner_plaintext_no_padding

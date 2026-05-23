@@ -59,28 +59,24 @@ fn client_connect
                 B.length server_key_bytes == 32 /\
                 B.length server_iv_bytes == 12)
 
-fn client_write_application_record
+fn client_write_raw_record
   (c: connection)
   (ch: IO.channel)
-  (record_state: Rec.record_state)
-  (buf: array U8.t)
-  (total_len: SZ.t)
-  (offset: SZ.t)
-  (chunk_len: SZ.t)
+  (header: array U8.t)
+  (header_len: SZ.t)
+  (cipher: array U8.t)
+  (cipher_len: SZ.t)
   requires   is_connection c **
-  Rec.is_record_state record_state 'record_s **
   IO.is_channel ch **
-  pts_to buf 'bytes **
-  pure (B.length 'bytes == SZ.v total_len /\
-        SZ.v chunk_len > 0 /\
-                 SZ.v chunk_len <= 4096 /\
-                 SZ.v offset + SZ.v chunk_len <= SZ.v total_len)
+  pts_to header 'header_bytes **
+  pts_to cipher 'cipher_bytes **
+  pure (B.length 'header_bytes == SZ.v header_len /\
+        B.length 'cipher_bytes == SZ.v cipher_len)
   returns ok: bool
-  ensures exists* record_s'.
-          is_connection c **
-          Rec.is_record_state record_state record_s' **
+  ensures is_connection c **
           IO.is_channel ch **
-          pts_to buf 'bytes
+          pts_to header 'header_bytes **
+          pts_to cipher 'cipher_bytes
 
 fn client_read_application_record
   (c: connection)

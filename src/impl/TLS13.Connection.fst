@@ -9,10 +9,12 @@ open Pulse.Lib.Box { box, (!), (:=) }
 module Arr = Pulse.Lib.Array
 module B = TLS13.Bytes
 module Box = Pulse.Lib.Box
+module Cast = FStar.Int.Cast
 module E = TLS13.Connection.External
 module H = TLS13.Handshake.Spec
 module IO = TLS13.IO
 module Rec = TLS13.Record
+module RF = TLS13.Record.Framing
 module S = TLS13.StateMachine
 module ST = TLS13.State
 module SZ = FStar.SizeT
@@ -274,15 +276,43 @@ fn rec client_write_application_records
     assert (pure (SZ.v chunk_len > 0));
     assert (pure (SZ.v chunk_len <= 4096));
     assert (pure (SZ.v offset + SZ.v chunk_len <= SZ.v total_len));
+    let inner_len = SZ.(chunk_len +^ 1sz);
+    let cipher_len = SZ.(inner_len +^ 16sz);
+    let mut header = [| 0uy; 5sz |];
+    let mut inner_plaintext = [| 0uy; inner_len |];
+    let mut cipher = [| 0uy; cipher_len |];
+    assert (pure (SZ.v cipher_len <= 4113));
+    RF.serialize_application_data_header
+      (Cast.uint32_to_uint16 (SZ.sizet_to_uint32 cipher_len))
+      header
+      5sz;
+    RF.encode_inner_plaintext_no_padding_slice
+      buf
+      total_len
+      offset
+      chunk_len
+      23uy
+      inner_plaintext
+      inner_len;
+    with inner_bytes. assert (pts_to inner_plaintext inner_bytes);
+    assert (pure (B.length inner_bytes == SZ.v inner_len));
+    let sealed = Rec.seal_application_runtime
+      record_state
+      header
+      5sz
+      inner_plaintext
+      inner_len
+      cipher;
+    with header_bytes. assert (pts_to header header_bytes);
+    with cipher_bytes. assert (pts_to cipher cipher_bytes);
+    assert (pure (B.length header_bytes == 5));
+    assert (pure (B.length cipher_bytes == SZ.v cipher_len));
     let ok =
-      E.client_write_application_record
-        backend
-        ch
-        record_state
-        buf
-        total_len
-        offset
-        chunk_len;
+      if sealed {
+        E.client_write_raw_record backend ch header 5sz cipher cipher_len
+      } else {
+        false
+      };
     if ok {
       let offset' = SZ.(offset +^ chunk_len);
       let remaining' = SZ.(remaining -^ chunk_len);

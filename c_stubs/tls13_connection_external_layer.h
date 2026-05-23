@@ -6,10 +6,17 @@
 #include <stdint.h>
 
 #include "TLS13_Record.h"
+#include "TLS13_Record_Framing.h"
 
 #define TLS13_Record_record_state_free(st, erased) TLS13_Record_record_state_free(st)
 #define TLS13_Record_install_application_keys_runtime(st, key, iv, erased_st, key_bytes, iv_bytes) \
     TLS13_Record_install_application_keys_runtime(st, key, iv)
+#define TLS13_Record_seal_application_runtime(st, aad, aad_len, plain, plain_len, out, erased_st, aad_bytes, plain_bytes, old_out) \
+    TLS13_Record_seal_application_runtime(st, aad, aad_len, plain, plain_len, out)
+#define TLS13_Record_Framing_serialize_application_data_header(fragment_len, out, out_len, old_out) \
+    TLS13_Record_Framing_serialize_application_data_header(fragment_len, out, out_len)
+#define TLS13_Record_Framing_encode_inner_plaintext_no_padding_slice(plain, plain_total_len, plain_offset, plain_len, content_type, out, out_len, plain_bytes, old_out) \
+    TLS13_Record_Framing_encode_inner_plaintext_no_padding_slice(plain, plain_total_len, plain_offset, plain_len, content_type, out, out_len)
 
 typedef struct TLS13_IO_channel_s *TLS13_IO_channel;
 typedef void *TLS13_X509_Spec_trust_store;
@@ -48,16 +55,15 @@ bool TLS13_Connection_External_client_connect(
     void *old_server_key,
     void *old_server_iv);
 
-bool TLS13_Connection_External_client_write_application_record(
+bool TLS13_Connection_External_client_write_raw_record(
     TLS13_Connection_External_connection c,
     TLS13_IO_channel ch,
-    TLS13_Record_record_state record_state,
-    uint8_t *buf,
-    size_t total_len,
-    size_t offset,
-    size_t chunk_len,
-    void *record_state_s,
-    void *bytes);
+    uint8_t *header,
+    size_t header_len,
+    uint8_t *cipher,
+    size_t cipher_len,
+    void *header_bytes,
+    void *cipher_bytes);
 
 size_t TLS13_Connection_External_client_read_application_record(
     TLS13_Connection_External_connection c,
