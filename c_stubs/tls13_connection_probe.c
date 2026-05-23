@@ -25,6 +25,7 @@
 #define PROBE_APP_RECORD_CHUNK_LEN 4096u
 #define PROBE_CLIENT_HELLO_CAPACITY 512u
 #define PROBE_SERVER_HELLO_CAPACITY 4096u
+#define PROBE_SERVER_HANDSHAKE_CAPACITY 32768u
 #define TLS13_WIRE_RECORD_HEADER_LEN 5u
 #define TLS13_WIRE_HANDSHAKE_HEADER_LEN 4u
 #define TLS13_WIRE_CERTIFICATE_VERIFY_INPUT_LEN 130u
@@ -43,7 +44,6 @@ struct TLS13_Connection_connection_s {
   int fd;
   bool handshake_failed;
   bool application_ready;
-  uint8_t server_handshake_messages[32768];
   tls13_peer_identity *peer;
   TLS13_Record_record_state server_handshake_record_state;
   bool server_handshake_record_state_initialized;
@@ -316,6 +316,19 @@ static bool copy_hello_messages(
   return true;
 }
 
+static bool copy_server_handshake_messages(
+    TLS13_Connection_connection c,
+    uint8_t messages[PROBE_SERVER_HANDSHAKE_CAPACITY]) {
+  if (c == NULL || messages == NULL) {
+    return false;
+  }
+  TLS13_Handshake_FlightState_copy_server_handshake(
+      c->server_handshake_flight_state,
+      messages,
+      PROBE_SERVER_HANDSHAKE_CAPACITY);
+  return true;
+}
+
 static bool read_next_encrypted_handshake_record(TLS13_Connection_connection c) {
   uint8_t encrypted_header[TLS13_WIRE_RECORD_HEADER_LEN];
   uint8_t encrypted_fragment[20000];
@@ -369,19 +382,28 @@ static bool read_next_encrypted_handshake_record(TLS13_Connection_connection c) 
   uint8_t inner_content_type = inner_content_type_buf[0];
   size_t server_handshake_len =
       TLS13_Handshake_FlightState_handshake_len(c->server_handshake_flight_state);
+  uint8_t server_handshake_messages[PROBE_SERVER_HANDSHAKE_CAPACITY];
+  if (!copy_server_handshake_messages(c, server_handshake_messages)) {
+    fprintf(stderr, "failed to copy OpenSSL handshake messages\n");
+    return false;
+  }
   if (inner_content_type != 22 ||
-      handshake_plaintext_len > sizeof c->server_handshake_messages - server_handshake_len ||
+      handshake_plaintext_len > sizeof server_handshake_messages - server_handshake_len ||
       !TLS13_Handshake_FlightState_append_handshake_len(
           c->server_handshake_flight_state,
           handshake_plaintext_len,
-          sizeof c->server_handshake_messages)) {
+          sizeof server_handshake_messages)) {
     fprintf(stderr, "failed to decode OpenSSL handshake inner plaintext\n");
     return false;
   }
   memcpy(
-      c->server_handshake_messages + server_handshake_len,
+      server_handshake_messages + server_handshake_len,
       inner_plaintext,
       handshake_plaintext_len);
+  TLS13_Handshake_FlightState_set_server_handshake(
+      c->server_handshake_flight_state,
+      server_handshake_messages,
+      sizeof server_handshake_messages);
   return true;
 }
 
@@ -401,10 +423,14 @@ static bool pending_handshake_metadata(
     return false;
   }
 
+  uint8_t server_handshake_messages[PROBE_SERVER_HANDSHAKE_CAPACITY];
+  if (!copy_server_handshake_messages(c, server_handshake_messages)) {
+    return false;
+  }
   uint8_t handshake_type_buf[1] = {0};
   uint8_t handshake_body_len_buf[3] = {0};
   if (!TLS13_Handshake_Framing_parse_handshake_header(
-          c->server_handshake_messages + parsed_handshake_len,
+          server_handshake_messages + parsed_handshake_len,
           server_handshake_len - parsed_handshake_len,
           handshake_type_buf,
           sizeof handshake_type_buf,
@@ -424,6 +450,7 @@ static bool pending_handshake_metadata(
 static bool pending_handshake_body(
     TLS13_Connection_connection c,
     uint8_t expected_type,
+    uint8_t messages[PROBE_SERVER_HANDSHAKE_CAPACITY],
     const uint8_t **body,
     uint32_t *body_len,
     size_t *message_len) {
@@ -434,7 +461,10 @@ static bool pending_handshake_body(
   }
   size_t parsed_handshake_len =
       TLS13_Handshake_FlightState_parsed_len(c->server_handshake_flight_state);
-  *body = c->server_handshake_messages +
+  if (!copy_server_handshake_messages(c, messages)) {
+    return false;
+  }
+  *body = messages +
           parsed_handshake_len +
           TLS13_WIRE_HANDSHAKE_HEADER_LEN;
   return true;
@@ -675,7 +705,13 @@ static bool probe_handshake_validate_certificate(
       TLS13_Handshake_FlightState_certificate_leaf_offset(c->server_handshake_flight_state);
   size_t leaf_der_len =
       TLS13_Handshake_FlightState_certificate_leaf_len(c->server_handshake_flight_state);
-  const uint8_t *leaf_der = c->server_handshake_messages + leaf_der_offset;
+  uint8_t server_handshake_messages[PROBE_SERVER_HANDSHAKE_CAPACITY];
+  if (!copy_server_handshake_messages(c, server_handshake_messages)) {
+    free(ca_pem);
+    fail_handshake(c);
+    return false;
+  }
+  const uint8_t *leaf_der = server_handshake_messages + leaf_der_offset;
   bool ok = tls13_openssl_validate_leaf_der(
       "localhost", ca_pem, ca_pem_len, leaf_der, leaf_der_len, &c->peer);
   free(ca_pem);
@@ -718,12 +754,18 @@ static bool probe_handshake_recv_certificate_verify(
     fail_handshake(c);
     return false;
   }
+  uint8_t server_handshake_messages[PROBE_SERVER_HANDSHAKE_CAPACITY];
+  if (!copy_server_handshake_messages(c, server_handshake_messages)) {
+    fprintf(stderr, "failed to copy server handshake transcript bytes\n");
+    fail_handshake(c);
+    return false;
+  }
   if (compute_transcript_hash(
           client_hello,
           client_hello_len,
           server_hello_fragment,
           server_hello_len,
-          c->server_handshake_messages,
+          server_handshake_messages,
           TLS13_Handshake_FlightState_certificate_verify_offset(c->server_handshake_flight_state),
           transcript_hash) != 0) {
     fprintf(stderr, "failed to build CertificateVerify input\n");
@@ -743,7 +785,7 @@ static bool probe_handshake_recv_certificate_verify(
   size_t signature_len =
       TLS13_Handshake_FlightState_certificate_verify_signature_len(
           c->server_handshake_flight_state);
-  const uint8_t *signature = c->server_handshake_messages + signature_offset;
+  const uint8_t *signature = server_handshake_messages + signature_offset;
   if (!tls13_openssl_peer_verify_signature(
           c->peer,
           signature_scheme,
@@ -789,6 +831,12 @@ static bool probe_handshake_recv_server_finished(
     fail_handshake(c);
     return false;
   }
+  uint8_t server_handshake_messages[PROBE_SERVER_HANDSHAKE_CAPACITY];
+  if (!copy_server_handshake_messages(c, server_handshake_messages)) {
+    fprintf(stderr, "failed to copy server handshake transcript bytes\n");
+    fail_handshake(c);
+    return false;
+  }
   TLS13_Handshake_FlightState_copy_server_finished_verify_data(
       c->server_handshake_flight_state,
       server_finished_verify_data,
@@ -802,7 +850,7 @@ static bool probe_handshake_recv_server_finished(
           client_hello_len,
           server_hello_fragment,
           server_hello_len,
-          c->server_handshake_messages,
+          server_handshake_messages,
           TLS13_Handshake_FlightState_server_before_finished_len(c->server_handshake_flight_state),
           server_finished_verify_data,
           server_handshake_traffic_secret) != 0) {
@@ -842,12 +890,18 @@ static bool probe_handshake_send_client_finished(
     fail_handshake(c);
     return false;
   }
+  uint8_t server_handshake_messages[PROBE_SERVER_HANDSHAKE_CAPACITY];
+  if (!copy_server_handshake_messages(c, server_handshake_messages)) {
+    fprintf(stderr, "failed to copy server handshake transcript bytes\n");
+    fail_handshake(c);
+    return false;
+  }
   if (compute_transcript_hash(
           client_hello,
           client_hello_len,
           server_hello_fragment,
           server_hello_len,
-          c->server_handshake_messages,
+          server_handshake_messages,
           TLS13_Handshake_FlightState_server_through_finished_len(c->server_handshake_flight_state),
           transcript_hash_through_server_finished) != 0) {
     fprintf(stderr, "failed to hash transcript through server Finished\n");
@@ -1084,6 +1138,12 @@ bool TLS13_Connection_External_client_connect(
     fail_handshake(c);
     return false;
   }
+  uint8_t server_handshake_messages[PROBE_SERVER_HANDSHAKE_CAPACITY];
+  if (!copy_server_handshake_messages(c, server_handshake_messages)) {
+    fprintf(stderr, "failed to copy server handshake transcript bytes\n");
+    fail_handshake(c);
+    return false;
+  }
   TLS13_Handshake_FlightState_copy_handshake_secret(
       c->server_handshake_flight_state, handshake_secret, sizeof handshake_secret);
   if (compute_transcript_hash(
@@ -1091,7 +1151,7 @@ bool TLS13_Connection_External_client_connect(
           client_hello_len,
           server_hello_fragment,
           server_hello_len,
-          c->server_handshake_messages,
+          server_handshake_messages,
           TLS13_Handshake_FlightState_server_through_finished_len(c->server_handshake_flight_state),
           transcript_hash_through_server_finished) != 0 ||
       derive_application_keys(
@@ -1353,7 +1413,8 @@ bool TLS13_Handshake_ByteDriver_External_accept_encrypted_extensions(
   const uint8_t *body = NULL;
   uint32_t body_len = 0;
   size_t message_len = 0;
-  if (!pending_handshake_body(c, 8, &body, &body_len, &message_len) ||
+  uint8_t server_handshake_messages[PROBE_SERVER_HANDSHAKE_CAPACITY];
+  if (!pending_handshake_body(c, 8, server_handshake_messages, &body, &body_len, &message_len) ||
       !TLS13_Handshake_FlightState_accept_encrypted_extensions(
           c->server_handshake_flight_state, message_len)) {
     fprintf(stderr, "decrypted first OpenSSL handshake message is not EncryptedExtensions\n");
@@ -1370,7 +1431,8 @@ bool TLS13_Handshake_ByteDriver_External_accept_certificate(
   const uint8_t *body = NULL;
   uint32_t body_len = 0;
   size_t message_len = 0;
-  if (!pending_handshake_body(c, 11, &body, &body_len, &message_len)) {
+  uint8_t server_handshake_messages[PROBE_SERVER_HANDSHAKE_CAPACITY];
+  if (!pending_handshake_body(c, 11, server_handshake_messages, &body, &body_len, &message_len)) {
     fprintf(stderr, "failed to parse server Certificate\n");
     return false;
   }
@@ -1388,7 +1450,7 @@ bool TLS13_Handshake_ByteDriver_External_accept_certificate(
   }
   size_t leaf_offset = ((size_t)leaf_offset_bytes[0] << 8) | (size_t)leaf_offset_bytes[1];
   size_t leaf_len = ((size_t)leaf_len_bytes[0] << 8) | (size_t)leaf_len_bytes[1];
-  size_t certificate_body_offset = (size_t)(body - c->server_handshake_messages);
+  size_t certificate_body_offset = (size_t)(body - server_handshake_messages);
   TLS13_Handshake_FlightState_set_certificate_leaf(
       c->server_handshake_flight_state,
       certificate_body_offset + leaf_offset,
@@ -1407,7 +1469,8 @@ bool TLS13_Handshake_ByteDriver_External_accept_certificate_verify(
   const uint8_t *body = NULL;
   uint32_t body_len = 0;
   size_t message_len = 0;
-  if (!pending_handshake_body(c, 15, &body, &body_len, &message_len)) {
+  uint8_t server_handshake_messages[PROBE_SERVER_HANDSHAKE_CAPACITY];
+  if (!pending_handshake_body(c, 15, server_handshake_messages, &body, &body_len, &message_len)) {
     fprintf(stderr, "failed to parse server CertificateVerify\n");
     return false;
   }
@@ -1427,7 +1490,7 @@ bool TLS13_Handshake_ByteDriver_External_accept_certificate_verify(
       ((uint16_t)signature_scheme_bytes[0] << 8) | (uint16_t)signature_scheme_bytes[1];
   size_t signature_len =
       ((size_t)signature_len_bytes[0] << 8) | (size_t)signature_len_bytes[1];
-  size_t signature_body_offset = (size_t)(body - c->server_handshake_messages);
+  size_t signature_body_offset = (size_t)(body - server_handshake_messages);
   TLS13_Handshake_FlightState_set_certificate_verify_signature(
       c->server_handshake_flight_state,
       signature_scheme,
@@ -1447,7 +1510,8 @@ bool TLS13_Handshake_ByteDriver_External_accept_finished(
   const uint8_t *body = NULL;
   uint32_t body_len = 0;
   size_t message_len = 0;
-  if (!pending_handshake_body(c, 20, &body, &body_len, &message_len) ||
+  uint8_t server_handshake_messages[PROBE_SERVER_HANDSHAKE_CAPACITY];
+  if (!pending_handshake_body(c, 20, server_handshake_messages, &body, &body_len, &message_len) ||
       body_len != 32) {
     fprintf(stderr, "OpenSSL Finished has unexpected length\n");
     return false;

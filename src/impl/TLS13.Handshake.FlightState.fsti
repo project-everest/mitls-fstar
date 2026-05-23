@@ -87,6 +87,30 @@ fn server_hello_len (st: flight_state)
   returns len: SZ.t
   ensures is_flight_state st
 
+fn set_server_handshake
+  (st: flight_state)
+  (messages: array U8.t)
+  (messages_capacity: SZ.t)
+  requires is_flight_state st **
+           pts_to messages 'messages_bytes **
+           pure (B.length 'messages_bytes == SZ.v messages_capacity /\
+                 SZ.v messages_capacity == 32768)
+  ensures is_flight_state st **
+          pts_to messages 'messages_bytes
+
+fn copy_server_handshake
+  (st: flight_state)
+  (out: array U8.t)
+  (out_capacity: SZ.t)
+  requires is_flight_state st **
+           pts_to out 'old_out **
+           pure (B.length 'old_out == SZ.v out_capacity /\
+                 SZ.v out_capacity == 32768)
+  ensures exists* out_bytes.
+          is_flight_state st **
+          pts_to out out_bytes **
+          pure (B.length out_bytes == 32768)
+
 fn set_handshake_secret
   (st: flight_state)
   (secret: array U8.t)
