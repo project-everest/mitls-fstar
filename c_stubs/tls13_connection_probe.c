@@ -47,8 +47,6 @@ struct TLS13_Connection_connection_s {
   size_t server_hello_len;
   uint8_t client_handshake_key[32];
   uint8_t client_handshake_iv[12];
-  uint8_t server_handshake_key[32];
-  uint8_t server_handshake_iv[12];
   uint8_t server_handshake_messages[32768];
   tls13_peer_identity *peer;
   TLS13_Record_record_state server_handshake_record_state;
@@ -518,6 +516,8 @@ static bool probe_handshake_recv_server_hello(
   uint8_t handshake_secret[32];
   uint8_t client_handshake_traffic_secret[32];
   uint8_t server_handshake_traffic_secret[32];
+  uint8_t server_handshake_key[32];
+  uint8_t server_handshake_iv[12];
   if (derive_server_handshake_keys(
           c->client_hello,
           c->client_hello_len,
@@ -529,8 +529,8 @@ static bool probe_handshake_recv_server_hello(
           server_handshake_traffic_secret,
           c->client_handshake_key,
           c->client_handshake_iv,
-          c->server_handshake_key,
-          c->server_handshake_iv) != 0) {
+          server_handshake_key,
+          server_handshake_iv) != 0) {
     fprintf(stderr, "failed to derive handshake traffic keys\n");
     fail_handshake(c);
     return false;
@@ -545,6 +545,12 @@ static bool probe_handshake_recv_server_hello(
       c->server_handshake_flight_state,
       server_handshake_traffic_secret,
       sizeof server_handshake_traffic_secret);
+  TLS13_Handshake_FlightState_set_server_handshake_key_iv(
+      c->server_handshake_flight_state,
+      server_handshake_key,
+      sizeof server_handshake_key,
+      server_handshake_iv,
+      sizeof server_handshake_iv);
   return true;
 }
 
@@ -1170,8 +1176,16 @@ void TLS13_Handshake_ByteDriver_External_reset_encrypted_handshake(
     c->server_handshake_record_state = TLS13_Record_record_state_new();
     c->server_handshake_record_state_initialized = true;
   }
+  uint8_t server_handshake_key[32] = {0};
+  uint8_t server_handshake_iv[12] = {0};
+  TLS13_Handshake_FlightState_copy_server_handshake_key_iv(
+      c->server_handshake_flight_state,
+      server_handshake_key,
+      sizeof server_handshake_key,
+      server_handshake_iv,
+      sizeof server_handshake_iv);
   TLS13_Record_install_keys(
-      c->server_handshake_record_state, 1, c->server_handshake_key, c->server_handshake_iv);
+      c->server_handshake_record_state, 1, server_handshake_key, server_handshake_iv);
 }
 
 bool TLS13_Handshake_ByteDriver_External_read_next_encrypted_handshake_record(
