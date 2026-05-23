@@ -16,3 +16,13 @@ void Pulse_Lib_Array_memcpy(
     memcpy(dst, src, len);
   }
 }
+
+void Pulse_Lib_Array_memcpy_l(
+    size_t len,
+    uint8_t *src,
+    uint8_t *dst,
+    void *src_bytes,
+    void *dst_bytes,
+    void *squash) {
+  Pulse_Lib_Array_memcpy(len, src, dst, src_bytes, dst_bytes, squash);
+}

@@ -8,6 +8,7 @@
 
 #ifdef TLS13_CONNECTION_PROBE_USE_EXTRACTED_CONNECTION_WRAPPER
 #include "TLS13_KeySchedule.h"
+#include "TLS13_Record_Framing.h"
 #include "TLS13_Record.h"
 #include "tls13_connection_external_layer.h"
 #endif
@@ -1262,8 +1263,12 @@ bool TLS13_Connection_External_client_write_all(
       c->application_ready = false;
       return false;
     }
-    memcpy(inner_plaintext, buf + sent, chunk_len);
-    inner_plaintext[chunk_len] = 23;
+    TLS13_Record_Framing_encode_inner_plaintext_no_padding(
+        buf + sent,
+        chunk_len,
+        23,
+        inner_plaintext,
+        inner_plaintext_len);
     if (!TLS13_Record_seal_application(
             record_state,
             record,

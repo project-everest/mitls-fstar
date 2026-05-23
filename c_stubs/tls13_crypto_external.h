@@ -15,6 +15,14 @@ void Pulse_Lib_Array_memcpy(
     void *dst_bytes,
     void *squash);
 
+void Pulse_Lib_Array_memcpy_l(
+    size_t len,
+    uint8_t *src,
+    uint8_t *dst,
+    void *src_bytes,
+    void *dst_bytes,
+    void *squash);
+
 void TLS13_Crypto_sha256_empty(uint8_t *out, void *old_out);
 
 void TLS13_Crypto_hmac_sha256(
