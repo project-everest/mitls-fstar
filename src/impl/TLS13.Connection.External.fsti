@@ -7,6 +7,7 @@ open Pulse.Lib.Array.PtsTo
 
 module B = TLS13.Bytes
 module IO = TLS13.IO
+module Rec = TLS13.Record
 module SZ = FStar.SizeT
 module U8 = FStar.UInt8
 module X = TLS13.X509.Spec
@@ -63,6 +64,7 @@ fn export_application_keys
 fn client_write_application_record
   (c: connection)
   (ch: IO.channel)
+  (record_state: Rec.record_state)
   (key: array U8.t)
   (iv: array U8.t)
   (buf: array U8.t)
@@ -70,6 +72,7 @@ fn client_write_application_record
   (offset: SZ.t)
   (chunk_len: SZ.t)
   requires is_connection c **
+           Rec.is_record_state record_state 'record_s **
            IO.is_channel ch **
            pts_to key 'key_bytes **
            pts_to iv 'iv_bytes **
@@ -81,7 +84,9 @@ fn client_write_application_record
                  SZ.v chunk_len <= 4096 /\
                  SZ.v offset + SZ.v chunk_len <= SZ.v total_len)
   returns ok: bool
-  ensures is_connection c **
+  ensures exists* record_s'.
+          is_connection c **
+          Rec.is_record_state record_state record_s' **
           IO.is_channel ch **
           pts_to key 'key_bytes **
           pts_to iv 'iv_bytes **
@@ -90,6 +95,7 @@ fn client_write_application_record
 fn client_read_application_record
   (c: connection)
   (ch: IO.channel)
+  (record_state: Rec.record_state)
   (key: array U8.t)
   (iv: array U8.t)
   (out: array U8.t)
@@ -97,6 +103,7 @@ fn client_read_application_record
   (offset: SZ.t)
   (remaining: SZ.t)
   requires is_connection c **
+           Rec.is_record_state record_state 'record_s **
            IO.is_channel ch **
            pts_to key 'key_bytes **
            pts_to iv 'iv_bytes **
@@ -107,8 +114,9 @@ fn client_read_application_record
                  SZ.v remaining > 0 /\
                  SZ.v offset + SZ.v remaining == SZ.v total_len)
   returns n: SZ.t
-  ensures exists* bytes.
+  ensures exists* record_s' bytes.
           is_connection c **
+          Rec.is_record_state record_state record_s' **
           IO.is_channel ch **
           pts_to key 'key_bytes **
           pts_to iv 'iv_bytes **

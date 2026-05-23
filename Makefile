@@ -507,11 +507,13 @@ test/test_connection_driver_bindings: test/test_connection_driver_bindings.c $(E
 test-connection-driver-bindings: test/test_connection_driver_bindings
 	./test/test_connection_driver_bindings
 
-test/test_connection_bindings: test/test_connection_bindings.c $(EXTRACT_CONNECTION_C) $(EXTRACT_CONNECTION_H) c_stubs/tls13_connection_external_layer.h c_stubs/tls13_pulse_shims.c
-	$(CC) -Wall -Wextra \
-	  -I $(EXTRACT_CONNECTION_DIR) -I c_stubs -I $(KRML_HOME)/include -I $(KRML_HOME)/krmllib/dist/minimal \
-	  $(EXTRACT_CONNECTION_C) c_stubs/tls13_pulse_shims.c test/test_connection_bindings.c \
-	  -o $@
+test/test_connection_bindings: test/test_connection_bindings.c $(EXTRACT_CONNECTION_C) $(EXTRACT_CONNECTION_H) $(EXTRACT_RECORD_C) $(EXTRACT_RECORD_H) c_stubs/tls13_connection_external_layer.h c_stubs/tls13_crypto_external.c c_stubs/tls13_pulse_shims.c $(HACL_WRAPPER_SOURCES) | check-deps
+	$(CC) -Wall -Wextra -Wno-deprecated-declarations \
+	  -ffunction-sections -fdata-sections \
+	  -I $(EXTRACT_CONNECTION_DIR) -I $(EXTRACT_RECORD_DIR) -I c_stubs -I $(KRML_HOME)/include -I $(KRML_HOME)/krmllib/dist/minimal \
+	  -I $(HACL_DIR) -I $(HACL_DIR)/internal -I $(HACL_KI) -I $(HACL_KL) \
+	  $(EXTRACT_CONNECTION_C) $(EXTRACT_RECORD_C) c_stubs/tls13_crypto_external.c c_stubs/tls13_pulse_shims.c test/test_connection_bindings.c $(HACL_WRAPPER_SOURCES) \
+	  -Wl,--gc-sections -o $@
 
 test-connection-bindings: test/test_connection_bindings
 	./test/test_connection_bindings

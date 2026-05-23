@@ -33,7 +33,7 @@
 typedef TLS13_Handshake_External_handshake_context TLS13_Handshake_handshake_context;
 
 struct TLS13_Connection_connection_s {
-  const char *host;
+  char *host;
   uint16_t port;
   const char *ca_pem_path;
   int fd;
@@ -72,10 +72,6 @@ struct TLS13_Connection_connection_s {
   bool server_handshake_record_state_initialized;
   TLS13_Handshake_FlightState_flight_state server_handshake_flight_state;
   bool server_handshake_flight_state_initialized;
-  TLS13_Record_record_state client_application_record_state;
-  bool client_application_record_state_initialized;
-  TLS13_Record_record_state server_application_record_state;
-  bool server_application_record_state_initialized;
 };
 
 struct TLS13_IO_channel_s {
@@ -790,7 +786,7 @@ static bool probe_handshake_send_client_finished(
       client_inner_plaintext,
       client_inner_plaintext_len,
       client_record + TLS13_WIRE_RECORD_HEADER_LEN);
-  TLS13_Record_record_state_free(client_handshake_record_state);
+  TLS13_Record_record_state_free(client_handshake_record_state, NULL);
   if (!sealed || write_all_fd(c->fd, client_record, client_record_len) != 0) {
     fprintf(stderr, "failed to send client Finished\n");
     fail_handshake(c);
@@ -875,7 +871,13 @@ TLS13_Connection_connection tls13_connection_probe_new(
   if (c == NULL) {
     return NULL;
   }
-  c->host = host;
+  size_t host_len = strlen(host);
+  c->host = malloc(host_len + 1u);
+  if (c->host == NULL) {
+    free(c);
+    return NULL;
+  }
+  memcpy(c->host, host, host_len + 1u);
   c->port = port;
   c->ca_pem_path = ca_pem_path;
   c->fd = -1;
@@ -894,18 +896,13 @@ void tls13_connection_probe_free(TLS13_Connection_connection c) {
     tls13_io_close_fd(c->fd);
   }
   if (c->server_handshake_record_state_initialized) {
-    TLS13_Record_record_state_free(c->server_handshake_record_state);
+    TLS13_Record_record_state_free(c->server_handshake_record_state, NULL);
   }
   if (c->server_handshake_flight_state_initialized) {
     TLS13_Handshake_FlightState_flight_state_free(c->server_handshake_flight_state);
   }
-  if (c->client_application_record_state_initialized) {
-    TLS13_Record_record_state_free(c->client_application_record_state);
-  }
-  if (c->server_application_record_state_initialized) {
-    TLS13_Record_record_state_free(c->server_application_record_state);
-  }
   tls13_openssl_peer_identity_free(c->peer);
+  free(c->host);
   free(c);
 }
 
@@ -982,20 +979,25 @@ bool TLS13_Connection_External_export_application_keys(
 bool TLS13_Connection_External_client_write_application_record(
     TLS13_Connection_External_connection c,
     TLS13_IO_channel ch,
+    TLS13_Record_record_state record_state,
     uint8_t *key,
     uint8_t *iv,
     uint8_t *buf,
     size_t total_len,
     size_t offset,
     size_t chunk_len,
+    void *record_state_s,
     void *key_bytes,
     void *iv_bytes,
     void *bytes) {
   (void)ch;
+  (void)record_state_s;
   (void)key_bytes;
   (void)iv_bytes;
   (void)bytes;
   if (c == NULL || !c->application_ready || c->fd < 0 ||
+      record_state.key == NULL || record_state.iv == NULL ||
+      record_state.seq == NULL || record_state.installed == NULL ||
       key == NULL || iv == NULL || buf == NULL ||
       chunk_len == 0 || chunk_len > PROBE_APP_RECORD_CHUNK_LEN ||
       offset > total_len || chunk_len > total_len - offset) {
@@ -1013,15 +1015,13 @@ bool TLS13_Connection_External_client_write_application_record(
     c->application_ready = false;
     return false;
   }
-  if (!c->client_application_record_state_initialized) {
-    c->client_application_record_state = TLS13_Record_record_state_new();
-    c->client_application_record_state_initialized = true;
-    TLS13_Record_install_keys(c->client_application_record_state, 2, key, iv);
-  }
   TLS13_Record_Framing_serialize_application_data_header(
       (uint16_t)ciphertext_len,
       record,
       TLS13_WIRE_RECORD_HEADER_LEN);
+  if (!*record_state.installed) {
+    TLS13_Record_install_keys(record_state, 2, key, iv);
+  }
   TLS13_Record_Framing_encode_inner_plaintext_no_padding(
       buf + offset,
       chunk_len,
@@ -1029,7 +1029,7 @@ bool TLS13_Connection_External_client_write_application_record(
       inner_plaintext,
       inner_plaintext_len);
   if (!TLS13_Record_seal_application(
-          c->client_application_record_state,
+          record_state,
           record,
           TLS13_WIRE_RECORD_HEADER_LEN,
           inner_plaintext,
@@ -1046,29 +1046,28 @@ bool TLS13_Connection_External_client_write_application_record(
 size_t TLS13_Connection_External_client_read_application_record(
     TLS13_Connection_External_connection c,
     TLS13_IO_channel ch,
+    TLS13_Record_record_state record_state,
     uint8_t *key,
     uint8_t *iv,
     uint8_t *out,
     size_t total_len,
     size_t offset,
     size_t remaining,
+    void *record_state_s,
     void *key_bytes,
     void *iv_bytes,
     void *old_bytes) {
   (void)ch;
+  (void)record_state_s;
   (void)key_bytes;
   (void)iv_bytes;
   (void)old_bytes;
   if (c == NULL || !c->application_ready || c->fd < 0 ||
+      record_state.key == NULL || record_state.iv == NULL ||
+      record_state.seq == NULL || record_state.installed == NULL ||
       key == NULL || iv == NULL || out == NULL ||
       remaining == 0 || offset > total_len || remaining > total_len - offset) {
     return 0;
-  }
-
-  if (!c->server_application_record_state_initialized) {
-    c->server_application_record_state = TLS13_Record_record_state_new();
-    c->server_application_record_state_initialized = true;
-    TLS13_Record_install_keys(c->server_application_record_state, 2, key, iv);
   }
 
   uint8_t header[TLS13_WIRE_RECORD_HEADER_LEN];
@@ -1093,9 +1092,12 @@ size_t TLS13_Connection_External_client_read_application_record(
     return 0;
   }
 
+  if (!*record_state.installed) {
+    TLS13_Record_install_keys(record_state, 2, key, iv);
+  }
   size_t inner_plaintext_len = (size_t)fragment_len - 16u;
   if (!TLS13_Record_open_application(
-          c->server_application_record_state,
+          record_state,
           header,
           TLS13_WIRE_RECORD_HEADER_LEN,
           encrypted_fragment,

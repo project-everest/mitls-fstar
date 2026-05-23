@@ -75,22 +75,26 @@ bool TLS13_Connection_External_export_application_keys(
 bool TLS13_Connection_External_client_write_application_record(
     TLS13_Connection_External_connection c,
     TLS13_IO_channel ch,
+    TLS13_Record_record_state record_state,
     uint8_t *key,
     uint8_t *iv,
     uint8_t *buf,
     size_t total_len,
     size_t offset,
     size_t chunk_len,
+    void *record_state_s,
     void *key_bytes,
     void *iv_bytes,
     void *bytes) {
   (void)ch;
+  (void)record_state;
   (void)key;
   (void)iv;
   (void)buf;
   (void)total_len;
   (void)offset;
   (void)chunk_len;
+  (void)record_state_s;
   (void)key_bytes;
   (void)iv_bytes;
   (void)bytes;
@@ -101,19 +105,23 @@ bool TLS13_Connection_External_client_write_application_record(
 size_t TLS13_Connection_External_client_read_application_record(
     TLS13_Connection_External_connection c,
     TLS13_IO_channel ch,
+    TLS13_Record_record_state record_state,
     uint8_t *key,
     uint8_t *iv,
     uint8_t *out,
     size_t total_len,
     size_t offset,
     size_t remaining,
+    void *record_state_s,
     void *key_bytes,
     void *iv_bytes,
     void *old_bytes) {
   (void)ch;
+  (void)record_state;
   (void)key;
   (void)iv;
   (void)total_len;
+  (void)record_state_s;
   (void)key_bytes;
   (void)iv_bytes;
   (void)old_bytes;
