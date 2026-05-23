@@ -1,0 +1,92 @@
+module TLS13.Handshake.FlightState
+
+#lang-pulse
+
+open Pulse.Lib.Pervasives
+
+module SZ = FStar.SizeT
+
+val flight_state : Type0
+val is_flight_state: flight_state -> slprop
+
+fn flight_state_new ()
+  returns st: flight_state
+  ensures is_flight_state st
+
+fn flight_state_free (st: flight_state)
+  requires is_flight_state st
+  ensures emp
+
+fn reset (st: flight_state)
+  requires is_flight_state st
+  ensures is_flight_state st
+
+fn handshake_len (st: flight_state)
+  requires is_flight_state st
+  returns len: SZ.t
+  ensures is_flight_state st
+
+fn parsed_len (st: flight_state)
+  requires is_flight_state st
+  returns len: SZ.t
+  ensures is_flight_state st
+
+fn append_handshake_len (st: flight_state) (fragment_len: SZ.t) (capacity: SZ.t)
+  requires is_flight_state st
+  returns ok: bool
+  ensures is_flight_state st
+
+fn accept_encrypted_extensions (st: flight_state) (message_len: SZ.t)
+  requires is_flight_state st
+  returns ok: bool
+  ensures is_flight_state st
+
+fn accept_certificate (st: flight_state) (message_len: SZ.t)
+  requires is_flight_state st
+  returns ok: bool
+  ensures is_flight_state st
+
+fn accept_certificate_verify (st: flight_state) (message_len: SZ.t)
+  requires is_flight_state st
+  returns ok: bool
+  ensures is_flight_state st
+
+fn accept_finished (st: flight_state) (message_len: SZ.t) (body_len: SZ.t)
+  requires is_flight_state st
+  returns ok: bool
+  ensures is_flight_state st
+
+fn certificate_verify_offset (st: flight_state)
+  requires is_flight_state st
+  returns offset: SZ.t
+  ensures is_flight_state st
+
+fn server_before_finished_len (st: flight_state)
+  requires is_flight_state st
+  returns len: SZ.t
+  ensures is_flight_state st
+
+fn server_through_finished_len (st: flight_state)
+  requires is_flight_state st
+  returns len: SZ.t
+  ensures is_flight_state st
+
+fn saw_certificate (st: flight_state)
+  requires is_flight_state st
+  returns saw: bool
+  ensures is_flight_state st
+
+fn saw_certificate_verify (st: flight_state)
+  requires is_flight_state st
+  returns saw: bool
+  ensures is_flight_state st
+
+fn saw_finished (st: flight_state)
+  requires is_flight_state st
+  returns saw: bool
+  ensures is_flight_state st
+
+fn encrypted_handshake_complete (st: flight_state)
+  requires is_flight_state st
+  returns complete: bool
+  ensures is_flight_state st
