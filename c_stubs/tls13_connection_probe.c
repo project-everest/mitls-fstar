@@ -9,6 +9,7 @@
 #ifdef TLS13_CONNECTION_PROBE_USE_EXTRACTED_CONNECTION_WRAPPER
 #include "TLS13_KeySchedule.h"
 #include "TLS13_Handshake_Framing.h"
+#include "TLS13_Handshake_Transcript.h"
 #include "TLS13_Handshake_ByteDriver.h"
 #include "TLS13_Record_Framing.h"
 #include "TLS13_Record.h"
@@ -318,6 +319,18 @@ static int compute_transcript_hash(
     const uint8_t *server_handshake_messages,
     size_t server_handshake_len,
     uint8_t transcript_hash[32]) {
+#ifdef TLS13_CONNECTION_PROBE_USE_EXTRACTED_HANDSHAKE_TRANSCRIPT
+  return TLS13_Handshake_Transcript_hash_client_server_handshake(
+             (uint8_t *)client_hello,
+             client_hello_len,
+             (uint8_t *)server_hello,
+             server_hello_len,
+             (uint8_t *)server_handshake_messages,
+             server_handshake_len,
+             transcript_hash)
+             ? 0
+             : -1;
+#else
   uint8_t transcript[32768];
   if (client_hello_len > sizeof transcript ||
       server_hello_len > sizeof transcript - client_hello_len ||
@@ -332,6 +345,7 @@ static int compute_transcript_hash(
   memcpy(transcript + pos, server_handshake_messages, server_handshake_len);
   pos += server_handshake_len;
   return tls13_hacl_sha256(transcript_hash, transcript, pos) ? 0 : -1;
+#endif
 }
 
 static int verify_server_finished(
@@ -365,7 +379,11 @@ static int verify_server_finished(
     return -1;
   }
 #endif
+#ifdef TLS13_CONNECTION_PROBE_USE_EXTRACTED_HANDSHAKE_TRANSCRIPT
+  return TLS13_Handshake_Transcript_equal32(expected, (uint8_t *)finished_verify_data) ? 0 : -1;
+#else
   return memcmp(expected, finished_verify_data, 32) == 0 ? 0 : -1;
+#endif
 }
 
 static int derive_application_keys(
