@@ -77,7 +77,15 @@ let max_application_read_records : U8.t = 255uy
 let read_status_failed : U8.t = 0uy
 let read_status_complete : U8.t = 1uy
 let read_status_close_notify : U8.t = 2uy
-let read_status_peer_alert : U8.t = 3uy
+let read_status_alert_decode_error : U8.t = 3uy
+let read_status_alert_unexpected_message : U8.t = 4uy
+let read_status_alert_bad_record_mac : U8.t = 5uy
+let read_status_alert_handshake_failure : U8.t = 6uy
+let read_status_alert_decrypt_error : U8.t = 7uy
+let read_status_alert_protocol_version : U8.t = 8uy
+let read_status_alert_unsupported_extension : U8.t = 9uy
+let read_status_alert_certificate_unknown : U8.t = 10uy
+let read_status_alert_illegal_parameter : U8.t = 11uy
 
 let dummy_client_hello : H.client_hello = {
   H.random = zeros32;
@@ -760,7 +768,25 @@ fn rec client_read_application_records
                         alert_description = 0uy) {
                       read_status_close_notify
                     } else if (alert_level = 1uy || alert_level = 2uy) {
-                      read_status_peer_alert
+                      if (alert_description = 10uy) {
+                        read_status_alert_unexpected_message
+                      } else if (alert_description = 20uy) {
+                        read_status_alert_bad_record_mac
+                      } else if (alert_description = 40uy) {
+                        read_status_alert_handshake_failure
+                      } else if (alert_description = 51uy) {
+                        read_status_alert_decrypt_error
+                      } else if (alert_description = 70uy) {
+                        read_status_alert_protocol_version
+                      } else if (alert_description = 110uy) {
+                        read_status_alert_unsupported_extension
+                      } else if (alert_description = 46uy) {
+                        read_status_alert_certificate_unknown
+                      } else if (alert_description = 47uy) {
+                        read_status_alert_illegal_parameter
+                      } else {
+                        read_status_alert_decode_error
+                      }
                     } else {
                       read_status_failed
                     }
@@ -878,7 +904,39 @@ fn client_read_exact (c: connection) (ch: IO.channel) (out: array U8.t) (len: SZ
       ST.advance 'st S.RecvCloseNotify (S.recv_close_state 's);
       fold (is_connection c 'st (S.recv_close_state 's));
       false
-    } else if (status = read_status_peer_alert) {
+    } else if (status = read_status_alert_unexpected_message) {
+      ST.advance_fail 'st (T.AlertError T.UnexpectedMessage);
+      fold (is_connection c 'st (S.fail 's (T.AlertError T.UnexpectedMessage)));
+      false
+    } else if (status = read_status_alert_bad_record_mac) {
+      ST.advance_fail 'st (T.AlertError T.BadRecordMac);
+      fold (is_connection c 'st (S.fail 's (T.AlertError T.BadRecordMac)));
+      false
+    } else if (status = read_status_alert_handshake_failure) {
+      ST.advance_fail 'st (T.AlertError T.HandshakeFailure);
+      fold (is_connection c 'st (S.fail 's (T.AlertError T.HandshakeFailure)));
+      false
+    } else if (status = read_status_alert_decrypt_error) {
+      ST.advance_fail 'st (T.AlertError T.DecryptError);
+      fold (is_connection c 'st (S.fail 's (T.AlertError T.DecryptError)));
+      false
+    } else if (status = read_status_alert_protocol_version) {
+      ST.advance_fail 'st (T.AlertError T.ProtocolVersion);
+      fold (is_connection c 'st (S.fail 's (T.AlertError T.ProtocolVersion)));
+      false
+    } else if (status = read_status_alert_unsupported_extension) {
+      ST.advance_fail 'st (T.AlertError T.UnsupportedExtension);
+      fold (is_connection c 'st (S.fail 's (T.AlertError T.UnsupportedExtension)));
+      false
+    } else if (status = read_status_alert_certificate_unknown) {
+      ST.advance_fail 'st (T.AlertError T.CertificateUnknown);
+      fold (is_connection c 'st (S.fail 's (T.AlertError T.CertificateUnknown)));
+      false
+    } else if (status = read_status_alert_illegal_parameter) {
+      ST.advance_fail 'st (T.AlertError T.IllegalParameter);
+      fold (is_connection c 'st (S.fail 's (T.AlertError T.IllegalParameter)));
+      false
+    } else if (status = read_status_alert_decode_error) {
       ST.advance_fail 'st (T.AlertError T.DecodeError);
       fold (is_connection c 'st (S.fail 's (T.AlertError T.DecodeError)));
       false

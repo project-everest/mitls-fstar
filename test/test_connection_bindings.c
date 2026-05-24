@@ -14,6 +14,7 @@ enum read_record_kind {
   READ_PADDED_APPLICATION_DATA,
   READ_CLOSE_NOTIFY,
   READ_FATAL_ALERT,
+  READ_BAD_RECORD_MAC_ALERT,
 };
 
 struct TLS13_Connection_External_connection_s {
@@ -28,7 +29,7 @@ struct TLS13_Connection_External_connection_s {
   unsigned read_fragment_calls;
   unsigned close_calls;
   TLS13_Record_record_state read_record_state;
-  uint8_t read_cipher[23];
+  uint8_t read_cipher[25];
   size_t read_cipher_len;
   bool read_cipher_ready;
   enum read_record_kind read_kind;
@@ -148,6 +149,7 @@ size_t TLS13_Connection_External_client_read_raw(
       uint8_t padded_app_plain[] = {0x6b, 0x6b, 0x6b, 0x6b, 0x6b, 0x6b, 23, 0, 0};
       uint8_t close_notify_plain[] = {1, 0, 21};
       uint8_t fatal_alert_plain[] = {2, 50, 21};
+      uint8_t bad_record_mac_plain[] = {2, 20, 21};
       uint8_t *plain = app_plain;
       size_t plain_len = sizeof app_plain;
       if (c->read_kind == READ_PADDED_APPLICATION_DATA) {
@@ -159,6 +161,9 @@ size_t TLS13_Connection_External_client_read_raw(
       } else if (c->read_kind == READ_FATAL_ALERT) {
         plain = fatal_alert_plain;
         plain_len = sizeof fatal_alert_plain;
+      } else if (c->read_kind == READ_BAD_RECORD_MAC_ALERT) {
+        plain = bad_record_mac_plain;
+        plain_len = sizeof bad_record_mac_plain;
       }
       c->read_cipher_ready = TLS13_Record_seal_application_runtime(
           c->read_record_state, header, sizeof header, plain, plain_len, c->read_cipher);
@@ -268,6 +273,7 @@ static int test_peer_alert_read_returns_zero(void) {
   if (c.backend == NULL) {
     return 1;
   }
+
   bool connected = TLS13_Connection_client_connect(c, ch);
   c.backend->read_kind = READ_FATAL_ALERT;
   size_t n = TLS13_Connection_client_read(c, ch, out, sizeof out);
@@ -279,6 +285,31 @@ static int test_peer_alert_read_returns_zero(void) {
   TLS13_Connection_client_free(c);
   if (failed) {
     fprintf(stderr, "connection wrapper peer alert read failed\n");
+    return 1;
+  }
+  return 0;
+}
+
+static int test_bad_record_mac_alert_read_returns_zero(void) {
+  uint8_t hostname[] = "localhost";
+  uint8_t out[1] = {0};
+  TLS13_Connection_connection c =
+      TLS13_Connection_client_new(hostname, sizeof hostname - 1, NULL);
+  TLS13_IO_channel ch = (TLS13_IO_channel)c.backend;
+  if (c.backend == NULL) {
+    return 1;
+  }
+  bool connected = TLS13_Connection_client_connect(c, ch);
+  c.backend->read_kind = READ_BAD_RECORD_MAC_ALERT;
+  size_t n = TLS13_Connection_client_read(c, ch, out, sizeof out);
+  int failed =
+      !connected ||
+      n != 0 ||
+      c.backend->read_header_calls == 0 ||
+      c.backend->read_fragment_calls == 0;
+  TLS13_Connection_client_free(c);
+  if (failed) {
+    fprintf(stderr, "connection wrapper bad_record_mac alert read failed\n");
     return 1;
   }
   return 0;
@@ -341,6 +372,7 @@ int main(void) {
       test_failure_return() != 0 ||
       test_close_notify_read_returns_zero() != 0 ||
       test_peer_alert_read_returns_zero() != 0 ||
+      test_bad_record_mac_alert_read_returns_zero() != 0 ||
       test_padded_application_read() != 0 ||
       test_buffered_application_reads() != 0) {
     return 1;
