@@ -374,6 +374,11 @@ fn accept_certificate (st: flight_state) (message_len: SZ.t)
   returns ok: bool
   ensures is_flight_state st
 
+fn accept_pending_certificate (st: flight_state)
+  requires is_flight_state st
+  returns ok: bool
+  ensures is_flight_state st
+
 fn set_certificate_leaf (st: flight_state) (leaf_offset: SZ.t) (leaf_len: SZ.t)
   requires is_flight_state st
   ensures is_flight_state st

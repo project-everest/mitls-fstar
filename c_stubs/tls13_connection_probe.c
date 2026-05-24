@@ -1217,35 +1217,9 @@ bool TLS13_Handshake_ByteDriver_External_accept_encrypted_extensions(
 bool TLS13_Handshake_ByteDriver_External_accept_certificate(
     TLS13_Handshake_ByteDriver_External_context ctx) {
   TLS13_Connection_connection c = (TLS13_Connection_connection)ctx;
-  const uint8_t *body = NULL;
-  uint32_t body_len = 0;
-  size_t message_len = 0;
-  uint8_t server_handshake_messages[PROBE_SERVER_HANDSHAKE_CAPACITY];
-  if (!pending_handshake_body(c, 11, server_handshake_messages, &body, &body_len, &message_len)) {
-    fprintf(stderr, "failed to parse server Certificate\n");
-    return false;
-  }
-  uint8_t leaf_offset_bytes[2] = {0};
-  uint8_t leaf_len_bytes[2] = {0};
-  if (!TLS13_Handshake_Framing_parse_certificate_leaf_der_offsets(
-          (uint8_t *)body,
-          body_len,
-          leaf_offset_bytes,
-          sizeof leaf_offset_bytes,
-          leaf_len_bytes,
-          sizeof leaf_len_bytes)) {
-    fprintf(stderr, "failed to parse server Certificate\n");
-    return false;
-  }
-  size_t leaf_offset = ((size_t)leaf_offset_bytes[0] << 8) | (size_t)leaf_offset_bytes[1];
-  size_t leaf_len = ((size_t)leaf_len_bytes[0] << 8) | (size_t)leaf_len_bytes[1];
-  size_t certificate_body_offset = (size_t)(body - server_handshake_messages);
-  TLS13_Handshake_FlightState_set_certificate_leaf(
-      c->server_handshake_flight_state,
-      certificate_body_offset + leaf_offset,
-      leaf_len);
-  if (!TLS13_Handshake_FlightState_accept_certificate(
-          c->server_handshake_flight_state, message_len)) {
+  if (c == NULL ||
+      !TLS13_Handshake_FlightState_accept_pending_certificate(
+          c->server_handshake_flight_state)) {
     fprintf(stderr, "failed to parse server Certificate\n");
     return false;
   }

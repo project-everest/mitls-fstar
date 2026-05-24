@@ -1177,6 +1177,121 @@ fn accept_certificate (st: flight_state) (message_len: SZ.t)
   }
 }
 
+fn accept_pending_certificate (st: flight_state)
+  requires is_flight_state st
+  returns ok: bool
+  ensures is_flight_state st
+{
+  unfold (is_flight_state st);
+  let parsed = !st.parsed_len_box;
+  let hlen = !st.handshake_len_box;
+  if SZ.(parsed <=^ hlen) {
+    let remaining = SZ.(hlen -^ parsed);
+    if SZ.(4sz <=^ remaining) {
+      V.pts_to_len st.server_handshake_messages;
+      assert (pure (V.length st.server_handshake_messages == 32768));
+      V.to_array_pts_to st.server_handshake_messages;
+      assert (pure (Pulse.Lib.Array.Core.length (V.vec_to_array st.server_handshake_messages) == 32768));
+      assert (pure (SZ.v parsed + 3 < 32768));
+      let msg_type = (V.vec_to_array st.server_handshake_messages).(parsed);
+      let len_hi = (V.vec_to_array st.server_handshake_messages).(SZ.(parsed +^ 1sz));
+      let len_mid = (V.vec_to_array st.server_handshake_messages).(SZ.(parsed +^ 2sz));
+      let len_lo = (V.vec_to_array st.server_handshake_messages).(SZ.(parsed +^ 3sz));
+      let len_mid16 = Cast.uint8_to_uint16 len_mid;
+      let len_lo16 = Cast.uint8_to_uint16 len_lo;
+      let body16 = U16.logor (U16.shift_left len_mid16 8ul) len_lo16;
+      let body_len = SZ.uint16_to_sizet body16;
+      let remaining_body_capacity = SZ.(remaining -^ 4sz);
+      if ((msg_type = 0x0buy) && (len_hi = 0uy) && SZ.(body_len <=^ remaining_body_capacity) && not (SZ.(body_len <^ 9sz))) {
+        assert (pure (SZ.fits (SZ.v parsed + 4)));
+        let body_start = SZ.(parsed +^ 4sz);
+        assert (pure (SZ.v body_start + SZ.v body_len <= SZ.v hlen));
+        assert (pure (SZ.v body_start + 8 < 32768));
+        let request_context_len = (V.vec_to_array st.server_handshake_messages).(body_start);
+        let list_len_hi = (V.vec_to_array st.server_handshake_messages).(SZ.(body_start +^ 1sz));
+        let list_len_b0 = (V.vec_to_array st.server_handshake_messages).(SZ.(body_start +^ 2sz));
+        let list_len_b1 = (V.vec_to_array st.server_handshake_messages).(SZ.(body_start +^ 3sz));
+        let cert_len_hi = (V.vec_to_array st.server_handshake_messages).(SZ.(body_start +^ 4sz));
+        let cert_len_b0 = (V.vec_to_array st.server_handshake_messages).(SZ.(body_start +^ 5sz));
+        let cert_len_b1 = (V.vec_to_array st.server_handshake_messages).(SZ.(body_start +^ 6sz));
+        if ((request_context_len = 0uy) && (list_len_hi = 0uy) && (cert_len_hi = 0uy)) {
+          let list_len_hi16 = Cast.uint8_to_uint16 list_len_b0;
+          let list_len_lo16 = Cast.uint8_to_uint16 list_len_b1;
+          let list_len16 = U16.logor (U16.shift_left list_len_hi16 8ul) list_len_lo16;
+          let list_len = SZ.uint16_to_sizet list_len16;
+          let actual_list_len = SZ.(body_len -^ 4sz);
+          if SZ.(actual_list_len =^ list_len) {
+            let cert_len_hi16 = Cast.uint8_to_uint16 cert_len_b0;
+            let cert_len_lo16 = Cast.uint8_to_uint16 cert_len_b1;
+            let cert_len16 = U16.logor (U16.shift_left cert_len_hi16 8ul) cert_len_lo16;
+            let cert_len = SZ.uint16_to_sizet cert_len16;
+            let payload_after_cert_header = SZ.(body_len -^ 7sz);
+            if (SZ.(cert_len =^ 0sz) || SZ.(payload_after_cert_header <^ cert_len)) {
+              V.to_vec_pts_to st.server_handshake_messages;
+              fold (is_flight_state st);
+              false
+            } else {
+              let rest_after_cert = SZ.(payload_after_cert_header -^ cert_len);
+              if SZ.(rest_after_cert <^ 2sz) {
+                V.to_vec_pts_to st.server_handshake_messages;
+                fold (is_flight_state st);
+                false
+              } else {
+                let rest_after_first_ext_len_byte = SZ.(rest_after_cert -^ 1sz);
+                let ext0_offset = SZ.(body_len -^ rest_after_cert);
+                let ext1_offset = SZ.(body_len -^ rest_after_first_ext_len_byte);
+                assert (pure (SZ.v body_start + SZ.v ext1_offset < 32768));
+                let ext_len_b0 = (V.vec_to_array st.server_handshake_messages).(SZ.(body_start +^ ext0_offset));
+                let ext_len_b1 = (V.vec_to_array st.server_handshake_messages).(SZ.(body_start +^ ext1_offset));
+                let ext_len_hi16 = Cast.uint8_to_uint16 ext_len_b0;
+                let ext_len_lo16 = Cast.uint8_to_uint16 ext_len_b1;
+                let ext_len16 = U16.logor (U16.shift_left ext_len_hi16 8ul) ext_len_lo16;
+                let ext_len = SZ.uint16_to_sizet ext_len16;
+                let actual_ext_len = SZ.(rest_after_cert -^ 2sz);
+                if SZ.(actual_ext_len =^ ext_len) {
+                  assert (pure (SZ.fits (SZ.v body_start + 7)));
+                  let leaf_offset = SZ.(body_start +^ 7sz);
+                  assert (pure (SZ.fits (SZ.v body_start + SZ.v body_len)));
+                  let next_parsed = SZ.(body_start +^ body_len);
+                  V.to_vec_pts_to st.server_handshake_messages;
+                  st.certificate_leaf_offset_box := leaf_offset;
+                  st.certificate_leaf_len_box := cert_len;
+                  st.saw_certificate_box := true;
+                  st.parsed_len_box := next_parsed;
+                  fold (is_flight_state st);
+                  true
+                } else {
+                  V.to_vec_pts_to st.server_handshake_messages;
+                  fold (is_flight_state st);
+                  false
+                }
+              }
+            }
+          } else {
+            V.to_vec_pts_to st.server_handshake_messages;
+            fold (is_flight_state st);
+            false
+          }
+        } else {
+          V.to_vec_pts_to st.server_handshake_messages;
+          fold (is_flight_state st);
+          false
+        }
+      } else {
+        V.to_vec_pts_to st.server_handshake_messages;
+        fold (is_flight_state st);
+        false
+      }
+    } else {
+      fold (is_flight_state st);
+      false
+    }
+  } else {
+    fold (is_flight_state st);
+    false
+  }
+}
+
 fn set_certificate_leaf (st: flight_state) (leaf_offset: SZ.t) (leaf_len: SZ.t)
   requires is_flight_state st
   ensures is_flight_state st
