@@ -365,6 +365,53 @@ fn rec client_write_application_records
   }
 }
 
+inline_for_extraction
+fn client_send_close_notify_record
+  (backend: E.connection)
+  (ch: IO.channel)
+  (record_state: Rec.record_state)
+  requires   E.is_connection backend **
+  Rec.is_record_state record_state 'record_s **
+  IO.is_channel ch
+  returns ok: bool
+  ensures exists* record_s'.
+          E.is_connection backend **
+          Rec.is_record_state record_state record_s' **
+          IO.is_channel ch
+{
+  let mut header = [| 0uy; 5sz |];
+  let mut inner_plaintext = [| 0uy; 3sz |];
+  let mut cipher = [| 0uy; 19sz |];
+  RF.serialize_application_data_header
+    (Cast.uint32_to_uint16 (SZ.sizet_to_uint32 19sz))
+    header
+    5sz;
+  inner_plaintext.(0sz) <- 1uy;
+  inner_plaintext.(1sz) <- 0uy;
+  inner_plaintext.(2sz) <- 21uy;
+  let sealed = Rec.seal_application_runtime
+    record_state
+    header
+    5sz
+    inner_plaintext
+    3sz
+    cipher;
+  with header_bytes. assert (pts_to header header_bytes);
+  with cipher_bytes. assert (pts_to cipher cipher_bytes);
+  assert (pure (B.length header_bytes == 5));
+  assert (pure (B.length cipher_bytes == 19));
+  if sealed {
+    let header_ok = client_write_raw_exact backend ch header 5sz 0sz 5sz;
+    if header_ok {
+      client_write_raw_exact backend ch cipher 19sz 0sz 19sz
+    } else {
+      false
+    }
+  } else {
+    false
+  }
+}
+
 fn client_write_all (c: connection) (ch: IO.channel) (buf: array U8.t) (len: SZ.t)
   requires is_connection c 'st 's **
            IO.is_channel ch **
@@ -698,10 +745,23 @@ fn client_close (c: connection) (ch: IO.channel)
           pure (s'.S.phase == S.Closing \/ s'.S.phase == S.Failed)
 {
   unfold (is_connection c 'st 's);
-  let ok = E.client_close c.backend ch;
-  if ok {
-    ST.advance 'st S.SendCloseNotify (S.send_close_state 's);
-    fold (is_connection c 'st (S.send_close_state 's));
+  let keys_installed = !c.application_keys_installed;
+  if keys_installed {
+    let close_notify_sent =
+      client_send_close_notify_record c.backend ch c.client_application_record_state;
+    if close_notify_sent {
+      let ok = E.client_close c.backend ch;
+      if ok {
+        ST.advance 'st S.SendCloseNotify (S.send_close_state 's);
+        fold (is_connection c 'st (S.send_close_state 's));
+      } else {
+        ST.advance_fail 'st T.IoError;
+        fold (is_connection c 'st (S.fail 's T.IoError));
+      }
+    } else {
+      ST.advance_fail 'st T.IoError;
+      fold (is_connection c 'st (S.fail 's T.IoError));
+    }
   } else {
     ST.advance_fail 'st T.IoError;
     fold (is_connection c 'st (S.fail 's T.IoError));
