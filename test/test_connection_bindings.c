@@ -309,12 +309,40 @@ static int test_padded_application_read(void) {
   return 0;
 }
 
+static int test_buffered_application_reads(void) {
+  uint8_t hostname[] = "localhost";
+  uint8_t first[3] = {0};
+  uint8_t second[3] = {0};
+  TLS13_Connection_connection c =
+      TLS13_Connection_client_new(hostname, sizeof hostname - 1, NULL);
+  TLS13_IO_channel ch = (TLS13_IO_channel)c.backend;
+  if (c.backend == NULL) {
+    return 1;
+  }
+  bool ok =
+      TLS13_Connection_client_connect(c, ch) &&
+      TLS13_Connection_client_read_exact(c, ch, first, sizeof first) &&
+      TLS13_Connection_client_read_exact(c, ch, second, sizeof second);
+  int failed =
+      !ok ||
+      first[0] != 0x5a ||
+      second[0] != 0x5a ||
+      c.backend->read_header_calls != 2;
+  TLS13_Connection_client_free(c);
+  if (failed) {
+    fprintf(stderr, "connection wrapper buffered reads failed\n");
+    return 1;
+  }
+  return 0;
+}
+
 int main(void) {
   if (test_success_path() != 0 ||
       test_failure_return() != 0 ||
       test_close_notify_read_returns_zero() != 0 ||
       test_peer_alert_read_returns_zero() != 0 ||
-      test_padded_application_read() != 0) {
+      test_padded_application_read() != 0 ||
+      test_buffered_application_reads() != 0) {
     return 1;
   }
   printf("connection wrapper binding test passed\n");

@@ -35,18 +35,25 @@ type connection = {
   client_application_record_state: Rec.record_state;
   server_application_record_state: Rec.record_state;
   application_keys_installed: box bool;
+  pending_read_buffer: V.vec U8.t;
+  pending_read_offset: box SZ.t;
+  pending_read_len: box SZ.t;
 }
 
 let is_connection (c:connection) (st:ST.state_ref) (s:S.conn_state) : slprop =
-  exists* live app_keys_installed client_key client_iv server_key server_iv
+  exists* live app_keys_installed pending_read_offset pending_read_len
+          client_key client_iv server_key server_iv pending_read_buffer
           client_record_state server_record_state.
     E.is_connection c.backend **
     Box.pts_to c.live live **
     Box.pts_to c.application_keys_installed app_keys_installed **
+    Box.pts_to c.pending_read_offset pending_read_offset **
+    Box.pts_to c.pending_read_len pending_read_len **
     V.pts_to c.client_application_key client_key **
     V.pts_to c.client_application_iv client_iv **
     V.pts_to c.server_application_key server_key **
     V.pts_to c.server_application_iv server_iv **
+    V.pts_to c.pending_read_buffer pending_read_buffer **
     Rec.is_record_state c.client_application_record_state client_record_state **
     Rec.is_record_state c.server_application_record_state server_record_state **
     ST.current st s **
@@ -54,13 +61,18 @@ let is_connection (c:connection) (st:ST.state_ref) (s:S.conn_state) : slprop =
           V.is_full_vec c.client_application_iv /\
           V.is_full_vec c.server_application_key /\
           V.is_full_vec c.server_application_iv /\
+          V.is_full_vec c.pending_read_buffer /\
           V.length c.client_application_key == 32 /\
           V.length c.client_application_iv == 12 /\
           V.length c.server_application_key == 32 /\
-          V.length c.server_application_iv == 12)
+          V.length c.server_application_iv == 12 /\
+          V.length c.pending_read_buffer == 4096 /\
+          SZ.v pending_read_offset <= SZ.v pending_read_len /\
+          SZ.v pending_read_len <= 4096)
 
 let zeros32 : B.bytes = B.zeros 32
 let app_record_chunk_len : SZ.t = 4096sz
+let pending_read_buffer_capacity : SZ.t = 4096sz
 let max_application_read_records : U8.t = 255uy
 let read_status_failed : U8.t = 0uy
 let read_status_complete : U8.t = 1uy
@@ -143,10 +155,13 @@ fn client_new
   let backend = E.client_new hostname hostname_len #trust_store;
   let live = Box.alloc true;
   let app_keys_installed = Box.alloc false;
+  let pending_read_offset = Box.alloc 0sz;
+  let pending_read_len = Box.alloc 0sz;
   let client_application_key = V.alloc 0uy 32sz;
   let client_application_iv = V.alloc 0uy 12sz;
   let server_application_key = V.alloc 0uy 32sz;
   let server_application_iv = V.alloc 0uy 12sz;
+  let pending_read_buffer = V.alloc 0uy pending_read_buffer_capacity;
   let client_application_record_state = Rec.record_state_new ();
   let server_application_record_state = Rec.record_state_new ();
   let st = ST.alloc_initial ();
@@ -160,14 +175,20 @@ fn client_new
     client_application_record_state;
     server_application_record_state;
     application_keys_installed = app_keys_installed;
+    pending_read_buffer;
+    pending_read_offset;
+    pending_read_len;
   };
   with backend_s. rewrite (E.is_connection backend) as (E.is_connection c.backend);
   with live_s. rewrite (Box.pts_to live live_s) as (Box.pts_to c.live live_s);
   with installed_s. rewrite (Box.pts_to app_keys_installed installed_s) as (Box.pts_to c.application_keys_installed installed_s);
+  with pending_offset_s. rewrite (Box.pts_to pending_read_offset pending_offset_s) as (Box.pts_to c.pending_read_offset pending_offset_s);
+  with pending_len_s. rewrite (Box.pts_to pending_read_len pending_len_s) as (Box.pts_to c.pending_read_len pending_len_s);
   with ck_s. rewrite (V.pts_to client_application_key ck_s) as (V.pts_to c.client_application_key ck_s);
   with ci_s. rewrite (V.pts_to client_application_iv ci_s) as (V.pts_to c.client_application_iv ci_s);
   with sk_s. rewrite (V.pts_to server_application_key sk_s) as (V.pts_to c.server_application_key sk_s);
   with si_s. rewrite (V.pts_to server_application_iv si_s) as (V.pts_to c.server_application_iv si_s);
+  with pending_s. rewrite (V.pts_to pending_read_buffer pending_s) as (V.pts_to c.pending_read_buffer pending_s);
   with crs. rewrite (Rec.is_record_state client_application_record_state crs) as (Rec.is_record_state c.client_application_record_state crs);
   with srs. rewrite (Rec.is_record_state server_application_record_state srs) as (Rec.is_record_state c.server_application_record_state srs);
   fold (is_connection c st S.initial);
@@ -182,10 +203,13 @@ fn client_free (c: connection)
   E.client_free c.backend;
   Box.free c.live;
   Box.free c.application_keys_installed;
+  Box.free c.pending_read_offset;
+  Box.free c.pending_read_len;
   V.free c.client_application_key;
   V.free c.client_application_iv;
   V.free c.server_application_key;
   V.free c.server_application_iv;
+  V.free c.pending_read_buffer;
   Rec.record_state_free c.client_application_record_state;
   Rec.record_state_free c.server_application_record_state;
   drop_ (ST.current 'st 's);
@@ -581,6 +605,9 @@ fn rec client_read_application_records
   (backend: E.connection)
   (ch: IO.channel)
   (record_state: Rec.record_state)
+  (read_buffer: V.vec U8.t)
+  (pending_read_offset_box: box SZ.t)
+  (pending_read_len_box: box SZ.t)
   (out: array U8.t)
   (total_len: SZ.t)
   (offset: SZ.t)
@@ -589,87 +616,211 @@ fn rec client_read_application_records
   requires   E.is_connection backend **
   Rec.is_record_state record_state 'record_s **
   IO.is_channel ch **
+  V.pts_to read_buffer 'read_buffer_bytes **
+  Box.pts_to pending_read_offset_box 'pending_read_offset **
+  Box.pts_to pending_read_len_box 'pending_read_len **
   pts_to out 'old **
-  pure (B.length 'old == SZ.v total_len /\
+  pure (V.is_full_vec read_buffer /\
+        V.length read_buffer == 4096 /\
+        SZ.v 'pending_read_offset <= SZ.v 'pending_read_len /\
+        SZ.v 'pending_read_len <= 4096 /\
+        B.length 'old == SZ.v total_len /\
         SZ.v offset + SZ.v remaining == SZ.v total_len)
   returns status: U8.t
-  ensures exists* record_s' bytes.
+  ensures exists* record_s' read_buffer_bytes pending_read_offset pending_read_len bytes.
           E.is_connection backend **
           Rec.is_record_state record_state record_s' **
           IO.is_channel ch **
+          V.pts_to read_buffer read_buffer_bytes **
+          Box.pts_to pending_read_offset_box pending_read_offset **
+          Box.pts_to pending_read_len_box pending_read_len **
           pts_to out bytes **
-          pure (B.length bytes == SZ.v total_len)
-  decreases (U8.v fuel)
+          pure (V.is_full_vec read_buffer /\
+                V.length read_buffer == 4096 /\
+                SZ.v pending_read_offset <= SZ.v pending_read_len /\
+                SZ.v pending_read_len <= 4096 /\
+                B.length bytes == SZ.v total_len)
+  decreases (U8.v fuel, SZ.v remaining)
 {
   if (remaining = 0sz) {
     read_status_complete
-  } else if (fuel = 0uy) {
-    read_status_failed
   } else {
     assert (pure (SZ.v remaining > 0));
-    let mut header = [| 0uy; 5sz |];
-    let header_ok = client_read_raw_exact backend ch header 5sz 0sz 5sz;
-    with bytes. assert (pts_to out bytes);
-    let fuel' = U8.(fuel -^ 1uy);
-    if header_ok {
-      let mut content_type_out = [| 0uy; 1sz |];
-      let mut fragment_len_out = [| 0uy; 2sz |];
-      let header_parse_ok =
-        RF.parse_record_header header 5sz content_type_out 1sz fragment_len_out 2sz;
-      if header_parse_ok {
-        let content_type = content_type_out.(0sz);
-        let frag_hi = fragment_len_out.(0sz);
-        let frag_lo = fragment_len_out.(1sz);
-        let frag_hi16 = Cast.uint8_to_uint16 frag_hi;
-        let frag_lo16 = Cast.uint8_to_uint16 frag_lo;
-        let frag16 = U16.logor (U16.shift_left frag_hi16 8ul) frag_lo16;
-        let fragment_len = SZ.uint16_to_sizet frag16;
-        if not (content_type = 23uy) {
-          read_status_failed
-        } else if SZ.(16sz <^ fragment_len) {
-          let mut cipher = [| 0uy; fragment_len |];
-          let fragment_ok = client_read_raw_exact backend ch cipher fragment_len 0sz fragment_len;
-          if fragment_ok {
-            let inner_len = SZ.(fragment_len -^ 16sz);
-            assert (pure (SZ.v inner_len > 0));
-            let mut inner = [| 0uy; inner_len |];
-            let opened =
-              Rec.open_application_runtime record_state header 5sz cipher fragment_len inner;
-            with opened_bytes. assert (pts_to out opened_bytes);
-            if opened {
-              let mut inner_content_type_out = [| 0uy; 1sz |];
-              let response_len =
-                RF.decode_inner_plaintext inner inner_len inner_content_type_out 1sz;
-              let inner_content_type = inner_content_type_out.(0sz);
-              if (inner_content_type = 22uy) {
-                assert (pure (U8.v fuel' < U8.v fuel));
-                client_read_application_records backend ch record_state out total_len offset remaining fuel'
-              } else if (inner_content_type = 21uy) {
-                if SZ.(1sz <^ inner_len) {
-                  pts_to_len inner;
-                  let alert_level = inner.(0sz);
-                  let alert_description = inner.(1sz);
-                  if ((alert_level = 1uy || alert_level = 2uy) &&
-                      alert_description = 0uy) {
-                    read_status_close_notify
-                  } else if (alert_level = 1uy || alert_level = 2uy) {
-                    read_status_peer_alert
+    let pending_read_offset = !pending_read_offset_box;
+    let pending_read_len = !pending_read_len_box;
+    assert (pure (SZ.v pending_read_offset <= SZ.v pending_read_len));
+    assert (pure (SZ.v pending_read_len <= 4096));
+    if SZ.(pending_read_offset <^ pending_read_len) {
+      let pending_available_refined = SZ.(pending_read_len -^ pending_read_offset);
+      let pending_available : SZ.t = pending_available_refined;
+      assert (pure (SZ.v pending_available > 0));
+      let copy_len : SZ.t =
+        if SZ.(remaining <^ pending_available) {
+          remaining
+        } else {
+          pending_available
+        };
+      assert (pure (SZ.v copy_len > 0));
+      assert (pure (SZ.v copy_len <= SZ.v remaining));
+      assert (pure (SZ.v pending_read_offset + SZ.v copy_len <= SZ.v pending_read_len));
+      assert (pure (SZ.v pending_read_offset + SZ.v copy_len <= SZ.v pending_read_buffer_capacity));
+      assert (pure (SZ.v offset + SZ.v copy_len <= SZ.v total_len));
+      V.pts_to_len read_buffer;
+      V.to_array_pts_to read_buffer;
+      copy_payload_to_output_loop
+        (V.vec_to_array read_buffer)
+        pending_read_buffer_capacity
+        out
+        total_len
+        pending_read_offset
+        offset
+        copy_len;
+      V.to_vec_pts_to read_buffer;
+      let pending_read_offset' = SZ.(pending_read_offset +^ copy_len);
+      assert (pure (SZ.v pending_read_offset' <= SZ.v pending_read_len));
+      pending_read_offset_box := pending_read_offset';
+      with bytes. assert (pts_to out bytes);
+      if (copy_len = remaining) {
+        read_status_complete
+      } else {
+        let offset' = SZ.(offset +^ copy_len);
+        let remaining' = SZ.(remaining -^ copy_len);
+        assert (pure (SZ.v remaining' < SZ.v remaining));
+        assert (pure (SZ.v offset' + SZ.v remaining' == SZ.v total_len));
+        client_read_application_records
+          backend
+          ch
+          record_state
+          read_buffer
+          pending_read_offset_box
+          pending_read_len_box
+          out
+          total_len
+          offset'
+          remaining'
+          fuel
+      }
+    } else if (fuel = 0uy) {
+      read_status_failed
+    } else {
+      let mut header = [| 0uy; 5sz |];
+      let header_ok = client_read_raw_exact backend ch header 5sz 0sz 5sz;
+      with bytes. assert (pts_to out bytes);
+      let fuel' = U8.(fuel -^ 1uy);
+      if header_ok {
+        let mut content_type_out = [| 0uy; 1sz |];
+        let mut fragment_len_out = [| 0uy; 2sz |];
+        let header_parse_ok =
+          RF.parse_record_header header 5sz content_type_out 1sz fragment_len_out 2sz;
+        if header_parse_ok {
+          let content_type = content_type_out.(0sz);
+          let frag_hi = fragment_len_out.(0sz);
+          let frag_lo = fragment_len_out.(1sz);
+          let frag_hi16 = Cast.uint8_to_uint16 frag_hi;
+          let frag_lo16 = Cast.uint8_to_uint16 frag_lo;
+          let frag16 = U16.logor (U16.shift_left frag_hi16 8ul) frag_lo16;
+          let fragment_len = SZ.uint16_to_sizet frag16;
+          if not (content_type = 23uy) {
+            read_status_failed
+          } else if SZ.(16sz <^ fragment_len) {
+            let mut cipher = [| 0uy; fragment_len |];
+            let fragment_ok = client_read_raw_exact backend ch cipher fragment_len 0sz fragment_len;
+            if fragment_ok {
+              let inner_len = SZ.(fragment_len -^ 16sz);
+              assert (pure (SZ.v inner_len > 0));
+              let mut inner = [| 0uy; inner_len |];
+              let opened =
+                Rec.open_application_runtime record_state header 5sz cipher fragment_len inner;
+              with opened_bytes. assert (pts_to out opened_bytes);
+              if opened {
+                let mut inner_content_type_out = [| 0uy; 1sz |];
+                let response_len =
+                  RF.decode_inner_plaintext inner inner_len inner_content_type_out 1sz;
+                let inner_content_type = inner_content_type_out.(0sz);
+                if (inner_content_type = 22uy) {
+                  assert (pure (U8.v fuel' < U8.v fuel));
+                  client_read_application_records
+                    backend
+                    ch
+                    record_state
+                    read_buffer
+                    pending_read_offset_box
+                    pending_read_len_box
+                    out
+                    total_len
+                    offset
+                    remaining
+                    fuel'
+                } else if (inner_content_type = 21uy) {
+                  if SZ.(1sz <^ inner_len) {
+                    pts_to_len inner;
+                    let alert_level = inner.(0sz);
+                    let alert_description = inner.(1sz);
+                    if ((alert_level = 1uy || alert_level = 2uy) &&
+                        alert_description = 0uy) {
+                      read_status_close_notify
+                    } else if (alert_level = 1uy || alert_level = 2uy) {
+                      read_status_peer_alert
+                    } else {
+                      read_status_failed
+                    }
+                  } else {
+                    read_status_failed
+                  }
+                } else if (not (inner_content_type = 23uy)) {
+                  read_status_failed
+                } else if SZ.(remaining <^ response_len) {
+                  if SZ.(response_len <=^ pending_read_buffer_capacity) {
+                    copy_payload_to_output inner inner_len remaining out total_len offset;
+                    with copied_bytes. assert (pts_to out copied_bytes);
+                    let leftover_len = SZ.(response_len -^ remaining);
+                    assert (pure (SZ.v leftover_len > 0));
+                    assert (pure (SZ.v leftover_len <= SZ.v pending_read_buffer_capacity));
+                    assert (pure (SZ.v remaining + SZ.v leftover_len == SZ.v response_len));
+                    assert (pure (SZ.v remaining + SZ.v leftover_len <= SZ.v inner_len));
+                    pts_to_len inner;
+                    with inner_bytes. assert (pts_to inner inner_bytes);
+                    assert (pure (B.length inner_bytes == SZ.v inner_len));
+                    assert (pure (0 + SZ.v leftover_len <= SZ.v pending_read_buffer_capacity));
+                    V.pts_to_len read_buffer;
+                    V.to_array_pts_to read_buffer;
+                    copy_payload_to_output_loop
+                      inner
+                      inner_len
+                      (V.vec_to_array read_buffer)
+                      pending_read_buffer_capacity
+                      remaining
+                      0sz
+                      leftover_len;
+                    V.to_vec_pts_to read_buffer;
+                    pending_read_offset_box := 0sz;
+                    pending_read_len_box := leftover_len;
+                    read_status_complete
                   } else {
                     read_status_failed
                   }
                 } else {
-                  read_status_failed
+                  copy_payload_to_output inner inner_len response_len out total_len offset;
+                  with copied_bytes. assert (pts_to out copied_bytes);
+                  let offset' = SZ.(offset +^ response_len);
+                  let remaining' = SZ.(remaining -^ response_len);
+                  assert (pure (U8.v fuel' < U8.v fuel));
+                  assert (pure (SZ.v offset' + SZ.v remaining' == SZ.v total_len));
+                  client_read_application_records
+                    backend
+                    ch
+                    record_state
+                    read_buffer
+                    pending_read_offset_box
+                    pending_read_len_box
+                    out
+                    total_len
+                    offset'
+                    remaining'
+                    fuel'
                 }
-              } else if (not (inner_content_type = 23uy) || SZ.(remaining <^ response_len)) {
-                read_status_failed
               } else {
-                copy_payload_to_output inner inner_len response_len out total_len offset;
-                with copied_bytes. assert (pts_to out copied_bytes);
-                let offset' = SZ.(offset +^ response_len);
-                let remaining' = SZ.(remaining -^ response_len);
-                assert (pure (U8.v fuel' < U8.v fuel));
-                assert (pure (SZ.v offset' + SZ.v remaining' == SZ.v total_len));
-                client_read_application_records backend ch record_state out total_len offset' remaining' fuel'
+                read_status_failed
               }
             } else {
               read_status_failed
@@ -683,8 +834,6 @@ fn rec client_read_application_records
       } else {
         read_status_failed
       }
-    } else {
-      read_status_failed
     }
   }
 }
@@ -712,6 +861,9 @@ fn client_read_exact (c: connection) (ch: IO.channel) (out: array U8.t) (len: SZ
         c.backend
         ch
         c.server_application_record_state
+        c.pending_read_buffer
+        c.pending_read_offset
+        c.pending_read_len
         out
         len
         0sz
