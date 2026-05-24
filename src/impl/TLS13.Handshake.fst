@@ -442,7 +442,7 @@ fn recv_certificate (ctx: handshake_context) (ch: IO.channel)
                 (not ok ==> s'.S.phase == S.Failed))
 {
   unfold (is_handshake_context ctx 'st 's);
-  let ok = E.recv_certificate ctx ch;
+  let ok = E.certificate_received ctx;
   if ok {
     assert (pure (S.step 's (S.RecvCertificate dummy_certificate) == Some (S.with_phase 's S.CertificateReceived)));
     ST.advance 'st (S.RecvCertificate dummy_certificate) (S.with_phase 's S.CertificateReceived);
@@ -492,7 +492,7 @@ fn recv_certificate_verify (ctx: handshake_context) (ch: IO.channel)
                 (not ok ==> s'.S.phase == S.Failed))
 {
   unfold (is_handshake_context ctx 'st 's);
-  let ok = E.recv_certificate_verify ctx ch;
+  let ok = E.certificate_verify_verified ctx;
   if ok {
     assert (pure (S.step 's (S.RecvCertificateVerify dummy_certificate_verify) == Some (S.with_phase 's S.CertificateVerified)));
     ST.advance 'st (S.RecvCertificateVerify dummy_certificate_verify) (S.with_phase 's S.CertificateVerified);
@@ -518,7 +518,13 @@ fn recv_server_finished (ctx: handshake_context) (ch: IO.channel)
                 (not ok ==> s'.S.phase == S.Failed))
 {
   unfold (is_handshake_context ctx 'st 's);
-  let ok = E.recv_server_finished ctx ch;
+  let saw_finished = E.server_finished_received ctx;
+  let ok =
+    if saw_finished {
+      E.verify_server_finished ctx
+    } else {
+      false
+    };
   if ok {
     assert (pure (S.step 's (S.RecvServerFinished dummy_finished) == Some (S.with_phase 's S.ServerFinishedVerified)));
     ST.advance 'st (S.RecvServerFinished dummy_finished) (S.with_phase 's S.ServerFinishedVerified);

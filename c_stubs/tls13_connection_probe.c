@@ -164,24 +164,6 @@ static bool process_server_hello_record(
   return true;
 }
 
-static bool probe_handshake_recv_certificate(
-    TLS13_Handshake_handshake_context ctx,
-    TLS13_IO_channel ch,
-    void *erased_state_ref,
-    void *erased_state) {
-  (void)ch;
-  (void)erased_state_ref;
-  (void)erased_state;
-  TLS13_Connection_connection c = from_handshake_context(ctx);
-  if (!handshake_can_continue(c) ||
-      !TLS13_Handshake_FlightState_saw_certificate(c->server_handshake_flight_state)
-      ) {
-    fail_handshake(c);
-    return false;
-  }
-  return true;
-}
-
 static bool probe_handshake_validate_certificate(
     TLS13_Handshake_handshake_context ctx,
     void *erased_state_ref,
@@ -255,46 +237,6 @@ static bool probe_handshake_validate_certificate(
     return false;
   }
   TLS13_Handshake_FlightState_mark_certificate_verify_verified(c->server_handshake_flight_state);
-  return true;
-}
-
-static bool probe_handshake_recv_certificate_verify(
-    TLS13_Handshake_handshake_context ctx,
-    TLS13_IO_channel ch,
-    void *erased_state_ref,
-    void *erased_state) {
-  (void)ch;
-  (void)erased_state_ref;
-  (void)erased_state;
-  TLS13_Connection_connection c = from_handshake_context(ctx);
-  if (!handshake_can_continue(c) ||
-      !TLS13_Handshake_FlightState_certificate_verify_verified(c->server_handshake_flight_state)) {
-    fail_handshake(c);
-    return false;
-  }
-  return true;
-}
-
-static bool probe_handshake_recv_server_finished(
-    TLS13_Handshake_handshake_context ctx,
-    TLS13_IO_channel ch,
-    void *erased_state_ref,
-    void *erased_state) {
-  (void)ch;
-  (void)erased_state_ref;
-  (void)erased_state;
-  TLS13_Connection_connection c = from_handshake_context(ctx);
-  if (!handshake_can_continue(c) ||
-      !TLS13_Handshake_FlightState_saw_finished(c->server_handshake_flight_state)
-      ) {
-    fail_handshake(c);
-    return false;
-  }
-  if (!TLS13_Handshake_FlightState_verify_server_finished(c->server_handshake_flight_state)) {
-    fprintf(stderr, "failed to verify OpenSSL server Finished\n");
-    fail_handshake(c);
-    return false;
-  }
   return true;
 }
 
@@ -416,10 +358,11 @@ bool TLS13_Handshake_External_process_server_hello_record(
       (TLS13_Handshake_handshake_context)ctx, header, fragment, fragment_len, key_share, key_share_len);
 }
 
-bool TLS13_Handshake_External_recv_certificate(
-    TLS13_Handshake_External_handshake_context ctx,
-    TLS13_IO_channel ch) {
-  return probe_handshake_recv_certificate((TLS13_Handshake_handshake_context)ctx, ch, NULL, NULL);
+bool TLS13_Handshake_External_certificate_received(
+    TLS13_Handshake_External_handshake_context ctx) {
+  TLS13_Connection_connection c = from_handshake_context((TLS13_Handshake_handshake_context)ctx);
+  return handshake_can_continue(c) &&
+         TLS13_Handshake_FlightState_saw_certificate(c->server_handshake_flight_state);
 }
 
 bool TLS13_Handshake_External_validate_certificate(
@@ -427,18 +370,31 @@ bool TLS13_Handshake_External_validate_certificate(
   return probe_handshake_validate_certificate((TLS13_Handshake_handshake_context)ctx, NULL, NULL);
 }
 
-bool TLS13_Handshake_External_recv_certificate_verify(
-    TLS13_Handshake_External_handshake_context ctx,
-    TLS13_IO_channel ch) {
-  return probe_handshake_recv_certificate_verify(
-      (TLS13_Handshake_handshake_context)ctx, ch, NULL, NULL);
+bool TLS13_Handshake_External_certificate_verify_verified(
+    TLS13_Handshake_External_handshake_context ctx) {
+  TLS13_Connection_connection c = from_handshake_context((TLS13_Handshake_handshake_context)ctx);
+  return handshake_can_continue(c) &&
+         TLS13_Handshake_FlightState_certificate_verify_verified(c->server_handshake_flight_state);
 }
 
-bool TLS13_Handshake_External_recv_server_finished(
-    TLS13_Handshake_External_handshake_context ctx,
-    TLS13_IO_channel ch) {
-  return probe_handshake_recv_server_finished(
-      (TLS13_Handshake_handshake_context)ctx, ch, NULL, NULL);
+bool TLS13_Handshake_External_server_finished_received(
+    TLS13_Handshake_External_handshake_context ctx) {
+  TLS13_Connection_connection c = from_handshake_context((TLS13_Handshake_handshake_context)ctx);
+  return handshake_can_continue(c) &&
+         TLS13_Handshake_FlightState_saw_finished(c->server_handshake_flight_state);
+}
+
+bool TLS13_Handshake_External_verify_server_finished(
+    TLS13_Handshake_External_handshake_context ctx) {
+  TLS13_Connection_connection c = from_handshake_context((TLS13_Handshake_handshake_context)ctx);
+  if (!handshake_can_continue(c)) {
+    return false;
+  }
+  bool ok = TLS13_Handshake_FlightState_verify_server_finished(c->server_handshake_flight_state);
+  if (!ok) {
+    fprintf(stderr, "failed to verify OpenSSL server Finished\n");
+  }
+  return ok;
 }
 
 static TLS13_Connection_connection tls13_connection_probe_new(

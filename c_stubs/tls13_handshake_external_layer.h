@@ -75,19 +75,19 @@ bool TLS13_Handshake_External_process_server_hello_record(
     void *fragment_bytes,
     void *key_share_bytes);
 
-bool TLS13_Handshake_External_recv_certificate(
-    TLS13_Handshake_External_handshake_context ctx,
-    TLS13_IO_channel ch);
+bool TLS13_Handshake_External_certificate_received(
+    TLS13_Handshake_External_handshake_context ctx);
 
 bool TLS13_Handshake_External_validate_certificate(
     TLS13_Handshake_External_handshake_context ctx);
 
-bool TLS13_Handshake_External_recv_certificate_verify(
-    TLS13_Handshake_External_handshake_context ctx,
-    TLS13_IO_channel ch);
+bool TLS13_Handshake_External_certificate_verify_verified(
+    TLS13_Handshake_External_handshake_context ctx);
 
-bool TLS13_Handshake_External_recv_server_finished(
-    TLS13_Handshake_External_handshake_context ctx,
-    TLS13_IO_channel ch);
+bool TLS13_Handshake_External_server_finished_received(
+    TLS13_Handshake_External_handshake_context ctx);
+
+bool TLS13_Handshake_External_verify_server_finished(
+    TLS13_Handshake_External_handshake_context ctx);
 
 #endif

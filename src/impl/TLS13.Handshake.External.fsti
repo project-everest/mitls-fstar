@@ -105,22 +105,27 @@ fn process_server_hello_record
           pts_to fragment 'fragment_bytes **
           pts_to key_share 'key_share_bytes
 
-fn recv_certificate (ctx: handshake_context) (ch: IO.channel)
-  requires is_context ctx ** IO.is_channel ch
+fn certificate_received (ctx: handshake_context)
+  requires is_context ctx
   returns ok: bool
-  ensures is_context ctx ** IO.is_channel ch
+  ensures is_context ctx
 
 fn validate_certificate (ctx: handshake_context)
   requires is_context ctx
   returns ok: bool
   ensures is_context ctx
 
-fn recv_certificate_verify (ctx: handshake_context) (ch: IO.channel)
-  requires is_context ctx ** IO.is_channel ch
+fn certificate_verify_verified (ctx: handshake_context)
+  requires is_context ctx
   returns ok: bool
-  ensures is_context ctx ** IO.is_channel ch
+  ensures is_context ctx
 
-fn recv_server_finished (ctx: handshake_context) (ch: IO.channel)
-  requires is_context ctx ** IO.is_channel ch
+fn server_finished_received (ctx: handshake_context)
+  requires is_context ctx
   returns ok: bool
-  ensures is_context ctx ** IO.is_channel ch
+  ensures is_context ctx
+
+fn verify_server_finished (ctx: handshake_context)
+  requires is_context ctx
+  returns ok: bool
+  ensures is_context ctx

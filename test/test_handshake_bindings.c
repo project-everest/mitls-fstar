@@ -179,10 +179,8 @@ bool TLS13_Handshake_External_process_server_hello_record(
   return ctx->recv_server_hello_ok;
 }
 
-bool TLS13_Handshake_External_recv_certificate(
-    TLS13_Handshake_External_handshake_context ctx,
-    TLS13_IO_channel ch) {
-  (void)ch;
+bool TLS13_Handshake_External_certificate_received(
+    TLS13_Handshake_External_handshake_context ctx) {
   ctx->recv_certificate_calls++;
   return ctx->recv_certificate_ok;
 }
@@ -193,19 +191,20 @@ bool TLS13_Handshake_External_validate_certificate(
   return ctx->validate_certificate_ok;
 }
 
-bool TLS13_Handshake_External_recv_certificate_verify(
-    TLS13_Handshake_External_handshake_context ctx,
-    TLS13_IO_channel ch) {
-  (void)ch;
+bool TLS13_Handshake_External_certificate_verify_verified(
+    TLS13_Handshake_External_handshake_context ctx) {
   ctx->recv_certificate_verify_calls++;
   return ctx->recv_certificate_verify_ok;
 }
 
-bool TLS13_Handshake_External_recv_server_finished(
-    TLS13_Handshake_External_handshake_context ctx,
-    TLS13_IO_channel ch) {
-  (void)ch;
+bool TLS13_Handshake_External_server_finished_received(
+    TLS13_Handshake_External_handshake_context ctx) {
   ctx->recv_server_finished_calls++;
+  return ctx->recv_server_finished_ok;
+}
+
+bool TLS13_Handshake_External_verify_server_finished(
+    TLS13_Handshake_External_handshake_context ctx) {
   return ctx->recv_server_finished_ok;
 }
 
