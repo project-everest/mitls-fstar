@@ -10,6 +10,7 @@ module Arr = Pulse.Lib.Array
 module B = TLS13.Bytes
 module Box = Pulse.Lib.Box
 module Rec = TLS13.Record
+module RF = TLS13.Record.Framing
 module Seq = FStar.Seq
 module SZ = FStar.SizeT
 module U16 = FStar.UInt16
@@ -437,6 +438,112 @@ fn copy_server_handshake
   fold (is_flight_state st);
 }
 
+fn rec copy_fragment_to_buffer_loop
+  (fragment: array U8.t)
+  (fragment_total_len: SZ.t)
+  (out: array U8.t)
+  (out_capacity: SZ.t)
+  (src_index: SZ.t)
+  (dst_index: SZ.t)
+  (remaining: SZ.t)
+  requires pts_to fragment 'fragment_bytes **
+           pts_to out 'old **
+           pure (B.length 'fragment_bytes == SZ.v fragment_total_len /\
+                 B.length 'old == SZ.v out_capacity /\
+                 SZ.v src_index + SZ.v remaining <= SZ.v fragment_total_len /\
+                 SZ.v dst_index + SZ.v remaining <= SZ.v out_capacity)
+  ensures exists* out_bytes.
+          pts_to fragment 'fragment_bytes **
+          pts_to out out_bytes **
+          pure (B.length out_bytes == SZ.v out_capacity)
+  decreases (SZ.v remaining)
+{
+  if (remaining = 0sz) {
+    with out_bytes. assert (pts_to out out_bytes);
+    assert (pure (B.length out_bytes == SZ.v out_capacity));
+  } else {
+    assert (pure (SZ.v src_index < SZ.v fragment_total_len));
+    assert (pure (SZ.v dst_index < SZ.v out_capacity));
+    let b = fragment.(src_index);
+    out.(dst_index) <- b;
+    let src_index' = SZ.(src_index +^ 1sz);
+    let dst_index' = SZ.(dst_index +^ 1sz);
+    let remaining' = SZ.(remaining -^ 1sz);
+    with out_bytes. assert (pts_to out out_bytes);
+    assert (pure (B.length out_bytes == SZ.v out_capacity));
+    assert (pure (SZ.v remaining' < SZ.v remaining));
+    assert (pure (SZ.v src_index' + SZ.v remaining' <= SZ.v fragment_total_len));
+    assert (pure (SZ.v dst_index' + SZ.v remaining' <= SZ.v out_capacity));
+    copy_fragment_to_buffer_loop
+      fragment fragment_total_len out out_capacity src_index' dst_index' remaining'
+  }
+}
+
+fn copy_fragment_to_buffer
+  (fragment: array U8.t)
+  (fragment_total_len: SZ.t)
+  (copy_len: SZ.t)
+  (out: array U8.t)
+  (out_capacity: SZ.t)
+  (offset: SZ.t)
+  requires pts_to fragment 'fragment_bytes **
+           pts_to out 'old **
+           pure (B.length 'fragment_bytes == SZ.v fragment_total_len /\
+                 B.length 'old == SZ.v out_capacity /\
+                 SZ.v copy_len <= SZ.v fragment_total_len /\
+                 SZ.v offset + SZ.v copy_len <= SZ.v out_capacity)
+  ensures exists* out_bytes.
+          pts_to fragment 'fragment_bytes **
+          pts_to out out_bytes **
+          pure (B.length out_bytes == SZ.v out_capacity)
+{
+  copy_fragment_to_buffer_loop fragment fragment_total_len out out_capacity 0sz offset copy_len
+}
+
+fn append_server_handshake_fragment
+  (st: flight_state)
+  (fragment: array U8.t)
+  (fragment_total_len: SZ.t)
+  (fragment_len: SZ.t)
+  requires is_flight_state st **
+           pts_to fragment 'fragment_bytes **
+           pure (B.length 'fragment_bytes == SZ.v fragment_total_len /\
+                 SZ.v fragment_len <= SZ.v fragment_total_len)
+  returns ok: bool
+  ensures is_flight_state st **
+          pts_to fragment 'fragment_bytes
+{
+  unfold (is_flight_state st);
+  let current = !st.handshake_len_box;
+  if SZ.(fragment_len <=^ 32768sz) {
+    let remaining_capacity = SZ.(32768sz -^ fragment_len);
+    if SZ.(current <=^ remaining_capacity) {
+      V.pts_to_len st.server_handshake_messages;
+      assert (pure (V.length st.server_handshake_messages == 32768));
+      V.to_array_pts_to st.server_handshake_messages;
+      assert (pure (Pulse.Lib.Array.Core.length (V.vec_to_array st.server_handshake_messages) == 32768));
+      assert (pure (SZ.v current + SZ.v fragment_len <= 32768));
+      copy_fragment_to_buffer
+        fragment
+        fragment_total_len
+        fragment_len
+        (V.vec_to_array st.server_handshake_messages)
+        32768sz
+        current;
+      V.to_vec_pts_to st.server_handshake_messages;
+      st.handshake_len_box := SZ.(current +^ fragment_len);
+      fold (is_flight_state st);
+      true
+    } else {
+      fold (is_flight_state st);
+      false
+    }
+  } else {
+    fold (is_flight_state st);
+    false
+  }
+}
+
 fn set_handshake_secret
   (st: flight_state)
   (secret: array U8.t)
@@ -825,6 +932,44 @@ fn open_server_handshake_record
   assert (pure (B.length out_s == B.length 'old_out));
   fold (is_flight_state st);
   ok
+}
+
+fn process_server_handshake_record
+  (st: flight_state)
+  (aad: array U8.t)
+  (aad_len: SZ.t)
+  (cipher: array U8.t)
+  (cipher_len: SZ.t)
+  requires is_flight_state st **
+           pts_to aad 'aad_bytes **
+           pts_to cipher 'cipher_bytes **
+           pure (B.length 'aad_bytes == SZ.v aad_len /\
+                 B.length 'cipher_bytes == SZ.v cipher_len /\
+                 SZ.v aad_len == 5 /\
+                 16 < SZ.v cipher_len /\
+                 SZ.v cipher_len <= 20000)
+  returns ok: bool
+  ensures is_flight_state st **
+          pts_to aad 'aad_bytes **
+          pts_to cipher 'cipher_bytes
+{
+  let inner_len = SZ.(cipher_len -^ 16sz);
+  assert (pure (SZ.v inner_len > 0));
+  let mut inner = [| 0uy; inner_len |];
+  let opened = open_server_handshake_record st aad aad_len cipher cipher_len inner;
+  if opened {
+    let mut inner_content_type_out = [| 0uy; 1sz |];
+    let handshake_plaintext_len =
+      RF.decode_inner_plaintext_no_padding inner inner_len inner_content_type_out 1sz;
+    let inner_content_type = inner_content_type_out.(0sz);
+    if (inner_content_type = 22uy) {
+      append_server_handshake_fragment st inner inner_len handshake_plaintext_len
+    } else {
+      false
+    }
+  } else {
+    false
+  }
 }
 
 fn handshake_len (st: flight_state)

@@ -330,60 +330,19 @@ static bool process_encrypted_handshake_record(
     uint8_t encrypted_header[TLS13_WIRE_RECORD_HEADER_LEN],
     uint8_t *encrypted_fragment,
     size_t fragment_len) {
-  if (fragment_len <= 16 || fragment_len > UINT16_MAX) {
+  if (fragment_len <= 16 || fragment_len > 20000) {
     fprintf(stderr, "unexpected encrypted handshake fragment length\n");
     return false;
   }
-
-  size_t inner_plaintext_len = fragment_len - 16u;
-  uint8_t inner_plaintext[inner_plaintext_len];
-  if (!TLS13_Handshake_FlightState_open_server_handshake_record(
+  if (!TLS13_Handshake_FlightState_process_server_handshake_record(
           c->server_handshake_flight_state,
           encrypted_header,
           TLS13_WIRE_RECORD_HEADER_LEN,
           encrypted_fragment,
-          fragment_len,
-          inner_plaintext)) {
-    fprintf(stderr, "failed to decrypt OpenSSL encrypted handshake record\n");
+          fragment_len)) {
+    fprintf(stderr, "failed to process OpenSSL encrypted handshake record\n");
     return false;
   }
-
-  uint8_t inner_content_type_buf[1] = {0};
-  if (inner_plaintext_len == 0) {
-    fprintf(stderr, "failed to decode OpenSSL handshake inner plaintext\n");
-    return false;
-  }
-  size_t handshake_plaintext_len =
-      TLS13_Record_Framing_decode_inner_plaintext_no_padding(
-          inner_plaintext,
-          inner_plaintext_len,
-          inner_content_type_buf,
-          sizeof inner_content_type_buf);
-  uint8_t inner_content_type = inner_content_type_buf[0];
-  size_t server_handshake_len =
-      TLS13_Handshake_FlightState_handshake_len(c->server_handshake_flight_state);
-  uint8_t server_handshake_messages[PROBE_SERVER_HANDSHAKE_CAPACITY];
-  if (!copy_server_handshake_messages(c, server_handshake_messages)) {
-    fprintf(stderr, "failed to copy OpenSSL handshake messages\n");
-    return false;
-  }
-  if (inner_content_type != 22 ||
-      handshake_plaintext_len > sizeof server_handshake_messages - server_handshake_len ||
-      !TLS13_Handshake_FlightState_append_handshake_len(
-          c->server_handshake_flight_state,
-          handshake_plaintext_len,
-          sizeof server_handshake_messages)) {
-    fprintf(stderr, "failed to decode OpenSSL handshake inner plaintext\n");
-    return false;
-  }
-  memcpy(
-      server_handshake_messages + server_handshake_len,
-      inner_plaintext,
-      handshake_plaintext_len);
-  TLS13_Handshake_FlightState_set_server_handshake(
-      c->server_handshake_flight_state,
-      server_handshake_messages,
-      sizeof server_handshake_messages);
   return true;
 }
 

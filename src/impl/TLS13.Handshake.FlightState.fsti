@@ -315,6 +315,25 @@ fn open_server_handshake_record
           pts_to out out_bytes **
           pure (B.length out_bytes == B.length 'old_out)
 
+fn process_server_handshake_record
+  (st: flight_state)
+  (aad: array U8.t)
+  (aad_len: SZ.t)
+  (cipher: array U8.t)
+  (cipher_len: SZ.t)
+  requires is_flight_state st **
+           pts_to aad 'aad_bytes **
+           pts_to cipher 'cipher_bytes **
+           pure (B.length 'aad_bytes == SZ.v aad_len /\
+                 B.length 'cipher_bytes == SZ.v cipher_len /\
+                 SZ.v aad_len == 5 /\
+                 16 < SZ.v cipher_len /\
+                 SZ.v cipher_len <= 20000)
+  returns ok: bool
+  ensures is_flight_state st **
+          pts_to aad 'aad_bytes **
+          pts_to cipher 'cipher_bytes
+
 fn handshake_len (st: flight_state)
   requires is_flight_state st
   returns len: SZ.t
