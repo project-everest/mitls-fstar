@@ -21,6 +21,8 @@ struct TLS13_Connection_External_connection_s {
   unsigned read_fragment_calls;
   unsigned close_calls;
   TLS13_Record_record_state read_record_state;
+  uint8_t read_cipher[23];
+  bool read_cipher_ready;
 };
 
 TLS13_Connection_External_connection TLS13_Connection_External_client_new(
@@ -97,46 +99,44 @@ bool TLS13_Connection_External_client_write_raw_record(
   return c->write_record_ok;
 }
 
-bool TLS13_Connection_External_client_read_raw_record_header(
+size_t TLS13_Connection_External_client_read_raw(
     TLS13_Connection_External_connection c,
     TLS13_IO_channel ch,
-    uint8_t *header,
-    size_t header_len,
-    void *old_header) {
+    uint8_t *buf,
+    size_t total_len,
+    size_t offset,
+    size_t remaining,
+    void *old_buf) {
   (void)ch;
-  (void)old_header;
+  (void)old_buf;
   if (!c->read_exact_ok) {
-    return false;
+    return 0;
   }
-  c->read_header_calls++;
-  memset(header, 0, header_len);
-  header[0] = 23;
-  header[1] = 3;
-  header[2] = 3;
-  header[3] = 0;
-  header[4] = 23;
-  return true;
-}
-
-bool TLS13_Connection_External_client_read_raw_record_fragment(
-    TLS13_Connection_External_connection c,
-    TLS13_IO_channel ch,
-    uint8_t *cipher,
-    size_t cipher_len,
-    void *old_cipher) {
-  (void)ch;
-  (void)old_cipher;
-  if (!c->read_exact_ok) {
-    return false;
+  if (remaining == 0 || offset > total_len || remaining > total_len - offset) {
+    return 0;
   }
-  c->read_fragment_calls++;
-  if (cipher_len != 23) {
-    return false;
+  size_t chunk = remaining > 3 ? 3 : remaining;
+  if (total_len == 5) {
+    static const uint8_t header[] = {23, 3, 3, 0, 23};
+    c->read_header_calls++;
+    memcpy(buf + offset, header + offset, chunk);
+    return chunk;
   }
-  uint8_t header[] = {23, 3, 3, 0, 23};
-  uint8_t plain[] = {0x5a, 0x5a, 0x5a, 0x5a, 0x5a, 0x5a, 23};
-  return TLS13_Record_seal_application_runtime(
-      c->read_record_state, header, sizeof header, plain, sizeof plain, cipher);
+  if (total_len == sizeof c->read_cipher) {
+    if (!c->read_cipher_ready) {
+      uint8_t header[] = {23, 3, 3, 0, 23};
+      uint8_t plain[] = {0x5a, 0x5a, 0x5a, 0x5a, 0x5a, 0x5a, 23};
+      c->read_cipher_ready = TLS13_Record_seal_application_runtime(
+          c->read_record_state, header, sizeof header, plain, sizeof plain, c->read_cipher);
+    }
+    if (!c->read_cipher_ready) {
+      return 0;
+    }
+    c->read_fragment_calls++;
+    memcpy(buf + offset, c->read_cipher + offset, chunk);
+    return chunk;
+  }
+  return 0;
 }
 
 bool TLS13_Connection_External_client_close(
@@ -169,8 +169,8 @@ static int test_success_path(void) {
       c.backend->new_calls != 1 ||
       c.backend->connect_calls != 1 ||
       c.backend->write_record_calls != 1 ||
-      c.backend->read_header_calls == 0 ||
-      c.backend->read_fragment_calls == 0 ||
+      c.backend->read_header_calls <= 1 ||
+      c.backend->read_fragment_calls <= 1 ||
       c.backend->close_calls != 1 ||
       out[0] != 0x5a;
   TLS13_Connection_client_free(c);

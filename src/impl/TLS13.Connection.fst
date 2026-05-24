@@ -449,6 +449,44 @@ fn copy_payload_to_output
   copy_payload_to_output_loop payload payload_total_len out total_len 0sz offset copy_len
 }
 
+fn rec client_read_raw_exact
+  (backend: E.connection)
+  (ch: IO.channel)
+  (buf: array U8.t)
+  (total_len: SZ.t)
+  (offset: SZ.t)
+  (remaining: SZ.t)
+  requires   E.is_connection backend **
+  IO.is_channel ch **
+  pts_to buf 'old **
+  pure (B.length 'old == SZ.v total_len /\
+        SZ.v offset + SZ.v remaining == SZ.v total_len)
+  returns ok: bool
+  ensures exists* bytes.
+          E.is_connection backend **
+          IO.is_channel ch **
+          pts_to buf bytes **
+          pure (B.length bytes == SZ.v total_len)
+  decreases (SZ.v remaining)
+{
+  if (remaining = 0sz) {
+    true
+  } else {
+    assert (pure (SZ.v remaining > 0));
+    let n = E.client_read_raw backend ch buf total_len offset remaining;
+    if (n = 0sz) {
+      false
+    } else {
+      with bytes. assert (pts_to buf bytes);
+      let offset' = SZ.(offset +^ n);
+      let remaining' = SZ.(remaining -^ n);
+      assert (pure (SZ.v remaining' < SZ.v remaining));
+      assert (pure (SZ.v offset' + SZ.v remaining' == SZ.v total_len));
+      client_read_raw_exact backend ch buf total_len offset' remaining'
+    }
+  }
+}
+
 fn rec client_read_application_records
   (backend: E.connection)
   (ch: IO.channel)
@@ -480,7 +518,7 @@ fn rec client_read_application_records
   } else {
     assert (pure (SZ.v remaining > 0));
     let mut header = [| 0uy; 5sz |];
-    let header_ok = E.client_read_raw_record_header backend ch header 5sz;
+    let header_ok = client_read_raw_exact backend ch header 5sz 0sz 5sz;
     with bytes. assert (pts_to out bytes);
     let fuel' = U8.(fuel -^ 1uy);
     if header_ok {
@@ -500,7 +538,7 @@ fn rec client_read_application_records
           false
         } else if SZ.(16sz <^ fragment_len) {
           let mut cipher = [| 0uy; fragment_len |];
-          let fragment_ok = E.client_read_raw_record_fragment backend ch cipher fragment_len;
+          let fragment_ok = client_read_raw_exact backend ch cipher fragment_len 0sz fragment_len;
           if fragment_ok {
             let inner_len = SZ.(fragment_len -^ 16sz);
             assert (pure (SZ.v inner_len > 0));

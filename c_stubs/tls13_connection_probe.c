@@ -1159,32 +1159,25 @@ bool TLS13_Connection_External_client_write_raw_record(
   return true;
 }
 
-bool TLS13_Connection_External_client_read_raw_record_header(
+size_t TLS13_Connection_External_client_read_raw(
     TLS13_Connection_External_connection c,
     TLS13_IO_channel ch,
-    uint8_t *header,
-    size_t header_len,
-    void *old_header) {
+    uint8_t *buf,
+    size_t total_len,
+    size_t offset,
+    size_t remaining,
+    void *old_buf) {
   (void)ch;
-  (void)old_header;
-  if (c == NULL || c->fd < 0 || header == NULL || header_len != TLS13_WIRE_RECORD_HEADER_LEN) {
-    return false;
+  (void)old_buf;
+  if (c == NULL || c->fd < 0 || buf == NULL ||
+      remaining == 0 || offset > total_len || remaining > total_len - offset) {
+    return 0;
   }
-  return read_exact_fd(c->fd, header, header_len) == 0;
-}
-
-bool TLS13_Connection_External_client_read_raw_record_fragment(
-    TLS13_Connection_External_connection c,
-    TLS13_IO_channel ch,
-    uint8_t *cipher,
-    size_t cipher_len,
-    void *old_cipher) {
-  (void)ch;
-  (void)old_cipher;
-  if (c == NULL || c->fd < 0 || cipher == NULL) {
-    return false;
+  ssize_t n = tls13_io_read_fd(c->fd, buf + offset, remaining);
+  if (n <= 0) {
+    return 0;
   }
-  return read_exact_fd(c->fd, cipher, cipher_len) == 0;
+  return (size_t)n;
 }
 
 bool TLS13_Connection_External_client_close(
