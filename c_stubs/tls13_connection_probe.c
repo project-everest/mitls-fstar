@@ -16,6 +16,13 @@
 #undef TLS13_Record_Framing_decode_inner_plaintext_no_padding
 #undef TLS13_Record_Framing_serialize_application_data_header
 #undef TLS13_Record_Framing_parse_record_header
+#undef TLS13_Handshake_Transcript_hash_client_server_hello
+#undef TLS13_Crypto_hkdf_extract
+#undef TLS13_KeySchedule_handshake_secret
+#undef TLS13_KeySchedule_client_handshake_traffic_secret
+#undef TLS13_KeySchedule_server_handshake_traffic_secret
+#undef TLS13_KeySchedule_derive_traffic_key
+#undef TLS13_KeySchedule_derive_traffic_iv
 
 #include "TLS13_Handshake_Driver.h"
 
@@ -92,62 +99,6 @@ static int write_all_fd(int fd, const uint8_t *buf, size_t len) {
     }
     off += (size_t)n;
   }
-  return 0;
-}
-
-static int derive_server_handshake_keys(
-    const uint8_t *client_hello,
-    size_t client_hello_len,
-    const uint8_t *server_hello,
-    size_t server_hello_len,
-    const uint8_t server_key_share[32],
-    uint8_t handshake_secret[32],
-    uint8_t client_handshake_traffic_secret[32],
-    uint8_t server_handshake_traffic_secret[32],
-    uint8_t client_key[32],
-    uint8_t client_iv[12],
-    uint8_t server_key[32],
-    uint8_t server_iv[12]) {
-  static const uint8_t client_private_key[32] = {
-      0x49, 0xaf, 0x42, 0xba, 0x7f, 0x79, 0x94, 0x85,
-      0x2d, 0x71, 0x3e, 0xf2, 0x78, 0x4b, 0xcb, 0xca,
-      0xa7, 0x91, 0x1d, 0xe2, 0x6a, 0xdc, 0x56, 0x42,
-      0xcb, 0x63, 0x45, 0x40, 0xe7, 0xea, 0x50, 0x05};
-  static const uint8_t zero_secret[32] = {0};
-
-  uint8_t early_secret[32];
-  uint8_t shared_secret[32];
-  uint8_t transcript_hash[32];
-
-  if (!tls13_hacl_hkdf_extract_sha256(
-          early_secret, NULL, 0, zero_secret, sizeof zero_secret) ||
-      !tls13_hacl_x25519_shared(shared_secret, client_private_key, server_key_share)) {
-    return -1;
-  }
-
-  if (!TLS13_Handshake_Transcript_hash_client_server_hello(
-          (uint8_t *)client_hello,
-          client_hello_len,
-          (uint8_t *)server_hello,
-          server_hello_len,
-          transcript_hash)) {
-    return -1;
-  }
-
-  TLS13_KeySchedule_handshake_secret(
-      early_secret, shared_secret, sizeof shared_secret, handshake_secret);
-  TLS13_KeySchedule_client_handshake_traffic_secret(
-      handshake_secret, transcript_hash, client_handshake_traffic_secret);
-  TLS13_KeySchedule_server_handshake_traffic_secret(
-      handshake_secret, transcript_hash, server_handshake_traffic_secret);
-  TLS13_KeySchedule_derive_traffic_key(
-      client_handshake_traffic_secret, client_key);
-  TLS13_KeySchedule_derive_traffic_iv(
-      client_handshake_traffic_secret, client_iv);
-  TLS13_KeySchedule_derive_traffic_key(
-      server_handshake_traffic_secret, server_key);
-  TLS13_KeySchedule_derive_traffic_iv(
-      server_handshake_traffic_secret, server_iv);
   return 0;
 }
 
@@ -303,69 +254,6 @@ static bool process_encrypted_handshake_record(
   return true;
 }
 
-static bool pending_handshake_metadata(
-    TLS13_Connection_connection c,
-    uint8_t *handshake_type,
-    uint32_t *handshake_body_len,
-    size_t *message_len) {
-  if (c == NULL) {
-    return false;
-  }
-  size_t server_handshake_len =
-      TLS13_Handshake_FlightState_handshake_len(c->server_handshake_flight_state);
-  size_t parsed_handshake_len =
-      TLS13_Handshake_FlightState_parsed_len(c->server_handshake_flight_state);
-  if (server_handshake_len - parsed_handshake_len < TLS13_WIRE_HANDSHAKE_HEADER_LEN) {
-    return false;
-  }
-
-  uint8_t server_handshake_messages[PROBE_SERVER_HANDSHAKE_CAPACITY];
-  if (!copy_server_handshake_messages(c, server_handshake_messages)) {
-    return false;
-  }
-  uint8_t handshake_type_buf[1] = {0};
-  uint8_t handshake_body_len_buf[3] = {0};
-  if (!TLS13_Handshake_Framing_parse_handshake_header(
-          server_handshake_messages + parsed_handshake_len,
-          server_handshake_len - parsed_handshake_len,
-          handshake_type_buf,
-          sizeof handshake_type_buf,
-          handshake_body_len_buf,
-          sizeof handshake_body_len_buf)) {
-    return false;
-  }
-  *handshake_type = handshake_type_buf[0];
-  *handshake_body_len =
-        ((uint32_t)handshake_body_len_buf[0] << 16) |
-        ((uint32_t)handshake_body_len_buf[1] << 8) |
-        (uint32_t)handshake_body_len_buf[2];
-  *message_len = TLS13_WIRE_HANDSHAKE_HEADER_LEN + (size_t)*handshake_body_len;
-  return *message_len <= server_handshake_len - parsed_handshake_len;
-}
-
-static bool pending_handshake_body(
-    TLS13_Connection_connection c,
-    uint8_t expected_type,
-    uint8_t messages[PROBE_SERVER_HANDSHAKE_CAPACITY],
-    const uint8_t **body,
-    uint32_t *body_len,
-    size_t *message_len) {
-  uint8_t handshake_type = 0;
-  if (!pending_handshake_metadata(c, &handshake_type, body_len, message_len) ||
-      handshake_type != expected_type) {
-    return false;
-  }
-  size_t parsed_handshake_len =
-      TLS13_Handshake_FlightState_parsed_len(c->server_handshake_flight_state);
-  if (!copy_server_handshake_messages(c, messages)) {
-    return false;
-  }
-  *body = messages +
-          parsed_handshake_len +
-          TLS13_WIRE_HANDSHAKE_HEADER_LEN;
-  return true;
-}
-
 static void probe_handshake_send_client_hello(
     TLS13_Handshake_handshake_context ctx,
     TLS13_IO_channel ch,
@@ -444,72 +332,21 @@ static bool process_server_hello_record(
     return false;
   }
 
-  uint8_t client_hello[PROBE_CLIENT_HELLO_CAPACITY];
   uint8_t padded_server_hello_fragment[PROBE_SERVER_HELLO_CAPACITY] = {0};
-  size_t client_hello_len = 0;
-  size_t server_hello_len = 0;
   memcpy(padded_server_hello_fragment, server_hello_fragment, fragment_len);
   TLS13_Handshake_FlightState_set_server_hello(
       c->server_handshake_flight_state,
       padded_server_hello_fragment,
       sizeof padded_server_hello_fragment,
       fragment_len);
-  if (!copy_hello_messages(
-          c,
-          client_hello,
-          &client_hello_len,
-          padded_server_hello_fragment,
-          &server_hello_len)) {
-    fprintf(stderr, "failed to copy hello transcript bytes\n");
-    fail_handshake(c);
-    return false;
-  }
-  uint8_t handshake_secret[32];
-  uint8_t client_handshake_traffic_secret[32];
-  uint8_t client_handshake_key[32];
-  uint8_t client_handshake_iv[12];
-  uint8_t server_handshake_traffic_secret[32];
-  uint8_t server_handshake_key[32];
-  uint8_t server_handshake_iv[12];
-  if (derive_server_handshake_keys(
-          client_hello,
-          client_hello_len,
-          padded_server_hello_fragment,
-          server_hello_len,
+  if (!TLS13_Handshake_FlightState_derive_server_handshake_keys_from_share(
+          c->server_handshake_flight_state,
           server_key_share,
-          handshake_secret,
-          client_handshake_traffic_secret,
-          server_handshake_traffic_secret,
-          client_handshake_key,
-          client_handshake_iv,
-          server_handshake_key,
-          server_handshake_iv) != 0) {
+          server_key_share_len)) {
     fprintf(stderr, "failed to derive handshake traffic keys\n");
     fail_handshake(c);
     return false;
   }
-  TLS13_Handshake_FlightState_set_handshake_secret(
-      c->server_handshake_flight_state, handshake_secret, sizeof handshake_secret);
-  TLS13_Handshake_FlightState_set_client_handshake_traffic_secret(
-      c->server_handshake_flight_state,
-      client_handshake_traffic_secret,
-      sizeof client_handshake_traffic_secret);
-  TLS13_Handshake_FlightState_set_client_handshake_key_iv(
-      c->server_handshake_flight_state,
-      client_handshake_key,
-      sizeof client_handshake_key,
-      client_handshake_iv,
-      sizeof client_handshake_iv);
-  TLS13_Handshake_FlightState_set_server_handshake_traffic_secret(
-      c->server_handshake_flight_state,
-      server_handshake_traffic_secret,
-      sizeof server_handshake_traffic_secret);
-  TLS13_Handshake_FlightState_set_server_handshake_key_iv(
-      c->server_handshake_flight_state,
-      server_handshake_key,
-      sizeof server_handshake_key,
-      server_handshake_iv,
-      sizeof server_handshake_iv);
   return true;
 }
 

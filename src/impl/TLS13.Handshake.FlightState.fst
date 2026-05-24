@@ -10,10 +10,13 @@ module Arr = Pulse.Lib.Array
 module B = TLS13.Bytes
 module Box = Pulse.Lib.Box
 module Cast = FStar.Int.Cast
+module Crypto = TLS13.Crypto
+module KS = TLS13.KeySchedule
 module Rec = TLS13.Record
 module RF = TLS13.Record.Framing
 module Seq = FStar.Seq
 module SZ = FStar.SizeT
+module Transcript = TLS13.Handshake.Transcript
 module U16 = FStar.UInt16
 module U8 = FStar.UInt8
 module V = Pulse.Lib.Vec
@@ -110,6 +113,8 @@ let is_flight_state ([@@@mkey] st: flight_state) : slprop =
           V.length st.server_handshake_key == 32 /\
           V.length st.server_handshake_iv == 12 /\
           V.length st.server_finished_verify_data == 32 /\
+          SZ.v client_hello_len <= 512 /\
+          SZ.v server_hello_len <= 4096 /\
           SZ.v handshake_len <= 32768 /\
           SZ.v parsed_len <= SZ.v handshake_len)
 
@@ -322,7 +327,7 @@ fn copy_client_hello
 
 fn client_hello_len (st: flight_state)
   requires is_flight_state st
-  returns len: SZ.t
+  returns len: (l:SZ.t{SZ.v l <= 512})
   ensures is_flight_state st
 {
   unfold (is_flight_state st);
@@ -384,13 +389,62 @@ fn copy_server_hello
 
 fn server_hello_len (st: flight_state)
   requires is_flight_state st
-  returns len: SZ.t
+  returns len: (l:SZ.t{SZ.v l <= 4096})
   ensures is_flight_state st
 {
   unfold (is_flight_state st);
   let len = !st.server_hello_len_box;
   fold (is_flight_state st);
   len
+}
+
+inline_for_extraction
+fn write_fixed_client_private_key (sk: array U8.t)
+  requires pts_to sk 'old **
+           pure (B.length 'old == 32)
+  ensures exists* sk_bytes.
+          pts_to sk sk_bytes **
+          pure (B.length sk_bytes == 32)
+{
+  pts_to_len sk;
+  sk.(0sz) <- 0x49uy;
+  sk.(1sz) <- 0xafuy;
+  sk.(2sz) <- 0x42uy;
+  sk.(3sz) <- 0xbauy;
+  sk.(4sz) <- 0x7fuy;
+  sk.(5sz) <- 0x79uy;
+  sk.(6sz) <- 0x94uy;
+  sk.(7sz) <- 0x85uy;
+  sk.(8sz) <- 0x2duy;
+  sk.(9sz) <- 0x71uy;
+  sk.(10sz) <- 0x3euy;
+  sk.(11sz) <- 0xf2uy;
+  sk.(12sz) <- 0x78uy;
+  sk.(13sz) <- 0x4buy;
+  sk.(14sz) <- 0xcbuy;
+  sk.(15sz) <- 0xcauy;
+  sk.(16sz) <- 0xa7uy;
+  sk.(17sz) <- 0x91uy;
+  sk.(18sz) <- 0x1duy;
+  pts_to_len sk;
+  with sk_mid. assert (pts_to sk sk_mid);
+  assert (pure (B.length sk_mid == 32));
+  sk.(19sz) <- 0xe2uy;
+  sk.(20sz) <- 0x6auy;
+  sk.(21sz) <- 0xdcuy;
+  sk.(22sz) <- 0x56uy;
+  sk.(23sz) <- 0x42uy;
+  sk.(24sz) <- 0xcbuy;
+  sk.(25sz) <- 0x63uy;
+  sk.(26sz) <- 0x45uy;
+  sk.(27sz) <- 0x40uy;
+  sk.(28sz) <- 0xe7uy;
+  sk.(29sz) <- 0xeauy;
+  sk.(30sz) <- 0x50uy;
+  sk.(31sz) <- 0x05uy;
+  pts_to_len sk;
+  with sk_bytes. assert (pts_to sk sk_bytes);
+  assert (pure (B.length sk_bytes == 32));
 }
 
 fn set_server_handshake
@@ -887,6 +941,83 @@ fn copy_server_handshake_key_iv
   assert (pure (Seq.length key_s == 32));
   assert (pure (Seq.length iv_s == 12));
   fold (is_flight_state st);
+}
+
+fn derive_server_handshake_keys_from_share
+  (st: flight_state)
+  (server_key_share: array U8.t)
+  (server_key_share_len: SZ.t)
+  requires is_flight_state st **
+           pts_to server_key_share 'key_share_bytes **
+           pure (B.length 'key_share_bytes == SZ.v server_key_share_len /\
+                 SZ.v server_key_share_len == 32)
+  returns ok: bool
+  ensures is_flight_state st **
+          pts_to server_key_share 'key_share_bytes
+{
+  let mut client_hello = [| 0uy; 512sz |];
+  let mut server_hello = [| 0uy; 4096sz |];
+  copy_client_hello st client_hello 512sz;
+  copy_server_hello st server_hello 4096sz;
+  let ch_len = client_hello_len st;
+  let sh_len = server_hello_len st;
+  assert (pure (SZ.v ch_len <= 512));
+  assert (pure (SZ.v sh_len <= 4096));
+  assert (pure (SZ.fits (SZ.v ch_len + SZ.v sh_len)));
+  if SZ.(ch_len +^ sh_len <=^ 32768sz) {
+    let mut client_hello_exact = [| 0uy; ch_len |];
+    let mut server_hello_exact = [| 0uy; sh_len |];
+    copy_fragment_to_buffer_loop client_hello 512sz client_hello_exact ch_len 0sz 0sz ch_len;
+    copy_fragment_to_buffer_loop server_hello 4096sz server_hello_exact sh_len 0sz 0sz sh_len;
+    let mut zero_secret = [| 0uy; 32sz |];
+    let mut empty = [| 0uy; 0sz |];
+    let mut early_secret = [| 0uy; 32sz |];
+    Crypto.hkdf_extract empty 0sz zero_secret 32sz early_secret;
+    let mut client_private_key = [| 0uy; 32sz |];
+    write_fixed_client_private_key client_private_key;
+    let mut shared_secret = [| 0uy; 32sz |];
+    let shared_ok = Crypto.x25519_shared_runtime client_private_key server_key_share shared_secret;
+    if shared_ok {
+      with shared_secret_bytes. assert (pts_to shared_secret shared_secret_bytes);
+      assert (pure (B.length shared_secret_bytes == 32));
+      let mut transcript_hash = [| 0uy; 32sz |];
+      let transcript_ok =
+        Transcript.hash_client_server_hello
+          client_hello_exact
+          ch_len
+          server_hello_exact
+          sh_len
+          transcript_hash;
+      if transcript_ok {
+        let mut handshake_secret_bytes = [| 0uy; 32sz |];
+        let mut client_hs_secret = [| 0uy; 32sz |];
+        let mut server_hs_secret = [| 0uy; 32sz |];
+        let mut client_key = [| 0uy; 32sz |];
+        let mut client_iv = [| 0uy; 12sz |];
+        let mut server_key = [| 0uy; 32sz |];
+        let mut server_iv = [| 0uy; 12sz |];
+        KS.handshake_secret early_secret shared_secret 32sz handshake_secret_bytes;
+        KS.client_handshake_traffic_secret handshake_secret_bytes transcript_hash client_hs_secret;
+        KS.server_handshake_traffic_secret handshake_secret_bytes transcript_hash server_hs_secret;
+        KS.derive_traffic_key client_hs_secret client_key;
+        KS.derive_traffic_iv client_hs_secret client_iv;
+        KS.derive_traffic_key server_hs_secret server_key;
+        KS.derive_traffic_iv server_hs_secret server_iv;
+        set_handshake_secret st handshake_secret_bytes 32sz;
+        set_client_handshake_traffic_secret st client_hs_secret 32sz;
+        set_client_handshake_key_iv st client_key 32sz client_iv 12sz;
+        set_server_handshake_traffic_secret st server_hs_secret 32sz;
+        set_server_handshake_key_iv st server_key 32sz server_iv 12sz;
+        true
+      } else {
+        false
+      }
+    } else {
+      false
+    }
+  } else {
+    false
+  }
 }
 
 fn install_server_handshake_record_keys

@@ -68,6 +68,14 @@ void TLS13_Crypto_hkdf_expand_label_empty_context(
     void *label_bytes,
     void *old_out);
 
+bool TLS13_Crypto_x25519_shared_runtime(
+    uint8_t *sk,
+    uint8_t *pk,
+    uint8_t *out,
+    void *sk_bytes,
+    void *pk_bytes,
+    void *old_out);
+
 bool TLS13_Crypto_tls13_record_nonce(
     uint8_t *static_iv,
     uint64_t sequence_number,

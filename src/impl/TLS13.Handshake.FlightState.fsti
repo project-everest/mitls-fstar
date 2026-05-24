@@ -54,7 +54,7 @@ fn copy_client_hello
 
 fn client_hello_len (st: flight_state)
   requires is_flight_state st
-  returns len: SZ.t
+  returns len: (l:SZ.t{SZ.v l <= 512})
   ensures is_flight_state st
 
 fn set_server_hello
@@ -85,8 +85,20 @@ fn copy_server_hello
 
 fn server_hello_len (st: flight_state)
   requires is_flight_state st
-  returns len: SZ.t
+  returns len: (l:SZ.t{SZ.v l <= 4096})
   ensures is_flight_state st
+
+fn derive_server_handshake_keys_from_share
+  (st: flight_state)
+  (server_key_share: array U8.t)
+  (server_key_share_len: SZ.t)
+  requires is_flight_state st **
+           pts_to server_key_share 'key_share_bytes **
+           pure (B.length 'key_share_bytes == SZ.v server_key_share_len /\
+                 SZ.v server_key_share_len == 32)
+  returns ok: bool
+  ensures is_flight_state st **
+          pts_to server_key_share 'key_share_bytes
 
 fn set_server_handshake
   (st: flight_state)

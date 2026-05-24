@@ -107,6 +107,18 @@ fn x25519_shared (sk: array U8.t) (pk: array U8.t) (out: array U8.t)
            | Some shared -> pts_to out shared ** pure ok
            | None -> pts_to out 'old ** pure (not ok))
 
+fn x25519_shared_runtime (sk: array U8.t) (pk: array U8.t) (out: array U8.t)
+  requires pts_to sk 'sk_bytes **
+           pts_to pk 'pk_bytes **
+           pts_to out 'old **
+           pure (B.length 'sk_bytes == 32 /\ B.length 'pk_bytes == 32 /\ B.length 'old == 32)
+  returns ok: bool
+  ensures exists* out_bytes.
+          pts_to sk 'sk_bytes **
+          pts_to pk 'pk_bytes **
+          pts_to out out_bytes **
+          pure (B.length out_bytes == 32)
+
 fn tls13_record_nonce (static_iv: array U8.t) (sequence_number: U64.t) (out: array U8.t)
   requires pts_to static_iv 'iv_bytes **
            pts_to out 'old **
