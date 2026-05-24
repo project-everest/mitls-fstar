@@ -11,6 +11,7 @@ module B = TLS13.Bytes
 module Box = Pulse.Lib.Box
 module Cast = FStar.Int.Cast
 module Crypto = TLS13.Crypto
+module HF = TLS13.Handshake.Framing
 module KS = TLS13.KeySchedule
 module Rec = TLS13.Record
 module RF = TLS13.Record.Framing
@@ -1962,6 +1963,81 @@ fn build_client_finished_record
   } else {
     with out_bytes. assert (pts_to out out_bytes);
     assert (pure (B.length out_bytes == 58));
+    false
+  }
+}
+
+fn build_certificate_verify_input
+  (st: flight_state)
+  (out: array U8.t)
+  (out_len: SZ.t)
+  requires is_flight_state st **
+           pts_to out 'old_out **
+           pure (B.length 'old_out == SZ.v out_len /\
+                 SZ.v out_len == 130)
+  returns ok: bool
+  ensures exists* out_bytes.
+          is_flight_state st **
+          pts_to out out_bytes **
+          pure (B.length out_bytes == 130)
+{
+  let mut client_hello = [| 0uy; 512sz |];
+  let mut server_hello = [| 0uy; 4096sz |];
+  let mut server_handshake = [| 0uy; 32768sz |];
+  copy_client_hello st client_hello 512sz;
+  copy_server_hello st server_hello 4096sz;
+  copy_server_handshake st server_handshake 32768sz;
+  let ch_len = client_hello_len st;
+  let sh_len = server_hello_len st;
+  let cv_offset = certificate_verify_offset st;
+  assert (pure (SZ.v ch_len <= 512));
+  assert (pure (SZ.v sh_len <= 4096));
+  assert (pure (SZ.fits (SZ.v ch_len + SZ.v sh_len)));
+  if SZ.(ch_len +^ sh_len <=^ 32768sz) {
+    let ch_sh_len = SZ.(ch_len +^ sh_len);
+    assert (pure (SZ.v ch_sh_len <= 32768));
+    if SZ.(cv_offset <=^ 32768sz) {
+      let mut client_hello_exact = [| 0uy; ch_len |];
+      let mut server_hello_exact = [| 0uy; sh_len |];
+      let mut server_handshake_exact = [| 0uy; cv_offset |];
+      copy_fragment_to_buffer_loop client_hello 512sz client_hello_exact ch_len 0sz 0sz ch_len;
+      copy_fragment_to_buffer_loop server_hello 4096sz server_hello_exact sh_len 0sz 0sz sh_len;
+      copy_fragment_to_buffer_loop server_handshake 32768sz server_handshake_exact cv_offset 0sz 0sz cv_offset;
+      assert (pure (SZ.fits (SZ.v ch_sh_len + SZ.v cv_offset)));
+      if SZ.(ch_sh_len +^ cv_offset <=^ 32768sz) {
+        let mut transcript_hash = [| 0uy; 32sz |];
+        let transcript_ok =
+          Transcript.hash_client_server_handshake
+            client_hello_exact
+            ch_len
+            server_hello_exact
+            sh_len
+            server_handshake_exact
+            cv_offset
+            transcript_hash;
+        if transcript_ok {
+          HF.build_server_certificate_verify_input transcript_hash out out_len;
+          with out_bytes. assert (pts_to out out_bytes);
+          assert (pure (B.length out_bytes == 130));
+          true
+        } else {
+          with out_bytes. assert (pts_to out out_bytes);
+          assert (pure (B.length out_bytes == 130));
+          false
+        }
+      } else {
+        with out_bytes. assert (pts_to out out_bytes);
+        assert (pure (B.length out_bytes == 130));
+        false
+      }
+    } else {
+      with out_bytes. assert (pts_to out out_bytes);
+      assert (pure (B.length out_bytes == 130));
+      false
+    }
+  } else {
+    with out_bytes. assert (pts_to out out_bytes);
+    assert (pure (B.length out_bytes == 130));
     false
   }
 }

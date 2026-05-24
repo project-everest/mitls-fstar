@@ -505,6 +505,20 @@ fn build_client_finished_record
           pts_to out out_bytes **
           pure (B.length out_bytes == 58)
 
+fn build_certificate_verify_input
+  (st: flight_state)
+  (out: array U8.t)
+  (out_len: SZ.t)
+  requires is_flight_state st **
+           pts_to out 'old_out **
+           pure (B.length 'old_out == SZ.v out_len /\
+                 SZ.v out_len == 130)
+  returns ok: bool
+  ensures exists* out_bytes.
+          is_flight_state st **
+          pts_to out out_bytes **
+          pure (B.length out_bytes == 130)
+
 fn certificate_verify_offset (st: flight_state)
   requires is_flight_state st
   returns offset: SZ.t
