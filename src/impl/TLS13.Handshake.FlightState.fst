@@ -1717,6 +1717,57 @@ fn certificate_verify_offset (st: flight_state)
   offset
 }
 
+fn copy_server_handshake_slice
+  (st: flight_state)
+  (slice_offset: SZ.t)
+  (slice_len: SZ.t)
+  (out: array U8.t)
+  (out_capacity: SZ.t)
+  requires is_flight_state st **
+           pts_to out 'old_out **
+           pure (B.length 'old_out == SZ.v out_capacity /\
+                 SZ.v out_capacity == 32768)
+  returns ok: bool
+  ensures exists* out_bytes.
+          is_flight_state st **
+          pts_to out out_bytes **
+          pure (B.length out_bytes == 32768)
+{
+  unfold (is_flight_state st);
+  if SZ.(slice_offset <=^ 32768sz) {
+    let available = SZ.(32768sz -^ slice_offset);
+    if SZ.(slice_len <=^ available) {
+      V.pts_to_len st.server_handshake_messages;
+      V.to_array_pts_to st.server_handshake_messages;
+      assert (pure (Pulse.Lib.Array.Core.length (V.vec_to_array st.server_handshake_messages) == 32768));
+      assert (pure (SZ.v slice_offset + SZ.v slice_len <= 32768));
+      copy_fragment_to_buffer_loop
+        (V.vec_to_array st.server_handshake_messages)
+        32768sz
+        out
+        out_capacity
+        slice_offset
+        0sz
+        slice_len;
+      V.to_vec_pts_to st.server_handshake_messages;
+      with out_s. assert (pts_to out out_s);
+      assert (pure (Seq.length out_s == 32768));
+      fold (is_flight_state st);
+      true
+    } else {
+      with out_s. assert (pts_to out out_s);
+      assert (pure (Seq.length out_s == 32768));
+      fold (is_flight_state st);
+      false
+    }
+  } else {
+    with out_s. assert (pts_to out out_s);
+    assert (pure (Seq.length out_s == 32768));
+    fold (is_flight_state st);
+    false
+  }
+}
+
 fn certificate_leaf_offset (st: flight_state)
   requires is_flight_state st
   returns offset: SZ.t
@@ -1770,6 +1821,44 @@ fn certificate_verify_signature_len (st: flight_state)
   let len = !st.certificate_verify_signature_len_box;
   fold (is_flight_state st);
   len
+}
+
+fn copy_certificate_leaf_der
+  (st: flight_state)
+  (out: array U8.t)
+  (out_capacity: SZ.t)
+  requires is_flight_state st **
+           pts_to out 'old_out **
+           pure (B.length 'old_out == SZ.v out_capacity /\
+                 SZ.v out_capacity == 32768)
+  returns ok: bool
+  ensures exists* out_bytes.
+          is_flight_state st **
+          pts_to out out_bytes **
+          pure (B.length out_bytes == 32768)
+{
+  let offset = certificate_leaf_offset st;
+  let len = certificate_leaf_len st;
+  copy_server_handshake_slice st offset len out out_capacity
+}
+
+fn copy_certificate_verify_signature
+  (st: flight_state)
+  (out: array U8.t)
+  (out_capacity: SZ.t)
+  requires is_flight_state st **
+           pts_to out 'old_out **
+           pure (B.length 'old_out == SZ.v out_capacity /\
+                 SZ.v out_capacity == 32768)
+  returns ok: bool
+  ensures exists* out_bytes.
+          is_flight_state st **
+          pts_to out out_bytes **
+          pure (B.length out_bytes == 32768)
+{
+  let offset = certificate_verify_signature_offset st;
+  let len = certificate_verify_signature_len st;
+  copy_server_handshake_slice st offset len out out_capacity
 }
 
 fn server_before_finished_len (st: flight_state)

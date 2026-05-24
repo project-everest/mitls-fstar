@@ -87,19 +87,6 @@ static void fail_handshake(TLS13_Connection_connection c) {
   }
 }
 
-static bool copy_server_handshake_messages(
-    TLS13_Connection_connection c,
-    uint8_t messages[PROBE_SERVER_HANDSHAKE_CAPACITY]) {
-  if (c == NULL || messages == NULL) {
-    return false;
-  }
-  TLS13_Handshake_FlightState_copy_server_handshake(
-      c->server_handshake_flight_state,
-      messages,
-      PROBE_SERVER_HANDSHAKE_CAPACITY);
-  return true;
-}
-
 static bool process_encrypted_handshake_record(
     TLS13_Connection_connection c,
     uint8_t encrypted_header[TLS13_WIRE_RECORD_HEADER_LEN],
@@ -176,17 +163,17 @@ static bool probe_handshake_validate_certificate(
     fail_handshake(c);
     return false;
   }
-  size_t leaf_der_offset =
-      TLS13_Handshake_FlightState_certificate_leaf_offset(c->server_handshake_flight_state);
   size_t leaf_der_len =
       TLS13_Handshake_FlightState_certificate_leaf_len(c->server_handshake_flight_state);
-  uint8_t server_handshake_messages[PROBE_SERVER_HANDSHAKE_CAPACITY];
-  if (!copy_server_handshake_messages(c, server_handshake_messages)) {
+  uint8_t leaf_der[PROBE_SERVER_HANDSHAKE_CAPACITY];
+  if (!TLS13_Handshake_FlightState_copy_certificate_leaf_der(
+          c->server_handshake_flight_state,
+          leaf_der,
+          sizeof leaf_der)) {
     free(ca_pem);
     fail_handshake(c);
     return false;
   }
-  const uint8_t *leaf_der = server_handshake_messages + leaf_der_offset;
   tls13_peer_identity *peer = NULL;
   bool ok = tls13_openssl_validate_leaf_der(
       "localhost", ca_pem, ca_pem_len, leaf_der, leaf_der_len, &peer);
@@ -209,13 +196,19 @@ static bool probe_handshake_validate_certificate(
   uint16_t signature_scheme =
       TLS13_Handshake_FlightState_certificate_verify_signature_scheme(
           c->server_handshake_flight_state);
-  size_t signature_offset =
-      TLS13_Handshake_FlightState_certificate_verify_signature_offset(
-          c->server_handshake_flight_state);
   size_t signature_len =
       TLS13_Handshake_FlightState_certificate_verify_signature_len(
           c->server_handshake_flight_state);
-  const uint8_t *signature = server_handshake_messages + signature_offset;
+  uint8_t signature[PROBE_SERVER_HANDSHAKE_CAPACITY];
+  if (!TLS13_Handshake_FlightState_copy_certificate_verify_signature(
+          c->server_handshake_flight_state,
+          signature,
+          sizeof signature)) {
+    fprintf(stderr, "failed to copy server CertificateVerify signature\n");
+    tls13_openssl_peer_identity_free(peer);
+    fail_handshake(c);
+    return false;
+  }
   bool signature_ok = tls13_openssl_peer_verify_signature(
           peer,
           signature_scheme,
