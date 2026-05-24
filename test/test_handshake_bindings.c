@@ -3,6 +3,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 struct TLS13_Handshake_External_handshake_context_s {
   bool recv_server_hello_ok;
@@ -49,10 +50,47 @@ void TLS13_Handshake_External_send_client_hello(
   ctx->send_client_hello_calls++;
 }
 
-bool TLS13_Handshake_External_recv_server_hello(
+size_t TLS13_Handshake_External_read_raw(
     TLS13_Handshake_External_handshake_context ctx,
-    TLS13_IO_channel ch) {
+    TLS13_IO_channel ch,
+    uint8_t *buf,
+    size_t total_len,
+    size_t offset,
+    size_t remaining,
+    void *old_buf) {
+  (void)ctx;
   (void)ch;
+  (void)old_buf;
+  if (remaining == 0 || offset > total_len || remaining > total_len - offset) {
+    return 0;
+  }
+  size_t chunk = remaining > 3 ? 3 : remaining;
+  if (total_len == 5) {
+    static const uint8_t header[] = {22, 3, 3, 0, 1};
+    memcpy(buf + offset, header + offset, chunk);
+    return chunk;
+  }
+  if (total_len == 1) {
+    buf[offset] = 0;
+    return chunk;
+  }
+  return 0;
+}
+
+bool TLS13_Handshake_External_process_server_hello_record(
+    TLS13_Handshake_External_handshake_context ctx,
+    uint8_t *header,
+    size_t header_len,
+    uint8_t *fragment,
+    size_t fragment_len,
+    void *header_bytes,
+    void *fragment_bytes) {
+  (void)header;
+  (void)header_len;
+  (void)fragment;
+  (void)fragment_len;
+  (void)header_bytes;
+  (void)fragment_bytes;
   ctx->recv_server_hello_calls++;
   return ctx->recv_server_hello_ok;
 }

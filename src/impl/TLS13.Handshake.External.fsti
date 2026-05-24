@@ -3,8 +3,12 @@ module TLS13.Handshake.External
 #lang-pulse
 
 open Pulse.Lib.Pervasives
+open Pulse.Lib.Array.PtsTo
 
+module B = TLS13.Bytes
 module IO = TLS13.IO
+module SZ = FStar.SizeT
+module U8 = FStar.UInt8
 
 val handshake_context : Type0
 val is_context: handshake_context -> slprop
@@ -21,10 +25,38 @@ fn send_client_hello (ctx: handshake_context) (ch: IO.channel)
   requires is_context ctx ** IO.is_channel ch
   ensures is_context ctx ** IO.is_channel ch
 
-fn recv_server_hello (ctx: handshake_context) (ch: IO.channel)
+fn read_raw (ctx: handshake_context) (ch: IO.channel) (buf: array U8.t)
+  (total_len: SZ.t) (offset: SZ.t) (remaining: SZ.t)
   requires is_context ctx ** IO.is_channel ch
+           ** pts_to buf 'old
+           ** pure (B.length 'old == SZ.v total_len /\
+                    SZ.v remaining > 0 /\
+                    SZ.v offset + SZ.v remaining <= SZ.v total_len)
+  returns n: SZ.t
+  ensures exists* bytes.
+          is_context ctx ** IO.is_channel ch
+          ** pts_to buf bytes
+          ** pure (B.length bytes == SZ.v total_len /\
+                   SZ.v n <= SZ.v remaining)
+
+fn process_server_hello_record
+  (ctx: handshake_context)
+  (header: array U8.t)
+  (header_len: SZ.t)
+  (fragment: array U8.t)
+  (fragment_len: SZ.t)
+  requires is_context ctx **
+           pts_to header 'header_bytes **
+           pts_to fragment 'fragment_bytes **
+           pure (B.length 'header_bytes == SZ.v header_len /\
+                 B.length 'fragment_bytes == SZ.v fragment_len /\
+                 SZ.v header_len == 5 /\
+                 0 < SZ.v fragment_len /\
+                 SZ.v fragment_len <= 4096)
   returns ok: bool
-  ensures is_context ctx ** IO.is_channel ch
+  ensures is_context ctx **
+          pts_to header 'header_bytes **
+          pts_to fragment 'fragment_bytes
 
 fn recv_encrypted_extensions (ctx: handshake_context) (ch: IO.channel)
   requires is_context ctx ** IO.is_channel ch

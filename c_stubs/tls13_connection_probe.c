@@ -95,49 +95,6 @@ static int write_all_fd(int fd, const uint8_t *buf, size_t len) {
   return 0;
 }
 
-static int read_exact_fd(int fd, uint8_t *buf, size_t len) {
-  size_t off = 0;
-  while (off < len) {
-    ssize_t n = tls13_io_read_fd(fd, buf + off, len - off);
-    if (n <= 0) {
-      return -1;
-    }
-    off += (size_t)n;
-  }
-  return 0;
-}
-
-static int read_record(
-    int fd,
-    uint8_t header[TLS13_WIRE_RECORD_HEADER_LEN],
-    uint8_t *fragment,
-    size_t fragment_capacity,
-    uint8_t *content_type,
-    uint16_t *legacy_version,
-    uint16_t *fragment_len) {
-  if (read_exact_fd(fd, header, TLS13_WIRE_RECORD_HEADER_LEN) != 0) {
-    return -1;
-  }
-  uint8_t content_type_buf[1] = {0};
-  uint8_t fragment_len_buf[2] = {0};
-  if (!TLS13_Record_Framing_parse_record_header(
-          header,
-          TLS13_WIRE_RECORD_HEADER_LEN,
-          content_type_buf,
-          sizeof content_type_buf,
-          fragment_len_buf,
-          sizeof fragment_len_buf)) {
-    return -1;
-  }
-  *content_type = content_type_buf[0];
-  *legacy_version = 0x0303;
-  *fragment_len = ((uint16_t)fragment_len_buf[0] << 8) | fragment_len_buf[1];
-  if (*fragment_len > fragment_capacity) {
-    return -1;
-  }
-  return read_exact_fd(fd, fragment, *fragment_len);
-}
-
 static int derive_server_handshake_keys(
     const uint8_t *client_hello,
     size_t client_hello_len,
@@ -469,42 +426,26 @@ static void probe_handshake_send_client_hello(
   }
 }
 
-static bool probe_handshake_recv_server_hello(
+static bool process_server_hello_record(
     TLS13_Handshake_handshake_context ctx,
-    TLS13_IO_channel ch,
-    void *erased_state_ref,
-    void *erased_state) {
-  (void)ch;
-  (void)erased_state_ref;
-  (void)erased_state;
+    uint8_t header[TLS13_WIRE_RECORD_HEADER_LEN],
+    uint8_t *server_hello_fragment,
+    size_t fragment_len) {
   TLS13_Connection_connection c = from_handshake_context(ctx);
-  if (!handshake_can_continue(c) || c->fd < 0) {
+  if (!handshake_can_continue(c) ||
+      header == NULL ||
+      server_hello_fragment == NULL ||
+      fragment_len == 0 ||
+      fragment_len > PROBE_SERVER_HELLO_CAPACITY) {
     return false;
   }
 
-  uint8_t header[TLS13_WIRE_RECORD_HEADER_LEN];
-  uint8_t content_type = 0;
-  uint16_t legacy_version = 0;
-  uint16_t fragment_len = 0;
   uint8_t client_hello[PROBE_CLIENT_HELLO_CAPACITY];
-  uint8_t server_hello_fragment[PROBE_SERVER_HELLO_CAPACITY];
+  uint8_t padded_server_hello_fragment[PROBE_SERVER_HELLO_CAPACITY] = {0};
   size_t client_hello_len = 0;
   size_t server_hello_len = 0;
   uint8_t server_random[32];
   uint8_t server_key_share[32];
-  if (read_record(
-          c->fd,
-          header,
-          server_hello_fragment,
-          sizeof server_hello_fragment,
-          &content_type,
-          &legacy_version,
-          &fragment_len) != 0 ||
-      content_type != 22) {
-    fprintf(stderr, "bad ServerHello record header\n");
-    fail_handshake(c);
-    return false;
-  }
   if (!TLS13_Handshake_Framing_parse_supported_server_hello(
           server_hello_fragment,
           fragment_len,
@@ -516,16 +457,17 @@ static bool probe_handshake_recv_server_hello(
     fail_handshake(c);
     return false;
   }
+  memcpy(padded_server_hello_fragment, server_hello_fragment, fragment_len);
   TLS13_Handshake_FlightState_set_server_hello(
       c->server_handshake_flight_state,
-      server_hello_fragment,
-      sizeof server_hello_fragment,
+      padded_server_hello_fragment,
+      sizeof padded_server_hello_fragment,
       fragment_len);
   if (!copy_hello_messages(
           c,
           client_hello,
           &client_hello_len,
-          server_hello_fragment,
+          padded_server_hello_fragment,
           &server_hello_len)) {
     fprintf(stderr, "failed to copy hello transcript bytes\n");
     fail_handshake(c);
@@ -541,7 +483,7 @@ static bool probe_handshake_recv_server_hello(
   if (derive_server_handshake_keys(
           client_hello,
           client_hello_len,
-          server_hello_fragment,
+          padded_server_hello_fragment,
           server_hello_len,
           server_key_share,
           handshake_secret,
@@ -899,10 +841,43 @@ void TLS13_Handshake_External_send_client_hello(
   probe_handshake_send_client_hello((TLS13_Handshake_handshake_context)ctx, ch, NULL, NULL);
 }
 
-bool TLS13_Handshake_External_recv_server_hello(
+size_t TLS13_Handshake_External_read_raw(
     TLS13_Handshake_External_handshake_context ctx,
-    TLS13_IO_channel ch) {
-  return probe_handshake_recv_server_hello((TLS13_Handshake_handshake_context)ctx, ch, NULL, NULL);
+    TLS13_IO_channel ch,
+    uint8_t *buf,
+    size_t total_len,
+    size_t offset,
+    size_t remaining,
+    void *old_buf) {
+  (void)ch;
+  (void)old_buf;
+  TLS13_Connection_connection c = from_handshake_context((TLS13_Handshake_handshake_context)ctx);
+  if (!handshake_can_continue(c) || c->fd < 0 || buf == NULL ||
+      remaining == 0 || offset > total_len || remaining > total_len - offset) {
+    return 0;
+  }
+  ssize_t n = tls13_io_read_fd(c->fd, buf + offset, remaining);
+  if (n <= 0) {
+    return 0;
+  }
+  return (size_t)n;
+}
+
+bool TLS13_Handshake_External_process_server_hello_record(
+    TLS13_Handshake_External_handshake_context ctx,
+    uint8_t *header,
+    size_t header_len,
+    uint8_t *fragment,
+    size_t fragment_len,
+    void *header_bytes,
+    void *fragment_bytes) {
+  (void)header_bytes;
+  (void)fragment_bytes;
+  if (header_len != TLS13_WIRE_RECORD_HEADER_LEN) {
+    return false;
+  }
+  return process_server_hello_record(
+      (TLS13_Handshake_handshake_context)ctx, header, fragment, fragment_len);
 }
 
 bool TLS13_Handshake_External_recv_encrypted_extensions(

@@ -3,14 +3,20 @@ module TLS13.Handshake
 #lang-pulse
 
 open Pulse.Lib.Pervasives
+open Pulse.Lib.Array.PtsTo
 
 module B = TLS13.Bytes
+module Cast = FStar.Int.Cast
 module E = TLS13.Handshake.External
 module H = TLS13.Handshake.Spec
 module IO = TLS13.IO
+module RF = TLS13.Record.Framing
 module S = TLS13.StateMachine
 module ST = TLS13.State
+module SZ = FStar.SizeT
 module T = TLS13.Types
+module U16 = FStar.UInt16
+module U8 = FStar.UInt8
 module X = TLS13.X509.Spec
 
 type handshake_context = E.handshake_context
@@ -19,6 +25,7 @@ let is_handshake_context (ctx:handshake_context) (st:ST.state_ref) (s:S.conn_sta
   E.is_context ctx ** ST.current st s
 
 let zeros32 : B.bytes = B.zeros 32
+let server_hello_fragment_capacity : SZ.t = 4096sz
 
 let dummy_client_hello : H.client_hello = {
   H.random = zeros32;
@@ -92,6 +99,86 @@ fn send_client_hello (ctx: handshake_context) (ch: IO.channel)
   fold (is_handshake_context ctx 'st (S.with_phase 's S.ClientHelloSent));
 }
 
+fn rec read_raw_exact
+  (ctx: handshake_context)
+  (ch: IO.channel)
+  (buf: array U8.t)
+  (total_len: SZ.t)
+  (offset: SZ.t)
+  (remaining: SZ.t)
+  requires E.is_context ctx **
+           IO.is_channel ch **
+           pts_to buf 'old **
+           pure (B.length 'old == SZ.v total_len /\
+                 SZ.v offset + SZ.v remaining == SZ.v total_len)
+  returns ok: bool
+  ensures exists* bytes.
+          E.is_context ctx **
+          IO.is_channel ch **
+          pts_to buf bytes **
+          pure (B.length bytes == SZ.v total_len)
+  decreases (SZ.v remaining)
+{
+  if (remaining = 0sz) {
+    true
+  } else {
+    assert (pure (SZ.v remaining > 0));
+    let n = E.read_raw ctx ch buf total_len offset remaining;
+    if (n = 0sz) {
+      false
+    } else {
+      with bytes. assert (pts_to buf bytes);
+      let offset' = SZ.(offset +^ n);
+      let remaining' = SZ.(remaining -^ n);
+      assert (pure (SZ.v remaining' < SZ.v remaining));
+      assert (pure (SZ.v offset' + SZ.v remaining' == SZ.v total_len));
+      read_raw_exact ctx ch buf total_len offset' remaining'
+    }
+  }
+}
+
+inline_for_extraction
+fn recv_server_hello_record (ctx: handshake_context) (ch: IO.channel)
+  requires E.is_context ctx ** IO.is_channel ch
+  returns ok: bool
+  ensures E.is_context ctx ** IO.is_channel ch
+{
+  let mut header = [| 0uy; 5sz |];
+  let header_ok = read_raw_exact ctx ch header 5sz 0sz 5sz;
+  if header_ok {
+    let mut content_type_out = [| 0uy; 1sz |];
+    let mut fragment_len_out = [| 0uy; 2sz |];
+    let header_parse_ok =
+      RF.parse_record_header header 5sz content_type_out 1sz fragment_len_out 2sz;
+    if header_parse_ok {
+      let content_type = content_type_out.(0sz);
+      let frag_hi = fragment_len_out.(0sz);
+      let frag_lo = fragment_len_out.(1sz);
+      let frag_hi16 = Cast.uint8_to_uint16 frag_hi;
+      let frag_lo16 = Cast.uint8_to_uint16 frag_lo;
+      let frag16 = U16.logor (U16.shift_left frag_hi16 8ul) frag_lo16;
+      let fragment_len = SZ.uint16_to_sizet frag16;
+      if ((content_type = 22uy) &&
+          SZ.(0sz <^ fragment_len) &&
+          SZ.(fragment_len <=^ server_hello_fragment_capacity)) {
+        let mut fragment = [| 0uy; fragment_len |];
+        let fragment_ok = read_raw_exact ctx ch fragment fragment_len 0sz fragment_len;
+        if fragment_ok {
+          E.process_server_hello_record ctx header 5sz fragment fragment_len
+        } else {
+          false
+        }
+      } else {
+        false
+      }
+    } else {
+      false
+    }
+  } else {
+    false
+  }
+}
+
 fn recv_server_hello (ctx: handshake_context) (ch: IO.channel)
   requires is_handshake_context ctx 'st 's **
            IO.is_channel ch **
@@ -104,7 +191,7 @@ fn recv_server_hello (ctx: handshake_context) (ch: IO.channel)
                 (not ok ==> s'.S.phase == S.Failed))
 {
   unfold (is_handshake_context ctx 'st 's);
-  let ok = E.recv_server_hello ctx ch;
+  let ok = recv_server_hello_record ctx ch;
   if ok {
     assert (pure (S.step 's (S.RecvServerHello dummy_server_hello) == Some (S.with_phase 's S.ServerHelloReceived)));
     ST.advance 'st (S.RecvServerHello dummy_server_hello) (S.with_phase 's S.ServerHelloReceived);
