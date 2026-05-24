@@ -1855,6 +1855,104 @@ fn verify_server_finished (st: flight_state)
   }
 }
 
+fn derive_application_keys
+  (st: flight_state)
+  (client_key: array U8.t)
+  (client_key_len: SZ.t)
+  (client_iv: array U8.t)
+  (client_iv_len: SZ.t)
+  (server_key: array U8.t)
+  (server_key_len: SZ.t)
+  (server_iv: array U8.t)
+  (server_iv_len: SZ.t)
+  requires is_flight_state st **
+           pts_to client_key 'old_client_key **
+           pts_to client_iv 'old_client_iv **
+           pts_to server_key 'old_server_key **
+           pts_to server_iv 'old_server_iv **
+           pure (B.length 'old_client_key == SZ.v client_key_len /\
+                 B.length 'old_client_iv == SZ.v client_iv_len /\
+                 B.length 'old_server_key == SZ.v server_key_len /\
+                 B.length 'old_server_iv == SZ.v server_iv_len /\
+                 SZ.v client_key_len == 32 /\
+                 SZ.v client_iv_len == 12 /\
+                 SZ.v server_key_len == 32 /\
+                 SZ.v server_iv_len == 12)
+  returns ok: bool
+  ensures exists* client_key_bytes client_iv_bytes server_key_bytes server_iv_bytes.
+          is_flight_state st **
+          pts_to client_key client_key_bytes **
+          pts_to client_iv client_iv_bytes **
+          pts_to server_key server_key_bytes **
+          pts_to server_iv server_iv_bytes **
+          pure (B.length client_key_bytes == 32 /\
+                B.length client_iv_bytes == 12 /\
+                B.length server_key_bytes == 32 /\
+                B.length server_iv_bytes == 12)
+{
+  let mut client_hello = [| 0uy; 512sz |];
+  let mut server_hello = [| 0uy; 4096sz |];
+  let mut server_handshake = [| 0uy; 32768sz |];
+  let mut handshake_secret_bytes = [| 0uy; 32sz |];
+  copy_client_hello st client_hello 512sz;
+  copy_server_hello st server_hello 4096sz;
+  copy_server_handshake st server_handshake 32768sz;
+  copy_handshake_secret st handshake_secret_bytes 32sz;
+  let ch_len = client_hello_len st;
+  let sh_len = server_hello_len st;
+  let through_len = server_through_finished_len st;
+  assert (pure (SZ.v ch_len <= 512));
+  assert (pure (SZ.v sh_len <= 4096));
+  assert (pure (SZ.v through_len <= 32768));
+  assert (pure (SZ.fits (SZ.v ch_len + SZ.v sh_len)));
+  if SZ.(ch_len +^ sh_len <=^ 32768sz) {
+    let ch_sh_len = SZ.(ch_len +^ sh_len);
+    assert (pure (SZ.v ch_sh_len <= 32768));
+    if SZ.(through_len <=^ 32768sz) {
+      let mut client_hello_exact = [| 0uy; ch_len |];
+      let mut server_hello_exact = [| 0uy; sh_len |];
+      let mut server_handshake_exact = [| 0uy; through_len |];
+      copy_fragment_to_buffer_loop client_hello 512sz client_hello_exact ch_len 0sz 0sz ch_len;
+      copy_fragment_to_buffer_loop server_hello 4096sz server_hello_exact sh_len 0sz 0sz sh_len;
+      copy_fragment_to_buffer_loop server_handshake 32768sz server_handshake_exact through_len 0sz 0sz through_len;
+      assert (pure (SZ.fits (SZ.v ch_sh_len + SZ.v through_len)));
+      if SZ.(ch_sh_len +^ through_len <=^ 32768sz) {
+        let mut transcript_hash = [| 0uy; 32sz |];
+        let transcript_ok =
+          Transcript.hash_client_server_handshake
+            client_hello_exact
+            ch_len
+            server_hello_exact
+            sh_len
+            server_handshake_exact
+            through_len
+            transcript_hash;
+        if transcript_ok {
+          let mut master_secret = [| 0uy; 32sz |];
+          let mut client_application_traffic_secret = [| 0uy; 32sz |];
+          let mut server_application_traffic_secret = [| 0uy; 32sz |];
+          KS.master_secret handshake_secret_bytes master_secret;
+          KS.client_application_traffic_secret master_secret transcript_hash client_application_traffic_secret;
+          KS.server_application_traffic_secret master_secret transcript_hash server_application_traffic_secret;
+          KS.derive_traffic_key client_application_traffic_secret client_key;
+          KS.derive_traffic_iv client_application_traffic_secret client_iv;
+          KS.derive_traffic_key server_application_traffic_secret server_key;
+          KS.derive_traffic_iv server_application_traffic_secret server_iv;
+          true
+        } else {
+          false
+        }
+      } else {
+        false
+      }
+    } else {
+      false
+    }
+  } else {
+    false
+  }
+}
+
 fn saw_certificate (st: flight_state)
   requires is_flight_state st
   returns saw: bool

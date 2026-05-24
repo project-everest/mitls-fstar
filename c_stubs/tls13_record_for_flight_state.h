@@ -34,5 +34,11 @@
     TLS13_KeySchedule_derive_traffic_iv(traffic_secret, out)
 #define TLS13_KeySchedule_finished_verify_data(base_key, transcript_hash, out, base_key_bytes, hash_bytes, old_out) \
     TLS13_KeySchedule_finished_verify_data(base_key, transcript_hash, out)
+#define TLS13_KeySchedule_master_secret(handshake, out, handshake_bytes, old_out) \
+    TLS13_KeySchedule_master_secret(handshake, out)
+#define TLS13_KeySchedule_client_application_traffic_secret(master, transcript_hash, out, master_bytes, hash_bytes, old_out) \
+    TLS13_KeySchedule_client_application_traffic_secret(master, transcript_hash, out)
+#define TLS13_KeySchedule_server_application_traffic_secret(master, transcript_hash, out, master_bytes, hash_bytes, old_out) \
+    TLS13_KeySchedule_server_application_traffic_secret(master, transcript_hash, out)
 
 #endif

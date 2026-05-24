@@ -456,6 +456,41 @@ fn verify_server_finished (st: flight_state)
   returns ok: bool
   ensures is_flight_state st
 
+fn derive_application_keys
+  (st: flight_state)
+  (client_key: array U8.t)
+  (client_key_len: SZ.t)
+  (client_iv: array U8.t)
+  (client_iv_len: SZ.t)
+  (server_key: array U8.t)
+  (server_key_len: SZ.t)
+  (server_iv: array U8.t)
+  (server_iv_len: SZ.t)
+  requires is_flight_state st **
+           pts_to client_key 'old_client_key **
+           pts_to client_iv 'old_client_iv **
+           pts_to server_key 'old_server_key **
+           pts_to server_iv 'old_server_iv **
+           pure (B.length 'old_client_key == SZ.v client_key_len /\
+                 B.length 'old_client_iv == SZ.v client_iv_len /\
+                 B.length 'old_server_key == SZ.v server_key_len /\
+                 B.length 'old_server_iv == SZ.v server_iv_len /\
+                 SZ.v client_key_len == 32 /\
+                 SZ.v client_iv_len == 12 /\
+                 SZ.v server_key_len == 32 /\
+                 SZ.v server_iv_len == 12)
+  returns ok: bool
+  ensures exists* client_key_bytes client_iv_bytes server_key_bytes server_iv_bytes.
+          is_flight_state st **
+          pts_to client_key client_key_bytes **
+          pts_to client_iv client_iv_bytes **
+          pts_to server_key server_key_bytes **
+          pts_to server_iv server_iv_bytes **
+          pure (B.length client_key_bytes == 32 /\
+                B.length client_iv_bytes == 12 /\
+                B.length server_key_bytes == 32 /\
+                B.length server_iv_bytes == 12)
+
 fn certificate_verify_offset (st: flight_state)
   requires is_flight_state st
   returns offset: SZ.t
