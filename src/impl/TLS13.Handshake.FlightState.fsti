@@ -491,6 +491,20 @@ fn derive_application_keys
                 B.length server_key_bytes == 32 /\
                 B.length server_iv_bytes == 12)
 
+fn build_client_finished_record
+  (st: flight_state)
+  (out: array U8.t)
+  (out_len: SZ.t)
+  requires is_flight_state st **
+           pts_to out 'old_out **
+           pure (B.length 'old_out == SZ.v out_len /\
+                 SZ.v out_len == 58)
+  returns ok: bool
+  ensures exists* out_bytes.
+          is_flight_state st **
+          pts_to out out_bytes **
+          pure (B.length out_bytes == 58)
+
 fn certificate_verify_offset (st: flight_state)
   requires is_flight_state st
   returns offset: SZ.t

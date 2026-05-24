@@ -1855,6 +1855,117 @@ fn verify_server_finished (st: flight_state)
   }
 }
 
+fn build_client_finished_record
+  (st: flight_state)
+  (out: array U8.t)
+  (out_len: SZ.t)
+  requires is_flight_state st **
+           pts_to out 'old_out **
+           pure (B.length 'old_out == SZ.v out_len /\
+                 SZ.v out_len == 58)
+  returns ok: bool
+  ensures exists* out_bytes.
+          is_flight_state st **
+          pts_to out out_bytes **
+          pure (B.length out_bytes == 58)
+{
+  let mut client_hello = [| 0uy; 512sz |];
+  let mut server_hello = [| 0uy; 4096sz |];
+  let mut server_handshake = [| 0uy; 32768sz |];
+  let mut client_hs_secret = [| 0uy; 32sz |];
+  copy_client_hello st client_hello 512sz;
+  copy_server_hello st server_hello 4096sz;
+  copy_server_handshake st server_handshake 32768sz;
+  copy_client_handshake_traffic_secret st client_hs_secret 32sz;
+  let ch_len = client_hello_len st;
+  let sh_len = server_hello_len st;
+  let through_len = server_through_finished_len st;
+  assert (pure (SZ.v ch_len <= 512));
+  assert (pure (SZ.v sh_len <= 4096));
+  assert (pure (SZ.v through_len <= 32768));
+  assert (pure (SZ.fits (SZ.v ch_len + SZ.v sh_len)));
+  if SZ.(ch_len +^ sh_len <=^ 32768sz) {
+    let ch_sh_len = SZ.(ch_len +^ sh_len);
+    assert (pure (SZ.v ch_sh_len <= 32768));
+    if SZ.(through_len <=^ 32768sz) {
+      let mut client_hello_exact = [| 0uy; ch_len |];
+      let mut server_hello_exact = [| 0uy; sh_len |];
+      let mut server_handshake_exact = [| 0uy; through_len |];
+      copy_fragment_to_buffer_loop client_hello 512sz client_hello_exact ch_len 0sz 0sz ch_len;
+      copy_fragment_to_buffer_loop server_hello 4096sz server_hello_exact sh_len 0sz 0sz sh_len;
+      copy_fragment_to_buffer_loop server_handshake 32768sz server_handshake_exact through_len 0sz 0sz through_len;
+      assert (pure (SZ.fits (SZ.v ch_sh_len + SZ.v through_len)));
+      if SZ.(ch_sh_len +^ through_len <=^ 32768sz) {
+        let mut transcript_hash = [| 0uy; 32sz |];
+        let transcript_ok =
+          Transcript.hash_client_server_handshake
+            client_hello_exact
+            ch_len
+            server_hello_exact
+            sh_len
+            server_handshake_exact
+            through_len
+            transcript_hash;
+        if transcript_ok {
+          let mut verify_data = [| 0uy; 32sz |];
+          let mut client_finished = [| 0uy; 36sz |];
+          let mut header = [| 0uy; 5sz |];
+          let mut inner = [| 0uy; 37sz |];
+          let mut cipher = [| 0uy; 53sz |];
+          client_finished.(0sz) <- 20uy;
+          client_finished.(1sz) <- 0uy;
+          client_finished.(2sz) <- 0uy;
+          client_finished.(3sz) <- 32uy;
+          KS.finished_verify_data client_hs_secret transcript_hash verify_data;
+          copy_fragment_to_buffer_loop verify_data 32sz client_finished 36sz 0sz 4sz 32sz;
+          header.(0sz) <- 0x17uy;
+          header.(1sz) <- 0x03uy;
+          header.(2sz) <- 0x03uy;
+          header.(3sz) <- 0uy;
+          header.(4sz) <- 53uy;
+          copy_fragment_to_buffer_loop client_finished 36sz inner 37sz 0sz 0sz 36sz;
+          inner.(36sz) <- 22uy;
+          pts_to_len inner;
+          with header_bytes. assert (pts_to header header_bytes);
+          with inner_bytes. assert (pts_to inner inner_bytes);
+          with cipher_bytes. assert (pts_to cipher cipher_bytes);
+          assert (pure (B.length header_bytes == 5));
+          assert (pure (B.length inner_bytes == 37));
+          assert (pure (B.length cipher_bytes == 53));
+          let sealed = seal_client_handshake_record st header 5sz inner 37sz cipher;
+          if sealed {
+            copy_fragment_to_buffer_loop header 5sz out out_len 0sz 0sz 5sz;
+            copy_fragment_to_buffer_loop cipher 53sz out out_len 0sz 5sz 53sz;
+            with out_bytes. assert (pts_to out out_bytes);
+            assert (pure (B.length out_bytes == 58));
+            true
+          } else {
+            with out_bytes. assert (pts_to out out_bytes);
+            assert (pure (B.length out_bytes == 58));
+            false
+          }
+        } else {
+          with out_bytes. assert (pts_to out out_bytes);
+          assert (pure (B.length out_bytes == 58));
+          false
+        }
+      } else {
+        with out_bytes. assert (pts_to out out_bytes);
+        assert (pure (B.length out_bytes == 58));
+        false
+      }
+    } else {
+      with out_bytes. assert (pts_to out out_bytes);
+      assert (pure (B.length out_bytes == 58));
+      false
+    }
+  } else {
+    with out_bytes. assert (pts_to out out_bytes);
+    assert (pure (B.length out_bytes == 58));
+    false
+  }
+}
+
 fn derive_application_keys
   (st: flight_state)
   (client_key: array U8.t)

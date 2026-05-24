@@ -499,80 +499,12 @@ static bool probe_handshake_send_client_finished(
     return false;
   }
 
-  uint8_t transcript_hash_through_server_finished[32];
-  uint8_t client_hello[PROBE_CLIENT_HELLO_CAPACITY];
-  uint8_t server_hello_fragment[PROBE_SERVER_HELLO_CAPACITY];
-  size_t client_hello_len = 0;
-  size_t server_hello_len = 0;
-  if (!copy_hello_messages(
-          c,
-          client_hello,
-          &client_hello_len,
-          server_hello_fragment,
-          &server_hello_len)) {
-    fprintf(stderr, "failed to copy hello transcript bytes\n");
-    fail_handshake(c);
-    return false;
-  }
-  uint8_t server_handshake_messages[PROBE_SERVER_HANDSHAKE_CAPACITY];
-  if (!copy_server_handshake_messages(c, server_handshake_messages)) {
-    fprintf(stderr, "failed to copy server handshake transcript bytes\n");
-    fail_handshake(c);
-    return false;
-  }
-  if (compute_transcript_hash(
-          client_hello,
-          client_hello_len,
-          server_hello_fragment,
-          server_hello_len,
-          server_handshake_messages,
-          TLS13_Handshake_FlightState_server_through_finished_len(c->server_handshake_flight_state),
-          transcript_hash_through_server_finished) != 0) {
-    fprintf(stderr, "failed to hash transcript through server Finished\n");
-    fail_handshake(c);
-    return false;
-  }
-
-  uint8_t client_finished[36] = {20, 0, 0, 32};
-  uint8_t client_handshake_traffic_secret[32] = {0};
-  TLS13_Handshake_FlightState_copy_client_handshake_traffic_secret(
-      c->server_handshake_flight_state,
-      client_handshake_traffic_secret,
-      sizeof client_handshake_traffic_secret);
-  TLS13_KeySchedule_finished_verify_data(
-      client_handshake_traffic_secret,
-      transcript_hash_through_server_finished,
-      client_finished + TLS13_WIRE_HANDSHAKE_HEADER_LEN);
-
-  uint8_t client_record[20000];
-  size_t client_record_len = 0;
-  uint8_t client_inner_plaintext[sizeof client_finished + 1u];
-  size_t client_inner_plaintext_len = sizeof client_finished + 1u;
-  size_t client_ciphertext_len = client_inner_plaintext_len + 16u;
-  client_record_len = TLS13_WIRE_RECORD_HEADER_LEN + client_ciphertext_len;
-  if (client_ciphertext_len > UINT16_MAX || client_record_len > sizeof client_record) {
-    fprintf(stderr, "failed to send client Finished\n");
-    fail_handshake(c);
-    return false;
-  }
-  TLS13_Record_Framing_serialize_application_data_header(
-      (uint16_t)client_ciphertext_len,
-      client_record,
-      TLS13_WIRE_RECORD_HEADER_LEN);
-  TLS13_Record_Framing_encode_inner_plaintext_no_padding(
-      client_finished,
-      sizeof client_finished,
-      22,
-      client_inner_plaintext,
-      client_inner_plaintext_len);
-  bool sealed = TLS13_Handshake_FlightState_seal_client_handshake_record(
-      c->server_handshake_flight_state,
-      client_record,
-      TLS13_WIRE_RECORD_HEADER_LEN,
-      client_inner_plaintext,
-      client_inner_plaintext_len,
-      client_record + TLS13_WIRE_RECORD_HEADER_LEN);
-  if (!sealed || write_all_fd(c->fd, client_record, client_record_len) != 0) {
+  uint8_t client_record[58] = {0};
+  if (!TLS13_Handshake_FlightState_build_client_finished_record(
+          c->server_handshake_flight_state,
+          client_record,
+          sizeof client_record) ||
+      write_all_fd(c->fd, client_record, sizeof client_record) != 0) {
     fprintf(stderr, "failed to send client Finished\n");
     fail_handshake(c);
     return false;
