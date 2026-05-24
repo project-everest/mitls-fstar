@@ -5,6 +5,7 @@
 #include <string.h>
 
 #define EXTRACTED_WRAPPER_ECHO_PAYLOAD_LEN 40000u
+#define EXTRACTED_WRAPPER_SPLIT_READ_LEN 17u
 
 static void fill_wrapper_payload(uint8_t *payload, size_t payload_len) {
   static const uint8_t echo_pattern[] = "agentic tls extracted wrapper echo\n";
@@ -52,7 +53,12 @@ int main(int argc, char **argv) {
       !TLS13_Connection_client_write_all(
           c, NULL, outbound, EXTRACTED_WRAPPER_ECHO_PAYLOAD_LEN) ||
       !TLS13_Connection_client_read_exact(
-          c, NULL, inbound, EXTRACTED_WRAPPER_ECHO_PAYLOAD_LEN)) {
+          c, NULL, inbound, EXTRACTED_WRAPPER_SPLIT_READ_LEN) ||
+      !TLS13_Connection_client_read_exact(
+          c,
+          NULL,
+          inbound + EXTRACTED_WRAPPER_SPLIT_READ_LEN,
+          EXTRACTED_WRAPPER_ECHO_PAYLOAD_LEN - EXTRACTED_WRAPPER_SPLIT_READ_LEN)) {
     goto done;
   }
   if (memcmp(inbound, outbound, EXTRACTED_WRAPPER_ECHO_PAYLOAD_LEN) != 0) {
