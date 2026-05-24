@@ -325,32 +325,17 @@ static bool copy_server_handshake_messages(
   return true;
 }
 
-static bool read_next_encrypted_handshake_record(TLS13_Connection_connection c) {
-  uint8_t encrypted_header[TLS13_WIRE_RECORD_HEADER_LEN];
-  uint8_t encrypted_fragment[20000];
-  uint8_t content_type = 0;
-  uint16_t legacy_version = 0;
-  uint16_t fragment_len = 0;
-  if (read_record(
-          c->fd,
-          encrypted_header,
-          encrypted_fragment,
-          sizeof encrypted_fragment,
-          &content_type,
-          &legacy_version,
-          &fragment_len) != 0) {
-    fprintf(stderr, "failed to read encrypted handshake record\n");
-    return false;
-  }
-  if (content_type == 20 && fragment_len == 1 && encrypted_fragment[0] == 1) {
-    return true;
-  }
-  if (content_type != 23 || fragment_len < 16) {
-    fprintf(stderr, "unexpected record before server Finished: %u\n", content_type);
+static bool process_encrypted_handshake_record(
+    TLS13_Connection_connection c,
+    uint8_t encrypted_header[TLS13_WIRE_RECORD_HEADER_LEN],
+    uint8_t *encrypted_fragment,
+    size_t fragment_len) {
+  if (fragment_len <= 16 || fragment_len > UINT16_MAX) {
+    fprintf(stderr, "unexpected encrypted handshake fragment length\n");
     return false;
   }
 
-  size_t inner_plaintext_len = (size_t)fragment_len - 16u;
+  size_t inner_plaintext_len = fragment_len - 16u;
   uint8_t inner_plaintext[inner_plaintext_len];
   if (!TLS13_Handshake_FlightState_open_server_handshake_record(
           c->server_handshake_flight_state,
@@ -1215,17 +1200,50 @@ void TLS13_Handshake_ByteDriver_External_reset_encrypted_handshake(
       server_handshake_iv);
 }
 
-bool TLS13_Handshake_ByteDriver_External_read_next_encrypted_handshake_record(
+size_t TLS13_Handshake_ByteDriver_External_read_raw(
     TLS13_Handshake_ByteDriver_External_context ctx,
     TLS13_IO_channel ch,
-    void *progress) {
+    uint8_t *buf,
+    size_t total_len,
+    size_t offset,
+    size_t remaining,
+    void *progress,
+    void *old_buf) {
   (void)ch;
   (void)progress;
+  (void)old_buf;
   TLS13_Connection_connection c = (TLS13_Connection_connection)ctx;
-  if (!handshake_can_continue(c) || c->fd < 0) {
+  if (!handshake_can_continue(c) || c->fd < 0 || buf == NULL ||
+      remaining == 0 || offset > total_len || remaining > total_len - offset) {
+    return 0;
+  }
+  ssize_t n = tls13_io_read_fd(c->fd, buf + offset, remaining);
+  if (n <= 0) {
+    return 0;
+  }
+  return (size_t)n;
+}
+
+bool TLS13_Handshake_ByteDriver_External_process_encrypted_handshake_record(
+    TLS13_Handshake_ByteDriver_External_context ctx,
+    uint8_t *header,
+    size_t header_len,
+    uint8_t *cipher,
+    size_t cipher_len,
+    void *progress,
+    void *header_bytes,
+    void *cipher_bytes) {
+  (void)progress;
+  (void)header_bytes;
+  (void)cipher_bytes;
+  TLS13_Connection_connection c = (TLS13_Connection_connection)ctx;
+  if (!handshake_can_continue(c) ||
+      header == NULL ||
+      header_len != TLS13_WIRE_RECORD_HEADER_LEN ||
+      cipher == NULL) {
     return false;
   }
-  return read_next_encrypted_handshake_record(c);
+  return process_encrypted_handshake_record(c, header, cipher, cipher_len);
 }
 
 bool TLS13_Handshake_ByteDriver_External_pending_handshake_message_complete(
