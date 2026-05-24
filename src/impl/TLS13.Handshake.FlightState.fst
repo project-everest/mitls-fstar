@@ -116,7 +116,9 @@ let is_flight_state ([@@@mkey] st: flight_state) : slprop =
           SZ.v client_hello_len <= 512 /\
           SZ.v server_hello_len <= 4096 /\
           SZ.v handshake_len <= 32768 /\
-          SZ.v parsed_len <= SZ.v handshake_len)
+          SZ.v parsed_len <= SZ.v handshake_len /\
+          SZ.v before_finished_len <= SZ.v handshake_len /\
+          SZ.v through_finished_len <= SZ.v handshake_len)
 
 fn flight_state_new ()
   returns st: flight_state
@@ -1771,7 +1773,7 @@ fn certificate_verify_signature_len (st: flight_state)
 
 fn server_before_finished_len (st: flight_state)
   requires is_flight_state st
-  returns len: SZ.t
+  returns len: (l:SZ.t{SZ.v l <= 32768})
   ensures is_flight_state st
 {
   unfold (is_flight_state st);
@@ -1782,13 +1784,75 @@ fn server_before_finished_len (st: flight_state)
 
 fn server_through_finished_len (st: flight_state)
   requires is_flight_state st
-  returns len: SZ.t
+  returns len: (l:SZ.t{SZ.v l <= 32768})
   ensures is_flight_state st
 {
   unfold (is_flight_state st);
   let len = !st.through_finished_len_box;
   fold (is_flight_state st);
   len
+}
+
+fn verify_server_finished (st: flight_state)
+  requires is_flight_state st
+  returns ok: bool
+  ensures is_flight_state st
+{
+  let mut client_hello = [| 0uy; 512sz |];
+  let mut server_hello = [| 0uy; 4096sz |];
+  let mut server_handshake = [| 0uy; 32768sz |];
+  let mut finished_verify_data = [| 0uy; 32sz |];
+  let mut server_hs_secret = [| 0uy; 32sz |];
+  copy_client_hello st client_hello 512sz;
+  copy_server_hello st server_hello 4096sz;
+  copy_server_handshake st server_handshake 32768sz;
+  copy_server_finished_verify_data st finished_verify_data 32sz;
+  copy_server_handshake_traffic_secret st server_hs_secret 32sz;
+  let ch_len = client_hello_len st;
+  let sh_len = server_hello_len st;
+  let before_len = server_before_finished_len st;
+  assert (pure (SZ.v ch_len <= 512));
+  assert (pure (SZ.v sh_len <= 4096));
+  assert (pure (SZ.v before_len <= 32768));
+  assert (pure (SZ.fits (SZ.v ch_len + SZ.v sh_len)));
+  if SZ.(ch_len +^ sh_len <=^ 32768sz) {
+    let ch_sh_len = SZ.(ch_len +^ sh_len);
+    assert (pure (SZ.v ch_sh_len <= 32768));
+    if SZ.(before_len <=^ 32768sz) {
+      let mut client_hello_exact = [| 0uy; ch_len |];
+      let mut server_hello_exact = [| 0uy; sh_len |];
+      let mut server_handshake_exact = [| 0uy; before_len |];
+      copy_fragment_to_buffer_loop client_hello 512sz client_hello_exact ch_len 0sz 0sz ch_len;
+      copy_fragment_to_buffer_loop server_hello 4096sz server_hello_exact sh_len 0sz 0sz sh_len;
+      copy_fragment_to_buffer_loop server_handshake 32768sz server_handshake_exact before_len 0sz 0sz before_len;
+      assert (pure (SZ.fits (SZ.v ch_sh_len + SZ.v before_len)));
+      if SZ.(ch_sh_len +^ before_len <=^ 32768sz) {
+        let mut transcript_hash = [| 0uy; 32sz |];
+        let transcript_ok =
+          Transcript.hash_client_server_handshake
+            client_hello_exact
+            ch_len
+            server_hello_exact
+            sh_len
+            server_handshake_exact
+            before_len
+            transcript_hash;
+        if transcript_ok {
+          let mut expected = [| 0uy; 32sz |];
+          KS.finished_verify_data server_hs_secret transcript_hash expected;
+          Transcript.equal32 expected finished_verify_data
+        } else {
+          false
+        }
+      } else {
+        false
+      }
+    } else {
+      false
+    }
+  } else {
+    false
+  }
 }
 
 fn saw_certificate (st: flight_state)

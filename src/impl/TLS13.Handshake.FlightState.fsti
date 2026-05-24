@@ -451,6 +451,11 @@ fn copy_server_finished_verify_data
           pts_to out out_bytes **
           pure (B.length out_bytes == 32)
 
+fn verify_server_finished (st: flight_state)
+  requires is_flight_state st
+  returns ok: bool
+  ensures is_flight_state st
+
 fn certificate_verify_offset (st: flight_state)
   requires is_flight_state st
   returns offset: SZ.t
@@ -483,12 +488,12 @@ fn certificate_verify_signature_len (st: flight_state)
 
 fn server_before_finished_len (st: flight_state)
   requires is_flight_state st
-  returns len: SZ.t
+  returns len: (l:SZ.t{SZ.v l <= 32768})
   ensures is_flight_state st
 
 fn server_through_finished_len (st: flight_state)
   requires is_flight_state st
-  returns len: SZ.t
+  returns len: (l:SZ.t{SZ.v l <= 32768})
   ensures is_flight_state st
 
 fn saw_certificate (st: flight_state)

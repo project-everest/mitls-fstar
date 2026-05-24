@@ -23,6 +23,9 @@
 #undef TLS13_KeySchedule_server_handshake_traffic_secret
 #undef TLS13_KeySchedule_derive_traffic_key
 #undef TLS13_KeySchedule_derive_traffic_iv
+#undef TLS13_KeySchedule_finished_verify_data
+#undef TLS13_Handshake_Transcript_hash_client_server_handshake
+#undef TLS13_Handshake_Transcript_equal32
 
 #include "TLS13_Handshake_Driver.h"
 
@@ -120,33 +123,6 @@ static int compute_transcript_hash(
              transcript_hash)
              ? 0
              : -1;
-}
-
-static int verify_server_finished(
-    const uint8_t *client_hello,
-    size_t client_hello_len,
-    const uint8_t *server_hello,
-    size_t server_hello_len,
-    const uint8_t *server_handshake_messages,
-    size_t server_handshake_before_finished_len,
-    const uint8_t finished_verify_data[32],
-    const uint8_t server_handshake_traffic_secret[32]) {
-  uint8_t transcript_hash[32];
-  uint8_t expected[32];
-
-  if (compute_transcript_hash(
-          client_hello,
-          client_hello_len,
-          server_hello,
-          server_hello_len,
-          server_handshake_messages,
-          server_handshake_before_finished_len,
-          transcript_hash) != 0) {
-    return -1;
-  }
-  TLS13_KeySchedule_finished_verify_data(
-      (uint8_t *)server_handshake_traffic_secret, transcript_hash, expected);
-  return TLS13_Handshake_Transcript_equal32(expected, (uint8_t *)finished_verify_data) ? 0 : -1;
 }
 
 static int derive_application_keys(
@@ -521,45 +497,7 @@ static bool probe_handshake_recv_server_finished(
     fail_handshake(c);
     return false;
   }
-  uint8_t server_finished_verify_data[32] = {0};
-  uint8_t server_handshake_traffic_secret[32] = {0};
-  uint8_t client_hello[PROBE_CLIENT_HELLO_CAPACITY];
-  uint8_t server_hello_fragment[PROBE_SERVER_HELLO_CAPACITY];
-  size_t client_hello_len = 0;
-  size_t server_hello_len = 0;
-  if (!copy_hello_messages(
-          c,
-          client_hello,
-          &client_hello_len,
-          server_hello_fragment,
-          &server_hello_len)) {
-    fprintf(stderr, "failed to copy hello transcript bytes\n");
-    fail_handshake(c);
-    return false;
-  }
-  uint8_t server_handshake_messages[PROBE_SERVER_HANDSHAKE_CAPACITY];
-  if (!copy_server_handshake_messages(c, server_handshake_messages)) {
-    fprintf(stderr, "failed to copy server handshake transcript bytes\n");
-    fail_handshake(c);
-    return false;
-  }
-  TLS13_Handshake_FlightState_copy_server_finished_verify_data(
-      c->server_handshake_flight_state,
-      server_finished_verify_data,
-      sizeof server_finished_verify_data);
-  TLS13_Handshake_FlightState_copy_server_handshake_traffic_secret(
-      c->server_handshake_flight_state,
-      server_handshake_traffic_secret,
-      sizeof server_handshake_traffic_secret);
-  if (verify_server_finished(
-          client_hello,
-          client_hello_len,
-          server_hello_fragment,
-          server_hello_len,
-          server_handshake_messages,
-          TLS13_Handshake_FlightState_server_before_finished_len(c->server_handshake_flight_state),
-          server_finished_verify_data,
-          server_handshake_traffic_secret) != 0) {
+  if (!TLS13_Handshake_FlightState_verify_server_finished(c->server_handshake_flight_state)) {
     fprintf(stderr, "failed to verify OpenSSL server Finished\n");
     fail_handshake(c);
     return false;

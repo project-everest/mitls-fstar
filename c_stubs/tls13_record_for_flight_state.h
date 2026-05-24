@@ -18,6 +18,10 @@
     TLS13_Record_Framing_decode_inner_plaintext_no_padding(inner, inner_len, content_type_out, content_type_out_len)
 #define TLS13_Handshake_Transcript_hash_client_server_hello(client_hello, client_hello_len, server_hello, server_hello_len, out, client_hello_bytes, server_hello_bytes, old_out) \
     TLS13_Handshake_Transcript_hash_client_server_hello(client_hello, client_hello_len, server_hello, server_hello_len, out)
+#define TLS13_Handshake_Transcript_hash_client_server_handshake(client_hello, client_hello_len, server_hello, server_hello_len, server_handshake, server_handshake_len, out, client_hello_bytes, server_hello_bytes, server_handshake_bytes, old_out) \
+    TLS13_Handshake_Transcript_hash_client_server_handshake(client_hello, client_hello_len, server_hello, server_hello_len, server_handshake, server_handshake_len, out)
+#define TLS13_Handshake_Transcript_equal32(a, b, a_bytes, b_bytes) \
+    TLS13_Handshake_Transcript_equal32(a, b)
 #define TLS13_KeySchedule_handshake_secret(early, shared, shared_len, out, early_bytes, shared_bytes, old_out) \
     TLS13_KeySchedule_handshake_secret(early, shared, shared_len, out)
 #define TLS13_KeySchedule_client_handshake_traffic_secret(handshake, transcript_hash, out, handshake_bytes, hash_bytes, old_out) \
@@ -28,5 +32,7 @@
     TLS13_KeySchedule_derive_traffic_key(traffic_secret, out)
 #define TLS13_KeySchedule_derive_traffic_iv(traffic_secret, out, secret_bytes, old_out) \
     TLS13_KeySchedule_derive_traffic_iv(traffic_secret, out)
+#define TLS13_KeySchedule_finished_verify_data(base_key, transcript_hash, out, base_key_bytes, hash_bytes, old_out) \
+    TLS13_KeySchedule_finished_verify_data(base_key, transcript_hash, out)
 
 #endif
