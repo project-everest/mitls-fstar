@@ -1101,6 +1101,57 @@ fn accept_encrypted_extensions (st: flight_state) (message_len: SZ.t)
   }
 }
 
+fn accept_pending_encrypted_extensions (st: flight_state)
+  requires is_flight_state st
+  returns ok: bool
+  ensures is_flight_state st
+{
+  unfold (is_flight_state st);
+  let parsed = !st.parsed_len_box;
+  let hlen = !st.handshake_len_box;
+  if (SZ.(parsed =^ 0sz) && SZ.(parsed <=^ hlen)) {
+    let remaining = SZ.(hlen -^ parsed);
+    if SZ.(4sz <=^ remaining) {
+      V.pts_to_len st.server_handshake_messages;
+      assert (pure (V.length st.server_handshake_messages == 32768));
+      V.to_array_pts_to st.server_handshake_messages;
+      assert (pure (Pulse.Lib.Array.Core.length (V.vec_to_array st.server_handshake_messages) == 32768));
+      assert (pure (SZ.v parsed + 3 < 32768));
+      let msg_type = (V.vec_to_array st.server_handshake_messages).(parsed);
+      let len_hi = (V.vec_to_array st.server_handshake_messages).(SZ.(parsed +^ 1sz));
+      let len_mid = (V.vec_to_array st.server_handshake_messages).(SZ.(parsed +^ 2sz));
+      let len_lo = (V.vec_to_array st.server_handshake_messages).(SZ.(parsed +^ 3sz));
+      let len_mid16 = Cast.uint8_to_uint16 len_mid;
+      let len_lo16 = Cast.uint8_to_uint16 len_lo;
+      let body16 = U16.logor (U16.shift_left len_mid16 8ul) len_lo16;
+      let body_len = SZ.uint16_to_sizet body16;
+      let remaining_body_capacity = SZ.(remaining -^ 4sz);
+      if ((msg_type = 0x08uy) && (len_hi = 0uy) && SZ.(body_len <=^ remaining_body_capacity)) {
+        assert (pure (SZ.fits (SZ.v parsed + 4)));
+        let after_header = SZ.(parsed +^ 4sz);
+        assert (pure (SZ.v after_header + SZ.v body_len <= SZ.v hlen));
+        assert (pure (SZ.fits (SZ.v after_header + SZ.v body_len)));
+        let next_parsed = SZ.(after_header +^ body_len);
+        V.to_vec_pts_to st.server_handshake_messages;
+        st.saw_encrypted_extensions_box := true;
+        st.parsed_len_box := next_parsed;
+        fold (is_flight_state st);
+        true
+      } else {
+        V.to_vec_pts_to st.server_handshake_messages;
+        fold (is_flight_state st);
+        false
+      }
+    } else {
+      fold (is_flight_state st);
+      false
+    }
+  } else {
+    fold (is_flight_state st);
+    false
+  }
+}
+
 fn accept_certificate (st: flight_state) (message_len: SZ.t)
   requires is_flight_state st
   returns ok: bool

@@ -1205,18 +1205,12 @@ uint8_t TLS13_Handshake_ByteDriver_External_pending_handshake_message_type(
 bool TLS13_Handshake_ByteDriver_External_accept_encrypted_extensions(
     TLS13_Handshake_ByteDriver_External_context ctx) {
   TLS13_Connection_connection c = (TLS13_Connection_connection)ctx;
-  const uint8_t *body = NULL;
-  uint32_t body_len = 0;
-  size_t message_len = 0;
-  uint8_t server_handshake_messages[PROBE_SERVER_HANDSHAKE_CAPACITY];
-  if (!pending_handshake_body(c, 8, server_handshake_messages, &body, &body_len, &message_len) ||
-      !TLS13_Handshake_FlightState_accept_encrypted_extensions(
-          c->server_handshake_flight_state, message_len)) {
+  if (c == NULL ||
+      !TLS13_Handshake_FlightState_accept_pending_encrypted_extensions(
+          c->server_handshake_flight_state)) {
     fprintf(stderr, "decrypted first OpenSSL handshake message is not EncryptedExtensions\n");
     return false;
   }
-  (void)body;
-  (void)body_len;
   return true;
 }
 

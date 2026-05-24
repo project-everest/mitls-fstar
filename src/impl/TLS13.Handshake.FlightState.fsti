@@ -364,6 +364,11 @@ fn accept_encrypted_extensions (st: flight_state) (message_len: SZ.t)
   returns ok: bool
   ensures is_flight_state st
 
+fn accept_pending_encrypted_extensions (st: flight_state)
+  requires is_flight_state st
+  returns ok: bool
+  ensures is_flight_state st
+
 fn accept_certificate (st: flight_state) (message_len: SZ.t)
   requires is_flight_state st
   returns ok: bool
