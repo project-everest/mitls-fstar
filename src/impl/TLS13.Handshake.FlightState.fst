@@ -108,7 +108,9 @@ let is_flight_state ([@@@mkey] st: flight_state) : slprop =
           V.length st.server_handshake_traffic_secret == 32 /\
           V.length st.server_handshake_key == 32 /\
           V.length st.server_handshake_iv == 12 /\
-          V.length st.server_finished_verify_data == 32)
+          V.length st.server_finished_verify_data == 32 /\
+          SZ.v handshake_len <= 32768 /\
+          SZ.v parsed_len <= SZ.v handshake_len)
 
 fn flight_state_new ()
   returns st: flight_state
@@ -999,10 +1001,11 @@ fn append_handshake_len (st: flight_state) (fragment_len: SZ.t) (capacity: SZ.t)
   returns ok: bool
   ensures is_flight_state st
 {
+  let _ = capacity;
   unfold (is_flight_state st);
   let current = !st.handshake_len_box;
-  if SZ.(fragment_len <=^ capacity) {
-    let remaining = SZ.(capacity -^ fragment_len);
+  if SZ.(fragment_len <=^ 32768sz) {
+    let remaining = SZ.(32768sz -^ fragment_len);
     if SZ.(current <=^ remaining) {
       st.handshake_len_box := SZ.(current +^ fragment_len);
       fold (is_flight_state st);
