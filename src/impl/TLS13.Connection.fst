@@ -65,6 +65,7 @@ let max_application_read_records : U8.t = 255uy
 let read_status_failed : U8.t = 0uy
 let read_status_complete : U8.t = 1uy
 let read_status_close_notify : U8.t = 2uy
+let read_status_peer_alert : U8.t = 3uy
 
 let dummy_client_hello : H.client_hello = {
   H.random = zeros32;
@@ -651,6 +652,8 @@ fn rec client_read_application_records
                   if ((alert_level = 1uy || alert_level = 2uy) &&
                       alert_description = 0uy) {
                     read_status_close_notify
+                  } else if (alert_level = 1uy || alert_level = 2uy) {
+                    read_status_peer_alert
                   } else {
                     read_status_failed
                   }
@@ -722,6 +725,10 @@ fn client_read_exact (c: connection) (ch: IO.channel) (out: array U8.t) (len: SZ
     } else if (status = read_status_close_notify) {
       ST.advance 'st S.RecvCloseNotify (S.recv_close_state 's);
       fold (is_connection c 'st (S.recv_close_state 's));
+      false
+    } else if (status = read_status_peer_alert) {
+      ST.advance_fail 'st (T.AlertError T.DecodeError);
+      fold (is_connection c 'st (S.fail 's (T.AlertError T.DecodeError)));
       false
     } else {
       ST.advance_fail 'st T.IoError;
