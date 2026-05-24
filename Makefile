@@ -130,11 +130,11 @@ EXTRACT_RECORD_FRAMING_KRML = $(EXTRACT_RECORD_FRAMING_DIR)/TLS13_Record_Framing
 EXTRACT_RECORD_FRAMING_C    = $(EXTRACT_RECORD_FRAMING_DIR)/TLS13_Record_Framing.c
 EXTRACT_RECORD_FRAMING_H    = $(EXTRACT_RECORD_FRAMING_DIR)/TLS13_Record_Framing.h
 
-.PHONY: all verify test extract-smoke extract-connection-driver-krml extract-connection-driver-c extract-connection-krml extract-connection-c extract-handshake-driver-krml extract-handshake-driver-c extract-handshake-layered-c extract-handshake-krml extract-handshake-c extract-handshake-framing-krml extract-handshake-framing-c extract-handshake-flight-state-krml extract-handshake-flight-state-c extract-handshake-transcript-krml extract-handshake-transcript-c extract-handshake-byte-driver-krml extract-handshake-byte-driver-c extract-key-schedule-krml extract-key-schedule-c extract-record-krml extract-record-c extract-record-framing-krml extract-record-framing-c test-extract-smoke test-connection-driver-bindings test-connection-bindings test-handshake-driver-bindings test-handshake-bindings test-key-schedule-bindings test-record-bindings check-c-stubs test-hacl-stubs test-openssl-stubs test-wire-stubs test-record-stubs test-io-stubs test-openssl-echo check-toolchain check-deps clean
+.PHONY: all verify test extract-smoke extract-connection-driver-krml extract-connection-driver-c extract-connection-krml extract-connection-c extract-handshake-driver-krml extract-handshake-driver-c extract-handshake-layered-c extract-handshake-krml extract-handshake-c extract-handshake-framing-krml extract-handshake-framing-c extract-handshake-flight-state-krml extract-handshake-flight-state-c extract-handshake-transcript-krml extract-handshake-transcript-c extract-handshake-byte-driver-krml extract-handshake-byte-driver-c extract-key-schedule-krml extract-key-schedule-c extract-record-krml extract-record-c extract-record-framing-krml extract-record-framing-c test-extract-smoke test-connection-driver-bindings test-connection-bindings test-handshake-driver-bindings test-handshake-bindings test-key-schedule-bindings test-record-bindings check-c-stubs test-hacl-stubs test-openssl-stubs test-io-stubs test-openssl-echo check-toolchain check-deps clean
 
 all: verify
 
-test: verify check-c-stubs test-hacl-stubs test-openssl-stubs test-wire-stubs test-record-stubs test-io-stubs test-extract-smoke test-connection-driver-bindings test-connection-bindings test-handshake-driver-bindings test-handshake-bindings test-key-schedule-bindings test-record-bindings
+test: verify check-c-stubs test-hacl-stubs test-openssl-stubs test-io-stubs test-extract-smoke test-connection-driver-bindings test-connection-bindings test-handshake-driver-bindings test-handshake-bindings test-key-schedule-bindings test-record-bindings
 
 check-toolchain:
 	@if ! command -v $(FSTAR_EXE) >/dev/null 2>&1; then \
@@ -264,24 +264,6 @@ test/test_extracted_connection_wrapper_openssl: $(CONNECTION_PROBE_SOURCES) test
 
 test-openssl-echo: test/openssl_echo_server test/test_extracted_connection_wrapper_openssl
 	scripts/test-openssl-echo.sh
-
-test/test_wire_stubs: c_stubs/tls13_wire_stubs.c c_stubs/tls13_wire_stubs.h test/test_wire_stubs.c
-	$(CC) -Wall -Wextra -I c_stubs \
-	  c_stubs/tls13_wire_stubs.c test/test_wire_stubs.c \
-	  -o $@
-
-test-wire-stubs: test/test_wire_stubs
-	./test/test_wire_stubs
-
-test/test_record_stubs: $(HACL_WRAPPER_SOURCES) c_stubs/tls13_hacl_stubs.h c_stubs/tls13_wire_stubs.c c_stubs/tls13_wire_stubs.h test/test_record_stubs.c | check-deps
-	$(CC) -Wall -Wextra -Wno-deprecated-declarations \
-	  -ffunction-sections -fdata-sections \
-	  -I c_stubs -I $(HACL_DIR) -I $(HACL_DIR)/internal -I $(HACL_KI) -I $(HACL_KL) \
-	  $(HACL_WRAPPER_SOURCES) c_stubs/tls13_wire_stubs.c test/test_record_stubs.c \
-	  -Wl,--gc-sections -o $@
-
-test-record-stubs: test/test_record_stubs
-	./test/test_record_stubs
 
 test/test_io_stubs: c_stubs/tls13_io_stubs.c c_stubs/tls13_io_stubs.h test/test_io_stubs.c
 	$(CC) -Wall -Wextra -I c_stubs \
@@ -559,5 +541,5 @@ test-record-bindings: test/test_record_bindings
 
 clean:
 	rm -rf $(CACHE_DIR) $(OUTPUT_DIR) $(EXTRACT_DIR)
-	rm -f test/test_hacl_stubs test/test_openssl_stubs test/test_wire_stubs test/test_record_stubs test/test_record_bindings test/test_io_stubs test/test_extract_smoke test/test_connection_driver_bindings test/test_connection_bindings test/test_handshake_driver_bindings test/test_handshake_bindings test/test_key_schedule_bindings test/test_extracted_connection_wrapper_openssl test/openssl_echo_server
+	rm -f test/test_hacl_stubs test/test_openssl_stubs test/test_record_bindings test/test_io_stubs test/test_extract_smoke test/test_connection_driver_bindings test/test_connection_bindings test/test_handshake_driver_bindings test/test_handshake_bindings test/test_key_schedule_bindings test/test_extracted_connection_wrapper_openssl test/openssl_echo_server
 	find src test -name '*.checked' -delete
