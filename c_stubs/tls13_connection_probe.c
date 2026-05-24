@@ -1,29 +1,22 @@
 #include "tls13_connection_external_layer.h"
-#include "tls13_hacl_stubs.h"
 #include "tls13_handshake_external_layer.h"
 #include "tls13_io_stubs.h"
 #include "tls13_openssl_stubs.h"
 
-#include "TLS13_Handshake_Framing.h"
 #include "TLS13_Handshake_FlightState.h"
 #include "TLS13_Handshake_ByteDriver.h"
-#include "TLS13_Record.h"
-#include "tls13_connection_external_layer.h"
 
 #include "TLS13_Handshake_Driver.h"
 
 #include <errno.h>
-#include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
-#define PROBE_APP_RECORD_CHUNK_LEN 4096u
 #define PROBE_CLIENT_HELLO_CAPACITY 512u
 #define PROBE_SERVER_HELLO_CAPACITY 4096u
 #define PROBE_SERVER_HANDSHAKE_CAPACITY 32768u
 #define TLS13_WIRE_RECORD_HEADER_LEN 5u
-#define TLS13_WIRE_HANDSHAKE_HEADER_LEN 4u
 #define TLS13_WIRE_CERTIFICATE_VERIFY_INPUT_LEN 130u
 
 #define TLS13_Connection_connection TLS13_Connection_External_connection
@@ -464,7 +457,22 @@ void TLS13_Connection_External_client_free(TLS13_Connection_External_connection 
 
 bool TLS13_Connection_External_client_connect(
     TLS13_Connection_External_connection c,
-    TLS13_IO_channel ch,
+    TLS13_IO_channel ch) {
+  if (c == NULL || c->fd >= 0) {
+    return false;
+  }
+  bool ok = TLS13_Handshake_Driver_run_client_handshake(
+      (TLS13_Handshake_handshake_context)c, ch);
+
+  if (!ok) {
+    fail_handshake(c);
+    return false;
+  }
+  return true;
+}
+
+bool TLS13_Connection_External_derive_application_keys(
+    TLS13_Connection_External_connection c,
     uint8_t *client_key,
     uint8_t *client_iv,
     uint8_t *server_key,
@@ -477,15 +485,8 @@ bool TLS13_Connection_External_client_connect(
   (void)old_client_iv;
   (void)old_server_key;
   (void)old_server_iv;
-  if (c == NULL || c->fd >= 0 ||
+  if (c == NULL ||
       client_key == NULL || client_iv == NULL || server_key == NULL || server_iv == NULL) {
-    return false;
-  }
-  bool ok = TLS13_Handshake_Driver_run_client_handshake(
-      (TLS13_Handshake_handshake_context)c, ch);
-
-  if (!ok) {
-    fail_handshake(c);
     return false;
   }
   if (!TLS13_Handshake_FlightState_derive_application_keys(

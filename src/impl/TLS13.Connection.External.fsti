@@ -32,12 +32,19 @@ fn client_free (c: connection)
 fn client_connect
   (c: connection)
   (ch: IO.channel)
+  requires is_connection c **
+           IO.is_channel ch
+  returns ok: bool
+  ensures is_connection c **
+          IO.is_channel ch
+
+fn derive_application_keys
+  (c: connection)
   (client_key: array U8.t)
   (client_iv: array U8.t)
   (server_key: array U8.t)
   (server_iv: array U8.t)
   requires is_connection c **
-           IO.is_channel ch **
            pts_to client_key 'old_client_key **
            pts_to client_iv 'old_client_iv **
            pts_to server_key 'old_server_key **
@@ -49,7 +56,6 @@ fn client_connect
   returns ok: bool
   ensures exists* client_key_bytes client_iv_bytes server_key_bytes server_iv_bytes.
           is_connection c **
-          IO.is_channel ch **
           pts_to client_key client_key_bytes **
           pts_to client_iv client_iv_bytes **
           pts_to server_key server_key_bytes **

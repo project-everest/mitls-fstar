@@ -74,7 +74,14 @@ void TLS13_Connection_External_client_free(TLS13_Connection_External_connection 
 
 bool TLS13_Connection_External_client_connect(
     TLS13_Connection_External_connection c,
-    TLS13_IO_channel ch,
+    TLS13_IO_channel ch) {
+  (void)ch;
+  c->connect_calls++;
+  return c->connect_ok;
+}
+
+bool TLS13_Connection_External_derive_application_keys(
+    TLS13_Connection_External_connection c,
     uint8_t *client_key,
     uint8_t *client_iv,
     uint8_t *server_key,
@@ -83,18 +90,16 @@ bool TLS13_Connection_External_client_connect(
     void *old_client_iv,
     void *old_server_key,
     void *old_server_iv) {
-  (void)ch;
   (void)old_client_key;
   (void)old_client_iv;
   (void)old_server_key;
   (void)old_server_iv;
-  c->connect_calls++;
   memset(client_key, 0x11, 32);
   memset(client_iv, 0x22, 12);
   memset(server_key, 0x33, 32);
   memset(server_iv, 0x44, 12);
   TLS13_Record_install_application_keys_runtime(c->read_record_state, server_key, server_iv);
-  return c->connect_ok;
+  return true;
 }
 
 size_t TLS13_Connection_External_client_write_raw(

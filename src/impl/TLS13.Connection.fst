@@ -238,45 +238,52 @@ fn client_connect (c: connection) (ch: IO.channel)
           let mut client_iv = [| 0uy; 12sz |];
           let mut server_key = [| 0uy; 32sz |];
           let mut server_iv = [| 0uy; 12sz |];
-          let ok = E.client_connect c.backend ch client_key client_iv server_key server_iv;
-          if ok {
+          let handshake_ok = E.client_connect c.backend ch;
+          if handshake_ok {
+            let keys_ok = E.derive_application_keys c.backend client_key client_iv server_key server_iv;
+            if keys_ok {
               pts_to_len client_key;
-      pts_to_len client_iv;
-      pts_to_len server_key;
-      pts_to_len server_iv;
-      V.pts_to_len c.client_application_key;
-      V.pts_to_len c.client_application_iv;
-      V.pts_to_len c.server_application_key;
-      V.pts_to_len c.server_application_iv;
-      V.to_array_pts_to c.client_application_key;
-      V.to_array_pts_to c.client_application_iv;
-      V.to_array_pts_to c.server_application_key;
-      V.to_array_pts_to c.server_application_iv;
-      Arr.memcpy 32sz client_key (V.vec_to_array c.client_application_key);
-      Arr.memcpy 12sz client_iv (V.vec_to_array c.client_application_iv);
-      Arr.memcpy 32sz server_key (V.vec_to_array c.server_application_key);
-      Arr.memcpy 12sz server_iv (V.vec_to_array c.server_application_iv);
-      Rec.install_application_keys_runtime
-        c.client_application_record_state
-        (V.vec_to_array c.client_application_key)
-        (V.vec_to_array c.client_application_iv);
-      Rec.install_application_keys_runtime
-        c.server_application_record_state
-        (V.vec_to_array c.server_application_key)
-        (V.vec_to_array c.server_application_iv);
-      V.to_vec_pts_to c.client_application_key;
-      V.to_vec_pts_to c.client_application_iv;
-      V.to_vec_pts_to c.server_application_key;
-      V.to_vec_pts_to c.server_application_iv;
-      c.application_keys_installed := true;
-      advance_successful_handshake 'st;
-      fold (is_connection c 'st (hs_application_data 's));
-      true
-  } else {
-    ST.advance_fail 'st T.IoError;
-    fold (is_connection c 'st (S.fail 's T.IoError));
-    false
-  }
+              pts_to_len client_iv;
+              pts_to_len server_key;
+              pts_to_len server_iv;
+              V.pts_to_len c.client_application_key;
+              V.pts_to_len c.client_application_iv;
+              V.pts_to_len c.server_application_key;
+              V.pts_to_len c.server_application_iv;
+              V.to_array_pts_to c.client_application_key;
+              V.to_array_pts_to c.client_application_iv;
+              V.to_array_pts_to c.server_application_key;
+              V.to_array_pts_to c.server_application_iv;
+              Arr.memcpy 32sz client_key (V.vec_to_array c.client_application_key);
+              Arr.memcpy 12sz client_iv (V.vec_to_array c.client_application_iv);
+              Arr.memcpy 32sz server_key (V.vec_to_array c.server_application_key);
+              Arr.memcpy 12sz server_iv (V.vec_to_array c.server_application_iv);
+              Rec.install_application_keys_runtime
+               c.client_application_record_state
+               (V.vec_to_array c.client_application_key)
+               (V.vec_to_array c.client_application_iv);
+              Rec.install_application_keys_runtime
+               c.server_application_record_state
+               (V.vec_to_array c.server_application_key)
+               (V.vec_to_array c.server_application_iv);
+              V.to_vec_pts_to c.client_application_key;
+              V.to_vec_pts_to c.client_application_iv;
+              V.to_vec_pts_to c.server_application_key;
+              V.to_vec_pts_to c.server_application_iv;
+              c.application_keys_installed := true;
+              advance_successful_handshake 'st;
+              fold (is_connection c 'st (hs_application_data 's));
+              true
+            } else {
+              ST.advance_fail 'st T.IoError;
+              fold (is_connection c 'st (S.fail 's T.IoError));
+              false
+            }
+          } else {
+            ST.advance_fail 'st T.IoError;
+            fold (is_connection c 'st (S.fail 's T.IoError));
+            false
+          }
 }
 
 fn rec client_write_raw_exact
@@ -826,6 +833,7 @@ fn rec client_read_application_records
                     read_status_failed
                   }
                 } else {
+                  assert (pure (SZ.v response_len <= SZ.v remaining));
                   copy_payload_to_output inner inner_len response_len out total_len offset;
                   with copied_bytes. assert (pts_to out copied_bytes);
                   let offset' = SZ.(offset +^ response_len);
