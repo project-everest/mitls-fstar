@@ -6,12 +6,14 @@ open Pulse.Lib.Pervasives
 open Pulse.Lib.Array.PtsTo
 
 module B = TLS13.Bytes
+module BDE = TLS13.Handshake.ByteDriver.External
 module IO = TLS13.IO
 module SZ = FStar.SizeT
 module U8 = FStar.UInt8
 
-val handshake_context : Type0
-val is_context: handshake_context -> slprop
+type handshake_context = BDE.context
+let is_context (ctx:handshake_context) : slprop =
+  exists* p. BDE.is_context ctx p
 
 fn context_new ()
   returns ctx: handshake_context
@@ -102,11 +104,6 @@ fn process_server_hello_record
           pts_to header 'header_bytes **
           pts_to fragment 'fragment_bytes **
           pts_to key_share 'key_share_bytes
-
-fn recv_encrypted_extensions (ctx: handshake_context) (ch: IO.channel)
-  requires is_context ctx ** IO.is_channel ch
-  returns ok: bool
-  ensures is_context ctx ** IO.is_channel ch
 
 fn recv_certificate (ctx: handshake_context) (ch: IO.channel)
   requires is_context ctx ** IO.is_channel ch

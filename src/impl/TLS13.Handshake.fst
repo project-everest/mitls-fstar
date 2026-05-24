@@ -6,6 +6,8 @@ open Pulse.Lib.Pervasives
 open Pulse.Lib.Array.PtsTo
 
 module B = TLS13.Bytes
+module BD = TLS13.Handshake.ByteDriver
+module BDE = TLS13.Handshake.ByteDriver.External
 module Cast = FStar.Int.Cast
 module E = TLS13.Handshake.External
 module H = TLS13.Handshake.Spec
@@ -411,7 +413,10 @@ fn recv_encrypted_extensions (ctx: handshake_context) (ch: IO.channel)
                 (not ok ==> s'.S.phase == S.Failed))
 {
   unfold (is_handshake_context ctx 'st 's);
-  let ok = E.recv_encrypted_extensions ctx ch;
+  unfold (E.is_context ctx);
+  with p. assert (BDE.is_context ctx p);
+  let ok = BD.recv_encrypted_handshake ctx ch;
+  fold (E.is_context ctx);
   if ok {
     assert (pure (S.step 's (S.RecvEncryptedExtensions dummy_encrypted_extensions) == Some (S.with_phase 's S.EncryptedExtensionsReceived)));
     ST.advance 'st (S.RecvEncryptedExtensions dummy_encrypted_extensions) (S.with_phase 's S.EncryptedExtensionsReceived);

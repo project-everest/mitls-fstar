@@ -30,7 +30,6 @@
 #define TLS13_Connection_connection_s TLS13_Connection_External_connection_s
 #define TLS13_Handshake_ByteDriver_External_context_s TLS13_Connection_External_connection_s
 
-#define TLS13_Handshake_External_handshake_context_s TLS13_Connection_connection_s
 typedef TLS13_Handshake_External_handshake_context TLS13_Handshake_handshake_context;
 
 struct TLS13_Connection_connection_s {
@@ -163,27 +162,6 @@ static bool process_server_hello_record(
     return false;
   }
   return true;
-}
-
-static bool probe_handshake_recv_encrypted_extensions(
-    TLS13_Handshake_handshake_context ctx,
-    TLS13_IO_channel ch,
-    void *erased_state_ref,
-    void *erased_state) {
-  (void)ch;
-  (void)erased_state_ref;
-  (void)erased_state;
-  TLS13_Connection_connection c = from_handshake_context(ctx);
-  if (!handshake_can_continue(c) || c->fd < 0) {
-    return false;
-  }
-
-  bool ok = TLS13_Handshake_ByteDriver_recv_encrypted_handshake(
-      (TLS13_Handshake_ByteDriver_External_context)c, ch);
-  if (!ok) {
-    fail_handshake(c);
-  }
-  return ok;
 }
 
 static bool probe_handshake_recv_certificate(
@@ -436,13 +414,6 @@ bool TLS13_Handshake_External_process_server_hello_record(
   }
   return process_server_hello_record(
       (TLS13_Handshake_handshake_context)ctx, header, fragment, fragment_len, key_share, key_share_len);
-}
-
-bool TLS13_Handshake_External_recv_encrypted_extensions(
-    TLS13_Handshake_External_handshake_context ctx,
-    TLS13_IO_channel ch) {
-  return probe_handshake_recv_encrypted_extensions(
-      (TLS13_Handshake_handshake_context)ctx, ch, NULL, NULL);
 }
 
 bool TLS13_Handshake_External_recv_certificate(

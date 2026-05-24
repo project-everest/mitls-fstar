@@ -5,7 +5,15 @@
 #include <stdlib.h>
 #include <string.h>
 
-struct TLS13_Handshake_External_handshake_context_s {
+enum mock_encrypted_progress {
+  MOCK_EXPECT_ENCRYPTED_EXTENSIONS,
+  MOCK_EXPECT_CERTIFICATE,
+  MOCK_EXPECT_CERTIFICATE_VERIFY,
+  MOCK_EXPECT_FINISHED,
+  MOCK_COMPLETE,
+};
+
+struct TLS13_Handshake_ByteDriver_External_context_s {
   bool recv_server_hello_ok;
   bool recv_encrypted_extensions_ok;
   bool recv_certificate_ok;
@@ -21,10 +29,11 @@ struct TLS13_Handshake_External_handshake_context_s {
   unsigned recv_certificate_verify_calls;
   unsigned recv_server_finished_calls;
   unsigned send_client_finished_calls;
+  enum mock_encrypted_progress encrypted_progress;
 };
 
 TLS13_Handshake_External_handshake_context TLS13_Handshake_External_context_new(void) {
-  struct TLS13_Handshake_External_handshake_context_s *ctx =
+  struct TLS13_Handshake_ByteDriver_External_context_s *ctx =
       calloc(1, sizeof *ctx);
   if (ctx != NULL) {
     ctx->recv_server_hello_ok = true;
@@ -170,14 +179,6 @@ bool TLS13_Handshake_External_process_server_hello_record(
   return ctx->recv_server_hello_ok;
 }
 
-bool TLS13_Handshake_External_recv_encrypted_extensions(
-    TLS13_Handshake_External_handshake_context ctx,
-    TLS13_IO_channel ch) {
-  (void)ch;
-  ctx->recv_encrypted_extensions_calls++;
-  return ctx->recv_encrypted_extensions_ok;
-}
-
 bool TLS13_Handshake_External_recv_certificate(
     TLS13_Handshake_External_handshake_context ctx,
     TLS13_IO_channel ch) {
@@ -206,6 +207,125 @@ bool TLS13_Handshake_External_recv_server_finished(
   (void)ch;
   ctx->recv_server_finished_calls++;
   return ctx->recv_server_finished_ok;
+}
+
+void TLS13_Handshake_ByteDriver_External_reset_encrypted_handshake(
+    TLS13_Handshake_ByteDriver_External_context ctx,
+    void *old_progress) {
+  (void)old_progress;
+  ctx->recv_encrypted_extensions_calls++;
+  ctx->encrypted_progress = MOCK_EXPECT_ENCRYPTED_EXTENSIONS;
+}
+
+size_t TLS13_Handshake_ByteDriver_External_read_raw(
+    TLS13_Handshake_ByteDriver_External_context ctx,
+    TLS13_IO_channel ch,
+    uint8_t *buf,
+    size_t total_len,
+    size_t offset,
+    size_t remaining,
+    void *progress,
+    void *old_buf) {
+  (void)ctx;
+  (void)ch;
+  (void)buf;
+  (void)total_len;
+  (void)offset;
+  (void)remaining;
+  (void)progress;
+  (void)old_buf;
+  return 0;
+}
+
+bool TLS13_Handshake_ByteDriver_External_process_encrypted_handshake_record(
+    TLS13_Handshake_ByteDriver_External_context ctx,
+    uint8_t *header,
+    size_t header_len,
+    uint8_t *cipher,
+    size_t cipher_len,
+    void *progress,
+    void *header_bytes,
+    void *cipher_bytes) {
+  (void)ctx;
+  (void)header;
+  (void)header_len;
+  (void)cipher;
+  (void)cipher_len;
+  (void)progress;
+  (void)header_bytes;
+  (void)cipher_bytes;
+  return false;
+}
+
+bool TLS13_Handshake_ByteDriver_External_pending_handshake_message_complete(
+    TLS13_Handshake_ByteDriver_External_context ctx,
+    void *progress) {
+  (void)ctx;
+  (void)progress;
+  return true;
+}
+
+uint8_t TLS13_Handshake_ByteDriver_External_pending_handshake_message_type(
+    TLS13_Handshake_ByteDriver_External_context ctx,
+    void *progress) {
+  (void)progress;
+  switch (ctx->encrypted_progress) {
+    case MOCK_EXPECT_ENCRYPTED_EXTENSIONS:
+      return 0x08;
+    case MOCK_EXPECT_CERTIFICATE:
+      return 0x0b;
+    case MOCK_EXPECT_CERTIFICATE_VERIFY:
+      return 0x0f;
+    case MOCK_EXPECT_FINISHED:
+      return 0x14;
+    case MOCK_COMPLETE:
+      return 0;
+  }
+  return 0;
+}
+
+bool TLS13_Handshake_ByteDriver_External_accept_encrypted_extensions(
+    TLS13_Handshake_ByteDriver_External_context ctx) {
+  if (!ctx->recv_encrypted_extensions_ok ||
+      ctx->encrypted_progress != MOCK_EXPECT_ENCRYPTED_EXTENSIONS) {
+    return false;
+  }
+  ctx->encrypted_progress = MOCK_EXPECT_CERTIFICATE;
+  return true;
+}
+
+bool TLS13_Handshake_ByteDriver_External_accept_certificate(
+    TLS13_Handshake_ByteDriver_External_context ctx) {
+  if (ctx->encrypted_progress != MOCK_EXPECT_CERTIFICATE) {
+    return false;
+  }
+  ctx->encrypted_progress = MOCK_EXPECT_CERTIFICATE_VERIFY;
+  return true;
+}
+
+bool TLS13_Handshake_ByteDriver_External_accept_certificate_verify(
+    TLS13_Handshake_ByteDriver_External_context ctx) {
+  if (ctx->encrypted_progress != MOCK_EXPECT_CERTIFICATE_VERIFY) {
+    return false;
+  }
+  ctx->encrypted_progress = MOCK_EXPECT_FINISHED;
+  return true;
+}
+
+bool TLS13_Handshake_ByteDriver_External_accept_finished(
+    TLS13_Handshake_ByteDriver_External_context ctx) {
+  if (ctx->encrypted_progress != MOCK_EXPECT_FINISHED) {
+    return false;
+  }
+  ctx->encrypted_progress = MOCK_COMPLETE;
+  return true;
+}
+
+bool TLS13_Handshake_ByteDriver_External_encrypted_handshake_complete(
+    TLS13_Handshake_ByteDriver_External_context ctx,
+    void *progress) {
+  (void)progress;
+  return ctx->encrypted_progress == MOCK_COMPLETE;
 }
 
 static int test_success_path(void) {
