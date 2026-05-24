@@ -1,6 +1,10 @@
 #include "TLS13_Connection.h"
 #include "tls13_connection_external_layer.h"
 
+#undef TLS13_Record_record_state_free
+#undef TLS13_Record_install_application_keys_runtime
+#undef TLS13_Record_seal_application_runtime
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -13,8 +17,10 @@ struct TLS13_Connection_External_connection_s {
   unsigned new_calls;
   unsigned connect_calls;
   unsigned write_record_calls;
-  unsigned read_record_calls;
+  unsigned read_header_calls;
+  unsigned read_fragment_calls;
   unsigned close_calls;
+  TLS13_Record_record_state read_record_state;
 };
 
 TLS13_Connection_External_connection TLS13_Connection_External_client_new(
@@ -33,11 +39,16 @@ TLS13_Connection_External_connection TLS13_Connection_External_client_new(
     c->read_exact_ok = true;
     c->close_ok = true;
     c->new_calls = 1;
+    c->read_record_state = TLS13_Record_record_state_new();
   }
   return c;
 }
 
 void TLS13_Connection_External_client_free(TLS13_Connection_External_connection c) {
+  if (c == NULL) {
+    return;
+  }
+  TLS13_Record_record_state_free(c->read_record_state);
   free(c);
 }
 
@@ -62,6 +73,7 @@ bool TLS13_Connection_External_client_connect(
   memset(client_iv, 0x22, 12);
   memset(server_key, 0x33, 32);
   memset(server_iv, 0x44, 12);
+  TLS13_Record_install_application_keys_runtime(c->read_record_state, server_key, server_iv);
   return c->connect_ok;
 }
 
@@ -85,28 +97,46 @@ bool TLS13_Connection_External_client_write_raw_record(
   return c->write_record_ok;
 }
 
-size_t TLS13_Connection_External_client_read_application_record(
+bool TLS13_Connection_External_client_read_raw_record_header(
     TLS13_Connection_External_connection c,
     TLS13_IO_channel ch,
-    TLS13_Record_record_state record_state,
-    uint8_t *out,
-    size_t total_len,
-    size_t offset,
-    size_t remaining,
-    void *record_state_s,
-    void *old_bytes) {
+    uint8_t *header,
+    size_t header_len,
+    void *old_header) {
   (void)ch;
-  (void)record_state;
-  (void)total_len;
-  (void)record_state_s;
-  (void)old_bytes;
-  c->read_record_calls++;
+  (void)old_header;
   if (!c->read_exact_ok) {
-    return 0;
+    return false;
   }
-  size_t n = remaining < 4096 ? remaining : 4096;
-  memset(out + offset, 0x5a, n);
-  return n;
+  c->read_header_calls++;
+  memset(header, 0, header_len);
+  header[0] = 23;
+  header[1] = 3;
+  header[2] = 3;
+  header[3] = 0;
+  header[4] = 23;
+  return true;
+}
+
+bool TLS13_Connection_External_client_read_raw_record_fragment(
+    TLS13_Connection_External_connection c,
+    TLS13_IO_channel ch,
+    uint8_t *cipher,
+    size_t cipher_len,
+    void *old_cipher) {
+  (void)ch;
+  (void)old_cipher;
+  if (!c->read_exact_ok) {
+    return false;
+  }
+  c->read_fragment_calls++;
+  if (cipher_len != 23) {
+    return false;
+  }
+  uint8_t header[] = {23, 3, 3, 0, 23};
+  uint8_t plain[] = {0x5a, 0x5a, 0x5a, 0x5a, 0x5a, 0x5a, 23};
+  return TLS13_Record_seal_application_runtime(
+      c->read_record_state, header, sizeof header, plain, sizeof plain, cipher);
 }
 
 bool TLS13_Connection_External_client_close(
@@ -139,7 +169,8 @@ static int test_success_path(void) {
       c.backend->new_calls != 1 ||
       c.backend->connect_calls != 1 ||
       c.backend->write_record_calls != 1 ||
-      c.backend->read_record_calls != 1 ||
+      c.backend->read_header_calls == 0 ||
+      c.backend->read_fragment_calls == 0 ||
       c.backend->close_calls != 1 ||
       out[0] != 0x5a;
   TLS13_Connection_client_free(c);

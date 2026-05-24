@@ -19,6 +19,7 @@ module S = TLS13.StateMachine
 module ST = TLS13.State
 module SZ = FStar.SizeT
 module T = TLS13.Types
+module U16 = FStar.UInt16
 module U8 = FStar.UInt8
 module V = Pulse.Lib.Vec
 module X = TLS13.X509.Spec
@@ -387,6 +388,67 @@ fn client_write (c: connection) (ch: IO.channel) (buf: array U8.t) (len: SZ.t)
   }
 }
 
+fn rec copy_payload_to_output_loop
+  (payload: array U8.t)
+  (payload_total_len: SZ.t)
+  (out: array U8.t)
+  (total_len: SZ.t)
+  (src_index: SZ.t)
+  (dst_index: SZ.t)
+  (remaining: SZ.t)
+  requires pts_to payload 'payload_bytes **
+           pts_to out 'old **
+           pure (B.length 'payload_bytes == SZ.v payload_total_len /\
+                 B.length 'old == SZ.v total_len /\
+                 SZ.v src_index + SZ.v remaining <= SZ.v payload_total_len /\
+                 SZ.v dst_index + SZ.v remaining <= SZ.v total_len)
+  ensures exists* bytes.
+          pts_to payload 'payload_bytes **
+          pts_to out bytes **
+          pure (B.length bytes == SZ.v total_len)
+  decreases (SZ.v remaining)
+{
+  if (remaining = 0sz) {
+    with bytes. assert (pts_to out bytes);
+    assert (pure (B.length bytes == SZ.v total_len));
+  } else {
+    assert (pure (SZ.v src_index < SZ.v payload_total_len));
+    assert (pure (SZ.v dst_index < SZ.v total_len));
+    let b = payload.(src_index);
+    out.(dst_index) <- b;
+    let src_index' = SZ.(src_index +^ 1sz);
+    let dst_index' = SZ.(dst_index +^ 1sz);
+    let remaining' = SZ.(remaining -^ 1sz);
+    with bytes. assert (pts_to out bytes);
+    assert (pure (B.length bytes == SZ.v total_len));
+    assert (pure (SZ.v remaining' < SZ.v remaining));
+    assert (pure (SZ.v src_index' + SZ.v remaining' <= SZ.v payload_total_len));
+    assert (pure (SZ.v dst_index' + SZ.v remaining' <= SZ.v total_len));
+    copy_payload_to_output_loop payload payload_total_len out total_len src_index' dst_index' remaining'
+  }
+}
+
+fn copy_payload_to_output
+  (payload: array U8.t)
+  (payload_total_len: SZ.t)
+  (copy_len: SZ.t)
+  (out: array U8.t)
+  (total_len: SZ.t)
+  (offset: SZ.t)
+  requires pts_to payload 'payload_bytes **
+           pts_to out 'old **
+           pure (B.length 'payload_bytes == SZ.v payload_total_len /\
+                 B.length 'old == SZ.v total_len /\
+                 SZ.v copy_len <= SZ.v payload_total_len /\
+                 SZ.v offset + SZ.v copy_len <= SZ.v total_len)
+  ensures exists* bytes.
+          pts_to payload 'payload_bytes **
+          pts_to out bytes **
+          pure (B.length bytes == SZ.v total_len)
+{
+  copy_payload_to_output_loop payload payload_total_len out total_len 0sz offset copy_len
+}
+
 fn rec client_read_application_records
   (backend: E.connection)
   (ch: IO.channel)
@@ -417,22 +479,69 @@ fn rec client_read_application_records
     false
   } else {
     assert (pure (SZ.v remaining > 0));
-    let n =
-      E.client_read_application_record
-        backend
-        ch
-        record_state
-        out
-        total_len
-        offset
-        remaining;
+    let mut header = [| 0uy; 5sz |];
+    let header_ok = E.client_read_raw_record_header backend ch header 5sz;
     with bytes. assert (pts_to out bytes);
     let fuel' = U8.(fuel -^ 1uy);
-    let offset' = SZ.(offset +^ n);
-    let remaining' = SZ.(remaining -^ n);
-    assert (pure (U8.v fuel' < U8.v fuel));
-    assert (pure (SZ.v offset' + SZ.v remaining' == SZ.v total_len));
-    client_read_application_records backend ch record_state out total_len offset' remaining' fuel'
+    if header_ok {
+      let mut content_type_out = [| 0uy; 1sz |];
+      let mut fragment_len_out = [| 0uy; 2sz |];
+      let header_parse_ok =
+        RF.parse_record_header header 5sz content_type_out 1sz fragment_len_out 2sz;
+      if header_parse_ok {
+        let content_type = content_type_out.(0sz);
+        let frag_hi = fragment_len_out.(0sz);
+        let frag_lo = fragment_len_out.(1sz);
+        let frag_hi16 = Cast.uint8_to_uint16 frag_hi;
+        let frag_lo16 = Cast.uint8_to_uint16 frag_lo;
+        let frag16 = U16.logor (U16.shift_left frag_hi16 8ul) frag_lo16;
+        let fragment_len = SZ.uint16_to_sizet frag16;
+        if not (content_type = 23uy) {
+          false
+        } else if SZ.(16sz <^ fragment_len) {
+          let mut cipher = [| 0uy; fragment_len |];
+          let fragment_ok = E.client_read_raw_record_fragment backend ch cipher fragment_len;
+          if fragment_ok {
+            let inner_len = SZ.(fragment_len -^ 16sz);
+            assert (pure (SZ.v inner_len > 0));
+              let mut inner = [| 0uy; inner_len |];
+              let opened =
+                Rec.open_application_runtime record_state header 5sz cipher fragment_len inner;
+              with opened_bytes. assert (pts_to out opened_bytes);
+              if opened {
+                let mut inner_content_type_out = [| 0uy; 1sz |];
+                let response_len =
+                  RF.decode_inner_plaintext_no_padding inner inner_len inner_content_type_out 1sz;
+                let inner_content_type = inner_content_type_out.(0sz);
+                if (inner_content_type = 22uy) {
+                  assert (pure (U8.v fuel' < U8.v fuel));
+                  client_read_application_records backend ch record_state out total_len offset remaining fuel'
+                } else if (not (inner_content_type = 23uy) || SZ.(remaining <^ response_len)) {
+                  false
+                } else {
+                  copy_payload_to_output inner inner_len response_len out total_len offset;
+                  with copied_bytes. assert (pts_to out copied_bytes);
+                  let offset' = SZ.(offset +^ response_len);
+                  let remaining' = SZ.(remaining -^ response_len);
+                  assert (pure (U8.v fuel' < U8.v fuel));
+                  assert (pure (SZ.v offset' + SZ.v remaining' == SZ.v total_len));
+                  client_read_application_records backend ch record_state out total_len offset' remaining' fuel'
+                }
+              } else {
+                false
+              }
+          } else {
+            false
+          }
+        } else {
+          false
+        }
+      } else {
+        false
+      }
+    } else {
+      false
+    }
   }
 }
 

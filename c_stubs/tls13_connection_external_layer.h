@@ -13,8 +13,14 @@
     TLS13_Record_install_application_keys_runtime(st, key, iv)
 #define TLS13_Record_seal_application_runtime(st, aad, aad_len, plain, plain_len, out, erased_st, aad_bytes, plain_bytes, old_out) \
     TLS13_Record_seal_application_runtime(st, aad, aad_len, plain, plain_len, out)
+#define TLS13_Record_open_application_runtime(st, aad, aad_len, cipher, cipher_len, out, erased_st, aad_bytes, cipher_bytes, old_out) \
+    TLS13_Record_open_application_runtime(st, aad, aad_len, cipher, cipher_len, out)
+#define TLS13_Record_Framing_decode_inner_plaintext_no_padding(inner, inner_len, content_type_out, content_type_out_len, inner_bytes, old_content_type_out) \
+    TLS13_Record_Framing_decode_inner_plaintext_no_padding(inner, inner_len, content_type_out, content_type_out_len)
 #define TLS13_Record_Framing_serialize_application_data_header(fragment_len, out, out_len, old_out) \
     TLS13_Record_Framing_serialize_application_data_header(fragment_len, out, out_len)
+#define TLS13_Record_Framing_parse_record_header(header, header_len, content_type_out, content_type_out_len, fragment_len_out, fragment_len_out_len, header_bytes, old_content_type_out, old_fragment_len_out) \
+    TLS13_Record_Framing_parse_record_header(header, header_len, content_type_out, content_type_out_len, fragment_len_out, fragment_len_out_len)
 #define TLS13_Record_Framing_encode_inner_plaintext_no_padding_slice(plain, plain_total_len, plain_offset, plain_len, content_type, out, out_len, plain_bytes, old_out) \
     TLS13_Record_Framing_encode_inner_plaintext_no_padding_slice(plain, plain_total_len, plain_offset, plain_len, content_type, out, out_len)
 
@@ -65,16 +71,19 @@ bool TLS13_Connection_External_client_write_raw_record(
     void *header_bytes,
     void *cipher_bytes);
 
-size_t TLS13_Connection_External_client_read_application_record(
+bool TLS13_Connection_External_client_read_raw_record_header(
     TLS13_Connection_External_connection c,
     TLS13_IO_channel ch,
-    TLS13_Record_record_state record_state,
-    uint8_t *out,
-    size_t total_len,
-    size_t offset,
-    size_t remaining,
-    void *record_state_s,
-    void *old_bytes);
+    uint8_t *header,
+    size_t header_len,
+    void *old_header);
+
+bool TLS13_Connection_External_client_read_raw_record_fragment(
+    TLS13_Connection_External_connection c,
+    TLS13_IO_channel ch,
+    uint8_t *cipher,
+    size_t cipher_len,
+    void *old_cipher);
 
 bool TLS13_Connection_External_client_close(
     TLS13_Connection_External_connection c,

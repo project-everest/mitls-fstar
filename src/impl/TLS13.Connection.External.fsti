@@ -78,29 +78,38 @@ fn client_write_raw_record
           pts_to header 'header_bytes **
           pts_to cipher 'cipher_bytes
 
-fn client_read_application_record
+fn client_read_raw_record_header
   (c: connection)
   (ch: IO.channel)
-  (record_state: Rec.record_state)
-  (out: array U8.t)
-  (total_len: SZ.t)
-  (offset: SZ.t)
-  (remaining: SZ.t)
+  (header: array U8.t)
+  (header_len: SZ.t)
   requires   is_connection c **
-  Rec.is_record_state record_state 'record_s **
   IO.is_channel ch **
-  pts_to out 'old **
-  pure (B.length 'old == SZ.v total_len /\
-        SZ.v remaining > 0 /\
-                 SZ.v offset + SZ.v remaining == SZ.v total_len)
-  returns n: SZ.t
-  ensures exists* record_s' bytes.
+  pts_to header 'old_header **
+  pure (B.length 'old_header == SZ.v header_len /\
+        SZ.v header_len == 5)
+  returns ok: bool
+  ensures exists* header_bytes.
           is_connection c **
-          Rec.is_record_state record_state record_s' **
           IO.is_channel ch **
-          pts_to out bytes **
-          pure (B.length bytes == SZ.v total_len /\
-                SZ.v n <= SZ.v remaining)
+          pts_to header header_bytes **
+          pure (B.length header_bytes == 5)
+
+fn client_read_raw_record_fragment
+  (c: connection)
+  (ch: IO.channel)
+  (cipher: array U8.t)
+  (cipher_len: SZ.t)
+  requires   is_connection c **
+  IO.is_channel ch **
+  pts_to cipher 'old_cipher **
+  pure (B.length 'old_cipher == SZ.v cipher_len)
+  returns ok: bool
+  ensures exists* cipher_bytes.
+          is_connection c **
+          IO.is_channel ch **
+          pts_to cipher cipher_bytes **
+          pure (B.length cipher_bytes == SZ.v cipher_len)
 
 fn client_close (c: connection) (ch: IO.channel)
   requires is_connection c ** IO.is_channel ch

@@ -13,6 +13,10 @@
 #include "TLS13_Record.h"
 #include "tls13_connection_external_layer.h"
 
+#undef TLS13_Record_Framing_decode_inner_plaintext_no_padding
+#undef TLS13_Record_Framing_serialize_application_data_header
+#undef TLS13_Record_Framing_parse_record_header
+
 #include "TLS13_Handshake_Driver.h"
 
 #include <errno.h>
@@ -922,8 +926,7 @@ static bool probe_handshake_send_client_finished(
   TLS13_Record_Framing_serialize_application_data_header(
       (uint16_t)client_ciphertext_len,
       client_record,
-      TLS13_WIRE_RECORD_HEADER_LEN,
-      NULL);
+      TLS13_WIRE_RECORD_HEADER_LEN);
   TLS13_Record_Framing_encode_inner_plaintext_no_padding(
       client_finished,
       sizeof client_finished,
@@ -1156,78 +1159,32 @@ bool TLS13_Connection_External_client_write_raw_record(
   return true;
 }
 
-size_t TLS13_Connection_External_client_read_application_record(
+bool TLS13_Connection_External_client_read_raw_record_header(
     TLS13_Connection_External_connection c,
     TLS13_IO_channel ch,
-    TLS13_Record_record_state record_state,
-    uint8_t *out,
-    size_t total_len,
-    size_t offset,
-    size_t remaining,
-    void *record_state_s,
-    void *old_bytes) {
+    uint8_t *header,
+    size_t header_len,
+    void *old_header) {
   (void)ch;
-  (void)record_state_s;
-  (void)old_bytes;
-  if (c == NULL || c->fd < 0 || out == NULL ||
-      remaining == 0 || offset > total_len || remaining > total_len - offset) {
-    return 0;
+  (void)old_header;
+  if (c == NULL || c->fd < 0 || header == NULL || header_len != TLS13_WIRE_RECORD_HEADER_LEN) {
+    return false;
   }
+  return read_exact_fd(c->fd, header, header_len) == 0;
+}
 
-  uint8_t header[TLS13_WIRE_RECORD_HEADER_LEN];
-  uint8_t encrypted_fragment[20000];
-  uint8_t inner_plaintext[20000];
-  uint8_t content_type = 0;
-  uint16_t legacy_version = 0;
-  uint16_t fragment_len = 0;
-  if (read_record(
-          c->fd,
-          header,
-          encrypted_fragment,
-          sizeof encrypted_fragment,
-          &content_type,
-          &legacy_version,
-          &fragment_len) != 0 ||
-      content_type != 23 ||
-      fragment_len < 16 ||
-      (size_t)fragment_len - 16u > sizeof inner_plaintext) {
-    fprintf(stderr, "failed to read application-data response record\n");
-    return 0;
+bool TLS13_Connection_External_client_read_raw_record_fragment(
+    TLS13_Connection_External_connection c,
+    TLS13_IO_channel ch,
+    uint8_t *cipher,
+    size_t cipher_len,
+    void *old_cipher) {
+  (void)ch;
+  (void)old_cipher;
+  if (c == NULL || c->fd < 0 || cipher == NULL) {
+    return false;
   }
-
-  size_t inner_plaintext_len = (size_t)fragment_len - 16u;
-  if (!TLS13_Record_open_application(
-          record_state,
-          header,
-          TLS13_WIRE_RECORD_HEADER_LEN,
-          encrypted_fragment,
-          fragment_len,
-          inner_plaintext)) {
-    fprintf(stderr, "failed to decrypt application-data response record\n");
-    return 0;
-  }
-
-  uint8_t inner_content_type_buf[1] = {0};
-  if (inner_plaintext_len == 0) {
-    fprintf(stderr, "failed to decode application-data response record\n");
-    return 0;
-  }
-  size_t response_len =
-      TLS13_Record_Framing_decode_inner_plaintext_no_padding(
-          inner_plaintext,
-          inner_plaintext_len,
-          inner_content_type_buf,
-          sizeof inner_content_type_buf);
-  uint8_t inner_content_type = inner_content_type_buf[0];
-  if (inner_content_type == 22) {
-    return 0;
-  }
-  if (inner_content_type != 23 || response_len > remaining) {
-    fprintf(stderr, "unexpected application-data response record\n");
-    return 0;
-  }
-  memcpy(out + offset, inner_plaintext, response_len);
-  return response_len;
+  return read_exact_fd(c->fd, cipher, cipher_len) == 0;
 }
 
 bool TLS13_Connection_External_client_close(
