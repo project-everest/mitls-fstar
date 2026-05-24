@@ -66,12 +66,37 @@ size_t TLS13_Handshake_External_read_raw(
   }
   size_t chunk = remaining > 3 ? 3 : remaining;
   if (total_len == 5) {
-    static const uint8_t header[] = {22, 3, 3, 0, 1};
+    static const uint8_t header[] = {22, 3, 3, 0, 90};
     memcpy(buf + offset, header + offset, chunk);
     return chunk;
   }
-  if (total_len == 1) {
-    buf[offset] = 0;
+  if (total_len == 90) {
+    uint8_t server_hello[90] = {0};
+    server_hello[0] = 0x02;
+    server_hello[3] = 0x56;
+    server_hello[4] = 0x03;
+    server_hello[5] = 0x03;
+    server_hello[38] = 0x00;
+    server_hello[39] = 0x13;
+    server_hello[40] = 0x03;
+    server_hello[41] = 0x00;
+    server_hello[42] = 0x00;
+    server_hello[43] = 0x2e;
+    server_hello[44] = 0x00;
+    server_hello[45] = 0x33;
+    server_hello[46] = 0x00;
+    server_hello[47] = 0x24;
+    server_hello[48] = 0x00;
+    server_hello[49] = 0x1d;
+    server_hello[50] = 0x00;
+    server_hello[51] = 0x20;
+    server_hello[84] = 0x00;
+    server_hello[85] = 0x2b;
+    server_hello[86] = 0x00;
+    server_hello[87] = 0x02;
+    server_hello[88] = 0x03;
+    server_hello[89] = 0x04;
+    memcpy(buf + offset, server_hello + offset, chunk);
     return chunk;
   }
   return 0;
@@ -83,14 +108,20 @@ bool TLS13_Handshake_External_process_server_hello_record(
     size_t header_len,
     uint8_t *fragment,
     size_t fragment_len,
+    uint8_t *key_share,
+    size_t key_share_len,
     void *header_bytes,
-    void *fragment_bytes) {
+    void *fragment_bytes,
+    void *key_share_bytes) {
   (void)header;
   (void)header_len;
   (void)fragment;
   (void)fragment_len;
+  (void)key_share;
+  (void)key_share_len;
   (void)header_bytes;
   (void)fragment_bytes;
+  (void)key_share_bytes;
   ctx->recv_server_hello_calls++;
   return ctx->recv_server_hello_ok;
 }

@@ -45,18 +45,24 @@ fn process_server_hello_record
   (header_len: SZ.t)
   (fragment: array U8.t)
   (fragment_len: SZ.t)
+  (key_share: array U8.t)
+  (key_share_len: SZ.t)
   requires is_context ctx **
            pts_to header 'header_bytes **
            pts_to fragment 'fragment_bytes **
+           pts_to key_share 'key_share_bytes **
            pure (B.length 'header_bytes == SZ.v header_len /\
                  B.length 'fragment_bytes == SZ.v fragment_len /\
+                 B.length 'key_share_bytes == SZ.v key_share_len /\
                  SZ.v header_len == 5 /\
                  0 < SZ.v fragment_len /\
-                 SZ.v fragment_len <= 4096)
+                 SZ.v fragment_len <= 4096 /\
+                 SZ.v key_share_len == 32)
   returns ok: bool
   ensures is_context ctx **
           pts_to header 'header_bytes **
-          pts_to fragment 'fragment_bytes
+          pts_to fragment 'fragment_bytes **
+          pts_to key_share 'key_share_bytes
 
 fn recv_encrypted_extensions (ctx: handshake_context) (ch: IO.channel)
   requires is_context ctx ** IO.is_channel ch

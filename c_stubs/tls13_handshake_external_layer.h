@@ -2,6 +2,7 @@
 #define TLS13_HANDSHAKE_EXTERNAL_LAYER_H
 
 #include "tls13_connection_external.h"
+#include "TLS13_Handshake_Framing.h"
 #include "TLS13_Record_Framing.h"
 
 #include <stdbool.h>
@@ -9,6 +10,8 @@
 
 #define TLS13_Record_Framing_parse_record_header(header, header_len, content_type_out, content_type_out_len, fragment_len_out, fragment_len_out_len, header_bytes, old_content_type_out, old_fragment_len_out) \
     TLS13_Record_Framing_parse_record_header(header, header_len, content_type_out, content_type_out_len, fragment_len_out, fragment_len_out_len)
+#define TLS13_Handshake_Framing_parse_supported_server_hello(input, input_len, random_out, random_out_len, key_share_out, key_share_out_len, input_bytes, old_random, old_key_share) \
+    TLS13_Handshake_Framing_parse_supported_server_hello(input, input_len, random_out, random_out_len, key_share_out, key_share_out_len)
 
 typedef struct TLS13_Handshake_External_handshake_context_s
     *TLS13_Handshake_External_handshake_context;
@@ -37,8 +40,11 @@ bool TLS13_Handshake_External_process_server_hello_record(
     size_t header_len,
     uint8_t *fragment,
     size_t fragment_len,
+    uint8_t *key_share,
+    size_t key_share_len,
     void *header_bytes,
-    void *fragment_bytes);
+    void *fragment_bytes,
+    void *key_share_bytes);
 
 bool TLS13_Handshake_External_recv_encrypted_extensions(
     TLS13_Handshake_External_handshake_context ctx,

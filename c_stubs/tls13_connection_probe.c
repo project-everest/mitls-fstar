@@ -430,13 +430,17 @@ static bool process_server_hello_record(
     TLS13_Handshake_handshake_context ctx,
     uint8_t header[TLS13_WIRE_RECORD_HEADER_LEN],
     uint8_t *server_hello_fragment,
-    size_t fragment_len) {
+    size_t fragment_len,
+    uint8_t server_key_share[32],
+    size_t server_key_share_len) {
   TLS13_Connection_connection c = from_handshake_context(ctx);
   if (!handshake_can_continue(c) ||
       header == NULL ||
       server_hello_fragment == NULL ||
       fragment_len == 0 ||
-      fragment_len > PROBE_SERVER_HELLO_CAPACITY) {
+      fragment_len > PROBE_SERVER_HELLO_CAPACITY ||
+      server_key_share == NULL ||
+      server_key_share_len != 32) {
     return false;
   }
 
@@ -444,19 +448,6 @@ static bool process_server_hello_record(
   uint8_t padded_server_hello_fragment[PROBE_SERVER_HELLO_CAPACITY] = {0};
   size_t client_hello_len = 0;
   size_t server_hello_len = 0;
-  uint8_t server_random[32];
-  uint8_t server_key_share[32];
-  if (!TLS13_Handshake_Framing_parse_supported_server_hello(
-          server_hello_fragment,
-          fragment_len,
-          server_random,
-          sizeof server_random,
-          server_key_share,
-          sizeof server_key_share)) {
-    fprintf(stderr, "failed to parse supported OpenSSL ServerHello\n");
-    fail_handshake(c);
-    return false;
-  }
   memcpy(padded_server_hello_fragment, server_hello_fragment, fragment_len);
   TLS13_Handshake_FlightState_set_server_hello(
       c->server_handshake_flight_state,
@@ -869,15 +860,19 @@ bool TLS13_Handshake_External_process_server_hello_record(
     size_t header_len,
     uint8_t *fragment,
     size_t fragment_len,
+    uint8_t *key_share,
+    size_t key_share_len,
     void *header_bytes,
-    void *fragment_bytes) {
+    void *fragment_bytes,
+    void *key_share_bytes) {
   (void)header_bytes;
   (void)fragment_bytes;
+  (void)key_share_bytes;
   if (header_len != TLS13_WIRE_RECORD_HEADER_LEN) {
     return false;
   }
   return process_server_hello_record(
-      (TLS13_Handshake_handshake_context)ctx, header, fragment, fragment_len);
+      (TLS13_Handshake_handshake_context)ctx, header, fragment, fragment_len, key_share, key_share_len);
 }
 
 bool TLS13_Handshake_External_recv_encrypted_extensions(

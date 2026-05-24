@@ -9,6 +9,7 @@ module B = TLS13.Bytes
 module Cast = FStar.Int.Cast
 module E = TLS13.Handshake.External
 module H = TLS13.Handshake.Spec
+module HF = TLS13.Handshake.Framing
 module IO = TLS13.IO
 module RF = TLS13.Record.Framing
 module S = TLS13.StateMachine
@@ -164,7 +165,21 @@ fn recv_server_hello_record (ctx: handshake_context) (ch: IO.channel)
         let mut fragment = [| 0uy; fragment_len |];
         let fragment_ok = read_raw_exact ctx ch fragment fragment_len 0sz fragment_len;
         if fragment_ok {
-          E.process_server_hello_record ctx header 5sz fragment fragment_len
+          let mut server_random = [| 0uy; 32sz |];
+          let mut key_share = [| 0uy; 32sz |];
+          let parsed =
+            HF.parse_supported_server_hello
+              fragment
+              fragment_len
+              server_random
+              32sz
+              key_share
+              32sz;
+          if parsed {
+            E.process_server_hello_record ctx header 5sz fragment fragment_len key_share 32sz
+          } else {
+            false
+          }
         } else {
           false
         }

@@ -526,10 +526,10 @@ test/test_handshake_driver_bindings: test/test_handshake_driver_bindings.c $(EXT
 test-handshake-driver-bindings: test/test_handshake_driver_bindings
 	./test/test_handshake_driver_bindings
 
-test/test_handshake_bindings: test/test_handshake_bindings.c $(EXTRACT_HANDSHAKE_C) $(EXTRACT_HANDSHAKE_H) $(EXTRACT_RECORD_FRAMING_C) $(EXTRACT_RECORD_FRAMING_H) c_stubs/tls13_handshake_external_layer.h
+test/test_handshake_bindings: test/test_handshake_bindings.c $(EXTRACT_HANDSHAKE_C) $(EXTRACT_HANDSHAKE_H) $(EXTRACT_HANDSHAKE_FRAMING_C) $(EXTRACT_HANDSHAKE_FRAMING_H) $(EXTRACT_RECORD_FRAMING_C) $(EXTRACT_RECORD_FRAMING_H) c_stubs/tls13_handshake_external_layer.h
 	$(CC) -Wall -Wextra \
-	  -I $(EXTRACT_HANDSHAKE_DIR) -I $(EXTRACT_RECORD_FRAMING_DIR) -I c_stubs -I $(KRML_HOME)/include -I $(KRML_HOME)/krmllib/dist/minimal \
-	  $(EXTRACT_HANDSHAKE_C) $(EXTRACT_RECORD_FRAMING_C) c_stubs/tls13_pulse_shims.c test/test_handshake_bindings.c \
+	  -I $(EXTRACT_HANDSHAKE_DIR) -I $(EXTRACT_HANDSHAKE_FRAMING_DIR) -I $(EXTRACT_RECORD_FRAMING_DIR) -I c_stubs -I $(KRML_HOME)/include -I $(KRML_HOME)/krmllib/dist/minimal \
+	  $(EXTRACT_HANDSHAKE_C) $(EXTRACT_HANDSHAKE_FRAMING_C) $(EXTRACT_RECORD_FRAMING_C) c_stubs/tls13_pulse_shims.c test/test_handshake_bindings.c \
 	  -o $@
 
 test-handshake-bindings: test/test_handshake_bindings
