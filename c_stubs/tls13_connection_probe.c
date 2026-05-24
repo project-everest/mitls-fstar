@@ -1136,27 +1136,25 @@ bool TLS13_Connection_External_client_connect(
   return true;
 }
 
-bool TLS13_Connection_External_client_write_raw_record(
+size_t TLS13_Connection_External_client_write_raw(
     TLS13_Connection_External_connection c,
     TLS13_IO_channel ch,
-    uint8_t *header,
-    size_t header_len,
-    uint8_t *cipher,
-    size_t cipher_len,
-    void *header_bytes,
-    void *cipher_bytes) {
+    uint8_t *buf,
+    size_t total_len,
+    size_t offset,
+    size_t remaining,
+    void *buf_bytes) {
   (void)ch;
-  (void)header_bytes;
-  (void)cipher_bytes;
-  if (c == NULL || c->fd < 0 || header == NULL || cipher == NULL) {
-    return false;
+  (void)buf_bytes;
+  if (c == NULL || c->fd < 0 || buf == NULL ||
+      remaining == 0 || offset > total_len || remaining > total_len - offset) {
+    return 0;
   }
-  if (write_all_fd(c->fd, header, header_len) != 0 ||
-      write_all_fd(c->fd, cipher, cipher_len) != 0) {
-    fprintf(stderr, "failed to send application-data record\n");
-    return false;
+  ssize_t n = tls13_io_write_fd(c->fd, buf + offset, remaining);
+  if (n <= 0) {
+    return 0;
   }
-  return true;
+  return (size_t)n;
 }
 
 size_t TLS13_Connection_External_client_read_raw(

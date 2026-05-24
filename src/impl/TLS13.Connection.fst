@@ -243,6 +243,41 @@ fn client_connect (c: connection) (ch: IO.channel)
   }
 }
 
+fn rec client_write_raw_exact
+  (backend: E.connection)
+  (ch: IO.channel)
+  (buf: array U8.t)
+  (total_len: SZ.t)
+  (offset: SZ.t)
+  (remaining: SZ.t)
+  requires   E.is_connection backend **
+  IO.is_channel ch **
+  pts_to buf 'bytes **
+  pure (B.length 'bytes == SZ.v total_len /\
+        SZ.v offset + SZ.v remaining == SZ.v total_len)
+  returns ok: bool
+  ensures E.is_connection backend **
+          IO.is_channel ch **
+          pts_to buf 'bytes
+  decreases (SZ.v remaining)
+{
+  if (remaining = 0sz) {
+    true
+  } else {
+    assert (pure (SZ.v remaining > 0));
+    let n = E.client_write_raw backend ch buf total_len offset remaining;
+    if (n = 0sz) {
+      false
+    } else {
+      let offset' = SZ.(offset +^ n);
+      let remaining' = SZ.(remaining -^ n);
+      assert (pure (SZ.v remaining' < SZ.v remaining));
+      assert (pure (SZ.v offset' + SZ.v remaining' == SZ.v total_len));
+      client_write_raw_exact backend ch buf total_len offset' remaining'
+    }
+  }
+}
+
 fn rec client_write_application_records
   (backend: E.connection)
   (ch: IO.channel)
@@ -308,18 +343,22 @@ fn rec client_write_application_records
     with cipher_bytes. assert (pts_to cipher cipher_bytes);
     assert (pure (B.length header_bytes == 5));
     assert (pure (B.length cipher_bytes == SZ.v cipher_len));
-    let ok =
-      if sealed {
-        E.client_write_raw_record backend ch header 5sz cipher cipher_len
+    if sealed {
+      let header_ok = client_write_raw_exact backend ch header 5sz 0sz 5sz;
+      if header_ok {
+        let cipher_ok = client_write_raw_exact backend ch cipher cipher_len 0sz cipher_len;
+        if cipher_ok {
+          let offset' = SZ.(offset +^ chunk_len);
+          let remaining' = SZ.(remaining -^ chunk_len);
+          assert (pure (SZ.v remaining' < SZ.v remaining));
+          assert (pure (SZ.v offset' + SZ.v remaining' == SZ.v total_len));
+          client_write_application_records backend ch record_state buf total_len offset' remaining'
+        } else {
+          false
+        }
       } else {
         false
-      };
-    if ok {
-      let offset' = SZ.(offset +^ chunk_len);
-      let remaining' = SZ.(remaining -^ chunk_len);
-      assert (pure (SZ.v remaining' < SZ.v remaining));
-      assert (pure (SZ.v offset' + SZ.v remaining' == SZ.v total_len));
-      client_write_application_records backend ch record_state buf total_len offset' remaining'
+      }
     } else {
       false
     }

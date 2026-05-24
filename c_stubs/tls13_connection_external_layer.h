@@ -61,15 +61,14 @@ bool TLS13_Connection_External_client_connect(
     void *old_server_key,
     void *old_server_iv);
 
-bool TLS13_Connection_External_client_write_raw_record(
+size_t TLS13_Connection_External_client_write_raw(
     TLS13_Connection_External_connection c,
     TLS13_IO_channel ch,
-    uint8_t *header,
-    size_t header_len,
-    uint8_t *cipher,
-    size_t cipher_len,
-    void *header_bytes,
-    void *cipher_bytes);
+    uint8_t *buf,
+    size_t total_len,
+    size_t offset,
+    size_t remaining,
+    void *buf_bytes);
 
 size_t TLS13_Connection_External_client_read_raw(
     TLS13_Connection_External_connection c,

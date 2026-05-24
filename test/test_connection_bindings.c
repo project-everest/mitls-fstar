@@ -79,24 +79,25 @@ bool TLS13_Connection_External_client_connect(
   return c->connect_ok;
 }
 
-bool TLS13_Connection_External_client_write_raw_record(
+size_t TLS13_Connection_External_client_write_raw(
     TLS13_Connection_External_connection c,
     TLS13_IO_channel ch,
-    uint8_t *header,
-    size_t header_len,
-    uint8_t *cipher,
-    size_t cipher_len,
-    void *header_bytes,
-    void *cipher_bytes) {
+    uint8_t *buf,
+    size_t total_len,
+    size_t offset,
+    size_t remaining,
+    void *buf_bytes) {
   (void)ch;
-  (void)header;
-  (void)header_len;
-  (void)cipher;
-  (void)cipher_len;
-  (void)header_bytes;
-  (void)cipher_bytes;
+  (void)buf;
+  (void)buf_bytes;
+  if (!c->write_record_ok) {
+    return 0;
+  }
+  if (remaining == 0 || offset > total_len || remaining > total_len - offset) {
+    return 0;
+  }
   c->write_record_calls++;
-  return c->write_record_ok;
+  return remaining > 4 ? 4 : remaining;
 }
 
 size_t TLS13_Connection_External_client_read_raw(
@@ -168,7 +169,7 @@ static int test_success_path(void) {
       !ok ||
       c.backend->new_calls != 1 ||
       c.backend->connect_calls != 1 ||
-      c.backend->write_record_calls != 1 ||
+      c.backend->write_record_calls <= 1 ||
       c.backend->read_header_calls <= 1 ||
       c.backend->read_fragment_calls <= 1 ||
       c.backend->close_calls != 1 ||

@@ -59,24 +59,24 @@ fn client_connect
                 B.length server_key_bytes == 32 /\
                 B.length server_iv_bytes == 12)
 
-fn client_write_raw_record
+fn client_write_raw
   (c: connection)
   (ch: IO.channel)
-  (header: array U8.t)
-  (header_len: SZ.t)
-  (cipher: array U8.t)
-  (cipher_len: SZ.t)
+  (buf: array U8.t)
+  (total_len: SZ.t)
+  (offset: SZ.t)
+  (remaining: SZ.t)
   requires   is_connection c **
   IO.is_channel ch **
-  pts_to header 'header_bytes **
-  pts_to cipher 'cipher_bytes **
-  pure (B.length 'header_bytes == SZ.v header_len /\
-        B.length 'cipher_bytes == SZ.v cipher_len)
-  returns ok: bool
+  pts_to buf 'bytes **
+  pure (B.length 'bytes == SZ.v total_len /\
+        SZ.v remaining > 0 /\
+        SZ.v offset + SZ.v remaining <= SZ.v total_len)
+  returns n: SZ.t
   ensures is_connection c **
           IO.is_channel ch **
-          pts_to header 'header_bytes **
-          pts_to cipher 'cipher_bytes
+          pts_to buf 'bytes **
+          pure (SZ.v n <= SZ.v remaining)
 
 fn client_read_raw
   (c: connection)
