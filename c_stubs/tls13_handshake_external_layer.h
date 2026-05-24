@@ -34,6 +34,21 @@ size_t TLS13_Handshake_External_read_raw(
     size_t remaining,
     void *old_buf);
 
+size_t TLS13_Handshake_External_write_raw(
+    TLS13_Handshake_External_handshake_context ctx,
+    TLS13_IO_channel ch,
+    uint8_t *buf,
+    size_t total_len,
+    size_t offset,
+    size_t remaining,
+    void *buf_bytes);
+
+bool TLS13_Handshake_External_build_client_finished_record(
+    TLS13_Handshake_External_handshake_context ctx,
+    uint8_t *out,
+    size_t out_len,
+    void *old_out);
+
 bool TLS13_Handshake_External_process_server_hello_record(
     TLS13_Handshake_External_handshake_context ctx,
     uint8_t *header,
@@ -62,10 +77,6 @@ bool TLS13_Handshake_External_recv_certificate_verify(
     TLS13_IO_channel ch);
 
 bool TLS13_Handshake_External_recv_server_finished(
-    TLS13_Handshake_External_handshake_context ctx,
-    TLS13_IO_channel ch);
-
-bool TLS13_Handshake_External_send_client_finished(
     TLS13_Handshake_External_handshake_context ctx,
     TLS13_IO_channel ch);
 

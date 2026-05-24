@@ -39,6 +39,32 @@ fn read_raw (ctx: handshake_context) (ch: IO.channel) (buf: array U8.t)
           ** pure (B.length bytes == SZ.v total_len /\
                    SZ.v n <= SZ.v remaining)
 
+fn write_raw (ctx: handshake_context) (ch: IO.channel) (buf: array U8.t)
+  (total_len: SZ.t) (offset: SZ.t) (remaining: SZ.t)
+  requires is_context ctx ** IO.is_channel ch
+           ** pts_to buf 'bytes
+           ** pure (B.length 'bytes == SZ.v total_len /\
+                    SZ.v remaining > 0 /\
+                    SZ.v offset + SZ.v remaining <= SZ.v total_len)
+  returns n: SZ.t
+  ensures is_context ctx ** IO.is_channel ch
+          ** pts_to buf 'bytes
+          ** pure (SZ.v n <= SZ.v remaining)
+
+fn build_client_finished_record
+  (ctx: handshake_context)
+  (out: array U8.t)
+  (out_len: SZ.t)
+  requires is_context ctx **
+           pts_to out 'old_out **
+           pure (B.length 'old_out == SZ.v out_len /\
+                 SZ.v out_len == 58)
+  returns ok: bool
+  ensures exists* out_bytes.
+          is_context ctx **
+          pts_to out out_bytes **
+          pure (B.length out_bytes == 58)
+
 fn process_server_hello_record
   (ctx: handshake_context)
   (header: array U8.t)
@@ -85,11 +111,6 @@ fn recv_certificate_verify (ctx: handshake_context) (ch: IO.channel)
   ensures is_context ctx ** IO.is_channel ch
 
 fn recv_server_finished (ctx: handshake_context) (ch: IO.channel)
-  requires is_context ctx ** IO.is_channel ch
-  returns ok: bool
-  ensures is_context ctx ** IO.is_channel ch
-
-fn send_client_finished (ctx: handshake_context) (ch: IO.channel)
   requires is_context ctx ** IO.is_channel ch
   returns ok: bool
   ensures is_context ctx ** IO.is_channel ch

@@ -138,6 +138,41 @@ fn rec read_raw_exact
   }
 }
 
+fn rec write_raw_exact
+  (ctx: handshake_context)
+  (ch: IO.channel)
+  (buf: array U8.t)
+  (total_len: SZ.t)
+  (offset: SZ.t)
+  (remaining: SZ.t)
+  requires E.is_context ctx **
+           IO.is_channel ch **
+           pts_to buf 'bytes **
+           pure (B.length 'bytes == SZ.v total_len /\
+                 SZ.v offset + SZ.v remaining == SZ.v total_len)
+  returns ok: bool
+  ensures E.is_context ctx **
+          IO.is_channel ch **
+          pts_to buf 'bytes
+  decreases (SZ.v remaining)
+{
+  if (remaining = 0sz) {
+    true
+  } else {
+    assert (pure (SZ.v remaining > 0));
+    let n = E.write_raw ctx ch buf total_len offset remaining;
+    if (n = 0sz) {
+      false
+    } else {
+      let offset' = SZ.(offset +^ n);
+      let remaining' = SZ.(remaining -^ n);
+      assert (pure (SZ.v remaining' < SZ.v remaining));
+      assert (pure (SZ.v offset' + SZ.v remaining' == SZ.v total_len));
+      write_raw_exact ctx ch buf total_len offset' remaining'
+    }
+  }
+}
+
 inline_for_extraction
 fn recv_server_hello_record (ctx: handshake_context) (ch: IO.channel)
   requires E.is_context ctx ** IO.is_channel ch
@@ -360,7 +395,14 @@ fn send_client_finished (ctx: handshake_context) (ch: IO.channel)
                 (not ok ==> s'.S.phase == S.Failed))
 {
   unfold (is_handshake_context ctx 'st 's);
-  let ok = E.send_client_finished ctx ch;
+  let mut record = [| 0uy; 58sz |];
+  let built = E.build_client_finished_record ctx record 58sz;
+  let ok =
+    if built {
+      write_raw_exact ctx ch record 58sz 0sz 58sz
+    } else {
+      false
+    };
   if ok {
     assert (pure (S.step 's (S.SendClientFinished dummy_finished) == Some (S.with_phase 's S.ApplicationData)));
     ST.advance 'st (S.SendClientFinished dummy_finished) (S.with_phase 's S.ApplicationData);

@@ -392,34 +392,6 @@ static bool probe_handshake_recv_server_finished(
   return true;
 }
 
-static bool probe_handshake_send_client_finished(
-    TLS13_Handshake_handshake_context ctx,
-    TLS13_IO_channel ch,
-    void *erased_state_ref,
-    void *erased_state) {
-  (void)ch;
-  (void)erased_state_ref;
-  (void)erased_state;
-  TLS13_Connection_connection c = from_handshake_context(ctx);
-  if (!handshake_can_continue(c) || c->fd < 0) {
-    fail_handshake(c);
-    return false;
-  }
-
-  uint8_t client_record[58] = {0};
-  if (!TLS13_Handshake_FlightState_build_client_finished_record(
-          c->server_handshake_flight_state,
-          client_record,
-          sizeof client_record) ||
-      write_all_fd(c->fd, client_record, sizeof client_record) != 0) {
-    fprintf(stderr, "failed to send client Finished\n");
-    fail_handshake(c);
-    return false;
-  }
-
-  return true;
-}
-
 void TLS13_Handshake_External_send_client_hello(
     TLS13_Handshake_External_handshake_context ctx,
     TLS13_IO_channel ch) {
@@ -446,6 +418,42 @@ size_t TLS13_Handshake_External_read_raw(
     return 0;
   }
   return (size_t)n;
+}
+
+size_t TLS13_Handshake_External_write_raw(
+    TLS13_Handshake_External_handshake_context ctx,
+    TLS13_IO_channel ch,
+    uint8_t *buf,
+    size_t total_len,
+    size_t offset,
+    size_t remaining,
+    void *buf_bytes) {
+  (void)ch;
+  (void)buf_bytes;
+  TLS13_Connection_connection c = from_handshake_context((TLS13_Handshake_handshake_context)ctx);
+  if (!handshake_can_continue(c) || c->fd < 0 || buf == NULL ||
+      remaining == 0 || offset > total_len || remaining > total_len - offset) {
+    return 0;
+  }
+  ssize_t n = tls13_io_write_fd(c->fd, buf + offset, remaining);
+  if (n <= 0) {
+    return 0;
+  }
+  return (size_t)n;
+}
+
+bool TLS13_Handshake_External_build_client_finished_record(
+    TLS13_Handshake_External_handshake_context ctx,
+    uint8_t *out,
+    size_t out_len,
+    void *old_out) {
+  (void)old_out;
+  TLS13_Connection_connection c = from_handshake_context((TLS13_Handshake_handshake_context)ctx);
+  if (!handshake_can_continue(c) || out == NULL || out_len != 58) {
+    return false;
+  }
+  return TLS13_Handshake_FlightState_build_client_finished_record(
+      c->server_handshake_flight_state, out, out_len);
 }
 
 bool TLS13_Handshake_External_process_server_hello_record(
@@ -499,12 +507,6 @@ bool TLS13_Handshake_External_recv_server_finished(
     TLS13_IO_channel ch) {
   return probe_handshake_recv_server_finished(
       (TLS13_Handshake_handshake_context)ctx, ch, NULL, NULL);
-}
-
-bool TLS13_Handshake_External_send_client_finished(
-    TLS13_Handshake_External_handshake_context ctx,
-    TLS13_IO_channel ch) {
-  return probe_handshake_send_client_finished((TLS13_Handshake_handshake_context)ctx, ch, NULL, NULL);
 }
 
 static TLS13_Connection_connection tls13_connection_probe_new(

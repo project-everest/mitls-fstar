@@ -102,6 +102,38 @@ size_t TLS13_Handshake_External_read_raw(
   return 0;
 }
 
+size_t TLS13_Handshake_External_write_raw(
+    TLS13_Handshake_External_handshake_context ctx,
+    TLS13_IO_channel ch,
+    uint8_t *buf,
+    size_t total_len,
+    size_t offset,
+    size_t remaining,
+    void *buf_bytes) {
+  (void)ctx;
+  (void)ch;
+  (void)buf;
+  (void)buf_bytes;
+  if (remaining == 0 || offset > total_len || remaining > total_len - offset) {
+    return 0;
+  }
+  return remaining > 5 ? 5 : remaining;
+}
+
+bool TLS13_Handshake_External_build_client_finished_record(
+    TLS13_Handshake_External_handshake_context ctx,
+    uint8_t *out,
+    size_t out_len,
+    void *old_out) {
+  (void)old_out;
+  if (out == NULL || out_len != 58) {
+    return false;
+  }
+  memset(out, 0x5a, out_len);
+  ctx->send_client_finished_calls++;
+  return ctx->send_client_finished_ok;
+}
+
 bool TLS13_Handshake_External_process_server_hello_record(
     TLS13_Handshake_External_handshake_context ctx,
     uint8_t *header,
@@ -162,14 +194,6 @@ bool TLS13_Handshake_External_recv_server_finished(
   (void)ch;
   ctx->recv_server_finished_calls++;
   return ctx->recv_server_finished_ok;
-}
-
-bool TLS13_Handshake_External_send_client_finished(
-    TLS13_Handshake_External_handshake_context ctx,
-    TLS13_IO_channel ch) {
-  (void)ch;
-  ctx->send_client_finished_calls++;
-  return ctx->send_client_finished_ok;
 }
 
 static int test_success_path(void) {
