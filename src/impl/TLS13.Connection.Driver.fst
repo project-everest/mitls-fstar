@@ -34,7 +34,7 @@ fn connect_write_read_exact
           pts_to inbound inbound_bytes **
           pure (B.length inbound_bytes == SZ.v inbound_len /\
                 (ok ==> s'.S.phase == S.ApplicationData) /\
-                (not ok ==> s'.S.phase == S.Failed))
+                (not ok ==> s'.S.phase == S.Closed \/ s'.S.phase == S.Failed))
 {
   let ok_connect = C.client_connect c ch;
   if ok_connect {

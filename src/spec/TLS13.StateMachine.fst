@@ -111,6 +111,7 @@ let step (s:conn_state) (e:event) : option conn_state =
     Some (advance_read_record s)
   | ApplicationData, SendCloseNotify ->
     Some (send_close_state s)
+  | ApplicationData, RecvCloseNotify
   | Closing, RecvCloseNotify ->
     Some (recv_close_state s)
   | _, Fail err ->

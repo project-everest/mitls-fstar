@@ -76,18 +76,6 @@ static uint8_t *read_file(const char *path, size_t *len_out) {
   return buf;
 }
 
-static int write_all_fd(int fd, const uint8_t *buf, size_t len) {
-  size_t off = 0;
-  while (off < len) {
-    ssize_t n = tls13_io_write_fd(fd, buf + off, len - off);
-    if (n <= 0) {
-      return -1;
-    }
-    off += (size_t)n;
-  }
-  return 0;
-}
-
 static TLS13_Connection_connection from_handshake_context(
     TLS13_Handshake_handshake_context ctx) {
   return (TLS13_Connection_connection)ctx;

@@ -9,6 +9,11 @@
 #include <stdlib.h>
 #include <string.h>
 
+enum read_record_kind {
+  READ_APPLICATION_DATA,
+  READ_CLOSE_NOTIFY,
+};
+
 struct TLS13_Connection_External_connection_s {
   bool connect_ok;
   bool write_record_ok;
@@ -22,8 +27,15 @@ struct TLS13_Connection_External_connection_s {
   unsigned close_calls;
   TLS13_Record_record_state read_record_state;
   uint8_t read_cipher[23];
+  size_t read_cipher_len;
   bool read_cipher_ready;
+  enum read_record_kind read_kind;
 };
+
+static size_t selected_read_cipher_len(
+    const struct TLS13_Connection_External_connection_s *c) {
+  return c->read_kind == READ_CLOSE_NOTIFY ? 19 : 23;
+}
 
 TLS13_Connection_External_connection TLS13_Connection_External_client_new(
     uint8_t *hostname,
@@ -118,17 +130,21 @@ size_t TLS13_Connection_External_client_read_raw(
   }
   size_t chunk = remaining > 3 ? 3 : remaining;
   if (total_len == 5) {
-    static const uint8_t header[] = {23, 3, 3, 0, 23};
+    uint8_t header[] = {23, 3, 3, 0, (uint8_t)selected_read_cipher_len(c)};
     c->read_header_calls++;
     memcpy(buf + offset, header + offset, chunk);
     return chunk;
   }
-  if (total_len == sizeof c->read_cipher) {
+  if (total_len == selected_read_cipher_len(c)) {
     if (!c->read_cipher_ready) {
-      uint8_t header[] = {23, 3, 3, 0, 23};
-      uint8_t plain[] = {0x5a, 0x5a, 0x5a, 0x5a, 0x5a, 0x5a, 23};
+      c->read_cipher_len = selected_read_cipher_len(c);
+      uint8_t header[] = {23, 3, 3, 0, (uint8_t)c->read_cipher_len};
+      uint8_t app_plain[] = {0x5a, 0x5a, 0x5a, 0x5a, 0x5a, 0x5a, 23};
+      uint8_t close_notify_plain[] = {1, 0, 21};
+      uint8_t *plain = c->read_kind == READ_CLOSE_NOTIFY ? close_notify_plain : app_plain;
+      size_t plain_len = c->read_kind == READ_CLOSE_NOTIFY ? sizeof close_notify_plain : sizeof app_plain;
       c->read_cipher_ready = TLS13_Record_seal_application_runtime(
-          c->read_record_state, header, sizeof header, plain, sizeof plain, c->read_cipher);
+          c->read_record_state, header, sizeof header, plain, plain_len, c->read_cipher);
     }
     if (!c->read_cipher_ready) {
       return 0;
@@ -201,8 +217,35 @@ static int test_failure_return(void) {
   return 0;
 }
 
+static int test_close_notify_read_returns_zero(void) {
+  uint8_t hostname[] = "localhost";
+  uint8_t out[1] = {0};
+  TLS13_Connection_connection c =
+      TLS13_Connection_client_new(hostname, sizeof hostname - 1, NULL);
+  TLS13_IO_channel ch = (TLS13_IO_channel)c.backend;
+  if (c.backend == NULL) {
+    return 1;
+  }
+  bool connected = TLS13_Connection_client_connect(c, ch);
+  c.backend->read_kind = READ_CLOSE_NOTIFY;
+  size_t n = TLS13_Connection_client_read(c, ch, out, sizeof out);
+  int failed =
+      !connected ||
+      n != 0 ||
+      c.backend->read_header_calls == 0 ||
+      c.backend->read_fragment_calls == 0;
+  TLS13_Connection_client_free(c);
+  if (failed) {
+    fprintf(stderr, "connection wrapper close_notify read failed\n");
+    return 1;
+  }
+  return 0;
+}
+
 int main(void) {
-  if (test_success_path() != 0 || test_failure_return() != 0) {
+  if (test_success_path() != 0 ||
+      test_failure_return() != 0 ||
+      test_close_notify_read_returns_zero() != 0) {
     return 1;
   }
   printf("connection wrapper binding test passed\n");

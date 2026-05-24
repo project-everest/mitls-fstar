@@ -99,7 +99,7 @@ let lemma_send_close_notify_progress (s:S.conn_state)
   = ()
 
 let lemma_recv_close_notify_progress (s:S.conn_state)
-  : Lemma (requires s.S.phase == S.Closing)
+  : Lemma (requires s.S.phase == S.ApplicationData \/ s.S.phase == S.Closing)
           (ensures (match S.step s S.RecvCloseNotify with
                     | Some s' -> s' == S.recv_close_state s /\
                                  s'.S.phase == S.Closed

@@ -92,7 +92,7 @@ fn client_read_exact (c: connection) (ch: IO.channel) (out: array U8.t) (len: SZ
           pts_to out bytes **
           pure (B.length bytes == SZ.v len /\
                 (ok ==> s'.S.phase == S.ApplicationData) /\
-                (not ok ==> s'.S.phase == S.Failed))
+                (not ok ==> s'.S.phase == S.Closed \/ s'.S.phase == S.Failed))
 
 fn client_close (c: connection) (ch: IO.channel)
   requires is_connection c 'st 's **

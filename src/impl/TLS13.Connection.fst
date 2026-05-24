@@ -62,6 +62,9 @@ let is_connection (c:connection) (st:ST.state_ref) (s:S.conn_state) : slprop =
 let zeros32 : B.bytes = B.zeros 32
 let app_record_chunk_len : SZ.t = 4096sz
 let max_application_read_records : U8.t = 255uy
+let read_status_failed : U8.t = 0uy
+let read_status_complete : U8.t = 1uy
+let read_status_close_notify : U8.t = 2uy
 
 let dummy_client_hello : H.client_hello = {
   H.random = zeros32;
@@ -588,7 +591,7 @@ fn rec client_read_application_records
   pts_to out 'old **
   pure (B.length 'old == SZ.v total_len /\
         SZ.v offset + SZ.v remaining == SZ.v total_len)
-  returns ok: bool
+  returns status: U8.t
   ensures exists* record_s' bytes.
           E.is_connection backend **
           Rec.is_record_state record_state record_s' **
@@ -598,9 +601,9 @@ fn rec client_read_application_records
   decreases (U8.v fuel)
 {
   if (remaining = 0sz) {
-    true
+    read_status_complete
   } else if (fuel = 0uy) {
-    false
+    read_status_failed
   } else {
     assert (pure (SZ.v remaining > 0));
     let mut header = [| 0uy; 5sz |];
@@ -621,50 +624,64 @@ fn rec client_read_application_records
         let frag16 = U16.logor (U16.shift_left frag_hi16 8ul) frag_lo16;
         let fragment_len = SZ.uint16_to_sizet frag16;
         if not (content_type = 23uy) {
-          false
+          read_status_failed
         } else if SZ.(16sz <^ fragment_len) {
           let mut cipher = [| 0uy; fragment_len |];
           let fragment_ok = client_read_raw_exact backend ch cipher fragment_len 0sz fragment_len;
           if fragment_ok {
             let inner_len = SZ.(fragment_len -^ 16sz);
             assert (pure (SZ.v inner_len > 0));
-              let mut inner = [| 0uy; inner_len |];
-              let opened =
-                Rec.open_application_runtime record_state header 5sz cipher fragment_len inner;
-              with opened_bytes. assert (pts_to out opened_bytes);
-              if opened {
-                let mut inner_content_type_out = [| 0uy; 1sz |];
-                let response_len =
-                  RF.decode_inner_plaintext_no_padding inner inner_len inner_content_type_out 1sz;
-                let inner_content_type = inner_content_type_out.(0sz);
-                if (inner_content_type = 22uy) {
-                  assert (pure (U8.v fuel' < U8.v fuel));
-                  client_read_application_records backend ch record_state out total_len offset remaining fuel'
-                } else if (not (inner_content_type = 23uy) || SZ.(remaining <^ response_len)) {
-                  false
+            let mut inner = [| 0uy; inner_len |];
+            let opened =
+              Rec.open_application_runtime record_state header 5sz cipher fragment_len inner;
+            with opened_bytes. assert (pts_to out opened_bytes);
+            if opened {
+              let mut inner_content_type_out = [| 0uy; 1sz |];
+              let response_len =
+                RF.decode_inner_plaintext_no_padding inner inner_len inner_content_type_out 1sz;
+              let inner_content_type = inner_content_type_out.(0sz);
+              if (inner_content_type = 22uy) {
+                assert (pure (U8.v fuel' < U8.v fuel));
+                client_read_application_records backend ch record_state out total_len offset remaining fuel'
+              } else if (inner_content_type = 21uy) {
+                if SZ.(1sz <^ inner_len) {
+                  pts_to_len inner;
+                  let alert_level = inner.(0sz);
+                  let alert_description = inner.(1sz);
+                  if ((alert_level = 1uy || alert_level = 2uy) &&
+                      alert_description = 0uy) {
+                    read_status_close_notify
+                  } else {
+                    read_status_failed
+                  }
                 } else {
-                  copy_payload_to_output inner inner_len response_len out total_len offset;
-                  with copied_bytes. assert (pts_to out copied_bytes);
-                  let offset' = SZ.(offset +^ response_len);
-                  let remaining' = SZ.(remaining -^ response_len);
-                  assert (pure (U8.v fuel' < U8.v fuel));
-                  assert (pure (SZ.v offset' + SZ.v remaining' == SZ.v total_len));
-                  client_read_application_records backend ch record_state out total_len offset' remaining' fuel'
+                  read_status_failed
                 }
+              } else if (not (inner_content_type = 23uy) || SZ.(remaining <^ response_len)) {
+                read_status_failed
               } else {
-                false
+                copy_payload_to_output inner inner_len response_len out total_len offset;
+                with copied_bytes. assert (pts_to out copied_bytes);
+                let offset' = SZ.(offset +^ response_len);
+                let remaining' = SZ.(remaining -^ response_len);
+                assert (pure (U8.v fuel' < U8.v fuel));
+                assert (pure (SZ.v offset' + SZ.v remaining' == SZ.v total_len));
+                client_read_application_records backend ch record_state out total_len offset' remaining' fuel'
               }
+            } else {
+              read_status_failed
+            }
           } else {
-            false
+            read_status_failed
           }
         } else {
-          false
+          read_status_failed
         }
       } else {
-        false
+        read_status_failed
       }
     } else {
-      false
+      read_status_failed
     }
   }
 }
@@ -680,14 +697,14 @@ fn client_read_exact (c: connection) (ch: IO.channel) (out: array U8.t) (len: SZ
           pts_to out bytes **
           pure (B.length bytes == SZ.v len /\
                 (ok ==> s'.S.phase == S.ApplicationData) /\
-                (not ok ==> s'.S.phase == S.Failed))
+                (not ok ==> s'.S.phase == S.Closed \/ s'.S.phase == S.Failed))
 {
   unfold (is_connection c 'st 's);
   let keys_installed = !c.application_keys_installed;
   if keys_installed {
     assert (pure (B.length 'old == SZ.v len));
     assert (pure (0 + SZ.v len == SZ.v len));
-    let ok =
+    let status =
       client_read_application_records
         c.backend
         ch
@@ -697,16 +714,20 @@ fn client_read_exact (c: connection) (ch: IO.channel) (out: array U8.t) (len: SZ
         0sz
         len
         max_application_read_records;
-  with bytes. assert (pts_to out bytes);
-  if ok {
-    ST.advance 'st (S.RecvApplicationData bytes) (S.advance_read_record 's);
-    fold (is_connection c 'st (S.advance_read_record 's));
-    true
-  } else {
-    ST.advance_fail 'st T.IoError;
-    fold (is_connection c 'st (S.fail 's T.IoError));
-    false
-  }
+    with bytes. assert (pts_to out bytes);
+    if (status = read_status_complete) {
+      ST.advance 'st (S.RecvApplicationData bytes) (S.advance_read_record 's);
+      fold (is_connection c 'st (S.advance_read_record 's));
+      true
+    } else if (status = read_status_close_notify) {
+      ST.advance 'st S.RecvCloseNotify (S.recv_close_state 's);
+      fold (is_connection c 'st (S.recv_close_state 's));
+      false
+    } else {
+      ST.advance_fail 'st T.IoError;
+      fold (is_connection c 'st (S.fail 's T.IoError));
+      false
+    }
   } else {
     ST.advance_fail 'st T.IoError;
     fold (is_connection c 'st (S.fail 's T.IoError));
