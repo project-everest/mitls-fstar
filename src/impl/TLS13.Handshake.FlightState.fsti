@@ -388,6 +388,11 @@ fn accept_certificate_verify (st: flight_state) (message_len: SZ.t)
   returns ok: bool
   ensures is_flight_state st
 
+fn accept_pending_certificate_verify (st: flight_state)
+  requires is_flight_state st
+  returns ok: bool
+  ensures is_flight_state st
+
 fn set_certificate_verify_signature
   (st: flight_state)
   (signature_scheme: U16.t)

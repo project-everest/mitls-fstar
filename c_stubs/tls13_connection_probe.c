@@ -1229,38 +1229,9 @@ bool TLS13_Handshake_ByteDriver_External_accept_certificate(
 bool TLS13_Handshake_ByteDriver_External_accept_certificate_verify(
     TLS13_Handshake_ByteDriver_External_context ctx) {
   TLS13_Connection_connection c = (TLS13_Connection_connection)ctx;
-  const uint8_t *body = NULL;
-  uint32_t body_len = 0;
-  size_t message_len = 0;
-  uint8_t server_handshake_messages[PROBE_SERVER_HANDSHAKE_CAPACITY];
-  if (!pending_handshake_body(c, 15, server_handshake_messages, &body, &body_len, &message_len)) {
-    fprintf(stderr, "failed to parse server CertificateVerify\n");
-    return false;
-  }
-  uint8_t signature_scheme_bytes[2] = {0};
-  uint8_t signature_len_bytes[2] = {0};
-  if (!TLS13_Handshake_Framing_parse_certificate_verify_body(
-          (uint8_t *)body,
-          body_len,
-          signature_scheme_bytes,
-          sizeof signature_scheme_bytes,
-          signature_len_bytes,
-          sizeof signature_len_bytes)) {
-    fprintf(stderr, "failed to parse server CertificateVerify\n");
-    return false;
-  }
-  uint16_t signature_scheme =
-      ((uint16_t)signature_scheme_bytes[0] << 8) | (uint16_t)signature_scheme_bytes[1];
-  size_t signature_len =
-      ((size_t)signature_len_bytes[0] << 8) | (size_t)signature_len_bytes[1];
-  size_t signature_body_offset = (size_t)(body - server_handshake_messages);
-  TLS13_Handshake_FlightState_set_certificate_verify_signature(
-      c->server_handshake_flight_state,
-      signature_scheme,
-      signature_body_offset + 4u,
-      signature_len);
-  if (!TLS13_Handshake_FlightState_accept_certificate_verify(
-          c->server_handshake_flight_state, message_len)) {
+  if (c == NULL ||
+      !TLS13_Handshake_FlightState_accept_pending_certificate_verify(
+          c->server_handshake_flight_state)) {
     fprintf(stderr, "failed to parse server CertificateVerify\n");
     return false;
   }
