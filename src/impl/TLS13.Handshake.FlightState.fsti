@@ -410,6 +410,11 @@ fn accept_finished (st: flight_state) (message_len: SZ.t) (body_len: SZ.t)
   returns ok: bool
   ensures is_flight_state st
 
+fn accept_pending_finished (st: flight_state)
+  requires is_flight_state st
+  returns ok: bool
+  ensures is_flight_state st
+
 fn set_server_finished_verify_data
   (st: flight_state)
   (verify_data: array U8.t)

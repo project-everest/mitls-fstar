@@ -1241,22 +1241,12 @@ bool TLS13_Handshake_ByteDriver_External_accept_certificate_verify(
 bool TLS13_Handshake_ByteDriver_External_accept_finished(
     TLS13_Handshake_ByteDriver_External_context ctx) {
   TLS13_Connection_connection c = (TLS13_Connection_connection)ctx;
-  const uint8_t *body = NULL;
-  uint32_t body_len = 0;
-  size_t message_len = 0;
-  uint8_t server_handshake_messages[PROBE_SERVER_HANDSHAKE_CAPACITY];
-  if (!pending_handshake_body(c, 20, server_handshake_messages, &body, &body_len, &message_len) ||
-      body_len != 32) {
+  if (c == NULL ||
+      !TLS13_Handshake_FlightState_accept_pending_finished(
+          c->server_handshake_flight_state)) {
     fprintf(stderr, "OpenSSL Finished has unexpected length\n");
     return false;
   }
-  if (!TLS13_Handshake_FlightState_accept_finished(
-          c->server_handshake_flight_state, message_len, body_len)) {
-    fprintf(stderr, "OpenSSL Finished has unexpected length\n");
-    return false;
-  }
-  TLS13_Handshake_FlightState_set_server_finished_verify_data(
-      c->server_handshake_flight_state, (uint8_t *)body, body_len);
   return true;
 }
 
