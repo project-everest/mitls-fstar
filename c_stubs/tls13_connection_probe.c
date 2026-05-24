@@ -1185,10 +1185,9 @@ bool TLS13_Handshake_ByteDriver_External_pending_handshake_message_complete(
     void *progress) {
   (void)progress;
   TLS13_Connection_connection c = (TLS13_Connection_connection)ctx;
-  uint8_t handshake_type = 0;
-  uint32_t handshake_body_len = 0;
-  size_t message_len = 0;
-  return pending_handshake_metadata(c, &handshake_type, &handshake_body_len, &message_len);
+  return c != NULL &&
+         TLS13_Handshake_FlightState_pending_handshake_message_complete(
+             c->server_handshake_flight_state);
 }
 
 uint8_t TLS13_Handshake_ByteDriver_External_pending_handshake_message_type(
@@ -1196,13 +1195,11 @@ uint8_t TLS13_Handshake_ByteDriver_External_pending_handshake_message_type(
     void *progress) {
   (void)progress;
   TLS13_Connection_connection c = (TLS13_Connection_connection)ctx;
-  uint8_t handshake_type = 0;
-  uint32_t handshake_body_len = 0;
-  size_t message_len = 0;
-  if (!pending_handshake_metadata(c, &handshake_type, &handshake_body_len, &message_len)) {
+  if (c == NULL) {
     return 0;
   }
-  return handshake_type;
+  return TLS13_Handshake_FlightState_pending_handshake_message_type(
+      c->server_handshake_flight_state);
 }
 
 bool TLS13_Handshake_ByteDriver_External_accept_encrypted_extensions(

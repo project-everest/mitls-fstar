@@ -344,6 +344,16 @@ fn parsed_len (st: flight_state)
   returns len: SZ.t
   ensures is_flight_state st
 
+fn pending_handshake_message_complete (st: flight_state)
+  requires is_flight_state st
+  returns complete: bool
+  ensures is_flight_state st
+
+fn pending_handshake_message_type (st: flight_state)
+  requires is_flight_state st
+  returns msg_type: U8.t
+  ensures is_flight_state st
+
 fn append_handshake_len (st: flight_state) (fragment_len: SZ.t) (capacity: SZ.t)
   requires is_flight_state st
   returns ok: bool

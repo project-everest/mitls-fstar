@@ -9,6 +9,7 @@ open Pulse.Lib.Box { box, (!), (:=) }
 module Arr = Pulse.Lib.Array
 module B = TLS13.Bytes
 module Box = Pulse.Lib.Box
+module Cast = FStar.Int.Cast
 module Rec = TLS13.Record
 module RF = TLS13.Record.Framing
 module Seq = FStar.Seq
@@ -994,6 +995,67 @@ fn parsed_len (st: flight_state)
   let len = !st.parsed_len_box;
   fold (is_flight_state st);
   len
+}
+
+fn pending_handshake_message_complete (st: flight_state)
+  requires is_flight_state st
+  returns complete: bool
+  ensures is_flight_state st
+{
+  unfold (is_flight_state st);
+  let parsed = !st.parsed_len_box;
+  let hlen = !st.handshake_len_box;
+  if SZ.(parsed <=^ hlen) {
+    let remaining = SZ.(hlen -^ parsed);
+    if SZ.(4sz <=^ remaining) {
+      V.pts_to_len st.server_handshake_messages;
+      assert (pure (V.length st.server_handshake_messages == 32768));
+      V.to_array_pts_to st.server_handshake_messages;
+      assert (pure (Pulse.Lib.Array.Core.length (V.vec_to_array st.server_handshake_messages) == 32768));
+      assert (pure (SZ.v parsed + 3 < 32768));
+      let len_hi = (V.vec_to_array st.server_handshake_messages).(SZ.(parsed +^ 1sz));
+      let len_mid = (V.vec_to_array st.server_handshake_messages).(SZ.(parsed +^ 2sz));
+      let len_lo = (V.vec_to_array st.server_handshake_messages).(SZ.(parsed +^ 3sz));
+      let len_mid16 = Cast.uint8_to_uint16 len_mid;
+      let len_lo16 = Cast.uint8_to_uint16 len_lo;
+      let body16 = U16.logor (U16.shift_left len_mid16 8ul) len_lo16;
+      let body_len = SZ.uint16_to_sizet body16;
+      let remaining_body_capacity = SZ.(remaining -^ 4sz);
+      V.to_vec_pts_to st.server_handshake_messages;
+      fold (is_flight_state st);
+      (len_hi = 0uy) && SZ.(body_len <=^ remaining_body_capacity)
+    } else {
+      fold (is_flight_state st);
+      false
+    }
+  } else {
+    fold (is_flight_state st);
+    false
+  }
+}
+
+fn pending_handshake_message_type (st: flight_state)
+  requires is_flight_state st
+  returns msg_type: U8.t
+  ensures is_flight_state st
+{
+  unfold (is_flight_state st);
+  let parsed = !st.parsed_len_box;
+  let hlen = !st.handshake_len_box;
+  if SZ.(parsed <^ hlen) {
+    V.pts_to_len st.server_handshake_messages;
+    assert (pure (V.length st.server_handshake_messages == 32768));
+    V.to_array_pts_to st.server_handshake_messages;
+    assert (pure (Pulse.Lib.Array.Core.length (V.vec_to_array st.server_handshake_messages) == 32768));
+    assert (pure (SZ.v parsed < 32768));
+    let msg_type = (V.vec_to_array st.server_handshake_messages).(parsed);
+    V.to_vec_pts_to st.server_handshake_messages;
+    fold (is_flight_state st);
+    msg_type
+  } else {
+    fold (is_flight_state st);
+    0uy
+  }
 }
 
 fn append_handshake_len (st: flight_state) (fragment_len: SZ.t) (capacity: SZ.t)
