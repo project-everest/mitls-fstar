@@ -17,6 +17,8 @@
     TLS13_Record_open_application_runtime(st, aad, aad_len, cipher, cipher_len, out)
 #define TLS13_Record_Framing_decode_inner_plaintext_no_padding(inner, inner_len, content_type_out, content_type_out_len, inner_bytes, old_content_type_out) \
     TLS13_Record_Framing_decode_inner_plaintext_no_padding(inner, inner_len, content_type_out, content_type_out_len)
+#define TLS13_Record_Framing_decode_inner_plaintext(inner, inner_len, content_type_out, content_type_out_len, inner_bytes, old_content_type_out) \
+    TLS13_Record_Framing_decode_inner_plaintext(inner, inner_len, content_type_out, content_type_out_len)
 #define TLS13_Record_Framing_serialize_application_data_header(fragment_len, out, out_len, old_out) \
     TLS13_Record_Framing_serialize_application_data_header(fragment_len, out, out_len)
 #define TLS13_Record_Framing_parse_record_header(header, header_len, content_type_out, content_type_out_len, fragment_len_out, fragment_len_out_len, header_bytes, old_content_type_out, old_fragment_len_out) \

@@ -74,6 +74,24 @@ fn decode_inner_plaintext_no_padding
           pts_to content_type_out content_type_bytes **
           pure (B.length content_type_bytes == 1)
 
+fn decode_inner_plaintext
+  (inner: array U8.t)
+  (inner_len: SZ.t)
+  (content_type_out: array U8.t)
+  (content_type_out_len: SZ.t)
+  requires pts_to inner 'inner_bytes **
+          pts_to content_type_out 'old_content_type **
+          pure (B.length 'inner_bytes == SZ.v inner_len /\
+                B.length 'old_content_type == SZ.v content_type_out_len /\
+                SZ.v inner_len > 0 /\
+                SZ.v content_type_out_len == 1)
+  returns payload_len: SZ.t
+  ensures exists* content_type_bytes.
+          pts_to inner 'inner_bytes **
+          pts_to content_type_out content_type_bytes **
+          pure (B.length content_type_bytes == 1 /\
+               SZ.v payload_len < SZ.v inner_len)
+
 fn serialize_application_data_header
   (fragment_len: U16.t)
   (out: array U8.t)

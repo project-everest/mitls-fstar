@@ -639,7 +639,7 @@ fn rec client_read_application_records
             if opened {
               let mut inner_content_type_out = [| 0uy; 1sz |];
               let response_len =
-                RF.decode_inner_plaintext_no_padding inner inner_len inner_content_type_out 1sz;
+                RF.decode_inner_plaintext inner inner_len inner_content_type_out 1sz;
               let inner_content_type = inner_content_type_out.(0sz);
               if (inner_content_type = 22uy) {
                 assert (pure (U8.v fuel' < U8.v fuel));

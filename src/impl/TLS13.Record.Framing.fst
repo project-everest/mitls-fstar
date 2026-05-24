@@ -135,6 +135,70 @@ fn decode_inner_plaintext_no_padding
   payload_len
 }
 
+fn rec decode_inner_plaintext_from
+  (inner: array U8.t)
+  (inner_len: SZ.t)
+  (index: SZ.t)
+  (content_type_out: array U8.t)
+  (content_type_out_len: SZ.t)
+  requires pts_to inner 'inner_bytes **
+           pts_to content_type_out 'old_content_type **
+           pure (B.length 'inner_bytes == SZ.v inner_len /\
+                 B.length 'old_content_type == SZ.v content_type_out_len /\
+                 SZ.v inner_len > 0 /\
+                 SZ.v index < SZ.v inner_len /\
+                 SZ.v content_type_out_len == 1)
+  returns payload_len: SZ.t
+  ensures exists* content_type_bytes.
+          pts_to inner 'inner_bytes **
+          pts_to content_type_out content_type_bytes **
+          pure (B.length content_type_bytes == 1 /\
+                SZ.v payload_len < SZ.v inner_len)
+  decreases (SZ.v index)
+{
+  pts_to_len inner;
+  pts_to_len content_type_out;
+  let content_type = inner.(index);
+  if (content_type = 0uy) {
+    if (index = 0sz) {
+      content_type_out.(0sz) <- 0uy;
+      0sz
+    } else {
+      assert (pure (SZ.v index > 0));
+      let index' = SZ.(index -^ 1sz);
+      assert (pure (SZ.v index' < SZ.v index));
+      assert (pure (SZ.v index' < SZ.v inner_len));
+      decode_inner_plaintext_from inner inner_len index' content_type_out content_type_out_len
+    }
+  } else {
+    content_type_out.(0sz) <- content_type;
+    index
+  }
+}
+
+fn decode_inner_plaintext
+  (inner: array U8.t)
+  (inner_len: SZ.t)
+  (content_type_out: array U8.t)
+  (content_type_out_len: SZ.t)
+  requires pts_to inner 'inner_bytes **
+           pts_to content_type_out 'old_content_type **
+           pure (B.length 'inner_bytes == SZ.v inner_len /\
+                 B.length 'old_content_type == SZ.v content_type_out_len /\
+                 SZ.v inner_len > 0 /\
+                 SZ.v content_type_out_len == 1)
+  returns payload_len: SZ.t
+  ensures exists* content_type_bytes.
+          pts_to inner 'inner_bytes **
+          pts_to content_type_out content_type_bytes **
+          pure (B.length content_type_bytes == 1 /\
+                SZ.v payload_len < SZ.v inner_len)
+{
+  let last = SZ.(inner_len -^ 1sz);
+  assert (pure (SZ.v last < SZ.v inner_len));
+  decode_inner_plaintext_from inner inner_len last content_type_out content_type_out_len
+}
+
 fn serialize_application_data_header
   (fragment_len: U16.t)
   (out: array U8.t)
