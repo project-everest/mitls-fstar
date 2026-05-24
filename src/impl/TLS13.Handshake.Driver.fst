@@ -20,20 +20,24 @@ fn run_client_handshake (ctx: HS.handshake_context) (ch: IO.channel)
           pure ((ok ==> s'.S.phase == S.ApplicationData) /\
                 (not ok ==> s'.S.phase == S.Failed))
 {
-  HS.send_client_hello ctx ch;
-  let ok_server_hello = HS.recv_server_hello ctx ch;
-  if ok_server_hello {
-    let ok_encrypted_extensions = HS.recv_encrypted_extensions ctx ch;
-    if ok_encrypted_extensions {
-      let ok_certificate = HS.recv_certificate ctx ch;
-      if ok_certificate {
-        let ok_valid_certificate = HS.validate_certificate ctx;
-        if ok_valid_certificate {
-          let ok_certificate_verify = HS.recv_certificate_verify ctx ch;
-          if ok_certificate_verify {
-            let ok_server_finished = HS.recv_server_finished ctx ch;
-            if ok_server_finished {
-              HS.send_client_finished ctx ch
+  let ok_client_hello = HS.send_client_hello ctx ch;
+  if ok_client_hello {
+    let ok_server_hello = HS.recv_server_hello ctx ch;
+    if ok_server_hello {
+      let ok_encrypted_extensions = HS.recv_encrypted_extensions ctx ch;
+      if ok_encrypted_extensions {
+        let ok_certificate = HS.recv_certificate ctx ch;
+        if ok_certificate {
+          let ok_valid_certificate = HS.validate_certificate ctx;
+          if ok_valid_certificate {
+            let ok_certificate_verify = HS.recv_certificate_verify ctx ch;
+            if ok_certificate_verify {
+              let ok_server_finished = HS.recv_server_finished ctx ch;
+              if ok_server_finished {
+                HS.send_client_finished ctx ch
+              } else {
+                false
+              }
             } else {
               false
             }

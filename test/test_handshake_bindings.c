@@ -43,11 +43,23 @@ void TLS13_Handshake_External_context_free(
   free(ctx);
 }
 
-void TLS13_Handshake_External_send_client_hello(
+bool TLS13_Handshake_External_connect(
     TLS13_Handshake_External_handshake_context ctx,
     TLS13_IO_channel ch) {
   (void)ch;
   ctx->send_client_hello_calls++;
+  return true;
+}
+
+bool TLS13_Handshake_External_store_client_hello(
+    TLS13_Handshake_External_handshake_context ctx,
+    uint8_t *hello,
+    size_t hello_len,
+    void *hello_bytes) {
+  (void)ctx;
+  (void)hello;
+  (void)hello_bytes;
+  return hello_len == 130;
 }
 
 size_t TLS13_Handshake_External_read_raw(

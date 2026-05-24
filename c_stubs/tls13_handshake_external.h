@@ -7,7 +7,7 @@
 
 typedef struct TLS13_Handshake_handshake_context_s *TLS13_Handshake_handshake_context;
 
-void TLS13_Handshake_send_client_hello(
+bool TLS13_Handshake_send_client_hello(
     TLS13_Handshake_handshake_context ctx,
     TLS13_IO_channel ch,
     void *erased_state_ref,

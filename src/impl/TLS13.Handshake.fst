@@ -65,6 +65,103 @@ let dummy_finished : H.finished = {
   H.verify_data = zeros32;
 }
 
+inline_for_extraction
+fn write_fixed_client_random (random: array U8.t)
+  requires pts_to random 'old **
+           pure (B.length 'old == 32)
+  ensures exists* bytes. pts_to random bytes ** pure (B.length bytes == 32)
+{
+  pts_to_len random;
+  random.(0sz) <- 0x00uy;
+  random.(1sz) <- 0x01uy;
+  random.(2sz) <- 0x02uy;
+  random.(3sz) <- 0x03uy;
+  random.(4sz) <- 0x04uy;
+  random.(5sz) <- 0x05uy;
+  random.(6sz) <- 0x06uy;
+  random.(7sz) <- 0x07uy;
+  random.(8sz) <- 0x08uy;
+  random.(9sz) <- 0x09uy;
+  random.(10sz) <- 0x0auy;
+  random.(11sz) <- 0x0buy;
+  random.(12sz) <- 0x0cuy;
+  random.(13sz) <- 0x0duy;
+  random.(14sz) <- 0x0euy;
+  random.(15sz) <- 0x0fuy;
+  random.(16sz) <- 0x10uy;
+  random.(17sz) <- 0x11uy;
+  random.(18sz) <- 0x12uy;
+  pts_to_len random;
+  with random_mid. assert (pts_to random random_mid);
+  assert (pure (B.length random_mid == 32));
+  random.(19sz) <- 0x13uy;
+  random.(20sz) <- 0x14uy;
+  random.(21sz) <- 0x15uy;
+  random.(22sz) <- 0x16uy;
+  random.(23sz) <- 0x17uy;
+  random.(24sz) <- 0x18uy;
+  random.(25sz) <- 0x19uy;
+  random.(26sz) <- 0x1auy;
+  random.(27sz) <- 0x1buy;
+  random.(28sz) <- 0x1cuy;
+  random.(29sz) <- 0x1duy;
+  random.(30sz) <- 0x1euy;
+  random.(31sz) <- 0x1fuy;
+  pts_to_len random;
+  with bytes. assert (pts_to random bytes);
+  assert (pure (B.length bytes == 32));
+}
+
+inline_for_extraction
+fn write_fixed_client_key_share (key_share: array U8.t)
+  requires pts_to key_share 'old **
+           pure (B.length 'old == 32)
+  ensures exists* bytes. pts_to key_share bytes ** pure (B.length bytes == 32)
+{
+  pts_to_len key_share;
+  key_share.(0sz) <- 0x99uy;
+  key_share.(1sz) <- 0x38uy;
+  key_share.(2sz) <- 0x1duy;
+  key_share.(3sz) <- 0xe5uy;
+  key_share.(4sz) <- 0x60uy;
+  key_share.(5sz) <- 0xe4uy;
+  key_share.(6sz) <- 0xbduy;
+  key_share.(7sz) <- 0x43uy;
+  key_share.(8sz) <- 0xd2uy;
+  key_share.(9sz) <- 0x3duy;
+  key_share.(10sz) <- 0x8euy;
+  key_share.(11sz) <- 0x43uy;
+  key_share.(12sz) <- 0x5auy;
+  key_share.(13sz) <- 0x7duy;
+  key_share.(14sz) <- 0xbauy;
+  key_share.(15sz) <- 0xfeuy;
+  key_share.(16sz) <- 0xb3uy;
+  key_share.(17sz) <- 0xc0uy;
+  key_share.(18sz) <- 0x6euy;
+  pts_to_len key_share;
+  with key_share_mid. assert (pts_to key_share key_share_mid);
+  assert (pure (B.length key_share_mid == 32));
+  key_share.(19sz) <- 0x51uy;
+  pts_to_len key_share;
+  with mid. assert (pts_to key_share mid);
+  assert (pure (B.length mid == 32));
+  key_share.(20sz) <- 0xc1uy;
+  key_share.(21sz) <- 0x3cuy;
+  key_share.(22sz) <- 0xaeuy;
+  key_share.(23sz) <- 0x4duy;
+  key_share.(24sz) <- 0x54uy;
+  key_share.(25sz) <- 0x13uy;
+  key_share.(26sz) <- 0x69uy;
+  key_share.(27sz) <- 0x1euy;
+  key_share.(28sz) <- 0x52uy;
+  key_share.(29sz) <- 0x9auy;
+  key_share.(30sz) <- 0xafuy;
+  key_share.(31sz) <- 0x2cuy;
+  pts_to_len key_share;
+  with bytes. assert (pts_to key_share bytes);
+  assert (pure (B.length bytes == 32));
+}
+
 fn handshake_context_new ()
   returns ctx: handshake_context
   ensures exists* st. is_handshake_context ctx st S.initial
@@ -82,22 +179,6 @@ fn handshake_context_free (ctx: handshake_context)
   unfold (is_handshake_context ctx 'st 's);
   E.context_free ctx;
   drop_ (ST.current 'st 's);
-}
-
-fn send_client_hello (ctx: handshake_context) (ch: IO.channel)
-  requires is_handshake_context ctx 'st 's **
-           IO.is_channel ch **
-           pure ('s.S.phase == S.Start)
-  ensures exists* s'.
-          is_handshake_context ctx 'st s' **
-          IO.is_channel ch **
-          pure (s'.S.phase == S.ClientHelloSent)
-{
-  unfold (is_handshake_context ctx 'st 's);
-  E.send_client_hello ctx ch;
-  assert (pure (S.step 's (S.SendClientHello dummy_client_hello) == Some (S.with_phase 's S.ClientHelloSent)));
-  ST.advance 'st (S.SendClientHello dummy_client_hello) (S.with_phase 's S.ClientHelloSent);
-  fold (is_handshake_context ctx 'st (S.with_phase 's S.ClientHelloSent));
 }
 
 fn rec read_raw_exact
@@ -170,6 +251,69 @@ fn rec write_raw_exact
       assert (pure (SZ.v offset' + SZ.v remaining' == SZ.v total_len));
       write_raw_exact ctx ch buf total_len offset' remaining'
     }
+  }
+}
+
+fn send_client_hello (ctx: handshake_context) (ch: IO.channel)
+  requires is_handshake_context ctx 'st 's **
+           IO.is_channel ch **
+           pure ('s.S.phase == S.Start)
+  returns ok: bool
+  ensures exists* s'.
+          is_handshake_context ctx 'st s' **
+          IO.is_channel ch **
+          pure ((ok ==> s'.S.phase == S.ClientHelloSent) /\
+                (not ok ==> s'.S.phase == S.Failed))
+{
+  unfold (is_handshake_context ctx 'st 's);
+  let mut random = [| 0uy; 32sz |];
+  let mut key_share = [| 0uy; 32sz |];
+  let mut hello = [| 0uy; 130sz |];
+  let mut header = [| 0uy; 5sz |];
+  write_fixed_client_random random;
+  write_fixed_client_key_share key_share;
+  let built = HF.build_supported_client_hello_localhost random key_share hello 130sz;
+  if built {
+    let stored = E.store_client_hello ctx hello 130sz;
+    if stored {
+      HF.serialize_client_hello_record_header header 5sz;
+      let connected = E.connect ctx ch;
+      if connected {
+        let header_ok = write_raw_exact ctx ch header 5sz 0sz 5sz;
+        let hello_ok =
+          if header_ok {
+            write_raw_exact ctx ch hello 130sz 0sz 130sz
+          } else {
+            false
+          };
+        if hello_ok {
+          assert (pure (S.step 's (S.SendClientHello dummy_client_hello) == Some (S.with_phase 's S.ClientHelloSent)));
+          ST.advance 'st (S.SendClientHello dummy_client_hello) (S.with_phase 's S.ClientHelloSent);
+          fold (is_handshake_context ctx 'st (S.with_phase 's S.ClientHelloSent));
+          true
+        } else {
+          assert (pure (S.step 's (S.Fail T.IoError) == Some (S.fail 's T.IoError)));
+          ST.advance_fail 'st T.IoError;
+          fold (is_handshake_context ctx 'st (S.fail 's T.IoError));
+          false
+        }
+      } else {
+        assert (pure (S.step 's (S.Fail T.IoError) == Some (S.fail 's T.IoError)));
+        ST.advance_fail 'st T.IoError;
+        fold (is_handshake_context ctx 'st (S.fail 's T.IoError));
+        false
+      }
+    } else {
+      assert (pure (S.step 's (S.Fail T.IoError) == Some (S.fail 's T.IoError)));
+      ST.advance_fail 'st T.IoError;
+      fold (is_handshake_context ctx 'st (S.fail 's T.IoError));
+      false
+    }
+  } else {
+    assert (pure (S.step 's (S.Fail T.IoError) == Some (S.fail 's T.IoError)));
+    ST.advance_fail 'st T.IoError;
+    fold (is_handshake_context ctx 'st (S.fail 's T.IoError));
+    false
   }
 }
 

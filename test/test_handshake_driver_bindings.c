@@ -14,6 +14,7 @@ enum handshake_step {
 };
 
 struct TLS13_Handshake_handshake_context_s {
+  bool client_hello_ok;
   bool server_hello_ok;
   bool encrypted_extensions_ok;
   bool certificate_ok;
@@ -38,7 +39,7 @@ static void record_call(
   ctx->call_count++;
 }
 
-void TLS13_Handshake_send_client_hello(
+bool TLS13_Handshake_send_client_hello(
     TLS13_Handshake_handshake_context ctx,
     TLS13_IO_channel ch,
     void *erased_state_ref,
@@ -47,6 +48,7 @@ void TLS13_Handshake_send_client_hello(
   (void)erased_state_ref;
   (void)erased_state;
   record_call(ctx, STEP_SEND_CLIENT_HELLO);
+  return ctx->client_hello_ok;
 }
 
 bool TLS13_Handshake_recv_server_hello(
@@ -151,6 +153,7 @@ static int expect_trace(
 
 static int test_success_path(void) {
   struct TLS13_Handshake_handshake_context_s ctx = {
+      .client_hello_ok = true,
       .server_hello_ok = true,
       .encrypted_extensions_ok = true,
       .certificate_ok = true,
@@ -179,7 +182,9 @@ static int test_success_path(void) {
 }
 
 static int test_server_hello_failure_short_circuits(void) {
-  struct TLS13_Handshake_handshake_context_s ctx = {0};
+  struct TLS13_Handshake_handshake_context_s ctx = {
+      .client_hello_ok = true,
+  };
   struct TLS13_IO_channel_s ch = {0};
   bool ok = TLS13_Handshake_Driver_run_client_handshake(&ctx, &ch);
   static const enum handshake_step expected[] = {
@@ -195,6 +200,7 @@ static int test_server_hello_failure_short_circuits(void) {
 
 static int test_certificate_validation_failure_short_circuits(void) {
   struct TLS13_Handshake_handshake_context_s ctx = {
+      .client_hello_ok = true,
       .server_hello_ok = true,
       .encrypted_extensions_ok = true,
       .certificate_ok = true,

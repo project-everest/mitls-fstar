@@ -27,10 +27,12 @@ fn send_client_hello (ctx: handshake_context) (ch: IO.channel)
   requires is_handshake_context ctx 'st 's **
            IO.is_channel ch **
            pure ('s.S.phase == S.Start)
+  returns ok: bool
   ensures exists* s'.
           is_handshake_context ctx 'st s' **
           IO.is_channel ch **
-          pure (s'.S.phase == S.ClientHelloSent)
+          pure ((ok ==> s'.S.phase == S.ClientHelloSent) /\
+                (not ok ==> s'.S.phase == S.Failed))
 
 fn recv_server_hello (ctx: handshake_context) (ch: IO.channel)
   requires is_handshake_context ctx 'st 's **

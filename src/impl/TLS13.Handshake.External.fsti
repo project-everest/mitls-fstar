@@ -21,9 +21,22 @@ fn context_free (ctx: handshake_context)
   requires is_context ctx
   ensures emp
 
-fn send_client_hello (ctx: handshake_context) (ch: IO.channel)
+fn connect (ctx: handshake_context) (ch: IO.channel)
   requires is_context ctx ** IO.is_channel ch
+  returns ok: bool
   ensures is_context ctx ** IO.is_channel ch
+
+fn store_client_hello
+  (ctx: handshake_context)
+  (hello: array U8.t)
+  (hello_len: SZ.t)
+  requires is_context ctx **
+           pts_to hello 'hello_bytes **
+           pure (B.length 'hello_bytes == SZ.v hello_len /\
+                 SZ.v hello_len == 130)
+  returns ok: bool
+  ensures is_context ctx **
+          pts_to hello 'hello_bytes
 
 fn read_raw (ctx: handshake_context) (ch: IO.channel) (buf: array U8.t)
   (total_len: SZ.t) (offset: SZ.t) (remaining: SZ.t)

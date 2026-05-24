@@ -141,66 +141,6 @@ static bool process_encrypted_handshake_record(
   return true;
 }
 
-static void probe_handshake_send_client_hello(
-    TLS13_Handshake_handshake_context ctx,
-    TLS13_IO_channel ch,
-    void *erased_state_ref,
-    void *erased_state) {
-  (void)ch;
-  (void)erased_state_ref;
-  (void)erased_state;
-  TLS13_Connection_connection c = from_handshake_context(ctx);
-  if (c == NULL || c->fd >= 0) {
-    fail_handshake(c);
-    return;
-  }
-
-  static const uint8_t random[32] = {
-      0xcb, 0x34, 0xec, 0xb1, 0xe7, 0x81, 0x63, 0xba,
-      0x1c, 0x38, 0xc6, 0xda, 0xcb, 0x19, 0x6a, 0x6d,
-      0xff, 0xa2, 0x1a, 0x8d, 0x99, 0x12, 0xec, 0x18,
-      0xa2, 0xef, 0x62, 0x83, 0x02, 0x4d, 0xec, 0xe7};
-  static const uint8_t key_share[32] = {
-      0x99, 0x38, 0x1d, 0xe5, 0x60, 0xe4, 0xbd, 0x43,
-      0xd2, 0x3d, 0x8e, 0x43, 0x5a, 0x7d, 0xba, 0xfe,
-      0xb3, 0xc0, 0x6e, 0x51, 0xc1, 0x3c, 0xae, 0x4d,
-      0x54, 0x13, 0x69, 0x1e, 0x52, 0x9a, 0xaf, 0x2c};
-
-  uint8_t client_hello[PROBE_CLIENT_HELLO_CAPACITY];
-  size_t client_hello_len = 130u;
-  if (!TLS13_Handshake_Framing_build_supported_client_hello_localhost(
-          (uint8_t *)random,
-          (uint8_t *)key_share,
-          client_hello,
-          sizeof client_hello)) {
-    fprintf(stderr, "failed to serialize ClientHello\n");
-    fail_handshake(c);
-    return;
-  }
-  TLS13_Handshake_FlightState_set_client_hello(
-      c->server_handshake_flight_state,
-      client_hello,
-      sizeof client_hello,
-      client_hello_len);
-
-  uint8_t record[TLS13_WIRE_RECORD_HEADER_LEN + PROBE_CLIENT_HELLO_CAPACITY];
-  TLS13_Handshake_Framing_serialize_client_hello_record_header(
-      record, TLS13_WIRE_RECORD_HEADER_LEN);
-  memcpy(record + TLS13_WIRE_RECORD_HEADER_LEN, client_hello, client_hello_len);
-  size_t record_len = TLS13_WIRE_RECORD_HEADER_LEN + client_hello_len;
-
-  c->fd = tls13_io_connect_tcp(c->host, c->port);
-  if (c->fd < 0) {
-    perror("connect");
-    fail_handshake(c);
-    return;
-  }
-  if (write_all_fd(c->fd, record, record_len) != 0) {
-    perror("write ClientHello");
-    fail_handshake(c);
-  }
-}
-
 static bool process_server_hello_record(
     TLS13_Handshake_handshake_context ctx,
     uint8_t header[TLS13_WIRE_RECORD_HEADER_LEN],
@@ -392,10 +332,43 @@ static bool probe_handshake_recv_server_finished(
   return true;
 }
 
-void TLS13_Handshake_External_send_client_hello(
+bool TLS13_Handshake_External_connect(
     TLS13_Handshake_External_handshake_context ctx,
     TLS13_IO_channel ch) {
-  probe_handshake_send_client_hello((TLS13_Handshake_handshake_context)ctx, ch, NULL, NULL);
+  (void)ch;
+  TLS13_Connection_connection c = from_handshake_context((TLS13_Handshake_handshake_context)ctx);
+  if (c == NULL || c->fd >= 0) {
+    fail_handshake(c);
+    return false;
+  }
+  c->fd = tls13_io_connect_tcp(c->host, c->port);
+  if (c->fd < 0) {
+    perror("connect");
+    fail_handshake(c);
+    return false;
+  }
+  return true;
+}
+
+bool TLS13_Handshake_External_store_client_hello(
+    TLS13_Handshake_External_handshake_context ctx,
+    uint8_t *hello,
+    size_t hello_len,
+    void *hello_bytes) {
+  (void)hello_bytes;
+  TLS13_Connection_connection c = from_handshake_context((TLS13_Handshake_handshake_context)ctx);
+  if (c == NULL || hello == NULL || hello_len != 130) {
+    fail_handshake(c);
+    return false;
+  }
+  uint8_t padded_client_hello[PROBE_CLIENT_HELLO_CAPACITY] = {0};
+  memcpy(padded_client_hello, hello, hello_len);
+  TLS13_Handshake_FlightState_set_client_hello(
+      c->server_handshake_flight_state,
+      padded_client_hello,
+      sizeof padded_client_hello,
+      hello_len);
+  return true;
 }
 
 size_t TLS13_Handshake_External_read_raw(

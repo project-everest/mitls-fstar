@@ -10,6 +10,10 @@
 
 #define TLS13_Record_Framing_parse_record_header(header, header_len, content_type_out, content_type_out_len, fragment_len_out, fragment_len_out_len, header_bytes, old_content_type_out, old_fragment_len_out) \
     TLS13_Record_Framing_parse_record_header(header, header_len, content_type_out, content_type_out_len, fragment_len_out, fragment_len_out_len)
+#define TLS13_Handshake_Framing_serialize_client_hello_record_header(out, out_len, old_out) \
+    TLS13_Handshake_Framing_serialize_client_hello_record_header(out, out_len)
+#define TLS13_Handshake_Framing_build_supported_client_hello_localhost(random, key_share, out, out_len, random_bytes, key_share_bytes, old_out) \
+    TLS13_Handshake_Framing_build_supported_client_hello_localhost(random, key_share, out, out_len)
 #define TLS13_Handshake_Framing_parse_supported_server_hello(input, input_len, random_out, random_out_len, key_share_out, key_share_out_len, input_bytes, old_random, old_key_share) \
     TLS13_Handshake_Framing_parse_supported_server_hello(input, input_len, random_out, random_out_len, key_share_out, key_share_out_len)
 
@@ -21,9 +25,15 @@ TLS13_Handshake_External_handshake_context TLS13_Handshake_External_context_new(
 void TLS13_Handshake_External_context_free(
     TLS13_Handshake_External_handshake_context ctx);
 
-void TLS13_Handshake_External_send_client_hello(
+bool TLS13_Handshake_External_connect(
     TLS13_Handshake_External_handshake_context ctx,
     TLS13_IO_channel ch);
+
+bool TLS13_Handshake_External_store_client_hello(
+    TLS13_Handshake_External_handshake_context ctx,
+    uint8_t *hello,
+    size_t hello_len,
+    void *hello_bytes);
 
 size_t TLS13_Handshake_External_read_raw(
     TLS13_Handshake_External_handshake_context ctx,
