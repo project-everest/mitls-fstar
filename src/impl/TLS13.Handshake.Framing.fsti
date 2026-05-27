@@ -8,6 +8,7 @@ open Pulse.Lib.Array.PtsTo
 module B = TLS13.Bytes
 module SZ = FStar.SizeT
 module U8 = FStar.UInt8
+module WS = TLS13.Wire.Spec
 // NOTE: TLS13.Wire.Spec contains the verified wire format specifications
 // that these parser/serializer implementations should match (see admits in .fst)
 
@@ -102,6 +103,8 @@ fn parse_supported_server_hello
           pure (B.length random_bytes == 32 /\
                 B.length key_share_bytes == 32 /\
                 (ok ==> SZ.v input_len == 90))
+  // PARSER CORRECTNESS (assumed, to be verified):
+  // ok <==> Some? (Wire.Spec.parse_supported_server_hello 'input_bytes)
 
 fn parse_certificate_verify_body
   (input: array U8.t)

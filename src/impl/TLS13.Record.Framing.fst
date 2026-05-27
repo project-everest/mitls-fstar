@@ -14,6 +14,7 @@ module SZ = FStar.SizeT
 module U16 = FStar.UInt16
 module U32 = FStar.UInt32
 module U8 = FStar.UInt8
+module WS = TLS13.Wire.Spec
 
 let inner_plaintext_no_padding_result
   (plain:B.bytes)
@@ -253,8 +254,11 @@ fn parse_record_header
   content_type_out.(0sz) <- ct;
   fragment_len_out.(0sz) <- l0;
   fragment_len_out.(1sz) <- l1;
-  admit(); // ASSUME: Parser correctness - matches Wire.Spec.parse_record
-  (ct = 0x14uy || ct = 0x15uy || ct = 0x16uy || ct = 0x17uy) &&
-  v0 = 0x03uy &&
-  (v1 = 0x01uy || v1 = 0x03uy)
+  let ok = (ct = 0x14uy || ct = 0x15uy || ct = 0x16uy || ct = 0x17uy) &&
+           v0 = 0x03uy &&
+           (v1 = 0x01uy || v1 = 0x03uy);
+  // PARSER TCB: Assume parser correctness
+  // Property assumed: ok <==> Some? (Wire.Spec.parse_record 'header_bytes)
+  admit();
+  ok
 }

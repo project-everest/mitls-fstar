@@ -10,6 +10,7 @@ module Seq = FStar.Seq
 module SZ = FStar.SizeT
 module U16 = FStar.UInt16
 module U8 = FStar.UInt8
+module WS = TLS13.Wire.Spec
 // NOTE: TLS13.Wire.Spec contains the verified wire format specifications
 // that these parser/serializer implementations should match (see admits in .fst)
 
@@ -128,3 +129,5 @@ fn parse_record_header
           pts_to fragment_len_out fragment_len_bytes **
           pure (B.length content_type_bytes == 1 /\
                 B.length fragment_len_bytes == 2)
+  // PARSER CORRECTNESS (assumed, to be verified):
+  // ok <==> Some? (Wire.Spec.parse_record 'header_bytes)

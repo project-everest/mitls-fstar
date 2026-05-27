@@ -11,6 +11,7 @@ module Seq = FStar.Seq
 module SZ = FStar.SizeT
 module U16 = FStar.UInt16
 module U8 = FStar.UInt8
+module WS = TLS13.Wire.Spec
 
 fn build_server_certificate_verify_input
   (transcript_hash: array U8.t)
@@ -420,22 +421,32 @@ fn parse_supported_server_hello
       copy_server_hello_random input random_out;
       if key_share_first {
         copy_server_key_share_at_52 input key_share_out;
-        admit(); // ASSUME: Parser correctness - matches Wire.Spec.parse_supported_server_hello
+        // PARSER TCB: Assume parser correctness
+        // Property assumed: true <==> Some? (Wire.Spec.parse_supported_server_hello 'input_bytes)
+        admit();
         true
       } else if supported_versions_first {
         copy_server_key_share_at_58 input key_share_out;
-        admit(); // ASSUME: Parser correctness - matches Wire.Spec.parse_supported_server_hello
+        // PARSER TCB: Assume parser correctness
+        // Property assumed: true <==> Some? (Wire.Spec.parse_supported_server_hello 'input_bytes)
+        admit();
         true
       } else {
-        admit(); // ASSUME: Parser correctness - matches Wire.Spec.parse_supported_server_hello
+        // PARSER TCB: Assume parser correctness
+        // Property assumed: false <==> Some? (Wire.Spec.parse_supported_server_hello 'input_bytes)
+        admit();
         false
       }
     } else {
-      admit(); // ASSUME: Parser correctness - matches Wire.Spec.parse_supported_server_hello
+      // PARSER TCB: Assume parser correctness
+      // Property assumed: false <==> Some? (Wire.Spec.parse_supported_server_hello 'input_bytes)
+      admit();
       false
     }
   } else {
-    admit(); // ASSUME: Parser correctness - matches Wire.Spec.parse_supported_server_hello
+    // PARSER TCB: Assume parser correctness
+    // Property assumed: false <==> Some? (Wire.Spec.parse_supported_server_hello 'input_bytes)
+    admit();
     false
   }
 }
