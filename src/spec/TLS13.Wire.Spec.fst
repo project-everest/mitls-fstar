@@ -4,6 +4,7 @@ module B = TLS13.Bytes
 module H = TLS13.Handshake.Spec
 module R = TLS13.Record.Spec
 module Seq = FStar.Seq
+module SP = FStar.Seq.Properties
 module T = TLS13.Types
 module U8 = FStar.UInt8
 
@@ -368,3 +369,38 @@ let serialize_record (content_type:T.content_type) (fragment:B.bytes) : GTot B.b
     (u8 (content_type_to_byte content_type))
     (u16 0x0303)
     (B.append (u16 (B.length fragment)) fragment)
+
+let lemma_parse_record_serializes (input:B.bytes)
+  : Lemma
+      (ensures (
+        match parse_record input with
+        | Some (content_type, fragment, consumed) ->
+          consumed > 0 /\
+          consumed <= B.length input /\
+          consumed == B.length (serialize_record content_type fragment) /\
+          Seq.equal (serialize_record content_type fragment)
+                    (Seq.slice input 0 consumed)
+        | None -> True))
+  =
+  if B.length input < 5 then ()
+  else
+    match content_type_of_byte (Seq.index input 0) with
+    | None -> ()
+    | Some content_type ->
+      if read_u16 input 1 <> 0x0303 then ()
+      else
+        let fragment_len = read_u16 input 3 in
+        if fragment_len > 16384 + 256 || 5 + fragment_len > B.length input then ()
+        else
+          match take_range input 5 fragment_len with
+          | None -> ()
+          | Some fragment ->
+            assert (B.length fragment == fragment_len);
+            assert (B.length (serialize_record content_type fragment) == 5 + fragment_len);
+            assert (5 + fragment_len <= B.length input);
+            assert (forall (i:nat{i < B.length (serialize_record content_type fragment)}).
+                      Seq.index (serialize_record content_type fragment) i ==
+                      Seq.index (Seq.slice input 0 (5 + fragment_len)) i);
+            Seq.lemma_eq_intro
+              (serialize_record content_type fragment)
+              (Seq.slice input 0 (5 + fragment_len))

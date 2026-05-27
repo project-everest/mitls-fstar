@@ -3,6 +3,7 @@ module TLS13.Wire.Spec
 module B = TLS13.Bytes
 module H = TLS13.Handshake.Spec
 module R = TLS13.Record.Spec
+module Seq = FStar.Seq
 module T = TLS13.Types
 
 type parse_error = T.tls_error
@@ -43,3 +44,16 @@ val serialize_record:
   content_type:T.content_type ->
   fragment:B.bytes ->
   GTot B.bytes
+
+val lemma_parse_record_serializes:
+  input:B.bytes ->
+  Lemma
+    (ensures (
+      match parse_record input with
+      | Some (content_type, fragment, consumed) ->
+        consumed > 0 /\
+        consumed <= B.length input /\
+        consumed == B.length (serialize_record content_type fragment) /\
+        Seq.equal (serialize_record content_type fragment)
+                  (Seq.slice input 0 consumed)
+      | None -> True))

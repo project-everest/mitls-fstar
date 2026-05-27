@@ -70,7 +70,9 @@ static bool validate_leaf_cert(
     goto done;
   }
   X509_VERIFY_PARAM *param = X509_STORE_CTX_get0_param(ctx);
-  if (param == NULL || X509_VERIFY_PARAM_set1_host(param, hostname, 0) != 1) {
+  if (param == NULL ||
+      (X509_VERIFY_PARAM_set1_ip_asc(param, hostname) != 1 &&
+       X509_VERIFY_PARAM_set1_host(param, hostname, 0) != 1)) {
     goto done;
   }
   if (X509_verify_cert(ctx) != 1) {

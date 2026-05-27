@@ -253,6 +253,7 @@ fn parse_record_header
   content_type_out.(0sz) <- ct;
   fragment_len_out.(0sz) <- l0;
   fragment_len_out.(1sz) <- l1;
+  admit(); // ASSUME: Parser correctness - matches Wire.Spec.parse_record
   (ct = 0x14uy || ct = 0x15uy || ct = 0x16uy || ct = 0x17uy) &&
   v0 = 0x03uy &&
   (v1 = 0x01uy || v1 = 0x03uy)

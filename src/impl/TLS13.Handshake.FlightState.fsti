@@ -70,6 +70,17 @@ fn set_server_hello
   ensures is_flight_state st **
           pts_to hello 'hello_bytes
 
+fn set_server_hello_fragment
+  (st: flight_state)
+  (hello: array U8.t)
+  (hello_len: SZ.t)
+  requires is_flight_state st **
+           pts_to hello 'hello_bytes **
+           pure (B.length 'hello_bytes == SZ.v hello_len /\
+                 SZ.v hello_len <= 4096)
+  ensures is_flight_state st **
+          pts_to hello 'hello_bytes
+
 fn copy_server_hello
   (st: flight_state)
   (out: array U8.t)
@@ -392,7 +403,8 @@ fn accept_pending_certificate (st: flight_state)
   ensures is_flight_state st
 
 fn set_certificate_leaf (st: flight_state) (leaf_offset: SZ.t) (leaf_len: SZ.t)
-  requires is_flight_state st
+  requires is_flight_state st **
+           pure (SZ.v leaf_len <= 32768)
   ensures is_flight_state st
 
 fn accept_certificate_verify (st: flight_state) (message_len: SZ.t)
@@ -410,7 +422,8 @@ fn set_certificate_verify_signature
   (signature_scheme: U16.t)
   (signature_offset: SZ.t)
   (signature_len: SZ.t)
-  requires is_flight_state st
+  requires is_flight_state st **
+           pure (SZ.v signature_len <= 32768)
   ensures is_flight_state st
 
 fn mark_certificate_verify_verified (st: flight_state)
@@ -559,7 +572,7 @@ fn certificate_leaf_offset (st: flight_state)
 
 fn certificate_leaf_len (st: flight_state)
   requires is_flight_state st
-  returns len: SZ.t
+  returns len: (l:SZ.t{SZ.v l <= 32768})
   ensures is_flight_state st
 
 fn certificate_verify_signature_scheme (st: flight_state)
@@ -574,7 +587,7 @@ fn certificate_verify_signature_offset (st: flight_state)
 
 fn certificate_verify_signature_len (st: flight_state)
   requires is_flight_state st
-  returns len: SZ.t
+  returns len: (l:SZ.t{SZ.v l <= 32768})
   ensures is_flight_state st
 
 fn server_before_finished_len (st: flight_state)

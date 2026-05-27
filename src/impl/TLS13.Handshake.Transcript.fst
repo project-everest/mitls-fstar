@@ -5,12 +5,311 @@ module TLS13.Handshake.Transcript
 open Pulse.Lib.Pervasives
 open Pulse.Lib.Array.PtsTo
 
+module Arr = Pulse.Lib.Array
 module B = TLS13.Bytes
 module C = TLS13.Crypto.Spec
-module E = TLS13.Handshake.Transcript.External
+module Crypto = TLS13.Crypto
+module Ref = Pulse.Lib.Reference
 module Seq = FStar.Seq
 module SZ = FStar.SizeT
 module U8 = FStar.UInt8
+module V = Pulse.Lib.Vec
+
+noextract
+let concat3 (a:B.bytes) (b:B.bytes) (c:B.bytes)
+  : B.bytes_of_len (B.length a + B.length b + B.length c)
+=
+  Seq.lemma_len_append a b;
+  Seq.lemma_len_append (B.append a b) c;
+  B.append (B.append a b) c
+
+noextract
+let concat2 (a:B.bytes) (b:B.bytes)
+  : B.bytes_of_len (B.length a + B.length b)
+=
+  Seq.lemma_create_len 0 0uy;
+  Seq.lemma_len_append a b;
+  Seq.lemma_len_append (B.append a b) B.empty;
+  concat3 a b B.empty
+
+let lemma_concat3_index_a
+  (a:B.bytes)
+  (b:B.bytes)
+  (c:B.bytes)
+  (i:nat{i < B.length a})
+  : Lemma (Seq.index (concat3 a b c) i == Seq.index a i)
+=
+  Seq.lemma_len_append a b;
+  Seq.lemma_index_app1 (B.append a b) c i;
+  Seq.lemma_index_app1 a b i
+
+let lemma_concat3_index_b
+  (a:B.bytes)
+  (b:B.bytes)
+  (c:B.bytes)
+  (i:nat{B.length a <= i /\ i < B.length a + B.length b})
+  : Lemma (Seq.index (concat3 a b c) i == Seq.index b (i - B.length a))
+=
+  Seq.lemma_len_append a b;
+  Seq.lemma_index_app1 (B.append a b) c i;
+  Seq.lemma_index_app2 a b i
+
+let lemma_concat3_index_c
+  (a:B.bytes)
+  (b:B.bytes)
+  (c:B.bytes)
+  (i:nat{B.length a + B.length b <= i /\ i < B.length a + B.length b + B.length c})
+  : Lemma (Seq.index (concat3 a b c) i == Seq.index c (i - (B.length a + B.length b)))
+=
+  Seq.lemma_len_append a b;
+  Seq.lemma_len_append (B.append a b) c;
+  Seq.lemma_index_app2 (B.append a b) c i
+
+let lemma_concat2_index_a
+  (a:B.bytes)
+  (b:B.bytes)
+  (i:nat{i < B.length a})
+  : Lemma (Seq.index (concat2 a b) i == Seq.index a i)
+=
+  lemma_concat3_index_a a b B.empty i
+
+let lemma_concat2_index_b
+  (a:B.bytes)
+  (b:B.bytes)
+  (i:nat{B.length a <= i /\ i < B.length a + B.length b})
+  : Lemma (Seq.index (concat2 a b) i == Seq.index b (i - B.length a))
+=
+  lemma_concat3_index_b a b B.empty i
+
+inline_for_extraction
+fn hash_concat3
+  (a: array U8.t)
+  (a_len: SZ.t)
+  (b: array U8.t)
+  (b_len: SZ.t)
+  (c: array U8.t)
+  (c_len: SZ.t)
+  (out: array U8.t)
+  requires pts_to a 'a_bytes **
+           pts_to b 'b_bytes **
+           pts_to c 'c_bytes **
+           pts_to out 'old_out **
+           pure (B.length 'a_bytes == SZ.v a_len /\
+                 B.length 'b_bytes == SZ.v b_len /\
+                 B.length 'c_bytes == SZ.v c_len /\
+                 B.length 'old_out == 32 /\
+                 SZ.v a_len + SZ.v b_len + SZ.v c_len <= 32768)
+  returns ok: bool
+  ensures exists* out_bytes.
+          pts_to a 'a_bytes **
+          pts_to b 'b_bytes **
+          pts_to c 'c_bytes **
+          pts_to out out_bytes **
+          pure (B.length out_bytes == 32 /\
+                (ok ==> out_bytes == C.sha256 (concat3 'a_bytes 'b_bytes 'c_bytes)))
+{
+  let ab_len = SZ.(a_len +^ b_len);
+  let total_len = SZ.(ab_len +^ c_len);
+  let transcript_vec = V.alloc 0uy total_len;
+  V.to_array_pts_to transcript_vec;
+  let transcript = V.vec_to_array transcript_vec;
+  with s. rewrite (pts_to (V.vec_to_array transcript_vec) s) as (pts_to transcript s);
+  pts_to_len transcript;
+  let mut i = 0sz;
+  while (SZ.lt !i a_len)
+    invariant exists* vi transcript_bytes.
+      Ref.pts_to i vi **
+      pts_to a 'a_bytes **
+      pts_to b 'b_bytes **
+      pts_to c 'c_bytes **
+      pts_to out 'old_out **
+      pts_to transcript transcript_bytes **
+      pure (B.length transcript_bytes == SZ.v total_len /\
+            SZ.v total_len == B.length 'a_bytes + B.length 'b_bytes + B.length 'c_bytes /\
+            SZ.v vi <= SZ.v a_len /\
+            (forall (j:nat{j < SZ.v vi}).
+              Seq.index transcript_bytes j == Seq.index (concat3 'a_bytes 'b_bytes 'c_bytes) j))
+  {
+    let vi = !i;
+    let byte = a.(vi);
+    transcript.(vi) <- byte;
+    with transcript_after. assert (pts_to transcript transcript_after);
+    lemma_concat3_index_a 'a_bytes 'b_bytes 'c_bytes (SZ.v vi);
+    assert (pure (Seq.index transcript_after (SZ.v vi) == Seq.index (concat3 'a_bytes 'b_bytes 'c_bytes) (SZ.v vi)));
+    assert (pure (forall (j:nat{j < SZ.v vi}).
+      Seq.index transcript_after j == Seq.index (concat3 'a_bytes 'b_bytes 'c_bytes) j));
+    assert (pure (forall (j:nat{j < SZ.v vi + 1}).
+      Seq.index transcript_after j == Seq.index (concat3 'a_bytes 'b_bytes 'c_bytes) j));
+    i := SZ.(vi +^ 1sz);
+  };
+  with i_after_a transcript_after_a. assert (Ref.pts_to i i_after_a ** pts_to transcript transcript_after_a);
+  assert (pure (SZ.v i_after_a == SZ.v a_len));
+  let mut j = 0sz;
+  while (SZ.lt !j b_len)
+    invariant exists* vj transcript_bytes.
+      Ref.pts_to j vj **
+      pts_to a 'a_bytes **
+      pts_to b 'b_bytes **
+      pts_to c 'c_bytes **
+      pts_to out 'old_out **
+      pts_to transcript transcript_bytes **
+      pure (B.length transcript_bytes == SZ.v total_len /\
+            SZ.v total_len == B.length 'a_bytes + B.length 'b_bytes + B.length 'c_bytes /\
+            SZ.v vj <= SZ.v b_len /\
+            (forall (k:nat{k < SZ.v a_len + SZ.v vj}).
+              Seq.index transcript_bytes k == Seq.index (concat3 'a_bytes 'b_bytes 'c_bytes) k))
+  {
+    let vj = !j;
+    let dst = SZ.(a_len +^ vj);
+    let byte = b.(vj);
+    transcript.(dst) <- byte;
+    with transcript_after. assert (pts_to transcript transcript_after);
+    lemma_concat3_index_b 'a_bytes 'b_bytes 'c_bytes (SZ.v a_len + SZ.v vj);
+    assert (pure (Seq.index transcript_after (SZ.v a_len + SZ.v vj) == Seq.index (concat3 'a_bytes 'b_bytes 'c_bytes) (SZ.v a_len + SZ.v vj)));
+    assert (pure (forall (k:nat{k < SZ.v a_len + SZ.v vj}).
+      Seq.index transcript_after k == Seq.index (concat3 'a_bytes 'b_bytes 'c_bytes) k));
+    assert (pure (forall (k:nat{k < SZ.v a_len + SZ.v vj + 1}).
+      Seq.index transcript_after k == Seq.index (concat3 'a_bytes 'b_bytes 'c_bytes) k));
+    j := SZ.(vj +^ 1sz);
+  };
+  with j_after_b transcript_after_b. assert (Ref.pts_to j j_after_b ** pts_to transcript transcript_after_b);
+  assert (pure (SZ.v j_after_b == SZ.v b_len));
+  let mut k = 0sz;
+  while (SZ.lt !k c_len)
+    invariant exists* vk transcript_bytes.
+      Ref.pts_to k vk **
+      pts_to a 'a_bytes **
+      pts_to b 'b_bytes **
+      pts_to c 'c_bytes **
+      pts_to out 'old_out **
+      pts_to transcript transcript_bytes **
+      pure (B.length transcript_bytes == SZ.v total_len /\
+            SZ.v total_len == B.length 'a_bytes + B.length 'b_bytes + B.length 'c_bytes /\
+            SZ.v vk <= SZ.v c_len /\
+            (forall (idx:nat{idx < SZ.v a_len + SZ.v b_len + SZ.v vk}).
+              Seq.index transcript_bytes idx == Seq.index (concat3 'a_bytes 'b_bytes 'c_bytes) idx))
+  {
+    let vk = !k;
+    let dst = SZ.(ab_len +^ vk);
+    let byte = c.(vk);
+    transcript.(dst) <- byte;
+    with transcript_after. assert (pts_to transcript transcript_after);
+    lemma_concat3_index_c 'a_bytes 'b_bytes 'c_bytes (SZ.v a_len + SZ.v b_len + SZ.v vk);
+    assert (pure (Seq.index transcript_after (SZ.v a_len + SZ.v b_len + SZ.v vk) == Seq.index (concat3 'a_bytes 'b_bytes 'c_bytes) (SZ.v a_len + SZ.v b_len + SZ.v vk)));
+    assert (pure (forall (idx:nat{idx < SZ.v a_len + SZ.v b_len + SZ.v vk}).
+      Seq.index transcript_after idx == Seq.index (concat3 'a_bytes 'b_bytes 'c_bytes) idx));
+    assert (pure (forall (idx:nat{idx < SZ.v a_len + SZ.v b_len + SZ.v vk + 1}).
+      Seq.index transcript_after idx == Seq.index (concat3 'a_bytes 'b_bytes 'c_bytes) idx));
+    k := SZ.(vk +^ 1sz);
+  };
+  with k_after_c transcript_bytes. assert (Ref.pts_to k k_after_c ** pts_to transcript transcript_bytes);
+  assert (pure (SZ.v k_after_c == SZ.v c_len));
+  assert (pure (forall (idx:nat{idx < B.length transcript_bytes}).
+    Seq.index transcript_bytes idx == Seq.index (concat3 'a_bytes 'b_bytes 'c_bytes) idx));
+  Seq.lemma_eq_intro transcript_bytes (concat3 'a_bytes 'b_bytes 'c_bytes);
+  Seq.lemma_eq_elim transcript_bytes (concat3 'a_bytes 'b_bytes 'c_bytes);
+  Crypto.sha256 transcript total_len out;
+  with s. rewrite (pts_to transcript s) as (pts_to (V.vec_to_array transcript_vec) s);
+  V.to_vec_pts_to transcript_vec;
+  V.free transcript_vec;
+  true
+}
+
+inline_for_extraction
+fn hash_concat2
+  (a: array U8.t)
+  (a_len: SZ.t)
+  (b: array U8.t)
+  (b_len: SZ.t)
+  (out: array U8.t)
+  requires pts_to a 'a_bytes **
+           pts_to b 'b_bytes **
+           pts_to out 'old_out **
+           pure (B.length 'a_bytes == SZ.v a_len /\
+                 B.length 'b_bytes == SZ.v b_len /\
+                 B.length 'old_out == 32 /\
+                 SZ.v a_len + SZ.v b_len <= 32768)
+  returns ok: bool
+  ensures exists* out_bytes.
+          pts_to a 'a_bytes **
+          pts_to b 'b_bytes **
+          pts_to out out_bytes **
+          pure (B.length out_bytes == 32 /\
+                (ok ==> out_bytes == C.sha256 (concat2 'a_bytes 'b_bytes)))
+{
+  let total_len = SZ.(a_len +^ b_len);
+  let transcript_vec = V.alloc 0uy total_len;
+  V.to_array_pts_to transcript_vec;
+  let transcript = V.vec_to_array transcript_vec;
+  with s. rewrite (pts_to (V.vec_to_array transcript_vec) s) as (pts_to transcript s);
+  pts_to_len transcript;
+  let mut i = 0sz;
+  while (SZ.lt !i a_len)
+    invariant exists* vi transcript_bytes.
+      Ref.pts_to i vi **
+      pts_to a 'a_bytes **
+      pts_to b 'b_bytes **
+      pts_to out 'old_out **
+      pts_to transcript transcript_bytes **
+      pure (B.length transcript_bytes == SZ.v total_len /\
+            SZ.v total_len == B.length 'a_bytes + B.length 'b_bytes /\
+            SZ.v vi <= SZ.v a_len /\
+            (forall (idx:nat{idx < SZ.v vi}).
+              Seq.index transcript_bytes idx == Seq.index (concat2 'a_bytes 'b_bytes) idx))
+  {
+    let vi = !i;
+    let byte = a.(vi);
+    transcript.(vi) <- byte;
+    with transcript_after. assert (pts_to transcript transcript_after);
+    lemma_concat2_index_a 'a_bytes 'b_bytes (SZ.v vi);
+    assert (pure (Seq.index transcript_after (SZ.v vi) == Seq.index (concat2 'a_bytes 'b_bytes) (SZ.v vi)));
+    assert (pure (forall (idx:nat{idx < SZ.v vi}).
+      Seq.index transcript_after idx == Seq.index (concat2 'a_bytes 'b_bytes) idx));
+    assert (pure (forall (idx:nat{idx < SZ.v vi + 1}).
+      Seq.index transcript_after idx == Seq.index (concat2 'a_bytes 'b_bytes) idx));
+    i := SZ.(vi +^ 1sz);
+  };
+  with i_after_a transcript_after_a. assert (Ref.pts_to i i_after_a ** pts_to transcript transcript_after_a);
+  assert (pure (SZ.v i_after_a == SZ.v a_len));
+  let mut j = 0sz;
+  while (SZ.lt !j b_len)
+    invariant exists* vj transcript_bytes.
+      Ref.pts_to j vj **
+      pts_to a 'a_bytes **
+      pts_to b 'b_bytes **
+      pts_to out 'old_out **
+      pts_to transcript transcript_bytes **
+      pure (B.length transcript_bytes == SZ.v total_len /\
+            SZ.v total_len == B.length 'a_bytes + B.length 'b_bytes /\
+            SZ.v vj <= SZ.v b_len /\
+            (forall (idx:nat{idx < SZ.v a_len + SZ.v vj}).
+              Seq.index transcript_bytes idx == Seq.index (concat2 'a_bytes 'b_bytes) idx))
+  {
+    let vj = !j;
+    let dst = SZ.(a_len +^ vj);
+    let byte = b.(vj);
+    transcript.(dst) <- byte;
+    with transcript_after. assert (pts_to transcript transcript_after);
+    lemma_concat2_index_b 'a_bytes 'b_bytes (SZ.v a_len + SZ.v vj);
+    assert (pure (Seq.index transcript_after (SZ.v a_len + SZ.v vj) == Seq.index (concat2 'a_bytes 'b_bytes) (SZ.v a_len + SZ.v vj)));
+    assert (pure (forall (idx:nat{idx < SZ.v a_len + SZ.v vj}).
+      Seq.index transcript_after idx == Seq.index (concat2 'a_bytes 'b_bytes) idx));
+    assert (pure (forall (idx:nat{idx < SZ.v a_len + SZ.v vj + 1}).
+      Seq.index transcript_after idx == Seq.index (concat2 'a_bytes 'b_bytes) idx));
+    j := SZ.(vj +^ 1sz);
+  };
+  with j_after_b transcript_bytes. assert (Ref.pts_to j j_after_b ** pts_to transcript transcript_bytes);
+  assert (pure (SZ.v j_after_b == SZ.v b_len));
+  assert (pure (forall (idx:nat{idx < B.length transcript_bytes}).
+    Seq.index transcript_bytes idx == Seq.index (concat2 'a_bytes 'b_bytes) idx));
+  Seq.lemma_eq_intro transcript_bytes (concat2 'a_bytes 'b_bytes);
+  Seq.lemma_eq_elim transcript_bytes (concat2 'a_bytes 'b_bytes);
+  Crypto.sha256 transcript total_len out;
+  with s. rewrite (pts_to transcript s) as (pts_to (V.vec_to_array transcript_vec) s);
+  V.to_vec_pts_to transcript_vec;
+  V.free transcript_vec;
+  true
+}
 
 fn hash_client_server_handshake
   (client_hello: array U8.t)
@@ -38,7 +337,7 @@ fn hash_client_server_handshake
           pure (B.length out_bytes == 32 /\
                 (ok ==> out_bytes == C.sha256 (B.append (B.append 'client_hello_bytes 'server_hello_bytes) 'server_handshake_bytes)))
 {
-  E.sha256_three
+  hash_concat3
     client_hello client_hello_len
     server_hello server_hello_len
     server_handshake server_handshake_len
@@ -66,11 +365,9 @@ fn hash_client_server_hello
           pure (B.length out_bytes == 32 /\
                 (ok ==> out_bytes == C.sha256 (B.append (B.append 'client_hello_bytes 'server_hello_bytes) (Seq.create 0 0uy))))
 {
-  let mut empty = [| 0uy; 0sz |];
-  E.sha256_three
+  hash_concat2
     client_hello client_hello_len
     server_hello server_hello_len
-    empty 0sz
     out;
 }
 

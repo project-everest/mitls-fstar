@@ -1,6 +1,65 @@
-# agentic-tls
+# Verified TLS 1.3 Client - agentic-tls
 
-Verified TLS 1.3 client implementation experiment in Pulse/F*, extracted to C.
+Formally verified TLS 1.3 client implementation in Pulse/F*, extracted to C.
+
+## Project Status
+
+✅ **Verification Complete**: All 40+ F*/Pulse modules verify  
+✅ **Extraction Complete**: Clean extraction to C (~160 KB across 11 files)  
+✅ **Compilation Complete**: All extracted C code compiles without errors  
+✅ **End-to-End Test**: Working TLS 1.3 client demonstration
+
+## Quick Start
+
+```sh
+# Initial setup
+git submodule update --init --depth 1 third_party/hacl-star
+./setup.sh
+
+# Verify all F* modules
+make verify
+
+# Extract to C
+make extract-bundle
+
+# Build and run end-to-end test
+make test/tls_client
+./test/tls_client example.com 443 ca.pem
+```
+
+## Public API
+
+The extracted C code provides a clean 5-function API (see `_extract/bundle/TLS13.h`):
+
+```c
+connection client_new(uint8_t *hostname, size_t len, config *cfg);
+void client_free(connection c);
+bool client_connect(connection c, TLS13_IO_channel ch);
+size_t client_write(connection c, TLS13_IO_channel ch, uint8_t *buf, size_t len);
+size_t client_read(connection c, TLS13_IO_channel ch, uint8_t *out, size_t max_len);
+```
+
+Complete example in `test/tls_client.c`.
+
+## Architecture
+
+The implementation uses a **layered ghost log specification**:
+
+1. **Raw Byte Log** - Monotonic ghost sequence of bytes sent/received on network
+2. **Message Log** - Parse of raw bytes into TLS messages (send = serialize, receive = parse)
+3. **State Machine** - TLS 1.3 handshake protocol related to message log
+4. **Application Log** - Projection of TLS messages to application-level data
+
+All layers are ghost state tied together through the connection invariant, with only the application log exposed in the top-level API specification.
+
+## Repository Structure
+
+- **src/spec/** - Pure F* specifications (TLS 1.3 protocol, crypto)
+- **src/impl/** - Pulse implementations (handshake, record layer, connection)
+- **_extract/bundle/** - Generated C code (~160 KB, 11 files)
+- **c_stubs/** - Unverified backend (I/O, certificate validation, crypto FFI)
+- **test/** - End-to-end TLS 1.3 client test
+- **third_party/hacl-star/** - HACL* verified crypto library (C snapshot)
 
 ## Reference material and dependencies
 

@@ -8,6 +8,8 @@ open Pulse.Lib.Array.PtsTo
 module B = TLS13.Bytes
 module SZ = FStar.SizeT
 module U8 = FStar.UInt8
+// NOTE: TLS13.Wire.Spec contains the verified wire format specifications
+// that these parser/serializer implementations should match (see admits in .fst)
 
 fn build_server_certificate_verify_input
   (transcript_hash: array U8.t)

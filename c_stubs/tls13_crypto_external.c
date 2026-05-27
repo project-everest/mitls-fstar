@@ -7,6 +7,17 @@ void TLS13_Crypto_sha256_empty(uint8_t *out, void *old_out) {
   (void)tls13_hacl_sha256(out, NULL, 0);
 }
 
+void TLS13_Crypto_sha256(
+    uint8_t *input,
+    size_t input_len,
+    uint8_t *out,
+    void *msg,
+    void *old_out) {
+  (void)msg;
+  (void)old_out;
+  (void)tls13_hacl_sha256(out, input, input_len);
+}
+
 void TLS13_Crypto_hmac_sha256(
     uint8_t *key,
     size_t key_len,

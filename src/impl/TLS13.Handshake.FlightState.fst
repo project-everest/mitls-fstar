@@ -119,7 +119,9 @@ let is_flight_state ([@@@mkey] st: flight_state) : slprop =
           SZ.v handshake_len <= 32768 /\
           SZ.v parsed_len <= SZ.v handshake_len /\
           SZ.v before_finished_len <= SZ.v handshake_len /\
-          SZ.v through_finished_len <= SZ.v handshake_len)
+          SZ.v through_finished_len <= SZ.v handshake_len /\
+          SZ.v certificate_leaf_len <= 32768 /\
+          SZ.v certificate_verify_signature_len <= 32768)
 
 fn flight_state_new ()
   returns st: flight_state
@@ -558,6 +560,29 @@ fn copy_fragment_to_buffer
           pure (B.length out_bytes == SZ.v out_capacity)
 {
   copy_fragment_to_buffer_loop fragment fragment_total_len out out_capacity 0sz offset copy_len
+}
+
+fn set_server_hello_fragment
+  (st: flight_state)
+  (hello: array U8.t)
+  (hello_len: SZ.t)
+  requires is_flight_state st **
+           pts_to hello 'hello_bytes **
+           pure (B.length 'hello_bytes == SZ.v hello_len /\
+                 SZ.v hello_len <= 4096)
+  ensures is_flight_state st **
+          pts_to hello 'hello_bytes
+{
+  unfold (is_flight_state st);
+  pts_to_len hello;
+  V.pts_to_len st.server_hello;
+  assert (pure (V.length st.server_hello == 4096));
+  V.to_array_pts_to st.server_hello;
+  assert (pure (Pulse.Lib.Array.Core.length (V.vec_to_array st.server_hello) == 4096));
+  copy_fragment_to_buffer_loop hello hello_len (V.vec_to_array st.server_hello) 4096sz 0sz 0sz hello_len;
+  V.to_vec_pts_to st.server_hello;
+  st.server_hello_len_box := hello_len;
+  fold (is_flight_state st);
 }
 
 fn append_server_handshake_fragment
@@ -1427,7 +1452,8 @@ fn accept_pending_certificate (st: flight_state)
 }
 
 fn set_certificate_leaf (st: flight_state) (leaf_offset: SZ.t) (leaf_len: SZ.t)
-  requires is_flight_state st
+  requires is_flight_state st **
+           pure (SZ.v leaf_len <= 32768)
   ensures is_flight_state st
 {
   unfold (is_flight_state st);
@@ -1543,7 +1569,8 @@ fn set_certificate_verify_signature
   (signature_scheme: U16.t)
   (signature_offset: SZ.t)
   (signature_len: SZ.t)
-  requires is_flight_state st
+  requires is_flight_state st **
+           pure (SZ.v signature_len <= 32768)
   ensures is_flight_state st
 {
   unfold (is_flight_state st);
@@ -1781,7 +1808,7 @@ fn certificate_leaf_offset (st: flight_state)
 
 fn certificate_leaf_len (st: flight_state)
   requires is_flight_state st
-  returns len: SZ.t
+  returns len: (l:SZ.t{SZ.v l <= 32768})
   ensures is_flight_state st
 {
   unfold (is_flight_state st);
@@ -1814,7 +1841,7 @@ fn certificate_verify_signature_offset (st: flight_state)
 
 fn certificate_verify_signature_len (st: flight_state)
   requires is_flight_state st
-  returns len: SZ.t
+  returns len: (l:SZ.t{SZ.v l <= 32768})
   ensures is_flight_state st
 {
   unfold (is_flight_state st);

@@ -6,6 +6,7 @@ _extract/
 *.checked
 *.krml
 *.smt2
+.depend
 test/test_hacl_stubs
 test/test_openssl_stubs
 test/test_wire_stubs
@@ -15,7 +16,6 @@ test/test_extract_smoke
 test/test_connection_driver_bindings
 test/test_connection_bindings
 test/test_handshake_driver_bindings
-test/test_handshake_bindings
 test/test_key_schedule_bindings
 test/test_record_bindings
 test/test_extracted_connection_wrapper_openssl

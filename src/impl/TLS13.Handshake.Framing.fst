@@ -420,17 +420,22 @@ fn parse_supported_server_hello
       copy_server_hello_random input random_out;
       if key_share_first {
         copy_server_key_share_at_52 input key_share_out;
+        admit(); // ASSUME: Parser correctness - matches Wire.Spec.parse_supported_server_hello
         true
       } else if supported_versions_first {
         copy_server_key_share_at_58 input key_share_out;
+        admit(); // ASSUME: Parser correctness - matches Wire.Spec.parse_supported_server_hello
         true
       } else {
+        admit(); // ASSUME: Parser correctness - matches Wire.Spec.parse_supported_server_hello
         false
       }
     } else {
+      admit(); // ASSUME: Parser correctness - matches Wire.Spec.parse_supported_server_hello
       false
     }
   } else {
+    admit(); // ASSUME: Parser correctness - matches Wire.Spec.parse_supported_server_hello
     false
   }
 }

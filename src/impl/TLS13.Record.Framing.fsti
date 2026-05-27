@@ -10,6 +10,8 @@ module Seq = FStar.Seq
 module SZ = FStar.SizeT
 module U16 = FStar.UInt16
 module U8 = FStar.UInt8
+// NOTE: TLS13.Wire.Spec contains the verified wire format specifications
+// that these parser/serializer implementations should match (see admits in .fst)
 
 val inner_plaintext_no_padding_result:
   plain:B.bytes ->
