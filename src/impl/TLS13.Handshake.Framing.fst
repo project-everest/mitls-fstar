@@ -7,6 +7,7 @@ open Pulse.Lib.Array.PtsTo
 
 module B = TLS13.Bytes
 module Cast = FStar.Int.Cast
+module PC = TLS13.Parser.Correctness
 module Seq = FStar.Seq
 module SZ = FStar.SizeT
 module U16 = FStar.UInt16
@@ -368,9 +369,19 @@ fn parse_supported_server_hello
           pts_to input 'input_bytes **
           pts_to random_out random_bytes **
           pts_to key_share_out key_share_bytes **
-          pure (B.length random_bytes == 32 /\
-                B.length key_share_bytes == 32 /\
-                (ok ==> SZ.v input_len == 90))
+          pure (
+            B.length random_bytes == 32 /\
+            B.length key_share_bytes == 32 /\
+            (ok ==> SZ.v input_len == 90) /\
+            // Parser correctness: ok matches Wire.Spec.parse_supported_server_hello
+            (ok <==> Some? (WS.parse_supported_server_hello 'input_bytes)) /\
+            // When parsing succeeds, extracted fields match the spec
+            (ok ==> (
+              let Some sh = WS.parse_supported_server_hello 'input_bytes in
+              Seq.equal random_bytes sh.random /\
+              Seq.equal key_share_bytes sh.key_share
+            ))
+          )
 {
   pts_to_len input;
   pts_to_len random_out;
@@ -419,34 +430,54 @@ fn parse_supported_server_hello
       (input.(56sz) = 0uy) && (input.(57sz) = 0x20uy);
     if (header_ok && (not hrr)) {
       copy_server_hello_random input random_out;
+      with random_bytes. _;
       if key_share_first {
         copy_server_key_share_at_52 input key_share_out;
-        // PARSER TCB: Assume parser correctness
-        // Property assumed: true <==> Some? (Wire.Spec.parse_supported_server_hello 'input_bytes)
-        admit();
+        with key_share_bytes. _;
+        // PARSER TCB: Call admitted lemma stating parser correctness
+        PC.lemma_parse_supported_server_hello_correct 'input_bytes random_bytes key_share_bytes true;
+        assert (pure (
+          (true <==> Some? (WS.parse_supported_server_hello 'input_bytes)) /\
+          (let Some sh = WS.parse_supported_server_hello 'input_bytes in
+           Seq.equal random_bytes sh.random /\ Seq.equal key_share_bytes sh.key_share)
+        ));
         true
       } else if supported_versions_first {
         copy_server_key_share_at_58 input key_share_out;
-        // PARSER TCB: Assume parser correctness
-        // Property assumed: true <==> Some? (Wire.Spec.parse_supported_server_hello 'input_bytes)
-        admit();
+        with key_share_bytes. _;
+        // PARSER TCB: Call admitted lemma stating parser correctness
+        PC.lemma_parse_supported_server_hello_correct 'input_bytes random_bytes key_share_bytes true;
+        assert (pure (
+          (true <==> Some? (WS.parse_supported_server_hello 'input_bytes)) /\
+          (let Some sh = WS.parse_supported_server_hello 'input_bytes in
+           Seq.equal random_bytes sh.random /\ Seq.equal key_share_bytes sh.key_share)
+        ));
         true
       } else {
-        // PARSER TCB: Assume parser correctness
-        // Property assumed: false <==> Some? (Wire.Spec.parse_supported_server_hello 'input_bytes)
-        admit();
+        // Failure: random copied, key_share not copied
+        with random_out_bytes. assert (pts_to random_out random_out_bytes);
+        with key_share_out_bytes. assert (pts_to key_share_out key_share_out_bytes);
+        // PARSER TCB: Call admitted lemma stating parser correctness
+        PC.lemma_parse_supported_server_hello_correct 'input_bytes random_out_bytes key_share_out_bytes false;
+        assert (pure (false <==> Some? (WS.parse_supported_server_hello 'input_bytes)));
         false
       }
     } else {
-      // PARSER TCB: Assume parser correctness
-      // Property assumed: false <==> Some? (Wire.Spec.parse_supported_server_hello 'input_bytes)
-      admit();
+      // Failure: random copied, key_share not copied
+      with random_out_bytes. assert (pts_to random_out random_out_bytes);
+      with key_share_out_bytes. assert (pts_to key_share_out key_share_out_bytes);
+      // PARSER TCB: Call admitted lemma stating parser correctness
+      PC.lemma_parse_supported_server_hello_correct 'input_bytes random_out_bytes key_share_out_bytes false;
+      assert (pure (false <==> Some? (WS.parse_supported_server_hello 'input_bytes)));
       false
     }
   } else {
-    // PARSER TCB: Assume parser correctness
-    // Property assumed: false <==> Some? (Wire.Spec.parse_supported_server_hello 'input_bytes)
-    admit();
+    // Failure: neither random nor key_share copied
+    with random_out_bytes. assert (pts_to random_out random_out_bytes);
+    with key_share_out_bytes. assert (pts_to key_share_out key_share_out_bytes);
+    // PARSER TCB: Call admitted lemma stating parser correctness
+    PC.lemma_parse_supported_server_hello_correct 'input_bytes random_out_bytes key_share_out_bytes false;
+    assert (pure (false <==> Some? (WS.parse_supported_server_hello 'input_bytes)));
     false
   }
 }

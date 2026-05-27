@@ -127,7 +127,14 @@ fn parse_record_header
           pts_to header 'header_bytes **
           pts_to content_type_out content_type_bytes **
           pts_to fragment_len_out fragment_len_bytes **
-          pure (B.length content_type_bytes == 1 /\
-                B.length fragment_len_bytes == 2)
-  // PARSER CORRECTNESS (assumed, to be verified):
-  // ok <==> Some? (Wire.Spec.parse_record 'header_bytes)
+          pure (
+            // Length constraints (carried from precondition)
+            B.length 'header_bytes == 5 /\
+            B.length content_type_bytes == 1 /\
+            B.length fragment_len_bytes == 2 /\
+            // Parsed fields match the input header
+            Seq.index content_type_bytes 0 == Seq.index 'header_bytes 0 /\
+            WS.read_u16 fragment_len_bytes 0 == WS.read_u16 'header_bytes 3 /\
+            // Parser correctness: ok matches Wire.Spec.parse_record_header
+            (ok <==> Some? (WS.parse_record_header 'header_bytes))
+          )

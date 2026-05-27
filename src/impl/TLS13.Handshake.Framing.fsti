@@ -100,11 +100,19 @@ fn parse_supported_server_hello
           pts_to input 'input_bytes **
           pts_to random_out random_bytes **
           pts_to key_share_out key_share_bytes **
-          pure (B.length random_bytes == 32 /\
-                B.length key_share_bytes == 32 /\
-                (ok ==> SZ.v input_len == 90))
-  // PARSER CORRECTNESS (assumed, to be verified):
-  // ok <==> Some? (Wire.Spec.parse_supported_server_hello 'input_bytes)
+          pure (
+            B.length random_bytes == 32 /\
+            B.length key_share_bytes == 32 /\
+            (ok ==> SZ.v input_len == 90) /\
+            // Parser correctness: ok matches Wire.Spec.parse_supported_server_hello
+            (ok <==> Some? (WS.parse_supported_server_hello 'input_bytes)) /\
+            // When parsing succeeds, extracted fields match the spec
+            (ok ==> (
+              let Some sh = WS.parse_supported_server_hello 'input_bytes in
+              Seq.equal random_bytes sh.random /\
+              Seq.equal key_share_bytes sh.key_share
+            ))
+          )
 
 fn parse_certificate_verify_body
   (input: array U8.t)

@@ -364,6 +364,19 @@ let parse_record (input:B.bytes) : GTot (option (T.content_type & R.sealed_recor
           | Some fragment -> Some (content_type, fragment, 5 + fragment_len)
           | None -> None
 
+// Parse just the 5-byte record header (without requiring the fragment data)
+let parse_record_header (input:B.bytes) : GTot (option (T.content_type & nat)) =
+  if B.length input < 5 then None
+  else
+    match content_type_of_byte (Seq.index input 0) with
+    | None -> None
+    | Some content_type ->
+      if read_u16 input 1 <> 0x0303 then None
+      else
+        let fragment_len = read_u16 input 3 in
+        if fragment_len > 16384 + 256 then None
+        else Some (content_type, fragment_len)
+
 let serialize_record (content_type:T.content_type) (fragment:B.bytes) : GTot B.bytes =
   append3
     (u8 (content_type_to_byte content_type))

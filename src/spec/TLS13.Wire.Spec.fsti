@@ -8,6 +8,11 @@ module T = TLS13.Types
 
 type parse_error = T.tls_error
 
+val read_u16:
+  input:B.bytes ->
+  pos:nat{pos + 2 <= B.length input} ->
+  GTot nat
+
 val parse_handshake:
   input:B.bytes ->
   GTot (option (H.handshake_msg & nat))
@@ -39,6 +44,10 @@ val serialize_server_certificate_verify_input:
 val parse_record:
   input:B.bytes ->
   GTot (option (T.content_type & R.sealed_record & nat))
+
+val parse_record_header:
+  input:B.bytes ->
+  GTot (option (T.content_type & nat))
 
 val serialize_record:
   content_type:T.content_type ->

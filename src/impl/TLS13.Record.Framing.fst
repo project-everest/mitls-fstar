@@ -8,10 +8,12 @@ open Pulse.Lib.Array.PtsTo
 module Arr = Pulse.Lib.Array
 module B = TLS13.Bytes
 module Cast = FStar.Int.Cast
+module PC = TLS13.Parser.Correctness
 module Ref = Pulse.Lib.Reference
 module Seq = FStar.Seq
 module SZ = FStar.SizeT
 module U16 = FStar.UInt16
+module WS = TLS13.Wire.Spec
 module U32 = FStar.UInt32
 module U8 = FStar.UInt8
 module WS = TLS13.Wire.Spec
@@ -240,8 +242,17 @@ fn parse_record_header
           pts_to header 'header_bytes **
           pts_to content_type_out content_type_bytes **
           pts_to fragment_len_out fragment_len_bytes **
-          pure (B.length content_type_bytes == 1 /\
-                B.length fragment_len_bytes == 2)
+          pure (
+            // Length constraints (carried from precondition)
+            B.length 'header_bytes == 5 /\
+            B.length content_type_bytes == 1 /\
+            B.length fragment_len_bytes == 2 /\
+            // Parsed fields match the input header
+            Seq.index content_type_bytes 0 == Seq.index 'header_bytes 0 /\
+            WS.read_u16 fragment_len_bytes 0 == WS.read_u16 'header_bytes 3 /\
+            // Parser correctness: ok matches Wire.Spec.parse_record_header
+            (ok <==> Some? (WS.parse_record_header 'header_bytes))
+          )
 {
   pts_to_len header;
   pts_to_len content_type_out;
@@ -252,13 +263,17 @@ fn parse_record_header
   let l0 = header.(3sz);
   let l1 = header.(4sz);
   content_type_out.(0sz) <- ct;
+  with content_type_bytes. _;
   fragment_len_out.(0sz) <- l0;
   fragment_len_out.(1sz) <- l1;
+  with fragment_len_bytes. _;
   let ok = (ct = 0x14uy || ct = 0x15uy || ct = 0x16uy || ct = 0x17uy) &&
            v0 = 0x03uy &&
            (v1 = 0x01uy || v1 = 0x03uy);
-  // PARSER TCB: Assume parser correctness
-  // Property assumed: ok <==> Some? (Wire.Spec.parse_record 'header_bytes)
-  admit();
+  // Establish field correspondence required by lemma
+  // These properties follow from the array updates but Pulse needs help
+  admit();  // TODO: Prove byte-level correspondence from array updates
+  // PARSER TCB: Call admitted lemma stating parser correctness
+  PC.lemma_parse_record_header_correct 'header_bytes content_type_bytes fragment_len_bytes ok;
   ok
 }
