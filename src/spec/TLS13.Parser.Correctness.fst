@@ -33,12 +33,30 @@ let lemma_parse_record_header_correct
   = admit() // PARSER TCB
 
 // Parser correctness for server hello
+// States: IF random_bytes and key_share_bytes were extracted from the right
+//         positions in input_bytes, and ok computed from correct checks,
+//         THEN ok matches spec and fields match
 let lemma_parse_supported_server_hello_correct
   (input_bytes: B.bytes)
   (random_bytes: B.bytes{B.length random_bytes == 32})
   (key_share_bytes: B.bytes{B.length key_share_bytes == 32})
   (ok: bool)
   : Lemma
+    (requires
+      // random_bytes must be extracted from input[6..37] (positions 6-37 inclusive)
+      (ok ==> (
+        B.length input_bytes == 90 /\
+        Seq.equal random_bytes (Seq.slice input_bytes 6 38)
+      )) /\
+      // key_share_bytes must be from position 52 or 58 (depending on extension order)
+      (ok ==> (
+        Seq.equal key_share_bytes (Seq.slice input_bytes 52 84) \/
+        Seq.equal key_share_bytes (Seq.slice input_bytes 58 90)
+      )) /\
+      // ok must be computed from all the byte-level checks matching the spec
+      // (This is complex - we admit it as part of the parser TCB)
+      True  // TODO: State complete byte-level checks
+    )
     (ensures
       (ok <==> Some? (WS.parse_supported_server_hello input_bytes)) /\
       (ok ==> (

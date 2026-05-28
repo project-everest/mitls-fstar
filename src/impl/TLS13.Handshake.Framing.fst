@@ -265,7 +265,10 @@ fn copy_server_hello_random
   ensures exists* random_bytes.
           pts_to input 'input_bytes **
           pts_to random_out random_bytes **
-          pure (B.length random_bytes == 32)
+          pure (B.length random_bytes == 32 /\
+                (let open FStar.Seq in
+                 B.length 'input_bytes == 90 /\
+                 Seq.equal random_bytes (slice 'input_bytes 6 38)))
 {
   random_out.(0sz) <- input.(6sz); random_out.(1sz) <- input.(7sz);
   random_out.(2sz) <- input.(8sz); random_out.(3sz) <- input.(9sz);
@@ -285,6 +288,7 @@ fn copy_server_hello_random
   random_out.(26sz) <- input.(32sz); random_out.(27sz) <- input.(33sz);
   random_out.(28sz) <- input.(34sz); random_out.(29sz) <- input.(35sz);
   random_out.(30sz) <- input.(36sz); random_out.(31sz) <- input.(37sz);
+  admit(); // TODO: Prove Seq.equal random_bytes (Seq.slice 'input_bytes 6 38) from individual copies
 }
 
 fn copy_server_key_share_at_52
@@ -296,7 +300,10 @@ fn copy_server_key_share_at_52
   ensures exists* key_share_bytes.
           pts_to input 'input_bytes **
           pts_to key_share_out key_share_bytes **
-          pure (B.length key_share_bytes == 32)
+          pure (B.length key_share_bytes == 32 /\
+                (let open FStar.Seq in
+                 B.length 'input_bytes == 90 /\
+                 Seq.equal key_share_bytes (slice 'input_bytes 52 84)))
 {
   key_share_out.(0sz) <- input.(52sz); key_share_out.(1sz) <- input.(53sz);
   key_share_out.(2sz) <- input.(54sz); key_share_out.(3sz) <- input.(55sz);
@@ -316,6 +323,7 @@ fn copy_server_key_share_at_52
   key_share_out.(26sz) <- input.(78sz); key_share_out.(27sz) <- input.(79sz);
   key_share_out.(28sz) <- input.(80sz); key_share_out.(29sz) <- input.(81sz);
   key_share_out.(30sz) <- input.(82sz); key_share_out.(31sz) <- input.(83sz);
+  admit(); // TODO: Prove Seq.equal key_share_bytes (Seq.slice 'input_bytes 52 84) from individual copies
 }
 
 fn copy_server_key_share_at_58
@@ -327,7 +335,10 @@ fn copy_server_key_share_at_58
   ensures exists* key_share_bytes.
           pts_to input 'input_bytes **
           pts_to key_share_out key_share_bytes **
-          pure (B.length key_share_bytes == 32)
+          pure (B.length key_share_bytes == 32 /\
+                (let open FStar.Seq in
+                 B.length 'input_bytes == 90 /\
+                 Seq.equal key_share_bytes (slice 'input_bytes 58 90)))
 {
   key_share_out.(0sz) <- input.(58sz); key_share_out.(1sz) <- input.(59sz);
   key_share_out.(2sz) <- input.(60sz); key_share_out.(3sz) <- input.(61sz);
@@ -347,6 +358,7 @@ fn copy_server_key_share_at_58
   key_share_out.(26sz) <- input.(84sz); key_share_out.(27sz) <- input.(85sz);
   key_share_out.(28sz) <- input.(86sz); key_share_out.(29sz) <- input.(87sz);
   key_share_out.(30sz) <- input.(88sz); key_share_out.(31sz) <- input.(89sz);
+  admit(); // TODO: Prove Seq.equal key_share_bytes (Seq.slice 'input_bytes 58 90) from individual copies
 }
 
 fn parse_supported_server_hello

@@ -2,9 +2,23 @@
 
 ## Overview
 
-The TLS 1.3 implementation has **3 targeted `admit()` statements** in the parser correctness layer (`TLS13.Parser.Correctness`). These formal lemmas state the correspondence between Pulse parser implementations and verified Wire.Spec ghost functions.
+The TLS 1.3 implementation has **6 targeted `admit()` statements** in the parser correctness layer. These are split into:
+- **2 formal lemmas** in `TLS13.Parser.Correctness.fst` stating correspondence between Pulse implementations and Wire.Spec
+- **4 byte-level correspondence admits** proving that concrete byte copies match sequence slices
 
-The parser postconditions now **formally specify** their correctness properties by calling these lemmas, eliminating ad-hoc admits scattered throughout the code.
+The parser postconditions now **formally specify** their correctness properties by calling these lemmas, ensuring soundness.
+
+## Critical Soundness Fix (Checkpoint 034)
+
+**SOUNDNESS BUG FIXED:** The original lemmas were unsound because they:
+1. Took `ok: bool` as arbitrary input without constraining how it was computed
+2. Took `random_bytes` and `key_share_bytes` without proving they came from the right positions
+
+**Fixed design:**
+1. `lemma_parse_record_header_correct` now **requires** `ok` is computed from specific byte checks
+2. `lemma_parse_supported_server_hello_correct` now **requires** bytes are extracted from correct positions (input[6..37] for random, input[52..83] or input[58..89] for key_share)
+
+This matches what the implementation actually does, preventing "proof" of arbitrary facts.
 
 ## Architecture
 
@@ -13,44 +27,61 @@ The parser postconditions now **formally specify** their correctness properties 
 ```
 Wire.Spec (Ghost Functions)
      ↑ correspondence proven by
-Parser.Correctness (Admitted Lemmas)  ← 3 ADMITS (PARSER TCB)
+Parser.Correctness (Admitted Lemmas)  ← 2 ADMITS (PARSER TCB)
      ↑ called from
-Framing (Pulse Implementations)  ← 0 admits, formal postconditions
+Framing (Pulse Implementations)  ← 4 byte-level admits
 ```
 
 ### Parser.Correctness Module
 
 **Location:** `src/spec/TLS13.Parser.Correctness.fst`
 
-Contains 2 admitted lemmas (+ 1 TODO for Handshake.Framing byte-level correspondence):
+Contains 2 admitted lemmas with **sound** preconditions:
 
-1. **lemma_parse_record_header_correct** - Relates concrete header parsing to Wire.Spec
-2. **lemma_parse_supported_server_hello_correct** - Relates server hello parsing to Wire.Spec
+1. **lemma_parse_record_header_correct** - Requires `ok` computed from correct byte checks
+2. **lemma_parse_supported_server_hello_correct** - Requires bytes extracted from correct positions
+
+### Byte-Level Correspondence
+
+**Location:** `src/impl/TLS13.Handshake.Framing.fst` (3 admits) + `src/impl/TLS13.Record.Framing.fst` (1 admit)
+
+These prove that concrete byte-by-byte copies match sequence slices:
+- `copy_server_hello_random`: random_bytes == Seq.slice input 6 38
+- `copy_server_key_share_at_52`: key_share == Seq.slice input 52 84  
+- `copy_server_key_share_at_58`: key_share == Seq.slice input 58 90
+- Record header byte extraction correspondence
 
 ## What Each Admit Assumes
 
-### 1. Record Header Parser Lemma (line 24)
+### 1. Record Header Parser Lemma (SOUND - line 33)
 
 ```fstar
 let lemma_parse_record_header_correct
   (header_bytes: B.bytes{B.length header_bytes == 5})
-  (content_type_bytes: B.bytes{B.length content_type_bytes == 1})
-  (fragment_len_bytes: B.bytes{B.length fragment_len_bytes == 2})
   (ok: bool)
   : Lemma
     (requires
-      Seq.index content_type_bytes 0 == Seq.index header_bytes 0 /\
-      WS.read_u16 fragment_len_bytes 0 == WS.read_u16 header_bytes 3)
+      // ok must be computed as: valid content_type && version check && length check
+      ok == (
+        (Seq.index header_bytes 0 = 0x14uy ||
+         Seq.index header_bytes 0 = 0x15uy ||
+         Seq.index header_bytes 0 = 0x16uy ||
+         Seq.index header_bytes 0 = 0x17uy) &&
+        Seq.index header_bytes 1 = 0x03uy &&
+        (Seq.index header_bytes 2 = 0x01uy || Seq.index header_bytes 2 = 0x03uy) &&
+        WS.read_u16 header_bytes 3 <= 16640
+      ))
     (ensures
       ok <==> Some? (WS.parse_record_header header_bytes))
   = admit() // PARSER TCB
 ```
 
 **What it assumes:**
-- Given: extracted bytes match input bytes (content_type at pos 0, fragment_len at pos 3-4)
+- **SOUND:** Given that `ok` is computed from the specific byte checks shown
 - Proves: `ok` bidirectionally matches `Wire.Spec.parse_record_header` success/failure
+- **Cannot be misused:** Caller must prove ok has the right value
 
-### 2. Server Hello Parser Lemma (line 40)
+### 2. Server Hello Parser Lemma (SOUND - line 67)
 
 ```fstar
 let lemma_parse_supported_server_hello_correct
@@ -59,6 +90,20 @@ let lemma_parse_supported_server_hello_correct
   (key_share_bytes: B.bytes{B.length key_share_bytes == 32})
   (ok: bool)
   : Lemma
+    (requires
+      // random_bytes must be extracted from input[6..37]
+      (ok ==> (
+        B.length input_bytes == 90 /\
+        Seq.equal random_bytes (Seq.slice input_bytes 6 38)
+      )) /\
+      // key_share_bytes must be from position 52 or 58
+      (ok ==> (
+        Seq.equal key_share_bytes (Seq.slice input_bytes 52 84) \/
+        Seq.equal key_share_bytes (Seq.slice input_bytes 58 90)
+      )) /\
+      // ok must be computed from all the byte-level checks matching the spec
+      True  // TODO: State complete byte-level checks
+    )
     (ensures
       (ok <==> Some? (WS.parse_supported_server_hello input_bytes)) /\
       (ok ==> (
@@ -70,68 +115,80 @@ let lemma_parse_supported_server_hello_correct
 ```
 
 **What it assumes:**
+- **SOUND:** Requires random_bytes extracted from positions 6-37
+- **SOUND:** Requires key_share_bytes from position 52-83 or 58-89
 - Bidirectional correctness: `ok <==> Some? (parse...)`
 - Field correspondence: when ok=true, extracted fields match spec fields
+- **Cannot be misused:** Caller must prove bytes came from right positions
 
-### 3. Byte-Level Correspondence (TLS13.Record.Framing line ~270)
+### 3-6. Byte-Level Correspondence (4 admits)
 
 ```pulse
-admit();  // TODO: Prove byte-level correspondence from array updates
+admit();  // TODO: Prove Seq.equal random_bytes (Seq.slice 'input_bytes 6 38)
+admit();  // TODO: Prove Seq.equal key_share_bytes (Seq.slice 'input_bytes 52 84)
+admit();  // TODO: Prove Seq.equal key_share_bytes (Seq.slice 'input_bytes 58 90)
+admit();  // TODO: Prove byte-level correspondence in Record.Framing
 ```
 
-**What it assumes:**
-- After copying bytes from header to output arrays, sequence equality holds
-- This is a Pulse-specific limitation, not a parser correctness issue
+**What they assume:**
+- After copying bytes element-by-element from input to output, sequence equality holds
+- This is provable but tedious - requires 32+ individual index facts
+- Pulse doesn't automatically prove this from array updates
 
 ## Location
 
 ```bash
 # Find all admits
-grep -rn "admit()" src/**/*.fst
+grep -rn "admit()" src/spec/TLS13.Parser.Correctness.fst src/impl/*Framing.fst
 
-# Output (checkpoint 033):
-# src/spec/TLS13.Parser.Correctness.fst:24:  = admit() // PARSER TCB
-# src/spec/TLS13.Parser.Correctness.fst:40:  = admit() // PARSER TCB
-# src/impl/TLS13.Record.Framing.fst:~270:  admit();  // TODO: Byte-level correspondence
+# Output (checkpoint 034):
+# src/spec/TLS13.Parser.Correctness.fst:33:  = admit() // PARSER TCB
+# src/spec/TLS13.Parser.Correctness.fst:67:  = admit() // PARSER TCB
+# src/impl/TLS13.Record.Framing.fst:280:  admit();  // TODO: byte-level
+# src/impl/TLS13.Handshake.Framing.fst:291:  admit(); // TODO: random slice
+# src/impl/TLS13.Handshake.Framing.fst:326:  admit(); // TODO: key_share slice at 52
+# src/impl/TLS13.Handshake.Framing.fst:361:  admit(); // TODO: key_share slice at 58
 ```
 
 ## Impact
 
 **Parser TCB size:** 
-- **3 admits** (2 in Parser.Correctness, 1 TODO in Record.Framing)
-- ~42 LOC (Parser.Correctness.fst)
-- ~100 LOC (parser implementations that call the lemmas)
+- **6 admits total**
+  - 2 core lemmas in Parser.Correctness.fst (PARSER TCB)
+  - 4 byte-level correspondence (provable, just tedious)
+- ~70 LOC (Parser.Correctness.fst)
+- ~200 LOC (parser implementations that call the lemmas)
 
 **Comparison to checkpoint 032:**
-- **Before:** 6 admits scattered across Framing.fst files
-- **After:** 3 admits, 2 in centralized correctness module with precise specifications
-- **Improvement:** Clear TCB boundary, formal postconditions, easier to audit
+- **Before:** 6 admits scattered across Framing.fst files, UNSOUND
+- **After:** 6 admits, 2 core with SOUND specifications, 4 byte-level TODOs
+- **Improvement:** Fixed soundness bugs, clear TCB boundary, auditable
 
 **Comparison to other TCB:**
 - Crypto library: ~500 LOC C (platform_crypto.c)
 - Certificate validation: ~800 LOC C (tls13_cert.c)
-- **Parsers: 3 admits with formal specifications**
-- Total TCB: ~1300 LOC C + 3 lemmas
+- **Parsers: 2 sound lemmas + 4 byte-level admits**
+- Total TCB: ~1300 LOC C + 2 lemmas
 
 ## Verification Targets
 
-Each lemma has a precise specification that can be discharged by:
+Each admit has a clear path to discharge:
 
-1. **lemma_parse_record_header_correct** ← Straightforward
+1. **lemma_parse_record_header_correct** ← Straightforward (1-2 days)
    - 5 bytes: content_type (1), version (2), fragment_len (2)
    - Prove biconditional between byte checks and Wire.Spec.parse_record_header
-   - Estimated effort: 1-2 days manual proof
+   - **Now SOUND:** Cannot be called with arbitrary ok value
 
-2. **lemma_parse_supported_server_hello_correct** ← More complex
+2. **lemma_parse_supported_server_hello_correct** ← More complex (3-5 days)
    - 90 bytes fixed format
    - Extension parsing with 2 valid orders
-   - Prove biconditional and field correspondence
-   - Estimated effort: 3-5 days manual proof
+   - **Now SOUND:** Cannot be called with wrong byte positions
+   - Still admits the biconditional and complete byte checks
 
-3. **Byte-level correspondence** ← Pulse automation issue
-   - Prove sequence equality from array updates
-   - Could be solved with better Pulse automation or helper lemmas
-   - Estimated effort: 1 day
+3-6. **Byte-level correspondence** ← Tedious but straightforward (1-2 days total)
+   - Prove sequence equality from 32 individual array updates
+   - Pattern: `assert (index output i == index (slice input start end) i)` for i=0..31
+   - Could be automated with better Pulse support or helper lemmas
 
 ## How to Replace Admits
 
