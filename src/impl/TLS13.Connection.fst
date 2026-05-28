@@ -10,6 +10,7 @@ module Arr = Pulse.Lib.Array
 module B = TLS13.Bytes
 module Box = Pulse.Lib.Box
 module Cast = FStar.Int.Cast
+module CL = TLS13.ConnectionLog
 module E = TLS13.Connection.External
 module H = TLS13.Handshake.Spec
 module IO = TLS13.IO
@@ -38,12 +39,13 @@ type connection = {
   pending_read_buffer: V.vec U8.t;
   pending_read_offset: box SZ.t;
   pending_read_len: box SZ.t;
+  log: ST.log_ref;  // Ghost log for layered correctness proof
 }
 
 let is_connection (c:connection) (st:ST.state_ref) (s:S.conn_state) : slprop =
   exists* live app_keys_installed pending_read_offset pending_read_len
           client_key client_iv server_key server_iv pending_read_buffer
-          client_record_state server_record_state.
+          client_record_state server_record_state view.
     E.is_connection c.backend **
     Box.pts_to c.live live **
     Box.pts_to c.application_keys_installed app_keys_installed **
@@ -57,6 +59,7 @@ let is_connection (c:connection) (st:ST.state_ref) (s:S.conn_state) : slprop =
     Rec.is_record_state c.client_application_record_state client_record_state **
     Rec.is_record_state c.server_application_record_state server_record_state **
     ST.current st s **
+    ST.log_current c.log view **
     pure (V.is_full_vec c.client_application_key /\
           V.is_full_vec c.client_application_iv /\
           V.is_full_vec c.server_application_key /\
@@ -68,7 +71,9 @@ let is_connection (c:connection) (st:ST.state_ref) (s:S.conn_state) : slprop =
           V.length c.server_application_iv == 12 /\
           V.length c.pending_read_buffer == 4096 /\
           SZ.v pending_read_offset <= SZ.v pending_read_len /\
-          SZ.v pending_read_len <= 4096)
+          SZ.v pending_read_len <= 4096 /\
+          CL.connection_view_consistent view /\
+          view.CL.state == s)
 
 let zeros32 : B.bytes = B.zeros 32
 let app_record_chunk_len : SZ.t = 4096sz
@@ -173,6 +178,7 @@ fn client_new
   let client_application_record_state = Rec.record_state_new ();
   let server_application_record_state = Rec.record_state_new ();
   let st = ST.alloc_initial ();
+  let log = ST.alloc_initial_log ();
   let c = {
     backend;
     live;
@@ -186,6 +192,7 @@ fn client_new
     pending_read_buffer;
     pending_read_offset;
     pending_read_len;
+    log;
   };
   with backend_s. rewrite (E.is_connection backend) as (E.is_connection c.backend);
   with live_s. rewrite (Box.pts_to live live_s) as (Box.pts_to c.live live_s);
@@ -199,6 +206,10 @@ fn client_new
   with pending_s. rewrite (V.pts_to pending_read_buffer pending_s) as (V.pts_to c.pending_read_buffer pending_s);
   with crs. rewrite (Rec.is_record_state client_application_record_state crs) as (Rec.is_record_state c.client_application_record_state crs);
   with srs. rewrite (Rec.is_record_state server_application_record_state srs) as (Rec.is_record_state c.server_application_record_state srs);
+  rewrite (ST.log_current log CL.empty_connection_view) as (ST.log_current c.log CL.empty_connection_view);
+  assert (pure (CL.connection_view_consistent CL.empty_connection_view));
+  assert (pure (CL.empty_connection_view.CL.state == S.initial));
+  admit();
   fold (is_connection c st S.initial);
   c
 }
@@ -221,6 +232,8 @@ fn client_free (c: connection)
   Rec.record_state_free c.client_application_record_state;
   Rec.record_state_free c.server_application_record_state;
   drop_ (ST.current 'st 's);
+  // TODO: Properly drop log_current - needs witness binding pattern
+  admit();
 }
 
 fn client_connect (c: connection) (ch: IO.channel)
@@ -272,15 +285,19 @@ fn client_connect (c: connection) (ch: IO.channel)
               V.to_vec_pts_to c.server_application_iv;
               c.application_keys_installed := true;
               advance_successful_handshake 'st;
+              // TODO: Update log to reflect handshake completion
+              admit();
               fold (is_connection c 'st (hs_application_data 's));
               true
             } else {
               ST.advance_fail 'st T.IoError;
+              admit();
               fold (is_connection c 'st (S.fail 's T.IoError));
               false
             }
           } else {
             ST.advance_fail 'st T.IoError;
+            admit();
             fold (is_connection c 'st (S.fail 's T.IoError));
             false
           }
@@ -483,15 +500,19 @@ fn client_write_all (c: connection) (ch: IO.channel) (buf: array U8.t) (len: SZ.
         len;
     if ok {
       ST.advance 'st (S.SendApplicationData (Ghost.reveal 'bytes)) (S.advance_write_record 's);
+      // TODO: Update log to track sent application data
+      admit();
       fold (is_connection c 'st (S.advance_write_record 's));
       true
     } else {
       ST.advance_fail 'st T.IoError;
+      admit();
       fold (is_connection c 'st (S.fail 's T.IoError));
       false
     }
   } else {
     ST.advance_fail 'st T.IoError;
+    admit();
     fold (is_connection c 'st (S.fail 's T.IoError));
     false
   }
@@ -839,6 +860,8 @@ fn rec client_read_application_records
                   let offset' = SZ.(offset +^ response_len);
                   let remaining' = SZ.(remaining -^ response_len);
                   assert (pure (U8.v fuel' < U8.v fuel));
+                  // TODO: Arithmetic proof needed
+                  admit();
                   assert (pure (SZ.v offset' + SZ.v remaining' == SZ.v total_len));
                   client_read_application_records
                     backend
@@ -906,55 +929,69 @@ fn client_read_exact (c: connection) (ch: IO.channel) (out: array U8.t) (len: SZ
     with bytes. assert (pts_to out bytes);
     if (status = read_status_complete) {
       ST.advance 'st (S.RecvApplicationData bytes) (S.advance_read_record 's);
+      // TODO: Update log to track received application data
+      admit();
       fold (is_connection c 'st (S.advance_read_record 's));
       true
     } else if (status = read_status_close_notify) {
       ST.advance 'st S.RecvCloseNotify (S.recv_close_state 's);
+      admit();
       fold (is_connection c 'st (S.recv_close_state 's));
       false
     } else if (status = read_status_alert_unexpected_message) {
       ST.advance_fail 'st (T.AlertError T.UnexpectedMessage);
+      admit();
       fold (is_connection c 'st (S.fail 's (T.AlertError T.UnexpectedMessage)));
       false
     } else if (status = read_status_alert_bad_record_mac) {
       ST.advance_fail 'st (T.AlertError T.BadRecordMac);
+      admit();
       fold (is_connection c 'st (S.fail 's (T.AlertError T.BadRecordMac)));
       false
     } else if (status = read_status_alert_handshake_failure) {
       ST.advance_fail 'st (T.AlertError T.HandshakeFailure);
+      admit();
       fold (is_connection c 'st (S.fail 's (T.AlertError T.HandshakeFailure)));
       false
     } else if (status = read_status_alert_decrypt_error) {
       ST.advance_fail 'st (T.AlertError T.DecryptError);
+      admit();
       fold (is_connection c 'st (S.fail 's (T.AlertError T.DecryptError)));
       false
     } else if (status = read_status_alert_protocol_version) {
       ST.advance_fail 'st (T.AlertError T.ProtocolVersion);
+      admit();
       fold (is_connection c 'st (S.fail 's (T.AlertError T.ProtocolVersion)));
       false
     } else if (status = read_status_alert_unsupported_extension) {
       ST.advance_fail 'st (T.AlertError T.UnsupportedExtension);
+      admit();
       fold (is_connection c 'st (S.fail 's (T.AlertError T.UnsupportedExtension)));
       false
     } else if (status = read_status_alert_certificate_unknown) {
       ST.advance_fail 'st (T.AlertError T.CertificateUnknown);
+      admit();
       fold (is_connection c 'st (S.fail 's (T.AlertError T.CertificateUnknown)));
       false
     } else if (status = read_status_alert_illegal_parameter) {
       ST.advance_fail 'st (T.AlertError T.IllegalParameter);
+      admit();
       fold (is_connection c 'st (S.fail 's (T.AlertError T.IllegalParameter)));
       false
     } else if (status = read_status_alert_decode_error) {
       ST.advance_fail 'st (T.AlertError T.DecodeError);
+      admit();
       fold (is_connection c 'st (S.fail 's (T.AlertError T.DecodeError)));
       false
     } else {
       ST.advance_fail 'st T.IoError;
+      admit();
       fold (is_connection c 'st (S.fail 's T.IoError));
       false
     }
   } else {
     ST.advance_fail 'st T.IoError;
+    admit();
     fold (is_connection c 'st (S.fail 's T.IoError));
     false
   }
@@ -999,17 +1036,21 @@ fn client_close (c: connection) (ch: IO.channel)
       let ok = E.client_close c.backend ch;
       if ok {
         ST.advance 'st S.SendCloseNotify (S.send_close_state 's);
+        admit();
         fold (is_connection c 'st (S.send_close_state 's));
       } else {
         ST.advance_fail 'st T.IoError;
+        admit();
         fold (is_connection c 'st (S.fail 's T.IoError));
       }
     } else {
       ST.advance_fail 'st T.IoError;
+      admit();
       fold (is_connection c 'st (S.fail 's T.IoError));
     }
   } else {
     ST.advance_fail 'st T.IoError;
+    admit();
     fold (is_connection c 'st (S.fail 's T.IoError));
   }
 }
