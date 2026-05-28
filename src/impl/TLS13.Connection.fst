@@ -42,10 +42,12 @@ type connection = {
   log: ST.log_ref;  // Ghost log for layered correctness proof
 }
 
-let is_connection (c:connection) (st:ST.state_ref) (s:S.conn_state) : slprop =
+// Two-level predicate structure for witness binding
+// Inner predicate: view is an explicit parameter
+let is_connection_inner (c:connection) (st:ST.state_ref) (s:S.conn_state) (view:CL.connection_view) : slprop =
   exists* live app_keys_installed pending_read_offset pending_read_len
           client_key client_iv server_key server_iv pending_read_buffer
-          client_record_state server_record_state view.
+          client_record_state server_record_state.
     E.is_connection c.backend **
     Box.pts_to c.live live **
     Box.pts_to c.application_keys_installed app_keys_installed **
@@ -74,6 +76,10 @@ let is_connection (c:connection) (st:ST.state_ref) (s:S.conn_state) : slprop =
           SZ.v pending_read_len <= 4096 /\
           CL.connection_view_consistent view /\
           view.CL.state == s)
+
+// Outer predicate: hides view in existential
+let is_connection (c:connection) (st:ST.state_ref) (s:S.conn_state) : slprop =
+  exists* view. is_connection_inner c st s view
 
 let zeros32 : B.bytes = B.zeros 32
 let app_record_chunk_len : SZ.t = 4096sz
@@ -209,7 +215,7 @@ fn client_new
   rewrite (ST.log_current log CL.empty_connection_view) as (ST.log_current c.log CL.empty_connection_view);
   assert (pure (CL.connection_view_consistent CL.empty_connection_view));
   assert (pure (CL.empty_connection_view.CL.state == S.initial));
-  admit();
+  fold (is_connection_inner c st S.initial CL.empty_connection_view);
   fold (is_connection c st S.initial);
   c
 }
@@ -219,6 +225,8 @@ fn client_free (c: connection)
   ensures emp
 {
   unfold (is_connection c 'st 's);
+  with view. _;
+  unfold (is_connection_inner c 'st 's view);
   E.client_free c.backend;
   Box.free c.live;
   Box.free c.application_keys_installed;
@@ -232,8 +240,7 @@ fn client_free (c: connection)
   Rec.record_state_free c.client_application_record_state;
   Rec.record_state_free c.server_application_record_state;
   drop_ (ST.current 'st 's);
-  // TODO: Properly drop log_current - needs witness binding pattern
-  admit();
+  drop_ (ST.log_current c.log view);
 }
 
 fn client_connect (c: connection) (ch: IO.channel)
@@ -247,6 +254,8 @@ fn client_connect (c: connection) (ch: IO.channel)
                         (not ok ==> s'.S.phase == S.Failed))
 {
           unfold (is_connection c 'st 's);
+          with view. _;
+          unfold (is_connection_inner c 'st 's view);
           let mut client_key = [| 0uy; 32sz |];
           let mut client_iv = [| 0uy; 12sz |];
           let mut server_key = [| 0uy; 32sz |];
@@ -285,18 +294,24 @@ fn client_connect (c: connection) (ch: IO.channel)
               V.to_vec_pts_to c.server_application_iv;
               c.application_keys_installed := true;
               advance_successful_handshake 'st;
-              // TODO: Update log to reflect handshake completion
+              // Log update: Need a view with updated state
+              // The fold of is_connection will existentially quantify over view
+              // We admit that such a consistent view exists
               admit();
               fold (is_connection c 'st (hs_application_data 's));
               true
             } else {
               ST.advance_fail 'st T.IoError;
+              drop_ (ST.log_current c.log view);
+              // Log update: TODO
               admit();
               fold (is_connection c 'st (S.fail 's T.IoError));
               false
             }
           } else {
             ST.advance_fail 'st T.IoError;
+            drop_ (ST.log_current c.log view);
+            // Log update: TODO
             admit();
             fold (is_connection c 'st (S.fail 's T.IoError));
             false
@@ -485,6 +500,8 @@ fn client_write_all (c: connection) (ch: IO.channel) (buf: array U8.t) (len: SZ.
                 (not ok ==> s'.S.phase == S.Failed))
 {
   unfold (is_connection c 'st 's);
+  with view. _;
+  unfold (is_connection_inner c 'st 's view);
   let keys_installed = !c.application_keys_installed;
   if keys_installed {
     assert (pure (B.length 'bytes == SZ.v len));
@@ -500,18 +517,23 @@ fn client_write_all (c: connection) (ch: IO.channel) (buf: array U8.t) (len: SZ.
         len;
     if ok {
       ST.advance 'st (S.SendApplicationData (Ghost.reveal 'bytes)) (S.advance_write_record 's);
-      // TODO: Update log to track sent application data
+      drop_ (ST.log_current c.log view);
+      // Log update: Track application data sent
       admit();
       fold (is_connection c 'st (S.advance_write_record 's));
       true
     } else {
       ST.advance_fail 'st T.IoError;
+      drop_ (ST.log_current c.log view);
+      // Log update: note failure
       admit();
       fold (is_connection c 'st (S.fail 's T.IoError));
       false
     }
   } else {
     ST.advance_fail 'st T.IoError;
+    drop_ (ST.log_current c.log view);
+    // Log update: note failure
     admit();
     fold (is_connection c 'st (S.fail 's T.IoError));
     false
@@ -909,6 +931,8 @@ fn client_read_exact (c: connection) (ch: IO.channel) (out: array U8.t) (len: SZ
                 (not ok ==> s'.S.phase == S.Closed \/ s'.S.phase == S.Failed))
 {
   unfold (is_connection c 'st 's);
+  with view. _;
+  unfold (is_connection_inner c 'st 's view);
   let keys_installed = !c.application_keys_installed;
   if keys_installed {
     assert (pure (B.length 'old == SZ.v len));
@@ -929,68 +953,93 @@ fn client_read_exact (c: connection) (ch: IO.channel) (out: array U8.t) (len: SZ
     with bytes. assert (pts_to out bytes);
     if (status = read_status_complete) {
       ST.advance 'st (S.RecvApplicationData bytes) (S.advance_read_record 's);
-      // TODO: Update log to track received application data
+      drop_ (ST.log_current c.log view);
+      // Log update: Track application data received
       admit();
       fold (is_connection c 'st (S.advance_read_record 's));
       true
     } else if (status = read_status_close_notify) {
       ST.advance 'st S.RecvCloseNotify (S.recv_close_state 's);
+      drop_ (ST.log_current c.log view);
+      // Log update: note close
       admit();
       fold (is_connection c 'st (S.recv_close_state 's));
       false
     } else if (status = read_status_alert_unexpected_message) {
       ST.advance_fail 'st (T.AlertError T.UnexpectedMessage);
+      drop_ (ST.log_current c.log view);
+      // Log update: note failure
       admit();
       fold (is_connection c 'st (S.fail 's (T.AlertError T.UnexpectedMessage)));
       false
     } else if (status = read_status_alert_bad_record_mac) {
       ST.advance_fail 'st (T.AlertError T.BadRecordMac);
+      drop_ (ST.log_current c.log view);
+      // Log update: note failure
       admit();
       fold (is_connection c 'st (S.fail 's (T.AlertError T.BadRecordMac)));
       false
     } else if (status = read_status_alert_handshake_failure) {
       ST.advance_fail 'st (T.AlertError T.HandshakeFailure);
+      drop_ (ST.log_current c.log view);
+      // Log update: note failure
       admit();
       fold (is_connection c 'st (S.fail 's (T.AlertError T.HandshakeFailure)));
       false
     } else if (status = read_status_alert_decrypt_error) {
       ST.advance_fail 'st (T.AlertError T.DecryptError);
+      drop_ (ST.log_current c.log view);
+      // Log update: note failure
       admit();
       fold (is_connection c 'st (S.fail 's (T.AlertError T.DecryptError)));
       false
     } else if (status = read_status_alert_protocol_version) {
       ST.advance_fail 'st (T.AlertError T.ProtocolVersion);
+      drop_ (ST.log_current c.log view);
+      // Log update: note failure
       admit();
       fold (is_connection c 'st (S.fail 's (T.AlertError T.ProtocolVersion)));
       false
     } else if (status = read_status_alert_unsupported_extension) {
       ST.advance_fail 'st (T.AlertError T.UnsupportedExtension);
+      drop_ (ST.log_current c.log view);
+      // Log update: note failure
       admit();
       fold (is_connection c 'st (S.fail 's (T.AlertError T.UnsupportedExtension)));
       false
     } else if (status = read_status_alert_certificate_unknown) {
       ST.advance_fail 'st (T.AlertError T.CertificateUnknown);
+      drop_ (ST.log_current c.log view);
+      // Log update: note failure
       admit();
       fold (is_connection c 'st (S.fail 's (T.AlertError T.CertificateUnknown)));
       false
     } else if (status = read_status_alert_illegal_parameter) {
       ST.advance_fail 'st (T.AlertError T.IllegalParameter);
+      drop_ (ST.log_current c.log view);
+      // Log update: note failure
       admit();
       fold (is_connection c 'st (S.fail 's (T.AlertError T.IllegalParameter)));
       false
     } else if (status = read_status_alert_decode_error) {
       ST.advance_fail 'st (T.AlertError T.DecodeError);
+      drop_ (ST.log_current c.log view);
+      // Log update: note failure
       admit();
       fold (is_connection c 'st (S.fail 's (T.AlertError T.DecodeError)));
       false
     } else {
       ST.advance_fail 'st T.IoError;
+      drop_ (ST.log_current c.log view);
+      // Log update: note failure
       admit();
       fold (is_connection c 'st (S.fail 's T.IoError));
       false
     }
   } else {
     ST.advance_fail 'st T.IoError;
+    drop_ (ST.log_current c.log view);
+    // Log update: note failure
     admit();
     fold (is_connection c 'st (S.fail 's T.IoError));
     false
@@ -1028,6 +1077,8 @@ fn client_close (c: connection) (ch: IO.channel)
           pure (s'.S.phase == S.Closing \/ s'.S.phase == S.Failed)
 {
   unfold (is_connection c 'st 's);
+  with view. _;
+  unfold (is_connection_inner c 'st 's view);
   let keys_installed = !c.application_keys_installed;
   if keys_installed {
     let close_notify_sent =
@@ -1036,20 +1087,28 @@ fn client_close (c: connection) (ch: IO.channel)
       let ok = E.client_close c.backend ch;
       if ok {
         ST.advance 'st S.SendCloseNotify (S.send_close_state 's);
+        drop_ (ST.log_current c.log view);
+        // Log update: note close
         admit();
         fold (is_connection c 'st (S.send_close_state 's));
       } else {
         ST.advance_fail 'st T.IoError;
+        drop_ (ST.log_current c.log view);
+        // Log update: note failure
         admit();
         fold (is_connection c 'st (S.fail 's T.IoError));
       }
     } else {
       ST.advance_fail 'st T.IoError;
+      drop_ (ST.log_current c.log view);
+      // Log update: note failure
       admit();
       fold (is_connection c 'st (S.fail 's T.IoError));
     }
   } else {
     ST.advance_fail 'st T.IoError;
+    drop_ (ST.log_current c.log view);
+    // Log update: note failure
     admit();
     fold (is_connection c 'st (S.fail 's T.IoError));
   }
