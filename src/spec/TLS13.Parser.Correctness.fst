@@ -10,15 +10,24 @@ module T = TLS13.Types
 module WS = TLS13.Wire.Spec
 
 // Parser correctness for record header
+// Parser correctness for record header
+// States: IF ok is computed from the correct byte checks,
+//         THEN it matches Wire.Spec.parse_record_header
 let lemma_parse_record_header_correct
   (header_bytes: B.bytes{B.length header_bytes == 5})
-  (content_type_bytes: B.bytes{B.length content_type_bytes == 1})
-  (fragment_len_bytes: B.bytes{B.length fragment_len_bytes == 2})
   (ok: bool)
   : Lemma
     (requires
-      Seq.index content_type_bytes 0 == Seq.index header_bytes 0 /\
-      WS.read_u16 fragment_len_bytes 0 == WS.read_u16 header_bytes 3)
+      // ok must be computed as: valid content_type && version check && length check
+      ok == (
+        (Seq.index header_bytes 0 = 0x14uy ||
+         Seq.index header_bytes 0 = 0x15uy ||
+         Seq.index header_bytes 0 = 0x16uy ||
+         Seq.index header_bytes 0 = 0x17uy) &&
+        Seq.index header_bytes 1 = 0x03uy &&
+        (Seq.index header_bytes 2 = 0x01uy || Seq.index header_bytes 2 = 0x03uy) &&
+        WS.read_u16 header_bytes 3 <= 16640
+      ))
     (ensures
       ok <==> Some? (WS.parse_record_header header_bytes))
   = admit() // PARSER TCB

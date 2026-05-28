@@ -263,17 +263,23 @@ fn parse_record_header
   let l0 = header.(3sz);
   let l1 = header.(4sz);
   content_type_out.(0sz) <- ct;
-  with content_type_bytes. _;
   fragment_len_out.(0sz) <- l0;
   fragment_len_out.(1sz) <- l1;
-  with fragment_len_bytes. _;
+  
+  // Compute fragment length as U16
+  let frag_len = U16.logor (U16.shift_left (Cast.uint8_to_uint16 l0) 8ul)
+                            (Cast.uint8_to_uint16 l1);
+  
   let ok = (ct = 0x14uy || ct = 0x15uy || ct = 0x16uy || ct = 0x17uy) &&
            v0 = 0x03uy &&
-           (v1 = 0x01uy || v1 = 0x03uy);
-  // Establish field correspondence required by lemma
-  // These properties follow from the array updates but Pulse needs help
-  admit();  // TODO: Prove byte-level correspondence from array updates
+           (v1 = 0x01uy || v1 = 0x03uy) &&
+           frag_len `U16.lte` 16640us;
+  
+  // TODO: Prove frag_len == WS.read_u16 'header_bytes 3 from byte arithmetic
+  // This is provable but needs byte-level reasoning
+  admit();
+  
   // PARSER TCB: Call admitted lemma stating parser correctness
-  PC.lemma_parse_record_header_correct 'header_bytes content_type_bytes fragment_len_bytes ok;
+  PC.lemma_parse_record_header_correct 'header_bytes ok;
   ok
 }
