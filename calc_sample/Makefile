@@ -5,11 +5,14 @@
 
 # ── Toolchain ──────────────────────────────────────────────────────
 FSTAR_EXE ?= fstar.exe
+KRML ?= krml
 
 # ── Directories ────────────────────────────────────────────────────
 CACHE_DIR = _cache
 SPEC_DIR  = spec
 IMPL_DIR  = impl
+OUTPUT_DIR = _output
+EXTRACT_DIR = _extract
 
 # ── F* Flags ───────────────────────────────────────────────────────
 INCLUDES = \
@@ -31,7 +34,7 @@ IMPL_FILES = $(wildcard $(IMPL_DIR)/*.fst $(IMPL_DIR)/*.fsti)
 ALL_FILES  = $(SPEC_FILES) $(IMPL_FILES)
 
 # ── Main Targets (MUST come before .depend include) ───────────────
-.PHONY: all verify clean check-admits stats help
+.PHONY: all verify clean check-admits stats help extract extract-krml extract-c test-c
 
 # Default target (defined before including .depend to ensure it's the default)
 all: verify
@@ -89,6 +92,8 @@ stats:
 # Clean build artifacts
 clean:
 	rm -rf $(CACHE_DIR)
+	rm -rf $(OUTPUT_DIR)
+	rm -rf $(EXTRACT_DIR)
 	rm -f .depend
 	rm -f $(SPEC_DIR)/*.checked $(IMPL_DIR)/*.checked
 	@echo "Cleaned build artifacts"
@@ -101,6 +106,10 @@ help:
 	@echo "  make verify       - Verify all modules (incremental, supports -j)"
 	@echo "  make check-admits - Check for admits (should be 0)"
 	@echo "  make stats        - Show project statistics"
+	@echo "  make extract      - Extract to C (verify + extract-krml + extract-c)"
+	@echo "  make extract-krml - Extract F* to .krml files"
+	@echo "  make extract-c    - Run KaRaMeL to generate C code"
+	@echo "  make test-c       - Compile and run C test"
 	@echo "  make clean        - Remove build artifacts"
 	@echo "  make help         - Show this help"
 	@echo ""
@@ -109,3 +118,76 @@ help:
 	@echo ""
 	@echo "Incremental builds: Only changed files and their dependents are reverified"
 	@echo "Expected result: All modules verify with 0 admits"
+
+# ═══════════════════════════════════════════════════════════════════
+# Extraction to C
+# ═══════════════════════════════════════════════════════════════════
+
+# ── Modules to Extract ─────────────────────────────────────────────
+IMPL_MODULES = \
+  Calc.Impl.Types \
+  Calc.Impl.Parser \
+  Calc.Impl.Push \
+  Calc.Impl.Peek \
+  Calc.Impl.Add \
+  Calc.Impl.Sub \
+  Calc.Impl.Mul \
+  Calc.Impl.Div \
+  Calc.Server
+
+# Convert module names to .krml filenames
+KRML_FILES = $(patsubst %,$(OUTPUT_DIR)/%.krml,$(subst .,_,$(IMPL_MODULES)))
+
+$(OUTPUT_DIR):
+	@mkdir -p $@
+
+$(EXTRACT_DIR):
+	@mkdir -p $@
+
+# ── Phase 1: F* → .krml ────────────────────────────────────────────
+# Pattern rule: _output/Calc_Server.krml from Calc.Server
+$(OUTPUT_DIR)/%.krml: verify | $(OUTPUT_DIR)
+	@echo "Extracting $(subst _,.,$*) to .krml"
+	@$(FSTAR) --codegen krml \
+	  --extract_module $(subst _,.,$*) \
+	  --odir $(OUTPUT_DIR) \
+	  $(IMPL_DIR)/$(subst _,.,$*).fst
+
+extract-krml: $(KRML_FILES)
+	@echo "✅ All modules extracted to .krml"
+
+# ── Phase 2: .krml → C ─────────────────────────────────────────────
+extract-c: extract-krml | $(EXTRACT_DIR)
+	@echo "Running KaRaMeL to generate C code..."
+	@$(KRML) \
+	  -tmpdir $(EXTRACT_DIR) \
+	  -skip-compilation \
+	  -warn-error -2-9-17 \
+	  -bundle 'Calc.Server=Calc.*[rename=Calc_Server]' \
+	  -bundle 'FStar.*,Pulse.*,PulseCore.*,Prims' \
+	  -no-prefix Calc.Server \
+	  $(KRML_FILES)
+	@echo "✅ C code generated in $(EXTRACT_DIR)/"
+	@ls -lh $(EXTRACT_DIR)/Calc_Server.c $(EXTRACT_DIR)/Calc_Server.h
+
+extract: extract-c
+
+# ── C Compilation and Testing ──────────────────────────────────────
+KRML_INCLUDE = /home/nswamy/.local/fstar/include
+KRML_RUNTIME = /home/nswamy/.local/fstar/lib/krml/dist/minimal
+
+test-c: extract-c
+	@echo "Compiling C test..."
+	@gcc -std=c11 -Wall -Wextra -I$(KRML_INCLUDE)/krml -I$(KRML_RUNTIME) -I$(EXTRACT_DIR) \
+	  -c $(EXTRACT_DIR)/Calc_Server.c -o $(EXTRACT_DIR)/Calc_Server.o
+	@gcc -std=c11 -Wall -Wextra -I$(KRML_INCLUDE)/krml -I$(KRML_RUNTIME) -I$(EXTRACT_DIR) \
+	  -c calc_wrapper.c -o $(EXTRACT_DIR)/calc_wrapper.o
+	@gcc -std=c11 -Wall -Wextra -I$(KRML_INCLUDE)/krml -I$(KRML_RUNTIME) -I$(EXTRACT_DIR) -I. \
+	  -o $(EXTRACT_DIR)/calc_test \
+	  $(EXTRACT_DIR)/Calc_Server.o \
+	  $(EXTRACT_DIR)/calc_wrapper.o \
+	  test_main.c
+	@echo "✅ C code compiled successfully"
+	@echo ""
+	@echo "Running C test..."
+	@$(EXTRACT_DIR)/calc_test
