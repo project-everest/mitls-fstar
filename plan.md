@@ -1,102 +1,109 @@
 # Verified TLS 1.3 Client - Development Plan
 
-## Current Status: Calculator Sample COMPLETE ✅
+## Current Status: Calc Sample ZERO ADMITS + C EXTRACTION COMPLETE ✅
 
-### Calc Sample: FULLY VERIFIED (0 admits!)
+**Full verification + extraction validated - ready for TLS!**
 
-**412 lines of verified code demonstrating the complete pattern!**
+### Calc Sample - COMPLETE EXEMPLAR ✅✅✅
 
-**Modules:**
-1. ✅ **Calc.Wire.fst** (110 lines, 0 admits) - Wire format parser/serializer
-2. ✅ **Calc.Spec.fst** (70 lines, 0 admits) - State machine with termination proof
-3. ✅ **Calc.Log.fst** (142 lines, 0 admits) - Monotonic ghost log with proven lemmas
-4. ✅ **Calc.Server.fst** (90 lines, 0 admits) - Pulse implementation with ghost updates
+**2183 lines, 14 modules, 0 ADMITS, extracts to C, ALL TESTS PASS** 🎉
 
-**Key achievements:**
-- Monotonic ghost references (not boxes) ✅
-- Operation-specific ghost updates (not full wire parsing) ✅
-- Concrete-to-ghost correspondence maintained ✅
-- `MR.update` with proven evolution (NO ADMITS!) ✅
-- Full separation logic proofs in Pulse ✅
+#### Verification (COMPLETE)
+- **14 modules** with clean separation
+- **0 admits** - all proofs complete
+- **Wire-to-semantic correspondence** - proven at byte level
+- **Ghost log** - fully erased at extraction
+- **Build time**: ~12 seconds
 
-See `calc_sample/COMPLETE.md` for full details.
+#### C Extraction (COMPLETE) 🔥
+- **F* → .krml → C** pipeline working
+- **Single-file output**: Calc_Server.c/h via bundling
+- **Heap wrapper**: calc_wrapper.c fixes stack allocation issue
+- **9 comprehensive tests**: ALL PASS ✅
+- **Zero runtime overhead**: All proofs erased
 
-## Path to Zero Admits in TLS (PATTERN VALIDATED!)
+#### Key Achievement Unlocked 🎉
+**Complete end-to-end validation**: Verified F*/Pulse code → Working C implementation
 
-The calc sample proves the approach works! Now apply to TLS:
+See:
+- `calc_sample/ZERO_ADMITS_ACHIEVED.md` - Verification journey
+- `calc_sample/EXTRACTION.md` - Extraction guide
+- `calc_sample/test_main.c` - Test suite (all passing)
 
-### Phase 1: Define TLS Ghost Log Operations (3-5 days)
+## Path to Zero Admits + Extraction in TLS
 
-Create operation-specific ghost updates in TLS13.ConnectionLog.fst:
+The calc_sample validates the complete pattern. Apply to TLS:
 
-```fstar
-val step_log_send_client_hello : bytes → tls_log → tls_log
-val step_log_recv_server_hello : bytes → tls_log → tls_log
-val step_log_send_client_finished : bytes → tls_log → tls_log
-... (one per connection operation)
-```
+### Phase 1: Update TLS Spec with Modular Semantics (2-3 days)
 
-**For each operation:**
-- Define ghost state transition
-- Prove `lemma_step_log_XXX_consistent`
-- Prove `lemma_step_log_XXX_evolves`
+Align TLS crypto operations with implementation (similar to calc_sample):
+- Ensure spec matches concrete byte operations
+- Add modular semantics where implementation uses wrapping arithmetic
 
-**Pattern from calc sample:**
-```fstar
-val lemma_step_log_push_consistent
-  (value: int) (req_bytes resp_bytes: bytes) (log: calc_log{...})
-  : Lemma (log_consistent (step_log_push value req_bytes resp_bytes log))
-```
+### Phase 2: Strengthen IO Layer with Unrefined Pattern (3-5 days)
 
-### Phase 2: Update Connection Layer (3-5 days)
-
-Refactor TLS13.Connection.fst to use proven ghost updates:
-
-**Before (24 admits):**
-```pulse
-let view' = CL.note_raw_app_sent ... in
-admit();  // Can't prove ghost update
-ST.advance_log c.log view';
-```
-
-**After (0 admits):**
-```pulse
-lemma_step_log_send_app_consistent bytes log0;
-lemma_step_log_send_app_evolves bytes log0;
-MR.update #_ #log_evolves c.log
-  (step_log_send_app bytes log0);  // NO ADMIT!
-```
-
-**All 24 connection operations:**
-- client_write_all
-- client_read
-- client_send_client_hello
-- client_recv_server_hello
-- client_send_client_finished
-- ... (21 more)
-
-### Phase 3: Strengthen IO Layer (1-2 days)
-
-*Optional* - Expose concrete bytes in TLS13.IO.fsti:
+Apply the **unrefined type pattern** (proven in calc_sample) to TLS13.IO.fsti:
 
 ```pulse
 fn write (ch: channel) (buf: array U8.t) (len: SZ.t)
+  requires is_channel ch ** pts_to buf 'bytes ** ...
+  returns n: SZ.t
   ensures exists* sent_bytes.
           is_channel ch **
-          pure (sent_bytes == slice buf 0 len)  // ← Expose bytes
+          pts_to buf 'bytes **
+          pure (sent_bytes == slice 'bytes 0 (SZ.v n))
 ```
 
-This would make the connection between concrete bytes and ghost log even clearer, but is not strictly necessary if we trust the IO layer TCB.
+### Phase 3: Update Connection with all_parse Pattern (3-5 days)
 
-### Phase 4: Parser & Byte-Level Admits (2-3 days)
+Extract concrete bytes and construct monotonic ghost log:
 
-**2 parser admits:**
-- Prove parser correctness lemmas
-- Show parsed messages match wire format
+```pulse
+fn client_write_all ... {
+  unfold (is_connection c 'st 's);
+  with view. _;
+  
+  let n = IO.write ch buf len;
+  with sent_bytes. _;
+  
+  ST.advance 'st event new_state;
+  
+  let old_log = !c.log in
+  let new_view = CL.note_raw_app_sent (reveal old_log) sent_bytes new_state;
+  
+  CL.lemma_note_consistent (reveal old_log) sent_bytes new_state;
+  ST.advance_log c.log new_view;
+  
+  fold (is_connection c 'st new_state);
+}
+```
 
-**4 byte-level admits:**
-- Slice equality proofs
-- Sequence manipulation lemmas
+### Phase 4: Prove Lemmas with all_parse Integration (4-6 days)
+
+Implement consistency and evolution lemmas (following Calc.Log pattern):
+- Add `all_parse_handshake_messages` predicate
+- Add `all_parse_app_data_frames` predicate  
+- Integrate into TLS connection log_consistent
+- `lemma_note_raw_app_sent_consistent` with all_parse proofs
+- `lemma_note_raw_app_received_consistent` with all_parse proofs
+- Parser/serializer correspondence with unrefined pattern
+
+### Phase 5: Complete Remaining Proofs (2-4 days)
+
+- Apply unrefined pattern to crypto byte operations
+- Prove inductive lemmas for message parsing
+- Complete TLS-specific sequence/list lemmas
+
+### Phase 6: C Extraction via KaRaMeL (3-5 days)
+
+Following validated calc_sample extraction pattern:
+- Extract implementation modules to .krml
+- Bundle into single TLS13_Client.c/h
+- Create heap wrapper if needed (for connection state)
+- Build comprehensive test suite
+- Validate against real TLS 1.3 servers
+
+**Total**: 17-28 days to zero admits + working C extraction for TLS
 
 **Total**: 10-15 days to zero admits in full TLS client
 
