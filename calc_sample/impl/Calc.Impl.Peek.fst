@@ -1,0 +1,137 @@
+module Calc.Impl.Peek
+
+#lang-pulse
+
+module U8 = FStar.UInt8
+module U32 = FStar.UInt32
+module SZ = FStar.SizeT
+module Seq = FStar.Seq
+module Cast = FStar.Int.Cast
+module L = FStar.List.Tot
+
+open Pulse.Lib.Pervasives
+open Pulse.Lib.Array.PtsTo
+module Arr = Pulse.Lib.Array
+module R = Pulse.Lib.Reference
+module MR = Pulse.Lib.MonotonicGhostRef
+
+open Calc.Spec
+open Calc.Wire
+open Calc.Wire.Lemmas
+open Calc.Log
+open Calc.Impl.Types
+
+fn write_error_response (resp_buf: array U8.t)
+  requires Arr.pts_to resp_buf 'bytes ** pure (Seq.length 'bytes == 5)
+  ensures exists* (resp_bytes1: bytes).
+    Arr.pts_to resp_buf resp_bytes1 **
+    pure (
+      Seq.length resp_bytes1 == 5 /\
+      Seq.index resp_bytes1 0 == 2uy /\
+      (forall (i:nat{i > 0 /\ i < 5}). Seq.index resp_bytes1 i == 0uy)
+    )
+{
+  resp_buf.(0sz) <- 2uy;
+  resp_buf.(1sz) <- 0uy;
+  resp_buf.(2sz) <- 0uy;
+  resp_buf.(3sz) <- 0uy;
+  resp_buf.(4sz) <- 0uy
+}
+
+(** Write Result response (tag 1, then big-endian value) **)
+fn write_result_response (resp_buf: array U8.t) (value: U32.t)
+  requires Arr.pts_to resp_buf 'bytes ** pure (Seq.length 'bytes == 5)
+  ensures exists* (resp_bytes1: bytes).
+    Arr.pts_to resp_buf resp_bytes1 **
+    pure (
+      Seq.length resp_bytes1 == 5 /\
+      Seq.index resp_bytes1 0 == 1uy /\
+      Calc.Wire.be_to_n (Seq.slice resp_bytes1 1 5) == U32.v value
+    )
+{
+  resp_buf.(0sz) <- 1uy;
+  resp_buf.(1sz) <- Cast.uint32_to_uint8 (U32.shift_right value 24ul);
+  resp_buf.(2sz) <- Cast.uint32_to_uint8 (U32.shift_right value 16ul);
+  resp_buf.(3sz) <- Cast.uint32_to_uint8 (U32.shift_right value 8ul);
+  resp_buf.(4sz) <- Cast.uint32_to_uint8 value;
+  
+  // These lemmas establish the proof chain:
+  // 1. shift_right + uint32_to_uint8 produces n_to_be_bX values
+  lemma_write_result_bytes value;
+  // 2. n_to_be components reconstruct the value
+  lemma_n_to_be_correct (U32.v value)
+  // 3. SMT connects these to be_to_n via arithmetic
+}
+
+#push-options "--fuel 2 --ifuel 2 --z3rlimit 100"
+fn process_peek
+  (srv: server_state)
+  (req_buf: array U8.t)
+  (resp_buf: array U8.t)
+  (#log0: erased calc_log)
+  (#req_bytes: erased bytes{Seq.length req_bytes == 5})
+requires
+  server_exactly srv log0 **
+  Arr.pts_to req_buf req_bytes **
+  Arr.pts_to resp_buf 'resp_bytes **
+  pure (
+    parse_request req_bytes == Some Peek /\
+    Seq.length 'resp_bytes == 5
+  )
+ensures exists* (resp_bytes1: bytes{Seq.length resp_bytes1 == 5}) (log1: calc_log).
+  server_exactly srv log1 **
+  Arr.pts_to req_buf req_bytes **
+  Arr.pts_to resp_buf resp_bytes1 **
+  pure (
+    log1 == step_log_peek req_bytes resp_bytes1 log0 /\
+    log1.input_bytes `Seq.equal` Seq.append log0.input_bytes req_bytes /\
+    log1.output_bytes `Seq.equal` Seq.append log0.output_bytes resp_bytes1
+  )
+{
+  unfold (server_exactly srv log0);
+  with sb sz. _;
+  let csz = !srv.size;
+
+  if SZ.gt csz 0sz {
+    // Peek success: read top element
+    let top = srv.stack.(SZ.sub csz 1sz);
+    write_result_response resp_buf top;
+    with resp_bytes1. _;
+    
+    assert (pure (
+      (step_log_peek req_bytes resp_bytes1 log0).current_state ==
+      log0.current_state
+    ));
+    
+    // Establish serialize_response correspondence for Result
+    Calc.Wire.lemma_serialize_result_bytes (U32.v top) resp_bytes1;
+    assert (pure (snd (step log0.current_state Peek) == Result (L.hd log0.current_state)));
+    assert (pure (L.hd log0.current_state == U32.v top));
+    assert (pure (serialize_response (snd (step log0.current_state Peek)) `Seq.equal` resp_bytes1));
+    
+    lemma_step_log_peek_consistent req_bytes resp_bytes1 log0;
+    lemma_step_log_peek_evolves req_bytes resp_bytes1 log0;
+    MR.update srv.ghost_log (step_log_peek req_bytes resp_bytes1 log0);
+    fold (server_exactly srv (step_log_peek req_bytes resp_bytes1 log0))
+  } else {
+    // Peek error: empty stack
+    write_error_response resp_buf;
+    with resp_bytes1. _;
+    
+    assert (pure (
+      (step_log_peek req_bytes resp_bytes1 log0).current_state ==
+      log0.current_state
+    ));
+    
+    // Establish serialize_response correspondence for Error
+    Calc.Wire.lemma_serialize_error_bytes resp_bytes1;
+    assert (pure (snd (step log0.current_state Peek) == Error));
+    assert (pure (serialize_response (snd (step log0.current_state Peek)) `Seq.equal` resp_bytes1));
+    
+    lemma_step_log_peek_consistent req_bytes resp_bytes1 log0;
+    lemma_step_log_peek_evolves req_bytes resp_bytes1 log0;
+    MR.update srv.ghost_log (step_log_peek req_bytes resp_bytes1 log0);
+    fold (server_exactly srv (step_log_peek req_bytes resp_bytes1 log0))
+  }
+}
+#pop-options

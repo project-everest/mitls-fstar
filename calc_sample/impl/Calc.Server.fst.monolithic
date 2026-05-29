@@ -1,0 +1,490 @@
+module Calc.Server
+
+#lang-pulse
+
+(**
+  Pulse implementation with monotonic ghost log.
+  Demonstrates complete wire-to-semantic proof with operation-specific ghost updates.
+**)
+
+module U8 = FStar.UInt8
+module U32 = FStar.UInt32
+module SZ = FStar.SizeT
+module Seq = FStar.Seq
+module L = FStar.List.Tot
+module Cast = FStar.Int.Cast
+
+open Pulse.Lib.Pervasives
+open Pulse.Lib.Array.PtsTo
+module Arr = Pulse.Lib.Array
+module R = Pulse.Lib.Reference
+module MR = Pulse.Lib.MonotonicGhostRef
+
+open Calc.Spec
+open Calc.Wire
+open Calc.Log
+
+(** Maximum stack size **)
+let max_stack_size : SZ.t = 10sz
+
+(** Server state: concrete stack + monotonic ghost log **)
+noeq
+type server_state = {
+  stack: array U32.t;              // Concrete stack (max 10 elements)
+  size: ref SZ.t;                   // Concrete size
+  ghost_log: MR.mref log_evolves;  // Monotonic ghost log
+}
+
+(** Knowledge that server has exact log state **)
+[@@pulse_unfold]
+let server_exactly (srv: server_state) (log: calc_log) =
+  exists* (stack_bytes: Ghost.erased (Seq.seq U32.t)) (sz: SZ.t).
+    Arr.pts_to srv.stack stack_bytes **
+    R.pts_to srv.size sz **
+    MR.pts_to srv.ghost_log #1.0R log **
+    pure (
+      Seq.length (Ghost.reveal stack_bytes) == 10 /\
+      SZ.v sz <= 10 /\
+      SZ.v sz == L.length log.current_state /\
+      // Concrete stack matches ghost state (stack is reversed!)
+      // stack[0..sz] contains current_state in reverse order
+      (forall (i:nat{i < SZ.v sz}).
+         U32.v (Seq.index (Ghost.reveal stack_bytes) i) == 
+         L.index log.current_state (SZ.v sz - 1 - i))
+    )
+
+(** Create new server with empty stack and initial ghost log **)
+fn new_server ()
+  requires emp
+  returns srv: server_state
+  ensures server_exactly srv initial_log
+{
+  lemma_initial_log_consistent ();
+  let stack = Arr.alloc 0ul 10sz;
+  let size_ref = R.alloc 0sz;
+  let ghost_log = MR.alloc #_ #log_evolves initial_log;
+  let srv = {
+    stack = stack;
+    size = size_ref;
+    ghost_log = ghost_log;
+  };
+  
+  // Rewrite predicates to match srv fields
+  with stack_bytes. rewrite (Arr.pts_to stack stack_bytes) as (Arr.pts_to srv.stack stack_bytes);
+  with sz. rewrite (R.pts_to size_ref sz) as (R.pts_to srv.size sz);
+  rewrite (MR.pts_to ghost_log #1.0R initial_log) as (MR.pts_to srv.ghost_log #1.0R initial_log);
+  
+  fold (server_exactly srv initial_log);
+  srv
+}
+
+(** ================================================================
+    Single process_request function – handles all 6 ops inline.
+
+    Design:
+    * Parse tag byte.  Valid tags 0-5 map to Push/Peek/Add/Sub/Mul/Div.
+      Precondition `parse_request 'req_bytes <> None` ensures tag < 6.
+    * For each op: unfold server_exactly, check concrete bounds /
+      divisor, update concrete stack (success) or leave it (error),
+      update response bytes, call step_log_*, call consistency /
+      evolution lemmas, MR.update ghost log, fold server_exactly.
+    * The fold obligations reduce to automatic Z3 queries under
+      --fuel 2 --ifuel 2: Seq.upd SMTPats + list-index fuel handling.
+    ================================================================ **)
+
+(** Lemma: parse_request b <> None => first byte tag is in [0..5] **)
+let lemma_valid_tag (b: bytes{Seq.length b == 5 /\ parse_request b <> None})
+  : Lemma (U8.v (Seq.index b 0) < 6)
+  = ()
+
+(**
+  process_request: handles a single request from wire bytes.
+
+  Preconditions:
+  - server state is valid (server_exactly srv log0)
+  - req_buf contains 5 valid request bytes
+  - resp_buf is 5 bytes (will be overwritten)
+  - log is consistent
+  - request is parsable (parse_request req_bytes <> None)
+
+  Postconditions:
+  - server state updated (server_exactly srv log1)
+  - req_buf unchanged
+  - resp_buf contains the response bytes
+  - log advanced by one step (log_single_step log0 log1)
+  - new log is consistent
+**)
+#push-options "--fuel 2 --ifuel 2 --z3rlimit 200"
+fn process_request
+  (srv: server_state)
+  (req_buf: array U8.t)
+  (resp_buf: array U8.t)
+  (#log0: erased calc_log)
+requires
+  server_exactly srv log0 **
+  Arr.pts_to req_buf 'req_bytes **
+  Arr.pts_to resp_buf 'resp_bytes **
+  pure (
+    log_consistent log0 /\
+    Seq.length 'req_bytes == 5 /\
+    Seq.length 'resp_bytes == 5 /\
+    parse_request 'req_bytes <> None
+  )
+ensures exists* (resp_bytes1: bytes{Seq.length resp_bytes1 == 5}) (log1: calc_log).
+  server_exactly srv log1 **
+  Arr.pts_to req_buf 'req_bytes **
+  Arr.pts_to resp_buf resp_bytes1 **
+  pure (log_single_step log0 log1 /\ log_consistent log1)
+{
+  // Establish tag bound from parse precondition (fuel 1 reduces parse_request)
+  lemma_valid_tag 'req_bytes;
+  let tag = req_buf.(0sz);
+  assert (pure (U8.v tag < 6));
+
+  if U8.eq tag 0uy {
+    // ================================================================
+    // PUSH
+    // ================================================================
+    // Decode big-endian value from bytes 1-4
+    let b1 = req_buf.(1sz);
+    let b2 = req_buf.(2sz);
+    let b3 = req_buf.(3sz);
+    let b4 = req_buf.(4sz);
+    let v0 : U32.t = Cast.uint8_to_uint32 b1;
+    let v1 : U32.t = Cast.uint8_to_uint32 b2;
+    let v2 : U32.t = Cast.uint8_to_uint32 b3;
+    let v3 : U32.t = Cast.uint8_to_uint32 b4;
+    let value = U32.add (U32.add (U32.mul v0 16777216ul) (U32.add (U32.mul v1 65536ul) (U32.mul v2 256ul))) v3;
+    // Bind as int so that nat→int subtyping is resolved before pure assertions
+    let v_int : int = U32.v value;
+
+    unfold (server_exactly srv log0);
+    with sb sz. _;
+    let csz = !srv.size;
+
+    if SZ.lt csz 10sz {
+      // Push success: stack not full
+      srv.stack.(csz) <- value;
+      srv.size := SZ.add csz 1sz;
+      resp_buf.(0sz) <- 0uy;
+      resp_buf.(1sz) <- 0uy;
+      resp_buf.(2sz) <- 0uy;
+      resp_buf.(3sz) <- 0uy;
+      resp_buf.(4sz) <- 0uy;
+      with resp_bytes1. _;
+      // step (Push v) on non-full stack: new_state = v :: old_state
+      assert (pure (
+        (step_log_push v_int 'req_bytes resp_bytes1 log0).current_state ==
+        v_int :: log0.current_state
+      ));
+      lemma_step_log_push_consistent v_int 'req_bytes resp_bytes1 log0;
+      lemma_step_log_push_evolves   v_int 'req_bytes resp_bytes1 log0;
+      MR.update srv.ghost_log (step_log_push v_int 'req_bytes resp_bytes1 log0);
+      fold (server_exactly srv (step_log_push v_int 'req_bytes resp_bytes1 log0))
+    } else {
+      // Push error: stack full, state unchanged (step returns (s, Error))
+      resp_buf.(0sz) <- 2uy;
+      resp_buf.(1sz) <- 0uy;
+      resp_buf.(2sz) <- 0uy;
+      resp_buf.(3sz) <- 0uy;
+      resp_buf.(4sz) <- 0uy;
+      with resp_bytes1. _;
+      // step (Push v) on full stack: state unchanged
+      assert (pure (
+        (step_log_push v_int 'req_bytes resp_bytes1 log0).current_state ==
+        log0.current_state
+      ));
+      lemma_step_log_push_consistent v_int 'req_bytes resp_bytes1 log0;
+      lemma_step_log_push_evolves   v_int 'req_bytes resp_bytes1 log0;
+      MR.update srv.ghost_log (step_log_push v_int 'req_bytes resp_bytes1 log0);
+      fold (server_exactly srv (step_log_push v_int 'req_bytes resp_bytes1 log0))
+    }
+
+  } else if U8.eq tag 1uy {
+    // ================================================================
+    // PEEK  (state unchanged in both success and error)
+    // ================================================================
+    unfold (server_exactly srv log0);
+    with sb sz. _;
+    let csz = !srv.size;
+
+    if SZ.gt csz 0sz {
+      // Peek success: read top element
+      let top = srv.stack.(SZ.sub csz 1sz);
+      let tv = top;
+      resp_buf.(0sz) <- 1uy;  // Result tag
+      resp_buf.(1sz) <- Cast.uint32_to_uint8 (U32.shift_right tv 24ul);
+      resp_buf.(2sz) <- Cast.uint32_to_uint8 (U32.shift_right tv 16ul);
+      resp_buf.(3sz) <- Cast.uint32_to_uint8 (U32.shift_right tv 8ul);
+      resp_buf.(4sz) <- Cast.uint32_to_uint8 tv;
+      with resp_bytes1. _;
+      // step Peek on non-empty stack: state unchanged
+      assert (pure (
+        (step_log_peek 'req_bytes resp_bytes1 log0).current_state ==
+        log0.current_state
+      ));
+      lemma_step_log_peek_consistent 'req_bytes resp_bytes1 log0;
+      lemma_step_log_peek_evolves   'req_bytes resp_bytes1 log0;
+      MR.update srv.ghost_log (step_log_peek 'req_bytes resp_bytes1 log0);
+      fold (server_exactly srv (step_log_peek 'req_bytes resp_bytes1 log0))
+    } else {
+      // Peek error: empty stack, state unchanged
+      resp_buf.(0sz) <- 2uy;
+      resp_buf.(1sz) <- 0uy;
+      resp_buf.(2sz) <- 0uy;
+      resp_buf.(3sz) <- 0uy;
+      resp_buf.(4sz) <- 0uy;
+      with resp_bytes1. _;
+      // step Peek on empty stack: state unchanged
+      assert (pure (
+        (step_log_peek 'req_bytes resp_bytes1 log0).current_state ==
+        log0.current_state
+      ));
+      lemma_step_log_peek_consistent 'req_bytes resp_bytes1 log0;
+      lemma_step_log_peek_evolves   'req_bytes resp_bytes1 log0;
+      MR.update srv.ghost_log (step_log_peek 'req_bytes resp_bytes1 log0);
+      fold (server_exactly srv (step_log_peek 'req_bytes resp_bytes1 log0))
+    }
+
+  } else if U8.eq tag 2uy {
+    // ================================================================
+    // ADD  (stack[sz-2] = y/second, stack[sz-1] = x/top)
+    //       step Add [x;y;...] = (x+y)%2^32 :: rest
+    //       concrete: val1=stack[sz-2]=y, val2=stack[sz-1]=x
+    //                 result = add_mod val1 val2 = (y+x)%2^32 = (x+y)%2^32
+    // ================================================================
+    unfold (server_exactly srv log0);
+    with sb sz. _;
+    let csz = !srv.size;
+
+    if SZ.gte csz 2sz {
+      // Add success
+      let val1 = srv.stack.(SZ.sub csz 2sz);  // y = L.index state 1
+      let val2 = srv.stack.(SZ.sub csz 1sz);  // x = L.index state 0
+      let result = U32.add_mod val1 val2;
+      // Help Z3 connect val1/val2 to ghost state indices
+      assert (pure (U32.v val1 == L.index log0.current_state 1));
+      assert (pure (U32.v val2 == L.index log0.current_state 0));
+      srv.stack.(SZ.sub csz 2sz) <- result;
+      srv.size := SZ.sub csz 1sz;
+      resp_buf.(0sz) <- 0uy;
+      resp_buf.(1sz) <- 0uy;
+      resp_buf.(2sz) <- 0uy;
+      resp_buf.(3sz) <- 0uy;
+      resp_buf.(4sz) <- 0uy;
+      with resp_bytes1. _;
+      // step Add [x;y;rest] = (x+y)%2^32 :: rest
+      assert (pure (
+        (step_log_add 'req_bytes resp_bytes1 log0).current_state ==
+        ((L.index log0.current_state 0 + L.index log0.current_state 1) % 4294967296) ::
+        L.tl (L.tl log0.current_state)
+      ));
+      lemma_step_log_add_consistent 'req_bytes resp_bytes1 log0;
+      lemma_step_log_add_evolves   'req_bytes resp_bytes1 log0;
+      MR.update srv.ghost_log (step_log_add 'req_bytes resp_bytes1 log0);
+      fold (server_exactly srv (step_log_add 'req_bytes resp_bytes1 log0))
+    } else {
+      // Add error: stack underflow, state unchanged
+      resp_buf.(0sz) <- 2uy;
+      resp_buf.(1sz) <- 0uy;
+      resp_buf.(2sz) <- 0uy;
+      resp_buf.(3sz) <- 0uy;
+      resp_buf.(4sz) <- 0uy;
+      with resp_bytes1. _;
+      assert (pure (
+        (step_log_add 'req_bytes resp_bytes1 log0).current_state ==
+        log0.current_state
+      ));
+      lemma_step_log_add_consistent 'req_bytes resp_bytes1 log0;
+      lemma_step_log_add_evolves   'req_bytes resp_bytes1 log0;
+      MR.update srv.ghost_log (step_log_add 'req_bytes resp_bytes1 log0);
+      fold (server_exactly srv (step_log_add 'req_bytes resp_bytes1 log0))
+    }
+
+  } else if U8.eq tag 3uy {
+    // ================================================================
+    // SUB   step Sub [x;y;...] = (y-x)%2^32 :: rest
+    //       concrete: val1=stack[sz-2]=y, val2=stack[sz-1]=x
+    //                 result = sub_mod val1 val2 = (y-x)%2^32
+    // ================================================================
+    unfold (server_exactly srv log0);
+    with sb sz. _;
+    let csz = !srv.size;
+
+    if SZ.gte csz 2sz {
+      // Sub success
+      let val1 = srv.stack.(SZ.sub csz 2sz);  // y
+      let val2 = srv.stack.(SZ.sub csz 1sz);  // x
+      let result = U32.sub_mod val1 val2;
+      assert (pure (U32.v val1 == L.index log0.current_state 1));
+      assert (pure (U32.v val2 == L.index log0.current_state 0));
+      srv.stack.(SZ.sub csz 2sz) <- result;
+      srv.size := SZ.sub csz 1sz;
+      resp_buf.(0sz) <- 0uy;
+      resp_buf.(1sz) <- 0uy;
+      resp_buf.(2sz) <- 0uy;
+      resp_buf.(3sz) <- 0uy;
+      resp_buf.(4sz) <- 0uy;
+      with resp_bytes1. _;
+      // step Sub [x;y;rest] = (y-x)%2^32 :: rest
+      assert (pure (
+        (step_log_sub 'req_bytes resp_bytes1 log0).current_state ==
+        ((L.index log0.current_state 1 - L.index log0.current_state 0) % 4294967296) ::
+        L.tl (L.tl log0.current_state)
+      ));
+      lemma_step_log_sub_consistent 'req_bytes resp_bytes1 log0;
+      lemma_step_log_sub_evolves   'req_bytes resp_bytes1 log0;
+      MR.update srv.ghost_log (step_log_sub 'req_bytes resp_bytes1 log0);
+      fold (server_exactly srv (step_log_sub 'req_bytes resp_bytes1 log0))
+    } else {
+      // Sub error: stack underflow, state unchanged
+      resp_buf.(0sz) <- 2uy;
+      resp_buf.(1sz) <- 0uy;
+      resp_buf.(2sz) <- 0uy;
+      resp_buf.(3sz) <- 0uy;
+      resp_buf.(4sz) <- 0uy;
+      with resp_bytes1. _;
+      assert (pure (
+        (step_log_sub 'req_bytes resp_bytes1 log0).current_state ==
+        log0.current_state
+      ));
+      lemma_step_log_sub_consistent 'req_bytes resp_bytes1 log0;
+      lemma_step_log_sub_evolves   'req_bytes resp_bytes1 log0;
+      MR.update srv.ghost_log (step_log_sub 'req_bytes resp_bytes1 log0);
+      fold (server_exactly srv (step_log_sub 'req_bytes resp_bytes1 log0))
+    }
+
+  } else if U8.eq tag 4uy {
+    // ================================================================
+    // MUL   step Mul [x;y;...] = (x*y)%2^32 :: rest
+    //       concrete: val1=stack[sz-2]=y, val2=stack[sz-1]=x
+    //                 result = mul_mod val1 val2 = (y*x)%2^32 = (x*y)%2^32
+    // ================================================================
+    unfold (server_exactly srv log0);
+    with sb sz. _;
+    let csz = !srv.size;
+
+    if SZ.gte csz 2sz {
+      // Mul success
+      let val1 = srv.stack.(SZ.sub csz 2sz);  // y
+      let val2 = srv.stack.(SZ.sub csz 1sz);  // x
+      let result = U32.mul_mod val1 val2;
+      assert (pure (U32.v val1 == L.index log0.current_state 1));
+      assert (pure (U32.v val2 == L.index log0.current_state 0));
+      srv.stack.(SZ.sub csz 2sz) <- result;
+      srv.size := SZ.sub csz 1sz;
+      resp_buf.(0sz) <- 0uy;
+      resp_buf.(1sz) <- 0uy;
+      resp_buf.(2sz) <- 0uy;
+      resp_buf.(3sz) <- 0uy;
+      resp_buf.(4sz) <- 0uy;
+      with resp_bytes1. _;
+      // step Mul [x;y;rest] = (x*y)%2^32 :: rest
+      assert (pure (
+        (step_log_mul 'req_bytes resp_bytes1 log0).current_state ==
+        ((L.index log0.current_state 0 * L.index log0.current_state 1) % 4294967296) ::
+        L.tl (L.tl log0.current_state)
+      ));
+      lemma_step_log_mul_consistent 'req_bytes resp_bytes1 log0;
+      lemma_step_log_mul_evolves   'req_bytes resp_bytes1 log0;
+      MR.update srv.ghost_log (step_log_mul 'req_bytes resp_bytes1 log0);
+      fold (server_exactly srv (step_log_mul 'req_bytes resp_bytes1 log0))
+    } else {
+      // Mul error: stack underflow, state unchanged
+      resp_buf.(0sz) <- 2uy;
+      resp_buf.(1sz) <- 0uy;
+      resp_buf.(2sz) <- 0uy;
+      resp_buf.(3sz) <- 0uy;
+      resp_buf.(4sz) <- 0uy;
+      with resp_bytes1. _;
+      assert (pure (
+        (step_log_mul 'req_bytes resp_bytes1 log0).current_state ==
+        log0.current_state
+      ));
+      lemma_step_log_mul_consistent 'req_bytes resp_bytes1 log0;
+      lemma_step_log_mul_evolves   'req_bytes resp_bytes1 log0;
+      MR.update srv.ghost_log (step_log_mul 'req_bytes resp_bytes1 log0);
+      fold (server_exactly srv (step_log_mul 'req_bytes resp_bytes1 log0))
+    }
+
+  } else if U8.eq tag 5uy {
+    // ================================================================
+    // DIV   step Div [x;y;...]:
+    //         x == 0 → Error, state unchanged
+    //         x != 0 → (y/x) :: rest
+    //       concrete: val1=stack[sz-2]=y, val2=stack[sz-1]=x (divisor)
+    // ================================================================
+    unfold (server_exactly srv log0);
+    with sb sz. _;
+    let csz = !srv.size;
+
+    if SZ.gte csz 2sz {
+      let val1 = srv.stack.(SZ.sub csz 2sz);  // y = dividend
+      let val2 = srv.stack.(SZ.sub csz 1sz);  // x = divisor
+      // Connect concrete reads to ghost state
+      assert (pure (U32.v val1 == L.index log0.current_state 1));
+      assert (pure (U32.v val2 == L.index log0.current_state 0));
+
+      if U32.eq val2 0ul {
+        // Div-by-zero error: state unchanged
+        resp_buf.(0sz) <- 2uy;
+        resp_buf.(1sz) <- 0uy;
+        resp_buf.(2sz) <- 0uy;
+        resp_buf.(3sz) <- 0uy;
+        resp_buf.(4sz) <- 0uy;
+        with resp_bytes1. _;
+        // step Div when top == 0: state unchanged
+        assert (pure (
+          (step_log_div 'req_bytes resp_bytes1 log0).current_state ==
+          log0.current_state
+        ));
+        lemma_step_log_div_consistent 'req_bytes resp_bytes1 log0;
+        lemma_step_log_div_evolves   'req_bytes resp_bytes1 log0;
+        MR.update srv.ghost_log (step_log_div 'req_bytes resp_bytes1 log0);
+        fold (server_exactly srv (step_log_div 'req_bytes resp_bytes1 log0))
+      } else {
+        // Div success
+        let result = U32.div val1 val2;
+        srv.stack.(SZ.sub csz 2sz) <- result;
+        srv.size := SZ.sub csz 1sz;
+        resp_buf.(0sz) <- 0uy;
+        resp_buf.(1sz) <- 0uy;
+        resp_buf.(2sz) <- 0uy;
+        resp_buf.(3sz) <- 0uy;
+        resp_buf.(4sz) <- 0uy;
+        with resp_bytes1. _;
+        // step Div [x;y;rest] (x!=0) = (y/x) :: rest
+        assert (pure (
+          (step_log_div 'req_bytes resp_bytes1 log0).current_state ==
+          (L.index log0.current_state 1 / L.index log0.current_state 0) ::
+          L.tl (L.tl log0.current_state)
+        ));
+        lemma_step_log_div_consistent 'req_bytes resp_bytes1 log0;
+        lemma_step_log_div_evolves   'req_bytes resp_bytes1 log0;
+        MR.update srv.ghost_log (step_log_div 'req_bytes resp_bytes1 log0);
+        fold (server_exactly srv (step_log_div 'req_bytes resp_bytes1 log0))
+      }
+    } else {
+      // Div error: stack underflow, state unchanged
+      resp_buf.(0sz) <- 2uy;
+      resp_buf.(1sz) <- 0uy;
+      resp_buf.(2sz) <- 0uy;
+      resp_buf.(3sz) <- 0uy;
+      resp_buf.(4sz) <- 0uy;
+      with resp_bytes1. _;
+      assert (pure (
+        (step_log_div 'req_bytes resp_bytes1 log0).current_state ==
+        log0.current_state
+      ));
+      lemma_step_log_div_consistent 'req_bytes resp_bytes1 log0;
+      lemma_step_log_div_evolves   'req_bytes resp_bytes1 log0;
+      MR.update srv.ghost_log (step_log_div 'req_bytes resp_bytes1 log0);
+      fold (server_exactly srv (step_log_div 'req_bytes resp_bytes1 log0))
+    }
+
+  } else {
+    // Unreachable: tag < 6 /\ tag != 0..5 → False
+    assert (pure False)
+  }
+}
+#pop-options
