@@ -5,6 +5,7 @@ module H = TLS13.Handshake.Spec
 module R = TLS13.Record.Spec
 module Seq = FStar.Seq
 module T = TLS13.Types
+module U8 = FStar.UInt8
 
 type parse_error = T.tls_error
 
@@ -12,6 +13,13 @@ val read_u16:
   input:B.bytes ->
   pos:nat{pos + 2 <= B.length input} ->
   GTot nat
+
+val lemma_read_u16_definition:
+  input:B.bytes ->
+  pos:nat{pos + 2 <= B.length input} ->
+  Lemma (read_u16 input pos ==
+         U8.v (Seq.index input pos) * 256 +
+         U8.v (Seq.index input (pos + 1)))
 
 val parse_handshake:
   input:B.bytes ->

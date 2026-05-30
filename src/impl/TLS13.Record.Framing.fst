@@ -12,11 +12,28 @@ module PC = TLS13.Parser.Correctness
 module Ref = Pulse.Lib.Reference
 module Seq = FStar.Seq
 module SZ = FStar.SizeT
+module UInt = FStar.UInt
 module U16 = FStar.UInt16
 module WS = TLS13.Wire.Spec
 module U32 = FStar.UInt32
 module U8 = FStar.UInt8
 module WS = TLS13.Wire.Spec
+
+let lemma_read_u16_from_bytes (hi:U8.t) (lo:U8.t)
+  : Lemma
+      (U16.v (U16.logor (U16.shift_left (Cast.uint8_to_uint16 hi) 8ul)
+                        (Cast.uint8_to_uint16 lo)) ==
+       U8.v hi * 256 + U8.v lo)
+=
+  let hi16 = Cast.uint8_to_uint16 hi in
+  let lo16 = Cast.uint8_to_uint16 lo in
+  let shifted = U16.shift_left hi16 8ul in
+  UInt.pow2_values 8;
+  UInt.pow2_values 16;
+  UInt.shift_left_value_lemma #16 (U16.v hi16) 8;
+  assert (U16.v shifted == U8.v hi * 256);
+  UInt.logor_disjoint #16 (U16.v shifted) (U16.v lo16) 8;
+  assert (U16.v (U16.logor shifted lo16) == U16.v shifted + U16.v lo16)
 
 let inner_plaintext_no_padding_result
   (plain:B.bytes)
@@ -265,20 +282,37 @@ fn parse_record_header
   content_type_out.(0sz) <- ct;
   fragment_len_out.(0sz) <- l0;
   fragment_len_out.(1sz) <- l1;
-  
+  with content_type_bytes. assert (pts_to content_type_out content_type_bytes);
+  with fragment_len_bytes. assert (pts_to fragment_len_out fragment_len_bytes);
+
   // Compute fragment length as U16
   let frag_len = U16.logor (U16.shift_left (Cast.uint8_to_uint16 l0) 8ul)
                             (Cast.uint8_to_uint16 l1);
-  
+
   let ok = (ct = 0x14uy || ct = 0x15uy || ct = 0x16uy || ct = 0x17uy) &&
            v0 = 0x03uy &&
            (v1 = 0x01uy || v1 = 0x03uy) &&
            frag_len `U16.lte` 16640us;
-  
-  // TODO: Prove frag_len == WS.read_u16 'header_bytes 3 from byte arithmetic
-  // This is provable but needs byte-level reasoning
-  admit();
-  
+
+  lemma_read_u16_from_bytes l0 l1;
+  WS.lemma_read_u16_definition 'header_bytes 3;
+  assert (pure (WS.read_u16 'header_bytes 3 == U8.v l0 * 256 + U8.v l1));
+  assert (pure (UInt.size (WS.read_u16 'header_bytes 3) 16));
+  assert (pure (U16.v frag_len == WS.read_u16 'header_bytes 3));
+  Seq.lemma_index_upd1 'old_fragment_len 0 l0;
+  Seq.lemma_index_upd2 (Seq.upd 'old_fragment_len 0 l0) 1 l1 0;
+  Seq.lemma_index_upd1 (Seq.upd 'old_fragment_len 0 l0) 1 l1;
+  assert (pure (Seq.index fragment_len_bytes 0 == l0));
+  assert (pure (Seq.index fragment_len_bytes 1 == l1));
+  WS.lemma_read_u16_definition fragment_len_bytes 0;
+  assert (pure (WS.read_u16 fragment_len_bytes 0 ==
+                U8.v (Seq.index fragment_len_bytes 0) * 256 +
+                U8.v (Seq.index fragment_len_bytes 1)));
+  assert (pure (WS.read_u16 fragment_len_bytes 0 == U8.v l0 * 256 + U8.v l1));
+  assert (pure (WS.read_u16 fragment_len_bytes 0 == WS.read_u16 'header_bytes 3));
+  assert (pure ((frag_len `U16.lte` 16640us) <==>
+                (WS.read_u16 'header_bytes 3 <= 16640)));
+
   // PARSER TCB: Call admitted lemma stating parser correctness
   PC.lemma_parse_record_header_correct 'header_bytes ok;
   ok

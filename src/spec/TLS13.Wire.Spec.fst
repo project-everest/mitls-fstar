@@ -36,6 +36,15 @@ let read_u16 (input:B.bytes) (pos:nat{pos + 2 <= B.length input}) : GTot nat =
   nat_of_byte (Seq.index input pos) * 256 +
   nat_of_byte (Seq.index input (pos + 1))
 
+let lemma_read_u16_definition
+  (input:B.bytes)
+  (pos:nat{pos + 2 <= B.length input})
+  : Lemma (read_u16 input pos ==
+           U8.v (Seq.index input pos) * 256 +
+           U8.v (Seq.index input (pos + 1)))
+=
+  ()
+
 let read_u24 (input:B.bytes) (pos:nat{pos + 3 <= B.length input}) : GTot nat =
   nat_of_byte (Seq.index input pos) * 65536 +
   nat_of_byte (Seq.index input (pos + 1)) * 256 +
