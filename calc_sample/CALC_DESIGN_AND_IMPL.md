@@ -50,11 +50,12 @@ The **calc_sample** is an exemplary verified calculator server implementation de
 - `serialize_response : response -> bytes{len==5}`
 - 6 operation tags: Push(0), Peek(1), Add(2), Sub(3), Mul(4), Div(5)
 
-**2. Calc.Wire.Lemmas.fst (142 lines)** - Big-endian arithmetic & unrefined proofs ⭐
-- **Unrefined type pattern** infrastructure (see [Verification Patterns](#unrefined-type-pattern))
-- `be_to_n_unrefined`: Takes 4 raw U8.t instead of refined bytes
-- `n_to_be_unrefined`: Serialization counterpart
-- `lemma_be_to_n_equiv`, `lemma_n_to_be_correct`: Equivalence proofs
+**2. Calc.Wire.Lemmas.fst (142 lines)** - Big-endian arithmetic proofs
+- Byte parsing correspondence lemmas
+- `be_to_n_unrefined`: Optional unrefined version (style choice, not requirement)
+- `lemma_be_to_n_equiv`: Equivalence to refined `be_to_n`
+- `lemma_u32_arithmetic_correspondence`: Proves U32 ops match mathematical arithmetic
+- `lemma_parse_push_value_correct`, `lemma_n_to_be_correct`: Serialization proofs
 
 **3. Calc.Spec.fst (63 lines)** - State machine with errors as transitions
 - Pure functional semantics using unbounded types (list int)
@@ -142,45 +143,41 @@ Each handler:
 2. Calc.Impl.Peek.fst:57 - Write result response correspondence
 3-4. Calc.Log.fst - Sequence/list induction lemmas (2 admits)
 
-**Phase 1: Eliminate 2 Implementation Admits → Unrefined Type Pattern**
+**Phase 1: Eliminate 2 Implementation Admits → Byte Parsing Lemmas**
 
-**Problem**: Pulse postconditions are type-checked BEFORE function execution. Can't use refined types depending on runtime values extracted from arrays.
+**Problem**: Need to prove correspondence between low-level U32 arithmetic and spec-level big-endian parsing.
 
-**Example**:
+**Initial assumption**: Pulse postconditions can't use refined types like `bytes{length==4}`.
+
+**Actual finding**: ✅ **Refined types work fine in Pulse postconditions!** Testing shows both approaches verify:
+
 ```pulse
-// Can't write this - won't typecheck
-ensures pure (parse_be_bytes buf == Some value)
+// Approach 1: Using refined be_to_n directly ✅
+ensures pure (U32.v value == be_to_n (slice buf 1 5))
 
-// Reason: parse_be_bytes requires bytes{length==4}
-// but buf : array U8.t with runtime-dependent content
+// Approach 2: Using unrefined version (calc_sample's current style) ✅
+ensures pure (U32.v value == be_to_n_unrefined b0 b1 b2 b3)
 ```
 
-**Solution**: **Unrefined Type Pattern** (Calc.Wire.Lemmas.fst)
+**Solution implemented**: Calc.Wire.Lemmas.fst provides both styles:
 
-Created unrefined versions taking raw U8.t values:
 ```fstar
-// Unrefined version - takes 4 raw bytes
+// Unrefined version (style choice, not requirement)
 val be_to_n_unrefined (b0 b1 b2 b3: U8.t) : U32.t
 
-// Equivalence lemma
+// Equivalence lemma connecting to spec
 val lemma_be_to_n_equiv (bytes: seq U8.t{Seq.length bytes == 4})
   : Lemma (be_to_n_unrefined bytes.[0] bytes.[1] bytes.[2] bytes.[3]
            == be_to_n bytes)
+
+// Arithmetic correctness lemmas
+val lemma_u32_arithmetic_correspondence (v0 v1 v2 v3: U32.t) : Lemma ...
+val lemma_parse_push_value_correct (b1 b2 b3 b4: U8.t) : Lemma ...
 ```
 
-**Usage in postconditions**:
-```pulse
-// In postcondition, use unrefined version
-pure (U32.v value == be_to_n_unrefined b0 b1 b2 b3)
+**Impact**: Eliminated admits in Calc.Server and Calc.Impl.Peek by proving U32 operations correspond to spec
 
-// Call equivalence lemma to relate to spec
-lemma_be_to_n_equiv (slice buf 1 5);
-// Now proven: value == spec's parse result
-```
-
-**Impact**: Eliminated admits in Calc.Server and Calc.Impl.Peek
-
-**Reusability**: Pattern applies to ANY Pulse verification with runtime-dependent properties ⭐
+**Key insight**: The unrefined pattern is used in calc_sample but is **not actually necessary** - it's a style choice that provides explicit intermediate steps. Use whichever style you find clearer.
 
 **Phase 2: Eliminate 2 Spec Admits → all_parse Integration**
 
@@ -650,7 +647,7 @@ The calc_sample **validates the complete methodology**. All techniques directly 
 
 | Calc Sample | TLS 1.3 |
 |-------------|---------|
-| be_to_n_unrefined | crypto_function_unrefined |
+| be_to_n + lemmas | crypto operations + lemmas |
 | all_parse (5-byte msgs) | all_parse_handshake |
 | server_exactly | connection_exactly |
 | step_log_push | step_log_client_hello |
