@@ -25,6 +25,14 @@ module U8 = FStar.UInt8
 module V = Pulse.Lib.Vec
 module X = TLS13.X509.Spec
 
+let lemma_nat_add_sub_cancel
+  (a:nat)
+  (b:nat)
+  (c:nat{b <= c})
+  : Lemma (a + b + (c - b) == a + c)
+=
+  ()
+
 noeq
 type connection = {
   backend: E.connection;
@@ -882,8 +890,16 @@ fn rec client_read_application_records
                   let offset' = SZ.(offset +^ response_len);
                   let remaining' = SZ.(remaining -^ response_len);
                   assert (pure (U8.v fuel' < U8.v fuel));
-                  // TODO: Arithmetic proof needed
-                  admit();
+                  assert (pure (SZ.v offset' == SZ.v offset + SZ.v response_len));
+                  assert (pure (SZ.v remaining' == SZ.v remaining - SZ.v response_len));
+                  assert (pure (SZ.v offset + SZ.v remaining == SZ.v total_len));
+                  lemma_nat_add_sub_cancel
+                    (SZ.v offset)
+                    (SZ.v response_len)
+                    (SZ.v remaining);
+                  assert (pure (SZ.v offset + SZ.v response_len +
+                                (SZ.v remaining - SZ.v response_len) ==
+                                SZ.v total_len));
                   assert (pure (SZ.v offset' + SZ.v remaining' == SZ.v total_len));
                   client_read_application_records
                     backend
