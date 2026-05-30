@@ -633,7 +633,7 @@ assert (pure (property_of x y));
 **Solution:** Use `Vec.alloc` for heap allocation:
 
 ```pulse
-// WRONG: Stack allocation
+// WRONG: Stack allocation; produces a deprecation warning
 let stack = Array.alloc 0ul 0sz;  // C: uint32_t stack[0] on stack
 return {stack; ...}                // Dangling pointer!
 
@@ -646,25 +646,17 @@ return {stack; ...}                // Safe!
 
 ---
 
-### Pattern 7: Single-Element Vec for Scalar Fields
-
-**For uniform pts_to API:**
+### Pattern 7: Use Box instead of Ref for heap-allocated mutable references
 
 ```pulse
-type server_state = {
-  stack: Vec.vec U32.t;      // Dynamic array
-  count: Vec.vec SZ.t;       // Single element! (uniform API)
-  log:   R.ref (erased calc_log);
-}
+// WRONG: Stack allocation
+let stack = Ref.alloc true;  
+return {stack; ...}                // Dangling pointer!
 
-// Read count
-let c = Vec.op_Array_Access srv.count 0sz;
-
-// Update count  
-Vec.op_Array_Assignment srv.count 0sz new_count;
+// RIGHT: Heap allocation  
+let heap_ref = Box.alloc true;        // C: malloc(...)
+return {heap_ref; ...}                // Safe!
 ```
-
-**Why:** `Vec.pts_to` for both fields. Avoids mixing `R.pts_to` and `Vec.pts_to` in `server_exactly`.
 
 ---
 
@@ -736,52 +728,398 @@ Each: `write_*_response` + `process_*` proving `log_single_step`
 
 ---
 
-## Applying to TLS 1.3
+## Extraction to C via KaRaMeL
 
-### Architectural Mapping
+The verified Pulse code extracts to clean, portable C code via KaRaMeL. This section explains the two-phase extraction process, bundling strategy, and testing workflow.
 
-| Calc Sample | TLS 1.3 |
-|-------------|---------|
-| `calc_log` | `connection_log` |
-| `input_bytes` | `received_bytes` (handshake + app data) |
-| `output_bytes` | `sent_bytes` (handshake + app data) |
-| `requests` | `handshake_messages` + `app_data_frames` |
-| `responses` | `handshake_responses` + `app_data_frames` |
-| `current_state` | `connection_state` (keys, cipher, sequence numbers) |
-| `server_exactly` | `connection_exactly` |
-| `log_consistent` | `connection_log_consistent` |
-| `step_log_push` | `step_log_client_hello`, etc. |
+### Two-Phase Extraction Pipeline
 
-### Key Adaptations
-
-**1. Two message types:**
-```fstar
-type tls_log = {
-  handshake_bytes: bytes;
-  app_data_bytes: bytes;
-  handshake_messages: list handshake_message;
-  app_data_frames: list app_data_frame;
-  connection_state: tls_connection_state;
-}
+**Phase 1: F* → .krml**
+```bash
+fstar.exe --codegen krml --extract_module Calc.Server \
+  --odir _output impl/Calc.Server.fst
+# Produces: _output/Calc_Server.krml
 ```
 
-**2. Crypto operations:**
-Add arithmetic correctness lemmas for HMAC, HKDF, AEAD similar to `be_to_n` lemmas.
-
-**3. Multiple parsers:**
-```fstar
-let connection_log_consistent (log: tls_log) : prop =
-  all_parse_handshake log.handshake_bytes /\
-  all_parse_app_data log.app_data_bytes /\
-  ...
+**Phase 2: .krml → C**
+```bash
+krml -tmpdir _extract -skip-compilation \
+  -bundle 'Calc.Server=Calc.*[rename=Calc_Server]' \
+  -bundle 'FStar.*,Pulse.*,PulseCore.*,Prims' \
+  -no-prefix Calc.Server \
+  _output/*.krml
+# Produces: _extract/Calc_Server.c, _extract/Calc_Server.h
 ```
-
-**4. Stateful crypto:**
-Model sequence numbers, keys, cipher state in ghost log's `connection_state`.
 
 ---
 
-## Summary
+### Bundling Strategy
+
+**Goal:** Produce a single `Calc_Server.c/.h` with only `new_server` and `process_request` exposed.
+
+**Bundle 1 - API bundle (what gets exposed in C):**
+```makefile
+-bundle 'Calc.Server=Calc.*[rename=Calc_Server]'
+```
+
+Breakdown:
+- `Calc.Server` - API module (public functions in header)
+- `=Calc.*` - Include all Calc.* modules in this bundle
+- `[rename=Calc_Server]` - Output filename
+
+Result: All Calc.* modules bundled into `Calc_Server.c`, only `Calc.Server` functions public.
+
+**Bundle 2 - Hide bundle (no C output):**
+```makefile
+-bundle 'FStar.*,Pulse.*,PulseCore.*,Prims'
+```
+
+These modules are bundled together with NO API module, so they produce no C code. This hides:
+- Specification modules (Calc.Wire, Calc.Spec, Calc.Log use unbounded types)
+- F* standard library
+- Pulse runtime (built into KaRaMeL)
+
+**Name prefix stripping:**
+```makefile
+-no-prefix Calc.Server
+```
+
+Without: `Calc_Server_new_server`, `Calc_Server_process_request`  
+With: `new_server`, `process_request`
+
+---
+
+### Type Extraction Rules
+
+**Machine-width types extract directly:**
+```pulse
+// Pulse
+let x: U32.t = ...
+let b: U8.t = ...
+let s: SZ.t = ...
+
+// C
+uint32_t x = ...;
+uint8_t b = ...;
+size_t s = ...;
+```
+
+**Vec extracts to heap allocation:**
+```pulse
+// Pulse
+let stack = Vec.alloc 0ul 0sz;
+
+// C (generated)
+uint32_t *stack = KRML_HOST_MALLOC(sizeof(uint32_t) * 0);
+```
+
+**Ghost/erased types vanish:**
+```pulse
+// Pulse
+fn process_request (...) (#log0: erased calc_log)
+
+// C (no ghost parameter)
+void process_request(...) {
+  // log0 does not appear
+}
+```
+
+**Lemma calls vanish:**
+```pulse
+// Pulse
+Calc.Wire.Lemmas.lemma_be_to_n_equiv ...;
+assert (pure (property));
+
+// C (no output)
+// Lemmas produce zero code
+```
+
+---
+
+### Generated C Code Structure
+
+**Calc_Server.h (public API):**
+```c
+#ifndef __Calc_Server_H
+#define __Calc_Server_H
+
+#include "krmllib.h"
+#include "krml/internal/target.h"
+
+// Opaque server state type
+typedef struct Calc_Impl_Types_server_state_s Calc_Impl_Types_server_state;
+
+// Public API
+Calc_Impl_Types_server_state *new_server(void);
+
+void process_request(
+  Calc_Impl_Types_server_state *srv,
+  uint8_t *req_buf,
+  uint8_t *resp_buf
+);
+
+#endif
+```
+
+**Calc_Server.c (implementation):**
+```c
+#include "Calc_Server.h"
+
+// Internal helpers (static)
+static uint32_t parse_push_value(uint8_t *buf) { ... }
+static void process_push(...) { ... }
+// ... other internal functions
+
+// Public API implementations
+Calc_Impl_Types_server_state *new_server(void) {
+  uint32_t *stack = KRML_HOST_MALLOC(...);
+  size_t *count = KRML_HOST_MALLOC(...);
+  // ... initialize and return
+}
+
+void process_request(...) {
+  uint8_t tag = buf[0];
+  if (tag == 0) {
+    // Push
+    uint32_t value = parse_push_value(buf);
+    process_push(srv, value, req_buf, resp_buf);
+  } else if (tag == 1) {
+    // Peek
+    process_peek(srv, req_buf, resp_buf);
+  }
+  // ... other operations
+}
+```
+
+---
+
+### Heap Allocation Pattern
+
+**Critical lesson:** `Array.alloc` extracts to C **stack allocation**, `Vec.alloc` extracts to C **heap allocation**.
+
+**Wrong (dangling pointers):**
+```pulse
+fn new_server()
+  requires emp
+  returns srv: server_state
+  ensures ...
+{
+  let stack = Array.alloc 0ul 0sz;  // C: uint32_t stack[0] on stack
+  let count = Array.alloc 0sz 1sz;   // C: size_t count[1] on stack
+  {stack; count; ...}                 // Return struct → DANGLING POINTERS
+}
+
+// C extraction (BROKEN):
+server_state new_server(void) {
+  uint32_t stack[0];   // On stack!
+  size_t count[1];     // On stack!
+  server_state result = {stack, count, ...};
+  return result;       // stack and count go out of scope → SEGFAULT
+}
+```
+
+**Right (heap allocation):**
+```pulse
+fn new_server()
+  requires emp
+  returns srv: server_state
+  ensures ...
+{
+  let stack = Vec.alloc 0ul 0sz;    // C: malloc
+  let count = Vec.alloc 0sz 1sz;    // C: malloc
+  {stack; count; ...}                // Safe to return
+}
+
+// C extraction (CORRECT):
+server_state *new_server(void) {
+  uint32_t *stack = KRML_HOST_MALLOC(sizeof(uint32_t) * 0);
+  size_t *count = KRML_HOST_MALLOC(sizeof(size_t) * 1);
+  server_state *result = KRML_HOST_MALLOC(sizeof(server_state));
+  result->stack = stack;
+  result->count = count;
+  return result;  // All heap-allocated → safe
+}
+```
+
+**Pattern:** Use `Vec` for ANY data that must persist beyond the function scope.
+
+---
+
+### Build Workflow
+
+**1. Verify Pulse code:**
+```bash
+make verify
+# Uses F* --dep full for incremental, parallel builds
+# Output: All modules verified, .checked files in _cache/
+```
+
+**2. Extract to .krml:**
+```bash
+make extract-krml
+# Parallel extraction of 9 implementation modules
+# Output: 9 .krml files in _output/
+```
+
+**3. Run KaRaMeL:**
+```bash
+make extract-c
+# Bundles .krml files, generates C code
+# Output: Calc_Server.c, Calc_Server.h in _extract/
+```
+
+**4. Compile C code:**
+```bash
+make test-c
+# Compiles with gcc, links with test_main.c
+# Runs 9 tests
+```
+
+**Full pipeline:**
+```bash
+make test-c
+# Automatically runs: verify → extract-krml → extract-c → compile → test
+```
+
+---
+
+### Testing Strategy
+
+**test_main.c structure:**
+```c
+#include "Calc_Server.h"
+#include <assert.h>
+#include <string.h>
+
+void test_push_peek() {
+  Calc_Impl_Types_server_state *srv = new_server();
+  
+  uint8_t req[5] = {0, 0, 0, 0, 42};  // Push 42
+  uint8_t resp[5];
+  
+  process_request(srv, req, resp);
+  assert(resp[0] == 0);  // OK response
+  
+  uint8_t peek_req[5] = {1, 0, 0, 0, 0};  // Peek
+  process_request(srv, peek_req, resp);
+  assert(resp[0] == 1);              // Result response
+  assert(resp[4] == 42);             // Value is 42
+  
+  printf("✅ test_push_peek passed\n");
+}
+
+int main() {
+  test_push_peek();
+  test_add();
+  test_div_by_zero();
+  // ... 9 tests total
+  printf("All tests passed!\n");
+  return 0;
+}
+```
+
+**What the tests verify:**
+1. **Functional correctness** - Operations produce correct results
+2. **Error handling** - Peek on empty stack returns Error
+3. **Modular arithmetic** - Overflow wraps correctly (U32 semantics)
+4. **Wire format** - Parsing and serialization work end-to-end
+5. **Memory safety** - No leaks, no crashes (verified via valgrind)
+
+---
+
+### Extraction Warnings and Suppressions
+
+**Warning -2: Function not implemented**
+```
+Warning 2: _zero_for_deref: function not implemented
+```
+
+**Cause:** `Pulse.Lib.Pervasives._zero_for_deref` is a Pulse builtin handled specially by KaRaMeL. It has no `.krml` definition but is translated to `*ptr` dereference.
+
+**Solution:** Suppress with `-warn-error -2` (safe for this specific Pulse builtin).
+
+---
+
+**Warning -9: Static initializer needed**
+```
+Warning 9: some_constant will be initialized in krmlinit_globals()
+```
+
+**Cause:** A global constant (e.g., struct with default values) cannot be a C compile-time constant. KaRaMeL generates `krmlinit_globals()` to initialize it at runtime.
+
+**Solution:** Suppress with `-warn-error -9` if `krmlinit_globals()` is called before use (or not needed).
+
+---
+
+**Warning -17: Static initializer declaration**
+```
+Warning 17: declaration that triggered krmlinit
+```
+
+**Cause:** Consequence of warning 9 - shows which declaration triggered runtime initialization.
+
+**Solution:** Suppress with `-warn-error -17` (same conditions as -9).
+
+---
+
+**DO NOT suppress warnings blindly!** Run KaRaMeL without `-warn-error` first to see what warnings are emitted. Warnings like -4 (type error) or -6 (VLA) indicate real problems.
+
+---
+
+### Complete Makefile Targets
+
+```bash
+# Verification only
+make verify              # Incremental verification
+make -j4 verify          # Parallel verification
+
+# Extraction
+make extract-krml        # F* → .krml (phase 1)
+make extract-c           # .krml → C (phase 2)
+make extract             # Both phases
+
+# Testing
+make test-c              # Full pipeline: verify → extract → compile → test
+
+# Utilities
+make check-admits        # Verify 0 admits
+make stats               # Show LOC, module counts
+make clean               # Remove build artifacts
+```
+
+---
+
+### Incremental Build Support
+
+The Makefile uses `--dep full` for proper dependency tracking:
+
+```makefile
+.depend: $(ALL_FILES)
+	$(FSTAR) --dep full $(ALL_FILES) --output_deps_to $@
+
+-include .depend
+```
+
+**Benefits:**
+- Only changed files are reverified
+- Parallel builds work correctly (`make -j4`)
+- .krml extraction is parallelized
+- Dependency order is automatic
+
+**Example:**
+```bash
+# Change Calc.Impl.Push.fst
+make -j4 verify
+
+# Only rebuilds:
+# - Calc.Impl.Push.fst (changed)
+# - Calc.Server.fst (depends on Push)
+# Other modules use cached .checked files
+```
+
+---
+
+## Applying to TLS 1.3
 
 The **layered log specification pattern** provides:
 
