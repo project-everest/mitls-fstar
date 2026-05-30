@@ -10,9 +10,8 @@ module Cast = FStar.Int.Cast
 module L = FStar.List.Tot
 
 open Pulse.Lib.Pervasives
-open Pulse.Lib.Array.PtsTo
-module Arr = Pulse.Lib.Array
-module R = Pulse.Lib.Reference
+module Vec = Pulse.Lib.Vec
+module B = Pulse.Lib.Box
 module MR = Pulse.Lib.MonotonicGhostRef
 
 open Calc.Spec
@@ -21,67 +20,81 @@ open Calc.Wire.Lemmas
 open Calc.Log
 open Calc.Impl.Types
 
-fn write_error_response (resp_buf: array U8.t)
-  requires Arr.pts_to resp_buf 'bytes ** pure (Seq.length 'bytes == 5)
+fn write_error_response (resp_buf: Vec.vec U8.t)
+  requires Vec.pts_to resp_buf 'bytes ** pure (Seq.length 'bytes == 5)
   ensures exists* (resp_bytes1: bytes).
-    Arr.pts_to resp_buf resp_bytes1 **
+    Vec.pts_to resp_buf resp_bytes1 **
     pure (
       Seq.length resp_bytes1 == 5 /\
       Seq.index resp_bytes1 0 == 2uy /\
       (forall (i:nat{i > 0 /\ i < 5}). Seq.index resp_bytes1 i == 0uy)
     )
 {
-  resp_buf.(0sz) <- 2uy;
-  resp_buf.(1sz) <- 0uy;
-  resp_buf.(2sz) <- 0uy;
-  resp_buf.(3sz) <- 0uy;
-  resp_buf.(4sz) <- 0uy
+  Vec.op_Array_Assignment resp_buf 0sz 2uy;
+  Vec.op_Array_Assignment resp_buf 1sz 0uy;
+  Vec.op_Array_Assignment resp_buf 2sz 0uy;
+  Vec.op_Array_Assignment resp_buf 3sz 0uy;
+  Vec.op_Array_Assignment resp_buf 4sz 0uy
 }
 
 (** Write Result response (tag 1, then big-endian value) **)
-fn write_result_response (resp_buf: array U8.t) (value: U32.t)
-  requires Arr.pts_to resp_buf 'bytes ** pure (Seq.length 'bytes == 5)
+fn write_result_response (resp_buf: Vec.vec U8.t) (value: U32.t)
+  requires Vec.pts_to resp_buf 'bytes ** pure (Seq.length 'bytes == 5)
   ensures exists* (resp_bytes1: bytes).
-    Arr.pts_to resp_buf resp_bytes1 **
+    Vec.pts_to resp_buf resp_bytes1 **
     pure (
       Seq.length resp_bytes1 == 5 /\
       Seq.index resp_bytes1 0 == 1uy /\
       Calc.Wire.be_to_n (Seq.slice resp_bytes1 1 5) == U32.v value
     )
 {
-  resp_buf.(0sz) <- 1uy;
-  resp_buf.(1sz) <- Cast.uint32_to_uint8 (U32.shift_right value 24ul);
-  resp_buf.(2sz) <- Cast.uint32_to_uint8 (U32.shift_right value 16ul);
-  resp_buf.(3sz) <- Cast.uint32_to_uint8 (U32.shift_right value 8ul);
-  resp_buf.(4sz) <- Cast.uint32_to_uint8 value;
+  Vec.op_Array_Assignment resp_buf 0sz 1uy;
+  with rb1. _;
+  Vec.op_Array_Assignment resp_buf 1sz (Cast.uint32_to_uint8 (U32.shift_right value 24ul));
+  with rb2. _;
+  Vec.op_Array_Assignment resp_buf 2sz (Cast.uint32_to_uint8 (U32.shift_right value 16ul));
+  with rb3. _;
+  Vec.op_Array_Assignment resp_buf 3sz (Cast.uint32_to_uint8 (U32.shift_right value 8ul));
+  with rb4. _;
+  Vec.op_Array_Assignment resp_buf 4sz (Cast.uint32_to_uint8 value);
+  with resp_bytes1. _;
+  
+  // Assert the concrete byte values
+  assert (pure (
+    Seq.index resp_bytes1 0 == 1uy /\
+    Seq.index resp_bytes1 1 == Cast.uint32_to_uint8 (U32.shift_right value 24ul) /\
+    Seq.index resp_bytes1 2 == Cast.uint32_to_uint8 (U32.shift_right value 16ul) /\
+    Seq.index resp_bytes1 3 == Cast.uint32_to_uint8 (U32.shift_right value 8ul) /\
+    Seq.index resp_bytes1 4 == Cast.uint32_to_uint8 value
+  ));
   
   // These lemmas establish the proof chain:
   // 1. shift_right + uint32_to_uint8 produces n_to_be_bX values
   lemma_write_result_bytes value;
   // 2. n_to_be components reconstruct the value
-  lemma_n_to_be_correct (U32.v value)
+  lemma_n_to_be_correct (U32.v value);
   // 3. SMT connects these to be_to_n via arithmetic
 }
 
 #push-options "--fuel 2 --ifuel 2 --z3rlimit 100"
 fn process_peek
   (srv: server_state)
-  (req_buf: array U8.t)
-  (resp_buf: array U8.t)
+  (req_buf: Vec.vec U8.t)
+  (resp_buf: Vec.vec U8.t)
   (#log0: erased calc_log)
   (#req_bytes: erased bytes{Seq.length req_bytes == 5})
 requires
   server_exactly srv log0 **
-  Arr.pts_to req_buf req_bytes **
-  Arr.pts_to resp_buf 'resp_bytes **
+  Vec.pts_to req_buf req_bytes **
+  Vec.pts_to resp_buf 'resp_bytes **
   pure (
     parse_request req_bytes == Some Peek /\
     Seq.length 'resp_bytes == 5
   )
 ensures exists* (resp_bytes1: bytes{Seq.length resp_bytes1 == 5}) (log1: calc_log).
   server_exactly srv log1 **
-  Arr.pts_to req_buf req_bytes **
-  Arr.pts_to resp_buf resp_bytes1 **
+  Vec.pts_to req_buf req_bytes **
+  Vec.pts_to resp_buf resp_bytes1 **
   pure (
     log1 == step_log_peek req_bytes resp_bytes1 log0 /\
     log1.input_bytes `Seq.equal` Seq.append log0.input_bytes req_bytes /\
@@ -89,12 +102,12 @@ ensures exists* (resp_bytes1: bytes{Seq.length resp_bytes1 == 5}) (log1: calc_lo
   )
 {
   unfold (server_exactly srv log0);
-  with sb sz. _;
-  let csz = !srv.size;
+  with sb size_seq. _;
+  let csz = Vec.op_Array_Access srv.size 0sz;
 
   if SZ.gt csz 0sz {
     // Peek success: read top element
-    let top = srv.stack.(SZ.sub csz 1sz);
+    let top = Vec.op_Array_Access srv.stack (SZ.sub csz 1sz);
     write_result_response resp_buf top;
     with resp_bytes1. _;
     

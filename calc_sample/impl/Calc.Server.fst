@@ -13,9 +13,8 @@ module SZ = FStar.SizeT
 module Seq = FStar.Seq
 
 open Pulse.Lib.Pervasives
-open Pulse.Lib.Array.PtsTo
-module Arr = Pulse.Lib.Array
-module R = Pulse.Lib.Reference
+module Vec = Pulse.Lib.Vec
+module B = Pulse.Lib.Box
 module MR = Pulse.Lib.MonotonicGhostRef
 
 open Calc.Wire
@@ -42,18 +41,18 @@ fn new_server ()
   ensures server_exactly srv initial_log
 {
   lemma_initial_log_consistent ();
-  let stack = Arr.alloc 0ul 10sz;
-  let size_ref = R.alloc 0sz;
+  let stack = Vec.alloc 0ul 10sz;
+  let size_vec = Vec.alloc 0sz 1sz;  // Single-element vector for size
   let ghost_log = MR.alloc #_ #log_evolves initial_log;
   let srv = {
     stack = stack;
-    size = size_ref;
+    size = size_vec;
     ghost_log = ghost_log;
   };
   
   // Rewrite predicates to match srv fields
-  with stack_bytes. rewrite (Arr.pts_to stack stack_bytes) as (Arr.pts_to srv.stack stack_bytes);
-  with sz. rewrite (R.pts_to size_ref sz) as (R.pts_to srv.size sz);
+  with stack_bytes. rewrite (Vec.pts_to stack stack_bytes) as (Vec.pts_to srv.stack stack_bytes);
+  with size_seq. rewrite (Vec.pts_to size_vec size_seq) as (Vec.pts_to srv.size size_seq);
   rewrite (MR.pts_to ghost_log #1.0R initial_log) as (MR.pts_to srv.ghost_log #1.0R initial_log);
   
   fold (server_exactly srv initial_log);
@@ -83,13 +82,13 @@ let lemma_valid_tag (b: bytes{Seq.length b == 5 /\ parse_request b <> None})
 #push-options "--fuel 2 --ifuel 2 --z3rlimit 200"
 fn process_request
   (srv: server_state)
-  (req_buf: array U8.t)
-  (resp_buf: array U8.t)
+  (req_buf: Vec.vec U8.t)
+  (resp_buf: Vec.vec U8.t)
   (#log0: erased calc_log)
 requires
   server_exactly srv log0 **
-  Arr.pts_to req_buf 'req_bytes **
-  Arr.pts_to resp_buf 'resp_bytes **
+  Vec.pts_to req_buf 'req_bytes **
+  Vec.pts_to resp_buf 'resp_bytes **
   pure (
     Seq.length 'req_bytes == 5 /\
     Seq.length 'resp_bytes == 5 /\
@@ -97,8 +96,8 @@ requires
   )
 ensures exists* (resp_bytes1: bytes) (log1: calc_log).
   server_exactly srv log1 **
-  Arr.pts_to req_buf 'req_bytes **
-  Arr.pts_to resp_buf resp_bytes1 **
+  Vec.pts_to req_buf 'req_bytes **
+  Vec.pts_to resp_buf resp_bytes1 **
   pure (
     log_single_step log0 log1 /\
     log1.input_bytes `Seq.equal` Seq.append log0.input_bytes 'req_bytes /\

@@ -8,7 +8,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <string.h>
-#include "calc_wrapper.h"
+#include "Calc_Server.h"
 
 // Helper to print a 5-byte buffer in hex
 void print_buffer(const char *label, uint8_t *buf) {
@@ -50,11 +50,7 @@ int main() {
 
     // Create server
     printf("Creating new server...\n");
-    Calc_Impl_Types_server_state *srv = new_server_heap();
-    if (!srv) {
-        printf("❌ FAIL: Could not allocate server\n");
-        return 1;
-    }
+    Calc_Impl_Types_server_state srv = new_server();
     printf("✅ Server created\n\n");
 
     // Test buffers
@@ -65,7 +61,7 @@ int main() {
     printf("Test 1: Push 42\n");
     make_push_request(request, 42);
     print_buffer("Request ", request);
-    process_request_wrapper(srv, request, response);
+    process_request(srv, request, response);
     print_buffer("Response", response);
     if (response[0] == 0x00) {
         printf("✅ PASS (Ok response)\n\n");
@@ -78,7 +74,7 @@ int main() {
     printf("Test 2: Push 10\n");
     make_push_request(request, 10);
     print_buffer("Request ", request);
-    process_request_wrapper(srv, request, response);
+    process_request(srv, request, response);
     print_buffer("Response", response);
     if (response[0] == 0x00) {
         printf("✅ PASS (Ok response)\n\n");
@@ -91,7 +87,7 @@ int main() {
     printf("Test 3: Add (42 + 10 = 52)\n");
     make_op_request(request, 0x02); // Add opcode (tag 2)
     print_buffer("Request ", request);
-    process_request_wrapper(srv, request, response);
+    process_request(srv, request, response);
     print_buffer("Response", response);
     if (response[0] == 0x00) {
         printf("✅ PASS (Ok response)\n\n");
@@ -104,7 +100,7 @@ int main() {
     printf("Test 4: Peek (should still be 52)\n");
     make_op_request(request, 0x01); // Peek opcode (tag 1)
     print_buffer("Request ", request);
-    process_request_wrapper(srv, request, response);
+    process_request(srv, request, response);
     print_buffer("Response", response);
     if (response[0] == 0x01) {  // Result tag
         int32_t result = get_int32_be(response, 1);
@@ -124,7 +120,7 @@ int main() {
     printf("Test 5: Push 5\n");
     make_push_request(request, 5);
     print_buffer("Request ", request);
-    process_request_wrapper(srv, request, response);
+    process_request(srv, request, response);
     print_buffer("Response", response);
     if (response[0] == 0x00) {
         printf("✅ PASS (Ok response)\n\n");
@@ -137,7 +133,7 @@ int main() {
     printf("Test 6: Multiply (52 * 5 = 260)\n");
     make_op_request(request, 0x04); // Mul opcode (tag 4)
     print_buffer("Request ", request);
-    process_request_wrapper(srv, request, response);
+    process_request(srv, request, response);
     print_buffer("Response", response);
     if (response[0] == 0x00) {
         printf("✅ PASS (Ok response)\n\n");
@@ -150,7 +146,7 @@ int main() {
     printf("Test 7: Push 20\n");
     make_push_request(request, 20);
     print_buffer("Request ", request);
-    process_request_wrapper(srv, request, response);
+    process_request(srv, request, response);
     print_buffer("Response", response);
     if (response[0] == 0x00) {
         printf("✅ PASS (Ok response)\n\n");
@@ -163,7 +159,7 @@ int main() {
     printf("Test 8: Divide (260 / 20 = 13)\n");
     make_op_request(request, 0x05); // Div opcode (tag 5)
     print_buffer("Request ", request);
-    process_request_wrapper(srv, request, response);
+    process_request(srv, request, response);
     print_buffer("Response", response);
     if (response[0] == 0x00) {
         printf("✅ PASS (Ok response)\n\n");
@@ -176,7 +172,7 @@ int main() {
     printf("Test 9: Error case - Add on stack with only 1 element (should error)\n");
     make_op_request(request, 0x02); // Add opcode (tag 2)
     print_buffer("Request ", request);
-    process_request_wrapper(srv, request, response);
+    process_request(srv, request, response);
     print_buffer("Response", response);
     if (response[0] == 0x02) {  // Error tag
         printf("Result: Error (as expected)\n");
@@ -190,6 +186,8 @@ int main() {
     printf("  ✅ ALL TESTS PASSED\n");
     printf("═══════════════════════════════════════════════════════════════\n");
 
-    free_server(srv);
+    // Note: srv.stack and srv.size are heap-allocated via Vec.alloc
+    // In a real program, we should free them here
+    // For this test, we'll let the OS clean up on exit
     return 0;
 }

@@ -8,9 +8,8 @@ module SZ = FStar.SizeT
 module Seq = FStar.Seq
 
 open Pulse.Lib.Pervasives
-open Pulse.Lib.Array.PtsTo
-module Arr = Pulse.Lib.Array
-module R = Pulse.Lib.Reference
+module Vec = Pulse.Lib.Vec
+module B = Pulse.Lib.Box
 module MR = Pulse.Lib.MonotonicGhostRef
 
 open Calc.Spec
@@ -19,10 +18,10 @@ open Calc.Log
 open Calc.Impl.Types
 
 (** Write Ok response (5 zero bytes) **)
-fn write_ok_response (resp_buf: array U8.t)
-  requires Arr.pts_to resp_buf 'bytes ** pure (Seq.length 'bytes == 5)
+fn write_ok_response (resp_buf: Vec.vec U8.t)
+  requires Vec.pts_to resp_buf 'bytes ** pure (Seq.length 'bytes == 5)
   ensures exists* (resp_bytes1: bytes).
-    Arr.pts_to resp_buf resp_bytes1 **
+    Vec.pts_to resp_buf resp_bytes1 **
     pure (
       Seq.length resp_bytes1 == 5 /\ 
       Seq.index resp_bytes1 0 == 0uy /\
@@ -32,18 +31,18 @@ fn write_ok_response (resp_buf: array U8.t)
       Seq.index resp_bytes1 4 == 0uy
     )
 {
-  resp_buf.(0sz) <- 0uy;
-  resp_buf.(1sz) <- 0uy;
-  resp_buf.(2sz) <- 0uy;
-  resp_buf.(3sz) <- 0uy;
-  resp_buf.(4sz) <- 0uy
+  Vec.op_Array_Assignment resp_buf 0sz 0uy;
+  Vec.op_Array_Assignment resp_buf 1sz 0uy;
+  Vec.op_Array_Assignment resp_buf 2sz 0uy;
+  Vec.op_Array_Assignment resp_buf 3sz 0uy;
+  Vec.op_Array_Assignment resp_buf 4sz 0uy
 }
 
 (** Write Error response (tag 2, then zeros) **)
-fn write_error_response (resp_buf: array U8.t)
-  requires Arr.pts_to resp_buf 'bytes ** pure (Seq.length 'bytes == 5)
+fn write_error_response (resp_buf: Vec.vec U8.t)
+  requires Vec.pts_to resp_buf 'bytes ** pure (Seq.length 'bytes == 5)
   ensures exists* (resp_bytes1: bytes).
-    Arr.pts_to resp_buf resp_bytes1 **
+    Vec.pts_to resp_buf resp_bytes1 **
     pure (
       Seq.length resp_bytes1 == 5 /\ 
       Seq.index resp_bytes1 0 == 2uy /\
@@ -53,11 +52,11 @@ fn write_error_response (resp_buf: array U8.t)
       Seq.index resp_bytes1 4 == 0uy
     )
 {
-  resp_buf.(0sz) <- 2uy;
-  resp_buf.(1sz) <- 0uy;
-  resp_buf.(2sz) <- 0uy;
-  resp_buf.(3sz) <- 0uy;
-  resp_buf.(4sz) <- 0uy
+  Vec.op_Array_Assignment resp_buf 0sz 2uy;
+  Vec.op_Array_Assignment resp_buf 1sz 0uy;
+  Vec.op_Array_Assignment resp_buf 2sz 0uy;
+  Vec.op_Array_Assignment resp_buf 3sz 0uy;
+  Vec.op_Array_Assignment resp_buf 4sz 0uy
 }
 
 (** 
@@ -73,22 +72,22 @@ fn write_error_response (resp_buf: array U8.t)
 fn process_push
   (srv: server_state)
   (value: U32.t)
-  (req_buf: array U8.t)
-  (resp_buf: array U8.t)
+  (req_buf: Vec.vec U8.t)
+  (resp_buf: Vec.vec U8.t)
   (#log0: erased calc_log)
   (#req_bytes: erased bytes{Seq.length req_bytes == 5})
 requires
   server_exactly srv log0 **
-  Arr.pts_to req_buf req_bytes **
-  Arr.pts_to resp_buf 'resp_bytes **
+  Vec.pts_to req_buf req_bytes **
+  Vec.pts_to resp_buf 'resp_bytes **
   pure (
     parse_request req_bytes == Some (Push (U32.v value)) /\
     Seq.length 'resp_bytes == 5
   )
 ensures exists* (resp_bytes1: bytes{Seq.length resp_bytes1 == 5}) (log1: calc_log).
   server_exactly srv log1 **
-  Arr.pts_to req_buf req_bytes **
-  Arr.pts_to resp_buf resp_bytes1 **
+  Vec.pts_to req_buf req_bytes **
+  Vec.pts_to resp_buf resp_bytes1 **
   pure (
     log1 == step_log_push (U32.v value) req_bytes resp_bytes1 log0 /\
     log1.input_bytes `Seq.equal` Seq.append log0.input_bytes req_bytes /\
@@ -98,13 +97,13 @@ ensures exists* (resp_bytes1: bytes{Seq.length resp_bytes1 == 5}) (log1: calc_lo
   let v_int : int = U32.v value;
   
   unfold (server_exactly srv log0);
-  with sb sz. _;
-  let csz = !srv.size;
+  with sb size_seq. _;
+  let csz = Vec.op_Array_Access srv.size 0sz;
 
   if SZ.lt csz 10sz {
     // Push success: stack not full
-    srv.stack.(csz) <- value;
-    srv.size := SZ.add csz 1sz;
+    Vec.op_Array_Assignment srv.stack csz value;
+    Vec.op_Array_Assignment srv.size 0sz (SZ.add csz 1sz);
     write_ok_response resp_buf;
     with resp_bytes1. _;
     

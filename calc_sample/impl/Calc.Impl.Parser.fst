@@ -9,25 +9,24 @@ module Seq = FStar.Seq
 module Cast = FStar.Int.Cast
 
 open Pulse.Lib.Pervasives
-open Pulse.Lib.Array.PtsTo
-module Arr = Pulse.Lib.Array
+module Vec = Pulse.Lib.Vec
 
 open Calc.Wire
 
 (** Parse request tag from buffer **)
-fn parse_tag (buf: array U8.t)
-  requires Arr.pts_to buf 'bytes ** pure (Seq.length 'bytes == 5)
+fn parse_tag (buf: Vec.vec U8.t)
+  requires Vec.pts_to buf 'bytes ** pure (Seq.length 'bytes == 5)
   returns tag: U8.t
-  ensures Arr.pts_to buf 'bytes ** pure (Seq.length 'bytes == 5 /\ tag == Seq.index 'bytes 0)
+  ensures Vec.pts_to buf 'bytes ** pure (Seq.length 'bytes == 5 /\ tag == Seq.index 'bytes 0)
 {
-  buf.(0sz)
+  Vec.op_Array_Access buf 0sz
 }
 
 (** Parse Push value from bytes 1-4 (big-endian U32) **)
-fn parse_push_value (buf: array U8.t)
-  requires Arr.pts_to buf 'bytes ** pure (Seq.length 'bytes == 5)
+fn parse_push_value (buf: Vec.vec U8.t)
+  requires Vec.pts_to buf 'bytes ** pure (Seq.length 'bytes == 5)
   returns value: U32.t
-  ensures Arr.pts_to buf 'bytes **
+  ensures Vec.pts_to buf 'bytes **
           pure (Seq.length 'bytes == 5 /\
                 U32.v value == Calc.Wire.Lemmas.be_to_n_unrefined
                   (Seq.index 'bytes 1)
@@ -35,10 +34,10 @@ fn parse_push_value (buf: array U8.t)
                   (Seq.index 'bytes 3)
                   (Seq.index 'bytes 4))
 {
-  let b1 = buf.(1sz);
-  let b2 = buf.(2sz);
-  let b3 = buf.(3sz);
-  let b4 = buf.(4sz);
+  let b1 = Vec.op_Array_Access buf 1sz;
+  let b2 = Vec.op_Array_Access buf 2sz;
+  let b3 = Vec.op_Array_Access buf 3sz;
+  let b4 = Vec.op_Array_Access buf 4sz;
   let v0 : U32.t = Cast.uint8_to_uint32 b1;
   let v1 : U32.t = Cast.uint8_to_uint32 b2;
   let v2 : U32.t = Cast.uint8_to_uint32 b3;
