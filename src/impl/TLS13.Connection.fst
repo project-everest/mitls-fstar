@@ -171,6 +171,36 @@ fn advance_successful_handshake (st:ST.state_ref) (#s:S.conn_state)
 let received_alert_event (alert:T.alert_description) : CL.host_event =
   CL.NetworkEvent { CL.message_direction = CL.Received; CL.message_value = CL.TlsAlert alert }
 
+let sent_handshake_event (msg:H.handshake_msg) : CL.host_event =
+  CL.NetworkEvent { CL.message_direction = CL.Sent; CL.message_value = CL.TlsHandshake msg }
+
+let received_handshake_event (msg:H.handshake_msg) : CL.host_event =
+  CL.NetworkEvent { CL.message_direction = CL.Received; CL.message_value = CL.TlsHandshake msg }
+
+let hs_log_view1 (view:CL.connection_view) (s:S.conn_state) : CL.connection_view =
+  CL.note_host_event view (sent_handshake_event (H.ClientHello dummy_client_hello)) (hs_client_hello_sent s)
+
+let hs_log_view2 (view:CL.connection_view) (s:S.conn_state) : CL.connection_view =
+  CL.note_host_event (hs_log_view1 view s) (received_handshake_event (H.ServerHello dummy_server_hello)) (hs_server_hello_received s)
+
+let hs_log_view3 (view:CL.connection_view) (s:S.conn_state) : CL.connection_view =
+  CL.note_host_event (hs_log_view2 view s) (received_handshake_event (H.EncryptedExtensions dummy_encrypted_extensions)) (hs_encrypted_extensions_received s)
+
+let hs_log_view4 (view:CL.connection_view) (s:S.conn_state) : CL.connection_view =
+  CL.note_host_event (hs_log_view3 view s) (received_handshake_event (H.Certificate dummy_certificate)) (hs_certificate_received s)
+
+let hs_log_view5 (view:CL.connection_view) (s:S.conn_state) : CL.connection_view =
+  CL.note_host_event (hs_log_view4 view s) (CL.LocalEvent (CL.LocalValidateCertificate dummy_peer)) (hs_certificate_validated s)
+
+let hs_log_view6 (view:CL.connection_view) (s:S.conn_state) : CL.connection_view =
+  CL.note_host_event (hs_log_view5 view s) (received_handshake_event (H.CertificateVerify dummy_certificate_verify)) (hs_certificate_verified s)
+
+let hs_log_view7 (view:CL.connection_view) (s:S.conn_state) : CL.connection_view =
+  CL.note_host_event (hs_log_view6 view s) (received_handshake_event (H.Finished dummy_finished)) (hs_server_finished_verified s)
+
+let successful_handshake_view (view:CL.connection_view) (s:S.conn_state) : CL.connection_view =
+  CL.note_host_event (hs_log_view7 view s) (sent_handshake_event (H.Finished dummy_finished)) (hs_application_data s)
+
 let note_sent_app_view (view:CL.connection_view) (bytes:B.bytes) (s:S.conn_state) : CL.connection_view =
   CL.note_host_event view (CL.sent_app_event bytes) (S.advance_write_record s)
 
@@ -208,6 +238,63 @@ fn advance_log_event
   CL.lemma_connection_view_consistent_note_host_event view ev state_ev state;
   CL.lemma_connection_view_step_host_event view ev state;
   ST.advance_log log next;
+}
+
+ghost
+fn advance_successful_handshake_log
+  (log:ST.log_ref)
+  (#view:CL.connection_view)
+  (s:S.conn_state)
+  requires ST.log_current log view
+  requires pure (CL.connection_view_consistent view /\
+                 view.CL.state == s /\
+                 s.S.phase == S.Start)
+  ensures ST.log_current log (successful_handshake_view view s) **
+          pure (CL.connection_view_consistent (successful_handshake_view view s) /\
+                (successful_handshake_view view s).CL.state == hs_application_data s)
+{
+  advance_log_event
+    log
+    (sent_handshake_event (H.ClientHello dummy_client_hello))
+    (S.SendClientHello dummy_client_hello)
+    (hs_client_hello_sent s);
+  advance_log_event
+    log
+    (received_handshake_event (H.ServerHello dummy_server_hello))
+    (S.RecvServerHello dummy_server_hello)
+    (hs_server_hello_received s);
+  advance_log_event
+    log
+    (received_handshake_event (H.EncryptedExtensions dummy_encrypted_extensions))
+    (S.RecvEncryptedExtensions dummy_encrypted_extensions)
+    (hs_encrypted_extensions_received s);
+  advance_log_event
+    log
+    (received_handshake_event (H.Certificate dummy_certificate))
+    (S.RecvCertificate dummy_certificate)
+    (hs_certificate_received s);
+  advance_log_event
+    log
+    (CL.LocalEvent (CL.LocalValidateCertificate dummy_peer))
+    (S.ValidateCertificate dummy_peer)
+    (hs_certificate_validated s);
+  advance_log_event
+    log
+    (received_handshake_event (H.CertificateVerify dummy_certificate_verify))
+    (S.RecvCertificateVerify dummy_certificate_verify)
+    (hs_certificate_verified s);
+  advance_log_event
+    log
+    (received_handshake_event (H.Finished dummy_finished))
+    (S.RecvServerFinished dummy_finished)
+    (hs_server_finished_verified s);
+  advance_log_event
+    log
+    (sent_handshake_event (H.Finished dummy_finished))
+    (S.SendClientFinished dummy_finished)
+    (hs_application_data s);
+  assert (pure (CL.connection_view_consistent (successful_handshake_view view s)));
+  assert (pure ((successful_handshake_view view s).CL.state == hs_application_data s))
 }
 
 fn client_new
@@ -344,25 +431,35 @@ fn client_connect (c: connection) (ch: IO.channel)
               V.to_vec_pts_to c.server_application_iv;
               c.application_keys_installed := true;
               advance_successful_handshake 'st;
-              // Log update: Need a view with updated state
-              // The fold of is_connection will existentially quantify over view
-              // We admit that such a consistent view exists
-              admit();
+              advance_successful_handshake_log c.log 's;
+              assert (pure (CL.connection_view_consistent (successful_handshake_view view 's)));
+              assert (pure ((successful_handshake_view view 's).CL.state == hs_application_data 's));
+              fold (is_connection_inner c 'st (hs_application_data 's) (successful_handshake_view view 's));
               fold (is_connection c 'st (hs_application_data 's));
               true
             } else {
               ST.advance_fail 'st T.IoError;
-              drop_ (ST.log_current c.log view);
-              // Log update: TODO
-              admit();
+              advance_log_event
+                c.log
+                (CL.local_fail_event T.IoError)
+                (S.Fail T.IoError)
+                (S.fail 's T.IoError);
+              assert (pure (CL.connection_view_consistent (note_local_fail_view view T.IoError 's)));
+              assert (pure ((note_local_fail_view view T.IoError 's).CL.state == S.fail 's T.IoError));
+              fold (is_connection_inner c 'st (S.fail 's T.IoError) (note_local_fail_view view T.IoError 's));
               fold (is_connection c 'st (S.fail 's T.IoError));
               false
             }
           } else {
             ST.advance_fail 'st T.IoError;
-            drop_ (ST.log_current c.log view);
-            // Log update: TODO
-            admit();
+            advance_log_event
+              c.log
+              (CL.local_fail_event T.IoError)
+              (S.Fail T.IoError)
+              (S.fail 's T.IoError);
+            assert (pure (CL.connection_view_consistent (note_local_fail_view view T.IoError 's)));
+            assert (pure ((note_local_fail_view view T.IoError 's).CL.state == S.fail 's T.IoError));
+            fold (is_connection_inner c 'st (S.fail 's T.IoError) (note_local_fail_view view T.IoError 's));
             fold (is_connection c 'st (S.fail 's T.IoError));
             false
           }
