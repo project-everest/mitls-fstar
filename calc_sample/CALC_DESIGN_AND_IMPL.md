@@ -4,6 +4,11 @@
 
 ---
 
+This is the canonical design and implementation document for `calc_sample/`.
+Older root-level calc status notes have been folded into this file. Use it as
+the reference for the `process_request`/layered-log proof pattern that
+`TLS_DESIGN_AND_IMPL.md` applies to the TLS client.
+
 ## Introduction
 
 This document describes the **layered log specification pattern** used to achieve complete functional correctness proofs for the calc_sample verified calculator server (2183 lines, 0 admits, ~12s verification). The pattern provides end-to-end correspondence between raw bytes, protocol messages, and state transitions for interactive stateful protocols.
@@ -1136,3 +1141,31 @@ The **layered log specification pattern** provides:
 - **Arithmetic lemmas** connecting implementation to spec
 
 **Reusable for:** TLS 1.3, database protocols, distributed systems, any stateful protocol requiring complete functional correctness proofs.
+
+### Mapping the calc pattern to TLS
+
+| Calc sample | TLS client |
+| --- | --- |
+| `Calc.Wire` request/response bytes | TLS records, handshake messages, alerts, and application-data bytes in `TLS13.Wire.Spec` |
+| `Calc.Spec.step` over stack requests | TLS client state-machine transitions in `TLS13.StateMachine` |
+| `Calc.Log.log_consistent` | `TLS13.ConnectionLog.connection_view_consistent` tying buffers to records, messages, traces, and app projection |
+| `server_exactly` | A Pulse `client_core`/connection predicate relating heap state to a ghost connection view |
+| `process_request` with input/output buffers | TLS buffer-oriented `process_request` over network/app input buffers and network/app output buffers |
+| Modular handler lemmas | Handshake, record, app-data, close, and failure-step preservation lemmas |
+
+The key design lesson for TLS is to keep live socket I/O outside the verified
+core theorem. The calc server proves one request/response buffer step at a time;
+TLS should do the same with explicit network/application buffers, while an
+external driver relates those buffers to actual socket reads and writes.
+
+### Current calc validation commands
+
+```sh
+cd calc_sample
+make verify
+make check-admits
+make test-c
+```
+
+`make check-admits` is the guard that the calc methodology reference remains
+admit-free.
