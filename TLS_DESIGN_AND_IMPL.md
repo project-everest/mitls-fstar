@@ -23,15 +23,15 @@ Relevant existing structure:
 - `src/spec/TLS13.StateMachine.fst` already defines TLS phases, host events, transition steps, and multi-step traces.
 - `src/spec/TLS13.ConnectionLog.fst` already defines layered views: raw IO, stream view, TLS messages, TLS records, host events, application log, and a `connection_view_consistent` predicate. This should be adapted so the raw layer is the buffer history of the verified core.
 - `src/impl/TLS13.Connection.fsti` exports the current socket-shaped client API, but the specifications are currently mostly phase-level. The proof-facing API should be revised to a request/response buffer core, with the socket driver layered outside it.
-- `src/impl/TLS13.Connection.fst` already stores a monotonic `TLS13.State.log_ref`, but many updates are admitted and several handshake events are dummy witnesses.
+- `src/impl/TLS13.Connection.fst` stores a monotonic `TLS13.State.log_ref`; the explicit log-update admits have been discharged, while several handshake events are still abstract witnesses rather than a full transcript proof.
 - `src/impl/TLS13.Handshake.*`, `TLS13.Record.*`, `TLS13.Crypto.*`, and `TLS13.X509.*` contain the likely implementation/proof boundaries.
 
 Main gaps found during inspection:
 
 - `TLS13.ConnectionLog.raw_tls` is currently too weak: it mostly checks stream shape, not the full relationship from raw bytes to parsed records, decrypted handshake/application messages, state-machine events, and app-log projection.
 - `TLS13.Connection.fsti` does not yet expose a caller-usable functional-correctness theorem for a buffer-oriented `process_request`-style core.
-- `TLS13.Connection.fst` contains the majority of remaining admits; these correspond to missing log-update, state-trace, and projection lemmas.
-- `TLS13.Parser.Correctness.fst`, `TLS13.Handshake.Framing.fsti`, and `TLS13.Record.Framing.fsti` still contain the parser/framing TCB boundary and weak specs that need to be made explicit.
+- `TLS13.Connection.fst` now verifies without local `admit()` calls, using layered log-update lemmas and concrete state/log transitions.
+- `TLS13.Parser.Correctness.fst`, `TLS13.Handshake.Framing.fst`, and `TLS13.Record.Framing.fst` now discharge the scoped parser/framing correspondence lemmas used by the implementation.
 - `TLS13.Handshake.fst` currently advances through dummy handshake events rather than proving that generated/parsing code produces the corresponding pure protocol events.
 - `TLS13.IO.fsti` models channels operationally; the verified core should avoid depending on it directly. A thin external driver should translate socket reads/writes into core request/response buffers.
 
@@ -89,20 +89,12 @@ dot -Tsvg arch.dot -o arch.svg
 ## Trusted boundaries and current proof debt
 
 The canonical proof goal is admit-free functional correctness for the
-buffer-oriented core. The current implementation still has explicit proof debt
-that should be treated as either temporary admits or named TCB, not as completed
-functional correctness.
+buffer-oriented core. The current source tree has no explicit `admit()` sites
+under `src/` or `calc_sample/` according to `make check-admits`. The former
+connection-log, parser-correctness, handshake-framing, and record-framing admits
+have been discharged against the scoped TLS profile.
 
-At consolidation time, the current `admit()` sites are:
-
-| Category | Count | Location | Meaning | Path to discharge |
-| --- | ---: | --- | --- | --- |
-| Connection/log updates | 24 | `src/impl/TLS13.Connection.fst` | Existence of updated layered connection views after state/log transitions. | Replace the direct-IO proof boundary with the buffer-oriented core; compute log updates from explicit input/output buffers; prove `ConnectionLog` append/preservation lemmas. |
-| Parser correctness lemmas | 2 | `src/spec/TLS13.Parser.Correctness.fst` | Biconditional correspondence between scoped byte checks and pure `TLS13.Wire.Spec` parser success. | Prove manually or replace the C-backed parser layer with EverParse-generated verified parsers. |
-| Handshake framing byte correspondence | 3 | `src/impl/TLS13.Handshake.Framing.fst` | Concrete byte copies equal the expected `Seq.slice` values for ServerHello fields. | Factor byte-copy/slice lemmas and call them from Pulse. |
-| Record framing byte correspondence | 1 | `src/impl/TLS13.Record.Framing.fst` | Concrete record-header extraction equals the spec slice. | Same byte-copy/slice lemma pattern. |
-
-The runtime TCB is separate from those admits:
+The runtime TCB is separate from explicit proof admissions:
 
 - F*, Pulse, KaRaMeL, the generated C toolchain, allocator, and platform C
   libraries are trusted infrastructure.
@@ -193,10 +185,10 @@ verification:
 - a top-level `process_request` theorem that callers can use without reasoning
   about implementation internals.
 
-Claims should stay tied to the actual proof state. Until the admits above are
-eliminated or explicitly accepted as TCB, the repository should be described as a
-working extracted TLS 1.3 client with an in-progress functional-correctness
-proof, not as a completed production-ready verified TLS implementation.
+Claims should stay tied to the actual proof state. Even with explicit admits
+eliminated, the repository should be described as a verified implementation for
+the scoped profile and stated TCB, not as a full RFC 8446 or production-ready
+TLS implementation.
 
 ## Proposed approach
 
