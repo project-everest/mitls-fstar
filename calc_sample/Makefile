@@ -181,11 +181,8 @@ test-c: extract-c
 	@gcc -std=c11 -Wall -Wextra -I$(KRML_INCLUDE)/krml -I$(KRML_RUNTIME) -I$(EXTRACT_DIR) \
 	  -c $(EXTRACT_DIR)/Calc_Server.c -o $(EXTRACT_DIR)/Calc_Server.o
 	@gcc -std=c11 -Wall -Wextra -I$(KRML_INCLUDE)/krml -I$(KRML_RUNTIME) -I$(EXTRACT_DIR) \
-	  -c calc_wrapper.c -o $(EXTRACT_DIR)/calc_wrapper.o
-	@gcc -std=c11 -Wall -Wextra -I$(KRML_INCLUDE)/krml -I$(KRML_RUNTIME) -I$(EXTRACT_DIR) -I. \
 	  -o $(EXTRACT_DIR)/calc_test \
 	  $(EXTRACT_DIR)/Calc_Server.o \
-	  $(EXTRACT_DIR)/calc_wrapper.o \
 	  test_main.c
 	@echo "✅ C code compiled successfully"
 	@echo ""
