@@ -291,7 +291,7 @@ fn parse_record_header
 
   let ok = (ct = 0x14uy || ct = 0x15uy || ct = 0x16uy || ct = 0x17uy) &&
            v0 = 0x03uy &&
-           (v1 = 0x01uy || v1 = 0x03uy) &&
+           v1 = 0x03uy &&
            frag_len `U16.lte` 16640us;
 
   lemma_read_u16_from_bytes l0 l1;

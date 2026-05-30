@@ -57,6 +57,17 @@ val parse_record_header:
   input:B.bytes ->
   GTot (option (T.content_type & nat))
 
+val lemma_parse_record_header_some_iff:
+  input:B.bytes{B.length input == 5} ->
+  Lemma (Some? (parse_record_header input) <==>
+    ((Seq.index input 0 = 0x14uy ||
+      Seq.index input 0 = 0x15uy ||
+      Seq.index input 0 = 0x16uy ||
+      Seq.index input 0 = 0x17uy) &&
+     Seq.index input 1 = 0x03uy &&
+     Seq.index input 2 = 0x03uy &&
+     read_u16 input 3 <= 16640))
+
 val serialize_record:
   content_type:T.content_type ->
   fragment:B.bytes ->

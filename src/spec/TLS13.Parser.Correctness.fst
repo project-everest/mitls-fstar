@@ -25,12 +25,13 @@ let lemma_parse_record_header_correct
          Seq.index header_bytes 0 = 0x16uy ||
          Seq.index header_bytes 0 = 0x17uy) &&
         Seq.index header_bytes 1 = 0x03uy &&
-        (Seq.index header_bytes 2 = 0x01uy || Seq.index header_bytes 2 = 0x03uy) &&
+        Seq.index header_bytes 2 = 0x03uy &&
         WS.read_u16 header_bytes 3 <= 16640
       ))
     (ensures
       ok <==> Some? (WS.parse_record_header header_bytes))
-  = admit() // PARSER TCB
+  =
+    WS.lemma_parse_record_header_some_iff header_bytes
 
 // Parser correctness for server hello
 // States: IF random_bytes and key_share_bytes were extracted from the right
