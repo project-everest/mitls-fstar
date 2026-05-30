@@ -168,6 +168,30 @@ fn advance_successful_handshake (st:ST.state_ref) (#s:S.conn_state)
   ST.advance st (S.SendClientFinished dummy_finished) (hs_application_data s);
 }
 
+let received_alert_event (alert:T.alert_description) : CL.host_event =
+  CL.NetworkEvent { CL.message_direction = CL.Received; CL.message_value = CL.TlsAlert alert }
+
+ghost
+fn advance_log_event
+  (log:ST.log_ref)
+  (#view:CL.connection_view)
+  (ev:CL.host_event)
+  (state_ev:S.event)
+  (state:S.conn_state)
+  requires ST.log_current log view
+  requires pure (CL.connection_view_consistent view /\
+                 CL.state_event_of_host_event ev == Some state_ev /\
+                 S.step view.CL.state state_ev == Some state)
+  ensures ST.log_current log (CL.note_host_event view ev state) **
+          pure (CL.connection_view_consistent (CL.note_host_event view ev state) /\
+                (CL.note_host_event view ev state).CL.state == state)
+{
+  let next = CL.note_host_event view ev state;
+  CL.lemma_connection_view_consistent_note_host_event view ev state_ev state;
+  CL.lemma_connection_view_step_host_event view ev state;
+  ST.advance_log log next;
+}
+
 fn client_new
   (hostname: array U8.t)
   (hostname_len: SZ.t)
@@ -525,24 +549,39 @@ fn client_write_all (c: connection) (ch: IO.channel) (buf: array U8.t) (len: SZ.
         len;
     if ok {
       ST.advance 'st (S.SendApplicationData (Ghost.reveal 'bytes)) (S.advance_write_record 's);
-      drop_ (ST.log_current c.log view);
-      // Log update: Track application data sent
-      admit();
+      advance_log_event
+        c.log
+        (CL.sent_app_event (Ghost.reveal 'bytes))
+        (S.SendApplicationData (Ghost.reveal 'bytes))
+        (S.advance_write_record 's);
+      assert (pure (CL.connection_view_consistent (CL.note_host_event view (CL.sent_app_event (Ghost.reveal 'bytes)) (S.advance_write_record 's))));
+      assert (pure ((CL.note_host_event view (CL.sent_app_event (Ghost.reveal 'bytes)) (S.advance_write_record 's)).CL.state == S.advance_write_record 's));
+      fold (is_connection_inner c 'st (S.advance_write_record 's) (CL.note_host_event view (CL.sent_app_event (Ghost.reveal 'bytes)) (S.advance_write_record 's)));
       fold (is_connection c 'st (S.advance_write_record 's));
       true
     } else {
       ST.advance_fail 'st T.IoError;
-      drop_ (ST.log_current c.log view);
-      // Log update: note failure
-      admit();
+      advance_log_event
+        c.log
+        (CL.local_fail_event T.IoError)
+        (S.Fail T.IoError)
+        (S.fail 's T.IoError);
+      assert (pure (CL.connection_view_consistent (CL.note_host_event view (CL.local_fail_event T.IoError) (S.fail 's T.IoError))));
+      assert (pure ((CL.note_host_event view (CL.local_fail_event T.IoError) (S.fail 's T.IoError)).CL.state == S.fail 's T.IoError));
+      fold (is_connection_inner c 'st (S.fail 's T.IoError) (CL.note_host_event view (CL.local_fail_event T.IoError) (S.fail 's T.IoError)));
       fold (is_connection c 'st (S.fail 's T.IoError));
       false
     }
   } else {
     ST.advance_fail 'st T.IoError;
-    drop_ (ST.log_current c.log view);
-    // Log update: note failure
-    admit();
+    advance_log_event
+      c.log
+      (CL.local_fail_event T.IoError)
+      (S.Fail T.IoError)
+      (S.fail 's T.IoError);
+    assert (pure (CL.connection_view_consistent (CL.note_host_event view (CL.local_fail_event T.IoError) (S.fail 's T.IoError))));
+    assert (pure ((CL.note_host_event view (CL.local_fail_event T.IoError) (S.fail 's T.IoError)).CL.state == S.fail 's T.IoError));
+    fold (is_connection_inner c 'st (S.fail 's T.IoError) (CL.note_host_event view (CL.local_fail_event T.IoError) (S.fail 's T.IoError)));
     fold (is_connection c 'st (S.fail 's T.IoError));
     false
   }
