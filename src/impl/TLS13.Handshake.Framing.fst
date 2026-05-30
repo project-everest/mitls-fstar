@@ -256,6 +256,141 @@ fn parse_handshake_header
   }
 }
 
+let rec copy32_prefix
+  (n:nat{n <= 32})
+  (start:nat)
+  (old:B.bytes{B.length old == 32})
+  (input:B.bytes{start + 32 <= B.length input})
+  : Tot (b:B.bytes{B.length b == 32})
+  (decreases n)
+=
+  if n = 0 then old
+  else
+    let prev = copy32_prefix (n - 1) start old input in
+    Seq.upd prev (n - 1) (Seq.index input (start + n - 1))
+
+let copy32_from
+  (start:nat)
+  (old:B.bytes{B.length old == 32})
+  (input:B.bytes{start + 32 <= B.length input})
+  : B.bytes =
+  let s0 = Seq.upd old 0 (Seq.index input start) in
+  let s1 = Seq.upd s0 1 (Seq.index input (start + 1)) in
+  let s2 = Seq.upd s1 2 (Seq.index input (start + 2)) in
+  let s3 = Seq.upd s2 3 (Seq.index input (start + 3)) in
+  let s4 = Seq.upd s3 4 (Seq.index input (start + 4)) in
+  let s5 = Seq.upd s4 5 (Seq.index input (start + 5)) in
+  let s6 = Seq.upd s5 6 (Seq.index input (start + 6)) in
+  let s7 = Seq.upd s6 7 (Seq.index input (start + 7)) in
+  let s8 = Seq.upd s7 8 (Seq.index input (start + 8)) in
+  let s9 = Seq.upd s8 9 (Seq.index input (start + 9)) in
+  let s10 = Seq.upd s9 10 (Seq.index input (start + 10)) in
+  let s11 = Seq.upd s10 11 (Seq.index input (start + 11)) in
+  let s12 = Seq.upd s11 12 (Seq.index input (start + 12)) in
+  let s13 = Seq.upd s12 13 (Seq.index input (start + 13)) in
+  let s14 = Seq.upd s13 14 (Seq.index input (start + 14)) in
+  let s15 = Seq.upd s14 15 (Seq.index input (start + 15)) in
+  let s16 = Seq.upd s15 16 (Seq.index input (start + 16)) in
+  let s17 = Seq.upd s16 17 (Seq.index input (start + 17)) in
+  let s18 = Seq.upd s17 18 (Seq.index input (start + 18)) in
+  let s19 = Seq.upd s18 19 (Seq.index input (start + 19)) in
+  let s20 = Seq.upd s19 20 (Seq.index input (start + 20)) in
+  let s21 = Seq.upd s20 21 (Seq.index input (start + 21)) in
+  let s22 = Seq.upd s21 22 (Seq.index input (start + 22)) in
+  let s23 = Seq.upd s22 23 (Seq.index input (start + 23)) in
+  let s24 = Seq.upd s23 24 (Seq.index input (start + 24)) in
+  let s25 = Seq.upd s24 25 (Seq.index input (start + 25)) in
+  let s26 = Seq.upd s25 26 (Seq.index input (start + 26)) in
+  let s27 = Seq.upd s26 27 (Seq.index input (start + 27)) in
+  let s28 = Seq.upd s27 28 (Seq.index input (start + 28)) in
+  let s29 = Seq.upd s28 29 (Seq.index input (start + 29)) in
+  let s30 = Seq.upd s29 30 (Seq.index input (start + 30)) in
+  Seq.upd s30 31 (Seq.index input (start + 31))
+
+let lemma_copy32_from_eq_prefix
+  (start:nat)
+  (old:B.bytes{B.length old == 32})
+  (input:B.bytes{start + 32 <= B.length input})
+  : Lemma (copy32_from start old input == copy32_prefix 32 start old input)
+=
+  assert_norm (copy32_from start old input == copy32_prefix 32 start old input)
+
+let rec lemma_copy32_prefix_index
+  (n:nat{n <= 32})
+  (start:nat)
+  (old:B.bytes{B.length old == 32})
+  (input:B.bytes{start + 32 <= B.length input})
+  (i:nat{i < n})
+  : Lemma (ensures (Seq.index (copy32_prefix n start old input) i == Seq.index input (start + i)))
+  (decreases n)
+=
+  if n = 0 then ()
+  else
+    let prev = copy32_prefix (n - 1) start old input in
+    if i = n - 1 then
+      Seq.lemma_index_upd1 prev (n - 1) (Seq.index input (start + n - 1))
+    else
+      begin
+        Seq.lemma_index_upd2 prev (n - 1) (Seq.index input (start + n - 1)) i;
+        lemma_copy32_prefix_index (n - 1) start old input i
+      end
+
+let lemma_copy32_from_index
+  (start:nat)
+  (old:B.bytes{B.length old == 32})
+  (input:B.bytes{start + 32 <= B.length input})
+  (i:nat{i < 32})
+  : Lemma (Seq.index (copy32_from start old input) i == Seq.index input (start + i))
+=
+  lemma_copy32_from_eq_prefix start old input;
+  lemma_copy32_prefix_index 32 start old input i
+
+let lemma_copy32_from_slice
+  (start:nat)
+  (old:B.bytes{B.length old == 32})
+  (input:B.bytes{start + 32 <= B.length input})
+  : Lemma (Seq.equal (copy32_from start old input)
+                     (Seq.slice input start (start + 32)))
+=
+  Seq.lemma_len_slice input start (start + 32);
+  assert (Seq.length (copy32_from start old input) == 32);
+  lemma_copy32_from_index start old input 0;
+  lemma_copy32_from_index start old input 1;
+  lemma_copy32_from_index start old input 2;
+  lemma_copy32_from_index start old input 3;
+  lemma_copy32_from_index start old input 4;
+  lemma_copy32_from_index start old input 5;
+  lemma_copy32_from_index start old input 6;
+  lemma_copy32_from_index start old input 7;
+  lemma_copy32_from_index start old input 8;
+  lemma_copy32_from_index start old input 9;
+  lemma_copy32_from_index start old input 10;
+  lemma_copy32_from_index start old input 11;
+  lemma_copy32_from_index start old input 12;
+  lemma_copy32_from_index start old input 13;
+  lemma_copy32_from_index start old input 14;
+  lemma_copy32_from_index start old input 15;
+  lemma_copy32_from_index start old input 16;
+  lemma_copy32_from_index start old input 17;
+  lemma_copy32_from_index start old input 18;
+  lemma_copy32_from_index start old input 19;
+  lemma_copy32_from_index start old input 20;
+  lemma_copy32_from_index start old input 21;
+  lemma_copy32_from_index start old input 22;
+  lemma_copy32_from_index start old input 23;
+  lemma_copy32_from_index start old input 24;
+  lemma_copy32_from_index start old input 25;
+  lemma_copy32_from_index start old input 26;
+  lemma_copy32_from_index start old input 27;
+  lemma_copy32_from_index start old input 28;
+  lemma_copy32_from_index start old input 29;
+  lemma_copy32_from_index start old input 30;
+  lemma_copy32_from_index start old input 31;
+  assert (forall (i:nat{i < 32}).
+            Seq.index (copy32_from start old input) i ==
+            Seq.index (Seq.slice input start (start + 32)) i);
+  Seq.lemma_eq_intro (copy32_from start old input) (Seq.slice input start (start + 32))
+
 fn copy_server_hello_random
   (input: array U8.t)
   (random_out: array U8.t)
@@ -288,7 +423,13 @@ fn copy_server_hello_random
   random_out.(26sz) <- input.(32sz); random_out.(27sz) <- input.(33sz);
   random_out.(28sz) <- input.(34sz); random_out.(29sz) <- input.(35sz);
   random_out.(30sz) <- input.(36sz); random_out.(31sz) <- input.(37sz);
-  admit(); // TODO: Prove Seq.equal random_bytes (Seq.slice 'input_bytes 6 38) from individual copies
+  with random_bytes. assert (pts_to random_out random_bytes);
+  assert (pure (Seq.length random_bytes == 32));
+  Seq.lemma_len_slice 'input_bytes 6 38;
+  assert (pure (Seq.length (Seq.slice 'input_bytes 6 38) == 32));
+  assert (pure (random_bytes == copy32_from 6 'old_random 'input_bytes));
+  lemma_copy32_from_slice 6 'old_random 'input_bytes;
+  assert (pure (Seq.equal random_bytes (Seq.slice 'input_bytes 6 38)));
 }
 
 fn copy_server_key_share_at_52
@@ -323,7 +464,13 @@ fn copy_server_key_share_at_52
   key_share_out.(26sz) <- input.(78sz); key_share_out.(27sz) <- input.(79sz);
   key_share_out.(28sz) <- input.(80sz); key_share_out.(29sz) <- input.(81sz);
   key_share_out.(30sz) <- input.(82sz); key_share_out.(31sz) <- input.(83sz);
-  admit(); // TODO: Prove Seq.equal key_share_bytes (Seq.slice 'input_bytes 52 84) from individual copies
+  with key_share_bytes. assert (pts_to key_share_out key_share_bytes);
+  assert (pure (Seq.length key_share_bytes == 32));
+  Seq.lemma_len_slice 'input_bytes 52 84;
+  assert (pure (Seq.length (Seq.slice 'input_bytes 52 84) == 32));
+  assert (pure (key_share_bytes == copy32_from 52 'old_key_share 'input_bytes));
+  lemma_copy32_from_slice 52 'old_key_share 'input_bytes;
+  assert (pure (Seq.equal key_share_bytes (Seq.slice 'input_bytes 52 84)));
 }
 
 fn copy_server_key_share_at_58
@@ -358,7 +505,13 @@ fn copy_server_key_share_at_58
   key_share_out.(26sz) <- input.(84sz); key_share_out.(27sz) <- input.(85sz);
   key_share_out.(28sz) <- input.(86sz); key_share_out.(29sz) <- input.(87sz);
   key_share_out.(30sz) <- input.(88sz); key_share_out.(31sz) <- input.(89sz);
-  admit(); // TODO: Prove Seq.equal key_share_bytes (Seq.slice 'input_bytes 58 90) from individual copies
+  with key_share_bytes. assert (pts_to key_share_out key_share_bytes);
+  assert (pure (Seq.length key_share_bytes == 32));
+  Seq.lemma_len_slice 'input_bytes 58 90;
+  assert (pure (Seq.length (Seq.slice 'input_bytes 58 90) == 32));
+  assert (pure (key_share_bytes == copy32_from 58 'old_key_share 'input_bytes));
+  lemma_copy32_from_slice 58 'old_key_share 'input_bytes;
+  assert (pure (Seq.equal key_share_bytes (Seq.slice 'input_bytes 58 90)));
 }
 
 fn parse_supported_server_hello
