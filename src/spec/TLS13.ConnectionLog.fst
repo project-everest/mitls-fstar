@@ -335,6 +335,26 @@ type app_log = {
   app_received: list B.bytes;
 }
 
+type client_request =
+  | ReqStart of server_name:T.hostname
+  | ReqRecvNetwork of ciphertext:B.bytes
+  | ReqSendApplicationData of plaintext:B.bytes
+  | ReqReadApplicationData of max_len:nat
+  | ReqClose
+
+type client_status =
+  | NeedNetworkInput
+  | HandshakeComplete
+  | ApplicationDataReady
+  | Closed
+  | Failed of error:T.tls_error
+
+type client_response = {
+  network_out: B.bytes;
+  app_out: B.bytes;
+  status: client_status;
+}
+
 let empty_app_log : app_log =
   { app_sent = []; app_received = [] }
 
@@ -379,6 +399,87 @@ let lemma_app_log_extends_received (app:app_log) (bytes:B.bytes)
   assert (exists sent_delta received_delta.
             (append_app_received app bytes).app_sent == app.app_sent @ sent_delta /\
             (append_app_received app bytes).app_received == app.app_received @ received_delta)
+
+let request_network_in (req:client_request) : B.bytes =
+  match req with
+  | ReqRecvNetwork ciphertext -> ciphertext
+  | _ -> B.empty
+
+let request_app_in (req:client_request) : B.bytes =
+  match req with
+  | ReqSendApplicationData plaintext -> plaintext
+  | _ -> B.empty
+
+let request_read_len (req:client_request) : nat =
+  match req with
+  | ReqReadApplicationData max_len -> max_len
+  | _ -> 0
+
+let response_shape (resp:client_response) : prop =
+  match resp.status with
+  | NeedNetworkInput
+  | HandshakeComplete
+  | Closed
+  | Failed _ -> B.length resp.app_out == 0
+  | ApplicationDataReady -> True
+
+let status_matches_phase (status:client_status) (phase:S.phase) : prop =
+  match status with
+  | NeedNetworkInput -> phase <> S.Closed /\ phase <> S.Failed
+  | HandshakeComplete -> phase == S.ApplicationData
+  | ApplicationDataReady -> phase == S.ApplicationData
+  | Closed -> phase == S.Closing \/ phase == S.Closed
+  | Failed _ -> phase == S.Failed
+
+let step_raw_log
+  (raw:raw_io_log)
+  (req:client_request)
+  (resp:client_response)
+  : raw_io_log =
+  {
+    raw_sent = B.append raw.raw_sent resp.network_out;
+    raw_received = B.append raw.raw_received (request_network_in req);
+  }
+
+let step_app_sent_delta (req:client_request) (resp:client_response) : list B.bytes =
+  match req, resp.status with
+  | ReqSendApplicationData plaintext, Failed _ -> []
+  | ReqSendApplicationData plaintext, _ -> [plaintext]
+  | _, _ -> []
+
+let step_app_received_delta (resp:client_response) : list B.bytes =
+  match resp.status with
+  | ApplicationDataReady -> [resp.app_out]
+  | _ -> []
+
+let step_app_log (app:app_log) (req:client_request) (resp:client_response) : app_log =
+  {
+    app_sent = app.app_sent @ step_app_sent_delta req resp;
+    app_received = app.app_received @ step_app_received_delta resp;
+  }
+
+let lemma_step_raw_log_extends
+  (raw:raw_io_log)
+  (req:client_request)
+  (resp:client_response)
+  : Lemma (raw_io_log_extends raw (step_raw_log raw req resp))
+  =
+  lemma_bytes_extends_append raw.raw_sent resp.network_out;
+  lemma_bytes_extends_append raw.raw_received (request_network_in req)
+
+let lemma_step_app_log_extends
+  (app:app_log)
+  (req:client_request)
+  (resp:client_response)
+  : Lemma (app_log_extends app (step_app_log app req resp))
+  =
+  let sent_delta = step_app_sent_delta req resp in
+  let received_delta = step_app_received_delta resp in
+  assert ((step_app_log app req resp).app_sent == app.app_sent @ sent_delta);
+  assert ((step_app_log app req resp).app_received == app.app_received @ received_delta);
+  assert (exists sent_delta received_delta.
+            (step_app_log app req resp).app_sent == app.app_sent @ sent_delta /\
+            (step_app_log app req resp).app_received == app.app_received @ received_delta)
 
 let state_event_of_tls_message (msg:directed_message tls_message) : GTot (option S.event) =
   match msg.message_direction, msg.message_value with
@@ -614,6 +715,34 @@ let public_connection_view_from_raw
 let connection_view_single_step (old:connection_view) (next:connection_view) : prop =
   (old.raw_log == next.raw_log \/ raw_io_log_extends old.raw_log next.raw_log) /\
   (old.app_view == next.app_view \/ app_log_extends old.app_view next.app_view)
+
+let step
+  (view0:connection_view)
+  (req:client_request)
+  (view1:connection_view)
+  (resp:client_response)
+  : prop =
+  connection_view_consistent view0 /\
+  connection_view_consistent view1 /\
+  view1.raw_log == step_raw_log view0.raw_log req resp /\
+  view1.app_view == step_app_log view0.app_view req resp /\
+  response_shape resp /\
+  status_matches_phase resp.status view1.state.S.phase /\
+  S.conn_evolves view0.state view1.state /\
+  connection_view_single_step view0 view1
+
+let lemma_connection_view_single_step_for_core_step
+  (view0:connection_view)
+  (req:client_request)
+  (view1:connection_view)
+  (resp:client_response)
+  : Lemma
+      (requires view1.raw_log == step_raw_log view0.raw_log req resp /\
+                view1.app_view == step_app_log view0.app_view req resp)
+      (ensures connection_view_single_step view0 view1)
+  =
+  lemma_step_raw_log_extends view0.raw_log req resp;
+  lemma_step_app_log_extends view0.app_view req resp
 
 let connection_view_evolves : RTC.preorder connection_view =
   RTC.closure connection_view_single_step

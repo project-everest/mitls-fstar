@@ -54,12 +54,33 @@ $(CACHE_DIR) $(OUTPUT_DIR) $(EXTRACT_DIR):
 	mkdir -p $@
 
 # ── Main Targets ───────────────────────────────────────────────────
-.PHONY: all verify test clean check-toolchain check-deps
+.PHONY: all verify test clean check-toolchain check-deps admit-count check-admits
 
 all: verify
 
 verify: $(ALL_CHECKED_FILES)
 	@echo "All F* modules verified"
+
+admit-count:
+	@matches=$$(grep -RIn --include='*.fst' --include='*.fsti' 'admit[[:space:]]*(' src calc_sample/spec calc_sample/impl || true); \
+	if [ -n "$$matches" ]; then \
+	  printf "%s\n" "$$matches"; \
+	  count=$$(printf "%s\n" "$$matches" | wc -l); \
+	  echo "$$count admit(s) found"; \
+	else \
+	  echo "0 admit(s) found"; \
+	fi
+
+check-admits:
+	@matches=$$(grep -RIn --include='*.fst' --include='*.fsti' 'admit[[:space:]]*(' src calc_sample/spec calc_sample/impl || true); \
+	if [ -n "$$matches" ]; then \
+	  printf "%s\n" "$$matches"; \
+	  count=$$(printf "%s\n" "$$matches" | wc -l); \
+	  echo "$$count admit(s) found"; \
+	  exit 1; \
+	else \
+	  echo "0 admit(s) found"; \
+	fi
 
 # ── Generic Extraction Rules ───────────────────────────────────────
 # Extract individual module to .krml
