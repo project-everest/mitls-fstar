@@ -508,6 +508,49 @@ let state_event_of_host_event (ev:host_event) : GTot (option S.event) =
   | NetworkEvent msg -> state_event_of_tls_message msg
   | LocalEvent local -> state_event_of_local_event local
 
+let sent_tls_delta_of_host_event (ev:host_event) : list tls_message =
+  match ev with
+  | NetworkEvent msg ->
+    (match msg.message_direction with
+     | Sent -> [msg.message_value]
+     | Received -> [])
+  | LocalEvent _ -> []
+
+let received_tls_delta_of_host_event (ev:host_event) : list tls_message =
+  match ev with
+  | NetworkEvent msg ->
+    (match msg.message_direction with
+     | Received -> [msg.message_value]
+     | Sent -> [])
+  | LocalEvent _ -> []
+
+let app_sent_delta_of_host_event (ev:host_event) : list B.bytes =
+  match ev with
+  | NetworkEvent msg ->
+    (match msg.message_direction, msg.message_value with
+     | Sent, TlsApplicationData bytes -> [bytes]
+     | _, _ -> [])
+  | LocalEvent _ -> []
+
+let app_received_delta_of_host_event (ev:host_event) : list B.bytes =
+  match ev with
+  | NetworkEvent msg ->
+    (match msg.message_direction, msg.message_value with
+     | Received, TlsApplicationData bytes -> [bytes]
+     | _, _ -> [])
+  | LocalEvent _ -> []
+
+let app_log_snoc_event (app:app_log) (ev:host_event) : app_log =
+  {
+    app_sent = app.app_sent @ app_sent_delta_of_host_event ev;
+    app_received = app.app_received @ app_received_delta_of_host_event ev;
+  }
+
+let state_event_delta_of_host_event (ev:host_event) : GTot (list S.event) =
+  match state_event_of_host_event ev with
+  | Some state_ev -> [state_ev]
+  | None -> []
+
 let rec state_events_of_host_trace (trace:list host_event)
   : GTot (list S.event)
         (decreases trace)
@@ -586,6 +629,84 @@ let sent_app_event (bytes:B.bytes) : host_event =
 
 let received_app_event (bytes:B.bytes) : host_event =
   NetworkEvent { message_direction = Received; message_value = TlsApplicationData bytes }
+
+let sent_close_notify_event : host_event =
+  NetworkEvent { message_direction = Sent; message_value = TlsAlert T.CloseNotify }
+
+let received_close_notify_event : host_event =
+  NetworkEvent { message_direction = Received; message_value = TlsAlert T.CloseNotify }
+
+let local_fail_event (err:T.tls_error) : host_event =
+  LocalEvent (LocalFail err)
+
+let rec lemma_sent_tls_of_host_trace_snoc (trace:list host_event) (ev:host_event)
+  : Lemma
+      (ensures sent_tls_of_host_trace (trace @ [ev]) ==
+               sent_tls_of_host_trace trace @ sent_tls_delta_of_host_event ev)
+          (decreases trace)
+  =
+  match trace with
+  | [] -> ()
+  | _ :: rest -> lemma_sent_tls_of_host_trace_snoc rest ev
+
+let rec lemma_received_tls_of_host_trace_snoc (trace:list host_event) (ev:host_event)
+  : Lemma
+      (ensures received_tls_of_host_trace (trace @ [ev]) ==
+               received_tls_of_host_trace trace @ received_tls_delta_of_host_event ev)
+          (decreases trace)
+  =
+  match trace with
+  | [] -> ()
+  | _ :: rest -> lemma_received_tls_of_host_trace_snoc rest ev
+
+let rec lemma_state_events_of_host_trace_snoc (trace:list host_event) (ev:host_event)
+  : Lemma
+      (ensures state_events_of_host_trace (trace @ [ev]) ==
+               state_events_of_host_trace trace @ state_event_delta_of_host_event ev)
+          (decreases trace)
+  =
+  match trace with
+  | [] -> ()
+  | _ :: rest -> lemma_state_events_of_host_trace_snoc rest ev
+
+let rec lemma_app_sent_of_host_trace_snoc (trace:list host_event) (ev:host_event)
+  : Lemma
+      (ensures app_sent_of_host_trace (trace @ [ev]) ==
+               app_sent_of_host_trace trace @ app_sent_delta_of_host_event ev)
+          (decreases trace)
+  =
+  match trace with
+  | [] -> ()
+  | _ :: rest -> lemma_app_sent_of_host_trace_snoc rest ev
+
+let rec lemma_app_received_of_host_trace_snoc (trace:list host_event) (ev:host_event)
+  : Lemma
+      (ensures app_received_of_host_trace (trace @ [ev]) ==
+               app_received_of_host_trace trace @ app_received_delta_of_host_event ev)
+          (decreases trace)
+  =
+  match trace with
+  | [] -> ()
+  | _ :: rest -> lemma_app_received_of_host_trace_snoc rest ev
+
+let rec lemma_step_many_snoc
+  (s0:S.conn_state)
+  (events:list S.event)
+  (ev:S.event)
+  (s1:S.conn_state)
+  (s2:S.conn_state)
+  : Lemma
+      (requires S.step_many s0 events == Some s1 /\
+                S.step s1 ev == Some s2)
+      (ensures S.step_many s0 (events @ [ev]) == Some s2)
+      (decreases events)
+  =
+  match events with
+  | [] -> ()
+  | ev0 :: rest ->
+    match S.step s0 ev0 with
+    | Some mid -> lemma_step_many_snoc mid rest ev s1 s2
+    | None -> assert False
 
 let rec lemma_app_sent_snoc_sent (trace:list host_event) (bytes:B.bytes)
   : Lemma
@@ -685,6 +806,24 @@ let view_with_raw_streams (view:connection_view) (raw:raw_io_log) : GTot connect
       received_tls = raw_stream_view raw.raw_received view.received_tls.values;
   }
 
+let note_host_event
+  (view:connection_view)
+  (ev:host_event)
+  (state:S.conn_state)
+  : connection_view =
+  {
+    view with
+      sent_tls =
+        raw_stream_view view.raw_log.raw_sent
+          (view.sent_tls.values @ sent_tls_delta_of_host_event ev);
+      received_tls =
+        raw_stream_view view.raw_log.raw_received
+          (view.received_tls.values @ received_tls_delta_of_host_event ev);
+      host_trace = view.host_trace @ [ev];
+      state = state;
+      app_view = app_log_snoc_event view.app_view ev;
+  }
+
 let empty_connection_view : connection_view =
   {
     raw_log = empty_raw_io_log;
@@ -756,44 +895,38 @@ let sync_raw (view:connection_view) (raw:raw_io_log) : GTot connection_view =
 let sync_raw_state (view:connection_view) (raw:raw_io_log) (state:S.conn_state) : GTot connection_view =
   { view_with_raw_streams view raw with state = state }
 
-let note_handshake_complete (view:connection_view) (state:S.conn_state) : connection_view =
-  { view with state = state }
+let note_local_fail
+  (view:connection_view)
+  (err:T.tls_error)
+  (state:S.conn_state)
+  : connection_view =
+  note_host_event view (local_fail_event err) state
 
-let note_fail (view:connection_view) (state:S.conn_state) : connection_view =
-  { view with state = state }
+let note_send_close_notify
+  (view:connection_view)
+  (state:S.conn_state)
+  : connection_view =
+  note_host_event view sent_close_notify_event state
 
-let note_close (view:connection_view) (state:S.conn_state) : connection_view =
-  { view with state = state }
+let note_recv_close_notify
+  (view:connection_view)
+  (state:S.conn_state)
+  : connection_view =
+  note_host_event view received_close_notify_event state
 
 let note_app_sent
   (view:connection_view)
   (bytes:B.bytes)
   (state:S.conn_state)
   : connection_view =
-  {
-    view with
-      sent_tls = raw_stream_view view.raw_log.raw_sent (view.sent_tls.values @ [TlsApplicationData bytes]);
-      received_tls = raw_stream_view view.raw_log.raw_received view.received_tls.values;
-      host_trace =
-        view.host_trace @ [sent_app_event bytes];
-      state = state;
-      app_view = append_app_sent view.app_view bytes;
-  }
+  note_host_event view (sent_app_event bytes) state
 
 let note_app_received
   (view:connection_view)
   (bytes:B.bytes)
   (state:S.conn_state)
   : connection_view =
-  {
-    view with
-      sent_tls = raw_stream_view view.raw_log.raw_sent view.sent_tls.values;
-      received_tls = raw_stream_view view.raw_log.raw_received (view.received_tls.values @ [TlsApplicationData bytes]);
-      host_trace =
-        view.host_trace @ [received_app_event bytes];
-      state = state;
-      app_view = append_app_received view.app_view bytes;
-  }
+  note_host_event view (received_app_event bytes) state
 
 let note_raw_app_sent
   (view:connection_view)
@@ -812,6 +945,71 @@ let note_raw_app_received
   : GTot connection_view =
   let next = note_app_received view bytes state in
   view_with_raw_streams { next with raw_log = raw } raw
+
+let lemma_app_log_extends_snoc_event
+  (app:app_log)
+  (ev:host_event)
+  : Lemma (app_log_extends app (app_log_snoc_event app ev))
+=
+  let sent_delta = app_sent_delta_of_host_event ev in
+  let received_delta = app_received_delta_of_host_event ev in
+  assert ((app_log_snoc_event app ev).app_sent == app.app_sent @ sent_delta);
+  assert ((app_log_snoc_event app ev).app_received == app.app_received @ received_delta);
+  assert (exists (s_delta:list B.bytes) (r_delta:list B.bytes).
+            (app_log_snoc_event app ev).app_sent == app.app_sent @ s_delta /\
+            (app_log_snoc_event app ev).app_received == app.app_received @ r_delta)
+
+let lemma_connection_view_step_host_event
+  (view:connection_view)
+  (ev:host_event)
+  (state:S.conn_state)
+  : Lemma (connection_view_single_step view (note_host_event view ev state))
+=
+  lemma_app_log_extends_snoc_event view.app_view ev
+
+let lemma_connection_view_consistent_note_host_event
+  (view:connection_view)
+  (ev:host_event)
+  (state_ev:S.event)
+  (state:S.conn_state)
+  : Lemma
+      (requires connection_view_consistent view /\
+                state_event_of_host_event ev == Some state_ev /\
+                S.step view.state state_ev == Some state)
+      (ensures connection_view_consistent (note_host_event view ev state))
+=
+  let next = note_host_event view ev state in
+  lemma_sent_tls_of_host_trace_snoc view.host_trace ev;
+  lemma_received_tls_of_host_trace_snoc view.host_trace ev;
+  lemma_state_events_of_host_trace_snoc view.host_trace ev;
+  lemma_app_sent_of_host_trace_snoc view.host_trace ev;
+  lemma_app_received_of_host_trace_snoc view.host_trace ev;
+  lemma_step_many_snoc
+    S.initial
+    (state_events_of_host_trace view.host_trace)
+    state_ev
+    view.state
+    state;
+  lemma_raw_stream_view_shape #tls_message
+    next.raw_log.raw_sent
+    next.sent_tls.values;
+  lemma_raw_stream_view_shape #tls_message
+    next.raw_log.raw_received
+    next.received_tls.values;
+  assert (state_event_delta_of_host_event ev == [state_ev]);
+  assert (state_events_of_host_trace next.host_trace ==
+          state_events_of_host_trace view.host_trace @ [state_ev]);
+  assert (S.step_many S.initial (state_events_of_host_trace next.host_trace) ==
+          Some state);
+  assert (sent_tls_of_host_trace next.host_trace == next.sent_tls.values);
+  assert (received_tls_of_host_trace next.host_trace == next.received_tls.values);
+  assert ((app_log_of_host_trace next.host_trace).app_sent == next.app_view.app_sent);
+  assert ((app_log_of_host_trace next.host_trace).app_received == next.app_view.app_received);
+  assert (app_log_of_host_trace next.host_trace == next.app_view);
+  assert (connection_view_raw_stream_shaped next);
+  assert (connection_view_record_stream_shaped next);
+  assert (connection_view_shape next);
+  assert (connection_view_consistent_with raw_tls_stream_shapes next)
 
 let lemma_connection_view_app_projected_sync_state
   (view:connection_view)
