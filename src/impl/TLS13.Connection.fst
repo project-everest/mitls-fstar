@@ -171,6 +171,24 @@ fn advance_successful_handshake (st:ST.state_ref) (#s:S.conn_state)
 let received_alert_event (alert:T.alert_description) : CL.host_event =
   CL.NetworkEvent { CL.message_direction = CL.Received; CL.message_value = CL.TlsAlert alert }
 
+let note_sent_app_view (view:CL.connection_view) (bytes:B.bytes) (s:S.conn_state) : CL.connection_view =
+  CL.note_host_event view (CL.sent_app_event bytes) (S.advance_write_record s)
+
+let note_recv_app_view (view:CL.connection_view) (bytes:B.bytes) (s:S.conn_state) : CL.connection_view =
+  CL.note_host_event view (CL.received_app_event bytes) (S.advance_read_record s)
+
+let note_local_fail_view (view:CL.connection_view) (err:T.tls_error) (s:S.conn_state) : CL.connection_view =
+  CL.note_host_event view (CL.local_fail_event err) (S.fail s err)
+
+let note_recv_alert_view (view:CL.connection_view) (alert:T.alert_description) (s:S.conn_state) : CL.connection_view =
+  CL.note_host_event view (received_alert_event alert) (S.fail s (T.AlertError alert))
+
+let note_recv_close_view (view:CL.connection_view) (s:S.conn_state) : CL.connection_view =
+  CL.note_host_event view CL.received_close_notify_event (S.recv_close_state s)
+
+let note_send_close_view (view:CL.connection_view) (s:S.conn_state) : CL.connection_view =
+  CL.note_host_event view CL.sent_close_notify_event (S.send_close_state s)
+
 ghost
 fn advance_log_event
   (log:ST.log_ref)
@@ -554,9 +572,9 @@ fn client_write_all (c: connection) (ch: IO.channel) (buf: array U8.t) (len: SZ.
         (CL.sent_app_event (Ghost.reveal 'bytes))
         (S.SendApplicationData (Ghost.reveal 'bytes))
         (S.advance_write_record 's);
-      assert (pure (CL.connection_view_consistent (CL.note_host_event view (CL.sent_app_event (Ghost.reveal 'bytes)) (S.advance_write_record 's))));
-      assert (pure ((CL.note_host_event view (CL.sent_app_event (Ghost.reveal 'bytes)) (S.advance_write_record 's)).CL.state == S.advance_write_record 's));
-      fold (is_connection_inner c 'st (S.advance_write_record 's) (CL.note_host_event view (CL.sent_app_event (Ghost.reveal 'bytes)) (S.advance_write_record 's)));
+      assert (pure (CL.connection_view_consistent (note_sent_app_view view (Ghost.reveal 'bytes) 's)));
+      assert (pure ((note_sent_app_view view (Ghost.reveal 'bytes) 's).CL.state == S.advance_write_record 's));
+      fold (is_connection_inner c 'st (S.advance_write_record 's) (note_sent_app_view view (Ghost.reveal 'bytes) 's));
       fold (is_connection c 'st (S.advance_write_record 's));
       true
     } else {
@@ -566,9 +584,9 @@ fn client_write_all (c: connection) (ch: IO.channel) (buf: array U8.t) (len: SZ.
         (CL.local_fail_event T.IoError)
         (S.Fail T.IoError)
         (S.fail 's T.IoError);
-      assert (pure (CL.connection_view_consistent (CL.note_host_event view (CL.local_fail_event T.IoError) (S.fail 's T.IoError))));
-      assert (pure ((CL.note_host_event view (CL.local_fail_event T.IoError) (S.fail 's T.IoError)).CL.state == S.fail 's T.IoError));
-      fold (is_connection_inner c 'st (S.fail 's T.IoError) (CL.note_host_event view (CL.local_fail_event T.IoError) (S.fail 's T.IoError)));
+      assert (pure (CL.connection_view_consistent (note_local_fail_view view T.IoError 's)));
+      assert (pure ((note_local_fail_view view T.IoError 's).CL.state == S.fail 's T.IoError));
+      fold (is_connection_inner c 'st (S.fail 's T.IoError) (note_local_fail_view view T.IoError 's));
       fold (is_connection c 'st (S.fail 's T.IoError));
       false
     }
@@ -579,9 +597,9 @@ fn client_write_all (c: connection) (ch: IO.channel) (buf: array U8.t) (len: SZ.
       (CL.local_fail_event T.IoError)
       (S.Fail T.IoError)
       (S.fail 's T.IoError);
-    assert (pure (CL.connection_view_consistent (CL.note_host_event view (CL.local_fail_event T.IoError) (S.fail 's T.IoError))));
-    assert (pure ((CL.note_host_event view (CL.local_fail_event T.IoError) (S.fail 's T.IoError)).CL.state == S.fail 's T.IoError));
-    fold (is_connection_inner c 'st (S.fail 's T.IoError) (CL.note_host_event view (CL.local_fail_event T.IoError) (S.fail 's T.IoError)));
+    assert (pure (CL.connection_view_consistent (note_local_fail_view view T.IoError 's)));
+    assert (pure ((note_local_fail_view view T.IoError 's).CL.state == S.fail 's T.IoError));
+    fold (is_connection_inner c 'st (S.fail 's T.IoError) (note_local_fail_view view T.IoError 's));
     fold (is_connection c 'st (S.fail 's T.IoError));
     false
   }
@@ -1008,94 +1026,159 @@ fn client_read_exact (c: connection) (ch: IO.channel) (out: array U8.t) (len: SZ
     with bytes. assert (pts_to out bytes);
     if (status = read_status_complete) {
       ST.advance 'st (S.RecvApplicationData bytes) (S.advance_read_record 's);
-      drop_ (ST.log_current c.log view);
-      // Log update: Track application data received
-      admit();
+      advance_log_event
+        c.log
+        (CL.received_app_event bytes)
+        (S.RecvApplicationData bytes)
+        (S.advance_read_record 's);
+      assert (pure (CL.connection_view_consistent (note_recv_app_view view bytes 's)));
+      assert (pure ((note_recv_app_view view bytes 's).CL.state == S.advance_read_record 's));
+      fold (is_connection_inner c 'st (S.advance_read_record 's) (note_recv_app_view view bytes 's));
       fold (is_connection c 'st (S.advance_read_record 's));
       true
     } else if (status = read_status_close_notify) {
       ST.advance 'st S.RecvCloseNotify (S.recv_close_state 's);
-      drop_ (ST.log_current c.log view);
-      // Log update: note close
-      admit();
+      advance_log_event
+        c.log
+        CL.received_close_notify_event
+        S.RecvCloseNotify
+        (S.recv_close_state 's);
+      assert (pure (CL.connection_view_consistent (note_recv_close_view view 's)));
+      assert (pure ((note_recv_close_view view 's).CL.state == S.recv_close_state 's));
+      fold (is_connection_inner c 'st (S.recv_close_state 's) (note_recv_close_view view 's));
       fold (is_connection c 'st (S.recv_close_state 's));
       false
     } else if (status = read_status_alert_unexpected_message) {
       ST.advance_fail 'st (T.AlertError T.UnexpectedMessage);
-      drop_ (ST.log_current c.log view);
-      // Log update: note failure
-      admit();
+      advance_log_event
+        c.log
+        (received_alert_event T.UnexpectedMessage)
+        (S.Fail (T.AlertError T.UnexpectedMessage))
+        (S.fail 's (T.AlertError T.UnexpectedMessage));
+      assert (pure (CL.connection_view_consistent (note_recv_alert_view view T.UnexpectedMessage 's)));
+      assert (pure ((note_recv_alert_view view T.UnexpectedMessage 's).CL.state == S.fail 's (T.AlertError T.UnexpectedMessage)));
+      fold (is_connection_inner c 'st (S.fail 's (T.AlertError T.UnexpectedMessage)) (note_recv_alert_view view T.UnexpectedMessage 's));
       fold (is_connection c 'st (S.fail 's (T.AlertError T.UnexpectedMessage)));
       false
     } else if (status = read_status_alert_bad_record_mac) {
       ST.advance_fail 'st (T.AlertError T.BadRecordMac);
-      drop_ (ST.log_current c.log view);
-      // Log update: note failure
-      admit();
+      advance_log_event
+        c.log
+        (received_alert_event T.BadRecordMac)
+        (S.Fail (T.AlertError T.BadRecordMac))
+        (S.fail 's (T.AlertError T.BadRecordMac));
+      assert (pure (CL.connection_view_consistent (note_recv_alert_view view T.BadRecordMac 's)));
+      assert (pure ((note_recv_alert_view view T.BadRecordMac 's).CL.state == S.fail 's (T.AlertError T.BadRecordMac)));
+      fold (is_connection_inner c 'st (S.fail 's (T.AlertError T.BadRecordMac)) (note_recv_alert_view view T.BadRecordMac 's));
       fold (is_connection c 'st (S.fail 's (T.AlertError T.BadRecordMac)));
       false
     } else if (status = read_status_alert_handshake_failure) {
       ST.advance_fail 'st (T.AlertError T.HandshakeFailure);
-      drop_ (ST.log_current c.log view);
-      // Log update: note failure
-      admit();
+      advance_log_event
+        c.log
+        (received_alert_event T.HandshakeFailure)
+        (S.Fail (T.AlertError T.HandshakeFailure))
+        (S.fail 's (T.AlertError T.HandshakeFailure));
+      assert (pure (CL.connection_view_consistent (note_recv_alert_view view T.HandshakeFailure 's)));
+      assert (pure ((note_recv_alert_view view T.HandshakeFailure 's).CL.state == S.fail 's (T.AlertError T.HandshakeFailure)));
+      fold (is_connection_inner c 'st (S.fail 's (T.AlertError T.HandshakeFailure)) (note_recv_alert_view view T.HandshakeFailure 's));
       fold (is_connection c 'st (S.fail 's (T.AlertError T.HandshakeFailure)));
       false
     } else if (status = read_status_alert_decrypt_error) {
       ST.advance_fail 'st (T.AlertError T.DecryptError);
-      drop_ (ST.log_current c.log view);
-      // Log update: note failure
-      admit();
+      advance_log_event
+        c.log
+        (received_alert_event T.DecryptError)
+        (S.Fail (T.AlertError T.DecryptError))
+        (S.fail 's (T.AlertError T.DecryptError));
+      assert (pure (CL.connection_view_consistent (note_recv_alert_view view T.DecryptError 's)));
+      assert (pure ((note_recv_alert_view view T.DecryptError 's).CL.state == S.fail 's (T.AlertError T.DecryptError)));
+      fold (is_connection_inner c 'st (S.fail 's (T.AlertError T.DecryptError)) (note_recv_alert_view view T.DecryptError 's));
       fold (is_connection c 'st (S.fail 's (T.AlertError T.DecryptError)));
       false
     } else if (status = read_status_alert_protocol_version) {
       ST.advance_fail 'st (T.AlertError T.ProtocolVersion);
-      drop_ (ST.log_current c.log view);
-      // Log update: note failure
-      admit();
+      advance_log_event
+        c.log
+        (received_alert_event T.ProtocolVersion)
+        (S.Fail (T.AlertError T.ProtocolVersion))
+        (S.fail 's (T.AlertError T.ProtocolVersion));
+      assert (pure (CL.connection_view_consistent (note_recv_alert_view view T.ProtocolVersion 's)));
+      assert (pure ((note_recv_alert_view view T.ProtocolVersion 's).CL.state == S.fail 's (T.AlertError T.ProtocolVersion)));
+      fold (is_connection_inner c 'st (S.fail 's (T.AlertError T.ProtocolVersion)) (note_recv_alert_view view T.ProtocolVersion 's));
       fold (is_connection c 'st (S.fail 's (T.AlertError T.ProtocolVersion)));
       false
     } else if (status = read_status_alert_unsupported_extension) {
       ST.advance_fail 'st (T.AlertError T.UnsupportedExtension);
-      drop_ (ST.log_current c.log view);
-      // Log update: note failure
-      admit();
+      advance_log_event
+        c.log
+        (received_alert_event T.UnsupportedExtension)
+        (S.Fail (T.AlertError T.UnsupportedExtension))
+        (S.fail 's (T.AlertError T.UnsupportedExtension));
+      assert (pure (CL.connection_view_consistent (note_recv_alert_view view T.UnsupportedExtension 's)));
+      assert (pure ((note_recv_alert_view view T.UnsupportedExtension 's).CL.state == S.fail 's (T.AlertError T.UnsupportedExtension)));
+      fold (is_connection_inner c 'st (S.fail 's (T.AlertError T.UnsupportedExtension)) (note_recv_alert_view view T.UnsupportedExtension 's));
       fold (is_connection c 'st (S.fail 's (T.AlertError T.UnsupportedExtension)));
       false
     } else if (status = read_status_alert_certificate_unknown) {
       ST.advance_fail 'st (T.AlertError T.CertificateUnknown);
-      drop_ (ST.log_current c.log view);
-      // Log update: note failure
-      admit();
+      advance_log_event
+        c.log
+        (received_alert_event T.CertificateUnknown)
+        (S.Fail (T.AlertError T.CertificateUnknown))
+        (S.fail 's (T.AlertError T.CertificateUnknown));
+      assert (pure (CL.connection_view_consistent (note_recv_alert_view view T.CertificateUnknown 's)));
+      assert (pure ((note_recv_alert_view view T.CertificateUnknown 's).CL.state == S.fail 's (T.AlertError T.CertificateUnknown)));
+      fold (is_connection_inner c 'st (S.fail 's (T.AlertError T.CertificateUnknown)) (note_recv_alert_view view T.CertificateUnknown 's));
       fold (is_connection c 'st (S.fail 's (T.AlertError T.CertificateUnknown)));
       false
     } else if (status = read_status_alert_illegal_parameter) {
       ST.advance_fail 'st (T.AlertError T.IllegalParameter);
-      drop_ (ST.log_current c.log view);
-      // Log update: note failure
-      admit();
+      advance_log_event
+        c.log
+        (received_alert_event T.IllegalParameter)
+        (S.Fail (T.AlertError T.IllegalParameter))
+        (S.fail 's (T.AlertError T.IllegalParameter));
+      assert (pure (CL.connection_view_consistent (note_recv_alert_view view T.IllegalParameter 's)));
+      assert (pure ((note_recv_alert_view view T.IllegalParameter 's).CL.state == S.fail 's (T.AlertError T.IllegalParameter)));
+      fold (is_connection_inner c 'st (S.fail 's (T.AlertError T.IllegalParameter)) (note_recv_alert_view view T.IllegalParameter 's));
       fold (is_connection c 'st (S.fail 's (T.AlertError T.IllegalParameter)));
       false
     } else if (status = read_status_alert_decode_error) {
       ST.advance_fail 'st (T.AlertError T.DecodeError);
-      drop_ (ST.log_current c.log view);
-      // Log update: note failure
-      admit();
+      advance_log_event
+        c.log
+        (received_alert_event T.DecodeError)
+        (S.Fail (T.AlertError T.DecodeError))
+        (S.fail 's (T.AlertError T.DecodeError));
+      assert (pure (CL.connection_view_consistent (note_recv_alert_view view T.DecodeError 's)));
+      assert (pure ((note_recv_alert_view view T.DecodeError 's).CL.state == S.fail 's (T.AlertError T.DecodeError)));
+      fold (is_connection_inner c 'st (S.fail 's (T.AlertError T.DecodeError)) (note_recv_alert_view view T.DecodeError 's));
       fold (is_connection c 'st (S.fail 's (T.AlertError T.DecodeError)));
       false
     } else {
       ST.advance_fail 'st T.IoError;
-      drop_ (ST.log_current c.log view);
-      // Log update: note failure
-      admit();
+      advance_log_event
+        c.log
+        (CL.local_fail_event T.IoError)
+        (S.Fail T.IoError)
+        (S.fail 's T.IoError);
+      assert (pure (CL.connection_view_consistent (note_local_fail_view view T.IoError 's)));
+      assert (pure ((note_local_fail_view view T.IoError 's).CL.state == S.fail 's T.IoError));
+      fold (is_connection_inner c 'st (S.fail 's T.IoError) (note_local_fail_view view T.IoError 's));
       fold (is_connection c 'st (S.fail 's T.IoError));
       false
     }
   } else {
     ST.advance_fail 'st T.IoError;
-    drop_ (ST.log_current c.log view);
-    // Log update: note failure
-    admit();
+    advance_log_event
+      c.log
+      (CL.local_fail_event T.IoError)
+      (S.Fail T.IoError)
+      (S.fail 's T.IoError);
+    assert (pure (CL.connection_view_consistent (note_local_fail_view view T.IoError 's)));
+    assert (pure ((note_local_fail_view view T.IoError 's).CL.state == S.fail 's T.IoError));
+    fold (is_connection_inner c 'st (S.fail 's T.IoError) (note_local_fail_view view T.IoError 's));
     fold (is_connection c 'st (S.fail 's T.IoError));
     false
   }
