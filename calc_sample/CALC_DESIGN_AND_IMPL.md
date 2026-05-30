@@ -941,7 +941,7 @@ server_state *new_server(void) {
 }
 ```
 
-**Pattern:** Use `Vec` for ANY data that must persist beyond the function scope.
+**Pattern:** Use `Vec` for ANY data that must persist beyond the function scope. Use `Box` for heap allocated mutable references.
 
 ---
 
