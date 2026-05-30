@@ -294,10 +294,10 @@ check-c-stubs:
 	  $(wildcard c_stubs/*.c)
 
 # ── HACL* Wrapper Tests ────────────────────────────────────────────
-test/test_hacl_stubs: test/test_hacl_stubs.c $(HACL_WRAPPER_SOURCES) \
+test/test_hacl_stubs: test/unit/test_hacl_stubs.c $(HACL_WRAPPER_SOURCES) \
   c_stubs/tls13_hacl_stubs.h | check-deps
 	$(CC) $(CFLAGS_COMMON) \
-	  test/test_hacl_stubs.c $(HACL_WRAPPER_SOURCES) \
+	  test/unit/test_hacl_stubs.c $(HACL_WRAPPER_SOURCES) \
 	  $(LDFLAGS_COMMON) -o $@
 
 test-hacl-stubs: test/test_hacl_stubs
@@ -309,9 +309,9 @@ test/certs/chain.pem test/certs/ca.pem test/certs/leaf.key test/certs/leaf.der: 
 	scripts/generate-test-certs.sh test/certs
 
 test/test_openssl_stubs: c_stubs/tls13_openssl_stubs.c \
-  c_stubs/tls13_openssl_stubs.h test/test_openssl_stubs.c | check-deps
+  c_stubs/tls13_openssl_stubs.h test/unit/test_openssl_stubs.c | check-deps
 	$(CC) -Wall -Wextra -I c_stubs \
-	  c_stubs/tls13_openssl_stubs.c test/test_openssl_stubs.c \
+	  c_stubs/tls13_openssl_stubs.c test/unit/test_openssl_stubs.c \
 	  -lssl -lcrypto -o $@
 
 test-openssl-stubs: test/test_openssl_stubs test/certs/chain.pem \
@@ -321,38 +321,38 @@ test-openssl-stubs: test/test_openssl_stubs test/certs/chain.pem \
 
 # ── I/O Stub Tests ─────────────────────────────────────────────────
 test/test_io_stubs: c_stubs/tls13_io_stubs.c c_stubs/tls13_io_stubs.h \
-  test/test_io_stubs.c
+  test/unit/test_io_stubs.c
 	$(CC) -Wall -Wextra -I c_stubs \
-	  c_stubs/tls13_io_stubs.c test/test_io_stubs.c -o $@
+	  c_stubs/tls13_io_stubs.c test/unit/test_io_stubs.c -o $@
 
 test-io-stubs: test/test_io_stubs
 	./test/test_io_stubs
 
 # ── Extracted Code Tests ───────────────────────────────────────────
-test/test_extract_smoke: test/test_extract_smoke.c $(SMOKE_C) $(SMOKE_H)
+test/test_extract_smoke: test/unit/test_extract_smoke.c $(SMOKE_C) $(SMOKE_H)
 	$(CC) -Wall -Wextra \
 	  -I $(SMOKE_DIR) \
 	  -I $(KRML_HOME)/include \
 	  -I $(KRML_HOME)/krmllib/dist/minimal \
-	  $(SMOKE_C) test/test_extract_smoke.c -o $@
+	  $(SMOKE_C) test/unit/test_extract_smoke.c -o $@
 
 test-extract-smoke: test/test_extract_smoke
 	./test/test_extract_smoke
 
-test/test_connection_bindings: test/test_connection_bindings.c extract-bundle $(HACL_OBJECTS)
+test/test_connection_bindings: test/unit/test_connection_bindings.c extract-bundle $(HACL_OBJECTS)
 	$(CC) $(CFLAGS_COMMON) \
 	  -I_extract/bundle -I_extract/bundle/internal \
 	  _extract/bundle/*.c \
 	  c_stubs/tls13_crypto_external.c \
 	  c_stubs/tls13_pulse_shims.c \
-	  test/test_connection_bindings.c \
+	  test/unit/test_connection_bindings.c \
 	  $(HACL_WRAPPER_SOURCES) \
 	  $(LDFLAGS_COMMON) -o $@
 
 test-connection-bindings: test/test_connection_bindings
 	./test/test_connection_bindings
 
-test/test_key_schedule_bindings: test/test_key_schedule_bindings.c \
+test/test_key_schedule_bindings: test/unit/test_key_schedule_bindings.c \
   $(OUTPUT_DIR)/TLS13_KeySchedule.krml \
   c_stubs/tls13_crypto_external.h \
   $(HACL_WRAPPER_SOURCES) | check-deps $(EXTRACT_DIR)
@@ -364,14 +364,14 @@ test/test_key_schedule_bindings: test/test_key_schedule_bindings.c \
 	$(CC) $(CFLAGS_COMMON) \
 	  -I $(EXTRACT_DIR)/key-schedule \
 	  $(EXTRACT_DIR)/key-schedule/TLS13_KeySchedule.c \
-	  test/test_key_schedule_bindings.c \
+	  test/unit/test_key_schedule_bindings.c \
 	  $(HACL_WRAPPER_SOURCES) \
 	  $(LDFLAGS_COMMON) -o $@
 
 test-key-schedule-bindings: test/test_key_schedule_bindings
 	./test/test_key_schedule_bindings
 
-test/test_record_bindings: test/test_record_bindings.c \
+test/test_record_bindings: test/unit/test_record_bindings.c \
   $(OUTPUT_DIR)/TLS13_Record.krml \
   c_stubs/tls13_crypto_external.h \
   c_stubs/tls13_pulse_shims.c \
@@ -384,7 +384,7 @@ test/test_record_bindings: test/test_record_bindings.c \
 	$(CC) $(CFLAGS_COMMON) \
 	  -I $(EXTRACT_DIR)/record \
 	  $(EXTRACT_DIR)/record/TLS13_Record.c \
-	  test/test_record_bindings.c \
+	  test/unit/test_record_bindings.c \
 	  c_stubs/tls13_pulse_shims.c \
 	  $(HACL_WRAPPER_SOURCES) \
 	  $(LDFLAGS_COMMON) -o $@
@@ -414,13 +414,13 @@ test-client: test/openssl_echo_server test/tls_client
 
 # ── Unit Tests ─────────────────────────────────────────────────────
 # These are low-level tests for individual modules (for development only)
-test/test_record_bindings: test/test_record_bindings.c \
+test/openssl_echo_server: test/openssl_echo_server.c
 	$(CC) -Wall -Wextra test/openssl_echo_server.c \
 	  -lssl -lcrypto -o $@
 
 test/test_extracted_connection_wrapper_openssl: \
   $(CONNECTION_BACKEND_SOURCES) \
-  test/test_extracted_connection_wrapper_openssl.c \
+  test/unit/test_extracted_connection_wrapper_openssl.c \
   $(CONNECTION_BUNDLE_C) $(CONNECTION_BUNDLE_H) \
   c_stubs/tls13_connection_backend.h \
   c_stubs/tls13_crypto_external.c \
@@ -434,7 +434,7 @@ test/test_extracted_connection_wrapper_openssl: \
 	  c_stubs/tls13_io_stubs.c \
 	  c_stubs/tls13_openssl_stubs.c \
 	  c_stubs/tls13_connection_backend_openssl.c \
-	  test/test_extracted_connection_wrapper_openssl.c \
+	  test/unit/test_extracted_connection_wrapper_openssl.c \
 	  $(LDFLAGS_COMMON) -lssl -lcrypto -o $@
 
 test-openssl-echo: test/openssl_echo_server \
