@@ -6,6 +6,7 @@ module TLS13.Parser.Correctness
 module B = TLS13.Bytes
 module H = TLS13.Handshake.Spec
 module Seq = FStar.Seq
+module SHC = TLS13.ServerHello.Checks
 module T = TLS13.Types
 module WS = TLS13.Wire.Spec
 
@@ -44,19 +45,20 @@ let lemma_parse_supported_server_hello_correct
   (ok: bool)
   : Lemma
     (requires
+      // ok must be computed from the scoped byte-level ServerHello checks.
+      ok == SHC.server_hello_ok input_bytes /\
       // random_bytes must be extracted from input[6..37] (positions 6-37 inclusive)
       (ok ==> (
         B.length input_bytes == 90 /\
         Seq.equal random_bytes (Seq.slice input_bytes 6 38)
       )) /\
-      // key_share_bytes must be from position 52 or 58 (depending on extension order)
+      // key_share_bytes must correspond to the accepted extension order.
       (ok ==> (
-        Seq.equal key_share_bytes (Seq.slice input_bytes 52 84) \/
-        Seq.equal key_share_bytes (Seq.slice input_bytes 58 90)
-      )) /\
-      // ok must be computed from all the byte-level checks matching the spec
-      // (This is complex - we admit it as part of the parser TCB)
-      True  // TODO: State complete byte-level checks
+        (SHC.server_hello_ok_52 input_bytes /\
+         Seq.equal key_share_bytes (Seq.slice input_bytes 52 84)) \/
+        (SHC.server_hello_ok_58 input_bytes /\
+         Seq.equal key_share_bytes (Seq.slice input_bytes 58 90))
+      ))
     )
     (ensures
       (ok <==> Some? (WS.parse_supported_server_hello input_bytes)) /\
@@ -65,4 +67,29 @@ let lemma_parse_supported_server_hello_correct
         Seq.equal random_bytes sh.random /\
         Seq.equal key_share_bytes sh.key_share
       )))
-  = admit() // PARSER TCB
+  =
+    WS.lemma_parse_supported_server_hello_ok input_bytes;
+    if ok then
+      begin
+        WS.lemma_parse_supported_server_hello_fields input_bytes;
+        match WS.parse_supported_server_hello input_bytes with
+        | None -> ()
+        | Some sh ->
+          Seq.lemma_eq_elim random_bytes (Seq.slice input_bytes 6 38);
+          Seq.lemma_eq_elim sh.H.random (Seq.slice input_bytes 6 38);
+          Seq.lemma_eq_refl random_bytes sh.H.random;
+          if SHC.server_hello_ok_52 input_bytes then
+            begin
+              Seq.lemma_eq_elim key_share_bytes (Seq.slice input_bytes 52 84);
+              Seq.lemma_eq_elim sh.H.key_share (Seq.slice input_bytes 52 84);
+              Seq.lemma_eq_refl key_share_bytes sh.H.key_share
+            end
+          else
+            begin
+              assert (SHC.server_hello_ok_58 input_bytes);
+              Seq.lemma_eq_elim key_share_bytes (Seq.slice input_bytes 58 90);
+              Seq.lemma_eq_elim sh.H.key_share (Seq.slice input_bytes 58 90);
+              Seq.lemma_eq_refl key_share_bytes sh.H.key_share
+            end
+      end
+    else ()

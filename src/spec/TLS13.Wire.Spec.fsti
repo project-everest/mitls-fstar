@@ -4,6 +4,7 @@ module B = TLS13.Bytes
 module H = TLS13.Handshake.Spec
 module R = TLS13.Record.Spec
 module Seq = FStar.Seq
+module SHC = TLS13.ServerHello.Checks
 module T = TLS13.Types
 module U8 = FStar.UInt8
 
@@ -28,6 +29,25 @@ val parse_handshake:
 val parse_supported_server_hello:
   input:B.bytes ->
   GTot (option H.server_hello)
+
+val lemma_parse_supported_server_hello_ok:
+  input:B.bytes ->
+  Lemma (Some? (parse_supported_server_hello input) <==>
+         SHC.server_hello_ok input)
+
+val lemma_parse_supported_server_hello_fields:
+  input:B.bytes ->
+  Lemma
+    (requires SHC.server_hello_ok input)
+    (ensures (
+      match parse_supported_server_hello input with
+      | Some sh ->
+        Seq.equal sh.H.random (Seq.slice input 6 38) /\
+        ((SHC.server_hello_ok_52 input /\
+          Seq.equal sh.H.key_share (Seq.slice input 52 84)) \/
+         (SHC.server_hello_ok_58 input /\
+          Seq.equal sh.H.key_share (Seq.slice input 58 90)))
+      | None -> False))
 
 val parse_certificate_leaf_der:
   input:B.bytes ->

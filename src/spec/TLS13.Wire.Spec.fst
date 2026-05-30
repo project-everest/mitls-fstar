@@ -4,6 +4,7 @@ module B = TLS13.Bytes
 module H = TLS13.Handshake.Spec
 module R = TLS13.Record.Spec
 module Seq = FStar.Seq
+module SHC = TLS13.ServerHello.Checks
 module SP = FStar.Seq.Properties
 module T = TLS13.Types
 module U8 = FStar.UInt8
@@ -156,39 +157,25 @@ let rec parse_server_hello_extensions
   else None
 
 let parse_supported_server_hello_impl (input:B.bytes) : GTot (option H.server_hello) =
-  if B.length input < 4 then None
-  else
-    let msg_type = nat_of_byte (Seq.index input 0) in
-    let body_len = read_u24 input 1 in
-    if msg_type <> 2 || body_len + 4 <> B.length input then None
-    else
-      let body = Seq.slice input 4 (B.length input) in
-      if B.length body < 40 then None
-      else if read_u16 body 0 <> 0x0303 then None
-      else
-        match take_range body 2 32 with
-        | None -> None
-        | Some random ->
-          if is_hrr_random random then None
-          else
-            let session_id_len = nat_of_byte (Seq.index body 34) in
-            let pos = 35 + session_id_len in
-            if pos + 5 > B.length body then None
-            else if read_u16 body pos <> 0x1303 then None
-            else if nat_of_byte (Seq.index body (pos + 2)) <> 0 then None
-            else
-              let extensions_len = read_u16 body (pos + 3) in
-              let extensions_pos = pos + 5 in
-              if extensions_pos + extensions_len <> B.length body then None
-              else
-                match parse_server_hello_extensions body extensions_pos (extensions_pos + extensions_len) false None with
-                | Some key_share ->
-                  Some {
-                    H.random = random;
-                    H.key_share = key_share;
-                    H.cipher_suite = T.TLS_CHACHA20_POLY1305_SHA256
-                  }
-                | None -> None
+  if SHC.server_hello_ok_52 input then
+    match take_range input 6 32, take_range input 52 32 with
+    | Some random, Some key_share ->
+      Some {
+        H.random = random;
+        H.key_share = key_share;
+        H.cipher_suite = T.TLS_CHACHA20_POLY1305_SHA256
+      }
+    | _, _ -> None
+  else if SHC.server_hello_ok_58 input then
+    match take_range input 6 32, take_range input 58 32 with
+    | Some random, Some key_share ->
+      Some {
+        H.random = random;
+        H.key_share = key_share;
+        H.cipher_suite = T.TLS_CHACHA20_POLY1305_SHA256
+      }
+    | _, _ -> None
+  else None
 
 let parse_certificate_leaf_der_impl (input:B.bytes) : GTot (option B.bytes) =
   if B.length input < 4 then None
@@ -257,6 +244,40 @@ let parse_handshake (input:B.bytes) : GTot (option (H.handshake_msg & nat)) =
 
 let parse_supported_server_hello (input:B.bytes) : GTot (option H.server_hello) =
   parse_supported_server_hello_impl input
+
+let lemma_parse_supported_server_hello_ok (input:B.bytes)
+  : Lemma (Some? (parse_supported_server_hello input) <==>
+           SHC.server_hello_ok input)
+=
+  ()
+
+let lemma_parse_supported_server_hello_fields (input:B.bytes)
+  : Lemma
+      (requires SHC.server_hello_ok input)
+      (ensures (
+        match parse_supported_server_hello input with
+        | Some sh ->
+          Seq.equal sh.H.random (Seq.slice input 6 38) /\
+          ((SHC.server_hello_ok_52 input /\
+            Seq.equal sh.H.key_share (Seq.slice input 52 84)) \/
+           (SHC.server_hello_ok_58 input /\
+            Seq.equal sh.H.key_share (Seq.slice input 58 90)))
+        | None -> False))
+=
+  if SHC.server_hello_ok_52 input then
+    begin
+      Seq.lemma_len_slice input 6 38;
+      Seq.lemma_eq_intro (Seq.slice input 6 38) (Seq.slice input 6 38);
+      Seq.lemma_len_slice input 52 84;
+      Seq.lemma_eq_intro (Seq.slice input 52 84) (Seq.slice input 52 84)
+    end
+  else
+    begin
+      Seq.lemma_len_slice input 6 38;
+      Seq.lemma_eq_intro (Seq.slice input 6 38) (Seq.slice input 6 38);
+      Seq.lemma_len_slice input 58 90;
+      Seq.lemma_eq_intro (Seq.slice input 58 90) (Seq.slice input 58 90)
+    end
 
 let parse_certificate_leaf_der (input:B.bytes) : GTot (option B.bytes) =
   parse_certificate_leaf_der_impl input
