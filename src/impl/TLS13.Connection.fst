@@ -1225,29 +1225,49 @@ fn client_close (c: connection) (ch: IO.channel)
       let ok = E.client_close c.backend ch;
       if ok {
         ST.advance 'st S.SendCloseNotify (S.send_close_state 's);
-        drop_ (ST.log_current c.log view);
-        // Log update: note close
-        admit();
+        advance_log_event
+          c.log
+          CL.sent_close_notify_event
+          S.SendCloseNotify
+          (S.send_close_state 's);
+        assert (pure (CL.connection_view_consistent (note_send_close_view view 's)));
+        assert (pure ((note_send_close_view view 's).CL.state == S.send_close_state 's));
+        fold (is_connection_inner c 'st (S.send_close_state 's) (note_send_close_view view 's));
         fold (is_connection c 'st (S.send_close_state 's));
       } else {
         ST.advance_fail 'st T.IoError;
-        drop_ (ST.log_current c.log view);
-        // Log update: note failure
-        admit();
+        advance_log_event
+          c.log
+          (CL.local_fail_event T.IoError)
+          (S.Fail T.IoError)
+          (S.fail 's T.IoError);
+        assert (pure (CL.connection_view_consistent (note_local_fail_view view T.IoError 's)));
+        assert (pure ((note_local_fail_view view T.IoError 's).CL.state == S.fail 's T.IoError));
+        fold (is_connection_inner c 'st (S.fail 's T.IoError) (note_local_fail_view view T.IoError 's));
         fold (is_connection c 'st (S.fail 's T.IoError));
       }
     } else {
       ST.advance_fail 'st T.IoError;
-      drop_ (ST.log_current c.log view);
-      // Log update: note failure
-      admit();
+      advance_log_event
+        c.log
+        (CL.local_fail_event T.IoError)
+        (S.Fail T.IoError)
+        (S.fail 's T.IoError);
+      assert (pure (CL.connection_view_consistent (note_local_fail_view view T.IoError 's)));
+      assert (pure ((note_local_fail_view view T.IoError 's).CL.state == S.fail 's T.IoError));
+      fold (is_connection_inner c 'st (S.fail 's T.IoError) (note_local_fail_view view T.IoError 's));
       fold (is_connection c 'st (S.fail 's T.IoError));
     }
   } else {
     ST.advance_fail 'st T.IoError;
-    drop_ (ST.log_current c.log view);
-    // Log update: note failure
-    admit();
+    advance_log_event
+      c.log
+      (CL.local_fail_event T.IoError)
+      (S.Fail T.IoError)
+      (S.fail 's T.IoError);
+    assert (pure (CL.connection_view_consistent (note_local_fail_view view T.IoError 's)));
+    assert (pure ((note_local_fail_view view T.IoError 's).CL.state == S.fail 's T.IoError));
+    fold (is_connection_inner c 'st (S.fail 's T.IoError) (note_local_fail_view view T.IoError 's));
     fold (is_connection c 'st (S.fail 's T.IoError));
   }
 }
