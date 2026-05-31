@@ -1184,8 +1184,8 @@ let note_app_delivered_with_pending
   {
     note_app_delivered view bytes with
       pending_app = pending;
-      pending_app_record = B.append bytes pending;
-      pending_app_offset = B.length bytes;
+      pending_app_record = view.pending_app_record;
+      pending_app_offset = view.pending_app_offset + B.length bytes;
   }
 
 let note_app_received_with_pending
@@ -1200,6 +1200,102 @@ let note_app_received_with_pending
       pending_app_record = B.append bytes pending;
       pending_app_offset = B.length bytes;
   }
+
+let lemma_raw_slice_split
+  (source:B.bytes)
+  (lo:nat)
+  (mid:nat)
+  (hi:nat)
+  : Lemma
+      (requires lo <= mid /\ mid <= hi /\ hi <= B.length source)
+      (ensures Seq.equal
+        (raw_slice source lo hi)
+        (B.append (raw_slice source lo mid) (raw_slice source mid hi)))
+  =
+  let whole = raw_slice source lo hi in
+  let left = raw_slice source lo mid in
+  let right = raw_slice source mid hi in
+  assert (whole == Seq.slice source lo hi);
+  assert (left == Seq.slice source lo mid);
+  assert (right == Seq.slice source mid hi);
+  Seq.lemma_len_slice source lo hi;
+  Seq.lemma_len_slice source lo mid;
+  Seq.lemma_len_slice source mid hi;
+  assert (B.length whole == hi - lo);
+  assert (B.length left == mid - lo);
+  assert (B.length right == hi - mid);
+  assert (mid - lo <= B.length whole);
+  SP.lemma_split whole (mid - lo);
+  SP.slice_slice source lo hi 0 (mid - lo);
+  assert (Seq.slice whole 0 (mid - lo) == left);
+  SP.slice_slice source lo hi (mid - lo) (hi - lo);
+  assert (Seq.slice whole (mid - lo) (B.length whole) == right);
+  assert (B.append left right == whole);
+  Seq.lemma_eq_refl whole (B.append left right)
+
+let lemma_pending_app_drain_split
+  (view:connection_view)
+  (bytes:B.bytes)
+  (pending:B.bytes)
+  : Lemma
+      (requires pending_app_source_consistent view /\
+                Seq.equal view.pending_app (B.append bytes pending))
+      (ensures view.pending_app_offset + B.length bytes <= B.length view.pending_app_record /\
+               Seq.equal pending
+                 (raw_slice
+                   view.pending_app_record
+                   (view.pending_app_offset + B.length bytes)
+                   (B.length view.pending_app_record)))
+  =
+  let source = view.pending_app_record in
+  let off = view.pending_app_offset in
+  let hi = B.length source in
+  let joined = B.append bytes pending in
+  assert (off <= hi);
+  assert (raw_slice source off hi == Seq.slice source off hi);
+  Seq.lemma_len_slice source off hi;
+  Seq.lemma_len_append bytes pending;
+  assert (B.length joined == B.length bytes + B.length pending);
+  assert (B.length (raw_slice source off hi) == hi - off);
+  Seq.lemma_eq_elim view.pending_app (raw_slice source off hi);
+  Seq.lemma_eq_elim view.pending_app joined;
+  assert (raw_slice source off hi == joined);
+  assert (hi - off == B.length bytes + B.length pending);
+  assert (off + B.length bytes <= hi);
+  lemma_raw_slice_split source off (off + B.length bytes) hi;
+  assert (Seq.equal
+    (raw_slice source off hi)
+    (B.append
+      (raw_slice source off (off + B.length bytes))
+      (raw_slice source (off + B.length bytes) hi)));
+  Seq.lemma_eq_elim
+    (raw_slice source off hi)
+    (B.append
+      (raw_slice source off (off + B.length bytes))
+      (raw_slice source (off + B.length bytes) hi));
+  assert (B.length (raw_slice source off (off + B.length bytes)) == B.length bytes);
+  assert (B.append bytes pending ==
+          B.append
+            (raw_slice source off (off + B.length bytes))
+            (raw_slice source (off + B.length bytes) hi));
+  SP.lemma_append_inj
+    bytes
+    pending
+    (raw_slice source off (off + B.length bytes))
+    (raw_slice source (off + B.length bytes) hi);
+  assert (Seq.equal pending (raw_slice source (off + B.length bytes) hi))
+
+let lemma_note_app_delivered_with_pending_source_consistent
+  (view:connection_view)
+  (bytes:B.bytes)
+  (pending:B.bytes)
+  : Lemma
+      (requires pending_app_source_consistent view /\
+                Seq.equal view.pending_app (B.append bytes pending))
+      (ensures pending_app_source_consistent
+        (note_app_delivered_with_pending view bytes pending))
+  =
+  lemma_pending_app_drain_split view bytes pending
 
 let with_pending_received_raw
   (view:connection_view)
@@ -1665,7 +1761,8 @@ let lemma_step_read_application_data_delivered_with_pending
                 raw_view.app_view == view0.app_view /\
                 raw_io_log_extends view0.raw_log raw_view.raw_log /\
                 raw_io_log_same_sent view0.raw_log raw_view.raw_log /\
-                view0.state.S.phase == S.ApplicationData)
+                view0.state.S.phase == S.ApplicationData /\
+                Seq.equal raw_view.pending_app (B.append bytes pending))
       (ensures step
         view0
         (request_with_received_raw_delta (OpReadApplicationData max_len) view0.raw_log (note_app_delivered_with_pending raw_view bytes pending).raw_log)
@@ -1677,7 +1774,7 @@ let lemma_step_read_application_data_delivered_with_pending
   let req = request_with_received_raw_delta (OpReadApplicationData max_len) view0.raw_log view1.raw_log in
   let resp = response_no_network_out bytes ApplicationDataReady in
   lemma_step_read_application_data_delivered view0 raw_view max_len bytes;
-  lemma_raw_slice_append_suffix bytes pending;
+  lemma_note_app_delivered_with_pending_source_consistent raw_view bytes pending;
   assert (pending_app_source_consistent view1);
   assert (connection_view_consistent base);
   assert (connection_view_consistent view1);
