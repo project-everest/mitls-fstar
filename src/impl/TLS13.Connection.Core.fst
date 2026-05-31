@@ -4,8 +4,10 @@ module TLS13.Connection.Core
 
 open Pulse.Lib.Pervasives
 open Pulse.Lib.Array.PtsTo
+open Pulse.Lib.Box { box, (!), (:=) }
 
 module B = TLS13.Bytes
+module Box = Pulse.Lib.Box
 module Cast = FStar.Int.Cast
 module CL = TLS13.ConnectionLog
 module Rec = TLS13.Record
@@ -17,6 +19,9 @@ module SZ = FStar.SizeT
 module T = TLS13.Types
 module U16 = FStar.UInt16
 module U8 = FStar.UInt8
+module V = Pulse.Lib.Vec
+
+let pending_read_buffer_capacity : SZ.t = 16384sz
 
 noeq
 type client_core = {
@@ -24,15 +29,25 @@ type client_core = {
   log: ST.log_ref;
   client_application_record_state: Rec.record_state;
   server_application_record_state: Rec.record_state;
+  pending_read_buffer: V.vec U8.t;
+  pending_read_offset: box SZ.t;
+  pending_read_len: box SZ.t;
 }
 
 let is_client_core (c:client_core) (view:CL.connection_view) : slprop =
-  exists* client_record_s server_record_s.
+  exists* client_record_s server_record_s pending_read_buffer pending_read_offset pending_read_len.
     ST.current c.state view.CL.state **
     ST.log_current c.log view **
     Rec.is_record_state c.client_application_record_state client_record_s **
     Rec.is_record_state c.server_application_record_state server_record_s **
-    pure (CL.connection_view_consistent view)
+    V.pts_to c.pending_read_buffer pending_read_buffer **
+    Box.pts_to c.pending_read_offset pending_read_offset **
+    Box.pts_to c.pending_read_len pending_read_len **
+    pure (CL.connection_view_consistent view /\
+          V.is_full_vec c.pending_read_buffer /\
+          V.length c.pending_read_buffer == 16384 /\
+          SZ.v pending_read_offset <= SZ.v pending_read_len /\
+          SZ.v pending_read_len <= 16384)
 
 let received_alert_event (alert:T.alert_description) : CL.host_event =
   CL.NetworkEvent { CL.message_direction = CL.Received; CL.message_value = CL.TlsAlert alert }
@@ -149,16 +164,25 @@ fn client_core_new ()
   let log = ST.alloc_initial_log ();
   let client_record_state = Rec.record_state_new ();
   let server_record_state = Rec.record_state_new ();
+  let pending_read_buffer = V.alloc 0uy pending_read_buffer_capacity;
+  let pending_read_offset = Box.alloc 0sz;
+  let pending_read_len = Box.alloc 0sz;
   let c = {
     state = st;
     log = log;
     client_application_record_state = client_record_state;
     server_application_record_state = server_record_state;
+    pending_read_buffer = pending_read_buffer;
+    pending_read_offset = pending_read_offset;
+    pending_read_len = pending_read_len;
   };
   rewrite (ST.current st S.initial) as (ST.current c.state CL.empty_connection_view.CL.state);
   rewrite (ST.log_current log CL.empty_connection_view) as (ST.log_current c.log CL.empty_connection_view);
   with client_record_s. rewrite (Rec.is_record_state client_record_state client_record_s) as (Rec.is_record_state c.client_application_record_state client_record_s);
   with server_record_s. rewrite (Rec.is_record_state server_record_state server_record_s) as (Rec.is_record_state c.server_application_record_state server_record_s);
+  with pending_s. rewrite (V.pts_to pending_read_buffer pending_s) as (V.pts_to c.pending_read_buffer pending_s);
+  with pending_offset_s. rewrite (Box.pts_to pending_read_offset pending_offset_s) as (Box.pts_to c.pending_read_offset pending_offset_s);
+  with pending_len_s. rewrite (Box.pts_to pending_read_len pending_len_s) as (Box.pts_to c.pending_read_len pending_len_s);
   assert (pure (CL.connection_view_consistent CL.empty_connection_view));
   fold (is_client_core c CL.empty_connection_view);
   c
@@ -173,6 +197,9 @@ fn client_core_free (c: client_core)
   drop_ (ST.log_current c.log 'view);
   Rec.record_state_free c.client_application_record_state;
   Rec.record_state_free c.server_application_record_state;
+  V.free c.pending_read_buffer;
+  Box.free c.pending_read_offset;
+  Box.free c.pending_read_len;
 }
 
 fn client_core_install_application_keys_runtime
