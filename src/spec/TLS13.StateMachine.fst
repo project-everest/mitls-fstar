@@ -145,6 +145,42 @@ let rec lemma_advance_write_records_preserves_read_state (s:conn_state) (n:nat)
 let advance_read_record (s:conn_state) : conn_state =
   { s with read_state = R.next_seq s.read_state }
 
+let rec advance_read_records (s:conn_state) (n:nat) : Tot conn_state (decreases n) =
+  if n = 0 then s
+  else advance_read_record (advance_read_records s (n - 1))
+
+let lemma_advance_read_records_one (s:conn_state)
+  : Lemma (advance_read_records s 1 == advance_read_record s)
+  =
+  ()
+
+let lemma_advance_read_records_succ (s:conn_state) (n:nat)
+  : Lemma (advance_read_records s (n + 1) == advance_read_record (advance_read_records s n))
+  =
+  ()
+
+let rec lemma_advance_read_records_read_seq (s:conn_state) (n:nat)
+  : Lemma
+      (ensures (advance_read_records s n).read_state.R.seq == s.read_state.R.seq + n)
+      (decreases n)
+  =
+  if n = 0 then ()
+  else lemma_advance_read_records_read_seq s (n - 1)
+
+let rec lemma_advance_read_records_preserves_phase (s:conn_state) (n:nat)
+  : Lemma (ensures (advance_read_records s n).phase == s.phase)
+          (decreases n)
+  =
+  if n = 0 then ()
+  else lemma_advance_read_records_preserves_phase s (n - 1)
+
+let rec lemma_advance_read_records_preserves_write_state (s:conn_state) (n:nat)
+  : Lemma (ensures (advance_read_records s n).write_state == s.write_state)
+          (decreases n)
+  =
+  if n = 0 then ()
+  else lemma_advance_read_records_preserves_write_state s (n - 1)
+
 let send_close_state (s:conn_state) : conn_state =
   { advance_write_record s with phase = Closing }
 
