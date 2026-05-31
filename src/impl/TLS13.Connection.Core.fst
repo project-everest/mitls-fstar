@@ -349,14 +349,14 @@ ensures exists* view1 network_out1 app_out1.
   if KSendApplicationData? kind {
     let app_bytes : erased B.bytes = Ghost.reveal 'app_in_bytes;
     assert (pure (mreq == CL.request_no_network_in (CL.OpSendApplicationData (Ghost.reveal app_bytes))));
-    if SZ.(app_in_len <=^ tls_application_plaintext_max) {
+    if SZ.(app_in_len <=^ tls_two_application_plaintext_max) {
       let inner_len = SZ.(app_in_len +^ 1sz);
       let cipher_len = SZ.(inner_len +^ 16sz);
       let wire_len = SZ.(5sz +^ cipher_len);
       assert (pure (SZ.v cipher_len == SZ.v app_in_len + 17));
       assert (pure (SZ.v wire_len == SZ.v app_in_len + 22));
-      assert (pure (SZ.v wire_len <= SZ.v max_self_emitted_application_record_wire_len));
-      if SZ.(wire_len <=^ network_out_cap) {
+      if SZ.(app_in_len <=^ tls_application_plaintext_max && wire_len <=^ network_out_cap) {
+        assert (pure (SZ.v wire_len <= SZ.v max_self_emitted_application_record_wire_len));
         let mut header = [| 0uy; 5sz |];
         let mut inner_plaintext = [| 0uy; inner_len |];
         let mut cipher = [| 0uy; cipher_len |];
