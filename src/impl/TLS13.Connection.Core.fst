@@ -94,6 +94,7 @@ let is_client_core (c:client_core) (view:CL.connection_view) : slprop =
     V.pts_to c.pending_network_buffer pending_network_buffer **
     Box.pts_to c.pending_network_len pending_network_len **
     pure (CL.connection_view_consistent view /\
+          CL.pending_app_source_consistent view /\
           V.is_full_vec c.pending_read_buffer /\
           V.length c.pending_read_buffer == SZ.v pending_read_buffer_capacity /\
           SZ.v pending_read_offset <= SZ.v pending_read_len /\
@@ -983,11 +984,36 @@ ensures exists* view1 network_out1 app_out1.
             (Ghost.reveal pending_buffer1)
             (SZ.v pending_read_offset')
             (SZ.v pending_read_len);
+        assert (pure (SZ.v pending_read_offset' == SZ.v pending_read_offset + SZ.v copy_len));
+        assert (pure (Seq.equal
+          (Ghost.reveal app_payload)
+          (Seq.slice
+            (Ghost.reveal pending_buffer1)
+            (SZ.v pending_read_offset)
+            (SZ.v pending_read_offset'))));
+        assert (pure (CL.raw_slice
+          (Ghost.reveal pending_buffer1)
+          (SZ.v pending_read_offset')
+          (SZ.v pending_read_len) ==
+          Seq.slice
+            (Ghost.reveal pending_buffer1)
+            (SZ.v pending_read_offset')
+            (SZ.v pending_read_len)));
+        assert (pure (Seq.equal
+          (Ghost.reveal pending_payload)
+          (Seq.slice
+            (Ghost.reveal pending_buffer1)
+            (SZ.v pending_read_offset')
+            (SZ.v pending_read_len))));
+        CL.lemma_raw_slice_append_suffix
+          (Ghost.reveal app_payload)
+          (Ghost.reveal pending_payload);
         let view2 : erased CL.connection_view =
           CL.note_app_delivered_with_pending
             (Ghost.reveal view1)
             (Ghost.reveal app_payload)
             (Ghost.reveal pending_payload);
+        assert (pure (CL.pending_app_source_consistent (Ghost.reveal view2)));
         CL.lemma_step_read_application_data_delivered_with_pending
           view0
           (Ghost.reveal view1)
@@ -1268,6 +1294,8 @@ ensures exists* view1 network_out1 app_out1.
                           (Ghost.reveal app_payload)
                           B.empty
                           (S.advance_read_record view0.CL.state);
+                      CL.lemma_raw_slice_append_suffix (Ghost.reveal app_payload) B.empty;
+                      assert (pure (CL.pending_app_source_consistent (Ghost.reveal base_view2)));
                       CL.lemma_step_read_application_data_success_with_pending
                         view0
                         (Ghost.reveal view1)
@@ -1360,6 +1388,9 @@ ensures exists* view1 network_out1 app_out1.
                         assert (pure (Seq.equal
                           (Ghost.reveal pending_payload)
                           (Seq.slice (Ghost.reveal inner_bytes) (SZ.v output_limit) (SZ.v payload_len))));
+                        CL.lemma_raw_slice_append_suffix
+                          (Ghost.reveal app_payload)
+                          (Ghost.reveal pending_payload);
                         assert (pure (view0.CL.state.S.phase == S.ApplicationData));
                         lemma_step_recv_application_data view0.CL.state (Ghost.reveal app_payload);
                         assert (pure (S.step view0.CL.state (S.RecvApplicationData (Ghost.reveal app_payload)) ==
@@ -1371,6 +1402,7 @@ ensures exists* view1 network_out1 app_out1.
                             (Ghost.reveal app_payload)
                             (Ghost.reveal pending_payload)
                             (S.advance_read_record view0.CL.state);
+                        assert (pure (CL.pending_app_source_consistent (Ghost.reveal base_view2)));
                         CL.lemma_step_read_application_data_success_with_pending
                           view0
                           (Ghost.reveal view1)
@@ -2038,6 +2070,8 @@ ensures exists* view1 network_out1 app_out1.
                     (Ghost.reveal app_payload)
                     B.empty
                     (S.advance_read_record view0.CL.state);
+                CL.lemma_raw_slice_append_suffix (Ghost.reveal app_payload) B.empty;
+                assert (pure (CL.pending_app_source_consistent (Ghost.reveal base_view2)));
                 let view2 : erased CL.connection_view =
                   CL.with_pending_received_raw
                     (Ghost.reveal base_view2)
@@ -2130,6 +2164,9 @@ ensures exists* view1 network_out1 app_out1.
                   assert (pure (Seq.equal
                     (Ghost.reveal pending_payload)
                     (Seq.slice (Ghost.reveal inner_bytes) (SZ.v output_limit) (SZ.v payload_len))));
+                  CL.lemma_raw_slice_append_suffix
+                    (Ghost.reveal app_payload)
+                    (Ghost.reveal pending_payload);
                   assert (pure (view0.CL.state.S.phase == S.ApplicationData));
                   lemma_step_recv_application_data view0.CL.state (Ghost.reveal app_payload);
                   assert (pure (S.step view0.CL.state (S.RecvApplicationData (Ghost.reveal app_payload)) ==
@@ -2141,6 +2178,7 @@ ensures exists* view1 network_out1 app_out1.
                       (Ghost.reveal app_payload)
                       (Ghost.reveal pending_payload)
                       (S.advance_read_record view0.CL.state);
+                  assert (pure (CL.pending_app_source_consistent (Ghost.reveal base_view2)));
                   let view2 : erased CL.connection_view =
                     CL.with_pending_received_raw
                       (Ghost.reveal base_view2)

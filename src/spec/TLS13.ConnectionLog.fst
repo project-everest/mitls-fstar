@@ -66,6 +66,23 @@ let raw_slice (bytes:B.bytes) (lo:nat) (hi:nat) : B.bytes =
   then Seq.slice bytes lo hi
   else B.empty
 
+let lemma_raw_slice_append_suffix (prefix:B.bytes) (suffix:B.bytes)
+  : Lemma
+      (ensures Seq.equal suffix
+        (raw_slice (B.append prefix suffix) (B.length prefix) (B.length (B.append prefix suffix))))
+  =
+  let full = B.append prefix suffix in
+  Seq.lemma_len_append prefix suffix;
+  assert (B.length full == B.length prefix + B.length suffix);
+  assert (B.length prefix <= B.length full);
+  assert (raw_slice full (B.length prefix) (B.length full) ==
+          Seq.slice full (B.length prefix) (B.length full));
+  SP.append_slices prefix suffix;
+  assert (Seq.equal suffix
+    (Seq.slice full (B.length prefix) (B.length prefix + B.length suffix)));
+  assert (B.length prefix + B.length suffix == B.length full);
+  assert (Seq.equal suffix (Seq.slice full (B.length prefix) (B.length full)))
+
 let append_raw_sent (raw:raw_io_log) (bytes:B.bytes) : raw_io_log =
   { raw with raw_sent = B.append raw.raw_sent bytes }
 
@@ -969,8 +986,15 @@ type connection_view = {
   state: S.conn_state;
   app_view: app_log;
   pending_app: B.bytes;
+  pending_app_record: B.bytes;
+  pending_app_offset: nat;
   pending_received_raw: B.bytes;
 }
+
+let pending_app_source_consistent (view:connection_view) : prop =
+  view.pending_app_offset <= B.length view.pending_app_record /\
+  Seq.equal view.pending_app
+    (raw_slice view.pending_app_record view.pending_app_offset (B.length view.pending_app_record))
 
 let connection_view_app_projected (view:connection_view) : prop =
   app_log_of_host_trace view.host_trace == view.app_view
@@ -1004,7 +1028,8 @@ let connection_view_record_stream_shaped (view:connection_view) : prop =
 
 let connection_view_shape (view:connection_view) : prop =
   connection_view_consistent_with raw_tls_stream_shapes view /\
-  connection_view_record_stream_shaped view
+  connection_view_record_stream_shaped view /\
+  pending_app_source_consistent view
 
 let connection_view_consistent (view:connection_view) : prop =
   connection_view_shape view
@@ -1048,6 +1073,8 @@ let empty_connection_view : connection_view =
     state = S.initial;
     app_view = empty_app_log;
     pending_app = B.empty;
+    pending_app_record = B.empty;
+    pending_app_offset = 0;
     pending_received_raw = B.empty;
   }
 
@@ -1154,7 +1181,12 @@ let note_app_delivered_with_pending
   (bytes:B.bytes)
   (pending:B.bytes)
   : connection_view =
-  { note_app_delivered view bytes with pending_app = pending }
+  {
+    note_app_delivered view bytes with
+      pending_app = pending;
+      pending_app_record = B.append bytes pending;
+      pending_app_offset = B.length bytes;
+  }
 
 let note_app_received_with_pending
   (view:connection_view)
@@ -1162,7 +1194,12 @@ let note_app_received_with_pending
   (pending:B.bytes)
   (state:S.conn_state)
   : connection_view =
-  { note_app_received view bytes state with pending_app = pending }
+  {
+    note_app_received view bytes state with
+      pending_app = pending;
+      pending_app_record = B.append bytes pending;
+      pending_app_offset = B.length bytes;
+  }
 
 let with_pending_received_raw
   (view:connection_view)
@@ -1248,6 +1285,8 @@ let lemma_connection_view_consistent_note_host_event
   assert ((app_log_of_host_trace next.host_trace).app_sent == next.app_view.app_sent);
   assert ((app_log_of_host_trace next.host_trace).app_received == next.app_view.app_received);
   assert (app_log_of_host_trace next.host_trace == next.app_view);
+  assert (pending_app_source_consistent view);
+  assert (pending_app_source_consistent next);
   assert (connection_view_raw_stream_shaped next);
   assert (connection_view_record_stream_shaped next);
   assert (connection_view_shape next);
@@ -1284,6 +1323,8 @@ let lemma_connection_view_consistent_note_host_event_no_state
   assert ((app_log_of_host_trace next.host_trace).app_sent == next.app_view.app_sent);
   assert ((app_log_of_host_trace next.host_trace).app_received == next.app_view.app_received);
   assert (app_log_of_host_trace next.host_trace == next.app_view);
+  assert (pending_app_source_consistent view);
+  assert (pending_app_source_consistent next);
   assert (connection_view_raw_stream_shaped next);
   assert (connection_view_record_stream_shaped next);
   assert (connection_view_shape next);
@@ -1555,6 +1596,8 @@ let lemma_step_read_application_data_success_with_pending
   let req = request_with_received_raw_delta (OpReadApplicationData max_len) view0.raw_log view1.raw_log in
   let resp = response_no_network_out bytes ApplicationDataReady in
   lemma_step_read_application_data_success view0 raw_view max_len bytes state;
+  lemma_raw_slice_append_suffix bytes pending;
+  assert (pending_app_source_consistent view1);
   assert (connection_view_consistent base);
   assert (connection_view_consistent view1);
   assert (view1.raw_log == base.raw_log);
@@ -1634,6 +1677,8 @@ let lemma_step_read_application_data_delivered_with_pending
   let req = request_with_received_raw_delta (OpReadApplicationData max_len) view0.raw_log view1.raw_log in
   let resp = response_no_network_out bytes ApplicationDataReady in
   lemma_step_read_application_data_delivered view0 raw_view max_len bytes;
+  lemma_raw_slice_append_suffix bytes pending;
+  assert (pending_app_source_consistent view1);
   assert (connection_view_consistent base);
   assert (connection_view_consistent view1);
   assert (view1.raw_log == base.raw_log);
@@ -1702,6 +1747,8 @@ let lemma_step_read_need_network_input_with_pending
   let req = request_with_received_raw_delta (OpReadApplicationData max_len) view0.raw_log view1.raw_log in
   let resp = response_no_network_out B.empty NeedNetworkInput in
   lemma_step_read_need_network_input view0 raw_view max_len;
+  assert (pending_app_source_consistent raw_view);
+  assert (pending_app_source_consistent view1);
   assert (connection_view_consistent view1);
   assert (view1.raw_log == raw_view.raw_log);
   assert (view1.app_view == raw_view.app_view);
@@ -1725,6 +1772,8 @@ let lemma_step_with_pending_received_raw
       (ensures step view0 req (with_pending_received_raw view1 pending) resp)
   =
   let view2 = with_pending_received_raw view1 pending in
+  assert (pending_app_source_consistent view1);
+  assert (pending_app_source_consistent view2);
   assert (connection_view_consistent view2);
   assert (view2.raw_log == view1.raw_log);
   assert (view2.app_view == view1.app_view);
@@ -1991,6 +2040,8 @@ let lemma_connection_view_consistent_sync_raw_same_state
   lemma_connection_view_record_stream_shaped_sync_raw_state view raw view.state;
   assert (connection_view_consistent_with raw_tls_stream_shapes view);
   assert (connection_view_consistent_with raw_tls_stream_shapes (sync_raw_state view raw view.state));
+  assert (pending_app_source_consistent view);
+  assert (pending_app_source_consistent (sync_raw_state view raw view.state));
   assert (connection_view_shape (sync_raw_state view raw view.state))
 
 let lemma_connection_view_raw_stream_shaped_note_raw_app_sent
