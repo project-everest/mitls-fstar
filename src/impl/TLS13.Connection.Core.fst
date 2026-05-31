@@ -2286,18 +2286,12 @@ ensures exists* view1 network_out1 app_out1.
             } else {
               assert (pure (SZ.v residual_len <= SZ.v pending_network_buffer_capacity));
               assert (pure (SZ.v record_wire_len + SZ.v residual_len <= SZ.v network_in_len));
-              V.pts_to_len c.pending_network_buffer;
-              V.to_array_pts_to c.pending_network_buffer;
-              copy_payload_to_output_loop
+              set_pending_network_from_slice
+                c
                 network_in
                 network_in_len
-                (V.vec_to_array c.pending_network_buffer)
-                pending_network_buffer_capacity
                 record_wire_len
-                0sz
                 residual_len;
-              V.to_vec_pts_to c.pending_network_buffer;
-              c.pending_network_len := residual_len;
               with pending_network_buffer1. assert (V.pts_to c.pending_network_buffer pending_network_buffer1);
               let pending_raw_payload : erased B.bytes =
                 CL.raw_slice
@@ -2361,19 +2355,13 @@ ensures exists* view1 network_out1 app_out1.
           }
         } else if not (SZ.(fragment_len <=^ remaining_network_len)) {
           if SZ.(network_in_len <=^ pending_network_buffer_capacity) {
-            V.pts_to_len c.pending_network_buffer;
-            V.to_array_pts_to c.pending_network_buffer;
-            copy_payload_to_output_loop
+            set_pending_network_from_slice
+              c
               network_in
               network_in_len
-              (V.vec_to_array c.pending_network_buffer)
-              pending_network_buffer_capacity
-              0sz
               0sz
               network_in_len;
-            V.to_vec_pts_to c.pending_network_buffer;
             with pending_network_buffer1. assert (V.pts_to c.pending_network_buffer pending_network_buffer1);
-            c.pending_network_len := network_in_len;
             let pending_payload : erased B.bytes =
               CL.raw_slice
                 (Ghost.reveal pending_network_buffer1)
@@ -3258,19 +3246,13 @@ ensures exists* view1 network_out1 app_out1.
     } else {
       assert (pure (SZ.v network_in_len < 5));
       assert (pure (SZ.v network_in_len <= SZ.v pending_network_buffer_capacity));
-      V.pts_to_len c.pending_network_buffer;
-      V.to_array_pts_to c.pending_network_buffer;
-      copy_payload_to_output_loop
+      set_pending_network_from_slice
+        c
         network_in
         network_in_len
-        (V.vec_to_array c.pending_network_buffer)
-        pending_network_buffer_capacity
-        0sz
         0sz
         network_in_len;
-      V.to_vec_pts_to c.pending_network_buffer;
       with pending_network_buffer1. assert (V.pts_to c.pending_network_buffer pending_network_buffer1);
-      c.pending_network_len := network_in_len;
       let pending_payload : erased B.bytes =
         CL.raw_slice
           (Ghost.reveal pending_network_buffer1)
