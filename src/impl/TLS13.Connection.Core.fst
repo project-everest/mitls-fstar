@@ -364,20 +364,29 @@ ensures exists* view1 network_out1 app_out1.
       result
     }
   } else if KReadApplicationData? kind {
-    assert (pure (mreq == CL.request_with_network_in (CL.OpReadApplicationData (SZ.v requested_app_len)) B.empty));
+    let network_bytes : erased B.bytes = Ghost.reveal 'network_in_bytes;
+    assert (pure (mreq == CL.request_with_network_in (CL.OpReadApplicationData (SZ.v requested_app_len)) (Ghost.reveal network_bytes)));
     let result = { network_out_len = 0sz; app_out_len = 0sz; status = CL.NeedNetworkInput };
     let resp = CL.response_no_network_out B.empty CL.NeedNetworkInput;
+    let raw : erased CL.raw_io_log =
+      CL.append_raw_received view0.CL.raw_log (Ghost.reveal network_bytes);
+    CL.lemma_raw_io_log_extends_received view0.CL.raw_log (Ghost.reveal network_bytes);
+    assert (pure (CL.raw_io_log_same_sent view0.CL.raw_log (Ghost.reveal raw)));
+    let view1 : erased CL.connection_view =
+      CL.sync_raw_state view0 (Ghost.reveal raw) view0.CL.state;
+    CL.lemma_connection_view_consistent_sync_raw_same_state view0 (Ghost.reveal raw);
     CL.lemma_append_empty_right view0.CL.raw_log.CL.raw_sent;
-    CL.lemma_append_empty_right view0.CL.raw_log.CL.raw_received;
-    CL.lemma_connection_view_single_step_for_core_step view0 mreq view0 resp;
-    assert (pure (CL.step view0 mreq view0 resp));
-    ST.advance_log c.log view0;
+    assert (pure ((Ghost.reveal view1).CL.raw_log == CL.step_raw_log view0.CL.raw_log mreq resp));
+    assert (pure ((Ghost.reveal view1).CL.app_view == CL.step_app_log view0.CL.app_view mreq resp));
+    CL.lemma_connection_view_single_step_for_core_step view0 mreq (Ghost.reveal view1) resp;
+    assert (pure (CL.step view0 mreq (Ghost.reveal view1) resp));
+    ST.advance_log c.log (Ghost.reveal view1);
     lemma_empty_prefix (Ghost.reveal 'network_out0);
     lemma_empty_prefix (Ghost.reveal 'app_out0);
     assert (pure (response_buffers_match result (Ghost.reveal 'network_out0) (Ghost.reveal 'app_out0) resp));
     assert (pure (exists mresp. response_buffers_match result (Ghost.reveal 'network_out0) (Ghost.reveal 'app_out0) mresp /\
-                              CL.step view0 mreq view0 mresp));
-    fold (is_client_core c view0);
+                              CL.step view0 mreq (Ghost.reveal view1) mresp));
+    fold (is_client_core c (Ghost.reveal view1));
     result
   } else {
     assert (pure (mreq == CL.request_no_network_in CL.OpClose));

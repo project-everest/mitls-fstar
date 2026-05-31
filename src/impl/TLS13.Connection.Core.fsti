@@ -23,8 +23,9 @@ module U8 = FStar.UInt8
   The implementation establishes the calc-style theorem shape over concrete
   buffers and CL.step witnesses. Application writes and close_notify use the
   record/framing code to emit one TLS record into network_out.
-  KReadApplicationData currently models an empty input poll that returns
-  NeedNetworkInput, and multi-record fragmentation remains a later milestone.
+  KReadApplicationData threads network_in into the raw received log and currently
+  returns NeedNetworkInput until decrypt/parse-to-app_out is wired.
+  Multi-record fragmentation remains a later milestone.
 **)
 
 val client_core : Type0
@@ -79,7 +80,6 @@ let request_buffers_match
     Seq.equal network_in B.empty /\
     req == CL.request_no_network_in (CL.OpSendApplicationData app_in)
   | KReadApplicationData ->
-    Seq.equal network_in B.empty /\
     Seq.equal app_in B.empty /\
     req == CL.request_with_network_in (CL.OpReadApplicationData requested_app_len) network_in
   | KClose ->
