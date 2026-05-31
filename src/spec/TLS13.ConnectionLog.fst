@@ -1164,6 +1164,12 @@ let note_app_received_with_pending
   : connection_view =
   { note_app_received view bytes state with pending_app = pending }
 
+let with_pending_received_raw
+  (view:connection_view)
+  (pending:B.bytes)
+  : connection_view =
+  { view with pending_received_raw = pending }
+
 let note_raw_app_sent
   (view:connection_view)
   (raw:raw_io_log)
@@ -1632,6 +1638,73 @@ let lemma_step_read_application_data_delivered_with_pending
   assert (view1.app_view == base.app_view);
   assert (view1.state == base.state);
   assert (step view0 req base resp);
+  assert (view1.raw_log == step_raw_log view0.raw_log req resp);
+  assert (view1.app_view == step_app_log view0.app_view req resp);
+  assert (response_shape resp);
+  assert (status_matches_phase resp.status view1.state.S.phase);
+  assert (S.conn_evolves view0.state view1.state);
+  lemma_connection_view_single_step_for_core_step view0 req view1 resp
+
+let lemma_step_read_need_network_input
+  (view0:connection_view)
+  (raw_view:connection_view)
+  (max_len:nat)
+  : Lemma
+      (requires connection_view_consistent view0 /\
+                connection_view_consistent raw_view /\
+                raw_view.state == view0.state /\
+                raw_view.app_view == view0.app_view /\
+                raw_io_log_extends view0.raw_log raw_view.raw_log /\
+                raw_io_log_same_sent view0.raw_log raw_view.raw_log /\
+                view0.state.S.phase == S.ApplicationData)
+      (ensures step
+        view0
+        (request_with_received_raw_delta (OpReadApplicationData max_len) view0.raw_log raw_view.raw_log)
+        raw_view
+        (response_no_network_out B.empty NeedNetworkInput))
+  =
+  let req = request_with_received_raw_delta (OpReadApplicationData max_len) view0.raw_log raw_view.raw_log in
+  let resp = response_no_network_out B.empty NeedNetworkInput in
+  lemma_step_raw_log_received_delta view0.raw_log raw_view.raw_log (OpReadApplicationData max_len) B.empty NeedNetworkInput;
+  L.append_l_nil view0.app_view.app_sent;
+  L.append_l_nil view0.app_view.app_received;
+  assert (raw_view.app_view.app_sent == view0.app_view.app_sent);
+  assert (raw_view.app_view.app_received == view0.app_view.app_received);
+  assert (raw_view.app_view == step_app_log view0.app_view req resp);
+  assert (response_shape resp);
+  assert (status_matches_phase resp.status raw_view.state.S.phase);
+  assert (raw_view.state == view0.state);
+  assert (S.conn_evolves view0.state raw_view.state);
+  lemma_connection_view_single_step_for_core_step view0 req raw_view resp
+
+let lemma_step_read_need_network_input_with_pending
+  (view0:connection_view)
+  (raw_view:connection_view)
+  (max_len:nat)
+  (pending:B.bytes)
+  : Lemma
+      (requires connection_view_consistent view0 /\
+                connection_view_consistent raw_view /\
+                raw_view.state == view0.state /\
+                raw_view.app_view == view0.app_view /\
+                raw_io_log_extends view0.raw_log raw_view.raw_log /\
+                raw_io_log_same_sent view0.raw_log raw_view.raw_log /\
+                view0.state.S.phase == S.ApplicationData)
+      (ensures step
+        view0
+        (request_with_received_raw_delta (OpReadApplicationData max_len) view0.raw_log (with_pending_received_raw raw_view pending).raw_log)
+        (with_pending_received_raw raw_view pending)
+        (response_no_network_out B.empty NeedNetworkInput))
+  =
+  let view1 = with_pending_received_raw raw_view pending in
+  let req = request_with_received_raw_delta (OpReadApplicationData max_len) view0.raw_log view1.raw_log in
+  let resp = response_no_network_out B.empty NeedNetworkInput in
+  lemma_step_read_need_network_input view0 raw_view max_len;
+  assert (connection_view_consistent view1);
+  assert (view1.raw_log == raw_view.raw_log);
+  assert (view1.app_view == raw_view.app_view);
+  assert (view1.state == raw_view.state);
+  assert (step view0 req raw_view resp);
   assert (view1.raw_log == step_raw_log view0.raw_log req resp);
   assert (view1.app_view == step_app_log view0.app_view req resp);
   assert (response_shape resp);
