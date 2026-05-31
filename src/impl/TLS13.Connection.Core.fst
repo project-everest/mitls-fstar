@@ -22,13 +22,15 @@ type client_core = {
   state: ST.state_ref;
   log: ST.log_ref;
   client_application_record_state: Rec.record_state;
+  server_application_record_state: Rec.record_state;
 }
 
 let is_client_core (c:client_core) (view:CL.connection_view) : slprop =
-  exists* record_s.
+  exists* client_record_s server_record_s.
     ST.current c.state view.CL.state **
     ST.log_current c.log view **
-    Rec.is_record_state c.client_application_record_state record_s **
+    Rec.is_record_state c.client_application_record_state client_record_s **
+    Rec.is_record_state c.server_application_record_state server_record_s **
     pure (CL.connection_view_consistent view)
 
 let lemma_empty_prefix (buffer:B.bytes)
@@ -116,11 +118,18 @@ fn client_core_new ()
 {
   let st = ST.alloc_initial ();
   let log = ST.alloc_initial_log ();
-  let record_state = Rec.record_state_new ();
-  let c = { state = st; log = log; client_application_record_state = record_state };
+  let client_record_state = Rec.record_state_new ();
+  let server_record_state = Rec.record_state_new ();
+  let c = {
+    state = st;
+    log = log;
+    client_application_record_state = client_record_state;
+    server_application_record_state = server_record_state;
+  };
   rewrite (ST.current st S.initial) as (ST.current c.state CL.empty_connection_view.CL.state);
   rewrite (ST.log_current log CL.empty_connection_view) as (ST.log_current c.log CL.empty_connection_view);
-  with record_s. rewrite (Rec.is_record_state record_state record_s) as (Rec.is_record_state c.client_application_record_state record_s);
+  with client_record_s. rewrite (Rec.is_record_state client_record_state client_record_s) as (Rec.is_record_state c.client_application_record_state client_record_s);
+  with server_record_s. rewrite (Rec.is_record_state server_record_state server_record_s) as (Rec.is_record_state c.server_application_record_state server_record_s);
   assert (pure (CL.connection_view_consistent CL.empty_connection_view));
   fold (is_client_core c CL.empty_connection_view);
   c
@@ -134,6 +143,7 @@ fn client_core_free (c: client_core)
   drop_ (ST.current c.state 'view.CL.state);
   drop_ (ST.log_current c.log 'view);
   Rec.record_state_free c.client_application_record_state;
+  Rec.record_state_free c.server_application_record_state;
 }
 
 fn client_core_install_application_keys_runtime
@@ -150,6 +160,24 @@ fn client_core_install_application_keys_runtime
 {
   unfold (is_client_core c 'view);
   Rec.install_application_keys_runtime c.client_application_record_state key iv;
+  assert (pure (CL.connection_view_consistent 'view));
+  fold (is_client_core c 'view);
+}
+
+fn client_core_install_peer_application_keys_runtime
+  (c: client_core)
+  (key: array U8.t)
+  (iv: array U8.t)
+  requires is_client_core c 'view **
+           pts_to key 'key_bytes **
+           pts_to iv 'iv_bytes **
+           pure (B.length 'key_bytes == 32 /\ B.length 'iv_bytes == 12)
+  ensures is_client_core c 'view **
+          pts_to key 'key_bytes **
+          pts_to iv 'iv_bytes
+{
+  unfold (is_client_core c 'view);
+  Rec.install_application_keys_runtime c.server_application_record_state key iv;
   assert (pure (CL.connection_view_consistent 'view));
   fold (is_client_core c 'view);
 }

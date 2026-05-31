@@ -52,6 +52,18 @@ fn client_core_install_application_keys_runtime
           pts_to key 'key_bytes **
           pts_to iv 'iv_bytes
 
+fn client_core_install_peer_application_keys_runtime
+  (c: client_core)
+  (key: array U8.t)
+  (iv: array U8.t)
+  requires is_client_core c 'view **
+           pts_to key 'key_bytes **
+           pts_to iv 'iv_bytes **
+           pure (B.length 'key_bytes == 32 /\ B.length 'iv_bytes == 12)
+  ensures is_client_core c 'view **
+          pts_to key 'key_bytes **
+          pts_to iv 'iv_bytes
+
 type request_kind =
   | KSendApplicationData
   | KReadApplicationData
