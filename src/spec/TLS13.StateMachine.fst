@@ -167,6 +167,20 @@ let rec lemma_advance_read_records_after_one (s:conn_state) (n:nat)
   if n = 0 then lemma_advance_read_records_one s
   else lemma_advance_read_records_after_one s (n - 1)
 
+let rec lemma_advance_read_records_append (s:conn_state) (n:nat) (m:nat)
+  : Lemma
+      (ensures advance_read_records (advance_read_records s n) m ==
+               advance_read_records s (n + m))
+      (decreases m)
+  =
+  if m = 0 then ()
+  else
+    let m1:nat = m - 1 in
+    let nm1:nat = n + m1 in
+    lemma_advance_read_records_append s n m1;
+    lemma_advance_read_records_succ s nm1;
+    assert (nm1 + 1 == n + m)
+
 let rec lemma_advance_read_records_read_seq (s:conn_state) (n:nat)
   : Lemma
       (ensures (advance_read_records s n).read_state.R.seq == s.read_state.R.seq + n)
