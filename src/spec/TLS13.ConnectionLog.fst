@@ -1414,6 +1414,26 @@ let lemma_raw_slice_split
   assert (B.append left right == whole);
   Seq.lemma_eq_refl whole (B.append left right)
 
+let lemma_raw_slice_prefix_append_equal
+  (source:B.bytes)
+  (mid:nat)
+  (hi:nat)
+  (prefix:B.bytes)
+  (chunk:B.bytes)
+  : Lemma
+      (requires mid <= hi /\
+                hi <= B.length source /\
+                Seq.equal prefix (raw_slice source 0 mid) /\
+                Seq.equal chunk (raw_slice source mid hi))
+      (ensures Seq.equal (raw_slice source 0 hi) (B.append prefix chunk))
+  =
+  lemma_raw_slice_split source 0 mid hi;
+  Seq.lemma_eq_elim prefix (raw_slice source 0 mid);
+  Seq.lemma_eq_elim chunk (raw_slice source mid hi);
+  Seq.lemma_eq_refl
+    (raw_slice source 0 hi)
+    (B.append prefix chunk)
+
 let lemma_pending_app_drain_split
   (view:connection_view)
   (bytes:B.bytes)
