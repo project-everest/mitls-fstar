@@ -504,6 +504,26 @@ let raw_sent_delta (old:raw_io_log) (next:raw_io_log) : B.bytes =
 let raw_received_delta (old:raw_io_log) (next:raw_io_log) : B.bytes =
   bytes_delta old.raw_received next.raw_received
 
+let lemma_bytes_delta_refl (bytes:B.bytes)
+  : Lemma (bytes_delta bytes bytes == B.empty)
+  =
+  Seq.lemma_len_slice bytes (B.length bytes) (B.length bytes);
+  assert (B.length (Seq.slice bytes (B.length bytes) (B.length bytes)) == 0);
+  assert (forall (i:nat{i < B.length B.empty}).
+            Seq.index (Seq.slice bytes (B.length bytes) (B.length bytes)) i ==
+            Seq.index B.empty i);
+  Seq.lemma_eq_intro (Seq.slice bytes (B.length bytes) (B.length bytes)) B.empty
+
+let lemma_raw_sent_delta_refl (raw:raw_io_log)
+  : Lemma (raw_sent_delta raw raw == B.empty)
+  =
+  lemma_bytes_delta_refl raw.raw_sent
+
+let lemma_raw_received_delta_refl (raw:raw_io_log)
+  : Lemma (raw_received_delta raw raw == B.empty)
+  =
+  lemma_bytes_delta_refl raw.raw_received
+
 let request_with_network_in (op:client_operation) (network_in:B.bytes) : client_request =
   { operation = op; network_in = network_in }
 
