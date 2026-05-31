@@ -968,6 +968,7 @@ type connection_view = {
   host_trace: list host_event;
   state: S.conn_state;
   app_view: app_log;
+  pending_app: B.bytes;
 }
 
 let connection_view_app_projected (view:connection_view) : prop =
@@ -1045,6 +1046,7 @@ let empty_connection_view : connection_view =
     host_trace = [];
     state = S.initial;
     app_view = empty_app_log;
+    pending_app = B.empty;
   }
 
 let public_connection_view
@@ -1144,6 +1146,14 @@ let note_app_delivered
   (bytes:B.bytes)
   : connection_view =
   note_host_event view (local_app_received_event bytes) view.state
+
+let note_app_received_with_pending
+  (view:connection_view)
+  (bytes:B.bytes)
+  (pending:B.bytes)
+  (state:S.conn_state)
+  : connection_view =
+  { note_app_received view bytes state with pending_app = pending }
 
 let note_raw_app_sent
   (view:connection_view)
