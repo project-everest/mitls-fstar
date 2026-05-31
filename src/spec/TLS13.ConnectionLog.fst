@@ -969,6 +969,7 @@ type connection_view = {
   state: S.conn_state;
   app_view: app_log;
   pending_app: B.bytes;
+  pending_received_raw: B.bytes;
 }
 
 let connection_view_app_projected (view:connection_view) : prop =
@@ -1047,6 +1048,7 @@ let empty_connection_view : connection_view =
     state = S.initial;
     app_view = empty_app_log;
     pending_app = B.empty;
+    pending_received_raw = B.empty;
   }
 
 let public_connection_view

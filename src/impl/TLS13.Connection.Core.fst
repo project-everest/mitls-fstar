@@ -27,6 +27,7 @@ let tls_application_record_wire_max : SZ.t = 16645sz
 let max_self_emitted_application_record_wire_len : SZ.t = 16406sz
 
 let pending_read_buffer_capacity : SZ.t = tls_application_plaintext_max
+let pending_network_buffer_capacity : SZ.t = tls_application_record_wire_max
 
 let lemma_nat_add_sub_cancel
   (a:nat)
@@ -45,10 +46,14 @@ type client_core = {
   pending_read_buffer: V.vec U8.t;
   pending_read_offset: box SZ.t;
   pending_read_len: box SZ.t;
+  pending_network_buffer: V.vec U8.t;
+  pending_network_len: box SZ.t;
 }
 
 let is_client_core (c:client_core) (view:CL.connection_view) : slprop =
-  exists* client_record_s server_record_s pending_read_buffer pending_read_offset pending_read_len.
+  exists* client_record_s server_record_s
+          pending_read_buffer pending_read_offset pending_read_len
+          pending_network_buffer pending_network_len.
     ST.current c.state view.CL.state **
     ST.log_current c.log view **
     Rec.is_record_state c.client_application_record_state client_record_s **
@@ -56,13 +61,20 @@ let is_client_core (c:client_core) (view:CL.connection_view) : slprop =
     V.pts_to c.pending_read_buffer pending_read_buffer **
     Box.pts_to c.pending_read_offset pending_read_offset **
     Box.pts_to c.pending_read_len pending_read_len **
+    V.pts_to c.pending_network_buffer pending_network_buffer **
+    Box.pts_to c.pending_network_len pending_network_len **
     pure (CL.connection_view_consistent view /\
           V.is_full_vec c.pending_read_buffer /\
           V.length c.pending_read_buffer == SZ.v pending_read_buffer_capacity /\
           SZ.v pending_read_offset <= SZ.v pending_read_len /\
           SZ.v pending_read_len <= SZ.v pending_read_buffer_capacity /\
           Seq.equal view.CL.pending_app
-            (CL.raw_slice pending_read_buffer (SZ.v pending_read_offset) (SZ.v pending_read_len)))
+            (CL.raw_slice pending_read_buffer (SZ.v pending_read_offset) (SZ.v pending_read_len)) /\
+          V.is_full_vec c.pending_network_buffer /\
+          V.length c.pending_network_buffer == SZ.v pending_network_buffer_capacity /\
+          SZ.v pending_network_len <= SZ.v pending_network_buffer_capacity /\
+          Seq.equal view.CL.pending_received_raw
+            (CL.raw_slice pending_network_buffer 0 (SZ.v pending_network_len)))
 
 let received_alert_event (alert:T.alert_description) : CL.host_event =
   CL.NetworkEvent { CL.message_direction = CL.Received; CL.message_value = CL.TlsAlert alert }
@@ -182,6 +194,8 @@ fn client_core_new ()
   let pending_read_buffer = V.alloc 0uy pending_read_buffer_capacity;
   let pending_read_offset = Box.alloc 0sz;
   let pending_read_len = Box.alloc 0sz;
+  let pending_network_buffer = V.alloc 0uy pending_network_buffer_capacity;
+  let pending_network_len = Box.alloc 0sz;
   let c = {
     state = st;
     log = log;
@@ -190,6 +204,8 @@ fn client_core_new ()
     pending_read_buffer = pending_read_buffer;
     pending_read_offset = pending_read_offset;
     pending_read_len = pending_read_len;
+    pending_network_buffer = pending_network_buffer;
+    pending_network_len = pending_network_len;
   };
   rewrite (ST.current st S.initial) as (ST.current c.state CL.empty_connection_view.CL.state);
   rewrite (ST.log_current log CL.empty_connection_view) as (ST.log_current c.log CL.empty_connection_view);
@@ -200,6 +216,10 @@ fn client_core_new ()
   lemma_empty_prefix pending_s;
   with pending_offset_s. rewrite (Box.pts_to pending_read_offset pending_offset_s) as (Box.pts_to c.pending_read_offset pending_offset_s);
   with pending_len_s. rewrite (Box.pts_to pending_read_len pending_len_s) as (Box.pts_to c.pending_read_len pending_len_s);
+  with pending_network_s. assert (V.pts_to pending_network_buffer pending_network_s);
+  rewrite (V.pts_to pending_network_buffer pending_network_s) as (V.pts_to c.pending_network_buffer pending_network_s);
+  lemma_empty_prefix pending_network_s;
+  with pending_network_len_s. rewrite (Box.pts_to pending_network_len pending_network_len_s) as (Box.pts_to c.pending_network_len pending_network_len_s);
   assert (pure (CL.connection_view_consistent CL.empty_connection_view));
   fold (is_client_core c CL.empty_connection_view);
   c
@@ -217,6 +237,8 @@ fn client_core_free (c: client_core)
   V.free c.pending_read_buffer;
   Box.free c.pending_read_offset;
   Box.free c.pending_read_len;
+  V.free c.pending_network_buffer;
+  Box.free c.pending_network_len;
 }
 
 fn client_core_install_application_keys_runtime
