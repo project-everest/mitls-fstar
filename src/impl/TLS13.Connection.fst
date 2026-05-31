@@ -456,12 +456,13 @@ fn client_connect (c: connection) (ch: IO.channel)
                 'view0
                 (HW.successful_handshake_view 'view0 's)
                 B.empty;
-              let resp = CL.response_no_network_out B.empty CL.HandshakeComplete;
+              let resp : erased CL.client_response =
+                CL.response_no_network_out B.empty CL.HandshakeComplete;
               assert (pure (CL.step 'view0
                 (CL.request_no_network_in (CL.OpStart B.empty))
                 (HW.successful_handshake_view 'view0 's)
-                resp));
-              assert (pure (resp.CL.status == CL.HandshakeComplete));
+                (Ghost.reveal resp)));
+              assert (pure ((Ghost.reveal resp).CL.status == CL.HandshakeComplete));
               assert (pure (exists server_name step_resp.
                 CL.step 'view0
                   (CL.request_no_network_in (CL.OpStart server_name))
@@ -485,12 +486,13 @@ fn client_connect (c: connection) (ch: IO.channel)
                 B.empty
                 T.IoError
                 (S.fail 's T.IoError);
-              let resp = CL.response_no_network_out B.empty (CL.Failed T.IoError);
+              let resp : erased CL.client_response =
+                CL.response_no_network_out B.empty (CL.Failed T.IoError);
               assert (pure (CL.step 'view0
                 (CL.request_no_network_in (CL.OpStart B.empty))
                 (note_local_fail_view 'view0 T.IoError 's)
-                resp));
-              assert (pure (resp.CL.status == CL.Failed T.IoError));
+                (Ghost.reveal resp)));
+              assert (pure ((Ghost.reveal resp).CL.status == CL.Failed T.IoError));
               assert (pure (exists server_name step_resp.
                 CL.step 'view0
                   (CL.request_no_network_in (CL.OpStart server_name))
@@ -515,12 +517,13 @@ fn client_connect (c: connection) (ch: IO.channel)
               B.empty
               T.IoError
               (S.fail 's T.IoError);
-            let resp = CL.response_no_network_out B.empty (CL.Failed T.IoError);
+            let resp : erased CL.client_response =
+              CL.response_no_network_out B.empty (CL.Failed T.IoError);
             assert (pure (CL.step 'view0
               (CL.request_no_network_in (CL.OpStart B.empty))
               (note_local_fail_view 'view0 T.IoError 's)
-              resp));
-            assert (pure (resp.CL.status == CL.Failed T.IoError));
+              (Ghost.reveal resp)));
+            assert (pure ((Ghost.reveal resp).CL.status == CL.Failed T.IoError));
             assert (pure (exists server_name step_resp.
               CL.step 'view0
                 (CL.request_no_network_in (CL.OpStart server_name))

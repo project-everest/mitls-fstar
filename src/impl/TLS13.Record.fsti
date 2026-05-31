@@ -149,6 +149,33 @@ fn open_application
                             out_bytes == 'old /\
                             R.open_record 's (Ghost.reveal 'aad_bytes) (Ghost.reveal 'cipher_bytes) == None))
 
+fn peek_open_application
+  (st: record_state)
+  (aad: array U8.t)
+  (aad_len: SZ.t)
+  (cipher: array U8.t)
+  (cipher_len: SZ.t)
+  (out: array U8.t)
+  requires is_record_state st 's **
+           pts_to aad 'aad_bytes **
+           pts_to cipher 'cipher_bytes **
+           pts_to out 'old **
+           pure (B.length 'aad_bytes == SZ.v aad_len /\
+                B.length 'cipher_bytes == SZ.v cipher_len /\
+                B.length 'old + 16 == SZ.v cipher_len)
+  returns ok: bool
+  ensures exists* out_bytes.
+          is_record_state st 's **
+          pts_to aad 'aad_bytes **
+          pts_to cipher 'cipher_bytes **
+          pts_to out out_bytes **
+          pure (B.length out_bytes == B.length 'old /\
+                (ok ==> Some? (R.open_record 's (Ghost.reveal 'aad_bytes) (Ghost.reveal 'cipher_bytes)) /\
+                        (let opened = Some?.v (R.open_record 's (Ghost.reveal 'aad_bytes) (Ghost.reveal 'cipher_bytes)) in
+                         out_bytes == fst opened)) /\
+                (not ok ==> out_bytes == 'old /\
+                           R.open_record 's (Ghost.reveal 'aad_bytes) (Ghost.reveal 'cipher_bytes) == None))
+
 fn open_application_runtime
   (st: record_state)
   (aad: array U8.t)

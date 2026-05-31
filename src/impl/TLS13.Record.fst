@@ -388,6 +388,82 @@ fn open_application
   }
 }
 
+fn peek_open_application
+  (st: record_state)
+  (aad: array U8.t)
+  (aad_len: SZ.t)
+  (cipher: array U8.t)
+  (cipher_len: SZ.t)
+  (out: array U8.t)
+  requires is_record_state st 's **
+           pts_to aad 'aad_bytes **
+           pts_to cipher 'cipher_bytes **
+           pts_to out 'old **
+           pure (B.length 'aad_bytes == SZ.v aad_len /\
+                 B.length 'cipher_bytes == SZ.v cipher_len /\
+                 B.length 'old + 16 == SZ.v cipher_len)
+  returns ok: bool
+  ensures exists* out_bytes.
+          is_record_state st 's **
+          pts_to aad 'aad_bytes **
+          pts_to cipher 'cipher_bytes **
+          pts_to out out_bytes **
+          pure (B.length out_bytes == B.length 'old /\
+                (ok ==> Some? (R.open_record 's (Ghost.reveal 'aad_bytes) (Ghost.reveal 'cipher_bytes)) /\
+                         (let opened = Some?.v (R.open_record 's (Ghost.reveal 'aad_bytes) (Ghost.reveal 'cipher_bytes)) in
+                          out_bytes == fst opened)) /\
+                (not ok ==> out_bytes == 'old /\
+                            R.open_record 's (Ghost.reveal 'aad_bytes) (Ghost.reveal 'cipher_bytes) == None))
+{
+  unfold (is_record_state st 's);
+  let installed = !st.installed;
+  if installed {
+    let seq = !st.seq;
+    let mut nonce = [| 0uy; 12sz |];
+    V.to_array_pts_to st.key;
+    V.to_array_pts_to st.iv;
+    let nonce_ok = Crypto.tls13_record_nonce (V.vec_to_array st.iv) seq nonce;
+    assert (pure nonce_ok);
+    let opened = Crypto.chacha20_poly1305_open (V.vec_to_array st.key) nonce aad aad_len cipher cipher_len out;
+    V.to_vec_pts_to st.key;
+    V.to_vec_pts_to st.iv;
+    with key_s. assert (V.pts_to st.key key_s);
+    with iv_s. assert (V.pts_to st.iv iv_s);
+    with seq_s. assert (Box.pts_to st.seq seq_s);
+    assert (pure (seq_s == seq));
+    assert (pure (state_matches true seq key_s iv_s 's));
+    assert (pure ('s.R.key == Some key_s /\ 's.R.static_iv == Some iv_s /\
+                  's.R.seq == U64.v seq));
+    if opened {
+      with out_s. assert (pts_to out out_s);
+      assert (pure (B.length out_s == B.length 'old));
+      assert (pure (Some? (C.chacha20_poly1305_open key_s (C.tls13_record_nonce iv_s (U64.v seq)) (Ghost.reveal 'aad_bytes) (Ghost.reveal 'cipher_bytes))));
+      assert (pure (out_s == Some?.v (C.chacha20_poly1305_open key_s (C.tls13_record_nonce iv_s (U64.v seq)) (Ghost.reveal 'aad_bytes) (Ghost.reveal 'cipher_bytes))));
+      assert (pure (Some? (R.open_record 's (Ghost.reveal 'aad_bytes) (Ghost.reveal 'cipher_bytes))));
+      assert (pure (Some?.v (R.open_record 's (Ghost.reveal 'aad_bytes) (Ghost.reveal 'cipher_bytes)) == (out_s, R.next_seq 's)));
+      fold (is_record_state st 's);
+      true
+    } else {
+      with out_s. assert (pts_to out out_s);
+      assert (pure (B.length out_s == B.length 'old));
+      assert (pure (out_s == 'old));
+      assert (pure (C.chacha20_poly1305_open key_s (C.tls13_record_nonce iv_s (U64.v seq)) (Ghost.reveal 'aad_bytes) (Ghost.reveal 'cipher_bytes) == None));
+      assert (pure (R.open_record 's (Ghost.reveal 'aad_bytes) (Ghost.reveal 'cipher_bytes) == None));
+      fold (is_record_state st 's);
+      false
+    }
+  } else {
+    with key_s. assert (V.pts_to st.key key_s);
+    with iv_s. assert (V.pts_to st.iv iv_s);
+    with seq_s. assert (Box.pts_to st.seq seq_s);
+    with out_s. assert (pts_to out out_s);
+    assert (pure (out_s == 'old));
+    assert (pure (R.open_record 's (Ghost.reveal 'aad_bytes) (Ghost.reveal 'cipher_bytes) == None));
+    fold (is_record_state st 's);
+    false
+  }
+}
+
 fn open_application_runtime
   (st: record_state)
   (aad: array U8.t)

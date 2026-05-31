@@ -662,6 +662,15 @@ let lemma_concat_bytes_singleton (bytes:B.bytes)
   assert (concat_bytes [bytes] == bytes);
   Seq.lemma_eq_refl bytes (concat_bytes [bytes])
 
+let lemma_concat_bytes_pair (bytes1 bytes2:B.bytes)
+  : Lemma (Seq.equal (B.append bytes1 bytes2) (concat_bytes [bytes1; bytes2]))
+  =
+  lemma_append_empty_right bytes2;
+  assert (concat_bytes [bytes1; bytes2] == B.append bytes1 (B.append bytes2 B.empty));
+  assert (B.append bytes2 B.empty == bytes2);
+  assert (concat_bytes [bytes1; bytes2] == B.append bytes1 bytes2);
+  Seq.lemma_eq_refl (B.append bytes1 bytes2) (concat_bytes [bytes1; bytes2])
+
 let lemma_response_with_sent_raw_delta_shape
   (old:raw_io_log)
   (next:raw_io_log)
