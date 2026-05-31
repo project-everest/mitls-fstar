@@ -638,7 +638,7 @@ ensures exists* view1 network_out1 app_out1.
               let fragment_len = SZ.uint16_to_sizet frag16;
               let remaining_pending_len = SZ.(pending_network_len' -^ 5sz);
               assert (pure (SZ.v remaining_pending_len == SZ.v pending_network_len' - 5));
-              if not (SZ.(fragment_len =^ remaining_pending_len)) {
+              if not (SZ.(fragment_len <=^ remaining_pending_len)) {
                 V.to_vec_pts_to c.pending_network_buffer;
                 with pending_network_buffer2. assert (V.pts_to c.pending_network_buffer pending_network_buffer2);
                 let pending_payload : erased B.bytes =
@@ -667,51 +667,100 @@ ensures exists* view1 network_out1 app_out1.
                                           CL.step view0 mreq (Ghost.reveal view2) mresp));
                 fold (is_client_core c (Ghost.reveal view2));
                 result
-              } else if not (content_type = 23uy) {
+              } else {
+                assert (pure (SZ.v fragment_len <= SZ.v remaining_pending_len));
+                assert (pure (SZ.v remaining_pending_len == SZ.v pending_network_len' - 5));
+                assert (pure (5 + SZ.v fragment_len <= SZ.v pending_network_len'));
+                let record_wire_len = SZ.(5sz +^ fragment_len);
+                assert (pure (SZ.v record_wire_len == 5 + SZ.v fragment_len));
+                assert (pure (SZ.v record_wire_len <= SZ.v pending_network_len'));
+                assert (pure (SZ.v record_wire_len <= SZ.v pending_network_buffer_capacity));
+                let residual_len = SZ.(pending_network_len' -^ record_wire_len);
+                assert (pure (SZ.v residual_len == SZ.v pending_network_len' - SZ.v record_wire_len));
+                lemma_nat_add_sub_cancel 0 (SZ.v record_wire_len) (SZ.v pending_network_len');
+                assert (pure (SZ.v record_wire_len + SZ.v residual_len == SZ.v pending_network_len'));
+                assert (pure (SZ.v residual_len <= SZ.v pending_network_buffer_capacity));
+                assert (pure (SZ.v record_wire_len + SZ.v residual_len <= SZ.v pending_network_buffer_capacity));
+                let mut record_tmp = [| 0uy; record_wire_len |];
+                copy_payload_to_output_loop
+                  (V.vec_to_array c.pending_network_buffer)
+                  pending_network_buffer_capacity
+                  record_tmp
+                  record_wire_len
+                  0sz
+                  0sz
+                  record_wire_len;
+                with record_tmp_bytes. assert (pts_to record_tmp record_tmp_bytes);
+                assert (pure (B.length record_tmp_bytes == SZ.v record_wire_len));
+                let mut residual_tmp = [| 0uy; residual_len |];
+                copy_payload_to_output_loop
+                  (V.vec_to_array c.pending_network_buffer)
+                  pending_network_buffer_capacity
+                  residual_tmp
+                  residual_len
+                  record_wire_len
+                  0sz
+                  residual_len;
+                with residual_tmp_bytes. assert (pts_to residual_tmp residual_tmp_bytes);
+                assert (pure (B.length residual_tmp_bytes == SZ.v residual_len));
+                copy_payload_to_output_loop
+                  residual_tmp
+                  residual_len
+                  (V.vec_to_array c.pending_network_buffer)
+                  pending_network_buffer_capacity
+                  0sz
+                  0sz
+                  residual_len;
                 V.to_vec_pts_to c.pending_network_buffer;
                 with pending_network_buffer2. assert (V.pts_to c.pending_network_buffer pending_network_buffer2);
-                c.pending_network_len := 0sz;
-                lemma_empty_prefix (Ghost.reveal pending_network_buffer2);
-                ST.advance_fail c.state T.IoError;
-                let base_view2 : erased CL.connection_view =
-                  CL.note_local_fail (Ghost.reveal view1) T.IoError (S.fail view0.CL.state T.IoError);
-                CL.lemma_step_read_failed
-                  view0
-                  (Ghost.reveal view1)
-                  (SZ.v requested_app_len)
-                  T.IoError
-                  (S.fail view0.CL.state T.IoError);
-                let resp : erased CL.client_response =
-                  CL.response_no_network_out B.empty (CL.Failed T.IoError);
-                CL.lemma_raw_received_delta_append view0.CL.raw_log (Ghost.reveal network_bytes);
-                assert (pure (mreq == CL.request_with_received_raw_delta (CL.OpReadApplicationData (SZ.v requested_app_len)) view0.CL.raw_log (Ghost.reveal base_view2).CL.raw_log));
-                assert (pure (CL.step view0 mreq (Ghost.reveal base_view2) (Ghost.reveal resp)));
-                let view2 : erased CL.connection_view =
-                  CL.with_pending_received_raw (Ghost.reveal base_view2) B.empty;
-                CL.lemma_step_with_pending_received_raw
-                  view0
-                  mreq
-                  (Ghost.reveal base_view2)
-                  (Ghost.reveal resp)
-                  B.empty;
-                assert (pure (mreq == CL.request_with_received_raw_delta (CL.OpReadApplicationData (SZ.v requested_app_len)) view0.CL.raw_log (Ghost.reveal view2).CL.raw_log));
-                ST.advance_log c.log (Ghost.reveal view2);
-                let result = { network_out_len = 0sz; app_out_len = 0sz; status = CL.Failed T.IoError };
-                lemma_empty_prefix (Ghost.reveal 'network_out0);
-                lemma_empty_prefix (Ghost.reveal 'app_out0);
-                assert (pure (response_buffers_match result (Ghost.reveal 'network_out0) (Ghost.reveal 'app_out0) (Ghost.reveal resp)));
-                assert (pure (exists mresp. response_buffers_match result (Ghost.reveal 'network_out0) (Ghost.reveal 'app_out0) mresp /\
-                                          CL.step view0 mreq (Ghost.reveal view2) mresp));
-                fold (is_client_core c (Ghost.reveal view2));
-                result
+                c.pending_network_len := residual_len;
+                let pending_raw_payload : erased B.bytes =
+                  CL.raw_slice
+                    (Ghost.reveal pending_network_buffer2)
+                    0
+                    (SZ.v residual_len);
+                if not (content_type = 23uy) {
+                  ST.advance_fail c.state T.IoError;
+                  let base_view2 : erased CL.connection_view =
+                    CL.note_local_fail (Ghost.reveal view1) T.IoError (S.fail view0.CL.state T.IoError);
+                  let view2 : erased CL.connection_view =
+                    CL.with_pending_received_raw
+                      (Ghost.reveal base_view2)
+                      (Ghost.reveal pending_raw_payload);
+                  CL.lemma_step_read_failed
+                    view0
+                    (Ghost.reveal view1)
+                    (SZ.v requested_app_len)
+                    T.IoError
+                    (S.fail view0.CL.state T.IoError);
+                  let resp : erased CL.client_response =
+                    CL.response_no_network_out B.empty (CL.Failed T.IoError);
+                  CL.lemma_raw_received_delta_append view0.CL.raw_log (Ghost.reveal network_bytes);
+                  assert (pure (mreq == CL.request_with_received_raw_delta (CL.OpReadApplicationData (SZ.v requested_app_len)) view0.CL.raw_log (Ghost.reveal view2).CL.raw_log));
+                  CL.lemma_step_with_pending_received_raw
+                    view0
+                    mreq
+                    (Ghost.reveal base_view2)
+                    (Ghost.reveal resp)
+                    (Ghost.reveal pending_raw_payload);
+                  assert (pure (mreq == CL.request_with_received_raw_delta (CL.OpReadApplicationData (SZ.v requested_app_len)) view0.CL.raw_log (Ghost.reveal view2).CL.raw_log));
+                  ST.advance_log c.log (Ghost.reveal view2);
+                  let result = { network_out_len = 0sz; app_out_len = 0sz; status = CL.Failed T.IoError };
+                  lemma_empty_prefix (Ghost.reveal 'network_out0);
+                  lemma_empty_prefix (Ghost.reveal 'app_out0);
+                  assert (pure (response_buffers_match result (Ghost.reveal 'network_out0) (Ghost.reveal 'app_out0) (Ghost.reveal resp)));
+                  assert (pure (exists mresp. response_buffers_match result (Ghost.reveal 'network_out0) (Ghost.reveal 'app_out0) mresp /\
+                                            CL.step view0 mreq (Ghost.reveal view2) mresp));
+                  fold (is_client_core c (Ghost.reveal view2));
+                  result
               } else if not (SZ.(16sz <^ fragment_len)) {
-                V.to_vec_pts_to c.pending_network_buffer;
-                with pending_network_buffer2. assert (V.pts_to c.pending_network_buffer pending_network_buffer2);
-                c.pending_network_len := 0sz;
-                lemma_empty_prefix (Ghost.reveal pending_network_buffer2);
                 ST.advance_fail c.state T.IoError;
                 let base_view2 : erased CL.connection_view =
                   CL.note_local_fail (Ghost.reveal view1) T.IoError (S.fail view0.CL.state T.IoError);
+                let view2 : erased CL.connection_view =
+                  CL.with_pending_received_raw
+                    (Ghost.reveal base_view2)
+                    (Ghost.reveal pending_raw_payload);
                 CL.lemma_step_read_failed
                   view0
                   (Ghost.reveal view1)
@@ -721,16 +770,13 @@ ensures exists* view1 network_out1 app_out1.
                 let resp : erased CL.client_response =
                   CL.response_no_network_out B.empty (CL.Failed T.IoError);
                 CL.lemma_raw_received_delta_append view0.CL.raw_log (Ghost.reveal network_bytes);
-                assert (pure (mreq == CL.request_with_received_raw_delta (CL.OpReadApplicationData (SZ.v requested_app_len)) view0.CL.raw_log (Ghost.reveal base_view2).CL.raw_log));
-                assert (pure (CL.step view0 mreq (Ghost.reveal base_view2) (Ghost.reveal resp)));
-                let view2 : erased CL.connection_view =
-                  CL.with_pending_received_raw (Ghost.reveal base_view2) B.empty;
+                assert (pure (mreq == CL.request_with_received_raw_delta (CL.OpReadApplicationData (SZ.v requested_app_len)) view0.CL.raw_log (Ghost.reveal view2).CL.raw_log));
                 CL.lemma_step_with_pending_received_raw
                   view0
                   mreq
                   (Ghost.reveal base_view2)
                   (Ghost.reveal resp)
-                  B.empty;
+                  (Ghost.reveal pending_raw_payload);
                 assert (pure (mreq == CL.request_with_received_raw_delta (CL.OpReadApplicationData (SZ.v requested_app_len)) view0.CL.raw_log (Ghost.reveal view2).CL.raw_log));
                 ST.advance_log c.log (Ghost.reveal view2);
                 let result = { network_out_len = 0sz; app_out_len = 0sz; status = CL.Failed T.IoError };
@@ -742,13 +788,11 @@ ensures exists* view1 network_out1 app_out1.
                 fold (is_client_core c (Ghost.reveal view2));
                 result
               } else {
-                assert (pure (SZ.v fragment_len == SZ.v remaining_pending_len));
-                assert (pure (5 + SZ.v fragment_len == SZ.v pending_network_len'));
-                assert (pure (5 + SZ.v fragment_len <= SZ.v pending_network_buffer_capacity));
+                assert (pure (5 + SZ.v fragment_len <= SZ.v record_wire_len));
                 let mut cipher = [| 0uy; fragment_len |];
                 copy_payload_to_output_loop
-                  (V.vec_to_array c.pending_network_buffer)
-                  pending_network_buffer_capacity
+                  record_tmp
+                  record_wire_len
                   cipher
                   fragment_len
                   5sz
@@ -756,10 +800,6 @@ ensures exists* view1 network_out1 app_out1.
                   fragment_len;
                 with cipher_bytes. assert (pts_to cipher cipher_bytes);
                 assert (pure (B.length cipher_bytes == SZ.v fragment_len));
-                V.to_vec_pts_to c.pending_network_buffer;
-                with pending_network_buffer2. assert (V.pts_to c.pending_network_buffer pending_network_buffer2);
-                c.pending_network_len := 0sz;
-                lemma_empty_prefix (Ghost.reveal pending_network_buffer2);
                 let inner_len = SZ.(fragment_len -^ 16sz);
                 assert (pure (SZ.v inner_len > 0));
                 let mut inner = [| 0uy; inner_len |];
@@ -806,13 +846,13 @@ ensures exists* view1 network_out1 app_out1.
                       assert (pure (mreq == CL.request_with_received_raw_delta (CL.OpReadApplicationData (SZ.v requested_app_len)) view0.CL.raw_log (Ghost.reveal base_view2).CL.raw_log));
                       assert (pure (CL.step view0 mreq (Ghost.reveal base_view2) (Ghost.reveal resp)));
                       let view2 : erased CL.connection_view =
-                        CL.with_pending_received_raw (Ghost.reveal base_view2) B.empty;
+                        CL.with_pending_received_raw (Ghost.reveal base_view2) (Ghost.reveal pending_raw_payload);
                       CL.lemma_step_with_pending_received_raw
                         view0
                         mreq
                         (Ghost.reveal base_view2)
                         (Ghost.reveal resp)
-                        B.empty;
+                        (Ghost.reveal pending_raw_payload);
                       assert (pure (mreq == CL.request_with_received_raw_delta (CL.OpReadApplicationData (SZ.v requested_app_len)) view0.CL.raw_log (Ghost.reveal view2).CL.raw_log));
                       ST.advance_log c.log (Ghost.reveal view2);
                       let result = { network_out_len = 0sz; app_out_len = payload_len; status = CL.ApplicationDataReady };
@@ -894,13 +934,13 @@ ensures exists* view1 network_out1 app_out1.
                         assert (pure (mreq == CL.request_with_received_raw_delta (CL.OpReadApplicationData (SZ.v requested_app_len)) view0.CL.raw_log (Ghost.reveal base_view2).CL.raw_log));
                         assert (pure (CL.step view0 mreq (Ghost.reveal base_view2) (Ghost.reveal resp)));
                         let view2 : erased CL.connection_view =
-                          CL.with_pending_received_raw (Ghost.reveal base_view2) B.empty;
+                          CL.with_pending_received_raw (Ghost.reveal base_view2) (Ghost.reveal pending_raw_payload);
                         CL.lemma_step_with_pending_received_raw
                           view0
                           mreq
                           (Ghost.reveal base_view2)
                           (Ghost.reveal resp)
-                          B.empty;
+                          (Ghost.reveal pending_raw_payload);
                         assert (pure (mreq == CL.request_with_received_raw_delta (CL.OpReadApplicationData (SZ.v requested_app_len)) view0.CL.raw_log (Ghost.reveal view2).CL.raw_log));
                         ST.advance_log c.log (Ghost.reveal view2);
                         let result = { network_out_len = 0sz; app_out_len = output_limit; status = CL.ApplicationDataReady };
@@ -927,13 +967,13 @@ ensures exists* view1 network_out1 app_out1.
                         assert (pure (mreq == CL.request_with_received_raw_delta (CL.OpReadApplicationData (SZ.v requested_app_len)) view0.CL.raw_log (Ghost.reveal base_view2).CL.raw_log));
                         assert (pure (CL.step view0 mreq (Ghost.reveal base_view2) (Ghost.reveal resp)));
                         let view2 : erased CL.connection_view =
-                          CL.with_pending_received_raw (Ghost.reveal base_view2) B.empty;
+                          CL.with_pending_received_raw (Ghost.reveal base_view2) (Ghost.reveal pending_raw_payload);
                         CL.lemma_step_with_pending_received_raw
                           view0
                           mreq
                           (Ghost.reveal base_view2)
                           (Ghost.reveal resp)
-                          B.empty;
+                          (Ghost.reveal pending_raw_payload);
                         assert (pure (mreq == CL.request_with_received_raw_delta (CL.OpReadApplicationData (SZ.v requested_app_len)) view0.CL.raw_log (Ghost.reveal view2).CL.raw_log));
                         ST.advance_log c.log (Ghost.reveal view2);
                         let result = { network_out_len = 0sz; app_out_len = 0sz; status = CL.Failed T.IoError };
@@ -965,13 +1005,13 @@ ensures exists* view1 network_out1 app_out1.
                         assert (pure (mreq == CL.request_with_received_raw_delta (CL.OpReadApplicationData (SZ.v requested_app_len)) view0.CL.raw_log (Ghost.reveal base_view2).CL.raw_log));
                         assert (pure (CL.step view0 mreq (Ghost.reveal base_view2) (Ghost.reveal resp)));
                         let view2 : erased CL.connection_view =
-                          CL.with_pending_received_raw (Ghost.reveal base_view2) B.empty;
+                          CL.with_pending_received_raw (Ghost.reveal base_view2) (Ghost.reveal pending_raw_payload);
                         CL.lemma_step_with_pending_received_raw
                           view0
                           mreq
                           (Ghost.reveal base_view2)
                           (Ghost.reveal resp)
-                          B.empty;
+                          (Ghost.reveal pending_raw_payload);
                         assert (pure (mreq == CL.request_with_received_raw_delta (CL.OpReadApplicationData (SZ.v requested_app_len)) view0.CL.raw_log (Ghost.reveal view2).CL.raw_log));
                         ST.advance_log c.log (Ghost.reveal view2);
                         let result = { network_out_len = 0sz; app_out_len = 0sz; status = CL.Closed };
@@ -1004,13 +1044,13 @@ ensures exists* view1 network_out1 app_out1.
                         assert (pure (mreq == CL.request_with_received_raw_delta (CL.OpReadApplicationData (SZ.v requested_app_len)) view0.CL.raw_log (Ghost.reveal base_view2).CL.raw_log));
                         assert (pure (CL.step view0 mreq (Ghost.reveal base_view2) (Ghost.reveal resp)));
                         let view2 : erased CL.connection_view =
-                          CL.with_pending_received_raw (Ghost.reveal base_view2) B.empty;
+                          CL.with_pending_received_raw (Ghost.reveal base_view2) (Ghost.reveal pending_raw_payload);
                         CL.lemma_step_with_pending_received_raw
                           view0
                           mreq
                           (Ghost.reveal base_view2)
                           (Ghost.reveal resp)
-                          B.empty;
+                          (Ghost.reveal pending_raw_payload);
                         assert (pure (mreq == CL.request_with_received_raw_delta (CL.OpReadApplicationData (SZ.v requested_app_len)) view0.CL.raw_log (Ghost.reveal view2).CL.raw_log));
                         ST.advance_log c.log (Ghost.reveal view2);
                         let result = { network_out_len = 0sz; app_out_len = 0sz; status = CL.Failed (T.AlertError alert) };
@@ -1037,13 +1077,13 @@ ensures exists* view1 network_out1 app_out1.
                         assert (pure (mreq == CL.request_with_received_raw_delta (CL.OpReadApplicationData (SZ.v requested_app_len)) view0.CL.raw_log (Ghost.reveal base_view2).CL.raw_log));
                         assert (pure (CL.step view0 mreq (Ghost.reveal base_view2) (Ghost.reveal resp)));
                         let view2 : erased CL.connection_view =
-                          CL.with_pending_received_raw (Ghost.reveal base_view2) B.empty;
+                          CL.with_pending_received_raw (Ghost.reveal base_view2) (Ghost.reveal pending_raw_payload);
                         CL.lemma_step_with_pending_received_raw
                           view0
                           mreq
                           (Ghost.reveal base_view2)
                           (Ghost.reveal resp)
-                          B.empty;
+                          (Ghost.reveal pending_raw_payload);
                         assert (pure (mreq == CL.request_with_received_raw_delta (CL.OpReadApplicationData (SZ.v requested_app_len)) view0.CL.raw_log (Ghost.reveal view2).CL.raw_log));
                         ST.advance_log c.log (Ghost.reveal view2);
                         let result = { network_out_len = 0sz; app_out_len = 0sz; status = CL.Failed T.IoError };
@@ -1071,13 +1111,13 @@ ensures exists* view1 network_out1 app_out1.
                       assert (pure (mreq == CL.request_with_received_raw_delta (CL.OpReadApplicationData (SZ.v requested_app_len)) view0.CL.raw_log (Ghost.reveal base_view2).CL.raw_log));
                       assert (pure (CL.step view0 mreq (Ghost.reveal base_view2) (Ghost.reveal resp)));
                       let view2 : erased CL.connection_view =
-                        CL.with_pending_received_raw (Ghost.reveal base_view2) B.empty;
+                        CL.with_pending_received_raw (Ghost.reveal base_view2) (Ghost.reveal pending_raw_payload);
                       CL.lemma_step_with_pending_received_raw
                         view0
                         mreq
                         (Ghost.reveal base_view2)
                         (Ghost.reveal resp)
-                        B.empty;
+                        (Ghost.reveal pending_raw_payload);
                       assert (pure (mreq == CL.request_with_received_raw_delta (CL.OpReadApplicationData (SZ.v requested_app_len)) view0.CL.raw_log (Ghost.reveal view2).CL.raw_log));
                       ST.advance_log c.log (Ghost.reveal view2);
                       let result = { network_out_len = 0sz; app_out_len = 0sz; status = CL.Failed T.IoError };
@@ -1105,13 +1145,13 @@ ensures exists* view1 network_out1 app_out1.
                     assert (pure (mreq == CL.request_with_received_raw_delta (CL.OpReadApplicationData (SZ.v requested_app_len)) view0.CL.raw_log (Ghost.reveal base_view2).CL.raw_log));
                     assert (pure (CL.step view0 mreq (Ghost.reveal base_view2) (Ghost.reveal resp)));
                     let view2 : erased CL.connection_view =
-                      CL.with_pending_received_raw (Ghost.reveal base_view2) B.empty;
+                      CL.with_pending_received_raw (Ghost.reveal base_view2) (Ghost.reveal pending_raw_payload);
                     CL.lemma_step_with_pending_received_raw
                       view0
                       mreq
                       (Ghost.reveal base_view2)
                       (Ghost.reveal resp)
-                      B.empty;
+                      (Ghost.reveal pending_raw_payload);
                     assert (pure (mreq == CL.request_with_received_raw_delta (CL.OpReadApplicationData (SZ.v requested_app_len)) view0.CL.raw_log (Ghost.reveal view2).CL.raw_log));
                     ST.advance_log c.log (Ghost.reveal view2);
                     let result = { network_out_len = 0sz; app_out_len = 0sz; status = CL.Failed T.IoError };
@@ -1139,13 +1179,13 @@ ensures exists* view1 network_out1 app_out1.
                   assert (pure (mreq == CL.request_with_received_raw_delta (CL.OpReadApplicationData (SZ.v requested_app_len)) view0.CL.raw_log (Ghost.reveal base_view2).CL.raw_log));
                   assert (pure (CL.step view0 mreq (Ghost.reveal base_view2) (Ghost.reveal resp)));
                   let view2 : erased CL.connection_view =
-                    CL.with_pending_received_raw (Ghost.reveal base_view2) B.empty;
+                    CL.with_pending_received_raw (Ghost.reveal base_view2) (Ghost.reveal pending_raw_payload);
                   CL.lemma_step_with_pending_received_raw
                     view0
                     mreq
                     (Ghost.reveal base_view2)
                     (Ghost.reveal resp)
-                    B.empty;
+                    (Ghost.reveal pending_raw_payload);
                   assert (pure (mreq == CL.request_with_received_raw_delta (CL.OpReadApplicationData (SZ.v requested_app_len)) view0.CL.raw_log (Ghost.reveal view2).CL.raw_log));
                   ST.advance_log c.log (Ghost.reveal view2);
                   let result = { network_out_len = 0sz; app_out_len = 0sz; status = CL.Failed T.IoError };
@@ -1157,6 +1197,7 @@ ensures exists* view1 network_out1 app_out1.
                   fold (is_client_core c (Ghost.reveal view2));
                   result
                 }
+              }
               }
             } else {
               V.to_vec_pts_to c.pending_network_buffer;
