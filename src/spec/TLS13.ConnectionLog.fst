@@ -650,6 +650,12 @@ let lemma_append_empty_right (bytes:B.bytes)
   Seq.lemma_empty B.empty;
   Seq.append_empty_r bytes
 
+let lemma_append_empty_left (bytes:B.bytes)
+  : Lemma (B.append B.empty bytes == bytes)
+  =
+  Seq.lemma_empty B.empty;
+  Seq.append_empty_l bytes
+
 let lemma_concat_bytes_nil ()
   : Lemma (concat_bytes [] == B.empty)
   =
@@ -670,6 +676,53 @@ let lemma_concat_bytes_pair (bytes1 bytes2:B.bytes)
   assert (B.append bytes2 B.empty == bytes2);
   assert (concat_bytes [bytes1; bytes2] == B.append bytes1 bytes2);
   Seq.lemma_eq_refl (B.append bytes1 bytes2) (concat_bytes [bytes1; bytes2])
+
+let rec lemma_concat_bytes_append
+  (left:list B.bytes)
+  (right:list B.bytes)
+  : Lemma
+      (ensures B.append (concat_bytes left) (concat_bytes right) == concat_bytes (left @ right))
+      (decreases left)
+  =
+  match left with
+  | [] ->
+    lemma_append_empty_left (concat_bytes right);
+    assert ([] @ right == right)
+  | bytes :: rest ->
+    lemma_concat_bytes_append rest right;
+    Seq.append_assoc bytes (concat_bytes rest) (concat_bytes right);
+    assert (B.append (concat_bytes rest) (concat_bytes right) == concat_bytes (rest @ right));
+    assert ((bytes :: rest) @ right == bytes :: (rest @ right))
+
+let lemma_concat_bytes_snoc
+  (chunks:list B.bytes)
+  (bytes:B.bytes)
+  : Lemma (B.append (concat_bytes chunks) bytes == concat_bytes (chunks @ [bytes]))
+  =
+  lemma_concat_bytes_append chunks [bytes];
+  lemma_concat_bytes_singleton bytes;
+  Seq.lemma_eq_elim bytes (concat_bytes [bytes])
+
+let rec lemma_chunk_count_append
+  (left:list B.bytes)
+  (right:list B.bytes)
+  : Lemma
+      (ensures chunk_count (left @ right) == chunk_count left + chunk_count right)
+      (decreases left)
+  =
+  match left with
+  | [] -> ()
+  | bytes :: rest ->
+    lemma_chunk_count_append rest right;
+    assert (left @ right == bytes :: (rest @ right));
+    assert (chunk_count (left @ right) == 1 + chunk_count (rest @ right))
+
+let lemma_chunk_count_snoc
+  (chunks:list B.bytes)
+  (bytes:B.bytes)
+  : Lemma (chunk_count (chunks @ [bytes]) == chunk_count chunks + 1)
+  =
+  lemma_chunk_count_append chunks [bytes]
 
 let lemma_response_with_sent_raw_delta_shape
   (old:raw_io_log)
@@ -1584,6 +1637,36 @@ let rec lemma_note_app_received_chunks_app_view
     assert ([bytes] @ rest == chunks);
     assert (next.app_view.app_sent == view.app_view.app_sent);
     assert (next.app_view.app_received == view.app_view.app_received @ chunks)
+
+let rec lemma_note_app_received_chunks_append
+  (view:connection_view)
+  (left:list B.bytes)
+  (right:list B.bytes)
+  : Lemma
+      (ensures
+        note_app_received_chunks view (left @ right) ==
+        note_app_received_chunks (note_app_received_chunks view left) right)
+      (decreases left)
+  =
+  match left with
+  | [] -> ()
+  | bytes :: rest ->
+    let state = S.advance_read_record view.state in
+    let mid = note_app_received view bytes state in
+    lemma_note_app_received_chunks_append mid rest right;
+    assert ((bytes :: rest) @ right == bytes :: (rest @ right));
+    assert (note_app_received_chunks view left == note_app_received_chunks mid rest)
+
+let lemma_note_app_received_chunks_snoc
+  (view:connection_view)
+  (chunks:list B.bytes)
+  (bytes:B.bytes)
+  : Lemma
+      (ensures
+        note_app_received_chunks view (chunks @ [bytes]) ==
+        note_app_received_chunks (note_app_received_chunks view chunks) [bytes])
+  =
+  lemma_note_app_received_chunks_append view chunks [bytes]
 
 let rec lemma_note_app_received_chunks_state
   (view:connection_view)
