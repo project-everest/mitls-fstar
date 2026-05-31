@@ -1345,22 +1345,21 @@ ensures exists* view1 network_out1 app_out1.
                                     Some (S.advance_read_record view0.CL.state)));
                       ST.advance c.state (S.RecvApplicationData (Ghost.reveal app_payload)) (S.advance_read_record view0.CL.state);
                       let base_view2 : erased CL.connection_view =
-                        CL.note_app_received_with_pending
+                        CL.note_app_received_chunks
                           (Ghost.reveal view1)
-                          (Ghost.reveal app_payload)
-                          B.empty
-                          (S.advance_read_record view0.CL.state);
-                      CL.lemma_raw_slice_append_suffix (Ghost.reveal app_payload) B.empty;
-                      assert (pure (CL.pending_app_source_consistent (Ghost.reveal base_view2)));
-                      CL.lemma_step_read_application_data_success_with_pending
+                          [Ghost.reveal app_payload];
+                      CL.lemma_concat_bytes_singleton (Ghost.reveal app_payload);
+                      CL.lemma_step_read_application_data_chunks_success
                         view0
                         (Ghost.reveal view1)
                         (SZ.v requested_app_len)
                         (Ghost.reveal app_payload)
-                        B.empty
-                        (S.advance_read_record view0.CL.state);
+                        [Ghost.reveal app_payload];
                       let resp : erased CL.client_response =
-                        CL.response_no_network_out (Ghost.reveal app_payload) CL.ApplicationDataReady;
+                        CL.response_no_network_out_chunks
+                          (Ghost.reveal app_payload)
+                          [Ghost.reveal app_payload]
+                          CL.ApplicationDataReady;
                       CL.lemma_raw_received_delta_append view0.CL.raw_log (Ghost.reveal network_bytes);
                       assert (pure (mreq == CL.request_with_received_raw_delta (CL.OpReadApplicationData (SZ.v requested_app_len)) view0.CL.raw_log (Ghost.reveal base_view2).CL.raw_log));
                       assert (pure (CL.step view0 mreq (Ghost.reveal base_view2) (Ghost.reveal resp)));
@@ -2121,28 +2120,27 @@ ensures exists* view1 network_out1 app_out1.
                               Some (S.advance_read_record view0.CL.state)));
                 ST.advance c.state (S.RecvApplicationData (Ghost.reveal app_payload)) (S.advance_read_record view0.CL.state);
                 let base_view2 : erased CL.connection_view =
-                  CL.note_app_received_with_pending
+                  CL.note_app_received_chunks
                     (Ghost.reveal view1)
-                    (Ghost.reveal app_payload)
-                    B.empty
-                    (S.advance_read_record view0.CL.state);
-                CL.lemma_raw_slice_append_suffix (Ghost.reveal app_payload) B.empty;
-                assert (pure (CL.pending_app_source_consistent (Ghost.reveal base_view2)));
+                    [Ghost.reveal app_payload];
                 let view2 : erased CL.connection_view =
                   CL.with_pending_received_raw
                     (Ghost.reveal base_view2)
                     (Ghost.reveal pending_raw_payload);
-                CL.lemma_step_read_application_data_success_with_pending
+                CL.lemma_concat_bytes_singleton (Ghost.reveal app_payload);
+                CL.lemma_step_read_application_data_chunks_success
                   view0
                   (Ghost.reveal view1)
                   (SZ.v requested_app_len)
                   (Ghost.reveal app_payload)
-                  B.empty
-                  (S.advance_read_record view0.CL.state);
+                  [Ghost.reveal app_payload];
                 CL.lemma_raw_received_delta_append view0.CL.raw_log (Ghost.reveal network_bytes);
                 assert (pure (mreq == CL.request_with_received_raw_delta (CL.OpReadApplicationData (SZ.v requested_app_len)) view0.CL.raw_log (Ghost.reveal view2).CL.raw_log));
                 let resp : erased CL.client_response =
-                  CL.response_no_network_out (Ghost.reveal app_payload) CL.ApplicationDataReady;
+                  CL.response_no_network_out_chunks
+                    (Ghost.reveal app_payload)
+                    [Ghost.reveal app_payload]
+                    CL.ApplicationDataReady;
                 CL.lemma_step_with_pending_received_raw
                   view0
                   mreq
