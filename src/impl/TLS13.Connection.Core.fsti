@@ -24,7 +24,8 @@ module U8 = FStar.UInt8
   buffers and CL.step witnesses. Application writes and close_notify use the
   record/framing code to emit one TLS record into network_out.
   KReadApplicationData threads network_in into the raw received log, decrypts one
-  complete peer application record into app_out, and handles close_notify.
+  complete peer application record into app_out, and handles close_notify/known
+  alerts.
   Multi-record fragmentation remains a later milestone.
 **)
 

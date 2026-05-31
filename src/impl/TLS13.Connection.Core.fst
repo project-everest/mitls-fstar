@@ -34,6 +34,34 @@ let is_client_core (c:client_core) (view:CL.connection_view) : slprop =
     Rec.is_record_state c.server_application_record_state server_record_s **
     pure (CL.connection_view_consistent view)
 
+let received_alert_event (alert:T.alert_description) : CL.host_event =
+  CL.NetworkEvent { CL.message_direction = CL.Received; CL.message_value = CL.TlsAlert alert }
+
+let alert_description_of_u8 (b:U8.t) : T.alert_description =
+  if b = 10uy then
+    T.UnexpectedMessage
+  else if b = 20uy then
+    T.BadRecordMac
+  else if b = 40uy then
+    T.HandshakeFailure
+  else if b = 51uy then
+    T.DecryptError
+  else if b = 70uy then
+    T.ProtocolVersion
+  else if b = 110uy then
+    T.UnsupportedExtension
+  else if b = 46uy then
+    T.CertificateUnknown
+  else if b = 47uy then
+    T.IllegalParameter
+  else
+    T.DecodeError
+
+let lemma_alert_description_of_u8_not_close (b:U8.t)
+  : Lemma (alert_description_of_u8 b <> T.CloseNotify)
+  =
+  ()
+
 let lemma_empty_prefix (buffer:B.bytes)
   : Lemma (buffer_prefix_matches buffer 0 B.empty)
   =
@@ -581,6 +609,34 @@ ensures exists* view1 network_out1 app_out1.
                   ST.advance_log c.log (Ghost.reveal view2);
                   let result = { network_out_len = 0sz; app_out_len = 0sz; status = CL.Closed };
                   let resp = CL.response_no_network_out B.empty CL.Closed;
+                  lemma_empty_prefix (Ghost.reveal 'network_out0);
+                  lemma_empty_prefix (Ghost.reveal 'app_out0);
+                  assert (pure (response_buffers_match result (Ghost.reveal 'network_out0) (Ghost.reveal 'app_out0) resp));
+                  assert (pure (exists mresp. response_buffers_match result (Ghost.reveal 'network_out0) (Ghost.reveal 'app_out0) mresp /\
+                                            CL.step view0 mreq (Ghost.reveal view2) mresp));
+                  fold (is_client_core c (Ghost.reveal view2));
+                  result
+                } else if (alert_level = 1uy || alert_level = 2uy) {
+                  let alert = alert_description_of_u8 alert_description;
+                  lemma_alert_description_of_u8_not_close alert_description;
+                  assert (pure (alert <> T.CloseNotify));
+                  ST.advance_fail c.state (T.AlertError alert);
+                  let view2 : erased CL.connection_view =
+                    CL.note_host_event
+                      (Ghost.reveal view1)
+                      (received_alert_event alert)
+                      (S.fail view0.CL.state (T.AlertError alert));
+                  CL.lemma_step_read_alert_failed
+                    view0
+                    (Ghost.reveal view1)
+                    (SZ.v requested_app_len)
+                    alert
+                    (S.fail view0.CL.state (T.AlertError alert));
+                  CL.lemma_raw_received_delta_append view0.CL.raw_log (Ghost.reveal network_bytes);
+                  assert (pure (mreq == CL.request_with_received_raw_delta (CL.OpReadApplicationData (SZ.v requested_app_len)) view0.CL.raw_log (Ghost.reveal view2).CL.raw_log));
+                  ST.advance_log c.log (Ghost.reveal view2);
+                  let result = { network_out_len = 0sz; app_out_len = 0sz; status = CL.Failed (T.AlertError alert) };
+                  let resp = CL.response_no_network_out B.empty (CL.Failed (T.AlertError alert));
                   lemma_empty_prefix (Ghost.reveal 'network_out0);
                   lemma_empty_prefix (Ghost.reveal 'app_out0);
                   assert (pure (response_buffers_match result (Ghost.reveal 'network_out0) (Ghost.reveal 'app_out0) resp));
