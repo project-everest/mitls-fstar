@@ -120,6 +120,14 @@ let lemma_advance_write_records_succ (s:conn_state) (n:nat)
   =
   ()
 
+let rec lemma_advance_write_records_write_seq (s:conn_state) (n:nat)
+  : Lemma
+      (ensures (advance_write_records s n).write_state.R.seq == s.write_state.R.seq + n)
+      (decreases n)
+  =
+  if n = 0 then ()
+  else lemma_advance_write_records_write_seq s (n - 1)
+
 let rec lemma_advance_write_records_preserves_phase (s:conn_state) (n:nat)
   : Lemma (ensures (advance_write_records s n).phase == s.phase)
           (decreases n)
