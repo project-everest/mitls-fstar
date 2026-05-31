@@ -532,13 +532,22 @@ ensures exists* view1 network_out1 app_out1.
         assert (pure (B.length app_out1 == SZ.v app_out_cap));
         let app_payload : erased B.bytes =
           Seq.slice (Ghost.reveal app_out1) 0 (SZ.v copy_len);
+        let pending_payload : erased B.bytes =
+          CL.raw_slice
+            (Ghost.reveal view1).CL.pending_app
+            (SZ.v copy_len)
+            (B.length (Ghost.reveal view1).CL.pending_app);
         let view2 : erased CL.connection_view =
-          CL.note_app_delivered (Ghost.reveal view1) (Ghost.reveal app_payload);
-        CL.lemma_step_read_application_data_delivered
+          CL.note_app_delivered_with_pending
+            (Ghost.reveal view1)
+            (Ghost.reveal app_payload)
+            (Ghost.reveal pending_payload);
+        CL.lemma_step_read_application_data_delivered_with_pending
           view0
           (Ghost.reveal view1)
           (SZ.v requested_app_len)
-          (Ghost.reveal app_payload);
+          (Ghost.reveal app_payload)
+          (Ghost.reveal pending_payload);
         CL.lemma_raw_received_delta_append view0.CL.raw_log (Ghost.reveal network_bytes);
         assert (pure (mreq == CL.request_with_received_raw_delta (CL.OpReadApplicationData (SZ.v requested_app_len)) view0.CL.raw_log (Ghost.reveal view2).CL.raw_log));
         ST.advance_log c.log (Ghost.reveal view2);
@@ -667,12 +676,17 @@ ensures exists* view1 network_out1 app_out1.
                   Seq.slice (Ghost.reveal app_out1) 0 (SZ.v payload_len);
                 ST.advance c.state (S.RecvApplicationData (Ghost.reveal app_payload)) (S.advance_read_record view0.CL.state);
                 let view2 : erased CL.connection_view =
-                  CL.note_app_received (Ghost.reveal view1) (Ghost.reveal app_payload) (S.advance_read_record view0.CL.state);
-                CL.lemma_step_read_application_data_success
+                  CL.note_app_received_with_pending
+                    (Ghost.reveal view1)
+                    (Ghost.reveal app_payload)
+                    B.empty
+                    (S.advance_read_record view0.CL.state);
+                CL.lemma_step_read_application_data_success_with_pending
                   view0
                   (Ghost.reveal view1)
                   (SZ.v requested_app_len)
                   (Ghost.reveal app_payload)
+                  B.empty
                   (S.advance_read_record view0.CL.state);
                 CL.lemma_raw_received_delta_append view0.CL.raw_log (Ghost.reveal network_bytes);
                 assert (pure (mreq == CL.request_with_received_raw_delta (CL.OpReadApplicationData (SZ.v requested_app_len)) view0.CL.raw_log (Ghost.reveal view2).CL.raw_log));
@@ -735,14 +749,21 @@ ensures exists* view1 network_out1 app_out1.
                   c.pending_read_len := leftover_len;
                   let app_payload : erased B.bytes =
                     Seq.slice (Ghost.reveal app_out1) 0 (SZ.v output_limit);
+                  let pending_payload : erased B.bytes =
+                    Seq.slice (Ghost.reveal inner_bytes) (SZ.v output_limit) (SZ.v payload_len);
                   ST.advance c.state (S.RecvApplicationData (Ghost.reveal app_payload)) (S.advance_read_record view0.CL.state);
                   let view2 : erased CL.connection_view =
-                    CL.note_app_received (Ghost.reveal view1) (Ghost.reveal app_payload) (S.advance_read_record view0.CL.state);
-                  CL.lemma_step_read_application_data_success
+                    CL.note_app_received_with_pending
+                      (Ghost.reveal view1)
+                      (Ghost.reveal app_payload)
+                      (Ghost.reveal pending_payload)
+                      (S.advance_read_record view0.CL.state);
+                  CL.lemma_step_read_application_data_success_with_pending
                     view0
                     (Ghost.reveal view1)
                     (SZ.v requested_app_len)
                     (Ghost.reveal app_payload)
+                    (Ghost.reveal pending_payload)
                     (S.advance_read_record view0.CL.state);
                   CL.lemma_raw_received_delta_append view0.CL.raw_log (Ghost.reveal network_bytes);
                   assert (pure (mreq == CL.request_with_received_raw_delta (CL.OpReadApplicationData (SZ.v requested_app_len)) view0.CL.raw_log (Ghost.reveal view2).CL.raw_log));

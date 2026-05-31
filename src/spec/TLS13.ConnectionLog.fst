@@ -1147,6 +1147,13 @@ let note_app_delivered
   : connection_view =
   note_host_event view (local_app_received_event bytes) view.state
 
+let note_app_delivered_with_pending
+  (view:connection_view)
+  (bytes:B.bytes)
+  (pending:B.bytes)
+  : connection_view =
+  { note_app_delivered view bytes with pending_app = pending }
+
 let note_app_received_with_pending
   (view:connection_view)
   (bytes:B.bytes)
@@ -1511,6 +1518,46 @@ let lemma_step_read_application_data_success
   assert (S.conn_evolves view0.state view1.state);
   lemma_connection_view_single_step_for_core_step view0 req view1 resp
 
+let lemma_step_read_application_data_success_with_pending
+  (view0:connection_view)
+  (raw_view:connection_view)
+  (max_len:nat)
+  (bytes:B.bytes)
+  (pending:B.bytes)
+  (state:S.conn_state)
+  : Lemma
+      (requires connection_view_consistent view0 /\
+                connection_view_consistent raw_view /\
+                raw_view.state == view0.state /\
+                raw_view.app_view == view0.app_view /\
+                raw_io_log_extends view0.raw_log raw_view.raw_log /\
+                raw_io_log_same_sent view0.raw_log raw_view.raw_log /\
+                view0.state.S.phase == S.ApplicationData /\
+                state == S.advance_read_record view0.state)
+      (ensures step
+        view0
+        (request_with_received_raw_delta (OpReadApplicationData max_len) view0.raw_log (note_app_received_with_pending raw_view bytes pending state).raw_log)
+        (note_app_received_with_pending raw_view bytes pending state)
+        (response_no_network_out bytes ApplicationDataReady))
+  =
+  let base = note_app_received raw_view bytes state in
+  let view1 = note_app_received_with_pending raw_view bytes pending state in
+  let req = request_with_received_raw_delta (OpReadApplicationData max_len) view0.raw_log view1.raw_log in
+  let resp = response_no_network_out bytes ApplicationDataReady in
+  lemma_step_read_application_data_success view0 raw_view max_len bytes state;
+  assert (connection_view_consistent base);
+  assert (connection_view_consistent view1);
+  assert (view1.raw_log == base.raw_log);
+  assert (view1.app_view == base.app_view);
+  assert (view1.state == base.state);
+  assert (step view0 req base resp);
+  assert (view1.raw_log == step_raw_log view0.raw_log req resp);
+  assert (view1.app_view == step_app_log view0.app_view req resp);
+  assert (response_shape resp);
+  assert (status_matches_phase resp.status view1.state.S.phase);
+  assert (S.conn_evolves view0.state view1.state);
+  lemma_connection_view_single_step_for_core_step view0 req view1 resp
+
 let lemma_step_read_application_data_delivered
   (view0:connection_view)
   (raw_view:connection_view)
@@ -1549,6 +1596,44 @@ let lemma_step_read_application_data_delivered
   assert (response_shape resp);
   assert (status_matches_phase resp.status view1.state.S.phase);
   assert (view1.state == view0.state);
+  assert (S.conn_evolves view0.state view1.state);
+  lemma_connection_view_single_step_for_core_step view0 req view1 resp
+
+let lemma_step_read_application_data_delivered_with_pending
+  (view0:connection_view)
+  (raw_view:connection_view)
+  (max_len:nat)
+  (bytes:B.bytes)
+  (pending:B.bytes)
+  : Lemma
+      (requires connection_view_consistent view0 /\
+                connection_view_consistent raw_view /\
+                raw_view.state == view0.state /\
+                raw_view.app_view == view0.app_view /\
+                raw_io_log_extends view0.raw_log raw_view.raw_log /\
+                raw_io_log_same_sent view0.raw_log raw_view.raw_log /\
+                view0.state.S.phase == S.ApplicationData)
+      (ensures step
+        view0
+        (request_with_received_raw_delta (OpReadApplicationData max_len) view0.raw_log (note_app_delivered_with_pending raw_view bytes pending).raw_log)
+        (note_app_delivered_with_pending raw_view bytes pending)
+        (response_no_network_out bytes ApplicationDataReady))
+  =
+  let base = note_app_delivered raw_view bytes in
+  let view1 = note_app_delivered_with_pending raw_view bytes pending in
+  let req = request_with_received_raw_delta (OpReadApplicationData max_len) view0.raw_log view1.raw_log in
+  let resp = response_no_network_out bytes ApplicationDataReady in
+  lemma_step_read_application_data_delivered view0 raw_view max_len bytes;
+  assert (connection_view_consistent base);
+  assert (connection_view_consistent view1);
+  assert (view1.raw_log == base.raw_log);
+  assert (view1.app_view == base.app_view);
+  assert (view1.state == base.state);
+  assert (step view0 req base resp);
+  assert (view1.raw_log == step_raw_log view0.raw_log req resp);
+  assert (view1.app_view == step_app_log view0.app_view req resp);
+  assert (response_shape resp);
+  assert (status_matches_phase resp.status view1.state.S.phase);
   assert (S.conn_evolves view0.state view1.state);
   lemma_connection_view_single_step_for_core_step view0 req view1 resp
 
