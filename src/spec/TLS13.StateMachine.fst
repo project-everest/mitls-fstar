@@ -110,6 +110,22 @@ let lemma_application_data_record_count_len_three (len:nat)
   =
   lemma_application_data_record_count_len_two (len - max_application_data_fragment_len)
 
+let rec lemma_application_data_record_count_len_positive (len:nat)
+  : Lemma
+      (ensures 1 <= application_data_record_count_len len)
+      (decreases len)
+  =
+  if len <= max_application_data_fragment_len then ()
+  else lemma_application_data_record_count_len_positive (len - max_application_data_fragment_len)
+
+let lemma_application_data_record_count_len_step (len:nat)
+  : Lemma
+      (requires max_application_data_fragment_len < len)
+      (ensures application_data_record_count_len len ==
+               1 + application_data_record_count_len (len - max_application_data_fragment_len))
+  =
+  ()
+
 let lemma_advance_write_records_one (s:conn_state)
   : Lemma (advance_write_records s 1 == advance_write_record s)
   =

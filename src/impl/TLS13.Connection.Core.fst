@@ -58,6 +58,15 @@ let lemma_nat_add_sub_cancel
 =
   ()
 
+let lemma_u64_fits_add_one_of_count
+  (seq:nat)
+  (count:nat)
+  : Lemma
+      (requires 1 <= count /\ U64.fits (seq + count))
+      (ensures U64.fits (seq + 1))
+  =
+  ()
+
 noeq
 type client_core = {
   state: ST.state_ref;
@@ -289,6 +298,138 @@ fn seal_application_record_to_output
     assert (pure (B.length network_out1 == SZ.v network_out_cap));
     assert (pure (s' == 's));
     sealed
+  }
+}
+
+type seal_records_result = {
+  seal_records_ok: bool;
+  seal_records_len: SZ.t;
+}
+
+fn rec seal_application_records_to_output
+  (record_state: Rec.record_state)
+  (app_in: array U8.t)
+  (app_in_len: SZ.t)
+  (plain_offset: SZ.t)
+  (remaining: SZ.t)
+  (network_out: array U8.t)
+  (network_out_cap: SZ.t)
+  (wire_offset: SZ.t)
+  requires Rec.is_record_state record_state 's **
+           pts_to app_in 'app_bytes **
+           pts_to network_out 'network_out0 **
+           pure (B.length 'app_bytes == SZ.v app_in_len /\
+                 B.length 'network_out0 == SZ.v network_out_cap /\
+                 SZ.v plain_offset + SZ.v remaining == SZ.v app_in_len /\
+                 SZ.v wire_offset <= SZ.v network_out_cap /\
+                 U64.fits ('s.R.seq + S.application_data_record_count_len (SZ.v remaining)))
+  returns result: seal_records_result
+  ensures exists* s' network_out1.
+           Rec.is_record_state record_state s' **
+           pts_to app_in 'app_bytes **
+           pts_to network_out network_out1 **
+           pure (B.length network_out1 == SZ.v network_out_cap /\
+                 (result.seal_records_ok ==>
+                   s'.R.seq == 's.R.seq + S.application_data_record_count_len (SZ.v remaining) /\
+                   SZ.v wire_offset + SZ.v result.seal_records_len <= SZ.v network_out_cap) /\
+                 (not result.seal_records_ok ==> result.seal_records_len == 0sz))
+  decreases (SZ.v remaining)
+{
+  assert (pure (S.max_application_data_fragment_len == SZ.v tls_application_plaintext_max));
+  let chunk_len =
+    if SZ.(remaining <=^ tls_application_plaintext_max) {
+      remaining
+    } else {
+      tls_application_plaintext_max
+    };
+  assert (pure (SZ.v chunk_len <= SZ.v tls_application_plaintext_max));
+  assert (pure (SZ.v plain_offset + SZ.v chunk_len <= SZ.v app_in_len));
+  let inner_len = SZ.(chunk_len +^ 1sz);
+  let cipher_len = SZ.(inner_len +^ 16sz);
+  let wire_len = SZ.(5sz +^ cipher_len);
+  assert (pure (SZ.v cipher_len == SZ.v chunk_len + 17));
+  assert (pure (SZ.v wire_len == 5 + (SZ.v chunk_len + 17)));
+  let available = SZ.(network_out_cap -^ wire_offset);
+  assert (pure (SZ.v available == SZ.v network_out_cap - SZ.v wire_offset));
+  lemma_nat_add_sub_cancel 0 (SZ.v wire_offset) (SZ.v network_out_cap);
+  assert (pure (SZ.v wire_offset + SZ.v available == SZ.v network_out_cap));
+  if SZ.(wire_len <=^ available) {
+    assert (pure (SZ.v wire_offset + SZ.v wire_len <= SZ.v network_out_cap));
+    S.lemma_application_data_record_count_len_positive (SZ.v remaining);
+    lemma_u64_fits_add_one_of_count 's.R.seq (S.application_data_record_count_len (SZ.v remaining));
+    let sealed = seal_application_record_to_output
+      record_state
+      app_in
+      app_in_len
+      plain_offset
+      chunk_len
+      network_out
+      network_out_cap
+      wire_offset;
+    with network_after_chunk. assert (pts_to network_out network_after_chunk);
+    with s_after_chunk. assert (Rec.is_record_state record_state s_after_chunk);
+    assert (pure (B.length network_after_chunk == SZ.v network_out_cap));
+    if sealed {
+      assert (pure (s_after_chunk.R.seq == 's.R.seq + 1));
+      if SZ.(remaining <=^ tls_application_plaintext_max) {
+        S.lemma_application_data_record_count_len_small (SZ.v remaining);
+        assert (pure (s_after_chunk.R.seq == 's.R.seq + S.application_data_record_count_len (SZ.v remaining)));
+        let result = { seal_records_ok = true; seal_records_len = wire_len };
+        assert (pure (B.length network_after_chunk == SZ.v network_out_cap));
+        assert (pure (SZ.v wire_offset + SZ.v result.seal_records_len <= SZ.v network_out_cap));
+        result
+      } else {
+        assert (pure (SZ.v tls_application_plaintext_max < SZ.v remaining));
+        assert (pure (chunk_len == tls_application_plaintext_max));
+        let plain_offset' = SZ.(plain_offset +^ chunk_len);
+        let remaining' = SZ.(remaining -^ chunk_len);
+        let wire_offset' = SZ.(wire_offset +^ wire_len);
+        assert (pure (SZ.v remaining' == SZ.v remaining - SZ.v tls_application_plaintext_max));
+        assert (pure (SZ.v remaining' < SZ.v remaining));
+        assert (pure (SZ.v plain_offset' + SZ.v remaining' == SZ.v app_in_len));
+        assert (pure (SZ.v wire_offset' == SZ.v wire_offset + SZ.v wire_len));
+        assert (pure (SZ.v wire_offset' <= SZ.v network_out_cap));
+        S.lemma_application_data_record_count_len_step (SZ.v remaining);
+        assert (pure (S.application_data_record_count_len (SZ.v remaining) ==
+                      1 + S.application_data_record_count_len (SZ.v remaining')));
+        assert (pure (s_after_chunk.R.seq + S.application_data_record_count_len (SZ.v remaining') ==
+                      's.R.seq + S.application_data_record_count_len (SZ.v remaining)));
+        assert (pure (U64.fits (s_after_chunk.R.seq + S.application_data_record_count_len (SZ.v remaining'))));
+        let tail = seal_application_records_to_output
+          record_state
+          app_in
+          app_in_len
+          plain_offset'
+          remaining'
+          network_out
+          network_out_cap
+          wire_offset';
+        with network_out1. assert (pts_to network_out network_out1);
+        with s'. assert (Rec.is_record_state record_state s');
+        assert (pure (B.length network_out1 == SZ.v network_out_cap));
+        if tail.seal_records_ok {
+          assert (pure (s'.R.seq == s_after_chunk.R.seq + S.application_data_record_count_len (SZ.v remaining')));
+          assert (pure (s'.R.seq == 's.R.seq + S.application_data_record_count_len (SZ.v remaining)));
+          assert (pure (SZ.v wire_offset' + SZ.v tail.seal_records_len <= SZ.v network_out_cap));
+          assert (pure (SZ.v wire_offset + SZ.v wire_len + SZ.v tail.seal_records_len <= SZ.v network_out_cap));
+          assert (pure (SZ.v wire_len + SZ.v tail.seal_records_len <= SZ.v network_out_cap));
+          let total_len = SZ.(wire_len +^ tail.seal_records_len);
+          assert (pure (SZ.v total_len == SZ.v wire_len + SZ.v tail.seal_records_len));
+          assert (pure (SZ.v wire_offset + SZ.v total_len <= SZ.v network_out_cap));
+          let result = { seal_records_ok = true; seal_records_len = total_len };
+          result
+        } else {
+          let result = { seal_records_ok = false; seal_records_len = 0sz };
+          result
+        }
+      }
+    } else {
+      let result = { seal_records_ok = false; seal_records_len = 0sz };
+      result
+    }
+  } else {
+    let result = { seal_records_ok = false; seal_records_len = 0sz };
+    result
   }
 }
 
@@ -911,29 +1052,92 @@ ensures exists* view1 network_out1 app_out1.
           result
         }
       } else {
-        ST.advance_fail c.state T.IoError;
-        let view1 : erased CL.connection_view =
-          CL.note_local_fail view0 T.IoError (S.fail view0.CL.state T.IoError);
-        CL.lemma_raw_io_log_extends_refl view0.CL.raw_log;
-        assert (pure (CL.raw_io_log_same_received view0.CL.raw_log view0.CL.raw_log));
-        CL.lemma_step_send_application_data_failed
-          view0
-          view0
-          (Ghost.reveal app_bytes)
-          T.IoError
-          (S.fail view0.CL.state T.IoError);
-        ST.advance_log c.log (Ghost.reveal view1);
-        let result = { network_out_len = 0sz; app_out_len = 0sz; status = CL.Failed T.IoError };
-        let resp = CL.response_no_network_out B.empty (CL.Failed T.IoError);
-        CL.lemma_raw_sent_delta_refl view0.CL.raw_log;
-        assert (pure (resp.CL.network_out == B.empty));
-        lemma_empty_prefix (Ghost.reveal 'network_out0);
-        lemma_empty_prefix (Ghost.reveal 'app_out0);
-        assert (pure (response_buffers_match result (Ghost.reveal 'network_out0) (Ghost.reveal 'app_out0) resp));
-        assert (pure (exists mresp. response_buffers_match result (Ghost.reveal 'network_out0) (Ghost.reveal 'app_out0) mresp /\
-                                  CL.step view0 mreq (Ghost.reveal view1) mresp));
-        fold (is_client_core c (Ghost.reveal view1));
-        result
+        with client_record_s0. assert (Rec.is_record_state c.client_application_record_state client_record_s0);
+        assert (pure (client_record_s0.R.seq == view0.CL.state.S.write_state.R.seq));
+        assert (pure (S.application_data_record_count (Ghost.reveal app_bytes) ==
+                      S.application_data_record_count_len (SZ.v app_in_len)));
+        assert (pure (U64.fits (client_record_s0.R.seq + S.application_data_record_count_len (SZ.v app_in_len))));
+        let sealed = seal_application_records_to_output
+          c.client_application_record_state
+          app_in
+          app_in_len
+          0sz
+          app_in_len
+          network_out
+          network_out_cap
+          0sz;
+        with network_out1. assert (pts_to network_out network_out1);
+        with client_record_s1. assert (Rec.is_record_state c.client_application_record_state client_record_s1);
+        assert (pure (B.length network_out1 == SZ.v network_out_cap));
+        if sealed.seal_records_ok {
+          let total_wire_len = sealed.seal_records_len;
+          assert (pure (SZ.v total_wire_len <= SZ.v network_out_cap));
+          assert (pure (client_record_s1.R.seq ==
+                        client_record_s0.R.seq + S.application_data_record_count_len (SZ.v app_in_len)));
+          let raw : erased CL.raw_io_log =
+            CL.append_raw_sent_slice view0.CL.raw_log (Ghost.reveal network_out1) 0 (SZ.v total_wire_len);
+          CL.lemma_raw_io_log_extends_sent_slice view0.CL.raw_log (Ghost.reveal network_out1) 0 (SZ.v total_wire_len);
+          CL.lemma_raw_io_log_same_received_sent_slice view0.CL.raw_log (Ghost.reveal network_out1) 0 (SZ.v total_wire_len);
+          let raw_view : erased CL.connection_view = CL.sync_raw_state view0 (Ghost.reveal raw) view0.CL.state;
+          CL.lemma_connection_view_consistent_sync_raw_same_state view0 (Ghost.reveal raw);
+          assert (pure ((Ghost.reveal raw_view).CL.state == view0.CL.state));
+          assert (pure ((Ghost.reveal raw_view).CL.app_view == view0.CL.app_view));
+          assert (pure (CL.raw_io_log_extends view0.CL.raw_log (Ghost.reveal raw_view).CL.raw_log));
+          assert (pure (CL.raw_io_log_same_received view0.CL.raw_log (Ghost.reveal raw_view).CL.raw_log));
+          let send_state : erased S.conn_state =
+            S.advance_write_records view0.CL.state (S.application_data_record_count (Ghost.reveal app_bytes));
+          S.lemma_advance_write_records_write_seq view0.CL.state (S.application_data_record_count (Ghost.reveal app_bytes));
+          assert (pure ((Ghost.reveal send_state).S.write_state.R.seq ==
+                        view0.CL.state.S.write_state.R.seq + S.application_data_record_count (Ghost.reveal app_bytes)));
+          assert (pure (client_record_s1.R.seq == (Ghost.reveal send_state).S.write_state.R.seq));
+          ST.advance c.state (S.SendApplicationData (Ghost.reveal app_bytes)) (Ghost.reveal send_state);
+          let view1 : erased CL.connection_view =
+            CL.note_app_sent (Ghost.reveal raw_view) (Ghost.reveal app_bytes) (Ghost.reveal send_state);
+          CL.lemma_step_send_application_data_success
+            view0
+            (Ghost.reveal raw_view)
+            (Ghost.reveal app_bytes)
+            (Ghost.reveal send_state);
+          ST.advance_log c.log (Ghost.reveal view1);
+          let result = { network_out_len = total_wire_len; app_out_len = 0sz; status = CL.ActionComplete };
+          let resp : erased CL.client_response =
+            CL.response_with_sent_raw_delta view0.CL.raw_log (Ghost.reveal view1).CL.raw_log B.empty CL.ActionComplete;
+          CL.lemma_raw_sent_delta_append_slice view0.CL.raw_log (Ghost.reveal network_out1) 0 (SZ.v total_wire_len);
+          assert (pure ((Ghost.reveal resp).CL.network_out == CL.raw_slice (Ghost.reveal network_out1) 0 (SZ.v total_wire_len)));
+          assert (pure (CL.raw_slice (Ghost.reveal network_out1) 0 (SZ.v total_wire_len) ==
+                        Seq.slice (Ghost.reveal network_out1) 0 (SZ.v total_wire_len)));
+          lemma_prefix_slice (Ghost.reveal network_out1) (SZ.v total_wire_len);
+          lemma_empty_prefix (Ghost.reveal 'app_out0);
+          assert (pure (response_buffers_match result (Ghost.reveal network_out1) (Ghost.reveal 'app_out0) (Ghost.reveal resp)));
+          assert (pure (exists mresp. response_buffers_match result (Ghost.reveal network_out1) (Ghost.reveal 'app_out0) mresp /\
+                                    CL.step view0 mreq (Ghost.reveal view1) mresp));
+          fold (is_client_core c (Ghost.reveal view1));
+          result
+        } else {
+          ST.advance_fail c.state T.IoError;
+          let view1 : erased CL.connection_view =
+            CL.note_local_fail view0 T.IoError (S.fail view0.CL.state T.IoError);
+          CL.lemma_raw_io_log_extends_refl view0.CL.raw_log;
+          assert (pure (CL.raw_io_log_same_received view0.CL.raw_log view0.CL.raw_log));
+          CL.lemma_step_send_application_data_failed
+            view0
+            view0
+            (Ghost.reveal app_bytes)
+            T.IoError
+            (S.fail view0.CL.state T.IoError);
+          ST.advance_log c.log (Ghost.reveal view1);
+          let result = { network_out_len = 0sz; app_out_len = 0sz; status = CL.Failed T.IoError };
+          let resp = CL.response_no_network_out B.empty (CL.Failed T.IoError);
+          CL.lemma_raw_sent_delta_refl view0.CL.raw_log;
+          assert (pure (resp.CL.network_out == B.empty));
+          lemma_empty_prefix (Ghost.reveal network_out1);
+          lemma_empty_prefix (Ghost.reveal 'app_out0);
+          assert (pure (response_buffers_match result (Ghost.reveal network_out1) (Ghost.reveal 'app_out0) resp));
+          assert (pure (exists mresp. response_buffers_match result (Ghost.reveal network_out1) (Ghost.reveal 'app_out0) mresp /\
+                                    CL.step view0 mreq (Ghost.reveal view1) mresp));
+          fold (is_client_core c (Ghost.reveal view1));
+          result
+        }
       }
     } else {
       ST.advance_fail c.state T.IoError;

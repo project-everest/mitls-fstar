@@ -25,13 +25,12 @@ module U64 = FStar.UInt64
   The implementation establishes the calc-style theorem shape over concrete
   buffers and CL.step witnesses. Application writes and close_notify use the
   record/framing code to emit sealed TLS records into network_out. Writes up to
-  16 KiB emit one record; writes over 16 KiB and up to 48 KiB emit multiple
-  records.
+  48 KiB keep the existing fixed one/two/three-record proof branches; larger
+  writes use the recursive fragmentation helper.
   KReadApplicationData threads network_in into the raw received log, decrypts one
   complete peer application record, returns the accepted application prefix in
   app_out, buffers leftover plaintext for later reads, and handles
   close_notify/known alerts.
-  General write fragmentation beyond three records remains a later milestone.
 **)
 
 val client_core : Type0
