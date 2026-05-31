@@ -50,6 +50,16 @@ let lemma_nat_add_sub_cancel
 =
   ()
 
+let lemma_u64_fits_add_le_of_count
+  (seq:nat)
+  (n:nat)
+  (count:nat)
+  : Lemma
+      (requires n <= count /\ U64.fits (seq + count))
+      (ensures U64.fits (seq + n))
+  =
+  ()
+
 let lemma_u64_fits_add_one_of_count
   (seq:nat)
   (count:nat)
@@ -57,7 +67,7 @@ let lemma_u64_fits_add_one_of_count
       (requires 1 <= count /\ U64.fits (seq + count))
       (ensures U64.fits (seq + 1))
   =
-  ()
+  lemma_u64_fits_add_le_of_count seq 1 count
 
 let lemma_u64_fits_add_two_of_count
   (seq:nat)
@@ -66,7 +76,7 @@ let lemma_u64_fits_add_two_of_count
       (requires 2 <= count /\ U64.fits (seq + count))
       (ensures U64.fits (seq + 2))
   =
-  ()
+  lemma_u64_fits_add_le_of_count seq 2 count
 
 let lemma_step_recv_application_data
   (s:S.conn_state)
