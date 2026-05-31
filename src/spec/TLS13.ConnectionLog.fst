@@ -1607,6 +1607,28 @@ let rec lemma_note_app_received_chunks_raw_log
       note_app_received view bytes (S.advance_read_record view.state) in
     lemma_note_app_received_chunks_raw_log mid rest
 
+let rec lemma_note_app_received_chunks_pending_fields
+  (view:connection_view)
+  (chunks:list B.bytes)
+  : Lemma
+      (ensures
+        (note_app_received_chunks view chunks).pending_app == view.pending_app /\
+        (note_app_received_chunks view chunks).pending_app_record == view.pending_app_record /\
+        (note_app_received_chunks view chunks).pending_app_offset == view.pending_app_offset /\
+        (note_app_received_chunks view chunks).pending_received_raw == view.pending_received_raw)
+      (decreases chunks)
+  =
+  match chunks with
+  | [] -> ()
+  | bytes :: rest ->
+    let mid =
+      note_app_received view bytes (S.advance_read_record view.state) in
+    assert (mid.pending_app == view.pending_app);
+    assert (mid.pending_app_record == view.pending_app_record);
+    assert (mid.pending_app_offset == view.pending_app_offset);
+    assert (mid.pending_received_raw == view.pending_received_raw);
+    lemma_note_app_received_chunks_pending_fields mid rest
+
 let rec lemma_note_app_received_chunks_app_view
   (view:connection_view)
   (chunks:list B.bytes)
@@ -1768,6 +1790,48 @@ let rec lemma_connection_view_consistent_note_app_received_chunks
     assert (connection_view_consistent mid);
     assert (mid.state.S.phase == S.ApplicationData);
     lemma_connection_view_consistent_note_app_received_chunks mid rest
+
+/// Bundle of invariant-step facts needed by the arbitrary-residual loop in Core.
+/// After appending one more chunk to an accumulated list, the new view:
+///   (1) is connection_view_consistent and in ApplicationData phase
+///   (2) extends the app log by exactly that chunk
+///   (3) preserves pending fields and raw_log from the base view
+///   (4) preserves write_state unchanged from the base view
+///   (5) advances read_state.seq by exactly 1 from the k-chunk view
+/// Core can call this single lemma per loop iteration instead of combining several
+/// separate lemma calls inside the Pulse proof context.
+let lemma_note_app_received_chunks_loop_step
+  (view:connection_view)
+  (chunks:list B.bytes)
+  (bytes:B.bytes)
+  : Lemma
+      (requires connection_view_consistent view /\
+                view.state.S.phase == S.ApplicationData)
+      (ensures (
+        let acc = note_app_received_chunks view chunks in
+        let next = note_app_received_chunks view (chunks @ [bytes]) in
+        connection_view_consistent next /\
+        next.state.S.phase == S.ApplicationData /\
+        next.app_view.app_sent == view.app_view.app_sent /\
+        next.app_view.app_received == acc.app_view.app_received @ [bytes] /\
+        next.pending_app == view.pending_app /\
+        next.pending_app_record == view.pending_app_record /\
+        next.pending_app_offset == view.pending_app_offset /\
+        next.pending_received_raw == view.pending_received_raw /\
+        next.raw_log == view.raw_log /\
+        next.state.S.write_state == view.state.S.write_state /\
+        next.state.S.read_state.R.seq ==
+          acc.state.S.read_state.R.seq + 1))
+  =
+  lemma_connection_view_consistent_note_app_received_chunks view (chunks @ [bytes]);
+  lemma_note_app_received_chunks_state_components view (chunks @ [bytes]);
+  lemma_chunk_count_snoc chunks bytes;
+  lemma_note_app_received_chunks_state_components view chunks;
+  lemma_note_app_received_chunks_app_view view (chunks @ [bytes]);
+  lemma_note_app_received_chunks_app_view view chunks;
+  L.append_assoc view.app_view.app_received chunks [bytes];
+  lemma_note_app_received_chunks_pending_fields view (chunks @ [bytes]);
+  lemma_note_app_received_chunks_raw_log view (chunks @ [bytes])
 
 let rec lemma_note_app_received_chunks_conn_evolves
   (view:connection_view)
