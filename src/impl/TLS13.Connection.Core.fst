@@ -509,6 +509,36 @@ fn set_pending_network_from_slice
     (Seq.slice 'source_bytes (SZ.v source_offset) (SZ.v source_offset + SZ.v copy_len))))
 }
 
+type residual_frame_lengths = {
+  residual_frame_wire_len: SZ.t;
+  residual_frame_tail_len: SZ.t;
+}
+
+let residual_frame_lengths_for
+  (residual_len: SZ.t)
+  (fragment_len: SZ.t)
+  : Pure residual_frame_lengths
+      (requires 5 + SZ.v fragment_len <= SZ.v residual_len)
+      (ensures fun lens ->
+        SZ.v lens.residual_frame_wire_len == 5 + SZ.v fragment_len /\
+        SZ.v lens.residual_frame_wire_len <= SZ.v residual_len /\
+        SZ.v lens.residual_frame_tail_len ==
+          SZ.v residual_len - SZ.v lens.residual_frame_wire_len /\
+        SZ.v lens.residual_frame_wire_len + SZ.v lens.residual_frame_tail_len ==
+          SZ.v residual_len)
+=
+  let wire_len = SZ.(5sz +^ fragment_len) in
+  assert (SZ.v wire_len == 5 + SZ.v fragment_len);
+  assert (SZ.v wire_len <= SZ.v residual_len);
+  let tail_len = SZ.(residual_len -^ wire_len) in
+  assert (SZ.v tail_len == SZ.v residual_len - SZ.v wire_len);
+  lemma_nat_add_sub_cancel 0 (SZ.v wire_len) (SZ.v residual_len);
+  assert (SZ.v wire_len + SZ.v tail_len == SZ.v residual_len);
+  {
+    residual_frame_wire_len = wire_len;
+    residual_frame_tail_len = tail_len
+  }
+
 fn seal_application_record_to_output
   (record_state: Rec.record_state)
   (app_in: array U8.t)
@@ -1513,12 +1543,13 @@ ensures exists* view1 network_out1 app_out1.
                               SZ.(fragment2_len <=^ remaining2_len)) {
                             assert (pure (SZ.v fragment2_len <= SZ.v remaining2_len));
                             assert (pure (5 + SZ.v fragment2_len <= SZ.v residual_len));
-                            let record2_wire_len = SZ.(5sz +^ fragment2_len);
+                            let record2_lengths =
+                              residual_frame_lengths_for residual_len fragment2_len;
+                            let record2_wire_len = record2_lengths.residual_frame_wire_len;
                             assert (pure (SZ.v record2_wire_len == 5 + SZ.v fragment2_len));
                             assert (pure (SZ.v record2_wire_len <= SZ.v residual_len));
-                            let residual_after_two_len = SZ.(residual_len -^ record2_wire_len);
+                            let residual_after_two_len = record2_lengths.residual_frame_tail_len;
                             assert (pure (SZ.v residual_after_two_len == SZ.v residual_len - SZ.v record2_wire_len));
-                            lemma_nat_add_sub_cancel 0 (SZ.v record2_wire_len) (SZ.v residual_len);
                             assert (pure (SZ.v record2_wire_len + SZ.v residual_after_two_len == SZ.v residual_len));
                             assert (pure (SZ.v residual_after_two_len <= SZ.v pending_network_buffer_capacity));
                             let record2_cipher_offset = 5sz;
@@ -2595,12 +2626,13 @@ ensures exists* view1 network_out1 app_out1.
                         SZ.(fragment2_len <=^ remaining2_len)) {
                       assert (pure (SZ.v fragment2_len <= SZ.v remaining2_len));
                       assert (pure (5 + SZ.v fragment2_len <= SZ.v residual_len));
-                      let record2_wire_len = SZ.(5sz +^ fragment2_len);
+                      let record2_lengths =
+                        residual_frame_lengths_for residual_len fragment2_len;
+                      let record2_wire_len = record2_lengths.residual_frame_wire_len;
                       assert (pure (SZ.v record2_wire_len == 5 + SZ.v fragment2_len));
                       assert (pure (SZ.v record2_wire_len <= SZ.v residual_len));
-                      let residual_after_two_len = SZ.(residual_len -^ record2_wire_len);
+                      let residual_after_two_len = record2_lengths.residual_frame_tail_len;
                       assert (pure (SZ.v residual_after_two_len == SZ.v residual_len - SZ.v record2_wire_len));
-                      lemma_nat_add_sub_cancel 0 (SZ.v record2_wire_len) (SZ.v residual_len);
                       assert (pure (SZ.v record2_wire_len + SZ.v residual_after_two_len == SZ.v residual_len));
                       assert (pure (SZ.v residual_after_two_len <= SZ.v pending_network_buffer_capacity));
                       let record2_cipher_offset = 5sz;
