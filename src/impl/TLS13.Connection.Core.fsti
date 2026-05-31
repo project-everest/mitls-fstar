@@ -21,10 +21,10 @@ module U8 = FStar.UInt8
   TCB milestone.
 
   The implementation establishes the calc-style theorem shape over concrete
-  buffers and CL.step witnesses. Application writes use the record/framing code
-  to emit one TLS record into network_out. KReadApplicationData currently models
-  an empty input poll that returns NeedNetworkInput, and multi-record
-  fragmentation remains a later milestone.
+  buffers and CL.step witnesses. Application writes and close_notify use the
+  record/framing code to emit one TLS record into network_out.
+  KReadApplicationData currently models an empty input poll that returns
+  NeedNetworkInput, and multi-record fragmentation remains a later milestone.
 **)
 
 val client_core : Type0
