@@ -1690,6 +1690,16 @@ let lemma_note_app_received_chunks_snoc
   =
   lemma_note_app_received_chunks_append view chunks [bytes]
 
+let lemma_note_app_received_chunks_singleton
+  (view:connection_view)
+  (bytes:B.bytes)
+  : Lemma
+      (ensures
+        note_app_received_chunks view [bytes] ==
+        note_app_received view bytes (S.advance_read_record view.state))
+  =
+  ()
+
 let rec lemma_note_app_received_chunks_state
   (view:connection_view)
   (chunks:list B.bytes)
