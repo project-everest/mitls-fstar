@@ -67,6 +67,7 @@ fn client_write (c: connection) (ch: IO.channel) (buf: array U8.t) (len: SZ.t)
           IO.is_channel ch **
           pts_to buf 'bytes **
           pure (CL.connection_view_single_step 'view0 view1 /\
+                (exists resp. CL.step 'view0 (CL.request_no_network_in (CL.OpSendApplicationData 'bytes)) view1 resp) /\
                 SZ.v written <= SZ.v len /\
                 (s'.S.phase == S.ApplicationData \/ s'.S.phase == S.Failed))
 
@@ -80,6 +81,7 @@ fn client_write_all (c: connection) (ch: IO.channel) (buf: array U8.t) (len: SZ.
           IO.is_channel ch **
           pts_to buf 'bytes **
           pure (CL.connection_view_single_step 'view0 view1 /\
+                (exists resp. CL.step 'view0 (CL.request_no_network_in (CL.OpSendApplicationData 'bytes)) view1 resp) /\
                 (ok ==> s'.S.phase == S.ApplicationData) /\
                 (not ok ==> s'.S.phase == S.Failed))
 
@@ -93,6 +95,9 @@ fn client_read (c: connection) (ch: IO.channel) (out: array U8.t) (max_len: SZ.t
           IO.is_channel ch **
           pts_to out bytes **
           pure (CL.connection_view_single_step 'view0 view1 /\
+                (exists resp. CL.step 'view0
+                  (CL.request_with_received_raw_delta (CL.OpReadApplicationData (SZ.v max_len)) 'view0.CL.raw_log view1.CL.raw_log)
+                  view1 resp) /\
                 B.length bytes == SZ.v max_len /\
                 SZ.v n <= SZ.v max_len /\
                 (s'.S.phase == S.ApplicationData \/ s'.S.phase == S.Closing \/
@@ -108,6 +113,9 @@ fn client_read_exact (c: connection) (ch: IO.channel) (out: array U8.t) (len: SZ
           IO.is_channel ch **
           pts_to out bytes **
           pure (CL.connection_view_single_step 'view0 view1 /\
+                (exists resp. CL.step 'view0
+                  (CL.request_with_received_raw_delta (CL.OpReadApplicationData (SZ.v len)) 'view0.CL.raw_log view1.CL.raw_log)
+                  view1 resp) /\
                 B.length bytes == SZ.v len /\
                 (ok ==> s'.S.phase == S.ApplicationData) /\
                 (not ok ==> s'.S.phase == S.Closed \/ s'.S.phase == S.Failed))
@@ -119,4 +127,5 @@ fn client_close (c: connection) (ch: IO.channel)
   ensures exists* s' view1. connection_exactly c 'st s' view1 **
           IO.is_channel ch **
           pure (CL.connection_view_single_step 'view0 view1 /\
+                (exists resp. CL.step 'view0 (CL.request_no_network_in CL.OpClose) view1 resp) /\
                 (s'.S.phase == S.Closing \/ s'.S.phase == S.Failed))

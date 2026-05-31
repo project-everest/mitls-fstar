@@ -22,14 +22,14 @@ Relevant existing structure:
 - `src/spec/TLS13.Wire.Spec.*` already contains pure parsing/serialization for records and several handshake messages.
 - `src/spec/TLS13.StateMachine.fst` already defines TLS phases, host events, transition steps, and multi-step traces.
 - `src/spec/TLS13.ConnectionLog.fst` already defines layered views: raw IO, stream view, TLS messages, TLS records, host events, application log, and a `connection_view_consistent` predicate. This should be adapted so the raw layer is the buffer history of the verified core.
-- `src/impl/TLS13.Connection.fsti` exports the current socket-shaped client API. It now exposes a proof-facing `connection_exactly` predicate with an explicit `ConnectionLog.connection_view`, and each public operation proves a `connection_view_single_step`; it still needs to be revised to a request/response buffer core, with the socket driver layered outside it.
+- `src/impl/TLS13.Connection.fsti` exports the current socket-shaped client API. It now exposes a proof-facing `connection_exactly` predicate with an explicit `ConnectionLog.connection_view`; application read/write/close operations prove an existential `ConnectionLog.step` witness, while connect still needs the handshake transcript proof before it can expose the same theorem shape.
 - `src/impl/TLS13.Connection.fst` stores a monotonic `TLS13.State.log_ref`; the explicit log-update admits have been discharged, application-data and close_notify send/receive paths now thread actual raw socket bytes through `view.raw_log.raw_sent` and `view.raw_log.raw_received`, while several handshake events are still abstract witnesses rather than a full transcript proof.
 - `src/impl/TLS13.Handshake.*`, `TLS13.Record.*`, `TLS13.Crypto.*`, and `TLS13.X509.*` contain the likely implementation/proof boundaries.
 
 Main gaps found during inspection:
 
 - `TLS13.ConnectionLog.raw_tls` is currently too weak: it mostly checks stream shape, not the full relationship from raw bytes to parsed records, decrypted handshake/application messages, state-machine events, and app-log projection.
-- `TLS13.Connection.fsti` exposes exact log-view evolution for the socket-shaped operations, but does not yet expose a caller-usable functional-correctness theorem for a buffer-oriented `process_request`-style core.
+- `TLS13.Connection.fsti` exposes exact log-view evolution for the socket-shaped operations, and the application read/write/close paths now expose caller-usable `CL.step` witnesses. A dedicated buffer-oriented `process_request`-style core is still needed to make network input/output explicit without direct socket IO.
 - `TLS13.Connection.fst` now verifies without local `admit()` calls, using layered log-update lemmas and concrete state/log transitions.
 - `TLS13.Parser.Correctness.fst`, `TLS13.Handshake.Framing.fst`, and `TLS13.Record.Framing.fst` now discharge the scoped parser/framing correspondence lemmas used by the implementation.
 - `TLS13.Handshake.fst` currently advances through dummy handshake events rather than proving that generated/parsing code produces the corresponding pure protocol events.
@@ -271,16 +271,21 @@ Do not make live network IO the proof boundary. Instead, revise the top-level ve
 The proof-level request and response datatypes should make the two byte directions explicit:
 
 ```fstar
-type client_request =
-  | ReqStart of server_name: hostname
-  | ReqRecvNetwork of ciphertext: bytes
-  | ReqSendApplicationData of plaintext: bytes
-  | ReqReadApplicationData of max_len: nat
-  | ReqClose
+type client_operation =
+  | OpStart of server_name: hostname
+  | OpSendApplicationData of plaintext: bytes
+  | OpReadApplicationData of max_len: nat
+  | OpClose
+
+type client_request = {
+  operation: client_operation;
+  network_in: bytes;  // bytes supplied by the driver from the socket
+}
 
 type client_status =
   | NeedNetworkInput
   | HandshakeComplete
+  | ActionComplete
   | ApplicationDataReady
   | Closed
   | Failed of error_code
@@ -314,7 +319,6 @@ val is_client_core :
 
 type request_kind =
   | KStart
-  | KRecvNetwork
   | KSendApplicationData
   | KReadApplicationData
   | KClose
@@ -322,6 +326,7 @@ type request_kind =
 type core_status =
   | NeedNetworkInput
   | HandshakeComplete
+  | ActionComplete
   | ApplicationDataReady
   | Closed
   | Failed
@@ -395,7 +400,7 @@ ensures
 
 The concrete Pulse parameters are intentionally buffer-oriented:
 
-- `network_in` contains bytes read by the external driver from the socket and is meaningful for `KRecvNetwork`;
+- `network_in` contains bytes read by the external driver from the socket and is available to every operation; it is typically empty for writes/closes and non-empty when a read or handshake step must process inbound TLS records;
 - `app_in` contains plaintext supplied by the caller and is meaningful for `KSendApplicationData`;
 - `requested_app_len` is meaningful for `KReadApplicationData`;
 - `network_out` is mutated with the TLS bytes the driver must write to the socket;
@@ -406,11 +411,10 @@ The `request_buffers_match` and `response_buffers_match` predicates are the spec
 
 The external driver should be a thin orchestration layer:
 
-- call `ReqStart` and write `network_out` to the socket;
-- read socket bytes and pass them to `ReqRecvNetwork`;
-- pass caller writes to `ReqSendApplicationData` and write the returned `network_out`;
-- satisfy caller reads from `app_out`, calling `ReqRecvNetwork` again when the core reports `NeedNetworkInput`;
-- call `ReqClose` and write any returned close_notify bytes.
+- call `OpStart` requests, feeding any available `network_in`, and write `network_out` to the socket;
+- pass caller writes as `OpSendApplicationData`, usually with empty `network_in`, and write the returned `network_out`;
+- satisfy caller reads with `OpReadApplicationData`, feeding newly read socket bytes through `network_in` until the core returns `ApplicationDataReady`, `NeedNetworkInput`, `Closed`, or `Failed`;
+- call `OpClose` and write any returned close_notify bytes.
 
 Expected deliverable:
 
@@ -430,17 +434,16 @@ Replace dummy handshake events with evidence derived from actual generated and p
 
 Expected deliverable:
 
-- the `ReqStart`/`ReqRecvNetwork` sequence proves a valid handshake trace and establishes application traffic keys;
+- the `OpStart` handshake sequence, with explicit `network_in` bytes, proves a valid handshake trace and establishes application traffic keys;
 - dummy handshake witnesses are removed or isolated behind explicit TCB specs.
 
 ### 8. Prove application data and close correctness
 
 Once the handshake invariant is established:
 
-- prove `ReqSendApplicationData` appends exactly the accepted plaintext bytes to the outbound app-log projection and returns exactly the encrypted network buffer that the driver must send;
-- prove `ReqRecvNetwork` decrypts inbound application records into pending plaintext bytes represented by the inbound app-log projection;
-- prove `ReqReadApplicationData` returns exactly a prefix of the pending plaintext bytes and preserves projection correctness when one TLS record satisfies multiple reads;
-- prove `ReqClose` emits or accepts close_notify consistently with the state-machine trace and final phase;
+- prove `OpSendApplicationData` appends exactly the accepted plaintext bytes to the outbound app-log projection and returns exactly the encrypted network buffer that the driver must send;
+- prove `OpReadApplicationData` accounts for exactly the inbound `network_in` bytes, returns exactly a prefix of available plaintext, and preserves projection correctness when one TLS record satisfies multiple reads;
+- prove `OpClose` emits or accepts close_notify consistently with the state-machine trace and final phase;
 - specify and prove behavior for EOF, alert, parse failure, and decryption failure within the chosen scope.
 
 Expected deliverable:
@@ -452,7 +455,7 @@ Expected deliverable:
 Keep the top-level proof boundary clean:
 
 - make the `process_request`-style API the verified core boundary;
-- keep the network loop/driver as an orchestration layer that relies on the verified core theorem and only proves or assumes that bytes written/read from the socket equal the core's `network_out`/`ReqRecvNetwork` buffers;
+- keep the network loop/driver as an orchestration layer that relies on the verified core theorem and only proves or assumes that bytes written/read from the socket equal the core's `network_out`/`network_in` buffers;
 - preserve existing extraction and OpenSSL interop paths;
 - document which C-backed functions are trusted and which F* lemmas prove correspondence.
 
@@ -483,7 +486,7 @@ Expected deliverable:
 4. Strengthen crypto, X509, key-schedule, and record-layer correspondence specs.
 5. Rework `TLS13.ConnectionLog` into the central layered log invariant.
 6. Design the buffer-oriented verified core and external network driver boundary.
-7. Prove handshake correctness for `ReqStart` and `ReqRecvNetwork` from actual bytes and messages.
+7. Prove handshake correctness for `OpStart` requests with explicit `network_in` from actual bytes and messages.
 8. Prove application send/receive/read/close correctness and app-log projection for buffer requests.
 9. Keep the verified core separate from the network driver and document the TCB.
 10. Add validation/admit-count workflow using existing verification and interop commands.
@@ -493,5 +496,5 @@ Expected deliverable:
 - The chosen first milestone is a full theorem for the buffer-oriented `process_request` API. Internally, implementation can still proceed incrementally through handshake, application data, and close phases, but the plan should not stop at handshake-only correctness.
 - Parser/framing correctness is likely to remain partially trusted if the C implementations stay external. The plan should make this a narrow, named TCB rather than hiding it behind weak postconditions.
 - Certificate validation, transcript hashing, Finished verification, and traffic-secret installation must be represented in the pure state trace. Otherwise the proof would only show phase progress, not functional correctness of TLS authentication.
-- Pending read buffers are easy to underspecify. The app-log projection must account for splitting one decrypted TLS record across multiple `ReqReadApplicationData` calls.
+- Pending read buffers are easy to underspecify. The app-log projection must account for splitting one decrypted TLS record across multiple `OpReadApplicationData` calls.
 - The proof should avoid exposing implementation-specific predicates in `.fsti` files unless accompanied by spec-level projection lemmas.

@@ -365,16 +365,21 @@ type app_log = {
   app_received: list B.bytes;
 }
 
-type client_request =
-  | ReqStart of server_name:T.hostname
-  | ReqRecvNetwork of ciphertext:B.bytes
-  | ReqSendApplicationData of plaintext:B.bytes
-  | ReqReadApplicationData of max_len:nat
-  | ReqClose
+type client_operation =
+  | OpStart of server_name:T.hostname
+  | OpSendApplicationData of plaintext:B.bytes
+  | OpReadApplicationData of max_len:nat
+  | OpClose
+
+type client_request = {
+  operation: client_operation;
+  network_in: B.bytes;
+}
 
 type client_status =
   | NeedNetworkInput
   | HandshakeComplete
+  | ActionComplete
   | ApplicationDataReady
   | Closed
   | Failed of error:T.tls_error
@@ -431,24 +436,23 @@ let lemma_app_log_extends_received (app:app_log) (bytes:B.bytes)
             (append_app_received app bytes).app_received == app.app_received @ received_delta)
 
 let request_network_in (req:client_request) : B.bytes =
-  match req with
-  | ReqRecvNetwork ciphertext -> ciphertext
-  | _ -> B.empty
+  req.network_in
 
 let request_app_in (req:client_request) : B.bytes =
-  match req with
-  | ReqSendApplicationData plaintext -> plaintext
+  match req.operation with
+  | OpSendApplicationData plaintext -> plaintext
   | _ -> B.empty
 
 let request_read_len (req:client_request) : nat =
-  match req with
-  | ReqReadApplicationData max_len -> max_len
+  match req.operation with
+  | OpReadApplicationData max_len -> max_len
   | _ -> 0
 
 let response_shape (resp:client_response) : prop =
   match resp.status with
   | NeedNetworkInput
   | HandshakeComplete
+  | ActionComplete
   | Closed
   | Failed _ -> B.length resp.app_out == 0
   | ApplicationDataReady -> True
@@ -457,6 +461,7 @@ let status_matches_phase (status:client_status) (phase:S.phase) : prop =
   match status with
   | NeedNetworkInput -> phase <> S.Closed /\ phase <> S.Failed
   | HandshakeComplete -> phase == S.ApplicationData
+  | ActionComplete -> phase == S.ApplicationData
   | ApplicationDataReady -> phase == S.ApplicationData
   | Closed -> phase == S.Closing \/ phase == S.Closed
   | Failed _ -> phase == S.Failed
@@ -472,9 +477,9 @@ let step_raw_log
   }
 
 let step_app_sent_delta (req:client_request) (resp:client_response) : list B.bytes =
-  match req, resp.status with
-  | ReqSendApplicationData plaintext, Failed _ -> []
-  | ReqSendApplicationData plaintext, _ -> [plaintext]
+  match req.operation, resp.status with
+  | OpSendApplicationData plaintext, Failed _ -> []
+  | OpSendApplicationData plaintext, _ -> [plaintext]
   | _, _ -> []
 
 let step_app_received_delta (resp:client_response) : list B.bytes =
@@ -487,6 +492,94 @@ let step_app_log (app:app_log) (req:client_request) (resp:client_response) : app
     app_sent = app.app_sent @ step_app_sent_delta req resp;
     app_received = app.app_received @ step_app_received_delta resp;
   }
+
+let bytes_delta (old:B.bytes) (next:B.bytes) : B.bytes =
+  if B.length old <= B.length next
+  then Seq.slice next (B.length old) (B.length next)
+  else B.empty
+
+let raw_sent_delta (old:raw_io_log) (next:raw_io_log) : B.bytes =
+  bytes_delta old.raw_sent next.raw_sent
+
+let raw_received_delta (old:raw_io_log) (next:raw_io_log) : B.bytes =
+  bytes_delta old.raw_received next.raw_received
+
+let request_with_network_in (op:client_operation) (network_in:B.bytes) : client_request =
+  { operation = op; network_in = network_in }
+
+let request_no_network_in (op:client_operation) : client_request =
+  request_with_network_in op B.empty
+
+let request_with_received_raw_delta (op:client_operation) (old:raw_io_log) (next:raw_io_log)
+  : client_request =
+  request_with_network_in op (raw_received_delta old next)
+
+let response_with_sent_raw_delta
+  (old:raw_io_log)
+  (next:raw_io_log)
+  (app_out:B.bytes)
+  (status:client_status)
+  : client_response =
+  {
+    network_out = raw_sent_delta old next;
+    app_out = app_out;
+    status = status;
+  }
+
+let response_no_network_out (app_out:B.bytes) (status:client_status) : client_response =
+  { network_out = B.empty; app_out = app_out; status = status }
+
+let lemma_append_empty_right (bytes:B.bytes)
+  : Lemma (B.append bytes B.empty == bytes)
+  =
+  Seq.lemma_empty B.empty;
+  Seq.append_empty_r bytes
+
+let lemma_bytes_extends_append_delta (old:B.bytes) (next:B.bytes)
+  : Lemma
+      (requires bytes_extends old next)
+      (ensures B.append old (bytes_delta old next) == next)
+  =
+  assert (B.length old <= B.length next);
+  assert (bytes_delta old next == Seq.slice next (B.length old) (B.length next));
+  Seq.lemma_eq_elim old (Seq.slice next 0 (B.length old));
+  SP.lemma_split next (B.length old);
+  assert (B.append (Seq.slice next 0 (B.length old)) (bytes_delta old next) == next);
+  assert (B.append old (bytes_delta old next) == next)
+
+let lemma_step_raw_log_sent_delta
+  (old:raw_io_log)
+  (next:raw_io_log)
+  (op:client_operation)
+  (app_out:B.bytes)
+  (status:client_status)
+  : Lemma
+      (requires raw_io_log_extends old next /\
+                raw_io_log_same_received old next)
+      (ensures next == step_raw_log old (request_no_network_in op)
+                   { network_out = raw_sent_delta old next; app_out = app_out; status = status })
+  =
+  lemma_bytes_extends_append_delta old.raw_sent next.raw_sent;
+  lemma_append_empty_right old.raw_received;
+  assert (B.append old.raw_received B.empty == old.raw_received);
+  assert (old.raw_received == next.raw_received)
+
+let lemma_step_raw_log_received_delta
+  (old:raw_io_log)
+  (next:raw_io_log)
+  (op:client_operation)
+  (app_out:B.bytes)
+  (status:client_status)
+  : Lemma
+      (requires raw_io_log_extends old next /\
+                raw_io_log_same_sent old next)
+      (ensures next == step_raw_log old (request_with_network_in op (raw_received_delta old next))
+                   { network_out = B.empty; app_out = app_out; status = status })
+  =
+  lemma_bytes_extends_append_delta old.raw_received next.raw_received;
+  lemma_append_empty_right old.raw_sent;
+  assert (B.append old.raw_sent B.empty == old.raw_sent);
+  assert (old.raw_sent == next.raw_sent)
 
 let lemma_step_raw_log_extends
   (raw:raw_io_log)
@@ -1040,6 +1133,390 @@ let lemma_connection_view_consistent_note_host_event
   assert (connection_view_record_stream_shaped next);
   assert (connection_view_shape next);
   assert (connection_view_consistent_with raw_tls_stream_shapes next)
+
+let lemma_step_send_application_data_success
+  (view0:connection_view)
+  (raw_view:connection_view)
+  (bytes:B.bytes)
+  (state:S.conn_state)
+  : Lemma
+      (requires connection_view_consistent view0 /\
+                connection_view_consistent raw_view /\
+                raw_view.state == view0.state /\
+                raw_view.app_view == view0.app_view /\
+                raw_io_log_extends view0.raw_log raw_view.raw_log /\
+                raw_io_log_same_received view0.raw_log raw_view.raw_log /\
+                view0.state.S.phase == S.ApplicationData /\
+                state == S.advance_write_record view0.state)
+      (ensures step
+        view0
+        (request_no_network_in (OpSendApplicationData bytes))
+        (note_app_sent raw_view bytes state)
+        (response_with_sent_raw_delta view0.raw_log (note_app_sent raw_view bytes state).raw_log B.empty ActionComplete))
+  =
+  let view1 = note_app_sent raw_view bytes state in
+  let req = request_no_network_in (OpSendApplicationData bytes) in
+  let resp = response_with_sent_raw_delta view0.raw_log view1.raw_log B.empty ActionComplete in
+  assert (S.step raw_view.state (S.SendApplicationData bytes) == Some state);
+  lemma_connection_view_consistent_note_host_event
+    raw_view
+    (sent_app_event bytes)
+    (S.SendApplicationData bytes)
+    state;
+  assert (connection_view_consistent view1);
+  lemma_step_raw_log_sent_delta view0.raw_log view1.raw_log (OpSendApplicationData bytes) B.empty ActionComplete;
+  L.append_l_nil view0.app_view.app_received;
+  assert (raw_view.app_view.app_sent == view0.app_view.app_sent);
+  assert (raw_view.app_view.app_received == view0.app_view.app_received);
+  assert (view1.app_view.app_sent == view0.app_view.app_sent @ [bytes]);
+  assert (view1.app_view.app_received == view0.app_view.app_received @ []);
+  assert ((step_app_log view0.app_view req resp).app_sent == view0.app_view.app_sent @ [bytes]);
+  assert ((step_app_log view0.app_view req resp).app_received == view0.app_view.app_received @ []);
+  assert (view1.app_view == step_app_log view0.app_view req resp);
+  assert (response_shape resp);
+  assert (status_matches_phase resp.status view1.state.S.phase);
+  assert (S.step view0.state (S.SendApplicationData bytes) == Some state);
+  assert (S.state_single_step view0.state state);
+  RTC.closure_step S.state_single_step view0.state state;
+  assert (S.conn_evolves view0.state view1.state);
+  lemma_connection_view_single_step_for_core_step view0 req view1 resp
+
+let lemma_step_send_application_data_failed
+  (view0:connection_view)
+  (raw_view:connection_view)
+  (bytes:B.bytes)
+  (err:T.tls_error)
+  (state:S.conn_state)
+  : Lemma
+      (requires connection_view_consistent view0 /\
+                connection_view_consistent raw_view /\
+                raw_view.state == view0.state /\
+                raw_view.app_view == view0.app_view /\
+                raw_io_log_extends view0.raw_log raw_view.raw_log /\
+                raw_io_log_same_received view0.raw_log raw_view.raw_log /\
+                state == S.fail view0.state err)
+      (ensures step
+        view0
+        (request_no_network_in (OpSendApplicationData bytes))
+        (note_local_fail raw_view err state)
+        (response_with_sent_raw_delta view0.raw_log (note_local_fail raw_view err state).raw_log B.empty (Failed err)))
+  =
+  let view1 = note_local_fail raw_view err state in
+  let req = request_no_network_in (OpSendApplicationData bytes) in
+  let resp = response_with_sent_raw_delta view0.raw_log view1.raw_log B.empty (Failed err) in
+  assert (S.step raw_view.state (S.Fail err) == Some state);
+  lemma_connection_view_consistent_note_host_event
+    raw_view
+    (local_fail_event err)
+    (S.Fail err)
+    state;
+  assert (connection_view_consistent view1);
+  lemma_step_raw_log_sent_delta view0.raw_log view1.raw_log (OpSendApplicationData bytes) B.empty (Failed err);
+  L.append_l_nil view0.app_view.app_sent;
+  L.append_l_nil view0.app_view.app_received;
+  assert (raw_view.app_view.app_sent == view0.app_view.app_sent);
+  assert (raw_view.app_view.app_received == view0.app_view.app_received);
+  assert (view1.app_view.app_sent == view0.app_view.app_sent @ []);
+  assert (view1.app_view.app_received == view0.app_view.app_received @ []);
+  assert ((step_app_log view0.app_view req resp).app_sent == view0.app_view.app_sent @ []);
+  assert ((step_app_log view0.app_view req resp).app_received == view0.app_view.app_received @ []);
+  assert (view1.app_view == step_app_log view0.app_view req resp);
+  assert (response_shape resp);
+  assert (status_matches_phase resp.status view1.state.S.phase);
+  assert (S.step view0.state (S.Fail err) == Some state);
+  assert (S.state_single_step view0.state state);
+  RTC.closure_step S.state_single_step view0.state state;
+  assert (S.conn_evolves view0.state view1.state);
+  lemma_connection_view_single_step_for_core_step view0 req view1 resp
+
+let lemma_step_close_success
+  (view0:connection_view)
+  (raw_view:connection_view)
+  (state:S.conn_state)
+  : Lemma
+      (requires connection_view_consistent view0 /\
+                connection_view_consistent raw_view /\
+                raw_view.state == view0.state /\
+                raw_view.app_view == view0.app_view /\
+                raw_io_log_extends view0.raw_log raw_view.raw_log /\
+                raw_io_log_same_received view0.raw_log raw_view.raw_log /\
+                view0.state.S.phase == S.ApplicationData /\
+                state == S.send_close_state view0.state)
+      (ensures step
+        view0
+        (request_no_network_in OpClose)
+        (note_send_close_notify raw_view state)
+        (response_with_sent_raw_delta view0.raw_log (note_send_close_notify raw_view state).raw_log B.empty Closed))
+  =
+  let view1 = note_send_close_notify raw_view state in
+  let req = request_no_network_in OpClose in
+  let resp = response_with_sent_raw_delta view0.raw_log view1.raw_log B.empty Closed in
+  assert (S.step raw_view.state S.SendCloseNotify == Some state);
+  lemma_connection_view_consistent_note_host_event
+    raw_view
+    sent_close_notify_event
+    S.SendCloseNotify
+    state;
+  assert (connection_view_consistent view1);
+  lemma_step_raw_log_sent_delta view0.raw_log view1.raw_log OpClose B.empty Closed;
+  L.append_l_nil view0.app_view.app_sent;
+  L.append_l_nil view0.app_view.app_received;
+  assert (raw_view.app_view.app_sent == view0.app_view.app_sent);
+  assert (raw_view.app_view.app_received == view0.app_view.app_received);
+  assert (view1.app_view.app_sent == view0.app_view.app_sent @ []);
+  assert (view1.app_view.app_received == view0.app_view.app_received @ []);
+  assert ((step_app_log view0.app_view req resp).app_sent == view0.app_view.app_sent @ []);
+  assert ((step_app_log view0.app_view req resp).app_received == view0.app_view.app_received @ []);
+  assert (view1.app_view == step_app_log view0.app_view req resp);
+  assert (response_shape resp);
+  assert (status_matches_phase resp.status view1.state.S.phase);
+  assert (S.step view0.state S.SendCloseNotify == Some state);
+  assert (S.state_single_step view0.state state);
+  RTC.closure_step S.state_single_step view0.state state;
+  assert (S.conn_evolves view0.state view1.state);
+  lemma_connection_view_single_step_for_core_step view0 req view1 resp
+
+let lemma_step_close_failed
+  (view0:connection_view)
+  (raw_view:connection_view)
+  (err:T.tls_error)
+  (state:S.conn_state)
+  : Lemma
+      (requires connection_view_consistent view0 /\
+                connection_view_consistent raw_view /\
+                raw_view.state == view0.state /\
+                raw_view.app_view == view0.app_view /\
+                raw_io_log_extends view0.raw_log raw_view.raw_log /\
+                raw_io_log_same_received view0.raw_log raw_view.raw_log /\
+                state == S.fail view0.state err)
+      (ensures step
+        view0
+        (request_no_network_in OpClose)
+        (note_local_fail raw_view err state)
+        (response_with_sent_raw_delta view0.raw_log (note_local_fail raw_view err state).raw_log B.empty (Failed err)))
+  =
+  let view1 = note_local_fail raw_view err state in
+  let req = request_no_network_in OpClose in
+  let resp = response_with_sent_raw_delta view0.raw_log view1.raw_log B.empty (Failed err) in
+  assert (S.step raw_view.state (S.Fail err) == Some state);
+  lemma_connection_view_consistent_note_host_event
+    raw_view
+    (local_fail_event err)
+    (S.Fail err)
+    state;
+  assert (connection_view_consistent view1);
+  lemma_step_raw_log_sent_delta view0.raw_log view1.raw_log OpClose B.empty (Failed err);
+  L.append_l_nil view0.app_view.app_sent;
+  L.append_l_nil view0.app_view.app_received;
+  assert (raw_view.app_view.app_sent == view0.app_view.app_sent);
+  assert (raw_view.app_view.app_received == view0.app_view.app_received);
+  assert (view1.app_view.app_sent == view0.app_view.app_sent @ []);
+  assert (view1.app_view.app_received == view0.app_view.app_received @ []);
+  assert ((step_app_log view0.app_view req resp).app_sent == view0.app_view.app_sent @ []);
+  assert ((step_app_log view0.app_view req resp).app_received == view0.app_view.app_received @ []);
+  assert (view1.app_view == step_app_log view0.app_view req resp);
+  assert (response_shape resp);
+  assert (status_matches_phase resp.status view1.state.S.phase);
+  assert (S.step view0.state (S.Fail err) == Some state);
+  assert (S.state_single_step view0.state state);
+  RTC.closure_step S.state_single_step view0.state state;
+  assert (S.conn_evolves view0.state view1.state);
+  lemma_connection_view_single_step_for_core_step view0 req view1 resp
+
+let lemma_step_read_application_data_success
+  (view0:connection_view)
+  (raw_view:connection_view)
+  (max_len:nat)
+  (bytes:B.bytes)
+  (state:S.conn_state)
+  : Lemma
+      (requires connection_view_consistent view0 /\
+                connection_view_consistent raw_view /\
+                raw_view.state == view0.state /\
+                raw_view.app_view == view0.app_view /\
+                raw_io_log_extends view0.raw_log raw_view.raw_log /\
+                raw_io_log_same_sent view0.raw_log raw_view.raw_log /\
+                view0.state.S.phase == S.ApplicationData /\
+                state == S.advance_read_record view0.state)
+      (ensures step
+        view0
+        (request_with_received_raw_delta (OpReadApplicationData max_len) view0.raw_log (note_app_received raw_view bytes state).raw_log)
+        (note_app_received raw_view bytes state)
+        (response_no_network_out bytes ApplicationDataReady))
+  =
+  let view1 = note_app_received raw_view bytes state in
+  let req = request_with_received_raw_delta (OpReadApplicationData max_len) view0.raw_log view1.raw_log in
+  let resp = response_no_network_out bytes ApplicationDataReady in
+  assert (S.step raw_view.state (S.RecvApplicationData bytes) == Some state);
+  lemma_connection_view_consistent_note_host_event
+    raw_view
+    (received_app_event bytes)
+    (S.RecvApplicationData bytes)
+    state;
+  assert (connection_view_consistent view1);
+  lemma_step_raw_log_received_delta view0.raw_log view1.raw_log (OpReadApplicationData max_len) bytes ApplicationDataReady;
+  L.append_l_nil view0.app_view.app_sent;
+  assert (raw_view.app_view.app_sent == view0.app_view.app_sent);
+  assert (raw_view.app_view.app_received == view0.app_view.app_received);
+  assert (view1.app_view.app_sent == view0.app_view.app_sent @ []);
+  assert (view1.app_view.app_received == view0.app_view.app_received @ [bytes]);
+  assert ((step_app_log view0.app_view req resp).app_sent == view0.app_view.app_sent @ []);
+  assert ((step_app_log view0.app_view req resp).app_received == view0.app_view.app_received @ [bytes]);
+  assert (view1.app_view == step_app_log view0.app_view req resp);
+  assert (response_shape resp);
+  assert (status_matches_phase resp.status view1.state.S.phase);
+  assert (S.step view0.state (S.RecvApplicationData bytes) == Some state);
+  assert (S.state_single_step view0.state state);
+  RTC.closure_step S.state_single_step view0.state state;
+  assert (S.conn_evolves view0.state view1.state);
+  lemma_connection_view_single_step_for_core_step view0 req view1 resp
+
+let lemma_step_read_close_notify
+  (view0:connection_view)
+  (raw_view:connection_view)
+  (max_len:nat)
+  (state:S.conn_state)
+  : Lemma
+      (requires connection_view_consistent view0 /\
+                connection_view_consistent raw_view /\
+                raw_view.state == view0.state /\
+                raw_view.app_view == view0.app_view /\
+                raw_io_log_extends view0.raw_log raw_view.raw_log /\
+                raw_io_log_same_sent view0.raw_log raw_view.raw_log /\
+                view0.state.S.phase == S.ApplicationData /\
+                state == S.recv_close_state view0.state)
+      (ensures step
+        view0
+        (request_with_received_raw_delta (OpReadApplicationData max_len) view0.raw_log (note_recv_close_notify raw_view state).raw_log)
+        (note_recv_close_notify raw_view state)
+        (response_no_network_out B.empty Closed))
+  =
+  let view1 = note_recv_close_notify raw_view state in
+  let req = request_with_received_raw_delta (OpReadApplicationData max_len) view0.raw_log view1.raw_log in
+  let resp = response_no_network_out B.empty Closed in
+  assert (S.step raw_view.state S.RecvCloseNotify == Some state);
+  lemma_connection_view_consistent_note_host_event
+    raw_view
+    received_close_notify_event
+    S.RecvCloseNotify
+    state;
+  assert (connection_view_consistent view1);
+  lemma_step_raw_log_received_delta view0.raw_log view1.raw_log (OpReadApplicationData max_len) B.empty Closed;
+  L.append_l_nil view0.app_view.app_sent;
+  L.append_l_nil view0.app_view.app_received;
+  assert (raw_view.app_view.app_sent == view0.app_view.app_sent);
+  assert (raw_view.app_view.app_received == view0.app_view.app_received);
+  assert (view1.app_view.app_sent == view0.app_view.app_sent @ []);
+  assert (view1.app_view.app_received == view0.app_view.app_received @ []);
+  assert ((step_app_log view0.app_view req resp).app_sent == view0.app_view.app_sent @ []);
+  assert ((step_app_log view0.app_view req resp).app_received == view0.app_view.app_received @ []);
+  assert (view1.app_view == step_app_log view0.app_view req resp);
+  assert (response_shape resp);
+  assert (status_matches_phase resp.status view1.state.S.phase);
+  assert (S.step view0.state S.RecvCloseNotify == Some state);
+  assert (S.state_single_step view0.state state);
+  RTC.closure_step S.state_single_step view0.state state;
+  assert (S.conn_evolves view0.state view1.state);
+  lemma_connection_view_single_step_for_core_step view0 req view1 resp
+
+let lemma_step_read_alert_failed
+  (view0:connection_view)
+  (raw_view:connection_view)
+  (max_len:nat)
+  (alert:T.alert_description)
+  (state:S.conn_state)
+  : Lemma
+      (requires connection_view_consistent view0 /\
+                connection_view_consistent raw_view /\
+                raw_view.state == view0.state /\
+                raw_view.app_view == view0.app_view /\
+                raw_io_log_extends view0.raw_log raw_view.raw_log /\
+                raw_io_log_same_sent view0.raw_log raw_view.raw_log /\
+                alert <> T.CloseNotify /\
+                state == S.fail view0.state (T.AlertError alert))
+      (ensures step
+        view0
+        (request_with_received_raw_delta (OpReadApplicationData max_len) view0.raw_log (note_host_event raw_view (NetworkEvent { message_direction = Received; message_value = TlsAlert alert }) state).raw_log)
+        (note_host_event raw_view (NetworkEvent { message_direction = Received; message_value = TlsAlert alert }) state)
+        (response_no_network_out B.empty (Failed (T.AlertError alert))))
+  =
+  let ev = NetworkEvent { message_direction = Received; message_value = TlsAlert alert } in
+  let view1 = note_host_event raw_view ev state in
+  let req = request_with_received_raw_delta (OpReadApplicationData max_len) view0.raw_log view1.raw_log in
+  let resp = response_no_network_out B.empty (Failed (T.AlertError alert)) in
+  assert (state_event_of_host_event ev == Some (S.Fail (T.AlertError alert)));
+  assert (S.step raw_view.state (S.Fail (T.AlertError alert)) == Some state);
+  lemma_connection_view_consistent_note_host_event
+    raw_view
+    ev
+    (S.Fail (T.AlertError alert))
+    state;
+  assert (connection_view_consistent view1);
+  lemma_step_raw_log_received_delta view0.raw_log view1.raw_log (OpReadApplicationData max_len) B.empty (Failed (T.AlertError alert));
+  L.append_l_nil view0.app_view.app_sent;
+  L.append_l_nil view0.app_view.app_received;
+  assert (raw_view.app_view.app_sent == view0.app_view.app_sent);
+  assert (raw_view.app_view.app_received == view0.app_view.app_received);
+  assert (view1.app_view.app_sent == view0.app_view.app_sent @ []);
+  assert (view1.app_view.app_received == view0.app_view.app_received @ []);
+  assert ((step_app_log view0.app_view req resp).app_sent == view0.app_view.app_sent @ []);
+  assert ((step_app_log view0.app_view req resp).app_received == view0.app_view.app_received @ []);
+  assert (view1.app_view == step_app_log view0.app_view req resp);
+  assert (response_shape resp);
+  assert (status_matches_phase resp.status view1.state.S.phase);
+  assert (S.step view0.state (S.Fail (T.AlertError alert)) == Some state);
+  assert (S.state_single_step view0.state state);
+  RTC.closure_step S.state_single_step view0.state state;
+  assert (S.conn_evolves view0.state view1.state);
+  lemma_connection_view_single_step_for_core_step view0 req view1 resp
+
+let lemma_step_read_failed
+  (view0:connection_view)
+  (raw_view:connection_view)
+  (max_len:nat)
+  (err:T.tls_error)
+  (state:S.conn_state)
+  : Lemma
+      (requires connection_view_consistent view0 /\
+                connection_view_consistent raw_view /\
+                raw_view.state == view0.state /\
+                raw_view.app_view == view0.app_view /\
+                raw_io_log_extends view0.raw_log raw_view.raw_log /\
+                raw_io_log_same_sent view0.raw_log raw_view.raw_log /\
+                state == S.fail view0.state err)
+      (ensures step
+        view0
+        (request_with_received_raw_delta (OpReadApplicationData max_len) view0.raw_log (note_local_fail raw_view err state).raw_log)
+        (note_local_fail raw_view err state)
+        (response_no_network_out B.empty (Failed err)))
+  =
+  let view1 = note_local_fail raw_view err state in
+  let req = request_with_received_raw_delta (OpReadApplicationData max_len) view0.raw_log view1.raw_log in
+  let resp = response_no_network_out B.empty (Failed err) in
+  assert (S.step raw_view.state (S.Fail err) == Some state);
+  lemma_connection_view_consistent_note_host_event
+    raw_view
+    (local_fail_event err)
+    (S.Fail err)
+    state;
+  assert (connection_view_consistent view1);
+  lemma_step_raw_log_received_delta view0.raw_log view1.raw_log (OpReadApplicationData max_len) B.empty (Failed err);
+  L.append_l_nil view0.app_view.app_sent;
+  L.append_l_nil view0.app_view.app_received;
+  assert (raw_view.app_view.app_sent == view0.app_view.app_sent);
+  assert (raw_view.app_view.app_received == view0.app_view.app_received);
+  assert (view1.app_view.app_sent == view0.app_view.app_sent @ []);
+  assert (view1.app_view.app_received == view0.app_view.app_received @ []);
+  assert ((step_app_log view0.app_view req resp).app_sent == view0.app_view.app_sent @ []);
+  assert ((step_app_log view0.app_view req resp).app_received == view0.app_view.app_received @ []);
+  assert (view1.app_view == step_app_log view0.app_view req resp);
+  assert (response_shape resp);
+  assert (status_matches_phase resp.status view1.state.S.phase);
+  assert (S.step view0.state (S.Fail err) == Some state);
+  assert (S.state_single_step view0.state state);
+  RTC.closure_step S.state_single_step view0.state state;
+  assert (S.conn_evolves view0.state view1.state);
+  lemma_connection_view_single_step_for_core_step view0 req view1 resp
 
 let lemma_connection_view_app_projected_sync_state
   (view:connection_view)
