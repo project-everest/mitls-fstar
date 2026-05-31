@@ -425,6 +425,11 @@ let rec concat_bytes (chunks:list B.bytes) : Tot B.bytes (decreases chunks) =
   | [] -> B.empty
   | chunk :: rest -> B.append chunk (concat_bytes rest)
 
+let rec chunk_count (chunks:list B.bytes) : Tot nat (decreases chunks) =
+  match chunks with
+  | [] -> 0
+  | _ :: rest -> 1 + chunk_count rest
+
 let app_log_extends (old:app_log) (next:app_log) : prop =
   exists sent_delta received_delta.
     next.app_sent == old.app_sent @ sent_delta /\
@@ -627,6 +632,18 @@ let response_no_network_out (app_out:B.bytes) (status:client_status) : client_re
     status = status
   }
 
+let response_no_network_out_chunks
+  (app_out:B.bytes)
+  (chunks:list B.bytes)
+  (status:client_status)
+  : client_response =
+  {
+    network_out = B.empty;
+    app_out = app_out;
+    app_received_delta = chunks;
+    status = status
+  }
+
 let lemma_append_empty_right (bytes:B.bytes)
   : Lemma (B.append bytes B.empty == bytes)
   =
@@ -669,6 +686,16 @@ let lemma_response_no_network_out_shape
   | ApplicationDataReady -> lemma_concat_bytes_singleton app_out
   | _ -> ()
 
+let lemma_response_no_network_out_chunks_shape
+  (app_out:B.bytes)
+  (chunks:list B.bytes)
+  (status:client_status)
+  : Lemma
+      (requires Seq.equal app_out (concat_bytes chunks))
+      (ensures response_shape (response_no_network_out_chunks app_out chunks status))
+  =
+  ()
+
 let lemma_bytes_extends_append_delta (old:B.bytes) (next:B.bytes)
   : Lemma
       (requires bytes_extends old next)
@@ -709,6 +736,24 @@ let lemma_step_raw_log_received_delta
                 raw_io_log_same_sent old next)
       (ensures next == step_raw_log old (request_with_network_in op (raw_received_delta old next))
                    (response_no_network_out app_out status))
+  =
+  lemma_bytes_extends_append_delta old.raw_received next.raw_received;
+  lemma_append_empty_right old.raw_sent;
+  assert (B.append old.raw_sent B.empty == old.raw_sent);
+  assert (old.raw_sent == next.raw_sent)
+
+let lemma_step_raw_log_received_delta_chunks
+  (old:raw_io_log)
+  (next:raw_io_log)
+  (op:client_operation)
+  (app_out:B.bytes)
+  (chunks:list B.bytes)
+  (status:client_status)
+  : Lemma
+      (requires raw_io_log_extends old next /\
+                raw_io_log_same_sent old next)
+      (ensures next == step_raw_log old (request_with_network_in op (raw_received_delta old next))
+                   (response_no_network_out_chunks app_out chunks status))
   =
   lemma_bytes_extends_append_delta old.raw_received next.raw_received;
   lemma_append_empty_right old.raw_sent;
@@ -1218,6 +1263,18 @@ let note_app_received
   : connection_view =
   note_host_event view (received_app_event bytes) state
 
+let rec note_app_received_chunks
+  (view:connection_view)
+  (chunks:list B.bytes)
+  : Tot connection_view
+        (decreases chunks)
+  =
+  match chunks with
+  | [] -> view
+  | bytes :: rest ->
+    let state = S.advance_read_record view.state in
+    note_app_received_chunks (note_app_received view bytes state) rest
+
 let note_app_delivered
   (view:connection_view)
   (bytes:B.bytes)
@@ -1473,6 +1530,121 @@ let lemma_connection_view_consistent_note_host_event_no_state
   assert (connection_view_record_stream_shaped next);
   assert (connection_view_shape next);
   assert (connection_view_consistent_with raw_tls_stream_shapes next)
+
+let rec lemma_note_app_received_chunks_raw_log
+  (view:connection_view)
+  (chunks:list B.bytes)
+  : Lemma
+      (ensures (note_app_received_chunks view chunks).raw_log == view.raw_log)
+      (decreases chunks)
+  =
+  match chunks with
+  | [] -> ()
+  | bytes :: rest ->
+    let mid =
+      note_app_received view bytes (S.advance_read_record view.state) in
+    lemma_note_app_received_chunks_raw_log mid rest
+
+let rec lemma_note_app_received_chunks_app_view
+  (view:connection_view)
+  (chunks:list B.bytes)
+  : Lemma
+      (ensures
+        (note_app_received_chunks view chunks).app_view.app_sent ==
+          view.app_view.app_sent /\
+        (note_app_received_chunks view chunks).app_view.app_received ==
+          view.app_view.app_received @ chunks)
+      (decreases chunks)
+  =
+  match chunks with
+  | [] ->
+    L.append_l_nil view.app_view.app_received
+  | bytes :: rest ->
+    let state = S.advance_read_record view.state in
+    let mid = note_app_received view bytes state in
+    let next = note_app_received_chunks mid rest in
+    L.append_l_nil view.app_view.app_sent;
+    assert (mid.app_view.app_sent == view.app_view.app_sent);
+    assert (mid.app_view.app_received == view.app_view.app_received @ [bytes]);
+    lemma_note_app_received_chunks_app_view mid rest;
+    assert (next.app_view.app_sent == mid.app_view.app_sent);
+    assert (next.app_view.app_received == mid.app_view.app_received @ rest);
+    L.append_assoc view.app_view.app_received [bytes] rest;
+    assert ((view.app_view.app_received @ [bytes]) @ rest ==
+            view.app_view.app_received @ ([bytes] @ rest));
+    assert ([bytes] @ rest == chunks);
+    assert (next.app_view.app_sent == view.app_view.app_sent);
+    assert (next.app_view.app_received == view.app_view.app_received @ chunks)
+
+let rec lemma_note_app_received_chunks_state
+  (view:connection_view)
+  (chunks:list B.bytes)
+  : Lemma
+      (requires view.state.S.phase == S.ApplicationData)
+      (ensures (note_app_received_chunks view chunks).state ==
+               S.advance_read_records view.state (chunk_count chunks))
+      (decreases chunks)
+  =
+  match chunks with
+  | [] -> ()
+  | bytes :: rest ->
+    let state = S.advance_read_record view.state in
+    let mid = note_app_received view bytes state in
+    lemma_note_app_received_chunks_state mid rest;
+    assert (mid.state == state);
+    assert (mid.state.S.phase == S.ApplicationData);
+    S.lemma_advance_read_records_after_one view.state (chunk_count rest);
+    assert (chunk_count chunks == chunk_count rest + 1);
+    assert ((note_app_received_chunks view chunks).state ==
+            S.advance_read_records view.state (chunk_count chunks))
+
+let rec lemma_connection_view_consistent_note_app_received_chunks
+  (view:connection_view)
+  (chunks:list B.bytes)
+  : Lemma
+      (requires connection_view_consistent view /\
+                view.state.S.phase == S.ApplicationData)
+      (ensures connection_view_consistent (note_app_received_chunks view chunks) /\
+               (note_app_received_chunks view chunks).state.S.phase == S.ApplicationData)
+      (decreases chunks)
+  =
+  match chunks with
+  | [] -> ()
+  | bytes :: rest ->
+    let state = S.advance_read_record view.state in
+    let mid = note_app_received view bytes state in
+    assert (S.step view.state (S.RecvApplicationData bytes) == Some state);
+    lemma_connection_view_consistent_note_host_event
+      view
+      (received_app_event bytes)
+      (S.RecvApplicationData bytes)
+      state;
+    assert (connection_view_consistent mid);
+    assert (mid.state.S.phase == S.ApplicationData);
+    lemma_connection_view_consistent_note_app_received_chunks mid rest
+
+let rec lemma_note_app_received_chunks_conn_evolves
+  (view:connection_view)
+  (chunks:list B.bytes)
+  : Lemma
+      (requires view.state.S.phase == S.ApplicationData)
+      (ensures S.conn_evolves view.state (note_app_received_chunks view chunks).state)
+      (decreases chunks)
+  =
+  match chunks with
+  | [] -> ()
+  | bytes :: rest ->
+    let state = S.advance_read_record view.state in
+    let mid = note_app_received view bytes state in
+    assert (S.step view.state (S.RecvApplicationData bytes) == Some state);
+    assert (S.state_single_step view.state state);
+    RTC.closure_step S.state_single_step view.state state;
+    assert (S.conn_evolves view.state mid.state);
+    assert (mid.state.S.phase == S.ApplicationData);
+    lemma_note_app_received_chunks_conn_evolves mid rest;
+    assert (S.conn_evolves mid.state (note_app_received_chunks mid rest).state);
+    assert (RTC.transitive S.conn_evolves);
+    assert (S.conn_evolves view.state (note_app_received_chunks mid rest).state)
 
 let lemma_step_start_success_abstract
   (view0:connection_view)
@@ -1791,6 +1963,67 @@ let lemma_step_read_application_data_success
   assert (S.step view0.state (S.RecvApplicationData bytes) == Some state);
   assert (S.state_single_step view0.state state);
   RTC.closure_step S.state_single_step view0.state state;
+  assert (S.conn_evolves view0.state view1.state);
+  lemma_connection_view_single_step_for_core_step view0 req view1 resp
+
+let lemma_step_read_application_data_chunks_success
+  (view0:connection_view)
+  (raw_view:connection_view)
+  (max_len:nat)
+  (app_out:B.bytes)
+  (chunks:list B.bytes)
+  : Lemma
+      (requires connection_view_consistent view0 /\
+                connection_view_consistent raw_view /\
+                raw_view.state == view0.state /\
+                raw_view.app_view == view0.app_view /\
+                raw_io_log_extends view0.raw_log raw_view.raw_log /\
+                raw_io_log_same_sent view0.raw_log raw_view.raw_log /\
+                view0.state.S.phase == S.ApplicationData /\
+                Seq.equal app_out (concat_bytes chunks))
+      (ensures step
+        view0
+        (request_with_received_raw_delta
+          (OpReadApplicationData max_len)
+          view0.raw_log
+          (note_app_received_chunks raw_view chunks).raw_log)
+        (note_app_received_chunks raw_view chunks)
+        (response_no_network_out_chunks app_out chunks ApplicationDataReady))
+  =
+  let view1 = note_app_received_chunks raw_view chunks in
+  let req =
+    request_with_received_raw_delta
+      (OpReadApplicationData max_len)
+      view0.raw_log
+      view1.raw_log in
+  let resp = response_no_network_out_chunks app_out chunks ApplicationDataReady in
+  lemma_connection_view_consistent_note_app_received_chunks raw_view chunks;
+  assert (connection_view_consistent view1);
+  lemma_note_app_received_chunks_raw_log raw_view chunks;
+  assert (view1.raw_log == raw_view.raw_log);
+  lemma_step_raw_log_received_delta_chunks
+    view0.raw_log
+    view1.raw_log
+    (OpReadApplicationData max_len)
+    app_out
+    chunks
+    ApplicationDataReady;
+  L.append_l_nil view0.app_view.app_sent;
+  assert (raw_view.app_view.app_sent == view0.app_view.app_sent);
+  assert (raw_view.app_view.app_received == view0.app_view.app_received);
+  lemma_note_app_received_chunks_app_view raw_view chunks;
+  assert (view1.app_view.app_sent == view0.app_view.app_sent);
+  assert (view1.app_view.app_received == view0.app_view.app_received @ chunks);
+  assert ((step_app_log view0.app_view req resp).app_sent ==
+          view0.app_view.app_sent @ []);
+  assert ((step_app_log view0.app_view req resp).app_received ==
+          view0.app_view.app_received @ chunks);
+  assert (view1.app_view == step_app_log view0.app_view req resp);
+  lemma_response_no_network_out_chunks_shape app_out chunks ApplicationDataReady;
+  assert (response_shape resp);
+  assert (status_matches_phase resp.status view1.state.S.phase);
+  lemma_note_app_received_chunks_state raw_view chunks;
+  lemma_note_app_received_chunks_conn_evolves raw_view chunks;
   assert (S.conn_evolves view0.state view1.state);
   lemma_connection_view_single_step_for_core_step view0 req view1 resp
 
