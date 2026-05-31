@@ -355,6 +355,7 @@ type directed_message (a:Type0) = {
 type local_event =
   | LocalValidateCertificate of X.peer_identity
   | LocalFail of T.tls_error
+  | LocalDeliverApplicationData of B.bytes
 
 type host_event =
   | NetworkEvent of directed_message tls_message
@@ -693,6 +694,7 @@ let state_event_of_local_event (ev:local_event) : GTot (option S.event) =
   match ev with
   | LocalValidateCertificate peer -> Some (S.ValidateCertificate peer)
   | LocalFail err -> Some (S.Fail err)
+  | LocalDeliverApplicationData _ -> None
 
 let state_event_of_host_event (ev:host_event) : GTot (option S.event) =
   match ev with
@@ -729,7 +731,10 @@ let app_received_delta_of_host_event (ev:host_event) : list B.bytes =
     (match msg.message_direction, msg.message_value with
      | Received, TlsApplicationData bytes -> [bytes]
      | _, _ -> [])
-  | LocalEvent _ -> []
+  | LocalEvent local ->
+    (match local with
+     | LocalDeliverApplicationData bytes -> [bytes]
+     | _ -> [])
 
 let app_log_snoc_event (app:app_log) (ev:host_event) : app_log =
   {
@@ -807,7 +812,10 @@ let rec app_received_of_host_trace (trace:list host_event)
        (match msg.message_direction, msg.message_value with
         | Received, TlsApplicationData bytes -> bytes :: app_received_of_host_trace rest
         | _, _ -> app_received_of_host_trace rest)
-     | LocalEvent _ -> app_received_of_host_trace rest)
+     | LocalEvent local ->
+       (match local with
+        | LocalDeliverApplicationData bytes -> bytes :: app_received_of_host_trace rest
+        | _ -> app_received_of_host_trace rest))
 
 let app_log_of_host_trace (trace:list host_event) : GTot app_log =
   {
@@ -829,6 +837,9 @@ let received_close_notify_event : host_event =
 
 let local_fail_event (err:T.tls_error) : host_event =
   LocalEvent (LocalFail err)
+
+let local_app_received_event (bytes:B.bytes) : host_event =
+  LocalEvent (LocalDeliverApplicationData bytes)
 
 let rec lemma_sent_tls_of_host_trace_snoc (trace:list host_event) (ev:host_event)
   : Lemma
@@ -877,7 +888,16 @@ let rec lemma_app_received_of_host_trace_snoc (trace:list host_event) (ev:host_e
           (decreases trace)
   =
   match trace with
-  | [] -> ()
+  | [] ->
+    (match ev with
+     | NetworkEvent msg ->
+       (match msg.message_direction, msg.message_value with
+        | Received, TlsApplicationData _ -> ()
+        | _, _ -> ())
+     | LocalEvent local ->
+       (match local with
+        | LocalDeliverApplicationData _ -> ()
+        | _ -> ()))
   | _ :: rest -> lemma_app_received_of_host_trace_snoc rest ev
 
 let rec lemma_step_many_snoc
@@ -1119,6 +1139,12 @@ let note_app_received
   : connection_view =
   note_host_event view (received_app_event bytes) state
 
+let note_app_delivered
+  (view:connection_view)
+  (bytes:B.bytes)
+  : connection_view =
+  note_host_event view (local_app_received_event bytes) view.state
+
 let note_raw_app_sent
   (view:connection_view)
   (raw:raw_io_log)
@@ -1192,6 +1218,42 @@ let lemma_connection_view_consistent_note_host_event
           state_events_of_host_trace view.host_trace @ [state_ev]);
   assert (S.step_many S.initial (state_events_of_host_trace next.host_trace) ==
           Some state);
+  assert (sent_tls_of_host_trace next.host_trace == next.sent_tls.values);
+  assert (received_tls_of_host_trace next.host_trace == next.received_tls.values);
+  assert ((app_log_of_host_trace next.host_trace).app_sent == next.app_view.app_sent);
+  assert ((app_log_of_host_trace next.host_trace).app_received == next.app_view.app_received);
+  assert (app_log_of_host_trace next.host_trace == next.app_view);
+  assert (connection_view_raw_stream_shaped next);
+  assert (connection_view_record_stream_shaped next);
+  assert (connection_view_shape next);
+  assert (connection_view_consistent_with raw_tls_stream_shapes next)
+
+let lemma_connection_view_consistent_note_host_event_no_state
+  (view:connection_view)
+  (ev:host_event)
+  : Lemma
+      (requires connection_view_consistent view /\
+                state_event_of_host_event ev == None)
+      (ensures connection_view_consistent (note_host_event view ev view.state))
+=
+  let next = note_host_event view ev view.state in
+  lemma_sent_tls_of_host_trace_snoc view.host_trace ev;
+  lemma_received_tls_of_host_trace_snoc view.host_trace ev;
+  lemma_state_events_of_host_trace_snoc view.host_trace ev;
+  lemma_app_sent_of_host_trace_snoc view.host_trace ev;
+  lemma_app_received_of_host_trace_snoc view.host_trace ev;
+  assert (state_event_delta_of_host_event ev == []);
+  L.append_l_nil (state_events_of_host_trace view.host_trace);
+  assert (state_events_of_host_trace next.host_trace ==
+          state_events_of_host_trace view.host_trace);
+  assert (S.step_many S.initial (state_events_of_host_trace next.host_trace) ==
+          Some view.state);
+  lemma_raw_stream_view_shape #tls_message
+    next.raw_log.raw_sent
+    next.sent_tls.values;
+  lemma_raw_stream_view_shape #tls_message
+    next.raw_log.raw_received
+    next.received_tls.values;
   assert (sent_tls_of_host_trace next.host_trace == next.sent_tls.values);
   assert (received_tls_of_host_trace next.host_trace == next.received_tls.values);
   assert ((app_log_of_host_trace next.host_trace).app_sent == next.app_view.app_sent);
@@ -1436,6 +1498,47 @@ let lemma_step_read_application_data_success
   assert (S.step view0.state (S.RecvApplicationData bytes) == Some state);
   assert (S.state_single_step view0.state state);
   RTC.closure_step S.state_single_step view0.state state;
+  assert (S.conn_evolves view0.state view1.state);
+  lemma_connection_view_single_step_for_core_step view0 req view1 resp
+
+let lemma_step_read_application_data_delivered
+  (view0:connection_view)
+  (raw_view:connection_view)
+  (max_len:nat)
+  (bytes:B.bytes)
+  : Lemma
+      (requires connection_view_consistent view0 /\
+                connection_view_consistent raw_view /\
+                raw_view.state == view0.state /\
+                raw_view.app_view == view0.app_view /\
+                raw_io_log_extends view0.raw_log raw_view.raw_log /\
+                raw_io_log_same_sent view0.raw_log raw_view.raw_log /\
+                view0.state.S.phase == S.ApplicationData)
+      (ensures step
+        view0
+        (request_with_received_raw_delta (OpReadApplicationData max_len) view0.raw_log (note_app_delivered raw_view bytes).raw_log)
+        (note_app_delivered raw_view bytes)
+        (response_no_network_out bytes ApplicationDataReady))
+  =
+  let view1 = note_app_delivered raw_view bytes in
+  let req = request_with_received_raw_delta (OpReadApplicationData max_len) view0.raw_log view1.raw_log in
+  let resp = response_no_network_out bytes ApplicationDataReady in
+  lemma_connection_view_consistent_note_host_event_no_state
+    raw_view
+    (local_app_received_event bytes);
+  assert (connection_view_consistent view1);
+  lemma_step_raw_log_received_delta view0.raw_log view1.raw_log (OpReadApplicationData max_len) bytes ApplicationDataReady;
+  L.append_l_nil view0.app_view.app_sent;
+  assert (raw_view.app_view.app_sent == view0.app_view.app_sent);
+  assert (raw_view.app_view.app_received == view0.app_view.app_received);
+  assert (view1.app_view.app_sent == view0.app_view.app_sent @ []);
+  assert (view1.app_view.app_received == view0.app_view.app_received @ [bytes]);
+  assert ((step_app_log view0.app_view req resp).app_sent == view0.app_view.app_sent @ []);
+  assert ((step_app_log view0.app_view req resp).app_received == view0.app_view.app_received @ [bytes]);
+  assert (view1.app_view == step_app_log view0.app_view req resp);
+  assert (response_shape resp);
+  assert (status_matches_phase resp.status view1.state.S.phase);
+  assert (view1.state == view0.state);
   assert (S.conn_evolves view0.state view1.state);
   lemma_connection_view_single_step_for_core_step view0 req view1 resp
 
