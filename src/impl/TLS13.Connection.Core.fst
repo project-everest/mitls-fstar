@@ -10,6 +10,7 @@ module B = TLS13.Bytes
 module Box = Pulse.Lib.Box
 module Cast = FStar.Int.Cast
 module CL = TLS13.ConnectionLog
+module L = FStar.List.Tot
 module Math = FStar.Math.Lemmas
 module Rec = TLS13.Record
 module R = TLS13.Record.Spec
@@ -1697,7 +1698,14 @@ ensures exists* view1 network_out1 app_out1.
                                   assert (pure (Seq.equal
                                     (Ghost.reveal app_payload_total)
                                     (B.append (Ghost.reveal app_payload) (Ghost.reveal app_payload2))));
-                                  CL.lemma_concat_bytes_pair (Ghost.reveal app_payload) (Ghost.reveal app_payload2);
+                                  CL.lemma_concat_bytes_singleton (Ghost.reveal app_payload);
+                                  CL.lemma_concat_bytes_snoc_equal
+                                    [Ghost.reveal app_payload]
+                                    (Ghost.reveal app_payload2)
+                                    (Ghost.reveal app_payload);
+                                  assert (pure (
+                                    L.append [Ghost.reveal app_payload] [Ghost.reveal app_payload2] ==
+                                    [Ghost.reveal app_payload; Ghost.reveal app_payload2]));
                                   assert (pure (Seq.equal
                                     (Ghost.reveal app_payload_total)
                                     (CL.concat_bytes [Ghost.reveal app_payload; Ghost.reveal app_payload2])));
@@ -2782,7 +2790,14 @@ ensures exists* view1 network_out1 app_out1.
                             assert (pure (Seq.equal
                               (Ghost.reveal app_payload_total)
                               (B.append (Ghost.reveal app_payload) (Ghost.reveal app_payload2))));
-                            CL.lemma_concat_bytes_pair (Ghost.reveal app_payload) (Ghost.reveal app_payload2);
+                            CL.lemma_concat_bytes_singleton (Ghost.reveal app_payload);
+                            CL.lemma_concat_bytes_snoc_equal
+                              [Ghost.reveal app_payload]
+                              (Ghost.reveal app_payload2)
+                              (Ghost.reveal app_payload);
+                            assert (pure (
+                              L.append [Ghost.reveal app_payload] [Ghost.reveal app_payload2] ==
+                              [Ghost.reveal app_payload; Ghost.reveal app_payload2]));
                             assert (pure (Seq.equal
                               (Ghost.reveal app_payload_total)
                               (CL.concat_bytes [Ghost.reveal app_payload; Ghost.reveal app_payload2])));
