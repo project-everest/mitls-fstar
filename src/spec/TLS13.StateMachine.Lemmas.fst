@@ -85,10 +85,11 @@ let lemma_controlled_handshake_reaches_application_data
 let lemma_application_data_send_stays_application (s:S.conn_state) (bytes:TLS13.Bytes.bytes)
   : Lemma (requires s.S.phase == S.ApplicationData)
           (ensures (match S.step s (S.SendApplicationData bytes) with
-                    | Some s' -> s' == S.advance_write_record s /\
+                    | Some s' -> s' == S.advance_write_records s (S.application_data_record_count bytes) /\
                                  s'.S.phase == S.ApplicationData
                     | None -> False))
-  = ()
+  =
+  S.lemma_advance_write_records_preserves_phase s (S.application_data_record_count bytes)
 
 let lemma_send_close_notify_progress (s:S.conn_state)
   : Lemma (requires s.S.phase == S.ApplicationData)

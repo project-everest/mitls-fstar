@@ -320,7 +320,7 @@ requires
     B.length 'network_out0 == SZ.v network_out_cap /\
     B.length 'app_out0 == SZ.v app_out_cap /\
     view0.CL.state.S.phase == S.ApplicationData /\
-    request_record_sequence_fits kind view0 /\
+    request_record_sequence_fits kind view0 (Ghost.reveal 'app_in_bytes) /\
     request_buffers_match
       kind
       (Ghost.reveal 'network_in_bytes)
@@ -406,14 +406,22 @@ ensures exists* view1 network_out1 app_out1.
           assert (pure ((Ghost.reveal raw_view).CL.app_view == view0.CL.app_view));
           assert (pure (CL.raw_io_log_extends view0.CL.raw_log (Ghost.reveal raw_view).CL.raw_log));
           assert (pure (CL.raw_io_log_same_received view0.CL.raw_log (Ghost.reveal raw_view).CL.raw_log));
-          ST.advance c.state (S.SendApplicationData (Ghost.reveal app_bytes)) (S.advance_write_record view0.CL.state);
+          assert (pure (S.max_application_data_fragment_len == SZ.v tls_application_plaintext_max));
+          assert (pure (B.length (Ghost.reveal app_bytes) <= S.max_application_data_fragment_len));
+          S.lemma_application_data_record_count_len_small (B.length (Ghost.reveal app_bytes));
+          S.lemma_advance_write_records_one view0.CL.state;
+          assert (pure (S.advance_write_records view0.CL.state (S.application_data_record_count (Ghost.reveal app_bytes)) ==
+                        S.advance_write_record view0.CL.state));
+          let send_state : erased S.conn_state =
+            S.advance_write_records view0.CL.state (S.application_data_record_count (Ghost.reveal app_bytes));
+          ST.advance c.state (S.SendApplicationData (Ghost.reveal app_bytes)) (Ghost.reveal send_state);
           let view1 : erased CL.connection_view =
-            CL.note_app_sent (Ghost.reveal raw_view) (Ghost.reveal app_bytes) (S.advance_write_record view0.CL.state);
+            CL.note_app_sent (Ghost.reveal raw_view) (Ghost.reveal app_bytes) (Ghost.reveal send_state);
           CL.lemma_step_send_application_data_success
             view0
             (Ghost.reveal raw_view)
             (Ghost.reveal app_bytes)
-            (S.advance_write_record view0.CL.state);
+            (Ghost.reveal send_state);
           ST.advance_log c.log (Ghost.reveal view1);
           let result = { network_out_len = wire_len; app_out_len = 0sz; status = CL.ActionComplete };
           let resp : erased CL.client_response =
@@ -817,6 +825,13 @@ ensures exists* view1 network_out1 app_out1.
                   fragment_len;
                 with cipher_bytes. assert (pts_to cipher cipher_bytes);
                 assert (pure (B.length cipher_bytes == SZ.v fragment_len));
+                assert (pure (not (not (SZ.(16sz <^ fragment_len)))));
+                let fragment_len_has_tag = SZ.lt 16sz fragment_len;
+                assert (pure (fragment_len_has_tag == SZ.(16sz <^ fragment_len)));
+                assert (pure (fragment_len_has_tag == true));
+                assert (pure (fragment_len_has_tag == (SZ.v 16sz < SZ.v fragment_len)));
+                assert (pure (SZ.v 16sz == 16));
+                assert (pure (16 < SZ.v fragment_len));
                 assert (pure (16 <= SZ.v fragment_len));
                 let inner_len = SZ.(fragment_len -^ 16sz);
                 assert (pure (SZ.v inner_len > 0));

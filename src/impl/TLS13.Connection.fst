@@ -215,7 +215,7 @@ let successful_handshake_view (view:CL.connection_view) (s:S.conn_state) : CL.co
   CL.note_host_event (hs_log_view7 view s) (sent_handshake_event (H.Finished dummy_finished)) (hs_application_data s)
 
 let note_sent_app_view (view:CL.connection_view) (bytes:B.bytes) (s:S.conn_state) : CL.connection_view =
-  CL.note_host_event view (CL.sent_app_event bytes) (S.advance_write_record s)
+  CL.note_host_event view (CL.sent_app_event bytes) (S.advance_write_records s (S.application_data_record_count bytes))
 
 let note_recv_app_view (view:CL.connection_view) (bytes:B.bytes) (s:S.conn_state) : CL.connection_view =
   CL.note_host_event view (CL.received_app_event bytes) (S.advance_read_record s)
@@ -810,27 +810,29 @@ fn client_write_all (c: connection) (ch: IO.channel) (buf: array U8.t) (len: SZ.
         c.log;
     with record_s' raw_view. _;
     if ok {
-      ST.advance 'st (S.SendApplicationData (Ghost.reveal 'bytes)) (S.advance_write_record 's);
+      let send_state : erased S.conn_state =
+        S.advance_write_records 's (S.application_data_record_count (Ghost.reveal 'bytes));
+      ST.advance 'st (S.SendApplicationData (Ghost.reveal 'bytes)) (Ghost.reveal send_state);
       assert (pure (raw_view.CL.state == 's));
       advance_log_event
         c.log
         (CL.sent_app_event (Ghost.reveal 'bytes))
         (S.SendApplicationData (Ghost.reveal 'bytes))
-        (S.advance_write_record 's);
+        (Ghost.reveal send_state);
       assert (pure (CL.connection_view_consistent (note_sent_app_view raw_view (Ghost.reveal 'bytes) 's)));
-      assert (pure ((note_sent_app_view raw_view (Ghost.reveal 'bytes) 's).CL.state == S.advance_write_record 's));
+      assert (pure ((note_sent_app_view raw_view (Ghost.reveal 'bytes) 's).CL.state == Ghost.reveal send_state));
       CL.lemma_app_log_extends_sent raw_view.CL.app_view (Ghost.reveal 'bytes);
       assert (pure (CL.connection_view_single_step 'view0 (note_sent_app_view raw_view (Ghost.reveal 'bytes) 's)));
       CL.lemma_step_send_application_data_success
         'view0
         raw_view
         (Ghost.reveal 'bytes)
-        (S.advance_write_record 's);
+        (Ghost.reveal send_state);
       assert (pure (exists resp. CL.step 'view0
         (CL.request_no_network_in (CL.OpSendApplicationData (Ghost.reveal 'bytes)))
         (note_sent_app_view raw_view (Ghost.reveal 'bytes) 's)
         resp));
-      fold (connection_exactly c 'st (S.advance_write_record 's) (note_sent_app_view raw_view (Ghost.reveal 'bytes) 's));
+      fold (connection_exactly c 'st (Ghost.reveal send_state) (note_sent_app_view raw_view (Ghost.reveal 'bytes) 's));
       true
     } else {
       ST.advance_fail 'st T.IoError;

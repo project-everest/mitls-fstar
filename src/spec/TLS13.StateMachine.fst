@@ -74,6 +74,43 @@ let with_validated_peer (s:conn_state) (peer:X.peer_identity) : conn_state =
 let advance_write_record (s:conn_state) : conn_state =
   { s with write_state = R.next_seq s.write_state }
 
+let max_application_data_fragment_len : nat = 16384
+
+let rec application_data_record_count_len (len:nat) : Tot nat (decreases len) =
+  if len <= max_application_data_fragment_len then 1
+  else 1 + application_data_record_count_len (len - max_application_data_fragment_len)
+
+let application_data_record_count (bytes:B.bytes) : nat =
+  application_data_record_count_len (B.length bytes)
+
+let rec advance_write_records (s:conn_state) (n:nat) : Tot conn_state (decreases n) =
+  if n = 0 then s
+  else advance_write_record (advance_write_records s (n - 1))
+
+let lemma_application_data_record_count_len_small (len:nat)
+  : Lemma
+      (requires len <= max_application_data_fragment_len)
+      (ensures application_data_record_count_len len == 1)
+  =
+  ()
+
+let lemma_advance_write_records_one (s:conn_state)
+  : Lemma (advance_write_records s 1 == advance_write_record s)
+  =
+  ()
+
+let lemma_advance_write_records_succ (s:conn_state) (n:nat)
+  : Lemma (advance_write_records s (n + 1) == advance_write_record (advance_write_records s n))
+  =
+  ()
+
+let rec lemma_advance_write_records_preserves_phase (s:conn_state) (n:nat)
+  : Lemma (ensures (advance_write_records s n).phase == s.phase)
+          (decreases n)
+  =
+  if n = 0 then ()
+  else lemma_advance_write_records_preserves_phase s (n - 1)
+
 let advance_read_record (s:conn_state) : conn_state =
   { s with read_state = R.next_seq s.read_state }
 
@@ -105,8 +142,8 @@ let step (s:conn_state) (e:event) : option conn_state =
     Some { s with phase = ServerFinishedVerified }
   | ServerFinishedVerified, SendClientFinished _ ->
     Some { s with phase = ApplicationData }
-  | ApplicationData, SendApplicationData _ ->
-    Some (advance_write_record s)
+  | ApplicationData, SendApplicationData bytes ->
+    Some (advance_write_records s (application_data_record_count bytes))
   | ApplicationData, RecvApplicationData _ ->
     Some (advance_read_record s)
   | ApplicationData, SendCloseNotify ->

@@ -1302,7 +1302,7 @@ let lemma_step_send_application_data_success
                 raw_io_log_extends view0.raw_log raw_view.raw_log /\
                 raw_io_log_same_received view0.raw_log raw_view.raw_log /\
                 view0.state.S.phase == S.ApplicationData /\
-                state == S.advance_write_record view0.state)
+                state == S.advance_write_records view0.state (S.application_data_record_count bytes))
       (ensures step
         view0
         (request_no_network_in (OpSendApplicationData bytes))
@@ -1329,6 +1329,8 @@ let lemma_step_send_application_data_success
   assert ((step_app_log view0.app_view req resp).app_received == view0.app_view.app_received @ []);
   assert (view1.app_view == step_app_log view0.app_view req resp);
   assert (response_shape resp);
+  S.lemma_advance_write_records_preserves_phase view0.state (S.application_data_record_count bytes);
+  assert (view1.state.S.phase == S.ApplicationData);
   assert (status_matches_phase resp.status view1.state.S.phase);
   assert (S.step view0.state (S.SendApplicationData bytes) == Some state);
   assert (S.state_single_step view0.state state);

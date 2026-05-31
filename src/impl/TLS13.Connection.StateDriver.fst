@@ -22,9 +22,11 @@ fn application_echo_roundtrip
           pure (S.conn_evolves s s' /\ s'.S.phase == S.ApplicationData)
 {
   ST.take_snapshot st;
-  let sent_s = S.advance_write_record s;
+  let sent_s = S.advance_write_records s (S.application_data_record_count sent);
   ST.advance st (S.SendApplicationData sent) sent_s;
 
+  S.lemma_advance_write_records_preserves_phase s (S.application_data_record_count sent);
+  assert (pure (sent_s.S.phase == S.ApplicationData));
   let received_s = S.advance_read_record sent_s;
   ST.advance st (S.RecvApplicationData received) received_s;
 
