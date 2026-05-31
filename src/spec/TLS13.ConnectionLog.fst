@@ -55,6 +55,12 @@ let raw_io_log_extends (old:raw_io_log) (next:raw_io_log) : prop =
   bytes_extends old.raw_sent next.raw_sent /\
   bytes_extends old.raw_received next.raw_received
 
+let raw_io_log_same_sent (old:raw_io_log) (next:raw_io_log) : prop =
+  old.raw_sent == next.raw_sent
+
+let raw_io_log_same_received (old:raw_io_log) (next:raw_io_log) : prop =
+  old.raw_received == next.raw_received
+
 let raw_slice (bytes:B.bytes) (lo:nat) (hi:nat) : B.bytes =
   if lo <= hi && hi <= B.length bytes
   then Seq.slice bytes lo hi
@@ -100,6 +106,16 @@ let lemma_raw_io_log_extends_received_slice (raw:raw_io_log) (bytes:B.bytes) (lo
   =
   lemma_raw_io_log_extends_received raw (raw_slice bytes lo hi)
 
+let lemma_raw_io_log_same_received_sent_slice (raw:raw_io_log) (bytes:B.bytes) (lo:nat) (hi:nat)
+  : Lemma (raw_io_log_same_received raw (append_raw_sent_slice raw bytes lo hi))
+  =
+  ()
+
+let lemma_raw_io_log_same_sent_received_slice (raw:raw_io_log) (bytes:B.bytes) (lo:nat) (hi:nat)
+  : Lemma (raw_io_log_same_sent raw (append_raw_received_slice raw bytes lo hi))
+  =
+  ()
+
 let lemma_bytes_extends_trans (old:B.bytes) (mid:B.bytes) (next:B.bytes)
   : Lemma
       (requires bytes_extends old mid /\ bytes_extends mid next)
@@ -119,6 +135,20 @@ let lemma_raw_io_log_extends_trans (old:raw_io_log) (mid:raw_io_log) (next:raw_i
   =
   lemma_bytes_extends_trans old.raw_sent mid.raw_sent next.raw_sent;
   lemma_bytes_extends_trans old.raw_received mid.raw_received next.raw_received
+
+let lemma_raw_io_log_same_sent_trans (old:raw_io_log) (mid:raw_io_log) (next:raw_io_log)
+  : Lemma
+      (requires raw_io_log_same_sent old mid /\ raw_io_log_same_sent mid next)
+      (ensures raw_io_log_same_sent old next)
+  =
+  ()
+
+let lemma_raw_io_log_same_received_trans (old:raw_io_log) (mid:raw_io_log) (next:raw_io_log)
+  : Lemma
+      (requires raw_io_log_same_received old mid /\ raw_io_log_same_received mid next)
+      (ensures raw_io_log_same_received old next)
+  =
+  ()
 
 type stream_view (a:Type0) = {
   values: list a;

@@ -270,11 +270,14 @@ fn advance_log_raw_sent_slice
                 (CL.sync_raw_state view (CL.append_raw_sent_slice view.CL.raw_log bytes lo hi) view.CL.state).CL.app_view == view.CL.app_view /\
                 CL.raw_io_log_extends view.CL.raw_log
                   (CL.sync_raw_state view (CL.append_raw_sent_slice view.CL.raw_log bytes lo hi) view.CL.state).CL.raw_log /\
+                CL.raw_io_log_same_received view.CL.raw_log
+                  (CL.sync_raw_state view (CL.append_raw_sent_slice view.CL.raw_log bytes lo hi) view.CL.state).CL.raw_log /\
                 CL.connection_view_single_step view (CL.sync_raw_state view (CL.append_raw_sent_slice view.CL.raw_log bytes lo hi) view.CL.state))
 {
   let raw = CL.append_raw_sent_slice view.CL.raw_log bytes lo hi;
   let next = CL.sync_raw_state view raw view.CL.state;
   CL.lemma_raw_io_log_extends_sent_slice view.CL.raw_log bytes lo hi;
+  CL.lemma_raw_io_log_same_received_sent_slice view.CL.raw_log bytes lo hi;
   CL.lemma_connection_view_consistent_sync_raw_same_state view raw;
   CL.lemma_connection_view_step_raw_state view raw view.CL.state;
   ST.advance_log log next;
@@ -282,6 +285,7 @@ fn advance_log_raw_sent_slice
   assert (pure (next.CL.state == view.CL.state));
   assert (pure (next.CL.app_view == view.CL.app_view));
   assert (pure (CL.raw_io_log_extends view.CL.raw_log next.CL.raw_log));
+  assert (pure (CL.raw_io_log_same_received view.CL.raw_log next.CL.raw_log));
   assert (pure (CL.connection_view_single_step view next))
 }
 
@@ -301,11 +305,14 @@ fn advance_log_raw_received_slice
                 (CL.sync_raw_state view (CL.append_raw_received_slice view.CL.raw_log bytes lo hi) view.CL.state).CL.app_view == view.CL.app_view /\
                 CL.raw_io_log_extends view.CL.raw_log
                   (CL.sync_raw_state view (CL.append_raw_received_slice view.CL.raw_log bytes lo hi) view.CL.state).CL.raw_log /\
+                CL.raw_io_log_same_sent view.CL.raw_log
+                  (CL.sync_raw_state view (CL.append_raw_received_slice view.CL.raw_log bytes lo hi) view.CL.state).CL.raw_log /\
                 CL.connection_view_single_step view (CL.sync_raw_state view (CL.append_raw_received_slice view.CL.raw_log bytes lo hi) view.CL.state))
 {
   let raw = CL.append_raw_received_slice view.CL.raw_log bytes lo hi;
   let next = CL.sync_raw_state view raw view.CL.state;
   CL.lemma_raw_io_log_extends_received_slice view.CL.raw_log bytes lo hi;
+  CL.lemma_raw_io_log_same_sent_received_slice view.CL.raw_log bytes lo hi;
   CL.lemma_connection_view_consistent_sync_raw_same_state view raw;
   CL.lemma_connection_view_step_raw_state view raw view.CL.state;
   ST.advance_log log next;
@@ -313,6 +320,7 @@ fn advance_log_raw_received_slice
   assert (pure (next.CL.state == view.CL.state));
   assert (pure (next.CL.app_view == view.CL.app_view));
   assert (pure (CL.raw_io_log_extends view.CL.raw_log next.CL.raw_log));
+  assert (pure (CL.raw_io_log_same_sent view.CL.raw_log next.CL.raw_log));
   assert (pure (CL.connection_view_single_step view next))
 }
 
@@ -563,17 +571,20 @@ fn rec client_write_raw_exact
           pure (CL.connection_view_consistent view' /\
                 view'.CL.state == 'view.CL.state /\
                 view'.CL.app_view == 'view.CL.app_view /\
-                CL.raw_io_log_extends 'view.CL.raw_log view'.CL.raw_log)
+                CL.raw_io_log_extends 'view.CL.raw_log view'.CL.raw_log /\
+                CL.raw_io_log_same_received 'view.CL.raw_log view'.CL.raw_log)
   decreases (SZ.v remaining)
 {
   if (remaining = 0sz) {
     CL.lemma_raw_io_log_extends_refl 'view.CL.raw_log;
+    assert (pure (CL.raw_io_log_same_received 'view.CL.raw_log 'view.CL.raw_log));
     true
   } else {
     assert (pure (SZ.v remaining > 0));
     let n = E.client_write_raw backend ch buf total_len offset remaining;
     if (n = 0sz) {
       CL.lemma_raw_io_log_extends_refl 'view.CL.raw_log;
+      assert (pure (CL.raw_io_log_same_received 'view.CL.raw_log 'view.CL.raw_log));
       false
     } else {
       let offset' = SZ.(offset +^ n);
@@ -585,7 +596,9 @@ fn rec client_write_raw_exact
       let ok = client_write_raw_exact backend ch buf total_len offset' remaining' log;
       with view'. _;
       CL.lemma_raw_io_log_extends_trans 'view.CL.raw_log mid_view.CL.raw_log view'.CL.raw_log;
+      CL.lemma_raw_io_log_same_received_trans 'view.CL.raw_log mid_view.CL.raw_log view'.CL.raw_log;
       assert (pure (CL.raw_io_log_extends 'view.CL.raw_log view'.CL.raw_log));
+      assert (pure (CL.raw_io_log_same_received 'view.CL.raw_log view'.CL.raw_log));
       ok
     }
   }
@@ -618,11 +631,13 @@ fn rec client_write_application_records
           pure (CL.connection_view_consistent view' /\
                 view'.CL.state == 'view.CL.state /\
                 view'.CL.app_view == 'view.CL.app_view /\
-                CL.raw_io_log_extends 'view.CL.raw_log view'.CL.raw_log)
+                CL.raw_io_log_extends 'view.CL.raw_log view'.CL.raw_log /\
+                CL.raw_io_log_same_received 'view.CL.raw_log view'.CL.raw_log)
   decreases (SZ.v remaining)
 {
   if (remaining = 0sz) {
     CL.lemma_raw_io_log_extends_refl 'view.CL.raw_log;
+    assert (pure (CL.raw_io_log_same_received 'view.CL.raw_log 'view.CL.raw_log));
     true
   } else {
     let chunk_len =
@@ -672,6 +687,7 @@ fn rec client_write_application_records
         let cipher_ok = client_write_raw_exact backend ch cipher cipher_len 0sz cipher_len log;
         with cipher_view. _;
         CL.lemma_raw_io_log_extends_trans 'view.CL.raw_log header_view.CL.raw_log cipher_view.CL.raw_log;
+        CL.lemma_raw_io_log_same_received_trans 'view.CL.raw_log header_view.CL.raw_log cipher_view.CL.raw_log;
         if cipher_ok {
           let offset' = SZ.(offset +^ chunk_len);
           let remaining' = SZ.(remaining -^ chunk_len);
@@ -680,10 +696,13 @@ fn rec client_write_application_records
           let ok = client_write_application_records backend ch record_state buf total_len offset' remaining' log;
           with record_s' view'. _;
           CL.lemma_raw_io_log_extends_trans 'view.CL.raw_log cipher_view.CL.raw_log view'.CL.raw_log;
+          CL.lemma_raw_io_log_same_received_trans 'view.CL.raw_log cipher_view.CL.raw_log view'.CL.raw_log;
           assert (pure (CL.raw_io_log_extends 'view.CL.raw_log view'.CL.raw_log));
+          assert (pure (CL.raw_io_log_same_received 'view.CL.raw_log view'.CL.raw_log));
           ok
         } else {
           assert (pure (CL.raw_io_log_extends 'view.CL.raw_log cipher_view.CL.raw_log));
+          assert (pure (CL.raw_io_log_same_received 'view.CL.raw_log cipher_view.CL.raw_log));
           false
         }
       } else {
@@ -691,6 +710,7 @@ fn rec client_write_application_records
       }
     } else {
       CL.lemma_raw_io_log_extends_refl 'view.CL.raw_log;
+      assert (pure (CL.raw_io_log_same_received 'view.CL.raw_log 'view.CL.raw_log));
       false
     }
   }
@@ -716,7 +736,8 @@ fn client_send_close_notify_record
           pure (CL.connection_view_consistent view' /\
                 view'.CL.state == 'view.CL.state /\
                 view'.CL.app_view == 'view.CL.app_view /\
-                CL.raw_io_log_extends 'view.CL.raw_log view'.CL.raw_log)
+                CL.raw_io_log_extends 'view.CL.raw_log view'.CL.raw_log /\
+                CL.raw_io_log_same_received 'view.CL.raw_log view'.CL.raw_log)
 {
   let mut header = [| 0uy; 5sz |];
   let mut inner_plaintext = [| 0uy; 3sz |];
@@ -746,12 +767,14 @@ fn client_send_close_notify_record
       let cipher_ok = client_write_raw_exact backend ch cipher 19sz 0sz 19sz log;
       with cipher_view. _;
       CL.lemma_raw_io_log_extends_trans 'view.CL.raw_log header_view.CL.raw_log cipher_view.CL.raw_log;
+      CL.lemma_raw_io_log_same_received_trans 'view.CL.raw_log header_view.CL.raw_log cipher_view.CL.raw_log;
       cipher_ok
     } else {
       false
     }
   } else {
     CL.lemma_raw_io_log_extends_refl 'view.CL.raw_log;
+    assert (pure (CL.raw_io_log_same_received 'view.CL.raw_log 'view.CL.raw_log));
     false
   }
 }
@@ -935,17 +958,20 @@ fn rec client_read_raw_exact
                 CL.connection_view_consistent view' /\
                 view'.CL.state == 'view.CL.state /\
                 view'.CL.app_view == 'view.CL.app_view /\
-                CL.raw_io_log_extends 'view.CL.raw_log view'.CL.raw_log)
+                CL.raw_io_log_extends 'view.CL.raw_log view'.CL.raw_log /\
+                CL.raw_io_log_same_sent 'view.CL.raw_log view'.CL.raw_log)
   decreases (SZ.v remaining)
 {
   if (remaining = 0sz) {
     CL.lemma_raw_io_log_extends_refl 'view.CL.raw_log;
+    assert (pure (CL.raw_io_log_same_sent 'view.CL.raw_log 'view.CL.raw_log));
     true
   } else {
     assert (pure (SZ.v remaining > 0));
     let n = E.client_read_raw backend ch buf total_len offset remaining;
     if (n = 0sz) {
       CL.lemma_raw_io_log_extends_refl 'view.CL.raw_log;
+      assert (pure (CL.raw_io_log_same_sent 'view.CL.raw_log 'view.CL.raw_log));
       false
     } else {
       with bytes. assert (pts_to buf bytes);
@@ -958,7 +984,9 @@ fn rec client_read_raw_exact
       let ok = client_read_raw_exact backend ch buf total_len offset' remaining' log;
       with bytes' view'. _;
       CL.lemma_raw_io_log_extends_trans 'view.CL.raw_log mid_view.CL.raw_log view'.CL.raw_log;
+      CL.lemma_raw_io_log_same_sent_trans 'view.CL.raw_log mid_view.CL.raw_log view'.CL.raw_log;
       assert (pure (CL.raw_io_log_extends 'view.CL.raw_log view'.CL.raw_log));
+      assert (pure (CL.raw_io_log_same_sent 'view.CL.raw_log view'.CL.raw_log));
       ok
     }
   }
@@ -1010,11 +1038,13 @@ fn rec client_read_application_records
                 CL.connection_view_consistent view' /\
                 view'.CL.state == 'view.CL.state /\
                 view'.CL.app_view == 'view.CL.app_view /\
-                CL.raw_io_log_extends 'view.CL.raw_log view'.CL.raw_log)
+                CL.raw_io_log_extends 'view.CL.raw_log view'.CL.raw_log /\
+                CL.raw_io_log_same_sent 'view.CL.raw_log view'.CL.raw_log)
   decreases (U8.v fuel, SZ.v remaining)
 {
   if (remaining = 0sz) {
     CL.lemma_raw_io_log_extends_refl 'view.CL.raw_log;
+    assert (pure (CL.raw_io_log_same_sent 'view.CL.raw_log 'view.CL.raw_log));
     read_status_complete
   } else {
     assert (pure (SZ.v remaining > 0));
@@ -1054,6 +1084,7 @@ fn rec client_read_application_records
       with bytes. assert (pts_to out bytes);
       if (copy_len = remaining) {
         CL.lemma_raw_io_log_extends_refl 'view.CL.raw_log;
+        assert (pure (CL.raw_io_log_same_sent 'view.CL.raw_log 'view.CL.raw_log));
         read_status_complete
       } else {
         let offset' = SZ.(offset +^ copy_len);
@@ -1075,10 +1106,12 @@ fn rec client_read_application_records
           log;
         with record_s' read_buffer_bytes pending_read_offset pending_read_len bytes' view'. _;
         assert (pure (CL.raw_io_log_extends 'view.CL.raw_log view'.CL.raw_log));
+        assert (pure (CL.raw_io_log_same_sent 'view.CL.raw_log view'.CL.raw_log));
         status
       }
     } else if (fuel = 0uy) {
       CL.lemma_raw_io_log_extends_refl 'view.CL.raw_log;
+      assert (pure (CL.raw_io_log_same_sent 'view.CL.raw_log 'view.CL.raw_log));
       read_status_failed
     } else {
       let mut header = [| 0uy; 5sz |];
@@ -1106,6 +1139,7 @@ fn rec client_read_application_records
             let fragment_ok = client_read_raw_exact backend ch cipher fragment_len 0sz fragment_len log;
             with cipher_bytes cipher_view. _;
             CL.lemma_raw_io_log_extends_trans 'view.CL.raw_log header_view.CL.raw_log cipher_view.CL.raw_log;
+            CL.lemma_raw_io_log_same_sent_trans 'view.CL.raw_log header_view.CL.raw_log cipher_view.CL.raw_log;
             if fragment_ok {
               let inner_len = SZ.(fragment_len -^ 16sz);
               assert (pure (SZ.v inner_len > 0));
@@ -1135,7 +1169,9 @@ fn rec client_read_application_records
                     log;
                   with record_s' read_buffer_bytes pending_read_offset pending_read_len bytes' view'. _;
                   CL.lemma_raw_io_log_extends_trans 'view.CL.raw_log cipher_view.CL.raw_log view'.CL.raw_log;
+                  CL.lemma_raw_io_log_same_sent_trans 'view.CL.raw_log cipher_view.CL.raw_log view'.CL.raw_log;
                   assert (pure (CL.raw_io_log_extends 'view.CL.raw_log view'.CL.raw_log));
+                  assert (pure (CL.raw_io_log_same_sent 'view.CL.raw_log view'.CL.raw_log));
                   status
                 } else if (inner_content_type = 21uy) {
                   if SZ.(1sz <^ inner_len) {
@@ -1240,7 +1276,9 @@ fn rec client_read_application_records
                     log;
                   with record_s' read_buffer_bytes pending_read_offset pending_read_len bytes' view'. _;
                   CL.lemma_raw_io_log_extends_trans 'view.CL.raw_log cipher_view.CL.raw_log view'.CL.raw_log;
+                  CL.lemma_raw_io_log_same_sent_trans 'view.CL.raw_log cipher_view.CL.raw_log view'.CL.raw_log;
                   assert (pure (CL.raw_io_log_extends 'view.CL.raw_log view'.CL.raw_log));
+                  assert (pure (CL.raw_io_log_same_sent 'view.CL.raw_log view'.CL.raw_log));
                   status
                 }
               } else {
