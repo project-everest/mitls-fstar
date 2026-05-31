@@ -60,7 +60,9 @@ let is_client_core (c:client_core) (view:CL.connection_view) : slprop =
           V.is_full_vec c.pending_read_buffer /\
           V.length c.pending_read_buffer == SZ.v pending_read_buffer_capacity /\
           SZ.v pending_read_offset <= SZ.v pending_read_len /\
-          SZ.v pending_read_len <= SZ.v pending_read_buffer_capacity)
+          SZ.v pending_read_len <= SZ.v pending_read_buffer_capacity /\
+          Seq.equal view.CL.pending_app
+            (CL.raw_slice pending_read_buffer (SZ.v pending_read_offset) (SZ.v pending_read_len)))
 
 let received_alert_event (alert:T.alert_description) : CL.host_event =
   CL.NetworkEvent { CL.message_direction = CL.Received; CL.message_value = CL.TlsAlert alert }
@@ -193,7 +195,9 @@ fn client_core_new ()
   rewrite (ST.log_current log CL.empty_connection_view) as (ST.log_current c.log CL.empty_connection_view);
   with client_record_s. rewrite (Rec.is_record_state client_record_state client_record_s) as (Rec.is_record_state c.client_application_record_state client_record_s);
   with server_record_s. rewrite (Rec.is_record_state server_record_state server_record_s) as (Rec.is_record_state c.server_application_record_state server_record_s);
-  with pending_s. rewrite (V.pts_to pending_read_buffer pending_s) as (V.pts_to c.pending_read_buffer pending_s);
+  with pending_s. assert (V.pts_to pending_read_buffer pending_s);
+  rewrite (V.pts_to pending_read_buffer pending_s) as (V.pts_to c.pending_read_buffer pending_s);
+  lemma_empty_prefix pending_s;
   with pending_offset_s. rewrite (Box.pts_to pending_read_offset pending_offset_s) as (Box.pts_to c.pending_read_offset pending_offset_s);
   with pending_len_s. rewrite (Box.pts_to pending_read_len pending_len_s) as (Box.pts_to c.pending_read_len pending_len_s);
   assert (pure (CL.connection_view_consistent CL.empty_connection_view));
@@ -525,6 +529,7 @@ ensures exists* view1 network_out1 app_out1.
           0sz
           copy_len;
         V.to_vec_pts_to c.pending_read_buffer;
+        with pending_buffer1. assert (V.pts_to c.pending_read_buffer pending_buffer1);
         let pending_read_offset' = SZ.(pending_read_offset +^ copy_len);
         assert (pure (SZ.v pending_read_offset' <= SZ.v pending_read_len));
         c.pending_read_offset := pending_read_offset';
@@ -534,9 +539,9 @@ ensures exists* view1 network_out1 app_out1.
           Seq.slice (Ghost.reveal app_out1) 0 (SZ.v copy_len);
         let pending_payload : erased B.bytes =
           CL.raw_slice
-            (Ghost.reveal view1).CL.pending_app
-            (SZ.v copy_len)
-            (B.length (Ghost.reveal view1).CL.pending_app);
+            (Ghost.reveal pending_buffer1)
+            (SZ.v pending_read_offset')
+            (SZ.v pending_read_len);
         let view2 : erased CL.connection_view =
           CL.note_app_delivered_with_pending
             (Ghost.reveal view1)
@@ -745,12 +750,13 @@ ensures exists* view1 network_out1 app_out1.
                     0sz
                     leftover_len;
                   V.to_vec_pts_to c.pending_read_buffer;
+                  with pending_buffer1. assert (V.pts_to c.pending_read_buffer pending_buffer1);
                   c.pending_read_offset := 0sz;
                   c.pending_read_len := leftover_len;
                   let app_payload : erased B.bytes =
                     Seq.slice (Ghost.reveal app_out1) 0 (SZ.v output_limit);
                   let pending_payload : erased B.bytes =
-                    Seq.slice (Ghost.reveal inner_bytes) (SZ.v output_limit) (SZ.v payload_len);
+                    CL.raw_slice (Ghost.reveal pending_buffer1) 0 (SZ.v leftover_len);
                   ST.advance c.state (S.RecvApplicationData (Ghost.reveal app_payload)) (S.advance_read_record view0.CL.state);
                   let view2 : erased CL.connection_view =
                     CL.note_app_received_with_pending
