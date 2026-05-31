@@ -36,15 +36,20 @@ fn connect_write_read_exact
                 (ok ==> s'.S.phase == S.ApplicationData) /\
                 (not ok ==> s'.S.phase == S.Closed \/ s'.S.phase == S.Failed))
 {
+  C.reveal_connection_view c;
   let ok_connect = C.client_connect c ch;
   if ok_connect {
     let ok_write = C.client_write_all c ch outbound outbound_len;
     if ok_write {
-      C.client_read_exact c ch inbound inbound_len
+      let ok_read = C.client_read_exact c ch inbound inbound_len;
+      C.hide_connection_view c;
+      ok_read
     } else {
+      C.hide_connection_view c;
       false
     }
   } else {
+    C.hide_connection_view c;
     false
   }
 }

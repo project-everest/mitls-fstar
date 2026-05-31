@@ -22,14 +22,14 @@ Relevant existing structure:
 - `src/spec/TLS13.Wire.Spec.*` already contains pure parsing/serialization for records and several handshake messages.
 - `src/spec/TLS13.StateMachine.fst` already defines TLS phases, host events, transition steps, and multi-step traces.
 - `src/spec/TLS13.ConnectionLog.fst` already defines layered views: raw IO, stream view, TLS messages, TLS records, host events, application log, and a `connection_view_consistent` predicate. This should be adapted so the raw layer is the buffer history of the verified core.
-- `src/impl/TLS13.Connection.fsti` exports the current socket-shaped client API, but the specifications are currently mostly phase-level. The proof-facing API should be revised to a request/response buffer core, with the socket driver layered outside it.
+- `src/impl/TLS13.Connection.fsti` exports the current socket-shaped client API. It now exposes a proof-facing `connection_exactly` predicate with an explicit `ConnectionLog.connection_view`, and each public operation proves a `connection_view_single_step`; it still needs to be revised to a request/response buffer core, with the socket driver layered outside it.
 - `src/impl/TLS13.Connection.fst` stores a monotonic `TLS13.State.log_ref`; the explicit log-update admits have been discharged, while several handshake events are still abstract witnesses rather than a full transcript proof.
 - `src/impl/TLS13.Handshake.*`, `TLS13.Record.*`, `TLS13.Crypto.*`, and `TLS13.X509.*` contain the likely implementation/proof boundaries.
 
 Main gaps found during inspection:
 
 - `TLS13.ConnectionLog.raw_tls` is currently too weak: it mostly checks stream shape, not the full relationship from raw bytes to parsed records, decrypted handshake/application messages, state-machine events, and app-log projection.
-- `TLS13.Connection.fsti` does not yet expose a caller-usable functional-correctness theorem for a buffer-oriented `process_request`-style core.
+- `TLS13.Connection.fsti` exposes exact log-view evolution for the socket-shaped operations, but does not yet expose a caller-usable functional-correctness theorem for a buffer-oriented `process_request`-style core.
 - `TLS13.Connection.fst` now verifies without local `admit()` calls, using layered log-update lemmas and concrete state/log transitions.
 - `TLS13.Parser.Correctness.fst`, `TLS13.Handshake.Framing.fst`, and `TLS13.Record.Framing.fst` now discharge the scoped parser/framing correspondence lemmas used by the implementation.
 - `TLS13.Handshake.fst` currently advances through dummy handshake events rather than proving that generated/parsing code produces the corresponding pure protocol events.

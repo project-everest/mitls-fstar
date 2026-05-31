@@ -50,9 +50,7 @@ type connection = {
   log: ST.log_ref;  // Ghost log for layered correctness proof
 }
 
-// Two-level predicate structure for witness binding
-// Inner predicate: view is an explicit parameter
-let is_connection_inner (c:connection) (st:ST.state_ref) (s:S.conn_state) (view:CL.connection_view) : slprop =
+let connection_exactly (c:connection) (st:ST.state_ref) (s:S.conn_state) (view:CL.connection_view) : slprop =
   exists* live app_keys_installed pending_read_offset pending_read_len
           client_key client_iv server_key server_iv pending_read_buffer
           client_record_state server_record_state.
@@ -85,9 +83,24 @@ let is_connection_inner (c:connection) (st:ST.state_ref) (s:S.conn_state) (view:
           CL.connection_view_consistent view /\
           view.CL.state == s)
 
-// Outer predicate: hides view in existential
 let is_connection (c:connection) (st:ST.state_ref) (s:S.conn_state) : slprop =
-  exists* view. is_connection_inner c st s view
+  exists* view. connection_exactly c st s view
+
+ghost
+fn reveal_connection_view (c: connection)
+  requires is_connection c 'st 's
+  ensures exists* view. connection_exactly c 'st 's view
+{
+  unfold (is_connection c 'st 's);
+}
+
+ghost
+fn hide_connection_view (c: connection)
+  requires connection_exactly c 'st 's 'view
+  ensures is_connection c 'st 's
+{
+  fold (is_connection c 'st 's);
+}
 
 let zeros32 : B.bytes = B.zeros 32
 let app_record_chunk_len : SZ.t = 4096sz
@@ -232,7 +245,8 @@ fn advance_log_event
                  S.step view.CL.state state_ev == Some state)
   ensures ST.log_current log (CL.note_host_event view ev state) **
           pure (CL.connection_view_consistent (CL.note_host_event view ev state) /\
-                (CL.note_host_event view ev state).CL.state == state)
+                (CL.note_host_event view ev state).CL.state == state /\
+                CL.connection_view_single_step view (CL.note_host_event view ev state))
 {
   let next = CL.note_host_event view ev state;
   CL.lemma_connection_view_consistent_note_host_event view ev state_ev state;
@@ -251,7 +265,8 @@ fn advance_successful_handshake_log
                  s.S.phase == S.Start)
   ensures ST.log_current log (successful_handshake_view view s) **
           pure (CL.connection_view_consistent (successful_handshake_view view s) /\
-                (successful_handshake_view view s).CL.state == hs_application_data s)
+                (successful_handshake_view view s).CL.state == hs_application_data s /\
+                CL.connection_view_single_step view (successful_handshake_view view s))
 {
   advance_log_event
     log
@@ -294,7 +309,11 @@ fn advance_successful_handshake_log
     (S.SendClientFinished dummy_finished)
     (hs_application_data s);
   assert (pure (CL.connection_view_consistent (successful_handshake_view view s)));
-  assert (pure ((successful_handshake_view view s).CL.state == hs_application_data s))
+  assert (pure ((successful_handshake_view view s).CL.state == hs_application_data s));
+  assert (pure ((successful_handshake_view view s).CL.raw_log == view.CL.raw_log));
+  assert (pure ((successful_handshake_view view s).CL.app_view == view.CL.app_view));
+  CL.lemma_connection_view_step_same_app view (successful_handshake_view view s);
+  assert (pure (CL.connection_view_single_step view (successful_handshake_view view s)))
 }
 
 fn client_new
@@ -306,7 +325,7 @@ fn client_new
   returns c: connection
   ensures exists* st.
           pts_to hostname 'hostname_bytes **
-          is_connection c st S.initial
+          connection_exactly c st S.initial CL.empty_connection_view
 {
   let backend = E.client_new hostname hostname_len #trust_store;
   let live = Box.alloc true;
@@ -352,18 +371,15 @@ fn client_new
   rewrite (ST.log_current log CL.empty_connection_view) as (ST.log_current c.log CL.empty_connection_view);
   assert (pure (CL.connection_view_consistent CL.empty_connection_view));
   assert (pure (CL.empty_connection_view.CL.state == S.initial));
-  fold (is_connection_inner c st S.initial CL.empty_connection_view);
-  fold (is_connection c st S.initial);
+  fold (connection_exactly c st S.initial CL.empty_connection_view);
   c
 }
 
 fn client_free (c: connection)
-  requires is_connection c 'st 's
+  requires connection_exactly c 'st 's 'view
   ensures emp
 {
-  unfold (is_connection c 'st 's);
-  with view. _;
-  unfold (is_connection_inner c 'st 's view);
+  unfold (connection_exactly c 'st 's 'view);
   E.client_free c.backend;
   Box.free c.live;
   Box.free c.application_keys_installed;
@@ -377,22 +393,21 @@ fn client_free (c: connection)
   Rec.record_state_free c.client_application_record_state;
   Rec.record_state_free c.server_application_record_state;
   drop_ (ST.current 'st 's);
-  drop_ (ST.log_current c.log view);
+  drop_ (ST.log_current c.log 'view);
 }
 
 fn client_connect (c: connection) (ch: IO.channel)
-  requires is_connection c 'st 's **
-           IO.is_channel ch **
-           pure ('s.S.phase == S.Start)
-  returns ok: bool
-  ensures exists* s'. is_connection c 'st s' **
+  requires connection_exactly c 'st 's 'view0 **
           IO.is_channel ch **
-          pure ((ok ==> s'.S.phase == S.ApplicationData) /\
+          pure ('s.S.phase == S.Start)
+  returns ok: bool
+  ensures exists* s' view1. connection_exactly c 'st s' view1 **
+          IO.is_channel ch **
+          pure (CL.connection_view_single_step 'view0 view1 /\
+                (ok ==> s'.S.phase == S.ApplicationData) /\
                         (not ok ==> s'.S.phase == S.Failed))
 {
-          unfold (is_connection c 'st 's);
-          with view. _;
-          unfold (is_connection_inner c 'st 's view);
+          unfold (connection_exactly c 'st 's 'view0);
           let mut client_key = [| 0uy; 32sz |];
           let mut client_iv = [| 0uy; 12sz |];
           let mut server_key = [| 0uy; 32sz |];
@@ -432,10 +447,9 @@ fn client_connect (c: connection) (ch: IO.channel)
               c.application_keys_installed := true;
               advance_successful_handshake 'st;
               advance_successful_handshake_log c.log 's;
-              assert (pure (CL.connection_view_consistent (successful_handshake_view view 's)));
-              assert (pure ((successful_handshake_view view 's).CL.state == hs_application_data 's));
-              fold (is_connection_inner c 'st (hs_application_data 's) (successful_handshake_view view 's));
-              fold (is_connection c 'st (hs_application_data 's));
+              assert (pure (CL.connection_view_consistent (successful_handshake_view 'view0 's)));
+              assert (pure ((successful_handshake_view 'view0 's).CL.state == hs_application_data 's));
+              fold (connection_exactly c 'st (hs_application_data 's) (successful_handshake_view 'view0 's));
               true
             } else {
               ST.advance_fail 'st T.IoError;
@@ -444,10 +458,9 @@ fn client_connect (c: connection) (ch: IO.channel)
                 (CL.local_fail_event T.IoError)
                 (S.Fail T.IoError)
                 (S.fail 's T.IoError);
-              assert (pure (CL.connection_view_consistent (note_local_fail_view view T.IoError 's)));
-              assert (pure ((note_local_fail_view view T.IoError 's).CL.state == S.fail 's T.IoError));
-              fold (is_connection_inner c 'st (S.fail 's T.IoError) (note_local_fail_view view T.IoError 's));
-              fold (is_connection c 'st (S.fail 's T.IoError));
+              assert (pure (CL.connection_view_consistent (note_local_fail_view 'view0 T.IoError 's)));
+              assert (pure ((note_local_fail_view 'view0 T.IoError 's).CL.state == S.fail 's T.IoError));
+              fold (connection_exactly c 'st (S.fail 's T.IoError) (note_local_fail_view 'view0 T.IoError 's));
               false
             }
           } else {
@@ -457,10 +470,9 @@ fn client_connect (c: connection) (ch: IO.channel)
               (CL.local_fail_event T.IoError)
               (S.Fail T.IoError)
               (S.fail 's T.IoError);
-            assert (pure (CL.connection_view_consistent (note_local_fail_view view T.IoError 's)));
-            assert (pure ((note_local_fail_view view T.IoError 's).CL.state == S.fail 's T.IoError));
-            fold (is_connection_inner c 'st (S.fail 's T.IoError) (note_local_fail_view view T.IoError 's));
-            fold (is_connection c 'st (S.fail 's T.IoError));
+            assert (pure (CL.connection_view_consistent (note_local_fail_view 'view0 T.IoError 's)));
+            assert (pure ((note_local_fail_view 'view0 T.IoError 's).CL.state == S.fail 's T.IoError));
+            fold (connection_exactly c 'st (S.fail 's T.IoError) (note_local_fail_view 'view0 T.IoError 's));
             false
           }
 }
@@ -635,20 +647,19 @@ fn client_send_close_notify_record
 }
 
 fn client_write_all (c: connection) (ch: IO.channel) (buf: array U8.t) (len: SZ.t)
-  requires is_connection c 'st 's **
-           IO.is_channel ch **
-           pts_to buf 'bytes **
-           pure ('s.S.phase == S.ApplicationData /\ B.length 'bytes == SZ.v len)
-  returns ok: bool
-  ensures exists* s'. is_connection c 'st s' **
+  requires connection_exactly c 'st 's 'view0 **
           IO.is_channel ch **
           pts_to buf 'bytes **
-          pure ((ok ==> s'.S.phase == S.ApplicationData) /\
+          pure ('s.S.phase == S.ApplicationData /\ B.length 'bytes == SZ.v len)
+  returns ok: bool
+  ensures exists* s' view1. connection_exactly c 'st s' view1 **
+          IO.is_channel ch **
+          pts_to buf 'bytes **
+          pure (CL.connection_view_single_step 'view0 view1 /\
+                (ok ==> s'.S.phase == S.ApplicationData) /\
                 (not ok ==> s'.S.phase == S.Failed))
 {
-  unfold (is_connection c 'st 's);
-  with view. _;
-  unfold (is_connection_inner c 'st 's view);
+  unfold (connection_exactly c 'st 's 'view0);
   let keys_installed = !c.application_keys_installed;
   if keys_installed {
     assert (pure (B.length 'bytes == SZ.v len));
@@ -669,10 +680,9 @@ fn client_write_all (c: connection) (ch: IO.channel) (buf: array U8.t) (len: SZ.
         (CL.sent_app_event (Ghost.reveal 'bytes))
         (S.SendApplicationData (Ghost.reveal 'bytes))
         (S.advance_write_record 's);
-      assert (pure (CL.connection_view_consistent (note_sent_app_view view (Ghost.reveal 'bytes) 's)));
-      assert (pure ((note_sent_app_view view (Ghost.reveal 'bytes) 's).CL.state == S.advance_write_record 's));
-      fold (is_connection_inner c 'st (S.advance_write_record 's) (note_sent_app_view view (Ghost.reveal 'bytes) 's));
-      fold (is_connection c 'st (S.advance_write_record 's));
+      assert (pure (CL.connection_view_consistent (note_sent_app_view 'view0 (Ghost.reveal 'bytes) 's)));
+      assert (pure ((note_sent_app_view 'view0 (Ghost.reveal 'bytes) 's).CL.state == S.advance_write_record 's));
+      fold (connection_exactly c 'st (S.advance_write_record 's) (note_sent_app_view 'view0 (Ghost.reveal 'bytes) 's));
       true
     } else {
       ST.advance_fail 'st T.IoError;
@@ -681,10 +691,9 @@ fn client_write_all (c: connection) (ch: IO.channel) (buf: array U8.t) (len: SZ.
         (CL.local_fail_event T.IoError)
         (S.Fail T.IoError)
         (S.fail 's T.IoError);
-      assert (pure (CL.connection_view_consistent (note_local_fail_view view T.IoError 's)));
-      assert (pure ((note_local_fail_view view T.IoError 's).CL.state == S.fail 's T.IoError));
-      fold (is_connection_inner c 'st (S.fail 's T.IoError) (note_local_fail_view view T.IoError 's));
-      fold (is_connection c 'st (S.fail 's T.IoError));
+      assert (pure (CL.connection_view_consistent (note_local_fail_view 'view0 T.IoError 's)));
+      assert (pure ((note_local_fail_view 'view0 T.IoError 's).CL.state == S.fail 's T.IoError));
+      fold (connection_exactly c 'st (S.fail 's T.IoError) (note_local_fail_view 'view0 T.IoError 's));
       false
     }
   } else {
@@ -694,24 +703,24 @@ fn client_write_all (c: connection) (ch: IO.channel) (buf: array U8.t) (len: SZ.
       (CL.local_fail_event T.IoError)
       (S.Fail T.IoError)
       (S.fail 's T.IoError);
-    assert (pure (CL.connection_view_consistent (note_local_fail_view view T.IoError 's)));
-    assert (pure ((note_local_fail_view view T.IoError 's).CL.state == S.fail 's T.IoError));
-    fold (is_connection_inner c 'st (S.fail 's T.IoError) (note_local_fail_view view T.IoError 's));
-    fold (is_connection c 'st (S.fail 's T.IoError));
+    assert (pure (CL.connection_view_consistent (note_local_fail_view 'view0 T.IoError 's)));
+    assert (pure ((note_local_fail_view 'view0 T.IoError 's).CL.state == S.fail 's T.IoError));
+    fold (connection_exactly c 'st (S.fail 's T.IoError) (note_local_fail_view 'view0 T.IoError 's));
     false
   }
 }
 
 fn client_write (c: connection) (ch: IO.channel) (buf: array U8.t) (len: SZ.t)
-  requires is_connection c 'st 's **
+  requires connection_exactly c 'st 's 'view0 **
            IO.is_channel ch **
            pts_to buf 'bytes **
            pure ('s.S.phase == S.ApplicationData /\ B.length 'bytes == SZ.v len)
   returns written: SZ.t
-  ensures exists* s'. is_connection c 'st s' **
+  ensures exists* s' view1. connection_exactly c 'st s' view1 **
           IO.is_channel ch **
           pts_to buf 'bytes **
-          pure (SZ.v written <= SZ.v len /\
+          pure (CL.connection_view_single_step 'view0 view1 /\
+                SZ.v written <= SZ.v len /\
                 (s'.S.phase == S.ApplicationData \/ s'.S.phase == S.Failed))
 {
   let ok = client_write_all c ch buf len;
@@ -1088,21 +1097,20 @@ fn rec client_read_application_records
 }
 
 fn client_read_exact (c: connection) (ch: IO.channel) (out: array U8.t) (len: SZ.t)
-  requires is_connection c 'st 's **
-           IO.is_channel ch **
-           pts_to out 'old **
-           pure ('s.S.phase == S.ApplicationData /\ B.length 'old == SZ.v len)
+  requires connection_exactly c 'st 's 'view0 **
+          IO.is_channel ch **
+          pts_to out 'old **
+          pure ('s.S.phase == S.ApplicationData /\ B.length 'old == SZ.v len)
   returns ok: bool
-  ensures exists* s' bytes. is_connection c 'st s' **
+  ensures exists* s' view1 bytes. connection_exactly c 'st s' view1 **
           IO.is_channel ch **
           pts_to out bytes **
-          pure (B.length bytes == SZ.v len /\
+          pure (CL.connection_view_single_step 'view0 view1 /\
+                B.length bytes == SZ.v len /\
                 (ok ==> s'.S.phase == S.ApplicationData) /\
                 (not ok ==> s'.S.phase == S.Closed \/ s'.S.phase == S.Failed))
 {
-  unfold (is_connection c 'st 's);
-  with view. _;
-  unfold (is_connection_inner c 'st 's view);
+  unfold (connection_exactly c 'st 's 'view0);
   let keys_installed = !c.application_keys_installed;
   if keys_installed {
     assert (pure (B.length 'old == SZ.v len));
@@ -1128,10 +1136,9 @@ fn client_read_exact (c: connection) (ch: IO.channel) (out: array U8.t) (len: SZ
         (CL.received_app_event bytes)
         (S.RecvApplicationData bytes)
         (S.advance_read_record 's);
-      assert (pure (CL.connection_view_consistent (note_recv_app_view view bytes 's)));
-      assert (pure ((note_recv_app_view view bytes 's).CL.state == S.advance_read_record 's));
-      fold (is_connection_inner c 'st (S.advance_read_record 's) (note_recv_app_view view bytes 's));
-      fold (is_connection c 'st (S.advance_read_record 's));
+      assert (pure (CL.connection_view_consistent (note_recv_app_view 'view0 bytes 's)));
+      assert (pure ((note_recv_app_view 'view0 bytes 's).CL.state == S.advance_read_record 's));
+      fold (connection_exactly c 'st (S.advance_read_record 's) (note_recv_app_view 'view0 bytes 's));
       true
     } else if (status = read_status_close_notify) {
       ST.advance 'st S.RecvCloseNotify (S.recv_close_state 's);
@@ -1140,10 +1147,9 @@ fn client_read_exact (c: connection) (ch: IO.channel) (out: array U8.t) (len: SZ
         CL.received_close_notify_event
         S.RecvCloseNotify
         (S.recv_close_state 's);
-      assert (pure (CL.connection_view_consistent (note_recv_close_view view 's)));
-      assert (pure ((note_recv_close_view view 's).CL.state == S.recv_close_state 's));
-      fold (is_connection_inner c 'st (S.recv_close_state 's) (note_recv_close_view view 's));
-      fold (is_connection c 'st (S.recv_close_state 's));
+      assert (pure (CL.connection_view_consistent (note_recv_close_view 'view0 's)));
+      assert (pure ((note_recv_close_view 'view0 's).CL.state == S.recv_close_state 's));
+      fold (connection_exactly c 'st (S.recv_close_state 's) (note_recv_close_view 'view0 's));
       false
     } else if (status = read_status_alert_unexpected_message) {
       ST.advance_fail 'st (T.AlertError T.UnexpectedMessage);
@@ -1152,10 +1158,9 @@ fn client_read_exact (c: connection) (ch: IO.channel) (out: array U8.t) (len: SZ
         (received_alert_event T.UnexpectedMessage)
         (S.Fail (T.AlertError T.UnexpectedMessage))
         (S.fail 's (T.AlertError T.UnexpectedMessage));
-      assert (pure (CL.connection_view_consistent (note_recv_alert_view view T.UnexpectedMessage 's)));
-      assert (pure ((note_recv_alert_view view T.UnexpectedMessage 's).CL.state == S.fail 's (T.AlertError T.UnexpectedMessage)));
-      fold (is_connection_inner c 'st (S.fail 's (T.AlertError T.UnexpectedMessage)) (note_recv_alert_view view T.UnexpectedMessage 's));
-      fold (is_connection c 'st (S.fail 's (T.AlertError T.UnexpectedMessage)));
+      assert (pure (CL.connection_view_consistent (note_recv_alert_view 'view0 T.UnexpectedMessage 's)));
+      assert (pure ((note_recv_alert_view 'view0 T.UnexpectedMessage 's).CL.state == S.fail 's (T.AlertError T.UnexpectedMessage)));
+      fold (connection_exactly c 'st (S.fail 's (T.AlertError T.UnexpectedMessage)) (note_recv_alert_view 'view0 T.UnexpectedMessage 's));
       false
     } else if (status = read_status_alert_bad_record_mac) {
       ST.advance_fail 'st (T.AlertError T.BadRecordMac);
@@ -1164,10 +1169,9 @@ fn client_read_exact (c: connection) (ch: IO.channel) (out: array U8.t) (len: SZ
         (received_alert_event T.BadRecordMac)
         (S.Fail (T.AlertError T.BadRecordMac))
         (S.fail 's (T.AlertError T.BadRecordMac));
-      assert (pure (CL.connection_view_consistent (note_recv_alert_view view T.BadRecordMac 's)));
-      assert (pure ((note_recv_alert_view view T.BadRecordMac 's).CL.state == S.fail 's (T.AlertError T.BadRecordMac)));
-      fold (is_connection_inner c 'st (S.fail 's (T.AlertError T.BadRecordMac)) (note_recv_alert_view view T.BadRecordMac 's));
-      fold (is_connection c 'st (S.fail 's (T.AlertError T.BadRecordMac)));
+      assert (pure (CL.connection_view_consistent (note_recv_alert_view 'view0 T.BadRecordMac 's)));
+      assert (pure ((note_recv_alert_view 'view0 T.BadRecordMac 's).CL.state == S.fail 's (T.AlertError T.BadRecordMac)));
+      fold (connection_exactly c 'st (S.fail 's (T.AlertError T.BadRecordMac)) (note_recv_alert_view 'view0 T.BadRecordMac 's));
       false
     } else if (status = read_status_alert_handshake_failure) {
       ST.advance_fail 'st (T.AlertError T.HandshakeFailure);
@@ -1176,10 +1180,9 @@ fn client_read_exact (c: connection) (ch: IO.channel) (out: array U8.t) (len: SZ
         (received_alert_event T.HandshakeFailure)
         (S.Fail (T.AlertError T.HandshakeFailure))
         (S.fail 's (T.AlertError T.HandshakeFailure));
-      assert (pure (CL.connection_view_consistent (note_recv_alert_view view T.HandshakeFailure 's)));
-      assert (pure ((note_recv_alert_view view T.HandshakeFailure 's).CL.state == S.fail 's (T.AlertError T.HandshakeFailure)));
-      fold (is_connection_inner c 'st (S.fail 's (T.AlertError T.HandshakeFailure)) (note_recv_alert_view view T.HandshakeFailure 's));
-      fold (is_connection c 'st (S.fail 's (T.AlertError T.HandshakeFailure)));
+      assert (pure (CL.connection_view_consistent (note_recv_alert_view 'view0 T.HandshakeFailure 's)));
+      assert (pure ((note_recv_alert_view 'view0 T.HandshakeFailure 's).CL.state == S.fail 's (T.AlertError T.HandshakeFailure)));
+      fold (connection_exactly c 'st (S.fail 's (T.AlertError T.HandshakeFailure)) (note_recv_alert_view 'view0 T.HandshakeFailure 's));
       false
     } else if (status = read_status_alert_decrypt_error) {
       ST.advance_fail 'st (T.AlertError T.DecryptError);
@@ -1188,10 +1191,9 @@ fn client_read_exact (c: connection) (ch: IO.channel) (out: array U8.t) (len: SZ
         (received_alert_event T.DecryptError)
         (S.Fail (T.AlertError T.DecryptError))
         (S.fail 's (T.AlertError T.DecryptError));
-      assert (pure (CL.connection_view_consistent (note_recv_alert_view view T.DecryptError 's)));
-      assert (pure ((note_recv_alert_view view T.DecryptError 's).CL.state == S.fail 's (T.AlertError T.DecryptError)));
-      fold (is_connection_inner c 'st (S.fail 's (T.AlertError T.DecryptError)) (note_recv_alert_view view T.DecryptError 's));
-      fold (is_connection c 'st (S.fail 's (T.AlertError T.DecryptError)));
+      assert (pure (CL.connection_view_consistent (note_recv_alert_view 'view0 T.DecryptError 's)));
+      assert (pure ((note_recv_alert_view 'view0 T.DecryptError 's).CL.state == S.fail 's (T.AlertError T.DecryptError)));
+      fold (connection_exactly c 'st (S.fail 's (T.AlertError T.DecryptError)) (note_recv_alert_view 'view0 T.DecryptError 's));
       false
     } else if (status = read_status_alert_protocol_version) {
       ST.advance_fail 'st (T.AlertError T.ProtocolVersion);
@@ -1200,10 +1202,9 @@ fn client_read_exact (c: connection) (ch: IO.channel) (out: array U8.t) (len: SZ
         (received_alert_event T.ProtocolVersion)
         (S.Fail (T.AlertError T.ProtocolVersion))
         (S.fail 's (T.AlertError T.ProtocolVersion));
-      assert (pure (CL.connection_view_consistent (note_recv_alert_view view T.ProtocolVersion 's)));
-      assert (pure ((note_recv_alert_view view T.ProtocolVersion 's).CL.state == S.fail 's (T.AlertError T.ProtocolVersion)));
-      fold (is_connection_inner c 'st (S.fail 's (T.AlertError T.ProtocolVersion)) (note_recv_alert_view view T.ProtocolVersion 's));
-      fold (is_connection c 'st (S.fail 's (T.AlertError T.ProtocolVersion)));
+      assert (pure (CL.connection_view_consistent (note_recv_alert_view 'view0 T.ProtocolVersion 's)));
+      assert (pure ((note_recv_alert_view 'view0 T.ProtocolVersion 's).CL.state == S.fail 's (T.AlertError T.ProtocolVersion)));
+      fold (connection_exactly c 'st (S.fail 's (T.AlertError T.ProtocolVersion)) (note_recv_alert_view 'view0 T.ProtocolVersion 's));
       false
     } else if (status = read_status_alert_unsupported_extension) {
       ST.advance_fail 'st (T.AlertError T.UnsupportedExtension);
@@ -1212,10 +1213,9 @@ fn client_read_exact (c: connection) (ch: IO.channel) (out: array U8.t) (len: SZ
         (received_alert_event T.UnsupportedExtension)
         (S.Fail (T.AlertError T.UnsupportedExtension))
         (S.fail 's (T.AlertError T.UnsupportedExtension));
-      assert (pure (CL.connection_view_consistent (note_recv_alert_view view T.UnsupportedExtension 's)));
-      assert (pure ((note_recv_alert_view view T.UnsupportedExtension 's).CL.state == S.fail 's (T.AlertError T.UnsupportedExtension)));
-      fold (is_connection_inner c 'st (S.fail 's (T.AlertError T.UnsupportedExtension)) (note_recv_alert_view view T.UnsupportedExtension 's));
-      fold (is_connection c 'st (S.fail 's (T.AlertError T.UnsupportedExtension)));
+      assert (pure (CL.connection_view_consistent (note_recv_alert_view 'view0 T.UnsupportedExtension 's)));
+      assert (pure ((note_recv_alert_view 'view0 T.UnsupportedExtension 's).CL.state == S.fail 's (T.AlertError T.UnsupportedExtension)));
+      fold (connection_exactly c 'st (S.fail 's (T.AlertError T.UnsupportedExtension)) (note_recv_alert_view 'view0 T.UnsupportedExtension 's));
       false
     } else if (status = read_status_alert_certificate_unknown) {
       ST.advance_fail 'st (T.AlertError T.CertificateUnknown);
@@ -1224,10 +1224,9 @@ fn client_read_exact (c: connection) (ch: IO.channel) (out: array U8.t) (len: SZ
         (received_alert_event T.CertificateUnknown)
         (S.Fail (T.AlertError T.CertificateUnknown))
         (S.fail 's (T.AlertError T.CertificateUnknown));
-      assert (pure (CL.connection_view_consistent (note_recv_alert_view view T.CertificateUnknown 's)));
-      assert (pure ((note_recv_alert_view view T.CertificateUnknown 's).CL.state == S.fail 's (T.AlertError T.CertificateUnknown)));
-      fold (is_connection_inner c 'st (S.fail 's (T.AlertError T.CertificateUnknown)) (note_recv_alert_view view T.CertificateUnknown 's));
-      fold (is_connection c 'st (S.fail 's (T.AlertError T.CertificateUnknown)));
+      assert (pure (CL.connection_view_consistent (note_recv_alert_view 'view0 T.CertificateUnknown 's)));
+      assert (pure ((note_recv_alert_view 'view0 T.CertificateUnknown 's).CL.state == S.fail 's (T.AlertError T.CertificateUnknown)));
+      fold (connection_exactly c 'st (S.fail 's (T.AlertError T.CertificateUnknown)) (note_recv_alert_view 'view0 T.CertificateUnknown 's));
       false
     } else if (status = read_status_alert_illegal_parameter) {
       ST.advance_fail 'st (T.AlertError T.IllegalParameter);
@@ -1236,10 +1235,9 @@ fn client_read_exact (c: connection) (ch: IO.channel) (out: array U8.t) (len: SZ
         (received_alert_event T.IllegalParameter)
         (S.Fail (T.AlertError T.IllegalParameter))
         (S.fail 's (T.AlertError T.IllegalParameter));
-      assert (pure (CL.connection_view_consistent (note_recv_alert_view view T.IllegalParameter 's)));
-      assert (pure ((note_recv_alert_view view T.IllegalParameter 's).CL.state == S.fail 's (T.AlertError T.IllegalParameter)));
-      fold (is_connection_inner c 'st (S.fail 's (T.AlertError T.IllegalParameter)) (note_recv_alert_view view T.IllegalParameter 's));
-      fold (is_connection c 'st (S.fail 's (T.AlertError T.IllegalParameter)));
+      assert (pure (CL.connection_view_consistent (note_recv_alert_view 'view0 T.IllegalParameter 's)));
+      assert (pure ((note_recv_alert_view 'view0 T.IllegalParameter 's).CL.state == S.fail 's (T.AlertError T.IllegalParameter)));
+      fold (connection_exactly c 'st (S.fail 's (T.AlertError T.IllegalParameter)) (note_recv_alert_view 'view0 T.IllegalParameter 's));
       false
     } else if (status = read_status_alert_decode_error) {
       ST.advance_fail 'st (T.AlertError T.DecodeError);
@@ -1248,10 +1246,9 @@ fn client_read_exact (c: connection) (ch: IO.channel) (out: array U8.t) (len: SZ
         (received_alert_event T.DecodeError)
         (S.Fail (T.AlertError T.DecodeError))
         (S.fail 's (T.AlertError T.DecodeError));
-      assert (pure (CL.connection_view_consistent (note_recv_alert_view view T.DecodeError 's)));
-      assert (pure ((note_recv_alert_view view T.DecodeError 's).CL.state == S.fail 's (T.AlertError T.DecodeError)));
-      fold (is_connection_inner c 'st (S.fail 's (T.AlertError T.DecodeError)) (note_recv_alert_view view T.DecodeError 's));
-      fold (is_connection c 'st (S.fail 's (T.AlertError T.DecodeError)));
+      assert (pure (CL.connection_view_consistent (note_recv_alert_view 'view0 T.DecodeError 's)));
+      assert (pure ((note_recv_alert_view 'view0 T.DecodeError 's).CL.state == S.fail 's (T.AlertError T.DecodeError)));
+      fold (connection_exactly c 'st (S.fail 's (T.AlertError T.DecodeError)) (note_recv_alert_view 'view0 T.DecodeError 's));
       false
     } else {
       ST.advance_fail 'st T.IoError;
@@ -1260,10 +1257,9 @@ fn client_read_exact (c: connection) (ch: IO.channel) (out: array U8.t) (len: SZ
         (CL.local_fail_event T.IoError)
         (S.Fail T.IoError)
         (S.fail 's T.IoError);
-      assert (pure (CL.connection_view_consistent (note_local_fail_view view T.IoError 's)));
-      assert (pure ((note_local_fail_view view T.IoError 's).CL.state == S.fail 's T.IoError));
-      fold (is_connection_inner c 'st (S.fail 's T.IoError) (note_local_fail_view view T.IoError 's));
-      fold (is_connection c 'st (S.fail 's T.IoError));
+      assert (pure (CL.connection_view_consistent (note_local_fail_view 'view0 T.IoError 's)));
+      assert (pure ((note_local_fail_view 'view0 T.IoError 's).CL.state == S.fail 's T.IoError));
+      fold (connection_exactly c 'st (S.fail 's T.IoError) (note_local_fail_view 'view0 T.IoError 's));
       false
     }
   } else {
@@ -1273,24 +1269,24 @@ fn client_read_exact (c: connection) (ch: IO.channel) (out: array U8.t) (len: SZ
       (CL.local_fail_event T.IoError)
       (S.Fail T.IoError)
       (S.fail 's T.IoError);
-    assert (pure (CL.connection_view_consistent (note_local_fail_view view T.IoError 's)));
-    assert (pure ((note_local_fail_view view T.IoError 's).CL.state == S.fail 's T.IoError));
-    fold (is_connection_inner c 'st (S.fail 's T.IoError) (note_local_fail_view view T.IoError 's));
-    fold (is_connection c 'st (S.fail 's T.IoError));
+    assert (pure (CL.connection_view_consistent (note_local_fail_view 'view0 T.IoError 's)));
+    assert (pure ((note_local_fail_view 'view0 T.IoError 's).CL.state == S.fail 's T.IoError));
+    fold (connection_exactly c 'st (S.fail 's T.IoError) (note_local_fail_view 'view0 T.IoError 's));
     false
   }
 }
 
 fn client_read (c: connection) (ch: IO.channel) (out: array U8.t) (max_len: SZ.t)
-  requires is_connection c 'st 's **
+  requires connection_exactly c 'st 's 'view0 **
            IO.is_channel ch **
            pts_to out 'old **
            pure ('s.S.phase == S.ApplicationData /\ B.length 'old == SZ.v max_len)
   returns n: SZ.t
-  ensures exists* s' bytes. is_connection c 'st s' **
+  ensures exists* s' view1 bytes. connection_exactly c 'st s' view1 **
           IO.is_channel ch **
           pts_to out bytes **
-          pure (B.length bytes == SZ.v max_len /\
+          pure (CL.connection_view_single_step 'view0 view1 /\
+                B.length bytes == SZ.v max_len /\
                 SZ.v n <= SZ.v max_len /\
                 (s'.S.phase == S.ApplicationData \/ s'.S.phase == S.Closing \/
                  s'.S.phase == S.Closed \/ s'.S.phase == S.Failed))
@@ -1304,16 +1300,15 @@ fn client_read (c: connection) (ch: IO.channel) (out: array U8.t) (max_len: SZ.t
 }
 
 fn client_close (c: connection) (ch: IO.channel)
-  requires is_connection c 'st 's **
-           IO.is_channel ch **
-           pure ('s.S.phase == S.ApplicationData)
-  ensures exists* s'. is_connection c 'st s' **
+  requires connection_exactly c 'st 's 'view0 **
           IO.is_channel ch **
-          pure (s'.S.phase == S.Closing \/ s'.S.phase == S.Failed)
+          pure ('s.S.phase == S.ApplicationData)
+  ensures exists* s' view1. connection_exactly c 'st s' view1 **
+          IO.is_channel ch **
+          pure (CL.connection_view_single_step 'view0 view1 /\
+                (s'.S.phase == S.Closing \/ s'.S.phase == S.Failed))
 {
-  unfold (is_connection c 'st 's);
-  with view. _;
-  unfold (is_connection_inner c 'st 's view);
+  unfold (connection_exactly c 'st 's 'view0);
   let keys_installed = !c.application_keys_installed;
   if keys_installed {
     let close_notify_sent =
@@ -1327,10 +1322,9 @@ fn client_close (c: connection) (ch: IO.channel)
           CL.sent_close_notify_event
           S.SendCloseNotify
           (S.send_close_state 's);
-        assert (pure (CL.connection_view_consistent (note_send_close_view view 's)));
-        assert (pure ((note_send_close_view view 's).CL.state == S.send_close_state 's));
-        fold (is_connection_inner c 'st (S.send_close_state 's) (note_send_close_view view 's));
-        fold (is_connection c 'st (S.send_close_state 's));
+        assert (pure (CL.connection_view_consistent (note_send_close_view 'view0 's)));
+        assert (pure ((note_send_close_view 'view0 's).CL.state == S.send_close_state 's));
+        fold (connection_exactly c 'st (S.send_close_state 's) (note_send_close_view 'view0 's));
       } else {
         ST.advance_fail 'st T.IoError;
         advance_log_event
@@ -1338,10 +1332,9 @@ fn client_close (c: connection) (ch: IO.channel)
           (CL.local_fail_event T.IoError)
           (S.Fail T.IoError)
           (S.fail 's T.IoError);
-        assert (pure (CL.connection_view_consistent (note_local_fail_view view T.IoError 's)));
-        assert (pure ((note_local_fail_view view T.IoError 's).CL.state == S.fail 's T.IoError));
-        fold (is_connection_inner c 'st (S.fail 's T.IoError) (note_local_fail_view view T.IoError 's));
-        fold (is_connection c 'st (S.fail 's T.IoError));
+        assert (pure (CL.connection_view_consistent (note_local_fail_view 'view0 T.IoError 's)));
+        assert (pure ((note_local_fail_view 'view0 T.IoError 's).CL.state == S.fail 's T.IoError));
+        fold (connection_exactly c 'st (S.fail 's T.IoError) (note_local_fail_view 'view0 T.IoError 's));
       }
     } else {
       ST.advance_fail 'st T.IoError;
@@ -1350,10 +1343,9 @@ fn client_close (c: connection) (ch: IO.channel)
         (CL.local_fail_event T.IoError)
         (S.Fail T.IoError)
         (S.fail 's T.IoError);
-      assert (pure (CL.connection_view_consistent (note_local_fail_view view T.IoError 's)));
-      assert (pure ((note_local_fail_view view T.IoError 's).CL.state == S.fail 's T.IoError));
-      fold (is_connection_inner c 'st (S.fail 's T.IoError) (note_local_fail_view view T.IoError 's));
-      fold (is_connection c 'st (S.fail 's T.IoError));
+      assert (pure (CL.connection_view_consistent (note_local_fail_view 'view0 T.IoError 's)));
+      assert (pure ((note_local_fail_view 'view0 T.IoError 's).CL.state == S.fail 's T.IoError));
+      fold (connection_exactly c 'st (S.fail 's T.IoError) (note_local_fail_view 'view0 T.IoError 's));
     }
   } else {
     ST.advance_fail 'st T.IoError;
@@ -1362,9 +1354,8 @@ fn client_close (c: connection) (ch: IO.channel)
       (CL.local_fail_event T.IoError)
       (S.Fail T.IoError)
       (S.fail 's T.IoError);
-    assert (pure (CL.connection_view_consistent (note_local_fail_view view T.IoError 's)));
-    assert (pure ((note_local_fail_view view T.IoError 's).CL.state == S.fail 's T.IoError));
-    fold (is_connection_inner c 'st (S.fail 's T.IoError) (note_local_fail_view view T.IoError 's));
-    fold (is_connection c 'st (S.fail 's T.IoError));
+    assert (pure (CL.connection_view_consistent (note_local_fail_view 'view0 T.IoError 's)));
+    assert (pure ((note_local_fail_view 'view0 T.IoError 's).CL.state == S.fail 's T.IoError));
+    fold (connection_exactly c 'st (S.fail 's T.IoError) (note_local_fail_view 'view0 T.IoError 's));
   }
 }

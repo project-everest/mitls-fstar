@@ -6,6 +6,7 @@ open Pulse.Lib.Pervasives
 open Pulse.Lib.Array.PtsTo
 
 module B = TLS13.Bytes
+module CL = TLS13.ConnectionLog
 module IO = TLS13.IO
 module S = TLS13.StateMachine
 module ST = TLS13.State
@@ -16,7 +17,19 @@ module X = TLS13.X509.Spec
 
 val connection : Type0
 
+val connection_exactly: connection -> ST.state_ref -> S.conn_state -> CL.connection_view -> slprop
+
 val is_connection: connection -> ST.state_ref -> S.conn_state -> slprop
+
+ghost
+fn reveal_connection_view (c: connection)
+  requires is_connection c 'st 's
+  ensures exists* view. connection_exactly c 'st 's view
+
+ghost
+fn hide_connection_view (c: connection)
+  requires connection_exactly c 'st 's 'view
+  ensures is_connection c 'st 's
 
 fn client_new
   (hostname: array U8.t)
@@ -27,77 +40,83 @@ fn client_new
   returns c: connection
   ensures exists* st.
           pts_to hostname 'hostname_bytes **
-          is_connection c st S.initial
+          connection_exactly c st S.initial CL.empty_connection_view
 
 fn client_free (c: connection)
-  requires is_connection c 'st 's
+  requires connection_exactly c 'st 's 'view
   ensures emp
 
 fn client_connect (c: connection) (ch: IO.channel)
-  requires is_connection c 'st 's **
+  requires connection_exactly c 'st 's 'view0 **
            IO.is_channel ch **
            pure ('s.S.phase == S.Start)
   returns ok: bool
-  ensures exists* s'. is_connection c 'st s' **
+  ensures exists* s' view1. connection_exactly c 'st s' view1 **
           IO.is_channel ch **
-          pure ((ok ==> s'.S.phase == S.ApplicationData) /\
+          pure (CL.connection_view_single_step 'view0 view1 /\
+                (ok ==> s'.S.phase == S.ApplicationData) /\
                 (not ok ==> s'.S.phase == S.Failed))
 
 fn client_write (c: connection) (ch: IO.channel) (buf: array U8.t) (len: SZ.t)
-  requires is_connection c 'st 's **
-           IO.is_channel ch **
-           pts_to buf 'bytes **
-           pure ('s.S.phase == S.ApplicationData /\ B.length 'bytes == SZ.v len)
-  returns written: SZ.t
-  ensures exists* s'. is_connection c 'st s' **
+  requires connection_exactly c 'st 's 'view0 **
           IO.is_channel ch **
           pts_to buf 'bytes **
-          pure (SZ.v written <= SZ.v len /\
+          pure ('s.S.phase == S.ApplicationData /\ B.length 'bytes == SZ.v len)
+  returns written: SZ.t
+  ensures exists* s' view1. connection_exactly c 'st s' view1 **
+          IO.is_channel ch **
+          pts_to buf 'bytes **
+          pure (CL.connection_view_single_step 'view0 view1 /\
+                SZ.v written <= SZ.v len /\
                 (s'.S.phase == S.ApplicationData \/ s'.S.phase == S.Failed))
 
 fn client_write_all (c: connection) (ch: IO.channel) (buf: array U8.t) (len: SZ.t)
-  requires is_connection c 'st 's **
-           IO.is_channel ch **
-           pts_to buf 'bytes **
-           pure ('s.S.phase == S.ApplicationData /\ B.length 'bytes == SZ.v len)
-  returns ok: bool
-  ensures exists* s'. is_connection c 'st s' **
+  requires connection_exactly c 'st 's 'view0 **
           IO.is_channel ch **
           pts_to buf 'bytes **
-          pure ((ok ==> s'.S.phase == S.ApplicationData) /\
+          pure ('s.S.phase == S.ApplicationData /\ B.length 'bytes == SZ.v len)
+  returns ok: bool
+  ensures exists* s' view1. connection_exactly c 'st s' view1 **
+          IO.is_channel ch **
+          pts_to buf 'bytes **
+          pure (CL.connection_view_single_step 'view0 view1 /\
+                (ok ==> s'.S.phase == S.ApplicationData) /\
                 (not ok ==> s'.S.phase == S.Failed))
 
 fn client_read (c: connection) (ch: IO.channel) (out: array U8.t) (max_len: SZ.t)
-  requires is_connection c 'st 's **
-           IO.is_channel ch **
-           pts_to out 'old **
-           pure ('s.S.phase == S.ApplicationData /\ B.length 'old == SZ.v max_len)
+  requires connection_exactly c 'st 's 'view0 **
+          IO.is_channel ch **
+          pts_to out 'old **
+          pure ('s.S.phase == S.ApplicationData /\ B.length 'old == SZ.v max_len)
   returns n: SZ.t
-  ensures exists* s' bytes. is_connection c 'st s' **
+  ensures exists* s' view1 bytes. connection_exactly c 'st s' view1 **
           IO.is_channel ch **
           pts_to out bytes **
-          pure (B.length bytes == SZ.v max_len /\
+          pure (CL.connection_view_single_step 'view0 view1 /\
+                B.length bytes == SZ.v max_len /\
                 SZ.v n <= SZ.v max_len /\
                 (s'.S.phase == S.ApplicationData \/ s'.S.phase == S.Closing \/
                  s'.S.phase == S.Closed \/ s'.S.phase == S.Failed))
 
 fn client_read_exact (c: connection) (ch: IO.channel) (out: array U8.t) (len: SZ.t)
-  requires is_connection c 'st 's **
-           IO.is_channel ch **
-           pts_to out 'old **
-           pure ('s.S.phase == S.ApplicationData /\ B.length 'old == SZ.v len)
+  requires connection_exactly c 'st 's 'view0 **
+          IO.is_channel ch **
+          pts_to out 'old **
+          pure ('s.S.phase == S.ApplicationData /\ B.length 'old == SZ.v len)
   returns ok: bool
-  ensures exists* s' bytes. is_connection c 'st s' **
+  ensures exists* s' view1 bytes. connection_exactly c 'st s' view1 **
           IO.is_channel ch **
           pts_to out bytes **
-          pure (B.length bytes == SZ.v len /\
+          pure (CL.connection_view_single_step 'view0 view1 /\
+                B.length bytes == SZ.v len /\
                 (ok ==> s'.S.phase == S.ApplicationData) /\
                 (not ok ==> s'.S.phase == S.Closed \/ s'.S.phase == S.Failed))
 
 fn client_close (c: connection) (ch: IO.channel)
-  requires is_connection c 'st 's **
-           IO.is_channel ch **
-           pure ('s.S.phase == S.ApplicationData)
-  ensures exists* s'. is_connection c 'st s' **
+  requires connection_exactly c 'st 's 'view0 **
           IO.is_channel ch **
-          pure (s'.S.phase == S.Closing \/ s'.S.phase == S.Failed)
+          pure ('s.S.phase == S.ApplicationData)
+  ensures exists* s' view1. connection_exactly c 'st s' view1 **
+          IO.is_channel ch **
+          pure (CL.connection_view_single_step 'view0 view1 /\
+                (s'.S.phase == S.Closing \/ s'.S.phase == S.Failed))
