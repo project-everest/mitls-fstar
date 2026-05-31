@@ -20,6 +20,7 @@ module SZ = FStar.SizeT
 module T = TLS13.Types
 module U16 = FStar.UInt16
 module U8 = FStar.UInt8
+module U64 = FStar.UInt64
 module V = Pulse.Lib.Vec
 
 let tls_application_plaintext_max : SZ.t = 16384sz
@@ -200,6 +201,93 @@ fn copy_payload_to_output
   copy_payload_to_output_loop payload payload_total_len out total_len 0sz offset copy_len
 }
 
+fn seal_application_record_to_output
+  (record_state: Rec.record_state)
+  (app_in: array U8.t)
+  (app_in_len: SZ.t)
+  (plain_offset: SZ.t)
+  (chunk_len: SZ.t)
+  (network_out: array U8.t)
+  (network_out_cap: SZ.t)
+  (wire_offset: SZ.t)
+  requires Rec.is_record_state record_state 's **
+           pts_to app_in 'app_bytes **
+           pts_to network_out 'network_out0 **
+           pure (B.length 'app_bytes == SZ.v app_in_len /\
+                 B.length 'network_out0 == SZ.v network_out_cap /\
+                 SZ.v chunk_len <= SZ.v tls_application_plaintext_max /\
+                 SZ.v plain_offset + SZ.v chunk_len <= SZ.v app_in_len /\
+                 U64.fits ('s.R.seq + 1) /\
+                 SZ.v wire_offset + 5 + (SZ.v chunk_len + 17) <= SZ.v network_out_cap)
+  returns ok: bool
+  ensures exists* s' network_out1.
+          Rec.is_record_state record_state s' **
+          pts_to app_in 'app_bytes **
+          pts_to network_out network_out1 **
+          pure (B.length network_out1 == SZ.v network_out_cap /\
+                (ok ==> s'.R.seq == 's.R.seq + 1) /\
+                (not ok ==> s' == 's))
+{
+  let inner_len = SZ.(chunk_len +^ 1sz);
+  let cipher_len = SZ.(inner_len +^ 16sz);
+  let wire_len = SZ.(5sz +^ cipher_len);
+  let cipher_offset = SZ.(wire_offset +^ 5sz);
+  assert (pure (SZ.v cipher_len == SZ.v chunk_len + 17));
+  assert (pure (SZ.v wire_len == SZ.v chunk_len + 22));
+  assert (pure (SZ.v wire_offset + SZ.v wire_len <= SZ.v network_out_cap));
+  let mut header = [| 0uy; 5sz |];
+  let mut inner_plaintext = [| 0uy; inner_len |];
+  let mut cipher = [| 0uy; cipher_len |];
+  RF.serialize_application_data_header
+    (Cast.uint32_to_uint16 (SZ.sizet_to_uint32 cipher_len))
+    header
+    5sz;
+  RF.encode_inner_plaintext_no_padding_slice
+    app_in
+    app_in_len
+    plain_offset
+    chunk_len
+    23uy
+    inner_plaintext
+    inner_len;
+  with inner_bytes. assert (pts_to inner_plaintext inner_bytes);
+  with cipher_old. assert (pts_to cipher cipher_old);
+  assert (pure (B.length inner_bytes == SZ.v inner_len));
+  assert (pure (B.length cipher_old == SZ.v cipher_len));
+  assert (pure (B.length cipher_old == SZ.v inner_len + 16));
+  let sealed = Rec.seal_application_runtime
+    record_state
+    header
+    5sz
+    inner_plaintext
+    inner_len
+    cipher;
+  with header_bytes. assert (pts_to header header_bytes);
+  with cipher_bytes. assert (pts_to cipher cipher_bytes);
+  assert (pure (B.length header_bytes == 5));
+  assert (pure (B.length cipher_bytes == SZ.v cipher_len));
+  if sealed {
+    assert (pure (5 + SZ.v cipher_len == SZ.v wire_len));
+    assert (pure (SZ.v wire_offset + 5 <= SZ.v network_out_cap));
+    copy_payload_to_output header 5sz 5sz network_out network_out_cap wire_offset;
+    with network_after_header. assert (pts_to network_out network_after_header);
+    assert (pure (B.length network_after_header == SZ.v network_out_cap));
+    assert (pure (SZ.v cipher_offset + SZ.v cipher_len <= SZ.v network_out_cap));
+    copy_payload_to_output cipher cipher_len cipher_len network_out network_out_cap cipher_offset;
+    with network_out1. assert (pts_to network_out network_out1);
+    with s'. assert (Rec.is_record_state record_state s');
+    assert (pure (B.length network_out1 == SZ.v network_out_cap));
+    assert (pure (s'.R.seq == 's.R.seq + 1));
+    sealed
+  } else {
+    with network_out1. assert (pts_to network_out network_out1);
+    with s'. assert (Rec.is_record_state record_state s');
+    assert (pure (B.length network_out1 == SZ.v network_out_cap));
+    assert (pure (s' == 's));
+    sealed
+  }
+}
+
 fn client_core_new ()
   returns c: client_core
   ensures is_client_core c CL.empty_connection_view
@@ -357,49 +445,22 @@ ensures exists* view1 network_out1 app_out1.
       assert (pure (SZ.v wire_len == SZ.v app_in_len + 22));
       if SZ.(app_in_len <=^ tls_application_plaintext_max && wire_len <=^ network_out_cap) {
         assert (pure (SZ.v wire_len <= SZ.v max_self_emitted_application_record_wire_len));
-        let mut header = [| 0uy; 5sz |];
-        let mut inner_plaintext = [| 0uy; inner_len |];
-        let mut cipher = [| 0uy; cipher_len |];
-        RF.serialize_application_data_header
-          (Cast.uint32_to_uint16 (SZ.sizet_to_uint32 cipher_len))
-          header
-          5sz;
-        RF.encode_inner_plaintext_no_padding
+        assert (pure (S.max_application_data_fragment_len == SZ.v tls_application_plaintext_max));
+        assert (pure (B.length (Ghost.reveal app_bytes) <= S.max_application_data_fragment_len));
+        S.lemma_application_data_record_count_len_small (B.length (Ghost.reveal app_bytes));
+        assert (pure (SZ.v wire_len == 5 + (SZ.v app_in_len + 17)));
+        let sealed = seal_application_record_to_output
+          c.client_application_record_state
           app_in
           app_in_len
-          23uy
-          inner_plaintext
-          inner_len;
-        with inner_bytes. assert (pts_to inner_plaintext inner_bytes);
-        with cipher_old. assert (pts_to cipher cipher_old);
-        RF.lemma_inner_plaintext_no_padding_result_len
-          (Ghost.reveal 'app_in_bytes)
-          (Seq.create (SZ.v inner_len) 0uy)
-          (SZ.v app_in_len)
-          (SZ.v inner_len)
-          23uy;
-        assert (pure (B.length inner_bytes == SZ.v inner_len));
-        assert (pure (B.length cipher_old == SZ.v cipher_len));
-        assert (pure (B.length cipher_old == SZ.v inner_len + 16));
-        let sealed = Rec.seal_application_runtime
-          c.client_application_record_state
-          header
-          5sz
-          inner_plaintext
-          inner_len
-          cipher;
-        with header_bytes. assert (pts_to header header_bytes);
-        with cipher_bytes. assert (pts_to cipher cipher_bytes);
-        assert (pure (B.length header_bytes == 5));
-        assert (pure (B.length cipher_bytes == SZ.v cipher_len));
+          0sz
+          app_in_len
+          network_out
+          network_out_cap
+          0sz;
+        with network_out1. assert (pts_to network_out network_out1);
+        assert (pure (B.length network_out1 == SZ.v network_out_cap));
         if sealed {
-          copy_payload_to_output header 5sz 5sz network_out network_out_cap 0sz;
-          with network_after_header. assert (pts_to network_out network_after_header);
-          assert (pure (B.length network_after_header == SZ.v network_out_cap));
-          assert (pure (5 + SZ.v cipher_len == SZ.v wire_len));
-          copy_payload_to_output cipher cipher_len cipher_len network_out network_out_cap 5sz;
-          with network_out1. assert (pts_to network_out network_out1);
-          assert (pure (B.length network_out1 == SZ.v network_out_cap));
           let raw : erased CL.raw_io_log =
             CL.append_raw_sent_slice view0.CL.raw_log (Ghost.reveal network_out1) 0 (SZ.v wire_len);
           CL.lemma_raw_io_log_extends_sent_slice view0.CL.raw_log (Ghost.reveal network_out1) 0 (SZ.v wire_len);
@@ -458,10 +519,10 @@ ensures exists* view1 network_out1 app_out1.
           let resp = CL.response_no_network_out B.empty (CL.Failed T.IoError);
           CL.lemma_raw_sent_delta_refl view0.CL.raw_log;
           assert (pure (resp.CL.network_out == B.empty));
-          lemma_empty_prefix (Ghost.reveal 'network_out0);
+          lemma_empty_prefix (Ghost.reveal network_out1);
           lemma_empty_prefix (Ghost.reveal 'app_out0);
-          assert (pure (response_buffers_match result (Ghost.reveal 'network_out0) (Ghost.reveal 'app_out0) resp));
-          assert (pure (exists mresp. response_buffers_match result (Ghost.reveal 'network_out0) (Ghost.reveal 'app_out0) mresp /\
+          assert (pure (response_buffers_match result (Ghost.reveal network_out1) (Ghost.reveal 'app_out0) resp));
+          assert (pure (exists mresp. response_buffers_match result (Ghost.reveal network_out1) (Ghost.reveal 'app_out0) mresp /\
                                     CL.step view0 mreq (Ghost.reveal view1) mresp));
           fold (is_client_core c (Ghost.reveal view1));
           result
@@ -491,87 +552,36 @@ ensures exists* view1 network_out1 app_out1.
           assert (pure (SZ.v total_wire_len == SZ.v app_in_len + 44));
           assert (pure (SZ.v total_wire_len <= SZ.v max_two_self_emitted_application_records_wire_len));
           if SZ.(total_wire_len <=^ network_out_cap) {
-            let mut header1 = [| 0uy; 5sz |];
-            let mut inner1 = [| 0uy; first_inner_len |];
-            let mut cipher1 = [| 0uy; first_cipher_len |];
-            let mut header2 = [| 0uy; 5sz |];
-            let mut inner2 = [| 0uy; second_inner_len |];
-            let mut cipher2 = [| 0uy; second_cipher_len |];
-            RF.serialize_application_data_header
-              (Cast.uint32_to_uint16 (SZ.sizet_to_uint32 first_cipher_len))
-              header1
-              5sz;
-            RF.encode_inner_plaintext_no_padding_slice
+            assert (pure (SZ.v first_wire_len == 5 + (SZ.v first_chunk + 17)));
+            assert (pure (SZ.v first_wire_len <= SZ.v network_out_cap));
+            let sealed1 = seal_application_record_to_output
+              c.client_application_record_state
               app_in
               app_in_len
               0sz
               first_chunk
-              23uy
-              inner1
-              first_inner_len;
-            RF.serialize_application_data_header
-              (Cast.uint32_to_uint16 (SZ.sizet_to_uint32 second_cipher_len))
-              header2
-              5sz;
-            RF.encode_inner_plaintext_no_padding_slice
-              app_in
-              app_in_len
-              first_chunk
-              second_chunk
-              23uy
-              inner2
-              second_inner_len;
-            with inner1_bytes. assert (pts_to inner1 inner1_bytes);
-            with cipher1_old. assert (pts_to cipher1 cipher1_old);
-            assert (pure (B.length inner1_bytes == SZ.v first_inner_len));
-            assert (pure (B.length cipher1_old == SZ.v first_cipher_len));
-            assert (pure (B.length cipher1_old == SZ.v first_inner_len + 16));
-            let sealed1 = Rec.seal_application_runtime
-              c.client_application_record_state
-              header1
-              5sz
-              inner1
-              first_inner_len
-              cipher1;
-            with header1_bytes. assert (pts_to header1 header1_bytes);
-            with cipher1_bytes. assert (pts_to cipher1 cipher1_bytes);
-            assert (pure (B.length header1_bytes == 5));
-            assert (pure (B.length cipher1_bytes == SZ.v first_cipher_len));
+              network_out
+              network_out_cap
+              0sz;
+            with network_after_first. assert (pts_to network_out network_after_first);
+            assert (pure (B.length network_after_first == SZ.v network_out_cap));
             if sealed1 {
-              with inner2_bytes. assert (pts_to inner2 inner2_bytes);
-              with cipher2_old. assert (pts_to cipher2 cipher2_old);
-              assert (pure (B.length inner2_bytes == SZ.v second_inner_len));
-              assert (pure (B.length cipher2_old == SZ.v second_cipher_len));
-              assert (pure (B.length cipher2_old == SZ.v second_inner_len + 16));
-              let sealed2 = Rec.seal_application_runtime
+              assert (pure (SZ.v first_chunk + SZ.v second_chunk <= SZ.v app_in_len));
+              assert (pure (SZ.v second_record_offset + 5 + (SZ.v second_chunk + 17) <= SZ.v network_out_cap));
+              let sealed2 = seal_application_record_to_output
                 c.client_application_record_state
-                header2
-                5sz
-                inner2
-                second_inner_len
-                cipher2;
-              with header2_bytes. assert (pts_to header2 header2_bytes);
-              with cipher2_bytes. assert (pts_to cipher2 cipher2_bytes);
-              assert (pure (B.length header2_bytes == 5));
-              assert (pure (B.length cipher2_bytes == SZ.v second_cipher_len));
+                app_in
+                app_in_len
+                first_chunk
+                second_chunk
+                network_out
+                network_out_cap
+                second_record_offset;
+              with network_out1. assert (pts_to network_out network_out1);
+              assert (pure (B.length network_out1 == SZ.v network_out_cap));
               if sealed2 {
                 assert (pure (5 + SZ.v first_cipher_len == SZ.v first_wire_len));
                 assert (pure (5 + SZ.v second_cipher_len == SZ.v second_wire_len));
-                assert (pure (SZ.v first_wire_len <= SZ.v network_out_cap));
-                copy_payload_to_output header1 5sz 5sz network_out network_out_cap 0sz;
-                with network_after_header1. assert (pts_to network_out network_after_header1);
-                assert (pure (B.length network_after_header1 == SZ.v network_out_cap));
-                copy_payload_to_output cipher1 first_cipher_len first_cipher_len network_out network_out_cap 5sz;
-                with network_after_cipher1. assert (pts_to network_out network_after_cipher1);
-                assert (pure (B.length network_after_cipher1 == SZ.v network_out_cap));
-                assert (pure (SZ.v second_record_offset + 5 <= SZ.v network_out_cap));
-                copy_payload_to_output header2 5sz 5sz network_out network_out_cap second_record_offset;
-                with network_after_header2. assert (pts_to network_out network_after_header2);
-                assert (pure (B.length network_after_header2 == SZ.v network_out_cap));
-                assert (pure (SZ.v second_cipher_offset + SZ.v second_cipher_len <= SZ.v network_out_cap));
-                copy_payload_to_output cipher2 second_cipher_len second_cipher_len network_out network_out_cap second_cipher_offset;
-                with network_out1. assert (pts_to network_out network_out1);
-                assert (pure (B.length network_out1 == SZ.v network_out_cap));
                 let raw : erased CL.raw_io_log =
                   CL.append_raw_sent_slice view0.CL.raw_log (Ghost.reveal network_out1) 0 (SZ.v total_wire_len);
                 CL.lemma_raw_io_log_extends_sent_slice view0.CL.raw_log (Ghost.reveal network_out1) 0 (SZ.v total_wire_len);
@@ -627,10 +637,10 @@ ensures exists* view1 network_out1 app_out1.
                 let resp = CL.response_no_network_out B.empty (CL.Failed T.IoError);
                 CL.lemma_raw_sent_delta_refl view0.CL.raw_log;
                 assert (pure (resp.CL.network_out == B.empty));
-                lemma_empty_prefix (Ghost.reveal 'network_out0);
+                lemma_empty_prefix (Ghost.reveal network_out1);
                 lemma_empty_prefix (Ghost.reveal 'app_out0);
-                assert (pure (response_buffers_match result (Ghost.reveal 'network_out0) (Ghost.reveal 'app_out0) resp));
-                assert (pure (exists mresp. response_buffers_match result (Ghost.reveal 'network_out0) (Ghost.reveal 'app_out0) mresp /\
+                assert (pure (response_buffers_match result (Ghost.reveal network_out1) (Ghost.reveal 'app_out0) resp));
+                assert (pure (exists mresp. response_buffers_match result (Ghost.reveal network_out1) (Ghost.reveal 'app_out0) mresp /\
                                           CL.step view0 mreq (Ghost.reveal view1) mresp));
                 fold (is_client_core c (Ghost.reveal view1));
                 result
@@ -647,10 +657,10 @@ ensures exists* view1 network_out1 app_out1.
               let resp = CL.response_no_network_out B.empty (CL.Failed T.IoError);
               CL.lemma_raw_sent_delta_refl view0.CL.raw_log;
               assert (pure (resp.CL.network_out == B.empty));
-              lemma_empty_prefix (Ghost.reveal 'network_out0);
+              lemma_empty_prefix (Ghost.reveal network_after_first);
               lemma_empty_prefix (Ghost.reveal 'app_out0);
-              assert (pure (response_buffers_match result (Ghost.reveal 'network_out0) (Ghost.reveal 'app_out0) resp));
-              assert (pure (exists mresp. response_buffers_match result (Ghost.reveal 'network_out0) (Ghost.reveal 'app_out0) mresp /\
+              assert (pure (response_buffers_match result (Ghost.reveal network_after_first) (Ghost.reveal 'app_out0) resp));
+              assert (pure (exists mresp. response_buffers_match result (Ghost.reveal network_after_first) (Ghost.reveal 'app_out0) mresp /\
                                         CL.step view0 mreq (Ghost.reveal view1) mresp));
               fold (is_client_core c (Ghost.reveal view1));
               result
