@@ -1429,16 +1429,14 @@ ensures exists* view1 network_out1 app_out1.
                       assert (pure (CL.step view0 mreq (Ghost.reveal view_single) (Ghost.reveal resp_single)));
                       if SZ.(5sz <=^ residual_len) {
                         let mut header2 = [| 0uy; 5sz |];
-                        V.to_array_pts_to c.pending_network_buffer;
                         copy_payload_to_output_loop
-                          (V.vec_to_array c.pending_network_buffer)
-                          pending_network_buffer_capacity
+                          residual_tmp
+                          residual_len
                           header2
                           5sz
                           0sz
                           0sz
                           5sz;
-                        V.to_vec_pts_to c.pending_network_buffer;
                         with header2_bytes. assert (pts_to header2 header2_bytes);
                         assert (pure (B.length header2_bytes == 5));
                         let mut content_type2_out = [| 0uy; 1sz |];
@@ -1481,16 +1479,14 @@ ensures exists* view1 network_out1 app_out1.
                             assert (pure (SZ.v record2_end + SZ.v residual_after_two_len ==
                                           SZ.v residual_len));
                             let mut cipher2 = [| 0uy; fragment2_len |];
-                            V.to_array_pts_to c.pending_network_buffer;
                             copy_payload_to_output_loop
-                              (V.vec_to_array c.pending_network_buffer)
-                              pending_network_buffer_capacity
+                              residual_tmp
+                              residual_len
                               cipher2
                               fragment2_len
                               record2_cipher_offset
                               0sz
                               fragment2_len;
-                            V.to_vec_pts_to c.pending_network_buffer;
                             with cipher2_bytes. assert (pts_to cipher2 cipher2_bytes);
                             assert (pure (B.length cipher2_bytes == SZ.v fragment2_len));
                             assert (pure (SZ.v 16sz == 16));
@@ -2522,16 +2518,14 @@ ensures exists* view1 network_out1 app_out1.
                 assert (pure (CL.step view0 mreq (Ghost.reveal view_single) (Ghost.reveal resp_single)));
                 if SZ.(5sz <=^ residual_len) {
                   let mut header2 = [| 0uy; 5sz |];
-                  V.to_array_pts_to c.pending_network_buffer;
                   copy_payload_to_output_loop
-                    (V.vec_to_array c.pending_network_buffer)
-                    pending_network_buffer_capacity
+                    residual_tmp
+                    residual_len
                     header2
                     5sz
                     0sz
                     0sz
                     5sz;
-                  V.to_vec_pts_to c.pending_network_buffer;
                   with header2_bytes. assert (pts_to header2 header2_bytes);
                   assert (pure (B.length header2_bytes == 5));
                   let mut content_type2_out = [| 0uy; 1sz |];
@@ -2573,16 +2567,14 @@ ensures exists* view1 network_out1 app_out1.
                       assert (pure (SZ.v record2_end + SZ.v residual_after_two_len ==
                                     SZ.v residual_len));
                       let mut cipher2 = [| 0uy; fragment2_len |];
-                      V.to_array_pts_to c.pending_network_buffer;
                       copy_payload_to_output_loop
-                        (V.vec_to_array c.pending_network_buffer)
-                        pending_network_buffer_capacity
+                        residual_tmp
+                        residual_len
                         cipher2
                         fragment2_len
                         record2_cipher_offset
                         0sz
                         fragment2_len;
-                      V.to_vec_pts_to c.pending_network_buffer;
                       with cipher2_bytes. assert (pts_to cipher2 cipher2_bytes);
                       assert (pure (B.length cipher2_bytes == SZ.v fragment2_len));
                       assert (pure (SZ.v 16sz == 16));
