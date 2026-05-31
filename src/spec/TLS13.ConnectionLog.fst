@@ -1728,6 +1728,22 @@ let lemma_note_app_received_chunks_state_snoc
   S.lemma_advance_read_records_succ view.state (chunk_count chunks);
   assert (mid.state == S.advance_read_records view.state (chunk_count chunks))
 
+let lemma_note_app_received_chunks_state_components
+  (view:connection_view)
+  (chunks:list B.bytes)
+  : Lemma
+      (requires view.state.S.phase == S.ApplicationData)
+      (ensures
+        (note_app_received_chunks view chunks).state.S.phase == S.ApplicationData /\
+        (note_app_received_chunks view chunks).state.S.write_state == view.state.S.write_state /\
+        (note_app_received_chunks view chunks).state.S.read_state.R.seq ==
+          view.state.S.read_state.R.seq + chunk_count chunks)
+  =
+  lemma_note_app_received_chunks_state view chunks;
+  S.lemma_advance_read_records_preserves_phase view.state (chunk_count chunks);
+  S.lemma_advance_read_records_preserves_write_state view.state (chunk_count chunks);
+  S.lemma_advance_read_records_read_seq view.state (chunk_count chunks)
+
 let rec lemma_connection_view_consistent_note_app_received_chunks
   (view:connection_view)
   (chunks:list B.bytes)
