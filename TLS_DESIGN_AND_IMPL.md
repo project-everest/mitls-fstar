@@ -414,7 +414,7 @@ The concrete Pulse parameters are intentionally buffer-oriented:
 - `app_out` is mutated with plaintext bytes delivered to the caller;
 - `core_result` reports how many bytes in each output buffer are valid and the next driver action.
 
-The `request_buffers_match` and `response_buffers_match` predicates are the spec/implementation bridge. They relate concrete Pulse buffers and machine-sized lengths to the pure `client_request` and `client_response` values, while `CL.step` records exactly which inbound network bytes were consumed, which outbound network bytes were produced, which plaintext bytes were accepted or returned, and which TLS state-machine events justify the transition.
+The `request_buffers_match` and `response_buffers_match` predicates are the spec/implementation bridge. They relate concrete Pulse buffers and machine-sized lengths to the pure `client_request` and `client_response` values, while `CL.step` records exactly which inbound network bytes were consumed, which outbound network bytes were produced, which plaintext bytes were accepted or returned, and which TLS state-machine events justify the transition. The core copy helpers now prove copied destination slices equal the corresponding source slices, so read-path app and pending buffers are tied directly to decrypted plaintext prefixes/suffixes.
 
 The external driver should be a thin orchestration layer:
 

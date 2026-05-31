@@ -58,6 +58,15 @@ let lemma_u64_fits_add_one_of_count
   =
   ()
 
+let lemma_step_recv_application_data
+  (s:S.conn_state)
+  (app:B.bytes)
+  : Lemma
+      (requires s.S.phase == S.ApplicationData)
+      (ensures S.step s (S.RecvApplicationData app) == Some (S.advance_read_record s))
+  =
+  ()
+
 noeq
 type client_core = {
   state: ST.state_ref;
@@ -144,6 +153,130 @@ let lemma_prefix_slice (buffer:B.bytes) (len:nat)
   Seq.lemma_len_slice buffer 0 len;
   Seq.lemma_eq_refl (Seq.slice buffer 0 len) (Seq.slice buffer 0 len)
 
+let lemma_copied_range_slice
+  (payload:B.bytes)
+  (bytes:B.bytes)
+  (src:nat)
+  (dst:nat)
+  (len:nat)
+  : Lemma
+      (requires src + len <= B.length payload /\
+                dst + len <= B.length bytes /\
+                (forall (i:nat{i < len}).
+                  Seq.index bytes (dst + i) == Seq.index payload (src + i)))
+      (ensures Seq.equal
+        (Seq.slice bytes dst (dst + len))
+        (Seq.slice payload src (src + len)))
+  =
+  Seq.lemma_len_slice bytes dst (dst + len);
+  Seq.lemma_len_slice payload src (src + len);
+  assert (forall (i:nat{i < len}).
+            Seq.index (Seq.slice bytes dst (dst + len)) i ==
+            Seq.index bytes (dst + i));
+  assert (forall (i:nat{i < len}).
+            Seq.index (Seq.slice payload src (src + len)) i ==
+            Seq.index payload (src + i));
+  assert (forall (i:nat{i < len}).
+            Seq.index (Seq.slice bytes dst (dst + len)) i ==
+            Seq.index (Seq.slice payload src (src + len)) i);
+  Seq.lemma_eq_intro
+    (Seq.slice bytes dst (dst + len))
+    (Seq.slice payload src (src + len))
+
+let lemma_slice_equal_range
+  (payload:B.bytes)
+  (bytes:B.bytes)
+  (src:nat)
+  (dst:nat)
+  (len:nat)
+  : Lemma
+      (requires src + len <= B.length payload /\
+                dst + len <= B.length bytes /\
+                Seq.equal
+                  (Seq.slice bytes dst (dst + len))
+                  (Seq.slice payload src (src + len)))
+      (ensures (forall (i:nat{i < len}).
+        Seq.index bytes (dst + i) == Seq.index payload (src + i)))
+  =
+  Seq.lemma_eq_elim
+    (Seq.slice bytes dst (dst + len))
+    (Seq.slice payload src (src + len));
+  assert (forall (i:nat{i < len}).
+            Seq.index (Seq.slice bytes dst (dst + len)) i ==
+            Seq.index (Seq.slice payload src (src + len)) i);
+  assert (forall (i:nat{i < len}).
+            Seq.index (Seq.slice bytes dst (dst + len)) i ==
+            Seq.index bytes (dst + i));
+  assert (forall (i:nat{i < len}).
+            Seq.index (Seq.slice payload src (src + len)) i ==
+            Seq.index payload (src + i));
+  assert (forall (i:nat{i < len}).
+            Seq.index bytes (dst + i) == Seq.index payload (src + i))
+
+let lemma_copy_step_range
+  (payload:B.bytes)
+  (mid:B.bytes)
+  (final:B.bytes)
+  (src:nat)
+  (dst:nat)
+  (remaining:nat)
+  (src_next:nat)
+  (dst_next:nat)
+  (remaining_next:nat)
+  : Lemma
+      (requires remaining > 0 /\
+                src_next == src + 1 /\
+                dst_next == dst + 1 /\
+                remaining_next == remaining - 1 /\
+                src + remaining <= B.length payload /\
+                dst + remaining <= B.length final /\
+                B.length final == B.length mid /\
+                Seq.index mid dst == Seq.index payload src /\
+                (forall (i:nat{i < dst_next}).
+                  Seq.index final i == Seq.index mid i) /\
+                (forall (i:nat{i < remaining_next}).
+                  Seq.index final (dst_next + i) ==
+                  Seq.index payload (src_next + i)))
+      (ensures (forall (i:nat{i < remaining}).
+        Seq.index final (dst + i) == Seq.index payload (src + i)))
+  =
+  introduce forall (i:nat{i < remaining}).
+    Seq.index final (dst + i) == Seq.index payload (src + i)
+  with (
+    if i = 0 then (
+      assert (dst + i == dst);
+      assert (src + i == src);
+      assert (dst < dst_next);
+      assert (Seq.index final dst == Seq.index mid dst)
+    ) else (
+      assert (i > 0);
+      assert (i - 1 < remaining_next);
+      assert (dst + i == dst_next + (i - 1));
+      assert (src + i == src_next + (i - 1))
+    )
+  )
+
+let lemma_copy_step_prefix
+  (old:B.bytes)
+  (mid:B.bytes)
+  (final:B.bytes)
+  (dst:nat)
+  (dst_next:nat)
+  : Lemma
+      (requires dst <= B.length old /\
+                dst_next == dst + 1 /\
+                dst_next <= B.length old /\
+                B.length mid == B.length old /\
+                B.length final == B.length old /\
+                (forall (i:nat{i < dst_next}).
+                  Seq.index final i == Seq.index mid i) /\
+                (forall (i:nat{i < dst}).
+                  Seq.index mid i == Seq.index old i))
+      (ensures (forall (i:nat{i < dst}).
+        Seq.index final i == Seq.index old i))
+  =
+  ()
+
 fn rec copy_payload_to_output_loop
   (payload: array U8.t)
   (payload_total_len: SZ.t)
@@ -161,12 +294,44 @@ fn rec copy_payload_to_output_loop
   ensures exists* bytes.
           pts_to payload 'payload_bytes **
           pts_to out bytes **
-          pure (B.length bytes == SZ.v total_len)
+          pure (B.length 'payload_bytes == SZ.v payload_total_len /\
+                B.length 'old == SZ.v total_len /\
+                B.length bytes == SZ.v total_len /\
+                SZ.v src_index + SZ.v remaining <= SZ.v payload_total_len /\
+                SZ.v dst_index + SZ.v remaining <= SZ.v total_len /\
+                Seq.equal
+                  (Seq.slice bytes (SZ.v dst_index) (SZ.v dst_index + SZ.v remaining))
+                  (Seq.slice 'payload_bytes (SZ.v src_index) (SZ.v src_index + SZ.v remaining)) /\
+                Seq.equal
+                  (Seq.slice bytes 0 (SZ.v dst_index))
+                  (Seq.slice 'old 0 (SZ.v dst_index)))
   decreases (SZ.v remaining)
 {
   if (remaining = 0sz) {
     with bytes. assert (pts_to out bytes);
+    assert (pure (B.length 'payload_bytes == SZ.v payload_total_len));
+    assert (pure (B.length 'old == SZ.v total_len));
     assert (pure (B.length bytes == SZ.v total_len));
+    lemma_copied_range_slice
+      (Ghost.reveal 'payload_bytes)
+      (Ghost.reveal bytes)
+      (SZ.v src_index)
+      (SZ.v dst_index)
+      (SZ.v remaining);
+    assert (pure (Seq.equal
+      (Seq.slice bytes (SZ.v dst_index) (SZ.v dst_index + SZ.v remaining))
+      (Seq.slice 'payload_bytes (SZ.v src_index) (SZ.v src_index + SZ.v remaining))));
+    assert (pure (forall (i:nat{i < SZ.v dst_index}).
+      Seq.index bytes i == Seq.index 'old i));
+    lemma_copied_range_slice
+      (Ghost.reveal 'old)
+      (Ghost.reveal bytes)
+      0
+      0
+      (SZ.v dst_index);
+    assert (pure (Seq.equal
+      (Seq.slice bytes 0 (SZ.v dst_index))
+      (Seq.slice 'old 0 (SZ.v dst_index))));
   } else {
     assert (pure (SZ.v src_index < SZ.v payload_total_len));
     assert (pure (SZ.v dst_index < SZ.v total_len));
@@ -176,11 +341,69 @@ fn rec copy_payload_to_output_loop
     let dst_index' = SZ.(dst_index +^ 1sz);
     let remaining' = SZ.(remaining -^ 1sz);
     with bytes. assert (pts_to out bytes);
+    assert (pure (B.length 'payload_bytes == SZ.v payload_total_len));
+    assert (pure (B.length 'old == SZ.v total_len));
     assert (pure (B.length bytes == SZ.v total_len));
+    assert (pure (Seq.index bytes (SZ.v dst_index) == Seq.index 'payload_bytes (SZ.v src_index)));
+    assert (pure (forall (i:nat{i < SZ.v dst_index}).
+      Seq.index bytes i == Seq.index 'old i));
     assert (pure (SZ.v remaining' < SZ.v remaining));
     assert (pure (SZ.v src_index' + SZ.v remaining' <= SZ.v payload_total_len));
     assert (pure (SZ.v dst_index' + SZ.v remaining' <= SZ.v total_len));
-    copy_payload_to_output_loop payload payload_total_len out total_len src_index' dst_index' remaining'
+    copy_payload_to_output_loop payload payload_total_len out total_len src_index' dst_index' remaining';
+    with final_bytes. assert (pts_to out final_bytes);
+    assert (pure (B.length final_bytes == SZ.v total_len));
+    assert (pure (SZ.v src_index' == SZ.v src_index + 1));
+    assert (pure (SZ.v dst_index' == SZ.v dst_index + 1));
+    assert (pure (SZ.v remaining' == SZ.v remaining - 1));
+    lemma_slice_equal_range
+      (Ghost.reveal bytes)
+      (Ghost.reveal final_bytes)
+      0
+      0
+      (SZ.v dst_index');
+    lemma_slice_equal_range
+      (Ghost.reveal 'payload_bytes)
+      (Ghost.reveal final_bytes)
+      (SZ.v src_index')
+      (SZ.v dst_index')
+      (SZ.v remaining');
+    lemma_copy_step_range
+      (Ghost.reveal 'payload_bytes)
+      (Ghost.reveal bytes)
+      (Ghost.reveal final_bytes)
+      (SZ.v src_index)
+      (SZ.v dst_index)
+      (SZ.v remaining)
+      (SZ.v src_index')
+      (SZ.v dst_index')
+      (SZ.v remaining');
+    assert (pure (forall (i:nat{i < SZ.v remaining}).
+      Seq.index final_bytes (SZ.v dst_index + i) ==
+      Seq.index 'payload_bytes (SZ.v src_index + i)));
+    lemma_copied_range_slice
+      (Ghost.reveal 'payload_bytes)
+      (Ghost.reveal final_bytes)
+      (SZ.v src_index)
+      (SZ.v dst_index)
+      (SZ.v remaining);
+    lemma_copy_step_prefix
+      (Ghost.reveal 'old)
+      (Ghost.reveal bytes)
+      (Ghost.reveal final_bytes)
+      (SZ.v dst_index)
+      (SZ.v dst_index');
+    assert (pure (forall (i:nat{i < SZ.v dst_index}).
+      Seq.index final_bytes i == Seq.index 'old i));
+    lemma_copied_range_slice
+      (Ghost.reveal 'old)
+      (Ghost.reveal final_bytes)
+      0
+      0
+      (SZ.v dst_index);
+    assert (pure (Seq.equal
+      (Seq.slice final_bytes 0 (SZ.v dst_index))
+      (Seq.slice 'old 0 (SZ.v dst_index))))
   }
 }
 
@@ -200,7 +423,14 @@ fn copy_payload_to_output
   ensures exists* bytes.
           pts_to payload 'payload_bytes **
           pts_to out bytes **
-          pure (B.length bytes == SZ.v total_len)
+          pure (B.length 'payload_bytes == SZ.v payload_total_len /\
+                B.length 'old == SZ.v total_len /\
+                B.length bytes == SZ.v total_len /\
+                SZ.v copy_len <= SZ.v payload_total_len /\
+                SZ.v offset + SZ.v copy_len <= SZ.v total_len /\
+                Seq.equal
+                  (Seq.slice bytes (SZ.v offset) (SZ.v offset + SZ.v copy_len))
+                  (Seq.slice 'payload_bytes 0 (SZ.v copy_len)))
 {
   copy_payload_to_output_loop payload payload_total_len out total_len 0sz offset copy_len
 }
@@ -1022,6 +1252,15 @@ ensures exists* view1 network_out1 app_out1.
                       assert (pure (B.length app_out1 == SZ.v app_out_cap));
                       let app_payload : erased B.bytes =
                         Seq.slice (Ghost.reveal app_out1) 0 (SZ.v payload_len);
+                      with inner_bytes. assert (pts_to inner inner_bytes);
+                      assert (pure (B.length inner_bytes == SZ.v inner_len));
+                      assert (pure (Seq.equal
+                        (Ghost.reveal app_payload)
+                        (Seq.slice (Ghost.reveal inner_bytes) 0 (SZ.v payload_len))));
+                      assert (pure (view0.CL.state.S.phase == S.ApplicationData));
+                      lemma_step_recv_application_data view0.CL.state (Ghost.reveal app_payload);
+                      assert (pure (S.step view0.CL.state (S.RecvApplicationData (Ghost.reveal app_payload)) ==
+                                    Some (S.advance_read_record view0.CL.state)));
                       ST.advance c.state (S.RecvApplicationData (Ghost.reveal app_payload)) (S.advance_read_record view0.CL.state);
                       let base_view2 : erased CL.connection_view =
                         CL.note_app_received_with_pending
@@ -1110,6 +1349,21 @@ ensures exists* view1 network_out1 app_out1.
                           Seq.slice (Ghost.reveal app_out1) 0 (SZ.v output_limit);
                         let pending_payload : erased B.bytes =
                           CL.raw_slice (Ghost.reveal pending_buffer1) 0 (SZ.v leftover_len);
+                        assert (pure (Seq.equal
+                          (Ghost.reveal app_payload)
+                          (Seq.slice (Ghost.reveal inner_bytes) 0 (SZ.v output_limit))));
+                        assert (pure (CL.raw_slice (Ghost.reveal pending_buffer1) 0 (SZ.v leftover_len) ==
+                                      Seq.slice (Ghost.reveal pending_buffer1) 0 (SZ.v leftover_len)));
+                        assert (pure (Seq.equal
+                          (Seq.slice (Ghost.reveal pending_buffer1) 0 (SZ.v leftover_len))
+                          (Seq.slice (Ghost.reveal inner_bytes) (SZ.v output_limit) (SZ.v payload_len))));
+                        assert (pure (Seq.equal
+                          (Ghost.reveal pending_payload)
+                          (Seq.slice (Ghost.reveal inner_bytes) (SZ.v output_limit) (SZ.v payload_len))));
+                        assert (pure (view0.CL.state.S.phase == S.ApplicationData));
+                        lemma_step_recv_application_data view0.CL.state (Ghost.reveal app_payload);
+                        assert (pure (S.step view0.CL.state (S.RecvApplicationData (Ghost.reveal app_payload)) ==
+                                      Some (S.advance_read_record view0.CL.state)));
                         ST.advance c.state (S.RecvApplicationData (Ghost.reveal app_payload)) (S.advance_read_record view0.CL.state);
                         let base_view2 : erased CL.connection_view =
                           CL.note_app_received_with_pending
@@ -1768,6 +2022,15 @@ ensures exists* view1 network_out1 app_out1.
                 assert (pure (B.length app_out1 == SZ.v app_out_cap));
                 let app_payload : erased B.bytes =
                   Seq.slice (Ghost.reveal app_out1) 0 (SZ.v payload_len);
+                with inner_bytes. assert (pts_to inner inner_bytes);
+                assert (pure (B.length inner_bytes == SZ.v inner_len));
+                assert (pure (Seq.equal
+                  (Ghost.reveal app_payload)
+                  (Seq.slice (Ghost.reveal inner_bytes) 0 (SZ.v payload_len))));
+                assert (pure (view0.CL.state.S.phase == S.ApplicationData));
+                lemma_step_recv_application_data view0.CL.state (Ghost.reveal app_payload);
+                assert (pure (S.step view0.CL.state (S.RecvApplicationData (Ghost.reveal app_payload)) ==
+                              Some (S.advance_read_record view0.CL.state)));
                 ST.advance c.state (S.RecvApplicationData (Ghost.reveal app_payload)) (S.advance_read_record view0.CL.state);
                 let base_view2 : erased CL.connection_view =
                   CL.note_app_received_with_pending
@@ -1856,6 +2119,21 @@ ensures exists* view1 network_out1 app_out1.
                     Seq.slice (Ghost.reveal app_out1) 0 (SZ.v output_limit);
                   let pending_payload : erased B.bytes =
                     CL.raw_slice (Ghost.reveal pending_buffer1) 0 (SZ.v leftover_len);
+                  assert (pure (Seq.equal
+                    (Ghost.reveal app_payload)
+                    (Seq.slice (Ghost.reveal inner_bytes) 0 (SZ.v output_limit))));
+                  assert (pure (CL.raw_slice (Ghost.reveal pending_buffer1) 0 (SZ.v leftover_len) ==
+                                Seq.slice (Ghost.reveal pending_buffer1) 0 (SZ.v leftover_len)));
+                  assert (pure (Seq.equal
+                    (Seq.slice (Ghost.reveal pending_buffer1) 0 (SZ.v leftover_len))
+                    (Seq.slice (Ghost.reveal inner_bytes) (SZ.v output_limit) (SZ.v payload_len))));
+                  assert (pure (Seq.equal
+                    (Ghost.reveal pending_payload)
+                    (Seq.slice (Ghost.reveal inner_bytes) (SZ.v output_limit) (SZ.v payload_len))));
+                  assert (pure (view0.CL.state.S.phase == S.ApplicationData));
+                  lemma_step_recv_application_data view0.CL.state (Ghost.reveal app_payload);
+                  assert (pure (S.step view0.CL.state (S.RecvApplicationData (Ghost.reveal app_payload)) ==
+                                Some (S.advance_read_record view0.CL.state)));
                   ST.advance c.state (S.RecvApplicationData (Ghost.reveal app_payload)) (S.advance_read_record view0.CL.state);
                   let base_view2 : erased CL.connection_view =
                     CL.note_app_received_with_pending
