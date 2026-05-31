@@ -1690,6 +1690,44 @@ let rec lemma_note_app_received_chunks_state
     assert ((note_app_received_chunks view chunks).state ==
             S.advance_read_records view.state (chunk_count chunks))
 
+let lemma_note_app_received_chunks_state_append
+  (view:connection_view)
+  (left:list B.bytes)
+  (right:list B.bytes)
+  : Lemma
+      (requires view.state.S.phase == S.ApplicationData)
+      (ensures
+        (note_app_received_chunks (note_app_received_chunks view left) right).state ==
+          S.advance_read_records view.state (chunk_count left + chunk_count right) /\
+        (note_app_received_chunks view (left @ right)).state ==
+          S.advance_read_records view.state (chunk_count left + chunk_count right))
+  =
+  let mid = note_app_received_chunks view left in
+  lemma_note_app_received_chunks_state view left;
+  S.lemma_advance_read_records_preserves_phase view.state (chunk_count left);
+  assert (mid.state.S.phase == S.ApplicationData);
+  lemma_note_app_received_chunks_state mid right;
+  S.lemma_advance_read_records_append view.state (chunk_count left) (chunk_count right);
+  lemma_note_app_received_chunks_append view left right;
+  lemma_chunk_count_append left right
+
+let lemma_note_app_received_chunks_state_snoc
+  (view:connection_view)
+  (chunks:list B.bytes)
+  (bytes:B.bytes)
+  : Lemma
+      (requires view.state.S.phase == S.ApplicationData)
+      (ensures
+        (note_app_received_chunks view (chunks @ [bytes])).state ==
+          S.advance_read_record (note_app_received_chunks view chunks).state)
+  =
+  let mid = note_app_received_chunks view chunks in
+  lemma_note_app_received_chunks_state_append view chunks [bytes];
+  lemma_chunk_count_snoc chunks bytes;
+  lemma_note_app_received_chunks_state view chunks;
+  S.lemma_advance_read_records_succ view.state (chunk_count chunks);
+  assert (mid.state == S.advance_read_records view.state (chunk_count chunks))
+
 let rec lemma_connection_view_consistent_note_app_received_chunks
   (view:connection_view)
   (chunks:list B.bytes)
