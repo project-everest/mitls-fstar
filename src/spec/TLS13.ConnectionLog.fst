@@ -2336,6 +2336,55 @@ let lemma_step_with_pending_received_raw
   assert (S.conn_evolves view0.state view2.state);
   lemma_connection_view_single_step_for_core_step view0 req view2 resp
 
+let lemma_step_read_application_data_chunks_success_with_pending_raw
+  (view0:connection_view)
+  (raw_view:connection_view)
+  (max_len:nat)
+  (app_out:B.bytes)
+  (chunks:list B.bytes)
+  (pending:B.bytes)
+  : Lemma
+      (requires connection_view_consistent view0 /\
+                connection_view_consistent raw_view /\
+                raw_view.state == view0.state /\
+                raw_view.app_view == view0.app_view /\
+                raw_io_log_extends view0.raw_log raw_view.raw_log /\
+                raw_io_log_same_sent view0.raw_log raw_view.raw_log /\
+                view0.state.S.phase == S.ApplicationData /\
+                Seq.equal app_out (concat_bytes chunks))
+      (ensures step
+        view0
+        (request_with_received_raw_delta
+          (OpReadApplicationData max_len)
+          view0.raw_log
+          (with_pending_received_raw (note_app_received_chunks raw_view chunks) pending).raw_log)
+        (with_pending_received_raw (note_app_received_chunks raw_view chunks) pending)
+        (response_no_network_out_chunks app_out chunks ApplicationDataReady))
+  =
+  let base = note_app_received_chunks raw_view chunks in
+  let view1 = with_pending_received_raw base pending in
+  let req =
+    request_with_received_raw_delta
+      (OpReadApplicationData max_len)
+      view0.raw_log
+      base.raw_log in
+  let req_pending =
+    request_with_received_raw_delta
+      (OpReadApplicationData max_len)
+      view0.raw_log
+      view1.raw_log in
+  let resp = response_no_network_out_chunks app_out chunks ApplicationDataReady in
+  lemma_step_read_application_data_chunks_success
+    view0
+    raw_view
+    max_len
+    app_out
+    chunks;
+  assert (step view0 req base resp);
+  assert (view1.raw_log == base.raw_log);
+  assert (req_pending == req);
+  lemma_step_with_pending_received_raw view0 req base resp pending
+
 let lemma_step_read_close_notify
   (view0:connection_view)
   (raw_view:connection_view)
