@@ -21,7 +21,12 @@ module U16 = FStar.UInt16
 module U8 = FStar.UInt8
 module V = Pulse.Lib.Vec
 
-let pending_read_buffer_capacity : SZ.t = 16384sz
+let tls_application_plaintext_max : SZ.t = 16384sz
+let tls_ciphertext_fragment_max : SZ.t = 16640sz
+let tls_application_record_wire_max : SZ.t = 16645sz
+let max_self_emitted_application_record_wire_len : SZ.t = 16406sz
+
+let pending_read_buffer_capacity : SZ.t = tls_application_plaintext_max
 
 let lemma_nat_add_sub_cancel
   (a:nat)
@@ -53,9 +58,9 @@ let is_client_core (c:client_core) (view:CL.connection_view) : slprop =
     Box.pts_to c.pending_read_len pending_read_len **
     pure (CL.connection_view_consistent view /\
           V.is_full_vec c.pending_read_buffer /\
-          V.length c.pending_read_buffer == 16384 /\
+          V.length c.pending_read_buffer == SZ.v pending_read_buffer_capacity /\
           SZ.v pending_read_offset <= SZ.v pending_read_len /\
-          SZ.v pending_read_len <= 16384)
+          SZ.v pending_read_len <= SZ.v pending_read_buffer_capacity)
 
 let received_alert_event (alert:T.alert_description) : CL.host_event =
   CL.NetworkEvent { CL.message_direction = CL.Received; CL.message_value = CL.TlsAlert alert }
@@ -296,13 +301,13 @@ ensures exists* view1 network_out1 app_out1.
   if KSendApplicationData? kind {
     let app_bytes : erased B.bytes = Ghost.reveal 'app_in_bytes;
     assert (pure (mreq == CL.request_no_network_in (CL.OpSendApplicationData (Ghost.reveal app_bytes))));
-    if SZ.(app_in_len <=^ 16384sz) {
+    if SZ.(app_in_len <=^ tls_application_plaintext_max) {
       let inner_len = SZ.(app_in_len +^ 1sz);
       let cipher_len = SZ.(inner_len +^ 16sz);
       let wire_len = SZ.(5sz +^ cipher_len);
       assert (pure (SZ.v cipher_len == SZ.v app_in_len + 17));
       assert (pure (SZ.v wire_len == SZ.v app_in_len + 22));
-      assert (pure (SZ.v wire_len <= 16406));
+      assert (pure (SZ.v wire_len <= SZ.v max_self_emitted_application_record_wire_len));
       if SZ.(wire_len <=^ network_out_cap) {
         let mut header = [| 0uy; 5sz |];
         let mut inner_plaintext = [| 0uy; inner_len |];
