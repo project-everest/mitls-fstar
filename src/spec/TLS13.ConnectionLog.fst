@@ -405,6 +405,9 @@ type client_status =
 type client_response = {
   network_out: B.bytes;
   app_out: B.bytes;
+  // One entry per received-application-data or local-delivery host event
+  // represented by this response, in order. app_out is their concatenation.
+  app_received_delta: list B.bytes;
   status: client_status;
 }
 
@@ -416,6 +419,11 @@ let append_app_sent (app:app_log) (bytes:B.bytes) : app_log =
 
 let append_app_received (app:app_log) (bytes:B.bytes) : app_log =
   { app with app_received = app.app_received @ [bytes] }
+
+let rec concat_bytes (chunks:list B.bytes) : Tot B.bytes (decreases chunks) =
+  match chunks with
+  | [] -> B.empty
+  | chunk :: rest -> B.append chunk (concat_bytes rest)
 
 let app_log_extends (old:app_log) (next:app_log) : prop =
   exists sent_delta received_delta.
@@ -467,13 +475,7 @@ let request_read_len (req:client_request) : nat =
   | _ -> 0
 
 let response_shape (resp:client_response) : prop =
-  match resp.status with
-  | NeedNetworkInput
-  | HandshakeComplete
-  | ActionComplete
-  | Closed
-  | Failed _ -> B.length resp.app_out == 0
-  | ApplicationDataReady -> True
+  Seq.equal resp.app_out (concat_bytes resp.app_received_delta)
 
 let status_matches_phase (status:client_status) (phase:S.phase) : prop =
   match status with
@@ -501,9 +503,7 @@ let step_app_sent_delta (req:client_request) (resp:client_response) : list B.byt
   | _, _ -> []
 
 let step_app_received_delta (resp:client_response) : list B.bytes =
-  match resp.status with
-  | ApplicationDataReady -> [resp.app_out]
-  | _ -> []
+  resp.app_received_delta
 
 let step_app_log (app:app_log) (req:client_request) (resp:client_response) : app_log =
   {
@@ -609,17 +609,65 @@ let response_with_sent_raw_delta
   {
     network_out = raw_sent_delta old next;
     app_out = app_out;
+    app_received_delta =
+      (match status with
+       | ApplicationDataReady -> [app_out]
+       | _ -> []);
     status = status;
   }
 
 let response_no_network_out (app_out:B.bytes) (status:client_status) : client_response =
-  { network_out = B.empty; app_out = app_out; status = status }
+  {
+    network_out = B.empty;
+    app_out = app_out;
+    app_received_delta =
+      (match status with
+       | ApplicationDataReady -> [app_out]
+       | _ -> []);
+    status = status
+  }
 
 let lemma_append_empty_right (bytes:B.bytes)
   : Lemma (B.append bytes B.empty == bytes)
   =
   Seq.lemma_empty B.empty;
   Seq.append_empty_r bytes
+
+let lemma_concat_bytes_nil ()
+  : Lemma (concat_bytes [] == B.empty)
+  =
+  ()
+
+let lemma_concat_bytes_singleton (bytes:B.bytes)
+  : Lemma (Seq.equal bytes (concat_bytes [bytes]))
+  =
+  lemma_append_empty_right bytes;
+  assert (concat_bytes [bytes] == bytes);
+  Seq.lemma_eq_refl bytes (concat_bytes [bytes])
+
+let lemma_response_with_sent_raw_delta_shape
+  (old:raw_io_log)
+  (next:raw_io_log)
+  (app_out:B.bytes)
+  (status:client_status)
+  : Lemma
+      (requires status == ApplicationDataReady \/ Seq.equal app_out B.empty)
+      (ensures response_shape (response_with_sent_raw_delta old next app_out status))
+  =
+  match status with
+  | ApplicationDataReady -> lemma_concat_bytes_singleton app_out
+  | _ -> ()
+
+let lemma_response_no_network_out_shape
+  (app_out:B.bytes)
+  (status:client_status)
+  : Lemma
+      (requires status == ApplicationDataReady \/ Seq.equal app_out B.empty)
+      (ensures response_shape (response_no_network_out app_out status))
+  =
+  match status with
+  | ApplicationDataReady -> lemma_concat_bytes_singleton app_out
+  | _ -> ()
 
 let lemma_bytes_extends_append_delta (old:B.bytes) (next:B.bytes)
   : Lemma
@@ -643,7 +691,7 @@ let lemma_step_raw_log_sent_delta
       (requires raw_io_log_extends old next /\
                 raw_io_log_same_received old next)
       (ensures next == step_raw_log old (request_no_network_in op)
-                   { network_out = raw_sent_delta old next; app_out = app_out; status = status })
+                   (response_with_sent_raw_delta old next app_out status))
   =
   lemma_bytes_extends_append_delta old.raw_sent next.raw_sent;
   lemma_append_empty_right old.raw_received;
@@ -660,7 +708,7 @@ let lemma_step_raw_log_received_delta
       (requires raw_io_log_extends old next /\
                 raw_io_log_same_sent old next)
       (ensures next == step_raw_log old (request_with_network_in op (raw_received_delta old next))
-                   { network_out = B.empty; app_out = app_out; status = status })
+                   (response_no_network_out app_out status))
   =
   lemma_bytes_extends_append_delta old.raw_received next.raw_received;
   lemma_append_empty_right old.raw_sent;
