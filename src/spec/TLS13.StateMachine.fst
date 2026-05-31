@@ -94,6 +94,14 @@ let lemma_application_data_record_count_len_small (len:nat)
   =
   ()
 
+let lemma_application_data_record_count_len_two (len:nat)
+  : Lemma
+      (requires max_application_data_fragment_len < len /\
+                len <= max_application_data_fragment_len + max_application_data_fragment_len)
+      (ensures application_data_record_count_len len == 2)
+  =
+  ()
+
 let lemma_advance_write_records_one (s:conn_state)
   : Lemma (advance_write_records s 1 == advance_write_record s)
   =
