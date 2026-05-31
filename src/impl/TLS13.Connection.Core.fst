@@ -11,6 +11,7 @@ module Box = Pulse.Lib.Box
 module Cast = FStar.Int.Cast
 module CL = TLS13.ConnectionLog
 module Rec = TLS13.Record
+module R = TLS13.Record.Spec
 module RF = TLS13.Record.Framing
 module Seq = FStar.Seq
 module S = TLS13.StateMachine
@@ -29,6 +30,16 @@ let max_self_emitted_application_record_wire_len : SZ.t = 16406sz
 let pending_read_buffer_capacity : SZ.t = tls_application_plaintext_max
 let pending_network_buffer_capacity : SZ.t =
   SZ.(tls_application_record_wire_max +^ tls_application_record_wire_max)
+
+let record_states_match_view
+  (client_s:R.direction_state)
+  (server_s:R.direction_state)
+  (view:CL.connection_view)
+  : prop =
+  // Error paths can consume a concrete record before transitioning to Failed.
+  view.CL.state.S.phase == S.Failed \/
+  (client_s.R.seq == view.CL.state.S.write_state.R.seq /\
+   server_s.R.seq == view.CL.state.S.read_state.R.seq)
 
 let lemma_nat_add_sub_cancel
   (a:nat)
@@ -75,7 +86,8 @@ let is_client_core (c:client_core) (view:CL.connection_view) : slprop =
           V.length c.pending_network_buffer == SZ.v pending_network_buffer_capacity /\
           SZ.v pending_network_len <= SZ.v pending_network_buffer_capacity /\
           Seq.equal view.CL.pending_received_raw
-            (CL.raw_slice pending_network_buffer 0 (SZ.v pending_network_len)))
+            (CL.raw_slice pending_network_buffer 0 (SZ.v pending_network_len)) /\
+          record_states_match_view client_record_s server_record_s view)
 
 let received_alert_event (alert:T.alert_description) : CL.host_event =
   CL.NetworkEvent { CL.message_direction = CL.Received; CL.message_value = CL.TlsAlert alert }
@@ -249,7 +261,9 @@ fn client_core_install_application_keys_runtime
   requires is_client_core c 'view **
            pts_to key 'key_bytes **
            pts_to iv 'iv_bytes **
-           pure (B.length 'key_bytes == 32 /\ B.length 'iv_bytes == 12)
+           pure (B.length 'key_bytes == 32 /\
+                 B.length 'iv_bytes == 12 /\
+                 'view.CL.state.S.write_state.R.seq == 0)
   ensures is_client_core c 'view **
           pts_to key 'key_bytes **
           pts_to iv 'iv_bytes
@@ -267,7 +281,9 @@ fn client_core_install_peer_application_keys_runtime
   requires is_client_core c 'view **
            pts_to key 'key_bytes **
            pts_to iv 'iv_bytes **
-           pure (B.length 'key_bytes == 32 /\ B.length 'iv_bytes == 12)
+           pure (B.length 'key_bytes == 32 /\
+                 B.length 'iv_bytes == 12 /\
+                 'view.CL.state.S.read_state.R.seq == 0)
   ensures is_client_core c 'view **
           pts_to key 'key_bytes **
           pts_to iv 'iv_bytes
@@ -304,6 +320,7 @@ requires
     B.length 'network_out0 == SZ.v network_out_cap /\
     B.length 'app_out0 == SZ.v app_out_cap /\
     view0.CL.state.S.phase == S.ApplicationData /\
+    request_record_sequence_fits kind view0 /\
     request_buffers_match
       kind
       (Ghost.reveal 'network_in_bytes)
@@ -800,6 +817,7 @@ ensures exists* view1 network_out1 app_out1.
                   fragment_len;
                 with cipher_bytes. assert (pts_to cipher cipher_bytes);
                 assert (pure (B.length cipher_bytes == SZ.v fragment_len));
+                assert (pure (16 <= SZ.v fragment_len));
                 let inner_len = SZ.(fragment_len -^ 16sz);
                 assert (pure (SZ.v inner_len > 0));
                 let mut inner = [| 0uy; inner_len |];
@@ -1538,6 +1556,14 @@ ensures exists* view1 network_out1 app_out1.
           copy_payload_to_output_loop network_in network_in_len cipher fragment_len 5sz 0sz fragment_len;
           with cipher_bytes. assert (pts_to cipher cipher_bytes);
           assert (pure (B.length cipher_bytes == SZ.v fragment_len));
+          assert (pure (not (not (SZ.(16sz <^ fragment_len)))));
+          let fragment_len_has_tag = SZ.lt 16sz fragment_len;
+          assert (pure (fragment_len_has_tag == SZ.(16sz <^ fragment_len)));
+          assert (pure (fragment_len_has_tag == true));
+          assert (pure (fragment_len_has_tag == (SZ.v 16sz < SZ.v fragment_len)));
+          assert (pure (SZ.v 16sz == 16));
+          assert (pure (16 < SZ.v fragment_len));
+          assert (pure (16 <= SZ.v fragment_len));
           let inner_len = SZ.(fragment_len -^ 16sz);
           assert (pure (SZ.v inner_len > 0));
           let mut inner = [| 0uy; inner_len |];

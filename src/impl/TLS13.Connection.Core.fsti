@@ -7,10 +7,12 @@ open Pulse.Lib.Array.PtsTo
 
 module B = TLS13.Bytes
 module CL = TLS13.ConnectionLog
+module R = TLS13.Record.Spec
 module Seq = FStar.Seq
 module S = TLS13.StateMachine
 module SZ = FStar.SizeT
 module U8 = FStar.UInt8
+module U64 = FStar.UInt64
 
 (**
   Buffer-oriented proof boundary for the application-data phase.
@@ -49,7 +51,9 @@ fn client_core_install_application_keys_runtime
   requires is_client_core c 'view **
            pts_to key 'key_bytes **
            pts_to iv 'iv_bytes **
-           pure (B.length 'key_bytes == 32 /\ B.length 'iv_bytes == 12)
+           pure (B.length 'key_bytes == 32 /\
+                 B.length 'iv_bytes == 12 /\
+                 'view.CL.state.S.write_state.R.seq == 0)
   ensures is_client_core c 'view **
           pts_to key 'key_bytes **
           pts_to iv 'iv_bytes
@@ -61,7 +65,9 @@ fn client_core_install_peer_application_keys_runtime
   requires is_client_core c 'view **
            pts_to key 'key_bytes **
            pts_to iv 'iv_bytes **
-           pure (B.length 'key_bytes == 32 /\ B.length 'iv_bytes == 12)
+           pure (B.length 'key_bytes == 32 /\
+                 B.length 'iv_bytes == 12 /\
+                 'view.CL.state.S.read_state.R.seq == 0)
   ensures is_client_core c 'view **
           pts_to key 'key_bytes **
           pts_to iv 'iv_bytes
@@ -70,6 +76,17 @@ type request_kind =
   | KSendApplicationData
   | KReadApplicationData
   | KClose
+
+let request_record_sequence_fits
+  (kind:request_kind)
+  (view:CL.connection_view)
+  : prop =
+  match kind with
+  | KSendApplicationData
+  | KClose ->
+    U64.fits (view.CL.state.S.write_state.R.seq + 1)
+  | KReadApplicationData ->
+    U64.fits (view.CL.state.S.read_state.R.seq + 1)
 
 type core_result = {
   network_out_len: SZ.t;
@@ -141,6 +158,7 @@ requires
     B.length 'network_out0 == SZ.v network_out_cap /\
     B.length 'app_out0 == SZ.v app_out_cap /\
     view0.CL.state.S.phase == S.ApplicationData /\
+    request_record_sequence_fits kind view0 /\
     request_buffers_match
       kind
       (Ghost.reveal 'network_in_bytes)

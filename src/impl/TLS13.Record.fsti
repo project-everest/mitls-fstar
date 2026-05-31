@@ -46,8 +46,7 @@ fn install_handshake_keys_runtime
            pts_to key 'key_bytes **
            pts_to iv 'iv_bytes **
            pure (B.length 'key_bytes == 32 /\ B.length 'iv_bytes == 12)
-  ensures exists* s'.
-          is_record_state st s' **
+  ensures is_record_state st (R.install_keys 's R.Handshake (Ghost.reveal 'key_bytes) (Ghost.reveal 'iv_bytes)) **
           pts_to key 'key_bytes **
           pts_to iv 'iv_bytes
 
@@ -59,8 +58,7 @@ fn install_application_keys_runtime
            pts_to key 'key_bytes **
            pts_to iv 'iv_bytes **
            pure (B.length 'key_bytes == 32 /\ B.length 'iv_bytes == 12)
-  ensures exists* s'.
-          is_record_state st s' **
+  ensures is_record_state st (R.install_keys 's R.Application (Ghost.reveal 'key_bytes) (Ghost.reveal 'iv_bytes)) **
           pts_to key 'key_bytes **
           pts_to iv 'iv_bytes
 
@@ -119,7 +117,9 @@ fn seal_application_runtime
           pts_to aad 'aad_bytes **
           pts_to plain 'plain_bytes **
           pts_to out out_bytes **
-          pure (B.length out_bytes == B.length 'old)
+          pure (B.length out_bytes == B.length 'old /\
+                (ok /\ U64.fits ('s.R.seq + 1) ==> s'.R.seq == 's.R.seq + 1) /\
+                (not ok ==> s' == 's /\ out_bytes == 'old))
 
 fn open_application
   (st: record_state)
@@ -169,4 +169,6 @@ fn open_application_runtime
           pts_to aad 'aad_bytes **
           pts_to cipher 'cipher_bytes **
           pts_to out out_bytes **
-          pure (B.length out_bytes == B.length 'old)
+          pure (B.length out_bytes == B.length 'old /\
+                (ok /\ U64.fits ('s.R.seq + 1) ==> s'.R.seq == 's.R.seq + 1) /\
+                (not ok ==> s' == 's /\ out_bytes == 'old))

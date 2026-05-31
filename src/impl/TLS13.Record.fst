@@ -123,8 +123,7 @@ fn install_handshake_keys_runtime
            pts_to key 'key_bytes **
            pts_to iv 'iv_bytes **
            pure (B.length 'key_bytes == 32 /\ B.length 'iv_bytes == 12)
-  ensures exists* s'.
-          is_record_state st s' **
+  ensures is_record_state st (R.install_keys 's R.Handshake (Ghost.reveal 'key_bytes) (Ghost.reveal 'iv_bytes)) **
           pts_to key 'key_bytes **
           pts_to iv 'iv_bytes
 {
@@ -157,8 +156,7 @@ fn install_application_keys_runtime
            pts_to key 'key_bytes **
            pts_to iv 'iv_bytes **
            pure (B.length 'key_bytes == 32 /\ B.length 'iv_bytes == 12)
-  ensures exists* s'.
-          is_record_state st s' **
+  ensures is_record_state st (R.install_keys 's R.Application (Ghost.reveal 'key_bytes) (Ghost.reveal 'iv_bytes)) **
           pts_to key 'key_bytes **
           pts_to iv 'iv_bytes
 {
@@ -280,7 +278,9 @@ fn seal_application_runtime
           pts_to aad 'aad_bytes **
           pts_to plain 'plain_bytes **
           pts_to out out_bytes **
-          pure (B.length out_bytes == B.length 'old)
+          pure (B.length out_bytes == B.length 'old /\
+                (ok /\ U64.fits ('s.R.seq + 1) ==> s'.R.seq == 's.R.seq + 1) /\
+                (not ok ==> s' == 's /\ out_bytes == 'old))
 {
   unfold (is_record_state st 's);
   let installed = !st.installed;
@@ -301,6 +301,7 @@ fn seal_application_runtime
     with out_s. assert (pts_to out out_s);
     assert (pure (state_matches true seq key_s iv_s 's));
     assert (pure (B.length out_s == B.length 'old));
+    assert (pure (U64.fits ('s.R.seq + 1) ==> U64.v next_seq == 's.R.seq + 1));
     assert (pure (state_matches true next_seq key_s iv_s ({ 's with R.seq = U64.v next_seq })));
     fold (is_record_state st ({ 's with R.seq = U64.v next_seq }));
     true
@@ -407,7 +408,9 @@ fn open_application_runtime
           pts_to aad 'aad_bytes **
           pts_to cipher 'cipher_bytes **
           pts_to out out_bytes **
-          pure (B.length out_bytes == B.length 'old)
+          pure (B.length out_bytes == B.length 'old /\
+                (ok /\ U64.fits ('s.R.seq + 1) ==> s'.R.seq == 's.R.seq + 1) /\
+                (not ok ==> s' == 's /\ out_bytes == 'old))
 {
   unfold (is_record_state st 's);
   let installed = !st.installed;
@@ -430,6 +433,7 @@ fn open_application_runtime
       st.seq := next_seq;
       with out_s. assert (pts_to out out_s);
       assert (pure (B.length out_s == B.length 'old));
+      assert (pure (U64.fits ('s.R.seq + 1) ==> U64.v next_seq == 's.R.seq + 1));
       assert (pure (state_matches true next_seq key_s iv_s ({ 's with R.seq = U64.v next_seq })));
       fold (is_record_state st ({ 's with R.seq = U64.v next_seq }));
       true
