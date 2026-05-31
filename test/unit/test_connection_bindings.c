@@ -1,7 +1,6 @@
 #include "tls13_connection_backend.h"  /* For TLS13_IO_channel - must be first */
-#include "TLS13.h"  /* Main API header */
+#include "TLS13_Connection.h"
 #include "TLS13_Record.h"
-#include "TLS13_Handshake.h"
 
 #undef TLS13_Record_record_state_free
 #undef TLS13_Record_install_application_keys_runtime
@@ -262,7 +261,7 @@ bool TLS13_Connection_Backend_close(
 }
 
 static TLS13_Connection_Backend_connection backend_of(connection c) {
-  return c.handshake.backend;
+  return c.backend;
 }
 
 static void mark_application_ready(connection c) {

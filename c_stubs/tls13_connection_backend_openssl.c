@@ -3,6 +3,9 @@
 #include "tls13_openssl_stubs.h"
 
 #include <errno.h>
+#include <limits.h>
+#include <openssl/err.h>
+#include <openssl/ssl.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -12,6 +15,8 @@ struct TLS13_Connection_Backend_connection_s {
   uint16_t port;
   char *ca_pem_path;
   int fd;
+  SSL_CTX *ssl_ctx;
+  SSL *ssl;
   tls13_peer_identity *peer;
 };
 
@@ -83,15 +88,29 @@ static void backend_drop_peer(TLS13_Connection_Backend_connection c) {
   }
 }
 
-static void backend_close_fd(TLS13_Connection_Backend_connection c) {
-  if (c != NULL && c->fd >= 0) {
+static void backend_close_transport(TLS13_Connection_Backend_connection c, bool graceful) {
+  if (c == NULL) {
+    return;
+  }
+  if (c->ssl != NULL) {
+    if (graceful) {
+      (void)SSL_shutdown(c->ssl);
+    }
+    SSL_free(c->ssl);
+    c->ssl = NULL;
+  }
+  if (c->ssl_ctx != NULL) {
+    SSL_CTX_free(c->ssl_ctx);
+    c->ssl_ctx = NULL;
+  }
+  if (c->fd >= 0) {
     tls13_io_close_fd(c->fd);
     c->fd = -1;
   }
 }
 
 static void backend_fail(TLS13_Connection_Backend_connection c) {
-  backend_close_fd(c);
+  backend_close_transport(c, false);
 }
 
 TLS13_Connection_Backend_connection TLS13_Connection_Backend_client_new(
@@ -129,7 +148,7 @@ void TLS13_Connection_Backend_client_free(
   if (c == NULL) {
     return;
   }
-  backend_close_fd(c);
+  backend_close_transport(c, true);
   backend_drop_peer(c);
   free(c->ca_pem_path);
   free(c->host);
@@ -145,9 +164,46 @@ bool TLS13_Connection_Backend_connect(
   if (c == NULL || c->fd >= 0) {
     return false;
   }
+
+  /* The current extracted connection treats client_connect as a trusted
+   * handshake boundary. This backend realizes that boundary with OpenSSL and
+   * then transports the extracted record-layer bytes as TLS application data. */
+  OPENSSL_init_ssl(0, NULL);
+  c->ssl_ctx = SSL_CTX_new(TLS_client_method());
+  if (c->ssl_ctx == NULL) {
+    ERR_print_errors_fp(stderr);
+    return false;
+  }
+  if (!SSL_CTX_set_min_proto_version(c->ssl_ctx, TLS1_3_VERSION) ||
+      !SSL_CTX_set_max_proto_version(c->ssl_ctx, TLS1_3_VERSION) ||
+      !SSL_CTX_load_verify_locations(c->ssl_ctx, c->ca_pem_path, NULL)) {
+    ERR_print_errors_fp(stderr);
+    backend_fail(c);
+    return false;
+  }
+  SSL_CTX_set_verify(c->ssl_ctx, SSL_VERIFY_PEER, NULL);
+
   c->fd = tls13_io_connect_tcp(c->host, c->port);
   if (c->fd < 0) {
     perror("connect");
+    backend_fail(c);
+    return false;
+  }
+  c->ssl = SSL_new(c->ssl_ctx);
+  if (c->ssl == NULL) {
+    ERR_print_errors_fp(stderr);
+    backend_fail(c);
+    return false;
+  }
+  if (!SSL_set_tlsext_host_name(c->ssl, c->host) ||
+      !SSL_set1_host(c->ssl, c->host) ||
+      !SSL_set_fd(c->ssl, c->fd)) {
+    ERR_print_errors_fp(stderr);
+    backend_fail(c);
+    return false;
+  }
+  if (SSL_connect(c->ssl) != 1) {
+    ERR_print_errors_fp(stderr);
     backend_fail(c);
     return false;
   }
@@ -166,12 +222,16 @@ size_t TLS13_Connection_Backend_write_raw(
   (void)ch;
   (void)buf_bytes;
   (void)raw;
-  if (c == NULL || c->fd < 0 || buf == NULL ||
+  if (c == NULL || c->ssl == NULL || buf == NULL ||
       remaining == 0 || offset > total_len || remaining > total_len - offset) {
     return 0;
   }
-  ssize_t n = tls13_io_write_fd(c->fd, buf + offset, remaining);
+  if (remaining > (size_t)INT_MAX) {
+    remaining = (size_t)INT_MAX;
+  }
+  int n = SSL_write(c->ssl, buf + offset, (int)remaining);
   if (n <= 0) {
+    ERR_print_errors_fp(stderr);
     return 0;
   }
   return (size_t)n;
@@ -189,12 +249,16 @@ size_t TLS13_Connection_Backend_read_raw(
   (void)ch;
   (void)old_buf;
   (void)raw;
-  if (c == NULL || c->fd < 0 || buf == NULL ||
+  if (c == NULL || c->ssl == NULL || buf == NULL ||
       remaining == 0 || offset > total_len || remaining > total_len - offset) {
     return 0;
   }
-  ssize_t n = tls13_io_read_fd(c->fd, buf + offset, remaining);
+  if (remaining > (size_t)INT_MAX) {
+    remaining = (size_t)INT_MAX;
+  }
+  int n = SSL_read(c->ssl, buf + offset, (int)remaining);
   if (n <= 0) {
+    ERR_print_errors_fp(stderr);
     return 0;
   }
   return (size_t)n;
@@ -284,6 +348,6 @@ bool TLS13_Connection_Backend_close(
   if (c == NULL) {
     return false;
   }
-  backend_close_fd(c);
+  backend_close_transport(c, true);
   return true;
 }

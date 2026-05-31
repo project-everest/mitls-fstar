@@ -20,14 +20,14 @@ static void fill_wrapper_payload(uint8_t *payload, size_t payload_len) {
 }
 
 static int run_echo_case(
-    TLS13_Connection_connection c,
+    connection c,
     uint8_t *outbound,
     uint8_t *inbound,
     const struct echo_case *test_case) {
   fill_wrapper_payload(outbound, test_case->payload_len);
   memset(inbound, 0, test_case->payload_len);
 
-  if (!TLS13_Connection_client_write_all(c, NULL, outbound, test_case->payload_len)) {
+  if (!client_write_all(c, NULL, outbound, test_case->payload_len)) {
     fprintf(stderr, "extracted wrapper OpenSSL echo write failed for %s\n", test_case->name);
     return 1;
   }
@@ -37,14 +37,14 @@ static int run_echo_case(
     first_read_len = test_case->payload_len;
   }
   if (first_read_len > 0 &&
-      !TLS13_Connection_client_read_exact(c, NULL, inbound, first_read_len)) {
+      !client_read_exact(c, NULL, inbound, first_read_len)) {
     fprintf(stderr, "extracted wrapper OpenSSL echo first read failed for %s\n", test_case->name);
     return 1;
   }
 
   size_t remaining = test_case->payload_len - first_read_len;
   if (remaining > 0 &&
-      !TLS13_Connection_client_read_exact(c, NULL, inbound + first_read_len, remaining)) {
+      !client_read_exact(c, NULL, inbound + first_read_len, remaining)) {
     fprintf(stderr, "extracted wrapper OpenSSL echo final read failed for %s\n", test_case->name);
     return 1;
   }
@@ -82,9 +82,8 @@ int main(int argc, char **argv) {
       .port = (uint16_t)port_long,
       .ca_pem_path = argv[3],
   };
-  TLS13_Connection_connection c =
-      TLS13_Connection_client_new((uint8_t *)argv[1], strlen(argv[1]), &config);
-  if (c.handshake.backend == NULL) {
+  connection c = client_new((uint8_t *)argv[1], strlen(argv[1]), &config);
+  if (c.backend == NULL) {
     free(outbound);
     free(inbound);
     return 1;
@@ -99,7 +98,7 @@ int main(int argc, char **argv) {
       {"large-multi-record", EXTRACTED_WRAPPER_MAX_ECHO_PAYLOAD_LEN, 17u},
   };
 
-  if (!TLS13_Connection_client_connect(c, NULL)) {
+  if (!client_connect(c, NULL)) {
     goto done;
   }
   for (size_t i = 0; i < sizeof echo_cases / sizeof echo_cases[0]; ++i) {
@@ -107,13 +106,13 @@ int main(int argc, char **argv) {
       goto done;
     }
   }
-  TLS13_Connection_client_close(c, NULL);
+  client_close(c, NULL);
 
   printf("extracted connection wrapper OpenSSL echo passed\n");
   rc = 0;
 
 done:
-  TLS13_Connection_client_free(c);
+  client_free(c);
   free(outbound);
   free(inbound);
   return rc;

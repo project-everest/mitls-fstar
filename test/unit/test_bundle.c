@@ -3,7 +3,7 @@
  * This is a minimal sanity check that the bundle compiles and links
  */
 
-#include "TLS13.h"
+#include "TLS13_Connection.h"
 #include "tls13_connection_backend.h"
 #include <stdio.h>
 #include <string.h>

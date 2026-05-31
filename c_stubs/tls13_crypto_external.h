@@ -5,7 +5,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-typedef uint8_t TLS13_Record_Spec_epoch;
+#include "tls13_spec_types.h"
 
 void Pulse_Lib_Array_memcpy(
     size_t len,

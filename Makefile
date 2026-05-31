@@ -135,13 +135,6 @@ BUNDLE_IMPL_MODULES = \
   TLS13.Connection \
   TLS13.Connection.Driver \
   TLS13.Connection.StateDriver \
-  TLS13.Handshake \
-  TLS13.Handshake.ByteDriver \
-  TLS13.Handshake.Driver \
-  TLS13.Handshake.FlightState \
-  TLS13.Handshake.Framing \
-  TLS13.Handshake.StateDriver \
-  TLS13.Handshake.Transcript \
   TLS13.KeySchedule \
   TLS13.Record \
   TLS13.Record.Framing \
@@ -150,9 +143,6 @@ BUNDLE_IMPL_MODULES = \
 # Non-API modules (everything except TLS13.Connection)
 BUNDLE_INTERNAL_MODULES = \
   TLS13.Connection.Driver,TLS13.Connection.StateDriver,\
-  TLS13.Handshake,TLS13.Handshake.ByteDriver,TLS13.Handshake.Driver,\
-  TLS13.Handshake.FlightState,TLS13.Handshake.Framing,\
-  TLS13.Handshake.StateDriver,TLS13.Handshake.Transcript,\
   TLS13.KeySchedule,TLS13.Record,TLS13.Record.Framing,TLS13.State
 
 # Interface-only modules (not extracted, only .fsti):
@@ -187,12 +177,14 @@ extract-krml-bundle: $(BUNDLE_KRML_FILES) $(OUTPUT_DIR)/FStar_Pervasives_Native.
 # This avoids the KaRaMeL bug while keeping the API clean
 extract-bundle: extract-krml-bundle | $(BUNDLE_DIR)
 	@echo "Extracting TLS13 modules without bundling (consistent ghost handling)..."
+	@rm -f $(BUNDLE_DIR)/*.c $(BUNDLE_DIR)/*.h $(BUNDLE_DIR)/internal/*.h
 	$(KRML_EXE) \
 	  -tmpdir $(BUNDLE_DIR) \
 	  -skip-compilation \
 	  -warn-error -2-9-17-6 \
 	  -add-include '<stdbool.h>' \
 	  -add-include '"../../c_stubs/tls13_connection_backend.h"' \
+	  -add-include '"../../c_stubs/tls13_crypto_external.h"' \
 	  -add-include '"../../c_stubs/tls13_spec_types.h"' \
 	  -bundle 'FStar.*,Pulse.*,PulseCore.*,Prims' \
 	  -no-prefix TLS13.Connection \
@@ -201,12 +193,6 @@ extract-bundle: extract-krml-bundle | $(BUNDLE_DIR)
 	  _output/TLS13_Connection_Driver.krml \
 	  _output/TLS13_Connection_StateDriver.krml \
 	  _output/TLS13_State.krml \
-	  _output/TLS13_Handshake.krml \
-	  _output/TLS13_Handshake_ByteDriver.krml \
-	  _output/TLS13_Handshake_Driver.krml \
-	  _output/TLS13_Handshake_FlightState.krml \
-	  _output/TLS13_Handshake_Framing.krml \
-	  _output/TLS13_Handshake_Transcript.krml \
 	  _output/TLS13_KeySchedule.krml \
 	  _output/TLS13_Record.krml \
 	  _output/TLS13_Record_Framing.krml \
@@ -218,8 +204,8 @@ extract-bundle: extract-krml-bundle | $(BUNDLE_DIR)
 	@echo "  Main API (TLS13_Connection.h):"
 	@ls -lh $(BUNDLE_DIR)/TLS13_*.c 2>/dev/null | awk '{print "    " $$9 " (" $$5 ")"}'
 	@echo ""
-	@echo "Public API (TLS13.h):"
-	@grep "^[a-zA-Z_].*client_" $(BUNDLE_DIR)/TLS13.h || true
+	@echo "Public API (TLS13_Connection.h):"
+	@grep "^[a-zA-Z_].*client_" $(BUNDLE_DIR)/TLS13_Connection.h || true
 
 $(BUNDLE_DIR):
 	mkdir -p $@
@@ -421,13 +407,13 @@ test/openssl_echo_server: test/openssl_echo_server.c
 test/test_extracted_connection_wrapper_openssl: \
   $(CONNECTION_BACKEND_SOURCES) \
   test/unit/test_extracted_connection_wrapper_openssl.c \
-  $(CONNECTION_BUNDLE_C) $(CONNECTION_BUNDLE_H) \
+  extract-bundle \
   c_stubs/tls13_connection_backend.h \
   c_stubs/tls13_crypto_external.c \
   c_stubs/tls13_pulse_shims.c | check-deps
 	$(CC) $(CFLAGS_COMMON) \
-	  -I $(CONNECTION_BUNDLE_DIR) \
-	  $(CONNECTION_BUNDLE_C) \
+	  -I $(BUNDLE_DIR) -I $(BUNDLE_DIR)/internal \
+	  $(BUNDLE_DIR)/*.c \
 	  $(HACL_WRAPPER_SOURCES) \
 	  c_stubs/tls13_crypto_external.c \
 	  c_stubs/tls13_pulse_shims.c \

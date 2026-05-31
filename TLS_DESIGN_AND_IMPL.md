@@ -25,6 +25,7 @@ Relevant existing structure:
 - `src/impl/TLS13.Connection.fsti` exports the current socket-shaped client API. It now exposes a proof-facing `connection_exactly` predicate with an explicit `ConnectionLog.connection_view`; application read/write/close operations prove an existential `ConnectionLog.step` witness, while connect still needs the handshake transcript proof before it can expose the same theorem shape.
 - `src/impl/TLS13.Connection.fst` stores a monotonic `TLS13.State.log_ref`; the explicit log-update admits have been discharged, application-data and close_notify send/receive paths now thread actual raw socket bytes through `view.raw_log.raw_sent` and `view.raw_log.raw_received`, while several handshake events are still abstract witnesses rather than a full transcript proof.
 - `src/impl/TLS13.Handshake.*`, `TLS13.Record.*`, `TLS13.Crypto.*`, and `TLS13.X509.*` contain the likely implementation/proof boundaries.
+- The extracted OpenSSL echo smoke test currently treats `Connection.External.client_connect` as a trusted TLS transport boundary: the C backend performs the OpenSSL handshake, then carries the extracted record-layer bytes as TLS application data. This keeps extraction/runtime wiring exercised, but it is not the final verified handshake transcript theorem or a raw-TCP interoperability proof for the verified record layer.
 
 Main gaps found during inspection:
 
@@ -106,6 +107,11 @@ The runtime TCB is separate from explicit proof admissions:
   boundary. The verified core should only rely on explicit byte buffers; the
   external driver is responsible for relating those buffers to actual network
   reads and writes.
+- The current extracted OpenSSL echo backend is additionally trusted for the
+  external `client_connect` handshake boundary and TLS transport tunnel. This is
+  a runtime smoke-test bridge until `TLS13.Connection.fst` replaces dummy
+  handshake witnesses with evidence derived from the actual ClientHello/server
+  transcript.
 
 The parser/framing TCB should remain narrow: low-level parser postconditions
 must reference `TLS13.Wire.Spec` directly, and any remaining assumed parser fact

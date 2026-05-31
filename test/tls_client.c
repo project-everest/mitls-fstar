@@ -11,8 +11,7 @@
 
 #include "tls13_connection_backend.h"
 #include "TLS13_Record.h"
-#include "TLS13_Handshake.h"
-#include "TLS13.h"
+#include "TLS13_Connection.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -80,7 +79,7 @@ int main(int argc, char **argv) {
         .ca_pem_path = ca_pem,
     };
     connection c = client_new((uint8_t *)hostname, strlen(hostname), &config);
-    if (c == NULL) {
+    if (c.backend == NULL) {
         fprintf(stderr, "  FAILED: client_new returned NULL\n");
         return 1;
     }
