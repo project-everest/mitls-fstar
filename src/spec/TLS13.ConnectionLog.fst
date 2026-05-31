@@ -1712,6 +1712,28 @@ let lemma_step_read_need_network_input_with_pending
   assert (S.conn_evolves view0.state view1.state);
   lemma_connection_view_single_step_for_core_step view0 req view1 resp
 
+let lemma_step_with_pending_received_raw
+  (view0:connection_view)
+  (req:client_request)
+  (view1:connection_view)
+  (resp:client_response)
+  (pending:B.bytes)
+  : Lemma
+      (requires step view0 req view1 resp)
+      (ensures step view0 req (with_pending_received_raw view1 pending) resp)
+  =
+  let view2 = with_pending_received_raw view1 pending in
+  assert (connection_view_consistent view2);
+  assert (view2.raw_log == view1.raw_log);
+  assert (view2.app_view == view1.app_view);
+  assert (view2.state == view1.state);
+  assert (view2.raw_log == step_raw_log view0.raw_log req resp);
+  assert (view2.app_view == step_app_log view0.app_view req resp);
+  assert (response_shape resp);
+  assert (status_matches_phase resp.status view2.state.S.phase);
+  assert (S.conn_evolves view0.state view2.state);
+  lemma_connection_view_single_step_for_core_step view0 req view2 resp
+
 let lemma_step_read_close_notify
   (view0:connection_view)
   (raw_view:connection_view)
