@@ -94,22 +94,6 @@ let lemma_application_data_record_count_len_small (len:nat)
   =
   ()
 
-let lemma_application_data_record_count_len_two (len:nat)
-  : Lemma
-      (requires max_application_data_fragment_len < len /\
-                len <= max_application_data_fragment_len + max_application_data_fragment_len)
-      (ensures application_data_record_count_len len == 2)
-  =
-  ()
-
-let lemma_application_data_record_count_len_three (len:nat)
-  : Lemma
-      (requires max_application_data_fragment_len + max_application_data_fragment_len < len /\
-                len <= max_application_data_fragment_len + max_application_data_fragment_len + max_application_data_fragment_len)
-      (ensures application_data_record_count_len len == 3)
-  =
-  lemma_application_data_record_count_len_two (len - max_application_data_fragment_len)
-
 let rec lemma_application_data_record_count_len_positive (len:nat)
   : Lemma
       (ensures 1 <= application_data_record_count_len len)
@@ -150,6 +134,13 @@ let rec lemma_advance_write_records_preserves_phase (s:conn_state) (n:nat)
   =
   if n = 0 then ()
   else lemma_advance_write_records_preserves_phase s (n - 1)
+
+let rec lemma_advance_write_records_preserves_read_state (s:conn_state) (n:nat)
+  : Lemma (ensures (advance_write_records s n).read_state == s.read_state)
+          (decreases n)
+  =
+  if n = 0 then ()
+  else lemma_advance_write_records_preserves_read_state s (n - 1)
 
 let advance_read_record (s:conn_state) : conn_state =
   { s with read_state = R.next_seq s.read_state }
