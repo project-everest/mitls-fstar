@@ -1310,9 +1310,14 @@ ensures exists* view1 network_out1 app_out1.
                 with pending_network_buffer2. assert (V.pts_to c.pending_network_buffer pending_network_buffer2);
                 let pending_raw_payload : erased B.bytes =
                   CL.raw_slice
-                    (Ghost.reveal pending_network_buffer2)
+                    (Ghost.reveal residual_tmp_bytes)
                     0
                     (SZ.v residual_len);
+                assert (pure (CL.raw_slice (Ghost.reveal residual_tmp_bytes) 0 (SZ.v residual_len) ==
+                              Seq.slice (Ghost.reveal residual_tmp_bytes) 0 (SZ.v residual_len)));
+                assert (pure (Seq.equal
+                  (Ghost.reveal pending_raw_payload)
+                  (CL.raw_slice (Ghost.reveal pending_network_buffer2) 0 (SZ.v residual_len))));
                 if not (content_type = 23uy) {
                   ST.advance_fail c.state T.IoError;
                   let base_view2 : erased CL.connection_view =
@@ -1660,9 +1665,20 @@ ensures exists* view1 network_out1 app_out1.
                                   with pending_network_buffer3. assert (V.pts_to c.pending_network_buffer pending_network_buffer3);
                                   let pending_raw_payload2 : erased B.bytes =
                                     CL.raw_slice
-                                      (Ghost.reveal pending_network_buffer3)
-                                      0
-                                      (SZ.v residual_after_two_len);
+                                      (Ghost.reveal residual_tmp_bytes)
+                                      (SZ.v record2_end)
+                                      (SZ.v residual_len);
+                                  assert (pure (CL.raw_slice
+                                    (Ghost.reveal residual_tmp_bytes)
+                                    (SZ.v record2_end)
+                                    (SZ.v residual_len) ==
+                                    Seq.slice
+                                      (Ghost.reveal residual_tmp_bytes)
+                                      (SZ.v record2_end)
+                                      (SZ.v residual_len)));
+                                  assert (pure (Seq.equal
+                                    (Ghost.reveal pending_raw_payload2)
+                                    (CL.raw_slice (Ghost.reveal pending_network_buffer3) 0 (SZ.v residual_after_two_len))));
                                   assert (pure ((S.advance_read_record view0.CL.state).S.phase == S.ApplicationData));
                                   lemma_step_recv_application_data
                                     (S.advance_read_record view0.CL.state)
@@ -2463,9 +2479,14 @@ ensures exists* view1 network_out1 app_out1.
             with pending_network_buffer1. assert (V.pts_to c.pending_network_buffer pending_network_buffer1);
             let pending_raw_payload : erased B.bytes =
               CL.raw_slice
-                (Ghost.reveal pending_network_buffer1)
+                (Ghost.reveal residual_tmp_bytes)
                 0
                 (SZ.v residual_len);
+            assert (pure (CL.raw_slice (Ghost.reveal residual_tmp_bytes) 0 (SZ.v residual_len) ==
+                          Seq.slice (Ghost.reveal residual_tmp_bytes) 0 (SZ.v residual_len)));
+            assert (pure (Seq.equal
+              (Ghost.reveal pending_raw_payload)
+              (CL.raw_slice (Ghost.reveal pending_network_buffer1) 0 (SZ.v residual_len))));
           let mut cipher = [| 0uy; fragment_len |];
           copy_payload_to_output_loop network_in network_in_len cipher fragment_len 5sz 0sz fragment_len;
           with cipher_bytes. assert (pts_to cipher cipher_bytes);
@@ -2740,9 +2761,20 @@ ensures exists* view1 network_out1 app_out1.
                             with pending_network_buffer2. assert (V.pts_to c.pending_network_buffer pending_network_buffer2);
                             let pending_raw_payload2 : erased B.bytes =
                               CL.raw_slice
-                                (Ghost.reveal pending_network_buffer2)
-                                0
-                                (SZ.v residual_after_two_len);
+                                (Ghost.reveal residual_tmp_bytes)
+                                (SZ.v record2_end)
+                                (SZ.v residual_len);
+                            assert (pure (CL.raw_slice
+                              (Ghost.reveal residual_tmp_bytes)
+                              (SZ.v record2_end)
+                              (SZ.v residual_len) ==
+                              Seq.slice
+                                (Ghost.reveal residual_tmp_bytes)
+                                (SZ.v record2_end)
+                                (SZ.v residual_len)));
+                            assert (pure (Seq.equal
+                              (Ghost.reveal pending_raw_payload2)
+                              (CL.raw_slice (Ghost.reveal pending_network_buffer2) 0 (SZ.v residual_after_two_len))));
                             assert (pure ((S.advance_read_record view0.CL.state).S.phase == S.ApplicationData));
                             lemma_step_recv_application_data
                               (S.advance_read_record view0.CL.state)
