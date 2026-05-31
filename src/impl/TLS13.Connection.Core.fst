@@ -78,6 +78,19 @@ let lemma_u64_fits_add_two_of_count
   =
   lemma_u64_fits_add_le_of_count seq 2 count
 
+let lemma_u64_fits_next_after_consumed_of_budget
+  (seq:nat)
+  (consumed:nat)
+  (budget:nat)
+  : Lemma
+      (requires consumed <= budget /\ U64.fits (seq + budget + 1))
+      (ensures U64.fits (seq + consumed + 1))
+  =
+  assert (consumed + 1 <= budget + 1);
+  assert (seq + (budget + 1) == seq + budget + 1);
+  assert (seq + (consumed + 1) == seq + consumed + 1);
+  lemma_u64_fits_add_le_of_count seq (consumed + 1) (budget + 1)
+
 let lemma_step_recv_application_data
   (s:S.conn_state)
   (app:B.bytes)
@@ -1476,15 +1489,16 @@ ensures exists* view1 network_out1 app_out1.
                       assert (pure (U64.fits
                         (view0.CL.state.S.read_state.R.seq +
                          (B.length view0.CL.pending_received_raw + B.length (Ghost.reveal network_bytes) + 1))));
-                      assert (pure (1 <= B.length view0.CL.pending_received_raw + B.length (Ghost.reveal network_bytes) + 1));
-                      lemma_u64_fits_add_one_of_count
+                      lemma_u64_fits_next_after_consumed_of_budget
                         view0.CL.state.S.read_state.R.seq
-                        (B.length view0.CL.pending_received_raw + B.length (Ghost.reveal network_bytes) + 1);
+                        0
+                        (B.length view0.CL.pending_received_raw + B.length (Ghost.reveal network_bytes));
                       assert (pure (0 < B.length view0.CL.pending_received_raw));
-                      assert (pure (2 <= B.length view0.CL.pending_received_raw + B.length (Ghost.reveal network_bytes) + 1));
-                      lemma_u64_fits_add_two_of_count
+                      assert (pure (1 <= B.length view0.CL.pending_received_raw + B.length (Ghost.reveal network_bytes)));
+                      lemma_u64_fits_next_after_consumed_of_budget
                         view0.CL.state.S.read_state.R.seq
-                        (B.length view0.CL.pending_received_raw + B.length (Ghost.reveal network_bytes) + 1);
+                        1
+                        (B.length view0.CL.pending_received_raw + B.length (Ghost.reveal network_bytes));
                       assert (pure (U64.fits (view0.CL.state.S.read_state.R.seq + 1)));
                       assert (pure (U64.fits (view0.CL.state.S.read_state.R.seq + 2)));
                       with server_record_s1. assert (Rec.is_record_state c.server_application_record_state server_record_s1);
@@ -2558,14 +2572,15 @@ ensures exists* view1 network_out1 app_out1.
                 assert (pure (U64.fits
                   (view0.CL.state.S.read_state.R.seq +
                    (B.length view0.CL.pending_received_raw + B.length (Ghost.reveal network_bytes) + 1))));
-                assert (pure (1 <= B.length view0.CL.pending_received_raw + B.length (Ghost.reveal network_bytes) + 1));
-                lemma_u64_fits_add_one_of_count
+                lemma_u64_fits_next_after_consumed_of_budget
                   view0.CL.state.S.read_state.R.seq
-                  (B.length view0.CL.pending_received_raw + B.length (Ghost.reveal network_bytes) + 1);
-                assert (pure (2 <= B.length view0.CL.pending_received_raw + B.length (Ghost.reveal network_bytes) + 1));
-                lemma_u64_fits_add_two_of_count
+                  0
+                  (B.length view0.CL.pending_received_raw + B.length (Ghost.reveal network_bytes));
+                assert (pure (1 <= B.length view0.CL.pending_received_raw + B.length (Ghost.reveal network_bytes)));
+                lemma_u64_fits_next_after_consumed_of_budget
                   view0.CL.state.S.read_state.R.seq
-                  (B.length view0.CL.pending_received_raw + B.length (Ghost.reveal network_bytes) + 1);
+                  1
+                  (B.length view0.CL.pending_received_raw + B.length (Ghost.reveal network_bytes));
                 assert (pure (U64.fits (view0.CL.state.S.read_state.R.seq + 1)));
                 assert (pure (U64.fits (view0.CL.state.S.read_state.R.seq + 2)));
                 with server_record_s1. assert (Rec.is_record_state c.server_application_record_state server_record_s1);
