@@ -1108,6 +1108,19 @@ let lemma_connection_view_record_stream_shaped_sync_raw_state
   lemma_parse_record_prefix_serializes raw.raw_sent;
   lemma_parse_record_prefix_serializes raw.raw_received
 
+let lemma_connection_view_consistent_sync_raw_same_state
+  (view:connection_view)
+  (raw:raw_io_log)
+  : Lemma
+      (requires connection_view_consistent view)
+      (ensures connection_view_consistent (sync_raw_state view raw view.state))
+  =
+  lemma_connection_view_raw_stream_shaped_sync_raw_state view raw view.state;
+  lemma_connection_view_record_stream_shaped_sync_raw_state view raw view.state;
+  assert (connection_view_consistent_with raw_tls_stream_shapes view);
+  assert (connection_view_consistent_with raw_tls_stream_shapes (sync_raw_state view raw view.state));
+  assert (connection_view_shape (sync_raw_state view raw view.state))
+
 let lemma_connection_view_raw_stream_shaped_note_raw_app_sent
   (view:connection_view)
   (raw:raw_io_log)

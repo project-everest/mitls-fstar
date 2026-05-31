@@ -23,7 +23,7 @@ Relevant existing structure:
 - `src/spec/TLS13.StateMachine.fst` already defines TLS phases, host events, transition steps, and multi-step traces.
 - `src/spec/TLS13.ConnectionLog.fst` already defines layered views: raw IO, stream view, TLS messages, TLS records, host events, application log, and a `connection_view_consistent` predicate. This should be adapted so the raw layer is the buffer history of the verified core.
 - `src/impl/TLS13.Connection.fsti` exports the current socket-shaped client API. It now exposes a proof-facing `connection_exactly` predicate with an explicit `ConnectionLog.connection_view`, and each public operation proves a `connection_view_single_step`; it still needs to be revised to a request/response buffer core, with the socket driver layered outside it.
-- `src/impl/TLS13.Connection.fst` stores a monotonic `TLS13.State.log_ref`; the explicit log-update admits have been discharged, while several handshake events are still abstract witnesses rather than a full transcript proof.
+- `src/impl/TLS13.Connection.fst` stores a monotonic `TLS13.State.log_ref`; the explicit log-update admits have been discharged, application-data writes and close_notify now thread actual raw bytes written through `view.raw_log.raw_sent`, while several handshake events are still abstract witnesses rather than a full transcript proof.
 - `src/impl/TLS13.Handshake.*`, `TLS13.Record.*`, `TLS13.Crypto.*`, and `TLS13.X509.*` contain the likely implementation/proof boundaries.
 
 Main gaps found during inspection:

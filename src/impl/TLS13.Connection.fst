@@ -255,6 +255,68 @@ fn advance_log_event
 }
 
 ghost
+fn advance_log_raw_sent_slice
+  (log:ST.log_ref)
+  (#view:CL.connection_view)
+  (bytes:B.bytes)
+  (lo:nat)
+  (hi:nat)
+  requires ST.log_current log view
+  requires pure (CL.connection_view_consistent view /\
+                 lo <= hi /\ hi <= B.length bytes)
+  ensures ST.log_current log (CL.sync_raw_state view (CL.append_raw_sent_slice view.CL.raw_log bytes lo hi) view.CL.state) **
+          pure (CL.connection_view_consistent (CL.sync_raw_state view (CL.append_raw_sent_slice view.CL.raw_log bytes lo hi) view.CL.state) /\
+                (CL.sync_raw_state view (CL.append_raw_sent_slice view.CL.raw_log bytes lo hi) view.CL.state).CL.state == view.CL.state /\
+                (CL.sync_raw_state view (CL.append_raw_sent_slice view.CL.raw_log bytes lo hi) view.CL.state).CL.app_view == view.CL.app_view /\
+                CL.raw_io_log_extends view.CL.raw_log
+                  (CL.sync_raw_state view (CL.append_raw_sent_slice view.CL.raw_log bytes lo hi) view.CL.state).CL.raw_log /\
+                CL.connection_view_single_step view (CL.sync_raw_state view (CL.append_raw_sent_slice view.CL.raw_log bytes lo hi) view.CL.state))
+{
+  let raw = CL.append_raw_sent_slice view.CL.raw_log bytes lo hi;
+  let next = CL.sync_raw_state view raw view.CL.state;
+  CL.lemma_raw_io_log_extends_sent_slice view.CL.raw_log bytes lo hi;
+  CL.lemma_connection_view_consistent_sync_raw_same_state view raw;
+  CL.lemma_connection_view_step_raw_state view raw view.CL.state;
+  ST.advance_log log next;
+  assert (pure (CL.connection_view_consistent next));
+  assert (pure (next.CL.state == view.CL.state));
+  assert (pure (next.CL.app_view == view.CL.app_view));
+  assert (pure (CL.raw_io_log_extends view.CL.raw_log next.CL.raw_log));
+  assert (pure (CL.connection_view_single_step view next))
+}
+
+ghost
+fn advance_log_raw_received_slice
+  (log:ST.log_ref)
+  (#view:CL.connection_view)
+  (bytes:B.bytes)
+  (lo:nat)
+  (hi:nat)
+  requires ST.log_current log view
+  requires pure (CL.connection_view_consistent view /\
+                 lo <= hi /\ hi <= B.length bytes)
+  ensures ST.log_current log (CL.sync_raw_state view (CL.append_raw_received_slice view.CL.raw_log bytes lo hi) view.CL.state) **
+          pure (CL.connection_view_consistent (CL.sync_raw_state view (CL.append_raw_received_slice view.CL.raw_log bytes lo hi) view.CL.state) /\
+                (CL.sync_raw_state view (CL.append_raw_received_slice view.CL.raw_log bytes lo hi) view.CL.state).CL.state == view.CL.state /\
+                (CL.sync_raw_state view (CL.append_raw_received_slice view.CL.raw_log bytes lo hi) view.CL.state).CL.app_view == view.CL.app_view /\
+                CL.raw_io_log_extends view.CL.raw_log
+                  (CL.sync_raw_state view (CL.append_raw_received_slice view.CL.raw_log bytes lo hi) view.CL.state).CL.raw_log /\
+                CL.connection_view_single_step view (CL.sync_raw_state view (CL.append_raw_received_slice view.CL.raw_log bytes lo hi) view.CL.state))
+{
+  let raw = CL.append_raw_received_slice view.CL.raw_log bytes lo hi;
+  let next = CL.sync_raw_state view raw view.CL.state;
+  CL.lemma_raw_io_log_extends_received_slice view.CL.raw_log bytes lo hi;
+  CL.lemma_connection_view_consistent_sync_raw_same_state view raw;
+  CL.lemma_connection_view_step_raw_state view raw view.CL.state;
+  ST.advance_log log next;
+  assert (pure (CL.connection_view_consistent next));
+  assert (pure (next.CL.state == view.CL.state));
+  assert (pure (next.CL.app_view == view.CL.app_view));
+  assert (pure (CL.raw_io_log_extends view.CL.raw_log next.CL.raw_log));
+  assert (pure (CL.connection_view_single_step view next))
+}
+
+ghost
 fn advance_successful_handshake_log
   (log:ST.log_ref)
   (#view:CL.connection_view)
@@ -484,30 +546,47 @@ fn rec client_write_raw_exact
   (total_len: SZ.t)
   (offset: SZ.t)
   (remaining: SZ.t)
+  (log:ST.log_ref)
   requires   E.is_connection backend **
   IO.is_channel ch **
   pts_to buf 'bytes **
+  ST.log_current log 'view **
   pure (B.length 'bytes == SZ.v total_len /\
+        CL.connection_view_consistent 'view /\
         SZ.v offset + SZ.v remaining == SZ.v total_len)
   returns ok: bool
-  ensures E.is_connection backend **
+  ensures exists* view'.
+          E.is_connection backend **
           IO.is_channel ch **
-          pts_to buf 'bytes
+          pts_to buf 'bytes **
+          ST.log_current log view' **
+          pure (CL.connection_view_consistent view' /\
+                view'.CL.state == 'view.CL.state /\
+                view'.CL.app_view == 'view.CL.app_view /\
+                CL.raw_io_log_extends 'view.CL.raw_log view'.CL.raw_log)
   decreases (SZ.v remaining)
 {
   if (remaining = 0sz) {
+    CL.lemma_raw_io_log_extends_refl 'view.CL.raw_log;
     true
   } else {
     assert (pure (SZ.v remaining > 0));
     let n = E.client_write_raw backend ch buf total_len offset remaining;
     if (n = 0sz) {
+      CL.lemma_raw_io_log_extends_refl 'view.CL.raw_log;
       false
     } else {
       let offset' = SZ.(offset +^ n);
       let remaining' = SZ.(remaining -^ n);
+      advance_log_raw_sent_slice log (Ghost.reveal 'bytes) (SZ.v offset) (SZ.v offset');
+      with mid_view. assert (ST.log_current log mid_view);
       assert (pure (SZ.v remaining' < SZ.v remaining));
       assert (pure (SZ.v offset' + SZ.v remaining' == SZ.v total_len));
-      client_write_raw_exact backend ch buf total_len offset' remaining'
+      let ok = client_write_raw_exact backend ch buf total_len offset' remaining' log;
+      with view'. _;
+      CL.lemma_raw_io_log_extends_trans 'view.CL.raw_log mid_view.CL.raw_log view'.CL.raw_log;
+      assert (pure (CL.raw_io_log_extends 'view.CL.raw_log view'.CL.raw_log));
+      ok
     }
   }
 }
@@ -520,21 +599,30 @@ fn rec client_write_application_records
   (total_len: SZ.t)
   (offset: SZ.t)
   (remaining: SZ.t)
+  (log:ST.log_ref)
   requires   E.is_connection backend **
   Rec.is_record_state record_state 'record_s **
   IO.is_channel ch **
   pts_to buf 'bytes **
+  ST.log_current log 'view **
   pure (B.length 'bytes == SZ.v total_len /\
+        CL.connection_view_consistent 'view /\
         SZ.v offset + SZ.v remaining == SZ.v total_len)
   returns ok: bool
-  ensures exists* record_s'.
+  ensures exists* record_s' view'.
           E.is_connection backend **
           Rec.is_record_state record_state record_s' **
           IO.is_channel ch **
-          pts_to buf 'bytes
+          pts_to buf 'bytes **
+          ST.log_current log view' **
+          pure (CL.connection_view_consistent view' /\
+                view'.CL.state == 'view.CL.state /\
+                view'.CL.app_view == 'view.CL.app_view /\
+                CL.raw_io_log_extends 'view.CL.raw_log view'.CL.raw_log)
   decreases (SZ.v remaining)
 {
   if (remaining = 0sz) {
+    CL.lemma_raw_io_log_extends_refl 'view.CL.raw_log;
     true
   } else {
     let chunk_len =
@@ -578,22 +666,31 @@ fn rec client_write_application_records
     assert (pure (B.length header_bytes == 5));
     assert (pure (B.length cipher_bytes == SZ.v cipher_len));
     if sealed {
-      let header_ok = client_write_raw_exact backend ch header 5sz 0sz 5sz;
+      let header_ok = client_write_raw_exact backend ch header 5sz 0sz 5sz log;
+      with header_view. _;
       if header_ok {
-        let cipher_ok = client_write_raw_exact backend ch cipher cipher_len 0sz cipher_len;
+        let cipher_ok = client_write_raw_exact backend ch cipher cipher_len 0sz cipher_len log;
+        with cipher_view. _;
+        CL.lemma_raw_io_log_extends_trans 'view.CL.raw_log header_view.CL.raw_log cipher_view.CL.raw_log;
         if cipher_ok {
           let offset' = SZ.(offset +^ chunk_len);
           let remaining' = SZ.(remaining -^ chunk_len);
           assert (pure (SZ.v remaining' < SZ.v remaining));
           assert (pure (SZ.v offset' + SZ.v remaining' == SZ.v total_len));
-          client_write_application_records backend ch record_state buf total_len offset' remaining'
+          let ok = client_write_application_records backend ch record_state buf total_len offset' remaining' log;
+          with record_s' view'. _;
+          CL.lemma_raw_io_log_extends_trans 'view.CL.raw_log cipher_view.CL.raw_log view'.CL.raw_log;
+          assert (pure (CL.raw_io_log_extends 'view.CL.raw_log view'.CL.raw_log));
+          ok
         } else {
+          assert (pure (CL.raw_io_log_extends 'view.CL.raw_log cipher_view.CL.raw_log));
           false
         }
       } else {
         false
       }
     } else {
+      CL.lemma_raw_io_log_extends_refl 'view.CL.raw_log;
       false
     }
   }
@@ -604,14 +701,22 @@ fn client_send_close_notify_record
   (backend: E.connection)
   (ch: IO.channel)
   (record_state: Rec.record_state)
+  (log:ST.log_ref)
   requires   E.is_connection backend **
   Rec.is_record_state record_state 'record_s **
-  IO.is_channel ch
+  IO.is_channel ch **
+  ST.log_current log 'view **
+  pure (CL.connection_view_consistent 'view)
   returns ok: bool
-  ensures exists* record_s'.
+  ensures exists* record_s' view'.
           E.is_connection backend **
           Rec.is_record_state record_state record_s' **
-          IO.is_channel ch
+          IO.is_channel ch **
+          ST.log_current log view' **
+          pure (CL.connection_view_consistent view' /\
+                view'.CL.state == 'view.CL.state /\
+                view'.CL.app_view == 'view.CL.app_view /\
+                CL.raw_io_log_extends 'view.CL.raw_log view'.CL.raw_log)
 {
   let mut header = [| 0uy; 5sz |];
   let mut inner_plaintext = [| 0uy; 3sz |];
@@ -635,13 +740,18 @@ fn client_send_close_notify_record
   assert (pure (B.length header_bytes == 5));
   assert (pure (B.length cipher_bytes == 19));
   if sealed {
-    let header_ok = client_write_raw_exact backend ch header 5sz 0sz 5sz;
+    let header_ok = client_write_raw_exact backend ch header 5sz 0sz 5sz log;
+    with header_view. _;
     if header_ok {
-      client_write_raw_exact backend ch cipher 19sz 0sz 19sz
+      let cipher_ok = client_write_raw_exact backend ch cipher 19sz 0sz 19sz log;
+      with cipher_view. _;
+      CL.lemma_raw_io_log_extends_trans 'view.CL.raw_log header_view.CL.raw_log cipher_view.CL.raw_log;
+      cipher_ok
     } else {
       false
     }
   } else {
+    CL.lemma_raw_io_log_extends_refl 'view.CL.raw_log;
     false
   }
 }
@@ -672,28 +782,36 @@ fn client_write_all (c: connection) (ch: IO.channel) (buf: array U8.t) (len: SZ.
         buf
         len
         0sz
-        len;
+        len
+        c.log;
+    with record_s' raw_view. _;
     if ok {
       ST.advance 'st (S.SendApplicationData (Ghost.reveal 'bytes)) (S.advance_write_record 's);
+      assert (pure (raw_view.CL.state == 's));
       advance_log_event
         c.log
         (CL.sent_app_event (Ghost.reveal 'bytes))
         (S.SendApplicationData (Ghost.reveal 'bytes))
         (S.advance_write_record 's);
-      assert (pure (CL.connection_view_consistent (note_sent_app_view 'view0 (Ghost.reveal 'bytes) 's)));
-      assert (pure ((note_sent_app_view 'view0 (Ghost.reveal 'bytes) 's).CL.state == S.advance_write_record 's));
-      fold (connection_exactly c 'st (S.advance_write_record 's) (note_sent_app_view 'view0 (Ghost.reveal 'bytes) 's));
+      assert (pure (CL.connection_view_consistent (note_sent_app_view raw_view (Ghost.reveal 'bytes) 's)));
+      assert (pure ((note_sent_app_view raw_view (Ghost.reveal 'bytes) 's).CL.state == S.advance_write_record 's));
+      CL.lemma_app_log_extends_sent raw_view.CL.app_view (Ghost.reveal 'bytes);
+      assert (pure (CL.connection_view_single_step 'view0 (note_sent_app_view raw_view (Ghost.reveal 'bytes) 's)));
+      fold (connection_exactly c 'st (S.advance_write_record 's) (note_sent_app_view raw_view (Ghost.reveal 'bytes) 's));
       true
     } else {
       ST.advance_fail 'st T.IoError;
+      assert (pure (raw_view.CL.state == 's));
       advance_log_event
         c.log
         (CL.local_fail_event T.IoError)
         (S.Fail T.IoError)
         (S.fail 's T.IoError);
-      assert (pure (CL.connection_view_consistent (note_local_fail_view 'view0 T.IoError 's)));
-      assert (pure ((note_local_fail_view 'view0 T.IoError 's).CL.state == S.fail 's T.IoError));
-      fold (connection_exactly c 'st (S.fail 's T.IoError) (note_local_fail_view 'view0 T.IoError 's));
+      assert (pure (CL.connection_view_consistent (note_local_fail_view raw_view T.IoError 's)));
+      assert (pure ((note_local_fail_view raw_view T.IoError 's).CL.state == S.fail 's T.IoError));
+      assert (pure ((note_local_fail_view raw_view T.IoError 's).CL.app_view == raw_view.CL.app_view));
+      assert (pure (CL.connection_view_single_step 'view0 (note_local_fail_view raw_view T.IoError 's)));
+      fold (connection_exactly c 'st (S.fail 's T.IoError) (note_local_fail_view raw_view T.IoError 's));
       false
     }
   } else {
@@ -1312,40 +1430,50 @@ fn client_close (c: connection) (ch: IO.channel)
   let keys_installed = !c.application_keys_installed;
   if keys_installed {
     let close_notify_sent =
-      client_send_close_notify_record c.backend ch c.client_application_record_state;
+      client_send_close_notify_record c.backend ch c.client_application_record_state c.log;
+    with record_s' raw_view. _;
     if close_notify_sent {
       let ok = E.client_close c.backend ch;
       if ok {
         ST.advance 'st S.SendCloseNotify (S.send_close_state 's);
+        assert (pure (raw_view.CL.state == 's));
         advance_log_event
           c.log
           CL.sent_close_notify_event
           S.SendCloseNotify
           (S.send_close_state 's);
-        assert (pure (CL.connection_view_consistent (note_send_close_view 'view0 's)));
-        assert (pure ((note_send_close_view 'view0 's).CL.state == S.send_close_state 's));
-        fold (connection_exactly c 'st (S.send_close_state 's) (note_send_close_view 'view0 's));
+        assert (pure (CL.connection_view_consistent (note_send_close_view raw_view 's)));
+        assert (pure ((note_send_close_view raw_view 's).CL.state == S.send_close_state 's));
+        assert (pure ((note_send_close_view raw_view 's).CL.app_view == raw_view.CL.app_view));
+        assert (pure (CL.connection_view_single_step 'view0 (note_send_close_view raw_view 's)));
+        fold (connection_exactly c 'st (S.send_close_state 's) (note_send_close_view raw_view 's));
       } else {
         ST.advance_fail 'st T.IoError;
+        assert (pure (raw_view.CL.state == 's));
         advance_log_event
           c.log
           (CL.local_fail_event T.IoError)
           (S.Fail T.IoError)
           (S.fail 's T.IoError);
-        assert (pure (CL.connection_view_consistent (note_local_fail_view 'view0 T.IoError 's)));
-        assert (pure ((note_local_fail_view 'view0 T.IoError 's).CL.state == S.fail 's T.IoError));
-        fold (connection_exactly c 'st (S.fail 's T.IoError) (note_local_fail_view 'view0 T.IoError 's));
+        assert (pure (CL.connection_view_consistent (note_local_fail_view raw_view T.IoError 's)));
+        assert (pure ((note_local_fail_view raw_view T.IoError 's).CL.state == S.fail 's T.IoError));
+        assert (pure ((note_local_fail_view raw_view T.IoError 's).CL.app_view == raw_view.CL.app_view));
+        assert (pure (CL.connection_view_single_step 'view0 (note_local_fail_view raw_view T.IoError 's)));
+        fold (connection_exactly c 'st (S.fail 's T.IoError) (note_local_fail_view raw_view T.IoError 's));
       }
     } else {
       ST.advance_fail 'st T.IoError;
+      assert (pure (raw_view.CL.state == 's));
       advance_log_event
         c.log
         (CL.local_fail_event T.IoError)
         (S.Fail T.IoError)
         (S.fail 's T.IoError);
-      assert (pure (CL.connection_view_consistent (note_local_fail_view 'view0 T.IoError 's)));
-      assert (pure ((note_local_fail_view 'view0 T.IoError 's).CL.state == S.fail 's T.IoError));
-      fold (connection_exactly c 'st (S.fail 's T.IoError) (note_local_fail_view 'view0 T.IoError 's));
+      assert (pure (CL.connection_view_consistent (note_local_fail_view raw_view T.IoError 's)));
+      assert (pure ((note_local_fail_view raw_view T.IoError 's).CL.state == S.fail 's T.IoError));
+      assert (pure ((note_local_fail_view raw_view T.IoError 's).CL.app_view == raw_view.CL.app_view));
+      assert (pure (CL.connection_view_single_step 'view0 (note_local_fail_view raw_view T.IoError 's)));
+      fold (connection_exactly c 'st (S.fail 's T.IoError) (note_local_fail_view raw_view T.IoError 's));
     }
   } else {
     ST.advance_fail 'st T.IoError;
