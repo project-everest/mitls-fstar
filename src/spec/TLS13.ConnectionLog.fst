@@ -1426,6 +1426,87 @@ let lemma_connection_view_consistent_note_host_event_no_state
   assert (connection_view_shape next);
   assert (connection_view_consistent_with raw_tls_stream_shapes next)
 
+let lemma_step_start_success_abstract
+  (view0:connection_view)
+  (view1:connection_view)
+  (server_name:T.hostname)
+  : Lemma
+      (requires connection_view_consistent view0 /\
+                connection_view_consistent view1 /\
+                view0.state.S.phase == S.Start /\
+                view1.raw_log == view0.raw_log /\
+                view1.app_view == view0.app_view /\
+                view1.state.S.phase == S.ApplicationData /\
+                S.conn_evolves view0.state view1.state)
+      (ensures step
+        view0
+        (request_no_network_in (OpStart server_name))
+        view1
+        (response_no_network_out B.empty HandshakeComplete))
+  =
+  let req = request_no_network_in (OpStart server_name) in
+  let resp = response_no_network_out B.empty HandshakeComplete in
+  lemma_append_empty_right view0.raw_log.raw_sent;
+  lemma_append_empty_right view0.raw_log.raw_received;
+  assert ((step_raw_log view0.raw_log req resp).raw_sent == view0.raw_log.raw_sent);
+  assert ((step_raw_log view0.raw_log req resp).raw_received == view0.raw_log.raw_received);
+  assert (step_raw_log view0.raw_log req resp == view0.raw_log);
+  assert (view1.raw_log == step_raw_log view0.raw_log req resp);
+  L.append_l_nil view0.app_view.app_sent;
+  L.append_l_nil view0.app_view.app_received;
+  assert ((step_app_log view0.app_view req resp).app_sent == view0.app_view.app_sent);
+  assert ((step_app_log view0.app_view req resp).app_received == view0.app_view.app_received);
+  assert (step_app_log view0.app_view req resp == view0.app_view);
+  assert (view1.app_view == step_app_log view0.app_view req resp);
+  assert (response_shape resp);
+  assert (status_matches_phase resp.status view1.state.S.phase);
+  lemma_connection_view_single_step_for_core_step view0 req view1 resp
+
+let lemma_step_start_failed
+  (view0:connection_view)
+  (server_name:T.hostname)
+  (err:T.tls_error)
+  (state:S.conn_state)
+  : Lemma
+      (requires connection_view_consistent view0 /\
+                view0.state.S.phase == S.Start /\
+                state == S.fail view0.state err)
+      (ensures step
+        view0
+        (request_no_network_in (OpStart server_name))
+        (note_local_fail view0 err state)
+        (response_no_network_out B.empty (Failed err)))
+  =
+  let view1 = note_local_fail view0 err state in
+  let req = request_no_network_in (OpStart server_name) in
+  let resp = response_no_network_out B.empty (Failed err) in
+  assert (S.step view0.state (S.Fail err) == Some state);
+  lemma_connection_view_consistent_note_host_event
+    view0
+    (local_fail_event err)
+    (S.Fail err)
+    state;
+  assert (connection_view_consistent view1);
+  lemma_append_empty_right view0.raw_log.raw_sent;
+  lemma_append_empty_right view0.raw_log.raw_received;
+  assert ((step_raw_log view0.raw_log req resp).raw_sent == view0.raw_log.raw_sent);
+  assert ((step_raw_log view0.raw_log req resp).raw_received == view0.raw_log.raw_received);
+  assert (step_raw_log view0.raw_log req resp == view0.raw_log);
+  assert (view1.raw_log == step_raw_log view0.raw_log req resp);
+  L.append_l_nil view0.app_view.app_sent;
+  L.append_l_nil view0.app_view.app_received;
+  assert (view1.app_view.app_sent == view0.app_view.app_sent @ []);
+  assert (view1.app_view.app_received == view0.app_view.app_received @ []);
+  assert ((step_app_log view0.app_view req resp).app_sent == view0.app_view.app_sent @ []);
+  assert ((step_app_log view0.app_view req resp).app_received == view0.app_view.app_received @ []);
+  assert (view1.app_view == step_app_log view0.app_view req resp);
+  assert (response_shape resp);
+  assert (status_matches_phase resp.status view1.state.S.phase);
+  assert (S.state_single_step view0.state state);
+  RTC.closure_step S.state_single_step view0.state state;
+  assert (S.conn_evolves view0.state view1.state);
+  lemma_connection_view_single_step_for_core_step view0 req view1 resp
+
 let lemma_step_send_application_data_success
   (view0:connection_view)
   (raw_view:connection_view)

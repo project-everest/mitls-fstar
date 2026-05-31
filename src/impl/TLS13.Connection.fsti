@@ -54,6 +54,10 @@ fn client_connect (c: connection) (ch: IO.channel)
   ensures exists* s' view1. connection_exactly c 'st s' view1 **
           IO.is_channel ch **
           pure (CL.connection_view_single_step 'view0 view1 /\
+                (exists server_name resp.
+                   CL.step 'view0 (CL.request_no_network_in (CL.OpStart server_name)) view1 resp /\
+                   (ok ==> resp.CL.status == CL.HandshakeComplete) /\
+                   (not ok ==> resp.CL.status == CL.Failed T.IoError)) /\
                 (ok ==> s'.S.phase == S.ApplicationData) /\
                 (not ok ==> s'.S.phase == S.Failed))
 

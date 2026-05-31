@@ -16,6 +16,7 @@ module H = TLS13.Handshake.Spec
 module IO = TLS13.IO
 module Rec = TLS13.Record
 module RF = TLS13.Record.Framing
+module RTC = FStar.ReflexiveTransitiveClosure
 module S = TLS13.StateMachine
 module ST = TLS13.State
 module SZ = FStar.SizeT
@@ -164,6 +165,53 @@ let hs_certificate_validated (s:S.conn_state) = S.with_validated_peer (hs_certif
 let hs_certificate_verified (s:S.conn_state) = S.with_phase (hs_certificate_validated s) S.CertificateVerified
 let hs_server_finished_verified (s:S.conn_state) = S.with_phase (hs_certificate_verified s) S.ServerFinishedVerified
 let hs_application_data (s:S.conn_state) = S.with_phase (hs_server_finished_verified s) S.ApplicationData
+
+let lemma_successful_handshake_state_evolves
+  (s:S.conn_state)
+  : Lemma
+      (requires s.S.phase == S.Start)
+      (ensures S.conn_evolves s (hs_application_data s))
+  =
+  let s1 = hs_client_hello_sent s in
+  let s2 = hs_server_hello_received s in
+  let s3 = hs_encrypted_extensions_received s in
+  let s4 = hs_certificate_received s in
+  let s5 = hs_certificate_validated s in
+  let s6 = hs_certificate_verified s in
+  let s7 = hs_server_finished_verified s in
+  let s8 = hs_application_data s in
+  assert (S.step s (S.SendClientHello dummy_client_hello) == Some s1);
+  assert (S.state_single_step s s1);
+  RTC.closure_step S.state_single_step s s1;
+  assert (S.step s1 (S.RecvServerHello dummy_server_hello) == Some s2);
+  assert (S.state_single_step s1 s2);
+  RTC.closure_step S.state_single_step s1 s2;
+  assert (S.step s2 (S.RecvEncryptedExtensions dummy_encrypted_extensions) == Some s3);
+  assert (S.state_single_step s2 s3);
+  RTC.closure_step S.state_single_step s2 s3;
+  assert (S.step s3 (S.RecvCertificate dummy_certificate) == Some s4);
+  assert (S.state_single_step s3 s4);
+  RTC.closure_step S.state_single_step s3 s4;
+  assert (S.step s4 (S.ValidateCertificate dummy_peer) == Some s5);
+  assert (S.state_single_step s4 s5);
+  RTC.closure_step S.state_single_step s4 s5;
+  assert (S.step s5 (S.RecvCertificateVerify dummy_certificate_verify) == Some s6);
+  assert (S.state_single_step s5 s6);
+  RTC.closure_step S.state_single_step s5 s6;
+  assert (S.step s6 (S.RecvServerFinished dummy_finished) == Some s7);
+  assert (S.state_single_step s6 s7);
+  RTC.closure_step S.state_single_step s6 s7;
+  assert (S.step s7 (S.SendClientFinished dummy_finished) == Some s8);
+  assert (S.state_single_step s7 s8);
+  RTC.closure_step S.state_single_step s7 s8;
+  assert (RTC.transitive S.conn_evolves);
+  assert (S.conn_evolves s s2);
+  assert (S.conn_evolves s s3);
+  assert (S.conn_evolves s s4);
+  assert (S.conn_evolves s s5);
+  assert (S.conn_evolves s s6);
+  assert (S.conn_evolves s s7);
+  assert (S.conn_evolves s s8)
 
 ghost
 fn advance_successful_handshake (st:ST.state_ref) (#s:S.conn_state)
@@ -336,6 +384,8 @@ fn advance_successful_handshake_log
   ensures ST.log_current log (successful_handshake_view view s) **
           pure (CL.connection_view_consistent (successful_handshake_view view s) /\
                 (successful_handshake_view view s).CL.state == hs_application_data s /\
+                (successful_handshake_view view s).CL.raw_log == view.CL.raw_log /\
+                (successful_handshake_view view s).CL.app_view == view.CL.app_view /\
                 CL.connection_view_single_step view (successful_handshake_view view s))
 {
   advance_log_event
@@ -474,6 +524,10 @@ fn client_connect (c: connection) (ch: IO.channel)
   ensures exists* s' view1. connection_exactly c 'st s' view1 **
           IO.is_channel ch **
           pure (CL.connection_view_single_step 'view0 view1 /\
+                (exists server_name resp.
+                   CL.step 'view0 (CL.request_no_network_in (CL.OpStart server_name)) view1 resp /\
+                   (ok ==> resp.CL.status == CL.HandshakeComplete) /\
+                   (not ok ==> resp.CL.status == CL.Failed T.IoError)) /\
                 (ok ==> s'.S.phase == S.ApplicationData) /\
                         (not ok ==> s'.S.phase == S.Failed))
 {
@@ -517,6 +571,29 @@ fn client_connect (c: connection) (ch: IO.channel)
               c.application_keys_installed := true;
               advance_successful_handshake 'st;
               advance_successful_handshake_log c.log 's;
+              lemma_successful_handshake_state_evolves 's;
+              assert (pure ('view0.CL.state == 's));
+              assert (pure ((successful_handshake_view 'view0 's).CL.raw_log == 'view0.CL.raw_log));
+              assert (pure ((successful_handshake_view 'view0 's).CL.app_view == 'view0.CL.app_view));
+              assert (pure ((successful_handshake_view 'view0 's).CL.state.S.phase == S.ApplicationData));
+              assert (pure (S.conn_evolves 'view0.CL.state (successful_handshake_view 'view0 's).CL.state));
+              CL.lemma_step_start_success_abstract
+                'view0
+                (successful_handshake_view 'view0 's)
+                B.empty;
+              let resp = CL.response_no_network_out B.empty CL.HandshakeComplete;
+              assert (pure (CL.step 'view0
+                (CL.request_no_network_in (CL.OpStart B.empty))
+                (successful_handshake_view 'view0 's)
+                resp));
+              assert (pure (resp.CL.status == CL.HandshakeComplete));
+              assert (pure (exists server_name step_resp.
+                CL.step 'view0
+                  (CL.request_no_network_in (CL.OpStart server_name))
+                  (successful_handshake_view 'view0 's)
+                  step_resp /\
+                (true ==> step_resp.CL.status == CL.HandshakeComplete) /\
+                (not true ==> step_resp.CL.status == CL.Failed T.IoError)));
               assert (pure (CL.connection_view_consistent (successful_handshake_view 'view0 's)));
               assert (pure ((successful_handshake_view 'view0 's).CL.state == hs_application_data 's));
               fold (connection_exactly c 'st (hs_application_data 's) (successful_handshake_view 'view0 's));
@@ -528,6 +605,24 @@ fn client_connect (c: connection) (ch: IO.channel)
                 (CL.local_fail_event T.IoError)
                 (S.Fail T.IoError)
                 (S.fail 's T.IoError);
+              CL.lemma_step_start_failed
+                'view0
+                B.empty
+                T.IoError
+                (S.fail 's T.IoError);
+              let resp = CL.response_no_network_out B.empty (CL.Failed T.IoError);
+              assert (pure (CL.step 'view0
+                (CL.request_no_network_in (CL.OpStart B.empty))
+                (note_local_fail_view 'view0 T.IoError 's)
+                resp));
+              assert (pure (resp.CL.status == CL.Failed T.IoError));
+              assert (pure (exists server_name step_resp.
+                CL.step 'view0
+                  (CL.request_no_network_in (CL.OpStart server_name))
+                  (note_local_fail_view 'view0 T.IoError 's)
+                  step_resp /\
+                (false ==> step_resp.CL.status == CL.HandshakeComplete) /\
+                (not false ==> step_resp.CL.status == CL.Failed T.IoError)));
               assert (pure (CL.connection_view_consistent (note_local_fail_view 'view0 T.IoError 's)));
               assert (pure ((note_local_fail_view 'view0 T.IoError 's).CL.state == S.fail 's T.IoError));
               fold (connection_exactly c 'st (S.fail 's T.IoError) (note_local_fail_view 'view0 T.IoError 's));
@@ -540,6 +635,24 @@ fn client_connect (c: connection) (ch: IO.channel)
               (CL.local_fail_event T.IoError)
               (S.Fail T.IoError)
               (S.fail 's T.IoError);
+            CL.lemma_step_start_failed
+              'view0
+              B.empty
+              T.IoError
+              (S.fail 's T.IoError);
+            let resp = CL.response_no_network_out B.empty (CL.Failed T.IoError);
+            assert (pure (CL.step 'view0
+              (CL.request_no_network_in (CL.OpStart B.empty))
+              (note_local_fail_view 'view0 T.IoError 's)
+              resp));
+            assert (pure (resp.CL.status == CL.Failed T.IoError));
+            assert (pure (exists server_name step_resp.
+              CL.step 'view0
+                (CL.request_no_network_in (CL.OpStart server_name))
+                (note_local_fail_view 'view0 T.IoError 's)
+                step_resp /\
+              (false ==> step_resp.CL.status == CL.HandshakeComplete) /\
+              (not false ==> step_resp.CL.status == CL.Failed T.IoError)));
             assert (pure (CL.connection_view_consistent (note_local_fail_view 'view0 T.IoError 's)));
             assert (pure ((note_local_fail_view 'view0 T.IoError 's).CL.state == S.fail 's T.IoError));
             fold (connection_exactly c 'st (S.fail 's T.IoError) (note_local_fail_view 'view0 T.IoError 's));
