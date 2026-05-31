@@ -34,6 +34,7 @@ FSTAR_FLAGS = \
   $(INCLUDES)
 
 FSTAR = $(FSTAR_EXE) $(FSTAR_FLAGS)
+FSTAR_REFRESH = $(FSTAR_EXE) $(FSTAR_FLAGS) --z3refresh
 
 # ── Source Files ───────────────────────────────────────────────────
 SPEC_FILES = $(wildcard src/spec/*.fst src/spec/*.fsti)
@@ -49,6 +50,12 @@ include .depend
 # ── Generic Verification Rules ────────────────────────────────────
 $(CACHE_DIR)/%.checked: | $(CACHE_DIR)
 	$(FSTAR) $<
+
+# Work around a Z3 4.13.3 arithmetic-context assertion in the large Core VC.
+# Refreshing Z3 between queries does not weaken verification and keeps the
+# normal `make verify` gate deterministic.
+$(CACHE_DIR)/TLS13.Connection.Core.fst.checked: src/impl/TLS13.Connection.Core.fst | $(CACHE_DIR)
+	$(FSTAR_REFRESH) $<
 
 $(CACHE_DIR) $(OUTPUT_DIR) $(EXTRACT_DIR):
 	mkdir -p $@

@@ -2423,6 +2423,38 @@ let lemma_step_read_application_data_chunks_success_with_pending_raw
   assert (req_pending == req);
   lemma_step_with_pending_received_raw view0 req base resp pending
 
+let lemma_step_read_application_data_single_chunk_success_with_pending_raw
+  (view0:connection_view)
+  (raw_view:connection_view)
+  (max_len:nat)
+  (bytes:B.bytes)
+  (pending:B.bytes)
+  : Lemma
+      (requires connection_view_consistent view0 /\
+                connection_view_consistent raw_view /\
+                raw_view.state == view0.state /\
+                raw_view.app_view == view0.app_view /\
+                raw_io_log_extends view0.raw_log raw_view.raw_log /\
+                raw_io_log_same_sent view0.raw_log raw_view.raw_log /\
+                view0.state.S.phase == S.ApplicationData)
+      (ensures step
+        view0
+        (request_with_received_raw_delta
+          (OpReadApplicationData max_len)
+          view0.raw_log
+          (with_pending_received_raw (note_app_received_chunks raw_view [bytes]) pending).raw_log)
+        (with_pending_received_raw (note_app_received_chunks raw_view [bytes]) pending)
+        (response_no_network_out_chunks bytes [bytes] ApplicationDataReady))
+  =
+  lemma_concat_bytes_singleton bytes;
+  lemma_step_read_application_data_chunks_success_with_pending_raw
+    view0
+    raw_view
+    max_len
+    bytes
+    [bytes]
+    pending
+
 let lemma_step_read_close_notify
   (view0:connection_view)
   (raw_view:connection_view)
