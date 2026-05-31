@@ -703,6 +703,20 @@ let lemma_concat_bytes_snoc
   lemma_concat_bytes_singleton bytes;
   Seq.lemma_eq_elim bytes (concat_bytes [bytes])
 
+let lemma_concat_bytes_snoc_equal
+  (chunks:list B.bytes)
+  (bytes:B.bytes)
+  (prefix:B.bytes)
+  : Lemma
+      (requires Seq.equal prefix (concat_bytes chunks))
+      (ensures Seq.equal (B.append prefix bytes) (concat_bytes (chunks @ [bytes])))
+  =
+  lemma_concat_bytes_snoc chunks bytes;
+  Seq.lemma_eq_elim prefix (concat_bytes chunks);
+  Seq.lemma_eq_refl
+    (B.append prefix bytes)
+    (concat_bytes (chunks @ [bytes]))
+
 let rec lemma_chunk_count_append
   (left:list B.bytes)
   (right:list B.bytes)
