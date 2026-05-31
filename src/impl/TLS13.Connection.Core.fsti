@@ -80,6 +80,7 @@ type request_kind =
 let request_record_sequence_fits
   (kind:request_kind)
   (view:CL.connection_view)
+  (network_in:B.bytes)
   (app_in:B.bytes)
   : prop =
   match kind with
@@ -88,7 +89,10 @@ let request_record_sequence_fits
   | KClose ->
     U64.fits (view.CL.state.S.write_state.R.seq + 1)
   | KReadApplicationData ->
-    U64.fits (view.CL.state.S.read_state.R.seq + 1)
+    U64.fits
+      (view.CL.state.S.read_state.R.seq +
+       B.length view.CL.pending_received_raw +
+       B.length network_in + 1)
 
 type core_result = {
   network_out_len: SZ.t;
@@ -160,7 +164,11 @@ requires
     B.length 'network_out0 == SZ.v network_out_cap /\
     B.length 'app_out0 == SZ.v app_out_cap /\
     view0.CL.state.S.phase == S.ApplicationData /\
-    request_record_sequence_fits kind view0 (Ghost.reveal 'app_in_bytes) /\
+    request_record_sequence_fits
+      kind
+      view0
+      (Ghost.reveal 'network_in_bytes)
+      (Ghost.reveal 'app_in_bytes) /\
     request_buffers_match
       kind
       (Ghost.reveal 'network_in_bytes)

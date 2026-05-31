@@ -779,7 +779,11 @@ requires
     B.length 'network_out0 == SZ.v network_out_cap /\
     B.length 'app_out0 == SZ.v app_out_cap /\
     view0.CL.state.S.phase == S.ApplicationData /\
-    request_record_sequence_fits kind view0 (Ghost.reveal 'app_in_bytes) /\
+    request_record_sequence_fits
+      kind
+      view0
+      (Ghost.reveal 'network_in_bytes)
+      (Ghost.reveal 'app_in_bytes) /\
     request_buffers_match
       kind
       (Ghost.reveal 'network_in_bytes)
