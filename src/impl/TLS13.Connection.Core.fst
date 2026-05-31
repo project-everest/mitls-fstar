@@ -2402,14 +2402,25 @@ ensures exists* view1 network_out1 app_out1.
           } else {
             assert (pure (SZ.v residual_len <= SZ.v pending_network_buffer_capacity));
             assert (pure (SZ.v record_wire_len + SZ.v residual_len <= SZ.v network_in_len));
-            V.pts_to_len c.pending_network_buffer;
-            V.to_array_pts_to c.pending_network_buffer;
+            let mut residual_tmp = [| 0uy; residual_len |];
             copy_payload_to_output_loop
               network_in
               network_in_len
+              residual_tmp
+              residual_len
+              record_wire_len
+              0sz
+              residual_len;
+            with residual_tmp_bytes. assert (pts_to residual_tmp residual_tmp_bytes);
+            assert (pure (B.length residual_tmp_bytes == SZ.v residual_len));
+            V.pts_to_len c.pending_network_buffer;
+            V.to_array_pts_to c.pending_network_buffer;
+            copy_payload_to_output_loop
+              residual_tmp
+              residual_len
               (V.vec_to_array c.pending_network_buffer)
               pending_network_buffer_capacity
-              record_wire_len
+              0sz
               0sz
               residual_len;
             V.to_vec_pts_to c.pending_network_buffer;
@@ -2510,16 +2521,17 @@ ensures exists* view1 network_out1 app_out1.
                 assert (pure (mreq == CL.request_with_received_raw_delta (CL.OpReadApplicationData (SZ.v requested_app_len)) view0.CL.raw_log (Ghost.reveal view_single).CL.raw_log));
                 assert (pure (CL.step view0 mreq (Ghost.reveal view_single) (Ghost.reveal resp_single)));
                 if SZ.(5sz <=^ residual_len) {
-                  assert (pure (SZ.v record_wire_len + 5 <= SZ.v network_in_len));
                   let mut header2 = [| 0uy; 5sz |];
+                  V.to_array_pts_to c.pending_network_buffer;
                   copy_payload_to_output_loop
-                    network_in
-                    network_in_len
+                    (V.vec_to_array c.pending_network_buffer)
+                    pending_network_buffer_capacity
                     header2
                     5sz
-                    record_wire_len
+                    0sz
                     0sz
                     5sz;
+                  V.to_vec_pts_to c.pending_network_buffer;
                   with header2_bytes. assert (pts_to header2 header2_bytes);
                   assert (pure (B.length header2_bytes == 5));
                   let mut content_type2_out = [| 0uy; 1sz |];
@@ -2549,46 +2561,28 @@ ensures exists* view1 network_out1 app_out1.
                       lemma_nat_add_sub_cancel 0 (SZ.v record2_wire_len) (SZ.v residual_len);
                       assert (pure (SZ.v record2_wire_len + SZ.v residual_after_two_len == SZ.v residual_len));
                       assert (pure (SZ.v residual_after_two_len <= SZ.v pending_network_buffer_capacity));
-                      let record2_cipher_offset = SZ.(record_wire_len +^ 5sz);
-                      assert (pure (SZ.v record2_cipher_offset == SZ.v record_wire_len + 5));
-                      let record2_end = SZ.(record_wire_len +^ record2_wire_len);
-                      assert (pure (SZ.v record2_end == SZ.v record_wire_len + SZ.v record2_wire_len));
-                      assert (pure (SZ.v record2_end <= SZ.v network_in_len));
-                      assert (pure (SZ.v record2_end + SZ.v residual_after_two_len ==
-                                    (SZ.v record_wire_len + SZ.v record2_wire_len) + SZ.v residual_after_two_len));
-                      Math.addition_is_associative
-                        (SZ.v record_wire_len)
-                        (SZ.v record2_wire_len)
-                        (SZ.v residual_after_two_len);
-                      assert (pure ((SZ.v record_wire_len + SZ.v record2_wire_len) + SZ.v residual_after_two_len ==
-                                    SZ.v record_wire_len + (SZ.v record2_wire_len + SZ.v residual_after_two_len)));
-                      assert (pure (SZ.v record2_end + SZ.v residual_after_two_len ==
-                                    SZ.v record_wire_len + (SZ.v record2_wire_len + SZ.v residual_after_two_len)));
-                      assert (pure (SZ.v record2_end + SZ.v residual_after_two_len ==
-                                    SZ.v record_wire_len + SZ.v residual_len));
-                      assert (pure (SZ.v record2_end + SZ.v residual_after_two_len == SZ.v network_in_len));
+                      let record2_cipher_offset = 5sz;
+                      let record2_end = record2_wire_len;
+                      assert (pure (SZ.v record2_cipher_offset == 5));
+                      assert (pure (SZ.v record2_end == SZ.v record2_wire_len));
                       assert (pure (SZ.v record2_cipher_offset + SZ.v fragment2_len ==
-                                    (SZ.v record_wire_len + 5) + SZ.v fragment2_len));
-                      Math.addition_is_associative
-                        (SZ.v record_wire_len)
-                        5
-                        (SZ.v fragment2_len);
-                      assert (pure ((SZ.v record_wire_len + 5) + SZ.v fragment2_len ==
-                                    SZ.v record_wire_len + (5 + SZ.v fragment2_len)));
+                                    5 + SZ.v fragment2_len));
                       assert (pure (SZ.v record2_cipher_offset + SZ.v fragment2_len ==
-                                    SZ.v record_wire_len + (5 + SZ.v fragment2_len)));
-                      assert (pure (SZ.v record2_cipher_offset + SZ.v fragment2_len ==
-                                    SZ.v record_wire_len + SZ.v record2_wire_len));
+                                    SZ.v record2_wire_len));
                       assert (pure (SZ.v record2_cipher_offset + SZ.v fragment2_len == SZ.v record2_end));
+                      assert (pure (SZ.v record2_end + SZ.v residual_after_two_len ==
+                                    SZ.v residual_len));
                       let mut cipher2 = [| 0uy; fragment2_len |];
+                      V.to_array_pts_to c.pending_network_buffer;
                       copy_payload_to_output_loop
-                        network_in
-                        network_in_len
+                        (V.vec_to_array c.pending_network_buffer)
+                        pending_network_buffer_capacity
                         cipher2
                         fragment2_len
                         record2_cipher_offset
                         0sz
                         fragment2_len;
+                      V.to_vec_pts_to c.pending_network_buffer;
                       with cipher2_bytes. assert (pts_to cipher2 cipher2_bytes);
                       assert (pure (B.length cipher2_bytes == SZ.v fragment2_len));
                       assert (pure (SZ.v 16sz == 16));
@@ -2705,11 +2699,11 @@ ensures exists* view1 network_out1 app_out1.
                             assert (pure (Seq.equal
                               (Ghost.reveal app_payload_total)
                               (CL.concat_bytes [Ghost.reveal app_payload; Ghost.reveal app_payload2])));
-                            assert (pure (SZ.v record2_end + SZ.v residual_after_two_len == SZ.v network_in_len));
+                            assert (pure (SZ.v record2_end + SZ.v residual_after_two_len == SZ.v residual_len));
                             V.to_array_pts_to c.pending_network_buffer;
                             copy_payload_to_output_loop
-                              network_in
-                              network_in_len
+                              residual_tmp
+                              residual_len
                               (V.vec_to_array c.pending_network_buffer)
                               pending_network_buffer_capacity
                               record2_end
