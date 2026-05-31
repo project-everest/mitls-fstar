@@ -11,6 +11,7 @@ module BDE = TLS13.Handshake.ByteDriver.External
 module Cast = FStar.Int.Cast
 module E = TLS13.Handshake.External
 module H = TLS13.Handshake.Spec
+module HW = TLS13.Connection.HandshakeWitness
 module HF = TLS13.Handshake.Framing
 module IO = TLS13.IO
 module RF = TLS13.Record.Framing
@@ -27,45 +28,7 @@ type handshake_context = E.handshake_context
 let is_handshake_context (ctx:handshake_context) (st:ST.state_ref) (s:S.conn_state) : slprop =
   E.is_context ctx ** ST.current st s
 
-let zeros32 : B.bytes = B.zeros 32
 let server_hello_fragment_capacity : SZ.t = 4096sz
-
-let dummy_client_hello : H.client_hello = {
-  H.random = zeros32;
-  H.server_name = None;
-  H.key_share = zeros32;
-  H.cipher_suites = [T.TLS_CHACHA20_POLY1305_SHA256];
-  H.signature_schemes = [T.RsaPssRsaeSha256];
-}
-
-let dummy_server_hello : H.server_hello = {
-  H.random = zeros32;
-  H.key_share = zeros32;
-  H.cipher_suite = T.TLS_CHACHA20_POLY1305_SHA256;
-}
-
-let dummy_encrypted_extensions : H.encrypted_extensions = {
-  H.negotiated_alpn = None;
-}
-
-let dummy_certificate : H.certificate_msg = {
-  H.chain = [];
-}
-
-let dummy_peer : X.peer_identity = {
-  X.validated_hostname = B.empty;
-  X.leaf_public_key = B.empty;
-  X.permitted_signature_schemes = [T.RsaPssRsaeSha256];
-}
-
-let dummy_certificate_verify : H.certificate_verify = {
-  H.scheme = T.RsaPssRsaeSha256;
-  H.signature = B.empty;
-}
-
-let dummy_finished : H.finished = {
-  H.verify_data = zeros32;
-}
 
 inline_for_extraction
 fn write_fixed_client_random (random: array U8.t)
@@ -289,8 +252,8 @@ fn send_client_hello (ctx: handshake_context) (ch: IO.channel)
             false
           };
         if hello_ok {
-          assert (pure (S.step 's (S.SendClientHello dummy_client_hello) == Some (S.with_phase 's S.ClientHelloSent)));
-          ST.advance 'st (S.SendClientHello dummy_client_hello) (S.with_phase 's S.ClientHelloSent);
+          assert (pure (S.step 's (S.SendClientHello HW.dummy_client_hello) == Some (S.with_phase 's S.ClientHelloSent)));
+          ST.advance 'st (S.SendClientHello HW.dummy_client_hello) (S.with_phase 's S.ClientHelloSent);
           fold (is_handshake_context ctx 'st (S.with_phase 's S.ClientHelloSent));
           true
         } else {
@@ -389,8 +352,8 @@ fn recv_server_hello (ctx: handshake_context) (ch: IO.channel)
   unfold (is_handshake_context ctx 'st 's);
   let ok = recv_server_hello_record ctx ch;
   if ok {
-    assert (pure (S.step 's (S.RecvServerHello dummy_server_hello) == Some (S.with_phase 's S.ServerHelloReceived)));
-    ST.advance 'st (S.RecvServerHello dummy_server_hello) (S.with_phase 's S.ServerHelloReceived);
+    assert (pure (S.step 's (S.RecvServerHello HW.dummy_server_hello) == Some (S.with_phase 's S.ServerHelloReceived)));
+    ST.advance 'st (S.RecvServerHello HW.dummy_server_hello) (S.with_phase 's S.ServerHelloReceived);
     fold (is_handshake_context ctx 'st (S.with_phase 's S.ServerHelloReceived));
     true
   } else {
@@ -418,8 +381,8 @@ fn recv_encrypted_extensions (ctx: handshake_context) (ch: IO.channel)
   let ok = BD.recv_encrypted_handshake ctx ch;
   fold (E.is_context ctx);
   if ok {
-    assert (pure (S.step 's (S.RecvEncryptedExtensions dummy_encrypted_extensions) == Some (S.with_phase 's S.EncryptedExtensionsReceived)));
-    ST.advance 'st (S.RecvEncryptedExtensions dummy_encrypted_extensions) (S.with_phase 's S.EncryptedExtensionsReceived);
+    assert (pure (S.step 's (S.RecvEncryptedExtensions HW.dummy_encrypted_extensions) == Some (S.with_phase 's S.EncryptedExtensionsReceived)));
+    ST.advance 'st (S.RecvEncryptedExtensions HW.dummy_encrypted_extensions) (S.with_phase 's S.EncryptedExtensionsReceived);
     fold (is_handshake_context ctx 'st (S.with_phase 's S.EncryptedExtensionsReceived));
     true
   } else {
@@ -444,8 +407,8 @@ fn recv_certificate (ctx: handshake_context) (ch: IO.channel)
   unfold (is_handshake_context ctx 'st 's);
   let ok = E.certificate_received ctx;
   if ok {
-    assert (pure (S.step 's (S.RecvCertificate dummy_certificate) == Some (S.with_phase 's S.CertificateReceived)));
-    ST.advance 'st (S.RecvCertificate dummy_certificate) (S.with_phase 's S.CertificateReceived);
+    assert (pure (S.step 's (S.RecvCertificate HW.dummy_certificate) == Some (S.with_phase 's S.CertificateReceived)));
+    ST.advance 'st (S.RecvCertificate HW.dummy_certificate) (S.with_phase 's S.CertificateReceived);
     fold (is_handshake_context ctx 'st (S.with_phase 's S.CertificateReceived));
     true
   } else {
@@ -468,9 +431,9 @@ fn validate_certificate (ctx: handshake_context)
   unfold (is_handshake_context ctx 'st 's);
   let ok = E.validate_certificate ctx;
   if ok {
-    assert (pure (S.step 's (S.ValidateCertificate dummy_peer) == Some (S.with_validated_peer 's dummy_peer)));
-    ST.advance 'st (S.ValidateCertificate dummy_peer) (S.with_validated_peer 's dummy_peer);
-    fold (is_handshake_context ctx 'st (S.with_validated_peer 's dummy_peer));
+    assert (pure (S.step 's (S.ValidateCertificate HW.dummy_peer) == Some (S.with_validated_peer 's HW.dummy_peer)));
+    ST.advance 'st (S.ValidateCertificate HW.dummy_peer) (S.with_validated_peer 's HW.dummy_peer);
+    fold (is_handshake_context ctx 'st (S.with_validated_peer 's HW.dummy_peer));
     true
   } else {
     assert (pure (S.step 's (S.Fail T.BadCertificate) == Some (S.fail 's T.BadCertificate)));
@@ -494,8 +457,8 @@ fn recv_certificate_verify (ctx: handshake_context) (ch: IO.channel)
   unfold (is_handshake_context ctx 'st 's);
   let ok = E.certificate_verify_verified ctx;
   if ok {
-    assert (pure (S.step 's (S.RecvCertificateVerify dummy_certificate_verify) == Some (S.with_phase 's S.CertificateVerified)));
-    ST.advance 'st (S.RecvCertificateVerify dummy_certificate_verify) (S.with_phase 's S.CertificateVerified);
+    assert (pure (S.step 's (S.RecvCertificateVerify HW.dummy_certificate_verify) == Some (S.with_phase 's S.CertificateVerified)));
+    ST.advance 'st (S.RecvCertificateVerify HW.dummy_certificate_verify) (S.with_phase 's S.CertificateVerified);
     fold (is_handshake_context ctx 'st (S.with_phase 's S.CertificateVerified));
     true
   } else {
@@ -526,8 +489,8 @@ fn recv_server_finished (ctx: handshake_context) (ch: IO.channel)
       false
     };
   if ok {
-    assert (pure (S.step 's (S.RecvServerFinished dummy_finished) == Some (S.with_phase 's S.ServerFinishedVerified)));
-    ST.advance 'st (S.RecvServerFinished dummy_finished) (S.with_phase 's S.ServerFinishedVerified);
+    assert (pure (S.step 's (S.RecvServerFinished HW.dummy_finished) == Some (S.with_phase 's S.ServerFinishedVerified)));
+    ST.advance 'st (S.RecvServerFinished HW.dummy_finished) (S.with_phase 's S.ServerFinishedVerified);
     fold (is_handshake_context ctx 'st (S.with_phase 's S.ServerFinishedVerified));
     true
   } else {
@@ -559,8 +522,8 @@ fn send_client_finished (ctx: handshake_context) (ch: IO.channel)
       false
     };
   if ok {
-    assert (pure (S.step 's (S.SendClientFinished dummy_finished) == Some (S.with_phase 's S.ApplicationData)));
-    ST.advance 'st (S.SendClientFinished dummy_finished) (S.with_phase 's S.ApplicationData);
+    assert (pure (S.step 's (S.SendClientFinished HW.dummy_finished) == Some (S.with_phase 's S.ApplicationData)));
+    ST.advance 'st (S.SendClientFinished HW.dummy_finished) (S.with_phase 's S.ApplicationData);
     fold (is_handshake_context ctx 'st (S.with_phase 's S.ApplicationData));
     true
   } else {
