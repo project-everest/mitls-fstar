@@ -22,6 +22,18 @@ val inner_plaintext_no_padding_result:
   content_type:U8.t ->
   GTot B.bytes
 
+val lemma_inner_plaintext_no_padding_result_len:
+  plain:B.bytes ->
+  old:B.bytes ->
+  plain_len:nat ->
+  out_len:nat ->
+  content_type:U8.t ->
+  Lemma
+    (requires B.length plain == plain_len /\
+              B.length old == out_len /\
+              out_len == plain_len + 1)
+    (ensures B.length (inner_plaintext_no_padding_result plain old plain_len out_len content_type) == out_len)
+
 fn encode_inner_plaintext_no_padding
   (plain: array U8.t)
   (plain_len: SZ.t)

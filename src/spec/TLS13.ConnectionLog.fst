@@ -524,6 +524,54 @@ let lemma_raw_received_delta_refl (raw:raw_io_log)
   =
   lemma_bytes_delta_refl raw.raw_received
 
+let lemma_bytes_delta_append (old:B.bytes) (delta:B.bytes)
+  : Lemma (bytes_delta old (B.append old delta) == delta)
+  =
+  let next = B.append old delta in
+  let prefix = Seq.slice next 0 (B.length old) in
+  let suffix = Seq.slice next (B.length old) (B.length next) in
+  Seq.lemma_len_append old delta;
+  Seq.lemma_len_slice next 0 (B.length old);
+  Seq.lemma_len_slice next (B.length old) (B.length next);
+  lemma_bytes_extends_append old delta;
+  Seq.lemma_eq_elim old prefix;
+  SP.lemma_split next (B.length old);
+  assert (B.append prefix suffix == next);
+  assert (B.append prefix suffix == B.append old delta);
+  Seq.lemma_eq_refl (B.append prefix suffix) (B.append old delta);
+  SP.lemma_append_inj prefix suffix old delta;
+  Seq.lemma_eq_elim suffix delta;
+  assert (bytes_delta old next == suffix);
+  assert (bytes_delta old next == delta)
+
+let lemma_raw_sent_delta_append (raw:raw_io_log) (delta:B.bytes)
+  : Lemma (raw_sent_delta raw (append_raw_sent raw delta) == delta)
+  =
+  lemma_bytes_delta_append raw.raw_sent delta
+
+let lemma_raw_received_delta_append (raw:raw_io_log) (delta:B.bytes)
+  : Lemma (raw_received_delta raw (append_raw_received raw delta) == delta)
+  =
+  lemma_bytes_delta_append raw.raw_received delta
+
+let lemma_raw_sent_delta_append_slice
+  (raw:raw_io_log)
+  (bytes:B.bytes)
+  (lo:nat)
+  (hi:nat)
+  : Lemma (raw_sent_delta raw (append_raw_sent_slice raw bytes lo hi) == raw_slice bytes lo hi)
+  =
+  lemma_raw_sent_delta_append raw (raw_slice bytes lo hi)
+
+let lemma_raw_received_delta_append_slice
+  (raw:raw_io_log)
+  (bytes:B.bytes)
+  (lo:nat)
+  (hi:nat)
+  : Lemma (raw_received_delta raw (append_raw_received_slice raw bytes lo hi) == raw_slice bytes lo hi)
+  =
+  lemma_raw_received_delta_append raw (raw_slice bytes lo hi)
+
 let request_with_network_in (op:client_operation) (network_in:B.bytes) : client_request =
   { operation = op; network_in = network_in }
 

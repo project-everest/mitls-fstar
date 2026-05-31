@@ -54,6 +54,33 @@ let inner_plaintext_no_padding_result
       content_type
   else old
 
+let lemma_inner_plaintext_no_padding_result_len
+  (plain:B.bytes)
+  (old:B.bytes)
+  (plain_len:nat)
+  (out_len:nat)
+  (content_type:U8.t)
+  : Lemma
+      (requires B.length plain == plain_len /\
+                B.length old == out_len /\
+                out_len == plain_len + 1)
+      (ensures B.length (inner_plaintext_no_padding_result plain old plain_len out_len content_type) == out_len)
+  =
+  assert (plain_len < out_len);
+  assert (plain_len <= B.length plain);
+  assert (out_len <= B.length old);
+  Seq.lemma_len_slice plain 0 plain_len;
+  Seq.lemma_len_slice old plain_len out_len;
+  Seq.lemma_len_append (Seq.slice plain 0 plain_len) (Seq.slice old plain_len out_len);
+  assert (B.length (Seq.append (Seq.slice plain 0 plain_len) (Seq.slice old plain_len out_len)) == out_len);
+  Seq.lemma_len_upd plain_len content_type (Seq.append (Seq.slice plain 0 plain_len) (Seq.slice old plain_len out_len));
+  assert (inner_plaintext_no_padding_result plain old plain_len out_len content_type ==
+          Seq.upd
+            (Seq.append (Seq.slice plain 0 plain_len) (Seq.slice old plain_len out_len))
+            plain_len
+            content_type);
+  assert (B.length (inner_plaintext_no_padding_result plain old plain_len out_len content_type) == out_len)
+
 fn encode_inner_plaintext_no_padding
   (plain: array U8.t)
   (plain_len: SZ.t)

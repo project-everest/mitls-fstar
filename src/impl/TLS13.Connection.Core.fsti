@@ -20,11 +20,11 @@ module U8 = FStar.UInt8
   connection implementation still treats the handshake transcript as an external
   TCB milestone.
 
-  The initial implementation establishes the calc-style theorem shape over
-  concrete buffers and CL.step witnesses. It does not yet serialize application
-  records into network_out, and KReadApplicationData currently models an empty
-  input poll that returns NeedNetworkInput. Moving the record/framing code behind
-  this boundary is the next proof milestone.
+  The implementation establishes the calc-style theorem shape over concrete
+  buffers and CL.step witnesses. Application writes use the record/framing code
+  to emit one TLS record into network_out. KReadApplicationData currently models
+  an empty input poll that returns NeedNetworkInput, and multi-record
+  fragmentation remains a later milestone.
 **)
 
 val client_core : Type0
@@ -38,6 +38,18 @@ fn client_core_new ()
 fn client_core_free (c: client_core)
   requires is_client_core c 'view
   ensures emp
+
+fn client_core_install_application_keys_runtime
+  (c: client_core)
+  (key: array U8.t)
+  (iv: array U8.t)
+  requires is_client_core c 'view **
+           pts_to key 'key_bytes **
+           pts_to iv 'iv_bytes **
+           pure (B.length 'key_bytes == 32 /\ B.length 'iv_bytes == 12)
+  ensures is_client_core c 'view **
+          pts_to key 'key_bytes **
+          pts_to iv 'iv_bytes
 
 type request_kind =
   | KSendApplicationData
