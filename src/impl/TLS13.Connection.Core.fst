@@ -1566,13 +1566,19 @@ ensures exists* view1 network_out1 app_out1.
                       assert (pure (mreq == CL.request_with_received_raw_delta (CL.OpReadApplicationData (SZ.v requested_app_len)) view0.CL.raw_log (Ghost.reveal view_single).CL.raw_log));
                       assert (pure (CL.step view0 mreq (Ghost.reveal view_single) (Ghost.reveal resp_single)));
                       if SZ.(5sz <=^ residual_len) {
+                        let record2_cursor = 0sz;
+                        assert (pure (SZ.v record2_cursor == 0));
+                        let record2_header_end = SZ.(record2_cursor +^ 5sz);
+                        assert (pure (SZ.v record2_header_end == SZ.v record2_cursor + 5));
+                        assert (pure (SZ.v record2_header_end == 5));
+                        assert (pure (SZ.v record2_header_end <= SZ.v residual_len));
                         let mut header2 = [| 0uy; 5sz |];
                         copy_payload_to_output_loop
                           residual_tmp
                           residual_len
                           header2
                           5sz
-                          0sz
+                          record2_cursor
                           0sz
                           5sz;
                         with header2_bytes. assert (pts_to header2 header2_bytes);
@@ -1589,15 +1595,17 @@ ensures exists* view1 network_out1 app_out1.
                           let frag2_lo16 = Cast.uint8_to_uint16 frag2_lo;
                           let frag2_16 = U16.logor (U16.shift_left frag2_hi16 8ul) frag2_lo16;
                           let fragment2_len = SZ.uint16_to_sizet frag2_16;
-                          let remaining2_len = SZ.(residual_len -^ 5sz);
+                          let remaining2_len = SZ.(residual_len -^ record2_header_end);
+                          assert (pure (SZ.v remaining2_len == SZ.v residual_len - SZ.v record2_header_end));
                           assert (pure (SZ.v remaining2_len == SZ.v residual_len - 5));
                           if (content_type2 = 23uy &&
                               SZ.(16sz <^ fragment2_len) &&
                               SZ.(fragment2_len <=^ remaining2_len)) {
                             assert (pure (SZ.v fragment2_len <= SZ.v remaining2_len));
                             assert (pure (5 + SZ.v fragment2_len <= SZ.v residual_len));
+                            assert (pure (SZ.v record2_cursor + 5 + SZ.v fragment2_len <= SZ.v residual_len));
                             let record2_lengths =
-                              residual_frame_lengths_at residual_len 0sz fragment2_len;
+                              residual_frame_lengths_at residual_len record2_cursor fragment2_len;
                             let record2_wire_len = record2_lengths.residual_frame_at_wire_len;
                             assert (pure (SZ.v record2_wire_len == 5 + SZ.v fragment2_len));
                             assert (pure (SZ.v record2_wire_len <= SZ.v residual_len));
@@ -1607,7 +1615,8 @@ ensures exists* view1 network_out1 app_out1.
                             assert (pure (SZ.v residual_after_two_len == SZ.v residual_len - SZ.v record2_end));
                             assert (pure (SZ.v record2_end + SZ.v residual_after_two_len == SZ.v residual_len));
                             assert (pure (SZ.v residual_after_two_len <= SZ.v pending_network_buffer_capacity));
-                            let record2_cipher_offset = 5sz;
+                            let record2_cipher_offset = record2_header_end;
+                            assert (pure (SZ.v record2_cipher_offset == SZ.v record2_cursor + 5));
                             assert (pure (SZ.v record2_cipher_offset == 5));
                             assert (pure (SZ.v record2_cipher_offset + SZ.v fragment2_len ==
                                           5 + SZ.v fragment2_len));
@@ -2659,13 +2668,19 @@ ensures exists* view1 network_out1 app_out1.
                 assert (pure (mreq == CL.request_with_received_raw_delta (CL.OpReadApplicationData (SZ.v requested_app_len)) view0.CL.raw_log (Ghost.reveal view_single).CL.raw_log));
                 assert (pure (CL.step view0 mreq (Ghost.reveal view_single) (Ghost.reveal resp_single)));
                 if SZ.(5sz <=^ residual_len) {
+                  let record2_cursor = 0sz;
+                  assert (pure (SZ.v record2_cursor == 0));
+                  let record2_header_end = SZ.(record2_cursor +^ 5sz);
+                  assert (pure (SZ.v record2_header_end == SZ.v record2_cursor + 5));
+                  assert (pure (SZ.v record2_header_end == 5));
+                  assert (pure (SZ.v record2_header_end <= SZ.v residual_len));
                   let mut header2 = [| 0uy; 5sz |];
                   copy_payload_to_output_loop
                     residual_tmp
                     residual_len
                     header2
                     5sz
-                    0sz
+                    record2_cursor
                     0sz
                     5sz;
                   with header2_bytes. assert (pts_to header2 header2_bytes);
@@ -2682,15 +2697,17 @@ ensures exists* view1 network_out1 app_out1.
                     let frag2_lo16 = Cast.uint8_to_uint16 frag2_lo;
                     let frag2_16 = U16.logor (U16.shift_left frag2_hi16 8ul) frag2_lo16;
                     let fragment2_len = SZ.uint16_to_sizet frag2_16;
-                    let remaining2_len = SZ.(residual_len -^ 5sz);
+                    let remaining2_len = SZ.(residual_len -^ record2_header_end);
+                    assert (pure (SZ.v remaining2_len == SZ.v residual_len - SZ.v record2_header_end));
                     assert (pure (SZ.v remaining2_len == SZ.v residual_len - 5));
                     if (content_type2 = 23uy &&
                         SZ.(16sz <^ fragment2_len) &&
                         SZ.(fragment2_len <=^ remaining2_len)) {
                       assert (pure (SZ.v fragment2_len <= SZ.v remaining2_len));
                       assert (pure (5 + SZ.v fragment2_len <= SZ.v residual_len));
+                      assert (pure (SZ.v record2_cursor + 5 + SZ.v fragment2_len <= SZ.v residual_len));
                       let record2_lengths =
-                        residual_frame_lengths_at residual_len 0sz fragment2_len;
+                        residual_frame_lengths_at residual_len record2_cursor fragment2_len;
                       let record2_wire_len = record2_lengths.residual_frame_at_wire_len;
                       assert (pure (SZ.v record2_wire_len == 5 + SZ.v fragment2_len));
                       assert (pure (SZ.v record2_wire_len <= SZ.v residual_len));
@@ -2700,7 +2717,8 @@ ensures exists* view1 network_out1 app_out1.
                       assert (pure (SZ.v residual_after_two_len == SZ.v residual_len - SZ.v record2_end));
                       assert (pure (SZ.v record2_end + SZ.v residual_after_two_len == SZ.v residual_len));
                       assert (pure (SZ.v residual_after_two_len <= SZ.v pending_network_buffer_capacity));
-                      let record2_cipher_offset = 5sz;
+                      let record2_cipher_offset = record2_header_end;
+                      assert (pure (SZ.v record2_cipher_offset == SZ.v record2_cursor + 5));
                       assert (pure (SZ.v record2_cipher_offset == 5));
                       assert (pure (SZ.v record2_cipher_offset + SZ.v fragment2_len ==
                                     5 + SZ.v fragment2_len));
