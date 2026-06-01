@@ -115,6 +115,53 @@ let lemma_step_recv_application_data
   =
   ()
 
+let lemma_read_loop_accept_app_record
+  (view:CL.connection_view)
+  (chunks:list B.bytes)
+  (bytes:B.bytes)
+  (source:B.bytes)
+  (mid:nat)
+  (hi:nat)
+  (prefix:B.bytes)
+  (whole:B.bytes)
+  : Lemma
+      (requires CL.connection_view_consistent view /\
+                view.CL.state.S.phase == S.ApplicationData /\
+                mid <= hi /\
+                hi <= B.length source /\
+                Seq.equal whole (CL.raw_slice source 0 hi) /\
+                Seq.equal prefix (CL.raw_slice source 0 mid) /\
+                Seq.equal prefix (CL.concat_bytes chunks) /\
+                Seq.equal bytes (CL.raw_slice source mid hi))
+      (ensures (
+        let chunks' = L.append chunks [bytes] in
+        let acc = CL.note_app_received_chunks view chunks in
+        let next = CL.note_app_received_chunks view chunks' in
+        CL.connection_view_consistent next /\
+        next.CL.state.S.phase == S.ApplicationData /\
+        next.CL.state == S.advance_read_record acc.CL.state /\
+        S.step acc.CL.state (S.RecvApplicationData bytes) == Some next.CL.state /\
+        CL.chunk_count chunks' == CL.chunk_count chunks + 1 /\
+        Seq.equal whole (CL.concat_bytes chunks')))
+=
+  CL.lemma_chunk_count_snoc chunks bytes;
+  CL.lemma_note_app_received_chunks_loop_accept_output
+    view
+    chunks
+    bytes
+    source
+    mid
+    hi
+    prefix
+    whole;
+  let acc = CL.note_app_received_chunks view chunks in
+  let next = CL.note_app_received_chunks view (L.append chunks [bytes]) in
+  assert (acc.CL.state.S.phase == S.ApplicationData);
+  lemma_step_recv_application_data acc.CL.state bytes;
+  assert (S.step acc.CL.state (S.RecvApplicationData bytes) ==
+          Some (S.advance_read_record acc.CL.state));
+  assert (next.CL.state == S.advance_read_record acc.CL.state)
+
 noeq
 type client_core = {
   state: ST.state_ref;
@@ -1797,15 +1844,7 @@ ensures exists* view1 network_out1 app_out1.
                                     CL.note_app_received_chunks
                                       (Ghost.reveal view1)
                                       (Ghost.reveal chunks_after_second);
-                                  CL.lemma_chunk_count_snoc
-                                    (Ghost.reveal chunks_single)
-                                    (Ghost.reveal app_payload2);
-                                  assert (pure (CL.chunk_count (Ghost.reveal chunks_after_second) ==
-                                                CL.chunk_count (Ghost.reveal chunks_single) + 1));
-                                  assert (pure (server_record_s2.R.seq ==
-                                                view0.CL.state.S.read_state.R.seq +
-                                                CL.chunk_count (Ghost.reveal chunks_after_second)));
-                                  CL.lemma_note_app_received_chunks_loop_accept_output
+                                  lemma_read_loop_accept_app_record
                                     (Ghost.reveal view1)
                                     (Ghost.reveal chunks_single)
                                     (Ghost.reveal app_payload2)
@@ -1814,6 +1853,11 @@ ensures exists* view1 network_out1 app_out1.
                                     (SZ.v total_payload_len)
                                     (Ghost.reveal app_payload)
                                     (Ghost.reveal app_payload_total);
+                                  assert (pure (CL.chunk_count (Ghost.reveal chunks_after_second) ==
+                                                CL.chunk_count (Ghost.reveal chunks_single) + 1));
+                                  assert (pure (server_record_s2.R.seq ==
+                                                view0.CL.state.S.read_state.R.seq +
+                                                CL.chunk_count (Ghost.reveal chunks_after_second)));
                                   assert (pure (Seq.equal
                                     (Ghost.reveal app_payload_total)
                                     (CL.concat_bytes (Ghost.reveal chunks_after_second))));
@@ -1846,9 +1890,6 @@ ensures exists* view1 network_out1 app_out1.
                                     (Ghost.reveal pending_raw_payload2)
                                     (CL.raw_slice (Ghost.reveal pending_network_buffer3) 0 (SZ.v residual_after_two_len))));
                                   assert (pure ((Ghost.reveal acc_view_single).CL.state.S.phase == S.ApplicationData));
-                                  lemma_step_recv_application_data
-                                    (Ghost.reveal acc_view_single).CL.state
-                                    (Ghost.reveal app_payload2);
                                   assert (pure (S.step
                                     (Ghost.reveal acc_view_single).CL.state
                                     (S.RecvApplicationData (Ghost.reveal app_payload2)) ==
@@ -2947,15 +2988,7 @@ ensures exists* view1 network_out1 app_out1.
                               CL.note_app_received_chunks
                                 (Ghost.reveal view1)
                                 (Ghost.reveal chunks_after_second);
-                            CL.lemma_chunk_count_snoc
-                              (Ghost.reveal chunks_single)
-                              (Ghost.reveal app_payload2);
-                            assert (pure (CL.chunk_count (Ghost.reveal chunks_after_second) ==
-                                          CL.chunk_count (Ghost.reveal chunks_single) + 1));
-                            assert (pure (server_record_s2.R.seq ==
-                                          view0.CL.state.S.read_state.R.seq +
-                                          CL.chunk_count (Ghost.reveal chunks_after_second)));
-                            CL.lemma_note_app_received_chunks_loop_accept_output
+                            lemma_read_loop_accept_app_record
                               (Ghost.reveal view1)
                               (Ghost.reveal chunks_single)
                               (Ghost.reveal app_payload2)
@@ -2964,6 +2997,11 @@ ensures exists* view1 network_out1 app_out1.
                               (SZ.v total_payload_len)
                               (Ghost.reveal app_payload)
                               (Ghost.reveal app_payload_total);
+                            assert (pure (CL.chunk_count (Ghost.reveal chunks_after_second) ==
+                                          CL.chunk_count (Ghost.reveal chunks_single) + 1));
+                            assert (pure (server_record_s2.R.seq ==
+                                          view0.CL.state.S.read_state.R.seq +
+                                          CL.chunk_count (Ghost.reveal chunks_after_second)));
                             assert (pure (Seq.equal
                               (Ghost.reveal app_payload_total)
                               (CL.concat_bytes (Ghost.reveal chunks_after_second))));
@@ -2997,9 +3035,6 @@ ensures exists* view1 network_out1 app_out1.
                               (Ghost.reveal pending_raw_payload2)
                               (CL.raw_slice (Ghost.reveal pending_network_buffer2) 0 (SZ.v residual_after_two_len))));
                             assert (pure ((Ghost.reveal acc_view_single).CL.state.S.phase == S.ApplicationData));
-                            lemma_step_recv_application_data
-                              (Ghost.reveal acc_view_single).CL.state
-                              (Ghost.reveal app_payload2);
                             assert (pure (S.step
                               (Ghost.reveal acc_view_single).CL.state
                               (S.RecvApplicationData (Ghost.reveal app_payload2)) ==
