@@ -12,6 +12,7 @@ module Box = Pulse.Lib.Box
 module Cast = FStar.Int.Cast
 module CL = TLS13.ConnectionLog
 module E = TLS13.Connection.External
+module FS = TLS13.Handshake.FlightState
 module HS = TLS13.Handshake
 module HSD = TLS13.Handshake.Driver
 module HW = TLS13.Connection.HandshakeWitness
@@ -124,19 +125,19 @@ let read_status_alert_certificate_unknown : U8.t = 10uy
 let read_status_alert_illegal_parameter : U8.t = 11uy
 
 ghost
-fn advance_successful_handshake (st:ST.state_ref) (#s:S.conn_state)
+fn advance_successful_handshake_with (st:ST.state_ref) (#s:S.conn_state) (ev:HW.handshake_evidence)
   requires ST.current st s
   requires pure (s.S.phase == S.Start)
-  ensures ST.current st (HW.hs_application_data s)
+  ensures ST.current st (HW.hs_application_data_with ev.HW.peer s)
 {
-  ST.advance st (S.SendClientHello HW.dummy_client_hello) (HW.hs_client_hello_sent s);
-  ST.advance st (S.RecvServerHello HW.dummy_server_hello) (HW.hs_server_hello_received s);
-  ST.advance st (S.RecvEncryptedExtensions HW.dummy_encrypted_extensions) (HW.hs_encrypted_extensions_received s);
-  ST.advance st (S.RecvCertificate HW.dummy_certificate) (HW.hs_certificate_received s);
-  ST.advance st (S.ValidateCertificate HW.dummy_peer) (HW.hs_certificate_validated s);
-  ST.advance st (S.RecvCertificateVerify HW.dummy_certificate_verify) (HW.hs_certificate_verified s);
-  ST.advance st (S.RecvServerFinished HW.dummy_finished) (HW.hs_server_finished_verified s);
-  ST.advance st (S.SendClientFinished HW.dummy_finished) (HW.hs_application_data s);
+  ST.advance st (S.SendClientHello ev.HW.client_hello) (HW.hs_client_hello_sent s);
+  ST.advance st (S.RecvServerHello ev.HW.server_hello) (HW.hs_server_hello_received s);
+  ST.advance st (S.RecvEncryptedExtensions ev.HW.encrypted_extensions) (HW.hs_encrypted_extensions_received s);
+  ST.advance st (S.RecvCertificate ev.HW.certificate) (HW.hs_certificate_received s);
+  ST.advance st (S.ValidateCertificate ev.HW.peer) (HW.hs_certificate_validated_with ev.HW.peer s);
+  ST.advance st (S.RecvCertificateVerify ev.HW.certificate_verify) (HW.hs_certificate_verified_with ev.HW.peer s);
+  ST.advance st (S.RecvServerFinished ev.HW.server_finished) (HW.hs_server_finished_verified_with ev.HW.peer s);
+  ST.advance st (S.SendClientFinished ev.HW.client_finished) (HW.hs_application_data_with ev.HW.peer s);
 }
 
 let received_alert_event (alert:T.alert_description) : CL.host_event =
@@ -253,67 +254,68 @@ fn advance_log_raw_received_slice
 }
 
 ghost
-fn advance_successful_handshake_log
+fn advance_successful_handshake_log_with
   (log:ST.log_ref)
   (#view:CL.connection_view)
   (s:S.conn_state)
+  (ev:HW.handshake_evidence)
   requires ST.log_current log view
   requires pure (CL.connection_view_consistent view /\
                  view.CL.state == s /\
                  s.S.phase == S.Start)
-  ensures ST.log_current log (HW.successful_handshake_view view s) **
-          pure (CL.connection_view_consistent (HW.successful_handshake_view view s) /\
-                (HW.successful_handshake_view view s).CL.state == HW.hs_application_data s /\
-                (HW.successful_handshake_view view s).CL.raw_log == view.CL.raw_log /\
-                (HW.successful_handshake_view view s).CL.app_view == view.CL.app_view /\
-                CL.connection_view_single_step view (HW.successful_handshake_view view s))
+  ensures ST.log_current log (HW.successful_handshake_view_with ev view s) **
+          pure (CL.connection_view_consistent (HW.successful_handshake_view_with ev view s) /\
+                (HW.successful_handshake_view_with ev view s).CL.state == HW.hs_application_data_with ev.HW.peer s /\
+                (HW.successful_handshake_view_with ev view s).CL.raw_log == view.CL.raw_log /\
+                (HW.successful_handshake_view_with ev view s).CL.app_view == view.CL.app_view /\
+                CL.connection_view_single_step view (HW.successful_handshake_view_with ev view s))
 {
   advance_log_event
     log
-    (HW.sent_handshake_event (TLS13.Handshake.Spec.ClientHello HW.dummy_client_hello))
-    (S.SendClientHello HW.dummy_client_hello)
+    (HW.sent_handshake_event (TLS13.Handshake.Spec.ClientHello ev.HW.client_hello))
+    (S.SendClientHello ev.HW.client_hello)
     (HW.hs_client_hello_sent s);
   advance_log_event
     log
-    (HW.received_handshake_event (TLS13.Handshake.Spec.ServerHello HW.dummy_server_hello))
-    (S.RecvServerHello HW.dummy_server_hello)
+    (HW.received_handshake_event (TLS13.Handshake.Spec.ServerHello ev.HW.server_hello))
+    (S.RecvServerHello ev.HW.server_hello)
     (HW.hs_server_hello_received s);
   advance_log_event
     log
-    (HW.received_handshake_event (TLS13.Handshake.Spec.EncryptedExtensions HW.dummy_encrypted_extensions))
-    (S.RecvEncryptedExtensions HW.dummy_encrypted_extensions)
+    (HW.received_handshake_event (TLS13.Handshake.Spec.EncryptedExtensions ev.HW.encrypted_extensions))
+    (S.RecvEncryptedExtensions ev.HW.encrypted_extensions)
     (HW.hs_encrypted_extensions_received s);
   advance_log_event
     log
-    (HW.received_handshake_event (TLS13.Handshake.Spec.Certificate HW.dummy_certificate))
-    (S.RecvCertificate HW.dummy_certificate)
+    (HW.received_handshake_event (TLS13.Handshake.Spec.Certificate ev.HW.certificate))
+    (S.RecvCertificate ev.HW.certificate)
     (HW.hs_certificate_received s);
   advance_log_event
     log
-    (CL.LocalEvent (CL.LocalValidateCertificate HW.dummy_peer))
-    (S.ValidateCertificate HW.dummy_peer)
-    (HW.hs_certificate_validated s);
+    (CL.LocalEvent (CL.LocalValidateCertificate ev.HW.peer))
+    (S.ValidateCertificate ev.HW.peer)
+    (HW.hs_certificate_validated_with ev.HW.peer s);
   advance_log_event
     log
-    (HW.received_handshake_event (TLS13.Handshake.Spec.CertificateVerify HW.dummy_certificate_verify))
-    (S.RecvCertificateVerify HW.dummy_certificate_verify)
-    (HW.hs_certificate_verified s);
+    (HW.received_handshake_event (TLS13.Handshake.Spec.CertificateVerify ev.HW.certificate_verify))
+    (S.RecvCertificateVerify ev.HW.certificate_verify)
+    (HW.hs_certificate_verified_with ev.HW.peer s);
   advance_log_event
     log
-    (HW.received_handshake_event (TLS13.Handshake.Spec.Finished HW.dummy_finished))
-    (S.RecvServerFinished HW.dummy_finished)
-    (HW.hs_server_finished_verified s);
+    (HW.received_handshake_event (TLS13.Handshake.Spec.Finished ev.HW.server_finished))
+    (S.RecvServerFinished ev.HW.server_finished)
+    (HW.hs_server_finished_verified_with ev.HW.peer s);
   advance_log_event
     log
-    (HW.sent_handshake_event (TLS13.Handshake.Spec.Finished HW.dummy_finished))
-    (S.SendClientFinished HW.dummy_finished)
-    (HW.hs_application_data s);
-  assert (pure (CL.connection_view_consistent (HW.successful_handshake_view view s)));
-  assert (pure ((HW.successful_handshake_view view s).CL.state == HW.hs_application_data s));
-  assert (pure ((HW.successful_handshake_view view s).CL.raw_log == view.CL.raw_log));
-  assert (pure ((HW.successful_handshake_view view s).CL.app_view == view.CL.app_view));
-  CL.lemma_connection_view_step_same_app view (HW.successful_handshake_view view s);
-  assert (pure (CL.connection_view_single_step view (HW.successful_handshake_view view s)))
+    (HW.sent_handshake_event (TLS13.Handshake.Spec.Finished ev.HW.client_finished))
+    (S.SendClientFinished ev.HW.client_finished)
+    (HW.hs_application_data_with ev.HW.peer s);
+  assert (pure (CL.connection_view_consistent (HW.successful_handshake_view_with ev view s)));
+  assert (pure ((HW.successful_handshake_view_with ev view s).CL.state == HW.hs_application_data_with ev.HW.peer s));
+  assert (pure ((HW.successful_handshake_view_with ev view s).CL.raw_log == view.CL.raw_log));
+  assert (pure ((HW.successful_handshake_view_with ev view s).CL.app_view == view.CL.app_view));
+  CL.lemma_connection_view_step_same_app view (HW.successful_handshake_view_with ev view s);
+  assert (pure (CL.connection_view_single_step view (HW.successful_handshake_view_with ev view s)))
 }
 
 fn client_new
@@ -456,36 +458,50 @@ fn client_connect (c: connection) (ch: IO.channel)
               V.to_vec_pts_to c.client_application_iv;
               V.to_vec_pts_to c.server_application_key;
               V.to_vec_pts_to c.server_application_iv;
+              HS.reveal_handshake_flight_view c.handshake;
+              with flight_view. assert (HS.handshake_context_exactly c.handshake handshake_st handshake_state_after flight_view);
+              let peer : erased X.peer_identity = Some?.v handshake_state_after.S.peer;
+              let handshake_evidence : erased HW.handshake_evidence = {
+                HW.client_hello = FS.flight_view_client_hello (Ghost.reveal flight_view);
+                HW.server_hello = FS.flight_view_server_hello (Ghost.reveal flight_view);
+                HW.encrypted_extensions = FS.flight_view_encrypted_extensions (Ghost.reveal flight_view);
+                HW.certificate = FS.flight_view_certificate (Ghost.reveal flight_view);
+                HW.peer = Ghost.reveal peer;
+                HW.certificate_verify = FS.flight_view_certificate_verify (Ghost.reveal flight_view);
+                HW.server_finished = FS.flight_view_server_finished (Ghost.reveal flight_view);
+                HW.client_finished = FS.flight_view_client_finished (Ghost.reveal flight_view);
+              };
+              HS.hide_handshake_flight_view c.handshake;
               c.application_keys_installed := true;
-              advance_successful_handshake 'st;
-              advance_successful_handshake_log c.log 's;
-              HW.lemma_successful_handshake_state_evolves 's;
+              advance_successful_handshake_with 'st (Ghost.reveal handshake_evidence);
+              advance_successful_handshake_log_with c.log 's (Ghost.reveal handshake_evidence);
+              HW.lemma_successful_handshake_state_evolves_with (Ghost.reveal handshake_evidence) 's;
               assert (pure ('view0.CL.state == 's));
-              assert (pure ((HW.successful_handshake_view 'view0 's).CL.raw_log == 'view0.CL.raw_log));
-              assert (pure ((HW.successful_handshake_view 'view0 's).CL.app_view == 'view0.CL.app_view));
-              assert (pure ((HW.successful_handshake_view 'view0 's).CL.state.S.phase == S.ApplicationData));
-              assert (pure (S.conn_evolves 'view0.CL.state (HW.successful_handshake_view 'view0 's).CL.state));
+              assert (pure ((HW.successful_handshake_view_with (Ghost.reveal handshake_evidence) 'view0 's).CL.raw_log == 'view0.CL.raw_log));
+              assert (pure ((HW.successful_handshake_view_with (Ghost.reveal handshake_evidence) 'view0 's).CL.app_view == 'view0.CL.app_view));
+              assert (pure ((HW.successful_handshake_view_with (Ghost.reveal handshake_evidence) 'view0 's).CL.state.S.phase == S.ApplicationData));
+              assert (pure (S.conn_evolves 'view0.CL.state (HW.successful_handshake_view_with (Ghost.reveal handshake_evidence) 'view0 's).CL.state));
               CL.lemma_step_start_success_abstract
                 'view0
-                (HW.successful_handshake_view 'view0 's)
+                (HW.successful_handshake_view_with (Ghost.reveal handshake_evidence) 'view0 's)
                 B.empty;
               let resp : erased CL.client_response =
                 CL.response_no_network_out B.empty CL.HandshakeComplete;
               assert (pure (CL.step 'view0
                 (CL.request_no_network_in (CL.OpStart B.empty))
-                (HW.successful_handshake_view 'view0 's)
+                (HW.successful_handshake_view_with (Ghost.reveal handshake_evidence) 'view0 's)
                 (Ghost.reveal resp)));
               assert (pure ((Ghost.reveal resp).CL.status == CL.HandshakeComplete));
               assert (pure (exists server_name step_resp.
                 CL.step 'view0
                   (CL.request_no_network_in (CL.OpStart server_name))
-                  (HW.successful_handshake_view 'view0 's)
+                  (HW.successful_handshake_view_with (Ghost.reveal handshake_evidence) 'view0 's)
                   step_resp /\
                 (true ==> step_resp.CL.status == CL.HandshakeComplete) /\
                 (not true ==> step_resp.CL.status == CL.Failed T.IoError)));
-              assert (pure (CL.connection_view_consistent (HW.successful_handshake_view 'view0 's)));
-              assert (pure ((HW.successful_handshake_view 'view0 's).CL.state == HW.hs_application_data 's));
-              fold (connection_exactly c 'st (HW.hs_application_data 's) (HW.successful_handshake_view 'view0 's));
+              assert (pure (CL.connection_view_consistent (HW.successful_handshake_view_with (Ghost.reveal handshake_evidence) 'view0 's)));
+              assert (pure ((HW.successful_handshake_view_with (Ghost.reveal handshake_evidence) 'view0 's).CL.state == HW.hs_application_data_with (Ghost.reveal handshake_evidence).HW.peer 's));
+              fold (connection_exactly c 'st (HW.hs_application_data_with (Ghost.reveal handshake_evidence).HW.peer 's) (HW.successful_handshake_view_with (Ghost.reveal handshake_evidence) 'view0 's));
               true
             } else {
               ST.advance_fail 'st T.IoError;
