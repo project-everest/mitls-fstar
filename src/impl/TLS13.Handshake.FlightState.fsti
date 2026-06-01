@@ -6,9 +6,11 @@ open Pulse.Lib.Pervasives
 open Pulse.Lib.Array.PtsTo
 
 module B = TLS13.Bytes
+module H = TLS13.Handshake.Spec
 module Rec = TLS13.Record
 module Seq = FStar.Seq
 module SZ = FStar.SizeT
+module T = TLS13.Types
 module U16 = FStar.UInt16
 module U8 = FStar.UInt8
 
@@ -89,6 +91,19 @@ let flight_view_certificate_verify_signature (view: flight_view) : B.bytes =
     view
     view.certificate_verify_signature_offset
     view.certificate_verify_signature_len
+
+let signature_scheme_of_u16 (scheme: U16.t) : T.signature_scheme =
+  match U16.v scheme with
+  | 0x0804 -> T.RsaPssRsaeSha256
+  | 0x0403 -> T.EcdsaSecp256r1Sha256
+  | 0x0807 -> T.Ed25519
+  | n -> T.UnsupportedSignatureScheme n
+
+let flight_view_certificate_verify (view: flight_view) : H.certificate_verify =
+  {
+    H.scheme = signature_scheme_of_u16 view.certificate_verify_signature_scheme;
+    H.signature = flight_view_certificate_verify_signature view;
+  }
 
 val is_flight_state: flight_state -> slprop
 val flight_state_exactly: flight_state -> flight_view -> slprop

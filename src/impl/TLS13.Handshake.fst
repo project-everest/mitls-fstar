@@ -543,6 +543,9 @@ fn recv_certificate_verify (ctx: handshake_context) (ch: IO.channel)
   unfold (is_handshake_context ctx 'st 's);
   let backend_ok = E.certificate_verify_verified ctx.backend;
   FS.reveal_flight_view ctx.flight;
+  with flight_view. assert (FS.flight_state_exactly ctx.flight flight_view);
+  let cv : erased H.certificate_verify =
+    FS.flight_view_certificate_verify (Ghost.reveal flight_view);
   let saw_cv = FS.saw_certificate_verify_exact ctx.flight;
   let ok =
     if (saw_cv && backend_ok) {
@@ -554,9 +557,9 @@ fn recv_certificate_verify (ctx: handshake_context) (ch: IO.channel)
       false
     };
   if ok {
-    assert (pure (S.step 's (S.RecvCertificateVerify HW.dummy_certificate_verify) == Some (S.with_phase 's S.CertificateVerified)));
-    ST.advance 'st (S.RecvCertificateVerify HW.dummy_certificate_verify) (S.with_phase 's S.CertificateVerified);
-    lemma_step_evolves 's (S.RecvCertificateVerify HW.dummy_certificate_verify) (S.with_phase 's S.CertificateVerified);
+    assert (pure (S.step 's (S.RecvCertificateVerify (Ghost.reveal cv)) == Some (S.with_phase 's S.CertificateVerified)));
+    ST.advance 'st (S.RecvCertificateVerify (Ghost.reveal cv)) (S.with_phase 's S.CertificateVerified);
+    lemma_step_evolves 's (S.RecvCertificateVerify (Ghost.reveal cv)) (S.with_phase 's S.CertificateVerified);
     fold (is_handshake_context ctx 'st (S.with_phase 's S.CertificateVerified));
     true
   } else {
