@@ -459,11 +459,9 @@ fn recv_certificate (ctx: handshake_context) (ch: IO.channel)
                 (not ok ==> s'.S.phase == S.Failed))
 {
   unfold (is_handshake_context ctx 'st 's);
-  let backend_ok = E.certificate_received ctx.backend;
   FS.reveal_flight_view ctx.flight;
-  let flight_ok = FS.saw_certificate_exact ctx.flight;
+  let ok = FS.saw_certificate_exact ctx.flight;
   FS.hide_flight_view ctx.flight;
-  let ok = backend_ok && flight_ok;
   if ok {
     assert (pure (S.step 's (S.RecvCertificate HW.dummy_certificate) == Some (S.with_phase 's S.CertificateReceived)));
     ST.advance 'st (S.RecvCertificate HW.dummy_certificate) (S.with_phase 's S.CertificateReceived);
