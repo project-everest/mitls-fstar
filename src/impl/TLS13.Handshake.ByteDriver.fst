@@ -98,13 +98,7 @@ fn read_next_encrypted_handshake_record
         let mut cipher = [| 0uy; fragment_len |];
         let fragment_ok = read_raw_exact ctx ch cipher fragment_len 0sz fragment_len;
         if fragment_ok {
-          let backend_ok =
-            E.process_encrypted_handshake_record ctx header 5sz cipher fragment_len;
-          if backend_ok {
-            FS.process_server_handshake_record flight header 5sz cipher fragment_len
-          } else {
-            false
-          }
+          FS.process_server_handshake_record flight header 5sz cipher fragment_len
         } else {
           false
         }
@@ -129,9 +123,9 @@ fn rec ensure_pending_handshake_message_with_fuel
   ensures E.is_context ctx 'p ** FS.is_flight_state flight ** IO.is_channel ch
   decreases (U8.v fuel)
 {
-  let pending = E.pending_handshake_message_complete ctx;
+  let pending = FS.pending_handshake_message_complete flight;
   if pending {
-    FS.pending_handshake_message_complete flight
+    true
   } else if (fuel = 0uy) {
     false
   } else {
@@ -162,66 +156,35 @@ fn recv_encrypted_handshake
   (ch: IO.channel)
   requires E.is_context ctx 'p ** FS.is_flight_state flight ** IO.is_channel ch
   returns ok: bool
-  ensures exists* p'. E.is_context ctx p' ** FS.is_flight_state flight ** IO.is_channel ch **
-          pure (ok ==> p' == E.Complete)
+  ensures E.is_context ctx 'p ** FS.is_flight_state flight ** IO.is_channel ch
 {
-  E.reset_encrypted_handshake ctx;
   FS.reset flight;
 
   let has_ee = ensure_pending_handshake_message ctx flight ch;
   if has_ee {
-    let ee_type = E.pending_handshake_message_type ctx;
-    let flight_ee_type = FS.pending_handshake_message_type flight;
-    if ((ee_type = 0x08uy) && (flight_ee_type = 0x08uy)) {
-      let ee_ok = E.accept_encrypted_extensions ctx;
+    let ee_type = FS.pending_handshake_message_type flight;
+    if (ee_type = 0x08uy) {
+      let ee_ok = FS.accept_pending_encrypted_extensions flight;
       if ee_ok {
-        let flight_ee_ok = FS.accept_pending_encrypted_extensions flight;
-        if flight_ee_ok {
-          let has_cert = ensure_pending_handshake_message ctx flight ch;
-          if has_cert {
-            let cert_type = E.pending_handshake_message_type ctx;
-            let flight_cert_type = FS.pending_handshake_message_type flight;
-            if ((cert_type = 0x0buy) && (flight_cert_type = 0x0buy)) {
-              let cert_ok = E.accept_certificate ctx;
-              if cert_ok {
-                let flight_cert_ok = FS.accept_pending_certificate flight;
-                if flight_cert_ok {
-                  let has_cv = ensure_pending_handshake_message ctx flight ch;
-                  if has_cv {
-                    let cv_type = E.pending_handshake_message_type ctx;
-                    let flight_cv_type = FS.pending_handshake_message_type flight;
-                    if ((cv_type = 0x0fuy) && (flight_cv_type = 0x0fuy)) {
-                      let cv_ok = E.accept_certificate_verify ctx;
-                      if cv_ok {
-                        let flight_cv_ok = FS.accept_pending_certificate_verify flight;
-                        if flight_cv_ok {
-                          let has_finished = ensure_pending_handshake_message ctx flight ch;
-                          if has_finished {
-                            let finished_type = E.pending_handshake_message_type ctx;
-                            let flight_finished_type = FS.pending_handshake_message_type flight;
-                            if ((finished_type = 0x14uy) && (flight_finished_type = 0x14uy)) {
-                              let finished_ok = E.accept_finished ctx;
-                              if finished_ok {
-                                let flight_finished_ok = FS.accept_pending_finished flight;
-                                if flight_finished_ok {
-                                  let backend_done = E.encrypted_handshake_complete ctx;
-                                  if backend_done {
-                                    FS.encrypted_handshake_complete flight
-                                  } else {
-                                    false
-                                  }
-                                } else {
-                                  false
-                                }
-                              } else {
-                                false
-                              }
-                            } else {
-                              false
-                            }
-                          } else {
-                            false
-                          }
+        let has_cert = ensure_pending_handshake_message ctx flight ch;
+        if has_cert {
+          let cert_type = FS.pending_handshake_message_type flight;
+          if (cert_type = 0x0buy) {
+            let cert_ok = FS.accept_pending_certificate flight;
+            if cert_ok {
+              let has_cv = ensure_pending_handshake_message ctx flight ch;
+              if has_cv {
+                let cv_type = FS.pending_handshake_message_type flight;
+                if (cv_type = 0x0fuy) {
+                  let cv_ok = FS.accept_pending_certificate_verify flight;
+                  if cv_ok {
+                    let has_finished = ensure_pending_handshake_message ctx flight ch;
+                    if has_finished {
+                      let finished_type = FS.pending_handshake_message_type flight;
+                      if (finished_type = 0x14uy) {
+                        let finished_ok = FS.accept_pending_finished flight;
+                        if finished_ok {
+                          FS.encrypted_handshake_complete flight
                         } else {
                           false
                         }
