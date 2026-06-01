@@ -13,6 +13,7 @@ module SZ = FStar.SizeT
 module T = TLS13.Types
 module U16 = FStar.UInt16
 module U8 = FStar.UInt8
+module WS = TLS13.Wire.Spec
 
 val flight_state : Type0
 
@@ -79,6 +80,25 @@ let flight_view_server_handshake_slice
     view.server_handshake_bytes
     (SZ.v offset)
     (SZ.v offset + SZ.v len)
+
+let flight_view_client_hello_bytes (view: flight_view) : B.bytes =
+  flight_bytes_slice view.client_hello_bytes 0 (SZ.v view.client_hello_len)
+
+let flight_view_server_hello_bytes (view: flight_view) : B.bytes =
+  flight_bytes_slice view.server_hello_bytes 0 (SZ.v view.server_hello_len)
+
+let default_server_hello : H.server_hello = {
+  H.random = B.zeros 32;
+  H.key_share = B.zeros 32;
+  H.cipher_suite = T.TLS_CHACHA20_POLY1305_SHA256;
+}
+
+let flight_view_server_hello
+  (view: flight_view)
+  : GTot (sh:H.server_hello{H.is_supported_cipher_suite sh.H.cipher_suite}) =
+  match WS.parse_supported_server_hello (flight_view_server_hello_bytes view) with
+  | Some sh -> sh
+  | None -> default_server_hello
 
 let flight_view_certificate_leaf_der (view: flight_view) : B.bytes =
   flight_view_server_handshake_slice

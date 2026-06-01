@@ -424,9 +424,14 @@ fn recv_server_hello (ctx: handshake_context) (ch: IO.channel)
   unfold (is_handshake_context ctx 'st 's);
   let ok = recv_server_hello_record ctx ch;
   if ok {
-    assert (pure (S.step 's (S.RecvServerHello HW.dummy_server_hello) == Some (S.with_phase 's S.ServerHelloReceived)));
-    ST.advance 'st (S.RecvServerHello HW.dummy_server_hello) (S.with_phase 's S.ServerHelloReceived);
-    lemma_step_evolves 's (S.RecvServerHello HW.dummy_server_hello) (S.with_phase 's S.ServerHelloReceived);
+    FS.reveal_flight_view ctx.flight;
+    with flight_view. assert (FS.flight_state_exactly ctx.flight flight_view);
+    let server_hello : erased H.server_hello =
+      FS.flight_view_server_hello (Ghost.reveal flight_view);
+    FS.hide_flight_view ctx.flight;
+    assert (pure (S.step 's (S.RecvServerHello (Ghost.reveal server_hello)) == Some (S.with_phase 's S.ServerHelloReceived)));
+    ST.advance 'st (S.RecvServerHello (Ghost.reveal server_hello)) (S.with_phase 's S.ServerHelloReceived);
+    lemma_step_evolves 's (S.RecvServerHello (Ghost.reveal server_hello)) (S.with_phase 's S.ServerHelloReceived);
     fold (is_handshake_context ctx 'st (S.with_phase 's S.ServerHelloReceived));
     true
   } else {
