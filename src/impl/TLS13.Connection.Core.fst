@@ -1795,20 +1795,16 @@ ensures exists* view1 network_out1 app_out1.
                                     c.state
                                     (S.RecvApplicationData (Ghost.reveal app_payload2))
                                     (S.advance_read_record (S.advance_read_record view0.CL.state));
-                                  let base_view2 : erased CL.connection_view =
-                                    CL.note_app_received_chunks
-                                      (Ghost.reveal view1)
-                                      [Ghost.reveal app_payload; Ghost.reveal app_payload2];
                                   let view2 : erased CL.connection_view =
-                                    CL.with_pending_received_raw
-                                      (Ghost.reveal base_view2)
+                                    CL.read_application_data_chunks_success_view
+                                      (Ghost.reveal view1)
+                                      [Ghost.reveal app_payload; Ghost.reveal app_payload2]
                                       (Ghost.reveal pending_raw_payload2);
                                   let resp : erased CL.client_response =
-                                    CL.response_no_network_out_chunks
+                                    CL.read_application_data_chunks_success_response
                                       (Ghost.reveal app_payload_total)
-                                      [Ghost.reveal app_payload; Ghost.reveal app_payload2]
-                                      CL.ApplicationDataReady;
-                                  CL.lemma_step_read_application_data_chunks_success_with_pending_raw
+                                      [Ghost.reveal app_payload; Ghost.reveal app_payload2];
+                                  CL.lemma_step_read_application_data_chunks_success_exit
                                     view0
                                     (Ghost.reveal view1)
                                     (SZ.v requested_app_len)
