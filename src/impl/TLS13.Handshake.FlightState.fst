@@ -203,6 +203,7 @@ let flight_state_exactly ([@@@mkey] st: flight_state) (view: flight_view) : slpr
           view.client_hello_bytes == client_hello /\
           view.server_hello_bytes == server_hello /\
           view.server_handshake_bytes == server_handshake_messages /\
+          view.server_finished_verify_data == server_finished_verify_data /\
           view.saw_encrypted_extensions == saw_encrypted_extensions /\
           view.saw_certificate == saw_certificate /\
           view.saw_certificate_verify == saw_certificate_verify /\
@@ -230,6 +231,9 @@ fn reveal_flight_view (st: flight_state)
   with certificate_verify_signature_scheme. assert (Box.pts_to st.certificate_verify_signature_scheme_box certificate_verify_signature_scheme);
   with certificate_verify_signature_offset. assert (Box.pts_to st.certificate_verify_signature_offset_box certificate_verify_signature_offset);
   with certificate_verify_signature_len. assert (Box.pts_to st.certificate_verify_signature_len_box certificate_verify_signature_len);
+  with server_finished_verify_data. assert (V.pts_to st.server_finished_verify_data server_finished_verify_data);
+  V.pts_to_len st.server_finished_verify_data;
+  assert (pure (B.length server_finished_verify_data == 32));
   with before_finished_len. assert (Box.pts_to st.before_finished_len_box before_finished_len);
   with through_finished_len. assert (Box.pts_to st.through_finished_len_box through_finished_len);
   with saw_encrypted_extensions. assert (Box.pts_to st.saw_encrypted_extensions_box saw_encrypted_extensions);
@@ -241,6 +245,7 @@ fn reveal_flight_view (st: flight_state)
     client_hello_bytes = client_hello;
     server_hello_bytes = server_hello;
     server_handshake_bytes = server_handshake_messages;
+    server_finished_verify_data = server_finished_verify_data;
     client_hello_len;
     server_hello_len;
     server_handshake_len = handshake_len;
@@ -1719,7 +1724,7 @@ fn accept_pending_encrypted_extensions (st: flight_state)
       let body16 = U16.logor (U16.shift_left len_mid16 8ul) len_lo16;
       let body_len = SZ.uint16_to_sizet body16;
       let remaining_body_capacity = SZ.(remaining -^ 4sz);
-      if ((msg_type = 0x08uy) && (len_hi = 0uy) && SZ.(body_len <=^ remaining_body_capacity)) {
+      if ((msg_type = 0x08uy) && (len_hi = 0uy) && SZ.(body_len =^ 0sz) && SZ.(body_len <=^ remaining_body_capacity)) {
         assert (pure (SZ.fits (SZ.v parsed + 4)));
         let after_header = SZ.(parsed +^ 4sz);
         assert (pure (SZ.v after_header + SZ.v body_len <= SZ.v hlen));

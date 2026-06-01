@@ -21,6 +21,7 @@ type flight_view = {
   client_hello_bytes: B.bytes;
   server_hello_bytes: B.bytes;
   server_handshake_bytes: B.bytes;
+  server_finished_verify_data: B.bytes_of_len 32;
   client_hello_len: (l:SZ.t{SZ.v l <= 512});
   server_hello_len: (l:SZ.t{SZ.v l <= 4096});
   server_handshake_len: (l:SZ.t{SZ.v l <= 32768});
@@ -44,6 +45,7 @@ let empty_flight_view : flight_view = {
   client_hello_bytes = B.zeros 512;
   server_hello_bytes = B.zeros 4096;
   server_handshake_bytes = B.zeros 32768;
+  server_finished_verify_data = B.zeros 32;
   client_hello_len = 0sz;
   server_hello_len = 0sz;
   server_handshake_len = 0sz;
@@ -100,6 +102,11 @@ let flight_view_server_hello
   | Some sh -> sh
   | None -> default_server_hello
 
+let flight_view_encrypted_extensions (_view: flight_view) : H.encrypted_extensions =
+  {
+    H.negotiated_alpn = None;
+  }
+
 let flight_view_certificate_leaf_der (view: flight_view) : B.bytes =
   flight_view_server_handshake_slice
     view
@@ -128,6 +135,11 @@ let flight_view_certificate_verify (view: flight_view) : H.certificate_verify =
   {
     H.scheme = signature_scheme_of_u16 view.certificate_verify_signature_scheme;
     H.signature = flight_view_certificate_verify_signature view;
+  }
+
+let flight_view_server_finished (view: flight_view) : H.finished =
+  {
+    H.verify_data = view.server_finished_verify_data;
   }
 
 val is_flight_state: flight_state -> slprop

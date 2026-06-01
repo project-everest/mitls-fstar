@@ -461,9 +461,14 @@ fn recv_encrypted_extensions (ctx: handshake_context) (ch: IO.channel)
   let ok = BD.recv_encrypted_handshake ctx.backend ctx.flight ch;
   fold (E.is_context ctx.backend);
   if ok {
-    assert (pure (S.step 's (S.RecvEncryptedExtensions HW.dummy_encrypted_extensions) == Some (S.with_phase 's S.EncryptedExtensionsReceived)));
-    ST.advance 'st (S.RecvEncryptedExtensions HW.dummy_encrypted_extensions) (S.with_phase 's S.EncryptedExtensionsReceived);
-    lemma_step_evolves 's (S.RecvEncryptedExtensions HW.dummy_encrypted_extensions) (S.with_phase 's S.EncryptedExtensionsReceived);
+    FS.reveal_flight_view ctx.flight;
+    with flight_view. assert (FS.flight_state_exactly ctx.flight flight_view);
+    let encrypted_extensions : erased H.encrypted_extensions =
+      FS.flight_view_encrypted_extensions (Ghost.reveal flight_view);
+    FS.hide_flight_view ctx.flight;
+    assert (pure (S.step 's (S.RecvEncryptedExtensions (Ghost.reveal encrypted_extensions)) == Some (S.with_phase 's S.EncryptedExtensionsReceived)));
+    ST.advance 'st (S.RecvEncryptedExtensions (Ghost.reveal encrypted_extensions)) (S.with_phase 's S.EncryptedExtensionsReceived);
+    lemma_step_evolves 's (S.RecvEncryptedExtensions (Ghost.reveal encrypted_extensions)) (S.with_phase 's S.EncryptedExtensionsReceived);
     fold (is_handshake_context ctx 'st (S.with_phase 's S.EncryptedExtensionsReceived));
     true
   } else {
@@ -632,6 +637,9 @@ fn recv_server_finished (ctx: handshake_context) (ch: IO.channel)
 {
   unfold (is_handshake_context ctx 'st 's);
   FS.reveal_flight_view ctx.flight;
+  with flight_view. assert (FS.flight_state_exactly ctx.flight flight_view);
+  let finished : erased H.finished =
+    FS.flight_view_server_finished (Ghost.reveal flight_view);
   let cv_ok = FS.certificate_verify_verified_exact ctx.flight;
   let saw_finished = FS.saw_finished_exact ctx.flight;
   FS.hide_flight_view ctx.flight;
@@ -642,9 +650,9 @@ fn recv_server_finished (ctx: handshake_context) (ch: IO.channel)
       false
     };
   if ok {
-    assert (pure (S.step 's (S.RecvServerFinished HW.dummy_finished) == Some (S.with_phase 's S.ServerFinishedVerified)));
-    ST.advance 'st (S.RecvServerFinished HW.dummy_finished) (S.with_phase 's S.ServerFinishedVerified);
-    lemma_step_evolves 's (S.RecvServerFinished HW.dummy_finished) (S.with_phase 's S.ServerFinishedVerified);
+    assert (pure (S.step 's (S.RecvServerFinished (Ghost.reveal finished)) == Some (S.with_phase 's S.ServerFinishedVerified)));
+    ST.advance 'st (S.RecvServerFinished (Ghost.reveal finished)) (S.with_phase 's S.ServerFinishedVerified);
+    lemma_step_evolves 's (S.RecvServerFinished (Ghost.reveal finished)) (S.with_phase 's S.ServerFinishedVerified);
     fold (is_handshake_context ctx 'st (S.with_phase 's S.ServerFinishedVerified));
     true
   } else {
