@@ -7,6 +7,7 @@ open Pulse.Lib.Array.PtsTo
 
 module B = TLS13.Bytes
 module Rec = TLS13.Record
+module Seq = FStar.Seq
 module SZ = FStar.SizeT
 module U16 = FStar.UInt16
 module U8 = FStar.UInt8
@@ -61,6 +62,33 @@ let empty_flight_view : flight_view = {
 
 let flight_view_with_certificate_verify_verified (view: flight_view) : flight_view =
   { view with certificate_verify_verified = true }
+
+let flight_bytes_slice (bytes: B.bytes) (lo: nat) (hi: nat) : B.bytes =
+  if lo <= hi && hi <= B.length bytes
+  then Seq.slice bytes lo hi
+  else B.empty
+
+let flight_view_server_handshake_slice
+  (view: flight_view)
+  (offset: SZ.t)
+  (len: SZ.t)
+  : B.bytes =
+  flight_bytes_slice
+    view.server_handshake_bytes
+    (SZ.v offset)
+    (SZ.v offset + SZ.v len)
+
+let flight_view_certificate_leaf_der (view: flight_view) : B.bytes =
+  flight_view_server_handshake_slice
+    view
+    view.certificate_leaf_offset
+    view.certificate_leaf_len
+
+let flight_view_certificate_verify_signature (view: flight_view) : B.bytes =
+  flight_view_server_handshake_slice
+    view
+    view.certificate_verify_signature_offset
+    view.certificate_verify_signature_len
 
 val is_flight_state: flight_state -> slprop
 val flight_state_exactly: flight_state -> flight_view -> slprop
@@ -646,6 +674,42 @@ fn copy_certificate_leaf_der
           pts_to out out_bytes **
           pure (B.length out_bytes == 32768)
 
+fn copy_certificate_leaf_der_exact
+  (st: flight_state)
+  (out: array U8.t)
+  (out_capacity: SZ.t)
+  requires flight_state_exactly st 'view **
+          pts_to out 'old_out **
+          pure (B.length 'old_out == SZ.v out_capacity /\
+                SZ.v out_capacity == 32768)
+  returns ok: bool
+  ensures exists* out_bytes.
+          flight_state_exactly st 'view **
+          pts_to out out_bytes **
+          pure (B.length out_bytes == 32768 /\
+               (ok ==>
+                 SZ.v 'view.certificate_leaf_offset + SZ.v 'view.certificate_leaf_len <= 32768 /\
+                 Seq.equal
+                   (flight_bytes_slice out_bytes 0 (SZ.v 'view.certificate_leaf_len))
+                   (flight_view_certificate_leaf_der 'view)))
+
+fn copy_certificate_leaf_der_exact_len
+  (st: flight_state)
+  (out: array U8.t)
+  (out_len: SZ.t)
+  requires flight_state_exactly st 'view **
+           pts_to out 'old_out **
+           pure (B.length 'old_out == SZ.v out_len /\
+                 out_len == 'view.certificate_leaf_len)
+  returns ok: bool
+  ensures exists* out_bytes.
+          flight_state_exactly st 'view **
+          pts_to out out_bytes **
+          pure (B.length out_bytes == SZ.v 'view.certificate_leaf_len /\
+                (ok ==>
+                 SZ.v 'view.certificate_leaf_offset + SZ.v 'view.certificate_leaf_len <= 32768 /\
+                 Seq.equal out_bytes (flight_view_certificate_leaf_der 'view)))
+
 fn copy_certificate_verify_signature
   (st: flight_state)
   (out: array U8.t)
@@ -659,6 +723,42 @@ fn copy_certificate_verify_signature
           is_flight_state st **
           pts_to out out_bytes **
           pure (B.length out_bytes == 32768)
+
+fn copy_certificate_verify_signature_exact
+  (st: flight_state)
+  (out: array U8.t)
+  (out_capacity: SZ.t)
+  requires flight_state_exactly st 'view **
+          pts_to out 'old_out **
+          pure (B.length 'old_out == SZ.v out_capacity /\
+                SZ.v out_capacity == 32768)
+  returns ok: bool
+  ensures exists* out_bytes.
+          flight_state_exactly st 'view **
+          pts_to out out_bytes **
+          pure (B.length out_bytes == 32768 /\
+               (ok ==>
+                 SZ.v 'view.certificate_verify_signature_offset + SZ.v 'view.certificate_verify_signature_len <= 32768 /\
+                 Seq.equal
+                   (flight_bytes_slice out_bytes 0 (SZ.v 'view.certificate_verify_signature_len))
+                   (flight_view_certificate_verify_signature 'view)))
+
+fn copy_certificate_verify_signature_exact_len
+  (st: flight_state)
+  (out: array U8.t)
+  (out_len: SZ.t)
+  requires flight_state_exactly st 'view **
+           pts_to out 'old_out **
+           pure (B.length 'old_out == SZ.v out_len /\
+                 out_len == 'view.certificate_verify_signature_len)
+  returns ok: bool
+  ensures exists* out_bytes.
+          flight_state_exactly st 'view **
+          pts_to out out_bytes **
+          pure (B.length out_bytes == SZ.v 'view.certificate_verify_signature_len /\
+                (ok ==>
+                 SZ.v 'view.certificate_verify_signature_offset + SZ.v 'view.certificate_verify_signature_len <= 32768 /\
+                 Seq.equal out_bytes (flight_view_certificate_verify_signature 'view)))
 
 fn certificate_verify_offset (st: flight_state)
   requires is_flight_state st

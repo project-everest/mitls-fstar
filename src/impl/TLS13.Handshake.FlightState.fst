@@ -674,6 +674,130 @@ fn copy_server_handshake
   fold (is_flight_state st);
 }
 
+let lemma_copied_range_slice
+  (payload: B.bytes)
+  (bytes: B.bytes)
+  (src: nat)
+  (dst: nat)
+  (len: nat)
+  : Lemma
+      (requires src + len <= B.length payload /\
+                dst + len <= B.length bytes /\
+                (forall (i:nat{i < len}).
+                  Seq.index bytes (dst + i) == Seq.index payload (src + i)))
+      (ensures Seq.equal
+        (Seq.slice bytes dst (dst + len))
+        (Seq.slice payload src (src + len)))
+  =
+  Seq.lemma_len_slice bytes dst (dst + len);
+  Seq.lemma_len_slice payload src (src + len);
+  assert (forall (i:nat{i < len}).
+            Seq.index (Seq.slice bytes dst (dst + len)) i ==
+            Seq.index bytes (dst + i));
+  assert (forall (i:nat{i < len}).
+            Seq.index (Seq.slice payload src (src + len)) i ==
+            Seq.index payload (src + i));
+  assert (forall (i:nat{i < len}).
+            Seq.index (Seq.slice bytes dst (dst + len)) i ==
+            Seq.index (Seq.slice payload src (src + len)) i);
+  Seq.lemma_eq_intro
+    (Seq.slice bytes dst (dst + len))
+    (Seq.slice payload src (src + len))
+
+let lemma_slice_equal_range
+  (payload: B.bytes)
+  (bytes: B.bytes)
+  (src: nat)
+  (dst: nat)
+  (len: nat)
+  : Lemma
+      (requires src + len <= B.length payload /\
+                dst + len <= B.length bytes /\
+                Seq.equal
+                  (Seq.slice bytes dst (dst + len))
+                  (Seq.slice payload src (src + len)))
+      (ensures (forall (i:nat{i < len}).
+        Seq.index bytes (dst + i) == Seq.index payload (src + i)))
+  =
+  Seq.lemma_eq_elim
+    (Seq.slice bytes dst (dst + len))
+    (Seq.slice payload src (src + len));
+  assert (forall (i:nat{i < len}).
+            Seq.index (Seq.slice bytes dst (dst + len)) i ==
+            Seq.index (Seq.slice payload src (src + len)) i);
+  assert (forall (i:nat{i < len}).
+            Seq.index (Seq.slice bytes dst (dst + len)) i ==
+            Seq.index bytes (dst + i));
+  assert (forall (i:nat{i < len}).
+            Seq.index (Seq.slice payload src (src + len)) i ==
+            Seq.index payload (src + i));
+  assert (forall (i:nat{i < len}).
+            Seq.index bytes (dst + i) == Seq.index payload (src + i))
+
+let lemma_copy_step_range
+  (payload: B.bytes)
+  (mid: B.bytes)
+  (final: B.bytes)
+  (src: nat)
+  (dst: nat)
+  (remaining: nat)
+  (src_next: nat)
+  (dst_next: nat)
+  (remaining_next: nat)
+  : Lemma
+      (requires remaining > 0 /\
+                src_next == src + 1 /\
+                dst_next == dst + 1 /\
+                remaining_next == remaining - 1 /\
+                src + remaining <= B.length payload /\
+                dst + remaining <= B.length final /\
+                B.length final == B.length mid /\
+                Seq.index mid dst == Seq.index payload src /\
+                (forall (i:nat{i < dst_next}).
+                  Seq.index final i == Seq.index mid i) /\
+                (forall (i:nat{i < remaining_next}).
+                  Seq.index final (dst_next + i) ==
+                  Seq.index payload (src_next + i)))
+      (ensures (forall (i:nat{i < remaining}).
+        Seq.index final (dst + i) == Seq.index payload (src + i)))
+  =
+  introduce forall (i:nat{i < remaining}).
+    Seq.index final (dst + i) == Seq.index payload (src + i)
+  with (
+    if i = 0 then (
+      assert (dst + i == dst);
+      assert (src + i == src);
+      assert (dst < dst_next);
+      assert (Seq.index final dst == Seq.index mid dst)
+    ) else (
+      assert (i > 0);
+      assert (i - 1 < remaining_next);
+      assert (dst + i == dst_next + (i - 1));
+      assert (src + i == src_next + (i - 1))
+    )
+  )
+
+let lemma_copy_step_prefix
+  (old: B.bytes)
+  (mid: B.bytes)
+  (final: B.bytes)
+  (dst: nat)
+  (dst_next: nat)
+  : Lemma
+      (requires dst <= B.length old /\
+                dst_next == dst + 1 /\
+                dst_next <= B.length old /\
+                B.length mid == B.length old /\
+                B.length final == B.length old /\
+                (forall (i:nat{i < dst_next}).
+                  Seq.index final i == Seq.index mid i) /\
+                (forall (i:nat{i < dst}).
+                  Seq.index mid i == Seq.index old i))
+      (ensures (forall (i:nat{i < dst}).
+        Seq.index final i == Seq.index old i))
+  =
+  ()
+
 fn rec copy_fragment_to_buffer_loop
   (fragment: array U8.t)
   (fragment_total_len: SZ.t)
@@ -691,12 +815,42 @@ fn rec copy_fragment_to_buffer_loop
   ensures exists* out_bytes.
           pts_to fragment 'fragment_bytes **
           pts_to out out_bytes **
-          pure (B.length out_bytes == SZ.v out_capacity)
+          pure (B.length out_bytes == SZ.v out_capacity /\
+                B.length 'fragment_bytes == SZ.v fragment_total_len /\
+                B.length 'old == SZ.v out_capacity /\
+                SZ.v src_index + SZ.v remaining <= SZ.v fragment_total_len /\
+                SZ.v dst_index + SZ.v remaining <= SZ.v out_capacity /\
+                Seq.equal
+                  (Seq.slice out_bytes (SZ.v dst_index) (SZ.v dst_index + SZ.v remaining))
+                  (Seq.slice 'fragment_bytes (SZ.v src_index) (SZ.v src_index + SZ.v remaining)) /\
+                Seq.equal
+                  (Seq.slice out_bytes 0 (SZ.v dst_index))
+                  (Seq.slice 'old 0 (SZ.v dst_index)))
   decreases (SZ.v remaining)
 {
   if (remaining = 0sz) {
     with out_bytes. assert (pts_to out out_bytes);
     assert (pure (B.length out_bytes == SZ.v out_capacity));
+    lemma_copied_range_slice
+      (Ghost.reveal 'fragment_bytes)
+      (Ghost.reveal out_bytes)
+      (SZ.v src_index)
+      (SZ.v dst_index)
+      (SZ.v remaining);
+    assert (pure (Seq.equal
+      (Seq.slice out_bytes (SZ.v dst_index) (SZ.v dst_index + SZ.v remaining))
+      (Seq.slice 'fragment_bytes (SZ.v src_index) (SZ.v src_index + SZ.v remaining))));
+    assert (pure (forall (i:nat{i < SZ.v dst_index}).
+      Seq.index out_bytes i == Seq.index 'old i));
+    lemma_copied_range_slice
+      (Ghost.reveal 'old)
+      (Ghost.reveal out_bytes)
+      0
+      0
+      (SZ.v dst_index);
+    assert (pure (Seq.equal
+      (Seq.slice out_bytes 0 (SZ.v dst_index))
+      (Seq.slice 'old 0 (SZ.v dst_index))));
   } else {
     assert (pure (SZ.v src_index < SZ.v fragment_total_len));
     assert (pure (SZ.v dst_index < SZ.v out_capacity));
@@ -707,11 +861,68 @@ fn rec copy_fragment_to_buffer_loop
     let remaining' = SZ.(remaining -^ 1sz);
     with out_bytes. assert (pts_to out out_bytes);
     assert (pure (B.length out_bytes == SZ.v out_capacity));
+    assert (pure (Seq.index out_bytes (SZ.v dst_index) == Seq.index 'fragment_bytes (SZ.v src_index)));
+    assert (pure (forall (i:nat{i < SZ.v dst_index}).
+      Seq.index out_bytes i == Seq.index 'old i));
     assert (pure (SZ.v remaining' < SZ.v remaining));
     assert (pure (SZ.v src_index' + SZ.v remaining' <= SZ.v fragment_total_len));
     assert (pure (SZ.v dst_index' + SZ.v remaining' <= SZ.v out_capacity));
     copy_fragment_to_buffer_loop
       fragment fragment_total_len out out_capacity src_index' dst_index' remaining'
+    ;
+    with final_bytes. assert (pts_to out final_bytes);
+    assert (pure (B.length final_bytes == SZ.v out_capacity));
+    assert (pure (SZ.v src_index' == SZ.v src_index + 1));
+    assert (pure (SZ.v dst_index' == SZ.v dst_index + 1));
+    assert (pure (SZ.v remaining' == SZ.v remaining - 1));
+    lemma_slice_equal_range
+      (Ghost.reveal out_bytes)
+      (Ghost.reveal final_bytes)
+      0
+      0
+      (SZ.v dst_index');
+    lemma_slice_equal_range
+      (Ghost.reveal 'fragment_bytes)
+      (Ghost.reveal final_bytes)
+      (SZ.v src_index')
+      (SZ.v dst_index')
+      (SZ.v remaining');
+    lemma_copy_step_range
+      (Ghost.reveal 'fragment_bytes)
+      (Ghost.reveal out_bytes)
+      (Ghost.reveal final_bytes)
+      (SZ.v src_index)
+      (SZ.v dst_index)
+      (SZ.v remaining)
+      (SZ.v src_index')
+      (SZ.v dst_index')
+      (SZ.v remaining');
+    assert (pure (forall (i:nat{i < SZ.v remaining}).
+      Seq.index final_bytes (SZ.v dst_index + i) ==
+      Seq.index 'fragment_bytes (SZ.v src_index + i)));
+    lemma_copied_range_slice
+      (Ghost.reveal 'fragment_bytes)
+      (Ghost.reveal final_bytes)
+      (SZ.v src_index)
+      (SZ.v dst_index)
+      (SZ.v remaining);
+    lemma_copy_step_prefix
+      (Ghost.reveal 'old)
+      (Ghost.reveal out_bytes)
+      (Ghost.reveal final_bytes)
+      (SZ.v dst_index)
+      (SZ.v dst_index');
+    assert (pure (forall (i:nat{i < SZ.v dst_index}).
+      Seq.index final_bytes i == Seq.index 'old i));
+    lemma_copied_range_slice
+      (Ghost.reveal 'old)
+      (Ghost.reveal final_bytes)
+      0
+      0
+      (SZ.v dst_index);
+    assert (pure (Seq.equal
+      (Seq.slice final_bytes 0 (SZ.v dst_index))
+      (Seq.slice 'old 0 (SZ.v dst_index))))
   }
 }
 
@@ -2041,6 +2252,153 @@ fn copy_server_handshake_slice
   }
 }
 
+fn copy_server_handshake_slice_exact
+  (st: flight_state)
+  (slice_offset: SZ.t)
+  (slice_len: SZ.t)
+  (out: array U8.t)
+  (out_capacity: SZ.t)
+  requires flight_state_exactly st 'view **
+           pts_to out 'old_out **
+           pure (B.length 'old_out == SZ.v out_capacity /\
+                 SZ.v out_capacity == 32768)
+  returns ok: bool
+  ensures exists* out_bytes.
+          flight_state_exactly st 'view **
+          pts_to out out_bytes **
+          pure (B.length out_bytes == 32768 /\
+                (ok ==>
+                  SZ.v slice_offset + SZ.v slice_len <= 32768 /\
+                  Seq.equal
+                    (flight_bytes_slice out_bytes 0 (SZ.v slice_len))
+                    (flight_view_server_handshake_slice 'view slice_offset slice_len)))
+{
+  unfold (flight_state_exactly st 'view);
+  if SZ.(slice_offset <=^ 32768sz) {
+    let available = SZ.(32768sz -^ slice_offset);
+    if SZ.(slice_len <=^ available) {
+      assert (pure (SZ.v slice_offset + SZ.v slice_len <= 32768));
+      V.pts_to_len st.server_handshake_messages;
+      V.to_array_pts_to st.server_handshake_messages;
+      with fragment_bytes.
+        assert (pts_to (V.vec_to_array st.server_handshake_messages) fragment_bytes);
+      assert (pure (fragment_bytes == 'view.server_handshake_bytes));
+      assert (pure (Pulse.Lib.Array.Core.length (V.vec_to_array st.server_handshake_messages) == 32768));
+      copy_fragment_to_buffer_loop
+        (V.vec_to_array st.server_handshake_messages)
+        32768sz
+        out
+        out_capacity
+        slice_offset
+        0sz
+        slice_len;
+      V.to_vec_pts_to st.server_handshake_messages;
+      with out_s. assert (pts_to out out_s);
+      assert (pure (B.length out_s == 32768));
+      assert (pure (B.length 'view.server_handshake_bytes == 32768));
+      assert (pure (flight_bytes_slice out_s 0 (SZ.v slice_len) ==
+                    Seq.slice out_s 0 (SZ.v slice_len)));
+      assert (pure (flight_view_server_handshake_slice 'view slice_offset slice_len ==
+                    Seq.slice 'view.server_handshake_bytes
+                      (SZ.v slice_offset)
+                      (SZ.v slice_offset + SZ.v slice_len)));
+      assert (pure (Seq.equal
+        (flight_bytes_slice out_s 0 (SZ.v slice_len))
+        (flight_view_server_handshake_slice 'view slice_offset slice_len)));
+      fold (flight_state_exactly st 'view);
+      true
+    } else {
+      with out_s. assert (pts_to out out_s);
+      assert (pure (B.length out_s == 32768));
+      fold (flight_state_exactly st 'view);
+      false
+    }
+  } else {
+    with out_s. assert (pts_to out out_s);
+    assert (pure (B.length out_s == 32768));
+    fold (flight_state_exactly st 'view);
+    false
+  }
+}
+
+fn copy_server_handshake_slice_exact_len
+  (st: flight_state)
+  (slice_offset: SZ.t)
+  (slice_len: SZ.t)
+  (out: array U8.t)
+  (out_len: SZ.t)
+  requires flight_state_exactly st 'view **
+           pts_to out 'old_out **
+           pure (B.length 'old_out == SZ.v out_len /\
+                 out_len == slice_len)
+  returns ok: bool
+  ensures exists* out_bytes.
+          flight_state_exactly st 'view **
+          pts_to out out_bytes **
+          pure (B.length out_bytes == SZ.v slice_len /\
+                (ok ==>
+                  SZ.v slice_offset + SZ.v slice_len <= 32768 /\
+                  Seq.equal out_bytes
+                    (flight_view_server_handshake_slice 'view slice_offset slice_len)))
+{
+  unfold (flight_state_exactly st 'view);
+  if SZ.(slice_offset <=^ 32768sz) {
+    let available = SZ.(32768sz -^ slice_offset);
+    if SZ.(slice_len <=^ available) {
+      assert (pure (SZ.v slice_offset + SZ.v slice_len <= 32768));
+      V.pts_to_len st.server_handshake_messages;
+      V.to_array_pts_to st.server_handshake_messages;
+      with fragment_bytes.
+        assert (pts_to (V.vec_to_array st.server_handshake_messages) fragment_bytes);
+      assert (pure (fragment_bytes == 'view.server_handshake_bytes));
+      assert (pure (Pulse.Lib.Array.Core.length (V.vec_to_array st.server_handshake_messages) == 32768));
+      copy_fragment_to_buffer_loop
+        (V.vec_to_array st.server_handshake_messages)
+        32768sz
+        out
+        out_len
+        slice_offset
+        0sz
+        slice_len;
+      V.to_vec_pts_to st.server_handshake_messages;
+      with out_s. assert (pts_to out out_s);
+      assert (pure (B.length out_s == SZ.v slice_len));
+      assert (pure (B.length 'view.server_handshake_bytes == 32768));
+      assert (pure (Seq.equal
+        (Seq.slice out_s 0 (SZ.v slice_len))
+        (Seq.slice 'view.server_handshake_bytes
+          (SZ.v slice_offset)
+          (SZ.v slice_offset + SZ.v slice_len))));
+      Seq.lemma_len_slice out_s 0 (SZ.v slice_len);
+      Seq.lemma_eq_elim
+        (Seq.slice out_s 0 (SZ.v slice_len))
+        (Seq.slice 'view.server_handshake_bytes
+          (SZ.v slice_offset)
+          (SZ.v slice_offset + SZ.v slice_len));
+      assert (pure (Seq.length (Seq.slice out_s 0 (SZ.v slice_len)) == B.length out_s));
+      Seq.lemma_eq_intro out_s (Seq.slice out_s 0 (SZ.v slice_len));
+      assert (pure (flight_view_server_handshake_slice 'view slice_offset slice_len ==
+                    Seq.slice 'view.server_handshake_bytes
+                      (SZ.v slice_offset)
+                      (SZ.v slice_offset + SZ.v slice_len)));
+      assert (pure (Seq.equal out_s
+        (flight_view_server_handshake_slice 'view slice_offset slice_len)));
+      fold (flight_state_exactly st 'view);
+      true
+    } else {
+      with out_s. assert (pts_to out out_s);
+      assert (pure (B.length out_s == SZ.v slice_len));
+      fold (flight_state_exactly st 'view);
+      false
+    }
+  } else {
+    with out_s. assert (pts_to out out_s);
+    assert (pure (B.length out_s == SZ.v slice_len));
+    fold (flight_state_exactly st 'view);
+    false
+  }
+}
+
 fn certificate_leaf_offset (st: flight_state)
   requires is_flight_state st
   returns offset: SZ.t
@@ -2180,6 +2538,64 @@ fn copy_certificate_leaf_der
   copy_server_handshake_slice st offset len out out_capacity
 }
 
+fn copy_certificate_leaf_der_exact
+  (st: flight_state)
+  (out: array U8.t)
+  (out_capacity: SZ.t)
+  requires flight_state_exactly st 'view **
+           pts_to out 'old_out **
+           pure (B.length 'old_out == SZ.v out_capacity /\
+                 SZ.v out_capacity == 32768)
+  returns ok: bool
+  ensures exists* out_bytes.
+          flight_state_exactly st 'view **
+          pts_to out out_bytes **
+          pure (B.length out_bytes == 32768 /\
+                (ok ==>
+                  SZ.v 'view.certificate_leaf_offset + SZ.v 'view.certificate_leaf_len <= 32768 /\
+                  Seq.equal
+                    (flight_bytes_slice out_bytes 0 (SZ.v 'view.certificate_leaf_len))
+                    (flight_view_certificate_leaf_der 'view)))
+{
+  let offset = certificate_leaf_offset_exact st;
+  let len = certificate_leaf_len_exact st;
+  let ok = copy_server_handshake_slice_exact st offset len out out_capacity;
+  with out_s. assert (pts_to out out_s);
+  assert (pure (offset == 'view.certificate_leaf_offset));
+  assert (pure (len == 'view.certificate_leaf_len));
+  assert (pure (flight_view_server_handshake_slice 'view offset len ==
+                flight_view_certificate_leaf_der 'view));
+  ok
+}
+
+fn copy_certificate_leaf_der_exact_len
+  (st: flight_state)
+  (out: array U8.t)
+  (out_len: SZ.t)
+  requires flight_state_exactly st 'view **
+           pts_to out 'old_out **
+           pure (B.length 'old_out == SZ.v out_len /\
+                 out_len == 'view.certificate_leaf_len)
+  returns ok: bool
+  ensures exists* out_bytes.
+          flight_state_exactly st 'view **
+          pts_to out out_bytes **
+          pure (B.length out_bytes == SZ.v 'view.certificate_leaf_len /\
+                (ok ==>
+                  SZ.v 'view.certificate_leaf_offset + SZ.v 'view.certificate_leaf_len <= 32768 /\
+                  Seq.equal out_bytes (flight_view_certificate_leaf_der 'view)))
+{
+  let offset = certificate_leaf_offset_exact st;
+  let len = certificate_leaf_len_exact st;
+  let ok = copy_server_handshake_slice_exact_len st offset len out out_len;
+  with out_s. assert (pts_to out out_s);
+  assert (pure (offset == 'view.certificate_leaf_offset));
+  assert (pure (len == 'view.certificate_leaf_len));
+  assert (pure (flight_view_server_handshake_slice 'view offset len ==
+                flight_view_certificate_leaf_der 'view));
+  ok
+}
+
 fn copy_certificate_verify_signature
   (st: flight_state)
   (out: array U8.t)
@@ -2197,6 +2613,64 @@ fn copy_certificate_verify_signature
   let offset = certificate_verify_signature_offset st;
   let len = certificate_verify_signature_len st;
   copy_server_handshake_slice st offset len out out_capacity
+}
+
+fn copy_certificate_verify_signature_exact
+  (st: flight_state)
+  (out: array U8.t)
+  (out_capacity: SZ.t)
+  requires flight_state_exactly st 'view **
+           pts_to out 'old_out **
+           pure (B.length 'old_out == SZ.v out_capacity /\
+                 SZ.v out_capacity == 32768)
+  returns ok: bool
+  ensures exists* out_bytes.
+          flight_state_exactly st 'view **
+          pts_to out out_bytes **
+          pure (B.length out_bytes == 32768 /\
+                (ok ==>
+                  SZ.v 'view.certificate_verify_signature_offset + SZ.v 'view.certificate_verify_signature_len <= 32768 /\
+                  Seq.equal
+                    (flight_bytes_slice out_bytes 0 (SZ.v 'view.certificate_verify_signature_len))
+                    (flight_view_certificate_verify_signature 'view)))
+{
+  let offset = certificate_verify_signature_offset_exact st;
+  let len = certificate_verify_signature_len_exact st;
+  let ok = copy_server_handshake_slice_exact st offset len out out_capacity;
+  with out_s. assert (pts_to out out_s);
+  assert (pure (offset == 'view.certificate_verify_signature_offset));
+  assert (pure (len == 'view.certificate_verify_signature_len));
+  assert (pure (flight_view_server_handshake_slice 'view offset len ==
+                flight_view_certificate_verify_signature 'view));
+  ok
+}
+
+fn copy_certificate_verify_signature_exact_len
+  (st: flight_state)
+  (out: array U8.t)
+  (out_len: SZ.t)
+  requires flight_state_exactly st 'view **
+           pts_to out 'old_out **
+           pure (B.length 'old_out == SZ.v out_len /\
+                 out_len == 'view.certificate_verify_signature_len)
+  returns ok: bool
+  ensures exists* out_bytes.
+          flight_state_exactly st 'view **
+          pts_to out out_bytes **
+          pure (B.length out_bytes == SZ.v 'view.certificate_verify_signature_len /\
+                (ok ==>
+                  SZ.v 'view.certificate_verify_signature_offset + SZ.v 'view.certificate_verify_signature_len <= 32768 /\
+                  Seq.equal out_bytes (flight_view_certificate_verify_signature 'view)))
+{
+  let offset = certificate_verify_signature_offset_exact st;
+  let len = certificate_verify_signature_len_exact st;
+  let ok = copy_server_handshake_slice_exact_len st offset len out out_len;
+  with out_s. assert (pts_to out out_s);
+  assert (pure (offset == 'view.certificate_verify_signature_offset));
+  assert (pure (len == 'view.certificate_verify_signature_len));
+  assert (pure (flight_view_server_handshake_slice 'view offset len ==
+                flight_view_certificate_verify_signature 'view));
+  ok
 }
 
 fn server_before_finished_len (st: flight_state)
