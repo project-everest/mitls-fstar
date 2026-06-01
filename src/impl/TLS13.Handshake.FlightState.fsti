@@ -14,6 +14,9 @@ module U8 = FStar.UInt8
 val flight_state : Type0
 
 type flight_view = {
+  client_hello_bytes: B.bytes;
+  server_hello_bytes: B.bytes;
+  server_handshake_bytes: B.bytes;
   client_hello_len: (l:SZ.t{SZ.v l <= 512});
   server_hello_len: (l:SZ.t{SZ.v l <= 4096});
   server_handshake_len: (l:SZ.t{SZ.v l <= 32768});
@@ -34,6 +37,9 @@ type flight_view = {
 }
 
 let empty_flight_view : flight_view = {
+  client_hello_bytes = B.zeros 512;
+  server_hello_bytes = B.zeros 4096;
+  server_handshake_bytes = B.zeros 32768;
   client_hello_len = 0sz;
   server_hello_len = 0sz;
   server_handshake_len = 0sz;

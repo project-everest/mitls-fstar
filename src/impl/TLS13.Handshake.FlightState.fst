@@ -200,6 +200,9 @@ let flight_state_exactly ([@@@mkey] st: flight_state) (view: flight_view) : slpr
           view.certificate_verify_signature_scheme == certificate_verify_signature_scheme /\
           view.certificate_verify_signature_offset == certificate_verify_signature_offset /\
           view.certificate_verify_signature_len == certificate_verify_signature_len /\
+          view.client_hello_bytes == client_hello /\
+          view.server_hello_bytes == server_hello /\
+          view.server_handshake_bytes == server_handshake_messages /\
           view.saw_encrypted_extensions == saw_encrypted_extensions /\
           view.saw_certificate == saw_certificate /\
           view.saw_certificate_verify == saw_certificate_verify /\
@@ -218,6 +221,9 @@ fn reveal_flight_view (st: flight_state)
   with parsed_len. assert (Box.pts_to st.parsed_len_box parsed_len);
   with client_hello_len. assert (Box.pts_to st.client_hello_len_box client_hello_len);
   with server_hello_len. assert (Box.pts_to st.server_hello_len_box server_hello_len);
+  with client_hello. assert (V.pts_to st.client_hello client_hello);
+  with server_hello. assert (V.pts_to st.server_hello server_hello);
+  with server_handshake_messages. assert (V.pts_to st.server_handshake_messages server_handshake_messages);
   with certificate_verify_offset. assert (Box.pts_to st.certificate_verify_offset_box certificate_verify_offset);
   with certificate_leaf_offset. assert (Box.pts_to st.certificate_leaf_offset_box certificate_leaf_offset);
   with certificate_leaf_len. assert (Box.pts_to st.certificate_leaf_len_box certificate_leaf_len);
@@ -232,6 +238,9 @@ fn reveal_flight_view (st: flight_state)
   with certificate_verify_verified. assert (Box.pts_to st.certificate_verify_verified_box certificate_verify_verified);
   with saw_finished. assert (Box.pts_to st.saw_finished_box saw_finished);
   let view = {
+    client_hello_bytes = client_hello;
+    server_hello_bytes = server_hello;
+    server_handshake_bytes = server_handshake_messages;
     client_hello_len;
     server_hello_len;
     server_handshake_len = handshake_len;
