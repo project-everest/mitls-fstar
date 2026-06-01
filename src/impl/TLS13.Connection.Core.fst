@@ -1527,6 +1527,7 @@ ensures exists* view1 network_out1 app_out1.
                       ST.advance c.state (S.RecvApplicationData (Ghost.reveal app_payload)) (S.advance_read_record view0.CL.state);
                       let chunks_single : erased (list B.bytes) =
                         [Ghost.reveal app_payload];
+                      let acc_app_len = payload_len;
                       let acc_view_single : erased CL.connection_view =
                         CL.note_app_received_chunks
                           (Ghost.reveal view1)
@@ -1681,17 +1682,17 @@ ensures exists* view1 network_out1 app_out1.
                               let payload2_len =
                                 RF.decode_inner_plaintext inner2 inner2_len inner_content_type2_out 1sz;
                               let inner_content_type2 = inner_content_type2_out.(0sz);
-                              let remaining_requested = SZ.(requested_app_len -^ payload_len);
-                              let remaining_app_cap = SZ.(app_out_cap -^ payload_len);
-                              assert (pure (SZ.v remaining_requested == SZ.v requested_app_len - SZ.v payload_len));
-                              assert (pure (SZ.v remaining_app_cap == SZ.v app_out_cap - SZ.v payload_len));
+                              let remaining_requested = SZ.(requested_app_len -^ acc_app_len);
+                              let remaining_app_cap = SZ.(app_out_cap -^ acc_app_len);
+                              assert (pure (SZ.v remaining_requested == SZ.v requested_app_len - SZ.v acc_app_len));
+                              assert (pure (SZ.v remaining_app_cap == SZ.v app_out_cap - SZ.v acc_app_len));
                               if (inner_content_type2 = 23uy &&
                                   SZ.(payload2_len <=^ remaining_requested) &&
                                   SZ.(payload2_len <=^ remaining_app_cap)) {
-                                assert (pure (SZ.v payload_len + SZ.v payload2_len <= SZ.v requested_app_len));
-                                assert (pure (SZ.v payload_len + SZ.v payload2_len <= SZ.v app_out_cap));
-                                let total_payload_len = SZ.(payload_len +^ payload2_len);
-                                assert (pure (SZ.v total_payload_len == SZ.v payload_len + SZ.v payload2_len));
+                                assert (pure (SZ.v acc_app_len + SZ.v payload2_len <= SZ.v requested_app_len));
+                                assert (pure (SZ.v acc_app_len + SZ.v payload2_len <= SZ.v app_out_cap));
+                                let total_payload_len = SZ.(acc_app_len +^ payload2_len);
+                                assert (pure (SZ.v total_payload_len == SZ.v acc_app_len + SZ.v payload2_len));
                                 assert (pure (SZ.v total_payload_len <= SZ.v app_out_cap));
                                 assert (pure (SZ.v total_payload_len <= SZ.v requested_app_len));
                                 with inner2_bytes_peek. assert (pts_to inner2 inner2_bytes_peek);
@@ -1727,18 +1728,18 @@ ensures exists* view1 network_out1 app_out1.
                                     app_out
                                     app_out_cap
                                     0sz
-                                    payload_len
+                                    acc_app_len
                                     payload2_len;
                                   with app_out2. assert (pts_to app_out app_out2);
                                   assert (pure (B.length app_out2 == SZ.v app_out_cap));
                                   assert (pure (Seq.equal
-                                    (Seq.slice app_out2 (SZ.v payload_len) (SZ.v total_payload_len))
+                                    (Seq.slice app_out2 (SZ.v acc_app_len) (SZ.v total_payload_len))
                                     (Seq.slice payload2_tmp_bytes 0 (SZ.v payload2_len))));
                                   assert (pure (Seq.equal
-                                    (Seq.slice app_out2 0 (SZ.v payload_len))
-                                    (Seq.slice app_out1 0 (SZ.v payload_len))));
+                                    (Seq.slice app_out2 0 (SZ.v acc_app_len))
+                                    (Seq.slice app_out1 0 (SZ.v acc_app_len))));
                                   let app_payload2 : erased B.bytes =
-                                    Seq.slice (Ghost.reveal app_out2) (SZ.v payload_len) (SZ.v total_payload_len);
+                                    Seq.slice (Ghost.reveal app_out2) (SZ.v acc_app_len) (SZ.v total_payload_len);
                                   let app_payload_total : erased B.bytes =
                                     Seq.slice (Ghost.reveal app_out2) 0 (SZ.v total_payload_len);
                                   assert (pure (Seq.equal
@@ -1746,19 +1747,19 @@ ensures exists* view1 network_out1 app_out1.
                                     (Seq.slice (Ghost.reveal payload2_tmp_bytes) 0 (SZ.v payload2_len))));
                                   assert (pure (Seq.equal
                                     (Ghost.reveal app_payload)
-                                    (Seq.slice (Ghost.reveal app_out2) 0 (SZ.v payload_len))));
+                                    (Seq.slice (Ghost.reveal app_out2) 0 (SZ.v acc_app_len))));
                                   assert (pure (CL.raw_slice (Ghost.reveal app_out2) 0 (SZ.v total_payload_len) ==
                                                 Seq.slice (Ghost.reveal app_out2) 0 (SZ.v total_payload_len)));
-                                  assert (pure (CL.raw_slice (Ghost.reveal app_out2) 0 (SZ.v payload_len) ==
-                                                Seq.slice (Ghost.reveal app_out2) 0 (SZ.v payload_len)));
-                                  assert (pure (CL.raw_slice (Ghost.reveal app_out2) (SZ.v payload_len) (SZ.v total_payload_len) ==
-                                                Seq.slice (Ghost.reveal app_out2) (SZ.v payload_len) (SZ.v total_payload_len)));
+                                  assert (pure (CL.raw_slice (Ghost.reveal app_out2) 0 (SZ.v acc_app_len) ==
+                                                Seq.slice (Ghost.reveal app_out2) 0 (SZ.v acc_app_len)));
+                                  assert (pure (CL.raw_slice (Ghost.reveal app_out2) (SZ.v acc_app_len) (SZ.v total_payload_len) ==
+                                                Seq.slice (Ghost.reveal app_out2) (SZ.v acc_app_len) (SZ.v total_payload_len)));
                                   assert (pure (Seq.equal
                                     (Ghost.reveal app_payload)
-                                    (CL.raw_slice (Ghost.reveal app_out2) 0 (SZ.v payload_len))));
+                                    (CL.raw_slice (Ghost.reveal app_out2) 0 (SZ.v acc_app_len))));
                                   assert (pure (Seq.equal
                                     (Ghost.reveal app_payload2)
-                                    (CL.raw_slice (Ghost.reveal app_out2) (SZ.v payload_len) (SZ.v total_payload_len))));
+                                    (CL.raw_slice (Ghost.reveal app_out2) (SZ.v acc_app_len) (SZ.v total_payload_len))));
                                   assert (pure (CL.connection_view_consistent (Ghost.reveal view1)));
                                   assert (pure ((Ghost.reveal view1).CL.state.S.phase == S.ApplicationData));
                                   let chunks_after_second : erased (list B.bytes) =
@@ -1780,7 +1781,7 @@ ensures exists* view1 network_out1 app_out1.
                                     (Ghost.reveal chunks_single)
                                     (Ghost.reveal app_payload2)
                                     (Ghost.reveal app_out2)
-                                    (SZ.v payload_len)
+                                    (SZ.v acc_app_len)
                                     (SZ.v total_payload_len)
                                     (Ghost.reveal app_payload)
                                     (Ghost.reveal app_payload_total);
@@ -2660,6 +2661,7 @@ ensures exists* view1 network_out1 app_out1.
                 ST.advance c.state (S.RecvApplicationData (Ghost.reveal app_payload)) (S.advance_read_record view0.CL.state);
                 let chunks_single : erased (list B.bytes) =
                   [Ghost.reveal app_payload];
+                let acc_app_len = payload_len;
                 let acc_view_single : erased CL.connection_view =
                   CL.note_app_received_chunks
                     (Ghost.reveal view1)
@@ -2813,17 +2815,17 @@ ensures exists* view1 network_out1 app_out1.
                         let payload2_len =
                           RF.decode_inner_plaintext inner2 inner2_len inner_content_type2_out 1sz;
                         let inner_content_type2 = inner_content_type2_out.(0sz);
-                        let remaining_requested = SZ.(requested_app_len -^ payload_len);
-                        let remaining_app_cap = SZ.(app_out_cap -^ payload_len);
-                        assert (pure (SZ.v remaining_requested == SZ.v requested_app_len - SZ.v payload_len));
-                        assert (pure (SZ.v remaining_app_cap == SZ.v app_out_cap - SZ.v payload_len));
+                        let remaining_requested = SZ.(requested_app_len -^ acc_app_len);
+                        let remaining_app_cap = SZ.(app_out_cap -^ acc_app_len);
+                        assert (pure (SZ.v remaining_requested == SZ.v requested_app_len - SZ.v acc_app_len));
+                        assert (pure (SZ.v remaining_app_cap == SZ.v app_out_cap - SZ.v acc_app_len));
                         if (inner_content_type2 = 23uy &&
                             SZ.(payload2_len <=^ remaining_requested) &&
                             SZ.(payload2_len <=^ remaining_app_cap)) {
-                          assert (pure (SZ.v payload_len + SZ.v payload2_len <= SZ.v requested_app_len));
-                          assert (pure (SZ.v payload_len + SZ.v payload2_len <= SZ.v app_out_cap));
-                          let total_payload_len = SZ.(payload_len +^ payload2_len);
-                          assert (pure (SZ.v total_payload_len == SZ.v payload_len + SZ.v payload2_len));
+                          assert (pure (SZ.v acc_app_len + SZ.v payload2_len <= SZ.v requested_app_len));
+                          assert (pure (SZ.v acc_app_len + SZ.v payload2_len <= SZ.v app_out_cap));
+                          let total_payload_len = SZ.(acc_app_len +^ payload2_len);
+                          assert (pure (SZ.v total_payload_len == SZ.v acc_app_len + SZ.v payload2_len));
                           assert (pure (SZ.v total_payload_len <= SZ.v app_out_cap));
                           assert (pure (SZ.v total_payload_len <= SZ.v requested_app_len));
                           with inner2_bytes_peek. assert (pts_to inner2 inner2_bytes_peek);
@@ -2861,18 +2863,18 @@ ensures exists* view1 network_out1 app_out1.
                               app_out
                               app_out_cap
                               0sz
-                              payload_len
+                              acc_app_len
                               payload2_len;
                             with app_out2. assert (pts_to app_out app_out2);
                             assert (pure (B.length app_out2 == SZ.v app_out_cap));
                             assert (pure (Seq.equal
-                              (Seq.slice app_out2 (SZ.v payload_len) (SZ.v total_payload_len))
+                              (Seq.slice app_out2 (SZ.v acc_app_len) (SZ.v total_payload_len))
                               (Seq.slice payload2_tmp_bytes 0 (SZ.v payload2_len))));
                             assert (pure (Seq.equal
-                              (Seq.slice app_out2 0 (SZ.v payload_len))
-                              (Seq.slice app_out1 0 (SZ.v payload_len))));
+                              (Seq.slice app_out2 0 (SZ.v acc_app_len))
+                              (Seq.slice app_out1 0 (SZ.v acc_app_len))));
                             let app_payload2 : erased B.bytes =
-                              Seq.slice (Ghost.reveal app_out2) (SZ.v payload_len) (SZ.v total_payload_len);
+                              Seq.slice (Ghost.reveal app_out2) (SZ.v acc_app_len) (SZ.v total_payload_len);
                             let app_payload_total : erased B.bytes =
                               Seq.slice (Ghost.reveal app_out2) 0 (SZ.v total_payload_len);
                             assert (pure (Seq.equal
@@ -2880,19 +2882,19 @@ ensures exists* view1 network_out1 app_out1.
                               (Seq.slice (Ghost.reveal payload2_tmp_bytes) 0 (SZ.v payload2_len))));
                             assert (pure (Seq.equal
                               (Ghost.reveal app_payload)
-                              (Seq.slice (Ghost.reveal app_out2) 0 (SZ.v payload_len))));
+                              (Seq.slice (Ghost.reveal app_out2) 0 (SZ.v acc_app_len))));
                             assert (pure (CL.raw_slice (Ghost.reveal app_out2) 0 (SZ.v total_payload_len) ==
                                           Seq.slice (Ghost.reveal app_out2) 0 (SZ.v total_payload_len)));
-                            assert (pure (CL.raw_slice (Ghost.reveal app_out2) 0 (SZ.v payload_len) ==
-                                          Seq.slice (Ghost.reveal app_out2) 0 (SZ.v payload_len)));
-                            assert (pure (CL.raw_slice (Ghost.reveal app_out2) (SZ.v payload_len) (SZ.v total_payload_len) ==
-                                          Seq.slice (Ghost.reveal app_out2) (SZ.v payload_len) (SZ.v total_payload_len)));
+                            assert (pure (CL.raw_slice (Ghost.reveal app_out2) 0 (SZ.v acc_app_len) ==
+                                          Seq.slice (Ghost.reveal app_out2) 0 (SZ.v acc_app_len)));
+                            assert (pure (CL.raw_slice (Ghost.reveal app_out2) (SZ.v acc_app_len) (SZ.v total_payload_len) ==
+                                          Seq.slice (Ghost.reveal app_out2) (SZ.v acc_app_len) (SZ.v total_payload_len)));
                             assert (pure (Seq.equal
                               (Ghost.reveal app_payload)
-                              (CL.raw_slice (Ghost.reveal app_out2) 0 (SZ.v payload_len))));
+                              (CL.raw_slice (Ghost.reveal app_out2) 0 (SZ.v acc_app_len))));
                             assert (pure (Seq.equal
                               (Ghost.reveal app_payload2)
-                              (CL.raw_slice (Ghost.reveal app_out2) (SZ.v payload_len) (SZ.v total_payload_len))));
+                              (CL.raw_slice (Ghost.reveal app_out2) (SZ.v acc_app_len) (SZ.v total_payload_len))));
                             assert (pure (CL.connection_view_consistent (Ghost.reveal view1)));
                             assert (pure ((Ghost.reveal view1).CL.state.S.phase == S.ApplicationData));
                             let chunks_after_second : erased (list B.bytes) =
@@ -2914,7 +2916,7 @@ ensures exists* view1 network_out1 app_out1.
                               (Ghost.reveal chunks_single)
                               (Ghost.reveal app_payload2)
                               (Ghost.reveal app_out2)
-                              (SZ.v payload_len)
+                              (SZ.v acc_app_len)
                               (SZ.v total_payload_len)
                               (Ghost.reveal app_payload)
                               (Ghost.reveal app_payload_total);
