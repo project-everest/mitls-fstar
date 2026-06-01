@@ -1708,6 +1708,12 @@ ensures exists* view1 network_out1 app_out1.
                                   assert (pure (Seq.equal
                                     (Ghost.reveal app_payload_total)
                                     (CL.concat_bytes [Ghost.reveal app_payload; Ghost.reveal app_payload2])));
+                                  assert (pure (CL.connection_view_consistent (Ghost.reveal view1)));
+                                  assert (pure ((Ghost.reveal view1).CL.state.S.phase == S.ApplicationData));
+                                  CL.lemma_note_app_received_chunks_loop_step
+                                    (Ghost.reveal view1)
+                                    [Ghost.reveal app_payload]
+                                    (Ghost.reveal app_payload2);
                                   set_pending_network_from_slice
                                     c
                                     residual_tmp
@@ -2799,6 +2805,12 @@ ensures exists* view1 network_out1 app_out1.
                             assert (pure (Seq.equal
                               (Ghost.reveal app_payload_total)
                               (CL.concat_bytes [Ghost.reveal app_payload; Ghost.reveal app_payload2])));
+                            assert (pure (CL.connection_view_consistent (Ghost.reveal view1)));
+                            assert (pure ((Ghost.reveal view1).CL.state.S.phase == S.ApplicationData));
+                            CL.lemma_note_app_received_chunks_loop_step
+                              (Ghost.reveal view1)
+                              [Ghost.reveal app_payload]
+                              (Ghost.reveal app_payload2);
                             assert (pure (SZ.v record2_end + SZ.v residual_after_two_len == SZ.v residual_len));
                             set_pending_network_from_slice
                               c
