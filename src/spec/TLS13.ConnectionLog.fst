@@ -1527,6 +1527,19 @@ let with_pending_received_raw
   : connection_view =
   { view with pending_received_raw = pending }
 
+let read_application_data_chunks_success_view
+  (raw_view:connection_view)
+  (chunks:list B.bytes)
+  (pending:B.bytes)
+  : connection_view =
+  with_pending_received_raw (note_app_received_chunks raw_view chunks) pending
+
+let read_application_data_chunks_success_response
+  (app_out:B.bytes)
+  (chunks:list B.bytes)
+  : client_response =
+  response_no_network_out_chunks app_out chunks ApplicationDataReady
+
 let note_raw_app_sent
   (view:connection_view)
   (raw:raw_io_log)
@@ -2616,6 +2629,39 @@ let lemma_step_read_application_data_chunks_success_with_pending_raw
   assert (view1.raw_log == base.raw_log);
   assert (req_pending == req);
   lemma_step_with_pending_received_raw view0 req base resp pending
+
+let lemma_step_read_application_data_chunks_success_exit
+  (view0:connection_view)
+  (raw_view:connection_view)
+  (max_len:nat)
+  (app_out:B.bytes)
+  (chunks:list B.bytes)
+  (pending:B.bytes)
+  : Lemma
+      (requires connection_view_consistent view0 /\
+                connection_view_consistent raw_view /\
+                raw_view.state == view0.state /\
+                raw_view.app_view == view0.app_view /\
+                raw_io_log_extends view0.raw_log raw_view.raw_log /\
+                raw_io_log_same_sent view0.raw_log raw_view.raw_log /\
+                view0.state.S.phase == S.ApplicationData /\
+                Seq.equal app_out (concat_bytes chunks))
+      (ensures step
+        view0
+        (request_with_received_raw_delta
+          (OpReadApplicationData max_len)
+          view0.raw_log
+          (read_application_data_chunks_success_view raw_view chunks pending).raw_log)
+        (read_application_data_chunks_success_view raw_view chunks pending)
+        (read_application_data_chunks_success_response app_out chunks))
+  =
+  lemma_step_read_application_data_chunks_success_with_pending_raw
+    view0
+    raw_view
+    max_len
+    app_out
+    chunks
+    pending
 
 let lemma_step_read_application_data_single_chunk_success_with_pending_raw
   (view0:connection_view)
