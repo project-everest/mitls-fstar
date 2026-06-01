@@ -13,7 +13,6 @@ module CE = TLS13.Connection.External
 module E = TLS13.Handshake.External
 module FS = TLS13.Handshake.FlightState
 module H = TLS13.Handshake.Spec
-module HW = TLS13.Connection.HandshakeWitness
 module HF = TLS13.Handshake.Framing
 module IO = TLS13.IO
 module RF = TLS13.Record.Framing
