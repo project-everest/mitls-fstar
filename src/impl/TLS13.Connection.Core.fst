@@ -1525,6 +1525,8 @@ ensures exists* view1 network_out1 app_out1.
                       assert (pure (S.step view0.CL.state (S.RecvApplicationData (Ghost.reveal app_payload)) ==
                                     Some (S.advance_read_record view0.CL.state)));
                       ST.advance c.state (S.RecvApplicationData (Ghost.reveal app_payload)) (S.advance_read_record view0.CL.state);
+                      let chunks_single : erased (list B.bytes) =
+                        [Ghost.reveal app_payload];
                       assert (pure (U64.fits
                         (view0.CL.state.S.read_state.R.seq +
                          (B.length view0.CL.pending_received_raw + B.length (Ghost.reveal network_bytes) + 1))));
@@ -1535,10 +1537,10 @@ ensures exists* view1 network_out1 app_out1.
                         (B.length view0.CL.pending_received_raw + B.length (Ghost.reveal network_bytes));
                       assert (pure (0 < B.length view0.CL.pending_received_raw));
                       assert (pure (1 <= B.length view0.CL.pending_received_raw + B.length (Ghost.reveal network_bytes)));
-                      assert (pure (CL.chunk_count [Ghost.reveal app_payload] == 1));
+                      assert (pure (CL.chunk_count (Ghost.reveal chunks_single) == 1));
                       lemma_u64_fits_next_after_consumed_of_budget
                         view0.CL.state.S.read_state.R.seq
-                        (CL.chunk_count [Ghost.reveal app_payload])
+                        (CL.chunk_count (Ghost.reveal chunks_single))
                         (B.length view0.CL.pending_received_raw + B.length (Ghost.reveal network_bytes));
                       assert (pure (U64.fits (view0.CL.state.S.read_state.R.seq + 1)));
                       assert (pure (U64.fits (view0.CL.state.S.read_state.R.seq + 2)));
@@ -1547,8 +1549,6 @@ ensures exists* view1 network_out1 app_out1.
                       assert (pure (server_record_s1.R.seq == server_record_s0.R.seq + 1));
                       assert (pure (server_record_s1.R.seq == view0.CL.state.S.read_state.R.seq + 1));
                       assert (pure (U64.fits (server_record_s1.R.seq + 1)));
-                      let chunks_single : erased (list B.bytes) =
-                        [Ghost.reveal app_payload];
                       CL.lemma_concat_bytes_singleton (Ghost.reveal app_payload);
                       assert (pure (Seq.equal
                         (Ghost.reveal app_payload)
