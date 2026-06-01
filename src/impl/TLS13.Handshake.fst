@@ -33,6 +33,35 @@ type handshake_context = {
 let is_handshake_context (ctx:handshake_context) (st:ST.state_ref) (s:S.conn_state) : slprop =
   E.is_context ctx.backend ** FS.is_flight_state ctx.flight ** ST.current st s
 
+let handshake_context_exactly
+  (ctx:handshake_context)
+  (st:ST.state_ref)
+  (s:S.conn_state)
+  (flight_view:FS.flight_view)
+  : slprop =
+  E.is_context ctx.backend ** FS.flight_state_exactly ctx.flight flight_view ** ST.current st s
+
+ghost
+fn reveal_handshake_flight_view (ctx: handshake_context)
+  requires is_handshake_context ctx 'st 's
+  ensures exists* flight_view. handshake_context_exactly ctx 'st 's flight_view
+{
+  unfold (is_handshake_context ctx 'st 's);
+  FS.reveal_flight_view ctx.flight;
+  with flight_view. assert (FS.flight_state_exactly ctx.flight flight_view);
+  fold (handshake_context_exactly ctx 'st 's flight_view);
+}
+
+ghost
+fn hide_handshake_flight_view (ctx: handshake_context)
+  requires handshake_context_exactly ctx 'st 's 'flight_view
+  ensures is_handshake_context ctx 'st 's
+{
+  unfold (handshake_context_exactly ctx 'st 's 'flight_view);
+  FS.hide_flight_view ctx.flight;
+  fold (is_handshake_context ctx 'st 's);
+}
+
 let server_hello_fragment_capacity : SZ.t = 4096sz
 
 inline_for_extraction

@@ -5,6 +5,7 @@ module TLS13.Handshake
 open Pulse.Lib.Pervasives
 
 module H = TLS13.Handshake.Spec
+module FS = TLS13.Handshake.FlightState
 module IO = TLS13.IO
 module S = TLS13.StateMachine
 module ST = TLS13.State
@@ -14,6 +15,17 @@ module X = TLS13.X509.Spec
 val handshake_context : Type0
 
 val is_handshake_context: handshake_context -> ST.state_ref -> S.conn_state -> slprop
+val handshake_context_exactly: handshake_context -> ST.state_ref -> S.conn_state -> FS.flight_view -> slprop
+
+ghost
+fn reveal_handshake_flight_view (ctx: handshake_context)
+  requires is_handshake_context ctx 'st 's
+  ensures exists* flight_view. handshake_context_exactly ctx 'st 's flight_view
+
+ghost
+fn hide_handshake_flight_view (ctx: handshake_context)
+  requires handshake_context_exactly ctx 'st 's 'flight_view
+  ensures is_handshake_context ctx 'st 's
 
 fn handshake_context_new ()
   returns ctx: handshake_context
