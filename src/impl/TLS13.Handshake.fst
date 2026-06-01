@@ -483,12 +483,15 @@ fn recv_certificate (ctx: handshake_context) (ch: IO.channel)
 {
   unfold (is_handshake_context ctx 'st 's);
   FS.reveal_flight_view ctx.flight;
+  with flight_view. assert (FS.flight_state_exactly ctx.flight flight_view);
+  let certificate : erased H.certificate_msg =
+    FS.flight_view_certificate (Ghost.reveal flight_view);
   let ok = FS.saw_certificate_exact ctx.flight;
   FS.hide_flight_view ctx.flight;
   if ok {
-    assert (pure (S.step 's (S.RecvCertificate HW.dummy_certificate) == Some (S.with_phase 's S.CertificateReceived)));
-    ST.advance 'st (S.RecvCertificate HW.dummy_certificate) (S.with_phase 's S.CertificateReceived);
-    lemma_step_evolves 's (S.RecvCertificate HW.dummy_certificate) (S.with_phase 's S.CertificateReceived);
+    assert (pure (S.step 's (S.RecvCertificate (Ghost.reveal certificate)) == Some (S.with_phase 's S.CertificateReceived)));
+    ST.advance 'st (S.RecvCertificate (Ghost.reveal certificate)) (S.with_phase 's S.CertificateReceived);
+    lemma_step_evolves 's (S.RecvCertificate (Ghost.reveal certificate)) (S.with_phase 's S.CertificateReceived);
     fold (is_handshake_context ctx 'st (S.with_phase 's S.CertificateReceived));
     true
   } else {

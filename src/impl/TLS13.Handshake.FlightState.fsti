@@ -92,6 +92,11 @@ let flight_view_certificate_verify_signature (view: flight_view) : B.bytes =
     view.certificate_verify_signature_offset
     view.certificate_verify_signature_len
 
+let flight_view_certificate (view: flight_view) : H.certificate_msg =
+  {
+    H.chain = [flight_view_certificate_leaf_der view];
+  }
+
 let signature_scheme_of_u16 (scheme: U16.t) : T.signature_scheme =
   match U16.v scheme with
   | 0x0804 -> T.RsaPssRsaeSha256
