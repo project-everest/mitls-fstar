@@ -293,6 +293,7 @@ fn send_client_hello (ctx: handshake_context) (ch: IO.channel)
     let stored = E.store_client_hello ctx.backend hello 130sz;
     if stored {
       FS.set_client_hello_fragment ctx.flight hello 130sz;
+      FS.set_client_hello_parameters ctx.flight random key_share;
       HF.serialize_client_hello_record_header header 5sz;
       let connected = E.connect ctx.backend ch;
       if connected {
@@ -304,9 +305,14 @@ fn send_client_hello (ctx: handshake_context) (ch: IO.channel)
             false
           };
         if hello_ok {
-          assert (pure (S.step 's (S.SendClientHello HW.dummy_client_hello) == Some (S.with_phase 's S.ClientHelloSent)));
-          ST.advance 'st (S.SendClientHello HW.dummy_client_hello) (S.with_phase 's S.ClientHelloSent);
-          lemma_step_evolves 's (S.SendClientHello HW.dummy_client_hello) (S.with_phase 's S.ClientHelloSent);
+          FS.reveal_flight_view ctx.flight;
+          with flight_view. assert (FS.flight_state_exactly ctx.flight flight_view);
+          let client_hello : erased H.client_hello =
+            FS.flight_view_client_hello (Ghost.reveal flight_view);
+          FS.hide_flight_view ctx.flight;
+          assert (pure (S.step 's (S.SendClientHello (Ghost.reveal client_hello)) == Some (S.with_phase 's S.ClientHelloSent)));
+          ST.advance 'st (S.SendClientHello (Ghost.reveal client_hello)) (S.with_phase 's S.ClientHelloSent);
+          lemma_step_evolves 's (S.SendClientHello (Ghost.reveal client_hello)) (S.with_phase 's S.ClientHelloSent);
           fold (is_handshake_context ctx 'st (S.with_phase 's S.ClientHelloSent));
           true
         } else {
@@ -687,9 +693,14 @@ fn send_client_finished (ctx: handshake_context) (ch: IO.channel)
       false
     };
   if ok {
-    assert (pure (S.step 's (S.SendClientFinished HW.dummy_finished) == Some (S.with_phase 's S.ApplicationData)));
-    ST.advance 'st (S.SendClientFinished HW.dummy_finished) (S.with_phase 's S.ApplicationData);
-    lemma_step_evolves 's (S.SendClientFinished HW.dummy_finished) (S.with_phase 's S.ApplicationData);
+    FS.reveal_flight_view ctx.flight;
+    with flight_view. assert (FS.flight_state_exactly ctx.flight flight_view);
+    let finished : erased H.finished =
+      FS.flight_view_client_finished (Ghost.reveal flight_view);
+    FS.hide_flight_view ctx.flight;
+    assert (pure (S.step 's (S.SendClientFinished (Ghost.reveal finished)) == Some (S.with_phase 's S.ApplicationData)));
+    ST.advance 'st (S.SendClientFinished (Ghost.reveal finished)) (S.with_phase 's S.ApplicationData);
+    lemma_step_evolves 's (S.SendClientFinished (Ghost.reveal finished)) (S.with_phase 's S.ApplicationData);
     fold (is_handshake_context ctx 'st (S.with_phase 's S.ApplicationData));
     true
   } else {

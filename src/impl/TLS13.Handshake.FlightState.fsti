@@ -19,9 +19,12 @@ val flight_state : Type0
 
 type flight_view = {
   client_hello_bytes: B.bytes;
+  client_hello_random: B.bytes_of_len 32;
+  client_hello_key_share: B.bytes_of_len 32;
   server_hello_bytes: B.bytes;
   server_handshake_bytes: B.bytes;
   server_finished_verify_data: B.bytes_of_len 32;
+  client_finished_verify_data: B.bytes_of_len 32;
   client_hello_len: (l:SZ.t{SZ.v l <= 512});
   server_hello_len: (l:SZ.t{SZ.v l <= 4096});
   server_handshake_len: (l:SZ.t{SZ.v l <= 32768});
@@ -43,9 +46,12 @@ type flight_view = {
 
 let empty_flight_view : flight_view = {
   client_hello_bytes = B.zeros 512;
+  client_hello_random = B.zeros 32;
+  client_hello_key_share = B.zeros 32;
   server_hello_bytes = B.zeros 4096;
   server_handshake_bytes = B.zeros 32768;
   server_finished_verify_data = B.zeros 32;
+  client_finished_verify_data = B.zeros 32;
   client_hello_len = 0sz;
   server_hello_len = 0sz;
   server_handshake_len = 0sz;
@@ -85,6 +91,18 @@ let flight_view_server_handshake_slice
 
 let flight_view_client_hello_bytes (view: flight_view) : B.bytes =
   flight_bytes_slice view.client_hello_bytes 0 (SZ.v view.client_hello_len)
+
+let localhost_hostname : T.hostname =
+  B.of_list [0x6cuy; 0x6fuy; 0x63uy; 0x61uy; 0x6cuy; 0x68uy; 0x6fuy; 0x73uy; 0x74uy]
+
+let flight_view_client_hello (view: flight_view) : H.client_hello =
+  {
+    H.random = view.client_hello_random;
+    H.server_name = Some localhost_hostname;
+    H.key_share = view.client_hello_key_share;
+    H.cipher_suites = [T.TLS_CHACHA20_POLY1305_SHA256];
+    H.signature_schemes = [T.RsaPssRsaeSha256];
+  }
 
 let flight_view_server_hello_bytes (view: flight_view) : B.bytes =
   flight_bytes_slice view.server_hello_bytes 0 (SZ.v view.server_hello_len)
@@ -142,6 +160,11 @@ let flight_view_server_finished (view: flight_view) : H.finished =
     H.verify_data = view.server_finished_verify_data;
   }
 
+let flight_view_client_finished (view: flight_view) : H.finished =
+  {
+    H.verify_data = view.client_finished_verify_data;
+  }
+
 val is_flight_state: flight_state -> slprop
 val flight_state_exactly: flight_state -> flight_view -> slprop
 
@@ -190,6 +213,19 @@ fn set_client_hello_fragment
                  SZ.v hello_len <= 512)
   ensures is_flight_state st **
           pts_to hello 'hello_bytes
+
+fn set_client_hello_parameters
+  (st: flight_state)
+  (random: array U8.t)
+  (key_share: array U8.t)
+  requires is_flight_state st **
+           pts_to random 'random_bytes **
+           pts_to key_share 'key_share_bytes **
+           pure (B.length 'random_bytes == 32 /\
+                 B.length 'key_share_bytes == 32)
+  ensures is_flight_state st **
+          pts_to random 'random_bytes **
+          pts_to key_share 'key_share_bytes
 
 fn copy_client_hello
   (st: flight_state)
