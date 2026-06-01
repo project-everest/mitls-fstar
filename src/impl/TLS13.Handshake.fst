@@ -603,3 +603,47 @@ fn send_client_finished (ctx: handshake_context) (ch: IO.channel)
     false
   }
 }
+
+fn derive_application_keys
+  (ctx: handshake_context)
+  (client_key: array U8.t)
+  (client_iv: array U8.t)
+  (server_key: array U8.t)
+  (server_iv: array U8.t)
+  requires is_handshake_context ctx 'st 's **
+           pts_to client_key 'old_client_key **
+           pts_to client_iv 'old_client_iv **
+           pts_to server_key 'old_server_key **
+           pts_to server_iv 'old_server_iv **
+           pure ('s.S.phase == S.ApplicationData /\
+                 B.length 'old_client_key == 32 /\
+                 B.length 'old_client_iv == 12 /\
+                 B.length 'old_server_key == 32 /\
+                 B.length 'old_server_iv == 12)
+  returns ok: bool
+  ensures exists* client_key_bytes client_iv_bytes server_key_bytes server_iv_bytes.
+          is_handshake_context ctx 'st 's **
+          pts_to client_key client_key_bytes **
+          pts_to client_iv client_iv_bytes **
+          pts_to server_key server_key_bytes **
+          pts_to server_iv server_iv_bytes **
+          pure (B.length client_key_bytes == 32 /\
+                B.length client_iv_bytes == 12 /\
+                B.length server_key_bytes == 32 /\
+                B.length server_iv_bytes == 12)
+{
+  unfold (is_handshake_context ctx 'st 's);
+  let ok =
+    FS.derive_application_keys
+      ctx.flight
+      client_key
+      32sz
+      client_iv
+      12sz
+      server_key
+      32sz
+      server_iv
+      12sz;
+  fold (is_handshake_context ctx 'st 's);
+  ok
+}

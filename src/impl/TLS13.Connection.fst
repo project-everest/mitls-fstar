@@ -12,6 +12,8 @@ module Box = Pulse.Lib.Box
 module Cast = FStar.Int.Cast
 module CL = TLS13.ConnectionLog
 module E = TLS13.Connection.External
+module HS = TLS13.Handshake
+module HSD = TLS13.Handshake.Driver
 module HW = TLS13.Connection.HandshakeWitness
 module IO = TLS13.IO
 module Rec = TLS13.Record
@@ -36,6 +38,7 @@ let lemma_nat_add_sub_cancel
 noeq
 type connection = {
   backend: E.connection;
+  handshake: HS.handshake_context;
   live: box bool;
   client_application_key: V.vec U8.t;
   client_application_iv: V.vec U8.t;
@@ -53,8 +56,9 @@ type connection = {
 let connection_exactly (c:connection) (st:ST.state_ref) (s:S.conn_state) (view:CL.connection_view) : slprop =
   exists* live app_keys_installed pending_read_offset pending_read_len
           client_key client_iv server_key server_iv pending_read_buffer
-          client_record_state server_record_state.
+          client_record_state server_record_state handshake_st handshake_state.
     E.is_connection c.backend **
+    HS.is_handshake_context c.handshake handshake_st handshake_state **
     Box.pts_to c.live live **
     Box.pts_to c.application_keys_installed app_keys_installed **
     Box.pts_to c.pending_read_offset pending_read_offset **
@@ -81,7 +85,8 @@ let connection_exactly (c:connection) (st:ST.state_ref) (s:S.conn_state) (view:C
           SZ.v pending_read_offset <= SZ.v pending_read_len /\
           SZ.v pending_read_len <= 4096 /\
           CL.connection_view_consistent view /\
-          view.CL.state == s)
+          view.CL.state == s /\
+          (s.S.phase == S.Start ==> handshake_state.S.phase == S.Start))
 
 let is_connection (c:connection) (st:ST.state_ref) (s:S.conn_state) : slprop =
   exists* view. connection_exactly c st s view
@@ -323,6 +328,7 @@ fn client_new
           connection_exactly c st S.initial CL.empty_connection_view
 {
   let backend = E.client_new hostname hostname_len #trust_store;
+  let handshake = HS.handshake_context_new ();
   let live = Box.alloc true;
   let app_keys_installed = Box.alloc false;
   let pending_read_offset = Box.alloc 0sz;
@@ -338,6 +344,7 @@ fn client_new
   let log = ST.alloc_initial_log ();
   let c = {
     backend;
+    handshake;
     live;
     client_application_key;
     client_application_iv;
@@ -352,6 +359,7 @@ fn client_new
     log;
   };
   with backend_s. rewrite (E.is_connection backend) as (E.is_connection c.backend);
+  with handshake_st. rewrite (HS.is_handshake_context handshake handshake_st S.initial) as (HS.is_handshake_context c.handshake handshake_st S.initial);
   with live_s. rewrite (Box.pts_to live live_s) as (Box.pts_to c.live live_s);
   with installed_s. rewrite (Box.pts_to app_keys_installed installed_s) as (Box.pts_to c.application_keys_installed installed_s);
   with pending_offset_s. rewrite (Box.pts_to pending_read_offset pending_offset_s) as (Box.pts_to c.pending_read_offset pending_offset_s);
@@ -376,6 +384,7 @@ fn client_free (c: connection)
 {
   unfold (connection_exactly c 'st 's 'view);
   E.client_free c.backend;
+  HS.handshake_context_free c.handshake;
   Box.free c.live;
   Box.free c.application_keys_installed;
   Box.free c.pending_read_offset;
@@ -411,9 +420,13 @@ fn client_connect (c: connection) (ch: IO.channel)
           let mut client_iv = [| 0uy; 12sz |];
           let mut server_key = [| 0uy; 32sz |];
           let mut server_iv = [| 0uy; 12sz |];
-          let handshake_ok = E.client_connect c.backend ch;
+          with handshake_st handshake_state. assert (HS.is_handshake_context c.handshake handshake_st handshake_state);
+          assert (pure (handshake_state.S.phase == S.Start));
+          let handshake_ok = HSD.run_client_handshake c.handshake ch;
           if handshake_ok {
-            let keys_ok = E.derive_application_keys c.backend client_key client_iv server_key server_iv;
+            with handshake_state_after. assert (HS.is_handshake_context c.handshake handshake_st handshake_state_after);
+            assert (pure (handshake_state_after.S.phase == S.ApplicationData));
+            let keys_ok = HS.derive_application_keys c.handshake client_key client_iv server_key server_iv;
             if keys_ok {
               pts_to_len client_key;
               pts_to_len client_iv;

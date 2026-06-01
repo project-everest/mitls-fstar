@@ -3,13 +3,17 @@ module TLS13.Handshake
 #lang-pulse
 
 open Pulse.Lib.Pervasives
+open Pulse.Lib.Array.PtsTo
 
+module B = TLS13.Bytes
 module H = TLS13.Handshake.Spec
 module FS = TLS13.Handshake.FlightState
 module IO = TLS13.IO
 module S = TLS13.StateMachine
 module ST = TLS13.State
+module SZ = FStar.SizeT
 module T = TLS13.Types
+module U8 = FStar.UInt8
 module X = TLS13.X509.Spec
 
 val handshake_context : Type0
@@ -120,3 +124,31 @@ fn send_client_finished (ctx: handshake_context) (ch: IO.channel)
           IO.is_channel ch **
           pure ((ok ==> s'.S.phase == S.ApplicationData) /\
                 (not ok ==> s'.S.phase == S.Failed))
+
+fn derive_application_keys
+  (ctx: handshake_context)
+  (client_key: array U8.t)
+  (client_iv: array U8.t)
+  (server_key: array U8.t)
+  (server_iv: array U8.t)
+  requires is_handshake_context ctx 'st 's **
+          pts_to client_key 'old_client_key **
+          pts_to client_iv 'old_client_iv **
+          pts_to server_key 'old_server_key **
+          pts_to server_iv 'old_server_iv **
+          pure ('s.S.phase == S.ApplicationData /\
+                B.length 'old_client_key == 32 /\
+                B.length 'old_client_iv == 12 /\
+                B.length 'old_server_key == 32 /\
+                B.length 'old_server_iv == 12)
+  returns ok: bool
+  ensures exists* client_key_bytes client_iv_bytes server_key_bytes server_iv_bytes.
+          is_handshake_context ctx 'st 's **
+          pts_to client_key client_key_bytes **
+          pts_to client_iv client_iv_bytes **
+          pts_to server_key server_key_bytes **
+          pts_to server_iv server_iv_bytes **
+          pure (B.length client_key_bytes == 32 /\
+               B.length client_iv_bytes == 12 /\
+               B.length server_key_bytes == 32 /\
+               B.length server_iv_bytes == 12)
