@@ -2645,23 +2645,28 @@ ensures exists* view1 network_out1 app_out1.
                 assert (pure (server_record_s1.R.seq == server_record_s0.R.seq + 1));
                 assert (pure (server_record_s1.R.seq == view0.CL.state.S.read_state.R.seq + 1));
                 assert (pure (U64.fits (server_record_s1.R.seq + 1)));
+                let chunks_single : erased (list B.bytes) =
+                  [Ghost.reveal app_payload];
+                CL.lemma_concat_bytes_singleton (Ghost.reveal app_payload);
+                assert (pure (Seq.equal
+                  (Ghost.reveal app_payload)
+                  (CL.concat_bytes (Ghost.reveal chunks_single))));
                 let view_single : erased CL.connection_view =
                   CL.read_application_data_chunks_success_view
                     (Ghost.reveal view1)
-                    [Ghost.reveal app_payload]
+                    (Ghost.reveal chunks_single)
                     (Ghost.reveal pending_raw_payload);
                 let resp_single : erased CL.client_response =
                   CL.read_application_data_chunks_success_response
                     (Ghost.reveal app_payload)
-                    [Ghost.reveal app_payload];
+                    (Ghost.reveal chunks_single);
                 CL.lemma_raw_received_delta_append view0.CL.raw_log (Ghost.reveal network_bytes);
-                CL.lemma_concat_bytes_singleton (Ghost.reveal app_payload);
                 CL.lemma_step_read_application_data_chunks_success_exit
                   view0
                   (Ghost.reveal view1)
                   (SZ.v requested_app_len)
                   (Ghost.reveal app_payload)
-                  [Ghost.reveal app_payload]
+                  (Ghost.reveal chunks_single)
                   (Ghost.reveal pending_raw_payload);
                 assert (pure (mreq == CL.request_with_received_raw_delta (CL.OpReadApplicationData (SZ.v requested_app_len)) view0.CL.raw_log (Ghost.reveal view_single).CL.raw_log));
                 assert (pure (CL.step view0 mreq (Ghost.reveal view_single) (Ghost.reveal resp_single)));
@@ -2838,12 +2843,13 @@ ensures exists* view1 network_out1 app_out1.
                             assert (pure (Seq.equal
                               (Ghost.reveal app_payload2)
                               (CL.raw_slice (Ghost.reveal app_out2) (SZ.v payload_len) (SZ.v total_payload_len))));
-                            CL.lemma_concat_bytes_singleton (Ghost.reveal app_payload);
                             assert (pure (CL.connection_view_consistent (Ghost.reveal view1)));
                             assert (pure ((Ghost.reveal view1).CL.state.S.phase == S.ApplicationData));
+                            let chunks_after_second : erased (list B.bytes) =
+                              L.append (Ghost.reveal chunks_single) [Ghost.reveal app_payload2];
                             CL.lemma_note_app_received_chunks_loop_accept_output
                               (Ghost.reveal view1)
-                              [Ghost.reveal app_payload]
+                              (Ghost.reveal chunks_single)
                               (Ghost.reveal app_payload2)
                               (Ghost.reveal app_out2)
                               (SZ.v payload_len)
@@ -2852,13 +2858,7 @@ ensures exists* view1 network_out1 app_out1.
                               (Ghost.reveal app_payload_total);
                             assert (pure (Seq.equal
                               (Ghost.reveal app_payload_total)
-                              (CL.concat_bytes (L.append [Ghost.reveal app_payload] [Ghost.reveal app_payload2]))));
-                            assert (pure (
-                              L.append [Ghost.reveal app_payload] [Ghost.reveal app_payload2] ==
-                              [Ghost.reveal app_payload; Ghost.reveal app_payload2]));
-                            assert (pure (Seq.equal
-                              (Ghost.reveal app_payload_total)
-                              (CL.concat_bytes [Ghost.reveal app_payload; Ghost.reveal app_payload2])));
+                              (CL.concat_bytes (Ghost.reveal chunks_after_second))));
                             assert (pure (SZ.v record2_end + SZ.v residual_after_two_len == SZ.v residual_len));
                             set_pending_network_from_slice
                               c
@@ -2898,19 +2898,19 @@ ensures exists* view1 network_out1 app_out1.
                             let view2 : erased CL.connection_view =
                               CL.read_application_data_chunks_success_view
                                 (Ghost.reveal view1)
-                                [Ghost.reveal app_payload; Ghost.reveal app_payload2]
+                                (Ghost.reveal chunks_after_second)
                                 (Ghost.reveal pending_raw_payload2);
                             CL.lemma_raw_received_delta_append view0.CL.raw_log (Ghost.reveal network_bytes);
                             let resp : erased CL.client_response =
                               CL.read_application_data_chunks_success_response
                                 (Ghost.reveal app_payload_total)
-                                [Ghost.reveal app_payload; Ghost.reveal app_payload2];
+                                (Ghost.reveal chunks_after_second);
                             CL.lemma_step_read_application_data_chunks_success_exit
                               view0
                               (Ghost.reveal view1)
                               (SZ.v requested_app_len)
                               (Ghost.reveal app_payload_total)
-                              [Ghost.reveal app_payload; Ghost.reveal app_payload2]
+                              (Ghost.reveal chunks_after_second)
                               (Ghost.reveal pending_raw_payload2);
                             assert (pure (mreq == CL.request_with_received_raw_delta (CL.OpReadApplicationData (SZ.v requested_app_len)) view0.CL.raw_log (Ghost.reveal view2).CL.raw_log));
                             ST.advance_log c.log (Ghost.reveal view2);
