@@ -47,7 +47,8 @@ fn send_client_hello (ctx: handshake_context) (ch: IO.channel)
   ensures exists* s'.
           is_handshake_context ctx 'st s' **
           IO.is_channel ch **
-          pure ((ok ==> s'.S.phase == S.ClientHelloSent) /\
+          pure (S.conn_evolves 's s' /\
+                (ok ==> s'.S.phase == S.ClientHelloSent) /\
                 (not ok ==> s'.S.phase == S.Failed))
 
 fn recv_server_hello (ctx: handshake_context) (ch: IO.channel)
@@ -58,7 +59,8 @@ fn recv_server_hello (ctx: handshake_context) (ch: IO.channel)
   ensures exists* s'.
           is_handshake_context ctx 'st s' **
           IO.is_channel ch **
-          pure ((ok ==> s'.S.phase == S.ServerHelloReceived) /\
+          pure (S.conn_evolves 's s' /\
+                (ok ==> s'.S.phase == S.ServerHelloReceived) /\
                 (not ok ==> s'.S.phase == S.Failed))
 
 fn recv_encrypted_extensions (ctx: handshake_context) (ch: IO.channel)
@@ -69,7 +71,8 @@ fn recv_encrypted_extensions (ctx: handshake_context) (ch: IO.channel)
   ensures exists* s'.
           is_handshake_context ctx 'st s' **
           IO.is_channel ch **
-          pure ((ok ==> s'.S.phase == S.EncryptedExtensionsReceived) /\
+          pure (S.conn_evolves 's s' /\
+                (ok ==> s'.S.phase == S.EncryptedExtensionsReceived) /\
                 (not ok ==> s'.S.phase == S.Failed))
 
 fn recv_certificate (ctx: handshake_context) (ch: IO.channel)
@@ -80,7 +83,8 @@ fn recv_certificate (ctx: handshake_context) (ch: IO.channel)
   ensures exists* s'.
           is_handshake_context ctx 'st s' **
           IO.is_channel ch **
-          pure ((ok ==> s'.S.phase == S.CertificateReceived) /\
+          pure (S.conn_evolves 's s' /\
+                (ok ==> s'.S.phase == S.CertificateReceived) /\
                 (not ok ==> s'.S.phase == S.Failed))
 
 fn validate_certificate (ctx: handshake_context)
@@ -89,7 +93,8 @@ fn validate_certificate (ctx: handshake_context)
   returns ok: bool
   ensures exists* s'.
           is_handshake_context ctx 'st s' **
-          pure ((ok ==> s'.S.phase == S.CertificateValidated /\ Some? s'.S.peer) /\
+          pure (S.conn_evolves 's s' /\
+                (ok ==> s'.S.phase == S.CertificateValidated /\ Some? s'.S.peer) /\
                 (not ok ==> s'.S.phase == S.Failed))
 
 fn recv_certificate_verify (ctx: handshake_context) (ch: IO.channel)
@@ -100,7 +105,8 @@ fn recv_certificate_verify (ctx: handshake_context) (ch: IO.channel)
   ensures exists* s'.
           is_handshake_context ctx 'st s' **
           IO.is_channel ch **
-          pure ((ok ==> s'.S.phase == S.CertificateVerified /\
+          pure (S.conn_evolves 's s' /\
+               (ok ==> s'.S.phase == S.CertificateVerified /\
                         s'.S.peer == 's.S.peer) /\
                (not ok ==> s'.S.phase == S.Failed))
 
@@ -112,7 +118,8 @@ fn recv_server_finished (ctx: handshake_context) (ch: IO.channel)
   ensures exists* s'.
           is_handshake_context ctx 'st s' **
           IO.is_channel ch **
-          pure ((ok ==> s'.S.phase == S.ServerFinishedVerified /\
+          pure (S.conn_evolves 's s' /\
+               (ok ==> s'.S.phase == S.ServerFinishedVerified /\
                         s'.S.peer == 's.S.peer) /\
                (not ok ==> s'.S.phase == S.Failed))
 
@@ -124,7 +131,8 @@ fn send_client_finished (ctx: handshake_context) (ch: IO.channel)
   ensures exists* s'.
           is_handshake_context ctx 'st s' **
           IO.is_channel ch **
-          pure ((ok ==> s'.S.phase == S.ApplicationData /\
+          pure (S.conn_evolves 's s' /\
+               (ok ==> s'.S.phase == S.ApplicationData /\
                         s'.S.peer == 's.S.peer) /\
                (not ok ==> s'.S.phase == S.Failed))
 

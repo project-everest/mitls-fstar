@@ -16,6 +16,7 @@ module HW = TLS13.Connection.HandshakeWitness
 module HF = TLS13.Handshake.Framing
 module IO = TLS13.IO
 module RF = TLS13.Record.Framing
+module RTC = FStar.ReflexiveTransitiveClosure
 module S = TLS13.StateMachine
 module ST = TLS13.State
 module SZ = FStar.SizeT
@@ -28,6 +29,15 @@ noeq
 type handshake_context = {
   backend: E.handshake_context;
   flight: FS.flight_state;
+}
+
+ghost
+fn lemma_step_evolves (s0:S.conn_state) (e:S.event) (s1:S.conn_state)
+  requires pure (S.step s0 e == Some s1)
+  ensures pure (S.conn_evolves s0 s1)
+{
+  assert (pure (S.state_single_step s0 s1));
+  RTC.closure_step S.state_single_step s0 s1;
 }
 
 let is_handshake_context (ctx:handshake_context) (st:ST.state_ref) (s:S.conn_state) : slprop =
@@ -266,7 +276,8 @@ fn send_client_hello (ctx: handshake_context) (ch: IO.channel)
   ensures exists* s'.
           is_handshake_context ctx 'st s' **
           IO.is_channel ch **
-          pure ((ok ==> s'.S.phase == S.ClientHelloSent) /\
+          pure (S.conn_evolves 's s' /\
+                (ok ==> s'.S.phase == S.ClientHelloSent) /\
                 (not ok ==> s'.S.phase == S.Failed))
 {
   unfold (is_handshake_context ctx 'st 's);
@@ -294,29 +305,34 @@ fn send_client_hello (ctx: handshake_context) (ch: IO.channel)
         if hello_ok {
           assert (pure (S.step 's (S.SendClientHello HW.dummy_client_hello) == Some (S.with_phase 's S.ClientHelloSent)));
           ST.advance 'st (S.SendClientHello HW.dummy_client_hello) (S.with_phase 's S.ClientHelloSent);
+          lemma_step_evolves 's (S.SendClientHello HW.dummy_client_hello) (S.with_phase 's S.ClientHelloSent);
           fold (is_handshake_context ctx 'st (S.with_phase 's S.ClientHelloSent));
           true
         } else {
           assert (pure (S.step 's (S.Fail T.IoError) == Some (S.fail 's T.IoError)));
           ST.advance_fail 'st T.IoError;
+          lemma_step_evolves 's (S.Fail T.IoError) (S.fail 's T.IoError);
           fold (is_handshake_context ctx 'st (S.fail 's T.IoError));
           false
         }
       } else {
         assert (pure (S.step 's (S.Fail T.IoError) == Some (S.fail 's T.IoError)));
         ST.advance_fail 'st T.IoError;
+        lemma_step_evolves 's (S.Fail T.IoError) (S.fail 's T.IoError);
         fold (is_handshake_context ctx 'st (S.fail 's T.IoError));
         false
       }
     } else {
       assert (pure (S.step 's (S.Fail T.IoError) == Some (S.fail 's T.IoError)));
       ST.advance_fail 'st T.IoError;
+      lemma_step_evolves 's (S.Fail T.IoError) (S.fail 's T.IoError);
       fold (is_handshake_context ctx 'st (S.fail 's T.IoError));
       false
     }
   } else {
     assert (pure (S.step 's (S.Fail T.IoError) == Some (S.fail 's T.IoError)));
     ST.advance_fail 'st T.IoError;
+    lemma_step_evolves 's (S.Fail T.IoError) (S.fail 's T.IoError);
     fold (is_handshake_context ctx 'st (S.fail 's T.IoError));
     false
   }
@@ -400,7 +416,8 @@ fn recv_server_hello (ctx: handshake_context) (ch: IO.channel)
   ensures exists* s'.
           is_handshake_context ctx 'st s' **
           IO.is_channel ch **
-          pure ((ok ==> s'.S.phase == S.ServerHelloReceived) /\
+          pure (S.conn_evolves 's s' /\
+                (ok ==> s'.S.phase == S.ServerHelloReceived) /\
                 (not ok ==> s'.S.phase == S.Failed))
 {
   unfold (is_handshake_context ctx 'st 's);
@@ -408,11 +425,13 @@ fn recv_server_hello (ctx: handshake_context) (ch: IO.channel)
   if ok {
     assert (pure (S.step 's (S.RecvServerHello HW.dummy_server_hello) == Some (S.with_phase 's S.ServerHelloReceived)));
     ST.advance 'st (S.RecvServerHello HW.dummy_server_hello) (S.with_phase 's S.ServerHelloReceived);
+    lemma_step_evolves 's (S.RecvServerHello HW.dummy_server_hello) (S.with_phase 's S.ServerHelloReceived);
     fold (is_handshake_context ctx 'st (S.with_phase 's S.ServerHelloReceived));
     true
   } else {
     assert (pure (S.step 's (S.Fail T.UnsupportedCipherSuite) == Some (S.fail 's T.UnsupportedCipherSuite)));
     ST.advance_fail 'st T.UnsupportedCipherSuite;
+    lemma_step_evolves 's (S.Fail T.UnsupportedCipherSuite) (S.fail 's T.UnsupportedCipherSuite);
     fold (is_handshake_context ctx 'st (S.fail 's T.UnsupportedCipherSuite));
     false
   }
@@ -426,7 +445,8 @@ fn recv_encrypted_extensions (ctx: handshake_context) (ch: IO.channel)
   ensures exists* s'.
           is_handshake_context ctx 'st s' **
           IO.is_channel ch **
-          pure ((ok ==> s'.S.phase == S.EncryptedExtensionsReceived) /\
+          pure (S.conn_evolves 's s' /\
+                (ok ==> s'.S.phase == S.EncryptedExtensionsReceived) /\
                 (not ok ==> s'.S.phase == S.Failed))
 {
   unfold (is_handshake_context ctx 'st 's);
@@ -437,11 +457,13 @@ fn recv_encrypted_extensions (ctx: handshake_context) (ch: IO.channel)
   if ok {
     assert (pure (S.step 's (S.RecvEncryptedExtensions HW.dummy_encrypted_extensions) == Some (S.with_phase 's S.EncryptedExtensionsReceived)));
     ST.advance 'st (S.RecvEncryptedExtensions HW.dummy_encrypted_extensions) (S.with_phase 's S.EncryptedExtensionsReceived);
+    lemma_step_evolves 's (S.RecvEncryptedExtensions HW.dummy_encrypted_extensions) (S.with_phase 's S.EncryptedExtensionsReceived);
     fold (is_handshake_context ctx 'st (S.with_phase 's S.EncryptedExtensionsReceived));
     true
   } else {
     assert (pure (S.step 's (S.Fail (T.AlertError T.DecodeError)) == Some (S.fail 's (T.AlertError T.DecodeError))));
     ST.advance_fail 'st (T.AlertError T.DecodeError);
+    lemma_step_evolves 's (S.Fail (T.AlertError T.DecodeError)) (S.fail 's (T.AlertError T.DecodeError));
     fold (is_handshake_context ctx 'st (S.fail 's (T.AlertError T.DecodeError)));
     false
   }
@@ -455,7 +477,8 @@ fn recv_certificate (ctx: handshake_context) (ch: IO.channel)
   ensures exists* s'.
           is_handshake_context ctx 'st s' **
           IO.is_channel ch **
-          pure ((ok ==> s'.S.phase == S.CertificateReceived) /\
+          pure (S.conn_evolves 's s' /\
+                (ok ==> s'.S.phase == S.CertificateReceived) /\
                 (not ok ==> s'.S.phase == S.Failed))
 {
   unfold (is_handshake_context ctx 'st 's);
@@ -465,11 +488,13 @@ fn recv_certificate (ctx: handshake_context) (ch: IO.channel)
   if ok {
     assert (pure (S.step 's (S.RecvCertificate HW.dummy_certificate) == Some (S.with_phase 's S.CertificateReceived)));
     ST.advance 'st (S.RecvCertificate HW.dummy_certificate) (S.with_phase 's S.CertificateReceived);
+    lemma_step_evolves 's (S.RecvCertificate HW.dummy_certificate) (S.with_phase 's S.CertificateReceived);
     fold (is_handshake_context ctx 'st (S.with_phase 's S.CertificateReceived));
     true
   } else {
     assert (pure (S.step 's (S.Fail T.BadCertificate) == Some (S.fail 's T.BadCertificate)));
     ST.advance_fail 'st T.BadCertificate;
+    lemma_step_evolves 's (S.Fail T.BadCertificate) (S.fail 's T.BadCertificate);
     fold (is_handshake_context ctx 'st (S.fail 's T.BadCertificate));
     false
   }
@@ -481,7 +506,8 @@ fn validate_certificate (ctx: handshake_context)
   returns ok: bool
   ensures exists* s'.
           is_handshake_context ctx 'st s' **
-          pure ((ok ==> s'.S.phase == S.CertificateValidated /\ Some? s'.S.peer) /\
+          pure (S.conn_evolves 's s' /\
+                (ok ==> s'.S.phase == S.CertificateValidated /\ Some? s'.S.peer) /\
                 (not ok ==> s'.S.phase == S.Failed))
 {
   unfold (is_handshake_context ctx 'st 's);
@@ -489,11 +515,13 @@ fn validate_certificate (ctx: handshake_context)
   if ok {
     assert (pure (S.step 's (S.ValidateCertificate HW.dummy_peer) == Some (S.with_validated_peer 's HW.dummy_peer)));
     ST.advance 'st (S.ValidateCertificate HW.dummy_peer) (S.with_validated_peer 's HW.dummy_peer);
+    lemma_step_evolves 's (S.ValidateCertificate HW.dummy_peer) (S.with_validated_peer 's HW.dummy_peer);
     fold (is_handshake_context ctx 'st (S.with_validated_peer 's HW.dummy_peer));
     true
   } else {
     assert (pure (S.step 's (S.Fail T.BadCertificate) == Some (S.fail 's T.BadCertificate)));
     ST.advance_fail 'st T.BadCertificate;
+    lemma_step_evolves 's (S.Fail T.BadCertificate) (S.fail 's T.BadCertificate);
     fold (is_handshake_context ctx 'st (S.fail 's T.BadCertificate));
     false
   }
@@ -507,7 +535,8 @@ fn recv_certificate_verify (ctx: handshake_context) (ch: IO.channel)
   ensures exists* s'.
           is_handshake_context ctx 'st s' **
           IO.is_channel ch **
-          pure ((ok ==> s'.S.phase == S.CertificateVerified /\
+          pure (S.conn_evolves 's s' /\
+                (ok ==> s'.S.phase == S.CertificateVerified /\
                          s'.S.peer == 's.S.peer) /\
                 (not ok ==> s'.S.phase == S.Failed))
 {
@@ -527,11 +556,13 @@ fn recv_certificate_verify (ctx: handshake_context) (ch: IO.channel)
   if ok {
     assert (pure (S.step 's (S.RecvCertificateVerify HW.dummy_certificate_verify) == Some (S.with_phase 's S.CertificateVerified)));
     ST.advance 'st (S.RecvCertificateVerify HW.dummy_certificate_verify) (S.with_phase 's S.CertificateVerified);
+    lemma_step_evolves 's (S.RecvCertificateVerify HW.dummy_certificate_verify) (S.with_phase 's S.CertificateVerified);
     fold (is_handshake_context ctx 'st (S.with_phase 's S.CertificateVerified));
     true
   } else {
     assert (pure (S.step 's (S.Fail T.BadCertificateVerify) == Some (S.fail 's T.BadCertificateVerify)));
     ST.advance_fail 'st T.BadCertificateVerify;
+    lemma_step_evolves 's (S.Fail T.BadCertificateVerify) (S.fail 's T.BadCertificateVerify);
     fold (is_handshake_context ctx 'st (S.fail 's T.BadCertificateVerify));
     false
   }
@@ -545,7 +576,8 @@ fn recv_server_finished (ctx: handshake_context) (ch: IO.channel)
   ensures exists* s'.
           is_handshake_context ctx 'st s' **
           IO.is_channel ch **
-          pure ((ok ==> s'.S.phase == S.ServerFinishedVerified /\
+          pure (S.conn_evolves 's s' /\
+                (ok ==> s'.S.phase == S.ServerFinishedVerified /\
                         s'.S.peer == 's.S.peer) /\
                (not ok ==> s'.S.phase == S.Failed))
 {
@@ -563,11 +595,13 @@ fn recv_server_finished (ctx: handshake_context) (ch: IO.channel)
   if ok {
     assert (pure (S.step 's (S.RecvServerFinished HW.dummy_finished) == Some (S.with_phase 's S.ServerFinishedVerified)));
     ST.advance 'st (S.RecvServerFinished HW.dummy_finished) (S.with_phase 's S.ServerFinishedVerified);
+    lemma_step_evolves 's (S.RecvServerFinished HW.dummy_finished) (S.with_phase 's S.ServerFinishedVerified);
     fold (is_handshake_context ctx 'st (S.with_phase 's S.ServerFinishedVerified));
     true
   } else {
     assert (pure (S.step 's (S.Fail T.BadFinished) == Some (S.fail 's T.BadFinished)));
     ST.advance_fail 'st T.BadFinished;
+    lemma_step_evolves 's (S.Fail T.BadFinished) (S.fail 's T.BadFinished);
     fold (is_handshake_context ctx 'st (S.fail 's T.BadFinished));
     false
   }
@@ -581,7 +615,8 @@ fn send_client_finished (ctx: handshake_context) (ch: IO.channel)
   ensures exists* s'.
           is_handshake_context ctx 'st s' **
           IO.is_channel ch **
-          pure ((ok ==> s'.S.phase == S.ApplicationData /\
+          pure (S.conn_evolves 's s' /\
+                (ok ==> s'.S.phase == S.ApplicationData /\
                         s'.S.peer == 's.S.peer) /\
                (not ok ==> s'.S.phase == S.Failed))
 {
@@ -597,11 +632,13 @@ fn send_client_finished (ctx: handshake_context) (ch: IO.channel)
   if ok {
     assert (pure (S.step 's (S.SendClientFinished HW.dummy_finished) == Some (S.with_phase 's S.ApplicationData)));
     ST.advance 'st (S.SendClientFinished HW.dummy_finished) (S.with_phase 's S.ApplicationData);
+    lemma_step_evolves 's (S.SendClientFinished HW.dummy_finished) (S.with_phase 's S.ApplicationData);
     fold (is_handshake_context ctx 'st (S.with_phase 's S.ApplicationData));
     true
   } else {
     assert (pure (S.step 's (S.Fail T.IoError) == Some (S.fail 's T.IoError)));
     ST.advance_fail 'st T.IoError;
+    lemma_step_evolves 's (S.Fail T.IoError) (S.fail 's T.IoError);
     fold (is_handshake_context ctx 'st (S.fail 's T.IoError));
     false
   }
