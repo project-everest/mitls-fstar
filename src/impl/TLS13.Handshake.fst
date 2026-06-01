@@ -403,7 +403,7 @@ fn recv_encrypted_extensions (ctx: handshake_context) (ch: IO.channel)
   unfold (is_handshake_context ctx 'st 's);
   unfold (E.is_context ctx.backend);
   with p. assert (BDE.is_context ctx.backend p);
-  let ok = BD.recv_encrypted_handshake ctx.backend ch;
+  let ok = BD.recv_encrypted_handshake ctx.backend ctx.flight ch;
   fold (E.is_context ctx.backend);
   if ok {
     assert (pure (S.step 's (S.RecvEncryptedExtensions HW.dummy_encrypted_extensions) == Some (S.with_phase 's S.EncryptedExtensionsReceived)));
