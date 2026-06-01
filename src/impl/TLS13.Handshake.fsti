@@ -6,6 +6,7 @@ open Pulse.Lib.Pervasives
 open Pulse.Lib.Array.PtsTo
 
 module B = TLS13.Bytes
+module CE = TLS13.Connection.External
 module H = TLS13.Handshake.Spec
 module FS = TLS13.Handshake.FlightState
 module IO = TLS13.IO
@@ -87,23 +88,27 @@ fn recv_certificate (ctx: handshake_context) (ch: IO.channel)
                 (ok ==> s'.S.phase == S.CertificateReceived) /\
                 (not ok ==> s'.S.phase == S.Failed))
 
-fn validate_certificate (ctx: handshake_context)
+fn validate_certificate (ctx: handshake_context) (backend: CE.connection)
   requires is_handshake_context ctx 'st 's **
+           CE.is_connection backend **
            pure ('s.S.phase == S.CertificateReceived)
   returns ok: bool
   ensures exists* s'.
           is_handshake_context ctx 'st s' **
+          CE.is_connection backend **
           pure (S.conn_evolves 's s' /\
                 (ok ==> s'.S.phase == S.CertificateValidated /\ Some? s'.S.peer) /\
                 (not ok ==> s'.S.phase == S.Failed))
 
-fn recv_certificate_verify (ctx: handshake_context) (ch: IO.channel)
+fn recv_certificate_verify (ctx: handshake_context) (backend: CE.connection) (ch: IO.channel)
   requires is_handshake_context ctx 'st 's **
+           CE.is_connection backend **
            IO.is_channel ch **
            pure ('s.S.phase == S.CertificateValidated /\ Some? 's.S.peer)
   returns ok: bool
   ensures exists* s'.
           is_handshake_context ctx 'st s' **
+          CE.is_connection backend **
           IO.is_channel ch **
           pure (S.conn_evolves 's s' /\
                (ok ==> s'.S.phase == S.CertificateVerified /\

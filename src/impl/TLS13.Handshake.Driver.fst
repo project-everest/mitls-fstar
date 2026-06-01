@@ -4,6 +4,7 @@ module TLS13.Handshake.Driver
 
 open Pulse.Lib.Pervasives
 
+module CE = TLS13.Connection.External
 module HS = TLS13.Handshake
 module IO = TLS13.IO
 module RTC = FStar.ReflexiveTransitiveClosure
@@ -17,12 +18,14 @@ let lemma_evolves_trans (s0:S.conn_state) (s1:S.conn_state) (s2:S.conn_state)
   =
   assert (RTC.transitive S.conn_evolves)
 
-fn run_client_handshake (ctx: HS.handshake_context) (ch: IO.channel)
-  requires HS.is_handshake_context ctx 'st 's **
-           IO.is_channel ch **
-           pure ('s.S.phase == S.Start)
+fn run_client_handshake (backend: CE.connection) (ctx: HS.handshake_context) (ch: IO.channel)
+  requires CE.is_connection backend **
+          HS.is_handshake_context ctx 'st 's **
+          IO.is_channel ch **
+          pure ('s.S.phase == S.Start)
   returns ok: bool
   ensures exists* s'.
+          CE.is_connection backend **
           HS.is_handshake_context ctx 'st s' **
           IO.is_channel ch **
           pure (S.conn_evolves 's s' /\
@@ -44,11 +47,11 @@ fn run_client_handshake (ctx: HS.handshake_context) (ch: IO.channel)
         with s4. assert (HS.is_handshake_context ctx 'st s4);
         lemma_evolves_trans 's s3 s4;
         if ok_certificate {
-          let ok_valid_certificate = HS.validate_certificate ctx;
+          let ok_valid_certificate = HS.validate_certificate ctx backend;
           with s5. assert (HS.is_handshake_context ctx 'st s5);
           lemma_evolves_trans 's s4 s5;
           if ok_valid_certificate {
-           let ok_certificate_verify = HS.recv_certificate_verify ctx ch;
+           let ok_certificate_verify = HS.recv_certificate_verify ctx backend ch;
            with s6. assert (HS.is_handshake_context ctx 'st s6);
            lemma_evolves_trans 's s5 s6;
            if ok_certificate_verify {

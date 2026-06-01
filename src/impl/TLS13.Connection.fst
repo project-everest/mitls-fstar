@@ -422,7 +422,7 @@ fn client_connect (c: connection) (ch: IO.channel)
           let mut server_iv = [| 0uy; 12sz |];
           with handshake_st handshake_state. assert (HS.is_handshake_context c.handshake handshake_st handshake_state);
           assert (pure (handshake_state.S.phase == S.Start));
-          let handshake_ok = HSD.run_client_handshake c.handshake ch;
+          let handshake_ok = HSD.run_client_handshake c.backend c.handshake ch;
           if handshake_ok {
             with handshake_state_after. assert (HS.is_handshake_context c.handshake handshake_st handshake_state_after);
             assert (pure (handshake_state_after.S.phase == S.ApplicationData));

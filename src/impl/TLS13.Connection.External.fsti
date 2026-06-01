@@ -9,6 +9,7 @@ module B = TLS13.Bytes
 module IO = TLS13.IO
 module Rec = TLS13.Record
 module SZ = FStar.SizeT
+module U16 = FStar.UInt16
 module U8 = FStar.UInt8
 module X = TLS13.X509.Spec
 
@@ -64,6 +65,34 @@ fn derive_application_keys
                 B.length client_iv_bytes == 12 /\
                 B.length server_key_bytes == 32 /\
                 B.length server_iv_bytes == 12)
+
+fn validate_certificate
+  (c: connection)
+  (leaf_der: array U8.t)
+  (leaf_der_len: SZ.t)
+  requires is_connection c **
+           pts_to leaf_der 'leaf_der_bytes **
+           pure (B.length 'leaf_der_bytes == SZ.v leaf_der_len)
+  returns ok: bool
+  ensures is_connection c **
+          pts_to leaf_der 'leaf_der_bytes
+
+fn verify_certificate_signature
+  (c: connection)
+  (certificate_verify_input: array U8.t)
+  (certificate_verify_input_len: SZ.t)
+  (signature_scheme: U16.t)
+  (signature: array U8.t)
+  (signature_len: SZ.t)
+  requires is_connection c **
+           pts_to certificate_verify_input 'input_bytes **
+           pts_to signature 'signature_bytes **
+           pure (B.length 'input_bytes == SZ.v certificate_verify_input_len /\
+                B.length 'signature_bytes == SZ.v signature_len)
+  returns ok: bool
+  ensures is_connection c **
+          pts_to certificate_verify_input 'input_bytes **
+          pts_to signature 'signature_bytes
 
 fn client_write_raw
   (c: connection)

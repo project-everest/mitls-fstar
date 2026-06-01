@@ -9,6 +9,7 @@ module B = TLS13.Bytes
 module BD = TLS13.Handshake.ByteDriver
 module BDE = TLS13.Handshake.ByteDriver.External
 module Cast = FStar.Int.Cast
+module CE = TLS13.Connection.External
 module E = TLS13.Handshake.External
 module FS = TLS13.Handshake.FlightState
 module H = TLS13.Handshake.Spec
@@ -503,18 +504,30 @@ fn recv_certificate (ctx: handshake_context) (ch: IO.channel)
   }
 }
 
-fn validate_certificate (ctx: handshake_context)
+fn validate_certificate (ctx: handshake_context) (backend: CE.connection)
   requires is_handshake_context ctx 'st 's **
+           CE.is_connection backend **
            pure ('s.S.phase == S.CertificateReceived)
   returns ok: bool
   ensures exists* s'.
           is_handshake_context ctx 'st s' **
+          CE.is_connection backend **
           pure (S.conn_evolves 's s' /\
                 (ok ==> s'.S.phase == S.CertificateValidated /\ Some? s'.S.peer) /\
                 (not ok ==> s'.S.phase == S.Failed))
 {
   unfold (is_handshake_context ctx 'st 's);
-  let ok = E.validate_certificate ctx.backend;
+  FS.reveal_flight_view ctx.flight;
+  let leaf_len = FS.certificate_leaf_len_exact ctx.flight;
+  let mut leaf_der = [| 0uy; leaf_len |];
+  let copied = FS.copy_certificate_leaf_der_exact_len ctx.flight leaf_der leaf_len;
+  let ok =
+    if copied {
+      CE.validate_certificate backend leaf_der leaf_len
+    } else {
+      false
+    };
+  FS.hide_flight_view ctx.flight;
   if ok {
     assert (pure (S.step 's (S.ValidateCertificate HW.dummy_peer) == Some (S.with_validated_peer 's HW.dummy_peer)));
     ST.advance 'st (S.ValidateCertificate HW.dummy_peer) (S.with_validated_peer 's HW.dummy_peer);
@@ -530,13 +543,15 @@ fn validate_certificate (ctx: handshake_context)
   }
 }
 
-fn recv_certificate_verify (ctx: handshake_context) (ch: IO.channel)
+fn recv_certificate_verify (ctx: handshake_context) (backend: CE.connection) (ch: IO.channel)
   requires is_handshake_context ctx 'st 's **
+           CE.is_connection backend **
            IO.is_channel ch **
            pure ('s.S.phase == S.CertificateValidated /\ Some? 's.S.peer)
   returns ok: bool
   ensures exists* s'.
           is_handshake_context ctx 'st s' **
+          CE.is_connection backend **
           IO.is_channel ch **
           pure (S.conn_evolves 's s' /\
                 (ok ==> s'.S.phase == S.CertificateVerified /\
@@ -544,14 +559,31 @@ fn recv_certificate_verify (ctx: handshake_context) (ch: IO.channel)
                 (not ok ==> s'.S.phase == S.Failed))
 {
   unfold (is_handshake_context ctx 'st 's);
-  let backend_ok = E.certificate_verify_verified ctx.backend;
+  let mut certificate_verify_input = [| 0uy; 130sz |];
+  let input_ok = FS.build_certificate_verify_input ctx.flight certificate_verify_input 130sz;
   FS.reveal_flight_view ctx.flight;
   with flight_view. assert (FS.flight_state_exactly ctx.flight flight_view);
   let cv : erased H.certificate_verify =
     FS.flight_view_certificate_verify (Ghost.reveal flight_view);
   let saw_cv = FS.saw_certificate_verify_exact ctx.flight;
+  let signature_scheme = FS.certificate_verify_signature_scheme_exact ctx.flight;
+  let signature_len = FS.certificate_verify_signature_len_exact ctx.flight;
+  let mut signature = [| 0uy; signature_len |];
+  let signature_copied = FS.copy_certificate_verify_signature_exact_len ctx.flight signature signature_len;
+  let backend_ok =
+    if (saw_cv && input_ok && signature_copied) {
+      CE.verify_certificate_signature
+        backend
+        certificate_verify_input
+        130sz
+        signature_scheme
+        signature
+        signature_len
+    } else {
+      false
+    };
   let ok =
-    if (saw_cv && backend_ok) {
+    if (saw_cv && input_ok && signature_copied && backend_ok) {
       FS.mark_certificate_verify_verified_exact ctx.flight;
       FS.hide_flight_view ctx.flight;
       true

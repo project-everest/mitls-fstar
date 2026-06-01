@@ -7,6 +7,7 @@
 #include <string.h>
 
 typedef struct TLS13_IO_channel_s *TLS13_IO_channel;
+typedef uintptr_t TLS13_Handshake_handshake_context;
 
 typedef struct TLS13_Connection_Backend_config_s {
   uint16_t port;
@@ -96,6 +97,66 @@ static inline bool TLS13_Connection_External_client_connect(
     TLS13_Connection_External_connection c,
     TLS13_IO_channel ch) {
   return TLS13_Connection_Backend_connect(c, ch, NULL);
+}
+
+static inline TLS13_Handshake_handshake_context
+TLS13_Handshake_handshake_context_new(void) {
+  return (TLS13_Handshake_handshake_context)0;
+}
+
+#define TLS13_Handshake_handshake_context_free(ctx, ...) ((void)(ctx))
+
+#define TLS13_Handshake_Driver_run_client_handshake(c, ctx, ch, ...) \
+  TLS13_Connection_Backend_connect((c), (ch), NULL)
+
+static inline bool TLS13_Handshake_derive_application_keys_bridge(
+    TLS13_Handshake_handshake_context ctx,
+    uint8_t *client_key,
+    uint8_t *client_iv,
+    uint8_t *server_key,
+    uint8_t *server_iv) {
+  (void)ctx;
+  memset(client_key, 0x11, 32);
+  memset(client_iv, 0x22, 12);
+  memset(server_key, 0x11, 32);
+  memset(server_iv, 0x22, 12);
+  return true;
+}
+
+#define TLS13_Handshake_derive_application_keys( \
+    ctx, client_key, client_iv, server_key, server_iv, ...) \
+  TLS13_Handshake_derive_application_keys_bridge( \
+      (ctx), (client_key), (client_iv), (server_key), (server_iv))
+
+static inline bool TLS13_Connection_External_validate_certificate(
+    TLS13_Connection_External_connection c,
+    uint8_t *leaf_der,
+    size_t leaf_der_len,
+    void *leaf_der_bytes) {
+  return TLS13_Connection_Backend_validate_certificate(
+      c, leaf_der, leaf_der_len, leaf_der_len, leaf_der_bytes, NULL);
+}
+
+static inline bool TLS13_Connection_External_verify_certificate_signature(
+    TLS13_Connection_External_connection c,
+    uint8_t *certificate_verify_input,
+    size_t certificate_verify_input_len,
+    uint16_t signature_scheme,
+    uint8_t *signature,
+    size_t signature_len,
+    void *input_bytes,
+    void *signature_bytes) {
+  return TLS13_Connection_Backend_verify_certificate_signature(
+      c,
+      certificate_verify_input,
+      certificate_verify_input_len,
+      signature_scheme,
+      signature,
+      signature_len,
+      signature_len,
+      input_bytes,
+      signature_bytes,
+      NULL);
 }
 
 static inline size_t TLS13_Connection_External_client_write_raw(
