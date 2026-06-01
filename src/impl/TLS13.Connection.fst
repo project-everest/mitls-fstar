@@ -92,6 +92,10 @@ let connection_exactly (c:connection) (st:ST.state_ref) (s:S.conn_state) (view:C
 let is_connection (c:connection) (st:ST.state_ref) (s:S.conn_state) : slprop =
   exists* view. connection_exactly c st s view
 
+noextract
+let connection_hostname (c: connection) : T.hostname =
+  E.connection_hostname c.backend
+
 ghost
 fn reveal_connection_view (c: connection)
   requires is_connection c 'st 's
@@ -327,7 +331,8 @@ fn client_new
   returns c: connection
   ensures exists* st.
           pts_to hostname 'hostname_bytes **
-          connection_exactly c st S.initial CL.empty_connection_view
+          connection_exactly c st S.initial CL.empty_connection_view **
+          pure (connection_hostname c == Ghost.reveal 'hostname_bytes)
 {
   let backend = E.client_new hostname hostname_len #trust_store;
   let handshake = HS.handshake_context_new ();
@@ -374,6 +379,7 @@ fn client_new
   with crs. rewrite (Rec.is_record_state client_application_record_state crs) as (Rec.is_record_state c.client_application_record_state crs);
   with srs. rewrite (Rec.is_record_state server_application_record_state srs) as (Rec.is_record_state c.server_application_record_state srs);
   rewrite (ST.log_current log CL.empty_connection_view) as (ST.log_current c.log CL.empty_connection_view);
+  assert (pure (connection_hostname c == Ghost.reveal 'hostname_bytes));
   assert (pure (CL.connection_view_consistent CL.empty_connection_view));
   assert (pure (CL.empty_connection_view.CL.state == S.initial));
   fold (connection_exactly c st S.initial CL.empty_connection_view);
@@ -410,8 +416,8 @@ fn client_connect (c: connection) (ch: IO.channel)
   ensures exists* s' view1. connection_exactly c 'st s' view1 **
           IO.is_channel ch **
           pure (CL.connection_view_single_step 'view0 view1 /\
-                (exists server_name resp.
-                   CL.step 'view0 (CL.request_no_network_in (CL.OpStart server_name)) view1 resp /\
+                (exists resp.
+                   CL.step 'view0 (CL.request_no_network_in (CL.OpStart (connection_hostname c))) view1 resp /\
                    (ok ==> resp.CL.status == CL.HandshakeComplete) /\
                    (not ok ==> resp.CL.status == CL.Failed T.IoError)) /\
                 (ok ==> s'.S.phase == S.ApplicationData) /\
@@ -484,17 +490,17 @@ fn client_connect (c: connection) (ch: IO.channel)
               CL.lemma_step_start_success_abstract
                 'view0
                 (HW.successful_handshake_view_with (Ghost.reveal handshake_evidence) 'view0 's)
-                B.empty;
+                (connection_hostname c);
               let resp : erased CL.client_response =
                 CL.response_no_network_out B.empty CL.HandshakeComplete;
               assert (pure (CL.step 'view0
-                (CL.request_no_network_in (CL.OpStart B.empty))
+                (CL.request_no_network_in (CL.OpStart (connection_hostname c)))
                 (HW.successful_handshake_view_with (Ghost.reveal handshake_evidence) 'view0 's)
                 (Ghost.reveal resp)));
               assert (pure ((Ghost.reveal resp).CL.status == CL.HandshakeComplete));
-              assert (pure (exists server_name step_resp.
+              assert (pure (exists step_resp.
                 CL.step 'view0
-                  (CL.request_no_network_in (CL.OpStart server_name))
+                  (CL.request_no_network_in (CL.OpStart (connection_hostname c)))
                   (HW.successful_handshake_view_with (Ghost.reveal handshake_evidence) 'view0 's)
                   step_resp /\
                 (true ==> step_resp.CL.status == CL.HandshakeComplete) /\
@@ -512,19 +518,19 @@ fn client_connect (c: connection) (ch: IO.channel)
                 (S.fail 's T.IoError);
               CL.lemma_step_start_failed
                 'view0
-                B.empty
+                (connection_hostname c)
                 T.IoError
                 (S.fail 's T.IoError);
               let resp : erased CL.client_response =
                 CL.response_no_network_out B.empty (CL.Failed T.IoError);
               assert (pure (CL.step 'view0
-                (CL.request_no_network_in (CL.OpStart B.empty))
+                (CL.request_no_network_in (CL.OpStart (connection_hostname c)))
                 (note_local_fail_view 'view0 T.IoError 's)
                 (Ghost.reveal resp)));
               assert (pure ((Ghost.reveal resp).CL.status == CL.Failed T.IoError));
-              assert (pure (exists server_name step_resp.
+              assert (pure (exists step_resp.
                 CL.step 'view0
-                  (CL.request_no_network_in (CL.OpStart server_name))
+                  (CL.request_no_network_in (CL.OpStart (connection_hostname c)))
                   (note_local_fail_view 'view0 T.IoError 's)
                   step_resp /\
                 (false ==> step_resp.CL.status == CL.HandshakeComplete) /\
@@ -543,19 +549,19 @@ fn client_connect (c: connection) (ch: IO.channel)
               (S.fail 's T.IoError);
             CL.lemma_step_start_failed
               'view0
-              B.empty
+              (connection_hostname c)
               T.IoError
               (S.fail 's T.IoError);
             let resp : erased CL.client_response =
               CL.response_no_network_out B.empty (CL.Failed T.IoError);
             assert (pure (CL.step 'view0
-              (CL.request_no_network_in (CL.OpStart B.empty))
+              (CL.request_no_network_in (CL.OpStart (connection_hostname c)))
               (note_local_fail_view 'view0 T.IoError 's)
               (Ghost.reveal resp)));
             assert (pure ((Ghost.reveal resp).CL.status == CL.Failed T.IoError));
-            assert (pure (exists server_name step_resp.
+            assert (pure (exists step_resp.
               CL.step 'view0
-                (CL.request_no_network_in (CL.OpStart server_name))
+                (CL.request_no_network_in (CL.OpStart (connection_hostname c)))
                 (note_local_fail_view 'view0 T.IoError 's)
                 step_resp /\
               (false ==> step_resp.CL.status == CL.HandshakeComplete) /\
