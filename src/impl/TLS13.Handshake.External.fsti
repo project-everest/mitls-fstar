@@ -28,18 +28,6 @@ fn connect (ctx: handshake_context) (ch: IO.channel)
   returns ok: bool
   ensures is_context ctx ** IO.is_channel ch
 
-fn store_client_hello
-  (ctx: handshake_context)
-  (hello: array U8.t)
-  (hello_len: SZ.t)
-  requires is_context ctx **
-           pts_to hello 'hello_bytes **
-           pure (B.length 'hello_bytes == SZ.v hello_len /\
-                 SZ.v hello_len == 130)
-  returns ok: bool
-  ensures is_context ctx **
-          pts_to hello 'hello_bytes
-
 fn read_raw (ctx: handshake_context) (ch: IO.channel) (buf: array U8.t)
   (total_len: SZ.t) (offset: SZ.t) (remaining: SZ.t)
   requires is_context ctx ** IO.is_channel ch
@@ -65,67 +53,3 @@ fn write_raw (ctx: handshake_context) (ch: IO.channel) (buf: array U8.t)
   ensures is_context ctx ** IO.is_channel ch
           ** pts_to buf 'bytes
           ** pure (SZ.v n <= SZ.v remaining)
-
-fn build_client_finished_record
-  (ctx: handshake_context)
-  (out: array U8.t)
-  (out_len: SZ.t)
-  requires is_context ctx **
-           pts_to out 'old_out **
-           pure (B.length 'old_out == SZ.v out_len /\
-                 SZ.v out_len == 58)
-  returns ok: bool
-  ensures exists* out_bytes.
-          is_context ctx **
-          pts_to out out_bytes **
-          pure (B.length out_bytes == 58)
-
-fn process_server_hello_record
-  (ctx: handshake_context)
-  (header: array U8.t)
-  (header_len: SZ.t)
-  (fragment: array U8.t)
-  (fragment_len: SZ.t)
-  (key_share: array U8.t)
-  (key_share_len: SZ.t)
-  requires is_context ctx **
-           pts_to header 'header_bytes **
-           pts_to fragment 'fragment_bytes **
-           pts_to key_share 'key_share_bytes **
-           pure (B.length 'header_bytes == SZ.v header_len /\
-                 B.length 'fragment_bytes == SZ.v fragment_len /\
-                 B.length 'key_share_bytes == SZ.v key_share_len /\
-                 SZ.v header_len == 5 /\
-                 0 < SZ.v fragment_len /\
-                 SZ.v fragment_len <= 4096 /\
-                 SZ.v key_share_len == 32)
-  returns ok: bool
-  ensures is_context ctx **
-          pts_to header 'header_bytes **
-          pts_to fragment 'fragment_bytes **
-          pts_to key_share 'key_share_bytes
-
-fn certificate_received (ctx: handshake_context)
-  requires is_context ctx
-  returns ok: bool
-  ensures is_context ctx
-
-fn validate_certificate (ctx: handshake_context)
-  requires is_context ctx
-  returns ok: bool
-  ensures is_context ctx
-
-fn certificate_verify_verified (ctx: handshake_context)
-  requires is_context ctx
-  returns ok: bool
-  ensures is_context ctx
-
-fn server_finished_received (ctx: handshake_context)
-  requires is_context ctx
-  returns ok: bool
-  ensures is_context ctx
-
-fn verify_server_finished (ctx: handshake_context)
-  requires is_context ctx
-  returns ok: bool
-  ensures is_context ctx
