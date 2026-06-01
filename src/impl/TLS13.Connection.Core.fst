@@ -1690,23 +1690,18 @@ ensures exists* view1 network_out1 app_out1.
                                   assert (pure (Seq.equal
                                     (Ghost.reveal app_payload2)
                                     (CL.raw_slice (Ghost.reveal app_out2) (SZ.v payload_len) (SZ.v total_payload_len))));
-                                  CL.lemma_raw_slice_prefix_append_equal
+                                  CL.lemma_concat_bytes_singleton (Ghost.reveal app_payload);
+                                  CL.lemma_raw_slice_total_snoc_concat_equal
                                     (Ghost.reveal app_out2)
                                     (SZ.v payload_len)
                                     (SZ.v total_payload_len)
+                                    [Ghost.reveal app_payload]
                                     (Ghost.reveal app_payload)
-                                    (Ghost.reveal app_payload2);
-                                  Seq.lemma_eq_elim
-                                    (Ghost.reveal app_payload_total)
-                                    (CL.raw_slice (Ghost.reveal app_out2) 0 (SZ.v total_payload_len));
+                                    (Ghost.reveal app_payload2)
+                                    (Ghost.reveal app_payload_total);
                                   assert (pure (Seq.equal
                                     (Ghost.reveal app_payload_total)
-                                    (B.append (Ghost.reveal app_payload) (Ghost.reveal app_payload2))));
-                                  CL.lemma_concat_bytes_singleton (Ghost.reveal app_payload);
-                                  CL.lemma_concat_bytes_snoc_equal
-                                    [Ghost.reveal app_payload]
-                                    (Ghost.reveal app_payload2)
-                                    (Ghost.reveal app_payload);
+                                    (CL.concat_bytes (L.append [Ghost.reveal app_payload] [Ghost.reveal app_payload2]))));
                                   assert (pure (
                                     L.append [Ghost.reveal app_payload] [Ghost.reveal app_payload2] ==
                                     [Ghost.reveal app_payload; Ghost.reveal app_payload2]));
@@ -2786,23 +2781,18 @@ ensures exists* view1 network_out1 app_out1.
                             assert (pure (Seq.equal
                               (Ghost.reveal app_payload2)
                               (CL.raw_slice (Ghost.reveal app_out2) (SZ.v payload_len) (SZ.v total_payload_len))));
-                            CL.lemma_raw_slice_prefix_append_equal
+                            CL.lemma_concat_bytes_singleton (Ghost.reveal app_payload);
+                            CL.lemma_raw_slice_total_snoc_concat_equal
                               (Ghost.reveal app_out2)
                               (SZ.v payload_len)
                               (SZ.v total_payload_len)
+                              [Ghost.reveal app_payload]
                               (Ghost.reveal app_payload)
-                              (Ghost.reveal app_payload2);
-                            Seq.lemma_eq_elim
-                              (Ghost.reveal app_payload_total)
-                              (CL.raw_slice (Ghost.reveal app_out2) 0 (SZ.v total_payload_len));
+                              (Ghost.reveal app_payload2)
+                              (Ghost.reveal app_payload_total);
                             assert (pure (Seq.equal
                               (Ghost.reveal app_payload_total)
-                              (B.append (Ghost.reveal app_payload) (Ghost.reveal app_payload2))));
-                            CL.lemma_concat_bytes_singleton (Ghost.reveal app_payload);
-                            CL.lemma_concat_bytes_snoc_equal
-                              [Ghost.reveal app_payload]
-                              (Ghost.reveal app_payload2)
-                              (Ghost.reveal app_payload);
+                              (CL.concat_bytes (L.append [Ghost.reveal app_payload] [Ghost.reveal app_payload2]))));
                             assert (pure (
                               L.append [Ghost.reveal app_payload] [Ghost.reveal app_payload2] ==
                               [Ghost.reveal app_payload; Ghost.reveal app_payload2]));

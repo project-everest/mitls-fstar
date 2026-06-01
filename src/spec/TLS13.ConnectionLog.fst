@@ -1434,6 +1434,29 @@ let lemma_raw_slice_prefix_append_equal
     (raw_slice source 0 hi)
     (B.append prefix chunk)
 
+let lemma_raw_slice_total_snoc_concat_equal
+  (source:B.bytes)
+  (mid:nat)
+  (hi:nat)
+  (chunks:list B.bytes)
+  (prefix:B.bytes)
+  (chunk:B.bytes)
+  (whole:B.bytes)
+  : Lemma
+      (requires mid <= hi /\
+                hi <= B.length source /\
+                Seq.equal whole (raw_slice source 0 hi) /\
+                Seq.equal prefix (raw_slice source 0 mid) /\
+                Seq.equal prefix (concat_bytes chunks) /\
+                Seq.equal chunk (raw_slice source mid hi))
+      (ensures Seq.equal whole (concat_bytes (chunks @ [chunk])))
+  =
+  lemma_raw_slice_prefix_append_equal source mid hi prefix chunk;
+  lemma_concat_bytes_snoc_equal chunks chunk prefix;
+  Seq.lemma_eq_elim whole (raw_slice source 0 hi);
+  Seq.lemma_eq_elim (B.append prefix chunk) (concat_bytes (chunks @ [chunk]));
+  Seq.lemma_eq_refl whole (concat_bytes (chunks @ [chunk]))
+
 let lemma_pending_app_drain_split
   (view:connection_view)
   (bytes:B.bytes)
