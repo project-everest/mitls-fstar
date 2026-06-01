@@ -92,6 +92,20 @@ let lemma_u64_fits_next_after_consumed_of_budget
   assert (seq + (consumed + 1) == seq + consumed + 1);
   lemma_u64_fits_add_le_of_count seq (consumed + 1) (budget + 1)
 
+let lemma_read_loop_next_record_fits
+  (seq:nat)
+  (chunks:list B.bytes)
+  (raw_cursor:nat)
+  (raw_budget:nat)
+  : Lemma
+      (requires CL.chunk_count chunks <= raw_cursor /\
+                raw_cursor <= raw_budget /\
+                U64.fits (seq + raw_budget + 1))
+      (ensures U64.fits (seq + CL.chunk_count chunks + 1))
+=
+  assert (CL.chunk_count chunks <= raw_budget);
+  lemma_u64_fits_next_after_consumed_of_budget seq (CL.chunk_count chunks) raw_budget
+
 let lemma_step_recv_application_data
   (s:S.conn_state)
   (app:B.bytes)
@@ -1548,17 +1562,27 @@ ensures exists* view1 network_out1 app_out1.
                       assert (pure (U64.fits
                         (view0.CL.state.S.read_state.R.seq +
                          (B.length view0.CL.pending_received_raw + B.length (Ghost.reveal network_bytes) + 1))));
+                      assert (pure (B.length view0.CL.pending_received_raw +
+                                    B.length (Ghost.reveal network_bytes) ==
+                                    SZ.v pending_network_len'));
                       assert (pure (CL.chunk_count [] == 0));
-                      lemma_u64_fits_next_after_consumed_of_budget
+                      lemma_read_loop_next_record_fits
                         view0.CL.state.S.read_state.R.seq
-                        (CL.chunk_count [])
+                        []
+                        (SZ.v acc_raw_cursor)
                         (B.length view0.CL.pending_received_raw + B.length (Ghost.reveal network_bytes));
                       assert (pure (0 < B.length view0.CL.pending_received_raw));
                       assert (pure (1 <= B.length view0.CL.pending_received_raw + B.length (Ghost.reveal network_bytes)));
                       assert (pure (CL.chunk_count (Ghost.reveal chunks_single) == 1));
-                      lemma_u64_fits_next_after_consumed_of_budget
+                      assert (pure (1 <= SZ.v record_wire_len));
+                      assert (pure (CL.chunk_count (Ghost.reveal chunks_single) <= SZ.v record_wire_len));
+                      assert (pure (SZ.v record_wire_len <=
+                                    B.length view0.CL.pending_received_raw +
+                                    B.length (Ghost.reveal network_bytes)));
+                      lemma_read_loop_next_record_fits
                         view0.CL.state.S.read_state.R.seq
-                        (CL.chunk_count (Ghost.reveal chunks_single))
+                        (Ghost.reveal chunks_single)
+                        (SZ.v record_wire_len)
                         (B.length view0.CL.pending_received_raw + B.length (Ghost.reveal network_bytes));
                       assert (pure (U64.fits (view0.CL.state.S.read_state.R.seq + 1)));
                       assert (pure (U64.fits (view0.CL.state.S.read_state.R.seq + 2)));
@@ -2692,15 +2716,22 @@ ensures exists* view1 network_out1 app_out1.
                   (view0.CL.state.S.read_state.R.seq +
                    (B.length view0.CL.pending_received_raw + B.length (Ghost.reveal network_bytes) + 1))));
                 assert (pure (CL.chunk_count [] == 0));
-                lemma_u64_fits_next_after_consumed_of_budget
+                lemma_read_loop_next_record_fits
                   view0.CL.state.S.read_state.R.seq
-                  (CL.chunk_count [])
+                  []
+                  (SZ.v acc_raw_cursor)
                   (B.length view0.CL.pending_received_raw + B.length (Ghost.reveal network_bytes));
                 assert (pure (1 <= B.length view0.CL.pending_received_raw + B.length (Ghost.reveal network_bytes)));
                 assert (pure (CL.chunk_count (Ghost.reveal chunks_single) == 1));
-                lemma_u64_fits_next_after_consumed_of_budget
+                assert (pure (1 <= SZ.v record_wire_len));
+                assert (pure (CL.chunk_count (Ghost.reveal chunks_single) <= SZ.v record_wire_len));
+                assert (pure (SZ.v record_wire_len <=
+                              B.length view0.CL.pending_received_raw +
+                              B.length (Ghost.reveal network_bytes)));
+                lemma_read_loop_next_record_fits
                   view0.CL.state.S.read_state.R.seq
-                  (CL.chunk_count (Ghost.reveal chunks_single))
+                  (Ghost.reveal chunks_single)
+                  (SZ.v record_wire_len)
                   (B.length view0.CL.pending_received_raw + B.length (Ghost.reveal network_bytes));
                 assert (pure (U64.fits (view0.CL.state.S.read_state.R.seq + 1)));
                 assert (pure (U64.fits (view0.CL.state.S.read_state.R.seq + 2)));
