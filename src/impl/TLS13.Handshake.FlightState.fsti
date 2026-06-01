@@ -39,6 +39,17 @@ fn set_client_hello
   ensures is_flight_state st **
           pts_to hello 'hello_bytes
 
+fn set_client_hello_fragment
+  (st: flight_state)
+  (hello: array U8.t)
+  (hello_len: SZ.t)
+  requires is_flight_state st **
+           pts_to hello 'hello_bytes **
+           pure (B.length 'hello_bytes == SZ.v hello_len /\
+                 SZ.v hello_len <= 512)
+  ensures is_flight_state st **
+          pts_to hello 'hello_bytes
+
 fn copy_client_hello
   (st: flight_state)
   (out: array U8.t)

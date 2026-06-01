@@ -10,6 +10,7 @@ module BD = TLS13.Handshake.ByteDriver
 module BDE = TLS13.Handshake.ByteDriver.External
 module Cast = FStar.Int.Cast
 module E = TLS13.Handshake.External
+module FS = TLS13.Handshake.FlightState
 module H = TLS13.Handshake.Spec
 module HW = TLS13.Connection.HandshakeWitness
 module HF = TLS13.Handshake.Framing
@@ -23,10 +24,14 @@ module U16 = FStar.UInt16
 module U8 = FStar.UInt8
 module X = TLS13.X509.Spec
 
-type handshake_context = E.handshake_context
+noeq
+type handshake_context = {
+  backend: E.handshake_context;
+  flight: FS.flight_state;
+}
 
 let is_handshake_context (ctx:handshake_context) (st:ST.state_ref) (s:S.conn_state) : slprop =
-  E.is_context ctx ** ST.current st s
+  E.is_context ctx.backend ** FS.is_flight_state ctx.flight ** ST.current st s
 
 let server_hello_fragment_capacity : SZ.t = 4096sz
 
@@ -131,8 +136,12 @@ fn handshake_context_new ()
   returns ctx: handshake_context
   ensures exists* st. is_handshake_context ctx st S.initial
 {
-  let ctx = E.context_new ();
+  let backend = E.context_new ();
+  let flight = FS.flight_state_new ();
   let st = ST.alloc_initial ();
+  let ctx = { backend; flight };
+  rewrite (E.is_context backend) as (E.is_context ctx.backend);
+  rewrite (FS.is_flight_state flight) as (FS.is_flight_state ctx.flight);
   fold (is_handshake_context ctx st S.initial);
   ctx
 }
@@ -142,7 +151,8 @@ fn handshake_context_free (ctx: handshake_context)
   ensures emp
 {
   unfold (is_handshake_context ctx 'st 's);
-  E.context_free ctx;
+  E.context_free ctx.backend;
+  FS.flight_state_free ctx.flight;
   drop_ (ST.current 'st 's);
 }
 
@@ -153,14 +163,14 @@ fn rec read_raw_exact
   (total_len: SZ.t)
   (offset: SZ.t)
   (remaining: SZ.t)
-  requires E.is_context ctx **
+  requires E.is_context ctx.backend **
            IO.is_channel ch **
            pts_to buf 'old **
            pure (B.length 'old == SZ.v total_len /\
                  SZ.v offset + SZ.v remaining == SZ.v total_len)
   returns ok: bool
   ensures exists* bytes.
-          E.is_context ctx **
+          E.is_context ctx.backend **
           IO.is_channel ch **
           pts_to buf bytes **
           pure (B.length bytes == SZ.v total_len)
@@ -170,7 +180,7 @@ fn rec read_raw_exact
     true
   } else {
     assert (pure (SZ.v remaining > 0));
-    let n = E.read_raw ctx ch buf total_len offset remaining;
+    let n = E.read_raw ctx.backend ch buf total_len offset remaining;
     if (n = 0sz) {
       false
     } else {
@@ -191,13 +201,13 @@ fn rec write_raw_exact
   (total_len: SZ.t)
   (offset: SZ.t)
   (remaining: SZ.t)
-  requires E.is_context ctx **
+  requires E.is_context ctx.backend **
            IO.is_channel ch **
            pts_to buf 'bytes **
            pure (B.length 'bytes == SZ.v total_len /\
                  SZ.v offset + SZ.v remaining == SZ.v total_len)
   returns ok: bool
-  ensures E.is_context ctx **
+  ensures E.is_context ctx.backend **
           IO.is_channel ch **
           pts_to buf 'bytes
   decreases (SZ.v remaining)
@@ -206,7 +216,7 @@ fn rec write_raw_exact
     true
   } else {
     assert (pure (SZ.v remaining > 0));
-    let n = E.write_raw ctx ch buf total_len offset remaining;
+    let n = E.write_raw ctx.backend ch buf total_len offset remaining;
     if (n = 0sz) {
       false
     } else {
@@ -239,10 +249,11 @@ fn send_client_hello (ctx: handshake_context) (ch: IO.channel)
   write_fixed_client_key_share key_share;
   let built = HF.build_supported_client_hello_localhost random key_share hello 130sz;
   if built {
-    let stored = E.store_client_hello ctx hello 130sz;
+    let stored = E.store_client_hello ctx.backend hello 130sz;
     if stored {
+      FS.set_client_hello_fragment ctx.flight hello 130sz;
       HF.serialize_client_hello_record_header header 5sz;
-      let connected = E.connect ctx ch;
+      let connected = E.connect ctx.backend ch;
       if connected {
         let header_ok = write_raw_exact ctx ch header 5sz 0sz 5sz;
         let hello_ok =
@@ -284,9 +295,9 @@ fn send_client_hello (ctx: handshake_context) (ch: IO.channel)
 
 inline_for_extraction
 fn recv_server_hello_record (ctx: handshake_context) (ch: IO.channel)
-  requires E.is_context ctx ** IO.is_channel ch
+  requires E.is_context ctx.backend ** FS.is_flight_state ctx.flight ** IO.is_channel ch
   returns ok: bool
-  ensures E.is_context ctx ** IO.is_channel ch
+  ensures E.is_context ctx.backend ** FS.is_flight_state ctx.flight ** IO.is_channel ch
 {
   let mut header = [| 0uy; 5sz |];
   let header_ok = read_raw_exact ctx ch header 5sz 0sz 5sz;
@@ -320,7 +331,21 @@ fn recv_server_hello_record (ctx: handshake_context) (ch: IO.channel)
               key_share
               32sz;
           if parsed {
-            E.process_server_hello_record ctx header 5sz fragment fragment_len key_share 32sz
+            let backend_ok =
+              E.process_server_hello_record
+                ctx.backend
+                header
+                5sz
+                fragment
+                fragment_len
+                key_share
+                32sz;
+            if backend_ok {
+              FS.set_server_hello_fragment ctx.flight fragment fragment_len;
+              FS.derive_server_handshake_keys_from_share ctx.flight key_share 32sz
+            } else {
+              false
+            }
           } else {
             false
           }
@@ -376,10 +401,10 @@ fn recv_encrypted_extensions (ctx: handshake_context) (ch: IO.channel)
                 (not ok ==> s'.S.phase == S.Failed))
 {
   unfold (is_handshake_context ctx 'st 's);
-  unfold (E.is_context ctx);
-  with p. assert (BDE.is_context ctx p);
-  let ok = BD.recv_encrypted_handshake ctx ch;
-  fold (E.is_context ctx);
+  unfold (E.is_context ctx.backend);
+  with p. assert (BDE.is_context ctx.backend p);
+  let ok = BD.recv_encrypted_handshake ctx.backend ch;
+  fold (E.is_context ctx.backend);
   if ok {
     assert (pure (S.step 's (S.RecvEncryptedExtensions HW.dummy_encrypted_extensions) == Some (S.with_phase 's S.EncryptedExtensionsReceived)));
     ST.advance 'st (S.RecvEncryptedExtensions HW.dummy_encrypted_extensions) (S.with_phase 's S.EncryptedExtensionsReceived);
@@ -405,7 +430,7 @@ fn recv_certificate (ctx: handshake_context) (ch: IO.channel)
                 (not ok ==> s'.S.phase == S.Failed))
 {
   unfold (is_handshake_context ctx 'st 's);
-  let ok = E.certificate_received ctx;
+  let ok = E.certificate_received ctx.backend;
   if ok {
     assert (pure (S.step 's (S.RecvCertificate HW.dummy_certificate) == Some (S.with_phase 's S.CertificateReceived)));
     ST.advance 'st (S.RecvCertificate HW.dummy_certificate) (S.with_phase 's S.CertificateReceived);
@@ -429,7 +454,7 @@ fn validate_certificate (ctx: handshake_context)
                 (not ok ==> s'.S.phase == S.Failed))
 {
   unfold (is_handshake_context ctx 'st 's);
-  let ok = E.validate_certificate ctx;
+  let ok = E.validate_certificate ctx.backend;
   if ok {
     assert (pure (S.step 's (S.ValidateCertificate HW.dummy_peer) == Some (S.with_validated_peer 's HW.dummy_peer)));
     ST.advance 'st (S.ValidateCertificate HW.dummy_peer) (S.with_validated_peer 's HW.dummy_peer);
@@ -455,7 +480,7 @@ fn recv_certificate_verify (ctx: handshake_context) (ch: IO.channel)
                 (not ok ==> s'.S.phase == S.Failed))
 {
   unfold (is_handshake_context ctx 'st 's);
-  let ok = E.certificate_verify_verified ctx;
+  let ok = E.certificate_verify_verified ctx.backend;
   if ok {
     assert (pure (S.step 's (S.RecvCertificateVerify HW.dummy_certificate_verify) == Some (S.with_phase 's S.CertificateVerified)));
     ST.advance 'st (S.RecvCertificateVerify HW.dummy_certificate_verify) (S.with_phase 's S.CertificateVerified);
@@ -481,10 +506,10 @@ fn recv_server_finished (ctx: handshake_context) (ch: IO.channel)
                 (not ok ==> s'.S.phase == S.Failed))
 {
   unfold (is_handshake_context ctx 'st 's);
-  let saw_finished = E.server_finished_received ctx;
+  let saw_finished = E.server_finished_received ctx.backend;
   let ok =
     if saw_finished {
-      E.verify_server_finished ctx
+      E.verify_server_finished ctx.backend
     } else {
       false
     };
@@ -514,7 +539,7 @@ fn send_client_finished (ctx: handshake_context) (ch: IO.channel)
 {
   unfold (is_handshake_context ctx 'st 's);
   let mut record = [| 0uy; 58sz |];
-  let built = E.build_client_finished_record ctx record 58sz;
+  let built = E.build_client_finished_record ctx.backend record 58sz;
   let ok =
     if built {
       write_raw_exact ctx ch record 58sz 0sz 58sz

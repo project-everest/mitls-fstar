@@ -562,6 +562,29 @@ fn copy_fragment_to_buffer
   copy_fragment_to_buffer_loop fragment fragment_total_len out out_capacity 0sz offset copy_len
 }
 
+fn set_client_hello_fragment
+  (st: flight_state)
+  (hello: array U8.t)
+  (hello_len: SZ.t)
+  requires is_flight_state st **
+           pts_to hello 'hello_bytes **
+           pure (B.length 'hello_bytes == SZ.v hello_len /\
+                 SZ.v hello_len <= 512)
+  ensures is_flight_state st **
+          pts_to hello 'hello_bytes
+{
+  unfold (is_flight_state st);
+  pts_to_len hello;
+  V.pts_to_len st.client_hello;
+  assert (pure (V.length st.client_hello == 512));
+  V.to_array_pts_to st.client_hello;
+  assert (pure (Pulse.Lib.Array.Core.length (V.vec_to_array st.client_hello) == 512));
+  copy_fragment_to_buffer_loop hello hello_len (V.vec_to_array st.client_hello) 512sz 0sz 0sz hello_len;
+  V.to_vec_pts_to st.client_hello;
+  st.client_hello_len_box := hello_len;
+  fold (is_flight_state st);
+}
+
 fn set_server_hello_fragment
   (st: flight_state)
   (hello: array U8.t)
