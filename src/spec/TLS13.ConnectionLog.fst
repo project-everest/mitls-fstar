@@ -1900,6 +1900,53 @@ let lemma_note_app_received_chunks_loop_step
   lemma_note_app_received_chunks_pending_fields view (chunks @ [bytes]);
   lemma_note_app_received_chunks_raw_log view (chunks @ [bytes])
 
+let lemma_note_app_received_chunks_loop_accept_output
+  (view:connection_view)
+  (chunks:list B.bytes)
+  (bytes:B.bytes)
+  (source:B.bytes)
+  (mid:nat)
+  (hi:nat)
+  (prefix:B.bytes)
+  (whole:B.bytes)
+  : Lemma
+      (requires connection_view_consistent view /\
+                view.state.S.phase == S.ApplicationData /\
+                mid <= hi /\
+                hi <= B.length source /\
+                Seq.equal whole (raw_slice source 0 hi) /\
+                Seq.equal prefix (raw_slice source 0 mid) /\
+                Seq.equal prefix (concat_bytes chunks) /\
+                Seq.equal bytes (raw_slice source mid hi))
+      (ensures (
+        let acc = note_app_received_chunks view chunks in
+        let next = note_app_received_chunks view (chunks @ [bytes]) in
+        connection_view_consistent next /\
+        next.state.S.phase == S.ApplicationData /\
+        next.app_view.app_sent == view.app_view.app_sent /\
+        next.app_view.app_received == acc.app_view.app_received @ [bytes] /\
+        next.pending_app == view.pending_app /\
+        next.pending_app_record == view.pending_app_record /\
+        next.pending_app_offset == view.pending_app_offset /\
+        next.pending_received_raw == view.pending_received_raw /\
+        next.raw_log == view.raw_log /\
+        next.state.S.write_state == view.state.S.write_state /\
+        next.state.S.read_state.R.seq ==
+          acc.state.S.read_state.R.seq + 1 /\
+        next.state == S.advance_read_record acc.state /\
+        Seq.equal whole (concat_bytes (chunks @ [bytes]))))
+  =
+  lemma_note_app_received_chunks_loop_step view chunks bytes;
+  lemma_note_app_received_chunks_state_snoc view chunks bytes;
+  lemma_raw_slice_total_snoc_concat_equal
+    source
+    mid
+    hi
+    chunks
+    prefix
+    bytes
+    whole
+
 let rec lemma_note_app_received_chunks_conn_evolves
   (view:connection_view)
   (chunks:list B.bytes)
