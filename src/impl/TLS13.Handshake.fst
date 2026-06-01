@@ -521,6 +521,7 @@ fn validate_certificate (ctx: handshake_context) (backend: CE.connection)
   let leaf_len = FS.certificate_leaf_len_exact ctx.flight;
   let mut leaf_der = [| 0uy; leaf_len |];
   let copied = FS.copy_certificate_leaf_der_exact_len ctx.flight leaf_der leaf_len;
+  with leaf_der_bytes. assert (pts_to leaf_der leaf_der_bytes);
   let ok =
     if copied {
       CE.validate_certificate backend leaf_der leaf_len
@@ -529,10 +530,13 @@ fn validate_certificate (ctx: handshake_context) (backend: CE.connection)
     };
   FS.hide_flight_view ctx.flight;
   if ok {
-    assert (pure (S.step 's (S.ValidateCertificate HW.dummy_peer) == Some (S.with_validated_peer 's HW.dummy_peer)));
-    ST.advance 'st (S.ValidateCertificate HW.dummy_peer) (S.with_validated_peer 's HW.dummy_peer);
-    lemma_step_evolves 's (S.ValidateCertificate HW.dummy_peer) (S.with_validated_peer 's HW.dummy_peer);
-    fold (is_handshake_context ctx 'st (S.with_validated_peer 's HW.dummy_peer));
+    assert (pure (Some? (CE.validate_certificate_result backend (Ghost.reveal leaf_der_bytes))));
+    let peer : erased X.peer_identity =
+      Some?.v (CE.validate_certificate_result backend (Ghost.reveal leaf_der_bytes));
+    assert (pure (S.step 's (S.ValidateCertificate (Ghost.reveal peer)) == Some (S.with_validated_peer 's (Ghost.reveal peer))));
+    ST.advance 'st (S.ValidateCertificate (Ghost.reveal peer)) (S.with_validated_peer 's (Ghost.reveal peer));
+    lemma_step_evolves 's (S.ValidateCertificate (Ghost.reveal peer)) (S.with_validated_peer 's (Ghost.reveal peer));
+    fold (is_handshake_context ctx 'st (S.with_validated_peer 's (Ghost.reveal peer)));
     true
   } else {
     assert (pure (S.step 's (S.Fail T.BadCertificate) == Some (S.fail 's T.BadCertificate)));

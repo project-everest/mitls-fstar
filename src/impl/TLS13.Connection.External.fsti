@@ -9,12 +9,24 @@ module B = TLS13.Bytes
 module IO = TLS13.IO
 module Rec = TLS13.Record
 module SZ = FStar.SizeT
+module T = TLS13.Types
 module U16 = FStar.UInt16
 module U8 = FStar.UInt8
 module X = TLS13.X509.Spec
 
 val connection : Type0
 val is_connection: connection -> slprop
+
+val connection_hostname: connection -> T.hostname
+val connection_trust_store: connection -> X.trust_store
+val connection_validation_time: connection -> X.validation_time
+
+let validate_certificate_result (c: connection) (leaf_der: B.bytes) : option X.peer_identity =
+  X.validate_chain
+    (connection_hostname c)
+    (connection_validation_time c)
+    (connection_trust_store c)
+    [leaf_der]
 
 fn client_new
   (hostname: array U8.t)
@@ -24,7 +36,9 @@ fn client_new
            pure (B.length 'hostname_bytes == SZ.v hostname_len)
   returns c: connection
   ensures pts_to hostname 'hostname_bytes **
-          is_connection c
+          is_connection c **
+          pure (connection_hostname c == Ghost.reveal 'hostname_bytes /\
+                connection_trust_store c == trust_store)
 
 fn client_free (c: connection)
   requires is_connection c
@@ -75,7 +89,8 @@ fn validate_certificate
            pure (B.length 'leaf_der_bytes == SZ.v leaf_der_len)
   returns ok: bool
   ensures is_connection c **
-          pts_to leaf_der 'leaf_der_bytes
+          pts_to leaf_der 'leaf_der_bytes **
+          pure (ok ==> Some? (validate_certificate_result c (Ghost.reveal 'leaf_der_bytes)))
 
 fn verify_certificate_signature
   (c: connection)
