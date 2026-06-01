@@ -12,7 +12,42 @@ module U16 = FStar.UInt16
 module U8 = FStar.UInt8
 
 val flight_state : Type0
+
+type flight_view = {
+  saw_encrypted_extensions: bool;
+  saw_certificate: bool;
+  saw_certificate_verify: bool;
+  certificate_verify_verified: bool;
+  saw_finished: bool;
+  server_before_finished_len: (l:SZ.t{SZ.v l <= 32768});
+  server_through_finished_len: (l:SZ.t{SZ.v l <= 32768});
+}
+
+let empty_flight_view : flight_view = {
+  saw_encrypted_extensions = false;
+  saw_certificate = false;
+  saw_certificate_verify = false;
+  certificate_verify_verified = false;
+  saw_finished = false;
+  server_before_finished_len = 0sz;
+  server_through_finished_len = 0sz;
+}
+
+let flight_view_with_certificate_verify_verified (view: flight_view) : flight_view =
+  { view with certificate_verify_verified = true }
+
 val is_flight_state: flight_state -> slprop
+val flight_state_exactly: flight_state -> flight_view -> slprop
+
+ghost
+fn reveal_flight_view (st: flight_state)
+  requires is_flight_state st
+  ensures exists* view. flight_state_exactly st view
+
+ghost
+fn hide_flight_view (st: flight_state)
+  requires flight_state_exactly st 'view
+  ensures is_flight_state st
 
 fn flight_state_new ()
   returns st: flight_state
@@ -441,6 +476,10 @@ fn mark_certificate_verify_verified (st: flight_state)
   requires is_flight_state st
   ensures is_flight_state st
 
+fn mark_certificate_verify_verified_exact (st: flight_state)
+  requires flight_state_exactly st 'view
+  ensures flight_state_exactly st (flight_view_with_certificate_verify_verified 'view)
+
 fn accept_finished (st: flight_state) (message_len: SZ.t) (body_len: SZ.t)
   requires is_flight_state st
   returns ok: bool
@@ -606,32 +645,74 @@ fn server_before_finished_len (st: flight_state)
   returns len: (l:SZ.t{SZ.v l <= 32768})
   ensures is_flight_state st
 
+fn server_before_finished_len_exact (st: flight_state)
+  requires flight_state_exactly st 'view
+  returns len: (l:SZ.t{SZ.v l <= 32768})
+  ensures flight_state_exactly st 'view **
+          pure (len == 'view.server_before_finished_len)
+
 fn server_through_finished_len (st: flight_state)
   requires is_flight_state st
   returns len: (l:SZ.t{SZ.v l <= 32768})
   ensures is_flight_state st
+
+fn server_through_finished_len_exact (st: flight_state)
+  requires flight_state_exactly st 'view
+  returns len: (l:SZ.t{SZ.v l <= 32768})
+  ensures flight_state_exactly st 'view **
+          pure (len == 'view.server_through_finished_len)
 
 fn saw_certificate (st: flight_state)
   requires is_flight_state st
   returns saw: bool
   ensures is_flight_state st
 
+fn saw_certificate_exact (st: flight_state)
+  requires flight_state_exactly st 'view
+  returns saw: bool
+  ensures flight_state_exactly st 'view **
+          pure (saw == 'view.saw_certificate)
+
 fn saw_certificate_verify (st: flight_state)
   requires is_flight_state st
   returns saw: bool
   ensures is_flight_state st
+
+fn saw_certificate_verify_exact (st: flight_state)
+  requires flight_state_exactly st 'view
+  returns saw: bool
+  ensures flight_state_exactly st 'view **
+          pure (saw == 'view.saw_certificate_verify)
 
 fn certificate_verify_verified (st: flight_state)
   requires is_flight_state st
   returns verified: bool
   ensures is_flight_state st
 
+fn certificate_verify_verified_exact (st: flight_state)
+  requires flight_state_exactly st 'view
+  returns verified: bool
+  ensures flight_state_exactly st 'view **
+          pure (verified == 'view.certificate_verify_verified)
+
 fn saw_finished (st: flight_state)
   requires is_flight_state st
   returns saw: bool
   ensures is_flight_state st
 
+fn saw_finished_exact (st: flight_state)
+  requires flight_state_exactly st 'view
+  returns saw: bool
+  ensures flight_state_exactly st 'view **
+          pure (saw == 'view.saw_finished)
+
 fn encrypted_handshake_complete (st: flight_state)
   requires is_flight_state st
   returns complete: bool
   ensures is_flight_state st
+
+fn encrypted_handshake_complete_exact (st: flight_state)
+  requires flight_state_exactly st 'view
+  returns complete: bool
+  ensures flight_state_exactly st 'view **
+          pure (complete == ('view.saw_encrypted_extensions && 'view.saw_finished))

@@ -123,6 +123,115 @@ let is_flight_state ([@@@mkey] st: flight_state) : slprop =
           SZ.v certificate_leaf_len <= 32768 /\
           SZ.v certificate_verify_signature_len <= 32768)
 
+let flight_state_exactly ([@@@mkey] st: flight_state) (view: flight_view) : slprop =
+  exists* handshake_len parsed_len client_hello_len server_hello_len client_hello server_hello server_handshake_messages
+          certificate_verify_offset certificate_leaf_offset certificate_leaf_len
+          certificate_verify_signature_scheme certificate_verify_signature_offset certificate_verify_signature_len
+          handshake_secret client_handshake_traffic_secret client_handshake_key client_handshake_iv server_handshake_traffic_secret
+          server_handshake_key server_handshake_iv server_handshake_record_state server_finished_verify_data
+          before_finished_len through_finished_len
+          saw_encrypted_extensions saw_certificate saw_certificate_verify certificate_verify_verified saw_finished.
+    Box.pts_to st.handshake_len_box handshake_len **
+    Box.pts_to st.parsed_len_box parsed_len **
+    Box.pts_to st.client_hello_len_box client_hello_len **
+    Box.pts_to st.server_hello_len_box server_hello_len **
+    V.pts_to st.client_hello client_hello **
+    V.pts_to st.server_hello server_hello **
+    V.pts_to st.server_handshake_messages server_handshake_messages **
+    Box.pts_to st.certificate_verify_offset_box certificate_verify_offset **
+    Box.pts_to st.certificate_leaf_offset_box certificate_leaf_offset **
+    Box.pts_to st.certificate_leaf_len_box certificate_leaf_len **
+    Box.pts_to st.certificate_verify_signature_scheme_box certificate_verify_signature_scheme **
+    Box.pts_to st.certificate_verify_signature_offset_box certificate_verify_signature_offset **
+    Box.pts_to st.certificate_verify_signature_len_box certificate_verify_signature_len **
+    V.pts_to st.handshake_secret handshake_secret **
+    V.pts_to st.client_handshake_traffic_secret client_handshake_traffic_secret **
+    V.pts_to st.client_handshake_key client_handshake_key **
+    V.pts_to st.client_handshake_iv client_handshake_iv **
+    V.pts_to st.server_handshake_traffic_secret server_handshake_traffic_secret **
+    V.pts_to st.server_handshake_key server_handshake_key **
+    V.pts_to st.server_handshake_iv server_handshake_iv **
+    Rec.is_record_state st.server_handshake_record_state server_handshake_record_state **
+    V.pts_to st.server_finished_verify_data server_finished_verify_data **
+    Box.pts_to st.before_finished_len_box before_finished_len **
+    Box.pts_to st.through_finished_len_box through_finished_len **
+    Box.pts_to st.saw_encrypted_extensions_box saw_encrypted_extensions **
+    Box.pts_to st.saw_certificate_box saw_certificate **
+    Box.pts_to st.saw_certificate_verify_box saw_certificate_verify **
+    Box.pts_to st.certificate_verify_verified_box certificate_verify_verified **
+    Box.pts_to st.saw_finished_box saw_finished **
+    pure (V.is_full_vec st.client_hello /\
+          V.is_full_vec st.server_hello /\
+          V.is_full_vec st.server_handshake_messages /\
+          V.is_full_vec st.handshake_secret /\
+          V.is_full_vec st.client_handshake_traffic_secret /\
+          V.is_full_vec st.client_handshake_key /\
+          V.is_full_vec st.client_handshake_iv /\
+          V.is_full_vec st.server_handshake_traffic_secret /\
+          V.is_full_vec st.server_handshake_key /\
+          V.is_full_vec st.server_handshake_iv /\
+          V.is_full_vec st.server_finished_verify_data /\
+          V.length st.client_hello == 512 /\
+          V.length st.server_hello == 4096 /\
+          V.length st.server_handshake_messages == 32768 /\
+          V.length st.handshake_secret == 32 /\
+          V.length st.client_handshake_traffic_secret == 32 /\
+          V.length st.client_handshake_key == 32 /\
+          V.length st.client_handshake_iv == 12 /\
+          V.length st.server_handshake_traffic_secret == 32 /\
+          V.length st.server_handshake_key == 32 /\
+          V.length st.server_handshake_iv == 12 /\
+          V.length st.server_finished_verify_data == 32 /\
+          SZ.v client_hello_len <= 512 /\
+          SZ.v server_hello_len <= 4096 /\
+          SZ.v handshake_len <= 32768 /\
+          SZ.v parsed_len <= SZ.v handshake_len /\
+          SZ.v before_finished_len <= SZ.v handshake_len /\
+          SZ.v through_finished_len <= SZ.v handshake_len /\
+          SZ.v certificate_leaf_len <= 32768 /\
+          SZ.v certificate_verify_signature_len <= 32768 /\
+          view.saw_encrypted_extensions == saw_encrypted_extensions /\
+          view.saw_certificate == saw_certificate /\
+          view.saw_certificate_verify == saw_certificate_verify /\
+          view.certificate_verify_verified == certificate_verify_verified /\
+          view.saw_finished == saw_finished /\
+          view.server_before_finished_len == before_finished_len /\
+          view.server_through_finished_len == through_finished_len)
+
+ghost
+fn reveal_flight_view (st: flight_state)
+  requires is_flight_state st
+  ensures exists* view. flight_state_exactly st view
+{
+  unfold (is_flight_state st);
+  with before_finished_len. assert (Box.pts_to st.before_finished_len_box before_finished_len);
+  with through_finished_len. assert (Box.pts_to st.through_finished_len_box through_finished_len);
+  with saw_encrypted_extensions. assert (Box.pts_to st.saw_encrypted_extensions_box saw_encrypted_extensions);
+  with saw_certificate. assert (Box.pts_to st.saw_certificate_box saw_certificate);
+  with saw_certificate_verify. assert (Box.pts_to st.saw_certificate_verify_box saw_certificate_verify);
+  with certificate_verify_verified. assert (Box.pts_to st.certificate_verify_verified_box certificate_verify_verified);
+  with saw_finished. assert (Box.pts_to st.saw_finished_box saw_finished);
+  let view = {
+    saw_encrypted_extensions;
+    saw_certificate;
+    saw_certificate_verify;
+    certificate_verify_verified;
+    saw_finished;
+    server_before_finished_len = before_finished_len;
+    server_through_finished_len = through_finished_len
+  };
+  fold (flight_state_exactly st view);
+}
+
+ghost
+fn hide_flight_view (st: flight_state)
+  requires flight_state_exactly st 'view
+  ensures is_flight_state st
+{
+  unfold (flight_state_exactly st 'view);
+  fold (is_flight_state st);
+}
+
 fn flight_state_new ()
   returns st: flight_state
   ensures is_flight_state st
@@ -1612,6 +1721,16 @@ fn mark_certificate_verify_verified (st: flight_state)
   fold (is_flight_state st);
 }
 
+fn mark_certificate_verify_verified_exact (st: flight_state)
+  requires flight_state_exactly st 'view
+  ensures flight_state_exactly st (flight_view_with_certificate_verify_verified 'view)
+{
+  unfold (flight_state_exactly st 'view);
+  st.certificate_verify_verified_box := true;
+  assert (pure ((flight_view_with_certificate_verify_verified 'view).certificate_verify_verified == true));
+  fold (flight_state_exactly st (flight_view_with_certificate_verify_verified 'view));
+}
+
 fn accept_finished (st: flight_state) (message_len: SZ.t) (body_len: SZ.t)
   requires is_flight_state st
   returns ok: bool
@@ -1922,6 +2041,19 @@ fn server_before_finished_len (st: flight_state)
   len
 }
 
+fn server_before_finished_len_exact (st: flight_state)
+  requires flight_state_exactly st 'view
+  returns len: (l:SZ.t{SZ.v l <= 32768})
+  ensures flight_state_exactly st 'view **
+          pure (len == 'view.server_before_finished_len)
+{
+  unfold (flight_state_exactly st 'view);
+  let len = !st.before_finished_len_box;
+  assert (pure (len == 'view.server_before_finished_len));
+  fold (flight_state_exactly st 'view);
+  len
+}
+
 fn server_through_finished_len (st: flight_state)
   requires is_flight_state st
   returns len: (l:SZ.t{SZ.v l <= 32768})
@@ -1930,6 +2062,19 @@ fn server_through_finished_len (st: flight_state)
   unfold (is_flight_state st);
   let len = !st.through_finished_len_box;
   fold (is_flight_state st);
+  len
+}
+
+fn server_through_finished_len_exact (st: flight_state)
+  requires flight_state_exactly st 'view
+  returns len: (l:SZ.t{SZ.v l <= 32768})
+  ensures flight_state_exactly st 'view **
+          pure (len == 'view.server_through_finished_len)
+{
+  unfold (flight_state_exactly st 'view);
+  let len = !st.through_finished_len_box;
+  assert (pure (len == 'view.server_through_finished_len));
+  fold (flight_state_exactly st 'view);
   len
 }
 
@@ -2290,6 +2435,19 @@ fn saw_certificate (st: flight_state)
   saw
 }
 
+fn saw_certificate_exact (st: flight_state)
+  requires flight_state_exactly st 'view
+  returns saw: bool
+  ensures flight_state_exactly st 'view **
+          pure (saw == 'view.saw_certificate)
+{
+  unfold (flight_state_exactly st 'view);
+  let saw = !st.saw_certificate_box;
+  assert (pure (saw == 'view.saw_certificate));
+  fold (flight_state_exactly st 'view);
+  saw
+}
+
 fn saw_certificate_verify (st: flight_state)
   requires is_flight_state st
   returns saw: bool
@@ -2298,6 +2456,19 @@ fn saw_certificate_verify (st: flight_state)
   unfold (is_flight_state st);
   let saw = !st.saw_certificate_verify_box;
   fold (is_flight_state st);
+  saw
+}
+
+fn saw_certificate_verify_exact (st: flight_state)
+  requires flight_state_exactly st 'view
+  returns saw: bool
+  ensures flight_state_exactly st 'view **
+          pure (saw == 'view.saw_certificate_verify)
+{
+  unfold (flight_state_exactly st 'view);
+  let saw = !st.saw_certificate_verify_box;
+  assert (pure (saw == 'view.saw_certificate_verify));
+  fold (flight_state_exactly st 'view);
   saw
 }
 
@@ -2312,6 +2483,19 @@ fn certificate_verify_verified (st: flight_state)
   verified
 }
 
+fn certificate_verify_verified_exact (st: flight_state)
+  requires flight_state_exactly st 'view
+  returns verified: bool
+  ensures flight_state_exactly st 'view **
+          pure (verified == 'view.certificate_verify_verified)
+{
+  unfold (flight_state_exactly st 'view);
+  let verified = !st.certificate_verify_verified_box;
+  assert (pure (verified == 'view.certificate_verify_verified));
+  fold (flight_state_exactly st 'view);
+  verified
+}
+
 fn saw_finished (st: flight_state)
   requires is_flight_state st
   returns saw: bool
@@ -2320,6 +2504,19 @@ fn saw_finished (st: flight_state)
   unfold (is_flight_state st);
   let saw = !st.saw_finished_box;
   fold (is_flight_state st);
+  saw
+}
+
+fn saw_finished_exact (st: flight_state)
+  requires flight_state_exactly st 'view
+  returns saw: bool
+  ensures flight_state_exactly st 'view **
+          pure (saw == 'view.saw_finished)
+{
+  unfold (flight_state_exactly st 'view);
+  let saw = !st.saw_finished_box;
+  assert (pure (saw == 'view.saw_finished));
+  fold (flight_state_exactly st 'view);
   saw
 }
 
@@ -2332,5 +2529,20 @@ fn encrypted_handshake_complete (st: flight_state)
   let saw_ee = !st.saw_encrypted_extensions_box;
   let saw_finished = !st.saw_finished_box;
   fold (is_flight_state st);
+  saw_ee && saw_finished
+}
+
+fn encrypted_handshake_complete_exact (st: flight_state)
+  requires flight_state_exactly st 'view
+  returns complete: bool
+  ensures flight_state_exactly st 'view **
+          pure (complete == ('view.saw_encrypted_extensions && 'view.saw_finished))
+{
+  unfold (flight_state_exactly st 'view);
+  let saw_ee = !st.saw_encrypted_extensions_box;
+  let saw_finished = !st.saw_finished_box;
+  assert (pure (saw_ee == 'view.saw_encrypted_extensions));
+  assert (pure (saw_finished == 'view.saw_finished));
+  fold (flight_state_exactly st 'view);
   saw_ee && saw_finished
 }

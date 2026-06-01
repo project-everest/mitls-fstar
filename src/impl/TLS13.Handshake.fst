@@ -431,7 +431,9 @@ fn recv_certificate (ctx: handshake_context) (ch: IO.channel)
 {
   unfold (is_handshake_context ctx 'st 's);
   let backend_ok = E.certificate_received ctx.backend;
-  let flight_ok = FS.saw_certificate ctx.flight;
+  FS.reveal_flight_view ctx.flight;
+  let flight_ok = FS.saw_certificate_exact ctx.flight;
+  FS.hide_flight_view ctx.flight;
   let ok = backend_ok && flight_ok;
   if ok {
     assert (pure (S.step 's (S.RecvCertificate HW.dummy_certificate) == Some (S.with_phase 's S.CertificateReceived)));
@@ -482,13 +484,16 @@ fn recv_certificate_verify (ctx: handshake_context) (ch: IO.channel)
                 (not ok ==> s'.S.phase == S.Failed))
 {
   unfold (is_handshake_context ctx 'st 's);
-  let saw_cv = FS.saw_certificate_verify ctx.flight;
   let backend_ok = E.certificate_verify_verified ctx.backend;
+  FS.reveal_flight_view ctx.flight;
+  let saw_cv = FS.saw_certificate_verify_exact ctx.flight;
   let ok =
     if (saw_cv && backend_ok) {
-      FS.mark_certificate_verify_verified ctx.flight;
+      FS.mark_certificate_verify_verified_exact ctx.flight;
+      FS.hide_flight_view ctx.flight;
       true
     } else {
+      FS.hide_flight_view ctx.flight;
       false
     };
   if ok {
@@ -516,8 +521,10 @@ fn recv_server_finished (ctx: handshake_context) (ch: IO.channel)
                 (not ok ==> s'.S.phase == S.Failed))
 {
   unfold (is_handshake_context ctx 'st 's);
-  let cv_ok = FS.certificate_verify_verified ctx.flight;
-  let saw_finished = FS.saw_finished ctx.flight;
+  FS.reveal_flight_view ctx.flight;
+  let cv_ok = FS.certificate_verify_verified_exact ctx.flight;
+  let saw_finished = FS.saw_finished_exact ctx.flight;
+  FS.hide_flight_view ctx.flight;
   let ok =
     if (cv_ok && saw_finished) {
       FS.verify_server_finished ctx.flight
