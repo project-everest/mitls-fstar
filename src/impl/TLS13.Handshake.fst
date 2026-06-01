@@ -430,7 +430,9 @@ fn recv_certificate (ctx: handshake_context) (ch: IO.channel)
                 (not ok ==> s'.S.phase == S.Failed))
 {
   unfold (is_handshake_context ctx 'st 's);
-  let ok = E.certificate_received ctx.backend;
+  let backend_ok = E.certificate_received ctx.backend;
+  let flight_ok = FS.saw_certificate ctx.flight;
+  let ok = backend_ok && flight_ok;
   if ok {
     assert (pure (S.step 's (S.RecvCertificate HW.dummy_certificate) == Some (S.with_phase 's S.CertificateReceived)));
     ST.advance 'st (S.RecvCertificate HW.dummy_certificate) (S.with_phase 's S.CertificateReceived);
@@ -480,7 +482,15 @@ fn recv_certificate_verify (ctx: handshake_context) (ch: IO.channel)
                 (not ok ==> s'.S.phase == S.Failed))
 {
   unfold (is_handshake_context ctx 'st 's);
-  let ok = E.certificate_verify_verified ctx.backend;
+  let saw_cv = FS.saw_certificate_verify ctx.flight;
+  let backend_ok = E.certificate_verify_verified ctx.backend;
+  let ok =
+    if (saw_cv && backend_ok) {
+      FS.mark_certificate_verify_verified ctx.flight;
+      true
+    } else {
+      false
+    };
   if ok {
     assert (pure (S.step 's (S.RecvCertificateVerify HW.dummy_certificate_verify) == Some (S.with_phase 's S.CertificateVerified)));
     ST.advance 'st (S.RecvCertificateVerify HW.dummy_certificate_verify) (S.with_phase 's S.CertificateVerified);
@@ -506,10 +516,11 @@ fn recv_server_finished (ctx: handshake_context) (ch: IO.channel)
                 (not ok ==> s'.S.phase == S.Failed))
 {
   unfold (is_handshake_context ctx 'st 's);
-  let saw_finished = E.server_finished_received ctx.backend;
+  let cv_ok = FS.certificate_verify_verified ctx.flight;
+  let saw_finished = FS.saw_finished ctx.flight;
   let ok =
-    if saw_finished {
-      E.verify_server_finished ctx.backend
+    if (cv_ok && saw_finished) {
+      FS.verify_server_finished ctx.flight
     } else {
       false
     };
@@ -539,7 +550,7 @@ fn send_client_finished (ctx: handshake_context) (ch: IO.channel)
 {
   unfold (is_handshake_context ctx 'st 's);
   let mut record = [| 0uy; 58sz |];
-  let built = E.build_client_finished_record ctx.backend record 58sz;
+  let built = FS.build_client_finished_record ctx.flight record 58sz;
   let ok =
     if built {
       write_raw_exact ctx ch record 58sz 0sz 58sz
