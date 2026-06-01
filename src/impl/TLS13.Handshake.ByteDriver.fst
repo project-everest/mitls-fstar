@@ -25,14 +25,14 @@ fn rec read_raw_exact
   (total_len: SZ.t)
   (offset: SZ.t)
   (remaining: SZ.t)
-  requires E.is_context ctx 'p **
+  requires E.is_context ctx **
            IO.is_channel ch **
            pts_to buf 'old **
            pure (B.length 'old == SZ.v total_len /\
                  SZ.v offset + SZ.v remaining == SZ.v total_len)
   returns ok: bool
   ensures exists* bytes.
-          E.is_context ctx 'p **
+          E.is_context ctx **
           IO.is_channel ch **
           pts_to buf bytes **
           pure (B.length bytes == SZ.v total_len)
@@ -60,9 +60,9 @@ fn read_next_encrypted_handshake_record
   (ctx: E.context)
   (flight: FS.flight_state)
   (ch: IO.channel)
-  requires E.is_context ctx 'p ** FS.is_flight_state flight ** IO.is_channel ch
+  requires E.is_context ctx ** FS.is_flight_state flight ** IO.is_channel ch
   returns ok: bool
-  ensures E.is_context ctx 'p ** FS.is_flight_state flight ** IO.is_channel ch
+  ensures E.is_context ctx ** FS.is_flight_state flight ** IO.is_channel ch
 {
   let mut header = [| 0uy; 5sz |];
   let header_ok = read_raw_exact ctx ch header 5sz 0sz 5sz;
@@ -118,9 +118,9 @@ fn rec ensure_pending_handshake_message_with_fuel
   (flight: FS.flight_state)
   (ch: IO.channel)
   (fuel: U8.t)
-  requires E.is_context ctx 'p ** FS.is_flight_state flight ** IO.is_channel ch
+  requires E.is_context ctx ** FS.is_flight_state flight ** IO.is_channel ch
   returns ok: bool
-  ensures E.is_context ctx 'p ** FS.is_flight_state flight ** IO.is_channel ch
+  ensures E.is_context ctx ** FS.is_flight_state flight ** IO.is_channel ch
   decreases (U8.v fuel)
 {
   let pending = FS.pending_handshake_message_complete flight;
@@ -143,9 +143,9 @@ fn ensure_pending_handshake_message
   (ctx: E.context)
   (flight: FS.flight_state)
   (ch: IO.channel)
-  requires E.is_context ctx 'p ** FS.is_flight_state flight ** IO.is_channel ch
+  requires E.is_context ctx ** FS.is_flight_state flight ** IO.is_channel ch
   returns ok: bool
-  ensures E.is_context ctx 'p ** FS.is_flight_state flight ** IO.is_channel ch
+  ensures E.is_context ctx ** FS.is_flight_state flight ** IO.is_channel ch
 {
   ensure_pending_handshake_message_with_fuel ctx flight ch max_encrypted_records_per_message
 }
@@ -154,9 +154,9 @@ fn recv_encrypted_handshake
   (ctx: E.context)
   (flight: FS.flight_state)
   (ch: IO.channel)
-  requires E.is_context ctx 'p ** FS.is_flight_state flight ** IO.is_channel ch
+  requires E.is_context ctx ** FS.is_flight_state flight ** IO.is_channel ch
   returns ok: bool
-  ensures E.is_context ctx 'p ** FS.is_flight_state flight ** IO.is_channel ch
+  ensures E.is_context ctx ** FS.is_flight_state flight ** IO.is_channel ch
 {
   FS.reset flight;
 

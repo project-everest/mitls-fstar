@@ -13,7 +13,7 @@ module U8 = FStar.UInt8
 
 type handshake_context = BDE.context
 let is_context (ctx:handshake_context) : slprop =
-  exists* p. BDE.is_context ctx p
+  BDE.is_context ctx
 
 fn context_new ()
   returns ctx: handshake_context

@@ -7,7 +7,6 @@ open Pulse.Lib.Array.PtsTo
 
 module B = TLS13.Bytes
 module BD = TLS13.Handshake.ByteDriver
-module BDE = TLS13.Handshake.ByteDriver.External
 module Cast = FStar.Int.Cast
 module CE = TLS13.Connection.External
 module E = TLS13.Handshake.External
@@ -440,7 +439,6 @@ fn recv_encrypted_extensions (ctx: handshake_context) (ch: IO.channel)
 {
   unfold (is_handshake_context ctx 'st 's);
   unfold (E.is_context ctx.backend);
-  with p. assert (BDE.is_context ctx.backend p);
   let ok = BD.recv_encrypted_handshake ctx.backend ctx.flight ch;
   fold (E.is_context ctx.backend);
   if ok {
