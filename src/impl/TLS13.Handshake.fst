@@ -289,38 +289,29 @@ fn send_client_hello (ctx: handshake_context) (ch: IO.channel)
   write_fixed_client_key_share key_share;
   let built = HF.build_supported_client_hello_localhost random key_share hello 130sz;
   if built {
-    let stored = E.store_client_hello ctx.backend hello 130sz;
-    if stored {
-      FS.set_client_hello_fragment ctx.flight hello 130sz;
-      FS.set_client_hello_parameters ctx.flight random key_share;
-      HF.serialize_client_hello_record_header header 5sz;
-      let connected = E.connect ctx.backend ch;
-      if connected {
-        let header_ok = write_raw_exact ctx ch header 5sz 0sz 5sz;
-        let hello_ok =
-          if header_ok {
-            write_raw_exact ctx ch hello 130sz 0sz 130sz
-          } else {
-            false
-          };
-        if hello_ok {
-          FS.reveal_flight_view ctx.flight;
-          with flight_view. assert (FS.flight_state_exactly ctx.flight flight_view);
-          let client_hello : erased H.client_hello =
-            FS.flight_view_client_hello (Ghost.reveal flight_view);
-          FS.hide_flight_view ctx.flight;
-          assert (pure (S.step 's (S.SendClientHello (Ghost.reveal client_hello)) == Some (S.with_phase 's S.ClientHelloSent)));
-          ST.advance 'st (S.SendClientHello (Ghost.reveal client_hello)) (S.with_phase 's S.ClientHelloSent);
-          lemma_step_evolves 's (S.SendClientHello (Ghost.reveal client_hello)) (S.with_phase 's S.ClientHelloSent);
-          fold (is_handshake_context ctx 'st (S.with_phase 's S.ClientHelloSent));
-          true
+    FS.set_client_hello_fragment ctx.flight hello 130sz;
+    FS.set_client_hello_parameters ctx.flight random key_share;
+    HF.serialize_client_hello_record_header header 5sz;
+    let connected = E.connect ctx.backend ch;
+    if connected {
+      let header_ok = write_raw_exact ctx ch header 5sz 0sz 5sz;
+      let hello_ok =
+        if header_ok {
+          write_raw_exact ctx ch hello 130sz 0sz 130sz
         } else {
-          assert (pure (S.step 's (S.Fail T.IoError) == Some (S.fail 's T.IoError)));
-          ST.advance_fail 'st T.IoError;
-          lemma_step_evolves 's (S.Fail T.IoError) (S.fail 's T.IoError);
-          fold (is_handshake_context ctx 'st (S.fail 's T.IoError));
           false
-        }
+        };
+      if hello_ok {
+        FS.reveal_flight_view ctx.flight;
+        with flight_view. assert (FS.flight_state_exactly ctx.flight flight_view);
+        let client_hello : erased H.client_hello =
+          FS.flight_view_client_hello (Ghost.reveal flight_view);
+        FS.hide_flight_view ctx.flight;
+        assert (pure (S.step 's (S.SendClientHello (Ghost.reveal client_hello)) == Some (S.with_phase 's S.ClientHelloSent)));
+        ST.advance 'st (S.SendClientHello (Ghost.reveal client_hello)) (S.with_phase 's S.ClientHelloSent);
+        lemma_step_evolves 's (S.SendClientHello (Ghost.reveal client_hello)) (S.with_phase 's S.ClientHelloSent);
+        fold (is_handshake_context ctx 'st (S.with_phase 's S.ClientHelloSent));
+        true
       } else {
         assert (pure (S.step 's (S.Fail T.IoError) == Some (S.fail 's T.IoError)));
         ST.advance_fail 'st T.IoError;
@@ -382,21 +373,8 @@ fn recv_server_hello_record (ctx: handshake_context) (ch: IO.channel)
               key_share
               32sz;
           if parsed {
-            let backend_ok =
-              E.process_server_hello_record
-                ctx.backend
-                header
-                5sz
-                fragment
-                fragment_len
-                key_share
-                32sz;
-            if backend_ok {
-              FS.set_server_hello_fragment ctx.flight fragment fragment_len;
-              FS.derive_server_handshake_keys_from_share ctx.flight key_share 32sz
-            } else {
-              false
-            }
+            FS.set_server_hello_fragment ctx.flight fragment fragment_len;
+            FS.derive_server_handshake_keys_from_share ctx.flight key_share 32sz
           } else {
             false
           }
