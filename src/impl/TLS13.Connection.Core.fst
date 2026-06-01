@@ -1548,6 +1548,9 @@ ensures exists* view1 network_out1 app_out1.
                       assert (pure (U64.fits (server_record_s0.R.seq + 1)));
                       assert (pure (server_record_s1.R.seq == server_record_s0.R.seq + 1));
                       assert (pure (server_record_s1.R.seq == view0.CL.state.S.read_state.R.seq + 1));
+                      assert (pure (server_record_s1.R.seq ==
+                                    view0.CL.state.S.read_state.R.seq +
+                                    CL.chunk_count (Ghost.reveal chunks_single)));
                       assert (pure (U64.fits (server_record_s1.R.seq + 1)));
                       CL.lemma_concat_bytes_singleton (Ghost.reveal app_payload);
                       assert (pure (Seq.equal
@@ -1748,6 +1751,14 @@ ensures exists* view1 network_out1 app_out1.
                                   assert (pure ((Ghost.reveal view1).CL.state.S.phase == S.ApplicationData));
                                   let chunks_after_second : erased (list B.bytes) =
                                     L.append (Ghost.reveal chunks_single) [Ghost.reveal app_payload2];
+                                  CL.lemma_chunk_count_snoc
+                                    (Ghost.reveal chunks_single)
+                                    (Ghost.reveal app_payload2);
+                                  assert (pure (CL.chunk_count (Ghost.reveal chunks_after_second) ==
+                                                CL.chunk_count (Ghost.reveal chunks_single) + 1));
+                                  assert (pure (server_record_s2.R.seq ==
+                                                view0.CL.state.S.read_state.R.seq +
+                                                CL.chunk_count (Ghost.reveal chunks_after_second)));
                                   CL.lemma_note_app_received_chunks_loop_accept_output
                                     (Ghost.reveal view1)
                                     (Ghost.reveal chunks_single)
