@@ -6,6 +6,7 @@ open Pulse.Lib.Pervasives
 open Pulse.Lib.Array.PtsTo
 
 module B = TLS13.Bytes
+module C = TLS13.Crypto.Spec
 module IO = TLS13.IO
 module Rec = TLS13.Record
 module SZ = FStar.SizeT
@@ -27,6 +28,13 @@ let validate_certificate_result (c: connection) (leaf_der: B.bytes) : option X.p
     (connection_validation_time c)
     (connection_trust_store c)
     [leaf_der]
+
+let signature_scheme_of_u16 (scheme: U16.t) : T.signature_scheme =
+  match U16.v scheme with
+  | 0x0804 -> T.RsaPssRsaeSha256
+  | 0x0403 -> T.EcdsaSecp256r1Sha256
+  | 0x0807 -> T.Ed25519
+  | n -> T.UnsupportedSignatureScheme n
 
 fn client_new
   (hostname: array U8.t)
@@ -93,6 +101,7 @@ fn validate_certificate
           pure (ok ==> Some? (validate_certificate_result c (Ghost.reveal 'leaf_der_bytes)))
 
 fn verify_certificate_signature
+  (#peer: erased X.peer_identity)
   (c: connection)
   (certificate_verify_input: array U8.t)
   (certificate_verify_input_len: SZ.t)
@@ -107,7 +116,13 @@ fn verify_certificate_signature
   returns ok: bool
   ensures is_connection c **
           pts_to certificate_verify_input 'input_bytes **
-          pts_to signature 'signature_bytes
+          pts_to signature 'signature_bytes **
+          pure (ok ==>
+            C.verify_signature
+              (signature_scheme_of_u16 signature_scheme)
+              (Ghost.reveal peer).X.leaf_public_key
+              (Ghost.reveal 'input_bytes)
+              (Ghost.reveal 'signature_bytes))
 
 fn client_write_raw
   (c: connection)

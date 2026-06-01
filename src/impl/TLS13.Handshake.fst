@@ -563,6 +563,7 @@ fn recv_certificate_verify (ctx: handshake_context) (backend: CE.connection) (ch
                 (not ok ==> s'.S.phase == S.Failed))
 {
   unfold (is_handshake_context ctx 'st 's);
+  let peer : erased X.peer_identity = Some?.v 's.S.peer;
   let mut certificate_verify_input = [| 0uy; 130sz |];
   let input_ok = FS.build_certificate_verify_input ctx.flight certificate_verify_input 130sz;
   FS.reveal_flight_view ctx.flight;
@@ -577,6 +578,7 @@ fn recv_certificate_verify (ctx: handshake_context) (backend: CE.connection) (ch
   let backend_ok =
     if (saw_cv && input_ok && signature_copied) {
       CE.verify_certificate_signature
+        #peer
         backend
         certificate_verify_input
         130sz
