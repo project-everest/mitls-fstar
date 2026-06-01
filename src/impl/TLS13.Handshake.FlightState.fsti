@@ -14,6 +14,16 @@ module U8 = FStar.UInt8
 val flight_state : Type0
 
 type flight_view = {
+  client_hello_len: (l:SZ.t{SZ.v l <= 512});
+  server_hello_len: (l:SZ.t{SZ.v l <= 4096});
+  server_handshake_len: (l:SZ.t{SZ.v l <= 32768});
+  server_handshake_parsed_len: (l:SZ.t{SZ.v l <= 32768});
+  certificate_verify_offset: SZ.t;
+  certificate_leaf_offset: SZ.t;
+  certificate_leaf_len: (l:SZ.t{SZ.v l <= 32768});
+  certificate_verify_signature_scheme: U16.t;
+  certificate_verify_signature_offset: SZ.t;
+  certificate_verify_signature_len: (l:SZ.t{SZ.v l <= 32768});
   saw_encrypted_extensions: bool;
   saw_certificate: bool;
   saw_certificate_verify: bool;
@@ -24,6 +34,16 @@ type flight_view = {
 }
 
 let empty_flight_view : flight_view = {
+  client_hello_len = 0sz;
+  server_hello_len = 0sz;
+  server_handshake_len = 0sz;
+  server_handshake_parsed_len = 0sz;
+  certificate_verify_offset = 0sz;
+  certificate_leaf_offset = 0sz;
+  certificate_leaf_len = 0sz;
+  certificate_verify_signature_scheme = 0us;
+  certificate_verify_signature_offset = 0sz;
+  certificate_verify_signature_len = 0sz;
   saw_encrypted_extensions = false;
   saw_certificate = false;
   saw_certificate_verify = false;
@@ -103,6 +123,12 @@ fn client_hello_len (st: flight_state)
   returns len: (l:SZ.t{SZ.v l <= 512})
   ensures is_flight_state st
 
+fn client_hello_len_exact (st: flight_state)
+  requires flight_state_exactly st 'view
+  returns len: (l:SZ.t{SZ.v l <= 512})
+  ensures flight_state_exactly st 'view **
+          pure (len == 'view.client_hello_len)
+
 fn set_server_hello
   (st: flight_state)
   (hello: array U8.t)
@@ -144,6 +170,12 @@ fn server_hello_len (st: flight_state)
   requires is_flight_state st
   returns len: (l:SZ.t{SZ.v l <= 4096})
   ensures is_flight_state st
+
+fn server_hello_len_exact (st: flight_state)
+  requires flight_state_exactly st 'view
+  returns len: (l:SZ.t{SZ.v l <= 4096})
+  ensures flight_state_exactly st 'view **
+          pure (len == 'view.server_hello_len)
 
 fn derive_server_handshake_keys_from_share
   (st: flight_state)
@@ -408,10 +440,22 @@ fn handshake_len (st: flight_state)
   returns len: SZ.t
   ensures is_flight_state st
 
+fn handshake_len_exact (st: flight_state)
+  requires flight_state_exactly st 'view
+  returns len: (l:SZ.t{SZ.v l <= 32768})
+  ensures flight_state_exactly st 'view **
+          pure (len == 'view.server_handshake_len)
+
 fn parsed_len (st: flight_state)
   requires is_flight_state st
   returns len: SZ.t
   ensures is_flight_state st
+
+fn parsed_len_exact (st: flight_state)
+  requires flight_state_exactly st 'view
+  returns len: (l:SZ.t{SZ.v l <= 32768})
+  ensures flight_state_exactly st 'view **
+          pure (len == 'view.server_handshake_parsed_len)
 
 fn pending_handshake_message_complete (st: flight_state)
   requires is_flight_state st
@@ -615,30 +659,66 @@ fn certificate_verify_offset (st: flight_state)
   returns offset: SZ.t
   ensures is_flight_state st
 
+fn certificate_verify_offset_exact (st: flight_state)
+  requires flight_state_exactly st 'view
+  returns offset: SZ.t
+  ensures flight_state_exactly st 'view **
+          pure (offset == 'view.certificate_verify_offset)
+
 fn certificate_leaf_offset (st: flight_state)
   requires is_flight_state st
   returns offset: SZ.t
   ensures is_flight_state st
+
+fn certificate_leaf_offset_exact (st: flight_state)
+  requires flight_state_exactly st 'view
+  returns offset: SZ.t
+  ensures flight_state_exactly st 'view **
+          pure (offset == 'view.certificate_leaf_offset)
 
 fn certificate_leaf_len (st: flight_state)
   requires is_flight_state st
   returns len: (l:SZ.t{SZ.v l <= 32768})
   ensures is_flight_state st
 
+fn certificate_leaf_len_exact (st: flight_state)
+  requires flight_state_exactly st 'view
+  returns len: (l:SZ.t{SZ.v l <= 32768})
+  ensures flight_state_exactly st 'view **
+          pure (len == 'view.certificate_leaf_len)
+
 fn certificate_verify_signature_scheme (st: flight_state)
   requires is_flight_state st
   returns scheme: U16.t
   ensures is_flight_state st
+
+fn certificate_verify_signature_scheme_exact (st: flight_state)
+  requires flight_state_exactly st 'view
+  returns scheme: U16.t
+  ensures flight_state_exactly st 'view **
+          pure (scheme == 'view.certificate_verify_signature_scheme)
 
 fn certificate_verify_signature_offset (st: flight_state)
   requires is_flight_state st
   returns offset: SZ.t
   ensures is_flight_state st
 
+fn certificate_verify_signature_offset_exact (st: flight_state)
+  requires flight_state_exactly st 'view
+  returns offset: SZ.t
+  ensures flight_state_exactly st 'view **
+          pure (offset == 'view.certificate_verify_signature_offset)
+
 fn certificate_verify_signature_len (st: flight_state)
   requires is_flight_state st
   returns len: (l:SZ.t{SZ.v l <= 32768})
   ensures is_flight_state st
+
+fn certificate_verify_signature_len_exact (st: flight_state)
+  requires flight_state_exactly st 'view
+  returns len: (l:SZ.t{SZ.v l <= 32768})
+  ensures flight_state_exactly st 'view **
+          pure (len == 'view.certificate_verify_signature_len)
 
 fn server_before_finished_len (st: flight_state)
   requires is_flight_state st

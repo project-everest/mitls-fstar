@@ -190,6 +190,16 @@ let flight_state_exactly ([@@@mkey] st: flight_state) (view: flight_view) : slpr
           SZ.v through_finished_len <= SZ.v handshake_len /\
           SZ.v certificate_leaf_len <= 32768 /\
           SZ.v certificate_verify_signature_len <= 32768 /\
+          view.client_hello_len == client_hello_len /\
+          view.server_hello_len == server_hello_len /\
+          view.server_handshake_len == handshake_len /\
+          view.server_handshake_parsed_len == parsed_len /\
+          view.certificate_verify_offset == certificate_verify_offset /\
+          view.certificate_leaf_offset == certificate_leaf_offset /\
+          view.certificate_leaf_len == certificate_leaf_len /\
+          view.certificate_verify_signature_scheme == certificate_verify_signature_scheme /\
+          view.certificate_verify_signature_offset == certificate_verify_signature_offset /\
+          view.certificate_verify_signature_len == certificate_verify_signature_len /\
           view.saw_encrypted_extensions == saw_encrypted_extensions /\
           view.saw_certificate == saw_certificate /\
           view.saw_certificate_verify == saw_certificate_verify /\
@@ -204,6 +214,16 @@ fn reveal_flight_view (st: flight_state)
   ensures exists* view. flight_state_exactly st view
 {
   unfold (is_flight_state st);
+  with handshake_len. assert (Box.pts_to st.handshake_len_box handshake_len);
+  with parsed_len. assert (Box.pts_to st.parsed_len_box parsed_len);
+  with client_hello_len. assert (Box.pts_to st.client_hello_len_box client_hello_len);
+  with server_hello_len. assert (Box.pts_to st.server_hello_len_box server_hello_len);
+  with certificate_verify_offset. assert (Box.pts_to st.certificate_verify_offset_box certificate_verify_offset);
+  with certificate_leaf_offset. assert (Box.pts_to st.certificate_leaf_offset_box certificate_leaf_offset);
+  with certificate_leaf_len. assert (Box.pts_to st.certificate_leaf_len_box certificate_leaf_len);
+  with certificate_verify_signature_scheme. assert (Box.pts_to st.certificate_verify_signature_scheme_box certificate_verify_signature_scheme);
+  with certificate_verify_signature_offset. assert (Box.pts_to st.certificate_verify_signature_offset_box certificate_verify_signature_offset);
+  with certificate_verify_signature_len. assert (Box.pts_to st.certificate_verify_signature_len_box certificate_verify_signature_len);
   with before_finished_len. assert (Box.pts_to st.before_finished_len_box before_finished_len);
   with through_finished_len. assert (Box.pts_to st.through_finished_len_box through_finished_len);
   with saw_encrypted_extensions. assert (Box.pts_to st.saw_encrypted_extensions_box saw_encrypted_extensions);
@@ -212,6 +232,16 @@ fn reveal_flight_view (st: flight_state)
   with certificate_verify_verified. assert (Box.pts_to st.certificate_verify_verified_box certificate_verify_verified);
   with saw_finished. assert (Box.pts_to st.saw_finished_box saw_finished);
   let view = {
+    client_hello_len;
+    server_hello_len;
+    server_handshake_len = handshake_len;
+    server_handshake_parsed_len = parsed_len;
+    certificate_verify_offset;
+    certificate_leaf_offset;
+    certificate_leaf_len;
+    certificate_verify_signature_scheme;
+    certificate_verify_signature_offset;
+    certificate_verify_signature_len;
     saw_encrypted_extensions;
     saw_certificate;
     saw_certificate_verify;
@@ -450,6 +480,19 @@ fn client_hello_len (st: flight_state)
   len
 }
 
+fn client_hello_len_exact (st: flight_state)
+  requires flight_state_exactly st 'view
+  returns len: (l:SZ.t{SZ.v l <= 512})
+  ensures flight_state_exactly st 'view **
+          pure (len == 'view.client_hello_len)
+{
+  unfold (flight_state_exactly st 'view);
+  let len = !st.client_hello_len_box;
+  assert (pure (len == 'view.client_hello_len));
+  fold (flight_state_exactly st 'view);
+  len
+}
+
 fn set_server_hello
   (st: flight_state)
   (hello: array U8.t)
@@ -509,6 +552,19 @@ fn server_hello_len (st: flight_state)
   unfold (is_flight_state st);
   let len = !st.server_hello_len_box;
   fold (is_flight_state st);
+  len
+}
+
+fn server_hello_len_exact (st: flight_state)
+  requires flight_state_exactly st 'view
+  returns len: (l:SZ.t{SZ.v l <= 4096})
+  ensures flight_state_exactly st 'view **
+          pure (len == 'view.server_hello_len)
+{
+  unfold (flight_state_exactly st 'view);
+  let len = !st.server_hello_len_box;
+  assert (pure (len == 'view.server_hello_len));
+  fold (flight_state_exactly st 'view);
   len
 }
 
@@ -1277,6 +1333,19 @@ fn handshake_len (st: flight_state)
   len
 }
 
+fn handshake_len_exact (st: flight_state)
+  requires flight_state_exactly st 'view
+  returns len: (l:SZ.t{SZ.v l <= 32768})
+  ensures flight_state_exactly st 'view **
+          pure (len == 'view.server_handshake_len)
+{
+  unfold (flight_state_exactly st 'view);
+  let len = !st.handshake_len_box;
+  assert (pure (len == 'view.server_handshake_len));
+  fold (flight_state_exactly st 'view);
+  len
+}
+
 fn parsed_len (st: flight_state)
   requires is_flight_state st
   returns len: SZ.t
@@ -1285,6 +1354,19 @@ fn parsed_len (st: flight_state)
   unfold (is_flight_state st);
   let len = !st.parsed_len_box;
   fold (is_flight_state st);
+  len
+}
+
+fn parsed_len_exact (st: flight_state)
+  requires flight_state_exactly st 'view
+  returns len: (l:SZ.t{SZ.v l <= 32768})
+  ensures flight_state_exactly st 'view **
+          pure (len == 'view.server_handshake_parsed_len)
+{
+  unfold (flight_state_exactly st 'view);
+  let len = !st.parsed_len_box;
+  assert (pure (len == 'view.server_handshake_parsed_len));
+  fold (flight_state_exactly st 'view);
   len
 }
 
@@ -1886,6 +1968,19 @@ fn certificate_verify_offset (st: flight_state)
   offset
 }
 
+fn certificate_verify_offset_exact (st: flight_state)
+  requires flight_state_exactly st 'view
+  returns offset: SZ.t
+  ensures flight_state_exactly st 'view **
+          pure (offset == 'view.certificate_verify_offset)
+{
+  unfold (flight_state_exactly st 'view);
+  let offset = !st.certificate_verify_offset_box;
+  assert (pure (offset == 'view.certificate_verify_offset));
+  fold (flight_state_exactly st 'view);
+  offset
+}
+
 fn copy_server_handshake_slice
   (st: flight_state)
   (slice_offset: SZ.t)
@@ -1948,6 +2043,19 @@ fn certificate_leaf_offset (st: flight_state)
   offset
 }
 
+fn certificate_leaf_offset_exact (st: flight_state)
+  requires flight_state_exactly st 'view
+  returns offset: SZ.t
+  ensures flight_state_exactly st 'view **
+          pure (offset == 'view.certificate_leaf_offset)
+{
+  unfold (flight_state_exactly st 'view);
+  let offset = !st.certificate_leaf_offset_box;
+  assert (pure (offset == 'view.certificate_leaf_offset));
+  fold (flight_state_exactly st 'view);
+  offset
+}
+
 fn certificate_leaf_len (st: flight_state)
   requires is_flight_state st
   returns len: (l:SZ.t{SZ.v l <= 32768})
@@ -1956,6 +2064,19 @@ fn certificate_leaf_len (st: flight_state)
   unfold (is_flight_state st);
   let len = !st.certificate_leaf_len_box;
   fold (is_flight_state st);
+  len
+}
+
+fn certificate_leaf_len_exact (st: flight_state)
+  requires flight_state_exactly st 'view
+  returns len: (l:SZ.t{SZ.v l <= 32768})
+  ensures flight_state_exactly st 'view **
+          pure (len == 'view.certificate_leaf_len)
+{
+  unfold (flight_state_exactly st 'view);
+  let len = !st.certificate_leaf_len_box;
+  assert (pure (len == 'view.certificate_leaf_len));
+  fold (flight_state_exactly st 'view);
   len
 }
 
@@ -1970,6 +2091,19 @@ fn certificate_verify_signature_scheme (st: flight_state)
   scheme
 }
 
+fn certificate_verify_signature_scheme_exact (st: flight_state)
+  requires flight_state_exactly st 'view
+  returns scheme: U16.t
+  ensures flight_state_exactly st 'view **
+          pure (scheme == 'view.certificate_verify_signature_scheme)
+{
+  unfold (flight_state_exactly st 'view);
+  let scheme = !st.certificate_verify_signature_scheme_box;
+  assert (pure (scheme == 'view.certificate_verify_signature_scheme));
+  fold (flight_state_exactly st 'view);
+  scheme
+}
+
 fn certificate_verify_signature_offset (st: flight_state)
   requires is_flight_state st
   returns offset: SZ.t
@@ -1981,6 +2115,19 @@ fn certificate_verify_signature_offset (st: flight_state)
   offset
 }
 
+fn certificate_verify_signature_offset_exact (st: flight_state)
+  requires flight_state_exactly st 'view
+  returns offset: SZ.t
+  ensures flight_state_exactly st 'view **
+          pure (offset == 'view.certificate_verify_signature_offset)
+{
+  unfold (flight_state_exactly st 'view);
+  let offset = !st.certificate_verify_signature_offset_box;
+  assert (pure (offset == 'view.certificate_verify_signature_offset));
+  fold (flight_state_exactly st 'view);
+  offset
+}
+
 fn certificate_verify_signature_len (st: flight_state)
   requires is_flight_state st
   returns len: (l:SZ.t{SZ.v l <= 32768})
@@ -1989,6 +2136,19 @@ fn certificate_verify_signature_len (st: flight_state)
   unfold (is_flight_state st);
   let len = !st.certificate_verify_signature_len_box;
   fold (is_flight_state st);
+  len
+}
+
+fn certificate_verify_signature_len_exact (st: flight_state)
+  requires flight_state_exactly st 'view
+  returns len: (l:SZ.t{SZ.v l <= 32768})
+  ensures flight_state_exactly st 'view **
+          pure (len == 'view.certificate_verify_signature_len)
+{
+  unfold (flight_state_exactly st 'view);
+  let len = !st.certificate_verify_signature_len_box;
+  assert (pure (len == 'view.certificate_verify_signature_len));
+  fold (flight_state_exactly st 'view);
   len
 }
 
