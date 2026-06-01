@@ -17,7 +17,7 @@ fn run_client_handshake (ctx: HS.handshake_context) (ch: IO.channel)
   ensures exists* s'.
           HS.is_handshake_context ctx 'st s' **
           IO.is_channel ch **
-          pure ((ok ==> s'.S.phase == S.ApplicationData) /\
+          pure ((ok ==> s'.S.phase == S.ApplicationData /\ Some? s'.S.peer) /\
                 (not ok ==> s'.S.phase == S.Failed))
 {
   let ok_client_hello = HS.send_client_hello ctx ch;

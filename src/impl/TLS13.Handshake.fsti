@@ -100,30 +100,33 @@ fn recv_certificate_verify (ctx: handshake_context) (ch: IO.channel)
   ensures exists* s'.
           is_handshake_context ctx 'st s' **
           IO.is_channel ch **
-          pure ((ok ==> s'.S.phase == S.CertificateVerified) /\
-                (not ok ==> s'.S.phase == S.Failed))
+          pure ((ok ==> s'.S.phase == S.CertificateVerified /\
+                        s'.S.peer == 's.S.peer) /\
+               (not ok ==> s'.S.phase == S.Failed))
 
 fn recv_server_finished (ctx: handshake_context) (ch: IO.channel)
   requires is_handshake_context ctx 'st 's **
            IO.is_channel ch **
-           pure ('s.S.phase == S.CertificateVerified)
+           pure ('s.S.phase == S.CertificateVerified /\ Some? 's.S.peer)
   returns ok: bool
   ensures exists* s'.
           is_handshake_context ctx 'st s' **
           IO.is_channel ch **
-          pure ((ok ==> s'.S.phase == S.ServerFinishedVerified) /\
-                (not ok ==> s'.S.phase == S.Failed))
+          pure ((ok ==> s'.S.phase == S.ServerFinishedVerified /\
+                        s'.S.peer == 's.S.peer) /\
+               (not ok ==> s'.S.phase == S.Failed))
 
 fn send_client_finished (ctx: handshake_context) (ch: IO.channel)
   requires is_handshake_context ctx 'st 's **
            IO.is_channel ch **
-           pure ('s.S.phase == S.ServerFinishedVerified)
+           pure ('s.S.phase == S.ServerFinishedVerified /\ Some? 's.S.peer)
   returns ok: bool
   ensures exists* s'.
           is_handshake_context ctx 'st s' **
           IO.is_channel ch **
-          pure ((ok ==> s'.S.phase == S.ApplicationData) /\
-                (not ok ==> s'.S.phase == S.Failed))
+          pure ((ok ==> s'.S.phase == S.ApplicationData /\
+                        s'.S.peer == 's.S.peer) /\
+               (not ok ==> s'.S.phase == S.Failed))
 
 fn derive_application_keys
   (ctx: handshake_context)
