@@ -195,6 +195,17 @@ fn derived_secret
   Crypto.hkdf_expand_label secret lbl 7sz empty_hash 32sz out 32sz;
 }
 
+fn early_secret_empty
+  (out: array U8.t)
+  requires pts_to out 'old **
+           pure (B.length 'old == 32)
+  ensures pts_to out (K.early_secret B.empty)
+{
+  let mut empty_salt = [| 0uy; 0sz |];
+  let mut empty_psk = [| 0uy; 0sz |];
+  Crypto.hkdf_extract empty_salt 0sz empty_psk 0sz out;
+}
+
 fn handshake_secret
   (early: array U8.t)
   (shared: array U8.t)

@@ -654,7 +654,7 @@ let legal_local_event (model:connection_model) (ev:local_event) : GTot prop =
      | Some start, Some sh ->
        (match start.start_client_key_share_private with
         | Some sk -> C.x25519_shared sk sh.M.key_share == Some shared
-        | None -> True)
+        | None -> False)
      | _, _ -> False)
   | LocalInstallTrafficKeys install, ControlHandshaking stage ->
     traffic_install_allowed_at_stage stage install /\

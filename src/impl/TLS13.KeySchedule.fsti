@@ -10,6 +10,12 @@ module K = TLS13.Keys
 module SZ = FStar.SizeT
 module U8 = FStar.UInt8
 
+fn early_secret_empty
+  (out: array U8.t)
+  requires pts_to out 'old **
+           pure (B.length 'old == 32)
+  ensures pts_to out (K.early_secret B.empty)
+
 fn handshake_secret
   (early: array U8.t)
   (shared: array U8.t)
