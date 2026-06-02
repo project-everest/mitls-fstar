@@ -99,37 +99,90 @@ fn handle_alert
 
   let close_notify = alert_wire = 0uy;
   if close_notify {
-    C.mark_unexpected_message c;
-    let resp = {
-      CT.network_out_len = 0sz;
-      CT.app_out_len = 0sz;
-      CT.status = CT.IllegalTransition;
-    };
-    Seq.lemma_len_slice 'old_network_out 0 0;
-    Seq.lemma_eq_intro B.empty (Seq.slice 'old_network_out 0 0);
-    assert (pure (Seq.equal B.empty (CT.response_network_out resp 'old_network_out)));
-    assert (pure (CT.unexpected_message_response
+    assert (pure (U8.v alert_wire == 0));
+    assert (pure (parsed_alert == T.CloseNotify));
+    assert (pure (CT.received_tls_raw_delta_legal
       'st0
-      (C.local_fail_state 'st0 C.tls_unexpected_message_error)
+      (M.TlsAlert T.CloseNotify)
+      (Ghost.reveal 'raw_bytes)));
+    let ready = C.can_receive_close_notify c;
+    if ready {
+      C.mark_received_close_notify c raw;
+      let resp = {
+        CT.network_out_len = 0sz;
+        CT.app_out_len = 0sz;
+        CT.status = CT.StepOk;
+      };
+      Seq.lemma_len_slice 'old_network_out 0 0;
+      Seq.lemma_eq_intro B.empty (Seq.slice 'old_network_out 0 0);
+      assert (pure (Seq.equal B.empty (CT.response_network_out resp 'old_network_out)));
+      C.lemma_received_close_notify_state_evolves 'st0 (Ghost.reveal 'raw_bytes);
+      assert (pure (CT.legal_received_tls_response
+        'st0
+        (C.received_close_notify_state 'st0 (Ghost.reveal 'raw_bytes))
+        resp
+        (M.TlsAlert T.CloseNotify)
+        (Ghost.reveal 'raw_bytes)
+        'old_network_out
+        'old_app_out));
+      assert (pure (CT.legal_handled_tls_response
+        'st0
+        (C.received_close_notify_state 'st0 (Ghost.reveal 'raw_bytes))
+        resp
+        (M.TlsAlert T.CloseNotify)
+        (Ghost.reveal 'raw_bytes)
+        'old_network_out
+        'old_app_out));
+      CT.lemma_legal_network_response_handled_from_parse_success
+        'st0
+        (C.received_close_notify_state 'st0 (Ghost.reveal 'raw_bytes))
+        resp
+        content_type
+        (Ghost.reveal 'fragment_bytes)
+        (M.TlsAlert T.CloseNotify)
+        (Ghost.reveal 'raw_bytes)
+        'old_network_out
+        'old_app_out;
+      assert (pure (CT.some_legal_response
+        'st0
+        (C.received_close_notify_state 'st0 (Ghost.reveal 'raw_bytes))
+        resp
+        'old_network_out
+        'old_app_out));
       resp
-      'old_network_out
-      'old_app_out));
-    CT.lemma_legal_network_response_unexpected_from_parse_success
-      'st0
-      (C.local_fail_state 'st0 C.tls_unexpected_message_error)
+    } else {
+      C.mark_unexpected_message c;
+      let resp = {
+        CT.network_out_len = 0sz;
+        CT.app_out_len = 0sz;
+        CT.status = CT.IllegalTransition;
+      };
+      Seq.lemma_len_slice 'old_network_out 0 0;
+      Seq.lemma_eq_intro B.empty (Seq.slice 'old_network_out 0 0);
+      assert (pure (Seq.equal B.empty (CT.response_network_out resp 'old_network_out)));
+      assert (pure (CT.unexpected_message_response
+        'st0
+        (C.local_fail_state 'st0 C.tls_unexpected_message_error)
+        resp
+        'old_network_out
+        'old_app_out));
+      CT.lemma_legal_network_response_unexpected_from_parse_success
+        'st0
+        (C.local_fail_state 'st0 C.tls_unexpected_message_error)
+        resp
+        content_type
+        (Ghost.reveal 'fragment_bytes)
+        (Ghost.reveal 'raw_bytes)
+        'old_network_out
+        'old_app_out;
+      assert (pure (CT.some_legal_response
+        'st0
+        (C.local_fail_state 'st0 C.tls_unexpected_message_error)
+        resp
+        'old_network_out
+        'old_app_out));
       resp
-      content_type
-      (Ghost.reveal 'fragment_bytes)
-      (Ghost.reveal 'raw_bytes)
-      'old_network_out
-      'old_app_out;
-    assert (pure (CT.some_legal_response
-      'st0
-      (C.local_fail_state 'st0 C.tls_unexpected_message_error)
-      resp
-      'old_network_out
-      'old_app_out));
-    resp
+    }
   } else {
     assert (pure (U8.v alert_wire <> 0));
     L.lemma_alert_description_nonzero_not_close_notify alert_wire parsed_alert;

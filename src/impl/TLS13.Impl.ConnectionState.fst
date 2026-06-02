@@ -980,6 +980,34 @@ let received_alert_failure_state
       }];
   }
 
+let received_close_notify_state
+  (st:CS.connection_state)
+  (raw_received:B.bytes)
+  : CS.connection_state =
+  let model0 = st.CS.cs_model in
+  let record0 = model0.CS.model_record in
+  let model1 = {
+    model0 with
+      CS.model_control = CS.ControlClosed;
+      CS.model_record = {
+        record0 with
+          CS.record_read = R.next_seq record0.CS.record_read;
+      };
+  } in
+  {
+    CS.cs_model = model1;
+    CS.cs_wire_log = {
+      CL.raw_sent = B.append st.CS.cs_wire_log.CL.raw_sent B.empty;
+      CL.raw_received = B.append st.CS.cs_wire_log.CL.raw_received raw_received;
+    };
+    CS.cs_event_log =
+      st.CS.cs_event_log @
+      [CS.ConnNetworkEvent {
+        CL.message_direction = CL.Received;
+        CL.message_value = M.TlsAlert T.CloseNotify;
+      }];
+  }
+
 let received_application_data_state
   (st:CS.connection_state)
   (bytes:B.bytes)
@@ -1212,6 +1240,69 @@ let lemma_received_alert_failure_state_evolves
     (received_alert_failure_state st alert raw_received);
   assert (CS.connection_state_evolves st (received_alert_failure_state st alert raw_received));
   assert (CS.connection_state_consistent (received_alert_failure_state st alert raw_received))
+
+let lemma_received_close_notify_state_evolves
+  (st:CS.connection_state)
+  (raw_received:B.bytes)
+  : Lemma
+      (requires CS.connection_state_consistent st /\
+                (st.CS.cs_model.CS.model_control == CS.ControlApplicationData \/
+                 st.CS.cs_model.CS.model_control == CS.ControlClosing) /\
+                CS.event_raw_delta_legal
+                  st.CS.cs_model
+                  (CS.ConnNetworkEvent {
+                    CL.message_direction = CL.Received;
+                    CL.message_value = M.TlsAlert T.CloseNotify;
+                  })
+                  B.empty
+                  raw_received)
+      (ensures CS.connection_state_evolves
+                 st
+                 (received_close_notify_state st raw_received) /\
+               CS.connection_state_consistent
+                 (received_close_notify_state st raw_received) /\
+               CS.legal_connection_delta
+                 st
+                 {
+                   CS.delta_event =
+                     CS.ConnNetworkEvent {
+                       CL.message_direction = CL.Received;
+                       CL.message_value = M.TlsAlert T.CloseNotify;
+                     };
+                   CS.delta_raw_sent = B.empty;
+                   CS.delta_raw_received = raw_received;
+                 }
+                 (received_close_notify_state st raw_received))
+=
+  let ev =
+    CS.ConnNetworkEvent {
+      CL.message_direction = CL.Received;
+      CL.message_value = M.TlsAlert T.CloseNotify;
+    } in
+  let delta = {
+    CS.delta_event = ev;
+    CS.delta_raw_sent = B.empty;
+    CS.delta_raw_received = raw_received;
+  } in
+  assert (CS.legal_event st.CS.cs_model ev);
+  assert (CS.step_model st.CS.cs_model ev ==
+          Some (received_close_notify_state st raw_received).CS.cs_model);
+  assert (CS.legal_connection_delta
+    st
+    delta
+    (received_close_notify_state st raw_received));
+  assert (CS.connection_state_single_step
+    st
+    (received_close_notify_state st raw_received));
+  FStar.ReflexiveTransitiveClosure.closure_step
+    CS.connection_state_single_step
+    st
+    (received_close_notify_state st raw_received);
+  assert (CS.connection_state_evolves
+    st
+    (received_close_notify_state st raw_received));
+  assert (CS.connection_state_consistent
+    (received_close_notify_state st raw_received))
 
 let lemma_received_application_data_state_evolves
   (st:CS.connection_state)
@@ -1451,6 +1542,49 @@ fn can_receive_application_data
   ok
 }
 
+fn can_receive_close_notify
+  (c:connection_state)
+  (#st0:erased CS.connection_state)
+  requires connection_exactly c st0
+  returns ok: bool
+  ensures connection_exactly c st0 **
+          pure (ok ==>
+            (st0.CS.cs_model.CS.model_control == CS.ControlApplicationData \/
+             st0.CS.cs_model.CS.model_control == CS.ControlClosing) /\
+            U64.fits (st0.CS.cs_model.CS.model_record.CS.record_read.R.seq + 1))
+{
+  unfold (connection_exactly c st0);
+  unfold (connection_model_exactly c st0.CS.cs_model);
+  unfold (control_exactly c.control st0.CS.cs_model.CS.model_control st0.CS.cs_model.CS.model_failure);
+  unfold (record_layer_exactly c.records st0.CS.cs_model.CS.model_record);
+
+  let tag = !c.control.control_tag;
+  let app_ok = tag = 2uy;
+  let closing_ok = tag = 3uy;
+  let control_ok = app_ok || closing_ok;
+
+  fold (control_exactly
+    c.control
+    st0.CS.cs_model.CS.model_control
+    st0.CS.cs_model.CS.model_failure);
+
+  let seq_ok = Rec.can_advance_seq c.records.read;
+  fold (record_layer_exactly c.records st0.CS.cs_model.CS.model_record);
+
+  let ok = control_ok && seq_ok;
+
+  assert (pure (app_ok ==> U8.v tag == 2));
+  assert (pure (closing_ok ==> U8.v tag == 3));
+  assert (pure (ok ==>
+    (st0.CS.cs_model.CS.model_control == CS.ControlApplicationData \/
+     st0.CS.cs_model.CS.model_control == CS.ControlClosing)));
+  assert (pure (ok ==> U64.fits (st0.CS.cs_model.CS.model_record.CS.record_read.R.seq + 1)));
+
+  fold (connection_model_exactly c st0.CS.cs_model);
+  fold (connection_exactly c st0);
+  ok
+}
+
 fn mark_received_change_cipher_spec
   (c:connection_state)
   (raw:array U8.t)
@@ -1542,6 +1676,82 @@ fn mark_received_alert_failure
   lemma_received_alert_failure_state_evolves st0 alert (Ghost.reveal 'raw_bytes);
   MR.update c.ghost_state (received_alert_failure_state st0 alert (Ghost.reveal 'raw_bytes));
   fold (connection_exactly c (received_alert_failure_state st0 alert (Ghost.reveal 'raw_bytes)))
+}
+
+fn mark_received_close_notify
+  (c:connection_state)
+  (raw:array U8.t)
+  (#st0:erased CS.connection_state)
+  requires connection_exactly c st0 **
+           Pulse.Lib.Array.PtsTo.pts_to raw 'raw_bytes **
+           pure ((st0.CS.cs_model.CS.model_control == CS.ControlApplicationData \/
+                  st0.CS.cs_model.CS.model_control == CS.ControlClosing) /\
+                 U64.fits (st0.CS.cs_model.CS.model_record.CS.record_read.R.seq + 1) /\
+                 CS.event_raw_delta_legal
+                   st0.CS.cs_model
+                   (CS.ConnNetworkEvent {
+                     CL.message_direction = CL.Received;
+                     CL.message_value = M.TlsAlert T.CloseNotify;
+                   })
+                   B.empty
+                   (Ghost.reveal 'raw_bytes))
+  ensures connection_exactly
+            c
+            (received_close_notify_state st0 (Ghost.reveal 'raw_bytes)) **
+          Pulse.Lib.Array.PtsTo.pts_to raw 'raw_bytes
+{
+  assert (pure (st0.CS.cs_model.CS.model_control == CS.ControlApplicationData \/
+                st0.CS.cs_model.CS.model_control == CS.ControlClosing));
+  assert (pure (U64.fits (st0.CS.cs_model.CS.model_record.CS.record_read.R.seq + 1)));
+  assert (pure (CS.event_raw_delta_legal
+    st0.CS.cs_model
+    (CS.ConnNetworkEvent {
+      CL.message_direction = CL.Received;
+      CL.message_value = M.TlsAlert T.CloseNotify;
+    })
+    B.empty
+    (Ghost.reveal 'raw_bytes)));
+  unfold (connection_exactly c st0);
+  unfold (connection_model_exactly c st0.CS.cs_model);
+  unfold (control_exactly c.control st0.CS.cs_model.CS.model_control st0.CS.cs_model.CS.model_failure);
+  unfold (record_layer_exactly c.records st0.CS.cs_model.CS.model_record);
+
+  assert (pure (st0.CS.cs_model.CS.model_failure == None));
+  c.control.control_tag := 4uy;
+  c.control.handshake_stage_tag := 0uy;
+  c.control.failure_present := false;
+  c.control.failure_code := 0uy;
+  c.control.failure_alert := 0uy;
+
+  assert (pure (control_state_matches
+    4uy
+    0uy
+    false
+    0uy
+    0uy
+    CS.ControlClosed));
+  fold (control_exactly
+    c.control
+    CS.ControlClosed
+    st0.CS.cs_model.CS.model_failure);
+
+  Rec.advance_seq c.records.read;
+  fold (record_layer_exactly
+    c.records
+    { st0.CS.cs_model.CS.model_record with
+        CS.record_read = R.next_seq st0.CS.cs_model.CS.model_record.CS.record_read });
+
+  assert (pure ((received_close_notify_state st0 (Ghost.reveal 'raw_bytes)).CS.cs_model.CS.model_control ==
+                CS.ControlClosed));
+  assert (pure ((received_close_notify_state st0 (Ghost.reveal 'raw_bytes)).CS.cs_model.CS.model_failure ==
+                st0.CS.cs_model.CS.model_failure));
+  fold (connection_model_exactly
+    c
+    (received_close_notify_state st0 (Ghost.reveal 'raw_bytes)).CS.cs_model);
+
+  lemma_received_close_notify_state_evolves st0 (Ghost.reveal 'raw_bytes);
+  MR.update c.ghost_state (received_close_notify_state st0 (Ghost.reveal 'raw_bytes));
+  fold (connection_exactly c (received_close_notify_state st0 (Ghost.reveal 'raw_bytes)))
 }
 
 fn mark_received_hello_retry_request_rejected
