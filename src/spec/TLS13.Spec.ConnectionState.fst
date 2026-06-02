@@ -590,6 +590,15 @@ let start_matches_config (cfg:connection_config) (start:handshake_start) : prop 
   start.start_cipher_suites == cfg.config_cipher_suites /\
   start.start_signature_schemes == cfg.config_signature_schemes
 
+let handshake_start_key_share_consistent (start:handshake_start) : prop =
+  match start.start_client_key_share_private with
+  | Some sk ->
+    Seq.equal
+      start.start_client_key_share_public
+      (C.x25519_public_from_private sk)
+  | None ->
+    True
+
 let client_hello_matches_start (start:handshake_start) (ch:M.client_hello) : prop =
   Seq.equal ch.M.random start.start_client_random /\
   ch.M.server_name == Some start.start_server_name /\
@@ -648,10 +657,12 @@ let legal_local_event (model:connection_model) (ev:local_event) : GTot prop =
   let hs = model.model_handshake in
   match ev, model.model_control with
   | LocalStartHandshake start, ControlNew ->
-    start_matches_config model.model_config start
+    start_matches_config model.model_config start /\
+    handshake_start_key_share_consistent start
   | LocalDeriveSharedSecret shared, ControlHandshaking HsServerHelloReceived ->
     (match hs.hs_start, hs.hs_server_hello with
      | Some start, Some sh ->
+       handshake_start_key_share_consistent start /\
        (match start.start_client_key_share_private with
         | Some sk -> C.x25519_shared sk sh.M.key_share == Some shared
         | None -> False)

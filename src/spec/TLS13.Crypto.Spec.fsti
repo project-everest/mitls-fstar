@@ -11,7 +11,7 @@ type aead_key = bytes_of_len 32
 type aead_nonce = bytes_of_len 12
 type x25519_private = bytes_of_len 32
 type x25519_public = bytes_of_len 32
-type x25519_shared_secret = bytes_of_len 32
+type x25519_shared_secret = secret
 type public_key = B.bytes
 type signature = B.bytes
 

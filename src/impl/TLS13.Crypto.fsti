@@ -103,9 +103,35 @@ fn x25519_shared (sk: array U8.t) (pk: array U8.t) (out: array U8.t)
   returns ok: bool
   ensures pts_to sk 'sk_bytes **
           pts_to pk 'pk_bytes **
-          (match C.x25519_shared 'sk_bytes 'pk_bytes with
-           | Some shared -> pts_to out shared ** pure ok
-           | None -> pts_to out 'old ** pure (not ok))
+          (exists* shared.
+            pts_to out shared **
+            pure (B.length shared == 32 /\
+                  (ok ==>
+                   Some? (C.x25519_shared 'sk_bytes 'pk_bytes) /\
+                   Some?.v (C.x25519_shared 'sk_bytes 'pk_bytes) == shared) /\
+                  (not ok ==> C.x25519_shared 'sk_bytes 'pk_bytes == None)))
+
+noextract
+val x25519_shared_call:
+  sk:B.bytes ->
+  pk:B.bytes ->
+  shared:B.bytes ->
+  ok:bool ->
+  GTot prop
+
+noextract
+val lemma_x25519_shared_call_success:
+  sk:B.bytes ->
+  pk:B.bytes ->
+  shared:B.bytes ->
+  ok:bool ->
+  Lemma
+    (requires x25519_shared_call sk pk shared ok /\
+              ok /\
+              B.length shared == 32)
+    (ensures Some? (C.x25519_shared sk pk) /\
+             C.x25519_shared sk pk == Some (Some?.v (C.x25519_shared sk pk)) /\
+             Some?.v (C.x25519_shared sk pk) == shared)
 
 fn x25519_shared_runtime (sk: array U8.t) (pk: array U8.t) (out: array U8.t)
   requires pts_to sk 'sk_bytes **
@@ -117,7 +143,7 @@ fn x25519_shared_runtime (sk: array U8.t) (pk: array U8.t) (out: array U8.t)
           pts_to sk 'sk_bytes **
           pts_to pk 'pk_bytes **
           pts_to out out_bytes **
-          pure (B.length out_bytes == 32)
+          pure (x25519_shared_call 'sk_bytes 'pk_bytes out_bytes ok)
 
 fn tls13_record_nonce (static_iv: array U8.t) (sequence_number: U64.t) (out: array U8.t)
   requires pts_to static_iv 'iv_bytes **

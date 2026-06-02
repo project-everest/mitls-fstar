@@ -333,6 +333,29 @@ let unexpected_message_response
     network_out
     app_out
 
+let legal_handled_local_response
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (resp:client_response)
+  (kind:local_event_kind)
+  (payload:B.bytes)
+  (network_out:B.bytes)
+  (app_out:B.bytes)
+  : prop =
+  (exists ev raw_sent raw_received.
+     legal_local_response
+       st0
+       st1
+       resp
+       kind
+       payload
+       ev
+       raw_sent
+       raw_received
+       network_out
+       app_out) \/
+  unexpected_message_response st0 st1 resp network_out app_out
+
 let legal_handled_tls_response
   (st0:CS.connection_state)
   (st1:CS.connection_state)

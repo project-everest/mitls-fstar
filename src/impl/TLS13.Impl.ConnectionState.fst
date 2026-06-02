@@ -42,7 +42,10 @@ module X = TLS13.X509.Spec
   and pending application buffers.
 **)
 
-let state_ref : Type0 = MR.mref CS.connection_state_evolves
+let connection_state_preorder : FStar.Preorder.preorder CS.connection_state =
+  CS.connection_state_evolves
+
+let state_ref : Type0 = MR.mref connection_state_preorder
 
 noextract
 let max_hostname_len : nat = IM.max_server_name_len
@@ -201,6 +204,7 @@ noeq
 type handshake_storage = {
   start: handshake_start_storage;
   messages: handshake_message_storage;
+  server_key_share: optional_fixed_bytes;
   validated_peer: peer_storage;
   certificate_verify_verified: box bool;
   server_finished_verified: box bool;
@@ -270,6 +274,69 @@ let optional_fixed_bytes_match
     | None -> False
   else
     bytes == None)
+
+let lemma_optional_fixed_bytes_match_some
+  (present:bool)
+  (storage:B.bytes)
+  (n:nat)
+  (bytes:option (b:B.bytes{B.length b == n}))
+  : Lemma
+      (requires optional_fixed_bytes_match present storage n bytes /\
+                present)
+      (ensures bytes == Some storage)
+=
+  match bytes with
+  | Some b ->
+    assert (fixed_bytes_match storage n b);
+    Seq.lemma_eq_intro storage b;
+    assert (storage == b)
+  | None -> ()
+
+let lemma_server_key_share_option_some
+  (server:option M.server_hello)
+  (storage:TLS13.Crypto.Spec.x25519_public)
+  : Lemma
+      (requires (match server with
+                 | Some sh -> Some sh.M.key_share
+                 | None -> None) == Some storage)
+      (ensures Some? server /\
+               server == Some (Some?.v server) /\
+               storage == (Some?.v server).M.key_share)
+=
+  match server with
+  | Some sh -> ()
+  | None -> ()
+
+let lemma_option_some_v (#a:Type0) (o:option a)
+  : Lemma
+      (requires Some? o)
+      (ensures o == Some (Some?.v o))
+=
+  match o with
+  | Some _ -> ()
+  | None -> ()
+
+let lemma_len32_refinement_tautology ()
+  : Lemma
+      (ensures forall (b:B.bytes). {:pattern (B.length b)}
+                 (B.length b == 32) == (B.length b == 32))
+=
+  ()
+
+let lemma_x25519_shared_option_shape
+  (sk:TLS13.Crypto.Spec.x25519_private)
+  (pk:TLS13.Crypto.Spec.x25519_public)
+  : Lemma
+      (ensures (match TLS13.Crypto.Spec.x25519_shared sk pk with
+                | Some _ -> true
+                | None -> false) \/
+               (match TLS13.Crypto.Spec.x25519_shared sk pk with
+                | None -> true
+                | Some _ -> false))
+=
+  match TLS13.Crypto.Spec.x25519_shared sk pk with
+  | Some _ -> ()
+  | None -> ()
 
 noextract
 let endpoint_role_tag_matches (tag:U8.t) (role:CS.endpoint_role) : prop =
@@ -517,7 +584,7 @@ let control_exactly
 
 let optional_secret_exactly
   ([@@@mkey] slot:optional_secret_storage)
-  (spec:option (b:B.bytes{B.length b == 32}))
+  (spec:option TLS13.Crypto.Spec.secret)
   : slprop =
   exists* present secret.
     Box.pts_to slot.present present **
@@ -570,6 +637,29 @@ let key_schedule_exactly
   optional_secret_exactly keys.exporter_master_secret spec.CS.ks_exporter_master_secret **
   optional_secret_exactly keys.resumption_master_secret spec.CS.ks_resumption_master_secret
 
+fn store_optional_secret
+  (slot:optional_secret_storage)
+  (src:array U8.t)
+  (#src_secret:erased TLS13.Crypto.Spec.secret)
+  requires (exists* prev. optional_secret_exactly slot prev) **
+           ArrPts.pts_to src src_secret
+  ensures optional_secret_exactly slot (Some (Ghost.reveal src_secret)) **
+          ArrPts.pts_to src src_secret
+{
+  with prev. unfold (optional_secret_exactly slot prev);
+  with old_present old_secret. _;
+  ArrPts.pts_to_len src;
+  V.pts_to_len slot.secret;
+  V.to_array_pts_to slot.secret;
+  Arr.memcpy 32sz src (V.vec_to_array slot.secret);
+  V.to_vec_pts_to slot.secret;
+  slot.present := true;
+  with stored. assert (V.pts_to slot.secret stored);
+  assert (pure (stored == Ghost.reveal src_secret));
+  assert (pure (optional_fixed_bytes_match true stored 32 (Some (Ghost.reveal src_secret))));
+  fold (optional_secret_exactly slot (Some (Ghost.reveal src_secret)))
+}
+
 let handshake_start_fields_allocated
   ([@@@mkey] start:handshake_start_storage)
   : slprop =
@@ -589,7 +679,8 @@ let handshake_start_fields_exactly
   optional_fixed_bytes_exactly start.client_key_share_private 32 spec.CS.start_client_key_share_private **
   fixed_bytes_exactly start.client_key_share_public 32 spec.CS.start_client_key_share_public **
   cipher_suite_list_exactly start.cipher_suites max_cipher_suites spec.CS.start_cipher_suites **
-  signature_scheme_list_exactly start.signature_schemes max_signature_schemes spec.CS.start_signature_schemes
+  signature_scheme_list_exactly start.signature_schemes max_signature_schemes spec.CS.start_signature_schemes **
+  pure (CS.handshake_start_key_share_consistent spec)
 
 let handshake_start_payload_exactly
   ([@@@mkey] start:handshake_start_storage)
@@ -788,6 +879,17 @@ let handshake_messages_exactly
   finished_slot_exactly msgs.server_finished_present msgs.server_finished hs.CS.hs_server_finished **
   finished_slot_exactly msgs.client_finished_present msgs.client_finished hs.CS.hs_client_finished
 
+let server_key_share_exactly
+  ([@@@mkey] slot:optional_fixed_bytes)
+  (hs:CS.handshake_state)
+  : slprop =
+  optional_fixed_bytes_exactly
+    slot
+    32
+    (match hs.CS.hs_server_hello with
+     | Some sh -> Some sh.M.key_share
+     | None -> None)
+
 let peer_fields_allocated
   ([@@@mkey] peer:peer_storage)
   : slprop =
@@ -854,6 +956,7 @@ let handshake_exactly
   exists* cv_verified server_finished_verified.
     handshake_start_exactly handshake.start hs.CS.hs_start **
     handshake_messages_exactly handshake.messages hs **
+    server_key_share_exactly handshake.server_key_share hs **
     peer_exactly handshake.validated_peer hs.CS.hs_validated_peer **
     Box.pts_to handshake.certificate_verify_verified cv_verified **
     Box.pts_to handshake.server_finished_verified server_finished_verified **
@@ -2054,6 +2157,318 @@ fn can_receive_application_data
   ok
 }
 
+fn try_derive_shared_secret
+  (c:connection_state)
+  (#st0:erased CS.connection_state)
+  requires connection_exactly c st0
+  returns ok: bool
+  ensures (if ok then
+             exists* shared.
+               connection_exactly c (derived_shared_secret_state st0 shared) **
+               pure (CS.legal_connection_delta
+                 st0
+                 {
+                   CS.delta_event = CS.ConnLocalEvent (CS.LocalDeriveSharedSecret shared);
+                   CS.delta_raw_sent = B.empty;
+                   CS.delta_raw_received = B.empty;
+                 }
+                 (derived_shared_secret_state st0 shared))
+           else
+             connection_exactly c st0)
+{
+  unfold (connection_exactly c st0);
+  unfold (connection_model_exactly c st0.CS.cs_model);
+  unfold (control_exactly c.control st0.CS.cs_model.CS.model_control st0.CS.cs_model.CS.model_failure);
+  unfold (handshake_exactly c.handshake st0.CS.cs_model.CS.model_handshake);
+  unfold (handshake_messages_exactly
+    c.handshake.messages
+    st0.CS.cs_model.CS.model_handshake);
+  unfold (handshake_start_exactly
+    c.handshake.start
+    st0.CS.cs_model.CS.model_handshake.CS.hs_start);
+  unfold (server_key_share_exactly
+    c.handshake.server_key_share
+    st0.CS.cs_model.CS.model_handshake);
+  unfold (optional_fixed_bytes_exactly
+    c.handshake.server_key_share
+    32
+    (match st0.CS.cs_model.CS.model_handshake.CS.hs_server_hello with
+     | Some sh -> Some sh.M.key_share
+     | None -> None));
+  unfold (key_schedule_exactly
+    c.handshake.keys
+    st0.CS.cs_model.CS.model_handshake.CS.hs_keys);
+
+  let tag = !c.control.control_tag;
+  let stage = !c.control.handshake_stage_tag;
+  let tag_ok = tag = 1uy;
+  let stage_ok = stage = 3uy;
+
+  with start_present. assert (pure True);
+  let has_start = !c.handshake.start.present;
+  assert (pure (has_start == start_present));
+
+  let has_server_share = !c.handshake.server_key_share.present;
+  with server_share_present.
+    assert (Box.pts_to c.handshake.server_key_share.present server_share_present);
+  with server_share_storage.
+    assert (V.pts_to c.handshake.server_key_share.bytes server_share_storage);
+  let server_share_storage_e = Ghost.hide server_share_storage;
+  assert (pure (has_server_share == server_share_present));
+
+  let ready = tag_ok && stage_ok && has_start && has_server_share;
+
+  if ready {
+    assert (pure (U8.v tag == 1));
+    assert (pure (U8.v stage == 3));
+    assert (pure has_start);
+    assert (pure has_server_share);
+    assert (pure server_share_present);
+    lemma_optional_fixed_bytes_match_some
+      server_share_present
+      server_share_storage
+      32
+      (match st0.CS.cs_model.CS.model_handshake.CS.hs_server_hello with
+       | Some sh -> Some sh.M.key_share
+       | None -> None);
+    lemma_server_key_share_option_some
+      st0.CS.cs_model.CS.model_handshake.CS.hs_server_hello
+      server_share_storage;
+    let sh = Ghost.hide (Some?.v st0.CS.cs_model.CS.model_handshake.CS.hs_server_hello);
+    assert (pure (st0.CS.cs_model.CS.model_control ==
+      CS.ControlHandshaking CS.HsServerHelloReceived));
+    assert (pure (st0.CS.cs_model.CS.model_handshake.CS.hs_server_hello == Some (Ghost.reveal sh)));
+    assert (pure (server_share_storage == (Ghost.reveal sh).M.key_share));
+
+    if has_start {
+    unfold (handshake_start_payload_exactly
+      c.handshake.start
+      has_start
+      st0.CS.cs_model.CS.model_handshake.CS.hs_start);
+    with start_spec. assert (pure True);
+    unfold (handshake_start_fields_exactly c.handshake.start start_spec);
+    unfold (optional_fixed_bytes_exactly
+      c.handshake.start.client_key_share_private
+      32
+      start_spec.CS.start_client_key_share_private);
+
+    with private_present private_storage. _;
+    let private_storage_e = Ghost.hide private_storage;
+    let has_private = !c.handshake.start.client_key_share_private.present;
+    assert (pure (has_private == private_present));
+
+    if has_private {
+      assert (pure private_present);
+      lemma_optional_fixed_bytes_match_some
+        private_present
+        (Ghost.reveal private_storage_e)
+        32
+        start_spec.CS.start_client_key_share_private;
+      assert (pure (start_spec.CS.start_client_key_share_private == Some (Ghost.reveal private_storage_e)));
+      let private_spec = private_storage_e;
+      assert (pure (B.length (Ghost.reveal private_storage_e) == 32));
+      assert (pure (B.length (Ghost.reveal server_share_storage_e) == 32));
+      lemma_len32_refinement_tautology();
+
+        V.to_array_pts_to c.handshake.start.client_key_share_private.bytes;
+        V.to_array_pts_to c.handshake.server_key_share.bytes;
+        let mut shared_out = [| 0uy; 32sz |];
+        let crypto_ok =
+          Crypto.x25519_shared_runtime
+            (V.vec_to_array c.handshake.start.client_key_share_private.bytes)
+            (V.vec_to_array c.handshake.server_key_share.bytes)
+            shared_out;
+        V.to_vec_pts_to c.handshake.start.client_key_share_private.bytes;
+        V.to_vec_pts_to c.handshake.server_key_share.bytes;
+
+        if crypto_ok {
+          with shared. assert (ArrPts.pts_to shared_out shared);
+          ArrPts.pts_to_len shared_out;
+          assert (pure (B.length shared == 32));
+          assert (pure (Crypto.x25519_shared_call (Ghost.reveal private_storage_e) (Ghost.reveal server_share_storage_e) shared crypto_ok));
+          Crypto.lemma_x25519_shared_call_success (Ghost.reveal private_storage_e) (Ghost.reveal server_share_storage_e) shared crypto_ok;
+          assert (pure (Some? (TLS13.Crypto.Spec.x25519_shared (Ghost.reveal private_storage_e) (Ghost.reveal server_share_storage_e))));
+          assert (pure (Some?.v (TLS13.Crypto.Spec.x25519_shared (Ghost.reveal private_storage_e) (Ghost.reveal server_share_storage_e)) == shared));
+          let shared_secret = Ghost.hide (Some?.v (TLS13.Crypto.Spec.x25519_shared (Ghost.reveal private_storage_e) (Ghost.reveal server_share_storage_e)));
+          assert (pure (Ghost.reveal shared_secret == shared));
+          assert (pure (TLS13.Crypto.Spec.x25519_shared (Ghost.reveal private_storage_e) (Ghost.reveal server_share_storage_e) == Some (Ghost.reveal shared_secret)));
+          assert (pure (TLS13.Crypto.Spec.x25519_shared (Ghost.reveal private_spec) (Ghost.reveal sh).M.key_share == Some (Ghost.reveal shared_secret)));
+          assert (pure (CS.legal_event
+            st0.CS.cs_model
+            (CS.ConnLocalEvent (CS.LocalDeriveSharedSecret (Ghost.reveal shared_secret)))));
+
+          let mut early_out = [| 0uy; 32sz |];
+          KS.early_secret_empty early_out;
+          let mut handshake_out = [| 0uy; 32sz |];
+          KS.handshake_secret early_out shared_out 32sz handshake_out;
+          let mut master_out = [| 0uy; 32sz |];
+          KS.master_secret handshake_out master_out;
+
+          store_optional_secret c.handshake.keys.shared_secret shared_out #shared_secret;
+          store_optional_secret
+            c.handshake.keys.early_secret
+            early_out
+            #(K.early_secret B.empty);
+          store_optional_secret
+            c.handshake.keys.handshake_secret
+            handshake_out
+            #(K.handshake_secret (K.early_secret B.empty) (Ghost.reveal shared_secret));
+          store_optional_secret
+            c.handshake.keys.master_secret
+            master_out
+            #(K.master_secret (K.handshake_secret (K.early_secret B.empty) (Ghost.reveal shared_secret)));
+
+          fold (key_schedule_exactly
+            c.handshake.keys
+            (derived_shared_secret_state st0 (Ghost.reveal shared_secret)).CS.cs_model.CS.model_handshake.CS.hs_keys);
+
+          fold (optional_fixed_bytes_exactly
+            c.handshake.start.client_key_share_private
+            32
+            start_spec.CS.start_client_key_share_private);
+          fold (handshake_start_fields_exactly c.handshake.start start_spec);
+          fold (handshake_start_payload_exactly
+            c.handshake.start
+            has_start
+            st0.CS.cs_model.CS.model_handshake.CS.hs_start);
+          fold (handshake_start_exactly
+            c.handshake.start
+            (derived_shared_secret_state st0 (Ghost.reveal shared_secret)).CS.cs_model.CS.model_handshake.CS.hs_start);
+          fold (optional_fixed_bytes_exactly
+            c.handshake.server_key_share
+            32
+            (match (derived_shared_secret_state st0 (Ghost.reveal shared_secret)).CS.cs_model.CS.model_handshake.CS.hs_server_hello with
+             | Some sh -> Some sh.M.key_share
+             | None -> None));
+          fold (server_key_share_exactly
+            c.handshake.server_key_share
+            (derived_shared_secret_state st0 (Ghost.reveal shared_secret)).CS.cs_model.CS.model_handshake);
+          fold (handshake_messages_exactly
+            c.handshake.messages
+            (derived_shared_secret_state st0 (Ghost.reveal shared_secret)).CS.cs_model.CS.model_handshake);
+          fold (handshake_exactly
+            c.handshake
+            (derived_shared_secret_state st0 (Ghost.reveal shared_secret)).CS.cs_model.CS.model_handshake);
+          fold (control_exactly
+            c.control
+            (derived_shared_secret_state st0 (Ghost.reveal shared_secret)).CS.cs_model.CS.model_control
+            (derived_shared_secret_state st0 (Ghost.reveal shared_secret)).CS.cs_model.CS.model_failure);
+          fold (connection_model_exactly
+            c
+            (derived_shared_secret_state st0 (Ghost.reveal shared_secret)).CS.cs_model);
+
+          lemma_derived_shared_secret_state_evolves st0 (Ghost.reveal shared_secret);
+          MR.update c.ghost_state (derived_shared_secret_state st0 (Ghost.reveal shared_secret));
+          fold (connection_exactly c (derived_shared_secret_state st0 (Ghost.reveal shared_secret)));
+          true
+        } else {
+          with shared_old. assert (ArrPts.pts_to shared_out shared_old);
+          fold (optional_fixed_bytes_exactly
+            c.handshake.start.client_key_share_private
+            32
+            start_spec.CS.start_client_key_share_private);
+          fold (handshake_start_fields_exactly c.handshake.start start_spec);
+          fold (handshake_start_payload_exactly
+            c.handshake.start
+            has_start
+            st0.CS.cs_model.CS.model_handshake.CS.hs_start);
+          fold (handshake_start_exactly
+            c.handshake.start
+            st0.CS.cs_model.CS.model_handshake.CS.hs_start);
+          fold (optional_fixed_bytes_exactly
+            c.handshake.server_key_share
+            32
+            (match st0.CS.cs_model.CS.model_handshake.CS.hs_server_hello with
+             | Some sh -> Some sh.M.key_share
+             | None -> None));
+          fold (server_key_share_exactly c.handshake.server_key_share st0.CS.cs_model.CS.model_handshake);
+          fold (key_schedule_exactly
+            c.handshake.keys
+            st0.CS.cs_model.CS.model_handshake.CS.hs_keys);
+          fold (handshake_messages_exactly c.handshake.messages st0.CS.cs_model.CS.model_handshake);
+          fold (handshake_exactly c.handshake st0.CS.cs_model.CS.model_handshake);
+          fold (control_exactly
+            c.control
+            st0.CS.cs_model.CS.model_control
+            st0.CS.cs_model.CS.model_failure);
+          fold (connection_model_exactly c st0.CS.cs_model);
+          fold (connection_exactly c st0);
+          false
+        }
+    } else {
+      fold (optional_fixed_bytes_exactly
+        c.handshake.start.client_key_share_private
+        32
+        start_spec.CS.start_client_key_share_private);
+      fold (handshake_start_fields_exactly c.handshake.start start_spec);
+      fold (handshake_start_payload_exactly
+        c.handshake.start
+        has_start
+        st0.CS.cs_model.CS.model_handshake.CS.hs_start);
+      fold (handshake_start_exactly
+        c.handshake.start
+        st0.CS.cs_model.CS.model_handshake.CS.hs_start);
+      fold (optional_fixed_bytes_exactly
+        c.handshake.server_key_share
+        32
+        (match st0.CS.cs_model.CS.model_handshake.CS.hs_server_hello with
+         | Some sh -> Some sh.M.key_share
+         | None -> None));
+      fold (server_key_share_exactly c.handshake.server_key_share st0.CS.cs_model.CS.model_handshake);
+      fold (key_schedule_exactly c.handshake.keys st0.CS.cs_model.CS.model_handshake.CS.hs_keys);
+      fold (handshake_messages_exactly c.handshake.messages st0.CS.cs_model.CS.model_handshake);
+      fold (handshake_exactly c.handshake st0.CS.cs_model.CS.model_handshake);
+      fold (control_exactly c.control st0.CS.cs_model.CS.model_control st0.CS.cs_model.CS.model_failure);
+      fold (connection_model_exactly c st0.CS.cs_model);
+      fold (connection_exactly c st0);
+      false
+    }
+    } else {
+      fold (handshake_start_exactly
+        c.handshake.start
+        st0.CS.cs_model.CS.model_handshake.CS.hs_start);
+      fold (optional_fixed_bytes_exactly
+        c.handshake.server_key_share
+        32
+        (match st0.CS.cs_model.CS.model_handshake.CS.hs_server_hello with
+         | Some sh -> Some sh.M.key_share
+         | None -> None));
+      fold (server_key_share_exactly c.handshake.server_key_share st0.CS.cs_model.CS.model_handshake);
+      fold (key_schedule_exactly c.handshake.keys st0.CS.cs_model.CS.model_handshake.CS.hs_keys);
+      fold (handshake_messages_exactly c.handshake.messages st0.CS.cs_model.CS.model_handshake);
+      fold (handshake_exactly c.handshake st0.CS.cs_model.CS.model_handshake);
+      fold (control_exactly
+        c.control
+        st0.CS.cs_model.CS.model_control
+        st0.CS.cs_model.CS.model_failure);
+      fold (connection_model_exactly c st0.CS.cs_model);
+      fold (connection_exactly c st0);
+      false
+    }
+  } else {
+      fold (handshake_start_exactly
+        c.handshake.start
+        st0.CS.cs_model.CS.model_handshake.CS.hs_start);
+      fold (optional_fixed_bytes_exactly
+        c.handshake.server_key_share
+        32
+        (match st0.CS.cs_model.CS.model_handshake.CS.hs_server_hello with
+         | Some sh -> Some sh.M.key_share
+         | None -> None));
+      fold (server_key_share_exactly c.handshake.server_key_share st0.CS.cs_model.CS.model_handshake);
+      fold (key_schedule_exactly c.handshake.keys st0.CS.cs_model.CS.model_handshake.CS.hs_keys);
+      fold (handshake_messages_exactly c.handshake.messages st0.CS.cs_model.CS.model_handshake);
+      fold (handshake_exactly c.handshake st0.CS.cs_model.CS.model_handshake);
+    fold (control_exactly
+      c.control
+      st0.CS.cs_model.CS.model_control
+      st0.CS.cs_model.CS.model_failure);
+    fold (connection_model_exactly c st0.CS.cs_model);
+    fold (connection_exactly c st0);
+    false
+  }
+}
+
 fn can_receive_close_notify
   (c:connection_state)
   (#st0:erased CS.connection_state)
@@ -2408,6 +2823,16 @@ fn mark_received_server_hello
   unfold (connection_model_exactly c st0.CS.cs_model);
   unfold (control_exactly c.control st0.CS.cs_model.CS.model_control st0.CS.cs_model.CS.model_failure);
   unfold (handshake_exactly c.handshake st0.CS.cs_model.CS.model_handshake);
+  unfold (server_key_share_exactly
+    c.handshake.server_key_share
+    st0.CS.cs_model.CS.model_handshake);
+  unfold (optional_fixed_bytes_exactly
+    c.handshake.server_key_share
+    32
+    (match st0.CS.cs_model.CS.model_handshake.CS.hs_server_hello with
+     | Some sh -> Some sh.M.key_share
+     | None -> None));
+  with old_server_key_share_present old_server_key_share_storage. _;
 
   c.control.handshake_stage_tag := 3uy;
 
@@ -2433,6 +2858,29 @@ fn mark_received_server_hello
     | Some old_l, Some old_m -> IM.is_valid_server_hello old_l old_m
     | _, _ -> pure False);
   c.handshake.messages.server_hello := Some lsh;
+
+  unfold (IM.is_valid_server_hello lsh sh);
+  with lsh_random lsh_key_share. _;
+  V.to_array_pts_to lsh.IM.server_hello_key_share;
+  V.to_array_pts_to c.handshake.server_key_share.bytes;
+  Arr.memcpy
+    32sz
+    (V.vec_to_array lsh.IM.server_hello_key_share)
+    (V.vec_to_array c.handshake.server_key_share.bytes);
+  V.to_vec_pts_to lsh.IM.server_hello_key_share;
+  V.to_vec_pts_to c.handshake.server_key_share.bytes;
+  c.handshake.server_key_share.present := true;
+  with copied_server_key_share. assert (V.pts_to c.handshake.server_key_share.bytes copied_server_key_share);
+  assert (pure (Seq.equal copied_server_key_share (Ghost.reveal sh).M.key_share));
+  assert (pure (optional_fixed_bytes_match true copied_server_key_share 32 (Some (Ghost.reveal sh).M.key_share)));
+  fold (optional_fixed_bytes_exactly
+    c.handshake.server_key_share
+    32
+    (Some (Ghost.reveal sh).M.key_share));
+  fold (server_key_share_exactly
+    c.handshake.server_key_share
+    (received_server_hello_state st0 sh (Ghost.reveal 'raw_bytes)).CS.cs_model.CS.model_handshake);
+  fold (IM.is_valid_server_hello lsh sh);
 
   unfold (handshake_buffers_exactly
     c.handshake.buffers

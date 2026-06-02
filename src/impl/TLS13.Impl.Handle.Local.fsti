@@ -41,4 +41,12 @@ fn handle_local_event
                   st1
                   resp
                   'old_network_out
+                  'old_app_out /\
+                CT.legal_handled_local_response
+                  'st0
+                  st1
+                  resp
+                  kind
+                  (Ghost.reveal 'payload_bytes)
+                  'old_network_out
                   'old_app_out)
