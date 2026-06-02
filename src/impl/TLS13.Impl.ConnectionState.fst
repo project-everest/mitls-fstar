@@ -10,12 +10,17 @@ module B = TLS13.Bytes
 module Box = Pulse.Lib.Box
 module CL = TLS13.ConnectionLog
 module CS = TLS13.Spec.ConnectionState
+module H = TLS13.Handshake.Spec
 module IM = TLS13.Impl.Messages
 module M = TLS13.Messages
 module MR = Pulse.Lib.MonotonicGhostRef
+module Arr = Pulse.Lib.Array
 module R = TLS13.Record.Spec
 module Rec = TLS13.Record
+module Ser = TLS13.Impl.Serializer
 module Seq = FStar.Seq
+module SeqP = FStar.Seq.Properties
+module Slice = Pulse.Lib.Slice
 module SZ = FStar.SizeT
 module T = TLS13.Types
 module U8 = FStar.UInt8
@@ -895,11 +900,86 @@ let connection_exactly
 let is_connection_state (c:connection_state) : slprop =
   exists* st. connection_exactly c st
 
+fn copy_server_hello_prefix_to_transcript
+  (src:V.vec U8.t)
+  (dst:V.vec U8.t)
+  (src_len:SZ.t)
+  (dst_offset:SZ.t)
+  requires V.pts_to src 'src_bytes **
+           V.pts_to dst 'dst_bytes **
+           pure (V.is_full_vec src /\
+                 V.is_full_vec dst /\
+                 V.length src == max_server_hello_len /\
+                 V.length dst == max_transcript_len /\
+                 B.length 'src_bytes == max_server_hello_len /\
+                 B.length 'dst_bytes == max_transcript_len /\
+                 Seq.length 'src_bytes == max_server_hello_len /\
+                 Seq.length 'dst_bytes == max_transcript_len /\
+                 SZ.v src_len <= max_server_hello_len /\
+                 SZ.v dst_offset + SZ.v src_len <= max_transcript_len)
+  ensures V.pts_to src 'src_bytes **
+          V.pts_to dst
+            (Seq.append
+              (CL.raw_slice 'dst_bytes 0 (SZ.v dst_offset))
+              (Seq.append
+                (CL.raw_slice 'src_bytes 0 (SZ.v src_len))
+                (CL.raw_slice
+                  'dst_bytes
+                  (SZ.v dst_offset + SZ.v src_len)
+                  max_transcript_len)))
+{
+  V.to_array_pts_to src;
+  V.to_array_pts_to dst;
+
+  assert (pure (SZ.fits max_server_hello_len));
+  assert (pure (SZ.fits max_transcript_len));
+  let src_cap = SZ.uint_to_t max_server_hello_len;
+  let dst_cap = SZ.uint_to_t max_transcript_len;
+  let src_slice = Slice.from_array (V.vec_to_array src) src_cap;
+  let dst_slice = Slice.from_array (V.vec_to_array dst) dst_cap;
+
+  let src_split = Slice.split src_slice src_len;
+
+  let dst_split = Slice.split dst_slice dst_offset;
+  let dst_insert_split = Slice.split (snd dst_split) src_len;
+
+  Slice.pts_to_len (fst src_split);
+  Slice.pts_to_len (fst dst_insert_split);
+  assert (pure (Slice.len (fst src_split) == src_len));
+  assert (pure (Slice.len (fst dst_insert_split) == src_len));
+  Slice.copy (fst dst_insert_split) (fst src_split);
+
+  Slice.join (fst src_split) (snd src_split) src_slice;
+  SeqP.lemma_split 'src_bytes (SZ.v src_len);
+  Slice.to_array src_slice;
+  V.to_vec_pts_to src;
+
+  Slice.join (fst dst_insert_split) (snd dst_insert_split) (snd dst_split);
+  Slice.join (fst dst_split) (snd dst_split) dst_slice;
+  Slice.to_array dst_slice;
+  V.to_vec_pts_to dst
+}
+
 let tls_decode_error : T.tls_error = T.AlertError T.DecodeError
 
 let tls_unexpected_message_error : T.tls_error = T.AlertError T.UnexpectedMessage
 
 let tls_hello_retry_request_rejected_error : T.tls_error = T.HelloRetryRequestRejected
+
+let lemma_nonempty_matched_cipher_suites_offer
+  (items:Seq.seq U16.t)
+  (len:nat)
+  (suites:list T.cipher_suite)
+  (suite:T.cipher_suite)
+  : Lemma
+      (requires IM.cipher_suites_match items len suites /\ len > 0)
+      (ensures CS.cipher_suite_offered suites suite)
+=
+  match suites with
+  | [] -> ()
+  | _ :: _ ->
+    match suite with
+    | T.TLS_CHACHA20_POLY1305_SHA256 -> ()
 
 let local_fail_state (st:CS.connection_state) (err:T.tls_error) : CS.connection_state =
   {

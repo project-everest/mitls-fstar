@@ -236,6 +236,8 @@ fn serialize_handshake_msg
           L.is_valid_handshake_msg l m **
           pts_to out out_bytes **
           pure (B.length out_bytes == SZ.v out_len /\
+                (B.length (WS.serialize_handshake_msg m) <= SZ.v out_len ==>
+                 Some? written) /\
                 (match written with
                  | Some n ->
                    let prefix = Seq.slice out_bytes 0 (SZ.v n) in
