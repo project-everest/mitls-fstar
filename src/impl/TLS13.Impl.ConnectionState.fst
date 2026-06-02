@@ -22,6 +22,7 @@ module U8 = FStar.UInt8
 module U16 = FStar.UInt16
 module U64 = FStar.UInt64
 module V = Pulse.Lib.Vec
+module W = TLS13.Wire.Spec
 module X = TLS13.X509.Spec
 
 (**
@@ -946,6 +947,37 @@ let received_change_cipher_spec_state
       }];
   }
 
+let received_server_hello_state
+  (st:CS.connection_state)
+  (sh:M.server_hello)
+  (raw_received:B.bytes)
+  : GTot CS.connection_state =
+  let model0 = st.CS.cs_model in
+  let hs0 = model0.CS.model_handshake in
+  let msg = M.ServerHello sh in
+  let hs1 =
+    CS.append_handshake_to_transcript
+      { hs0 with
+          CS.hs_server_hello = Some sh;
+          CS.hs_buffers =
+            { hs0.CS.hs_buffers with
+                CS.hb_server_hello_bytes = W.serialize_handshake msg };
+      }
+      msg in
+  {
+    CS.cs_model = CS.with_handshake_stage model0 hs1 CS.HsServerHelloReceived;
+    CS.cs_wire_log = {
+      CL.raw_sent = B.append st.CS.cs_wire_log.CL.raw_sent B.empty;
+      CL.raw_received = B.append st.CS.cs_wire_log.CL.raw_received raw_received;
+    };
+    CS.cs_event_log =
+      st.CS.cs_event_log @
+      [CS.ConnNetworkEvent {
+        CL.message_direction = CL.Received;
+        CL.message_value = M.TlsHandshake msg;
+      }];
+  }
+
 let received_alert_failure_state
   (st:CS.connection_state)
   (alert:T.alert_description)
@@ -1170,6 +1202,76 @@ let lemma_received_change_cipher_spec_state_evolves
     (received_change_cipher_spec_state st raw_received);
   assert (CS.connection_state_evolves st (received_change_cipher_spec_state st raw_received));
   assert (CS.connection_state_consistent (received_change_cipher_spec_state st raw_received))
+
+let lemma_received_server_hello_state_evolves
+  (st:CS.connection_state)
+  (sh:M.server_hello)
+  (raw_received:B.bytes)
+  : Lemma
+      (requires CS.connection_state_consistent st /\
+                st.CS.cs_model.CS.model_control ==
+                  CS.ControlHandshaking CS.HsClientHelloSent /\
+                CS.legal_event
+                  st.CS.cs_model
+                  (CS.ConnNetworkEvent {
+                    CL.message_direction = CL.Received;
+                    CL.message_value = M.TlsHandshake (M.ServerHello sh);
+                  }) /\
+                CS.event_raw_delta_legal
+                  st.CS.cs_model
+                  (CS.ConnNetworkEvent {
+                    CL.message_direction = CL.Received;
+                    CL.message_value = M.TlsHandshake (M.ServerHello sh);
+                  })
+                  B.empty
+                  raw_received)
+      (ensures CS.connection_state_evolves
+                 st
+                 (received_server_hello_state st sh raw_received) /\
+               CS.connection_state_consistent
+                 (received_server_hello_state st sh raw_received) /\
+               CS.legal_connection_delta
+                 st
+                 {
+                   CS.delta_event =
+                     CS.ConnNetworkEvent {
+                       CL.message_direction = CL.Received;
+                       CL.message_value = M.TlsHandshake (M.ServerHello sh);
+                     };
+                   CS.delta_raw_sent = B.empty;
+                   CS.delta_raw_received = raw_received;
+                 }
+                 (received_server_hello_state st sh raw_received))
+=
+  let ev =
+    CS.ConnNetworkEvent {
+      CL.message_direction = CL.Received;
+      CL.message_value = M.TlsHandshake (M.ServerHello sh);
+    } in
+  let delta = {
+    CS.delta_event = ev;
+    CS.delta_raw_sent = B.empty;
+    CS.delta_raw_received = raw_received;
+  } in
+  assert (CS.legal_event st.CS.cs_model ev);
+  assert (CS.step_model st.CS.cs_model ev ==
+          Some (received_server_hello_state st sh raw_received).CS.cs_model);
+  assert (CS.legal_connection_delta
+    st
+    delta
+    (received_server_hello_state st sh raw_received));
+  assert (CS.connection_state_single_step
+    st
+    (received_server_hello_state st sh raw_received));
+  FStar.ReflexiveTransitiveClosure.closure_step
+    CS.connection_state_single_step
+    st
+    (received_server_hello_state st sh raw_received);
+  assert (CS.connection_state_evolves
+    st
+    (received_server_hello_state st sh raw_received));
+  assert (CS.connection_state_consistent
+    (received_server_hello_state st sh raw_received))
 
 let lemma_received_alert_failure_state_evolves
   (st:CS.connection_state)
