@@ -588,6 +588,9 @@ let server_key_share_extension (key_share:B.bytes) : GTot B.bytes =
 let supported_versions_extension (_:unit) : GTot B.bytes =
   append4 (u16 0x002b) (u16 3) (u8 2) (u16 0x0304)
 
+let server_supported_versions_extension (_:unit) : GTot B.bytes =
+  append3 (u16 0x002b) (u16 2) (u16 0x0304)
+
 let client_hello_extensions (hello:M.client_hello) : GTot B.bytes =
   let hostname =
     match hello.M.server_name with
@@ -612,7 +615,7 @@ let serialize_client_hello (hello:M.client_hello) : GTot B.bytes =
 
 let serialize_server_hello (sh:M.server_hello) : GTot B.bytes =
   let extensions =
-    B.append (server_key_share_extension sh.M.key_share) (supported_versions_extension ()) in
+    B.append (server_key_share_extension sh.M.key_share) (server_supported_versions_extension ()) in
   append6
     (u16 0x0303)
     sh.M.random
@@ -678,6 +681,12 @@ let serialize_handshake (msg:M.handshake_msg) : GTot B.bytes =
 
 let serialize_handshake_msg (msg:M.handshake_msg) : GTot B.bytes =
   serialize_handshake msg
+
+let lemma_serialize_server_hello_len (sh:M.server_hello)
+  : Lemma (B.length (serialize_handshake (M.ServerHello sh)) == 90 /\
+           B.length (serialize_handshake_msg (M.ServerHello sh)) == 90)
+=
+  ()
 
 let serialize_server_certificate_verify_input (transcript_hash:B.bytes) : GTot B.bytes =
   if B.length transcript_hash == 32
