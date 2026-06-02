@@ -3,6 +3,7 @@ module TLS13.Spec.ConnectionState
 module B = TLS13.Bytes
 module C = TLS13.Crypto.Spec
 module CL = TLS13.ConnectionLog
+module H = TLS13.Handshake.Spec
 module K = TLS13.Keys
 module M = TLS13.Messages
 module R = TLS13.Record.Spec
@@ -11,6 +12,7 @@ module S = TLS13.StateMachine
 module Seq = FStar.Seq
 module T = TLS13.Types
 module Tr = TLS13.Transcript
+module W = TLS13.Wire.Spec
 module X = TLS13.X509.Spec
 
 open FStar.List.Tot
@@ -246,6 +248,524 @@ let sent_tls_event (msg:M.tls_message) : conn_event =
 let received_tls_event (msg:M.tls_message) : conn_event =
   ConnNetworkEvent { CL.message_direction = CL.Received; CL.message_value = msg }
 
+let fail_model (model:connection_model) (err:T.tls_error) : connection_model =
+  { model with model_control = ControlFailed err; model_failure = Some err }
+
+let with_handshake_stage
+  (model:connection_model)
+  (hs:handshake_state)
+  (stage:handshake_stage)
+  : connection_model =
+  { model with model_control = ControlHandshaking stage; model_handshake = hs }
+
+let with_handshake_state
+  (model:connection_model)
+  (hs:handshake_state)
+  : connection_model =
+  { model with model_handshake = hs }
+
+let append_handshake_to_transcript
+  (hs:handshake_state)
+  (msg:M.handshake_msg)
+  : GTot handshake_state =
+  { hs with hs_transcript = Tr.append hs.hs_transcript (W.serialize_handshake msg) }
+
+let rec advance_direction_records
+  (st:R.direction_state)
+  (n:nat)
+  : Tot R.direction_state
+        (decreases n)
+  =
+  if n = 0 then st
+  else R.next_seq (advance_direction_records st (n - 1))
+
+let traffic_record_epoch (epoch:traffic_epoch) : R.epoch =
+  match epoch with
+  | TrafficHandshake -> R.Handshake
+  | TrafficApplication -> R.Application
+
+let update_key_schedule_with_install
+  (keys:key_schedule_state)
+  (install:traffic_key_install)
+  : key_schedule_state =
+  let material = install.install_material in
+  match install.install_epoch, install.install_direction with
+  | TrafficHandshake, TrafficWrite ->
+    { keys with ks_client_handshake_traffic = Some material }
+  | TrafficHandshake, TrafficRead ->
+    { keys with ks_server_handshake_traffic = Some material }
+  | TrafficApplication, TrafficWrite ->
+    { keys with ks_client_application_traffic = Some material }
+  | TrafficApplication, TrafficRead ->
+    { keys with ks_server_application_traffic = Some material }
+
+let install_record_keys
+  (record:record_layer_state)
+  (install:traffic_key_install)
+  : record_layer_state =
+  let material = install.install_material in
+  let epoch = traffic_record_epoch install.install_epoch in
+  match install.install_direction with
+  | TrafficWrite ->
+    {
+      record with
+        record_write =
+          R.install_keys record.record_write epoch material.traffic_key material.traffic_iv;
+    }
+  | TrafficRead ->
+    {
+      record with
+        record_read =
+          R.install_keys record.record_read epoch material.traffic_key material.traffic_iv;
+    }
+
+let step_local_event (model:connection_model) (ev:local_event) : GTot (option connection_model) =
+  let hs = model.model_handshake in
+  match ev, model.model_control with
+  | LocalStartHandshake start, ControlNew ->
+    Some (with_handshake_stage model { hs with hs_start = Some start } HsStarted)
+  | LocalDeriveSharedSecret shared, ControlHandshaking HsServerHelloReceived ->
+    let early = K.early_secret B.empty in
+    let handshake = K.handshake_secret early shared in
+    let master = K.master_secret handshake in
+    let keys = { hs.hs_keys with ks_shared_secret = Some shared } in
+    Some (with_handshake_state
+      model
+      { hs with
+          hs_keys =
+            { keys with
+                ks_early_secret = Some early;
+                ks_handshake_secret = Some handshake;
+                ks_master_secret = Some master;
+            };
+      })
+  | LocalInstallTrafficKeys install, ControlHandshaking _ ->
+    let keys = update_key_schedule_with_install hs.hs_keys install in
+    Some {
+      model with
+        model_record = install_record_keys model.model_record install;
+        model_handshake = { hs with hs_keys = keys };
+    }
+  | LocalValidateCertificate peer, ControlHandshaking HsCertificateReceived ->
+    Some (with_handshake_stage model { hs with hs_validated_peer = Some peer } HsCertificateValidated)
+  | LocalVerifyCertificateSignature cv, ControlHandshaking HsCertificateVerifyReceived ->
+    Some (with_handshake_stage
+      model
+      { hs with
+          hs_certificate_verify = Some cv;
+          hs_certificate_verify_verified = true;
+      }
+      HsCertificateVerifyVerified)
+  | LocalVerifyFinished fin, ControlHandshaking HsServerFinishedReceived ->
+    Some (with_handshake_stage
+      model
+      (append_handshake_to_transcript
+        { hs with
+            hs_server_finished = Some fin;
+            hs_server_finished_verified = true;
+        }
+        (M.Finished fin))
+      HsServerFinishedVerified)
+  | LocalDeliverApplicationData bytes, ControlApplicationData ->
+    let app = model.model_application in
+    Some {
+      model with
+        model_application =
+          { app with app_log = CL.append_app_received app.app_log bytes };
+    }
+  | LocalFail err, _ ->
+    Some (fail_model model err)
+  | _, _ ->
+    None
+
+let step_handshake_message
+  (model:connection_model)
+  (dir:direction)
+  (msg:M.handshake_msg)
+  : GTot (option connection_model) =
+  let hs = model.model_handshake in
+  match dir, msg, model.model_control with
+  | CL.Sent, M.ClientHello ch, ControlHandshaking HsStarted ->
+    let hs' =
+      append_handshake_to_transcript
+        { hs with
+            hs_client_hello = Some ch;
+            hs_buffers =
+              { hs.hs_buffers with hb_client_hello_bytes = W.serialize_handshake msg };
+        }
+        msg in
+    Some (with_handshake_stage model hs' HsClientHelloSent)
+  | CL.Received, M.ServerHello sh, ControlHandshaking HsClientHelloSent ->
+    let hs' =
+      append_handshake_to_transcript
+        { hs with
+            hs_server_hello = Some sh;
+            hs_buffers =
+              { hs.hs_buffers with hb_server_hello_bytes = W.serialize_handshake msg };
+        }
+        msg in
+    Some (with_handshake_stage model hs' HsServerHelloReceived)
+  | CL.Received, M.EncryptedExtensions ee, ControlHandshaking HsServerHelloReceived ->
+    Some (with_handshake_stage
+      { model with
+          model_record =
+            { model.model_record with
+                record_read = R.next_seq model.model_record.record_read;
+            };
+      }
+      (append_handshake_to_transcript { hs with hs_encrypted_extensions = Some ee } msg)
+      HsEncryptedExtensionsReceived)
+  | CL.Received, M.Certificate cert, ControlHandshaking HsEncryptedExtensionsReceived ->
+    Some (with_handshake_stage
+      { model with
+          model_record =
+            { model.model_record with
+                record_read = R.next_seq model.model_record.record_read;
+            };
+      }
+      (append_handshake_to_transcript
+        { hs with
+            hs_certificate = Some cert;
+            hs_buffers =
+            { hs.hs_buffers with
+                hb_certificate_leaf_der =
+                  (match cert.M.chain with
+                   | leaf :: _ -> Some leaf
+                   | [] -> None);
+            };
+        }
+        msg)
+      HsCertificateReceived)
+  | CL.Received, M.CertificateVerify cv, ControlHandshaking HsCertificateValidated ->
+    Some (with_handshake_stage
+      { model with
+          model_record =
+            { model.model_record with
+                record_read = R.next_seq model.model_record.record_read;
+            };
+      }
+      (append_handshake_to_transcript
+        { hs with
+            hs_certificate_verify = Some cv;
+            hs_buffers =
+            { hs.hs_buffers with
+                hb_certificate_verify_input =
+                  Some (H.certificate_verify_input (Tr.hash hs.hs_transcript));
+            };
+        }
+        msg)
+      HsCertificateVerifyReceived)
+  | CL.Received, M.Finished fin, ControlHandshaking HsCertificateVerifyVerified ->
+    Some (with_handshake_stage
+      { model with
+          model_record =
+            { model.model_record with
+                record_read = R.next_seq model.model_record.record_read;
+            };
+      }
+      { hs with hs_server_finished = Some fin }
+      HsServerFinishedReceived)
+  | CL.Sent, M.Finished fin, ControlHandshaking HsServerFinishedVerified ->
+    Some {
+      model with
+        model_control = ControlApplicationData;
+        model_record =
+          { model.model_record with
+              record_write = R.next_seq model.model_record.record_write;
+          };
+        model_handshake =
+          append_handshake_to_transcript { hs with hs_client_finished = Some fin } msg;
+    }
+  | CL.Received, M.HelloRetryRequest, ControlHandshaking HsClientHelloSent ->
+    Some (fail_model model T.HelloRetryRequestRejected)
+  | _, _, _ ->
+    None
+
+let step_tls_message
+  (model:connection_model)
+  (dir:direction)
+  (msg:M.tls_message)
+  : GTot (option connection_model) =
+  match msg, model.model_control with
+  | M.TlsHandshake handshake_msg, _ -> step_handshake_message model dir handshake_msg
+  | M.TlsApplicationData bytes, ControlApplicationData ->
+    let app = model.model_application in
+    (match dir with
+     | CL.Sent ->
+       Some {
+         model with
+           model_record = {
+             model.model_record with
+               record_write =
+                 advance_direction_records
+                   model.model_record.record_write
+                   (S.application_data_record_count bytes);
+           };
+           model_application =
+             { app with app_log = CL.append_app_sent app.app_log bytes };
+       }
+     | CL.Received ->
+       Some {
+         model with
+           model_record = {
+             model.model_record with
+               record_read = R.next_seq model.model_record.record_read;
+           };
+           model_application =
+             { app with app_log = CL.append_app_received app.app_log bytes };
+       })
+  | M.TlsAlert T.CloseNotify, ControlApplicationData ->
+    (match dir with
+     | CL.Sent ->
+       Some {
+         model with
+           model_control = ControlClosing;
+           model_record = {
+             model.model_record with
+               record_write = R.next_seq model.model_record.record_write;
+           };
+       }
+     | CL.Received ->
+       Some {
+         model with
+           model_control = ControlClosed;
+           model_record = {
+             model.model_record with
+               record_read = R.next_seq model.model_record.record_read;
+           };
+       })
+  | M.TlsAlert T.CloseNotify, ControlClosing ->
+    (match dir with
+     | CL.Received ->
+       Some {
+         model with
+           model_control = ControlClosed;
+           model_record = {
+             model.model_record with
+               record_read = R.next_seq model.model_record.record_read;
+           };
+       }
+     | CL.Sent -> None)
+  | M.TlsAlert alert, _ ->
+    Some (fail_model model (T.AlertError alert))
+  | M.TlsChangeCipherSpec, ControlHandshaking _ ->
+    Some model
+  | _, _ ->
+    None
+
+let step_model (model:connection_model) (ev:conn_event) : GTot (option connection_model) =
+  match ev with
+  | ConnNetworkEvent msg ->
+    step_tls_message model msg.CL.message_direction msg.CL.message_value
+  | ConnLocalEvent local ->
+    step_local_event model local
+
+let rec step_model_many
+  (model:connection_model)
+  (events:list conn_event)
+  : GTot (option connection_model)
+        (decreases events)
+  =
+  match events with
+  | [] -> Some model
+  | ev :: rest ->
+    (match step_model model ev with
+     | Some model' -> step_model_many model' rest
+     | None -> None)
+
+let model_after_events (cfg:connection_config) (events:list conn_event)
+  : GTot (option connection_model) =
+  step_model_many (initial_model cfg) events
+
+let rec cipher_suite_offered (suites:list T.cipher_suite) (suite:T.cipher_suite)
+  : Tot prop
+        (decreases suites)
+  =
+  match suites with
+  | [] -> False
+  | offered :: rest -> offered == suite \/ cipher_suite_offered rest suite
+
+let start_matches_config (cfg:connection_config) (start:handshake_start) : prop =
+  Seq.equal start.start_server_name cfg.config_server_name /\
+  start.start_cipher_suites == cfg.config_cipher_suites /\
+  start.start_signature_schemes == cfg.config_signature_schemes
+
+let client_hello_matches_start (start:handshake_start) (ch:M.client_hello) : prop =
+  Seq.equal ch.M.random start.start_client_random /\
+  ch.M.server_name == Some start.start_server_name /\
+  Seq.equal ch.M.key_share start.start_client_key_share_public /\
+  ch.M.cipher_suites == start.start_cipher_suites /\
+  ch.M.signature_schemes == start.start_signature_schemes
+
+let traffic_key_material_for_secret (secret:K.traffic_secret) : traffic_key_material =
+  {
+    traffic_secret = secret;
+    traffic_key = K.derive_aead_key secret;
+    traffic_iv = K.derive_aead_iv secret;
+  }
+
+let expected_traffic_secret
+  (hs:handshake_state)
+  (epoch:traffic_epoch)
+  (dir:traffic_direction)
+  : GTot (option K.traffic_secret) =
+  match epoch, dir with
+  | TrafficHandshake, TrafficWrite ->
+    (match hs.hs_keys.ks_handshake_secret with
+     | Some secret -> Some (K.client_handshake_traffic_secret secret (Tr.hash hs.hs_transcript))
+     | None -> None)
+  | TrafficHandshake, TrafficRead ->
+    (match hs.hs_keys.ks_handshake_secret with
+     | Some secret -> Some (K.server_handshake_traffic_secret secret (Tr.hash hs.hs_transcript))
+     | None -> None)
+  | TrafficApplication, TrafficWrite ->
+    (match hs.hs_keys.ks_master_secret with
+     | Some secret -> Some (K.client_application_traffic_secret secret (Tr.hash hs.hs_transcript))
+     | None -> None)
+  | TrafficApplication, TrafficRead ->
+    (match hs.hs_keys.ks_master_secret with
+     | Some secret -> Some (K.server_application_traffic_secret secret (Tr.hash hs.hs_transcript))
+     | None -> None)
+
+let traffic_install_matches_key_schedule
+  (hs:handshake_state)
+  (install:traffic_key_install)
+  : GTot prop =
+  match expected_traffic_secret hs install.install_epoch install.install_direction with
+  | Some secret ->
+    install.install_material == traffic_key_material_for_secret secret
+  | None -> False
+
+let traffic_install_allowed_at_stage
+  (stage:handshake_stage)
+  (install:traffic_key_install)
+  : prop =
+  match install.install_epoch with
+  | TrafficHandshake -> stage == HsServerHelloReceived
+  | TrafficApplication -> stage == HsServerFinishedVerified
+
+let legal_local_event (model:connection_model) (ev:local_event) : GTot prop =
+  let hs = model.model_handshake in
+  match ev, model.model_control with
+  | LocalStartHandshake start, ControlNew ->
+    start_matches_config model.model_config start
+  | LocalDeriveSharedSecret shared, ControlHandshaking HsServerHelloReceived ->
+    (match hs.hs_start, hs.hs_server_hello with
+     | Some start, Some sh ->
+       (match start.start_client_key_share_private with
+        | Some sk -> C.x25519_shared sk sh.M.key_share == Some shared
+        | None -> True)
+     | _, _ -> False)
+  | LocalInstallTrafficKeys install, ControlHandshaking stage ->
+    traffic_install_allowed_at_stage stage install /\
+    traffic_install_matches_key_schedule hs install
+  | LocalValidateCertificate peer, ControlHandshaking HsCertificateReceived ->
+    (match hs.hs_certificate with
+     | Some cert ->
+       X.validate_chain
+         model.model_config.config_server_name
+         model.model_config.config_validation_time
+         model.model_config.config_trust_store
+         cert.M.chain == Some peer
+     | None -> False)
+  | LocalVerifyCertificateSignature cv, ControlHandshaking HsCertificateVerifyReceived ->
+    (match hs.hs_validated_peer, hs.hs_certificate_verify, hs.hs_buffers.hb_certificate_verify_input with
+     | Some peer, Some stored_cv, Some input ->
+       stored_cv == cv /\
+       C.verify_signature cv.M.scheme peer.X.leaf_public_key input cv.M.signature
+     | _, _, _ -> False)
+  | LocalVerifyFinished fin, ControlHandshaking HsServerFinishedReceived ->
+    (match hs.hs_server_finished, hs.hs_keys.ks_server_handshake_traffic with
+     | Some stored_fin, Some server_hs ->
+       stored_fin == fin /\
+       H.verify_finished server_hs.traffic_secret (Tr.hash hs.hs_transcript) fin
+     | _, _ -> False)
+  | LocalDeliverApplicationData bytes, ControlApplicationData ->
+    exists pending.
+      Seq.equal model.model_application.app_pending_plaintext (B.append bytes pending)
+  | LocalFail _, _ ->
+    True
+  | _, _ ->
+    False
+
+let legal_handshake_message
+  (model:connection_model)
+  (dir:direction)
+  (msg:M.handshake_msg)
+  : GTot prop =
+  let hs = model.model_handshake in
+  match dir, msg, model.model_control with
+  | CL.Sent, M.ClientHello ch, ControlHandshaking HsStarted ->
+    (match hs.hs_start with
+     | Some start -> client_hello_matches_start start ch
+     | None -> False)
+  | CL.Received, M.ServerHello sh, ControlHandshaking HsClientHelloSent ->
+    H.is_supported_cipher_suite sh.M.cipher_suite /\
+    (match hs.hs_start with
+     | Some start -> cipher_suite_offered start.start_cipher_suites sh.M.cipher_suite
+     | None -> False)
+  | CL.Received, M.EncryptedExtensions _, ControlHandshaking HsServerHelloReceived ->
+    Some? hs.hs_keys.ks_server_handshake_traffic
+  | CL.Received, M.Certificate cert, ControlHandshaking HsEncryptedExtensionsReceived ->
+    cert.M.chain <> []
+  | CL.Received, M.CertificateVerify _, ControlHandshaking HsCertificateValidated ->
+    Some? hs.hs_validated_peer
+  | CL.Received, M.Finished _, ControlHandshaking HsCertificateVerifyVerified ->
+    Some? hs.hs_keys.ks_server_handshake_traffic
+  | CL.Sent, M.Finished _, ControlHandshaking HsServerFinishedVerified ->
+    Some? hs.hs_keys.ks_client_application_traffic /\
+    Some? hs.hs_keys.ks_server_application_traffic
+  | CL.Received, M.HelloRetryRequest, ControlHandshaking HsClientHelloSent ->
+    True
+  | _, _, _ ->
+    False
+
+let legal_tls_message
+  (model:connection_model)
+  (dir:direction)
+  (msg:M.tls_message)
+  : GTot prop =
+  let hs = model.model_handshake in
+  match msg, model.model_control with
+  | M.TlsHandshake handshake_msg, _ ->
+    legal_handshake_message model dir handshake_msg
+  | M.TlsApplicationData _, ControlApplicationData ->
+    (match dir with
+     | CL.Sent -> Some? hs.hs_keys.ks_client_application_traffic
+     | CL.Received -> Some? hs.hs_keys.ks_server_application_traffic)
+  | M.TlsAlert T.CloseNotify, ControlApplicationData ->
+    True
+  | M.TlsAlert T.CloseNotify, ControlClosing ->
+    dir == CL.Received
+  | M.TlsAlert _, _ ->
+    True
+  | M.TlsChangeCipherSpec, ControlHandshaking _ ->
+    True
+  | _, _ ->
+    False
+
+let legal_event (model:connection_model) (ev:conn_event) : GTot prop =
+  match ev with
+  | ConnNetworkEvent msg ->
+    legal_tls_message model msg.CL.message_direction msg.CL.message_value
+  | ConnLocalEvent local ->
+    legal_local_event model local
+
+let rec model_events_legal
+  (model:connection_model)
+  (events:list conn_event)
+  (final:connection_model)
+  : GTot prop
+        (decreases events)
+  =
+  match events with
+  | [] -> final == model
+  | ev :: rest ->
+    legal_event model ev /\
+    (match step_model model ev with
+     | Some model' -> model_events_legal model' rest final
+     | None -> False)
+
 let conn_event_sent_tls_delta (ev:conn_event) : list M.tls_message =
   match ev with
   | ConnNetworkEvent msg ->
@@ -434,43 +954,114 @@ let connection_log_view_of_state (st:connection_state) : GTot CL.connection_view
     CL.pending_received_raw = app.app_pending_received_raw;
   }
 
-type raw_message_relation =
-  wire_log -> list M.tls_message -> list M.tls_message -> prop
+let rec all_records_outer_type
+  (outer:T.content_type)
+  (records:list M.tls_record)
+  : Tot prop
+        (decreases records)
+  =
+  match records with
+  | [] -> True
+  | record :: rest ->
+    record.M.record_outer_type == outer /\
+    all_records_outer_type outer rest
 
-let connection_state_consistent_with
-  (raw_messages:raw_message_relation)
-  (st:connection_state)
-  : prop =
-  raw_messages st.cs_wire_log
-    (sent_tls_messages st.cs_event_log)
-    (received_tls_messages st.cs_event_log) /\
-  st.cs_model.model_application.app_log == app_log_of_conn_events st.cs_event_log /\
-  pending_application_consistent st.cs_model.model_application /\
-  S.step_many S.initial (state_machine_events st.cs_event_log) ==
-    Some (abstract_state_of_model st.cs_model)
+let raw_records_exactly
+  (raw:B.bytes)
+  (outer:T.content_type)
+  (count:nat)
+  : GTot prop =
+  let parsed = CL.parse_record_prefix raw in
+  CL.record_stream_serializes raw parsed /\
+  Seq.equal parsed.CL.residual B.empty /\
+  length parsed.CL.values == count /\
+  all_records_outer_type outer parsed.CL.values
 
-let connection_state_consistent (st:connection_state) : prop =
-  connection_state_consistent_with (fun _ _ _ -> True) st
+let serialized_cleartext_tls_message (msg:M.tls_message) : GTot B.bytes =
+  let (content_type, fragment) = W.serialize_tls_message msg in
+  W.serialize_record content_type fragment
+
+let cleartext_tls_message_raw (msg:M.tls_message) (raw:B.bytes) : GTot prop =
+  match msg with
+  | M.TlsHandshake M.HelloRetryRequest ->
+    raw_records_exactly raw T.Handshake 1
+  | _ ->
+    Seq.equal raw (serialized_cleartext_tls_message msg)
+
+let network_message_is_cleartext (dir:direction) (msg:M.tls_message) : bool =
+  match dir, msg with
+  | CL.Sent, M.TlsHandshake (M.ClientHello _) -> true
+  | CL.Received, M.TlsHandshake (M.ServerHello _) -> true
+  | CL.Received, M.TlsHandshake M.HelloRetryRequest -> true
+  | _, M.TlsChangeCipherSpec -> true
+  | _, _ -> false
+
+let protected_record_count (dir:direction) (msg:M.tls_message) : nat =
+  match dir, msg with
+  | CL.Sent, M.TlsApplicationData bytes -> S.application_data_record_count bytes
+  | _, _ -> 1
+
+let network_message_raw_delta_legal
+  (model:connection_model)
+  (msg:directed_message M.tls_message)
+  (raw:B.bytes)
+  : GTot prop =
+  if network_message_is_cleartext msg.CL.message_direction msg.CL.message_value
+  then cleartext_tls_message_raw msg.CL.message_value raw
+  else
+    raw_records_exactly
+      raw
+      T.ApplicationData
+      (protected_record_count msg.CL.message_direction msg.CL.message_value)
+
+let event_raw_delta_legal
+  (model:connection_model)
+  (ev:conn_event)
+  (raw_sent:B.bytes)
+  (raw_received:B.bytes)
+  : GTot prop =
+  match ev with
+  | ConnLocalEvent _ ->
+    Seq.equal raw_sent B.empty /\
+    Seq.equal raw_received B.empty
+  | ConnNetworkEvent msg ->
+    (match msg.CL.message_direction with
+     | CL.Sent ->
+       network_message_raw_delta_legal model msg raw_sent /\
+       Seq.equal raw_received B.empty
+     | CL.Received ->
+       Seq.equal raw_sent B.empty /\
+       network_message_raw_delta_legal model msg raw_received)
 
 type connection_delta = {
   delta_event: conn_event;
   delta_raw_sent: B.bytes;
   delta_raw_received: B.bytes;
-  delta_next_model: connection_model;
 }
 
-let apply_delta (st:connection_state) (delta:connection_delta) : connection_state =
-  {
-    cs_model = delta.delta_next_model;
-    cs_wire_log = {
-      CL.raw_sent = B.append st.cs_wire_log.CL.raw_sent delta.delta_raw_sent;
-      CL.raw_received = B.append st.cs_wire_log.CL.raw_received delta.delta_raw_received;
-    };
-    cs_event_log = st.cs_event_log @ [delta.delta_event];
-  }
+let legal_connection_delta
+  (st0:connection_state)
+  (delta:connection_delta)
+  (st1:connection_state)
+  : GTot prop =
+  legal_event st0.cs_model delta.delta_event /\
+  step_model st0.cs_model delta.delta_event == Some st1.cs_model /\
+  event_raw_delta_legal
+    st0.cs_model
+    delta.delta_event
+    delta.delta_raw_sent
+    delta.delta_raw_received /\
+  st1.cs_wire_log == {
+    CL.raw_sent = B.append st0.cs_wire_log.CL.raw_sent delta.delta_raw_sent;
+    CL.raw_received = B.append st0.cs_wire_log.CL.raw_received delta.delta_raw_received;
+  } /\
+  st1.cs_event_log == st0.cs_event_log @ [delta.delta_event]
 
 let connection_state_single_step : RTC.binrel connection_state =
-  fun st0 st1 -> exists delta. st1 == apply_delta st0 delta
+  fun st0 st1 -> exists delta. legal_connection_delta st0 delta st1
 
 let connection_state_evolves : RTC.preorder connection_state =
   RTC.closure connection_state_single_step
+
+let connection_state_consistent (st:connection_state) : GTot prop =
+  connection_state_evolves (initial st.cs_model.model_config) st
