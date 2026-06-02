@@ -25,6 +25,17 @@ fn record_state_free (st: record_state)
   requires is_record_state st 's
   ensures emp
 
+fn can_advance_seq (st: record_state)
+  requires is_record_state st 's
+  returns ok: bool
+  ensures is_record_state st 's **
+          pure (ok ==> U64.fits ('s.R.seq + 1))
+
+fn advance_seq (st: record_state)
+  requires is_record_state st 's **
+           pure (U64.fits ('s.R.seq + 1))
+  ensures is_record_state st (R.next_seq 's)
+
 fn install_keys
   (st: record_state)
   (#epoch: R.epoch)

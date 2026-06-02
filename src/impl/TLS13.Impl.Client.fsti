@@ -9,6 +9,7 @@ module B = TLS13.Bytes
 module CS = TLS13.Spec.ConnectionState
 module C = TLS13.Impl.ConnectionState
 module CT = TLS13.Impl.Client.Types
+module L = TLS13.Impl.Messages
 module SZ = FStar.SizeT
 module U8 = FStar.UInt8
 
@@ -41,6 +42,7 @@ fn process_network_event
                  B.length 'fragment_bytes == SZ.v fragment_len /\
                  B.length 'old_network_out == SZ.v network_out_len /\
                  B.length 'old_app_out == SZ.v app_out_len /\
+                 L.max_record_fragment_len <= SZ.v app_out_len /\
                  CT.network_input_wf
                    'st0
                    content_type

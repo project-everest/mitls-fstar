@@ -58,6 +58,7 @@ fn dispatch_network_event
                  B.length 'fragment_bytes == SZ.v fragment_len /\
                  B.length 'old_network_out == SZ.v network_out_len /\
                  B.length 'old_app_out == SZ.v app_out_len /\
+                 L.max_record_fragment_len <= SZ.v app_out_len /\
                  CT.network_input_wf
                    'st0
                    content_type
@@ -127,22 +128,16 @@ fn dispatch_network_event
           let resp =
             HApplicationData.handle_application_data
               c
-              (L.LTlsApplicationData lapp)
+              content_type
+              lapp
               raw
               raw_len
+              fragment
+              fragment_len
               network_out
               network_out_len
               app_out
               app_out_len;
-          CT.lemma_legal_network_response_unexpected_from_parse_success
-            'st0
-            (C.local_fail_state 'st0 C.tls_unexpected_message_error)
-            resp
-            content_type
-            (Ghost.reveal 'fragment_bytes)
-            (Ghost.reveal 'raw_bytes)
-            'old_network_out
-            'old_app_out;
           resp
         }
         L.LTlsAlert lalert -> {

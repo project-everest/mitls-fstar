@@ -80,6 +80,65 @@ fn record_state_free (st: record_state)
   Box.free st.installed;
 }
 
+let u64_max : U64.t = U64.uint_to_t 18446744073709551615
+
+let seq_can_advance (seq:U64.t) : bool = U64.lt seq u64_max
+
+let lemma_seq_can_advance_fits (seq:U64.t)
+  : Lemma
+      (requires seq_can_advance seq)
+      (ensures U64.fits (U64.v seq + 1))
+=
+  assert (U64.v u64_max == 18446744073709551615);
+  assert (U64.v seq < U64.v u64_max);
+  assert (U64.v seq + 1 < 18446744073709551616)
+
+fn can_advance_seq (st: record_state)
+  requires is_record_state st 's
+  returns ok: bool
+  ensures is_record_state st 's **
+          pure (ok ==> U64.fits ('s.R.seq + 1))
+{
+  unfold (is_record_state st 's);
+  let seq = !st.seq;
+  let ok = seq_can_advance seq;
+  if ok {
+    lemma_seq_can_advance_fits seq;
+    with key_s. assert (V.pts_to st.key key_s);
+    with iv_s. assert (V.pts_to st.iv iv_s);
+    with installed_s. assert (Box.pts_to st.installed installed_s);
+    assert (pure (state_matches installed_s seq key_s iv_s 's));
+    assert (pure (U64.fits ('s.R.seq + 1)));
+    fold (is_record_state st 's);
+    true
+  } else {
+    with key_s. assert (V.pts_to st.key key_s);
+    with iv_s. assert (V.pts_to st.iv iv_s);
+    with installed_s. assert (Box.pts_to st.installed installed_s);
+    assert (pure (state_matches installed_s seq key_s iv_s 's));
+    fold (is_record_state st 's);
+    false
+  }
+}
+
+fn advance_seq (st: record_state)
+  requires is_record_state st 's **
+           pure (U64.fits ('s.R.seq + 1))
+  ensures is_record_state st (R.next_seq 's)
+{
+  unfold (is_record_state st 's);
+  let seq = !st.seq;
+  let next_seq = U64.add seq 1UL;
+  st.seq := next_seq;
+  with key_s. assert (V.pts_to st.key key_s);
+  with iv_s. assert (V.pts_to st.iv iv_s);
+  with installed_s. assert (Box.pts_to st.installed installed_s);
+  assert (pure (state_matches installed_s seq key_s iv_s 's));
+  assert (pure (U64.v next_seq == 's.R.seq + 1));
+  assert (pure (state_matches installed_s next_seq key_s iv_s (R.next_seq 's)));
+  fold (is_record_state st (R.next_seq 's));
+}
+
 fn install_keys
   (st: record_state)
   (#epoch: R.epoch)

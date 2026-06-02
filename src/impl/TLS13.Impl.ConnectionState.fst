@@ -20,6 +20,7 @@ module SZ = FStar.SizeT
 module T = TLS13.Types
 module U8 = FStar.UInt8
 module U16 = FStar.UInt16
+module U64 = FStar.UInt64
 module V = Pulse.Lib.Vec
 module X = TLS13.X509.Spec
 
@@ -979,6 +980,39 @@ let received_alert_failure_state
       }];
   }
 
+let received_application_data_state
+  (st:CS.connection_state)
+  (bytes:B.bytes)
+  (raw_received:B.bytes)
+  : CS.connection_state =
+  let model0 = st.CS.cs_model in
+  let record0 = model0.CS.model_record in
+  let app0 = model0.CS.model_application in
+  let model1 = {
+    model0 with
+      CS.model_record = {
+        record0 with
+          CS.record_read = R.next_seq record0.CS.record_read;
+      };
+      CS.model_application = {
+        app0 with
+          CS.app_log = CL.append_app_received app0.CS.app_log bytes;
+      };
+  } in
+  {
+    CS.cs_model = model1;
+    CS.cs_wire_log = {
+      CL.raw_sent = B.append st.CS.cs_wire_log.CL.raw_sent B.empty;
+      CL.raw_received = B.append st.CS.cs_wire_log.CL.raw_received raw_received;
+    };
+    CS.cs_event_log =
+      st.CS.cs_event_log @
+      [CS.ConnNetworkEvent {
+        CL.message_direction = CL.Received;
+        CL.message_value = M.TlsApplicationData bytes;
+      }];
+  }
+
 let lemma_local_fail_state_evolves (st:CS.connection_state) (err:T.tls_error)
   : Lemma
       (requires CS.connection_state_consistent st)
@@ -1179,6 +1213,70 @@ let lemma_received_alert_failure_state_evolves
   assert (CS.connection_state_evolves st (received_alert_failure_state st alert raw_received));
   assert (CS.connection_state_consistent (received_alert_failure_state st alert raw_received))
 
+let lemma_received_application_data_state_evolves
+  (st:CS.connection_state)
+  (bytes:B.bytes)
+  (raw_received:B.bytes)
+  : Lemma
+      (requires CS.connection_state_consistent st /\
+                st.CS.cs_model.CS.model_control == CS.ControlApplicationData /\
+                Some? st.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_application_traffic /\
+                CS.event_raw_delta_legal
+                  st.CS.cs_model
+                  (CS.ConnNetworkEvent {
+                    CL.message_direction = CL.Received;
+                    CL.message_value = M.TlsApplicationData bytes;
+                  })
+                  B.empty
+                  raw_received)
+      (ensures CS.connection_state_evolves
+                 st
+                 (received_application_data_state st bytes raw_received) /\
+               CS.connection_state_consistent
+                 (received_application_data_state st bytes raw_received) /\
+               CS.legal_connection_delta
+                 st
+                 {
+                   CS.delta_event =
+                     CS.ConnNetworkEvent {
+                       CL.message_direction = CL.Received;
+                       CL.message_value = M.TlsApplicationData bytes;
+                     };
+                   CS.delta_raw_sent = B.empty;
+                   CS.delta_raw_received = raw_received;
+                 }
+                 (received_application_data_state st bytes raw_received))
+=
+  let ev =
+    CS.ConnNetworkEvent {
+      CL.message_direction = CL.Received;
+      CL.message_value = M.TlsApplicationData bytes;
+    } in
+  let delta = {
+    CS.delta_event = ev;
+    CS.delta_raw_sent = B.empty;
+    CS.delta_raw_received = raw_received;
+  } in
+  assert (CS.legal_event st.CS.cs_model ev);
+  assert (CS.step_model st.CS.cs_model ev ==
+          Some (received_application_data_state st bytes raw_received).CS.cs_model);
+  assert (CS.legal_connection_delta
+    st
+    delta
+    (received_application_data_state st bytes raw_received));
+  assert (CS.connection_state_single_step
+    st
+    (received_application_data_state st bytes raw_received));
+  FStar.ReflexiveTransitiveClosure.closure_step
+    CS.connection_state_single_step
+    st
+    (received_application_data_state st bytes raw_received);
+  assert (CS.connection_state_evolves
+    st
+    (received_application_data_state st bytes raw_received));
+  assert (CS.connection_state_consistent
+    (received_application_data_state st bytes raw_received))
+
 fn mark_decode_error
   (c:connection_state)
   (#st0:erased CS.connection_state)
@@ -1289,6 +1387,60 @@ fn is_waiting_server_hello
   assert (pure (ok ==>
     st0.CS.cs_model.CS.model_control ==
       CS.ControlHandshaking CS.HsClientHelloSent));
+
+  fold (control_exactly
+    c.control
+    st0.CS.cs_model.CS.model_control
+    st0.CS.cs_model.CS.model_failure);
+  fold (connection_model_exactly c st0.CS.cs_model);
+  fold (connection_exactly c st0);
+  ok
+}
+
+fn can_receive_application_data
+  (c:connection_state)
+  (#st0:erased CS.connection_state)
+  requires connection_exactly c st0
+  returns ok: bool
+  ensures connection_exactly c st0 **
+          pure (ok ==>
+            st0.CS.cs_model.CS.model_control == CS.ControlApplicationData /\
+            Some? st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_application_traffic /\
+            U64.fits (st0.CS.cs_model.CS.model_record.CS.record_read.R.seq + 1))
+{
+  unfold (connection_exactly c st0);
+  unfold (connection_model_exactly c st0.CS.cs_model);
+  unfold (control_exactly c.control st0.CS.cs_model.CS.model_control st0.CS.cs_model.CS.model_failure);
+  unfold (record_layer_exactly c.records st0.CS.cs_model.CS.model_record);
+  unfold (handshake_exactly c.handshake st0.CS.cs_model.CS.model_handshake);
+  unfold (key_schedule_exactly
+    c.handshake.keys
+    st0.CS.cs_model.CS.model_handshake.CS.hs_keys);
+  unfold (traffic_key_material_exactly
+    c.handshake.keys.server_application_traffic
+    st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_application_traffic);
+
+  let tag = !c.control.control_tag;
+  let control_ok = tag = 2uy;
+  let server_app_present = !c.handshake.keys.server_application_traffic.present;
+
+  fold (traffic_key_material_exactly
+    c.handshake.keys.server_application_traffic
+    st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_application_traffic);
+  fold (key_schedule_exactly
+    c.handshake.keys
+    st0.CS.cs_model.CS.model_handshake.CS.hs_keys);
+  fold (handshake_exactly c.handshake st0.CS.cs_model.CS.model_handshake);
+
+  let seq_ok = Rec.can_advance_seq c.records.read;
+  fold (record_layer_exactly c.records st0.CS.cs_model.CS.model_record);
+
+  let ok = control_ok && server_app_present && seq_ok;
+
+  assert (pure (ok ==> U8.v tag == 2));
+  assert (pure (ok ==> st0.CS.cs_model.CS.model_control == CS.ControlApplicationData));
+  assert (pure (ok ==> Some? st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_application_traffic));
+  assert (pure (ok ==> U64.fits (st0.CS.cs_model.CS.model_record.CS.record_read.R.seq + 1)));
 
   fold (control_exactly
     c.control
@@ -1464,4 +1616,75 @@ fn mark_received_hello_retry_request_rejected
   fold (connection_exactly
     c
     (received_hello_retry_request_rejected_state st0 (Ghost.reveal 'raw_bytes)))
+}
+
+fn mark_received_application_data
+  (c:connection_state)
+  (raw:array U8.t)
+  (#bytes:erased B.bytes)
+  (#st0:erased CS.connection_state)
+  requires connection_exactly c st0 **
+           Pulse.Lib.Array.PtsTo.pts_to raw 'raw_bytes **
+           pure (st0.CS.cs_model.CS.model_control == CS.ControlApplicationData /\
+                 Some? st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_application_traffic /\
+                 U64.fits (st0.CS.cs_model.CS.model_record.CS.record_read.R.seq + 1) /\
+                 CS.event_raw_delta_legal
+                   st0.CS.cs_model
+                   (CS.ConnNetworkEvent {
+                     CL.message_direction = CL.Received;
+                     CL.message_value = M.TlsApplicationData bytes;
+                   })
+                   B.empty
+                   (Ghost.reveal 'raw_bytes))
+  ensures connection_exactly
+            c
+            (received_application_data_state st0 bytes (Ghost.reveal 'raw_bytes)) **
+          Pulse.Lib.Array.PtsTo.pts_to raw 'raw_bytes
+{
+  assert (pure (st0.CS.cs_model.CS.model_control == CS.ControlApplicationData));
+  assert (pure (Some? st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_application_traffic));
+  assert (pure (U64.fits (st0.CS.cs_model.CS.model_record.CS.record_read.R.seq + 1)));
+  assert (pure (CS.event_raw_delta_legal
+    st0.CS.cs_model
+    (CS.ConnNetworkEvent {
+      CL.message_direction = CL.Received;
+      CL.message_value = M.TlsApplicationData bytes;
+    })
+    B.empty
+    (Ghost.reveal 'raw_bytes)));
+  unfold (connection_exactly c st0);
+  unfold (connection_model_exactly c st0.CS.cs_model);
+  unfold (record_layer_exactly c.records st0.CS.cs_model.CS.model_record);
+
+  Rec.advance_seq c.records.read;
+  fold (record_layer_exactly
+    c.records
+    { st0.CS.cs_model.CS.model_record with
+        CS.record_read = R.next_seq st0.CS.cs_model.CS.model_record.CS.record_read });
+
+  unfold (application_exactly c.application st0.CS.cs_model.CS.model_application);
+  assert (pure (CS.pending_application_consistent
+    (received_application_data_state st0 bytes (Ghost.reveal 'raw_bytes)).CS.cs_model.CS.model_application));
+  fold (application_exactly
+    c.application
+    (received_application_data_state st0 bytes (Ghost.reveal 'raw_bytes)).CS.cs_model.CS.model_application);
+
+  assert (pure ((received_application_data_state st0 bytes (Ghost.reveal 'raw_bytes)).CS.cs_model.CS.model_control ==
+                st0.CS.cs_model.CS.model_control));
+  assert (pure ((received_application_data_state st0 bytes (Ghost.reveal 'raw_bytes)).CS.cs_model.CS.model_handshake ==
+                st0.CS.cs_model.CS.model_handshake));
+  fold (connection_model_exactly
+    c
+    (received_application_data_state st0 bytes (Ghost.reveal 'raw_bytes)).CS.cs_model);
+
+  lemma_received_application_data_state_evolves
+    st0
+    bytes
+    (Ghost.reveal 'raw_bytes);
+  MR.update
+    c.ghost_state
+    (received_application_data_state st0 bytes (Ghost.reveal 'raw_bytes));
+  fold (connection_exactly
+    c
+    (received_application_data_state st0 bytes (Ghost.reveal 'raw_bytes)))
 }
