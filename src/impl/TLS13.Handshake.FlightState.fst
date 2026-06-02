@@ -11,11 +11,11 @@ module B = TLS13.Bytes
 module Box = Pulse.Lib.Box
 module Cast = FStar.Int.Cast
 module Crypto = TLS13.Crypto
-module HF = TLS13.Handshake.Framing
+module P = TLS13.Impl.Parser
 module KS = TLS13.KeySchedule
 module Rec = TLS13.Record
-module RF = TLS13.Record.Framing
 module Seq = FStar.Seq
+module Ser = TLS13.Impl.Serializer
 module SZ = FStar.SizeT
 module Transcript = TLS13.Handshake.Transcript
 module U16 = FStar.UInt16
@@ -1614,7 +1614,7 @@ fn process_server_handshake_record
   if opened {
     let mut inner_content_type_out = [| 0uy; 1sz |];
     let handshake_plaintext_len =
-      RF.decode_inner_plaintext_no_padding inner inner_len inner_content_type_out 1sz;
+      P.decode_inner_plaintext_no_padding inner inner_len inner_content_type_out 1sz;
     let inner_content_type = inner_content_type_out.(0sz);
     if (inner_content_type = 22uy) {
       append_server_handshake_fragment st inner inner_len handshake_plaintext_len
@@ -3050,7 +3050,7 @@ fn build_certificate_verify_input
             cv_offset
             transcript_hash;
         if transcript_ok {
-          HF.build_server_certificate_verify_input transcript_hash out out_len;
+          Ser.build_server_certificate_verify_input transcript_hash out out_len;
           with out_bytes. assert (pts_to out out_bytes);
           assert (pure (B.length out_bytes == 130));
           true

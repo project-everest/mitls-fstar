@@ -220,4 +220,26 @@ static inline bool TLS13_Connection_External_client_close(
   return TLS13_Connection_Backend_close(c, ch, NULL);
 }
 
+#define TLS13_Impl_Parser_parse_record_header( \
+    header, header_len, content_type_out, content_type_out_len, fragment_len_out, fragment_len_out_len, ...) \
+  TLS13_Record_Framing_parse_record_header( \
+      (header), (header_len), (content_type_out), (content_type_out_len), \
+      (fragment_len_out), (fragment_len_out_len))
+
+#define TLS13_Impl_Parser_decode_inner_plaintext( \
+    inner, inner_len, content_type_out, content_type_out_len, ...) \
+  TLS13_Record_Framing_decode_inner_plaintext( \
+      (inner), (inner_len), (content_type_out), (content_type_out_len))
+
+#define TLS13_Impl_Serializer_encode_inner_plaintext_no_padding_slice( \
+    plain, plain_total_len, plain_offset, plain_len, content_type, out, out_len, ...) \
+  TLS13_Record_Framing_encode_inner_plaintext_no_padding_slice( \
+      (plain), (plain_total_len), (plain_offset), (plain_len), \
+      (content_type), (out), (out_len))
+
+#define TLS13_Impl_Serializer_serialize_application_data_header( \
+    fragment_len, out, out_len, ...) \
+  TLS13_Record_Framing_serialize_application_data_header( \
+      (fragment_len), (out), (out_len))
+
 #endif

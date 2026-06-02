@@ -153,7 +153,8 @@ BUNDLE_INTERNAL_MODULES = \
   TLS13.KeySchedule,TLS13.Record,TLS13.Record.Framing,TLS13.State
 
 # Interface-only modules (not extracted, only .fsti):
-# TLS13.Connection.Backend, TLS13.Crypto, TLS13.X509, TLS13.MachineTypes, TLS13.IO
+# TLS13.Connection.Backend, TLS13.Crypto, TLS13.X509, TLS13.MachineTypes, TLS13.IO,
+# TLS13.Impl.Parser, TLS13.Impl.Serializer
 
 # Extract all impl modules to .krml
 BUNDLE_KRML_FILES = $(patsubst %,$(OUTPUT_DIR)/%.krml,$(subst .,_,$(BUNDLE_IMPL_MODULES)))

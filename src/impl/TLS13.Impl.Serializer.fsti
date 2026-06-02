@@ -11,17 +11,97 @@ module M = TLS13.Messages
 module Seq = FStar.Seq
 module SZ = FStar.SizeT
 module T = TLS13.Types
+module U16 = FStar.UInt16
 module U8 = FStar.UInt8
 module WS = TLS13.Wire.Spec
 
 (**
   Serializer interface at the M/L boundary.
 
-  Each serializer takes an owned L value already related to a pure M value and
-  an output byte buffer.  Failure is reported as None.  On success, the returned
-  length identifies the emitted output prefix, that prefix is the corresponding
-  TLS13.Wire.Spec serialization, and the prefix parses back to the same M value.
+  The first group is a buffer-oriented streaming facade used by the active
+  implementation, including a few message-builder helpers that assemble fixed
+  protocol inputs.  These signatures preserve the existing driver shape while
+  routing the serializer TCB through this module.
+
+  The second group is the L serializer surface.  Each serializer takes an owned
+  L value already related to a pure M value and an output byte buffer.  Failure
+  is reported as None.  On success, the returned length identifies the emitted
+  output prefix, that prefix is the corresponding TLS13.Wire.Spec
+  serialization, and the prefix parses back to the same M value.
 **)
+
+fn build_server_certificate_verify_input
+  (transcript_hash: array U8.t)
+  (out: array U8.t)
+  (out_len: SZ.t)
+  requires pts_to transcript_hash 'hash_bytes **
+           pts_to out 'old_bytes **
+           pure (B.length 'hash_bytes == 32 /\
+                 B.length 'old_bytes == SZ.v out_len /\
+                 SZ.v out_len == 130)
+  ensures exists* out_bytes.
+          pts_to transcript_hash 'hash_bytes **
+          pts_to out out_bytes **
+          pure (B.length out_bytes == 130)
+
+fn serialize_client_hello_record_header
+  (out: array U8.t)
+  (out_len: SZ.t)
+  requires pts_to out 'old_bytes **
+          pure (B.length 'old_bytes == SZ.v out_len /\
+                SZ.v out_len == 5)
+  ensures exists* out_bytes.
+          pts_to out out_bytes **
+          pure (B.length out_bytes == 5)
+
+fn build_supported_client_hello_localhost
+  (random: array U8.t)
+  (key_share: array U8.t)
+  (out: array U8.t)
+  (out_len: SZ.t)
+  requires pts_to random 'random_bytes **
+          pts_to key_share 'key_share_bytes **
+          pts_to out 'old_bytes **
+          pure (B.length 'random_bytes == 32 /\
+                B.length 'key_share_bytes == 32 /\
+                B.length 'old_bytes == SZ.v out_len)
+  returns ok: bool
+  ensures exists* out_bytes.
+          pts_to random 'random_bytes **
+          pts_to key_share 'key_share_bytes **
+          pts_to out out_bytes **
+          pure (B.length out_bytes == SZ.v out_len /\
+               (ok ==> SZ.v out_len >= 130))
+
+fn encode_inner_plaintext_no_padding_slice
+  (plain: array U8.t)
+  (plain_total_len: SZ.t)
+  (plain_offset: SZ.t)
+  (plain_len: SZ.t)
+  (content_type: U8.t)
+  (out: array U8.t)
+  (out_len: SZ.t)
+  requires pts_to plain 'plain_bytes **
+           pts_to out 'old_bytes **
+           pure (B.length 'plain_bytes == SZ.v plain_total_len /\
+                 B.length 'old_bytes == SZ.v out_len /\
+                 SZ.v out_len == SZ.v plain_len + 1 /\
+                 SZ.v plain_offset + SZ.v plain_len <= SZ.v plain_total_len)
+  ensures exists* out_bytes.
+          pts_to plain 'plain_bytes **
+          pts_to out out_bytes **
+          pure (B.length out_bytes == SZ.v out_len)
+
+fn serialize_application_data_header
+  (fragment_len: U16.t)
+  (out: array U8.t)
+  (out_len: SZ.t)
+  requires pts_to out 'old_bytes **
+           pure (B.length 'old_bytes == SZ.v out_len /\
+                 SZ.v out_len == 5)
+  ensures exists* header_bytes.
+          pts_to out header_bytes **
+          pure (B.length header_bytes == 5)
 
 fn serialize_client_hello
   (#m: M.client_hello)

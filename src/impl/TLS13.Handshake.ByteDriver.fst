@@ -10,7 +10,7 @@ module Cast = FStar.Int.Cast
 module E = TLS13.Handshake.ByteDriver.External
 module FS = TLS13.Handshake.FlightState
 module IO = TLS13.IO
-module RF = TLS13.Record.Framing
+module P = TLS13.Impl.Parser
 module SZ = FStar.SizeT
 module U16 = FStar.UInt16
 module U8 = FStar.UInt8
@@ -70,7 +70,7 @@ fn read_next_encrypted_handshake_record
     let mut content_type_out = [| 0uy; 1sz |];
     let mut fragment_len_out = [| 0uy; 2sz |];
     let header_parse_ok =
-      RF.parse_record_header header 5sz content_type_out 1sz fragment_len_out 2sz;
+      P.parse_record_header header 5sz content_type_out 1sz fragment_len_out 2sz;
     if header_parse_ok {
       let content_type = content_type_out.(0sz);
       let frag_hi = fragment_len_out.(0sz);

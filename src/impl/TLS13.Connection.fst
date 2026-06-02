@@ -17,9 +17,10 @@ module HS = TLS13.Handshake
 module HSD = TLS13.Handshake.Driver
 module HW = TLS13.Connection.HandshakeWitness
 module IO = TLS13.IO
+module P = TLS13.Impl.Parser
 module Rec = TLS13.Record
-module RF = TLS13.Record.Framing
 module S = TLS13.StateMachine
+module Ser = TLS13.Impl.Serializer
 module ST = TLS13.State
 module SZ = FStar.SizeT
 module T = TLS13.Types
@@ -681,11 +682,11 @@ fn rec client_write_application_records
     let mut inner_plaintext = [| 0uy; inner_len |];
     let mut cipher = [| 0uy; cipher_len |];
     assert (pure (SZ.v cipher_len <= 4113));
-    RF.serialize_application_data_header
+    Ser.serialize_application_data_header
       (Cast.uint32_to_uint16 (SZ.sizet_to_uint32 cipher_len))
       header
       5sz;
-    RF.encode_inner_plaintext_no_padding_slice
+    Ser.encode_inner_plaintext_no_padding_slice
       buf
       total_len
       offset
@@ -768,7 +769,7 @@ fn client_send_close_notify_record
   let mut header = [| 0uy; 5sz |];
   let mut inner_plaintext = [| 0uy; 3sz |];
   let mut cipher = [| 0uy; 19sz |];
-  RF.serialize_application_data_header
+  Ser.serialize_application_data_header
     (Cast.uint32_to_uint16 (SZ.sizet_to_uint32 19sz))
     header
     5sz;
@@ -1184,7 +1185,7 @@ fn rec client_read_application_records
         let mut content_type_out = [| 0uy; 1sz |];
         let mut fragment_len_out = [| 0uy; 2sz |];
         let header_parse_ok =
-          RF.parse_record_header header 5sz content_type_out 1sz fragment_len_out 2sz;
+          P.parse_record_header header 5sz content_type_out 1sz fragment_len_out 2sz;
         if header_parse_ok {
           let content_type = content_type_out.(0sz);
           let frag_hi = fragment_len_out.(0sz);
@@ -1211,7 +1212,7 @@ fn rec client_read_application_records
               if opened {
                 let mut inner_content_type_out = [| 0uy; 1sz |];
                 let response_len =
-                  RF.decode_inner_plaintext inner inner_len inner_content_type_out 1sz;
+                  P.decode_inner_plaintext inner inner_len inner_content_type_out 1sz;
                 let inner_content_type = inner_content_type_out.(0sz);
                 if (inner_content_type = 22uy) {
                   assert (pure (U8.v fuel' < U8.v fuel));

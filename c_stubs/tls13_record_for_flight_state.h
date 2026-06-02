@@ -17,6 +17,24 @@
     TLS13_Record_open_application_runtime(st, aad, aad_len, cipher, cipher_len, out)
 #define TLS13_Record_Framing_decode_inner_plaintext_no_padding(inner, inner_len, content_type_out, content_type_out_len, inner_bytes, old_content_type_out) \
     TLS13_Record_Framing_decode_inner_plaintext_no_padding(inner, inner_len, content_type_out, content_type_out_len)
+#define TLS13_Impl_Parser_parse_supported_server_hello(input, input_len, random_out, random_out_len, key_share_out, key_share_out_len, input_bytes, old_random, old_key_share) \
+    TLS13_Handshake_Framing_parse_supported_server_hello(input, input_len, random_out, random_out_len, key_share_out, key_share_out_len)
+#define TLS13_Impl_Parser_decode_inner_plaintext_no_padding(inner, inner_len, content_type_out, content_type_out_len, inner_bytes, old_content_type_out) \
+    TLS13_Record_Framing_decode_inner_plaintext_no_padding(inner, inner_len, content_type_out, content_type_out_len)
+#define TLS13_Impl_Parser_decode_inner_plaintext(inner, inner_len, content_type_out, content_type_out_len, inner_bytes, old_content_type_out) \
+    TLS13_Record_Framing_decode_inner_plaintext(inner, inner_len, content_type_out, content_type_out_len)
+#define TLS13_Impl_Parser_parse_record_header(header, header_len, content_type_out, content_type_out_len, fragment_len_out, fragment_len_out_len, header_bytes, old_content_type, old_fragment_len) \
+    TLS13_Record_Framing_parse_record_header(header, header_len, content_type_out, content_type_out_len, fragment_len_out, fragment_len_out_len)
+#define TLS13_Impl_Serializer_build_server_certificate_verify_input(transcript_hash, out, out_len, hash_bytes, old_out) \
+    TLS13_Handshake_Framing_build_server_certificate_verify_input(transcript_hash, out, out_len)
+#define TLS13_Impl_Serializer_serialize_client_hello_record_header(out, out_len, old_bytes) \
+    TLS13_Handshake_Framing_serialize_client_hello_record_header(out, out_len)
+#define TLS13_Impl_Serializer_build_supported_client_hello_localhost(random, key_share, out, out_len, random_bytes, key_share_bytes, old_bytes) \
+    TLS13_Handshake_Framing_build_supported_client_hello_localhost(random, key_share, out, out_len)
+#define TLS13_Impl_Serializer_encode_inner_plaintext_no_padding_slice(plain, plain_total_len, plain_offset, plain_len, content_type, out, out_len, plain_bytes, old_bytes) \
+    TLS13_Record_Framing_encode_inner_plaintext_no_padding_slice(plain, plain_total_len, plain_offset, plain_len, content_type, out, out_len)
+#define TLS13_Impl_Serializer_serialize_application_data_header(fragment_len, out, out_len, old_bytes) \
+    TLS13_Record_Framing_serialize_application_data_header(fragment_len, out, out_len)
 #define TLS13_Handshake_Transcript_hash_client_server_hello(client_hello, client_hello_len, server_hello, server_hello_len, out, client_hello_bytes, server_hello_bytes, old_out) \
     TLS13_Handshake_Transcript_hash_client_server_hello(client_hello, client_hello_len, server_hello, server_hello_len, out)
 #define TLS13_Handshake_Transcript_hash_client_server_handshake(client_hello, client_hello_len, server_hello, server_hello_len, server_handshake, server_handshake_len, out, client_hello_bytes, server_hello_bytes, server_handshake_bytes, old_out) \

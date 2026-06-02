@@ -12,16 +12,14 @@ module U8 = FStar.UInt8
 
   The high-level model (M) is the pure message layer from TLS13.Messages,
   TLS13.Types, TLS13.StateMachine, and TLS13.ConnectionLog.
-  The low-level representation (L) for supported wire formats is bytes plus
-  explicit consumed lengths/slice offsets, not a second family of structured
-  TLS datatypes.
+  The low-level representation (L) for supported wire formats is the
+  extraction-oriented TLS13.Impl.Messages layer plus byte-buffer streaming
+  views where the active implementation is still header-first.
 
-  Concrete Pulse parsers/serializers in TLS13.Handshake.Framing and
-  TLS13.Record.Framing should state their correctness by referring to the
-  parse_* and serialize_* functions in this module.  Several existing
-  implementation contracts already follow this rule; the remaining weak
-  shape-only contracts should be strengthened here rather than by adding a
-  parallel codec API.
+  Pulse parsers/serializers should be exposed through TLS13.Impl.Parser and
+  TLS13.Impl.Serializer and state their correctness by referring to the parse_*
+  and serialize_* functions in this module.  The older framing modules are
+  implementation backends only, not the public M/L codec boundary.
 **)
 
 type parse_error = T.tls_error

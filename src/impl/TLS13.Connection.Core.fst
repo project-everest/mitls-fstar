@@ -12,11 +12,12 @@ module Cast = FStar.Int.Cast
 module CL = TLS13.ConnectionLog
 module L = FStar.List.Tot
 module Math = FStar.Math.Lemmas
+module P = TLS13.Impl.Parser
 module Rec = TLS13.Record
 module R = TLS13.Record.Spec
-module RF = TLS13.Record.Framing
 module Seq = FStar.Seq
 module S = TLS13.StateMachine
+module Ser = TLS13.Impl.Serializer
 module ST = TLS13.State
 module SZ = FStar.SizeT
 module T = TLS13.Types
@@ -553,11 +554,11 @@ fn seal_application_record_to_output
   let mut header = [| 0uy; 5sz |];
   let mut inner_plaintext = [| 0uy; inner_len |];
   let mut cipher = [| 0uy; cipher_len |];
-  RF.serialize_application_data_header
+  Ser.serialize_application_data_header
     (Cast.uint32_to_uint16 (SZ.sizet_to_uint32 cipher_len))
     header
     5sz;
-  RF.encode_inner_plaintext_no_padding_slice
+  Ser.encode_inner_plaintext_no_padding_slice
     app_in
     app_in_len
     plain_offset
@@ -1166,7 +1167,7 @@ ensures exists* view1 network_out1 app_out1.
     let mut header = [| 0uy; 5sz |];
     let mut inner_plaintext = [| 0uy; 3sz |];
     let mut cipher = [| 0uy; 19sz |];
-    RF.serialize_application_data_header
+    Ser.serialize_application_data_header
       (Cast.uint32_to_uint16 (SZ.sizet_to_uint32 19sz))
       header
       5sz;
@@ -1666,7 +1667,7 @@ ensures exists* view1 network_out1 app_out1.
             let mut content_type_out = [| 0uy; 1sz |];
             let mut fragment_len_out = [| 0uy; 2sz |];
             let header_parse_ok =
-              RF.parse_record_header header 5sz content_type_out 1sz fragment_len_out 2sz;
+              P.parse_record_header header 5sz content_type_out 1sz fragment_len_out 2sz;
             if header_parse_ok {
               let content_type = content_type_out.(0sz);
               let frag_hi = fragment_len_out.(0sz);
@@ -1871,7 +1872,7 @@ ensures exists* view1 network_out1 app_out1.
                 if opened {
                   let mut inner_content_type_out = [| 0uy; 1sz |];
                   let payload_len =
-                    RF.decode_inner_plaintext inner inner_len inner_content_type_out 1sz;
+                    P.decode_inner_plaintext inner inner_len inner_content_type_out 1sz;
                   let inner_content_type = inner_content_type_out.(0sz);
                   if (inner_content_type = 23uy) {
                     if (SZ.(payload_len <=^ requested_app_len) && SZ.(payload_len <=^ app_out_cap)) {
@@ -2403,7 +2404,7 @@ ensures exists* view1 network_out1 app_out1.
       let mut content_type_out = [| 0uy; 1sz |];
       let mut fragment_len_out = [| 0uy; 2sz |];
       let header_parse_ok =
-        RF.parse_record_header header 5sz content_type_out 1sz fragment_len_out 2sz;
+        P.parse_record_header header 5sz content_type_out 1sz fragment_len_out 2sz;
       if header_parse_ok {
         let content_type = content_type_out.(0sz);
         let frag_hi = fragment_len_out.(0sz);
@@ -2673,7 +2674,7 @@ ensures exists* view1 network_out1 app_out1.
           if opened {
             let mut inner_content_type_out = [| 0uy; 1sz |];
             let payload_len =
-              RF.decode_inner_plaintext inner inner_len inner_content_type_out 1sz;
+              P.decode_inner_plaintext inner inner_len inner_content_type_out 1sz;
             let inner_content_type = inner_content_type_out.(0sz);
             if (inner_content_type = 23uy) {
               if (SZ.(payload_len <=^ requested_app_len) && SZ.(payload_len <=^ app_out_cap)) {

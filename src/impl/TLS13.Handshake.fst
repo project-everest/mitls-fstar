@@ -12,11 +12,11 @@ module CE = TLS13.Connection.External
 module E = TLS13.Handshake.External
 module FS = TLS13.Handshake.FlightState
 module H = TLS13.Handshake.Spec
-module HF = TLS13.Handshake.Framing
 module IO = TLS13.IO
-module RF = TLS13.Record.Framing
+module P = TLS13.Impl.Parser
 module RTC = FStar.ReflexiveTransitiveClosure
 module S = TLS13.StateMachine
+module Ser = TLS13.Impl.Serializer
 module ST = TLS13.State
 module SZ = FStar.SizeT
 module T = TLS13.Types
@@ -286,11 +286,11 @@ fn send_client_hello (ctx: handshake_context) (ch: IO.channel)
   let mut header = [| 0uy; 5sz |];
   write_fixed_client_random random;
   write_fixed_client_key_share key_share;
-  let built = HF.build_supported_client_hello_localhost random key_share hello 130sz;
+  let built = Ser.build_supported_client_hello_localhost random key_share hello 130sz;
   if built {
     FS.set_client_hello_fragment ctx.flight hello 130sz;
     FS.set_client_hello_parameters ctx.flight random key_share;
-    HF.serialize_client_hello_record_header header 5sz;
+    Ser.serialize_client_hello_record_header header 5sz;
     let connected = E.connect ctx.backend ch;
     if connected {
       let header_ok = write_raw_exact ctx ch header 5sz 0sz 5sz;
@@ -346,7 +346,7 @@ fn recv_server_hello_record (ctx: handshake_context) (ch: IO.channel)
     let mut content_type_out = [| 0uy; 1sz |];
     let mut fragment_len_out = [| 0uy; 2sz |];
     let header_parse_ok =
-      RF.parse_record_header header 5sz content_type_out 1sz fragment_len_out 2sz;
+      P.parse_record_header header 5sz content_type_out 1sz fragment_len_out 2sz;
     if header_parse_ok {
       let content_type = content_type_out.(0sz);
       let frag_hi = fragment_len_out.(0sz);
@@ -364,7 +364,7 @@ fn recv_server_hello_record (ctx: handshake_context) (ch: IO.channel)
           let mut server_random = [| 0uy; 32sz |];
           let mut key_share = [| 0uy; 32sz |];
           let parsed =
-            HF.parse_supported_server_hello
+            P.parse_supported_server_hello
               fragment
               fragment_len
               server_random

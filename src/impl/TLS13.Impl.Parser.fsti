@@ -8,6 +8,7 @@ open Pulse.Lib.Array.PtsTo
 module B = TLS13.Bytes
 module L = TLS13.Impl.Messages
 module M = TLS13.Messages
+module Seq = FStar.Seq
 module SZ = FStar.SizeT
 module T = TLS13.Types
 module U8 = FStar.UInt8
@@ -16,11 +17,113 @@ module WS = TLS13.Wire.Spec
 (**
   Parser interface at the M/L boundary.
 
-  Each parser consumes an owned input byte array without modifying it.  On
-  success, it returns an extraction-oriented L value together with ownership
-  evidence, and relates that L value to the pure M message produced by the
-  corresponding TLS13.Wire.Spec parser.
+  The first group is a buffer-oriented streaming facade used by the active
+  implementation.  These signatures preserve the existing header-first driver
+  shape while routing the parser TCB through this module.
+
+  The second group is the allocating L parser surface.  Each parser consumes an
+  owned input byte array without modifying it.  On success, it returns an
+  extraction-oriented L value together with ownership evidence, and relates that
+  L value to the pure M message produced by the corresponding TLS13.Wire.Spec
+  parser.
 **)
+
+fn parse_supported_server_hello
+  (input: array U8.t)
+  (input_len: SZ.t)
+  (random_out: array U8.t)
+  (random_out_len: SZ.t)
+  (key_share_out: array U8.t)
+  (key_share_out_len: SZ.t)
+  requires pts_to input 'input_bytes **
+           pts_to random_out 'old_random **
+           pts_to key_share_out 'old_key_share **
+           pure (B.length 'input_bytes == SZ.v input_len /\
+                B.length 'old_random == SZ.v random_out_len /\
+                B.length 'old_key_share == SZ.v key_share_out_len /\
+                SZ.v random_out_len == 32 /\
+                SZ.v key_share_out_len == 32)
+  returns ok: bool
+  ensures exists* random_bytes key_share_bytes.
+          pts_to input 'input_bytes **
+          pts_to random_out random_bytes **
+          pts_to key_share_out key_share_bytes **
+          pure (
+            B.length random_bytes == 32 /\
+            B.length key_share_bytes == 32 /\
+            (ok ==> SZ.v input_len == 90) /\
+            (ok <==> Some? (WS.parse_supported_server_hello 'input_bytes)) /\
+            (ok ==> (
+              let Some sh = WS.parse_supported_server_hello 'input_bytes in
+              Seq.equal random_bytes sh.random /\
+              Seq.equal key_share_bytes sh.key_share
+            ))
+          )
+
+fn decode_inner_plaintext_no_padding
+  (inner: array U8.t)
+  (inner_len: SZ.t)
+  (content_type_out: array U8.t)
+  (content_type_out_len: SZ.t)
+  requires pts_to inner 'inner_bytes **
+           pts_to content_type_out 'old_content_type **
+           pure (B.length 'inner_bytes == SZ.v inner_len /\
+                 B.length 'old_content_type == SZ.v content_type_out_len /\
+                 SZ.v inner_len > 0 /\
+                 SZ.v content_type_out_len == 1)
+  returns payload_len: (p:SZ.t{SZ.v p + 1 == SZ.v inner_len})
+  ensures exists* content_type_bytes.
+          pts_to inner 'inner_bytes **
+          pts_to content_type_out content_type_bytes **
+          pure (B.length content_type_bytes == 1)
+
+fn decode_inner_plaintext
+  (inner: array U8.t)
+  (inner_len: SZ.t)
+  (content_type_out: array U8.t)
+  (content_type_out_len: SZ.t)
+  requires pts_to inner 'inner_bytes **
+          pts_to content_type_out 'old_content_type **
+          pure (B.length 'inner_bytes == SZ.v inner_len /\
+                B.length 'old_content_type == SZ.v content_type_out_len /\
+                SZ.v inner_len > 0 /\
+                SZ.v content_type_out_len == 1)
+  returns payload_len: SZ.t
+  ensures exists* content_type_bytes.
+          pts_to inner 'inner_bytes **
+          pts_to content_type_out content_type_bytes **
+          pure (B.length content_type_bytes == 1 /\
+               SZ.v payload_len < SZ.v inner_len)
+
+fn parse_record_header
+  (header: array U8.t)
+  (header_len: SZ.t)
+  (content_type_out: array U8.t)
+  (content_type_out_len: SZ.t)
+  (fragment_len_out: array U8.t)
+  (fragment_len_out_len: SZ.t)
+  requires pts_to header 'header_bytes **
+           pts_to content_type_out 'old_content_type **
+           pts_to fragment_len_out 'old_fragment_len **
+           pure (B.length 'header_bytes == SZ.v header_len /\
+                 B.length 'old_content_type == SZ.v content_type_out_len /\
+                 B.length 'old_fragment_len == SZ.v fragment_len_out_len /\
+                 SZ.v header_len == 5 /\
+                 SZ.v content_type_out_len == 1 /\
+                 SZ.v fragment_len_out_len == 2)
+  returns ok: bool
+  ensures exists* content_type_bytes fragment_len_bytes.
+          pts_to header 'header_bytes **
+          pts_to content_type_out content_type_bytes **
+          pts_to fragment_len_out fragment_len_bytes **
+          pure (
+            B.length 'header_bytes == 5 /\
+            B.length content_type_bytes == 1 /\
+            B.length fragment_len_bytes == 2 /\
+            Seq.index content_type_bytes 0 == Seq.index 'header_bytes 0 /\
+            WS.read_u16 fragment_len_bytes 0 == WS.read_u16 'header_bytes 3 /\
+            (ok <==> Some? (WS.parse_record_header 'header_bytes))
+          )
 
 fn parse_client_hello
   (input: array U8.t)
