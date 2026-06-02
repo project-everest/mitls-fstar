@@ -940,6 +940,25 @@ let received_change_cipher_spec_state
       }];
   }
 
+let received_alert_failure_state
+  (st:CS.connection_state)
+  (alert:T.alert_description)
+  (raw_received:B.bytes)
+  : CS.connection_state =
+  {
+    CS.cs_model = CS.fail_model st.CS.cs_model (T.AlertError alert);
+    CS.cs_wire_log = {
+      CL.raw_sent = B.append st.CS.cs_wire_log.CL.raw_sent B.empty;
+      CL.raw_received = B.append st.CS.cs_wire_log.CL.raw_received raw_received;
+    };
+    CS.cs_event_log =
+      st.CS.cs_event_log @
+      [CS.ConnNetworkEvent {
+        CL.message_direction = CL.Received;
+        CL.message_value = M.TlsAlert alert;
+      }];
+  }
+
 let lemma_local_fail_state_evolves (st:CS.connection_state) (err:T.tls_error)
   : Lemma
       (requires CS.connection_state_consistent st)
@@ -1021,6 +1040,61 @@ let lemma_received_change_cipher_spec_state_evolves
     (received_change_cipher_spec_state st raw_received);
   assert (CS.connection_state_evolves st (received_change_cipher_spec_state st raw_received));
   assert (CS.connection_state_consistent (received_change_cipher_spec_state st raw_received))
+
+let lemma_received_alert_failure_state_evolves
+  (st:CS.connection_state)
+  (alert:T.alert_description)
+  (raw_received:B.bytes)
+  : Lemma
+      (requires CS.connection_state_consistent st /\
+                alert <> T.CloseNotify /\
+                CS.event_raw_delta_legal
+                  st.CS.cs_model
+                  (CS.ConnNetworkEvent {
+                    CL.message_direction = CL.Received;
+                    CL.message_value = M.TlsAlert alert;
+                  })
+                  B.empty
+                  raw_received)
+      (ensures CS.connection_state_evolves
+                 st
+                 (received_alert_failure_state st alert raw_received) /\
+               CS.connection_state_consistent
+                 (received_alert_failure_state st alert raw_received) /\
+               CS.legal_connection_delta
+                 st
+                 {
+                   CS.delta_event =
+                     CS.ConnNetworkEvent {
+                       CL.message_direction = CL.Received;
+                       CL.message_value = M.TlsAlert alert;
+                     };
+                   CS.delta_raw_sent = B.empty;
+                   CS.delta_raw_received = raw_received;
+                 }
+                 (received_alert_failure_state st alert raw_received))
+=
+  let ev =
+    CS.ConnNetworkEvent {
+      CL.message_direction = CL.Received;
+      CL.message_value = M.TlsAlert alert;
+    } in
+  let delta = {
+    CS.delta_event = ev;
+    CS.delta_raw_sent = B.empty;
+    CS.delta_raw_received = raw_received;
+  } in
+  assert (CS.legal_event st.CS.cs_model ev);
+  assert (CS.step_model st.CS.cs_model ev ==
+          Some (CS.fail_model st.CS.cs_model (T.AlertError alert)));
+  assert (CS.legal_connection_delta st delta (received_alert_failure_state st alert raw_received));
+  assert (CS.connection_state_single_step st (received_alert_failure_state st alert raw_received));
+  FStar.ReflexiveTransitiveClosure.closure_step
+    CS.connection_state_single_step
+    st
+    (received_alert_failure_state st alert raw_received);
+  assert (CS.connection_state_evolves st (received_alert_failure_state st alert raw_received));
+  assert (CS.connection_state_consistent (received_alert_failure_state st alert raw_received))
 
 fn mark_decode_error
   (c:connection_state)
@@ -1133,4 +1207,69 @@ fn mark_received_change_cipher_spec
   lemma_received_change_cipher_spec_state_evolves st0 (Ghost.reveal 'raw_bytes);
   MR.update c.ghost_state (received_change_cipher_spec_state st0 (Ghost.reveal 'raw_bytes));
   fold (connection_exactly c (received_change_cipher_spec_state st0 (Ghost.reveal 'raw_bytes)))
+}
+
+fn mark_received_alert_failure
+  (c:connection_state)
+  (raw:array U8.t)
+  (alert_wire:U8.t)
+  (alert:T.alert_description)
+  (#st0:erased CS.connection_state)
+  requires connection_exactly c st0 **
+           Pulse.Lib.Array.PtsTo.pts_to raw 'raw_bytes **
+           pure (alert <> T.CloseNotify /\
+                 alert_tag_matches alert_wire alert /\
+                 CS.event_raw_delta_legal
+                   st0.CS.cs_model
+                   (CS.ConnNetworkEvent {
+                     CL.message_direction = CL.Received;
+                     CL.message_value = M.TlsAlert alert;
+                   })
+                   B.empty
+                   (Ghost.reveal 'raw_bytes))
+  ensures connection_exactly
+            c
+            (received_alert_failure_state st0 alert (Ghost.reveal 'raw_bytes)) **
+          Pulse.Lib.Array.PtsTo.pts_to raw 'raw_bytes
+{
+  assert (pure (alert <> T.CloseNotify));
+  assert (pure (alert_tag_matches alert_wire alert));
+  assert (pure (CS.event_raw_delta_legal
+    st0.CS.cs_model
+    (CS.ConnNetworkEvent {
+      CL.message_direction = CL.Received;
+      CL.message_value = M.TlsAlert alert;
+    })
+    B.empty
+    (Ghost.reveal 'raw_bytes)));
+  unfold (connection_exactly c st0);
+  unfold (connection_model_exactly c st0.CS.cs_model);
+  unfold (control_exactly c.control st0.CS.cs_model.CS.model_control st0.CS.cs_model.CS.model_failure);
+
+  c.control.control_tag := 5uy;
+  c.control.failure_present := true;
+  c.control.failure_code := 0uy;
+  c.control.failure_alert := alert_wire;
+
+  assert (pure (tls_error_code_matches 0uy alert_wire (T.AlertError alert)));
+  assert (pure (control_state_matches
+    5uy
+    0uy
+    true
+    0uy
+    alert_wire
+    (CS.ControlFailed (T.AlertError alert))));
+  fold (control_exactly
+    c.control
+    (CS.ControlFailed (T.AlertError alert))
+    (Some (T.AlertError alert)));
+  assert (pure ((CS.fail_model st0.CS.cs_model (T.AlertError alert)).CS.model_control ==
+                CS.ControlFailed (T.AlertError alert)));
+  assert (pure ((CS.fail_model st0.CS.cs_model (T.AlertError alert)).CS.model_failure ==
+                Some (T.AlertError alert)));
+  fold (connection_model_exactly c (CS.fail_model st0.CS.cs_model (T.AlertError alert)));
+
+  lemma_received_alert_failure_state_evolves st0 alert (Ghost.reveal 'raw_bytes);
+  MR.update c.ghost_state (received_alert_failure_state st0 alert (Ghost.reveal 'raw_bytes));
+  fold (connection_exactly c (received_alert_failure_state st0 alert (Ghost.reveal 'raw_bytes)))
 }

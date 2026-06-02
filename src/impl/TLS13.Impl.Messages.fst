@@ -193,6 +193,61 @@ let alert_description_matches (wire:U8.t) (alert:T.alert_description) : prop =
   | T.CertificateUnknown -> U8.v wire == 46
   | T.IllegalParameter -> U8.v wire == 47
 
+let alert_description_of_wire_or_unexpected
+  (wire:U8.t)
+  : T.alert_description =
+  match U8.v wire with
+  | 0 -> T.CloseNotify
+  | 10 -> T.UnexpectedMessage
+  | 20 -> T.BadRecordMac
+  | 40 -> T.HandshakeFailure
+  | 46 -> T.CertificateUnknown
+  | 47 -> T.IllegalParameter
+  | 50 -> T.DecodeError
+  | 51 -> T.DecryptError
+  | 70 -> T.ProtocolVersion
+  | 110 -> T.UnsupportedExtension
+  | _ -> T.UnexpectedMessage
+
+let lemma_alert_description_of_wire_matches
+  (wire:U8.t)
+  (alert:T.alert_description)
+  : Lemma
+      (requires alert_description_matches wire alert)
+      (ensures alert_description_of_wire_or_unexpected wire == alert /\
+               alert_description_matches wire (alert_description_of_wire_or_unexpected wire))
+=
+  match alert with
+  | T.CloseNotify -> ()
+  | T.UnexpectedMessage -> ()
+  | T.BadRecordMac -> ()
+  | T.HandshakeFailure -> ()
+  | T.DecodeError -> ()
+  | T.DecryptError -> ()
+  | T.ProtocolVersion -> ()
+  | T.UnsupportedExtension -> ()
+  | T.CertificateUnknown -> ()
+  | T.IllegalParameter -> ()
+
+let lemma_alert_description_nonzero_not_close_notify
+  (wire:U8.t)
+  (alert:T.alert_description)
+  : Lemma
+      (requires alert_description_matches wire alert /\ U8.v wire <> 0)
+      (ensures alert <> T.CloseNotify)
+=
+  match alert with
+  | T.CloseNotify -> ()
+  | T.UnexpectedMessage -> ()
+  | T.BadRecordMac -> ()
+  | T.HandshakeFailure -> ()
+  | T.DecodeError -> ()
+  | T.DecryptError -> ()
+  | T.ProtocolVersion -> ()
+  | T.UnsupportedExtension -> ()
+  | T.CertificateUnknown -> ()
+  | T.IllegalParameter -> ()
+
 noextract
 let cipher_suite_matches (wire:U16.t) (suite:T.cipher_suite) : prop =
   match suite with

@@ -175,6 +175,10 @@ let parsed_message_wire_success
   match l with
   | L.LTlsChangeCipherSpec ->
   wire_parse_success content_type fragment M.TlsChangeCipherSpec
+  | L.LTlsAlert alert_wire ->
+  forall alert.
+    L.alert_description_matches alert_wire alert ==>
+    wire_parse_success content_type fragment (M.TlsAlert alert)
   | _ ->
   exists msg. wire_parse_success content_type fragment msg
 

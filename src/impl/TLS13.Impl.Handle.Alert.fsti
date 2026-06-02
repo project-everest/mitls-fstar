@@ -11,42 +11,62 @@ module CT = TLS13.Impl.Client.Types
 module L = TLS13.Impl.Messages
 module M = TLS13.Messages
 module SZ = FStar.SizeT
+module T = TLS13.Types
 module U8 = FStar.UInt8
+module WS = TLS13.Wire.Spec
 
 fn handle_alert
   (c:C.connection_state)
-  (l:L.tls_message)
+  (content_type:U8.t)
+  (alert_wire:U8.t)
   (raw:array U8.t)
   (raw_len:SZ.t)
+  (fragment:array U8.t)
+  (fragment_len:SZ.t)
   (network_out:array U8.t)
   (network_out_len:SZ.t)
   (app_out:array U8.t)
   (app_out_len:SZ.t)
   requires C.connection_exactly c 'st0 **
-           (exists* m. L.is_valid_tls_message l m) **
+           (exists* m. L.is_valid_tls_message (L.LTlsAlert alert_wire) m) **
            pts_to raw 'raw_bytes **
+           pts_to fragment 'fragment_bytes **
            pts_to network_out 'old_network_out **
            pts_to app_out 'old_app_out **
            pure (B.length 'raw_bytes == SZ.v raw_len /\
+                 B.length 'fragment_bytes == SZ.v fragment_len /\
                  B.length 'old_network_out == SZ.v network_out_len /\
-           B.length 'old_app_out == SZ.v app_out_len /\
-           L.tls_message_is_alert l)
+                 B.length 'old_app_out == SZ.v app_out_len /\
+                 CT.network_input_wf
+                   'st0
+                   content_type
+                   (Ghost.reveal 'fragment_bytes)
+                   (Ghost.reveal 'raw_bytes) /\
+                 CT.parsed_message_wire_success
+                   content_type
+                   (Ghost.reveal 'fragment_bytes)
+                   (L.LTlsAlert alert_wire))
   returns resp: CT.client_response
-  ensures C.connection_exactly c (C.local_fail_state 'st0 C.tls_unexpected_message_error) **
+  ensures exists* st1.
+          C.connection_exactly c st1 **
           pts_to raw 'raw_bytes **
+          pts_to fragment 'fragment_bytes **
           pts_to network_out 'old_network_out **
           pts_to app_out 'old_app_out **
           pure (B.length 'old_network_out == SZ.v network_out_len /\
                 B.length 'old_app_out == SZ.v app_out_len /\
-                CT.unexpected_message_response
+                CT.legal_network_response
                   'st0
-                  (C.local_fail_state 'st0 C.tls_unexpected_message_error)
+                  st1
                   resp
+                  content_type
+                  (Ghost.reveal 'fragment_bytes)
+                  (Ghost.reveal 'raw_bytes)
                   'old_network_out
                   'old_app_out /\
                 CT.some_legal_response
                   'st0
-                  (C.local_fail_state 'st0 C.tls_unexpected_message_error)
+                  st1
                   resp
                   'old_network_out
                   'old_app_out)

@@ -12,68 +12,173 @@ module L = TLS13.Impl.Messages
 module M = TLS13.Messages
 module Seq = FStar.Seq
 module SZ = FStar.SizeT
+module T = TLS13.Types
 module U8 = FStar.UInt8
+module WS = TLS13.Wire.Spec
 
 fn handle_alert
   (c:C.connection_state)
-  (l:L.tls_message)
+  (content_type:U8.t)
+  (alert_wire:U8.t)
   (raw:array U8.t)
   (raw_len:SZ.t)
+  (fragment:array U8.t)
+  (fragment_len:SZ.t)
   (network_out:array U8.t)
   (network_out_len:SZ.t)
   (app_out:array U8.t)
   (app_out_len:SZ.t)
   requires C.connection_exactly c 'st0 **
-           (exists* m. L.is_valid_tls_message l m) **
+           (exists* m. L.is_valid_tls_message (L.LTlsAlert alert_wire) m) **
            pts_to raw 'raw_bytes **
+           pts_to fragment 'fragment_bytes **
            pts_to network_out 'old_network_out **
            pts_to app_out 'old_app_out **
            pure (B.length 'raw_bytes == SZ.v raw_len /\
+                 B.length 'fragment_bytes == SZ.v fragment_len /\
                  B.length 'old_network_out == SZ.v network_out_len /\
-           B.length 'old_app_out == SZ.v app_out_len /\
-           L.tls_message_is_alert l)
+                 B.length 'old_app_out == SZ.v app_out_len /\
+                 CT.network_input_wf
+                   'st0
+                   content_type
+                   (Ghost.reveal 'fragment_bytes)
+                   (Ghost.reveal 'raw_bytes) /\
+                 CT.parsed_message_wire_success
+                   content_type
+                   (Ghost.reveal 'fragment_bytes)
+                   (L.LTlsAlert alert_wire))
   returns resp: CT.client_response
-  ensures C.connection_exactly c (C.local_fail_state 'st0 C.tls_unexpected_message_error) **
+  ensures exists* st1.
+          C.connection_exactly c st1 **
           pts_to raw 'raw_bytes **
+          pts_to fragment 'fragment_bytes **
           pts_to network_out 'old_network_out **
           pts_to app_out 'old_app_out **
           pure (B.length 'old_network_out == SZ.v network_out_len /\
                 B.length 'old_app_out == SZ.v app_out_len /\
-                CT.unexpected_message_response
+                CT.legal_network_response
                   'st0
-                  (C.local_fail_state 'st0 C.tls_unexpected_message_error)
+                  st1
                   resp
+                  content_type
+                  (Ghost.reveal 'fragment_bytes)
+                  (Ghost.reveal 'raw_bytes)
                   'old_network_out
                   'old_app_out /\
                 CT.some_legal_response
                   'st0
-                  (C.local_fail_state 'st0 C.tls_unexpected_message_error)
+                  st1
                   resp
                   'old_network_out
                   'old_app_out)
 {
-  with m. assert (pure True);
-  L.free_tls_message l;
-  C.mark_unexpected_message c;
-  let resp = {
-    CT.network_out_len = 0sz;
-    CT.app_out_len = 0sz;
-    CT.status = CT.IllegalTransition;
-  };
-  Seq.lemma_len_slice 'old_network_out 0 0;
-  Seq.lemma_eq_intro B.empty (Seq.slice 'old_network_out 0 0);
-  assert (pure (Seq.equal B.empty (CT.response_network_out resp 'old_network_out)));
-  assert (pure (CT.unexpected_message_response
+  with m. unfold (L.is_valid_tls_message (L.LTlsAlert alert_wire) m);
+  with malert. _;
+  assert (pure (L.alert_description_matches alert_wire malert));
+  assert (pure (m == M.TlsAlert malert));
+  assert (pure (CT.wire_parse_success
+    content_type
+    (Ghost.reveal 'fragment_bytes)
+    (M.TlsAlert malert)));
+  assert (pure (CT.received_tls_raw_delta_legal
     'st0
-    (C.local_fail_state 'st0 C.tls_unexpected_message_error)
-    resp
-    'old_network_out
-    'old_app_out));
-  assert (pure (CT.some_legal_response
+    (M.TlsAlert malert)
+    (Ghost.reveal 'raw_bytes)));
+  let parsed_alert = L.alert_description_of_wire_or_unexpected alert_wire;
+  L.lemma_alert_description_of_wire_matches alert_wire malert;
+  assert (pure (parsed_alert == malert));
+  assert (pure (L.alert_description_matches alert_wire parsed_alert));
+  assert (pure (CT.wire_parse_success
+    content_type
+    (Ghost.reveal 'fragment_bytes)
+    (M.TlsAlert parsed_alert)));
+  assert (pure (CT.received_tls_raw_delta_legal
     'st0
-    (C.local_fail_state 'st0 C.tls_unexpected_message_error)
+    (M.TlsAlert parsed_alert)
+    (Ghost.reveal 'raw_bytes)));
+
+  let close_notify = alert_wire = 0uy;
+  if close_notify {
+    C.mark_unexpected_message c;
+    let resp = {
+      CT.network_out_len = 0sz;
+      CT.app_out_len = 0sz;
+      CT.status = CT.IllegalTransition;
+    };
+    Seq.lemma_len_slice 'old_network_out 0 0;
+    Seq.lemma_eq_intro B.empty (Seq.slice 'old_network_out 0 0);
+    assert (pure (Seq.equal B.empty (CT.response_network_out resp 'old_network_out)));
+    assert (pure (CT.unexpected_message_response
+      'st0
+      (C.local_fail_state 'st0 C.tls_unexpected_message_error)
+      resp
+      'old_network_out
+      'old_app_out));
+    CT.lemma_legal_network_response_unexpected_from_parse_success
+      'st0
+      (C.local_fail_state 'st0 C.tls_unexpected_message_error)
+      resp
+      content_type
+      (Ghost.reveal 'fragment_bytes)
+      (Ghost.reveal 'raw_bytes)
+      'old_network_out
+      'old_app_out;
+    assert (pure (CT.some_legal_response
+      'st0
+      (C.local_fail_state 'st0 C.tls_unexpected_message_error)
+      resp
+      'old_network_out
+      'old_app_out));
     resp
-    'old_network_out
-    'old_app_out));
-  resp
+  } else {
+    assert (pure (U8.v alert_wire <> 0));
+    L.lemma_alert_description_nonzero_not_close_notify alert_wire parsed_alert;
+    C.mark_received_alert_failure c raw alert_wire parsed_alert;
+    let resp = {
+      CT.network_out_len = 0sz;
+      CT.app_out_len = 0sz;
+      CT.status = CT.ConnectionFailed;
+    };
+    Seq.lemma_len_slice 'old_network_out 0 0;
+    Seq.lemma_eq_intro B.empty (Seq.slice 'old_network_out 0 0);
+    assert (pure (Seq.equal B.empty (CT.response_network_out resp 'old_network_out)));
+    assert (pure (CT.wire_parse_success
+      content_type
+      (Ghost.reveal 'fragment_bytes)
+      (M.TlsAlert parsed_alert)));
+    C.lemma_received_alert_failure_state_evolves 'st0 parsed_alert (Ghost.reveal 'raw_bytes);
+    assert (pure (CT.legal_received_tls_response
+      'st0
+      (C.received_alert_failure_state 'st0 parsed_alert (Ghost.reveal 'raw_bytes))
+      resp
+      (M.TlsAlert parsed_alert)
+      (Ghost.reveal 'raw_bytes)
+      'old_network_out
+      'old_app_out));
+    assert (pure (CT.legal_handled_tls_response
+      'st0
+      (C.received_alert_failure_state 'st0 parsed_alert (Ghost.reveal 'raw_bytes))
+      resp
+      (M.TlsAlert parsed_alert)
+      (Ghost.reveal 'raw_bytes)
+      'old_network_out
+      'old_app_out));
+    CT.lemma_legal_network_response_handled_from_parse_success
+      'st0
+      (C.received_alert_failure_state 'st0 parsed_alert (Ghost.reveal 'raw_bytes))
+      resp
+      content_type
+      (Ghost.reveal 'fragment_bytes)
+      (M.TlsAlert parsed_alert)
+      (Ghost.reveal 'raw_bytes)
+      'old_network_out
+      'old_app_out;
+    assert (pure (CT.some_legal_response
+      'st0
+      (C.received_alert_failure_state 'st0 parsed_alert (Ghost.reveal 'raw_bytes))
+      resp
+      'old_network_out
+      'old_app_out));
+    resp
+  }
 }
