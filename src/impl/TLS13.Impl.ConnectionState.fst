@@ -922,6 +922,24 @@ let local_fail_state (st:CS.connection_state) (err:T.tls_error) : CS.connection_
     CS.cs_event_log = st.CS.cs_event_log @ [CS.ConnLocalEvent (CS.LocalFail err)];
   }
 
+let received_change_cipher_spec_state
+  (st:CS.connection_state)
+  (raw_received:B.bytes)
+  : CS.connection_state =
+  {
+    CS.cs_model = st.CS.cs_model;
+    CS.cs_wire_log = {
+      CL.raw_sent = B.append st.CS.cs_wire_log.CL.raw_sent B.empty;
+      CL.raw_received = B.append st.CS.cs_wire_log.CL.raw_received raw_received;
+    };
+    CS.cs_event_log =
+      st.CS.cs_event_log @
+      [CS.ConnNetworkEvent {
+        CL.message_direction = CL.Received;
+        CL.message_value = M.TlsChangeCipherSpec;
+      }];
+  }
+
 let lemma_local_fail_state_evolves (st:CS.connection_state) (err:T.tls_error)
   : Lemma
       (requires CS.connection_state_consistent st)
@@ -949,6 +967,60 @@ let lemma_local_fail_state_evolves (st:CS.connection_state) (err:T.tls_error)
     (local_fail_state st err);
   assert (CS.connection_state_evolves st (local_fail_state st err));
   assert (CS.connection_state_consistent (local_fail_state st err))
+
+let lemma_received_change_cipher_spec_state_evolves
+  (st:CS.connection_state)
+  (raw_received:B.bytes)
+  : Lemma
+      (requires CS.connection_state_consistent st /\
+                (exists stage.
+                  st.CS.cs_model.CS.model_control == CS.ControlHandshaking stage) /\
+                CS.event_raw_delta_legal
+                  st.CS.cs_model
+                  (CS.ConnNetworkEvent {
+                    CL.message_direction = CL.Received;
+                    CL.message_value = M.TlsChangeCipherSpec;
+                  })
+                  B.empty
+                  raw_received)
+      (ensures CS.connection_state_evolves
+                 st
+                 (received_change_cipher_spec_state st raw_received) /\
+               CS.connection_state_consistent
+                 (received_change_cipher_spec_state st raw_received) /\
+               CS.legal_connection_delta
+                 st
+                 {
+                   CS.delta_event =
+                     CS.ConnNetworkEvent {
+                       CL.message_direction = CL.Received;
+                       CL.message_value = M.TlsChangeCipherSpec;
+                     };
+                   CS.delta_raw_sent = B.empty;
+                   CS.delta_raw_received = raw_received;
+                 }
+                 (received_change_cipher_spec_state st raw_received))
+=
+  let ev =
+    CS.ConnNetworkEvent {
+      CL.message_direction = CL.Received;
+      CL.message_value = M.TlsChangeCipherSpec;
+    } in
+  let delta = {
+    CS.delta_event = ev;
+    CS.delta_raw_sent = B.empty;
+    CS.delta_raw_received = raw_received;
+  } in
+  assert (CS.legal_event st.CS.cs_model ev);
+  assert (CS.step_model st.CS.cs_model ev == Some st.CS.cs_model);
+  assert (CS.legal_connection_delta st delta (received_change_cipher_spec_state st raw_received));
+  assert (CS.connection_state_single_step st (received_change_cipher_spec_state st raw_received));
+  FStar.ReflexiveTransitiveClosure.closure_step
+    CS.connection_state_single_step
+    st
+    (received_change_cipher_spec_state st raw_received);
+  assert (CS.connection_state_evolves st (received_change_cipher_spec_state st raw_received));
+  assert (CS.connection_state_consistent (received_change_cipher_spec_state st raw_received))
 
 fn mark_decode_error
   (c:connection_state)
@@ -1004,4 +1076,61 @@ fn mark_unexpected_message
   lemma_local_fail_state_evolves st0 tls_unexpected_message_error;
   MR.update c.ghost_state (local_fail_state st0 tls_unexpected_message_error);
   fold (connection_exactly c (local_fail_state st0 tls_unexpected_message_error))
+}
+
+fn is_handshaking
+  (c:connection_state)
+  (#st0:erased CS.connection_state)
+  requires connection_exactly c st0
+  returns ok: bool
+  ensures connection_exactly c st0 **
+          pure (ok ==> (exists stage.
+            st0.CS.cs_model.CS.model_control == CS.ControlHandshaking stage))
+{
+  unfold (connection_exactly c st0);
+  unfold (connection_model_exactly c st0.CS.cs_model);
+  unfold (control_exactly c.control st0.CS.cs_model.CS.model_control st0.CS.cs_model.CS.model_failure);
+
+  let tag = !c.control.control_tag;
+  let ok = tag = 1uy;
+
+  assert (pure (ok ==> U8.v tag == 1));
+  assert (pure (ok ==> (exists stage.
+    st0.CS.cs_model.CS.model_control == CS.ControlHandshaking stage)));
+
+  fold (control_exactly
+    c.control
+    st0.CS.cs_model.CS.model_control
+    st0.CS.cs_model.CS.model_failure);
+  fold (connection_model_exactly c st0.CS.cs_model);
+  fold (connection_exactly c st0);
+  ok
+}
+
+fn mark_received_change_cipher_spec
+  (c:connection_state)
+  (raw:array U8.t)
+  (#st0:erased CS.connection_state)
+  requires connection_exactly c st0 **
+           Pulse.Lib.Array.PtsTo.pts_to raw 'raw_bytes **
+           pure ((exists stage.
+                    st0.CS.cs_model.CS.model_control == CS.ControlHandshaking stage) /\
+                 CS.event_raw_delta_legal
+                   st0.CS.cs_model
+                   (CS.ConnNetworkEvent {
+                     CL.message_direction = CL.Received;
+                     CL.message_value = M.TlsChangeCipherSpec;
+                   })
+                   B.empty
+                   (Ghost.reveal 'raw_bytes))
+  ensures connection_exactly
+            c
+            (received_change_cipher_spec_state st0 (Ghost.reveal 'raw_bytes)) **
+          Pulse.Lib.Array.PtsTo.pts_to raw 'raw_bytes
+{
+  unfold (connection_exactly c st0);
+  assert (pure ((received_change_cipher_spec_state st0 (Ghost.reveal 'raw_bytes)).CS.cs_model == st0.CS.cs_model));
+  lemma_received_change_cipher_spec_state_evolves st0 (Ghost.reveal 'raw_bytes);
+  MR.update c.ghost_state (received_change_cipher_spec_state st0 (Ghost.reveal 'raw_bytes));
+  fold (connection_exactly c (received_change_cipher_spec_state st0 (Ghost.reveal 'raw_bytes)))
 }

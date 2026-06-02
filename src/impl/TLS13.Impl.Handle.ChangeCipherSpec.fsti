@@ -28,25 +28,32 @@ fn handle_change_cipher_spec
            pts_to network_out 'old_network_out **
            pts_to app_out 'old_app_out **
            pure (B.length 'raw_bytes == SZ.v raw_len /\
-                 B.length 'old_network_out == SZ.v network_out_len /\
+           B.length 'old_network_out == SZ.v network_out_len /\
            B.length 'old_app_out == SZ.v app_out_len /\
-           L.tls_message_is_change_cipher_spec l)
+           L.tls_message_is_change_cipher_spec l /\
+           CT.received_tls_raw_delta_legal
+                   'st0
+                   M.TlsChangeCipherSpec
+                   (Ghost.reveal 'raw_bytes))
   returns resp: CT.client_response
-  ensures C.connection_exactly c (C.local_fail_state 'st0 C.tls_unexpected_message_error) **
+  ensures exists* st1.
+          C.connection_exactly c st1 **
           pts_to raw 'raw_bytes **
           pts_to network_out 'old_network_out **
           pts_to app_out 'old_app_out **
           pure (B.length 'old_network_out == SZ.v network_out_len /\
                 B.length 'old_app_out == SZ.v app_out_len /\
-                CT.unexpected_message_response
+                CT.legal_handled_tls_response
                   'st0
-                  (C.local_fail_state 'st0 C.tls_unexpected_message_error)
+                  st1
                   resp
+                  M.TlsChangeCipherSpec
+                  (Ghost.reveal 'raw_bytes)
                   'old_network_out
                   'old_app_out /\
                 CT.some_legal_response
                   'st0
-                  (C.local_fail_state 'st0 C.tls_unexpected_message_error)
+                  st1
                   resp
                   'old_network_out
                   'old_app_out)

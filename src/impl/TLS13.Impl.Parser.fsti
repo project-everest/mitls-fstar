@@ -6,6 +6,7 @@ open Pulse.Lib.Pervasives
 open Pulse.Lib.Array.PtsTo
 
 module B = TLS13.Bytes
+module CT = TLS13.Impl.Client.Types
 module L = TLS13.Impl.Messages
 module M = TLS13.Messages
 module Seq = FStar.Seq
@@ -294,7 +295,11 @@ fn parse_tls_message
                      WS.parse_tls_message ct 'input_bytes == Some m)) **
              pure (exists ct m.
                L.content_type_matches content_type ct /\
-               WS.parse_tls_message ct 'input_bytes == Some m)
+               WS.parse_tls_message ct 'input_bytes == Some m) **
+             pure (CT.parsed_message_wire_success
+               content_type
+               (Ghost.reveal 'input_bytes)
+               l)
            | None ->
              pure (forall (ct:T.content_type).
                L.content_type_matches content_type ct ==>

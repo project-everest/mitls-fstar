@@ -40,7 +40,12 @@ fn process_network_event
            pure (B.length 'raw_bytes == SZ.v raw_len /\
                  B.length 'fragment_bytes == SZ.v fragment_len /\
                  B.length 'old_network_out == SZ.v network_out_len /\
-                 B.length 'old_app_out == SZ.v app_out_len)
+                 B.length 'old_app_out == SZ.v app_out_len /\
+                 CT.network_input_wf
+                   'st0
+                   content_type
+                   (Ghost.reveal 'fragment_bytes)
+                   (Ghost.reveal 'raw_bytes))
   returns resp: CT.client_response
   ensures exists* st1 network_out_bytes app_out_bytes.
           C.connection_exactly c st1 **

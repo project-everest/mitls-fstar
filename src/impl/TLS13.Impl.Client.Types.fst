@@ -126,6 +126,20 @@ let legal_received_tls_response
     network_out
     app_out
 
+let received_tls_raw_delta_legal
+  (st0:CS.connection_state)
+  (msg:M.tls_message)
+  (raw_received:B.bytes)
+  : prop =
+  CS.event_raw_delta_legal
+    st0.CS.cs_model
+    (CS.ConnNetworkEvent {
+      CL.message_direction = CL.Received;
+      CL.message_value = msg;
+    })
+    B.empty
+    raw_received
+
 let wire_parse_success
   (content_type:U8.t)
   (fragment:B.bytes)
@@ -142,6 +156,27 @@ let wire_parse_failure
   forall ct.
     L.content_type_matches content_type ct ==>
     WS.parse_tls_message ct fragment == None
+
+let network_input_wf
+  (st0:CS.connection_state)
+  (content_type:U8.t)
+  (fragment:B.bytes)
+  (raw_received:B.bytes)
+  : prop =
+  forall msg.
+  wire_parse_success content_type fragment msg ==>
+  received_tls_raw_delta_legal st0 msg raw_received
+
+let parsed_message_wire_success
+  (content_type:U8.t)
+  (fragment:B.bytes)
+  (l:L.tls_message)
+  : prop =
+  match l with
+  | L.LTlsChangeCipherSpec ->
+  wire_parse_success content_type fragment M.TlsChangeCipherSpec
+  | _ ->
+  exists msg. wire_parse_success content_type fragment msg
 
 let local_event_kind_matches
   (kind:local_event_kind)
@@ -308,6 +343,58 @@ let lemma_legal_network_response_unexpected_from_parse_success
                   L.content_type_matches content_type ct /\
                   WS.parse_tls_message ct fragment == Some msg) /\
                 unexpected_message_response st0 st1 resp network_out app_out)
+      (ensures legal_network_response
+        st0 st1 resp content_type fragment raw_received network_out app_out)
+=
+  ()
+
+let lemma_legal_network_response_handled
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (resp:client_response)
+  (content_type:U8.t)
+  (ct:T.content_type)
+  (fragment:B.bytes)
+  (msg:M.tls_message)
+  (raw_received:B.bytes)
+  (network_out:B.bytes)
+  (app_out:B.bytes)
+  : Lemma
+      (requires L.content_type_matches content_type ct /\
+                WS.parse_tls_message ct fragment == Some msg /\
+                legal_handled_tls_response
+                  st0
+                  st1
+                  resp
+                  msg
+                  raw_received
+                  network_out
+                  app_out)
+      (ensures legal_network_response
+        st0 st1 resp content_type fragment raw_received network_out app_out)
+=
+  ()
+
+let lemma_legal_network_response_handled_from_parse_success
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (resp:client_response)
+  (content_type:U8.t)
+  (fragment:B.bytes)
+  (msg:M.tls_message)
+  (raw_received:B.bytes)
+  (network_out:B.bytes)
+  (app_out:B.bytes)
+  : Lemma
+      (requires wire_parse_success content_type fragment msg /\
+                legal_handled_tls_response
+                  st0
+                  st1
+                  resp
+                  msg
+                  raw_received
+                  network_out
+                  app_out)
       (ensures legal_network_response
         st0 st1 resp content_type fragment raw_received network_out app_out)
 =

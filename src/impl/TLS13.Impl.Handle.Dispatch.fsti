@@ -47,7 +47,11 @@ fn dispatch_network_event
                       WS.parse_tls_message ct 'fragment_bytes == Some m)) **
               pure (exists ct msg.
                 L.content_type_matches content_type ct /\
-                WS.parse_tls_message ct 'fragment_bytes == Some msg)
+                WS.parse_tls_message ct 'fragment_bytes == Some msg) **
+              pure (CT.parsed_message_wire_success
+                content_type
+                (Ghost.reveal 'fragment_bytes)
+                l)
             | None ->
               pure (forall (ct:T.content_type).
                 L.content_type_matches content_type ct ==>
@@ -55,7 +59,12 @@ fn dispatch_network_event
            pure (B.length 'raw_bytes == SZ.v raw_len /\
                  B.length 'fragment_bytes == SZ.v fragment_len /\
                  B.length 'old_network_out == SZ.v network_out_len /\
-                 B.length 'old_app_out == SZ.v app_out_len)
+                 B.length 'old_app_out == SZ.v app_out_len /\
+                 CT.network_input_wf
+                   'st0
+                   content_type
+                   (Ghost.reveal 'fragment_bytes)
+                   (Ghost.reveal 'raw_bytes))
   returns resp: CT.client_response
   ensures exists* st1 network_out_bytes app_out_bytes.
           C.connection_exactly c st1 **
