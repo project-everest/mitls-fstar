@@ -3,10 +3,13 @@ module TLS13.Impl.Client.Types
 module B = TLS13.Bytes
 module CL = TLS13.ConnectionLog
 module CS = TLS13.Spec.ConnectionState
+module L = TLS13.Impl.Messages
 module M = TLS13.Messages
 module Seq = FStar.Seq
 module SZ = FStar.SizeT
 module T = TLS13.Types
+module U8 = FStar.UInt8
+module WS = TLS13.Wire.Spec
 
 (**
   Extraction-facing client step shapes.  The concrete driver supplies buffers
@@ -121,6 +124,23 @@ let legal_received_tls_response
     network_out
     app_out
 
+let wire_parse_success
+  (content_type:U8.t)
+  (fragment:B.bytes)
+  (msg:M.tls_message)
+  : prop =
+  exists ct.
+    L.content_type_matches content_type ct /\
+    WS.parse_tls_message ct fragment == Some msg
+
+let wire_parse_failure
+  (content_type:U8.t)
+  (fragment:B.bytes)
+  : prop =
+  forall ct.
+    L.content_type_matches content_type ct ==>
+    WS.parse_tls_message ct fragment == None
+
 let local_event_kind_matches
   (kind:local_event_kind)
   (payload:B.bytes)
@@ -188,3 +208,19 @@ let decode_error_response
     B.empty
     network_out
     app_out
+
+let legal_network_response
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (resp:client_response)
+  (content_type:U8.t)
+  (fragment:B.bytes)
+  (raw_received:B.bytes)
+  (network_out:B.bytes)
+  (app_out:B.bytes)
+  : prop =
+  (exists msg.
+     wire_parse_success content_type fragment msg /\
+     legal_received_tls_response st0 st1 resp msg raw_received network_out app_out) \/
+  (wire_parse_failure content_type fragment /\
+   decode_error_response st0 st1 resp network_out app_out)

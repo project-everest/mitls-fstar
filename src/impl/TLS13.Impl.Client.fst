@@ -46,6 +46,15 @@ fn process_network_event
           pts_to app_out app_out_bytes **
           pure (B.length network_out_bytes == SZ.v network_out_len /\
                 B.length app_out_bytes == SZ.v app_out_len /\
+                CT.legal_network_response
+                  'st0
+                  st1
+                  resp
+                  content_type
+                  (Ghost.reveal 'fragment_bytes)
+                  (Ghost.reveal 'raw_bytes)
+                  network_out_bytes
+                  app_out_bytes /\
                 CT.some_legal_response 'st0 st1 resp network_out_bytes app_out_bytes)
 {
   let parsed = P.parse_tls_message content_type fragment fragment_len;
