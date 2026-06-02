@@ -39,6 +39,6 @@ fn handle_change_cipher_spec
           pts_to app_out app_out_bytes **
           pure (B.length network_out_bytes == SZ.v network_out_len /\
                 B.length app_out_bytes == SZ.v app_out_len /\
-                CT.legal_received_tls_response
+                CT.legal_handled_tls_response
                   'st0 st1 resp m (Ghost.reveal 'raw_bytes) network_out_bytes app_out_bytes /\
                 CT.some_legal_response 'st0 st1 resp network_out_bytes app_out_bytes)

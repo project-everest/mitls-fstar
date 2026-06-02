@@ -3,7 +3,8 @@ module TLS13.Impl.ConnectionState
 #lang-pulse
 
 open Pulse.Lib.Pervasives
-open Pulse.Lib.Box { box }
+open Pulse.Lib.Box { box, (!), (:=) }
+open FStar.List.Tot
 
 module B = TLS13.Bytes
 module Box = Pulse.Lib.Box
@@ -906,3 +907,101 @@ let connection_exactly
 
 let is_connection_state (c:connection_state) : slprop =
   exists* st. connection_exactly c st
+
+let tls_decode_error : T.tls_error = T.AlertError T.DecodeError
+
+let tls_unexpected_message_error : T.tls_error = T.AlertError T.UnexpectedMessage
+
+let local_fail_state (st:CS.connection_state) (err:T.tls_error) : CS.connection_state =
+  {
+    CS.cs_model = CS.fail_model st.CS.cs_model err;
+    CS.cs_wire_log = {
+      CL.raw_sent = B.append st.CS.cs_wire_log.CL.raw_sent B.empty;
+      CL.raw_received = B.append st.CS.cs_wire_log.CL.raw_received B.empty;
+    };
+    CS.cs_event_log = st.CS.cs_event_log @ [CS.ConnLocalEvent (CS.LocalFail err)];
+  }
+
+let lemma_local_fail_state_evolves (st:CS.connection_state) (err:T.tls_error)
+  : Lemma
+      (requires CS.connection_state_consistent st)
+      (ensures CS.connection_state_evolves st (local_fail_state st err) /\
+               CS.connection_state_consistent (local_fail_state st err) /\
+               CS.legal_connection_delta
+                 st
+                 {
+                   CS.delta_event = CS.ConnLocalEvent (CS.LocalFail err);
+                   CS.delta_raw_sent = B.empty;
+                   CS.delta_raw_received = B.empty;
+                 }
+                 (local_fail_state st err))
+=
+  let delta = {
+    CS.delta_event = CS.ConnLocalEvent (CS.LocalFail err);
+    CS.delta_raw_sent = B.empty;
+    CS.delta_raw_received = B.empty;
+  } in
+  assert (CS.legal_connection_delta st delta (local_fail_state st err));
+  assert (CS.connection_state_single_step st (local_fail_state st err));
+  FStar.ReflexiveTransitiveClosure.closure_step
+    CS.connection_state_single_step
+    st
+    (local_fail_state st err);
+  assert (CS.connection_state_evolves st (local_fail_state st err));
+  assert (CS.connection_state_consistent (local_fail_state st err))
+
+fn mark_decode_error
+  (c:connection_state)
+  (#st0:erased CS.connection_state)
+  requires connection_exactly c st0
+  ensures connection_exactly c (local_fail_state st0 tls_decode_error)
+{
+  unfold (connection_exactly c st0);
+  unfold (connection_model_exactly c st0.CS.cs_model);
+  unfold (control_exactly c.control st0.CS.cs_model.CS.model_control st0.CS.cs_model.CS.model_failure);
+
+  c.control.control_tag := 5uy;
+  c.control.failure_present := true;
+  c.control.failure_code := 0uy;
+  c.control.failure_alert := 50uy;
+
+  fold (control_exactly
+    c.control
+    (CS.ControlFailed tls_decode_error)
+    (Some tls_decode_error));
+  assert (pure ((CS.fail_model st0.CS.cs_model tls_decode_error).CS.model_control == CS.ControlFailed tls_decode_error));
+  assert (pure ((CS.fail_model st0.CS.cs_model tls_decode_error).CS.model_failure == Some tls_decode_error));
+  fold (connection_model_exactly c (CS.fail_model st0.CS.cs_model tls_decode_error));
+
+  lemma_local_fail_state_evolves st0 tls_decode_error;
+  MR.update c.ghost_state (local_fail_state st0 tls_decode_error);
+  fold (connection_exactly c (local_fail_state st0 tls_decode_error))
+}
+
+fn mark_unexpected_message
+  (c:connection_state)
+  (#st0:erased CS.connection_state)
+  requires connection_exactly c st0
+  ensures connection_exactly c (local_fail_state st0 tls_unexpected_message_error)
+{
+  unfold (connection_exactly c st0);
+  unfold (connection_model_exactly c st0.CS.cs_model);
+  unfold (control_exactly c.control st0.CS.cs_model.CS.model_control st0.CS.cs_model.CS.model_failure);
+
+  c.control.control_tag := 5uy;
+  c.control.failure_present := true;
+  c.control.failure_code := 0uy;
+  c.control.failure_alert := 10uy;
+
+  fold (control_exactly
+    c.control
+    (CS.ControlFailed tls_unexpected_message_error)
+    (Some tls_unexpected_message_error));
+  assert (pure ((CS.fail_model st0.CS.cs_model tls_unexpected_message_error).CS.model_control == CS.ControlFailed tls_unexpected_message_error));
+  assert (pure ((CS.fail_model st0.CS.cs_model tls_unexpected_message_error).CS.model_failure == Some tls_unexpected_message_error));
+  fold (connection_model_exactly c (CS.fail_model st0.CS.cs_model tls_unexpected_message_error));
+
+  lemma_local_fail_state_evolves st0 tls_unexpected_message_error;
+  MR.update c.ghost_state (local_fail_state st0 tls_unexpected_message_error);
+  fold (connection_exactly c (local_fail_state st0 tls_unexpected_message_error))
+}

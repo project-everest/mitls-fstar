@@ -406,15 +406,21 @@ let is_valid_finished ([@@@mkey] l:finished) (m:M.finished) : slprop =
       Seq.equal verify_data m.M.verify_data)
 
 let is_valid_handshake_msg ([@@@mkey] l:handshake_msg) (m:M.handshake_msg) : slprop =
-  match l, m with
-  | LClientHello lch, M.ClientHello mch -> is_valid_client_hello lch mch
-  | LServerHello lsh, M.ServerHello msh -> is_valid_server_hello lsh msh
-  | LEncryptedExtensions lee, M.EncryptedExtensions mee -> is_valid_encrypted_extensions lee mee
-  | LCertificate lcert, M.Certificate mcert -> is_valid_certificate_msg lcert mcert
-  | LCertificateVerify lcv, M.CertificateVerify mcv -> is_valid_certificate_verify lcv mcv
-  | LFinished lfin, M.Finished mfin -> is_valid_finished lfin mfin
-  | LHelloRetryRequest, M.HelloRetryRequest -> emp
-  | _, _ -> pure False
+  match l with
+  | LClientHello lch ->
+    exists* mch. is_valid_client_hello lch mch ** pure (m == M.ClientHello mch)
+  | LServerHello lsh ->
+    exists* msh. is_valid_server_hello lsh msh ** pure (m == M.ServerHello msh)
+  | LEncryptedExtensions lee ->
+    exists* mee. is_valid_encrypted_extensions lee mee ** pure (m == M.EncryptedExtensions mee)
+  | LCertificate lcert ->
+    exists* mcert. is_valid_certificate_msg lcert mcert ** pure (m == M.Certificate mcert)
+  | LCertificateVerify lcv ->
+    exists* mcv. is_valid_certificate_verify lcv mcv ** pure (m == M.CertificateVerify mcv)
+  | LFinished lfin ->
+    exists* mfin. is_valid_finished lfin mfin ** pure (m == M.Finished mfin)
+  | LHelloRetryRequest ->
+    pure (m == M.HelloRetryRequest)
 
 let is_valid_plaintext ([@@@mkey] l:plaintext) (m:M.plaintext) : slprop =
   exists* fragment.
@@ -442,13 +448,163 @@ let is_valid_application_data ([@@@mkey] l:application_data) (m:B.bytes) : slpro
       byte_prefix_matches bytes l.application_data_len m)
 
 let is_valid_tls_message ([@@@mkey] l:tls_message) (m:M.tls_message) : slprop =
-  match l, m with
-  | LTlsHandshake lhs, M.TlsHandshake mhs -> is_valid_handshake_msg lhs mhs
-  | LTlsApplicationData lapp, M.TlsApplicationData mapp -> is_valid_application_data lapp mapp
-  | LTlsAlert lalert, M.TlsAlert malert -> pure (alert_description_matches lalert malert)
-  | LTlsChangeCipherSpec, M.TlsChangeCipherSpec -> emp
-  | _, _ -> pure False
+  match l with
+  | LTlsHandshake lhs ->
+    exists* mhs. is_valid_handshake_msg lhs mhs ** pure (m == M.TlsHandshake mhs)
+  | LTlsApplicationData lapp ->
+    exists* mapp. is_valid_application_data lapp mapp ** pure (m == M.TlsApplicationData mapp)
+  | LTlsAlert lalert ->
+    exists* malert. pure (alert_description_matches lalert malert /\ m == M.TlsAlert malert)
+  | LTlsChangeCipherSpec ->
+    pure (m == M.TlsChangeCipherSpec)
 
 let is_valid_tls_record ([@@@mkey] l:tls_record) (m:M.tls_record) : slprop =
   is_valid_sealed_record l.tls_record_fragment m.M.record_fragment **
   pure (content_type_matches l.tls_record_outer_type m.M.record_outer_type)
+
+fn free_application_data
+  (l:application_data)
+  requires exists* m. is_valid_application_data l m
+  ensures emp
+{
+  with m. unfold (is_valid_application_data l m);
+  with bytes. _;
+  V.free l.application_data_bytes;
+}
+
+fn free_client_hello
+  (l:client_hello)
+  requires exists* m. is_valid_client_hello l m
+  ensures emp
+{
+  with m. unfold (is_valid_client_hello l m);
+  with random server_name key_share cipher_suites signature_schemes. _;
+  V.free l.client_hello_random;
+  V.free l.client_hello_server_name;
+  V.free l.client_hello_key_share;
+  V.free l.client_hello_cipher_suites;
+  V.free l.client_hello_signature_schemes;
+}
+
+fn free_server_hello
+  (l:server_hello)
+  requires exists* m. is_valid_server_hello l m
+  ensures emp
+{
+  with m. unfold (is_valid_server_hello l m);
+  with random key_share. _;
+  V.free l.server_hello_random;
+  V.free l.server_hello_key_share;
+}
+
+fn free_encrypted_extensions
+  (l:encrypted_extensions)
+  requires exists* m. is_valid_encrypted_extensions l m
+  ensures emp
+{
+  with m. unfold (is_valid_encrypted_extensions l m);
+  with alpn. _;
+  V.free l.encrypted_extensions_alpn;
+}
+
+fn free_certificate_msg
+  (l:certificate_msg)
+  requires exists* m. is_valid_certificate_msg l m
+  ensures emp
+{
+  with m. unfold (is_valid_certificate_msg l m);
+  with chain_bytes offsets lens. _;
+  V.free l.certificate_msg_chain_bytes;
+  V.free l.certificate_msg_cert_offsets;
+  V.free l.certificate_msg_cert_lens;
+}
+
+fn free_certificate_verify
+  (l:certificate_verify)
+  requires exists* m. is_valid_certificate_verify l m
+  ensures emp
+{
+  with m. unfold (is_valid_certificate_verify l m);
+  with signature. _;
+  V.free l.certificate_verify_signature;
+}
+
+fn free_finished
+  (l:finished)
+  requires exists* m. is_valid_finished l m
+  ensures emp
+{
+  with m. unfold (is_valid_finished l m);
+  with verify_data. _;
+  V.free l.finished_verify_data;
+}
+
+fn free_handshake_msg
+  (l:handshake_msg)
+  requires exists* m. is_valid_handshake_msg l m
+  ensures emp
+{
+  with m. assert (pure True);
+  match l {
+    LClientHello lch -> {
+      unfold (is_valid_handshake_msg (LClientHello lch) m);
+      with mch. _;
+      free_client_hello lch
+    }
+    LServerHello lsh -> {
+      unfold (is_valid_handshake_msg (LServerHello lsh) m);
+      with msh. _;
+      free_server_hello lsh
+    }
+    LEncryptedExtensions lee -> {
+      unfold (is_valid_handshake_msg (LEncryptedExtensions lee) m);
+      with mee. _;
+      free_encrypted_extensions lee
+    }
+    LCertificate lcert -> {
+      unfold (is_valid_handshake_msg (LCertificate lcert) m);
+      with mcert. _;
+      free_certificate_msg lcert
+    }
+    LCertificateVerify lcv -> {
+      unfold (is_valid_handshake_msg (LCertificateVerify lcv) m);
+      with mcv. _;
+      free_certificate_verify lcv
+    }
+    LFinished lfin -> {
+      unfold (is_valid_handshake_msg (LFinished lfin) m);
+      with mfin. _;
+      free_finished lfin
+    }
+    LHelloRetryRequest -> {
+      unfold (is_valid_handshake_msg LHelloRetryRequest m)
+    }
+  }
+}
+
+fn free_tls_message
+  (l:tls_message)
+  requires exists* m. is_valid_tls_message l m
+  ensures emp
+{
+  with m. assert (pure True);
+  match l {
+    LTlsHandshake lhs -> {
+      unfold (is_valid_tls_message (LTlsHandshake lhs) m);
+      with mhs. _;
+      free_handshake_msg lhs
+    }
+    LTlsApplicationData lapp -> {
+      unfold (is_valid_tls_message (LTlsApplicationData lapp) m);
+      with mapp. _;
+      free_application_data lapp
+    }
+    LTlsAlert lalert -> {
+      unfold (is_valid_tls_message (LTlsAlert lalert) m);
+      with malert. _
+    }
+    LTlsChangeCipherSpec -> {
+      unfold (is_valid_tls_message LTlsChangeCipherSpec m)
+    }
+  }
+}

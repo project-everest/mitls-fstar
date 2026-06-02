@@ -33,6 +33,8 @@ type client_response = {
 
 let tls_decode_error : T.tls_error = T.AlertError T.DecodeError
 
+let tls_unexpected_message_error : T.tls_error = T.AlertError T.UnexpectedMessage
+
 type local_event_kind =
   | LocalStartHandshake
   | LocalDeriveSharedSecret
@@ -209,6 +211,36 @@ let decode_error_response
     network_out
     app_out
 
+let unexpected_message_response
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (resp:client_response)
+  (network_out:B.bytes)
+  (app_out:B.bytes)
+  : prop =
+  resp.status == IllegalTransition /\
+  legal_response_for_event
+    st0
+    st1
+    resp
+    (CS.ConnLocalEvent (CS.LocalFail tls_unexpected_message_error))
+    B.empty
+    B.empty
+    network_out
+    app_out
+
+let legal_handled_tls_response
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (resp:client_response)
+  (msg:M.tls_message)
+  (raw_received:B.bytes)
+  (network_out:B.bytes)
+  (app_out:B.bytes)
+  : prop =
+  legal_received_tls_response st0 st1 resp msg raw_received network_out app_out \/
+  unexpected_message_response st0 st1 resp network_out app_out
+
 let legal_network_response
   (st0:CS.connection_state)
   (st1:CS.connection_state)
@@ -221,6 +253,6 @@ let legal_network_response
   : prop =
   (exists msg.
      wire_parse_success content_type fragment msg /\
-     legal_received_tls_response st0 st1 resp msg raw_received network_out app_out) \/
+     legal_handled_tls_response st0 st1 resp msg raw_received network_out app_out) \/
   (wire_parse_failure content_type fragment /\
    decode_error_response st0 st1 resp network_out app_out)
