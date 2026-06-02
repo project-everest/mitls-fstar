@@ -184,6 +184,55 @@ let parsed_message_wire_success
   | _ ->
   exists msg. wire_parse_success content_type fragment msg
 
+let parsed_message_wire_success_for
+  (content_type:U8.t)
+  (fragment:B.bytes)
+  (l:L.tls_message)
+  (msg:M.tls_message)
+  : prop =
+  wire_parse_success content_type fragment msg /\
+  (match l, msg with
+  | L.LTlsChangeCipherSpec, M.TlsChangeCipherSpec ->
+    True
+  | L.LTlsChangeCipherSpec, _ ->
+    False
+  | L.LTlsAlert alert_wire, M.TlsAlert alert ->
+    L.alert_description_matches alert_wire alert
+  | L.LTlsAlert _, _ ->
+    False
+  | L.LTlsHandshake L.LHelloRetryRequest, M.TlsHandshake M.HelloRetryRequest ->
+    True
+  | L.LTlsHandshake L.LHelloRetryRequest, _ ->
+    False
+  | L.LTlsHandshake (L.LServerHello _), M.TlsHandshake (M.ServerHello sh) ->
+    Seq.equal fragment (WS.serialize_handshake (M.ServerHello sh))
+  | L.LTlsHandshake (L.LServerHello _), _ ->
+    False
+  | L.LTlsHandshake (L.LClientHello _), M.TlsHandshake (M.ClientHello _) ->
+    True
+  | L.LTlsHandshake (L.LClientHello _), _ ->
+    False
+  | L.LTlsHandshake (L.LEncryptedExtensions _), M.TlsHandshake (M.EncryptedExtensions _) ->
+    True
+  | L.LTlsHandshake (L.LEncryptedExtensions _), _ ->
+    False
+  | L.LTlsHandshake (L.LCertificate _), M.TlsHandshake (M.Certificate _) ->
+    True
+  | L.LTlsHandshake (L.LCertificate _), _ ->
+    False
+  | L.LTlsHandshake (L.LCertificateVerify _), M.TlsHandshake (M.CertificateVerify _) ->
+    True
+  | L.LTlsHandshake (L.LCertificateVerify _), _ ->
+    False
+  | L.LTlsHandshake (L.LFinished _), M.TlsHandshake (M.Finished _) ->
+    True
+  | L.LTlsHandshake (L.LFinished _), _ ->
+    False
+  | L.LTlsApplicationData _, M.TlsApplicationData _ ->
+    True
+  | L.LTlsApplicationData _, _ ->
+    False)
+
 let local_event_kind_matches
   (kind:local_event_kind)
   (payload:B.bytes)

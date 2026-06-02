@@ -39,10 +39,13 @@ fn dispatch_network_event
            pts_to app_out 'old_app_out **
            (match parsed with
             | Some l ->
-              (exists* ct m.
+              (exists* m.
                 L.is_valid_tls_message l m **
-                pure (L.content_type_matches content_type ct /\
-                      WS.parse_tls_message ct 'fragment_bytes == Some m)) **
+                pure (CT.parsed_message_wire_success_for
+                  content_type
+                  (Ghost.reveal 'fragment_bytes)
+                  l
+                  m)) **
               pure (exists ct msg.
                 L.content_type_matches content_type ct /\
                 WS.parse_tls_message ct 'fragment_bytes == Some msg) **
@@ -109,6 +112,7 @@ fn dispatch_network_event
     Some l -> {
       match l {
         L.LTlsHandshake lhs -> {
+          with m. assert (pure True);
           let resp =
             HHandshake.handle_handshake_message
               c

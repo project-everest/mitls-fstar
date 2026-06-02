@@ -113,7 +113,13 @@ fn handle_handshake_message
   (app_out:array U8.t)
   (app_out_len:SZ.t)
   requires C.connection_exactly c 'st0 **
-           (exists* m. L.is_valid_tls_message l m) **
+           (exists* m.
+             L.is_valid_tls_message l m **
+             pure (CT.parsed_message_wire_success_for
+               content_type
+               (Ghost.reveal 'fragment_bytes)
+               l
+               m)) **
            pts_to raw 'raw_bytes **
            pts_to fragment 'fragment_bytes **
            pts_to network_out 'old_network_out **
