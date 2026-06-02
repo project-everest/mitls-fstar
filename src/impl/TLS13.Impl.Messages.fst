@@ -132,6 +132,39 @@ type tls_message =
   | LTlsAlert of U8.t
   | LTlsChangeCipherSpec
 
+let tls_message_is_handshake (l:tls_message) : bool =
+  match l with
+  | LTlsHandshake _ -> true
+  | _ -> false
+
+let tls_message_is_application_data (l:tls_message) : bool =
+  match l with
+  | LTlsApplicationData _ -> true
+  | _ -> false
+
+let tls_message_is_alert (l:tls_message) : bool =
+  match l with
+  | LTlsAlert _ -> true
+  | _ -> false
+
+let tls_message_is_change_cipher_spec (l:tls_message) : bool =
+  match l with
+  | LTlsChangeCipherSpec -> true
+  | _ -> false
+
+let lemma_tls_message_classifier_complete (l:tls_message)
+  : Lemma (
+      tls_message_is_handshake l \/
+      tls_message_is_application_data l \/
+      tls_message_is_alert l \/
+      tls_message_is_change_cipher_spec l)
+  =
+  match l with
+  | LTlsHandshake _ -> ()
+  | LTlsApplicationData _ -> ()
+  | LTlsAlert _ -> ()
+  | LTlsChangeCipherSpec -> ()
+
 noeq
 type tls_record = {
   tls_record_outer_type: U8.t;

@@ -34,7 +34,6 @@ FSTAR_FLAGS = \
   $(INCLUDES)
 
 FSTAR = $(FSTAR_EXE) $(FSTAR_FLAGS)
-FSTAR_REFRESH = $(FSTAR_EXE) $(FSTAR_FLAGS) --z3refresh
 
 # ── Source Files ───────────────────────────────────────────────────
 SPEC_FILES = $(wildcard src/spec/*.fst src/spec/*.fsti)
@@ -50,12 +49,6 @@ include .depend
 # ── Generic Verification Rules ────────────────────────────────────
 $(CACHE_DIR)/%.checked: | $(CACHE_DIR)
 	$(FSTAR) $<
-
-# Work around a Z3 4.13.3 arithmetic-context assertion in the large Core VC.
-# Refreshing Z3 between queries does not weaken verification and keeps the
-# normal `make verify` gate deterministic.
-$(CACHE_DIR)/TLS13.Connection.Core.fst.checked: src/impl/TLS13.Connection.Core.fst | $(CACHE_DIR)
-	$(FSTAR_REFRESH) $<
 
 $(CACHE_DIR) $(OUTPUT_DIR) $(EXTRACT_DIR):
 	mkdir -p $@
@@ -103,17 +96,12 @@ $(OUTPUT_DIR)/%.krml: verify | $(OUTPUT_DIR)
 # ── Extraction Bundles ─────────────────────────────────────────────
 # List of modules to extract (dotted names)
 EXTRACT_MODULES = \
-  TLS13.Connection \
-  TLS13.Connection.Driver \
-  TLS13.Handshake \
-  TLS13.Handshake.Driver \
-  TLS13.Handshake.ByteDriver \
-  TLS13.Handshake.FlightState \
-  TLS13.Handshake.Framing \
-  TLS13.Handshake.Transcript \
+  TLS13.Impl.Client \
+  TLS13.Impl.Client.Types \
+  TLS13.Impl.ConnectionState \
+  TLS13.Impl.Messages \
   TLS13.KeySchedule \
   TLS13.Record \
-  TLS13.Record.Framing \
   TLS13.Extract.Smoke
 
 # Convert module names to .krml filenames
@@ -133,28 +121,26 @@ EXTRACT_DIR = _extract
 
 BUNDLE_DIR = $(EXTRACT_DIR)/bundle
 
-# TLS13.Connection is the public API module
-# All other implementation modules become internal (bundled into Connection.c)
-BUNDLE_API_MODULE = TLS13.Connection
+# TLS13.Impl.Client is the public API module.
+BUNDLE_API_MODULE = TLS13.Impl.Client
 
-# Implementation modules to bundle as internal to Connection
+# Implementation modules to bundle as internal to the client.
 BUNDLE_IMPL_MODULES = \
-  TLS13.Connection \
-  TLS13.Connection.Driver \
-  TLS13.Connection.StateDriver \
+  TLS13.Impl.Client \
+  TLS13.Impl.Client.Types \
+  TLS13.Impl.ConnectionState \
+  TLS13.Impl.Messages \
   TLS13.KeySchedule \
-  TLS13.Record \
-  TLS13.Record.Framing \
-  TLS13.State
+  TLS13.Record
 
-# Non-API modules (everything except TLS13.Connection)
+# Non-API modules (everything except TLS13.Impl.Client)
 BUNDLE_INTERNAL_MODULES = \
-  TLS13.Connection.Driver,TLS13.Connection.StateDriver,\
-  TLS13.KeySchedule,TLS13.Record,TLS13.Record.Framing,TLS13.State
+  TLS13.Impl.Client.Types,TLS13.Impl.ConnectionState,TLS13.Impl.Messages,\
+  TLS13.KeySchedule,TLS13.Record
 
 # Interface-only modules (not extracted, only .fsti):
-# TLS13.Connection.Backend, TLS13.Crypto, TLS13.X509, TLS13.MachineTypes, TLS13.IO,
-# TLS13.Impl.Parser, TLS13.Impl.Serializer
+# TLS13.Crypto, TLS13.X509, TLS13.MachineTypes, TLS13.IO,
+# TLS13.Impl.Parser, TLS13.Impl.Serializer, TLS13.Impl.Handle.*
 
 # Extract all impl modules to .krml
 BUNDLE_KRML_FILES = $(patsubst %,$(OUTPUT_DIR)/%.krml,$(subst .,_,$(BUNDLE_IMPL_MODULES)))
@@ -180,9 +166,7 @@ $(OUTPUT_DIR)/%.krml: verify | $(OUTPUT_DIR)
 
 extract-krml-bundle: $(BUNDLE_KRML_FILES) $(OUTPUT_DIR)/FStar_Pervasives_Native.krml
 
-# Generate single-file bundle for TLS13.Connection (+ its drivers)
-# Other modules (Handshake.*, Record.*) remain as separate .c files
-# This avoids the KaRaMeL bug while keeping the API clean
+# Generate C for the new buffer/event-oriented client API.
 extract-bundle: extract-krml-bundle | $(BUNDLE_DIR)
 	@echo "Extracting TLS13 modules without bundling (consistent ghost handling)..."
 	@rm -f $(BUNDLE_DIR)/*.c $(BUNDLE_DIR)/*.h $(BUNDLE_DIR)/internal/*.h
@@ -195,25 +179,23 @@ extract-bundle: extract-krml-bundle | $(BUNDLE_DIR)
 	  -add-include '"../../c_stubs/tls13_crypto_external.h"' \
 	  -add-include '"../../c_stubs/tls13_spec_types.h"' \
 	  -bundle 'FStar.*,Pulse.*,PulseCore.*,Prims' \
-	  -no-prefix TLS13.Connection \
-	  -no-prefix TLS13.State \
-	  _output/TLS13_Connection.krml \
-	  _output/TLS13_Connection_Driver.krml \
-	  _output/TLS13_Connection_StateDriver.krml \
-	  _output/TLS13_State.krml \
+	  -no-prefix TLS13.Impl.Client \
+	  _output/TLS13_Impl_Client.krml \
+	  _output/TLS13_Impl_Client_Types.krml \
+	  _output/TLS13_Impl_ConnectionState.krml \
+	  _output/TLS13_Impl_Messages.krml \
 	  _output/TLS13_KeySchedule.krml \
 	  _output/TLS13_Record.krml \
-	  _output/TLS13_Record_Framing.krml \
 	  _output/FStar_Pervasives_Native.krml
 	@echo ""
 	@echo "Extraction complete:"
 	@ls -lh $(BUNDLE_DIR)/TLS13_*.c 2>/dev/null | awk '{print "  " $$9 " (" $$5 ")"}'
 	@echo ""
-	@echo "  Main API (TLS13_Connection.h):"
+	@echo "  Main API (TLS13_Impl_Client.h):"
 	@ls -lh $(BUNDLE_DIR)/TLS13_*.c 2>/dev/null | awk '{print "    " $$9 " (" $$5 ")"}'
 	@echo ""
-	@echo "Public API (TLS13_Connection.h):"
-	@grep "^[a-zA-Z_].*client_" $(BUNDLE_DIR)/TLS13_Connection.h || true
+	@echo "Public API (TLS13_Impl_Client.h):"
+	@grep "^[a-zA-Z_].*client_" $(BUNDLE_DIR)/TLS13_Impl_Client.h || true
 
 $(BUNDLE_DIR):
 	mkdir -p $@
