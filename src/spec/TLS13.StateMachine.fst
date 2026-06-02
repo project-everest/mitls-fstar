@@ -2,6 +2,7 @@ module TLS13.StateMachine
 
 module B = TLS13.Bytes
 module H = TLS13.Handshake.Spec
+module M = TLS13.Messages
 module R = TLS13.Record.Spec
 module RTC = FStar.ReflexiveTransitiveClosure
 module T = TLS13.Types
@@ -37,14 +38,14 @@ type conn_state = {
 }
 
 type event =
-  | SendClientHello of H.client_hello
-  | RecvServerHello of H.server_hello
-  | RecvEncryptedExtensions of H.encrypted_extensions
-  | RecvCertificate of H.certificate_msg
+  | SendClientHello of M.client_hello
+  | RecvServerHello of M.server_hello
+  | RecvEncryptedExtensions of M.encrypted_extensions
+  | RecvCertificate of M.certificate_msg
   | ValidateCertificate of X.peer_identity
-  | RecvCertificateVerify of H.certificate_verify
-  | RecvServerFinished of H.finished
-  | SendClientFinished of H.finished
+  | RecvCertificateVerify of M.certificate_verify
+  | RecvServerFinished of M.finished
+  | SendClientFinished of M.finished
   | SendApplicationData of B.bytes
   | RecvApplicationData of B.bytes
   | SendCloseNotify
@@ -214,7 +215,7 @@ let step (s:conn_state) (e:event) : option conn_state =
   | Start, SendClientHello _ ->
     Some { s with phase = ClientHelloSent }
   | ClientHelloSent, RecvServerHello sh ->
-    if H.is_supported_cipher_suite sh.H.cipher_suite
+    if H.is_supported_cipher_suite sh.M.cipher_suite
     then Some { s with phase = ServerHelloReceived }
     else Some (fail s T.UnsupportedCipherSuite)
   | ServerHelloReceived, RecvEncryptedExtensions _ ->

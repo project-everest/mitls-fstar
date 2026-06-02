@@ -1,12 +1,28 @@
 module TLS13.Wire.Spec
 
 module B = TLS13.Bytes
-module H = TLS13.Handshake.Spec
-module R = TLS13.Record.Spec
+module M = TLS13.Messages
 module Seq = FStar.Seq
 module SHC = TLS13.ServerHello.Checks
 module T = TLS13.Types
 module U8 = FStar.UInt8
+
+(**
+  Wire-level M/L boundary.
+
+  The high-level model (M) is the pure message layer from TLS13.Messages,
+  TLS13.Types, TLS13.StateMachine, and TLS13.ConnectionLog.
+  The low-level representation (L) for supported wire formats is bytes plus
+  explicit consumed lengths/slice offsets, not a second family of structured
+  TLS datatypes.
+
+  Concrete Pulse parsers/serializers in TLS13.Handshake.Framing and
+  TLS13.Record.Framing should state their correctness by referring to the
+  parse_* and serialize_* functions in this module.  Several existing
+  implementation contracts already follow this rule; the remaining weak
+  shape-only contracts should be strengthened here rather than by adding a
+  parallel codec API.
+**)
 
 type parse_error = T.tls_error
 
@@ -22,13 +38,41 @@ val lemma_read_u16_definition:
          U8.v (Seq.index input pos) * 256 +
          U8.v (Seq.index input (pos + 1)))
 
+val parse_client_hello:
+  input:B.bytes ->
+  GTot (option M.client_hello)
+
+val parse_server_hello:
+  input:B.bytes ->
+  GTot (option M.server_hello)
+
+val parse_certificate_msg:
+  input:B.bytes ->
+  GTot (option M.certificate_msg)
+
+val parse_encrypted_extensions:
+  input:B.bytes ->
+  GTot (option M.encrypted_extensions)
+
+val parse_certificate_verify:
+  input:B.bytes ->
+  GTot (option M.certificate_verify)
+
+val parse_finished:
+  input:B.bytes ->
+  GTot (option M.finished)
+
 val parse_handshake:
   input:B.bytes ->
-  GTot (option (H.handshake_msg & nat))
+  GTot (option (M.handshake_msg & nat))
+
+val parse_handshake_msg:
+  input:B.bytes ->
+  GTot (option (M.handshake_msg & nat))
 
 val parse_supported_server_hello:
   input:B.bytes ->
-  GTot (option H.server_hello)
+  GTot (option M.server_hello)
 
 val lemma_parse_supported_server_hello_ok:
   input:B.bytes ->
@@ -42,27 +86,51 @@ val lemma_parse_supported_server_hello_fields:
     (ensures (
       match parse_supported_server_hello input with
       | Some sh ->
-        Seq.equal sh.H.random (Seq.slice input 6 38) /\
+        Seq.equal sh.M.random (Seq.slice input 6 38) /\
         ((SHC.server_hello_ok_52 input /\
-          Seq.equal sh.H.key_share (Seq.slice input 52 84)) \/
+          Seq.equal sh.M.key_share (Seq.slice input 52 84)) \/
          (SHC.server_hello_ok_58 input /\
-          Seq.equal sh.H.key_share (Seq.slice input 58 90)))
+          Seq.equal sh.M.key_share (Seq.slice input 58 90)))
       | None -> False))
 
 val parse_certificate_leaf_der:
   input:B.bytes ->
   GTot (option B.bytes)
 
-val parse_certificate_verify:
-  input:B.bytes ->
-  GTot (option H.certificate_verify)
+val serialize_client_hello:
+  hello:M.client_hello ->
+  GTot B.bytes
+
+val serialize_server_hello:
+  hello:M.server_hello ->
+  GTot B.bytes
+
+val serialize_encrypted_extensions:
+  ee:M.encrypted_extensions ->
+  GTot B.bytes
+
+val serialize_certificate_msg:
+  cert:M.certificate_msg ->
+  GTot B.bytes
+
+val serialize_certificate_verify:
+  cv:M.certificate_verify ->
+  GTot B.bytes
+
+val serialize_finished:
+  fin:M.finished ->
+  GTot B.bytes
 
 val serialize_supported_client_hello:
-  hello:H.client_hello ->
+  hello:M.client_hello ->
   GTot B.bytes
 
 val serialize_handshake:
-  msg:H.handshake_msg ->
+  msg:M.handshake_msg ->
+  GTot B.bytes
+
+val serialize_handshake_msg:
+  msg:M.handshake_msg ->
   GTot B.bytes
 
 val serialize_server_certificate_verify_input:
@@ -71,7 +139,7 @@ val serialize_server_certificate_verify_input:
 
 val parse_record:
   input:B.bytes ->
-  GTot (option (T.content_type & R.sealed_record & nat))
+  GTot (option (T.content_type & M.sealed_record & nat))
 
 val parse_record_header:
   input:B.bytes ->
@@ -91,6 +159,39 @@ val lemma_parse_record_header_some_iff:
 val serialize_record:
   content_type:T.content_type ->
   fragment:B.bytes ->
+  GTot B.bytes
+
+val parse_plaintext:
+  input:B.bytes ->
+  GTot (option M.plaintext)
+
+val serialize_plaintext:
+  pt:M.plaintext ->
+  GTot B.bytes
+
+val parse_sealed_record:
+  input:B.bytes ->
+  GTot (option M.sealed_record)
+
+val serialize_sealed_record:
+  record:M.sealed_record ->
+  GTot B.bytes
+
+val parse_tls_message:
+  content_type:T.content_type ->
+  fragment:B.bytes ->
+  GTot (option M.tls_message)
+
+val serialize_tls_message:
+  msg:M.tls_message ->
+  GTot (T.content_type & B.bytes)
+
+val parse_tls_record:
+  input:B.bytes ->
+  GTot (option (M.tls_record & nat))
+
+val serialize_tls_record:
+  record:M.tls_record ->
   GTot B.bytes
 
 val lemma_parse_record_serializes:

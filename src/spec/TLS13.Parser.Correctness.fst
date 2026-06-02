@@ -4,7 +4,7 @@ module TLS13.Parser.Correctness
 // These are the admits that connect Pulse implementations to Wire.Spec
 
 module B = TLS13.Bytes
-module H = TLS13.Handshake.Spec
+module M = TLS13.Messages
 module Seq = FStar.Seq
 module SHC = TLS13.ServerHello.Checks
 module T = TLS13.Types
@@ -64,8 +64,8 @@ let lemma_parse_supported_server_hello_correct
       (ok <==> Some? (WS.parse_supported_server_hello input_bytes)) /\
       (ok ==> (
         let Some sh = WS.parse_supported_server_hello input_bytes in
-        Seq.equal random_bytes sh.random /\
-        Seq.equal key_share_bytes sh.key_share
+        Seq.equal random_bytes sh.M.random /\
+        Seq.equal key_share_bytes sh.M.key_share
       )))
   =
     WS.lemma_parse_supported_server_hello_ok input_bytes;
@@ -76,20 +76,20 @@ let lemma_parse_supported_server_hello_correct
         | None -> ()
         | Some sh ->
           Seq.lemma_eq_elim random_bytes (Seq.slice input_bytes 6 38);
-          Seq.lemma_eq_elim sh.H.random (Seq.slice input_bytes 6 38);
-          Seq.lemma_eq_refl random_bytes sh.H.random;
+          Seq.lemma_eq_elim sh.M.random (Seq.slice input_bytes 6 38);
+          Seq.lemma_eq_refl random_bytes sh.M.random;
           if SHC.server_hello_ok_52 input_bytes then
             begin
               Seq.lemma_eq_elim key_share_bytes (Seq.slice input_bytes 52 84);
-              Seq.lemma_eq_elim sh.H.key_share (Seq.slice input_bytes 52 84);
-              Seq.lemma_eq_refl key_share_bytes sh.H.key_share
+              Seq.lemma_eq_elim sh.M.key_share (Seq.slice input_bytes 52 84);
+              Seq.lemma_eq_refl key_share_bytes sh.M.key_share
             end
           else
             begin
               assert (SHC.server_hello_ok_58 input_bytes);
               Seq.lemma_eq_elim key_share_bytes (Seq.slice input_bytes 58 90);
-              Seq.lemma_eq_elim sh.H.key_share (Seq.slice input_bytes 58 90);
-              Seq.lemma_eq_refl key_share_bytes sh.H.key_share
+              Seq.lemma_eq_elim sh.M.key_share (Seq.slice input_bytes 58 90);
+              Seq.lemma_eq_refl key_share_bytes sh.M.key_share
             end
       end
     else ()

@@ -1,0 +1,421 @@
+module TLS13.Impl.Messages
+
+#lang-pulse
+
+open Pulse.Lib.Pervasives
+
+module B = TLS13.Bytes
+module L = FStar.List.Tot
+module M = TLS13.Messages
+module Seq = FStar.Seq
+module SZ = FStar.SizeT
+module T = TLS13.Types
+module U8 = FStar.UInt8
+module U16 = FStar.UInt16
+module V = Pulse.Lib.Vec
+
+(**
+  Extraction-oriented low-level message layer.
+
+  The types in this module are the L counterparts of TLS13.Messages.  Fixed
+  wire discriminants and lengths use machine integers; variable-size payloads
+  are represented by heap vectors plus explicit SizeT lengths.  The is_valid_*
+  predicates are ghost-only ownership/correspondence predicates tying each L
+  value to its pure M value.
+**)
+
+noextract
+let max_server_name_len : nat = 255
+
+noextract
+let max_alpn_len : nat = 255
+
+noextract
+let max_cipher_suites : nat = 16
+
+noextract
+let max_signature_schemes : nat = 16
+
+noextract
+let max_certificate_chain_bytes : nat = 32768
+
+noextract
+let max_certificate_chain_entries : nat = 8
+
+noextract
+let max_signature_len : nat = 4096
+
+noextract
+let max_record_fragment_len : nat = 16640
+
+noeq
+type client_hello = {
+  client_hello_random: V.vec U8.t;
+  client_hello_server_name: V.vec U8.t;
+  client_hello_server_name_len: SZ.t;
+  client_hello_has_server_name: bool;
+  client_hello_key_share: V.vec U8.t;
+  client_hello_cipher_suites: V.vec U16.t;
+  client_hello_cipher_suites_len: SZ.t;
+  client_hello_signature_schemes: V.vec U16.t;
+  client_hello_signature_schemes_len: SZ.t;
+}
+
+noeq
+type server_hello = {
+  server_hello_random: V.vec U8.t;
+  server_hello_key_share: V.vec U8.t;
+  server_hello_cipher_suite: U16.t;
+}
+
+noeq
+type encrypted_extensions = {
+  encrypted_extensions_alpn: V.vec U8.t;
+  encrypted_extensions_alpn_len: SZ.t;
+  encrypted_extensions_has_alpn: bool;
+}
+
+noeq
+type certificate_msg = {
+  certificate_msg_chain_bytes: V.vec U8.t;
+  certificate_msg_chain_bytes_len: SZ.t;
+  certificate_msg_cert_offsets: V.vec SZ.t;
+  certificate_msg_cert_lens: V.vec SZ.t;
+  certificate_msg_cert_count: SZ.t;
+}
+
+noeq
+type certificate_verify = {
+  certificate_verify_scheme: U16.t;
+  certificate_verify_signature: V.vec U8.t;
+  certificate_verify_signature_len: SZ.t;
+}
+
+noeq
+type finished = {
+  finished_verify_data: V.vec U8.t;
+}
+
+noeq
+type handshake_msg =
+  | LClientHello of client_hello
+  | LServerHello of server_hello
+  | LEncryptedExtensions of encrypted_extensions
+  | LCertificate of certificate_msg
+  | LCertificateVerify of certificate_verify
+  | LFinished of finished
+  | LHelloRetryRequest
+
+noeq
+type plaintext = {
+  plaintext_content_type: U8.t;
+  plaintext_fragment: V.vec U8.t;
+  plaintext_fragment_len: SZ.t;
+}
+
+noeq
+type sealed_record = {
+  sealed_record_fragment: V.vec U8.t;
+  sealed_record_fragment_len: SZ.t;
+}
+
+noeq
+type application_data = {
+  application_data_bytes: V.vec U8.t;
+  application_data_len: SZ.t;
+}
+
+noeq
+type tls_message =
+  | LTlsHandshake of handshake_msg
+  | LTlsApplicationData of application_data
+  | LTlsAlert of U8.t
+  | LTlsChangeCipherSpec
+
+noeq
+type tls_record = {
+  tls_record_outer_type: U8.t;
+  tls_record_fragment: sealed_record;
+}
+
+noextract
+let content_type_matches (wire:U8.t) (ct:T.content_type) : prop =
+  match ct with
+  | T.ChangeCipherSpec -> U8.v wire == 0x14
+  | T.Alert -> U8.v wire == 0x15
+  | T.Handshake -> U8.v wire == 0x16
+  | T.ApplicationData -> U8.v wire == 0x17
+
+noextract
+let alert_description_matches (wire:U8.t) (alert:T.alert_description) : prop =
+  match alert with
+  | T.CloseNotify -> U8.v wire == 0
+  | T.UnexpectedMessage -> U8.v wire == 10
+  | T.BadRecordMac -> U8.v wire == 20
+  | T.HandshakeFailure -> U8.v wire == 40
+  | T.DecodeError -> U8.v wire == 50
+  | T.DecryptError -> U8.v wire == 51
+  | T.ProtocolVersion -> U8.v wire == 70
+  | T.UnsupportedExtension -> U8.v wire == 110
+  | T.CertificateUnknown -> U8.v wire == 46
+  | T.IllegalParameter -> U8.v wire == 47
+
+noextract
+let cipher_suite_matches (wire:U16.t) (suite:T.cipher_suite) : prop =
+  match suite with
+  | T.TLS_CHACHA20_POLY1305_SHA256 -> U16.v wire == 0x1303
+
+noextract
+let signature_scheme_matches (wire:U16.t) (scheme:T.signature_scheme) : prop =
+  match scheme with
+  | T.RsaPssRsaeSha256 -> U16.v wire == 0x0804
+  | T.EcdsaSecp256r1Sha256 -> U16.v wire == 0x0403
+  | T.Ed25519 -> U16.v wire == 0x0807
+  | T.UnsupportedSignatureScheme n -> U16.v wire == n
+
+noextract
+let byte_prefix_matches
+  (storage:B.bytes)
+  (len:SZ.t)
+  (bytes:B.bytes)
+  : prop =
+  SZ.v len <= B.length storage /\
+  Seq.equal bytes (Seq.slice storage 0 (SZ.v len))
+
+noextract
+let optional_byte_prefix_matches
+  (present:bool)
+  (storage:B.bytes)
+  (len:SZ.t)
+  (bytes:option B.bytes)
+  : prop =
+  if present then
+    match bytes with
+    | Some b -> byte_prefix_matches storage len b
+    | None -> False
+  else bytes == None
+
+noextract
+let rec cipher_suites_match
+  (wire:Seq.seq U16.t)
+  (len:nat)
+  (suites:list T.cipher_suite)
+  : Tot prop
+    (decreases len)
+  =
+  if len == 0 then suites == []
+  else if len <= Seq.length wire then
+    match suites with
+    | suite :: rest ->
+      cipher_suite_matches (Seq.index wire 0) suite /\
+      cipher_suites_match (Seq.slice wire 1 (Seq.length wire)) (len - 1) rest
+    | [] -> False
+  else False
+
+noextract
+let rec signature_schemes_match
+  (wire:Seq.seq U16.t)
+  (len:nat)
+  (schemes:list T.signature_scheme)
+  : Tot prop
+    (decreases len)
+  =
+  if len == 0 then schemes == []
+  else if len <= Seq.length wire then
+    match schemes with
+    | scheme :: rest ->
+      signature_scheme_matches (Seq.index wire 0) scheme /\
+      signature_schemes_match (Seq.slice wire 1 (Seq.length wire)) (len - 1) rest
+    | [] -> False
+  else False
+
+noextract
+let rec certificate_chain_matches
+  (storage:B.bytes)
+  (storage_len:nat)
+  (offsets:Seq.seq SZ.t)
+  (lens:Seq.seq SZ.t)
+  (count:nat)
+  (chain:list B.bytes)
+  : Tot prop
+    (decreases count)
+  =
+  if count == 0 then chain == []
+  else if storage_len <= B.length storage /\
+          count <= Seq.length offsets /\
+          count <= Seq.length lens then
+    match chain with
+    | cert :: rest ->
+      let offset = SZ.v (Seq.index offsets 0) in
+      let cert_len = SZ.v (Seq.index lens 0) in
+      offset + cert_len <= storage_len /\
+      Seq.equal cert (Seq.slice storage offset (offset + cert_len)) /\
+      certificate_chain_matches
+        storage
+        storage_len
+        (Seq.slice offsets 1 (Seq.length offsets))
+        (Seq.slice lens 1 (Seq.length lens))
+        (count - 1)
+        rest
+    | [] -> False
+  else False
+
+let is_valid_client_hello ([@@@mkey] l:client_hello) (m:M.client_hello) : slprop =
+  exists* random server_name key_share cipher_suites signature_schemes.
+    V.pts_to l.client_hello_random random **
+    V.pts_to l.client_hello_server_name server_name **
+    V.pts_to l.client_hello_key_share key_share **
+    V.pts_to l.client_hello_cipher_suites cipher_suites **
+    V.pts_to l.client_hello_signature_schemes signature_schemes **
+    pure (
+      V.is_full_vec l.client_hello_random /\
+      V.is_full_vec l.client_hello_server_name /\
+      V.is_full_vec l.client_hello_key_share /\
+      V.is_full_vec l.client_hello_cipher_suites /\
+      V.is_full_vec l.client_hello_signature_schemes /\
+      V.length l.client_hello_random == 32 /\
+      V.length l.client_hello_server_name == max_server_name_len /\
+      V.length l.client_hello_key_share == 32 /\
+      V.length l.client_hello_cipher_suites == max_cipher_suites /\
+      V.length l.client_hello_signature_schemes == max_signature_schemes /\
+      SZ.v l.client_hello_server_name_len <= B.length server_name /\
+      SZ.v l.client_hello_cipher_suites_len <= Seq.length cipher_suites /\
+      SZ.v l.client_hello_signature_schemes_len <= Seq.length signature_schemes /\
+      Seq.equal random m.M.random /\
+      optional_byte_prefix_matches
+        l.client_hello_has_server_name
+        server_name
+        l.client_hello_server_name_len
+        m.M.server_name /\
+      Seq.equal key_share m.M.key_share /\
+      cipher_suites_match
+        cipher_suites
+        (SZ.v l.client_hello_cipher_suites_len)
+        m.M.cipher_suites /\
+      signature_schemes_match
+        signature_schemes
+        (SZ.v l.client_hello_signature_schemes_len)
+        m.M.signature_schemes)
+
+let is_valid_server_hello ([@@@mkey] l:server_hello) (m:M.server_hello) : slprop =
+  exists* random key_share.
+    V.pts_to l.server_hello_random random **
+    V.pts_to l.server_hello_key_share key_share **
+    pure (
+      V.is_full_vec l.server_hello_random /\
+      V.is_full_vec l.server_hello_key_share /\
+      V.length l.server_hello_random == 32 /\
+      V.length l.server_hello_key_share == 32 /\
+      Seq.equal random m.M.random /\
+      Seq.equal key_share m.M.key_share /\
+      cipher_suite_matches l.server_hello_cipher_suite m.M.cipher_suite)
+
+let is_valid_encrypted_extensions
+  ([@@@mkey] l:encrypted_extensions)
+  (m:M.encrypted_extensions)
+  : slprop =
+  exists* alpn.
+    V.pts_to l.encrypted_extensions_alpn alpn **
+    pure (
+      V.is_full_vec l.encrypted_extensions_alpn /\
+      V.length l.encrypted_extensions_alpn == max_alpn_len /\
+      SZ.v l.encrypted_extensions_alpn_len <= B.length alpn /\
+      optional_byte_prefix_matches
+        l.encrypted_extensions_has_alpn
+        alpn
+        l.encrypted_extensions_alpn_len
+        m.M.negotiated_alpn)
+
+let is_valid_certificate_msg ([@@@mkey] l:certificate_msg) (m:M.certificate_msg) : slprop =
+  exists* chain_bytes offsets lens.
+    V.pts_to l.certificate_msg_chain_bytes chain_bytes **
+    V.pts_to l.certificate_msg_cert_offsets offsets **
+    V.pts_to l.certificate_msg_cert_lens lens **
+    pure (
+      V.is_full_vec l.certificate_msg_chain_bytes /\
+      V.is_full_vec l.certificate_msg_cert_offsets /\
+      V.is_full_vec l.certificate_msg_cert_lens /\
+      V.length l.certificate_msg_chain_bytes == max_certificate_chain_bytes /\
+      V.length l.certificate_msg_cert_offsets == max_certificate_chain_entries /\
+      V.length l.certificate_msg_cert_lens == max_certificate_chain_entries /\
+      SZ.v l.certificate_msg_chain_bytes_len <= B.length chain_bytes /\
+      SZ.v l.certificate_msg_cert_count <= Seq.length offsets /\
+      SZ.v l.certificate_msg_cert_count <= Seq.length lens /\
+      certificate_chain_matches
+        chain_bytes
+        (SZ.v l.certificate_msg_chain_bytes_len)
+        offsets
+        lens
+        (SZ.v l.certificate_msg_cert_count)
+        m.M.chain)
+
+let is_valid_certificate_verify
+  ([@@@mkey] l:certificate_verify)
+  (m:M.certificate_verify)
+  : slprop =
+  exists* signature.
+    V.pts_to l.certificate_verify_signature signature **
+    pure (
+      V.is_full_vec l.certificate_verify_signature /\
+      V.length l.certificate_verify_signature == max_signature_len /\
+      byte_prefix_matches
+        signature
+        l.certificate_verify_signature_len
+        m.M.signature /\
+      signature_scheme_matches l.certificate_verify_scheme m.M.scheme)
+
+let is_valid_finished ([@@@mkey] l:finished) (m:M.finished) : slprop =
+  exists* verify_data.
+    V.pts_to l.finished_verify_data verify_data **
+    pure (
+      V.is_full_vec l.finished_verify_data /\
+      V.length l.finished_verify_data == 32 /\
+      Seq.equal verify_data m.M.verify_data)
+
+let is_valid_handshake_msg ([@@@mkey] l:handshake_msg) (m:M.handshake_msg) : slprop =
+  match l, m with
+  | LClientHello lch, M.ClientHello mch -> is_valid_client_hello lch mch
+  | LServerHello lsh, M.ServerHello msh -> is_valid_server_hello lsh msh
+  | LEncryptedExtensions lee, M.EncryptedExtensions mee -> is_valid_encrypted_extensions lee mee
+  | LCertificate lcert, M.Certificate mcert -> is_valid_certificate_msg lcert mcert
+  | LCertificateVerify lcv, M.CertificateVerify mcv -> is_valid_certificate_verify lcv mcv
+  | LFinished lfin, M.Finished mfin -> is_valid_finished lfin mfin
+  | LHelloRetryRequest, M.HelloRetryRequest -> emp
+  | _, _ -> pure False
+
+let is_valid_plaintext ([@@@mkey] l:plaintext) (m:M.plaintext) : slprop =
+  exists* fragment.
+    V.pts_to l.plaintext_fragment fragment **
+    pure (
+      V.is_full_vec l.plaintext_fragment /\
+      V.length l.plaintext_fragment == max_record_fragment_len /\
+      byte_prefix_matches fragment l.plaintext_fragment_len m.M.fragment /\
+      content_type_matches l.plaintext_content_type m.M.content_type)
+
+let is_valid_sealed_record ([@@@mkey] l:sealed_record) (m:M.sealed_record) : slprop =
+  exists* fragment.
+    V.pts_to l.sealed_record_fragment fragment **
+    pure (
+      V.is_full_vec l.sealed_record_fragment /\
+      V.length l.sealed_record_fragment == max_record_fragment_len /\
+      byte_prefix_matches fragment l.sealed_record_fragment_len m)
+
+let is_valid_application_data ([@@@mkey] l:application_data) (m:B.bytes) : slprop =
+  exists* bytes.
+    V.pts_to l.application_data_bytes bytes **
+    pure (
+      V.is_full_vec l.application_data_bytes /\
+      V.length l.application_data_bytes == max_record_fragment_len /\
+      byte_prefix_matches bytes l.application_data_len m)
+
+let is_valid_tls_message ([@@@mkey] l:tls_message) (m:M.tls_message) : slprop =
+  match l, m with
+  | LTlsHandshake lhs, M.TlsHandshake mhs -> is_valid_handshake_msg lhs mhs
+  | LTlsApplicationData lapp, M.TlsApplicationData mapp -> is_valid_application_data lapp mapp
+  | LTlsAlert lalert, M.TlsAlert malert -> pure (alert_description_matches lalert malert)
+  | LTlsChangeCipherSpec, M.TlsChangeCipherSpec -> emp
+  | _, _ -> pure False
+
+let is_valid_tls_record ([@@@mkey] l:tls_record) (m:M.tls_record) : slprop =
+  is_valid_sealed_record l.tls_record_fragment m.M.record_fragment **
+  pure (content_type_matches l.tls_record_outer_type m.M.record_outer_type)

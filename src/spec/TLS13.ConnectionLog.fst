@@ -1,8 +1,8 @@
 module TLS13.ConnectionLog
 
 module B = TLS13.Bytes
-module H = TLS13.Handshake.Spec
 module L = FStar.List.Tot
+module M = TLS13.Messages
 module R = TLS13.Record.Spec
 module RTC = FStar.ReflexiveTransitiveClosure
 module S = TLS13.StateMachine
@@ -13,6 +13,7 @@ module W = TLS13.Wire.Spec
 module X = TLS13.X509.Spec
 
 open FStar.List.Tot
+include TLS13.Messages
 
 type direction =
   | Sent
@@ -176,17 +177,6 @@ type stream_view (a:Type0) = {
 let stream_view_shape (#a:Type0) (raw:B.bytes) (view:stream_view a) : prop =
   view.consumed <= B.length raw /\
   Seq.equal view.residual (Seq.slice raw view.consumed (B.length raw))
-
-type tls_message =
-  | TlsHandshake of H.handshake_msg
-  | TlsApplicationData of B.bytes
-  | TlsAlert of T.alert_description
-  | TlsChangeCipherSpec
-
-type tls_record = {
-  record_outer_type: T.content_type;
-  record_fragment: R.sealed_record;
-}
 
 let serialize_tls_record (record:tls_record) : GTot B.bytes =
   W.serialize_record record.record_outer_type record.record_fragment
@@ -861,13 +851,13 @@ let lemma_step_app_log_extends
 
 let state_event_of_tls_message (msg:directed_message tls_message) : GTot (option S.event) =
   match msg.message_direction, msg.message_value with
-  | Sent, TlsHandshake (H.ClientHello ch) -> Some (S.SendClientHello ch)
-  | Received, TlsHandshake (H.ServerHello sh) -> Some (S.RecvServerHello sh)
-  | Received, TlsHandshake (H.EncryptedExtensions ee) -> Some (S.RecvEncryptedExtensions ee)
-  | Received, TlsHandshake (H.Certificate cert) -> Some (S.RecvCertificate cert)
-  | Received, TlsHandshake (H.CertificateVerify cv) -> Some (S.RecvCertificateVerify cv)
-  | Received, TlsHandshake (H.Finished fin) -> Some (S.RecvServerFinished fin)
-  | Sent, TlsHandshake (H.Finished fin) -> Some (S.SendClientFinished fin)
+  | Sent, TlsHandshake (M.ClientHello ch) -> Some (S.SendClientHello ch)
+  | Received, TlsHandshake (M.ServerHello sh) -> Some (S.RecvServerHello sh)
+  | Received, TlsHandshake (M.EncryptedExtensions ee) -> Some (S.RecvEncryptedExtensions ee)
+  | Received, TlsHandshake (M.Certificate cert) -> Some (S.RecvCertificate cert)
+  | Received, TlsHandshake (M.CertificateVerify cv) -> Some (S.RecvCertificateVerify cv)
+  | Received, TlsHandshake (M.Finished fin) -> Some (S.RecvServerFinished fin)
+  | Sent, TlsHandshake (M.Finished fin) -> Some (S.SendClientFinished fin)
   | Sent, TlsApplicationData bytes -> Some (S.SendApplicationData bytes)
   | Received, TlsApplicationData bytes -> Some (S.RecvApplicationData bytes)
   | Sent, TlsAlert T.CloseNotify -> Some S.SendCloseNotify

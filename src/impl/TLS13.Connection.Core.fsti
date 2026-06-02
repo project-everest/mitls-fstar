@@ -10,17 +10,24 @@ module CL = TLS13.ConnectionLog
 module R = TLS13.Record.Spec
 module Seq = FStar.Seq
 module S = TLS13.StateMachine
+module ST = TLS13.State
 module SZ = FStar.SizeT
 module U8 = FStar.UInt8
 module U64 = FStar.UInt64
 
 (**
-  Buffer-oriented proof boundary for the application-data phase.
+  Buffer-oriented ConnectionCore proof boundary.
 
-  This module is intentionally scoped to application write/read/close requests.
-  Handshake start/connect is not part of this first core API, because the current
-  connection implementation still treats the handshake transcript as an external
-  TCB milestone.
+  This is the single owned application-data core for the connection: it owns the
+  monotonic state/log resources, local and peer application record states, and
+  pending application/raw-network buffers.  The socket-shaped TLS13.Connection
+  module is only a transport/handshake wrapper while the top-level API is being
+  consolidated; it should not grow another independent application-data core.
+
+  Handshake start/connect is not part of this first core API yet. The next
+  consolidation step is to advance this core through the verified handshake and
+  install transcript-derived application keys here, rather than maintaining a
+  parallel post-handshake state in TLS13.Connection.
 
   The implementation establishes the calc-style theorem shape over concrete
   buffers and CL.step witnesses. Application writes and close_notify use the
@@ -33,6 +40,12 @@ module U64 = FStar.UInt64
 **)
 
 val client_core : Type0
+
+noextract
+val client_core_state_ref : client_core -> ST.state_ref
+
+noextract
+val client_core_log_ref : client_core -> ST.log_ref
 
 val is_client_core : client_core -> CL.connection_view -> slprop
 

@@ -4,6 +4,8 @@ module B = TLS13.Bytes
 module C = TLS13.Crypto.Spec
 module T = TLS13.Types
 
+include TLS13.Messages
+
 type epoch =
   | Initial
   | Handshake
@@ -15,13 +17,6 @@ type direction_state = {
   static_iv: option B.bytes;
   seq: nat;
 }
-
-type plaintext = {
-  content_type: T.content_type;
-  fragment: B.bytes;
-}
-
-type sealed_record = B.bytes
 
 let initial_direction_state : direction_state =
   { epoch = Initial; key = None; static_iv = None; seq = 0 }
