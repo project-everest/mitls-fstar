@@ -9,9 +9,12 @@ open FStar.List.Tot
 module B = TLS13.Bytes
 module Box = Pulse.Lib.Box
 module CL = TLS13.ConnectionLog
+module Crypto = TLS13.Crypto
 module CS = TLS13.Spec.ConnectionState
 module H = TLS13.Handshake.Spec
 module IM = TLS13.Impl.Messages
+module K = TLS13.Keys
+module KS = TLS13.KeySchedule
 module M = TLS13.Messages
 module MR = Pulse.Lib.MonotonicGhostRef
 module Arr = Pulse.Lib.Array
@@ -23,6 +26,7 @@ module SeqP = FStar.Seq.Properties
 module Slice = Pulse.Lib.Slice
 module SZ = FStar.SizeT
 module T = TLS13.Types
+module Tr = TLS13.Transcript
 module U8 = FStar.UInt8
 module U16 = FStar.UInt16
 module U64 = FStar.UInt64
@@ -998,6 +1002,58 @@ let local_fail_state (st:CS.connection_state) (err:T.tls_error) : CS.connection_
     CS.cs_event_log = st.CS.cs_event_log @ [CS.ConnLocalEvent (CS.LocalFail err)];
   }
 
+let derived_shared_secret_state
+  (st:CS.connection_state)
+  (shared:TLS13.Crypto.Spec.x25519_shared_secret)
+  : CS.connection_state =
+  let model0 = st.CS.cs_model in
+  let hs0 = model0.CS.model_handshake in
+  let early = K.early_secret B.empty in
+  let handshake = K.handshake_secret early shared in
+  let master = K.master_secret handshake in
+  let keys0 = hs0.CS.hs_keys in
+  let keys1 =
+    {
+      keys0 with
+        CS.ks_shared_secret = Some shared;
+        CS.ks_early_secret = Some early;
+        CS.ks_handshake_secret = Some handshake;
+        CS.ks_master_secret = Some master;
+    } in
+  {
+    CS.cs_model =
+      CS.with_handshake_state model0 { hs0 with CS.hs_keys = keys1 };
+    CS.cs_wire_log = {
+      CL.raw_sent = B.append st.CS.cs_wire_log.CL.raw_sent B.empty;
+      CL.raw_received = B.append st.CS.cs_wire_log.CL.raw_received B.empty;
+    };
+    CS.cs_event_log =
+      st.CS.cs_event_log @ [CS.ConnLocalEvent (CS.LocalDeriveSharedSecret shared)];
+  }
+
+let installed_traffic_keys_state
+  (st:CS.connection_state)
+  (install:CS.traffic_key_install)
+  : CS.connection_state =
+  let model0 = st.CS.cs_model in
+  let hs0 = model0.CS.model_handshake in
+  {
+    CS.cs_model = {
+      model0 with
+        CS.model_record = CS.install_record_keys model0.CS.model_record install;
+        CS.model_handshake = {
+          hs0 with
+            CS.hs_keys = CS.update_key_schedule_with_install hs0.CS.hs_keys install;
+        };
+    };
+    CS.cs_wire_log = {
+      CL.raw_sent = B.append st.CS.cs_wire_log.CL.raw_sent B.empty;
+      CL.raw_received = B.append st.CS.cs_wire_log.CL.raw_received B.empty;
+    };
+    CS.cs_event_log =
+      st.CS.cs_event_log @ [CS.ConnLocalEvent (CS.LocalInstallTrafficKeys install)];
+  }
+
 let received_hello_retry_request_rejected_state
   (st:CS.connection_state)
   (raw_received:B.bytes)
@@ -1172,6 +1228,90 @@ let lemma_local_fail_state_evolves (st:CS.connection_state) (err:T.tls_error)
     (local_fail_state st err);
   assert (CS.connection_state_evolves st (local_fail_state st err));
   assert (CS.connection_state_consistent (local_fail_state st err))
+
+let lemma_derived_shared_secret_state_evolves
+  (st:CS.connection_state)
+  (shared:TLS13.Crypto.Spec.x25519_shared_secret)
+  : Lemma
+      (requires CS.connection_state_consistent st /\
+                CS.legal_event
+                  st.CS.cs_model
+                  (CS.ConnLocalEvent (CS.LocalDeriveSharedSecret shared)))
+      (ensures CS.connection_state_evolves
+                 st
+                 (derived_shared_secret_state st shared) /\
+               CS.connection_state_consistent
+                 (derived_shared_secret_state st shared) /\
+               CS.legal_connection_delta
+                 st
+                 {
+                   CS.delta_event =
+                     CS.ConnLocalEvent (CS.LocalDeriveSharedSecret shared);
+                   CS.delta_raw_sent = B.empty;
+                   CS.delta_raw_received = B.empty;
+                 }
+                 (derived_shared_secret_state st shared))
+=
+  let ev = CS.ConnLocalEvent (CS.LocalDeriveSharedSecret shared) in
+  let delta = {
+    CS.delta_event = ev;
+    CS.delta_raw_sent = B.empty;
+    CS.delta_raw_received = B.empty;
+  } in
+  Seq.lemma_eq_intro B.empty B.empty;
+  assert (CS.step_model st.CS.cs_model ev ==
+          Some (derived_shared_secret_state st shared).CS.cs_model);
+  assert (CS.event_raw_delta_legal st.CS.cs_model ev B.empty B.empty);
+  assert (CS.legal_connection_delta st delta (derived_shared_secret_state st shared));
+  assert (CS.connection_state_single_step st (derived_shared_secret_state st shared));
+  FStar.ReflexiveTransitiveClosure.closure_step
+    CS.connection_state_single_step
+    st
+    (derived_shared_secret_state st shared);
+  assert (CS.connection_state_evolves st (derived_shared_secret_state st shared));
+  assert (CS.connection_state_consistent (derived_shared_secret_state st shared))
+
+let lemma_installed_traffic_keys_state_evolves
+  (st:CS.connection_state)
+  (install:CS.traffic_key_install)
+  : Lemma
+      (requires CS.connection_state_consistent st /\
+                CS.legal_event
+                  st.CS.cs_model
+                  (CS.ConnLocalEvent (CS.LocalInstallTrafficKeys install)))
+      (ensures CS.connection_state_evolves
+                 st
+                 (installed_traffic_keys_state st install) /\
+               CS.connection_state_consistent
+                 (installed_traffic_keys_state st install) /\
+               CS.legal_connection_delta
+                 st
+                 {
+                   CS.delta_event =
+                     CS.ConnLocalEvent (CS.LocalInstallTrafficKeys install);
+                   CS.delta_raw_sent = B.empty;
+                   CS.delta_raw_received = B.empty;
+                 }
+                 (installed_traffic_keys_state st install))
+=
+  let ev = CS.ConnLocalEvent (CS.LocalInstallTrafficKeys install) in
+  let delta = {
+    CS.delta_event = ev;
+    CS.delta_raw_sent = B.empty;
+    CS.delta_raw_received = B.empty;
+  } in
+  Seq.lemma_eq_intro B.empty B.empty;
+  assert (CS.step_model st.CS.cs_model ev ==
+          Some (installed_traffic_keys_state st install).CS.cs_model);
+  assert (CS.event_raw_delta_legal st.CS.cs_model ev B.empty B.empty);
+  assert (CS.legal_connection_delta st delta (installed_traffic_keys_state st install));
+  assert (CS.connection_state_single_step st (installed_traffic_keys_state st install));
+  FStar.ReflexiveTransitiveClosure.closure_step
+    CS.connection_state_single_step
+    st
+    (installed_traffic_keys_state st install);
+  assert (CS.connection_state_evolves st (installed_traffic_keys_state st install));
+  assert (CS.connection_state_consistent (installed_traffic_keys_state st install))
 
 let lemma_received_hello_retry_request_rejected_state_evolves
   (st:CS.connection_state)
