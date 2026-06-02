@@ -38,7 +38,10 @@ let tls_unexpected_message_error : T.tls_error = T.AlertError T.UnexpectedMessag
 type local_event_kind =
   | LocalStartHandshake
   | LocalDeriveSharedSecret
-  | LocalInstallTrafficKeys
+  | LocalInstallClientHandshakeTrafficKeys
+  | LocalInstallServerHandshakeTrafficKeys
+  | LocalInstallClientApplicationTrafficKeys
+  | LocalInstallServerApplicationTrafficKeys
   | LocalValidateCertificate
   | LocalVerifyCertificateSignature
   | LocalVerifyFinished
@@ -261,7 +264,18 @@ let local_event_kind_matches
     msg.CL.message_value == M.TlsAlert T.CloseNotify
   | LocalStartHandshake, CS.ConnLocalEvent (CS.LocalStartHandshake _) -> True
   | LocalDeriveSharedSecret, CS.ConnLocalEvent (CS.LocalDeriveSharedSecret _) -> True
-  | LocalInstallTrafficKeys, CS.ConnLocalEvent (CS.LocalInstallTrafficKeys _) -> True
+  | LocalInstallClientHandshakeTrafficKeys, CS.ConnLocalEvent (CS.LocalInstallTrafficKeys install) ->
+    install.CS.install_epoch == CS.TrafficHandshake /\
+    install.CS.install_direction == CS.TrafficWrite
+  | LocalInstallServerHandshakeTrafficKeys, CS.ConnLocalEvent (CS.LocalInstallTrafficKeys install) ->
+    install.CS.install_epoch == CS.TrafficHandshake /\
+    install.CS.install_direction == CS.TrafficRead
+  | LocalInstallClientApplicationTrafficKeys, CS.ConnLocalEvent (CS.LocalInstallTrafficKeys install) ->
+    install.CS.install_epoch == CS.TrafficApplication /\
+    install.CS.install_direction == CS.TrafficWrite
+  | LocalInstallServerApplicationTrafficKeys, CS.ConnLocalEvent (CS.LocalInstallTrafficKeys install) ->
+    install.CS.install_epoch == CS.TrafficApplication /\
+    install.CS.install_direction == CS.TrafficRead
   | LocalValidateCertificate, CS.ConnLocalEvent (CS.LocalValidateCertificate _) -> True
   | LocalVerifyCertificateSignature, CS.ConnLocalEvent (CS.LocalVerifyCertificateSignature _) -> True
   | LocalVerifyFinished, CS.ConnLocalEvent (CS.LocalVerifyFinished _) -> True
