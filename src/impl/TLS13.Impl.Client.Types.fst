@@ -179,6 +179,8 @@ let parsed_message_wire_success
   forall alert.
     L.alert_description_matches alert_wire alert ==>
     wire_parse_success content_type fragment (M.TlsAlert alert)
+  | L.LTlsHandshake L.LHelloRetryRequest ->
+  wire_parse_success content_type fragment (M.TlsHandshake M.HelloRetryRequest)
   | _ ->
   exists msg. wire_parse_success content_type fragment msg
 

@@ -111,22 +111,16 @@ fn dispatch_network_event
           let resp =
             HHandshake.handle_handshake_message
               c
+              content_type
               (L.LTlsHandshake lhs)
               raw
               raw_len
+              fragment
+              fragment_len
               network_out
               network_out_len
               app_out
               app_out_len;
-          CT.lemma_legal_network_response_unexpected_from_parse_success
-            'st0
-            (C.local_fail_state 'st0 C.tls_unexpected_message_error)
-            resp
-            content_type
-            (Ghost.reveal 'fragment_bytes)
-            (Ghost.reveal 'raw_bytes)
-            'old_network_out
-            'old_app_out;
           resp
         }
         L.LTlsApplicationData lapp -> {
