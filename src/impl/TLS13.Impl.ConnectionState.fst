@@ -429,7 +429,7 @@ let cipher_suite_list_allocated
   ([@@@mkey] slot:u16_list_storage)
   (cap:nat)
   : slprop =
-  exists* items len.
+  exists* (items:Seq.seq U16.t) (len:SZ.t).
     V.pts_to slot.items items **
     Box.pts_to slot.len len **
     pure (V.is_full_vec slot.items /\
@@ -442,7 +442,7 @@ let cipher_suite_list_exactly
   (cap:nat)
   (suites:list T.cipher_suite)
   : slprop =
-  exists* items len.
+  exists* (items:Seq.seq U16.t) (len:SZ.t).
     V.pts_to slot.items items **
     Box.pts_to slot.len len **
     pure (V.is_full_vec slot.items /\
@@ -587,18 +587,25 @@ let handshake_start_fields_exactly
   cipher_suite_list_exactly start.cipher_suites max_cipher_suites spec.CS.start_cipher_suites **
   signature_scheme_list_exactly start.signature_schemes max_signature_schemes spec.CS.start_signature_schemes
 
+let handshake_start_payload_exactly
+  ([@@@mkey] start:handshake_start_storage)
+  (present:bool)
+  (spec:option CS.handshake_start)
+  : slprop =
+  if present then
+    exists* (s:CS.handshake_start).
+      handshake_start_fields_exactly start s **
+      pure (spec == Some s)
+  else
+    handshake_start_fields_allocated start ** pure (spec == None)
+
 let handshake_start_exactly
   ([@@@mkey] start:handshake_start_storage)
   (spec:option CS.handshake_start)
   : slprop =
   exists* present.
     Box.pts_to start.present present **
-    (if present then
-       match spec with
-       | Some s -> handshake_start_fields_exactly start s
-       | None -> handshake_start_fields_allocated start ** pure False
-     else
-       handshake_start_fields_allocated start ** pure (spec == None))
+    handshake_start_payload_exactly start present spec
 
 let client_hello_slot_exactly
   (present_box:box bool)
@@ -658,7 +665,9 @@ let server_hello_slot_exactly
     (match stored, spec with
      | None, None -> pure True
      | Some l, Some m -> IM.is_valid_server_hello l m
-     | _, _ -> pure False)
+     | _, _ -> pure False) **
+    pure ((match stored with | None -> true | Some _ -> false) ==
+          (match spec with | None -> true | Some _ -> false))
 
 let encrypted_extensions_slot_exactly
   (present_box:box bool)
@@ -966,13 +975,11 @@ let tls_unexpected_message_error : T.tls_error = T.AlertError T.UnexpectedMessag
 
 let tls_hello_retry_request_rejected_error : T.tls_error = T.HelloRetryRequestRejected
 
-let lemma_nonempty_matched_cipher_suites_offer
-  (items:Seq.seq U16.t)
-  (len:nat)
+let lemma_nonempty_cipher_suites_offer
   (suites:list T.cipher_suite)
   (suite:T.cipher_suite)
   : Lemma
-      (requires IM.cipher_suites_match items len suites /\ len > 0)
+      (requires suites <> [])
       (ensures CS.cipher_suite_offered suites suite)
 =
   match suites with
@@ -1653,6 +1660,204 @@ fn is_waiting_server_hello
   fold (connection_model_exactly c st0.CS.cs_model);
   fold (connection_exactly c st0);
   ok
+}
+
+fn can_receive_server_hello
+  (c:connection_state)
+  (#sh:erased M.server_hello)
+  (#st0:erased CS.connection_state)
+  requires connection_exactly c st0
+  returns ok: bool
+  ensures connection_exactly c st0 **
+          pure (ok ==>
+            st0.CS.cs_model.CS.model_control ==
+              CS.ControlHandshaking CS.HsClientHelloSent /\
+            st0.CS.cs_model.CS.model_handshake.CS.hs_server_hello == None /\
+            B.length st0.CS.cs_model.CS.model_handshake.CS.hs_transcript +
+              B.length (W.serialize_handshake (M.ServerHello sh)) <=
+              max_transcript_len /\
+            CS.legal_event
+              st0.CS.cs_model
+              (CS.ConnNetworkEvent {
+                CL.message_direction = CL.Received;
+                CL.message_value = M.TlsHandshake (M.ServerHello sh);
+              }))
+{
+  unfold (connection_exactly c st0);
+  unfold (connection_model_exactly c st0.CS.cs_model);
+  unfold (control_exactly c.control st0.CS.cs_model.CS.model_control st0.CS.cs_model.CS.model_failure);
+  unfold (handshake_exactly c.handshake st0.CS.cs_model.CS.model_handshake);
+  unfold (handshake_start_exactly
+    c.handshake.start
+    st0.CS.cs_model.CS.model_handshake.CS.hs_start);
+  unfold (handshake_messages_exactly c.handshake.messages st0.CS.cs_model.CS.model_handshake);
+  unfold (server_hello_slot_exactly
+    c.handshake.messages.server_hello
+    st0.CS.cs_model.CS.model_handshake.CS.hs_server_hello);
+  unfold (sized_bytes_exactly
+    c.handshake.transcript
+    max_transcript_len
+    st0.CS.cs_model.CS.model_handshake.CS.hs_transcript);
+
+  let tag = !c.control.control_tag;
+  let stage = !c.control.handshake_stage_tag;
+  let tag_ok = tag = 1uy;
+  let stage_ok = stage = 2uy;
+
+  with start_present. assert (pure True);
+  let has_start = !c.handshake.start.present;
+  assert (pure (has_start == start_present));
+
+  with stored_server_hello. assert (pure True);
+  let stored = !c.handshake.messages.server_hello;
+  let no_server_hello = (
+    match stored with
+    | None -> true
+    | Some _ -> false);
+  assert (pure (stored == stored_server_hello));
+  assert (pure (no_server_hello ==> stored == None));
+  assert (pure (no_server_hello ==> stored_server_hello == None));
+  assert (pure (no_server_hello ==>
+    st0.CS.cs_model.CS.model_handshake.CS.hs_server_hello == None));
+
+  with transcript_storage transcript_len. assert (pure True);
+  let current_transcript_len = !c.handshake.transcript.len;
+  assert (pure (current_transcript_len == transcript_len));
+
+  W.lemma_serialize_server_hello_len sh;
+  assert (pure (B.length (W.serialize_handshake (M.ServerHello sh)) == 90));
+  assert (pure (SZ.fits (max_transcript_len - 90)));
+  let max_start = SZ.uint_to_t (max_transcript_len - 90);
+  let transcript_room = SZ.lte current_transcript_len max_start;
+
+  if has_start {
+    unfold (handshake_start_payload_exactly
+      c.handshake.start
+      has_start
+      st0.CS.cs_model.CS.model_handshake.CS.hs_start);
+    with start_spec. assert (pure True);
+    unfold (handshake_start_fields_exactly c.handshake.start start_spec);
+        unfold (cipher_suite_list_exactly
+          c.handshake.start.cipher_suites
+          max_cipher_suites
+          start_spec.CS.start_cipher_suites);
+        with cipher_items cipher_len. assert (pure True);
+        let offered_len = !c.handshake.start.cipher_suites.len;
+        assert (pure (offered_len == cipher_len));
+        let offered_nonempty = SZ.gt offered_len 0sz;
+        if offered_nonempty {
+          assert (pure (SZ.v cipher_len > 0));
+          assert (pure (SZ.v offered_len == SZ.v cipher_len));
+          assert (pure (start_spec.CS.start_cipher_suites <> []));
+          lemma_nonempty_cipher_suites_offer
+            start_spec.CS.start_cipher_suites
+            sh.M.cipher_suite;
+          assert (pure (CS.cipher_suite_offered
+            start_spec.CS.start_cipher_suites
+            sh.M.cipher_suite));
+          assert (pure (H.is_supported_cipher_suite sh.M.cipher_suite));
+
+          let control_ok = tag_ok && stage_ok;
+          let ok = control_ok && no_server_hello && transcript_room;
+          assert (pure (ok ==> U8.v tag == 1));
+          assert (pure (ok ==> U8.v stage == 2));
+          assert (pure (ok ==>
+            st0.CS.cs_model.CS.model_control ==
+              CS.ControlHandshaking CS.HsClientHelloSent));
+          assert (pure (ok ==> st0.CS.cs_model.CS.model_handshake.CS.hs_server_hello == None));
+          assert (pure (ok ==> SZ.v current_transcript_len <= max_transcript_len - 90));
+          assert (pure (ok ==> B.length st0.CS.cs_model.CS.model_handshake.CS.hs_transcript ==
+            SZ.v current_transcript_len));
+          assert (pure (ok ==>
+            B.length st0.CS.cs_model.CS.model_handshake.CS.hs_transcript +
+              B.length (W.serialize_handshake (M.ServerHello sh)) <=
+              max_transcript_len));
+          assert (pure (ok ==> CS.legal_event
+            st0.CS.cs_model
+            (CS.ConnNetworkEvent {
+              CL.message_direction = CL.Received;
+              CL.message_value = M.TlsHandshake (M.ServerHello sh);
+            })));
+
+          fold (cipher_suite_list_exactly
+            c.handshake.start.cipher_suites
+            max_cipher_suites
+            start_spec.CS.start_cipher_suites);
+          fold (handshake_start_fields_exactly c.handshake.start start_spec);
+          fold (handshake_start_payload_exactly
+            c.handshake.start
+            has_start
+            st0.CS.cs_model.CS.model_handshake.CS.hs_start);
+          fold (sized_bytes_exactly
+            c.handshake.transcript
+            max_transcript_len
+            st0.CS.cs_model.CS.model_handshake.CS.hs_transcript);
+          fold (server_hello_slot_exactly
+            c.handshake.messages.server_hello
+            st0.CS.cs_model.CS.model_handshake.CS.hs_server_hello);
+          fold (handshake_messages_exactly c.handshake.messages st0.CS.cs_model.CS.model_handshake);
+          fold (handshake_start_exactly
+            c.handshake.start
+            st0.CS.cs_model.CS.model_handshake.CS.hs_start);
+          fold (handshake_exactly c.handshake st0.CS.cs_model.CS.model_handshake);
+          fold (control_exactly
+            c.control
+            st0.CS.cs_model.CS.model_control
+            st0.CS.cs_model.CS.model_failure);
+          fold (connection_model_exactly c st0.CS.cs_model);
+          fold (connection_exactly c st0);
+          ok
+        } else {
+          fold (cipher_suite_list_exactly
+            c.handshake.start.cipher_suites
+            max_cipher_suites
+            start_spec.CS.start_cipher_suites);
+          fold (handshake_start_fields_exactly c.handshake.start start_spec);
+          fold (handshake_start_payload_exactly
+            c.handshake.start
+            has_start
+            st0.CS.cs_model.CS.model_handshake.CS.hs_start);
+          fold (sized_bytes_exactly
+            c.handshake.transcript
+            max_transcript_len
+            st0.CS.cs_model.CS.model_handshake.CS.hs_transcript);
+          fold (server_hello_slot_exactly
+            c.handshake.messages.server_hello
+            st0.CS.cs_model.CS.model_handshake.CS.hs_server_hello);
+          fold (handshake_messages_exactly c.handshake.messages st0.CS.cs_model.CS.model_handshake);
+          fold (handshake_start_exactly
+            c.handshake.start
+            st0.CS.cs_model.CS.model_handshake.CS.hs_start);
+          fold (handshake_exactly c.handshake st0.CS.cs_model.CS.model_handshake);
+          fold (control_exactly
+            c.control
+            st0.CS.cs_model.CS.model_control
+            st0.CS.cs_model.CS.model_failure);
+          fold (connection_model_exactly c st0.CS.cs_model);
+          fold (connection_exactly c st0);
+          false
+        }
+  } else {
+    fold (sized_bytes_exactly
+      c.handshake.transcript
+      max_transcript_len
+      st0.CS.cs_model.CS.model_handshake.CS.hs_transcript);
+    fold (server_hello_slot_exactly
+      c.handshake.messages.server_hello
+      st0.CS.cs_model.CS.model_handshake.CS.hs_server_hello);
+    fold (handshake_messages_exactly c.handshake.messages st0.CS.cs_model.CS.model_handshake);
+    fold (handshake_start_exactly
+      c.handshake.start
+      st0.CS.cs_model.CS.model_handshake.CS.hs_start);
+    fold (handshake_exactly c.handshake st0.CS.cs_model.CS.model_handshake);
+    fold (control_exactly
+      c.control
+      st0.CS.cs_model.CS.model_control
+      st0.CS.cs_model.CS.model_failure);
+    fold (connection_model_exactly c st0.CS.cs_model);
+    fold (connection_exactly c st0);
+    false
+  }
 }
 
 fn can_receive_application_data
