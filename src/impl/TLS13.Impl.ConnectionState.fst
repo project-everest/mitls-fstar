@@ -156,8 +156,7 @@ noeq
 type handshake_message_storage = {
   client_hello_present: box bool;
   client_hello: IM.client_hello;
-  server_hello_present: box bool;
-  server_hello: IM.server_hello;
+  server_hello: box (option IM.server_hello);
   encrypted_extensions_present: box bool;
   encrypted_extensions: IM.encrypted_extensions;
   certificate_present: box bool;
@@ -645,29 +644,15 @@ let client_hello_slot_exactly
             spec == None))
 
 let server_hello_slot_exactly
-  (present_box:box bool)
-  ([@@@mkey] l:IM.server_hello)
+  ([@@@mkey] slot:box (option IM.server_hello))
   (spec:option M.server_hello)
   : slprop =
-  exists* present random key_share.
-    Box.pts_to present_box present **
-    V.pts_to l.IM.server_hello_random random **
-    V.pts_to l.IM.server_hello_key_share key_share **
-    pure (V.is_full_vec l.IM.server_hello_random /\
-          V.is_full_vec l.IM.server_hello_key_share /\
-          V.length l.IM.server_hello_random == 32 /\
-          V.length l.IM.server_hello_key_share == 32 /\
-          B.length random == 32 /\
-          B.length key_share == 32 /\
-          (if present then
-            match spec with
-            | Some m ->
-              Seq.equal random m.M.random /\
-              Seq.equal key_share m.M.key_share /\
-              IM.cipher_suite_matches l.IM.server_hello_cipher_suite m.M.cipher_suite
-            | None -> False
-          else
-            spec == None))
+  exists* stored.
+    Box.pts_to slot stored **
+    (match stored, spec with
+     | None, None -> pure True
+     | Some l, Some m -> IM.is_valid_server_hello l m
+     | _, _ -> pure False)
 
 let encrypted_extensions_slot_exactly
   (present_box:box bool)
@@ -771,7 +756,7 @@ let handshake_messages_exactly
   (hs:CS.handshake_state)
   : slprop =
   client_hello_slot_exactly msgs.client_hello_present msgs.client_hello hs.CS.hs_client_hello **
-  server_hello_slot_exactly msgs.server_hello_present msgs.server_hello hs.CS.hs_server_hello **
+  server_hello_slot_exactly msgs.server_hello hs.CS.hs_server_hello **
   encrypted_extensions_slot_exactly
     msgs.encrypted_extensions_present
     msgs.encrypted_extensions
