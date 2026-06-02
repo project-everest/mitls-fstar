@@ -27,12 +27,21 @@ fn handle_decode_error
                  B.length 'old_network_out == SZ.v network_out_len /\
                  B.length 'old_app_out == SZ.v app_out_len)
   returns resp: CT.client_response
-  ensures exists* st1 network_out_bytes app_out_bytes.
-          C.connection_exactly c st1 **
+  ensures C.connection_exactly c (C.local_fail_state 'st0 C.tls_decode_error) **
           pts_to raw 'raw_bytes **
-          pts_to network_out network_out_bytes **
-          pts_to app_out app_out_bytes **
-          pure (B.length network_out_bytes == SZ.v network_out_len /\
-                B.length app_out_bytes == SZ.v app_out_len /\
-          CT.decode_error_response 'st0 st1 resp network_out_bytes app_out_bytes /\
-          CT.some_legal_response 'st0 st1 resp network_out_bytes app_out_bytes)
+          pts_to network_out 'old_network_out **
+          pts_to app_out 'old_app_out **
+          pure (B.length 'old_network_out == SZ.v network_out_len /\
+                B.length 'old_app_out == SZ.v app_out_len /\
+          CT.decode_error_response
+            'st0
+            (C.local_fail_state 'st0 C.tls_decode_error)
+            resp
+            'old_network_out
+            'old_app_out /\
+          CT.some_legal_response
+            'st0
+            (C.local_fail_state 'st0 C.tls_decode_error)
+            resp
+            'old_network_out
+            'old_app_out)

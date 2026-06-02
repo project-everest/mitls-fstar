@@ -41,10 +41,13 @@ fn dispatch_network_event
            pts_to app_out 'old_app_out **
            (match parsed with
             | Some l ->
-              exists* ct m.
+              (exists* ct m.
                 L.is_valid_tls_message l m **
                 pure (L.content_type_matches content_type ct /\
-                      WS.parse_tls_message ct 'fragment_bytes == Some m)
+                      WS.parse_tls_message ct 'fragment_bytes == Some m)) **
+              pure (exists ct msg.
+                L.content_type_matches content_type ct /\
+                WS.parse_tls_message ct 'fragment_bytes == Some msg)
             | None ->
               pure (forall (ct:T.content_type).
                 L.content_type_matches content_type ct ==>

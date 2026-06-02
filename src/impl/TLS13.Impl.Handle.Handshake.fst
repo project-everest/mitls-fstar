@@ -11,6 +11,7 @@ module C = TLS13.Impl.ConnectionState
 module CT = TLS13.Impl.Client.Types
 module L = TLS13.Impl.Messages
 module M = TLS13.Messages
+module Seq = FStar.Seq
 module SZ = FStar.SizeT
 module U8 = FStar.UInt8
 
@@ -51,3 +52,29 @@ fn handle_handshake_message
                   resp
                   'old_network_out
                   'old_app_out)
+{
+  with m. assert (pure True);
+  L.free_tls_message l;
+  C.mark_unexpected_message c;
+  let resp = {
+    CT.network_out_len = 0sz;
+    CT.app_out_len = 0sz;
+    CT.status = CT.IllegalTransition;
+  };
+  Seq.lemma_len_slice 'old_network_out 0 0;
+  Seq.lemma_eq_intro B.empty (Seq.slice 'old_network_out 0 0);
+  assert (pure (Seq.equal B.empty (CT.response_network_out resp 'old_network_out)));
+  assert (pure (CT.unexpected_message_response
+    'st0
+    (C.local_fail_state 'st0 C.tls_unexpected_message_error)
+    resp
+    'old_network_out
+    'old_app_out));
+  assert (pure (CT.some_legal_response
+    'st0
+    (C.local_fail_state 'st0 C.tls_unexpected_message_error)
+    resp
+    'old_network_out
+    'old_app_out));
+  resp
+}

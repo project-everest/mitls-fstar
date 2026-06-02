@@ -288,10 +288,13 @@ fn parse_tls_message
   ensures pts_to input 'input_bytes **
           (match r with
            | Some l ->
-             exists* ct m.
+             (exists* ct m.
                L.is_valid_tls_message l m **
                pure (L.content_type_matches content_type ct /\
-                     WS.parse_tls_message ct 'input_bytes == Some m)
+                     WS.parse_tls_message ct 'input_bytes == Some m)) **
+             pure (exists ct m.
+               L.content_type_matches content_type ct /\
+               WS.parse_tls_message ct 'input_bytes == Some m)
            | None ->
              pure (forall (ct:T.content_type).
                L.content_type_matches content_type ct ==>

@@ -256,3 +256,59 @@ let legal_network_response
      legal_handled_tls_response st0 st1 resp msg raw_received network_out app_out) \/
   (wire_parse_failure content_type fragment /\
    decode_error_response st0 st1 resp network_out app_out)
+
+let lemma_legal_network_response_decode_error
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (resp:client_response)
+  (content_type:U8.t)
+  (fragment:B.bytes)
+  (raw_received:B.bytes)
+  (network_out:B.bytes)
+  (app_out:B.bytes)
+  : Lemma
+      (requires wire_parse_failure content_type fragment /\
+                decode_error_response st0 st1 resp network_out app_out)
+      (ensures legal_network_response
+        st0 st1 resp content_type fragment raw_received network_out app_out)
+=
+  ()
+
+let lemma_legal_network_response_unexpected
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (resp:client_response)
+  (content_type:U8.t)
+  (ct:T.content_type)
+  (fragment:B.bytes)
+  (msg:M.tls_message)
+  (raw_received:B.bytes)
+  (network_out:B.bytes)
+  (app_out:B.bytes)
+  : Lemma
+      (requires L.content_type_matches content_type ct /\
+                WS.parse_tls_message ct fragment == Some msg /\
+                unexpected_message_response st0 st1 resp network_out app_out)
+      (ensures legal_network_response
+        st0 st1 resp content_type fragment raw_received network_out app_out)
+=
+  ()
+
+let lemma_legal_network_response_unexpected_from_parse_success
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (resp:client_response)
+  (content_type:U8.t)
+  (fragment:B.bytes)
+  (raw_received:B.bytes)
+  (network_out:B.bytes)
+  (app_out:B.bytes)
+  : Lemma
+      (requires (exists ct msg.
+                  L.content_type_matches content_type ct /\
+                  WS.parse_tls_message ct fragment == Some msg) /\
+                unexpected_message_response st0 st1 resp network_out app_out)
+      (ensures legal_network_response
+        st0 st1 resp content_type fragment raw_received network_out app_out)
+=
+  ()
