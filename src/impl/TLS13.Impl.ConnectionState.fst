@@ -15,9 +15,9 @@ module IM = TLS13.Impl.Messages
 module M = TLS13.Messages
 module MR = Pulse.Lib.MonotonicGhostRef
 module Arr = Pulse.Lib.Array
+module ArrPts = Pulse.Lib.Array.PtsTo
 module R = TLS13.Record.Spec
 module Rec = TLS13.Record
-module Ser = TLS13.Impl.Serializer
 module Seq = FStar.Seq
 module SeqP = FStar.Seq.Properties
 module Slice = Pulse.Lib.Slice
@@ -1993,6 +1993,190 @@ fn mark_received_hello_retry_request_rejected
   fold (connection_exactly
     c
     (received_hello_retry_request_rejected_state st0 (Ghost.reveal 'raw_bytes)))
+}
+
+fn mark_received_server_hello
+  (c:connection_state)
+  (raw:array U8.t)
+  (fragment:array U8.t)
+  (fragment_len:SZ.t)
+  (lsh:IM.server_hello)
+  (#sh:erased M.server_hello)
+  (#st0:erased CS.connection_state)
+  requires connection_exactly c st0 **
+           Pulse.Lib.Array.PtsTo.pts_to raw 'raw_bytes **
+           Pulse.Lib.Array.PtsTo.pts_to fragment 'fragment_bytes **
+           IM.is_valid_server_hello lsh sh **
+           pure (st0.CS.cs_model.CS.model_control ==
+                   CS.ControlHandshaking CS.HsClientHelloSent /\
+                 B.length 'fragment_bytes == SZ.v fragment_len /\
+                 Seq.equal
+                   (Ghost.reveal 'fragment_bytes)
+                   (W.serialize_handshake (M.ServerHello sh)) /\
+                 st0.CS.cs_model.CS.model_handshake.CS.hs_server_hello == None /\
+                 B.length st0.CS.cs_model.CS.model_handshake.CS.hs_transcript +
+                   B.length (W.serialize_handshake (M.ServerHello sh)) <=
+                   max_transcript_len /\
+                 CS.legal_event
+                   st0.CS.cs_model
+                   (CS.ConnNetworkEvent {
+                     CL.message_direction = CL.Received;
+                     CL.message_value = M.TlsHandshake (M.ServerHello sh);
+                   }) /\
+                 CS.event_raw_delta_legal
+                   st0.CS.cs_model
+                   (CS.ConnNetworkEvent {
+                     CL.message_direction = CL.Received;
+                     CL.message_value = M.TlsHandshake (M.ServerHello sh);
+                   })
+                   B.empty
+                   (Ghost.reveal 'raw_bytes))
+  ensures connection_exactly
+            c
+            (received_server_hello_state st0 sh (Ghost.reveal 'raw_bytes)) **
+          Pulse.Lib.Array.PtsTo.pts_to raw 'raw_bytes **
+          Pulse.Lib.Array.PtsTo.pts_to fragment 'fragment_bytes
+{
+  assert (pure (st0.CS.cs_model.CS.model_control ==
+    CS.ControlHandshaking CS.HsClientHelloSent));
+  assert (pure (st0.CS.cs_model.CS.model_handshake.CS.hs_server_hello == None));
+  assert (pure (CS.legal_event
+    st0.CS.cs_model
+    (CS.ConnNetworkEvent {
+      CL.message_direction = CL.Received;
+      CL.message_value = M.TlsHandshake (M.ServerHello sh);
+    })));
+  assert (pure (CS.event_raw_delta_legal
+    st0.CS.cs_model
+    (CS.ConnNetworkEvent {
+      CL.message_direction = CL.Received;
+      CL.message_value = M.TlsHandshake (M.ServerHello sh);
+    })
+    B.empty
+    (Ghost.reveal 'raw_bytes)));
+
+  W.lemma_serialize_server_hello_len sh;
+  assert (pure (B.length (W.serialize_handshake (M.ServerHello sh)) == 90));
+  assert (pure (SZ.v fragment_len == 90));
+
+  unfold (connection_exactly c st0);
+  unfold (connection_model_exactly c st0.CS.cs_model);
+  unfold (control_exactly c.control st0.CS.cs_model.CS.model_control st0.CS.cs_model.CS.model_failure);
+  unfold (handshake_exactly c.handshake st0.CS.cs_model.CS.model_handshake);
+
+  c.control.handshake_stage_tag := 3uy;
+
+  assert (pure (control_state_matches
+    1uy
+    3uy
+    false
+    0uy
+    0uy
+    (CS.ControlHandshaking CS.HsServerHelloReceived)));
+  fold (control_exactly
+    c.control
+    (CS.ControlHandshaking CS.HsServerHelloReceived)
+    st0.CS.cs_model.CS.model_failure);
+
+  unfold (handshake_messages_exactly c.handshake.messages st0.CS.cs_model.CS.model_handshake);
+  unfold (server_hello_slot_exactly
+    c.handshake.messages.server_hello
+    st0.CS.cs_model.CS.model_handshake.CS.hs_server_hello);
+  with stored_server_hello. _;
+  drop_ (match stored_server_hello, st0.CS.cs_model.CS.model_handshake.CS.hs_server_hello with
+    | None, None -> pure True
+    | Some old_l, Some old_m -> IM.is_valid_server_hello old_l old_m
+    | _, _ -> pure False);
+  c.handshake.messages.server_hello := Some lsh;
+
+  unfold (handshake_buffers_exactly
+    c.handshake.buffers
+    st0.CS.cs_model.CS.model_handshake.CS.hs_buffers);
+  unfold (sized_bytes_exactly
+    c.handshake.buffers.server_hello_bytes
+    max_server_hello_len
+    st0.CS.cs_model.CS.model_handshake.CS.hs_buffers.CS.hb_server_hello_bytes);
+
+  with old_server_hello_storage old_server_hello_len. _;
+  V.to_array_pts_to c.handshake.buffers.server_hello_bytes.bytes;
+  ArrPts.pts_to_len fragment;
+  ArrPts.pts_to_len (V.vec_to_array c.handshake.buffers.server_hello_bytes.bytes);
+  Arr.memcpy_l fragment_len fragment (V.vec_to_array c.handshake.buffers.server_hello_bytes.bytes);
+  V.to_vec_pts_to c.handshake.buffers.server_hello_bytes.bytes;
+  with server_hello_storage. assert (V.pts_to c.handshake.buffers.server_hello_bytes.bytes server_hello_storage);
+  Seq.lemma_len_slice server_hello_storage 0 (SZ.v fragment_len);
+  assert (pure (Seq.equal
+    (Seq.slice server_hello_storage 0 (SZ.v fragment_len))
+    (Ghost.reveal 'fragment_bytes)));
+  assert (pure (Seq.equal
+    (Seq.slice server_hello_storage 0 (SZ.v fragment_len))
+    (W.serialize_handshake (M.ServerHello sh))));
+
+  unfold (sized_bytes_exactly
+    c.handshake.transcript
+    max_transcript_len
+    st0.CS.cs_model.CS.model_handshake.CS.hs_transcript);
+  with old_transcript_storage old_transcript_len. _;
+  let transcript_len = !c.handshake.transcript.len;
+  assert (pure (transcript_len == old_transcript_len));
+  assert (pure (SZ.v transcript_len ==
+    B.length st0.CS.cs_model.CS.model_handshake.CS.hs_transcript));
+  assert (pure (SZ.v transcript_len + SZ.v fragment_len <= max_transcript_len));
+
+  copy_server_hello_prefix_to_transcript
+    c.handshake.buffers.server_hello_bytes.bytes
+    c.handshake.transcript.bytes
+    fragment_len
+    transcript_len;
+
+  with copied_server_hello_storage copied_transcript_storage.
+    assert (V.pts_to c.handshake.buffers.server_hello_bytes.bytes copied_server_hello_storage **
+            V.pts_to c.handshake.transcript.bytes copied_transcript_storage);
+  assert (pure (copied_server_hello_storage == server_hello_storage));
+
+  assert (pure (SZ.fits (SZ.v transcript_len + SZ.v fragment_len)));
+  let new_transcript_len = SZ.add transcript_len fragment_len;
+  c.handshake.buffers.server_hello_bytes.len := fragment_len;
+  c.handshake.transcript.len := new_transcript_len;
+
+  fold (sized_bytes_exactly
+    c.handshake.buffers.server_hello_bytes
+    max_server_hello_len
+    (W.serialize_handshake (M.ServerHello sh)));
+
+  fold (sized_bytes_exactly
+    c.handshake.transcript
+    max_transcript_len
+    (B.append
+      st0.CS.cs_model.CS.model_handshake.CS.hs_transcript
+      (W.serialize_handshake (M.ServerHello sh))));
+
+  fold (server_hello_slot_exactly
+    c.handshake.messages.server_hello
+    (Some (Ghost.reveal sh)));
+  fold (handshake_messages_exactly
+    c.handshake.messages
+    (received_server_hello_state st0 sh (Ghost.reveal 'raw_bytes)).CS.cs_model.CS.model_handshake);
+  fold (handshake_buffers_exactly
+    c.handshake.buffers
+    (received_server_hello_state st0 sh (Ghost.reveal 'raw_bytes)).CS.cs_model.CS.model_handshake.CS.hs_buffers);
+  fold (handshake_exactly
+    c.handshake
+    (received_server_hello_state st0 sh (Ghost.reveal 'raw_bytes)).CS.cs_model.CS.model_handshake);
+  fold (connection_model_exactly
+    c
+    (received_server_hello_state st0 sh (Ghost.reveal 'raw_bytes)).CS.cs_model);
+
+  lemma_received_server_hello_state_evolves
+    st0
+    sh
+    (Ghost.reveal 'raw_bytes);
+  MR.update
+    c.ghost_state
+    (received_server_hello_state st0 sh (Ghost.reveal 'raw_bytes));
+  fold (connection_exactly
+    c
+    (received_server_hello_state st0 sh (Ghost.reveal 'raw_bytes)))
 }
 
 fn mark_received_application_data
