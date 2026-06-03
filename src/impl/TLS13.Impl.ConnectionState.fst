@@ -2506,6 +2506,30 @@ let received_application_data_state
       }];
   }
 
+let delivered_application_data_state
+  (st:CS.connection_state)
+  (bytes:B.bytes)
+  : CS.connection_state =
+  let model0 = st.CS.cs_model in
+  let app0 = model0.CS.model_application in
+  let model1 = {
+    model0 with
+      CS.model_application = {
+        app0 with
+          CS.app_log = CL.append_app_received app0.CS.app_log bytes;
+      };
+  } in
+  {
+    CS.cs_model = model1;
+    CS.cs_wire_log = {
+      CL.raw_sent = B.append st.CS.cs_wire_log.CL.raw_sent B.empty;
+      CL.raw_received = B.append st.CS.cs_wire_log.CL.raw_received B.empty;
+    };
+    CS.cs_event_log =
+      st.CS.cs_event_log @
+      [CS.ConnLocalEvent (CS.LocalDeliverApplicationData bytes)];
+  }
+
 let sent_application_data_state
   (st:CS.connection_state)
   (bytes:B.bytes)
@@ -3804,6 +3828,49 @@ let lemma_received_application_data_state_evolves
     (received_application_data_state st bytes raw_received));
   assert (CS.connection_state_consistent
     (received_application_data_state st bytes raw_received))
+
+let lemma_delivered_application_data_state_evolves
+  (st:CS.connection_state)
+  (bytes:B.bytes)
+  : Lemma
+      (requires CS.connection_state_consistent st /\
+                st.CS.cs_model.CS.model_control == CS.ControlApplicationData /\
+                CS.legal_event
+                  st.CS.cs_model
+                  (CS.ConnLocalEvent (CS.LocalDeliverApplicationData bytes)))
+      (ensures CS.connection_state_evolves
+                 st
+                 (delivered_application_data_state st bytes) /\
+               CS.connection_state_consistent
+                 (delivered_application_data_state st bytes) /\
+               CS.legal_connection_delta
+                 st
+                 {
+                   CS.delta_event =
+                     CS.ConnLocalEvent (CS.LocalDeliverApplicationData bytes);
+                   CS.delta_raw_sent = B.empty;
+                   CS.delta_raw_received = B.empty;
+                 }
+                 (delivered_application_data_state st bytes))
+=
+  let ev = CS.ConnLocalEvent (CS.LocalDeliverApplicationData bytes) in
+  let delta = {
+    CS.delta_event = ev;
+    CS.delta_raw_sent = B.empty;
+    CS.delta_raw_received = B.empty;
+  } in
+  Seq.lemma_eq_intro B.empty B.empty;
+  assert (CS.event_raw_delta_legal st.CS.cs_model ev B.empty B.empty);
+  assert (CS.step_model st.CS.cs_model ev ==
+          Some (delivered_application_data_state st bytes).CS.cs_model);
+  assert (CS.legal_connection_delta st delta (delivered_application_data_state st bytes));
+  assert (CS.connection_state_single_step st (delivered_application_data_state st bytes));
+  FStar.ReflexiveTransitiveClosure.closure_step
+    CS.connection_state_single_step
+    st
+    (delivered_application_data_state st bytes);
+  assert (CS.connection_state_evolves st (delivered_application_data_state st bytes));
+  assert (CS.connection_state_consistent (delivered_application_data_state st bytes))
 
 let lemma_sent_application_data_state_evolves
   (st:CS.connection_state)
@@ -5133,6 +5200,41 @@ fn can_receive_application_data
   assert (pure (ok ==> st0.CS.cs_model.CS.model_control == CS.ControlApplicationData));
   assert (pure (ok ==> Some? st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_application_traffic));
   assert (pure (ok ==> U64.fits (st0.CS.cs_model.CS.model_record.CS.record_read.R.seq + 1)));
+
+  fold (control_exactly
+    c.control
+    st0.CS.cs_model.CS.model_control
+    st0.CS.cs_model.CS.model_failure);
+  fold (connection_model_exactly c st0.CS.cs_model);
+  fold (connection_exactly c st0);
+  ok
+}
+
+fn can_deliver_application_data
+  (c:connection_state)
+  (payload_len:SZ.t)
+  (app_out_len:SZ.t)
+  (#st0:erased CS.connection_state)
+  requires connection_exactly c st0
+  returns ok: bool
+  ensures connection_exactly c st0 **
+          pure (ok ==>
+            st0.CS.cs_model.CS.model_control == CS.ControlApplicationData /\
+            SZ.v payload_len <= SZ.v app_out_len)
+{
+  unfold (connection_exactly c st0);
+  unfold (connection_model_exactly c st0.CS.cs_model);
+  unfold (control_exactly c.control st0.CS.cs_model.CS.model_control st0.CS.cs_model.CS.model_failure);
+
+  let tag = !c.control.control_tag;
+  let control_ok = tag = 2uy;
+  let output_ok = sizet_lte_plain payload_len app_out_len;
+  lemma_sizet_lte_plain payload_len app_out_len;
+  let ok = control_ok && output_ok;
+
+  assert (pure (ok ==> U8.v tag == 2));
+  assert (pure (ok ==> st0.CS.cs_model.CS.model_control == CS.ControlApplicationData));
+  assert (pure (ok ==> SZ.v payload_len <= SZ.v app_out_len));
 
   fold (control_exactly
     c.control
@@ -11224,4 +11326,58 @@ fn mark_received_application_data
   fold (connection_exactly
     c
     (received_application_data_state st0 bytes (Ghost.reveal 'raw_bytes)))
+}
+
+fn mark_delivered_application_data
+  (c:connection_state)
+  (#bytes:erased B.bytes)
+  (#st0:erased CS.connection_state)
+  requires connection_exactly c st0 **
+           pure (st0.CS.cs_model.CS.model_control == CS.ControlApplicationData /\
+                 CS.legal_event
+                   st0.CS.cs_model
+                   (CS.ConnLocalEvent (CS.LocalDeliverApplicationData bytes)))
+  ensures connection_exactly c (delivered_application_data_state st0 bytes)
+{
+  assert (pure (st0.CS.cs_model.CS.model_control == CS.ControlApplicationData));
+  assert (pure (CS.legal_event
+    st0.CS.cs_model
+    (CS.ConnLocalEvent (CS.LocalDeliverApplicationData bytes))));
+  unfold (connection_exactly c st0);
+  unfold (connection_model_exactly c st0.CS.cs_model);
+
+  unfold (application_exactly c.application st0.CS.cs_model.CS.model_application);
+  assert (pure ((delivered_application_data_state st0 bytes).CS.cs_model.CS.model_application.CS.app_pending_plaintext ==
+                st0.CS.cs_model.CS.model_application.CS.app_pending_plaintext));
+  assert (pure ((delivered_application_data_state st0 bytes).CS.cs_model.CS.model_application.CS.app_pending_source_record ==
+                st0.CS.cs_model.CS.model_application.CS.app_pending_source_record));
+  assert (pure ((delivered_application_data_state st0 bytes).CS.cs_model.CS.model_application.CS.app_pending_source_offset ==
+                st0.CS.cs_model.CS.model_application.CS.app_pending_source_offset));
+  assert (pure ((delivered_application_data_state st0 bytes).CS.cs_model.CS.model_application.CS.app_pending_received_raw ==
+                st0.CS.cs_model.CS.model_application.CS.app_pending_received_raw));
+  assert (pure (CS.pending_application_consistent
+    (delivered_application_data_state st0 bytes).CS.cs_model.CS.model_application));
+  fold (application_exactly
+    c.application
+    (delivered_application_data_state st0 bytes).CS.cs_model.CS.model_application);
+
+  assert (pure ((delivered_application_data_state st0 bytes).CS.cs_model.CS.model_config ==
+                st0.CS.cs_model.CS.model_config));
+  assert (pure ((delivered_application_data_state st0 bytes).CS.cs_model.CS.model_control ==
+                st0.CS.cs_model.CS.model_control));
+  assert (pure ((delivered_application_data_state st0 bytes).CS.cs_model.CS.model_record ==
+                st0.CS.cs_model.CS.model_record));
+  assert (pure ((delivered_application_data_state st0 bytes).CS.cs_model.CS.model_handshake ==
+                st0.CS.cs_model.CS.model_handshake));
+  assert (pure ((delivered_application_data_state st0 bytes).CS.cs_model.CS.model_failure ==
+                st0.CS.cs_model.CS.model_failure));
+  fold (connection_model_exactly
+    c
+    (delivered_application_data_state st0 bytes).CS.cs_model);
+
+  lemma_delivered_application_data_state_evolves st0 bytes;
+  MR.update
+    c.ghost_state
+    (delivered_application_data_state st0 bytes);
+  fold (connection_exactly c (delivered_application_data_state st0 bytes))
 }

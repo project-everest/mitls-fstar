@@ -69,6 +69,11 @@ let local_input_wf
   (payload:B.bytes)
   : prop =
   match kind with
+  | LocalDeliverApplicationData ->
+    st.CS.cs_model.CS.model_control == CS.ControlApplicationData ==>
+    CS.legal_event
+      st.CS.cs_model
+      (CS.ConnLocalEvent (CS.LocalDeliverApplicationData payload))
   | LocalValidateCertificate ->
     st.CS.cs_model.CS.model_control ==
       CS.ControlHandshaking CS.HsCertificateReceived ==>

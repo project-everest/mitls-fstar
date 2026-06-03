@@ -33,19 +33,19 @@ fn handle_local_event
                    kind
                    (Ghost.reveal 'payload_bytes))
   returns resp: CT.client_response
-  ensures exists* st1 network_out_bytes.
+  ensures exists* st1 network_out_bytes app_out_bytes.
           C.connection_exactly c st1 **
           pts_to payload 'payload_bytes **
           pts_to network_out network_out_bytes **
-          pts_to app_out 'old_app_out **
+          pts_to app_out app_out_bytes **
           pure (B.length network_out_bytes == SZ.v network_out_len /\
-                B.length 'old_app_out == SZ.v app_out_len /\
+                B.length app_out_bytes == SZ.v app_out_len /\
                 CT.some_legal_response
                   'st0
                   st1
                   resp
                   network_out_bytes
-                  'old_app_out /\
+                  app_out_bytes /\
                 CT.legal_handled_local_response
                   'st0
                   st1
@@ -53,4 +53,4 @@ fn handle_local_event
                   kind
                   (Ghost.reveal 'payload_bytes)
                   network_out_bytes
-                  'old_app_out)
+                  app_out_bytes)

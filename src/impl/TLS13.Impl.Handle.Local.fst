@@ -11,6 +11,7 @@ module CL = TLS13.ConnectionLog
 module C = TLS13.Impl.ConnectionState
 module CS = TLS13.Spec.ConnectionState
 module CT = TLS13.Impl.Client.Types
+module Arr = Pulse.Lib.Array
 module M = TLS13.Messages
 module Seq = FStar.Seq
 module SZ = FStar.SizeT
@@ -39,19 +40,19 @@ fn handle_local_event
                    kind
                    (Ghost.reveal 'payload_bytes))
   returns resp: CT.client_response
-  ensures exists* st1 network_out_bytes.
+  ensures exists* st1 network_out_bytes app_out_bytes.
           C.connection_exactly c st1 **
           pts_to payload 'payload_bytes **
           pts_to network_out network_out_bytes **
-          pts_to app_out 'old_app_out **
+          pts_to app_out app_out_bytes **
           pure (B.length network_out_bytes == SZ.v network_out_len /\
-                B.length 'old_app_out == SZ.v app_out_len /\
+                B.length app_out_bytes == SZ.v app_out_len /\
                 CT.some_legal_response
                   'st0
                   st1
                   resp
                   network_out_bytes
-                  'old_app_out /\
+                  app_out_bytes /\
                 CT.legal_handled_local_response
                   'st0
                   st1
@@ -59,7 +60,7 @@ fn handle_local_event
                   kind
                   (Ghost.reveal 'payload_bytes)
                   network_out_bytes
-                  'old_app_out)
+                  app_out_bytes)
 {
   match kind {
     LocalStartHandshake -> {
@@ -1069,6 +1070,115 @@ fn handle_local_event
           'old_app_out));
         resp
       }
+    }
+  }
+    LocalDeliverApplicationData -> {
+    let ready = C.can_deliver_application_data c payload_len app_out_len;
+    if ready {
+      assert (pure (CT.local_input_wf
+        'st0
+        CT.LocalDeliverApplicationData
+        (Ghost.reveal 'payload_bytes)));
+      assert (pure (CS.legal_event
+        'st0.CS.cs_model
+        (CS.ConnLocalEvent
+          (CS.LocalDeliverApplicationData (Ghost.reveal 'payload_bytes)))));
+      pts_to_len payload;
+      pts_to_len app_out;
+      Arr.memcpy_l payload_len payload app_out;
+      with app_out_bytes. assert (pts_to app_out app_out_bytes);
+      assert (pure (B.length app_out_bytes == SZ.v app_out_len));
+      assert (pure (Seq.equal
+        (Seq.slice app_out_bytes 0 (SZ.v payload_len))
+        (Seq.slice (Ghost.reveal 'payload_bytes) 0 (SZ.v payload_len))));
+      assert (pure (Seq.equal
+        (Ghost.reveal 'payload_bytes)
+        (Seq.slice (Ghost.reveal 'payload_bytes) 0 (SZ.v payload_len))));
+      C.mark_delivered_application_data c #(Ghost.reveal 'payload_bytes);
+      let resp = {
+        CT.network_out_len = 0sz;
+        CT.app_out_len = payload_len;
+        CT.status = CT.StepOk;
+      };
+      Seq.lemma_len_slice 'old_network_out 0 0;
+      Seq.lemma_eq_intro B.empty (Seq.slice 'old_network_out 0 0);
+      assert (pure (Seq.equal B.empty (CT.response_network_out resp 'old_network_out)));
+      assert (pure (CT.response_app_out resp app_out_bytes ==
+        Seq.slice app_out_bytes 0 (SZ.v payload_len)));
+      assert (pure (Seq.equal
+        (Ghost.reveal 'payload_bytes)
+        (CT.response_app_out resp app_out_bytes)));
+      C.lemma_delivered_application_data_state_evolves
+        'st0
+        (Ghost.reveal 'payload_bytes);
+      assert (pure (CT.legal_response_for_event
+        'st0
+        (C.delivered_application_data_state 'st0 (Ghost.reveal 'payload_bytes))
+        resp
+        (CS.ConnLocalEvent
+          (CS.LocalDeliverApplicationData (Ghost.reveal 'payload_bytes)))
+        B.empty
+        B.empty
+        'old_network_out
+        app_out_bytes));
+      assert (pure (CT.legal_local_response
+        'st0
+        (C.delivered_application_data_state 'st0 (Ghost.reveal 'payload_bytes))
+        resp
+        CT.LocalDeliverApplicationData
+        (Ghost.reveal 'payload_bytes)
+        (CS.ConnLocalEvent
+          (CS.LocalDeliverApplicationData (Ghost.reveal 'payload_bytes)))
+        B.empty
+        B.empty
+        'old_network_out
+        app_out_bytes));
+      assert (pure (CT.legal_handled_local_response
+        'st0
+        (C.delivered_application_data_state 'st0 (Ghost.reveal 'payload_bytes))
+        resp
+        CT.LocalDeliverApplicationData
+        (Ghost.reveal 'payload_bytes)
+        'old_network_out
+        app_out_bytes));
+      assert (pure (CT.some_legal_response
+        'st0
+        (C.delivered_application_data_state 'st0 (Ghost.reveal 'payload_bytes))
+        resp
+        'old_network_out
+        app_out_bytes));
+      resp
+    } else {
+      C.mark_unexpected_message c;
+      let resp = {
+        CT.network_out_len = 0sz;
+        CT.app_out_len = 0sz;
+        CT.status = CT.IllegalTransition;
+      };
+      Seq.lemma_len_slice 'old_network_out 0 0;
+      Seq.lemma_eq_intro B.empty (Seq.slice 'old_network_out 0 0);
+      assert (pure (Seq.equal B.empty (CT.response_network_out resp 'old_network_out)));
+      assert (pure (CT.unexpected_message_response
+        'st0
+        (C.local_fail_state 'st0 C.tls_unexpected_message_error)
+        resp
+        'old_network_out
+        'old_app_out));
+      assert (pure (CT.legal_handled_local_response
+        'st0
+        (C.local_fail_state 'st0 C.tls_unexpected_message_error)
+        resp
+        CT.LocalDeliverApplicationData
+        (Ghost.reveal 'payload_bytes)
+        'old_network_out
+        'old_app_out));
+      assert (pure (CT.some_legal_response
+        'st0
+        (C.local_fail_state 'st0 C.tls_unexpected_message_error)
+        resp
+        'old_network_out
+        'old_app_out));
+      resp
     }
   }
     LocalSendApplicationData -> {
