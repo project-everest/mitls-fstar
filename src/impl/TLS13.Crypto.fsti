@@ -7,6 +7,7 @@ open Pulse.Lib.Array.PtsTo
 
 module B = TLS13.Bytes
 module C = TLS13.Crypto.Spec
+module CL = TLS13.ConnectionLog
 module Seq = FStar.Seq
 module SZ = FStar.SizeT
 module U8 = FStar.UInt8
@@ -22,6 +23,14 @@ fn sha256 (input: array U8.t) (input_len: SZ.t) (out: array U8.t)
            pts_to out 'old **
            pure (B.length 'msg == SZ.v input_len /\ B.length 'old == 32)
   ensures pts_to input 'msg ** pts_to out (C.sha256 'msg)
+
+fn sha256_prefix (input: array U8.t) (input_len: SZ.t) (out: array U8.t)
+  requires pts_to input 'msg **
+           pts_to out 'old **
+           pure (SZ.v input_len <= B.length 'msg /\
+                 B.length 'old == 32)
+  ensures pts_to input 'msg **
+          pts_to out (C.sha256 (CL.raw_slice 'msg 0 (SZ.v input_len)))
 
 fn sha256_empty (out: array U8.t)
   requires pts_to out 'old **
