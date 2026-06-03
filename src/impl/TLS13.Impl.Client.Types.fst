@@ -32,6 +32,11 @@ type client_response = {
   status: client_status;
 }
 
+type client_buffer_response = {
+  response: client_response;
+  consumed_len: SZ.t;
+}
+
 let tls_decode_error : T.tls_error = T.AlertError T.DecodeError
 
 let tls_unexpected_message_error : T.tls_error = T.AlertError T.UnexpectedMessage

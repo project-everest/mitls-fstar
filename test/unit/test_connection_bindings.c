@@ -91,7 +91,7 @@ static int run_network_step(
   int protected_record = content_type == 22 && expected_stage >= 4;
   size_t record_fragment_len = fragment_len + (protected_record ? 1u : 0u);
 
-  if (record_fragment_len + 5 > sizeof raw) {
+  if (record_fragment_len + 6 > sizeof raw) {
     fprintf(stderr, "%s test fragment too large\n", label);
     return 1;
   }
@@ -103,17 +103,26 @@ static int run_network_step(
   if (protected_record) {
     raw[5 + fragment_len] = content_type;
   }
+  raw[5 + record_fragment_len] = 0xa5;
 
-  TLS13_Impl_Client_Types_client_response resp =
-      process_tls_record(
+  TLS13_Impl_Client_Types_client_buffer_response buffer_resp =
+      process_network_bytes(
           c,
           raw,
-          record_fragment_len + 5,
+          record_fragment_len + 6,
           network_out,
           sizeof network_out,
           app_out,
           sizeof app_out);
+  TLS13_Impl_Client_Types_client_response resp = buffer_resp.response;
   if (expect_step_ok(resp, label) != 0) {
+    return 1;
+  }
+  if (buffer_resp.consumed_len != record_fragment_len + 5) {
+    fprintf(stderr, "%s consumed %zu bytes, expected %zu\n",
+            label,
+            (size_t)buffer_resp.consumed_len,
+            record_fragment_len + 5);
     return 1;
   }
   return expect_handshake_stage(c, expected_stage, label);
@@ -139,8 +148,8 @@ static int receive_application_data(
   memcpy(raw + 5, fragment, fragment_len);
   raw[5 + fragment_len] = 23;
 
-  TLS13_Impl_Client_Types_client_response resp =
-      process_tls_record(
+  TLS13_Impl_Client_Types_client_buffer_response buffer_resp =
+      process_network_bytes(
           c,
           raw,
           fragment_len + 6,
@@ -148,7 +157,9 @@ static int receive_application_data(
           sizeof network_out,
           app_out,
           sizeof app_out);
+  TLS13_Impl_Client_Types_client_response resp = buffer_resp.response;
   if (expect_step_ok(resp, label) != 0 ||
+      buffer_resp.consumed_len != fragment_len + 6 ||
       resp.app_out_len != fragment_len ||
       memcmp(app_out, fragment, fragment_len) != 0 ||
       expect_control_tag(c, 2, label) != 0) {
@@ -163,8 +174,8 @@ static int receive_close_notify(
   uint8_t raw[8] = {23, 3, 3, 0, 3, 1, 0, 21};
   uint8_t network_out[2048] = {0};
   uint8_t app_out[16384] = {0};
-  TLS13_Impl_Client_Types_client_response resp =
-      process_tls_record(
+  TLS13_Impl_Client_Types_client_buffer_response buffer_resp =
+      process_network_bytes(
           c,
           raw,
           sizeof raw,
@@ -172,7 +183,9 @@ static int receive_close_notify(
           sizeof network_out,
           app_out,
           sizeof app_out);
+  TLS13_Impl_Client_Types_client_response resp = buffer_resp.response;
   if (expect_step_ok(resp, "CloseNotify") != 0 ||
+      buffer_resp.consumed_len != sizeof raw ||
       expect_control_tag(c, 4, "CloseNotify") != 0) {
     fprintf(stderr, "CloseNotify failed\n");
     return 1;
@@ -282,6 +295,25 @@ static int test_client_hello_local_path(void) {
   uint8_t payload[1] = {0};
   uint8_t network_out[2048] = {0};
   uint8_t app_out[16384] = {0};
+
+  uint8_t short_record_prefix[2] = {22, 3};
+  TLS13_Impl_Client_Types_client_buffer_response need_more =
+      process_network_bytes(
+          c,
+          short_record_prefix,
+          sizeof short_record_prefix,
+          network_out,
+          sizeof network_out,
+          app_out,
+          sizeof app_out);
+  if (need_more.response.status != TLS13_Impl_Client_Types_NeedMoreInput ||
+      need_more.consumed_len != 0 ||
+      need_more.response.network_out_len != 0 ||
+      need_more.response.app_out_len != 0 ||
+      expect_control_tag(c, 0, "NeedMoreInput") != 0) {
+    fprintf(stderr, "NeedMoreInput prefix handling failed\n");
+    return 1;
+  }
 
   TLS13_Impl_Client_Types_client_response start =
       process_local_event(

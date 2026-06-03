@@ -185,6 +185,23 @@ type decoded_network_record_result =
   | NetworkRecordDecodeError
   | NetworkRecordOk of decoded_network_record
 
+noeq
+type decoded_network_buffer = {
+  decoded_buffer_raw_record: V.vec U8.t;
+  decoded_buffer_raw_record_len: SZ.t;
+  decoded_buffer_consumed_len: SZ.t;
+  decoded_buffer_content_type: U8.t;
+  decoded_buffer_fragment: V.vec U8.t;
+  decoded_buffer_fragment_len: SZ.t;
+  decoded_buffer_parsed: option tls_message;
+}
+
+noeq
+type decoded_network_buffer_result =
+  | NetworkBufferNeedMoreInput
+  | NetworkBufferDecodeError
+  | NetworkBufferOk of decoded_network_buffer
+
 noextract
 let content_type_matches (wire:U8.t) (ct:T.content_type) : prop =
   match ct with

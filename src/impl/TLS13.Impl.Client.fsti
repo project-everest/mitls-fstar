@@ -208,6 +208,46 @@ fn process_tls_record
                    network_out_bytes
                    app_out_bytes))
 
+fn process_network_bytes
+  (c:client)
+  (raw:array U8.t)
+  (raw_len:SZ.t)
+  (network_out:array U8.t)
+  (network_out_len:SZ.t)
+  (app_out:array U8.t)
+  (app_out_len:SZ.t)
+  requires C.connection_exactly c 'st0 **
+           pts_to raw 'raw_bytes **
+           pts_to network_out 'old_network_out **
+           pts_to app_out 'old_app_out **
+           pure (B.length 'raw_bytes == SZ.v raw_len /\
+                 B.length 'old_network_out == SZ.v network_out_len /\
+                 B.length 'old_app_out == SZ.v app_out_len /\
+                 L.max_record_fragment_len <= SZ.v app_out_len)
+  returns buffer_resp: CT.client_buffer_response
+  ensures exists* st1 network_out_bytes app_out_bytes.
+          C.connection_exactly c st1 **
+          pts_to raw 'raw_bytes **
+          pts_to network_out network_out_bytes **
+          pts_to app_out app_out_bytes **
+          pure (B.length network_out_bytes == SZ.v network_out_len /\
+                B.length app_out_bytes == SZ.v app_out_len /\
+                (let resp = buffer_resp.CT.response in
+                 ((resp.CT.status == CT.NeedMoreInput /\
+                   buffer_resp.CT.consumed_len == 0sz /\
+                   resp.CT.network_out_len == 0sz /\
+                   resp.CT.app_out_len == 0sz /\
+                   st1 == 'st0 /\
+                   Seq.equal network_out_bytes 'old_network_out /\
+                   Seq.equal app_out_bytes 'old_app_out) \/
+                  (SZ.v buffer_resp.CT.consumed_len <= B.length (Ghost.reveal 'raw_bytes) /\
+                   CT.some_legal_response
+                     'st0
+                     st1
+                     resp
+                     network_out_bytes
+                     app_out_bytes))))
+
 fn process_local_event
   (c:client)
   (kind:CT.local_event_kind)

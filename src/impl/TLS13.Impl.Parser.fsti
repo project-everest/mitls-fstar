@@ -385,3 +385,78 @@ fn decode_network_record
                   decoded.L.decoded_record_content_type
                   fragment_bytes
                   (Ghost.reveal 'raw_bytes)))
+
+(**
+  Streaming-buffer decoder for extracted drivers.  On success it consumes
+  exactly the first complete TLS record in the input buffer, returning owned
+  copies of both that raw record prefix and its decoded dispatcher fragment.
+  The caller remains responsible for retaining any bytes after consumed_len.
+**)
+fn decode_network_buffer
+  (c:C.connection_state)
+  (raw: array U8.t)
+  (raw_len: SZ.t)
+  requires C.connection_exactly c 'st0 **
+           pts_to raw 'raw_bytes **
+           pure (B.length 'raw_bytes == SZ.v raw_len)
+  returns r: L.decoded_network_buffer_result
+  ensures C.connection_exactly c 'st0 **
+          pts_to raw 'raw_bytes **
+          (match r with
+           | L.NetworkBufferNeedMoreInput -> emp
+           | L.NetworkBufferDecodeError -> emp
+           | L.NetworkBufferOk decoded ->
+            exists* raw_record_bytes fragment_bytes.
+              V.pts_to decoded.L.decoded_buffer_raw_record raw_record_bytes **
+              V.pts_to decoded.L.decoded_buffer_fragment fragment_bytes **
+              (match decoded.L.decoded_buffer_parsed with
+               | Some l ->
+                 (exists* m.
+                  L.is_valid_tls_message l m **
+                  pure (CT.parsed_message_wire_success_for
+                    decoded.L.decoded_buffer_content_type
+                    fragment_bytes
+                    l
+                    m)) **
+                 pure (
+                  exists ct msg.
+                    L.content_type_matches
+                      decoded.L.decoded_buffer_content_type
+                      ct /\
+                    WS.parse_tls_message ct fragment_bytes == Some msg) **
+                 pure (CT.parsed_message_wire_success
+                  decoded.L.decoded_buffer_content_type
+                  (Ghost.reveal fragment_bytes)
+                  l)
+               | None ->
+                 pure (forall (ct:T.content_type).
+                  L.content_type_matches
+                    decoded.L.decoded_buffer_content_type
+                    ct ==>
+                  WS.parse_tls_message ct fragment_bytes == None)) **
+              pure (
+                V.is_full_vec decoded.L.decoded_buffer_raw_record /\
+                V.length decoded.L.decoded_buffer_raw_record ==
+                  SZ.v decoded.L.decoded_buffer_raw_record_len /\
+                B.length raw_record_bytes ==
+                  SZ.v decoded.L.decoded_buffer_raw_record_len /\
+                decoded.L.decoded_buffer_raw_record_len ==
+                  decoded.L.decoded_buffer_consumed_len /\
+                SZ.v decoded.L.decoded_buffer_consumed_len <=
+                  B.length (Ghost.reveal 'raw_bytes) /\
+                Seq.equal
+                  raw_record_bytes
+                  (Seq.slice
+                   (Ghost.reveal 'raw_bytes)
+                   0
+                   (SZ.v decoded.L.decoded_buffer_consumed_len)) /\
+                V.is_full_vec decoded.L.decoded_buffer_fragment /\
+                V.length decoded.L.decoded_buffer_fragment ==
+                  SZ.v decoded.L.decoded_buffer_fragment_len /\
+                B.length fragment_bytes ==
+                  SZ.v decoded.L.decoded_buffer_fragment_len /\
+                CT.network_input_wf
+                  'st0
+                  decoded.L.decoded_buffer_content_type
+                  fragment_bytes
+                  raw_record_bytes))

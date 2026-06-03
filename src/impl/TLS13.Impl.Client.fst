@@ -287,6 +287,106 @@ fn process_tls_record
   }
 }
 
+fn process_network_bytes
+  (c:client)
+  (raw:array U8.t)
+  (raw_len:SZ.t)
+  (network_out:array U8.t)
+  (network_out_len:SZ.t)
+  (app_out:array U8.t)
+  (app_out_len:SZ.t)
+  requires C.connection_exactly c 'st0 **
+           pts_to raw 'raw_bytes **
+           pts_to network_out 'old_network_out **
+           pts_to app_out 'old_app_out **
+           pure (B.length 'raw_bytes == SZ.v raw_len /\
+                 B.length 'old_network_out == SZ.v network_out_len /\
+                 B.length 'old_app_out == SZ.v app_out_len /\
+                 L.max_record_fragment_len <= SZ.v app_out_len)
+  returns buffer_resp: CT.client_buffer_response
+  ensures exists* st1 network_out_bytes app_out_bytes.
+          C.connection_exactly c st1 **
+          pts_to raw 'raw_bytes **
+          pts_to network_out network_out_bytes **
+          pts_to app_out app_out_bytes **
+          pure (B.length network_out_bytes == SZ.v network_out_len /\
+                B.length app_out_bytes == SZ.v app_out_len /\
+                (let resp = buffer_resp.CT.response in
+                 ((resp.CT.status == CT.NeedMoreInput /\
+                   buffer_resp.CT.consumed_len == 0sz /\
+                   resp.CT.network_out_len == 0sz /\
+                   resp.CT.app_out_len == 0sz /\
+                   st1 == 'st0 /\
+                   Seq.equal network_out_bytes 'old_network_out /\
+                   Seq.equal app_out_bytes 'old_app_out) \/
+                  (SZ.v buffer_resp.CT.consumed_len <= B.length (Ghost.reveal 'raw_bytes) /\
+                   CT.some_legal_response
+                     'st0
+                     st1
+                     resp
+                     network_out_bytes
+                     app_out_bytes))))
+{
+  let decoded = P.decode_network_buffer c raw raw_len;
+  match decoded {
+    L.NetworkBufferNeedMoreInput -> {
+      let resp = {
+        CT.network_out_len = 0sz;
+        CT.app_out_len = 0sz;
+        CT.status = CT.NeedMoreInput;
+      };
+      {
+        CT.response = resp;
+        CT.consumed_len = 0sz;
+      }
+    }
+    L.NetworkBufferDecodeError -> {
+      let resp =
+        HDecodeError.handle_decode_error
+          c
+          raw
+          raw_len
+          network_out
+          network_out_len
+          app_out
+          app_out_len;
+      {
+        CT.response = resp;
+        CT.consumed_len = 0sz;
+      }
+    }
+    L.NetworkBufferOk decoded_buffer -> {
+      with raw_record_bytes fragment_bytes.
+        assert (V.pts_to decoded_buffer.L.decoded_buffer_raw_record raw_record_bytes **
+                V.pts_to decoded_buffer.L.decoded_buffer_fragment fragment_bytes);
+      V.to_array_pts_to decoded_buffer.L.decoded_buffer_raw_record;
+      V.to_array_pts_to decoded_buffer.L.decoded_buffer_fragment;
+      let resp =
+        HDispatch.dispatch_network_event
+          c
+          decoded_buffer.L.decoded_buffer_content_type
+          decoded_buffer.L.decoded_buffer_parsed
+          (V.vec_to_array decoded_buffer.L.decoded_buffer_raw_record)
+          decoded_buffer.L.decoded_buffer_raw_record_len
+          (V.vec_to_array decoded_buffer.L.decoded_buffer_fragment)
+          decoded_buffer.L.decoded_buffer_fragment_len
+          network_out
+          network_out_len
+          app_out
+          app_out_len;
+      with st1 network_out_bytes app_out_bytes. assert (pure True);
+      V.to_vec_pts_to decoded_buffer.L.decoded_buffer_fragment;
+      V.free decoded_buffer.L.decoded_buffer_fragment;
+      V.to_vec_pts_to decoded_buffer.L.decoded_buffer_raw_record;
+      V.free decoded_buffer.L.decoded_buffer_raw_record;
+      {
+        CT.response = resp;
+        CT.consumed_len = decoded_buffer.L.decoded_buffer_consumed_len;
+      }
+    }
+  }
+}
+
 fn process_local_event
   (c:client)
   (kind:CT.local_event_kind)
