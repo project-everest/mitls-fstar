@@ -7,6 +7,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "tls13_hacl_stubs.h"
+
 typedef struct TLS13_IO_channel_s *TLS13_IO_channel;
 typedef uintptr_t TLS13_Handshake_handshake_context;
 
@@ -234,14 +236,31 @@ static inline bool TLS13_Connection_External_client_close(
 
 #define TLS13_Impl_Serializer_encode_inner_plaintext_no_padding_slice( \
     plain, plain_total_len, plain_offset, plain_len, content_type, out, out_len, ...) \
-  TLS13_Record_Framing_encode_inner_plaintext_no_padding_slice( \
-      (plain), (plain_total_len), (plain_offset), (plain_len), \
-      (content_type), (out), (out_len))
+  do { \
+    size_t _tls13_plain_total_len = (plain_total_len); \
+    size_t _tls13_plain_offset = (plain_offset); \
+    size_t _tls13_plain_len = (plain_len); \
+    size_t _tls13_out_len = (out_len); \
+    if (_tls13_plain_offset <= _tls13_plain_total_len && \
+        _tls13_plain_len <= _tls13_plain_total_len - _tls13_plain_offset && \
+        _tls13_out_len == _tls13_plain_len + 1u) { \
+      memcpy((out), (plain) + _tls13_plain_offset, _tls13_plain_len); \
+      (out)[_tls13_plain_len] = (content_type); \
+    } \
+  } while (0)
 
 #define TLS13_Impl_Serializer_serialize_application_data_header( \
     fragment_len, out, out_len, ...) \
-  TLS13_Record_Framing_serialize_application_data_header( \
-      (fragment_len), (out), (out_len))
+  do { \
+    size_t _tls13_fragment_len = (fragment_len); \
+    if ((out_len) >= 5u && _tls13_fragment_len <= 0xffffu) { \
+      (out)[0] = 23u; \
+      (out)[1] = 0x03u; \
+      (out)[2] = 0x03u; \
+      (out)[3] = (uint8_t)((_tls13_fragment_len >> 8) & 0xffu); \
+      (out)[4] = (uint8_t)(_tls13_fragment_len & 0xffu); \
+    } \
+  } while (0)
 
 static inline void TLS13_Connection_Backend_write_u16(uint8_t *out, size_t v) {
   out[0] = (uint8_t)((v >> 8) & 0xffu);
@@ -344,27 +363,61 @@ static inline size_t TLS13_Connection_Backend_serialize_raw_application_data_rec
   TLS13_Connection_Backend_serialize_raw_application_data_record((fragment), (fragment_len), (out), (out_len))
 
 static inline size_t TLS13_Connection_Backend_serialize_client_finished_outputs(
+    const uint8_t *write_key,
+    const uint8_t *write_iv,
+    uint64_t write_seq,
+    bool write_installed,
     uint8_t *verify_data,
     uint8_t *handshake_out,
     uint8_t *network_out,
     size_t network_out_len) {
-  if (network_out_len < 58u) {
+  if (!write_installed || network_out_len < 58u) {
     return 0u;
   }
   handshake_out[0] = 20u;
   TLS13_Connection_Backend_write_u24(handshake_out + 1u, 32u);
   memcpy(handshake_out + 4u, verify_data, 32u);
+
   network_out[0] = 23u;
   network_out[1] = 0x03u;
   network_out[2] = 0x03u;
   TLS13_Connection_Backend_write_u16(network_out + 3u, 53u);
-  memcpy(network_out + 5u, handshake_out, 36u);
-  memset(network_out + 41u, 0u, 17u);
+
+  uint8_t inner_plaintext[37u];
+  memcpy(inner_plaintext, handshake_out, 36u);
+  inner_plaintext[36u] = 22u;
+
+  uint8_t nonce[12u];
+  if (!tls13_record_nonce(nonce, write_iv, write_seq)) {
+    return 0u;
+  }
+  if (!tls13_hacl_chacha20_poly1305_seal_combined(
+          network_out + 5u,
+          53u,
+          write_key,
+          nonce,
+          network_out,
+          5u,
+          inner_plaintext,
+          37u)) {
+    return 0u;
+  }
   return 58u;
 }
 
-#define TLS13_Impl_Serializer_serialize_client_finished_outputs(lfin, handshake_out, network_out, network_out_len, ...) \
-  TLS13_Connection_Backend_serialize_client_finished_outputs((lfin), (handshake_out), (network_out), (network_out_len))
+#define TLS13_Impl_Serializer_serialize_client_finished_outputs(write_state, lfin, handshake_out, network_out, network_out_len, ...) \
+  ({ \
+    __auto_type _tls13_write_state = (write_state); \
+    TLS13_Connection_Backend_serialize_client_finished_outputs( \
+        _tls13_write_state.key, \
+        _tls13_write_state.iv, \
+        *_tls13_write_state.seq, \
+        *_tls13_write_state.installed, \
+        (lfin), \
+        (handshake_out), \
+        (network_out), \
+        (network_out_len)); \
+  })
 
 #define TLS13_Impl_Parser_parse_tls_message(content_type, input, input_len, ...) \
   ({ \
@@ -614,10 +667,19 @@ static inline bool TLS13_Connection_Backend_decode_inner_plaintext(
               size_t _tls13_opened_len = _tls13_fragment_len - 16u; \
               uint8_t *_tls13_opened = calloc(_tls13_opened_len == 0u ? 1u : _tls13_opened_len, sizeof(uint8_t)); \
               if (_tls13_opened != NULL) { \
-                uint8_t _tls13_aad[1] = {0}; \
+                uint8_t _tls13_aad[5u]; \
+                uint8_t _tls13_zero_aad[1u] = {0u}; \
+                memcpy(_tls13_aad, _tls13_raw, 5u); \
                 if (TLS13_Record_peek_open_application( \
                       _tls13_c.records.read, \
                       _tls13_aad, \
+                      5u, \
+                      _tls13_record_fragment, \
+                      _tls13_fragment_len, \
+                      _tls13_opened) || \
+                    TLS13_Record_peek_open_application( \
+                      _tls13_c.records.read, \
+                      _tls13_zero_aad, \
                       0u, \
                       _tls13_record_fragment, \
                       _tls13_fragment_len, \
@@ -725,10 +787,19 @@ static inline bool TLS13_Connection_Backend_decode_inner_plaintext(
               size_t _tls13_opened_len = _tls13_fragment_len - 16u; \
               uint8_t *_tls13_opened = calloc(_tls13_opened_len == 0u ? 1u : _tls13_opened_len, sizeof(uint8_t)); \
               if (_tls13_opened != NULL) { \
-                uint8_t _tls13_aad[1] = {0}; \
+                uint8_t _tls13_aad[5u]; \
+                uint8_t _tls13_zero_aad[1u] = {0u}; \
+                memcpy(_tls13_aad, _tls13_raw, 5u); \
                 if (TLS13_Record_peek_open_application( \
                       _tls13_c.records.read, \
                       _tls13_aad, \
+                      5u, \
+                      _tls13_record_fragment, \
+                      _tls13_fragment_len, \
+                      _tls13_opened) || \
+                    TLS13_Record_peek_open_application( \
+                      _tls13_c.records.read, \
+                      _tls13_zero_aad, \
                       0u, \
                       _tls13_record_fragment, \
                       _tls13_fragment_len, \

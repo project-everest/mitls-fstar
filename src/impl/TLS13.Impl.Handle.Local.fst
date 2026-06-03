@@ -1199,17 +1199,17 @@ fn handle_local_event
           (Ghost.reveal 'payload_bytes)
           raw_sent));
       assert (pure (B.length network_out_bytes == SZ.v network_out_len));
-      assert (pure (SZ.v payload_len + 21 <= B.length network_out_bytes));
+      assert (pure (SZ.v payload_len + 22 <= B.length network_out_bytes));
       assert (pure (C.can_send_application_data
         'st0
         (Ghost.reveal 'payload_bytes)
         raw_sent));
       assert (pure (Seq.equal
         raw_sent
-        (Seq.slice network_out_bytes 0 (SZ.v payload_len + 21))));
-      assert (pure (SZ.fits (SZ.v payload_len + 21)));
-      let written_len = SZ.add payload_len 21sz;
-      assert (pure (SZ.v written_len == SZ.v payload_len + 21));
+        (Seq.slice network_out_bytes 0 (SZ.v payload_len + 22))));
+      assert (pure (SZ.fits (SZ.v payload_len + 22)));
+      let written_len = SZ.add payload_len 22sz;
+      assert (pure (SZ.v written_len == SZ.v payload_len + 22));
       let resp = {
         CT.network_out_len = written_len;
         CT.app_out_len = 0sz;
@@ -1419,19 +1419,19 @@ fn handle_local_event
           'st0
           raw_sent));
       assert (pure (B.length network_out_bytes == SZ.v network_out_len));
-      assert (pure (23 <= B.length network_out_bytes));
+      assert (pure (24 <= B.length network_out_bytes));
       assert (pure (C.can_send_close_notify
         'st0
         raw_sent));
       assert (pure (Seq.equal
         raw_sent
-        (Seq.slice network_out_bytes 0 23)));
+        (Seq.slice network_out_bytes 0 24)));
       let resp = {
-        CT.network_out_len = 23sz;
+        CT.network_out_len = 24sz;
         CT.app_out_len = 0sz;
         CT.status = CT.StepOk;
       };
-      Seq.lemma_len_slice network_out_bytes 0 23;
+      Seq.lemma_len_slice network_out_bytes 0 24;
       assert (pure (Seq.equal raw_sent (CT.response_network_out resp network_out_bytes)));
       Seq.lemma_len_slice 'old_app_out 0 0;
       Seq.lemma_eq_intro B.empty (Seq.slice 'old_app_out 0 0);

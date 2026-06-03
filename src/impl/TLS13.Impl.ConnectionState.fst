@@ -3784,7 +3784,7 @@ let can_send_application_data_sizes
       (requires True)
       (ensures fun ok ->
         ok ==> SZ.v payload_len <= SM.max_application_data_fragment_len /\
-                 SZ.v payload_len + 21 <= SZ.v network_out_len)
+                 SZ.v payload_len + 22 <= SZ.v network_out_len)
 =
   assert_norm (SM.max_application_data_fragment_len == 16384);
   let max_payload = 16384sz in
@@ -3793,11 +3793,11 @@ let can_send_application_data_sizes
   if payload_fits then
     begin
       assert (SZ.v payload_len <= SM.max_application_data_fragment_len);
-      assert (SZ.fits (SZ.v payload_len + 21));
-      let needed = SZ.add payload_len 21sz in
+      assert (SZ.fits (SZ.v payload_len + 22));
+      let needed = SZ.add payload_len 22sz in
       let out_room = sizet_lte_plain needed network_out_len in
       lemma_sizet_lte_plain needed network_out_len;
-      assert (out_room ==> SZ.v payload_len + 21 <= SZ.v network_out_len);
+      assert (out_room ==> SZ.v payload_len + 22 <= SZ.v network_out_len);
       out_room
     end
   else
@@ -3808,10 +3808,10 @@ let can_send_close_notify_sizes
   : Pure bool
       (requires True)
       (ensures fun ok ->
-        ok ==> 23 <= SZ.v network_out_len)
+        ok ==> 24 <= SZ.v network_out_len)
 =
-  let out_room = sizet_lte_plain 23sz network_out_len in
-  lemma_sizet_lte_plain 23sz network_out_len;
+  let out_room = sizet_lte_plain 24sz network_out_len in
+  lemma_sizet_lte_plain 24sz network_out_len;
   out_room
 
 let lemma_local_fail_state_evolves (st:CS.connection_state) (err:T.tls_error)
@@ -9518,7 +9518,7 @@ fn can_send_application_data_runtime
             Some? st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_application_traffic /\
             U64.fits (st0.CS.cs_model.CS.model_record.CS.record_write.R.seq + 1) /\
             SZ.v payload_len <= SM.max_application_data_fragment_len /\
-            SZ.v payload_len + 21 <= SZ.v network_out_len)
+            SZ.v payload_len + 22 <= SZ.v network_out_len)
 {
   unfold (connection_exactly c st0);
   unfold (connection_model_exactly c st0.CS.cs_model);
@@ -9562,7 +9562,7 @@ fn can_send_application_data_runtime
     st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_application_traffic));
   assert (pure (ok ==> U64.fits (st0.CS.cs_model.CS.model_record.CS.record_write.R.seq + 1)));
   assert (pure (ok ==> SZ.v payload_len <= SM.max_application_data_fragment_len));
-  assert (pure (ok ==> SZ.v payload_len + 21 <= SZ.v network_out_len));
+  assert (pure (ok ==> SZ.v payload_len + 22 <= SZ.v network_out_len));
 
   fold (control_exactly
     c.control
@@ -9584,7 +9584,7 @@ fn can_send_close_notify_runtime
             st0.CS.cs_model.CS.model_control == CS.ControlApplicationData /\
             Some? st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_application_traffic /\
             U64.fits (st0.CS.cs_model.CS.model_record.CS.record_write.R.seq + 1) /\
-            23 <= SZ.v network_out_len)
+            24 <= SZ.v network_out_len)
 {
   unfold (connection_exactly c st0);
   unfold (connection_model_exactly c st0.CS.cs_model);
@@ -9627,7 +9627,7 @@ fn can_send_close_notify_runtime
   assert (pure (ok ==> Some?
     st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_application_traffic));
   assert (pure (ok ==> U64.fits (st0.CS.cs_model.CS.model_record.CS.record_write.R.seq + 1)));
-  assert (pure (ok ==> 23 <= SZ.v network_out_len));
+  assert (pure (ok ==> 24 <= SZ.v network_out_len));
 
   fold (control_exactly
     c.control
@@ -12062,13 +12062,20 @@ fn try_send_client_finished
     fold (IM.is_valid_finished lfin (Ghost.reveal fin));
 
     let mut serialized_finished = [| 0uy; 36sz |];
+    unfold connection_exactly c st0;
+    unfold connection_model_exactly c st0.CS.cs_model;
+    unfold record_layer_exactly c.records st0.CS.cs_model.CS.model_record;
     let written_raw =
       Ser.serialize_client_finished_outputs
+        c.records.write
         lfin
         serialized_finished
         network_out
         network_out_len;
     with sent_fin serialized_finished_bytes network_out_bytes. _;
+    fold (record_layer_exactly c.records st0.CS.cs_model.CS.model_record);
+    fold (connection_model_exactly c st0.CS.cs_model);
+    fold (connection_exactly c st0);
     let fin_sent = Ghost.hide sent_fin;
     assert (pure (B.length serialized_finished_bytes == 36));
     assert (pure (Seq.equal
@@ -12147,7 +12154,7 @@ fn mark_sent_application_data_after_record_advanced
                    st0
                    (Ghost.reveal 'payload_bytes)
                    (Ghost.reveal raw_sent) /\
-                 SZ.v written == SZ.v payload_len + 21 /\
+                 SZ.v written == SZ.v payload_len + 22 /\
                  SZ.v written <= B.length 'network_out_bytes /\
                  Seq.equal
                    (Ghost.reveal raw_sent)
@@ -12287,7 +12294,7 @@ fn mark_sent_close_notify_after_record_advanced
                  can_send_close_notify
                    st0
                    (Ghost.reveal raw_sent) /\
-                 SZ.v written == 23 /\
+                 SZ.v written == 24 /\
                  SZ.v written <= B.length 'network_out_bytes /\
                  Seq.equal
                    (Ghost.reveal raw_sent)
@@ -12442,14 +12449,14 @@ fn try_send_application_data
               ArrPts.pts_to payload 'payload_bytes **
               ArrPts.pts_to network_out network_out_bytes **
               pure (B.length network_out_bytes == SZ.v network_out_len /\
-                    SZ.v payload_len + 21 <= B.length network_out_bytes /\
+                    SZ.v payload_len + 22 <= B.length network_out_bytes /\
                     can_send_application_data
                       st0
                       (Ghost.reveal 'payload_bytes)
                       raw_sent /\
                     Seq.equal
                       raw_sent
-                      (Seq.slice network_out_bytes 0 (SZ.v payload_len + 21)))
+                      (Seq.slice network_out_bytes 0 (SZ.v payload_len + 22)))
           else
             connection_exactly c st0 **
             ArrPts.pts_to payload 'payload_bytes **
@@ -12465,23 +12472,45 @@ fn try_send_application_data
     assert (pure (B.length (Ghost.reveal 'payload_bytes) <= SM.max_application_data_fragment_len));
     lemma_application_data_record_count_small (Ghost.reveal 'payload_bytes);
     assert (pure (SM.application_data_record_count (Ghost.reveal 'payload_bytes) == 1));
-    assert (pure (SZ.v payload_len + 21 <= SZ.v network_out_len));
+    assert (pure (SZ.v payload_len + 22 <= SZ.v network_out_len));
 
-    assert (pure (SZ.fits (SZ.v payload_len + 16)));
-    let ciphertext_len = SZ.add payload_len 16sz;
-    assert (pure (SZ.v ciphertext_len == SZ.v payload_len + 16));
+    assert (pure (SZ.fits (SZ.v payload_len + 1)));
+    let inner_plaintext_len = SZ.add payload_len 1sz;
+    assert (pure (SZ.v inner_plaintext_len == SZ.v payload_len + 1));
+    assert (pure (SZ.fits (SZ.v inner_plaintext_len + 16)));
+    let ciphertext_len = SZ.add inner_plaintext_len 16sz;
+    assert (pure (SZ.v ciphertext_len == SZ.v payload_len + 17));
     assert (pure (SZ.v ciphertext_len <= 16640));
     assert (pure (SZ.v ciphertext_len + 5 <= SZ.v network_out_len));
+
+    let inner_plaintext = V.alloc 0uy inner_plaintext_len;
+    with old_inner_plaintext_bytes.
+      assert (V.pts_to inner_plaintext old_inner_plaintext_bytes);
+    V.pts_to_len inner_plaintext;
+    assert (pure (B.length old_inner_plaintext_bytes == SZ.v inner_plaintext_len));
+    V.to_array_pts_to inner_plaintext;
+    Ser.encode_inner_plaintext_no_padding_slice
+      payload
+      payload_len
+      0sz
+      payload_len
+      23uy
+      (V.vec_to_array inner_plaintext)
+      inner_plaintext_len;
+    with inner_plaintext_bytes.
+      assert (ArrPts.pts_to (V.vec_to_array inner_plaintext) inner_plaintext_bytes);
+    assert (pure (B.length inner_plaintext_bytes == SZ.v inner_plaintext_len));
 
     let ciphertext = V.alloc 0uy ciphertext_len;
     with old_ciphertext_bytes.
       assert (V.pts_to ciphertext old_ciphertext_bytes);
     V.pts_to_len ciphertext;
     assert (pure (B.length old_ciphertext_bytes == SZ.v ciphertext_len));
-    let mut aad = [| 0uy; 0sz |];
+    let mut aad = [| 0uy; 5sz |];
+    Ser.serialize_application_data_header ciphertext_len aad 5sz;
     with aad_bytes.
       assert (ArrPts.pts_to aad aad_bytes);
-    assert (pure (B.length aad_bytes == 0));
+    assert (pure (B.length aad_bytes == 5));
 
     unfold (connection_exactly c st0);
     unfold (connection_model_exactly c st0.CS.cs_model);
@@ -12492,9 +12521,9 @@ fn try_send_application_data
       Rec.seal_application
         c.records.write
         aad
-        0sz
-        payload
-        payload_len
+        5sz
+        (V.vec_to_array inner_plaintext)
+        inner_plaintext_len
         (V.vec_to_array ciphertext);
     with sealed_write ciphertext_bytes. _;
     if sealed {
@@ -12502,12 +12531,12 @@ fn try_send_application_data
         st0.CS.cs_model.CS.model_record.CS.record_write
         aad_bytes
         { R.content_type = T.ApplicationData;
-          R.fragment = Ghost.reveal 'payload_bytes } ==
+          R.fragment = inner_plaintext_bytes } ==
         Some (ciphertext_bytes, sealed_write)));
       lemma_seal_application_success_next_seq
         st0.CS.cs_model.CS.model_record.CS.record_write
         aad_bytes
-        (Ghost.reveal 'payload_bytes)
+        inner_plaintext_bytes
         ciphertext_bytes
         sealed_write;
       assert (pure (sealed_write ==
@@ -12533,7 +12562,7 @@ fn try_send_application_data
         assert (ArrPts.pts_to network_out network_out_bytes);
       assert (pure (B.length network_out_bytes == SZ.v network_out_len));
       assert (pure (SZ.v written == SZ.v ciphertext_len + 5));
-      assert (pure (SZ.v written == SZ.v payload_len + 21));
+      assert (pure (SZ.v written == SZ.v payload_len + 22));
       assert (pure (SZ.v written <= B.length network_out_bytes));
       let raw_sent = Ghost.hide (Seq.slice network_out_bytes 0 (SZ.v written));
       assert (pure (Seq.equal
@@ -12573,6 +12602,8 @@ fn try_send_application_data
         (Ghost.reveal 'payload_bytes)
         (Ghost.reveal raw_sent)));
 
+      V.to_vec_pts_to inner_plaintext;
+      V.free inner_plaintext;
       V.to_vec_pts_to ciphertext;
       V.free ciphertext;
 
@@ -12584,10 +12615,10 @@ fn try_send_application_data
         written
         #raw_sent;
 
-      assert (pure (SZ.v written == SZ.v payload_len + 21));
+      assert (pure (SZ.v written == SZ.v payload_len + 22));
       assert (pure (Seq.equal
         (Ghost.reveal raw_sent)
-        (Seq.slice network_out_bytes 0 (SZ.v payload_len + 21))));
+        (Seq.slice network_out_bytes 0 (SZ.v payload_len + 22))));
       true
     } else {
       assert (pure (sealed_write ==
@@ -12596,6 +12627,8 @@ fn try_send_application_data
         as (Rec.is_record_state
           c.records.write
           st0.CS.cs_model.CS.model_record.CS.record_write);
+      V.to_vec_pts_to inner_plaintext;
+      V.free inner_plaintext;
       V.to_vec_pts_to ciphertext;
       V.free ciphertext;
       fold (record_layer_exactly c.records st0.CS.cs_model.CS.model_record);
@@ -12626,13 +12659,13 @@ fn try_send_close_notify
                   raw_sent) **
               ArrPts.pts_to network_out network_out_bytes **
               pure (B.length network_out_bytes == SZ.v network_out_len /\
-                    23 <= B.length network_out_bytes /\
+                    24 <= B.length network_out_bytes /\
                     can_send_close_notify
                       st0
                       raw_sent /\
                     Seq.equal
                       raw_sent
-                      (Seq.slice network_out_bytes 0 23))
+                      (Seq.slice network_out_bytes 0 24))
           else
             connection_exactly c st0 **
             ArrPts.pts_to network_out 'old_network_out)
@@ -12643,7 +12676,7 @@ fn try_send_close_notify
     assert (pure (Some?
       st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_application_traffic));
     assert (pure (U64.fits (st0.CS.cs_model.CS.model_record.CS.record_write.R.seq + 1)));
-    assert (pure (23 <= SZ.v network_out_len));
+    assert (pure (24 <= SZ.v network_out_len));
 
     let mut alert_plaintext = [| 0uy; 2sz |];
     write_close_notify_alert alert_plaintext;
@@ -12652,9 +12685,29 @@ fn try_send_close_notify
     assert (pure (Seq.equal alert_plaintext_bytes close_notify_alert_fragment));
     assert (pure (B.length alert_plaintext_bytes == 2));
 
-    let ciphertext_len = 18sz;
-    assert (pure (SZ.v ciphertext_len == 18));
-    assert (pure (SZ.v ciphertext_len == 2 + 16));
+    let inner_plaintext_len = 3sz;
+    assert (pure (SZ.v inner_plaintext_len == 3));
+    let inner_plaintext = V.alloc 0uy inner_plaintext_len;
+    with old_inner_plaintext_bytes.
+      assert (V.pts_to inner_plaintext old_inner_plaintext_bytes);
+    V.pts_to_len inner_plaintext;
+    assert (pure (B.length old_inner_plaintext_bytes == SZ.v inner_plaintext_len));
+    V.to_array_pts_to inner_plaintext;
+    Ser.encode_inner_plaintext_no_padding_slice
+      alert_plaintext
+      2sz
+      0sz
+      2sz
+      21uy
+      (V.vec_to_array inner_plaintext)
+      inner_plaintext_len;
+    with inner_plaintext_bytes.
+      assert (ArrPts.pts_to (V.vec_to_array inner_plaintext) inner_plaintext_bytes);
+    assert (pure (B.length inner_plaintext_bytes == 3));
+
+    let ciphertext_len = 19sz;
+    assert (pure (SZ.v ciphertext_len == 19));
+    assert (pure (SZ.v ciphertext_len == SZ.v inner_plaintext_len + 16));
     assert (pure (SZ.v ciphertext_len <= 16640));
     assert (pure (SZ.v ciphertext_len + 5 <= SZ.v network_out_len));
 
@@ -12663,11 +12716,12 @@ fn try_send_close_notify
       assert (V.pts_to ciphertext old_ciphertext_bytes);
     V.pts_to_len ciphertext;
     assert (pure (B.length old_ciphertext_bytes == SZ.v ciphertext_len));
-    assert (pure (B.length old_ciphertext_bytes == B.length alert_plaintext_bytes + 16));
-    let mut aad = [| 0uy; 0sz |];
+    assert (pure (B.length old_ciphertext_bytes == B.length inner_plaintext_bytes + 16));
+    let mut aad = [| 0uy; 5sz |];
+    Ser.serialize_application_data_header ciphertext_len aad 5sz;
     with aad_bytes.
       assert (ArrPts.pts_to aad aad_bytes);
-    assert (pure (B.length aad_bytes == 0));
+    assert (pure (B.length aad_bytes == 5));
 
     unfold (connection_exactly c st0);
     unfold (connection_model_exactly c st0.CS.cs_model);
@@ -12678,9 +12732,9 @@ fn try_send_close_notify
       Rec.seal_application
         c.records.write
         aad
-        0sz
-        alert_plaintext
-        2sz
+        5sz
+        (V.vec_to_array inner_plaintext)
+        inner_plaintext_len
         (V.vec_to_array ciphertext);
     with sealed_write ciphertext_bytes. _;
     if sealed {
@@ -12688,12 +12742,12 @@ fn try_send_close_notify
         st0.CS.cs_model.CS.model_record.CS.record_write
         aad_bytes
         { R.content_type = T.ApplicationData;
-          R.fragment = alert_plaintext_bytes } ==
+          R.fragment = inner_plaintext_bytes } ==
         Some (ciphertext_bytes, sealed_write)));
       lemma_seal_application_success_next_seq
         st0.CS.cs_model.CS.model_record.CS.record_write
         aad_bytes
-        alert_plaintext_bytes
+        inner_plaintext_bytes
         ciphertext_bytes
         sealed_write;
       assert (pure (sealed_write ==
@@ -12719,7 +12773,7 @@ fn try_send_close_notify
         assert (ArrPts.pts_to network_out network_out_bytes);
       assert (pure (B.length network_out_bytes == SZ.v network_out_len));
       assert (pure (SZ.v written == SZ.v ciphertext_len + 5));
-      assert (pure (SZ.v written == 23));
+      assert (pure (SZ.v written == 24));
       assert (pure (SZ.v written <= B.length network_out_bytes));
       let raw_sent = Ghost.hide (Seq.slice network_out_bytes 0 (SZ.v written));
       assert (pure (Seq.equal
@@ -12758,6 +12812,8 @@ fn try_send_close_notify
         st0
         (Ghost.reveal raw_sent)));
 
+      V.to_vec_pts_to inner_plaintext;
+      V.free inner_plaintext;
       V.to_vec_pts_to ciphertext;
       V.free ciphertext;
 
@@ -12767,10 +12823,10 @@ fn try_send_close_notify
         written
         #raw_sent;
 
-      assert (pure (SZ.v written == 23));
+      assert (pure (SZ.v written == 24));
       assert (pure (Seq.equal
         (Ghost.reveal raw_sent)
-        (Seq.slice network_out_bytes 0 23)));
+        (Seq.slice network_out_bytes 0 24)));
       true
     } else {
       assert (pure (sealed_write ==
@@ -12779,6 +12835,8 @@ fn try_send_close_notify
         as (Rec.is_record_state
           c.records.write
           st0.CS.cs_model.CS.model_record.CS.record_write);
+      V.to_vec_pts_to inner_plaintext;
+      V.free inner_plaintext;
       V.to_vec_pts_to ciphertext;
       V.free ciphertext;
       fold (record_layer_exactly c.records st0.CS.cs_model.CS.model_record);

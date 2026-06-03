@@ -12,6 +12,7 @@ module CL = TLS13.ConnectionLog
 module CS = TLS13.Spec.ConnectionState
 module L = TLS13.Impl.Messages
 module M = TLS13.Messages
+module Rec = TLS13.Record
 module Seq = FStar.Seq
 module SZ = FStar.SizeT
 module T = TLS13.Types
@@ -298,12 +299,13 @@ fn encode_inner_plaintext_no_padding_slice
           pure (B.length out_bytes == SZ.v out_len)
 
 fn serialize_application_data_header
-  (fragment_len: U16.t)
+  (fragment_len: SZ.t)
   (out: array U8.t)
   (out_len: SZ.t)
   requires pts_to out 'old_bytes **
            pure (B.length 'old_bytes == SZ.v out_len /\
-                 SZ.v out_len == 5)
+                 SZ.v out_len == 5 /\
+                 SZ.v fragment_len <= 16640)
   ensures exists* header_bytes.
           pts_to out header_bytes **
           pure (B.length header_bytes == 5)
@@ -349,11 +351,13 @@ fn serialize_client_finished_application_data_record
                 CS.raw_records_exactly raw_prefix T.ApplicationData 1))
 
 fn serialize_client_finished_outputs
+  (write_state: Rec.record_state)
   (lfin: L.finished)
   (handshake_out: array U8.t)
   (network_out: array U8.t)
   (network_out_len: SZ.t)
-  requires (exists* fin. L.is_valid_finished lfin fin) **
+  requires Rec.is_record_state write_state 'record_write **
+           (exists* fin. L.is_valid_finished lfin fin) **
            pts_to handshake_out 'old_handshake **
            pts_to network_out 'old_network **
            pure (B.length 'old_handshake == 36 /\
@@ -361,6 +365,7 @@ fn serialize_client_finished_outputs
                 58 <= SZ.v network_out_len)
   returns written: (n:SZ.t{SZ.v n <= SZ.v network_out_len})
   ensures exists* fin handshake_bytes network_bytes.
+          Rec.is_record_state write_state 'record_write **
           L.is_valid_finished lfin fin **
           pts_to handshake_out handshake_bytes **
           pts_to network_out network_bytes **

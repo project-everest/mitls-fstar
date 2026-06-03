@@ -730,7 +730,7 @@ static int test_client_hello_local_path(void) {
         app_out,
         sizeof app_out);
   if (expect_step_ok(app_sent, "LocalSendApplicationData") != 0 ||
-    app_sent.network_out_len != sizeof app_payload + 21 ||
+    app_sent.network_out_len != sizeof app_payload + 22 ||
     network_out[0] != 23) {
     fprintf(stderr, "LocalSendApplicationData failed\n");
     return 1;
