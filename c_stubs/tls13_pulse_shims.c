@@ -1,3 +1,4 @@
+#define TLS13_PULSE_SHIMS_IMPLEMENTATION
 #include "tls13_crypto_external.h"
 
 #include <string.h>

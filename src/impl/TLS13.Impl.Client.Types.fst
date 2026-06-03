@@ -105,11 +105,13 @@ let response_wf
   SZ.v resp.network_out_len <= B.length network_out /\
   SZ.v resp.app_out_len <= B.length app_out
 
+noextract
 let response_network_out (resp:client_response) (network_out:B.bytes) : B.bytes =
   if SZ.v resp.network_out_len <= B.length network_out
   then Seq.slice network_out 0 (SZ.v resp.network_out_len)
   else B.empty
 
+noextract
 let response_app_out (resp:client_response) (app_out:B.bytes) : B.bytes =
   if SZ.v resp.app_out_len <= B.length app_out
   then Seq.slice app_out 0 (SZ.v resp.app_out_len)

@@ -186,7 +186,7 @@ fn handle_alert
   } else {
     assert (pure (U8.v alert_wire <> 0));
     L.lemma_alert_description_nonzero_not_close_notify alert_wire parsed_alert;
-    C.mark_received_alert_failure c raw alert_wire parsed_alert;
+    C.mark_received_alert_failure c raw alert_wire #parsed_alert;
     let resp = {
       CT.network_out_len = 0sz;
       CT.app_out_len = 0sz;

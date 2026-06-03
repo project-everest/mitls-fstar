@@ -7,6 +7,11 @@ void TLS13_Crypto_sha256_empty(uint8_t *out, void *old_out) {
   (void)tls13_hacl_sha256(out, NULL, 0);
 }
 
+bool TLS13_Crypto_random_bytes(uint8_t *out, size_t out_len, void *old) {
+  (void)old;
+  return tls13_hacl_random_bytes(out, out_len);
+}
+
 void TLS13_Crypto_sha256(
     uint8_t *input,
     size_t input_len,
@@ -95,6 +100,16 @@ bool TLS13_Crypto_x25519_shared_runtime(
   (void)pk_bytes;
   (void)old_out;
   return tls13_hacl_x25519_shared(out, sk, pk);
+}
+
+void TLS13_Crypto_x25519_public_from_private(
+    uint8_t *sk,
+    uint8_t *out,
+    void *sk_bytes,
+    void *old_out) {
+  (void)sk_bytes;
+  (void)old_out;
+  (void)tls13_hacl_x25519_public_from_private(out, sk);
 }
 
 bool TLS13_Crypto_tls13_record_nonce(

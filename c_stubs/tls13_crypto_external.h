@@ -4,9 +4,27 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
+#include <string.h>
 
 #include "tls13_spec_types.h"
 
+#ifndef TLS13_PULSE_SHIMS_IMPLEMENTATION
+static inline void TLS13_Pulse_Lib_Array_memcpy_typed(
+    size_t len,
+    const void *src,
+    void *dst,
+    size_t elem_size) {
+  if (len != 0) {
+    memcpy(dst, src, len * elem_size);
+  }
+}
+
+#define Pulse_Lib_Array_memcpy(len, src, dst, ...) \
+  TLS13_Pulse_Lib_Array_memcpy_typed((len), (src), (dst), sizeof(*(src)))
+
+#define Pulse_Lib_Array_memcpy_l(len, src, dst, ...) \
+  TLS13_Pulse_Lib_Array_memcpy_typed((len), (src), (dst), sizeof(*(src)))
+#else
 void Pulse_Lib_Array_memcpy(
     size_t len,
     uint8_t *src,
@@ -22,8 +40,11 @@ void Pulse_Lib_Array_memcpy_l(
     void *src_bytes,
     void *dst_bytes,
     void *squash);
+#endif
 
 void TLS13_Crypto_sha256_empty(uint8_t *out, void *old_out);
+
+bool TLS13_Crypto_random_bytes(uint8_t *out, size_t out_len, void *old);
 
 void TLS13_Crypto_sha256(
     uint8_t *input,
@@ -81,6 +102,12 @@ bool TLS13_Crypto_x25519_shared_runtime(
     uint8_t *out,
     void *sk_bytes,
     void *pk_bytes,
+    void *old_out);
+
+void TLS13_Crypto_x25519_public_from_private(
+    uint8_t *sk,
+    uint8_t *out,
+    void *sk_bytes,
     void *old_out);
 
 bool TLS13_Crypto_tls13_record_nonce(
