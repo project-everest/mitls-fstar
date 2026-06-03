@@ -11,6 +11,7 @@ module C = TLS13.Impl.ConnectionState
 module CT = TLS13.Impl.Client.Types
 module L = TLS13.Impl.Messages
 module M = TLS13.Messages
+module R = TLS13.Record.Spec
 module Seq = FStar.Seq
 module SZ = FStar.SizeT
 module U8 = FStar.UInt8
@@ -19,6 +20,115 @@ type client = C.connection_state
 
 let connection_exactly (c:client) (st:CS.connection_state) : slprop =
   C.connection_exactly c st
+
+noextract
+let next_local_action_sound
+  (st:CS.connection_state)
+  (network_out_len:SZ.t)
+  (certificate_public_key_len:SZ.t)
+  (server_finished_payload_len:SZ.t)
+  (action:CT.next_local_action)
+  : prop =
+  if action.CT.next_local_ready then
+    match action.CT.next_local_kind with
+    | CT.LocalStartHandshake ->
+      action.CT.next_local_payload == CT.LocalPayloadNone /\
+      st.CS.cs_model.CS.model_control == CS.ControlNew /\
+      st.CS.cs_model.CS.model_handshake.CS.hs_start == None
+    | CT.LocalSendClientHello ->
+      action.CT.next_local_payload == CT.LocalPayloadNone /\
+      st.CS.cs_model.CS.model_control ==
+        CS.ControlHandshaking CS.HsStarted /\
+      Some? st.CS.cs_model.CS.model_handshake.CS.hs_start /\
+      st.CS.cs_model.CS.model_handshake.CS.hs_client_hello == None /\
+      B.length st.CS.cs_model.CS.model_handshake.CS.hs_transcript
+        <= C.max_transcript_len - C.max_client_hello_len /\
+      517 <= SZ.v network_out_len
+    | CT.LocalDeriveSharedSecret ->
+      action.CT.next_local_payload == CT.LocalPayloadNone /\
+      st.CS.cs_model.CS.model_control ==
+        CS.ControlHandshaking CS.HsServerHelloReceived /\
+      not (Some?
+        st.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_handshake_secret)
+    | CT.LocalInstallClientHandshakeTrafficKeys ->
+      action.CT.next_local_payload == CT.LocalPayloadNone /\
+      st.CS.cs_model.CS.model_control ==
+        CS.ControlHandshaking CS.HsServerHelloReceived /\
+      Some?
+        st.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_handshake_secret /\
+      not (Some?
+        st.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_handshake_traffic)
+    | CT.LocalInstallServerHandshakeTrafficKeys ->
+      action.CT.next_local_payload == CT.LocalPayloadNone /\
+      st.CS.cs_model.CS.model_control ==
+        CS.ControlHandshaking CS.HsServerHelloReceived /\
+      Some?
+        st.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_handshake_secret /\
+      not (Some?
+        st.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_handshake_traffic)
+    | CT.LocalValidateCertificate ->
+      action.CT.next_local_payload == CT.LocalPayloadCertificatePublicKey /\
+      st.CS.cs_model.CS.model_control ==
+        CS.ControlHandshaking CS.HsCertificateReceived /\
+      st.CS.cs_model.CS.model_handshake.CS.hs_validated_peer == None /\
+      SZ.v certificate_public_key_len <= C.max_public_key_len
+    | CT.LocalVerifyCertificateSignature ->
+      action.CT.next_local_payload == CT.LocalPayloadNone /\
+      st.CS.cs_model.CS.model_control ==
+        CS.ControlHandshaking CS.HsCertificateVerifyReceived /\
+      Some? st.CS.cs_model.CS.model_handshake.CS.hs_validated_peer /\
+      Some? st.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify /\
+      Some?
+        st.CS.cs_model.CS.model_handshake.CS.hs_buffers.CS.hb_certificate_verify_input /\
+      st.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify_verified == false
+    | CT.LocalVerifyFinished ->
+      action.CT.next_local_payload == CT.LocalPayloadServerFinishedHandshake /\
+      st.CS.cs_model.CS.model_control ==
+        CS.ControlHandshaking CS.HsServerFinishedReceived /\
+      Some? st.CS.cs_model.CS.model_handshake.CS.hs_server_finished /\
+      st.CS.cs_model.CS.model_handshake.CS.hs_server_finished_verified == false /\
+      B.length st.CS.cs_model.CS.model_handshake.CS.hs_transcript +
+        SZ.v server_finished_payload_len <= C.max_transcript_len
+    | CT.LocalInstallClientApplicationTrafficKeys ->
+      action.CT.next_local_payload == CT.LocalPayloadNone /\
+      st.CS.cs_model.CS.model_control ==
+        CS.ControlHandshaking CS.HsServerFinishedVerified /\
+      Some? st.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_master_secret /\
+      not (Some?
+        st.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_application_traffic)
+    | CT.LocalInstallServerApplicationTrafficKeys ->
+      action.CT.next_local_payload == CT.LocalPayloadNone /\
+      st.CS.cs_model.CS.model_control ==
+        CS.ControlHandshaking CS.HsServerFinishedVerified /\
+      Some? st.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_master_secret /\
+      not (Some?
+        st.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_application_traffic)
+    | CT.LocalSendClientFinished ->
+      action.CT.next_local_payload == CT.LocalPayloadNone /\
+      st.CS.cs_model.CS.model_control ==
+        CS.ControlHandshaking CS.HsServerFinishedVerified /\
+      st.CS.cs_model.CS.model_handshake.CS.hs_client_finished == None /\
+      Some? st.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_handshake_traffic /\
+      Some? st.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_application_traffic /\
+      Some? st.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_application_traffic /\
+      FStar.UInt64.fits
+        (st.CS.cs_model.CS.model_record.CS.record_write.R.seq + 1) /\
+      B.length st.CS.cs_model.CS.model_handshake.CS.hs_transcript + 36
+        <= C.max_transcript_len /\
+      58 <= SZ.v network_out_len
+    | CT.LocalSendKeyUpdate ->
+      action.CT.next_local_payload == CT.LocalPayloadNone /\
+      st.CS.cs_model.CS.model_control == CS.ControlApplicationData /\
+      st.CS.cs_model.CS.model_application.CS.app_key_update_response_pending /\
+      Some? st.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_application_traffic /\
+      FStar.UInt64.fits
+        (st.CS.cs_model.CS.model_record.CS.record_write.R.seq + 1) /\
+      27 <= SZ.v network_out_len
+    | _ ->
+      False
+  else
+    action.CT.next_local_kind == CT.LocalFail /\
+    action.CT.next_local_payload == CT.LocalPayloadNone
 
 noextract
 let client_state_ref (c:client) : C.state_ref =
@@ -64,7 +174,13 @@ fn next_local_action
   (server_finished_payload_len:SZ.t)
   requires C.connection_exactly c 'st0
   returns action:CT.next_local_action
-  ensures C.connection_exactly c 'st0
+  ensures C.connection_exactly c 'st0 **
+          pure (next_local_action_sound
+            'st0
+            network_out_len
+            certificate_public_key_len
+            server_finished_payload_len
+            action)
 
 fn copy_certificate_leaf_der
   (c:client)

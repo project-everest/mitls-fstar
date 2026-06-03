@@ -74,7 +74,13 @@ fn next_local_action
   (server_finished_payload_len:SZ.t)
   requires C.connection_exactly c 'st0
   returns action:CT.next_local_action
-  ensures C.connection_exactly c 'st0
+  ensures C.connection_exactly c 'st0 **
+          pure (next_local_action_sound
+            'st0
+            network_out_len
+            certificate_public_key_len
+            server_finished_payload_len
+            action)
 {
   let no_action = {
     CT.next_local_ready = false;
