@@ -57,6 +57,7 @@ type tls_message =
   | TlsApplicationData of B.bytes
   | TlsAlert of T.alert_description
   | TlsChangeCipherSpec
+  | TlsIgnoredPostHandshake of B.bytes
 
 type tls_record = {
   record_outer_type: T.content_type;

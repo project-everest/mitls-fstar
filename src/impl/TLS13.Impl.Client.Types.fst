@@ -299,6 +299,10 @@ let parsed_message_wire_success_for
     True
   | L.LTlsHandshake (L.LFinished _), _ ->
     False
+  | L.LTlsIgnoredPostHandshake _, M.TlsIgnoredPostHandshake _ ->
+    True
+  | L.LTlsIgnoredPostHandshake _, _ ->
+    False
   | L.LTlsApplicationData _, M.TlsApplicationData _ ->
     True
   | L.LTlsApplicationData _, _ ->

@@ -537,6 +537,17 @@ let step_tls_message
            model_application =
              { app with app_log = CL.append_app_received app.app_log bytes };
        })
+  | M.TlsIgnoredPostHandshake _, ControlApplicationData ->
+    (match dir with
+     | CL.Received ->
+       Some {
+        model with
+          model_record = {
+            model.model_record with
+              record_read = R.next_seq model.model_record.record_read;
+          };
+       }
+     | CL.Sent -> None)
   | M.TlsAlert T.CloseNotify, ControlApplicationData ->
     (match dir with
      | CL.Sent ->
@@ -768,6 +779,8 @@ let legal_tls_message
     (match dir with
      | CL.Sent -> Some? hs.hs_keys.ks_client_application_traffic
      | CL.Received -> Some? hs.hs_keys.ks_server_application_traffic)
+  | M.TlsIgnoredPostHandshake _, ControlApplicationData ->
+    dir == CL.Received /\ Some? hs.hs_keys.ks_server_application_traffic
   | M.TlsAlert T.CloseNotify, ControlApplicationData ->
     True
   | M.TlsAlert T.CloseNotify, ControlClosing ->

@@ -3639,6 +3639,34 @@ let received_application_data_state
       }];
   }
 
+let received_ignored_post_handshake_state
+  (st:CS.connection_state)
+  (body:B.bytes)
+  (raw_received:B.bytes)
+  : CS.connection_state =
+  let model0 = st.CS.cs_model in
+  let record0 = model0.CS.model_record in
+  let model1 = {
+    model0 with
+      CS.model_record = {
+        record0 with
+          CS.record_read = R.next_seq record0.CS.record_read;
+      };
+  } in
+  {
+    CS.cs_model = model1;
+    CS.cs_wire_log = {
+      CL.raw_sent = B.append st.CS.cs_wire_log.CL.raw_sent B.empty;
+      CL.raw_received = B.append st.CS.cs_wire_log.CL.raw_received raw_received;
+    };
+    CS.cs_event_log =
+      st.CS.cs_event_log @
+      [CS.ConnNetworkEvent {
+        CL.message_direction = CL.Received;
+        CL.message_value = M.TlsIgnoredPostHandshake body;
+      }];
+  }
+
 let delivered_application_data_state
   (st:CS.connection_state)
   (bytes:B.bytes)
@@ -4961,6 +4989,70 @@ let lemma_received_application_data_state_evolves
     (received_application_data_state st bytes raw_received));
   assert (CS.connection_state_consistent
     (received_application_data_state st bytes raw_received))
+
+let lemma_received_ignored_post_handshake_state_evolves
+  (st:CS.connection_state)
+  (body:B.bytes)
+  (raw_received:B.bytes)
+  : Lemma
+      (requires CS.connection_state_consistent st /\
+                st.CS.cs_model.CS.model_control == CS.ControlApplicationData /\
+                Some? st.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_application_traffic /\
+                CS.event_raw_delta_legal
+                  st.CS.cs_model
+                  (CS.ConnNetworkEvent {
+                    CL.message_direction = CL.Received;
+                    CL.message_value = M.TlsIgnoredPostHandshake body;
+                  })
+                  B.empty
+                  raw_received)
+      (ensures CS.connection_state_evolves
+                 st
+                 (received_ignored_post_handshake_state st body raw_received) /\
+               CS.connection_state_consistent
+                 (received_ignored_post_handshake_state st body raw_received) /\
+               CS.legal_connection_delta
+                 st
+                 {
+                   CS.delta_event =
+                     CS.ConnNetworkEvent {
+                       CL.message_direction = CL.Received;
+                       CL.message_value = M.TlsIgnoredPostHandshake body;
+                     };
+                   CS.delta_raw_sent = B.empty;
+                   CS.delta_raw_received = raw_received;
+                 }
+                 (received_ignored_post_handshake_state st body raw_received))
+=
+  let ev =
+    CS.ConnNetworkEvent {
+      CL.message_direction = CL.Received;
+      CL.message_value = M.TlsIgnoredPostHandshake body;
+    } in
+  let delta = {
+    CS.delta_event = ev;
+    CS.delta_raw_sent = B.empty;
+    CS.delta_raw_received = raw_received;
+  } in
+  assert (CS.legal_event st.CS.cs_model ev);
+  assert (CS.step_model st.CS.cs_model ev ==
+          Some (received_ignored_post_handshake_state st body raw_received).CS.cs_model);
+  assert (CS.legal_connection_delta
+    st
+    delta
+    (received_ignored_post_handshake_state st body raw_received));
+  assert (CS.connection_state_single_step
+    st
+    (received_ignored_post_handshake_state st body raw_received));
+  FStar.ReflexiveTransitiveClosure.closure_step
+    CS.connection_state_single_step
+    st
+    (received_ignored_post_handshake_state st body raw_received);
+  assert (CS.connection_state_evolves
+    st
+    (received_ignored_post_handshake_state st body raw_received));
+  assert (CS.connection_state_consistent
+    (received_ignored_post_handshake_state st body raw_received))
 
 let lemma_delivered_application_data_state_evolves
   (st:CS.connection_state)
@@ -12918,6 +13010,74 @@ fn mark_received_application_data
   fold (connection_exactly
     c
     (received_application_data_state st0 bytes (Ghost.reveal 'raw_bytes)))
+}
+
+fn mark_received_ignored_post_handshake
+  (c:connection_state)
+  (raw:array U8.t)
+  (#body:erased B.bytes)
+  (#st0:erased CS.connection_state)
+  requires connection_exactly c st0 **
+           Pulse.Lib.Array.PtsTo.pts_to raw 'raw_bytes **
+           pure (st0.CS.cs_model.CS.model_control == CS.ControlApplicationData /\
+                 Some? st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_application_traffic /\
+                 U64.fits (st0.CS.cs_model.CS.model_record.CS.record_read.R.seq + 1) /\
+                 CS.event_raw_delta_legal
+                   st0.CS.cs_model
+                   (CS.ConnNetworkEvent {
+                     CL.message_direction = CL.Received;
+                     CL.message_value = M.TlsIgnoredPostHandshake body;
+                   })
+                   B.empty
+                   (Ghost.reveal 'raw_bytes))
+  ensures connection_exactly
+            c
+            (received_ignored_post_handshake_state st0 body (Ghost.reveal 'raw_bytes)) **
+          Pulse.Lib.Array.PtsTo.pts_to raw 'raw_bytes
+{
+  assert (pure (st0.CS.cs_model.CS.model_control == CS.ControlApplicationData));
+  assert (pure (Some? st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_application_traffic));
+  assert (pure (U64.fits (st0.CS.cs_model.CS.model_record.CS.record_read.R.seq + 1)));
+  assert (pure (CS.event_raw_delta_legal
+    st0.CS.cs_model
+    (CS.ConnNetworkEvent {
+      CL.message_direction = CL.Received;
+      CL.message_value = M.TlsIgnoredPostHandshake body;
+    })
+    B.empty
+    (Ghost.reveal 'raw_bytes)));
+  unfold (connection_exactly c st0);
+  unfold (connection_model_exactly c st0.CS.cs_model);
+  unfold (record_layer_exactly c.records st0.CS.cs_model.CS.model_record);
+
+  Rec.advance_seq c.records.read;
+  fold (record_layer_exactly
+    c.records
+    { st0.CS.cs_model.CS.model_record with
+        CS.record_read = R.next_seq st0.CS.cs_model.CS.model_record.CS.record_read });
+
+  assert (pure ((received_ignored_post_handshake_state st0 body (Ghost.reveal 'raw_bytes)).CS.cs_model.CS.model_config ==
+                st0.CS.cs_model.CS.model_config));
+  assert (pure ((received_ignored_post_handshake_state st0 body (Ghost.reveal 'raw_bytes)).CS.cs_model.CS.model_control ==
+                st0.CS.cs_model.CS.model_control));
+  assert (pure ((received_ignored_post_handshake_state st0 body (Ghost.reveal 'raw_bytes)).CS.cs_model.CS.model_handshake ==
+                st0.CS.cs_model.CS.model_handshake));
+  assert (pure ((received_ignored_post_handshake_state st0 body (Ghost.reveal 'raw_bytes)).CS.cs_model.CS.model_application ==
+                st0.CS.cs_model.CS.model_application));
+  fold (connection_model_exactly
+    c
+    (received_ignored_post_handshake_state st0 body (Ghost.reveal 'raw_bytes)).CS.cs_model);
+
+  lemma_received_ignored_post_handshake_state_evolves
+    st0
+    body
+    (Ghost.reveal 'raw_bytes);
+  MR.update
+    c.ghost_state
+    (received_ignored_post_handshake_state st0 body (Ghost.reveal 'raw_bytes));
+  fold (connection_exactly
+    c
+    (received_ignored_post_handshake_state st0 body (Ghost.reveal 'raw_bytes)))
 }
 
 fn mark_delivered_application_data

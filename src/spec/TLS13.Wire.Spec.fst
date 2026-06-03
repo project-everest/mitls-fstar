@@ -493,6 +493,15 @@ let parse_finished (input:B.bytes) : GTot (option M.finished) =
   then Some { M.verify_data = input }
   else None
 
+let parse_ignored_post_handshake (input:B.bytes) : GTot (option B.bytes) =
+  if B.length input < 4 then None
+  else
+    let msg_type = nat_of_byte (Seq.index input 0) in
+    let body_len = read_u24 input 1 in
+    if msg_type == 4 && body_len + 4 == B.length input
+    then Some (Seq.slice input 4 (body_len + 4))
+    else None
+
 let parse_handshake (input:B.bytes) : GTot (option (M.handshake_msg & nat)) =
   if B.length input < 4 then None
   else
@@ -866,7 +875,10 @@ let parse_tls_message (content_type:T.content_type) (fragment:B.bytes) : GTot (o
     (match parse_handshake fragment with
      | Some (msg, consumed) ->
        if consumed == B.length fragment then Some (M.TlsHandshake msg) else None
-     | None -> None)
+     | None ->
+       match parse_ignored_post_handshake fragment with
+       | Some body -> Some (M.TlsIgnoredPostHandshake body)
+       | None -> None)
   | T.ApplicationData -> Some (M.TlsApplicationData fragment)
   | T.Alert ->
     if B.length fragment == 2
@@ -886,6 +898,7 @@ let serialize_tls_message (msg:M.tls_message) : GTot (T.content_type & B.bytes) 
   | M.TlsApplicationData data -> (T.ApplicationData, data)
   | M.TlsAlert alert -> (T.Alert, B.of_list [byte 2; byte (alert_description_to_byte alert)])
   | M.TlsChangeCipherSpec -> (T.ChangeCipherSpec, B.singleton (byte 1))
+  | M.TlsIgnoredPostHandshake body -> (T.Handshake, append3 (u8 4) (u24 (B.length body)) body)
 
 let parse_tls_record (input:B.bytes) : GTot (option (M.tls_record & nat)) =
   match parse_record input with
