@@ -144,6 +144,32 @@ fn copy_certificate_verify_signature
   C.copy_certificate_verify_signature c out out_len
 }
 
+fn copy_server_finished_verify_data
+  (c:client)
+  (out:array U8.t)
+  (out_len:SZ.t)
+  requires C.connection_exactly c 'st0 **
+           pts_to out 'old_out **
+           pure (B.length 'old_out == SZ.v out_len /\
+                 32 <= SZ.v out_len /\
+                 Some? 'st0.CS.cs_model.CS.model_handshake.CS.hs_server_finished)
+  returns copied_len:SZ.t
+  ensures exists* out_bytes.
+          C.connection_exactly c 'st0 **
+          pts_to out out_bytes **
+          pure (B.length out_bytes == SZ.v out_len /\
+                SZ.v copied_len == 32 /\
+                SZ.v copied_len <= B.length out_bytes /\
+                (match 'st0.CS.cs_model.CS.model_handshake.CS.hs_server_finished with
+                 | Some fin ->
+                   Seq.equal
+                     (Seq.slice out_bytes 0 (SZ.v copied_len))
+                     fin.M.verify_data
+                 | None -> False))
+{
+  C.copy_server_finished_verify_data c out out_len
+}
+
 fn process_network_event
   (c:client)
   (content_type:U8.t)

@@ -523,11 +523,24 @@ static int test_client_hello_local_path(void) {
     return 1;
   }
 
+  uint8_t server_finished_verify_data[32] = {0};
+  size_t server_finished_verify_data_len =
+      copy_server_finished_verify_data(c, server_finished_verify_data, sizeof server_finished_verify_data);
+  if (server_finished_verify_data_len != 32 ||
+      memcmp(server_finished_verify_data, finished + 4, 32) != 0) {
+    fprintf(stderr, "copy_server_finished_verify_data failed\n");
+    return 1;
+  }
+  uint8_t stored_finished[36] = {0};
+  stored_finished[0] = 20;
+  write_u24(stored_finished + 1, server_finished_verify_data_len);
+  memcpy(stored_finished + 4, server_finished_verify_data, server_finished_verify_data_len);
+
   if (run_local_step(
         c,
         TLS13_Impl_Client_Types_LocalVerifyFinished,
-        finished,
-        finished_len,
+        stored_finished,
+        sizeof stored_finished,
         "LocalVerifyFinished") != 0 ||
     expect_handshake_stage(c, 10, "LocalVerifyFinished") != 0) {
     fprintf(stderr, "LocalVerifyFinished did not verify Finished\n");

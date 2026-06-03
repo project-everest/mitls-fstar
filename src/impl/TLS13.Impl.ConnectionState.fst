@@ -5332,6 +5332,93 @@ fn copy_certificate_verify_signature
   snapshot
 }
 
+fn copy_server_finished_verify_data
+  (c:connection_state)
+  (out:array U8.t)
+  (out_len:SZ.t)
+  (#st0:erased CS.connection_state)
+  requires connection_exactly c st0 **
+           ArrPts.pts_to out 'old_out **
+           pure (B.length 'old_out == SZ.v out_len /\
+                 32 <= SZ.v out_len /\
+                 Some? st0.CS.cs_model.CS.model_handshake.CS.hs_server_finished)
+  returns copied_len:SZ.t
+  ensures exists* out_bytes.
+          connection_exactly c st0 **
+          ArrPts.pts_to out out_bytes **
+          pure (B.length out_bytes == SZ.v out_len /\
+                SZ.v copied_len == 32 /\
+                SZ.v copied_len <= B.length out_bytes /\
+                (match st0.CS.cs_model.CS.model_handshake.CS.hs_server_finished with
+                 | Some fin ->
+                   Seq.equal
+                     (Seq.slice out_bytes 0 (SZ.v copied_len))
+                     fin.M.verify_data
+                 | None -> False))
+{
+  let fin = Ghost.hide (Some?.v st0.CS.cs_model.CS.model_handshake.CS.hs_server_finished);
+  assert (pure (st0.CS.cs_model.CS.model_handshake.CS.hs_server_finished ==
+    Some (Ghost.reveal fin)));
+
+  unfold (connection_exactly c st0);
+  unfold (connection_model_exactly c st0.CS.cs_model);
+  unfold (handshake_exactly c.handshake st0.CS.cs_model.CS.model_handshake);
+  unfold (handshake_messages_exactly c.handshake.messages st0.CS.cs_model.CS.model_handshake);
+  unfold (finished_slot_exactly
+    c.handshake.messages.server_finished
+    st0.CS.cs_model.CS.model_handshake.CS.hs_server_finished);
+
+  with stored. assert (Box.pts_to c.handshake.messages.server_finished stored);
+  let stored_fin_opt = !c.handshake.messages.server_finished;
+  assert (pure (stored_fin_opt == stored));
+  assert (pure (Some? stored_fin_opt));
+  let lfin = Some?.v stored_fin_opt;
+  assert (pure (stored_fin_opt == Some lfin));
+  assert (pure (stored == Some lfin));
+
+  rewrite (match stored, st0.CS.cs_model.CS.model_handshake.CS.hs_server_finished with
+    | None, None -> pure True
+    | Some old_l, Some old_m -> IM.is_valid_finished old_l old_m
+    | _, _ -> pure False)
+    as (IM.is_valid_finished lfin (Ghost.reveal fin));
+  unfold (IM.is_valid_finished lfin (Ghost.reveal fin));
+  with verify_data. _;
+
+  V.pts_to_len lfin.IM.finished_verify_data;
+  assert (pure (B.length verify_data == 32));
+  assert (pure (Seq.equal verify_data (Ghost.reveal fin).M.verify_data));
+  assert_norm (SZ.v 32sz == 32);
+  assert (pure (SZ.v 32sz <= SZ.v out_len));
+
+  ArrPts.pts_to_len out;
+  V.to_array_pts_to lfin.IM.finished_verify_data;
+  Arr.memcpy_l 32sz (V.vec_to_array lfin.IM.finished_verify_data) out;
+  V.to_vec_pts_to lfin.IM.finished_verify_data;
+
+  with out_bytes. assert (ArrPts.pts_to out out_bytes);
+  assert (pure (B.length out_bytes == SZ.v out_len));
+  assert (pure (32 <= B.length out_bytes));
+  assert (pure (Seq.equal (Seq.slice out_bytes 0 32) verify_data));
+  assert (pure (Seq.equal
+    (Seq.slice out_bytes 0 32)
+    (Ghost.reveal fin).M.verify_data));
+
+  fold (IM.is_valid_finished lfin (Ghost.reveal fin));
+  rewrite (IM.is_valid_finished lfin (Ghost.reveal fin))
+    as (match stored, st0.CS.cs_model.CS.model_handshake.CS.hs_server_finished with
+      | None, None -> pure True
+      | Some old_l, Some old_m -> IM.is_valid_finished old_l old_m
+      | _, _ -> pure False);
+  fold (finished_slot_exactly
+    c.handshake.messages.server_finished
+    st0.CS.cs_model.CS.model_handshake.CS.hs_server_finished);
+  fold (handshake_messages_exactly c.handshake.messages st0.CS.cs_model.CS.model_handshake);
+  fold (handshake_exactly c.handshake st0.CS.cs_model.CS.model_handshake);
+  fold (connection_model_exactly c st0.CS.cs_model);
+  fold (connection_exactly c st0);
+  32sz
+}
+
 fn is_handshaking
   (c:connection_state)
   (#st0:erased CS.connection_state)
