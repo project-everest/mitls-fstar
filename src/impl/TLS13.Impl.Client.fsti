@@ -10,6 +10,7 @@ module CS = TLS13.Spec.ConnectionState
 module C = TLS13.Impl.ConnectionState
 module CT = TLS13.Impl.Client.Types
 module L = TLS13.Impl.Messages
+module Seq = FStar.Seq
 module SZ = FStar.SizeT
 module U8 = FStar.UInt8
 
@@ -54,6 +55,50 @@ fn control_snapshot
   returns snapshot:C.control_snapshot
   ensures C.connection_exactly c 'st0 **
           pure (C.control_snapshot_matches snapshot 'st0)
+
+fn copy_certificate_leaf_der
+  (c:client)
+  (out:array U8.t)
+  (out_len:SZ.t)
+  requires C.connection_exactly c 'st0 **
+           pts_to out 'old_out **
+           pure (B.length 'old_out == SZ.v out_len /\
+                 C.max_handshake_flight_len <= SZ.v out_len /\
+                 Some?
+                   'st0.CS.cs_model.CS.model_handshake.CS.hs_buffers.CS.hb_certificate_leaf_der)
+  returns copied_len:SZ.t
+  ensures exists* out_bytes.
+          C.connection_exactly c 'st0 **
+          pts_to out out_bytes **
+          pure (B.length out_bytes == SZ.v out_len /\
+                SZ.v copied_len <= B.length out_bytes /\
+                (match 'st0.CS.cs_model.CS.model_handshake.CS.hs_buffers.CS.hb_certificate_leaf_der with
+                | Some leaf ->
+                  SZ.v copied_len == B.length leaf /\
+                  Seq.equal (Seq.slice out_bytes 0 (SZ.v copied_len)) leaf
+                | None -> False))
+
+fn copy_certificate_verify_input
+  (c:client)
+  (out:array U8.t)
+  (out_len:SZ.t)
+  requires C.connection_exactly c 'st0 **
+           pts_to out 'old_out **
+           pure (B.length 'old_out == SZ.v out_len /\
+                 C.max_certificate_verify_input_len <= SZ.v out_len /\
+                 Some?
+                   'st0.CS.cs_model.CS.model_handshake.CS.hs_buffers.CS.hb_certificate_verify_input)
+  returns copied_len:SZ.t
+  ensures exists* out_bytes.
+          C.connection_exactly c 'st0 **
+          pts_to out out_bytes **
+          pure (B.length out_bytes == SZ.v out_len /\
+                SZ.v copied_len <= B.length out_bytes /\
+                (match 'st0.CS.cs_model.CS.model_handshake.CS.hs_buffers.CS.hb_certificate_verify_input with
+                | Some input ->
+                  SZ.v copied_len == B.length input /\
+                  Seq.equal (Seq.slice out_bytes 0 (SZ.v copied_len)) input
+                | None -> False))
 
 fn process_network_event
   (c:client)

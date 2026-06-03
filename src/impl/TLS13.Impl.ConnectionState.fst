@@ -1409,6 +1409,64 @@ fn alloc_empty_optional_sized_bytes (#cap:nat)
   slot
 }
 
+fn copy_optional_sized_bytes_to_array
+  (#cap:nat)
+  (slot:optional_sized_bytes)
+  (dst:array U8.t)
+  (dst_len:SZ.t)
+  (#bytes_opt:erased (option B.bytes))
+  requires optional_sized_bytes_exactly slot cap bytes_opt **
+           ArrPts.pts_to dst 'old_dst **
+           pure (B.length 'old_dst == SZ.v dst_len /\
+                 cap <= SZ.v dst_len /\
+                 Some? (Ghost.reveal bytes_opt))
+  returns copied_len:SZ.t
+  ensures exists* dst_bytes.
+          optional_sized_bytes_exactly slot cap bytes_opt **
+          ArrPts.pts_to dst dst_bytes **
+          pure (B.length dst_bytes == SZ.v dst_len /\
+                SZ.v copied_len <= B.length dst_bytes /\
+                (match Ghost.reveal bytes_opt with
+                | Some bytes ->
+                  SZ.v copied_len == B.length bytes /\
+                  Seq.equal (Seq.slice dst_bytes 0 (SZ.v copied_len)) bytes
+                | None -> False))
+{
+  unfold (optional_sized_bytes_exactly slot cap (Ghost.reveal bytes_opt));
+  with present storage len. _;
+
+  let copy_len = !slot.value.len;
+  assert (pure (copy_len == len));
+  assert (pure (present));
+  assert (pure (
+    match Ghost.reveal bytes_opt with
+    | Some bytes -> byte_prefix_matches storage copy_len bytes
+    | None -> False));
+  assert (pure (SZ.v copy_len <= cap));
+  assert (pure (SZ.v copy_len <= SZ.v dst_len));
+
+  ArrPts.pts_to_len dst;
+  V.to_array_pts_to slot.value.bytes;
+  Arr.memcpy_l copy_len (V.vec_to_array slot.value.bytes) dst;
+  V.to_vec_pts_to slot.value.bytes;
+
+  with dst_bytes. assert (ArrPts.pts_to dst dst_bytes);
+  assert (pure (B.length dst_bytes == SZ.v dst_len));
+  assert (pure (SZ.v copy_len <= B.length dst_bytes));
+  assert (pure (Seq.equal
+    (Seq.slice dst_bytes 0 (SZ.v copy_len))
+    (Seq.slice storage 0 (SZ.v copy_len))));
+  assert (pure (
+    match Ghost.reveal bytes_opt with
+    | Some bytes ->
+      SZ.v copy_len == B.length bytes /\
+      Seq.equal (Seq.slice dst_bytes 0 (SZ.v copy_len)) bytes
+    | None -> False));
+
+  fold (optional_sized_bytes_exactly slot cap (Ghost.reveal bytes_opt));
+  copy_len
+}
+
 fn alloc_empty_optional_fixed32 ()
   requires emp
   returns slot:optional_fixed_bytes
@@ -5071,6 +5129,100 @@ fn get_control_snapshot
   fold (connection_model_exactly c st0.CS.cs_model);
   fold (connection_exactly c st0);
   snapshot
+}
+
+fn copy_certificate_leaf_der
+  (c:connection_state)
+  (out:array U8.t)
+  (out_len:SZ.t)
+  (#st0:erased CS.connection_state)
+  requires connection_exactly c st0 **
+           ArrPts.pts_to out 'old_out **
+           pure (B.length 'old_out == SZ.v out_len /\
+                 max_handshake_flight_len <= SZ.v out_len /\
+                 Some?
+                   st0.CS.cs_model.CS.model_handshake.CS.hs_buffers.CS.hb_certificate_leaf_der)
+  returns copied_len:SZ.t
+  ensures exists* out_bytes.
+          connection_exactly c st0 **
+          ArrPts.pts_to out out_bytes **
+          pure (B.length out_bytes == SZ.v out_len /\
+                SZ.v copied_len <= B.length out_bytes /\
+                (match st0.CS.cs_model.CS.model_handshake.CS.hs_buffers.CS.hb_certificate_leaf_der with
+                | Some leaf ->
+                  SZ.v copied_len == B.length leaf /\
+                  Seq.equal (Seq.slice out_bytes 0 (SZ.v copied_len)) leaf
+                | None -> False))
+{
+  unfold (connection_exactly c st0);
+  unfold (connection_model_exactly c st0.CS.cs_model);
+  unfold (handshake_exactly c.handshake st0.CS.cs_model.CS.model_handshake);
+  unfold (handshake_buffers_exactly
+    c.handshake.buffers
+    st0.CS.cs_model.CS.model_handshake.CS.hs_buffers);
+  with parsed. _;
+
+  let copied_len =
+    copy_optional_sized_bytes_to_array
+      c.handshake.buffers.certificate_leaf_der
+      out
+      out_len
+      #(st0.CS.cs_model.CS.model_handshake.CS.hs_buffers.CS.hb_certificate_leaf_der);
+
+  fold (handshake_buffers_exactly
+    c.handshake.buffers
+    st0.CS.cs_model.CS.model_handshake.CS.hs_buffers);
+  fold (handshake_exactly c.handshake st0.CS.cs_model.CS.model_handshake);
+  fold (connection_model_exactly c st0.CS.cs_model);
+  fold (connection_exactly c st0);
+  copied_len
+}
+
+fn copy_certificate_verify_input
+  (c:connection_state)
+  (out:array U8.t)
+  (out_len:SZ.t)
+  (#st0:erased CS.connection_state)
+  requires connection_exactly c st0 **
+           ArrPts.pts_to out 'old_out **
+           pure (B.length 'old_out == SZ.v out_len /\
+                 max_certificate_verify_input_len <= SZ.v out_len /\
+                 Some?
+                   st0.CS.cs_model.CS.model_handshake.CS.hs_buffers.CS.hb_certificate_verify_input)
+  returns copied_len:SZ.t
+  ensures exists* out_bytes.
+          connection_exactly c st0 **
+          ArrPts.pts_to out out_bytes **
+          pure (B.length out_bytes == SZ.v out_len /\
+                SZ.v copied_len <= B.length out_bytes /\
+                (match st0.CS.cs_model.CS.model_handshake.CS.hs_buffers.CS.hb_certificate_verify_input with
+                | Some input ->
+                  SZ.v copied_len == B.length input /\
+                  Seq.equal (Seq.slice out_bytes 0 (SZ.v copied_len)) input
+                | None -> False))
+{
+  unfold (connection_exactly c st0);
+  unfold (connection_model_exactly c st0.CS.cs_model);
+  unfold (handshake_exactly c.handshake st0.CS.cs_model.CS.model_handshake);
+  unfold (handshake_buffers_exactly
+    c.handshake.buffers
+    st0.CS.cs_model.CS.model_handshake.CS.hs_buffers);
+  with parsed. _;
+
+  let copied_len =
+    copy_optional_sized_bytes_to_array
+      c.handshake.buffers.certificate_verify_input
+      out
+      out_len
+      #(st0.CS.cs_model.CS.model_handshake.CS.hs_buffers.CS.hb_certificate_verify_input);
+
+  fold (handshake_buffers_exactly
+    c.handshake.buffers
+    st0.CS.cs_model.CS.model_handshake.CS.hs_buffers);
+  fold (handshake_exactly c.handshake st0.CS.cs_model.CS.model_handshake);
+  fold (connection_model_exactly c st0.CS.cs_model);
+  fold (connection_exactly c st0);
+  copied_len
 }
 
 fn is_handshaking

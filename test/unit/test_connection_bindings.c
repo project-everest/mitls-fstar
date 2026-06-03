@@ -252,6 +252,26 @@ static size_t build_finished(uint8_t out[36]) {
   return 36;
 }
 
+static int expect_certificate_verify_input(uint8_t *input, size_t input_len) {
+  static const char context[] = "TLS 1.3, server CertificateVerify";
+  if (input_len != 130) {
+    fprintf(stderr, "CertificateVerify input length was %zu\n", input_len);
+    return 1;
+  }
+  for (size_t i = 0; i < 64; i++) {
+    if (input[i] != 0x20) {
+      fprintf(stderr, "CertificateVerify input prefix failed\n");
+      return 1;
+    }
+  }
+  if (memcmp(input + 64, context, sizeof context - 1) != 0 ||
+      input[64 + sizeof context - 1] != 0) {
+    fprintf(stderr, "CertificateVerify input context failed\n");
+    return 1;
+  }
+  return 0;
+}
+
 static int test_client_hello_local_path(void) {
   uint8_t server_name[] = {'l', 'o', 'c', 'a', 'l', 'h', 'o', 's', 't'};
   uint8_t trust_anchors[] = {0xde, 0xad, 0xbe, 0xef};
@@ -381,6 +401,13 @@ static int test_client_hello_local_path(void) {
     return 1;
   }
 
+  uint8_t cert_leaf[32768] = {0};
+  size_t cert_leaf_len = copy_certificate_leaf_der(c, cert_leaf, sizeof cert_leaf);
+  if (cert_leaf_len != 1 || cert_leaf[0] != 0x42) {
+    fprintf(stderr, "copy_certificate_leaf_der failed\n");
+    return 1;
+  }
+
   uint8_t public_key[32] = {0};
   public_key[0] = 9;
   if (run_local_step(
@@ -402,6 +429,12 @@ static int test_client_hello_local_path(void) {
         build_certificate_verify(certificate_verify),
         7,
         "CertificateVerify") != 0) {
+    return 1;
+  }
+
+  uint8_t cv_input[256] = {0};
+  size_t cv_input_len = copy_certificate_verify_input(c, cv_input, sizeof cv_input);
+  if (expect_certificate_verify_input(cv_input, cv_input_len) != 0) {
     return 1;
   }
 
