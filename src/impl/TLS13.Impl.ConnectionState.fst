@@ -170,16 +170,11 @@ type handshake_message_storage = {
   client_hello_present: box bool;
   client_hello: IM.client_hello;
   server_hello: box (option IM.server_hello);
-  encrypted_extensions_present: box bool;
-  encrypted_extensions: IM.encrypted_extensions;
-  certificate_present: box bool;
-  certificate: IM.certificate_msg;
-  certificate_verify_present: box bool;
-  certificate_verify: IM.certificate_verify;
-  server_finished_present: box bool;
-  server_finished: IM.finished;
-  client_finished_present: box bool;
-  client_finished: IM.finished;
+  encrypted_extensions: box (option IM.encrypted_extensions);
+  certificate: box (option IM.certificate_msg);
+  certificate_verify: box (option IM.certificate_verify);
+  server_finished: box (option IM.finished);
+  client_finished: box (option IM.finished);
 }
 
 noeq
@@ -358,6 +353,14 @@ let lemma_x25519_shared_option_shape
   match TLS13.Crypto.Spec.x25519_shared sk pk with
   | Some _ -> ()
   | None -> ()
+
+let sizet_lte_plain (x:SZ.t) (y:SZ.t) : bool =
+  SZ.lte x y
+
+let lemma_sizet_lte_plain (x:SZ.t) (y:SZ.t)
+  : Lemma (sizet_lte_plain x y == (SZ.v x <= SZ.v y))
+=
+  ()
 
 noextract
 let endpoint_role_tag_matches (tag:U8.t) (role:CS.endpoint_role) : prop =
@@ -828,101 +831,56 @@ let server_hello_slot_exactly
           (match spec with | None -> true | Some _ -> false))
 
 let encrypted_extensions_slot_exactly
-  (present_box:box bool)
-  ([@@@mkey] l:IM.encrypted_extensions)
+  ([@@@mkey] slot:box (option IM.encrypted_extensions))
   (spec:option M.encrypted_extensions)
   : slprop =
-  exists* present alpn.
-    Box.pts_to present_box present **
-    V.pts_to l.IM.encrypted_extensions_alpn alpn **
-    pure (V.is_full_vec l.IM.encrypted_extensions_alpn /\
-          V.length l.IM.encrypted_extensions_alpn == IM.max_alpn_len /\
-          B.length alpn == IM.max_alpn_len /\
-          (if present then
-            match spec with
-            | Some m ->
-              IM.optional_byte_prefix_matches
-                l.IM.encrypted_extensions_has_alpn
-                alpn
-                l.IM.encrypted_extensions_alpn_len
-                m.M.negotiated_alpn
-            | None -> False
-          else
-            spec == None))
+  exists* stored.
+    Box.pts_to slot stored **
+    (match stored, spec with
+     | None, None -> pure True
+     | Some l, Some m -> IM.is_valid_encrypted_extensions l m
+     | _, _ -> pure False) **
+    pure ((match stored with | None -> true | Some _ -> false) ==
+          (match spec with | None -> true | Some _ -> false))
 
 let certificate_slot_exactly
-  (present_box:box bool)
-  ([@@@mkey] l:IM.certificate_msg)
+  ([@@@mkey] slot:box (option IM.certificate_msg))
   (spec:option M.certificate_msg)
   : slprop =
-  exists* present chain_bytes offsets lens.
-    Box.pts_to present_box present **
-    V.pts_to l.IM.certificate_msg_chain_bytes chain_bytes **
-    V.pts_to l.IM.certificate_msg_cert_offsets offsets **
-    V.pts_to l.IM.certificate_msg_cert_lens lens **
-    pure (V.is_full_vec l.IM.certificate_msg_chain_bytes /\
-          V.is_full_vec l.IM.certificate_msg_cert_offsets /\
-          V.is_full_vec l.IM.certificate_msg_cert_lens /\
-          V.length l.IM.certificate_msg_chain_bytes == IM.max_certificate_chain_bytes /\
-          V.length l.IM.certificate_msg_cert_offsets == IM.max_certificate_chain_entries /\
-          V.length l.IM.certificate_msg_cert_lens == IM.max_certificate_chain_entries /\
-          B.length chain_bytes == IM.max_certificate_chain_bytes /\
-          Seq.length offsets == IM.max_certificate_chain_entries /\
-          Seq.length lens == IM.max_certificate_chain_entries /\
-          (if present then
-            match spec with
-            | Some m ->
-              IM.certificate_chain_matches
-                chain_bytes
-                (SZ.v l.IM.certificate_msg_chain_bytes_len)
-                offsets
-                lens
-                (SZ.v l.IM.certificate_msg_cert_count)
-                m.M.chain
-            | None -> False
-          else
-            spec == None))
+  exists* stored.
+    Box.pts_to slot stored **
+    (match stored, spec with
+     | None, None -> pure True
+     | Some l, Some m -> IM.is_valid_certificate_msg l m
+     | _, _ -> pure False) **
+    pure ((match stored with | None -> true | Some _ -> false) ==
+          (match spec with | None -> true | Some _ -> false))
 
 let certificate_verify_slot_exactly
-  (present_box:box bool)
-  ([@@@mkey] l:IM.certificate_verify)
+  ([@@@mkey] slot:box (option IM.certificate_verify))
   (spec:option M.certificate_verify)
   : slprop =
-  exists* present signature.
-    Box.pts_to present_box present **
-    V.pts_to l.IM.certificate_verify_signature signature **
-    pure (V.is_full_vec l.IM.certificate_verify_signature /\
-          V.length l.IM.certificate_verify_signature == IM.max_signature_len /\
-          B.length signature == IM.max_signature_len /\
-          (if present then
-            match spec with
-            | Some m ->
-              IM.byte_prefix_matches
-                signature
-                l.IM.certificate_verify_signature_len
-                m.M.signature /\
-              IM.signature_scheme_matches l.IM.certificate_verify_scheme m.M.scheme
-            | None -> False
-          else
-            spec == None))
+  exists* stored.
+    Box.pts_to slot stored **
+    (match stored, spec with
+     | None, None -> pure True
+     | Some l, Some m -> IM.is_valid_certificate_verify l m
+     | _, _ -> pure False) **
+    pure ((match stored with | None -> true | Some _ -> false) ==
+          (match spec with | None -> true | Some _ -> false))
 
 let finished_slot_exactly
-  (present_box:box bool)
-  ([@@@mkey] l:IM.finished)
+  ([@@@mkey] slot:box (option IM.finished))
   (spec:option M.finished)
   : slprop =
-  exists* present verify_data.
-    Box.pts_to present_box present **
-    V.pts_to l.IM.finished_verify_data verify_data **
-    pure (V.is_full_vec l.IM.finished_verify_data /\
-          V.length l.IM.finished_verify_data == 32 /\
-          B.length verify_data == 32 /\
-          (if present then
-            match spec with
-            | Some m -> Seq.equal verify_data m.M.verify_data
-            | None -> False
-          else
-            spec == None))
+  exists* stored.
+    Box.pts_to slot stored **
+    (match stored, spec with
+     | None, None -> pure True
+     | Some l, Some m -> IM.is_valid_finished l m
+     | _, _ -> pure False) **
+    pure ((match stored with | None -> true | Some _ -> false) ==
+          (match spec with | None -> true | Some _ -> false))
 
 let handshake_messages_exactly
   ([@@@mkey] msgs:handshake_message_storage)
@@ -930,17 +888,11 @@ let handshake_messages_exactly
   : slprop =
   client_hello_slot_exactly msgs.client_hello_present msgs.client_hello hs.CS.hs_client_hello **
   server_hello_slot_exactly msgs.server_hello hs.CS.hs_server_hello **
-  encrypted_extensions_slot_exactly
-    msgs.encrypted_extensions_present
-    msgs.encrypted_extensions
-    hs.CS.hs_encrypted_extensions **
-  certificate_slot_exactly msgs.certificate_present msgs.certificate hs.CS.hs_certificate **
-  certificate_verify_slot_exactly
-    msgs.certificate_verify_present
-    msgs.certificate_verify
-    hs.CS.hs_certificate_verify **
-  finished_slot_exactly msgs.server_finished_present msgs.server_finished hs.CS.hs_server_finished **
-  finished_slot_exactly msgs.client_finished_present msgs.client_finished hs.CS.hs_client_finished
+  encrypted_extensions_slot_exactly msgs.encrypted_extensions hs.CS.hs_encrypted_extensions **
+  certificate_slot_exactly msgs.certificate hs.CS.hs_certificate **
+  certificate_verify_slot_exactly msgs.certificate_verify hs.CS.hs_certificate_verify **
+  finished_slot_exactly msgs.server_finished hs.CS.hs_server_finished **
+  finished_slot_exactly msgs.client_finished hs.CS.hs_client_finished
 
 let server_key_share_exactly
   ([@@@mkey] slot:optional_fixed_bytes)
@@ -1139,6 +1091,55 @@ fn copy_server_hello_prefix_to_transcript
   V.to_vec_pts_to dst
 }
 
+fn copy_array_to_transcript
+  (src:array U8.t)
+  (dst:V.vec U8.t)
+  (src_len:SZ.t)
+  (dst_offset:SZ.t)
+  requires ArrPts.pts_to src 'src_bytes **
+           V.pts_to dst 'dst_bytes **
+           pure (V.is_full_vec dst /\
+                 V.length dst == max_transcript_len /\
+                 B.length 'src_bytes == SZ.v src_len /\
+                 B.length 'dst_bytes == max_transcript_len /\
+                 Seq.length 'dst_bytes == max_transcript_len /\
+                 SZ.v dst_offset + SZ.v src_len <= max_transcript_len)
+  ensures ArrPts.pts_to src 'src_bytes **
+          V.pts_to dst
+            (Seq.append
+              (CL.raw_slice 'dst_bytes 0 (SZ.v dst_offset))
+              (Seq.append
+                'src_bytes
+                (CL.raw_slice
+                  'dst_bytes
+                  (SZ.v dst_offset + SZ.v src_len)
+                  max_transcript_len)))
+{
+  ArrPts.pts_to_len src;
+  V.to_array_pts_to dst;
+
+  assert (pure (SZ.fits max_transcript_len));
+  let dst_cap = SZ.uint_to_t max_transcript_len;
+  let src_slice = Slice.from_array src src_len;
+  let dst_slice = Slice.from_array (V.vec_to_array dst) dst_cap;
+
+  let dst_split = Slice.split dst_slice dst_offset;
+  let dst_insert_split = Slice.split (snd dst_split) src_len;
+
+  Slice.pts_to_len src_slice;
+  Slice.pts_to_len (fst dst_insert_split);
+  assert (pure (Slice.len src_slice == src_len));
+  assert (pure (Slice.len (fst dst_insert_split) == src_len));
+  Slice.copy (fst dst_insert_split) src_slice;
+
+  Slice.to_array src_slice;
+
+  Slice.join (fst dst_insert_split) (snd dst_insert_split) (snd dst_split);
+  Slice.join (fst dst_split) (snd dst_split) dst_slice;
+  Slice.to_array dst_slice;
+  V.to_vec_pts_to dst
+}
+
 let tls_decode_error : T.tls_error = T.AlertError T.DecodeError
 
 let tls_unexpected_message_error : T.tls_error = T.AlertError T.UnexpectedMessage
@@ -1275,6 +1276,39 @@ let received_server_hello_state
       msg in
   {
     CS.cs_model = CS.with_handshake_stage model0 hs1 CS.HsServerHelloReceived;
+    CS.cs_wire_log = {
+      CL.raw_sent = B.append st.CS.cs_wire_log.CL.raw_sent B.empty;
+      CL.raw_received = B.append st.CS.cs_wire_log.CL.raw_received raw_received;
+    };
+    CS.cs_event_log =
+      st.CS.cs_event_log @
+      [CS.ConnNetworkEvent {
+        CL.message_direction = CL.Received;
+        CL.message_value = M.TlsHandshake msg;
+      }];
+  }
+
+let received_encrypted_extensions_state
+  (st:CS.connection_state)
+  (ee:M.encrypted_extensions)
+  (raw_received:B.bytes)
+  : GTot CS.connection_state =
+  let model0 = st.CS.cs_model in
+  let hs0 = model0.CS.model_handshake in
+  let msg = M.EncryptedExtensions ee in
+  let model1 = {
+    model0 with
+      CS.model_record = {
+        model0.CS.model_record with
+          CS.record_read = R.next_seq model0.CS.model_record.CS.record_read;
+      };
+  } in
+  let hs1 =
+    CS.append_handshake_to_transcript
+      { hs0 with CS.hs_encrypted_extensions = Some ee }
+      msg in
+  {
+    CS.cs_model = CS.with_handshake_stage model1 hs1 CS.HsEncryptedExtensionsReceived;
     CS.cs_wire_log = {
       CL.raw_sent = B.append st.CS.cs_wire_log.CL.raw_sent B.empty;
       CL.raw_received = B.append st.CS.cs_wire_log.CL.raw_received raw_received;
@@ -1711,6 +1745,72 @@ let lemma_received_server_hello_state_evolves
     (received_server_hello_state st sh raw_received));
   assert (CS.connection_state_consistent
     (received_server_hello_state st sh raw_received))
+
+let lemma_received_encrypted_extensions_state_evolves
+  (st:CS.connection_state)
+  (ee:M.encrypted_extensions)
+  (raw_received:B.bytes)
+  : Lemma
+      (requires CS.connection_state_consistent st /\
+                st.CS.cs_model.CS.model_control ==
+                  CS.ControlHandshaking CS.HsServerHelloReceived /\
+                Some?
+                  st.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_handshake_traffic /\
+                CS.event_raw_delta_legal
+                  st.CS.cs_model
+                  (CS.ConnNetworkEvent {
+                    CL.message_direction = CL.Received;
+                    CL.message_value = M.TlsHandshake (M.EncryptedExtensions ee);
+                  })
+                  B.empty
+                  raw_received)
+      (ensures CS.connection_state_evolves
+                 st
+                 (received_encrypted_extensions_state st ee raw_received) /\
+               CS.connection_state_consistent
+                 (received_encrypted_extensions_state st ee raw_received) /\
+               CS.legal_connection_delta
+                 st
+                 {
+                   CS.delta_event =
+                     CS.ConnNetworkEvent {
+                       CL.message_direction = CL.Received;
+                       CL.message_value = M.TlsHandshake (M.EncryptedExtensions ee);
+                     };
+                   CS.delta_raw_sent = B.empty;
+                   CS.delta_raw_received = raw_received;
+                 }
+                 (received_encrypted_extensions_state st ee raw_received))
+=
+  let ev =
+    CS.ConnNetworkEvent {
+      CL.message_direction = CL.Received;
+      CL.message_value = M.TlsHandshake (M.EncryptedExtensions ee);
+    } in
+  let delta = {
+    CS.delta_event = ev;
+    CS.delta_raw_sent = B.empty;
+    CS.delta_raw_received = raw_received;
+  } in
+  assert (CS.legal_event st.CS.cs_model ev);
+  assert (CS.step_model st.CS.cs_model ev ==
+          Some (received_encrypted_extensions_state st ee raw_received).CS.cs_model);
+  assert (CS.legal_connection_delta
+    st
+    delta
+    (received_encrypted_extensions_state st ee raw_received));
+  assert (CS.connection_state_single_step
+    st
+    (received_encrypted_extensions_state st ee raw_received));
+  FStar.ReflexiveTransitiveClosure.closure_step
+    CS.connection_state_single_step
+    st
+    (received_encrypted_extensions_state st ee raw_received);
+  assert (CS.connection_state_evolves
+    st
+    (received_encrypted_extensions_state st ee raw_received));
+  assert (CS.connection_state_consistent
+    (received_encrypted_extensions_state st ee raw_received))
 
 let lemma_received_alert_failure_state_evolves
   (st:CS.connection_state)
@@ -3228,6 +3328,173 @@ fn try_install_server_handshake_traffic_keys
   }
 }
 
+fn can_receive_encrypted_extensions
+  (c:connection_state)
+  (#ee:erased M.encrypted_extensions)
+  (fragment_len:SZ.t)
+  (#st0:erased CS.connection_state)
+  requires connection_exactly c st0
+  returns ok: bool
+  ensures connection_exactly c st0 **
+          pure (ok ==>
+            st0.CS.cs_model.CS.model_control ==
+              CS.ControlHandshaking CS.HsServerHelloReceived /\
+            st0.CS.cs_model.CS.model_handshake.CS.hs_encrypted_extensions == None /\
+            Some?
+              st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_handshake_traffic /\
+            U64.fits (st0.CS.cs_model.CS.model_record.CS.record_read.R.seq + 1) /\
+            B.length st0.CS.cs_model.CS.model_handshake.CS.hs_transcript +
+              SZ.v fragment_len <= max_transcript_len /\
+            CS.legal_event
+              st0.CS.cs_model
+              (CS.ConnNetworkEvent {
+                CL.message_direction = CL.Received;
+                CL.message_value = M.TlsHandshake (M.EncryptedExtensions ee);
+              }))
+{
+  unfold (connection_exactly c st0);
+  unfold (connection_model_exactly c st0.CS.cs_model);
+  unfold (control_exactly c.control st0.CS.cs_model.CS.model_control st0.CS.cs_model.CS.model_failure);
+  unfold (record_layer_exactly c.records st0.CS.cs_model.CS.model_record);
+  unfold (handshake_exactly c.handshake st0.CS.cs_model.CS.model_handshake);
+  unfold (handshake_messages_exactly c.handshake.messages st0.CS.cs_model.CS.model_handshake);
+  unfold (encrypted_extensions_slot_exactly
+    c.handshake.messages.encrypted_extensions
+    st0.CS.cs_model.CS.model_handshake.CS.hs_encrypted_extensions);
+  unfold (sized_bytes_exactly
+    c.handshake.transcript
+    max_transcript_len
+    st0.CS.cs_model.CS.model_handshake.CS.hs_transcript);
+  unfold (key_schedule_exactly
+    c.handshake.keys
+    st0.CS.cs_model.CS.model_handshake.CS.hs_keys);
+  unfold (traffic_key_material_exactly
+    c.handshake.keys.server_handshake_traffic
+    st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_handshake_traffic);
+
+  let tag = !c.control.control_tag;
+  let stage = !c.control.handshake_stage_tag;
+  let tag_ok = tag = 1uy;
+  let stage_ok = stage = 3uy;
+
+  with stored_ee. assert (Box.pts_to c.handshake.messages.encrypted_extensions stored_ee);
+  let stored = !c.handshake.messages.encrypted_extensions;
+  let no_encrypted_extensions = (
+    match stored with
+    | None -> true
+    | Some _ -> false);
+  assert (pure (stored == stored_ee));
+  assert (pure (no_encrypted_extensions ==> stored == None));
+  assert (pure (no_encrypted_extensions ==> stored_ee == None));
+  assert (pure (no_encrypted_extensions ==>
+    st0.CS.cs_model.CS.model_handshake.CS.hs_encrypted_extensions == None));
+
+  with transcript_storage transcript_len. assert (pure True);
+  let current_transcript_len = !c.handshake.transcript.len;
+  assert (pure (current_transcript_len == transcript_len));
+
+  with server_hs_present.
+    assert (Box.pts_to c.handshake.keys.server_handshake_traffic.present server_hs_present);
+  with server_hs_secret.
+    assert (V.pts_to c.handshake.keys.server_handshake_traffic.traffic_secret server_hs_secret);
+  with server_hs_key.
+    assert (V.pts_to c.handshake.keys.server_handshake_traffic.traffic_key server_hs_key);
+  with server_hs_iv.
+    assert (V.pts_to c.handshake.keys.server_handshake_traffic.traffic_iv server_hs_iv);
+  let has_server_handshake_keys = !c.handshake.keys.server_handshake_traffic.present;
+  assert (pure (has_server_handshake_keys == server_hs_present));
+
+  let seq_ok = Rec.can_advance_seq c.records.read;
+
+  assert (pure (SZ.fits max_transcript_len));
+  let max_len = SZ.uint_to_t max_transcript_len;
+  let fragment_fits = SZ.lte fragment_len max_len;
+  if fragment_fits {
+    let max_start = SZ.sub max_len fragment_len;
+    let transcript_room = sizet_lte_plain current_transcript_len max_start;
+    lemma_sizet_lte_plain current_transcript_len max_start;
+
+    let control_ok = tag_ok && stage_ok;
+    let ok =
+      control_ok &&
+      no_encrypted_extensions &&
+      has_server_handshake_keys &&
+      seq_ok &&
+      transcript_room;
+
+    assert (pure (ok ==> U8.v tag == 1));
+    assert (pure (ok ==> U8.v stage == 3));
+    assert (pure (ok ==>
+      st0.CS.cs_model.CS.model_control ==
+        CS.ControlHandshaking CS.HsServerHelloReceived));
+    assert (pure (ok ==> st0.CS.cs_model.CS.model_handshake.CS.hs_encrypted_extensions == None));
+    assert (pure (ok ==> server_hs_present));
+    assert (pure (ok ==> Some?
+      st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_handshake_traffic));
+    assert (pure (ok ==> U64.fits (st0.CS.cs_model.CS.model_record.CS.record_read.R.seq + 1)));
+    assert (pure (ok ==> B.length st0.CS.cs_model.CS.model_handshake.CS.hs_transcript ==
+      SZ.v current_transcript_len));
+    assert (pure (ok ==> SZ.v current_transcript_len <= SZ.v max_start));
+    assert (pure (ok ==> SZ.v current_transcript_len + SZ.v fragment_len <= max_transcript_len));
+    assert (pure (ok ==> B.length st0.CS.cs_model.CS.model_handshake.CS.hs_transcript +
+      SZ.v fragment_len <= max_transcript_len));
+    assert (pure (ok ==> CS.legal_event
+      st0.CS.cs_model
+      (CS.ConnNetworkEvent {
+        CL.message_direction = CL.Received;
+        CL.message_value = M.TlsHandshake (M.EncryptedExtensions ee);
+      })));
+
+    fold (traffic_key_material_exactly
+      c.handshake.keys.server_handshake_traffic
+      st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_handshake_traffic);
+    fold (key_schedule_exactly
+      c.handshake.keys
+      st0.CS.cs_model.CS.model_handshake.CS.hs_keys);
+    fold (sized_bytes_exactly
+      c.handshake.transcript
+      max_transcript_len
+      st0.CS.cs_model.CS.model_handshake.CS.hs_transcript);
+    fold (encrypted_extensions_slot_exactly
+      c.handshake.messages.encrypted_extensions
+      st0.CS.cs_model.CS.model_handshake.CS.hs_encrypted_extensions);
+    fold (handshake_messages_exactly c.handshake.messages st0.CS.cs_model.CS.model_handshake);
+    fold (handshake_exactly c.handshake st0.CS.cs_model.CS.model_handshake);
+    fold (record_layer_exactly c.records st0.CS.cs_model.CS.model_record);
+    fold (control_exactly
+      c.control
+      st0.CS.cs_model.CS.model_control
+      st0.CS.cs_model.CS.model_failure);
+    fold (connection_model_exactly c st0.CS.cs_model);
+    fold (connection_exactly c st0);
+    ok
+  } else {
+    fold (traffic_key_material_exactly
+      c.handshake.keys.server_handshake_traffic
+      st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_handshake_traffic);
+    fold (key_schedule_exactly
+      c.handshake.keys
+      st0.CS.cs_model.CS.model_handshake.CS.hs_keys);
+    fold (sized_bytes_exactly
+      c.handshake.transcript
+      max_transcript_len
+      st0.CS.cs_model.CS.model_handshake.CS.hs_transcript);
+    fold (encrypted_extensions_slot_exactly
+      c.handshake.messages.encrypted_extensions
+      st0.CS.cs_model.CS.model_handshake.CS.hs_encrypted_extensions);
+    fold (handshake_messages_exactly c.handshake.messages st0.CS.cs_model.CS.model_handshake);
+    fold (handshake_exactly c.handshake st0.CS.cs_model.CS.model_handshake);
+    fold (record_layer_exactly c.records st0.CS.cs_model.CS.model_record);
+    fold (control_exactly
+      c.control
+      st0.CS.cs_model.CS.model_control
+      st0.CS.cs_model.CS.model_failure);
+    fold (connection_model_exactly c st0.CS.cs_model);
+    fold (connection_exactly c st0);
+    false
+  }
+}
+
 fn can_receive_close_notify
   (c:connection_state)
   (#st0:erased CS.connection_state)
@@ -3729,6 +3996,214 @@ fn mark_received_server_hello
   fold (connection_exactly
     c
     (received_server_hello_state st0 sh (Ghost.reveal 'raw_bytes)))
+}
+
+fn mark_received_encrypted_extensions
+  (c:connection_state)
+  (raw:array U8.t)
+  (fragment:array U8.t)
+  (fragment_len:SZ.t)
+  (lee:IM.encrypted_extensions)
+  (#ee:erased M.encrypted_extensions)
+  (#st0:erased CS.connection_state)
+  requires connection_exactly c st0 **
+           Pulse.Lib.Array.PtsTo.pts_to raw 'raw_bytes **
+           Pulse.Lib.Array.PtsTo.pts_to fragment 'fragment_bytes **
+           IM.is_valid_encrypted_extensions lee ee **
+           pure (st0.CS.cs_model.CS.model_control ==
+                    CS.ControlHandshaking CS.HsServerHelloReceived /\
+                  st0.CS.cs_model.CS.model_handshake.CS.hs_encrypted_extensions == None /\
+                  Some?
+                    st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_handshake_traffic /\
+                  U64.fits (st0.CS.cs_model.CS.model_record.CS.record_read.R.seq + 1) /\
+                  B.length 'fragment_bytes == SZ.v fragment_len /\
+                  Seq.equal
+                    (Ghost.reveal 'fragment_bytes)
+                    (W.serialize_handshake (M.EncryptedExtensions ee)) /\
+                  B.length st0.CS.cs_model.CS.model_handshake.CS.hs_transcript +
+                    SZ.v fragment_len <= max_transcript_len /\
+                  CS.event_raw_delta_legal
+                    st0.CS.cs_model
+                    (CS.ConnNetworkEvent {
+                      CL.message_direction = CL.Received;
+                      CL.message_value = M.TlsHandshake (M.EncryptedExtensions ee);
+                    })
+                    B.empty
+                    (Ghost.reveal 'raw_bytes))
+  ensures connection_exactly
+            c
+            (received_encrypted_extensions_state st0 ee (Ghost.reveal 'raw_bytes)) **
+          Pulse.Lib.Array.PtsTo.pts_to raw 'raw_bytes **
+          Pulse.Lib.Array.PtsTo.pts_to fragment 'fragment_bytes
+{
+  assert (pure (st0.CS.cs_model.CS.model_control ==
+    CS.ControlHandshaking CS.HsServerHelloReceived));
+  assert (pure (st0.CS.cs_model.CS.model_handshake.CS.hs_encrypted_extensions == None));
+  assert (pure (Some?
+    st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_handshake_traffic));
+  assert (pure (U64.fits (st0.CS.cs_model.CS.model_record.CS.record_read.R.seq + 1)));
+  assert (pure (CS.event_raw_delta_legal
+    st0.CS.cs_model
+    (CS.ConnNetworkEvent {
+      CL.message_direction = CL.Received;
+      CL.message_value = M.TlsHandshake (M.EncryptedExtensions ee);
+    })
+    B.empty
+    (Ghost.reveal 'raw_bytes)));
+
+  unfold (connection_exactly c st0);
+  unfold (connection_model_exactly c st0.CS.cs_model);
+  unfold (control_exactly c.control st0.CS.cs_model.CS.model_control st0.CS.cs_model.CS.model_failure);
+  unfold (record_layer_exactly c.records st0.CS.cs_model.CS.model_record);
+  unfold (handshake_exactly c.handshake st0.CS.cs_model.CS.model_handshake);
+
+  c.control.handshake_stage_tag := 4uy;
+  assert (pure (control_state_matches
+    1uy
+    4uy
+    false
+    0uy
+    0uy
+    (CS.ControlHandshaking CS.HsEncryptedExtensionsReceived)));
+  fold (control_exactly
+    c.control
+    (CS.ControlHandshaking CS.HsEncryptedExtensionsReceived)
+    st0.CS.cs_model.CS.model_failure);
+
+  Rec.advance_seq c.records.read;
+  fold (record_layer_exactly
+    c.records
+    { st0.CS.cs_model.CS.model_record with
+        CS.record_read = R.next_seq st0.CS.cs_model.CS.model_record.CS.record_read });
+
+  unfold (handshake_messages_exactly c.handshake.messages st0.CS.cs_model.CS.model_handshake);
+  unfold (encrypted_extensions_slot_exactly
+    c.handshake.messages.encrypted_extensions
+    st0.CS.cs_model.CS.model_handshake.CS.hs_encrypted_extensions);
+  with stored_encrypted_extensions. _;
+  drop_ (match stored_encrypted_extensions, st0.CS.cs_model.CS.model_handshake.CS.hs_encrypted_extensions with
+    | None, None -> pure True
+    | Some old_l, Some old_m -> IM.is_valid_encrypted_extensions old_l old_m
+    | _, _ -> pure False);
+  c.handshake.messages.encrypted_extensions := Some lee;
+  fold (encrypted_extensions_slot_exactly
+    c.handshake.messages.encrypted_extensions
+    (Some (Ghost.reveal ee)));
+
+  unfold (sized_bytes_exactly
+    c.handshake.transcript
+    max_transcript_len
+    st0.CS.cs_model.CS.model_handshake.CS.hs_transcript);
+  with old_transcript_storage old_transcript_len. _;
+  let transcript_len = !c.handshake.transcript.len;
+  assert (pure (transcript_len == old_transcript_len));
+  assert (pure (SZ.v transcript_len ==
+    B.length st0.CS.cs_model.CS.model_handshake.CS.hs_transcript));
+  assert (pure (SZ.v transcript_len + SZ.v fragment_len <= max_transcript_len));
+
+  copy_array_to_transcript
+    fragment
+    c.handshake.transcript.bytes
+    fragment_len
+    transcript_len;
+
+  with copied_transcript_storage.
+    assert (V.pts_to c.handshake.transcript.bytes copied_transcript_storage);
+  assert (pure (SZ.fits (SZ.v transcript_len + SZ.v fragment_len)));
+  let new_transcript_len = SZ.add transcript_len fragment_len;
+  c.handshake.transcript.len := new_transcript_len;
+
+  assert (pure (Seq.equal
+    (Ghost.reveal 'fragment_bytes)
+    (W.serialize_handshake (M.EncryptedExtensions ee))));
+  assert (pure (Seq.equal
+    (B.append
+      st0.CS.cs_model.CS.model_handshake.CS.hs_transcript
+      (Ghost.reveal 'fragment_bytes))
+    (B.append
+      st0.CS.cs_model.CS.model_handshake.CS.hs_transcript
+      (W.serialize_handshake (M.EncryptedExtensions ee)))));
+
+  fold (sized_bytes_exactly
+    c.handshake.transcript
+    max_transcript_len
+    (B.append
+      st0.CS.cs_model.CS.model_handshake.CS.hs_transcript
+      (W.serialize_handshake (M.EncryptedExtensions ee))));
+
+  assert (pure ((received_encrypted_extensions_state st0 ee (Ghost.reveal 'raw_bytes)).CS.cs_model.CS.model_handshake.CS.hs_start ==
+    st0.CS.cs_model.CS.model_handshake.CS.hs_start));
+  assert (pure ((received_encrypted_extensions_state st0 ee (Ghost.reveal 'raw_bytes)).CS.cs_model.CS.model_handshake.CS.hs_server_hello ==
+    st0.CS.cs_model.CS.model_handshake.CS.hs_server_hello));
+  assert (pure ((received_encrypted_extensions_state st0 ee (Ghost.reveal 'raw_bytes)).CS.cs_model.CS.model_handshake.CS.hs_validated_peer ==
+    st0.CS.cs_model.CS.model_handshake.CS.hs_validated_peer));
+  assert (pure ((received_encrypted_extensions_state st0 ee (Ghost.reveal 'raw_bytes)).CS.cs_model.CS.model_handshake.CS.hs_buffers ==
+    st0.CS.cs_model.CS.model_handshake.CS.hs_buffers));
+  assert (pure ((received_encrypted_extensions_state st0 ee (Ghost.reveal 'raw_bytes)).CS.cs_model.CS.model_handshake.CS.hs_keys ==
+    st0.CS.cs_model.CS.model_handshake.CS.hs_keys));
+  assert (pure ((received_encrypted_extensions_state st0 ee (Ghost.reveal 'raw_bytes)).CS.cs_model.CS.model_handshake.CS.hs_certificate_verify_verified ==
+    st0.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify_verified));
+  assert (pure ((received_encrypted_extensions_state st0 ee (Ghost.reveal 'raw_bytes)).CS.cs_model.CS.model_handshake.CS.hs_server_finished_verified ==
+    st0.CS.cs_model.CS.model_handshake.CS.hs_server_finished_verified));
+  assert (pure ((received_encrypted_extensions_state st0 ee (Ghost.reveal 'raw_bytes)).CS.cs_model.CS.model_handshake.CS.hs_client_hello ==
+    st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello));
+  assert (pure ((received_encrypted_extensions_state st0 ee (Ghost.reveal 'raw_bytes)).CS.cs_model.CS.model_handshake.CS.hs_certificate ==
+    st0.CS.cs_model.CS.model_handshake.CS.hs_certificate));
+  assert (pure ((received_encrypted_extensions_state st0 ee (Ghost.reveal 'raw_bytes)).CS.cs_model.CS.model_handshake.CS.hs_certificate_verify ==
+    st0.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify));
+  assert (pure ((received_encrypted_extensions_state st0 ee (Ghost.reveal 'raw_bytes)).CS.cs_model.CS.model_handshake.CS.hs_server_finished ==
+    st0.CS.cs_model.CS.model_handshake.CS.hs_server_finished));
+  assert (pure ((received_encrypted_extensions_state st0 ee (Ghost.reveal 'raw_bytes)).CS.cs_model.CS.model_handshake.CS.hs_client_finished ==
+    st0.CS.cs_model.CS.model_handshake.CS.hs_client_finished));
+
+  rewrite (handshake_start_exactly
+    c.handshake.start
+    st0.CS.cs_model.CS.model_handshake.CS.hs_start)
+    as (handshake_start_exactly
+      c.handshake.start
+      (received_encrypted_extensions_state st0 ee (Ghost.reveal 'raw_bytes)).CS.cs_model.CS.model_handshake.CS.hs_start);
+  unfold (server_key_share_exactly c.handshake.server_key_share st0.CS.cs_model.CS.model_handshake);
+  fold (server_key_share_exactly
+    c.handshake.server_key_share
+    (received_encrypted_extensions_state st0 ee (Ghost.reveal 'raw_bytes)).CS.cs_model.CS.model_handshake);
+  rewrite (peer_exactly
+    c.handshake.validated_peer
+    st0.CS.cs_model.CS.model_handshake.CS.hs_validated_peer)
+    as (peer_exactly
+      c.handshake.validated_peer
+      (received_encrypted_extensions_state st0 ee (Ghost.reveal 'raw_bytes)).CS.cs_model.CS.model_handshake.CS.hs_validated_peer);
+  rewrite (handshake_buffers_exactly
+    c.handshake.buffers
+    st0.CS.cs_model.CS.model_handshake.CS.hs_buffers)
+    as (handshake_buffers_exactly
+      c.handshake.buffers
+      (received_encrypted_extensions_state st0 ee (Ghost.reveal 'raw_bytes)).CS.cs_model.CS.model_handshake.CS.hs_buffers);
+  rewrite (key_schedule_exactly
+    c.handshake.keys
+    st0.CS.cs_model.CS.model_handshake.CS.hs_keys)
+    as (key_schedule_exactly
+      c.handshake.keys
+      (received_encrypted_extensions_state st0 ee (Ghost.reveal 'raw_bytes)).CS.cs_model.CS.model_handshake.CS.hs_keys);
+  fold (handshake_messages_exactly
+    c.handshake.messages
+    (received_encrypted_extensions_state st0 ee (Ghost.reveal 'raw_bytes)).CS.cs_model.CS.model_handshake);
+  fold (handshake_exactly
+    c.handshake
+    (received_encrypted_extensions_state st0 ee (Ghost.reveal 'raw_bytes)).CS.cs_model.CS.model_handshake);
+  fold (connection_model_exactly
+    c
+    (received_encrypted_extensions_state st0 ee (Ghost.reveal 'raw_bytes)).CS.cs_model);
+
+  lemma_received_encrypted_extensions_state_evolves
+    st0
+    ee
+    (Ghost.reveal 'raw_bytes);
+  MR.update
+    c.ghost_state
+    (received_encrypted_extensions_state st0 ee (Ghost.reveal 'raw_bytes));
+  fold (connection_exactly
+    c
+    (received_encrypted_extensions_state st0 ee (Ghost.reveal 'raw_bytes)))
 }
 
 fn mark_received_application_data

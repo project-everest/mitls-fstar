@@ -215,8 +215,8 @@ let parsed_message_wire_success_for
     True
   | L.LTlsHandshake (L.LClientHello _), _ ->
     False
-  | L.LTlsHandshake (L.LEncryptedExtensions _), M.TlsHandshake (M.EncryptedExtensions _) ->
-    True
+  | L.LTlsHandshake (L.LEncryptedExtensions _), M.TlsHandshake (M.EncryptedExtensions ee) ->
+    Seq.equal fragment (WS.serialize_handshake (M.EncryptedExtensions ee))
   | L.LTlsHandshake (L.LEncryptedExtensions _), _ ->
     False
   | L.LTlsHandshake (L.LCertificate _), M.TlsHandshake (M.Certificate _) ->
