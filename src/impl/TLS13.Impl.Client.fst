@@ -17,6 +17,13 @@ module P = TLS13.Impl.Parser
 module SZ = FStar.SizeT
 module U8 = FStar.UInt8
 
+fn new_client_default ()
+  returns c:client
+  ensures C.connection_exactly c C.default_initial_state
+{
+  C.new_client_default ()
+}
+
 fn process_network_event
   (c:client)
   (content_type:U8.t)

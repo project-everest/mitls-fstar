@@ -22,6 +22,10 @@ noextract
 let client_state_ref (c:client) : C.state_ref =
   C.connection_state_ref c
 
+fn new_client_default ()
+  returns c:client
+  ensures C.connection_exactly c C.default_initial_state
+
 fn process_network_event
   (c:client)
   (content_type:U8.t)
