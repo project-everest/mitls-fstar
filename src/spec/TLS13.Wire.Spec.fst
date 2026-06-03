@@ -693,6 +693,14 @@ let serialize_server_certificate_verify_input (transcript_hash:B.bytes) : GTot B
   then H.certificate_verify_input transcript_hash
   else B.empty
 
+let lemma_serialize_server_certificate_verify_input_len32
+  (transcript_hash:B.bytes{B.length transcript_hash == 32})
+  : Lemma (Seq.equal
+      (serialize_server_certificate_verify_input transcript_hash)
+      (H.certificate_verify_input transcript_hash))
+=
+  ()
+
 let parse_record (input:B.bytes) : GTot (option (T.content_type & M.sealed_record & nat)) =
   if B.length input < 5 then None
   else

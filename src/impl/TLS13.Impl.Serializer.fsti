@@ -42,7 +42,11 @@ fn build_server_certificate_verify_input
   ensures exists* out_bytes.
           pts_to transcript_hash 'hash_bytes **
           pts_to out out_bytes **
-          pure (B.length out_bytes == 130)
+          pure (B.length out_bytes == 130 /\
+                B.length 'hash_bytes == 32 /\
+                Seq.equal
+                  (Ghost.reveal out_bytes)
+                  (WS.serialize_server_certificate_verify_input (Ghost.reveal 'hash_bytes)))
 
 fn serialize_client_hello_record_header
   (out: array U8.t)

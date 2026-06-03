@@ -1,6 +1,7 @@
 module TLS13.Wire.Spec
 
 module B = TLS13.Bytes
+module H = TLS13.Handshake.Spec
 module M = TLS13.Messages
 module Seq = FStar.Seq
 module SHC = TLS13.ServerHello.Checks
@@ -139,6 +140,12 @@ val lemma_serialize_server_hello_len:
 val serialize_server_certificate_verify_input:
   transcript_hash:B.bytes ->
   GTot B.bytes
+
+val lemma_serialize_server_certificate_verify_input_len32:
+  transcript_hash:B.bytes{B.length transcript_hash == 32} ->
+  Lemma (Seq.equal
+    (serialize_server_certificate_verify_input transcript_hash)
+    (H.certificate_verify_input transcript_hash))
 
 val parse_record:
   input:B.bytes ->

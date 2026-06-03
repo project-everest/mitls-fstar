@@ -249,8 +249,8 @@ let parsed_message_wire_success_for
     Seq.equal fragment (WS.serialize_handshake (M.Certificate cert))
   | L.LTlsHandshake (L.LCertificate _), _ ->
     False
-  | L.LTlsHandshake (L.LCertificateVerify _), M.TlsHandshake (M.CertificateVerify _) ->
-    True
+  | L.LTlsHandshake (L.LCertificateVerify _), M.TlsHandshake (M.CertificateVerify cv) ->
+    Seq.equal fragment (WS.serialize_handshake (M.CertificateVerify cv))
   | L.LTlsHandshake (L.LCertificateVerify _), _ ->
     False
   | L.LTlsHandshake (L.LFinished _), M.TlsHandshake (M.Finished _) ->
