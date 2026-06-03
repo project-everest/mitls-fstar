@@ -697,18 +697,110 @@ fn handle_handshake_message
           }
         }
         L.LFinished lfin -> {
-          handle_unexpected_handshake_input
-            c
+          with m. assert (pure True);
+          unfold (L.is_valid_tls_message (L.LTlsHandshake (L.LFinished lfin)) m);
+          with mhs. _;
+          assert (pure (m == M.TlsHandshake mhs));
+          unfold (L.is_valid_handshake_msg (L.LFinished lfin) mhs);
+          with fin. _;
+          assert (pure (mhs == M.Finished fin));
+          assert (pure (m == M.TlsHandshake (M.Finished fin)));
+          assert (pure (CT.parsed_message_wire_success_for
             content_type
+            (Ghost.reveal 'fragment_bytes)
             (L.LTlsHandshake (L.LFinished lfin))
-            raw
-            raw_len
-            fragment
-            fragment_len
-            network_out
-            network_out_len
-            app_out
-            app_out_len
+            (M.TlsHandshake (M.Finished fin))));
+          assert (pure (CT.wire_parse_success
+            content_type
+            (Ghost.reveal 'fragment_bytes)
+            (M.TlsHandshake (M.Finished fin))));
+          assert (pure (CT.received_tls_raw_delta_legal
+            'st0
+            (M.TlsHandshake (M.Finished fin))
+            (Ghost.reveal 'raw_bytes)));
+
+          let ready = C.can_receive_server_finished c #fin;
+          if ready {
+            C.mark_received_server_finished c raw lfin #fin;
+            let resp = {
+              CT.network_out_len = 0sz;
+              CT.app_out_len = 0sz;
+              CT.status = CT.StepOk;
+            };
+            Seq.lemma_len_slice 'old_network_out 0 0;
+            Seq.lemma_eq_intro B.empty (Seq.slice 'old_network_out 0 0);
+            assert (pure (Seq.equal B.empty (CT.response_network_out resp 'old_network_out)));
+            C.lemma_received_server_finished_state_evolves
+              'st0
+              fin
+              (Ghost.reveal 'raw_bytes);
+            assert (pure (CT.legal_received_tls_response
+              'st0
+              (C.received_server_finished_state 'st0 fin (Ghost.reveal 'raw_bytes))
+              resp
+              (M.TlsHandshake (M.Finished fin))
+              (Ghost.reveal 'raw_bytes)
+              'old_network_out
+              'old_app_out));
+            assert (pure (CT.legal_handled_tls_response
+              'st0
+              (C.received_server_finished_state 'st0 fin (Ghost.reveal 'raw_bytes))
+              resp
+              (M.TlsHandshake (M.Finished fin))
+              (Ghost.reveal 'raw_bytes)
+              'old_network_out
+              'old_app_out));
+            CT.lemma_legal_network_response_handled_from_parse_success
+              'st0
+              (C.received_server_finished_state 'st0 fin (Ghost.reveal 'raw_bytes))
+              resp
+              content_type
+              (Ghost.reveal 'fragment_bytes)
+              (M.TlsHandshake (M.Finished fin))
+              (Ghost.reveal 'raw_bytes)
+              'old_network_out
+              'old_app_out;
+            assert (pure (CT.some_legal_response
+              'st0
+              (C.received_server_finished_state 'st0 fin (Ghost.reveal 'raw_bytes))
+              resp
+              'old_network_out
+              'old_app_out));
+            resp
+          } else {
+            L.free_finished lfin;
+            C.mark_unexpected_message c;
+            let resp = {
+              CT.network_out_len = 0sz;
+              CT.app_out_len = 0sz;
+              CT.status = CT.IllegalTransition;
+            };
+            Seq.lemma_len_slice 'old_network_out 0 0;
+            Seq.lemma_eq_intro B.empty (Seq.slice 'old_network_out 0 0);
+            assert (pure (Seq.equal B.empty (CT.response_network_out resp 'old_network_out)));
+            assert (pure (CT.unexpected_message_response
+              'st0
+              (C.local_fail_state 'st0 C.tls_unexpected_message_error)
+              resp
+              'old_network_out
+              'old_app_out));
+            CT.lemma_legal_network_response_unexpected_from_parse_success
+              'st0
+              (C.local_fail_state 'st0 C.tls_unexpected_message_error)
+              resp
+              content_type
+              (Ghost.reveal 'fragment_bytes)
+              (Ghost.reveal 'raw_bytes)
+              'old_network_out
+              'old_app_out;
+            assert (pure (CT.some_legal_response
+              'st0
+              (C.local_fail_state 'st0 C.tls_unexpected_message_error)
+              resp
+              'old_network_out
+              'old_app_out));
+            resp
+          }
         }
       }
     }
