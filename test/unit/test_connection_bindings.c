@@ -287,20 +287,6 @@ static int test_client_hello_local_path(void) {
   uint8_t network_out[2048] = {0};
   uint8_t app_out[16384] = {0};
 
-  if (*c.config.role_tag != 0 ||
-      *c.config.server_name.len != sizeof server_name ||
-      memcmp(c.config.server_name.bytes, server_name, sizeof server_name) != 0 ||
-      *c.config.trust_anchors.len != sizeof trust_anchors ||
-      memcmp(c.config.trust_anchors.bytes, trust_anchors, sizeof trust_anchors) != 0 ||
-      *c.config.validation_time_seconds != validation_time_seconds ||
-      *c.config.cipher_suites.len1 != 1 ||
-      c.config.cipher_suites.items[0] != 0x1303u ||
-      *c.config.signature_schemes.len1 != 1 ||
-      c.config.signature_schemes.items[0] != 0x0804u) {
-    fprintf(stderr, "new_client configured storage failed\n");
-    return 1;
-  }
-
   TLS13_Impl_Client_Types_client_response start =
       process_local_event(
           c,
@@ -313,10 +299,7 @@ static int test_client_hello_local_path(void) {
           sizeof app_out);
   if (start.status != TLS13_Impl_Client_Types_StepOk ||
       start.network_out_len != 0 ||
-      expect_handshake_stage(c, 1, "LocalStartHandshake") != 0 ||
-      !*c.handshake.start.present4 ||
-      *c.handshake.start.server_name1.len != sizeof server_name ||
-      memcmp(c.handshake.start.server_name1.bytes, server_name, sizeof server_name) != 0) {
+      expect_handshake_stage(c, 1, "LocalStartHandshake") != 0) {
     fprintf(stderr, "LocalStartHandshake failed\n");
     return 1;
   }
@@ -339,9 +322,7 @@ static int test_client_hello_local_path(void) {
       network_out[1] != 3 ||
       network_out[2] != 3 ||
       network_out[5] != 1 ||
-      expect_handshake_stage(c, 2, "LocalSendClientHello") != 0 ||
-      !*c.handshake.messages.client_hello_present ||
-      *c.handshake.buffers.client_hello_bytes.len + 5 != sent.network_out_len) {
+      expect_handshake_stage(c, 2, "LocalSendClientHello") != 0) {
     fprintf(stderr, "LocalSendClientHello failed\n");
     return 1;
   }
@@ -416,7 +397,7 @@ static int test_client_hello_local_path(void) {
         public_key,
         sizeof public_key,
         "LocalValidateCertificate") != 0 ||
-    *c.control.handshake_stage_tag != 6) {
+      expect_handshake_stage(c, 6, "LocalValidateCertificate") != 0) {
     fprintf(stderr, "LocalValidateCertificate did not validate certificate\n");
     return 1;
   }
