@@ -382,6 +382,20 @@ static int drive_handshake(driver_state *d) {
   return 1;
 }
 
+static int run_pending_local_actions(driver_state *d) {
+  for (size_t i = 0; i < 100u; ++i) {
+    bool progress = false;
+    if (run_one_local_action(d, &progress) != 0) {
+      return 1;
+    }
+    if (!progress) {
+      return 0;
+    }
+  }
+  fprintf(stderr, "too many pending local actions\n");
+  return 1;
+}
+
 static int send_application_data(driver_state *d, const uint8_t *payload, size_t payload_len) {
   memset(d->network_out, 0, sizeof d->network_out);
   memset(d->app_out, 0, sizeof d->app_out);
@@ -429,6 +443,9 @@ static int receive_expected_echo(driver_state *d, const uint8_t *expected, size_
       continue;
     }
     if (rc != 0) {
+      return 1;
+    }
+    if (!saw_expected && run_pending_local_actions(d) != 0) {
       return 1;
     }
   }

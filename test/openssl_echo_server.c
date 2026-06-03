@@ -123,6 +123,7 @@ int main(int argc, char **argv) {
 
   uint8_t buf[4096];
   bool saw_data = false;
+  bool requested_key_update = false;
   for (;;) {
     int n = SSL_read(ssl, buf, sizeof buf);
     if (n <= 0) {
@@ -139,6 +140,14 @@ int main(int argc, char **argv) {
       goto done;
     }
     saw_data = true;
+    if (!requested_key_update) {
+      if (SSL_key_update(ssl, SSL_KEY_UPDATE_REQUESTED) != 1 ||
+          SSL_do_handshake(ssl) != 1) {
+        ERR_print_errors_fp(stderr);
+        goto done;
+      }
+      requested_key_update = true;
+    }
     int written = 0;
     while (written < n) {
       int m = SSL_write(ssl, buf + written, n - written);
