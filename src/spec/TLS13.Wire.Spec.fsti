@@ -61,6 +61,10 @@ val parse_finished:
   input:B.bytes ->
   GTot (option M.finished)
 
+val parse_key_update:
+  input:B.bytes ->
+  GTot (option M.key_update_request)
+
 val parse_handshake:
   input:B.bytes ->
   GTot (option (M.handshake_msg & nat))

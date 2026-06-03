@@ -303,6 +303,10 @@ let parsed_message_wire_success_for
     True
   | L.LTlsIgnoredPostHandshake _, _ ->
     False
+  | L.LTlsKeyUpdate req_wire, M.TlsKeyUpdate req ->
+    L.key_update_request_matches req_wire req
+  | L.LTlsKeyUpdate _, _ ->
+    False
   | L.LTlsApplicationData _, M.TlsApplicationData _ ->
     True
   | L.LTlsApplicationData _, _ ->

@@ -72,6 +72,19 @@ type traffic_key_material = {
   traffic_iv: C.aead_nonce;
 }
 
+let traffic_key_material_for_secret (secret:K.traffic_secret) : traffic_key_material =
+  {
+    traffic_secret = secret;
+    traffic_key = K.derive_aead_key secret;
+    traffic_iv = K.derive_aead_iv secret;
+  }
+
+let updated_traffic_key_material
+  (old:traffic_key_material)
+  : traffic_key_material =
+  traffic_key_material_for_secret
+    (K.application_traffic_secret_update old.traffic_secret)
+
 type key_schedule_state = {
   ks_early_secret: option C.secret;
   ks_shared_secret: option C.x25519_shared_secret;
@@ -509,6 +522,7 @@ let step_tls_message
   (dir:direction)
   (msg:M.tls_message)
   : GTot (option connection_model) =
+  let hs = model.model_handshake in
   match msg, model.model_control with
   | M.TlsHandshake handshake_msg, _ -> step_handshake_message model dir handshake_msg
   | M.TlsApplicationData bytes, ControlApplicationData ->
@@ -548,6 +562,32 @@ let step_tls_message
           };
        }
      | CL.Sent -> None)
+  | M.TlsKeyUpdate M.UpdateNotRequested, ControlApplicationData ->
+    (match dir, hs.hs_keys.ks_server_application_traffic with
+     | CL.Received, Some old_server_app ->
+      let new_server_app = updated_traffic_key_material old_server_app in
+      Some {
+        model with
+          model_record = {
+            model.model_record with
+              record_read =
+                R.install_keys
+                  (R.next_seq model.model_record.record_read)
+                  R.Application
+                  new_server_app.traffic_key
+                  new_server_app.traffic_iv;
+          };
+          model_handshake = {
+            hs with
+              hs_keys = {
+                hs.hs_keys with
+                  ks_server_application_traffic = Some new_server_app;
+              };
+          };
+      }
+     | _, _ -> None)
+  | M.TlsKeyUpdate M.UpdateRequested, ControlApplicationData ->
+    None
   | M.TlsAlert T.CloseNotify, ControlApplicationData ->
     (match dir with
      | CL.Sent ->
@@ -639,13 +679,6 @@ let client_hello_matches_start (start:handshake_start) (ch:M.client_hello) : pro
   Seq.equal ch.M.key_share start.start_client_key_share_public /\
   ch.M.cipher_suites == start.start_cipher_suites /\
   ch.M.signature_schemes == start.start_signature_schemes
-
-let traffic_key_material_for_secret (secret:K.traffic_secret) : traffic_key_material =
-  {
-    traffic_secret = secret;
-    traffic_key = K.derive_aead_key secret;
-    traffic_iv = K.derive_aead_iv secret;
-  }
 
 let expected_traffic_secret
   (hs:handshake_state)
@@ -781,6 +814,10 @@ let legal_tls_message
      | CL.Received -> Some? hs.hs_keys.ks_server_application_traffic)
   | M.TlsIgnoredPostHandshake _, ControlApplicationData ->
     dir == CL.Received /\ Some? hs.hs_keys.ks_server_application_traffic
+  | M.TlsKeyUpdate M.UpdateNotRequested, ControlApplicationData ->
+    dir == CL.Received /\ Some? hs.hs_keys.ks_server_application_traffic
+  | M.TlsKeyUpdate M.UpdateRequested, ControlApplicationData ->
+    False
   | M.TlsAlert T.CloseNotify, ControlApplicationData ->
     True
   | M.TlsAlert T.CloseNotify, ControlClosing ->

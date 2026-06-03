@@ -64,6 +64,12 @@ let label_key : B.bytes =
 let label_iv : B.bytes =
   Seq.upd (Seq.upd (B.zeros 2) 0 0x69uy) 1 0x76uy
 
+let label_traffic_update : B.bytes =
+  Seq.upd (Seq.upd (Seq.upd (Seq.upd (Seq.upd (Seq.upd
+  (Seq.upd (Seq.upd (Seq.upd (Seq.upd (Seq.upd (B.zeros 11)
+    0 0x74uy) 1 0x72uy) 2 0x61uy) 3 0x66uy) 4 0x66uy) 5 0x69uy)
+    6 0x63uy) 7 0x20uy) 8 0x75uy) 9 0x70uy) 10 0x64uy
+
 let zero_secret : C.secret = B.zeros 32
 
 let empty_hash : C.digest32 = C.sha256 B.empty
@@ -110,6 +116,11 @@ let server_application_traffic_secret
   (transcript_hash:B.bytes)
   : traffic_secret =
   derive_secret master label_s_ap_traffic transcript_hash
+
+let application_traffic_secret_update
+  (old_secret:B.bytes)
+  : traffic_secret =
+  C.hkdf_expand_label old_secret label_traffic_update B.empty 32
 
 let exporter_master_secret
   (master:B.bytes)

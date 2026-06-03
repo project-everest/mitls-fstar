@@ -443,7 +443,13 @@ static inline size_t TLS13_Connection_Backend_serialize_client_finished_outputs(
     } else if ((content_type) == 22u && (input_len) >= 4u) { \
       uint8_t _ht = (input)[0]; \
       size_t _hlen = TLS13_Connection_Backend_read_u24((input) + 1u); \
-      if (_ht == 4u && _hlen + 4u == (input_len)) { \
+      if (_ht == 24u && _hlen == 1u && _hlen + 4u == (input_len) && (input)[4u] <= 1u) { \
+        _r.tag = FStar_Pervasives_Native_Some; \
+        _r.v = (TLS13_Impl_Messages_tls_message){ \
+          .tag = TLS13_Impl_Messages_LTlsKeyUpdate, \
+          { .case_LTlsKeyUpdate = (input)[4u] } \
+        }; \
+      } else if (_ht == 4u && _hlen + 4u == (input_len)) { \
         uint8_t *_body = (input) + 4u; \
         uint8_t *_ticket = TLS13_Connection_Backend_dup_bytes(_body, _hlen); \
         if (_ticket != NULL) { \

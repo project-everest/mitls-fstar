@@ -45,6 +45,10 @@ type handshake_msg =
   | Finished of finished
   | HelloRetryRequest
 
+type key_update_request =
+  | UpdateNotRequested
+  | UpdateRequested
+
 type plaintext = {
   content_type: T.content_type;
   fragment: B.bytes;
@@ -58,6 +62,7 @@ type tls_message =
   | TlsAlert of T.alert_description
   | TlsChangeCipherSpec
   | TlsIgnoredPostHandshake of B.bytes
+  | TlsKeyUpdate of key_update_request
 
 type tls_record = {
   record_outer_type: T.content_type;

@@ -28,6 +28,8 @@ noextract
 let label_key_seq : B.bytes = K.label_key
 noextract
 let label_iv_seq : B.bytes = K.label_iv
+noextract
+let label_traffic_update_seq : B.bytes = K.label_traffic_update
 
 inline_for_extraction
 fn write_label_derived (lbl: array U8.t)
@@ -175,6 +177,27 @@ fn write_label_iv (lbl: array U8.t)
   with s. assert (pts_to lbl s);
   assert_norm (s == label_iv_seq);
   assert (pure (s == label_iv_seq));
+}
+
+inline_for_extraction
+fn write_label_traffic_update (lbl: array U8.t)
+  requires pts_to lbl (Seq.create 11 0uy)
+  ensures pts_to lbl label_traffic_update_seq
+{
+  lbl.(0sz) <- 0x74uy;
+  lbl.(1sz) <- 0x72uy;
+  lbl.(2sz) <- 0x61uy;
+  lbl.(3sz) <- 0x66uy;
+  lbl.(4sz) <- 0x66uy;
+  lbl.(5sz) <- 0x69uy;
+  lbl.(6sz) <- 0x63uy;
+  lbl.(7sz) <- 0x20uy;
+  lbl.(8sz) <- 0x75uy;
+  lbl.(9sz) <- 0x70uy;
+  lbl.(10sz) <- 0x64uy;
+  with s. assert (pts_to lbl s);
+  assert_norm (s == label_traffic_update_seq);
+  assert (pure (s == label_traffic_update_seq));
 }
 
 inline_for_extraction
@@ -346,6 +369,22 @@ fn finished_verify_data
   let mut finished_key = [| 0uy; 32sz |];
   Crypto.hkdf_expand_label_empty_context base_key lbl 8sz finished_key 32sz;
   Crypto.hmac_sha256 finished_key 32sz transcript_hash 32sz out;
+}
+
+fn application_traffic_secret_update
+  (old_secret: array U8.t)
+  (out: array U8.t)
+  requires pts_to old_secret 'old_secret_bytes **
+           pts_to out 'old **
+           pure (B.length 'old_secret_bytes == 32 /\
+                 B.length 'old == 32)
+  ensures pts_to old_secret 'old_secret_bytes **
+          pts_to out (K.application_traffic_secret_update
+                        (Ghost.reveal 'old_secret_bytes))
+{
+  let mut lbl = [| 0uy; 11sz |];
+  write_label_traffic_update lbl;
+  Crypto.hkdf_expand_label_empty_context old_secret lbl 11sz out 32sz;
 }
 
 fn derive_traffic_key

@@ -104,6 +104,17 @@ fn server_application_traffic_secret
                         (Ghost.reveal 'master_bytes)
                         (Ghost.reveal 'hash_bytes))
 
+fn application_traffic_secret_update
+  (old_secret: array U8.t)
+  (out: array U8.t)
+  requires pts_to old_secret 'old_secret_bytes **
+          pts_to out 'old **
+          pure (B.length 'old_secret_bytes == 32 /\
+                B.length 'old == 32)
+  ensures pts_to old_secret 'old_secret_bytes **
+          pts_to out (K.application_traffic_secret_update
+                       (Ghost.reveal 'old_secret_bytes))
+
 fn finished_verify_data
   (base_key: array U8.t)
   (transcript_hash: array U8.t)

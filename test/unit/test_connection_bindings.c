@@ -275,6 +275,41 @@ static int receive_close_notify(
   return 0;
 }
 
+static int receive_key_update_not_requested(
+    TLS13_Impl_ConnectionState_connection_state c) {
+  uint8_t key_update[] = {24, 0, 0, 1, 0};
+  uint8_t raw[16] = {0};
+  uint8_t network_out[2048] = {0};
+  uint8_t app_out[16384] = {0};
+  size_t raw_len =
+      build_protected_plaintext_record(
+          raw,
+          sizeof raw,
+          key_update,
+          sizeof key_update,
+          22);
+  TLS13_Impl_Client_Types_client_buffer_response buffer_resp =
+      process_network_bytes(
+          c,
+          raw,
+          raw_len,
+          network_out,
+          sizeof network_out,
+          app_out,
+          sizeof app_out);
+  TLS13_Impl_Client_Types_client_response resp = buffer_resp.response;
+  if (expect_step_ok(resp, "KeyUpdate-not-requested") != 0 ||
+      buffer_resp.consumed_len != raw_len ||
+      resp.network_out_len != 0 ||
+      resp.app_out_len != 0 ||
+      expect_control_tag(c, 2, "KeyUpdate-not-requested") != 0 ||
+      expect_no_next_action(c, "KeyUpdate-not-requested next action") != 0) {
+    fprintf(stderr, "KeyUpdate-not-requested failed\n");
+    return 1;
+  }
+  return 0;
+}
+
 static int test_network_buffer_decode_error(void) {
   TLS13_Impl_ConnectionState_connection_state c = new_client_default();
   uint8_t invalid_record_prefix[1] = {0xff};
@@ -766,6 +801,10 @@ static int test_client_hello_local_path(void) {
         expected_app,
         expected_app_lens,
         sizeof expected_app / sizeof expected_app[0]) != 0) {
+    return 1;
+  }
+
+  if (receive_key_update_not_requested(c) != 0) {
     return 1;
   }
 

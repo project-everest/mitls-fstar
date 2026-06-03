@@ -132,6 +132,7 @@ type tls_message =
   | LTlsAlert of U8.t
   | LTlsChangeCipherSpec
   | LTlsIgnoredPostHandshake of application_data
+  | LTlsKeyUpdate of U8.t
 
 let tls_message_is_handshake (l:tls_message) : bool =
   match l with
@@ -158,13 +159,19 @@ let tls_message_is_ignored_post_handshake (l:tls_message) : bool =
   | LTlsIgnoredPostHandshake _ -> true
   | _ -> false
 
+let tls_message_is_key_update (l:tls_message) : bool =
+  match l with
+  | LTlsKeyUpdate _ -> true
+  | _ -> false
+
 let lemma_tls_message_classifier_complete (l:tls_message)
   : Lemma (
       tls_message_is_handshake l \/
       tls_message_is_application_data l \/
       tls_message_is_alert l \/
       tls_message_is_change_cipher_spec l \/
-      tls_message_is_ignored_post_handshake l)
+      tls_message_is_ignored_post_handshake l \/
+      tls_message_is_key_update l)
   =
   match l with
   | LTlsHandshake _ -> ()
@@ -172,6 +179,7 @@ let lemma_tls_message_classifier_complete (l:tls_message)
   | LTlsAlert _ -> ()
   | LTlsChangeCipherSpec -> ()
   | LTlsIgnoredPostHandshake _ -> ()
+  | LTlsKeyUpdate _ -> ()
 
 noeq
 type tls_record = {
@@ -231,6 +239,12 @@ let alert_description_matches (wire:U8.t) (alert:T.alert_description) : prop =
   | T.UnsupportedExtension -> U8.v wire == 110
   | T.CertificateUnknown -> U8.v wire == 46
   | T.IllegalParameter -> U8.v wire == 47
+
+noextract
+let key_update_request_matches (wire:U8.t) (req:M.key_update_request) : prop =
+  match req with
+  | M.UpdateNotRequested -> U8.v wire == 0
+  | M.UpdateRequested -> U8.v wire == 1
 
 let alert_description_of_wire_or_unexpected
   (wire:U8.t)
@@ -553,6 +567,8 @@ let is_valid_tls_message ([@@@mkey] l:tls_message) (m:M.tls_message) : slprop =
     pure (m == M.TlsChangeCipherSpec)
   | LTlsIgnoredPostHandshake lignored ->
     exists* body. is_valid_application_data lignored body ** pure (m == M.TlsIgnoredPostHandshake body)
+  | LTlsKeyUpdate lreq ->
+    exists* req. pure (key_update_request_matches lreq req /\ m == M.TlsKeyUpdate req)
 
 let is_valid_tls_record ([@@@mkey] l:tls_record) (m:M.tls_record) : slprop =
   is_valid_sealed_record l.tls_record_fragment m.M.record_fragment **
@@ -699,6 +715,10 @@ fn free_tls_message
       unfold (is_valid_tls_message (LTlsIgnoredPostHandshake lignored) m);
       with body. _;
       free_application_data lignored
+    }
+    LTlsKeyUpdate lreq -> {
+      unfold (is_valid_tls_message (LTlsKeyUpdate lreq) m);
+      with req. _
     }
     LTlsAlert lalert -> {
       unfold (is_valid_tls_message (LTlsAlert lalert) m);

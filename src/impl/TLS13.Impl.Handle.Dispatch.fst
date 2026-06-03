@@ -186,6 +186,150 @@ fn dispatch_network_event
               app_out_len;
           resp
         }
+        L.LTlsKeyUpdate lreq -> {
+          with m. assert (pure True);
+          unfold (L.is_valid_tls_message (L.LTlsKeyUpdate lreq) m);
+          with req. _;
+          assert (pure (m == M.TlsKeyUpdate req));
+          assert (pure (CT.parsed_message_wire_success_for
+            content_type
+            (Ghost.reveal 'fragment_bytes)
+            (L.LTlsKeyUpdate lreq)
+            (M.TlsKeyUpdate req)));
+          assert (pure (CT.wire_parse_success
+            content_type
+            (Ghost.reveal 'fragment_bytes)
+            (M.TlsKeyUpdate req)));
+          assert (pure (CT.received_tls_raw_delta_legal
+            'st0
+            (M.TlsKeyUpdate req)
+            (Ghost.reveal 'raw_bytes)));
+          let not_requested = lreq = 0uy;
+          if not_requested {
+            assert (pure (L.key_update_request_matches lreq req));
+            assert (pure (req == M.UpdateNotRequested));
+            assert (pure (CT.wire_parse_success
+              content_type
+              (Ghost.reveal 'fragment_bytes)
+              (M.TlsKeyUpdate M.UpdateNotRequested)));
+            assert (pure (CT.received_tls_raw_delta_legal
+              'st0
+              (M.TlsKeyUpdate M.UpdateNotRequested)
+              (Ghost.reveal 'raw_bytes)));
+            let ready = C.can_receive_application_data c;
+            if ready {
+              C.mark_received_key_update_not_requested c raw;
+              let resp = {
+                CT.network_out_len = 0sz;
+                CT.app_out_len = 0sz;
+                CT.status = CT.StepOk;
+              };
+              Seq.lemma_len_slice 'old_network_out 0 0;
+              Seq.lemma_eq_intro B.empty (Seq.slice 'old_network_out 0 0);
+              assert (pure (Seq.equal B.empty (CT.response_network_out resp 'old_network_out)));
+              C.lemma_received_key_update_not_requested_state_evolves
+                'st0
+                (Ghost.reveal 'raw_bytes);
+              assert (pure (CT.legal_received_tls_response
+                'st0
+                (C.received_key_update_not_requested_state 'st0 (Ghost.reveal 'raw_bytes))
+                resp
+                (M.TlsKeyUpdate M.UpdateNotRequested)
+                (Ghost.reveal 'raw_bytes)
+                'old_network_out
+                'old_app_out));
+              assert (pure (CT.legal_handled_tls_response
+                'st0
+                (C.received_key_update_not_requested_state 'st0 (Ghost.reveal 'raw_bytes))
+                resp
+                (M.TlsKeyUpdate M.UpdateNotRequested)
+                (Ghost.reveal 'raw_bytes)
+                'old_network_out
+                'old_app_out));
+              CT.lemma_legal_network_response_handled_from_parse_success
+                'st0
+                (C.received_key_update_not_requested_state 'st0 (Ghost.reveal 'raw_bytes))
+                resp
+                content_type
+                (Ghost.reveal 'fragment_bytes)
+                (M.TlsKeyUpdate M.UpdateNotRequested)
+                (Ghost.reveal 'raw_bytes)
+                'old_network_out
+                'old_app_out;
+              assert (pure (CT.some_legal_response
+                'st0
+                (C.received_key_update_not_requested_state 'st0 (Ghost.reveal 'raw_bytes))
+                resp
+                'old_network_out
+                'old_app_out));
+              resp
+            } else {
+              C.mark_unexpected_message c;
+              let resp = {
+                CT.network_out_len = 0sz;
+                CT.app_out_len = 0sz;
+                CT.status = CT.IllegalTransition;
+              };
+              Seq.lemma_len_slice 'old_network_out 0 0;
+              Seq.lemma_eq_intro B.empty (Seq.slice 'old_network_out 0 0);
+              assert (pure (Seq.equal B.empty (CT.response_network_out resp 'old_network_out)));
+              assert (pure (CT.unexpected_message_response
+                'st0
+                (C.local_fail_state 'st0 C.tls_unexpected_message_error)
+                resp
+                'old_network_out
+                'old_app_out));
+              CT.lemma_legal_network_response_unexpected_from_parse_success
+                'st0
+                (C.local_fail_state 'st0 C.tls_unexpected_message_error)
+                resp
+                content_type
+                (Ghost.reveal 'fragment_bytes)
+                (Ghost.reveal 'raw_bytes)
+                'old_network_out
+                'old_app_out;
+              assert (pure (CT.some_legal_response
+                'st0
+                (C.local_fail_state 'st0 C.tls_unexpected_message_error)
+                resp
+                'old_network_out
+                'old_app_out));
+              resp
+            }
+          } else {
+            C.mark_unexpected_message c;
+            let resp = {
+              CT.network_out_len = 0sz;
+              CT.app_out_len = 0sz;
+              CT.status = CT.IllegalTransition;
+            };
+            Seq.lemma_len_slice 'old_network_out 0 0;
+            Seq.lemma_eq_intro B.empty (Seq.slice 'old_network_out 0 0);
+            assert (pure (Seq.equal B.empty (CT.response_network_out resp 'old_network_out)));
+            assert (pure (CT.unexpected_message_response
+              'st0
+              (C.local_fail_state 'st0 C.tls_unexpected_message_error)
+              resp
+              'old_network_out
+              'old_app_out));
+            CT.lemma_legal_network_response_unexpected_from_parse_success
+              'st0
+              (C.local_fail_state 'st0 C.tls_unexpected_message_error)
+              resp
+              content_type
+              (Ghost.reveal 'fragment_bytes)
+              (Ghost.reveal 'raw_bytes)
+              'old_network_out
+              'old_app_out;
+            assert (pure (CT.some_legal_response
+              'st0
+              (C.local_fail_state 'st0 C.tls_unexpected_message_error)
+              resp
+              'old_network_out
+              'old_app_out));
+            resp
+          }
+        }
         L.LTlsIgnoredPostHandshake lignored -> {
           with m. assert (pure True);
           unfold (L.is_valid_tls_message (L.LTlsIgnoredPostHandshake lignored) m);
