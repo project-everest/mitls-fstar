@@ -329,6 +329,21 @@ let lemma_optional_fixed_bytes_match_present_of_some
     | false -> ())
   | None -> ()
 
+let lemma_optional_fixed_bytes_match_present_iff
+  (present:bool)
+  (storage:B.bytes)
+  (n:nat)
+  (bytes:option (b:B.bytes{B.length b == n}))
+  : Lemma
+      (requires optional_fixed_bytes_match present storage n bytes)
+      (ensures present == Some? bytes)
+=
+  match present, bytes with
+  | true, Some b -> ()
+  | true, None -> ()
+  | false, Some b -> ()
+  | false, None -> ()
+
 let lemma_server_key_share_option_some
   (server:option M.server_hello)
   (storage:TLS13.Crypto.Spec.x25519_public)
@@ -529,6 +544,26 @@ type key_schedule_snapshot = {
   snapshot_client_application_traffic_present: bool;
   snapshot_server_application_traffic_present: bool;
 }
+
+noextract
+let key_schedule_snapshot_matches
+  (snapshot:key_schedule_snapshot)
+  (st:CS.connection_state)
+  : prop =
+  snapshot.snapshot_shared_secret_present ==
+    Some? st.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_shared_secret /\
+  snapshot.snapshot_handshake_secret_present ==
+    Some? st.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_handshake_secret /\
+  snapshot.snapshot_master_secret_present ==
+    Some? st.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_master_secret /\
+  snapshot.snapshot_client_handshake_traffic_present ==
+    Some? st.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_handshake_traffic /\
+  snapshot.snapshot_server_handshake_traffic_present ==
+    Some? st.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_handshake_traffic /\
+  snapshot.snapshot_client_application_traffic_present ==
+    Some? st.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_application_traffic /\
+  snapshot.snapshot_server_application_traffic_present ==
+    Some? st.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_application_traffic
 
 noextract
 let control_snapshot_matches
@@ -808,6 +843,30 @@ let lemma_traffic_key_material_match_present_of_some
       CS.traffic_iv = iv;
     })
   | None -> ()
+
+let lemma_traffic_key_material_match_present_iff
+  (present:bool)
+  (secret:B.bytes)
+  (key:B.bytes)
+  (iv:B.bytes)
+  (spec:option CS.traffic_key_material)
+  : Lemma
+      (requires (if present then
+                 match spec with
+                 | Some m ->
+                   Seq.equal secret m.CS.traffic_secret /\
+                   Seq.equal key m.CS.traffic_key /\
+                   Seq.equal iv m.CS.traffic_iv
+                 | None -> False
+               else
+                 spec == None))
+      (ensures present == Some? spec)
+=
+  match present, spec with
+  | true, Some m -> ()
+  | true, None -> ()
+  | false, Some m -> ()
+  | false, None -> ()
 
 let key_schedule_exactly
   ([@@@mkey] keys:key_schedule_storage)
@@ -5545,7 +5604,8 @@ fn get_key_schedule_snapshot
   (#st0:erased CS.connection_state)
   requires connection_exactly c st0
   returns snapshot:key_schedule_snapshot
-  ensures connection_exactly c st0
+  ensures connection_exactly c st0 **
+          pure (key_schedule_snapshot_matches snapshot st0)
 {
   unfold (connection_exactly c st0);
   unfold (connection_model_exactly c st0.CS.cs_model);
@@ -5575,6 +5635,92 @@ fn get_key_schedule_snapshot
     c.handshake.keys.server_application_traffic
     st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_application_traffic);
 
+  with shared_present_w shared_secret_bytes.
+    assert (Box.pts_to c.handshake.keys.shared_secret.present shared_present_w **
+            V.pts_to c.handshake.keys.shared_secret.secret shared_secret_bytes);
+  with handshake_present_w handshake_secret_bytes.
+    assert (Box.pts_to c.handshake.keys.handshake_secret.present handshake_present_w **
+            V.pts_to c.handshake.keys.handshake_secret.secret handshake_secret_bytes);
+  with master_present_w master_secret_bytes.
+    assert (Box.pts_to c.handshake.keys.master_secret.present master_present_w **
+            V.pts_to c.handshake.keys.master_secret.secret master_secret_bytes);
+  with client_hs_present_w client_hs_secret client_hs_key client_hs_iv.
+    assert (Box.pts_to c.handshake.keys.client_handshake_traffic.present client_hs_present_w **
+            V.pts_to c.handshake.keys.client_handshake_traffic.traffic_secret client_hs_secret **
+            V.pts_to c.handshake.keys.client_handshake_traffic.traffic_key client_hs_key **
+            V.pts_to c.handshake.keys.client_handshake_traffic.traffic_iv client_hs_iv);
+  with server_hs_present_w server_hs_secret server_hs_key server_hs_iv.
+    assert (Box.pts_to c.handshake.keys.server_handshake_traffic.present server_hs_present_w **
+            V.pts_to c.handshake.keys.server_handshake_traffic.traffic_secret server_hs_secret **
+            V.pts_to c.handshake.keys.server_handshake_traffic.traffic_key server_hs_key **
+            V.pts_to c.handshake.keys.server_handshake_traffic.traffic_iv server_hs_iv);
+  with client_app_present_w client_app_secret client_app_key client_app_iv.
+    assert (Box.pts_to c.handshake.keys.client_application_traffic.present client_app_present_w **
+            V.pts_to c.handshake.keys.client_application_traffic.traffic_secret client_app_secret **
+            V.pts_to c.handshake.keys.client_application_traffic.traffic_key client_app_key **
+            V.pts_to c.handshake.keys.client_application_traffic.traffic_iv client_app_iv);
+  with server_app_present_w server_app_secret server_app_key server_app_iv.
+    assert (Box.pts_to c.handshake.keys.server_application_traffic.present server_app_present_w **
+            V.pts_to c.handshake.keys.server_application_traffic.traffic_secret server_app_secret **
+            V.pts_to c.handshake.keys.server_application_traffic.traffic_key server_app_key **
+            V.pts_to c.handshake.keys.server_application_traffic.traffic_iv server_app_iv);
+
+  assert (pure (optional_fixed_bytes_match
+    shared_present_w
+    shared_secret_bytes
+    32
+    st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_shared_secret));
+  assert (pure (optional_fixed_bytes_match
+    handshake_present_w
+    handshake_secret_bytes
+    32
+    st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_handshake_secret));
+  assert (pure (optional_fixed_bytes_match
+    master_present_w
+    master_secret_bytes
+    32
+    st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_master_secret));
+  assert (pure (
+    if client_hs_present_w then
+      match st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_handshake_traffic with
+      | Some m ->
+        Seq.equal client_hs_secret m.CS.traffic_secret /\
+        Seq.equal client_hs_key m.CS.traffic_key /\
+        Seq.equal client_hs_iv m.CS.traffic_iv
+      | None -> False
+    else
+      st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_handshake_traffic == None));
+  assert (pure (
+    if server_hs_present_w then
+      match st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_handshake_traffic with
+      | Some m ->
+        Seq.equal server_hs_secret m.CS.traffic_secret /\
+        Seq.equal server_hs_key m.CS.traffic_key /\
+        Seq.equal server_hs_iv m.CS.traffic_iv
+      | None -> False
+    else
+      st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_handshake_traffic == None));
+  assert (pure (
+    if client_app_present_w then
+      match st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_application_traffic with
+      | Some m ->
+        Seq.equal client_app_secret m.CS.traffic_secret /\
+        Seq.equal client_app_key m.CS.traffic_key /\
+        Seq.equal client_app_iv m.CS.traffic_iv
+      | None -> False
+    else
+      st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_application_traffic == None));
+  assert (pure (
+    if server_app_present_w then
+      match st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_application_traffic with
+      | Some m ->
+        Seq.equal server_app_secret m.CS.traffic_secret /\
+        Seq.equal server_app_key m.CS.traffic_key /\
+        Seq.equal server_app_iv m.CS.traffic_iv
+      | None -> False
+    else
+      st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_application_traffic == None));
+
   let shared_secret_present = !c.handshake.keys.shared_secret.present;
   let handshake_secret_present = !c.handshake.keys.handshake_secret.present;
   let master_secret_present = !c.handshake.keys.master_secret.present;
@@ -5592,6 +5738,56 @@ fn get_key_schedule_snapshot
     snapshot_client_application_traffic_present = client_application_present;
     snapshot_server_application_traffic_present = server_application_present;
   };
+
+  assert (pure (shared_secret_present == shared_present_w));
+  assert (pure (handshake_secret_present == handshake_present_w));
+  assert (pure (master_secret_present == master_present_w));
+  assert (pure (client_handshake_present == client_hs_present_w));
+  assert (pure (server_handshake_present == server_hs_present_w));
+  assert (pure (client_application_present == client_app_present_w));
+  assert (pure (server_application_present == server_app_present_w));
+
+  lemma_optional_fixed_bytes_match_present_iff
+    shared_present_w
+    shared_secret_bytes
+    32
+    st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_shared_secret;
+  lemma_optional_fixed_bytes_match_present_iff
+    handshake_present_w
+    handshake_secret_bytes
+    32
+    st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_handshake_secret;
+  lemma_optional_fixed_bytes_match_present_iff
+    master_present_w
+    master_secret_bytes
+    32
+    st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_master_secret;
+  lemma_traffic_key_material_match_present_iff
+    client_hs_present_w
+    client_hs_secret
+    client_hs_key
+    client_hs_iv
+    st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_handshake_traffic;
+  lemma_traffic_key_material_match_present_iff
+    server_hs_present_w
+    server_hs_secret
+    server_hs_key
+    server_hs_iv
+    st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_handshake_traffic;
+  lemma_traffic_key_material_match_present_iff
+    client_app_present_w
+    client_app_secret
+    client_app_key
+    client_app_iv
+    st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_application_traffic;
+  lemma_traffic_key_material_match_present_iff
+    server_app_present_w
+    server_app_secret
+    server_app_key
+    server_app_iv
+    st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_application_traffic;
+
+  assert (pure (key_schedule_snapshot_matches snapshot st0));
 
   fold (traffic_key_material_exactly
     c.handshake.keys.server_application_traffic
