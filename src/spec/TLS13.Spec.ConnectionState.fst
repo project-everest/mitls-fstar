@@ -279,6 +279,27 @@ let rec advance_direction_records
   if n = 0 then st
   else R.next_seq (advance_direction_records st (n - 1))
 
+let install_client_application_write_after_finished
+  (record:record_layer_state)
+  (keys:key_schedule_state)
+  : record_layer_state =
+  match keys.ks_client_application_traffic with
+  | Some material ->
+    {
+      record with
+        record_write =
+          R.install_keys
+            (R.next_seq record.record_write)
+            R.Application
+            material.traffic_key
+            material.traffic_iv;
+    }
+  | None ->
+    {
+      record with
+        record_write = R.next_seq record.record_write;
+    }
+
 let traffic_record_epoch (epoch:traffic_epoch) : R.epoch =
   match epoch with
   | TrafficHandshake -> R.Handshake
@@ -472,9 +493,9 @@ let step_handshake_message
       model with
         model_control = ControlApplicationData;
         model_record =
-          { model.model_record with
-              record_write = R.next_seq model.model_record.record_write;
-          };
+          install_client_application_write_after_finished
+            model.model_record
+            hs.hs_keys;
         model_handshake =
           append_handshake_to_transcript { hs with hs_client_finished = Some fin } msg;
     }
@@ -726,6 +747,7 @@ let legal_handshake_message
   | CL.Received, M.Finished _, ControlHandshaking HsCertificateVerifyVerified ->
     Some? hs.hs_keys.ks_server_handshake_traffic
   | CL.Sent, M.Finished _, ControlHandshaking HsServerFinishedVerified ->
+    Some? hs.hs_keys.ks_client_handshake_traffic /\
     Some? hs.hs_keys.ks_client_application_traffic /\
     Some? hs.hs_keys.ks_server_application_traffic
   | CL.Received, M.HelloRetryRequest, ControlHandshaking HsClientHelloSent ->
@@ -989,6 +1011,43 @@ let raw_records_exactly
   Seq.equal parsed.CL.residual B.empty /\
   length parsed.CL.values == count /\
   all_records_outer_type outer parsed.CL.values
+
+let lemma_raw_records_exactly_single_serialized
+  (outer:T.content_type)
+  (fragment:B.bytes{B.length fragment <= 16640})
+  : Lemma
+      (raw_records_exactly (W.serialize_record outer fragment) outer 1)
+=
+  let raw = W.serialize_record outer fragment in
+  W.lemma_parse_record_serialize_record outer fragment;
+  CL.lemma_parse_record_prefix_serializes raw;
+  assert (B.length raw > 0);
+  assert (W.parse_record raw == Some (outer, fragment, B.length raw));
+  let rest = Seq.slice raw (B.length raw) (B.length raw) in
+  Seq.lemma_len_slice raw (B.length raw) (B.length raw);
+  assert (B.length rest == 0);
+  Seq.lemma_eq_intro rest B.empty;
+  assert (rest == B.empty);
+  assert (CL.parse_record_prefix_fuel (B.length raw) rest ==
+    CL.raw_record_stream_view rest);
+  assert (CL.raw_record_stream_view rest ==
+    { CL.values = []; CL.consumed = 0; CL.residual = rest });
+  assert (CL.record_stream_serializes raw (CL.parse_record_prefix raw));
+  assert (CL.parse_record_prefix raw ==
+    {
+      CL.values = [{ M.record_outer_type = outer; M.record_fragment = fragment }];
+      CL.consumed = B.length raw;
+      CL.residual = B.empty;
+    });
+  assert (length (CL.parse_record_prefix raw).CL.values == 1);
+  assert (all_records_outer_type outer (CL.parse_record_prefix raw).CL.values)
+
+let lemma_raw_application_data_record_exactly
+  (fragment:B.bytes{B.length fragment <= 16640})
+  : Lemma
+      (raw_records_exactly (W.serialize_record T.ApplicationData fragment) T.ApplicationData 1)
+=
+  lemma_raw_records_exactly_single_serialized T.ApplicationData fragment
 
 let serialized_cleartext_tls_message (msg:M.tls_message) : GTot B.bytes =
   let (content_type, fragment) = W.serialize_tls_message msg in

@@ -3,6 +3,7 @@ module TLS13.Wire.Spec
 module B = TLS13.Bytes
 module H = TLS13.Handshake.Spec
 module M = TLS13.Messages
+module ML = FStar.Math.Lemmas
 module Seq = FStar.Seq
 module SHC = TLS13.ServerHello.Checks
 module SP = FStar.Seq.Properties
@@ -12,6 +13,11 @@ module U8 = FStar.UInt8
 let byte (n:nat) : B.byte = U8.uint_to_t (n % 256)
 
 let nat_of_byte (b:B.byte) : GTot nat = U8.v b
+
+let lemma_byte_v (n:nat)
+  : Lemma (nat_of_byte (byte n) == n % 256)
+=
+  U8.vu_inv (n % 256)
 
 let u16 (n:nat) : GTot B.bytes =
   B.of_list [byte (n / 256); byte n]
@@ -36,6 +42,20 @@ let append6 (a b c d e f:B.bytes) : GTot B.bytes =
 let read_u16 (input:B.bytes) (pos:nat{pos + 2 <= B.length input}) : GTot nat =
   nat_of_byte (Seq.index input pos) * 256 +
   nat_of_byte (Seq.index input (pos + 1))
+
+let lemma_read_u16_u16 (n:nat{n <= 65535})
+  : Lemma (read_u16 (u16 n) 0 == n)
+=
+  lemma_byte_v (n / 256);
+  lemma_byte_v n;
+  ML.lemma_div_mod n 256;
+  ML.lemma_mod_lt n 256;
+  ML.lemma_div_lt n 16 8;
+  assert (n / 256 < 256);
+  ML.small_mod (n / 256) 256;
+  assert ((n / 256) % 256 == n / 256);
+  assert (n == 256 * (n / 256) + n % 256);
+  assert (read_u16 (u16 n) 0 == n)
 
 let lemma_read_u16_definition
   (input:B.bytes)
@@ -682,6 +702,13 @@ let serialize_handshake (msg:M.handshake_msg) : GTot B.bytes =
 let serialize_handshake_msg (msg:M.handshake_msg) : GTot B.bytes =
   serialize_handshake msg
 
+let lemma_serialize_finished_len (fin:M.finished)
+  : Lemma (B.length (serialize_finished fin) == 32 /\
+           B.length (serialize_handshake (M.Finished fin)) == 36 /\
+           B.length (serialize_handshake_msg (M.Finished fin)) == 36)
+=
+  ()
+
 let lemma_serialize_server_hello_len (sh:M.server_hello)
   : Lemma (B.length (serialize_handshake (M.ServerHello sh)) == 90 /\
            B.length (serialize_handshake_msg (M.ServerHello sh)) == 90)
@@ -746,6 +773,71 @@ let serialize_record (content_type:T.content_type) (fragment:B.bytes) : GTot B.b
     (u8 (content_type_to_byte content_type))
     (u16 0x0303)
     (B.append (u16 (B.length fragment)) fragment)
+
+let lemma_parse_record_serialize_record
+  (content_type:T.content_type)
+  (fragment:B.bytes{B.length fragment <= 16640})
+  : Lemma
+      (B.length (serialize_record content_type fragment) == 5 + B.length fragment /\
+       parse_record (serialize_record content_type fragment) ==
+        Some (content_type, fragment, B.length (serialize_record content_type fragment)))
+=
+  let ct = u8 (content_type_to_byte content_type) in
+  let ver = u16 0x0303 in
+  let lenb = u16 (B.length fragment) in
+  let tail2 = B.append lenb fragment in
+  let tail1 = B.append ver tail2 in
+  let raw = B.append ct tail1 in
+  assert (raw == serialize_record content_type fragment);
+  Seq.lemma_len_append ct tail1;
+  Seq.lemma_len_append ver tail2;
+  Seq.lemma_len_append lenb fragment;
+  assert (B.length ct == 1);
+  assert (B.length ver == 2);
+  assert (B.length lenb == 2);
+  assert (B.length raw == 5 + B.length fragment);
+
+  Seq.lemma_index_app1 ct tail1 0;
+  Seq.lemma_index_create 1 (byte (content_type_to_byte content_type)) 0;
+  assert (Seq.index raw 0 == byte (content_type_to_byte content_type));
+  lemma_byte_v (content_type_to_byte content_type);
+  (match content_type with
+   | T.ChangeCipherSpec -> ()
+   | T.Alert -> ()
+   | T.Handshake -> ()
+   | T.ApplicationData -> ());
+  assert (content_type_of_byte (Seq.index raw 0) == Some content_type);
+
+  Seq.lemma_index_app2 ct tail1 1;
+  Seq.lemma_index_app1 ver tail2 0;
+  Seq.lemma_index_app2 ct tail1 2;
+  Seq.lemma_index_app1 ver tail2 1;
+  lemma_read_u16_u16 0x0303;
+  assert (read_u16 raw 1 == read_u16 ver 0);
+  assert (read_u16 raw 1 == 0x0303);
+
+  Seq.lemma_index_app2 ct tail1 3;
+  Seq.lemma_index_app2 ver tail2 2;
+  Seq.lemma_index_app1 lenb fragment 0;
+  Seq.lemma_index_app2 ct tail1 4;
+  Seq.lemma_index_app2 ver tail2 3;
+  Seq.lemma_index_app1 lenb fragment 1;
+  lemma_read_u16_u16 (B.length fragment);
+  assert (read_u16 raw 3 == read_u16 lenb 0);
+  assert (read_u16 raw 3 == B.length fragment);
+
+  assert (B.length fragment <= 16384 + 256);
+  assert (5 + B.length fragment <= B.length raw);
+  let frag_slice = Seq.slice raw 5 (5 + B.length fragment) in
+  Seq.lemma_len_slice raw 5 (5 + B.length fragment);
+  assert (forall (i:nat{i < B.length fragment}).
+    Seq.index frag_slice i == Seq.index fragment i);
+  Seq.lemma_eq_intro frag_slice fragment;
+  assert (frag_slice == fragment);
+  assert (take_range raw 5 (B.length fragment) == Some frag_slice);
+  assert (take_range raw 5 (B.length fragment) == Some fragment);
+  assert (parse_record raw ==
+    Some (content_type, fragment, B.length raw))
 
 let parse_plaintext (input:B.bytes) : GTot (option M.plaintext) =
   if B.length input == 0 then None

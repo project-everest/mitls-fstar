@@ -132,6 +132,12 @@ val serialize_handshake_msg:
   msg:M.handshake_msg ->
   GTot B.bytes
 
+val lemma_serialize_finished_len:
+  fin:M.finished ->
+  Lemma (B.length (serialize_finished fin) == 32 /\
+         B.length (serialize_handshake (M.Finished fin)) == 36 /\
+         B.length (serialize_handshake_msg (M.Finished fin)) == 36)
+
 val lemma_serialize_server_hello_len:
   sh:M.server_hello ->
   Lemma (B.length (serialize_handshake (M.ServerHello sh)) == 90 /\
@@ -170,6 +176,14 @@ val serialize_record:
   content_type:T.content_type ->
   fragment:B.bytes ->
   GTot B.bytes
+
+val lemma_parse_record_serialize_record:
+  content_type:T.content_type ->
+  fragment:B.bytes{B.length fragment <= 16640} ->
+  Lemma
+    (B.length (serialize_record content_type fragment) == 5 + B.length fragment /\
+     parse_record (serialize_record content_type fragment) ==
+      Some (content_type, fragment, B.length (serialize_record content_type fragment)))
 
 val parse_plaintext:
   input:B.bytes ->

@@ -6,6 +6,7 @@ open Pulse.Lib.Pervasives
 open Pulse.Lib.Array.PtsTo
 
 module B = TLS13.Bytes
+module CS = TLS13.Spec.ConnectionState
 module L = TLS13.Impl.Messages
 module M = TLS13.Messages
 module Seq = FStar.Seq
@@ -106,6 +107,69 @@ fn serialize_application_data_header
   ensures exists* header_bytes.
           pts_to out header_bytes **
           pure (B.length header_bytes == 5)
+
+fn serialize_raw_application_data_record
+  (fragment: array U8.t)
+  (fragment_len: SZ.t)
+  (out: array U8.t)
+  (out_len: SZ.t)
+  requires pts_to fragment 'fragment_bytes **
+          pts_to out 'old_out **
+          pure (B.length 'old_out == SZ.v out_len /\
+                B.length 'fragment_bytes == SZ.v fragment_len /\
+                SZ.v fragment_len <= 16640 /\
+                SZ.v fragment_len + 5 <= SZ.v out_len)
+  returns written: (n:SZ.t{SZ.v n <= SZ.v out_len})
+  ensures exists* out_bytes.
+          pts_to fragment 'fragment_bytes **
+          pts_to out out_bytes **
+          pure (B.length out_bytes == SZ.v out_len /\
+               SZ.v written == SZ.v fragment_len + 5 /\
+               (let raw_prefix =
+                  Seq.slice out_bytes 0 (SZ.v written) in
+                Seq.equal raw_prefix (WS.serialize_record T.ApplicationData (Ghost.reveal 'fragment_bytes)) /\
+                CS.raw_records_exactly raw_prefix T.ApplicationData 1))
+
+fn serialize_client_finished_application_data_record
+  (#fin: M.finished)
+  (lfin: L.finished)
+  (out: array U8.t)
+  (out_len: SZ.t)
+  requires L.is_valid_finished lfin fin **
+           pts_to out 'old_out **
+           pure (B.length 'old_out == SZ.v out_len /\
+                58 <= SZ.v out_len)
+  returns written: (n:SZ.t{SZ.v n <= SZ.v out_len})
+  ensures exists* out_bytes.
+          L.is_valid_finished lfin fin **
+          pts_to out out_bytes **
+          pure (B.length out_bytes == SZ.v out_len /\
+                SZ.v written == 58 /\
+                (let raw_prefix = Seq.slice out_bytes 0 (SZ.v written) in
+                CS.raw_records_exactly raw_prefix T.ApplicationData 1))
+
+fn serialize_client_finished_outputs
+  (lfin: L.finished)
+  (handshake_out: array U8.t)
+  (network_out: array U8.t)
+  (network_out_len: SZ.t)
+  requires (exists* fin. L.is_valid_finished lfin fin) **
+           pts_to handshake_out 'old_handshake **
+           pts_to network_out 'old_network **
+           pure (B.length 'old_handshake == 36 /\
+                B.length 'old_network == SZ.v network_out_len /\
+                58 <= SZ.v network_out_len)
+  returns written: (n:SZ.t{SZ.v n <= SZ.v network_out_len})
+  ensures exists* fin handshake_bytes network_bytes.
+          L.is_valid_finished lfin fin **
+          pts_to handshake_out handshake_bytes **
+          pts_to network_out network_bytes **
+          pure (B.length handshake_bytes == 36 /\
+                Seq.equal handshake_bytes (WS.serialize_handshake (M.Finished fin)) /\
+                B.length network_bytes == SZ.v network_out_len /\
+                SZ.v written == 58 /\
+                (let raw_prefix = Seq.slice network_bytes 0 (SZ.v written) in
+                CS.raw_records_exactly raw_prefix T.ApplicationData 1))
 
 fn serialize_client_hello
   (#m: M.client_hello)
