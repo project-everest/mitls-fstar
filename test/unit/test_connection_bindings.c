@@ -432,6 +432,16 @@ static int test_client_hello_local_path(void) {
     return 1;
   }
 
+  uint8_t cv_signature[4096] = {0};
+  TLS13_Impl_ConnectionState_certificate_verify_signature_snapshot cv_sig =
+      copy_certificate_verify_signature(c, cv_signature, sizeof cv_signature);
+  if (cv_sig.cv_signature_scheme != 0x0804u ||
+      cv_sig.cv_signature_len != 1 ||
+      cv_signature[0] != 0x5a) {
+    fprintf(stderr, "copy_certificate_verify_signature failed\n");
+    return 1;
+  }
+
   uint8_t cv_input[256] = {0};
   size_t cv_input_len = copy_certificate_verify_input(c, cv_input, sizeof cv_input);
   if (expect_certificate_verify_input(cv_input, cv_input_len) != 0) {

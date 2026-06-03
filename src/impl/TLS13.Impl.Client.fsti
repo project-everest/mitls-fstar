@@ -10,6 +10,7 @@ module CS = TLS13.Spec.ConnectionState
 module C = TLS13.Impl.ConnectionState
 module CT = TLS13.Impl.Client.Types
 module L = TLS13.Impl.Messages
+module M = TLS13.Messages
 module Seq = FStar.Seq
 module SZ = FStar.SizeT
 module U8 = FStar.UInt8
@@ -98,6 +99,30 @@ fn copy_certificate_verify_input
                 | Some input ->
                   SZ.v copied_len == B.length input /\
                   Seq.equal (Seq.slice out_bytes 0 (SZ.v copied_len)) input
+                | None -> False))
+
+fn copy_certificate_verify_signature
+  (c:client)
+  (out:array U8.t)
+  (out_len:SZ.t)
+  requires C.connection_exactly c 'st0 **
+           pts_to out 'old_out **
+           pure (B.length 'old_out == SZ.v out_len /\
+                 L.max_signature_len <= SZ.v out_len /\
+                 Some? 'st0.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify)
+  returns snapshot:C.certificate_verify_signature_snapshot
+  ensures exists* out_bytes.
+          C.connection_exactly c 'st0 **
+          pts_to out out_bytes **
+          pure (B.length out_bytes == SZ.v out_len /\
+                SZ.v snapshot.C.cv_signature_len <= B.length out_bytes /\
+                (match 'st0.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify with
+                | Some cv ->
+                  L.signature_scheme_matches snapshot.C.cv_signature_scheme cv.M.scheme /\
+                  SZ.v snapshot.C.cv_signature_len == B.length cv.M.signature /\
+                  Seq.equal
+                    (Seq.slice out_bytes 0 (SZ.v snapshot.C.cv_signature_len))
+                    cv.M.signature
                 | None -> False))
 
 fn process_network_event
