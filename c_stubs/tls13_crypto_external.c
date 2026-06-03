@@ -38,6 +38,16 @@ void TLS13_Crypto_hmac_sha256(
   (void)tls13_hacl_hmac_sha256(out, key, key_len, msg, msg_len);
 }
 
+bool TLS13_Crypto_equal32(uint8_t *a, uint8_t *b, void *a_bytes, void *b_bytes) {
+  (void)a_bytes;
+  (void)b_bytes;
+  volatile uint8_t diff = 0;
+  for (size_t i = 0; i < 32u; ++i) {
+    diff = (uint8_t)(diff | (uint8_t)(a[i] ^ b[i]));
+  }
+  return diff == 0u;
+}
+
 void TLS13_Crypto_hkdf_extract(
     uint8_t *salt,
     size_t salt_len,

@@ -41,6 +41,8 @@ let tls_decode_error : T.tls_error = T.AlertError T.DecodeError
 
 let tls_unexpected_message_error : T.tls_error = T.AlertError T.UnexpectedMessage
 
+let tls_bad_finished_error : T.tls_error = T.BadFinished
+
 type local_event_kind =
   | LocalStartHandshake
   | LocalDeriveSharedSecret
@@ -454,6 +456,24 @@ let unexpected_message_response
     network_out
     app_out
 
+let bad_finished_response
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (resp:client_response)
+  (network_out:B.bytes)
+  (app_out:B.bytes)
+  : prop =
+  resp.status == ConnectionFailed /\
+  legal_response_for_event
+    st0
+    st1
+    resp
+    (CS.ConnLocalEvent (CS.LocalFail tls_bad_finished_error))
+    B.empty
+    B.empty
+    network_out
+    app_out
+
 let legal_handled_local_response
   (st0:CS.connection_state)
   (st1:CS.connection_state)
@@ -475,7 +495,8 @@ let legal_handled_local_response
        raw_received
        network_out
        app_out) \/
-  unexpected_message_response st0 st1 resp network_out app_out
+  unexpected_message_response st0 st1 resp network_out app_out \/
+  bad_finished_response st0 st1 resp network_out app_out
 
 let legal_handled_tls_response
   (st0:CS.connection_state)

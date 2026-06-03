@@ -48,6 +48,15 @@ fn hmac_sha256 (key: array U8.t) (key_len: SZ.t) (msg: array U8.t) (msg_len: SZ.
           pts_to msg 'msg_bytes **
           pts_to out (C.hmac_sha256 'key_bytes 'msg_bytes)
 
+fn equal32 (a: array U8.t) (b: array U8.t)
+  requires pts_to a 'a_bytes **
+           pts_to b 'b_bytes **
+           pure (B.length 'a_bytes == 32 /\ B.length 'b_bytes == 32)
+  returns ok: bool
+  ensures pts_to a 'a_bytes **
+          pts_to b 'b_bytes **
+          pure (ok <==> Seq.equal 'a_bytes 'b_bytes)
+
 fn hkdf_extract (salt: array U8.t) (salt_len: SZ.t) (ikm: array U8.t) (ikm_len: SZ.t) (out: array U8.t)
   requires pts_to salt 'salt_bytes **
            pts_to ikm 'ikm_bytes **

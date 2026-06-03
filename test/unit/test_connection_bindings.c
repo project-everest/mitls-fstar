@@ -1,6 +1,8 @@
 #include "TLS13_Impl_Client.h"
 #include "TLS13_Impl_Client_Types.h"
 #include "TLS13_Impl_ConnectionState.h"
+#include "TLS13_KeySchedule.h"
+#include "tls13_crypto_external.h"
 
 #include <stdint.h>
 #include <stdio.h>
@@ -426,12 +428,30 @@ static size_t build_certificate_verify(uint8_t out[9]) {
   return 9;
 }
 
-static size_t build_finished(uint8_t out[36]) {
+static size_t build_expected_finished(
+    TLS13_Impl_ConnectionState_connection_state c,
+    uint8_t out[36]) {
+  TLS13_Impl_ConnectionState_traffic_key_material_storage server_hs =
+      c.handshake.keys.server_handshake_traffic;
+  if (server_hs.present2 == NULL || !*server_hs.present2 ||
+      server_hs.traffic_secret == NULL ||
+      c.handshake.transcript.bytes == NULL ||
+      c.handshake.transcript.len == NULL) {
+    return 0;
+  }
+  uint8_t transcript_hash[32] = {0};
+  TLS13_Crypto_sha256(
+      c.handshake.transcript.bytes,
+      *c.handshake.transcript.len,
+      transcript_hash,
+      NULL,
+      NULL);
   out[0] = 20;
   write_u24(out + 1, 32);
-  for (size_t i = 0; i < 32; i++) {
-    out[4 + i] = (uint8_t)(0x70u + i);
-  }
+  TLS13_KeySchedule_finished_verify_data(
+      server_hs.traffic_secret,
+      transcript_hash,
+      out + 4);
   return 36;
 }
 
@@ -455,17 +475,242 @@ static int expect_certificate_verify_input(uint8_t *input, size_t input_len) {
   return 0;
 }
 
-static int test_client_hello_local_path(void) {
+static TLS13_Impl_ConnectionState_connection_state new_scripted_client(void) {
   uint8_t server_name[] = {'l', 'o', 'c', 'a', 'l', 'h', 'o', 's', 't'};
   uint8_t trust_anchors[] = {0xde, 0xad, 0xbe, 0xef};
   size_t validation_time_seconds = 123456789u;
-  TLS13_Impl_ConnectionState_connection_state c =
-      new_client(
-          server_name,
-          sizeof server_name,
-          trust_anchors,
-          sizeof trust_anchors,
-          validation_time_seconds);
+  return new_client(
+      server_name,
+      sizeof server_name,
+      trust_anchors,
+      sizeof trust_anchors,
+      validation_time_seconds);
+}
+
+static int advance_to_certificate_signature_verified(
+    TLS13_Impl_ConnectionState_connection_state c) {
+  uint8_t payload[1] = {0};
+  uint8_t network_out[2048] = {0};
+  uint8_t app_out[16384] = {0};
+  uint8_t public_key[32] = {0};
+  public_key[0] = 9;
+
+  if (run_suggested_local_step(
+        c,
+        TLS13_Impl_Client_Types_LocalStartHandshake,
+        TLS13_Impl_Client_Types_LocalPayloadNone,
+        payload,
+        0,
+        network_out,
+        sizeof network_out,
+        app_out,
+        sizeof app_out,
+        NULL,
+        "setup LocalStartHandshake") != 0 ||
+      run_suggested_local_step(
+        c,
+        TLS13_Impl_Client_Types_LocalSendClientHello,
+        TLS13_Impl_Client_Types_LocalPayloadNone,
+        payload,
+        0,
+        network_out,
+        sizeof network_out,
+        app_out,
+        sizeof app_out,
+        NULL,
+        "setup LocalSendClientHello") != 0) {
+    return 1;
+  }
+
+  uint8_t server_hello[90];
+  if (run_network_step(
+        c,
+        22,
+        server_hello,
+        build_server_hello(server_hello),
+        3,
+        "setup ServerHello") != 0) {
+    return 1;
+  }
+
+  if (run_suggested_local_step(
+        c,
+        TLS13_Impl_Client_Types_LocalDeriveSharedSecret,
+        TLS13_Impl_Client_Types_LocalPayloadNone,
+        payload,
+        0,
+        network_out,
+        sizeof network_out,
+        app_out,
+        sizeof app_out,
+        NULL,
+        "setup LocalDeriveSharedSecret") != 0 ||
+      run_suggested_local_step(
+        c,
+        TLS13_Impl_Client_Types_LocalInstallClientHandshakeTrafficKeys,
+        TLS13_Impl_Client_Types_LocalPayloadNone,
+        payload,
+        0,
+        network_out,
+        sizeof network_out,
+        app_out,
+        sizeof app_out,
+        NULL,
+        "setup LocalInstallClientHandshakeTrafficKeys") != 0 ||
+      run_suggested_local_step(
+        c,
+        TLS13_Impl_Client_Types_LocalInstallServerHandshakeTrafficKeys,
+        TLS13_Impl_Client_Types_LocalPayloadNone,
+        payload,
+        0,
+        network_out,
+        sizeof network_out,
+        app_out,
+        sizeof app_out,
+        NULL,
+        "setup LocalInstallServerHandshakeTrafficKeys") != 0) {
+    return 1;
+  }
+
+  uint8_t encrypted_extensions[4];
+  if (run_network_step(
+        c,
+        22,
+        encrypted_extensions,
+        build_empty_encrypted_extensions(encrypted_extensions),
+        4,
+        "setup EncryptedExtensions") != 0) {
+    return 1;
+  }
+
+  uint8_t certificate[14];
+  if (run_network_step(
+        c,
+        22,
+        certificate,
+        build_certificate(certificate),
+        5,
+        "setup Certificate") != 0) {
+    return 1;
+  }
+
+  if (run_suggested_local_step(
+        c,
+        TLS13_Impl_Client_Types_LocalValidateCertificate,
+        TLS13_Impl_Client_Types_LocalPayloadCertificatePublicKey,
+        public_key,
+        sizeof public_key,
+        network_out,
+        sizeof network_out,
+        app_out,
+        sizeof app_out,
+        NULL,
+        "setup LocalValidateCertificate") != 0) {
+    return 1;
+  }
+
+  uint8_t certificate_verify[9];
+  if (run_network_step(
+        c,
+        22,
+        certificate_verify,
+        build_certificate_verify(certificate_verify),
+        7,
+        "setup CertificateVerify") != 0) {
+    return 1;
+  }
+
+  if (run_suggested_local_step(
+        c,
+        TLS13_Impl_Client_Types_LocalVerifyCertificateSignature,
+        TLS13_Impl_Client_Types_LocalPayloadNone,
+        payload,
+        0,
+        network_out,
+        sizeof network_out,
+        app_out,
+        sizeof app_out,
+        NULL,
+        "setup LocalVerifyCertificateSignature") != 0 ||
+      expect_handshake_stage(c, 8, "setup certificate signature") != 0) {
+    return 1;
+  }
+  return 0;
+}
+
+static int test_bad_server_finished_rejected(void) {
+  TLS13_Impl_ConnectionState_connection_state c = new_scripted_client();
+  uint8_t network_out[2048] = {0};
+  uint8_t app_out[16384] = {0};
+
+  if (advance_to_certificate_signature_verified(c) != 0) {
+    return 1;
+  }
+
+  uint8_t finished[36];
+  size_t finished_len = build_expected_finished(c, finished);
+  if (finished_len != sizeof finished) {
+    fprintf(stderr, "could not build expected Finished\n");
+    return 1;
+  }
+  finished[4] ^= 0x80u;
+  if (run_network_step(
+        c,
+        22,
+        finished,
+        finished_len,
+        9,
+        "bad Finished") != 0) {
+    return 1;
+  }
+
+  TLS13_Impl_Client_Types_next_local_action action =
+      next_local_action(c, sizeof network_out, 0, 36);
+  if (!action.next_local_ready ||
+      action.next_local_kind != TLS13_Impl_Client_Types_LocalVerifyFinished ||
+      action.next_local_payload != TLS13_Impl_Client_Types_LocalPayloadServerFinishedHandshake) {
+    fprintf(stderr, "bad Finished next action was not LocalVerifyFinished\n");
+    return 1;
+  }
+
+  uint8_t verify_data[32] = {0};
+  size_t verify_data_len =
+      copy_server_finished_verify_data(c, verify_data, sizeof verify_data);
+  if (verify_data_len != 32 ||
+      memcmp(verify_data, finished + 4, sizeof verify_data) != 0) {
+    fprintf(stderr, "bad Finished stored verify_data snapshot failed\n");
+    return 1;
+  }
+
+  uint8_t payload[36] = {0};
+  payload[0] = 20;
+  write_u24(payload + 1, verify_data_len);
+  memcpy(payload + 4, verify_data, sizeof verify_data);
+  TLS13_Impl_Client_Types_client_response resp =
+      process_local_event(
+          c,
+          TLS13_Impl_Client_Types_LocalVerifyFinished,
+          payload,
+          sizeof payload,
+          network_out,
+          sizeof network_out,
+          app_out,
+          sizeof app_out);
+  TLS13_Impl_ConnectionState_control_snapshot snapshot = control_snapshot(c);
+  if (resp.status != TLS13_Impl_Client_Types_ConnectionFailed ||
+      resp.network_out_len != 0 ||
+      resp.app_out_len != 0 ||
+      snapshot.snapshot_control_tag != 5 ||
+      !snapshot.snapshot_failure_present ||
+      snapshot.snapshot_failure_code != 7) {
+    fprintf(stderr, "bad Finished was not rejected as BadFinished\n");
+    return 1;
+  }
+  return 0;
+}
+
+static int test_client_hello_local_path(void) {
+  TLS13_Impl_ConnectionState_connection_state c = new_scripted_client();
   uint8_t payload[1] = {0};
   uint8_t network_out[2048] = {0};
   uint8_t app_out[16384] = {0};
@@ -696,7 +941,11 @@ static int test_client_hello_local_path(void) {
   }
 
   uint8_t finished[36];
-  size_t finished_len = build_finished(finished);
+  size_t finished_len = build_expected_finished(c, finished);
+  if (finished_len != sizeof finished) {
+    fprintf(stderr, "could not build expected Finished\n");
+    return 1;
+  }
   if (run_network_step(
         c,
         22,
@@ -898,6 +1147,7 @@ static int test_client_hello_local_path(void) {
 
 int main(void) {
   if (test_network_buffer_decode_error() != 0 ||
+      test_bad_server_finished_rejected() != 0 ||
       test_client_hello_local_path() != 0) {
     return 1;
   }
