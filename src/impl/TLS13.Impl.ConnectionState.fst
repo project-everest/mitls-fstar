@@ -972,14 +972,38 @@ let peer_exactly
   ([@@@mkey] peer:peer_storage)
   (spec:option X.peer_identity)
   : slprop =
-  exists* present.
+  exists* present hostname hostname_len public_key public_key_len schemes schemes_len.
     Box.pts_to peer.present present **
-    (if present then
-       match spec with
-       | Some p -> peer_fields_exactly peer p
-       | None -> peer_fields_allocated peer ** pure False
-     else
-       peer_fields_allocated peer ** pure (spec == None))
+    V.pts_to peer.validated_hostname.bytes hostname **
+    Box.pts_to peer.validated_hostname.len hostname_len **
+    V.pts_to peer.leaf_public_key.bytes public_key **
+    Box.pts_to peer.leaf_public_key.len public_key_len **
+    V.pts_to peer.permitted_signature_schemes.items schemes **
+    Box.pts_to peer.permitted_signature_schemes.len schemes_len **
+    pure (V.is_full_vec peer.validated_hostname.bytes /\
+          V.length peer.validated_hostname.bytes == max_hostname_len /\
+          B.length hostname == max_hostname_len /\
+          SZ.v hostname_len <= max_hostname_len /\
+          V.is_full_vec peer.leaf_public_key.bytes /\
+          V.length peer.leaf_public_key.bytes == max_public_key_len /\
+          B.length public_key == max_public_key_len /\
+          SZ.v public_key_len <= max_public_key_len /\
+          V.is_full_vec peer.permitted_signature_schemes.items /\
+          V.length peer.permitted_signature_schemes.items == max_signature_schemes /\
+          Seq.length schemes == max_signature_schemes /\
+          SZ.v schemes_len <= max_signature_schemes /\
+          (if present then
+             match spec with
+             | Some p ->
+               byte_prefix_matches hostname hostname_len p.X.validated_hostname /\
+               byte_prefix_matches public_key public_key_len p.X.leaf_public_key /\
+               IM.signature_schemes_match
+                 schemes
+                 (SZ.v schemes_len)
+                 p.X.permitted_signature_schemes
+             | None -> False
+           else
+             spec == None))
 
 let handshake_buffers_exactly
   ([@@@mkey] buffers:handshake_buffer_storage)
@@ -1185,6 +1209,102 @@ fn copy_array_to_transcript
   V.to_vec_pts_to dst
 }
 
+fn copy_hostname_sized_bytes
+  (src:sized_bytes)
+  (dst:sized_bytes)
+  requires sized_bytes_exactly src max_hostname_len 'src_bytes **
+           sized_bytes_allocated dst max_hostname_len
+  ensures sized_bytes_exactly src max_hostname_len 'src_bytes **
+          sized_bytes_exactly dst max_hostname_len 'src_bytes
+{
+  unfold (sized_bytes_exactly src max_hostname_len (Ghost.reveal 'src_bytes));
+  with src_storage src_len. _;
+  unfold (sized_bytes_allocated dst max_hostname_len);
+  with dst_storage dst_len. _;
+  let copy_len = !src.len;
+  assert (pure (copy_len == src_len));
+
+  V.to_array_pts_to src.bytes;
+  V.to_array_pts_to dst.bytes;
+
+  assert (pure (SZ.fits max_hostname_len));
+  let cap = SZ.uint_to_t max_hostname_len;
+  let src_slice = Slice.from_array (V.vec_to_array src.bytes) cap;
+  let dst_slice = Slice.from_array (V.vec_to_array dst.bytes) cap;
+
+  let src_split = Slice.split src_slice copy_len;
+  let dst_split = Slice.split dst_slice copy_len;
+
+  Slice.pts_to_len (fst src_split);
+  Slice.pts_to_len (fst dst_split);
+  assert (pure (Slice.len (fst src_split) == copy_len));
+  assert (pure (Slice.len (fst dst_split) == copy_len));
+  Slice.copy (fst dst_split) (fst src_split);
+
+  Slice.join (fst src_split) (snd src_split) src_slice;
+  SeqP.lemma_split src_storage (SZ.v copy_len);
+  Slice.to_array src_slice;
+  V.to_vec_pts_to src.bytes;
+
+  Slice.join (fst dst_split) (snd dst_split) dst_slice;
+  Slice.to_array dst_slice;
+  V.to_vec_pts_to dst.bytes;
+  dst.len := copy_len;
+
+  with copied_dst_storage. assert (V.pts_to dst.bytes copied_dst_storage);
+  assert (pure (Seq.equal
+    (Seq.slice copied_dst_storage 0 (SZ.v copy_len))
+    (Seq.slice src_storage 0 (SZ.v copy_len))));
+  assert (pure (byte_prefix_matches copied_dst_storage copy_len (Ghost.reveal 'src_bytes)));
+  fold (sized_bytes_exactly dst max_hostname_len (Ghost.reveal 'src_bytes));
+  fold (sized_bytes_exactly src max_hostname_len (Ghost.reveal 'src_bytes))
+}
+
+fn copy_array_to_public_key_sized_bytes
+  (src:array U8.t)
+  (dst:sized_bytes)
+  (src_len:SZ.t)
+  requires ArrPts.pts_to src 'src_bytes **
+           sized_bytes_allocated dst max_public_key_len **
+           pure (B.length 'src_bytes == SZ.v src_len /\
+                 SZ.v src_len <= max_public_key_len)
+  ensures ArrPts.pts_to src 'src_bytes **
+          sized_bytes_exactly dst max_public_key_len (Ghost.reveal 'src_bytes)
+{
+  unfold (sized_bytes_allocated dst max_public_key_len);
+  with dst_storage dst_len. _;
+
+  ArrPts.pts_to_len src;
+  V.to_array_pts_to dst.bytes;
+
+  assert (pure (SZ.fits max_public_key_len));
+  let dst_cap = SZ.uint_to_t max_public_key_len;
+  let src_slice = Slice.from_array src src_len;
+  let dst_slice = Slice.from_array (V.vec_to_array dst.bytes) dst_cap;
+
+  let dst_split = Slice.split dst_slice src_len;
+
+  Slice.pts_to_len src_slice;
+  Slice.pts_to_len (fst dst_split);
+  assert (pure (Slice.len src_slice == src_len));
+  assert (pure (Slice.len (fst dst_split) == src_len));
+  Slice.copy (fst dst_split) src_slice;
+
+  Slice.to_array src_slice;
+
+  Slice.join (fst dst_split) (snd dst_split) dst_slice;
+  Slice.to_array dst_slice;
+  V.to_vec_pts_to dst.bytes;
+  dst.len := src_len;
+
+  with copied_dst_storage. assert (V.pts_to dst.bytes copied_dst_storage);
+  Seq.lemma_len_slice copied_dst_storage 0 (SZ.v src_len);
+  assert (pure (Seq.equal
+    (Seq.slice copied_dst_storage 0 (SZ.v src_len))
+    (Ghost.reveal 'src_bytes)));
+  fold (sized_bytes_exactly dst max_public_key_len (Ghost.reveal 'src_bytes))
+}
+
 fn copy_certificate_chain_range_to_sized_bytes
   (src:V.vec U8.t)
   (dst:sized_bytes)
@@ -1386,6 +1506,26 @@ let installed_traffic_keys_state
     };
     CS.cs_event_log =
       st.CS.cs_event_log @ [CS.ConnLocalEvent (CS.LocalInstallTrafficKeys install)];
+  }
+
+let validated_certificate_state
+  (st:CS.connection_state)
+  (peer:X.peer_identity)
+  : CS.connection_state =
+  let model0 = st.CS.cs_model in
+  let hs0 = model0.CS.model_handshake in
+  {
+    CS.cs_model =
+      CS.with_handshake_stage
+        model0
+        { hs0 with CS.hs_validated_peer = Some peer }
+        CS.HsCertificateValidated;
+    CS.cs_wire_log = {
+      CL.raw_sent = B.append st.CS.cs_wire_log.CL.raw_sent B.empty;
+      CL.raw_received = B.append st.CS.cs_wire_log.CL.raw_received B.empty;
+    };
+    CS.cs_event_log =
+      st.CS.cs_event_log @ [CS.ConnLocalEvent (CS.LocalValidateCertificate peer)];
   }
 
 let received_hello_retry_request_rejected_state
@@ -1721,6 +1861,48 @@ let lemma_installed_traffic_keys_state_evolves
     (installed_traffic_keys_state st install);
   assert (CS.connection_state_evolves st (installed_traffic_keys_state st install));
   assert (CS.connection_state_consistent (installed_traffic_keys_state st install))
+
+let lemma_validated_certificate_state_evolves
+  (st:CS.connection_state)
+  (peer:X.peer_identity)
+  : Lemma
+      (requires CS.connection_state_consistent st /\
+                CS.legal_event
+                  st.CS.cs_model
+                  (CS.ConnLocalEvent (CS.LocalValidateCertificate peer)))
+      (ensures CS.connection_state_evolves
+                 st
+                 (validated_certificate_state st peer) /\
+               CS.connection_state_consistent
+                 (validated_certificate_state st peer) /\
+               CS.legal_connection_delta
+                 st
+                 {
+                   CS.delta_event =
+                     CS.ConnLocalEvent (CS.LocalValidateCertificate peer);
+                   CS.delta_raw_sent = B.empty;
+                   CS.delta_raw_received = B.empty;
+                 }
+                 (validated_certificate_state st peer))
+=
+  let ev = CS.ConnLocalEvent (CS.LocalValidateCertificate peer) in
+  let delta = {
+    CS.delta_event = ev;
+    CS.delta_raw_sent = B.empty;
+    CS.delta_raw_received = B.empty;
+  } in
+  Seq.lemma_eq_intro B.empty B.empty;
+  assert (CS.step_model st.CS.cs_model ev ==
+          Some (validated_certificate_state st peer).CS.cs_model);
+  assert (CS.event_raw_delta_legal st.CS.cs_model ev B.empty B.empty);
+  assert (CS.legal_connection_delta st delta (validated_certificate_state st peer));
+  assert (CS.connection_state_single_step st (validated_certificate_state st peer));
+  FStar.ReflexiveTransitiveClosure.closure_step
+    CS.connection_state_single_step
+    st
+    (validated_certificate_state st peer);
+  assert (CS.connection_state_evolves st (validated_certificate_state st peer));
+  assert (CS.connection_state_consistent (validated_certificate_state st peer))
 
 let lemma_client_handshake_traffic_install_legal
   (model:CS.connection_model)
@@ -3979,6 +4161,67 @@ fn can_receive_certificate
   }
 }
 
+fn can_validate_certificate
+  (c:connection_state)
+  (payload_len:SZ.t)
+  (#st0:erased CS.connection_state)
+  requires connection_exactly c st0
+  returns ok: bool
+  ensures connection_exactly c st0 **
+          pure (ok ==>
+            st0.CS.cs_model.CS.model_control ==
+              CS.ControlHandshaking CS.HsCertificateReceived /\
+            st0.CS.cs_model.CS.model_handshake.CS.hs_validated_peer == None /\
+            SZ.v payload_len <= max_public_key_len)
+{
+  unfold (connection_exactly c st0);
+  unfold (connection_model_exactly c st0.CS.cs_model);
+  unfold (control_exactly c.control st0.CS.cs_model.CS.model_control st0.CS.cs_model.CS.model_failure);
+  unfold (handshake_exactly c.handshake st0.CS.cs_model.CS.model_handshake);
+  unfold (peer_exactly
+    c.handshake.validated_peer
+    st0.CS.cs_model.CS.model_handshake.CS.hs_validated_peer);
+
+  let tag = !c.control.control_tag;
+  let stage = !c.control.handshake_stage_tag;
+  let tag_ok = tag = 1uy;
+  let stage_ok = stage = 5uy;
+
+  with peer_present peer_hostname peer_hostname_len peer_public_key peer_public_key_len peer_schemes peer_schemes_len.
+    assert (pure True);
+  let stored_peer_present = !c.handshake.validated_peer.present;
+  let no_peer = not stored_peer_present;
+  assert (pure (stored_peer_present == peer_present));
+  assert (pure (no_peer ==> not peer_present));
+  assert (pure (no_peer ==>
+    st0.CS.cs_model.CS.model_handshake.CS.hs_validated_peer == None));
+
+  assert (pure (SZ.fits max_public_key_len));
+  let max_pk_len = SZ.uint_to_t max_public_key_len;
+  let payload_fits = SZ.lte payload_len max_pk_len;
+  let ok = tag_ok && stage_ok && no_peer && payload_fits;
+
+  assert (pure (ok ==> U8.v tag == 1));
+  assert (pure (ok ==> U8.v stage == 5));
+  assert (pure (ok ==>
+    st0.CS.cs_model.CS.model_control ==
+      CS.ControlHandshaking CS.HsCertificateReceived));
+  assert (pure (ok ==> st0.CS.cs_model.CS.model_handshake.CS.hs_validated_peer == None));
+  assert (pure (ok ==> SZ.v payload_len <= max_public_key_len));
+
+  fold (peer_exactly
+    c.handshake.validated_peer
+    st0.CS.cs_model.CS.model_handshake.CS.hs_validated_peer);
+  fold (handshake_exactly c.handshake st0.CS.cs_model.CS.model_handshake);
+  fold (control_exactly
+    c.control
+    st0.CS.cs_model.CS.model_control
+    st0.CS.cs_model.CS.model_failure);
+  fold (connection_model_exactly c st0.CS.cs_model);
+  fold (connection_exactly c st0);
+  ok
+}
+
 fn can_receive_close_notify
   (c:connection_state)
   (#st0:erased CS.connection_state)
@@ -4962,6 +5205,221 @@ fn mark_received_certificate
   fold (connection_exactly
     c
     (received_certificate_state st0 (Ghost.reveal cert) (Ghost.reveal 'raw_bytes)))
+}
+
+fn mark_validated_certificate
+  (c:connection_state)
+  (payload:array U8.t)
+  (payload_len:SZ.t)
+  (#peer:erased X.peer_identity)
+  (#st0:erased CS.connection_state)
+  requires connection_exactly c st0 **
+           ArrPts.pts_to payload 'payload_bytes **
+           pure (st0.CS.cs_model.CS.model_control ==
+                    CS.ControlHandshaking CS.HsCertificateReceived /\
+                  st0.CS.cs_model.CS.model_handshake.CS.hs_validated_peer == None /\
+                  B.length 'payload_bytes == SZ.v payload_len /\
+                  SZ.v payload_len <= max_public_key_len /\
+                  (Ghost.reveal peer).X.validated_hostname ==
+                    st0.CS.cs_model.CS.model_config.CS.config_server_name /\
+                  (Ghost.reveal peer).X.leaf_public_key ==
+                    (Ghost.reveal 'payload_bytes) /\
+                  (Ghost.reveal peer).X.permitted_signature_schemes == [] /\
+                  CS.legal_event
+                    st0.CS.cs_model
+                    (CS.ConnLocalEvent
+                      (CS.LocalValidateCertificate (Ghost.reveal peer))))
+  ensures connection_exactly
+            c
+            (validated_certificate_state st0 (Ghost.reveal peer)) **
+          ArrPts.pts_to payload 'payload_bytes
+{
+  assert (pure (st0.CS.cs_model.CS.model_control ==
+    CS.ControlHandshaking CS.HsCertificateReceived));
+  assert (pure (st0.CS.cs_model.CS.model_handshake.CS.hs_validated_peer == None));
+  assert (pure (B.length 'payload_bytes == SZ.v payload_len));
+  assert (pure (SZ.v payload_len <= max_public_key_len));
+  assert (pure (CS.legal_event
+    st0.CS.cs_model
+    (CS.ConnLocalEvent
+      (CS.LocalValidateCertificate (Ghost.reveal peer)))));
+
+  unfold (connection_exactly c st0);
+  unfold (connection_model_exactly c st0.CS.cs_model);
+  unfold (connection_config_exactly c.config st0.CS.cs_model.CS.model_config);
+  with role validation_time. _;
+  unfold (control_exactly c.control st0.CS.cs_model.CS.model_control st0.CS.cs_model.CS.model_failure);
+  unfold (handshake_exactly c.handshake st0.CS.cs_model.CS.model_handshake);
+  with cv_verified server_finished_verified. _;
+  unfold (peer_exactly
+    c.handshake.validated_peer
+    st0.CS.cs_model.CS.model_handshake.CS.hs_validated_peer);
+  with peer_present peer_hostname peer_hostname_len peer_public_key peer_public_key_len peer_schemes peer_schemes_len. _;
+
+  c.control.handshake_stage_tag := 6uy;
+  assert (pure (control_state_matches
+    1uy
+    6uy
+    false
+    0uy
+    0uy
+    (CS.ControlHandshaking CS.HsCertificateValidated)));
+  fold (control_exactly
+    c.control
+    (CS.ControlHandshaking CS.HsCertificateValidated)
+    st0.CS.cs_model.CS.model_failure);
+
+  fold (sized_bytes_allocated
+    c.handshake.validated_peer.validated_hostname
+    max_hostname_len);
+  copy_hostname_sized_bytes
+    c.config.server_name
+    c.handshake.validated_peer.validated_hostname;
+  rewrite (sized_bytes_exactly
+    c.handshake.validated_peer.validated_hostname
+    max_hostname_len
+    st0.CS.cs_model.CS.model_config.CS.config_server_name)
+    as (sized_bytes_exactly
+      c.handshake.validated_peer.validated_hostname
+      max_hostname_len
+      (Ghost.reveal peer).X.validated_hostname);
+
+  fold (sized_bytes_allocated
+    c.handshake.validated_peer.leaf_public_key
+    max_public_key_len);
+  copy_array_to_public_key_sized_bytes
+    payload
+    c.handshake.validated_peer.leaf_public_key
+    payload_len;
+  rewrite (sized_bytes_exactly
+    c.handshake.validated_peer.leaf_public_key
+    max_public_key_len
+    (Ghost.reveal 'payload_bytes))
+    as (sized_bytes_exactly
+      c.handshake.validated_peer.leaf_public_key
+      max_public_key_len
+      (Ghost.reveal peer).X.leaf_public_key);
+
+  c.handshake.validated_peer.permitted_signature_schemes.len := 0sz;
+  c.handshake.validated_peer.present := true;
+
+  unfold (sized_bytes_exactly
+    c.handshake.validated_peer.validated_hostname
+    max_hostname_len
+    (Ghost.reveal peer).X.validated_hostname);
+  with stored_hostname stored_hostname_len. _;
+  unfold (sized_bytes_exactly
+    c.handshake.validated_peer.leaf_public_key
+    max_public_key_len
+    (Ghost.reveal peer).X.leaf_public_key);
+  with stored_public_key stored_public_key_len. _;
+  assert_norm (IM.signature_schemes_match peer_schemes 0 []);
+  assert (pure (IM.signature_schemes_match
+    peer_schemes
+    (SZ.v 0sz)
+    (Ghost.reveal peer).X.permitted_signature_schemes));
+  fold (peer_exactly
+    c.handshake.validated_peer
+    (Some (Ghost.reveal peer)));
+
+  fold (connection_config_exactly c.config st0.CS.cs_model.CS.model_config);
+
+  assert (pure ((validated_certificate_state st0 (Ghost.reveal peer)).CS.cs_model.CS.model_handshake.CS.hs_start ==
+    st0.CS.cs_model.CS.model_handshake.CS.hs_start));
+  assert (pure ((validated_certificate_state st0 (Ghost.reveal peer)).CS.cs_model.CS.model_handshake.CS.hs_client_hello ==
+    st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello));
+  assert (pure ((validated_certificate_state st0 (Ghost.reveal peer)).CS.cs_model.CS.model_handshake.CS.hs_server_hello ==
+    st0.CS.cs_model.CS.model_handshake.CS.hs_server_hello));
+  assert (pure ((validated_certificate_state st0 (Ghost.reveal peer)).CS.cs_model.CS.model_handshake.CS.hs_encrypted_extensions ==
+    st0.CS.cs_model.CS.model_handshake.CS.hs_encrypted_extensions));
+  assert (pure ((validated_certificate_state st0 (Ghost.reveal peer)).CS.cs_model.CS.model_handshake.CS.hs_certificate ==
+    st0.CS.cs_model.CS.model_handshake.CS.hs_certificate));
+  assert (pure ((validated_certificate_state st0 (Ghost.reveal peer)).CS.cs_model.CS.model_handshake.CS.hs_certificate_verify ==
+    st0.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify));
+  assert (pure ((validated_certificate_state st0 (Ghost.reveal peer)).CS.cs_model.CS.model_handshake.CS.hs_certificate_verify_verified ==
+    st0.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify_verified));
+  assert (pure ((validated_certificate_state st0 (Ghost.reveal peer)).CS.cs_model.CS.model_handshake.CS.hs_server_finished ==
+    st0.CS.cs_model.CS.model_handshake.CS.hs_server_finished));
+  assert (pure ((validated_certificate_state st0 (Ghost.reveal peer)).CS.cs_model.CS.model_handshake.CS.hs_server_finished_verified ==
+    st0.CS.cs_model.CS.model_handshake.CS.hs_server_finished_verified));
+  assert (pure ((validated_certificate_state st0 (Ghost.reveal peer)).CS.cs_model.CS.model_handshake.CS.hs_client_finished ==
+    st0.CS.cs_model.CS.model_handshake.CS.hs_client_finished));
+  assert (pure ((validated_certificate_state st0 (Ghost.reveal peer)).CS.cs_model.CS.model_handshake.CS.hs_transcript ==
+    st0.CS.cs_model.CS.model_handshake.CS.hs_transcript));
+  assert (pure ((validated_certificate_state st0 (Ghost.reveal peer)).CS.cs_model.CS.model_handshake.CS.hs_buffers ==
+    st0.CS.cs_model.CS.model_handshake.CS.hs_buffers));
+  assert (pure ((validated_certificate_state st0 (Ghost.reveal peer)).CS.cs_model.CS.model_handshake.CS.hs_keys ==
+    st0.CS.cs_model.CS.model_handshake.CS.hs_keys));
+
+  rewrite (handshake_start_exactly
+    c.handshake.start
+    st0.CS.cs_model.CS.model_handshake.CS.hs_start)
+    as (handshake_start_exactly
+      c.handshake.start
+      (validated_certificate_state st0 (Ghost.reveal peer)).CS.cs_model.CS.model_handshake.CS.hs_start);
+  unfold (handshake_messages_exactly
+    c.handshake.messages
+    st0.CS.cs_model.CS.model_handshake);
+  fold (handshake_messages_exactly
+    c.handshake.messages
+    (validated_certificate_state st0 (Ghost.reveal peer)).CS.cs_model.CS.model_handshake);
+  unfold (server_key_share_exactly c.handshake.server_key_share st0.CS.cs_model.CS.model_handshake);
+  fold (server_key_share_exactly
+    c.handshake.server_key_share
+    (validated_certificate_state st0 (Ghost.reveal peer)).CS.cs_model.CS.model_handshake);
+  rewrite (sized_bytes_exactly
+    c.handshake.transcript
+    max_transcript_len
+    st0.CS.cs_model.CS.model_handshake.CS.hs_transcript)
+    as (sized_bytes_exactly
+      c.handshake.transcript
+      max_transcript_len
+      (validated_certificate_state st0 (Ghost.reveal peer)).CS.cs_model.CS.model_handshake.CS.hs_transcript);
+  rewrite (handshake_buffers_exactly
+    c.handshake.buffers
+    st0.CS.cs_model.CS.model_handshake.CS.hs_buffers)
+    as (handshake_buffers_exactly
+      c.handshake.buffers
+      (validated_certificate_state st0 (Ghost.reveal peer)).CS.cs_model.CS.model_handshake.CS.hs_buffers);
+  rewrite (key_schedule_exactly
+    c.handshake.keys
+    st0.CS.cs_model.CS.model_handshake.CS.hs_keys)
+    as (key_schedule_exactly
+      c.handshake.keys
+      (validated_certificate_state st0 (Ghost.reveal peer)).CS.cs_model.CS.model_handshake.CS.hs_keys);
+  assert (pure (cv_verified ==
+    (validated_certificate_state st0 (Ghost.reveal peer)).CS.cs_model.CS.model_handshake.CS.hs_certificate_verify_verified));
+  assert (pure (server_finished_verified ==
+    (validated_certificate_state st0 (Ghost.reveal peer)).CS.cs_model.CS.model_handshake.CS.hs_server_finished_verified));
+  fold (handshake_exactly
+    c.handshake
+    (validated_certificate_state st0 (Ghost.reveal peer)).CS.cs_model.CS.model_handshake);
+
+  assert (pure ((validated_certificate_state st0 (Ghost.reveal peer)).CS.cs_model.CS.model_config ==
+    st0.CS.cs_model.CS.model_config));
+  assert (pure ((validated_certificate_state st0 (Ghost.reveal peer)).CS.cs_model.CS.model_record ==
+    st0.CS.cs_model.CS.model_record));
+  assert (pure ((validated_certificate_state st0 (Ghost.reveal peer)).CS.cs_model.CS.model_application ==
+    st0.CS.cs_model.CS.model_application));
+  rewrite (record_layer_exactly c.records st0.CS.cs_model.CS.model_record)
+    as (record_layer_exactly
+      c.records
+      (validated_certificate_state st0 (Ghost.reveal peer)).CS.cs_model.CS.model_record);
+  rewrite (application_exactly c.application st0.CS.cs_model.CS.model_application)
+    as (application_exactly
+      c.application
+      (validated_certificate_state st0 (Ghost.reveal peer)).CS.cs_model.CS.model_application);
+  fold (connection_model_exactly
+    c
+    (validated_certificate_state st0 (Ghost.reveal peer)).CS.cs_model);
+
+  lemma_validated_certificate_state_evolves st0 (Ghost.reveal peer);
+  MR.update
+    c.ghost_state
+    (validated_certificate_state st0 (Ghost.reveal peer));
+  fold (connection_exactly
+    c
+    (validated_certificate_state st0 (Ghost.reveal peer)))
 }
 
 fn mark_received_application_data

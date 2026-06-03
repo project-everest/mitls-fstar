@@ -13,6 +13,7 @@ module CT = TLS13.Impl.Client.Types
 module Seq = FStar.Seq
 module SZ = FStar.SizeT
 module U8 = FStar.UInt8
+module X = TLS13.X509.Spec
 
 fn handle_local_event
   (c:C.connection_state)
@@ -29,7 +30,11 @@ fn handle_local_event
            pts_to app_out 'old_app_out **
            pure (B.length 'payload_bytes == SZ.v payload_len /\
                  B.length 'old_network_out == SZ.v network_out_len /\
-                 B.length 'old_app_out == SZ.v app_out_len)
+                 B.length 'old_app_out == SZ.v app_out_len /\
+                 CT.local_input_wf
+                   'st0
+                   kind
+                   (Ghost.reveal 'payload_bytes))
   returns resp: CT.client_response
   ensures exists* st1.
           C.connection_exactly c st1 **
@@ -343,6 +348,107 @@ fn handle_local_event
         (C.local_fail_state 'st0 C.tls_unexpected_message_error)
         resp
         CT.LocalInstallServerHandshakeTrafficKeys
+        (Ghost.reveal 'payload_bytes)
+        'old_network_out
+        'old_app_out));
+      assert (pure (CT.some_legal_response
+        'st0
+        (C.local_fail_state 'st0 C.tls_unexpected_message_error)
+        resp
+        'old_network_out
+        'old_app_out));
+      resp
+    }
+  }
+    LocalValidateCertificate -> {
+    let ready = C.can_validate_certificate c payload_len;
+    if ready {
+      let peer = Ghost.hide (CT.local_validation_peer 'st0 (Ghost.reveal 'payload_bytes));
+      assert (pure (CT.local_input_wf
+        'st0
+        CT.LocalValidateCertificate
+        (Ghost.reveal 'payload_bytes)));
+      assert (pure ('st0.CS.cs_model.CS.model_control ==
+        CS.ControlHandshaking CS.HsCertificateReceived));
+      assert (pure (CS.legal_event
+        'st0.CS.cs_model
+        (CS.ConnLocalEvent
+          (CS.LocalValidateCertificate (Ghost.reveal peer)))));
+      assert (pure ((Ghost.reveal peer).X.validated_hostname ==
+        'st0.CS.cs_model.CS.model_config.CS.config_server_name));
+      assert (pure ((Ghost.reveal peer).X.leaf_public_key ==
+        (Ghost.reveal 'payload_bytes)));
+      assert (pure ((Ghost.reveal peer).X.permitted_signature_schemes == []));
+      C.mark_validated_certificate c payload payload_len #peer;
+      let resp = {
+        CT.network_out_len = 0sz;
+        CT.app_out_len = 0sz;
+        CT.status = CT.StepOk;
+      };
+      Seq.lemma_len_slice 'old_network_out 0 0;
+      Seq.lemma_eq_intro B.empty (Seq.slice 'old_network_out 0 0);
+      assert (pure (Seq.equal B.empty (CT.response_network_out resp 'old_network_out)));
+      C.lemma_validated_certificate_state_evolves
+        'st0
+        (Ghost.reveal peer);
+      assert (pure (CT.legal_response_for_event
+        'st0
+        (C.validated_certificate_state 'st0 (Ghost.reveal peer))
+        resp
+        (CS.ConnLocalEvent
+          (CS.LocalValidateCertificate (Ghost.reveal peer)))
+        B.empty
+        B.empty
+        'old_network_out
+        'old_app_out));
+      assert (pure (CT.legal_local_response
+        'st0
+        (C.validated_certificate_state 'st0 (Ghost.reveal peer))
+        resp
+        CT.LocalValidateCertificate
+        (Ghost.reveal 'payload_bytes)
+        (CS.ConnLocalEvent
+          (CS.LocalValidateCertificate (Ghost.reveal peer)))
+        B.empty
+        B.empty
+        'old_network_out
+        'old_app_out));
+      assert (pure (CT.legal_handled_local_response
+        'st0
+        (C.validated_certificate_state 'st0 (Ghost.reveal peer))
+        resp
+        CT.LocalValidateCertificate
+        (Ghost.reveal 'payload_bytes)
+        'old_network_out
+        'old_app_out));
+      assert (pure (CT.some_legal_response
+        'st0
+        (C.validated_certificate_state 'st0 (Ghost.reveal peer))
+        resp
+        'old_network_out
+        'old_app_out));
+      resp
+    } else {
+      C.mark_unexpected_message c;
+      let resp = {
+        CT.network_out_len = 0sz;
+        CT.app_out_len = 0sz;
+        CT.status = CT.IllegalTransition;
+      };
+      Seq.lemma_len_slice 'old_network_out 0 0;
+      Seq.lemma_eq_intro B.empty (Seq.slice 'old_network_out 0 0);
+      assert (pure (Seq.equal B.empty (CT.response_network_out resp 'old_network_out)));
+      assert (pure (CT.unexpected_message_response
+        'st0
+        (C.local_fail_state 'st0 C.tls_unexpected_message_error)
+        resp
+        'old_network_out
+        'old_app_out));
+      assert (pure (CT.legal_handled_local_response
+        'st0
+        (C.local_fail_state 'st0 C.tls_unexpected_message_error)
+        resp
+        CT.LocalValidateCertificate
         (Ghost.reveal 'payload_bytes)
         'old_network_out
         'old_app_out));

@@ -10,6 +10,7 @@ module SZ = FStar.SizeT
 module T = TLS13.Types
 module U8 = FStar.UInt8
 module WS = TLS13.Wire.Spec
+module X = TLS13.X509.Spec
 
 (**
   Extraction-facing client step shapes.  The concrete driver supplies buffers
@@ -51,6 +52,31 @@ type local_event_kind =
   | LocalSendApplicationData
   | LocalSendCloseNotify
   | LocalFail
+
+let local_validation_peer
+  (st:CS.connection_state)
+  (payload:B.bytes)
+  : X.peer_identity =
+  {
+    X.validated_hostname = st.CS.cs_model.CS.model_config.CS.config_server_name;
+    X.leaf_public_key = payload;
+    X.permitted_signature_schemes = [];
+  }
+
+let local_input_wf
+  (st:CS.connection_state)
+  (kind:local_event_kind)
+  (payload:B.bytes)
+  : prop =
+  match kind with
+  | LocalValidateCertificate ->
+    st.CS.cs_model.CS.model_control ==
+      CS.ControlHandshaking CS.HsCertificateReceived ==>
+    CS.legal_event
+      st.CS.cs_model
+      (CS.ConnLocalEvent
+        (CS.LocalValidateCertificate (local_validation_peer st payload)))
+  | _ -> True
 
 let response_wf
   (resp:client_response)

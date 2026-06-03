@@ -93,7 +93,11 @@ fn process_local_event
            pts_to app_out 'old_app_out **
            pure (B.length 'payload_bytes == SZ.v payload_len /\
                  B.length 'old_network_out == SZ.v network_out_len /\
-                 B.length 'old_app_out == SZ.v app_out_len)
+                 B.length 'old_app_out == SZ.v app_out_len /\
+                 CT.local_input_wf
+                   'st0
+                   kind
+                   (Ghost.reveal 'payload_bytes))
   returns resp: CT.client_response
   ensures exists* st1 network_out_bytes app_out_bytes.
           C.connection_exactly c st1 **
