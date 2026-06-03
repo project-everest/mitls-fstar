@@ -57,27 +57,6 @@ static int expect_control_tag(
   return 0;
 }
 
-static int expect_next_action(
-    TLS13_Impl_ConnectionState_connection_state c,
-    TLS13_Impl_Client_Types_local_event_kind expected_kind,
-    TLS13_Impl_Client_Types_local_payload_kind expected_payload,
-    const char *label) {
-  TLS13_Impl_Client_Types_next_local_action action =
-      next_local_action(c, 2048, 32, 36);
-  if (!action.next_local_ready ||
-      action.next_local_kind != expected_kind ||
-      action.next_local_payload != expected_payload) {
-    fprintf(stderr,
-            "%s returned next action ready=%d kind=%d payload=%d\n",
-            label,
-            (int)action.next_local_ready,
-            (int)action.next_local_kind,
-            (int)action.next_local_payload);
-    return 1;
-  }
-  return 0;
-}
-
 static int expect_no_next_action(
     TLS13_Impl_ConnectionState_connection_state c,
     const char *label) {
@@ -94,24 +73,70 @@ static int expect_no_next_action(
   return 0;
 }
 
-static int run_local_step(
+static int run_suggested_local_step(
     TLS13_Impl_ConnectionState_connection_state c,
-    TLS13_Impl_Client_Types_local_event_kind kind,
-    uint8_t *payload,
-    size_t payload_len,
+    TLS13_Impl_Client_Types_local_event_kind expected_kind,
+    TLS13_Impl_Client_Types_local_payload_kind expected_payload,
+    uint8_t *certificate_public_key,
+    size_t certificate_public_key_len,
+    uint8_t *network_out,
+    size_t network_out_len,
+    uint8_t *app_out,
+    size_t app_out_len,
+    TLS13_Impl_Client_Types_client_response *out_resp,
     const char *label) {
-  uint8_t network_out[2048] = {0};
-  uint8_t app_out[16384] = {0};
+  TLS13_Impl_Client_Types_next_local_action action =
+      next_local_action(c, network_out_len, certificate_public_key_len, 36);
+  if (!action.next_local_ready ||
+      action.next_local_kind != expected_kind ||
+      action.next_local_payload != expected_payload) {
+    fprintf(stderr,
+            "%s returned next action ready=%d kind=%d payload=%d\n",
+            label,
+            (int)action.next_local_ready,
+            (int)action.next_local_kind,
+            (int)action.next_local_payload);
+    return 1;
+  }
+
+  uint8_t empty_payload[1] = {0};
+  uint8_t stored_finished[36] = {0};
+  uint8_t *payload = empty_payload;
+  size_t payload_len = 0;
+
+  if (action.next_local_payload ==
+      TLS13_Impl_Client_Types_LocalPayloadCertificatePublicKey) {
+    payload = certificate_public_key;
+    payload_len = certificate_public_key_len;
+  } else if (action.next_local_payload ==
+             TLS13_Impl_Client_Types_LocalPayloadServerFinishedHandshake) {
+    uint8_t verify_data[32] = {0};
+    size_t verify_data_len =
+        copy_server_finished_verify_data(c, verify_data, sizeof verify_data);
+    if (verify_data_len != 32) {
+      fprintf(stderr, "%s could not copy server Finished verify_data\n", label);
+      return 1;
+    }
+    stored_finished[0] = 20;
+    write_u24(stored_finished + 1, verify_data_len);
+    memcpy(stored_finished + 4, verify_data, verify_data_len);
+    payload = stored_finished;
+    payload_len = sizeof stored_finished;
+  }
+
   TLS13_Impl_Client_Types_client_response resp =
       process_local_event(
           c,
-          kind,
+          action.next_local_kind,
           payload,
           payload_len,
           network_out,
-          sizeof network_out,
+          network_out_len,
           app_out,
-          sizeof app_out);
+          app_out_len);
+  if (out_resp != NULL) {
+    *out_resp = resp;
+  }
   return expect_step_ok(resp, label);
 }
 
@@ -395,49 +420,40 @@ static int test_client_hello_local_path(void) {
     return 1;
   }
 
-  if (expect_next_action(
-        c,
-        TLS13_Impl_Client_Types_LocalStartHandshake,
-        TLS13_Impl_Client_Types_LocalPayloadNone,
-        "initial next action") != 0) {
-    return 1;
-  }
-
-  TLS13_Impl_Client_Types_client_response start =
-      process_local_event(
+  TLS13_Impl_Client_Types_client_response start;
+  if (run_suggested_local_step(
           c,
           TLS13_Impl_Client_Types_LocalStartHandshake,
+          TLS13_Impl_Client_Types_LocalPayloadNone,
           payload,
           0,
           network_out,
           sizeof network_out,
           app_out,
-          sizeof app_out);
-  if (start.status != TLS13_Impl_Client_Types_StepOk ||
+          sizeof app_out,
+          &start,
+          "LocalStartHandshake") != 0 ||
       start.network_out_len != 0 ||
       expect_handshake_stage(c, 1, "LocalStartHandshake") != 0) {
     fprintf(stderr, "LocalStartHandshake failed\n");
     return 1;
   }
 
-  if (expect_next_action(
-        c,
-        TLS13_Impl_Client_Types_LocalSendClientHello,
-        TLS13_Impl_Client_Types_LocalPayloadNone,
-        "post-start next action") != 0) {
-    return 1;
-  }
-
-  TLS13_Impl_Client_Types_client_response sent =
-      process_local_event(
+  TLS13_Impl_Client_Types_client_response sent;
+  if (run_suggested_local_step(
           c,
           TLS13_Impl_Client_Types_LocalSendClientHello,
+          TLS13_Impl_Client_Types_LocalPayloadNone,
           payload,
           0,
           network_out,
           sizeof network_out,
           app_out,
-          sizeof app_out);
+          sizeof app_out,
+          &sent,
+          "LocalSendClientHello") != 0) {
+    return 1;
+  }
   size_t record_len = ((size_t)network_out[3] << 8) | (size_t)network_out[4];
   if (sent.status != TLS13_Impl_Client_Types_StepOk ||
       sent.network_out_len < 5 ||
@@ -467,41 +483,41 @@ static int test_client_hello_local_path(void) {
     return 1;
   }
 
-  if (expect_next_action(
+  if (run_suggested_local_step(
         c,
         TLS13_Impl_Client_Types_LocalDeriveSharedSecret,
         TLS13_Impl_Client_Types_LocalPayloadNone,
-        "post-ServerHello next action") != 0) {
-    return 1;
-  }
-
-  if (run_local_step(
-        c,
-        TLS13_Impl_Client_Types_LocalDeriveSharedSecret,
         payload,
         0,
+        network_out,
+        sizeof network_out,
+        app_out,
+        sizeof app_out,
+        NULL,
         "LocalDeriveSharedSecret") != 0 ||
-    expect_next_action(
+    run_suggested_local_step(
         c,
         TLS13_Impl_Client_Types_LocalInstallClientHandshakeTrafficKeys,
         TLS13_Impl_Client_Types_LocalPayloadNone,
-        "post-shared-secret next action") != 0 ||
-    run_local_step(
-        c,
-        TLS13_Impl_Client_Types_LocalInstallClientHandshakeTrafficKeys,
         payload,
         0,
+        network_out,
+        sizeof network_out,
+        app_out,
+        sizeof app_out,
+        NULL,
         "LocalInstallClientHandshakeTrafficKeys") != 0 ||
-    expect_next_action(
+    run_suggested_local_step(
         c,
         TLS13_Impl_Client_Types_LocalInstallServerHandshakeTrafficKeys,
         TLS13_Impl_Client_Types_LocalPayloadNone,
-        "post-client-handshake-key next action") != 0 ||
-    run_local_step(
-        c,
-        TLS13_Impl_Client_Types_LocalInstallServerHandshakeTrafficKeys,
         payload,
         0,
+        network_out,
+        sizeof network_out,
+        app_out,
+        sizeof app_out,
+        NULL,
         "LocalInstallServerHandshakeTrafficKeys") != 0) {
     return 1;
   }
@@ -532,14 +548,6 @@ static int test_client_hello_local_path(void) {
     return 1;
   }
 
-  if (expect_next_action(
-        c,
-        TLS13_Impl_Client_Types_LocalValidateCertificate,
-        TLS13_Impl_Client_Types_LocalPayloadCertificatePublicKey,
-        "post-Certificate next action") != 0) {
-    return 1;
-  }
-
   uint8_t cert_leaf[32768] = {0};
   size_t cert_leaf_len = copy_certificate_leaf_der(c, cert_leaf, sizeof cert_leaf);
   if (cert_leaf_len != 1 || cert_leaf[0] != 0x42) {
@@ -549,11 +557,17 @@ static int test_client_hello_local_path(void) {
 
   uint8_t public_key[32] = {0};
   public_key[0] = 9;
-  if (run_local_step(
+  if (run_suggested_local_step(
         c,
         TLS13_Impl_Client_Types_LocalValidateCertificate,
+        TLS13_Impl_Client_Types_LocalPayloadCertificatePublicKey,
         public_key,
         sizeof public_key,
+        network_out,
+        sizeof network_out,
+        app_out,
+        sizeof app_out,
+        NULL,
         "LocalValidateCertificate") != 0 ||
       expect_handshake_stage(c, 6, "LocalValidateCertificate") != 0) {
     fprintf(stderr, "LocalValidateCertificate did not validate certificate\n");
@@ -575,14 +589,6 @@ static int test_client_hello_local_path(void) {
     return 1;
   }
 
-  if (expect_next_action(
-        c,
-        TLS13_Impl_Client_Types_LocalVerifyCertificateSignature,
-        TLS13_Impl_Client_Types_LocalPayloadNone,
-        "post-CertificateVerify next action") != 0) {
-    return 1;
-  }
-
   uint8_t cv_signature[4096] = {0};
   TLS13_Impl_ConnectionState_certificate_verify_signature_snapshot cv_sig =
       copy_certificate_verify_signature(c, cv_signature, sizeof cv_signature);
@@ -599,11 +605,17 @@ static int test_client_hello_local_path(void) {
     return 1;
   }
 
-  if (run_local_step(
+  if (run_suggested_local_step(
         c,
         TLS13_Impl_Client_Types_LocalVerifyCertificateSignature,
+        TLS13_Impl_Client_Types_LocalPayloadNone,
         payload,
         0,
+        network_out,
+        sizeof network_out,
+        app_out,
+        sizeof app_out,
+        NULL,
         "LocalVerifyCertificateSignature") != 0 ||
     expect_handshake_stage(c, 8, "LocalVerifyCertificateSignature") != 0) {
     fprintf(stderr, "LocalVerifyCertificateSignature did not verify signature\n");
@@ -626,14 +638,6 @@ static int test_client_hello_local_path(void) {
     return 1;
   }
 
-  if (expect_next_action(
-        c,
-        TLS13_Impl_Client_Types_LocalVerifyFinished,
-        TLS13_Impl_Client_Types_LocalPayloadServerFinishedHandshake,
-        "post-Finished next action") != 0) {
-    return 1;
-  }
-
   uint8_t server_finished_verify_data[32] = {0};
   size_t server_finished_verify_data_len =
       copy_server_finished_verify_data(c, server_finished_verify_data, sizeof server_finished_verify_data);
@@ -642,68 +646,66 @@ static int test_client_hello_local_path(void) {
     fprintf(stderr, "copy_server_finished_verify_data failed\n");
     return 1;
   }
-  uint8_t stored_finished[36] = {0};
-  stored_finished[0] = 20;
-  write_u24(stored_finished + 1, server_finished_verify_data_len);
-  memcpy(stored_finished + 4, server_finished_verify_data, server_finished_verify_data_len);
 
-  if (run_local_step(
+  if (run_suggested_local_step(
         c,
         TLS13_Impl_Client_Types_LocalVerifyFinished,
-        stored_finished,
-        sizeof stored_finished,
+        TLS13_Impl_Client_Types_LocalPayloadServerFinishedHandshake,
+        payload,
+        0,
+        network_out,
+        sizeof network_out,
+        app_out,
+        sizeof app_out,
+        NULL,
         "LocalVerifyFinished") != 0 ||
     expect_handshake_stage(c, 10, "LocalVerifyFinished") != 0) {
     fprintf(stderr, "LocalVerifyFinished did not verify Finished\n");
     return 1;
   }
 
-  if (expect_next_action(
+  if (run_suggested_local_step(
         c,
         TLS13_Impl_Client_Types_LocalInstallClientApplicationTrafficKeys,
         TLS13_Impl_Client_Types_LocalPayloadNone,
-        "post-Finished-verify next action") != 0) {
-    return 1;
-  }
-
-  if (run_local_step(
-        c,
-        TLS13_Impl_Client_Types_LocalInstallClientApplicationTrafficKeys,
-        payload,
-        0,
-        "LocalInstallClientApplicationTrafficKeys") != 0 ||
-    expect_next_action(
-        c,
-        TLS13_Impl_Client_Types_LocalInstallServerApplicationTrafficKeys,
-        TLS13_Impl_Client_Types_LocalPayloadNone,
-        "post-client-application-key next action") != 0 ||
-    run_local_step(
-        c,
-        TLS13_Impl_Client_Types_LocalInstallServerApplicationTrafficKeys,
-        payload,
-        0,
-        "LocalInstallServerApplicationTrafficKeys") != 0) {
-    return 1;
-  }
-
-  if (expect_next_action(
-        c,
-        TLS13_Impl_Client_Types_LocalSendClientFinished,
-        TLS13_Impl_Client_Types_LocalPayloadNone,
-        "post-application-keys next action") != 0) {
-    return 1;
-  }
-
-  TLS13_Impl_Client_Types_client_response client_finished =
-    process_local_event(
-        c,
-        TLS13_Impl_Client_Types_LocalSendClientFinished,
         payload,
         0,
         network_out,
         sizeof network_out,
         app_out,
-        sizeof app_out);
+        sizeof app_out,
+        NULL,
+        "LocalInstallClientApplicationTrafficKeys") != 0 ||
+    run_suggested_local_step(
+        c,
+        TLS13_Impl_Client_Types_LocalInstallServerApplicationTrafficKeys,
+        TLS13_Impl_Client_Types_LocalPayloadNone,
+        payload,
+        0,
+        network_out,
+        sizeof network_out,
+        app_out,
+        sizeof app_out,
+        NULL,
+        "LocalInstallServerApplicationTrafficKeys") != 0) {
+    return 1;
+  }
+
+  TLS13_Impl_Client_Types_client_response client_finished;
+  if (run_suggested_local_step(
+        c,
+        TLS13_Impl_Client_Types_LocalSendClientFinished,
+        TLS13_Impl_Client_Types_LocalPayloadNone,
+        payload,
+        0,
+        network_out,
+        sizeof network_out,
+        app_out,
+        sizeof app_out,
+        &client_finished,
+        "LocalSendClientFinished") != 0) {
+    return 1;
+  }
   if (expect_step_ok(client_finished, "LocalSendClientFinished") != 0 ||
     client_finished.network_out_len != 58 ||
     network_out[0] != 23 ||
