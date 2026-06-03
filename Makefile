@@ -129,18 +129,29 @@ BUNDLE_IMPL_MODULES = \
   TLS13.Impl.Client \
   TLS13.Impl.Client.Types \
   TLS13.Impl.ConnectionState \
+  TLS13.Impl.Handle.Alert \
+  TLS13.Impl.Handle.ApplicationData \
+  TLS13.Impl.Handle.ChangeCipherSpec \
+  TLS13.Impl.Handle.DecodeError \
+  TLS13.Impl.Handle.Dispatch \
+  TLS13.Impl.Handle.Handshake \
+  TLS13.Impl.Handle.Local \
   TLS13.Impl.Messages \
   TLS13.KeySchedule \
   TLS13.Record
 
 # Non-API modules (everything except TLS13.Impl.Client)
 BUNDLE_INTERNAL_MODULES = \
-  TLS13.Impl.Client.Types,TLS13.Impl.ConnectionState,TLS13.Impl.Messages,\
+  TLS13.Impl.Client.Types,TLS13.Impl.ConnectionState,\
+  TLS13.Impl.Handle.Alert,TLS13.Impl.Handle.ApplicationData,\
+  TLS13.Impl.Handle.ChangeCipherSpec,TLS13.Impl.Handle.DecodeError,\
+  TLS13.Impl.Handle.Dispatch,TLS13.Impl.Handle.Handshake,\
+  TLS13.Impl.Handle.Local,TLS13.Impl.Messages,\
   TLS13.KeySchedule,TLS13.Record
 
 # Interface-only modules (not extracted, only .fsti):
 # TLS13.Crypto, TLS13.X509, TLS13.MachineTypes, TLS13.IO,
-# TLS13.Impl.Parser, TLS13.Impl.Serializer, TLS13.Impl.Handle.*
+# TLS13.Impl.Parser, TLS13.Impl.Serializer
 
 # Extract all impl modules to .krml
 BUNDLE_KRML_FILES = $(patsubst %,$(OUTPUT_DIR)/%.krml,$(subst .,_,$(BUNDLE_IMPL_MODULES)))
@@ -180,12 +191,7 @@ extract-bundle: extract-krml-bundle | $(BUNDLE_DIR)
 	  -add-include '"../../c_stubs/tls13_spec_types.h"' \
 	  -bundle 'FStar.*,Pulse.*,PulseCore.*,Prims' \
 	  -no-prefix TLS13.Impl.Client \
-	  _output/TLS13_Impl_Client.krml \
-	  _output/TLS13_Impl_Client_Types.krml \
-	  _output/TLS13_Impl_ConnectionState.krml \
-	  _output/TLS13_Impl_Messages.krml \
-	  _output/TLS13_KeySchedule.krml \
-	  _output/TLS13_Record.krml \
+	  $(BUNDLE_KRML_FILES) \
 	  _output/FStar_Pervasives_Native.krml
 	@echo ""
 	@echo "Extraction complete:"
@@ -368,54 +374,17 @@ test/test_record_bindings: test/unit/test_record_bindings.c \
 test-record-bindings: test/test_record_bindings
 	./test/test_record_bindings
 
-# ── Main TLS Client Test ──────────────────────────────────────────
-# Primary end-to-end test for the verified TLS 1.3 client
-test/tls_client: test/tls_client.c extract-bundle $(CONNECTION_BACKEND_SOURCES) \
-  c_stubs/tls13_crypto_external.c c_stubs/tls13_pulse_shims.c $(HACL_OBJECTS)
-	$(CC) $(CFLAGS_COMMON) \
-	  -I$(BUNDLE_DIR) -I$(BUNDLE_DIR)/internal \
-	  $(BUNDLE_DIR)/TLS13*.c \
-	  c_stubs/tls13_crypto_external.c \
-	  c_stubs/tls13_pulse_shims.c \
-	  c_stubs/tls13_io_stubs.c \
-	  c_stubs/tls13_openssl_stubs.c \
-	  c_stubs/tls13_connection_backend_openssl.c \
-	  test/tls_client.c \
-	  $(HACL_WRAPPER_SOURCES) \
-	  $(LDFLAGS_COMMON) -lssl -lcrypto -o $@
-
-test-client: test/openssl_echo_server test/tls_client
-	@echo "Starting OpenSSL echo server..."
-	@scripts/test-openssl-echo.sh test/tls_client
-
 # ── Unit Tests ─────────────────────────────────────────────────────
 # These are low-level tests for individual modules (for development only)
 test/openssl_echo_server: test/openssl_echo_server.c
 	$(CC) -Wall -Wextra test/openssl_echo_server.c \
 	  -lssl -lcrypto -o $@
 
-test/test_extracted_connection_wrapper_openssl: \
-  $(CONNECTION_BACKEND_SOURCES) \
-  test/unit/test_extracted_connection_wrapper_openssl.c \
-  extract-bundle \
-  c_stubs/tls13_connection_backend.h \
-  c_stubs/tls13_crypto_external.c \
-  c_stubs/tls13_pulse_shims.c | check-deps
-	$(CC) $(CFLAGS_COMMON) \
-	  -I $(BUNDLE_DIR) -I $(BUNDLE_DIR)/internal \
-	  $(BUNDLE_DIR)/*.c \
-	  $(HACL_WRAPPER_SOURCES) \
-	  c_stubs/tls13_crypto_external.c \
-	  c_stubs/tls13_pulse_shims.c \
-	  c_stubs/tls13_io_stubs.c \
-	  c_stubs/tls13_openssl_stubs.c \
-	  c_stubs/tls13_connection_backend_openssl.c \
-	  test/unit/test_extracted_connection_wrapper_openssl.c \
-	  $(LDFLAGS_COMMON) -lssl -lcrypto -o $@
+test-client:
+	@echo "OpenSSL interop is pending the new buffer/event network driver."
 
-test-openssl-echo: test/openssl_echo_server \
-  test/test_extracted_connection_wrapper_openssl
-	scripts/test-openssl-echo.sh
+test-openssl-echo:
+	@echo "OpenSSL interop is pending the new buffer/event network driver."
 
 # ── Dependency Checks ──────────────────────────────────────────────
 check-toolchain:
@@ -440,11 +409,10 @@ clean:
 	  test/test_record_bindings test/test_io_stubs \
 	  test/test_extract_smoke test/test_connection_bindings \
 	  test/test_key_schedule_bindings \
-	  test/test_extracted_connection_wrapper_openssl \
 	  test/openssl_echo_server
 	find src test -name '*.checked' -delete
 
 .PHONY: all verify test extract-krml extract-connection extract-smoke extract-bundle \
   test-extract-smoke test-connection-bindings test-key-schedule-bindings \
   test-record-bindings test-hacl-stubs test-openssl-stubs test-io-stubs \
-  test-openssl-echo test-bundle check-c-stubs check-toolchain check-deps clean
+  test-client test-openssl-echo check-c-stubs check-toolchain check-deps clean

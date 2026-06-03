@@ -84,23 +84,23 @@ fn handle_alert
     'st0
     (M.TlsAlert malert)
     (Ghost.reveal 'raw_bytes)));
-  let parsed_alert = L.alert_description_of_wire_or_unexpected alert_wire;
+  let parsed_alert = Ghost.hide (L.alert_description_of_wire_or_unexpected alert_wire);
   L.lemma_alert_description_of_wire_matches alert_wire malert;
-  assert (pure (parsed_alert == malert));
-  assert (pure (L.alert_description_matches alert_wire parsed_alert));
+  assert (pure (Ghost.reveal parsed_alert == malert));
+  assert (pure (L.alert_description_matches alert_wire (Ghost.reveal parsed_alert)));
   assert (pure (CT.wire_parse_success
     content_type
     (Ghost.reveal 'fragment_bytes)
-    (M.TlsAlert parsed_alert)));
+    (M.TlsAlert (Ghost.reveal parsed_alert))));
   assert (pure (CT.received_tls_raw_delta_legal
     'st0
-    (M.TlsAlert parsed_alert)
+    (M.TlsAlert (Ghost.reveal parsed_alert))
     (Ghost.reveal 'raw_bytes)));
 
   let close_notify = alert_wire = 0uy;
   if close_notify {
     assert (pure (U8.v alert_wire == 0));
-    assert (pure (parsed_alert == T.CloseNotify));
+    assert (pure (Ghost.reveal parsed_alert == T.CloseNotify));
     assert (pure (CT.received_tls_raw_delta_legal
       'st0
       (M.TlsAlert T.CloseNotify)
@@ -185,7 +185,7 @@ fn handle_alert
     }
   } else {
     assert (pure (U8.v alert_wire <> 0));
-    L.lemma_alert_description_nonzero_not_close_notify alert_wire parsed_alert;
+    L.lemma_alert_description_nonzero_not_close_notify alert_wire (Ghost.reveal parsed_alert);
     C.mark_received_alert_failure c raw alert_wire #parsed_alert;
     let resp = {
       CT.network_out_len = 0sz;
@@ -198,37 +198,37 @@ fn handle_alert
     assert (pure (CT.wire_parse_success
       content_type
       (Ghost.reveal 'fragment_bytes)
-      (M.TlsAlert parsed_alert)));
-    C.lemma_received_alert_failure_state_evolves 'st0 parsed_alert (Ghost.reveal 'raw_bytes);
+      (M.TlsAlert (Ghost.reveal parsed_alert))));
+    C.lemma_received_alert_failure_state_evolves 'st0 (Ghost.reveal parsed_alert) (Ghost.reveal 'raw_bytes);
     assert (pure (CT.legal_received_tls_response
       'st0
-      (C.received_alert_failure_state 'st0 parsed_alert (Ghost.reveal 'raw_bytes))
+      (C.received_alert_failure_state 'st0 (Ghost.reveal parsed_alert) (Ghost.reveal 'raw_bytes))
       resp
-      (M.TlsAlert parsed_alert)
+      (M.TlsAlert (Ghost.reveal parsed_alert))
       (Ghost.reveal 'raw_bytes)
       'old_network_out
       'old_app_out));
     assert (pure (CT.legal_handled_tls_response
       'st0
-      (C.received_alert_failure_state 'st0 parsed_alert (Ghost.reveal 'raw_bytes))
+      (C.received_alert_failure_state 'st0 (Ghost.reveal parsed_alert) (Ghost.reveal 'raw_bytes))
       resp
-      (M.TlsAlert parsed_alert)
+      (M.TlsAlert (Ghost.reveal parsed_alert))
       (Ghost.reveal 'raw_bytes)
       'old_network_out
       'old_app_out));
     CT.lemma_legal_network_response_handled_from_parse_success
       'st0
-      (C.received_alert_failure_state 'st0 parsed_alert (Ghost.reveal 'raw_bytes))
+      (C.received_alert_failure_state 'st0 (Ghost.reveal parsed_alert) (Ghost.reveal 'raw_bytes))
       resp
       content_type
       (Ghost.reveal 'fragment_bytes)
-      (M.TlsAlert parsed_alert)
+      (M.TlsAlert (Ghost.reveal parsed_alert))
       (Ghost.reveal 'raw_bytes)
       'old_network_out
       'old_app_out;
     assert (pure (CT.some_legal_response
       'st0
-      (C.received_alert_failure_state 'st0 parsed_alert (Ghost.reveal 'raw_bytes))
+      (C.received_alert_failure_state 'st0 (Ghost.reveal parsed_alert) (Ghost.reveal 'raw_bytes))
       resp
       'old_network_out
       'old_app_out));

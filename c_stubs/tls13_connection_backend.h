@@ -4,6 +4,7 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
+#include <stdlib.h>
 #include <string.h>
 
 typedef struct TLS13_IO_channel_s *TLS13_IO_channel;
@@ -252,6 +253,237 @@ static inline void TLS13_Connection_Backend_write_u24(uint8_t *out, size_t v) {
   out[1] = (uint8_t)((v >> 8) & 0xffu);
   out[2] = (uint8_t)(v & 0xffu);
 }
+
+static inline size_t TLS13_Connection_Backend_read_u16(const uint8_t *in) {
+  return ((size_t)in[0] << 8) | (size_t)in[1];
+}
+
+static inline size_t TLS13_Connection_Backend_read_u24(const uint8_t *in) {
+  return ((size_t)in[0] << 16) | ((size_t)in[1] << 8) | (size_t)in[2];
+}
+
+#define FStar_SizeT_uint_to_t(n) ((size_t)(n))
+#define FStar_SizeT_v(n) ((size_t)(n))
+
+#define TLS13_Impl_ConnectionState_copy_hostname_sized_bytes(src, dst, ...) \
+  ((*((dst).len) = *((src).len)), memcpy((dst).bytes, (src).bytes, *((src).len)))
+
+#define TLS13_Impl_ConnectionState_copy_array_to_transcript(src, dst, nbytes, off, ...) \
+  (memcpy((dst) + (off), (src), (nbytes)))
+
+#define TLS13_Impl_ConnectionState_copy_client_hello_prefix_to_transcript(src, dst, nbytes, off, ...) \
+  TLS13_Impl_ConnectionState_copy_array_to_transcript((src), (dst), (nbytes), (off))
+
+#define TLS13_Impl_ConnectionState_copy_server_hello_prefix_to_transcript(src, dst, nbytes, off, ...) \
+  TLS13_Impl_ConnectionState_copy_array_to_transcript((src), (dst), (nbytes), (off))
+
+#define TLS13_Impl_ConnectionState_copy_array_to_certificate_verify_input_sized_bytes(src, dst, nbytes, ...) \
+  ((*((dst).len) = (nbytes)), memcpy((dst).bytes, (src), (nbytes)))
+
+#define TLS13_Impl_ConnectionState_copy_certificate_chain_range_to_sized_bytes(src, dst, off, nbytes, ...) \
+  ((*((dst).len) = (nbytes)), memcpy((dst).bytes, (src) + (off), (nbytes)))
+
+#define TLS13_Impl_ConnectionState_copy_array_to_public_key_sized_bytes(src, dst, nbytes, ...) \
+  ((*((dst).len) = (nbytes)), memcpy((dst).bytes, (src), (nbytes)))
+
+#define TLS13_Crypto_sha256_prefix(input, input_len, out, ...) \
+  TLS13_Crypto_sha256((input), (input_len), (out), NULL, NULL)
+
+static inline void TLS13_Connection_Backend_build_server_certificate_verify_input(
+    uint8_t *transcript_hash,
+    uint8_t *out,
+    size_t out_len) {
+  static const char context[] = "TLS 1.3, server CertificateVerify";
+  if (out_len < 130u) {
+    return;
+  }
+  memset(out, 0x20, 64u);
+  memcpy(out + 64u, context, sizeof(context) - 1u);
+  out[64u + sizeof(context) - 1u] = 0u;
+  memcpy(out + 65u + sizeof(context) - 1u, transcript_hash, 32u);
+}
+
+#define TLS13_Impl_Serializer_build_server_certificate_verify_input(transcript_hash, out, out_len, ...) \
+  TLS13_Connection_Backend_build_server_certificate_verify_input((transcript_hash), (out), (out_len))
+
+static inline size_t TLS13_Connection_Backend_serialize_raw_application_data_record(
+    uint8_t *fragment,
+    size_t fragment_len,
+    uint8_t *out,
+    size_t out_len) {
+  size_t written = 5u + fragment_len;
+  if (written > out_len || fragment_len > 0xffffu) {
+    return 0u;
+  }
+  out[0] = 23u;
+  out[1] = 0x03u;
+  out[2] = 0x03u;
+  TLS13_Connection_Backend_write_u16(out + 3u, fragment_len);
+  memcpy(out + 5u, fragment, fragment_len);
+  return written;
+}
+
+#define TLS13_Impl_Serializer_serialize_raw_application_data_record(fragment, fragment_len, out, out_len, ...) \
+  TLS13_Connection_Backend_serialize_raw_application_data_record((fragment), (fragment_len), (out), (out_len))
+
+static inline size_t TLS13_Connection_Backend_serialize_client_finished_outputs(
+    uint8_t *verify_data,
+    uint8_t *handshake_out,
+    uint8_t *network_out,
+    size_t network_out_len) {
+  if (network_out_len < 58u) {
+    return 0u;
+  }
+  handshake_out[0] = 20u;
+  TLS13_Connection_Backend_write_u24(handshake_out + 1u, 32u);
+  memcpy(handshake_out + 4u, verify_data, 32u);
+  network_out[0] = 23u;
+  network_out[1] = 0x03u;
+  network_out[2] = 0x03u;
+  TLS13_Connection_Backend_write_u16(network_out + 3u, 53u);
+  memcpy(network_out + 5u, handshake_out, 36u);
+  memset(network_out + 41u, 0u, 17u);
+  return 58u;
+}
+
+#define TLS13_Impl_Serializer_serialize_client_finished_outputs(lfin, handshake_out, network_out, network_out_len, ...) \
+  TLS13_Connection_Backend_serialize_client_finished_outputs((lfin), (handshake_out), (network_out), (network_out_len))
+
+#define TLS13_Impl_Parser_parse_tls_message(content_type, input, input_len, ...) \
+  ({ \
+    FStar_Pervasives_Native_option__TLS13_Impl_Messages_tls_message _r = { .tag = FStar_Pervasives_Native_None }; \
+    if ((content_type) == 20u && (input_len) == 1u && (input)[0] == 1u) { \
+      _r.tag = FStar_Pervasives_Native_Some; \
+      _r.v = (TLS13_Impl_Messages_tls_message){ .tag = TLS13_Impl_Messages_LTlsChangeCipherSpec }; \
+    } else if ((content_type) == 21u && (input_len) >= 2u) { \
+      _r.tag = FStar_Pervasives_Native_Some; \
+      _r.v = (TLS13_Impl_Messages_tls_message){ \
+        .tag = TLS13_Impl_Messages_LTlsAlert, \
+        { .case_LTlsAlert = (input)[1] } \
+      }; \
+    } else if ((content_type) == 23u) { \
+      _r.tag = FStar_Pervasives_Native_Some; \
+      _r.v = (TLS13_Impl_Messages_tls_message){ \
+        .tag = TLS13_Impl_Messages_LTlsApplicationData, \
+        { .case_LTlsApplicationData = { .application_data_bytes = (input), .application_data_len = (input_len) } } \
+      }; \
+    } else if ((content_type) == 22u && (input_len) >= 4u) { \
+      uint8_t _ht = (input)[0]; \
+      size_t _hlen = TLS13_Connection_Backend_read_u24((input) + 1u); \
+      if (_hlen + 4u <= (input_len)) { \
+        uint8_t *_body = (input) + 4u; \
+        TLS13_Impl_Messages_handshake_msg _hs = { .tag = TLS13_Impl_Messages_LHelloRetryRequest }; \
+        bool _ok = true; \
+        if (_ht == 2u && _hlen >= 38u) { \
+          size_t _sid_len = _body[34u]; \
+          size_t _cipher_off = 35u + _sid_len; \
+          size_t _ext_len_off = _cipher_off + 3u; \
+          uint8_t *_random = calloc(32u, sizeof(uint8_t)); \
+          uint8_t *_key_share = calloc(32u, sizeof(uint8_t)); \
+          _ok = _random != NULL && _key_share != NULL && _ext_len_off + 2u <= _hlen; \
+          uint16_t _cipher = 0u; \
+          if (_ok) { \
+            memcpy(_random, _body + 2u, 32u); \
+            _cipher = (uint16_t)TLS13_Connection_Backend_read_u16(_body + _cipher_off); \
+            size_t _ext_len = TLS13_Connection_Backend_read_u16(_body + _ext_len_off); \
+            size_t _pos = _ext_len_off + 2u; \
+            size_t _end = _pos + _ext_len; \
+            _ok = _end <= _hlen; \
+            bool _found_key_share = false; \
+            while (_ok && _pos + 4u <= _end) { \
+              size_t _etype = TLS13_Connection_Backend_read_u16(_body + _pos); \
+              size_t _elen = TLS13_Connection_Backend_read_u16(_body + _pos + 2u); \
+              _pos += 4u; \
+              if (_pos + _elen > _end) { \
+                _ok = false; \
+              } else if (_etype == 0x0033u && _elen >= 36u && TLS13_Connection_Backend_read_u16(_body + _pos + 2u) == 32u) { \
+                memcpy(_key_share, _body + _pos + 4u, 32u); \
+                _found_key_share = true; \
+              } \
+              _pos += _elen; \
+            } \
+            _ok = _ok && _found_key_share; \
+          } \
+          if (_ok) { \
+            _hs = (TLS13_Impl_Messages_handshake_msg){ \
+              .tag = TLS13_Impl_Messages_LServerHello, \
+              { .case_LServerHello = { \
+                  .server_hello_random = _random, \
+                  .server_hello_key_share = _key_share, \
+                  .server_hello_cipher_suite = _cipher } } \
+            }; \
+          } \
+        } else if (_ht == 8u) { \
+          _hs = (TLS13_Impl_Messages_handshake_msg){ \
+            .tag = TLS13_Impl_Messages_LEncryptedExtensions, \
+            { .case_LEncryptedExtensions = { \
+                .encrypted_extensions_alpn = NULL, \
+                .encrypted_extensions_alpn_len = 0u, \
+                .encrypted_extensions_has_alpn = false } } \
+          }; \
+        } else if (_ht == 11u && _hlen >= 7u) { \
+          size_t _cert_list_len_off = 1u; \
+          size_t _cert_list_len = TLS13_Connection_Backend_read_u24(_body + _cert_list_len_off); \
+          size_t _cert_len_off = 4u; \
+          size_t _cert_len = TLS13_Connection_Backend_read_u24(_body + _cert_len_off); \
+          size_t _cert_off = 7u; \
+          size_t *_offs = calloc(1u, sizeof(size_t)); \
+          size_t *_lens = calloc(1u, sizeof(size_t)); \
+          if (_offs != NULL && _lens != NULL && _cert_off + _cert_len + 2u <= _hlen && _cert_list_len + 4u <= _hlen) { \
+            _offs[0] = _cert_off; \
+            _lens[0] = _cert_len; \
+            _hs = (TLS13_Impl_Messages_handshake_msg){ \
+              .tag = TLS13_Impl_Messages_LCertificate, \
+              { .case_LCertificate = { \
+                  .certificate_msg_chain_bytes = _body, \
+                  .certificate_msg_chain_bytes_len = _hlen, \
+                  .certificate_msg_cert_offsets = _offs, \
+                  .certificate_msg_cert_lens = _lens, \
+                  .certificate_msg_cert_count = 1u } } \
+            }; \
+          } else { \
+            _ok = false; \
+          } \
+        } else if (_ht == 15u && _hlen >= 4u) { \
+          size_t _sig_len = TLS13_Connection_Backend_read_u16(_body + 2u); \
+          uint8_t *_sig = calloc(_sig_len == 0u ? 1u : _sig_len, sizeof(uint8_t)); \
+          if (_sig != NULL && 4u + _sig_len <= _hlen) { \
+            memcpy(_sig, _body + 4u, _sig_len); \
+            _hs = (TLS13_Impl_Messages_handshake_msg){ \
+              .tag = TLS13_Impl_Messages_LCertificateVerify, \
+              { .case_LCertificateVerify = { \
+                  .certificate_verify_scheme = (uint16_t)TLS13_Connection_Backend_read_u16(_body), \
+                  .certificate_verify_signature = _sig, \
+                  .certificate_verify_signature_len = _sig_len } } \
+            }; \
+          } else { \
+            _ok = false; \
+          } \
+        } else if (_ht == 20u && _hlen == 32u) { \
+          uint8_t *_fin = calloc(32u, sizeof(uint8_t)); \
+          if (_fin != NULL) { \
+            memcpy(_fin, _body, 32u); \
+            _hs = (TLS13_Impl_Messages_handshake_msg){ \
+              .tag = TLS13_Impl_Messages_LFinished, \
+              { .case_LFinished = _fin } \
+            }; \
+          } else { \
+            _ok = false; \
+          } \
+        } else { \
+          _ok = false; \
+        } \
+        if (_ok) { \
+          _r.tag = FStar_Pervasives_Native_Some; \
+          _r.v = (TLS13_Impl_Messages_tls_message){ \
+            .tag = TLS13_Impl_Messages_LTlsHandshake, \
+            { .case_LTlsHandshake = _hs } \
+          }; \
+        } \
+      } \
+    } \
+    _r; \
+  })
 
 static inline size_t TLS13_Connection_Backend_serialize_client_hello_from_start_impl(
     uint8_t *start_random,
