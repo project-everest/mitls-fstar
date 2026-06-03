@@ -76,6 +76,15 @@ let local_input_wf
       st.CS.cs_model
       (CS.ConnLocalEvent
         (CS.LocalValidateCertificate (local_validation_peer st payload)))
+  | LocalVerifyCertificateSignature ->
+    st.CS.cs_model.CS.model_control ==
+      CS.ControlHandshaking CS.HsCertificateVerifyReceived ==>
+    (match st.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify with
+     | Some cv ->
+       CS.legal_event
+         st.CS.cs_model
+         (CS.ConnLocalEvent (CS.LocalVerifyCertificateSignature cv))
+     | None -> False)
   | _ -> True
 
 let response_wf

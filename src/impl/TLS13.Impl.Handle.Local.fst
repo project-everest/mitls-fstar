@@ -461,6 +461,104 @@ fn handle_local_event
       resp
     }
   }
+    LocalVerifyCertificateSignature -> {
+    let ready = C.can_verify_certificate_signature c;
+    if ready {
+      let cv = Ghost.hide (Some?.v 'st0.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify);
+      assert (pure ('st0.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify ==
+        Some (Ghost.reveal cv)));
+      assert (pure (CT.local_input_wf
+        'st0
+        CT.LocalVerifyCertificateSignature
+        (Ghost.reveal 'payload_bytes)));
+      assert (pure ('st0.CS.cs_model.CS.model_control ==
+        CS.ControlHandshaking CS.HsCertificateVerifyReceived));
+      assert (pure (CS.legal_event
+        'st0.CS.cs_model
+        (CS.ConnLocalEvent
+          (CS.LocalVerifyCertificateSignature (Ghost.reveal cv)))));
+      C.mark_verified_certificate_signature c #cv;
+      let resp = {
+        CT.network_out_len = 0sz;
+        CT.app_out_len = 0sz;
+        CT.status = CT.StepOk;
+      };
+      Seq.lemma_len_slice 'old_network_out 0 0;
+      Seq.lemma_eq_intro B.empty (Seq.slice 'old_network_out 0 0);
+      assert (pure (Seq.equal B.empty (CT.response_network_out resp 'old_network_out)));
+      C.lemma_verified_certificate_signature_state_evolves
+        'st0
+        (Ghost.reveal cv);
+      assert (pure (CT.legal_response_for_event
+        'st0
+        (C.verified_certificate_signature_state 'st0 (Ghost.reveal cv))
+        resp
+        (CS.ConnLocalEvent
+          (CS.LocalVerifyCertificateSignature (Ghost.reveal cv)))
+        B.empty
+        B.empty
+        'old_network_out
+        'old_app_out));
+      assert (pure (CT.legal_local_response
+        'st0
+        (C.verified_certificate_signature_state 'st0 (Ghost.reveal cv))
+        resp
+        CT.LocalVerifyCertificateSignature
+        (Ghost.reveal 'payload_bytes)
+        (CS.ConnLocalEvent
+          (CS.LocalVerifyCertificateSignature (Ghost.reveal cv)))
+        B.empty
+        B.empty
+        'old_network_out
+        'old_app_out));
+      assert (pure (CT.legal_handled_local_response
+        'st0
+        (C.verified_certificate_signature_state 'st0 (Ghost.reveal cv))
+        resp
+        CT.LocalVerifyCertificateSignature
+        (Ghost.reveal 'payload_bytes)
+        'old_network_out
+        'old_app_out));
+      assert (pure (CT.some_legal_response
+        'st0
+        (C.verified_certificate_signature_state 'st0 (Ghost.reveal cv))
+        resp
+        'old_network_out
+        'old_app_out));
+      resp
+    } else {
+      C.mark_unexpected_message c;
+      let resp = {
+        CT.network_out_len = 0sz;
+        CT.app_out_len = 0sz;
+        CT.status = CT.IllegalTransition;
+      };
+      Seq.lemma_len_slice 'old_network_out 0 0;
+      Seq.lemma_eq_intro B.empty (Seq.slice 'old_network_out 0 0);
+      assert (pure (Seq.equal B.empty (CT.response_network_out resp 'old_network_out)));
+      assert (pure (CT.unexpected_message_response
+        'st0
+        (C.local_fail_state 'st0 C.tls_unexpected_message_error)
+        resp
+        'old_network_out
+        'old_app_out));
+      assert (pure (CT.legal_handled_local_response
+        'st0
+        (C.local_fail_state 'st0 C.tls_unexpected_message_error)
+        resp
+        CT.LocalVerifyCertificateSignature
+        (Ghost.reveal 'payload_bytes)
+        'old_network_out
+        'old_app_out));
+      assert (pure (CT.some_legal_response
+        'st0
+        (C.local_fail_state 'st0 C.tls_unexpected_message_error)
+        resp
+        'old_network_out
+        'old_app_out));
+      resp
+    }
+  }
     _ -> {
     C.mark_unexpected_message c;
     let resp = {
