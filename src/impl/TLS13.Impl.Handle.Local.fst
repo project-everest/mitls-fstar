@@ -360,6 +360,226 @@ fn handle_local_event
       resp
     }
   }
+    LocalInstallClientApplicationTrafficKeys -> {
+    let ok = C.try_install_client_application_traffic_keys c;
+    if ok {
+      with material.
+        assert (C.connection_exactly c
+          (C.installed_traffic_keys_state 'st0 {
+            CS.install_epoch = CS.TrafficApplication;
+            CS.install_direction = CS.TrafficWrite;
+            CS.install_material = material;
+          }));
+      let resp = {
+        CT.network_out_len = 0sz;
+        CT.app_out_len = 0sz;
+        CT.status = CT.StepOk;
+      };
+      Seq.lemma_len_slice 'old_network_out 0 0;
+      Seq.lemma_eq_intro B.empty (Seq.slice 'old_network_out 0 0);
+      assert (pure (Seq.equal B.empty (CT.response_network_out resp 'old_network_out)));
+      assert (pure (CT.legal_response_for_event
+        'st0
+        (C.installed_traffic_keys_state 'st0 {
+          CS.install_epoch = CS.TrafficApplication;
+          CS.install_direction = CS.TrafficWrite;
+          CS.install_material = material;
+        })
+        resp
+        (CS.ConnLocalEvent (CS.LocalInstallTrafficKeys {
+          CS.install_epoch = CS.TrafficApplication;
+          CS.install_direction = CS.TrafficWrite;
+          CS.install_material = material;
+        }))
+        B.empty
+        B.empty
+        'old_network_out
+        'old_app_out));
+      assert (pure (CT.legal_local_response
+        'st0
+        (C.installed_traffic_keys_state 'st0 {
+          CS.install_epoch = CS.TrafficApplication;
+          CS.install_direction = CS.TrafficWrite;
+          CS.install_material = material;
+        })
+        resp
+        CT.LocalInstallClientApplicationTrafficKeys
+        (Ghost.reveal 'payload_bytes)
+        (CS.ConnLocalEvent (CS.LocalInstallTrafficKeys {
+          CS.install_epoch = CS.TrafficApplication;
+          CS.install_direction = CS.TrafficWrite;
+          CS.install_material = material;
+        }))
+        B.empty
+        B.empty
+        'old_network_out
+        'old_app_out));
+      assert (pure (CT.legal_handled_local_response
+        'st0
+        (C.installed_traffic_keys_state 'st0 {
+          CS.install_epoch = CS.TrafficApplication;
+          CS.install_direction = CS.TrafficWrite;
+          CS.install_material = material;
+        })
+        resp
+        CT.LocalInstallClientApplicationTrafficKeys
+        (Ghost.reveal 'payload_bytes)
+        'old_network_out
+        'old_app_out));
+      assert (pure (CT.some_legal_response
+        'st0
+        (C.installed_traffic_keys_state 'st0 {
+          CS.install_epoch = CS.TrafficApplication;
+          CS.install_direction = CS.TrafficWrite;
+          CS.install_material = material;
+        })
+        resp
+        'old_network_out
+        'old_app_out));
+      resp
+    } else {
+      C.mark_unexpected_message c;
+      let resp = {
+        CT.network_out_len = 0sz;
+        CT.app_out_len = 0sz;
+        CT.status = CT.IllegalTransition;
+      };
+      Seq.lemma_len_slice 'old_network_out 0 0;
+      Seq.lemma_eq_intro B.empty (Seq.slice 'old_network_out 0 0);
+      assert (pure (Seq.equal B.empty (CT.response_network_out resp 'old_network_out)));
+      assert (pure (CT.unexpected_message_response
+        'st0
+        (C.local_fail_state 'st0 C.tls_unexpected_message_error)
+        resp
+        'old_network_out
+        'old_app_out));
+      assert (pure (CT.legal_handled_local_response
+        'st0
+        (C.local_fail_state 'st0 C.tls_unexpected_message_error)
+        resp
+        CT.LocalInstallClientApplicationTrafficKeys
+        (Ghost.reveal 'payload_bytes)
+        'old_network_out
+        'old_app_out));
+      assert (pure (CT.some_legal_response
+        'st0
+        (C.local_fail_state 'st0 C.tls_unexpected_message_error)
+        resp
+        'old_network_out
+        'old_app_out));
+      resp
+    }
+  }
+    LocalInstallServerApplicationTrafficKeys -> {
+    let ok = C.try_install_server_application_traffic_keys c;
+    if ok {
+      with material.
+        assert (C.connection_exactly c
+          (C.installed_traffic_keys_state 'st0 {
+            CS.install_epoch = CS.TrafficApplication;
+            CS.install_direction = CS.TrafficRead;
+            CS.install_material = material;
+          }));
+      let resp = {
+        CT.network_out_len = 0sz;
+        CT.app_out_len = 0sz;
+        CT.status = CT.StepOk;
+      };
+      Seq.lemma_len_slice 'old_network_out 0 0;
+      Seq.lemma_eq_intro B.empty (Seq.slice 'old_network_out 0 0);
+      assert (pure (Seq.equal B.empty (CT.response_network_out resp 'old_network_out)));
+      assert (pure (CT.legal_response_for_event
+        'st0
+        (C.installed_traffic_keys_state 'st0 {
+          CS.install_epoch = CS.TrafficApplication;
+          CS.install_direction = CS.TrafficRead;
+          CS.install_material = material;
+        })
+        resp
+        (CS.ConnLocalEvent (CS.LocalInstallTrafficKeys {
+          CS.install_epoch = CS.TrafficApplication;
+          CS.install_direction = CS.TrafficRead;
+          CS.install_material = material;
+        }))
+        B.empty
+        B.empty
+        'old_network_out
+        'old_app_out));
+      assert (pure (CT.legal_local_response
+        'st0
+        (C.installed_traffic_keys_state 'st0 {
+          CS.install_epoch = CS.TrafficApplication;
+          CS.install_direction = CS.TrafficRead;
+          CS.install_material = material;
+        })
+        resp
+        CT.LocalInstallServerApplicationTrafficKeys
+        (Ghost.reveal 'payload_bytes)
+        (CS.ConnLocalEvent (CS.LocalInstallTrafficKeys {
+          CS.install_epoch = CS.TrafficApplication;
+          CS.install_direction = CS.TrafficRead;
+          CS.install_material = material;
+        }))
+        B.empty
+        B.empty
+        'old_network_out
+        'old_app_out));
+      assert (pure (CT.legal_handled_local_response
+        'st0
+        (C.installed_traffic_keys_state 'st0 {
+          CS.install_epoch = CS.TrafficApplication;
+          CS.install_direction = CS.TrafficRead;
+          CS.install_material = material;
+        })
+        resp
+        CT.LocalInstallServerApplicationTrafficKeys
+        (Ghost.reveal 'payload_bytes)
+        'old_network_out
+        'old_app_out));
+      assert (pure (CT.some_legal_response
+        'st0
+        (C.installed_traffic_keys_state 'st0 {
+          CS.install_epoch = CS.TrafficApplication;
+          CS.install_direction = CS.TrafficRead;
+          CS.install_material = material;
+        })
+        resp
+        'old_network_out
+        'old_app_out));
+      resp
+    } else {
+      C.mark_unexpected_message c;
+      let resp = {
+        CT.network_out_len = 0sz;
+        CT.app_out_len = 0sz;
+        CT.status = CT.IllegalTransition;
+      };
+      Seq.lemma_len_slice 'old_network_out 0 0;
+      Seq.lemma_eq_intro B.empty (Seq.slice 'old_network_out 0 0);
+      assert (pure (Seq.equal B.empty (CT.response_network_out resp 'old_network_out)));
+      assert (pure (CT.unexpected_message_response
+        'st0
+        (C.local_fail_state 'st0 C.tls_unexpected_message_error)
+        resp
+        'old_network_out
+        'old_app_out));
+      assert (pure (CT.legal_handled_local_response
+        'st0
+        (C.local_fail_state 'st0 C.tls_unexpected_message_error)
+        resp
+        CT.LocalInstallServerApplicationTrafficKeys
+        (Ghost.reveal 'payload_bytes)
+        'old_network_out
+        'old_app_out));
+      assert (pure (CT.some_legal_response
+        'st0
+        (C.local_fail_state 'st0 C.tls_unexpected_message_error)
+        resp
+        'old_network_out
+        'old_app_out));
+      resp
+    }
+  }
     LocalValidateCertificate -> {
     let ready = C.can_validate_certificate c payload_len;
     if ready {
