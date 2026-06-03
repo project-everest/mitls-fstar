@@ -1257,8 +1257,41 @@ noextract
 let default_initial_state : CS.connection_state =
   CS.initial default_connection_config
 
+noextract
+let configured_connection_config
+  (server_name:B.bytes)
+  (trust_anchors:B.bytes)
+  (validation_time_seconds:SZ.t)
+  : CS.connection_config =
+  {
+    CS.config_role = CS.ClientEndpoint;
+    CS.config_server_name = server_name;
+    CS.config_trust_store = { X.anchors = trust_anchors };
+    CS.config_validation_time = { X.seconds_since_epoch = SZ.v validation_time_seconds };
+    CS.config_cipher_suites = default_connection_config.CS.config_cipher_suites;
+    CS.config_signature_schemes = default_connection_config.CS.config_signature_schemes;
+  }
+
+noextract
+let configured_initial_state
+  (server_name:B.bytes)
+  (trust_anchors:B.bytes)
+  (validation_time_seconds:SZ.t)
+  : CS.connection_state =
+  CS.initial (configured_connection_config server_name trust_anchors validation_time_seconds)
+
 let lemma_default_initial_consistent ()
   : Lemma (CS.connection_state_consistent default_initial_state)
+=
+  ()
+
+let lemma_configured_initial_consistent
+  (server_name:B.bytes)
+  (trust_anchors:B.bytes)
+  (validation_time_seconds:SZ.t)
+  : Lemma
+      (CS.connection_state_consistent
+        (configured_initial_state server_name trust_anchors validation_time_seconds))
 =
   ()
 
@@ -1281,6 +1314,52 @@ fn alloc_empty_sized_bytes (#cap:nat)
   assert (pure (byte_prefix_matches (Seq.create cap 0uy) (SZ.uint_to_t 0) B.empty));
   fold (sized_bytes_exactly slot cap B.empty);
   slot
+}
+
+fn copy_array_to_sized_bytes
+  (#cap:nat)
+  (src:array U8.t)
+  (dst:sized_bytes)
+  (src_len:SZ.t)
+  requires ArrPts.pts_to src 'src_bytes **
+           sized_bytes_allocated dst cap **
+           pure (SZ.fits cap /\
+                 B.length 'src_bytes == SZ.v src_len /\
+                 SZ.v src_len <= cap)
+  ensures ArrPts.pts_to src 'src_bytes **
+          sized_bytes_exactly dst cap (Ghost.reveal 'src_bytes)
+{
+  unfold (sized_bytes_allocated dst cap);
+  with dst_storage dst_len. _;
+
+  ArrPts.pts_to_len src;
+  V.to_array_pts_to dst.bytes;
+
+  let dst_cap = SZ.uint_to_t cap;
+  let src_slice = Slice.from_array src src_len;
+  let dst_slice = Slice.from_array (V.vec_to_array dst.bytes) dst_cap;
+
+  let dst_split = Slice.split dst_slice src_len;
+
+  Slice.pts_to_len src_slice;
+  Slice.pts_to_len (fst dst_split);
+  assert (pure (Slice.len src_slice == src_len));
+  assert (pure (Slice.len (fst dst_split) == src_len));
+  Slice.copy (fst dst_split) src_slice;
+
+  Slice.to_array src_slice;
+
+  Slice.join (fst dst_split) (snd dst_split) dst_slice;
+  Slice.to_array dst_slice;
+  V.to_vec_pts_to dst.bytes;
+  dst.len := src_len;
+
+  with copied_dst_storage. assert (V.pts_to dst.bytes copied_dst_storage);
+  Seq.lemma_len_slice copied_dst_storage 0 (SZ.v src_len);
+  assert (pure (Seq.equal
+    (Seq.slice copied_dst_storage 0 (SZ.v src_len))
+    (Ghost.reveal 'src_bytes)));
+  fold (sized_bytes_exactly dst cap (Ghost.reveal 'src_bytes))
 }
 
 fn alloc_empty_optional_sized_bytes (#cap:nat)
@@ -1472,6 +1551,128 @@ fn alloc_default_config_storage ()
   assert (pure (SZ.v 0sz ==
     default_connection_config.CS.config_validation_time.X.seconds_since_epoch));
   fold (connection_config_exactly cfg default_connection_config);
+  cfg
+}
+
+fn alloc_config_storage
+  (server_name:array U8.t)
+  (server_name_len:SZ.t)
+  (trust_anchors:array U8.t)
+  (trust_anchors_len:SZ.t)
+  (validation_time_seconds:SZ.t)
+  requires ArrPts.pts_to server_name 'server_name_bytes **
+           ArrPts.pts_to trust_anchors 'trust_anchors_bytes **
+           pure (B.length 'server_name_bytes == SZ.v server_name_len /\
+                 B.length 'trust_anchors_bytes == SZ.v trust_anchors_len /\
+                 SZ.v server_name_len <= max_hostname_len /\
+                 SZ.v trust_anchors_len <= max_trust_anchors_len)
+  returns cfg:connection_config_storage
+  ensures ArrPts.pts_to server_name 'server_name_bytes **
+          ArrPts.pts_to trust_anchors 'trust_anchors_bytes **
+          connection_config_exactly
+            cfg
+            (configured_connection_config
+              (Ghost.reveal 'server_name_bytes)
+              (Ghost.reveal 'trust_anchors_bytes)
+              validation_time_seconds)
+{
+  assert (pure (SZ.fits max_hostname_len));
+  assert (pure (SZ.fits max_trust_anchors_len));
+  let role_tag = Box.alloc 0uy;
+  let server_name_slot = alloc_empty_sized_bytes #max_hostname_len;
+  unfold (sized_bytes_exactly server_name_slot max_hostname_len B.empty);
+  with empty_server_name_storage empty_server_name_len. _;
+  fold (sized_bytes_allocated server_name_slot max_hostname_len);
+  copy_array_to_sized_bytes
+    #max_hostname_len
+    server_name
+    server_name_slot
+    server_name_len;
+  let trust_anchors_slot = alloc_empty_sized_bytes #max_trust_anchors_len;
+  unfold (sized_bytes_exactly trust_anchors_slot max_trust_anchors_len B.empty);
+  with empty_trust_anchors_storage empty_trust_anchors_len. _;
+  fold (sized_bytes_allocated trust_anchors_slot max_trust_anchors_len);
+  copy_array_to_sized_bytes
+    #max_trust_anchors_len
+    trust_anchors
+    trust_anchors_slot
+    trust_anchors_len;
+  let validation_time_seconds_box = Box.alloc validation_time_seconds;
+  let cipher_suites = alloc_default_cipher_suites ();
+  let signature_schemes = alloc_default_signature_schemes ();
+  let cfg = {
+    role_tag;
+    server_name = server_name_slot;
+    trust_anchors = trust_anchors_slot;
+    validation_time_seconds = validation_time_seconds_box;
+    cipher_suites;
+    signature_schemes;
+  };
+  rewrite (Box.pts_to role_tag 0uy) as (Box.pts_to cfg.role_tag 0uy);
+  rewrite (sized_bytes_exactly
+    server_name_slot
+    max_hostname_len
+    (Ghost.reveal 'server_name_bytes)) as
+    (sized_bytes_exactly
+      cfg.server_name
+      max_hostname_len
+      (configured_connection_config
+        (Ghost.reveal 'server_name_bytes)
+        (Ghost.reveal 'trust_anchors_bytes)
+        validation_time_seconds).CS.config_server_name);
+  rewrite (sized_bytes_exactly
+    trust_anchors_slot
+    max_trust_anchors_len
+    (Ghost.reveal 'trust_anchors_bytes)) as
+    (sized_bytes_exactly
+      cfg.trust_anchors
+      max_trust_anchors_len
+      (configured_connection_config
+        (Ghost.reveal 'server_name_bytes)
+        (Ghost.reveal 'trust_anchors_bytes)
+        validation_time_seconds).CS.config_trust_store.X.anchors);
+  rewrite (Box.pts_to validation_time_seconds_box validation_time_seconds) as
+    (Box.pts_to cfg.validation_time_seconds validation_time_seconds);
+  rewrite (cipher_suite_list_exactly
+    cipher_suites
+    max_cipher_suites
+    default_connection_config.CS.config_cipher_suites) as
+    (cipher_suite_list_exactly
+      cfg.cipher_suites
+      max_cipher_suites
+      (configured_connection_config
+        (Ghost.reveal 'server_name_bytes)
+        (Ghost.reveal 'trust_anchors_bytes)
+        validation_time_seconds).CS.config_cipher_suites);
+  rewrite (signature_scheme_list_exactly
+    signature_schemes
+    max_signature_schemes
+    default_connection_config.CS.config_signature_schemes) as
+    (signature_scheme_list_exactly
+      cfg.signature_schemes
+      max_signature_schemes
+      (configured_connection_config
+        (Ghost.reveal 'server_name_bytes)
+        (Ghost.reveal 'trust_anchors_bytes)
+        validation_time_seconds).CS.config_signature_schemes);
+  assert_norm (endpoint_role_tag_matches 0uy CS.ClientEndpoint);
+  assert (pure (endpoint_role_tag_matches
+    0uy
+    (configured_connection_config
+      (Ghost.reveal 'server_name_bytes)
+      (Ghost.reveal 'trust_anchors_bytes)
+      validation_time_seconds).CS.config_role));
+  assert (pure (SZ.v validation_time_seconds ==
+    (configured_connection_config
+      (Ghost.reveal 'server_name_bytes)
+      (Ghost.reveal 'trust_anchors_bytes)
+      validation_time_seconds).CS.config_validation_time.X.seconds_since_epoch));
+  fold (connection_config_exactly
+    cfg
+    (configured_connection_config
+      (Ghost.reveal 'server_name_bytes)
+      (Ghost.reveal 'trust_anchors_bytes)
+      validation_time_seconds));
   cfg
 }
 
@@ -1928,6 +2129,144 @@ fn new_client_default ()
   rewrite (MR.pts_to ghost_state #1.0R default_initial_state) as
     (MR.pts_to c.ghost_state #1.0R default_initial_state);
   fold (connection_exactly c default_initial_state);
+  c
+}
+
+fn new_client
+  (server_name:array U8.t)
+  (server_name_len:SZ.t)
+  (trust_anchors:array U8.t)
+  (trust_anchors_len:SZ.t)
+  (validation_time_seconds:SZ.t)
+  requires ArrPts.pts_to server_name 'server_name_bytes **
+           ArrPts.pts_to trust_anchors 'trust_anchors_bytes **
+           pure (B.length 'server_name_bytes == SZ.v server_name_len /\
+                 B.length 'trust_anchors_bytes == SZ.v trust_anchors_len /\
+                 SZ.v server_name_len <= max_hostname_len /\
+                 SZ.v trust_anchors_len <= max_trust_anchors_len)
+  returns c:connection_state
+  ensures ArrPts.pts_to server_name 'server_name_bytes **
+          ArrPts.pts_to trust_anchors 'trust_anchors_bytes **
+          connection_exactly
+            c
+            (configured_initial_state
+              (Ghost.reveal 'server_name_bytes)
+              (Ghost.reveal 'trust_anchors_bytes)
+              validation_time_seconds)
+{
+  lemma_configured_initial_consistent
+    (Ghost.reveal 'server_name_bytes)
+    (Ghost.reveal 'trust_anchors_bytes)
+    validation_time_seconds;
+  let config =
+    alloc_config_storage
+      server_name
+      server_name_len
+      trust_anchors
+      trust_anchors_len
+      validation_time_seconds;
+  let control = alloc_control_new ();
+  let read = Rec.record_state_new ();
+  let write = Rec.record_state_new ();
+  let records = { read; write };
+  let handshake = alloc_handshake_empty ();
+  let application = alloc_application_empty ();
+  let ghost_state = MR.alloc #_ #connection_state_preorder
+    (configured_initial_state
+      (Ghost.reveal 'server_name_bytes)
+      (Ghost.reveal 'trust_anchors_bytes)
+      validation_time_seconds);
+  let c = {
+    config;
+    control;
+    records;
+    handshake;
+    application;
+    ghost_state;
+  };
+  rewrite (connection_config_exactly
+    config
+    (configured_connection_config
+      (Ghost.reveal 'server_name_bytes)
+      (Ghost.reveal 'trust_anchors_bytes)
+      validation_time_seconds)) as
+    (connection_config_exactly
+      c.config
+      (configured_initial_state
+        (Ghost.reveal 'server_name_bytes)
+        (Ghost.reveal 'trust_anchors_bytes)
+        validation_time_seconds).CS.cs_model.CS.model_config);
+  rewrite (control_exactly control CS.ControlNew None) as
+    (control_exactly
+      c.control
+      (configured_initial_state
+        (Ghost.reveal 'server_name_bytes)
+        (Ghost.reveal 'trust_anchors_bytes)
+        validation_time_seconds).CS.cs_model.CS.model_control
+      (configured_initial_state
+        (Ghost.reveal 'server_name_bytes)
+        (Ghost.reveal 'trust_anchors_bytes)
+        validation_time_seconds).CS.cs_model.CS.model_failure);
+  rewrite (Rec.is_record_state read R.initial_direction_state) as
+    (Rec.is_record_state
+      c.records.read
+      (configured_initial_state
+        (Ghost.reveal 'server_name_bytes)
+        (Ghost.reveal 'trust_anchors_bytes)
+        validation_time_seconds).CS.cs_model.CS.model_record.CS.record_read);
+  rewrite (Rec.is_record_state write R.initial_direction_state) as
+    (Rec.is_record_state
+      c.records.write
+      (configured_initial_state
+        (Ghost.reveal 'server_name_bytes)
+        (Ghost.reveal 'trust_anchors_bytes)
+        validation_time_seconds).CS.cs_model.CS.model_record.CS.record_write);
+  fold (record_layer_exactly
+    c.records
+    (configured_initial_state
+      (Ghost.reveal 'server_name_bytes)
+      (Ghost.reveal 'trust_anchors_bytes)
+      validation_time_seconds).CS.cs_model.CS.model_record);
+  rewrite (handshake_exactly handshake CS.empty_handshake_state) as
+    (handshake_exactly
+      c.handshake
+      (configured_initial_state
+        (Ghost.reveal 'server_name_bytes)
+        (Ghost.reveal 'trust_anchors_bytes)
+        validation_time_seconds).CS.cs_model.CS.model_handshake);
+  rewrite (application_exactly application CS.empty_application_state) as
+    (application_exactly
+      c.application
+      (configured_initial_state
+        (Ghost.reveal 'server_name_bytes)
+        (Ghost.reveal 'trust_anchors_bytes)
+        validation_time_seconds).CS.cs_model.CS.model_application);
+  fold (connection_model_exactly
+    c
+    (configured_initial_state
+      (Ghost.reveal 'server_name_bytes)
+      (Ghost.reveal 'trust_anchors_bytes)
+      validation_time_seconds).CS.cs_model);
+  rewrite (MR.pts_to
+    ghost_state
+    #1.0R
+    (configured_initial_state
+      (Ghost.reveal 'server_name_bytes)
+      (Ghost.reveal 'trust_anchors_bytes)
+      validation_time_seconds)) as
+    (MR.pts_to
+      c.ghost_state
+      #1.0R
+      (configured_initial_state
+        (Ghost.reveal 'server_name_bytes)
+        (Ghost.reveal 'trust_anchors_bytes)
+        validation_time_seconds));
+  fold (connection_exactly
+    c
+    (configured_initial_state
+      (Ghost.reveal 'server_name_bytes)
+      (Ghost.reveal 'trust_anchors_bytes)
+      validation_time_seconds));
   c
 }
 

@@ -268,6 +268,15 @@ static inline size_t TLS13_Connection_Backend_read_u24(const uint8_t *in) {
 #define TLS13_Impl_ConnectionState_copy_hostname_sized_bytes(src, dst, ...) \
   ((*((dst).len) = *((src).len)), memcpy((dst).bytes, (src).bytes, *((src).len)))
 
+#define TLS13_Impl_ConnectionState_copy_array_to_sized_bytes(cap, src, dst, nbytes, ...) \
+  do { \
+    size_t tls13_copy_nbytes = (size_t)(nbytes); \
+    *((dst).len) = tls13_copy_nbytes; \
+    if (tls13_copy_nbytes != 0u) { \
+      memcpy((dst).bytes, (src), tls13_copy_nbytes); \
+    } \
+  } while (0)
+
 #define TLS13_Impl_ConnectionState_copy_array_to_transcript(src, dst, nbytes, off, ...) \
   (memcpy((dst) + (off), (src), (nbytes)))
 

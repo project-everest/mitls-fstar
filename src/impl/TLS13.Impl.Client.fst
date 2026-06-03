@@ -24,6 +24,36 @@ fn new_client_default ()
   C.new_client_default ()
 }
 
+fn new_client
+  (server_name:array U8.t)
+  (server_name_len:SZ.t)
+  (trust_anchors:array U8.t)
+  (trust_anchors_len:SZ.t)
+  (validation_time_seconds:SZ.t)
+  requires pts_to server_name 'server_name_bytes **
+           pts_to trust_anchors 'trust_anchors_bytes **
+           pure (B.length 'server_name_bytes == SZ.v server_name_len /\
+                 B.length 'trust_anchors_bytes == SZ.v trust_anchors_len /\
+                 SZ.v server_name_len <= C.max_hostname_len /\
+                 SZ.v trust_anchors_len <= C.max_trust_anchors_len)
+  returns c:client
+  ensures pts_to server_name 'server_name_bytes **
+          pts_to trust_anchors 'trust_anchors_bytes **
+          C.connection_exactly
+            c
+            (C.configured_initial_state
+              (Ghost.reveal 'server_name_bytes)
+              (Ghost.reveal 'trust_anchors_bytes)
+              validation_time_seconds)
+{
+  C.new_client
+    server_name
+    server_name_len
+    trust_anchors
+    trust_anchors_len
+    validation_time_seconds
+}
+
 fn process_network_event
   (c:client)
   (content_type:U8.t)
