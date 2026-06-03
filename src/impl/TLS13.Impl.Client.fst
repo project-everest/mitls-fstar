@@ -10,6 +10,7 @@ module CS = TLS13.Spec.ConnectionState
 module C = TLS13.Impl.ConnectionState
 module CT = TLS13.Impl.Client.Types
 module HDispatch = TLS13.Impl.Handle.Dispatch
+module HDecodeError = TLS13.Impl.Handle.DecodeError
 module HLocal = TLS13.Impl.Handle.Local
 module L = TLS13.Impl.Messages
 module M = TLS13.Messages
@@ -17,6 +18,7 @@ module P = TLS13.Impl.Parser
 module Seq = FStar.Seq
 module SZ = FStar.SizeT
 module U8 = FStar.UInt8
+module V = Pulse.Lib.Vec
 
 fn new_client_default ()
   returns c:client
@@ -201,6 +203,88 @@ fn process_network_event
     network_out_len
     app_out
     app_out_len
+}
+
+fn process_tls_record
+  (c:client)
+  (raw:array U8.t)
+  (raw_len:SZ.t)
+  (network_out:array U8.t)
+  (network_out_len:SZ.t)
+  (app_out:array U8.t)
+  (app_out_len:SZ.t)
+  requires C.connection_exactly c 'st0 **
+           pts_to raw 'raw_bytes **
+           pts_to network_out 'old_network_out **
+           pts_to app_out 'old_app_out **
+           pure (B.length 'raw_bytes == SZ.v raw_len /\
+                 B.length 'old_network_out == SZ.v network_out_len /\
+                 B.length 'old_app_out == SZ.v app_out_len /\
+                 L.max_record_fragment_len <= SZ.v app_out_len)
+  returns resp: CT.client_response
+  ensures exists* st1 network_out_bytes app_out_bytes.
+          C.connection_exactly c st1 **
+          pts_to raw 'raw_bytes **
+          pts_to network_out network_out_bytes **
+          pts_to app_out app_out_bytes **
+          pure (B.length network_out_bytes == SZ.v network_out_len /\
+                B.length app_out_bytes == SZ.v app_out_len /\
+                ((resp.CT.status == CT.NeedMoreInput /\
+                  resp.CT.network_out_len == 0sz /\
+                  resp.CT.app_out_len == 0sz /\
+                  st1 == 'st0 /\
+                  Seq.equal network_out_bytes 'old_network_out /\
+                  Seq.equal app_out_bytes 'old_app_out) \/
+                 CT.some_legal_response
+                   'st0
+                   st1
+                   resp
+                   network_out_bytes
+                   app_out_bytes))
+{
+  let decoded = P.decode_network_record c raw raw_len;
+  match decoded {
+    L.NetworkRecordNeedMoreInput -> {
+      let resp = {
+        CT.network_out_len = 0sz;
+        CT.app_out_len = 0sz;
+        CT.status = CT.NeedMoreInput;
+      };
+      resp
+    }
+    L.NetworkRecordDecodeError -> {
+      HDecodeError.handle_decode_error
+        c
+        raw
+        raw_len
+        network_out
+        network_out_len
+        app_out
+        app_out_len
+    }
+    L.NetworkRecordOk decoded_record -> {
+      with fragment_bytes.
+        assert (V.pts_to decoded_record.L.decoded_record_fragment fragment_bytes);
+      V.to_array_pts_to decoded_record.L.decoded_record_fragment;
+      let resp =
+        HDispatch.dispatch_network_event
+          c
+          decoded_record.L.decoded_record_content_type
+          decoded_record.L.decoded_record_parsed
+          raw
+          raw_len
+          (V.vec_to_array decoded_record.L.decoded_record_fragment)
+          decoded_record.L.decoded_record_fragment_len
+          network_out
+          network_out_len
+          app_out
+          app_out_len;
+      with st1 network_out_bytes app_out_bytes. assert (pure True);
+      V.to_vec_pts_to decoded_record.L.decoded_record_fragment;
+      V.free decoded_record.L.decoded_record_fragment;
+      resp
+    }
+  }
 }
 
 fn process_local_event

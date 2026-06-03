@@ -512,6 +512,154 @@ static inline size_t TLS13_Connection_Backend_serialize_client_finished_outputs(
     _r; \
   })
 
+static inline bool TLS13_Connection_Backend_is_tls_content_type(uint8_t ct) {
+  return ct == 20u || ct == 21u || ct == 22u || ct == 23u;
+}
+
+#define TLS13_CONNECTION_BACKEND_DECODED_RECORD_NEED_MORE_INPUT() \
+  ({ \
+    TLS13_Impl_Messages_decoded_network_record_result _tls13_decoded = { \
+      .tag = TLS13_Impl_Messages_NetworkRecordNeedMoreInput \
+    }; \
+    _tls13_decoded; \
+  })
+
+#define TLS13_CONNECTION_BACKEND_DECODED_RECORD_DECODE_ERROR() \
+  ({ \
+    TLS13_Impl_Messages_decoded_network_record_result _tls13_decoded = { \
+      .tag = TLS13_Impl_Messages_NetworkRecordDecodeError \
+    }; \
+    _tls13_decoded; \
+  })
+
+static inline bool TLS13_Connection_Backend_decode_inner_plaintext(
+    uint8_t *inner,
+    size_t inner_len,
+    uint8_t *content_type_out,
+    size_t *payload_len_out) {
+  if (inner_len == 0u) {
+    return false;
+  }
+  size_t pos = inner_len;
+  while (pos > 0u && inner[pos - 1u] == 0u) {
+    pos--;
+  }
+  if (pos == 0u) {
+    return false;
+  }
+  uint8_t ct = inner[pos - 1u];
+  if (!TLS13_Connection_Backend_is_tls_content_type(ct)) {
+    return false;
+  }
+  *content_type_out = ct;
+  *payload_len_out = pos - 1u;
+  return true;
+}
+
+#define TLS13_Impl_Parser_decode_network_record(c, raw, raw_len, ...) \
+  ({ \
+    TLS13_Impl_ConnectionState_connection_state _tls13_c = (c); \
+    uint8_t *_tls13_raw = (raw); \
+    size_t _tls13_raw_len = (raw_len); \
+    TLS13_Impl_Messages_decoded_network_record_result _tls13_result = \
+      TLS13_CONNECTION_BACKEND_DECODED_RECORD_DECODE_ERROR(); \
+    if (_tls13_raw_len < 5u) { \
+      _tls13_result = TLS13_CONNECTION_BACKEND_DECODED_RECORD_NEED_MORE_INPUT(); \
+    } else { \
+      uint8_t _tls13_outer_ct = _tls13_raw[0]; \
+      if (!TLS13_Connection_Backend_is_tls_content_type(_tls13_outer_ct) || \
+          _tls13_raw[1] != 3u || \
+          _tls13_raw[2] != 3u) { \
+        _tls13_result = TLS13_CONNECTION_BACKEND_DECODED_RECORD_DECODE_ERROR(); \
+      } else { \
+        size_t _tls13_fragment_len = TLS13_Connection_Backend_read_u16(_tls13_raw + 3u); \
+        if (_tls13_fragment_len > 16640u) { \
+          _tls13_result = TLS13_CONNECTION_BACKEND_DECODED_RECORD_DECODE_ERROR(); \
+        } else if (_tls13_raw_len < 5u + _tls13_fragment_len) { \
+          _tls13_result = TLS13_CONNECTION_BACKEND_DECODED_RECORD_NEED_MORE_INPUT(); \
+        } else if (_tls13_raw_len != 5u + _tls13_fragment_len) { \
+          _tls13_result = TLS13_CONNECTION_BACKEND_DECODED_RECORD_DECODE_ERROR(); \
+        } else { \
+          uint8_t *_tls13_record_fragment = _tls13_raw + 5u; \
+          uint8_t _tls13_content_type = _tls13_outer_ct; \
+          uint8_t *_tls13_payload = _tls13_record_fragment; \
+          size_t _tls13_payload_len = _tls13_fragment_len; \
+          uint8_t *_tls13_opened_to_free = NULL; \
+          bool _tls13_decoded = _tls13_outer_ct != 23u; \
+          if (_tls13_outer_ct == 23u) { \
+            uint8_t _tls13_inner_ct = 0u; \
+            size_t _tls13_inner_payload_len = 0u; \
+            if (_tls13_c.records.read.installed != NULL && \
+                *_tls13_c.records.read.installed && \
+                _tls13_fragment_len >= 16u) { \
+              size_t _tls13_opened_len = _tls13_fragment_len - 16u; \
+              uint8_t *_tls13_opened = calloc(_tls13_opened_len == 0u ? 1u : _tls13_opened_len, sizeof(uint8_t)); \
+              if (_tls13_opened != NULL) { \
+                uint8_t _tls13_aad[1] = {0}; \
+                if (TLS13_Record_peek_open_application( \
+                      _tls13_c.records.read, \
+                      _tls13_aad, \
+                      0u, \
+                      _tls13_record_fragment, \
+                      _tls13_fragment_len, \
+                      _tls13_opened)) { \
+                  if (TLS13_Connection_Backend_decode_inner_plaintext( \
+                        _tls13_opened, \
+                        _tls13_opened_len, \
+                        &_tls13_inner_ct, \
+                        &_tls13_inner_payload_len)) { \
+                    _tls13_content_type = _tls13_inner_ct; \
+                    _tls13_payload = _tls13_opened; \
+                    _tls13_payload_len = _tls13_inner_payload_len; \
+                    _tls13_opened_to_free = _tls13_opened; \
+                    _tls13_decoded = true; \
+                  } else { \
+                    _tls13_content_type = \
+                      (_tls13_opened_len == 2u && _tls13_opened[0] <= 2u) ? 21u : 23u; \
+                    _tls13_payload = _tls13_opened; \
+                    _tls13_payload_len = _tls13_opened_len; \
+                    _tls13_opened_to_free = _tls13_opened; \
+                    _tls13_decoded = true; \
+                  } \
+                } \
+                if (!_tls13_decoded) { \
+                  free(_tls13_opened); \
+                } \
+              } \
+            } \
+            if (!_tls13_decoded && \
+                TLS13_Connection_Backend_decode_inner_plaintext( \
+                  _tls13_record_fragment, \
+                  _tls13_fragment_len, \
+                  &_tls13_inner_ct, \
+                  &_tls13_inner_payload_len)) { \
+              _tls13_content_type = _tls13_inner_ct; \
+              _tls13_payload = _tls13_record_fragment; \
+              _tls13_payload_len = _tls13_inner_payload_len; \
+              _tls13_decoded = true; \
+            } \
+          } \
+          if (_tls13_decoded && _tls13_result.tag != TLS13_Impl_Messages_NetworkRecordOk) { \
+            uint8_t *_tls13_owned_fragment = TLS13_Connection_Backend_dup_bytes(_tls13_payload, _tls13_payload_len); \
+            if (_tls13_owned_fragment != NULL) { \
+              _tls13_result.tag = TLS13_Impl_Messages_NetworkRecordOk; \
+              _tls13_result._0 = (TLS13_Impl_Messages_decoded_network_record){ \
+                .decoded_record_content_type = _tls13_content_type, \
+                .decoded_record_fragment = _tls13_owned_fragment, \
+                .decoded_record_fragment_len = _tls13_payload_len, \
+                .decoded_record_parsed = TLS13_Impl_Parser_parse_tls_message(_tls13_content_type, _tls13_owned_fragment, _tls13_payload_len) \
+              }; \
+            } \
+          } \
+          if (_tls13_opened_to_free != NULL) { \
+            free(_tls13_opened_to_free); \
+          } \
+        } \
+      } \
+    } \
+    _tls13_result; \
+  })
+
 static inline size_t TLS13_Connection_Backend_serialize_client_hello_from_start_impl(
     uint8_t *start_random,
     uint8_t *start_server_name,

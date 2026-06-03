@@ -6,6 +6,7 @@ open Pulse.Lib.Pervasives
 open Pulse.Lib.Array.PtsTo
 
 module B = TLS13.Bytes
+module C = TLS13.Impl.ConnectionState
 module CT = TLS13.Impl.Client.Types
 module L = TLS13.Impl.Messages
 module M = TLS13.Messages
@@ -13,6 +14,7 @@ module Seq = FStar.Seq
 module SZ = FStar.SizeT
 module T = TLS13.Types
 module U8 = FStar.UInt8
+module V = Pulse.Lib.Vec
 module WS = TLS13.Wire.Spec
 
 (**
@@ -325,3 +327,61 @@ fn parse_tls_record
                  | None -> False)
            | None ->
              pure (WS.parse_tls_record 'input_bytes == None))
+
+(**
+  Extraction-facing record decoder used by the public client driver API.
+  On success it returns an owned exact-length fragment vector plus the same
+  parser and raw-delta facts required by the existing message dispatcher.
+**)
+fn decode_network_record
+  (c:C.connection_state)
+  (raw: array U8.t)
+  (raw_len: SZ.t)
+  requires C.connection_exactly c 'st0 **
+           pts_to raw 'raw_bytes **
+           pure (B.length 'raw_bytes == SZ.v raw_len)
+  returns r: L.decoded_network_record_result
+  ensures C.connection_exactly c 'st0 **
+          pts_to raw 'raw_bytes **
+          (match r with
+           | L.NetworkRecordNeedMoreInput -> emp
+           | L.NetworkRecordDecodeError -> emp
+           | L.NetworkRecordOk decoded ->
+            exists* fragment_bytes.
+              V.pts_to decoded.L.decoded_record_fragment fragment_bytes **
+              (match decoded.L.decoded_record_parsed with
+               | Some l ->
+                 (exists* m.
+                   L.is_valid_tls_message l m **
+                   pure (CT.parsed_message_wire_success_for
+                     decoded.L.decoded_record_content_type
+                     fragment_bytes
+                     l
+                     m)) **
+                 pure (
+                   exists ct msg.
+                     L.content_type_matches
+                       decoded.L.decoded_record_content_type
+                       ct /\
+                     WS.parse_tls_message ct fragment_bytes == Some msg) **
+                 pure (CT.parsed_message_wire_success
+                   decoded.L.decoded_record_content_type
+                   (Ghost.reveal fragment_bytes)
+                   l)
+               | None ->
+                 pure (forall (ct:T.content_type).
+                   L.content_type_matches
+                     decoded.L.decoded_record_content_type
+                     ct ==>
+                   WS.parse_tls_message ct fragment_bytes == None)) **
+              pure (
+                V.is_full_vec decoded.L.decoded_record_fragment /\
+                V.length decoded.L.decoded_record_fragment ==
+                  SZ.v decoded.L.decoded_record_fragment_len /\
+                B.length fragment_bytes ==
+                  SZ.v decoded.L.decoded_record_fragment_len /\
+                CT.network_input_wf
+                  'st0
+                  decoded.L.decoded_record_content_type
+                  fragment_bytes
+                  (Ghost.reveal 'raw_bytes)))

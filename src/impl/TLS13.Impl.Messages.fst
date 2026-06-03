@@ -171,6 +171,20 @@ type tls_record = {
   tls_record_fragment: sealed_record;
 }
 
+noeq
+type decoded_network_record = {
+  decoded_record_content_type: U8.t;
+  decoded_record_fragment: V.vec U8.t;
+  decoded_record_fragment_len: SZ.t;
+  decoded_record_parsed: option tls_message;
+}
+
+noeq
+type decoded_network_record_result =
+  | NetworkRecordNeedMoreInput
+  | NetworkRecordDecodeError
+  | NetworkRecordOk of decoded_network_record
+
 noextract
 let content_type_matches (wire:U8.t) (ct:T.content_type) : prop =
   match ct with

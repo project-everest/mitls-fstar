@@ -88,25 +88,27 @@ static int run_network_step(
   uint8_t raw[512] = {0};
   uint8_t network_out[2048] = {0};
   uint8_t app_out[16384] = {0};
+  int protected_record = content_type == 22 && expected_stage >= 4;
+  size_t record_fragment_len = fragment_len + (protected_record ? 1u : 0u);
 
-  if (fragment_len + 5 > sizeof raw) {
+  if (record_fragment_len + 5 > sizeof raw) {
     fprintf(stderr, "%s test fragment too large\n", label);
     return 1;
   }
-  raw[0] = content_type;
+  raw[0] = protected_record ? 23 : content_type;
   raw[1] = 3;
   raw[2] = 3;
-  write_u16(raw + 3, (uint16_t)fragment_len);
+  write_u16(raw + 3, (uint16_t)record_fragment_len);
   memcpy(raw + 5, fragment, fragment_len);
+  if (protected_record) {
+    raw[5 + fragment_len] = content_type;
+  }
 
   TLS13_Impl_Client_Types_client_response resp =
-      process_network_event(
+      process_tls_record(
           c,
-          content_type,
           raw,
-          fragment_len + 5,
-          fragment,
-          fragment_len,
+          record_fragment_len + 5,
           network_out,
           sizeof network_out,
           app_out,
@@ -126,24 +128,22 @@ static int receive_application_data(
   uint8_t network_out[2048] = {0};
   uint8_t app_out[16384] = {0};
 
-  if (fragment_len + 5 > sizeof raw) {
+  if (fragment_len + 6 > sizeof raw) {
     fprintf(stderr, "%s test fragment too large\n", label);
     return 1;
   }
   raw[0] = 23;
   raw[1] = 3;
   raw[2] = 3;
-  write_u16(raw + 3, (uint16_t)fragment_len);
+  write_u16(raw + 3, (uint16_t)(fragment_len + 1));
   memcpy(raw + 5, fragment, fragment_len);
+  raw[5 + fragment_len] = 23;
 
   TLS13_Impl_Client_Types_client_response resp =
-      process_network_event(
+      process_tls_record(
           c,
-          23,
           raw,
-          fragment_len + 5,
-          fragment,
-          fragment_len,
+          fragment_len + 6,
           network_out,
           sizeof network_out,
           app_out,
@@ -160,18 +160,14 @@ static int receive_application_data(
 
 static int receive_close_notify(
     TLS13_Impl_ConnectionState_connection_state c) {
-  uint8_t alert[] = {1, 0};
-  uint8_t raw[7] = {21, 3, 3, 0, 2, 1, 0};
+  uint8_t raw[8] = {23, 3, 3, 0, 3, 1, 0, 21};
   uint8_t network_out[2048] = {0};
   uint8_t app_out[16384] = {0};
   TLS13_Impl_Client_Types_client_response resp =
-      process_network_event(
+      process_tls_record(
           c,
-          21,
           raw,
           sizeof raw,
-          alert,
-          sizeof alert,
           network_out,
           sizeof network_out,
           app_out,
