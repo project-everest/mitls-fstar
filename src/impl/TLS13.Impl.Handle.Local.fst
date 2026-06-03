@@ -1404,6 +1404,120 @@ fn handle_local_event
       resp
     }
   }
+    LocalSendKeyUpdate -> {
+    let ok =
+      C.try_send_key_update
+        c
+        network_out
+        network_out_len;
+    if ok {
+      with raw_sent network_out_bytes.
+        assert (pts_to network_out network_out_bytes);
+      assert (C.connection_exactly
+        c
+        (C.sent_key_update_response_state
+          'st0
+          raw_sent));
+      assert (pure (B.length network_out_bytes == SZ.v network_out_len));
+      assert (pure (27 <= B.length network_out_bytes));
+      assert (pure (C.can_send_key_update
+        'st0
+        raw_sent));
+      assert (pure (Seq.equal
+        raw_sent
+        (Seq.slice network_out_bytes 0 27)));
+      let resp = {
+        CT.network_out_len = 27sz;
+        CT.app_out_len = 0sz;
+        CT.status = CT.StepOk;
+      };
+      Seq.lemma_len_slice network_out_bytes 0 27;
+      assert (pure (Seq.equal raw_sent (CT.response_network_out resp network_out_bytes)));
+      Seq.lemma_len_slice 'old_app_out 0 0;
+      Seq.lemma_eq_intro B.empty (Seq.slice 'old_app_out 0 0);
+      C.lemma_sent_key_update_response_state_evolves 'st0 raw_sent;
+      assert (pure (CT.legal_response_for_event
+        'st0
+        (C.sent_key_update_response_state
+          'st0
+          raw_sent)
+        resp
+        (CS.ConnNetworkEvent {
+          CL.message_direction = CL.Sent;
+          CL.message_value = M.TlsKeyUpdate M.UpdateNotRequested;
+        })
+        raw_sent
+        B.empty
+        network_out_bytes
+        'old_app_out));
+      assert (pure (CT.legal_local_response
+        'st0
+        (C.sent_key_update_response_state
+          'st0
+          raw_sent)
+        resp
+        CT.LocalSendKeyUpdate
+        (Ghost.reveal 'payload_bytes)
+        (CS.ConnNetworkEvent {
+          CL.message_direction = CL.Sent;
+          CL.message_value = M.TlsKeyUpdate M.UpdateNotRequested;
+        })
+        raw_sent
+        B.empty
+        network_out_bytes
+        'old_app_out));
+      assert (pure (CT.legal_handled_local_response
+        'st0
+        (C.sent_key_update_response_state
+          'st0
+          raw_sent)
+        resp
+        CT.LocalSendKeyUpdate
+        (Ghost.reveal 'payload_bytes)
+        network_out_bytes
+        'old_app_out));
+      assert (pure (CT.some_legal_response
+        'st0
+        (C.sent_key_update_response_state
+          'st0
+          raw_sent)
+        resp
+        network_out_bytes
+        'old_app_out));
+      resp
+    } else {
+      C.mark_unexpected_message c;
+      let resp = {
+        CT.network_out_len = 0sz;
+        CT.app_out_len = 0sz;
+        CT.status = CT.IllegalTransition;
+      };
+      Seq.lemma_len_slice 'old_network_out 0 0;
+      Seq.lemma_eq_intro B.empty (Seq.slice 'old_network_out 0 0);
+      assert (pure (Seq.equal B.empty (CT.response_network_out resp 'old_network_out)));
+      assert (pure (CT.unexpected_message_response
+        'st0
+        (C.local_fail_state 'st0 C.tls_unexpected_message_error)
+        resp
+        'old_network_out
+        'old_app_out));
+      assert (pure (CT.legal_handled_local_response
+        'st0
+        (C.local_fail_state 'st0 C.tls_unexpected_message_error)
+        resp
+        CT.LocalSendKeyUpdate
+        (Ghost.reveal 'payload_bytes)
+        'old_network_out
+        'old_app_out));
+      assert (pure (CT.some_legal_response
+        'st0
+        (C.local_fail_state 'st0 C.tls_unexpected_message_error)
+        resp
+        'old_network_out
+        'old_app_out));
+      resp
+    }
+  }
     LocalSendCloseNotify -> {
     let ok =
       C.try_send_close_notify

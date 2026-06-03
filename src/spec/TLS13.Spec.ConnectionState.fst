@@ -179,6 +179,7 @@ type application_state = {
   app_pending_source_record: B.bytes;
   app_pending_source_offset: nat;
   app_pending_received_raw: B.bytes;
+  app_key_update_response_pending: bool;
 }
 
 let empty_application_state : application_state = {
@@ -187,6 +188,7 @@ let empty_application_state : application_state = {
   app_pending_source_record = B.empty;
   app_pending_source_offset = 0;
   app_pending_received_raw = B.empty;
+  app_key_update_response_pending = false;
 }
 
 let pending_application_consistent (app:application_state) : prop =
@@ -282,6 +284,16 @@ let append_handshake_to_transcript
   (msg:M.handshake_msg)
   : GTot handshake_state =
   { hs with hs_transcript = Tr.append hs.hs_transcript (W.serialize_handshake msg) }
+
+let received_key_update_pending
+  (app:application_state)
+  (req:M.key_update_request)
+  : application_state =
+  match req with
+  | M.UpdateRequested ->
+    { app with app_key_update_response_pending = true }
+  | M.UpdateNotRequested ->
+    app
 
 let rec advance_direction_records
   (st:R.direction_state)
@@ -562,32 +574,66 @@ let step_tls_message
           };
        }
      | CL.Sent -> None)
-  | M.TlsKeyUpdate M.UpdateNotRequested, ControlApplicationData ->
-    (match dir, hs.hs_keys.ks_server_application_traffic with
-     | CL.Received, Some old_server_app ->
-      let new_server_app = updated_traffic_key_material old_server_app in
-      Some {
-        model with
-          model_record = {
-            model.model_record with
-              record_read =
-                R.install_keys
-                  (R.next_seq model.model_record.record_read)
-                  R.Application
-                  new_server_app.traffic_key
-                  new_server_app.traffic_iv;
-          };
-          model_handshake = {
-            hs with
-              hs_keys = {
-                hs.hs_keys with
-                  ks_server_application_traffic = Some new_server_app;
-              };
-          };
-      }
-     | _, _ -> None)
-  | M.TlsKeyUpdate M.UpdateRequested, ControlApplicationData ->
-    None
+  | M.TlsKeyUpdate req, ControlApplicationData ->
+   (match dir, req with
+    | CL.Received, _ ->
+      (match hs.hs_keys.ks_server_application_traffic with
+       | Some old_server_app ->
+         let new_server_app = updated_traffic_key_material old_server_app in
+         Some {
+           model with
+             model_record = {
+               model.model_record with
+                 record_read =
+                   R.install_keys
+                     (R.next_seq model.model_record.record_read)
+                     R.Application
+                     new_server_app.traffic_key
+                     new_server_app.traffic_iv;
+             };
+             model_handshake = {
+               hs with
+                 hs_keys = {
+                   hs.hs_keys with
+                     ks_server_application_traffic = Some new_server_app;
+                 };
+             };
+             model_application =
+               received_key_update_pending model.model_application req;
+         }
+       | None -> None)
+    | CL.Sent, M.UpdateNotRequested ->
+      (match hs.hs_keys.ks_client_application_traffic with
+       | Some old_client_app ->
+         if model.model_application.app_key_update_response_pending then
+           let new_client_app = updated_traffic_key_material old_client_app in
+           Some {
+             model with
+               model_record = {
+                 model.model_record with
+                   record_write =
+                     R.install_keys
+                       (R.next_seq model.model_record.record_write)
+                       R.Application
+                       new_client_app.traffic_key
+                       new_client_app.traffic_iv;
+               };
+               model_handshake = {
+                 hs with
+                   hs_keys = {
+                     hs.hs_keys with
+                       ks_client_application_traffic = Some new_client_app;
+                   };
+               };
+               model_application = {
+                 model.model_application with
+                   app_key_update_response_pending = false;
+               };
+           }
+         else None
+       | None -> None)
+    | CL.Sent, M.UpdateRequested ->
+      None)
   | M.TlsAlert T.CloseNotify, ControlApplicationData ->
     (match dir with
      | CL.Sent ->
@@ -814,10 +860,15 @@ let legal_tls_message
      | CL.Received -> Some? hs.hs_keys.ks_server_application_traffic)
   | M.TlsIgnoredPostHandshake _, ControlApplicationData ->
     dir == CL.Received /\ Some? hs.hs_keys.ks_server_application_traffic
-  | M.TlsKeyUpdate M.UpdateNotRequested, ControlApplicationData ->
-    dir == CL.Received /\ Some? hs.hs_keys.ks_server_application_traffic
-  | M.TlsKeyUpdate M.UpdateRequested, ControlApplicationData ->
-    False
+  | M.TlsKeyUpdate req, ControlApplicationData ->
+    (match dir, req with
+     | CL.Received, _ ->
+       Some? hs.hs_keys.ks_server_application_traffic
+     | CL.Sent, M.UpdateNotRequested ->
+       Some? hs.hs_keys.ks_client_application_traffic /\
+       model.model_application.app_key_update_response_pending
+     | CL.Sent, M.UpdateRequested ->
+       False)
   | M.TlsAlert T.CloseNotify, ControlApplicationData ->
     True
   | M.TlsAlert T.CloseNotify, ControlClosing ->

@@ -310,6 +310,40 @@ static int receive_key_update_not_requested(
   return 0;
 }
 
+static int receive_key_update_requested(
+    TLS13_Impl_ConnectionState_connection_state c) {
+  uint8_t key_update[] = {24, 0, 0, 1, 1};
+  uint8_t raw[16] = {0};
+  uint8_t network_out[2048] = {0};
+  uint8_t app_out[16384] = {0};
+  size_t raw_len =
+      build_protected_plaintext_record(
+          raw,
+          sizeof raw,
+          key_update,
+          sizeof key_update,
+          22);
+  TLS13_Impl_Client_Types_client_buffer_response buffer_resp =
+      process_network_bytes(
+          c,
+          raw,
+          raw_len,
+          network_out,
+          sizeof network_out,
+          app_out,
+          sizeof app_out);
+  TLS13_Impl_Client_Types_client_response resp = buffer_resp.response;
+  if (expect_step_ok(resp, "KeyUpdate-requested") != 0 ||
+      buffer_resp.consumed_len != raw_len ||
+      resp.network_out_len != 0 ||
+      resp.app_out_len != 0 ||
+      expect_control_tag(c, 2, "KeyUpdate-requested") != 0) {
+    fprintf(stderr, "KeyUpdate-requested failed\n");
+    return 1;
+  }
+  return 0;
+}
+
 static int test_network_buffer_decode_error(void) {
   TLS13_Impl_ConnectionState_connection_state c = new_client_default();
   uint8_t invalid_record_prefix[1] = {0xff};
@@ -805,6 +839,35 @@ static int test_client_hello_local_path(void) {
   }
 
   if (receive_key_update_not_requested(c) != 0) {
+    return 1;
+  }
+
+  if (receive_key_update_requested(c) != 0) {
+    return 1;
+  }
+
+  TLS13_Impl_Client_Types_client_response key_update_sent;
+  if (run_suggested_local_step(
+        c,
+        TLS13_Impl_Client_Types_LocalSendKeyUpdate,
+        TLS13_Impl_Client_Types_LocalPayloadNone,
+        payload,
+        0,
+        network_out,
+        sizeof network_out,
+        app_out,
+        sizeof app_out,
+        &key_update_sent,
+        "LocalSendKeyUpdate") != 0) {
+    return 1;
+  }
+  if (expect_step_ok(key_update_sent, "LocalSendKeyUpdate") != 0 ||
+      key_update_sent.network_out_len != 27 ||
+      key_update_sent.app_out_len != 0 ||
+      network_out[0] != 23 ||
+      expect_control_tag(c, 2, "LocalSendKeyUpdate") != 0 ||
+      expect_no_next_action(c, "LocalSendKeyUpdate next action") != 0) {
+    fprintf(stderr, "LocalSendKeyUpdate failed\n");
     return 1;
   }
 

@@ -112,6 +112,8 @@ fn next_local_action
     not keys.C.snapshot_server_application_traffic_present;
   let client_finished_ready =
     C.can_send_client_finished_runtime c network_out_len;
+  let key_update_ready =
+    C.can_send_key_update_runtime c network_out_len;
 
   if start_ready {
     {
@@ -177,6 +179,12 @@ fn next_local_action
     {
       CT.next_local_ready = true;
       CT.next_local_kind = CT.LocalSendClientFinished;
+      CT.next_local_payload = CT.LocalPayloadNone;
+    }
+  } else if key_update_ready {
+    {
+      CT.next_local_ready = true;
+      CT.next_local_kind = CT.LocalSendKeyUpdate;
       CT.next_local_payload = CT.LocalPayloadNone;
     }
   } else {

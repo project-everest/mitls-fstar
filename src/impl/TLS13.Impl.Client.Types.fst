@@ -55,6 +55,7 @@ type local_event_kind =
   | LocalSendClientHello
   | LocalSendClientFinished
   | LocalSendApplicationData
+  | LocalSendKeyUpdate
   | LocalSendCloseNotify
   | LocalFail
 
@@ -338,6 +339,9 @@ let local_event_kind_matches
   | LocalSendCloseNotify, CS.ConnNetworkEvent msg ->
     msg.CL.message_direction == CL.Sent /\
     msg.CL.message_value == M.TlsAlert T.CloseNotify
+  | LocalSendKeyUpdate, CS.ConnNetworkEvent msg ->
+    msg.CL.message_direction == CL.Sent /\
+    msg.CL.message_value == M.TlsKeyUpdate M.UpdateNotRequested
   | LocalStartHandshake, CS.ConnLocalEvent (CS.LocalStartHandshake _) -> True
   | LocalDeriveSharedSecret, CS.ConnLocalEvent (CS.LocalDeriveSharedSecret _) -> True
   | LocalInstallClientHandshakeTrafficKeys, CS.ConnLocalEvent (CS.LocalInstallTrafficKeys install) ->
