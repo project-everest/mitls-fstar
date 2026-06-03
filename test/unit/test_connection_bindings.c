@@ -27,6 +27,36 @@ static int expect_step_ok(
   return 0;
 }
 
+static int expect_handshake_stage(
+    TLS13_Impl_ConnectionState_connection_state c,
+    uint8_t expected_stage,
+    const char *label) {
+  TLS13_Impl_ConnectionState_control_snapshot snapshot = control_snapshot(c);
+  if (snapshot.snapshot_control_tag != 1 ||
+      snapshot.snapshot_handshake_stage_tag != expected_stage) {
+    fprintf(stderr, "%s left unexpected stage %u/%u\n",
+            label,
+            (unsigned)snapshot.snapshot_control_tag,
+            (unsigned)snapshot.snapshot_handshake_stage_tag);
+    return 1;
+  }
+  return 0;
+}
+
+static int expect_control_tag(
+    TLS13_Impl_ConnectionState_connection_state c,
+    uint8_t expected_tag,
+    const char *label) {
+  TLS13_Impl_ConnectionState_control_snapshot snapshot = control_snapshot(c);
+  if (snapshot.snapshot_control_tag != expected_tag) {
+    fprintf(stderr, "%s left unexpected control tag %u\n",
+            label,
+            (unsigned)snapshot.snapshot_control_tag);
+    return 1;
+  }
+  return 0;
+}
+
 static int run_local_step(
     TLS13_Impl_ConnectionState_connection_state c,
     TLS13_Impl_Client_Types_local_event_kind kind,
@@ -84,15 +114,7 @@ static int run_network_step(
   if (expect_step_ok(resp, label) != 0) {
     return 1;
   }
-  if (*c.control.control_tag != 1 ||
-      *c.control.handshake_stage_tag != expected_stage) {
-    fprintf(stderr, "%s left unexpected stage %u/%u\n",
-            label,
-            (unsigned)*c.control.control_tag,
-            (unsigned)*c.control.handshake_stage_tag);
-    return 1;
-  }
-  return 0;
+  return expect_handshake_stage(c, expected_stage, label);
 }
 
 static int receive_application_data(
@@ -129,7 +151,7 @@ static int receive_application_data(
   if (expect_step_ok(resp, label) != 0 ||
       resp.app_out_len != fragment_len ||
       memcmp(app_out, fragment, fragment_len) != 0 ||
-      *c.control.control_tag != 2) {
+      expect_control_tag(c, 2, label) != 0) {
     fprintf(stderr, "%s failed\n", label);
     return 1;
   }
@@ -155,7 +177,7 @@ static int receive_close_notify(
           app_out,
           sizeof app_out);
   if (expect_step_ok(resp, "CloseNotify") != 0 ||
-      *c.control.control_tag != 4) {
+      expect_control_tag(c, 4, "CloseNotify") != 0) {
     fprintf(stderr, "CloseNotify failed\n");
     return 1;
   }
@@ -271,8 +293,7 @@ static int test_client_hello_local_path(void) {
           sizeof app_out);
   if (start.status != TLS13_Impl_Client_Types_StepOk ||
       start.network_out_len != 0 ||
-      *c.control.control_tag != 1 ||
-      *c.control.handshake_stage_tag != 1 ||
+      expect_handshake_stage(c, 1, "LocalStartHandshake") != 0 ||
       !*c.handshake.start.present4 ||
       *c.handshake.start.server_name1.len != sizeof server_name ||
       memcmp(c.handshake.start.server_name1.bytes, server_name, sizeof server_name) != 0) {
@@ -298,7 +319,7 @@ static int test_client_hello_local_path(void) {
       network_out[1] != 3 ||
       network_out[2] != 3 ||
       network_out[5] != 1 ||
-      *c.control.handshake_stage_tag != 2 ||
+      expect_handshake_stage(c, 2, "LocalSendClientHello") != 0 ||
       !*c.handshake.messages.client_hello_present ||
       *c.handshake.buffers.client_hello_bytes.len + 5 != sent.network_out_len) {
     fprintf(stderr, "LocalSendClientHello failed\n");
@@ -390,7 +411,7 @@ static int test_client_hello_local_path(void) {
         payload,
         0,
         "LocalVerifyCertificateSignature") != 0 ||
-    *c.control.handshake_stage_tag != 8) {
+    expect_handshake_stage(c, 8, "LocalVerifyCertificateSignature") != 0) {
     fprintf(stderr, "LocalVerifyCertificateSignature did not verify signature\n");
     return 1;
   }
@@ -413,7 +434,7 @@ static int test_client_hello_local_path(void) {
         finished,
         finished_len,
         "LocalVerifyFinished") != 0 ||
-    *c.control.handshake_stage_tag != 10) {
+    expect_handshake_stage(c, 10, "LocalVerifyFinished") != 0) {
     fprintf(stderr, "LocalVerifyFinished did not verify Finished\n");
     return 1;
   }
@@ -446,7 +467,7 @@ static int test_client_hello_local_path(void) {
   if (expect_step_ok(client_finished, "LocalSendClientFinished") != 0 ||
     client_finished.network_out_len != 58 ||
     network_out[0] != 23 ||
-    *c.control.control_tag != 2) {
+    expect_control_tag(c, 2, "LocalSendClientFinished") != 0) {
     fprintf(stderr, "LocalSendClientFinished failed\n");
     return 1;
   }
@@ -491,7 +512,7 @@ static int test_client_hello_local_path(void) {
   if (expect_step_ok(close_sent, "LocalSendCloseNotify") != 0 ||
     close_sent.network_out_len <= 5 ||
     network_out[0] != 23 ||
-    *c.control.control_tag != 3) {
+    expect_control_tag(c, 3, "LocalSendCloseNotify") != 0) {
     fprintf(stderr, "LocalSendCloseNotify failed\n");
     return 1;
   }

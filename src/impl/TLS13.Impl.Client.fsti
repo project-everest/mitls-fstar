@@ -48,6 +48,13 @@ fn new_client
               (Ghost.reveal 'trust_anchors_bytes)
               validation_time_seconds)
 
+fn control_snapshot
+  (c:client)
+  requires C.connection_exactly c 'st0
+  returns snapshot:C.control_snapshot
+  ensures C.connection_exactly c 'st0 **
+          pure (C.control_snapshot_matches snapshot 'st0)
+
 fn process_network_event
   (c:client)
   (content_type:U8.t)

@@ -506,6 +506,32 @@ let control_state_matches
     failure_present /\
     tls_error_code_matches failure_code failure_alert err
 
+type control_snapshot = {
+  snapshot_control_tag: U8.t;
+  snapshot_handshake_stage_tag: U8.t;
+  snapshot_failure_present: bool;
+  snapshot_failure_code: U8.t;
+  snapshot_failure_alert: U8.t;
+}
+
+noextract
+let control_snapshot_matches
+  (snapshot:control_snapshot)
+  (st:CS.connection_state)
+  : prop =
+  control_state_matches
+    snapshot.snapshot_control_tag
+    snapshot.snapshot_handshake_stage_tag
+    snapshot.snapshot_failure_present
+    snapshot.snapshot_failure_code
+    snapshot.snapshot_failure_alert
+    st.CS.cs_model.CS.model_control /\
+  failure_option_matches
+    snapshot.snapshot_failure_present
+    snapshot.snapshot_failure_code
+    snapshot.snapshot_failure_alert
+    st.CS.cs_model.CS.model_failure
+
 let sized_bytes_allocated
   ([@@@mkey] slot:sized_bytes)
   (cap:nat)
@@ -5010,6 +5036,41 @@ fn mark_unexpected_message
   lemma_local_fail_state_evolves st0 tls_unexpected_message_error;
   MR.update c.ghost_state (local_fail_state st0 tls_unexpected_message_error);
   fold (connection_exactly c (local_fail_state st0 tls_unexpected_message_error))
+}
+
+fn get_control_snapshot
+  (c:connection_state)
+  (#st0:erased CS.connection_state)
+  requires connection_exactly c st0
+  returns snapshot:control_snapshot
+  ensures connection_exactly c st0 **
+          pure (control_snapshot_matches snapshot st0)
+{
+  unfold (connection_exactly c st0);
+  unfold (connection_model_exactly c st0.CS.cs_model);
+  unfold (control_exactly c.control st0.CS.cs_model.CS.model_control st0.CS.cs_model.CS.model_failure);
+
+  let control_tag = !c.control.control_tag;
+  let handshake_stage_tag = !c.control.handshake_stage_tag;
+  let failure_present = !c.control.failure_present;
+  let failure_code = !c.control.failure_code;
+  let failure_alert = !c.control.failure_alert;
+  let snapshot = {
+    snapshot_control_tag = control_tag;
+    snapshot_handshake_stage_tag = handshake_stage_tag;
+    snapshot_failure_present = failure_present;
+    snapshot_failure_code = failure_code;
+    snapshot_failure_alert = failure_alert;
+  };
+  assert (pure (control_snapshot_matches snapshot st0));
+
+  fold (control_exactly
+    c.control
+    st0.CS.cs_model.CS.model_control
+    st0.CS.cs_model.CS.model_failure);
+  fold (connection_model_exactly c st0.CS.cs_model);
+  fold (connection_exactly c st0);
+  snapshot
 }
 
 fn is_handshaking

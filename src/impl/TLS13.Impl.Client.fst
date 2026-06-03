@@ -54,6 +54,16 @@ fn new_client
     validation_time_seconds
 }
 
+fn control_snapshot
+  (c:client)
+  requires C.connection_exactly c 'st0
+  returns snapshot:C.control_snapshot
+  ensures C.connection_exactly c 'st0 **
+          pure (C.control_snapshot_matches snapshot 'st0)
+{
+  C.get_control_snapshot c
+}
+
 fn process_network_event
   (c:client)
   (content_type:U8.t)
