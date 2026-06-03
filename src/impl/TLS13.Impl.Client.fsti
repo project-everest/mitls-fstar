@@ -238,6 +238,13 @@ fn process_tls_record
                    st1
                    resp
                    network_out_bytes
+                   app_out_bytes /\
+                 CT.some_legal_response_for_network_input
+                   'st0
+                   st1
+                   resp
+                   (Ghost.reveal 'raw_bytes)
+                   network_out_bytes
                    app_out_bytes))
 
 fn process_network_bytes
@@ -277,6 +284,14 @@ fn process_network_bytes
                      'st0
                      st1
                      resp
+                     network_out_bytes
+                     app_out_bytes /\
+                   CT.some_legal_response_for_network_prefix
+                     'st0
+                     st1
+                     resp
+                     (Ghost.reveal 'raw_bytes)
+                     buffer_resp.CT.consumed_len
                      network_out_bytes
                      app_out_bytes))))
 

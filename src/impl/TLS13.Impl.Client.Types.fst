@@ -179,6 +179,47 @@ let some_legal_response
   exists ev raw_sent raw_received.
     legal_response_for_event st0 st1 resp ev raw_sent raw_received network_out app_out
 
+let raw_received_matches_network_input
+  (raw_received:B.bytes)
+  (network_input:B.bytes)
+  : prop =
+  Seq.equal raw_received B.empty \/
+  Seq.equal raw_received network_input
+
+let some_legal_response_for_network_input
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (resp:client_response)
+  (network_input:B.bytes)
+  (network_out:B.bytes)
+  (app_out:B.bytes)
+  : prop =
+  exists ev raw_sent raw_received.
+    legal_response_for_event st0 st1 resp ev raw_sent raw_received network_out app_out /\
+    raw_received_matches_network_input raw_received network_input
+
+let some_legal_response_for_network_prefix
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (resp:client_response)
+  (network_input:B.bytes)
+  (consumed_len:SZ.t)
+  (network_out:B.bytes)
+  (app_out:B.bytes)
+  : prop =
+  if SZ.v consumed_len <= B.length network_input then
+    exists consumed_input.
+      Seq.equal consumed_input (Seq.slice network_input 0 (SZ.v consumed_len)) /\
+      some_legal_response_for_network_input
+        st0
+        st1
+        resp
+        consumed_input
+        network_out
+        app_out
+  else
+    False
+
 let legal_received_tls_response
   (st0:CS.connection_state)
   (st1:CS.connection_state)
@@ -458,11 +499,18 @@ let legal_network_response
   (network_out:B.bytes)
   (app_out:B.bytes)
   : prop =
-  (exists msg.
-     wire_parse_success content_type fragment msg /\
-     legal_handled_tls_response st0 st1 resp msg raw_received network_out app_out) \/
-  (wire_parse_failure content_type fragment /\
-   decode_error_response st0 st1 resp network_out app_out)
+  ((exists msg.
+      wire_parse_success content_type fragment msg /\
+      legal_handled_tls_response st0 st1 resp msg raw_received network_out app_out) \/
+   (wire_parse_failure content_type fragment /\
+    decode_error_response st0 st1 resp network_out app_out)) /\
+  some_legal_response_for_network_input
+    st0
+    st1
+    resp
+    raw_received
+    network_out
+    app_out
 
 let lemma_legal_network_response_decode_error
   (st0:CS.connection_state)
@@ -571,3 +619,51 @@ let lemma_legal_network_response_handled_from_parse_success
         st0 st1 resp content_type fragment raw_received network_out app_out)
 =
   ()
+
+let lemma_decode_error_response_for_network_input
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (resp:client_response)
+  (network_input:B.bytes)
+  (network_out:B.bytes)
+  (app_out:B.bytes)
+  : Lemma
+      (requires decode_error_response st0 st1 resp network_out app_out)
+      (ensures some_legal_response_for_network_input
+        st0 st1 resp network_input network_out app_out)
+=
+  ()
+
+let lemma_legal_network_response_for_network_input
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (resp:client_response)
+  (content_type:U8.t)
+  (fragment:B.bytes)
+  (raw_received:B.bytes)
+  (network_out:B.bytes)
+  (app_out:B.bytes)
+  : Lemma
+      (requires legal_network_response
+        st0 st1 resp content_type fragment raw_received network_out app_out)
+      (ensures some_legal_response_for_network_input
+        st0 st1 resp raw_received network_out app_out)
+=
+  ()
+
+let lemma_some_legal_response_for_equal_network_input
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (resp:client_response)
+  (network_input0:B.bytes)
+  (network_input1:B.bytes)
+  (network_out:B.bytes)
+  (app_out:B.bytes)
+  : Lemma
+      (requires some_legal_response_for_network_input
+        st0 st1 resp network_input0 network_out app_out /\
+        Seq.equal network_input0 network_input1)
+      (ensures some_legal_response_for_network_input
+        st0 st1 resp network_input1 network_out app_out)
+=
+  Seq.lemma_eq_elim network_input0 network_input1

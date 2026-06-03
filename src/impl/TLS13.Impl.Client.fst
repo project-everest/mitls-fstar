@@ -391,6 +391,13 @@ fn process_tls_record
                    st1
                    resp
                    network_out_bytes
+                   app_out_bytes /\
+                 CT.some_legal_response_for_network_input
+                   'st0
+                   st1
+                   resp
+                   (Ghost.reveal 'raw_bytes)
+                   network_out_bytes
                    app_out_bytes))
 {
   let decoded = P.decode_network_record c raw raw_len;
@@ -404,14 +411,29 @@ fn process_tls_record
       resp
     }
     L.NetworkRecordDecodeError -> {
-      HDecodeError.handle_decode_error
-        c
-        raw
-        raw_len
-        network_out
-        network_out_len
-        app_out
-        app_out_len
+      let resp =
+        HDecodeError.handle_decode_error
+          c
+          raw
+          raw_len
+          network_out
+          network_out_len
+          app_out
+          app_out_len;
+      assert (pure (CT.decode_error_response
+        'st0
+        (C.local_fail_state 'st0 C.tls_decode_error)
+        resp
+        'old_network_out
+        'old_app_out));
+      CT.lemma_decode_error_response_for_network_input
+        'st0
+        (C.local_fail_state 'st0 C.tls_decode_error)
+        resp
+        (Ghost.reveal 'raw_bytes)
+        'old_network_out
+        'old_app_out;
+      resp
     }
     L.NetworkRecordOk decoded_record -> {
       with fragment_bytes.
@@ -430,7 +452,6 @@ fn process_tls_record
           network_out_len
           app_out
           app_out_len;
-      with st1 network_out_bytes app_out_bytes. assert (pure True);
       V.to_vec_pts_to decoded_record.L.decoded_record_fragment;
       V.free decoded_record.L.decoded_record_fragment;
       resp
@@ -476,6 +497,14 @@ fn process_network_bytes
                      st1
                      resp
                      network_out_bytes
+                     app_out_bytes /\
+                   CT.some_legal_response_for_network_prefix
+                     'st0
+                     st1
+                     resp
+                     (Ghost.reveal 'raw_bytes)
+                     buffer_resp.CT.consumed_len
+                     network_out_bytes
                      app_out_bytes))))
 {
   let decoded = P.decode_network_buffer c raw raw_len;
@@ -501,6 +530,19 @@ fn process_network_bytes
           network_out_len
           app_out
           app_out_len;
+      assert (pure (CT.decode_error_response
+        'st0
+        (C.local_fail_state 'st0 C.tls_decode_error)
+        resp
+        'old_network_out
+        'old_app_out));
+      CT.lemma_decode_error_response_for_network_input
+        'st0
+        (C.local_fail_state 'st0 C.tls_decode_error)
+        resp
+        (Seq.slice (Ghost.reveal 'raw_bytes) 0 0)
+        'old_network_out
+        'old_app_out;
       {
         CT.response = resp;
         CT.consumed_len = 0sz;
@@ -525,7 +567,6 @@ fn process_network_bytes
           network_out_len
           app_out
           app_out_len;
-      with st1 network_out_bytes app_out_bytes. assert (pure True);
       V.to_vec_pts_to decoded_buffer.L.decoded_buffer_fragment;
       V.free decoded_buffer.L.decoded_buffer_fragment;
       V.to_vec_pts_to decoded_buffer.L.decoded_buffer_raw_record;
