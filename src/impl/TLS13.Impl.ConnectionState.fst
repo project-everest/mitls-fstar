@@ -2071,6 +2071,34 @@ let received_close_notify_state
       }];
   }
 
+let sent_close_notify_state
+  (st:CS.connection_state)
+  (raw_sent:B.bytes)
+  : CS.connection_state =
+  let model0 = st.CS.cs_model in
+  let record0 = model0.CS.model_record in
+  let model1 = {
+    model0 with
+      CS.model_control = CS.ControlClosing;
+      CS.model_record = {
+        record0 with
+          CS.record_write = R.next_seq record0.CS.record_write;
+      };
+  } in
+  {
+    CS.cs_model = model1;
+    CS.cs_wire_log = {
+      CL.raw_sent = B.append st.CS.cs_wire_log.CL.raw_sent raw_sent;
+      CL.raw_received = B.append st.CS.cs_wire_log.CL.raw_received B.empty;
+    };
+    CS.cs_event_log =
+      st.CS.cs_event_log @
+      [CS.ConnNetworkEvent {
+        CL.message_direction = CL.Sent;
+        CL.message_value = M.TlsAlert T.CloseNotify;
+      }];
+  }
+
 let received_application_data_state
   (st:CS.connection_state)
   (bytes:B.bytes)
@@ -2193,6 +2221,31 @@ let can_send_application_data
     raw_sent
     B.empty
 
+noextract
+let close_notify_alert_fragment : B.bytes = B.of_list [2uy; 0uy]
+
+let can_send_close_notify
+  (st:CS.connection_state)
+  (raw_sent:B.bytes)
+  : GTot prop =
+  st.CS.cs_model.CS.model_control == CS.ControlApplicationData /\
+  Some? st.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_application_traffic /\
+  U64.fits (st.CS.cs_model.CS.model_record.CS.record_write.R.seq + 1) /\
+  CS.legal_event
+    st.CS.cs_model
+    (CS.ConnNetworkEvent {
+      CL.message_direction = CL.Sent;
+      CL.message_value = M.TlsAlert T.CloseNotify;
+    }) /\
+  CS.event_raw_delta_legal
+    st.CS.cs_model
+    (CS.ConnNetworkEvent {
+      CL.message_direction = CL.Sent;
+      CL.message_value = M.TlsAlert T.CloseNotify;
+    })
+    raw_sent
+    B.empty
+
 let can_send_application_data_sizes
   (payload_len:SZ.t)
   (network_out_len:SZ.t)
@@ -2218,6 +2271,17 @@ let can_send_application_data_sizes
     end
   else
     false
+
+let can_send_close_notify_sizes
+  (network_out_len:SZ.t)
+  : Pure bool
+      (requires True)
+      (ensures fun ok ->
+        ok ==> 23 <= SZ.v network_out_len)
+=
+  let out_room = sizet_lte_plain 23sz network_out_len in
+  lemma_sizet_lte_plain 23sz network_out_len;
+  out_room
 
 let lemma_local_fail_state_evolves (st:CS.connection_state) (err:T.tls_error)
   : Lemma
@@ -3158,6 +3222,61 @@ let lemma_received_close_notify_state_evolves
     (received_close_notify_state st raw_received));
   assert (CS.connection_state_consistent
     (received_close_notify_state st raw_received))
+
+let lemma_sent_close_notify_state_evolves
+  (st:CS.connection_state)
+  (raw_sent:B.bytes)
+  : Lemma
+      (requires CS.connection_state_consistent st /\
+                can_send_close_notify st raw_sent)
+      (ensures CS.connection_state_evolves
+                 st
+                 (sent_close_notify_state st raw_sent) /\
+               CS.connection_state_consistent
+                 (sent_close_notify_state st raw_sent) /\
+               CS.legal_connection_delta
+                 st
+                 {
+                   CS.delta_event =
+                     CS.ConnNetworkEvent {
+                       CL.message_direction = CL.Sent;
+                       CL.message_value = M.TlsAlert T.CloseNotify;
+                     };
+                   CS.delta_raw_sent = raw_sent;
+                   CS.delta_raw_received = B.empty;
+                 }
+                 (sent_close_notify_state st raw_sent))
+=
+  let ev =
+    CS.ConnNetworkEvent {
+      CL.message_direction = CL.Sent;
+      CL.message_value = M.TlsAlert T.CloseNotify;
+    } in
+  let delta = {
+    CS.delta_event = ev;
+    CS.delta_raw_sent = raw_sent;
+    CS.delta_raw_received = B.empty;
+  } in
+  assert (CS.legal_event st.CS.cs_model ev);
+  assert (CS.event_raw_delta_legal st.CS.cs_model ev raw_sent B.empty);
+  assert (CS.step_model st.CS.cs_model ev ==
+          Some (sent_close_notify_state st raw_sent).CS.cs_model);
+  assert (CS.legal_connection_delta
+    st
+    delta
+    (sent_close_notify_state st raw_sent));
+  assert (CS.connection_state_single_step
+    st
+    (sent_close_notify_state st raw_sent));
+  FStar.ReflexiveTransitiveClosure.closure_step
+    CS.connection_state_single_step
+    st
+    (sent_close_notify_state st raw_sent);
+  assert (CS.connection_state_evolves
+    st
+    (sent_close_notify_state st raw_sent));
+  assert (CS.connection_state_consistent
+    (sent_close_notify_state st raw_sent))
 
 let lemma_received_application_data_state_evolves
   (st:CS.connection_state)
@@ -6438,6 +6557,94 @@ fn can_send_application_data_runtime
   ok
 }
 
+fn can_send_close_notify_runtime
+  (c:connection_state)
+  (network_out_len:SZ.t)
+  (#st0:erased CS.connection_state)
+  requires connection_exactly c st0
+  returns ok: bool
+  ensures connection_exactly c st0 **
+          pure (ok ==>
+            st0.CS.cs_model.CS.model_control == CS.ControlApplicationData /\
+            Some? st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_application_traffic /\
+            U64.fits (st0.CS.cs_model.CS.model_record.CS.record_write.R.seq + 1) /\
+            23 <= SZ.v network_out_len)
+{
+  unfold (connection_exactly c st0);
+  unfold (connection_model_exactly c st0.CS.cs_model);
+  unfold (control_exactly c.control st0.CS.cs_model.CS.model_control st0.CS.cs_model.CS.model_failure);
+  unfold (record_layer_exactly c.records st0.CS.cs_model.CS.model_record);
+  unfold (handshake_exactly c.handshake st0.CS.cs_model.CS.model_handshake);
+  unfold (key_schedule_exactly
+    c.handshake.keys
+    st0.CS.cs_model.CS.model_handshake.CS.hs_keys);
+  unfold (traffic_key_material_exactly
+    c.handshake.keys.client_application_traffic
+    st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_application_traffic);
+
+  let tag = !c.control.control_tag;
+  let control_ok = tag = 2uy;
+  let client_app_present = !c.handshake.keys.client_application_traffic.present;
+
+  fold (traffic_key_material_exactly
+    c.handshake.keys.client_application_traffic
+    st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_application_traffic);
+  fold (key_schedule_exactly
+    c.handshake.keys
+    st0.CS.cs_model.CS.model_handshake.CS.hs_keys);
+  fold (handshake_exactly c.handshake st0.CS.cs_model.CS.model_handshake);
+
+  let seq_ok = Rec.can_advance_seq c.records.write;
+  fold (record_layer_exactly c.records st0.CS.cs_model.CS.model_record);
+
+  let size_ok =
+    can_send_close_notify_sizes network_out_len;
+
+  let ok =
+    control_ok &&
+    client_app_present &&
+    seq_ok &&
+    size_ok;
+
+  assert (pure (ok ==> U8.v tag == 2));
+  assert (pure (ok ==> st0.CS.cs_model.CS.model_control == CS.ControlApplicationData));
+  assert (pure (ok ==> Some?
+    st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_application_traffic));
+  assert (pure (ok ==> U64.fits (st0.CS.cs_model.CS.model_record.CS.record_write.R.seq + 1)));
+  assert (pure (ok ==> 23 <= SZ.v network_out_len));
+
+  fold (control_exactly
+    c.control
+    st0.CS.cs_model.CS.model_control
+    st0.CS.cs_model.CS.model_failure);
+  fold (connection_model_exactly c st0.CS.cs_model);
+  fold (connection_exactly c st0);
+  ok
+}
+
+fn write_close_notify_alert
+  (alert:array U8.t)
+  requires ArrPts.pts_to alert (Seq.create 2 0uy)
+  ensures exists* alert_bytes.
+            ArrPts.pts_to alert alert_bytes **
+            pure (B.length alert_bytes == 2 /\
+                  Seq.equal alert_bytes close_notify_alert_fragment)
+{
+  alert.(0sz) <- 2uy;
+  alert.(1sz) <- 0uy;
+  with alert_bytes.
+    assert (ArrPts.pts_to alert alert_bytes);
+  assert_norm (close_notify_alert_fragment == B.of_list [2uy; 0uy]);
+  assert_norm (B.length close_notify_alert_fragment == 2);
+  assert_norm (Seq.index close_notify_alert_fragment 0 == 2uy);
+  assert_norm (Seq.index close_notify_alert_fragment 1 == 0uy);
+  assert (pure (B.length alert_bytes == 2));
+  assert (pure (Seq.index alert_bytes 0 == 2uy));
+  assert (pure (Seq.index alert_bytes 1 == 0uy));
+  Seq.lemma_eq_intro alert_bytes close_notify_alert_fragment;
+  assert (pure (Seq.equal alert_bytes close_notify_alert_fragment))
+}
+
 fn can_receive_close_notify
   (c:connection_state)
   (#st0:erased CS.connection_state)
@@ -9040,6 +9247,161 @@ fn mark_sent_application_data_after_record_advanced
       (Ghost.reveal raw_sent)))
 }
 
+fn mark_sent_close_notify_after_record_advanced
+  (c:connection_state)
+  (network_out:array U8.t)
+  (written:SZ.t)
+  (#raw_sent:erased B.bytes)
+  (#st0:erased CS.connection_state)
+  requires MR.pts_to c.ghost_state #1.0R st0 **
+           connection_config_exactly c.config st0.CS.cs_model.CS.model_config **
+           control_exactly
+             c.control
+             st0.CS.cs_model.CS.model_control
+             st0.CS.cs_model.CS.model_failure **
+           record_layer_exactly
+             c.records
+             ({ st0.CS.cs_model.CS.model_record with
+                 CS.record_write =
+                   R.next_seq st0.CS.cs_model.CS.model_record.CS.record_write }) **
+           handshake_exactly c.handshake st0.CS.cs_model.CS.model_handshake **
+           application_exactly c.application st0.CS.cs_model.CS.model_application **
+           ArrPts.pts_to network_out 'network_out_bytes **
+           pure (CS.connection_state_consistent st0 /\
+                 can_send_close_notify
+                   st0
+                   (Ghost.reveal raw_sent) /\
+                 SZ.v written == 23 /\
+                 SZ.v written <= B.length 'network_out_bytes /\
+                 Seq.equal
+                   (Ghost.reveal raw_sent)
+                   (Seq.slice (Ghost.reveal 'network_out_bytes) 0 (SZ.v written)))
+  ensures connection_exactly
+            c
+            (sent_close_notify_state
+              st0
+              (Ghost.reveal raw_sent)) **
+          ArrPts.pts_to network_out 'network_out_bytes
+{
+  assert (pure (can_send_close_notify
+    st0
+    (Ghost.reveal raw_sent)));
+  assert (pure (st0.CS.cs_model.CS.model_control == CS.ControlApplicationData));
+  assert (pure (Some?
+    st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_application_traffic));
+  assert (pure (U64.fits (st0.CS.cs_model.CS.model_record.CS.record_write.R.seq + 1)));
+
+  unfold (control_exactly
+    c.control
+    st0.CS.cs_model.CS.model_control
+    st0.CS.cs_model.CS.model_failure);
+  assert (pure (st0.CS.cs_model.CS.model_failure == None));
+  c.control.control_tag := 3uy;
+  c.control.handshake_stage_tag := 0uy;
+  c.control.failure_present := false;
+  c.control.failure_code := 0uy;
+  c.control.failure_alert := 0uy;
+
+  assert (pure (control_state_matches
+    3uy
+    0uy
+    false
+    0uy
+    0uy
+    CS.ControlClosing));
+  fold (control_exactly
+    c.control
+    CS.ControlClosing
+    st0.CS.cs_model.CS.model_failure);
+
+  assert (pure ((sent_close_notify_state
+    st0
+    (Ghost.reveal raw_sent)).CS.cs_model.CS.model_config ==
+    st0.CS.cs_model.CS.model_config));
+  assert (pure ((sent_close_notify_state
+    st0
+    (Ghost.reveal raw_sent)).CS.cs_model.CS.model_control ==
+    CS.ControlClosing));
+  assert (pure ((sent_close_notify_state
+    st0
+    (Ghost.reveal raw_sent)).CS.cs_model.CS.model_failure ==
+    st0.CS.cs_model.CS.model_failure));
+  assert (pure ((sent_close_notify_state
+    st0
+    (Ghost.reveal raw_sent)).CS.cs_model.CS.model_handshake ==
+    st0.CS.cs_model.CS.model_handshake));
+  assert (pure ((sent_close_notify_state
+    st0
+    (Ghost.reveal raw_sent)).CS.cs_model.CS.model_application ==
+    st0.CS.cs_model.CS.model_application));
+  assert (pure ((sent_close_notify_state
+    st0
+    (Ghost.reveal raw_sent)).CS.cs_model.CS.model_record ==
+    { st0.CS.cs_model.CS.model_record with
+        CS.record_write = R.next_seq st0.CS.cs_model.CS.model_record.CS.record_write }));
+
+  rewrite (connection_config_exactly c.config st0.CS.cs_model.CS.model_config)
+    as (connection_config_exactly
+      c.config
+      (sent_close_notify_state
+        st0
+        (Ghost.reveal raw_sent)).CS.cs_model.CS.model_config);
+  rewrite (control_exactly
+    c.control
+    CS.ControlClosing
+    st0.CS.cs_model.CS.model_failure)
+    as (control_exactly
+      c.control
+      (sent_close_notify_state
+        st0
+        (Ghost.reveal raw_sent)).CS.cs_model.CS.model_control
+      (sent_close_notify_state
+        st0
+        (Ghost.reveal raw_sent)).CS.cs_model.CS.model_failure);
+  rewrite (record_layer_exactly
+    c.records
+    ({ st0.CS.cs_model.CS.model_record with
+        CS.record_write =
+          R.next_seq st0.CS.cs_model.CS.model_record.CS.record_write }))
+    as (record_layer_exactly
+      c.records
+      (sent_close_notify_state
+        st0
+        (Ghost.reveal raw_sent)).CS.cs_model.CS.model_record);
+  rewrite (handshake_exactly c.handshake st0.CS.cs_model.CS.model_handshake)
+    as (handshake_exactly
+      c.handshake
+      (sent_close_notify_state
+        st0
+        (Ghost.reveal raw_sent)).CS.cs_model.CS.model_handshake);
+  rewrite (application_exactly c.application st0.CS.cs_model.CS.model_application)
+    as (application_exactly
+      c.application
+      (sent_close_notify_state
+        st0
+        (Ghost.reveal raw_sent)).CS.cs_model.CS.model_application);
+
+  fold (connection_model_exactly
+    c
+    (sent_close_notify_state
+      st0
+      (Ghost.reveal raw_sent)).CS.cs_model);
+
+  lemma_sent_close_notify_state_evolves
+    st0
+    (Ghost.reveal raw_sent);
+  MR.update
+    c.ghost_state
+    (sent_close_notify_state
+      st0
+      (Ghost.reveal raw_sent));
+  fold (connection_exactly
+    c
+    (sent_close_notify_state
+      st0
+      (Ghost.reveal raw_sent)))
+}
+
 fn try_send_application_data
   (c:connection_state)
   (payload:array U8.t)
@@ -9210,6 +9572,189 @@ fn try_send_application_data
       assert (pure (Seq.equal
         (Ghost.reveal raw_sent)
         (Seq.slice network_out_bytes 0 (SZ.v payload_len + 21))));
+      true
+    } else {
+      assert (pure (sealed_write ==
+        st0.CS.cs_model.CS.model_record.CS.record_write));
+      rewrite (Rec.is_record_state c.records.write sealed_write)
+        as (Rec.is_record_state
+          c.records.write
+          st0.CS.cs_model.CS.model_record.CS.record_write);
+      V.to_vec_pts_to ciphertext;
+      V.free ciphertext;
+      fold (record_layer_exactly c.records st0.CS.cs_model.CS.model_record);
+      fold (connection_model_exactly c st0.CS.cs_model);
+      fold (connection_exactly c st0);
+      false
+    }
+  } else {
+    false
+  }
+}
+
+fn try_send_close_notify
+  (c:connection_state)
+  (network_out:array U8.t)
+  (network_out_len:SZ.t)
+  (#st0:erased CS.connection_state)
+  requires connection_exactly c st0 **
+           ArrPts.pts_to network_out 'old_network_out **
+           pure (B.length 'old_network_out == SZ.v network_out_len)
+  returns ok: bool
+  ensures (if ok then
+            exists* raw_sent network_out_bytes.
+              connection_exactly
+                c
+                (sent_close_notify_state
+                  st0
+                  raw_sent) **
+              ArrPts.pts_to network_out network_out_bytes **
+              pure (B.length network_out_bytes == SZ.v network_out_len /\
+                    23 <= B.length network_out_bytes /\
+                    can_send_close_notify
+                      st0
+                      raw_sent /\
+                    Seq.equal
+                      raw_sent
+                      (Seq.slice network_out_bytes 0 23))
+          else
+            connection_exactly c st0 **
+            ArrPts.pts_to network_out 'old_network_out)
+{
+  let ready = can_send_close_notify_runtime c network_out_len;
+  if ready {
+    assert (pure (st0.CS.cs_model.CS.model_control == CS.ControlApplicationData));
+    assert (pure (Some?
+      st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_application_traffic));
+    assert (pure (U64.fits (st0.CS.cs_model.CS.model_record.CS.record_write.R.seq + 1)));
+    assert (pure (23 <= SZ.v network_out_len));
+
+    let mut alert_plaintext = [| 0uy; 2sz |];
+    write_close_notify_alert alert_plaintext;
+    with alert_plaintext_bytes.
+      assert (ArrPts.pts_to alert_plaintext alert_plaintext_bytes);
+    assert (pure (Seq.equal alert_plaintext_bytes close_notify_alert_fragment));
+    assert (pure (B.length alert_plaintext_bytes == 2));
+
+    let ciphertext_len = 18sz;
+    assert (pure (SZ.v ciphertext_len == 18));
+    assert (pure (SZ.v ciphertext_len == 2 + 16));
+    assert (pure (SZ.v ciphertext_len <= 16640));
+    assert (pure (SZ.v ciphertext_len + 5 <= SZ.v network_out_len));
+
+    let ciphertext = V.alloc 0uy ciphertext_len;
+    with old_ciphertext_bytes.
+      assert (V.pts_to ciphertext old_ciphertext_bytes);
+    V.pts_to_len ciphertext;
+    assert (pure (B.length old_ciphertext_bytes == SZ.v ciphertext_len));
+    assert (pure (B.length old_ciphertext_bytes == B.length alert_plaintext_bytes + 16));
+    let mut aad = [| 0uy; 0sz |];
+    with aad_bytes.
+      assert (ArrPts.pts_to aad aad_bytes);
+    assert (pure (B.length aad_bytes == 0));
+
+    unfold (connection_exactly c st0);
+    unfold (connection_model_exactly c st0.CS.cs_model);
+    unfold (record_layer_exactly c.records st0.CS.cs_model.CS.model_record);
+
+    V.to_array_pts_to ciphertext;
+    let sealed =
+      Rec.seal_application
+        c.records.write
+        aad
+        0sz
+        alert_plaintext
+        2sz
+        (V.vec_to_array ciphertext);
+    with sealed_write ciphertext_bytes. _;
+    if sealed {
+      assert (pure (R.seal
+        st0.CS.cs_model.CS.model_record.CS.record_write
+        aad_bytes
+        { R.content_type = T.ApplicationData;
+          R.fragment = alert_plaintext_bytes } ==
+        Some (ciphertext_bytes, sealed_write)));
+      lemma_seal_application_success_next_seq
+        st0.CS.cs_model.CS.model_record.CS.record_write
+        aad_bytes
+        alert_plaintext_bytes
+        ciphertext_bytes
+        sealed_write;
+      assert (pure (sealed_write ==
+        R.next_seq st0.CS.cs_model.CS.model_record.CS.record_write));
+      rewrite (Rec.is_record_state c.records.write sealed_write)
+        as (Rec.is_record_state
+          c.records.write
+          (R.next_seq st0.CS.cs_model.CS.model_record.CS.record_write));
+      fold (record_layer_exactly
+        c.records
+        { st0.CS.cs_model.CS.model_record with
+            CS.record_write =
+              R.next_seq st0.CS.cs_model.CS.model_record.CS.record_write });
+
+      assert (pure (B.length ciphertext_bytes == SZ.v ciphertext_len));
+      let written =
+        Ser.serialize_raw_application_data_record
+          (V.vec_to_array ciphertext)
+          ciphertext_len
+          network_out
+          network_out_len;
+      with network_out_bytes.
+        assert (ArrPts.pts_to network_out network_out_bytes);
+      assert (pure (B.length network_out_bytes == SZ.v network_out_len));
+      assert (pure (SZ.v written == SZ.v ciphertext_len + 5));
+      assert (pure (SZ.v written == 23));
+      assert (pure (SZ.v written <= B.length network_out_bytes));
+      let raw_sent = Ghost.hide (Seq.slice network_out_bytes 0 (SZ.v written));
+      assert (pure (Seq.equal
+        (Ghost.reveal raw_sent)
+        (Seq.slice network_out_bytes 0 (SZ.v written))));
+      assert (pure (CS.raw_records_exactly
+        (Ghost.reveal raw_sent)
+        T.ApplicationData
+        1));
+      assert (pure (CS.legal_event
+        st0.CS.cs_model
+        (CS.ConnNetworkEvent {
+          CL.message_direction = CL.Sent;
+          CL.message_value = M.TlsAlert T.CloseNotify;
+        })));
+      assert (pure (CS.protected_record_count
+        CL.Sent
+        (M.TlsAlert T.CloseNotify) == 1));
+      assert (pure (CS.network_message_raw_delta_legal
+        st0.CS.cs_model
+        {
+          CL.message_direction = CL.Sent;
+          CL.message_value = M.TlsAlert T.CloseNotify;
+        }
+        (Ghost.reveal raw_sent)));
+      Seq.lemma_eq_intro B.empty B.empty;
+      assert (pure (CS.event_raw_delta_legal
+        st0.CS.cs_model
+        (CS.ConnNetworkEvent {
+          CL.message_direction = CL.Sent;
+          CL.message_value = M.TlsAlert T.CloseNotify;
+        })
+        (Ghost.reveal raw_sent)
+        B.empty));
+      assert (pure (can_send_close_notify
+        st0
+        (Ghost.reveal raw_sent)));
+
+      V.to_vec_pts_to ciphertext;
+      V.free ciphertext;
+
+      mark_sent_close_notify_after_record_advanced
+        c
+        network_out
+        written
+        #raw_sent;
+
+      assert (pure (SZ.v written == 23));
+      assert (pure (Seq.equal
+        (Ghost.reveal raw_sent)
+        (Seq.slice network_out_bytes 0 23)));
       true
     } else {
       assert (pure (sealed_write ==
