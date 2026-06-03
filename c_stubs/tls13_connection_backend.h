@@ -419,6 +419,22 @@ static inline size_t TLS13_Connection_Backend_serialize_client_finished_outputs(
         (network_out_len)); \
   })
 
+static inline size_t TLS13_Connection_Backend_serialize_finished_handshake(
+    const uint8_t *verify_data,
+    uint8_t *handshake_out,
+    size_t handshake_out_len) {
+  if (handshake_out_len < 36u) {
+    return 0u;
+  }
+  handshake_out[0] = 20u;
+  TLS13_Connection_Backend_write_u24(handshake_out + 1u, 32u);
+  memcpy(handshake_out + 4u, verify_data, 32u);
+  return 36u;
+}
+
+#define TLS13_Impl_Serializer_serialize_finished_handshake(fin_erased, lfin, handshake_out, handshake_out_len, ...) \
+  TLS13_Connection_Backend_serialize_finished_handshake((lfin), (handshake_out), (handshake_out_len))
+
 #define TLS13_Impl_Parser_parse_tls_message(content_type, input, input_len, ...) \
   ({ \
     FStar_Pervasives_Native_option__TLS13_Impl_Messages_tls_message _r = { .tag = FStar_Pervasives_Native_None }; \

@@ -376,6 +376,23 @@ fn serialize_client_finished_outputs
                 (let raw_prefix = Seq.slice network_bytes 0 (SZ.v written) in
                 CS.raw_records_exactly raw_prefix T.ApplicationData 1))
 
+fn serialize_finished_handshake
+  (#fin: erased M.finished)
+  (lfin: L.finished)
+  (handshake_out: array U8.t)
+  (handshake_out_len: SZ.t)
+  requires L.is_valid_finished lfin (Ghost.reveal fin) **
+           pts_to handshake_out 'old_handshake **
+           pure (B.length 'old_handshake == SZ.v handshake_out_len /\
+                 SZ.v handshake_out_len == 36)
+  returns written: (n:SZ.t{SZ.v n <= SZ.v handshake_out_len})
+  ensures exists* handshake_bytes.
+          L.is_valid_finished lfin (Ghost.reveal fin) **
+          pts_to handshake_out handshake_bytes **
+          pure (B.length handshake_bytes == 36 /\
+                SZ.v written == 36 /\
+                Seq.equal handshake_bytes (WS.serialize_handshake (M.Finished (Ghost.reveal fin))))
+
 fn serialize_client_hello
   (#m: M.client_hello)
   (l: L.client_hello)

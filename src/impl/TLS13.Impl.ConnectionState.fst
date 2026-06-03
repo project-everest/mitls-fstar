@@ -12594,6 +12594,81 @@ fn mark_verified_server_finished
     (verified_server_finished_state st0 (Ghost.reveal fin)))
 }
 
+fn mark_verified_stored_server_finished
+  (c:connection_state)
+  (#fin:erased M.finished)
+  (#st0:erased CS.connection_state)
+  requires connection_exactly c st0 **
+           pure (st0.CS.cs_model.CS.model_control ==
+                    CS.ControlHandshaking CS.HsServerFinishedReceived /\
+                  st0.CS.cs_model.CS.model_handshake.CS.hs_server_finished ==
+                    Some (Ghost.reveal fin) /\
+                  st0.CS.cs_model.CS.model_handshake.CS.hs_server_finished_verified == false /\
+                  B.length st0.CS.cs_model.CS.model_handshake.CS.hs_transcript + 36 <=
+                    max_transcript_len /\
+                  CS.legal_event
+                    st0.CS.cs_model
+                    (CS.ConnLocalEvent
+                      (CS.LocalVerifyFinished (Ghost.reveal fin))))
+  ensures connection_exactly
+            c
+            (verified_server_finished_state st0 (Ghost.reveal fin))
+{
+  let mut serialized_finished = [| 0uy; 36sz |];
+
+  unfold (connection_exactly c st0);
+  unfold (connection_model_exactly c st0.CS.cs_model);
+  unfold (handshake_exactly c.handshake st0.CS.cs_model.CS.model_handshake);
+  with cv_verified server_finished_verified. _;
+  unfold (handshake_messages_exactly c.handshake.messages st0.CS.cs_model.CS.model_handshake);
+  unfold (finished_slot_exactly
+    c.handshake.messages.server_finished
+    st0.CS.cs_model.CS.model_handshake.CS.hs_server_finished);
+  with stored. assert (Box.pts_to c.handshake.messages.server_finished stored);
+  let stored_fin_opt = !c.handshake.messages.server_finished;
+  assert (pure (stored_fin_opt == stored));
+  assert (pure (Some? stored_fin_opt));
+  let lfin = Some?.v stored_fin_opt;
+  assert (pure (stored_fin_opt == Some lfin));
+  assert (pure (stored == Some lfin));
+
+  rewrite (match stored, st0.CS.cs_model.CS.model_handshake.CS.hs_server_finished with
+    | None, None -> pure True
+    | Some old_l, Some old_m -> IM.is_valid_finished old_l old_m
+    | _, _ -> pure False)
+    as (IM.is_valid_finished lfin (Ghost.reveal fin));
+  let written_len =
+    Ser.serialize_finished_handshake
+      #fin
+      lfin
+      serialized_finished
+      36sz;
+  with serialized_finished_bytes.
+    assert (ArrPts.pts_to serialized_finished serialized_finished_bytes);
+  assert (pure (Seq.equal
+    serialized_finished_bytes
+    (W.serialize_handshake (M.Finished (Ghost.reveal fin)))));
+  assert (pure (SZ.v written_len == 36));
+  rewrite (IM.is_valid_finished lfin (Ghost.reveal fin))
+    as (match stored, st0.CS.cs_model.CS.model_handshake.CS.hs_server_finished with
+      | None, None -> pure True
+      | Some old_l, Some old_m -> IM.is_valid_finished old_l old_m
+      | _, _ -> pure False);
+  fold (finished_slot_exactly
+    c.handshake.messages.server_finished
+    st0.CS.cs_model.CS.model_handshake.CS.hs_server_finished);
+  fold (handshake_messages_exactly c.handshake.messages st0.CS.cs_model.CS.model_handshake);
+  fold (handshake_exactly c.handshake st0.CS.cs_model.CS.model_handshake);
+  fold (connection_model_exactly c st0.CS.cs_model);
+  fold (connection_exactly c st0);
+
+  mark_verified_server_finished
+    c
+    serialized_finished
+    36sz
+    #fin
+}
+
 fn mark_sent_client_finished
   (c:connection_state)
   (handshake_bytes:array U8.t)

@@ -107,7 +107,7 @@ fn next_local_action
   let certificate_signature_ready =
     C.can_verify_certificate_signature c;
   let finished_ready =
-    C.can_verify_server_finished c server_finished_payload_len;
+    C.can_verify_server_finished c 36sz;
   let application_keys_ready =
     C.can_install_application_traffic_keys c;
   let client_application_keys_ready =
@@ -167,7 +167,7 @@ fn next_local_action
     {
       CT.next_local_ready = true;
       CT.next_local_kind = CT.LocalVerifyFinished;
-      CT.next_local_payload = CT.LocalPayloadServerFinishedHandshake;
+      CT.next_local_payload = CT.LocalPayloadNone;
     }
   } else if client_application_keys_ready {
     {

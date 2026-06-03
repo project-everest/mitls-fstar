@@ -64,7 +64,6 @@ type local_event_kind =
 type local_payload_kind =
   | LocalPayloadNone
   | LocalPayloadCertificatePublicKey
-  | LocalPayloadServerFinishedHandshake
 
 type next_local_action = {
   next_local_ready: bool;
@@ -110,15 +109,7 @@ let local_input_wf
          (CS.ConnLocalEvent (CS.LocalVerifyCertificateSignature cv))
      | None -> False)
   | LocalVerifyFinished ->
-    st.CS.cs_model.CS.model_control ==
-      CS.ControlHandshaking CS.HsServerFinishedReceived ==>
-    (match st.CS.cs_model.CS.model_handshake.CS.hs_server_finished with
-     | Some fin ->
-       CS.legal_event
-         st.CS.cs_model
-         (CS.ConnLocalEvent (CS.LocalVerifyFinished fin)) /\
-       Seq.equal payload (WS.serialize_handshake (M.Finished fin))
-     | None -> False)
+    Seq.equal payload B.empty
   | _ -> True
 
 let response_wf

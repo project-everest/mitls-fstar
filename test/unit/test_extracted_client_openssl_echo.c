@@ -33,12 +33,6 @@ typedef struct driver_state_s {
   tls13_peer_identity *peer;
 } driver_state;
 
-static void write_u24(uint8_t *out, size_t v) {
-  out[0] = (uint8_t)(v >> 16);
-  out[1] = (uint8_t)(v >> 8);
-  out[2] = (uint8_t)v;
-}
-
 static int read_file(const char *path, uint8_t **out, size_t *out_len) {
   FILE *f = fopen(path, "rb");
   if (f == NULL) {
@@ -281,19 +275,6 @@ static int verify_certificate_signature_for_local_step(driver_state *d) {
   return 0;
 }
 
-static int build_finished_payload(driver_state *d, uint8_t out[36]) {
-  uint8_t verify_data[32] = {0};
-  size_t verify_len = copy_server_finished_verify_data(d->client, verify_data, sizeof verify_data);
-  if (verify_len != sizeof verify_data) {
-    fprintf(stderr, "server Finished verify_data length was %zu\n", verify_len);
-    return 1;
-  }
-  out[0] = 20u;
-  write_u24(out + 1, verify_len);
-  memcpy(out + 4, verify_data, verify_len);
-  return 0;
-}
-
 static int run_one_local_action(driver_state *d, bool *progress) {
   TLS13_Impl_Client_Types_next_local_action action =
       next_local_action(d->client, sizeof d->network_out, PUBLIC_KEY_PAYLOAD_CAP, 36u);
@@ -303,7 +284,6 @@ static int run_one_local_action(driver_state *d, bool *progress) {
   }
   uint8_t empty_payload[1] = {0};
   uint8_t certificate_payload[PUBLIC_KEY_PAYLOAD_CAP] = {0};
-  uint8_t finished_payload[36] = {0};
   uint8_t *payload = empty_payload;
   size_t payload_len = 0u;
 
@@ -312,12 +292,6 @@ static int run_one_local_action(driver_state *d, bool *progress) {
       return 1;
     }
     payload = certificate_payload;
-  } else if (action.next_local_payload == TLS13_Impl_Client_Types_LocalPayloadServerFinishedHandshake) {
-    if (build_finished_payload(d, finished_payload) != 0) {
-      return 1;
-    }
-    payload = finished_payload;
-    payload_len = sizeof finished_payload;
   }
 
   if (action.next_local_kind == TLS13_Impl_Client_Types_LocalVerifyCertificateSignature &&

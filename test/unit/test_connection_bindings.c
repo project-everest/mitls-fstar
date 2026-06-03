@@ -102,7 +102,6 @@ static int run_suggested_local_step(
   }
 
   uint8_t empty_payload[1] = {0};
-  uint8_t stored_finished[36] = {0};
   uint8_t *payload = empty_payload;
   size_t payload_len = 0;
 
@@ -110,20 +109,6 @@ static int run_suggested_local_step(
       TLS13_Impl_Client_Types_LocalPayloadCertificatePublicKey) {
     payload = certificate_public_key;
     payload_len = certificate_public_key_len;
-  } else if (action.next_local_payload ==
-             TLS13_Impl_Client_Types_LocalPayloadServerFinishedHandshake) {
-    uint8_t verify_data[32] = {0};
-    size_t verify_data_len =
-        copy_server_finished_verify_data(c, verify_data, sizeof verify_data);
-    if (verify_data_len != 32) {
-      fprintf(stderr, "%s could not copy server Finished verify_data\n", label);
-      return 1;
-    }
-    stored_finished[0] = 20;
-    write_u24(stored_finished + 1, verify_data_len);
-    memcpy(stored_finished + 4, verify_data, verify_data_len);
-    payload = stored_finished;
-    payload_len = sizeof stored_finished;
   }
 
   TLS13_Impl_Client_Types_client_response resp =
@@ -668,7 +653,7 @@ static int test_bad_server_finished_rejected(void) {
       next_local_action(c, sizeof network_out, 0, 36);
   if (!action.next_local_ready ||
       action.next_local_kind != TLS13_Impl_Client_Types_LocalVerifyFinished ||
-      action.next_local_payload != TLS13_Impl_Client_Types_LocalPayloadServerFinishedHandshake) {
+      action.next_local_payload != TLS13_Impl_Client_Types_LocalPayloadNone) {
     fprintf(stderr, "bad Finished next action was not LocalVerifyFinished\n");
     return 1;
   }
@@ -682,16 +667,13 @@ static int test_bad_server_finished_rejected(void) {
     return 1;
   }
 
-  uint8_t payload[36] = {0};
-  payload[0] = 20;
-  write_u24(payload + 1, verify_data_len);
-  memcpy(payload + 4, verify_data, sizeof verify_data);
+  uint8_t payload[1] = {0};
   TLS13_Impl_Client_Types_client_response resp =
       process_local_event(
           c,
           TLS13_Impl_Client_Types_LocalVerifyFinished,
           payload,
-          sizeof payload,
+          0,
           network_out,
           sizeof network_out,
           app_out,
@@ -968,7 +950,7 @@ static int test_client_hello_local_path(void) {
   if (run_suggested_local_step(
         c,
         TLS13_Impl_Client_Types_LocalVerifyFinished,
-        TLS13_Impl_Client_Types_LocalPayloadServerFinishedHandshake,
+        TLS13_Impl_Client_Types_LocalPayloadNone,
         payload,
         0,
         network_out,

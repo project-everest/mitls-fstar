@@ -866,27 +866,20 @@ fn handle_local_event
     }
   }
     LocalVerifyFinished -> {
-    let ready = C.can_verify_server_finished c payload_len;
+    let ready = C.can_verify_server_finished c 36sz;
     if ready {
       let finished_ok = C.server_finished_verify_data_matches c;
       if finished_ok {
         let fin = Ghost.hide (Some?.v 'st0.CS.cs_model.CS.model_handshake.CS.hs_server_finished);
         assert (pure ('st0.CS.cs_model.CS.model_handshake.CS.hs_server_finished ==
           Some (Ghost.reveal fin)));
-        assert (pure (CT.local_input_wf
-          'st0
-          CT.LocalVerifyFinished
-          (Ghost.reveal 'payload_bytes)));
         assert (pure ('st0.CS.cs_model.CS.model_control ==
           CS.ControlHandshaking CS.HsServerFinishedReceived));
         assert (pure (CS.legal_event
           'st0.CS.cs_model
           (CS.ConnLocalEvent
             (CS.LocalVerifyFinished (Ghost.reveal fin)))));
-        assert (pure (Seq.equal
-          (Ghost.reveal 'payload_bytes)
-          (TLS13.Wire.Spec.serialize_handshake (TLS13.Messages.Finished (Ghost.reveal fin)))));
-        C.mark_verified_server_finished c payload payload_len #fin;
+        C.mark_verified_stored_server_finished c #fin;
         let resp = {
           CT.network_out_len = 0sz;
           CT.app_out_len = 0sz;

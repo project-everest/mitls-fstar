@@ -82,15 +82,15 @@ let next_local_action_sound
         st.CS.cs_model.CS.model_handshake.CS.hs_buffers.CS.hb_certificate_verify_input /\
       st.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify_verified == false
     | CT.LocalVerifyFinished ->
-      action.CT.next_local_payload == CT.LocalPayloadServerFinishedHandshake /\
+      action.CT.next_local_payload == CT.LocalPayloadNone /\
       st.CS.cs_model.CS.model_control ==
         CS.ControlHandshaking CS.HsServerFinishedReceived /\
       Some? st.CS.cs_model.CS.model_handshake.CS.hs_server_finished /\
       Some?
         st.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_handshake_traffic /\
       st.CS.cs_model.CS.model_handshake.CS.hs_server_finished_verified == false /\
-      B.length st.CS.cs_model.CS.model_handshake.CS.hs_transcript +
-        SZ.v server_finished_payload_len <= C.max_transcript_len
+      B.length st.CS.cs_model.CS.model_handshake.CS.hs_transcript + 36 <=
+        C.max_transcript_len
     | CT.LocalInstallClientApplicationTrafficKeys ->
       action.CT.next_local_payload == CT.LocalPayloadNone /\
       st.CS.cs_model.CS.model_control ==
