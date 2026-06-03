@@ -76,7 +76,7 @@ let derive_secret
   C.hkdf_expand_label secret label context 32
 
 let early_secret (psk:B.bytes) : C.secret =
-  C.hkdf_extract B.empty psk
+  C.hkdf_extract B.empty (if B.length psk = 0 then zero_secret else psk)
 
 let derived_secret (secret:B.bytes) : C.secret =
   derive_secret secret label_derived empty_hash

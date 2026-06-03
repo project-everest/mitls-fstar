@@ -260,6 +260,7 @@ LDFLAGS_COMMON = -Wl,--gc-sections
 # Testing
 # ──────────────────────────────────────────────────────────────────────────────
 .PHONY: test test-extract-smoke test-connection-bindings \
+  test-extracted-client-openssl-echo \
   test-key-schedule-bindings test-record-bindings \
   test-hacl-stubs test-openssl-stubs test-io-stubs \
   test-openssl-echo check-c-stubs
@@ -334,6 +335,21 @@ test/test_connection_bindings: test/unit/test_connection_bindings.c extract-bund
 test-connection-bindings: test/test_connection_bindings
 	./test/test_connection_bindings
 
+test/test_extracted_client_openssl_echo: \
+  test/unit/test_extracted_client_openssl_echo.c extract-bundle \
+  c_stubs/tls13_openssl_stubs.c c_stubs/tls13_openssl_stubs.h $(HACL_OBJECTS)
+	$(CC) $(CFLAGS_COMMON) \
+	  -I_extract/bundle -I_extract/bundle/internal \
+	  _extract/bundle/*.c \
+	  c_stubs/tls13_crypto_external.c \
+	  c_stubs/tls13_pulse_shims.c \
+	  c_stubs/tls13_openssl_stubs.c \
+	  test/unit/test_extracted_client_openssl_echo.c \
+	  $(HACL_WRAPPER_SOURCES) \
+	  $(LDFLAGS_COMMON) -lssl -lcrypto -o $@
+
+test-extracted-client-openssl-echo: test-openssl-echo
+
 test/test_key_schedule_bindings: test/unit/test_key_schedule_bindings.c \
   $(OUTPUT_DIR)/TLS13_KeySchedule.krml \
   c_stubs/tls13_crypto_external.h \
@@ -383,8 +399,26 @@ test/openssl_echo_server: test/openssl_echo_server.c
 test-client:
 	@echo "OpenSSL interop is pending the new buffer/event network driver."
 
-test-openssl-echo:
-	@echo "OpenSSL interop is pending the new buffer/event network driver."
+test-openssl-echo: test/openssl_echo_server test/test_extracted_client_openssl_echo \
+  test/certs/chain.pem test/certs/ca.pem test/certs/leaf.key test/certs/leaf.der
+	@rm -f test/openssl_echo_server.port test/openssl_echo_server.log
+	@set -e; \
+	  ./test/openssl_echo_server 0 test/certs/chain.pem test/certs/leaf.key \
+	    test/openssl_echo_server.port > test/openssl_echo_server.log 2>&1 & \
+	  server_pid=$$!; \
+	  trap 'kill '"$$server_pid"' 2>/dev/null || true; wait '"$$server_pid"' 2>/dev/null || true; rm -f test/openssl_echo_server.port' EXIT; \
+	  for _i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39 40 41 42 43 44 45 46 47 48 49 50; do \
+	    test -s test/openssl_echo_server.port && break; \
+	    sleep 0.1; \
+	  done; \
+	  if ! test -s test/openssl_echo_server.port; then \
+	    echo "OpenSSL echo server did not start"; \
+	    cat test/openssl_echo_server.log; \
+	    exit 1; \
+	  fi; \
+	  port=$$(cat test/openssl_echo_server.port); \
+	  ./test/test_extracted_client_openssl_echo 127.0.0.1 $$port test/certs/ca.pem; \
+	  wait $$server_pid
 
 # ── Dependency Checks ──────────────────────────────────────────────
 check-toolchain:
@@ -409,10 +443,13 @@ clean:
 	  test/test_record_bindings test/test_io_stubs \
 	  test/test_extract_smoke test/test_connection_bindings \
 	  test/test_key_schedule_bindings \
-	  test/openssl_echo_server
+	  test/test_extracted_client_openssl_echo \
+	  test/openssl_echo_server test/openssl_echo_server.port \
+	  test/openssl_echo_server.log
 	find src test -name '*.checked' -delete
 
 .PHONY: all verify test extract-krml extract-connection extract-smoke extract-bundle \
   test-extract-smoke test-connection-bindings test-key-schedule-bindings \
   test-record-bindings test-hacl-stubs test-openssl-stubs test-io-stubs \
+  test-extracted-client-openssl-echo \
   test-client test-openssl-echo check-c-stubs check-toolchain check-deps clean

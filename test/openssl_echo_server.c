@@ -53,8 +53,8 @@ static int make_listener(uint16_t requested_port, uint16_t *actual_port) {
 }
 
 int main(int argc, char **argv) {
-  if (argc != 4) {
-    fprintf(stderr, "usage: %s PORT CERT_PEM KEY_PEM\n", argv[0]);
+  if (argc != 4 && argc != 5) {
+    fprintf(stderr, "usage: %s PORT CERT_PEM KEY_PEM [PORT_FILE]\n", argv[0]);
     return 1;
   }
 
@@ -78,12 +78,15 @@ int main(int argc, char **argv) {
       SSL_CTX_set_max_proto_version(ctx, TLS1_3_VERSION) != 1 ||
       SSL_CTX_set_ciphersuites(ctx, "TLS_CHACHA20_POLY1305_SHA256") != 1 ||
       SSL_CTX_set1_groups_list(ctx, "X25519") != 1 ||
+      SSL_CTX_set_num_tickets(ctx, 0) != 1 ||
       SSL_CTX_use_certificate_file(ctx, argv[2], SSL_FILETYPE_PEM) != 1 ||
       SSL_CTX_use_PrivateKey_file(ctx, argv[3], SSL_FILETYPE_PEM) != 1 ||
       SSL_CTX_check_private_key(ctx) != 1) {
     ERR_print_errors_fp(stderr);
     goto done;
   }
+  SSL_CTX_set_session_cache_mode(ctx, SSL_SESS_CACHE_OFF);
+  SSL_CTX_set_verify(ctx, SSL_VERIFY_NONE, NULL);
 
   uint16_t actual_port = 0;
   listen_fd = make_listener((uint16_t)port_long, &actual_port);
@@ -92,6 +95,15 @@ int main(int argc, char **argv) {
   }
   printf("%u\n", actual_port);
   fflush(stdout);
+  if (argc == 5) {
+    FILE *port_file = fopen(argv[4], "w");
+    if (port_file == NULL) {
+      perror("fopen port file");
+      goto done;
+    }
+    fprintf(port_file, "%u\n", actual_port);
+    fclose(port_file);
+  }
 
   client_fd = accept(listen_fd, NULL, NULL);
   if (client_fd < 0) {
@@ -105,7 +117,7 @@ int main(int argc, char **argv) {
     goto done;
   }
 
-  struct timeval read_timeout = {.tv_sec = 1, .tv_usec = 0};
+  struct timeval read_timeout = {.tv_sec = 10, .tv_usec = 0};
   if (setsockopt(client_fd, SOL_SOCKET, SO_RCVTIMEO, &read_timeout, sizeof read_timeout) != 0) {
     perror("setsockopt SO_RCVTIMEO");
     goto done;

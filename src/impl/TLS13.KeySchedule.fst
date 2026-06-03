@@ -202,8 +202,8 @@ fn early_secret_empty
   ensures pts_to out (K.early_secret B.empty)
 {
   let mut empty_salt = [| 0uy; 0sz |];
-  let mut empty_psk = [| 0uy; 0sz |];
-  Crypto.hkdf_extract empty_salt 0sz empty_psk 0sz out;
+  let mut zero_psk = [| 0uy; 32sz |];
+  Crypto.hkdf_extract empty_salt 0sz zero_psk 32sz out;
 }
 
 fn handshake_secret
