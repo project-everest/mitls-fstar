@@ -305,14 +305,16 @@ let install_record_keys
   : record_layer_state =
   let material = install.install_material in
   let epoch = traffic_record_epoch install.install_epoch in
-  match install.install_direction with
-  | TrafficWrite ->
+  match install.install_epoch, install.install_direction with
+  | TrafficApplication, TrafficWrite ->
+    record
+  | _, TrafficWrite ->
     {
       record with
         record_write =
           R.install_keys record.record_write epoch material.traffic_key material.traffic_iv;
     }
-  | TrafficRead ->
+  | _, TrafficRead ->
     {
       record with
         record_read =

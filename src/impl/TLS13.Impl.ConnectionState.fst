@@ -4492,29 +4492,18 @@ fn try_install_client_application_traffic_keys
       c.handshake.keys
       (installed_traffic_keys_state st0 (Ghost.reveal install)).CS.cs_model.CS.model_handshake.CS.hs_keys);
 
-    Rec.install_application_keys_runtime c.records.write traffic_key_out traffic_iv_out;
     assert (pure ((Ghost.reveal install).CS.install_epoch == CS.TrafficApplication));
     assert (pure ((Ghost.reveal install).CS.install_direction == CS.TrafficWrite));
     assert (pure ((Ghost.reveal install).CS.install_material == Ghost.reveal material));
     assert (pure ((installed_traffic_keys_state st0 (Ghost.reveal install)).CS.cs_model.CS.model_record.CS.record_read ==
       st0.CS.cs_model.CS.model_record.CS.record_read));
     assert (pure ((installed_traffic_keys_state st0 (Ghost.reveal install)).CS.cs_model.CS.model_record.CS.record_write ==
-      R.install_keys
-        st0.CS.cs_model.CS.model_record.CS.record_write
-        R.Application
-        (Ghost.reveal material).CS.traffic_key
-        (Ghost.reveal material).CS.traffic_iv));
+      st0.CS.cs_model.CS.model_record.CS.record_write));
     rewrite (Rec.is_record_state c.records.read st0.CS.cs_model.CS.model_record.CS.record_read)
       as (Rec.is_record_state
         c.records.read
         (installed_traffic_keys_state st0 (Ghost.reveal install)).CS.cs_model.CS.model_record.CS.record_read);
-    rewrite (Rec.is_record_state
-      c.records.write
-      (R.install_keys
-        st0.CS.cs_model.CS.model_record.CS.record_write
-        R.Application
-        (Ghost.reveal material).CS.traffic_key
-        (Ghost.reveal material).CS.traffic_iv))
+    rewrite (Rec.is_record_state c.records.write st0.CS.cs_model.CS.model_record.CS.record_write)
       as (Rec.is_record_state
         c.records.write
         (installed_traffic_keys_state st0 (Ghost.reveal install)).CS.cs_model.CS.model_record.CS.record_write);
