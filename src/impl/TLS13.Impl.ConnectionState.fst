@@ -24,6 +24,7 @@ module Rec = TLS13.Record
 module Ser = TLS13.Impl.Serializer
 module Seq = FStar.Seq
 module SeqP = FStar.Seq.Properties
+module SM = TLS13.StateMachine
 module Slice = Pulse.Lib.Slice
 module SZ = FStar.SizeT
 module T = TLS13.Types
@@ -2103,6 +2104,121 @@ let received_application_data_state
       }];
   }
 
+let sent_application_data_state
+  (st:CS.connection_state)
+  (bytes:B.bytes)
+  (raw_sent:B.bytes)
+  : CS.connection_state =
+  let model0 = st.CS.cs_model in
+  let record0 = model0.CS.model_record in
+  let app0 = model0.CS.model_application in
+  let model1 = {
+    model0 with
+      CS.model_record = {
+        record0 with
+          CS.record_write = R.next_seq record0.CS.record_write;
+      };
+      CS.model_application = {
+        app0 with
+          CS.app_log = CL.append_app_sent app0.CS.app_log bytes;
+      };
+  } in
+  {
+    CS.cs_model = model1;
+    CS.cs_wire_log = {
+      CL.raw_sent = B.append st.CS.cs_wire_log.CL.raw_sent raw_sent;
+      CL.raw_received = B.append st.CS.cs_wire_log.CL.raw_received B.empty;
+    };
+    CS.cs_event_log =
+      st.CS.cs_event_log @
+      [CS.ConnNetworkEvent {
+        CL.message_direction = CL.Sent;
+        CL.message_value = M.TlsApplicationData bytes;
+      }];
+  }
+
+let lemma_application_data_record_count_small
+  (bytes:B.bytes)
+  : Lemma
+      (requires B.length bytes <= SM.max_application_data_fragment_len)
+      (ensures SM.application_data_record_count bytes == 1)
+=
+  SM.lemma_application_data_record_count_len_small (B.length bytes)
+
+let lemma_advance_direction_records_one (s:R.direction_state)
+  : Lemma (CS.advance_direction_records s 1 == R.next_seq s)
+=
+  ()
+
+let lemma_seal_application_success_next_seq
+  (s:R.direction_state)
+  (aad:B.bytes)
+  (payload:B.bytes)
+  (ciphertext:B.bytes)
+  (s':R.direction_state)
+  : Lemma
+      (requires R.seal
+                  s
+                  aad
+                  { R.content_type = T.ApplicationData;
+                    R.fragment = payload } == Some (ciphertext, s'))
+      (ensures s' == R.next_seq s)
+=
+  match s.R.key, s.R.static_iv with
+  | Some _, Some _ -> ()
+  | _, _ -> ()
+
+let can_send_application_data
+  (st:CS.connection_state)
+  (bytes:B.bytes)
+  (raw_sent:B.bytes)
+  : GTot prop =
+  st.CS.cs_model.CS.model_control == CS.ControlApplicationData /\
+  Some? st.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_application_traffic /\
+  U64.fits (st.CS.cs_model.CS.model_record.CS.record_write.R.seq + 1) /\
+  B.length bytes <= SM.max_application_data_fragment_len /\
+  SM.application_data_record_count bytes == 1 /\
+  CS.legal_event
+    st.CS.cs_model
+    (CS.ConnNetworkEvent {
+      CL.message_direction = CL.Sent;
+      CL.message_value = M.TlsApplicationData bytes;
+    }) /\
+  CS.event_raw_delta_legal
+    st.CS.cs_model
+    (CS.ConnNetworkEvent {
+      CL.message_direction = CL.Sent;
+      CL.message_value = M.TlsApplicationData bytes;
+    })
+    raw_sent
+    B.empty
+
+let can_send_application_data_sizes
+  (payload_len:SZ.t)
+  (network_out_len:SZ.t)
+  : Pure bool
+      (requires True)
+      (ensures fun ok ->
+        ok ==> SZ.v payload_len <= SM.max_application_data_fragment_len /\
+                 SZ.v payload_len + 21 <= SZ.v network_out_len)
+=
+  assert_norm (SM.max_application_data_fragment_len == 16384);
+  let max_payload = 16384sz in
+  let payload_fits = sizet_lte_plain payload_len max_payload in
+  lemma_sizet_lte_plain payload_len max_payload;
+  if payload_fits then
+    begin
+      assert (SZ.v payload_len <= SM.max_application_data_fragment_len);
+      assert (SZ.fits (SZ.v payload_len + 21));
+      let needed = SZ.add payload_len 21sz in
+      let out_room = sizet_lte_plain needed network_out_len in
+      lemma_sizet_lte_plain needed network_out_len;
+      assert (out_room ==> SZ.v payload_len + 21 <= SZ.v network_out_len);
+      out_room
+    end
+  else
+    false
+
 let lemma_local_fail_state_evolves (st:CS.connection_state) (err:T.tls_error)
   : Lemma
       (requires CS.connection_state_consistent st)
@@ -3106,6 +3222,56 @@ let lemma_received_application_data_state_evolves
     (received_application_data_state st bytes raw_received));
   assert (CS.connection_state_consistent
     (received_application_data_state st bytes raw_received))
+
+let lemma_sent_application_data_state_evolves
+  (st:CS.connection_state)
+  (bytes:B.bytes)
+  (raw_sent:B.bytes)
+  : Lemma
+      (requires CS.connection_state_consistent st /\
+                can_send_application_data st bytes raw_sent)
+      (ensures CS.connection_state_evolves
+                 st
+                 (sent_application_data_state st bytes raw_sent) /\
+               CS.connection_state_consistent
+                 (sent_application_data_state st bytes raw_sent) /\
+               CS.legal_connection_delta
+                 st
+                 {
+                   CS.delta_event =
+                     CS.ConnNetworkEvent {
+                       CL.message_direction = CL.Sent;
+                       CL.message_value = M.TlsApplicationData bytes;
+                     };
+                   CS.delta_raw_sent = raw_sent;
+                   CS.delta_raw_received = B.empty;
+                 }
+                 (sent_application_data_state st bytes raw_sent))
+=
+  let ev =
+    CS.ConnNetworkEvent {
+      CL.message_direction = CL.Sent;
+      CL.message_value = M.TlsApplicationData bytes;
+    } in
+  let delta = {
+    CS.delta_event = ev;
+    CS.delta_raw_sent = raw_sent;
+    CS.delta_raw_received = B.empty;
+  } in
+  lemma_application_data_record_count_small bytes;
+  lemma_advance_direction_records_one st.CS.cs_model.CS.model_record.CS.record_write;
+  assert (CS.legal_event st.CS.cs_model ev);
+  assert (CS.event_raw_delta_legal st.CS.cs_model ev raw_sent B.empty);
+  assert (CS.step_model st.CS.cs_model ev ==
+          Some (sent_application_data_state st bytes raw_sent).CS.cs_model);
+  assert (CS.legal_connection_delta st delta (sent_application_data_state st bytes raw_sent));
+  assert (CS.connection_state_single_step st (sent_application_data_state st bytes raw_sent));
+  FStar.ReflexiveTransitiveClosure.closure_step
+    CS.connection_state_single_step
+    st
+    (sent_application_data_state st bytes raw_sent);
+  assert (CS.connection_state_evolves st (sent_application_data_state st bytes raw_sent));
+  assert (CS.connection_state_consistent (sent_application_data_state st bytes raw_sent))
 
 fn mark_decode_error
   (c:connection_state)
@@ -6204,6 +6370,74 @@ fn can_send_client_finished_runtime
   ok
 }
 
+fn can_send_application_data_runtime
+  (c:connection_state)
+  (payload_len:SZ.t)
+  (network_out_len:SZ.t)
+  (#st0:erased CS.connection_state)
+  requires connection_exactly c st0
+  returns ok: bool
+  ensures connection_exactly c st0 **
+          pure (ok ==>
+            st0.CS.cs_model.CS.model_control == CS.ControlApplicationData /\
+            Some? st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_application_traffic /\
+            U64.fits (st0.CS.cs_model.CS.model_record.CS.record_write.R.seq + 1) /\
+            SZ.v payload_len <= SM.max_application_data_fragment_len /\
+            SZ.v payload_len + 21 <= SZ.v network_out_len)
+{
+  unfold (connection_exactly c st0);
+  unfold (connection_model_exactly c st0.CS.cs_model);
+  unfold (control_exactly c.control st0.CS.cs_model.CS.model_control st0.CS.cs_model.CS.model_failure);
+  unfold (record_layer_exactly c.records st0.CS.cs_model.CS.model_record);
+  unfold (handshake_exactly c.handshake st0.CS.cs_model.CS.model_handshake);
+  unfold (key_schedule_exactly
+    c.handshake.keys
+    st0.CS.cs_model.CS.model_handshake.CS.hs_keys);
+  unfold (traffic_key_material_exactly
+    c.handshake.keys.client_application_traffic
+    st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_application_traffic);
+
+  let tag = !c.control.control_tag;
+  let control_ok = tag = 2uy;
+  let client_app_present = !c.handshake.keys.client_application_traffic.present;
+
+  fold (traffic_key_material_exactly
+    c.handshake.keys.client_application_traffic
+    st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_application_traffic);
+  fold (key_schedule_exactly
+    c.handshake.keys
+    st0.CS.cs_model.CS.model_handshake.CS.hs_keys);
+  fold (handshake_exactly c.handshake st0.CS.cs_model.CS.model_handshake);
+
+  let seq_ok = Rec.can_advance_seq c.records.write;
+  fold (record_layer_exactly c.records st0.CS.cs_model.CS.model_record);
+
+  let size_ok =
+    can_send_application_data_sizes payload_len network_out_len;
+
+  let ok =
+    control_ok &&
+    client_app_present &&
+    seq_ok &&
+    size_ok;
+
+  assert (pure (ok ==> U8.v tag == 2));
+  assert (pure (ok ==> st0.CS.cs_model.CS.model_control == CS.ControlApplicationData));
+  assert (pure (ok ==> Some?
+    st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_application_traffic));
+  assert (pure (ok ==> U64.fits (st0.CS.cs_model.CS.model_record.CS.record_write.R.seq + 1)));
+  assert (pure (ok ==> SZ.v payload_len <= SM.max_application_data_fragment_len));
+  assert (pure (ok ==> SZ.v payload_len + 21 <= SZ.v network_out_len));
+
+  fold (control_exactly
+    c.control
+    st0.CS.cs_model.CS.model_control
+    st0.CS.cs_model.CS.model_failure);
+  fold (connection_model_exactly c st0.CS.cs_model);
+  fold (connection_exactly c st0);
+  ok
+}
+
 fn can_receive_close_notify
   (c:connection_state)
   (#st0:erased CS.connection_state)
@@ -8656,6 +8890,341 @@ fn try_send_client_finished
       #fin_sent
       #raw_sent;
     true
+  } else {
+    false
+  }
+}
+
+fn mark_sent_application_data_after_record_advanced
+  (c:connection_state)
+  (payload:array U8.t)
+  (payload_len:SZ.t)
+  (network_out:array U8.t)
+  (written:SZ.t)
+  (#raw_sent:erased B.bytes)
+  (#st0:erased CS.connection_state)
+  requires MR.pts_to c.ghost_state #1.0R st0 **
+           connection_config_exactly c.config st0.CS.cs_model.CS.model_config **
+           control_exactly
+             c.control
+             st0.CS.cs_model.CS.model_control
+             st0.CS.cs_model.CS.model_failure **
+           record_layer_exactly
+             c.records
+             ({ st0.CS.cs_model.CS.model_record with
+                 CS.record_write =
+                   R.next_seq st0.CS.cs_model.CS.model_record.CS.record_write }) **
+           handshake_exactly c.handshake st0.CS.cs_model.CS.model_handshake **
+           application_exactly c.application st0.CS.cs_model.CS.model_application **
+           ArrPts.pts_to payload 'payload_bytes **
+           ArrPts.pts_to network_out 'network_out_bytes **
+           pure (CS.connection_state_consistent st0 /\
+                 B.length 'payload_bytes == SZ.v payload_len /\
+                 can_send_application_data
+                   st0
+                   (Ghost.reveal 'payload_bytes)
+                   (Ghost.reveal raw_sent) /\
+                 SZ.v written == SZ.v payload_len + 21 /\
+                 SZ.v written <= B.length 'network_out_bytes /\
+                 Seq.equal
+                   (Ghost.reveal raw_sent)
+                   (Seq.slice (Ghost.reveal 'network_out_bytes) 0 (SZ.v written)))
+  ensures connection_exactly
+            c
+            (sent_application_data_state
+              st0
+              (Ghost.reveal 'payload_bytes)
+              (Ghost.reveal raw_sent)) **
+          ArrPts.pts_to payload 'payload_bytes **
+          ArrPts.pts_to network_out 'network_out_bytes
+{
+  assert (pure (can_send_application_data
+    st0
+    (Ghost.reveal 'payload_bytes)
+    (Ghost.reveal raw_sent)));
+  assert (pure (st0.CS.cs_model.CS.model_control == CS.ControlApplicationData));
+  assert (pure (Some?
+    st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_application_traffic));
+  assert (pure (U64.fits (st0.CS.cs_model.CS.model_record.CS.record_write.R.seq + 1)));
+
+  unfold (application_exactly c.application st0.CS.cs_model.CS.model_application);
+  assert (pure (CS.pending_application_consistent
+    (sent_application_data_state
+      st0
+      (Ghost.reveal 'payload_bytes)
+      (Ghost.reveal raw_sent)).CS.cs_model.CS.model_application));
+  fold (application_exactly
+    c.application
+    (sent_application_data_state
+      st0
+      (Ghost.reveal 'payload_bytes)
+      (Ghost.reveal raw_sent)).CS.cs_model.CS.model_application);
+
+  assert (pure ((sent_application_data_state
+    st0
+    (Ghost.reveal 'payload_bytes)
+    (Ghost.reveal raw_sent)).CS.cs_model.CS.model_config ==
+    st0.CS.cs_model.CS.model_config));
+  assert (pure ((sent_application_data_state
+    st0
+    (Ghost.reveal 'payload_bytes)
+    (Ghost.reveal raw_sent)).CS.cs_model.CS.model_control ==
+    st0.CS.cs_model.CS.model_control));
+  assert (pure ((sent_application_data_state
+    st0
+    (Ghost.reveal 'payload_bytes)
+    (Ghost.reveal raw_sent)).CS.cs_model.CS.model_failure ==
+    st0.CS.cs_model.CS.model_failure));
+  assert (pure ((sent_application_data_state
+    st0
+    (Ghost.reveal 'payload_bytes)
+    (Ghost.reveal raw_sent)).CS.cs_model.CS.model_handshake ==
+    st0.CS.cs_model.CS.model_handshake));
+  assert (pure ((sent_application_data_state
+    st0
+    (Ghost.reveal 'payload_bytes)
+    (Ghost.reveal raw_sent)).CS.cs_model.CS.model_record ==
+    { st0.CS.cs_model.CS.model_record with
+        CS.record_write = R.next_seq st0.CS.cs_model.CS.model_record.CS.record_write }));
+
+  rewrite (connection_config_exactly c.config st0.CS.cs_model.CS.model_config)
+    as (connection_config_exactly
+      c.config
+      (sent_application_data_state
+        st0
+        (Ghost.reveal 'payload_bytes)
+        (Ghost.reveal raw_sent)).CS.cs_model.CS.model_config);
+  rewrite (control_exactly
+    c.control
+    st0.CS.cs_model.CS.model_control
+    st0.CS.cs_model.CS.model_failure)
+    as (control_exactly
+      c.control
+      (sent_application_data_state
+        st0
+        (Ghost.reveal 'payload_bytes)
+        (Ghost.reveal raw_sent)).CS.cs_model.CS.model_control
+      (sent_application_data_state
+        st0
+        (Ghost.reveal 'payload_bytes)
+        (Ghost.reveal raw_sent)).CS.cs_model.CS.model_failure);
+  rewrite (handshake_exactly c.handshake st0.CS.cs_model.CS.model_handshake)
+    as (handshake_exactly
+      c.handshake
+      (sent_application_data_state
+        st0
+        (Ghost.reveal 'payload_bytes)
+        (Ghost.reveal raw_sent)).CS.cs_model.CS.model_handshake);
+  fold (connection_model_exactly
+    c
+    (sent_application_data_state
+      st0
+      (Ghost.reveal 'payload_bytes)
+      (Ghost.reveal raw_sent)).CS.cs_model);
+
+  lemma_sent_application_data_state_evolves
+    st0
+    (Ghost.reveal 'payload_bytes)
+    (Ghost.reveal raw_sent);
+  MR.update
+    c.ghost_state
+    (sent_application_data_state
+      st0
+      (Ghost.reveal 'payload_bytes)
+      (Ghost.reveal raw_sent));
+  fold (connection_exactly
+    c
+    (sent_application_data_state
+      st0
+      (Ghost.reveal 'payload_bytes)
+      (Ghost.reveal raw_sent)))
+}
+
+fn try_send_application_data
+  (c:connection_state)
+  (payload:array U8.t)
+  (payload_len:SZ.t)
+  (network_out:array U8.t)
+  (network_out_len:SZ.t)
+  (#st0:erased CS.connection_state)
+  requires connection_exactly c st0 **
+           ArrPts.pts_to payload 'payload_bytes **
+           ArrPts.pts_to network_out 'old_network_out **
+           pure (B.length 'payload_bytes == SZ.v payload_len /\
+                 B.length 'old_network_out == SZ.v network_out_len)
+  returns ok: bool
+  ensures (if ok then
+            exists* raw_sent network_out_bytes.
+              connection_exactly
+                c
+                (sent_application_data_state
+                  st0
+                  (Ghost.reveal 'payload_bytes)
+                  raw_sent) **
+              ArrPts.pts_to payload 'payload_bytes **
+              ArrPts.pts_to network_out network_out_bytes **
+              pure (B.length network_out_bytes == SZ.v network_out_len /\
+                    SZ.v payload_len + 21 <= B.length network_out_bytes /\
+                    can_send_application_data
+                      st0
+                      (Ghost.reveal 'payload_bytes)
+                      raw_sent /\
+                    Seq.equal
+                      raw_sent
+                      (Seq.slice network_out_bytes 0 (SZ.v payload_len + 21)))
+          else
+            connection_exactly c st0 **
+            ArrPts.pts_to payload 'payload_bytes **
+            ArrPts.pts_to network_out 'old_network_out)
+{
+  let ready = can_send_application_data_runtime c payload_len network_out_len;
+  if ready {
+    assert (pure (st0.CS.cs_model.CS.model_control == CS.ControlApplicationData));
+    assert (pure (Some?
+      st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_application_traffic));
+    assert (pure (U64.fits (st0.CS.cs_model.CS.model_record.CS.record_write.R.seq + 1)));
+    assert (pure (B.length (Ghost.reveal 'payload_bytes) == SZ.v payload_len));
+    assert (pure (B.length (Ghost.reveal 'payload_bytes) <= SM.max_application_data_fragment_len));
+    lemma_application_data_record_count_small (Ghost.reveal 'payload_bytes);
+    assert (pure (SM.application_data_record_count (Ghost.reveal 'payload_bytes) == 1));
+    assert (pure (SZ.v payload_len + 21 <= SZ.v network_out_len));
+
+    assert (pure (SZ.fits (SZ.v payload_len + 16)));
+    let ciphertext_len = SZ.add payload_len 16sz;
+    assert (pure (SZ.v ciphertext_len == SZ.v payload_len + 16));
+    assert (pure (SZ.v ciphertext_len <= 16640));
+    assert (pure (SZ.v ciphertext_len + 5 <= SZ.v network_out_len));
+
+    let ciphertext = V.alloc 0uy ciphertext_len;
+    with old_ciphertext_bytes.
+      assert (V.pts_to ciphertext old_ciphertext_bytes);
+    V.pts_to_len ciphertext;
+    assert (pure (B.length old_ciphertext_bytes == SZ.v ciphertext_len));
+    let mut aad = [| 0uy; 0sz |];
+    with aad_bytes.
+      assert (ArrPts.pts_to aad aad_bytes);
+    assert (pure (B.length aad_bytes == 0));
+
+    unfold (connection_exactly c st0);
+    unfold (connection_model_exactly c st0.CS.cs_model);
+    unfold (record_layer_exactly c.records st0.CS.cs_model.CS.model_record);
+
+    V.to_array_pts_to ciphertext;
+    let sealed =
+      Rec.seal_application
+        c.records.write
+        aad
+        0sz
+        payload
+        payload_len
+        (V.vec_to_array ciphertext);
+    with sealed_write ciphertext_bytes. _;
+    if sealed {
+      assert (pure (R.seal
+        st0.CS.cs_model.CS.model_record.CS.record_write
+        aad_bytes
+        { R.content_type = T.ApplicationData;
+          R.fragment = Ghost.reveal 'payload_bytes } ==
+        Some (ciphertext_bytes, sealed_write)));
+      lemma_seal_application_success_next_seq
+        st0.CS.cs_model.CS.model_record.CS.record_write
+        aad_bytes
+        (Ghost.reveal 'payload_bytes)
+        ciphertext_bytes
+        sealed_write;
+      assert (pure (sealed_write ==
+        R.next_seq st0.CS.cs_model.CS.model_record.CS.record_write));
+      rewrite (Rec.is_record_state c.records.write sealed_write)
+        as (Rec.is_record_state
+          c.records.write
+          (R.next_seq st0.CS.cs_model.CS.model_record.CS.record_write));
+      fold (record_layer_exactly
+        c.records
+        { st0.CS.cs_model.CS.model_record with
+            CS.record_write =
+              R.next_seq st0.CS.cs_model.CS.model_record.CS.record_write });
+
+      assert (pure (B.length ciphertext_bytes == SZ.v ciphertext_len));
+      let written =
+        Ser.serialize_raw_application_data_record
+          (V.vec_to_array ciphertext)
+          ciphertext_len
+          network_out
+          network_out_len;
+      with network_out_bytes.
+        assert (ArrPts.pts_to network_out network_out_bytes);
+      assert (pure (B.length network_out_bytes == SZ.v network_out_len));
+      assert (pure (SZ.v written == SZ.v ciphertext_len + 5));
+      assert (pure (SZ.v written == SZ.v payload_len + 21));
+      assert (pure (SZ.v written <= B.length network_out_bytes));
+      let raw_sent = Ghost.hide (Seq.slice network_out_bytes 0 (SZ.v written));
+      assert (pure (Seq.equal
+        (Ghost.reveal raw_sent)
+        (Seq.slice network_out_bytes 0 (SZ.v written))));
+      assert (pure (CS.raw_records_exactly
+        (Ghost.reveal raw_sent)
+        T.ApplicationData
+        1));
+      assert (pure (CS.legal_event
+        st0.CS.cs_model
+        (CS.ConnNetworkEvent {
+          CL.message_direction = CL.Sent;
+          CL.message_value = M.TlsApplicationData (Ghost.reveal 'payload_bytes);
+        })));
+      assert (pure (CS.protected_record_count
+        CL.Sent
+        (M.TlsApplicationData (Ghost.reveal 'payload_bytes)) == 1));
+      assert (pure (CS.network_message_raw_delta_legal
+        st0.CS.cs_model
+        {
+          CL.message_direction = CL.Sent;
+          CL.message_value = M.TlsApplicationData (Ghost.reveal 'payload_bytes);
+        }
+        (Ghost.reveal raw_sent)));
+      Seq.lemma_eq_intro B.empty B.empty;
+      assert (pure (CS.event_raw_delta_legal
+        st0.CS.cs_model
+        (CS.ConnNetworkEvent {
+          CL.message_direction = CL.Sent;
+          CL.message_value = M.TlsApplicationData (Ghost.reveal 'payload_bytes);
+        })
+        (Ghost.reveal raw_sent)
+        B.empty));
+      assert (pure (can_send_application_data
+        st0
+        (Ghost.reveal 'payload_bytes)
+        (Ghost.reveal raw_sent)));
+
+      V.to_vec_pts_to ciphertext;
+      V.free ciphertext;
+
+      mark_sent_application_data_after_record_advanced
+        c
+        payload
+        payload_len
+        network_out
+        written
+        #raw_sent;
+
+      assert (pure (SZ.v written == SZ.v payload_len + 21));
+      assert (pure (Seq.equal
+        (Ghost.reveal raw_sent)
+        (Seq.slice network_out_bytes 0 (SZ.v payload_len + 21))));
+      true
+    } else {
+      assert (pure (sealed_write ==
+        st0.CS.cs_model.CS.model_record.CS.record_write));
+      rewrite (Rec.is_record_state c.records.write sealed_write)
+        as (Rec.is_record_state
+          c.records.write
+          st0.CS.cs_model.CS.model_record.CS.record_write);
+      V.to_vec_pts_to ciphertext;
+      V.free ciphertext;
+      fold (record_layer_exactly c.records st0.CS.cs_model.CS.model_record);
+      fold (connection_model_exactly c st0.CS.cs_model);
+      fold (connection_exactly c st0);
+      false
+    }
   } else {
     false
   }
