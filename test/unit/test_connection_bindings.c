@@ -128,42 +128,62 @@ static int run_network_step(
   return expect_handshake_stage(c, expected_stage, label);
 }
 
-static int receive_application_data(
-    TLS13_Impl_ConnectionState_connection_state c,
-    uint8_t *fragment,
+static size_t build_protected_plaintext_record(
+    uint8_t *out,
+    size_t out_cap,
+    const uint8_t *fragment,
     size_t fragment_len,
-    const char *label) {
-  uint8_t raw[512] = {0};
+    uint8_t inner_type) {
+  if (fragment_len + 6 > out_cap) {
+    return 0;
+  }
+  out[0] = 23;
+  out[1] = 3;
+  out[2] = 3;
+  write_u16(out + 3, (uint16_t)(fragment_len + 1));
+  memcpy(out + 5, fragment, fragment_len);
+  out[5 + fragment_len] = inner_type;
+  return fragment_len + 6;
+}
+
+static int receive_application_stream(
+    TLS13_Impl_ConnectionState_connection_state c,
+    uint8_t *stream,
+    size_t stream_len,
+    const uint8_t **expected,
+    const size_t *expected_lens,
+    size_t expected_count) {
   uint8_t network_out[2048] = {0};
   uint8_t app_out[16384] = {0};
+  size_t offset = 0;
 
-  if (fragment_len + 6 > sizeof raw) {
-    fprintf(stderr, "%s test fragment too large\n", label);
-    return 1;
+  for (size_t i = 0; i < expected_count; ++i) {
+    memset(network_out, 0, sizeof network_out);
+    memset(app_out, 0, sizeof app_out);
+    TLS13_Impl_Client_Types_client_buffer_response buffer_resp =
+        process_network_bytes(
+            c,
+            stream + offset,
+            stream_len - offset,
+            network_out,
+            sizeof network_out,
+            app_out,
+            sizeof app_out);
+    TLS13_Impl_Client_Types_client_response resp = buffer_resp.response;
+    if (expect_step_ok(resp, "ApplicationData stream") != 0 ||
+        buffer_resp.consumed_len == 0 ||
+        buffer_resp.consumed_len > stream_len - offset ||
+        resp.app_out_len != expected_lens[i] ||
+        memcmp(app_out, expected[i], expected_lens[i]) != 0 ||
+        expect_control_tag(c, 2, "ApplicationData stream") != 0) {
+      fprintf(stderr, "ApplicationData stream step %zu failed\n", i);
+      return 1;
+    }
+    offset += buffer_resp.consumed_len;
   }
-  raw[0] = 23;
-  raw[1] = 3;
-  raw[2] = 3;
-  write_u16(raw + 3, (uint16_t)(fragment_len + 1));
-  memcpy(raw + 5, fragment, fragment_len);
-  raw[5 + fragment_len] = 23;
 
-  TLS13_Impl_Client_Types_client_buffer_response buffer_resp =
-      process_network_bytes(
-          c,
-          raw,
-          fragment_len + 6,
-          network_out,
-          sizeof network_out,
-          app_out,
-          sizeof app_out);
-  TLS13_Impl_Client_Types_client_response resp = buffer_resp.response;
-  if (expect_step_ok(resp, label) != 0 ||
-      buffer_resp.consumed_len != fragment_len + 6 ||
-      resp.app_out_len != fragment_len ||
-      memcmp(app_out, fragment, fragment_len) != 0 ||
-      expect_control_tag(c, 2, label) != 0) {
-    fprintf(stderr, "%s failed\n", label);
+  if (offset != stream_len) {
+    fprintf(stderr, "ApplicationData stream left %zu trailing bytes\n", stream_len - offset);
     return 1;
   }
   return 0;
@@ -188,6 +208,29 @@ static int receive_close_notify(
       buffer_resp.consumed_len != sizeof raw ||
       expect_control_tag(c, 4, "CloseNotify") != 0) {
     fprintf(stderr, "CloseNotify failed\n");
+    return 1;
+  }
+  return 0;
+}
+
+static int test_network_buffer_decode_error(void) {
+  TLS13_Impl_ConnectionState_connection_state c = new_client_default();
+  uint8_t invalid_record_prefix[1] = {0xff};
+  uint8_t network_out[2048] = {0};
+  uint8_t app_out[16384] = {0};
+  TLS13_Impl_Client_Types_client_buffer_response buffer_resp =
+      process_network_bytes(
+          c,
+          invalid_record_prefix,
+          sizeof invalid_record_prefix,
+          network_out,
+          sizeof network_out,
+          app_out,
+          sizeof app_out);
+  if (buffer_resp.response.status != TLS13_Impl_Client_Types_DecodeError ||
+      buffer_resp.consumed_len != 0 ||
+      expect_control_tag(c, 5, "DecodeError") != 0) {
+    fprintf(stderr, "DecodeError prefix handling failed\n");
     return 1;
   }
   return 0;
@@ -542,12 +585,36 @@ static int test_client_hello_local_path(void) {
     return 1;
   }
 
-  uint8_t reply_payload[] = {'p', 'o', 'n', 'g'};
-  if (receive_application_data(
+  uint8_t reply_payload_0[] = {'p', 'o', 'n', 'g'};
+  uint8_t reply_payload_1[] = {'a', 'g', 'a', 'i', 'n'};
+  uint8_t app_stream[64] = {0};
+  size_t app_stream_len = 0;
+  size_t app_record_len =
+      build_protected_plaintext_record(
+          app_stream,
+          sizeof app_stream,
+          reply_payload_0,
+          sizeof reply_payload_0,
+          23);
+  app_stream_len += app_record_len;
+  app_record_len =
+      build_protected_plaintext_record(
+          app_stream + app_stream_len,
+          sizeof app_stream - app_stream_len,
+          reply_payload_1,
+          sizeof reply_payload_1,
+          23);
+  app_stream_len += app_record_len;
+  const uint8_t *expected_app[] = {reply_payload_0, reply_payload_1};
+  const size_t expected_app_lens[] = {sizeof reply_payload_0, sizeof reply_payload_1};
+  if (app_stream_len == 0 ||
+      receive_application_stream(
         c,
-        reply_payload,
-        sizeof reply_payload,
-        "ApplicationData") != 0) {
+        app_stream,
+        app_stream_len,
+        expected_app,
+        expected_app_lens,
+        sizeof expected_app / sizeof expected_app[0]) != 0) {
     return 1;
   }
 
@@ -577,7 +644,8 @@ static int test_client_hello_local_path(void) {
 }
 
 int main(void) {
-  if (test_client_hello_local_path() != 0) {
+  if (test_network_buffer_decode_error() != 0 ||
+      test_client_hello_local_path() != 0) {
     return 1;
   }
   printf("new client binding test passed\n");
