@@ -57,6 +57,43 @@ static int expect_control_tag(
   return 0;
 }
 
+static int expect_next_action(
+    TLS13_Impl_ConnectionState_connection_state c,
+    TLS13_Impl_Client_Types_local_event_kind expected_kind,
+    TLS13_Impl_Client_Types_local_payload_kind expected_payload,
+    const char *label) {
+  TLS13_Impl_Client_Types_next_local_action action =
+      next_local_action(c, 2048, 32, 36);
+  if (!action.next_local_ready ||
+      action.next_local_kind != expected_kind ||
+      action.next_local_payload != expected_payload) {
+    fprintf(stderr,
+            "%s returned next action ready=%d kind=%d payload=%d\n",
+            label,
+            (int)action.next_local_ready,
+            (int)action.next_local_kind,
+            (int)action.next_local_payload);
+    return 1;
+  }
+  return 0;
+}
+
+static int expect_no_next_action(
+    TLS13_Impl_ConnectionState_connection_state c,
+    const char *label) {
+  TLS13_Impl_Client_Types_next_local_action action =
+      next_local_action(c, 2048, 32, 36);
+  if (action.next_local_ready) {
+    fprintf(stderr,
+            "%s returned unexpected next action kind=%d payload=%d\n",
+            label,
+            (int)action.next_local_kind,
+            (int)action.next_local_payload);
+    return 1;
+  }
+  return 0;
+}
+
 static int run_local_step(
     TLS13_Impl_ConnectionState_connection_state c,
     TLS13_Impl_Client_Types_local_event_kind kind,
@@ -358,6 +395,14 @@ static int test_client_hello_local_path(void) {
     return 1;
   }
 
+  if (expect_next_action(
+        c,
+        TLS13_Impl_Client_Types_LocalStartHandshake,
+        TLS13_Impl_Client_Types_LocalPayloadNone,
+        "initial next action") != 0) {
+    return 1;
+  }
+
   TLS13_Impl_Client_Types_client_response start =
       process_local_event(
           c,
@@ -372,6 +417,14 @@ static int test_client_hello_local_path(void) {
       start.network_out_len != 0 ||
       expect_handshake_stage(c, 1, "LocalStartHandshake") != 0) {
     fprintf(stderr, "LocalStartHandshake failed\n");
+    return 1;
+  }
+
+  if (expect_next_action(
+        c,
+        TLS13_Impl_Client_Types_LocalSendClientHello,
+        TLS13_Impl_Client_Types_LocalPayloadNone,
+        "post-start next action") != 0) {
     return 1;
   }
 
@@ -398,6 +451,10 @@ static int test_client_hello_local_path(void) {
     return 1;
   }
 
+  if (expect_no_next_action(c, "post-ClientHello next action") != 0) {
+    return 1;
+  }
+
   uint8_t server_hello[90];
   size_t server_hello_len = build_server_hello(server_hello);
   if (run_network_step(
@@ -410,24 +467,46 @@ static int test_client_hello_local_path(void) {
     return 1;
   }
 
+  if (expect_next_action(
+        c,
+        TLS13_Impl_Client_Types_LocalDeriveSharedSecret,
+        TLS13_Impl_Client_Types_LocalPayloadNone,
+        "post-ServerHello next action") != 0) {
+    return 1;
+  }
+
   if (run_local_step(
         c,
         TLS13_Impl_Client_Types_LocalDeriveSharedSecret,
         payload,
         0,
         "LocalDeriveSharedSecret") != 0 ||
+    expect_next_action(
+        c,
+        TLS13_Impl_Client_Types_LocalInstallClientHandshakeTrafficKeys,
+        TLS13_Impl_Client_Types_LocalPayloadNone,
+        "post-shared-secret next action") != 0 ||
     run_local_step(
         c,
         TLS13_Impl_Client_Types_LocalInstallClientHandshakeTrafficKeys,
         payload,
         0,
         "LocalInstallClientHandshakeTrafficKeys") != 0 ||
+    expect_next_action(
+        c,
+        TLS13_Impl_Client_Types_LocalInstallServerHandshakeTrafficKeys,
+        TLS13_Impl_Client_Types_LocalPayloadNone,
+        "post-client-handshake-key next action") != 0 ||
     run_local_step(
         c,
         TLS13_Impl_Client_Types_LocalInstallServerHandshakeTrafficKeys,
         payload,
         0,
         "LocalInstallServerHandshakeTrafficKeys") != 0) {
+    return 1;
+  }
+
+  if (expect_no_next_action(c, "post-handshake-keys next action") != 0) {
     return 1;
   }
 
@@ -453,6 +532,14 @@ static int test_client_hello_local_path(void) {
     return 1;
   }
 
+  if (expect_next_action(
+        c,
+        TLS13_Impl_Client_Types_LocalValidateCertificate,
+        TLS13_Impl_Client_Types_LocalPayloadCertificatePublicKey,
+        "post-Certificate next action") != 0) {
+    return 1;
+  }
+
   uint8_t cert_leaf[32768] = {0};
   size_t cert_leaf_len = copy_certificate_leaf_der(c, cert_leaf, sizeof cert_leaf);
   if (cert_leaf_len != 1 || cert_leaf[0] != 0x42) {
@@ -473,6 +560,10 @@ static int test_client_hello_local_path(void) {
     return 1;
   }
 
+  if (expect_no_next_action(c, "post-certificate-validation next action") != 0) {
+    return 1;
+  }
+
   uint8_t certificate_verify[9];
   if (run_network_step(
         c,
@@ -481,6 +572,14 @@ static int test_client_hello_local_path(void) {
         build_certificate_verify(certificate_verify),
         7,
         "CertificateVerify") != 0) {
+    return 1;
+  }
+
+  if (expect_next_action(
+        c,
+        TLS13_Impl_Client_Types_LocalVerifyCertificateSignature,
+        TLS13_Impl_Client_Types_LocalPayloadNone,
+        "post-CertificateVerify next action") != 0) {
     return 1;
   }
 
@@ -511,6 +610,10 @@ static int test_client_hello_local_path(void) {
     return 1;
   }
 
+  if (expect_no_next_action(c, "post-certificate-signature next action") != 0) {
+    return 1;
+  }
+
   uint8_t finished[36];
   size_t finished_len = build_finished(finished);
   if (run_network_step(
@@ -520,6 +623,14 @@ static int test_client_hello_local_path(void) {
         finished_len,
         9,
         "Finished") != 0) {
+    return 1;
+  }
+
+  if (expect_next_action(
+        c,
+        TLS13_Impl_Client_Types_LocalVerifyFinished,
+        TLS13_Impl_Client_Types_LocalPayloadServerFinishedHandshake,
+        "post-Finished next action") != 0) {
     return 1;
   }
 
@@ -547,18 +658,39 @@ static int test_client_hello_local_path(void) {
     return 1;
   }
 
+  if (expect_next_action(
+        c,
+        TLS13_Impl_Client_Types_LocalInstallClientApplicationTrafficKeys,
+        TLS13_Impl_Client_Types_LocalPayloadNone,
+        "post-Finished-verify next action") != 0) {
+    return 1;
+  }
+
   if (run_local_step(
         c,
         TLS13_Impl_Client_Types_LocalInstallClientApplicationTrafficKeys,
         payload,
         0,
         "LocalInstallClientApplicationTrafficKeys") != 0 ||
+    expect_next_action(
+        c,
+        TLS13_Impl_Client_Types_LocalInstallServerApplicationTrafficKeys,
+        TLS13_Impl_Client_Types_LocalPayloadNone,
+        "post-client-application-key next action") != 0 ||
     run_local_step(
         c,
         TLS13_Impl_Client_Types_LocalInstallServerApplicationTrafficKeys,
         payload,
         0,
         "LocalInstallServerApplicationTrafficKeys") != 0) {
+    return 1;
+  }
+
+  if (expect_next_action(
+        c,
+        TLS13_Impl_Client_Types_LocalSendClientFinished,
+        TLS13_Impl_Client_Types_LocalPayloadNone,
+        "post-application-keys next action") != 0) {
     return 1;
   }
 
@@ -577,6 +709,10 @@ static int test_client_hello_local_path(void) {
     network_out[0] != 23 ||
     expect_control_tag(c, 2, "LocalSendClientFinished") != 0) {
     fprintf(stderr, "LocalSendClientFinished failed\n");
+    return 1;
+  }
+
+  if (expect_no_next_action(c, "post-client-finished next action") != 0) {
     return 1;
   }
 

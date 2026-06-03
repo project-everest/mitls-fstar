@@ -57,6 +57,15 @@ fn control_snapshot
   ensures C.connection_exactly c 'st0 **
           pure (C.control_snapshot_matches snapshot 'st0)
 
+fn next_local_action
+  (c:client)
+  (network_out_len:SZ.t)
+  (certificate_public_key_len:SZ.t)
+  (server_finished_payload_len:SZ.t)
+  requires C.connection_exactly c 'st0
+  returns action:CT.next_local_action
+  ensures C.connection_exactly c 'st0
+
 fn copy_certificate_leaf_der
   (c:client)
   (out:array U8.t)

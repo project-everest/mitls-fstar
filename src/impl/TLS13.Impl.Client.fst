@@ -67,6 +67,123 @@ fn control_snapshot
   C.get_control_snapshot c
 }
 
+fn next_local_action
+  (c:client)
+  (network_out_len:SZ.t)
+  (certificate_public_key_len:SZ.t)
+  (server_finished_payload_len:SZ.t)
+  requires C.connection_exactly c 'st0
+  returns action:CT.next_local_action
+  ensures C.connection_exactly c 'st0
+{
+  let no_action = {
+    CT.next_local_ready = false;
+    CT.next_local_kind = CT.LocalFail;
+    CT.next_local_payload = CT.LocalPayloadNone;
+  };
+  let control = C.get_control_snapshot c;
+  let keys = C.get_key_schedule_snapshot c;
+  let start_ready = C.can_start_handshake_runtime c;
+  let client_hello_ready = C.can_send_client_hello_runtime c network_out_len;
+  let derive_ready =
+    (control.C.snapshot_control_tag = 1uy) &&
+    (control.C.snapshot_handshake_stage_tag = 3uy) &&
+    not keys.C.snapshot_handshake_secret_present;
+  let handshake_keys_ready = C.can_install_handshake_traffic_keys c;
+  let client_handshake_keys_ready =
+    handshake_keys_ready &&
+    not keys.C.snapshot_client_handshake_traffic_present;
+  let server_handshake_keys_ready =
+    handshake_keys_ready &&
+    not keys.C.snapshot_server_handshake_traffic_present;
+  let certificate_ready =
+    C.can_validate_certificate c certificate_public_key_len;
+  let certificate_signature_ready =
+    C.can_verify_certificate_signature c;
+  let finished_ready =
+    C.can_verify_server_finished c server_finished_payload_len;
+  let application_keys_ready =
+    C.can_install_application_traffic_keys c;
+  let client_application_keys_ready =
+    application_keys_ready &&
+    not keys.C.snapshot_client_application_traffic_present;
+  let server_application_keys_ready =
+    application_keys_ready &&
+    not keys.C.snapshot_server_application_traffic_present;
+  let client_finished_ready =
+    C.can_send_client_finished_runtime c network_out_len;
+
+  if start_ready {
+    {
+      CT.next_local_ready = true;
+      CT.next_local_kind = CT.LocalStartHandshake;
+      CT.next_local_payload = CT.LocalPayloadNone;
+    }
+  } else if client_hello_ready {
+    {
+      CT.next_local_ready = true;
+      CT.next_local_kind = CT.LocalSendClientHello;
+      CT.next_local_payload = CT.LocalPayloadNone;
+    }
+  } else if derive_ready {
+    {
+      CT.next_local_ready = true;
+      CT.next_local_kind = CT.LocalDeriveSharedSecret;
+      CT.next_local_payload = CT.LocalPayloadNone;
+    }
+  } else if client_handshake_keys_ready {
+    {
+      CT.next_local_ready = true;
+      CT.next_local_kind = CT.LocalInstallClientHandshakeTrafficKeys;
+      CT.next_local_payload = CT.LocalPayloadNone;
+    }
+  } else if server_handshake_keys_ready {
+    {
+      CT.next_local_ready = true;
+      CT.next_local_kind = CT.LocalInstallServerHandshakeTrafficKeys;
+      CT.next_local_payload = CT.LocalPayloadNone;
+    }
+  } else if certificate_ready {
+    {
+      CT.next_local_ready = true;
+      CT.next_local_kind = CT.LocalValidateCertificate;
+      CT.next_local_payload = CT.LocalPayloadCertificatePublicKey;
+    }
+  } else if certificate_signature_ready {
+    {
+      CT.next_local_ready = true;
+      CT.next_local_kind = CT.LocalVerifyCertificateSignature;
+      CT.next_local_payload = CT.LocalPayloadNone;
+    }
+  } else if finished_ready {
+    {
+      CT.next_local_ready = true;
+      CT.next_local_kind = CT.LocalVerifyFinished;
+      CT.next_local_payload = CT.LocalPayloadServerFinishedHandshake;
+    }
+  } else if client_application_keys_ready {
+    {
+      CT.next_local_ready = true;
+      CT.next_local_kind = CT.LocalInstallClientApplicationTrafficKeys;
+      CT.next_local_payload = CT.LocalPayloadNone;
+    }
+  } else if server_application_keys_ready {
+    {
+      CT.next_local_ready = true;
+      CT.next_local_kind = CT.LocalInstallServerApplicationTrafficKeys;
+      CT.next_local_payload = CT.LocalPayloadNone;
+    }
+  } else if client_finished_ready {
+    {
+      CT.next_local_ready = true;
+      CT.next_local_kind = CT.LocalSendClientFinished;
+      CT.next_local_payload = CT.LocalPayloadNone;
+    }
+  } else {
+    no_action
+  }
+}
+
 fn copy_certificate_leaf_der
   (c:client)
   (out:array U8.t)

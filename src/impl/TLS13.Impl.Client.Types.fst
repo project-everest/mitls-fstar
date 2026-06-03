@@ -58,6 +58,17 @@ type local_event_kind =
   | LocalSendCloseNotify
   | LocalFail
 
+type local_payload_kind =
+  | LocalPayloadNone
+  | LocalPayloadCertificatePublicKey
+  | LocalPayloadServerFinishedHandshake
+
+type next_local_action = {
+  next_local_ready: bool;
+  next_local_kind: local_event_kind;
+  next_local_payload: local_payload_kind;
+}
+
 let local_validation_peer
   (st:CS.connection_state)
   (payload:B.bytes)

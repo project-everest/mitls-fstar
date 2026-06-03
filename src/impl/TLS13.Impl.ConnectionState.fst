@@ -519,6 +519,16 @@ type certificate_verify_signature_snapshot = {
   cv_signature_len: SZ.t;
 }
 
+type key_schedule_snapshot = {
+  snapshot_shared_secret_present: bool;
+  snapshot_handshake_secret_present: bool;
+  snapshot_master_secret_present: bool;
+  snapshot_client_handshake_traffic_present: bool;
+  snapshot_server_handshake_traffic_present: bool;
+  snapshot_client_application_traffic_present: bool;
+  snapshot_server_application_traffic_present: bool;
+}
+
 noextract
 let control_snapshot_matches
   (snapshot:control_snapshot)
@@ -5131,6 +5141,89 @@ fn get_control_snapshot
     c.control
     st0.CS.cs_model.CS.model_control
     st0.CS.cs_model.CS.model_failure);
+  fold (connection_model_exactly c st0.CS.cs_model);
+  fold (connection_exactly c st0);
+  snapshot
+}
+
+fn get_key_schedule_snapshot
+  (c:connection_state)
+  (#st0:erased CS.connection_state)
+  requires connection_exactly c st0
+  returns snapshot:key_schedule_snapshot
+  ensures connection_exactly c st0
+{
+  unfold (connection_exactly c st0);
+  unfold (connection_model_exactly c st0.CS.cs_model);
+  unfold (handshake_exactly c.handshake st0.CS.cs_model.CS.model_handshake);
+  unfold (key_schedule_exactly
+    c.handshake.keys
+    st0.CS.cs_model.CS.model_handshake.CS.hs_keys);
+  unfold (optional_secret_exactly
+    c.handshake.keys.shared_secret
+    st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_shared_secret);
+  unfold (optional_secret_exactly
+    c.handshake.keys.handshake_secret
+    st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_handshake_secret);
+  unfold (optional_secret_exactly
+    c.handshake.keys.master_secret
+    st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_master_secret);
+  unfold (traffic_key_material_exactly
+    c.handshake.keys.client_handshake_traffic
+    st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_handshake_traffic);
+  unfold (traffic_key_material_exactly
+    c.handshake.keys.server_handshake_traffic
+    st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_handshake_traffic);
+  unfold (traffic_key_material_exactly
+    c.handshake.keys.client_application_traffic
+    st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_application_traffic);
+  unfold (traffic_key_material_exactly
+    c.handshake.keys.server_application_traffic
+    st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_application_traffic);
+
+  let shared_secret_present = !c.handshake.keys.shared_secret.present;
+  let handshake_secret_present = !c.handshake.keys.handshake_secret.present;
+  let master_secret_present = !c.handshake.keys.master_secret.present;
+  let client_handshake_present = !c.handshake.keys.client_handshake_traffic.present;
+  let server_handshake_present = !c.handshake.keys.server_handshake_traffic.present;
+  let client_application_present = !c.handshake.keys.client_application_traffic.present;
+  let server_application_present = !c.handshake.keys.server_application_traffic.present;
+
+  let snapshot = {
+    snapshot_shared_secret_present = shared_secret_present;
+    snapshot_handshake_secret_present = handshake_secret_present;
+    snapshot_master_secret_present = master_secret_present;
+    snapshot_client_handshake_traffic_present = client_handshake_present;
+    snapshot_server_handshake_traffic_present = server_handshake_present;
+    snapshot_client_application_traffic_present = client_application_present;
+    snapshot_server_application_traffic_present = server_application_present;
+  };
+
+  fold (traffic_key_material_exactly
+    c.handshake.keys.server_application_traffic
+    st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_application_traffic);
+  fold (traffic_key_material_exactly
+    c.handshake.keys.client_application_traffic
+    st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_application_traffic);
+  fold (traffic_key_material_exactly
+    c.handshake.keys.server_handshake_traffic
+    st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_handshake_traffic);
+  fold (traffic_key_material_exactly
+    c.handshake.keys.client_handshake_traffic
+    st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_handshake_traffic);
+  fold (optional_secret_exactly
+    c.handshake.keys.master_secret
+    st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_master_secret);
+  fold (optional_secret_exactly
+    c.handshake.keys.handshake_secret
+    st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_handshake_secret);
+  fold (optional_secret_exactly
+    c.handshake.keys.shared_secret
+    st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_shared_secret);
+  fold (key_schedule_exactly
+    c.handshake.keys
+    st0.CS.cs_model.CS.model_handshake.CS.hs_keys);
+  fold (handshake_exactly c.handshake st0.CS.cs_model.CS.model_handshake);
   fold (connection_model_exactly c st0.CS.cs_model);
   fold (connection_exactly c st0);
   snapshot
