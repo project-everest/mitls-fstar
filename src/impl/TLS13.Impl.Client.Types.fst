@@ -300,6 +300,13 @@ let network_input_wf
   wire_parse_success content_type fragment msg ==>
   received_tls_raw_delta_legal st0 msg raw_received
 
+let raw_record_parse_success
+  (raw_received:B.bytes)
+  : prop =
+  exists outer_ct outer_fragment.
+    WS.parse_record raw_received ==
+      Some (outer_ct, outer_fragment, B.length raw_received)
+
 let parsed_message_wire_success
   (content_type:U8.t)
   (fragment:B.bytes)
@@ -611,7 +618,8 @@ let tls_record_step_correct
   (app_out:B.bytes)
   : prop =
   response_stuttered st0 st1 resp old_network_out network_out old_app_out app_out \/
-  (some_legal_response st0 st1 resp network_out app_out /\
+  ((resp.status == DecodeError \/ raw_record_parse_success network_input) /\
+   some_legal_response st0 st1 resp network_out app_out /\
    some_legal_response_for_network_input st0 st1 resp network_input network_out app_out)
 
 let network_bytes_step_correct
@@ -628,6 +636,9 @@ let network_bytes_step_correct
   (buffer_resp.consumed_len == 0sz /\
    response_stuttered st0 st1 resp old_network_out network_out old_app_out app_out) \/
   (SZ.v buffer_resp.consumed_len <= B.length network_input /\
+   (resp.status == DecodeError \/
+    raw_record_parse_success
+     (network_consumed_prefix network_input buffer_resp.consumed_len)) /\
    some_legal_response st0 st1 resp network_out app_out /\
    some_legal_response_for_network_prefix
     st0
