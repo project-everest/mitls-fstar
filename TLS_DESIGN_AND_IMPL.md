@@ -75,6 +75,12 @@ The public client API is buffer/event oriented:
   expose the exact driver-copyout facts needed by the external validation TCB:
   certificate leaf DER is the head of the parsed certificate chain, and
   CertificateVerify input is computed from the pre-CV transcript hash.
+- The public `process_local_event` input predicate now makes the external
+  certificate/signature TCB assumptions explicit: `LocalValidateCertificate`
+  assumes `TLS13.X509.Spec.validate_chain` returns the peer identity being
+  installed, and `LocalVerifyCertificateSignature` assumes
+  `TLS13.Crypto.Spec.verify_signature` succeeds over the stored peer key,
+  CertificateVerify input, and parsed signature.
 - There are no explicit `admit()` or `assume_` sites under `src/` or
   `calc_sample/`.
 - The strongest current proof surface is per-step preservation of
@@ -144,11 +150,11 @@ Other trusted runtime boundaries remain:
    strongest entries already carry `M`/`L` validity and `TLS13.Wire.Spec`
    facts, and stale unused fixed builders have been removed, but every supported
    record/message path must be classified against the final theorem needs.
-4. Certificate and CertificateVerify copyout/local-event proofs are partially
-   strengthened: received-message transitions expose exact leaf-DER and
-   CertificateVerify-input copyout facts, but the final theorem must still tie
-   successful driver validation/signature checks to the external X509/crypto
-   specs.
+4. Certificate and CertificateVerify copyout/local-event proofs are much
+   clearer: received-message transitions expose exact leaf-DER and
+   CertificateVerify-input copyout facts, and the public local-input predicate
+   states the X509/signature TCB assumptions. The final theorem still needs to
+   package these facts into one auditable end-to-end statement.
 5. The old root `TLS13.Impl.ConnectionState.fst` facade is gone, but future
    changes must preserve the explicit responsibility split rather than recreating
    a catch-all mutation module.
@@ -180,6 +186,8 @@ Other trusted runtime boundaries remain:
    driver-visible copyout bytes are exactly the certificate leaf DER,
    CertificateVerify input, and signature bytes from the parsed handshake, and
    that successful local events correspond to the X509/signature TCB specs.
+   The current public local-input predicate already states these X509/signature
+   assumptions; the remaining work is to package them into the final theorem.
 7. Keep the `TLS13.Impl.ConnectionState.*` split explicit and behavior-preserving:
    use `CR`/`ConnectionState.Repr` for storage and `connection_exactly`,
    `CQ`/`ConnectionState.Queries` for read-only checks/copyouts, and

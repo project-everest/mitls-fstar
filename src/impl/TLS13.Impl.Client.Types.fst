@@ -1,6 +1,7 @@
 module TLS13.Impl.Client.Types
 
 module B = TLS13.Bytes
+module C = TLS13.Crypto.Spec
 module CL = TLS13.ConnectionLog
 module CS = TLS13.Spec.ConnectionState
 module L = TLS13.Impl.Messages
@@ -95,19 +96,35 @@ let local_input_wf
   | LocalValidateCertificate ->
     st.CS.cs_model.CS.model_control ==
       CS.ControlHandshaking CS.HsCertificateReceived ==>
-    CS.legal_event
-      st.CS.cs_model
-      (CS.ConnLocalEvent
-        (CS.LocalValidateCertificate (local_validation_peer st payload)))
+    (match st.CS.cs_model.CS.model_handshake.CS.hs_certificate with
+     | Some cert ->
+       X.validate_chain
+         st.CS.cs_model.CS.model_config.CS.config_server_name
+         st.CS.cs_model.CS.model_config.CS.config_validation_time
+         st.CS.cs_model.CS.model_config.CS.config_trust_store
+         cert.M.chain ==
+           Some (local_validation_peer st payload) /\
+       CS.legal_event
+         st.CS.cs_model
+         (CS.ConnLocalEvent
+           (CS.LocalValidateCertificate (local_validation_peer st payload)))
+     | None -> False)
   | LocalVerifyCertificateSignature ->
     st.CS.cs_model.CS.model_control ==
       CS.ControlHandshaking CS.HsCertificateVerifyReceived ==>
-    (match st.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify with
-     | Some cv ->
+    (match st.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify,
+           st.CS.cs_model.CS.model_handshake.CS.hs_validated_peer,
+           st.CS.cs_model.CS.model_handshake.CS.hs_buffers.CS.hb_certificate_verify_input with
+     | Some cv, Some peer, Some verify_input ->
+       C.verify_signature
+         cv.M.scheme
+         peer.X.leaf_public_key
+         verify_input
+         cv.M.signature == true /\
        CS.legal_event
          st.CS.cs_model
          (CS.ConnLocalEvent (CS.LocalVerifyCertificateSignature cv))
-     | None -> False)
+     | _, _, _ -> False)
   | LocalVerifyFinished ->
     Seq.equal payload B.empty
   | _ -> True
