@@ -367,6 +367,99 @@ let install_record_keys
           R.install_keys record.record_read epoch material.traffic_key material.traffic_iv;
     }
 
+let traffic_material_matches_record_direction
+  (material:traffic_key_material)
+  (st:R.direction_state)
+  : prop =
+  st.R.key == Some material.traffic_key /\
+  st.R.static_iv == Some material.traffic_iv
+
+let traffic_material_option_matches_record_direction
+  (material:option traffic_key_material)
+  (st:R.direction_state)
+  : prop =
+  match material with
+  | Some material -> traffic_material_matches_record_direction material st
+  | None -> False
+
+let record_read_keys_match_key_schedule
+  (keys:key_schedule_state)
+  (st:R.direction_state)
+  : prop =
+  match st.R.epoch with
+  | R.Initial ->
+    st.R.key == None /\ st.R.static_iv == None
+  | R.Handshake ->
+    traffic_material_option_matches_record_direction keys.ks_server_handshake_traffic st
+  | R.Application ->
+    traffic_material_option_matches_record_direction keys.ks_server_application_traffic st
+
+let record_write_keys_match_key_schedule
+  (control:connection_control_state)
+  (keys:key_schedule_state)
+  (st:R.direction_state)
+  : prop =
+  match st.R.epoch with
+  | R.Initial ->
+    st.R.key == None /\ st.R.static_iv == None
+  | R.Handshake ->
+    traffic_material_option_matches_record_direction keys.ks_client_handshake_traffic st
+  | R.Application ->
+    (match control with
+     | ControlHandshaking _ ->
+       True
+     | _ ->
+       traffic_material_option_matches_record_direction keys.ks_client_application_traffic st)
+
+let model_record_keys_consistent
+  (model:connection_model)
+  : prop =
+  match model.model_control with
+  | ControlFailed _ -> True
+  | _ ->
+    let keys = model.model_handshake.hs_keys in
+    record_read_keys_match_key_schedule keys model.model_record.record_read /\
+    record_write_keys_match_key_schedule
+      model.model_control
+      keys
+      model.model_record.record_write
+
+let lemma_record_read_keys_next_seq
+  (keys:key_schedule_state)
+  (st:R.direction_state)
+  : Lemma
+      (requires record_read_keys_match_key_schedule keys st)
+      (ensures record_read_keys_match_key_schedule keys (R.next_seq st))
+=
+  ()
+
+let lemma_record_write_keys_next_seq
+  (control:connection_control_state)
+  (keys:key_schedule_state)
+  (st:R.direction_state)
+  : Lemma
+      (requires record_write_keys_match_key_schedule control keys st)
+      (ensures record_write_keys_match_key_schedule control keys (R.next_seq st))
+=
+  ()
+
+let rec lemma_record_write_keys_advance
+  (control:connection_control_state)
+  (keys:key_schedule_state)
+  (st:R.direction_state)
+  (n:nat)
+  : Lemma
+      (requires record_write_keys_match_key_schedule control keys st)
+      (ensures
+        record_write_keys_match_key_schedule
+          control
+          keys
+          (advance_direction_records st n))
+      (decreases n)
+=
+  if n = 0 then ()
+  else lemma_record_write_keys_advance control keys st (n - 1)
+
 let step_local_event (model:connection_model) (ev:local_event) : GTot (option connection_model) =
   let hs = model.model_handshake in
   match ev, model.model_control with
@@ -1246,6 +1339,11 @@ let connection_state_record_layer_consistent
     projected_record_layer_state_of_record st.cs_model.model_record ==
       projected_record_layer_of_conn_events st.cs_event_log
 
+let connection_state_record_keys_consistent
+  (st:connection_state)
+  : prop =
+  model_record_keys_consistent st.cs_model
+
 let connection_state_layered_log_consistent
   (st:connection_state)
   : prop =
@@ -1253,6 +1351,7 @@ let connection_state_layered_log_consistent
   connection_state_transcript_consistent st /\
   connection_state_key_update_pending_consistent st /\
   connection_state_record_layer_consistent st /\
+  connection_state_record_keys_consistent st /\
   connection_state_pending_application_consistent st /\
   connection_state_app_log_consistent st
 
@@ -1291,6 +1390,12 @@ let lemma_initial_key_update_pending_consistent
 let lemma_initial_record_layer_consistent
   (cfg:connection_config)
   : Lemma (connection_state_record_layer_consistent (initial cfg))
+=
+  ()
+
+let lemma_initial_record_keys_consistent
+  (cfg:connection_config)
+  : Lemma (connection_state_record_keys_consistent (initial cfg))
 =
   ()
 
@@ -1635,6 +1740,176 @@ let model_pending_application_delta
   : prop =
   pending_application_consistent model0.model_application ==>
     pending_application_consistent model1.model_application
+
+let lemma_step_model_record_keys_consistent
+  (model0:connection_model)
+  (ev:conn_event)
+  (model1:connection_model)
+  : Lemma
+      (requires
+        legal_event model0 ev /\
+        step_model model0 ev == Some model1 /\
+        model_record_keys_consistent model0)
+      (ensures model_record_keys_consistent model1)
+=
+  match ev with
+  | ConnLocalEvent local ->
+    (match local with
+     | LocalDeriveSharedSecret _ ->
+       assert (model1.model_record == model0.model_record);
+       assert (model1.model_handshake.hs_keys.ks_client_handshake_traffic ==
+         model0.model_handshake.hs_keys.ks_client_handshake_traffic);
+       assert (model1.model_handshake.hs_keys.ks_server_handshake_traffic ==
+         model0.model_handshake.hs_keys.ks_server_handshake_traffic);
+       assert (model1.model_handshake.hs_keys.ks_client_application_traffic ==
+         model0.model_handshake.hs_keys.ks_client_application_traffic);
+       assert (model1.model_handshake.hs_keys.ks_server_application_traffic ==
+         model0.model_handshake.hs_keys.ks_server_application_traffic)
+     | LocalInstallTrafficKeys install ->
+       (match install.install_epoch, install.install_direction with
+        | TrafficHandshake, TrafficWrite ->
+          assert (model1.model_record.record_write ==
+            R.install_keys
+              model0.model_record.record_write
+              R.Handshake
+              install.install_material.traffic_key
+              install.install_material.traffic_iv);
+          assert (model1.model_handshake.hs_keys.ks_client_handshake_traffic ==
+            Some install.install_material)
+        | TrafficHandshake, TrafficRead ->
+          assert (model1.model_record.record_read ==
+            R.install_keys
+              model0.model_record.record_read
+              R.Handshake
+              install.install_material.traffic_key
+              install.install_material.traffic_iv);
+          assert (model1.model_handshake.hs_keys.ks_server_handshake_traffic ==
+            Some install.install_material)
+        | TrafficApplication, TrafficWrite ->
+          assert (model1.model_record == model0.model_record);
+          assert (model1.model_control == model0.model_control);
+          assert (model0.model_control == ControlHandshaking HsServerFinishedVerified)
+        | TrafficApplication, TrafficRead ->
+          assert (model1.model_record.record_read ==
+            R.install_keys
+              model0.model_record.record_read
+              R.Application
+              install.install_material.traffic_key
+              install.install_material.traffic_iv);
+          assert (model1.model_handshake.hs_keys.ks_server_application_traffic ==
+            Some install.install_material))
+     | LocalFail _ -> ()
+     | _ ->
+       assert (model1.model_record == model0.model_record);
+       assert (model1.model_handshake.hs_keys == model0.model_handshake.hs_keys))
+  | ConnNetworkEvent msg ->
+    (match msg.CL.message_direction, msg.CL.message_value with
+     | CL.Sent, M.TlsHandshake (M.Finished _) ->
+       (match model0.model_control with
+        | ControlHandshaking HsServerFinishedVerified ->
+          assert (Some? model0.model_handshake.hs_keys.ks_client_application_traffic);
+          (match model0.model_handshake.hs_keys.ks_client_application_traffic with
+           | Some material ->
+             assert (model1.model_record.record_write ==
+               R.install_keys
+                 (R.next_seq model0.model_record.record_write)
+                 R.Application
+                 material.traffic_key
+                 material.traffic_iv);
+             assert (model1.model_handshake.hs_keys.ks_client_application_traffic ==
+               Some material)
+           | None -> assert False)
+        | _ -> assert False)
+     | CL.Received, M.TlsKeyUpdate _ ->
+       (match model0.model_control with
+        | ControlApplicationData ->
+          assert (Some? model0.model_handshake.hs_keys.ks_server_application_traffic);
+          (match model0.model_handshake.hs_keys.ks_server_application_traffic with
+           | Some old_server_app ->
+             let new_server_app = updated_traffic_key_material old_server_app in
+             assert (model1.model_record.record_read ==
+               R.install_keys
+                 (R.next_seq model0.model_record.record_read)
+                 R.Application
+                 new_server_app.traffic_key
+                 new_server_app.traffic_iv);
+             assert (model1.model_handshake.hs_keys.ks_server_application_traffic ==
+               Some new_server_app)
+           | None -> assert False)
+        | _ -> assert False)
+     | CL.Sent, M.TlsKeyUpdate M.UpdateNotRequested ->
+       (match model0.model_control with
+        | ControlApplicationData ->
+          assert (Some? model0.model_handshake.hs_keys.ks_client_application_traffic);
+          assert (model0.model_application.app_key_update_response_pending);
+          (match model0.model_handshake.hs_keys.ks_client_application_traffic with
+           | Some old_client_app ->
+             let new_client_app = updated_traffic_key_material old_client_app in
+             assert (model1.model_record.record_write ==
+               R.install_keys
+                 (R.next_seq model0.model_record.record_write)
+                 R.Application
+                 new_client_app.traffic_key
+                 new_client_app.traffic_iv);
+             assert (model1.model_handshake.hs_keys.ks_client_application_traffic ==
+               Some new_client_app)
+           | None -> assert False)
+        | _ -> assert False)
+     | CL.Sent, M.TlsApplicationData bytes ->
+       assert (model1.model_handshake.hs_keys == model0.model_handshake.hs_keys);
+       assert (model1.model_record.record_write ==
+         advance_direction_records
+           model0.model_record.record_write
+           (S.application_data_record_count bytes));
+       lemma_record_write_keys_advance
+         model0.model_control
+         model0.model_handshake.hs_keys
+         model0.model_record.record_write
+         (S.application_data_record_count bytes)
+     | CL.Received, M.TlsHandshake (M.EncryptedExtensions _)
+     | CL.Received, M.TlsHandshake (M.Certificate _)
+     | CL.Received, M.TlsHandshake (M.CertificateVerify _)
+     | CL.Received, M.TlsHandshake (M.Finished _)
+     | CL.Received, M.TlsApplicationData _
+     | CL.Received, M.TlsIgnoredPostHandshake _ ->
+       assert (model1.model_handshake.hs_keys == model0.model_handshake.hs_keys);
+       assert (model1.model_record.record_read ==
+         R.next_seq model0.model_record.record_read);
+       lemma_record_read_keys_next_seq
+         model0.model_handshake.hs_keys
+         model0.model_record.record_read
+     | CL.Received, M.TlsAlert T.CloseNotify ->
+       (match model1.model_control with
+        | ControlFailed _ -> ()
+        | _ ->
+          assert (model1.model_handshake.hs_keys == model0.model_handshake.hs_keys);
+          assert (model1.model_record.record_read ==
+            R.next_seq model0.model_record.record_read);
+          lemma_record_read_keys_next_seq
+            model0.model_handshake.hs_keys
+            model0.model_record.record_read)
+     | CL.Sent, M.TlsAlert T.CloseNotify ->
+       (match model1.model_control with
+        | ControlFailed _ -> ()
+        | _ ->
+          assert (model1.model_handshake.hs_keys == model0.model_handshake.hs_keys);
+          assert (model1.model_record.record_write ==
+            R.next_seq model0.model_record.record_write);
+          lemma_record_write_keys_next_seq
+            model0.model_control
+            model0.model_handshake.hs_keys
+            model0.model_record.record_write)
+     | _, M.TlsAlert alert ->
+       (match model1.model_control with
+        | ControlFailed _ -> ()
+        | _ ->
+          assert (model1.model_handshake.hs_keys == model0.model_handshake.hs_keys))
+     | _ ->
+       (match model1.model_control with
+        | ControlFailed _ -> ()
+        | _ ->
+          assert (model1.model_record == model0.model_record);
+          assert (model1.model_handshake.hs_keys == model0.model_handshake.hs_keys)))
 
 let lemma_step_model_record_layer_delta
   (model0:connection_model)
@@ -2972,6 +3247,21 @@ let lemma_legal_connection_delta_record_layer_consistent
         (projected_record_layer_of_conn_events st0.cs_event_log)
         delta.delta_event)
 
+let lemma_legal_connection_delta_record_keys_consistent
+  (st0:connection_state)
+  (delta:connection_delta)
+  (st1:connection_state)
+  : Lemma
+      (requires
+        legal_connection_delta st0 delta st1 /\
+        connection_state_record_keys_consistent st0)
+      (ensures connection_state_record_keys_consistent st1)
+=
+  lemma_step_model_record_keys_consistent
+    st0.cs_model
+    delta.delta_event
+    st1.cs_model
+
 let lemma_legal_connection_delta_pending_application_consistent
   (st0:connection_state)
   (delta:connection_delta)
@@ -3001,6 +3291,7 @@ let lemma_legal_connection_delta_layered_log_consistent
   lemma_legal_connection_delta_transcript_consistent st0 delta st1;
   lemma_legal_connection_delta_key_update_pending_consistent st0 delta st1;
   lemma_legal_connection_delta_record_layer_consistent st0 delta st1;
+  lemma_legal_connection_delta_record_keys_consistent st0 delta st1;
   lemma_legal_connection_delta_pending_application_consistent st0 delta st1;
   lemma_legal_connection_delta_app_log_consistent st0 delta st1
 

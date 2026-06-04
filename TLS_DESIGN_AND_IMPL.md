@@ -128,9 +128,9 @@ The public client API is buffer/event oriented:
   preserved `connection_state_layered_log_consistent` invariant that packages
   event-log replay from the initial config, transcript projection from serialized
   handshake events, KeyUpdate response-pending state, non-failed record
-  epoch/sequence projection, pending application-buffer consistency, and app-log
-  projection from `cs_event_log`; the client theorem surface exposes
-  preservation lemmas for
+  epoch/sequence projection, record key/IV consistency with the key schedule,
+  pending application-buffer consistency, and app-log projection from
+  `cs_event_log`; the client theorem surface exposes preservation lemmas for
   `legal_response_for_event`, `some_legal_response`, `network_bytes_step_correct`, and
   `local_event_step_correct`. The public
   `TLS13.Impl.Client` postconditions use named theorem-surface predicates
@@ -199,10 +199,10 @@ Other trusted runtime boundaries remain:
    existing legal-delta facts, and parser successes now expose a packaged
    decoded-message projection for cleartext/protected records. Event-log replay,
    transcript projection, KeyUpdate response-pending state, non-failed record
-   epoch/sequence projection, pending application-buffer consistency, and
-   app-log projection are now packaged into an explicit preserved spec
-   invariant, but key-schedule, decryption, and remaining event-projection
-   facts still need to be connected into it.
+   epoch/sequence projection, record key/IV consistency with the installed key
+   schedule, pending application-buffer consistency, and app-log projection are
+   now packaged into an explicit preserved spec invariant, but decryption and
+   remaining event-projection facts still need to be connected into it.
 3. Parser/serializer contracts still need a complete entry-by-entry audit. The
    strongest entries already carry `M`/`L` validity and `TLS13.Wire.Spec`
    facts, and stale unused fixed builders have been removed, but every supported
@@ -239,8 +239,9 @@ Other trusted runtime boundaries remain:
    spec now has admit-free one-record, non-empty-prefix, head/tail,
    parser-fuel-saturation, recursive segmentation, event-log replay,
    transcript-projection, KeyUpdate response-pending, non-failed record
-   epoch/sequence projection, pending application-buffer consistency, and
-   app-log-consistency preservation lemmas, with
+   epoch/sequence projection, record key/IV-to-key-schedule consistency,
+   pending application-buffer consistency, and app-log-consistency preservation
+   lemmas, with
    legal-delta/client-response/public-step projections, plus a
    parser-success-to-raw-log inverse bridge. The client surface now also exposes
    `network_input_message_projection`, derived from `network_input_wf`, so next
