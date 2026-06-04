@@ -750,7 +750,13 @@ fn mark_received_certificate
             c
             (received_certificate_state st0 (Ghost.reveal cert) (Ghost.reveal 'raw_bytes)) **
           Pulse.Lib.Array.PtsTo.pts_to raw 'raw_bytes **
-          Pulse.Lib.Array.PtsTo.pts_to fragment 'fragment_bytes
+          Pulse.Lib.Array.PtsTo.pts_to fragment 'fragment_bytes **
+          pure (match (Ghost.reveal cert).M.chain with
+                | leaf :: _ ->
+                  (received_certificate_state st0 (Ghost.reveal cert) (Ghost.reveal 'raw_bytes)).
+                    CS.cs_model.CS.model_handshake.CS.hs_buffers.CS.hb_certificate_leaf_der ==
+                    Some leaf
+                | [] -> False)
 {
   assert (pure (st0.CS.cs_model.CS.model_control ==
     CS.ControlHandshaking CS.HsEncryptedExtensionsReceived));
@@ -1024,7 +1030,12 @@ fn mark_received_certificate_verify
             c
             (received_certificate_verify_state st0 (Ghost.reveal cv) (Ghost.reveal 'raw_bytes)) **
           ArrPts.pts_to raw 'raw_bytes **
-          ArrPts.pts_to fragment 'fragment_bytes
+          ArrPts.pts_to fragment 'fragment_bytes **
+          pure ((received_certificate_verify_state st0 (Ghost.reveal cv) (Ghost.reveal 'raw_bytes)).
+                  CS.cs_model.CS.model_handshake.CS.hs_buffers.CS.hb_certificate_verify_input ==
+                Some
+                  (H.certificate_verify_input
+                    (Tr.hash st0.CS.cs_model.CS.model_handshake.CS.hs_transcript)))
 {
   assert (pure (st0.CS.cs_model.CS.model_control ==
     CS.ControlHandshaking CS.HsCertificateValidated));

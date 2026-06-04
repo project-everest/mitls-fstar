@@ -71,6 +71,10 @@ The public client API is buffer/event oriented:
   expose concrete shape facts: inner plaintext encoding states the copied
   payload slice plus trailing content-type byte, and application-data header
   serialization states the public `TLS13.Wire.Spec.parse_record_header` result.
+- The received Certificate and CertificateVerify state-transition interfaces
+  expose the exact driver-copyout facts needed by the external validation TCB:
+  certificate leaf DER is the head of the parsed certificate chain, and
+  CertificateVerify input is computed from the pre-CV transcript hash.
 - There are no explicit `admit()` or `assume_` sites under `src/` or
   `calc_sample/`.
 - The strongest current proof surface is per-step preservation of
@@ -140,8 +144,11 @@ Other trusted runtime boundaries remain:
    strongest entries already carry `M`/`L` validity and `TLS13.Wire.Spec`
    facts, and stale unused fixed builders have been removed, but every supported
    record/message path must be classified against the final theorem needs.
-4. Certificate and CertificateVerify copyout/local-event proofs must make the
-   exact byte correspondence to parsed handshake inputs explicit.
+4. Certificate and CertificateVerify copyout/local-event proofs are partially
+   strengthened: received-message transitions expose exact leaf-DER and
+   CertificateVerify-input copyout facts, but the final theorem must still tie
+   successful driver validation/signature checks to the external X509/crypto
+   specs.
 5. The old root `TLS13.Impl.ConnectionState.fst` facade is gone, but future
    changes must preserve the explicit responsibility split rather than recreating
    a catch-all mutation module.
@@ -171,7 +178,8 @@ Other trusted runtime boundaries remain:
    them as narrow fixed-builder TCBs.
 6. Make the certificate and CertificateVerify boundary auditable by proving that
    driver-visible copyout bytes are exactly the certificate leaf DER,
-   CertificateVerify input, and signature bytes from the parsed handshake.
+   CertificateVerify input, and signature bytes from the parsed handshake, and
+   that successful local events correspond to the X509/signature TCB specs.
 7. Keep the `TLS13.Impl.ConnectionState.*` split explicit and behavior-preserving:
    use `CR`/`ConnectionState.Repr` for storage and `connection_exactly`,
    `CQ`/`ConnectionState.Queries` for read-only checks/copyouts, and
