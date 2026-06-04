@@ -1073,6 +1073,133 @@ let key_update_response_pending_of_conn_events
   : Tot bool =
   key_update_response_pending_after_events_from false events
 
+type projected_direction_state = {
+  projected_epoch: R.epoch;
+  projected_seq: nat;
+}
+
+type projected_record_layer_state = {
+  projected_read: projected_direction_state;
+  projected_write: projected_direction_state;
+}
+
+let projected_direction_state_of_record
+  (st:R.direction_state)
+  : projected_direction_state =
+  {
+    projected_epoch = st.R.epoch;
+    projected_seq = st.R.seq;
+  }
+
+let projected_record_layer_state_of_record
+  (record:record_layer_state)
+  : projected_record_layer_state =
+  {
+    projected_read = projected_direction_state_of_record record.record_read;
+    projected_write = projected_direction_state_of_record record.record_write;
+  }
+
+let initial_projected_direction_state : projected_direction_state = {
+  projected_epoch = R.Initial;
+  projected_seq = 0;
+}
+
+let initial_projected_record_layer_state : projected_record_layer_state = {
+  projected_read = initial_projected_direction_state;
+  projected_write = initial_projected_direction_state;
+}
+
+let projected_next_seq
+  (st:projected_direction_state)
+  : projected_direction_state =
+  { st with projected_seq = st.projected_seq + 1 }
+
+let projected_install_keys
+  (epoch:R.epoch)
+  : projected_direction_state =
+  { projected_epoch = epoch; projected_seq = 0 }
+
+let rec projected_advance_records
+  (st:projected_direction_state)
+  (n:nat)
+  : Tot projected_direction_state
+        (decreases n)
+=
+  if n = 0 then st
+  else projected_next_seq (projected_advance_records st (n - 1))
+
+let projected_install_record_keys
+  (record:projected_record_layer_state)
+  (install:traffic_key_install)
+  : projected_record_layer_state =
+  let epoch = traffic_record_epoch install.install_epoch in
+  match install.install_epoch, install.install_direction with
+  | TrafficApplication, TrafficWrite ->
+    record
+  | _, TrafficWrite ->
+    { record with projected_write = projected_install_keys epoch }
+  | _, TrafficRead ->
+    { record with projected_read = projected_install_keys epoch }
+
+let projected_client_application_write_after_finished
+  (record:projected_record_layer_state)
+  : projected_record_layer_state =
+  { record with projected_write = projected_install_keys R.Application }
+
+let projected_record_layer_step
+  (record:projected_record_layer_state)
+  (ev:conn_event)
+  : projected_record_layer_state =
+  match ev with
+  | ConnLocalEvent local ->
+    (match local with
+     | LocalInstallTrafficKeys install -> projected_install_record_keys record install
+     | _ -> record)
+  | ConnNetworkEvent msg ->
+    (match msg.CL.message_direction, msg.CL.message_value with
+     | CL.Received, M.TlsHandshake (M.EncryptedExtensions _)
+     | CL.Received, M.TlsHandshake (M.Certificate _)
+     | CL.Received, M.TlsHandshake (M.CertificateVerify _)
+     | CL.Received, M.TlsHandshake (M.Finished _)
+     | CL.Received, M.TlsApplicationData _
+     | CL.Received, M.TlsIgnoredPostHandshake _
+     | CL.Received, M.TlsAlert T.CloseNotify ->
+       { record with projected_read = projected_next_seq record.projected_read }
+     | CL.Sent, M.TlsHandshake (M.Finished _) ->
+       projected_client_application_write_after_finished record
+     | CL.Sent, M.TlsApplicationData bytes ->
+       { record with
+           projected_write =
+             projected_advance_records
+               record.projected_write
+               (S.application_data_record_count bytes) }
+     | CL.Received, M.TlsKeyUpdate _ ->
+       { record with projected_read = projected_install_keys R.Application }
+     | CL.Sent, M.TlsKeyUpdate M.UpdateNotRequested ->
+       { record with projected_write = projected_install_keys R.Application }
+     | CL.Sent, M.TlsAlert T.CloseNotify ->
+       { record with projected_write = projected_next_seq record.projected_write }
+     | _, _ ->
+       record)
+
+let rec projected_record_layer_after_events_from
+  (record:projected_record_layer_state)
+  (events:list conn_event)
+  : Tot projected_record_layer_state
+        (decreases events)
+=
+  match events with
+  | [] -> record
+  | ev :: rest ->
+    projected_record_layer_after_events_from
+      (projected_record_layer_step record ev)
+      rest
+
+let projected_record_layer_of_conn_events
+  (events:list conn_event)
+  : Tot projected_record_layer_state =
+  projected_record_layer_after_events_from initial_projected_record_layer_state events
+
 let connection_state_app_log_consistent
   (st:connection_state)
   : prop =
@@ -1105,12 +1232,22 @@ let connection_state_key_update_pending_consistent
   st.cs_model.model_application.app_key_update_response_pending ==
     key_update_response_pending_of_conn_events st.cs_event_log
 
+let connection_state_record_layer_consistent
+  (st:connection_state)
+  : prop =
+  match st.cs_model.model_control with
+  | ControlFailed _ -> True
+  | _ ->
+    projected_record_layer_state_of_record st.cs_model.model_record ==
+      projected_record_layer_of_conn_events st.cs_event_log
+
 let connection_state_layered_log_consistent
   (st:connection_state)
   : prop =
   connection_state_event_log_consistent st /\
   connection_state_transcript_consistent st /\
   connection_state_key_update_pending_consistent st /\
+  connection_state_record_layer_consistent st /\
   connection_state_app_log_consistent st
 
 let lemma_initial_app_log_consistent
@@ -1136,6 +1273,12 @@ let lemma_initial_event_log_consistent
 let lemma_initial_key_update_pending_consistent
   (cfg:connection_config)
   : Lemma (connection_state_key_update_pending_consistent (initial cfg))
+=
+  ()
+
+let lemma_initial_record_layer_consistent
+  (cfg:connection_config)
+  : Lemma (connection_state_record_layer_consistent (initial cfg))
 =
   ()
 
@@ -1235,6 +1378,157 @@ let lemma_key_update_response_pending_snoc
 =
   lemma_key_update_response_pending_after_events_snoc false events ev
 
+let rec lemma_projected_record_layer_after_events_snoc
+  (record:projected_record_layer_state)
+  (events:list conn_event)
+  (ev:conn_event)
+  : Lemma
+      (ensures
+        projected_record_layer_after_events_from record (events @ [ev]) ==
+          projected_record_layer_step
+            (projected_record_layer_after_events_from record events)
+            ev)
+      (decreases events)
+=
+  match events with
+  | [] -> ()
+  | hd :: tl ->
+    lemma_projected_record_layer_after_events_snoc
+      (projected_record_layer_step record hd)
+      tl
+      ev
+
+let lemma_projected_record_layer_snoc
+  (events:list conn_event)
+  (ev:conn_event)
+  : Lemma
+      (ensures
+        projected_record_layer_of_conn_events (events @ [ev]) ==
+          projected_record_layer_step
+            (projected_record_layer_of_conn_events events)
+            ev)
+=
+  lemma_projected_record_layer_after_events_snoc
+    initial_projected_record_layer_state
+    events
+    ev
+
+let rec lemma_projected_advance_records_of_record
+  (st:R.direction_state)
+  (n:nat)
+  : Lemma
+      (ensures
+        projected_direction_state_of_record (advance_direction_records st n) ==
+          projected_advance_records (projected_direction_state_of_record st) n)
+      (decreases n)
+=
+  if n = 0 then ()
+  else lemma_projected_advance_records_of_record st (n - 1)
+
+let lemma_projected_next_seq_of_record
+  (st:R.direction_state)
+  : Lemma
+      (projected_direction_state_of_record (R.next_seq st) ==
+        projected_next_seq (projected_direction_state_of_record st))
+=
+  ()
+
+let lemma_projected_install_keys_of_record
+  (st:R.direction_state)
+  (epoch:R.epoch)
+  (key:C.aead_key)
+  (iv:C.aead_nonce)
+  : Lemma
+      (projected_direction_state_of_record (R.install_keys st epoch key iv) ==
+        projected_install_keys epoch)
+=
+  ()
+
+let lemma_projected_install_record_keys_of_record
+  (record:record_layer_state)
+  (install:traffic_key_install)
+  : Lemma
+      (projected_record_layer_state_of_record (install_record_keys record install) ==
+        projected_install_record_keys
+          (projected_record_layer_state_of_record record)
+          install)
+=
+  match install.install_epoch, install.install_direction with
+  | TrafficApplication, TrafficWrite -> ()
+  | _, TrafficWrite ->
+    lemma_projected_install_keys_of_record
+      record.record_write
+      (traffic_record_epoch install.install_epoch)
+      install.install_material.traffic_key
+      install.install_material.traffic_iv
+  | _, TrafficRead ->
+    lemma_projected_install_keys_of_record
+      record.record_read
+      (traffic_record_epoch install.install_epoch)
+      install.install_material.traffic_key
+      install.install_material.traffic_iv
+
+let lemma_projected_client_application_write_after_finished
+  (record:record_layer_state)
+  (keys:key_schedule_state)
+  : Lemma
+      (requires Some? keys.ks_client_application_traffic)
+      (ensures
+        projected_record_layer_state_of_record
+          (install_client_application_write_after_finished record keys) ==
+        projected_client_application_write_after_finished
+          (projected_record_layer_state_of_record record))
+=
+  match keys.ks_client_application_traffic with
+  | Some material ->
+    lemma_projected_install_keys_of_record
+      (R.next_seq record.record_write)
+      R.Application
+      material.traffic_key
+      material.traffic_iv
+  | None -> assert False
+
+let lemma_projected_record_next_read
+  (record:record_layer_state)
+  : Lemma
+      (ensures
+       projected_record_layer_state_of_record
+         { record with record_read = R.next_seq record.record_read } ==
+       { projected_record_layer_state_of_record record with
+           projected_read =
+             projected_next_seq
+               (projected_record_layer_state_of_record record).projected_read })
+=
+  lemma_projected_next_seq_of_record record.record_read
+
+let lemma_projected_record_next_write
+  (record:record_layer_state)
+  : Lemma
+      (ensures
+       projected_record_layer_state_of_record
+         { record with record_write = R.next_seq record.record_write } ==
+       { projected_record_layer_state_of_record record with
+           projected_write =
+             projected_next_seq
+               (projected_record_layer_state_of_record record).projected_write })
+=
+  lemma_projected_next_seq_of_record record.record_write
+
+let lemma_projected_record_advance_write
+  (record:record_layer_state)
+  (n:nat)
+  : Lemma
+      (ensures
+       projected_record_layer_state_of_record
+         { record with record_write = advance_direction_records record.record_write n } ==
+       { projected_record_layer_state_of_record record with
+           projected_write =
+             projected_advance_records
+               (projected_record_layer_state_of_record record).projected_write
+               n })
+=
+  lemma_projected_advance_records_of_record record.record_write n
+
 let rec lemma_step_model_many_snoc
   (model0:connection_model)
   (events:list conn_event)
@@ -1308,6 +1602,219 @@ let lemma_step_model_key_update_pending_delta
         | M.UpdateRequested -> assert False)
      | _, _ -> ())
   | ConnLocalEvent _ -> ()
+
+let model_record_layer_delta
+  (model0:connection_model)
+  (ev:conn_event)
+  (model1:connection_model)
+  : prop =
+  match model1.model_control with
+  | ControlFailed _ -> True
+  | _ ->
+    projected_record_layer_state_of_record model1.model_record ==
+      projected_record_layer_step
+        (projected_record_layer_state_of_record model0.model_record)
+        ev
+
+let lemma_step_model_record_layer_delta
+  (model0:connection_model)
+  (ev:conn_event)
+  (model1:connection_model)
+  : Lemma
+      (requires
+        legal_event model0 ev /\
+        step_model model0 ev == Some model1)
+      (ensures model_record_layer_delta model0 ev model1)
+=
+  (match ev with
+  | ConnLocalEvent local ->
+    assert (ev == ConnLocalEvent local);
+    (match local with
+     | LocalInstallTrafficKeys install ->
+       assert (model1.model_record == install_record_keys model0.model_record install);
+       lemma_projected_install_record_keys_of_record model0.model_record install;
+       assert (model_record_layer_delta model0 ev model1)
+     | _ ->
+       assert (model1.model_record == model0.model_record);
+       assert (model_record_layer_delta model0 ev model1))
+  | ConnNetworkEvent msg ->
+    assert (ev == ConnNetworkEvent msg);
+    (match msg.CL.message_direction, msg.CL.message_value with
+     | CL.Sent, M.TlsApplicationData bytes ->
+       assert (model1.model_record == {
+         model0.model_record with
+           record_write =
+             advance_direction_records
+               model0.model_record.record_write
+               (S.application_data_record_count bytes)
+       });
+       lemma_projected_record_advance_write
+         model0.model_record
+         (S.application_data_record_count bytes);
+       assert (model_record_layer_delta model0 ev model1)
+     | CL.Sent, M.TlsHandshake (M.Finished _) ->
+       (match model0.model_control with
+        | ControlHandshaking HsServerFinishedVerified ->
+          assert (Some? model0.model_handshake.hs_keys.ks_client_application_traffic);
+          (match model0.model_handshake.hs_keys.ks_client_application_traffic with
+           | Some _ ->
+             assert (model1.model_record ==
+               install_client_application_write_after_finished
+                 model0.model_record
+                 model0.model_handshake.hs_keys);
+             lemma_projected_client_application_write_after_finished
+               model0.model_record
+               model0.model_handshake.hs_keys;
+             assert (model_record_layer_delta model0 ev model1)
+           | None -> assert False)
+        | _ -> assert False)
+     | CL.Received, M.TlsKeyUpdate _ ->
+       (match model0.model_control with
+        | ControlApplicationData ->
+          assert (Some? model0.model_handshake.hs_keys.ks_server_application_traffic);
+          (match model0.model_handshake.hs_keys.ks_server_application_traffic with
+           | Some old_server_app ->
+             let new_server_app = updated_traffic_key_material old_server_app in
+             assert (model1.model_record == {
+               model0.model_record with
+                 record_read =
+                   R.install_keys
+                     (R.next_seq model0.model_record.record_read)
+                     R.Application
+                     new_server_app.traffic_key
+                     new_server_app.traffic_iv
+             });
+             lemma_projected_install_keys_of_record
+               (R.next_seq model0.model_record.record_read)
+               R.Application
+               new_server_app.traffic_key
+               new_server_app.traffic_iv;
+             assert (model_record_layer_delta model0 ev model1)
+           | None -> assert False)
+        | _ -> assert False)
+     | CL.Sent, M.TlsKeyUpdate req ->
+       (match req with
+        | M.UpdateNotRequested ->
+          (match model0.model_control with
+           | ControlApplicationData ->
+             assert (Some? model0.model_handshake.hs_keys.ks_client_application_traffic);
+             (match model0.model_handshake.hs_keys.ks_client_application_traffic with
+              | Some _ ->
+                assert (model0.model_application.app_key_update_response_pending);
+                (match model0.model_handshake.hs_keys.ks_client_application_traffic with
+                 | Some old_client_app ->
+                   let new_client_app = updated_traffic_key_material old_client_app in
+                   assert (model1.model_record == {
+                     model0.model_record with
+                       record_write =
+                         R.install_keys
+                           (R.next_seq model0.model_record.record_write)
+                           R.Application
+                           new_client_app.traffic_key
+                           new_client_app.traffic_iv
+                   });
+                   lemma_projected_install_keys_of_record
+                     (R.next_seq model0.model_record.record_write)
+                     R.Application
+                     new_client_app.traffic_key
+                     new_client_app.traffic_iv;
+                   assert (model_record_layer_delta model0 ev model1)
+                 | None -> assert False)
+              | None -> assert False)
+           | _ -> assert False)
+        | M.UpdateRequested -> assert False)
+     | CL.Received, M.TlsHandshake (M.EncryptedExtensions _)
+     | CL.Received, M.TlsHandshake (M.Certificate _)
+     | CL.Received, M.TlsHandshake (M.CertificateVerify _)
+     | CL.Received, M.TlsHandshake (M.Finished _) ->
+       assert (model1.model_record == {
+         model0.model_record with
+           record_read = R.next_seq model0.model_record.record_read
+       });
+       lemma_projected_record_next_read model0.model_record;
+       assert (
+         projected_record_layer_step
+           (projected_record_layer_state_of_record model0.model_record)
+           ev ==
+         { projected_record_layer_state_of_record model0.model_record with
+             projected_read =
+               projected_next_seq
+                 (projected_record_layer_state_of_record model0.model_record).projected_read });
+       assert (model_record_layer_delta model0 ev model1)
+     | CL.Received, M.TlsApplicationData _ ->
+       assert (model1.model_record == {
+         model0.model_record with
+           record_read = R.next_seq model0.model_record.record_read
+       });
+       lemma_projected_record_next_read model0.model_record;
+       assert (
+         projected_record_layer_step
+           (projected_record_layer_state_of_record model0.model_record)
+           ev ==
+         { projected_record_layer_state_of_record model0.model_record with
+             projected_read =
+               projected_next_seq
+                 (projected_record_layer_state_of_record model0.model_record).projected_read });
+       assert (model_record_layer_delta model0 ev model1)
+     | CL.Received, M.TlsIgnoredPostHandshake _ ->
+       assert (model1.model_record == {
+         model0.model_record with
+           record_read = R.next_seq model0.model_record.record_read
+       });
+       lemma_projected_record_next_read model0.model_record;
+       assert (
+         projected_record_layer_step
+           (projected_record_layer_state_of_record model0.model_record)
+           ev ==
+         { projected_record_layer_state_of_record model0.model_record with
+             projected_read =
+               projected_next_seq
+                 (projected_record_layer_state_of_record model0.model_record).projected_read });
+       assert (model_record_layer_delta model0 ev model1)
+     | CL.Received, M.TlsAlert T.CloseNotify ->
+       (match model0.model_control with
+        | ControlApplicationData
+        | ControlClosing ->
+          assert (model1.model_record == {
+            model0.model_record with
+              record_read = R.next_seq model0.model_record.record_read
+          });
+          lemma_projected_record_next_read model0.model_record;
+          assert (
+            projected_record_layer_step
+              (projected_record_layer_state_of_record model0.model_record)
+              ev ==
+            { projected_record_layer_state_of_record model0.model_record with
+                projected_read =
+                  projected_next_seq
+                    (projected_record_layer_state_of_record model0.model_record).projected_read });
+          assert (model_record_layer_delta model0 ev model1)
+        | _ ->
+          assert (model1.model_control == ControlFailed (T.AlertError T.CloseNotify));
+          assert (model_record_layer_delta model0 ev model1))
+     | CL.Sent, M.TlsAlert T.CloseNotify ->
+       (match model0.model_control with
+        | ControlApplicationData ->
+          assert (model1.model_record == {
+            model0.model_record with
+              record_write = R.next_seq model0.model_record.record_write
+          });
+          lemma_projected_record_next_write model0.model_record;
+          assert (
+            projected_record_layer_step
+              (projected_record_layer_state_of_record model0.model_record)
+              ev ==
+            { projected_record_layer_state_of_record model0.model_record with
+                projected_write =
+                  projected_next_seq
+                    (projected_record_layer_state_of_record model0.model_record).projected_write });
+          assert (model_record_layer_delta model0 ev model1)
+        | _ ->
+          assert (model1.model_control == ControlFailed (T.AlertError T.CloseNotify));
+          assert (model_record_layer_delta model0 ev model1))
+     | _, _ ->
+       assert (model1.model_record == model0.model_record);
+       assert (model_record_layer_delta model0 ev model1)))
 
 let model_transcript_delta
   (model0:connection_model)
@@ -2376,6 +2883,37 @@ let lemma_legal_connection_delta_key_update_pending_consistent
       (key_update_response_pending_of_conn_events st0.cs_event_log)
       delta.delta_event)
 
+let lemma_legal_connection_delta_record_layer_consistent
+  (st0:connection_state)
+  (delta:connection_delta)
+  (st1:connection_state)
+  : Lemma
+      (requires
+        legal_connection_delta st0 delta st1 /\
+        connection_state_record_layer_consistent st0)
+      (ensures connection_state_record_layer_consistent st1)
+=
+  lemma_step_model_record_layer_delta st0.cs_model delta.delta_event st1.cs_model;
+  lemma_projected_record_layer_snoc st0.cs_event_log delta.delta_event;
+  assert (st1.cs_event_log == st0.cs_event_log @ [delta.delta_event]);
+  match st1.cs_model.model_control with
+  | ControlFailed _ -> ()
+  | _ ->
+    assert (projected_record_layer_state_of_record st1.cs_model.model_record ==
+      projected_record_layer_step
+        (projected_record_layer_state_of_record st0.cs_model.model_record)
+        delta.delta_event);
+    assert (projected_record_layer_state_of_record st0.cs_model.model_record ==
+      projected_record_layer_of_conn_events st0.cs_event_log);
+    assert (projected_record_layer_state_of_record st1.cs_model.model_record ==
+      projected_record_layer_step
+        (projected_record_layer_of_conn_events st0.cs_event_log)
+        delta.delta_event);
+    assert (projected_record_layer_of_conn_events st1.cs_event_log ==
+      projected_record_layer_step
+        (projected_record_layer_of_conn_events st0.cs_event_log)
+        delta.delta_event)
+
 let lemma_legal_connection_delta_layered_log_consistent
   (st0:connection_state)
   (delta:connection_delta)
@@ -2389,6 +2927,7 @@ let lemma_legal_connection_delta_layered_log_consistent
   lemma_legal_connection_delta_event_log_consistent st0 delta st1;
   lemma_legal_connection_delta_transcript_consistent st0 delta st1;
   lemma_legal_connection_delta_key_update_pending_consistent st0 delta st1;
+  lemma_legal_connection_delta_record_layer_consistent st0 delta st1;
   lemma_legal_connection_delta_app_log_consistent st0 delta st1
 
 let lemma_legal_connection_delta_protected_single_parse_record
