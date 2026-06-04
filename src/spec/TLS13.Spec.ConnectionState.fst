@@ -990,10 +990,41 @@ let rec state_machine_events (events:list conn_event)
   | [] -> []
   | ev :: rest -> state_event_delta_of_conn_event ev @ state_machine_events rest
 
+let conn_event_transcript_delta (ev:conn_event) : GTot B.bytes =
+  match ev with
+  | ConnNetworkEvent msg ->
+    (match msg.CL.message_direction, msg.CL.message_value with
+     | CL.Sent, M.TlsHandshake (M.ClientHello ch) ->
+       W.serialize_handshake (M.ClientHello ch)
+     | CL.Received, M.TlsHandshake (M.ServerHello sh) ->
+       W.serialize_handshake (M.ServerHello sh)
+     | CL.Received, M.TlsHandshake (M.EncryptedExtensions ee) ->
+       W.serialize_handshake (M.EncryptedExtensions ee)
+     | CL.Received, M.TlsHandshake (M.Certificate cert) ->
+       W.serialize_handshake (M.Certificate cert)
+     | CL.Received, M.TlsHandshake (M.CertificateVerify cv) ->
+       W.serialize_handshake (M.CertificateVerify cv)
+     | CL.Sent, M.TlsHandshake (M.Finished fin) ->
+       W.serialize_handshake (M.Finished fin)
+     | _, _ -> B.empty)
+  | ConnLocalEvent local ->
+    (match local with
+     | LocalVerifyFinished fin -> W.serialize_handshake (M.Finished fin)
+     | _ -> B.empty)
+
+let rec transcript_bytes_of_conn_events (events:list conn_event)
+  : GTot B.bytes
+        (decreases events)
+=
+  match events with
+  | [] -> B.empty
+  | ev :: rest ->
+    B.append (conn_event_transcript_delta ev) (transcript_bytes_of_conn_events rest)
+
 let rec app_sent_messages (events:list conn_event)
   : GTot (list B.bytes)
         (decreases events)
-  =
+=
   match events with
   | [] -> []
   | ev :: rest -> conn_event_app_sent_delta ev @ app_sent_messages rest
@@ -1019,9 +1050,54 @@ let connection_state_app_log_consistent
   st.cs_model.model_application.app_log.CL.app_received ==
     (app_log_of_conn_events st.cs_event_log).CL.app_received
 
+let connection_state_transcript_consistent
+  (st:connection_state)
+  : prop =
+  Seq.equal
+    st.cs_model.model_handshake.hs_transcript
+    (transcript_bytes_of_conn_events st.cs_event_log)
+
+let connection_state_event_log_consistent_with
+  (cfg:connection_config)
+  (st:connection_state)
+  : prop =
+  step_model_many (initial_model cfg) st.cs_event_log == Some st.cs_model
+
+let connection_state_event_log_consistent
+  (st:connection_state)
+  : prop =
+  connection_state_event_log_consistent_with st.cs_model.model_config st
+
+let connection_state_layered_log_consistent
+  (st:connection_state)
+  : prop =
+  connection_state_event_log_consistent st /\
+  connection_state_transcript_consistent st /\
+  connection_state_app_log_consistent st
+
 let lemma_initial_app_log_consistent
   (cfg:connection_config)
   : Lemma (connection_state_app_log_consistent (initial cfg))
+=
+  ()
+
+let lemma_initial_transcript_consistent
+  (cfg:connection_config)
+  : Lemma (connection_state_transcript_consistent (initial cfg))
+=
+  ()
+
+let lemma_initial_event_log_consistent
+  (cfg:connection_config)
+  : Lemma
+      (connection_state_event_log_consistent_with cfg (initial cfg) /\
+       connection_state_event_log_consistent (initial cfg))
+=
+  ()
+
+let lemma_initial_layered_log_consistent
+  (cfg:connection_config)
+  : Lemma (connection_state_layered_log_consistent (initial cfg))
 =
   ()
 
@@ -1060,6 +1136,98 @@ let rec lemma_app_received_messages_snoc
       (conn_event_app_received_delta hd)
       (app_received_messages tl)
       (conn_event_app_received_delta ev)
+
+let rec lemma_transcript_bytes_snoc
+  (events:list conn_event)
+  (ev:conn_event)
+  : Lemma
+      (ensures
+        B.append
+          (transcript_bytes_of_conn_events events)
+          (conn_event_transcript_delta ev) ==
+        transcript_bytes_of_conn_events (events @ [ev]))
+      (decreases events)
+=
+  match events with
+  | [] ->
+    CL.lemma_append_empty_left (conn_event_transcript_delta ev);
+    CL.lemma_append_empty_right (conn_event_transcript_delta ev)
+  | hd :: tl ->
+    lemma_transcript_bytes_snoc tl ev;
+    Seq.append_assoc
+      (conn_event_transcript_delta hd)
+      (transcript_bytes_of_conn_events tl)
+      (conn_event_transcript_delta ev)
+
+let rec lemma_step_model_many_snoc
+  (model0:connection_model)
+  (events:list conn_event)
+  (ev:conn_event)
+  (model1:connection_model)
+  (model2:connection_model)
+  : Lemma
+      (requires
+        step_model_many model0 events == Some model1 /\
+        step_model model1 ev == Some model2)
+      (ensures
+        step_model_many model0 (events @ [ev]) == Some model2)
+      (decreases events)
+=
+  match events with
+  | [] -> ()
+  | ev0 :: rest ->
+    (match step_model model0 ev0 with
+     | Some mid -> lemma_step_model_many_snoc mid rest ev model1 model2
+     | None -> assert False)
+
+let lemma_step_model_preserves_config
+  (model:connection_model)
+  (ev:conn_event)
+  (model':connection_model)
+  : Lemma
+      (requires step_model model ev == Some model')
+      (ensures model'.model_config == model.model_config)
+=
+  ()
+
+let model_transcript_delta
+  (model0:connection_model)
+  (ev:conn_event)
+  (model1:connection_model)
+  : prop =
+  Seq.equal
+    model1.model_handshake.hs_transcript
+    (B.append
+      model0.model_handshake.hs_transcript
+      (conn_event_transcript_delta ev))
+
+let lemma_step_model_transcript_delta
+  (model0:connection_model)
+  (ev:conn_event)
+  (model1:connection_model)
+  : Lemma
+      (requires step_model model0 ev == Some model1)
+      (ensures model_transcript_delta model0 ev model1)
+=
+  let t0 = model0.model_handshake.hs_transcript in
+  match ev with
+  | ConnLocalEvent local ->
+    (match local with
+     | LocalVerifyFinished _ -> ()
+     | _ ->
+       CL.lemma_append_empty_right t0;
+       Seq.lemma_eq_refl model1.model_handshake.hs_transcript t0)
+  | ConnNetworkEvent msg ->
+    (match msg.CL.message_direction, msg.CL.message_value with
+     | CL.Sent, M.TlsHandshake (M.ClientHello _) -> ()
+     | CL.Received, M.TlsHandshake (M.ServerHello _) -> ()
+     | CL.Received, M.TlsHandshake (M.EncryptedExtensions _) -> ()
+     | CL.Received, M.TlsHandshake (M.Certificate _) -> ()
+     | CL.Received, M.TlsHandshake (M.CertificateVerify _) -> ()
+     | CL.Sent, M.TlsHandshake (M.Finished _) -> ()
+     | _, _ ->
+       CL.lemma_append_empty_right t0;
+       Seq.lemma_eq_refl model1.model_handshake.hs_transcript t0)
 
 let model_app_log_delta
   (model0:connection_model)
@@ -1997,6 +2165,83 @@ let lemma_legal_connection_delta_app_log_consistent
   assert (app_received_messages st1.cs_event_log ==
     app_received_messages st0.cs_event_log @
       conn_event_app_received_delta delta.delta_event)
+
+let lemma_legal_connection_delta_event_log_consistent_with
+  (cfg:connection_config)
+  (st0:connection_state)
+  (delta:connection_delta)
+  (st1:connection_state)
+  : Lemma
+      (requires
+        legal_connection_delta st0 delta st1 /\
+        connection_state_event_log_consistent_with cfg st0)
+      (ensures connection_state_event_log_consistent_with cfg st1)
+=
+  lemma_step_model_many_snoc
+    (initial_model cfg)
+    st0.cs_event_log
+    delta.delta_event
+    st0.cs_model
+    st1.cs_model;
+  assert (st1.cs_event_log == st0.cs_event_log @ [delta.delta_event])
+
+let lemma_legal_connection_delta_event_log_consistent
+  (st0:connection_state)
+  (delta:connection_delta)
+  (st1:connection_state)
+  : Lemma
+      (requires
+        legal_connection_delta st0 delta st1 /\
+        connection_state_event_log_consistent st0)
+      (ensures connection_state_event_log_consistent st1)
+=
+  lemma_legal_connection_delta_event_log_consistent_with
+    st0.cs_model.model_config
+    st0
+    delta
+    st1;
+  lemma_step_model_preserves_config st0.cs_model delta.delta_event st1.cs_model;
+  assert (st1.cs_model.model_config == st0.cs_model.model_config)
+
+let lemma_legal_connection_delta_transcript_consistent
+  (st0:connection_state)
+  (delta:connection_delta)
+  (st1:connection_state)
+  : Lemma
+      (requires
+        legal_connection_delta st0 delta st1 /\
+        connection_state_transcript_consistent st0)
+      (ensures connection_state_transcript_consistent st1)
+=
+  lemma_step_model_transcript_delta st0.cs_model delta.delta_event st1.cs_model;
+  lemma_transcript_bytes_snoc st0.cs_event_log delta.delta_event;
+  Seq.lemma_eq_elim
+    st0.cs_model.model_handshake.hs_transcript
+    (transcript_bytes_of_conn_events st0.cs_event_log);
+  assert (st1.cs_event_log == st0.cs_event_log @ [delta.delta_event]);
+  assert (Seq.equal
+    st1.cs_model.model_handshake.hs_transcript
+    (B.append
+      st0.cs_model.model_handshake.hs_transcript
+      (conn_event_transcript_delta delta.delta_event)));
+  assert (B.append
+    st0.cs_model.model_handshake.hs_transcript
+    (conn_event_transcript_delta delta.delta_event) ==
+    transcript_bytes_of_conn_events st1.cs_event_log)
+
+let lemma_legal_connection_delta_layered_log_consistent
+  (st0:connection_state)
+  (delta:connection_delta)
+  (st1:connection_state)
+  : Lemma
+      (requires
+        legal_connection_delta st0 delta st1 /\
+        connection_state_layered_log_consistent st0)
+      (ensures connection_state_layered_log_consistent st1)
+=
+  lemma_legal_connection_delta_event_log_consistent st0 delta st1;
+  lemma_legal_connection_delta_transcript_consistent st0 delta st1;
+  lemma_legal_connection_delta_app_log_consistent st0 delta st1
 
 let lemma_legal_connection_delta_protected_single_parse_record
   (st0:connection_state)

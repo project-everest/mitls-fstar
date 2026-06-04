@@ -125,9 +125,11 @@ The public client API is buffer/event oriented:
   `CL.concat_bytes (CS.conn_event_app_received_delta ev)`, and local
   send-application-data responses tie their payload to
   `CL.concat_bytes (CS.conn_event_app_sent_delta ev)`. The spec also has a
-  preserved `connection_state_app_log_consistent` invariant tying the model app
-  log to the projection of `cs_event_log`, with a client-surface preservation
-  lemma for `legal_response_for_event`. The public
+  preserved `connection_state_layered_log_consistent` invariant that packages
+  event-log replay from the initial config, transcript projection from serialized
+  handshake events, and app-log projection from `cs_event_log`; the client
+  theorem surface exposes preservation lemmas for `legal_response_for_event`.
+  The public
   `TLS13.Impl.Client` postconditions use named theorem-surface predicates
   `network_bytes_step_correct` and `local_event_step_correct`; lower-level
   record/event predicates remain internal proof vocabulary. The streaming
@@ -192,10 +194,10 @@ Other trusted runtime boundaries remain:
    interpret as exactly the TLS messages/events that drive the state machine and
    app log. Raw protected deltas can now be segmented record-by-record from the
    existing legal-delta facts, and parser successes now expose a packaged
-   decoded-message projection for cleartext/protected records. The app-log
-   projection now has an explicit preserved invariant, but transcript,
-   key-schedule, pending-buffer, and remaining event-projection facts still need
-   to be connected into the invariant.
+   decoded-message projection for cleartext/protected records. Event-log replay,
+   transcript projection, and app-log projection are now packaged into an explicit
+   preserved spec invariant, but key-schedule, pending-buffer, decryption, and
+   remaining event-projection facts still need to be connected into it.
 3. Parser/serializer contracts still need a complete entry-by-entry audit. The
    strongest entries already carry `M`/`L` validity and `TLS13.Wire.Spec`
    facts, and stale unused fixed builders have been removed, but every supported
@@ -230,13 +232,14 @@ Other trusted runtime boundaries remain:
    record parsing, decryption, transcript updates, traffic secrets, KeyUpdate
    epochs, pending buffers, and app-log projection live in one invariant. The
    spec now has admit-free one-record, non-empty-prefix, head/tail,
-   parser-fuel-saturation, recursive segmentation, and app-log-consistency
-   preservation lemmas, with legal-delta/client-response projections, plus a
-   parser-success-to-raw-log inverse bridge. The client surface now also exposes
+   parser-fuel-saturation, recursive segmentation, event-log replay,
+   transcript-projection, and app-log-consistency preservation lemmas, with
+   legal-delta/client-response projections, plus a parser-success-to-raw-log
+   inverse bridge. The client surface now also exposes
    `network_input_message_projection`, derived from `network_input_wf`, so next
    raw-log work should build on those decoded-message projection facts to connect
-   transcript, key schedule, KeyUpdate epochs, pending buffers, and remaining
-   event-log projections.
+   key schedule, KeyUpdate epochs, pending buffers, decryption facts, and
+   remaining event-log projections.
 5. Continue auditing `TLS13.Impl.Parser.fsti` and
    `TLS13.Impl.Serializer.fsti` entry by entry. Mark each supported
    message/record as strong or weak relative to the required `M`/`L` +
