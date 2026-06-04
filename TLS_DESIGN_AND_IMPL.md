@@ -156,7 +156,8 @@ The public client API is buffer/event oriented:
   reachability with the layered log invariant plus the cumulative connection-log
   view consistency predicate, and
   `network_bytes_end_to_end_correct` / `local_event_end_to_end_correct` prove
-  that the public API step predicates preserve it. The network theorem also
+  that the public API step predicates preserve it while explicitly projecting
+  the resulting cumulative connection-log view. The network theorem also
   exposes `network_consumed_raw_record_projection`: every non-empty,
   non-decode-error consumed prefix is a single raw TLS record and has the
   recursive raw-record segmentation fact needed by downstream raw-log proofs.
