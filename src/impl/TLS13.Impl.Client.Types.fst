@@ -809,6 +809,20 @@ let decoder_fragment_relation
        L.content_type_matches content_type outer_ct /\
        Seq.equal fragment outer_fragment)
 
+let network_input_decoder_payload_projection
+  (st0:CS.connection_state)
+  (content_type:U8.t)
+  (fragment:B.bytes)
+  (msg:M.tls_message)
+  (raw_received:B.bytes)
+  : prop =
+  if CS.network_message_is_cleartext CL.Received msg
+  then
+    decoder_fragment_relation st0 content_type fragment raw_received /\
+    CS.cleartext_tls_message_raw msg raw_received
+  else
+    protected_decoder_fragment_relation st0 content_type fragment raw_received
+
 let network_input_wf
   (st0:CS.connection_state)
   (content_type:U8.t)
@@ -859,6 +873,56 @@ let lemma_network_input_wf_raw_record_parse_success
 =
   assert (decoder_fragment_relation st0 content_type fragment raw_received)
 
+let lemma_decoder_fragment_relation_protected_from_raw_records
+  (st0:CS.connection_state)
+  (content_type:U8.t)
+  (fragment:B.bytes)
+  (raw_received:B.bytes)
+  : Lemma
+      (requires
+        decoder_fragment_relation st0 content_type fragment raw_received /\
+        CS.raw_records_exactly raw_received T.ApplicationData 1)
+      (ensures protected_decoder_fragment_relation st0 content_type fragment raw_received)
+=
+  CS.lemma_raw_records_exactly_one_parse_record raw_received T.ApplicationData;
+  assert (exists app_fragment.
+    WS.parse_record raw_received ==
+      Some (T.ApplicationData, app_fragment, B.length raw_received));
+  let app_fragment =
+    ID.indefinite_description_ghost
+      B.bytes
+      (fun app_fragment ->
+        WS.parse_record raw_received ==
+          Some (T.ApplicationData, app_fragment, B.length raw_received)) in
+  let outer_ct =
+    ID.indefinite_description_ghost
+      T.content_type
+      (fun outer_ct -> exists outer_fragment.
+        WS.parse_record raw_received ==
+          Some (outer_ct, outer_fragment, B.length raw_received) /\
+        (if outer_ct == T.ApplicationData
+         then protected_decoder_fragment_relation st0 content_type fragment raw_received
+         else
+           L.content_type_matches content_type outer_ct /\
+           Seq.equal fragment outer_fragment)) in
+  let outer_fragment =
+    ID.indefinite_description_ghost
+      B.bytes
+      (fun outer_fragment ->
+        WS.parse_record raw_received ==
+          Some (outer_ct, outer_fragment, B.length raw_received) /\
+        (if outer_ct == T.ApplicationData
+         then protected_decoder_fragment_relation st0 content_type fragment raw_received
+         else
+           L.content_type_matches content_type outer_ct /\
+           Seq.equal fragment outer_fragment)) in
+  assert (WS.parse_record raw_received ==
+    Some (outer_ct, outer_fragment, B.length raw_received));
+  assert (WS.parse_record raw_received ==
+    Some (T.ApplicationData, app_fragment, B.length raw_received));
+  assert (outer_ct == T.ApplicationData);
+  assert (protected_decoder_fragment_relation st0 content_type fragment raw_received)
+
 let network_input_message_projection
   (st0:CS.connection_state)
   (content_type:U8.t)
@@ -873,6 +937,7 @@ let network_input_message_projection
   decoder_fragment_relation st0 content_type fragment raw_received /\
   raw_record_parse_success raw_received /\
   wire_parse_success content_type fragment msg /\
+  network_input_decoder_payload_projection st0 content_type fragment msg raw_received /\
   received_tls_raw_delta_legal st0 msg raw_received /\
   CS.network_message_raw_delta_legal
     st0.CS.cs_model
@@ -927,6 +992,13 @@ let lemma_network_input_wf_message_projection
       raw_received
       T.ApplicationData
       (CS.protected_record_count CL.Received msg));
+    assert (CS.protected_record_count CL.Received msg == 1);
+    lemma_decoder_fragment_relation_protected_from_raw_records
+      st0
+      content_type
+      fragment
+      raw_received;
+    assert (protected_decoder_fragment_relation st0 content_type fragment raw_received);
     CS.lemma_event_raw_delta_legal_protected_segmented
       st0.CS.cs_model
       (CS.ConnNetworkEvent received_msg)
