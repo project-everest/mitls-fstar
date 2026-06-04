@@ -133,24 +133,18 @@ let response_app_out (resp:client_response) (app_out:B.bytes) : B.bytes =
   else B.empty
 
 noextract
+let event_api_app_out
+  (ev:CS.conn_event)
+  : B.bytes =
+  CL.concat_bytes (CS.conn_event_app_received_delta ev)
+
+noextract
 let response_app_out_matches_event
   (resp:client_response)
   (ev:CS.conn_event)
   (app_out:B.bytes)
   : prop =
-  match ev with
-  | CS.ConnNetworkEvent msg ->
-    (match msg.CL.message_direction, msg.CL.message_value with
-     | CL.Received, M.TlsApplicationData bytes ->
-       Seq.equal (response_app_out resp app_out) bytes
-     | _, _ ->
-       Seq.equal (response_app_out resp app_out) B.empty)
-  | CS.ConnLocalEvent local ->
-    (match local with
-     | CS.LocalDeliverApplicationData bytes ->
-       Seq.equal (response_app_out resp app_out) bytes
-     | _ ->
-       Seq.equal (response_app_out resp app_out) B.empty)
+  Seq.equal (response_app_out resp app_out) (event_api_app_out ev)
 
 let legal_delta
   (st0:CS.connection_state)
