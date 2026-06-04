@@ -71,9 +71,10 @@ The public client API is buffer/event oriented:
   payload slice plus trailing content-type byte, application-data header
   serialization states the public `TLS13.Wire.Spec.parse_record_header` result,
   ClientHello fixed-output serialization exposes the exact public
-  `parse_record` result for the emitted cleartext handshake record, and
-  ClientFinished encrypted-output serialization exposes a public `parse_record`
-  fact for the emitted application-data record.
+  `parse_record` result for the emitted cleartext handshake record, and raw
+  application-data record serialization plus ClientFinished encrypted-output
+  serialization expose public `parse_record` facts for emitted
+  application-data records.
 - The received Certificate and CertificateVerify state-transition interfaces
   expose the exact driver-copyout facts needed by the external validation TCB:
   certificate leaf DER is the head of the parsed certificate chain, and

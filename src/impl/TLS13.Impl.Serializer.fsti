@@ -327,6 +327,8 @@ fn serialize_raw_application_data_record
                (let raw_prefix =
                   Seq.slice out_bytes 0 (SZ.v written) in
                 Seq.equal raw_prefix (WS.serialize_record T.ApplicationData (Ghost.reveal 'fragment_bytes)) /\
+                WS.parse_record raw_prefix ==
+                  Some (T.ApplicationData, (Ghost.reveal 'fragment_bytes), SZ.v written) /\
                 CS.raw_records_exactly raw_prefix T.ApplicationData 1))
 
 fn serialize_client_finished_outputs
