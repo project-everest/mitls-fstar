@@ -1072,6 +1072,32 @@ let legal_network_response
     network_out
     app_out
 
+let lemma_legal_network_response_message_projection
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (resp:client_response)
+  (content_type:U8.t)
+  (fragment:B.bytes)
+  (msg:M.tls_message)
+  (raw_received:B.bytes)
+  (network_out:B.bytes)
+  (app_out:B.bytes)
+  : Lemma
+      (requires
+        network_input_wf st0 content_type fragment raw_received /\
+        legal_network_response
+          st0 st1 resp content_type fragment raw_received network_out app_out /\
+        wire_parse_success content_type fragment msg)
+      (ensures network_input_message_projection
+        st0 content_type fragment msg raw_received)
+=
+  lemma_network_input_wf_message_projection
+    st0
+    content_type
+    fragment
+    msg
+    raw_received
+
 let response_stuttered
   (st0:CS.connection_state)
   (st1:CS.connection_state)
@@ -1108,6 +1134,43 @@ let network_event_step_correct
     network_out
     app_out /\
   some_legal_response st0 st1 resp network_out app_out
+
+let lemma_network_event_step_correct_message_projection
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (resp:client_response)
+  (content_type:U8.t)
+  (fragment:B.bytes)
+  (msg:M.tls_message)
+  (raw_received:B.bytes)
+  (network_out:B.bytes)
+  (app_out:B.bytes)
+  : Lemma
+      (requires
+        network_input_wf st0 content_type fragment raw_received /\
+        network_event_step_correct
+          st0
+          st1
+          resp
+          content_type
+          fragment
+          raw_received
+          network_out
+          app_out /\
+        wire_parse_success content_type fragment msg)
+      (ensures network_input_message_projection
+        st0 content_type fragment msg raw_received)
+=
+  lemma_legal_network_response_message_projection
+    st0
+    st1
+    resp
+    content_type
+    fragment
+    msg
+    raw_received
+    network_out
+    app_out
 
 let tls_record_step_correct
   (st0:CS.connection_state)

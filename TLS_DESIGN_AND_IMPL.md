@@ -72,7 +72,10 @@ The public client API is buffer/event oriented:
   facts as `CT.network_input_message_projection`: a parsed network message is
   tied to the raw outer record parse, the cleartext/protected decoder-fragment
   relation, the legal received raw delta, and protected-record segmentation for
-  non-cleartext messages.
+  non-cleartext messages. `CT.lemma_legal_network_response_message_projection`
+  and `CT.lemma_network_event_step_correct_message_projection` expose the same
+  package from the legal network-response / internal network-event theorem
+  surface whenever the caller has `network_input_wf` and a parse-success fact.
 - The active serializer TCB surface no longer includes stale unused ClientHello
   record-header/localhost fixed-builder declarations or the unused standalone
   ClientFinished application-data-record declaration. Live fixed helpers now
