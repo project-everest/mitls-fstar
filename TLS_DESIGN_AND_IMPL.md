@@ -62,8 +62,13 @@ The public client API is buffer/event oriented:
   `TLS13_Impl_Parser_decode_network_record`, both implemented in
   `c_stubs/tls13_connection_backend.h`. Their success contracts now include
   `TLS13.Wire.Spec.parse_record` facts for the raw outer record bytes; the
-  dispatcher fragment may still be decrypted inner plaintext rather than the
-  outer record fragment.
+  dispatcher fragment relation is now explicit in `CT.network_input_wf`.
+  Cleartext records expose the outer fragment. `ApplicationData` records expose
+  either a `TLS13.Record.Spec.open_record` result under the current read state
+  and record-header/empty-AAD choices followed by TLSInnerPlaintext decoding, or
+  the documented synthetic plaintext fallback still used by deterministic
+  binding tests. The C shim no longer accepts decrypted protected records whose
+  opened bytes fail TLSInnerPlaintext decoding.
 - The active serializer TCB surface no longer includes stale unused ClientHello
   record-header/localhost fixed-builder declarations or the unused standalone
   ClientFinished application-data-record declaration. Live fixed helpers now
@@ -87,9 +92,13 @@ The public client API is buffer/event oriented:
   `lemma_raw_records_exactly_one_parse_record` turns
   `raw_records_exactly raw outer 1` into an exact
   `TLS13.Wire.Spec.parse_record raw == Some (outer, fragment, length raw)` fact.
-  The bridge is also packaged through protected single-record message/event
-  deltas and through the client-side `legal_response_for_event` projection.
-  Multi-record protected deltas now also expose a first-record parse prefix via
+  The inverse bridge `lemma_parse_record_full_raw_records_exactly` turns a
+  full-buffer parser fact back into `raw_records_exactly` and recursive
+  segmentation, with `CT.lemma_raw_record_parse_success_raw_records` exposing
+  that bridge at the client theorem surface. The raw-log bridge is also
+  packaged through protected single-record message/event deltas and through the
+  client-side `legal_response_for_event` projection. Multi-record protected
+  deltas now expose a first-record parse prefix via
   `lemma_raw_records_exactly_nonempty_parse_record` and the corresponding
   legal-delta/client-response projection lemmas. For protected message raw
   deltas, parser-fuel saturation lifts the head/tail view back to ordinary
@@ -174,8 +183,9 @@ Other trusted runtime boundaries remain:
    invariant proving that consumed/emitted raw bytes parse, decrypt, and
    interpret as exactly the TLS messages/events that drive the state machine and
    app log. Raw protected deltas can now be segmented record-by-record from the
-   existing legal-delta facts, but decryption, transcript, key-schedule, and
-   app-projection facts still need to be connected in that invariant.
+   existing legal-delta facts, and parser successes now expose a decoder-fragment
+   relation for protected records, but decryption, transcript, key-schedule, and
+   app-projection facts still need to be connected into the invariant.
 3. Parser/serializer contracts still need a complete entry-by-entry audit. The
    strongest entries already carry `M`/`L` validity and `TLS13.Wire.Spec`
    facts, and stale unused fixed builders have been removed, but every supported
@@ -211,9 +221,10 @@ Other trusted runtime boundaries remain:
    epochs, pending buffers, and app-log projection live in one invariant. The
    spec now has admit-free one-record, non-empty-prefix, head/tail,
    parser-fuel-saturation, and recursive segmentation lemmas, with
-   legal-delta/client-response projections. Next raw-log work should build on
-   those segmented records for protected-record decryption and TLS
-   message/projection facts.
+   legal-delta/client-response projections, plus a parser-success-to-raw-log
+   inverse bridge. Next raw-log work should build on those segmented records and
+   the explicit decoder-fragment relation for protected-record decryption and
+   TLS message/projection facts.
 5. Continue auditing `TLS13.Impl.Parser.fsti` and
    `TLS13.Impl.Serializer.fsti` entry by entry. Mark each supported
    message/record as strong or weak relative to the required `M`/`L` +

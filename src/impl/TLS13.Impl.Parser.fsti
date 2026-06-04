@@ -230,9 +230,12 @@ fn parse_tls_record
   Extraction-facing record decoder used by the public client driver API.
   On success it returns an owned exact-length fragment vector plus the same
   parser and raw-delta facts required by the existing message dispatcher.  The
-  input bytes are also required to parse as exactly one TLS outer record; the
-  dispatcher fragment may be decrypted inner plaintext rather than the outer
-  record fragment.
+  input bytes are also required to parse as exactly one TLS outer record.
+  CT.network_input_wf records how the dispatcher fragment relates to that raw
+  record: cleartext records expose the outer fragment, while ApplicationData
+  records expose either a record-layer open result followed by TLSInnerPlaintext
+  decoding or the current synthetic plaintext fallback used by deterministic
+  tests.
 **)
 fn decode_network_record
   (c:CR.connection_state)
@@ -295,9 +298,12 @@ fn decode_network_record
   exactly the first complete TLS record in the input buffer, returning owned
   copies of both that raw record prefix and its decoded dispatcher fragment.
   The caller remains responsible for retaining any bytes after consumed_len.
-  The raw prefix is required to parse as exactly one TLS outer record; the
-  dispatcher fragment may be decrypted inner plaintext rather than the outer
-  record fragment.
+  The raw prefix is required to parse as exactly one TLS outer record.
+  CT.network_input_wf records how the dispatcher fragment relates to that raw
+  record: cleartext records expose the outer fragment, while ApplicationData
+  records expose either a record-layer open result followed by TLSInnerPlaintext
+  decoding or the current synthetic plaintext fallback used by deterministic
+  tests.
 **)
 fn decode_network_buffer
   (c:CR.connection_state)

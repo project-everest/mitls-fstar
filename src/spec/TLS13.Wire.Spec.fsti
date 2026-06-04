@@ -234,3 +234,11 @@ val lemma_parse_record_serializes:
         Seq.equal (serialize_record content_type fragment)
                   (Seq.slice input 0 consumed)
       | None -> True))
+
+val lemma_parse_record_fragment_bound:
+  input:B.bytes ->
+  Lemma
+    (ensures (
+      match parse_record input with
+      | Some (_, fragment, _) -> B.length fragment <= 16640
+      | None -> True))

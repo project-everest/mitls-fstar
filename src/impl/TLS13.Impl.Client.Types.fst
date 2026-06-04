@@ -6,6 +6,7 @@ module CL = TLS13.ConnectionLog
 module CS = TLS13.Spec.ConnectionState
 module L = TLS13.Impl.Messages
 module M = TLS13.Messages
+module R = TLS13.Record.Spec
 module Seq = FStar.Seq
 module SZ = FStar.SizeT
 module T = TLS13.Types
@@ -399,12 +400,77 @@ let wire_parse_failure
     L.content_type_matches content_type ct ==>
     WS.parse_tls_message ct fragment == None
 
+let decoder_fragment_matches_plaintext
+  (content_type:U8.t)
+  (fragment:B.bytes)
+  (plaintext:M.plaintext)
+  : prop =
+  L.content_type_matches content_type plaintext.M.content_type /\
+  Seq.equal fragment plaintext.M.fragment
+
+let record_header_aad (raw_received:B.bytes) : GTot B.bytes =
+  if B.length raw_received >= 5
+  then Seq.slice raw_received 0 5
+  else B.empty
+
+let protected_record_opened
+  (st0:CS.connection_state)
+  (raw_received:B.bytes)
+  (outer_fragment:B.bytes)
+  (opened:B.bytes)
+  : prop =
+  exists read_state'.
+    R.open_record
+      st0.CS.cs_model.CS.model_record.CS.record_read
+      (record_header_aad raw_received)
+      outer_fragment ==
+      Some (opened, read_state') \/
+    R.open_record
+      st0.CS.cs_model.CS.model_record.CS.record_read
+      B.empty
+      outer_fragment ==
+      Some (opened, read_state')
+
+let protected_decoder_fragment_relation
+  (st0:CS.connection_state)
+  (content_type:U8.t)
+  (fragment:B.bytes)
+  (raw_received:B.bytes)
+  : prop =
+  exists outer_fragment.
+    WS.parse_record raw_received ==
+      Some (T.ApplicationData, outer_fragment, B.length raw_received) /\
+    ((exists opened.
+        protected_record_opened st0 raw_received outer_fragment opened /\
+        (exists plaintext.
+          WS.parse_plaintext opened == Some plaintext /\
+          decoder_fragment_matches_plaintext content_type fragment plaintext)) \/
+     (exists plaintext.
+        WS.parse_plaintext outer_fragment == Some plaintext /\
+        decoder_fragment_matches_plaintext content_type fragment plaintext))
+
+let decoder_fragment_relation
+  (st0:CS.connection_state)
+  (content_type:U8.t)
+  (fragment:B.bytes)
+  (raw_received:B.bytes)
+  : prop =
+  exists outer_ct outer_fragment.
+    WS.parse_record raw_received ==
+      Some (outer_ct, outer_fragment, B.length raw_received) /\
+    (if outer_ct == T.ApplicationData
+     then protected_decoder_fragment_relation st0 content_type fragment raw_received
+     else
+       L.content_type_matches content_type outer_ct /\
+       Seq.equal fragment outer_fragment)
+
 let network_input_wf
   (st0:CS.connection_state)
   (content_type:U8.t)
   (fragment:B.bytes)
   (raw_received:B.bytes)
   : prop =
+  decoder_fragment_relation st0 content_type fragment raw_received /\
   forall msg.
   wire_parse_success content_type fragment msg ==>
   received_tls_raw_delta_legal st0 msg raw_received
@@ -415,6 +481,27 @@ let raw_record_parse_success
   exists outer_ct outer_fragment.
     WS.parse_record raw_received ==
       Some (outer_ct, outer_fragment, B.length raw_received)
+
+let lemma_raw_record_parse_success_raw_records
+  (raw_received:B.bytes)
+  : Lemma
+      (requires raw_record_parse_success raw_received)
+      (ensures exists outer_ct.
+        CS.raw_records_exactly raw_received outer_ct 1 /\
+        CS.raw_records_segmented raw_received outer_ct 1)
+=
+  match WS.parse_record raw_received with
+  | None ->
+    assert False
+  | Some (outer_ct, outer_fragment, consumed) ->
+    assert (consumed == B.length raw_received);
+    CS.lemma_parse_record_full_raw_records_exactly
+      raw_received
+      outer_ct
+      outer_fragment;
+    assert (exists outer_ct'.
+      CS.raw_records_exactly raw_received outer_ct' 1 /\
+      CS.raw_records_segmented raw_received outer_ct' 1)
 
 let response_network_out_parse_success
   (resp:client_response)

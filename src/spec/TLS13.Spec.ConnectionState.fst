@@ -1459,6 +1459,32 @@ let lemma_raw_application_data_record_exactly
 =
   lemma_raw_records_exactly_single_serialized T.ApplicationData fragment
 
+let lemma_parse_record_full_raw_records_exactly
+  (raw:B.bytes)
+  (outer:T.content_type)
+  (fragment:B.bytes)
+  : Lemma
+      (requires W.parse_record raw == Some (outer, fragment, B.length raw))
+      (ensures raw_records_exactly raw outer 1 /\
+               raw_records_segmented raw outer 1)
+=
+  W.lemma_parse_record_serializes raw;
+  W.lemma_parse_record_fragment_bound raw;
+  assert (B.length fragment <= 16640);
+  let serialized = W.serialize_record outer fragment in
+  assert (B.length raw == B.length serialized);
+  assert (Seq.equal serialized (Seq.slice raw 0 (B.length raw)));
+  Seq.lemma_len_slice raw 0 (B.length raw);
+  assert (B.length (Seq.slice raw 0 (B.length raw)) == B.length raw);
+  assert (forall (i:nat{i < B.length raw}).
+    Seq.index raw i == Seq.index (Seq.slice raw 0 (B.length raw)) i);
+  Seq.lemma_eq_intro raw (Seq.slice raw 0 (B.length raw));
+  assert (Seq.equal raw serialized);
+  lemma_raw_records_exactly_single_serialized outer fragment;
+  Seq.lemma_eq_elim raw serialized;
+  assert (raw_records_exactly raw outer 1);
+  lemma_raw_records_exactly_segmented raw outer 1
+
 let serialized_cleartext_tls_message (msg:M.tls_message) : GTot B.bytes =
   let (content_type, fragment) = W.serialize_tls_message msg in
   W.serialize_record content_type fragment

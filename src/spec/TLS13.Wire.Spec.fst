@@ -963,3 +963,26 @@ let lemma_parse_record_serializes (input:B.bytes)
             Seq.lemma_eq_intro
               (serialize_record content_type fragment)
               (Seq.slice input 0 (5 + fragment_len))
+
+let lemma_parse_record_fragment_bound (input:B.bytes)
+  : Lemma
+      (ensures (
+        match parse_record input with
+        | Some (_, fragment, _) -> B.length fragment <= 16640
+        | None -> True))
+=
+  if B.length input < 5 then ()
+  else
+    match content_type_of_byte (Seq.index input 0) with
+    | None -> ()
+    | Some _ ->
+      if read_u16 input 1 <> 0x0303 then ()
+      else
+        let fragment_len = read_u16 input 3 in
+        if fragment_len > 16384 + 256 || 5 + fragment_len > B.length input then ()
+        else
+          match take_range input 5 fragment_len with
+          | Some fragment ->
+            assert (B.length fragment == fragment_len);
+            assert (B.length fragment <= 16640)
+          | None -> ()

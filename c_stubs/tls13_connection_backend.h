@@ -717,13 +717,6 @@ static inline bool TLS13_Connection_Backend_decode_inner_plaintext(
                     _tls13_payload_len = _tls13_inner_payload_len; \
                     _tls13_opened_to_free = _tls13_opened; \
                     _tls13_decoded = true; \
-                  } else { \
-                    _tls13_content_type = \
-                      (_tls13_opened_len == 2u && _tls13_opened[0] <= 2u) ? 21u : 23u; \
-                    _tls13_payload = _tls13_opened; \
-                    _tls13_payload_len = _tls13_opened_len; \
-                    _tls13_opened_to_free = _tls13_opened; \
-                    _tls13_decoded = true; \
                   } \
                 } \
                 if (!_tls13_decoded) { \
@@ -835,13 +828,6 @@ static inline bool TLS13_Connection_Backend_decode_inner_plaintext(
                     _tls13_content_type = _tls13_inner_ct; \
                     _tls13_payload = _tls13_opened; \
                     _tls13_payload_len = _tls13_inner_payload_len; \
-                    _tls13_opened_to_free = _tls13_opened; \
-                    _tls13_decoded = true; \
-                  } else { \
-                    _tls13_content_type = \
-                      (_tls13_opened_len == 2u && _tls13_opened[0] <= 2u) ? 21u : 23u; \
-                    _tls13_payload = _tls13_opened; \
-                    _tls13_payload_len = _tls13_opened_len; \
                     _tls13_opened_to_free = _tls13_opened; \
                     _tls13_decoded = true; \
                   } \
