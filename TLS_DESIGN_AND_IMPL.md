@@ -68,7 +68,11 @@ The public client API is buffer/event oriented:
   record-header AAD, followed by TLSInnerPlaintext decoding. The C shim no
   longer accepts synthetic plaintext-in-ApplicationData records, zero-AAD
   protected opens, or decrypted protected records whose opened bytes fail
-  TLSInnerPlaintext decoding.
+  TLSInnerPlaintext decoding. The client theorem surface now packages these
+  facts as `CT.network_input_message_projection`: a parsed network message is
+  tied to the raw outer record parse, the cleartext/protected decoder-fragment
+  relation, the legal received raw delta, and protected-record segmentation for
+  non-cleartext messages.
 - The active serializer TCB surface no longer includes stale unused ClientHello
   record-header/localhost fixed-builder declarations or the unused standalone
   ClientFinished application-data-record declaration. Live fixed helpers now
@@ -183,9 +187,10 @@ Other trusted runtime boundaries remain:
    invariant proving that consumed/emitted raw bytes parse, decrypt, and
    interpret as exactly the TLS messages/events that drive the state machine and
    app log. Raw protected deltas can now be segmented record-by-record from the
-   existing legal-delta facts, and parser successes now expose a decoder-fragment
-   relation for protected records, but decryption, transcript, key-schedule, and
-   app-projection facts still need to be connected into the invariant.
+   existing legal-delta facts, and parser successes now expose a packaged
+   decoded-message projection for cleartext/protected records, but transcript,
+   key-schedule, and app-projection facts still need to be connected into the
+   invariant.
 3. Parser/serializer contracts still need a complete entry-by-entry audit. The
    strongest entries already carry `M`/`L` validity and `TLS13.Wire.Spec`
    facts, and stale unused fixed builders have been removed, but every supported
@@ -222,9 +227,11 @@ Other trusted runtime boundaries remain:
    spec now has admit-free one-record, non-empty-prefix, head/tail,
    parser-fuel-saturation, and recursive segmentation lemmas, with
    legal-delta/client-response projections, plus a parser-success-to-raw-log
-   inverse bridge. Next raw-log work should build on those segmented records and
-   the explicit decoder-fragment relation for protected-record decryption and
-   TLS message/projection facts.
+   inverse bridge. The client surface now also exposes
+   `network_input_message_projection`, derived from `network_input_wf`, so next
+   raw-log work should build on those decoded-message projection facts to connect
+   transcript, key schedule, KeyUpdate epochs, pending buffers, and app-log
+   projection.
 5. Continue auditing `TLS13.Impl.Parser.fsti` and
    `TLS13.Impl.Serializer.fsti` entry by entry. Mark each supported
    message/record as strong or weak relative to the required `M`/`L` +

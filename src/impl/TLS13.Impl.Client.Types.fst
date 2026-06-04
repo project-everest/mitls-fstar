@@ -495,6 +495,100 @@ let lemma_raw_record_parse_success_raw_records
       CS.raw_records_exactly raw_received outer_ct' 1 /\
       CS.raw_records_segmented raw_received outer_ct' 1)
 
+let lemma_network_input_wf_raw_record_parse_success
+  (st0:CS.connection_state)
+  (content_type:U8.t)
+  (fragment:B.bytes)
+  (raw_received:B.bytes)
+  : Lemma
+      (requires network_input_wf st0 content_type fragment raw_received)
+      (ensures raw_record_parse_success raw_received)
+=
+  assert (decoder_fragment_relation st0 content_type fragment raw_received)
+
+let network_input_message_projection
+  (st0:CS.connection_state)
+  (content_type:U8.t)
+  (fragment:B.bytes)
+  (msg:M.tls_message)
+  (raw_received:B.bytes)
+  : prop =
+  let received_msg = {
+    CL.message_direction = CL.Received;
+    CL.message_value = msg;
+  } in
+  decoder_fragment_relation st0 content_type fragment raw_received /\
+  raw_record_parse_success raw_received /\
+  wire_parse_success content_type fragment msg /\
+  received_tls_raw_delta_legal st0 msg raw_received /\
+  CS.network_message_raw_delta_legal
+    st0.CS.cs_model
+    received_msg
+    raw_received /\
+  (if CS.network_message_is_cleartext CL.Received msg
+   then CS.cleartext_tls_message_raw msg raw_received
+   else
+     CS.raw_records_exactly
+       raw_received
+       T.ApplicationData
+       (CS.protected_record_count CL.Received msg) /\
+     CS.raw_records_segmented
+       raw_received
+       T.ApplicationData
+       (CS.protected_record_count CL.Received msg))
+
+let lemma_network_input_wf_message_projection
+  (st0:CS.connection_state)
+  (content_type:U8.t)
+  (fragment:B.bytes)
+  (msg:M.tls_message)
+  (raw_received:B.bytes)
+  : Lemma
+      (requires
+        network_input_wf st0 content_type fragment raw_received /\
+        wire_parse_success content_type fragment msg)
+      (ensures network_input_message_projection
+        st0 content_type fragment msg raw_received)
+=
+  let received_msg = {
+    CL.message_direction = CL.Received;
+    CL.message_value = msg;
+  } in
+  assert (decoder_fragment_relation st0 content_type fragment raw_received);
+  assert (raw_record_parse_success raw_received);
+  assert (received_tls_raw_delta_legal st0 msg raw_received);
+  assert (CS.event_raw_delta_legal
+    st0.CS.cs_model
+    (CS.ConnNetworkEvent received_msg)
+    B.empty
+    raw_received);
+  assert (CS.network_message_raw_delta_legal
+    st0.CS.cs_model
+    received_msg
+    raw_received);
+  if CS.network_message_is_cleartext CL.Received msg
+  then
+    assert (CS.cleartext_tls_message_raw msg raw_received)
+  else (
+    assert (CS.raw_records_exactly
+      raw_received
+      T.ApplicationData
+      (CS.protected_record_count CL.Received msg));
+    CS.lemma_event_raw_delta_legal_protected_segmented
+      st0.CS.cs_model
+      (CS.ConnNetworkEvent received_msg)
+      B.empty
+      raw_received;
+    assert (CS.event_protected_raw_segmented_success
+      (CS.ConnNetworkEvent received_msg)
+      B.empty
+      raw_received);
+    assert (CS.raw_records_segmented
+      raw_received
+      T.ApplicationData
+      (CS.protected_record_count CL.Received msg))
+  )
+
 let response_network_out_parse_success
   (resp:client_response)
   (network_out:B.bytes)
@@ -577,6 +671,27 @@ let parsed_message_wire_success_for
     True
   | L.LTlsApplicationData _, _ ->
     False)
+
+let lemma_parsed_message_network_input_projection
+  (st0:CS.connection_state)
+  (content_type:U8.t)
+  (fragment:B.bytes)
+  (l:L.tls_message)
+  (msg:M.tls_message)
+  (raw_received:B.bytes)
+  : Lemma
+     (requires
+       network_input_wf st0 content_type fragment raw_received /\
+       parsed_message_wire_success_for content_type fragment l msg)
+     (ensures network_input_message_projection
+       st0 content_type fragment msg raw_received)
+=
+  lemma_network_input_wf_message_projection
+    st0
+    content_type
+    fragment
+    msg
+    raw_received
 
 let local_event_kind_matches
   (kind:local_event_kind)
