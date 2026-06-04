@@ -136,7 +136,7 @@ The public client API is buffer/event oriented:
   `cs_event_log`. The public client invariant also includes
   `connection_state_connection_log_view_consistent`, which packages the cumulative
   `ConnectionLog.connection_view` stream shapes, record-prefix parsing, host-trace
-  TLS/app projections, and pending-app source shape; the client theorem surface exposes preservation lemmas for
+  TLS/state-event/app projections, and pending-app source shape; the client theorem surface exposes preservation lemmas for
   `legal_response_for_event`, `some_legal_response`, `network_bytes_step_correct`, and
   `local_event_step_correct`. The public
   `TLS13.Impl.Client` postconditions now use the compact end-to-end predicates
@@ -228,7 +228,8 @@ Other trusted runtime boundaries remain:
    interpret as exactly the TLS messages/events that drive the state machine and
    app log. Raw protected deltas can now be segmented record-by-record from the
    existing legal-delta facts, cumulative `ConnectionLog.connection_view` stream
-   and host-trace projections are packaged into `client_state_correct`, and parser successes now expose a packaged
+   and TLS/state-event/app host-trace projections are packaged into
+   `client_state_correct`, and parser successes now expose a packaged
    decoded-message projection for cleartext/protected records. Event-log replay,
    transcript projection, KeyUpdate response-pending state, non-failed record
    epoch/sequence projection, record key/IV consistency with the installed key

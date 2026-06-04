@@ -2293,6 +2293,27 @@ let rec lemma_connection_log_trace_received_tls
        | LocalFail _ -> ()
        | _ -> ())
 
+let rec lemma_connection_log_trace_state_events
+  (events:list conn_event)
+  : Lemma
+      (ensures
+        CL.state_events_of_host_trace (connection_log_trace_of_conn_events events) ==
+          state_machine_events events)
+      (decreases events)
+=
+  match events with
+  | [] -> ()
+  | ev :: rest ->
+    lemma_connection_log_trace_state_events rest;
+    match ev with
+    | ConnNetworkEvent _ -> ()
+    | ConnLocalEvent local ->
+      (match local with
+       | LocalValidateCertificate _
+       | LocalDeliverApplicationData _
+       | LocalFail _ -> ()
+       | _ -> ())
+
 let rec lemma_connection_log_trace_app_sent
   (events:list conn_event)
   : Lemma
@@ -2401,6 +2422,7 @@ let connection_state_connection_log_view_consistent
   CL.connection_view_record_stream_shaped view /\
   view.CL.sent_tls.CL.values == CL.sent_tls_of_host_trace view.CL.host_trace /\
   view.CL.received_tls.CL.values == CL.received_tls_of_host_trace view.CL.host_trace /\
+  CL.state_events_of_host_trace view.CL.host_trace == state_machine_events st.cs_event_log /\
   CL.app_log_of_host_trace view.CL.host_trace == view.CL.app_view /\
   CL.pending_app_source_consistent view
 
@@ -2425,6 +2447,7 @@ let lemma_connection_state_connection_log_view_consistent
   CL.lemma_parse_record_prefix_serializes st.cs_wire_log.CL.raw_received;
   lemma_connection_log_trace_sent_tls st.cs_event_log;
   lemma_connection_log_trace_received_tls st.cs_event_log;
+  lemma_connection_log_trace_state_events st.cs_event_log;
   lemma_connection_log_trace_app_sent st.cs_event_log;
   lemma_connection_log_trace_app_received st.cs_event_log;
   assert (view.CL.sent_tls.CL.values == sent_tls_messages st.cs_event_log);
