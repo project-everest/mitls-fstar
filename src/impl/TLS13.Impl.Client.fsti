@@ -23,6 +23,19 @@ let connection_exactly (c:client) (st:CS.connection_state) : slprop =
   CR.connection_exactly c st
 
 noextract
+let next_local_action_internal_input_ready
+  (st:CS.connection_state)
+  (action:CT.next_local_action)
+  : prop =
+  action.CT.next_local_ready ==> (
+  match action.CT.next_local_kind with
+  | CT.LocalValidateCertificate
+  | CT.LocalVerifyCertificateSignature ->
+    True
+  | _ ->
+    CT.local_input_wf st action.CT.next_local_kind B.empty)
+
+noextract
 let next_local_action_sound
   (st:CS.connection_state)
   (network_out_len:SZ.t)
@@ -31,7 +44,8 @@ let next_local_action_sound
   (action:CT.next_local_action)
   : prop =
   if action.CT.next_local_ready then
-    match action.CT.next_local_kind with
+    next_local_action_internal_input_ready st action /\
+    (match action.CT.next_local_kind with
     | CT.LocalStartHandshake ->
       action.CT.next_local_payload == CT.LocalPayloadNone /\
       st.CS.cs_model.CS.model_control == CS.ControlNew /\
@@ -128,7 +142,7 @@ let next_local_action_sound
         (st.CS.cs_model.CS.model_record.CS.record_write.R.seq + 1) /\
       27 <= SZ.v network_out_len
     | _ ->
-      False
+      False)
   else
     action.CT.next_local_kind == CT.LocalFail /\
     action.CT.next_local_payload == CT.LocalPayloadNone

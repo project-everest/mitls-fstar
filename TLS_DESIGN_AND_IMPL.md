@@ -98,7 +98,10 @@ The public client API is buffer/event oriented:
   network predicate exposes public `parse_record` success facts for
   non-decode-error consumed raw records, and the `process_network_bytes` theorem
   shape names the exact consumed input prefix instead of hiding it behind an
-  existential. This is substantial progress, but it is not yet the final
+  existential. `next_local_action_sound` also proves that ready non-external
+  local actions satisfy `local_input_wf` with the empty payload; certificate
+  validation and CertificateVerify signature checking remain explicit external
+  TCB actions. This is substantial progress, but it is not yet the final
   end-to-end correctness theorem.
 - `TLS13.Impl.ConnectionState` has been split by responsibility: `Repr` owns the
   concrete representation and exact predicates, `Queries` owns read-only checks
@@ -178,7 +181,9 @@ Other trusted runtime boundaries remain:
    a public raw-record parse-success fact for non-decode-error consumed input.
 3. State the corresponding local theorem for `next_local_action` and
    `process_local_event`, with explicit assumptions for certificate validation,
-   peer signature verification, and local application requests.
+   peer signature verification, and local application requests. The current
+   `next_local_action_sound` predicate already proves empty-input admissibility
+   for ready non-external local actions.
 4. Strengthen `TLS13.ConnectionLog` / `TLS13.Spec.ConnectionState` so raw bytes,
    record parsing, decryption, transcript updates, traffic secrets, KeyUpdate
    epochs, pending buffers, and app-log projection live in one invariant.
