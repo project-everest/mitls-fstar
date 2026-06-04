@@ -288,7 +288,7 @@ fn process_network_event
           pts_to app_out app_out_bytes **
           pure (B.length network_out_bytes == SZ.v network_out_len /\
                 B.length app_out_bytes == SZ.v app_out_len /\
-                CT.legal_network_response
+                CT.network_event_step_correct
                   'st0
                   st1
                   resp
@@ -296,8 +296,7 @@ fn process_network_event
                   (Ghost.reveal 'fragment_bytes)
                   (Ghost.reveal 'raw_bytes)
                   network_out_bytes
-                  app_out_bytes /\
-                CT.some_legal_response 'st0 st1 resp network_out_bytes app_out_bytes)
+                  app_out_bytes)
 
 fn process_tls_record
   (c:client)
@@ -323,25 +322,15 @@ fn process_tls_record
           pts_to app_out app_out_bytes **
           pure (B.length network_out_bytes == SZ.v network_out_len /\
                 B.length app_out_bytes == SZ.v app_out_len /\
-                ((resp.CT.status == CT.NeedMoreInput /\
-                  resp.CT.network_out_len == 0sz /\
-                  resp.CT.app_out_len == 0sz /\
-                  st1 == 'st0 /\
-                  Seq.equal network_out_bytes 'old_network_out /\
-                  Seq.equal app_out_bytes 'old_app_out) \/
-                 CT.some_legal_response
-                   'st0
-                   st1
-                   resp
-                   network_out_bytes
-                   app_out_bytes /\
-                 CT.some_legal_response_for_network_input
-                   'st0
-                   st1
-                   resp
-                   (Ghost.reveal 'raw_bytes)
-                   network_out_bytes
-                   app_out_bytes))
+                CT.tls_record_step_correct
+                  'st0
+                  st1
+                  resp
+                  (Ghost.reveal 'raw_bytes)
+                  'old_network_out
+                  network_out_bytes
+                  'old_app_out
+                  app_out_bytes)
 
 fn process_network_bytes
   (c:client)
@@ -367,29 +356,15 @@ fn process_network_bytes
           pts_to app_out app_out_bytes **
           pure (B.length network_out_bytes == SZ.v network_out_len /\
                 B.length app_out_bytes == SZ.v app_out_len /\
-                (let resp = buffer_resp.CT.response in
-                 ((resp.CT.status == CT.NeedMoreInput /\
-                   buffer_resp.CT.consumed_len == 0sz /\
-                   resp.CT.network_out_len == 0sz /\
-                   resp.CT.app_out_len == 0sz /\
-                   st1 == 'st0 /\
-                   Seq.equal network_out_bytes 'old_network_out /\
-                   Seq.equal app_out_bytes 'old_app_out) \/
-                  (SZ.v buffer_resp.CT.consumed_len <= B.length (Ghost.reveal 'raw_bytes) /\
-                   CT.some_legal_response
-                     'st0
-                     st1
-                     resp
-                     network_out_bytes
-                     app_out_bytes /\
-                   CT.some_legal_response_for_network_prefix
-                     'st0
-                     st1
-                     resp
-                     (Ghost.reveal 'raw_bytes)
-                     buffer_resp.CT.consumed_len
-                     network_out_bytes
-                     app_out_bytes))))
+                CT.network_bytes_step_correct
+                  'st0
+                  st1
+                  buffer_resp
+                  (Ghost.reveal 'raw_bytes)
+                  'old_network_out
+                  network_out_bytes
+                  'old_app_out
+                  app_out_bytes)
 
 fn process_local_event
   (c:client)
@@ -419,8 +394,7 @@ fn process_local_event
           pts_to app_out app_out_bytes **
           pure (B.length network_out_bytes == SZ.v network_out_len /\
                 B.length app_out_bytes == SZ.v app_out_len /\
-                CT.some_legal_response 'st0 st1 resp network_out_bytes app_out_bytes /\
-                CT.legal_handled_local_response
+                CT.local_event_step_correct
                   'st0
                   st1
                   resp

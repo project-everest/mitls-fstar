@@ -557,6 +557,93 @@ let legal_network_response
     network_out
     app_out
 
+let response_stuttered
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (resp:client_response)
+  (old_network_out:B.bytes)
+  (network_out:B.bytes)
+  (old_app_out:B.bytes)
+  (app_out:B.bytes)
+  : prop =
+  resp.status == NeedMoreInput /\
+  resp.network_out_len == 0sz /\
+  resp.app_out_len == 0sz /\
+  st1 == st0 /\
+  Seq.equal network_out old_network_out /\
+  Seq.equal app_out old_app_out
+
+let network_event_step_correct
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (resp:client_response)
+  (content_type:U8.t)
+  (fragment:B.bytes)
+  (raw_received:B.bytes)
+  (network_out:B.bytes)
+  (app_out:B.bytes)
+  : prop =
+  legal_network_response
+    st0
+    st1
+    resp
+    content_type
+    fragment
+    raw_received
+    network_out
+    app_out /\
+  some_legal_response st0 st1 resp network_out app_out
+
+let tls_record_step_correct
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (resp:client_response)
+  (network_input:B.bytes)
+  (old_network_out:B.bytes)
+  (network_out:B.bytes)
+  (old_app_out:B.bytes)
+  (app_out:B.bytes)
+  : prop =
+  response_stuttered st0 st1 resp old_network_out network_out old_app_out app_out \/
+  (some_legal_response st0 st1 resp network_out app_out /\
+   some_legal_response_for_network_input st0 st1 resp network_input network_out app_out)
+
+let network_bytes_step_correct
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (buffer_resp:client_buffer_response)
+  (network_input:B.bytes)
+  (old_network_out:B.bytes)
+  (network_out:B.bytes)
+  (old_app_out:B.bytes)
+  (app_out:B.bytes)
+  : prop =
+  let resp = buffer_resp.response in
+  (buffer_resp.consumed_len == 0sz /\
+   response_stuttered st0 st1 resp old_network_out network_out old_app_out app_out) \/
+  (SZ.v buffer_resp.consumed_len <= B.length network_input /\
+   some_legal_response st0 st1 resp network_out app_out /\
+   some_legal_response_for_network_prefix
+    st0
+    st1
+    resp
+    network_input
+    buffer_resp.consumed_len
+    network_out
+    app_out)
+
+let local_event_step_correct
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (resp:client_response)
+  (kind:local_event_kind)
+  (payload:B.bytes)
+  (network_out:B.bytes)
+  (app_out:B.bytes)
+  : prop =
+  some_legal_response st0 st1 resp network_out app_out /\
+  legal_handled_local_response st0 st1 resp kind payload network_out app_out
+
 let lemma_legal_network_response_decode_error
   (st0:CS.connection_state)
   (st1:CS.connection_state)

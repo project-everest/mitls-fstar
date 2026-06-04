@@ -72,8 +72,12 @@ The public client API is buffer/event oriented:
   `app_out` prefix is exactly
   `CL.concat_bytes (CS.conn_event_app_received_delta ev)`, and local
   send-application-data responses tie their payload to
-  `CL.concat_bytes (CS.conn_event_app_sent_delta ev)`. This is substantial
-  progress, but it is not yet the final end-to-end correctness theorem.
+  `CL.concat_bytes (CS.conn_event_app_sent_delta ev)`. The public
+  `TLS13.Impl.Client` postconditions use named theorem-surface predicates:
+  `network_event_step_correct`, `tls_record_step_correct`,
+  `network_bytes_step_correct`, and `local_event_step_correct`. This is
+  substantial progress, but it is not yet the final end-to-end correctness
+  theorem.
 - `TLS13.Impl.ConnectionState` has been split by responsibility: `Repr` owns the
   concrete representation and exact predicates, `Queries` owns read-only checks
   and copyouts, `Model`/`Bounds`/`Tags` own pure/proof helpers, and the mutation
