@@ -128,8 +128,9 @@ The public client API is buffer/event oriented:
   preserved `connection_state_layered_log_consistent` invariant that packages
   event-log replay from the initial config, transcript projection from serialized
   handshake events, and app-log projection from `cs_event_log`; the client
-  theorem surface exposes preservation lemmas for `legal_response_for_event`.
-  The public
+  theorem surface exposes preservation lemmas for `legal_response_for_event`,
+  `some_legal_response`, `network_bytes_step_correct`, and
+  `local_event_step_correct`. The public
   `TLS13.Impl.Client` postconditions use named theorem-surface predicates
   `network_bytes_step_correct` and `local_event_step_correct`; lower-level
   record/event predicates remain internal proof vocabulary. The streaming
@@ -234,8 +235,8 @@ Other trusted runtime boundaries remain:
    spec now has admit-free one-record, non-empty-prefix, head/tail,
    parser-fuel-saturation, recursive segmentation, event-log replay,
    transcript-projection, and app-log-consistency preservation lemmas, with
-   legal-delta/client-response projections, plus a parser-success-to-raw-log
-   inverse bridge. The client surface now also exposes
+   legal-delta/client-response/public-step projections, plus a
+   parser-success-to-raw-log inverse bridge. The client surface now also exposes
    `network_input_message_projection`, derived from `network_input_wf`, so next
    raw-log work should build on those decoded-message projection facts to connect
    key schedule, KeyUpdate epochs, pending buffers, decryption facts, and
