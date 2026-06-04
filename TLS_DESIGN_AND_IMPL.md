@@ -41,8 +41,6 @@ The public client API is buffer/event oriented:
   CertificateVerify, Finished, application send, close, or KeyUpdate local work
   is ready;
 - `process_network_bytes` is the normal network-input entry point;
-- `process_tls_record` and `process_network_event` are lower-level helpers that
-  may remain public only if they are useful as testing/theorem sub-surfaces;
 - `process_local_event` realizes driver-provided local actions;
 - copyout hooks expose auditable driver inputs such as certificate leaf DER and
   CertificateVerify bytes/signature.
@@ -91,14 +89,14 @@ The public client API is buffer/event oriented:
   `CL.concat_bytes (CS.conn_event_app_received_delta ev)`, and local
   send-application-data responses tie their payload to
   `CL.concat_bytes (CS.conn_event_app_sent_delta ev)`. The public
-  `TLS13.Impl.Client` postconditions use named theorem-surface predicates:
-  `network_event_step_correct`, `tls_record_step_correct`,
-  `network_bytes_step_correct`, and `local_event_step_correct`. The
-  record and streaming network predicates expose public `parse_record` success
-  facts for non-decode-error consumed raw records, and the
-  `process_network_bytes` theorem shape names the exact consumed input prefix
-  instead of hiding it behind an existential. This is substantial progress, but
-  it is not yet the final end-to-end correctness theorem.
+  `TLS13.Impl.Client` postconditions use named theorem-surface predicates
+  `network_bytes_step_correct` and `local_event_step_correct`; lower-level
+  record/event predicates remain internal proof vocabulary. The streaming
+  network predicate exposes public `parse_record` success facts for
+  non-decode-error consumed raw records, and the `process_network_bytes` theorem
+  shape names the exact consumed input prefix instead of hiding it behind an
+  existential. This is substantial progress, but it is not yet the final
+  end-to-end correctness theorem.
 - `TLS13.Impl.ConnectionState` has been split by responsibility: `Repr` owns the
   concrete representation and exact predicates, `Queries` owns read-only checks
   and copyouts, `Model`/`Bounds`/`Tags` own pure/proof helpers, and the mutation
@@ -116,9 +114,13 @@ modules. Their extracted calls are satisfied by macros/static helpers in
 The active network input path is:
 
 1. `process_network_bytes` calls `TLS13_Impl_Parser_decode_network_buffer`;
-2. `process_tls_record` calls `TLS13_Impl_Parser_decode_network_record`;
-3. those C helpers parse TLS record headers inline and then dispatch through
+2. that C helper parses TLS record headers inline and then dispatches through
    `TLS13_Impl_Parser_parse_tls_message`.
+
+`TLS13_Impl_Parser_decode_network_record` remains part of the parser TCB surface
+for internal/expert use, but `process_tls_record` and `process_network_event`
+are no longer exported by `TLS13.Impl.Client.fsti`; the driver-facing network API
+is `process_network_bytes`.
 
 No active C shim should forward to old framing modules or undefined generated
 symbols. New parser/serializer hooks should be added directly to
