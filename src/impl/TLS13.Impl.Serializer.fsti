@@ -245,6 +245,11 @@ fn serialize_client_hello_from_start
                Seq.equal
                  (CL.raw_slice network_out_bytes 0 (SZ.v written))
                  (CS.serialized_cleartext_tls_message (M.TlsHandshake (M.ClientHello (Ghost.reveal ch)))) /\
+               WS.parse_record (CL.raw_slice network_out_bytes 0 (SZ.v written)) ==
+                 Some
+                   (T.Handshake,
+                    WS.serialize_handshake (M.ClientHello (Ghost.reveal ch)),
+                    SZ.v written) /\
                CS.raw_records_exactly
                  (CL.raw_slice network_out_bytes 0 (SZ.v written))
                  T.Handshake
