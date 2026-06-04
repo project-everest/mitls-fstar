@@ -2251,6 +2251,90 @@ let rec connection_log_trace_of_conn_events (events:list conn_event)
      | Some host_ev -> host_ev :: connection_log_trace_of_conn_events rest
      | None -> connection_log_trace_of_conn_events rest)
 
+let rec lemma_connection_log_trace_sent_tls
+  (events:list conn_event)
+  : Lemma
+      (ensures
+        CL.sent_tls_of_host_trace (connection_log_trace_of_conn_events events) ==
+          sent_tls_messages events)
+      (decreases events)
+=
+  match events with
+  | [] -> ()
+  | ev :: rest ->
+    lemma_connection_log_trace_sent_tls rest;
+    match ev with
+    | ConnNetworkEvent _ -> ()
+    | ConnLocalEvent local ->
+      (match local with
+       | LocalValidateCertificate _
+       | LocalDeliverApplicationData _
+       | LocalFail _ -> ()
+       | _ -> ())
+
+let rec lemma_connection_log_trace_received_tls
+  (events:list conn_event)
+  : Lemma
+      (ensures
+        CL.received_tls_of_host_trace (connection_log_trace_of_conn_events events) ==
+          received_tls_messages events)
+      (decreases events)
+=
+  match events with
+  | [] -> ()
+  | ev :: rest ->
+    lemma_connection_log_trace_received_tls rest;
+    match ev with
+    | ConnNetworkEvent _ -> ()
+    | ConnLocalEvent local ->
+      (match local with
+       | LocalValidateCertificate _
+       | LocalDeliverApplicationData _
+       | LocalFail _ -> ()
+       | _ -> ())
+
+let rec lemma_connection_log_trace_app_sent
+  (events:list conn_event)
+  : Lemma
+      (ensures
+        CL.app_sent_of_host_trace (connection_log_trace_of_conn_events events) ==
+          app_sent_messages events)
+      (decreases events)
+=
+  match events with
+  | [] -> ()
+  | ev :: rest ->
+    lemma_connection_log_trace_app_sent rest;
+    match ev with
+    | ConnNetworkEvent _ -> ()
+    | ConnLocalEvent local ->
+      (match local with
+       | LocalValidateCertificate _
+       | LocalDeliverApplicationData _
+       | LocalFail _ -> ()
+       | _ -> ())
+
+let rec lemma_connection_log_trace_app_received
+  (events:list conn_event)
+  : Lemma
+      (ensures
+        CL.app_received_of_host_trace (connection_log_trace_of_conn_events events) ==
+          app_received_messages events)
+      (decreases events)
+=
+  match events with
+  | [] -> ()
+  | ev :: rest ->
+    lemma_connection_log_trace_app_received rest;
+    match ev with
+    | ConnNetworkEvent _ -> ()
+    | ConnLocalEvent local ->
+      (match local with
+       | LocalValidateCertificate _
+       | LocalDeliverApplicationData _
+       | LocalFail _ -> ()
+       | _ -> ())
+
 let phase_of_handshake_stage (stage:handshake_stage) : S.phase =
   match stage with
   | HsNotStarted -> S.Start
@@ -2308,6 +2392,49 @@ let connection_log_view_of_state (st:connection_state) : GTot CL.connection_view
     CL.pending_app_offset = app.app_pending_source_offset;
     CL.pending_received_raw = app.app_pending_received_raw;
   }
+
+let connection_state_connection_log_view_consistent
+  (st:connection_state)
+  : prop =
+  let view = connection_log_view_of_state st in
+  CL.connection_view_raw_stream_shaped view /\
+  CL.connection_view_record_stream_shaped view /\
+  view.CL.sent_tls.CL.values == CL.sent_tls_of_host_trace view.CL.host_trace /\
+  view.CL.received_tls.CL.values == CL.received_tls_of_host_trace view.CL.host_trace /\
+  CL.app_log_of_host_trace view.CL.host_trace == view.CL.app_view /\
+  CL.pending_app_source_consistent view
+
+let lemma_connection_state_connection_log_view_consistent
+  (st:connection_state)
+  : Lemma
+      (requires
+        connection_state_app_log_consistent st /\
+        connection_state_pending_application_consistent st)
+      (ensures connection_state_connection_log_view_consistent st)
+=
+  let view = connection_log_view_of_state st in
+  CL.lemma_raw_stream_view_shape
+    #M.tls_message
+    st.cs_wire_log.CL.raw_sent
+    (sent_tls_messages st.cs_event_log);
+  CL.lemma_raw_stream_view_shape
+    #M.tls_message
+    st.cs_wire_log.CL.raw_received
+    (received_tls_messages st.cs_event_log);
+  CL.lemma_parse_record_prefix_serializes st.cs_wire_log.CL.raw_sent;
+  CL.lemma_parse_record_prefix_serializes st.cs_wire_log.CL.raw_received;
+  lemma_connection_log_trace_sent_tls st.cs_event_log;
+  lemma_connection_log_trace_received_tls st.cs_event_log;
+  lemma_connection_log_trace_app_sent st.cs_event_log;
+  lemma_connection_log_trace_app_received st.cs_event_log;
+  assert (view.CL.sent_tls.CL.values == sent_tls_messages st.cs_event_log);
+  assert (view.CL.received_tls.CL.values == received_tls_messages st.cs_event_log);
+  assert (CL.app_log_of_host_trace view.CL.host_trace == {
+    CL.app_sent = app_sent_messages st.cs_event_log;
+    CL.app_received = app_received_messages st.cs_event_log;
+  });
+  assert (CL.app_log_of_host_trace view.CL.host_trace == view.CL.app_view);
+  assert (CL.pending_app_source_consistent view)
 
 let rec all_records_outer_type
   (outer:T.content_type)

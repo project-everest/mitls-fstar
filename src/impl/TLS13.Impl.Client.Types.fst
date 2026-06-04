@@ -44,13 +44,15 @@ let client_state_correct
   (st:CS.connection_state)
   : prop =
   CS.connection_state_consistent st /\
-  CS.connection_state_layered_log_consistent st
+  CS.connection_state_layered_log_consistent st /\
+  CS.connection_state_connection_log_view_consistent st
 
 let lemma_initial_client_state_correct
   (cfg:CS.connection_config)
   : Lemma (client_state_correct (CS.initial cfg))
 =
   CS.lemma_initial_layered_log_consistent cfg;
+  CS.lemma_connection_state_connection_log_view_consistent (CS.initial cfg);
   assert (CS.connection_state_evolves (CS.initial cfg) (CS.initial cfg))
 
 let tls_decode_error : T.tls_error = T.AlertError T.DecodeError
@@ -395,7 +397,8 @@ let lemma_legal_response_for_event_client_state_correct
     raw_sent
     raw_received
     network_out
-    app_out
+    app_out;
+  CS.lemma_connection_state_connection_log_view_consistent st1
 
 let lemma_legal_response_for_event_protected_single_parse_record
   (st0:CS.connection_state)
