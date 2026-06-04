@@ -229,7 +229,10 @@ fn parse_tls_record
 (**
   Extraction-facing record decoder used by the public client driver API.
   On success it returns an owned exact-length fragment vector plus the same
-  parser and raw-delta facts required by the existing message dispatcher.
+  parser and raw-delta facts required by the existing message dispatcher.  The
+  input bytes are also required to parse as exactly one TLS outer record; the
+  dispatcher fragment may be decrypted inner plaintext rather than the outer
+  record fragment.
 **)
 fn decode_network_record
   (c:CR.connection_state)
@@ -278,6 +281,9 @@ fn decode_network_record
                   SZ.v decoded.L.decoded_record_fragment_len /\
                 B.length fragment_bytes ==
                   SZ.v decoded.L.decoded_record_fragment_len /\
+                (exists outer_ct outer_fragment.
+                   WS.parse_record (Ghost.reveal 'raw_bytes) ==
+                     Some (outer_ct, outer_fragment, B.length (Ghost.reveal 'raw_bytes))) /\
                 CT.network_input_wf
                   'st0
                   decoded.L.decoded_record_content_type
@@ -289,6 +295,9 @@ fn decode_network_record
   exactly the first complete TLS record in the input buffer, returning owned
   copies of both that raw record prefix and its decoded dispatcher fragment.
   The caller remains responsible for retaining any bytes after consumed_len.
+  The raw prefix is required to parse as exactly one TLS outer record; the
+  dispatcher fragment may be decrypted inner plaintext rather than the outer
+  record fragment.
 **)
 fn decode_network_buffer
   (c:CR.connection_state)
@@ -348,6 +357,9 @@ fn decode_network_buffer
                    (Ghost.reveal 'raw_bytes)
                    0
                    (SZ.v decoded.L.decoded_buffer_consumed_len)) /\
+                (exists outer_ct outer_fragment.
+                   WS.parse_record raw_record_bytes ==
+                     Some (outer_ct, outer_fragment, B.length raw_record_bytes)) /\
                 V.is_full_vec decoded.L.decoded_buffer_fragment /\
                 V.length decoded.L.decoded_buffer_fragment ==
                   SZ.v decoded.L.decoded_buffer_fragment_len /\

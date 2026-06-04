@@ -62,7 +62,10 @@ The public client API is buffer/event oriented:
   `TLS13.Impl.Parser` TCB surface and C backend. The active network path uses
   `TLS13_Impl_Parser_decode_network_buffer` and
   `TLS13_Impl_Parser_decode_network_record`, both implemented in
-  `c_stubs/tls13_connection_backend.h`.
+  `c_stubs/tls13_connection_backend.h`. Their success contracts now include
+  `TLS13.Wire.Spec.parse_record` facts for the raw outer record bytes; the
+  dispatcher fragment may still be decrypted inner plaintext rather than the
+  outer record fragment.
 - There are no explicit `admit()` or `assume_` sites under `src/` or
   `calc_sample/`.
 - The strongest current proof surface is per-step preservation of
