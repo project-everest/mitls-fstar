@@ -201,6 +201,54 @@ let legal_response_for_event
   response_app_out_matches_event resp ev app_out /\
   legal_delta st0 st1 ev raw_sent raw_received
 
+let lemma_legal_response_for_event_app_log_delta
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (resp:client_response)
+  (ev:CS.conn_event)
+  (raw_sent:B.bytes)
+  (raw_received:B.bytes)
+  (network_out:B.bytes)
+  (app_out:B.bytes)
+  : Lemma
+      (requires legal_response_for_event
+        st0 st1 resp ev raw_sent raw_received network_out app_out)
+      (ensures CS.model_app_log_delta st0.CS.cs_model ev st1.CS.cs_model)
+=
+  CS.lemma_legal_connection_delta_app_log_delta
+    st0
+    {
+      CS.delta_event = ev;
+      CS.delta_raw_sent = raw_sent;
+      CS.delta_raw_received = raw_received;
+    }
+    st1
+
+let lemma_legal_response_for_event_app_log_consistent
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (resp:client_response)
+  (ev:CS.conn_event)
+  (raw_sent:B.bytes)
+  (raw_received:B.bytes)
+  (network_out:B.bytes)
+  (app_out:B.bytes)
+  : Lemma
+      (requires
+        legal_response_for_event
+          st0 st1 resp ev raw_sent raw_received network_out app_out /\
+        CS.connection_state_app_log_consistent st0)
+      (ensures CS.connection_state_app_log_consistent st1)
+=
+  CS.lemma_legal_connection_delta_app_log_consistent
+    st0
+    {
+      CS.delta_event = ev;
+      CS.delta_raw_sent = raw_sent;
+      CS.delta_raw_received = raw_received;
+    }
+    st1
+
 let lemma_legal_response_for_event_protected_single_parse_record
   (st0:CS.connection_state)
   (st1:CS.connection_state)

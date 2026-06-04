@@ -1011,6 +1011,98 @@ let app_log_of_conn_events (events:list conn_event) : GTot CL.app_log = {
   CL.app_received = app_received_messages events;
 }
 
+let connection_state_app_log_consistent
+  (st:connection_state)
+  : prop =
+  st.cs_model.model_application.app_log.CL.app_sent ==
+    (app_log_of_conn_events st.cs_event_log).CL.app_sent /\
+  st.cs_model.model_application.app_log.CL.app_received ==
+    (app_log_of_conn_events st.cs_event_log).CL.app_received
+
+let lemma_initial_app_log_consistent
+  (cfg:connection_config)
+  : Lemma (connection_state_app_log_consistent (initial cfg))
+=
+  ()
+
+let rec lemma_app_sent_messages_snoc
+  (events:list conn_event)
+  (ev:conn_event)
+  : Lemma
+      (ensures
+        app_sent_messages (events @ [ev]) ==
+          app_sent_messages events @ conn_event_app_sent_delta ev)
+      (decreases events)
+=
+  match events with
+  | [] -> ()
+  | hd :: tl ->
+    lemma_app_sent_messages_snoc tl ev;
+    append_assoc
+      (conn_event_app_sent_delta hd)
+      (app_sent_messages tl)
+      (conn_event_app_sent_delta ev)
+
+let rec lemma_app_received_messages_snoc
+  (events:list conn_event)
+  (ev:conn_event)
+  : Lemma
+      (ensures
+        app_received_messages (events @ [ev]) ==
+          app_received_messages events @ conn_event_app_received_delta ev)
+      (decreases events)
+=
+  match events with
+  | [] -> ()
+  | hd :: tl ->
+    lemma_app_received_messages_snoc tl ev;
+    append_assoc
+      (conn_event_app_received_delta hd)
+      (app_received_messages tl)
+      (conn_event_app_received_delta ev)
+
+let model_app_log_delta
+  (model0:connection_model)
+  (ev:conn_event)
+  (model1:connection_model)
+  : prop =
+  model1.model_application.app_log.CL.app_sent ==
+    model0.model_application.app_log.CL.app_sent @ conn_event_app_sent_delta ev /\
+  model1.model_application.app_log.CL.app_received ==
+    model0.model_application.app_log.CL.app_received @ conn_event_app_received_delta ev
+
+let lemma_step_model_app_log_delta
+  (model0:connection_model)
+  (ev:conn_event)
+  (model1:connection_model)
+  : Lemma
+      (requires step_model model0 ev == Some model1)
+      (ensures model_app_log_delta model0 ev model1)
+=
+  let app = model0.model_application.app_log in
+  match ev with
+  | ConnLocalEvent local ->
+    (match local with
+     | LocalDeliverApplicationData bytes ->
+       (match model0.model_control with
+        | ControlApplicationData -> ()
+        | _ -> assert False)
+     | _ ->
+       append_l_nil app.CL.app_sent;
+       append_l_nil app.CL.app_received)
+  | ConnNetworkEvent msg ->
+    (match msg.CL.message_value with
+     | M.TlsApplicationData bytes ->
+       (match model0.model_control with
+        | ControlApplicationData ->
+          (match msg.CL.message_direction with
+           | CL.Sent -> append_l_nil app.CL.app_received
+           | CL.Received -> append_l_nil app.CL.app_sent)
+        | _ -> assert False)
+     | _ ->
+       append_l_nil app.CL.app_sent;
+       append_l_nil app.CL.app_received)
+
 let connection_log_event_of_conn_event (ev:conn_event) : option CL.host_event =
   match ev with
   | ConnNetworkEvent msg -> Some (CL.NetworkEvent msg)
@@ -1865,6 +1957,46 @@ let legal_connection_delta
     CL.raw_received = B.append st0.cs_wire_log.CL.raw_received delta.delta_raw_received;
   } /\
   st1.cs_event_log == st0.cs_event_log @ [delta.delta_event]
+
+let lemma_legal_connection_delta_app_log_delta
+  (st0:connection_state)
+  (delta:connection_delta)
+  (st1:connection_state)
+  : Lemma
+      (requires legal_connection_delta st0 delta st1)
+      (ensures model_app_log_delta st0.cs_model delta.delta_event st1.cs_model)
+=
+  lemma_step_model_app_log_delta
+    st0.cs_model
+    delta.delta_event
+    st1.cs_model
+
+let lemma_legal_connection_delta_app_log_consistent
+  (st0:connection_state)
+  (delta:connection_delta)
+  (st1:connection_state)
+  : Lemma
+      (requires
+        legal_connection_delta st0 delta st1 /\
+        connection_state_app_log_consistent st0)
+      (ensures connection_state_app_log_consistent st1)
+=
+  lemma_legal_connection_delta_app_log_delta st0 delta st1;
+  lemma_app_sent_messages_snoc st0.cs_event_log delta.delta_event;
+  lemma_app_received_messages_snoc st0.cs_event_log delta.delta_event;
+  assert (st1.cs_event_log == st0.cs_event_log @ [delta.delta_event]);
+  assert (st1.cs_model.model_application.app_log.CL.app_sent ==
+    st0.cs_model.model_application.app_log.CL.app_sent @
+      conn_event_app_sent_delta delta.delta_event);
+  assert (st1.cs_model.model_application.app_log.CL.app_received ==
+    st0.cs_model.model_application.app_log.CL.app_received @
+      conn_event_app_received_delta delta.delta_event);
+  assert (app_sent_messages st1.cs_event_log ==
+    app_sent_messages st0.cs_event_log @
+      conn_event_app_sent_delta delta.delta_event);
+  assert (app_received_messages st1.cs_event_log ==
+    app_received_messages st0.cs_event_log @
+      conn_event_app_received_delta delta.delta_event)
 
 let lemma_legal_connection_delta_protected_single_parse_record
   (st0:connection_state)
