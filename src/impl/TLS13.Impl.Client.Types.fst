@@ -143,9 +143,14 @@ let response_app_out_matches_event
     (match msg.CL.message_direction, msg.CL.message_value with
      | CL.Received, M.TlsApplicationData bytes ->
        Seq.equal (response_app_out resp app_out) bytes
-     | _, _ -> True)
-  | CS.ConnLocalEvent _ ->
-    True
+     | _, _ ->
+       Seq.equal (response_app_out resp app_out) B.empty)
+  | CS.ConnLocalEvent local ->
+    (match local with
+     | CS.LocalDeliverApplicationData bytes ->
+       Seq.equal (response_app_out resp app_out) bytes
+     | _ ->
+       Seq.equal (response_app_out resp app_out) B.empty)
 
 let legal_delta
   (st0:CS.connection_state)
