@@ -66,6 +66,11 @@ The public client API is buffer/event oriented:
   `TLS13.Wire.Spec.parse_record` facts for the raw outer record bytes; the
   dispatcher fragment may still be decrypted inner plaintext rather than the
   outer record fragment.
+- The active serializer TCB surface no longer includes stale unused ClientHello
+  record-header/localhost fixed-builder declarations. Live fixed helpers now
+  expose concrete shape facts: inner plaintext encoding states the copied
+  payload slice plus trailing content-type byte, and application-data header
+  serialization states the public `TLS13.Wire.Spec.parse_record_header` result.
 - There are no explicit `admit()` or `assume_` sites under `src/` or
   `calc_sample/`.
 - The strongest current proof surface is per-step preservation of
@@ -128,8 +133,10 @@ Other trusted runtime boundaries remain:
    invariant proving that consumed/emitted raw bytes parse, decrypt, and
    interpret as exactly the TLS messages/events that drive the state machine and
    app log.
-3. Parser/serializer contracts are uneven. The final TCB audit must cover every
-   supported record/message with parse/serialize facts against `TLS13.Wire.Spec`.
+3. Parser/serializer contracts still need a complete entry-by-entry audit. The
+   strongest entries already carry `M`/`L` validity and `TLS13.Wire.Spec`
+   facts, and stale unused fixed builders have been removed, but every supported
+   record/message path must be classified against the final theorem needs.
 4. Certificate and CertificateVerify copyout/local-event proofs must make the
    exact byte correspondence to parsed handshake inputs explicit.
 5. The old root `TLS13.Impl.ConnectionState.fst` facade is gone, but future
@@ -152,10 +159,11 @@ Other trusted runtime boundaries remain:
 4. Strengthen `TLS13.ConnectionLog` / `TLS13.Spec.ConnectionState` so raw bytes,
    record parsing, decryption, transcript updates, traffic secrets, KeyUpdate
    epochs, pending buffers, and app-log projection live in one invariant.
-5. Audit `TLS13.Impl.Parser.fsti` and `TLS13.Impl.Serializer.fsti` entry by
-   entry. Mark each supported message/record as strong or weak relative to the
-   required `M`/`L` + `TLS13.Wire.Spec` postconditions, then strengthen weak
-   entries or document them as narrow fixed-builder TCBs.
+5. Continue auditing `TLS13.Impl.Parser.fsti` and
+   `TLS13.Impl.Serializer.fsti` entry by entry. Mark each supported
+   message/record as strong or weak relative to the required `M`/`L` +
+   `TLS13.Wire.Spec` postconditions, then strengthen weak entries or document
+   them as narrow fixed-builder TCBs.
 6. Make the certificate and CertificateVerify boundary auditable by proving that
    driver-visible copyout bytes are exactly the certificate leaf DER,
    CertificateVerify input, and signature bytes from the parsed handshake.

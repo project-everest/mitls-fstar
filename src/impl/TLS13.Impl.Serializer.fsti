@@ -54,35 +54,6 @@ fn build_server_certificate_verify_input
                   (Ghost.reveal out_bytes)
                   (WS.serialize_server_certificate_verify_input (Ghost.reveal 'hash_bytes)))
 
-fn serialize_client_hello_record_header
-  (out: array U8.t)
-  (out_len: SZ.t)
-  requires pts_to out 'old_bytes **
-          pure (B.length 'old_bytes == SZ.v out_len /\
-                SZ.v out_len == 5)
-  ensures exists* out_bytes.
-          pts_to out out_bytes **
-          pure (B.length out_bytes == 5)
-
-fn build_supported_client_hello_localhost
-  (random: array U8.t)
-  (key_share: array U8.t)
-  (out: array U8.t)
-  (out_len: SZ.t)
-  requires pts_to random 'random_bytes **
-          pts_to key_share 'key_share_bytes **
-          pts_to out 'old_bytes **
-          pure (B.length 'random_bytes == 32 /\
-                B.length 'key_share_bytes == 32 /\
-                B.length 'old_bytes == SZ.v out_len)
-  returns ok: bool
-  ensures exists* out_bytes.
-          pts_to random 'random_bytes **
-          pts_to key_share 'key_share_bytes **
-          pts_to out out_bytes **
-          pure (B.length out_bytes == SZ.v out_len /\
-               (ok ==> SZ.v out_len >= 130))
-
 fn serialize_client_hello_from_start
   (#start: erased CS.handshake_start)
   (#ch: erased M.client_hello)
@@ -291,12 +262,31 @@ fn encode_inner_plaintext_no_padding_slice
            pts_to out 'old_bytes **
            pure (B.length 'plain_bytes == SZ.v plain_total_len /\
                  B.length 'old_bytes == SZ.v out_len /\
+                 0 <= SZ.v plain_offset /\
+                 0 <= SZ.v plain_len /\
                  SZ.v out_len == SZ.v plain_len + 1 /\
                  SZ.v plain_offset + SZ.v plain_len <= SZ.v plain_total_len)
   ensures exists* out_bytes.
           pts_to plain 'plain_bytes **
           pts_to out out_bytes **
-          pure (B.length out_bytes == SZ.v out_len)
+          pure (B.length out_bytes == SZ.v out_len /\
+               0 <= SZ.v plain_offset /\
+               0 <= SZ.v plain_len /\
+               SZ.v plain_len <= Seq.length (Ghost.reveal out_bytes) /\
+               SZ.v plain_offset <= SZ.v plain_offset + SZ.v plain_len /\
+               SZ.v plain_offset + SZ.v plain_len <= Seq.length (Ghost.reveal 'plain_bytes) /\
+               Seq.equal
+                 (Seq.slice (Ghost.reveal out_bytes) 0 (SZ.v plain_len))
+                 (Seq.slice
+                    (Ghost.reveal 'plain_bytes)
+                    (SZ.v plain_offset)
+                    (SZ.v plain_offset + SZ.v plain_len)) /\
+                Seq.equal
+                  (Seq.slice
+                    (Ghost.reveal out_bytes)
+                    (SZ.v plain_len)
+                    (Seq.length (Ghost.reveal out_bytes)))
+                  (B.singleton content_type))
 
 fn serialize_application_data_header
   (fragment_len: SZ.t)
@@ -308,7 +298,9 @@ fn serialize_application_data_header
                  SZ.v fragment_len <= 16640)
   ensures exists* header_bytes.
           pts_to out header_bytes **
-          pure (B.length header_bytes == 5)
+          pure (B.length header_bytes == 5 /\
+                WS.parse_record_header (Ghost.reveal header_bytes) ==
+                  Some (T.ApplicationData, SZ.v fragment_len))
 
 fn serialize_raw_application_data_record
   (fragment: array U8.t)
