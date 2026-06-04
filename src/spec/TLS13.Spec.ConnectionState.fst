@@ -1254,6 +1254,21 @@ let network_message_raw_delta_legal
       T.ApplicationData
       (protected_record_count msg.CL.message_direction msg.CL.message_value)
 
+let lemma_network_message_raw_delta_legal_protected_single_parse_record
+  (model:connection_model)
+  (msg:directed_message M.tls_message)
+  (raw:B.bytes)
+  : Lemma
+      (requires
+        network_message_raw_delta_legal model msg raw /\
+        network_message_is_cleartext msg.CL.message_direction msg.CL.message_value == false /\
+        protected_record_count msg.CL.message_direction msg.CL.message_value == 1)
+      (ensures exists fragment.
+        W.parse_record raw == Some (T.ApplicationData, fragment, B.length raw))
+=
+  assert (raw_records_exactly raw T.ApplicationData 1);
+  lemma_raw_records_exactly_one_parse_record raw T.ApplicationData
+
 let event_raw_delta_legal
   (model:connection_model)
   (ev:conn_event)
@@ -1272,6 +1287,52 @@ let event_raw_delta_legal
      | CL.Received ->
        Seq.equal raw_sent B.empty /\
        network_message_raw_delta_legal model msg raw_received)
+
+let event_protected_single_raw_parse_success
+  (ev:conn_event)
+  (raw_sent:B.bytes)
+  (raw_received:B.bytes)
+  : GTot prop =
+  match ev with
+  | ConnNetworkEvent msg ->
+    if network_message_is_cleartext msg.CL.message_direction msg.CL.message_value
+    then True
+    else if protected_record_count msg.CL.message_direction msg.CL.message_value == 1
+    then
+      match msg.CL.message_direction with
+      | CL.Sent ->
+        exists fragment.
+          W.parse_record raw_sent ==
+            Some (T.ApplicationData, fragment, B.length raw_sent)
+      | CL.Received ->
+        exists fragment.
+          W.parse_record raw_received ==
+            Some (T.ApplicationData, fragment, B.length raw_received)
+    else True
+  | _ -> True
+
+let lemma_event_raw_delta_legal_protected_single_parse_record
+  (model:connection_model)
+  (ev:conn_event)
+  (raw_sent:B.bytes)
+  (raw_received:B.bytes)
+  : Lemma
+      (requires event_raw_delta_legal model ev raw_sent raw_received)
+      (ensures event_protected_single_raw_parse_success ev raw_sent raw_received)
+=
+  match ev with
+  | ConnLocalEvent _ -> ()
+  | ConnNetworkEvent msg ->
+    if network_message_is_cleartext msg.CL.message_direction msg.CL.message_value
+    then ()
+    else if protected_record_count msg.CL.message_direction msg.CL.message_value == 1
+    then
+      match msg.CL.message_direction with
+      | CL.Sent ->
+        lemma_network_message_raw_delta_legal_protected_single_parse_record model msg raw_sent
+      | CL.Received ->
+        lemma_network_message_raw_delta_legal_protected_single_parse_record model msg raw_received
+    else ()
 
 type connection_delta = {
   delta_event: conn_event;
@@ -1296,6 +1357,23 @@ let legal_connection_delta
     CL.raw_received = B.append st0.cs_wire_log.CL.raw_received delta.delta_raw_received;
   } /\
   st1.cs_event_log == st0.cs_event_log @ [delta.delta_event]
+
+let lemma_legal_connection_delta_protected_single_parse_record
+  (st0:connection_state)
+  (delta:connection_delta)
+  (st1:connection_state)
+  : Lemma
+      (requires legal_connection_delta st0 delta st1)
+      (ensures event_protected_single_raw_parse_success
+        delta.delta_event
+        delta.delta_raw_sent
+        delta.delta_raw_received)
+=
+  lemma_event_raw_delta_legal_protected_single_parse_record
+    st0.cs_model
+    delta.delta_event
+    delta.delta_raw_sent
+    delta.delta_raw_received
 
 let connection_state_single_step : RTC.binrel connection_state =
   fun st0 st1 -> exists delta. legal_connection_delta st0 delta st1

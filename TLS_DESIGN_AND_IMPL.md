@@ -87,6 +87,8 @@ The public client API is buffer/event oriented:
   `lemma_raw_records_exactly_one_parse_record` turns
   `raw_records_exactly raw outer 1` into an exact
   `TLS13.Wire.Spec.parse_record raw == Some (outer, fragment, length raw)` fact.
+  The bridge is also packaged through protected single-record message/event
+  deltas and through the client-side `legal_response_for_event` projection.
 - The public `process_local_event` input predicate now makes the external
   certificate/signature TCB assumptions explicit: `LocalValidateCertificate`
   assumes `TLS13.X509.Spec.validate_chain` returns the peer identity being
@@ -167,7 +169,8 @@ Other trusted runtime boundaries remain:
    interpret as exactly the TLS messages/events that drive the state machine and
    app log. The one-record raw parse bridge is now available, but multi-record
    application-data, decryption, transcript, key-schedule, and app-projection
-   facts still need to be connected in that invariant.
+   facts still need to be connected in that invariant. Legal deltas and client
+   legal responses can now project protected single-record raw parse facts.
 3. Parser/serializer contracts still need a complete entry-by-entry audit. The
    strongest entries already carry `M`/`L` validity and `TLS13.Wire.Spec`
    facts, and stale unused fixed builders have been removed, but every supported
@@ -202,8 +205,9 @@ Other trusted runtime boundaries remain:
    record parsing, decryption, transcript updates, traffic secrets, KeyUpdate
    epochs, pending buffers, and app-log projection live in one invariant. The
    spec now has an admit-free one-record `raw_records_exactly`-to-`parse_record`
-   lemma; next raw-log work should build on that for multi-record protected app
-   data and message/decryption projection.
+   lemma plus legal-delta/client-response projection lemmas; next raw-log work
+   should build on those for multi-record protected app data and
+   message/decryption projection.
 5. Continue auditing `TLS13.Impl.Parser.fsti` and
    `TLS13.Impl.Serializer.fsti` entry by entry. Mark each supported
    message/record as strong or weak relative to the required `M`/`L` +
