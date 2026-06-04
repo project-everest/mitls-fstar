@@ -3371,3 +3371,21 @@ let connection_state_evolves : RTC.preorder connection_state =
 
 let connection_state_consistent (st:connection_state) : GTot prop =
   connection_state_evolves (initial st.cs_model.model_config) st
+
+let lemma_legal_connection_delta_consistent
+  (st0:connection_state)
+  (delta:connection_delta)
+  (st1:connection_state)
+  : Lemma
+      (requires
+        connection_state_consistent st0 /\
+        legal_connection_delta st0 delta st1)
+      (ensures connection_state_consistent st1)
+=
+  lemma_step_model_preserves_config st0.cs_model delta.delta_event st1.cs_model;
+  assert (st1.cs_model.model_config == st0.cs_model.model_config);
+  assert (connection_state_single_step st0 st1);
+  RTC.closure_step connection_state_single_step st0 st1;
+  assert (connection_state_evolves st0 st1);
+  assert (connection_state_evolves (initial st0.cs_model.model_config) st0);
+  assert (connection_state_evolves (initial st0.cs_model.model_config) st1)

@@ -146,8 +146,14 @@ The public client API is buffer/event oriented:
   non-empty local network output. `next_local_action_sound` also proves that
   ready non-external local actions satisfy `local_input_wf` with the empty
   payload; certificate validation and CertificateVerify signature checking
-  remain explicit external TCB actions. This is substantial progress, but it is
-  not yet the final end-to-end correctness theorem.
+  remain explicit external TCB actions. `TLS13.Impl.Client.Types` now packages
+  these facts into compact step theorems: `client_state_correct` combines pure
+  reachability with the layered log invariant, and
+  `network_bytes_end_to_end_correct` / `local_event_end_to_end_correct` prove
+  that the public API step predicates preserve it. The network theorem also
+  exposes `network_consumed_raw_record_projection`: every non-empty,
+  non-decode-error consumed prefix is a single raw TLS record and has the
+  recursive raw-record segmentation fact needed by downstream raw-log proofs.
 - `TLS13.Impl.ConnectionState` has been split by responsibility: `Repr` owns the
   concrete representation and exact predicates, `Queries` owns read-only checks
   and copyouts, `Model`/`Bounds`/`Tags` own pure/proof helpers, and the mutation
@@ -191,10 +197,11 @@ Other trusted runtime boundaries remain:
 
 ## Critical gaps
 
-1. The public theorem is not yet calc_sample-shaped. Callers have strong
-   per-step specs, but not one small top-level theorem saying the extracted
-   client implements the pure TLS client spec from raw buffers to app
-   observations.
+1. The public step theorem is now calc_sample-shaped at the client-step level:
+   `client_state_correct` plus the end-to-end step predicates state that
+   `process_network_bytes` / `process_local_event` preserve pure reachability
+   and the layered invariant. The remaining theorem gap is completeness of the
+   layered invariant itself, not the absence of a compact preservation wrapper.
 2. `ConnectionLog` and `Spec.ConnectionState` still need one stronger layered
    invariant proving that consumed/emitted raw bytes parse, decrypt, and
    interpret as exactly the TLS messages/events that drive the state machine and
