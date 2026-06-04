@@ -352,6 +352,8 @@ fn serialize_client_finished_outputs
           pts_to network_out network_bytes **
           pure (B.length handshake_bytes == 36 /\
                 Seq.equal handshake_bytes (WS.serialize_handshake (M.Finished fin)) /\
+                WS.parse_tls_message T.Handshake handshake_bytes ==
+                  Some (M.TlsHandshake (M.Finished fin)) /\
                 B.length network_bytes == SZ.v network_out_len /\
                 SZ.v written == 58 /\
                 (let raw_prefix = Seq.slice network_bytes 0 (SZ.v written) in
@@ -375,7 +377,9 @@ fn serialize_finished_handshake
           pts_to handshake_out handshake_bytes **
           pure (B.length handshake_bytes == 36 /\
                 SZ.v written == 36 /\
-                Seq.equal handshake_bytes (WS.serialize_handshake (M.Finished (Ghost.reveal fin))))
+                Seq.equal handshake_bytes (WS.serialize_handshake (M.Finished (Ghost.reveal fin))) /\
+                WS.parse_tls_message T.Handshake handshake_bytes ==
+                  Some (M.TlsHandshake (M.Finished (Ghost.reveal fin))))
 
 fn serialize_client_hello
   (#m: M.client_hello)

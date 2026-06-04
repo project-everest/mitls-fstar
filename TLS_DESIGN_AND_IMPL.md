@@ -83,7 +83,8 @@ The public client API is buffer/event oriented:
   `parse_record` result for the emitted cleartext handshake record, and raw
   application-data record serialization plus ClientFinished encrypted-output
   serialization expose public `parse_record` facts for emitted
-  application-data records.
+  application-data records. Finished handshake serialization also exposes that
+  the generated 36-byte handshake buffer parses as `TlsHandshake (Finished ...)`.
 - The received Certificate and CertificateVerify state-transition interfaces
   expose the exact driver-copyout facts needed by the external validation TCB:
   certificate leaf DER is the head of the parsed certificate chain, and
