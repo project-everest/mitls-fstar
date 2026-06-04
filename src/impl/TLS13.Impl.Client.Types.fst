@@ -132,6 +132,21 @@ let response_app_out (resp:client_response) (app_out:B.bytes) : B.bytes =
   then Seq.slice app_out 0 (SZ.v resp.app_out_len)
   else B.empty
 
+noextract
+let response_app_out_matches_event
+  (resp:client_response)
+  (ev:CS.conn_event)
+  (app_out:B.bytes)
+  : prop =
+  match ev with
+  | CS.ConnNetworkEvent msg ->
+    (match msg.CL.message_direction, msg.CL.message_value with
+     | CL.Received, M.TlsApplicationData bytes ->
+       Seq.equal (response_app_out resp app_out) bytes
+     | _, _ -> True)
+  | CS.ConnLocalEvent _ ->
+    True
+
 let legal_delta
   (st0:CS.connection_state)
   (st1:CS.connection_state)
@@ -160,6 +175,7 @@ let legal_response_for_event
   : prop =
   response_wf resp network_out app_out /\
   Seq.equal raw_sent (response_network_out resp network_out) /\
+  response_app_out_matches_event resp ev app_out /\
   legal_delta st0 st1 ev raw_sent raw_received
 
 let some_legal_response

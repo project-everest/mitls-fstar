@@ -68,7 +68,9 @@ The public client API is buffer/event oriented:
 - The strongest current proof surface is per-step preservation of
   `TLS13.Impl.Client.connection_exactly` /
   `TLS13.Impl.ConnectionState.Repr.connection_exactly` plus spec-level legal
-  response/delta facts. This is substantial progress, but it is not yet the
+  response/delta facts. The legal response predicate also states that a
+  received application-data network event returns exactly that plaintext in the
+  API `app_out` prefix. This is substantial progress, but it is not yet the
   final end-to-end correctness theorem.
 - `TLS13.Impl.ConnectionState` has been split by responsibility: `Repr` owns the
   concrete representation and exact predicates, `Queries` owns read-only checks
