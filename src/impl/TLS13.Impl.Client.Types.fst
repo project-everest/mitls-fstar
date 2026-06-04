@@ -139,6 +139,12 @@ let event_api_app_out
   CL.concat_bytes (CS.conn_event_app_received_delta ev)
 
 noextract
+let event_api_app_sent
+  (ev:CS.conn_event)
+  : B.bytes =
+  CL.concat_bytes (CS.conn_event_app_sent_delta ev)
+
+noextract
 let response_app_out_matches_event
   (resp:client_response)
   (ev:CS.conn_event)
@@ -411,6 +417,17 @@ let local_event_kind_matches
   | LocalFail, CS.ConnLocalEvent (CS.LocalFail _) -> True
   | _, _ -> False
 
+let local_payload_matches_app_sent_delta
+  (kind:local_event_kind)
+  (payload:B.bytes)
+  (ev:CS.conn_event)
+  : prop =
+  match kind with
+  | LocalSendApplicationData ->
+    Seq.equal (event_api_app_sent ev) payload
+  | _ ->
+    Seq.equal (event_api_app_sent ev) B.empty
+
 let legal_local_response
   (st0:CS.connection_state)
   (st1:CS.connection_state)
@@ -424,6 +441,7 @@ let legal_local_response
   (app_out:B.bytes)
   : prop =
   local_event_kind_matches kind payload ev /\
+  local_payload_matches_app_sent_delta kind payload ev /\
   legal_response_for_event st0 st1 resp ev raw_sent raw_received network_out app_out
 
 let decode_error_response

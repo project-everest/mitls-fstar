@@ -70,7 +70,9 @@ The public client API is buffer/event oriented:
   `TLS13.Impl.ConnectionState.Repr.connection_exactly` plus spec-level legal
   response/delta facts. The legal response predicate also states that the API
   `app_out` prefix is exactly
-  `CL.concat_bytes (CS.conn_event_app_received_delta ev)`. This is substantial
+  `CL.concat_bytes (CS.conn_event_app_received_delta ev)`, and local
+  send-application-data responses tie their payload to
+  `CL.concat_bytes (CS.conn_event_app_sent_delta ev)`. This is substantial
   progress, but it is not yet the final end-to-end correctness theorem.
 - `TLS13.Impl.ConnectionState` has been split by responsibility: `Repr` owns the
   concrete representation and exact predicates, `Queries` owns read-only checks
