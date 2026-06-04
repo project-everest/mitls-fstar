@@ -1042,6 +1042,37 @@ let app_log_of_conn_events (events:list conn_event) : GTot CL.app_log = {
   CL.app_received = app_received_messages events;
 }
 
+let key_update_response_pending_step
+  (pending:bool)
+  (ev:conn_event)
+  : bool =
+  match ev with
+  | ConnNetworkEvent msg ->
+    (match msg.CL.message_direction, msg.CL.message_value with
+     | CL.Received, M.TlsKeyUpdate M.UpdateRequested -> true
+     | CL.Sent, M.TlsKeyUpdate M.UpdateNotRequested -> false
+     | _, _ -> pending)
+  | ConnLocalEvent _ ->
+    pending
+
+let rec key_update_response_pending_after_events_from
+  (pending:bool)
+  (events:list conn_event)
+  : Tot bool
+        (decreases events)
+=
+  match events with
+  | [] -> pending
+  | ev :: rest ->
+    key_update_response_pending_after_events_from
+      (key_update_response_pending_step pending ev)
+      rest
+
+let key_update_response_pending_of_conn_events
+  (events:list conn_event)
+  : Tot bool =
+  key_update_response_pending_after_events_from false events
+
 let connection_state_app_log_consistent
   (st:connection_state)
   : prop =
@@ -1068,11 +1099,18 @@ let connection_state_event_log_consistent
   : prop =
   connection_state_event_log_consistent_with st.cs_model.model_config st
 
+let connection_state_key_update_pending_consistent
+  (st:connection_state)
+  : prop =
+  st.cs_model.model_application.app_key_update_response_pending ==
+    key_update_response_pending_of_conn_events st.cs_event_log
+
 let connection_state_layered_log_consistent
   (st:connection_state)
   : prop =
   connection_state_event_log_consistent st /\
   connection_state_transcript_consistent st /\
+  connection_state_key_update_pending_consistent st /\
   connection_state_app_log_consistent st
 
 let lemma_initial_app_log_consistent
@@ -1092,6 +1130,12 @@ let lemma_initial_event_log_consistent
   : Lemma
       (connection_state_event_log_consistent_with cfg (initial cfg) /\
        connection_state_event_log_consistent (initial cfg))
+=
+  ()
+
+let lemma_initial_key_update_pending_consistent
+  (cfg:connection_config)
+  : Lemma (connection_state_key_update_pending_consistent (initial cfg))
 =
   ()
 
@@ -1159,6 +1203,38 @@ let rec lemma_transcript_bytes_snoc
       (transcript_bytes_of_conn_events tl)
       (conn_event_transcript_delta ev)
 
+let rec lemma_key_update_response_pending_after_events_snoc
+  (pending:bool)
+  (events:list conn_event)
+  (ev:conn_event)
+  : Lemma
+      (ensures
+        key_update_response_pending_after_events_from pending (events @ [ev]) ==
+          key_update_response_pending_step
+            (key_update_response_pending_after_events_from pending events)
+            ev)
+      (decreases events)
+=
+  match events with
+  | [] -> ()
+  | hd :: tl ->
+    lemma_key_update_response_pending_after_events_snoc
+      (key_update_response_pending_step pending hd)
+      tl
+      ev
+
+let lemma_key_update_response_pending_snoc
+  (events:list conn_event)
+  (ev:conn_event)
+  : Lemma
+      (ensures
+        key_update_response_pending_of_conn_events (events @ [ev]) ==
+          key_update_response_pending_step
+            (key_update_response_pending_of_conn_events events)
+            ev)
+=
+  lemma_key_update_response_pending_after_events_snoc false events ev
+
 let rec lemma_step_model_many_snoc
   (model0:connection_model)
   (events:list conn_event)
@@ -1189,6 +1265,49 @@ let lemma_step_model_preserves_config
       (ensures model'.model_config == model.model_config)
 =
   ()
+
+let model_key_update_pending_delta
+  (model0:connection_model)
+  (ev:conn_event)
+  (model1:connection_model)
+  : prop =
+  model1.model_application.app_key_update_response_pending ==
+    key_update_response_pending_step
+      model0.model_application.app_key_update_response_pending
+      ev
+
+let lemma_step_model_key_update_pending_delta
+  (model0:connection_model)
+  (ev:conn_event)
+  (model1:connection_model)
+  : Lemma
+      (requires step_model model0 ev == Some model1)
+      (ensures model_key_update_pending_delta model0 ev model1)
+=
+  match ev with
+  | ConnNetworkEvent msg ->
+    (match msg.CL.message_direction, msg.CL.message_value with
+     | CL.Received, M.TlsKeyUpdate req ->
+       (match model0.model_control with
+        | ControlApplicationData ->
+          (match model0.model_handshake.hs_keys.ks_server_application_traffic with
+           | Some _ -> ()
+           | None -> assert False)
+        | _ -> assert False)
+     | CL.Sent, M.TlsKeyUpdate req ->
+       (match req with
+        | M.UpdateNotRequested ->
+          (match model0.model_control with
+           | ControlApplicationData ->
+             (match model0.model_handshake.hs_keys.ks_client_application_traffic with
+              | Some _ ->
+                if model0.model_application.app_key_update_response_pending then ()
+                else assert False
+              | None -> assert False)
+           | _ -> assert False)
+        | M.UpdateRequested -> assert False)
+     | _, _ -> ())
+  | ConnLocalEvent _ -> ()
 
 let model_transcript_delta
   (model0:connection_model)
@@ -2229,6 +2348,34 @@ let lemma_legal_connection_delta_transcript_consistent
     (conn_event_transcript_delta delta.delta_event) ==
     transcript_bytes_of_conn_events st1.cs_event_log)
 
+let lemma_legal_connection_delta_key_update_pending_consistent
+  (st0:connection_state)
+  (delta:connection_delta)
+  (st1:connection_state)
+  : Lemma
+      (requires
+        legal_connection_delta st0 delta st1 /\
+        connection_state_key_update_pending_consistent st0)
+      (ensures connection_state_key_update_pending_consistent st1)
+=
+  lemma_step_model_key_update_pending_delta st0.cs_model delta.delta_event st1.cs_model;
+  lemma_key_update_response_pending_snoc st0.cs_event_log delta.delta_event;
+  assert (st1.cs_event_log == st0.cs_event_log @ [delta.delta_event]);
+  assert (st1.cs_model.model_application.app_key_update_response_pending ==
+    key_update_response_pending_step
+      st0.cs_model.model_application.app_key_update_response_pending
+      delta.delta_event);
+  assert (st0.cs_model.model_application.app_key_update_response_pending ==
+    key_update_response_pending_of_conn_events st0.cs_event_log);
+  assert (st1.cs_model.model_application.app_key_update_response_pending ==
+    key_update_response_pending_step
+      (key_update_response_pending_of_conn_events st0.cs_event_log)
+      delta.delta_event);
+  assert (key_update_response_pending_of_conn_events st1.cs_event_log ==
+    key_update_response_pending_step
+      (key_update_response_pending_of_conn_events st0.cs_event_log)
+      delta.delta_event)
+
 let lemma_legal_connection_delta_layered_log_consistent
   (st0:connection_state)
   (delta:connection_delta)
@@ -2241,6 +2388,7 @@ let lemma_legal_connection_delta_layered_log_consistent
 =
   lemma_legal_connection_delta_event_log_consistent st0 delta st1;
   lemma_legal_connection_delta_transcript_consistent st0 delta st1;
+  lemma_legal_connection_delta_key_update_pending_consistent st0 delta st1;
   lemma_legal_connection_delta_app_log_consistent st0 delta st1
 
 let lemma_legal_connection_delta_protected_single_parse_record

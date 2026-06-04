@@ -127,9 +127,9 @@ The public client API is buffer/event oriented:
   `CL.concat_bytes (CS.conn_event_app_sent_delta ev)`. The spec also has a
   preserved `connection_state_layered_log_consistent` invariant that packages
   event-log replay from the initial config, transcript projection from serialized
-  handshake events, and app-log projection from `cs_event_log`; the client
-  theorem surface exposes preservation lemmas for `legal_response_for_event`,
-  `some_legal_response`, `network_bytes_step_correct`, and
+  handshake events, KeyUpdate response-pending state, and app-log projection from
+  `cs_event_log`; the client theorem surface exposes preservation lemmas for
+  `legal_response_for_event`, `some_legal_response`, `network_bytes_step_correct`, and
   `local_event_step_correct`. The public
   `TLS13.Impl.Client` postconditions use named theorem-surface predicates
   `network_bytes_step_correct` and `local_event_step_correct`; lower-level
@@ -196,9 +196,10 @@ Other trusted runtime boundaries remain:
    app log. Raw protected deltas can now be segmented record-by-record from the
    existing legal-delta facts, and parser successes now expose a packaged
    decoded-message projection for cleartext/protected records. Event-log replay,
-   transcript projection, and app-log projection are now packaged into an explicit
-   preserved spec invariant, but key-schedule, pending-buffer, decryption, and
-   remaining event-projection facts still need to be connected into it.
+   transcript projection, KeyUpdate response-pending state, and app-log
+   projection are now packaged into an explicit preserved spec invariant, but
+   key-schedule, pending-buffer, decryption, and remaining event-projection facts
+   still need to be connected into it.
 3. Parser/serializer contracts still need a complete entry-by-entry audit. The
    strongest entries already carry `M`/`L` validity and `TLS13.Wire.Spec`
    facts, and stale unused fixed builders have been removed, but every supported
@@ -234,8 +235,8 @@ Other trusted runtime boundaries remain:
    epochs, pending buffers, and app-log projection live in one invariant. The
    spec now has admit-free one-record, non-empty-prefix, head/tail,
    parser-fuel-saturation, recursive segmentation, event-log replay,
-   transcript-projection, and app-log-consistency preservation lemmas, with
-   legal-delta/client-response/public-step projections, plus a
+   transcript-projection, KeyUpdate response-pending, and app-log-consistency
+   preservation lemmas, with legal-delta/client-response/public-step projections, plus a
    parser-success-to-raw-log inverse bridge. The client surface now also exposes
    `network_input_message_projection`, derived from `network_input_wf`, so next
    raw-log work should build on those decoded-message projection facts to connect
