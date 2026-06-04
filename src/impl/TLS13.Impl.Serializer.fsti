@@ -324,24 +324,6 @@ fn serialize_raw_application_data_record
                 Seq.equal raw_prefix (WS.serialize_record T.ApplicationData (Ghost.reveal 'fragment_bytes)) /\
                 CS.raw_records_exactly raw_prefix T.ApplicationData 1))
 
-fn serialize_client_finished_application_data_record
-  (#fin: M.finished)
-  (lfin: L.finished)
-  (out: array U8.t)
-  (out_len: SZ.t)
-  requires L.is_valid_finished lfin fin **
-           pts_to out 'old_out **
-           pure (B.length 'old_out == SZ.v out_len /\
-                58 <= SZ.v out_len)
-  returns written: (n:SZ.t{SZ.v n <= SZ.v out_len})
-  ensures exists* out_bytes.
-          L.is_valid_finished lfin fin **
-          pts_to out out_bytes **
-          pure (B.length out_bytes == SZ.v out_len /\
-                SZ.v written == 58 /\
-                (let raw_prefix = Seq.slice out_bytes 0 (SZ.v written) in
-                CS.raw_records_exactly raw_prefix T.ApplicationData 1))
-
 fn serialize_client_finished_outputs
   (write_state: Rec.record_state)
   (lfin: L.finished)
@@ -366,7 +348,10 @@ fn serialize_client_finished_outputs
                 B.length network_bytes == SZ.v network_out_len /\
                 SZ.v written == 58 /\
                 (let raw_prefix = Seq.slice network_bytes 0 (SZ.v written) in
-                CS.raw_records_exactly raw_prefix T.ApplicationData 1))
+                CS.raw_records_exactly raw_prefix T.ApplicationData 1 /\
+                (exists outer_fragment.
+                   WS.parse_record raw_prefix ==
+                     Some (T.ApplicationData, outer_fragment, B.length raw_prefix))))
 
 fn serialize_finished_handshake
   (#fin: erased M.finished)

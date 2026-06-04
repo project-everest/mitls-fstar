@@ -65,10 +65,13 @@ The public client API is buffer/event oriented:
   dispatcher fragment may still be decrypted inner plaintext rather than the
   outer record fragment.
 - The active serializer TCB surface no longer includes stale unused ClientHello
-  record-header/localhost fixed-builder declarations. Live fixed helpers now
+  record-header/localhost fixed-builder declarations or the unused standalone
+  ClientFinished application-data-record declaration. Live fixed helpers now
   expose concrete shape facts: inner plaintext encoding states the copied
-  payload slice plus trailing content-type byte, and application-data header
-  serialization states the public `TLS13.Wire.Spec.parse_record_header` result.
+  payload slice plus trailing content-type byte, application-data header
+  serialization states the public `TLS13.Wire.Spec.parse_record_header` result,
+  and ClientFinished encrypted-output serialization exposes a public
+  `parse_record` fact for the emitted application-data record.
 - The received Certificate and CertificateVerify state-transition interfaces
   expose the exact driver-copyout facts needed by the external validation TCB:
   certificate leaf DER is the head of the parsed certificate chain, and
