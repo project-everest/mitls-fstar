@@ -79,6 +79,10 @@ The public client API is buffer/event oriented:
   expose the exact driver-copyout facts needed by the external validation TCB:
   certificate leaf DER is the head of the parsed certificate chain, and
   CertificateVerify input is computed from the pre-CV transcript hash.
+- The local send state-transition interfaces expose outgoing record parse facts:
+  successful ClientHello sends parse as the exact cleartext handshake record, and
+  successful ClientFinished, application-data, close_notify, and KeyUpdate sends
+  parse as one outer `ApplicationData` record.
 - The public `process_local_event` input predicate now makes the external
   certificate/signature TCB assumptions explicit: `LocalValidateCertificate`
   assumes `TLS13.X509.Spec.validate_chain` returns the peer identity being

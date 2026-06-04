@@ -381,6 +381,9 @@ fn try_send_client_finished
               pure (B.length network_out_bytes == SZ.v network_out_len /\
                     58 <= B.length network_out_bytes /\
                     can_send_client_finished st0 fin raw_sent /\
+                    (exists outer_fragment.
+                       W.parse_record (Seq.slice network_out_bytes 0 58) ==
+                         Some (T.ApplicationData, outer_fragment, 58)) /\
                     Seq.equal raw_sent (Seq.slice network_out_bytes 0 58))
           else
             connection_exactly c st0 **
@@ -882,6 +885,13 @@ fn try_send_application_data
                       st0
                       (Ghost.reveal 'payload_bytes)
                       raw_sent /\
+                    (exists outer_fragment.
+                       W.parse_record
+                         (Seq.slice network_out_bytes 0 (SZ.v payload_len + 22)) ==
+                         Some
+                           (T.ApplicationData,
+                            outer_fragment,
+                            SZ.v payload_len + 22)) /\
                     Seq.equal
                       raw_sent
                       (Seq.slice network_out_bytes 0 (SZ.v payload_len + 22)))
@@ -1091,6 +1101,9 @@ fn try_send_close_notify
                     can_send_close_notify
                       st0
                       raw_sent /\
+                    (exists outer_fragment.
+                       W.parse_record (Seq.slice network_out_bytes 0 24) ==
+                         Some (T.ApplicationData, outer_fragment, 24)) /\
                     Seq.equal
                       raw_sent
                       (Seq.slice network_out_bytes 0 24))
@@ -1299,6 +1312,9 @@ fn try_send_key_update
                     can_send_key_update
                       st0
                       raw_sent /\
+                    (exists outer_fragment.
+                       W.parse_record (Seq.slice network_out_bytes 0 27) ==
+                         Some (T.ApplicationData, outer_fragment, 27)) /\
                     Seq.equal
                       raw_sent
                       (Seq.slice network_out_bytes 0 27))

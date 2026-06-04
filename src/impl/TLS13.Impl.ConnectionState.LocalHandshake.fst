@@ -356,6 +356,11 @@ fn try_send_client_hello
                      5 <= SZ.v n /\
                      SZ.v n <= B.length network_out_bytes /\
                      can_send_client_hello st0 ch raw_sent /\
+                     W.parse_record (Seq.slice network_out_bytes 0 (SZ.v n)) ==
+                       Some
+                         (T.Handshake,
+                          W.serialize_handshake (M.ClientHello ch),
+                          SZ.v n) /\
                      Seq.equal raw_sent (Seq.slice network_out_bytes 0 (SZ.v n)))
            | None ->
              connection_exactly c st0 **
