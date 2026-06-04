@@ -105,11 +105,12 @@ The public client API is buffer/event oriented:
   network predicate exposes public `parse_record` success facts for
   non-decode-error consumed raw records, and the `process_network_bytes` theorem
   shape names the exact consumed input prefix instead of hiding it behind an
-  existential. `next_local_action_sound` also proves that ready non-external
-  local actions satisfy `local_input_wf` with the empty payload; certificate
-  validation and CertificateVerify signature checking remain explicit external
-  TCB actions. This is substantial progress, but it is not yet the final
-  end-to-end correctness theorem.
+  existential. The local-step predicate exposes `parse_record` success for
+  non-empty local network output. `next_local_action_sound` also proves that
+  ready non-external local actions satisfy `local_input_wf` with the empty
+  payload; certificate validation and CertificateVerify signature checking
+  remain explicit external TCB actions. This is substantial progress, but it is
+  not yet the final end-to-end correctness theorem.
 - `TLS13.Impl.ConnectionState` has been split by responsibility: `Repr` owns the
   concrete representation and exact predicates, `Queries` owns read-only checks
   and copyouts, `Model`/`Bounds`/`Tags` own pure/proof helpers, and the mutation

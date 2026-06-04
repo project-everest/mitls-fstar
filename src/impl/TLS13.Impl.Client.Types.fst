@@ -324,6 +324,15 @@ let raw_record_parse_success
     WS.parse_record raw_received ==
       Some (outer_ct, outer_fragment, B.length raw_received)
 
+let response_network_out_parse_success
+  (resp:client_response)
+  (network_out:B.bytes)
+  : prop =
+  resp.network_out_len == 0sz \/
+  exists outer_ct outer_fragment.
+    WS.parse_record (response_network_out resp network_out) ==
+      Some (outer_ct, outer_fragment, SZ.v resp.network_out_len)
+
 let parsed_message_wire_success
   (content_type:U8.t)
   (fragment:B.bytes)
@@ -676,7 +685,8 @@ let local_event_step_correct
   (app_out:B.bytes)
   : prop =
   some_legal_response st0 st1 resp network_out app_out /\
-  legal_handled_local_response st0 st1 resp kind payload network_out app_out
+  legal_handled_local_response st0 st1 resp kind payload network_out app_out /\
+  response_network_out_parse_success resp network_out
 
 let lemma_legal_network_response_decode_error
   (st0:CS.connection_state)

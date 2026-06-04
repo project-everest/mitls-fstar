@@ -67,7 +67,8 @@ fn handle_local_event
                   kind
                   (Ghost.reveal 'payload_bytes)
                   network_out_bytes
-                  app_out_bytes)
+                  app_out_bytes /\
+                CT.response_network_out_parse_success resp network_out_bytes)
 {
   match kind {
     LocalStartHandshake -> {
