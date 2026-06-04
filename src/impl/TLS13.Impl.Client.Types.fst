@@ -489,6 +489,45 @@ let lemma_legal_response_for_event_protected_segmented
     }
     st1
 
+let response_network_out_raw_projection
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (resp:client_response)
+  (network_out:B.bytes)
+  (app_out:B.bytes)
+  : prop =
+  resp.network_out_len == 0sz \/
+  (exists ev raw_sent raw_received.
+    legal_response_for_event
+      st0 st1 resp ev raw_sent raw_received network_out app_out /\
+    CS.event_protected_raw_segmented_success ev raw_sent raw_received)
+
+let lemma_legal_response_for_event_network_out_raw_projection
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (resp:client_response)
+  (ev:CS.conn_event)
+  (raw_sent:B.bytes)
+  (raw_received:B.bytes)
+  (network_out:B.bytes)
+  (app_out:B.bytes)
+  : Lemma
+      (requires legal_response_for_event
+        st0 st1 resp ev raw_sent raw_received network_out app_out)
+      (ensures response_network_out_raw_projection st0 st1 resp network_out app_out)
+=
+  if resp.network_out_len = 0sz then ()
+  else
+    lemma_legal_response_for_event_protected_segmented
+      st0
+      st1
+      resp
+      ev
+      raw_sent
+      raw_received
+      network_out
+      app_out
+
 let some_legal_response
   (st0:CS.connection_state)
   (st1:CS.connection_state)
@@ -576,6 +615,46 @@ let lemma_some_legal_response_client_state_correct
     raw_received
     network_out
     app_out
+
+let lemma_some_legal_response_network_out_raw_projection
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (resp:client_response)
+  (network_out:B.bytes)
+  (app_out:B.bytes)
+  : Lemma
+      (requires some_legal_response st0 st1 resp network_out app_out)
+      (ensures response_network_out_raw_projection st0 st1 resp network_out app_out)
+=
+  if resp.network_out_len = 0sz then ()
+  else (
+    assert (exists ev. exists raw_sent raw_received.
+      legal_response_for_event st0 st1 resp ev raw_sent raw_received network_out app_out);
+    let ev =
+      ID.indefinite_description_ghost
+        CS.conn_event
+        (fun ev -> exists raw_sent raw_received.
+          legal_response_for_event st0 st1 resp ev raw_sent raw_received network_out app_out) in
+    let raw_sent =
+      ID.indefinite_description_ghost
+        B.bytes
+        (fun raw_sent -> exists raw_received.
+          legal_response_for_event st0 st1 resp ev raw_sent raw_received network_out app_out) in
+    let raw_received =
+      ID.indefinite_description_ghost
+        B.bytes
+        (fun raw_received ->
+          legal_response_for_event st0 st1 resp ev raw_sent raw_received network_out app_out) in
+    lemma_legal_response_for_event_network_out_raw_projection
+      st0
+      st1
+      resp
+      ev
+      raw_sent
+      raw_received
+      network_out
+      app_out
+  )
 
 let raw_received_matches_network_input
   (raw_received:B.bytes)
@@ -1409,6 +1488,7 @@ let network_bytes_end_to_end_correct
     st0 st1 buffer_resp network_input old_network_out network_out old_app_out app_out /\
   network_consumed_raw_record_projection network_input buffer_resp /\
   network_bytes_decoded_message_projection st0 st1 buffer_resp network_input network_out app_out /\
+  response_network_out_raw_projection st0 st1 buffer_resp.response network_out app_out /\
   (client_state_correct st0 ==> client_state_correct st1)
 
 let local_event_end_to_end_correct
@@ -1421,6 +1501,7 @@ let local_event_end_to_end_correct
   (app_out:B.bytes)
   : prop =
   local_event_step_correct st0 st1 resp kind payload network_out app_out /\
+  response_network_out_raw_projection st0 st1 resp network_out app_out /\
   (client_state_correct st0 ==> client_state_correct st1)
 
 let lemma_network_bytes_step_correct_layered_log_consistent
@@ -1468,6 +1549,28 @@ let lemma_network_bytes_step_correct_consumed_raw_record_projection
     lemma_raw_record_parse_success_raw_records
       (network_consumed_prefix network_input buffer_resp.consumed_len)
   )
+
+let lemma_network_bytes_step_correct_network_out_raw_projection
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (buffer_resp:client_buffer_response)
+  (network_input:B.bytes)
+  (old_network_out:B.bytes)
+  (network_out:B.bytes)
+  (old_app_out:B.bytes)
+  (app_out:B.bytes)
+  : Lemma
+      (requires
+        network_bytes_step_correct
+          st0 st1 buffer_resp network_input old_network_out network_out old_app_out app_out)
+      (ensures
+        response_network_out_raw_projection
+          st0 st1 buffer_resp.response network_out app_out)
+=
+  let resp = buffer_resp.response in
+  if response_stuttered st0 st1 resp old_network_out network_out old_app_out app_out
+  then assert (resp.network_out_len == 0sz)
+  else lemma_some_legal_response_network_out_raw_projection st0 st1 resp network_out app_out
 
 let lemma_network_bytes_decoded_message_projection_intro_consumed_zero
   (st0:CS.connection_state)
@@ -1660,6 +1763,15 @@ let lemma_network_bytes_step_correct_end_to_end
     network_out
     old_app_out
     app_out;
+  lemma_network_bytes_step_correct_network_out_raw_projection
+    st0
+    st1
+    buffer_resp
+    network_input
+    old_network_out
+    network_out
+    old_app_out
+    app_out;
   if client_state_correct st0 then
     lemma_network_bytes_step_correct_client_state_correct
       st0
@@ -1717,6 +1829,7 @@ let lemma_local_event_step_correct_end_to_end
       (ensures
         local_event_end_to_end_correct st0 st1 resp kind payload network_out app_out)
 =
+  lemma_some_legal_response_network_out_raw_projection st0 st1 resp network_out app_out;
   if client_state_correct st0 then
     lemma_local_event_step_correct_client_state_correct
       st0
