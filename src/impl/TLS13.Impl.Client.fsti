@@ -291,7 +291,7 @@ fn process_network_bytes
           pts_to app_out app_out_bytes **
           pure (B.length network_out_bytes == SZ.v network_out_len /\
                 B.length app_out_bytes == SZ.v app_out_len /\
-                CT.network_bytes_step_correct
+                CT.network_bytes_end_to_end_correct
                   'st0
                   st1
                   buffer_resp
@@ -329,7 +329,7 @@ fn process_local_event
           pts_to app_out app_out_bytes **
           pure (B.length network_out_bytes == SZ.v network_out_len /\
                 B.length app_out_bytes == SZ.v app_out_len /\
-                CT.local_event_step_correct
+                CT.local_event_end_to_end_correct
                   'st0
                   st1
                   resp

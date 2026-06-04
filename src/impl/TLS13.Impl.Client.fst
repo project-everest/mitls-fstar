@@ -455,7 +455,7 @@ fn process_network_bytes
           pts_to app_out app_out_bytes **
           pure (B.length network_out_bytes == SZ.v network_out_len /\
                 B.length app_out_bytes == SZ.v app_out_len /\
-                CT.network_bytes_step_correct
+                CT.network_bytes_end_to_end_correct
                   'st0
                   st1
                   buffer_resp
@@ -473,10 +473,27 @@ fn process_network_bytes
         CT.app_out_len = 0sz;
         CT.status = CT.NeedMoreInput;
       };
-      {
+      let buffer_resp = {
         CT.response = resp;
         CT.consumed_len = 0sz;
-      }
+      };
+      CT.lemma_network_bytes_decoded_message_projection_intro_consumed_zero
+        'st0
+        'st0
+        buffer_resp
+        (Ghost.reveal 'raw_bytes)
+        'old_network_out
+        'old_app_out;
+      CT.lemma_network_bytes_step_correct_end_to_end
+        'st0
+        'st0
+        buffer_resp
+        (Ghost.reveal 'raw_bytes)
+        'old_network_out
+        'old_network_out
+        'old_app_out
+        'old_app_out;
+      buffer_resp
     }
     L.NetworkBufferDecodeError -> {
       let resp =
@@ -501,10 +518,27 @@ fn process_network_bytes
         (Seq.slice (Ghost.reveal 'raw_bytes) 0 0)
         'old_network_out
         'old_app_out;
-      {
+      let buffer_resp = {
         CT.response = resp;
         CT.consumed_len = 0sz;
-      }
+      };
+      CT.lemma_network_bytes_decoded_message_projection_intro_consumed_zero
+        'st0
+        (CM.local_fail_state 'st0 CM.tls_decode_error)
+        buffer_resp
+        (Ghost.reveal 'raw_bytes)
+        'old_network_out
+        'old_app_out;
+      CT.lemma_network_bytes_step_correct_end_to_end
+        'st0
+        (CM.local_fail_state 'st0 CM.tls_decode_error)
+        buffer_resp
+        (Ghost.reveal 'raw_bytes)
+        'old_network_out
+        'old_network_out
+        'old_app_out
+        'old_app_out;
+      buffer_resp
     }
     L.NetworkBufferOk decoded_buffer -> {
       with raw_record_bytes fragment_bytes.
@@ -525,14 +559,60 @@ fn process_network_bytes
           network_out_len
           app_out
           app_out_len;
+      let buffer_resp = {
+        CT.response = resp;
+        CT.consumed_len = decoded_buffer.L.decoded_buffer_consumed_len;
+      };
+      with st1 network_out_bytes app_out_bytes.
+        assert (CR.connection_exactly c st1 **
+                pts_to (V.vec_to_array decoded_buffer.L.decoded_buffer_raw_record) raw_record_bytes **
+                pts_to (V.vec_to_array decoded_buffer.L.decoded_buffer_fragment) fragment_bytes **
+                pts_to network_out network_out_bytes **
+                pts_to app_out app_out_bytes);
+      assert (pure (SZ.v decoded_buffer.L.decoded_buffer_consumed_len <=
+        B.length (Ghost.reveal 'raw_bytes)));
+      assert (pure (Seq.equal
+        raw_record_bytes
+        (CT.network_consumed_prefix
+          (Ghost.reveal 'raw_bytes)
+          decoded_buffer.L.decoded_buffer_consumed_len)));
+      let decoded_error = resp.CT.status = CT.DecodeError;
+      if decoded_error {
+        CT.lemma_network_bytes_decoded_message_projection_intro_decode_error
+          'st0
+          st1
+          buffer_resp
+          (Ghost.reveal 'raw_bytes)
+          network_out_bytes
+          app_out_bytes;
+      } else {
+        assert (pure (decoded_error == false));
+        assert (pure (resp.CT.status == CT.DecodeError ==> False));
+        CT.lemma_network_bytes_decoded_message_projection_intro_network_response
+          'st0
+          st1
+          buffer_resp
+          (Ghost.reveal 'raw_bytes)
+          decoded_buffer.L.decoded_buffer_content_type
+          fragment_bytes
+          raw_record_bytes
+          network_out_bytes
+          app_out_bytes;
+      };
+      CT.lemma_network_bytes_step_correct_end_to_end
+        'st0
+        st1
+        buffer_resp
+        (Ghost.reveal 'raw_bytes)
+        'old_network_out
+        network_out_bytes
+        'old_app_out
+        app_out_bytes;
       V.to_vec_pts_to decoded_buffer.L.decoded_buffer_fragment;
       V.free decoded_buffer.L.decoded_buffer_fragment;
       V.to_vec_pts_to decoded_buffer.L.decoded_buffer_raw_record;
       V.free decoded_buffer.L.decoded_buffer_raw_record;
-      {
-        CT.response = resp;
-        CT.consumed_len = decoded_buffer.L.decoded_buffer_consumed_len;
-      }
+      buffer_resp
     }
   }
 }
@@ -565,7 +645,7 @@ fn process_local_event
           pts_to app_out app_out_bytes **
           pure (B.length network_out_bytes == SZ.v network_out_len /\
                 B.length app_out_bytes == SZ.v app_out_len /\
-                CT.local_event_step_correct
+                CT.local_event_end_to_end_correct
                   'st0
                   st1
                   resp
@@ -584,5 +664,17 @@ fn process_local_event
       network_out_len
       app_out
       app_out_len;
+  with st1 network_out_bytes app_out_bytes.
+    assert (CR.connection_exactly c st1 **
+            pts_to network_out network_out_bytes **
+            pts_to app_out app_out_bytes);
+  CT.lemma_local_event_step_correct_end_to_end
+    'st0
+    st1
+    resp
+    kind
+    (Ghost.reveal 'payload_bytes)
+    network_out_bytes
+    app_out_bytes;
   resp
 }

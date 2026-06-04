@@ -136,10 +136,10 @@ The public client API is buffer/event oriented:
   `cs_event_log`; the client theorem surface exposes preservation lemmas for
   `legal_response_for_event`, `some_legal_response`, `network_bytes_step_correct`, and
   `local_event_step_correct`. The public
-  `TLS13.Impl.Client` postconditions use named theorem-surface predicates
-  `network_bytes_step_correct` and `local_event_step_correct`; lower-level
-  record/event predicates remain internal proof vocabulary. The streaming
-  network predicate exposes public `parse_record` success facts for
+  `TLS13.Impl.Client` postconditions now use the compact end-to-end predicates
+  `network_bytes_end_to_end_correct` and `local_event_end_to_end_correct`; the
+  lower-level step, record, and event predicates remain internal proof
+  vocabulary. The streaming network predicate exposes public `parse_record` success facts for
   non-decode-error consumed raw records, and the `process_network_bytes` theorem
   shape names the exact consumed input prefix instead of hiding it behind an
   existential. The local-step predicate exposes `parse_record` success for
@@ -154,6 +154,9 @@ The public client API is buffer/event oriented:
   exposes `network_consumed_raw_record_projection`: every non-empty,
   non-decode-error consumed prefix is a single raw TLS record and has the
   recursive raw-record segmentation fact needed by downstream raw-log proofs.
+  Successful non-decode-error byte steps additionally expose
+  `network_bytes_decoded_message_projection`, tying the hidden parser witnesses
+  to `network_input_message_projection` for the public consumed prefix.
 - `TLS13.Impl.ConnectionState` has been split by responsibility: `Repr` owns the
   concrete representation and exact predicates, `Queries` owns read-only checks
   and copyouts, `Model`/`Bounds`/`Tags` own pure/proof helpers, and the mutation
@@ -197,11 +200,13 @@ Other trusted runtime boundaries remain:
 
 ## Critical gaps
 
-1. The public step theorem is now calc_sample-shaped at the client-step level:
-   `client_state_correct` plus the end-to-end step predicates state that
-   `process_network_bytes` / `process_local_event` preserve pure reachability
-   and the layered invariant. The remaining theorem gap is completeness of the
-   layered invariant itself, not the absence of a compact preservation wrapper.
+1. The public step theorem is now calc_sample-shaped at the exported API level:
+   `process_network_bytes` and `process_local_event` directly return
+   `network_bytes_end_to_end_correct` / `local_event_end_to_end_correct`, which
+   preserve `client_state_correct` and expose the raw-record and decoded-message
+   projection currently available. The remaining theorem gap is completeness of
+   the layered invariant itself, not the absence of a compact preservation
+   wrapper.
 2. `ConnectionLog` and `Spec.ConnectionState` still need one stronger layered
    invariant proving that consumed/emitted raw bytes parse, decrypt, and
    interpret as exactly the TLS messages/events that drive the state machine and
