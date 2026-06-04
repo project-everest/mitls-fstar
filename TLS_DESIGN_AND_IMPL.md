@@ -83,9 +83,10 @@ The public client API is buffer/event oriented:
   `CL.concat_bytes (CS.conn_event_app_sent_delta ev)`. The public
   `TLS13.Impl.Client` postconditions use named theorem-surface predicates:
   `network_event_step_correct`, `tls_record_step_correct`,
-  `network_bytes_step_correct`, and `local_event_step_correct`. This is
-  substantial progress, but it is not yet the final end-to-end correctness
-  theorem.
+  `network_bytes_step_correct`, and `local_event_step_correct`. The
+  `process_network_bytes` theorem shape now names the exact consumed input
+  prefix instead of hiding it behind an existential. This is substantial
+  progress, but it is not yet the final end-to-end correctness theorem.
 - `TLS13.Impl.ConnectionState` has been split by responsibility: `Repr` owns the
   concrete representation and exact predicates, `Queries` owns read-only checks
   and copyouts, `Model`/`Bounds`/`Tags` own pure/proof helpers, and the mutation
@@ -152,7 +153,8 @@ Other trusted runtime boundaries remain:
 2. State the final `process_network_bytes` theorem in terms of
    `TLS13.Spec.ConnectionState` and a strengthened layered invariant. It should
    prove that consumed network prefixes, emitted network prefixes, and app
-   observations are justified by legal spec deltas.
+   observations are justified by legal spec deltas. The current named predicate
+   already exposes the consumed prefix as `network_consumed_prefix`.
 3. State the corresponding local theorem for `next_local_action` and
    `process_local_event`, with explicit assumptions for certificate validation,
    peer signature verification, and local application requests.

@@ -212,6 +212,16 @@ let some_legal_response_for_network_input
     legal_response_for_event st0 st1 resp ev raw_sent raw_received network_out app_out /\
     raw_received_matches_network_input raw_received network_input
 
+noextract
+let network_consumed_prefix
+  (network_input:B.bytes)
+  (consumed_len:SZ.t)
+  : B.bytes =
+  if SZ.v consumed_len <= B.length network_input then
+    Seq.slice network_input 0 (SZ.v consumed_len)
+  else
+    B.empty
+
 let some_legal_response_for_network_prefix
   (st0:CS.connection_state)
   (st1:CS.connection_state)
@@ -221,18 +231,14 @@ let some_legal_response_for_network_prefix
   (network_out:B.bytes)
   (app_out:B.bytes)
   : prop =
-  if SZ.v consumed_len <= B.length network_input then
-    exists consumed_input.
-      Seq.equal consumed_input (Seq.slice network_input 0 (SZ.v consumed_len)) /\
-      some_legal_response_for_network_input
-        st0
-        st1
-        resp
-        consumed_input
-        network_out
-        app_out
-  else
-    False
+  SZ.v consumed_len <= B.length network_input /\
+  some_legal_response_for_network_input
+    st0
+    st1
+    resp
+    (network_consumed_prefix network_input consumed_len)
+    network_out
+    app_out
 
 let legal_received_tls_response
   (st0:CS.connection_state)
