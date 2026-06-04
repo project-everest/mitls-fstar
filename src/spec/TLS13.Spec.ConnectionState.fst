@@ -1113,6 +1113,25 @@ let raw_records_exactly
   length parsed.CL.values == count /\
   all_records_outer_type outer parsed.CL.values
 
+let rec raw_records_segmented
+  (raw:B.bytes)
+  (outer:T.content_type)
+  (count:nat)
+  : Tot prop
+        (decreases count)
+  =
+  if count == 0 then
+    Seq.equal raw B.empty
+  else
+    exists fragment. exists (consumed:nat).
+      W.parse_record raw == Some (outer, fragment, consumed) /\
+      consumed > 0 /\
+      consumed <= B.length raw /\
+      raw_records_segmented
+        (Seq.slice raw consumed (B.length raw))
+        outer
+        (count - 1)
+
 let lemma_raw_records_exactly_one_parse_record
   (raw:B.bytes)
   (outer:T.content_type)
@@ -1296,6 +1315,113 @@ let lemma_raw_records_exactly_nonempty_decompose
          all_records_outer_type outer tail'.CL.values))
     )
 
+let lemma_raw_records_exactly_nonempty_decompose_prefix
+  (raw:B.bytes)
+  (outer:T.content_type)
+  (count:nat)
+  : Lemma
+      (requires raw_records_exactly raw outer count /\ count > 0)
+      (ensures exists fragment. exists (consumed:nat).
+        W.parse_record raw == Some (outer, fragment, consumed) /\
+        consumed > 0 /\
+        consumed <= B.length raw /\
+        raw_records_exactly
+          (Seq.slice raw consumed (B.length raw))
+          outer
+          (count - 1))
+=
+  lemma_raw_records_exactly_nonempty_decompose raw outer count;
+  match W.parse_record raw with
+  | None ->
+    assert False
+  | Some (content_type, fragment, consumed) ->
+    assert (W.parse_record raw == Some (content_type, fragment, consumed));
+    assert (content_type == outer);
+    assert (W.parse_record raw == Some (outer, fragment, consumed));
+    assert (consumed > 0);
+    assert (consumed <= B.length raw);
+    let rest = Seq.slice raw consumed (B.length raw) in
+    let tail = CL.parse_record_prefix_fuel (B.length raw) rest in
+    assert (CL.record_stream_serializes rest tail);
+    assert (Seq.equal tail.CL.residual B.empty);
+    assert (length tail.CL.values == count - 1);
+    assert (all_records_outer_type outer tail.CL.values);
+    Seq.lemma_len_slice raw consumed (B.length raw);
+    assert (consumed + B.length rest == B.length raw);
+    assert (B.length rest + 1 <= B.length raw);
+    CL.lemma_parse_record_prefix_fuel_eq_parse_record_prefix (B.length raw) rest;
+    assert (tail == CL.parse_record_prefix rest);
+    let parsed_rest = CL.parse_record_prefix rest in
+    assert (CL.record_stream_serializes rest parsed_rest);
+    assert (Seq.equal parsed_rest.CL.residual B.empty);
+    assert (length parsed_rest.CL.values == count - 1);
+    assert (all_records_outer_type outer parsed_rest.CL.values);
+    assert (raw_records_exactly rest outer (count - 1));
+    assert (exists fragment'. exists (consumed':nat).
+      W.parse_record raw == Some (outer, fragment', consumed') /\
+      consumed' > 0 /\
+      consumed' <= B.length raw /\
+      raw_records_exactly
+        (Seq.slice raw consumed' (B.length raw))
+        outer
+        (count - 1))
+
+let rec lemma_raw_records_exactly_segmented
+  (raw:B.bytes)
+  (outer:T.content_type)
+  (count:nat)
+  : Lemma
+      (requires raw_records_exactly raw outer count)
+      (ensures raw_records_segmented raw outer count)
+      (decreases count)
+=
+  if count == 0 then (
+    let parsed = CL.parse_record_prefix raw in
+    assert (CL.record_stream_serializes raw parsed);
+    assert (Seq.equal parsed.CL.residual B.empty);
+    assert (length parsed.CL.values == 0);
+    match parsed.CL.values with
+    | [] ->
+      assert (CL.serialize_tls_records parsed.CL.values == B.empty);
+      assert (parsed.CL.consumed == 0);
+      assert (Seq.equal parsed.CL.residual
+                        (Seq.slice raw parsed.CL.consumed (B.length raw)));
+      Seq.lemma_eq_elim parsed.CL.residual B.empty;
+      Seq.lemma_eq_elim
+        parsed.CL.residual
+        (Seq.slice raw parsed.CL.consumed (B.length raw));
+      Seq.lemma_len_slice raw parsed.CL.consumed (B.length raw);
+      assert (B.length (Seq.slice raw parsed.CL.consumed (B.length raw)) == 0);
+      assert (parsed.CL.consumed == 0);
+      assert (B.length raw == 0);
+      assert (forall (i:nat{i < B.length raw}).
+        Seq.index raw i == Seq.index B.empty i);
+      Seq.lemma_eq_intro raw B.empty
+    | _ :: _ ->
+      assert False
+  ) else (
+    lemma_raw_records_exactly_nonempty_decompose_prefix raw outer count;
+    match W.parse_record raw with
+    | None -> assert False
+    | Some (content_type, fragment, consumed) ->
+      assert (content_type == outer);
+      assert (W.parse_record raw == Some (outer, fragment, consumed));
+      assert (consumed > 0);
+      assert (consumed <= B.length raw);
+      let rest = Seq.slice raw consumed (B.length raw) in
+      assert (raw_records_exactly rest outer (count - 1));
+      lemma_raw_records_exactly_segmented rest outer (count - 1);
+      assert (raw_records_segmented rest outer (count - 1));
+      assert (exists fragment'. exists (consumed':nat).
+        W.parse_record raw == Some (outer, fragment', consumed') /\
+        consumed' > 0 /\
+        consumed' <= B.length raw /\
+        raw_records_segmented
+          (Seq.slice raw consumed' (B.length raw))
+          outer
+          (count - 1))
+  )
+
 let lemma_raw_records_exactly_single_serialized
   (outer:T.content_type)
   (fragment:B.bytes{B.length fragment <= 16640})
@@ -1440,6 +1566,47 @@ let lemma_network_message_raw_delta_legal_protected_decompose
     T.ApplicationData
     (protected_record_count msg.CL.message_direction msg.CL.message_value)
 
+let lemma_network_message_raw_delta_legal_protected_decompose_prefix
+  (model:connection_model)
+  (msg:directed_message M.tls_message)
+  (raw:B.bytes)
+  : Lemma
+      (requires
+        network_message_raw_delta_legal model msg raw /\
+        network_message_is_cleartext msg.CL.message_direction msg.CL.message_value == false)
+      (ensures exists fragment. exists (consumed:nat).
+        W.parse_record raw == Some (T.ApplicationData, fragment, consumed) /\
+        consumed > 0 /\
+        consumed <= B.length raw /\
+        raw_records_exactly
+          (Seq.slice raw consumed (B.length raw))
+          T.ApplicationData
+          (protected_record_count msg.CL.message_direction msg.CL.message_value - 1))
+=
+  lemma_protected_record_count_positive msg.CL.message_direction msg.CL.message_value;
+  lemma_raw_records_exactly_nonempty_decompose_prefix
+    raw
+    T.ApplicationData
+    (protected_record_count msg.CL.message_direction msg.CL.message_value)
+
+let lemma_network_message_raw_delta_legal_protected_segmented
+  (model:connection_model)
+  (msg:directed_message M.tls_message)
+  (raw:B.bytes)
+  : Lemma
+      (requires
+        network_message_raw_delta_legal model msg raw /\
+        network_message_is_cleartext msg.CL.message_direction msg.CL.message_value == false)
+      (ensures raw_records_segmented
+        raw
+        T.ApplicationData
+        (protected_record_count msg.CL.message_direction msg.CL.message_value))
+=
+  lemma_raw_records_exactly_segmented
+    raw
+    T.ApplicationData
+    (protected_record_count msg.CL.message_direction msg.CL.message_value)
+
 let event_raw_delta_legal
   (model:connection_model)
   (ev:conn_event)
@@ -1507,6 +1674,62 @@ let event_protected_raw_parse_prefix_success
           consumed <= B.length raw_received))
   | ConnLocalEvent _ -> True
 
+let event_protected_raw_decompose_prefix_success
+  (ev:conn_event)
+  (raw_sent:B.bytes)
+  (raw_received:B.bytes)
+  : GTot prop =
+  match ev with
+  | ConnNetworkEvent msg ->
+    if network_message_is_cleartext msg.CL.message_direction msg.CL.message_value
+    then True
+    else
+      (match msg.CL.message_direction with
+      | CL.Sent ->
+        (exists fragment. exists (consumed:nat).
+          W.parse_record raw_sent ==
+            Some (T.ApplicationData, fragment, consumed) /\
+          consumed > 0 /\
+          consumed <= B.length raw_sent /\
+          raw_records_exactly
+            (Seq.slice raw_sent consumed (B.length raw_sent))
+            T.ApplicationData
+            (protected_record_count msg.CL.message_direction msg.CL.message_value - 1))
+      | CL.Received ->
+        (exists fragment. exists (consumed:nat).
+          W.parse_record raw_received ==
+            Some (T.ApplicationData, fragment, consumed) /\
+          consumed > 0 /\
+          consumed <= B.length raw_received /\
+          raw_records_exactly
+            (Seq.slice raw_received consumed (B.length raw_received))
+            T.ApplicationData
+            (protected_record_count msg.CL.message_direction msg.CL.message_value - 1)))
+  | ConnLocalEvent _ -> True
+
+let event_protected_raw_segmented_success
+  (ev:conn_event)
+  (raw_sent:B.bytes)
+  (raw_received:B.bytes)
+  : GTot prop =
+  match ev with
+  | ConnNetworkEvent msg ->
+    if network_message_is_cleartext msg.CL.message_direction msg.CL.message_value
+    then True
+    else
+      (match msg.CL.message_direction with
+      | CL.Sent ->
+        raw_records_segmented
+          raw_sent
+          T.ApplicationData
+          (protected_record_count msg.CL.message_direction msg.CL.message_value)
+      | CL.Received ->
+        raw_records_segmented
+          raw_received
+          T.ApplicationData
+          (protected_record_count msg.CL.message_direction msg.CL.message_value))
+  | ConnLocalEvent _ -> True
+
 let lemma_event_raw_delta_legal_protected_single_parse_record
   (model:connection_model)
   (ev:conn_event)
@@ -1550,6 +1773,48 @@ let lemma_event_raw_delta_legal_protected_parse_prefix
         lemma_network_message_raw_delta_legal_protected_parse_prefix model msg raw_sent
       | CL.Received ->
         lemma_network_message_raw_delta_legal_protected_parse_prefix model msg raw_received
+
+let lemma_event_raw_delta_legal_protected_decompose_prefix
+  (model:connection_model)
+  (ev:conn_event)
+  (raw_sent:B.bytes)
+  (raw_received:B.bytes)
+  : Lemma
+      (requires event_raw_delta_legal model ev raw_sent raw_received)
+      (ensures event_protected_raw_decompose_prefix_success ev raw_sent raw_received)
+=
+  match ev with
+  | ConnLocalEvent _ -> ()
+  | ConnNetworkEvent msg ->
+    if network_message_is_cleartext msg.CL.message_direction msg.CL.message_value
+    then ()
+    else
+      match msg.CL.message_direction with
+      | CL.Sent ->
+        lemma_network_message_raw_delta_legal_protected_decompose_prefix model msg raw_sent
+      | CL.Received ->
+        lemma_network_message_raw_delta_legal_protected_decompose_prefix model msg raw_received
+
+let lemma_event_raw_delta_legal_protected_segmented
+  (model:connection_model)
+  (ev:conn_event)
+  (raw_sent:B.bytes)
+  (raw_received:B.bytes)
+  : Lemma
+      (requires event_raw_delta_legal model ev raw_sent raw_received)
+      (ensures event_protected_raw_segmented_success ev raw_sent raw_received)
+=
+  match ev with
+  | ConnLocalEvent _ -> ()
+  | ConnNetworkEvent msg ->
+    if network_message_is_cleartext msg.CL.message_direction msg.CL.message_value
+    then ()
+    else
+      match msg.CL.message_direction with
+      | CL.Sent ->
+        lemma_network_message_raw_delta_legal_protected_segmented model msg raw_sent
+      | CL.Received ->
+        lemma_network_message_raw_delta_legal_protected_segmented model msg raw_received
 
 type connection_delta = {
   delta_event: conn_event;
@@ -1604,6 +1869,40 @@ let lemma_legal_connection_delta_protected_parse_prefix
         delta.delta_raw_received)
 =
   lemma_event_raw_delta_legal_protected_parse_prefix
+    st0.cs_model
+    delta.delta_event
+    delta.delta_raw_sent
+    delta.delta_raw_received
+
+let lemma_legal_connection_delta_protected_decompose_prefix
+  (st0:connection_state)
+  (delta:connection_delta)
+  (st1:connection_state)
+  : Lemma
+      (requires legal_connection_delta st0 delta st1)
+      (ensures event_protected_raw_decompose_prefix_success
+        delta.delta_event
+        delta.delta_raw_sent
+        delta.delta_raw_received)
+=
+  lemma_event_raw_delta_legal_protected_decompose_prefix
+    st0.cs_model
+    delta.delta_event
+    delta.delta_raw_sent
+    delta.delta_raw_received
+
+let lemma_legal_connection_delta_protected_segmented
+  (st0:connection_state)
+  (delta:connection_delta)
+  (st1:connection_state)
+  : Lemma
+      (requires legal_connection_delta st0 delta st1)
+      (ensures event_protected_raw_segmented_success
+        delta.delta_event
+        delta.delta_raw_sent
+        delta.delta_raw_received)
+=
+  lemma_event_raw_delta_legal_protected_segmented
     st0.cs_model
     delta.delta_event
     delta.delta_raw_sent

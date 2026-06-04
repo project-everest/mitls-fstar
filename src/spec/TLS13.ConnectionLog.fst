@@ -267,6 +267,49 @@ let rec parse_record_prefix_fuel
 let parse_record_prefix (input:B.bytes) : GTot (stream_view tls_record) =
   parse_record_prefix_fuel (B.length input + 1) input
 
+let rec lemma_parse_record_prefix_fuel_eq_parse_record_prefix
+  (fuel:nat)
+  (input:B.bytes)
+  : Lemma
+      (requires fuel >= B.length input + 1)
+      (ensures parse_record_prefix_fuel fuel input == parse_record_prefix input)
+      (decreases fuel)
+  =
+  if fuel == 0 then (
+    assert (B.length input + 1 > 0);
+    assert False
+  ) else
+    match W.parse_record input with
+    | Some (content_type, fragment, consumed) ->
+      if consumed == 0 || consumed > B.length input then
+        ()
+      else (
+        let rest = Seq.slice input consumed (B.length input) in
+        let record = { record_outer_type = content_type; record_fragment = fragment } in
+        let tail_fuel = parse_record_prefix_fuel (fuel - 1) rest in
+        let tail_prefix_fuel = parse_record_prefix_fuel (B.length input) rest in
+        Seq.lemma_len_slice input consumed (B.length input);
+        assert (consumed > 0);
+        assert (consumed + B.length rest == B.length input);
+        assert (B.length rest + 1 <= B.length input);
+        assert (fuel - 1 >= B.length rest + 1);
+        lemma_parse_record_prefix_fuel_eq_parse_record_prefix (fuel - 1) rest;
+        assert (B.length input < fuel);
+        assert (B.length input >= B.length rest + 1);
+        lemma_parse_record_prefix_fuel_eq_parse_record_prefix (B.length input) rest;
+        assert (tail_fuel == parse_record_prefix rest);
+        assert (tail_prefix_fuel == parse_record_prefix rest);
+        assert (tail_fuel == tail_prefix_fuel);
+        assert (
+          { values = record :: tail_fuel.values;
+            consumed = consumed + tail_fuel.consumed;
+            residual = tail_fuel.residual } ==
+          { values = record :: tail_prefix_fuel.values;
+            consumed = consumed + tail_prefix_fuel.consumed;
+            residual = tail_prefix_fuel.residual })
+      )
+    | None -> ()
+
 let rec lemma_parse_record_prefix_fuel_shape
   (fuel:nat)
   (input:B.bytes)

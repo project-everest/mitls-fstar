@@ -92,9 +92,9 @@ The public client API is buffer/event oriented:
   Multi-record protected deltas now also expose a first-record parse prefix via
   `lemma_raw_records_exactly_nonempty_parse_record` and the corresponding
   legal-delta/client-response projection lemmas. For protected message raw
-  deltas, `lemma_network_message_raw_delta_legal_protected_decompose` also
-  exposes the remaining fuel-local tail view with empty residual and
-  `record_count - 1` records.
+  deltas, parser-fuel saturation lifts the head/tail view back to ordinary
+  `raw_records_exactly`, and `lemma_raw_records_exactly_segmented` proves full
+  recursive record-by-record segmentation through the client response surface.
 - The public `process_local_event` input predicate now makes the external
   certificate/signature TCB assumptions explicit: `LocalValidateCertificate`
   assumes `TLS13.X509.Spec.validate_chain` returns the peer identity being
@@ -173,12 +173,9 @@ Other trusted runtime boundaries remain:
 2. `ConnectionLog` and `Spec.ConnectionState` still need one stronger layered
    invariant proving that consumed/emitted raw bytes parse, decrypt, and
    interpret as exactly the TLS messages/events that drive the state machine and
-   app log. The one-record raw parse bridge is now available, but multi-record
-   application-data, decryption, transcript, key-schedule, and app-projection
-   facts still need to be connected in that invariant. Legal deltas and client
-   legal responses can now project protected single-record raw parse facts and
-   first-record parse prefixes for non-empty protected deltas; protected message
-   raw deltas also have a first-record/tail decomposition lemma.
+   app log. Raw protected deltas can now be segmented record-by-record from the
+   existing legal-delta facts, but decryption, transcript, key-schedule, and
+   app-projection facts still need to be connected in that invariant.
 3. Parser/serializer contracts still need a complete entry-by-entry audit. The
    strongest entries already carry `M`/`L` validity and `TLS13.Wire.Spec`
    facts, and stale unused fixed builders have been removed, but every supported
@@ -212,12 +209,11 @@ Other trusted runtime boundaries remain:
 4. Strengthen `TLS13.ConnectionLog` / `TLS13.Spec.ConnectionState` so raw bytes,
    record parsing, decryption, transcript updates, traffic secrets, KeyUpdate
    epochs, pending buffers, and app-log projection live in one invariant. The
-   spec now has an admit-free one-record `raw_records_exactly`-to-`parse_record`
-   lemma, a non-empty first-record prefix lemma, and legal-delta/client-response
-   projection lemmas, plus a protected-message head/tail decomposition over the
-   parser fuel used by `parse_record_prefix`. Next raw-log work should build on
-   those for recursive full multi-record protected app-data segmentation and
-   message/decryption projection.
+   spec now has admit-free one-record, non-empty-prefix, head/tail,
+   parser-fuel-saturation, and recursive segmentation lemmas, with
+   legal-delta/client-response projections. Next raw-log work should build on
+   those segmented records for protected-record decryption and TLS
+   message/projection facts.
 5. Continue auditing `TLS13.Impl.Parser.fsti` and
    `TLS13.Impl.Serializer.fsti` entry by entry. Mark each supported
    message/record as strong or weak relative to the required `M`/`L` +
