@@ -139,7 +139,9 @@ The public client API is buffer/event oriented:
   `TLS13.Impl.Client` postconditions now use the compact end-to-end predicates
   `network_bytes_end_to_end_correct` and `local_event_end_to_end_correct`; the
   lower-level step, record, and event predicates remain internal proof
-  vocabulary. The streaming network predicate exposes public `parse_record` success facts for
+  vocabulary. The `new_client_default` and configured `new_client` constructors
+  now establish `client_state_correct` for their initial states, so callers can
+  chain directly into the end-to-end step predicates. The streaming network predicate exposes public `parse_record` success facts for
   non-decode-error consumed raw records, and the `process_network_bytes` theorem
   shape names the exact consumed input prefix instead of hiding it behind an
   existential. The local-step predicate exposes `parse_record` success for

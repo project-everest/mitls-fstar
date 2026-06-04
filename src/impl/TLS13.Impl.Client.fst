@@ -25,9 +25,12 @@ module V = Pulse.Lib.Vec
 
 fn new_client_default ()
   returns c:client
-  ensures CR.connection_exactly c CR.default_initial_state
+  ensures CR.connection_exactly c CR.default_initial_state **
+          pure (CT.client_state_correct CR.default_initial_state)
 {
-  CR.new_client_default ()
+  let c = CR.new_client_default ();
+  CT.lemma_initial_client_state_correct CR.default_connection_config;
+  c
 }
 
 fn new_client
@@ -50,14 +53,26 @@ fn new_client
             (CR.configured_initial_state
               (Ghost.reveal 'server_name_bytes)
               (Ghost.reveal 'trust_anchors_bytes)
-              validation_time_seconds)
+              validation_time_seconds) **
+          pure (CT.client_state_correct
+            (CR.configured_initial_state
+              (Ghost.reveal 'server_name_bytes)
+              (Ghost.reveal 'trust_anchors_bytes)
+              validation_time_seconds))
 {
-  CR.new_client
-    server_name
-    server_name_len
-    trust_anchors
-    trust_anchors_len
-    validation_time_seconds
+  let c =
+    CR.new_client
+      server_name
+      server_name_len
+      trust_anchors
+      trust_anchors_len
+      validation_time_seconds;
+  CT.lemma_initial_client_state_correct
+    (CR.configured_connection_config
+      (Ghost.reveal 'server_name_bytes)
+      (Ghost.reveal 'trust_anchors_bytes)
+      validation_time_seconds);
+  c
 }
 
 fn control_snapshot
