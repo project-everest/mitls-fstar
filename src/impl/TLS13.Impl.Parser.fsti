@@ -233,9 +233,8 @@ fn parse_tls_record
   input bytes are also required to parse as exactly one TLS outer record.
   CT.network_input_wf records how the dispatcher fragment relates to that raw
   record: cleartext records expose the outer fragment, while ApplicationData
-  records expose either a record-layer open result followed by TLSInnerPlaintext
-  decoding or the current synthetic plaintext fallback used by deterministic
-  tests.
+  records expose a record-layer open result followed by TLSInnerPlaintext
+  decoding.
 **)
 fn decode_network_record
   (c:CR.connection_state)
@@ -301,9 +300,8 @@ fn decode_network_record
   The raw prefix is required to parse as exactly one TLS outer record.
   CT.network_input_wf records how the dispatcher fragment relates to that raw
   record: cleartext records expose the outer fragment, while ApplicationData
-  records expose either a record-layer open result followed by TLSInnerPlaintext
-  decoding or the current synthetic plaintext fallback used by deterministic
-  tests.
+  records expose a record-layer open result followed by TLSInnerPlaintext
+  decoding.
 **)
 fn decode_network_buffer
   (c:CR.connection_state)

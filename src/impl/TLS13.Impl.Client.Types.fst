@@ -424,11 +424,6 @@ let protected_record_opened
       st0.CS.cs_model.CS.model_record.CS.record_read
       (record_header_aad raw_received)
       outer_fragment ==
-      Some (opened, read_state') \/
-    R.open_record
-      st0.CS.cs_model.CS.model_record.CS.record_read
-      B.empty
-      outer_fragment ==
       Some (opened, read_state')
 
 let protected_decoder_fragment_relation
@@ -439,15 +434,12 @@ let protected_decoder_fragment_relation
   : prop =
   exists outer_fragment.
     WS.parse_record raw_received ==
-      Some (T.ApplicationData, outer_fragment, B.length raw_received) /\
-    ((exists opened.
-        protected_record_opened st0 raw_received outer_fragment opened /\
-        (exists plaintext.
-          WS.parse_plaintext opened == Some plaintext /\
-          decoder_fragment_matches_plaintext content_type fragment plaintext)) \/
+     Some (T.ApplicationData, outer_fragment, B.length raw_received) /\
+    (exists opened.
+     protected_record_opened st0 raw_received outer_fragment opened /\
      (exists plaintext.
-        WS.parse_plaintext outer_fragment == Some plaintext /\
-        decoder_fragment_matches_plaintext content_type fragment plaintext))
+       WS.parse_plaintext opened == Some plaintext /\
+       decoder_fragment_matches_plaintext content_type fragment plaintext))
 
 let decoder_fragment_relation
   (st0:CS.connection_state)

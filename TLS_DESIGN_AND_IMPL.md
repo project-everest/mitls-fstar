@@ -64,11 +64,11 @@ The public client API is buffer/event oriented:
   `TLS13.Wire.Spec.parse_record` facts for the raw outer record bytes; the
   dispatcher fragment relation is now explicit in `CT.network_input_wf`.
   Cleartext records expose the outer fragment. `ApplicationData` records expose
-  either a `TLS13.Record.Spec.open_record` result under the current read state
-  and record-header/empty-AAD choices followed by TLSInnerPlaintext decoding, or
-  the documented synthetic plaintext fallback still used by deterministic
-  binding tests. The C shim no longer accepts decrypted protected records whose
-  opened bytes fail TLSInnerPlaintext decoding.
+  a `TLS13.Record.Spec.open_record` result under the current read state and
+  record-header AAD, followed by TLSInnerPlaintext decoding. The C shim no
+  longer accepts synthetic plaintext-in-ApplicationData records, zero-AAD
+  protected opens, or decrypted protected records whose opened bytes fail
+  TLSInnerPlaintext decoding.
 - The active serializer TCB surface no longer includes stale unused ClientHello
   record-header/localhost fixed-builder declarations or the unused standalone
   ClientFinished application-data-record declaration. Live fixed helpers now

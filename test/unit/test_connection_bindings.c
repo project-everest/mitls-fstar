@@ -2,11 +2,17 @@
 #include "TLS13_Impl_Client_Types.h"
 #include "TLS13_Impl_ConnectionState_Repr.h"
 #include "TLS13_KeySchedule.h"
+#include "TLS13_Record.h"
 #include "tls13_crypto_external.h"
 
+#include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
+
+#define TLS13_RECORD_HEADER_LEN 5u
+#define TLS13_AEAD_TAG_LEN 16u
+#define TLS13_MAX_INNER_PLAINTEXT_LEN 16385u
 
 static void write_u16(uint8_t *out, uint16_t v) {
   out[0] = (uint8_t)(v >> 8);
@@ -75,6 +81,81 @@ static int expect_no_next_action(
   return 0;
 }
 
+static int install_server_sealer(
+    TLS13_Record_record_state sealer,
+    TLS13_Impl_ConnectionState_Repr_traffic_key_material_storage material,
+    TLS13_Record_Spec_epoch epoch,
+    const char *label) {
+  if (material.present2 == NULL || !*material.present2 ||
+      material.traffic_key == NULL ||
+      material.traffic_iv == NULL) {
+    fprintf(stderr, "%s traffic keys unavailable\n", label);
+    return 1;
+  }
+  TLS13_Record_install_keys(sealer, epoch, material.traffic_key, material.traffic_iv);
+  return 0;
+}
+
+static int install_server_handshake_sealer(
+    TLS13_Impl_ConnectionState_Repr_connection_state c,
+    TLS13_Record_record_state sealer,
+    const char *label) {
+  return install_server_sealer(
+      sealer,
+      c.handshake.keys.server_handshake_traffic,
+      TLS13_Record_Spec_HandshakeEpoch,
+      label);
+}
+
+static int install_server_application_sealer(
+    TLS13_Impl_ConnectionState_Repr_connection_state c,
+    TLS13_Record_record_state sealer,
+    const char *label) {
+  return install_server_sealer(
+      sealer,
+      c.handshake.keys.server_application_traffic,
+      TLS13_Record_Spec_ApplicationEpoch,
+      label);
+}
+
+static size_t build_protected_record(
+    TLS13_Record_record_state sealer,
+    uint8_t *out,
+    size_t out_cap,
+    const uint8_t *fragment,
+    size_t fragment_len,
+    uint8_t inner_type) {
+  if (fragment_len + 1u < fragment_len ||
+      fragment_len + 1u > TLS13_MAX_INNER_PLAINTEXT_LEN) {
+    return 0;
+  }
+  size_t inner_len = fragment_len + 1u;
+  size_t ciphertext_len = inner_len + TLS13_AEAD_TAG_LEN;
+  size_t record_len = TLS13_RECORD_HEADER_LEN + ciphertext_len;
+  if (ciphertext_len > UINT16_MAX || record_len > out_cap) {
+    return 0;
+  }
+
+  uint8_t inner[TLS13_MAX_INNER_PLAINTEXT_LEN];
+  memcpy(inner, fragment, fragment_len);
+  inner[fragment_len] = inner_type;
+
+  out[0] = 23;
+  out[1] = 3;
+  out[2] = 3;
+  write_u16(out + 3, (uint16_t)ciphertext_len);
+  if (!TLS13_Record_seal_application(
+          sealer,
+          out,
+          TLS13_RECORD_HEADER_LEN,
+          inner,
+          inner_len,
+          out + TLS13_RECORD_HEADER_LEN)) {
+    return 0;
+  }
+  return record_len;
+}
+
 static int run_suggested_local_step(
     TLS13_Impl_ConnectionState_Repr_connection_state c,
     TLS13_Impl_Client_Types_local_event_kind expected_kind,
@@ -127,8 +208,9 @@ static int run_suggested_local_step(
   return expect_step_ok(resp, label);
 }
 
-static int run_network_step(
+static int run_network_step_with_sealer(
     TLS13_Impl_ConnectionState_Repr_connection_state c,
+    TLS13_Record_record_state *sealer,
     uint8_t content_type,
     uint8_t *fragment,
     size_t fragment_len,
@@ -138,27 +220,49 @@ static int run_network_step(
   uint8_t network_out[2048] = {0};
   uint8_t app_out[16384] = {0};
   int protected_record = content_type == 22 && expected_stage >= 4;
-  size_t record_fragment_len = fragment_len + (protected_record ? 1u : 0u);
+  size_t raw_len = 0;
+  size_t expected_consumed = 0;
 
-  if (record_fragment_len + 6 > sizeof raw) {
-    fprintf(stderr, "%s test fragment too large\n", label);
-    return 1;
-  }
-  raw[0] = protected_record ? 23 : content_type;
-  raw[1] = 3;
-  raw[2] = 3;
-  write_u16(raw + 3, (uint16_t)record_fragment_len);
-  memcpy(raw + 5, fragment, fragment_len);
   if (protected_record) {
-    raw[5 + fragment_len] = content_type;
+    if (sealer == NULL) {
+      fprintf(stderr, "%s missing protected-record sealer\n", label);
+      return 1;
+    }
+    size_t record_len =
+        build_protected_record(
+            *sealer,
+            raw,
+            sizeof raw - 1u,
+            fragment,
+            fragment_len,
+            content_type);
+    if (record_len == 0) {
+      fprintf(stderr, "%s could not seal protected test record\n", label);
+      return 1;
+    }
+    raw[record_len] = 0xa5;
+    raw_len = record_len + 1u;
+    expected_consumed = record_len;
+  } else {
+    if (fragment_len + 6u > sizeof raw || fragment_len > UINT16_MAX) {
+      fprintf(stderr, "%s test fragment too large\n", label);
+      return 1;
+    }
+    raw[0] = content_type;
+    raw[1] = 3;
+    raw[2] = 3;
+    write_u16(raw + 3, (uint16_t)fragment_len);
+    memcpy(raw + 5, fragment, fragment_len);
+    raw[5 + fragment_len] = 0xa5;
+    raw_len = fragment_len + 6u;
+    expected_consumed = fragment_len + 5u;
   }
-  raw[5 + record_fragment_len] = 0xa5;
 
   TLS13_Impl_Client_Types_client_buffer_response buffer_resp =
       process_network_bytes(
           c,
           raw,
-          record_fragment_len + 6,
+          raw_len,
           network_out,
           sizeof network_out,
           app_out,
@@ -167,32 +271,25 @@ static int run_network_step(
   if (expect_step_ok(resp, label) != 0) {
     return 1;
   }
-  if (buffer_resp.consumed_len != record_fragment_len + 5) {
+  if (buffer_resp.consumed_len != expected_consumed) {
     fprintf(stderr, "%s consumed %zu bytes, expected %zu\n",
             label,
             (size_t)buffer_resp.consumed_len,
-            record_fragment_len + 5);
+            expected_consumed);
     return 1;
   }
   return expect_handshake_stage(c, expected_stage, label);
 }
 
-static size_t build_protected_plaintext_record(
-    uint8_t *out,
-    size_t out_cap,
-    const uint8_t *fragment,
+static int run_network_step(
+    TLS13_Impl_ConnectionState_Repr_connection_state c,
+    uint8_t content_type,
+    uint8_t *fragment,
     size_t fragment_len,
-    uint8_t inner_type) {
-  if (fragment_len + 6 > out_cap) {
-    return 0;
-  }
-  out[0] = 23;
-  out[1] = 3;
-  out[2] = 3;
-  write_u16(out + 3, (uint16_t)(fragment_len + 1));
-  memcpy(out + 5, fragment, fragment_len);
-  out[5 + fragment_len] = inner_type;
-  return fragment_len + 6;
+    uint8_t expected_stage,
+    const char *label) {
+  return run_network_step_with_sealer(
+      c, NULL, content_type, fragment, fragment_len, expected_stage, label);
 }
 
 static int receive_application_stream(
@@ -239,22 +336,33 @@ static int receive_application_stream(
 }
 
 static int receive_close_notify(
-    TLS13_Impl_ConnectionState_Repr_connection_state c) {
-  uint8_t raw[8] = {23, 3, 3, 0, 3, 1, 0, 21};
+    TLS13_Impl_ConnectionState_Repr_connection_state c,
+    TLS13_Record_record_state *app_sealer) {
+  uint8_t close_notify[] = {1, 0};
+  uint8_t raw[64] = {0};
   uint8_t network_out[2048] = {0};
   uint8_t app_out[16384] = {0};
+  size_t raw_len =
+      build_protected_record(
+          *app_sealer,
+          raw,
+          sizeof raw,
+          close_notify,
+          sizeof close_notify,
+          21);
   TLS13_Impl_Client_Types_client_buffer_response buffer_resp =
       process_network_bytes(
           c,
           raw,
-          sizeof raw,
+          raw_len,
           network_out,
           sizeof network_out,
           app_out,
           sizeof app_out);
   TLS13_Impl_Client_Types_client_response resp = buffer_resp.response;
-  if (expect_step_ok(resp, "CloseNotify") != 0 ||
-      buffer_resp.consumed_len != sizeof raw ||
+  if (raw_len == 0 ||
+      expect_step_ok(resp, "CloseNotify") != 0 ||
+      buffer_resp.consumed_len != raw_len ||
       expect_control_tag(c, 4, "CloseNotify") != 0) {
     fprintf(stderr, "CloseNotify failed\n");
     return 1;
@@ -263,13 +371,15 @@ static int receive_close_notify(
 }
 
 static int receive_key_update_not_requested(
-    TLS13_Impl_ConnectionState_Repr_connection_state c) {
+    TLS13_Impl_ConnectionState_Repr_connection_state c,
+    TLS13_Record_record_state *app_sealer) {
   uint8_t key_update[] = {24, 0, 0, 1, 0};
-  uint8_t raw[16] = {0};
+  uint8_t raw[64] = {0};
   uint8_t network_out[2048] = {0};
   uint8_t app_out[16384] = {0};
   size_t raw_len =
-      build_protected_plaintext_record(
+      build_protected_record(
+          *app_sealer,
           raw,
           sizeof raw,
           key_update,
@@ -294,17 +404,19 @@ static int receive_key_update_not_requested(
     fprintf(stderr, "KeyUpdate-not-requested failed\n");
     return 1;
   }
-  return 0;
+  return install_server_application_sealer(c, *app_sealer, "KeyUpdate-not-requested rekey");
 }
 
 static int receive_key_update_requested(
-    TLS13_Impl_ConnectionState_Repr_connection_state c) {
+    TLS13_Impl_ConnectionState_Repr_connection_state c,
+    TLS13_Record_record_state *app_sealer) {
   uint8_t key_update[] = {24, 0, 0, 1, 1};
-  uint8_t raw[16] = {0};
+  uint8_t raw[64] = {0};
   uint8_t network_out[2048] = {0};
   uint8_t app_out[16384] = {0};
   size_t raw_len =
-      build_protected_plaintext_record(
+      build_protected_record(
+          *app_sealer,
           raw,
           sizeof raw,
           key_update,
@@ -328,7 +440,7 @@ static int receive_key_update_requested(
     fprintf(stderr, "KeyUpdate-requested failed\n");
     return 1;
   }
-  return 0;
+  return install_server_application_sealer(c, *app_sealer, "KeyUpdate-requested rekey");
 }
 
 static int test_network_buffer_decode_error(void) {
@@ -473,7 +585,8 @@ static TLS13_Impl_ConnectionState_Repr_connection_state new_scripted_client(void
 }
 
 static int advance_to_certificate_signature_verified(
-    TLS13_Impl_ConnectionState_Repr_connection_state c) {
+    TLS13_Impl_ConnectionState_Repr_connection_state c,
+    TLS13_Record_record_state *server_hs_sealer_out) {
   uint8_t payload[1] = {0};
   uint8_t network_out[2048] = {0};
   uint8_t app_out[16384] = {0};
@@ -557,26 +670,35 @@ static int advance_to_certificate_signature_verified(
     return 1;
   }
 
+  TLS13_Record_record_state server_hs_sealer = TLS13_Record_record_state_new();
+  if (install_server_handshake_sealer(
+        c, server_hs_sealer, "setup server handshake sealer") != 0) {
+    TLS13_Record_record_state_free(server_hs_sealer);
+    return 1;
+  }
+
   uint8_t encrypted_extensions[4];
-  if (run_network_step(
+  if (run_network_step_with_sealer(
         c,
+        &server_hs_sealer,
         22,
         encrypted_extensions,
         build_empty_encrypted_extensions(encrypted_extensions),
         4,
         "setup EncryptedExtensions") != 0) {
-    return 1;
+    goto fail;
   }
 
   uint8_t certificate[14];
-  if (run_network_step(
+  if (run_network_step_with_sealer(
         c,
+        &server_hs_sealer,
         22,
         certificate,
         build_certificate(certificate),
         5,
         "setup Certificate") != 0) {
-    return 1;
+    goto fail;
   }
 
   if (run_suggested_local_step(
@@ -591,18 +713,19 @@ static int advance_to_certificate_signature_verified(
         sizeof app_out,
         NULL,
         "setup LocalValidateCertificate") != 0) {
-    return 1;
+    goto fail;
   }
 
   uint8_t certificate_verify[9];
-  if (run_network_step(
+  if (run_network_step_with_sealer(
         c,
+        &server_hs_sealer,
         22,
         certificate_verify,
         build_certificate_verify(certificate_verify),
         7,
         "setup CertificateVerify") != 0) {
-    return 1;
+    goto fail;
   }
 
   if (run_suggested_local_step(
@@ -618,17 +741,23 @@ static int advance_to_certificate_signature_verified(
         NULL,
         "setup LocalVerifyCertificateSignature") != 0 ||
       expect_handshake_stage(c, 8, "setup certificate signature") != 0) {
-    return 1;
+    goto fail;
   }
+  *server_hs_sealer_out = server_hs_sealer;
   return 0;
+
+fail:
+  TLS13_Record_record_state_free(server_hs_sealer);
+  return 1;
 }
 
 static int test_bad_server_finished_rejected(void) {
   TLS13_Impl_ConnectionState_Repr_connection_state c = new_scripted_client();
   uint8_t network_out[2048] = {0};
   uint8_t app_out[16384] = {0};
+  TLS13_Record_record_state server_hs_sealer = {0};
 
-  if (advance_to_certificate_signature_verified(c) != 0) {
+  if (advance_to_certificate_signature_verified(c, &server_hs_sealer) != 0) {
     return 1;
   }
 
@@ -636,18 +765,22 @@ static int test_bad_server_finished_rejected(void) {
   size_t finished_len = build_expected_finished(c, finished);
   if (finished_len != sizeof finished) {
     fprintf(stderr, "could not build expected Finished\n");
+    TLS13_Record_record_state_free(server_hs_sealer);
     return 1;
   }
   finished[4] ^= 0x80u;
-  if (run_network_step(
+  if (run_network_step_with_sealer(
         c,
+        &server_hs_sealer,
         22,
         finished,
         finished_len,
         9,
         "bad Finished") != 0) {
+    TLS13_Record_record_state_free(server_hs_sealer);
     return 1;
   }
+  TLS13_Record_record_state_free(server_hs_sealer);
 
   TLS13_Impl_Client_Types_next_local_action action =
       next_local_action(c, sizeof network_out, 0, 36);
@@ -813,25 +946,36 @@ static int test_client_hello_local_path(void) {
     return 1;
   }
 
+  TLS13_Record_record_state server_hs_sealer = TLS13_Record_record_state_new();
+  if (install_server_handshake_sealer(
+        c, server_hs_sealer, "server handshake sealer") != 0) {
+    TLS13_Record_record_state_free(server_hs_sealer);
+    return 1;
+  }
+
   uint8_t encrypted_extensions[4];
-  if (run_network_step(
+  if (run_network_step_with_sealer(
         c,
+        &server_hs_sealer,
         22,
         encrypted_extensions,
         build_empty_encrypted_extensions(encrypted_extensions),
         4,
         "EncryptedExtensions") != 0) {
+    TLS13_Record_record_state_free(server_hs_sealer);
     return 1;
   }
 
   uint8_t certificate[14];
-  if (run_network_step(
+  if (run_network_step_with_sealer(
         c,
+        &server_hs_sealer,
         22,
         certificate,
         build_certificate(certificate),
         5,
         "Certificate") != 0) {
+    TLS13_Record_record_state_free(server_hs_sealer);
     return 1;
   }
 
@@ -839,6 +983,7 @@ static int test_client_hello_local_path(void) {
   size_t cert_leaf_len = copy_certificate_leaf_der(c, cert_leaf, sizeof cert_leaf);
   if (cert_leaf_len != 1 || cert_leaf[0] != 0x42) {
     fprintf(stderr, "copy_certificate_leaf_der failed\n");
+    TLS13_Record_record_state_free(server_hs_sealer);
     return 1;
   }
 
@@ -858,21 +1003,25 @@ static int test_client_hello_local_path(void) {
         "LocalValidateCertificate") != 0 ||
       expect_handshake_stage(c, 6, "LocalValidateCertificate") != 0) {
     fprintf(stderr, "LocalValidateCertificate did not validate certificate\n");
+    TLS13_Record_record_state_free(server_hs_sealer);
     return 1;
   }
 
   if (expect_no_next_action(c, "post-certificate-validation next action") != 0) {
+    TLS13_Record_record_state_free(server_hs_sealer);
     return 1;
   }
 
   uint8_t certificate_verify[9];
-  if (run_network_step(
+  if (run_network_step_with_sealer(
         c,
+        &server_hs_sealer,
         22,
         certificate_verify,
         build_certificate_verify(certificate_verify),
         7,
         "CertificateVerify") != 0) {
+    TLS13_Record_record_state_free(server_hs_sealer);
     return 1;
   }
 
@@ -883,12 +1032,14 @@ static int test_client_hello_local_path(void) {
       cv_sig.cv_signature_len != 1 ||
       cv_signature[0] != 0x5a) {
     fprintf(stderr, "copy_certificate_verify_signature failed\n");
+    TLS13_Record_record_state_free(server_hs_sealer);
     return 1;
   }
 
   uint8_t cv_input[256] = {0};
   size_t cv_input_len = copy_certificate_verify_input(c, cv_input, sizeof cv_input);
   if (expect_certificate_verify_input(cv_input, cv_input_len) != 0) {
+    TLS13_Record_record_state_free(server_hs_sealer);
     return 1;
   }
 
@@ -906,10 +1057,12 @@ static int test_client_hello_local_path(void) {
         "LocalVerifyCertificateSignature") != 0 ||
     expect_handshake_stage(c, 8, "LocalVerifyCertificateSignature") != 0) {
     fprintf(stderr, "LocalVerifyCertificateSignature did not verify signature\n");
+    TLS13_Record_record_state_free(server_hs_sealer);
     return 1;
   }
 
   if (expect_no_next_action(c, "post-certificate-signature next action") != 0) {
+    TLS13_Record_record_state_free(server_hs_sealer);
     return 1;
   }
 
@@ -917,17 +1070,21 @@ static int test_client_hello_local_path(void) {
   size_t finished_len = build_expected_finished(c, finished);
   if (finished_len != sizeof finished) {
     fprintf(stderr, "could not build expected Finished\n");
+    TLS13_Record_record_state_free(server_hs_sealer);
     return 1;
   }
-  if (run_network_step(
+  if (run_network_step_with_sealer(
         c,
+        &server_hs_sealer,
         22,
         finished,
         finished_len,
         9,
         "Finished") != 0) {
+    TLS13_Record_record_state_free(server_hs_sealer);
     return 1;
   }
+  TLS13_Record_record_state_free(server_hs_sealer);
 
   if (run_suggested_local_step(
         c,
@@ -973,6 +1130,12 @@ static int test_client_hello_local_path(void) {
     return 1;
   }
 
+  TLS13_Record_record_state app_sealer = TLS13_Record_record_state_new();
+  if (install_server_application_sealer(c, app_sealer, "server application sealer") != 0) {
+    TLS13_Record_record_state_free(app_sealer);
+    return 1;
+  }
+
   TLS13_Impl_Client_Types_client_response client_finished;
   if (run_suggested_local_step(
         c,
@@ -986,6 +1149,7 @@ static int test_client_hello_local_path(void) {
         sizeof app_out,
         &client_finished,
         "LocalSendClientFinished") != 0) {
+    TLS13_Record_record_state_free(app_sealer);
     return 1;
   }
   if (expect_step_ok(client_finished, "LocalSendClientFinished") != 0 ||
@@ -993,10 +1157,12 @@ static int test_client_hello_local_path(void) {
     network_out[0] != 23 ||
     expect_control_tag(c, 2, "LocalSendClientFinished") != 0) {
     fprintf(stderr, "LocalSendClientFinished failed\n");
+    TLS13_Record_record_state_free(app_sealer);
     return 1;
   }
 
   if (expect_no_next_action(c, "post-client-finished next action") != 0) {
+    TLS13_Record_record_state_free(app_sealer);
     return 1;
   }
 
@@ -1015,6 +1181,7 @@ static int test_client_hello_local_path(void) {
     app_sent.network_out_len != sizeof app_payload + 22 ||
     network_out[0] != 23) {
     fprintf(stderr, "LocalSendApplicationData failed\n");
+    TLS13_Record_record_state_free(app_sealer);
     return 1;
   }
 
@@ -1023,7 +1190,8 @@ static int test_client_hello_local_path(void) {
   uint8_t app_stream[64] = {0};
   size_t app_stream_len = 0;
   size_t app_record_len =
-      build_protected_plaintext_record(
+      build_protected_record(
+          app_sealer,
           app_stream,
           sizeof app_stream,
           reply_payload_0,
@@ -1031,7 +1199,8 @@ static int test_client_hello_local_path(void) {
           23);
   app_stream_len += app_record_len;
   app_record_len =
-      build_protected_plaintext_record(
+      build_protected_record(
+          app_sealer,
           app_stream + app_stream_len,
           sizeof app_stream - app_stream_len,
           reply_payload_1,
@@ -1048,14 +1217,17 @@ static int test_client_hello_local_path(void) {
         expected_app,
         expected_app_lens,
         sizeof expected_app / sizeof expected_app[0]) != 0) {
+    TLS13_Record_record_state_free(app_sealer);
     return 1;
   }
 
-  if (receive_key_update_not_requested(c) != 0) {
+  if (receive_key_update_not_requested(c, &app_sealer) != 0) {
+    TLS13_Record_record_state_free(app_sealer);
     return 1;
   }
 
-  if (receive_key_update_requested(c) != 0) {
+  if (receive_key_update_requested(c, &app_sealer) != 0) {
+    TLS13_Record_record_state_free(app_sealer);
     return 1;
   }
 
@@ -1072,6 +1244,7 @@ static int test_client_hello_local_path(void) {
         sizeof app_out,
         &key_update_sent,
         "LocalSendKeyUpdate") != 0) {
+    TLS13_Record_record_state_free(app_sealer);
     return 1;
   }
   if (expect_step_ok(key_update_sent, "LocalSendKeyUpdate") != 0 ||
@@ -1081,6 +1254,7 @@ static int test_client_hello_local_path(void) {
       expect_control_tag(c, 2, "LocalSendKeyUpdate") != 0 ||
       expect_no_next_action(c, "LocalSendKeyUpdate next action") != 0) {
     fprintf(stderr, "LocalSendKeyUpdate failed\n");
+    TLS13_Record_record_state_free(app_sealer);
     return 1;
   }
 
@@ -1099,12 +1273,15 @@ static int test_client_hello_local_path(void) {
     network_out[0] != 23 ||
     expect_control_tag(c, 3, "LocalSendCloseNotify") != 0) {
     fprintf(stderr, "LocalSendCloseNotify failed\n");
+    TLS13_Record_record_state_free(app_sealer);
     return 1;
   }
 
-  if (receive_close_notify(c) != 0) {
+  if (receive_close_notify(c, &app_sealer) != 0) {
+    TLS13_Record_record_state_free(app_sealer);
     return 1;
   }
+  TLS13_Record_record_state_free(app_sealer);
 
   return 0;
 }
