@@ -1212,6 +1212,46 @@ let legal_handled_tls_response
   legal_received_tls_response st0 st1 resp msg raw_received network_out app_out \/
   unexpected_message_response st0 st1 resp network_out app_out
 
+let decoded_message_event_projection
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (resp:client_response)
+  (msg:M.tls_message)
+  (raw_received:B.bytes)
+  (network_out:B.bytes)
+  (app_out:B.bytes)
+  : prop =
+  legal_received_tls_response st0 st1 resp msg raw_received network_out app_out \/
+  (received_tls_raw_delta_legal st0 msg raw_received /\
+   unexpected_message_response st0 st1 resp network_out app_out)
+
+let lemma_legal_handled_tls_response_decoded_message_event_projection
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (resp:client_response)
+  (content_type:U8.t)
+  (fragment:B.bytes)
+  (msg:M.tls_message)
+  (raw_received:B.bytes)
+  (network_out:B.bytes)
+  (app_out:B.bytes)
+  : Lemma
+      (requires
+        network_input_message_projection
+          st0 content_type fragment msg raw_received /\
+        legal_handled_tls_response
+          st0 st1 resp msg raw_received network_out app_out)
+      (ensures
+        decoded_message_event_projection
+          st0 st1 resp msg raw_received network_out app_out)
+=
+  if legal_received_tls_response st0 st1 resp msg raw_received network_out app_out
+  then ()
+  else (
+    assert (unexpected_message_response st0 st1 resp network_out app_out);
+    assert (received_tls_raw_delta_legal st0 msg raw_received)
+  )
+
 let legal_network_response
   (st0:CS.connection_state)
   (st1:CS.connection_state)
@@ -1452,7 +1492,7 @@ let network_bytes_decoded_message_projection
       fragment
       msg
       (network_consumed_prefix network_input buffer_resp.consumed_len) /\
-    legal_handled_tls_response
+    decoded_message_event_projection
       st0
       st1
       buffer_resp.response
@@ -1652,7 +1692,17 @@ let lemma_network_bytes_decoded_message_projection_intro_handled
       msg
       (network_consumed_prefix network_input buffer_resp.consumed_len)
       network_out
-      app_out)
+      app_out);
+    lemma_legal_handled_tls_response_decoded_message_event_projection
+      st0
+      st1
+      buffer_resp.response
+      content_type
+      fragment
+      msg
+      (network_consumed_prefix network_input buffer_resp.consumed_len)
+      network_out
+      app_out
   )
 
 let lemma_network_bytes_decoded_message_projection_intro_network_response

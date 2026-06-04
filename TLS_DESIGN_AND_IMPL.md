@@ -156,8 +156,11 @@ The public client API is buffer/event oriented:
   recursive raw-record segmentation fact needed by downstream raw-log proofs.
   Successful non-decode-error byte steps additionally expose
   `network_bytes_decoded_message_projection`, tying the hidden parser witnesses
-  to `network_input_message_projection` for the public consumed prefix. Both
-  network and local end-to-end predicates expose
+  to `network_input_message_projection` for the public consumed prefix and to
+  `decoded_message_event_projection`, which says the decoded message either
+  drives the received-message event or justifies an unexpected-message failure
+  while preserving the received raw-delta fact. Both network and local
+  end-to-end predicates expose
   `response_network_out_raw_projection`, so non-empty emitted network prefixes
   are tied to the legal event raw delta and protected-record segmentation facts.
 - `TLS13.Impl.ConnectionState` has been split by responsibility: `Repr` owns the
