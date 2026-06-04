@@ -1228,6 +1228,74 @@ let lemma_raw_records_exactly_nonempty_parse_record
         consumed' <= B.length raw)
     )
 
+let lemma_raw_records_exactly_nonempty_decompose
+  (raw:B.bytes)
+  (outer:T.content_type)
+  (count:nat)
+  : Lemma
+      (requires raw_records_exactly raw outer count /\ count > 0)
+      (ensures exists fragment. exists (consumed:nat).
+        W.parse_record raw == Some (outer, fragment, consumed) /\
+        consumed > 0 /\
+        consumed <= B.length raw /\
+        (let rest = Seq.slice raw consumed (B.length raw) in
+         let tail = CL.parse_record_prefix_fuel (B.length raw) rest in
+         CL.record_stream_serializes rest tail /\
+         Seq.equal tail.CL.residual B.empty /\
+         length tail.CL.values == count - 1 /\
+         all_records_outer_type outer tail.CL.values))
+=
+  let parsed = CL.parse_record_prefix raw in
+  assert (CL.record_stream_serializes raw parsed);
+  assert (Seq.equal parsed.CL.residual B.empty);
+  assert (length parsed.CL.values == count);
+  assert (all_records_outer_type outer parsed.CL.values);
+  match W.parse_record raw with
+  | None ->
+    assert (B.length raw + 1 > 0);
+    assert (CL.parse_record_prefix raw == CL.raw_record_stream_view raw);
+    assert (parsed.CL.values == []);
+    assert False
+  | Some (content_type, fragment, consumed) ->
+    W.lemma_parse_record_serializes raw;
+    if consumed == 0 || consumed > B.length raw then (
+      assert (CL.parse_record_prefix raw == CL.raw_record_stream_view raw);
+      assert (parsed.CL.values == []);
+      assert False
+    ) else (
+      let rest = Seq.slice raw consumed (B.length raw) in
+      let tail = CL.parse_record_prefix_fuel (B.length raw) rest in
+      let record =
+        { M.record_outer_type = content_type;
+          M.record_fragment = fragment } in
+      assert (CL.parse_record_prefix raw ==
+        {
+          CL.values = record :: tail.CL.values;
+          CL.consumed = consumed + tail.CL.consumed;
+          CL.residual = tail.CL.residual;
+        });
+      assert (parsed.CL.values == record :: tail.CL.values);
+      assert (parsed.CL.residual == tail.CL.residual);
+      assert (all_records_outer_type outer (record :: tail.CL.values));
+      assert (content_type == outer);
+      assert (all_records_outer_type outer tail.CL.values);
+      CL.lemma_parse_record_prefix_fuel_serializes (B.length raw) rest;
+      assert (CL.record_stream_serializes rest tail);
+      assert (Seq.equal tail.CL.residual B.empty);
+      assert (length tail.CL.values == count - 1);
+      assert (W.parse_record raw == Some (outer, fragment, consumed));
+      assert (exists fragment'. exists (consumed':nat).
+        W.parse_record raw == Some (outer, fragment', consumed') /\
+        consumed' > 0 /\
+        consumed' <= B.length raw /\
+        (let rest' = Seq.slice raw consumed' (B.length raw) in
+         let tail' = CL.parse_record_prefix_fuel (B.length raw) rest' in
+         CL.record_stream_serializes rest' tail' /\
+         Seq.equal tail'.CL.residual B.empty /\
+         length tail'.CL.values == count - 1 /\
+         all_records_outer_type outer tail'.CL.values))
+    )
+
 let lemma_raw_records_exactly_single_serialized
   (outer:T.content_type)
   (fragment:B.bytes{B.length fragment <= 16640})
@@ -1342,6 +1410,32 @@ let lemma_network_message_raw_delta_legal_protected_parse_prefix
 =
   lemma_protected_record_count_positive msg.CL.message_direction msg.CL.message_value;
   lemma_raw_records_exactly_nonempty_parse_record
+    raw
+    T.ApplicationData
+    (protected_record_count msg.CL.message_direction msg.CL.message_value)
+
+let lemma_network_message_raw_delta_legal_protected_decompose
+  (model:connection_model)
+  (msg:directed_message M.tls_message)
+  (raw:B.bytes)
+  : Lemma
+      (requires
+        network_message_raw_delta_legal model msg raw /\
+        network_message_is_cleartext msg.CL.message_direction msg.CL.message_value == false)
+      (ensures exists fragment. exists (consumed:nat).
+        W.parse_record raw == Some (T.ApplicationData, fragment, consumed) /\
+        consumed > 0 /\
+        consumed <= B.length raw /\
+        (let rest = Seq.slice raw consumed (B.length raw) in
+         let tail = CL.parse_record_prefix_fuel (B.length raw) rest in
+         CL.record_stream_serializes rest tail /\
+         Seq.equal tail.CL.residual B.empty /\
+         length tail.CL.values ==
+           protected_record_count msg.CL.message_direction msg.CL.message_value - 1 /\
+         all_records_outer_type T.ApplicationData tail.CL.values))
+=
+  lemma_protected_record_count_positive msg.CL.message_direction msg.CL.message_value;
+  lemma_raw_records_exactly_nonempty_decompose
     raw
     T.ApplicationData
     (protected_record_count msg.CL.message_direction msg.CL.message_value)
