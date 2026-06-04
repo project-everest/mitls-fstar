@@ -1208,6 +1208,11 @@ let connection_state_app_log_consistent
   st.cs_model.model_application.app_log.CL.app_received ==
     (app_log_of_conn_events st.cs_event_log).CL.app_received
 
+let connection_state_pending_application_consistent
+  (st:connection_state)
+  : prop =
+  pending_application_consistent st.cs_model.model_application
+
 let connection_state_transcript_consistent
   (st:connection_state)
   : prop =
@@ -1248,11 +1253,18 @@ let connection_state_layered_log_consistent
   connection_state_transcript_consistent st /\
   connection_state_key_update_pending_consistent st /\
   connection_state_record_layer_consistent st /\
+  connection_state_pending_application_consistent st /\
   connection_state_app_log_consistent st
 
 let lemma_initial_app_log_consistent
   (cfg:connection_config)
   : Lemma (connection_state_app_log_consistent (initial cfg))
+=
+  ()
+
+let lemma_initial_pending_application_consistent
+  (cfg:connection_config)
+  : Lemma (connection_state_pending_application_consistent (initial cfg))
 =
   ()
 
@@ -1616,6 +1628,14 @@ let model_record_layer_delta
         (projected_record_layer_state_of_record model0.model_record)
         ev
 
+let model_pending_application_delta
+  (model0:connection_model)
+  (ev:conn_event)
+  (model1:connection_model)
+  : prop =
+  pending_application_consistent model0.model_application ==>
+    pending_application_consistent model1.model_application
+
 let lemma_step_model_record_layer_delta
   (model0:connection_model)
   (ev:conn_event)
@@ -1815,6 +1835,44 @@ let lemma_step_model_record_layer_delta
      | _, _ ->
        assert (model1.model_record == model0.model_record);
        assert (model_record_layer_delta model0 ev model1)))
+
+let lemma_step_model_pending_application_delta
+  (model0:connection_model)
+  (ev:conn_event)
+  (model1:connection_model)
+  : Lemma
+      (requires step_model model0 ev == Some model1)
+      (ensures model_pending_application_delta model0 ev model1)
+=
+  match ev with
+  | ConnLocalEvent local ->
+    (match local with
+     | LocalDeliverApplicationData _
+     | LocalFail _ -> ()
+     | _ ->
+       assert (model1.model_application == model0.model_application))
+  | ConnNetworkEvent msg ->
+    (match msg.CL.message_value with
+     | M.TlsApplicationData _ ->
+       assert (model1.model_application.app_pending_plaintext ==
+         model0.model_application.app_pending_plaintext);
+       assert (model1.model_application.app_pending_source_record ==
+         model0.model_application.app_pending_source_record);
+       assert (model1.model_application.app_pending_source_offset ==
+         model0.model_application.app_pending_source_offset);
+       assert (model1.model_application.app_pending_received_raw ==
+         model0.model_application.app_pending_received_raw)
+     | M.TlsKeyUpdate _ ->
+       assert (model1.model_application.app_pending_plaintext ==
+         model0.model_application.app_pending_plaintext);
+       assert (model1.model_application.app_pending_source_record ==
+         model0.model_application.app_pending_source_record);
+       assert (model1.model_application.app_pending_source_offset ==
+         model0.model_application.app_pending_source_offset);
+       assert (model1.model_application.app_pending_received_raw ==
+         model0.model_application.app_pending_received_raw)
+     | _ ->
+       assert (model1.model_application == model0.model_application))
 
 let model_transcript_delta
   (model0:connection_model)
@@ -2914,6 +2972,21 @@ let lemma_legal_connection_delta_record_layer_consistent
         (projected_record_layer_of_conn_events st0.cs_event_log)
         delta.delta_event)
 
+let lemma_legal_connection_delta_pending_application_consistent
+  (st0:connection_state)
+  (delta:connection_delta)
+  (st1:connection_state)
+  : Lemma
+      (requires
+        legal_connection_delta st0 delta st1 /\
+        connection_state_pending_application_consistent st0)
+      (ensures connection_state_pending_application_consistent st1)
+=
+  lemma_step_model_pending_application_delta
+    st0.cs_model
+    delta.delta_event
+    st1.cs_model
+
 let lemma_legal_connection_delta_layered_log_consistent
   (st0:connection_state)
   (delta:connection_delta)
@@ -2928,6 +3001,7 @@ let lemma_legal_connection_delta_layered_log_consistent
   lemma_legal_connection_delta_transcript_consistent st0 delta st1;
   lemma_legal_connection_delta_key_update_pending_consistent st0 delta st1;
   lemma_legal_connection_delta_record_layer_consistent st0 delta st1;
+  lemma_legal_connection_delta_pending_application_consistent st0 delta st1;
   lemma_legal_connection_delta_app_log_consistent st0 delta st1
 
 let lemma_legal_connection_delta_protected_single_parse_record
