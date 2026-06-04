@@ -1113,6 +1113,73 @@ let raw_records_exactly
   length parsed.CL.values == count /\
   all_records_outer_type outer parsed.CL.values
 
+let lemma_raw_records_exactly_one_parse_record
+  (raw:B.bytes)
+  (outer:T.content_type)
+  : Lemma
+      (requires raw_records_exactly raw outer 1)
+      (ensures exists fragment.
+        W.parse_record raw == Some (outer, fragment, B.length raw))
+=
+  let parsed = CL.parse_record_prefix raw in
+  assert (CL.record_stream_serializes raw parsed);
+  assert (Seq.equal parsed.CL.residual B.empty);
+  assert (length parsed.CL.values == 1);
+  assert (all_records_outer_type outer parsed.CL.values);
+  assert (parsed.CL.consumed <= B.length raw);
+  assert (Seq.equal parsed.CL.residual
+                    (Seq.slice raw parsed.CL.consumed (B.length raw)));
+  Seq.lemma_eq_elim parsed.CL.residual B.empty;
+  Seq.lemma_eq_elim
+    parsed.CL.residual
+    (Seq.slice raw parsed.CL.consumed (B.length raw));
+  Seq.lemma_len_slice raw parsed.CL.consumed (B.length raw);
+  assert (B.length (Seq.slice raw parsed.CL.consumed (B.length raw)) == 0);
+  assert (parsed.CL.consumed == B.length raw);
+  match W.parse_record raw with
+  | None ->
+    assert (B.length raw + 1 > 0);
+    assert (CL.parse_record_prefix raw == CL.raw_record_stream_view raw);
+    assert (parsed.CL.values == []);
+    assert False
+  | Some (content_type, fragment, consumed) ->
+    W.lemma_parse_record_serializes raw;
+    if consumed == 0 || consumed > B.length raw then (
+      assert (CL.parse_record_prefix raw == CL.raw_record_stream_view raw);
+      assert (parsed.CL.values == []);
+      assert False
+    ) else (
+      let rest = Seq.slice raw consumed (B.length raw) in
+      let tail = CL.parse_record_prefix_fuel (B.length raw) rest in
+      let record =
+        { M.record_outer_type = content_type;
+          M.record_fragment = fragment } in
+      assert (CL.parse_record_prefix raw ==
+        {
+          CL.values = record :: tail.CL.values;
+          CL.consumed = consumed + tail.CL.consumed;
+          CL.residual = tail.CL.residual;
+        });
+      assert (parsed.CL.values == record :: tail.CL.values);
+      assert (length tail.CL.values == 0);
+      assert (all_records_outer_type outer (record :: tail.CL.values));
+      assert (content_type == outer);
+      CL.lemma_parse_record_prefix_fuel_serializes (B.length raw) rest;
+      assert (CL.record_stream_serializes rest tail);
+      assert (tail.CL.consumed == B.length (CL.serialize_tls_records tail.CL.values));
+      match tail.CL.values with
+      | [] ->
+        assert (CL.serialize_tls_records tail.CL.values == B.empty);
+        assert (tail.CL.consumed == 0);
+        assert (parsed.CL.consumed == consumed + tail.CL.consumed);
+        assert (consumed == parsed.CL.consumed);
+        assert (consumed == B.length raw);
+        assert (W.parse_record raw == Some (outer, fragment, B.length raw));
+        assert (exists fragment'. W.parse_record raw == Some (outer, fragment', B.length raw))
+      | _ :: _ ->
+        assert False
+    )
+
 let lemma_raw_records_exactly_single_serialized
   (outer:T.content_type)
   (fragment:B.bytes{B.length fragment <= 16640})

@@ -83,6 +83,10 @@ The public client API is buffer/event oriented:
   successful ClientHello sends parse as the exact cleartext handshake record, and
   successful ClientFinished, application-data, close_notify, and KeyUpdate sends
   parse as one outer `ApplicationData` record.
+- The pure connection spec now has a reusable one-record bridge:
+  `lemma_raw_records_exactly_one_parse_record` turns
+  `raw_records_exactly raw outer 1` into an exact
+  `TLS13.Wire.Spec.parse_record raw == Some (outer, fragment, length raw)` fact.
 - The public `process_local_event` input predicate now makes the external
   certificate/signature TCB assumptions explicit: `LocalValidateCertificate`
   assumes `TLS13.X509.Spec.validate_chain` returns the peer identity being
@@ -161,7 +165,9 @@ Other trusted runtime boundaries remain:
 2. `ConnectionLog` and `Spec.ConnectionState` still need one stronger layered
    invariant proving that consumed/emitted raw bytes parse, decrypt, and
    interpret as exactly the TLS messages/events that drive the state machine and
-   app log.
+   app log. The one-record raw parse bridge is now available, but multi-record
+   application-data, decryption, transcript, key-schedule, and app-projection
+   facts still need to be connected in that invariant.
 3. Parser/serializer contracts still need a complete entry-by-entry audit. The
    strongest entries already carry `M`/`L` validity and `TLS13.Wire.Spec`
    facts, and stale unused fixed builders have been removed, but every supported
@@ -194,7 +200,10 @@ Other trusted runtime boundaries remain:
    for ready non-external local actions.
 4. Strengthen `TLS13.ConnectionLog` / `TLS13.Spec.ConnectionState` so raw bytes,
    record parsing, decryption, transcript updates, traffic secrets, KeyUpdate
-   epochs, pending buffers, and app-log projection live in one invariant.
+   epochs, pending buffers, and app-log projection live in one invariant. The
+   spec now has an admit-free one-record `raw_records_exactly`-to-`parse_record`
+   lemma; next raw-log work should build on that for multi-record protected app
+   data and message/decryption projection.
 5. Continue auditing `TLS13.Impl.Parser.fsti` and
    `TLS13.Impl.Serializer.fsti` entry by entry. Mark each supported
    message/record as strong or weak relative to the required `M`/`L` +
