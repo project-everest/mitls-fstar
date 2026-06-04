@@ -223,17 +223,6 @@ static inline bool TLS13_Connection_External_client_close(
   return TLS13_Connection_Backend_close(c, ch, NULL);
 }
 
-#define TLS13_Impl_Parser_parse_record_header( \
-    header, header_len, content_type_out, content_type_out_len, fragment_len_out, fragment_len_out_len, ...) \
-  TLS13_Record_Framing_parse_record_header( \
-      (header), (header_len), (content_type_out), (content_type_out_len), \
-      (fragment_len_out), (fragment_len_out_len))
-
-#define TLS13_Impl_Parser_decode_inner_plaintext( \
-    inner, inner_len, content_type_out, content_type_out_len, ...) \
-  TLS13_Record_Framing_decode_inner_plaintext( \
-      (inner), (inner_len), (content_type_out), (content_type_out_len))
-
 #define TLS13_Impl_Serializer_encode_inner_plaintext_no_padding_slice( \
     plain, plain_total_len, plain_offset, plain_len, content_type, out, out_len, ...) \
   do { \
@@ -292,10 +281,10 @@ static inline uint8_t *TLS13_Connection_Backend_dup_bytes(const uint8_t *src, si
 #define FStar_SizeT_uint_to_t(n) ((size_t)(n))
 #define FStar_SizeT_v(n) ((size_t)(n))
 
-#define TLS13_Impl_ConnectionState_copy_hostname_sized_bytes(src, dst, ...) \
+#define TLS13_Impl_ConnectionState_Repr_copy_hostname_sized_bytes(src, dst, ...) \
   ((*((dst).len) = *((src).len)), memcpy((dst).bytes, (src).bytes, *((src).len)))
 
-#define TLS13_Impl_ConnectionState_copy_array_to_sized_bytes(cap, src, dst, nbytes, ...) \
+#define TLS13_Impl_ConnectionState_Repr_copy_array_to_sized_bytes(cap, src, dst, nbytes, ...) \
   do { \
     size_t tls13_copy_nbytes = (size_t)(nbytes); \
     *((dst).len) = tls13_copy_nbytes; \
@@ -304,22 +293,22 @@ static inline uint8_t *TLS13_Connection_Backend_dup_bytes(const uint8_t *src, si
     } \
   } while (0)
 
-#define TLS13_Impl_ConnectionState_copy_array_to_transcript(src, dst, nbytes, off, ...) \
+#define TLS13_Impl_ConnectionState_Repr_copy_array_to_transcript(src, dst, nbytes, off, ...) \
   (memcpy((dst) + (off), (src), (nbytes)))
 
-#define TLS13_Impl_ConnectionState_copy_client_hello_prefix_to_transcript(src, dst, nbytes, off, ...) \
-  TLS13_Impl_ConnectionState_copy_array_to_transcript((src), (dst), (nbytes), (off))
+#define TLS13_Impl_ConnectionState_Repr_copy_client_hello_prefix_to_transcript(src, dst, nbytes, off, ...) \
+  TLS13_Impl_ConnectionState_Repr_copy_array_to_transcript((src), (dst), (nbytes), (off))
 
-#define TLS13_Impl_ConnectionState_copy_server_hello_prefix_to_transcript(src, dst, nbytes, off, ...) \
-  TLS13_Impl_ConnectionState_copy_array_to_transcript((src), (dst), (nbytes), (off))
+#define TLS13_Impl_ConnectionState_Repr_copy_server_hello_prefix_to_transcript(src, dst, nbytes, off, ...) \
+  TLS13_Impl_ConnectionState_Repr_copy_array_to_transcript((src), (dst), (nbytes), (off))
 
-#define TLS13_Impl_ConnectionState_copy_array_to_certificate_verify_input_sized_bytes(src, dst, nbytes, ...) \
+#define TLS13_Impl_ConnectionState_Repr_copy_array_to_certificate_verify_input_sized_bytes(src, dst, nbytes, ...) \
   ((*((dst).len) = (nbytes)), memcpy((dst).bytes, (src), (nbytes)))
 
-#define TLS13_Impl_ConnectionState_copy_certificate_chain_range_to_sized_bytes(src, dst, off, nbytes, ...) \
+#define TLS13_Impl_ConnectionState_Repr_copy_certificate_chain_range_to_sized_bytes(src, dst, off, nbytes, ...) \
   ((*((dst).len) = (nbytes)), memcpy((dst).bytes, (src) + (off), (nbytes)))
 
-#define TLS13_Impl_ConnectionState_copy_array_to_public_key_sized_bytes(src, dst, nbytes, ...) \
+#define TLS13_Impl_ConnectionState_Repr_copy_array_to_public_key_sized_bytes(src, dst, nbytes, ...) \
   ((*((dst).len) = (nbytes)), memcpy((dst).bytes, (src), (nbytes)))
 
 #define TLS13_Crypto_sha256_prefix(input, input_len, out, ...) \
@@ -661,7 +650,7 @@ static inline bool TLS13_Connection_Backend_decode_inner_plaintext(
 
 #define TLS13_Impl_Parser_decode_network_buffer(c, raw, raw_len, ...) \
   ({ \
-    TLS13_Impl_ConnectionState_connection_state _tls13_c = (c); \
+    TLS13_Impl_ConnectionState_Repr_connection_state _tls13_c = (c); \
     uint8_t *_tls13_raw = (raw); \
     size_t _tls13_raw_len = (raw_len); \
     TLS13_Impl_Messages_decoded_network_buffer_result _tls13_result = \
@@ -784,7 +773,7 @@ static inline bool TLS13_Connection_Backend_decode_inner_plaintext(
 
 #define TLS13_Impl_Parser_decode_network_record(c, raw, raw_len, ...) \
   ({ \
-    TLS13_Impl_ConnectionState_connection_state _tls13_c = (c); \
+    TLS13_Impl_ConnectionState_Repr_connection_state _tls13_c = (c); \
     uint8_t *_tls13_raw = (raw); \
     size_t _tls13_raw_len = (raw_len); \
     TLS13_Impl_Messages_decoded_network_record_result _tls13_result = \

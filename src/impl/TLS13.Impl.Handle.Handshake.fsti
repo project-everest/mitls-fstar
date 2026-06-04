@@ -7,7 +7,7 @@ open Pulse.Lib.Array.PtsTo
 
 module B = TLS13.Bytes
 module CS = TLS13.Spec.ConnectionState
-module C = TLS13.Impl.ConnectionState
+module CR = TLS13.Impl.ConnectionState.Repr
 module CT = TLS13.Impl.Client.Types
 module L = TLS13.Impl.Messages
 module M = TLS13.Messages
@@ -16,7 +16,7 @@ module U8 = FStar.UInt8
 module WS = TLS13.Wire.Spec
 
 fn handle_handshake_message
-  (c:C.connection_state)
+  (c:CR.connection_state)
   (content_type:U8.t)
   (l:L.tls_message)
   (raw:array U8.t)
@@ -27,7 +27,7 @@ fn handle_handshake_message
   (network_out_len:SZ.t)
   (app_out:array U8.t)
   (app_out_len:SZ.t)
-  requires C.connection_exactly c 'st0 **
+  requires CR.connection_exactly c 'st0 **
            (exists* m.
              L.is_valid_tls_message l m **
              pure (CT.parsed_message_wire_success_for
@@ -58,7 +58,7 @@ fn handle_handshake_message
                    l)
   returns resp: CT.client_response
   ensures exists* st1.
-          C.connection_exactly c st1 **
+          CR.connection_exactly c st1 **
           pts_to raw 'raw_bytes **
           pts_to fragment 'fragment_bytes **
           pts_to network_out 'old_network_out **

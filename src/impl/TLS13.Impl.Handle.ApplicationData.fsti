@@ -6,7 +6,7 @@ open Pulse.Lib.Pervasives
 open Pulse.Lib.Array.PtsTo
 
 module B = TLS13.Bytes
-module C = TLS13.Impl.ConnectionState
+module CR = TLS13.Impl.ConnectionState.Repr
 module CT = TLS13.Impl.Client.Types
 module L = TLS13.Impl.Messages
 module M = TLS13.Messages
@@ -16,7 +16,7 @@ module U8 = FStar.UInt8
 module WS = TLS13.Wire.Spec
 
 fn handle_application_data
-  (c:C.connection_state)
+  (c:CR.connection_state)
   (content_type:U8.t)
   (lapp:L.application_data)
   (raw:array U8.t)
@@ -27,7 +27,7 @@ fn handle_application_data
   (network_out_len:SZ.t)
   (app_out:array U8.t)
   (app_out_len:SZ.t)
-  requires C.connection_exactly c 'st0 **
+  requires CR.connection_exactly c 'st0 **
            pts_to raw 'raw_bytes **
            pts_to fragment 'fragment_bytes **
            (exists* m.
@@ -47,7 +47,7 @@ fn handle_application_data
                    (Ghost.reveal 'raw_bytes))
   returns resp: CT.client_response
   ensures exists* st1 app_out_bytes.
-          C.connection_exactly c st1 **
+          CR.connection_exactly c st1 **
           pts_to raw 'raw_bytes **
           pts_to fragment 'fragment_bytes **
           pts_to network_out 'old_network_out **

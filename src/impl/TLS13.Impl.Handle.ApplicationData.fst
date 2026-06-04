@@ -7,7 +7,11 @@ open Pulse.Lib.Array.PtsTo
 
 module Arr = Pulse.Lib.Array
 module B = TLS13.Bytes
-module C = TLS13.Impl.ConnectionState
+module CR = TLS13.Impl.ConnectionState.Repr
+module CF = TLS13.Impl.ConnectionState.Fail
+module CN = TLS13.Impl.ConnectionState.Network
+module CQ = TLS13.Impl.ConnectionState.Queries
+module CM = TLS13.Impl.ConnectionState.Model
 module CT = TLS13.Impl.Client.Types
 module L = TLS13.Impl.Messages
 module M = TLS13.Messages
@@ -19,7 +23,7 @@ module V = Pulse.Lib.Vec
 module WS = TLS13.Wire.Spec
 
 fn handle_unexpected_application_input
-  (c:C.connection_state)
+  (c:CR.connection_state)
   (content_type:U8.t)
   (lapp:L.application_data)
   (raw:array U8.t)
@@ -30,7 +34,7 @@ fn handle_unexpected_application_input
   (network_out_len:SZ.t)
   (app_out:array U8.t)
   (app_out_len:SZ.t)
-  requires C.connection_exactly c 'st0 **
+  requires CR.connection_exactly c 'st0 **
            pts_to raw 'raw_bytes **
            pts_to fragment 'fragment_bytes **
            (exists* m.
@@ -43,7 +47,7 @@ fn handle_unexpected_application_input
                  B.length 'old_network_out == SZ.v network_out_len /\
                  B.length 'old_app_out == SZ.v app_out_len)
   returns resp: CT.client_response
-  ensures C.connection_exactly c (C.local_fail_state 'st0 C.tls_unexpected_message_error) **
+  ensures CR.connection_exactly c (CM.local_fail_state 'st0 CM.tls_unexpected_message_error) **
           pts_to raw 'raw_bytes **
           pts_to fragment 'fragment_bytes **
           pts_to network_out 'old_network_out **
@@ -53,7 +57,7 @@ fn handle_unexpected_application_input
                 B.length 'old_app_out == SZ.v app_out_len /\
                 CT.legal_network_response
                   'st0
-                  (C.local_fail_state 'st0 C.tls_unexpected_message_error)
+                  (CM.local_fail_state 'st0 CM.tls_unexpected_message_error)
                   resp
                   content_type
                   (Ghost.reveal 'fragment_bytes)
@@ -62,14 +66,14 @@ fn handle_unexpected_application_input
                   'old_app_out /\
                 CT.some_legal_response
                   'st0
-                  (C.local_fail_state 'st0 C.tls_unexpected_message_error)
+                  (CM.local_fail_state 'st0 CM.tls_unexpected_message_error)
                   resp
                   'old_network_out
                   'old_app_out)
 {
   with m. assert (pure True);
   L.free_tls_message (L.LTlsApplicationData lapp);
-  C.mark_unexpected_message c;
+  CF.mark_unexpected_message c;
   let resp = {
     CT.network_out_len = 0sz;
     CT.app_out_len = 0sz;
@@ -80,13 +84,13 @@ fn handle_unexpected_application_input
   assert (pure (Seq.equal B.empty (CT.response_network_out resp 'old_network_out)));
   assert (pure (CT.unexpected_message_response
     'st0
-    (C.local_fail_state 'st0 C.tls_unexpected_message_error)
+    (CM.local_fail_state 'st0 CM.tls_unexpected_message_error)
     resp
     'old_network_out
     'old_app_out));
   CT.lemma_legal_network_response_unexpected_from_parse_success
     'st0
-    (C.local_fail_state 'st0 C.tls_unexpected_message_error)
+    (CM.local_fail_state 'st0 CM.tls_unexpected_message_error)
     resp
     content_type
     (Ghost.reveal 'fragment_bytes)
@@ -95,7 +99,7 @@ fn handle_unexpected_application_input
     'old_app_out;
   assert (pure (CT.some_legal_response
     'st0
-    (C.local_fail_state 'st0 C.tls_unexpected_message_error)
+    (CM.local_fail_state 'st0 CM.tls_unexpected_message_error)
     resp
     'old_network_out
     'old_app_out));
@@ -103,7 +107,7 @@ fn handle_unexpected_application_input
 }
 
 fn handle_application_data
-  (c:C.connection_state)
+  (c:CR.connection_state)
   (content_type:U8.t)
   (lapp:L.application_data)
   (raw:array U8.t)
@@ -114,7 +118,7 @@ fn handle_application_data
   (network_out_len:SZ.t)
   (app_out:array U8.t)
   (app_out_len:SZ.t)
-  requires C.connection_exactly c 'st0 **
+  requires CR.connection_exactly c 'st0 **
            pts_to raw 'raw_bytes **
            pts_to fragment 'fragment_bytes **
            (exists* m.
@@ -134,7 +138,7 @@ fn handle_application_data
                    (Ghost.reveal 'raw_bytes))
   returns resp: CT.client_response
   ensures exists* st1 app_out_bytes.
-          C.connection_exactly c st1 **
+          CR.connection_exactly c st1 **
           pts_to raw 'raw_bytes **
           pts_to fragment 'fragment_bytes **
           pts_to network_out 'old_network_out **
@@ -168,7 +172,7 @@ fn handle_application_data
                       app_out_bytes /\
                     Seq.equal bytes (CT.response_app_out resp app_out_bytes)))
 {
-  let ready = C.can_receive_application_data c;
+  let ready = CQ.can_receive_application_data c;
   if ready {
         with m. assert (pure True);
         unfold (L.is_valid_tls_message (L.LTlsApplicationData lapp) m);
@@ -202,7 +206,7 @@ fn handle_application_data
         assert (pure (Seq.equal mapp (Seq.slice app_out_bytes 0 (SZ.v data_len))));
 
         V.free lapp.L.application_data_bytes;
-        C.mark_received_application_data c raw #mapp;
+        CN.mark_received_application_data c raw #mapp;
         let resp = {
           CT.network_out_len = 0sz;
           CT.app_out_len = data_len;
@@ -213,13 +217,13 @@ fn handle_application_data
         assert (pure (Seq.equal B.empty (CT.response_network_out resp 'old_network_out)));
         assert (pure (CT.response_app_out resp app_out_bytes == Seq.slice app_out_bytes 0 (SZ.v data_len)));
         assert (pure (Seq.equal mapp (CT.response_app_out resp app_out_bytes)));
-        C.lemma_received_application_data_state_evolves
+        CM.lemma_received_application_data_state_evolves
           'st0
           mapp
           (Ghost.reveal 'raw_bytes);
         assert (pure (CT.legal_received_tls_response
           'st0
-          (C.received_application_data_state 'st0 mapp (Ghost.reveal 'raw_bytes))
+          (CM.received_application_data_state 'st0 mapp (Ghost.reveal 'raw_bytes))
           resp
           (M.TlsApplicationData mapp)
           (Ghost.reveal 'raw_bytes)
@@ -227,7 +231,7 @@ fn handle_application_data
           app_out_bytes));
         assert (pure (CT.legal_handled_tls_response
           'st0
-          (C.received_application_data_state 'st0 mapp (Ghost.reveal 'raw_bytes))
+          (CM.received_application_data_state 'st0 mapp (Ghost.reveal 'raw_bytes))
           resp
           (M.TlsApplicationData mapp)
           (Ghost.reveal 'raw_bytes)
@@ -235,7 +239,7 @@ fn handle_application_data
           app_out_bytes));
         CT.lemma_legal_network_response_handled_from_parse_success
           'st0
-          (C.received_application_data_state 'st0 mapp (Ghost.reveal 'raw_bytes))
+          (CM.received_application_data_state 'st0 mapp (Ghost.reveal 'raw_bytes))
           resp
           content_type
           (Ghost.reveal 'fragment_bytes)
@@ -245,7 +249,7 @@ fn handle_application_data
           app_out_bytes;
         assert (pure (CT.some_legal_response
           'st0
-          (C.received_application_data_state 'st0 mapp (Ghost.reveal 'raw_bytes))
+          (CM.received_application_data_state 'st0 mapp (Ghost.reveal 'raw_bytes))
           resp
           'old_network_out
           app_out_bytes));
@@ -253,7 +257,7 @@ fn handle_application_data
           exists bytes.
             CT.legal_received_tls_response
               'st0
-              (C.received_application_data_state 'st0 mapp (Ghost.reveal 'raw_bytes))
+              (CM.received_application_data_state 'st0 mapp (Ghost.reveal 'raw_bytes))
               resp
               (M.TlsApplicationData bytes)
               (Ghost.reveal 'raw_bytes)
@@ -279,7 +283,7 @@ fn handle_application_data
       exists bytes.
         CT.legal_received_tls_response
           'st0
-          (C.local_fail_state 'st0 C.tls_unexpected_message_error)
+          (CM.local_fail_state 'st0 CM.tls_unexpected_message_error)
           resp
           (M.TlsApplicationData bytes)
           (Ghost.reveal 'raw_bytes)

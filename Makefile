@@ -96,12 +96,7 @@ $(OUTPUT_DIR)/%.krml: verify | $(OUTPUT_DIR)
 # ── Extraction Bundles ─────────────────────────────────────────────
 # List of modules to extract (dotted names)
 EXTRACT_MODULES = \
-  TLS13.Impl.Client \
-  TLS13.Impl.Client.Types \
-  TLS13.Impl.ConnectionState \
-  TLS13.Impl.Messages \
-  TLS13.KeySchedule \
-  TLS13.Record \
+  $(BUNDLE_IMPL_MODULES) \
   TLS13.Extract.Smoke
 
 # Convert module names to .krml filenames
@@ -128,7 +123,17 @@ BUNDLE_API_MODULE = TLS13.Impl.Client
 BUNDLE_IMPL_MODULES = \
   TLS13.Impl.Client \
   TLS13.Impl.Client.Types \
-  TLS13.Impl.ConnectionState \
+  TLS13.Impl.ConnectionState.Bounds \
+  TLS13.Impl.ConnectionState.Model \
+  TLS13.Impl.ConnectionState.Tags \
+  TLS13.Impl.ConnectionState.Repr \
+  TLS13.Impl.ConnectionState.Queries \
+  TLS13.Impl.ConnectionState.Fail \
+  TLS13.Impl.ConnectionState.LocalHandshake \
+  TLS13.Impl.ConnectionState.LocalAuth \
+  TLS13.Impl.ConnectionState.LocalSend \
+  TLS13.Impl.ConnectionState.LocalApp \
+  TLS13.Impl.ConnectionState.Network \
   TLS13.Impl.Handle.Alert \
   TLS13.Impl.Handle.ApplicationData \
   TLS13.Impl.Handle.ChangeCipherSpec \
@@ -142,7 +147,12 @@ BUNDLE_IMPL_MODULES = \
 
 # Non-API modules (everything except TLS13.Impl.Client)
 BUNDLE_INTERNAL_MODULES = \
-  TLS13.Impl.Client.Types,TLS13.Impl.ConnectionState,\
+  TLS13.Impl.Client.Types,TLS13.Impl.ConnectionState.Bounds,\
+  TLS13.Impl.ConnectionState.Model,TLS13.Impl.ConnectionState.Tags,\
+  TLS13.Impl.ConnectionState.Repr,TLS13.Impl.ConnectionState.Queries,\
+  TLS13.Impl.ConnectionState.Fail,TLS13.Impl.ConnectionState.LocalHandshake,\
+  TLS13.Impl.ConnectionState.LocalAuth,TLS13.Impl.ConnectionState.LocalSend,\
+  TLS13.Impl.ConnectionState.LocalApp,TLS13.Impl.ConnectionState.Network,\
   TLS13.Impl.Handle.Alert,TLS13.Impl.Handle.ApplicationData,\
   TLS13.Impl.Handle.ChangeCipherSpec,TLS13.Impl.Handle.DecodeError,\
   TLS13.Impl.Handle.Dispatch,TLS13.Impl.Handle.Handshake,\

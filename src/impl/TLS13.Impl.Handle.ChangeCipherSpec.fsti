@@ -6,7 +6,7 @@ open Pulse.Lib.Pervasives
 open Pulse.Lib.Array.PtsTo
 
 module B = TLS13.Bytes
-module C = TLS13.Impl.ConnectionState
+module CR = TLS13.Impl.ConnectionState.Repr
 module CT = TLS13.Impl.Client.Types
 module L = TLS13.Impl.Messages
 module M = TLS13.Messages
@@ -14,7 +14,7 @@ module SZ = FStar.SizeT
 module U8 = FStar.UInt8
 
 fn handle_change_cipher_spec
-  (c:C.connection_state)
+  (c:CR.connection_state)
   (l:L.tls_message)
   (raw:array U8.t)
   (raw_len:SZ.t)
@@ -22,7 +22,7 @@ fn handle_change_cipher_spec
   (network_out_len:SZ.t)
   (app_out:array U8.t)
   (app_out_len:SZ.t)
-  requires C.connection_exactly c 'st0 **
+  requires CR.connection_exactly c 'st0 **
            (exists* m. L.is_valid_tls_message l m) **
            pts_to raw 'raw_bytes **
            pts_to network_out 'old_network_out **
@@ -37,7 +37,7 @@ fn handle_change_cipher_spec
                    (Ghost.reveal 'raw_bytes))
   returns resp: CT.client_response
   ensures exists* st1.
-          C.connection_exactly c st1 **
+          CR.connection_exactly c st1 **
           pts_to raw 'raw_bytes **
           pts_to network_out 'old_network_out **
           pts_to app_out 'old_app_out **

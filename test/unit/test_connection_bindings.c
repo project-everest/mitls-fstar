@@ -1,6 +1,6 @@
 #include "TLS13_Impl_Client.h"
 #include "TLS13_Impl_Client_Types.h"
-#include "TLS13_Impl_ConnectionState.h"
+#include "TLS13_Impl_ConnectionState_Repr.h"
 #include "TLS13_KeySchedule.h"
 #include "tls13_crypto_external.h"
 
@@ -30,10 +30,10 @@ static int expect_step_ok(
 }
 
 static int expect_handshake_stage(
-    TLS13_Impl_ConnectionState_connection_state c,
+    TLS13_Impl_ConnectionState_Repr_connection_state c,
     uint8_t expected_stage,
     const char *label) {
-  TLS13_Impl_ConnectionState_control_snapshot snapshot = control_snapshot(c);
+  TLS13_Impl_ConnectionState_Repr_control_snapshot snapshot = control_snapshot(c);
   if (snapshot.snapshot_control_tag != 1 ||
       snapshot.snapshot_handshake_stage_tag != expected_stage) {
     fprintf(stderr, "%s left unexpected stage %u/%u\n",
@@ -46,10 +46,10 @@ static int expect_handshake_stage(
 }
 
 static int expect_control_tag(
-    TLS13_Impl_ConnectionState_connection_state c,
+    TLS13_Impl_ConnectionState_Repr_connection_state c,
     uint8_t expected_tag,
     const char *label) {
-  TLS13_Impl_ConnectionState_control_snapshot snapshot = control_snapshot(c);
+  TLS13_Impl_ConnectionState_Repr_control_snapshot snapshot = control_snapshot(c);
   if (snapshot.snapshot_control_tag != expected_tag) {
     fprintf(stderr, "%s left unexpected control tag %u\n",
             label,
@@ -60,7 +60,7 @@ static int expect_control_tag(
 }
 
 static int expect_no_next_action(
-    TLS13_Impl_ConnectionState_connection_state c,
+    TLS13_Impl_ConnectionState_Repr_connection_state c,
     const char *label) {
   TLS13_Impl_Client_Types_next_local_action action =
       next_local_action(c, 2048, 32, 36);
@@ -76,7 +76,7 @@ static int expect_no_next_action(
 }
 
 static int run_suggested_local_step(
-    TLS13_Impl_ConnectionState_connection_state c,
+    TLS13_Impl_ConnectionState_Repr_connection_state c,
     TLS13_Impl_Client_Types_local_event_kind expected_kind,
     TLS13_Impl_Client_Types_local_payload_kind expected_payload,
     uint8_t *certificate_public_key,
@@ -128,7 +128,7 @@ static int run_suggested_local_step(
 }
 
 static int run_network_step(
-    TLS13_Impl_ConnectionState_connection_state c,
+    TLS13_Impl_ConnectionState_Repr_connection_state c,
     uint8_t content_type,
     uint8_t *fragment,
     size_t fragment_len,
@@ -196,7 +196,7 @@ static size_t build_protected_plaintext_record(
 }
 
 static int receive_application_stream(
-    TLS13_Impl_ConnectionState_connection_state c,
+    TLS13_Impl_ConnectionState_Repr_connection_state c,
     uint8_t *stream,
     size_t stream_len,
     const uint8_t **expected,
@@ -239,7 +239,7 @@ static int receive_application_stream(
 }
 
 static int receive_close_notify(
-    TLS13_Impl_ConnectionState_connection_state c) {
+    TLS13_Impl_ConnectionState_Repr_connection_state c) {
   uint8_t raw[8] = {23, 3, 3, 0, 3, 1, 0, 21};
   uint8_t network_out[2048] = {0};
   uint8_t app_out[16384] = {0};
@@ -263,7 +263,7 @@ static int receive_close_notify(
 }
 
 static int receive_key_update_not_requested(
-    TLS13_Impl_ConnectionState_connection_state c) {
+    TLS13_Impl_ConnectionState_Repr_connection_state c) {
   uint8_t key_update[] = {24, 0, 0, 1, 0};
   uint8_t raw[16] = {0};
   uint8_t network_out[2048] = {0};
@@ -298,7 +298,7 @@ static int receive_key_update_not_requested(
 }
 
 static int receive_key_update_requested(
-    TLS13_Impl_ConnectionState_connection_state c) {
+    TLS13_Impl_ConnectionState_Repr_connection_state c) {
   uint8_t key_update[] = {24, 0, 0, 1, 1};
   uint8_t raw[16] = {0};
   uint8_t network_out[2048] = {0};
@@ -332,7 +332,7 @@ static int receive_key_update_requested(
 }
 
 static int test_network_buffer_decode_error(void) {
-  TLS13_Impl_ConnectionState_connection_state c = new_client_default();
+  TLS13_Impl_ConnectionState_Repr_connection_state c = new_client_default();
   uint8_t invalid_record_prefix[1] = {0xff};
   uint8_t network_out[2048] = {0};
   uint8_t app_out[16384] = {0};
@@ -414,9 +414,9 @@ static size_t build_certificate_verify(uint8_t out[9]) {
 }
 
 static size_t build_expected_finished(
-    TLS13_Impl_ConnectionState_connection_state c,
+    TLS13_Impl_ConnectionState_Repr_connection_state c,
     uint8_t out[36]) {
-  TLS13_Impl_ConnectionState_traffic_key_material_storage server_hs =
+  TLS13_Impl_ConnectionState_Repr_traffic_key_material_storage server_hs =
       c.handshake.keys.server_handshake_traffic;
   if (server_hs.present2 == NULL || !*server_hs.present2 ||
       server_hs.traffic_secret == NULL ||
@@ -460,7 +460,7 @@ static int expect_certificate_verify_input(uint8_t *input, size_t input_len) {
   return 0;
 }
 
-static TLS13_Impl_ConnectionState_connection_state new_scripted_client(void) {
+static TLS13_Impl_ConnectionState_Repr_connection_state new_scripted_client(void) {
   uint8_t server_name[] = {'l', 'o', 'c', 'a', 'l', 'h', 'o', 's', 't'};
   uint8_t trust_anchors[] = {0xde, 0xad, 0xbe, 0xef};
   size_t validation_time_seconds = 123456789u;
@@ -473,7 +473,7 @@ static TLS13_Impl_ConnectionState_connection_state new_scripted_client(void) {
 }
 
 static int advance_to_certificate_signature_verified(
-    TLS13_Impl_ConnectionState_connection_state c) {
+    TLS13_Impl_ConnectionState_Repr_connection_state c) {
   uint8_t payload[1] = {0};
   uint8_t network_out[2048] = {0};
   uint8_t app_out[16384] = {0};
@@ -624,7 +624,7 @@ static int advance_to_certificate_signature_verified(
 }
 
 static int test_bad_server_finished_rejected(void) {
-  TLS13_Impl_ConnectionState_connection_state c = new_scripted_client();
+  TLS13_Impl_ConnectionState_Repr_connection_state c = new_scripted_client();
   uint8_t network_out[2048] = {0};
   uint8_t app_out[16384] = {0};
 
@@ -658,15 +658,6 @@ static int test_bad_server_finished_rejected(void) {
     return 1;
   }
 
-  uint8_t verify_data[32] = {0};
-  size_t verify_data_len =
-      copy_server_finished_verify_data(c, verify_data, sizeof verify_data);
-  if (verify_data_len != 32 ||
-      memcmp(verify_data, finished + 4, sizeof verify_data) != 0) {
-    fprintf(stderr, "bad Finished stored verify_data snapshot failed\n");
-    return 1;
-  }
-
   uint8_t payload[1] = {0};
   TLS13_Impl_Client_Types_client_response resp =
       process_local_event(
@@ -678,7 +669,7 @@ static int test_bad_server_finished_rejected(void) {
           sizeof network_out,
           app_out,
           sizeof app_out);
-  TLS13_Impl_ConnectionState_control_snapshot snapshot = control_snapshot(c);
+  TLS13_Impl_ConnectionState_Repr_control_snapshot snapshot = control_snapshot(c);
   if (resp.status != TLS13_Impl_Client_Types_ConnectionFailed ||
       resp.network_out_len != 0 ||
       resp.app_out_len != 0 ||
@@ -692,7 +683,7 @@ static int test_bad_server_finished_rejected(void) {
 }
 
 static int test_client_hello_local_path(void) {
-  TLS13_Impl_ConnectionState_connection_state c = new_scripted_client();
+  TLS13_Impl_ConnectionState_Repr_connection_state c = new_scripted_client();
   uint8_t payload[1] = {0};
   uint8_t network_out[2048] = {0};
   uint8_t app_out[16384] = {0};
@@ -886,7 +877,7 @@ static int test_client_hello_local_path(void) {
   }
 
   uint8_t cv_signature[4096] = {0};
-  TLS13_Impl_ConnectionState_certificate_verify_signature_snapshot cv_sig =
+  TLS13_Impl_ConnectionState_Repr_certificate_verify_signature_snapshot cv_sig =
       copy_certificate_verify_signature(c, cv_signature, sizeof cv_signature);
   if (cv_sig.cv_signature_scheme != 0x0804u ||
       cv_sig.cv_signature_len != 1 ||
@@ -935,15 +926,6 @@ static int test_client_hello_local_path(void) {
         finished_len,
         9,
         "Finished") != 0) {
-    return 1;
-  }
-
-  uint8_t server_finished_verify_data[32] = {0};
-  size_t server_finished_verify_data_len =
-      copy_server_finished_verify_data(c, server_finished_verify_data, sizeof server_finished_verify_data);
-  if (server_finished_verify_data_len != 32 ||
-      memcmp(server_finished_verify_data, finished + 4, 32) != 0) {
-    fprintf(stderr, "copy_server_finished_verify_data failed\n");
     return 1;
   }
 

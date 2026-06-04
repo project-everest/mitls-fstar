@@ -6,7 +6,11 @@ open Pulse.Lib.Pervasives
 open Pulse.Lib.Array.PtsTo
 
 module B = TLS13.Bytes
-module C = TLS13.Impl.ConnectionState
+module CR = TLS13.Impl.ConnectionState.Repr
+module CF = TLS13.Impl.ConnectionState.Fail
+module CN = TLS13.Impl.ConnectionState.Network
+module CQ = TLS13.Impl.ConnectionState.Queries
+module CM = TLS13.Impl.ConnectionState.Model
 module CT = TLS13.Impl.Client.Types
 module HAlert = TLS13.Impl.Handle.Alert
 module HApplicationData = TLS13.Impl.Handle.ApplicationData
@@ -22,7 +26,7 @@ module U8 = FStar.UInt8
 module WS = TLS13.Wire.Spec
 
 fn dispatch_network_event
-  (c:C.connection_state)
+  (c:CR.connection_state)
   (content_type:U8.t)
   (parsed:option L.tls_message)
   (raw:array U8.t)
@@ -33,7 +37,7 @@ fn dispatch_network_event
   (network_out_len:SZ.t)
   (app_out:array U8.t)
   (app_out_len:SZ.t)
-  requires C.connection_exactly c 'st0 **
+  requires CR.connection_exactly c 'st0 **
            pts_to raw 'raw_bytes **
            pts_to fragment 'fragment_bytes **
            pts_to network_out 'old_network_out **
@@ -70,7 +74,7 @@ fn dispatch_network_event
                    (Ghost.reveal 'raw_bytes))
   returns resp: CT.client_response
   ensures exists* st1 network_out_bytes app_out_bytes.
-          C.connection_exactly c st1 **
+          CR.connection_exactly c st1 **
           pts_to raw 'raw_bytes **
           pts_to fragment 'fragment_bytes **
           pts_to network_out network_out_bytes **
@@ -101,7 +105,7 @@ fn dispatch_network_event
           app_out_len;
       CT.lemma_legal_network_response_decode_error
         'st0
-        (C.local_fail_state 'st0 C.tls_decode_error)
+        (CM.local_fail_state 'st0 CM.tls_decode_error)
         resp
         content_type
         (Ghost.reveal 'fragment_bytes)
@@ -212,9 +216,9 @@ fn dispatch_network_event
             assert (pure (requested == false));
             assert (pure (req == M.UpdateNotRequested));
           };
-          let ready = C.can_receive_application_data c;
+          let ready = CQ.can_receive_application_data c;
           if ready {
-            C.mark_received_key_update c raw requested #req;
+            CN.mark_received_key_update c raw requested #req;
             let resp = {
               CT.network_out_len = 0sz;
               CT.app_out_len = 0sz;
@@ -223,13 +227,13 @@ fn dispatch_network_event
             Seq.lemma_len_slice 'old_network_out 0 0;
             Seq.lemma_eq_intro B.empty (Seq.slice 'old_network_out 0 0);
             assert (pure (Seq.equal B.empty (CT.response_network_out resp 'old_network_out)));
-            C.lemma_received_key_update_state_evolves
+            CM.lemma_received_key_update_state_evolves
               'st0
               req
               (Ghost.reveal 'raw_bytes);
             assert (pure (CT.legal_received_tls_response
               'st0
-              (C.received_key_update_state 'st0 req (Ghost.reveal 'raw_bytes))
+              (CM.received_key_update_state 'st0 req (Ghost.reveal 'raw_bytes))
               resp
               (M.TlsKeyUpdate req)
               (Ghost.reveal 'raw_bytes)
@@ -237,7 +241,7 @@ fn dispatch_network_event
               'old_app_out));
             assert (pure (CT.legal_handled_tls_response
               'st0
-              (C.received_key_update_state 'st0 req (Ghost.reveal 'raw_bytes))
+              (CM.received_key_update_state 'st0 req (Ghost.reveal 'raw_bytes))
               resp
               (M.TlsKeyUpdate req)
               (Ghost.reveal 'raw_bytes)
@@ -245,7 +249,7 @@ fn dispatch_network_event
               'old_app_out));
             CT.lemma_legal_network_response_handled_from_parse_success
               'st0
-              (C.received_key_update_state 'st0 req (Ghost.reveal 'raw_bytes))
+              (CM.received_key_update_state 'st0 req (Ghost.reveal 'raw_bytes))
               resp
               content_type
               (Ghost.reveal 'fragment_bytes)
@@ -255,13 +259,13 @@ fn dispatch_network_event
               'old_app_out;
             assert (pure (CT.some_legal_response
               'st0
-              (C.received_key_update_state 'st0 req (Ghost.reveal 'raw_bytes))
+              (CM.received_key_update_state 'st0 req (Ghost.reveal 'raw_bytes))
               resp
               'old_network_out
               'old_app_out));
             resp
           } else {
-            C.mark_unexpected_message c;
+            CF.mark_unexpected_message c;
             let resp = {
               CT.network_out_len = 0sz;
               CT.app_out_len = 0sz;
@@ -272,13 +276,13 @@ fn dispatch_network_event
             assert (pure (Seq.equal B.empty (CT.response_network_out resp 'old_network_out)));
             assert (pure (CT.unexpected_message_response
               'st0
-              (C.local_fail_state 'st0 C.tls_unexpected_message_error)
+              (CM.local_fail_state 'st0 CM.tls_unexpected_message_error)
               resp
               'old_network_out
               'old_app_out));
             CT.lemma_legal_network_response_unexpected_from_parse_success
               'st0
-              (C.local_fail_state 'st0 C.tls_unexpected_message_error)
+              (CM.local_fail_state 'st0 CM.tls_unexpected_message_error)
               resp
               content_type
               (Ghost.reveal 'fragment_bytes)
@@ -287,7 +291,7 @@ fn dispatch_network_event
               'old_app_out;
             assert (pure (CT.some_legal_response
               'st0
-              (C.local_fail_state 'st0 C.tls_unexpected_message_error)
+              (CM.local_fail_state 'st0 CM.tls_unexpected_message_error)
               resp
               'old_network_out
               'old_app_out));
@@ -312,10 +316,10 @@ fn dispatch_network_event
             'st0
             (M.TlsIgnoredPostHandshake body)
             (Ghost.reveal 'raw_bytes)));
-          let ready = C.can_receive_application_data c;
+          let ready = CQ.can_receive_application_data c;
           if ready {
             L.free_application_data lignored;
-            C.mark_received_ignored_post_handshake c raw #body;
+            CN.mark_received_ignored_post_handshake c raw #body;
             let resp = {
               CT.network_out_len = 0sz;
               CT.app_out_len = 0sz;
@@ -324,13 +328,13 @@ fn dispatch_network_event
             Seq.lemma_len_slice 'old_network_out 0 0;
             Seq.lemma_eq_intro B.empty (Seq.slice 'old_network_out 0 0);
             assert (pure (Seq.equal B.empty (CT.response_network_out resp 'old_network_out)));
-            C.lemma_received_ignored_post_handshake_state_evolves
+            CM.lemma_received_ignored_post_handshake_state_evolves
               'st0
               body
               (Ghost.reveal 'raw_bytes);
             assert (pure (CT.legal_received_tls_response
               'st0
-              (C.received_ignored_post_handshake_state 'st0 body (Ghost.reveal 'raw_bytes))
+              (CM.received_ignored_post_handshake_state 'st0 body (Ghost.reveal 'raw_bytes))
               resp
               (M.TlsIgnoredPostHandshake body)
               (Ghost.reveal 'raw_bytes)
@@ -338,7 +342,7 @@ fn dispatch_network_event
               'old_app_out));
             assert (pure (CT.legal_handled_tls_response
               'st0
-              (C.received_ignored_post_handshake_state 'st0 body (Ghost.reveal 'raw_bytes))
+              (CM.received_ignored_post_handshake_state 'st0 body (Ghost.reveal 'raw_bytes))
               resp
               (M.TlsIgnoredPostHandshake body)
               (Ghost.reveal 'raw_bytes)
@@ -346,7 +350,7 @@ fn dispatch_network_event
               'old_app_out));
             CT.lemma_legal_network_response_handled_from_parse_success
               'st0
-              (C.received_ignored_post_handshake_state 'st0 body (Ghost.reveal 'raw_bytes))
+              (CM.received_ignored_post_handshake_state 'st0 body (Ghost.reveal 'raw_bytes))
               resp
               content_type
               (Ghost.reveal 'fragment_bytes)
@@ -356,14 +360,14 @@ fn dispatch_network_event
               'old_app_out;
             assert (pure (CT.some_legal_response
               'st0
-              (C.received_ignored_post_handshake_state 'st0 body (Ghost.reveal 'raw_bytes))
+              (CM.received_ignored_post_handshake_state 'st0 body (Ghost.reveal 'raw_bytes))
               resp
               'old_network_out
               'old_app_out));
             resp
           } else {
             L.free_application_data lignored;
-            C.mark_unexpected_message c;
+            CF.mark_unexpected_message c;
             let resp = {
               CT.network_out_len = 0sz;
               CT.app_out_len = 0sz;
@@ -374,13 +378,13 @@ fn dispatch_network_event
             assert (pure (Seq.equal B.empty (CT.response_network_out resp 'old_network_out)));
             assert (pure (CT.unexpected_message_response
               'st0
-              (C.local_fail_state 'st0 C.tls_unexpected_message_error)
+              (CM.local_fail_state 'st0 CM.tls_unexpected_message_error)
               resp
               'old_network_out
               'old_app_out));
             CT.lemma_legal_network_response_unexpected_from_parse_success
               'st0
-              (C.local_fail_state 'st0 C.tls_unexpected_message_error)
+              (CM.local_fail_state 'st0 CM.tls_unexpected_message_error)
               resp
               content_type
               (Ghost.reveal 'fragment_bytes)
@@ -389,7 +393,7 @@ fn dispatch_network_event
               'old_app_out;
             assert (pure (CT.some_legal_response
               'st0
-              (C.local_fail_state 'st0 C.tls_unexpected_message_error)
+              (CM.local_fail_state 'st0 CM.tls_unexpected_message_error)
               resp
               'old_network_out
               'old_app_out));

@@ -7,7 +7,8 @@ open Pulse.Lib.Array.PtsTo
 
 module B = TLS13.Bytes
 module CS = TLS13.Spec.ConnectionState
-module C = TLS13.Impl.ConnectionState
+module CR = TLS13.Impl.ConnectionState.Repr
+module Bounds = TLS13.Impl.ConnectionState.Bounds
 module CT = TLS13.Impl.Client.Types
 module L = TLS13.Impl.Messages
 module M = TLS13.Messages
@@ -16,10 +17,10 @@ module Seq = FStar.Seq
 module SZ = FStar.SizeT
 module U8 = FStar.UInt8
 
-type client = C.connection_state
+type client = CR.connection_state
 
 let connection_exactly (c:client) (st:CS.connection_state) : slprop =
-  C.connection_exactly c st
+  CR.connection_exactly c st
 
 noextract
 let next_local_action_sound
@@ -42,7 +43,7 @@ let next_local_action_sound
       Some? st.CS.cs_model.CS.model_handshake.CS.hs_start /\
       st.CS.cs_model.CS.model_handshake.CS.hs_client_hello == None /\
       B.length st.CS.cs_model.CS.model_handshake.CS.hs_transcript
-        <= C.max_transcript_len - C.max_client_hello_len /\
+        <= Bounds.max_transcript_len - Bounds.max_client_hello_len /\
       517 <= SZ.v network_out_len
     | CT.LocalDeriveSharedSecret ->
       action.CT.next_local_payload == CT.LocalPayloadNone /\
@@ -71,7 +72,7 @@ let next_local_action_sound
       st.CS.cs_model.CS.model_control ==
         CS.ControlHandshaking CS.HsCertificateReceived /\
       st.CS.cs_model.CS.model_handshake.CS.hs_validated_peer == None /\
-      SZ.v certificate_public_key_len <= C.max_public_key_len
+      SZ.v certificate_public_key_len <= Bounds.max_public_key_len
     | CT.LocalVerifyCertificateSignature ->
       action.CT.next_local_payload == CT.LocalPayloadNone /\
       st.CS.cs_model.CS.model_control ==
@@ -90,7 +91,7 @@ let next_local_action_sound
         st.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_handshake_traffic /\
       st.CS.cs_model.CS.model_handshake.CS.hs_server_finished_verified == false /\
       B.length st.CS.cs_model.CS.model_handshake.CS.hs_transcript + 36 <=
-        C.max_transcript_len
+        Bounds.max_transcript_len
     | CT.LocalInstallClientApplicationTrafficKeys ->
       action.CT.next_local_payload == CT.LocalPayloadNone /\
       st.CS.cs_model.CS.model_control ==
@@ -116,7 +117,7 @@ let next_local_action_sound
       FStar.UInt64.fits
         (st.CS.cs_model.CS.model_record.CS.record_write.R.seq + 1) /\
       B.length st.CS.cs_model.CS.model_handshake.CS.hs_transcript + 36
-        <= C.max_transcript_len /\
+        <= Bounds.max_transcript_len /\
       58 <= SZ.v network_out_len
     | CT.LocalSendKeyUpdate ->
       action.CT.next_local_payload == CT.LocalPayloadNone /\
@@ -133,12 +134,12 @@ let next_local_action_sound
     action.CT.next_local_payload == CT.LocalPayloadNone
 
 noextract
-let client_state_ref (c:client) : C.state_ref =
-  C.connection_state_ref c
+let client_state_ref (c:client) : CR.state_ref =
+  CR.connection_state_ref c
 
 fn new_client_default ()
   returns c:client
-  ensures C.connection_exactly c C.default_initial_state
+  ensures CR.connection_exactly c CR.default_initial_state
 
 fn new_client
   (server_name:array U8.t)
@@ -150,33 +151,33 @@ fn new_client
            pts_to trust_anchors 'trust_anchors_bytes **
            pure (B.length 'server_name_bytes == SZ.v server_name_len /\
                  B.length 'trust_anchors_bytes == SZ.v trust_anchors_len /\
-                 SZ.v server_name_len <= C.max_hostname_len /\
-                 SZ.v trust_anchors_len <= C.max_trust_anchors_len)
+                 SZ.v server_name_len <= Bounds.max_hostname_len /\
+                 SZ.v trust_anchors_len <= Bounds.max_trust_anchors_len)
   returns c:client
   ensures pts_to server_name 'server_name_bytes **
           pts_to trust_anchors 'trust_anchors_bytes **
-          C.connection_exactly
+          CR.connection_exactly
             c
-            (C.configured_initial_state
+            (CR.configured_initial_state
               (Ghost.reveal 'server_name_bytes)
               (Ghost.reveal 'trust_anchors_bytes)
               validation_time_seconds)
 
 fn control_snapshot
   (c:client)
-  requires C.connection_exactly c 'st0
-  returns snapshot:C.control_snapshot
-  ensures C.connection_exactly c 'st0 **
-          pure (C.control_snapshot_matches snapshot 'st0)
+  requires CR.connection_exactly c 'st0
+  returns snapshot:CR.control_snapshot
+  ensures CR.connection_exactly c 'st0 **
+          pure (CR.control_snapshot_matches snapshot 'st0)
 
 fn next_local_action
   (c:client)
   (network_out_len:SZ.t)
   (certificate_public_key_len:SZ.t)
   (server_finished_payload_len:SZ.t)
-  requires C.connection_exactly c 'st0
+  requires CR.connection_exactly c 'st0
   returns action:CT.next_local_action
-  ensures C.connection_exactly c 'st0 **
+  ensures CR.connection_exactly c 'st0 **
           pure (next_local_action_sound
             'st0
             network_out_len
@@ -188,15 +189,15 @@ fn copy_certificate_leaf_der
   (c:client)
   (out:array U8.t)
   (out_len:SZ.t)
-  requires C.connection_exactly c 'st0 **
+  requires CR.connection_exactly c 'st0 **
            pts_to out 'old_out **
            pure (B.length 'old_out == SZ.v out_len /\
-                 C.max_handshake_flight_len <= SZ.v out_len /\
+                 Bounds.max_handshake_flight_len <= SZ.v out_len /\
                  Some?
                    'st0.CS.cs_model.CS.model_handshake.CS.hs_buffers.CS.hb_certificate_leaf_der)
   returns copied_len:SZ.t
   ensures exists* out_bytes.
-          C.connection_exactly c 'st0 **
+          CR.connection_exactly c 'st0 **
           pts_to out out_bytes **
           pure (B.length out_bytes == SZ.v out_len /\
                 SZ.v copied_len <= B.length out_bytes /\
@@ -210,15 +211,15 @@ fn copy_certificate_verify_input
   (c:client)
   (out:array U8.t)
   (out_len:SZ.t)
-  requires C.connection_exactly c 'st0 **
+  requires CR.connection_exactly c 'st0 **
            pts_to out 'old_out **
            pure (B.length 'old_out == SZ.v out_len /\
-                 C.max_certificate_verify_input_len <= SZ.v out_len /\
+                 Bounds.max_certificate_verify_input_len <= SZ.v out_len /\
                  Some?
                    'st0.CS.cs_model.CS.model_handshake.CS.hs_buffers.CS.hb_certificate_verify_input)
   returns copied_len:SZ.t
   ensures exists* out_bytes.
-          C.connection_exactly c 'st0 **
+          CR.connection_exactly c 'st0 **
           pts_to out out_bytes **
           pure (B.length out_bytes == SZ.v out_len /\
                 SZ.v copied_len <= B.length out_bytes /\
@@ -232,48 +233,25 @@ fn copy_certificate_verify_signature
   (c:client)
   (out:array U8.t)
   (out_len:SZ.t)
-  requires C.connection_exactly c 'st0 **
+  requires CR.connection_exactly c 'st0 **
            pts_to out 'old_out **
            pure (B.length 'old_out == SZ.v out_len /\
                  L.max_signature_len <= SZ.v out_len /\
                  Some? 'st0.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify)
-  returns snapshot:C.certificate_verify_signature_snapshot
+  returns snapshot:CR.certificate_verify_signature_snapshot
   ensures exists* out_bytes.
-          C.connection_exactly c 'st0 **
+          CR.connection_exactly c 'st0 **
           pts_to out out_bytes **
           pure (B.length out_bytes == SZ.v out_len /\
-                SZ.v snapshot.C.cv_signature_len <= B.length out_bytes /\
+                SZ.v snapshot.CR.cv_signature_len <= B.length out_bytes /\
                 (match 'st0.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify with
                 | Some cv ->
-                  L.signature_scheme_matches snapshot.C.cv_signature_scheme cv.M.scheme /\
-                  SZ.v snapshot.C.cv_signature_len == B.length cv.M.signature /\
+                  L.signature_scheme_matches snapshot.CR.cv_signature_scheme cv.M.scheme /\
+                  SZ.v snapshot.CR.cv_signature_len == B.length cv.M.signature /\
                   Seq.equal
-                    (Seq.slice out_bytes 0 (SZ.v snapshot.C.cv_signature_len))
+                    (Seq.slice out_bytes 0 (SZ.v snapshot.CR.cv_signature_len))
                     cv.M.signature
                 | None -> False))
-
-fn copy_server_finished_verify_data
-  (c:client)
-  (out:array U8.t)
-  (out_len:SZ.t)
-  requires C.connection_exactly c 'st0 **
-           pts_to out 'old_out **
-           pure (B.length 'old_out == SZ.v out_len /\
-                 32 <= SZ.v out_len /\
-                 Some? 'st0.CS.cs_model.CS.model_handshake.CS.hs_server_finished)
-  returns copied_len:SZ.t
-  ensures exists* out_bytes.
-          C.connection_exactly c 'st0 **
-          pts_to out out_bytes **
-          pure (B.length out_bytes == SZ.v out_len /\
-                SZ.v copied_len == 32 /\
-                SZ.v copied_len <= B.length out_bytes /\
-                (match 'st0.CS.cs_model.CS.model_handshake.CS.hs_server_finished with
-                 | Some fin ->
-                    Seq.equal
-                      (Seq.slice out_bytes 0 (SZ.v copied_len))
-                      fin.M.verify_data
-                 | None -> False))
 
 fn process_network_event
   (c:client)
@@ -286,7 +264,7 @@ fn process_network_event
   (network_out_len:SZ.t)
   (app_out:array U8.t)
   (app_out_len:SZ.t)
-  requires C.connection_exactly c 'st0 **
+  requires CR.connection_exactly c 'st0 **
            pts_to raw 'raw_bytes **
            pts_to fragment 'fragment_bytes **
            pts_to network_out 'old_network_out **
@@ -303,7 +281,7 @@ fn process_network_event
                    (Ghost.reveal 'raw_bytes))
   returns resp: CT.client_response
   ensures exists* st1 network_out_bytes app_out_bytes.
-          C.connection_exactly c st1 **
+          CR.connection_exactly c st1 **
           pts_to raw 'raw_bytes **
           pts_to fragment 'fragment_bytes **
           pts_to network_out network_out_bytes **
@@ -329,7 +307,7 @@ fn process_tls_record
   (network_out_len:SZ.t)
   (app_out:array U8.t)
   (app_out_len:SZ.t)
-  requires C.connection_exactly c 'st0 **
+  requires CR.connection_exactly c 'st0 **
            pts_to raw 'raw_bytes **
            pts_to network_out 'old_network_out **
            pts_to app_out 'old_app_out **
@@ -339,7 +317,7 @@ fn process_tls_record
                  L.max_record_fragment_len <= SZ.v app_out_len)
   returns resp: CT.client_response
   ensures exists* st1 network_out_bytes app_out_bytes.
-          C.connection_exactly c st1 **
+          CR.connection_exactly c st1 **
           pts_to raw 'raw_bytes **
           pts_to network_out network_out_bytes **
           pts_to app_out app_out_bytes **
@@ -373,7 +351,7 @@ fn process_network_bytes
   (network_out_len:SZ.t)
   (app_out:array U8.t)
   (app_out_len:SZ.t)
-  requires C.connection_exactly c 'st0 **
+  requires CR.connection_exactly c 'st0 **
            pts_to raw 'raw_bytes **
            pts_to network_out 'old_network_out **
            pts_to app_out 'old_app_out **
@@ -383,7 +361,7 @@ fn process_network_bytes
                  L.max_record_fragment_len <= SZ.v app_out_len)
   returns buffer_resp: CT.client_buffer_response
   ensures exists* st1 network_out_bytes app_out_bytes.
-          C.connection_exactly c st1 **
+          CR.connection_exactly c st1 **
           pts_to raw 'raw_bytes **
           pts_to network_out network_out_bytes **
           pts_to app_out app_out_bytes **
@@ -422,7 +400,7 @@ fn process_local_event
   (network_out_len:SZ.t)
   (app_out:array U8.t)
   (app_out_len:SZ.t)
-  requires C.connection_exactly c 'st0 **
+  requires CR.connection_exactly c 'st0 **
            pts_to payload 'payload_bytes **
            pts_to network_out 'old_network_out **
            pts_to app_out 'old_app_out **
@@ -435,7 +413,7 @@ fn process_local_event
                    (Ghost.reveal 'payload_bytes))
   returns resp: CT.client_response
   ensures exists* st1 network_out_bytes app_out_bytes.
-          C.connection_exactly c st1 **
+          CR.connection_exactly c st1 **
           pts_to payload 'payload_bytes **
           pts_to network_out network_out_bytes **
           pts_to app_out app_out_bytes **

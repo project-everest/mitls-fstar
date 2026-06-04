@@ -8,7 +8,14 @@ open TLS13.Impl.Client.Types
 
 module B = TLS13.Bytes
 module CL = TLS13.ConnectionLog
-module C = TLS13.Impl.ConnectionState
+module CR = TLS13.Impl.ConnectionState.Repr
+module CLH = TLS13.Impl.ConnectionState.LocalHandshake
+module CLA = TLS13.Impl.ConnectionState.LocalAuth
+module CLS = TLS13.Impl.ConnectionState.LocalSend
+module CLApp = TLS13.Impl.ConnectionState.LocalApp
+module CF = TLS13.Impl.ConnectionState.Fail
+module CQ = TLS13.Impl.ConnectionState.Queries
+module CM = TLS13.Impl.ConnectionState.Model
 module CS = TLS13.Spec.ConnectionState
 module CT = TLS13.Impl.Client.Types
 module Arr = Pulse.Lib.Array
@@ -20,7 +27,7 @@ module U8 = FStar.UInt8
 module X = TLS13.X509.Spec
 
 fn handle_local_event
-  (c:C.connection_state)
+  (c:CR.connection_state)
   (kind:CT.local_event_kind)
   (payload:array U8.t)
   (payload_len:SZ.t)
@@ -28,7 +35,7 @@ fn handle_local_event
   (network_out_len:SZ.t)
   (app_out:array U8.t)
   (app_out_len:SZ.t)
-  requires C.connection_exactly c 'st0 **
+  requires CR.connection_exactly c 'st0 **
            pts_to payload 'payload_bytes **
            pts_to network_out 'old_network_out **
            pts_to app_out 'old_app_out **
@@ -41,7 +48,7 @@ fn handle_local_event
                    (Ghost.reveal 'payload_bytes))
   returns resp: CT.client_response
   ensures exists* st1 network_out_bytes app_out_bytes.
-          C.connection_exactly c st1 **
+          CR.connection_exactly c st1 **
           pts_to payload 'payload_bytes **
           pts_to network_out network_out_bytes **
           pts_to app_out app_out_bytes **
@@ -64,10 +71,10 @@ fn handle_local_event
 {
   match kind {
     LocalStartHandshake -> {
-    let ok = C.try_start_handshake c;
+    let ok = CLH.try_start_handshake c;
     if ok {
       with start.
-        assert (C.connection_exactly c (C.started_handshake_state 'st0 start));
+        assert (CR.connection_exactly c (CM.started_handshake_state 'st0 start));
       let resp = {
         CT.network_out_len = 0sz;
         CT.app_out_len = 0sz;
@@ -76,10 +83,10 @@ fn handle_local_event
       Seq.lemma_len_slice 'old_network_out 0 0;
       Seq.lemma_eq_intro B.empty (Seq.slice 'old_network_out 0 0);
       assert (pure (Seq.equal B.empty (CT.response_network_out resp 'old_network_out)));
-      C.lemma_started_handshake_state_evolves 'st0 start;
+      CM.lemma_started_handshake_state_evolves 'st0 start;
       assert (pure (CT.legal_response_for_event
         'st0
-        (C.started_handshake_state 'st0 start)
+        (CM.started_handshake_state 'st0 start)
         resp
         (CS.ConnLocalEvent (CS.LocalStartHandshake start))
         B.empty
@@ -88,7 +95,7 @@ fn handle_local_event
         'old_app_out));
       assert (pure (CT.legal_local_response
         'st0
-        (C.started_handshake_state 'st0 start)
+        (CM.started_handshake_state 'st0 start)
         resp
         CT.LocalStartHandshake
         (Ghost.reveal 'payload_bytes)
@@ -99,7 +106,7 @@ fn handle_local_event
         'old_app_out));
       assert (pure (CT.legal_handled_local_response
         'st0
-        (C.started_handshake_state 'st0 start)
+        (CM.started_handshake_state 'st0 start)
         resp
         CT.LocalStartHandshake
         (Ghost.reveal 'payload_bytes)
@@ -107,13 +114,13 @@ fn handle_local_event
         'old_app_out));
       assert (pure (CT.some_legal_response
         'st0
-        (C.started_handshake_state 'st0 start)
+        (CM.started_handshake_state 'st0 start)
         resp
         'old_network_out
         'old_app_out));
       resp
     } else {
-      C.mark_unexpected_message c;
+      CF.mark_unexpected_message c;
       let resp = {
         CT.network_out_len = 0sz;
         CT.app_out_len = 0sz;
@@ -124,13 +131,13 @@ fn handle_local_event
       assert (pure (Seq.equal B.empty (CT.response_network_out resp 'old_network_out)));
       assert (pure (CT.unexpected_message_response
         'st0
-        (C.local_fail_state 'st0 C.tls_unexpected_message_error)
+        (CM.local_fail_state 'st0 CM.tls_unexpected_message_error)
         resp
         'old_network_out
         'old_app_out));
       assert (pure (CT.legal_handled_local_response
         'st0
-        (C.local_fail_state 'st0 C.tls_unexpected_message_error)
+        (CM.local_fail_state 'st0 CM.tls_unexpected_message_error)
         resp
         CT.LocalStartHandshake
         (Ghost.reveal 'payload_bytes)
@@ -138,7 +145,7 @@ fn handle_local_event
         'old_app_out));
       assert (pure (CT.some_legal_response
         'st0
-        (C.local_fail_state 'st0 C.tls_unexpected_message_error)
+        (CM.local_fail_state 'st0 CM.tls_unexpected_message_error)
         resp
         'old_network_out
         'old_app_out));
@@ -146,10 +153,10 @@ fn handle_local_event
     }
   }
     LocalDeriveSharedSecret -> {
-    let ok = C.try_derive_shared_secret c;
+    let ok = CLH.try_derive_shared_secret c;
     if ok {
       with shared.
-        assert (C.connection_exactly c (C.derived_shared_secret_state 'st0 shared));
+        assert (CR.connection_exactly c (CM.derived_shared_secret_state 'st0 shared));
       let resp = {
         CT.network_out_len = 0sz;
         CT.app_out_len = 0sz;
@@ -160,7 +167,7 @@ fn handle_local_event
       assert (pure (Seq.equal B.empty (CT.response_network_out resp 'old_network_out)));
       assert (pure (CT.legal_response_for_event
         'st0
-        (C.derived_shared_secret_state 'st0 shared)
+        (CM.derived_shared_secret_state 'st0 shared)
         resp
         (CS.ConnLocalEvent (CS.LocalDeriveSharedSecret shared))
         B.empty
@@ -169,7 +176,7 @@ fn handle_local_event
         'old_app_out));
       assert (pure (CT.legal_local_response
         'st0
-        (C.derived_shared_secret_state 'st0 shared)
+        (CM.derived_shared_secret_state 'st0 shared)
         resp
         CT.LocalDeriveSharedSecret
         (Ghost.reveal 'payload_bytes)
@@ -180,7 +187,7 @@ fn handle_local_event
         'old_app_out));
       assert (pure (CT.legal_handled_local_response
         'st0
-        (C.derived_shared_secret_state 'st0 shared)
+        (CM.derived_shared_secret_state 'st0 shared)
         resp
         CT.LocalDeriveSharedSecret
         (Ghost.reveal 'payload_bytes)
@@ -188,13 +195,13 @@ fn handle_local_event
         'old_app_out));
       assert (pure (CT.some_legal_response
         'st0
-        (C.derived_shared_secret_state 'st0 shared)
+        (CM.derived_shared_secret_state 'st0 shared)
         resp
         'old_network_out
         'old_app_out));
       resp
     } else {
-      C.mark_unexpected_message c;
+      CF.mark_unexpected_message c;
       let resp = {
         CT.network_out_len = 0sz;
         CT.app_out_len = 0sz;
@@ -205,13 +212,13 @@ fn handle_local_event
       assert (pure (Seq.equal B.empty (CT.response_network_out resp 'old_network_out)));
       assert (pure (CT.unexpected_message_response
         'st0
-        (C.local_fail_state 'st0 C.tls_unexpected_message_error)
+        (CM.local_fail_state 'st0 CM.tls_unexpected_message_error)
         resp
         'old_network_out
         'old_app_out));
       assert (pure (CT.legal_handled_local_response
         'st0
-        (C.local_fail_state 'st0 C.tls_unexpected_message_error)
+        (CM.local_fail_state 'st0 CM.tls_unexpected_message_error)
         resp
         CT.LocalDeriveSharedSecret
         (Ghost.reveal 'payload_bytes)
@@ -219,7 +226,7 @@ fn handle_local_event
         'old_app_out));
       assert (pure (CT.some_legal_response
         'st0
-        (C.local_fail_state 'st0 C.tls_unexpected_message_error)
+        (CM.local_fail_state 'st0 CM.tls_unexpected_message_error)
         resp
         'old_network_out
         'old_app_out));
@@ -227,11 +234,11 @@ fn handle_local_event
     }
   }
     LocalInstallClientHandshakeTrafficKeys -> {
-    let ok = C.try_install_client_handshake_traffic_keys c;
+    let ok = CLH.try_install_client_handshake_traffic_keys c;
     if ok {
       with material.
-        assert (C.connection_exactly c
-          (C.installed_traffic_keys_state 'st0 {
+        assert (CR.connection_exactly c
+          (CM.installed_traffic_keys_state 'st0 {
             CS.install_epoch = CS.TrafficHandshake;
             CS.install_direction = CS.TrafficWrite;
             CS.install_material = material;
@@ -246,7 +253,7 @@ fn handle_local_event
       assert (pure (Seq.equal B.empty (CT.response_network_out resp 'old_network_out)));
       assert (pure (CT.legal_response_for_event
         'st0
-        (C.installed_traffic_keys_state 'st0 {
+        (CM.installed_traffic_keys_state 'st0 {
           CS.install_epoch = CS.TrafficHandshake;
           CS.install_direction = CS.TrafficWrite;
           CS.install_material = material;
@@ -263,7 +270,7 @@ fn handle_local_event
         'old_app_out));
       assert (pure (CT.legal_local_response
         'st0
-        (C.installed_traffic_keys_state 'st0 {
+        (CM.installed_traffic_keys_state 'st0 {
           CS.install_epoch = CS.TrafficHandshake;
           CS.install_direction = CS.TrafficWrite;
           CS.install_material = material;
@@ -282,7 +289,7 @@ fn handle_local_event
         'old_app_out));
       assert (pure (CT.legal_handled_local_response
         'st0
-        (C.installed_traffic_keys_state 'st0 {
+        (CM.installed_traffic_keys_state 'st0 {
           CS.install_epoch = CS.TrafficHandshake;
           CS.install_direction = CS.TrafficWrite;
           CS.install_material = material;
@@ -294,7 +301,7 @@ fn handle_local_event
         'old_app_out));
       assert (pure (CT.some_legal_response
         'st0
-        (C.installed_traffic_keys_state 'st0 {
+        (CM.installed_traffic_keys_state 'st0 {
           CS.install_epoch = CS.TrafficHandshake;
           CS.install_direction = CS.TrafficWrite;
           CS.install_material = material;
@@ -304,7 +311,7 @@ fn handle_local_event
         'old_app_out));
       resp
     } else {
-      C.mark_unexpected_message c;
+      CF.mark_unexpected_message c;
       let resp = {
         CT.network_out_len = 0sz;
         CT.app_out_len = 0sz;
@@ -315,13 +322,13 @@ fn handle_local_event
       assert (pure (Seq.equal B.empty (CT.response_network_out resp 'old_network_out)));
       assert (pure (CT.unexpected_message_response
         'st0
-        (C.local_fail_state 'st0 C.tls_unexpected_message_error)
+        (CM.local_fail_state 'st0 CM.tls_unexpected_message_error)
         resp
         'old_network_out
         'old_app_out));
       assert (pure (CT.legal_handled_local_response
         'st0
-        (C.local_fail_state 'st0 C.tls_unexpected_message_error)
+        (CM.local_fail_state 'st0 CM.tls_unexpected_message_error)
         resp
         CT.LocalInstallClientHandshakeTrafficKeys
         (Ghost.reveal 'payload_bytes)
@@ -329,7 +336,7 @@ fn handle_local_event
         'old_app_out));
       assert (pure (CT.some_legal_response
         'st0
-        (C.local_fail_state 'st0 C.tls_unexpected_message_error)
+        (CM.local_fail_state 'st0 CM.tls_unexpected_message_error)
         resp
         'old_network_out
         'old_app_out));
@@ -337,11 +344,11 @@ fn handle_local_event
     }
   }
     LocalInstallServerHandshakeTrafficKeys -> {
-    let ok = C.try_install_server_handshake_traffic_keys c;
+    let ok = CLH.try_install_server_handshake_traffic_keys c;
     if ok {
       with material.
-        assert (C.connection_exactly c
-          (C.installed_traffic_keys_state 'st0 {
+        assert (CR.connection_exactly c
+          (CM.installed_traffic_keys_state 'st0 {
             CS.install_epoch = CS.TrafficHandshake;
             CS.install_direction = CS.TrafficRead;
             CS.install_material = material;
@@ -356,7 +363,7 @@ fn handle_local_event
       assert (pure (Seq.equal B.empty (CT.response_network_out resp 'old_network_out)));
       assert (pure (CT.legal_response_for_event
         'st0
-        (C.installed_traffic_keys_state 'st0 {
+        (CM.installed_traffic_keys_state 'st0 {
           CS.install_epoch = CS.TrafficHandshake;
           CS.install_direction = CS.TrafficRead;
           CS.install_material = material;
@@ -373,7 +380,7 @@ fn handle_local_event
         'old_app_out));
       assert (pure (CT.legal_local_response
         'st0
-        (C.installed_traffic_keys_state 'st0 {
+        (CM.installed_traffic_keys_state 'st0 {
           CS.install_epoch = CS.TrafficHandshake;
           CS.install_direction = CS.TrafficRead;
           CS.install_material = material;
@@ -392,7 +399,7 @@ fn handle_local_event
         'old_app_out));
       assert (pure (CT.legal_handled_local_response
         'st0
-        (C.installed_traffic_keys_state 'st0 {
+        (CM.installed_traffic_keys_state 'st0 {
           CS.install_epoch = CS.TrafficHandshake;
           CS.install_direction = CS.TrafficRead;
           CS.install_material = material;
@@ -404,7 +411,7 @@ fn handle_local_event
         'old_app_out));
       assert (pure (CT.some_legal_response
         'st0
-        (C.installed_traffic_keys_state 'st0 {
+        (CM.installed_traffic_keys_state 'st0 {
           CS.install_epoch = CS.TrafficHandshake;
           CS.install_direction = CS.TrafficRead;
           CS.install_material = material;
@@ -414,7 +421,7 @@ fn handle_local_event
         'old_app_out));
       resp
     } else {
-      C.mark_unexpected_message c;
+      CF.mark_unexpected_message c;
       let resp = {
         CT.network_out_len = 0sz;
         CT.app_out_len = 0sz;
@@ -425,13 +432,13 @@ fn handle_local_event
       assert (pure (Seq.equal B.empty (CT.response_network_out resp 'old_network_out)));
       assert (pure (CT.unexpected_message_response
         'st0
-        (C.local_fail_state 'st0 C.tls_unexpected_message_error)
+        (CM.local_fail_state 'st0 CM.tls_unexpected_message_error)
         resp
         'old_network_out
         'old_app_out));
       assert (pure (CT.legal_handled_local_response
         'st0
-        (C.local_fail_state 'st0 C.tls_unexpected_message_error)
+        (CM.local_fail_state 'st0 CM.tls_unexpected_message_error)
         resp
         CT.LocalInstallServerHandshakeTrafficKeys
         (Ghost.reveal 'payload_bytes)
@@ -439,7 +446,7 @@ fn handle_local_event
         'old_app_out));
       assert (pure (CT.some_legal_response
         'st0
-        (C.local_fail_state 'st0 C.tls_unexpected_message_error)
+        (CM.local_fail_state 'st0 CM.tls_unexpected_message_error)
         resp
         'old_network_out
         'old_app_out));
@@ -447,11 +454,11 @@ fn handle_local_event
     }
   }
     LocalInstallClientApplicationTrafficKeys -> {
-    let ok = C.try_install_client_application_traffic_keys c;
+    let ok = CLH.try_install_client_application_traffic_keys c;
     if ok {
       with material.
-        assert (C.connection_exactly c
-          (C.installed_traffic_keys_state 'st0 {
+        assert (CR.connection_exactly c
+          (CM.installed_traffic_keys_state 'st0 {
             CS.install_epoch = CS.TrafficApplication;
             CS.install_direction = CS.TrafficWrite;
             CS.install_material = material;
@@ -466,7 +473,7 @@ fn handle_local_event
       assert (pure (Seq.equal B.empty (CT.response_network_out resp 'old_network_out)));
       assert (pure (CT.legal_response_for_event
         'st0
-        (C.installed_traffic_keys_state 'st0 {
+        (CM.installed_traffic_keys_state 'st0 {
           CS.install_epoch = CS.TrafficApplication;
           CS.install_direction = CS.TrafficWrite;
           CS.install_material = material;
@@ -483,7 +490,7 @@ fn handle_local_event
         'old_app_out));
       assert (pure (CT.legal_local_response
         'st0
-        (C.installed_traffic_keys_state 'st0 {
+        (CM.installed_traffic_keys_state 'st0 {
           CS.install_epoch = CS.TrafficApplication;
           CS.install_direction = CS.TrafficWrite;
           CS.install_material = material;
@@ -502,7 +509,7 @@ fn handle_local_event
         'old_app_out));
       assert (pure (CT.legal_handled_local_response
         'st0
-        (C.installed_traffic_keys_state 'st0 {
+        (CM.installed_traffic_keys_state 'st0 {
           CS.install_epoch = CS.TrafficApplication;
           CS.install_direction = CS.TrafficWrite;
           CS.install_material = material;
@@ -514,7 +521,7 @@ fn handle_local_event
         'old_app_out));
       assert (pure (CT.some_legal_response
         'st0
-        (C.installed_traffic_keys_state 'st0 {
+        (CM.installed_traffic_keys_state 'st0 {
           CS.install_epoch = CS.TrafficApplication;
           CS.install_direction = CS.TrafficWrite;
           CS.install_material = material;
@@ -524,7 +531,7 @@ fn handle_local_event
         'old_app_out));
       resp
     } else {
-      C.mark_unexpected_message c;
+      CF.mark_unexpected_message c;
       let resp = {
         CT.network_out_len = 0sz;
         CT.app_out_len = 0sz;
@@ -535,13 +542,13 @@ fn handle_local_event
       assert (pure (Seq.equal B.empty (CT.response_network_out resp 'old_network_out)));
       assert (pure (CT.unexpected_message_response
         'st0
-        (C.local_fail_state 'st0 C.tls_unexpected_message_error)
+        (CM.local_fail_state 'st0 CM.tls_unexpected_message_error)
         resp
         'old_network_out
         'old_app_out));
       assert (pure (CT.legal_handled_local_response
         'st0
-        (C.local_fail_state 'st0 C.tls_unexpected_message_error)
+        (CM.local_fail_state 'st0 CM.tls_unexpected_message_error)
         resp
         CT.LocalInstallClientApplicationTrafficKeys
         (Ghost.reveal 'payload_bytes)
@@ -549,7 +556,7 @@ fn handle_local_event
         'old_app_out));
       assert (pure (CT.some_legal_response
         'st0
-        (C.local_fail_state 'st0 C.tls_unexpected_message_error)
+        (CM.local_fail_state 'st0 CM.tls_unexpected_message_error)
         resp
         'old_network_out
         'old_app_out));
@@ -557,11 +564,11 @@ fn handle_local_event
     }
   }
     LocalInstallServerApplicationTrafficKeys -> {
-    let ok = C.try_install_server_application_traffic_keys c;
+    let ok = CLH.try_install_server_application_traffic_keys c;
     if ok {
       with material.
-        assert (C.connection_exactly c
-          (C.installed_traffic_keys_state 'st0 {
+        assert (CR.connection_exactly c
+          (CM.installed_traffic_keys_state 'st0 {
             CS.install_epoch = CS.TrafficApplication;
             CS.install_direction = CS.TrafficRead;
             CS.install_material = material;
@@ -576,7 +583,7 @@ fn handle_local_event
       assert (pure (Seq.equal B.empty (CT.response_network_out resp 'old_network_out)));
       assert (pure (CT.legal_response_for_event
         'st0
-        (C.installed_traffic_keys_state 'st0 {
+        (CM.installed_traffic_keys_state 'st0 {
           CS.install_epoch = CS.TrafficApplication;
           CS.install_direction = CS.TrafficRead;
           CS.install_material = material;
@@ -593,7 +600,7 @@ fn handle_local_event
         'old_app_out));
       assert (pure (CT.legal_local_response
         'st0
-        (C.installed_traffic_keys_state 'st0 {
+        (CM.installed_traffic_keys_state 'st0 {
           CS.install_epoch = CS.TrafficApplication;
           CS.install_direction = CS.TrafficRead;
           CS.install_material = material;
@@ -612,7 +619,7 @@ fn handle_local_event
         'old_app_out));
       assert (pure (CT.legal_handled_local_response
         'st0
-        (C.installed_traffic_keys_state 'st0 {
+        (CM.installed_traffic_keys_state 'st0 {
           CS.install_epoch = CS.TrafficApplication;
           CS.install_direction = CS.TrafficRead;
           CS.install_material = material;
@@ -624,7 +631,7 @@ fn handle_local_event
         'old_app_out));
       assert (pure (CT.some_legal_response
         'st0
-        (C.installed_traffic_keys_state 'st0 {
+        (CM.installed_traffic_keys_state 'st0 {
           CS.install_epoch = CS.TrafficApplication;
           CS.install_direction = CS.TrafficRead;
           CS.install_material = material;
@@ -634,7 +641,7 @@ fn handle_local_event
         'old_app_out));
       resp
     } else {
-      C.mark_unexpected_message c;
+      CF.mark_unexpected_message c;
       let resp = {
         CT.network_out_len = 0sz;
         CT.app_out_len = 0sz;
@@ -645,13 +652,13 @@ fn handle_local_event
       assert (pure (Seq.equal B.empty (CT.response_network_out resp 'old_network_out)));
       assert (pure (CT.unexpected_message_response
         'st0
-        (C.local_fail_state 'st0 C.tls_unexpected_message_error)
+        (CM.local_fail_state 'st0 CM.tls_unexpected_message_error)
         resp
         'old_network_out
         'old_app_out));
       assert (pure (CT.legal_handled_local_response
         'st0
-        (C.local_fail_state 'st0 C.tls_unexpected_message_error)
+        (CM.local_fail_state 'st0 CM.tls_unexpected_message_error)
         resp
         CT.LocalInstallServerApplicationTrafficKeys
         (Ghost.reveal 'payload_bytes)
@@ -659,7 +666,7 @@ fn handle_local_event
         'old_app_out));
       assert (pure (CT.some_legal_response
         'st0
-        (C.local_fail_state 'st0 C.tls_unexpected_message_error)
+        (CM.local_fail_state 'st0 CM.tls_unexpected_message_error)
         resp
         'old_network_out
         'old_app_out));
@@ -667,7 +674,7 @@ fn handle_local_event
     }
   }
     LocalValidateCertificate -> {
-    let ready = C.can_validate_certificate c payload_len;
+    let ready = CQ.can_validate_certificate c payload_len;
     if ready {
       let peer = Ghost.hide (CT.local_validation_peer 'st0 (Ghost.reveal 'payload_bytes));
       assert (pure (CT.local_input_wf
@@ -685,7 +692,7 @@ fn handle_local_event
       assert (pure ((Ghost.reveal peer).X.leaf_public_key ==
         (Ghost.reveal 'payload_bytes)));
       assert (pure ((Ghost.reveal peer).X.permitted_signature_schemes == []));
-      C.mark_validated_certificate c payload payload_len #peer;
+      CLA.mark_validated_certificate c payload payload_len #peer;
       let resp = {
         CT.network_out_len = 0sz;
         CT.app_out_len = 0sz;
@@ -694,12 +701,12 @@ fn handle_local_event
       Seq.lemma_len_slice 'old_network_out 0 0;
       Seq.lemma_eq_intro B.empty (Seq.slice 'old_network_out 0 0);
       assert (pure (Seq.equal B.empty (CT.response_network_out resp 'old_network_out)));
-      C.lemma_validated_certificate_state_evolves
+      CM.lemma_validated_certificate_state_evolves
         'st0
         (Ghost.reveal peer);
       assert (pure (CT.legal_response_for_event
         'st0
-        (C.validated_certificate_state 'st0 (Ghost.reveal peer))
+        (CM.validated_certificate_state 'st0 (Ghost.reveal peer))
         resp
         (CS.ConnLocalEvent
           (CS.LocalValidateCertificate (Ghost.reveal peer)))
@@ -709,7 +716,7 @@ fn handle_local_event
         'old_app_out));
       assert (pure (CT.legal_local_response
         'st0
-        (C.validated_certificate_state 'st0 (Ghost.reveal peer))
+        (CM.validated_certificate_state 'st0 (Ghost.reveal peer))
         resp
         CT.LocalValidateCertificate
         (Ghost.reveal 'payload_bytes)
@@ -721,7 +728,7 @@ fn handle_local_event
         'old_app_out));
       assert (pure (CT.legal_handled_local_response
         'st0
-        (C.validated_certificate_state 'st0 (Ghost.reveal peer))
+        (CM.validated_certificate_state 'st0 (Ghost.reveal peer))
         resp
         CT.LocalValidateCertificate
         (Ghost.reveal 'payload_bytes)
@@ -729,13 +736,13 @@ fn handle_local_event
         'old_app_out));
       assert (pure (CT.some_legal_response
         'st0
-        (C.validated_certificate_state 'st0 (Ghost.reveal peer))
+        (CM.validated_certificate_state 'st0 (Ghost.reveal peer))
         resp
         'old_network_out
         'old_app_out));
       resp
     } else {
-      C.mark_unexpected_message c;
+      CF.mark_unexpected_message c;
       let resp = {
         CT.network_out_len = 0sz;
         CT.app_out_len = 0sz;
@@ -746,13 +753,13 @@ fn handle_local_event
       assert (pure (Seq.equal B.empty (CT.response_network_out resp 'old_network_out)));
       assert (pure (CT.unexpected_message_response
         'st0
-        (C.local_fail_state 'st0 C.tls_unexpected_message_error)
+        (CM.local_fail_state 'st0 CM.tls_unexpected_message_error)
         resp
         'old_network_out
         'old_app_out));
       assert (pure (CT.legal_handled_local_response
         'st0
-        (C.local_fail_state 'st0 C.tls_unexpected_message_error)
+        (CM.local_fail_state 'st0 CM.tls_unexpected_message_error)
         resp
         CT.LocalValidateCertificate
         (Ghost.reveal 'payload_bytes)
@@ -760,7 +767,7 @@ fn handle_local_event
         'old_app_out));
       assert (pure (CT.some_legal_response
         'st0
-        (C.local_fail_state 'st0 C.tls_unexpected_message_error)
+        (CM.local_fail_state 'st0 CM.tls_unexpected_message_error)
         resp
         'old_network_out
         'old_app_out));
@@ -768,7 +775,7 @@ fn handle_local_event
     }
   }
     LocalVerifyCertificateSignature -> {
-    let ready = C.can_verify_certificate_signature c;
+    let ready = CQ.can_verify_certificate_signature c;
     if ready {
       let cv = Ghost.hide (Some?.v 'st0.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify);
       assert (pure ('st0.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify ==
@@ -783,7 +790,7 @@ fn handle_local_event
         'st0.CS.cs_model
         (CS.ConnLocalEvent
           (CS.LocalVerifyCertificateSignature (Ghost.reveal cv)))));
-      C.mark_verified_certificate_signature c #cv;
+      CLA.mark_verified_certificate_signature c #cv;
       let resp = {
         CT.network_out_len = 0sz;
         CT.app_out_len = 0sz;
@@ -792,12 +799,12 @@ fn handle_local_event
       Seq.lemma_len_slice 'old_network_out 0 0;
       Seq.lemma_eq_intro B.empty (Seq.slice 'old_network_out 0 0);
       assert (pure (Seq.equal B.empty (CT.response_network_out resp 'old_network_out)));
-      C.lemma_verified_certificate_signature_state_evolves
+      CM.lemma_verified_certificate_signature_state_evolves
         'st0
         (Ghost.reveal cv);
       assert (pure (CT.legal_response_for_event
         'st0
-        (C.verified_certificate_signature_state 'st0 (Ghost.reveal cv))
+        (CM.verified_certificate_signature_state 'st0 (Ghost.reveal cv))
         resp
         (CS.ConnLocalEvent
           (CS.LocalVerifyCertificateSignature (Ghost.reveal cv)))
@@ -807,7 +814,7 @@ fn handle_local_event
         'old_app_out));
       assert (pure (CT.legal_local_response
         'st0
-        (C.verified_certificate_signature_state 'st0 (Ghost.reveal cv))
+        (CM.verified_certificate_signature_state 'st0 (Ghost.reveal cv))
         resp
         CT.LocalVerifyCertificateSignature
         (Ghost.reveal 'payload_bytes)
@@ -819,7 +826,7 @@ fn handle_local_event
         'old_app_out));
       assert (pure (CT.legal_handled_local_response
         'st0
-        (C.verified_certificate_signature_state 'st0 (Ghost.reveal cv))
+        (CM.verified_certificate_signature_state 'st0 (Ghost.reveal cv))
         resp
         CT.LocalVerifyCertificateSignature
         (Ghost.reveal 'payload_bytes)
@@ -827,13 +834,13 @@ fn handle_local_event
         'old_app_out));
       assert (pure (CT.some_legal_response
         'st0
-        (C.verified_certificate_signature_state 'st0 (Ghost.reveal cv))
+        (CM.verified_certificate_signature_state 'st0 (Ghost.reveal cv))
         resp
         'old_network_out
         'old_app_out));
       resp
     } else {
-      C.mark_unexpected_message c;
+      CF.mark_unexpected_message c;
       let resp = {
         CT.network_out_len = 0sz;
         CT.app_out_len = 0sz;
@@ -844,13 +851,13 @@ fn handle_local_event
       assert (pure (Seq.equal B.empty (CT.response_network_out resp 'old_network_out)));
       assert (pure (CT.unexpected_message_response
         'st0
-        (C.local_fail_state 'st0 C.tls_unexpected_message_error)
+        (CM.local_fail_state 'st0 CM.tls_unexpected_message_error)
         resp
         'old_network_out
         'old_app_out));
       assert (pure (CT.legal_handled_local_response
         'st0
-        (C.local_fail_state 'st0 C.tls_unexpected_message_error)
+        (CM.local_fail_state 'st0 CM.tls_unexpected_message_error)
         resp
         CT.LocalVerifyCertificateSignature
         (Ghost.reveal 'payload_bytes)
@@ -858,7 +865,7 @@ fn handle_local_event
         'old_app_out));
       assert (pure (CT.some_legal_response
         'st0
-        (C.local_fail_state 'st0 C.tls_unexpected_message_error)
+        (CM.local_fail_state 'st0 CM.tls_unexpected_message_error)
         resp
         'old_network_out
         'old_app_out));
@@ -866,9 +873,9 @@ fn handle_local_event
     }
   }
     LocalVerifyFinished -> {
-    let ready = C.can_verify_server_finished c 36sz;
+    let ready = CQ.can_verify_server_finished c 36sz;
     if ready {
-      let finished_ok = C.server_finished_verify_data_matches c;
+      let finished_ok = CQ.server_finished_verify_data_matches c;
       if finished_ok {
         let fin = Ghost.hide (Some?.v 'st0.CS.cs_model.CS.model_handshake.CS.hs_server_finished);
         assert (pure ('st0.CS.cs_model.CS.model_handshake.CS.hs_server_finished ==
@@ -879,7 +886,7 @@ fn handle_local_event
           'st0.CS.cs_model
           (CS.ConnLocalEvent
             (CS.LocalVerifyFinished (Ghost.reveal fin)))));
-        C.mark_verified_stored_server_finished c #fin;
+        CLA.mark_verified_stored_server_finished c #fin;
         let resp = {
           CT.network_out_len = 0sz;
           CT.app_out_len = 0sz;
@@ -888,12 +895,12 @@ fn handle_local_event
         Seq.lemma_len_slice 'old_network_out 0 0;
         Seq.lemma_eq_intro B.empty (Seq.slice 'old_network_out 0 0);
         assert (pure (Seq.equal B.empty (CT.response_network_out resp 'old_network_out)));
-        C.lemma_verified_server_finished_state_evolves
+        CM.lemma_verified_server_finished_state_evolves
           'st0
           (Ghost.reveal fin);
         assert (pure (CT.legal_response_for_event
           'st0
-          (C.verified_server_finished_state 'st0 (Ghost.reveal fin))
+          (CM.verified_server_finished_state 'st0 (Ghost.reveal fin))
           resp
           (CS.ConnLocalEvent
             (CS.LocalVerifyFinished (Ghost.reveal fin)))
@@ -903,7 +910,7 @@ fn handle_local_event
           'old_app_out));
         assert (pure (CT.legal_local_response
           'st0
-          (C.verified_server_finished_state 'st0 (Ghost.reveal fin))
+          (CM.verified_server_finished_state 'st0 (Ghost.reveal fin))
           resp
           CT.LocalVerifyFinished
           (Ghost.reveal 'payload_bytes)
@@ -915,7 +922,7 @@ fn handle_local_event
           'old_app_out));
         assert (pure (CT.legal_handled_local_response
           'st0
-          (C.verified_server_finished_state 'st0 (Ghost.reveal fin))
+          (CM.verified_server_finished_state 'st0 (Ghost.reveal fin))
           resp
           CT.LocalVerifyFinished
           (Ghost.reveal 'payload_bytes)
@@ -923,13 +930,13 @@ fn handle_local_event
           'old_app_out));
         assert (pure (CT.some_legal_response
           'st0
-          (C.verified_server_finished_state 'st0 (Ghost.reveal fin))
+          (CM.verified_server_finished_state 'st0 (Ghost.reveal fin))
           resp
           'old_network_out
           'old_app_out));
         resp
       } else {
-        C.mark_bad_finished c;
+        CF.mark_bad_finished c;
         let resp = {
           CT.network_out_len = 0sz;
           CT.app_out_len = 0sz;
@@ -940,13 +947,13 @@ fn handle_local_event
         assert (pure (Seq.equal B.empty (CT.response_network_out resp 'old_network_out)));
         assert (pure (CT.bad_finished_response
           'st0
-          (C.local_fail_state 'st0 C.tls_bad_finished_error)
+          (CM.local_fail_state 'st0 CM.tls_bad_finished_error)
           resp
           'old_network_out
           'old_app_out));
         assert (pure (CT.legal_handled_local_response
           'st0
-          (C.local_fail_state 'st0 C.tls_bad_finished_error)
+          (CM.local_fail_state 'st0 CM.tls_bad_finished_error)
           resp
           CT.LocalVerifyFinished
           (Ghost.reveal 'payload_bytes)
@@ -954,14 +961,14 @@ fn handle_local_event
           'old_app_out));
         assert (pure (CT.some_legal_response
           'st0
-          (C.local_fail_state 'st0 C.tls_bad_finished_error)
+          (CM.local_fail_state 'st0 CM.tls_bad_finished_error)
           resp
           'old_network_out
           'old_app_out));
         resp
       }
     } else {
-      C.mark_unexpected_message c;
+      CF.mark_unexpected_message c;
       let resp = {
         CT.network_out_len = 0sz;
         CT.app_out_len = 0sz;
@@ -972,13 +979,13 @@ fn handle_local_event
       assert (pure (Seq.equal B.empty (CT.response_network_out resp 'old_network_out)));
       assert (pure (CT.unexpected_message_response
         'st0
-        (C.local_fail_state 'st0 C.tls_unexpected_message_error)
+        (CM.local_fail_state 'st0 CM.tls_unexpected_message_error)
         resp
         'old_network_out
         'old_app_out));
       assert (pure (CT.legal_handled_local_response
         'st0
-        (C.local_fail_state 'st0 C.tls_unexpected_message_error)
+        (CM.local_fail_state 'st0 CM.tls_unexpected_message_error)
         resp
         CT.LocalVerifyFinished
         (Ghost.reveal 'payload_bytes)
@@ -986,7 +993,7 @@ fn handle_local_event
         'old_app_out));
       assert (pure (CT.some_legal_response
         'st0
-        (C.local_fail_state 'st0 C.tls_unexpected_message_error)
+        (CM.local_fail_state 'st0 CM.tls_unexpected_message_error)
         resp
         'old_network_out
         'old_app_out));
@@ -995,7 +1002,7 @@ fn handle_local_event
   }
     LocalSendClientHello -> {
     let written_opt =
-      C.try_send_client_hello
+      CLH.try_send_client_hello
         c
         network_out
         network_out_len;
@@ -1003,13 +1010,13 @@ fn handle_local_event
       Some written -> {
         with ch raw_sent network_out_bytes.
           assert (pts_to network_out network_out_bytes);
-        assert (C.connection_exactly
+        assert (CR.connection_exactly
           c
-          (C.sent_client_hello_state 'st0 ch raw_sent));
+          (CM.sent_client_hello_state 'st0 ch raw_sent));
         assert (pure (B.length network_out_bytes == SZ.v network_out_len));
         assert (pure (5 <= SZ.v written));
         assert (pure (SZ.v written <= B.length network_out_bytes));
-        assert (pure (C.can_send_client_hello 'st0 ch raw_sent));
+        assert (pure (CM.can_send_client_hello 'st0 ch raw_sent));
         assert (pure (Seq.equal
           raw_sent
           (Seq.slice network_out_bytes 0 (SZ.v written))));
@@ -1022,10 +1029,10 @@ fn handle_local_event
         assert (pure (Seq.equal raw_sent (CT.response_network_out resp network_out_bytes)));
         Seq.lemma_len_slice 'old_app_out 0 0;
         Seq.lemma_eq_intro B.empty (Seq.slice 'old_app_out 0 0);
-        C.lemma_sent_client_hello_state_evolves 'st0 ch raw_sent;
+        CM.lemma_sent_client_hello_state_evolves 'st0 ch raw_sent;
         assert (pure (CT.legal_response_for_event
           'st0
-          (C.sent_client_hello_state 'st0 ch raw_sent)
+          (CM.sent_client_hello_state 'st0 ch raw_sent)
           resp
           (CS.ConnNetworkEvent {
             CL.message_direction = CL.Sent;
@@ -1037,7 +1044,7 @@ fn handle_local_event
           'old_app_out));
         assert (pure (CT.legal_local_response
           'st0
-          (C.sent_client_hello_state 'st0 ch raw_sent)
+          (CM.sent_client_hello_state 'st0 ch raw_sent)
           resp
           CT.LocalSendClientHello
           (Ghost.reveal 'payload_bytes)
@@ -1051,7 +1058,7 @@ fn handle_local_event
           'old_app_out));
         assert (pure (CT.legal_handled_local_response
           'st0
-          (C.sent_client_hello_state 'st0 ch raw_sent)
+          (CM.sent_client_hello_state 'st0 ch raw_sent)
           resp
           CT.LocalSendClientHello
           (Ghost.reveal 'payload_bytes)
@@ -1059,14 +1066,14 @@ fn handle_local_event
           'old_app_out));
         assert (pure (CT.some_legal_response
           'st0
-          (C.sent_client_hello_state 'st0 ch raw_sent)
+          (CM.sent_client_hello_state 'st0 ch raw_sent)
           resp
           network_out_bytes
           'old_app_out));
         resp
       }
       None -> {
-        C.mark_unexpected_message c;
+        CF.mark_unexpected_message c;
         let resp = {
           CT.network_out_len = 0sz;
           CT.app_out_len = 0sz;
@@ -1077,13 +1084,13 @@ fn handle_local_event
         assert (pure (Seq.equal B.empty (CT.response_network_out resp 'old_network_out)));
         assert (pure (CT.unexpected_message_response
           'st0
-          (C.local_fail_state 'st0 C.tls_unexpected_message_error)
+          (CM.local_fail_state 'st0 CM.tls_unexpected_message_error)
           resp
           'old_network_out
           'old_app_out));
         assert (pure (CT.legal_handled_local_response
           'st0
-          (C.local_fail_state 'st0 C.tls_unexpected_message_error)
+          (CM.local_fail_state 'st0 CM.tls_unexpected_message_error)
           resp
           CT.LocalSendClientHello
           (Ghost.reveal 'payload_bytes)
@@ -1091,7 +1098,7 @@ fn handle_local_event
           'old_app_out));
         assert (pure (CT.some_legal_response
           'st0
-          (C.local_fail_state 'st0 C.tls_unexpected_message_error)
+          (CM.local_fail_state 'st0 CM.tls_unexpected_message_error)
           resp
           'old_network_out
           'old_app_out));
@@ -1100,7 +1107,7 @@ fn handle_local_event
     }
   }
     LocalDeliverApplicationData -> {
-    let ready = C.can_deliver_application_data c payload_len app_out_len;
+    let ready = CQ.can_deliver_application_data c payload_len app_out_len;
     if ready {
       assert (pure (CT.local_input_wf
         'st0
@@ -1121,7 +1128,7 @@ fn handle_local_event
       assert (pure (Seq.equal
         (Ghost.reveal 'payload_bytes)
         (Seq.slice (Ghost.reveal 'payload_bytes) 0 (SZ.v payload_len))));
-      C.mark_delivered_application_data c #(Ghost.reveal 'payload_bytes);
+      CLApp.mark_delivered_application_data c #(Ghost.reveal 'payload_bytes);
       let resp = {
         CT.network_out_len = 0sz;
         CT.app_out_len = payload_len;
@@ -1135,12 +1142,12 @@ fn handle_local_event
       assert (pure (Seq.equal
         (Ghost.reveal 'payload_bytes)
         (CT.response_app_out resp app_out_bytes)));
-      C.lemma_delivered_application_data_state_evolves
+      CM.lemma_delivered_application_data_state_evolves
         'st0
         (Ghost.reveal 'payload_bytes);
       assert (pure (CT.legal_response_for_event
         'st0
-        (C.delivered_application_data_state 'st0 (Ghost.reveal 'payload_bytes))
+        (CM.delivered_application_data_state 'st0 (Ghost.reveal 'payload_bytes))
         resp
         (CS.ConnLocalEvent
           (CS.LocalDeliverApplicationData (Ghost.reveal 'payload_bytes)))
@@ -1150,7 +1157,7 @@ fn handle_local_event
         app_out_bytes));
       assert (pure (CT.legal_local_response
         'st0
-        (C.delivered_application_data_state 'st0 (Ghost.reveal 'payload_bytes))
+        (CM.delivered_application_data_state 'st0 (Ghost.reveal 'payload_bytes))
         resp
         CT.LocalDeliverApplicationData
         (Ghost.reveal 'payload_bytes)
@@ -1162,7 +1169,7 @@ fn handle_local_event
         app_out_bytes));
       assert (pure (CT.legal_handled_local_response
         'st0
-        (C.delivered_application_data_state 'st0 (Ghost.reveal 'payload_bytes))
+        (CM.delivered_application_data_state 'st0 (Ghost.reveal 'payload_bytes))
         resp
         CT.LocalDeliverApplicationData
         (Ghost.reveal 'payload_bytes)
@@ -1170,13 +1177,13 @@ fn handle_local_event
         app_out_bytes));
       assert (pure (CT.some_legal_response
         'st0
-        (C.delivered_application_data_state 'st0 (Ghost.reveal 'payload_bytes))
+        (CM.delivered_application_data_state 'st0 (Ghost.reveal 'payload_bytes))
         resp
         'old_network_out
         app_out_bytes));
       resp
     } else {
-      C.mark_unexpected_message c;
+      CF.mark_unexpected_message c;
       let resp = {
         CT.network_out_len = 0sz;
         CT.app_out_len = 0sz;
@@ -1187,13 +1194,13 @@ fn handle_local_event
       assert (pure (Seq.equal B.empty (CT.response_network_out resp 'old_network_out)));
       assert (pure (CT.unexpected_message_response
         'st0
-        (C.local_fail_state 'st0 C.tls_unexpected_message_error)
+        (CM.local_fail_state 'st0 CM.tls_unexpected_message_error)
         resp
         'old_network_out
         'old_app_out));
       assert (pure (CT.legal_handled_local_response
         'st0
-        (C.local_fail_state 'st0 C.tls_unexpected_message_error)
+        (CM.local_fail_state 'st0 CM.tls_unexpected_message_error)
         resp
         CT.LocalDeliverApplicationData
         (Ghost.reveal 'payload_bytes)
@@ -1201,7 +1208,7 @@ fn handle_local_event
         'old_app_out));
       assert (pure (CT.some_legal_response
         'st0
-        (C.local_fail_state 'st0 C.tls_unexpected_message_error)
+        (CM.local_fail_state 'st0 CM.tls_unexpected_message_error)
         resp
         'old_network_out
         'old_app_out));
@@ -1210,7 +1217,7 @@ fn handle_local_event
   }
     LocalSendApplicationData -> {
     let ok =
-      C.try_send_application_data
+      CLS.try_send_application_data
         c
         payload
         payload_len
@@ -1219,15 +1226,15 @@ fn handle_local_event
     if ok {
       with raw_sent network_out_bytes.
         assert (pts_to network_out network_out_bytes);
-      assert (C.connection_exactly
+      assert (CR.connection_exactly
         c
-        (C.sent_application_data_state
+        (CM.sent_application_data_state
           'st0
           (Ghost.reveal 'payload_bytes)
           raw_sent));
       assert (pure (B.length network_out_bytes == SZ.v network_out_len));
       assert (pure (SZ.v payload_len + 22 <= B.length network_out_bytes));
-      assert (pure (C.can_send_application_data
+      assert (pure (CM.can_send_application_data
         'st0
         (Ghost.reveal 'payload_bytes)
         raw_sent));
@@ -1246,13 +1253,13 @@ fn handle_local_event
       assert (pure (Seq.equal raw_sent (CT.response_network_out resp network_out_bytes)));
       Seq.lemma_len_slice 'old_app_out 0 0;
       Seq.lemma_eq_intro B.empty (Seq.slice 'old_app_out 0 0);
-      C.lemma_sent_application_data_state_evolves
+      CM.lemma_sent_application_data_state_evolves
         'st0
         (Ghost.reveal 'payload_bytes)
         raw_sent;
       assert (pure (CT.legal_response_for_event
         'st0
-        (C.sent_application_data_state
+        (CM.sent_application_data_state
           'st0
           (Ghost.reveal 'payload_bytes)
           raw_sent)
@@ -1267,7 +1274,7 @@ fn handle_local_event
         'old_app_out));
       assert (pure (CT.legal_local_response
         'st0
-        (C.sent_application_data_state
+        (CM.sent_application_data_state
           'st0
           (Ghost.reveal 'payload_bytes)
           raw_sent)
@@ -1284,7 +1291,7 @@ fn handle_local_event
         'old_app_out));
       assert (pure (CT.legal_handled_local_response
         'st0
-        (C.sent_application_data_state
+        (CM.sent_application_data_state
           'st0
           (Ghost.reveal 'payload_bytes)
           raw_sent)
@@ -1295,7 +1302,7 @@ fn handle_local_event
         'old_app_out));
       assert (pure (CT.some_legal_response
         'st0
-        (C.sent_application_data_state
+        (CM.sent_application_data_state
           'st0
           (Ghost.reveal 'payload_bytes)
           raw_sent)
@@ -1304,7 +1311,7 @@ fn handle_local_event
         'old_app_out));
       resp
     } else {
-      C.mark_unexpected_message c;
+      CF.mark_unexpected_message c;
       let resp = {
         CT.network_out_len = 0sz;
         CT.app_out_len = 0sz;
@@ -1315,13 +1322,13 @@ fn handle_local_event
       assert (pure (Seq.equal B.empty (CT.response_network_out resp 'old_network_out)));
       assert (pure (CT.unexpected_message_response
         'st0
-        (C.local_fail_state 'st0 C.tls_unexpected_message_error)
+        (CM.local_fail_state 'st0 CM.tls_unexpected_message_error)
         resp
         'old_network_out
         'old_app_out));
       assert (pure (CT.legal_handled_local_response
         'st0
-        (C.local_fail_state 'st0 C.tls_unexpected_message_error)
+        (CM.local_fail_state 'st0 CM.tls_unexpected_message_error)
         resp
         CT.LocalSendApplicationData
         (Ghost.reveal 'payload_bytes)
@@ -1329,7 +1336,7 @@ fn handle_local_event
         'old_app_out));
       assert (pure (CT.some_legal_response
         'st0
-        (C.local_fail_state 'st0 C.tls_unexpected_message_error)
+        (CM.local_fail_state 'st0 CM.tls_unexpected_message_error)
         resp
         'old_network_out
         'old_app_out));
@@ -1337,14 +1344,14 @@ fn handle_local_event
     }
   }
     LocalSendClientFinished -> {
-    let ok = C.try_send_client_finished c network_out network_out_len;
+    let ok = CLS.try_send_client_finished c network_out network_out_len;
     if ok {
       with fin raw_sent network_out_bytes.
         assert (pts_to network_out network_out_bytes);
-      assert (C.connection_exactly c (C.sent_client_finished_state 'st0 fin raw_sent));
+      assert (CR.connection_exactly c (CM.sent_client_finished_state 'st0 fin raw_sent));
       assert (pure (B.length network_out_bytes == SZ.v network_out_len));
       assert (pure (58 <= B.length network_out_bytes));
-      assert (pure (C.can_send_client_finished 'st0 fin raw_sent));
+      assert (pure (CM.can_send_client_finished 'st0 fin raw_sent));
       assert (pure (Seq.equal raw_sent (Seq.slice network_out_bytes 0 58)));
       let resp = {
         CT.network_out_len = 58sz;
@@ -1356,10 +1363,10 @@ fn handle_local_event
       assert (pure (Seq.equal raw_sent (CT.response_network_out resp network_out_bytes)));
       Seq.lemma_len_slice 'old_app_out 0 0;
       Seq.lemma_eq_intro B.empty (Seq.slice 'old_app_out 0 0);
-      C.lemma_sent_client_finished_state_evolves 'st0 fin raw_sent;
+      CM.lemma_sent_client_finished_state_evolves 'st0 fin raw_sent;
       assert (pure (CT.legal_response_for_event
         'st0
-        (C.sent_client_finished_state 'st0 fin raw_sent)
+        (CM.sent_client_finished_state 'st0 fin raw_sent)
         resp
         (CS.ConnNetworkEvent {
           CL.message_direction = CL.Sent;
@@ -1371,7 +1378,7 @@ fn handle_local_event
         'old_app_out));
       assert (pure (CT.legal_local_response
         'st0
-        (C.sent_client_finished_state 'st0 fin raw_sent)
+        (CM.sent_client_finished_state 'st0 fin raw_sent)
         resp
         CT.LocalSendClientFinished
         (Ghost.reveal 'payload_bytes)
@@ -1385,7 +1392,7 @@ fn handle_local_event
         'old_app_out));
       assert (pure (CT.legal_handled_local_response
         'st0
-        (C.sent_client_finished_state 'st0 fin raw_sent)
+        (CM.sent_client_finished_state 'st0 fin raw_sent)
         resp
         CT.LocalSendClientFinished
         (Ghost.reveal 'payload_bytes)
@@ -1393,13 +1400,13 @@ fn handle_local_event
         'old_app_out));
       assert (pure (CT.some_legal_response
         'st0
-        (C.sent_client_finished_state 'st0 fin raw_sent)
+        (CM.sent_client_finished_state 'st0 fin raw_sent)
         resp
         network_out_bytes
         'old_app_out));
       resp
     } else {
-      C.mark_unexpected_message c;
+      CF.mark_unexpected_message c;
       let resp = {
         CT.network_out_len = 0sz;
         CT.app_out_len = 0sz;
@@ -1410,13 +1417,13 @@ fn handle_local_event
       assert (pure (Seq.equal B.empty (CT.response_network_out resp 'old_network_out)));
       assert (pure (CT.unexpected_message_response
         'st0
-        (C.local_fail_state 'st0 C.tls_unexpected_message_error)
+        (CM.local_fail_state 'st0 CM.tls_unexpected_message_error)
         resp
         'old_network_out
         'old_app_out));
       assert (pure (CT.legal_handled_local_response
         'st0
-        (C.local_fail_state 'st0 C.tls_unexpected_message_error)
+        (CM.local_fail_state 'st0 CM.tls_unexpected_message_error)
         resp
         CT.LocalSendClientFinished
         (Ghost.reveal 'payload_bytes)
@@ -1424,7 +1431,7 @@ fn handle_local_event
         'old_app_out));
       assert (pure (CT.some_legal_response
         'st0
-        (C.local_fail_state 'st0 C.tls_unexpected_message_error)
+        (CM.local_fail_state 'st0 CM.tls_unexpected_message_error)
         resp
         'old_network_out
         'old_app_out));
@@ -1433,21 +1440,21 @@ fn handle_local_event
   }
     LocalSendKeyUpdate -> {
     let ok =
-      C.try_send_key_update
+      CLS.try_send_key_update
         c
         network_out
         network_out_len;
     if ok {
       with raw_sent network_out_bytes.
         assert (pts_to network_out network_out_bytes);
-      assert (C.connection_exactly
+      assert (CR.connection_exactly
         c
-        (C.sent_key_update_response_state
+        (CM.sent_key_update_response_state
           'st0
           raw_sent));
       assert (pure (B.length network_out_bytes == SZ.v network_out_len));
       assert (pure (27 <= B.length network_out_bytes));
-      assert (pure (C.can_send_key_update
+      assert (pure (CM.can_send_key_update
         'st0
         raw_sent));
       assert (pure (Seq.equal
@@ -1462,10 +1469,10 @@ fn handle_local_event
       assert (pure (Seq.equal raw_sent (CT.response_network_out resp network_out_bytes)));
       Seq.lemma_len_slice 'old_app_out 0 0;
       Seq.lemma_eq_intro B.empty (Seq.slice 'old_app_out 0 0);
-      C.lemma_sent_key_update_response_state_evolves 'st0 raw_sent;
+      CM.lemma_sent_key_update_response_state_evolves 'st0 raw_sent;
       assert (pure (CT.legal_response_for_event
         'st0
-        (C.sent_key_update_response_state
+        (CM.sent_key_update_response_state
           'st0
           raw_sent)
         resp
@@ -1479,7 +1486,7 @@ fn handle_local_event
         'old_app_out));
       assert (pure (CT.legal_local_response
         'st0
-        (C.sent_key_update_response_state
+        (CM.sent_key_update_response_state
           'st0
           raw_sent)
         resp
@@ -1495,7 +1502,7 @@ fn handle_local_event
         'old_app_out));
       assert (pure (CT.legal_handled_local_response
         'st0
-        (C.sent_key_update_response_state
+        (CM.sent_key_update_response_state
           'st0
           raw_sent)
         resp
@@ -1505,7 +1512,7 @@ fn handle_local_event
         'old_app_out));
       assert (pure (CT.some_legal_response
         'st0
-        (C.sent_key_update_response_state
+        (CM.sent_key_update_response_state
           'st0
           raw_sent)
         resp
@@ -1513,7 +1520,7 @@ fn handle_local_event
         'old_app_out));
       resp
     } else {
-      C.mark_unexpected_message c;
+      CF.mark_unexpected_message c;
       let resp = {
         CT.network_out_len = 0sz;
         CT.app_out_len = 0sz;
@@ -1524,13 +1531,13 @@ fn handle_local_event
       assert (pure (Seq.equal B.empty (CT.response_network_out resp 'old_network_out)));
       assert (pure (CT.unexpected_message_response
         'st0
-        (C.local_fail_state 'st0 C.tls_unexpected_message_error)
+        (CM.local_fail_state 'st0 CM.tls_unexpected_message_error)
         resp
         'old_network_out
         'old_app_out));
       assert (pure (CT.legal_handled_local_response
         'st0
-        (C.local_fail_state 'st0 C.tls_unexpected_message_error)
+        (CM.local_fail_state 'st0 CM.tls_unexpected_message_error)
         resp
         CT.LocalSendKeyUpdate
         (Ghost.reveal 'payload_bytes)
@@ -1538,7 +1545,7 @@ fn handle_local_event
         'old_app_out));
       assert (pure (CT.some_legal_response
         'st0
-        (C.local_fail_state 'st0 C.tls_unexpected_message_error)
+        (CM.local_fail_state 'st0 CM.tls_unexpected_message_error)
         resp
         'old_network_out
         'old_app_out));
@@ -1547,21 +1554,21 @@ fn handle_local_event
   }
     LocalSendCloseNotify -> {
     let ok =
-      C.try_send_close_notify
+      CLS.try_send_close_notify
         c
         network_out
         network_out_len;
     if ok {
       with raw_sent network_out_bytes.
         assert (pts_to network_out network_out_bytes);
-      assert (C.connection_exactly
+      assert (CR.connection_exactly
         c
-        (C.sent_close_notify_state
+        (CM.sent_close_notify_state
           'st0
           raw_sent));
       assert (pure (B.length network_out_bytes == SZ.v network_out_len));
       assert (pure (24 <= B.length network_out_bytes));
-      assert (pure (C.can_send_close_notify
+      assert (pure (CM.can_send_close_notify
         'st0
         raw_sent));
       assert (pure (Seq.equal
@@ -1576,10 +1583,10 @@ fn handle_local_event
       assert (pure (Seq.equal raw_sent (CT.response_network_out resp network_out_bytes)));
       Seq.lemma_len_slice 'old_app_out 0 0;
       Seq.lemma_eq_intro B.empty (Seq.slice 'old_app_out 0 0);
-      C.lemma_sent_close_notify_state_evolves 'st0 raw_sent;
+      CM.lemma_sent_close_notify_state_evolves 'st0 raw_sent;
       assert (pure (CT.legal_response_for_event
         'st0
-        (C.sent_close_notify_state
+        (CM.sent_close_notify_state
           'st0
           raw_sent)
         resp
@@ -1593,7 +1600,7 @@ fn handle_local_event
         'old_app_out));
       assert (pure (CT.legal_local_response
         'st0
-        (C.sent_close_notify_state
+        (CM.sent_close_notify_state
           'st0
           raw_sent)
         resp
@@ -1609,7 +1616,7 @@ fn handle_local_event
         'old_app_out));
       assert (pure (CT.legal_handled_local_response
         'st0
-        (C.sent_close_notify_state
+        (CM.sent_close_notify_state
           'st0
           raw_sent)
         resp
@@ -1619,7 +1626,7 @@ fn handle_local_event
         'old_app_out));
       assert (pure (CT.some_legal_response
         'st0
-        (C.sent_close_notify_state
+        (CM.sent_close_notify_state
           'st0
           raw_sent)
         resp
@@ -1627,7 +1634,7 @@ fn handle_local_event
         'old_app_out));
       resp
     } else {
-      C.mark_unexpected_message c;
+      CF.mark_unexpected_message c;
       let resp = {
         CT.network_out_len = 0sz;
         CT.app_out_len = 0sz;
@@ -1638,13 +1645,13 @@ fn handle_local_event
       assert (pure (Seq.equal B.empty (CT.response_network_out resp 'old_network_out)));
       assert (pure (CT.unexpected_message_response
         'st0
-        (C.local_fail_state 'st0 C.tls_unexpected_message_error)
+        (CM.local_fail_state 'st0 CM.tls_unexpected_message_error)
         resp
         'old_network_out
         'old_app_out));
       assert (pure (CT.legal_handled_local_response
         'st0
-        (C.local_fail_state 'st0 C.tls_unexpected_message_error)
+        (CM.local_fail_state 'st0 CM.tls_unexpected_message_error)
         resp
         CT.LocalSendCloseNotify
         (Ghost.reveal 'payload_bytes)
@@ -1652,7 +1659,7 @@ fn handle_local_event
         'old_app_out));
       assert (pure (CT.some_legal_response
         'st0
-        (C.local_fail_state 'st0 C.tls_unexpected_message_error)
+        (CM.local_fail_state 'st0 CM.tls_unexpected_message_error)
         resp
         'old_network_out
         'old_app_out));
@@ -1660,7 +1667,7 @@ fn handle_local_event
     }
   }
     _ -> {
-    C.mark_unexpected_message c;
+    CF.mark_unexpected_message c;
     let resp = {
       CT.network_out_len = 0sz;
       CT.app_out_len = 0sz;
@@ -1671,13 +1678,13 @@ fn handle_local_event
     assert (pure (Seq.equal B.empty (CT.response_network_out resp 'old_network_out)));
     assert (pure (CT.unexpected_message_response
       'st0
-      (C.local_fail_state 'st0 C.tls_unexpected_message_error)
+      (CM.local_fail_state 'st0 CM.tls_unexpected_message_error)
       resp
       'old_network_out
       'old_app_out));
     assert (pure (CT.legal_handled_local_response
       'st0
-      (C.local_fail_state 'st0 C.tls_unexpected_message_error)
+      (CM.local_fail_state 'st0 CM.tls_unexpected_message_error)
       resp
       kind
       (Ghost.reveal 'payload_bytes)
@@ -1685,7 +1692,7 @@ fn handle_local_event
       'old_app_out));
     assert (pure (CT.some_legal_response
       'st0
-      (C.local_fail_state 'st0 C.tls_unexpected_message_error)
+      (CM.local_fail_state 'st0 CM.tls_unexpected_message_error)
       resp
       'old_network_out
       'old_app_out));

@@ -1,6 +1,6 @@
 #include "TLS13_Impl_Client.h"
 #include "TLS13_Impl_Client_Types.h"
-#include "TLS13_Impl_ConnectionState.h"
+#include "TLS13_Impl_ConnectionState_Repr.h"
 #include "tls13_openssl_stubs.h"
 
 #include <arpa/inet.h>
@@ -22,7 +22,7 @@
 #define PUBLIC_KEY_PAYLOAD_CAP 4096u
 
 typedef struct driver_state_s {
-  TLS13_Impl_ConnectionState_connection_state client;
+  TLS13_Impl_ConnectionState_Repr_connection_state client;
   int fd;
   uint8_t network_out[NETWORK_OUT_CAP];
   uint8_t app_out[APP_OUT_CAP];
@@ -173,7 +173,7 @@ static int process_one_network_record(
     return 2;
   }
   if (br.response.status != TLS13_Impl_Client_Types_StepOk) {
-    TLS13_Impl_ConnectionState_control_snapshot snapshot = control_snapshot(d->client);
+    TLS13_Impl_ConnectionState_Repr_control_snapshot snapshot = control_snapshot(d->client);
     if (d->rx_len >= 5u) {
       size_t record_len = ((size_t)d->rx[3] << 8) | (size_t)d->rx[4];
       fprintf(stderr,
@@ -256,7 +256,7 @@ static int verify_certificate_signature_for_local_step(driver_state *d) {
     return 1;
   }
   uint8_t signature[PUBLIC_KEY_PAYLOAD_CAP] = {0};
-  TLS13_Impl_ConnectionState_certificate_verify_signature_snapshot sig =
+  TLS13_Impl_ConnectionState_Repr_certificate_verify_signature_snapshot sig =
       copy_certificate_verify_signature(d->client, signature, sizeof signature);
   if (sig.cv_signature_len == 0u || sig.cv_signature_len > sizeof signature) {
     fprintf(stderr, "CertificateVerify signature length was %zu\n", sig.cv_signature_len);
@@ -320,7 +320,7 @@ static int run_one_local_action(driver_state *d, bool *progress) {
 
 static int drive_handshake(driver_state *d) {
   for (size_t i = 0; i < 1000u; ++i) {
-    TLS13_Impl_ConnectionState_control_snapshot snapshot = control_snapshot(d->client);
+    TLS13_Impl_ConnectionState_Repr_control_snapshot snapshot = control_snapshot(d->client);
     if (snapshot.snapshot_control_tag == 2u) {
       return 0;
     }
@@ -432,7 +432,7 @@ static int receive_expected_echo(driver_state *d, const uint8_t *expected, size_
 
 static int receive_close_notify(driver_state *d) {
   for (size_t i = 0; i < 1000u; ++i) {
-    TLS13_Impl_ConnectionState_control_snapshot snapshot = control_snapshot(d->client);
+    TLS13_Impl_ConnectionState_Repr_control_snapshot snapshot = control_snapshot(d->client);
     if (snapshot.snapshot_control_tag == 4u) {
       return 0;
     }

@@ -6,7 +6,7 @@ digraph TLS13Architecture {
     fontname="Helvetica",
     fontsize=18,
     labelloc=t,
-    label="TLS 1.3 client architecture and unverified boundaries",
+    label="TLS 1.3 extracted client architecture and trusted boundaries",
     pad=0.35,
     nodesep=0.45,
     ranksep=0.75
@@ -31,64 +31,52 @@ digraph TLS13Architecture {
     penwidth=1.1
   ];
 
-  subgraph cluster_app {
-    label="C caller / harness";
+  subgraph cluster_driver {
+    label="External C driver / tests";
     color="#777777";
     fillcolor="#eeeeee";
     style="rounded,filled";
 
-    App [label="C caller / OpenSSL echo wrapper\ntest/test_extracted_connection_wrapper_openssl.c", fillcolor="#eeeeee"];
-    BackendH [label="tls13_connection_backend.h\nbackend C ABI only", fillcolor="#ffe8e8", color="#c9342c"];
+    Driver [label="network/application driver\nowns TCP reads/writes", fillcolor="#eeeeee"];
+    BindingTest [label="test_connection_bindings.c\ndeterministic API test", fillcolor="#eeeeee"];
+    OpenSSLEcho [label="test_extracted_client_openssl_echo.c\nlocal OpenSSL interop", fillcolor="#eeeeee"];
   }
 
-  subgraph cluster_extracted {
-    label="Verified Pulse/F* implementation extracted to C";
+  subgraph cluster_impl {
+    label="Extracted Pulse/F* implementation";
     color="#2e8b57";
     fillcolor="#f4fbf4";
     style="rounded,filled";
 
-    State [label="TLS13.State\nmonotonic state + log tokens", fillcolor="#e8f7e8", color="#2e8b57"];
-    HSStateDriver [label="TLS13.Handshake.StateDriver", fillcolor="#e8f7e8", color="#2e8b57"];
-    ConnStateDriver [label="TLS13.Connection.StateDriver", fillcolor="#e8f7e8", color="#2e8b57"];
-    Conn [label="TLS13.Connection\npublic client API\nis_connection(... raw app)", fillcolor="#e8f7e8", color="#2e8b57"];
-    ConnDriver [label="TLS13.Connection.Driver\ntest/control spine", fillcolor="#e8f7e8", color="#2e8b57"];
-    HSDriver [label="TLS13.Handshake.Driver", fillcolor="#e8f7e8", color="#2e8b57"];
-    HS [label="TLS13.Handshake\nhandshake orchestration", fillcolor="#e8f7e8", color="#2e8b57"];
-    ByteDriver [label="TLS13.Handshake.ByteDriver\nencrypted server-flight scheduler", fillcolor="#e8f7e8", color="#2e8b57"];
-    FlightState [label="TLS13.Handshake.FlightState\nruntime transcript/key/cert buffers", fillcolor="#e8f7e8", color="#2e8b57"];
-    HSFraming [label="TLS13.Handshake.Framing\nClientHello, ServerHello, Certificate, CV framing", fillcolor="#e8f7e8", color="#2e8b57"];
-    HSTranscript [label="TLS13.Handshake.Transcript\nverified transcript wrapper", fillcolor="#e8f7e8", color="#2e8b57"];
-    KeySchedule [label="TLS13.KeySchedule\nTLS 1.3 labels/secret orchestration", fillcolor="#e8f7e8", color="#2e8b57"];
-    Record [label="TLS13.Record\nAEAD record-state wrapper", fillcolor="#e8f7e8", color="#2e8b57"];
-    RecordFraming [label="TLS13.Record.Framing\nrecord headers, TLSInnerPlaintext", fillcolor="#e8f7e8", color="#2e8b57"];
+    Client [label="TLS13.Impl.Client\npublic buffer/event API", fillcolor="#e8f7e8", color="#2e8b57"];
+    ClientTypes [label="TLS13.Impl.Client.Types\nresponses, local actions, legality predicates", fillcolor="#e8f7e8", color="#2e8b57"];
+    Mutations [label="ConnectionState.Fail/Network\nLocalHandshake/LocalAuth\nLocalSend/LocalApp\nstate mutations / transitions", fillcolor="#e8f7e8", color="#2e8b57"];
+    Repr [label="TLS13.Impl.ConnectionState.Repr\nstorage + connection_exactly", fillcolor="#e8f7e8", color="#2e8b57"];
+    Queries [label="TLS13.Impl.ConnectionState.Queries\nruntime checks + copyouts", fillcolor="#e8f7e8", color="#2e8b57"];
+    Model [label="TLS13.Impl.ConnectionState.Model/Bounds/Tags\npure model helpers + proof predicates", fillcolor="#e8f7e8", color="#2e8b57"];
+    Handlers [label="TLS13.Impl.Handle.*\nhandshake/local/alert/app dispatch", fillcolor="#e8f7e8", color="#2e8b57"];
+    ImplMessages [label="TLS13.Impl.Messages\nextractable L messages + validity predicates", fillcolor="#e8f7e8", color="#2e8b57"];
+    KeySchedule [label="TLS13.KeySchedule\nTLS 1.3 secret derivation", fillcolor="#e8f7e8", color="#2e8b57"];
+    Record [label="TLS13.Record\nrecord-state and AEAD wrapper", fillcolor="#e8f7e8", color="#2e8b57"];
   }
 
-  subgraph cluster_abi {
-    label="Trusted Pulse/F* implementation boundaries";
+  subgraph cluster_tcb {
+    label="Trusted implementation boundaries";
     color="#c9342c";
     fillcolor="#fff7f7";
     style="rounded,filled";
 
-    CryptoABI [label="TLS13.Crypto.fsti\ncrypto primitive ABI", fillcolor="#ffe8e8", color="#c9342c"];
-    IOABI [label="TLS13.IO.fsti\nopaque lower POSIX channel ABI", fillcolor="#ffe8e8", color="#c9342c"];
-    BackendABI [label="TLS13.Connection.Backend.fsti\nbackend ABI + raw byte ghost log", fillcolor="#ffe8e8", color="#c9342c"];
-    X509ABI [label="TLS13.X509.fsti\ndeclared X.509 ABI, not on default path", fillcolor="#ffe8e8", color="#c9342c"];
-  }
-
-  subgraph cluster_trusted_c {
-    label="Trusted C / external code";
-    color="#c9342c";
-    fillcolor="#fff7f7";
-    style="rounded,filled";
-
-    BackendC [label="tls13_connection_backend_openssl.c\nhost/config/fd/peer lifetime", fillcolor="#ffe8e8", color="#c9342c"];
-    IOStubs [label="tls13_io_stubs.c/.h\nPOSIX connect/read/write/close", fillcolor="#ffe8e8", color="#c9342c"];
-    OpenSSLStubs [label="tls13_openssl_stubs.c/.h\nX.509 + CertificateVerify", fillcolor="#ffe8e8", color="#c9342c"];
+    Parser [label="TLS13.Impl.Parser.fsti\nparser TCB interface", fillcolor="#ffe8e8", color="#c9342c"];
+    Serializer [label="TLS13.Impl.Serializer.fsti\nserializer TCB interface", fillcolor="#ffe8e8", color="#c9342c"];
+    BackendH [label="tls13_connection_backend.h\nC parser/serializer helpers", fillcolor="#ffe8e8", color="#c9342c"];
+    CryptoABI [label="TLS13.Crypto.fsti\ncrypto ABI", fillcolor="#ffe8e8", color="#c9342c"];
+    X509ABI [label="TLS13.X509.fsti\ncertificate/signature ABI", fillcolor="#ffe8e8", color="#c9342c"];
+    MachineTypes [label="TLS13.MachineTypes.fsti\nmachine/runtime types", fillcolor="#ffe8e8", color="#c9342c"];
+    CryptoC [label="tls13_crypto_external.c\nHACL glue", fillcolor="#ffe8e8", color="#c9342c"];
+    X509C [label="tls13_openssl_stubs.c\nOpenSSL validation/signature checks", fillcolor="#ffe8e8", color="#c9342c"];
+    PulseShims [label="tls13_pulse_shims.c\nextraction support", fillcolor="#ffe8e8", color="#c9342c"];
+    HACL [label="HACL* C snapshot", fillcolor="#ffe8e8", color="#c9342c"];
     OpenSSL [label="OpenSSL library", fillcolor="#ffe8e8", color="#c9342c"];
-    CryptoC [label="tls13_crypto_external.c/.h\nextracted crypto ABI glue + memcpy", fillcolor="#ffe8e8", color="#c9342c"];
-    HACLStubs [label="tls13_hacl_stubs.c/.h", fillcolor="#ffe8e8", color="#c9342c"];
-    HACL [label="HACL* C snapshot\nthird_party/hacl-star/dist/gcc-compatible", fillcolor="#ffe8e8", color="#c9342c"];
-    PulseShims [label="tls13_pulse_shims.c\nsmall extraction support", fillcolor="#ffe8e8", color="#c9342c"];
     Runtime [label="KaRaMeL/Pulse/C runtime,\nallocator, compiler, libc", fillcolor="#eeeeee", color="#777777"];
   }
 
@@ -100,113 +88,79 @@ digraph TLS13Architecture {
 
     Bytes [label="TLS13.Bytes", fillcolor="#e8f1ff", color="#4f7ccf"];
     Types [label="TLS13.Types", fillcolor="#e8f1ff", color="#4f7ccf"];
-    CryptoSpec [label="TLS13.Crypto.Spec.fsti\nabstract crypto model", fillcolor="#fff4cc", color="#b8860b"];
-    X509Spec [label="TLS13.X509.Spec.fsti\nabstract X.509/signature model", fillcolor="#fff4cc", color="#b8860b"];
-    TranscriptSpec [label="TLS13.Transcript", fillcolor="#e8f1ff", color="#4f7ccf"];
-    KeysSpec [label="TLS13.Keys", fillcolor="#e8f1ff", color="#4f7ccf"];
-    RecordSpec [label="TLS13.Record.Spec", fillcolor="#e8f1ff", color="#4f7ccf"];
+    Messages [label="TLS13.Messages", fillcolor="#e8f1ff", color="#4f7ccf"];
+    WireSpec [label="TLS13.Wire.Spec\npure wire parse/serialize", fillcolor="#e8f1ff", color="#4f7ccf"];
     HandshakeSpec [label="TLS13.Handshake.Spec", fillcolor="#e8f1ff", color="#4f7ccf"];
-    WireSpec [label="TLS13.Wire.Spec.fsti/.fst", fillcolor="#e8f1ff", color="#4f7ccf"];
-    SM [label="TLS13.StateMachine", fillcolor="#e8f1ff", color="#4f7ccf"];
-    ConnLog [label="TLS13.ConnectionLog\nlayered ghost-log vocabulary\nraw + sound record-prefix view", fillcolor="#e8f1ff", color="#4f7ccf"];
-    SMLemmas [label="TLS13.StateMachine.Lemmas", fillcolor="#e8f1ff", color="#4f7ccf"];
+    RecordSpec [label="TLS13.Record.Spec", fillcolor="#e8f1ff", color="#4f7ccf"];
+    CryptoSpec [label="TLS13.Crypto.Spec.fsti", fillcolor="#fff4cc", color="#b8860b"];
+    X509Spec [label="TLS13.X509.Spec.fsti", fillcolor="#fff4cc", color="#b8860b"];
+    Transcript [label="TLS13.Transcript", fillcolor="#e8f1ff", color="#4f7ccf"];
+    Keys [label="TLS13.Keys", fillcolor="#e8f1ff", color="#4f7ccf"];
+    StateSpec [label="TLS13.Spec.ConnectionState\nrich client state + legal deltas", fillcolor="#e8f1ff", color="#4f7ccf"];
+    ConnLog [label="TLS13.ConnectionLog\nraw/record/message/app-log vocabulary", fillcolor="#e8f1ff", color="#4f7ccf"];
   }
 
-  App -> Conn;
-  App -> BackendH;
+  Driver -> Client;
+  BindingTest -> Client;
+  OpenSSLEcho -> Client;
 
-  Conn -> HSDriver;
-  Conn -> HS;
-  Conn -> Record;
-  Conn -> RecordFraming;
-  Conn -> BackendABI;
-  Conn -> IOABI;
-  ConnDriver -> Conn;
+  Client -> ClientTypes;
+  Client -> Mutations;
+  Client -> Repr;
+  Client -> Queries;
+  Client -> Handlers;
+  Handlers -> Mutations;
+  Handlers -> Repr;
+  Handlers -> Queries;
+  Handlers -> Parser;
+  Handlers -> Serializer;
+  Handlers -> Record;
+  Handlers -> KeySchedule;
+  Mutations -> Repr;
+  Mutations -> Queries;
+  Mutations -> Model;
+  Mutations -> ImplMessages;
+  Repr -> Model;
+  Queries -> Repr;
+  Queries -> Model;
+  Repr -> StateSpec [style=dashed, label="connection_exactly", color="#777777"];
+  Mutations -> StateSpec [style=dashed, label="legal deltas", color="#777777"];
+  ClientTypes -> StateSpec [style=dashed, label="legal responses", color="#777777"];
 
-  HSDriver -> HS;
-  HS -> ByteDriver;
-  HS -> FlightState;
-  HS -> HSFraming;
-  HS -> BackendABI;
-  HS -> IOABI;
-  HS -> State;
-
-  ByteDriver -> BackendABI;
-  ByteDriver -> FlightState;
-  ByteDriver -> RecordFraming;
-
-  FlightState -> HSFraming;
-  FlightState -> HSTranscript;
-  FlightState -> KeySchedule;
-  FlightState -> Record;
-  FlightState -> RecordFraming;
-
-  HSTranscript -> CryptoABI;
-  KeySchedule -> CryptoABI;
+  Parser -> BackendH;
+  Serializer -> BackendH;
   Record -> CryptoABI;
-
-  BackendABI -> BackendC;
-  BackendC -> BackendH;
-  BackendC -> IOStubs;
-  BackendC -> OpenSSLStubs;
-  BackendC -> Runtime;
-  OpenSSLStubs -> OpenSSL;
-
+  KeySchedule -> CryptoABI;
+  Mutations -> X509ABI;
+  Mutations -> MachineTypes;
   CryptoABI -> CryptoC;
-  CryptoC -> HACLStubs;
+  X509ABI -> X509C;
+  CryptoC -> HACL;
+  X509C -> OpenSSL;
   CryptoC -> PulseShims;
-  HACLStubs -> HACL;
-  HACLStubs -> Runtime;
+  BackendH -> Runtime;
+  PulseShims -> Runtime;
 
-  State -> SM [style=dashed, label="state predicate", color="#777777"];
-  HSStateDriver -> SM [style=dashed, label="handshake transitions", color="#777777"];
-  ConnStateDriver -> SM [style=dashed, label="connection transitions", color="#777777"];
-  Conn -> SM [style=dashed, label="postconditions/state phases", color="#777777"];
-  Conn -> ConnLog [style=dashed, label="ghost log invariant/app projection", color="#777777"];
-  IOABI -> ConnLog [style=dashed, label="below TLS-facing raw log", color="#777777"];
-  BackendABI -> ConnLog [style=dashed, label="exact raw sent/received log", color="#777777"];
-  HS -> HandshakeSpec [style=dashed, label="handshake phases/messages", color="#777777"];
-  HS -> SM [style=dashed, label="state phases", color="#777777"];
-  HSFraming -> WireSpec [style=dashed, label="wire model", color="#777777"];
-  RecordFraming -> WireSpec [style=dashed, label="record/inner-plaintext model", color="#777777"];
+  ImplMessages -> Messages [style=dashed, label="L/M validity", color="#777777"];
+  Parser -> WireSpec [style=dashed, label="postconditions", color="#777777"];
+  Serializer -> WireSpec [style=dashed, label="postconditions", color="#777777"];
   Record -> RecordSpec [style=dashed, label="seal/open spec", color="#777777"];
-  KeySchedule -> KeysSpec [style=dashed, label="key derivation spec", color="#777777"];
-  HSTranscript -> CryptoSpec [style=dashed, label="hash spec", color="#777777"];
-  CryptoABI -> CryptoSpec [style=dashed, label="ensures clauses", color="#777777"];
-  X509ABI -> X509Spec [style=dashed, label="ensures clauses", color="#777777"];
-
-  Types -> Bytes;
-  CryptoSpec -> Bytes;
-  CryptoSpec -> Types;
-  X509Spec -> Bytes;
-  X509Spec -> Types;
-  X509Spec -> CryptoSpec;
-  TranscriptSpec -> Bytes;
-  TranscriptSpec -> CryptoSpec;
-  KeysSpec -> Bytes;
-  KeysSpec -> CryptoSpec;
-  RecordSpec -> Bytes;
-  RecordSpec -> CryptoSpec;
-  RecordSpec -> Types;
-  HandshakeSpec -> Bytes;
-  HandshakeSpec -> CryptoSpec;
-  HandshakeSpec -> KeysSpec;
-  HandshakeSpec -> Types;
-  HandshakeSpec -> X509Spec;
-  WireSpec -> Bytes;
-  WireSpec -> HandshakeSpec;
+  KeySchedule -> Keys [style=dashed, label="secret specs", color="#777777"];
+  CryptoABI -> CryptoSpec [style=dashed, label="assumed behavior", color="#777777"];
+  X509ABI -> X509Spec [style=dashed, label="assumed behavior", color="#777777"];
+  StateSpec -> ConnLog;
+  StateSpec -> Messages;
+  StateSpec -> RecordSpec;
+  StateSpec -> HandshakeSpec;
+  StateSpec -> Transcript;
+  StateSpec -> Keys;
+  WireSpec -> Messages;
   WireSpec -> RecordSpec;
-  WireSpec -> Types;
-  SM -> Bytes;
-  SM -> HandshakeSpec;
-  SM -> RecordSpec;
-  SM -> TranscriptSpec;
-  SM -> Types;
-  SM -> X509Spec;
+  WireSpec -> HandshakeSpec;
+  Messages -> Types;
+  Messages -> Bytes;
+  RecordSpec -> CryptoSpec;
+  HandshakeSpec -> X509Spec;
+  ConnLog -> Messages;
   ConnLog -> Bytes;
-  ConnLog -> HandshakeSpec;
-  ConnLog -> SM;
-  ConnLog -> Types;
-  ConnLog -> X509Spec;
-  SMLemmas -> SM;
 }

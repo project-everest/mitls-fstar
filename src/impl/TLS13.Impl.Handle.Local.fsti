@@ -6,14 +6,14 @@ open Pulse.Lib.Pervasives
 open Pulse.Lib.Array.PtsTo
 
 module B = TLS13.Bytes
-module C = TLS13.Impl.ConnectionState
+module CR = TLS13.Impl.ConnectionState.Repr
 module CS = TLS13.Spec.ConnectionState
 module CT = TLS13.Impl.Client.Types
 module SZ = FStar.SizeT
 module U8 = FStar.UInt8
 
 fn handle_local_event
-  (c:C.connection_state)
+  (c:CR.connection_state)
   (kind:CT.local_event_kind)
   (payload:array U8.t)
   (payload_len:SZ.t)
@@ -21,7 +21,7 @@ fn handle_local_event
   (network_out_len:SZ.t)
   (app_out:array U8.t)
   (app_out_len:SZ.t)
-  requires C.connection_exactly c 'st0 **
+  requires CR.connection_exactly c 'st0 **
            pts_to payload 'payload_bytes **
            pts_to network_out 'old_network_out **
            pts_to app_out 'old_app_out **
@@ -34,7 +34,7 @@ fn handle_local_event
                    (Ghost.reveal 'payload_bytes))
   returns resp: CT.client_response
   ensures exists* st1 network_out_bytes app_out_bytes.
-          C.connection_exactly c st1 **
+          CR.connection_exactly c st1 **
           pts_to payload 'payload_bytes **
           pts_to network_out network_out_bytes **
           pts_to app_out app_out_bytes **
