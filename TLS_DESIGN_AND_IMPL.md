@@ -166,8 +166,8 @@ The public client API is buffer/event oriented:
   now establish `client_state_correct` plus explicit initial sent/received replay,
   key-provenance replay, and protected raw-segmentation replay facts, so callers
   can chain directly into the end-to-end step predicates. The streaming network
-  predicate exposes public `parse_record` success facts for
-  non-decode-error consumed raw records, and the `process_network_bytes` theorem
+  predicate exposes public `parse_record` success facts for every nonzero
+  consumed raw prefix, and the `process_network_bytes` theorem
   shape names the exact consumed input prefix instead of hiding it behind an
   existential. The local-step predicate exposes `parse_record` success for
   non-empty local network output. `next_local_action_sound` also proves that
@@ -187,8 +187,9 @@ The public client API is buffer/event oriented:
   that the public API step predicates preserve it while explicitly projecting
   the resulting cumulative connection-log view, raw-event replay, sent-seal
   replay, and historical sent/received key-provenance replay facts. The network
-  theorem also exposes `network_consumed_raw_record_projection`: every non-empty,
-  non-decode-error consumed prefix is a single raw TLS record and has the
+  theorem also exposes `network_consumed_raw_record_projection`: every non-empty
+  consumed prefix, including record-level decode-error rejection, is a single
+  raw TLS record and has the
   recursive raw-record segmentation fact needed by downstream raw-log proofs.
   `client_end_to_end_invariant` packages `client_state_correct` with
   `connection_state_raw_to_message_replay_consistent`: cumulative raw-event
@@ -375,7 +376,7 @@ Other trusted runtime boundaries remain:
    prove that consumed network prefixes, emitted network prefixes, and app
    observations are justified by legal spec deltas. The current named predicate
    already exposes the consumed prefix as `network_consumed_prefix` and carries
-   a public raw-record parse-success fact for non-decode-error consumed input.
+   a public raw-record parse-success fact for every nonzero consumed input.
 3. State the corresponding local theorem for `next_local_action` and
    `process_local_event`, with explicit assumptions for certificate validation,
    peer signature verification, and local application requests. The current

@@ -2460,7 +2460,7 @@ let network_bytes_step_correct
   (buffer_resp.consumed_len == 0sz /\
    response_stuttered st0 st1 resp old_network_out network_out old_app_out app_out) \/
   (SZ.v buffer_resp.consumed_len <= B.length network_input /\
-   (resp.status == DecodeError \/
+   ((resp.status == DecodeError /\ buffer_resp.consumed_len == 0sz) \/
     raw_record_parse_success
      (network_consumed_prefix network_input buffer_resp.consumed_len)) /\
    (resp.status == DecodeError ==>
@@ -2480,7 +2480,6 @@ let network_consumed_raw_record_projection
   (buffer_resp:client_buffer_response)
   : prop =
   buffer_resp.consumed_len == 0sz \/
-  buffer_resp.response.status == DecodeError \/
   (exists outer_ct.
     CS.raw_records_exactly
      (network_consumed_prefix network_input buffer_resp.consumed_len)
@@ -2937,7 +2936,6 @@ let lemma_network_bytes_step_correct_consumed_raw_record_projection
 =
   let resp = buffer_resp.response in
   if buffer_resp.consumed_len = 0sz then ()
-  else if resp.status == DecodeError then ()
   else (
     assert (raw_record_parse_success
       (network_consumed_prefix network_input buffer_resp.consumed_len));
@@ -4276,7 +4274,7 @@ let lemma_network_bytes_decoded_message_network_out_seal_projection
     assert (response_stuttered
       st0 st1 resp old_network_out network_out old_app_out app_out ==> False);
     assert (SZ.v buffer_resp.consumed_len <= B.length network_input /\
-      (resp.status == DecodeError \/
+      ((resp.status == DecodeError /\ buffer_resp.consumed_len == 0sz) \/
        raw_record_parse_success
         (network_consumed_prefix network_input buffer_resp.consumed_len)) /\
       (resp.status == DecodeError ==>
@@ -4305,7 +4303,7 @@ let lemma_network_bytes_decoded_message_network_out_seal_projection
       st0 st1 resp old_network_out network_out old_app_out app_out ==> False);
     assert (resp.status == DecodeError ==> False);
     assert (SZ.v buffer_resp.consumed_len <= B.length network_input /\
-      (resp.status == DecodeError \/
+      ((resp.status == DecodeError /\ buffer_resp.consumed_len == 0sz) \/
        raw_record_parse_success
         (network_consumed_prefix network_input buffer_resp.consumed_len)) /\
       (resp.status == DecodeError ==>
