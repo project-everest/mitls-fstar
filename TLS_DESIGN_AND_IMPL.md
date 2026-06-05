@@ -182,8 +182,8 @@ The public client API is buffer/event oriented:
   schedule provenance folded into those sent/received replay packages, and
   `network_bytes_end_to_end_correct` / `local_event_end_to_end_correct` prove
   that the public API step predicates preserve it while explicitly projecting
-  the resulting cumulative connection-log view, raw-event replay, and
-  sent-seal replay facts. The network
+  the resulting cumulative connection-log view, raw-event replay, sent-seal
+  replay, and historical sent/received key-provenance replay facts. The network
   theorem also exposes `network_consumed_raw_record_projection`: every non-empty,
   non-decode-error consumed prefix is a single raw TLS record and has the
   recursive raw-record segmentation fact needed by downstream raw-log proofs.
@@ -303,7 +303,9 @@ Other trusted runtime boundaries remain:
    emitted-network-byte/write-key, and cumulative raw-event replay projections
    currently available. `client_state_correct` now also packages cumulative
    sent-seal replay and accepted received-decode replay with historical
-   write/read-key schedule provenance. The separate public replay projections remain as
+   write/read-key schedule provenance. The exported end-to-end predicates also
+   project those key-provenance replay facts explicitly from
+   `client_state_correct`. The separate public replay projections remain as
    compatibility/audit facts. The remaining theorem
    gap is
    completeness of the layered invariant itself, not the absence of a compact
