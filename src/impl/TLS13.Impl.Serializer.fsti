@@ -301,7 +301,16 @@ fn encode_inner_plaintext_no_padding_slice
                           (Ghost.reveal 'plain_bytes)
                           (SZ.v plain_offset)
                           (SZ.v plain_offset + SZ.v plain_len);
-                    })))
+                   }) /\
+                  WS.parse_plaintext (Ghost.reveal out_bytes) ==
+                    Some {
+                      M.content_type = ct;
+                      M.fragment =
+                        Seq.slice
+                          (Ghost.reveal 'plain_bytes)
+                          (SZ.v plain_offset)
+                          (SZ.v plain_offset + SZ.v plain_len);
+                    }))
 
 fn serialize_application_data_header
   (fragment_len: SZ.t)
@@ -377,6 +386,10 @@ fn serialize_client_finished_outputs
                 (exists outer_fragment.
                    WS.parse_record raw_prefix ==
                      Some (T.ApplicationData, outer_fragment, B.length raw_prefix) /\
+                   Seq.equal raw_prefix (WS.serialize_record T.ApplicationData outer_fragment) /\
+                   Seq.equal
+                     (CS.record_header_aad raw_prefix)
+                     (CS.application_data_record_header 53) /\
                    R.seal
                      'record_write
                      (CS.record_header_aad raw_prefix)

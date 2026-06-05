@@ -87,13 +87,15 @@ The public client API is buffer/event oriented:
   record-header/localhost fixed-builder declarations or the unused standalone
   ClientFinished application-data-record declaration. Live fixed helpers now
   expose concrete shape facts: inner plaintext encoding states the copied
-  payload slice plus trailing content-type byte, application-data header
+  payload slice plus trailing content-type byte and its no-padding
+  `parse_plaintext` result, application-data header
   serialization states the public `TLS13.Wire.Spec.parse_record_header` result,
   ClientHello fixed-output serialization exposes the exact public
   `parse_record` result for the emitted cleartext handshake record, raw
   application-data record serialization exposes both public `parse_record` and
   header-AAD facts, and ClientFinished encrypted-output serialization exposes a
-  public `parse_record` fact plus the corresponding `Record.Spec.seal` equation.
+  public `parse_record` fact, exact serialized outer-record/header-AAD facts,
+  and the corresponding `Record.Spec.seal` equation.
   Finished handshake serialization also exposes that the generated 36-byte
   handshake buffer parses as `TlsHandshake (Finished ...)`.
 - The received Certificate and CertificateVerify state-transition interfaces
