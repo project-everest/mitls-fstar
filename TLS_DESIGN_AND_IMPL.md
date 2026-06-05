@@ -209,7 +209,10 @@ The public client API is buffer/event oriented:
   message parse fails. Under `client_state_correct`,
   `network_bytes_consumed_input_projection` packages the full consumed-prefix
   classification: zero bytes, decode-error parse failure, or a decoded TLS
-  message/event with protected-open facts when encrypted. Both network and local end-to-end
+  message/event with protected-open facts when encrypted.
+  `network_bytes_consumed_input_event_projection` exposes the weaker event-level
+  consumed-prefix classification unconditionally, without requiring the
+  `client_state_correct` key-schedule facts. Both network and local end-to-end
   predicates expose
   `response_network_out_raw_projection`, so non-empty emitted network prefixes
   are tied to the legal event raw delta and protected-record segmentation facts;
@@ -374,6 +377,8 @@ Other trusted runtime boundaries remain:
    consumed record-level parse failures,
    `network_bytes_consumed_input_projection` as the one-step classifier for the
    whole consumed prefix under `client_state_correct`,
+   `network_bytes_consumed_input_event_projection` as the unconditional
+   zero/decode-error/decoded-event classifier,
    `local_send_application_data_supported_projection` for successful local app
    sends in the current one-record supported profile, and exact decode-error
    local-fail witnesses, so next raw-log work should build
