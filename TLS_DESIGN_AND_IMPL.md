@@ -206,7 +206,10 @@ The public client API is buffer/event oriented:
   `network_bytes_decode_error_projection` now splits `DecodeError` precisely:
   public buffer-level parser failures consume zero bytes, while record-level
   failures expose the consumed raw prefix as a parsed TLS outer record whose TLS
-  message parse fails. Both network and local end-to-end
+  message parse fails. Under `client_state_correct`,
+  `network_bytes_consumed_input_projection` packages the full consumed-prefix
+  classification: zero bytes, decode-error parse failure, or a decoded TLS
+  message/event with protected-open facts when encrypted. Both network and local end-to-end
   predicates expose
   `response_network_out_raw_projection`, so non-empty emitted network prefixes
   are tied to the legal event raw delta and protected-record segmentation facts;
@@ -312,8 +315,9 @@ Other trusted runtime boundaries remain:
    successful local application-data sends are publicly constrained to the
    current one-record supported profile. Sent-seal replay is now folded into
    `client_state_correct`; rejected-but-consumed received decode steps now have
-   per-step parse-failure projections, but still need cumulative treatment before
-   accepted received-decode replay can be folded in too.
+   per-step parse-failure projections and a packaged consumed-prefix
+   classification, but still need cumulative treatment before accepted
+   received-decode replay can be folded in too.
    Event-log replay,
    transcript projection, KeyUpdate response-pending state, non-failed record
    epoch/sequence projection, record key/IV consistency with the installed key
@@ -368,6 +372,8 @@ Other trusted runtime boundaries remain:
    `network_bytes_received_decode_projection` over the public consumed prefix,
    `network_bytes_decode_error_projection` for zero-consume parser failures and
    consumed record-level parse failures,
+   `network_bytes_consumed_input_projection` as the one-step classifier for the
+   whole consumed prefix under `client_state_correct`,
    `local_send_application_data_supported_projection` for successful local app
    sends in the current one-record supported profile, and exact decode-error
    local-fail witnesses, so next raw-log work should build
