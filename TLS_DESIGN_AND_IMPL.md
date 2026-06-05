@@ -129,7 +129,9 @@ The public client API is buffer/event oriented:
   installed, and `LocalVerifyCertificateSignature` assumes
   `TLS13.Crypto.Spec.verify_signature` succeeds over the stored peer key,
   CertificateVerify input, and parsed signature. The local end-to-end theorem
-  exposes these assumptions through `CT.local_auth_tcb_projection`.
+  exposes these assumptions through `CT.local_auth_tcb_projection`, and
+  `CT.legal_local_response` now pins the successful validation event to that
+  peer and the successful signature event to the parsed CertificateVerify.
 - There are no explicit `admit()` or `assume_` sites under `src/` or
   `calc_sample/`.
 - The strongest current proof surface is per-step preservation of
@@ -208,7 +210,8 @@ The public client API is buffer/event oriented:
   which carries the same output-seal surface for non-decode-error network steps.
   The local theorem also exposes `CT.local_auth_tcb_projection`, making the
   validation and CertificateVerify external-TCB assumptions directly auditable
-  from the public postcondition.
+  from the public postcondition; the legal local-response event match ties those
+  assumptions to the concrete local event being handled.
 - `TLS13.Impl.ConnectionState` has been split by responsibility: `Repr` owns the
   concrete representation and exact predicates, `Queries` owns read-only checks
   and copyouts, `Model`/`Bounds`/`Tags` own pure/proof helpers, and the mutation

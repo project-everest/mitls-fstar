@@ -1419,6 +1419,7 @@ let lemma_parsed_message_network_input_projection
     raw_received
 
 let local_event_kind_matches
+  (st:CS.connection_state)
   (kind:local_event_kind)
   (payload:B.bytes)
   (ev:CS.conn_event)
@@ -1461,8 +1462,10 @@ let local_event_kind_matches
   | LocalInstallServerApplicationTrafficKeys, CS.ConnLocalEvent (CS.LocalInstallTrafficKeys install) ->
     install.CS.install_epoch == CS.TrafficApplication /\
     install.CS.install_direction == CS.TrafficRead
-  | LocalValidateCertificate, CS.ConnLocalEvent (CS.LocalValidateCertificate _) -> True
-  | LocalVerifyCertificateSignature, CS.ConnLocalEvent (CS.LocalVerifyCertificateSignature _) -> True
+  | LocalValidateCertificate, CS.ConnLocalEvent (CS.LocalValidateCertificate peer) ->
+    peer == local_validation_peer st payload
+  | LocalVerifyCertificateSignature, CS.ConnLocalEvent (CS.LocalVerifyCertificateSignature cv) ->
+    st.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify == Some cv
   | LocalVerifyFinished, CS.ConnLocalEvent (CS.LocalVerifyFinished _) -> True
   | LocalFail, CS.ConnLocalEvent (CS.LocalFail _) -> True
   | _, _ -> False
@@ -1490,7 +1493,7 @@ let legal_local_response
   (network_out:B.bytes)
   (app_out:B.bytes)
   : prop =
-  local_event_kind_matches kind payload ev /\
+  local_event_kind_matches st0 kind payload ev /\
   local_payload_matches_app_sent_delta kind payload ev /\
   CS.sent_event_seal_projection st0.CS.cs_model ev raw_sent /\
   legal_response_for_event st0 st1 resp ev raw_sent raw_received network_out app_out
