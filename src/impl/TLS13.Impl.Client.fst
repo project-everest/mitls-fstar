@@ -525,6 +525,13 @@ fn process_network_bytes
         (Ghost.reveal 'raw_bytes)
         'old_network_out
         'old_app_out;
+      CT.lemma_network_bytes_decode_error_projection_intro_non_decode_error
+        'st0
+        'st0
+        buffer_resp
+        (Ghost.reveal 'raw_bytes)
+        'old_network_out
+        'old_app_out;
       CT.lemma_network_bytes_step_correct_end_to_end
         'st0
         'st0
@@ -563,6 +570,13 @@ fn process_network_bytes
         CT.response = resp;
         CT.consumed_len = 0sz;
       };
+      CT.lemma_network_bytes_decode_error_projection_intro_consumed_zero
+        'st0
+        (CM.local_fail_state 'st0 CM.tls_decode_error)
+        buffer_resp
+        (Ghost.reveal 'raw_bytes)
+        'old_network_out
+        'old_app_out;
       CT.lemma_network_bytes_decoded_message_projection_intro_consumed_zero
         'st0
         (CM.local_fail_state 'st0 CM.tls_decode_error)
@@ -628,6 +642,16 @@ fn process_network_bytes
           raw_record_bytes
           network_out_bytes
           app_out_bytes;
+        CT.lemma_network_bytes_decode_error_projection_intro_parse_failure
+          'st0
+          st1
+          buffer_resp
+          (Ghost.reveal 'raw_bytes)
+          decoded_buffer.L.decoded_buffer_content_type
+          fragment_bytes
+          raw_record_bytes
+          network_out_bytes
+          app_out_bytes;
         CT.lemma_network_bytes_decoded_message_projection_intro_decode_error
           'st0
           st1
@@ -660,6 +684,13 @@ fn process_network_bytes
           decoded_buffer.L.decoded_buffer_content_type
           fragment_bytes
           raw_record_bytes
+          network_out_bytes
+          app_out_bytes;
+        CT.lemma_network_bytes_decode_error_projection_intro_non_decode_error
+          'st0
+          st1
+          buffer_resp
+          (Ghost.reveal 'raw_bytes)
           network_out_bytes
           app_out_bytes;
         CT.lemma_network_bytes_step_correct_end_to_end

@@ -202,8 +202,11 @@ The public client API is buffer/event oriented:
   `network_bytes_received_decode_projection`, which strips away parser witnesses
   and gives one public per-network-step predicate tying the consumed prefix to
   the received raw delta, decoded-message event shape, and protected
-  open-to-message/read-key projection when the input was encrypted. Both network
-  and local end-to-end
+  open-to-message/read-key projection when the input was encrypted.
+  `network_bytes_decode_error_projection` now splits `DecodeError` precisely:
+  public buffer-level parser failures consume zero bytes, while record-level
+  failures expose the consumed raw prefix as a parsed TLS outer record whose TLS
+  message parse fails. Both network and local end-to-end
   predicates expose
   `response_network_out_raw_projection`, so non-empty emitted network prefixes
   are tied to the legal event raw delta and protected-record segmentation facts;
@@ -232,7 +235,9 @@ The public client API is buffer/event oriented:
   application-data record. Multi-record local application-data sends remain
   outside the current implementation profile rather than an unproved hidden
   behavior. Rejected DecodeError/unexpected-message bytes are still exposed by
-  per-step theorem projections rather than by the cumulative state log.
+  per-step theorem projections rather than by the cumulative state log; the
+  named decode-error projection now records the zero-consume versus
+  parsed-record/parse-failure cases explicitly.
   The local theorem also exposes `CT.local_auth_tcb_projection`, making the
   validation and CertificateVerify external-TCB assumptions directly auditable
   from the public postcondition; the legal local-response event match ties those
@@ -284,7 +289,7 @@ Other trusted runtime boundaries remain:
    `process_network_bytes` and `process_local_event` directly return
    `network_bytes_end_to_end_correct` / `local_event_end_to_end_correct`, which
    preserve `client_state_correct` and expose the raw-record, decoded-message,
-   received-event, received-decode, protected-open/read-key-schedule,
+   received-event, received-decode, decode-error, protected-open/read-key-schedule,
    emitted-network-byte/write-key, and cumulative raw-event replay projections
    currently available. It also
    exposes cumulative sent-seal and accepted received-decode replay preservation
@@ -306,9 +311,9 @@ Other trusted runtime boundaries remain:
    cumulative replay predicates with unconditional public-step preservation, and
    successful local application-data sends are publicly constrained to the
    current one-record supported profile. Sent-seal replay is now folded into
-   `client_state_correct`; rejected-but-consumed received decode steps still
-   need cumulative treatment before accepted received-decode replay can be folded
-   in too.
+   `client_state_correct`; rejected-but-consumed received decode steps now have
+   per-step parse-failure projections, but still need cumulative treatment before
+   accepted received-decode replay can be folded in too.
    Event-log replay,
    transcript projection, KeyUpdate response-pending state, non-failed record
    epoch/sequence projection, record key/IV consistency with the installed key
@@ -361,6 +366,8 @@ Other trusted runtime boundaries remain:
    The client surface now also
    exposes `network_input_message_projection`, derived from `network_input_wf`,
    `network_bytes_received_decode_projection` over the public consumed prefix,
+   `network_bytes_decode_error_projection` for zero-consume parser failures and
+   consumed record-level parse failures,
    `local_send_application_data_supported_projection` for successful local app
    sends in the current one-record supported profile, and exact decode-error
    local-fail witnesses, so next raw-log work should build

@@ -2155,9 +2155,13 @@ let lemma_legal_network_response_decode_error_response
         legal_network_response
           st0 st1 resp content_type fragment raw_received network_out app_out /\
         resp.status == DecodeError)
-      (ensures decode_error_response st0 st1 resp network_out app_out)
+      (ensures
+        wire_parse_failure content_type fragment /\
+        decode_error_response st0 st1 resp network_out app_out)
 =
-  if decode_error_response st0 st1 resp network_out app_out then ()
+  if wire_parse_failure content_type fragment /\
+     decode_error_response st0 st1 resp network_out app_out
+  then ()
   else (
     assert (legal_network_response_handled_exists
       st0 st1 resp content_type fragment raw_received network_out app_out);
@@ -2471,6 +2475,25 @@ let network_bytes_received_decode_projection
         (network_consumed_prefix network_input buffer_resp.consumed_len)
         msg))
 
+let network_bytes_decode_error_projection
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (buffer_resp:client_buffer_response)
+  (network_input:B.bytes)
+  (network_out:B.bytes)
+  (app_out:B.bytes)
+  : prop =
+  buffer_resp.response.status == DecodeError ==>
+    decode_error_response st0 st1 buffer_resp.response network_out app_out /\
+    (buffer_resp.consumed_len == 0sz \/
+     (SZ.v buffer_resp.consumed_len <= B.length network_input /\
+      (exists content_type fragment raw_received.
+       Seq.equal raw_received
+         (network_consumed_prefix network_input buffer_resp.consumed_len) /\
+       network_input_wf st0 content_type fragment raw_received /\
+       wire_parse_failure content_type fragment /\
+       raw_record_parse_success raw_received)))
+
 let network_bytes_network_out_seal_projection
   (st0:CS.connection_state)
   (st1:CS.connection_state)
@@ -2603,6 +2626,7 @@ let network_bytes_end_to_end_correct
   network_consumed_raw_record_projection network_input buffer_resp /\
   network_bytes_decoded_message_projection st0 st1 buffer_resp network_input network_out app_out /\
   network_bytes_received_event_projection st0 st1 buffer_resp network_input network_out app_out /\
+  network_bytes_decode_error_projection st0 st1 buffer_resp network_input network_out app_out /\
   response_network_out_raw_projection st0 st1 buffer_resp.response network_out app_out /\
   network_bytes_network_out_seal_projection st0 st1 buffer_resp network_input network_out app_out /\
   (client_state_correct st0 ==> client_state_correct st1) /\
@@ -2743,6 +2767,76 @@ let lemma_network_bytes_decoded_message_projection_intro_decode_error
           st0 st1 buffer_resp network_input network_out app_out)
 =
   ()
+
+let lemma_network_bytes_decode_error_projection_intro_non_decode_error
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (buffer_resp:client_buffer_response)
+  (network_input:B.bytes)
+  (network_out:B.bytes)
+  (app_out:B.bytes)
+  : Lemma
+      (requires buffer_resp.response.status == DecodeError ==> False)
+      (ensures
+        network_bytes_decode_error_projection
+          st0 st1 buffer_resp network_input network_out app_out)
+=
+  ()
+
+let lemma_network_bytes_decode_error_projection_intro_consumed_zero
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (buffer_resp:client_buffer_response)
+  (network_input:B.bytes)
+  (network_out:B.bytes)
+  (app_out:B.bytes)
+  : Lemma
+      (requires
+        buffer_resp.consumed_len == 0sz /\
+        (buffer_resp.response.status == DecodeError ==>
+          decode_error_response st0 st1 buffer_resp.response network_out app_out))
+      (ensures
+        network_bytes_decode_error_projection
+          st0 st1 buffer_resp network_input network_out app_out)
+=
+  ()
+
+let lemma_network_bytes_decode_error_projection_intro_parse_failure
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (buffer_resp:client_buffer_response)
+  (network_input:B.bytes)
+  (content_type:U8.t)
+  (fragment:B.bytes)
+  (raw_received:B.bytes)
+  (network_out:B.bytes)
+  (app_out:B.bytes)
+  : Lemma
+      (requires
+        buffer_resp.response.status == DecodeError /\
+        decode_error_response st0 st1 buffer_resp.response network_out app_out /\
+        SZ.v buffer_resp.consumed_len <= B.length network_input /\
+        Seq.equal
+          raw_received
+          (network_consumed_prefix network_input buffer_resp.consumed_len) /\
+        network_input_wf st0 content_type fragment raw_received /\
+        wire_parse_failure content_type fragment)
+      (ensures
+        network_bytes_decode_error_projection
+          st0 st1 buffer_resp network_input network_out app_out)
+=
+  lemma_network_input_wf_raw_record_parse_success
+    st0
+    content_type
+    fragment
+    raw_received;
+  assert (raw_record_parse_success raw_received);
+  assert (exists content_type' fragment' raw_received'.
+    Seq.equal raw_received'
+      (network_consumed_prefix network_input buffer_resp.consumed_len) /\
+    network_input_wf st0 content_type' fragment' raw_received' /\
+    wire_parse_failure content_type' fragment' /\
+    raw_record_parse_success raw_received')
 
 let lemma_network_bytes_decoded_message_projection_intro_handled
   (st0:CS.connection_state)
@@ -4018,6 +4112,8 @@ let lemma_network_bytes_step_correct_end_to_end
         network_bytes_step_correct
           st0 st1 buffer_resp network_input old_network_out network_out old_app_out app_out /\
         network_bytes_decoded_message_projection
+          st0 st1 buffer_resp network_input network_out app_out /\
+        network_bytes_decode_error_projection
           st0 st1 buffer_resp network_input network_out app_out)
       (ensures
         network_bytes_end_to_end_correct
