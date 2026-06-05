@@ -208,6 +208,13 @@ The public client API is buffer/event oriented:
   `Record.Spec.seal` equation over the emitted header AAD and TLSInnerPlaintext;
   the network theorem exposes `CT.network_bytes_network_out_seal_projection`,
   which carries the same output-seal surface for non-decode-error network steps.
+  `TLS13.Spec.ConnectionState` also has a parallel cumulative
+  `connection_state_sent_seal_replay_consistent` predicate, and the public local
+  theorem proves it is preserved by protected sends; the network theorem exposes
+  the analogous preservation when its response seal projection is available.
+  This cumulative seal replay is intentionally separate from
+  `connection_state_full_log_consistent` until the decode-error theorem surface is
+  strong enough to make it part of `client_state_correct`.
   The local theorem also exposes `CT.local_auth_tcb_projection`, making the
   validation and CertificateVerify external-TCB assumptions directly auditable
   from the public postcondition; the legal local-response event match ties those
@@ -260,9 +267,12 @@ Other trusted runtime boundaries remain:
    `network_bytes_end_to_end_correct` / `local_event_end_to_end_correct`, which
    preserve `client_state_correct` and expose the raw-record, decoded-message,
    received-event, protected-open/read-key-schedule, emitted-network-byte/write-key,
-   and cumulative raw-event replay projections currently available. The remaining
-   theorem gap is completeness of the layered invariant itself, not the absence of
-   a compact preservation wrapper.
+   and cumulative raw-event replay projections currently available. It also
+   exposes cumulative sent-seal replay preservation as a separate projection:
+   local steps preserve it unconditionally, while network steps preserve it when
+   the response seal projection is available. The remaining theorem gap is
+   completeness of the layered invariant itself, not the absence of a compact
+   preservation wrapper.
 2. `ConnectionLog` and `Spec.ConnectionState` still need one stronger layered
    invariant proving that consumed/emitted raw bytes parse, decrypt, and
    interpret as exactly the TLS messages/events that drive the state machine and
@@ -271,7 +281,10 @@ Other trusted runtime boundaries remain:
    and TLS/state-event/app host-trace projections plus cumulative raw-event
    replay are packaged into `client_state_correct`, and parser successes now
    expose a packaged decoded-message projection for cleartext/protected records,
-   including a read-key-schedule projection for protected opens.
+   including a read-key-schedule projection for protected opens. Sent protected
+   single-record outputs now have a cumulative seal-replay predicate, but this is
+   not yet folded into `client_state_correct`; multi-record sent application data
+   and the received open/decode counterpart still need cumulative treatment.
    Event-log replay,
    transcript projection, KeyUpdate response-pending state, non-failed record
    epoch/sequence projection, record key/IV consistency with the installed key
@@ -318,11 +331,12 @@ Other trusted runtime boundaries remain:
    pending application-buffer consistency, app-log-consistency preservation, and
    cumulative connection-log view consistency and cumulative raw-event replay
    lemmas, with legal-delta/client-response/public-step projections, plus a
-   parser-success-to-raw-log inverse bridge. The client surface now also exposes
-   `network_input_message_projection`, derived from `network_input_wf`, so next
-   raw-log work should build on those decoded-message projection facts to connect
-   key schedule, KeyUpdate epochs, pending buffers, decryption facts, and
-   remaining event-log projections.
+   parser-success-to-raw-log inverse bridge and cumulative sent-seal replay
+   preservation at the client theorem surface. The client surface now also
+   exposes `network_input_message_projection`, derived from `network_input_wf`, so
+   next raw-log work should build on those decoded-message projection facts to
+   connect key schedule, KeyUpdate epochs, pending buffers, received decryption
+   facts, multi-record sent seals, and remaining event-log projections.
 5. Continue auditing `TLS13.Impl.Parser.fsti` and
    `TLS13.Impl.Serializer.fsti` entry by entry. Mark each supported
    message/record as strong or weak relative to the required `M`/`L` +
