@@ -1896,6 +1896,18 @@ let network_bytes_protected_record_key_schedule_projection
          (network_consumed_prefix network_input buffer_resp.consumed_len)
          msg))
 
+let network_bytes_network_out_seal_projection
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (buffer_resp:client_buffer_response)
+  (network_input:B.bytes)
+  (network_out:B.bytes)
+  (app_out:B.bytes)
+  : prop =
+  buffer_resp.consumed_len == 0sz \/
+  buffer_resp.response.status == DecodeError \/
+  response_network_out_seal_projection st0 st1 buffer_resp.response network_out app_out
+
 let local_event_step_correct
   (st0:CS.connection_state)
   (st1:CS.connection_state)
@@ -2019,6 +2031,7 @@ let network_bytes_end_to_end_correct
   network_bytes_decoded_message_projection st0 st1 buffer_resp network_input network_out app_out /\
   network_bytes_received_event_projection st0 st1 buffer_resp network_input network_out app_out /\
   response_network_out_raw_projection st0 st1 buffer_resp.response network_out app_out /\
+  network_bytes_network_out_seal_projection st0 st1 buffer_resp network_input network_out app_out /\
   (client_state_correct st0 ==> client_state_correct st1) /\
   (client_state_correct st0 ==>
     network_bytes_protected_record_key_schedule_projection st0 buffer_resp network_input) /\
@@ -2532,6 +2545,93 @@ let lemma_network_bytes_protected_record_key_schedule_projection
        else protected_record_decode_correct st0 raw_received msg'))
   )
 
+let lemma_network_bytes_decoded_message_network_out_seal_projection
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (buffer_resp:client_buffer_response)
+  (network_input:B.bytes)
+  (network_out:B.bytes)
+  (app_out:B.bytes)
+  : Lemma
+      (requires
+        network_bytes_decoded_message_projection
+          st0 st1 buffer_resp network_input network_out app_out)
+      (ensures
+        network_bytes_network_out_seal_projection
+          st0 st1 buffer_resp network_input network_out app_out)
+=
+  if buffer_resp.consumed_len = 0sz then ()
+  else if buffer_resp.response.status == DecodeError then ()
+  else (
+    let raw_received = network_consumed_prefix network_input buffer_resp.consumed_len in
+    assert (exists content_type fragment msg.
+      network_input_message_projection
+        st0
+        content_type
+        fragment
+        msg
+        raw_received /\
+      decoded_message_event_projection
+        st0
+        st1
+        buffer_resp.response
+        msg
+        raw_received
+        network_out
+        app_out);
+    let msg =
+      ID.indefinite_description_ghost
+        M.tls_message
+        (fun msg -> exists content_type fragment.
+          network_input_message_projection
+            st0
+            content_type
+            fragment
+            msg
+            raw_received /\
+          decoded_message_event_projection
+            st0
+            st1
+            buffer_resp.response
+            msg
+            raw_received
+            network_out
+            app_out) in
+    assert (decoded_message_event_projection
+      st0
+      st1
+      buffer_resp.response
+      msg
+      raw_received
+      network_out
+      app_out);
+    if legal_received_tls_response st0 st1 buffer_resp.response msg raw_received network_out app_out
+    then (
+      assert (CS.sent_event_seal_projection
+        st0.CS.cs_model
+        (CS.ConnNetworkEvent {
+          CL.message_direction = CL.Received;
+          CL.message_value = msg;
+        })
+        B.empty);
+      assert (exists ev' raw_sent' raw_received'.
+        legal_response_for_event
+          st0 st1 buffer_resp.response ev' raw_sent' raw_received' network_out app_out /\
+        CS.sent_event_seal_projection st0.CS.cs_model ev' raw_sent')
+    )
+    else (
+      assert (unexpected_message_response st0 st1 buffer_resp.response network_out app_out);
+      assert (CS.sent_event_seal_projection
+        st0.CS.cs_model
+        (CS.ConnLocalEvent (CS.LocalFail tls_unexpected_message_error))
+        B.empty);
+      assert (exists ev' raw_sent' raw_received'.
+        legal_response_for_event
+          st0 st1 buffer_resp.response ev' raw_sent' raw_received' network_out app_out /\
+        CS.sent_event_seal_projection st0.CS.cs_model ev' raw_sent')
+    )
+  )
+
 let lemma_network_bytes_step_correct_client_state_correct
   (st0:CS.connection_state)
   (st1:CS.connection_state)
@@ -2596,6 +2696,13 @@ let lemma_network_bytes_step_correct_end_to_end
     old_network_out
     network_out
     old_app_out
+    app_out;
+  lemma_network_bytes_decoded_message_network_out_seal_projection
+    st0
+    st1
+    buffer_resp
+    network_input
+    network_out
     app_out;
   if client_state_correct st0 then (
     if response_stuttered st0 st1 buffer_resp.response old_network_out network_out old_app_out app_out

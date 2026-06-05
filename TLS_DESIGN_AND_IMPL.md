@@ -200,10 +200,11 @@ The public client API is buffer/event oriented:
   are tied to the legal event raw delta and protected-record segmentation facts;
   under `client_state_correct`, `response_network_out_write_key_schedule_projection`
   also exposes the current write-state key/IV projection from installed client
-  traffic material for protected sent events. For local protected sends,
-  `local_event_end_to_end_correct` additionally exposes
+  traffic material for protected sent events. The local theorem exposes
   `CT.response_network_out_seal_projection`, recording the concrete
-  `Record.Spec.seal` equation over the emitted header AAD and TLSInnerPlaintext.
+  `Record.Spec.seal` equation over the emitted header AAD and TLSInnerPlaintext;
+  the network theorem exposes `CT.network_bytes_network_out_seal_projection`,
+  which carries the same output-seal surface for non-decode-error network steps.
 - `TLS13.Impl.ConnectionState` has been split by responsibility: `Repr` owns the
   concrete representation and exact predicates, `Queries` owns read-only checks
   and copyouts, `Model`/`Bounds`/`Tags` own pure/proof helpers, and the mutation
