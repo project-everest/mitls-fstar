@@ -430,7 +430,7 @@ static inline size_t TLS13_Connection_Backend_serialize_finished_handshake(
     if ((content_type) == 20u && (input_len) == 1u && (input)[0] == 1u) { \
       _r.tag = FStar_Pervasives_Native_Some; \
       _r.v = (TLS13_Impl_Messages_tls_message){ .tag = TLS13_Impl_Messages_LTlsChangeCipherSpec }; \
-    } else if ((content_type) == 21u && (input_len) >= 2u) { \
+    } else if ((content_type) == 21u && (input_len) == 2u) { \
       _r.tag = FStar_Pervasives_Native_Some; \
       _r.v = (TLS13_Impl_Messages_tls_message){ \
         .tag = TLS13_Impl_Messages_LTlsAlert, \
@@ -466,7 +466,7 @@ static inline size_t TLS13_Connection_Backend_serialize_finished_handshake(
                 .application_data_len = _hlen } } \
           }; \
         } \
-      } else if (_hlen + 4u <= (input_len)) { \
+      } else if (_hlen + 4u == (input_len)) { \
         uint8_t *_body = (input) + 4u; \
         TLS13_Impl_Messages_handshake_msg _hs = { .tag = TLS13_Impl_Messages_LHelloRetryRequest }; \
         bool _ok = true; \
