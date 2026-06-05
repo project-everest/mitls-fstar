@@ -214,13 +214,18 @@ The public client API is buffer/event oriented:
   the network theorem exposes `CT.network_bytes_network_out_seal_projection`,
   which now carries the same output-seal surface for every network step,
   including exact `LocalFail tls_decode_error` witnesses for `DecodeError`
-  responses. `TLS13.Spec.ConnectionState` also has a parallel cumulative
-  `connection_state_sent_seal_replay_consistent` predicate. The public
-  constructors establish it initially, and both public network and local
-  end-to-end step predicates preserve it unconditionally when it holds initially.
-  This cumulative seal replay is still intentionally separate from
+  responses. `TLS13.Spec.ConnectionState` also has parallel cumulative replay
+  predicates for sent single-record protected seals and accepted received
+  protected decodes:
+  `connection_state_sent_seal_replay_consistent` and
+  `connection_state_received_decode_replay_consistent`. The public constructors
+  establish both initially, and both public network and local end-to-end step
+  predicates preserve them unconditionally when they hold initially. These
+  cumulative replays are still intentionally separate from
   `connection_state_full_log_consistent` until multi-record sent application data
-  and cumulative received-open/decode replay are folded into the same invariant.
+  and rejected-but-consumed received decode steps are folded into the same
+  invariant; rejected DecodeError/unexpected-message bytes are still exposed by
+  per-step theorem projections rather than by the cumulative state log.
   The local theorem also exposes `CT.local_auth_tcb_projection`, making the
   validation and CertificateVerify external-TCB assumptions directly auditable
   from the public postcondition; the legal local-response event match ties those
@@ -275,9 +280,10 @@ Other trusted runtime boundaries remain:
    received-event, received-decode, protected-open/read-key-schedule,
    emitted-network-byte/write-key, and cumulative raw-event replay projections
    currently available. It also
-   exposes cumulative sent-seal replay preservation as a separate projection:
-   constructors establish it initially and both network and local steps preserve
-   it unconditionally. The remaining theorem gap is
+   exposes cumulative sent-seal and accepted received-decode replay preservation
+   as separate projections: constructors establish them initially and both
+   network and local steps preserve them unconditionally. The remaining theorem
+   gap is
    completeness of the layered invariant itself, not the absence of a compact
    preservation wrapper.
 2. `ConnectionLog` and `Spec.ConnectionState` still need one stronger layered
@@ -289,10 +295,11 @@ Other trusted runtime boundaries remain:
    replay are packaged into `client_state_correct`, and parser successes now
    expose a packaged decoded-message projection for cleartext/protected records,
    including a read-key-schedule projection for protected opens. Sent protected
-   single-record outputs now have a cumulative seal-replay predicate with
-   unconditional public-step preservation, but this is not yet folded into
-   `client_state_correct`; multi-record sent application data and the received
-   open/decode counterpart still need cumulative treatment.
+   single-record outputs and accepted received protected inputs now have
+   cumulative replay predicates with unconditional public-step preservation, but
+   these are not yet folded into `client_state_correct`; multi-record sent
+   application data and rejected-but-consumed received decode steps still need
+   cumulative treatment.
    Event-log replay,
    transcript projection, KeyUpdate response-pending state, non-failed record
    epoch/sequence projection, record key/IV consistency with the installed key
@@ -339,13 +346,14 @@ Other trusted runtime boundaries remain:
    pending application-buffer consistency, app-log-consistency preservation, and
    cumulative connection-log view consistency and cumulative raw-event replay
    lemmas, with legal-delta/client-response/public-step projections, plus a
-   parser-success-to-raw-log inverse bridge and cumulative sent-seal replay
-   preservation at the client theorem surface. The client surface now also
+   parser-success-to-raw-log inverse bridge plus cumulative sent-seal and
+   accepted received-decode replay preservation at the client theorem surface.
+   The client surface now also
    exposes `network_input_message_projection`, derived from `network_input_wf`,
    `network_bytes_received_decode_projection` over the public consumed prefix,
    and exact decode-error local-fail witnesses, so next raw-log work should build
    on those decoded-message projection facts to connect key schedule, KeyUpdate
-   epochs, pending buffers, cumulative received decryption facts, multi-record
+   epochs, pending buffers, rejected consumed-byte decryption facts, multi-record
    sent seals, and remaining event-log projections.
 5. Continue auditing `TLS13.Impl.Parser.fsti` and
    `TLS13.Impl.Serializer.fsti` entry by entry. Mark each supported

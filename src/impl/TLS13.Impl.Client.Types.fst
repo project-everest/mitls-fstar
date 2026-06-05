@@ -558,6 +558,48 @@ let response_network_out_seal_projection
       st0 st1 resp ev raw_sent raw_received network_out app_out /\
     CS.sent_event_seal_projection st0.CS.cs_model ev raw_sent)
 
+let response_received_decode_projection
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (resp:client_response)
+  (network_out:B.bytes)
+  (app_out:B.bytes)
+  : prop =
+  exists ev raw_sent raw_received.
+    legal_response_for_event
+      st0 st1 resp ev raw_sent raw_received network_out app_out /\
+    CS.received_event_nonempty_decode_projection
+      st0.CS.cs_model
+      ev
+      raw_received
+
+let lemma_legal_response_for_event_response_received_decode_projection
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (resp:client_response)
+  (ev:CS.conn_event)
+  (raw_sent:B.bytes)
+  (raw_received:B.bytes)
+  (network_out:B.bytes)
+  (app_out:B.bytes)
+  : Lemma
+      (requires
+        legal_response_for_event
+          st0 st1 resp ev raw_sent raw_received network_out app_out /\
+        CS.received_event_nonempty_decode_projection
+          st0.CS.cs_model
+          ev
+          raw_received)
+      (ensures response_received_decode_projection st0 st1 resp network_out app_out)
+=
+  assert (exists ev' raw_sent' raw_received'.
+    legal_response_for_event
+      st0 st1 resp ev' raw_sent' raw_received' network_out app_out /\
+    CS.received_event_nonempty_decode_projection
+      st0.CS.cs_model
+      ev'
+      raw_received')
+
 let lemma_legal_response_for_event_network_out_raw_projection
   (st0:CS.connection_state)
   (st1:CS.connection_state)
@@ -789,6 +831,101 @@ let lemma_some_legal_response_sent_seal_replay_consistent
       app_out
   )
 
+let lemma_legal_response_for_event_received_decode_replay_consistent
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (resp:client_response)
+  (ev:CS.conn_event)
+  (raw_sent:B.bytes)
+  (raw_received:B.bytes)
+  (network_out:B.bytes)
+  (app_out:B.bytes)
+  : Lemma
+      (requires
+        legal_response_for_event
+          st0 st1 resp ev raw_sent raw_received network_out app_out /\
+        CS.connection_state_received_decode_replay_consistent st0 /\
+        CS.received_event_nonempty_decode_projection
+          st0.CS.cs_model
+          ev
+          raw_received)
+      (ensures CS.connection_state_received_decode_replay_consistent st1)
+=
+  CS.lemma_legal_connection_delta_received_decode_replay_consistent
+    st0
+    {
+      CS.delta_event = ev;
+      CS.delta_raw_sent = raw_sent;
+      CS.delta_raw_received = raw_received;
+    }
+    st1
+
+let lemma_some_legal_response_received_decode_replay_consistent
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (resp:client_response)
+  (network_out:B.bytes)
+  (app_out:B.bytes)
+  : Lemma
+      (requires
+        some_legal_response st0 st1 resp network_out app_out /\
+        response_received_decode_projection st0 st1 resp network_out app_out /\
+        CS.connection_state_received_decode_replay_consistent st0)
+      (ensures CS.connection_state_received_decode_replay_consistent st1)
+=
+  assert (exists ev raw_sent raw_received.
+    legal_response_for_event
+      st0 st1 resp ev raw_sent raw_received network_out app_out /\
+    CS.received_event_nonempty_decode_projection
+      st0.CS.cs_model
+      ev
+      raw_received);
+  let ev =
+    ID.indefinite_description_ghost
+      CS.conn_event
+      (fun ev -> exists raw_sent raw_received.
+        legal_response_for_event
+          st0 st1 resp ev raw_sent raw_received network_out app_out /\
+        CS.received_event_nonempty_decode_projection
+          st0.CS.cs_model
+          ev
+          raw_received) in
+  let raw_sent =
+    ID.indefinite_description_ghost
+      B.bytes
+      (fun raw_sent -> exists raw_received.
+        legal_response_for_event
+          st0 st1 resp ev raw_sent raw_received network_out app_out /\
+        CS.received_event_nonempty_decode_projection
+          st0.CS.cs_model
+          ev
+          raw_received) in
+  let raw_received =
+    ID.indefinite_description_ghost
+      B.bytes
+      (fun raw_received ->
+        legal_response_for_event
+          st0 st1 resp ev raw_sent raw_received network_out app_out /\
+        CS.received_event_nonempty_decode_projection
+          st0.CS.cs_model
+          ev
+          raw_received) in
+  assert (legal_response_for_event
+    st0 st1 resp ev raw_sent raw_received network_out app_out);
+  assert (CS.received_event_nonempty_decode_projection
+    st0.CS.cs_model
+    ev
+    raw_received);
+  lemma_legal_response_for_event_received_decode_replay_consistent
+    st0
+    st1
+    resp
+    ev
+    raw_sent
+    raw_received
+    network_out
+    app_out
+
 let lemma_some_legal_response_network_out_raw_projection
   (st0:CS.connection_state)
   (st1:CS.connection_state)
@@ -922,6 +1059,59 @@ let some_legal_response_for_network_input
   exists ev raw_sent raw_received.
     legal_response_for_event st0 st1 resp ev raw_sent raw_received network_out app_out /\
     raw_received_matches_network_input raw_received network_input
+
+let lemma_some_legal_response_for_empty_network_input_received_decode_projection
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (resp:client_response)
+  (network_out:B.bytes)
+  (app_out:B.bytes)
+  : Lemma
+      (requires some_legal_response_for_network_input
+        st0 st1 resp B.empty network_out app_out)
+      (ensures response_received_decode_projection st0 st1 resp network_out app_out)
+=
+  assert (exists ev raw_sent raw_received.
+    legal_response_for_event st0 st1 resp ev raw_sent raw_received network_out app_out /\
+    raw_received_matches_network_input raw_received B.empty);
+  let ev =
+    ID.indefinite_description_ghost
+      CS.conn_event
+      (fun ev -> exists raw_sent raw_received.
+        legal_response_for_event st0 st1 resp ev raw_sent raw_received network_out app_out /\
+        raw_received_matches_network_input raw_received B.empty) in
+  let raw_sent =
+    ID.indefinite_description_ghost
+      B.bytes
+      (fun raw_sent -> exists raw_received.
+        legal_response_for_event st0 st1 resp ev raw_sent raw_received network_out app_out /\
+        raw_received_matches_network_input raw_received B.empty) in
+  let raw_received =
+    ID.indefinite_description_ghost
+      B.bytes
+      (fun raw_received ->
+        legal_response_for_event st0 st1 resp ev raw_sent raw_received network_out app_out /\
+        raw_received_matches_network_input raw_received B.empty) in
+  assert (legal_response_for_event
+    st0 st1 resp ev raw_sent raw_received network_out app_out);
+  assert (raw_received_matches_network_input raw_received B.empty);
+  if Seq.equal raw_received B.empty then ()
+  else assert (Seq.equal raw_received B.empty);
+  Seq.lemma_eq_elim raw_received B.empty;
+  assert (B.length raw_received == 0);
+  assert (CS.received_event_nonempty_decode_projection
+    st0.CS.cs_model
+    ev
+    raw_received);
+  lemma_legal_response_for_event_response_received_decode_projection
+    st0
+    st1
+    resp
+    ev
+    raw_sent
+    raw_received
+    network_out
+    app_out
 
 noextract
 let network_consumed_prefix
@@ -1148,6 +1338,61 @@ let protected_record_decode_correct
   : prop =
   protected_record_decodes_to_message st0 raw_received msg /\
   protected_record_decode_uses_scheduled_read_key st0 raw_received
+
+let lemma_protected_record_decodes_to_received_single_decode
+  (st0:CS.connection_state)
+  (raw_received:B.bytes)
+  (msg:M.tls_message)
+  : Lemma
+      (requires protected_record_decodes_to_message st0 raw_received msg)
+      (ensures CS.received_single_protected_message_decode
+        st0.CS.cs_model
+        msg
+        raw_received)
+=
+  assert (exists outer_fragment opened plaintext.
+    WS.parse_record raw_received ==
+       Some (T.ApplicationData, outer_fragment, B.length raw_received) /\
+    protected_record_opened st0 raw_received outer_fragment opened /\
+    WS.parse_plaintext opened == Some plaintext /\
+    WS.parse_tls_message plaintext.M.content_type plaintext.M.fragment == Some msg);
+  let outer_fragment =
+    ID.indefinite_description_ghost
+      B.bytes
+      (fun outer_fragment -> exists opened plaintext.
+        WS.parse_record raw_received ==
+          Some (T.ApplicationData, outer_fragment, B.length raw_received) /\
+        protected_record_opened st0 raw_received outer_fragment opened /\
+        WS.parse_plaintext opened == Some plaintext /\
+        WS.parse_tls_message plaintext.M.content_type plaintext.M.fragment == Some msg) in
+  let opened =
+    ID.indefinite_description_ghost
+      B.bytes
+      (fun opened -> exists plaintext.
+        WS.parse_record raw_received ==
+          Some (T.ApplicationData, outer_fragment, B.length raw_received) /\
+        protected_record_opened st0 raw_received outer_fragment opened /\
+        WS.parse_plaintext opened == Some plaintext /\
+        WS.parse_tls_message plaintext.M.content_type plaintext.M.fragment == Some msg) in
+  let plaintext =
+    ID.indefinite_description_ghost
+      M.plaintext
+      (fun plaintext ->
+        WS.parse_record raw_received ==
+          Some (T.ApplicationData, outer_fragment, B.length raw_received) /\
+        protected_record_opened st0 raw_received outer_fragment opened /\
+        WS.parse_plaintext opened == Some plaintext /\
+        WS.parse_tls_message plaintext.M.content_type plaintext.M.fragment == Some msg) in
+  assert (protected_record_opened st0 raw_received outer_fragment opened);
+  assert (CS.received_record_opened
+    st0.CS.cs_model
+    raw_received
+    outer_fragment
+    opened);
+  assert (CS.received_single_protected_message_decode
+    st0.CS.cs_model
+    msg
+    raw_received)
 
 let lemma_protected_decoder_fragment_relation_read_key_schedule_projection
   (st0:CS.connection_state)
@@ -2283,7 +2528,9 @@ let network_bytes_end_to_end_correct
   (client_state_correct st0 ==> CS.connection_state_connection_log_view_consistent st1) /\
   (client_state_correct st0 ==> CS.connection_state_raw_event_replay_consistent st1) /\
   (CS.connection_state_sent_seal_replay_consistent st0 ==>
-   CS.connection_state_sent_seal_replay_consistent st1)
+   CS.connection_state_sent_seal_replay_consistent st1) /\
+  (CS.connection_state_received_decode_replay_consistent st0 ==>
+   CS.connection_state_received_decode_replay_consistent st1)
 
 let local_event_end_to_end_correct
   (st0:CS.connection_state)
@@ -2304,7 +2551,9 @@ let local_event_end_to_end_correct
   (client_state_correct st0 ==> CS.connection_state_connection_log_view_consistent st1) /\
   (client_state_correct st0 ==> CS.connection_state_raw_event_replay_consistent st1) /\
   (CS.connection_state_sent_seal_replay_consistent st0 ==>
-   CS.connection_state_sent_seal_replay_consistent st1)
+   CS.connection_state_sent_seal_replay_consistent st1) /\
+  (CS.connection_state_received_decode_replay_consistent st0 ==>
+   CS.connection_state_received_decode_replay_consistent st1)
 
 let lemma_network_bytes_step_correct_layered_log_consistent
   (st0:CS.connection_state)
@@ -2939,6 +3188,398 @@ let lemma_network_bytes_received_decode_projection
        else protected_record_decode_correct st0 raw_received msg'))
   )
 
+let lemma_decode_error_response_received_decode_projection
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (resp:client_response)
+  (network_out:B.bytes)
+  (app_out:B.bytes)
+  : Lemma
+      (requires decode_error_response st0 st1 resp network_out app_out)
+      (ensures response_received_decode_projection st0 st1 resp network_out app_out)
+=
+  let ev = CS.ConnLocalEvent (CS.LocalFail tls_decode_error) in
+  assert (legal_response_for_event
+    st0 st1 resp ev B.empty B.empty network_out app_out);
+  assert (B.length B.empty == 0);
+  assert (CS.received_event_nonempty_decode_projection st0.CS.cs_model ev B.empty);
+  lemma_legal_response_for_event_response_received_decode_projection
+    st0
+    st1
+    resp
+    ev
+    B.empty
+    B.empty
+    network_out
+    app_out
+
+let lemma_unexpected_message_response_received_decode_projection
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (resp:client_response)
+  (network_out:B.bytes)
+  (app_out:B.bytes)
+  : Lemma
+      (requires unexpected_message_response st0 st1 resp network_out app_out)
+      (ensures response_received_decode_projection st0 st1 resp network_out app_out)
+=
+  let ev = CS.ConnLocalEvent (CS.LocalFail tls_unexpected_message_error) in
+  assert (legal_response_for_event
+    st0 st1 resp ev B.empty B.empty network_out app_out);
+  assert (B.length B.empty == 0);
+  assert (CS.received_event_nonempty_decode_projection st0.CS.cs_model ev B.empty);
+  lemma_legal_response_for_event_response_received_decode_projection
+    st0
+    st1
+    resp
+    ev
+    B.empty
+    B.empty
+    network_out
+    app_out
+
+let lemma_bad_finished_response_received_decode_projection
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (resp:client_response)
+  (network_out:B.bytes)
+  (app_out:B.bytes)
+  : Lemma
+      (requires bad_finished_response st0 st1 resp network_out app_out)
+      (ensures response_received_decode_projection st0 st1 resp network_out app_out)
+=
+  let ev = CS.ConnLocalEvent (CS.LocalFail tls_bad_finished_error) in
+  assert (legal_response_for_event
+    st0 st1 resp ev B.empty B.empty network_out app_out);
+  assert (B.length B.empty == 0);
+  assert (CS.received_event_nonempty_decode_projection st0.CS.cs_model ev B.empty);
+  lemma_legal_response_for_event_response_received_decode_projection
+    st0
+    st1
+    resp
+    ev
+    B.empty
+    B.empty
+    network_out
+    app_out
+
+let lemma_decoded_message_event_response_received_decode_projection
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (resp:client_response)
+  (msg:M.tls_message)
+  (raw_received:B.bytes)
+  (network_out:B.bytes)
+  (app_out:B.bytes)
+  : Lemma
+      (requires
+        decoded_message_event_projection
+          st0 st1 resp msg raw_received network_out app_out /\
+        (if CS.network_message_is_cleartext CL.Received msg
+         then True
+         else protected_record_decodes_to_message st0 raw_received msg))
+      (ensures response_received_decode_projection st0 st1 resp network_out app_out)
+=
+  if legal_received_tls_response st0 st1 resp msg raw_received network_out app_out
+  then (
+    let ev = CS.ConnNetworkEvent {
+      CL.message_direction = CL.Received;
+      CL.message_value = msg;
+    } in
+    assert (legal_response_for_event
+      st0 st1 resp ev B.empty raw_received network_out app_out);
+    if CS.network_message_is_cleartext CL.Received msg
+    then (
+      assert (CS.received_event_decode_projection st0.CS.cs_model ev raw_received);
+      assert (CS.received_event_nonempty_decode_projection st0.CS.cs_model ev raw_received)
+    )
+    else (
+      assert (CS.protected_record_count CL.Received msg == 1);
+      lemma_protected_record_decodes_to_received_single_decode st0 raw_received msg;
+      assert (CS.received_single_protected_message_decode st0.CS.cs_model msg raw_received);
+      assert (CS.received_event_decode_projection st0.CS.cs_model ev raw_received);
+      assert (CS.received_event_nonempty_decode_projection st0.CS.cs_model ev raw_received)
+    );
+    lemma_legal_response_for_event_response_received_decode_projection
+      st0
+      st1
+      resp
+      ev
+      B.empty
+      raw_received
+      network_out
+      app_out
+  )
+  else (
+    assert (received_tls_raw_delta_legal st0 msg raw_received /\
+      unexpected_message_response st0 st1 resp network_out app_out);
+    lemma_unexpected_message_response_received_decode_projection
+      st0
+      st1
+      resp
+      network_out
+      app_out
+  )
+
+let lemma_legal_handled_local_response_received_decode_projection
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (resp:client_response)
+  (kind:local_event_kind)
+  (payload:B.bytes)
+  (network_out:B.bytes)
+  (app_out:B.bytes)
+  : Lemma
+      (requires legal_handled_local_response st0 st1 resp kind payload network_out app_out)
+      (ensures response_received_decode_projection st0 st1 resp network_out app_out)
+=
+  if (exists ev raw_sent raw_received.
+      legal_local_response
+        st0
+        st1
+        resp
+        kind
+        payload
+        ev
+        raw_sent
+        raw_received
+        network_out
+        app_out) then (
+    let ev =
+      ID.indefinite_description_ghost
+        CS.conn_event
+        (fun ev -> exists raw_sent raw_received.
+          legal_local_response
+            st0 st1 resp kind payload ev raw_sent raw_received network_out app_out) in
+    let raw_sent =
+      ID.indefinite_description_ghost
+        B.bytes
+        (fun raw_sent -> exists raw_received.
+          legal_local_response
+            st0 st1 resp kind payload ev raw_sent raw_received network_out app_out) in
+    let raw_received =
+      ID.indefinite_description_ghost
+        B.bytes
+        (fun raw_received ->
+          legal_local_response
+            st0 st1 resp kind payload ev raw_sent raw_received network_out app_out) in
+    assert (legal_response_for_event
+      st0 st1 resp ev raw_sent raw_received network_out app_out);
+    assert (legal_delta st0 st1 ev raw_sent raw_received);
+    match ev with
+    | CS.ConnLocalEvent _ ->
+      assert (Seq.equal raw_received B.empty);
+      Seq.lemma_eq_elim raw_received B.empty
+    | CS.ConnNetworkEvent msg ->
+      (match msg.CL.message_direction with
+       | CL.Sent ->
+         assert (Seq.equal raw_received B.empty);
+         Seq.lemma_eq_elim raw_received B.empty
+       | CL.Received ->
+         assert (local_event_kind_matches st0 kind payload ev);
+         assert False);
+    assert (B.length raw_received == 0);
+    assert (CS.received_event_nonempty_decode_projection
+      st0.CS.cs_model
+      ev
+      raw_received);
+    lemma_legal_response_for_event_response_received_decode_projection
+      st0
+      st1
+      resp
+      ev
+      raw_sent
+      raw_received
+      network_out
+      app_out
+  )
+  else if unexpected_message_response st0 st1 resp network_out app_out then (
+    lemma_unexpected_message_response_received_decode_projection
+      st0
+      st1
+      resp
+      network_out
+      app_out
+  )
+  else (
+    assert (bad_finished_response st0 st1 resp network_out app_out);
+    lemma_bad_finished_response_received_decode_projection
+      st0
+      st1
+      resp
+      network_out
+      app_out
+  )
+
+let lemma_network_bytes_step_correct_received_decode_replay_consistent
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (buffer_resp:client_buffer_response)
+  (network_input:B.bytes)
+  (old_network_out:B.bytes)
+  (network_out:B.bytes)
+  (old_app_out:B.bytes)
+  (app_out:B.bytes)
+  : Lemma
+      (requires
+        network_bytes_step_correct
+          st0 st1 buffer_resp network_input old_network_out network_out old_app_out app_out /\
+        network_bytes_decoded_message_projection
+          st0 st1 buffer_resp network_input network_out app_out /\
+        CS.connection_state_received_decode_replay_consistent st0)
+      (ensures CS.connection_state_received_decode_replay_consistent st1)
+=
+  let resp = buffer_resp.response in
+  if response_stuttered st0 st1 resp old_network_out network_out old_app_out app_out
+  then assert (st1 == st0)
+  else (
+    assert (some_legal_response st0 st1 resp network_out app_out);
+    if buffer_resp.consumed_len = 0sz then (
+      Seq.lemma_len_slice network_input 0 0;
+      Seq.lemma_eq_intro B.empty (Seq.slice network_input 0 0);
+      assert (Seq.equal
+        (network_consumed_prefix network_input buffer_resp.consumed_len)
+        B.empty);
+      assert (some_legal_response_for_network_input
+        st0 st1 resp B.empty network_out app_out);
+      lemma_some_legal_response_for_empty_network_input_received_decode_projection
+        st0
+        st1
+        resp
+        network_out
+        app_out
+    )
+    else if resp.status == DecodeError then (
+      assert (decode_error_response st0 st1 resp network_out app_out);
+      lemma_decode_error_response_received_decode_projection
+        st0
+        st1
+        resp
+        network_out
+        app_out
+    )
+    else (
+      let raw_received =
+        network_consumed_prefix network_input buffer_resp.consumed_len in
+      assert (exists content_type fragment msg.
+        network_input_message_projection
+          st0
+          content_type
+          fragment
+          msg
+          raw_received /\
+        decoded_message_event_projection
+          st0
+          st1
+          resp
+          msg
+          raw_received
+          network_out
+          app_out);
+      let msg =
+        ID.indefinite_description_ghost
+          M.tls_message
+          (fun msg -> exists content_type fragment.
+            network_input_message_projection
+              st0
+              content_type
+              fragment
+              msg
+              raw_received /\
+            decoded_message_event_projection
+              st0
+              st1
+              resp
+              msg
+              raw_received
+              network_out
+              app_out) in
+      assert (exists content_type fragment.
+        network_input_message_projection
+          st0
+          content_type
+          fragment
+          msg
+          raw_received /\
+        decoded_message_event_projection
+          st0
+          st1
+          resp
+          msg
+          raw_received
+          network_out
+          app_out);
+      let content_type =
+        ID.indefinite_description_ghost
+          U8.t
+          (fun content_type -> exists fragment.
+            network_input_message_projection
+              st0
+              content_type
+              fragment
+              msg
+              raw_received /\
+            decoded_message_event_projection
+              st0
+              st1
+              resp
+              msg
+              raw_received
+              network_out
+              app_out) in
+      let fragment =
+        ID.indefinite_description_ghost
+          B.bytes
+          (fun fragment ->
+            network_input_message_projection
+              st0
+              content_type
+              fragment
+              msg
+              raw_received /\
+            decoded_message_event_projection
+              st0
+              st1
+              resp
+              msg
+              raw_received
+              network_out
+              app_out) in
+      assert (network_input_message_projection
+        st0
+        content_type
+        fragment
+        msg
+        raw_received);
+      assert (decoded_message_event_projection
+        st0
+        st1
+        resp
+        msg
+        raw_received
+        network_out
+        app_out);
+      if CS.network_message_is_cleartext CL.Received msg
+      then ()
+      else assert (protected_record_decodes_to_message st0 raw_received msg);
+      lemma_decoded_message_event_response_received_decode_projection
+        st0
+        st1
+        resp
+        msg
+        raw_received
+        network_out
+        app_out
+    );
+    assert (response_received_decode_projection st0 st1 resp network_out app_out);
+    lemma_some_legal_response_received_decode_replay_consistent
+      st0
+      st1
+      resp
+      network_out
+      app_out
+  )
+
 let lemma_decode_error_response_network_out_seal_projection
   (st0:CS.connection_state)
   (st1:CS.connection_state)
@@ -3252,6 +3893,17 @@ let lemma_network_bytes_step_correct_end_to_end
       network_out
       app_out
   );
+  if CS.connection_state_received_decode_replay_consistent st0 then (
+    lemma_network_bytes_step_correct_received_decode_replay_consistent
+      st0
+      st1
+      buffer_resp
+      network_input
+      old_network_out
+      network_out
+      old_app_out
+      app_out
+  );
   if client_state_correct st0 then (
     if response_stuttered st0 st1 buffer_resp.response old_network_out network_out old_app_out app_out
     then assert (buffer_resp.response.network_out_len == 0sz)
@@ -3318,6 +3970,35 @@ let lemma_local_event_step_correct_client_state_correct
 =
   lemma_some_legal_response_client_state_correct st0 st1 resp network_out app_out
 
+let lemma_local_event_step_correct_received_decode_replay_consistent
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (resp:client_response)
+  (kind:local_event_kind)
+  (payload:B.bytes)
+  (network_out:B.bytes)
+  (app_out:B.bytes)
+  : Lemma
+      (requires
+        local_event_step_correct st0 st1 resp kind payload network_out app_out /\
+        CS.connection_state_received_decode_replay_consistent st0)
+      (ensures CS.connection_state_received_decode_replay_consistent st1)
+=
+  lemma_legal_handled_local_response_received_decode_projection
+    st0
+    st1
+    resp
+    kind
+    payload
+    network_out
+    app_out;
+  lemma_some_legal_response_received_decode_replay_consistent
+    st0
+    st1
+    resp
+    network_out
+    app_out
+
 let lemma_local_event_step_correct_end_to_end
   (st0:CS.connection_state)
   (st1:CS.connection_state)
@@ -3364,6 +4045,16 @@ let lemma_local_event_step_correct_end_to_end
       st0
       st1
       resp
+      network_out
+      app_out
+  );
+  if CS.connection_state_received_decode_replay_consistent st0 then (
+    lemma_local_event_step_correct_received_decode_replay_consistent
+      st0
+      st1
+      resp
+      kind
+      payload
       network_out
       app_out
   )

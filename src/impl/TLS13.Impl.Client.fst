@@ -28,11 +28,14 @@ fn new_client_default ()
   ensures CR.connection_exactly c CR.default_initial_state **
           pure (CT.client_state_correct CR.default_initial_state /\
                 CS.connection_state_sent_seal_replay_consistent
+                  CR.default_initial_state /\
+                CS.connection_state_received_decode_replay_consistent
                   CR.default_initial_state)
 {
   let c = CR.new_client_default ();
   CT.lemma_initial_client_state_correct CR.default_connection_config;
   CS.lemma_initial_sent_seal_replay_consistent CR.default_connection_config;
+  CS.lemma_initial_received_decode_replay_consistent CR.default_connection_config;
   c
 }
 
@@ -66,6 +69,11 @@ fn new_client
                   (CR.configured_initial_state
                     (Ghost.reveal 'server_name_bytes)
                     (Ghost.reveal 'trust_anchors_bytes)
+                    validation_time_seconds) /\
+                CS.connection_state_received_decode_replay_consistent
+                  (CR.configured_initial_state
+                    (Ghost.reveal 'server_name_bytes)
+                    (Ghost.reveal 'trust_anchors_bytes)
                     validation_time_seconds))
 {
   let c =
@@ -81,6 +89,11 @@ fn new_client
       (Ghost.reveal 'trust_anchors_bytes)
       validation_time_seconds);
   CS.lemma_initial_sent_seal_replay_consistent
+    (CR.configured_connection_config
+      (Ghost.reveal 'server_name_bytes)
+      (Ghost.reveal 'trust_anchors_bytes)
+      validation_time_seconds);
+  CS.lemma_initial_received_decode_replay_consistent
     (CR.configured_connection_config
       (Ghost.reveal 'server_name_bytes)
       (Ghost.reveal 'trust_anchors_bytes)
