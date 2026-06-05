@@ -214,6 +214,20 @@ val serialize_tls_message:
   msg:M.tls_message ->
   GTot (T.content_type & B.bytes)
 
+val lemma_serialize_tls_message_application_data:
+  data:B.bytes ->
+  Lemma (serialize_tls_message (M.TlsApplicationData data) == (T.ApplicationData, data))
+
+val lemma_serialize_tls_message_close_notify:
+  unit ->
+  Lemma (serialize_tls_message (M.TlsAlert T.CloseNotify) ==
+    (T.Alert, B.of_list [2uy; 0uy]))
+
+val lemma_serialize_tls_message_key_update_not_requested:
+  unit ->
+  Lemma (serialize_tls_message (M.TlsKeyUpdate M.UpdateNotRequested) ==
+    (T.Handshake, B.of_list [24uy; 0uy; 0uy; 1uy; 0uy]))
+
 val parse_tls_record:
   input:B.bytes ->
   GTot (option (M.tls_record & nat))

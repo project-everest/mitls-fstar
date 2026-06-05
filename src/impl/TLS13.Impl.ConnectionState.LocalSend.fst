@@ -1035,6 +1035,74 @@ fn try_send_application_data
         })
         (Ghost.reveal raw_sent)
         B.empty));
+      assert (pure (IM.content_type_matches 23uy T.ApplicationData));
+      Seq.lemma_len_slice (Ghost.reveal 'payload_bytes) 0 (SZ.v payload_len);
+      assert (pure (Seq.equal
+        (Seq.slice (Ghost.reveal 'payload_bytes) 0 (SZ.v payload_len))
+        (Ghost.reveal 'payload_bytes)));
+      assert (pure (Seq.equal
+        inner_plaintext_bytes
+        (W.serialize_plaintext {
+          M.content_type = T.ApplicationData;
+          M.fragment =
+            Seq.slice (Ghost.reveal 'payload_bytes) 0 (SZ.v payload_len);
+        })));
+      Seq.lemma_eq_elim
+        (Seq.slice (Ghost.reveal 'payload_bytes) 0 (SZ.v payload_len))
+        (Ghost.reveal 'payload_bytes);
+      assert (pure (Seq.equal
+        inner_plaintext_bytes
+        (W.serialize_plaintext {
+          M.content_type = T.ApplicationData;
+          M.fragment = Ghost.reveal 'payload_bytes;
+        })));
+      W.lemma_serialize_tls_message_application_data (Ghost.reveal 'payload_bytes);
+      assert (pure (
+        CS.sent_tls_inner_plaintext_fragment
+          (M.TlsApplicationData (Ghost.reveal 'payload_bytes)) ==
+        W.serialize_plaintext {
+          M.content_type = T.ApplicationData;
+          M.fragment = Ghost.reveal 'payload_bytes;
+        }));
+      assert (pure (Seq.equal
+        inner_plaintext_bytes
+        (CS.sent_tls_inner_plaintext_fragment
+          (M.TlsApplicationData (Ghost.reveal 'payload_bytes)))));
+      assert (pure (Seq.equal
+        aad_bytes
+        (CS.application_data_record_header (SZ.v ciphertext_len))));
+      assert (pure (Seq.equal
+        (CS.record_header_aad (Seq.slice network_out_bytes 0 (SZ.v written)))
+        (CS.application_data_record_header (SZ.v ciphertext_len))));
+      Seq.lemma_eq_elim
+        aad_bytes
+        (CS.application_data_record_header (SZ.v ciphertext_len));
+      Seq.lemma_eq_elim
+        (CS.record_header_aad (Seq.slice network_out_bytes 0 (SZ.v written)))
+        (CS.application_data_record_header (SZ.v ciphertext_len));
+      assert (pure (Seq.equal
+        aad_bytes
+        (CS.record_header_aad (Seq.slice network_out_bytes 0 (SZ.v written)))));
+      Seq.lemma_eq_elim
+        (Ghost.reveal raw_sent)
+        (Seq.slice network_out_bytes 0 (SZ.v written));
+      assert (pure (Seq.equal
+        aad_bytes
+        (CS.record_header_aad (Ghost.reveal raw_sent))));
+      CS.lemma_sent_event_seal_projection_intro
+        st0.CS.cs_model
+        (M.TlsApplicationData (Ghost.reveal 'payload_bytes))
+        (Ghost.reveal raw_sent)
+        aad_bytes
+        inner_plaintext_bytes
+        ciphertext_bytes;
+      assert (pure (CS.sent_event_seal_projection
+        st0.CS.cs_model
+        (CS.ConnNetworkEvent {
+          CL.message_direction = CL.Sent;
+          CL.message_value = M.TlsApplicationData (Ghost.reveal 'payload_bytes);
+        })
+        (Ghost.reveal raw_sent)));
       assert (pure (can_send_application_data
         st0
         (Ghost.reveal 'payload_bytes)
@@ -1249,6 +1317,73 @@ fn try_send_close_notify
         })
         (Ghost.reveal raw_sent)
         B.empty));
+      assert (pure (IM.content_type_matches 21uy T.Alert));
+      Seq.lemma_len_slice alert_plaintext_bytes 0 2;
+      assert (pure (Seq.equal
+        (Seq.slice alert_plaintext_bytes 0 2)
+        alert_plaintext_bytes));
+      assert (pure (Seq.equal
+        inner_plaintext_bytes
+        (W.serialize_plaintext {
+          M.content_type = T.Alert;
+          M.fragment = Seq.slice alert_plaintext_bytes 0 2;
+        })));
+      Seq.lemma_eq_elim (Seq.slice alert_plaintext_bytes 0 2) alert_plaintext_bytes;
+      assert (pure (Seq.equal alert_plaintext_bytes Model.close_notify_alert_fragment));
+      Seq.lemma_eq_elim alert_plaintext_bytes Model.close_notify_alert_fragment;
+      assert (pure (Seq.equal alert_plaintext_bytes (B.of_list [2uy; 0uy])));
+      Seq.lemma_eq_elim alert_plaintext_bytes (B.of_list [2uy; 0uy]);
+      assert (pure (Seq.equal
+        inner_plaintext_bytes
+        (W.serialize_plaintext {
+          M.content_type = T.Alert;
+          M.fragment = B.of_list [2uy; 0uy];
+        })));
+      W.lemma_serialize_tls_message_close_notify ();
+      assert (pure (
+        CS.sent_tls_inner_plaintext_fragment (M.TlsAlert T.CloseNotify) ==
+        W.serialize_plaintext {
+          M.content_type = T.Alert;
+          M.fragment = B.of_list [2uy; 0uy];
+        }));
+      assert (pure (Seq.equal
+        inner_plaintext_bytes
+        (CS.sent_tls_inner_plaintext_fragment (M.TlsAlert T.CloseNotify))));
+      assert (pure (Seq.equal
+        aad_bytes
+        (CS.application_data_record_header (SZ.v ciphertext_len))));
+      assert (pure (Seq.equal
+        (CS.record_header_aad (Seq.slice network_out_bytes 0 (SZ.v written)))
+        (CS.application_data_record_header (SZ.v ciphertext_len))));
+      Seq.lemma_eq_elim
+        aad_bytes
+        (CS.application_data_record_header (SZ.v ciphertext_len));
+      Seq.lemma_eq_elim
+        (CS.record_header_aad (Seq.slice network_out_bytes 0 (SZ.v written)))
+        (CS.application_data_record_header (SZ.v ciphertext_len));
+      assert (pure (Seq.equal
+        aad_bytes
+        (CS.record_header_aad (Seq.slice network_out_bytes 0 (SZ.v written)))));
+      Seq.lemma_eq_elim
+        (Ghost.reveal raw_sent)
+        (Seq.slice network_out_bytes 0 (SZ.v written));
+      assert (pure (Seq.equal
+        aad_bytes
+        (CS.record_header_aad (Ghost.reveal raw_sent))));
+      CS.lemma_sent_event_seal_projection_intro
+        st0.CS.cs_model
+        (M.TlsAlert T.CloseNotify)
+        (Ghost.reveal raw_sent)
+        aad_bytes
+        inner_plaintext_bytes
+        ciphertext_bytes;
+      assert (pure (CS.sent_event_seal_projection
+        st0.CS.cs_model
+        (CS.ConnNetworkEvent {
+          CL.message_direction = CL.Sent;
+          CL.message_value = M.TlsAlert T.CloseNotify;
+        })
+        (Ghost.reveal raw_sent)));
       assert (pure (can_send_close_notify
         st0
         (Ghost.reveal raw_sent)));
@@ -1456,6 +1591,85 @@ fn try_send_key_update
         })
         (Ghost.reveal raw_sent)
         B.empty));
+      assert (pure (IM.content_type_matches 22uy T.Handshake));
+      Seq.lemma_len_slice key_update_plaintext_bytes 0 5;
+      assert (pure (Seq.equal
+        (Seq.slice key_update_plaintext_bytes 0 5)
+        key_update_plaintext_bytes));
+      assert (pure (Seq.equal
+        inner_plaintext_bytes
+        (W.serialize_plaintext {
+          M.content_type = T.Handshake;
+          M.fragment = Seq.slice key_update_plaintext_bytes 0 5;
+        })));
+      Seq.lemma_eq_elim
+        (Seq.slice key_update_plaintext_bytes 0 5)
+        key_update_plaintext_bytes;
+      assert (pure (Seq.equal
+        key_update_plaintext_bytes
+        Model.key_update_response_fragment));
+      Seq.lemma_eq_elim
+        key_update_plaintext_bytes
+        Model.key_update_response_fragment;
+      assert (pure (Seq.equal
+        key_update_plaintext_bytes
+        (B.of_list [24uy; 0uy; 0uy; 1uy; 0uy])));
+      Seq.lemma_eq_elim
+        key_update_plaintext_bytes
+        (B.of_list [24uy; 0uy; 0uy; 1uy; 0uy]);
+      assert (pure (Seq.equal
+        inner_plaintext_bytes
+        (W.serialize_plaintext {
+          M.content_type = T.Handshake;
+          M.fragment = B.of_list [24uy; 0uy; 0uy; 1uy; 0uy];
+        })));
+      W.lemma_serialize_tls_message_key_update_not_requested ();
+      assert (pure (
+        CS.sent_tls_inner_plaintext_fragment
+          (M.TlsKeyUpdate M.UpdateNotRequested) ==
+        W.serialize_plaintext {
+          M.content_type = T.Handshake;
+          M.fragment = B.of_list [24uy; 0uy; 0uy; 1uy; 0uy];
+        }));
+      assert (pure (Seq.equal
+        inner_plaintext_bytes
+        (CS.sent_tls_inner_plaintext_fragment
+          (M.TlsKeyUpdate M.UpdateNotRequested))));
+      assert (pure (Seq.equal
+        aad_bytes
+        (CS.application_data_record_header (SZ.v ciphertext_len))));
+      assert (pure (Seq.equal
+        (CS.record_header_aad (Seq.slice network_out_bytes 0 (SZ.v written)))
+        (CS.application_data_record_header (SZ.v ciphertext_len))));
+      Seq.lemma_eq_elim
+        aad_bytes
+        (CS.application_data_record_header (SZ.v ciphertext_len));
+      Seq.lemma_eq_elim
+        (CS.record_header_aad (Seq.slice network_out_bytes 0 (SZ.v written)))
+        (CS.application_data_record_header (SZ.v ciphertext_len));
+      assert (pure (Seq.equal
+        aad_bytes
+        (CS.record_header_aad (Seq.slice network_out_bytes 0 (SZ.v written)))));
+      Seq.lemma_eq_elim
+        (Ghost.reveal raw_sent)
+        (Seq.slice network_out_bytes 0 (SZ.v written));
+      assert (pure (Seq.equal
+        aad_bytes
+        (CS.record_header_aad (Ghost.reveal raw_sent))));
+      CS.lemma_sent_event_seal_projection_intro
+        st0.CS.cs_model
+        (M.TlsKeyUpdate M.UpdateNotRequested)
+        (Ghost.reveal raw_sent)
+        aad_bytes
+        inner_plaintext_bytes
+        ciphertext_bytes;
+      assert (pure (CS.sent_event_seal_projection
+        st0.CS.cs_model
+        (CS.ConnNetworkEvent {
+          CL.message_direction = CL.Sent;
+          CL.message_value = M.TlsKeyUpdate M.UpdateNotRequested;
+        })
+        (Ghost.reveal raw_sent)));
       assert (pure (can_send_key_update
         st0
         (Ghost.reveal raw_sent)));

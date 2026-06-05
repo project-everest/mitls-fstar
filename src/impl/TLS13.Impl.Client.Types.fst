@@ -1349,6 +1349,7 @@ let legal_local_response
   : prop =
   local_event_kind_matches kind payload ev /\
   local_payload_matches_app_sent_delta kind payload ev /\
+  CS.sent_event_seal_projection st0.CS.cs_model ev raw_sent /\
   legal_response_for_event st0 st1 resp ev raw_sent raw_received network_out app_out
 
 let decode_error_response

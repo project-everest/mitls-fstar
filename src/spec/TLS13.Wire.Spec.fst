@@ -920,6 +920,32 @@ let serialize_tls_message (msg:M.tls_message) : GTot (T.content_type & B.bytes) 
       | M.UpdateRequested -> 1 in
     (T.Handshake, append3 (u8 24) (u24 1) (u8 request_byte))
 
+let lemma_serialize_tls_message_application_data (data:B.bytes)
+  : Lemma (serialize_tls_message (M.TlsApplicationData data) == (T.ApplicationData, data))
+=
+  ()
+
+let lemma_serialize_tls_message_close_notify ()
+  : Lemma (serialize_tls_message (M.TlsAlert T.CloseNotify) ==
+    (T.Alert, B.of_list [2uy; 0uy]))
+=
+  ()
+
+let lemma_serialize_tls_message_key_update_not_requested ()
+  : Lemma (serialize_tls_message (M.TlsKeyUpdate M.UpdateNotRequested) ==
+    (T.Handshake, B.of_list [24uy; 0uy; 0uy; 1uy; 0uy]))
+=
+  let lhs = append3 (u8 24) (u24 1) (u8 0) in
+  let rhs = B.of_list [24uy; 0uy; 0uy; 1uy; 0uy] in
+  lemma_byte_v 24;
+  lemma_byte_v 0;
+  lemma_byte_v 1;
+  assert (B.length lhs == 5);
+  assert (B.length rhs == 5);
+  assert (forall (i:nat{i < B.length lhs}). Seq.index lhs i == Seq.index rhs i);
+  Seq.lemma_eq_intro lhs rhs;
+  Seq.lemma_eq_elim lhs rhs
+
 let parse_tls_record (input:B.bytes) : GTot (option (M.tls_record & nat)) =
   match parse_record input with
   | Some (content_type, fragment, consumed) ->

@@ -2980,6 +2980,70 @@ let serialized_cleartext_tls_message (msg:M.tls_message) : GTot B.bytes =
   let (content_type, fragment) = W.serialize_tls_message msg in
   W.serialize_record content_type fragment
 
+let record_header_aad (raw:B.bytes) : GTot B.bytes =
+  if B.length raw >= 5
+  then Seq.slice raw 0 5
+  else B.empty
+
+let application_data_record_header (fragment_len:nat) : GTot B.bytes =
+  record_header_aad
+    (W.serialize_record T.ApplicationData (Seq.create fragment_len 0uy))
+
+let sent_tls_inner_plaintext_fragment (msg:M.tls_message) : GTot B.bytes =
+  let (content_type, fragment) = W.serialize_tls_message msg in
+  W.serialize_plaintext {
+    M.content_type = content_type;
+    M.fragment = fragment;
+  }
+
+let sent_single_protected_message_seal
+  (model:connection_model)
+  (msg:M.tls_message)
+  (raw:B.bytes)
+  : prop =
+  exists ciphertext.
+    W.parse_record raw == Some (T.ApplicationData, ciphertext, B.length raw) /\
+    R.seal
+      model.model_record.record_write
+      (record_header_aad raw)
+      {
+        R.content_type = T.ApplicationData;
+        R.fragment = sent_tls_inner_plaintext_fragment msg;
+      } ==
+      Some (ciphertext, R.next_seq model.model_record.record_write)
+
+let lemma_sent_single_protected_message_seal_intro
+  (model:connection_model)
+  (msg:M.tls_message)
+  (raw:B.bytes)
+  (aad:B.bytes)
+  (ciphertext:B.bytes)
+  : Lemma
+      (requires
+        W.parse_record raw == Some (T.ApplicationData, ciphertext, B.length raw) /\
+        Seq.equal aad (record_header_aad raw) /\
+        R.seal
+          model.model_record.record_write
+          aad
+          {
+            R.content_type = T.ApplicationData;
+            R.fragment = sent_tls_inner_plaintext_fragment msg;
+          } ==
+          Some (ciphertext, R.next_seq model.model_record.record_write))
+      (ensures sent_single_protected_message_seal model msg raw)
+=
+  Seq.lemma_eq_elim aad (record_header_aad raw);
+  assert (exists ciphertext'.
+    W.parse_record raw == Some (T.ApplicationData, ciphertext', B.length raw) /\
+    R.seal
+      model.model_record.record_write
+      (record_header_aad raw)
+      {
+        R.content_type = T.ApplicationData;
+        R.fragment = sent_tls_inner_plaintext_fragment msg;
+      } ==
+      Some (ciphertext', R.next_seq model.model_record.record_write))
+
 let cleartext_tls_message_raw (msg:M.tls_message) (raw:B.bytes) : GTot prop =
   match msg with
   | M.TlsHandshake M.HelloRetryRequest ->
@@ -3009,6 +3073,54 @@ let lemma_protected_record_count_positive
   | CL.Sent, M.TlsApplicationData bytes ->
     S.lemma_application_data_record_count_len_positive (B.length bytes)
   | _, _ -> ()
+
+let sent_event_seal_projection
+  (model:connection_model)
+  (ev:conn_event)
+  (raw_sent:B.bytes)
+  : prop =
+  match ev with
+  | ConnNetworkEvent msg ->
+    if msg.CL.message_direction == CL.Sent &&
+       network_message_is_cleartext msg.CL.message_direction msg.CL.message_value == false &&
+       protected_record_count msg.CL.message_direction msg.CL.message_value == 1
+    then sent_single_protected_message_seal model msg.CL.message_value raw_sent
+    else True
+  | ConnLocalEvent _ ->
+    True
+
+let lemma_sent_event_seal_projection_intro
+  (model:connection_model)
+  (msg:M.tls_message)
+  (raw:B.bytes)
+  (aad:B.bytes)
+  (plaintext:B.bytes)
+  (ciphertext:B.bytes)
+  : Lemma
+      (requires
+        network_message_is_cleartext CL.Sent msg == false /\
+        protected_record_count CL.Sent msg == 1 /\
+        W.parse_record raw == Some (T.ApplicationData, ciphertext, B.length raw) /\
+        Seq.equal aad (record_header_aad raw) /\
+        Seq.equal plaintext (sent_tls_inner_plaintext_fragment msg) /\
+        R.seal
+          model.model_record.record_write
+          aad
+          {
+            R.content_type = T.ApplicationData;
+            R.fragment = plaintext;
+          } ==
+          Some (ciphertext, R.next_seq model.model_record.record_write))
+      (ensures sent_event_seal_projection
+        model
+        (ConnNetworkEvent {
+          CL.message_direction = CL.Sent;
+          CL.message_value = msg;
+        })
+        raw)
+=
+  Seq.lemma_eq_elim plaintext (sent_tls_inner_plaintext_fragment msg);
+  lemma_sent_single_protected_message_seal_intro model msg raw aad ciphertext
 
 let network_message_raw_delta_legal
   (model:connection_model)

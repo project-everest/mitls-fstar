@@ -12,6 +12,7 @@ module CL = TLS13.ConnectionLog
 module CS = TLS13.Spec.ConnectionState
 module L = TLS13.Impl.Messages
 module M = TLS13.Messages
+module R = TLS13.Record.Spec
 module Rec = TLS13.Record
 module Seq = FStar.Seq
 module SZ = FStar.SizeT
@@ -291,7 +292,19 @@ fn encode_inner_plaintext_no_padding_slice
                     (Ghost.reveal out_bytes)
                     (SZ.v plain_len)
                     (Seq.length (Ghost.reveal out_bytes)))
-                  (B.singleton content_type))
+                  (B.singleton content_type) /\
+                (forall ct.
+                  L.content_type_matches content_type ct ==>
+                  Seq.equal
+                    (Ghost.reveal out_bytes)
+                    (WS.serialize_plaintext {
+                      M.content_type = ct;
+                      M.fragment =
+                        Seq.slice
+                          (Ghost.reveal 'plain_bytes)
+                          (SZ.v plain_offset)
+                          (SZ.v plain_offset + SZ.v plain_len);
+                    })))
 
 fn serialize_application_data_header
   (fragment_len: SZ.t)
@@ -304,6 +317,9 @@ fn serialize_application_data_header
   ensures exists* header_bytes.
           pts_to out header_bytes **
           pure (B.length header_bytes == 5 /\
+                Seq.equal
+                  (Ghost.reveal header_bytes)
+                  (CS.application_data_record_header (SZ.v fragment_len)) /\
                 WS.parse_record_header (Ghost.reveal header_bytes) ==
                   Some (T.ApplicationData, SZ.v fragment_len))
 
@@ -327,6 +343,9 @@ fn serialize_raw_application_data_record
                (let raw_prefix =
                   Seq.slice out_bytes 0 (SZ.v written) in
                 Seq.equal raw_prefix (WS.serialize_record T.ApplicationData (Ghost.reveal 'fragment_bytes)) /\
+                Seq.equal
+                  (CS.record_header_aad raw_prefix)
+                  (CS.application_data_record_header (SZ.v fragment_len)) /\
                 WS.parse_record raw_prefix ==
                   Some (T.ApplicationData, (Ghost.reveal 'fragment_bytes), SZ.v written) /\
                 CS.raw_records_exactly raw_prefix T.ApplicationData 1))
@@ -360,7 +379,17 @@ fn serialize_client_finished_outputs
                 CS.raw_records_exactly raw_prefix T.ApplicationData 1 /\
                 (exists outer_fragment.
                    WS.parse_record raw_prefix ==
-                     Some (T.ApplicationData, outer_fragment, B.length raw_prefix))))
+                     Some (T.ApplicationData, outer_fragment, B.length raw_prefix) /\
+                   R.seal
+                     'record_write
+                     (CS.record_header_aad raw_prefix)
+                     {
+                       R.content_type = T.ApplicationData;
+                       R.fragment =
+                         CS.sent_tls_inner_plaintext_fragment
+                           (M.TlsHandshake (M.Finished fin));
+                     } ==
+                     Some (outer_fragment, R.next_seq 'record_write))))
 
 fn serialize_finished_handshake
   (#fin: erased M.finished)

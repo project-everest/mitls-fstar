@@ -626,7 +626,14 @@ let can_send_client_finished
       CL.message_value = M.TlsHandshake (M.Finished fin);
     })
     raw_sent
-    B.empty
+    B.empty /\
+  CS.sent_event_seal_projection
+    st.CS.cs_model
+    (CS.ConnNetworkEvent {
+      CL.message_direction = CL.Sent;
+      CL.message_value = M.TlsHandshake (M.Finished fin);
+    })
+    raw_sent
 
 let received_alert_failure_state
   (st:CS.connection_state)
@@ -970,7 +977,14 @@ let can_send_application_data
       CL.message_value = M.TlsApplicationData bytes;
     })
     raw_sent
-    B.empty
+    B.empty /\
+  CS.sent_event_seal_projection
+    st.CS.cs_model
+    (CS.ConnNetworkEvent {
+      CL.message_direction = CL.Sent;
+      CL.message_value = M.TlsApplicationData bytes;
+    })
+    raw_sent
 
 noextract
 
@@ -1001,7 +1015,14 @@ let can_send_close_notify
       CL.message_value = M.TlsAlert T.CloseNotify;
     })
     raw_sent
-    B.empty
+    B.empty /\
+  CS.sent_event_seal_projection
+    st.CS.cs_model
+    (CS.ConnNetworkEvent {
+      CL.message_direction = CL.Sent;
+      CL.message_value = M.TlsAlert T.CloseNotify;
+    })
+    raw_sent
 
 let can_send_key_update
   (st:CS.connection_state)
@@ -1024,7 +1045,14 @@ let can_send_key_update
       CL.message_value = M.TlsKeyUpdate M.UpdateNotRequested;
     })
     raw_sent
-    B.empty
+    B.empty /\
+  CS.sent_event_seal_projection
+    st.CS.cs_model
+    (CS.ConnNetworkEvent {
+      CL.message_direction = CL.Sent;
+      CL.message_value = M.TlsKeyUpdate M.UpdateNotRequested;
+    })
+    raw_sent
 
 let can_send_application_data_sizes
   (payload_len:SZ.t)

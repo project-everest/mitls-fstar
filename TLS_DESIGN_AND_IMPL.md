@@ -83,11 +83,12 @@ The public client API is buffer/event oriented:
   payload slice plus trailing content-type byte, application-data header
   serialization states the public `TLS13.Wire.Spec.parse_record_header` result,
   ClientHello fixed-output serialization exposes the exact public
-  `parse_record` result for the emitted cleartext handshake record, and raw
-  application-data record serialization plus ClientFinished encrypted-output
-  serialization expose public `parse_record` facts for emitted
-  application-data records. Finished handshake serialization also exposes that
-  the generated 36-byte handshake buffer parses as `TlsHandshake (Finished ...)`.
+  `parse_record` result for the emitted cleartext handshake record, raw
+  application-data record serialization exposes both public `parse_record` and
+  header-AAD facts, and ClientFinished encrypted-output serialization exposes a
+  public `parse_record` fact plus the corresponding `Record.Spec.seal` equation.
+  Finished handshake serialization also exposes that the generated 36-byte
+  handshake buffer parses as `TlsHandshake (Finished ...)`.
 - The received Certificate and CertificateVerify state-transition interfaces
   expose the exact driver-copyout facts needed by the external validation TCB:
   certificate leaf DER is the head of the parsed certificate chain, and
@@ -95,7 +96,10 @@ The public client API is buffer/event oriented:
 - The local send state-transition interfaces expose outgoing record parse facts:
   successful ClientHello sends parse as the exact cleartext handshake record, and
   successful ClientFinished, application-data, close_notify, and KeyUpdate sends
-  parse as one outer `ApplicationData` record.
+  parse as one outer `ApplicationData` record. Protected local sends also prove
+  a `CS.sent_event_seal_projection` tying the emitted ciphertext to the current
+  write state, emitted record-header AAD, and TLSInnerPlaintext bytes for the
+  sent message.
 - The pure connection spec now has a reusable one-record bridge:
   `lemma_raw_records_exactly_one_parse_record` turns
   `raw_records_exactly raw outer 1` into an exact
@@ -189,7 +193,9 @@ The public client API is buffer/event oriented:
   are tied to the legal event raw delta and protected-record segmentation facts;
   under `client_state_correct`, `response_network_out_write_key_schedule_projection`
   also exposes the current write-state key/IV projection from installed client
-  traffic material for protected sent events.
+  traffic material for protected sent events. For local protected sends,
+  `CS.sent_event_seal_projection` additionally records the concrete
+  `Record.Spec.seal` equation over the emitted header AAD and TLSInnerPlaintext.
 - `TLS13.Impl.ConnectionState` has been split by responsibility: `Repr` owns the
   concrete representation and exact predicates, `Queries` owns read-only checks
   and copyouts, `Model`/`Bounds`/`Tags` own pure/proof helpers, and the mutation
