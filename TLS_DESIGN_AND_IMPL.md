@@ -194,7 +194,8 @@ The public client API is buffer/event oriented:
   under `client_state_correct`, `response_network_out_write_key_schedule_projection`
   also exposes the current write-state key/IV projection from installed client
   traffic material for protected sent events. For local protected sends,
-  `CS.sent_event_seal_projection` additionally records the concrete
+  `local_event_end_to_end_correct` additionally exposes
+  `CT.response_network_out_seal_projection`, recording the concrete
   `Record.Spec.seal` equation over the emitted header AAD and TLSInnerPlaintext.
 - `TLS13.Impl.ConnectionState` has been split by responsibility: `Repr` owns the
   concrete representation and exact predicates, `Queries` owns read-only checks

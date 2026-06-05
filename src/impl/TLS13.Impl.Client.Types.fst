@@ -520,6 +520,19 @@ let response_network_out_write_key_schedule_projection
       st0 st1 resp ev raw_sent raw_received network_out app_out /\
     sent_protected_event_write_key_schedule_projection st0 ev)
 
+let response_network_out_seal_projection
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (resp:client_response)
+  (network_out:B.bytes)
+  (app_out:B.bytes)
+  : prop =
+  resp.network_out_len == 0sz \/
+  (exists ev raw_sent raw_received.
+    legal_response_for_event
+      st0 st1 resp ev raw_sent raw_received network_out app_out /\
+    CS.sent_event_seal_projection st0.CS.cs_model ev raw_sent)
+
 let lemma_legal_response_for_event_network_out_raw_projection
   (st0:CS.connection_state)
   (st1:CS.connection_state)
@@ -1790,6 +1803,100 @@ let local_event_step_correct
   legal_handled_local_response st0 st1 resp kind payload network_out app_out /\
   response_network_out_parse_success resp network_out
 
+let lemma_legal_handled_local_response_network_out_seal_projection
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (resp:client_response)
+  (kind:local_event_kind)
+  (payload:B.bytes)
+  (network_out:B.bytes)
+  (app_out:B.bytes)
+  : Lemma
+      (requires legal_handled_local_response st0 st1 resp kind payload network_out app_out)
+      (ensures response_network_out_seal_projection st0 st1 resp network_out app_out)
+=
+  if resp.network_out_len = 0sz then ()
+  else if (exists ev raw_sent raw_received.
+      legal_local_response
+        st0
+        st1
+        resp
+        kind
+        payload
+        ev
+        raw_sent
+        raw_received
+        network_out
+        app_out) then (
+    let ev =
+      ID.indefinite_description_ghost
+        CS.conn_event
+        (fun ev -> exists raw_sent raw_received.
+          legal_local_response
+            st0 st1 resp kind payload ev raw_sent raw_received network_out app_out) in
+    let raw_sent =
+      ID.indefinite_description_ghost
+        B.bytes
+        (fun raw_sent -> exists raw_received.
+          legal_local_response
+            st0 st1 resp kind payload ev raw_sent raw_received network_out app_out) in
+    let raw_received =
+      ID.indefinite_description_ghost
+        B.bytes
+        (fun raw_received ->
+          legal_local_response
+            st0 st1 resp kind payload ev raw_sent raw_received network_out app_out) in
+    assert (legal_response_for_event
+      st0 st1 resp ev raw_sent raw_received network_out app_out);
+    assert (CS.sent_event_seal_projection st0.CS.cs_model ev raw_sent);
+    assert (exists ev' raw_sent' raw_received'.
+      legal_response_for_event
+        st0 st1 resp ev' raw_sent' raw_received' network_out app_out /\
+      CS.sent_event_seal_projection st0.CS.cs_model ev' raw_sent')
+  )
+  else if unexpected_message_response st0 st1 resp network_out app_out then (
+    assert (CS.sent_event_seal_projection
+      st0.CS.cs_model
+      (CS.ConnLocalEvent (CS.LocalFail tls_unexpected_message_error))
+      B.empty);
+    assert (exists ev' raw_sent' raw_received'.
+      legal_response_for_event
+        st0 st1 resp ev' raw_sent' raw_received' network_out app_out /\
+      CS.sent_event_seal_projection st0.CS.cs_model ev' raw_sent')
+  )
+  else (
+    assert (bad_finished_response st0 st1 resp network_out app_out);
+    assert (CS.sent_event_seal_projection
+      st0.CS.cs_model
+      (CS.ConnLocalEvent (CS.LocalFail tls_bad_finished_error))
+      B.empty);
+    assert (exists ev' raw_sent' raw_received'.
+      legal_response_for_event
+        st0 st1 resp ev' raw_sent' raw_received' network_out app_out /\
+      CS.sent_event_seal_projection st0.CS.cs_model ev' raw_sent')
+  )
+
+let lemma_local_event_step_correct_network_out_seal_projection
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (resp:client_response)
+  (kind:local_event_kind)
+  (payload:B.bytes)
+  (network_out:B.bytes)
+  (app_out:B.bytes)
+  : Lemma
+      (requires local_event_step_correct st0 st1 resp kind payload network_out app_out)
+      (ensures response_network_out_seal_projection st0 st1 resp network_out app_out)
+=
+  lemma_legal_handled_local_response_network_out_seal_projection
+    st0
+    st1
+    resp
+    kind
+    payload
+    network_out
+    app_out
+
 let network_bytes_end_to_end_correct
   (st0:CS.connection_state)
   (st1:CS.connection_state)
@@ -1826,6 +1933,7 @@ let local_event_end_to_end_correct
   : prop =
   local_event_step_correct st0 st1 resp kind payload network_out app_out /\
   response_network_out_raw_projection st0 st1 resp network_out app_out /\
+  response_network_out_seal_projection st0 st1 resp network_out app_out /\
   (client_state_correct st0 ==> client_state_correct st1) /\
   (client_state_correct st0 ==>
     response_network_out_write_key_schedule_projection st0 st1 resp network_out app_out) /\
@@ -2455,6 +2563,14 @@ let lemma_local_event_step_correct_end_to_end
         local_event_end_to_end_correct st0 st1 resp kind payload network_out app_out)
 =
   lemma_some_legal_response_network_out_raw_projection st0 st1 resp network_out app_out;
+  lemma_local_event_step_correct_network_out_seal_projection
+    st0
+    st1
+    resp
+    kind
+    payload
+    network_out
+    app_out;
   if client_state_correct st0 then (
     lemma_some_legal_response_network_out_write_key_schedule_projection
       st0
