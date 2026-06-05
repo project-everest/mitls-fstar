@@ -161,8 +161,9 @@ The public client API is buffer/event oriented:
   `network_bytes_end_to_end_correct` and `local_event_end_to_end_correct`; the
   lower-level step, record, and event predicates remain internal proof
   vocabulary. The `new_client_default` and configured `new_client` constructors
-  now establish `client_state_correct` for their initial states, so callers can
-  chain directly into the end-to-end step predicates. The streaming network
+  now establish `client_state_correct` plus explicit initial sent/received replay,
+  key-provenance replay, and protected raw-segmentation replay facts, so callers
+  can chain directly into the end-to-end step predicates. The streaming network
   predicate exposes public `parse_record` success facts for
   non-decode-error consumed raw records, and the `process_network_bytes` theorem
   shape names the exact consumed input prefix instead of hiding it behind an
@@ -237,8 +238,9 @@ The public client API is buffer/event oriented:
   `connection_state_sent_seal_replay_consistent` and
   `connection_state_received_decode_replay_consistent`. The client theorem
   invariant includes both replay predicates on top of
-  `connection_state_full_log_consistent`; the public constructors still expose
-  them explicitly, and both public network and local end-to-end step predicates
+  `connection_state_full_log_consistent`; the public constructors now expose them
+  explicitly along with the corresponding key-provenance replay and protected
+  raw-segmentation replay facts, and both public network and local end-to-end step predicates
   preserve them unconditionally when they hold initially. Rejected-but-consumed
   decode-error bytes remain exposed per step instead of being included in the
   cumulative raw received log. The local theorem now exposes

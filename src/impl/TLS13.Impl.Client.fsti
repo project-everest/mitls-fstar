@@ -159,7 +159,13 @@ fn new_client_default ()
           pure (CT.client_state_correct CR.default_initial_state /\
                 CS.connection_state_sent_seal_replay_consistent
                   CR.default_initial_state /\
+                CS.connection_state_sent_seal_key_schedule_replay_consistent
+                  CR.default_initial_state /\
                 CS.connection_state_received_decode_replay_consistent
+                  CR.default_initial_state /\
+                CS.connection_state_received_decode_key_schedule_replay_consistent
+                  CR.default_initial_state /\
+                CS.connection_state_protected_raw_segmented_replay_consistent
                   CR.default_initial_state)
 
 fn new_client
@@ -193,7 +199,22 @@ fn new_client
                     (Ghost.reveal 'server_name_bytes)
                     (Ghost.reveal 'trust_anchors_bytes)
                     validation_time_seconds) /\
+                CS.connection_state_sent_seal_key_schedule_replay_consistent
+                  (CR.configured_initial_state
+                    (Ghost.reveal 'server_name_bytes)
+                    (Ghost.reveal 'trust_anchors_bytes)
+                    validation_time_seconds) /\
                 CS.connection_state_received_decode_replay_consistent
+                  (CR.configured_initial_state
+                    (Ghost.reveal 'server_name_bytes)
+                    (Ghost.reveal 'trust_anchors_bytes)
+                    validation_time_seconds) /\
+                CS.connection_state_received_decode_key_schedule_replay_consistent
+                  (CR.configured_initial_state
+                    (Ghost.reveal 'server_name_bytes)
+                    (Ghost.reveal 'trust_anchors_bytes)
+                    validation_time_seconds) /\
+                CS.connection_state_protected_raw_segmented_replay_consistent
                   (CR.configured_initial_state
                     (Ghost.reveal 'server_name_bytes)
                     (Ghost.reveal 'trust_anchors_bytes)
