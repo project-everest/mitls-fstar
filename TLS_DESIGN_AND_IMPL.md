@@ -175,10 +175,11 @@ The public client API is buffer/event oriented:
   cumulative raw-event replay as `connection_state_full_log_consistent`.
   `TLS13.Impl.Client.Types` uses that package in compact step theorems:
   `client_state_correct` combines pure reachability with
-  `connection_state_full_log_consistent`, and
+  `connection_state_full_log_consistent` plus cumulative sent-seal replay, and
   `network_bytes_end_to_end_correct` / `local_event_end_to_end_correct` prove
   that the public API step predicates preserve it while explicitly projecting
-  the resulting cumulative connection-log view and raw-event replay. The network
+  the resulting cumulative connection-log view, raw-event replay, and
+  sent-seal replay facts. The network
   theorem also exposes `network_consumed_raw_record_projection`: every non-empty,
   non-decode-error consumed prefix is a single raw TLS record and has the
   recursive raw-record segmentation fact needed by downstream raw-log proofs.
@@ -218,13 +219,13 @@ The public client API is buffer/event oriented:
   predicates for sent single-record protected seals and accepted received
   protected decodes:
   `connection_state_sent_seal_replay_consistent` and
-  `connection_state_received_decode_replay_consistent`. The public constructors
-  establish both initially, and both public network and local end-to-end step
-  predicates preserve them unconditionally when they hold initially. These
-  cumulative replays are still intentionally separate from
-  `connection_state_full_log_consistent` until the supported local
-  application-data send profile and rejected-but-consumed received decode steps
-  are folded into the same invariant. The local theorem now exposes
+  `connection_state_received_decode_replay_consistent`. The client theorem
+  invariant now includes the sent replay on top of `connection_state_full_log_consistent`;
+  the public constructors still expose both replay predicates explicitly, and
+  both public network and local end-to-end step predicates preserve them
+  unconditionally when they hold initially. Accepted received-decode replay
+  remains intentionally separate until rejected-but-consumed received decode
+  steps are folded into the same invariant. The local theorem now exposes
   `CT.local_send_application_data_supported_projection`: every successful
   `LocalSendApplicationData` step is within the current supported profile
   (`max_application_data_fragment_len`) and emits exactly one protected
@@ -304,9 +305,10 @@ Other trusted runtime boundaries remain:
    single-record outputs and accepted received protected inputs now have
    cumulative replay predicates with unconditional public-step preservation, and
    successful local application-data sends are publicly constrained to the
-   current one-record supported profile. These are not yet folded into
+   current one-record supported profile. Sent-seal replay is now folded into
    `client_state_correct`; rejected-but-consumed received decode steps still
-   need cumulative treatment.
+   need cumulative treatment before accepted received-decode replay can be folded
+   in too.
    Event-log replay,
    transcript projection, KeyUpdate response-pending state, non-failed record
    epoch/sequence projection, record key/IV consistency with the installed key
@@ -353,8 +355,9 @@ Other trusted runtime boundaries remain:
    pending application-buffer consistency, app-log-consistency preservation, and
    cumulative connection-log view consistency and cumulative raw-event replay
    lemmas, with legal-delta/client-response/public-step projections, plus a
-   parser-success-to-raw-log inverse bridge plus cumulative sent-seal and
-   accepted received-decode replay preservation at the client theorem surface.
+   parser-success-to-raw-log inverse bridge, cumulative sent-seal replay inside
+   `client_state_correct`, and accepted received-decode replay preservation at
+   the client theorem surface.
    The client surface now also
    exposes `network_input_message_projection`, derived from `network_input_wf`,
    `network_bytes_received_decode_projection` over the public consumed prefix,
