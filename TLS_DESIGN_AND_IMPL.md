@@ -188,9 +188,11 @@ The public client API is buffer/event oriented:
   theorem also exposes `network_consumed_raw_record_projection`: every non-empty,
   non-decode-error consumed prefix is a single raw TLS record and has the
   recursive raw-record segmentation fact needed by downstream raw-log proofs.
-  `lemma_client_state_correct_protected_raw_segmented_replay` derives the
-  corresponding cumulative protected raw-record segmentation replay from
-  `client_state_correct` on demand.
+  `client_end_to_end_invariant` packages `client_state_correct` with the
+  cumulative protected raw-record segmentation replay, and
+  `lemma_network_bytes_end_to_end_correct_client_end_to_end_invariant` /
+  `lemma_local_event_end_to_end_correct_client_end_to_end_invariant` preserve
+  that named invariant across the public step predicates.
   Successful non-decode-error byte steps additionally expose
   `network_bytes_decoded_message_projection`, tying the hidden parser witnesses
   to `network_input_message_projection` for the public consumed prefix. That
@@ -240,8 +242,9 @@ The public client API is buffer/event oriented:
   invariant includes both replay predicates on top of
   `connection_state_full_log_consistent`; the public constructors now expose them
   explicitly along with the corresponding key-provenance replay and protected
-  raw-segmentation replay facts, and both public network and local end-to-end step predicates
-  preserve them unconditionally when they hold initially. Rejected-but-consumed
+  raw-segmentation replay facts, and both public network and local end-to-end
+  step predicates preserve the named `client_end_to_end_invariant` through
+  separate helper lemmas. Rejected-but-consumed
   decode-error bytes remain exposed per step instead of being included in the
   cumulative raw received log. The local theorem now exposes
   `CT.local_send_application_data_supported_projection`: every successful

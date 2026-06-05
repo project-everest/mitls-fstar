@@ -56,6 +56,12 @@ let client_state_correct
   CS.connection_state_received_decode_replay_consistent st /\
   CS.connection_state_received_decode_key_schedule_replay_consistent st
 
+let client_end_to_end_invariant
+  (st:CS.connection_state)
+  : prop =
+  client_state_correct st /\
+  CS.connection_state_protected_raw_segmented_replay_consistent st
+
 let lemma_initial_client_state_correct
   (cfg:CS.connection_config)
   : Lemma (client_state_correct (CS.initial cfg))
@@ -66,6 +72,14 @@ let lemma_initial_client_state_correct
   CS.lemma_initial_received_decode_replay_consistent cfg;
   CS.lemma_initial_received_decode_key_schedule_replay_consistent cfg;
   assert (CS.connection_state_evolves (CS.initial cfg) (CS.initial cfg))
+
+let lemma_initial_client_end_to_end_invariant
+  (cfg:CS.connection_config)
+  : Lemma (client_end_to_end_invariant (CS.initial cfg))
+=
+  lemma_initial_client_state_correct cfg;
+  CS.lemma_initial_raw_event_replay_consistent cfg;
+  CS.lemma_connection_state_protected_raw_segmented_replay (CS.initial cfg)
 
 let lemma_client_state_correct_sent_seal_key_schedule_replay
   (st:CS.connection_state)
@@ -2838,6 +2852,44 @@ let local_event_end_to_end_correct
   (CS.connection_state_received_decode_replay_consistent st0 ==>
    CS.connection_state_received_decode_replay_consistent st1)
 
+let lemma_network_bytes_end_to_end_correct_client_end_to_end_invariant
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (buffer_resp:client_buffer_response)
+  (network_input:B.bytes)
+  (old_network_out:B.bytes)
+  (network_out:B.bytes)
+  (old_app_out:B.bytes)
+  (app_out:B.bytes)
+  : Lemma
+      (requires
+        network_bytes_end_to_end_correct
+          st0 st1 buffer_resp network_input old_network_out network_out old_app_out app_out /\
+        client_end_to_end_invariant st0)
+      (ensures client_end_to_end_invariant st1)
+=
+  assert (client_state_correct st0);
+  assert (client_state_correct st1);
+  lemma_client_state_correct_protected_raw_segmented_replay st1
+
+let lemma_local_event_end_to_end_correct_client_end_to_end_invariant
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (resp:client_response)
+  (kind:local_event_kind)
+  (payload:B.bytes)
+  (network_out:B.bytes)
+  (app_out:B.bytes)
+  : Lemma
+      (requires
+        local_event_end_to_end_correct st0 st1 resp kind payload network_out app_out /\
+        client_end_to_end_invariant st0)
+      (ensures client_end_to_end_invariant st1)
+=
+  assert (client_state_correct st0);
+  assert (client_state_correct st1);
+  lemma_client_state_correct_protected_raw_segmented_replay st1
+
 let lemma_network_bytes_step_correct_layered_log_consistent
   (st0:CS.connection_state)
   (st1:CS.connection_state)
@@ -4371,6 +4423,38 @@ let lemma_network_bytes_step_correct_client_state_correct
       network_out
       app_out);
     lemma_some_legal_response_client_state_correct st0 st1 resp network_out app_out
+  )
+
+let lemma_network_bytes_step_correct_sent_seal_replay_consistent
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (buffer_resp:client_buffer_response)
+  (network_input:B.bytes)
+  (old_network_out:B.bytes)
+  (network_out:B.bytes)
+  (old_app_out:B.bytes)
+  (app_out:B.bytes)
+  : Lemma
+      (requires
+        network_bytes_step_correct
+          st0 st1 buffer_resp network_input old_network_out network_out old_app_out app_out /\
+        network_bytes_network_out_seal_projection
+          st0 st1 buffer_resp network_input network_out app_out /\
+        CS.connection_state_sent_seal_replay_consistent st0)
+      (ensures CS.connection_state_sent_seal_replay_consistent st1)
+=
+  let resp = buffer_resp.response in
+  if response_stuttered st0 st1 resp old_network_out network_out old_app_out app_out
+  then assert (st1 == st0)
+  else (
+    assert (some_legal_response st0 st1 resp network_out app_out);
+    assert (response_network_out_seal_projection st0 st1 resp network_out app_out);
+    lemma_some_legal_response_sent_seal_replay_consistent
+      st0
+      st1
+      resp
+      network_out
+      app_out
   )
 
 let lemma_network_bytes_step_correct_end_to_end
