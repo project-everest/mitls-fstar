@@ -144,6 +144,31 @@ let local_input_wf
     Seq.equal payload B.empty
   | _ -> True
 
+let local_auth_tcb_projection
+  (st:CS.connection_state)
+  (kind:local_event_kind)
+  (payload:B.bytes)
+  : prop =
+  match kind with
+  | LocalValidateCertificate
+  | LocalVerifyCertificateSignature ->
+    local_input_wf st kind payload
+  | _ ->
+    True
+
+let lemma_local_input_wf_auth_tcb_projection
+  (st:CS.connection_state)
+  (kind:local_event_kind)
+  (payload:B.bytes)
+  : Lemma
+      (requires local_input_wf st kind payload)
+      (ensures local_auth_tcb_projection st kind payload)
+=
+  match kind with
+  | LocalValidateCertificate -> ()
+  | LocalVerifyCertificateSignature -> ()
+  | _ -> ()
+
 let response_wf
   (resp:client_response)
   (network_out:B.bytes)
@@ -2051,6 +2076,7 @@ let local_event_end_to_end_correct
   (app_out:B.bytes)
   : prop =
   local_event_step_correct st0 st1 resp kind payload network_out app_out /\
+  local_auth_tcb_projection st0 kind payload /\
   response_network_out_raw_projection st0 st1 resp network_out app_out /\
   response_network_out_seal_projection st0 st1 resp network_out app_out /\
   (client_state_correct st0 ==> client_state_correct st1) /\
@@ -2773,10 +2799,12 @@ let lemma_local_event_step_correct_end_to_end
   (app_out:B.bytes)
   : Lemma
       (requires
+        local_input_wf st0 kind payload /\
         local_event_step_correct st0 st1 resp kind payload network_out app_out)
       (ensures
         local_event_end_to_end_correct st0 st1 resp kind payload network_out app_out)
 =
+  lemma_local_input_wf_auth_tcb_projection st0 kind payload;
   lemma_some_legal_response_network_out_raw_projection st0 st1 resp network_out app_out;
   lemma_local_event_step_correct_network_out_seal_projection
     st0
