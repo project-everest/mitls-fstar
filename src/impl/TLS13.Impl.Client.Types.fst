@@ -83,6 +83,14 @@ let lemma_client_state_correct_received_decode_key_schedule_replay
 =
   CS.lemma_connection_state_received_decode_key_schedule_replay st
 
+let lemma_client_state_correct_protected_raw_segmented_replay
+  (st:CS.connection_state)
+  : Lemma
+      (requires client_state_correct st)
+      (ensures CS.connection_state_protected_raw_segmented_replay_consistent st)
+=
+  CS.lemma_connection_state_protected_raw_segmented_replay st
+
 let tls_decode_error : T.tls_error = T.AlertError T.DecodeError
 
 let tls_unexpected_message_error : T.tls_error = T.AlertError T.UnexpectedMessage

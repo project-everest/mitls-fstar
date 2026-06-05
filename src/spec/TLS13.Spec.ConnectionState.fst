@@ -3857,10 +3857,376 @@ let rec lemma_conn_events_raw_replay_snoc
       (B.append tail_sent delta_sent)
       (B.append tail_received delta_received)
 
+let rec conn_events_protected_raw_segmented_replay
+  (model:connection_model)
+  (events:list conn_event)
+  (raw_sent:B.bytes)
+  (raw_received:B.bytes)
+  (final_model:connection_model)
+  : Tot prop
+        (decreases events)
+  =
+  match events with
+  | [] ->
+    Seq.equal raw_sent B.empty /\
+    Seq.equal raw_received B.empty /\
+    final_model == model
+  | ev :: rest ->
+    exists model1 delta_sent delta_received tail_sent tail_received.
+      legal_event model ev /\
+      step_model model ev == Some model1 /\
+      event_raw_delta_legal model ev delta_sent delta_received /\
+      event_protected_raw_segmented_success ev delta_sent delta_received /\
+      Seq.equal raw_sent (B.append delta_sent tail_sent) /\
+      Seq.equal raw_received (B.append delta_received tail_received) /\
+      conn_events_protected_raw_segmented_replay
+        model1
+        rest
+        tail_sent
+        tail_received
+        final_model
+
+let lemma_conn_events_protected_raw_segmented_replay_cons
+  (model:connection_model)
+  (ev:conn_event)
+  (rest:list conn_event)
+  (raw_sent:B.bytes)
+  (raw_received:B.bytes)
+  (final_model:connection_model)
+  (model1:connection_model)
+  (delta_sent:B.bytes)
+  (delta_received:B.bytes)
+  (tail_sent:B.bytes)
+  (tail_received:B.bytes)
+  : Lemma
+      (requires
+        legal_event model ev /\
+        step_model model ev == Some model1 /\
+        event_raw_delta_legal model ev delta_sent delta_received /\
+        event_protected_raw_segmented_success ev delta_sent delta_received /\
+        Seq.equal raw_sent (B.append delta_sent tail_sent) /\
+        Seq.equal raw_received (B.append delta_received tail_received) /\
+        conn_events_protected_raw_segmented_replay
+          model1
+          rest
+          tail_sent
+          tail_received
+          final_model)
+      (ensures
+        conn_events_protected_raw_segmented_replay
+          model
+          (ev :: rest)
+          raw_sent
+          raw_received
+          final_model)
+=
+  FStar.Classical.exists_intro
+    (fun tail_received' ->
+      legal_event model ev /\
+      step_model model ev == Some model1 /\
+      event_raw_delta_legal model ev delta_sent delta_received /\
+      event_protected_raw_segmented_success ev delta_sent delta_received /\
+      Seq.equal raw_sent (B.append delta_sent tail_sent) /\
+      Seq.equal raw_received (B.append delta_received tail_received') /\
+      conn_events_protected_raw_segmented_replay
+        model1
+        rest
+        tail_sent
+        tail_received'
+        final_model)
+    tail_received;
+  FStar.Classical.exists_intro
+    (fun tail_sent' ->
+      exists (tail_received':B.bytes).
+        legal_event model ev /\
+        step_model model ev == Some model1 /\
+        event_raw_delta_legal model ev delta_sent delta_received /\
+        event_protected_raw_segmented_success ev delta_sent delta_received /\
+        Seq.equal raw_sent (B.append delta_sent tail_sent') /\
+        Seq.equal raw_received (B.append delta_received tail_received') /\
+        conn_events_protected_raw_segmented_replay
+          model1
+          rest
+          tail_sent'
+          tail_received'
+          final_model)
+    tail_sent;
+  FStar.Classical.exists_intro
+    (fun delta_received' ->
+      exists (tail_sent':B.bytes).
+      exists (tail_received':B.bytes).
+        legal_event model ev /\
+        step_model model ev == Some model1 /\
+        event_raw_delta_legal model ev delta_sent delta_received' /\
+        event_protected_raw_segmented_success ev delta_sent delta_received' /\
+        Seq.equal raw_sent (B.append delta_sent tail_sent') /\
+        Seq.equal raw_received (B.append delta_received' tail_received') /\
+        conn_events_protected_raw_segmented_replay
+          model1
+          rest
+          tail_sent'
+          tail_received'
+          final_model)
+    delta_received;
+  FStar.Classical.exists_intro
+    (fun delta_sent' ->
+      exists (delta_received':B.bytes).
+      exists (tail_sent':B.bytes).
+      exists (tail_received':B.bytes).
+        legal_event model ev /\
+        step_model model ev == Some model1 /\
+        event_raw_delta_legal model ev delta_sent' delta_received' /\
+        event_protected_raw_segmented_success ev delta_sent' delta_received' /\
+        Seq.equal raw_sent (B.append delta_sent' tail_sent') /\
+        Seq.equal raw_received (B.append delta_received' tail_received') /\
+        conn_events_protected_raw_segmented_replay
+          model1
+          rest
+          tail_sent'
+          tail_received'
+          final_model)
+    delta_sent;
+  FStar.Classical.exists_intro
+    (fun model1' ->
+      exists (delta_sent':B.bytes).
+      exists (delta_received':B.bytes).
+      exists (tail_sent':B.bytes).
+      exists (tail_received':B.bytes).
+        legal_event model ev /\
+        step_model model ev == Some model1' /\
+        event_raw_delta_legal model ev delta_sent' delta_received' /\
+        event_protected_raw_segmented_success ev delta_sent' delta_received' /\
+        Seq.equal raw_sent (B.append delta_sent' tail_sent') /\
+        Seq.equal raw_received (B.append delta_received' tail_received') /\
+        conn_events_protected_raw_segmented_replay
+          model1'
+          rest
+          tail_sent'
+          tail_received'
+          final_model)
+    model1;
+  assert_norm (
+    conn_events_protected_raw_segmented_replay
+      model
+      (ev :: rest)
+      raw_sent
+      raw_received
+      final_model ==
+    (exists (model1':connection_model)
+            (delta_sent':B.bytes)
+            (delta_received':B.bytes)
+            (tail_sent':B.bytes)
+            (tail_received':B.bytes).
+      legal_event model ev /\
+      step_model model ev == Some model1' /\
+      event_raw_delta_legal model ev delta_sent' delta_received' /\
+      event_protected_raw_segmented_success ev delta_sent' delta_received' /\
+      Seq.equal raw_sent (B.append delta_sent' tail_sent') /\
+      Seq.equal raw_received (B.append delta_received' tail_received') /\
+      conn_events_protected_raw_segmented_replay
+        model1'
+        rest
+        tail_sent'
+        tail_received'
+        final_model));
+  assert (conn_events_protected_raw_segmented_replay
+    model
+    (ev :: rest)
+    raw_sent
+    raw_received
+    final_model)
+
+let rec lemma_conn_events_raw_replay_protected_segmented
+  (model:connection_model)
+  (events:list conn_event)
+  (raw_sent:B.bytes)
+  (raw_received:B.bytes)
+  (final_model:connection_model)
+  : Lemma
+      (requires
+        conn_events_raw_replay
+          model
+          events
+          raw_sent
+          raw_received
+          final_model)
+      (ensures
+        conn_events_protected_raw_segmented_replay
+          model
+          events
+          raw_sent
+          raw_received
+          final_model)
+      (decreases events)
+=
+  match events with
+  | [] ->
+    ()
+  | ev :: rest ->
+    assert_norm (
+      conn_events_raw_replay model (ev :: rest) raw_sent raw_received final_model ==
+      (exists (model1':connection_model)
+              (delta_sent':B.bytes)
+              (delta_received':B.bytes)
+              (tail_sent':B.bytes)
+              (tail_received':B.bytes).
+        legal_event model ev /\
+        step_model model ev == Some model1' /\
+        event_raw_delta_legal model ev delta_sent' delta_received' /\
+        Seq.equal raw_sent (B.append delta_sent' tail_sent') /\
+        Seq.equal raw_received (B.append delta_received' tail_received') /\
+        conn_events_raw_replay model1' rest tail_sent' tail_received' final_model));
+    assert (exists (model1':connection_model)
+                   (delta_sent':B.bytes)
+                   (delta_received':B.bytes)
+                   (tail_sent':B.bytes)
+                   (tail_received':B.bytes).
+      legal_event model ev /\
+      step_model model ev == Some model1' /\
+      event_raw_delta_legal model ev delta_sent' delta_received' /\
+      Seq.equal raw_sent (B.append delta_sent' tail_sent') /\
+      Seq.equal raw_received (B.append delta_received' tail_received') /\
+      conn_events_raw_replay model1' rest tail_sent' tail_received' final_model);
+    let model1_w =
+      ID.indefinite_description_ghost
+        connection_model
+        (fun model1 -> exists delta_sent delta_received tail_sent tail_received.
+          legal_event model ev /\
+          step_model model ev == Some model1 /\
+          event_raw_delta_legal model ev delta_sent delta_received /\
+          Seq.equal raw_sent (B.append delta_sent tail_sent) /\
+          Seq.equal raw_received (B.append delta_received tail_received) /\
+          conn_events_raw_replay model1 rest tail_sent tail_received final_model) in
+    let model1 : connection_model = model1_w in
+    assert (exists delta_sent' delta_received' tail_sent' tail_received'.
+      legal_event model ev /\
+      step_model model ev == Some model1 /\
+      event_raw_delta_legal model ev delta_sent' delta_received' /\
+      Seq.equal raw_sent (B.append delta_sent' tail_sent') /\
+      Seq.equal raw_received (B.append delta_received' tail_received') /\
+      conn_events_raw_replay model1 rest tail_sent' tail_received' final_model);
+    let delta_sent_w =
+      ID.indefinite_description_ghost
+        B.bytes
+        (fun delta_sent -> exists delta_received tail_sent tail_received.
+          legal_event model ev /\
+          step_model model ev == Some model1 /\
+          event_raw_delta_legal model ev delta_sent delta_received /\
+          Seq.equal raw_sent (B.append delta_sent tail_sent) /\
+          Seq.equal raw_received (B.append delta_received tail_received) /\
+          conn_events_raw_replay model1 rest tail_sent tail_received final_model) in
+    let delta_sent : B.bytes = delta_sent_w in
+    assert (exists delta_received' tail_sent' tail_received'.
+      legal_event model ev /\
+      step_model model ev == Some model1 /\
+      event_raw_delta_legal model ev delta_sent delta_received' /\
+      Seq.equal raw_sent (B.append delta_sent tail_sent') /\
+      Seq.equal raw_received (B.append delta_received' tail_received') /\
+      conn_events_raw_replay model1 rest tail_sent' tail_received' final_model);
+    let delta_received_w =
+      ID.indefinite_description_ghost
+        B.bytes
+        (fun delta_received -> exists tail_sent tail_received.
+          legal_event model ev /\
+          step_model model ev == Some model1 /\
+          event_raw_delta_legal model ev delta_sent delta_received /\
+          Seq.equal raw_sent (B.append delta_sent tail_sent) /\
+          Seq.equal raw_received (B.append delta_received tail_received) /\
+          conn_events_raw_replay model1 rest tail_sent tail_received final_model) in
+    let delta_received : B.bytes = delta_received_w in
+    assert (exists tail_sent' tail_received'.
+      legal_event model ev /\
+      step_model model ev == Some model1 /\
+      event_raw_delta_legal model ev delta_sent delta_received /\
+      Seq.equal raw_sent (B.append delta_sent tail_sent') /\
+      Seq.equal raw_received (B.append delta_received tail_received') /\
+      conn_events_raw_replay model1 rest tail_sent' tail_received' final_model);
+    let tail_sent_w =
+      ID.indefinite_description_ghost
+        B.bytes
+        (fun tail_sent -> exists tail_received.
+          legal_event model ev /\
+          step_model model ev == Some model1 /\
+          event_raw_delta_legal model ev delta_sent delta_received /\
+          Seq.equal raw_sent (B.append delta_sent tail_sent) /\
+          Seq.equal raw_received (B.append delta_received tail_received) /\
+          conn_events_raw_replay model1 rest tail_sent tail_received final_model) in
+    let tail_sent : B.bytes = tail_sent_w in
+    assert (exists tail_received'.
+      legal_event model ev /\
+      step_model model ev == Some model1 /\
+      event_raw_delta_legal model ev delta_sent delta_received /\
+      Seq.equal raw_sent (B.append delta_sent tail_sent) /\
+      Seq.equal raw_received (B.append delta_received tail_received') /\
+      conn_events_raw_replay model1 rest tail_sent tail_received' final_model);
+    let tail_received_w =
+      ID.indefinite_description_ghost
+        B.bytes
+        (fun tail_received ->
+          legal_event model ev /\
+          step_model model ev == Some model1 /\
+          event_raw_delta_legal model ev delta_sent delta_received /\
+          Seq.equal raw_sent (B.append delta_sent tail_sent) /\
+          Seq.equal raw_received (B.append delta_received tail_received) /\
+          conn_events_raw_replay model1 rest tail_sent tail_received final_model) in
+    let tail_received : B.bytes = tail_received_w in
+    assert (legal_event model ev);
+    assert (step_model model ev == Some model1);
+    assert (event_raw_delta_legal model ev delta_sent delta_received);
+    assert (Seq.equal raw_sent (B.append delta_sent tail_sent));
+    assert (Seq.equal raw_received (B.append delta_received tail_received));
+    assert (conn_events_raw_replay model1 rest tail_sent tail_received final_model);
+    lemma_event_raw_delta_legal_protected_segmented
+      model
+      ev
+      delta_sent
+      delta_received;
+    lemma_conn_events_raw_replay_protected_segmented
+      model1
+      rest
+      tail_sent
+      tail_received
+      final_model;
+    lemma_conn_events_protected_raw_segmented_replay_cons
+      model
+      ev
+      rest
+      raw_sent
+      raw_received
+      final_model
+      model1
+      delta_sent
+      delta_received
+      tail_sent
+      tail_received
+
 let connection_state_raw_event_replay_consistent
   (st:connection_state)
   : prop =
   conn_events_raw_replay
+    (initial_model st.cs_model.model_config)
+    st.cs_event_log
+    st.cs_wire_log.CL.raw_sent
+    st.cs_wire_log.CL.raw_received
+    st.cs_model
+
+let connection_state_protected_raw_segmented_replay_consistent
+  (st:connection_state)
+  : prop =
+  conn_events_protected_raw_segmented_replay
+    (initial_model st.cs_model.model_config)
+    st.cs_event_log
+    st.cs_wire_log.CL.raw_sent
+    st.cs_wire_log.CL.raw_received
+    st.cs_model
+
+let lemma_connection_state_protected_raw_segmented_replay
+  (st:connection_state)
+  : Lemma
+      (requires connection_state_raw_event_replay_consistent st)
+      (ensures connection_state_protected_raw_segmented_replay_consistent st)
+=
+  lemma_conn_events_raw_replay_protected_segmented
     (initial_model st.cs_model.model_config)
     st.cs_event_log
     st.cs_wire_log.CL.raw_sent

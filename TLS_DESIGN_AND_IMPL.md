@@ -187,6 +187,9 @@ The public client API is buffer/event oriented:
   theorem also exposes `network_consumed_raw_record_projection`: every non-empty,
   non-decode-error consumed prefix is a single raw TLS record and has the
   recursive raw-record segmentation fact needed by downstream raw-log proofs.
+  `lemma_client_state_correct_protected_raw_segmented_replay` derives the
+  corresponding cumulative protected raw-record segmentation replay from
+  `client_state_correct` on demand.
   Successful non-decode-error byte steps additionally expose
   `network_bytes_decoded_message_projection`, tying the hidden parser witnesses
   to `network_input_message_projection` for the public consumed prefix. That
@@ -314,9 +317,10 @@ Other trusted runtime boundaries remain:
    invariant proving that consumed/emitted raw bytes parse, decrypt, and
    interpret as exactly the TLS messages/events that drive the state machine and
    app log. Raw protected deltas can now be segmented record-by-record from the
-   existing legal-delta facts, cumulative `ConnectionLog.connection_view` stream
-   and TLS/state-event/app host-trace projections plus cumulative raw-event
-   replay are packaged into `client_state_correct`, and parser successes now
+   existing legal-delta facts, the raw-event replay has a cumulative protected
+   raw-segmentation replay derivation, cumulative `ConnectionLog.connection_view`
+   stream and TLS/state-event/app host-trace projections plus cumulative
+   raw-event replay are packaged into `client_state_correct`, and parser successes now
    expose a packaged decoded-message projection for cleartext/protected records,
    including a read-key-schedule projection for protected opens. Sent protected
    single-record outputs and accepted received protected inputs now have
@@ -376,8 +380,9 @@ Other trusted runtime boundaries remain:
    pending application-buffer consistency, app-log-consistency preservation, and
    cumulative connection-log view consistency and cumulative raw-event replay
    lemmas, with legal-delta/client-response/public-step projections, plus a
-   parser-success-to-raw-log inverse bridge, and cumulative sent-seal plus
-   accepted received-decode replay inside `client_state_correct`.
+   parser-success-to-raw-log inverse bridge, an on-demand cumulative protected
+   raw-segmentation replay derivation, and cumulative sent-seal plus accepted
+   received-decode replay inside `client_state_correct`.
    The client surface now also
    exposes `network_input_message_projection`, derived from `network_input_wf`,
    `network_bytes_received_decode_projection` over the public consumed prefix,
