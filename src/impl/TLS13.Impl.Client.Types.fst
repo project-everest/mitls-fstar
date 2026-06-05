@@ -9,6 +9,7 @@ module M = TLS13.Messages
 module R = TLS13.Record.Spec
 module ID = FStar.IndefiniteDescription
 module Seq = FStar.Seq
+module SM = TLS13.StateMachine
 module SZ = FStar.SizeT
 module T = TLS13.Types
 module U8 = FStar.UInt8
@@ -1868,6 +1869,24 @@ let local_payload_matches_app_sent_delta
   | _ ->
     Seq.equal (event_api_app_sent ev) B.empty
 
+let local_event_supported_profile
+  (kind:local_event_kind)
+  (payload:B.bytes)
+  (ev:CS.conn_event)
+  : prop =
+  match kind, ev with
+  | LocalSendApplicationData, CS.ConnNetworkEvent msg ->
+    msg.CL.message_direction == CL.Sent /\
+    (match msg.CL.message_value with
+     | M.TlsApplicationData bytes ->
+       B.length bytes <= SM.max_application_data_fragment_len /\
+       CS.protected_record_count CL.Sent msg.CL.message_value == 1
+     | _ -> False)
+  | LocalSendApplicationData, _ ->
+    False
+  | _, _ ->
+    True
+
 let legal_local_response
   (st0:CS.connection_state)
   (st1:CS.connection_state)
@@ -1882,6 +1901,7 @@ let legal_local_response
   : prop =
   local_event_kind_matches st0 kind payload ev /\
   local_payload_matches_app_sent_delta kind payload ev /\
+  local_event_supported_profile kind payload ev /\
   CS.sent_event_seal_projection st0.CS.cs_model ev raw_sent /\
   legal_response_for_event st0 st1 resp ev raw_sent raw_received network_out app_out
 
@@ -1962,6 +1982,19 @@ let legal_handled_local_response
        app_out) \/
   unexpected_message_response st0 st1 resp network_out app_out \/
   bad_finished_response st0 st1 resp network_out app_out
+
+let local_send_application_data_supported_projection
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (resp:client_response)
+  (kind:local_event_kind)
+  (payload:B.bytes)
+  (network_out:B.bytes)
+  (app_out:B.bytes)
+  : prop =
+  kind == LocalSendApplicationData /\ resp.status == StepOk ==>
+    B.length payload <= SM.max_application_data_fragment_len /\
+    CS.protected_record_count CL.Sent (M.TlsApplicationData payload) == 1
 
 let legal_handled_tls_response
   (st0:CS.connection_state)
@@ -2543,6 +2576,8 @@ let local_event_end_to_end_correct
   : prop =
   local_event_step_correct st0 st1 resp kind payload network_out app_out /\
   local_auth_tcb_projection st0 kind payload /\
+  local_send_application_data_supported_projection
+    st0 st1 resp kind payload network_out app_out /\
   response_network_out_raw_projection st0 st1 resp network_out app_out /\
   response_network_out_seal_projection st0 st1 resp network_out app_out /\
   (client_state_correct st0 ==> client_state_correct st1) /\
@@ -3411,6 +3446,76 @@ let lemma_legal_handled_local_response_received_decode_projection
       app_out
   )
 
+let lemma_legal_handled_local_response_app_data_supported_projection
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (resp:client_response)
+  (kind:local_event_kind)
+  (payload:B.bytes)
+  (network_out:B.bytes)
+  (app_out:B.bytes)
+  : Lemma
+      (requires legal_handled_local_response st0 st1 resp kind payload network_out app_out)
+      (ensures local_send_application_data_supported_projection
+        st0 st1 resp kind payload network_out app_out)
+=
+  if kind == LocalSendApplicationData && resp.status == StepOk then (
+    if (exists ev raw_sent raw_received.
+        legal_local_response
+          st0
+          st1
+          resp
+          kind
+          payload
+          ev
+          raw_sent
+          raw_received
+          network_out
+          app_out) then (
+      let ev =
+        ID.indefinite_description_ghost
+          CS.conn_event
+          (fun ev -> exists raw_sent raw_received.
+            legal_local_response
+              st0 st1 resp kind payload ev raw_sent raw_received network_out app_out) in
+      let raw_sent =
+        ID.indefinite_description_ghost
+          B.bytes
+          (fun raw_sent -> exists raw_received.
+            legal_local_response
+              st0 st1 resp kind payload ev raw_sent raw_received network_out app_out) in
+      let raw_received =
+        ID.indefinite_description_ghost
+          B.bytes
+          (fun raw_received ->
+            legal_local_response
+              st0 st1 resp kind payload ev raw_sent raw_received network_out app_out) in
+      assert (local_event_kind_matches st0 kind payload ev);
+      assert (local_event_supported_profile kind payload ev);
+      match ev with
+      | CS.ConnNetworkEvent msg ->
+        assert (msg.CL.message_direction == CL.Sent);
+        (match msg.CL.message_value with
+         | M.TlsApplicationData bytes ->
+           assert (Seq.equal bytes payload);
+           Seq.lemma_eq_elim bytes payload;
+           assert (B.length payload <= SM.max_application_data_fragment_len);
+           assert (CS.protected_record_count CL.Sent (M.TlsApplicationData payload) == 1)
+         | _ -> assert False)
+      | CS.ConnLocalEvent _ ->
+        assert False
+    )
+    else if unexpected_message_response st0 st1 resp network_out app_out then (
+      assert (resp.status == IllegalTransition);
+      assert False
+    )
+    else (
+      assert (bad_finished_response st0 st1 resp network_out app_out);
+      assert (resp.status == ConnectionFailed);
+      assert False
+    )
+  )
+
 let lemma_network_bytes_step_correct_received_decode_replay_consistent
   (st0:CS.connection_state)
   (st1:CS.connection_state)
@@ -4015,6 +4120,14 @@ let lemma_local_event_step_correct_end_to_end
         local_event_end_to_end_correct st0 st1 resp kind payload network_out app_out)
 =
   lemma_local_input_wf_auth_tcb_projection st0 kind payload;
+  lemma_legal_handled_local_response_app_data_supported_projection
+    st0
+    st1
+    resp
+    kind
+    payload
+    network_out
+    app_out;
   lemma_some_legal_response_network_out_raw_projection st0 st1 resp network_out app_out;
   lemma_local_event_step_correct_network_out_seal_projection
     st0

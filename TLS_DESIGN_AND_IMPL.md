@@ -222,9 +222,15 @@ The public client API is buffer/event oriented:
   establish both initially, and both public network and local end-to-end step
   predicates preserve them unconditionally when they hold initially. These
   cumulative replays are still intentionally separate from
-  `connection_state_full_log_consistent` until multi-record sent application data
-  and rejected-but-consumed received decode steps are folded into the same
-  invariant; rejected DecodeError/unexpected-message bytes are still exposed by
+  `connection_state_full_log_consistent` until the supported local
+  application-data send profile and rejected-but-consumed received decode steps
+  are folded into the same invariant. The local theorem now exposes
+  `CT.local_send_application_data_supported_projection`: every successful
+  `LocalSendApplicationData` step is within the current supported profile
+  (`max_application_data_fragment_len`) and emits exactly one protected
+  application-data record. Multi-record local application-data sends remain
+  outside the current implementation profile rather than an unproved hidden
+  behavior. Rejected DecodeError/unexpected-message bytes are still exposed by
   per-step theorem projections rather than by the cumulative state log.
   The local theorem also exposes `CT.local_auth_tcb_projection`, making the
   validation and CertificateVerify external-TCB assumptions directly auditable
@@ -296,10 +302,11 @@ Other trusted runtime boundaries remain:
    expose a packaged decoded-message projection for cleartext/protected records,
    including a read-key-schedule projection for protected opens. Sent protected
    single-record outputs and accepted received protected inputs now have
-   cumulative replay predicates with unconditional public-step preservation, but
-   these are not yet folded into `client_state_correct`; multi-record sent
-   application data and rejected-but-consumed received decode steps still need
-   cumulative treatment.
+   cumulative replay predicates with unconditional public-step preservation, and
+   successful local application-data sends are publicly constrained to the
+   current one-record supported profile. These are not yet folded into
+   `client_state_correct`; rejected-but-consumed received decode steps still
+   need cumulative treatment.
    Event-log replay,
    transcript projection, KeyUpdate response-pending state, non-failed record
    epoch/sequence projection, record key/IV consistency with the installed key
@@ -351,10 +358,12 @@ Other trusted runtime boundaries remain:
    The client surface now also
    exposes `network_input_message_projection`, derived from `network_input_wf`,
    `network_bytes_received_decode_projection` over the public consumed prefix,
-   and exact decode-error local-fail witnesses, so next raw-log work should build
+   `local_send_application_data_supported_projection` for successful local app
+   sends in the current one-record supported profile, and exact decode-error
+   local-fail witnesses, so next raw-log work should build
    on those decoded-message projection facts to connect key schedule, KeyUpdate
-   epochs, pending buffers, rejected consumed-byte decryption facts, multi-record
-   sent seals, and remaining event-log projections.
+   epochs, pending buffers, rejected consumed-byte decryption facts, supported
+   one-record sent seals, and remaining event-log projections.
 5. Continue auditing `TLS13.Impl.Parser.fsti` and
    `TLS13.Impl.Serializer.fsti` entry by entry. Mark each supported
    message/record as strong or weak relative to the required `M`/`L` +
