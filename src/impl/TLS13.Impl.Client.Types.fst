@@ -44,17 +44,13 @@ let client_state_correct
   (st:CS.connection_state)
   : prop =
   CS.connection_state_consistent st /\
-  CS.connection_state_layered_log_consistent st /\
-  CS.connection_state_connection_log_view_consistent st /\
-  CS.connection_state_raw_event_replay_consistent st
+  CS.connection_state_full_log_consistent st
 
 let lemma_initial_client_state_correct
   (cfg:CS.connection_config)
   : Lemma (client_state_correct (CS.initial cfg))
 =
-  CS.lemma_initial_layered_log_consistent cfg;
-  CS.lemma_connection_state_connection_log_view_consistent (CS.initial cfg);
-  CS.lemma_initial_raw_event_replay_consistent cfg;
+  CS.lemma_initial_full_log_consistent cfg;
   assert (CS.connection_state_evolves (CS.initial cfg) (CS.initial cfg))
 
 let tls_decode_error : T.tls_error = T.AlertError T.DecodeError
@@ -391,17 +387,7 @@ let lemma_legal_response_for_event_client_state_correct
     CS.delta_raw_received = raw_received;
   } in
   CS.lemma_legal_connection_delta_consistent st0 delta st1;
-  lemma_legal_response_for_event_layered_log_consistent
-    st0
-    st1
-    resp
-    ev
-    raw_sent
-    raw_received
-    network_out
-    app_out;
-  CS.lemma_connection_state_connection_log_view_consistent st1;
-  CS.lemma_legal_connection_delta_raw_event_replay_consistent st0 delta st1
+  CS.lemma_legal_connection_delta_full_log_consistent st0 delta st1
 
 let lemma_legal_response_for_event_protected_single_parse_record
   (st0:CS.connection_state)

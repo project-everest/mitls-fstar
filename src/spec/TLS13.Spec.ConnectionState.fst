@@ -3822,6 +3822,35 @@ let lemma_legal_connection_delta_layered_log_consistent
   lemma_legal_connection_delta_pending_application_consistent st0 delta st1;
   lemma_legal_connection_delta_app_log_consistent st0 delta st1
 
+let connection_state_full_log_consistent
+  (st:connection_state)
+  : prop =
+  connection_state_layered_log_consistent st /\
+  connection_state_connection_log_view_consistent st /\
+  connection_state_raw_event_replay_consistent st
+
+let lemma_initial_full_log_consistent
+  (cfg:connection_config)
+  : Lemma (connection_state_full_log_consistent (initial cfg))
+=
+  lemma_initial_layered_log_consistent cfg;
+  lemma_connection_state_connection_log_view_consistent (initial cfg);
+  lemma_initial_raw_event_replay_consistent cfg
+
+let lemma_legal_connection_delta_full_log_consistent
+  (st0:connection_state)
+  (delta:connection_delta)
+  (st1:connection_state)
+  : Lemma
+      (requires
+        legal_connection_delta st0 delta st1 /\
+        connection_state_full_log_consistent st0)
+      (ensures connection_state_full_log_consistent st1)
+=
+  lemma_legal_connection_delta_layered_log_consistent st0 delta st1;
+  lemma_connection_state_connection_log_view_consistent st1;
+  lemma_legal_connection_delta_raw_event_replay_consistent st0 delta st1
+
 let lemma_legal_connection_delta_protected_single_parse_record
   (st0:connection_state)
   (delta:connection_delta)

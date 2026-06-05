@@ -156,10 +156,12 @@ The public client API is buffer/event oriented:
   non-empty local network output. `next_local_action_sound` also proves that
   ready non-external local actions satisfy `local_input_wf` with the empty
   payload; certificate validation and CertificateVerify signature checking
-  remain explicit external TCB actions. `TLS13.Impl.Client.Types` now packages
-  these facts into compact step theorems: `client_state_correct` combines pure
-  reachability with the layered log invariant plus the cumulative connection-log
-  view consistency predicate plus cumulative raw-event replay, and
+  remain explicit external TCB actions. `TLS13.Spec.ConnectionState` now packages
+  the layered log invariant, cumulative connection-log view consistency, and
+  cumulative raw-event replay as `connection_state_full_log_consistent`.
+  `TLS13.Impl.Client.Types` uses that package in compact step theorems:
+  `client_state_correct` combines pure reachability with
+  `connection_state_full_log_consistent`, and
   `network_bytes_end_to_end_correct` / `local_event_end_to_end_correct` prove
   that the public API step predicates preserve it while explicitly projecting
   the resulting cumulative connection-log view and raw-event replay. The network
