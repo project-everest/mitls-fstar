@@ -26,10 +26,13 @@ module V = Pulse.Lib.Vec
 fn new_client_default ()
   returns c:client
   ensures CR.connection_exactly c CR.default_initial_state **
-          pure (CT.client_state_correct CR.default_initial_state)
+          pure (CT.client_state_correct CR.default_initial_state /\
+                CS.connection_state_sent_seal_replay_consistent
+                  CR.default_initial_state)
 {
   let c = CR.new_client_default ();
   CT.lemma_initial_client_state_correct CR.default_connection_config;
+  CS.lemma_initial_sent_seal_replay_consistent CR.default_connection_config;
   c
 }
 
@@ -58,7 +61,12 @@ fn new_client
             (CR.configured_initial_state
               (Ghost.reveal 'server_name_bytes)
               (Ghost.reveal 'trust_anchors_bytes)
-              validation_time_seconds))
+              validation_time_seconds) /\
+                CS.connection_state_sent_seal_replay_consistent
+                  (CR.configured_initial_state
+                    (Ghost.reveal 'server_name_bytes)
+                    (Ghost.reveal 'trust_anchors_bytes)
+                    validation_time_seconds))
 {
   let c =
     CR.new_client
@@ -68,6 +76,11 @@ fn new_client
       trust_anchors_len
       validation_time_seconds;
   CT.lemma_initial_client_state_correct
+    (CR.configured_connection_config
+      (Ghost.reveal 'server_name_bytes)
+      (Ghost.reveal 'trust_anchors_bytes)
+      validation_time_seconds);
+  CS.lemma_initial_sent_seal_replay_consistent
     (CR.configured_connection_config
       (Ghost.reveal 'server_name_bytes)
       (Ghost.reveal 'trust_anchors_bytes)
@@ -593,6 +606,15 @@ fn process_network_bytes
           decoded_buffer.L.decoded_buffer_consumed_len)));
       let decoded_error = resp.CT.status = CT.DecodeError;
       if decoded_error {
+        CT.lemma_legal_network_response_decode_error_response
+          'st0
+          st1
+          resp
+          decoded_buffer.L.decoded_buffer_content_type
+          fragment_bytes
+          raw_record_bytes
+          network_out_bytes
+          app_out_bytes;
         CT.lemma_network_bytes_decoded_message_projection_intro_decode_error
           'st0
           st1
@@ -600,6 +622,20 @@ fn process_network_bytes
           (Ghost.reveal 'raw_bytes)
           network_out_bytes
           app_out_bytes;
+        CT.lemma_network_bytes_step_correct_end_to_end
+          'st0
+          st1
+          buffer_resp
+          (Ghost.reveal 'raw_bytes)
+          'old_network_out
+          network_out_bytes
+          'old_app_out
+          app_out_bytes;
+        V.to_vec_pts_to decoded_buffer.L.decoded_buffer_fragment;
+        V.free decoded_buffer.L.decoded_buffer_fragment;
+        V.to_vec_pts_to decoded_buffer.L.decoded_buffer_raw_record;
+        V.free decoded_buffer.L.decoded_buffer_raw_record;
+        buffer_resp
       } else {
         assert (pure (decoded_error == false));
         assert (pure (resp.CT.status == CT.DecodeError ==> False));
@@ -613,21 +649,21 @@ fn process_network_bytes
           raw_record_bytes
           network_out_bytes
           app_out_bytes;
-      };
-      CT.lemma_network_bytes_step_correct_end_to_end
-        'st0
-        st1
+        CT.lemma_network_bytes_step_correct_end_to_end
+          'st0
+          st1
+          buffer_resp
+          (Ghost.reveal 'raw_bytes)
+          'old_network_out
+          network_out_bytes
+          'old_app_out
+          app_out_bytes;
+        V.to_vec_pts_to decoded_buffer.L.decoded_buffer_fragment;
+        V.free decoded_buffer.L.decoded_buffer_fragment;
+        V.to_vec_pts_to decoded_buffer.L.decoded_buffer_raw_record;
+        V.free decoded_buffer.L.decoded_buffer_raw_record;
         buffer_resp
-        (Ghost.reveal 'raw_bytes)
-        'old_network_out
-        network_out_bytes
-        'old_app_out
-        app_out_bytes;
-      V.to_vec_pts_to decoded_buffer.L.decoded_buffer_fragment;
-      V.free decoded_buffer.L.decoded_buffer_fragment;
-      V.to_vec_pts_to decoded_buffer.L.decoded_buffer_raw_record;
-      V.free decoded_buffer.L.decoded_buffer_raw_record;
-      buffer_resp
+      }
     }
   }
 }
