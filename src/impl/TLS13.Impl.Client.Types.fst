@@ -1565,6 +1565,30 @@ let network_bytes_decoded_message_projection
       network_out
       app_out)
 
+let network_bytes_received_event_projection
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (buffer_resp:client_buffer_response)
+  (network_input:B.bytes)
+  (network_out:B.bytes)
+  (app_out:B.bytes)
+  : prop =
+  buffer_resp.consumed_len == 0sz \/
+  buffer_resp.response.status == DecodeError \/
+  (exists msg.
+    received_tls_raw_delta_legal
+      st0
+      msg
+      (network_consumed_prefix network_input buffer_resp.consumed_len) /\
+    decoded_message_event_projection
+      st0
+      st1
+      buffer_resp.response
+      msg
+      (network_consumed_prefix network_input buffer_resp.consumed_len)
+      network_out
+      app_out)
+
 let local_event_step_correct
   (st0:CS.connection_state)
   (st1:CS.connection_state)
@@ -1592,6 +1616,7 @@ let network_bytes_end_to_end_correct
     st0 st1 buffer_resp network_input old_network_out network_out old_app_out app_out /\
   network_consumed_raw_record_projection network_input buffer_resp /\
   network_bytes_decoded_message_projection st0 st1 buffer_resp network_input network_out app_out /\
+  network_bytes_received_event_projection st0 st1 buffer_resp network_input network_out app_out /\
   response_network_out_raw_projection st0 st1 buffer_resp.response network_out app_out /\
   (client_state_correct st0 ==> client_state_correct st1) /\
   (client_state_correct st0 ==> CS.connection_state_connection_log_view_consistent st1) /\
@@ -1832,6 +1857,136 @@ let lemma_network_bytes_decoded_message_projection_intro_network_response
     network_out
     app_out
 
+let lemma_network_bytes_received_event_projection
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (buffer_resp:client_buffer_response)
+  (network_input:B.bytes)
+  (network_out:B.bytes)
+  (app_out:B.bytes)
+  : Lemma
+      (requires
+        network_bytes_decoded_message_projection
+          st0 st1 buffer_resp network_input network_out app_out)
+      (ensures
+        network_bytes_received_event_projection
+          st0 st1 buffer_resp network_input network_out app_out)
+=
+  if buffer_resp.consumed_len = 0sz then ()
+  else if buffer_resp.response.status == DecodeError then ()
+  else (
+    let raw_received = network_consumed_prefix network_input buffer_resp.consumed_len in
+    assert (exists content_type fragment msg.
+      network_input_message_projection
+        st0
+        content_type
+        fragment
+        msg
+        raw_received /\
+      decoded_message_event_projection
+        st0
+        st1
+        buffer_resp.response
+        msg
+        raw_received
+        network_out
+        app_out);
+    let msg =
+      ID.indefinite_description_ghost
+        M.tls_message
+        (fun msg -> exists content_type fragment.
+          network_input_message_projection
+            st0
+            content_type
+            fragment
+            msg
+            raw_received /\
+          decoded_message_event_projection
+            st0
+            st1
+            buffer_resp.response
+            msg
+            raw_received
+            network_out
+            app_out) in
+    assert (exists content_type fragment.
+      network_input_message_projection
+        st0
+        content_type
+        fragment
+        msg
+        raw_received /\
+      decoded_message_event_projection
+        st0
+        st1
+        buffer_resp.response
+        msg
+        raw_received
+        network_out
+        app_out);
+    let content_type =
+      ID.indefinite_description_ghost
+        U8.t
+        (fun content_type -> exists fragment.
+          network_input_message_projection
+            st0
+            content_type
+            fragment
+            msg
+            raw_received /\
+          decoded_message_event_projection
+            st0
+            st1
+            buffer_resp.response
+            msg
+            raw_received
+            network_out
+            app_out) in
+    let fragment =
+      ID.indefinite_description_ghost
+        B.bytes
+        (fun fragment ->
+          network_input_message_projection
+            st0
+            content_type
+            fragment
+            msg
+            raw_received /\
+          decoded_message_event_projection
+            st0
+            st1
+            buffer_resp.response
+            msg
+            raw_received
+            network_out
+            app_out) in
+    assert (network_input_message_projection
+      st0
+      content_type
+      fragment
+      msg
+      raw_received);
+    assert (received_tls_raw_delta_legal st0 msg raw_received);
+    assert (decoded_message_event_projection
+      st0
+      st1
+      buffer_resp.response
+      msg
+      raw_received
+      network_out
+      app_out);
+    assert (exists msg'.
+      received_tls_raw_delta_legal st0 msg' raw_received /\
+      decoded_message_event_projection
+        st0
+        st1
+        buffer_resp.response
+        msg'
+        raw_received
+        network_out
+        app_out)
+  )
+
 let lemma_network_bytes_step_correct_client_state_correct
   (st0:CS.connection_state)
   (st1:CS.connection_state)
@@ -1880,6 +2035,13 @@ let lemma_network_bytes_step_correct_end_to_end
     old_network_out
     network_out
     old_app_out
+    app_out;
+  lemma_network_bytes_received_event_projection
+    st0
+    st1
+    buffer_resp
+    network_input
+    network_out
     app_out;
   lemma_network_bytes_step_correct_network_out_raw_projection
     st0
