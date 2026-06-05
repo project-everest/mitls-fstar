@@ -900,6 +900,94 @@ let protected_decoder_fragment_relation
        WS.parse_plaintext opened == Some plaintext /\
        decoder_fragment_matches_plaintext content_type fragment plaintext))
 
+let protected_record_decodes_to_message
+  (st0:CS.connection_state)
+  (raw_received:B.bytes)
+  (msg:M.tls_message)
+  : prop =
+  exists outer_fragment opened plaintext.
+    WS.parse_record raw_received ==
+       Some (T.ApplicationData, outer_fragment, B.length raw_received) /\
+    protected_record_opened st0 raw_received outer_fragment opened /\
+    WS.parse_plaintext opened == Some plaintext /\
+    WS.parse_tls_message plaintext.M.content_type plaintext.M.fragment == Some msg
+
+let lemma_protected_decoder_fragment_relation_decodes_to_message
+  (st0:CS.connection_state)
+  (content_type:U8.t)
+  (fragment:B.bytes)
+  (msg:M.tls_message)
+  (raw_received:B.bytes)
+  : Lemma
+       (requires
+         protected_decoder_fragment_relation st0 content_type fragment raw_received /\
+         wire_parse_success content_type fragment msg)
+       (ensures protected_record_decodes_to_message st0 raw_received msg)
+=
+  assert (exists outer_fragment.
+    WS.parse_record raw_received ==
+     Some (T.ApplicationData, outer_fragment, B.length raw_received) /\
+    (exists opened.
+     protected_record_opened st0 raw_received outer_fragment opened /\
+     (exists plaintext.
+       WS.parse_plaintext opened == Some plaintext /\
+       decoder_fragment_matches_plaintext content_type fragment plaintext)));
+  let outer_fragment =
+    ID.indefinite_description_ghost
+       B.bytes
+       (fun outer_fragment ->
+         WS.parse_record raw_received ==
+           Some (T.ApplicationData, outer_fragment, B.length raw_received) /\
+         (exists opened.
+           protected_record_opened st0 raw_received outer_fragment opened /\
+           (exists plaintext.
+             WS.parse_plaintext opened == Some plaintext /\
+             decoder_fragment_matches_plaintext content_type fragment plaintext))) in
+  assert (exists opened.
+    protected_record_opened st0 raw_received outer_fragment opened /\
+    (exists plaintext.
+       WS.parse_plaintext opened == Some plaintext /\
+       decoder_fragment_matches_plaintext content_type fragment plaintext));
+  let opened =
+    ID.indefinite_description_ghost
+       B.bytes
+       (fun opened ->
+         protected_record_opened st0 raw_received outer_fragment opened /\
+         (exists plaintext.
+           WS.parse_plaintext opened == Some plaintext /\
+           decoder_fragment_matches_plaintext content_type fragment plaintext)) in
+  assert (exists plaintext.
+    WS.parse_plaintext opened == Some plaintext /\
+    decoder_fragment_matches_plaintext content_type fragment plaintext);
+  let plaintext =
+    ID.indefinite_description_ghost
+       M.plaintext
+       (fun plaintext ->
+         WS.parse_plaintext opened == Some plaintext /\
+         decoder_fragment_matches_plaintext content_type fragment plaintext) in
+  assert (decoder_fragment_matches_plaintext content_type fragment plaintext);
+  assert (exists ct.
+    L.content_type_matches content_type ct /\
+    WS.parse_tls_message ct fragment == Some msg);
+  let ct =
+    ID.indefinite_description_ghost
+       T.content_type
+       (fun ct ->
+         L.content_type_matches content_type ct /\
+         WS.parse_tls_message ct fragment == Some msg) in
+  assert (L.content_type_matches content_type ct);
+  assert (L.content_type_matches content_type plaintext.M.content_type);
+  assert (ct == plaintext.M.content_type);
+  assert (Seq.equal fragment plaintext.M.fragment);
+  Seq.lemma_eq_elim fragment plaintext.M.fragment;
+  assert (WS.parse_tls_message plaintext.M.content_type plaintext.M.fragment == Some msg);
+  assert (exists outer_fragment' opened' plaintext'.
+    WS.parse_record raw_received ==
+       Some (T.ApplicationData, outer_fragment', B.length raw_received) /\
+    protected_record_opened st0 raw_received outer_fragment' opened' /\
+    WS.parse_plaintext opened' == Some plaintext' /\
+    WS.parse_tls_message plaintext'.M.content_type plaintext'.M.fragment == Some msg)
+
 let protected_record_decode_uses_scheduled_read_key
   (st0:CS.connection_state)
   (raw_received:B.bytes)
@@ -1108,6 +1196,9 @@ let network_input_message_projection
   raw_record_parse_success raw_received /\
   wire_parse_success content_type fragment msg /\
   network_input_decoder_payload_projection st0 content_type fragment msg raw_received /\
+  (if CS.network_message_is_cleartext CL.Received msg
+   then True
+   else protected_record_decodes_to_message st0 raw_received msg) /\
   received_tls_raw_delta_legal st0 msg raw_received /\
   CS.network_message_raw_delta_legal
     st0.CS.cs_model
@@ -1169,6 +1260,12 @@ let lemma_network_input_wf_message_projection
       fragment
       raw_received;
     assert (protected_decoder_fragment_relation st0 content_type fragment raw_received);
+    lemma_protected_decoder_fragment_relation_decodes_to_message
+      st0
+      content_type
+      fragment
+      msg
+      raw_received;
     CS.lemma_event_raw_delta_legal_protected_segmented
       st0.CS.cs_model
       (CS.ConnNetworkEvent received_msg)

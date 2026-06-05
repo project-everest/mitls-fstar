@@ -76,6 +76,10 @@ The public client API is buffer/event oriented:
   and `CT.lemma_network_event_step_correct_message_projection` expose the same
   package from the legal network-response / internal network-event theorem
   surface whenever the caller has `network_input_wf` and a parse-success fact.
+  For protected inputs, that package now also includes
+  `CT.protected_record_decodes_to_message`: the consumed `ApplicationData`
+  record opens under the current read state, parses as TLSInnerPlaintext, and
+  that plaintext parses as the exact decoded TLS message.
 - The active serializer TCB surface no longer includes stale unused ClientHello
   record-header/localhost fixed-builder declarations or the unused standalone
   ClientFinished application-data-record declaration. Live fixed helpers now
