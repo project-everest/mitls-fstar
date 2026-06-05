@@ -2825,6 +2825,7 @@ let network_bytes_end_to_end_correct
    CS.connection_state_sent_seal_key_schedule_replay_consistent st1) /\
   (client_state_correct st0 ==>
    CS.connection_state_received_decode_key_schedule_replay_consistent st1) /\
+  (client_end_to_end_invariant st0 ==> client_end_to_end_invariant st1) /\
   (CS.connection_state_sent_seal_replay_consistent st0 ==>
    CS.connection_state_sent_seal_replay_consistent st1) /\
   (CS.connection_state_received_decode_replay_consistent st0 ==>
@@ -2854,6 +2855,7 @@ let local_event_end_to_end_correct
    CS.connection_state_sent_seal_key_schedule_replay_consistent st1) /\
   (client_state_correct st0 ==>
    CS.connection_state_received_decode_key_schedule_replay_consistent st1) /\
+  (client_end_to_end_invariant st0 ==> client_end_to_end_invariant st1) /\
   (CS.connection_state_sent_seal_replay_consistent st0 ==>
    CS.connection_state_sent_seal_replay_consistent st1) /\
   (CS.connection_state_received_decode_replay_consistent st0 ==>
@@ -4586,6 +4588,11 @@ let lemma_network_bytes_step_correct_end_to_end
       network_out
       old_app_out
       app_out
+  );
+  if client_end_to_end_invariant st0 then (
+    assert (client_state_correct st0);
+    assert (client_state_correct st1);
+    lemma_client_state_correct_raw_to_message_replay st1
   )
 
 let lemma_local_event_step_correct_layered_log_consistent
@@ -4713,6 +4720,11 @@ let lemma_local_event_step_correct_end_to_end
       payload
       network_out
       app_out
+  );
+  if client_end_to_end_invariant st0 then (
+    assert (client_state_correct st0);
+    assert (client_state_correct st1);
+    lemma_client_state_correct_raw_to_message_replay st1
   );
   if CS.connection_state_sent_seal_replay_consistent st0 then (
     lemma_some_legal_response_sent_seal_replay_consistent

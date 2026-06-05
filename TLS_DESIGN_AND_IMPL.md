@@ -192,10 +192,9 @@ The public client API is buffer/event oriented:
   `connection_state_raw_to_message_replay_consistent`: cumulative raw-event
   replay, protected raw-record segmentation, sent protected-record seal replay
   with write-key provenance, and accepted received protected-record decode replay
-  with read-key provenance. The
-  `lemma_network_bytes_end_to_end_correct_client_end_to_end_invariant` /
-  `lemma_local_event_end_to_end_correct_client_end_to_end_invariant` preserve
-  that named invariant across the public step predicates.
+  with read-key provenance. The public network/local end-to-end step predicates
+  themselves preserve that named invariant; the corresponding helper lemmas keep
+  the projection convenient for callers.
   Successful non-decode-error byte steps additionally expose
   `network_bytes_decoded_message_projection`, tying the hidden parser witnesses
   to `network_input_message_projection` for the public consumed prefix. That
@@ -245,8 +244,8 @@ The public client API is buffer/event oriented:
   with raw replay, protected segmentation, and key-provenance replay as
   `connection_state_raw_to_message_replay_consistent`. The public constructors
   expose that package explicitly, and both public network and local end-to-end
-  step predicates preserve the named `client_end_to_end_invariant` through
-  separate helper lemmas. Rejected-but-consumed
+  step predicates directly preserve the named `client_end_to_end_invariant`.
+  Rejected-but-consumed
   decode-error bytes remain exposed per step instead of being included in the
   cumulative raw received log. The local theorem now exposes
   `CT.local_send_application_data_supported_projection`: every successful
