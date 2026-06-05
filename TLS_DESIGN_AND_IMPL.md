@@ -290,7 +290,9 @@ is `process_network_bytes`.
 No active C shim should forward to old framing modules or undefined generated
 symbols. New parser/serializer hooks should be added directly to
 `TLS13.Impl.Parser` / `TLS13.Impl.Serializer` with postconditions tied to the
-`M`/`L` validity predicates and `TLS13.Wire.Spec`.
+`M`/`L` validity predicates and `TLS13.Wire.Spec`. Unused generic serializer
+hooks should stay out of the interface rather than expanding the handwritten TCB
+surface.
 
 Other trusted runtime boundaries remain:
 
@@ -408,8 +410,8 @@ Other trusted runtime boundaries remain:
 5. Continue auditing `TLS13.Impl.Parser.fsti` and
    `TLS13.Impl.Serializer.fsti` entry by entry. Mark each supported
    message/record as strong or weak relative to the required `M`/`L` +
-   `TLS13.Wire.Spec` postconditions, then strengthen weak entries or document
-   them as narrow fixed-builder TCBs.
+   `TLS13.Wire.Spec` postconditions, strengthen weak live entries, and keep
+   unused generic hooks out of the TCB surface.
 6. Make the certificate and CertificateVerify boundary auditable by proving that
    driver-visible copyout bytes are exactly the certificate leaf DER,
    CertificateVerify input, and signature bytes from the parsed handshake, and
