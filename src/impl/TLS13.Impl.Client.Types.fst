@@ -46,13 +46,15 @@ let client_state_core_correct
   : prop =
   CS.connection_state_consistent st /\
   CS.connection_state_full_log_consistent st /\
-  CS.connection_state_sent_seal_replay_consistent st
+  CS.connection_state_sent_seal_replay_consistent st /\
+  CS.connection_state_sent_seal_key_schedule_replay_consistent st
 
 let client_state_correct
   (st:CS.connection_state)
   : prop =
   client_state_core_correct st /\
-  CS.connection_state_received_decode_replay_consistent st
+  CS.connection_state_received_decode_replay_consistent st /\
+  CS.connection_state_received_decode_key_schedule_replay_consistent st
 
 let lemma_initial_client_state_correct
   (cfg:CS.connection_config)
@@ -60,7 +62,9 @@ let lemma_initial_client_state_correct
 =
   CS.lemma_initial_full_log_consistent cfg;
   CS.lemma_initial_sent_seal_replay_consistent cfg;
+  CS.lemma_initial_sent_seal_key_schedule_replay_consistent cfg;
   CS.lemma_initial_received_decode_replay_consistent cfg;
+  CS.lemma_initial_received_decode_key_schedule_replay_consistent cfg;
   assert (CS.connection_state_evolves (CS.initial cfg) (CS.initial cfg))
 
 let lemma_client_state_correct_sent_seal_key_schedule_replay
@@ -440,7 +444,8 @@ let lemma_legal_response_for_event_client_state_core_correct
   } in
   CS.lemma_legal_connection_delta_consistent st0 delta st1;
   CS.lemma_legal_connection_delta_full_log_consistent st0 delta st1;
-  CS.lemma_legal_connection_delta_sent_seal_replay_consistent st0 delta st1
+  CS.lemma_legal_connection_delta_sent_seal_replay_consistent st0 delta st1;
+  CS.lemma_connection_state_sent_seal_key_schedule_replay st1
 
 let lemma_legal_response_for_event_client_state_correct
   (st0:CS.connection_state)
@@ -477,7 +482,8 @@ let lemma_legal_response_for_event_client_state_correct
     raw_received
     network_out
     app_out;
-  CS.lemma_legal_connection_delta_received_decode_replay_consistent st0 delta st1
+  CS.lemma_legal_connection_delta_received_decode_replay_consistent st0 delta st1;
+  CS.lemma_connection_state_received_decode_key_schedule_replay st1
 
 let lemma_legal_response_for_event_protected_single_parse_record
   (st0:CS.connection_state)
@@ -899,7 +905,8 @@ let lemma_some_legal_response_client_state_correct
     st1
     resp
     network_out
-    app_out
+    app_out;
+  CS.lemma_connection_state_received_decode_key_schedule_replay st1
 
 let lemma_legal_response_for_event_sent_seal_replay_consistent
   (st0:CS.connection_state)

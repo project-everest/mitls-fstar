@@ -178,10 +178,8 @@ The public client API is buffer/event oriented:
   `TLS13.Impl.Client.Types` uses that package in compact step theorems:
   `client_state_correct` combines pure reachability with
   `connection_state_full_log_consistent`, cumulative sent-seal replay, and
-  cumulative accepted received-decode replay; derived
-  `lemma_client_state_correct_sent_seal_key_schedule_replay` and
-  `lemma_client_state_correct_received_decode_key_schedule_replay` strengthen
-  those historical sent/received replays with write/read-key schedule provenance, and
+  cumulative accepted received-decode replay, with historical write/read-key
+  schedule provenance folded into those sent/received replay packages, and
   `network_bytes_end_to_end_correct` / `local_event_end_to_end_correct` prove
   that the public API step predicates preserve it while explicitly projecting
   the resulting cumulative connection-log view, raw-event replay, and
@@ -304,9 +302,8 @@ Other trusted runtime boundaries remain:
    received-event, received-decode, decode-error, protected-open/read-key-schedule,
    emitted-network-byte/write-key, and cumulative raw-event replay projections
    currently available. `client_state_correct` now also packages cumulative
-   sent-seal replay and accepted received-decode replay; derived public lemmas
-   strengthen those accepted sent/received replays with historical write/read-key
-   schedule provenance. The separate public replay projections remain as
+   sent-seal replay and accepted received-decode replay with historical
+   write/read-key schedule provenance. The separate public replay projections remain as
    compatibility/audit facts. The remaining theorem
    gap is
    completeness of the layered invariant itself, not the absence of a compact
@@ -321,8 +318,8 @@ Other trusted runtime boundaries remain:
    expose a packaged decoded-message projection for cleartext/protected records,
    including a read-key-schedule projection for protected opens. Sent protected
    single-record outputs and accepted received protected inputs now have
-   cumulative replay predicates folded into `client_state_correct`, and both have
-   derived historical write/read-key replay theorems;
+   cumulative replay predicates, including historical write/read-key provenance,
+   folded into `client_state_correct`;
    successful local application-data sends are publicly constrained to the
    current one-record supported profile. Rejected-but-consumed received decode
    steps now have per-step parse-failure projections and a packaged
