@@ -60,7 +60,7 @@ let client_end_to_end_invariant
   (st:CS.connection_state)
   : prop =
   client_state_correct st /\
-  CS.connection_state_protected_raw_segmented_replay_consistent st
+  CS.connection_state_raw_to_message_replay_consistent st
 
 let lemma_initial_client_state_correct
   (cfg:CS.connection_config)
@@ -78,8 +78,7 @@ let lemma_initial_client_end_to_end_invariant
   : Lemma (client_end_to_end_invariant (CS.initial cfg))
 =
   lemma_initial_client_state_correct cfg;
-  CS.lemma_initial_raw_event_replay_consistent cfg;
-  CS.lemma_connection_state_protected_raw_segmented_replay (CS.initial cfg)
+  CS.lemma_initial_raw_to_message_replay_consistent cfg
 
 let lemma_client_state_correct_sent_seal_key_schedule_replay
   (st:CS.connection_state)
@@ -104,6 +103,14 @@ let lemma_client_state_correct_protected_raw_segmented_replay
       (ensures CS.connection_state_protected_raw_segmented_replay_consistent st)
 =
   CS.lemma_connection_state_protected_raw_segmented_replay st
+
+let lemma_client_state_correct_raw_to_message_replay
+  (st:CS.connection_state)
+  : Lemma
+      (requires client_state_correct st)
+      (ensures CS.connection_state_raw_to_message_replay_consistent st)
+=
+  CS.lemma_connection_state_raw_to_message_replay st
 
 let tls_decode_error : T.tls_error = T.AlertError T.DecodeError
 
@@ -2870,7 +2877,7 @@ let lemma_network_bytes_end_to_end_correct_client_end_to_end_invariant
 =
   assert (client_state_correct st0);
   assert (client_state_correct st1);
-  lemma_client_state_correct_protected_raw_segmented_replay st1
+  lemma_client_state_correct_raw_to_message_replay st1
 
 let lemma_local_event_end_to_end_correct_client_end_to_end_invariant
   (st0:CS.connection_state)
@@ -2888,7 +2895,7 @@ let lemma_local_event_end_to_end_correct_client_end_to_end_invariant
 =
   assert (client_state_correct st0);
   assert (client_state_correct st1);
-  lemma_client_state_correct_protected_raw_segmented_replay st1
+  lemma_client_state_correct_raw_to_message_replay st1
 
 let lemma_network_bytes_step_correct_layered_log_consistent
   (st0:CS.connection_state)

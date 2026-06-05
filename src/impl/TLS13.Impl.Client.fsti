@@ -158,6 +158,8 @@ fn new_client_default ()
   ensures CR.connection_exactly c CR.default_initial_state **
           pure (CT.client_state_correct CR.default_initial_state /\
                 CT.client_end_to_end_invariant CR.default_initial_state /\
+                CS.connection_state_raw_to_message_replay_consistent
+                  CR.default_initial_state /\
                 CS.connection_state_sent_seal_replay_consistent
                   CR.default_initial_state /\
                 CS.connection_state_sent_seal_key_schedule_replay_consistent
@@ -196,6 +198,11 @@ fn new_client
               (Ghost.reveal 'trust_anchors_bytes)
               validation_time_seconds) /\
                 CT.client_end_to_end_invariant
+                  (CR.configured_initial_state
+                    (Ghost.reveal 'server_name_bytes)
+                    (Ghost.reveal 'trust_anchors_bytes)
+                    validation_time_seconds) /\
+                CS.connection_state_raw_to_message_replay_consistent
                   (CR.configured_initial_state
                     (Ghost.reveal 'server_name_bytes)
                     (Ghost.reveal 'trust_anchors_bytes)

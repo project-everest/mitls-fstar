@@ -5833,6 +5833,16 @@ let connection_state_received_decode_key_schedule_replay_consistent
     st.cs_wire_log.CL.raw_received
     st.cs_model
 
+let connection_state_raw_to_message_replay_consistent
+  (st:connection_state)
+  : prop =
+  connection_state_raw_event_replay_consistent st /\
+  connection_state_protected_raw_segmented_replay_consistent st /\
+  connection_state_sent_seal_replay_consistent st /\
+  connection_state_sent_seal_key_schedule_replay_consistent st /\
+  connection_state_received_decode_replay_consistent st /\
+  connection_state_received_decode_key_schedule_replay_consistent st
+
 let lemma_initial_sent_seal_replay_consistent
   (cfg:connection_config)
   : Lemma (connection_state_sent_seal_replay_consistent (initial cfg))
@@ -5886,6 +5896,29 @@ let lemma_connection_state_received_decode_key_schedule_replay
     st.cs_wire_log.CL.raw_sent
     st.cs_wire_log.CL.raw_received
     st.cs_model
+
+let lemma_initial_raw_to_message_replay_consistent
+  (cfg:connection_config)
+  : Lemma (connection_state_raw_to_message_replay_consistent (initial cfg))
+=
+  lemma_connection_state_protected_raw_segmented_replay (initial cfg);
+  lemma_initial_sent_seal_replay_consistent cfg;
+  lemma_initial_sent_seal_key_schedule_replay_consistent cfg;
+  lemma_initial_received_decode_replay_consistent cfg;
+  lemma_initial_received_decode_key_schedule_replay_consistent cfg
+
+let lemma_connection_state_raw_to_message_replay
+  (st:connection_state)
+  : Lemma
+      (requires
+        connection_state_raw_event_replay_consistent st /\
+        connection_state_sent_seal_replay_consistent st /\
+        connection_state_received_decode_replay_consistent st)
+      (ensures connection_state_raw_to_message_replay_consistent st)
+=
+  lemma_connection_state_protected_raw_segmented_replay st;
+  lemma_connection_state_sent_seal_key_schedule_replay st;
+  lemma_connection_state_received_decode_key_schedule_replay st
 
 let lemma_initial_raw_event_replay_consistent
   (cfg:connection_config)

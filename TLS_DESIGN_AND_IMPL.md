@@ -188,8 +188,11 @@ The public client API is buffer/event oriented:
   theorem also exposes `network_consumed_raw_record_projection`: every non-empty,
   non-decode-error consumed prefix is a single raw TLS record and has the
   recursive raw-record segmentation fact needed by downstream raw-log proofs.
-  `client_end_to_end_invariant` packages `client_state_correct` with the
-  cumulative protected raw-record segmentation replay, and
+  `client_end_to_end_invariant` packages `client_state_correct` with
+  `connection_state_raw_to_message_replay_consistent`: cumulative raw-event
+  replay, protected raw-record segmentation, sent protected-record seal replay
+  with write-key provenance, and accepted received protected-record decode replay
+  with read-key provenance. The
   `lemma_network_bytes_end_to_end_correct_client_end_to_end_invariant` /
   `lemma_local_event_end_to_end_correct_client_end_to_end_invariant` preserve
   that named invariant across the public step predicates.
@@ -238,11 +241,10 @@ The public client API is buffer/event oriented:
   predicates for sent single-record protected seals and accepted received
   protected decodes:
   `connection_state_sent_seal_replay_consistent` and
-  `connection_state_received_decode_replay_consistent`. The client theorem
-  invariant includes both replay predicates on top of
-  `connection_state_full_log_consistent`; the public constructors now expose them
-  explicitly along with the corresponding key-provenance replay and protected
-  raw-segmentation replay facts, and both public network and local end-to-end
+  `connection_state_received_decode_replay_consistent`; these are now packaged
+  with raw replay, protected segmentation, and key-provenance replay as
+  `connection_state_raw_to_message_replay_consistent`. The public constructors
+  expose that package explicitly, and both public network and local end-to-end
   step predicates preserve the named `client_end_to_end_invariant` through
   separate helper lemmas. Rejected-but-consumed
   decode-error bytes remain exposed per step instead of being included in the
