@@ -186,7 +186,10 @@ The public client API is buffer/event oriented:
   handshake/application traffic material. Both network and local end-to-end
   predicates expose
   `response_network_out_raw_projection`, so non-empty emitted network prefixes
-  are tied to the legal event raw delta and protected-record segmentation facts.
+  are tied to the legal event raw delta and protected-record segmentation facts;
+  under `client_state_correct`, `response_network_out_write_key_schedule_projection`
+  also exposes the current write-state key/IV projection from installed client
+  traffic material for protected sent events.
 - `TLS13.Impl.ConnectionState` has been split by responsibility: `Repr` owns the
   concrete representation and exact predicates, `Queries` owns read-only checks
   and copyouts, `Model`/`Bounds`/`Tags` own pure/proof helpers, and the mutation
@@ -234,10 +237,10 @@ Other trusted runtime boundaries remain:
    `process_network_bytes` and `process_local_event` directly return
    `network_bytes_end_to_end_correct` / `local_event_end_to_end_correct`, which
    preserve `client_state_correct` and expose the raw-record, decoded-message,
-   received-event, protected-open/key-schedule, emitted-network-byte, and
-   cumulative raw-event replay projections currently available. The remaining
-   theorem gap is completeness of the layered invariant itself, not the absence
-   of a compact preservation wrapper.
+   received-event, protected-open/read-key-schedule, emitted-network-byte/write-key,
+   and cumulative raw-event replay projections currently available. The remaining
+   theorem gap is completeness of the layered invariant itself, not the absence of
+   a compact preservation wrapper.
 2. `ConnectionLog` and `Spec.ConnectionState` still need one stronger layered
    invariant proving that consumed/emitted raw bytes parse, decrypt, and
    interpret as exactly the TLS messages/events that drive the state machine and

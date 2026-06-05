@@ -494,6 +494,32 @@ let response_network_out_raw_projection
       st0 st1 resp ev raw_sent raw_received network_out app_out /\
     CS.event_protected_raw_segmented_success ev raw_sent raw_received)
 
+let sent_protected_event_write_key_schedule_projection
+  (st0:CS.connection_state)
+  (ev:CS.conn_event)
+  : prop =
+  match ev with
+  | CS.ConnNetworkEvent msg ->
+    if msg.CL.message_direction == CL.Sent &&
+       CS.network_message_is_cleartext msg.CL.message_direction msg.CL.message_value == false
+    then CS.record_write_key_schedule_projection st0.CS.cs_model
+    else True
+  | CS.ConnLocalEvent _ ->
+    True
+
+let response_network_out_write_key_schedule_projection
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (resp:client_response)
+  (network_out:B.bytes)
+  (app_out:B.bytes)
+  : prop =
+  resp.network_out_len == 0sz \/
+  (exists ev raw_sent raw_received.
+    legal_response_for_event
+      st0 st1 resp ev raw_sent raw_received network_out app_out /\
+    sent_protected_event_write_key_schedule_projection st0 ev)
+
 let lemma_legal_response_for_event_network_out_raw_projection
   (st0:CS.connection_state)
   (st1:CS.connection_state)
@@ -638,6 +664,81 @@ let lemma_some_legal_response_network_out_raw_projection
         (fun raw_received ->
           legal_response_for_event st0 st1 resp ev raw_sent raw_received network_out app_out) in
     lemma_legal_response_for_event_network_out_raw_projection
+      st0
+      st1
+      resp
+      ev
+      raw_sent
+      raw_received
+      network_out
+      app_out
+  )
+
+let lemma_legal_response_for_event_network_out_write_key_schedule_projection
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (resp:client_response)
+  (ev:CS.conn_event)
+  (raw_sent:B.bytes)
+  (raw_received:B.bytes)
+  (network_out:B.bytes)
+  (app_out:B.bytes)
+  : Lemma
+      (requires
+        legal_response_for_event
+          st0 st1 resp ev raw_sent raw_received network_out app_out /\
+        client_state_correct st0)
+      (ensures
+        response_network_out_write_key_schedule_projection
+          st0 st1 resp network_out app_out)
+=
+  if resp.network_out_len = 0sz then ()
+  else (
+    assert (CS.connection_state_record_keys_consistent st0);
+    CS.lemma_model_record_keys_consistent_record_write_key_schedule_projection
+      st0.CS.cs_model;
+    assert (CS.record_write_key_schedule_projection st0.CS.cs_model);
+    assert (sent_protected_event_write_key_schedule_projection st0 ev);
+    assert (exists ev' raw_sent' raw_received'.
+      legal_response_for_event
+        st0 st1 resp ev' raw_sent' raw_received' network_out app_out /\
+      sent_protected_event_write_key_schedule_projection st0 ev')
+  )
+
+let lemma_some_legal_response_network_out_write_key_schedule_projection
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (resp:client_response)
+  (network_out:B.bytes)
+  (app_out:B.bytes)
+  : Lemma
+      (requires
+        some_legal_response st0 st1 resp network_out app_out /\
+        client_state_correct st0)
+      (ensures
+        response_network_out_write_key_schedule_projection
+          st0 st1 resp network_out app_out)
+=
+  if resp.network_out_len = 0sz then ()
+  else (
+    assert (exists ev. exists raw_sent raw_received.
+      legal_response_for_event st0 st1 resp ev raw_sent raw_received network_out app_out);
+    let ev =
+      ID.indefinite_description_ghost
+        CS.conn_event
+        (fun ev -> exists raw_sent raw_received.
+          legal_response_for_event st0 st1 resp ev raw_sent raw_received network_out app_out) in
+    let raw_sent =
+      ID.indefinite_description_ghost
+        B.bytes
+        (fun raw_sent -> exists raw_received.
+          legal_response_for_event st0 st1 resp ev raw_sent raw_received network_out app_out) in
+    let raw_received =
+      ID.indefinite_description_ghost
+        B.bytes
+        (fun raw_received ->
+          legal_response_for_event st0 st1 resp ev raw_sent raw_received network_out app_out) in
+    lemma_legal_response_for_event_network_out_write_key_schedule_projection
       st0
       st1
       resp
@@ -1707,6 +1808,9 @@ let network_bytes_end_to_end_correct
   (client_state_correct st0 ==> client_state_correct st1) /\
   (client_state_correct st0 ==>
     network_bytes_protected_record_key_schedule_projection st0 buffer_resp network_input) /\
+  (client_state_correct st0 ==>
+    response_network_out_write_key_schedule_projection
+      st0 st1 buffer_resp.response network_out app_out) /\
   (client_state_correct st0 ==> CS.connection_state_connection_log_view_consistent st1) /\
   (client_state_correct st0 ==> CS.connection_state_raw_event_replay_consistent st1)
 
@@ -1722,6 +1826,8 @@ let local_event_end_to_end_correct
   local_event_step_correct st0 st1 resp kind payload network_out app_out /\
   response_network_out_raw_projection st0 st1 resp network_out app_out /\
   (client_state_correct st0 ==> client_state_correct st1) /\
+  (client_state_correct st0 ==>
+    response_network_out_write_key_schedule_projection st0 st1 resp network_out app_out) /\
   (client_state_correct st0 ==> CS.connection_state_connection_log_view_consistent st1) /\
   (client_state_correct st0 ==> CS.connection_state_raw_event_replay_consistent st1)
 
@@ -2275,6 +2381,14 @@ let lemma_network_bytes_step_correct_end_to_end
     old_app_out
     app_out;
   if client_state_correct st0 then (
+    if response_stuttered st0 st1 buffer_resp.response old_network_out network_out old_app_out app_out
+    then assert (buffer_resp.response.network_out_len == 0sz)
+    else lemma_some_legal_response_network_out_write_key_schedule_projection
+      st0
+      st1
+      buffer_resp.response
+      network_out
+      app_out;
     lemma_network_bytes_protected_record_key_schedule_projection
       st0
       st1
@@ -2340,7 +2454,13 @@ let lemma_local_event_step_correct_end_to_end
         local_event_end_to_end_correct st0 st1 resp kind payload network_out app_out)
 =
   lemma_some_legal_response_network_out_raw_projection st0 st1 resp network_out app_out;
-  if client_state_correct st0 then
+  if client_state_correct st0 then (
+    lemma_some_legal_response_network_out_write_key_schedule_projection
+      st0
+      st1
+      resp
+      network_out
+      app_out;
     lemma_local_event_step_correct_client_state_correct
       st0
       st1
@@ -2349,6 +2469,7 @@ let lemma_local_event_step_correct_end_to_end
       payload
       network_out
       app_out
+  )
 
 let lemma_legal_network_response_decode_error
   (st0:CS.connection_state)
