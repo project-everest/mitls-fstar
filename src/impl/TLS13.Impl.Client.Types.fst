@@ -2106,6 +2106,37 @@ let network_bytes_protected_record_key_schedule_projection
          (network_consumed_prefix network_input buffer_resp.consumed_len)
          msg))
 
+let network_bytes_received_decode_projection
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (buffer_resp:client_buffer_response)
+  (network_input:B.bytes)
+  (network_out:B.bytes)
+  (app_out:B.bytes)
+  : prop =
+  buffer_resp.consumed_len == 0sz \/
+  buffer_resp.response.status == DecodeError \/
+  (exists msg.
+    received_tls_raw_delta_legal
+      st0
+      msg
+      (network_consumed_prefix network_input buffer_resp.consumed_len) /\
+    decoded_message_event_projection
+      st0
+      st1
+      buffer_resp.response
+      msg
+      (network_consumed_prefix network_input buffer_resp.consumed_len)
+      network_out
+      app_out /\
+    (if CS.network_message_is_cleartext CL.Received msg
+     then True
+     else
+       protected_record_decode_correct
+        st0
+        (network_consumed_prefix network_input buffer_resp.consumed_len)
+        msg))
+
 let network_bytes_network_out_seal_projection
   (st0:CS.connection_state)
   (st1:CS.connection_state)
@@ -2243,6 +2274,9 @@ let network_bytes_end_to_end_correct
   (client_state_correct st0 ==> client_state_correct st1) /\
   (client_state_correct st0 ==>
     network_bytes_protected_record_key_schedule_projection st0 buffer_resp network_input) /\
+  (client_state_correct st0 ==>
+    network_bytes_received_decode_projection
+      st0 st1 buffer_resp network_input network_out app_out) /\
   (client_state_correct st0 ==>
     response_network_out_write_key_schedule_projection
       st0 st1 buffer_resp.response network_out app_out) /\
@@ -2758,6 +2792,153 @@ let lemma_network_bytes_protected_record_key_schedule_projection
        else protected_record_decode_correct st0 raw_received msg'))
   )
 
+let lemma_network_bytes_received_decode_projection
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (buffer_resp:client_buffer_response)
+  (network_input:B.bytes)
+  (network_out:B.bytes)
+  (app_out:B.bytes)
+  : Lemma
+      (requires
+       network_bytes_decoded_message_projection
+         st0 st1 buffer_resp network_input network_out app_out /\
+       client_state_correct st0)
+      (ensures
+       network_bytes_received_decode_projection
+         st0 st1 buffer_resp network_input network_out app_out)
+=
+  if buffer_resp.consumed_len = 0sz then ()
+  else if buffer_resp.response.status == DecodeError then ()
+  else (
+    let raw_received = network_consumed_prefix network_input buffer_resp.consumed_len in
+    assert (exists content_type fragment msg.
+      network_input_message_projection
+       st0
+       content_type
+       fragment
+       msg
+       raw_received /\
+      decoded_message_event_projection
+       st0
+       st1
+       buffer_resp.response
+       msg
+       raw_received
+       network_out
+       app_out);
+    let msg =
+      ID.indefinite_description_ghost
+       M.tls_message
+       (fun msg -> exists content_type fragment.
+         network_input_message_projection
+           st0
+           content_type
+           fragment
+           msg
+           raw_received /\
+         decoded_message_event_projection
+           st0
+           st1
+           buffer_resp.response
+           msg
+           raw_received
+           network_out
+           app_out) in
+    assert (exists content_type fragment.
+      network_input_message_projection
+       st0
+       content_type
+       fragment
+       msg
+       raw_received /\
+      decoded_message_event_projection
+       st0
+       st1
+       buffer_resp.response
+       msg
+       raw_received
+       network_out
+       app_out);
+    let content_type =
+      ID.indefinite_description_ghost
+       U8.t
+       (fun content_type -> exists fragment.
+         network_input_message_projection
+           st0
+           content_type
+           fragment
+           msg
+           raw_received /\
+         decoded_message_event_projection
+           st0
+           st1
+           buffer_resp.response
+           msg
+           raw_received
+           network_out
+           app_out) in
+    let fragment =
+      ID.indefinite_description_ghost
+       B.bytes
+       (fun fragment ->
+         network_input_message_projection
+           st0
+           content_type
+           fragment
+           msg
+           raw_received /\
+         decoded_message_event_projection
+           st0
+           st1
+           buffer_resp.response
+           msg
+           raw_received
+           network_out
+           app_out) in
+    assert (network_input_message_projection
+      st0
+      content_type
+      fragment
+      msg
+      raw_received);
+    assert (received_tls_raw_delta_legal st0 msg raw_received);
+    assert (decoded_message_event_projection
+      st0
+      st1
+      buffer_resp.response
+      msg
+      raw_received
+      network_out
+      app_out);
+    if CS.network_message_is_cleartext CL.Received msg
+    then ()
+    else (
+      assert (protected_decoder_fragment_relation st0 content_type fragment raw_received);
+      assert (protected_record_decodes_to_message st0 raw_received msg);
+      lemma_protected_decoder_fragment_relation_read_key_schedule_projection
+       st0
+       content_type
+       fragment
+       raw_received;
+      assert (protected_record_decode_uses_scheduled_read_key st0 raw_received);
+      assert (protected_record_decode_correct st0 raw_received msg)
+    );
+    assert (exists msg'.
+      received_tls_raw_delta_legal st0 msg' raw_received /\
+      decoded_message_event_projection
+       st0
+       st1
+       buffer_resp.response
+       msg'
+       raw_received
+       network_out
+       app_out /\
+      (if CS.network_message_is_cleartext CL.Received msg'
+       then True
+       else protected_record_decode_correct st0 raw_received msg'))
+  )
+
 let lemma_decode_error_response_network_out_seal_projection
   (st0:CS.connection_state)
   (st1:CS.connection_state)
@@ -3081,6 +3262,13 @@ let lemma_network_bytes_step_correct_end_to_end
       network_out
       app_out;
     lemma_network_bytes_protected_record_key_schedule_projection
+      st0
+      st1
+      buffer_resp
+      network_input
+      network_out
+      app_out;
+    lemma_network_bytes_received_decode_projection
       st0
       st1
       buffer_resp

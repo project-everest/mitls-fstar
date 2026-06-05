@@ -197,7 +197,12 @@ The public client API is buffer/event oriented:
   `network_bytes_protected_record_key_schedule_projection` also connects
   non-cleartext consumed prefixes to a protected `ApplicationData` open under the
   current read state whose key/IV are projected from the installed server
-  handshake/application traffic material. Both network and local end-to-end
+  handshake/application traffic material. The same facts are now also packaged as
+  `network_bytes_received_decode_projection`, which strips away parser witnesses
+  and gives one public per-network-step predicate tying the consumed prefix to
+  the received raw delta, decoded-message event shape, and protected
+  open-to-message/read-key projection when the input was encrypted. Both network
+  and local end-to-end
   predicates expose
   `response_network_out_raw_projection`, so non-empty emitted network prefixes
   are tied to the legal event raw delta and protected-record segmentation facts;
@@ -267,8 +272,9 @@ Other trusted runtime boundaries remain:
    `process_network_bytes` and `process_local_event` directly return
    `network_bytes_end_to_end_correct` / `local_event_end_to_end_correct`, which
    preserve `client_state_correct` and expose the raw-record, decoded-message,
-   received-event, protected-open/read-key-schedule, emitted-network-byte/write-key,
-   and cumulative raw-event replay projections currently available. It also
+   received-event, received-decode, protected-open/read-key-schedule,
+   emitted-network-byte/write-key, and cumulative raw-event replay projections
+   currently available. It also
    exposes cumulative sent-seal replay preservation as a separate projection:
    constructors establish it initially and both network and local steps preserve
    it unconditionally. The remaining theorem gap is
@@ -335,11 +341,12 @@ Other trusted runtime boundaries remain:
    lemmas, with legal-delta/client-response/public-step projections, plus a
    parser-success-to-raw-log inverse bridge and cumulative sent-seal replay
    preservation at the client theorem surface. The client surface now also
-   exposes `network_input_message_projection`, derived from `network_input_wf`, and
-   exact decode-error local-fail witnesses, so next raw-log work should build on
-   those decoded-message projection facts to connect key schedule, KeyUpdate
-   epochs, pending buffers, received decryption facts, multi-record sent seals,
-   and remaining event-log projections.
+   exposes `network_input_message_projection`, derived from `network_input_wf`,
+   `network_bytes_received_decode_projection` over the public consumed prefix,
+   and exact decode-error local-fail witnesses, so next raw-log work should build
+   on those decoded-message projection facts to connect key schedule, KeyUpdate
+   epochs, pending buffers, cumulative received decryption facts, multi-record
+   sent seals, and remaining event-log projections.
 5. Continue auditing `TLS13.Impl.Parser.fsti` and
    `TLS13.Impl.Serializer.fsti` entry by entry. Mark each supported
    message/record as strong or weak relative to the required `M`/`L` +
