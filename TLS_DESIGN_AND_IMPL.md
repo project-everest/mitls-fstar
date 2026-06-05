@@ -179,7 +179,12 @@ The public client API is buffer/event oriented:
   failure while preserving the received raw-delta fact. The public
   `network_bytes_received_event_projection` strips away parser witnesses and
   exposes that same received raw-delta/event-shape fact directly over the exact
-  consumed network prefix. Both network and local end-to-end predicates expose
+  consumed network prefix. Under `client_state_correct`,
+  `network_bytes_protected_record_key_schedule_projection` also connects
+  non-cleartext consumed prefixes to a protected `ApplicationData` open under the
+  current read state whose key/IV are projected from the installed server
+  handshake/application traffic material. Both network and local end-to-end
+  predicates expose
   `response_network_out_raw_projection`, so non-empty emitted network prefixes
   are tied to the legal event raw delta and protected-record segmentation facts.
 - `TLS13.Impl.ConnectionState` has been split by responsibility: `Repr` owns the
@@ -229,9 +234,10 @@ Other trusted runtime boundaries remain:
    `process_network_bytes` and `process_local_event` directly return
    `network_bytes_end_to_end_correct` / `local_event_end_to_end_correct`, which
    preserve `client_state_correct` and expose the raw-record, decoded-message,
-   received-event, emitted-network-byte, and cumulative raw-event replay
-   projections currently available. The remaining theorem gap is completeness of
-   the layered invariant itself, not the absence of a compact preservation wrapper.
+   received-event, protected-open/key-schedule, emitted-network-byte, and
+   cumulative raw-event replay projections currently available. The remaining
+   theorem gap is completeness of the layered invariant itself, not the absence
+   of a compact preservation wrapper.
 2. `ConnectionLog` and `Spec.ConnectionState` still need one stronger layered
    invariant proving that consumed/emitted raw bytes parse, decrypt, and
    interpret as exactly the TLS messages/events that drive the state machine and
@@ -239,7 +245,8 @@ Other trusted runtime boundaries remain:
    existing legal-delta facts, cumulative `ConnectionLog.connection_view` stream
    and TLS/state-event/app host-trace projections plus cumulative raw-event
    replay are packaged into `client_state_correct`, and parser successes now
-   expose a packaged decoded-message projection for cleartext/protected records.
+   expose a packaged decoded-message projection for cleartext/protected records,
+   including a read-key-schedule projection for protected opens.
    Event-log replay,
    transcript projection, KeyUpdate response-pending state, non-failed record
    epoch/sequence projection, record key/IV consistency with the installed key

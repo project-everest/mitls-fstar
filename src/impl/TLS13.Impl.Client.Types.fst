@@ -786,6 +786,70 @@ let protected_decoder_fragment_relation
        WS.parse_plaintext opened == Some plaintext /\
        decoder_fragment_matches_plaintext content_type fragment plaintext))
 
+let protected_record_decode_uses_scheduled_read_key
+  (st0:CS.connection_state)
+  (raw_received:B.bytes)
+  : prop =
+  exists outer_fragment opened.
+    WS.parse_record raw_received ==
+     Some (T.ApplicationData, outer_fragment, B.length raw_received) /\
+    protected_record_opened st0 raw_received outer_fragment opened /\
+    CS.record_read_key_schedule_projection st0.CS.cs_model
+
+let lemma_protected_decoder_fragment_relation_read_key_schedule_projection
+  (st0:CS.connection_state)
+  (content_type:U8.t)
+  (fragment:B.bytes)
+  (raw_received:B.bytes)
+  : Lemma
+     (requires
+       protected_decoder_fragment_relation st0 content_type fragment raw_received /\
+       client_state_correct st0)
+     (ensures protected_record_decode_uses_scheduled_read_key st0 raw_received)
+=
+  assert (exists outer_fragment.
+    WS.parse_record raw_received ==
+     Some (T.ApplicationData, outer_fragment, B.length raw_received) /\
+    (exists opened.
+     protected_record_opened st0 raw_received outer_fragment opened /\
+     (exists plaintext.
+      WS.parse_plaintext opened == Some plaintext /\
+      decoder_fragment_matches_plaintext content_type fragment plaintext)));
+  let outer_fragment =
+    ID.indefinite_description_ghost
+     B.bytes
+     (fun outer_fragment ->
+       WS.parse_record raw_received ==
+         Some (T.ApplicationData, outer_fragment, B.length raw_received) /\
+       (exists opened.
+         protected_record_opened st0 raw_received outer_fragment opened /\
+         (exists plaintext.
+           WS.parse_plaintext opened == Some plaintext /\
+           decoder_fragment_matches_plaintext content_type fragment plaintext))) in
+  assert (exists opened.
+    protected_record_opened st0 raw_received outer_fragment opened /\
+    (exists plaintext.
+     WS.parse_plaintext opened == Some plaintext /\
+     decoder_fragment_matches_plaintext content_type fragment plaintext));
+  let opened =
+    ID.indefinite_description_ghost
+     B.bytes
+     (fun opened ->
+       protected_record_opened st0 raw_received outer_fragment opened /\
+       (exists plaintext.
+         WS.parse_plaintext opened == Some plaintext /\
+         decoder_fragment_matches_plaintext content_type fragment plaintext)) in
+  assert (protected_record_opened st0 raw_received outer_fragment opened);
+  assert (CS.connection_state_record_keys_consistent st0);
+  CS.lemma_model_record_keys_consistent_record_read_key_schedule_projection
+    st0.CS.cs_model;
+  assert (CS.record_read_key_schedule_projection st0.CS.cs_model);
+  assert (exists outer_fragment' opened'.
+    WS.parse_record raw_received ==
+     Some (T.ApplicationData, outer_fragment', B.length raw_received) /\
+    protected_record_opened st0 raw_received outer_fragment' opened' /\
+    CS.record_read_key_schedule_projection st0.CS.cs_model)
+
 let decoder_fragment_relation
   (st0:CS.connection_state)
   (content_type:U8.t)
@@ -1589,6 +1653,28 @@ let network_bytes_received_event_projection
       network_out
       app_out)
 
+let network_bytes_protected_record_key_schedule_projection
+  (st0:CS.connection_state)
+  (buffer_resp:client_buffer_response)
+  (network_input:B.bytes)
+  : prop =
+  buffer_resp.consumed_len == 0sz \/
+  buffer_resp.response.status == DecodeError \/
+  (exists msg.
+    (exists content_type fragment.
+      network_input_message_projection
+        st0
+        content_type
+        fragment
+        msg
+        (network_consumed_prefix network_input buffer_resp.consumed_len)) /\
+    (if CS.network_message_is_cleartext CL.Received msg
+     then True
+     else
+       protected_record_decode_uses_scheduled_read_key
+         st0
+         (network_consumed_prefix network_input buffer_resp.consumed_len)))
+
 let local_event_step_correct
   (st0:CS.connection_state)
   (st1:CS.connection_state)
@@ -1619,6 +1705,8 @@ let network_bytes_end_to_end_correct
   network_bytes_received_event_projection st0 st1 buffer_resp network_input network_out app_out /\
   response_network_out_raw_projection st0 st1 buffer_resp.response network_out app_out /\
   (client_state_correct st0 ==> client_state_correct st1) /\
+  (client_state_correct st0 ==>
+    network_bytes_protected_record_key_schedule_projection st0 buffer_resp network_input) /\
   (client_state_correct st0 ==> CS.connection_state_connection_log_view_consistent st1) /\
   (client_state_correct st0 ==> CS.connection_state_raw_event_replay_consistent st1)
 
@@ -1987,6 +2075,140 @@ let lemma_network_bytes_received_event_projection
         app_out)
   )
 
+let lemma_network_bytes_protected_record_key_schedule_projection
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (buffer_resp:client_buffer_response)
+  (network_input:B.bytes)
+  (network_out:B.bytes)
+  (app_out:B.bytes)
+  : Lemma
+      (requires
+        network_bytes_decoded_message_projection
+          st0 st1 buffer_resp network_input network_out app_out /\
+        client_state_correct st0)
+      (ensures
+        network_bytes_protected_record_key_schedule_projection
+          st0 buffer_resp network_input)
+=
+  if buffer_resp.consumed_len = 0sz then ()
+  else if buffer_resp.response.status == DecodeError then ()
+  else (
+    let raw_received = network_consumed_prefix network_input buffer_resp.consumed_len in
+    assert (exists content_type fragment msg.
+      network_input_message_projection
+        st0
+        content_type
+        fragment
+        msg
+        raw_received /\
+      decoded_message_event_projection
+        st0
+        st1
+        buffer_resp.response
+        msg
+        raw_received
+        network_out
+        app_out);
+    let msg =
+      ID.indefinite_description_ghost
+        M.tls_message
+        (fun msg -> exists content_type fragment.
+          network_input_message_projection
+            st0
+            content_type
+            fragment
+            msg
+            raw_received /\
+          decoded_message_event_projection
+            st0
+            st1
+            buffer_resp.response
+            msg
+            raw_received
+            network_out
+            app_out) in
+    assert (exists content_type fragment.
+      network_input_message_projection
+        st0
+        content_type
+        fragment
+        msg
+        raw_received /\
+      decoded_message_event_projection
+        st0
+        st1
+        buffer_resp.response
+        msg
+        raw_received
+        network_out
+        app_out);
+    let content_type =
+      ID.indefinite_description_ghost
+        U8.t
+        (fun content_type -> exists fragment.
+          network_input_message_projection
+            st0
+            content_type
+            fragment
+            msg
+            raw_received /\
+          decoded_message_event_projection
+            st0
+            st1
+            buffer_resp.response
+            msg
+            raw_received
+            network_out
+            app_out) in
+    let fragment =
+      ID.indefinite_description_ghost
+        B.bytes
+        (fun fragment ->
+          network_input_message_projection
+            st0
+            content_type
+            fragment
+            msg
+            raw_received /\
+          decoded_message_event_projection
+            st0
+            st1
+            buffer_resp.response
+            msg
+            raw_received
+            network_out
+            app_out) in
+    assert (network_input_message_projection
+      st0
+      content_type
+      fragment
+      msg
+      raw_received);
+    if CS.network_message_is_cleartext CL.Received msg
+    then ()
+    else (
+      assert (protected_decoder_fragment_relation st0 content_type fragment raw_received);
+      lemma_protected_decoder_fragment_relation_read_key_schedule_projection
+        st0
+        content_type
+        fragment
+        raw_received;
+      assert (protected_record_decode_uses_scheduled_read_key st0 raw_received)
+    );
+    assert (exists msg'.
+      (exists content_type' fragment'.
+        network_input_message_projection
+          st0
+          content_type'
+          fragment'
+          msg'
+          raw_received) /\
+      (if CS.network_message_is_cleartext CL.Received msg'
+       then True
+       else protected_record_decode_uses_scheduled_read_key st0 raw_received))
+  )
+
 let lemma_network_bytes_step_correct_client_state_correct
   (st0:CS.connection_state)
   (st1:CS.connection_state)
@@ -2052,7 +2274,14 @@ let lemma_network_bytes_step_correct_end_to_end
     network_out
     old_app_out
     app_out;
-  if client_state_correct st0 then
+  if client_state_correct st0 then (
+    lemma_network_bytes_protected_record_key_schedule_projection
+      st0
+      st1
+      buffer_resp
+      network_input
+      network_out
+      app_out;
     lemma_network_bytes_step_correct_client_state_correct
       st0
       st1
@@ -2062,6 +2291,7 @@ let lemma_network_bytes_step_correct_end_to_end
       network_out
       old_app_out
       app_out
+  )
 
 let lemma_local_event_step_correct_layered_log_consistent
   (st0:CS.connection_state)

@@ -395,6 +395,26 @@ let record_read_keys_match_key_schedule
   | R.Application ->
     traffic_material_option_matches_record_direction keys.ks_server_application_traffic st
 
+let record_read_key_schedule_projection
+  (model:connection_model)
+  : prop =
+  match model.model_control with
+  | ControlFailed _ -> True
+  | _ ->
+    let keys = model.model_handshake.hs_keys in
+    let st = model.model_record.record_read in
+    match st.R.epoch with
+    | R.Initial ->
+      st.R.key == None /\ st.R.static_iv == None
+    | R.Handshake ->
+      exists material.
+        keys.ks_server_handshake_traffic == Some material /\
+        traffic_material_matches_record_direction material st
+    | R.Application ->
+      exists material.
+        keys.ks_server_application_traffic == Some material /\
+        traffic_material_matches_record_direction material st
+
 let record_write_keys_match_key_schedule
   (control:connection_control_state)
   (keys:key_schedule_state)
@@ -424,6 +444,43 @@ let model_record_keys_consistent
       model.model_control
       keys
       model.model_record.record_write
+
+let lemma_model_record_keys_consistent_record_read_key_schedule_projection
+  (model:connection_model)
+  : Lemma
+      (requires model_record_keys_consistent model)
+      (ensures record_read_key_schedule_projection model)
+=
+  match model.model_control with
+  | ControlFailed _ -> ()
+  | _ ->
+    let keys = model.model_handshake.hs_keys in
+    let st = model.model_record.record_read in
+    assert (record_read_keys_match_key_schedule keys st);
+    (match st.R.epoch with
+     | R.Initial -> ()
+     | R.Handshake ->
+       assert (traffic_material_option_matches_record_direction
+         keys.ks_server_handshake_traffic
+         st);
+       (match keys.ks_server_handshake_traffic with
+        | Some material ->
+          assert (traffic_material_matches_record_direction material st);
+          assert (exists material'.
+            keys.ks_server_handshake_traffic == Some material' /\
+            traffic_material_matches_record_direction material' st)
+        | None -> assert False)
+     | R.Application ->
+       assert (traffic_material_option_matches_record_direction
+         keys.ks_server_application_traffic
+         st);
+       (match keys.ks_server_application_traffic with
+        | Some material ->
+          assert (traffic_material_matches_record_direction material st);
+          assert (exists material'.
+            keys.ks_server_application_traffic == Some material' /\
+            traffic_material_matches_record_direction material' st)
+        | None -> assert False))
 
 let lemma_record_read_keys_next_seq
   (keys:key_schedule_state)
