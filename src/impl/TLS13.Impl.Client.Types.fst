@@ -45,7 +45,8 @@ let client_state_correct
   : prop =
   CS.connection_state_consistent st /\
   CS.connection_state_layered_log_consistent st /\
-  CS.connection_state_connection_log_view_consistent st
+  CS.connection_state_connection_log_view_consistent st /\
+  CS.connection_state_raw_event_replay_consistent st
 
 let lemma_initial_client_state_correct
   (cfg:CS.connection_config)
@@ -53,6 +54,7 @@ let lemma_initial_client_state_correct
 =
   CS.lemma_initial_layered_log_consistent cfg;
   CS.lemma_connection_state_connection_log_view_consistent (CS.initial cfg);
+  CS.lemma_initial_raw_event_replay_consistent cfg;
   assert (CS.connection_state_evolves (CS.initial cfg) (CS.initial cfg))
 
 let tls_decode_error : T.tls_error = T.AlertError T.DecodeError
@@ -398,7 +400,8 @@ let lemma_legal_response_for_event_client_state_correct
     raw_received
     network_out
     app_out;
-  CS.lemma_connection_state_connection_log_view_consistent st1
+  CS.lemma_connection_state_connection_log_view_consistent st1;
+  CS.lemma_legal_connection_delta_raw_event_replay_consistent st0 delta st1
 
 let lemma_legal_response_for_event_protected_single_parse_record
   (st0:CS.connection_state)
@@ -1605,7 +1608,8 @@ let network_bytes_end_to_end_correct
   network_bytes_decoded_message_projection st0 st1 buffer_resp network_input network_out app_out /\
   response_network_out_raw_projection st0 st1 buffer_resp.response network_out app_out /\
   (client_state_correct st0 ==> client_state_correct st1) /\
-  (client_state_correct st0 ==> CS.connection_state_connection_log_view_consistent st1)
+  (client_state_correct st0 ==> CS.connection_state_connection_log_view_consistent st1) /\
+  (client_state_correct st0 ==> CS.connection_state_raw_event_replay_consistent st1)
 
 let local_event_end_to_end_correct
   (st0:CS.connection_state)
@@ -1619,7 +1623,8 @@ let local_event_end_to_end_correct
   local_event_step_correct st0 st1 resp kind payload network_out app_out /\
   response_network_out_raw_projection st0 st1 resp network_out app_out /\
   (client_state_correct st0 ==> client_state_correct st1) /\
-  (client_state_correct st0 ==> CS.connection_state_connection_log_view_consistent st1)
+  (client_state_correct st0 ==> CS.connection_state_connection_log_view_consistent st1) /\
+  (client_state_correct st0 ==> CS.connection_state_raw_event_replay_consistent st1)
 
 let lemma_network_bytes_step_correct_layered_log_consistent
   (st0:CS.connection_state)

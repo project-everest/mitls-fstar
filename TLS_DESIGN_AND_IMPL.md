@@ -136,15 +136,20 @@ The public client API is buffer/event oriented:
   `cs_event_log`. The public client invariant also includes
   `connection_state_connection_log_view_consistent`, which packages the cumulative
   `ConnectionLog.connection_view` stream shapes, record-prefix parsing, host-trace
-  TLS/state-event/app projections, and pending-app source shape; the client theorem surface exposes preservation lemmas for
-  `legal_response_for_event`, `some_legal_response`, `network_bytes_step_correct`, and
+  TLS/state-event/app projections, and pending-app source shape. It now also
+  includes `connection_state_raw_event_replay_consistent`, proving that the
+  cumulative raw sent/received logs replay as per-event raw deltas, each legal at
+  the model state where the corresponding event occurs; the client theorem
+  surface exposes preservation lemmas for `legal_response_for_event`,
+  `some_legal_response`, `network_bytes_step_correct`, and
   `local_event_step_correct`. The public
   `TLS13.Impl.Client` postconditions now use the compact end-to-end predicates
   `network_bytes_end_to_end_correct` and `local_event_end_to_end_correct`; the
   lower-level step, record, and event predicates remain internal proof
   vocabulary. The `new_client_default` and configured `new_client` constructors
   now establish `client_state_correct` for their initial states, so callers can
-  chain directly into the end-to-end step predicates. The streaming network predicate exposes public `parse_record` success facts for
+  chain directly into the end-to-end step predicates. The streaming network
+  predicate exposes public `parse_record` success facts for
   non-decode-error consumed raw records, and the `process_network_bytes` theorem
   shape names the exact consumed input prefix instead of hiding it behind an
   existential. The local-step predicate exposes `parse_record` success for
@@ -154,11 +159,11 @@ The public client API is buffer/event oriented:
   remain explicit external TCB actions. `TLS13.Impl.Client.Types` now packages
   these facts into compact step theorems: `client_state_correct` combines pure
   reachability with the layered log invariant plus the cumulative connection-log
-  view consistency predicate, and
+  view consistency predicate plus cumulative raw-event replay, and
   `network_bytes_end_to_end_correct` / `local_event_end_to_end_correct` prove
   that the public API step predicates preserve it while explicitly projecting
-  the resulting cumulative connection-log view. The network theorem also
-  exposes `network_consumed_raw_record_projection`: every non-empty,
+  the resulting cumulative connection-log view and raw-event replay. The network
+  theorem also exposes `network_consumed_raw_record_projection`: every non-empty,
   non-decode-error consumed prefix is a single raw TLS record and has the
   recursive raw-record segmentation fact needed by downstream raw-log proofs.
   Successful non-decode-error byte steps additionally expose
@@ -220,17 +225,18 @@ Other trusted runtime boundaries remain:
    `process_network_bytes` and `process_local_event` directly return
    `network_bytes_end_to_end_correct` / `local_event_end_to_end_correct`, which
    preserve `client_state_correct` and expose the raw-record, decoded-message,
-   and emitted-network-byte projections currently available. The remaining
-   theorem gap is completeness of the layered invariant itself, not the absence
-   of a compact preservation wrapper.
+   emitted-network-byte, and cumulative raw-event replay projections currently
+   available. The remaining theorem gap is completeness of the layered invariant
+   itself, not the absence of a compact preservation wrapper.
 2. `ConnectionLog` and `Spec.ConnectionState` still need one stronger layered
    invariant proving that consumed/emitted raw bytes parse, decrypt, and
    interpret as exactly the TLS messages/events that drive the state machine and
    app log. Raw protected deltas can now be segmented record-by-record from the
    existing legal-delta facts, cumulative `ConnectionLog.connection_view` stream
-   and TLS/state-event/app host-trace projections are packaged into
-   `client_state_correct`, and parser successes now expose a packaged
-   decoded-message projection for cleartext/protected records. Event-log replay,
+   and TLS/state-event/app host-trace projections plus cumulative raw-event
+   replay are packaged into `client_state_correct`, and parser successes now
+   expose a packaged decoded-message projection for cleartext/protected records.
+   Event-log replay,
    transcript projection, KeyUpdate response-pending state, non-failed record
    epoch/sequence projection, record key/IV consistency with the installed key
    schedule, pending application-buffer consistency, and app-log projection are
@@ -274,8 +280,8 @@ Other trusted runtime boundaries remain:
    transcript-projection, KeyUpdate response-pending, non-failed record
    epoch/sequence projection, record key/IV-to-key-schedule consistency,
    pending application-buffer consistency, app-log-consistency preservation, and
-   cumulative connection-log view consistency lemmas, with
-   legal-delta/client-response/public-step projections, plus a
+   cumulative connection-log view consistency and cumulative raw-event replay
+   lemmas, with legal-delta/client-response/public-step projections, plus a
    parser-success-to-raw-log inverse bridge. The client surface now also exposes
    `network_input_message_projection`, derived from `network_input_wf`, so next
    raw-log work should build on those decoded-message projection facts to connect
