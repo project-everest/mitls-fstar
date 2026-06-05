@@ -79,7 +79,10 @@ The public client API is buffer/event oriented:
   For protected inputs, that package now also includes
   `CT.protected_record_decodes_to_message`: the consumed `ApplicationData`
   record opens under the current read state, parses as TLSInnerPlaintext, and
-  that plaintext parses as the exact decoded TLS message.
+  that plaintext parses as the exact decoded TLS message. Under
+  `client_state_correct`, the protected-record projection is packaged as
+  `CT.protected_record_decode_correct`, combining that open-to-message fact with
+  read-key schedule provenance.
 - The active serializer TCB surface no longer includes stale unused ClientHello
   record-header/localhost fixed-builder declarations or the unused standalone
   ClientFinished application-data-record declaration. Live fixed helpers now

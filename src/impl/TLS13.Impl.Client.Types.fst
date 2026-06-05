@@ -998,6 +998,14 @@ let protected_record_decode_uses_scheduled_read_key
     protected_record_opened st0 raw_received outer_fragment opened /\
     CS.record_read_key_schedule_projection st0.CS.cs_model
 
+let protected_record_decode_correct
+  (st0:CS.connection_state)
+  (raw_received:B.bytes)
+  (msg:M.tls_message)
+  : prop =
+  protected_record_decodes_to_message st0 raw_received msg /\
+  protected_record_decode_uses_scheduled_read_key st0 raw_received
+
 let lemma_protected_decoder_fragment_relation_read_key_schedule_projection
   (st0:CS.connection_state)
   (content_type:U8.t)
@@ -1883,9 +1891,10 @@ let network_bytes_protected_record_key_schedule_projection
     (if CS.network_message_is_cleartext CL.Received msg
      then True
      else
-       protected_record_decode_uses_scheduled_read_key
+       protected_record_decode_correct
          st0
-         (network_consumed_prefix network_input buffer_resp.consumed_len)))
+         (network_consumed_prefix network_input buffer_resp.consumed_len)
+         msg))
 
 let local_event_step_correct
   (st0:CS.connection_state)
@@ -2501,12 +2510,14 @@ let lemma_network_bytes_protected_record_key_schedule_projection
     then ()
     else (
       assert (protected_decoder_fragment_relation st0 content_type fragment raw_received);
+      assert (protected_record_decodes_to_message st0 raw_received msg);
       lemma_protected_decoder_fragment_relation_read_key_schedule_projection
         st0
         content_type
         fragment
         raw_received;
-      assert (protected_record_decode_uses_scheduled_read_key st0 raw_received)
+      assert (protected_record_decode_uses_scheduled_read_key st0 raw_received);
+      assert (protected_record_decode_correct st0 raw_received msg)
     );
     assert (exists msg'.
       (exists content_type' fragment'.
@@ -2518,7 +2529,7 @@ let lemma_network_bytes_protected_record_key_schedule_projection
           raw_received) /\
       (if CS.network_message_is_cleartext CL.Received msg'
        then True
-       else protected_record_decode_uses_scheduled_read_key st0 raw_received))
+       else protected_record_decode_correct st0 raw_received msg'))
   )
 
 let lemma_network_bytes_step_correct_client_state_correct
