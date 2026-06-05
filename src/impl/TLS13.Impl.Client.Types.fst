@@ -41,12 +41,18 @@ type client_buffer_response = {
   consumed_len: SZ.t;
 }
 
-let client_state_correct
+let client_state_core_correct
   (st:CS.connection_state)
   : prop =
   CS.connection_state_consistent st /\
   CS.connection_state_full_log_consistent st /\
   CS.connection_state_sent_seal_replay_consistent st
+
+let client_state_correct
+  (st:CS.connection_state)
+  : prop =
+  client_state_core_correct st /\
+  CS.connection_state_received_decode_replay_consistent st
 
 let lemma_initial_client_state_correct
   (cfg:CS.connection_config)
@@ -54,6 +60,7 @@ let lemma_initial_client_state_correct
 =
   CS.lemma_initial_full_log_consistent cfg;
   CS.lemma_initial_sent_seal_replay_consistent cfg;
+  CS.lemma_initial_received_decode_replay_consistent cfg;
   assert (CS.connection_state_evolves (CS.initial cfg) (CS.initial cfg))
 
 let tls_decode_error : T.tls_error = T.AlertError T.DecodeError
@@ -393,6 +400,32 @@ let lemma_legal_response_for_event_layered_log_consistent
     }
     st1
 
+let lemma_legal_response_for_event_client_state_core_correct
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (resp:client_response)
+  (ev:CS.conn_event)
+  (raw_sent:B.bytes)
+  (raw_received:B.bytes)
+  (network_out:B.bytes)
+  (app_out:B.bytes)
+  : Lemma
+      (requires
+        legal_response_for_event
+          st0 st1 resp ev raw_sent raw_received network_out app_out /\
+        CS.sent_event_nonempty_seal_projection st0.CS.cs_model ev raw_sent /\
+        client_state_core_correct st0)
+      (ensures client_state_core_correct st1)
+=
+  let delta = {
+    CS.delta_event = ev;
+    CS.delta_raw_sent = raw_sent;
+    CS.delta_raw_received = raw_received;
+  } in
+  CS.lemma_legal_connection_delta_consistent st0 delta st1;
+  CS.lemma_legal_connection_delta_full_log_consistent st0 delta st1;
+  CS.lemma_legal_connection_delta_sent_seal_replay_consistent st0 delta st1
+
 let lemma_legal_response_for_event_client_state_correct
   (st0:CS.connection_state)
   (st1:CS.connection_state)
@@ -407,6 +440,10 @@ let lemma_legal_response_for_event_client_state_correct
         legal_response_for_event
           st0 st1 resp ev raw_sent raw_received network_out app_out /\
         CS.sent_event_nonempty_seal_projection st0.CS.cs_model ev raw_sent /\
+        CS.received_event_nonempty_decode_projection
+          st0.CS.cs_model
+          ev
+          raw_received /\
         client_state_correct st0)
       (ensures client_state_correct st1)
 =
@@ -415,9 +452,16 @@ let lemma_legal_response_for_event_client_state_correct
     CS.delta_raw_sent = raw_sent;
     CS.delta_raw_received = raw_received;
   } in
-  CS.lemma_legal_connection_delta_consistent st0 delta st1;
-  CS.lemma_legal_connection_delta_full_log_consistent st0 delta st1;
-  CS.lemma_legal_connection_delta_sent_seal_replay_consistent st0 delta st1
+  lemma_legal_response_for_event_client_state_core_correct
+    st0
+    st1
+    resp
+    ev
+    raw_sent
+    raw_received
+    network_out
+    app_out;
+  CS.lemma_legal_connection_delta_received_decode_replay_consistent st0 delta st1
 
 let lemma_legal_response_for_event_protected_single_parse_record
   (st0:CS.connection_state)
@@ -641,6 +685,69 @@ let some_legal_response
   exists ev raw_sent raw_received.
     legal_response_for_event st0 st1 resp ev raw_sent raw_received network_out app_out
 
+let lemma_some_legal_response_received_decode_replay_consistent_aux
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (resp:client_response)
+  (network_out:B.bytes)
+  (app_out:B.bytes)
+  : Lemma
+      (requires
+        some_legal_response st0 st1 resp network_out app_out /\
+        response_received_decode_projection st0 st1 resp network_out app_out /\
+        CS.connection_state_received_decode_replay_consistent st0)
+      (ensures CS.connection_state_received_decode_replay_consistent st1)
+=
+  assert (exists ev raw_sent raw_received.
+    legal_response_for_event
+      st0 st1 resp ev raw_sent raw_received network_out app_out /\
+    CS.received_event_nonempty_decode_projection
+      st0.CS.cs_model
+      ev
+      raw_received);
+  let ev =
+    ID.indefinite_description_ghost
+      CS.conn_event
+      (fun ev -> exists raw_sent raw_received.
+        legal_response_for_event
+          st0 st1 resp ev raw_sent raw_received network_out app_out /\
+        CS.received_event_nonempty_decode_projection
+          st0.CS.cs_model
+          ev
+          raw_received) in
+  let raw_sent =
+    ID.indefinite_description_ghost
+      B.bytes
+      (fun raw_sent -> exists raw_received.
+        legal_response_for_event
+          st0 st1 resp ev raw_sent raw_received network_out app_out /\
+        CS.received_event_nonempty_decode_projection
+          st0.CS.cs_model
+          ev
+          raw_received) in
+  let raw_received =
+    ID.indefinite_description_ghost
+      B.bytes
+      (fun raw_received ->
+        legal_response_for_event
+          st0 st1 resp ev raw_sent raw_received network_out app_out /\
+        CS.received_event_nonempty_decode_projection
+          st0.CS.cs_model
+          ev
+          raw_received) in
+  assert (legal_response_for_event
+    st0 st1 resp ev raw_sent raw_received network_out app_out);
+  assert (CS.received_event_nonempty_decode_projection
+    st0.CS.cs_model
+    ev
+    raw_received);
+  let delta = {
+    CS.delta_event = ev;
+    CS.delta_raw_sent = raw_sent;
+    CS.delta_raw_received = raw_received;
+  } in
+  CS.lemma_legal_connection_delta_received_decode_replay_consistent st0 delta st1
+
 let lemma_some_legal_response_layered_log_consistent
   (st0:CS.connection_state)
   (st1:CS.connection_state)
@@ -690,6 +797,7 @@ let lemma_some_legal_response_client_state_correct
       (requires
         some_legal_response st0 st1 resp network_out app_out /\
         response_network_out_seal_projection st0 st1 resp network_out app_out /\
+        response_received_decode_projection st0 st1 resp network_out app_out /\
         client_state_correct st0)
       (ensures client_state_correct st1)
 =
@@ -724,7 +832,7 @@ let lemma_some_legal_response_client_state_correct
     Seq.lemma_eq_elim raw_sent B.empty;
     assert (B.length raw_sent == 0);
     assert (CS.sent_event_nonempty_seal_projection st0.CS.cs_model ev raw_sent);
-    lemma_legal_response_for_event_client_state_correct
+    lemma_legal_response_for_event_client_state_core_correct
       st0
       st1
       resp
@@ -760,7 +868,7 @@ let lemma_some_legal_response_client_state_correct
       st0 st1 resp ev raw_sent raw_received network_out app_out);
     assert (CS.sent_event_seal_projection st0.CS.cs_model ev raw_sent);
     assert (CS.sent_event_nonempty_seal_projection st0.CS.cs_model ev raw_sent);
-    lemma_legal_response_for_event_client_state_correct
+    lemma_legal_response_for_event_client_state_core_correct
       st0
       st1
       resp
@@ -769,7 +877,13 @@ let lemma_some_legal_response_client_state_correct
       raw_received
       network_out
       app_out
-  )
+  );
+  lemma_some_legal_response_received_decode_replay_consistent_aux
+    st0
+    st1
+    resp
+    network_out
+    app_out
 
 let lemma_legal_response_for_event_sent_seal_replay_consistent
   (st0:CS.connection_state)
@@ -930,56 +1044,10 @@ let lemma_some_legal_response_received_decode_replay_consistent
         CS.connection_state_received_decode_replay_consistent st0)
       (ensures CS.connection_state_received_decode_replay_consistent st1)
 =
-  assert (exists ev raw_sent raw_received.
-    legal_response_for_event
-      st0 st1 resp ev raw_sent raw_received network_out app_out /\
-    CS.received_event_nonempty_decode_projection
-      st0.CS.cs_model
-      ev
-      raw_received);
-  let ev =
-    ID.indefinite_description_ghost
-      CS.conn_event
-      (fun ev -> exists raw_sent raw_received.
-        legal_response_for_event
-          st0 st1 resp ev raw_sent raw_received network_out app_out /\
-        CS.received_event_nonempty_decode_projection
-          st0.CS.cs_model
-          ev
-          raw_received) in
-  let raw_sent =
-    ID.indefinite_description_ghost
-      B.bytes
-      (fun raw_sent -> exists raw_received.
-        legal_response_for_event
-          st0 st1 resp ev raw_sent raw_received network_out app_out /\
-        CS.received_event_nonempty_decode_projection
-          st0.CS.cs_model
-          ev
-          raw_received) in
-  let raw_received =
-    ID.indefinite_description_ghost
-      B.bytes
-      (fun raw_received ->
-        legal_response_for_event
-          st0 st1 resp ev raw_sent raw_received network_out app_out /\
-        CS.received_event_nonempty_decode_projection
-          st0.CS.cs_model
-          ev
-          raw_received) in
-  assert (legal_response_for_event
-    st0 st1 resp ev raw_sent raw_received network_out app_out);
-  assert (CS.received_event_nonempty_decode_projection
-    st0.CS.cs_model
-    ev
-    raw_received);
-  lemma_legal_response_for_event_received_decode_replay_consistent
+  lemma_some_legal_response_received_decode_replay_consistent_aux
     st0
     st1
     resp
-    ev
-    raw_sent
-    raw_received
     network_out
     app_out
 
@@ -3820,7 +3888,22 @@ let lemma_network_bytes_step_correct_received_decode_replay_consistent
         network_bytes_decoded_message_projection
           st0 st1 buffer_resp network_input network_out app_out /\
         CS.connection_state_received_decode_replay_consistent st0)
-      (ensures CS.connection_state_received_decode_replay_consistent st1)
+      (ensures
+        CS.connection_state_received_decode_replay_consistent st1 /\
+        (response_stuttered
+          st0
+          st1
+          buffer_resp.response
+          old_network_out
+          network_out
+          old_app_out
+          app_out \/
+         response_received_decode_projection
+          st0
+          st1
+          buffer_resp.response
+          network_out
+          app_out))
 =
   let resp = buffer_resp.response in
   if response_stuttered st0 st1 resp old_network_out network_out old_app_out app_out
@@ -4233,6 +4316,21 @@ let lemma_network_bytes_step_correct_client_state_correct
       network_out
       old_app_out
       app_out;
+    lemma_network_bytes_step_correct_received_decode_replay_consistent
+      st0
+      st1
+      buffer_resp
+      network_input
+      old_network_out
+      network_out
+      old_app_out
+      app_out;
+    assert (response_received_decode_projection
+      st0
+      st1
+      resp
+      network_out
+      app_out);
     lemma_some_legal_response_client_state_correct st0 st1 resp network_out app_out
   )
 
@@ -4391,6 +4489,14 @@ let lemma_local_event_step_correct_client_state_correct
       (ensures client_state_correct st1)
 =
   lemma_local_event_step_correct_network_out_seal_projection
+    st0
+    st1
+    resp
+    kind
+    payload
+    network_out
+    app_out;
+  lemma_legal_handled_local_response_received_decode_projection
     st0
     st1
     resp
