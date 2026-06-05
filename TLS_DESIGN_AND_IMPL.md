@@ -169,8 +169,10 @@ The public client API is buffer/event oriented:
   existential. The local-step predicate exposes `parse_record` success for
   non-empty local network output. `next_local_action_sound` also proves that
   ready non-external local actions satisfy `local_input_wf` with the empty
-  payload; certificate validation and CertificateVerify signature checking
-  remain explicit external TCB actions. `TLS13.Spec.ConnectionState` now packages
+  payload; certificate-validation readiness now also proves the parsed
+  Certificate and copied leaf DER are present, while certificate validation and
+  CertificateVerify signature checking remain explicit external TCB actions.
+  `TLS13.Spec.ConnectionState` now packages
   the layered log invariant, cumulative connection-log view consistency, and
   cumulative raw-event replay as `connection_state_full_log_consistent`.
   `TLS13.Impl.Client.Types` uses that package in compact step theorems:
@@ -356,7 +358,9 @@ Other trusted runtime boundaries remain:
    `process_local_event`, with explicit assumptions for certificate validation,
    peer signature verification, and local application requests. The current
    `next_local_action_sound` predicate already proves empty-input admissibility
-   for ready non-external local actions.
+   for ready non-external local actions, and certificate-validation readiness
+   exposes the stored Certificate plus copied leaf DER that the external driver
+   must validate.
 4. Strengthen `TLS13.ConnectionLog` / `TLS13.Spec.ConnectionState` so raw bytes,
    record parsing, decryption, transcript updates, traffic secrets, KeyUpdate
    epochs, pending buffers, and app-log projection live in one invariant. The

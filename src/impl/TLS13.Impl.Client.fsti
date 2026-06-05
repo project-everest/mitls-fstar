@@ -86,6 +86,8 @@ let next_local_action_sound
       st.CS.cs_model.CS.model_control ==
         CS.ControlHandshaking CS.HsCertificateReceived /\
       st.CS.cs_model.CS.model_handshake.CS.hs_validated_peer == None /\
+      Some? st.CS.cs_model.CS.model_handshake.CS.hs_certificate /\
+      Some? st.CS.cs_model.CS.model_handshake.CS.hs_buffers.CS.hb_certificate_leaf_der /\
       SZ.v certificate_public_key_len <= Bounds.max_public_key_len
     | CT.LocalVerifyCertificateSignature ->
       action.CT.next_local_payload == CT.LocalPayloadNone /\

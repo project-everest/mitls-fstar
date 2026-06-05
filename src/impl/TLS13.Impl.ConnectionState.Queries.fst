@@ -1588,20 +1588,43 @@ fn can_validate_certificate
             st0.CS.cs_model.CS.model_control ==
               CS.ControlHandshaking CS.HsCertificateReceived /\
             st0.CS.cs_model.CS.model_handshake.CS.hs_validated_peer == None /\
+            Some? st0.CS.cs_model.CS.model_handshake.CS.hs_certificate /\
+            Some?
+              st0.CS.cs_model.CS.model_handshake.CS.hs_buffers.CS.hb_certificate_leaf_der /\
             SZ.v payload_len <= max_public_key_len)
 {
   unfold (connection_exactly c st0);
   unfold (connection_model_exactly c st0.CS.cs_model);
   unfold (control_exactly c.control st0.CS.cs_model.CS.model_control st0.CS.cs_model.CS.model_failure);
   unfold (handshake_exactly c.handshake st0.CS.cs_model.CS.model_handshake);
+  unfold (handshake_messages_exactly c.handshake.messages st0.CS.cs_model.CS.model_handshake);
+  unfold (certificate_slot_exactly
+    c.handshake.messages.certificate
+    st0.CS.cs_model.CS.model_handshake.CS.hs_certificate);
   unfold (peer_exactly
     c.handshake.validated_peer
     st0.CS.cs_model.CS.model_handshake.CS.hs_validated_peer);
+  unfold (handshake_buffers_exactly
+    c.handshake.buffers
+    st0.CS.cs_model.CS.model_handshake.CS.hs_buffers);
+  unfold (optional_sized_bytes_exactly
+    c.handshake.buffers.certificate_leaf_der
+    max_handshake_flight_len
+    st0.CS.cs_model.CS.model_handshake.CS.hs_buffers.CS.hb_certificate_leaf_der);
 
   let tag = !c.control.control_tag;
   let stage = !c.control.handshake_stage_tag;
   let tag_ok = tag = 1uy;
   let stage_ok = stage = 5uy;
+
+  with stored_cert. assert (Box.pts_to c.handshake.messages.certificate stored_cert);
+  let stored_certificate = !c.handshake.messages.certificate;
+  let certificate_present = (
+    match stored_certificate with
+    | Some _ -> true
+    | None -> false);
+  assert (pure (stored_certificate == stored_cert));
+  assert (pure (certificate_present ==> Some? stored_cert));
 
   with peer_present peer_hostname peer_hostname_len peer_public_key peer_public_key_len peer_schemes peer_schemes_len.
     assert (pure True);
@@ -1612,10 +1635,25 @@ fn can_validate_certificate
   assert (pure (no_peer ==>
     st0.CS.cs_model.CS.model_handshake.CS.hs_validated_peer == None));
 
+  with leaf_present leaf_storage leaf_len. assert (pure True);
+  let leaf_present_runtime = !c.handshake.buffers.certificate_leaf_der.present;
+  assert (pure (leaf_present_runtime == leaf_present));
+  if leaf_present_runtime {
+    assert (pure leaf_present);
+    assert (pure (Some?
+      st0.CS.cs_model.CS.model_handshake.CS.hs_buffers.CS.hb_certificate_leaf_der));
+  };
+
   assert (pure (SZ.fits max_public_key_len));
   let max_pk_len = SZ.uint_to_t max_public_key_len;
   let payload_fits = SZ.lte payload_len max_pk_len;
-  let ok = tag_ok && stage_ok && no_peer && payload_fits;
+  let ok =
+    tag_ok &&
+    stage_ok &&
+    no_peer &&
+    certificate_present &&
+    leaf_present_runtime &&
+    payload_fits;
 
   assert (pure (ok ==> U8.v tag == 1));
   assert (pure (ok ==> U8.v stage == 5));
@@ -1623,11 +1661,25 @@ fn can_validate_certificate
     st0.CS.cs_model.CS.model_control ==
       CS.ControlHandshaking CS.HsCertificateReceived));
   assert (pure (ok ==> st0.CS.cs_model.CS.model_handshake.CS.hs_validated_peer == None));
+  assert (pure (ok ==> Some? st0.CS.cs_model.CS.model_handshake.CS.hs_certificate));
+  assert (pure (ok ==> Some?
+    st0.CS.cs_model.CS.model_handshake.CS.hs_buffers.CS.hb_certificate_leaf_der));
   assert (pure (ok ==> SZ.v payload_len <= max_public_key_len));
 
+  fold (optional_sized_bytes_exactly
+    c.handshake.buffers.certificate_leaf_der
+    max_handshake_flight_len
+    st0.CS.cs_model.CS.model_handshake.CS.hs_buffers.CS.hb_certificate_leaf_der);
+  fold (handshake_buffers_exactly
+    c.handshake.buffers
+    st0.CS.cs_model.CS.model_handshake.CS.hs_buffers);
   fold (peer_exactly
     c.handshake.validated_peer
     st0.CS.cs_model.CS.model_handshake.CS.hs_validated_peer);
+  fold (certificate_slot_exactly
+    c.handshake.messages.certificate
+    st0.CS.cs_model.CS.model_handshake.CS.hs_certificate);
+  fold (handshake_messages_exactly c.handshake.messages st0.CS.cs_model.CS.model_handshake);
   fold (handshake_exactly c.handshake st0.CS.cs_model.CS.model_handshake);
   fold (control_exactly
     c.control

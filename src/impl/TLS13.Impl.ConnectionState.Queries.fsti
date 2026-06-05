@@ -306,6 +306,9 @@ fn can_validate_certificate
             st0.CS.cs_model.CS.model_control ==
               CS.ControlHandshaking CS.HsCertificateReceived /\
             st0.CS.cs_model.CS.model_handshake.CS.hs_validated_peer == None /\
+            Some? st0.CS.cs_model.CS.model_handshake.CS.hs_certificate /\
+            Some?
+              st0.CS.cs_model.CS.model_handshake.CS.hs_buffers.CS.hb_certificate_leaf_der /\
             SZ.v payload_len <= max_public_key_len)
 
 fn can_receive_certificate_verify
