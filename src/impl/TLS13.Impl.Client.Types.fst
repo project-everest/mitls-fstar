@@ -63,6 +63,14 @@ let lemma_initial_client_state_correct
   CS.lemma_initial_received_decode_replay_consistent cfg;
   assert (CS.connection_state_evolves (CS.initial cfg) (CS.initial cfg))
 
+let lemma_client_state_correct_sent_seal_key_schedule_replay
+  (st:CS.connection_state)
+  : Lemma
+      (requires client_state_correct st)
+      (ensures CS.connection_state_sent_seal_key_schedule_replay_consistent st)
+=
+  CS.lemma_connection_state_sent_seal_key_schedule_replay st
+
 let lemma_client_state_correct_received_decode_key_schedule_replay
   (st:CS.connection_state)
   : Lemma
