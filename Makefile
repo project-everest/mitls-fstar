@@ -396,16 +396,18 @@ test-extracted-client-driver-slice: test/test_extracted_client_driver_slice
 	./test/test_extracted_client_driver_slice
 
 test/test_extracted_client_openssl_echo: \
-  test/unit/test_extracted_client_openssl_echo.c extract-bundle \
+  test/unit/test_extracted_client_openssl_echo.c extract-driver-bundle \
   runtime/tls13_client_driver.c runtime/tls13_client_driver.h \
+  c_stubs/tls13_io_karamel.c c_stubs/tls13_io_karamel.h \
   c_stubs/tls13_io_stubs.c c_stubs/tls13_io_stubs.h \
   c_stubs/tls13_openssl_stubs.c c_stubs/tls13_openssl_stubs.h $(HACL_OBJECTS)
 	$(CC) $(CFLAGS_COMMON) \
-	  -I_extract/bundle -I_extract/bundle/internal \
-	  _extract/bundle/*.c \
+	  -I_extract/driver_bundle -I_extract/driver_bundle/internal \
+	  _extract/driver_bundle/*.c \
 	  c_stubs/tls13_crypto_external.c \
 	  c_stubs/tls13_pulse_shims.c \
 	  runtime/tls13_client_driver.c \
+	  c_stubs/tls13_io_karamel.c \
 	  c_stubs/tls13_io_stubs.c \
 	  c_stubs/tls13_openssl_stubs.c \
 	  test/unit/test_extracted_client_openssl_echo.c \

@@ -91,11 +91,15 @@ size_t TLS13_IO_write(
   if (ch == NULL) {
     return 0;
   }
-  ssize_t n = tls13_io_write_fd(ch->fd, buf, len);
-  if (n <= 0) {
-    return 0;
+  size_t off = 0;
+  while (off < len) {
+    ssize_t n = tls13_io_write_fd(ch->fd, buf + off, len - off);
+    if (n <= 0) {
+      return off;
+    }
+    off += (size_t)n;
   }
-  return (size_t)n;
+  return off;
 }
 
 void TLS13_IO_close(TLS13_IO_channel ch) {

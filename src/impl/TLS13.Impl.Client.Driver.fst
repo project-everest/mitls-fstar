@@ -15,6 +15,7 @@ module CT = TLS13.Impl.Client.Types
 module IO = TLS13.IO
 module L = TLS13.Impl.Messages
 module M = TLS13.Messages
+module R = Pulse.Lib.Reference
 module Seq = FStar.Seq
 module SZ = FStar.SizeT
 module U16 = FStar.UInt16
@@ -913,6 +914,682 @@ fn driver_read_application_data_once
     network_out_len
     app_out
     app_out_len
+}
+
+fn driver_process_buffered_network_bytes_once
+  (d:driver)
+  (raw:array U8.t)
+  (raw_capacity:SZ.t)
+  (buffered_len:SZ.t)
+  (network_out:array U8.t)
+  (network_out_len:SZ.t)
+  (app_out:array U8.t)
+  (app_out_len:SZ.t)
+  requires driver_exactly d 'st0 **
+           pts_to raw 'old_raw **
+           pts_to network_out 'old_network_out **
+           pts_to app_out 'old_app_out **
+           pure (B.length 'old_raw == SZ.v raw_capacity /\
+                 SZ.v buffered_len <= SZ.v raw_capacity /\
+                 B.length 'old_network_out == SZ.v network_out_len /\
+                 B.length 'old_app_out == SZ.v app_out_len /\
+                 L.max_record_fragment_len <= SZ.v app_out_len)
+  returns result: network_read_result
+  ensures exists* st1 raw_bytes network_out_bytes app_out_bytes.
+           driver_exactly d st1 **
+           pts_to raw raw_bytes **
+           pts_to network_out network_out_bytes **
+           pts_to app_out app_out_bytes **
+           pure (B.length raw_bytes ==
+                   SZ.v raw_capacity /\
+                 B.length (Ghost.reveal result.network_read_prefix) ==
+                   SZ.v result.network_read_len /\
+                 result.network_read_len == buffered_len /\
+                 SZ.v result.network_read_len <= SZ.v raw_capacity /\
+                 B.length network_out_bytes == SZ.v network_out_len /\
+                 B.length app_out_bytes == SZ.v app_out_len /\
+                 CT.network_bytes_end_to_end_correct
+                  'st0
+                  st1
+                  result.network_read_buffer_resp
+                  (Ghost.reveal result.network_read_prefix)
+                  (Ghost.reveal 'old_network_out)
+                  network_out_bytes
+                  (Ghost.reveal 'old_app_out)
+                  app_out_bytes /\
+                 (result.network_read_buffer_resp.CT.response.CT.status ==
+                 CT.StepOk ==>
+                 SZ.v result.network_read_written <=
+                 SZ.v result.network_read_buffer_resp.CT.response.CT.network_out_len) /\
+                 (result.network_read_buffer_resp.CT.response.CT.status ==
+                 CT.StepOk \/
+                 result.network_read_written == 0sz))
+{
+  unfold (driver_exactly d 'st0);
+  A.pts_to_len raw;
+  assert (pure (A.length raw == SZ.v raw_capacity));
+  A.to_mask raw;
+  with raw_mask.
+    assert (A.pts_to_mask raw #1.0R raw_mask (fun _ -> True));
+  assert (pure (Seq.length raw_mask == SZ.v raw_capacity));
+  assert (pure (forall (i:nat). i < Seq.length raw_mask ==>
+    Seq.index raw_mask i == Some (Seq.index (Ghost.reveal 'old_raw) i)));
+  let raw_prefix_array =
+    A.sub raw #1.0R #(fun _ -> True) 0sz (SZ.v buffered_len);
+  with raw_prefix_mask.
+    assert (A.pts_to_mask raw_prefix_array #1.0R raw_prefix_mask (fun _ -> True));
+  assert (pure (forall (i:nat). i < Seq.length raw_prefix_mask ==>
+    Some? (Seq.index raw_prefix_mask i)));
+  A.from_mask raw_prefix_array;
+  with raw_prefix.
+    assert (pts_to raw_prefix_array raw_prefix);
+  assert (pure (B.length raw_prefix == SZ.v buffered_len));
+  rewrite (C.connection_exactly d.driver_client 'st0)
+    as (CR.connection_exactly d.driver_client 'st0);
+  let buffer_resp =
+    C.process_network_bytes
+      d.driver_client
+      raw_prefix_array
+      buffered_len
+      network_out
+      network_out_len
+      app_out
+      app_out_len;
+  with st1 network_out_bytes app_out_bytes.
+    assert (CR.connection_exactly d.driver_client st1 **
+            pts_to raw_prefix_array raw_prefix **
+            pts_to network_out network_out_bytes **
+            pts_to app_out app_out_bytes);
+  rewrite (CR.connection_exactly d.driver_client st1)
+    as (C.connection_exactly d.driver_client st1);
+  assert (pure (CT.network_bytes_end_to_end_correct
+    'st0
+    st1
+    buffer_resp
+    raw_prefix
+    (Ghost.reveal 'old_network_out)
+    network_out_bytes
+    (Ghost.reveal 'old_app_out)
+    app_out_bytes));
+  A.to_mask raw_prefix_array;
+  with raw_prefix_mask_after.
+    assert (A.pts_to_mask raw_prefix_array #1.0R raw_prefix_mask_after (fun _ -> True));
+  assert (pure (forall (i:nat). i < Seq.length raw_prefix_mask_after ==>
+    Some? (Seq.index raw_prefix_mask_after i)));
+  rewrite
+    (A.pts_to_mask raw_prefix_array #1.0R raw_prefix_mask_after (fun _ -> True))
+    as
+    (A.pts_to_mask (A.gsub raw 0 (SZ.v buffered_len)) #1.0R raw_prefix_mask_after (fun _ -> True));
+  A.return_sub
+    raw
+    #1.0R
+    #raw_mask
+    #raw_prefix_mask_after
+    #(fun k -> True /\ ~(0 <= k /\ k < SZ.v buffered_len))
+    #(fun _ -> True)
+    #0
+    #(SZ.v buffered_len);
+  with raw_joined_mask.
+    assert (A.pts_to_mask raw #1.0R raw_joined_mask
+      (fun k ->
+        (True /\ ~(0 <= k /\ k < SZ.v buffered_len)) \/
+        (0 <= k /\ k < SZ.v buffered_len /\ True)));
+  assert (pure (forall (i:nat). i < Seq.length raw_joined_mask ==>
+    ((True /\ ~(0 <= i /\ i < SZ.v buffered_len)) \/
+     (0 <= i /\ i < SZ.v buffered_len /\ True))));
+  assert (pure (forall (i:nat). i < Seq.length raw_joined_mask ==>
+    Some? (Seq.index raw_joined_mask i)));
+  A.from_mask raw;
+  with raw_bytes.
+    assert (pts_to raw raw_bytes);
+  assert (pure (B.length raw_bytes == SZ.v raw_capacity));
+  let ok = buffer_resp.CT.response.CT.status = CT.StepOk;
+  if ok {
+    assert (pure (buffer_resp.CT.response.CT.status == CT.StepOk));
+    assert (pure (CT.response_wf buffer_resp.CT.response network_out_bytes app_out_bytes));
+    assert (pure (SZ.v buffer_resp.CT.response.CT.network_out_len <= B.length network_out_bytes));
+    let written = IO.write d.driver_channel network_out buffer_resp.CT.response.CT.network_out_len;
+    assert (pure (SZ.v written <= SZ.v buffer_resp.CT.response.CT.network_out_len));
+    assert (pure (buffer_resp.CT.response.CT.status == CT.StepOk ==>
+      SZ.v written <= SZ.v buffer_resp.CT.response.CT.network_out_len));
+    assert (pure (buffer_resp.CT.response.CT.status == CT.StepOk \/ written == 0sz));
+    fold (driver_exactly d st1);
+    assert (pure (B.length raw_prefix == SZ.v buffered_len));
+    assert (pure (CT.network_bytes_end_to_end_correct
+      'st0
+      st1
+      buffer_resp
+      raw_prefix
+      (Ghost.reveal 'old_network_out)
+      network_out_bytes
+      (Ghost.reveal 'old_app_out)
+      app_out_bytes));
+    assert (pure (B.length raw_bytes == SZ.v raw_capacity /\
+      B.length raw_prefix == SZ.v buffered_len /\
+      buffered_len == buffered_len /\
+      SZ.v buffered_len <= SZ.v raw_capacity /\
+      B.length network_out_bytes == SZ.v network_out_len /\
+      B.length app_out_bytes == SZ.v app_out_len /\
+      CT.network_bytes_end_to_end_correct
+        'st0
+        st1
+        buffer_resp
+        raw_prefix
+        (Ghost.reveal 'old_network_out)
+        network_out_bytes
+        (Ghost.reveal 'old_app_out)
+        app_out_bytes /\
+      (buffer_resp.CT.response.CT.status == CT.StepOk ==>
+       SZ.v written <= SZ.v buffer_resp.CT.response.CT.network_out_len) /\
+      (buffer_resp.CT.response.CT.status == CT.StepOk \/ written == 0sz)));
+    {
+      network_read_len = buffered_len;
+      network_read_buffer_resp = buffer_resp;
+      network_read_written = written;
+      network_read_prefix = Ghost.hide raw_prefix;
+    }
+  } else {
+    assert (pure (buffer_resp.CT.response.CT.status == CT.StepOk ==>
+      SZ.v 0sz <= SZ.v buffer_resp.CT.response.CT.network_out_len));
+    assert (pure (buffer_resp.CT.response.CT.status == CT.StepOk \/ 0sz == 0sz));
+    fold (driver_exactly d st1);
+    assert (pure (B.length raw_prefix == SZ.v buffered_len));
+    assert (pure (CT.network_bytes_end_to_end_correct
+      'st0
+      st1
+      buffer_resp
+      raw_prefix
+      (Ghost.reveal 'old_network_out)
+      network_out_bytes
+      (Ghost.reveal 'old_app_out)
+      app_out_bytes));
+    assert (pure (B.length raw_bytes == SZ.v raw_capacity /\
+      B.length raw_prefix == SZ.v buffered_len /\
+      buffered_len == buffered_len /\
+      SZ.v buffered_len <= SZ.v raw_capacity /\
+      B.length network_out_bytes == SZ.v network_out_len /\
+      B.length app_out_bytes == SZ.v app_out_len /\
+      CT.network_bytes_end_to_end_correct
+        'st0
+        st1
+        buffer_resp
+        raw_prefix
+        (Ghost.reveal 'old_network_out)
+        network_out_bytes
+        (Ghost.reveal 'old_app_out)
+        app_out_bytes /\
+      (buffer_resp.CT.response.CT.status == CT.StepOk ==>
+       SZ.v 0sz <= SZ.v buffer_resp.CT.response.CT.network_out_len) /\
+      (buffer_resp.CT.response.CT.status == CT.StepOk \/ 0sz == 0sz)));
+    {
+      network_read_len = buffered_len;
+      network_read_buffer_resp = buffer_resp;
+      network_read_written = 0sz;
+      network_read_prefix = Ghost.hide raw_prefix;
+    }
+  }
+}
+
+fn compact_buffer_suffix
+  (raw:array U8.t)
+  (raw_capacity:SZ.t)
+  (buffered_len:SZ.t)
+  (consumed_len:SZ.t)
+  requires pts_to raw 'raw_bytes **
+           pure (B.length 'raw_bytes == SZ.v raw_capacity /\
+                 SZ.v consumed_len <= SZ.v buffered_len /\
+                 SZ.v buffered_len <= SZ.v raw_capacity)
+  returns new_len:SZ.t
+  ensures exists* raw_after.
+           pts_to raw raw_after **
+           pure (B.length raw_after == SZ.v raw_capacity /\
+                 SZ.v new_len <= SZ.v buffered_len)
+{
+  let new_len = SZ.sub buffered_len consumed_len;
+  assert (pure (SZ.v new_len == SZ.v buffered_len - SZ.v consumed_len));
+  assert (pure (SZ.v new_len <= SZ.v buffered_len));
+  let no_shift = consumed_len = 0sz;
+  if no_shift {
+    assert (pure (new_len == buffered_len));
+    new_len
+  } else {
+    let mut i = 0sz;
+    while ((R.read i) `SZ.lt` new_len)
+      invariant live i
+      invariant exists* raw_loop.
+        pts_to raw raw_loop **
+        pure (B.length raw_loop == SZ.v raw_capacity /\
+              SZ.v (R.read i) <= SZ.v new_len /\
+              SZ.v new_len == SZ.v buffered_len - SZ.v consumed_len /\
+              SZ.v new_len <= SZ.v buffered_len /\
+              SZ.v consumed_len <= SZ.v buffered_len /\
+              SZ.v buffered_len <= SZ.v raw_capacity)
+    {
+      let vi = R.read i;
+      assert (pure (SZ.v vi < SZ.v new_len));
+      assert (pure (SZ.v vi + SZ.v consumed_len < SZ.v buffered_len));
+      assert (pure (SZ.v vi + SZ.v consumed_len < SZ.v raw_capacity));
+      SZ.fits_lte (SZ.v vi + SZ.v consumed_len) (SZ.v raw_capacity);
+      let src_idx = vi `SZ.add` consumed_len;
+      assert (pure (SZ.v src_idx < SZ.v raw_capacity));
+      with raw_before_read.
+        assert (pts_to raw raw_before_read);
+      assert (pure (B.length raw_before_read == SZ.v raw_capacity));
+      let b = raw.(src_idx);
+      assert (pure (SZ.v vi < SZ.v raw_capacity));
+      raw.(vi) <- b;
+      with raw_after_write.
+        assert (pts_to raw raw_after_write);
+      assert (pure (B.length raw_after_write == SZ.v raw_capacity));
+      assert (pure (SZ.v vi + 1 <= SZ.v new_len));
+      SZ.fits_lte (SZ.v vi + 1) (SZ.v new_len);
+      let next_i = vi `SZ.add` 1sz;
+      R.write i next_i;
+    };
+    with raw_done.
+      assert (pts_to raw raw_done);
+    assert (pure (B.length raw_done == SZ.v raw_capacity));
+    new_len
+  }
+}
+
+fn driver_process_buffered_network_bytes_compact_once
+  (d:driver)
+  (raw:array U8.t)
+  (raw_capacity:SZ.t)
+  (buffered_len:SZ.t)
+  (network_out:array U8.t)
+  (network_out_len:SZ.t)
+  (app_out:array U8.t)
+  (app_out_len:SZ.t)
+  requires driver_exactly d 'st0 **
+           pts_to raw 'old_raw **
+           pts_to network_out 'old_network_out **
+           pts_to app_out 'old_app_out **
+           pure (B.length 'old_raw == SZ.v raw_capacity /\
+                 SZ.v buffered_len <= SZ.v raw_capacity /\
+                 B.length 'old_network_out == SZ.v network_out_len /\
+                 B.length 'old_app_out == SZ.v app_out_len /\
+                 L.max_record_fragment_len <= SZ.v app_out_len)
+  returns result: buffered_network_result
+  ensures exists* st1 raw_bytes network_out_bytes app_out_bytes.
+           driver_exactly d st1 **
+           pts_to raw raw_bytes **
+           pts_to network_out network_out_bytes **
+           pts_to app_out app_out_bytes **
+           pure (B.length raw_bytes ==
+                   SZ.v raw_capacity /\
+                 B.length (Ghost.reveal result.buffered_network_read.network_read_prefix) ==
+                   SZ.v result.buffered_network_read.network_read_len /\
+                 result.buffered_network_read.network_read_len == buffered_len /\
+                 SZ.v result.buffered_network_new_len <= SZ.v buffered_len /\
+                 B.length network_out_bytes == SZ.v network_out_len /\
+                 B.length app_out_bytes == SZ.v app_out_len /\
+                 CT.network_bytes_end_to_end_correct
+                  'st0
+                  st1
+                  result.buffered_network_read.network_read_buffer_resp
+                  (Ghost.reveal result.buffered_network_read.network_read_prefix)
+                  (Ghost.reveal 'old_network_out)
+                  network_out_bytes
+                  (Ghost.reveal 'old_app_out)
+                  app_out_bytes /\
+                 (result.buffered_network_read.network_read_buffer_resp.CT.response.CT.status ==
+                 CT.StepOk ==>
+                 SZ.v result.buffered_network_read.network_read_written <=
+                 SZ.v result.buffered_network_read.network_read_buffer_resp.CT.response.CT.network_out_len) /\
+                 (result.buffered_network_read.network_read_buffer_resp.CT.response.CT.status ==
+                 CT.StepOk \/
+                 result.buffered_network_read.network_read_written == 0sz))
+{
+  let read_result =
+    driver_process_buffered_network_bytes_once
+      d
+      raw
+      raw_capacity
+      buffered_len
+      network_out
+      network_out_len
+      app_out
+      app_out_len;
+  with st1 raw_bytes network_out_bytes app_out_bytes.
+    assert (driver_exactly d st1 **
+            pts_to raw raw_bytes **
+            pts_to network_out network_out_bytes **
+            pts_to app_out app_out_bytes);
+  assert (pure (B.length raw_bytes == SZ.v raw_capacity));
+  assert (pure (B.length (Ghost.reveal read_result.network_read_prefix) ==
+    SZ.v read_result.network_read_len));
+  assert (pure (read_result.network_read_len == buffered_len));
+  assert (pure (CT.network_bytes_end_to_end_correct
+    'st0
+    st1
+    read_result.network_read_buffer_resp
+    (Ghost.reveal read_result.network_read_prefix)
+    (Ghost.reveal 'old_network_out)
+    network_out_bytes
+    (Ghost.reveal 'old_app_out)
+    app_out_bytes));
+  assert (pure (SZ.v read_result.network_read_buffer_resp.CT.consumed_len <=
+    B.length (Ghost.reveal read_result.network_read_prefix)));
+  assert (pure (SZ.v read_result.network_read_buffer_resp.CT.consumed_len <=
+    SZ.v buffered_len));
+  let step_ok =
+    read_result.network_read_buffer_resp.CT.response.CT.status = CT.StepOk;
+  if step_ok {
+    let consumed_nonzero =
+      read_result.network_read_buffer_resp.CT.consumed_len = 0sz;
+    if consumed_nonzero {
+      assert (pure (SZ.v buffered_len <= SZ.v buffered_len));
+      {
+        buffered_network_read = read_result;
+        buffered_network_new_len = buffered_len;
+      }
+    } else {
+      let new_len =
+        compact_buffer_suffix
+          raw
+          raw_capacity
+          buffered_len
+          read_result.network_read_buffer_resp.CT.consumed_len;
+      with compacted_raw.
+        assert (pts_to raw compacted_raw);
+      assert (pure (B.length compacted_raw == SZ.v raw_capacity));
+      assert (pure (SZ.v new_len <= SZ.v buffered_len));
+      {
+        buffered_network_read = read_result;
+        buffered_network_new_len = new_len;
+      }
+    }
+  } else {
+    assert (pure (SZ.v buffered_len <= SZ.v buffered_len));
+    {
+      buffered_network_read = read_result;
+      buffered_network_new_len = buffered_len;
+    }
+  }
+}
+
+fn driver_read_buffered_network_bytes_compact_once
+  (d:driver)
+  (raw:array U8.t)
+  (raw_capacity:SZ.t)
+  (buffered_len:SZ.t)
+  (network_out:array U8.t)
+  (network_out_len:SZ.t)
+  (app_out:array U8.t)
+  (app_out_len:SZ.t)
+  requires driver_exactly d 'st0 **
+           pts_to raw 'old_raw **
+           pts_to network_out 'old_network_out **
+           pts_to app_out 'old_app_out **
+           pure (B.length 'old_raw == SZ.v raw_capacity /\
+                 SZ.v buffered_len <= SZ.v raw_capacity /\
+                 B.length 'old_network_out == SZ.v network_out_len /\
+                 B.length 'old_app_out == SZ.v app_out_len /\
+                 L.max_record_fragment_len <= SZ.v app_out_len)
+  returns result: buffered_network_io_result
+  ensures exists* st1 raw_bytes network_out_bytes app_out_bytes.
+           driver_exactly d st1 **
+           pts_to raw raw_bytes **
+           pts_to network_out network_out_bytes **
+           pts_to app_out app_out_bytes **
+           pure (B.length raw_bytes == SZ.v raw_capacity /\
+                 SZ.v result.buffered_network_io_read_len <=
+                  SZ.v raw_capacity - SZ.v buffered_len /\
+                 B.length
+                  (Ghost.reveal
+                    result.buffered_network_io_buffered.buffered_network_read.network_read_prefix) ==
+                  SZ.v
+                    result.buffered_network_io_buffered.buffered_network_read.network_read_len /\
+                 SZ.v
+                  result.buffered_network_io_buffered.buffered_network_read.network_read_len <=
+                  SZ.v raw_capacity /\
+                 SZ.v result.buffered_network_io_buffered.buffered_network_new_len <=
+                  SZ.v result.buffered_network_io_buffered.buffered_network_read.network_read_len /\
+                 B.length network_out_bytes == SZ.v network_out_len /\
+                 B.length app_out_bytes == SZ.v app_out_len /\
+                 CT.network_bytes_end_to_end_correct
+                  'st0
+                  st1
+                  result.buffered_network_io_buffered.buffered_network_read.network_read_buffer_resp
+                  (Ghost.reveal
+                    result.buffered_network_io_buffered.buffered_network_read.network_read_prefix)
+                  (Ghost.reveal 'old_network_out)
+                  network_out_bytes
+                  (Ghost.reveal 'old_app_out)
+                  app_out_bytes)
+{
+  unfold (driver_exactly d 'st0);
+  A.pts_to_len raw;
+  assert (pure (A.length raw == SZ.v raw_capacity));
+  A.to_mask raw;
+  with raw_mask.
+    assert (A.pts_to_mask raw #1.0R raw_mask (fun _ -> True));
+  assert (pure (Seq.length raw_mask == SZ.v raw_capacity));
+  assert (pure (forall (i:nat). i < Seq.length raw_mask ==>
+    Seq.index raw_mask i == Some (Seq.index (Ghost.reveal 'old_raw) i)));
+  let available = SZ.sub raw_capacity buffered_len;
+  assert (pure (SZ.v available == SZ.v raw_capacity - SZ.v buffered_len));
+  let raw_tail_array =
+    A.sub raw #1.0R #(fun _ -> True) buffered_len (SZ.v raw_capacity);
+  with raw_tail_mask.
+    assert (A.pts_to_mask raw_tail_array #1.0R raw_tail_mask (fun _ -> True));
+  assert (pure (Seq.length raw_tail_mask == SZ.v available));
+  assert (pure (forall (i:nat). i < Seq.length raw_tail_mask ==>
+    Some? (Seq.index raw_tail_mask i)));
+  A.from_mask raw_tail_array;
+  with raw_tail.
+    assert (pts_to raw_tail_array raw_tail);
+  assert (pure (B.length raw_tail == SZ.v available));
+  let read_len = IO.read d.driver_channel raw_tail_array available;
+  with raw_tail_after.
+    assert (IO.is_channel d.driver_channel **
+            pts_to raw_tail_array raw_tail_after);
+  assert (pure (B.length raw_tail_after == SZ.v available));
+  assert (pure (SZ.v read_len <= SZ.v available));
+  A.to_mask raw_tail_array;
+  with raw_tail_mask_after.
+    assert (A.pts_to_mask raw_tail_array #1.0R raw_tail_mask_after (fun _ -> True));
+  assert (pure (forall (i:nat). i < Seq.length raw_tail_mask_after ==>
+    Some? (Seq.index raw_tail_mask_after i)));
+  rewrite
+    (A.pts_to_mask raw_tail_array #1.0R raw_tail_mask_after (fun _ -> True))
+    as
+    (A.pts_to_mask
+      (A.gsub raw (SZ.v buffered_len) (SZ.v raw_capacity))
+      #1.0R
+      raw_tail_mask_after
+      (fun _ -> True));
+  A.return_sub
+    raw
+    #1.0R
+    #raw_mask
+    #raw_tail_mask_after
+    #(fun k -> True /\ ~(SZ.v buffered_len <= k /\ k < SZ.v raw_capacity))
+    #(fun _ -> True)
+    #(SZ.v buffered_len)
+    #(SZ.v raw_capacity);
+  with raw_joined_mask.
+    assert (A.pts_to_mask raw #1.0R raw_joined_mask
+      (fun k ->
+        (True /\ ~(SZ.v buffered_len <= k /\ k < SZ.v raw_capacity)) \/
+        (SZ.v buffered_len <= k /\ k < SZ.v raw_capacity /\ True)));
+  assert (pure (forall (i:nat). i < Seq.length raw_joined_mask ==>
+    ((True /\ ~(SZ.v buffered_len <= i /\ i < SZ.v raw_capacity)) \/
+     (SZ.v buffered_len <= i /\ i < SZ.v raw_capacity /\ True))));
+  assert (pure (forall (i:nat). i < Seq.length raw_joined_mask ==>
+    Some? (Seq.index raw_joined_mask i)));
+  A.from_mask raw;
+  with raw_after_read.
+    assert (pts_to raw raw_after_read);
+  assert (pure (B.length raw_after_read == SZ.v raw_capacity));
+  assert (pure (SZ.v buffered_len + SZ.v read_len <= SZ.v raw_capacity));
+  SZ.fits_lte (SZ.v buffered_len + SZ.v read_len) (SZ.v raw_capacity);
+  let total_len = buffered_len `SZ.add` read_len;
+  assert (pure (SZ.v total_len == SZ.v buffered_len + SZ.v read_len));
+  assert (pure (SZ.v total_len <= SZ.v raw_capacity));
+  rewrite (C.connection_exactly d.driver_client 'st0)
+    as (C.connection_exactly d.driver_client 'st0);
+  fold (driver_exactly d 'st0);
+  let buffered_result =
+    driver_process_buffered_network_bytes_compact_once
+      d
+      raw
+      raw_capacity
+      total_len
+      network_out
+      network_out_len
+      app_out
+      app_out_len;
+  with st1 raw_bytes network_out_bytes app_out_bytes.
+    assert (driver_exactly d st1 **
+            pts_to raw raw_bytes **
+            pts_to network_out network_out_bytes **
+            pts_to app_out app_out_bytes);
+  assert (pure (B.length raw_bytes == SZ.v raw_capacity));
+  assert (pure (SZ.v read_len <= SZ.v raw_capacity - SZ.v buffered_len));
+  assert (pure (B.length (Ghost.reveal
+    buffered_result.buffered_network_read.network_read_prefix) ==
+    SZ.v buffered_result.buffered_network_read.network_read_len));
+  assert (pure (buffered_result.buffered_network_read.network_read_len == total_len));
+  assert (pure (SZ.v buffered_result.buffered_network_read.network_read_len <=
+    SZ.v raw_capacity));
+  assert (pure (SZ.v buffered_result.buffered_network_new_len <=
+    SZ.v buffered_result.buffered_network_read.network_read_len));
+  assert (pure (B.length network_out_bytes == SZ.v network_out_len));
+  assert (pure (B.length app_out_bytes == SZ.v app_out_len));
+  assert (pure (CT.network_bytes_end_to_end_correct
+    'st0
+    st1
+    buffered_result.buffered_network_read.network_read_buffer_resp
+    (Ghost.reveal buffered_result.buffered_network_read.network_read_prefix)
+    (Ghost.reveal 'old_network_out)
+    network_out_bytes
+    (Ghost.reveal 'old_app_out)
+    app_out_bytes));
+  {
+    buffered_network_io_read_len = read_len;
+    buffered_network_io_buffered = buffered_result;
+  }
+}
+
+fn rec driver_process_buffered_network_records
+  (d:driver)
+  (raw:array U8.t)
+  (raw_capacity:SZ.t)
+  (buffered_len:SZ.t)
+  (network_out:array U8.t)
+  (network_out_len:SZ.t)
+  (app_out:array U8.t)
+  (app_out_len:SZ.t)
+  (fuel:SZ.t)
+  requires driver_exactly d 'st0 **
+           pts_to raw 'old_raw **
+           pts_to network_out 'old_network_out **
+           pts_to app_out 'old_app_out **
+           pure (B.length 'old_raw == SZ.v raw_capacity /\
+                 SZ.v buffered_len <= SZ.v raw_capacity /\
+                 B.length 'old_network_out == SZ.v network_out_len /\
+                 B.length 'old_app_out == SZ.v app_out_len /\
+                 L.max_record_fragment_len <= SZ.v app_out_len)
+  returns result: buffered_network_loop_result
+  ensures exists* st1 raw_bytes network_out_bytes app_out_bytes.
+           driver_exactly d st1 **
+           pts_to raw raw_bytes **
+           pts_to network_out network_out_bytes **
+           pts_to app_out app_out_bytes **
+           pure (B.length raw_bytes == SZ.v raw_capacity /\
+                 SZ.v result.buffered_network_loop_last.buffered_network_new_len <=
+                  SZ.v buffered_len /\
+                 B.length network_out_bytes == SZ.v network_out_len /\
+                 B.length app_out_bytes == SZ.v app_out_len)
+  decreases (SZ.v fuel)
+{
+  let no_op_resp = {
+    CT.network_out_len = 0sz;
+    CT.app_out_len = 0sz;
+    CT.status = CT.NeedMoreInput;
+  };
+  let no_op_buffer_resp = {
+    CT.response = no_op_resp;
+    CT.consumed_len = 0sz;
+  };
+  let no_op_read = {
+    network_read_len = 0sz;
+    network_read_buffer_resp = no_op_buffer_resp;
+    network_read_written = 0sz;
+    network_read_prefix = Ghost.hide B.empty;
+  };
+  let no_op = {
+    buffered_network_read = no_op_read;
+    buffered_network_new_len = buffered_len;
+  };
+  if (fuel = 0sz) {
+    {
+      buffered_network_loop_last = no_op;
+      buffered_network_loop_exhausted = true;
+    }
+  } else {
+    assert (pure (0 < SZ.v fuel));
+    let empty_buffer = buffered_len = 0sz;
+    if empty_buffer {
+      {
+        buffered_network_loop_last = no_op;
+        buffered_network_loop_exhausted = false;
+      }
+    } else {
+      let step =
+        driver_process_buffered_network_bytes_compact_once
+          d
+          raw
+          raw_capacity
+          buffered_len
+          network_out
+          network_out_len
+          app_out
+          app_out_len;
+      with st1 raw_bytes network_out_bytes app_out_bytes.
+        assert (driver_exactly d st1 **
+                pts_to raw raw_bytes **
+                pts_to network_out network_out_bytes **
+                pts_to app_out app_out_bytes);
+      assert (pure (B.length raw_bytes == SZ.v raw_capacity));
+      assert (pure (SZ.v step.buffered_network_new_len <= SZ.v buffered_len));
+      assert (pure (SZ.v step.buffered_network_new_len <= SZ.v raw_capacity));
+      let ok =
+        step.buffered_network_read.network_read_buffer_resp.CT.response.CT.status =
+        CT.StepOk;
+      let no_app =
+        step.buffered_network_read.network_read_buffer_resp.CT.response.CT.app_out_len =
+        0sz;
+      let consumed_zero =
+        step.buffered_network_read.network_read_buffer_resp.CT.consumed_len = 0sz;
+      let empty_after = step.buffered_network_new_len = 0sz;
+      let continue_loop =
+        ok && no_app && (consumed_zero = false) && (empty_after = false);
+      if continue_loop {
+        assert (pure (0 < SZ.v fuel));
+        let next_fuel = SZ.sub fuel 1sz;
+        assert (pure (SZ.v next_fuel < SZ.v fuel));
+        driver_process_buffered_network_records
+          d
+          raw
+          raw_capacity
+          step.buffered_network_new_len
+          network_out
+          network_out_len
+          app_out
+          app_out_len
+          next_fuel
+      } else {
+        {
+          buffered_network_loop_last = step;
+          buffered_network_loop_exhausted = false;
+        }
+      }
+    }
+  }
 }
 
 fn process_ready_internal_local_action_once

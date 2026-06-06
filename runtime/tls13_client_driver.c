@@ -1,9 +1,8 @@
 #include "tls13_client_driver.h"
 
-#include "TLS13_Impl_Client.h"
+#include "TLS13_Impl_Client_Driver.h"
 #include "TLS13_Impl_Client_Types.h"
 #include "TLS13_Impl_ConnectionState_Repr.h"
-#include "tls13_io_stubs.h"
 #include "tls13_openssl_stubs.h"
 
 #include <errno.h>
@@ -24,8 +23,8 @@
 #define TLS13_DRIVER_CONTROL_FAILED 5u
 
 struct tls13_client_driver_s {
-  TLS13_Impl_ConnectionState_Repr_connection_state client;
-  int fd;
+  driver verified_driver;
+  bool channel_open;
   char *server_name;
   uint8_t *trust_anchor_pem;
   size_t trust_anchor_pem_len;
@@ -70,38 +69,11 @@ static uint8_t *duplicate_bytes(const uint8_t *src, size_t len) {
   return dst;
 }
 
-static int write_all(tls13_client_driver *driver, const uint8_t *buf, size_t len) {
-  size_t off = 0;
-  while (off < len) {
-    ssize_t n = tls13_io_write_fd(driver->fd, buf + off, len - off);
-    if (n <= 0) {
-      return driver_fail(driver, "tcp write failed: %s", strerror(errno));
-    }
-    off += (size_t)n;
-  }
-  return 0;
-}
-
-static int read_more(tls13_client_driver *driver) {
-  if (driver->rx_len == sizeof driver->rx) {
-    return driver_fail(driver, "receive buffer full");
-  }
-  ssize_t n =
-      tls13_io_read_fd(driver->fd, driver->rx + driver->rx_len, sizeof driver->rx - driver->rx_len);
-  if (n < 0) {
-    return driver_fail(driver, "tcp read failed: %s", strerror(errno));
-  }
-  if (n == 0) {
-    return driver_fail(driver, "peer closed the TCP connection");
-  }
-  driver->rx_len += (size_t)n;
-  return 0;
-}
-
-static int flush_network_response(
+static int check_local_write_result(
     tls13_client_driver *driver,
-    TLS13_Impl_Client_Types_client_response response,
+    local_write_result result,
     const char *label) {
+  TLS13_Impl_Client_Types_client_response response = result.local_write_resp;
   if (response.status != TLS13_Impl_Client_Types_StepOk) {
     return driver_fail(driver, "%s returned status %u", label, (unsigned)response.status);
   }
@@ -109,37 +81,36 @@ static int flush_network_response(
       response.app_out_len > sizeof driver->app_out) {
     return driver_fail(driver, "%s returned out-of-range lengths", label);
   }
-  if (response.network_out_len != 0u) {
-    return write_all(driver, driver->network_out, response.network_out_len);
+  if (result.local_write_written != response.network_out_len) {
+    return driver_fail(
+        driver,
+        "%s wrote %zu of %zu network bytes",
+        label,
+        result.local_write_written,
+        response.network_out_len);
   }
   return 0;
 }
 
-static int process_one_network_record(
+static int handle_buffered_network_result(
     tls13_client_driver *driver,
+    buffered_network_result result,
+    size_t processed_len,
     uint8_t *app_out,
     size_t app_out_cap,
     size_t *app_out_len) {
   if (app_out_len != NULL) {
     *app_out_len = 0u;
   }
-  memset(driver->network_out, 0, sizeof driver->network_out);
-  memset(driver->app_out, 0, sizeof driver->app_out);
   TLS13_Impl_Client_Types_client_buffer_response response =
-      process_network_bytes(
-          driver->client,
-          driver->rx,
-          driver->rx_len,
-          driver->network_out,
-          sizeof driver->network_out,
-          driver->app_out,
-          sizeof driver->app_out);
+      result.buffered_network_read.network_read_buffer_resp;
   if (response.response.status == TLS13_Impl_Client_Types_NeedMoreInput) {
+    driver->rx_len = result.buffered_network_new_len;
     return 2;
   }
   if (response.response.status != TLS13_Impl_Client_Types_StepOk) {
     TLS13_Impl_ConnectionState_Repr_control_snapshot snapshot =
-        control_snapshot(driver->client);
+        driver_control_snapshot(driver->verified_driver);
     if (driver->rx_len >= 5u) {
       size_t record_len = ((size_t)driver->rx[3] << 8) | (size_t)driver->rx[4];
       return driver_fail(
@@ -158,22 +129,25 @@ static int process_one_network_record(
         driver,
         "network step returned status %u after %zu buffered bytes",
         (unsigned)response.response.status,
-        driver->rx_len);
+        processed_len);
   }
-  if (response.consumed_len == 0u || response.consumed_len > driver->rx_len) {
+  if (response.consumed_len == 0u || response.consumed_len > processed_len) {
     return driver_fail(
         driver,
         "network step consumed invalid prefix length %zu from %zu buffered bytes",
         response.consumed_len,
-        driver->rx_len);
+        processed_len);
   }
   if (response.response.network_out_len > sizeof driver->network_out ||
       response.response.app_out_len > sizeof driver->app_out) {
     return driver_fail(driver, "network step returned out-of-range lengths");
   }
-  if (response.response.network_out_len != 0u &&
-      write_all(driver, driver->network_out, response.response.network_out_len) != 0) {
-    return 1;
+  if (result.buffered_network_read.network_read_written != response.response.network_out_len) {
+    return driver_fail(
+        driver,
+        "network step wrote %zu of %zu network bytes",
+        result.buffered_network_read.network_read_written,
+        response.response.network_out_len);
   }
   if (response.response.app_out_len != 0u) {
     if (app_out == NULL || app_out_len == NULL) {
@@ -188,12 +162,82 @@ static int process_one_network_record(
     memcpy(app_out, driver->app_out, response.response.app_out_len);
     *app_out_len = response.response.app_out_len;
   }
-  memmove(
-      driver->rx,
-      driver->rx + response.consumed_len,
-      driver->rx_len - response.consumed_len);
-  driver->rx_len -= response.consumed_len;
+  driver->rx_len = result.buffered_network_new_len;
   return 0;
+}
+
+static int process_buffered_network_step(
+    tls13_client_driver *driver,
+    uint8_t *app_out,
+    size_t app_out_cap,
+    size_t *app_out_len) {
+  size_t processed_len = driver->rx_len;
+  memset(driver->network_out, 0, sizeof driver->network_out);
+  memset(driver->app_out, 0, sizeof driver->app_out);
+  buffered_network_result result =
+      driver_process_buffered_network_bytes_compact_once(
+          driver->verified_driver,
+          driver->rx,
+          sizeof driver->rx,
+          driver->rx_len,
+          driver->network_out,
+          sizeof driver->network_out,
+          driver->app_out,
+          sizeof driver->app_out);
+  return handle_buffered_network_result(driver, result, processed_len, app_out, app_out_cap, app_out_len);
+}
+
+static int read_buffered_network_step(
+    tls13_client_driver *driver,
+    uint8_t *app_out,
+    size_t app_out_cap,
+    size_t *app_out_len) {
+  if (!driver->channel_open) {
+    return driver_fail(driver, "TLS channel is closed");
+  }
+  if (driver->rx_len == sizeof driver->rx) {
+    return driver_fail(driver, "receive buffer full");
+  }
+  memset(driver->network_out, 0, sizeof driver->network_out);
+  memset(driver->app_out, 0, sizeof driver->app_out);
+  buffered_network_io_result result =
+      driver_read_buffered_network_bytes_compact_once(
+          driver->verified_driver,
+          driver->rx,
+          sizeof driver->rx,
+          driver->rx_len,
+          driver->network_out,
+          sizeof driver->network_out,
+          driver->app_out,
+          sizeof driver->app_out);
+  TLS13_Impl_Client_Types_client_buffer_response response =
+      result.buffered_network_io_buffered.buffered_network_read.network_read_buffer_resp;
+  if (response.response.status == TLS13_Impl_Client_Types_NeedMoreInput &&
+      result.buffered_network_io_read_len == 0u) {
+    driver->rx_len = result.buffered_network_io_buffered.buffered_network_new_len;
+    return driver_fail(driver, "tcp read failed or peer closed the connection");
+  }
+  return handle_buffered_network_result(
+      driver,
+      result.buffered_network_io_buffered,
+      result.buffered_network_io_buffered.buffered_network_read.network_read_len,
+      app_out,
+      app_out_cap,
+      app_out_len);
+}
+
+static int progress_buffered_network_step(
+    tls13_client_driver *driver,
+    uint8_t *app_out,
+    size_t app_out_cap,
+    size_t *app_out_len) {
+  if (driver->rx_len != 0u) {
+    int rc = process_buffered_network_step(driver, app_out, app_out_cap, app_out_len);
+    if (rc != 2) {
+      return rc;
+    }
+  }
+  return read_buffered_network_step(driver, app_out, app_out_cap, app_out_len);
 }
 
 static int validate_certificate_for_local_step(
@@ -201,7 +245,8 @@ static int validate_certificate_for_local_step(
     uint8_t *payload,
     size_t *payload_len) {
   uint8_t leaf_der[TLS13_DRIVER_SCRATCH_CAP] = {0};
-  size_t leaf_der_len = copy_certificate_leaf_der(driver->client, leaf_der, sizeof leaf_der);
+  size_t leaf_der_len =
+      driver_copy_certificate_leaf_der(driver->verified_driver, leaf_der, sizeof leaf_der);
   if (leaf_der_len == 0u || leaf_der_len > TLS13_DRIVER_PUBLIC_KEY_PAYLOAD_CAP) {
     return driver_fail(driver, "invalid copied leaf DER length %zu", leaf_der_len);
   }
@@ -226,13 +271,17 @@ static int verify_certificate_signature_for_local_step(tls13_client_driver *driv
     return driver_fail(driver, "certificate signature verification has no validated peer");
   }
   uint8_t input[130] = {0};
-  size_t input_len = copy_certificate_verify_input(driver->client, input, sizeof input);
+  size_t input_len =
+      driver_copy_certificate_verify_input(driver->verified_driver, input, sizeof input);
   if (input_len != sizeof input) {
     return driver_fail(driver, "CertificateVerify input length was %zu", input_len);
   }
   uint8_t signature[TLS13_DRIVER_PUBLIC_KEY_PAYLOAD_CAP] = {0};
   TLS13_Impl_ConnectionState_Repr_certificate_verify_signature_snapshot sig =
-      copy_certificate_verify_signature(driver->client, signature, sizeof signature);
+      driver_copy_certificate_verify_signature(
+          driver->verified_driver,
+          signature,
+          sizeof signature);
   if (sig.cv_signature_len == 0u || sig.cv_signature_len > sizeof signature) {
     return driver_fail(driver, "CertificateVerify signature length was %zu", sig.cv_signature_len);
   }
@@ -248,40 +297,39 @@ static int verify_certificate_signature_for_local_step(tls13_client_driver *driv
   return 0;
 }
 
-static int run_one_local_action(tls13_client_driver *driver, bool *progress) {
-  TLS13_Impl_Client_Types_next_local_action action =
-      next_local_action(
-          driver->client,
-          sizeof driver->network_out,
-          TLS13_DRIVER_PUBLIC_KEY_PAYLOAD_CAP,
-          36u);
-  if (!action.next_local_ready) {
-    *progress = false;
-    return 0;
-  }
-
+static int complete_external_local_action(
+    tls13_client_driver *driver,
+    TLS13_Impl_Client_Types_next_local_action action) {
   uint8_t empty_payload[1] = {0};
   uint8_t certificate_payload[TLS13_DRIVER_PUBLIC_KEY_PAYLOAD_CAP] = {0};
   uint8_t *payload = empty_payload;
   size_t payload_len = 0u;
 
-  if (action.next_local_payload == TLS13_Impl_Client_Types_LocalPayloadCertificatePublicKey) {
+  if (!action.next_local_ready) {
+    return 0;
+  }
+
+  if (action.next_local_kind == TLS13_Impl_Client_Types_LocalValidateCertificate) {
     if (validate_certificate_for_local_step(driver, certificate_payload, &payload_len) != 0) {
       return 1;
     }
     payload = certificate_payload;
-  }
-
-  if (action.next_local_kind == TLS13_Impl_Client_Types_LocalVerifyCertificateSignature &&
-      verify_certificate_signature_for_local_step(driver) != 0) {
-    return 1;
+  } else if (action.next_local_kind == TLS13_Impl_Client_Types_LocalVerifyCertificateSignature) {
+    if (verify_certificate_signature_for_local_step(driver) != 0) {
+      return 1;
+    }
+  } else {
+    return driver_fail(
+        driver,
+        "verified drain returned unexpected local action kind %u",
+        (unsigned)action.next_local_kind);
   }
 
   memset(driver->network_out, 0, sizeof driver->network_out);
   memset(driver->app_out, 0, sizeof driver->app_out);
-  TLS13_Impl_Client_Types_client_response response =
-      process_local_event(
-          driver->client,
+  local_write_result result =
+      driver_process_local_event(
+          driver->verified_driver,
           action.next_local_kind,
           payload,
           payload_len,
@@ -289,24 +337,43 @@ static int run_one_local_action(tls13_client_driver *driver, bool *progress) {
           sizeof driver->network_out,
           driver->app_out,
           sizeof driver->app_out);
-  if (flush_network_response(driver, response, "local action") != 0) {
-    return 1;
-  }
-  *progress = true;
-  return 0;
+  return check_local_write_result(driver, result, "external local action");
 }
 
 static int run_pending_local_actions(tls13_client_driver *driver) {
   for (size_t i = 0; i < 100u; ++i) {
-    bool progress = false;
-    if (run_one_local_action(driver, &progress) != 0) {
-      return 1;
+    uint8_t empty_payload[1] = {0};
+    memset(driver->network_out, 0, sizeof driver->network_out);
+    memset(driver->app_out, 0, sizeof driver->app_out);
+    driver_drain_result drain =
+        driver_drain_local_actions(
+            driver->verified_driver,
+            empty_payload,
+            driver->network_out,
+            sizeof driver->network_out,
+            TLS13_DRIVER_PUBLIC_KEY_PAYLOAD_CAP,
+            36u,
+            driver->app_out,
+            sizeof driver->app_out,
+            100u);
+    ready_local_action_result last = drain.driver_drain_last;
+    if (drain.driver_drain_exhausted) {
+      return driver_fail(driver, "too many pending internal local actions");
     }
-    if (!progress) {
+    if (last.ready_local_processed) {
+      return driver_fail(
+          driver,
+          "verified local drain stopped after status %u",
+          (unsigned)last.ready_local_resp.status);
+    }
+    if (!last.ready_local_action.next_local_ready) {
       return 0;
     }
+    if (complete_external_local_action(driver, last.ready_local_action) != 0) {
+      return 1;
+    }
   }
-  return driver_fail(driver, "too many pending local actions");
+  return driver_fail(driver, "too many pending external local actions");
 }
 
 int tls13_client_driver_connect(
@@ -326,7 +393,6 @@ int tls13_client_driver_connect(
   if (driver == NULL) {
     return 1;
   }
-  driver->fd = -1;
   driver->server_name = duplicate_cstr(server_name);
   driver->trust_anchor_pem = duplicate_bytes(trust_anchor_pem, trust_anchor_pem_len);
   driver->trust_anchor_pem_len = trust_anchor_pem_len;
@@ -340,19 +406,28 @@ int tls13_client_driver_connect(
     tls13_client_driver_free(driver);
     return 1;
   }
-  driver->client =
-      new_client(
+  size_t connect_host_len = strlen(connect_host);
+  FStar_Pervasives_Native_option__TLS13_Impl_Client_Driver_driver connected =
+      driver_connect(
+          (uint8_t *)connect_host,
+          connect_host_len,
+          port,
           (uint8_t *)driver->server_name,
           server_name_len,
           driver->trust_anchor_pem,
           driver->trust_anchor_pem_len,
           validation_time_seconds);
-  driver->fd = tls13_io_connect_tcp(connect_host, port);
-  if (driver->fd < 0) {
-    driver_fail(driver, "tcp connect to %s:%u failed: %s", connect_host, (unsigned)port, strerror(errno));
+  if (connected.tag != FStar_Pervasives_Native_Some) {
+    driver_fail(
+        driver,
+        "verified driver connect to %s:%u failed",
+        connect_host,
+        (unsigned)port);
     tls13_client_driver_free(driver);
     return 1;
   }
+  driver->verified_driver = connected.v;
+  driver->channel_open = true;
   *out = driver;
   return 0;
 }
@@ -361,9 +436,12 @@ int tls13_client_driver_handshake(tls13_client_driver *driver) {
   if (driver == NULL) {
     return 1;
   }
+  if (!driver->channel_open) {
+    return driver_fail(driver, "TLS channel is closed");
+  }
   for (size_t i = 0; i < 1000u; ++i) {
     TLS13_Impl_ConnectionState_Repr_control_snapshot snapshot =
-        control_snapshot(driver->client);
+        driver_control_snapshot(driver->verified_driver);
     if (snapshot.snapshot_control_tag == TLS13_DRIVER_CONTROL_APPLICATION_DATA) {
       return 0;
     }
@@ -371,22 +449,12 @@ int tls13_client_driver_handshake(tls13_client_driver *driver) {
       return driver_fail(driver, "connection failed during handshake");
     }
 
-    bool local_progress = false;
-    if (run_one_local_action(driver, &local_progress) != 0) {
+    if (run_pending_local_actions(driver) != 0) {
       return 1;
-    }
-    if (local_progress) {
-      continue;
     }
 
-    if (driver->rx_len == 0u && read_more(driver) != 0) {
-      return 1;
-    }
-    int rc = process_one_network_record(driver, NULL, 0u, NULL);
+    int rc = progress_buffered_network_step(driver, NULL, 0u, NULL);
     if (rc == 2) {
-      if (read_more(driver) != 0) {
-        return 1;
-      }
       continue;
     }
     if (rc != 0) {
@@ -403,19 +471,21 @@ int tls13_client_driver_send_application_data(
   if (driver == NULL || (payload == NULL && payload_len != 0u)) {
     return 1;
   }
+  if (!driver->channel_open) {
+    return driver_fail(driver, "TLS channel is closed");
+  }
   memset(driver->network_out, 0, sizeof driver->network_out);
   memset(driver->app_out, 0, sizeof driver->app_out);
-  TLS13_Impl_Client_Types_client_response response =
-      process_local_event(
-          driver->client,
-          TLS13_Impl_Client_Types_LocalSendApplicationData,
+  local_write_result result =
+      driver_send_application_data(
+          driver->verified_driver,
           (uint8_t *)payload,
           payload_len,
           driver->network_out,
           sizeof driver->network_out,
           driver->app_out,
           sizeof driver->app_out);
-  return flush_network_response(driver, response, "LocalSendApplicationData");
+  return check_local_write_result(driver, result, "LocalSendApplicationData");
 }
 
 int tls13_client_driver_receive_application_data(
@@ -426,16 +496,13 @@ int tls13_client_driver_receive_application_data(
   if (driver == NULL || out == NULL || out_len == NULL) {
     return 1;
   }
+  if (!driver->channel_open) {
+    return driver_fail(driver, "TLS channel is closed");
+  }
   *out_len = 0u;
   for (size_t i = 0; i < 1000u; ++i) {
-    if (driver->rx_len == 0u && read_more(driver) != 0) {
-      return 1;
-    }
-    int rc = process_one_network_record(driver, out, out_cap, out_len);
+    int rc = progress_buffered_network_step(driver, out, out_cap, out_len);
     if (rc == 2) {
-      if (read_more(driver) != 0) {
-        return 1;
-      }
       continue;
     }
     if (rc != 0) {
@@ -454,7 +521,7 @@ int tls13_client_driver_receive_application_data(
 static int await_peer_close_notify(tls13_client_driver *driver) {
   for (size_t i = 0; i < 1000u; ++i) {
     TLS13_Impl_ConnectionState_Repr_control_snapshot snapshot =
-        control_snapshot(driver->client);
+        driver_control_snapshot(driver->verified_driver);
     if (snapshot.snapshot_control_tag == TLS13_DRIVER_CONTROL_CLOSED) {
       return 0;
     }
@@ -465,14 +532,8 @@ static int await_peer_close_notify(tls13_client_driver *driver) {
           "unexpected control state while waiting for close_notify: %u",
           (unsigned)snapshot.snapshot_control_tag);
     }
-    if (driver->rx_len == 0u && read_more(driver) != 0) {
-      return 1;
-    }
-    int rc = process_one_network_record(driver, NULL, 0u, NULL);
+    int rc = progress_buffered_network_step(driver, NULL, 0u, NULL);
     if (rc == 2) {
-      if (read_more(driver) != 0) {
-        return 1;
-      }
       continue;
     }
     if (rc != 0) {
@@ -486,28 +547,36 @@ int tls13_client_driver_close(tls13_client_driver *driver, bool wait_for_peer) {
   if (driver == NULL) {
     return 1;
   }
+  if (!driver->channel_open) {
+    return 0;
+  }
   TLS13_Impl_ConnectionState_Repr_control_snapshot snapshot =
-      control_snapshot(driver->client);
+      driver_control_snapshot(driver->verified_driver);
   if (snapshot.snapshot_control_tag == TLS13_DRIVER_CONTROL_APPLICATION_DATA) {
     uint8_t empty_payload[1] = {0};
     memset(driver->network_out, 0, sizeof driver->network_out);
     memset(driver->app_out, 0, sizeof driver->app_out);
-    TLS13_Impl_Client_Types_client_response response =
-        process_local_event(
-            driver->client,
-            TLS13_Impl_Client_Types_LocalSendCloseNotify,
+    local_write_result result =
+        driver_send_close_notify(
+            driver->verified_driver,
             empty_payload,
-            0u,
             driver->network_out,
             sizeof driver->network_out,
             driver->app_out,
             sizeof driver->app_out);
-    if (flush_network_response(driver, response, "LocalSendCloseNotify") != 0) {
+    if (check_local_write_result(driver, result, "LocalSendCloseNotify") != 0) {
       return 1;
     }
   }
   if (wait_for_peer) {
-    return await_peer_close_notify(driver);
+    int rc = await_peer_close_notify(driver);
+    if (rc != 0) {
+      return rc;
+    }
+  }
+  if (driver->channel_open) {
+    driver_close(driver->verified_driver);
+    driver->channel_open = false;
   }
   return 0;
 }
@@ -523,8 +592,9 @@ void tls13_client_driver_free(tls13_client_driver *driver) {
   if (driver == NULL) {
     return;
   }
-  if (driver->fd >= 0) {
-    (void)tls13_io_close_fd(driver->fd);
+  if (driver->channel_open) {
+    driver_close(driver->verified_driver);
+    driver->channel_open = false;
   }
   tls13_openssl_peer_identity_free(driver->peer);
   free(driver->trust_anchor_pem);

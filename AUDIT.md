@@ -95,6 +95,10 @@ The facade owns a `driver` record containing an extracted client and
 - one ready internal local action;
 - bounded local-action drain;
 - exact-buffer network receive and application-receive aliases;
+- buffered-prefix network processing and suffix compaction for full-capacity
+  retained receive buffers;
+- retained-buffer read-append into the free suffix followed by buffered-prefix
+  processing and suffix compaction;
 - read-prefix network receive via `TLS13.IO.read`;
 - application-data send;
 - close_notify send;
@@ -108,6 +112,21 @@ call `process_network_bytes` on that exact prefix, and restore the full buffer.
 The processed prefix is carried as an erased proof field, so it does not change
 the generated C layout.
 
+The same split/restore pattern is also exposed for retained receive buffers by
+`driver_process_buffered_network_bytes_once` and
+`driver_process_buffered_network_bytes_compact_once`: the C runtime owns a
+capacity-sized buffer and a buffered-byte count, while Pulse splits only the
+buffered prefix, routes the protocol step and any response write through the
+verified driver facade, and compacts the unconsumed suffix after successful
+consumption.
+
+`driver_read_buffered_network_bytes_compact_once` additionally splits the free
+suffix of the retained buffer, calls `TLS13.IO.read` on that suffix, rejoins the
+full buffer, and then runs the same verified buffered-prefix processing and
+compaction path. The concrete runtime now uses this entry point when it needs
+more network input; the C code no longer performs a direct socket read into the
+retained receive buffer.
+
 The extracted driver facade is tested by `make test-extracted-client-driver-slice`.
 
 ## Concrete C runtime
@@ -117,20 +136,24 @@ The reusable concrete runtime API is:
 - `runtime/tls13_client_driver.h`
 - `runtime/tls13_client_driver.c`
 
-This C driver currently performs the full interop orchestration:
+This C driver currently performs bounded top-level interop orchestration around
+the verified driver facade:
 
-- TCP connect;
-- handshake loop around `next_local_action`, `process_local_event`, and
-  `process_network_bytes`;
-- OpenSSL certificate validation and CertificateVerify callbacks;
-- application send/receive;
-- close_notify send and optional peer close_notify wait.
+- TCP connect through `driver_connect`;
+- handshake/app/close polling around `driver_drain_local_actions`,
+  retained-buffer read/process helpers, `driver_send_application_data`,
+  `driver_send_close_notify`, and `driver_close`;
+- OpenSSL certificate validation and CertificateVerify callbacks, with copyout
+  and local-event completion through verified driver wrappers;
+- the bounded top-level decision to read more input or process the retained
+  buffer again.
 
 This runtime is functional and covered by the OpenSSL echo interop test, but it
-is still trusted C orchestration. The verified Pulse facade now covers the core
-single-step shapes, including the receive-prefix bridge. The remaining migration
-work is to move the full handshake/application/close loops and heap-owned driver
-buffers into Pulse, leaving only TCP and external auth/crypto callbacks in C.
+still contains trusted C polling/error handling and OpenSSL callback calls. The
+main interop path no longer calls raw `Impl.Client` step functions directly;
+protocol processing, retained-buffer suffix compaction, local-action drain, auth
+copyout and completion, retained-buffer read-append, response writes, and close
+all go through extracted Pulse driver entry points.
 
 ## Trusted computing base
 
@@ -141,9 +164,9 @@ The active TCB surface is intentionally explicit.
 | Parser/serializer C backend | `src/impl/TLS13.Impl.Parser.fsti`, `src/impl/TLS13.Impl.Serializer.fsti`, `c_stubs/tls13_connection_backend.h` | Interface-only parser/serializer contracts implemented by C macros/static helpers. Live hooks expose `TLS13.Wire.Spec` parse/serialize facts, but the C implementation is trusted. |
 | Crypto primitives and entropy | `src/impl/TLS13.Crypto.fsti`, `c_stubs/tls13_crypto_external.c`, `c_stubs/tls13_hacl_stubs.c`, HACL* sources | Trusted to match `TLS13.Crypto.Spec`, including AEAD, hashes, HKDF/HMAC, random bytes, and X25519. |
 | X509/signature validation | `src/impl/TLS13.X509.fsti`, `c_stubs/tls13_openssl_stubs.c` | Trusted certificate-chain validation and CertificateVerify signature checks. The verified local-step preconditions state exactly what these callbacks must establish. |
-| TCP bridge | `src/impl/TLS13.IO.fsti`, `c_stubs/tls13_io_stubs.c`, `c_stubs/tls13_io_karamel.*` | Trusted connect/read/write/close bridge. The KaRaMeL shim is deliberately small; read-prefix adaptation after `TLS13.IO.read` is verified in Pulse. |
+| TCP bridge | `src/impl/TLS13.IO.fsti`, `c_stubs/tls13_io_stubs.c`, `c_stubs/tls13_io_karamel.*` | Trusted connect/read/write/close bridge. The KaRaMeL shim is deliberately small; read-prefix handling, retained-buffer read-append, and retained-buffer prefix/compaction are verified in Pulse. |
 | Extracted runtime infrastructure | F*, Pulse, KaRaMeL, generated C, C compiler/runtime | Trusted extraction/runtime substrate and C platform behavior. |
-| Concrete C driver loop | `runtime/tls13_client_driver.c` | Trusted orchestration until its remaining loops are migrated into extracted Pulse. |
+| Concrete C driver loop | `runtime/tls13_client_driver.c` | Trusted bounded polling/error handling and OpenSSL callback invocation around verified driver entry points. |
 
 ## What is implemented in C
 
@@ -153,11 +176,12 @@ The C code is kept to glue and TCB responsibilities:
 - the tiny extracted-IO ABI shim in `tls13_io_karamel.c`;
 - parser/serializer backend shims in `tls13_connection_backend.h`;
 - crypto/X509 bridge code;
-- the current concrete OpenSSL interop driver loop.
+- the current concrete OpenSSL interop polling loop.
 
 Protocol state transitions, key-schedule logic, record-layer logic, client
-step theorems, and the new driver receive-prefix split are in F*/Pulse and
-extracted.
+step theorems, local-action drain, auth copyout/completion boundaries, response
+writes, and the new driver receive-prefix/buffered-prefix/read-append/compaction
+paths are in F*/Pulse and extracted.
 
 ## What is not claimed yet
 
@@ -168,7 +192,7 @@ The current theorem does not yet claim:
 - verified parser/serializer C implementations;
 - verified crypto/X509 implementations;
 - a fully verified top-level driver loop with owned receive buffers and auth
-  callbacks;
+  callbacks beyond the current verified facade boundaries;
 - transport honesty beyond the trusted `TLS13.IO` bridge contract;
 - general multi-record local application-data send correctness beyond the current
   supported one-record send theorem.
@@ -184,7 +208,8 @@ Start with these files:
    `src/spec/TLS13.ConnectionLog.fst` for the pure model and layered logs.
 4. `src/impl/TLS13.Impl.Client.Driver.fsti` / `.fst` for the verified Pulse
    driver facade and receive-prefix bridge.
-5. `runtime/tls13_client_driver.c` for the current C runtime loop.
+5. `runtime/tls13_client_driver.c` for the current C polling around the verified
+   runtime entry points.
 6. `src/impl/TLS13.Impl.Parser.fsti`, `src/impl/TLS13.Impl.Serializer.fsti`,
    and `c_stubs/tls13_connection_backend.h` for the parser/serializer TCB.
 7. `c_stubs/tls13_io_karamel.*`, `c_stubs/tls13_io_stubs.*`,
