@@ -170,7 +170,8 @@ BUNDLE_KRML_FILES = $(patsubst %,$(OUTPUT_DIR)/%.krml,$(subst .,_,$(BUNDLE_IMPL_
 DRIVER_BUNDLE_DIR = $(EXTRACT_DIR)/driver_bundle
 DRIVER_KRML_FILES = \
   $(BUNDLE_KRML_FILES) \
-  $(OUTPUT_DIR)/TLS13_Impl_Client_Driver.krml
+  $(OUTPUT_DIR)/TLS13_Impl_Client_Driver.krml \
+  $(OUTPUT_DIR)/TLS13_OpenSSL.krml
 
 # Extract FStar.Pervasives.Native for tuple support
 $(OUTPUT_DIR)/FStar_Pervasives_Native.krml: verify | $(OUTPUT_DIR)
@@ -184,6 +185,8 @@ $(OUTPUT_DIR)/FStar_Pervasives_Native.krml: verify | $(OUTPUT_DIR)
 $(OUTPUT_DIR)/%.krml: verify | $(OUTPUT_DIR)
 	@if [ -f "src/impl/$(subst _,.,$*).fst" ]; then \
 	  $(FSTAR) --codegen krml --extract_module $(subst _,.,$*) src/impl/$(subst _,.,$*).fst; \
+	elif [ -f "src/impl/$(subst _,.,$*).fsti" ]; then \
+	  $(FSTAR) --codegen krml --extract_module $(subst _,.,$*) src/impl/$(subst _,.,$*).fsti --krmloutput $@; \
 	elif [ -f "src/spec/$(subst _,.,$*).fst" ]; then \
 	  $(FSTAR) --codegen krml --extract_module $(subst _,.,$*) src/spec/$(subst _,.,$*).fst; \
 	else \
@@ -239,6 +242,7 @@ extract-driver-bundle: extract-driver-krml | $(DRIVER_BUNDLE_DIR)
 	  -add-include '"../../c_stubs/tls13_crypto_external.h"' \
 	  -add-include '"../../c_stubs/tls13_spec_types.h"' \
 	  -add-include '"../../c_stubs/tls13_io_karamel.h"' \
+	  -add-include '"../../c_stubs/tls13_openssl_karamel.h"' \
 	  -bundle 'FStar.*,Pulse.*,PulseCore.*,Prims' \
 	  -no-prefix TLS13.Impl.Client \
 	  -no-prefix TLS13.Impl.Client.Driver \
@@ -380,7 +384,9 @@ test-connection-bindings: test/test_connection_bindings
 test/test_extracted_client_driver_slice: \
   test/unit/test_extracted_client_driver_slice.c extract-driver-bundle \
   c_stubs/tls13_io_karamel.c c_stubs/tls13_io_karamel.h \
-  c_stubs/tls13_io_stubs.c c_stubs/tls13_io_stubs.h $(HACL_OBJECTS)
+  c_stubs/tls13_io_stubs.c c_stubs/tls13_io_stubs.h \
+  c_stubs/tls13_openssl_karamel.c c_stubs/tls13_openssl_karamel.h \
+  c_stubs/tls13_openssl_stubs.c c_stubs/tls13_openssl_stubs.h $(HACL_OBJECTS)
 	$(CC) $(CFLAGS_COMMON) \
 	  -I_extract/driver_bundle -I_extract/driver_bundle/internal \
 	  _extract/driver_bundle/*.c \
@@ -388,9 +394,11 @@ test/test_extracted_client_driver_slice: \
 	  c_stubs/tls13_pulse_shims.c \
 	  c_stubs/tls13_io_karamel.c \
 	  c_stubs/tls13_io_stubs.c \
+	  c_stubs/tls13_openssl_karamel.c \
+	  c_stubs/tls13_openssl_stubs.c \
 	  test/unit/test_extracted_client_driver_slice.c \
 	  $(HACL_WRAPPER_SOURCES) \
-	  $(LDFLAGS_COMMON) -o $@
+	  $(LDFLAGS_COMMON) -lssl -lcrypto -o $@
 
 test-extracted-client-driver-slice: test/test_extracted_client_driver_slice
 	./test/test_extracted_client_driver_slice
@@ -400,6 +408,7 @@ test/test_extracted_client_openssl_echo: \
   runtime/tls13_client_driver.c runtime/tls13_client_driver.h \
   c_stubs/tls13_io_karamel.c c_stubs/tls13_io_karamel.h \
   c_stubs/tls13_io_stubs.c c_stubs/tls13_io_stubs.h \
+  c_stubs/tls13_openssl_karamel.c c_stubs/tls13_openssl_karamel.h \
   c_stubs/tls13_openssl_stubs.c c_stubs/tls13_openssl_stubs.h $(HACL_OBJECTS)
 	$(CC) $(CFLAGS_COMMON) \
 	  -I_extract/driver_bundle -I_extract/driver_bundle/internal \
@@ -409,6 +418,7 @@ test/test_extracted_client_openssl_echo: \
 	  runtime/tls13_client_driver.c \
 	  c_stubs/tls13_io_karamel.c \
 	  c_stubs/tls13_io_stubs.c \
+	  c_stubs/tls13_openssl_karamel.c \
 	  c_stubs/tls13_openssl_stubs.c \
 	  test/unit/test_extracted_client_openssl_echo.c \
 	  $(HACL_WRAPPER_SOURCES) \

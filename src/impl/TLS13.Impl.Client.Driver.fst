@@ -15,6 +15,7 @@ module CT = TLS13.Impl.Client.Types
 module IO = TLS13.IO
 module L = TLS13.Impl.Messages
 module M = TLS13.Messages
+module O = TLS13.OpenSSL
 module R = Pulse.Lib.Reference
 module Seq = FStar.Seq
 module SZ = FStar.SizeT
@@ -156,6 +157,98 @@ fn driver_connect
       driver_channel = ch;
     }
   }
+  }
+}
+
+fn driver_open
+  (connect_host:array U8.t)
+  (connect_host_len:SZ.t)
+  (port:U16.t)
+  (server_name:array U8.t)
+  (server_name_len:SZ.t)
+  (trust_anchors:array U8.t)
+  (trust_anchors_len:SZ.t)
+  (validation_time_seconds:SZ.t)
+  requires pts_to connect_host 'connect_host_bytes **
+           pts_to server_name 'server_name_bytes **
+           pts_to trust_anchors 'trust_anchors_bytes **
+           pure (B.length 'connect_host_bytes == SZ.v connect_host_len /\
+                 B.length 'server_name_bytes == SZ.v server_name_len /\
+                 B.length 'trust_anchors_bytes == SZ.v trust_anchors_len /\
+                 SZ.v server_name_len <=
+                   TLS13.Impl.ConnectionState.Bounds.max_hostname_len /\
+                 SZ.v trust_anchors_len <=
+                   TLS13.Impl.ConnectionState.Bounds.max_trust_anchors_len)
+  returns result: option top_driver
+  ensures pts_to connect_host 'connect_host_bytes **
+          pts_to server_name 'server_name_bytes **
+          pts_to trust_anchors 'trust_anchors_bytes **
+          (match result with
+           | Some d ->
+             top_driver_exactly
+               d
+               (CR.configured_initial_state
+                 (Ghost.reveal 'server_name_bytes)
+                 (Ghost.reveal 'trust_anchors_bytes)
+                 validation_time_seconds) **
+             pure (CT.client_state_correct
+               (CR.configured_initial_state
+                 (Ghost.reveal 'server_name_bytes)
+                 (Ghost.reveal 'trust_anchors_bytes)
+                 validation_time_seconds) /\
+                   CT.client_end_to_end_invariant
+                     (CR.configured_initial_state
+                       (Ghost.reveal 'server_name_bytes)
+                       (Ghost.reveal 'trust_anchors_bytes)
+                       validation_time_seconds))
+           | None ->
+             emp)
+{
+  let auth_opt =
+    O.auth_context_new
+      server_name
+      server_name_len
+      trust_anchors
+      trust_anchors_len
+      validation_time_seconds;
+  match auth_opt {
+    None -> {
+      None
+    }
+    Some auth -> {
+      let connected =
+        driver_connect
+          connect_host
+          connect_host_len
+          port
+          server_name
+          server_name_len
+          trust_anchors
+          trust_anchors_len
+          validation_time_seconds;
+      match connected {
+        None -> {
+          O.auth_context_free auth;
+          None
+        }
+        Some d -> {
+          fold
+            (top_driver_exactly
+              {
+                top_driver_core = d;
+                top_driver_auth = auth;
+              }
+              (CR.configured_initial_state
+                (Ghost.reveal 'server_name_bytes)
+                (Ghost.reveal 'trust_anchors_bytes)
+                validation_time_seconds));
+          Some {
+            top_driver_core = d;
+            top_driver_auth = auth;
+          }
+        }
+      }
+    }
   }
 }
 
@@ -1641,7 +1734,8 @@ fn process_ready_internal_local_action_once
                   (result.ready_local_resp.CT.status == CT.StepOk \/
                    result.ready_local_written == 0sz)) /\
                  (result.ready_local_processed \/
-                  result.ready_local_written == 0sz))
+                  result.ready_local_written == 0sz) /\
+                 (result.ready_local_processed == false ==> st1 == 'st0))
 {
   rewrite (C.connection_exactly c 'st0) as (CR.connection_exactly c 'st0);
   let action =
@@ -1784,7 +1878,8 @@ fn driver_handshake_step
                   (result.ready_local_resp.CT.status == CT.StepOk \/
                    result.ready_local_written == 0sz)) /\
                  (result.ready_local_processed \/
-                  result.ready_local_written == 0sz))
+                  result.ready_local_written == 0sz) /\
+                 (result.ready_local_processed == false ==> st1 == 'st0))
 {
   unfold (driver_exactly d 'st0);
   let result =
@@ -1909,6 +2004,1090 @@ fn rec driver_drain_local_actions
   }
 }
 
+fn driver_progress_buffered_network_step
+  (d:driver)
+  (raw:array U8.t)
+  (raw_capacity:SZ.t)
+  (buffered_len:SZ.t)
+  (network_out:array U8.t)
+  (network_out_len:SZ.t)
+  (app_out:array U8.t)
+  (app_out_len:SZ.t)
+  requires driver_exactly d 'st0 **
+           pts_to raw 'old_raw **
+           pts_to network_out 'old_network_out **
+           pts_to app_out 'old_app_out **
+           pure (B.length 'old_raw == SZ.v raw_capacity /\
+                 SZ.v buffered_len <= SZ.v raw_capacity /\
+                 B.length 'old_network_out == SZ.v network_out_len /\
+                 B.length 'old_app_out == SZ.v app_out_len /\
+                 L.max_record_fragment_len <= SZ.v app_out_len)
+  returns result: buffered_network_io_result
+  ensures exists* st1 raw_bytes network_out_bytes app_out_bytes.
+           driver_exactly d st1 **
+           pts_to raw raw_bytes **
+           pts_to network_out network_out_bytes **
+           pts_to app_out app_out_bytes **
+           pure (B.length raw_bytes == SZ.v raw_capacity /\
+                 SZ.v result.buffered_network_io_buffered.buffered_network_new_len <=
+                  SZ.v raw_capacity /\
+                 B.length network_out_bytes == SZ.v network_out_len /\
+                 B.length app_out_bytes == SZ.v app_out_len)
+{
+  let empty_buffer = buffered_len = 0sz;
+  if empty_buffer {
+    driver_read_buffered_network_bytes_compact_once
+      d
+      raw
+      raw_capacity
+      buffered_len
+      network_out
+      network_out_len
+      app_out
+      app_out_len
+  } else {
+    let processed =
+      driver_process_buffered_network_bytes_compact_once
+        d
+        raw
+        raw_capacity
+        buffered_len
+        network_out
+        network_out_len
+        app_out
+        app_out_len;
+    with st1 raw_bytes network_out_bytes app_out_bytes.
+      assert (driver_exactly d st1 **
+              pts_to raw raw_bytes **
+              pts_to network_out network_out_bytes **
+              pts_to app_out app_out_bytes);
+    assert (pure (B.length raw_bytes == SZ.v raw_capacity));
+    assert (pure (SZ.v processed.buffered_network_new_len <= SZ.v buffered_len));
+    assert (pure (SZ.v processed.buffered_network_new_len <= SZ.v raw_capacity));
+    let need_more =
+      processed.buffered_network_read.network_read_buffer_resp.CT.response.CT.status =
+      CT.NeedMoreInput;
+    if need_more {
+      driver_read_buffered_network_bytes_compact_once
+        d
+        raw
+        raw_capacity
+        processed.buffered_network_new_len
+        network_out
+        network_out_len
+        app_out
+        app_out_len
+    } else {
+      {
+        buffered_network_io_read_len = 0sz;
+        buffered_network_io_buffered = processed;
+      }
+    }
+  }
+}
+
+fn top_driver_process_one_local_action
+  (d:top_driver)
+  (empty_payload:array U8.t)
+  (network_out:array U8.t)
+  (network_out_len:SZ.t)
+  (auth_leaf_der:array U8.t)
+  (auth_leaf_der_len:SZ.t)
+  (auth_payload:array U8.t)
+  (certificate_public_key_len:SZ.t)
+  (auth_cv_input:array U8.t)
+  (auth_cv_input_len:SZ.t)
+  (auth_signature:array U8.t)
+  (auth_signature_len:SZ.t)
+  (server_finished_payload_len:SZ.t)
+  (app_out:array U8.t)
+  (app_out_len:SZ.t)
+  requires top_driver_exactly d 'st0 **
+           pts_to empty_payload 'empty_payload_bytes **
+           pts_to network_out 'old_network_out **
+           pts_to auth_leaf_der 'old_auth_leaf_der **
+           pts_to auth_payload 'old_auth_payload **
+           pts_to auth_cv_input 'old_auth_cv_input **
+           pts_to auth_signature 'old_auth_signature **
+           pts_to app_out 'old_app_out **
+           pure (B.length 'empty_payload_bytes == 0 /\
+                 B.length 'old_network_out == SZ.v network_out_len /\
+                 B.length 'old_auth_leaf_der == SZ.v auth_leaf_der_len /\
+                 B.length 'old_auth_payload == SZ.v certificate_public_key_len /\
+                 B.length 'old_auth_cv_input == SZ.v auth_cv_input_len /\
+                 B.length 'old_auth_signature == SZ.v auth_signature_len /\
+                 Bounds.max_handshake_flight_len <= SZ.v auth_leaf_der_len /\
+                 SZ.v certificate_public_key_len <= Bounds.max_public_key_len /\
+                 Bounds.max_certificate_verify_input_len <= SZ.v auth_cv_input_len /\
+                 L.max_signature_len <= SZ.v auth_signature_len /\
+                 B.length 'old_app_out == SZ.v app_out_len)
+  returns result: ready_local_action_result
+  ensures exists* st1 network_out_bytes auth_leaf_der_bytes auth_payload_bytes auth_cv_input_bytes auth_signature_bytes app_out_bytes.
+           top_driver_exactly d st1 **
+           pts_to empty_payload 'empty_payload_bytes **
+           pts_to network_out network_out_bytes **
+           pts_to auth_leaf_der auth_leaf_der_bytes **
+           pts_to auth_payload auth_payload_bytes **
+           pts_to auth_cv_input auth_cv_input_bytes **
+           pts_to auth_signature auth_signature_bytes **
+           pts_to app_out app_out_bytes **
+           pure (B.length network_out_bytes == SZ.v network_out_len /\
+                 B.length auth_leaf_der_bytes == SZ.v auth_leaf_der_len /\
+                 B.length auth_payload_bytes == SZ.v certificate_public_key_len /\
+                 B.length auth_cv_input_bytes == SZ.v auth_cv_input_len /\
+                 B.length auth_signature_bytes == SZ.v auth_signature_len /\
+                 B.length app_out_bytes == SZ.v app_out_len /\
+                 (result.ready_local_processed \/
+                  result.ready_local_written == 0sz))
+{
+  unfold (top_driver_exactly d 'st0);
+  let step =
+    driver_handshake_step
+      d.top_driver_core
+      empty_payload
+      network_out
+      network_out_len
+      certificate_public_key_len
+      server_finished_payload_len
+      app_out
+      app_out_len;
+  with st1 network_out_bytes app_out_bytes.
+    assert (driver_exactly d.top_driver_core st1 **
+            pts_to empty_payload 'empty_payload_bytes **
+            pts_to network_out network_out_bytes **
+            pts_to app_out app_out_bytes);
+  assert (pure (B.length network_out_bytes == SZ.v network_out_len));
+  assert (pure (B.length app_out_bytes == SZ.v app_out_len));
+  if step.ready_local_processed {
+    fold (top_driver_exactly d st1);
+    step
+  } else {
+    assert (pure (step.ready_local_written == 0sz));
+    assert (pure (st1 == 'st0));
+    let ready = step.ready_local_action.CT.next_local_ready;
+    if ready {
+      let validate =
+        step.ready_local_action.CT.next_local_kind = CT.LocalValidateCertificate;
+      if validate {
+        assert (pure (C.next_local_action_sound
+          'st0
+          network_out_len
+          certificate_public_key_len
+          server_finished_payload_len
+          step.ready_local_action));
+        assert (pure (Some?
+          'st0.CS.cs_model.CS.model_handshake.CS.hs_buffers.CS.hb_certificate_leaf_der));
+        assert (pure (Some?
+          st1.CS.cs_model.CS.model_handshake.CS.hs_buffers.CS.hb_certificate_leaf_der));
+        let leaf_len =
+          driver_copy_certificate_leaf_der
+            d.top_driver_core
+            auth_leaf_der
+            auth_leaf_der_len;
+        with auth_leaf_der_bytes.
+          assert (driver_exactly d.top_driver_core st1 **
+                  pts_to auth_leaf_der auth_leaf_der_bytes);
+        let leaf_fits = SZ.lte leaf_len certificate_public_key_len;
+        if leaf_fits {
+          assert (pure (SZ.v leaf_len <= SZ.v certificate_public_key_len));
+          A.pts_to_len auth_payload;
+          assert (pure (A.length auth_payload == SZ.v certificate_public_key_len));
+          A.to_mask auth_payload;
+          with auth_payload_mask.
+            assert (A.pts_to_mask auth_payload #1.0R auth_payload_mask (fun _ -> True));
+          assert (pure (Seq.length auth_payload_mask == SZ.v certificate_public_key_len));
+          assert (pure (forall (i:nat). i < Seq.length auth_payload_mask ==>
+            Some? (Seq.index auth_payload_mask i)));
+          let auth_payload_prefix =
+            A.sub auth_payload #1.0R #(fun _ -> True) 0sz (SZ.v leaf_len);
+          with auth_payload_prefix_mask.
+            assert (A.pts_to_mask auth_payload_prefix #1.0R auth_payload_prefix_mask (fun _ -> True));
+          assert (pure (forall (i:nat). i < Seq.length auth_payload_prefix_mask ==>
+            Some? (Seq.index auth_payload_prefix_mask i)));
+          A.from_mask auth_payload_prefix;
+          with auth_payload_prefix_bytes_before.
+            assert (pts_to auth_payload_prefix auth_payload_prefix_bytes_before);
+          assert (pure (B.length auth_payload_prefix_bytes_before == SZ.v leaf_len));
+          let ok =
+            O.validate_certificate_for_local_event
+              d.top_driver_auth
+              #(st1)
+              auth_leaf_der
+              auth_leaf_der_len
+              leaf_len
+              auth_payload_prefix
+              leaf_len;
+          with auth_payload_prefix_bytes.
+            assert (O.is_auth_context d.top_driver_auth **
+                    pts_to auth_payload_prefix auth_payload_prefix_bytes);
+          assert (pure (B.length auth_payload_prefix_bytes == SZ.v leaf_len));
+          if ok {
+            assert (pure (CT.local_input_wf
+              st1
+              CT.LocalValidateCertificate
+              auth_payload_prefix_bytes));
+            let write_result =
+              driver_process_local_event
+                d.top_driver_core
+                CT.LocalValidateCertificate
+                auth_payload_prefix
+                leaf_len
+                network_out
+                network_out_len
+                app_out
+                app_out_len;
+            with st2 network_out_bytes2 app_out_bytes2.
+              assert (driver_exactly d.top_driver_core st2 **
+                      pts_to auth_payload_prefix auth_payload_prefix_bytes **
+                      pts_to network_out network_out_bytes2 **
+                      pts_to app_out app_out_bytes2);
+            A.to_mask auth_payload_prefix;
+            with auth_payload_prefix_mask_after.
+              assert (A.pts_to_mask auth_payload_prefix #1.0R auth_payload_prefix_mask_after (fun _ -> True));
+            assert (pure (forall (i:nat). i < Seq.length auth_payload_prefix_mask_after ==>
+              Some? (Seq.index auth_payload_prefix_mask_after i)));
+            rewrite
+              (A.pts_to_mask auth_payload_prefix #1.0R auth_payload_prefix_mask_after (fun _ -> True))
+              as
+              (A.pts_to_mask (A.gsub auth_payload 0 (SZ.v leaf_len)) #1.0R auth_payload_prefix_mask_after (fun _ -> True));
+            A.return_sub
+              auth_payload
+              #1.0R
+              #auth_payload_mask
+              #auth_payload_prefix_mask_after
+              #(fun k -> True /\ ~(0 <= k /\ k < SZ.v leaf_len))
+              #(fun _ -> True)
+              #0
+              #(SZ.v leaf_len);
+            with auth_payload_joined_mask.
+              assert (A.pts_to_mask auth_payload #1.0R auth_payload_joined_mask
+                (fun k ->
+                  (True /\ ~(0 <= k /\ k < SZ.v leaf_len)) \/
+                  (0 <= k /\ k < SZ.v leaf_len /\ True)));
+            assert (pure (forall (i:nat). i < Seq.length auth_payload_joined_mask ==>
+              Some? (Seq.index auth_payload_joined_mask i)));
+            A.from_mask auth_payload;
+            with auth_payload_bytes.
+              assert (pts_to auth_payload auth_payload_bytes);
+            assert (pure (B.length auth_payload_bytes == SZ.v certificate_public_key_len));
+            fold (top_driver_exactly d st2);
+            {
+              ready_local_action = step.ready_local_action;
+              ready_local_processed = true;
+              ready_local_resp = write_result.local_write_resp;
+              ready_local_written = write_result.local_write_written;
+            }
+          } else {
+            A.to_mask auth_payload_prefix;
+            with auth_payload_prefix_mask_after.
+              assert (A.pts_to_mask auth_payload_prefix #1.0R auth_payload_prefix_mask_after (fun _ -> True));
+            assert (pure (forall (i:nat). i < Seq.length auth_payload_prefix_mask_after ==>
+              Some? (Seq.index auth_payload_prefix_mask_after i)));
+            rewrite
+              (A.pts_to_mask auth_payload_prefix #1.0R auth_payload_prefix_mask_after (fun _ -> True))
+              as
+              (A.pts_to_mask (A.gsub auth_payload 0 (SZ.v leaf_len)) #1.0R auth_payload_prefix_mask_after (fun _ -> True));
+            A.return_sub
+              auth_payload
+              #1.0R
+              #auth_payload_mask
+              #auth_payload_prefix_mask_after
+              #(fun k -> True /\ ~(0 <= k /\ k < SZ.v leaf_len))
+              #(fun _ -> True)
+              #0
+              #(SZ.v leaf_len);
+            with auth_payload_joined_mask.
+              assert (A.pts_to_mask auth_payload #1.0R auth_payload_joined_mask
+                (fun k ->
+                  (True /\ ~(0 <= k /\ k < SZ.v leaf_len)) \/
+                  (0 <= k /\ k < SZ.v leaf_len /\ True)));
+            assert (pure (forall (i:nat). i < Seq.length auth_payload_joined_mask ==>
+              Some? (Seq.index auth_payload_joined_mask i)));
+            A.from_mask auth_payload;
+            with auth_payload_bytes.
+              assert (pts_to auth_payload auth_payload_bytes);
+            assert (pure (B.length auth_payload_bytes == SZ.v certificate_public_key_len));
+            fold (top_driver_exactly d st1);
+            step
+          }
+        } else {
+          fold (top_driver_exactly d st1);
+          step
+        }
+      } else {
+        let verify =
+          step.ready_local_action.CT.next_local_kind = CT.LocalVerifyCertificateSignature;
+        if verify {
+          assert (pure (C.next_local_action_sound
+            'st0
+            network_out_len
+            certificate_public_key_len
+            server_finished_payload_len
+            step.ready_local_action));
+          assert (pure (Some?
+            'st0.CS.cs_model.CS.model_handshake.CS.hs_buffers.CS.hb_certificate_verify_input));
+          assert (pure (Some?
+            st1.CS.cs_model.CS.model_handshake.CS.hs_buffers.CS.hb_certificate_verify_input));
+          assert (pure (Some?
+            'st0.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify));
+          assert (pure (Some?
+            st1.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify));
+          let input_len =
+            driver_copy_certificate_verify_input
+              d.top_driver_core
+              auth_cv_input
+              auth_cv_input_len;
+          with auth_cv_input_bytes.
+            assert (driver_exactly d.top_driver_core st1 **
+                    pts_to auth_cv_input auth_cv_input_bytes);
+          let signature_snapshot =
+            driver_copy_certificate_verify_signature
+              d.top_driver_core
+              auth_signature
+              auth_signature_len;
+          with auth_signature_bytes.
+            assert (driver_exactly d.top_driver_core st1 **
+                    pts_to auth_signature auth_signature_bytes);
+          let ok =
+            O.verify_certificate_signature_for_local_event
+              d.top_driver_auth
+              #(st1)
+              auth_cv_input
+              auth_cv_input_len
+              input_len
+              signature_snapshot.CR.cv_signature_scheme
+              auth_signature
+              auth_signature_len
+              signature_snapshot.CR.cv_signature_len;
+          if ok {
+            assert (pure (CT.local_input_wf
+              st1
+              CT.LocalVerifyCertificateSignature
+              B.empty));
+            let write_result =
+              driver_process_local_event
+                d.top_driver_core
+                CT.LocalVerifyCertificateSignature
+                empty_payload
+                0sz
+                network_out
+                network_out_len
+                app_out
+                app_out_len;
+            with st2 network_out_bytes2 app_out_bytes2.
+              assert (driver_exactly d.top_driver_core st2 **
+                      pts_to empty_payload 'empty_payload_bytes **
+                      pts_to network_out network_out_bytes2 **
+                      pts_to app_out app_out_bytes2);
+            fold (top_driver_exactly d st2);
+            {
+              ready_local_action = step.ready_local_action;
+              ready_local_processed = true;
+              ready_local_resp = write_result.local_write_resp;
+              ready_local_written = write_result.local_write_written;
+            }
+          } else {
+            fold (top_driver_exactly d st1);
+            step
+          }
+        } else {
+          fold (top_driver_exactly d st1);
+          step
+        }
+      }
+    } else {
+      fold (top_driver_exactly d st1);
+      step
+    }
+  }
+}
+
+fn rec driver_handshake
+  (d:top_driver)
+  (empty_payload:array U8.t)
+  (raw:array U8.t)
+  (raw_capacity:SZ.t)
+  (buffered_len:SZ.t)
+  (network_out:array U8.t)
+  (network_out_len:SZ.t)
+  (auth_leaf_der:array U8.t)
+  (auth_leaf_der_len:SZ.t)
+  (auth_payload:array U8.t)
+  (auth_cv_input:array U8.t)
+  (auth_cv_input_len:SZ.t)
+  (auth_signature:array U8.t)
+  (auth_signature_len:SZ.t)
+  (certificate_public_key_len:SZ.t)
+  (server_finished_payload_len:SZ.t)
+  (app_out:array U8.t)
+  (app_out_len:SZ.t)
+  (local_fuel:SZ.t)
+  (fuel:SZ.t)
+  requires top_driver_exactly d 'st0 **
+           pts_to empty_payload 'empty_payload_bytes **
+           pts_to raw 'old_raw **
+           pts_to network_out 'old_network_out **
+           pts_to auth_leaf_der 'old_auth_leaf_der **
+           pts_to auth_payload 'old_auth_payload **
+           pts_to auth_cv_input 'old_auth_cv_input **
+           pts_to auth_signature 'old_auth_signature **
+           pts_to app_out 'old_app_out **
+           pure (B.length 'empty_payload_bytes == 0 /\
+                 B.length 'old_raw == SZ.v raw_capacity /\
+                 SZ.v buffered_len <= SZ.v raw_capacity /\
+                 B.length 'old_network_out == SZ.v network_out_len /\
+                 B.length 'old_auth_leaf_der == SZ.v auth_leaf_der_len /\
+                 B.length 'old_auth_payload == SZ.v certificate_public_key_len /\
+                 B.length 'old_auth_cv_input == SZ.v auth_cv_input_len /\
+                 B.length 'old_auth_signature == SZ.v auth_signature_len /\
+                 Bounds.max_handshake_flight_len <= SZ.v auth_leaf_der_len /\
+                 SZ.v certificate_public_key_len <= Bounds.max_public_key_len /\
+                 Bounds.max_certificate_verify_input_len <= SZ.v auth_cv_input_len /\
+                 L.max_signature_len <= SZ.v auth_signature_len /\
+                 B.length 'old_app_out == SZ.v app_out_len /\
+                 L.max_record_fragment_len <= SZ.v app_out_len)
+  returns result: driver_workflow_result
+  ensures exists* st1 raw_bytes network_out_bytes auth_leaf_der_bytes auth_payload_bytes auth_cv_input_bytes auth_signature_bytes app_out_bytes.
+           top_driver_exactly d st1 **
+           pts_to empty_payload 'empty_payload_bytes **
+           pts_to raw raw_bytes **
+           pts_to network_out network_out_bytes **
+           pts_to auth_leaf_der auth_leaf_der_bytes **
+           pts_to auth_payload auth_payload_bytes **
+           pts_to auth_cv_input auth_cv_input_bytes **
+           pts_to auth_signature auth_signature_bytes **
+           pts_to app_out app_out_bytes **
+           pure (B.length raw_bytes == SZ.v raw_capacity /\
+                 B.length auth_leaf_der_bytes == SZ.v auth_leaf_der_len /\
+                 B.length auth_payload_bytes == SZ.v certificate_public_key_len /\
+                 B.length auth_cv_input_bytes == SZ.v auth_cv_input_len /\
+                 B.length auth_signature_bytes == SZ.v auth_signature_len /\
+                 SZ.v result.driver_workflow_rx_len <= SZ.v raw_capacity /\
+                 B.length network_out_bytes == SZ.v network_out_len /\
+                 B.length app_out_bytes == SZ.v app_out_len)
+  decreases (SZ.v fuel)
+{
+  let no_op_resp = {
+    CT.network_out_len = 0sz;
+    CT.app_out_len = 0sz;
+    CT.status = CT.NeedMoreInput;
+  };
+  let no_op_buffer_resp = {
+    CT.response = no_op_resp;
+    CT.consumed_len = 0sz;
+  };
+  let no_op_read = {
+    network_read_len = 0sz;
+    network_read_buffer_resp = no_op_buffer_resp;
+    network_read_written = 0sz;
+    network_read_prefix = Ghost.hide B.empty;
+  };
+  let no_op_buffered = {
+    buffered_network_read = no_op_read;
+    buffered_network_new_len = buffered_len;
+  };
+  let no_op_io = {
+    buffered_network_io_read_len = 0sz;
+    buffered_network_io_buffered = no_op_buffered;
+  };
+  let no_op_action = {
+    CT.next_local_ready = false;
+    CT.next_local_kind = CT.LocalFail;
+    CT.next_local_payload = CT.LocalPayloadNone;
+  };
+  let no_op_local = {
+    ready_local_action = no_op_action;
+    ready_local_processed = false;
+    ready_local_resp = no_op_resp;
+    ready_local_written = 0sz;
+  };
+  if (fuel = 0sz) {
+    {
+      driver_workflow_status = DriverWorkflowExhausted;
+      driver_workflow_rx_len = buffered_len;
+      driver_workflow_local = {
+        driver_drain_last = no_op_local;
+        driver_drain_exhausted = false;
+      };
+      driver_workflow_network = no_op_io;
+    }
+  } else {
+    unfold (top_driver_exactly d 'st0);
+    let snapshot = driver_control_snapshot d.top_driver_core;
+    with st_snapshot.
+      assert (driver_exactly d.top_driver_core st_snapshot);
+    fold (top_driver_exactly d st_snapshot);
+    let app_ready = snapshot.CR.snapshot_control_tag = 2uy;
+    if app_ready {
+      {
+        driver_workflow_status = DriverWorkflowOk;
+        driver_workflow_rx_len = buffered_len;
+        driver_workflow_local = {
+          driver_drain_last = no_op_local;
+          driver_drain_exhausted = false;
+        };
+        driver_workflow_network = no_op_io;
+      }
+    } else {
+      let failed = snapshot.CR.snapshot_control_tag = 5uy;
+      if failed {
+        {
+          driver_workflow_status = DriverWorkflowStepFailed;
+          driver_workflow_rx_len = buffered_len;
+          driver_workflow_local = {
+            driver_drain_last = no_op_local;
+            driver_drain_exhausted = false;
+          };
+          driver_workflow_network = no_op_io;
+        }
+      } else {
+        let local =
+          top_driver_process_one_local_action
+            d
+            empty_payload
+            network_out
+            network_out_len
+            auth_leaf_der
+            auth_leaf_der_len
+            auth_payload
+            certificate_public_key_len
+            auth_cv_input
+            auth_cv_input_len
+            auth_signature
+            auth_signature_len
+            server_finished_payload_len
+            app_out
+            app_out_len;
+        with st_local network_out_local auth_leaf_der_local auth_payload_local auth_cv_input_local auth_signature_local app_out_local.
+          assert (top_driver_exactly d st_local **
+                  pts_to network_out network_out_local **
+                  pts_to auth_leaf_der auth_leaf_der_local **
+                  pts_to auth_payload auth_payload_local **
+                  pts_to auth_cv_input auth_cv_input_local **
+                  pts_to auth_signature auth_signature_local **
+                  pts_to app_out app_out_local);
+        if local.ready_local_processed {
+          let ok = local.ready_local_resp.CT.status = CT.StepOk;
+          let wrote_all =
+            local.ready_local_written = local.ready_local_resp.CT.network_out_len;
+          if (ok && wrote_all) {
+            let next_fuel = SZ.sub fuel 1sz;
+            assert (pure (SZ.v next_fuel < SZ.v fuel));
+            driver_handshake
+              d
+              empty_payload
+              raw
+              raw_capacity
+              buffered_len
+              network_out
+              network_out_len
+              auth_leaf_der
+              auth_leaf_der_len
+              auth_payload
+              auth_cv_input
+              auth_cv_input_len
+              auth_signature
+              auth_signature_len
+              certificate_public_key_len
+              server_finished_payload_len
+              app_out
+              app_out_len
+              local_fuel
+              next_fuel
+          } else {
+            {
+              driver_workflow_status = DriverWorkflowStepFailed;
+              driver_workflow_rx_len = buffered_len;
+              driver_workflow_local = {
+                driver_drain_last = local;
+                driver_drain_exhausted = false;
+              };
+              driver_workflow_network = no_op_io;
+            }
+          }
+        } else {
+          let still_ready = local.ready_local_action.CT.next_local_ready;
+          if still_ready {
+            {
+              driver_workflow_status = DriverWorkflowStepFailed;
+              driver_workflow_rx_len = buffered_len;
+              driver_workflow_local = {
+                driver_drain_last = local;
+                driver_drain_exhausted = false;
+              };
+              driver_workflow_network = no_op_io;
+            }
+          } else {
+            unfold (top_driver_exactly d st_local);
+            let network =
+              driver_progress_buffered_network_step
+                d.top_driver_core
+                raw
+                raw_capacity
+                buffered_len
+                network_out
+                network_out_len
+                app_out
+                app_out_len;
+            with st_network raw_network network_out_network app_out_network.
+              assert (driver_exactly d.top_driver_core st_network **
+                      pts_to raw raw_network **
+                      pts_to network_out network_out_network **
+                      pts_to app_out app_out_network);
+            fold (top_driver_exactly d st_network);
+            let net_read =
+              network.buffered_network_io_buffered.buffered_network_read;
+            let net_resp = net_read.network_read_buffer_resp.CT.response;
+            let net_ok = net_resp.CT.status = CT.StepOk;
+            let net_need_more = net_resp.CT.status = CT.NeedMoreInput;
+            let net_bad_status = (net_ok || net_need_more) = false;
+            let net_wrote_all =
+              net_read.network_read_written = net_resp.CT.network_out_len;
+            let net_short_write = net_ok && (net_wrote_all = false);
+            let net_failed = net_bad_status || net_short_write;
+            if net_failed {
+              {
+                driver_workflow_status = DriverWorkflowStepFailed;
+                driver_workflow_rx_len =
+                  network.buffered_network_io_buffered.buffered_network_new_len;
+                driver_workflow_local = {
+                  driver_drain_last = local;
+                  driver_drain_exhausted = false;
+                };
+                driver_workflow_network = network;
+              }
+            } else {
+              let next_fuel = SZ.sub fuel 1sz;
+              assert (pure (SZ.v next_fuel < SZ.v fuel));
+              driver_handshake
+                d
+                empty_payload
+                raw
+                raw_capacity
+                network.buffered_network_io_buffered.buffered_network_new_len
+                network_out
+                network_out_len
+                auth_leaf_der
+                auth_leaf_der_len
+                auth_payload
+                auth_cv_input
+                auth_cv_input_len
+                auth_signature
+                auth_signature_len
+                certificate_public_key_len
+                server_finished_payload_len
+                app_out
+                app_out_len
+                local_fuel
+                next_fuel
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+fn rec driver_receive_application_data
+  (d:top_driver)
+  (empty_payload:array U8.t)
+  (raw:array U8.t)
+  (raw_capacity:SZ.t)
+  (buffered_len:SZ.t)
+  (network_out:array U8.t)
+  (network_out_len:SZ.t)
+  (auth_leaf_der:array U8.t)
+  (auth_leaf_der_len:SZ.t)
+  (auth_payload:array U8.t)
+  (auth_cv_input:array U8.t)
+  (auth_cv_input_len:SZ.t)
+  (auth_signature:array U8.t)
+  (auth_signature_len:SZ.t)
+  (certificate_public_key_len:SZ.t)
+  (server_finished_payload_len:SZ.t)
+  (app_out:array U8.t)
+  (app_out_len:SZ.t)
+  (local_fuel:SZ.t)
+  (fuel:SZ.t)
+  requires top_driver_exactly d 'st0 **
+           pts_to empty_payload 'empty_payload_bytes **
+           pts_to raw 'old_raw **
+           pts_to network_out 'old_network_out **
+           pts_to auth_leaf_der 'old_auth_leaf_der **
+           pts_to auth_payload 'old_auth_payload **
+           pts_to auth_cv_input 'old_auth_cv_input **
+           pts_to auth_signature 'old_auth_signature **
+           pts_to app_out 'old_app_out **
+           pure (B.length 'empty_payload_bytes == 0 /\
+                 B.length 'old_raw == SZ.v raw_capacity /\
+                 SZ.v buffered_len <= SZ.v raw_capacity /\
+                 B.length 'old_network_out == SZ.v network_out_len /\
+                 B.length 'old_auth_leaf_der == SZ.v auth_leaf_der_len /\
+                 B.length 'old_auth_payload == SZ.v certificate_public_key_len /\
+                 B.length 'old_auth_cv_input == SZ.v auth_cv_input_len /\
+                 B.length 'old_auth_signature == SZ.v auth_signature_len /\
+                 Bounds.max_handshake_flight_len <= SZ.v auth_leaf_der_len /\
+                 SZ.v certificate_public_key_len <= Bounds.max_public_key_len /\
+                 Bounds.max_certificate_verify_input_len <= SZ.v auth_cv_input_len /\
+                 L.max_signature_len <= SZ.v auth_signature_len /\
+                 B.length 'old_app_out == SZ.v app_out_len /\
+                 L.max_record_fragment_len <= SZ.v app_out_len)
+  returns result: driver_workflow_result
+  ensures exists* st1 raw_bytes network_out_bytes auth_leaf_der_bytes auth_payload_bytes auth_cv_input_bytes auth_signature_bytes app_out_bytes.
+           top_driver_exactly d st1 **
+           pts_to empty_payload 'empty_payload_bytes **
+           pts_to raw raw_bytes **
+           pts_to network_out network_out_bytes **
+           pts_to auth_leaf_der auth_leaf_der_bytes **
+           pts_to auth_payload auth_payload_bytes **
+           pts_to auth_cv_input auth_cv_input_bytes **
+           pts_to auth_signature auth_signature_bytes **
+           pts_to app_out app_out_bytes **
+           pure (B.length raw_bytes == SZ.v raw_capacity /\
+                 B.length auth_leaf_der_bytes == SZ.v auth_leaf_der_len /\
+                 B.length auth_payload_bytes == SZ.v certificate_public_key_len /\
+                 B.length auth_cv_input_bytes == SZ.v auth_cv_input_len /\
+                 B.length auth_signature_bytes == SZ.v auth_signature_len /\
+                 SZ.v result.driver_workflow_rx_len <= SZ.v raw_capacity /\
+                 B.length network_out_bytes == SZ.v network_out_len /\
+                 B.length app_out_bytes == SZ.v app_out_len)
+  decreases (SZ.v fuel)
+{
+  if (fuel = 0sz) {
+    let no_op_resp = {
+      CT.network_out_len = 0sz;
+      CT.app_out_len = 0sz;
+      CT.status = CT.NeedMoreInput;
+    };
+    let no_op_buffer_resp = {
+      CT.response = no_op_resp;
+      CT.consumed_len = 0sz;
+    };
+    let no_op_read = {
+      network_read_len = 0sz;
+      network_read_buffer_resp = no_op_buffer_resp;
+      network_read_written = 0sz;
+      network_read_prefix = Ghost.hide B.empty;
+    };
+    let no_op_buffered = {
+      buffered_network_read = no_op_read;
+      buffered_network_new_len = buffered_len;
+    };
+    let no_op_io = {
+      buffered_network_io_read_len = 0sz;
+      buffered_network_io_buffered = no_op_buffered;
+    };
+    let no_op_action = {
+      CT.next_local_ready = false;
+      CT.next_local_kind = CT.LocalFail;
+      CT.next_local_payload = CT.LocalPayloadNone;
+    };
+    let no_op_local = {
+      ready_local_action = no_op_action;
+      ready_local_processed = false;
+      ready_local_resp = no_op_resp;
+      ready_local_written = 0sz;
+    };
+    {
+      driver_workflow_status = DriverWorkflowExhausted;
+      driver_workflow_rx_len = buffered_len;
+      driver_workflow_local = {
+        driver_drain_last = no_op_local;
+        driver_drain_exhausted = false;
+      };
+      driver_workflow_network = no_op_io;
+    }
+  } else {
+    unfold (top_driver_exactly d 'st0);
+    let network =
+      driver_progress_buffered_network_step
+        d.top_driver_core
+        raw
+        raw_capacity
+        buffered_len
+        network_out
+        network_out_len
+        app_out
+        app_out_len;
+    with st_network raw_network network_out_network app_out_network.
+      assert (driver_exactly d.top_driver_core st_network **
+              pts_to raw raw_network **
+              pts_to network_out network_out_network **
+              pts_to app_out app_out_network);
+    fold (top_driver_exactly d st_network);
+    let no_op_resp = {
+      CT.network_out_len = 0sz;
+      CT.app_out_len = 0sz;
+      CT.status = CT.NeedMoreInput;
+    };
+    let no_op_action = {
+      CT.next_local_ready = false;
+      CT.next_local_kind = CT.LocalFail;
+      CT.next_local_payload = CT.LocalPayloadNone;
+    };
+    let no_op_local = {
+      ready_local_action = no_op_action;
+      ready_local_processed = false;
+      ready_local_resp = no_op_resp;
+      ready_local_written = 0sz;
+    };
+    let net_read =
+      network.buffered_network_io_buffered.buffered_network_read;
+    let net_resp = net_read.network_read_buffer_resp.CT.response;
+    let net_ok = net_resp.CT.status = CT.StepOk;
+    let net_need_more = net_resp.CT.status = CT.NeedMoreInput;
+    let net_bad_status = (net_ok || net_need_more) = false;
+    let net_wrote_all =
+      net_read.network_read_written = net_resp.CT.network_out_len;
+    let net_short_write = net_ok && (net_wrote_all = false);
+    let net_failed = net_bad_status || net_short_write;
+    if net_failed {
+      {
+        driver_workflow_status = DriverWorkflowStepFailed;
+        driver_workflow_rx_len =
+          network.buffered_network_io_buffered.buffered_network_new_len;
+        driver_workflow_local = {
+          driver_drain_last = no_op_local;
+          driver_drain_exhausted = false;
+        };
+        driver_workflow_network = network;
+      }
+    } else {
+    let app_ready =
+      network.buffered_network_io_buffered.buffered_network_read.network_read_buffer_resp.CT.response.CT.app_out_len =
+      0sz;
+    if (app_ready = false) {
+      {
+        driver_workflow_status = DriverWorkflowOk;
+        driver_workflow_rx_len =
+          network.buffered_network_io_buffered.buffered_network_new_len;
+        driver_workflow_local = {
+          driver_drain_last = no_op_local;
+          driver_drain_exhausted = false;
+        };
+        driver_workflow_network = network;
+      }
+    } else {
+      let local =
+        top_driver_process_one_local_action
+          d
+          empty_payload
+          network_out
+          network_out_len
+          auth_leaf_der
+          auth_leaf_der_len
+          auth_payload
+          certificate_public_key_len
+          auth_cv_input
+          auth_cv_input_len
+          auth_signature
+          auth_signature_len
+          server_finished_payload_len
+          app_out
+          app_out_len;
+      with st_local network_out_local auth_leaf_der_local auth_payload_local auth_cv_input_local auth_signature_local app_out_local.
+        assert (top_driver_exactly d st_local **
+                pts_to network_out network_out_local **
+                pts_to auth_leaf_der auth_leaf_der_local **
+                pts_to auth_payload auth_payload_local **
+                pts_to auth_cv_input auth_cv_input_local **
+                pts_to auth_signature auth_signature_local **
+                pts_to app_out app_out_local);
+      let local_processed = local.ready_local_processed;
+      let local_ready = local.ready_local_action.CT.next_local_ready;
+      let local_ok = local.ready_local_resp.CT.status = CT.StepOk;
+      let local_wrote_all =
+        local.ready_local_written = local.ready_local_resp.CT.network_out_len;
+      let local_short_write = local_processed && local_ok && (local_wrote_all = false);
+      let local_failed =
+        (local_processed && ((local_ok = false) || local_short_write)) ||
+        ((local_processed = false) && local_ready);
+      if local_failed {
+        {
+          driver_workflow_status = DriverWorkflowStepFailed;
+          driver_workflow_rx_len =
+            network.buffered_network_io_buffered.buffered_network_new_len;
+          driver_workflow_local = {
+            driver_drain_last = local;
+            driver_drain_exhausted = false;
+          };
+          driver_workflow_network = network;
+        }
+      } else {
+        let next_fuel = SZ.sub fuel 1sz;
+        assert (pure (SZ.v next_fuel < SZ.v fuel));
+        driver_receive_application_data
+          d
+          empty_payload
+          raw
+          raw_capacity
+          network.buffered_network_io_buffered.buffered_network_new_len
+          network_out
+          network_out_len
+          auth_leaf_der
+          auth_leaf_der_len
+          auth_payload
+          auth_cv_input
+          auth_cv_input_len
+          auth_signature
+          auth_signature_len
+          certificate_public_key_len
+          server_finished_payload_len
+          app_out
+          app_out_len
+          local_fuel
+          next_fuel
+      }
+    }
+    }
+  }
+}
+
+fn rec driver_await_peer_close_notify
+  (d:driver)
+  (raw:array U8.t)
+  (raw_capacity:SZ.t)
+  (buffered_len:SZ.t)
+  (network_out:array U8.t)
+  (network_out_len:SZ.t)
+  (app_out:array U8.t)
+  (app_out_len:SZ.t)
+  (fuel:SZ.t)
+  requires driver_exactly d 'st0 **
+           pts_to raw 'old_raw **
+           pts_to network_out 'old_network_out **
+           pts_to app_out 'old_app_out **
+           pure (B.length 'old_raw == SZ.v raw_capacity /\
+                 SZ.v buffered_len <= SZ.v raw_capacity /\
+                 B.length 'old_network_out == SZ.v network_out_len /\
+                 B.length 'old_app_out == SZ.v app_out_len /\
+                 L.max_record_fragment_len <= SZ.v app_out_len)
+  returns result: driver_workflow_result
+  ensures exists* st1 raw_bytes network_out_bytes app_out_bytes.
+           driver_exactly d st1 **
+           pts_to raw raw_bytes **
+           pts_to network_out network_out_bytes **
+           pts_to app_out app_out_bytes **
+           pure (B.length raw_bytes == SZ.v raw_capacity /\
+                 SZ.v result.driver_workflow_rx_len <= SZ.v raw_capacity /\
+                 B.length network_out_bytes == SZ.v network_out_len /\
+                 B.length app_out_bytes == SZ.v app_out_len)
+  decreases (SZ.v fuel)
+{
+  let no_op_resp = {
+    CT.network_out_len = 0sz;
+    CT.app_out_len = 0sz;
+    CT.status = CT.NeedMoreInput;
+  };
+  let no_op_buffer_resp = {
+    CT.response = no_op_resp;
+    CT.consumed_len = 0sz;
+  };
+  let no_op_read = {
+    network_read_len = 0sz;
+    network_read_buffer_resp = no_op_buffer_resp;
+    network_read_written = 0sz;
+    network_read_prefix = Ghost.hide B.empty;
+  };
+  let no_op_buffered = {
+    buffered_network_read = no_op_read;
+    buffered_network_new_len = buffered_len;
+  };
+  let no_op_io = {
+    buffered_network_io_read_len = 0sz;
+    buffered_network_io_buffered = no_op_buffered;
+  };
+  let no_op_action = {
+    CT.next_local_ready = false;
+    CT.next_local_kind = CT.LocalFail;
+    CT.next_local_payload = CT.LocalPayloadNone;
+  };
+  let no_op_local = {
+    ready_local_action = no_op_action;
+    ready_local_processed = false;
+    ready_local_resp = no_op_resp;
+    ready_local_written = 0sz;
+  };
+  if (fuel = 0sz) {
+    {
+      driver_workflow_status = DriverWorkflowExhausted;
+      driver_workflow_rx_len = buffered_len;
+      driver_workflow_local = {
+        driver_drain_last = no_op_local;
+        driver_drain_exhausted = false;
+      };
+      driver_workflow_network = no_op_io;
+    }
+  } else {
+    let snapshot = driver_control_snapshot d;
+    with st_snapshot.
+      assert (driver_exactly d st_snapshot);
+    let closed = snapshot.CR.snapshot_control_tag = 4uy;
+    if closed {
+      {
+        driver_workflow_status = DriverWorkflowOk;
+        driver_workflow_rx_len = buffered_len;
+        driver_workflow_local = {
+          driver_drain_last = no_op_local;
+          driver_drain_exhausted = false;
+        };
+        driver_workflow_network = no_op_io;
+      }
+    } else {
+      let network =
+        driver_progress_buffered_network_step
+          d
+          raw
+          raw_capacity
+          buffered_len
+          network_out
+          network_out_len
+          app_out
+          app_out_len;
+      with st_network raw_network network_out_network app_out_network.
+        assert (driver_exactly d st_network **
+                pts_to raw raw_network **
+                pts_to network_out network_out_network **
+                pts_to app_out app_out_network);
+      let net_read =
+        network.buffered_network_io_buffered.buffered_network_read;
+      let net_resp = net_read.network_read_buffer_resp.CT.response;
+      let net_ok = net_resp.CT.status = CT.StepOk;
+      let net_need_more = net_resp.CT.status = CT.NeedMoreInput;
+      let net_bad_status = (net_ok || net_need_more) = false;
+      let net_wrote_all =
+        net_read.network_read_written = net_resp.CT.network_out_len;
+      let net_short_write = net_ok && (net_wrote_all = false);
+      let net_failed = net_bad_status || net_short_write;
+      if net_failed {
+        {
+          driver_workflow_status = DriverWorkflowStepFailed;
+          driver_workflow_rx_len =
+            network.buffered_network_io_buffered.buffered_network_new_len;
+          driver_workflow_local = {
+            driver_drain_last = no_op_local;
+            driver_drain_exhausted = false;
+          };
+          driver_workflow_network = network;
+        }
+      } else {
+        let next_fuel = SZ.sub fuel 1sz;
+        assert (pure (SZ.v next_fuel < SZ.v fuel));
+        driver_await_peer_close_notify
+          d
+          raw
+          raw_capacity
+          network.buffered_network_io_buffered.buffered_network_new_len
+          network_out
+          network_out_len
+          app_out
+          app_out_len
+          next_fuel
+      }
+    }
+  }
+}
+
 fn send_application_data_once
   (c:C.client)
   (ch:IO.channel)
@@ -2026,6 +3205,66 @@ fn driver_send_application_data
   result
 }
 
+fn top_driver_send_application_data
+  (d:top_driver)
+  (payload:array U8.t)
+  (payload_len:SZ.t)
+  (network_out:array U8.t)
+  (network_out_len:SZ.t)
+  (app_out:array U8.t)
+  (app_out_len:SZ.t)
+  requires top_driver_exactly d 'st0 **
+           pts_to payload 'payload_bytes **
+           pts_to network_out 'old_network_out **
+           pts_to app_out 'old_app_out **
+           pure (B.length 'payload_bytes == SZ.v payload_len /\
+                 B.length 'old_network_out == SZ.v network_out_len /\
+                 B.length 'old_app_out == SZ.v app_out_len /\
+                 CT.local_input_wf
+                  'st0
+                  CT.LocalSendApplicationData
+                  (Ghost.reveal 'payload_bytes))
+  returns result: local_write_result
+  ensures exists* st1 network_out_bytes app_out_bytes.
+           top_driver_exactly d st1 **
+           pts_to payload 'payload_bytes **
+           pts_to network_out network_out_bytes **
+           pts_to app_out app_out_bytes **
+           pure (B.length network_out_bytes == SZ.v network_out_len /\
+                 B.length app_out_bytes == SZ.v app_out_len /\
+                 CT.local_event_end_to_end_correct
+                  'st0
+                  st1
+                  result.local_write_resp
+                  CT.LocalSendApplicationData
+                  (Ghost.reveal 'payload_bytes)
+                  network_out_bytes
+                  app_out_bytes /\
+                 (result.local_write_resp.CT.status == CT.StepOk ==>
+                 SZ.v result.local_write_written <=
+                 SZ.v result.local_write_resp.CT.network_out_len) /\
+                 (result.local_write_resp.CT.status == CT.StepOk \/
+                 result.local_write_written == 0sz))
+{
+  unfold (top_driver_exactly d 'st0);
+  let result =
+    driver_send_application_data
+      d.top_driver_core
+      payload
+      payload_len
+      network_out
+      network_out_len
+      app_out
+      app_out_len;
+  with st1 network_out_bytes app_out_bytes.
+    assert (driver_exactly d.top_driver_core st1 **
+            pts_to payload 'payload_bytes **
+            pts_to network_out network_out_bytes **
+            pts_to app_out app_out_bytes);
+  fold (top_driver_exactly d st1);
+  result
+}
+
 fn driver_send_close_notify
   (d:driver)
   (empty_payload:array U8.t)
@@ -2085,6 +3324,165 @@ fn driver_send_close_notify
             pts_to app_out app_out_bytes);
   fold (driver_exactly d st1);
   result
+}
+
+fn rec driver_close_workflow
+  (d:top_driver)
+  (wait_for_peer:bool)
+  (empty_payload:array U8.t)
+  (raw:array U8.t)
+  (raw_capacity:SZ.t)
+  (buffered_len:SZ.t)
+  (network_out:array U8.t)
+  (network_out_len:SZ.t)
+  (app_out:array U8.t)
+  (app_out_len:SZ.t)
+  (fuel:SZ.t)
+  requires top_driver_exactly d 'st0 **
+           pts_to empty_payload 'empty_payload_bytes **
+           pts_to raw 'old_raw **
+           pts_to network_out 'old_network_out **
+           pts_to app_out 'old_app_out **
+           pure (B.length 'empty_payload_bytes == 0 /\
+                 B.length 'old_raw == SZ.v raw_capacity /\
+                 SZ.v buffered_len <= SZ.v raw_capacity /\
+                 B.length 'old_network_out == SZ.v network_out_len /\
+                 B.length 'old_app_out == SZ.v app_out_len /\
+                 L.max_record_fragment_len <= SZ.v app_out_len)
+  returns result: driver_workflow_result
+  ensures exists* st1 raw_bytes network_out_bytes app_out_bytes.
+           C.connection_exactly d.top_driver_core.driver_client st1 **
+           pts_to empty_payload 'empty_payload_bytes **
+           pts_to raw raw_bytes **
+           pts_to network_out network_out_bytes **
+           pts_to app_out app_out_bytes **
+           pure (B.length raw_bytes == SZ.v raw_capacity /\
+                 SZ.v result.driver_workflow_rx_len <= SZ.v raw_capacity /\
+                 B.length network_out_bytes == SZ.v network_out_len /\
+                 B.length app_out_bytes == SZ.v app_out_len)
+  decreases (SZ.v fuel)
+{
+  unfold (top_driver_exactly d 'st0);
+  let close_result =
+    driver_send_close_notify
+      d.top_driver_core
+      empty_payload
+      network_out
+      network_out_len
+      app_out
+      app_out_len;
+  with st_after_close_notify network_out_after_close app_out_after_close.
+    assert (driver_exactly d.top_driver_core st_after_close_notify **
+            pts_to empty_payload 'empty_payload_bytes **
+            pts_to network_out network_out_after_close **
+            pts_to app_out app_out_after_close);
+  let no_op_resp = {
+    CT.network_out_len = 0sz;
+    CT.app_out_len = 0sz;
+    CT.status = CT.NeedMoreInput;
+  };
+  let no_op_buffer_resp = {
+    CT.response = no_op_resp;
+    CT.consumed_len = 0sz;
+  };
+  let no_op_read = {
+    network_read_len = 0sz;
+    network_read_buffer_resp = no_op_buffer_resp;
+    network_read_written = 0sz;
+    network_read_prefix = Ghost.hide B.empty;
+  };
+  let no_op_buffered = {
+    buffered_network_read = no_op_read;
+    buffered_network_new_len = buffered_len;
+  };
+  let no_op_io = {
+    buffered_network_io_read_len = 0sz;
+    buffered_network_io_buffered = no_op_buffered;
+  };
+  let no_op_action = {
+    CT.next_local_ready = false;
+    CT.next_local_kind = CT.LocalFail;
+    CT.next_local_payload = CT.LocalPayloadNone;
+  };
+  let no_op_local = {
+    ready_local_action = no_op_action;
+    ready_local_processed = false;
+    ready_local_resp = close_result.local_write_resp;
+    ready_local_written = close_result.local_write_written;
+  };
+  let close_ok = close_result.local_write_resp.CT.status = CT.StepOk;
+  let close_wrote_all =
+    close_result.local_write_written = close_result.local_write_resp.CT.network_out_len;
+  let close_failed = (close_ok && close_wrote_all) = false;
+  if close_failed {
+    unfold (driver_exactly d.top_driver_core st_after_close_notify);
+    IO.close d.top_driver_core.driver_channel;
+    O.auth_context_free d.top_driver_auth;
+    {
+      driver_workflow_status = DriverWorkflowStepFailed;
+      driver_workflow_rx_len = buffered_len;
+      driver_workflow_local = {
+        driver_drain_last = no_op_local;
+        driver_drain_exhausted = false;
+      };
+      driver_workflow_network = no_op_io;
+    }
+  } else if wait_for_peer {
+    let waited =
+      driver_await_peer_close_notify
+        d.top_driver_core
+        raw
+        raw_capacity
+        buffered_len
+        network_out
+        network_out_len
+        app_out
+        app_out_len
+        fuel;
+    with st_wait raw_wait network_out_wait app_out_wait.
+      assert (driver_exactly d.top_driver_core st_wait **
+              pts_to raw raw_wait **
+              pts_to network_out network_out_wait **
+              pts_to app_out app_out_wait);
+    unfold (driver_exactly d.top_driver_core st_wait);
+    IO.close d.top_driver_core.driver_channel;
+    O.auth_context_free d.top_driver_auth;
+    let wait_ok = waited.driver_workflow_status = DriverWorkflowOk;
+    if wait_ok {
+      {
+        driver_workflow_status = DriverWorkflowClosed;
+        driver_workflow_rx_len = waited.driver_workflow_rx_len;
+        driver_workflow_local = {
+          driver_drain_last = no_op_local;
+          driver_drain_exhausted = false;
+        };
+        driver_workflow_network = waited.driver_workflow_network;
+      }
+    } else {
+      {
+        driver_workflow_status = waited.driver_workflow_status;
+        driver_workflow_rx_len = waited.driver_workflow_rx_len;
+        driver_workflow_local = {
+          driver_drain_last = no_op_local;
+          driver_drain_exhausted = false;
+        };
+        driver_workflow_network = waited.driver_workflow_network;
+      }
+    }
+  } else {
+    unfold (driver_exactly d.top_driver_core st_after_close_notify);
+    IO.close d.top_driver_core.driver_channel;
+    O.auth_context_free d.top_driver_auth;
+    {
+      driver_workflow_status = DriverWorkflowClosed;
+      driver_workflow_rx_len = buffered_len;
+      driver_workflow_local = {
+        driver_drain_last = no_op_local;
+        driver_drain_exhausted = false;
+      };
+      driver_workflow_network = no_op_io;
+    }
+  }
 }
 
 fn driver_close (d:driver)

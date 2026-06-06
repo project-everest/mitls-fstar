@@ -15,6 +15,7 @@ module CT = TLS13.Impl.Client.Types
 module IO = TLS13.IO
 module L = TLS13.Impl.Messages
 module M = TLS13.Messages
+module O = TLS13.OpenSSL
 module Seq = FStar.Seq
 module SZ = FStar.SizeT
 module U16 = FStar.UInt16
@@ -32,6 +33,19 @@ let driver_exactly
   : slprop =
   C.connection_exactly d.driver_client st **
   IO.is_channel d.driver_channel
+
+noeq type top_driver = {
+  top_driver_core: driver;
+  top_driver_auth: O.auth_context;
+}
+
+noextract
+let top_driver_exactly
+  (d:top_driver)
+  (st:TLS13.Spec.ConnectionState.connection_state)
+  : slprop =
+  driver_exactly d.top_driver_core st **
+  O.is_auth_context d.top_driver_auth
 
 type local_write_result = {
   local_write_resp: CT.client_response;
@@ -77,6 +91,21 @@ type driver_drain_result = {
   driver_drain_exhausted: bool;
 }
 
+type driver_workflow_status =
+  | DriverWorkflowOk
+  | DriverWorkflowNeedMoreInput
+  | DriverWorkflowNeedExternalAction
+  | DriverWorkflowStepFailed
+  | DriverWorkflowExhausted
+  | DriverWorkflowClosed
+
+noeq type driver_workflow_result = {
+  driver_workflow_status: driver_workflow_status;
+  driver_workflow_rx_len: SZ.t;
+  driver_workflow_local: driver_drain_result;
+  driver_workflow_network: buffered_network_io_result;
+}
+
 fn driver_connect
   (connect_host:array U8.t)
   (connect_host_len:SZ.t)
@@ -120,6 +149,50 @@ fn driver_connect
                        validation_time_seconds))
            | None ->
              emp)
+
+fn driver_open
+  (connect_host:array U8.t)
+  (connect_host_len:SZ.t)
+  (port:U16.t)
+  (server_name:array U8.t)
+  (server_name_len:SZ.t)
+  (trust_anchors:array U8.t)
+  (trust_anchors_len:SZ.t)
+  (validation_time_seconds:SZ.t)
+  requires pts_to connect_host 'connect_host_bytes **
+           pts_to server_name 'server_name_bytes **
+           pts_to trust_anchors 'trust_anchors_bytes **
+           pure (B.length 'connect_host_bytes == SZ.v connect_host_len /\
+                B.length 'server_name_bytes == SZ.v server_name_len /\
+                B.length 'trust_anchors_bytes == SZ.v trust_anchors_len /\
+                SZ.v server_name_len <=
+                  TLS13.Impl.ConnectionState.Bounds.max_hostname_len /\
+                SZ.v trust_anchors_len <=
+                  TLS13.Impl.ConnectionState.Bounds.max_trust_anchors_len)
+  returns result: option top_driver
+  ensures pts_to connect_host 'connect_host_bytes **
+          pts_to server_name 'server_name_bytes **
+          pts_to trust_anchors 'trust_anchors_bytes **
+          (match result with
+           | Some d ->
+            top_driver_exactly
+              d
+              (CR.configured_initial_state
+                (Ghost.reveal 'server_name_bytes)
+                (Ghost.reveal 'trust_anchors_bytes)
+                validation_time_seconds) **
+            pure (CT.client_state_correct
+              (CR.configured_initial_state
+                (Ghost.reveal 'server_name_bytes)
+                (Ghost.reveal 'trust_anchors_bytes)
+                validation_time_seconds) /\
+                  CT.client_end_to_end_invariant
+                    (CR.configured_initial_state
+                      (Ghost.reveal 'server_name_bytes)
+                      (Ghost.reveal 'trust_anchors_bytes)
+                      validation_time_seconds))
+           | None ->
+            emp)
 
 fn driver_control_snapshot
   (d:driver)
@@ -481,7 +554,8 @@ fn process_ready_internal_local_action_once
                  (result.ready_local_resp.CT.status == CT.StepOk \/
                  result.ready_local_written == 0sz)) /\
                  (result.ready_local_processed \/
-                 result.ready_local_written == 0sz))
+                 result.ready_local_written == 0sz) /\
+                 (result.ready_local_processed == false ==> st1 == 'st0))
 
 fn driver_handshake_step
   (d:driver)
@@ -529,7 +603,8 @@ fn driver_handshake_step
                  (result.ready_local_resp.CT.status == CT.StepOk \/
                  result.ready_local_written == 0sz)) /\
                  (result.ready_local_processed \/
-                 result.ready_local_written == 0sz))
+                 result.ready_local_written == 0sz) /\
+                 (result.ready_local_processed == false ==> st1 == 'st0))
 
 fn rec driver_drain_local_actions
   (d:driver)
@@ -561,6 +636,194 @@ fn rec driver_drain_local_actions
                  (result.driver_drain_exhausted ==>
                  result.driver_drain_last.ready_local_processed == false /\
                  result.driver_drain_last.ready_local_written == 0sz))
+
+fn driver_progress_buffered_network_step
+  (d:driver)
+  (raw:array U8.t)
+  (raw_capacity:SZ.t)
+  (buffered_len:SZ.t)
+  (network_out:array U8.t)
+  (network_out_len:SZ.t)
+  (app_out:array U8.t)
+  (app_out_len:SZ.t)
+  requires driver_exactly d 'st0 **
+           pts_to raw 'old_raw **
+           pts_to network_out 'old_network_out **
+           pts_to app_out 'old_app_out **
+           pure (B.length 'old_raw == SZ.v raw_capacity /\
+                 SZ.v buffered_len <= SZ.v raw_capacity /\
+                 B.length 'old_network_out == SZ.v network_out_len /\
+                 B.length 'old_app_out == SZ.v app_out_len /\
+                 L.max_record_fragment_len <= SZ.v app_out_len)
+  returns result: buffered_network_io_result
+  ensures exists* st1 raw_bytes network_out_bytes app_out_bytes.
+           driver_exactly d st1 **
+           pts_to raw raw_bytes **
+           pts_to network_out network_out_bytes **
+           pts_to app_out app_out_bytes **
+           pure (B.length raw_bytes == SZ.v raw_capacity /\
+                 SZ.v result.buffered_network_io_buffered.buffered_network_new_len <=
+                 SZ.v raw_capacity /\
+                 B.length network_out_bytes == SZ.v network_out_len /\
+                 B.length app_out_bytes == SZ.v app_out_len)
+
+fn rec driver_handshake
+  (d:top_driver)
+  (empty_payload:array U8.t)
+  (raw:array U8.t)
+  (raw_capacity:SZ.t)
+  (buffered_len:SZ.t)
+  (network_out:array U8.t)
+  (network_out_len:SZ.t)
+  (auth_leaf_der:array U8.t)
+  (auth_leaf_der_len:SZ.t)
+  (auth_payload:array U8.t)
+  (auth_cv_input:array U8.t)
+  (auth_cv_input_len:SZ.t)
+  (auth_signature:array U8.t)
+  (auth_signature_len:SZ.t)
+  (certificate_public_key_len:SZ.t)
+  (server_finished_payload_len:SZ.t)
+  (app_out:array U8.t)
+  (app_out_len:SZ.t)
+  (local_fuel:SZ.t)
+  (fuel:SZ.t)
+  requires top_driver_exactly d 'st0 **
+           pts_to empty_payload 'empty_payload_bytes **
+           pts_to raw 'old_raw **
+           pts_to network_out 'old_network_out **
+           pts_to auth_leaf_der 'old_auth_leaf_der **
+           pts_to auth_payload 'old_auth_payload **
+           pts_to auth_cv_input 'old_auth_cv_input **
+           pts_to auth_signature 'old_auth_signature **
+           pts_to app_out 'old_app_out **
+           pure (B.length 'empty_payload_bytes == 0 /\
+                 B.length 'old_raw == SZ.v raw_capacity /\
+                 SZ.v buffered_len <= SZ.v raw_capacity /\
+                 B.length 'old_network_out == SZ.v network_out_len /\
+                 B.length 'old_auth_leaf_der == SZ.v auth_leaf_der_len /\
+                 B.length 'old_auth_payload == SZ.v certificate_public_key_len /\
+                 B.length 'old_auth_cv_input == SZ.v auth_cv_input_len /\
+                 B.length 'old_auth_signature == SZ.v auth_signature_len /\
+                 Bounds.max_handshake_flight_len <= SZ.v auth_leaf_der_len /\
+                 SZ.v certificate_public_key_len <= Bounds.max_public_key_len /\
+                 Bounds.max_certificate_verify_input_len <= SZ.v auth_cv_input_len /\
+                 L.max_signature_len <= SZ.v auth_signature_len /\
+                 B.length 'old_app_out == SZ.v app_out_len /\
+                 L.max_record_fragment_len <= SZ.v app_out_len)
+  returns result: driver_workflow_result
+  ensures exists* st1 raw_bytes network_out_bytes auth_leaf_der_bytes auth_payload_bytes auth_cv_input_bytes auth_signature_bytes app_out_bytes.
+           top_driver_exactly d st1 **
+           pts_to empty_payload 'empty_payload_bytes **
+           pts_to raw raw_bytes **
+           pts_to network_out network_out_bytes **
+           pts_to auth_leaf_der auth_leaf_der_bytes **
+           pts_to auth_payload auth_payload_bytes **
+           pts_to auth_cv_input auth_cv_input_bytes **
+           pts_to auth_signature auth_signature_bytes **
+           pts_to app_out app_out_bytes **
+           pure (B.length raw_bytes == SZ.v raw_capacity /\
+                 B.length auth_leaf_der_bytes == SZ.v auth_leaf_der_len /\
+           B.length auth_payload_bytes == SZ.v certificate_public_key_len /\
+           B.length auth_cv_input_bytes == SZ.v auth_cv_input_len /\
+                 B.length auth_signature_bytes == SZ.v auth_signature_len /\
+                 SZ.v result.driver_workflow_rx_len <= SZ.v raw_capacity /\
+                 B.length network_out_bytes == SZ.v network_out_len /\
+                 B.length app_out_bytes == SZ.v app_out_len)
+
+fn rec driver_receive_application_data
+  (d:top_driver)
+  (empty_payload:array U8.t)
+  (raw:array U8.t)
+  (raw_capacity:SZ.t)
+  (buffered_len:SZ.t)
+  (network_out:array U8.t)
+  (network_out_len:SZ.t)
+  (auth_leaf_der:array U8.t)
+  (auth_leaf_der_len:SZ.t)
+  (auth_payload:array U8.t)
+  (auth_cv_input:array U8.t)
+  (auth_cv_input_len:SZ.t)
+  (auth_signature:array U8.t)
+  (auth_signature_len:SZ.t)
+  (certificate_public_key_len:SZ.t)
+  (server_finished_payload_len:SZ.t)
+  (app_out:array U8.t)
+  (app_out_len:SZ.t)
+  (local_fuel:SZ.t)
+  (fuel:SZ.t)
+  requires top_driver_exactly d 'st0 **
+           pts_to empty_payload 'empty_payload_bytes **
+           pts_to raw 'old_raw **
+           pts_to network_out 'old_network_out **
+           pts_to auth_leaf_der 'old_auth_leaf_der **
+           pts_to auth_payload 'old_auth_payload **
+           pts_to auth_cv_input 'old_auth_cv_input **
+           pts_to auth_signature 'old_auth_signature **
+           pts_to app_out 'old_app_out **
+           pure (B.length 'empty_payload_bytes == 0 /\
+                 B.length 'old_raw == SZ.v raw_capacity /\
+                 SZ.v buffered_len <= SZ.v raw_capacity /\
+                 B.length 'old_network_out == SZ.v network_out_len /\
+                 B.length 'old_auth_leaf_der == SZ.v auth_leaf_der_len /\
+                 B.length 'old_auth_payload == SZ.v certificate_public_key_len /\
+                 B.length 'old_auth_cv_input == SZ.v auth_cv_input_len /\
+                 B.length 'old_auth_signature == SZ.v auth_signature_len /\
+                 Bounds.max_handshake_flight_len <= SZ.v auth_leaf_der_len /\
+                 SZ.v certificate_public_key_len <= Bounds.max_public_key_len /\
+                 Bounds.max_certificate_verify_input_len <= SZ.v auth_cv_input_len /\
+                 L.max_signature_len <= SZ.v auth_signature_len /\
+                 B.length 'old_app_out == SZ.v app_out_len /\
+                 L.max_record_fragment_len <= SZ.v app_out_len)
+  returns result: driver_workflow_result
+  ensures exists* st1 raw_bytes network_out_bytes auth_leaf_der_bytes auth_payload_bytes auth_cv_input_bytes auth_signature_bytes app_out_bytes.
+           top_driver_exactly d st1 **
+           pts_to empty_payload 'empty_payload_bytes **
+           pts_to raw raw_bytes **
+           pts_to network_out network_out_bytes **
+           pts_to auth_leaf_der auth_leaf_der_bytes **
+           pts_to auth_payload auth_payload_bytes **
+           pts_to auth_cv_input auth_cv_input_bytes **
+           pts_to auth_signature auth_signature_bytes **
+           pts_to app_out app_out_bytes **
+           pure (B.length raw_bytes == SZ.v raw_capacity /\
+                 B.length auth_leaf_der_bytes == SZ.v auth_leaf_der_len /\
+           B.length auth_payload_bytes == SZ.v certificate_public_key_len /\
+           B.length auth_cv_input_bytes == SZ.v auth_cv_input_len /\
+                 B.length auth_signature_bytes == SZ.v auth_signature_len /\
+                 SZ.v result.driver_workflow_rx_len <= SZ.v raw_capacity /\
+                 B.length network_out_bytes == SZ.v network_out_len /\
+                 B.length app_out_bytes == SZ.v app_out_len)
+
+fn rec driver_await_peer_close_notify
+  (d:driver)
+  (raw:array U8.t)
+  (raw_capacity:SZ.t)
+  (buffered_len:SZ.t)
+  (network_out:array U8.t)
+  (network_out_len:SZ.t)
+  (app_out:array U8.t)
+  (app_out_len:SZ.t)
+  (fuel:SZ.t)
+  requires driver_exactly d 'st0 **
+           pts_to raw 'old_raw **
+           pts_to network_out 'old_network_out **
+           pts_to app_out 'old_app_out **
+           pure (B.length 'old_raw == SZ.v raw_capacity /\
+                 SZ.v buffered_len <= SZ.v raw_capacity /\
+                 B.length 'old_network_out == SZ.v network_out_len /\
+                 B.length 'old_app_out == SZ.v app_out_len /\
+                 L.max_record_fragment_len <= SZ.v app_out_len)
+  returns result: driver_workflow_result
+  ensures exists* st1 raw_bytes network_out_bytes app_out_bytes.
+           driver_exactly d st1 **
+           pts_to raw raw_bytes **
+           pts_to network_out network_out_bytes **
+           pts_to app_out app_out_bytes **
+           pure (B.length raw_bytes == SZ.v raw_capacity /\
+                 SZ.v result.driver_workflow_rx_len <= SZ.v raw_capacity /\
+                 B.length network_out_bytes == SZ.v network_out_len /\
+                 B.length app_out_bytes == SZ.v app_out_len)
 
 fn send_application_data_once
   (c:C.client)
@@ -647,6 +910,47 @@ fn driver_send_application_data
                  (result.local_write_resp.CT.status == CT.StepOk \/
                  result.local_write_written == 0sz))
 
+fn top_driver_send_application_data
+  (d:top_driver)
+  (payload:array U8.t)
+  (payload_len:SZ.t)
+  (network_out:array U8.t)
+  (network_out_len:SZ.t)
+  (app_out:array U8.t)
+  (app_out_len:SZ.t)
+  requires top_driver_exactly d 'st0 **
+           pts_to payload 'payload_bytes **
+           pts_to network_out 'old_network_out **
+           pts_to app_out 'old_app_out **
+           pure (B.length 'payload_bytes == SZ.v payload_len /\
+                 B.length 'old_network_out == SZ.v network_out_len /\
+                 B.length 'old_app_out == SZ.v app_out_len /\
+                 CT.local_input_wf
+                 'st0
+                 CT.LocalSendApplicationData
+                 (Ghost.reveal 'payload_bytes))
+  returns result: local_write_result
+  ensures exists* st1 network_out_bytes app_out_bytes.
+           top_driver_exactly d st1 **
+           pts_to payload 'payload_bytes **
+           pts_to network_out network_out_bytes **
+           pts_to app_out app_out_bytes **
+           pure (B.length network_out_bytes == SZ.v network_out_len /\
+                 B.length app_out_bytes == SZ.v app_out_len /\
+                 CT.local_event_end_to_end_correct
+                 'st0
+                 st1
+                 result.local_write_resp
+                 CT.LocalSendApplicationData
+                 (Ghost.reveal 'payload_bytes)
+                 network_out_bytes
+                 app_out_bytes /\
+                 (result.local_write_resp.CT.status == CT.StepOk ==>
+                 SZ.v result.local_write_written <=
+                 SZ.v result.local_write_resp.CT.network_out_len) /\
+                 (result.local_write_resp.CT.status == CT.StepOk \/
+                 result.local_write_written == 0sz))
+
 fn driver_send_close_notify
   (d:driver)
   (empty_payload:array U8.t)
@@ -682,6 +986,41 @@ fn driver_send_close_notify
                  SZ.v result.local_write_resp.CT.network_out_len) /\
                  (result.local_write_resp.CT.status == CT.StepOk \/
                  result.local_write_written == 0sz))
+
+fn rec driver_close_workflow
+  (d:top_driver)
+  (wait_for_peer:bool)
+  (empty_payload:array U8.t)
+  (raw:array U8.t)
+  (raw_capacity:SZ.t)
+  (buffered_len:SZ.t)
+  (network_out:array U8.t)
+  (network_out_len:SZ.t)
+  (app_out:array U8.t)
+  (app_out_len:SZ.t)
+  (fuel:SZ.t)
+  requires top_driver_exactly d 'st0 **
+           pts_to empty_payload 'empty_payload_bytes **
+           pts_to raw 'old_raw **
+           pts_to network_out 'old_network_out **
+           pts_to app_out 'old_app_out **
+           pure (B.length 'empty_payload_bytes == 0 /\
+                 B.length 'old_raw == SZ.v raw_capacity /\
+                 SZ.v buffered_len <= SZ.v raw_capacity /\
+                 B.length 'old_network_out == SZ.v network_out_len /\
+                 B.length 'old_app_out == SZ.v app_out_len /\
+                 L.max_record_fragment_len <= SZ.v app_out_len)
+  returns result: driver_workflow_result
+  ensures exists* st1 raw_bytes network_out_bytes app_out_bytes.
+           C.connection_exactly d.top_driver_core.driver_client st1 **
+           pts_to empty_payload 'empty_payload_bytes **
+           pts_to raw raw_bytes **
+           pts_to network_out network_out_bytes **
+           pts_to app_out app_out_bytes **
+           pure (B.length raw_bytes == SZ.v raw_capacity /\
+                 SZ.v result.driver_workflow_rx_len <= SZ.v raw_capacity /\
+                 B.length network_out_bytes == SZ.v network_out_len /\
+                 B.length app_out_bytes == SZ.v app_out_len)
 
 fn driver_close (d:driver)
   requires driver_exactly d 'st0
