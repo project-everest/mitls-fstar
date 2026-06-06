@@ -102,7 +102,8 @@ EXTRACT_MODULES = \
 # Convert module names to .krml filenames
 KRML_FILES = $(patsubst %,$(OUTPUT_DIR)/%.krml,$(subst .,_,$(EXTRACT_MODULES)))
 
-.PHONY: extract-krml extract-connection extract-smoke
+.PHONY: extract-krml extract-connection extract-smoke \
+  extract-driver-krml extract-driver-bundle
 
 extract-krml: $(KRML_FILES)
 
@@ -166,6 +167,11 @@ BUNDLE_INTERNAL_MODULES = \
 # Extract all impl modules to .krml
 BUNDLE_KRML_FILES = $(patsubst %,$(OUTPUT_DIR)/%.krml,$(subst .,_,$(BUNDLE_IMPL_MODULES)))
 
+DRIVER_BUNDLE_DIR = $(EXTRACT_DIR)/driver_bundle
+DRIVER_KRML_FILES = \
+  $(BUNDLE_KRML_FILES) \
+  $(OUTPUT_DIR)/TLS13_Impl_Client_Driver.krml
+
 # Extract FStar.Pervasives.Native for tuple support
 $(OUTPUT_DIR)/FStar_Pervasives_Native.krml: verify | $(OUTPUT_DIR)
 	$(FSTAR_EXE) --codegen krml --extract_module FStar.Pervasives.Native \
@@ -186,6 +192,8 @@ $(OUTPUT_DIR)/%.krml: verify | $(OUTPUT_DIR)
 	fi
 
 extract-krml-bundle: $(BUNDLE_KRML_FILES) $(OUTPUT_DIR)/FStar_Pervasives_Native.krml
+
+extract-driver-krml: $(DRIVER_KRML_FILES) $(OUTPUT_DIR)/FStar_Pervasives_Native.krml
 
 # Generate C for the new buffer/event-oriented client API.
 extract-bundle: extract-krml-bundle | $(BUNDLE_DIR)
@@ -215,6 +223,27 @@ extract-bundle: extract-krml-bundle | $(BUNDLE_DIR)
 
 $(BUNDLE_DIR):
 	mkdir -p $@
+
+$(DRIVER_BUNDLE_DIR):
+	mkdir -p $@
+
+extract-driver-bundle: extract-driver-krml | $(DRIVER_BUNDLE_DIR)
+	@echo "Extracting TLS13 client driver slice..."
+	@rm -f $(DRIVER_BUNDLE_DIR)/*.c $(DRIVER_BUNDLE_DIR)/*.h $(DRIVER_BUNDLE_DIR)/internal/*.h
+	$(KRML_EXE) \
+	  -tmpdir $(DRIVER_BUNDLE_DIR) \
+	  -skip-compilation \
+	  -warn-error -2-9-17-6 \
+	  -add-include '<stdbool.h>' \
+	  -add-include '"../../c_stubs/tls13_connection_backend.h"' \
+	  -add-include '"../../c_stubs/tls13_crypto_external.h"' \
+	  -add-include '"../../c_stubs/tls13_spec_types.h"' \
+	  -add-include '"../../c_stubs/tls13_io_karamel.h"' \
+	  -bundle 'FStar.*,Pulse.*,PulseCore.*,Prims' \
+	  -no-prefix TLS13.Impl.Client \
+	  -no-prefix TLS13.Impl.Client.Driver \
+	  $(DRIVER_KRML_FILES) \
+	  _output/FStar_Pervasives_Native.krml
 
 # ── Smoke Test Extraction ───────────────────────────────────────────────
 
@@ -257,6 +286,7 @@ CONNECTION_BACKEND_SOURCES = \
 CFLAGS_COMMON = -Wall -Wextra -Wno-deprecated-declarations \
   -ffunction-sections -fdata-sections \
   -I c_stubs \
+  -I runtime \
   -I $(KRML_HOME)/include \
   -I $(KRML_HOME)/krmllib/dist/minimal \
   -I $(HACL_DIR) \
@@ -270,6 +300,7 @@ LDFLAGS_COMMON = -Wl,--gc-sections
 # Testing
 # ──────────────────────────────────────────────────────────────────────────────
 .PHONY: test test-extract-smoke test-connection-bindings \
+  test-extracted-client-driver-slice \
   test-extracted-client-openssl-echo \
   test-key-schedule-bindings test-record-bindings \
   test-hacl-stubs test-openssl-stubs test-io-stubs \
@@ -277,7 +308,8 @@ LDFLAGS_COMMON = -Wl,--gc-sections
 
 test: verify check-c-stubs test-hacl-stubs test-openssl-stubs \
   test-io-stubs test-extract-smoke test-connection-bindings \
-  test-key-schedule-bindings test-record-bindings
+  test-extracted-client-driver-slice test-key-schedule-bindings \
+  test-record-bindings
 
 # ── C Stub Syntax Check ────────────────────────────────────────────
 check-c-stubs:
@@ -345,14 +377,36 @@ test/test_connection_bindings: test/unit/test_connection_bindings.c extract-bund
 test-connection-bindings: test/test_connection_bindings
 	./test/test_connection_bindings
 
+test/test_extracted_client_driver_slice: \
+  test/unit/test_extracted_client_driver_slice.c extract-driver-bundle \
+  c_stubs/tls13_io_karamel.c c_stubs/tls13_io_karamel.h \
+  c_stubs/tls13_io_stubs.c c_stubs/tls13_io_stubs.h $(HACL_OBJECTS)
+	$(CC) $(CFLAGS_COMMON) \
+	  -I_extract/driver_bundle -I_extract/driver_bundle/internal \
+	  _extract/driver_bundle/*.c \
+	  c_stubs/tls13_crypto_external.c \
+	  c_stubs/tls13_pulse_shims.c \
+	  c_stubs/tls13_io_karamel.c \
+	  c_stubs/tls13_io_stubs.c \
+	  test/unit/test_extracted_client_driver_slice.c \
+	  $(HACL_WRAPPER_SOURCES) \
+	  $(LDFLAGS_COMMON) -o $@
+
+test-extracted-client-driver-slice: test/test_extracted_client_driver_slice
+	./test/test_extracted_client_driver_slice
+
 test/test_extracted_client_openssl_echo: \
   test/unit/test_extracted_client_openssl_echo.c extract-bundle \
+  runtime/tls13_client_driver.c runtime/tls13_client_driver.h \
+  c_stubs/tls13_io_stubs.c c_stubs/tls13_io_stubs.h \
   c_stubs/tls13_openssl_stubs.c c_stubs/tls13_openssl_stubs.h $(HACL_OBJECTS)
 	$(CC) $(CFLAGS_COMMON) \
 	  -I_extract/bundle -I_extract/bundle/internal \
 	  _extract/bundle/*.c \
 	  c_stubs/tls13_crypto_external.c \
 	  c_stubs/tls13_pulse_shims.c \
+	  runtime/tls13_client_driver.c \
+	  c_stubs/tls13_io_stubs.c \
 	  c_stubs/tls13_openssl_stubs.c \
 	  test/unit/test_extracted_client_openssl_echo.c \
 	  $(HACL_WRAPPER_SOURCES) \

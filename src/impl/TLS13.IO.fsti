@@ -30,7 +30,7 @@ fn read (ch: channel) (out: array U8.t) (max_len: SZ.t)
           pure (B.length bytes == SZ.v max_len /\ SZ.v n <= SZ.v max_len)
 
 fn write (ch: channel) (buf: array U8.t) (len: SZ.t)
-  requires is_channel ch ** pts_to buf 'bytes ** pure (B.length 'bytes == SZ.v len)
+  requires is_channel ch ** pts_to buf 'bytes ** pure (SZ.v len <= B.length 'bytes)
   returns n: SZ.t
   ensures is_channel ch ** pts_to buf 'bytes ** pure (SZ.v n <= SZ.v len)
 

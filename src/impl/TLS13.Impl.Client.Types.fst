@@ -4898,3 +4898,856 @@ let lemma_some_legal_response_for_equal_network_input
         st0 st1 resp network_input1 network_out app_out)
 =
   Seq.lemma_eq_elim network_input0 network_input1
+
+(**
+  Ghost-only driver traces for the exported buffer/event API.
+
+  The cumulative `connection_state` raw log remains an accepted-event log:
+  every non-stuttering step below contributes exactly the raw delta of a
+  `legal_response_for_event`.  Rejected consumed network input is not added to
+  that cumulative log; instead, the per-step theorem derives a local witness
+  classifying the consumed prefix.
+**)
+
+noextract
+type network_driver_step = {
+  network_driver_st0: CS.connection_state;
+  network_driver_st1: CS.connection_state;
+  network_driver_buffer_resp: client_buffer_response;
+  network_driver_input: B.bytes;
+  network_driver_old_network_out: B.bytes;
+  network_driver_network_out: B.bytes;
+  network_driver_old_app_out: B.bytes;
+  network_driver_app_out: B.bytes;
+}
+
+noextract
+type local_driver_step = {
+  local_driver_st0: CS.connection_state;
+  local_driver_st1: CS.connection_state;
+  local_driver_resp: client_response;
+  local_driver_kind: local_event_kind;
+  local_driver_payload: B.bytes;
+  local_driver_network_out: B.bytes;
+  local_driver_app_out: B.bytes;
+}
+
+noextract
+type driver_step =
+  | DriverNetworkStep of network_driver_step
+  | DriverLocalStep of local_driver_step
+
+noextract
+let driver_step_st0 (step:driver_step) : CS.connection_state =
+  match step with
+  | DriverNetworkStep n -> n.network_driver_st0
+  | DriverLocalStep l -> l.local_driver_st0
+
+noextract
+let driver_step_st1 (step:driver_step) : CS.connection_state =
+  match step with
+  | DriverNetworkStep n -> n.network_driver_st1
+  | DriverLocalStep l -> l.local_driver_st1
+
+noextract
+let driver_step_correct (step:driver_step) : prop =
+  match step with
+  | DriverNetworkStep n ->
+    network_bytes_end_to_end_correct
+      n.network_driver_st0
+      n.network_driver_st1
+      n.network_driver_buffer_resp
+      n.network_driver_input
+      n.network_driver_old_network_out
+      n.network_driver_network_out
+      n.network_driver_old_app_out
+      n.network_driver_app_out
+  | DriverLocalStep l ->
+    local_event_end_to_end_correct
+      l.local_driver_st0
+      l.local_driver_st1
+      l.local_driver_resp
+      l.local_driver_kind
+      l.local_driver_payload
+      l.local_driver_network_out
+      l.local_driver_app_out
+
+noextract
+let network_decode_error_rejected_input_witness
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (buffer_resp:client_buffer_response)
+  (network_input:B.bytes)
+  (network_out:B.bytes)
+  (app_out:B.bytes)
+  : prop =
+  buffer_resp.response.status == DecodeError ==>
+    buffer_resp.consumed_len == 0sz \/
+    (SZ.v buffer_resp.consumed_len <= B.length network_input /\
+     (exists content_type fragment raw_received.
+       Seq.equal raw_received
+         (network_consumed_prefix network_input buffer_resp.consumed_len) /\
+       network_input_wf st0 content_type fragment raw_received /\
+       wire_parse_failure content_type fragment /\
+       raw_record_parse_success raw_received))
+
+noextract
+let network_unexpected_message_rejected_input_witness
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (buffer_resp:client_buffer_response)
+  (network_input:B.bytes)
+  (network_out:B.bytes)
+  (app_out:B.bytes)
+  : prop =
+  buffer_resp.response.status == IllegalTransition ==>
+    buffer_resp.consumed_len == 0sz \/
+    (exists msg.
+      received_tls_raw_delta_legal
+        st0
+        msg
+        (network_consumed_prefix network_input buffer_resp.consumed_len) /\
+      decoded_message_event_projection
+        st0
+        st1
+        buffer_resp.response
+        msg
+        (network_consumed_prefix network_input buffer_resp.consumed_len)
+        network_out
+        app_out)
+
+noextract
+let network_rejected_input_witness
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (buffer_resp:client_buffer_response)
+  (network_input:B.bytes)
+  (network_out:B.bytes)
+  (app_out:B.bytes)
+  : prop =
+  network_decode_error_rejected_input_witness
+    st0
+    st1
+    buffer_resp
+    network_input
+    network_out
+    app_out /\
+  network_unexpected_message_rejected_input_witness
+    st0
+    st1
+    buffer_resp
+    network_input
+    network_out
+    app_out
+
+noextract
+let driver_step_rejected_input_witness (step:driver_step) : prop =
+  match step with
+  | DriverNetworkStep n ->
+    network_rejected_input_witness
+      n.network_driver_st0
+      n.network_driver_st1
+      n.network_driver_buffer_resp
+      n.network_driver_input
+      n.network_driver_network_out
+      n.network_driver_app_out
+  | DriverLocalStep _ ->
+    True
+
+noextract
+let driver_step_legal_wire_delta
+  (step:driver_step)
+  (raw_sent:B.bytes)
+  (raw_received:B.bytes)
+  : prop =
+  match step with
+  | DriverNetworkStep n ->
+    exists ev.
+      legal_response_for_event
+        n.network_driver_st0
+        n.network_driver_st1
+        n.network_driver_buffer_resp.response
+        ev
+        raw_sent
+        raw_received
+        n.network_driver_network_out
+        n.network_driver_app_out
+  | DriverLocalStep l ->
+    exists ev.
+      legal_response_for_event
+        l.local_driver_st0
+        l.local_driver_st1
+        l.local_driver_resp
+        ev
+        raw_sent
+        raw_received
+        l.local_driver_network_out
+        l.local_driver_app_out
+
+noextract
+let driver_step_accepted_wire_delta
+  (step:driver_step)
+  (raw_sent:B.bytes)
+  (raw_received:B.bytes)
+  : prop =
+  driver_step_legal_wire_delta step raw_sent raw_received \/
+  (driver_step_st1 step == driver_step_st0 step /\
+   Seq.equal raw_sent B.empty /\
+   Seq.equal raw_received B.empty)
+
+noextract
+let rec driver_trace_accepted_wire_delta
+  (steps:list driver_step)
+  (raw_sent:B.bytes)
+  (raw_received:B.bytes)
+  : Tot prop
+        (decreases steps)
+=
+  match steps with
+  | [] ->
+    Seq.equal raw_sent B.empty /\
+    Seq.equal raw_received B.empty
+  | step :: rest ->
+    exists step_sent step_received rest_sent rest_received.
+      driver_step_accepted_wire_delta step step_sent step_received /\
+      driver_trace_accepted_wire_delta rest rest_sent rest_received /\
+      Seq.equal raw_sent (B.append step_sent rest_sent) /\
+      Seq.equal raw_received (B.append step_received rest_received)
+
+noextract
+let driver_trace_accepted_wire_log_delta
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (steps:list driver_step)
+  : prop =
+  exists raw_sent raw_received.
+    driver_trace_accepted_wire_delta steps raw_sent raw_received /\
+    Seq.equal
+      st1.CS.cs_wire_log.CL.raw_sent
+      (B.append st0.CS.cs_wire_log.CL.raw_sent raw_sent) /\
+    Seq.equal
+      st1.CS.cs_wire_log.CL.raw_received
+      (B.append st0.CS.cs_wire_log.CL.raw_received raw_received)
+
+noextract
+let rec driver_trace_chained
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (steps:list driver_step)
+  : Tot prop
+        (decreases steps)
+=
+  match steps with
+  | [] ->
+    st1 == st0
+  | step :: rest ->
+    driver_step_st0 step == st0 /\
+    driver_step_correct step /\
+    driver_trace_chained (driver_step_st1 step) st1 rest
+
+noextract
+let rec driver_trace_rejected_input_witnesses
+  (steps:list driver_step)
+  : Tot prop
+        (decreases steps)
+=
+  match steps with
+  | [] -> True
+  | step :: rest ->
+    driver_step_rejected_input_witness step /\
+    driver_trace_rejected_input_witnesses rest
+
+noextract
+let driver_trace_end_to_end
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (steps:list driver_step)
+  : prop =
+  driver_trace_chained st0 st1 steps /\
+  (client_end_to_end_invariant st0 ==> client_end_to_end_invariant st1) /\
+  driver_trace_accepted_wire_log_delta st0 st1 steps /\
+  driver_trace_rejected_input_witnesses steps
+
+let lemma_network_bytes_end_to_end_correct_rejected_input_witness
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (buffer_resp:client_buffer_response)
+  (network_input:B.bytes)
+  (old_network_out:B.bytes)
+  (network_out:B.bytes)
+  (old_app_out:B.bytes)
+  (app_out:B.bytes)
+  : Lemma
+      (requires
+        network_bytes_end_to_end_correct
+          st0 st1 buffer_resp network_input old_network_out network_out old_app_out app_out)
+      (ensures
+        network_rejected_input_witness
+          st0 st1 buffer_resp network_input network_out app_out)
+=
+  if buffer_resp.response.status = DecodeError then (
+    assert (network_bytes_decode_error_projection
+      st0 st1 buffer_resp network_input network_out app_out);
+    assert (network_decode_error_rejected_input_witness
+      st0 st1 buffer_resp network_input network_out app_out)
+  );
+  if buffer_resp.response.status = IllegalTransition then (
+    assert (network_bytes_consumed_input_event_projection
+      st0 st1 buffer_resp network_input network_out app_out);
+    if buffer_resp.consumed_len = 0sz then ()
+    else (
+      assert (buffer_resp.response.status == DecodeError ==> False);
+      assert (exists msg.
+        received_tls_raw_delta_legal
+          st0
+          msg
+          (network_consumed_prefix network_input buffer_resp.consumed_len) /\
+        decoded_message_event_projection
+          st0
+          st1
+          buffer_resp.response
+          msg
+          (network_consumed_prefix network_input buffer_resp.consumed_len)
+          network_out
+          app_out)
+    );
+    assert (network_unexpected_message_rejected_input_witness
+      st0 st1 buffer_resp network_input network_out app_out)
+  )
+
+let lemma_driver_step_correct_rejected_input_witness
+  (step:driver_step)
+  : Lemma
+      (requires driver_step_correct step)
+      (ensures driver_step_rejected_input_witness step)
+=
+  match step with
+  | DriverNetworkStep n ->
+    lemma_network_bytes_end_to_end_correct_rejected_input_witness
+      n.network_driver_st0
+      n.network_driver_st1
+      n.network_driver_buffer_resp
+      n.network_driver_input
+      n.network_driver_old_network_out
+      n.network_driver_network_out
+      n.network_driver_old_app_out
+      n.network_driver_app_out
+  | DriverLocalStep _ ->
+    ()
+
+let lemma_driver_step_correct_client_end_to_end_invariant
+  (step:driver_step)
+  : Lemma
+      (requires driver_step_correct step /\ client_end_to_end_invariant (driver_step_st0 step))
+      (ensures client_end_to_end_invariant (driver_step_st1 step))
+=
+  match step with
+  | DriverNetworkStep n ->
+    lemma_network_bytes_end_to_end_correct_client_end_to_end_invariant
+      n.network_driver_st0
+      n.network_driver_st1
+      n.network_driver_buffer_resp
+      n.network_driver_input
+      n.network_driver_old_network_out
+      n.network_driver_network_out
+      n.network_driver_old_app_out
+      n.network_driver_app_out
+  | DriverLocalStep l ->
+    lemma_local_event_end_to_end_correct_client_end_to_end_invariant
+      l.local_driver_st0
+      l.local_driver_st1
+      l.local_driver_resp
+      l.local_driver_kind
+      l.local_driver_payload
+      l.local_driver_network_out
+      l.local_driver_app_out
+
+noextract
+let driver_step_some_legal_response (step:driver_step) : prop =
+  match step with
+  | DriverNetworkStep n ->
+    some_legal_response
+      n.network_driver_st0
+      n.network_driver_st1
+      n.network_driver_buffer_resp.response
+      n.network_driver_network_out
+      n.network_driver_app_out
+  | DriverLocalStep l ->
+    some_legal_response
+      l.local_driver_st0
+      l.local_driver_st1
+      l.local_driver_resp
+      l.local_driver_network_out
+      l.local_driver_app_out
+
+let lemma_some_legal_response_driver_step_legal_wire_delta
+  (step:driver_step)
+  : Lemma
+      (requires driver_step_some_legal_response step)
+      (ensures exists raw_sent raw_received.
+        driver_step_legal_wire_delta step raw_sent raw_received)
+=
+  match step with
+  | DriverNetworkStep n ->
+    assert (exists ev raw_sent raw_received.
+      legal_response_for_event
+        n.network_driver_st0
+        n.network_driver_st1
+        n.network_driver_buffer_resp.response
+        ev
+        raw_sent
+        raw_received
+        n.network_driver_network_out
+        n.network_driver_app_out);
+    let ev =
+      ID.indefinite_description_ghost
+        CS.conn_event
+        (fun ev -> exists raw_sent raw_received.
+          legal_response_for_event
+            n.network_driver_st0
+            n.network_driver_st1
+            n.network_driver_buffer_resp.response
+            ev
+            raw_sent
+            raw_received
+            n.network_driver_network_out
+            n.network_driver_app_out) in
+    let raw_sent =
+      ID.indefinite_description_ghost
+        B.bytes
+        (fun raw_sent -> exists raw_received.
+          legal_response_for_event
+            n.network_driver_st0
+            n.network_driver_st1
+            n.network_driver_buffer_resp.response
+            ev
+            raw_sent
+            raw_received
+            n.network_driver_network_out
+            n.network_driver_app_out) in
+    let raw_received =
+      ID.indefinite_description_ghost
+        B.bytes
+        (fun raw_received ->
+          legal_response_for_event
+            n.network_driver_st0
+            n.network_driver_st1
+            n.network_driver_buffer_resp.response
+            ev
+            raw_sent
+            raw_received
+            n.network_driver_network_out
+            n.network_driver_app_out) in
+    assert (driver_step_legal_wire_delta step raw_sent raw_received)
+  | DriverLocalStep l ->
+    assert (exists ev raw_sent raw_received.
+      legal_response_for_event
+        l.local_driver_st0
+        l.local_driver_st1
+        l.local_driver_resp
+        ev
+        raw_sent
+        raw_received
+        l.local_driver_network_out
+        l.local_driver_app_out);
+    let ev =
+      ID.indefinite_description_ghost
+        CS.conn_event
+        (fun ev -> exists raw_sent raw_received.
+          legal_response_for_event
+            l.local_driver_st0
+            l.local_driver_st1
+            l.local_driver_resp
+            ev
+            raw_sent
+            raw_received
+            l.local_driver_network_out
+            l.local_driver_app_out) in
+    let raw_sent =
+      ID.indefinite_description_ghost
+        B.bytes
+        (fun raw_sent -> exists raw_received.
+          legal_response_for_event
+            l.local_driver_st0
+            l.local_driver_st1
+            l.local_driver_resp
+            ev
+            raw_sent
+            raw_received
+            l.local_driver_network_out
+            l.local_driver_app_out) in
+    let raw_received =
+      ID.indefinite_description_ghost
+        B.bytes
+        (fun raw_received ->
+          legal_response_for_event
+            l.local_driver_st0
+            l.local_driver_st1
+            l.local_driver_resp
+            ev
+            raw_sent
+            raw_received
+            l.local_driver_network_out
+            l.local_driver_app_out) in
+    assert (driver_step_legal_wire_delta step raw_sent raw_received)
+
+let lemma_driver_step_correct_accepted_wire_delta
+  (step:driver_step)
+  : Lemma
+      (requires driver_step_correct step)
+      (ensures exists raw_sent raw_received.
+        driver_step_accepted_wire_delta step raw_sent raw_received /\
+        Seq.equal
+          (driver_step_st1 step).CS.cs_wire_log.CL.raw_sent
+          (B.append (driver_step_st0 step).CS.cs_wire_log.CL.raw_sent raw_sent) /\
+        Seq.equal
+          (driver_step_st1 step).CS.cs_wire_log.CL.raw_received
+          (B.append (driver_step_st0 step).CS.cs_wire_log.CL.raw_received raw_received))
+=
+  match step with
+  | DriverNetworkStep n ->
+    if response_stuttered
+        n.network_driver_st0
+        n.network_driver_st1
+        n.network_driver_buffer_resp.response
+        n.network_driver_old_network_out
+        n.network_driver_network_out
+        n.network_driver_old_app_out
+        n.network_driver_app_out
+    then (
+      assert (n.network_driver_st1 == n.network_driver_st0);
+      CL.lemma_append_empty_right n.network_driver_st0.CS.cs_wire_log.CL.raw_sent;
+      CL.lemma_append_empty_right n.network_driver_st0.CS.cs_wire_log.CL.raw_received;
+      assert (driver_step_accepted_wire_delta step B.empty B.empty)
+    )
+    else (
+      assert (network_bytes_step_correct
+        n.network_driver_st0
+        n.network_driver_st1
+        n.network_driver_buffer_resp
+        n.network_driver_input
+        n.network_driver_old_network_out
+        n.network_driver_network_out
+        n.network_driver_old_app_out
+        n.network_driver_app_out);
+      assert (some_legal_response
+        n.network_driver_st0
+        n.network_driver_st1
+        n.network_driver_buffer_resp.response
+        n.network_driver_network_out
+        n.network_driver_app_out);
+      lemma_some_legal_response_driver_step_legal_wire_delta step;
+      assert (exists raw_sent raw_received.
+        driver_step_legal_wire_delta step raw_sent raw_received);
+      let raw_sent =
+        ID.indefinite_description_ghost
+          B.bytes
+          (fun raw_sent -> exists raw_received.
+            driver_step_legal_wire_delta step raw_sent raw_received) in
+      let raw_received =
+        ID.indefinite_description_ghost
+          B.bytes
+          (fun raw_received ->
+            driver_step_legal_wire_delta step raw_sent raw_received) in
+      assert (exists ev.
+        legal_response_for_event
+          n.network_driver_st0
+          n.network_driver_st1
+          n.network_driver_buffer_resp.response
+          ev
+          raw_sent
+          raw_received
+          n.network_driver_network_out
+          n.network_driver_app_out);
+      let ev =
+        ID.indefinite_description_ghost
+          CS.conn_event
+          (fun ev ->
+            legal_response_for_event
+              n.network_driver_st0
+              n.network_driver_st1
+              n.network_driver_buffer_resp.response
+              ev
+              raw_sent
+              raw_received
+              n.network_driver_network_out
+              n.network_driver_app_out) in
+      assert (legal_response_for_event
+        n.network_driver_st0
+        n.network_driver_st1
+        n.network_driver_buffer_resp.response
+        ev
+        raw_sent
+        raw_received
+        n.network_driver_network_out
+        n.network_driver_app_out);
+      assert (legal_delta
+        n.network_driver_st0
+        n.network_driver_st1
+        ev
+        raw_sent
+        raw_received);
+      assert (driver_step_accepted_wire_delta step raw_sent raw_received)
+    )
+  | DriverLocalStep l ->
+    assert (local_event_step_correct
+      l.local_driver_st0
+      l.local_driver_st1
+      l.local_driver_resp
+      l.local_driver_kind
+      l.local_driver_payload
+      l.local_driver_network_out
+      l.local_driver_app_out);
+    assert (some_legal_response
+      l.local_driver_st0
+      l.local_driver_st1
+      l.local_driver_resp
+      l.local_driver_network_out
+      l.local_driver_app_out);
+    lemma_some_legal_response_driver_step_legal_wire_delta step;
+    assert (exists raw_sent raw_received.
+      driver_step_legal_wire_delta step raw_sent raw_received);
+    let raw_sent =
+      ID.indefinite_description_ghost
+        B.bytes
+        (fun raw_sent -> exists raw_received.
+          driver_step_legal_wire_delta step raw_sent raw_received) in
+    let raw_received =
+      ID.indefinite_description_ghost
+        B.bytes
+        (fun raw_received ->
+          driver_step_legal_wire_delta step raw_sent raw_received) in
+    assert (exists ev.
+      legal_response_for_event
+        l.local_driver_st0
+        l.local_driver_st1
+        l.local_driver_resp
+        ev
+        raw_sent
+        raw_received
+        l.local_driver_network_out
+        l.local_driver_app_out);
+    let ev =
+      ID.indefinite_description_ghost
+        CS.conn_event
+        (fun ev ->
+          legal_response_for_event
+            l.local_driver_st0
+            l.local_driver_st1
+            l.local_driver_resp
+            ev
+            raw_sent
+            raw_received
+            l.local_driver_network_out
+            l.local_driver_app_out) in
+    assert (legal_response_for_event
+      l.local_driver_st0
+      l.local_driver_st1
+      l.local_driver_resp
+      ev
+      raw_sent
+      raw_received
+      l.local_driver_network_out
+      l.local_driver_app_out);
+    assert (legal_delta
+      l.local_driver_st0
+      l.local_driver_st1
+      ev
+      raw_sent
+      raw_received);
+    assert (driver_step_accepted_wire_delta step raw_sent raw_received)
+
+let rec lemma_driver_trace_rejected_input_witnesses
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (steps:list driver_step)
+  : Lemma
+      (requires driver_trace_chained st0 st1 steps)
+      (ensures driver_trace_rejected_input_witnesses steps)
+      (decreases steps)
+=
+  match steps with
+  | [] -> ()
+  | step :: rest ->
+    assert (driver_step_correct step);
+    lemma_driver_step_correct_rejected_input_witness step;
+    lemma_driver_trace_rejected_input_witnesses (driver_step_st1 step) st1 rest
+
+let rec lemma_driver_trace_preserves_client_end_to_end_invariant
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (steps:list driver_step)
+  : Lemma
+      (requires
+        driver_trace_chained st0 st1 steps /\
+        client_end_to_end_invariant st0)
+      (ensures client_end_to_end_invariant st1)
+      (decreases steps)
+=
+  match steps with
+  | [] ->
+    assert (st1 == st0)
+  | step :: rest ->
+    assert (driver_step_st0 step == st0);
+    assert (driver_step_correct step);
+    lemma_driver_step_correct_client_end_to_end_invariant step;
+    lemma_driver_trace_preserves_client_end_to_end_invariant
+      (driver_step_st1 step)
+      st1
+      rest
+
+let rec lemma_driver_trace_accepted_wire_log_delta
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (steps:list driver_step)
+  : Lemma
+      (requires driver_trace_chained st0 st1 steps)
+      (ensures driver_trace_accepted_wire_log_delta st0 st1 steps)
+      (decreases steps)
+=
+  match steps with
+  | [] ->
+    assert (st1 == st0);
+    CL.lemma_append_empty_right st0.CS.cs_wire_log.CL.raw_sent;
+    CL.lemma_append_empty_right st0.CS.cs_wire_log.CL.raw_received;
+    assert (driver_trace_accepted_wire_delta [] B.empty B.empty)
+  | step :: rest ->
+    assert (driver_step_st0 step == st0);
+    assert (driver_step_correct step);
+    lemma_driver_step_correct_accepted_wire_delta step;
+    assert (exists step_sent step_received.
+      driver_step_accepted_wire_delta step step_sent step_received /\
+      Seq.equal
+        (driver_step_st1 step).CS.cs_wire_log.CL.raw_sent
+        (B.append st0.CS.cs_wire_log.CL.raw_sent step_sent) /\
+      Seq.equal
+        (driver_step_st1 step).CS.cs_wire_log.CL.raw_received
+        (B.append st0.CS.cs_wire_log.CL.raw_received step_received));
+    let step_sent =
+      ID.indefinite_description_ghost
+        B.bytes
+        (fun step_sent -> exists step_received.
+          driver_step_accepted_wire_delta step step_sent step_received /\
+          Seq.equal
+            (driver_step_st1 step).CS.cs_wire_log.CL.raw_sent
+            (B.append st0.CS.cs_wire_log.CL.raw_sent step_sent) /\
+          Seq.equal
+            (driver_step_st1 step).CS.cs_wire_log.CL.raw_received
+            (B.append st0.CS.cs_wire_log.CL.raw_received step_received)) in
+    let step_received =
+      ID.indefinite_description_ghost
+        B.bytes
+        (fun step_received ->
+          driver_step_accepted_wire_delta step step_sent step_received /\
+          Seq.equal
+            (driver_step_st1 step).CS.cs_wire_log.CL.raw_sent
+            (B.append st0.CS.cs_wire_log.CL.raw_sent step_sent) /\
+          Seq.equal
+            (driver_step_st1 step).CS.cs_wire_log.CL.raw_received
+            (B.append st0.CS.cs_wire_log.CL.raw_received step_received)) in
+    assert (driver_step_accepted_wire_delta step step_sent step_received);
+    assert (Seq.equal
+      (driver_step_st1 step).CS.cs_wire_log.CL.raw_sent
+      (B.append st0.CS.cs_wire_log.CL.raw_sent step_sent));
+    assert (Seq.equal
+      (driver_step_st1 step).CS.cs_wire_log.CL.raw_received
+      (B.append st0.CS.cs_wire_log.CL.raw_received step_received));
+    lemma_driver_trace_accepted_wire_log_delta (driver_step_st1 step) st1 rest;
+    assert (exists rest_sent rest_received.
+      driver_trace_accepted_wire_delta rest rest_sent rest_received /\
+      Seq.equal
+        st1.CS.cs_wire_log.CL.raw_sent
+        (B.append (driver_step_st1 step).CS.cs_wire_log.CL.raw_sent rest_sent) /\
+      Seq.equal
+        st1.CS.cs_wire_log.CL.raw_received
+        (B.append (driver_step_st1 step).CS.cs_wire_log.CL.raw_received rest_received));
+    let rest_sent =
+      ID.indefinite_description_ghost
+        B.bytes
+        (fun rest_sent -> exists rest_received.
+          driver_trace_accepted_wire_delta rest rest_sent rest_received /\
+          Seq.equal
+            st1.CS.cs_wire_log.CL.raw_sent
+            (B.append (driver_step_st1 step).CS.cs_wire_log.CL.raw_sent rest_sent) /\
+          Seq.equal
+            st1.CS.cs_wire_log.CL.raw_received
+            (B.append (driver_step_st1 step).CS.cs_wire_log.CL.raw_received rest_received)) in
+    let rest_received =
+      ID.indefinite_description_ghost
+        B.bytes
+        (fun rest_received ->
+          driver_trace_accepted_wire_delta rest rest_sent rest_received /\
+          Seq.equal
+            st1.CS.cs_wire_log.CL.raw_sent
+            (B.append (driver_step_st1 step).CS.cs_wire_log.CL.raw_sent rest_sent) /\
+          Seq.equal
+            st1.CS.cs_wire_log.CL.raw_received
+            (B.append (driver_step_st1 step).CS.cs_wire_log.CL.raw_received rest_received)) in
+    assert (driver_trace_accepted_wire_delta rest rest_sent rest_received);
+    assert (Seq.equal
+      st1.CS.cs_wire_log.CL.raw_sent
+      (B.append (driver_step_st1 step).CS.cs_wire_log.CL.raw_sent rest_sent));
+    assert (Seq.equal
+      st1.CS.cs_wire_log.CL.raw_received
+      (B.append (driver_step_st1 step).CS.cs_wire_log.CL.raw_received rest_received));
+    Seq.lemma_eq_elim
+      (driver_step_st1 step).CS.cs_wire_log.CL.raw_sent
+      (B.append st0.CS.cs_wire_log.CL.raw_sent step_sent);
+    Seq.lemma_eq_elim
+      (driver_step_st1 step).CS.cs_wire_log.CL.raw_received
+      (B.append st0.CS.cs_wire_log.CL.raw_received step_received);
+    Seq.append_assoc st0.CS.cs_wire_log.CL.raw_sent step_sent rest_sent;
+    Seq.append_assoc st0.CS.cs_wire_log.CL.raw_received step_received rest_received;
+    assert (Seq.equal
+      (B.append step_sent rest_sent)
+      (B.append step_sent rest_sent));
+    assert (Seq.equal
+      (B.append step_received rest_received)
+      (B.append step_received rest_received));
+    assert (exists step_sent' step_received' rest_sent' rest_received'.
+      driver_step_accepted_wire_delta step step_sent' step_received' /\
+      driver_trace_accepted_wire_delta rest rest_sent' rest_received' /\
+      Seq.equal (B.append step_sent rest_sent) (B.append step_sent' rest_sent') /\
+      Seq.equal
+        (B.append step_received rest_received)
+        (B.append step_received' rest_received'));
+    assert (driver_trace_accepted_wire_delta
+      (step :: rest)
+      (B.append step_sent rest_sent)
+      (B.append step_received rest_received));
+    assert (Seq.equal
+      st1.CS.cs_wire_log.CL.raw_sent
+      (B.append st0.CS.cs_wire_log.CL.raw_sent (B.append step_sent rest_sent)));
+    assert (Seq.equal
+      st1.CS.cs_wire_log.CL.raw_received
+      (B.append st0.CS.cs_wire_log.CL.raw_received (B.append step_received rest_received)))
+
+let lemma_driver_trace_end_to_end
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (steps:list driver_step)
+  : Lemma
+      (requires driver_trace_chained st0 st1 steps)
+      (ensures driver_trace_end_to_end st0 st1 steps)
+=
+  if client_end_to_end_invariant st0 then
+    lemma_driver_trace_preserves_client_end_to_end_invariant st0 st1 steps;
+  lemma_driver_trace_accepted_wire_log_delta st0 st1 steps;
+  lemma_driver_trace_rejected_input_witnesses st0 st1 steps
+
+let lemma_driver_trace_from_initial_end_to_end
+  (cfg:CS.connection_config)
+  (st1:CS.connection_state)
+  (steps:list driver_step)
+  : Lemma
+      (requires driver_trace_chained (CS.initial cfg) st1 steps)
+      (ensures
+        client_end_to_end_invariant st1 /\
+        driver_trace_end_to_end (CS.initial cfg) st1 steps)
+=
+  lemma_initial_client_end_to_end_invariant cfg;
+  lemma_driver_trace_end_to_end (CS.initial cfg) st1 steps;
+  lemma_driver_trace_preserves_client_end_to_end_invariant
+    (CS.initial cfg)
+    st1
+    steps
