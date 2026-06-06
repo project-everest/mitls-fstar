@@ -216,9 +216,9 @@ fn process_local_event_and_write_once
                  B.length 'old_network_out == SZ.v network_out_len /\
                  B.length 'old_app_out == SZ.v app_out_len /\
                  CT.local_input_wf
-                   'st0
-                   kind
-                   (Ghost.reveal 'payload_bytes))
+                 'st0
+                 kind
+                 (Ghost.reveal 'payload_bytes))
   returns result: local_write_result
   ensures exists* st1 network_out_bytes app_out_bytes.
            C.connection_exactly c st1 **
@@ -229,18 +229,18 @@ fn process_local_event_and_write_once
            pure (B.length network_out_bytes == SZ.v network_out_len /\
                  B.length app_out_bytes == SZ.v app_out_len /\
                  CT.local_event_end_to_end_correct
-                   'st0
-                   st1
-                   result.local_write_resp
-                   kind
-                   (Ghost.reveal 'payload_bytes)
-                   network_out_bytes
-                   app_out_bytes /\
+                 'st0
+                 st1
+                 result.local_write_resp
+                 kind
+                 (Ghost.reveal 'payload_bytes)
+                 network_out_bytes
+                 app_out_bytes /\
                  (result.local_write_resp.CT.status == CT.StepOk ==>
-                  SZ.v result.local_write_written <=
-                  SZ.v result.local_write_resp.CT.network_out_len) /\
+                 SZ.v result.local_write_written <=
+                 SZ.v result.local_write_resp.CT.network_out_len) /\
                  (result.local_write_resp.CT.status == CT.StepOk \/
-                  result.local_write_written == 0sz))
+                 result.local_write_written == 0sz))
 
 fn driver_process_local_event
   (d:driver)
@@ -283,88 +283,6 @@ fn driver_process_local_event
                  SZ.v result.local_write_resp.CT.network_out_len) /\
                  (result.local_write_resp.CT.status == CT.StepOk \/
                  result.local_write_written == 0sz))
-
-fn receive_network_bytes_once
-  (d:driver)
-  (raw:array U8.t)
-  (raw_len:SZ.t)
-  (network_out:array U8.t)
-  (network_out_len:SZ.t)
-  (app_out:array U8.t)
-  (app_out_len:SZ.t)
-  requires driver_exactly d 'st0 **
-           pts_to raw 'raw_bytes **
-           pts_to network_out 'old_network_out **
-           pts_to app_out 'old_app_out **
-           pure (B.length 'raw_bytes == SZ.v raw_len /\
-                 B.length 'old_network_out == SZ.v network_out_len /\
-                 B.length 'old_app_out == SZ.v app_out_len /\
-                 L.max_record_fragment_len <= SZ.v app_out_len)
-  returns result: network_write_result
-  ensures exists* st1 network_out_bytes app_out_bytes.
-           driver_exactly d st1 **
-           pts_to raw 'raw_bytes **
-           pts_to network_out network_out_bytes **
-           pts_to app_out app_out_bytes **
-           pure (B.length network_out_bytes == SZ.v network_out_len /\
-                 B.length app_out_bytes == SZ.v app_out_len /\
-                 CT.network_bytes_end_to_end_correct
-                  'st0
-                  st1
-                  result.network_write_buffer_resp
-                  (Ghost.reveal 'raw_bytes)
-                  (Ghost.reveal 'old_network_out)
-                  network_out_bytes
-                  (Ghost.reveal 'old_app_out)
-                  app_out_bytes /\
-                 (result.network_write_buffer_resp.CT.response.CT.status ==
-                 CT.StepOk ==>
-                 SZ.v result.network_write_written <=
-                 SZ.v result.network_write_buffer_resp.CT.response.CT.network_out_len) /\
-                 (result.network_write_buffer_resp.CT.response.CT.status ==
-                 CT.StepOk \/
-                 result.network_write_written == 0sz))
-
-fn driver_receive_application_data_once
-  (d:driver)
-  (raw:array U8.t)
-  (raw_len:SZ.t)
-  (network_out:array U8.t)
-  (network_out_len:SZ.t)
-  (app_out:array U8.t)
-  (app_out_len:SZ.t)
-  requires driver_exactly d 'st0 **
-           pts_to raw 'raw_bytes **
-           pts_to network_out 'old_network_out **
-           pts_to app_out 'old_app_out **
-           pure (B.length 'raw_bytes == SZ.v raw_len /\
-                 B.length 'old_network_out == SZ.v network_out_len /\
-                 B.length 'old_app_out == SZ.v app_out_len /\
-                 L.max_record_fragment_len <= SZ.v app_out_len)
-  returns result: network_write_result
-  ensures exists* st1 network_out_bytes app_out_bytes.
-           driver_exactly d st1 **
-           pts_to raw 'raw_bytes **
-           pts_to network_out network_out_bytes **
-           pts_to app_out app_out_bytes **
-           pure (B.length network_out_bytes == SZ.v network_out_len /\
-                 B.length app_out_bytes == SZ.v app_out_len /\
-                 CT.network_bytes_end_to_end_correct
-                 'st0
-                 st1
-                 result.network_write_buffer_resp
-                 (Ghost.reveal 'raw_bytes)
-                 (Ghost.reveal 'old_network_out)
-                 network_out_bytes
-                 (Ghost.reveal 'old_app_out)
-                 app_out_bytes /\
-                 (result.network_write_buffer_resp.CT.response.CT.status ==
-                 CT.StepOk ==>
-                 SZ.v result.network_write_written <=
-                 SZ.v result.network_write_buffer_resp.CT.response.CT.network_out_len) /\
-                 (result.network_write_buffer_resp.CT.response.CT.status ==
-                 CT.StepOk \/
-                 result.network_write_written == 0sz))
 
 fn driver_process_buffered_network_bytes_once
   (d:driver)
@@ -514,129 +432,6 @@ fn driver_read_buffered_network_bytes_compact_once
                  (Ghost.reveal 'old_app_out)
                  app_out_bytes)
 
-fn rec driver_process_buffered_network_records
-  (d:driver)
-  (raw:array U8.t)
-  (raw_capacity:SZ.t)
-  (buffered_len:SZ.t)
-  (network_out:array U8.t)
-  (network_out_len:SZ.t)
-  (app_out:array U8.t)
-  (app_out_len:SZ.t)
-  (fuel:SZ.t)
-  requires driver_exactly d 'st0 **
-           pts_to raw 'old_raw **
-           pts_to network_out 'old_network_out **
-           pts_to app_out 'old_app_out **
-           pure (B.length 'old_raw == SZ.v raw_capacity /\
-                 SZ.v buffered_len <= SZ.v raw_capacity /\
-                 B.length 'old_network_out == SZ.v network_out_len /\
-                 B.length 'old_app_out == SZ.v app_out_len /\
-                 L.max_record_fragment_len <= SZ.v app_out_len)
-  returns result: buffered_network_loop_result
-  ensures exists* st1 raw_bytes network_out_bytes app_out_bytes.
-           driver_exactly d st1 **
-           pts_to raw raw_bytes **
-           pts_to network_out network_out_bytes **
-           pts_to app_out app_out_bytes **
-           pure (B.length raw_bytes == SZ.v raw_capacity /\
-                 SZ.v result.buffered_network_loop_last.buffered_network_new_len <=
-                  SZ.v buffered_len /\
-                 B.length network_out_bytes == SZ.v network_out_len /\
-                 B.length app_out_bytes == SZ.v app_out_len)
-
-fn driver_read_network_bytes_once
-  (d:driver)
-  (raw:array U8.t)
-  (raw_capacity:SZ.t)
-  (network_out:array U8.t)
-  (network_out_len:SZ.t)
-  (app_out:array U8.t)
-  (app_out_len:SZ.t)
-  requires driver_exactly d 'st0 **
-           pts_to raw 'old_raw **
-           pts_to network_out 'old_network_out **
-           pts_to app_out 'old_app_out **
-           pure (B.length 'old_raw == SZ.v raw_capacity /\
-                 B.length 'old_network_out == SZ.v network_out_len /\
-                 B.length 'old_app_out == SZ.v app_out_len /\
-                 L.max_record_fragment_len <= SZ.v app_out_len)
-  returns result: network_read_result
-  ensures exists* st1 raw_bytes network_out_bytes app_out_bytes.
-           driver_exactly d st1 **
-           pts_to raw raw_bytes **
-           pts_to network_out network_out_bytes **
-           pts_to app_out app_out_bytes **
-           pure (B.length raw_bytes ==
-                  SZ.v raw_capacity /\
-                 B.length (Ghost.reveal result.network_read_prefix) ==
-                  SZ.v result.network_read_len /\
-                 SZ.v result.network_read_len <= SZ.v raw_capacity /\
-                 B.length network_out_bytes == SZ.v network_out_len /\
-                 B.length app_out_bytes == SZ.v app_out_len /\
-                 CT.network_bytes_end_to_end_correct
-                 'st0
-                 st1
-                 result.network_read_buffer_resp
-                 (Ghost.reveal result.network_read_prefix)
-                 (Ghost.reveal 'old_network_out)
-                 network_out_bytes
-                 (Ghost.reveal 'old_app_out)
-                 app_out_bytes /\
-                 (result.network_read_buffer_resp.CT.response.CT.status ==
-                 CT.StepOk ==>
-                 SZ.v result.network_read_written <=
-                 SZ.v result.network_read_buffer_resp.CT.response.CT.network_out_len) /\
-                 (result.network_read_buffer_resp.CT.response.CT.status ==
-                 CT.StepOk \/
-                 result.network_read_written == 0sz))
-
-fn driver_read_application_data_once
-  (d:driver)
-  (raw:array U8.t)
-  (raw_capacity:SZ.t)
-  (network_out:array U8.t)
-  (network_out_len:SZ.t)
-  (app_out:array U8.t)
-  (app_out_len:SZ.t)
-  requires driver_exactly d 'st0 **
-           pts_to raw 'old_raw **
-           pts_to network_out 'old_network_out **
-           pts_to app_out 'old_app_out **
-           pure (B.length 'old_raw == SZ.v raw_capacity /\
-                 B.length 'old_network_out == SZ.v network_out_len /\
-                 B.length 'old_app_out == SZ.v app_out_len /\
-                 L.max_record_fragment_len <= SZ.v app_out_len)
-  returns result: network_read_result
-  ensures exists* st1 raw_bytes network_out_bytes app_out_bytes.
-           driver_exactly d st1 **
-           pts_to raw raw_bytes **
-           pts_to network_out network_out_bytes **
-           pts_to app_out app_out_bytes **
-           pure (B.length raw_bytes ==
-                  SZ.v raw_capacity /\
-                 B.length (Ghost.reveal result.network_read_prefix) ==
-                  SZ.v result.network_read_len /\
-                 SZ.v result.network_read_len <= SZ.v raw_capacity /\
-                 B.length network_out_bytes == SZ.v network_out_len /\
-                 B.length app_out_bytes == SZ.v app_out_len /\
-                 CT.network_bytes_end_to_end_correct
-                 'st0
-                 st1
-                 result.network_read_buffer_resp
-                 (Ghost.reveal result.network_read_prefix)
-                 (Ghost.reveal 'old_network_out)
-                 network_out_bytes
-                 (Ghost.reveal 'old_app_out)
-                 app_out_bytes /\
-                 (result.network_read_buffer_resp.CT.response.CT.status ==
-                 CT.StepOk ==>
-                 SZ.v result.network_read_written <=
-                 SZ.v result.network_read_buffer_resp.CT.response.CT.network_out_len) /\
-                 (result.network_read_buffer_resp.CT.response.CT.status ==
-                 CT.StepOk \/
-                 result.network_read_written == 0sz))
-
 fn process_ready_internal_local_action_once
   (c:C.client)
   (ch:IO.channel)
@@ -665,28 +460,28 @@ fn process_ready_internal_local_action_once
            pure (B.length network_out_bytes == SZ.v network_out_len /\
                  B.length app_out_bytes == SZ.v app_out_len /\
                  C.next_local_action_sound
-                   'st0
-                   network_out_len
-                   certificate_public_key_len
-                   server_finished_payload_len
-                   result.ready_local_action /\
+                 'st0
+                 network_out_len
+                 certificate_public_key_len
+                 server_finished_payload_len
+                 result.ready_local_action /\
                  (result.ready_local_processed ==>
-                  result.ready_local_action.CT.next_local_ready == true /\
-                  CT.local_event_end_to_end_correct
-                    'st0
-                    st1
-                    result.ready_local_resp
-                    result.ready_local_action.CT.next_local_kind
-                    (Ghost.reveal 'empty_payload_bytes)
-                    network_out_bytes
-                    app_out_bytes /\
-                  (result.ready_local_resp.CT.status == CT.StepOk ==>
-                   SZ.v result.ready_local_written <=
-                   SZ.v result.ready_local_resp.CT.network_out_len) /\
-                  (result.ready_local_resp.CT.status == CT.StepOk \/
-                   result.ready_local_written == 0sz)) /\
+                 result.ready_local_action.CT.next_local_ready == true /\
+                 CT.local_event_end_to_end_correct
+                  'st0
+                  st1
+                  result.ready_local_resp
+                  result.ready_local_action.CT.next_local_kind
+                  (Ghost.reveal 'empty_payload_bytes)
+                  network_out_bytes
+                  app_out_bytes /\
+                 (result.ready_local_resp.CT.status == CT.StepOk ==>
+                 SZ.v result.ready_local_written <=
+                 SZ.v result.ready_local_resp.CT.network_out_len) /\
+                 (result.ready_local_resp.CT.status == CT.StepOk \/
+                 result.ready_local_written == 0sz)) /\
                  (result.ready_local_processed \/
-                  result.ready_local_written == 0sz))
+                 result.ready_local_written == 0sz))
 
 fn driver_handshake_step
   (d:driver)
@@ -713,26 +508,26 @@ fn driver_handshake_step
            pure (B.length network_out_bytes == SZ.v network_out_len /\
                  B.length app_out_bytes == SZ.v app_out_len /\
                  C.next_local_action_sound
-                  'st0
-                  network_out_len
-                  certificate_public_key_len
-                  server_finished_payload_len
-                  result.ready_local_action /\
+                 'st0
+                 network_out_len
+                 certificate_public_key_len
+                 server_finished_payload_len
+                 result.ready_local_action /\
                  (result.ready_local_processed ==>
                  result.ready_local_action.CT.next_local_ready == true /\
                  CT.local_event_end_to_end_correct
-                   'st0
-                   st1
-                   result.ready_local_resp
-                   result.ready_local_action.CT.next_local_kind
-                   (Ghost.reveal 'empty_payload_bytes)
-                   network_out_bytes
-                   app_out_bytes /\
+                  'st0
+                  st1
+                  result.ready_local_resp
+                  result.ready_local_action.CT.next_local_kind
+                  (Ghost.reveal 'empty_payload_bytes)
+                  network_out_bytes
+                  app_out_bytes /\
                  (result.ready_local_resp.CT.status == CT.StepOk ==>
-                  SZ.v result.ready_local_written <=
-                  SZ.v result.ready_local_resp.CT.network_out_len) /\
+                 SZ.v result.ready_local_written <=
+                 SZ.v result.ready_local_resp.CT.network_out_len) /\
                  (result.ready_local_resp.CT.status == CT.StepOk \/
-                  result.ready_local_written == 0sz)) /\
+                 result.ready_local_written == 0sz)) /\
                  (result.ready_local_processed \/
                  result.ready_local_written == 0sz))
 
@@ -785,9 +580,9 @@ fn send_application_data_once
                  B.length 'old_network_out == SZ.v network_out_len /\
                  B.length 'old_app_out == SZ.v app_out_len /\
                  CT.local_input_wf
-                   'st0
-                   CT.LocalSendApplicationData
-                   (Ghost.reveal 'payload_bytes))
+                  'st0
+                  CT.LocalSendApplicationData
+                  (Ghost.reveal 'payload_bytes))
   returns result: local_write_result
   ensures exists* st1 network_out_bytes app_out_bytes.
            C.connection_exactly c st1 **
@@ -798,18 +593,18 @@ fn send_application_data_once
            pure (B.length network_out_bytes == SZ.v network_out_len /\
                  B.length app_out_bytes == SZ.v app_out_len /\
                  CT.local_event_end_to_end_correct
-                   'st0
-                   st1
-                   result.local_write_resp
-                   CT.LocalSendApplicationData
-                   (Ghost.reveal 'payload_bytes)
-                   network_out_bytes
-                   app_out_bytes /\
+                  'st0
+                  st1
+                  result.local_write_resp
+                  CT.LocalSendApplicationData
+                  (Ghost.reveal 'payload_bytes)
+                  network_out_bytes
+                  app_out_bytes /\
                  (result.local_write_resp.CT.status == CT.StepOk ==>
-                  SZ.v result.local_write_written <=
-                  SZ.v result.local_write_resp.CT.network_out_len) /\
+                 SZ.v result.local_write_written <=
+                 SZ.v result.local_write_resp.CT.network_out_len) /\
                  (result.local_write_resp.CT.status == CT.StepOk \/
-                  result.local_write_written == 0sz))
+                 result.local_write_written == 0sz))
 
 fn driver_send_application_data
   (d:driver)

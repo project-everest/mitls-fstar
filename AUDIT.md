@@ -94,23 +94,23 @@ The facade owns a `driver` record containing an extracted client and
 - externally validated local-event completion;
 - one ready internal local action;
 - bounded local-action drain;
-- exact-buffer network receive and application-receive aliases;
 - buffered-prefix network processing and suffix compaction for full-capacity
   retained receive buffers;
 - retained-buffer read-append into the free suffix followed by buffered-prefix
   processing and suffix compaction;
-- read-prefix network receive via `TLS13.IO.read`;
 - application-data send;
 - close_notify send;
 - channel close.
 
-The read-prefix function is the important receive-buffer bridge. `TLS13.IO.read`
-returns ownership of the full-capacity buffer, while `process_network_bytes`
-requires a raw array whose logical length is exactly the bytes read. The Pulse
-driver uses `Pulse.Lib.Array.sub` / `return_sub` to split the received prefix,
-call `process_network_bytes` on that exact prefix, and restore the full buffer.
-The processed prefix is carried as an erased proof field, so it does not change
-the generated C layout.
+The retained-buffer read-append function is the important receive-buffer bridge.
+`TLS13.IO.read` writes into the free suffix of a caller-owned retained buffer,
+while `process_network_bytes` requires a raw array whose logical length is
+exactly the buffered bytes being processed. The Pulse driver uses
+`Pulse.Lib.Array.sub` / `return_sub` to split the read suffix, rejoin the full
+buffer, split the buffered prefix, call `process_network_bytes` on that exact
+prefix, and restore ownership of the full retained buffer. The processed prefix
+is carried as an erased proof field, so it does not change the generated C
+layout.
 
 The same split/restore pattern is also exposed for retained receive buffers by
 `driver_process_buffered_network_bytes_once` and
@@ -126,6 +126,15 @@ full buffer, and then runs the same verified buffered-prefix processing and
 compaction path. The concrete runtime now uses this entry point when it needs
 more network input; the C code no longer performs a direct socket read into the
 retained receive buffer.
+
+Exact-buffer receive, standalone read-prefix receive, and recursive
+buffered-record loops remain private implementation slices rather than exported
+C APIs. The generated driver header is still intentionally larger than
+`runtime/tls13_client_driver.h` because OpenSSL certificate validation and
+CertificateVerify remain explicit C callbacks, and the current KaRaMeL bundle
+still requires a few wrapper-dependency local-action entry points to be declared
+in the interface. The public Pulse surface no longer exports obsolete receive
+aliases that the runtime does not call.
 
 The extracted driver facade is tested by `make test-extracted-client-driver-slice`.
 
