@@ -29,10 +29,11 @@ The current committed proof surface is centered on `TLS13.Impl.Client`, not the 
 - Both public step predicates directly preserve `CT.client_end_to_end_invariant`.
 - `CT.client_end_to_end_invariant` packages `CT.client_state_correct` with `CS.connection_state_raw_to_message_replay_consistent`.
 - `CT.driver_trace_end_to_end` folds those public step predicates over a ghost driver trace.
-- `runtime/tls13_client_driver.c` is now a thin C ABI wrapper over the extracted `TLS13.Impl.Client.Driver` top-level workflow: connect calls `driver_open`, handshake calls `driver_handshake`, send calls `top_driver_send_application_data`, receive calls `driver_receive_application_data`, and close calls `driver_close_workflow`.
-- `TLS13.Impl.Client.Driver` now contains a curated C-facing Pulse driver facade and a `top_driver` workflow. The lower-level facade still exposes connect, snapshots, auth copyout/completion, local-action steps/drain, retained-buffer prefix processing, retained-buffer read-append, suffix compaction, application send, close_notify, and channel close. The top-level workflow adds typed OpenSSL auth orchestration through `TLS13.OpenSSL.fsti`, fueled handshake/receive loops, and close orchestration; certificate validation splits the auth payload to the exact validated peer-identity prefix before completing `LocalValidateCertificate`. Exact-buffer receive, standalone read-prefix receive, and helper buffered-record loops remain implementation-private.
-- The top-level workflow checks response write counts: if a local or network `StepOk` emits network bytes but `TLS13.IO.write` writes a short prefix, the workflow returns `DriverWorkflowStepFailed` instead of advancing to apparent success.
-- The Pulse driver facade has a separate extraction path, `make test-extracted-client-driver-slice`, with small C ABI bridges for extracted IO (`c_stubs/tls13_io_karamel.*`) and the typed OpenSSL TCB (`c_stubs/tls13_openssl_karamel.*`).
+- `runtime/tls13_client_driver.c` is now a thin C ABI wrapper over the extracted `TLS13.Impl.Client.Driver` top-level workflow: connect calls verified `new_client` and `connect`, handshake is a compatibility no-op after connect, send calls verified `send`, receive calls verified `receive`, and close calls verified `close`.
+- `TLS13.Impl.Client.Driver.fsti` now exposes the intended narrow Pulse API: `client_driver`, its live/connected/closed predicates, `driver_workflow_status`, `client_receive_result`, and exactly `new_client`, `connect`, `send`, `receive`, and `close`. The implementation keeps the older `driver`/`top_driver`, auth copyout/completion, local-action drain, retained-buffer processing/read-append/compaction, and fueled workflow helpers private.
+- The top-level workflow owns the retained receive buffer and scratch buffers in Pulse, calls typed OpenSSL auth through `TLS13.OpenSSL.fsti`, performs the handshake inside `connect`, copies application plaintext to the caller buffer inside `receive`, and closes/frees IO/auth/buffer resources inside `close`. Certificate validation splits the auth payload to the exact validated peer-identity prefix before completing `LocalValidateCertificate`.
+- The workflow checks response write counts: if a local or network `StepOk` emits network bytes but `TLS13.IO.write` writes a short prefix, the workflow returns `DriverWorkflowStepFailed` instead of advancing to apparent success.
+- The Pulse driver has a separate extraction path, `make test-extracted-client-driver-slice`, with small C ABI bridges for extracted IO (`c_stubs/tls13_io_karamel.*`) and the typed OpenSSL TCB (`c_stubs/tls13_openssl_karamel.*`). `TLS13_IO.krml` is included in the driver bundle so the generated IO ABI is typechecked and no hand-written IO prototypes are injected into generated headers.
 
 The invariant now includes:
 
@@ -73,11 +74,11 @@ The trace theorem now adds:
 The concrete runtime driver in `runtime/tls13_client_driver.c` now adds only the
 stable C ABI around the extracted workflow:
 
-- fixed runtime buffers for retained network input, network output, app output,
-  and auth scratch space;
-- status-to-error translation and caller plaintext copyout;
-- calls into `driver_open`, `driver_handshake`, `top_driver_send_application_data`,
-  `driver_receive_application_data`, and `driver_close_workflow`.
+- allocation of the small C wrapper object;
+- a connected flag and status-to-error translation;
+- calls into `TLS13_Impl_Client_Driver_new_client`, `connect`, `send`,
+  `receive`, and `close` (with generated names prefixed in C to avoid POSIX
+  symbol collisions).
 
 The Parser/Serializer TCB surface has been narrowed and strengthened:
 
@@ -112,23 +113,24 @@ The stronger "all bytes ever consumed are cumulatively classified" theorem would
 
 ### 2. Keep shrinking the remaining C runtime shell
 
-The top-level handshake, receive, send, and close workflow is now in verified
-Pulse. The concrete driver no longer calls raw `next_local_action`,
+The top-level connect/handshake, receive, send, and close workflow is now in
+verified Pulse. The concrete driver no longer calls raw `next_local_action`,
 `process_local_event`, `process_network_bytes`, `control_snapshot`, auth copyout
 wrappers, or read/process/compact helpers directly. Instead, the runtime's public
-C API calls `driver_open`, `driver_handshake`, `top_driver_send_application_data`,
-`driver_receive_application_data`, and `driver_close_workflow`.
+C API calls the narrow extracted driver operations: `new_client`, `connect`,
+`send`, `receive`, and `close`.
 
-The verified Pulse facade remains caller-buffer-supplied rather than fully
-heap-owning. It verifies retained-buffer prefix processing, retained-buffer
+The verified Pulse driver now owns its retained receive/output/auth scratch
+buffers. It verifies retained-buffer prefix processing, retained-buffer
 read-append into the free suffix, suffix compaction, response writes, internal
-local-action processing, typed OpenSSL auth orchestration, and fueled top-level
-handshake/receive/close loops. The exact-buffer, standalone read-prefix, and
-helper recursive buffered-record functions remain private implementation slices.
+local-action processing, typed OpenSSL auth orchestration, fueled top-level
+connect/receive/close loops, and `receive` copyout to a caller buffer. The
+exact-buffer, standalone read-prefix, and helper recursive buffered-record
+functions remain private implementation slices.
 
 Remaining work:
 
-- design a Pulse-owned heap driver state with receive/output/auth buffers if we want to remove the remaining C buffer ownership and wrapper allocation code;
+- add a public free/close path for an allocated-but-never-connected driver if that lifecycle becomes part of the public API; today failed connect is terminal, and successful connect must be followed by close;
 - decide whether to prove liveness/progress beyond the current fueled workflow status API;
 - keep the typed OpenSSL interface (`TLS13.OpenSSL.fsti`) as the explicit auth TCB, or replace it with verified validation/signature code later;
 - keep TCP connect/read/write in the unverified C bridge, with stronger `TLS13.IO` specs over raw byte logs when we want transport-honesty proofs;
@@ -186,9 +188,9 @@ Start with these files:
 - `src/impl/TLS13.Impl.Client.fsti`: public API and theorem-returning postconditions.
 - `src/impl/TLS13.Impl.Client.Types.fst`: definitions of `client_state_correct`, `client_end_to_end_invariant`, `network_bytes_end_to_end_correct`, `local_event_end_to_end_correct`, and the `driver_trace_end_to_end` theorem surface.
 - `runtime/tls13_client_driver.c` and `.h`: stable concrete C API and thin wrapper around the extracted top-level Pulse workflow.
-- `src/impl/TLS13.Impl.Client.Driver.fsti` and `.fst`: curated verified/extracted Pulse driver facade, top-level workflow, private helper slices, and the current transport/auth TCB boundary.
+- `src/impl/TLS13.Impl.Client.Driver.fsti` and `.fst`: narrowed verified/extracted Pulse driver API, top-level workflow, private helper slices, and the current transport/auth TCB boundary.
 - `src/impl/TLS13.OpenSSL.fsti` and `c_stubs/tls13_openssl_karamel.*`: typed OpenSSL auth TCB used by the verified workflow.
-- `c_stubs/tls13_io_karamel.*` and `test/unit/test_extracted_client_driver_slice.c`: C ABI bridge and smoke test for the extracted Pulse driver facade.
+- `c_stubs/tls13_io_karamel.*` and `test/unit/test_extracted_client_driver_slice.c`: C ABI bridge and smoke test for the extracted narrow Pulse driver API.
 - `src/spec/TLS13.Spec.ConnectionState.fst`: `connection_state_raw_to_message_replay_consistent`, legal deltas, cumulative replay predicates, and the accepted-versus-rejected raw-byte distinction.
 - `src/impl/TLS13.Impl.Parser.fsti` and `src/impl/TLS13.Impl.Serializer.fsti`: active TCB contracts.
 - `c_stubs/tls13_connection_backend.h`: handwritten C implementation of parser/serializer assumptions.

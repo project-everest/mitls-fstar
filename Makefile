@@ -170,6 +170,7 @@ BUNDLE_KRML_FILES = $(patsubst %,$(OUTPUT_DIR)/%.krml,$(subst .,_,$(BUNDLE_IMPL_
 DRIVER_BUNDLE_DIR = $(EXTRACT_DIR)/driver_bundle
 DRIVER_KRML_FILES = \
   $(BUNDLE_KRML_FILES) \
+  $(OUTPUT_DIR)/TLS13_IO.krml \
   $(OUTPUT_DIR)/TLS13_Impl_Client_Driver.krml \
   $(OUTPUT_DIR)/TLS13_OpenSSL.krml
 
@@ -241,11 +242,9 @@ extract-driver-bundle: extract-driver-krml | $(DRIVER_BUNDLE_DIR)
 	  -add-include '"../../c_stubs/tls13_connection_backend.h"' \
 	  -add-include '"../../c_stubs/tls13_crypto_external.h"' \
 	  -add-include '"../../c_stubs/tls13_spec_types.h"' \
-	  -add-include '"../../c_stubs/tls13_io_karamel.h"' \
 	  -add-include '"../../c_stubs/tls13_openssl_karamel.h"' \
 	  -bundle 'FStar.*,Pulse.*,PulseCore.*,Prims' \
 	  -no-prefix TLS13.Impl.Client \
-	  -no-prefix TLS13.Impl.Client.Driver \
 	  $(DRIVER_KRML_FILES) \
 	  _output/FStar_Pervasives_Native.krml
 

@@ -16,11 +16,185 @@ module IO = TLS13.IO
 module L = TLS13.Impl.Messages
 module M = TLS13.Messages
 module O = TLS13.OpenSSL
+module Box = Pulse.Lib.Box
 module R = Pulse.Lib.Reference
 module Seq = FStar.Seq
 module SZ = FStar.SizeT
 module U16 = FStar.UInt16
 module U8 = FStar.UInt8
+module V = Pulse.Lib.Vec
+
+let driver_network_out_capacity : SZ.t = SZ.uint_to_t 20000
+let driver_app_out_capacity : SZ.t = SZ.uint_to_t 16640
+let driver_rx_capacity : SZ.t = SZ.uint_to_t 65535
+let driver_public_key_payload_capacity : SZ.t = SZ.uint_to_t 4096
+let driver_auth_leaf_der_capacity : SZ.t = SZ.uint_to_t 32768
+let driver_certificate_verify_input_capacity : SZ.t = SZ.uint_to_t 256
+let driver_signature_capacity : SZ.t = SZ.uint_to_t 4096
+let driver_server_finished_payload_len : SZ.t = 36sz
+
+noeq type client_driver = {
+  client_driver_client: C.client;
+  client_driver_auth: O.auth_context;
+  client_driver_channel: Box.box (option IO.channel);
+  client_driver_buffered_len: Box.box SZ.t;
+  client_driver_empty_payload: V.vec U8.t;
+  client_driver_raw: V.vec U8.t;
+  client_driver_network_out: V.vec U8.t;
+  client_driver_auth_leaf_der: V.vec U8.t;
+  client_driver_auth_payload: V.vec U8.t;
+  client_driver_auth_cv_input: V.vec U8.t;
+  client_driver_auth_signature: V.vec U8.t;
+  client_driver_app_out: V.vec U8.t;
+}
+
+noeq type driver = {
+  driver_client: C.client;
+  driver_channel: IO.channel;
+}
+
+noextract
+let driver_exactly
+  (d:driver)
+  (st:TLS13.Spec.ConnectionState.connection_state)
+  : slprop =
+  C.connection_exactly d.driver_client st **
+  IO.is_channel d.driver_channel
+
+noeq type top_driver = {
+  top_driver_core: driver;
+  top_driver_auth: O.auth_context;
+}
+
+let no_channel : option IO.channel = None
+
+noextract
+let top_driver_exactly
+  (d:top_driver)
+  (st:TLS13.Spec.ConnectionState.connection_state)
+  : slprop =
+  driver_exactly d.top_driver_core st **
+  O.is_auth_context d.top_driver_auth
+
+noextract
+let client_driver_buffers
+  (d:client_driver)
+  (buffered_len:SZ.t)
+  : slprop =
+  Box.pts_to d.client_driver_buffered_len buffered_len **
+  exists* empty_payload raw network_out auth_leaf_der auth_payload auth_cv_input auth_signature app_out.
+    V.pts_to d.client_driver_empty_payload #1.0R empty_payload **
+    V.pts_to d.client_driver_raw #1.0R raw **
+    V.pts_to d.client_driver_network_out #1.0R network_out **
+    V.pts_to d.client_driver_auth_leaf_der #1.0R auth_leaf_der **
+    V.pts_to d.client_driver_auth_payload #1.0R auth_payload **
+    V.pts_to d.client_driver_auth_cv_input #1.0R auth_cv_input **
+    V.pts_to d.client_driver_auth_signature #1.0R auth_signature **
+    V.pts_to d.client_driver_app_out #1.0R app_out **
+    pure (
+      B.length empty_payload == 0 /\
+      B.length raw == SZ.v driver_rx_capacity /\
+      B.length network_out == SZ.v driver_network_out_capacity /\
+      B.length auth_leaf_der == SZ.v driver_auth_leaf_der_capacity /\
+      B.length auth_payload == SZ.v driver_public_key_payload_capacity /\
+      B.length auth_cv_input == SZ.v driver_certificate_verify_input_capacity /\
+      B.length auth_signature == SZ.v driver_signature_capacity /\
+      B.length app_out == SZ.v driver_app_out_capacity /\
+      SZ.v buffered_len <= SZ.v driver_rx_capacity /\
+      Bounds.max_handshake_flight_len <= SZ.v driver_auth_leaf_der_capacity /\
+      SZ.v driver_public_key_payload_capacity <= Bounds.max_public_key_len /\
+      Bounds.max_certificate_verify_input_len <= SZ.v driver_certificate_verify_input_capacity /\
+      L.max_signature_len <= SZ.v driver_signature_capacity /\
+      L.max_record_fragment_len <= SZ.v driver_app_out_capacity /\
+      V.is_full_vec d.client_driver_empty_payload /\
+      V.is_full_vec d.client_driver_raw /\
+      V.is_full_vec d.client_driver_network_out /\
+      V.is_full_vec d.client_driver_auth_leaf_der /\
+      V.is_full_vec d.client_driver_auth_payload /\
+      V.is_full_vec d.client_driver_auth_cv_input /\
+      V.is_full_vec d.client_driver_auth_signature /\
+      V.is_full_vec d.client_driver_app_out)
+
+noextract
+let client_driver_live
+  (d:client_driver)
+  (st:TLS13.Spec.ConnectionState.connection_state)
+  : slprop =
+  C.connection_exactly d.client_driver_client st **
+  O.is_auth_context d.client_driver_auth **
+  exists* buffered_len.
+    Box.pts_to d.client_driver_channel no_channel **
+    client_driver_buffers d buffered_len
+
+noextract
+let client_driver_connected
+  (d:client_driver)
+  (st:TLS13.Spec.ConnectionState.connection_state)
+  : slprop =
+  C.connection_exactly d.client_driver_client st **
+  O.is_auth_context d.client_driver_auth **
+  exists* ch buffered_len.
+    Box.pts_to d.client_driver_channel (Some ch) **
+    IO.is_channel ch **
+    client_driver_buffers d buffered_len
+
+noextract
+let client_driver_closed
+  (d:client_driver)
+  (st:TLS13.Spec.ConnectionState.connection_state)
+  : slprop =
+  C.connection_exactly d.client_driver_client st
+
+type network_write_result = {
+  network_write_buffer_resp: CT.client_buffer_response;
+  network_write_written: SZ.t;
+}
+
+type local_write_result = {
+  local_write_resp: CT.client_response;
+  local_write_written: SZ.t;
+}
+
+noeq type network_read_result = {
+  network_read_len: SZ.t;
+  network_read_buffer_resp: CT.client_buffer_response;
+  network_read_written: SZ.t;
+  network_read_prefix: Ghost.erased B.bytes;
+}
+
+noeq type buffered_network_result = {
+  buffered_network_read: network_read_result;
+  buffered_network_new_len: SZ.t;
+}
+
+noeq type buffered_network_io_result = {
+  buffered_network_io_read_len: SZ.t;
+  buffered_network_io_buffered: buffered_network_result;
+}
+
+noeq type buffered_network_loop_result = {
+  buffered_network_loop_last: buffered_network_result;
+  buffered_network_loop_exhausted: bool;
+}
+
+type ready_local_action_result = {
+  ready_local_action: CT.next_local_action;
+  ready_local_processed: bool;
+  ready_local_resp: CT.client_response;
+  ready_local_written: SZ.t;
+}
+
+type driver_drain_result = {
+  driver_drain_last: ready_local_action_result;
+  driver_drain_exhausted: bool;
+}
+
+noeq type driver_workflow_result = {
+  driver_workflow_status: driver_workflow_status;
+  driver_workflow_rx_len: SZ.t;
+  driver_workflow_local: driver_drain_result;
+  driver_workflow_network: buffered_network_io_result;
+}
 
 noextract
 let internal_local_action_kind
@@ -70,6 +244,168 @@ let lemma_ready_internal_action_empty_payload_wf
     assert False
   | _ ->
     ()
+
+fn new_client
+  (server_name:array U8.t)
+  (server_name_len:SZ.t)
+  (trust_anchors:array U8.t)
+  (trust_anchors_len:SZ.t)
+  (validation_time_seconds:SZ.t)
+  requires pts_to server_name 'server_name_bytes **
+           pts_to trust_anchors 'trust_anchors_bytes **
+           pure (B.length 'server_name_bytes == SZ.v server_name_len /\
+                 B.length 'trust_anchors_bytes == SZ.v trust_anchors_len /\
+                 SZ.v server_name_len <=
+                   TLS13.Impl.ConnectionState.Bounds.max_hostname_len /\
+                 SZ.v trust_anchors_len <=
+                   TLS13.Impl.ConnectionState.Bounds.max_trust_anchors_len)
+  returns result: option client_driver
+  ensures pts_to server_name 'server_name_bytes **
+          pts_to trust_anchors 'trust_anchors_bytes **
+          (match result with
+           | Some d ->
+             client_driver_live
+               d
+               (CR.configured_initial_state
+                 (Ghost.reveal 'server_name_bytes)
+                 (Ghost.reveal 'trust_anchors_bytes)
+                 validation_time_seconds) **
+             pure (CT.client_state_correct
+               (CR.configured_initial_state
+                 (Ghost.reveal 'server_name_bytes)
+                 (Ghost.reveal 'trust_anchors_bytes)
+                 validation_time_seconds) /\
+                   CT.client_end_to_end_invariant
+                     (CR.configured_initial_state
+                       (Ghost.reveal 'server_name_bytes)
+                       (Ghost.reveal 'trust_anchors_bytes)
+                       validation_time_seconds))
+           | None ->
+             emp)
+{
+  let auth_opt =
+    O.auth_context_new
+      server_name
+      server_name_len
+      trust_anchors
+      trust_anchors_len
+      validation_time_seconds;
+  match auth_opt {
+    None -> {
+      None
+    }
+    Some auth -> {
+      let c =
+        C.new_client
+          server_name
+          server_name_len
+          trust_anchors
+          trust_anchors_len
+          validation_time_seconds;
+      rewrite
+        (CR.connection_exactly
+          c
+          (CR.configured_initial_state
+            (Ghost.reveal 'server_name_bytes)
+            (Ghost.reveal 'trust_anchors_bytes)
+            validation_time_seconds))
+        as
+        (C.connection_exactly
+          c
+          (CR.configured_initial_state
+            (Ghost.reveal 'server_name_bytes)
+            (Ghost.reveal 'trust_anchors_bytes)
+            validation_time_seconds));
+      let channel = Box.alloc no_channel;
+      let buffered_len = Box.alloc 0sz;
+      let empty_payload = V.alloc 0uy 0sz;
+      let raw = V.alloc 0uy driver_rx_capacity;
+      let network_out = V.alloc 0uy driver_network_out_capacity;
+      let auth_leaf_der = V.alloc 0uy driver_auth_leaf_der_capacity;
+      let auth_payload = V.alloc 0uy driver_public_key_payload_capacity;
+      let auth_cv_input = V.alloc 0uy driver_certificate_verify_input_capacity;
+      let auth_signature = V.alloc 0uy driver_signature_capacity;
+      let app_out = V.alloc 0uy driver_app_out_capacity;
+      assert (pure (Bounds.max_handshake_flight_len <= SZ.v driver_auth_leaf_der_capacity));
+      assert (pure (SZ.v driver_public_key_payload_capacity <= Bounds.max_public_key_len));
+      assert (pure (Bounds.max_certificate_verify_input_len <= SZ.v driver_certificate_verify_input_capacity));
+      assert (pure (L.max_signature_len <= SZ.v driver_signature_capacity));
+      assert (pure (L.max_record_fragment_len <= SZ.v driver_app_out_capacity));
+      let d = {
+        client_driver_client = c;
+        client_driver_auth = auth;
+        client_driver_channel = channel;
+        client_driver_buffered_len = buffered_len;
+        client_driver_empty_payload = empty_payload;
+        client_driver_raw = raw;
+        client_driver_network_out = network_out;
+        client_driver_auth_leaf_der = auth_leaf_der;
+        client_driver_auth_payload = auth_payload;
+        client_driver_auth_cv_input = auth_cv_input;
+        client_driver_auth_signature = auth_signature;
+        client_driver_app_out = app_out;
+      };
+      rewrite (Box.pts_to channel no_channel) as
+        (Box.pts_to d.client_driver_channel no_channel);
+      rewrite (Box.pts_to buffered_len 0sz) as
+        (Box.pts_to d.client_driver_buffered_len 0sz);
+      rewrite (V.pts_to empty_payload #1.0R (Seq.create 0 0uy)) as
+        (V.pts_to d.client_driver_empty_payload #1.0R (Seq.create 0 0uy));
+      rewrite
+        (V.pts_to raw #1.0R (Seq.create (SZ.v driver_rx_capacity) 0uy))
+        as
+        (V.pts_to d.client_driver_raw #1.0R (Seq.create (SZ.v driver_rx_capacity) 0uy));
+      rewrite
+        (V.pts_to network_out #1.0R (Seq.create (SZ.v driver_network_out_capacity) 0uy))
+        as
+        (V.pts_to d.client_driver_network_out #1.0R (Seq.create (SZ.v driver_network_out_capacity) 0uy));
+      rewrite
+        (V.pts_to auth_leaf_der #1.0R (Seq.create (SZ.v driver_auth_leaf_der_capacity) 0uy))
+        as
+        (V.pts_to d.client_driver_auth_leaf_der #1.0R (Seq.create (SZ.v driver_auth_leaf_der_capacity) 0uy));
+      rewrite
+        (V.pts_to auth_payload #1.0R (Seq.create (SZ.v driver_public_key_payload_capacity) 0uy))
+        as
+        (V.pts_to d.client_driver_auth_payload #1.0R (Seq.create (SZ.v driver_public_key_payload_capacity) 0uy));
+      rewrite
+        (V.pts_to auth_cv_input #1.0R (Seq.create (SZ.v driver_certificate_verify_input_capacity) 0uy))
+        as
+        (V.pts_to d.client_driver_auth_cv_input #1.0R (Seq.create (SZ.v driver_certificate_verify_input_capacity) 0uy));
+      rewrite
+        (V.pts_to auth_signature #1.0R (Seq.create (SZ.v driver_signature_capacity) 0uy))
+        as
+        (V.pts_to d.client_driver_auth_signature #1.0R (Seq.create (SZ.v driver_signature_capacity) 0uy));
+      rewrite
+        (V.pts_to app_out #1.0R (Seq.create (SZ.v driver_app_out_capacity) 0uy))
+        as
+        (V.pts_to d.client_driver_app_out #1.0R (Seq.create (SZ.v driver_app_out_capacity) 0uy));
+      rewrite
+        (C.connection_exactly
+          c
+          (CR.configured_initial_state
+            (Ghost.reveal 'server_name_bytes)
+            (Ghost.reveal 'trust_anchors_bytes)
+            validation_time_seconds))
+        as
+        (C.connection_exactly
+          d.client_driver_client
+          (CR.configured_initial_state
+            (Ghost.reveal 'server_name_bytes)
+            (Ghost.reveal 'trust_anchors_bytes)
+            validation_time_seconds));
+      rewrite (O.is_auth_context auth) as (O.is_auth_context d.client_driver_auth);
+      fold (client_driver_buffers d 0sz);
+      fold
+        (client_driver_live
+          d
+          (CR.configured_initial_state
+            (Ghost.reveal 'server_name_bytes)
+            (Ghost.reveal 'trust_anchors_bytes)
+            validation_time_seconds));
+      Some d
+    }
+  }
+}
 
 fn driver_connect
   (connect_host:array U8.t)
@@ -3491,4 +3827,585 @@ fn driver_close (d:driver)
 {
   unfold (driver_exactly d 'st0);
   IO.close d.driver_channel
+}
+
+inline_for_extraction
+fn free_client_driver_buffers
+  (d:client_driver)
+  (buffered_len:SZ.t)
+  requires client_driver_buffers d buffered_len
+  ensures emp
+{
+  unfold (client_driver_buffers d buffered_len);
+  with empty_payload raw network_out auth_leaf_der auth_payload auth_cv_input auth_signature app_out.
+    assert (Box.pts_to d.client_driver_buffered_len buffered_len **
+            V.pts_to d.client_driver_empty_payload #1.0R empty_payload **
+            V.pts_to d.client_driver_raw #1.0R raw **
+            V.pts_to d.client_driver_network_out #1.0R network_out **
+            V.pts_to d.client_driver_auth_leaf_der #1.0R auth_leaf_der **
+            V.pts_to d.client_driver_auth_payload #1.0R auth_payload **
+            V.pts_to d.client_driver_auth_cv_input #1.0R auth_cv_input **
+            V.pts_to d.client_driver_auth_signature #1.0R auth_signature **
+            V.pts_to d.client_driver_app_out #1.0R app_out);
+  V.free d.client_driver_empty_payload;
+  V.free d.client_driver_raw;
+  V.free d.client_driver_network_out;
+  V.free d.client_driver_auth_leaf_der;
+  V.free d.client_driver_auth_payload;
+  V.free d.client_driver_auth_cv_input;
+  V.free d.client_driver_auth_signature;
+  V.free d.client_driver_app_out;
+  Box.free d.client_driver_buffered_len;
+}
+
+inline_for_extraction
+fn free_disconnected_client_driver
+  (d:client_driver)
+  (buffered_len:SZ.t)
+  requires C.connection_exactly d.client_driver_client 'st0 **
+           O.is_auth_context d.client_driver_auth **
+           Box.pts_to d.client_driver_channel no_channel **
+           client_driver_buffers d buffered_len
+  ensures client_driver_closed d 'st0
+{
+  O.auth_context_free d.client_driver_auth;
+  Box.free d.client_driver_channel;
+  free_client_driver_buffers d buffered_len;
+  fold (client_driver_closed d 'st0);
+}
+
+inline_for_extraction
+fn close_failed_connect
+  (d:client_driver)
+  (ch:IO.channel)
+  (buffered_len:SZ.t)
+  requires C.connection_exactly d.client_driver_client 'st0 **
+           O.is_auth_context d.client_driver_auth **
+           IO.is_channel ch **
+           Box.pts_to d.client_driver_channel no_channel **
+           client_driver_buffers d buffered_len
+  ensures client_driver_closed d 'st0
+{
+  IO.close ch;
+  free_disconnected_client_driver d buffered_len;
+}
+
+fn connect
+  (d:client_driver)
+  (connect_host:array U8.t)
+  (connect_host_len:SZ.t)
+  (port:U16.t)
+  (local_fuel:SZ.t)
+  (fuel:SZ.t)
+  requires client_driver_live d 'st0 **
+           pts_to connect_host 'connect_host_bytes **
+           pure (B.length 'connect_host_bytes == SZ.v connect_host_len)
+  returns status:driver_workflow_status
+  ensures exists* st1.
+          pts_to connect_host 'connect_host_bytes **
+          (match status with
+           | DriverWorkflowOk ->
+             client_driver_connected d st1
+           | _ ->
+             client_driver_closed d st1)
+{
+  unfold (client_driver_live d 'st0);
+  with buffered_len.
+    assert (C.connection_exactly d.client_driver_client 'st0 **
+            O.is_auth_context d.client_driver_auth **
+            Box.pts_to d.client_driver_channel no_channel **
+            client_driver_buffers d buffered_len);
+  unfold (client_driver_buffers d buffered_len);
+  let current_buffered_len = Box.(!d.client_driver_buffered_len);
+  assert (pure (current_buffered_len == buffered_len));
+  fold (client_driver_buffers d buffered_len);
+  let ch_opt = IO.connect_tcp connect_host connect_host_len port;
+  match ch_opt {
+    None -> {
+      free_disconnected_client_driver d current_buffered_len;
+      DriverWorkflowStepFailed
+    }
+    Some ch -> {
+      unfold (client_driver_buffers d buffered_len);
+      with empty_payload raw network_out auth_leaf_der auth_payload auth_cv_input auth_signature app_out.
+        assert (Box.pts_to d.client_driver_buffered_len buffered_len **
+                V.pts_to d.client_driver_empty_payload #1.0R empty_payload **
+                V.pts_to d.client_driver_raw #1.0R raw **
+                V.pts_to d.client_driver_network_out #1.0R network_out **
+                V.pts_to d.client_driver_auth_leaf_der #1.0R auth_leaf_der **
+                V.pts_to d.client_driver_auth_payload #1.0R auth_payload **
+                V.pts_to d.client_driver_auth_cv_input #1.0R auth_cv_input **
+                V.pts_to d.client_driver_auth_signature #1.0R auth_signature **
+                V.pts_to d.client_driver_app_out #1.0R app_out);
+      V.to_array_pts_to d.client_driver_empty_payload;
+      V.to_array_pts_to d.client_driver_raw;
+      V.to_array_pts_to d.client_driver_network_out;
+      V.to_array_pts_to d.client_driver_auth_leaf_der;
+      V.to_array_pts_to d.client_driver_auth_payload;
+      V.to_array_pts_to d.client_driver_auth_cv_input;
+      V.to_array_pts_to d.client_driver_auth_signature;
+      V.to_array_pts_to d.client_driver_app_out;
+      let core = {
+        driver_client = d.client_driver_client;
+        driver_channel = ch;
+      };
+      let td = {
+        top_driver_core = core;
+        top_driver_auth = d.client_driver_auth;
+      };
+      rewrite (C.connection_exactly d.client_driver_client 'st0) as
+        (C.connection_exactly core.driver_client 'st0);
+      rewrite (IO.is_channel ch) as (IO.is_channel core.driver_channel);
+      fold (driver_exactly core 'st0);
+      rewrite (driver_exactly core 'st0) as (driver_exactly td.top_driver_core 'st0);
+      rewrite (O.is_auth_context d.client_driver_auth) as (O.is_auth_context td.top_driver_auth);
+      fold (top_driver_exactly td 'st0);
+      let result =
+        driver_handshake
+          td
+          (V.vec_to_array d.client_driver_empty_payload)
+          (V.vec_to_array d.client_driver_raw)
+          driver_rx_capacity
+          current_buffered_len
+          (V.vec_to_array d.client_driver_network_out)
+          driver_network_out_capacity
+          (V.vec_to_array d.client_driver_auth_leaf_der)
+          driver_auth_leaf_der_capacity
+          (V.vec_to_array d.client_driver_auth_payload)
+          (V.vec_to_array d.client_driver_auth_cv_input)
+          driver_certificate_verify_input_capacity
+          (V.vec_to_array d.client_driver_auth_signature)
+          driver_signature_capacity
+          driver_public_key_payload_capacity
+          driver_server_finished_payload_len
+          (V.vec_to_array d.client_driver_app_out)
+          driver_app_out_capacity
+          local_fuel
+          fuel;
+      with st1 raw_bytes network_out_bytes auth_leaf_der_bytes auth_payload_bytes auth_cv_input_bytes auth_signature_bytes app_out_bytes.
+        assert (top_driver_exactly td st1 **
+                pts_to (V.vec_to_array d.client_driver_empty_payload) empty_payload **
+                pts_to (V.vec_to_array d.client_driver_raw) raw_bytes **
+                pts_to (V.vec_to_array d.client_driver_network_out) network_out_bytes **
+                pts_to (V.vec_to_array d.client_driver_auth_leaf_der) auth_leaf_der_bytes **
+                pts_to (V.vec_to_array d.client_driver_auth_payload) auth_payload_bytes **
+                pts_to (V.vec_to_array d.client_driver_auth_cv_input) auth_cv_input_bytes **
+                pts_to (V.vec_to_array d.client_driver_auth_signature) auth_signature_bytes **
+                pts_to (V.vec_to_array d.client_driver_app_out) app_out_bytes);
+      unfold (top_driver_exactly td st1);
+      rewrite (driver_exactly td.top_driver_core st1) as (driver_exactly core st1);
+      unfold (driver_exactly core st1);
+      V.to_vec_pts_to d.client_driver_empty_payload;
+      V.to_vec_pts_to d.client_driver_raw;
+      V.to_vec_pts_to d.client_driver_network_out;
+      V.to_vec_pts_to d.client_driver_auth_leaf_der;
+      V.to_vec_pts_to d.client_driver_auth_payload;
+      V.to_vec_pts_to d.client_driver_auth_cv_input;
+      V.to_vec_pts_to d.client_driver_auth_signature;
+      V.to_vec_pts_to d.client_driver_app_out;
+      Box.(d.client_driver_buffered_len := result.driver_workflow_rx_len);
+      assert (pure (SZ.v result.driver_workflow_rx_len <= SZ.v driver_rx_capacity));
+      fold (client_driver_buffers d result.driver_workflow_rx_len);
+      rewrite (C.connection_exactly core.driver_client st1) as
+        (C.connection_exactly d.client_driver_client st1);
+      rewrite (IO.is_channel core.driver_channel) as (IO.is_channel ch);
+      rewrite (O.is_auth_context td.top_driver_auth) as
+        (O.is_auth_context d.client_driver_auth);
+      match result.driver_workflow_status {
+        DriverWorkflowOk -> {
+          Box.(d.client_driver_channel := Some ch);
+          fold (client_driver_connected d st1);
+          DriverWorkflowOk
+        }
+        DriverWorkflowNeedMoreInput -> {
+          close_failed_connect d ch result.driver_workflow_rx_len;
+          DriverWorkflowNeedMoreInput
+        }
+        DriverWorkflowNeedExternalAction -> {
+          close_failed_connect d ch result.driver_workflow_rx_len;
+          DriverWorkflowNeedExternalAction
+        }
+        DriverWorkflowStepFailed -> {
+          close_failed_connect d ch result.driver_workflow_rx_len;
+          DriverWorkflowStepFailed
+        }
+        DriverWorkflowExhausted -> {
+          close_failed_connect d ch result.driver_workflow_rx_len;
+          DriverWorkflowExhausted
+        }
+        DriverWorkflowClosed -> {
+          close_failed_connect d ch result.driver_workflow_rx_len;
+          DriverWorkflowClosed
+        }
+      }
+    }
+  }
+}
+
+fn send
+  (d:client_driver)
+  (payload:array U8.t)
+  (payload_len:SZ.t)
+  requires client_driver_connected d 'st0 **
+           pts_to payload 'payload_bytes **
+           pure (B.length 'payload_bytes == SZ.v payload_len /\
+                 CT.local_input_wf
+                  'st0
+                  CT.LocalSendApplicationData
+                  (Ghost.reveal 'payload_bytes))
+  returns status:driver_workflow_status
+  ensures exists* st1.
+          pts_to payload 'payload_bytes **
+          client_driver_connected d st1
+{
+  unfold (client_driver_connected d 'st0);
+  with ch buffered_len.
+    assert (C.connection_exactly d.client_driver_client 'st0 **
+            O.is_auth_context d.client_driver_auth **
+            Box.pts_to d.client_driver_channel (Some ch) **
+            IO.is_channel ch **
+            client_driver_buffers d buffered_len);
+  let current_channel = Box.(!d.client_driver_channel);
+  assert (pure (current_channel == Some ch));
+  unfold (client_driver_buffers d buffered_len);
+  let current_buffered_len = Box.(!d.client_driver_buffered_len);
+  assert (pure (current_buffered_len == buffered_len));
+  match current_channel {
+    None -> {
+      assert (pure False);
+      fold (client_driver_buffers d current_buffered_len);
+      fold (client_driver_connected d 'st0);
+      DriverWorkflowStepFailed
+    }
+    Some concrete_ch -> {
+      with empty_payload raw network_out auth_leaf_der auth_payload auth_cv_input auth_signature app_out.
+        assert (Box.pts_to d.client_driver_buffered_len buffered_len **
+                V.pts_to d.client_driver_empty_payload #1.0R empty_payload **
+                V.pts_to d.client_driver_raw #1.0R raw **
+                V.pts_to d.client_driver_network_out #1.0R network_out **
+                V.pts_to d.client_driver_auth_leaf_der #1.0R auth_leaf_der **
+                V.pts_to d.client_driver_auth_payload #1.0R auth_payload **
+                V.pts_to d.client_driver_auth_cv_input #1.0R auth_cv_input **
+                V.pts_to d.client_driver_auth_signature #1.0R auth_signature **
+                V.pts_to d.client_driver_app_out #1.0R app_out);
+      V.to_array_pts_to d.client_driver_network_out;
+      V.to_array_pts_to d.client_driver_app_out;
+      let core = {
+        driver_client = d.client_driver_client;
+        driver_channel = concrete_ch;
+      };
+      let td = {
+        top_driver_core = core;
+        top_driver_auth = d.client_driver_auth;
+      };
+      rewrite (C.connection_exactly d.client_driver_client 'st0) as
+        (C.connection_exactly core.driver_client 'st0);
+      rewrite (IO.is_channel ch) as (IO.is_channel core.driver_channel);
+      fold (driver_exactly core 'st0);
+      rewrite (driver_exactly core 'st0) as (driver_exactly td.top_driver_core 'st0);
+      rewrite (O.is_auth_context d.client_driver_auth) as (O.is_auth_context td.top_driver_auth);
+      fold (top_driver_exactly td 'st0);
+      let result =
+        top_driver_send_application_data
+          td
+          payload
+          payload_len
+          (V.vec_to_array d.client_driver_network_out)
+          driver_network_out_capacity
+          (V.vec_to_array d.client_driver_app_out)
+          driver_app_out_capacity;
+      with st1 network_out_bytes app_out_bytes.
+        assert (top_driver_exactly td st1 **
+                pts_to payload 'payload_bytes **
+                pts_to (V.vec_to_array d.client_driver_network_out) network_out_bytes **
+                pts_to (V.vec_to_array d.client_driver_app_out) app_out_bytes);
+      unfold (top_driver_exactly td st1);
+      rewrite (driver_exactly td.top_driver_core st1) as (driver_exactly core st1);
+      unfold (driver_exactly core st1);
+      V.to_vec_pts_to d.client_driver_network_out;
+      V.to_vec_pts_to d.client_driver_app_out;
+      assert (pure (concrete_ch == ch));
+      rewrite (C.connection_exactly core.driver_client st1) as
+        (C.connection_exactly d.client_driver_client st1);
+      rewrite (IO.is_channel core.driver_channel) as (IO.is_channel ch);
+      rewrite (O.is_auth_context td.top_driver_auth) as
+        (O.is_auth_context d.client_driver_auth);
+      fold (client_driver_buffers d current_buffered_len);
+      fold (client_driver_connected d st1);
+      let ok = result.local_write_resp.CT.status = CT.StepOk;
+      let wrote_all = result.local_write_written = result.local_write_resp.CT.network_out_len;
+      if (ok && wrote_all) {
+        DriverWorkflowOk
+      } else {
+        DriverWorkflowStepFailed
+      }
+    }
+  }
+}
+
+fn receive
+  (d:client_driver)
+  (out:array U8.t)
+  (out_len:SZ.t)
+  (local_fuel:SZ.t)
+  (fuel:SZ.t)
+  requires client_driver_connected d 'st0 **
+           pts_to out 'old_out **
+           pure (B.length 'old_out == SZ.v out_len)
+  returns result:client_receive_result
+  ensures exists* st1 out_bytes.
+          client_driver_connected d st1 **
+          pts_to out out_bytes **
+          pure (B.length out_bytes == SZ.v out_len /\
+                SZ.v result.client_receive_len <= SZ.v out_len)
+{
+  unfold (client_driver_connected d 'st0);
+  with ch buffered_len.
+    assert (C.connection_exactly d.client_driver_client 'st0 **
+            O.is_auth_context d.client_driver_auth **
+            Box.pts_to d.client_driver_channel (Some ch) **
+            IO.is_channel ch **
+            client_driver_buffers d buffered_len);
+  let current_channel = Box.(!d.client_driver_channel);
+  assert (pure (current_channel == Some ch));
+  unfold (client_driver_buffers d buffered_len);
+  let current_buffered_len = Box.(!d.client_driver_buffered_len);
+  assert (pure (current_buffered_len == buffered_len));
+  match current_channel {
+    None -> {
+      assert (pure False);
+      fold (client_driver_buffers d current_buffered_len);
+      fold (client_driver_connected d 'st0);
+      {
+        client_receive_status = DriverWorkflowStepFailed;
+        client_receive_len = 0sz;
+      }
+    }
+    Some concrete_ch -> {
+      with empty_payload raw network_out auth_leaf_der auth_payload auth_cv_input auth_signature app_out.
+        assert (Box.pts_to d.client_driver_buffered_len buffered_len **
+                V.pts_to d.client_driver_empty_payload #1.0R empty_payload **
+                V.pts_to d.client_driver_raw #1.0R raw **
+                V.pts_to d.client_driver_network_out #1.0R network_out **
+                V.pts_to d.client_driver_auth_leaf_der #1.0R auth_leaf_der **
+                V.pts_to d.client_driver_auth_payload #1.0R auth_payload **
+                V.pts_to d.client_driver_auth_cv_input #1.0R auth_cv_input **
+                V.pts_to d.client_driver_auth_signature #1.0R auth_signature **
+                V.pts_to d.client_driver_app_out #1.0R app_out);
+      V.to_array_pts_to d.client_driver_empty_payload;
+      V.to_array_pts_to d.client_driver_raw;
+      V.to_array_pts_to d.client_driver_network_out;
+      V.to_array_pts_to d.client_driver_auth_leaf_der;
+      V.to_array_pts_to d.client_driver_auth_payload;
+      V.to_array_pts_to d.client_driver_auth_cv_input;
+      V.to_array_pts_to d.client_driver_auth_signature;
+      V.to_array_pts_to d.client_driver_app_out;
+      let core = {
+        driver_client = d.client_driver_client;
+        driver_channel = concrete_ch;
+      };
+      let td = {
+        top_driver_core = core;
+        top_driver_auth = d.client_driver_auth;
+      };
+      rewrite (C.connection_exactly d.client_driver_client 'st0) as
+        (C.connection_exactly core.driver_client 'st0);
+      rewrite (IO.is_channel ch) as (IO.is_channel core.driver_channel);
+      fold (driver_exactly core 'st0);
+      rewrite (driver_exactly core 'st0) as (driver_exactly td.top_driver_core 'st0);
+      rewrite (O.is_auth_context d.client_driver_auth) as (O.is_auth_context td.top_driver_auth);
+      fold (top_driver_exactly td 'st0);
+      let workflow =
+        driver_receive_application_data
+          td
+          (V.vec_to_array d.client_driver_empty_payload)
+          (V.vec_to_array d.client_driver_raw)
+          driver_rx_capacity
+          current_buffered_len
+          (V.vec_to_array d.client_driver_network_out)
+          driver_network_out_capacity
+          (V.vec_to_array d.client_driver_auth_leaf_der)
+          driver_auth_leaf_der_capacity
+          (V.vec_to_array d.client_driver_auth_payload)
+          (V.vec_to_array d.client_driver_auth_cv_input)
+          driver_certificate_verify_input_capacity
+          (V.vec_to_array d.client_driver_auth_signature)
+          driver_signature_capacity
+          driver_public_key_payload_capacity
+          driver_server_finished_payload_len
+          (V.vec_to_array d.client_driver_app_out)
+          driver_app_out_capacity
+          local_fuel
+          fuel;
+      with st1 raw_bytes network_out_bytes auth_leaf_der_bytes auth_payload_bytes auth_cv_input_bytes auth_signature_bytes app_out_bytes.
+        assert (top_driver_exactly td st1 **
+                pts_to (V.vec_to_array d.client_driver_empty_payload) empty_payload **
+                pts_to (V.vec_to_array d.client_driver_raw) raw_bytes **
+                pts_to (V.vec_to_array d.client_driver_network_out) network_out_bytes **
+                pts_to (V.vec_to_array d.client_driver_auth_leaf_der) auth_leaf_der_bytes **
+                pts_to (V.vec_to_array d.client_driver_auth_payload) auth_payload_bytes **
+                pts_to (V.vec_to_array d.client_driver_auth_cv_input) auth_cv_input_bytes **
+                pts_to (V.vec_to_array d.client_driver_auth_signature) auth_signature_bytes **
+                pts_to (V.vec_to_array d.client_driver_app_out) app_out_bytes);
+      let response =
+        workflow.driver_workflow_network.buffered_network_io_buffered.buffered_network_read.network_read_buffer_resp.CT.response;
+      let copy_len = response.CT.app_out_len;
+      let app_fits = SZ.lte copy_len out_len;
+      let app_src_fits = SZ.lte copy_len driver_app_out_capacity;
+      let workflow_ok = workflow.driver_workflow_status = DriverWorkflowOk;
+      if (workflow_ok && app_fits && app_src_fits) {
+        A.pts_to_len (V.vec_to_array d.client_driver_app_out);
+        A.pts_to_len out;
+        assert (pure (SZ.v copy_len <= SZ.v out_len));
+        assert (pure (SZ.v copy_len <= B.length app_out_bytes));
+        assert (pure (A.length (V.vec_to_array d.client_driver_app_out) == B.length app_out_bytes));
+        assert (pure (A.length out == SZ.v out_len));
+        assert (pure (SZ.v copy_len <= A.length (V.vec_to_array d.client_driver_app_out)));
+        assert (pure (SZ.v copy_len <= A.length out));
+        let _ = A.memcpy_l copy_len (V.vec_to_array d.client_driver_app_out) out;
+        with out_bytes.
+          assert (pts_to out out_bytes);
+        unfold (top_driver_exactly td st1);
+        rewrite (driver_exactly td.top_driver_core st1) as (driver_exactly core st1);
+        unfold (driver_exactly core st1);
+        V.to_vec_pts_to d.client_driver_empty_payload;
+        V.to_vec_pts_to d.client_driver_raw;
+        V.to_vec_pts_to d.client_driver_network_out;
+        V.to_vec_pts_to d.client_driver_auth_leaf_der;
+        V.to_vec_pts_to d.client_driver_auth_payload;
+        V.to_vec_pts_to d.client_driver_auth_cv_input;
+        V.to_vec_pts_to d.client_driver_auth_signature;
+        V.to_vec_pts_to d.client_driver_app_out;
+        Box.(d.client_driver_buffered_len := workflow.driver_workflow_rx_len);
+        assert (pure (SZ.v workflow.driver_workflow_rx_len <= SZ.v driver_rx_capacity));
+        assert (pure (concrete_ch == ch));
+        rewrite (C.connection_exactly core.driver_client st1) as
+          (C.connection_exactly d.client_driver_client st1);
+        rewrite (IO.is_channel core.driver_channel) as (IO.is_channel ch);
+        rewrite (O.is_auth_context td.top_driver_auth) as
+          (O.is_auth_context d.client_driver_auth);
+        fold (client_driver_buffers d workflow.driver_workflow_rx_len);
+        fold (client_driver_connected d st1);
+        {
+          client_receive_status = DriverWorkflowOk;
+          client_receive_len = copy_len;
+        }
+      } else {
+        unfold (top_driver_exactly td st1);
+        rewrite (driver_exactly td.top_driver_core st1) as (driver_exactly core st1);
+        unfold (driver_exactly core st1);
+        V.to_vec_pts_to d.client_driver_empty_payload;
+        V.to_vec_pts_to d.client_driver_raw;
+        V.to_vec_pts_to d.client_driver_network_out;
+        V.to_vec_pts_to d.client_driver_auth_leaf_der;
+        V.to_vec_pts_to d.client_driver_auth_payload;
+        V.to_vec_pts_to d.client_driver_auth_cv_input;
+        V.to_vec_pts_to d.client_driver_auth_signature;
+        V.to_vec_pts_to d.client_driver_app_out;
+        Box.(d.client_driver_buffered_len := workflow.driver_workflow_rx_len);
+        assert (pure (SZ.v workflow.driver_workflow_rx_len <= SZ.v driver_rx_capacity));
+        assert (pure (concrete_ch == ch));
+        rewrite (C.connection_exactly core.driver_client st1) as
+          (C.connection_exactly d.client_driver_client st1);
+        rewrite (IO.is_channel core.driver_channel) as (IO.is_channel ch);
+        rewrite (O.is_auth_context td.top_driver_auth) as
+          (O.is_auth_context d.client_driver_auth);
+        fold (client_driver_buffers d workflow.driver_workflow_rx_len);
+        fold (client_driver_connected d st1);
+        {
+          client_receive_status =
+            if workflow_ok then DriverWorkflowStepFailed else workflow.driver_workflow_status;
+          client_receive_len = 0sz;
+        }
+      }
+    }
+  }
+}
+
+fn close
+  (d:client_driver)
+  (wait_for_peer:bool)
+  (fuel:SZ.t)
+  requires client_driver_connected d 'st0
+  returns status:driver_workflow_status
+  ensures exists* st1.
+          client_driver_closed d st1
+{
+  unfold (client_driver_connected d 'st0);
+  with ch buffered_len.
+    assert (C.connection_exactly d.client_driver_client 'st0 **
+            O.is_auth_context d.client_driver_auth **
+            Box.pts_to d.client_driver_channel (Some ch) **
+            IO.is_channel ch **
+            client_driver_buffers d buffered_len);
+  let current_channel = Box.(!d.client_driver_channel);
+  assert (pure (current_channel == Some ch));
+  assert (pure (Some? current_channel));
+  let concrete_ch = Some?.v current_channel;
+  assert (pure (concrete_ch == ch));
+  unfold (client_driver_buffers d buffered_len);
+  let current_buffered_len = Box.(!d.client_driver_buffered_len);
+  assert (pure (current_buffered_len == buffered_len));
+  with empty_payload raw network_out auth_leaf_der auth_payload auth_cv_input auth_signature app_out.
+    assert (Box.pts_to d.client_driver_buffered_len buffered_len **
+            V.pts_to d.client_driver_empty_payload #1.0R empty_payload **
+            V.pts_to d.client_driver_raw #1.0R raw **
+            V.pts_to d.client_driver_network_out #1.0R network_out **
+            V.pts_to d.client_driver_auth_leaf_der #1.0R auth_leaf_der **
+            V.pts_to d.client_driver_auth_payload #1.0R auth_payload **
+            V.pts_to d.client_driver_auth_cv_input #1.0R auth_cv_input **
+            V.pts_to d.client_driver_auth_signature #1.0R auth_signature **
+            V.pts_to d.client_driver_app_out #1.0R app_out);
+  V.to_array_pts_to d.client_driver_empty_payload;
+  V.to_array_pts_to d.client_driver_raw;
+  V.to_array_pts_to d.client_driver_network_out;
+  V.to_array_pts_to d.client_driver_app_out;
+  let core = {
+    driver_client = d.client_driver_client;
+    driver_channel = concrete_ch;
+  };
+  let td = {
+    top_driver_core = core;
+    top_driver_auth = d.client_driver_auth;
+  };
+  rewrite (C.connection_exactly d.client_driver_client 'st0) as
+    (C.connection_exactly core.driver_client 'st0);
+  rewrite (IO.is_channel ch) as (IO.is_channel core.driver_channel);
+  fold (driver_exactly core 'st0);
+  rewrite (driver_exactly core 'st0) as (driver_exactly td.top_driver_core 'st0);
+  rewrite (O.is_auth_context d.client_driver_auth) as (O.is_auth_context td.top_driver_auth);
+  fold (top_driver_exactly td 'st0);
+  let workflow =
+    driver_close_workflow
+      td
+      wait_for_peer
+      (V.vec_to_array d.client_driver_empty_payload)
+      (V.vec_to_array d.client_driver_raw)
+      driver_rx_capacity
+      current_buffered_len
+      (V.vec_to_array d.client_driver_network_out)
+      driver_network_out_capacity
+      (V.vec_to_array d.client_driver_app_out)
+      driver_app_out_capacity
+      fuel;
+  with st1 raw_bytes network_out_bytes app_out_bytes.
+    assert (C.connection_exactly td.top_driver_core.driver_client st1 **
+            pts_to (V.vec_to_array d.client_driver_empty_payload) empty_payload **
+            pts_to (V.vec_to_array d.client_driver_raw) raw_bytes **
+            pts_to (V.vec_to_array d.client_driver_network_out) network_out_bytes **
+            pts_to (V.vec_to_array d.client_driver_app_out) app_out_bytes);
+  rewrite (C.connection_exactly td.top_driver_core.driver_client st1) as
+    (C.connection_exactly d.client_driver_client st1);
+  V.to_vec_pts_to d.client_driver_empty_payload;
+  V.to_vec_pts_to d.client_driver_raw;
+  V.to_vec_pts_to d.client_driver_network_out;
+  V.to_vec_pts_to d.client_driver_app_out;
+  Box.(d.client_driver_channel := no_channel);
+  Box.free d.client_driver_channel;
+  Box.(d.client_driver_buffered_len := workflow.driver_workflow_rx_len);
+  assert (pure (SZ.v workflow.driver_workflow_rx_len <= SZ.v driver_rx_capacity));
+  fold (client_driver_buffers d workflow.driver_workflow_rx_len);
+  free_client_driver_buffers d workflow.driver_workflow_rx_len;
+  fold (client_driver_closed d st1);
+  workflow.driver_workflow_status
 }

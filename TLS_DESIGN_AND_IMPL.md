@@ -21,8 +21,8 @@ and application-log projection.
 | --- | --- | --- |
 | Public extracted API | `src/impl/TLS13.Impl.Client.fsti`, `src/impl/TLS13.Impl.Client.fst` | Constructor, driver-hint, network-input, local-event, and observation/copyout entry points. |
 | Response/event types | `src/impl/TLS13.Impl.Client.Types.fst` | Extraction-facing response types plus legal-response predicates. |
-| Concrete C top-level driver | `runtime/tls13_client_driver.c`, `runtime/tls13_client_driver.h` | Stable C ABI wrapper whose implementation delegates to extracted `TLS13.Impl.Client.Driver` top-level workflows for open, handshake, application send/receive, and close. |
-| Verified Pulse driver facade | `src/impl/TLS13.Impl.Client.Driver.fsti`, `src/impl/TLS13.Impl.Client.Driver.fst`, `src/impl/TLS13.OpenSSL.fsti`, `c_stubs/tls13_io_karamel.*`, `c_stubs/tls13_openssl_karamel.*` | Migration path from C into Pulse: a `driver` record over an extracted client plus `TLS13.IO.channel`, a `top_driver` with typed OpenSSL auth context, connect/open/snapshot/auth-copyout/external-local-event/handshake-step/bounded-local-drain/buffered-prefix receive+compact/retained-buffer read+compact/top-level handshake+receive/send/close workflow entry points, preserved public end-to-end step theorems, and small extracted IO/OpenSSL C ABI shims. Exact-buffer and standalone read-prefix helpers are implementation-private. |
+| Concrete C top-level driver | `runtime/tls13_client_driver.c`, `runtime/tls13_client_driver.h` | Stable C ABI wrapper whose implementation delegates to extracted `TLS13.Impl.Client.Driver` top-level operations for construction, connect/handshake, application send/receive, and close. |
+| Verified Pulse driver | `src/impl/TLS13.Impl.Client.Driver.fsti`, `src/impl/TLS13.Impl.Client.Driver.fst`, `src/impl/TLS13.OpenSSL.fsti`, `c_stubs/tls13_io_karamel.*`, `c_stubs/tls13_openssl_karamel.*` | Narrow top-level Pulse API: `new_client`, `connect`, `send`, `receive`, and `close` over a Pulse-owned `client_driver` containing the extracted client, typed OpenSSL auth context, channel slot, retained receive length, and scratch buffers. Private helpers implement the former lower-level driver/top-driver workflow, auth copyout/completion, local-action drain, buffered-prefix receive+compact, retained-buffer read+compact, and close orchestration. |
 | Concrete state representation | `src/impl/TLS13.Impl.ConnectionState.Repr.fst` | Concrete storage records, allocation helpers, ownership predicates, low-level copy helpers, and `connection_exactly`. |
 | State queries | `src/impl/TLS13.Impl.ConnectionState.Queries.fst` | Read-only runtime checks, snapshots, and driver copyout helpers. |
 | State model helpers | `src/impl/TLS13.Impl.ConnectionState.{Bounds,Model,Tags}.fst` | Constants, pure transition constructors/evolution lemmas, and proof-only control/tag predicates. |
@@ -280,31 +280,31 @@ The public client API is buffer/event oriented:
   by the typed OpenSSL TCB, so the installed peer is not a padded scratch buffer.
 - `runtime/tls13_client_driver.c` now packages the concrete top-level runtime
   driver as a thin ABI wrapper over extracted `TLS13.Impl.Client.Driver`
-  workflows. It keeps the public C API and fixed runtime buffers, but construction
-  goes through `driver_open`, handshake through `driver_handshake`, application
-  send through `top_driver_send_application_data`, receive through
-  `driver_receive_application_data`, and close through `driver_close_workflow`.
+  operations. It keeps the public C API but stores only the extracted
+  `client_driver`, a connected flag, and the last error string. Construction goes
+  through verified `new_client`, `connect` performs TCP connect plus TLS
+  handshake, application send goes through verified `send`, receive goes through
+  verified `receive` which copies plaintext to the caller buffer, and close goes
+  through verified `close`.
   OpenSSL-backed certificate validation and CertificateVerify checks are called
   from Pulse through the typed `TLS13.OpenSSL.fsti` TCB. The OpenSSL echo interop
   test links the driver bundle and exercises this runtime. The workflow treats
   short writes from `TLS13.IO.write` as `DriverWorkflowStepFailed`, so it does not
   report handshake/send/receive/close success after emitting only a prefix of a
   verified TLS record.
-- `TLS13.Impl.Client.Driver` now verifies and extracts a curated Pulse driver
-  facade and top-level workflow rather than every proof helper slice. The
-  intended public workflow is `driver_open`, `driver_handshake`,
-  `top_driver_send_application_data`, `driver_receive_application_data`, and
-  `driver_close_workflow`. The lower-level facade still contains the
-  client/channel `driver`, snapshots, auth copyout and local-event completion,
-  local-action steps/drain, retained-buffer prefix processing, retained-buffer
-  read-append via `TLS13.IO.read` and `Pulse.Lib.Array.sub`/`return_sub`, suffix
-  compaction, application-data send, close_notify, and channel close. Exact-buffer
-  receive, standalone read-prefix receive, and helper buffered-loop functions
-  remain private implementation slices. External certificate validation and
+- `TLS13.Impl.Client.Driver` now verifies and extracts the intended narrow
+  top-level workflow rather than exposing every orchestration slice. The public
+  Pulse API is `new_client`, `connect`, `send`, `receive`, and `close`; generated
+  C symbols stay module-prefixed to avoid POSIX `connect`/`send`/`close`
+  collisions. The private helper layer still contains the client/channel
+  `driver`, snapshots, auth copyout and local-event completion, local-action
+  steps/drain, retained-buffer prefix processing, retained-buffer read-append via
+  `TLS13.IO.read` and `Pulse.Lib.Array.sub`/`return_sub`, suffix compaction,
+  application-data send, close_notify, and channel close. Exact-buffer receive,
+  standalone read-prefix receive, and helper buffered-loop functions remain
+  private implementation slices. External certificate validation and
   CertificateVerify are explicit typed auth TCB actions in `TLS13.OpenSSL.fsti`.
-  The extracted C smoke test exercises the curated public surface: snapshots,
-  bounded local-action drain, compacting buffered-prefix network processing, and
-  retained-buffer read-append processing.
+  The extracted C smoke test exercises the narrow generated API surface.
   `make test-extracted-client-driver-slice` extracts this module to C and
   compiles/runs a smoke test through `c_stubs/tls13_io_karamel.*`.
 - `TLS13.Impl.ConnectionState` has been split by responsibility: `Repr` owns the

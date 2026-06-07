@@ -27,6 +27,8 @@ struct TLS13_OpenSSL_auth_context_s {
   tls13_peer_identity *peer;
 };
 
+void TLS13_OpenSSL_auth_context_free(TLS13_OpenSSL_auth_context ctx);
+
 static char *duplicate_hostname_bytes(uint8_t *src, size_t len) {
   if (src == NULL || len == 0u || memchr(src, '\0', len) != NULL) {
     return NULL;
