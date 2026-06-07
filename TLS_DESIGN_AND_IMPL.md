@@ -30,8 +30,10 @@ and application-log projection.
 | Protocol handlers | `src/impl/TLS13.Impl.Handle.*` | Handshake, local-driver, alert, application data, ChangeCipherSpec, decode-error, and dispatch logic. |
 | Low-level message layer | `src/impl/TLS13.Impl.Messages.fst` | Extractable `L` messages and Pulse validity predicates relating them to pure `M` messages. |
 | Pure wire/message specs | `src/spec/TLS13.Wire.Spec.*`, `src/spec/TLS13.Messages.fst` | Mathematical parse/serialize model and pure TLS messages. |
-| Pure connection spec | `src/spec/TLS13.Spec.ConnectionState.fst` | Rich TLS client state model and legal per-step deltas. |
+| Pure connection spec | `src/spec/TLS13.Spec.ConnectionState.fst` | Audit-facing TLS client state model, log invariants, and legal per-step deltas. |
+| Connection-state proof support | `src/spec/TLS13.ConnectionState.Lemmas.fst` | Preservation/projection lemmas for the connection-state spec; not part of the primary review surface. |
 | Layered log vocabulary | `src/spec/TLS13.ConnectionLog.fst` | Raw I/O logs, records/messages, directed messages, app projection, and stream-shape facts. |
+| Lightweight trace automaton | `src/spec/TLS13.StateMachine.fst` | Compact client-only trace/state vocabulary used by `ConnectionLog` and implementation proof projections; it is not the authoritative connection-state model. |
 | Record/crypto implementation | `src/impl/TLS13.Record.*`, `src/impl/TLS13.KeySchedule.*` | Extracted record-layer and key-schedule implementation against crypto TCBs. |
 | Parser/serializer TCB | `src/impl/TLS13.Impl.Parser.fsti`, `src/impl/TLS13.Impl.Serializer.fsti`, `c_stubs/tls13_connection_backend.h` | Interface-only F*/Pulse contracts implemented by handwritten C macros/static helpers. |
 | Runtime tests | `test/unit/test_connection_bindings.c`, `test/unit/test_extracted_client_openssl_echo.c`, `test/openssl_echo_server.c` | Deterministic extracted-client API tests and local OpenSSL TLS 1.3 interop. |

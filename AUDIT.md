@@ -241,17 +241,21 @@ Start with these files:
 1. `src/impl/TLS13.Impl.Client.fsti` for the public API.
 2. `src/impl/TLS13.Impl.Client.Types.fst` for the theorem predicates and trace
    theorem surface.
-3. `src/spec/TLS13.Spec.ConnectionState.fst` and
-   `src/spec/TLS13.ConnectionLog.fst` for the pure model and layered logs.
-4. `src/impl/TLS13.Impl.Client.Driver.fsti` / `.fst` for the narrow top-level
+3. `src/spec/TLS13.Spec.ConnectionState.fst` for the core pure connection-state
+   model, invariants, and legal deltas; proof-only support lives in
+   `src/spec/TLS13.ConnectionState.Lemmas.fst`.
+4. `src/spec/TLS13.ConnectionLog.fst` and `src/spec/TLS13.StateMachine.fst` for
+   layered logs and the small client-only trace automaton used by log/projection
+   proofs.
+5. `src/impl/TLS13.Impl.Client.Driver.fsti` / `.fst` for the narrow top-level
    Pulse driver API, private workflow helpers, and receive-prefix bridge.
-5. `src/impl/TLS13.OpenSSL.fsti` and `c_stubs/tls13_openssl_karamel.*` for the
+6. `src/impl/TLS13.OpenSSL.fsti` and `c_stubs/tls13_openssl_karamel.*` for the
    typed OpenSSL TCB boundary called by the Pulse workflow.
-6. `runtime/tls13_client_driver.c` for the small C ABI wrapper around the
+7. `runtime/tls13_client_driver.c` for the small C ABI wrapper around the
    extracted workflow.
-7. `src/impl/TLS13.Impl.Parser.fsti`, `src/impl/TLS13.Impl.Serializer.fsti`,
+8. `src/impl/TLS13.Impl.Parser.fsti`, `src/impl/TLS13.Impl.Serializer.fsti`,
    and `c_stubs/tls13_connection_backend.h` for the parser/serializer TCB.
-8. `c_stubs/tls13_io_karamel.*`, `c_stubs/tls13_io_stubs.*`,
+9. `c_stubs/tls13_io_karamel.*`, `c_stubs/tls13_io_stubs.*`,
    `c_stubs/tls13_crypto_external.*`, and `c_stubs/tls13_openssl_stubs.*` for
    the remaining C boundary.
 

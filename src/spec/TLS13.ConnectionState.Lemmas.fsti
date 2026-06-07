@@ -1,0 +1,289 @@
+module TLS13.ConnectionState.Lemmas
+
+(**
+  Public proof support for TLS13.Spec.ConnectionState.
+
+  This interface exposes only the connection-state lemmas used outside the
+  proof module; the remaining local lemmas stay private implementation
+  scaffolding.
+**)
+
+module B = TLS13.Bytes
+module CL = TLS13.ConnectionLog
+module M = TLS13.Messages
+module R = TLS13.Record.Spec
+module Seq = FStar.Seq
+module T = TLS13.Types
+module W = TLS13.Wire.Spec
+
+open TLS13.Spec.ConnectionState
+
+val lemma_model_record_keys_consistent_record_read_key_schedule_projection
+  (model:connection_model)
+  : Lemma
+      (requires model_record_keys_consistent model)
+      (ensures record_read_key_schedule_projection model)
+
+val lemma_model_record_keys_consistent_record_write_key_schedule_projection
+  (model:connection_model)
+  : Lemma
+      (requires model_record_keys_consistent model)
+      (ensures record_write_key_schedule_projection model)
+
+val lemma_raw_records_exactly_one_parse_record
+  (raw:B.bytes)
+  (outer:T.content_type)
+  : Lemma
+      (requires raw_records_exactly raw outer 1)
+      (ensures exists fragment.
+        W.parse_record raw == Some (outer, fragment, B.length raw))
+
+val lemma_parse_record_full_raw_records_exactly
+  (raw:B.bytes)
+  (outer:T.content_type)
+  (fragment:B.bytes)
+  : Lemma
+      (requires W.parse_record raw == Some (outer, fragment, B.length raw))
+      (ensures raw_records_exactly raw outer 1 /\
+               raw_records_segmented raw outer 1)
+
+val lemma_sent_event_seal_projection_intro
+  (model:connection_model)
+  (msg:M.tls_message)
+  (raw:B.bytes)
+  (aad:B.bytes)
+  (plaintext:B.bytes)
+  (ciphertext:B.bytes)
+  : Lemma
+      (requires
+        network_message_is_cleartext CL.Sent msg == false /\
+        protected_record_count CL.Sent msg == 1 /\
+        W.parse_record raw == Some (T.ApplicationData, ciphertext, B.length raw) /\
+        Seq.equal aad (record_header_aad raw) /\
+        Seq.equal plaintext (sent_tls_inner_plaintext_fragment msg) /\
+        R.seal
+          model.model_record.record_write
+          aad
+          {
+            R.content_type = T.ApplicationData;
+            R.fragment = plaintext;
+          } ==
+          Some (ciphertext, R.next_seq model.model_record.record_write))
+      (ensures sent_event_seal_projection
+        model
+        (ConnNetworkEvent {
+          CL.message_direction = CL.Sent;
+          CL.message_value = msg;
+        })
+        raw)
+
+val lemma_event_raw_delta_legal_protected_segmented
+  (model:connection_model)
+  (ev:conn_event)
+  (raw_sent:B.bytes)
+  (raw_received:B.bytes)
+  : Lemma
+      (requires event_raw_delta_legal model ev raw_sent raw_received)
+      (ensures event_protected_raw_segmented_success ev raw_sent raw_received)
+
+val lemma_connection_state_protected_raw_segmented_replay
+  (st:connection_state)
+  : Lemma
+      (requires connection_state_raw_event_replay_consistent st)
+      (ensures connection_state_protected_raw_segmented_replay_consistent st)
+
+val lemma_initial_sent_seal_replay_consistent
+  (cfg:connection_config)
+  : Lemma (connection_state_sent_seal_replay_consistent (initial cfg))
+
+val lemma_initial_sent_seal_key_schedule_replay_consistent
+  (cfg:connection_config)
+  : Lemma (connection_state_sent_seal_key_schedule_replay_consistent (initial cfg))
+
+val lemma_connection_state_sent_seal_key_schedule_replay
+  (st:connection_state)
+  : Lemma
+      (requires connection_state_sent_seal_replay_consistent st)
+      (ensures connection_state_sent_seal_key_schedule_replay_consistent st)
+
+val lemma_initial_received_decode_replay_consistent
+  (cfg:connection_config)
+  : Lemma (connection_state_received_decode_replay_consistent (initial cfg))
+
+val lemma_initial_received_decode_key_schedule_replay_consistent
+  (cfg:connection_config)
+  : Lemma (connection_state_received_decode_key_schedule_replay_consistent (initial cfg))
+
+val lemma_connection_state_received_decode_key_schedule_replay
+  (st:connection_state)
+  : Lemma
+      (requires connection_state_received_decode_replay_consistent st)
+      (ensures connection_state_received_decode_key_schedule_replay_consistent st)
+
+val lemma_initial_raw_to_message_replay_consistent
+  (cfg:connection_config)
+  : Lemma (connection_state_raw_to_message_replay_consistent (initial cfg))
+
+val lemma_connection_state_raw_to_message_replay
+  (st:connection_state)
+  : Lemma
+      (requires
+        connection_state_raw_event_replay_consistent st /\
+        connection_state_sent_seal_replay_consistent st /\
+        connection_state_received_decode_replay_consistent st)
+      (ensures connection_state_raw_to_message_replay_consistent st)
+
+val lemma_legal_connection_delta_sent_seal_replay_consistent
+  (st0:connection_state)
+  (delta:connection_delta)
+  (st1:connection_state)
+  : Lemma
+      (requires
+        legal_connection_delta st0 delta st1 /\
+        connection_state_sent_seal_replay_consistent st0 /\
+        sent_event_nonempty_seal_projection
+          st0.cs_model
+          delta.delta_event
+          delta.delta_raw_sent)
+      (ensures connection_state_sent_seal_replay_consistent st1)
+
+val lemma_legal_connection_delta_received_decode_replay_consistent
+  (st0:connection_state)
+  (delta:connection_delta)
+  (st1:connection_state)
+  : Lemma
+      (requires
+        legal_connection_delta st0 delta st1 /\
+        connection_state_received_decode_replay_consistent st0 /\
+        received_event_nonempty_decode_projection
+          st0.cs_model
+          delta.delta_event
+          delta.delta_raw_received)
+      (ensures connection_state_received_decode_replay_consistent st1)
+
+val lemma_legal_connection_delta_app_log_delta
+  (st0:connection_state)
+  (delta:connection_delta)
+  (st1:connection_state)
+  : Lemma
+      (requires legal_connection_delta st0 delta st1)
+      (ensures model_app_log_delta st0.cs_model delta.delta_event st1.cs_model)
+
+val lemma_legal_connection_delta_app_log_consistent
+  (st0:connection_state)
+  (delta:connection_delta)
+  (st1:connection_state)
+  : Lemma
+      (requires
+        legal_connection_delta st0 delta st1 /\
+        connection_state_app_log_consistent st0)
+      (ensures connection_state_app_log_consistent st1)
+
+val lemma_legal_connection_delta_event_log_consistent_with
+  (cfg:connection_config)
+  (st0:connection_state)
+  (delta:connection_delta)
+  (st1:connection_state)
+  : Lemma
+      (requires
+        legal_connection_delta st0 delta st1 /\
+        connection_state_event_log_consistent_with cfg st0)
+      (ensures connection_state_event_log_consistent_with cfg st1)
+
+val lemma_legal_connection_delta_event_log_consistent
+  (st0:connection_state)
+  (delta:connection_delta)
+  (st1:connection_state)
+  : Lemma
+      (requires
+        legal_connection_delta st0 delta st1 /\
+        connection_state_event_log_consistent st0)
+      (ensures connection_state_event_log_consistent st1)
+
+val lemma_legal_connection_delta_transcript_consistent
+  (st0:connection_state)
+  (delta:connection_delta)
+  (st1:connection_state)
+  : Lemma
+      (requires
+        legal_connection_delta st0 delta st1 /\
+        connection_state_transcript_consistent st0)
+      (ensures connection_state_transcript_consistent st1)
+
+val lemma_legal_connection_delta_layered_log_consistent
+  (st0:connection_state)
+  (delta:connection_delta)
+  (st1:connection_state)
+  : Lemma
+      (requires
+        legal_connection_delta st0 delta st1 /\
+        connection_state_layered_log_consistent st0)
+      (ensures connection_state_layered_log_consistent st1)
+
+val lemma_initial_full_log_consistent
+  (cfg:connection_config)
+  : Lemma (connection_state_full_log_consistent (initial cfg))
+
+val lemma_legal_connection_delta_full_log_consistent
+  (st0:connection_state)
+  (delta:connection_delta)
+  (st1:connection_state)
+  : Lemma
+      (requires
+        legal_connection_delta st0 delta st1 /\
+        connection_state_full_log_consistent st0)
+      (ensures connection_state_full_log_consistent st1)
+
+val lemma_legal_connection_delta_protected_single_parse_record
+  (st0:connection_state)
+  (delta:connection_delta)
+  (st1:connection_state)
+  : Lemma
+      (requires legal_connection_delta st0 delta st1)
+      (ensures event_protected_single_raw_parse_success
+        delta.delta_event
+        delta.delta_raw_sent
+        delta.delta_raw_received)
+
+val lemma_legal_connection_delta_protected_parse_prefix
+  (st0:connection_state)
+  (delta:connection_delta)
+  (st1:connection_state)
+  : Lemma
+      (requires legal_connection_delta st0 delta st1)
+      (ensures event_protected_raw_parse_prefix_success
+        delta.delta_event
+        delta.delta_raw_sent
+        delta.delta_raw_received)
+
+val lemma_legal_connection_delta_protected_decompose_prefix
+  (st0:connection_state)
+  (delta:connection_delta)
+  (st1:connection_state)
+  : Lemma
+      (requires legal_connection_delta st0 delta st1)
+      (ensures event_protected_raw_decompose_prefix_success
+        delta.delta_event
+        delta.delta_raw_sent
+        delta.delta_raw_received)
+
+val lemma_legal_connection_delta_protected_segmented
+  (st0:connection_state)
+  (delta:connection_delta)
+  (st1:connection_state)
+  : Lemma
+      (requires legal_connection_delta st0 delta st1)
+      (ensures event_protected_raw_segmented_success
+        delta.delta_event
+        delta.delta_raw_sent
+        delta.delta_raw_received)
+
+val lemma_legal_connection_delta_consistent
+  (st0:connection_state)
+  (delta:connection_delta)
+  (st1:connection_state)
+  : Lemma
+      (requires
+        connection_state_consistent st0 /\
+        legal_connection_delta st0 delta st1)
+      (ensures connection_state_consistent st1)

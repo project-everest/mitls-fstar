@@ -11,6 +11,7 @@ module Box = Pulse.Lib.Box
 module CL = TLS13.ConnectionLog
 module Crypto = TLS13.Crypto
 module CS = TLS13.Spec.ConnectionState
+module CSL = TLS13.ConnectionState.Lemmas
 module H = TLS13.Handshake.Spec
 module IM = TLS13.Impl.Messages
 module K = TLS13.Keys
@@ -1089,7 +1090,7 @@ fn try_send_application_data
       assert (pure (Seq.equal
         aad_bytes
         (CS.record_header_aad (Ghost.reveal raw_sent))));
-      CS.lemma_sent_event_seal_projection_intro
+      CSL.lemma_sent_event_seal_projection_intro
         st0.CS.cs_model
         (M.TlsApplicationData (Ghost.reveal 'payload_bytes))
         (Ghost.reveal raw_sent)
@@ -1370,7 +1371,7 @@ fn try_send_close_notify
       assert (pure (Seq.equal
         aad_bytes
         (CS.record_header_aad (Ghost.reveal raw_sent))));
-      CS.lemma_sent_event_seal_projection_intro
+      CSL.lemma_sent_event_seal_projection_intro
         st0.CS.cs_model
         (M.TlsAlert T.CloseNotify)
         (Ghost.reveal raw_sent)
@@ -1656,7 +1657,7 @@ fn try_send_key_update
       assert (pure (Seq.equal
         aad_bytes
         (CS.record_header_aad (Ghost.reveal raw_sent))));
-      CS.lemma_sent_event_seal_projection_intro
+      CSL.lemma_sent_event_seal_projection_intro
         st0.CS.cs_model
         (M.TlsKeyUpdate M.UpdateNotRequested)
         (Ghost.reveal raw_sent)

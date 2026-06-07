@@ -3,6 +3,8 @@
 # ═══════════════════════════════════════════════════════════════════
 # Uses F* --dep full for proper incremental builds
 
+.DEFAULT_GOAL := all
+
 # ── Toolchain Configuration ────────────────────────────────────────
 FSTAR_HOME ?= $(CURDIR)/tools/FStar
 FSTAR_EXE  ?= $(FSTAR_HOME)/bin/fstar.exe

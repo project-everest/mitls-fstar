@@ -4,6 +4,7 @@ module B = TLS13.Bytes
 module C = TLS13.Crypto.Spec
 module CL = TLS13.ConnectionLog
 module CS = TLS13.Spec.ConnectionState
+module CSL = TLS13.ConnectionState.Lemmas
 module L = TLS13.Impl.Messages
 module M = TLS13.Messages
 module R = TLS13.Record.Spec
@@ -66,11 +67,11 @@ let lemma_initial_client_state_correct
   (cfg:CS.connection_config)
   : Lemma (client_state_correct (CS.initial cfg))
 =
-  CS.lemma_initial_full_log_consistent cfg;
-  CS.lemma_initial_sent_seal_replay_consistent cfg;
-  CS.lemma_initial_sent_seal_key_schedule_replay_consistent cfg;
-  CS.lemma_initial_received_decode_replay_consistent cfg;
-  CS.lemma_initial_received_decode_key_schedule_replay_consistent cfg;
+  CSL.lemma_initial_full_log_consistent cfg;
+  CSL.lemma_initial_sent_seal_replay_consistent cfg;
+  CSL.lemma_initial_sent_seal_key_schedule_replay_consistent cfg;
+  CSL.lemma_initial_received_decode_replay_consistent cfg;
+  CSL.lemma_initial_received_decode_key_schedule_replay_consistent cfg;
   assert (CS.connection_state_evolves (CS.initial cfg) (CS.initial cfg))
 
 let lemma_initial_client_end_to_end_invariant
@@ -78,7 +79,7 @@ let lemma_initial_client_end_to_end_invariant
   : Lemma (client_end_to_end_invariant (CS.initial cfg))
 =
   lemma_initial_client_state_correct cfg;
-  CS.lemma_initial_raw_to_message_replay_consistent cfg
+  CSL.lemma_initial_raw_to_message_replay_consistent cfg
 
 let lemma_client_state_correct_sent_seal_key_schedule_replay
   (st:CS.connection_state)
@@ -86,7 +87,7 @@ let lemma_client_state_correct_sent_seal_key_schedule_replay
       (requires client_state_correct st)
       (ensures CS.connection_state_sent_seal_key_schedule_replay_consistent st)
 =
-  CS.lemma_connection_state_sent_seal_key_schedule_replay st
+  CSL.lemma_connection_state_sent_seal_key_schedule_replay st
 
 let lemma_client_state_correct_received_decode_key_schedule_replay
   (st:CS.connection_state)
@@ -94,7 +95,7 @@ let lemma_client_state_correct_received_decode_key_schedule_replay
       (requires client_state_correct st)
       (ensures CS.connection_state_received_decode_key_schedule_replay_consistent st)
 =
-  CS.lemma_connection_state_received_decode_key_schedule_replay st
+  CSL.lemma_connection_state_received_decode_key_schedule_replay st
 
 let lemma_client_state_correct_protected_raw_segmented_replay
   (st:CS.connection_state)
@@ -102,7 +103,7 @@ let lemma_client_state_correct_protected_raw_segmented_replay
       (requires client_state_correct st)
       (ensures CS.connection_state_protected_raw_segmented_replay_consistent st)
 =
-  CS.lemma_connection_state_protected_raw_segmented_replay st
+  CSL.lemma_connection_state_protected_raw_segmented_replay st
 
 let lemma_client_state_correct_raw_to_message_replay
   (st:CS.connection_state)
@@ -110,7 +111,7 @@ let lemma_client_state_correct_raw_to_message_replay
       (requires client_state_correct st)
       (ensures CS.connection_state_raw_to_message_replay_consistent st)
 =
-  CS.lemma_connection_state_raw_to_message_replay st
+  CSL.lemma_connection_state_raw_to_message_replay st
 
 let tls_decode_error : T.tls_error = T.AlertError T.DecodeError
 
@@ -313,7 +314,7 @@ let lemma_legal_response_for_event_app_log_delta
         st0 st1 resp ev raw_sent raw_received network_out app_out)
       (ensures CS.model_app_log_delta st0.CS.cs_model ev st1.CS.cs_model)
 =
-  CS.lemma_legal_connection_delta_app_log_delta
+  CSL.lemma_legal_connection_delta_app_log_delta
     st0
     {
       CS.delta_event = ev;
@@ -338,7 +339,7 @@ let lemma_legal_response_for_event_app_log_consistent
         CS.connection_state_app_log_consistent st0)
       (ensures CS.connection_state_app_log_consistent st1)
 =
-  CS.lemma_legal_connection_delta_app_log_consistent
+  CSL.lemma_legal_connection_delta_app_log_consistent
     st0
     {
       CS.delta_event = ev;
@@ -364,7 +365,7 @@ let lemma_legal_response_for_event_event_log_consistent_with
         CS.connection_state_event_log_consistent_with cfg st0)
       (ensures CS.connection_state_event_log_consistent_with cfg st1)
 =
-  CS.lemma_legal_connection_delta_event_log_consistent_with
+  CSL.lemma_legal_connection_delta_event_log_consistent_with
     cfg
     st0
     {
@@ -390,7 +391,7 @@ let lemma_legal_response_for_event_event_log_consistent
         CS.connection_state_event_log_consistent st0)
       (ensures CS.connection_state_event_log_consistent st1)
 =
-  CS.lemma_legal_connection_delta_event_log_consistent
+  CSL.lemma_legal_connection_delta_event_log_consistent
     st0
     {
       CS.delta_event = ev;
@@ -415,7 +416,7 @@ let lemma_legal_response_for_event_transcript_consistent
         CS.connection_state_transcript_consistent st0)
       (ensures CS.connection_state_transcript_consistent st1)
 =
-  CS.lemma_legal_connection_delta_transcript_consistent
+  CSL.lemma_legal_connection_delta_transcript_consistent
     st0
     {
       CS.delta_event = ev;
@@ -440,7 +441,7 @@ let lemma_legal_response_for_event_layered_log_consistent
         CS.connection_state_layered_log_consistent st0)
       (ensures CS.connection_state_layered_log_consistent st1)
 =
-  CS.lemma_legal_connection_delta_layered_log_consistent
+  CSL.lemma_legal_connection_delta_layered_log_consistent
     st0
     {
       CS.delta_event = ev;
@@ -471,10 +472,10 @@ let lemma_legal_response_for_event_client_state_core_correct
     CS.delta_raw_sent = raw_sent;
     CS.delta_raw_received = raw_received;
   } in
-  CS.lemma_legal_connection_delta_consistent st0 delta st1;
-  CS.lemma_legal_connection_delta_full_log_consistent st0 delta st1;
-  CS.lemma_legal_connection_delta_sent_seal_replay_consistent st0 delta st1;
-  CS.lemma_connection_state_sent_seal_key_schedule_replay st1
+  CSL.lemma_legal_connection_delta_consistent st0 delta st1;
+  CSL.lemma_legal_connection_delta_full_log_consistent st0 delta st1;
+  CSL.lemma_legal_connection_delta_sent_seal_replay_consistent st0 delta st1;
+  CSL.lemma_connection_state_sent_seal_key_schedule_replay st1
 
 let lemma_legal_response_for_event_client_state_correct
   (st0:CS.connection_state)
@@ -511,8 +512,8 @@ let lemma_legal_response_for_event_client_state_correct
     raw_received
     network_out
     app_out;
-  CS.lemma_legal_connection_delta_received_decode_replay_consistent st0 delta st1;
-  CS.lemma_connection_state_received_decode_key_schedule_replay st1
+  CSL.lemma_legal_connection_delta_received_decode_replay_consistent st0 delta st1;
+  CSL.lemma_connection_state_received_decode_key_schedule_replay st1
 
 let lemma_legal_response_for_event_protected_single_parse_record
   (st0:CS.connection_state)
@@ -528,7 +529,7 @@ let lemma_legal_response_for_event_protected_single_parse_record
         st0 st1 resp ev raw_sent raw_received network_out app_out)
       (ensures CS.event_protected_single_raw_parse_success ev raw_sent raw_received)
 =
-  CS.lemma_legal_connection_delta_protected_single_parse_record
+  CSL.lemma_legal_connection_delta_protected_single_parse_record
     st0
     {
       CS.delta_event = ev;
@@ -551,7 +552,7 @@ let lemma_legal_response_for_event_protected_parse_prefix
         st0 st1 resp ev raw_sent raw_received network_out app_out)
       (ensures CS.event_protected_raw_parse_prefix_success ev raw_sent raw_received)
 =
-  CS.lemma_legal_connection_delta_protected_parse_prefix
+  CSL.lemma_legal_connection_delta_protected_parse_prefix
     st0
     {
       CS.delta_event = ev;
@@ -574,7 +575,7 @@ let lemma_legal_response_for_event_protected_decompose_prefix
         st0 st1 resp ev raw_sent raw_received network_out app_out)
       (ensures CS.event_protected_raw_decompose_prefix_success ev raw_sent raw_received)
 =
-  CS.lemma_legal_connection_delta_protected_decompose_prefix
+  CSL.lemma_legal_connection_delta_protected_decompose_prefix
     st0
     {
       CS.delta_event = ev;
@@ -597,7 +598,7 @@ let lemma_legal_response_for_event_protected_segmented
         st0 st1 resp ev raw_sent raw_received network_out app_out)
       (ensures CS.event_protected_raw_segmented_success ev raw_sent raw_received)
 =
-  CS.lemma_legal_connection_delta_protected_segmented
+  CSL.lemma_legal_connection_delta_protected_segmented
     st0
     {
       CS.delta_event = ev;
@@ -797,7 +798,7 @@ let lemma_some_legal_response_received_decode_replay_consistent_aux
     CS.delta_raw_sent = raw_sent;
     CS.delta_raw_received = raw_received;
   } in
-  CS.lemma_legal_connection_delta_received_decode_replay_consistent st0 delta st1
+  CSL.lemma_legal_connection_delta_received_decode_replay_consistent st0 delta st1
 
 let lemma_some_legal_response_layered_log_consistent
   (st0:CS.connection_state)
@@ -935,7 +936,7 @@ let lemma_some_legal_response_client_state_correct
     resp
     network_out
     app_out;
-  CS.lemma_connection_state_received_decode_key_schedule_replay st1
+  CSL.lemma_connection_state_received_decode_key_schedule_replay st1
 
 let lemma_legal_response_for_event_sent_seal_replay_consistent
   (st0:CS.connection_state)
@@ -954,7 +955,7 @@ let lemma_legal_response_for_event_sent_seal_replay_consistent
         CS.sent_event_nonempty_seal_projection st0.CS.cs_model ev raw_sent)
       (ensures CS.connection_state_sent_seal_replay_consistent st1)
 =
-  CS.lemma_legal_connection_delta_sent_seal_replay_consistent
+  CSL.lemma_legal_connection_delta_sent_seal_replay_consistent
     st0
     {
       CS.delta_event = ev;
@@ -1074,7 +1075,7 @@ let lemma_legal_response_for_event_received_decode_replay_consistent
           raw_received)
       (ensures CS.connection_state_received_decode_replay_consistent st1)
 =
-  CS.lemma_legal_connection_delta_received_decode_replay_consistent
+  CSL.lemma_legal_connection_delta_received_decode_replay_consistent
     st0
     {
       CS.delta_event = ev;
@@ -1164,7 +1165,7 @@ let lemma_legal_response_for_event_network_out_write_key_schedule_projection
   if resp.network_out_len = 0sz then ()
   else (
     assert (CS.connection_state_record_keys_consistent st0);
-    CS.lemma_model_record_keys_consistent_record_write_key_schedule_projection
+    CSL.lemma_model_record_keys_consistent_record_write_key_schedule_projection
       st0.CS.cs_model;
     assert (CS.record_write_key_schedule_projection st0.CS.cs_model);
     assert (sent_protected_event_write_key_schedule_projection st0 ev);
@@ -1616,7 +1617,7 @@ let lemma_protected_decoder_fragment_relation_read_key_schedule_projection
          decoder_fragment_matches_plaintext content_type fragment plaintext)) in
   assert (protected_record_opened st0 raw_received outer_fragment opened);
   assert (CS.connection_state_record_keys_consistent st0);
-  CS.lemma_model_record_keys_consistent_record_read_key_schedule_projection
+  CSL.lemma_model_record_keys_consistent_record_read_key_schedule_projection
     st0.CS.cs_model;
   assert (CS.record_read_key_schedule_projection st0.CS.cs_model);
   assert (exists outer_fragment' opened'.
@@ -1709,7 +1710,7 @@ let lemma_raw_record_parse_success_raw_records
     assert False
   | Some (outer_ct, outer_fragment, consumed) ->
     assert (consumed == B.length raw_received);
-    CS.lemma_parse_record_full_raw_records_exactly
+    CSL.lemma_parse_record_full_raw_records_exactly
       raw_received
       outer_ct
       outer_fragment;
@@ -1739,7 +1740,7 @@ let lemma_decoder_fragment_relation_protected_from_raw_records
         CS.raw_records_exactly raw_received T.ApplicationData 1)
       (ensures protected_decoder_fragment_relation st0 content_type fragment raw_received)
 =
-  CS.lemma_raw_records_exactly_one_parse_record raw_received T.ApplicationData;
+  CSL.lemma_raw_records_exactly_one_parse_record raw_received T.ApplicationData;
   assert (exists app_fragment.
     WS.parse_record raw_received ==
       Some (T.ApplicationData, app_fragment, B.length raw_received));
@@ -1863,7 +1864,7 @@ let lemma_network_input_wf_message_projection
       fragment
       msg
       raw_received;
-    CS.lemma_event_raw_delta_legal_protected_segmented
+    CSL.lemma_event_raw_delta_legal_protected_segmented
       st0.CS.cs_model
       (CS.ConnNetworkEvent received_msg)
       B.empty

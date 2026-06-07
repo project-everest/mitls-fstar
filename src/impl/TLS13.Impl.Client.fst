@@ -7,6 +7,7 @@ open Pulse.Lib.Array.PtsTo
 
 module B = TLS13.Bytes
 module CS = TLS13.Spec.ConnectionState
+module CSL = TLS13.ConnectionState.Lemmas
 module CR = TLS13.Impl.ConnectionState.Repr
 module CQ = TLS13.Impl.ConnectionState.Queries
 module Bounds = TLS13.Impl.ConnectionState.Bounds
@@ -44,11 +45,11 @@ fn new_client_default ()
   let c = CR.new_client_default ();
   CT.lemma_initial_client_state_correct CR.default_connection_config;
   CT.lemma_initial_client_end_to_end_invariant CR.default_connection_config;
-  CS.lemma_initial_raw_to_message_replay_consistent CR.default_connection_config;
-  CS.lemma_initial_sent_seal_replay_consistent CR.default_connection_config;
-  CS.lemma_initial_sent_seal_key_schedule_replay_consistent CR.default_connection_config;
-  CS.lemma_initial_received_decode_replay_consistent CR.default_connection_config;
-  CS.lemma_initial_received_decode_key_schedule_replay_consistent CR.default_connection_config;
+  CSL.lemma_initial_raw_to_message_replay_consistent CR.default_connection_config;
+  CSL.lemma_initial_sent_seal_replay_consistent CR.default_connection_config;
+  CSL.lemma_initial_sent_seal_key_schedule_replay_consistent CR.default_connection_config;
+  CSL.lemma_initial_received_decode_replay_consistent CR.default_connection_config;
+  CSL.lemma_initial_received_decode_key_schedule_replay_consistent CR.default_connection_config;
   CT.lemma_client_state_correct_protected_raw_segmented_replay CR.default_initial_state;
   c
 }
@@ -132,27 +133,27 @@ fn new_client
       (Ghost.reveal 'server_name_bytes)
       (Ghost.reveal 'trust_anchors_bytes)
       validation_time_seconds);
-  CS.lemma_initial_raw_to_message_replay_consistent
+  CSL.lemma_initial_raw_to_message_replay_consistent
     (CR.configured_connection_config
       (Ghost.reveal 'server_name_bytes)
       (Ghost.reveal 'trust_anchors_bytes)
       validation_time_seconds);
-  CS.lemma_initial_sent_seal_replay_consistent
+  CSL.lemma_initial_sent_seal_replay_consistent
     (CR.configured_connection_config
       (Ghost.reveal 'server_name_bytes)
       (Ghost.reveal 'trust_anchors_bytes)
       validation_time_seconds);
-  CS.lemma_initial_sent_seal_key_schedule_replay_consistent
+  CSL.lemma_initial_sent_seal_key_schedule_replay_consistent
     (CR.configured_connection_config
       (Ghost.reveal 'server_name_bytes)
       (Ghost.reveal 'trust_anchors_bytes)
       validation_time_seconds);
-  CS.lemma_initial_received_decode_replay_consistent
+  CSL.lemma_initial_received_decode_replay_consistent
     (CR.configured_connection_config
       (Ghost.reveal 'server_name_bytes)
       (Ghost.reveal 'trust_anchors_bytes)
       validation_time_seconds);
-  CS.lemma_initial_received_decode_key_schedule_replay_consistent
+  CSL.lemma_initial_received_decode_key_schedule_replay_consistent
     (CR.configured_connection_config
       (Ghost.reveal 'server_name_bytes)
       (Ghost.reveal 'trust_anchors_bytes)
