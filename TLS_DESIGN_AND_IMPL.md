@@ -21,7 +21,7 @@ and application-log projection.
 | --- | --- | --- |
 | Public extracted API | `src/impl/TLS13.Impl.Client.fsti`, `src/impl/TLS13.Impl.Client.fst` | Constructor, driver-hint, network-input, local-event, and observation/copyout entry points. |
 | Response/event types | `src/impl/TLS13.Impl.Client.Types.fst` | Extraction-facing response types plus legal-response predicates. |
-| Concrete C top-level driver | `runtime/tls13_client_driver.c`, `runtime/tls13_client_driver.h` | Stable C ABI wrapper whose implementation delegates to extracted `TLS13.Impl.Client.Driver` top-level operations for construction, connect/handshake, application send/receive, and close. |
+| Concrete C top-level driver | `runtime/tls13_client_driver.c`, `runtime/tls13_client_driver.h` | Stable C ABI wrapper whose implementation delegates to extracted `TLS13.Impl.Client.Driver` top-level operations for construction, connect including the TLS handshake, application send/receive, and close. |
 | Verified Pulse driver | `src/impl/TLS13.Impl.Client.Driver.fsti`, `src/impl/TLS13.Impl.Client.Driver.fst`, `src/impl/TLS13.OpenSSL.fsti`, `c_stubs/tls13_io_karamel.*`, `c_stubs/tls13_openssl_karamel.*` | Narrow top-level Pulse API: `new_client`, `connect`, `send`, `receive`, and `close` over a Pulse-owned `client_driver` containing the extracted client, typed OpenSSL auth context, channel slot, retained receive length, and scratch buffers. Private helpers implement the former lower-level driver/top-driver workflow, auth copyout/completion, local-action drain, buffered-prefix receive+compact, retained-buffer read+compact, and close orchestration. |
 | Concrete state representation | `src/impl/TLS13.Impl.ConnectionState.Repr.fst` | Concrete storage records, allocation helpers, ownership predicates, low-level copy helpers, and `connection_exactly`. |
 | State queries | `src/impl/TLS13.Impl.ConnectionState.Queries.fst` | Read-only runtime checks, snapshots, and driver copyout helpers. |
@@ -412,20 +412,21 @@ Other trusted runtime boundaries remain:
    CertificateVerify-input copyout facts, and the public local-input predicate
    states the X509/signature TCB assumptions. The final theorem still needs to
    package these facts into one auditable end-to-end statement.
-5. The top-level driver polling is now verified Pulse code, but the concrete C
-   wrapper still owns the runtime buffers, maps workflow statuses to errors, and
-   copies plaintext into caller buffers. The Pulse workflow covers the
+5. The top-level driver polling is now verified Pulse code. The concrete C
+   wrapper only tracks the extracted driver handle, connection state, and last
+   error; Pulse owns the retained/scratch buffers and copies plaintext into
+   caller buffers. The Pulse workflow covers the
    client/channel pair, typed OpenSSL auth context, control snapshots, auth
    copyout and local-event completion, ready internal local steps, retained-buffer
    buffered-prefix network processing with response writes, retained-buffer
-   read-append, suffix compaction, fueled handshake/receive loops, application
-   send, close_notify send, optional peer-close wait, channel close, and auth
-   context free. The receive side has verified retained-buffer prefix/read-append
+   read-append, suffix compaction, fueled connect/receive/close workflows,
+   application send, close_notify send, optional peer-close wait, channel close,
+   and auth context free. The receive side has verified retained-buffer prefix/read-append
    bridges: the full buffer is split, only the active prefix is passed to
    `process_network_bytes`, the free suffix is split before `TLS13.IO.read`, and
-   the full buffer is restored. The next proof step, if we want to shrink the TCB
-   further, is to move buffer ownership/allocation into a Pulse-owned heap driver
-   state and, separately, prove liveness beyond the current fueled status API.
+   the full buffer is restored. The remaining proof-polish step is to prove
+   liveness beyond the current fueled status API, if that becomes part of the
+   theorem.
 6. The old root `TLS13.Impl.ConnectionState.fst` facade is gone, but future
    changes must preserve the explicit responsibility split rather than recreating
    a catch-all mutation module.

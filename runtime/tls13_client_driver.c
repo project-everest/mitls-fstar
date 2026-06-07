@@ -7,7 +7,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define TLS13_DRIVER_HANDSHAKE_FUEL 1000u
+#define TLS13_DRIVER_WORKFLOW_FUEL 1000u
 #define TLS13_DRIVER_LOCAL_FUEL 100u
 
 struct tls13_client_driver_s {
@@ -79,7 +79,7 @@ int tls13_client_driver_connect(
           connect_host_len,
           port,
           TLS13_DRIVER_LOCAL_FUEL,
-          TLS13_DRIVER_HANDSHAKE_FUEL);
+          TLS13_DRIVER_WORKFLOW_FUEL);
   if (status != TLS13_Impl_Client_Driver_DriverWorkflowOk) {
     driver_fail(
         driver,
@@ -94,16 +94,6 @@ int tls13_client_driver_connect(
   driver->verified_driver = verified_driver;
   driver->connected = true;
   *out = driver;
-  return 0;
-}
-
-int tls13_client_driver_handshake(tls13_client_driver *driver) {
-  if (driver == NULL) {
-    return 1;
-  }
-  if (!driver->connected) {
-    return driver_fail(driver, "TLS channel is closed");
-  }
   return 0;
 }
 
@@ -147,7 +137,7 @@ int tls13_client_driver_receive_application_data(
           out,
           out_cap,
           TLS13_DRIVER_LOCAL_FUEL,
-          TLS13_DRIVER_HANDSHAKE_FUEL);
+          TLS13_DRIVER_WORKFLOW_FUEL);
   if (result.client_receive_status != TLS13_Impl_Client_Driver_DriverWorkflowOk) {
     return driver_fail(
         driver,
@@ -171,7 +161,7 @@ int tls13_client_driver_close(tls13_client_driver *driver, bool wait_for_peer) {
       TLS13_Impl_Client_Driver_close(
           driver->verified_driver,
           wait_for_peer,
-          TLS13_DRIVER_HANDSHAKE_FUEL);
+          TLS13_DRIVER_WORKFLOW_FUEL);
   driver->connected = false;
   if (status != TLS13_Impl_Client_Driver_DriverWorkflowClosed) {
     return driver_fail(driver, "verified close returned status %u", (unsigned)status);

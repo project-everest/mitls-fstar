@@ -16,8 +16,6 @@ int tls13_client_driver_connect(
     size_t trust_anchor_pem_len,
     size_t validation_time_seconds);
 
-int tls13_client_driver_handshake(tls13_client_driver *driver);
-
 int tls13_client_driver_send_application_data(
     tls13_client_driver *driver,
     const uint8_t *payload,

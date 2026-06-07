@@ -172,8 +172,6 @@ The reusable concrete runtime API is:
 This C driver is now a thin ABI wrapper around the verified top-level workflow:
 
 - `tls13_client_driver_connect` calls `new_client` and `connect`;
-- `tls13_client_driver_handshake` is a compatibility no-op after `connect`,
-  since the verified `connect` performs the TLS handshake;
 - `tls13_client_driver_send_application_data` calls
   `send`;
 - `tls13_client_driver_receive_application_data` calls
@@ -181,11 +179,11 @@ This C driver is now a thin ABI wrapper around the verified top-level workflow:
 - `tls13_client_driver_close` calls `close`.
 
 The C wrapper now stores only the extracted `client_driver` value, a connected
-flag, and the last error string. It preserves the stable
-`tls13_client_driver.h` API but no longer owns TLS scratch buffers, copies
-received plaintext, performs the TLS handshake loop, local-action drain, auth
-copyout/completion, retained-buffer read/process loop, or close-notify wait loop
-itself.
+flag, and the last error string. It no longer exposes a separate handshake
+entry point because the verified `connect` performs the TLS handshake. It also
+no longer owns TLS scratch buffers, copies received plaintext, performs the
+local-action drain, auth copyout/completion, retained-buffer read/process loop,
+or close-notify wait loop itself.
 
 ## Trusted computing base
 
@@ -213,7 +211,7 @@ The C code is kept to glue and TCB responsibilities:
 
 Protocol state transitions, key-schedule logic, record-layer logic, client step
 theorems, local-action drain, auth copyout/completion boundaries, response
-writes, top-level connect/handshake/send/receive/close workflows, OpenSSL auth
+writes, top-level connect/send/receive/close workflows, OpenSSL auth
 orchestration, caller receive copyout, and the driver
 receive-prefix/buffered-prefix/read-append/compaction paths are in F*/Pulse and
 extracted.

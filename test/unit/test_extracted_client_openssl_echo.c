@@ -73,7 +73,6 @@ int main(int argc, char **argv) {
           trust_anchor,
           trust_anchor_len,
           0u) == 0 &&
-      tls13_client_driver_handshake(driver) == 0 &&
       tls13_client_driver_send_application_data(driver, ping, sizeof ping) == 0 &&
       tls13_client_driver_receive_application_data(
           driver,

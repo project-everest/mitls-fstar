@@ -29,7 +29,7 @@ The current committed proof surface is centered on `TLS13.Impl.Client`, not the 
 - Both public step predicates directly preserve `CT.client_end_to_end_invariant`.
 - `CT.client_end_to_end_invariant` packages `CT.client_state_correct` with `CS.connection_state_raw_to_message_replay_consistent`.
 - `CT.driver_trace_end_to_end` folds those public step predicates over a ghost driver trace.
-- `runtime/tls13_client_driver.c` is now a thin C ABI wrapper over the extracted `TLS13.Impl.Client.Driver` top-level workflow: connect calls verified `new_client` and `connect`, handshake is a compatibility no-op after connect, send calls verified `send`, receive calls verified `receive`, and close calls verified `close`.
+- `runtime/tls13_client_driver.c` is now a thin C ABI wrapper over the extracted `TLS13.Impl.Client.Driver` top-level workflow: connect calls verified `new_client` and `connect` (including the TLS handshake), send calls verified `send`, receive calls verified `receive`, and close calls verified `close`.
 - `TLS13.Impl.Client.Driver.fsti` now exposes the intended narrow Pulse API: `client_driver`, its live/connected/closed predicates, `driver_workflow_status`, `client_receive_result`, and exactly `new_client`, `connect`, `send`, `receive`, and `close`. The implementation keeps the older `driver`/`top_driver`, auth copyout/completion, local-action drain, retained-buffer processing/read-append/compaction, and fueled workflow helpers private.
 - The top-level workflow owns the retained receive buffer and scratch buffers in Pulse, calls typed OpenSSL auth through `TLS13.OpenSSL.fsti`, performs the handshake inside `connect`, copies application plaintext to the caller buffer inside `receive`, and closes/frees IO/auth/buffer resources inside `close`. Certificate validation splits the auth payload to the exact validated peer-identity prefix before completing `LocalValidateCertificate`.
 - The workflow checks response write counts: if a local or network `StepOk` emits network bytes but `TLS13.IO.write` writes a short prefix, the workflow returns `DriverWorkflowStepFailed` instead of advancing to apparent success.
@@ -113,7 +113,7 @@ The stronger "all bytes ever consumed are cumulatively classified" theorem would
 
 ### 2. Keep shrinking the remaining C runtime shell
 
-The top-level connect/handshake, receive, send, and close workflow is now in
+The top-level connect (including handshake), receive, send, and close workflow is now in
 verified Pulse. The concrete driver no longer calls raw `next_local_action`,
 `process_local_event`, `process_network_bytes`, `control_snapshot`, auth copyout
 wrappers, or read/process/compact helpers directly. Instead, the runtime's public
