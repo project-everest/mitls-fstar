@@ -569,7 +569,9 @@ fn process_network_bytes
                   'old_network_out
                   network_out_bytes
                   'old_app_out
-                  app_out_bytes)
+                  app_out_bytes /\
+                (buffer_resp.CT.response.CT.status == CT.NeedMoreInput ==>
+                 buffer_resp.CT.consumed_len == 0sz))
 {
   let decoded = P.decode_network_buffer c raw raw_len;
   match decoded {
@@ -606,6 +608,8 @@ fn process_network_bytes
         'old_network_out
         'old_app_out
         'old_app_out;
+      assert (pure (buffer_resp.CT.response.CT.status == CT.NeedMoreInput ==>
+        buffer_resp.CT.consumed_len == 0sz));
       buffer_resp
     }
     L.NetworkBufferDecodeError -> {
@@ -658,6 +662,8 @@ fn process_network_bytes
         'old_network_out
         'old_app_out
         'old_app_out;
+      assert (pure (buffer_resp.CT.response.CT.status == CT.NeedMoreInput ==>
+        buffer_resp.CT.consumed_len == 0sz));
       buffer_resp
     }
     L.NetworkBufferOk decoded_buffer -> {
@@ -691,6 +697,9 @@ fn process_network_bytes
                 pts_to app_out app_out_bytes);
       assert (pure (SZ.v decoded_buffer.L.decoded_buffer_consumed_len <=
         B.length (Ghost.reveal 'raw_bytes)));
+      assert (pure (resp.CT.status == CT.NeedMoreInput ==> False));
+      assert (pure (buffer_resp.CT.response.CT.status == CT.NeedMoreInput ==>
+        buffer_resp.CT.consumed_len == 0sz));
       assert (pure (Seq.equal
         raw_record_bytes
         (CT.network_consumed_prefix

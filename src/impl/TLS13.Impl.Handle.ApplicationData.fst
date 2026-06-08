@@ -69,7 +69,8 @@ fn handle_unexpected_application_input
                   (CM.local_fail_state 'st0 CM.tls_unexpected_message_error)
                   resp
                   'old_network_out
-                  'old_app_out)
+                  'old_app_out /\
+                (resp.CT.status == CT.NeedMoreInput ==> False))
 {
   with m. assert (pure True);
   L.free_tls_message (L.LTlsApplicationData lapp);
@@ -170,7 +171,8 @@ fn handle_application_data
                       (Ghost.reveal 'raw_bytes)
                       'old_network_out
                       app_out_bytes /\
-                    Seq.equal bytes (CT.response_app_out resp app_out_bytes)))
+                    Seq.equal bytes (CT.response_app_out resp app_out_bytes)) /\
+                (resp.CT.status == CT.NeedMoreInput ==> False))
 {
   let ready = CQ.can_receive_application_data c;
   if ready {

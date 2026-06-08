@@ -67,7 +67,8 @@ fn handle_unexpected_handshake_input
                   (CM.local_fail_state 'st0 CM.tls_unexpected_message_error)
                   resp
                   'old_network_out
-                  'old_app_out)
+                  'old_app_out /\
+                (resp.CT.status == CT.NeedMoreInput ==> False))
 {
   with m. assert (pure True);
   L.free_tls_message l;
@@ -168,7 +169,8 @@ fn handle_handshake_message
                   st1
                   resp
                   'old_network_out
-                  'old_app_out)
+                  'old_app_out /\
+                (resp.CT.status == CT.NeedMoreInput ==> False))
 {
   match l {
     L.LTlsHandshake lhs -> {

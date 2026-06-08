@@ -79,4 +79,5 @@ fn handle_application_data
                      (Ghost.reveal 'raw_bytes)
                      'old_network_out
                      app_out_bytes /\
-                   Seq.equal bytes (CT.response_app_out resp app_out_bytes)))
+                   Seq.equal bytes (CT.response_app_out resp app_out_bytes)) /\
+                (resp.CT.status == CT.NeedMoreInput ==> False))

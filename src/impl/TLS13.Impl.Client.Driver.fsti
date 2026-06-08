@@ -7,6 +7,7 @@ open Pulse.Lib.Array.PtsTo
 
 module B = TLS13.Bytes
 module C = TLS13.Impl.Client
+module CL = TLS13.ConnectionLog
 module CR = TLS13.Impl.ConnectionState.Repr
 module CT = TLS13.Impl.Client.Types
 module IO = TLS13.IO
@@ -18,15 +19,34 @@ module U8 = FStar.UInt8
 val client_driver : Type0
 
 noextract
+val client_driver_wire_logs_match
+  (st:TLS13.Spec.ConnectionState.connection_state)
+  (received:B.bytes)
+  (sent:B.bytes)
+  (buffered:B.bytes)
+  (buffered_len:SZ.t)
+  : prop
+
+noextract
 val client_driver_live
   (d:client_driver)
   (st:TLS13.Spec.ConnectionState.connection_state)
   : slprop
 
 noextract
+(**
+  Owns a connected driver together with the actual TCP byte histories tracked by
+  TLS13.IO. The protocol-level processed wire log is in st.cs_wire_log; received
+  may also include bytes retained in the driver's input buffer. The predicate
+  includes client_driver_wire_logs_match for the hidden retained bytes, making
+  the public API relation between transport byte contents and protocol wire-log
+  contents explicit.
+**)
 val client_driver_connected
   (d:client_driver)
   (st:TLS13.Spec.ConnectionState.connection_state)
+  (received:B.bytes)
+  (sent:B.bytes)
   : slprop
 
 noextract
@@ -101,7 +121,8 @@ fn connect
           pts_to connect_host 'connect_host_bytes **
           (match status with
            | DriverWorkflowOk ->
-             client_driver_connected d st1
+             exists* received sent.
+               client_driver_connected d st1 received sent
            | _ ->
              client_driver_closed d st1)
 
@@ -109,7 +130,7 @@ fn send
   (d:client_driver)
   (payload:array U8.t)
   (payload_len:SZ.t)
-  requires client_driver_connected d 'st0 **
+  requires client_driver_connected d 'st0 'received0 'sent0 **
            pts_to payload 'payload_bytes **
            pure (B.length 'payload_bytes == SZ.v payload_len /\
                  CT.local_input_wf
@@ -117,9 +138,9 @@ fn send
                    CT.LocalSendApplicationData
                    (Ghost.reveal 'payload_bytes))
   returns status:driver_workflow_status
-  ensures exists* st1.
+  ensures exists* st1 received1 sent1.
           pts_to payload 'payload_bytes **
-          client_driver_connected d st1
+          client_driver_connected d st1 received1 sent1
 
 fn receive
   (d:client_driver)
@@ -127,12 +148,12 @@ fn receive
   (out_len:SZ.t)
   (local_fuel:SZ.t)
   (fuel:SZ.t)
-  requires client_driver_connected d 'st0 **
+  requires client_driver_connected d 'st0 'received0 'sent0 **
            pts_to out 'old_out **
            pure (B.length 'old_out == SZ.v out_len)
   returns result:client_receive_result
-  ensures exists* st1 out_bytes.
-          client_driver_connected d st1 **
+  ensures exists* st1 received1 sent1 out_bytes.
+          client_driver_connected d st1 received1 sent1 **
           pts_to out out_bytes **
           pure (B.length out_bytes == SZ.v out_len /\
                 SZ.v result.client_receive_len <= SZ.v out_len)
@@ -141,7 +162,7 @@ fn close
   (d:client_driver)
   (wait_for_peer:bool)
   (fuel:SZ.t)
-  requires client_driver_connected d 'st0
+  requires client_driver_connected d 'st0 'received0 'sent0
   returns status:driver_workflow_status
   ensures exists* st1.
           client_driver_closed d st1

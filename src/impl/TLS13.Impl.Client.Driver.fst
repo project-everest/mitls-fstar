@@ -9,9 +9,11 @@ module B = TLS13.Bytes
 module A = Pulse.Lib.Array
 module C = TLS13.Impl.Client
 module Bounds = TLS13.Impl.ConnectionState.Bounds
+module CL = TLS13.ConnectionLog
 module CR = TLS13.Impl.ConnectionState.Repr
 module CS = TLS13.Spec.ConnectionState
 module CT = TLS13.Impl.Client.Types
+module ID = FStar.IndefiniteDescription
 module IO = TLS13.IO
 module L = TLS13.Impl.Messages
 module M = TLS13.Messages
@@ -19,6 +21,7 @@ module O = TLS13.OpenSSL
 module Box = Pulse.Lib.Box
 module R = Pulse.Lib.Reference
 module Seq = FStar.Seq
+module SeqP = FStar.Seq.Properties
 module SZ = FStar.SizeT
 module U16 = FStar.UInt16
 module U8 = FStar.UInt8
@@ -32,6 +35,11 @@ let driver_auth_leaf_der_capacity : SZ.t = SZ.uint_to_t 32768
 let driver_certificate_verify_input_capacity : SZ.t = SZ.uint_to_t 256
 let driver_signature_capacity : SZ.t = SZ.uint_to_t 4096
 let driver_server_finished_payload_len : SZ.t = 36sz
+
+let pending_after_consumed (buffered_len consumed_len:SZ.t) : SZ.t =
+  if SZ.lte consumed_len buffered_len
+  then SZ.sub buffered_len consumed_len
+  else 0sz
 
 noeq type client_driver = {
   client_driver_client: C.client;
@@ -54,12 +62,64 @@ noeq type driver = {
 }
 
 noextract
+let logged_received_bytes_accounted
+  (logged:B.bytes)
+  (consumed:B.bytes)
+  : prop =
+  B.length logged <= B.length consumed /\
+  (forall b. SeqP.count b logged <= SeqP.count b consumed)
+
+noextract
+let client_driver_wire_logs_match_witness
+  (st:TLS13.Spec.ConnectionState.connection_state)
+  (received:B.bytes)
+  (sent:B.bytes)
+  (consumed:B.bytes)
+  (buffered:B.bytes)
+  (buffered_len:SZ.t)
+  : prop =
+  Seq.equal sent st.CS.cs_wire_log.CL.raw_sent /\
+  B.length buffered == SZ.v buffered_len /\
+  Seq.equal (B.append consumed buffered) received /\
+  logged_received_bytes_accounted st.CS.cs_wire_log.CL.raw_received consumed
+
+noextract
+let client_driver_wire_logs_match
+  (st:TLS13.Spec.ConnectionState.connection_state)
+  (received:B.bytes)
+  (sent:B.bytes)
+  (buffered:B.bytes)
+  (buffered_len:SZ.t)
+  : prop =
+  exists consumed.
+    client_driver_wire_logs_match_witness
+      st
+      received
+      sent
+      consumed
+      buffered
+      buffered_len
+
+noextract
+let channel_open
+  (ch:IO.channel)
+  (st:TLS13.Spec.ConnectionState.connection_state)
+  (buffered:B.bytes)
+  (buffered_len:SZ.t)
+  : slprop =
+  exists* received sent.
+    IO.is_channel ch received sent **
+    pure (client_driver_wire_logs_match st received sent buffered buffered_len)
+
+noextract
 let driver_exactly
   (d:driver)
   (st:TLS13.Spec.ConnectionState.connection_state)
+  (buffered:B.bytes)
+  (buffered_len:SZ.t)
   : slprop =
   C.connection_exactly d.driver_client st **
-  IO.is_channel d.driver_channel
+  channel_open d.driver_channel st buffered buffered_len
 
 noeq type top_driver = {
   top_driver_core: driver;
@@ -72,13 +132,16 @@ noextract
 let top_driver_exactly
   (d:top_driver)
   (st:TLS13.Spec.ConnectionState.connection_state)
+  (buffered:B.bytes)
+  (buffered_len:SZ.t)
   : slprop =
-  driver_exactly d.top_driver_core st **
+  driver_exactly d.top_driver_core st buffered buffered_len **
   O.is_auth_context d.top_driver_auth
 
 noextract
 let client_driver_buffers
   (d:client_driver)
+  (buffered:B.bytes)
   (buffered_len:SZ.t)
   : slprop =
   Box.pts_to d.client_driver_buffered_len buffered_len **
@@ -94,13 +157,15 @@ let client_driver_buffers
     pure (
       B.length empty_payload == 0 /\
       B.length raw == SZ.v driver_rx_capacity /\
+      B.length buffered == SZ.v buffered_len /\
+      SZ.v buffered_len <= SZ.v driver_rx_capacity /\
+      Seq.equal buffered (Seq.slice raw 0 (SZ.v buffered_len)) /\
       B.length network_out == SZ.v driver_network_out_capacity /\
       B.length auth_leaf_der == SZ.v driver_auth_leaf_der_capacity /\
       B.length auth_payload == SZ.v driver_public_key_payload_capacity /\
       B.length auth_cv_input == SZ.v driver_certificate_verify_input_capacity /\
       B.length auth_signature == SZ.v driver_signature_capacity /\
       B.length app_out == SZ.v driver_app_out_capacity /\
-      SZ.v buffered_len <= SZ.v driver_rx_capacity /\
       Bounds.max_handshake_flight_len <= SZ.v driver_auth_leaf_der_capacity /\
       SZ.v driver_public_key_payload_capacity <= Bounds.max_public_key_len /\
       Bounds.max_certificate_verify_input_len <= SZ.v driver_certificate_verify_input_capacity /\
@@ -122,21 +187,24 @@ let client_driver_live
   : slprop =
   C.connection_exactly d.client_driver_client st **
   O.is_auth_context d.client_driver_auth **
-  exists* buffered_len.
-    Box.pts_to d.client_driver_channel no_channel **
-    client_driver_buffers d buffered_len
+  Box.pts_to d.client_driver_channel no_channel **
+  client_driver_buffers d B.empty 0sz **
+  pure (client_driver_wire_logs_match st B.empty B.empty B.empty 0sz)
 
 noextract
 let client_driver_connected
   (d:client_driver)
   (st:TLS13.Spec.ConnectionState.connection_state)
+  (received:B.bytes)
+  (sent:B.bytes)
   : slprop =
   C.connection_exactly d.client_driver_client st **
   O.is_auth_context d.client_driver_auth **
-  exists* ch buffered_len.
+  exists* ch buffered buffered_len.
     Box.pts_to d.client_driver_channel (Some ch) **
-    IO.is_channel ch **
-    client_driver_buffers d buffered_len
+    IO.is_channel ch received sent **
+    client_driver_buffers d buffered buffered_len **
+    pure (client_driver_wire_logs_match st received sent buffered buffered_len)
 
 noextract
 let client_driver_closed
@@ -144,11 +212,6 @@ let client_driver_closed
   (st:TLS13.Spec.ConnectionState.connection_state)
   : slprop =
   C.connection_exactly d.client_driver_client st
-
-type network_write_result = {
-  network_write_buffer_resp: CT.client_buffer_response;
-  network_write_written: SZ.t;
-}
 
 type local_write_result = {
   local_write_resp: CT.client_response;
@@ -244,6 +307,363 @@ let lemma_ready_internal_action_empty_payload_wf
     assert False
   | _ ->
     ()
+
+let lemma_response_network_out_len
+  (resp:CT.client_response)
+  (network_out:B.bytes)
+  (app_out:B.bytes)
+  : Lemma
+      (requires CT.response_wf resp network_out app_out)
+      (ensures B.length (CT.response_network_out resp network_out) ==
+        SZ.v resp.CT.network_out_len)
+=
+  assert (SZ.v resp.CT.network_out_len <= B.length network_out);
+  Seq.lemma_len_slice network_out 0 (SZ.v resp.CT.network_out_len)
+
+let lemma_logged_received_bytes_accounted_append_delta
+  (old_logged:B.bytes)
+  (old_consumed:B.bytes)
+  (raw_delta:B.bytes)
+  (consumed_delta:B.bytes)
+  : Lemma
+      (requires
+        logged_received_bytes_accounted old_logged old_consumed /\
+        (Seq.equal raw_delta B.empty \/ Seq.equal raw_delta consumed_delta))
+      (ensures
+        logged_received_bytes_accounted
+          (B.append old_logged raw_delta)
+          (B.append old_consumed consumed_delta))
+=
+  Seq.lemma_len_append old_logged raw_delta;
+  Seq.lemma_len_append old_consumed consumed_delta;
+  SeqP.lemma_append_count old_logged raw_delta;
+  SeqP.lemma_append_count old_consumed consumed_delta;
+  if Seq.equal raw_delta B.empty then (
+    Seq.lemma_eq_elim raw_delta B.empty
+  ) else (
+    Seq.lemma_eq_elim raw_delta consumed_delta
+  )
+
+let lemma_slice_append_full
+  (s:B.bytes)
+  (n:nat)
+  : Lemma
+      (requires n <= B.length s)
+      (ensures Seq.equal (B.append (Seq.slice s 0 n) (Seq.slice s n (B.length s))) s)
+=
+  Seq.lemma_len_slice s 0 n;
+  Seq.lemma_len_slice s n (B.length s);
+  Seq.lemma_len_append (Seq.slice s 0 n) (Seq.slice s n (B.length s));
+  assert (B.length (B.append (Seq.slice s 0 n) (Seq.slice s n (B.length s))) == B.length s);
+  assert (forall (i:nat). i < B.length (B.append (Seq.slice s 0 n) (Seq.slice s n (B.length s))) ==>
+    Seq.index (B.append (Seq.slice s 0 n) (Seq.slice s n (B.length s))) i == Seq.index s i);
+  Seq.lemma_eq_intro (B.append (Seq.slice s 0 n) (Seq.slice s n (B.length s))) s
+
+let lemma_legal_response_for_event_wire_lengths
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (resp:CT.client_response)
+  (ev:CS.conn_event)
+  (raw_sent:B.bytes)
+  (raw_received:B.bytes)
+  (network_out:B.bytes)
+  (app_out:B.bytes)
+  : Lemma
+      (requires CT.legal_response_for_event
+        st0 st1 resp ev raw_sent raw_received network_out app_out)
+      (ensures
+        B.length st1.CS.cs_wire_log.CL.raw_sent ==
+          B.length st0.CS.cs_wire_log.CL.raw_sent + B.length raw_sent /\
+        B.length st1.CS.cs_wire_log.CL.raw_received ==
+          B.length st0.CS.cs_wire_log.CL.raw_received + B.length raw_received /\
+        Seq.equal st1.CS.cs_wire_log.CL.raw_sent
+          (B.append st0.CS.cs_wire_log.CL.raw_sent raw_sent) /\
+        Seq.equal st1.CS.cs_wire_log.CL.raw_received
+          (B.append st0.CS.cs_wire_log.CL.raw_received raw_received))
+=
+  assert (CS.legal_connection_delta
+    st0
+    {
+      CS.delta_event = ev;
+      CS.delta_raw_sent = raw_sent;
+      CS.delta_raw_received = raw_received;
+    }
+    st1);
+  assert (st1.CS.cs_wire_log == {
+    CL.raw_sent = B.append st0.CS.cs_wire_log.CL.raw_sent raw_sent;
+    CL.raw_received = B.append st0.CS.cs_wire_log.CL.raw_received raw_received;
+  });
+  Seq.lemma_len_append st0.CS.cs_wire_log.CL.raw_sent raw_sent;
+  Seq.lemma_len_append st0.CS.cs_wire_log.CL.raw_received raw_received
+
+let lemma_local_event_wire_lengths
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (resp:CT.client_response)
+  (kind:CT.local_event_kind)
+  (payload:B.bytes)
+  (network_out:B.bytes)
+  (app_out:B.bytes)
+  : Lemma
+      (requires CT.local_event_end_to_end_correct
+        st0 st1 resp kind payload network_out app_out)
+      (ensures
+        B.length st1.CS.cs_wire_log.CL.raw_sent ==
+          B.length st0.CS.cs_wire_log.CL.raw_sent + SZ.v resp.CT.network_out_len /\
+        B.length st1.CS.cs_wire_log.CL.raw_received ==
+          B.length st0.CS.cs_wire_log.CL.raw_received /\
+        Seq.equal st1.CS.cs_wire_log.CL.raw_sent
+          (B.append
+            st0.CS.cs_wire_log.CL.raw_sent
+            (CT.response_network_out resp network_out)) /\
+        Seq.equal st1.CS.cs_wire_log.CL.raw_received
+          st0.CS.cs_wire_log.CL.raw_received)
+=
+  assert (CT.local_event_step_correct st0 st1 resp kind payload network_out app_out);
+  assert (CT.legal_handled_local_response st0 st1 resp kind payload network_out app_out);
+  if (exists ev raw_sent raw_received.
+        CT.legal_local_response
+          st0 st1 resp kind payload ev raw_sent raw_received network_out app_out) then (
+    let ev =
+      ID.indefinite_description_ghost
+        CS.conn_event
+        (fun ev -> exists raw_sent raw_received.
+          CT.legal_local_response
+            st0 st1 resp kind payload ev raw_sent raw_received network_out app_out) in
+    let raw_sent =
+      ID.indefinite_description_ghost
+        B.bytes
+        (fun raw_sent -> exists raw_received.
+          CT.legal_local_response
+            st0 st1 resp kind payload ev raw_sent raw_received network_out app_out) in
+    let raw_received =
+      ID.indefinite_description_ghost
+        B.bytes
+        (fun raw_received ->
+          CT.legal_local_response
+            st0 st1 resp kind payload ev raw_sent raw_received network_out app_out) in
+    assert (CT.legal_local_response
+      st0 st1 resp kind payload ev raw_sent raw_received network_out app_out);
+    assert (CT.legal_response_for_event
+      st0 st1 resp ev raw_sent raw_received network_out app_out);
+    lemma_legal_response_for_event_wire_lengths
+      st0 st1 resp ev raw_sent raw_received network_out app_out;
+    assert (CS.event_raw_delta_legal st0.CS.cs_model ev raw_sent raw_received);
+    assert (CT.local_event_kind_matches st0 kind payload ev);
+    (match ev with
+     | CS.ConnLocalEvent _ ->
+       assert (Seq.equal raw_received B.empty)
+     | CS.ConnNetworkEvent msg ->
+       (match msg.CL.message_direction with
+        | CL.Sent ->
+          assert (Seq.equal raw_received B.empty)
+        | CL.Received ->
+          (match kind with
+           | CT.LocalSendApplicationData
+           | CT.LocalSendClientHello
+           | CT.LocalSendClientFinished
+           | CT.LocalSendCloseNotify
+           | CT.LocalSendKeyUpdate ->
+             assert (msg.CL.message_direction == CL.Sent);
+             assert False
+           | _ ->
+             assert False)));
+    assert (Seq.equal raw_received B.empty);
+    Seq.lemma_eq_elim raw_received B.empty;
+    lemma_response_network_out_len resp network_out app_out;
+    assert (Seq.equal raw_sent (CT.response_network_out resp network_out));
+    Seq.lemma_eq_elim raw_sent (CT.response_network_out resp network_out);
+    Seq.append_empty_r st0.CS.cs_wire_log.CL.raw_received
+  ) else if CT.unexpected_message_response st0 st1 resp network_out app_out then (
+    lemma_legal_response_for_event_wire_lengths
+      st0
+      st1
+      resp
+      (CS.ConnLocalEvent (CS.LocalFail CT.tls_unexpected_message_error))
+      B.empty
+      B.empty
+      network_out
+      app_out;
+    lemma_response_network_out_len resp network_out app_out;
+    assert (Seq.equal B.empty (CT.response_network_out resp network_out));
+    Seq.lemma_eq_elim B.empty (CT.response_network_out resp network_out);
+    Seq.append_empty_r st0.CS.cs_wire_log.CL.raw_received
+  ) else (
+    assert (CT.bad_finished_response st0 st1 resp network_out app_out);
+    lemma_legal_response_for_event_wire_lengths
+      st0
+      st1
+      resp
+      (CS.ConnLocalEvent (CS.LocalFail CT.tls_bad_finished_error))
+      B.empty
+      B.empty
+      network_out
+      app_out;
+    lemma_response_network_out_len resp network_out app_out;
+    assert (Seq.equal B.empty (CT.response_network_out resp network_out));
+    Seq.lemma_eq_elim B.empty (CT.response_network_out resp network_out);
+    Seq.append_empty_r st0.CS.cs_wire_log.CL.raw_received
+  )
+
+let lemma_network_bytes_wire_lengths
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (buffer_resp:CT.client_buffer_response)
+  (network_input:B.bytes)
+  (old_network_out:B.bytes)
+  (network_out:B.bytes)
+  (old_app_out:B.bytes)
+  (app_out:B.bytes)
+  : Lemma
+      (requires CT.network_bytes_end_to_end_correct
+        st0 st1 buffer_resp network_input old_network_out network_out old_app_out app_out)
+      (ensures
+        B.length st1.CS.cs_wire_log.CL.raw_sent ==
+          B.length st0.CS.cs_wire_log.CL.raw_sent +
+          SZ.v buffer_resp.CT.response.CT.network_out_len /\
+        B.length st1.CS.cs_wire_log.CL.raw_received <=
+          B.length st0.CS.cs_wire_log.CL.raw_received +
+          SZ.v buffer_resp.CT.consumed_len /\
+        Seq.equal st1.CS.cs_wire_log.CL.raw_sent
+          (B.append
+            st0.CS.cs_wire_log.CL.raw_sent
+            (CT.response_network_out buffer_resp.CT.response network_out)))
+=
+  let resp = buffer_resp.CT.response in
+  assert (CT.network_bytes_step_correct
+    st0 st1 buffer_resp network_input old_network_out network_out old_app_out app_out);
+  if CT.response_stuttered st0 st1 resp old_network_out network_out old_app_out app_out then (
+    assert (st1 == st0);
+    assert (resp.CT.network_out_len == 0sz)
+  ) else (
+    assert (SZ.v buffer_resp.CT.consumed_len <= B.length network_input);
+    assert (CT.some_legal_response_for_network_prefix
+      st0 st1 resp network_input buffer_resp.CT.consumed_len network_out app_out);
+    let ev =
+      ID.indefinite_description_ghost
+        CS.conn_event
+        (fun ev -> exists raw_sent raw_received.
+          CT.legal_response_for_event st0 st1 resp ev raw_sent raw_received network_out app_out /\
+          CT.raw_received_matches_network_input
+            raw_received
+            (CT.network_consumed_prefix network_input buffer_resp.CT.consumed_len)) in
+    let raw_sent =
+      ID.indefinite_description_ghost
+        B.bytes
+        (fun raw_sent -> exists raw_received.
+          CT.legal_response_for_event st0 st1 resp ev raw_sent raw_received network_out app_out /\
+          CT.raw_received_matches_network_input
+            raw_received
+            (CT.network_consumed_prefix network_input buffer_resp.CT.consumed_len)) in
+    let raw_received =
+      ID.indefinite_description_ghost
+        B.bytes
+        (fun raw_received ->
+          CT.legal_response_for_event st0 st1 resp ev raw_sent raw_received network_out app_out /\
+          CT.raw_received_matches_network_input
+            raw_received
+            (CT.network_consumed_prefix network_input buffer_resp.CT.consumed_len)) in
+    assert (CT.legal_response_for_event
+      st0 st1 resp ev raw_sent raw_received network_out app_out);
+    assert (CT.raw_received_matches_network_input
+      raw_received
+      (CT.network_consumed_prefix network_input buffer_resp.CT.consumed_len));
+    lemma_legal_response_for_event_wire_lengths
+      st0 st1 resp ev raw_sent raw_received network_out app_out;
+    lemma_response_network_out_len resp network_out app_out;
+    assert (Seq.equal raw_sent (CT.response_network_out resp network_out));
+    Seq.lemma_eq_elim raw_sent (CT.response_network_out resp network_out);
+    if Seq.equal raw_received B.empty then (
+      Seq.lemma_eq_elim raw_received B.empty
+    ) else (
+      assert (Seq.equal raw_received
+        (CT.network_consumed_prefix network_input buffer_resp.CT.consumed_len));
+      Seq.lemma_eq_elim raw_received
+        (CT.network_consumed_prefix network_input buffer_resp.CT.consumed_len);
+      Seq.lemma_len_slice network_input 0 (SZ.v buffer_resp.CT.consumed_len)
+    )
+  )
+
+let lemma_network_bytes_logged_received_accounted
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (buffer_resp:CT.client_buffer_response)
+  (network_input:B.bytes)
+  (old_network_out:B.bytes)
+  (network_out:B.bytes)
+  (old_app_out:B.bytes)
+  (app_out:B.bytes)
+  (old_consumed:B.bytes)
+  : Lemma
+      (requires
+        CT.network_bytes_end_to_end_correct
+          st0 st1 buffer_resp network_input old_network_out network_out old_app_out app_out /\
+        logged_received_bytes_accounted
+          st0.CS.cs_wire_log.CL.raw_received
+          old_consumed)
+      (ensures
+        logged_received_bytes_accounted
+          st1.CS.cs_wire_log.CL.raw_received
+          (B.append old_consumed
+            (CT.network_consumed_prefix network_input buffer_resp.CT.consumed_len)))
+=
+  let resp = buffer_resp.CT.response in
+  assert (CT.network_bytes_step_correct
+    st0 st1 buffer_resp network_input old_network_out network_out old_app_out app_out);
+  if CT.response_stuttered st0 st1 resp old_network_out network_out old_app_out app_out then (
+    assert (st1 == st0);
+    Seq.append_empty_r st0.CS.cs_wire_log.CL.raw_received;
+    lemma_logged_received_bytes_accounted_append_delta
+      st0.CS.cs_wire_log.CL.raw_received
+      old_consumed
+      B.empty
+      (CT.network_consumed_prefix network_input buffer_resp.CT.consumed_len)
+  ) else (
+    assert (CT.some_legal_response_for_network_prefix
+      st0 st1 resp network_input buffer_resp.CT.consumed_len network_out app_out);
+    let ev =
+      ID.indefinite_description_ghost
+        CS.conn_event
+        (fun ev -> exists raw_sent raw_received.
+          CT.legal_response_for_event st0 st1 resp ev raw_sent raw_received network_out app_out /\
+          CT.raw_received_matches_network_input
+            raw_received
+            (CT.network_consumed_prefix network_input buffer_resp.CT.consumed_len)) in
+    let raw_sent =
+      ID.indefinite_description_ghost
+        B.bytes
+        (fun raw_sent -> exists raw_received.
+          CT.legal_response_for_event st0 st1 resp ev raw_sent raw_received network_out app_out /\
+          CT.raw_received_matches_network_input
+            raw_received
+            (CT.network_consumed_prefix network_input buffer_resp.CT.consumed_len)) in
+    let raw_received =
+      ID.indefinite_description_ghost
+        B.bytes
+        (fun raw_received ->
+          CT.legal_response_for_event st0 st1 resp ev raw_sent raw_received network_out app_out /\
+          CT.raw_received_matches_network_input
+            raw_received
+            (CT.network_consumed_prefix network_input buffer_resp.CT.consumed_len)) in
+    assert (CT.legal_response_for_event
+      st0 st1 resp ev raw_sent raw_received network_out app_out);
+    assert (CT.raw_received_matches_network_input
+      raw_received
+      (CT.network_consumed_prefix network_input buffer_resp.CT.consumed_len));
+    lemma_legal_response_for_event_wire_lengths
+      st0 st1 resp ev raw_sent raw_received network_out app_out;
+    if Seq.equal raw_received B.empty then (
+      Seq.lemma_eq_elim raw_received B.empty
+    ) else (
+      Seq.lemma_eq_elim raw_received
+        (CT.network_consumed_prefix network_input buffer_resp.CT.consumed_len)
+    );
+    lemma_logged_received_bytes_accounted_append_delta
+      st0.CS.cs_wire_log.CL.raw_received
+      old_consumed
+      raw_received
+      (CT.network_consumed_prefix network_input buffer_resp.CT.consumed_len)
+  )
 
 fn new_client
   (server_name:array U8.t)
@@ -394,7 +814,16 @@ fn new_client
             (Ghost.reveal 'trust_anchors_bytes)
             validation_time_seconds));
       rewrite (O.is_auth_context auth) as (O.is_auth_context d.client_driver_auth);
-      fold (client_driver_buffers d 0sz);
+      fold (client_driver_buffers d B.empty 0sz);
+      assert (pure (client_driver_wire_logs_match
+        (CR.configured_initial_state
+          (Ghost.reveal 'server_name_bytes)
+          (Ghost.reveal 'trust_anchors_bytes)
+          validation_time_seconds)
+        B.empty
+        B.empty
+        B.empty
+        0sz));
       fold
         (client_driver_live
           d
@@ -437,7 +866,9 @@ fn driver_connect
                (CR.configured_initial_state
                  (Ghost.reveal 'server_name_bytes)
                  (Ghost.reveal 'trust_anchors_bytes)
-                 validation_time_seconds) **
+                 validation_time_seconds)
+               B.empty
+               0sz **
              pure (CT.client_state_correct
                (CR.configured_initial_state
                  (Ghost.reveal 'server_name_bytes)
@@ -478,6 +909,22 @@ fn driver_connect
           (Ghost.reveal 'server_name_bytes)
           (Ghost.reveal 'trust_anchors_bytes)
           validation_time_seconds));
+    assert (pure (client_driver_wire_logs_match
+      (CR.configured_initial_state
+        (Ghost.reveal 'server_name_bytes)
+        (Ghost.reveal 'trust_anchors_bytes)
+        validation_time_seconds)
+      B.empty
+      B.empty
+      B.empty
+      0sz));
+    fold (channel_open ch
+      (CR.configured_initial_state
+        (Ghost.reveal 'server_name_bytes)
+        (Ghost.reveal 'trust_anchors_bytes)
+        validation_time_seconds)
+      B.empty
+      0sz);
     fold
       (driver_exactly
         {
@@ -487,7 +934,9 @@ fn driver_connect
         (CR.configured_initial_state
           (Ghost.reveal 'server_name_bytes)
           (Ghost.reveal 'trust_anchors_bytes)
-          validation_time_seconds));
+          validation_time_seconds)
+        B.empty
+        0sz);
     Some {
       driver_client = c;
       driver_channel = ch;
@@ -526,7 +975,9 @@ fn driver_open
                (CR.configured_initial_state
                  (Ghost.reveal 'server_name_bytes)
                  (Ghost.reveal 'trust_anchors_bytes)
-                 validation_time_seconds) **
+                 validation_time_seconds)
+               B.empty
+               0sz **
              pure (CT.client_state_correct
                (CR.configured_initial_state
                  (Ghost.reveal 'server_name_bytes)
@@ -577,7 +1028,9 @@ fn driver_open
               (CR.configured_initial_state
                 (Ghost.reveal 'server_name_bytes)
                 (Ghost.reveal 'trust_anchors_bytes)
-                validation_time_seconds));
+                validation_time_seconds)
+              B.empty
+              0sz);
           Some {
             top_driver_core = d;
             top_driver_auth = auth;
@@ -590,18 +1043,18 @@ fn driver_open
 
 fn driver_control_snapshot
   (d:driver)
-  requires driver_exactly d 'st0
+  requires driver_exactly d 'st0 'buffered 'pending_len
   returns snapshot:CR.control_snapshot
-  ensures driver_exactly d 'st0 **
+  ensures driver_exactly d 'st0 'buffered 'pending_len **
           pure (CR.control_snapshot_matches snapshot 'st0)
 {
-  unfold (driver_exactly d 'st0);
+  unfold (driver_exactly d 'st0 (Ghost.reveal 'buffered) (Ghost.reveal 'pending_len));
   rewrite (C.connection_exactly d.driver_client 'st0)
     as (CR.connection_exactly d.driver_client 'st0);
   let snapshot = C.control_snapshot d.driver_client;
   rewrite (CR.connection_exactly d.driver_client 'st0)
     as (C.connection_exactly d.driver_client 'st0);
-  fold (driver_exactly d 'st0);
+  fold (driver_exactly d 'st0 (Ghost.reveal 'buffered) (Ghost.reveal 'pending_len));
   snapshot
 }
 
@@ -609,7 +1062,7 @@ fn driver_copy_certificate_leaf_der
   (d:driver)
   (out:array U8.t)
   (out_len:SZ.t)
-  requires driver_exactly d 'st0 **
+  requires driver_exactly d 'st0 'buffered 'pending_len **
            pts_to out 'old_out **
            pure (B.length 'old_out == SZ.v out_len /\
                  Bounds.max_handshake_flight_len <= SZ.v out_len /\
@@ -617,7 +1070,7 @@ fn driver_copy_certificate_leaf_der
                    'st0.CS.cs_model.CS.model_handshake.CS.hs_buffers.CS.hb_certificate_leaf_der)
   returns copied_len:SZ.t
   ensures exists* out_bytes.
-          driver_exactly d 'st0 **
+          driver_exactly d 'st0 'buffered 'pending_len **
           pts_to out out_bytes **
           pure (B.length out_bytes == SZ.v out_len /\
                 SZ.v copied_len <= B.length out_bytes /\
@@ -627,7 +1080,7 @@ fn driver_copy_certificate_leaf_der
                    Seq.equal (Seq.slice out_bytes 0 (SZ.v copied_len)) leaf
                  | None -> False))
 {
-  unfold (driver_exactly d 'st0);
+  unfold (driver_exactly d 'st0 (Ghost.reveal 'buffered) (Ghost.reveal 'pending_len));
   rewrite (C.connection_exactly d.driver_client 'st0)
     as (CR.connection_exactly d.driver_client 'st0);
   let copied_len =
@@ -640,7 +1093,7 @@ fn driver_copy_certificate_leaf_der
             pts_to out out_bytes);
   rewrite (CR.connection_exactly d.driver_client 'st0)
     as (C.connection_exactly d.driver_client 'st0);
-  fold (driver_exactly d 'st0);
+  fold (driver_exactly d 'st0 (Ghost.reveal 'buffered) (Ghost.reveal 'pending_len));
   copied_len
 }
 
@@ -648,7 +1101,7 @@ fn driver_copy_certificate_verify_input
   (d:driver)
   (out:array U8.t)
   (out_len:SZ.t)
-  requires driver_exactly d 'st0 **
+  requires driver_exactly d 'st0 'buffered 'pending_len **
            pts_to out 'old_out **
            pure (B.length 'old_out == SZ.v out_len /\
                  Bounds.max_certificate_verify_input_len <= SZ.v out_len /\
@@ -656,7 +1109,7 @@ fn driver_copy_certificate_verify_input
                    'st0.CS.cs_model.CS.model_handshake.CS.hs_buffers.CS.hb_certificate_verify_input)
   returns copied_len:SZ.t
   ensures exists* out_bytes.
-          driver_exactly d 'st0 **
+          driver_exactly d 'st0 'buffered 'pending_len **
           pts_to out out_bytes **
           pure (B.length out_bytes == SZ.v out_len /\
                 SZ.v copied_len <= B.length out_bytes /\
@@ -666,7 +1119,7 @@ fn driver_copy_certificate_verify_input
                    Seq.equal (Seq.slice out_bytes 0 (SZ.v copied_len)) input
                  | None -> False))
 {
-  unfold (driver_exactly d 'st0);
+  unfold (driver_exactly d 'st0 (Ghost.reveal 'buffered) (Ghost.reveal 'pending_len));
   rewrite (C.connection_exactly d.driver_client 'st0)
     as (CR.connection_exactly d.driver_client 'st0);
   let copied_len =
@@ -679,7 +1132,7 @@ fn driver_copy_certificate_verify_input
             pts_to out out_bytes);
   rewrite (CR.connection_exactly d.driver_client 'st0)
     as (C.connection_exactly d.driver_client 'st0);
-  fold (driver_exactly d 'st0);
+  fold (driver_exactly d 'st0 (Ghost.reveal 'buffered) (Ghost.reveal 'pending_len));
   copied_len
 }
 
@@ -687,7 +1140,7 @@ fn driver_copy_certificate_verify_signature
   (d:driver)
   (out:array U8.t)
   (out_len:SZ.t)
-  requires driver_exactly d 'st0 **
+  requires driver_exactly d 'st0 'buffered 'pending_len **
            pts_to out 'old_out **
            pure (B.length 'old_out == SZ.v out_len /\
                  L.max_signature_len <= SZ.v out_len /\
@@ -695,7 +1148,7 @@ fn driver_copy_certificate_verify_signature
                    'st0.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify)
   returns snapshot:CR.certificate_verify_signature_snapshot
   ensures exists* out_bytes.
-          driver_exactly d 'st0 **
+          driver_exactly d 'st0 'buffered 'pending_len **
           pts_to out out_bytes **
           pure (B.length out_bytes == SZ.v out_len /\
                 SZ.v snapshot.CR.cv_signature_len <= B.length out_bytes /\
@@ -708,7 +1161,7 @@ fn driver_copy_certificate_verify_signature
                      cv.M.signature
                  | None -> False))
 {
-  unfold (driver_exactly d 'st0);
+  unfold (driver_exactly d 'st0 (Ghost.reveal 'buffered) (Ghost.reveal 'pending_len));
   rewrite (C.connection_exactly d.driver_client 'st0)
     as (CR.connection_exactly d.driver_client 'st0);
   let snapshot =
@@ -721,7 +1174,7 @@ fn driver_copy_certificate_verify_signature
             pts_to out out_bytes);
   rewrite (CR.connection_exactly d.driver_client 'st0)
     as (C.connection_exactly d.driver_client 'st0);
-  fold (driver_exactly d 'st0);
+  fold (driver_exactly d 'st0 (Ghost.reveal 'buffered) (Ghost.reveal 'pending_len));
   snapshot
 }
 
@@ -736,7 +1189,7 @@ fn process_local_event_and_write_once
   (app_out:array U8.t)
   (app_out_len:SZ.t)
   requires C.connection_exactly c 'st0 **
-           IO.is_channel ch **
+           channel_open ch 'st0 'buffered 'pending_len **
            pts_to payload 'payload_bytes **
            pts_to network_out 'old_network_out **
            pts_to app_out 'old_app_out **
@@ -750,7 +1203,7 @@ fn process_local_event_and_write_once
   returns result: local_write_result
   ensures exists* st1 network_out_bytes app_out_bytes.
            C.connection_exactly c st1 **
-           IO.is_channel ch **
+           channel_open ch st1 'buffered 'pending_len **
            pts_to payload 'payload_bytes **
            pts_to network_out network_out_bytes **
            pts_to app_out app_out_bytes **
@@ -766,9 +1219,7 @@ fn process_local_event_and_write_once
                    app_out_bytes /\
                  (result.local_write_resp.CT.status == CT.StepOk ==>
                   SZ.v result.local_write_written <=
-                  SZ.v result.local_write_resp.CT.network_out_len) /\
-                 (result.local_write_resp.CT.status == CT.StepOk \/
-                  result.local_write_written == 0sz))
+                  SZ.v result.local_write_resp.CT.network_out_len))
 {
   rewrite (C.connection_exactly c 'st0) as (CR.connection_exactly c 'st0);
   let resp =
@@ -795,29 +1246,59 @@ fn process_local_event_and_write_once
     (Ghost.reveal 'payload_bytes)
     network_out_bytes
     app_out_bytes));
-  let ok = resp.CT.status = CT.StepOk;
-  if ok {
-    assert (pure (resp.CT.status == CT.StepOk));
-    assert (pure (CT.response_wf resp network_out_bytes app_out_bytes));
-    assert (pure (SZ.v resp.CT.network_out_len <= B.length network_out_bytes));
-    let written = IO.write ch network_out resp.CT.network_out_len;
-    assert (pure (SZ.v written <= SZ.v resp.CT.network_out_len));
-    assert (pure (resp.CT.status == CT.StepOk ==>
-      SZ.v written <= SZ.v resp.CT.network_out_len));
-    assert (pure (resp.CT.status == CT.StepOk \/ written == 0sz));
-    {
-      local_write_resp = resp;
-      local_write_written = written;
-    }
-  } else {
-    assert (pure (SZ.v 0sz <= SZ.v resp.CT.network_out_len));
-    assert (pure (resp.CT.status == CT.StepOk ==>
-      SZ.v 0sz <= SZ.v resp.CT.network_out_len));
-    assert (pure (resp.CT.status == CT.StepOk \/ 0sz == 0sz));
-    {
-      local_write_resp = resp;
-      local_write_written = 0sz;
-    }
+  lemma_local_event_wire_lengths
+    'st0
+    st1
+    resp
+    kind
+    (Ghost.reveal 'payload_bytes)
+    network_out_bytes
+    app_out_bytes;
+  assert (pure (CT.response_wf resp network_out_bytes app_out_bytes));
+  assert (pure (SZ.v resp.CT.network_out_len <= B.length network_out_bytes));
+  unfold (channel_open ch 'st0 (Ghost.reveal 'buffered) (Ghost.reveal 'pending_len));
+  with received sent.
+    assert (IO.is_channel ch received sent **
+            pure (client_driver_wire_logs_match 'st0 received sent (Ghost.reveal 'buffered) (Ghost.reveal 'pending_len)));
+  let written = IO.write ch network_out resp.CT.network_out_len;
+  assert (pure (written == resp.CT.network_out_len));
+  assert (pure (SZ.v written <= B.length network_out_bytes));
+  Seq.lemma_len_append sent (Seq.slice network_out_bytes 0 (SZ.v written));
+  Seq.lemma_len_slice network_out_bytes 0 (SZ.v written);
+  assert (pure (Seq.equal
+    (if SZ.v written <= B.length network_out_bytes
+     then Seq.slice network_out_bytes 0 (SZ.v written)
+     else B.empty)
+    (CT.response_network_out resp network_out_bytes)));
+  assert (pure (Seq.equal sent 'st0.CS.cs_wire_log.CL.raw_sent));
+  Seq.lemma_eq_elim sent 'st0.CS.cs_wire_log.CL.raw_sent;
+  assert (pure (Seq.equal
+    st1.CS.cs_wire_log.CL.raw_sent
+    (B.append
+      'st0.CS.cs_wire_log.CL.raw_sent
+      (CT.response_network_out resp network_out_bytes))));
+  assert (pure (Seq.equal
+    st1.CS.cs_wire_log.CL.raw_received
+    'st0.CS.cs_wire_log.CL.raw_received));
+  Seq.lemma_eq_elim
+    st1.CS.cs_wire_log.CL.raw_received
+    'st0.CS.cs_wire_log.CL.raw_received;
+  assert (pure (client_driver_wire_logs_match
+    st1
+    received
+    (B.append sent
+      (if SZ.v written <= B.length network_out_bytes
+       then Seq.slice network_out_bytes 0 (SZ.v written)
+       else B.empty))
+    (Ghost.reveal 'buffered)
+    (Ghost.reveal 'pending_len)));
+  fold (channel_open ch st1 (Ghost.reveal 'buffered) (Ghost.reveal 'pending_len));
+  assert (pure (SZ.v written <= SZ.v resp.CT.network_out_len));
+  assert (pure (resp.CT.status == CT.StepOk ==>
+    SZ.v written <= SZ.v resp.CT.network_out_len));
+  {
+    local_write_resp = resp;
+    local_write_written = written;
   }
 }
 
@@ -830,7 +1311,7 @@ fn driver_process_local_event
   (network_out_len:SZ.t)
   (app_out:array U8.t)
   (app_out_len:SZ.t)
-  requires driver_exactly d 'st0 **
+  requires driver_exactly d 'st0 'buffered 'pending_len **
            pts_to payload 'payload_bytes **
            pts_to network_out 'old_network_out **
            pts_to app_out 'old_app_out **
@@ -843,7 +1324,7 @@ fn driver_process_local_event
                    (Ghost.reveal 'payload_bytes))
   returns result: local_write_result
   ensures exists* st1 network_out_bytes app_out_bytes.
-           driver_exactly d st1 **
+           driver_exactly d st1 'buffered 'pending_len **
            pts_to payload 'payload_bytes **
            pts_to network_out network_out_bytes **
            pts_to app_out app_out_bytes **
@@ -859,11 +1340,9 @@ fn driver_process_local_event
                    app_out_bytes /\
                  (result.local_write_resp.CT.status == CT.StepOk ==>
                   SZ.v result.local_write_written <=
-                  SZ.v result.local_write_resp.CT.network_out_len) /\
-                 (result.local_write_resp.CT.status == CT.StepOk \/
-                  result.local_write_written == 0sz))
+                  SZ.v result.local_write_resp.CT.network_out_len))
 {
-  unfold (driver_exactly d 'st0);
+  unfold (driver_exactly d 'st0 (Ghost.reveal 'buffered) (Ghost.reveal 'pending_len));
   let result =
     process_local_event_and_write_once
       d.driver_client
@@ -880,469 +1359,8 @@ fn driver_process_local_event
             pts_to payload 'payload_bytes **
             pts_to network_out network_out_bytes **
             pts_to app_out app_out_bytes);
-  fold (driver_exactly d st1);
+  fold (driver_exactly d st1 (Ghost.reveal 'buffered) (Ghost.reveal 'pending_len));
   result
-}
-
-fn receive_network_bytes_once
-  (d:driver)
-  (raw:array U8.t)
-  (raw_len:SZ.t)
-  (network_out:array U8.t)
-  (network_out_len:SZ.t)
-  (app_out:array U8.t)
-  (app_out_len:SZ.t)
-  requires driver_exactly d 'st0 **
-           pts_to raw 'raw_bytes **
-           pts_to network_out 'old_network_out **
-           pts_to app_out 'old_app_out **
-           pure (B.length 'raw_bytes == SZ.v raw_len /\
-                 B.length 'old_network_out == SZ.v network_out_len /\
-                 B.length 'old_app_out == SZ.v app_out_len /\
-                 L.max_record_fragment_len <= SZ.v app_out_len)
-  returns result: network_write_result
-  ensures exists* st1 network_out_bytes app_out_bytes.
-           driver_exactly d st1 **
-           pts_to raw 'raw_bytes **
-           pts_to network_out network_out_bytes **
-           pts_to app_out app_out_bytes **
-           pure (B.length network_out_bytes == SZ.v network_out_len /\
-                 B.length app_out_bytes == SZ.v app_out_len /\
-                 CT.network_bytes_end_to_end_correct
-                   'st0
-                   st1
-                   result.network_write_buffer_resp
-                   (Ghost.reveal 'raw_bytes)
-                   (Ghost.reveal 'old_network_out)
-                   network_out_bytes
-                   (Ghost.reveal 'old_app_out)
-                   app_out_bytes /\
-                 (result.network_write_buffer_resp.CT.response.CT.status ==
-                  CT.StepOk ==>
-                  SZ.v result.network_write_written <=
-                  SZ.v result.network_write_buffer_resp.CT.response.CT.network_out_len) /\
-                 (result.network_write_buffer_resp.CT.response.CT.status ==
-                  CT.StepOk \/
-                  result.network_write_written == 0sz))
-{
-  unfold (driver_exactly d 'st0);
-  rewrite (C.connection_exactly d.driver_client 'st0)
-    as (CR.connection_exactly d.driver_client 'st0);
-  let buffer_resp =
-    C.process_network_bytes
-      d.driver_client
-      raw
-      raw_len
-      network_out
-      network_out_len
-      app_out
-      app_out_len;
-  with st1 network_out_bytes app_out_bytes.
-    assert (CR.connection_exactly d.driver_client st1 **
-            pts_to raw 'raw_bytes **
-            pts_to network_out network_out_bytes **
-            pts_to app_out app_out_bytes);
-  rewrite (CR.connection_exactly d.driver_client st1)
-    as (C.connection_exactly d.driver_client st1);
-  assert (pure (CT.network_bytes_end_to_end_correct
-    'st0
-    st1
-    buffer_resp
-    (Ghost.reveal 'raw_bytes)
-    (Ghost.reveal 'old_network_out)
-    network_out_bytes
-    (Ghost.reveal 'old_app_out)
-    app_out_bytes));
-  let ok = buffer_resp.CT.response.CT.status = CT.StepOk;
-  if ok {
-    assert (pure (buffer_resp.CT.response.CT.status == CT.StepOk));
-    assert (pure (CT.response_wf buffer_resp.CT.response network_out_bytes app_out_bytes));
-    assert (pure (SZ.v buffer_resp.CT.response.CT.network_out_len <= B.length network_out_bytes));
-    let written = IO.write d.driver_channel network_out buffer_resp.CT.response.CT.network_out_len;
-    assert (pure (SZ.v written <= SZ.v buffer_resp.CT.response.CT.network_out_len));
-    assert (pure (buffer_resp.CT.response.CT.status == CT.StepOk ==>
-      SZ.v written <= SZ.v buffer_resp.CT.response.CT.network_out_len));
-    assert (pure (buffer_resp.CT.response.CT.status == CT.StepOk \/ written == 0sz));
-    fold (driver_exactly d st1);
-    {
-      network_write_buffer_resp = buffer_resp;
-      network_write_written = written;
-    }
-  } else {
-    assert (pure (SZ.v 0sz <= SZ.v buffer_resp.CT.response.CT.network_out_len));
-    assert (pure (buffer_resp.CT.response.CT.status == CT.StepOk ==>
-      SZ.v 0sz <= SZ.v buffer_resp.CT.response.CT.network_out_len));
-    assert (pure (buffer_resp.CT.response.CT.status == CT.StepOk \/ 0sz == 0sz));
-    fold (driver_exactly d st1);
-    {
-      network_write_buffer_resp = buffer_resp;
-      network_write_written = 0sz;
-    }
-  }
-}
-
-fn driver_receive_application_data_once
-  (d:driver)
-  (raw:array U8.t)
-  (raw_len:SZ.t)
-  (network_out:array U8.t)
-  (network_out_len:SZ.t)
-  (app_out:array U8.t)
-  (app_out_len:SZ.t)
-  requires driver_exactly d 'st0 **
-           pts_to raw 'raw_bytes **
-           pts_to network_out 'old_network_out **
-           pts_to app_out 'old_app_out **
-           pure (B.length 'raw_bytes == SZ.v raw_len /\
-                 B.length 'old_network_out == SZ.v network_out_len /\
-                 B.length 'old_app_out == SZ.v app_out_len /\
-                 L.max_record_fragment_len <= SZ.v app_out_len)
-  returns result: network_write_result
-  ensures exists* st1 network_out_bytes app_out_bytes.
-           driver_exactly d st1 **
-           pts_to raw 'raw_bytes **
-           pts_to network_out network_out_bytes **
-           pts_to app_out app_out_bytes **
-           pure (B.length network_out_bytes == SZ.v network_out_len /\
-                 B.length app_out_bytes == SZ.v app_out_len /\
-                 CT.network_bytes_end_to_end_correct
-                  'st0
-                  st1
-                  result.network_write_buffer_resp
-                  (Ghost.reveal 'raw_bytes)
-                  (Ghost.reveal 'old_network_out)
-                  network_out_bytes
-                  (Ghost.reveal 'old_app_out)
-                  app_out_bytes /\
-                 (result.network_write_buffer_resp.CT.response.CT.status ==
-                  CT.StepOk ==>
-                  SZ.v result.network_write_written <=
-                  SZ.v result.network_write_buffer_resp.CT.response.CT.network_out_len) /\
-                 (result.network_write_buffer_resp.CT.response.CT.status ==
-                  CT.StepOk \/
-                  result.network_write_written == 0sz))
-{
-  receive_network_bytes_once
-    d
-    raw
-    raw_len
-    network_out
-    network_out_len
-    app_out
-    app_out_len
-}
-
-fn driver_read_network_bytes_once
-  (d:driver)
-  (raw:array U8.t)
-  (raw_capacity:SZ.t)
-  (network_out:array U8.t)
-  (network_out_len:SZ.t)
-  (app_out:array U8.t)
-  (app_out_len:SZ.t)
-  requires driver_exactly d 'st0 **
-           pts_to raw 'old_raw **
-           pts_to network_out 'old_network_out **
-           pts_to app_out 'old_app_out **
-           pure (B.length 'old_raw == SZ.v raw_capacity /\
-                 B.length 'old_network_out == SZ.v network_out_len /\
-                 B.length 'old_app_out == SZ.v app_out_len /\
-                 L.max_record_fragment_len <= SZ.v app_out_len)
-  returns result: network_read_result
-  ensures exists* st1 raw_bytes network_out_bytes app_out_bytes.
-           driver_exactly d st1 **
-           pts_to raw raw_bytes **
-           pts_to network_out network_out_bytes **
-           pts_to app_out app_out_bytes **
-           pure (B.length raw_bytes ==
-                   SZ.v raw_capacity /\
-                 B.length (Ghost.reveal result.network_read_prefix) ==
-                   SZ.v result.network_read_len /\
-                 SZ.v result.network_read_len <= SZ.v raw_capacity /\
-                 B.length network_out_bytes == SZ.v network_out_len /\
-                 B.length app_out_bytes == SZ.v app_out_len /\
-                 CT.network_bytes_end_to_end_correct
-                  'st0
-                  st1
-                  result.network_read_buffer_resp
-                  (Ghost.reveal result.network_read_prefix)
-                  (Ghost.reveal 'old_network_out)
-                  network_out_bytes
-                  (Ghost.reveal 'old_app_out)
-                  app_out_bytes /\
-                 (result.network_read_buffer_resp.CT.response.CT.status ==
-                 CT.StepOk ==>
-                 SZ.v result.network_read_written <=
-                 SZ.v result.network_read_buffer_resp.CT.response.CT.network_out_len) /\
-                 (result.network_read_buffer_resp.CT.response.CT.status ==
-                 CT.StepOk \/
-                 result.network_read_written == 0sz))
-{
-  unfold (driver_exactly d 'st0);
-  let read_len = IO.read d.driver_channel raw raw_capacity;
-  with raw_after.
-    assert (IO.is_channel d.driver_channel **
-            pts_to raw raw_after);
-  assert (pure (B.length raw_after == SZ.v raw_capacity));
-  assert (pure (SZ.v read_len <= SZ.v raw_capacity));
-  A.pts_to_len raw;
-  assert (pure (A.length raw == SZ.v raw_capacity));
-  A.to_mask raw;
-  with raw_mask.
-    assert (A.pts_to_mask raw #1.0R raw_mask (fun _ -> True));
-  assert (pure (Seq.length raw_mask == SZ.v raw_capacity));
-  assert (pure (forall (i:nat). i < Seq.length raw_mask ==>
-    Seq.index raw_mask i == Some (Seq.index raw_after i)));
-  let raw_prefix_array =
-    A.sub raw #1.0R #(fun _ -> True) 0sz (SZ.v read_len);
-  with raw_prefix_mask.
-    assert (A.pts_to_mask raw_prefix_array #1.0R raw_prefix_mask (fun _ -> True));
-  assert (pure (forall (i:nat). i < Seq.length raw_prefix_mask ==>
-    Some? (Seq.index raw_prefix_mask i)));
-  A.from_mask raw_prefix_array;
-  with raw_prefix.
-    assert (pts_to raw_prefix_array raw_prefix);
-  assert (pure (B.length raw_prefix == SZ.v read_len));
-  rewrite (C.connection_exactly d.driver_client 'st0)
-    as (CR.connection_exactly d.driver_client 'st0);
-  let buffer_resp =
-    C.process_network_bytes
-      d.driver_client
-      raw_prefix_array
-      read_len
-      network_out
-      network_out_len
-      app_out
-      app_out_len;
-  with st1 network_out_bytes app_out_bytes.
-    assert (CR.connection_exactly d.driver_client st1 **
-            pts_to raw_prefix_array raw_prefix **
-            pts_to network_out network_out_bytes **
-            pts_to app_out app_out_bytes);
-  rewrite (CR.connection_exactly d.driver_client st1)
-    as (C.connection_exactly d.driver_client st1);
-  assert (pure (CT.network_bytes_end_to_end_correct
-    'st0
-    st1
-    buffer_resp
-    raw_prefix
-    (Ghost.reveal 'old_network_out)
-    network_out_bytes
-    (Ghost.reveal 'old_app_out)
-    app_out_bytes));
-  A.to_mask raw_prefix_array;
-  with raw_prefix_mask_after.
-    assert (A.pts_to_mask raw_prefix_array #1.0R raw_prefix_mask_after (fun _ -> True));
-  assert (pure (forall (i:nat). i < Seq.length raw_prefix_mask_after ==>
-    Some? (Seq.index raw_prefix_mask_after i)));
-  rewrite
-    (A.pts_to_mask raw_prefix_array #1.0R raw_prefix_mask_after (fun _ -> True))
-    as
-    (A.pts_to_mask (A.gsub raw 0 (SZ.v read_len)) #1.0R raw_prefix_mask_after (fun _ -> True));
-  A.return_sub
-    raw
-    #1.0R
-    #raw_mask
-    #raw_prefix_mask_after
-    #(fun k -> True /\ ~(0 <= k /\ k < SZ.v read_len))
-    #(fun _ -> True)
-    #0
-    #(SZ.v read_len);
-  with raw_joined_mask.
-    assert (A.pts_to_mask raw #1.0R raw_joined_mask
-      (fun k ->
-        (True /\ ~(0 <= k /\ k < SZ.v read_len)) \/
-        (0 <= k /\ k < SZ.v read_len /\ True)));
-  assert (pure (forall (i:nat). i < Seq.length raw_joined_mask ==>
-    ((True /\ ~(0 <= i /\ i < SZ.v read_len)) \/
-     (0 <= i /\ i < SZ.v read_len /\ True))));
-  assert (pure (forall (i:nat). i < Seq.length raw_joined_mask ==>
-    Some? (Seq.index raw_joined_mask i)));
-  A.from_mask raw;
-  with raw_bytes.
-    assert (pts_to raw raw_bytes);
-  assert (pure (B.length raw_bytes == SZ.v raw_capacity));
-  let ok = buffer_resp.CT.response.CT.status = CT.StepOk;
-  if ok {
-    assert (pure (buffer_resp.CT.response.CT.status == CT.StepOk));
-    assert (pure (CT.response_wf buffer_resp.CT.response network_out_bytes app_out_bytes));
-    assert (pure (SZ.v buffer_resp.CT.response.CT.network_out_len <= B.length network_out_bytes));
-    let written = IO.write d.driver_channel network_out buffer_resp.CT.response.CT.network_out_len;
-    assert (pure (SZ.v written <= SZ.v buffer_resp.CT.response.CT.network_out_len));
-    assert (pure (buffer_resp.CT.response.CT.status == CT.StepOk ==>
-      SZ.v written <= SZ.v buffer_resp.CT.response.CT.network_out_len));
-    assert (pure (buffer_resp.CT.response.CT.status == CT.StepOk \/ written == 0sz));
-    fold (driver_exactly d st1);
-    assert (pure (B.length raw_prefix == SZ.v read_len));
-    assert (pure (CT.network_bytes_end_to_end_correct
-      'st0
-      st1
-      buffer_resp
-      raw_prefix
-      (Ghost.reveal 'old_network_out)
-      network_out_bytes
-      (Ghost.reveal 'old_app_out)
-      app_out_bytes));
-    assert (pure (B.length raw_bytes == SZ.v raw_capacity /\
-      B.length raw_prefix == SZ.v read_len /\
-      SZ.v read_len <= SZ.v raw_capacity /\
-      B.length network_out_bytes == SZ.v network_out_len /\
-      B.length app_out_bytes == SZ.v app_out_len /\
-      CT.network_bytes_end_to_end_correct
-        'st0
-        st1
-        buffer_resp
-        raw_prefix
-        (Ghost.reveal 'old_network_out)
-        network_out_bytes
-        (Ghost.reveal 'old_app_out)
-        app_out_bytes /\
-      (buffer_resp.CT.response.CT.status == CT.StepOk ==>
-       SZ.v written <= SZ.v buffer_resp.CT.response.CT.network_out_len) /\
-      (buffer_resp.CT.response.CT.status == CT.StepOk \/ written == 0sz)));
-    assert (driver_exactly d st1 **
-            pts_to raw raw_bytes **
-            pts_to network_out network_out_bytes **
-            pts_to app_out app_out_bytes **
-            pure (B.length raw_bytes == SZ.v raw_capacity /\
-              B.length raw_prefix == SZ.v read_len /\
-              SZ.v read_len <= SZ.v raw_capacity /\
-              B.length network_out_bytes == SZ.v network_out_len /\
-              B.length app_out_bytes == SZ.v app_out_len /\
-              CT.network_bytes_end_to_end_correct
-                'st0
-                st1
-                buffer_resp
-                raw_prefix
-                (Ghost.reveal 'old_network_out)
-                network_out_bytes
-                (Ghost.reveal 'old_app_out)
-                app_out_bytes /\
-              (buffer_resp.CT.response.CT.status == CT.StepOk ==>
-               SZ.v written <= SZ.v buffer_resp.CT.response.CT.network_out_len) /\
-              (buffer_resp.CT.response.CT.status == CT.StepOk \/ written == 0sz)));
-    {
-      network_read_len = read_len;
-      network_read_buffer_resp = buffer_resp;
-      network_read_written = written;
-      network_read_prefix = Ghost.hide raw_prefix;
-    }
-  } else {
-    assert (pure (buffer_resp.CT.response.CT.status == CT.StepOk ==>
-      SZ.v 0sz <= SZ.v buffer_resp.CT.response.CT.network_out_len));
-    assert (pure (buffer_resp.CT.response.CT.status == CT.StepOk \/ 0sz == 0sz));
-    fold (driver_exactly d st1);
-    assert (pure (B.length raw_prefix == SZ.v read_len));
-    assert (pure (CT.network_bytes_end_to_end_correct
-      'st0
-      st1
-      buffer_resp
-      raw_prefix
-      (Ghost.reveal 'old_network_out)
-      network_out_bytes
-      (Ghost.reveal 'old_app_out)
-      app_out_bytes));
-    assert (pure (B.length raw_bytes == SZ.v raw_capacity /\
-      B.length raw_prefix == SZ.v read_len /\
-      SZ.v read_len <= SZ.v raw_capacity /\
-      B.length network_out_bytes == SZ.v network_out_len /\
-      B.length app_out_bytes == SZ.v app_out_len /\
-      CT.network_bytes_end_to_end_correct
-        'st0
-        st1
-        buffer_resp
-        raw_prefix
-        (Ghost.reveal 'old_network_out)
-        network_out_bytes
-        (Ghost.reveal 'old_app_out)
-        app_out_bytes /\
-      (buffer_resp.CT.response.CT.status == CT.StepOk ==>
-       SZ.v 0sz <= SZ.v buffer_resp.CT.response.CT.network_out_len) /\
-      (buffer_resp.CT.response.CT.status == CT.StepOk \/ 0sz == 0sz)));
-    assert (driver_exactly d st1 **
-            pts_to raw raw_bytes **
-            pts_to network_out network_out_bytes **
-            pts_to app_out app_out_bytes **
-            pure (B.length raw_bytes == SZ.v raw_capacity /\
-              B.length raw_prefix == SZ.v read_len /\
-              SZ.v read_len <= SZ.v raw_capacity /\
-              B.length network_out_bytes == SZ.v network_out_len /\
-              B.length app_out_bytes == SZ.v app_out_len /\
-              CT.network_bytes_end_to_end_correct
-                'st0
-                st1
-                buffer_resp
-                raw_prefix
-                (Ghost.reveal 'old_network_out)
-                network_out_bytes
-                (Ghost.reveal 'old_app_out)
-                app_out_bytes /\
-              (buffer_resp.CT.response.CT.status == CT.StepOk ==>
-               SZ.v 0sz <= SZ.v buffer_resp.CT.response.CT.network_out_len) /\
-              (buffer_resp.CT.response.CT.status == CT.StepOk \/ 0sz == 0sz)));
-    {
-      network_read_len = read_len;
-      network_read_buffer_resp = buffer_resp;
-      network_read_written = 0sz;
-      network_read_prefix = Ghost.hide raw_prefix;
-    }
-  }
-}
-
-fn driver_read_application_data_once
-  (d:driver)
-  (raw:array U8.t)
-  (raw_capacity:SZ.t)
-  (network_out:array U8.t)
-  (network_out_len:SZ.t)
-  (app_out:array U8.t)
-  (app_out_len:SZ.t)
-  requires driver_exactly d 'st0 **
-           pts_to raw 'old_raw **
-           pts_to network_out 'old_network_out **
-           pts_to app_out 'old_app_out **
-           pure (B.length 'old_raw == SZ.v raw_capacity /\
-                 B.length 'old_network_out == SZ.v network_out_len /\
-                 B.length 'old_app_out == SZ.v app_out_len /\
-                 L.max_record_fragment_len <= SZ.v app_out_len)
-  returns result: network_read_result
-  ensures exists* st1 raw_bytes network_out_bytes app_out_bytes.
-           driver_exactly d st1 **
-           pts_to raw raw_bytes **
-           pts_to network_out network_out_bytes **
-           pts_to app_out app_out_bytes **
-           pure (B.length raw_bytes ==
-                   SZ.v raw_capacity /\
-                 B.length (Ghost.reveal result.network_read_prefix) ==
-                   SZ.v result.network_read_len /\
-                 SZ.v result.network_read_len <= SZ.v raw_capacity /\
-                 B.length network_out_bytes == SZ.v network_out_len /\
-                 B.length app_out_bytes == SZ.v app_out_len /\
-                 CT.network_bytes_end_to_end_correct
-                  'st0
-                  st1
-                  result.network_read_buffer_resp
-                  (Ghost.reveal result.network_read_prefix)
-                  (Ghost.reveal 'old_network_out)
-                  network_out_bytes
-                  (Ghost.reveal 'old_app_out)
-                  app_out_bytes /\
-                 (result.network_read_buffer_resp.CT.response.CT.status ==
-                 CT.StepOk ==>
-                 SZ.v result.network_read_written <=
-                 SZ.v result.network_read_buffer_resp.CT.response.CT.network_out_len) /\
-                 (result.network_read_buffer_resp.CT.response.CT.status ==
-                 CT.StepOk \/
-                 result.network_read_written == 0sz))
-{
-  driver_read_network_bytes_once
-    d
-    raw
-    raw_capacity
-    network_out
-    network_out_len
-    app_out
-    app_out_len
 }
 
 fn driver_process_buffered_network_bytes_once
@@ -1354,29 +1372,43 @@ fn driver_process_buffered_network_bytes_once
   (network_out_len:SZ.t)
   (app_out:array U8.t)
   (app_out_len:SZ.t)
-  requires driver_exactly d 'st0 **
+  requires driver_exactly d 'st0 'buffered buffered_len **
            pts_to raw 'old_raw **
            pts_to network_out 'old_network_out **
            pts_to app_out 'old_app_out **
            pure (B.length 'old_raw == SZ.v raw_capacity /\
+                 B.length 'buffered == SZ.v buffered_len /\
                  SZ.v buffered_len <= SZ.v raw_capacity /\
+                 Seq.equal 'buffered
+                   (Seq.slice 'old_raw 0 (SZ.v buffered_len)) /\
                  B.length 'old_network_out == SZ.v network_out_len /\
                  B.length 'old_app_out == SZ.v app_out_len /\
                  L.max_record_fragment_len <= SZ.v app_out_len)
   returns result: network_read_result
-  ensures exists* st1 raw_bytes network_out_bytes app_out_bytes.
-           driver_exactly d st1 **
+  ensures exists* st1 buffered_after raw_bytes network_out_bytes app_out_bytes.
+           driver_exactly d st1 buffered_after
+             (pending_after_consumed
+               buffered_len
+               result.network_read_buffer_resp.CT.consumed_len) **
            pts_to raw raw_bytes **
            pts_to network_out network_out_bytes **
            pts_to app_out app_out_bytes **
            pure (B.length raw_bytes ==
                    SZ.v raw_capacity /\
+                 Seq.equal raw_bytes (Ghost.reveal 'old_raw) /\
                  B.length (Ghost.reveal result.network_read_prefix) ==
                    SZ.v result.network_read_len /\
                  result.network_read_len == buffered_len /\
                  SZ.v result.network_read_len <= SZ.v raw_capacity /\
                  B.length network_out_bytes == SZ.v network_out_len /\
                  B.length app_out_bytes == SZ.v app_out_len /\
+                 B.length (Ghost.reveal 'buffered) == SZ.v buffered_len /\
+                 SZ.v result.network_read_buffer_resp.CT.consumed_len <=
+                   SZ.v buffered_len /\
+                 Seq.equal buffered_after
+                   (Seq.slice (Ghost.reveal 'buffered)
+                     (SZ.v result.network_read_buffer_resp.CT.consumed_len)
+                     (SZ.v buffered_len)) /\
                  CT.network_bytes_end_to_end_correct
                   'st0
                   st1
@@ -1387,14 +1419,14 @@ fn driver_process_buffered_network_bytes_once
                   (Ghost.reveal 'old_app_out)
                   app_out_bytes /\
                  (result.network_read_buffer_resp.CT.response.CT.status ==
+                  CT.NeedMoreInput ==>
+                  result.network_read_buffer_resp.CT.consumed_len == 0sz) /\
+                 (result.network_read_buffer_resp.CT.response.CT.status ==
                  CT.StepOk ==>
                  SZ.v result.network_read_written <=
-                 SZ.v result.network_read_buffer_resp.CT.response.CT.network_out_len) /\
-                 (result.network_read_buffer_resp.CT.response.CT.status ==
-                 CT.StepOk \/
-                 result.network_read_written == 0sz))
+                 SZ.v result.network_read_buffer_resp.CT.response.CT.network_out_len))
 {
-  unfold (driver_exactly d 'st0);
+  unfold (driver_exactly d 'st0 'buffered buffered_len);
   A.pts_to_len raw;
   assert (pure (A.length raw == SZ.v raw_capacity));
   A.to_mask raw;
@@ -1413,6 +1445,9 @@ fn driver_process_buffered_network_bytes_once
   with raw_prefix.
     assert (pts_to raw_prefix_array raw_prefix);
   assert (pure (B.length raw_prefix == SZ.v buffered_len));
+  assert (pure (Seq.equal raw_prefix
+    (Seq.slice (Ghost.reveal 'old_raw) 0 (SZ.v buffered_len))));
+  assert (pure (Seq.equal raw_prefix (Ghost.reveal 'buffered)));
   rewrite (C.connection_exactly d.driver_client 'st0)
     as (CR.connection_exactly d.driver_client 'st0);
   let buffer_resp =
@@ -1440,6 +1475,22 @@ fn driver_process_buffered_network_bytes_once
     network_out_bytes
     (Ghost.reveal 'old_app_out)
     app_out_bytes));
+  assert (pure (buffer_resp.CT.response.CT.status == CT.NeedMoreInput ==>
+    buffer_resp.CT.consumed_len == 0sz));
+  lemma_network_bytes_wire_lengths
+    'st0
+    st1
+    buffer_resp
+    raw_prefix
+    (Ghost.reveal 'old_network_out)
+    network_out_bytes
+    (Ghost.reveal 'old_app_out)
+    app_out_bytes;
+  assert (pure (SZ.v buffer_resp.CT.consumed_len <= B.length raw_prefix));
+  assert (pure (SZ.v buffer_resp.CT.consumed_len <= SZ.v buffered_len));
+  let new_pending = pending_after_consumed buffered_len buffer_resp.CT.consumed_len;
+  assert (pure (SZ.v new_pending ==
+    SZ.v buffered_len - SZ.v buffer_resp.CT.consumed_len));
   A.to_mask raw_prefix_array;
   with raw_prefix_mask_after.
     assert (A.pts_to_mask raw_prefix_array #1.0R raw_prefix_mask_after (fun _ -> True));
@@ -1472,19 +1523,122 @@ fn driver_process_buffered_network_bytes_once
   with raw_bytes.
     assert (pts_to raw raw_bytes);
   assert (pure (B.length raw_bytes == SZ.v raw_capacity));
-  let ok = buffer_resp.CT.response.CT.status = CT.StepOk;
-  if ok {
-    assert (pure (buffer_resp.CT.response.CT.status == CT.StepOk));
-    assert (pure (CT.response_wf buffer_resp.CT.response network_out_bytes app_out_bytes));
-    assert (pure (SZ.v buffer_resp.CT.response.CT.network_out_len <= B.length network_out_bytes));
-    let written = IO.write d.driver_channel network_out buffer_resp.CT.response.CT.network_out_len;
-    assert (pure (SZ.v written <= SZ.v buffer_resp.CT.response.CT.network_out_len));
-    assert (pure (buffer_resp.CT.response.CT.status == CT.StepOk ==>
-      SZ.v written <= SZ.v buffer_resp.CT.response.CT.network_out_len));
-    assert (pure (buffer_resp.CT.response.CT.status == CT.StepOk \/ written == 0sz));
-    fold (driver_exactly d st1);
-    assert (pure (B.length raw_prefix == SZ.v buffered_len));
-    assert (pure (CT.network_bytes_end_to_end_correct
+  assert (pure (Seq.equal raw_bytes (Ghost.reveal 'old_raw)));
+  assert (pure (CT.response_wf buffer_resp.CT.response network_out_bytes app_out_bytes));
+  assert (pure (SZ.v buffer_resp.CT.response.CT.network_out_len <= B.length network_out_bytes));
+  unfold (channel_open d.driver_channel 'st0 'buffered buffered_len);
+  with received sent.
+    assert (IO.is_channel d.driver_channel received sent **
+            pure (client_driver_wire_logs_match 'st0 received sent (Ghost.reveal 'buffered) buffered_len));
+  let old_consumed =
+    Ghost.hide (ID.indefinite_description_ghost
+      B.bytes
+      (fun consumed ->
+        client_driver_wire_logs_match_witness
+          'st0
+          received
+          sent
+          consumed
+          (Ghost.reveal 'buffered)
+          buffered_len));
+  assert (pure (client_driver_wire_logs_match_witness
+    'st0
+    received
+    sent
+    (Ghost.reveal old_consumed)
+    (Ghost.reveal 'buffered)
+    buffered_len));
+  let consumed_prefix =
+    Ghost.hide (CT.network_consumed_prefix raw_prefix buffer_resp.CT.consumed_len);
+  let new_buffered =
+    Ghost.hide (Seq.slice (Ghost.reveal 'buffered)
+      (SZ.v buffer_resp.CT.consumed_len)
+      (SZ.v buffered_len));
+  Seq.lemma_len_slice
+    (Ghost.reveal 'buffered)
+    (SZ.v buffer_resp.CT.consumed_len)
+    (SZ.v buffered_len);
+  assert (pure (B.length (Ghost.reveal new_buffered) == SZ.v new_pending));
+  assert (pure (Seq.equal (Ghost.reveal consumed_prefix)
+    (Seq.slice (Ghost.reveal 'buffered) 0 (SZ.v buffer_resp.CT.consumed_len))));
+  lemma_slice_append_full
+    (Ghost.reveal 'buffered)
+    (SZ.v buffer_resp.CT.consumed_len);
+  assert (pure (Seq.equal
+    (B.append (Ghost.reveal consumed_prefix) (Ghost.reveal new_buffered))
+    (Ghost.reveal 'buffered)));
+  lemma_network_bytes_logged_received_accounted
+    'st0
+    st1
+    buffer_resp
+    raw_prefix
+    (Ghost.reveal 'old_network_out)
+    network_out_bytes
+    (Ghost.reveal 'old_app_out)
+    app_out_bytes
+    (Ghost.reveal old_consumed);
+  Seq.append_assoc (Ghost.reveal old_consumed) (Ghost.reveal consumed_prefix) (Ghost.reveal new_buffered);
+  assert (pure (Seq.equal
+    (B.append (B.append (Ghost.reveal old_consumed) (Ghost.reveal consumed_prefix)) (Ghost.reveal new_buffered))
+    received));
+  let written = IO.write d.driver_channel network_out buffer_resp.CT.response.CT.network_out_len;
+  assert (pure (written == buffer_resp.CT.response.CT.network_out_len));
+  assert (pure (SZ.v written <= B.length network_out_bytes));
+  Seq.lemma_len_append sent (Seq.slice network_out_bytes 0 (SZ.v written));
+  Seq.lemma_len_slice network_out_bytes 0 (SZ.v written);
+  assert (pure (Seq.equal
+    (if SZ.v written <= B.length network_out_bytes
+     then Seq.slice network_out_bytes 0 (SZ.v written)
+     else B.empty)
+    (CT.response_network_out buffer_resp.CT.response network_out_bytes)));
+  assert (pure (Seq.equal sent 'st0.CS.cs_wire_log.CL.raw_sent));
+  Seq.lemma_eq_elim sent 'st0.CS.cs_wire_log.CL.raw_sent;
+  assert (pure (Seq.equal
+    st1.CS.cs_wire_log.CL.raw_sent
+    (B.append
+      'st0.CS.cs_wire_log.CL.raw_sent
+      (CT.response_network_out buffer_resp.CT.response network_out_bytes))));
+  assert (pure (client_driver_wire_logs_match_witness
+    st1
+    received
+    (B.append sent
+      (if SZ.v written <= B.length network_out_bytes
+       then Seq.slice network_out_bytes 0 (SZ.v written)
+       else B.empty))
+    (B.append (Ghost.reveal old_consumed) (Ghost.reveal consumed_prefix))
+    (Ghost.reveal new_buffered)
+    new_pending));
+  assert (pure (client_driver_wire_logs_match
+    st1
+    received
+    (B.append sent
+      (if SZ.v written <= B.length network_out_bytes
+       then Seq.slice network_out_bytes 0 (SZ.v written)
+       else B.empty))
+    (Ghost.reveal new_buffered)
+    new_pending));
+  fold (channel_open d.driver_channel st1 (Ghost.reveal new_buffered) new_pending);
+  assert (pure (SZ.v written <= SZ.v buffer_resp.CT.response.CT.network_out_len));
+  assert (pure (buffer_resp.CT.response.CT.status == CT.StepOk ==>
+    SZ.v written <= SZ.v buffer_resp.CT.response.CT.network_out_len));
+  fold (driver_exactly d st1 (Ghost.reveal new_buffered) new_pending);
+  assert (pure (B.length raw_prefix == SZ.v buffered_len));
+  assert (pure (CT.network_bytes_end_to_end_correct
+    'st0
+    st1
+    buffer_resp
+    raw_prefix
+    (Ghost.reveal 'old_network_out)
+    network_out_bytes
+    (Ghost.reveal 'old_app_out)
+    app_out_bytes));
+  assert (pure (B.length raw_bytes == SZ.v raw_capacity /\
+    B.length raw_prefix == SZ.v buffered_len /\
+    buffered_len == buffered_len /\
+    SZ.v buffered_len <= SZ.v raw_capacity /\
+    B.length network_out_bytes == SZ.v network_out_len /\
+    B.length app_out_bytes == SZ.v app_out_len /\
+    CT.network_bytes_end_to_end_correct
       'st0
       st1
       buffer_resp
@@ -1492,71 +1646,26 @@ fn driver_process_buffered_network_bytes_once
       (Ghost.reveal 'old_network_out)
       network_out_bytes
       (Ghost.reveal 'old_app_out)
-      app_out_bytes));
-    assert (pure (B.length raw_bytes == SZ.v raw_capacity /\
-      B.length raw_prefix == SZ.v buffered_len /\
-      buffered_len == buffered_len /\
-      SZ.v buffered_len <= SZ.v raw_capacity /\
-      B.length network_out_bytes == SZ.v network_out_len /\
-      B.length app_out_bytes == SZ.v app_out_len /\
-      CT.network_bytes_end_to_end_correct
-        'st0
-        st1
-        buffer_resp
-        raw_prefix
-        (Ghost.reveal 'old_network_out)
-        network_out_bytes
-        (Ghost.reveal 'old_app_out)
-        app_out_bytes /\
-      (buffer_resp.CT.response.CT.status == CT.StepOk ==>
-       SZ.v written <= SZ.v buffer_resp.CT.response.CT.network_out_len) /\
-      (buffer_resp.CT.response.CT.status == CT.StepOk \/ written == 0sz)));
-    {
-      network_read_len = buffered_len;
-      network_read_buffer_resp = buffer_resp;
-      network_read_written = written;
-      network_read_prefix = Ghost.hide raw_prefix;
-    }
-  } else {
-    assert (pure (buffer_resp.CT.response.CT.status == CT.StepOk ==>
-      SZ.v 0sz <= SZ.v buffer_resp.CT.response.CT.network_out_len));
-    assert (pure (buffer_resp.CT.response.CT.status == CT.StepOk \/ 0sz == 0sz));
-    fold (driver_exactly d st1);
-    assert (pure (B.length raw_prefix == SZ.v buffered_len));
-    assert (pure (CT.network_bytes_end_to_end_correct
-      'st0
-      st1
-      buffer_resp
-      raw_prefix
-      (Ghost.reveal 'old_network_out)
-      network_out_bytes
-      (Ghost.reveal 'old_app_out)
-      app_out_bytes));
-    assert (pure (B.length raw_bytes == SZ.v raw_capacity /\
-      B.length raw_prefix == SZ.v buffered_len /\
-      buffered_len == buffered_len /\
-      SZ.v buffered_len <= SZ.v raw_capacity /\
-      B.length network_out_bytes == SZ.v network_out_len /\
-      B.length app_out_bytes == SZ.v app_out_len /\
-      CT.network_bytes_end_to_end_correct
-        'st0
-        st1
-        buffer_resp
-        raw_prefix
-        (Ghost.reveal 'old_network_out)
-        network_out_bytes
-        (Ghost.reveal 'old_app_out)
-        app_out_bytes /\
-      (buffer_resp.CT.response.CT.status == CT.StepOk ==>
-       SZ.v 0sz <= SZ.v buffer_resp.CT.response.CT.network_out_len) /\
-      (buffer_resp.CT.response.CT.status == CT.StepOk \/ 0sz == 0sz)));
-    {
-      network_read_len = buffered_len;
-      network_read_buffer_resp = buffer_resp;
-      network_read_written = 0sz;
-      network_read_prefix = Ghost.hide raw_prefix;
-    }
-  }
+      app_out_bytes /\
+    (buffer_resp.CT.response.CT.status == CT.NeedMoreInput ==>
+     buffer_resp.CT.consumed_len == 0sz) /\
+    (buffer_resp.CT.response.CT.status == CT.StepOk ==>
+     SZ.v written <= SZ.v buffer_resp.CT.response.CT.network_out_len)));
+  assert (pure (new_pending ==
+    pending_after_consumed buffered_len buffer_resp.CT.consumed_len));
+  let result = {
+    network_read_len = buffered_len;
+    network_read_buffer_resp = buffer_resp;
+    network_read_written = written;
+    network_read_prefix = Ghost.hide raw_prefix;
+  };
+  assert (pure (pending_after_consumed buffered_len
+    result.network_read_buffer_resp.CT.consumed_len == new_pending));
+  rewrite (driver_exactly d st1 (Ghost.reveal new_buffered) new_pending) as
+    (driver_exactly d st1 (Ghost.reveal new_buffered)
+      (pending_after_consumed buffered_len
+        result.network_read_buffer_resp.CT.consumed_len));
+  result
 }
 
 fn compact_buffer_suffix
@@ -1572,14 +1681,30 @@ fn compact_buffer_suffix
   ensures exists* raw_after.
            pts_to raw raw_after **
            pure (B.length raw_after == SZ.v raw_capacity /\
-                 SZ.v new_len <= SZ.v buffered_len)
+                 B.length (Ghost.reveal 'raw_bytes) == SZ.v raw_capacity /\
+                 SZ.v consumed_len <= SZ.v buffered_len /\
+                 SZ.v buffered_len <= SZ.v raw_capacity /\
+                 new_len == pending_after_consumed buffered_len consumed_len /\
+                 SZ.v new_len + SZ.v consumed_len == SZ.v buffered_len /\
+                 SZ.v new_len <= SZ.v buffered_len /\
+                 Seq.equal
+                   (Seq.slice raw_after 0 (SZ.v new_len))
+                   (Seq.slice (Ghost.reveal 'raw_bytes)
+                     (SZ.v consumed_len)
+                     (SZ.v buffered_len)))
 {
   let new_len = SZ.sub buffered_len consumed_len;
+  assert (pure (new_len == pending_after_consumed buffered_len consumed_len));
   assert (pure (SZ.v new_len == SZ.v buffered_len - SZ.v consumed_len));
   assert (pure (SZ.v new_len <= SZ.v buffered_len));
   let no_shift = consumed_len = 0sz;
   if no_shift {
     assert (pure (new_len == buffered_len));
+    assert (pure (Seq.equal
+      (Seq.slice (Ghost.reveal 'raw_bytes) 0 (SZ.v new_len))
+      (Seq.slice (Ghost.reveal 'raw_bytes)
+        (SZ.v consumed_len)
+        (SZ.v buffered_len))));
     new_len
   } else {
     let mut i = 0sz;
@@ -1592,7 +1717,13 @@ fn compact_buffer_suffix
               SZ.v new_len == SZ.v buffered_len - SZ.v consumed_len /\
               SZ.v new_len <= SZ.v buffered_len /\
               SZ.v consumed_len <= SZ.v buffered_len /\
-              SZ.v buffered_len <= SZ.v raw_capacity)
+              SZ.v buffered_len <= SZ.v raw_capacity /\
+              (forall (k:nat). k < SZ.v (R.read i) ==>
+                Seq.index raw_loop k ==
+                Seq.index (Ghost.reveal 'raw_bytes) (k + SZ.v consumed_len)) /\
+              (forall (k:nat). SZ.v (R.read i) <= k /\ k < SZ.v buffered_len ==>
+                Seq.index raw_loop k ==
+                Seq.index (Ghost.reveal 'raw_bytes) k))
     {
       let vi = R.read i;
       assert (pure (SZ.v vi < SZ.v new_len));
@@ -1605,11 +1736,19 @@ fn compact_buffer_suffix
         assert (pts_to raw raw_before_read);
       assert (pure (B.length raw_before_read == SZ.v raw_capacity));
       let b = raw.(src_idx);
+      assert (pure (b == Seq.index (Ghost.reveal 'raw_bytes)
+        (SZ.v vi + SZ.v consumed_len)));
       assert (pure (SZ.v vi < SZ.v raw_capacity));
       raw.(vi) <- b;
       with raw_after_write.
         assert (pts_to raw raw_after_write);
       assert (pure (B.length raw_after_write == SZ.v raw_capacity));
+      assert (pure (forall (k:nat). k < SZ.v vi + 1 ==>
+        Seq.index raw_after_write k ==
+        Seq.index (Ghost.reveal 'raw_bytes) (k + SZ.v consumed_len)));
+      assert (pure (forall (k:nat). SZ.v vi + 1 <= k /\ k < SZ.v buffered_len ==>
+        Seq.index raw_after_write k ==
+        Seq.index (Ghost.reveal 'raw_bytes) k));
       assert (pure (SZ.v vi + 1 <= SZ.v new_len));
       SZ.fits_lte (SZ.v vi + 1) (SZ.v new_len);
       let next_i = vi `SZ.add` 1sz;
@@ -1618,6 +1757,21 @@ fn compact_buffer_suffix
     with raw_done.
       assert (pts_to raw raw_done);
     assert (pure (B.length raw_done == SZ.v raw_capacity));
+    assert (pure (forall (k:nat). k < SZ.v new_len ==>
+      Seq.index raw_done k ==
+      Seq.index (Ghost.reveal 'raw_bytes) (k + SZ.v consumed_len)));
+    Seq.lemma_len_slice raw_done 0 (SZ.v new_len);
+    Seq.lemma_len_slice (Ghost.reveal 'raw_bytes)
+      (SZ.v consumed_len)
+      (SZ.v buffered_len);
+    assert (pure (forall (k:nat). k < B.length (Seq.slice raw_done 0 (SZ.v new_len)) ==>
+      Seq.index (Seq.slice raw_done 0 (SZ.v new_len)) k ==
+      Seq.index
+        (Seq.slice (Ghost.reveal 'raw_bytes) (SZ.v consumed_len) (SZ.v buffered_len))
+        k));
+    Seq.lemma_eq_intro
+      (Seq.slice raw_done 0 (SZ.v new_len))
+      (Seq.slice (Ghost.reveal 'raw_bytes) (SZ.v consumed_len) (SZ.v buffered_len));
     new_len
   }
 }
@@ -1631,18 +1785,20 @@ fn driver_process_buffered_network_bytes_compact_once
   (network_out_len:SZ.t)
   (app_out:array U8.t)
   (app_out_len:SZ.t)
-  requires driver_exactly d 'st0 **
+  requires driver_exactly d 'st0 'buffered buffered_len **
            pts_to raw 'old_raw **
            pts_to network_out 'old_network_out **
            pts_to app_out 'old_app_out **
            pure (B.length 'old_raw == SZ.v raw_capacity /\
                  SZ.v buffered_len <= SZ.v raw_capacity /\
+                 Seq.equal 'buffered
+                   (Seq.slice 'old_raw 0 (SZ.v buffered_len)) /\
                  B.length 'old_network_out == SZ.v network_out_len /\
                  B.length 'old_app_out == SZ.v app_out_len /\
                  L.max_record_fragment_len <= SZ.v app_out_len)
   returns result: buffered_network_result
-  ensures exists* st1 raw_bytes network_out_bytes app_out_bytes.
-           driver_exactly d st1 **
+  ensures exists* st1 buffered_after raw_bytes network_out_bytes app_out_bytes.
+           driver_exactly d st1 buffered_after result.buffered_network_new_len **
            pts_to raw raw_bytes **
            pts_to network_out network_out_bytes **
            pts_to app_out app_out_bytes **
@@ -1652,8 +1808,11 @@ fn driver_process_buffered_network_bytes_compact_once
                    SZ.v result.buffered_network_read.network_read_len /\
                  result.buffered_network_read.network_read_len == buffered_len /\
                  SZ.v result.buffered_network_new_len <= SZ.v buffered_len /\
+                 SZ.v result.buffered_network_new_len <= SZ.v raw_capacity /\
                  B.length network_out_bytes == SZ.v network_out_len /\
                  B.length app_out_bytes == SZ.v app_out_len /\
+                 Seq.equal buffered_after
+                   (Seq.slice raw_bytes 0 (SZ.v result.buffered_network_new_len)) /\
                  CT.network_bytes_end_to_end_correct
                   'st0
                   st1
@@ -1666,10 +1825,7 @@ fn driver_process_buffered_network_bytes_compact_once
                  (result.buffered_network_read.network_read_buffer_resp.CT.response.CT.status ==
                  CT.StepOk ==>
                  SZ.v result.buffered_network_read.network_read_written <=
-                 SZ.v result.buffered_network_read.network_read_buffer_resp.CT.response.CT.network_out_len) /\
-                 (result.buffered_network_read.network_read_buffer_resp.CT.response.CT.status ==
-                 CT.StepOk \/
-                 result.buffered_network_read.network_read_written == 0sz))
+                 SZ.v result.buffered_network_read.network_read_buffer_resp.CT.response.CT.network_out_len))
 {
   let read_result =
     driver_process_buffered_network_bytes_once
@@ -1681,8 +1837,11 @@ fn driver_process_buffered_network_bytes_compact_once
       network_out_len
       app_out
       app_out_len;
-  with st1 raw_bytes network_out_bytes app_out_bytes.
-    assert (driver_exactly d st1 **
+  with st1 buffered_after raw_bytes network_out_bytes app_out_bytes.
+    assert (driver_exactly d st1 buffered_after
+              (pending_after_consumed
+                buffered_len
+                read_result.network_read_buffer_resp.CT.consumed_len) **
             pts_to raw raw_bytes **
             pts_to network_out network_out_bytes **
             pts_to app_out app_out_bytes);
@@ -1703,38 +1862,100 @@ fn driver_process_buffered_network_bytes_compact_once
     B.length (Ghost.reveal read_result.network_read_prefix)));
   assert (pure (SZ.v read_result.network_read_buffer_resp.CT.consumed_len <=
     SZ.v buffered_len));
-  let step_ok =
-    read_result.network_read_buffer_resp.CT.response.CT.status = CT.StepOk;
-  if step_ok {
-    let consumed_nonzero =
-      read_result.network_read_buffer_resp.CT.consumed_len = 0sz;
-    if consumed_nonzero {
-      assert (pure (SZ.v buffered_len <= SZ.v buffered_len));
-      {
-        buffered_network_read = read_result;
-        buffered_network_new_len = buffered_len;
-      }
-    } else {
-      let new_len =
-        compact_buffer_suffix
-          raw
-          raw_capacity
-          buffered_len
-          read_result.network_read_buffer_resp.CT.consumed_len;
-      with compacted_raw.
-        assert (pts_to raw compacted_raw);
-      assert (pure (B.length compacted_raw == SZ.v raw_capacity));
-      assert (pure (SZ.v new_len <= SZ.v buffered_len));
-      {
-        buffered_network_read = read_result;
-        buffered_network_new_len = new_len;
-      }
-    }
-  } else {
+  let consumed_zero =
+    read_result.network_read_buffer_resp.CT.consumed_len = 0sz;
+  if consumed_zero {
     assert (pure (SZ.v buffered_len <= SZ.v buffered_len));
+    assert (pure (
+      pending_after_consumed
+        buffered_len
+        read_result.network_read_buffer_resp.CT.consumed_len == buffered_len));
+    assert (pure (Seq.equal buffered_after
+      (Seq.slice (Ghost.reveal 'buffered) 0 (SZ.v buffered_len))));
+    SeqP.slice_length (Ghost.reveal 'buffered);
+    Seq.lemma_eq_elim
+      buffered_after
+      (Seq.slice (Ghost.reveal 'buffered) 0 (SZ.v buffered_len));
+    Seq.lemma_eq_elim
+      (Ghost.reveal 'buffered)
+      (Seq.slice (Ghost.reveal 'old_raw) 0 (SZ.v buffered_len));
+    Seq.lemma_eq_elim raw_bytes (Ghost.reveal 'old_raw);
+    assert (pure (Seq.equal buffered_after
+      (Seq.slice raw_bytes 0 (SZ.v buffered_len))));
+    rewrite (driver_exactly d st1 buffered_after
+      (pending_after_consumed
+        buffered_len
+        read_result.network_read_buffer_resp.CT.consumed_len)) as
+      (driver_exactly d st1 buffered_after buffered_len);
     {
       buffered_network_read = read_result;
       buffered_network_new_len = buffered_len;
+    }
+  } else {
+    let new_len =
+      compact_buffer_suffix
+        raw
+        raw_capacity
+        buffered_len
+        read_result.network_read_buffer_resp.CT.consumed_len;
+    with compacted_raw.
+      assert (pts_to raw compacted_raw);
+    assert (pure (B.length compacted_raw == SZ.v raw_capacity));
+    assert (pure (SZ.v new_len <= SZ.v buffered_len));
+    assert (pure (Seq.equal buffered_after
+      (Seq.slice (Ghost.reveal 'buffered)
+        (SZ.v read_result.network_read_buffer_resp.CT.consumed_len)
+        (SZ.v buffered_len))));
+    assert (pure (Seq.equal
+      (Seq.slice compacted_raw 0 (SZ.v new_len))
+      (Seq.slice raw_bytes
+        (SZ.v read_result.network_read_buffer_resp.CT.consumed_len)
+        (SZ.v buffered_len))));
+    SeqP.slice_slice
+      (Ghost.reveal 'old_raw)
+      0
+      (SZ.v buffered_len)
+      (SZ.v read_result.network_read_buffer_resp.CT.consumed_len)
+      (SZ.v buffered_len);
+    assert (pure (Seq.equal
+      (Seq.slice (Ghost.reveal 'buffered)
+        (SZ.v read_result.network_read_buffer_resp.CT.consumed_len)
+        (SZ.v buffered_len))
+      (Seq.slice (Ghost.reveal 'old_raw)
+        (SZ.v read_result.network_read_buffer_resp.CT.consumed_len)
+        (SZ.v buffered_len))));
+    Seq.lemma_eq_elim
+      buffered_after
+      (Seq.slice (Ghost.reveal 'buffered)
+        (SZ.v read_result.network_read_buffer_resp.CT.consumed_len)
+        (SZ.v buffered_len));
+    Seq.lemma_eq_elim
+      (Seq.slice (Ghost.reveal 'buffered)
+        (SZ.v read_result.network_read_buffer_resp.CT.consumed_len)
+        (SZ.v buffered_len))
+      (Seq.slice (Ghost.reveal 'old_raw)
+        (SZ.v read_result.network_read_buffer_resp.CT.consumed_len)
+        (SZ.v buffered_len));
+    Seq.lemma_eq_elim
+      (Seq.slice compacted_raw 0 (SZ.v new_len))
+      (Seq.slice raw_bytes
+        (SZ.v read_result.network_read_buffer_resp.CT.consumed_len)
+        (SZ.v buffered_len));
+    Seq.lemma_eq_elim raw_bytes (Ghost.reveal 'old_raw);
+    assert (pure (buffered_after == Seq.slice compacted_raw 0 (SZ.v new_len)));
+    assert (pure (Seq.equal buffered_after (Seq.slice compacted_raw 0 (SZ.v new_len))));
+    assert (pure (
+      pending_after_consumed
+        buffered_len
+        read_result.network_read_buffer_resp.CT.consumed_len == new_len));
+    rewrite (driver_exactly d st1 buffered_after
+      (pending_after_consumed
+        buffered_len
+        read_result.network_read_buffer_resp.CT.consumed_len)) as
+      (driver_exactly d st1 buffered_after new_len);
+    {
+      buffered_network_read = read_result;
+      buffered_network_new_len = new_len;
     }
   }
 }
@@ -1748,18 +1969,21 @@ fn driver_read_buffered_network_bytes_compact_once
   (network_out_len:SZ.t)
   (app_out:array U8.t)
   (app_out_len:SZ.t)
-  requires driver_exactly d 'st0 **
+  requires driver_exactly d 'st0 'buffered buffered_len **
            pts_to raw 'old_raw **
            pts_to network_out 'old_network_out **
            pts_to app_out 'old_app_out **
            pure (B.length 'old_raw == SZ.v raw_capacity /\
                  SZ.v buffered_len <= SZ.v raw_capacity /\
+                 Seq.equal 'buffered
+                   (Seq.slice 'old_raw 0 (SZ.v buffered_len)) /\
                  B.length 'old_network_out == SZ.v network_out_len /\
                  B.length 'old_app_out == SZ.v app_out_len /\
                  L.max_record_fragment_len <= SZ.v app_out_len)
   returns result: buffered_network_io_result
-  ensures exists* st1 raw_bytes network_out_bytes app_out_bytes.
-           driver_exactly d st1 **
+  ensures exists* st1 buffered_after raw_bytes network_out_bytes app_out_bytes.
+           driver_exactly d st1 buffered_after
+            result.buffered_network_io_buffered.buffered_network_new_len **
            pts_to raw raw_bytes **
            pts_to network_out network_out_bytes **
            pts_to app_out app_out_bytes **
@@ -1776,6 +2000,9 @@ fn driver_read_buffered_network_bytes_compact_once
                   SZ.v raw_capacity /\
                  SZ.v result.buffered_network_io_buffered.buffered_network_new_len <=
                   SZ.v result.buffered_network_io_buffered.buffered_network_read.network_read_len /\
+                 Seq.equal buffered_after
+                   (Seq.slice raw_bytes 0
+                     (SZ.v result.buffered_network_io_buffered.buffered_network_new_len)) /\
                  B.length network_out_bytes == SZ.v network_out_len /\
                  B.length app_out_bytes == SZ.v app_out_len /\
                  CT.network_bytes_end_to_end_correct
@@ -1789,7 +2016,7 @@ fn driver_read_buffered_network_bytes_compact_once
                   (Ghost.reveal 'old_app_out)
                   app_out_bytes)
 {
-  unfold (driver_exactly d 'st0);
+  unfold (driver_exactly d 'st0 'buffered buffered_len);
   A.pts_to_len raw;
   assert (pure (A.length raw == SZ.v raw_capacity));
   A.to_mask raw;
@@ -1811,10 +2038,57 @@ fn driver_read_buffered_network_bytes_compact_once
   with raw_tail.
     assert (pts_to raw_tail_array raw_tail);
   assert (pure (B.length raw_tail == SZ.v available));
+  unfold (channel_open d.driver_channel 'st0 'buffered buffered_len);
+  with received sent.
+    assert (IO.is_channel d.driver_channel received sent **
+            pure (client_driver_wire_logs_match 'st0 received sent (Ghost.reveal 'buffered) buffered_len));
+  let old_consumed =
+    Ghost.hide (ID.indefinite_description_ghost
+      B.bytes
+      (fun consumed ->
+        client_driver_wire_logs_match_witness
+          'st0
+          received
+          sent
+          consumed
+          (Ghost.reveal 'buffered)
+          buffered_len));
+  assert (pure (client_driver_wire_logs_match_witness
+    'st0
+    received
+    sent
+    (Ghost.reveal old_consumed)
+    (Ghost.reveal 'buffered)
+    buffered_len));
   let read_len = IO.read d.driver_channel raw_tail_array available;
-  with raw_tail_after.
-    assert (IO.is_channel d.driver_channel **
+  with raw_tail_after read_chunk.
+    assert (IO.is_channel d.driver_channel (B.append received read_chunk) sent **
             pts_to raw_tail_array raw_tail_after);
+  Seq.lemma_len_append received read_chunk;
+  assert (pure (B.length read_chunk == SZ.v read_len));
+  assert (pure (SZ.v buffered_len + SZ.v read_len <= SZ.v raw_capacity));
+  SZ.fits_lte (SZ.v buffered_len + SZ.v read_len) (SZ.v raw_capacity);
+  let total_len = buffered_len `SZ.add` read_len;
+  assert (pure (SZ.v total_len == SZ.v buffered_len + SZ.v read_len));
+  assert (pure (SZ.v total_len <= SZ.v raw_capacity));
+  let new_buffered =
+    Ghost.hide (B.append (Ghost.reveal 'buffered) read_chunk);
+  Seq.lemma_len_append (Ghost.reveal 'buffered) read_chunk;
+  Seq.append_assoc (Ghost.reveal old_consumed) (Ghost.reveal 'buffered) read_chunk;
+  assert (pure (client_driver_wire_logs_match_witness
+    'st0
+    (B.append received read_chunk)
+    sent
+    (Ghost.reveal old_consumed)
+    (Ghost.reveal new_buffered)
+    total_len));
+  assert (pure (client_driver_wire_logs_match
+    'st0
+    (B.append received read_chunk)
+    sent
+    (Ghost.reveal new_buffered)
+    total_len));
+  fold (channel_open d.driver_channel 'st0 (Ghost.reveal new_buffered) total_len);
   assert (pure (B.length raw_tail_after == SZ.v available));
   assert (pure (SZ.v read_len <= SZ.v available));
   A.to_mask raw_tail_array;
@@ -1853,14 +2127,11 @@ fn driver_read_buffered_network_bytes_compact_once
   with raw_after_read.
     assert (pts_to raw raw_after_read);
   assert (pure (B.length raw_after_read == SZ.v raw_capacity));
-  assert (pure (SZ.v buffered_len + SZ.v read_len <= SZ.v raw_capacity));
-  SZ.fits_lte (SZ.v buffered_len + SZ.v read_len) (SZ.v raw_capacity);
-  let total_len = buffered_len `SZ.add` read_len;
-  assert (pure (SZ.v total_len == SZ.v buffered_len + SZ.v read_len));
-  assert (pure (SZ.v total_len <= SZ.v raw_capacity));
+  assert (pure (Seq.equal (Ghost.reveal new_buffered)
+    (Seq.slice raw_after_read 0 (SZ.v total_len))));
   rewrite (C.connection_exactly d.driver_client 'st0)
     as (C.connection_exactly d.driver_client 'st0);
-  fold (driver_exactly d 'st0);
+  fold (driver_exactly d 'st0 (Ghost.reveal new_buffered) total_len);
   let buffered_result =
     driver_process_buffered_network_bytes_compact_once
       d
@@ -1871,8 +2142,8 @@ fn driver_read_buffered_network_bytes_compact_once
       network_out_len
       app_out
       app_out_len;
-  with st1 raw_bytes network_out_bytes app_out_bytes.
-    assert (driver_exactly d st1 **
+  with st1 buffered_after raw_bytes network_out_bytes app_out_bytes.
+    assert (driver_exactly d st1 buffered_after buffered_result.buffered_network_new_len **
             pts_to raw raw_bytes **
             pts_to network_out network_out_bytes **
             pts_to app_out app_out_bytes);
@@ -1913,18 +2184,21 @@ fn rec driver_process_buffered_network_records
   (app_out:array U8.t)
   (app_out_len:SZ.t)
   (fuel:SZ.t)
-  requires driver_exactly d 'st0 **
+  requires driver_exactly d 'st0 'buffered buffered_len **
            pts_to raw 'old_raw **
            pts_to network_out 'old_network_out **
            pts_to app_out 'old_app_out **
            pure (B.length 'old_raw == SZ.v raw_capacity /\
                  SZ.v buffered_len <= SZ.v raw_capacity /\
+                 Seq.equal 'buffered
+                   (Seq.slice 'old_raw 0 (SZ.v buffered_len)) /\
                  B.length 'old_network_out == SZ.v network_out_len /\
                  B.length 'old_app_out == SZ.v app_out_len /\
                  L.max_record_fragment_len <= SZ.v app_out_len)
   returns result: buffered_network_loop_result
-  ensures exists* st1 raw_bytes network_out_bytes app_out_bytes.
-           driver_exactly d st1 **
+  ensures exists* st1 buffered_after raw_bytes network_out_bytes app_out_bytes.
+           driver_exactly d st1 buffered_after
+            result.buffered_network_loop_last.buffered_network_new_len **
            pts_to raw raw_bytes **
            pts_to network_out network_out_bytes **
            pts_to app_out app_out_bytes **
@@ -1955,18 +2229,36 @@ fn rec driver_process_buffered_network_records
     buffered_network_new_len = buffered_len;
   };
   if (fuel = 0sz) {
-    {
+    assert (pure (no_op.buffered_network_new_len == buffered_len));
+    rewrite (driver_exactly d 'st0 'buffered buffered_len) as
+      (driver_exactly d 'st0 'buffered no_op.buffered_network_new_len);
+    let result = {
       buffered_network_loop_last = no_op;
       buffered_network_loop_exhausted = true;
-    }
+    };
+    assert (pure (result.buffered_network_loop_last.buffered_network_new_len ==
+      no_op.buffered_network_new_len));
+    rewrite (driver_exactly d 'st0 'buffered no_op.buffered_network_new_len) as
+      (driver_exactly d 'st0 'buffered
+        result.buffered_network_loop_last.buffered_network_new_len);
+    result
   } else {
     assert (pure (0 < SZ.v fuel));
     let empty_buffer = buffered_len = 0sz;
     if empty_buffer {
-      {
+      assert (pure (no_op.buffered_network_new_len == buffered_len));
+      rewrite (driver_exactly d 'st0 'buffered buffered_len) as
+        (driver_exactly d 'st0 'buffered no_op.buffered_network_new_len);
+      let result = {
         buffered_network_loop_last = no_op;
         buffered_network_loop_exhausted = false;
-      }
+      };
+      assert (pure (result.buffered_network_loop_last.buffered_network_new_len ==
+        no_op.buffered_network_new_len));
+      rewrite (driver_exactly d 'st0 'buffered no_op.buffered_network_new_len) as
+        (driver_exactly d 'st0 'buffered
+          result.buffered_network_loop_last.buffered_network_new_len);
+      result
     } else {
       let step =
         driver_process_buffered_network_bytes_compact_once
@@ -1978,8 +2270,8 @@ fn rec driver_process_buffered_network_records
           network_out_len
           app_out
           app_out_len;
-      with st1 raw_bytes network_out_bytes app_out_bytes.
-        assert (driver_exactly d st1 **
+      with st1 buffered_after raw_bytes network_out_bytes app_out_bytes.
+        assert (driver_exactly d st1 buffered_after step.buffered_network_new_len **
                 pts_to raw raw_bytes **
                 pts_to network_out network_out_bytes **
                 pts_to app_out app_out_bytes);
@@ -2001,6 +2293,8 @@ fn rec driver_process_buffered_network_records
         assert (pure (0 < SZ.v fuel));
         let next_fuel = SZ.sub fuel 1sz;
         assert (pure (SZ.v next_fuel < SZ.v fuel));
+        assert (pure (Seq.equal buffered_after
+          (Seq.slice raw_bytes 0 (SZ.v step.buffered_network_new_len))));
         driver_process_buffered_network_records
           d
           raw
@@ -2032,7 +2326,7 @@ fn process_ready_internal_local_action_once
   (app_out:array U8.t)
   (app_out_len:SZ.t)
   requires C.connection_exactly c 'st0 **
-           IO.is_channel ch **
+           channel_open ch 'st0 'buffered 'pending_len **
            pts_to empty_payload 'empty_payload_bytes **
            pts_to network_out 'old_network_out **
            pts_to app_out 'old_app_out **
@@ -2042,7 +2336,7 @@ fn process_ready_internal_local_action_once
   returns result: ready_local_action_result
   ensures exists* st1 network_out_bytes app_out_bytes.
            C.connection_exactly c st1 **
-           IO.is_channel ch **
+           channel_open ch st1 'buffered 'pending_len **
            pts_to empty_payload 'empty_payload_bytes **
            pts_to network_out network_out_bytes **
            pts_to app_out app_out_bytes **
@@ -2066,9 +2360,8 @@ fn process_ready_internal_local_action_once
                     app_out_bytes /\
                   (result.ready_local_resp.CT.status == CT.StepOk ==>
                    SZ.v result.ready_local_written <=
-                   SZ.v result.ready_local_resp.CT.network_out_len) /\
-                  (result.ready_local_resp.CT.status == CT.StepOk \/
-                   result.ready_local_written == 0sz)) /\
+                   SZ.v                   result.ready_local_resp.CT.network_out_len) /\
+                  True) /\
                  (result.ready_local_processed \/
                   result.ready_local_written == 0sz) /\
                  (result.ready_local_processed == false ==> st1 == 'st0))
@@ -2149,8 +2442,6 @@ fn process_ready_internal_local_action_once
       assert (pure (write_result.local_write_resp.CT.status == CT.StepOk ==>
         SZ.v write_result.local_write_written <=
         SZ.v write_result.local_write_resp.CT.network_out_len));
-      assert (pure (write_result.local_write_resp.CT.status == CT.StepOk \/
-        write_result.local_write_written == 0sz));
       {
         ready_local_action = action;
         ready_local_processed = true;
@@ -2177,7 +2468,7 @@ fn driver_handshake_step
   (server_finished_payload_len:SZ.t)
   (app_out:array U8.t)
   (app_out_len:SZ.t)
-  requires driver_exactly d 'st0 **
+  requires driver_exactly d 'st0 'buffered 'pending_len **
            pts_to empty_payload 'empty_payload_bytes **
            pts_to network_out 'old_network_out **
            pts_to app_out 'old_app_out **
@@ -2186,7 +2477,7 @@ fn driver_handshake_step
                  B.length 'old_app_out == SZ.v app_out_len)
   returns result: ready_local_action_result
   ensures exists* st1 network_out_bytes app_out_bytes.
-           driver_exactly d st1 **
+           driver_exactly d st1 'buffered 'pending_len **
            pts_to empty_payload 'empty_payload_bytes **
            pts_to network_out network_out_bytes **
            pts_to app_out app_out_bytes **
@@ -2210,14 +2501,13 @@ fn driver_handshake_step
                     app_out_bytes /\
                   (result.ready_local_resp.CT.status == CT.StepOk ==>
                    SZ.v result.ready_local_written <=
-                   SZ.v result.ready_local_resp.CT.network_out_len) /\
-                  (result.ready_local_resp.CT.status == CT.StepOk \/
-                   result.ready_local_written == 0sz)) /\
+                   SZ.v                   result.ready_local_resp.CT.network_out_len) /\
+                  True) /\
                  (result.ready_local_processed \/
                   result.ready_local_written == 0sz) /\
                  (result.ready_local_processed == false ==> st1 == 'st0))
 {
-  unfold (driver_exactly d 'st0);
+  unfold (driver_exactly d 'st0 (Ghost.reveal 'buffered) (Ghost.reveal 'pending_len));
   let result =
     process_ready_internal_local_action_once
       d.driver_client
@@ -2231,10 +2521,11 @@ fn driver_handshake_step
       app_out_len;
   with st1 network_out_bytes app_out_bytes.
     assert (C.connection_exactly d.driver_client st1 **
+            channel_open d.driver_channel st1 (Ghost.reveal 'buffered) (Ghost.reveal 'pending_len) **
             pts_to empty_payload 'empty_payload_bytes **
             pts_to network_out network_out_bytes **
             pts_to app_out app_out_bytes);
-  fold (driver_exactly d st1);
+  fold (driver_exactly d st1 (Ghost.reveal 'buffered) (Ghost.reveal 'pending_len));
   result
 }
 
@@ -2248,7 +2539,7 @@ fn rec driver_drain_local_actions
   (app_out:array U8.t)
   (app_out_len:SZ.t)
   (fuel:SZ.t)
-  requires driver_exactly d 'st0 **
+  requires driver_exactly d 'st0 'buffered 'pending_len **
            pts_to empty_payload 'empty_payload_bytes **
            pts_to network_out 'old_network_out **
            pts_to app_out 'old_app_out **
@@ -2257,7 +2548,7 @@ fn rec driver_drain_local_actions
                  B.length 'old_app_out == SZ.v app_out_len)
   returns result: driver_drain_result
   ensures exists* st1 network_out_bytes app_out_bytes.
-           driver_exactly d st1 **
+           driver_exactly d st1 'buffered 'pending_len **
            pts_to empty_payload 'empty_payload_bytes **
            pts_to network_out network_out_bytes **
            pts_to app_out app_out_bytes **
@@ -2305,7 +2596,7 @@ fn rec driver_drain_local_actions
         app_out
         app_out_len;
     with st1 network_out_bytes app_out_bytes.
-      assert (driver_exactly d st1 **
+      assert (driver_exactly d st1 (Ghost.reveal 'buffered) (Ghost.reveal 'pending_len) **
               pts_to empty_payload 'empty_payload_bytes **
               pts_to network_out network_out_bytes **
               pts_to app_out app_out_bytes);
@@ -2349,24 +2640,30 @@ fn driver_progress_buffered_network_step
   (network_out_len:SZ.t)
   (app_out:array U8.t)
   (app_out_len:SZ.t)
-  requires driver_exactly d 'st0 **
+  requires driver_exactly d 'st0 'buffered buffered_len **
            pts_to raw 'old_raw **
            pts_to network_out 'old_network_out **
            pts_to app_out 'old_app_out **
            pure (B.length 'old_raw == SZ.v raw_capacity /\
                  SZ.v buffered_len <= SZ.v raw_capacity /\
+                 Seq.equal 'buffered
+                   (Seq.slice 'old_raw 0 (SZ.v buffered_len)) /\
                  B.length 'old_network_out == SZ.v network_out_len /\
                  B.length 'old_app_out == SZ.v app_out_len /\
                  L.max_record_fragment_len <= SZ.v app_out_len)
   returns result: buffered_network_io_result
-  ensures exists* st1 raw_bytes network_out_bytes app_out_bytes.
-           driver_exactly d st1 **
+  ensures exists* st1 buffered_after raw_bytes network_out_bytes app_out_bytes.
+           driver_exactly d st1 buffered_after
+             result.buffered_network_io_buffered.buffered_network_new_len **
            pts_to raw raw_bytes **
            pts_to network_out network_out_bytes **
            pts_to app_out app_out_bytes **
            pure (B.length raw_bytes == SZ.v raw_capacity /\
                  SZ.v result.buffered_network_io_buffered.buffered_network_new_len <=
                   SZ.v raw_capacity /\
+                 Seq.equal buffered_after
+                   (Seq.slice raw_bytes 0
+                     (SZ.v result.buffered_network_io_buffered.buffered_network_new_len)) /\
                  B.length network_out_bytes == SZ.v network_out_len /\
                  B.length app_out_bytes == SZ.v app_out_len)
 {
@@ -2392,8 +2689,8 @@ fn driver_progress_buffered_network_step
         network_out_len
         app_out
         app_out_len;
-    with st1 raw_bytes network_out_bytes app_out_bytes.
-      assert (driver_exactly d st1 **
+    with st1 buffered_after raw_bytes network_out_bytes app_out_bytes.
+      assert (driver_exactly d st1 buffered_after processed.buffered_network_new_len **
               pts_to raw raw_bytes **
               pts_to network_out network_out_bytes **
               pts_to app_out app_out_bytes);
@@ -2404,6 +2701,8 @@ fn driver_progress_buffered_network_step
       processed.buffered_network_read.network_read_buffer_resp.CT.response.CT.status =
       CT.NeedMoreInput;
     if need_more {
+      assert (pure (Seq.equal buffered_after
+        (Seq.slice raw_bytes 0 (SZ.v processed.buffered_network_new_len))));
       driver_read_buffered_network_bytes_compact_once
         d
         raw
@@ -2414,10 +2713,19 @@ fn driver_progress_buffered_network_step
         app_out
         app_out_len
     } else {
-      {
+      assert (pure (Seq.equal buffered_after
+        (Seq.slice raw_bytes 0 (SZ.v processed.buffered_network_new_len))));
+      let result = {
         buffered_network_io_read_len = 0sz;
         buffered_network_io_buffered = processed;
-      }
+      };
+      assert (pure (
+        result.buffered_network_io_buffered.buffered_network_new_len ==
+        processed.buffered_network_new_len));
+      rewrite (driver_exactly d st1 buffered_after processed.buffered_network_new_len) as
+        (driver_exactly d st1 buffered_after
+          result.buffered_network_io_buffered.buffered_network_new_len);
+      result
     }
   }
 }
@@ -2438,7 +2746,7 @@ fn top_driver_process_one_local_action
   (server_finished_payload_len:SZ.t)
   (app_out:array U8.t)
   (app_out_len:SZ.t)
-  requires top_driver_exactly d 'st0 **
+  requires top_driver_exactly d 'st0 'buffered 'pending_len **
            pts_to empty_payload 'empty_payload_bytes **
            pts_to network_out 'old_network_out **
            pts_to auth_leaf_der 'old_auth_leaf_der **
@@ -2459,7 +2767,7 @@ fn top_driver_process_one_local_action
                  B.length 'old_app_out == SZ.v app_out_len)
   returns result: ready_local_action_result
   ensures exists* st1 network_out_bytes auth_leaf_der_bytes auth_payload_bytes auth_cv_input_bytes auth_signature_bytes app_out_bytes.
-           top_driver_exactly d st1 **
+           top_driver_exactly d st1 'buffered 'pending_len **
            pts_to empty_payload 'empty_payload_bytes **
            pts_to network_out network_out_bytes **
            pts_to auth_leaf_der auth_leaf_der_bytes **
@@ -2476,7 +2784,7 @@ fn top_driver_process_one_local_action
                  (result.ready_local_processed \/
                   result.ready_local_written == 0sz))
 {
-  unfold (top_driver_exactly d 'st0);
+  unfold (top_driver_exactly d 'st0 (Ghost.reveal 'buffered) (Ghost.reveal 'pending_len));
   let step =
     driver_handshake_step
       d.top_driver_core
@@ -2488,14 +2796,14 @@ fn top_driver_process_one_local_action
       app_out
       app_out_len;
   with st1 network_out_bytes app_out_bytes.
-    assert (driver_exactly d.top_driver_core st1 **
+    assert (driver_exactly d.top_driver_core st1 (Ghost.reveal 'buffered) (Ghost.reveal 'pending_len) **
             pts_to empty_payload 'empty_payload_bytes **
             pts_to network_out network_out_bytes **
             pts_to app_out app_out_bytes);
   assert (pure (B.length network_out_bytes == SZ.v network_out_len));
   assert (pure (B.length app_out_bytes == SZ.v app_out_len));
   if step.ready_local_processed {
-    fold (top_driver_exactly d st1);
+    fold (top_driver_exactly d st1 (Ghost.reveal 'buffered) (Ghost.reveal 'pending_len));
     step
   } else {
     assert (pure (step.ready_local_written == 0sz));
@@ -2521,7 +2829,7 @@ fn top_driver_process_one_local_action
             auth_leaf_der
             auth_leaf_der_len;
         with auth_leaf_der_bytes.
-          assert (driver_exactly d.top_driver_core st1 **
+          assert (driver_exactly d.top_driver_core st1 (Ghost.reveal 'buffered) (Ghost.reveal 'pending_len) **
                   pts_to auth_leaf_der auth_leaf_der_bytes);
         let leaf_fits = SZ.lte leaf_len certificate_public_key_len;
         if leaf_fits {
@@ -2573,7 +2881,7 @@ fn top_driver_process_one_local_action
                 app_out
                 app_out_len;
             with st2 network_out_bytes2 app_out_bytes2.
-              assert (driver_exactly d.top_driver_core st2 **
+              assert (driver_exactly d.top_driver_core st2 (Ghost.reveal 'buffered) (Ghost.reveal 'pending_len) **
                       pts_to auth_payload_prefix auth_payload_prefix_bytes **
                       pts_to network_out network_out_bytes2 **
                       pts_to app_out app_out_bytes2);
@@ -2606,7 +2914,7 @@ fn top_driver_process_one_local_action
             with auth_payload_bytes.
               assert (pts_to auth_payload auth_payload_bytes);
             assert (pure (B.length auth_payload_bytes == SZ.v certificate_public_key_len));
-            fold (top_driver_exactly d st2);
+            fold (top_driver_exactly d st2 (Ghost.reveal 'buffered) (Ghost.reveal 'pending_len));
             {
               ready_local_action = step.ready_local_action;
               ready_local_processed = true;
@@ -2643,11 +2951,11 @@ fn top_driver_process_one_local_action
             with auth_payload_bytes.
               assert (pts_to auth_payload auth_payload_bytes);
             assert (pure (B.length auth_payload_bytes == SZ.v certificate_public_key_len));
-            fold (top_driver_exactly d st1);
+            fold (top_driver_exactly d st1 (Ghost.reveal 'buffered) (Ghost.reveal 'pending_len));
             step
           }
         } else {
-          fold (top_driver_exactly d st1);
+          fold (top_driver_exactly d st1 (Ghost.reveal 'buffered) (Ghost.reveal 'pending_len));
           step
         }
       } else {
@@ -2674,7 +2982,7 @@ fn top_driver_process_one_local_action
               auth_cv_input
               auth_cv_input_len;
           with auth_cv_input_bytes.
-            assert (driver_exactly d.top_driver_core st1 **
+            assert (driver_exactly d.top_driver_core st1 (Ghost.reveal 'buffered) (Ghost.reveal 'pending_len) **
                     pts_to auth_cv_input auth_cv_input_bytes);
           let signature_snapshot =
             driver_copy_certificate_verify_signature
@@ -2682,7 +2990,7 @@ fn top_driver_process_one_local_action
               auth_signature
               auth_signature_len;
           with auth_signature_bytes.
-            assert (driver_exactly d.top_driver_core st1 **
+            assert (driver_exactly d.top_driver_core st1 (Ghost.reveal 'buffered) (Ghost.reveal 'pending_len) **
                     pts_to auth_signature auth_signature_bytes);
           let ok =
             O.verify_certificate_signature_for_local_event
@@ -2711,11 +3019,11 @@ fn top_driver_process_one_local_action
                 app_out
                 app_out_len;
             with st2 network_out_bytes2 app_out_bytes2.
-              assert (driver_exactly d.top_driver_core st2 **
+              assert (driver_exactly d.top_driver_core st2 (Ghost.reveal 'buffered) (Ghost.reveal 'pending_len) **
                       pts_to empty_payload 'empty_payload_bytes **
                       pts_to network_out network_out_bytes2 **
                       pts_to app_out app_out_bytes2);
-            fold (top_driver_exactly d st2);
+            fold (top_driver_exactly d st2 (Ghost.reveal 'buffered) (Ghost.reveal 'pending_len));
             {
               ready_local_action = step.ready_local_action;
               ready_local_processed = true;
@@ -2723,16 +3031,16 @@ fn top_driver_process_one_local_action
               ready_local_written = write_result.local_write_written;
             }
           } else {
-            fold (top_driver_exactly d st1);
+            fold (top_driver_exactly d st1 (Ghost.reveal 'buffered) (Ghost.reveal 'pending_len));
             step
           }
         } else {
-          fold (top_driver_exactly d st1);
+          fold (top_driver_exactly d st1 (Ghost.reveal 'buffered) (Ghost.reveal 'pending_len));
           step
         }
       }
     } else {
-      fold (top_driver_exactly d st1);
+      fold (top_driver_exactly d st1 (Ghost.reveal 'buffered) (Ghost.reveal 'pending_len));
       step
     }
   }
@@ -2759,7 +3067,7 @@ fn rec driver_handshake
   (app_out_len:SZ.t)
   (local_fuel:SZ.t)
   (fuel:SZ.t)
-  requires top_driver_exactly d 'st0 **
+  requires top_driver_exactly d 'st0 'buffered buffered_len **
            pts_to empty_payload 'empty_payload_bytes **
            pts_to raw 'old_raw **
            pts_to network_out 'old_network_out **
@@ -2771,6 +3079,9 @@ fn rec driver_handshake
            pure (B.length 'empty_payload_bytes == 0 /\
                  B.length 'old_raw == SZ.v raw_capacity /\
                  SZ.v buffered_len <= SZ.v raw_capacity /\
+                 B.length 'buffered == SZ.v buffered_len /\
+                 Seq.equal 'buffered
+                   (Seq.slice 'old_raw 0 (SZ.v buffered_len)) /\
                  B.length 'old_network_out == SZ.v network_out_len /\
                  B.length 'old_auth_leaf_der == SZ.v auth_leaf_der_len /\
                  B.length 'old_auth_payload == SZ.v certificate_public_key_len /\
@@ -2783,8 +3094,8 @@ fn rec driver_handshake
                  B.length 'old_app_out == SZ.v app_out_len /\
                  L.max_record_fragment_len <= SZ.v app_out_len)
   returns result: driver_workflow_result
-  ensures exists* st1 raw_bytes network_out_bytes auth_leaf_der_bytes auth_payload_bytes auth_cv_input_bytes auth_signature_bytes app_out_bytes.
-           top_driver_exactly d st1 **
+  ensures exists* st1 buffered_after raw_bytes network_out_bytes auth_leaf_der_bytes auth_payload_bytes auth_cv_input_bytes auth_signature_bytes app_out_bytes.
+           top_driver_exactly d st1 buffered_after result.driver_workflow_rx_len **
            pts_to empty_payload 'empty_payload_bytes **
            pts_to raw raw_bytes **
            pts_to network_out network_out_bytes **
@@ -2799,6 +3110,9 @@ fn rec driver_handshake
                  B.length auth_cv_input_bytes == SZ.v auth_cv_input_len /\
                  B.length auth_signature_bytes == SZ.v auth_signature_len /\
                  SZ.v result.driver_workflow_rx_len <= SZ.v raw_capacity /\
+                 B.length buffered_after == SZ.v result.driver_workflow_rx_len /\
+                 Seq.equal buffered_after
+                   (Seq.slice raw_bytes 0 (SZ.v result.driver_workflow_rx_len)) /\
                  B.length network_out_bytes == SZ.v network_out_len /\
                  B.length app_out_bytes == SZ.v app_out_len)
   decreases (SZ.v fuel)
@@ -2848,11 +3162,11 @@ fn rec driver_handshake
       driver_workflow_network = no_op_io;
     }
   } else {
-    unfold (top_driver_exactly d 'st0);
+    unfold (top_driver_exactly d 'st0 'buffered buffered_len);
     let snapshot = driver_control_snapshot d.top_driver_core;
     with st_snapshot.
-      assert (driver_exactly d.top_driver_core st_snapshot);
-    fold (top_driver_exactly d st_snapshot);
+      assert (driver_exactly d.top_driver_core st_snapshot 'buffered buffered_len);
+    fold (top_driver_exactly d st_snapshot 'buffered buffered_len);
     let app_ready = snapshot.CR.snapshot_control_tag = 2uy;
     if app_ready {
       {
@@ -2895,7 +3209,7 @@ fn rec driver_handshake
             app_out
             app_out_len;
         with st_local network_out_local auth_leaf_der_local auth_payload_local auth_cv_input_local auth_signature_local app_out_local.
-          assert (top_driver_exactly d st_local **
+          assert (top_driver_exactly d st_local 'buffered buffered_len **
                   pts_to network_out network_out_local **
                   pts_to auth_leaf_der auth_leaf_der_local **
                   pts_to auth_payload auth_payload_local **
@@ -2954,7 +3268,14 @@ fn rec driver_handshake
               driver_workflow_network = no_op_io;
             }
           } else {
-            unfold (top_driver_exactly d st_local);
+            assert (pure (B.length 'old_raw == SZ.v raw_capacity));
+            assert (pure (SZ.v buffered_len <= SZ.v raw_capacity));
+            assert (pure (Seq.equal 'buffered
+              (Seq.slice 'old_raw 0 (SZ.v buffered_len))));
+            assert (pure (B.length network_out_local == SZ.v network_out_len));
+            assert (pure (B.length app_out_local == SZ.v app_out_len));
+            assert (pure (L.max_record_fragment_len <= SZ.v app_out_len));
+            unfold (top_driver_exactly d st_local 'buffered buffered_len);
             let network =
               driver_progress_buffered_network_step
                 d.top_driver_core
@@ -2965,12 +3286,16 @@ fn rec driver_handshake
                 network_out_len
                 app_out
                 app_out_len;
-            with st_network raw_network network_out_network app_out_network.
-              assert (driver_exactly d.top_driver_core st_network **
+            with st_network buffered_network raw_network network_out_network app_out_network.
+              assert (driver_exactly d.top_driver_core st_network
+                        buffered_network
+                        network.buffered_network_io_buffered.buffered_network_new_len **
                       pts_to raw raw_network **
                       pts_to network_out network_out_network **
                       pts_to app_out app_out_network);
-            fold (top_driver_exactly d st_network);
+            fold (top_driver_exactly d st_network
+              buffered_network
+              network.buffered_network_io_buffered.buffered_network_new_len);
             let net_read =
               network.buffered_network_io_buffered.buffered_network_read;
             let net_resp = net_read.network_read_buffer_resp.CT.response;
@@ -3045,7 +3370,7 @@ fn rec driver_receive_application_data
   (app_out_len:SZ.t)
   (local_fuel:SZ.t)
   (fuel:SZ.t)
-  requires top_driver_exactly d 'st0 **
+  requires top_driver_exactly d 'st0 'buffered buffered_len **
            pts_to empty_payload 'empty_payload_bytes **
            pts_to raw 'old_raw **
            pts_to network_out 'old_network_out **
@@ -3057,6 +3382,9 @@ fn rec driver_receive_application_data
            pure (B.length 'empty_payload_bytes == 0 /\
                  B.length 'old_raw == SZ.v raw_capacity /\
                  SZ.v buffered_len <= SZ.v raw_capacity /\
+                 B.length 'buffered == SZ.v buffered_len /\
+                 Seq.equal 'buffered
+                   (Seq.slice 'old_raw 0 (SZ.v buffered_len)) /\
                  B.length 'old_network_out == SZ.v network_out_len /\
                  B.length 'old_auth_leaf_der == SZ.v auth_leaf_der_len /\
                  B.length 'old_auth_payload == SZ.v certificate_public_key_len /\
@@ -3069,8 +3397,8 @@ fn rec driver_receive_application_data
                  B.length 'old_app_out == SZ.v app_out_len /\
                  L.max_record_fragment_len <= SZ.v app_out_len)
   returns result: driver_workflow_result
-  ensures exists* st1 raw_bytes network_out_bytes auth_leaf_der_bytes auth_payload_bytes auth_cv_input_bytes auth_signature_bytes app_out_bytes.
-           top_driver_exactly d st1 **
+  ensures exists* st1 buffered_after raw_bytes network_out_bytes auth_leaf_der_bytes auth_payload_bytes auth_cv_input_bytes auth_signature_bytes app_out_bytes.
+           top_driver_exactly d st1 buffered_after result.driver_workflow_rx_len **
            pts_to empty_payload 'empty_payload_bytes **
            pts_to raw raw_bytes **
            pts_to network_out network_out_bytes **
@@ -3085,6 +3413,9 @@ fn rec driver_receive_application_data
                  B.length auth_cv_input_bytes == SZ.v auth_cv_input_len /\
                  B.length auth_signature_bytes == SZ.v auth_signature_len /\
                  SZ.v result.driver_workflow_rx_len <= SZ.v raw_capacity /\
+                 B.length buffered_after == SZ.v result.driver_workflow_rx_len /\
+                 Seq.equal buffered_after
+                   (Seq.slice raw_bytes 0 (SZ.v result.driver_workflow_rx_len)) /\
                  B.length network_out_bytes == SZ.v network_out_len /\
                  B.length app_out_bytes == SZ.v app_out_len)
   decreases (SZ.v fuel)
@@ -3134,7 +3465,7 @@ fn rec driver_receive_application_data
       driver_workflow_network = no_op_io;
     }
   } else {
-    unfold (top_driver_exactly d 'st0);
+    unfold (top_driver_exactly d 'st0 'buffered buffered_len);
     let network =
       driver_progress_buffered_network_step
         d.top_driver_core
@@ -3145,12 +3476,16 @@ fn rec driver_receive_application_data
         network_out_len
         app_out
         app_out_len;
-    with st_network raw_network network_out_network app_out_network.
-      assert (driver_exactly d.top_driver_core st_network **
+    with st_network buffered_network raw_network network_out_network app_out_network.
+      assert (driver_exactly d.top_driver_core st_network
+                buffered_network
+                network.buffered_network_io_buffered.buffered_network_new_len **
               pts_to raw raw_network **
               pts_to network_out network_out_network **
               pts_to app_out app_out_network);
-    fold (top_driver_exactly d st_network);
+    fold (top_driver_exactly d st_network
+      buffered_network
+      network.buffered_network_io_buffered.buffered_network_new_len);
     let no_op_resp = {
       CT.network_out_len = 0sz;
       CT.app_out_len = 0sz;
@@ -3222,7 +3557,9 @@ fn rec driver_receive_application_data
           app_out
           app_out_len;
       with st_local network_out_local auth_leaf_der_local auth_payload_local auth_cv_input_local auth_signature_local app_out_local.
-        assert (top_driver_exactly d st_local **
+        assert (top_driver_exactly d st_local
+                  buffered_network
+                  network.buffered_network_io_buffered.buffered_network_new_len **
                 pts_to network_out network_out_local **
                 pts_to auth_leaf_der auth_leaf_der_local **
                 pts_to auth_payload auth_payload_local **
@@ -3289,23 +3626,29 @@ fn rec driver_await_peer_close_notify
   (app_out:array U8.t)
   (app_out_len:SZ.t)
   (fuel:SZ.t)
-  requires driver_exactly d 'st0 **
+  requires driver_exactly d 'st0 'buffered buffered_len **
            pts_to raw 'old_raw **
            pts_to network_out 'old_network_out **
            pts_to app_out 'old_app_out **
            pure (B.length 'old_raw == SZ.v raw_capacity /\
                  SZ.v buffered_len <= SZ.v raw_capacity /\
+                 B.length 'buffered == SZ.v buffered_len /\
+                 Seq.equal 'buffered
+                   (Seq.slice 'old_raw 0 (SZ.v buffered_len)) /\
                  B.length 'old_network_out == SZ.v network_out_len /\
                  B.length 'old_app_out == SZ.v app_out_len /\
                  L.max_record_fragment_len <= SZ.v app_out_len)
   returns result: driver_workflow_result
-  ensures exists* st1 raw_bytes network_out_bytes app_out_bytes.
-           driver_exactly d st1 **
+  ensures exists* st1 buffered_after raw_bytes network_out_bytes app_out_bytes.
+           driver_exactly d st1 buffered_after result.driver_workflow_rx_len **
            pts_to raw raw_bytes **
            pts_to network_out network_out_bytes **
            pts_to app_out app_out_bytes **
            pure (B.length raw_bytes == SZ.v raw_capacity /\
                  SZ.v result.driver_workflow_rx_len <= SZ.v raw_capacity /\
+                 B.length buffered_after == SZ.v result.driver_workflow_rx_len /\
+                 Seq.equal buffered_after
+                   (Seq.slice raw_bytes 0 (SZ.v result.driver_workflow_rx_len)) /\
                  B.length network_out_bytes == SZ.v network_out_len /\
                  B.length app_out_bytes == SZ.v app_out_len)
   decreases (SZ.v fuel)
@@ -3357,7 +3700,7 @@ fn rec driver_await_peer_close_notify
   } else {
     let snapshot = driver_control_snapshot d;
     with st_snapshot.
-      assert (driver_exactly d st_snapshot);
+      assert (driver_exactly d st_snapshot 'buffered buffered_len);
     let closed = snapshot.CR.snapshot_control_tag = 4uy;
     if closed {
       {
@@ -3380,8 +3723,10 @@ fn rec driver_await_peer_close_notify
           network_out_len
           app_out
           app_out_len;
-      with st_network raw_network network_out_network app_out_network.
-        assert (driver_exactly d st_network **
+      with st_network buffered_network raw_network network_out_network app_out_network.
+        assert (driver_exactly d st_network
+                  buffered_network
+                  network.buffered_network_io_buffered.buffered_network_new_len **
                 pts_to raw raw_network **
                 pts_to network_out network_out_network **
                 pts_to app_out app_out_network);
@@ -3434,7 +3779,7 @@ fn send_application_data_once
   (app_out:array U8.t)
   (app_out_len:SZ.t)
   requires C.connection_exactly c 'st0 **
-           IO.is_channel ch **
+           channel_open ch 'st0 'buffered 'pending_len **
            pts_to payload 'payload_bytes **
            pts_to network_out 'old_network_out **
            pts_to app_out 'old_app_out **
@@ -3448,7 +3793,7 @@ fn send_application_data_once
   returns result: local_write_result
   ensures exists* st1 network_out_bytes app_out_bytes.
            C.connection_exactly c st1 **
-           IO.is_channel ch **
+           channel_open ch st1 'buffered 'pending_len **
            pts_to payload 'payload_bytes **
            pts_to network_out network_out_bytes **
            pts_to app_out app_out_bytes **
@@ -3464,9 +3809,7 @@ fn send_application_data_once
                    app_out_bytes /\
                  (result.local_write_resp.CT.status == CT.StepOk ==>
                   SZ.v result.local_write_written <=
-                  SZ.v result.local_write_resp.CT.network_out_len) /\
-                 (result.local_write_resp.CT.status == CT.StepOk \/
-                  result.local_write_written == 0sz))
+                  SZ.v result.local_write_resp.CT.network_out_len))
 {
   process_local_event_and_write_once
     c
@@ -3488,7 +3831,7 @@ fn driver_send_application_data
   (network_out_len:SZ.t)
   (app_out:array U8.t)
   (app_out_len:SZ.t)
-  requires driver_exactly d 'st0 **
+  requires driver_exactly d 'st0 'buffered 'pending_len **
            pts_to payload 'payload_bytes **
            pts_to network_out 'old_network_out **
            pts_to app_out 'old_app_out **
@@ -3501,7 +3844,7 @@ fn driver_send_application_data
                    (Ghost.reveal 'payload_bytes))
   returns result: local_write_result
   ensures exists* st1 network_out_bytes app_out_bytes.
-           driver_exactly d st1 **
+           driver_exactly d st1 'buffered 'pending_len **
            pts_to payload 'payload_bytes **
            pts_to network_out network_out_bytes **
            pts_to app_out app_out_bytes **
@@ -3517,11 +3860,9 @@ fn driver_send_application_data
                    app_out_bytes /\
                  (result.local_write_resp.CT.status == CT.StepOk ==>
                   SZ.v result.local_write_written <=
-                  SZ.v result.local_write_resp.CT.network_out_len) /\
-                 (result.local_write_resp.CT.status == CT.StepOk \/
-                  result.local_write_written == 0sz))
+                  SZ.v result.local_write_resp.CT.network_out_len))
 {
-  unfold (driver_exactly d 'st0);
+  unfold (driver_exactly d 'st0 (Ghost.reveal 'buffered) (Ghost.reveal 'pending_len));
   let result =
     send_application_data_once
       d.driver_client
@@ -3534,10 +3875,11 @@ fn driver_send_application_data
       app_out_len;
   with st1 network_out_bytes app_out_bytes.
     assert (C.connection_exactly d.driver_client st1 **
+            channel_open d.driver_channel st1 (Ghost.reveal 'buffered) (Ghost.reveal 'pending_len) **
             pts_to payload 'payload_bytes **
             pts_to network_out network_out_bytes **
             pts_to app_out app_out_bytes);
-  fold (driver_exactly d st1);
+  fold (driver_exactly d st1 (Ghost.reveal 'buffered) (Ghost.reveal 'pending_len));
   result
 }
 
@@ -3549,7 +3891,7 @@ fn top_driver_send_application_data
   (network_out_len:SZ.t)
   (app_out:array U8.t)
   (app_out_len:SZ.t)
-  requires top_driver_exactly d 'st0 **
+  requires top_driver_exactly d 'st0 'buffered 'pending_len **
            pts_to payload 'payload_bytes **
            pts_to network_out 'old_network_out **
            pts_to app_out 'old_app_out **
@@ -3562,7 +3904,7 @@ fn top_driver_send_application_data
                   (Ghost.reveal 'payload_bytes))
   returns result: local_write_result
   ensures exists* st1 network_out_bytes app_out_bytes.
-           top_driver_exactly d st1 **
+           top_driver_exactly d st1 'buffered 'pending_len **
            pts_to payload 'payload_bytes **
            pts_to network_out network_out_bytes **
            pts_to app_out app_out_bytes **
@@ -3578,11 +3920,9 @@ fn top_driver_send_application_data
                   app_out_bytes /\
                  (result.local_write_resp.CT.status == CT.StepOk ==>
                  SZ.v result.local_write_written <=
-                 SZ.v result.local_write_resp.CT.network_out_len) /\
-                 (result.local_write_resp.CT.status == CT.StepOk \/
-                 result.local_write_written == 0sz))
+                 SZ.v result.local_write_resp.CT.network_out_len))
 {
-  unfold (top_driver_exactly d 'st0);
+  unfold (top_driver_exactly d 'st0 (Ghost.reveal 'buffered) (Ghost.reveal 'pending_len));
   let result =
     driver_send_application_data
       d.top_driver_core
@@ -3593,11 +3933,11 @@ fn top_driver_send_application_data
       app_out
       app_out_len;
   with st1 network_out_bytes app_out_bytes.
-    assert (driver_exactly d.top_driver_core st1 **
+    assert (driver_exactly d.top_driver_core st1 (Ghost.reveal 'buffered) (Ghost.reveal 'pending_len) **
             pts_to payload 'payload_bytes **
             pts_to network_out network_out_bytes **
             pts_to app_out app_out_bytes);
-  fold (top_driver_exactly d st1);
+  fold (top_driver_exactly d st1 (Ghost.reveal 'buffered) (Ghost.reveal 'pending_len));
   result
 }
 
@@ -3608,7 +3948,7 @@ fn driver_send_close_notify
   (network_out_len:SZ.t)
   (app_out:array U8.t)
   (app_out_len:SZ.t)
-  requires driver_exactly d 'st0 **
+  requires driver_exactly d 'st0 'buffered 'pending_len **
            pts_to empty_payload 'empty_payload_bytes **
            pts_to network_out 'old_network_out **
            pts_to app_out 'old_app_out **
@@ -3617,7 +3957,7 @@ fn driver_send_close_notify
                  B.length 'old_app_out == SZ.v app_out_len)
   returns result: local_write_result
   ensures exists* st1 network_out_bytes app_out_bytes.
-           driver_exactly d st1 **
+           driver_exactly d st1 'buffered 'pending_len **
            pts_to empty_payload 'empty_payload_bytes **
            pts_to network_out network_out_bytes **
            pts_to app_out app_out_bytes **
@@ -3633,11 +3973,9 @@ fn driver_send_close_notify
                    app_out_bytes /\
                  (result.local_write_resp.CT.status == CT.StepOk ==>
                   SZ.v result.local_write_written <=
-                  SZ.v result.local_write_resp.CT.network_out_len) /\
-                 (result.local_write_resp.CT.status == CT.StepOk \/
-                  result.local_write_written == 0sz))
+                  SZ.v result.local_write_resp.CT.network_out_len))
 {
-  unfold (driver_exactly d 'st0);
+  unfold (driver_exactly d 'st0 (Ghost.reveal 'buffered) (Ghost.reveal 'pending_len));
   assert (pure (CT.local_input_wf
     'st0
     CT.LocalSendCloseNotify
@@ -3655,10 +3993,11 @@ fn driver_send_close_notify
       app_out_len;
   with st1 network_out_bytes app_out_bytes.
     assert (C.connection_exactly d.driver_client st1 **
+            channel_open d.driver_channel st1 (Ghost.reveal 'buffered) (Ghost.reveal 'pending_len) **
             pts_to empty_payload 'empty_payload_bytes **
             pts_to network_out network_out_bytes **
             pts_to app_out app_out_bytes);
-  fold (driver_exactly d st1);
+  fold (driver_exactly d st1 (Ghost.reveal 'buffered) (Ghost.reveal 'pending_len));
   result
 }
 
@@ -3674,7 +4013,7 @@ fn rec driver_close_workflow
   (app_out:array U8.t)
   (app_out_len:SZ.t)
   (fuel:SZ.t)
-  requires top_driver_exactly d 'st0 **
+  requires top_driver_exactly d 'st0 'buffered buffered_len **
            pts_to empty_payload 'empty_payload_bytes **
            pts_to raw 'old_raw **
            pts_to network_out 'old_network_out **
@@ -3682,6 +4021,9 @@ fn rec driver_close_workflow
            pure (B.length 'empty_payload_bytes == 0 /\
                  B.length 'old_raw == SZ.v raw_capacity /\
                  SZ.v buffered_len <= SZ.v raw_capacity /\
+                 B.length 'buffered == SZ.v buffered_len /\
+                 Seq.equal 'buffered
+                   (Seq.slice 'old_raw 0 (SZ.v buffered_len)) /\
                  B.length 'old_network_out == SZ.v network_out_len /\
                  B.length 'old_app_out == SZ.v app_out_len /\
                  L.max_record_fragment_len <= SZ.v app_out_len)
@@ -3698,7 +4040,7 @@ fn rec driver_close_workflow
                  B.length app_out_bytes == SZ.v app_out_len)
   decreases (SZ.v fuel)
 {
-  unfold (top_driver_exactly d 'st0);
+  unfold (top_driver_exactly d 'st0 'buffered buffered_len);
   let close_result =
     driver_send_close_notify
       d.top_driver_core
@@ -3708,7 +4050,7 @@ fn rec driver_close_workflow
       app_out
       app_out_len;
   with st_after_close_notify network_out_after_close app_out_after_close.
-    assert (driver_exactly d.top_driver_core st_after_close_notify **
+    assert (driver_exactly d.top_driver_core st_after_close_notify 'buffered buffered_len **
             pts_to empty_payload 'empty_payload_bytes **
             pts_to network_out network_out_after_close **
             pts_to app_out app_out_after_close);
@@ -3751,7 +4093,11 @@ fn rec driver_close_workflow
     close_result.local_write_written = close_result.local_write_resp.CT.network_out_len;
   let close_failed = (close_ok && close_wrote_all) = false;
   if close_failed {
-    unfold (driver_exactly d.top_driver_core st_after_close_notify);
+   unfold (driver_exactly d.top_driver_core st_after_close_notify 'buffered buffered_len);
+   unfold (channel_open d.top_driver_core.driver_channel st_after_close_notify 'buffered buffered_len);
+   with received sent.
+     assert (IO.is_channel d.top_driver_core.driver_channel received sent **
+             pure (client_driver_wire_logs_match st_after_close_notify received sent 'buffered buffered_len));
     IO.close d.top_driver_core.driver_channel;
     O.auth_context_free d.top_driver_auth;
     {
@@ -3775,12 +4121,16 @@ fn rec driver_close_workflow
         app_out
         app_out_len
         fuel;
-    with st_wait raw_wait network_out_wait app_out_wait.
-      assert (driver_exactly d.top_driver_core st_wait **
+    with st_wait buffered_wait raw_wait network_out_wait app_out_wait.
+      assert (driver_exactly d.top_driver_core st_wait buffered_wait waited.driver_workflow_rx_len **
               pts_to raw raw_wait **
               pts_to network_out network_out_wait **
               pts_to app_out app_out_wait);
-    unfold (driver_exactly d.top_driver_core st_wait);
+    unfold (driver_exactly d.top_driver_core st_wait buffered_wait waited.driver_workflow_rx_len);
+    unfold (channel_open d.top_driver_core.driver_channel st_wait buffered_wait waited.driver_workflow_rx_len);
+    with received sent.
+     assert (IO.is_channel d.top_driver_core.driver_channel received sent **
+             pure (client_driver_wire_logs_match st_wait received sent buffered_wait waited.driver_workflow_rx_len));
     IO.close d.top_driver_core.driver_channel;
     O.auth_context_free d.top_driver_auth;
     let wait_ok = waited.driver_workflow_status = DriverWorkflowOk;
@@ -3806,7 +4156,11 @@ fn rec driver_close_workflow
       }
     }
   } else {
-    unfold (driver_exactly d.top_driver_core st_after_close_notify);
+   unfold (driver_exactly d.top_driver_core st_after_close_notify 'buffered buffered_len);
+   unfold (channel_open d.top_driver_core.driver_channel st_after_close_notify 'buffered buffered_len);
+   with received sent.
+     assert (IO.is_channel d.top_driver_core.driver_channel received sent **
+             pure (client_driver_wire_logs_match st_after_close_notify received sent 'buffered buffered_len));
     IO.close d.top_driver_core.driver_channel;
     O.auth_context_free d.top_driver_auth;
     {
@@ -3822,10 +4176,14 @@ fn rec driver_close_workflow
 }
 
 fn driver_close (d:driver)
-  requires driver_exactly d 'st0
+  requires driver_exactly d 'st0 'buffered 'pending_len
   ensures C.connection_exactly d.driver_client 'st0
 {
-  unfold (driver_exactly d 'st0);
+  unfold (driver_exactly d 'st0 (Ghost.reveal 'buffered) (Ghost.reveal 'pending_len));
+  unfold (channel_open d.driver_channel 'st0 (Ghost.reveal 'buffered) (Ghost.reveal 'pending_len));
+  with received sent.
+    assert (IO.is_channel d.driver_channel received sent **
+            pure (client_driver_wire_logs_match 'st0 received sent (Ghost.reveal 'buffered) (Ghost.reveal 'pending_len)));
   IO.close d.driver_channel
 }
 
@@ -3833,10 +4191,12 @@ inline_for_extraction
 fn free_client_driver_buffers
   (d:client_driver)
   (buffered_len:SZ.t)
-  requires client_driver_buffers d buffered_len
+  requires (exists* buffered. client_driver_buffers d buffered buffered_len)
   ensures emp
 {
-  unfold (client_driver_buffers d buffered_len);
+  with buffered.
+    assert (client_driver_buffers d buffered buffered_len);
+  unfold (client_driver_buffers d buffered buffered_len);
   with empty_payload raw network_out auth_leaf_der auth_payload auth_cv_input auth_signature app_out.
     assert (Box.pts_to d.client_driver_buffered_len buffered_len **
             V.pts_to d.client_driver_empty_payload #1.0R empty_payload **
@@ -3865,7 +4225,7 @@ fn free_disconnected_client_driver
   requires C.connection_exactly d.client_driver_client 'st0 **
            O.is_auth_context d.client_driver_auth **
            Box.pts_to d.client_driver_channel no_channel **
-           client_driver_buffers d buffered_len
+           (exists* buffered. client_driver_buffers d buffered buffered_len)
   ensures client_driver_closed d 'st0
 {
   O.auth_context_free d.client_driver_auth;
@@ -3881,11 +4241,15 @@ fn close_failed_connect
   (buffered_len:SZ.t)
   requires C.connection_exactly d.client_driver_client 'st0 **
            O.is_auth_context d.client_driver_auth **
-           IO.is_channel ch **
+           channel_open ch 'st0 'buffered buffered_len **
            Box.pts_to d.client_driver_channel no_channel **
-           client_driver_buffers d buffered_len
+           client_driver_buffers d (Ghost.reveal 'buffered) buffered_len
   ensures client_driver_closed d 'st0
 {
+  unfold (channel_open ch 'st0 'buffered buffered_len);
+  with received sent.
+    assert (IO.is_channel ch received sent **
+            pure (client_driver_wire_logs_match 'st0 received sent (Ghost.reveal 'buffered) buffered_len));
   IO.close ch;
   free_disconnected_client_driver d buffered_len;
 }
@@ -3905,7 +4269,8 @@ fn connect
           pts_to connect_host 'connect_host_bytes **
           (match status with
            | DriverWorkflowOk ->
-             client_driver_connected d st1
+             exists* received sent.
+               client_driver_connected d st1 received sent
            | _ ->
              client_driver_closed d st1)
 {
@@ -3914,11 +4279,13 @@ fn connect
     assert (C.connection_exactly d.client_driver_client 'st0 **
             O.is_auth_context d.client_driver_auth **
             Box.pts_to d.client_driver_channel no_channel **
-            client_driver_buffers d buffered_len);
-  unfold (client_driver_buffers d buffered_len);
+            client_driver_buffers d B.empty buffered_len **
+            pure (client_driver_wire_logs_match 'st0 B.empty B.empty B.empty 0sz));
+  unfold (client_driver_buffers d B.empty buffered_len);
   let current_buffered_len = Box.(!d.client_driver_buffered_len);
   assert (pure (current_buffered_len == buffered_len));
-  fold (client_driver_buffers d buffered_len);
+  assert (pure (current_buffered_len == 0sz));
+  fold (client_driver_buffers d B.empty buffered_len);
   let ch_opt = IO.connect_tcp connect_host connect_host_len port;
   match ch_opt {
     None -> {
@@ -3926,7 +4293,9 @@ fn connect
       DriverWorkflowStepFailed
     }
     Some ch -> {
-      unfold (client_driver_buffers d buffered_len);
+      assert (pure (client_driver_wire_logs_match 'st0 B.empty B.empty B.empty current_buffered_len));
+      fold (channel_open ch 'st0 B.empty current_buffered_len);
+      unfold (client_driver_buffers d B.empty buffered_len);
       with empty_payload raw network_out auth_leaf_der auth_payload auth_cv_input auth_signature app_out.
         assert (Box.pts_to d.client_driver_buffered_len buffered_len **
                 V.pts_to d.client_driver_empty_payload #1.0R empty_payload **
@@ -3955,11 +4324,13 @@ fn connect
       };
       rewrite (C.connection_exactly d.client_driver_client 'st0) as
         (C.connection_exactly core.driver_client 'st0);
-      rewrite (IO.is_channel ch) as (IO.is_channel core.driver_channel);
-      fold (driver_exactly core 'st0);
-      rewrite (driver_exactly core 'st0) as (driver_exactly td.top_driver_core 'st0);
+      rewrite (channel_open ch 'st0 B.empty current_buffered_len) as
+        (channel_open core.driver_channel 'st0 B.empty current_buffered_len);
+      fold (driver_exactly core 'st0 B.empty current_buffered_len);
+      rewrite (driver_exactly core 'st0 B.empty current_buffered_len) as
+        (driver_exactly td.top_driver_core 'st0 B.empty current_buffered_len);
       rewrite (O.is_auth_context d.client_driver_auth) as (O.is_auth_context td.top_driver_auth);
-      fold (top_driver_exactly td 'st0);
+      fold (top_driver_exactly td 'st0 B.empty current_buffered_len);
       let result =
         driver_handshake
           td
@@ -3982,8 +4353,8 @@ fn connect
           driver_app_out_capacity
           local_fuel
           fuel;
-      with st1 raw_bytes network_out_bytes auth_leaf_der_bytes auth_payload_bytes auth_cv_input_bytes auth_signature_bytes app_out_bytes.
-        assert (top_driver_exactly td st1 **
+      with st1 buffered_after raw_bytes network_out_bytes auth_leaf_der_bytes auth_payload_bytes auth_cv_input_bytes auth_signature_bytes app_out_bytes.
+        assert (top_driver_exactly td st1 buffered_after result.driver_workflow_rx_len **
                 pts_to (V.vec_to_array d.client_driver_empty_payload) empty_payload **
                 pts_to (V.vec_to_array d.client_driver_raw) raw_bytes **
                 pts_to (V.vec_to_array d.client_driver_network_out) network_out_bytes **
@@ -3992,9 +4363,10 @@ fn connect
                 pts_to (V.vec_to_array d.client_driver_auth_cv_input) auth_cv_input_bytes **
                 pts_to (V.vec_to_array d.client_driver_auth_signature) auth_signature_bytes **
                 pts_to (V.vec_to_array d.client_driver_app_out) app_out_bytes);
-      unfold (top_driver_exactly td st1);
-      rewrite (driver_exactly td.top_driver_core st1) as (driver_exactly core st1);
-      unfold (driver_exactly core st1);
+      unfold (top_driver_exactly td st1 buffered_after result.driver_workflow_rx_len);
+      rewrite (driver_exactly td.top_driver_core st1 buffered_after result.driver_workflow_rx_len) as
+        (driver_exactly core st1 buffered_after result.driver_workflow_rx_len);
+      unfold (driver_exactly core st1 buffered_after result.driver_workflow_rx_len);
       V.to_vec_pts_to d.client_driver_empty_payload;
       V.to_vec_pts_to d.client_driver_raw;
       V.to_vec_pts_to d.client_driver_network_out;
@@ -4005,18 +4377,23 @@ fn connect
       V.to_vec_pts_to d.client_driver_app_out;
       Box.(d.client_driver_buffered_len := result.driver_workflow_rx_len);
       assert (pure (SZ.v result.driver_workflow_rx_len <= SZ.v driver_rx_capacity));
-      fold (client_driver_buffers d result.driver_workflow_rx_len);
+      fold (client_driver_buffers d buffered_after result.driver_workflow_rx_len);
       rewrite (C.connection_exactly core.driver_client st1) as
         (C.connection_exactly d.client_driver_client st1);
-      rewrite (IO.is_channel core.driver_channel) as (IO.is_channel ch);
+      rewrite (channel_open core.driver_channel st1 buffered_after result.driver_workflow_rx_len) as
+        (channel_open ch st1 buffered_after result.driver_workflow_rx_len);
       rewrite (O.is_auth_context td.top_driver_auth) as
         (O.is_auth_context d.client_driver_auth);
       match result.driver_workflow_status {
         DriverWorkflowOk -> {
-          Box.(d.client_driver_channel := Some ch);
-          fold (client_driver_connected d st1);
-          DriverWorkflowOk
-        }
+         unfold (channel_open ch st1 buffered_after result.driver_workflow_rx_len);
+         with received sent.
+           assert (IO.is_channel ch received sent **
+                   pure (client_driver_wire_logs_match st1 received sent buffered_after result.driver_workflow_rx_len));
+         Box.(d.client_driver_channel := Some ch);
+         fold (client_driver_connected d st1 received sent);
+         DriverWorkflowOk
+       }
         DriverWorkflowNeedMoreInput -> {
           close_failed_connect d ch result.driver_workflow_rx_len;
           DriverWorkflowNeedMoreInput
@@ -4046,7 +4423,7 @@ fn send
   (d:client_driver)
   (payload:array U8.t)
   (payload_len:SZ.t)
-  requires client_driver_connected d 'st0 **
+  requires client_driver_connected d 'st0 'received0 'sent0 **
            pts_to payload 'payload_bytes **
            pure (B.length 'payload_bytes == SZ.v payload_len /\
                  CT.local_input_wf
@@ -4054,27 +4431,33 @@ fn send
                   CT.LocalSendApplicationData
                   (Ghost.reveal 'payload_bytes))
   returns status:driver_workflow_status
-  ensures exists* st1.
+  ensures exists* st1 received1 sent1.
           pts_to payload 'payload_bytes **
-          client_driver_connected d st1
+          client_driver_connected d st1 received1 sent1
 {
-  unfold (client_driver_connected d 'st0);
-  with ch buffered_len.
+  unfold (client_driver_connected d 'st0 (Ghost.reveal 'received0) (Ghost.reveal 'sent0));
+  with ch buffered buffered_len.
     assert (C.connection_exactly d.client_driver_client 'st0 **
             O.is_auth_context d.client_driver_auth **
             Box.pts_to d.client_driver_channel (Some ch) **
-            IO.is_channel ch **
-            client_driver_buffers d buffered_len);
+            IO.is_channel ch (Ghost.reveal 'received0) (Ghost.reveal 'sent0) **
+            client_driver_buffers d buffered buffered_len **
+            pure (client_driver_wire_logs_match
+                    'st0
+                    (Ghost.reveal 'received0)
+                    (Ghost.reveal 'sent0)
+                    buffered
+                    buffered_len));
   let current_channel = Box.(!d.client_driver_channel);
   assert (pure (current_channel == Some ch));
-  unfold (client_driver_buffers d buffered_len);
+  unfold (client_driver_buffers d buffered buffered_len);
   let current_buffered_len = Box.(!d.client_driver_buffered_len);
   assert (pure (current_buffered_len == buffered_len));
   match current_channel {
     None -> {
       assert (pure False);
-      fold (client_driver_buffers d current_buffered_len);
-      fold (client_driver_connected d 'st0);
+      fold (client_driver_buffers d buffered current_buffered_len);
+      fold (client_driver_connected d 'st0 (Ghost.reveal 'received0) (Ghost.reveal 'sent0));
       DriverWorkflowStepFailed
     }
     Some concrete_ch -> {
@@ -4100,11 +4483,21 @@ fn send
       };
       rewrite (C.connection_exactly d.client_driver_client 'st0) as
         (C.connection_exactly core.driver_client 'st0);
-      rewrite (IO.is_channel ch) as (IO.is_channel core.driver_channel);
-      fold (driver_exactly core 'st0);
-      rewrite (driver_exactly core 'st0) as (driver_exactly td.top_driver_core 'st0);
+      assert (pure (concrete_ch == ch));
+      assert (pure (client_driver_wire_logs_match
+        'st0
+        (Ghost.reveal 'received0)
+        (Ghost.reveal 'sent0)
+        buffered
+        current_buffered_len));
+      fold (channel_open ch 'st0 buffered current_buffered_len);
+      rewrite (channel_open ch 'st0 buffered current_buffered_len) as
+        (channel_open core.driver_channel 'st0 buffered current_buffered_len);
+      fold (driver_exactly core 'st0 buffered current_buffered_len);
+      rewrite (driver_exactly core 'st0 buffered current_buffered_len) as
+        (driver_exactly td.top_driver_core 'st0 buffered current_buffered_len);
       rewrite (O.is_auth_context d.client_driver_auth) as (O.is_auth_context td.top_driver_auth);
-      fold (top_driver_exactly td 'st0);
+      fold (top_driver_exactly td 'st0 buffered current_buffered_len);
       let result =
         top_driver_send_application_data
           td
@@ -4115,23 +4508,28 @@ fn send
           (V.vec_to_array d.client_driver_app_out)
           driver_app_out_capacity;
       with st1 network_out_bytes app_out_bytes.
-        assert (top_driver_exactly td st1 **
+        assert (top_driver_exactly td st1 buffered current_buffered_len **
                 pts_to payload 'payload_bytes **
                 pts_to (V.vec_to_array d.client_driver_network_out) network_out_bytes **
                 pts_to (V.vec_to_array d.client_driver_app_out) app_out_bytes);
-      unfold (top_driver_exactly td st1);
-      rewrite (driver_exactly td.top_driver_core st1) as (driver_exactly core st1);
-      unfold (driver_exactly core st1);
+      unfold (top_driver_exactly td st1 buffered current_buffered_len);
+      rewrite (driver_exactly td.top_driver_core st1 buffered current_buffered_len) as
+        (driver_exactly core st1 buffered current_buffered_len);
+      unfold (driver_exactly core st1 buffered current_buffered_len);
       V.to_vec_pts_to d.client_driver_network_out;
       V.to_vec_pts_to d.client_driver_app_out;
-      assert (pure (concrete_ch == ch));
       rewrite (C.connection_exactly core.driver_client st1) as
         (C.connection_exactly d.client_driver_client st1);
-      rewrite (IO.is_channel core.driver_channel) as (IO.is_channel ch);
+      rewrite (channel_open core.driver_channel st1 buffered current_buffered_len) as
+        (channel_open ch st1 buffered current_buffered_len);
       rewrite (O.is_auth_context td.top_driver_auth) as
         (O.is_auth_context d.client_driver_auth);
-      fold (client_driver_buffers d current_buffered_len);
-      fold (client_driver_connected d st1);
+      fold (client_driver_buffers d buffered current_buffered_len);
+      unfold (channel_open ch st1 buffered current_buffered_len);
+      with received1 sent1.
+        assert (IO.is_channel ch received1 sent1 **
+                pure (client_driver_wire_logs_match st1 received1 sent1 buffered current_buffered_len));
+      fold (client_driver_connected d st1 received1 sent1);
       let ok = result.local_write_resp.CT.status = CT.StepOk;
       let wrote_all = result.local_write_written = result.local_write_resp.CT.network_out_len;
       if (ok && wrote_all) {
@@ -4149,33 +4547,39 @@ fn receive
   (out_len:SZ.t)
   (local_fuel:SZ.t)
   (fuel:SZ.t)
-  requires client_driver_connected d 'st0 **
+  requires client_driver_connected d 'st0 'received0 'sent0 **
            pts_to out 'old_out **
            pure (B.length 'old_out == SZ.v out_len)
   returns result:client_receive_result
-  ensures exists* st1 out_bytes.
-          client_driver_connected d st1 **
+  ensures exists* st1 received1 sent1 out_bytes.
+          client_driver_connected d st1 received1 sent1 **
           pts_to out out_bytes **
           pure (B.length out_bytes == SZ.v out_len /\
                 SZ.v result.client_receive_len <= SZ.v out_len)
 {
-  unfold (client_driver_connected d 'st0);
-  with ch buffered_len.
+  unfold (client_driver_connected d 'st0 (Ghost.reveal 'received0) (Ghost.reveal 'sent0));
+  with ch buffered buffered_len.
     assert (C.connection_exactly d.client_driver_client 'st0 **
             O.is_auth_context d.client_driver_auth **
             Box.pts_to d.client_driver_channel (Some ch) **
-            IO.is_channel ch **
-            client_driver_buffers d buffered_len);
+            IO.is_channel ch (Ghost.reveal 'received0) (Ghost.reveal 'sent0) **
+            client_driver_buffers d buffered buffered_len **
+            pure (client_driver_wire_logs_match
+                    'st0
+                    (Ghost.reveal 'received0)
+                    (Ghost.reveal 'sent0)
+                    buffered
+                    buffered_len));
   let current_channel = Box.(!d.client_driver_channel);
   assert (pure (current_channel == Some ch));
-  unfold (client_driver_buffers d buffered_len);
+  unfold (client_driver_buffers d buffered buffered_len);
   let current_buffered_len = Box.(!d.client_driver_buffered_len);
   assert (pure (current_buffered_len == buffered_len));
   match current_channel {
     None -> {
       assert (pure False);
-      fold (client_driver_buffers d current_buffered_len);
-      fold (client_driver_connected d 'st0);
+      fold (client_driver_buffers d buffered current_buffered_len);
+      fold (client_driver_connected d 'st0 (Ghost.reveal 'received0) (Ghost.reveal 'sent0));
       {
         client_receive_status = DriverWorkflowStepFailed;
         client_receive_len = 0sz;
@@ -4210,11 +4614,21 @@ fn receive
       };
       rewrite (C.connection_exactly d.client_driver_client 'st0) as
         (C.connection_exactly core.driver_client 'st0);
-      rewrite (IO.is_channel ch) as (IO.is_channel core.driver_channel);
-      fold (driver_exactly core 'st0);
-      rewrite (driver_exactly core 'st0) as (driver_exactly td.top_driver_core 'st0);
+      assert (pure (concrete_ch == ch));
+      assert (pure (client_driver_wire_logs_match
+        'st0
+        (Ghost.reveal 'received0)
+        (Ghost.reveal 'sent0)
+        buffered
+        current_buffered_len));
+      fold (channel_open ch 'st0 buffered current_buffered_len);
+      rewrite (channel_open ch 'st0 buffered current_buffered_len) as
+        (channel_open core.driver_channel 'st0 buffered current_buffered_len);
+      fold (driver_exactly core 'st0 buffered current_buffered_len);
+      rewrite (driver_exactly core 'st0 buffered current_buffered_len) as
+        (driver_exactly td.top_driver_core 'st0 buffered current_buffered_len);
       rewrite (O.is_auth_context d.client_driver_auth) as (O.is_auth_context td.top_driver_auth);
-      fold (top_driver_exactly td 'st0);
+      fold (top_driver_exactly td 'st0 buffered current_buffered_len);
       let workflow =
         driver_receive_application_data
           td
@@ -4237,8 +4651,8 @@ fn receive
           driver_app_out_capacity
           local_fuel
           fuel;
-      with st1 raw_bytes network_out_bytes auth_leaf_der_bytes auth_payload_bytes auth_cv_input_bytes auth_signature_bytes app_out_bytes.
-        assert (top_driver_exactly td st1 **
+      with st1 workflow_buffered raw_bytes network_out_bytes auth_leaf_der_bytes auth_payload_bytes auth_cv_input_bytes auth_signature_bytes app_out_bytes.
+        assert (top_driver_exactly td st1 workflow_buffered workflow.driver_workflow_rx_len **
                 pts_to (V.vec_to_array d.client_driver_empty_payload) empty_payload **
                 pts_to (V.vec_to_array d.client_driver_raw) raw_bytes **
                 pts_to (V.vec_to_array d.client_driver_network_out) network_out_bytes **
@@ -4265,9 +4679,10 @@ fn receive
         let _ = A.memcpy_l copy_len (V.vec_to_array d.client_driver_app_out) out;
         with out_bytes.
           assert (pts_to out out_bytes);
-        unfold (top_driver_exactly td st1);
-        rewrite (driver_exactly td.top_driver_core st1) as (driver_exactly core st1);
-        unfold (driver_exactly core st1);
+        unfold (top_driver_exactly td st1 workflow_buffered workflow.driver_workflow_rx_len);
+        rewrite (driver_exactly td.top_driver_core st1 workflow_buffered workflow.driver_workflow_rx_len) as
+          (driver_exactly core st1 workflow_buffered workflow.driver_workflow_rx_len);
+        unfold (driver_exactly core st1 workflow_buffered workflow.driver_workflow_rx_len);
         V.to_vec_pts_to d.client_driver_empty_payload;
         V.to_vec_pts_to d.client_driver_raw;
         V.to_vec_pts_to d.client_driver_network_out;
@@ -4278,22 +4693,27 @@ fn receive
         V.to_vec_pts_to d.client_driver_app_out;
         Box.(d.client_driver_buffered_len := workflow.driver_workflow_rx_len);
         assert (pure (SZ.v workflow.driver_workflow_rx_len <= SZ.v driver_rx_capacity));
-        assert (pure (concrete_ch == ch));
         rewrite (C.connection_exactly core.driver_client st1) as
           (C.connection_exactly d.client_driver_client st1);
-        rewrite (IO.is_channel core.driver_channel) as (IO.is_channel ch);
+        rewrite (channel_open core.driver_channel st1 workflow_buffered workflow.driver_workflow_rx_len) as
+          (channel_open ch st1 workflow_buffered workflow.driver_workflow_rx_len);
         rewrite (O.is_auth_context td.top_driver_auth) as
           (O.is_auth_context d.client_driver_auth);
-        fold (client_driver_buffers d workflow.driver_workflow_rx_len);
-        fold (client_driver_connected d st1);
+        fold (client_driver_buffers d workflow_buffered workflow.driver_workflow_rx_len);
+        unfold (channel_open ch st1 workflow_buffered workflow.driver_workflow_rx_len);
+        with received1 sent1.
+          assert (IO.is_channel ch received1 sent1 **
+                  pure (client_driver_wire_logs_match st1 received1 sent1 workflow_buffered workflow.driver_workflow_rx_len));
+        fold (client_driver_connected d st1 received1 sent1);
         {
           client_receive_status = DriverWorkflowOk;
           client_receive_len = copy_len;
         }
       } else {
-        unfold (top_driver_exactly td st1);
-        rewrite (driver_exactly td.top_driver_core st1) as (driver_exactly core st1);
-        unfold (driver_exactly core st1);
+        unfold (top_driver_exactly td st1 workflow_buffered workflow.driver_workflow_rx_len);
+        rewrite (driver_exactly td.top_driver_core st1 workflow_buffered workflow.driver_workflow_rx_len) as
+          (driver_exactly core st1 workflow_buffered workflow.driver_workflow_rx_len);
+        unfold (driver_exactly core st1 workflow_buffered workflow.driver_workflow_rx_len);
         V.to_vec_pts_to d.client_driver_empty_payload;
         V.to_vec_pts_to d.client_driver_raw;
         V.to_vec_pts_to d.client_driver_network_out;
@@ -4304,14 +4724,18 @@ fn receive
         V.to_vec_pts_to d.client_driver_app_out;
         Box.(d.client_driver_buffered_len := workflow.driver_workflow_rx_len);
         assert (pure (SZ.v workflow.driver_workflow_rx_len <= SZ.v driver_rx_capacity));
-        assert (pure (concrete_ch == ch));
         rewrite (C.connection_exactly core.driver_client st1) as
           (C.connection_exactly d.client_driver_client st1);
-        rewrite (IO.is_channel core.driver_channel) as (IO.is_channel ch);
+        rewrite (channel_open core.driver_channel st1 workflow_buffered workflow.driver_workflow_rx_len) as
+          (channel_open ch st1 workflow_buffered workflow.driver_workflow_rx_len);
         rewrite (O.is_auth_context td.top_driver_auth) as
           (O.is_auth_context d.client_driver_auth);
-        fold (client_driver_buffers d workflow.driver_workflow_rx_len);
-        fold (client_driver_connected d st1);
+        fold (client_driver_buffers d workflow_buffered workflow.driver_workflow_rx_len);
+        unfold (channel_open ch st1 workflow_buffered workflow.driver_workflow_rx_len);
+        with received1 sent1.
+          assert (IO.is_channel ch received1 sent1 **
+                  pure (client_driver_wire_logs_match st1 received1 sent1 workflow_buffered workflow.driver_workflow_rx_len));
+        fold (client_driver_connected d st1 received1 sent1);
         {
           client_receive_status =
             if workflow_ok then DriverWorkflowStepFailed else workflow.driver_workflow_status;
@@ -4326,24 +4750,30 @@ fn close
   (d:client_driver)
   (wait_for_peer:bool)
   (fuel:SZ.t)
-  requires client_driver_connected d 'st0
+  requires client_driver_connected d 'st0 'received0 'sent0
   returns status:driver_workflow_status
   ensures exists* st1.
           client_driver_closed d st1
 {
-  unfold (client_driver_connected d 'st0);
-  with ch buffered_len.
+  unfold (client_driver_connected d 'st0 (Ghost.reveal 'received0) (Ghost.reveal 'sent0));
+  with ch buffered buffered_len.
     assert (C.connection_exactly d.client_driver_client 'st0 **
             O.is_auth_context d.client_driver_auth **
             Box.pts_to d.client_driver_channel (Some ch) **
-            IO.is_channel ch **
-            client_driver_buffers d buffered_len);
+            IO.is_channel ch (Ghost.reveal 'received0) (Ghost.reveal 'sent0) **
+            client_driver_buffers d buffered buffered_len **
+            pure (client_driver_wire_logs_match
+                    'st0
+                    (Ghost.reveal 'received0)
+                    (Ghost.reveal 'sent0)
+                    buffered
+                    buffered_len));
   let current_channel = Box.(!d.client_driver_channel);
   assert (pure (current_channel == Some ch));
   assert (pure (Some? current_channel));
   let concrete_ch = Some?.v current_channel;
   assert (pure (concrete_ch == ch));
-  unfold (client_driver_buffers d buffered_len);
+  unfold (client_driver_buffers d buffered buffered_len);
   let current_buffered_len = Box.(!d.client_driver_buffered_len);
   assert (pure (current_buffered_len == buffered_len));
   with empty_payload raw network_out auth_leaf_der auth_payload auth_cv_input auth_signature app_out.
@@ -4370,11 +4800,20 @@ fn close
   };
   rewrite (C.connection_exactly d.client_driver_client 'st0) as
     (C.connection_exactly core.driver_client 'st0);
-  rewrite (IO.is_channel ch) as (IO.is_channel core.driver_channel);
-  fold (driver_exactly core 'st0);
-  rewrite (driver_exactly core 'st0) as (driver_exactly td.top_driver_core 'st0);
+  assert (pure (client_driver_wire_logs_match
+    'st0
+    (Ghost.reveal 'received0)
+    (Ghost.reveal 'sent0)
+    buffered
+    current_buffered_len));
+  fold (channel_open ch 'st0 buffered current_buffered_len);
+  rewrite (channel_open ch 'st0 buffered current_buffered_len) as
+    (channel_open core.driver_channel 'st0 buffered current_buffered_len);
+  fold (driver_exactly core 'st0 buffered current_buffered_len);
+  rewrite (driver_exactly core 'st0 buffered current_buffered_len) as
+    (driver_exactly td.top_driver_core 'st0 buffered current_buffered_len);
   rewrite (O.is_auth_context d.client_driver_auth) as (O.is_auth_context td.top_driver_auth);
-  fold (top_driver_exactly td 'st0);
+  fold (top_driver_exactly td 'st0 buffered current_buffered_len);
   let workflow =
     driver_close_workflow
       td
@@ -4404,7 +4843,10 @@ fn close
   Box.free d.client_driver_channel;
   Box.(d.client_driver_buffered_len := workflow.driver_workflow_rx_len);
   assert (pure (SZ.v workflow.driver_workflow_rx_len <= SZ.v driver_rx_capacity));
-  fold (client_driver_buffers d workflow.driver_workflow_rx_len);
+  let close_buffered =
+    Ghost.hide (Seq.slice raw_bytes 0 (SZ.v workflow.driver_workflow_rx_len));
+  Seq.lemma_len_slice raw_bytes 0 (SZ.v workflow.driver_workflow_rx_len);
+  fold (client_driver_buffers d (Ghost.reveal close_buffered) workflow.driver_workflow_rx_len);
   free_client_driver_buffers d workflow.driver_workflow_rx_len;
   fold (client_driver_closed d st1);
   workflow.driver_workflow_status

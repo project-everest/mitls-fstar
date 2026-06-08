@@ -69,4 +69,5 @@ fn handle_alert
                   st1
                   resp
                   'old_network_out
-                  'old_app_out)
+                  'old_app_out /\
+                (resp.CT.status == CT.NeedMoreInput ==> False))
