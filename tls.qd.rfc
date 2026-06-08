@@ -312,7 +312,7 @@ struct {
    length is modelled by the <0..16640> bound, which is exactly the
    implementation's accepted maximum (16384 + 256). */
 struct {
-    ContentType     type;
+    ContentType     content_type;
     ProtocolVersion legacy_record_version;   /* [covered: 0x0303] */
     opaque          fragment<0..16640>;
 } TLSPlaintext;
