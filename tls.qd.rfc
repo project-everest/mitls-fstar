@@ -1,0 +1,339 @@
+/*
+ * tls.qd.rfc
+ *
+ * QuackyDucky-compatible rewrite of tls.rfc.
+ *
+ * This file expresses the SAME covered subset of TLS 1.3 (RFC 8446) that the
+ * agentic-tls parser (src/impl/TLS13.Impl.Parser.fsti) and serializer
+ * (src/impl/TLS13.Impl.Serializer.fsti) implement, but using the QuackyDucky
+ * input grammar (everparse/src/qd/rfc_parser.mly, rfc_lexer.mll) rather than
+ * raw RFC 8446 presentation language.  It parses and generates with
+ *   everparse/bin/qd.exe -pulse tls.qd.rfc
+ * (the -pulse backend is required: ServerHello/HelloRetryRequest below uses an
+ *  if-then-else, which QuackyDucky only supports under -pulse).
+ *
+ * Differences forced by the QuackyDucky grammar (vs. tls.rfc):
+ *   - All vectors carry explicit numeric bounds (no open-ended <...>).
+ *   - Length-prefixed fields use the canonical 2-/3-byte bounds so the
+ *     generated parser matches the real wire; the implemented subset is
+ *     recorded in /* [covered: ...] */ comments instead of as the bound.
+ *   - extension_data is opaque (canonical TLS-13 QD style); each covered
+ *     extension body is a standalone named type tagged with its code.
+ *   - ProtocolVersion / ContentType / CipherSuite are enums (tag types).
+ *   - TLSInnerPlaintext (trailing-type, implicit length) is documented in a
+ *     comment, as QuackyDucky cannot express the implicit content length.
+ *
+ * Ground truth: src/spec/TLS13.Wire.Spec.fst, TLS13.Messages.fst,
+ * TLS13.Types.fst.  Scope: TLS 1.3 client profile, X25519,
+ * TLS_CHACHA20_POLY1305_SHA256, 1-RTT, application data.
+ */
+
+/* ===================================================================== */
+/* Primitive tag enums                                                   */
+/* ===================================================================== */
+
+enum {
+    /* On the wire in TLS 1.3 these always read 0x0303; the negotiated
+       version travels in the supported_versions extension (0x0304). */
+    TLS_1p2(0x0303),
+    TLS_1p3(0x0304),
+    (0xFFFF)
+} ProtocolVersion;
+
+enum {
+    invalid(0),
+    change_cipher_spec(20),
+    alert(21),
+    handshake(22),
+    application_data(23),
+    (255)
+} ContentType;
+
+enum {
+    /* [covered: this is the only suite emitted/accepted] */
+    TLS_CHACHA20_POLY1305_SHA256(0x1303),
+    (0xFFFF)
+} CipherSuite;
+
+enum /*@open*/ {
+    /* [covered: x25519 only; others round-trip as unsupported] */
+    x25519(0x001D),
+    (0xFFFF)
+} NamedGroup;
+
+enum /*@open*/ {
+    /* [covered: these three are mapped; any other 16-bit value is
+       treated as an unsupported scheme] */
+    ecdsa_secp256r1_sha256(0x0403),
+    rsa_pss_rsae_sha256(0x0804),
+    ed25519(0x0807),
+    (0xFFFF)
+} SignatureScheme;
+
+enum /*@open*/ {
+    /* [covered: extension_type values emitted and/or interpreted] */
+    server_name(0),
+    supported_groups(10),
+    signature_algorithms(13),
+    application_layer_protocol_negotiation(16),
+    supported_versions(43),
+    key_share(51),
+    (0xFFFF)
+} ExtensionType;
+
+enum { host_name(0), (255) } NameType;
+
+enum { warning(1), fatal(2), (255) } AlertLevel;
+
+enum {
+    /* [covered: AlertDescription values the codec maps] */
+    close_notify(0),
+    unexpected_message(10),
+    bad_record_mac(20),
+    handshake_failure(40),
+    certificate_unknown(46),
+    illegal_parameter(47),
+    decode_error(50),
+    decrypt_error(51),
+    protocol_version(70),
+    unsupported_extension(110),
+    (255)
+} AlertDescription;
+
+enum {
+    client_hello(1),            /* emit + parse */
+    new_session_ticket(4),      /* parse-and-skip (body ignored) */
+    server_hello(2),            /* parse */
+    encrypted_extensions(8),    /* parse */
+    certificate(11),            /* parse */
+    certificate_verify(15),     /* parse */
+    finished(20),               /* emit + parse */
+    key_update(24),             /* parse */
+    (255)
+} HandshakeType;
+
+enum { update_not_requested(0), update_requested(1), (255) } KeyUpdateRequest;
+
+
+/* ===================================================================== */
+/* Small typedefs                                                        */
+/* ===================================================================== */
+
+opaque HostName<1..2^16-1>;
+opaque UnknownName<1..2^16-1>;
+opaque ProtocolName<1..2^8-1>;        /* ALPN protocol identifier */
+opaque UnknownExtension<0..2^16-1>;   /* extension_data we do not interpret */
+
+struct { opaque random[32]; } Random;
+
+
+/* ===================================================================== */
+/* Generic extension envelope (canonical TLS-13 QD style)                */
+/*   The covered extension bodies are the standalone types below; each   */
+/*   travels inside extension_data when extension_type matches its tag.  */
+/* ===================================================================== */
+
+struct {
+    ExtensionType extension_type;
+    opaque        extension_data<0..2^16-1>;
+} Extension;
+
+/* extension_data payloads for the covered extensions: */
+
+/* extension_type == server_name(0) */
+struct {
+    NameType name_type;
+    select (name_type) {
+        case host_name: HostName;
+        default:        UnknownName;
+    } name;
+} ServerName;
+
+struct {
+    ServerName server_name_list<1..2^16-1>;
+} ServerNameList;
+
+/* extension_type == supported_groups(10)  [covered: { x25519 }] */
+struct {
+    NamedGroup named_group_list<2..2^16-1>;
+} NamedGroupList;
+
+/* extension_type == signature_algorithms(13)  [covered: { rsa_pss_rsae_sha256 }] */
+struct {
+    SignatureScheme supported_signature_algorithms<2..2^16-2>;
+} SignatureSchemeList;
+
+/* extension_type == application_layer_protocol_negotiation(16)
+   [covered: a single protocol name] */
+struct {
+    ProtocolName protocol_name_list<2..2^16-1>;
+} ProtocolNameList;
+
+/* extension_type == key_share(51), ClientHello side
+   [covered: exactly one entry, x25519 + 32-byte key] */
+struct {
+    NamedGroup group;
+    opaque     key_exchange<1..2^16-1>;
+} KeyShareEntry;
+
+struct {
+    KeyShareEntry client_shares<0..2^16-1>;
+} KeyShareClientHello;
+
+/* extension_type == key_share(51), ServerHello side (single entry) */
+struct {
+    KeyShareEntry server_share;
+} KeyShareServerHello;
+
+/* extension_type == supported_versions(43), ClientHello side
+   [covered: { 0x0304 }] */
+struct {
+    ProtocolVersion versions<2..254>;
+} SupportedVersionsClientHello;
+
+/* extension_type == supported_versions(43), ServerHello side */
+struct {
+    ProtocolVersion selected_version;
+} SupportedVersionsServerHello;
+
+
+/* ===================================================================== */
+/* Handshake messages                                                    */
+/* ===================================================================== */
+
+struct {
+    ProtocolVersion legacy_version = TLS_1p2(0x0303);
+    Random          random;
+    opaque          legacy_session_id<0..32>;          /* [covered: empty] */
+    CipherSuite     cipher_suites<2..2^16-2>;          /* [covered: {0x1303}] */
+    opaque          legacy_compression_methods<1..2^8-1>; /* [covered: {0x00}] */
+    Extension       extensions<8..2^16-1>;             /* order: server_name?, */
+                                                       /* supported_groups,    */
+                                                       /* signature_algorithms,*/
+                                                       /* key_share,           */
+                                                       /* supported_versions   */
+} ClientHello;
+
+/* ServerHello and HelloRetryRequest are wire-identical after `random`
+   (RFC 8446 §4.1.3/§4.1.4): HRR is a ServerHello whose `random` field equals a
+   fixed magic value (SHA-256 of "HelloRetryRequest"). We model the shared tail
+   once as ServerHelloBody and discriminate on `random` with QuackyDucky's
+   if-then-else, naming the magic-random arm `HelloRetryRequest` and the ordinary
+   arm `ServerHello` (default false constructor). There is no separate
+   HelloRetryRequest type; the retry bit is delivered as a typed constructor and
+   enforced on serialization by the false branch's `random <> cst` refinement.
+   Note: an if-then-else grammar must be compiled with `qd.exe -pulse`. */
+struct {
+    opaque          legacy_session_id_echo<0..32>;     /* [covered: empty]      */
+    CipherSuite     cipher_suite;                      /* [covered: 0x1303]     */
+    uint8           legacy_compression_method = { 0 };
+    Extension       extensions<6..2^16-1>;             /* supported_versions +  */
+                                                       /* key_share             */
+} ServerHelloBody;
+
+struct {
+    ProtocolVersion legacy_version = TLS_1p2(0x0303);
+    opaque          random[32];
+    (if random = "cf21ad74e59a6111be1d8c021e65b891c2a211167abb8c5e079e09e2c8a8339c"
+        HelloRetryRequest : ServerHelloBody            /* magic random => HRR   */
+     else
+        ServerHelloBody)                               /* otherwise  => SH      */
+        body;
+} ServerHello;
+
+struct {
+    Extension extensions<0..2^16-1>;   /* [covered: only ALPN(16) interpreted] */
+} EncryptedExtensions;
+
+struct {
+    opaque    cert_data<1..2^24-1>;        /* X.509 DER (CertificateType X509) */
+    Extension extensions<0..2^16-1>;       /* [covered: empty] */
+} CertificateEntry;
+
+struct {
+    opaque           certificate_request_context<0..2^8-1>; /* [covered: empty] */
+    CertificateEntry certificate_list<0..2^24-1>;
+} Certificate;
+
+struct {
+    SignatureScheme algorithm;
+    opaque          signature<0..2^16-1>;
+} CertificateVerify;
+
+struct {
+    opaque verify_data[32];   /* [covered: HMAC-SHA256, fixed length 32] */
+} Finished;
+
+struct {
+    KeyUpdateRequest request_update;
+} KeyUpdate;
+
+/* NewSessionTicket(4): recognized on receipt and its body is skipped, so it
+   is not decoded into fields here.  The msg_type/length envelope still
+   bounds it (see Handshake below). */
+
+/* The 3-byte on-wire handshake body length is expressed with QuackyDucky's
+   symbolic-length select: `select (msg_type) {...} body[length]` binds the
+   preceding `uint24 length` field as the byte length of the selected body.
+   QuackyDucky compiles each case to a uint24 bounded-vldata frame
+   (LP.parse_bounded_vldata 0 16777215 <case>_parser), i.e. exactly the TLS
+   Handshake wire format: msg_type tag, 3-byte length, then that many body
+   bytes parsed as the dispatched case. */
+struct {
+    HandshakeType msg_type;
+    uint24 length;
+    select (msg_type) {
+        case client_hello:          ClientHello;
+        case server_hello:          ServerHello;
+        case encrypted_extensions:  EncryptedExtensions;
+        case certificate:           Certificate;
+        case certificate_verify:    CertificateVerify;
+        case finished:              Finished;
+        case key_update:            KeyUpdate;
+    } body[length];
+} Handshake;
+
+
+/* ===================================================================== */
+/* Alert                                                                 */
+/* ===================================================================== */
+
+struct {
+    AlertLevel       level;          /* [covered: emitted as fatal(2)] */
+    AlertDescription description;
+} Alert;
+
+
+/* ===================================================================== */
+/* Record layer                                                          */
+/* ===================================================================== */
+
+/* Cleartext record.  legacy_record_version is always 0x0303; the 2-byte
+   length is modelled by the <0..16640> bound, which is exactly the
+   implementation's accepted maximum (16384 + 256). */
+struct {
+    ContentType     type;
+    ProtocolVersion legacy_record_version;   /* [covered: 0x0303] */
+    opaque          fragment<0..16640>;
+} TLSPlaintext;
+
+/* Encrypted record. */
+struct {
+    ContentType     opaque_type = application_data(23);
+    ProtocolVersion legacy_record_version = TLS_1p2(0x0303);
+    opaque          encrypted_record<0..16640>;
+} TLSCiphertext;
+
+/* TLSInnerPlaintext (post-decryption): the implementation produces and
+   accepts NO padding (encode_inner_plaintext_no_padding), so the layout is
+   exactly:
+ *
+ *     content || ContentType type        (one trailing type byte, no zeros)
+ *
+ * QuackyDucky cannot express the implicit content length (it is the record
+ * length minus one), so this layout is documented rather than declared. */
+
+/* ChangeCipherSpec record payload: a single byte 0x01, accepted and ignored. */
+struct {
+    uint8 value = { 1 };
+} ChangeCipherSpec;
