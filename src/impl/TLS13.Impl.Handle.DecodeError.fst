@@ -47,7 +47,8 @@ fn handle_decode_error
             (CM.local_fail_state 'st0 CM.tls_decode_error)
             resp
             'old_network_out
-            'old_app_out)
+            'old_app_out /\
+           (resp.CT.status == CT.NeedMoreInput ==> False))
 {
   CF.mark_decode_error c;
   let resp = {

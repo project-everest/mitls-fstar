@@ -355,7 +355,9 @@ fn process_network_bytes
                   'old_network_out
                   network_out_bytes
                   'old_app_out
-                  app_out_bytes)
+                  app_out_bytes /\
+                (buffer_resp.CT.response.CT.status == CT.NeedMoreInput ==>
+                 buffer_resp.CT.consumed_len == 0sz))
 
 fn process_local_event
   (c:client)

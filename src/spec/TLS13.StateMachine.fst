@@ -1,5 +1,16 @@
 module TLS13.StateMachine
 
+(**
+  Lightweight client-only abstract trace automaton.
+
+  TLS13.Spec.ConnectionState is the main audit-facing state model. This module
+  remains as a compact trace/state-machine vocabulary used by ConnectionLog and
+  a few implementation proof projections. It is not the authoritative concrete
+  connection-state spec; future server work should either generalize this small
+  automaton by role or retire it behind the role-parametric ConnectionState
+  model.
+**)
+
 module B = TLS13.Bytes
 module H = TLS13.Handshake.Spec
 module M = TLS13.Messages

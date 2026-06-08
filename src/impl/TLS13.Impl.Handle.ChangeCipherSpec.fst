@@ -61,7 +61,8 @@ fn handle_change_cipher_spec
                   st1
                   resp
                   'old_network_out
-                  'old_app_out)
+                  'old_app_out /\
+                (resp.CT.status == CT.NeedMoreInput ==> False))
 {
   let handshaking = CQ.is_handshaking c;
   if handshaking {
