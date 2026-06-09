@@ -15,6 +15,7 @@ module GSHBody = TLS13.Wire.Generated.ServerHelloBody
 module GCS = TLS13.Wire.Generated.CipherSuite
 module GCert = TLS13.Wire.Generated.Certificate
 module GCE = TLS13.Wire.Generated.CertificateEntry
+module GCH = TLS13.Wire.Generated.ClientHello
 module M = TLS13.Messages
 module ML = FStar.Math.Lemmas
 module Seq = FStar.Seq
@@ -287,54 +288,79 @@ let rec parse_client_hello_extensions
       else parse_client_hello_extensions body next extensions_end server_name key_share saw_supported_versions signature_schemes
   else None
 
-let parse_client_hello (input:B.bytes) : GTot (option M.client_hello) =
-  if B.length input < 35 then None
-  else if read_u16 input 0 <> 0x0303 then None
-  else
-    match take_range input 2 32 with
-    | None -> None
-    | Some random ->
-      let session_id_len = nat_of_byte (Seq.index input 34) in
-      let cipher_suites_len_pos = 35 + session_id_len in
-      if cipher_suites_len_pos + 2 > B.length input then None
-      else
-        let cipher_suites_len = read_u16 input cipher_suites_len_pos in
-        let cipher_suites_pos = cipher_suites_len_pos + 2 in
-        let compression_len_pos = cipher_suites_pos + cipher_suites_len in
-        if cipher_suites_len <> 2 || compression_len_pos + 1 > B.length input then None
-        else
-          match cipher_suite_of_u16 (read_u16 input cipher_suites_pos) with
-          | None -> None
-          | Some suite ->
-            let compression_methods_len = nat_of_byte (Seq.index input compression_len_pos) in
-            let compression_methods_pos = compression_len_pos + 1 in
-            if compression_methods_len <> 1 ||
-               compression_methods_pos + 1 > B.length input ||
-               nat_of_byte (Seq.index input compression_methods_pos) <> 0
-            then None
-            else
-              let extensions_len_pos = compression_methods_pos + compression_methods_len in
-              if extensions_len_pos + 2 > B.length input then None
-              else
-                let extensions_len = read_u16 input extensions_len_pos in
-                let extensions_pos = extensions_len_pos + 2 in
-                let extensions_end = extensions_pos + extensions_len in
-                if extensions_end <> B.length input then None
-                else
-                  match parse_client_hello_extensions input extensions_pos extensions_end None None false [] with
-                  | Some (server_name, Some key_share, _, signature_schemes) ->
-                    Some {
-                      M.random = random;
-                      M.server_name = server_name;
-                      M.key_share = key_share;
-                      M.cipher_suites = [suite];
-                      M.signature_schemes = signature_schemes
-                    }
-                  | _ -> None
-
 let synth_cipher_suite (c:GCS.cipherSuite) : T.cipher_suite =
   match c with
   | GCS.TLS_CHACHA20_POLY1305_SHA256 -> T.TLS_CHACHA20_POLY1305_SHA256
+
+let rec synth_cipher_suites (l:list GCS.cipherSuite)
+  : GTot (list T.cipher_suite)
+       (decreases l)
+  =
+  match l with
+  | [] -> []
+  | c :: tl -> synth_cipher_suite c :: synth_cipher_suites tl
+
+let rec ch_extensions
+  (l:list GExt.extension)
+  (server_name:option T.hostname)
+  (key_share:option (B.bytes_of_len 32))
+  (saw_supported_versions:bool)
+  (signature_schemes:list T.signature_scheme)
+  : GTot (option (option T.hostname & option (B.bytes_of_len 32) & bool & list T.signature_scheme))
+       (decreases l)
+  =
+  match l with
+  | [] ->
+    if saw_supported_versions
+    then Some (server_name, key_share, saw_supported_versions, signature_schemes)
+    else None
+  | e :: tl ->
+    let d : B.bytes = (e.GExt.extension_data <: B.bytes) in
+    (match e.GExt.extension_type with
+     | GET.Server_name ->
+       if B.length d >= 5 &&
+          read_u16 d 0 + 2 = B.length d &&
+          nat_of_byte (Seq.index d 2) = 0 &&
+          read_u16 d 3 + 5 = B.length d
+       then (match take_range d 5 (read_u16 d 3) with
+             | Some name -> ch_extensions tl (Some (name <: T.hostname)) key_share saw_supported_versions signature_schemes
+             | None -> None)
+       else None
+     | GET.Supported_groups ->
+       if B.length d = 4 && read_u16 d 0 = 2 && read_u16 d 2 = 0x001d
+       then ch_extensions tl server_name key_share saw_supported_versions signature_schemes
+       else None
+     | GET.Signature_algorithms ->
+       if B.length d = 4 && read_u16 d 0 = 2
+       then ch_extensions tl server_name key_share saw_supported_versions [signature_scheme_of_u16 (read_u16 d 2)]
+       else None
+     | GET.Key_share ->
+       if B.length d = 38 && read_u16 d 0 = 36 && read_u16 d 2 = 0x001d && read_u16 d 4 = 32
+       then (match take_range d 6 32 with
+             | Some ks -> ch_extensions tl server_name (Some (ks <: B.bytes_of_len 32)) saw_supported_versions signature_schemes
+             | None -> None)
+       else None
+     | GET.Supported_versions ->
+       if B.length d = 3 && nat_of_byte (Seq.index d 0) = 2 && read_u16 d 1 = 0x0304
+       then ch_extensions tl server_name key_share true signature_schemes
+       else None
+     | _ -> ch_extensions tl server_name key_share saw_supported_versions signature_schemes)
+
+let synth_client_hello (c:GCH.clientHello) : GTot (option M.client_hello) =
+  match ch_extensions c.GCH.extensions None None false [] with
+  | Some (server_name, Some key_share, _, signature_schemes) ->
+    Some ({ M.random = (c.GCH.random <: B.bytes_of_len 32);
+            M.server_name = server_name;
+            M.key_share = key_share;
+            M.cipher_suites = synth_cipher_suites c.GCH.cipher_suites;
+            M.signature_schemes = signature_schemes })
+  | _ -> None
+
+let parse_client_hello (input:B.bytes) : GTot (option M.client_hello) =
+  match LP.parse GCH.clientHello_parser input with
+  | Some (ch, consumed) ->
+    if consumed = B.length input then synth_client_hello ch else None
+  | None -> None
 
 let rec sh_key_share
   (l:list GExt.extension)
