@@ -16,6 +16,7 @@ module GCS = TLS13.Wire.Generated.CipherSuite
 module GCert = TLS13.Wire.Generated.Certificate
 module GCE = TLS13.Wire.Generated.CertificateEntry
 module GCH = TLS13.Wire.Generated.ClientHello
+module GHS = TLS13.Wire.Generated.Handshake
 module M = TLS13.Messages
 module ML = FStar.Math.Lemmas
 module Seq = FStar.Seq
@@ -610,41 +611,37 @@ let parse_key_update (input:B.bytes) : GTot (option M.key_update_request) =
     else None
   else None
 
+let synth_handshake_msg_of (h:GHS.handshake) : GTot (option M.handshake_msg) =
+  match h with
+  | GHS.Body_client_hello b ->
+    (match synth_client_hello b with
+     | Some x -> Some (M.ClientHello x)
+     | None -> None)
+  | GHS.Body_server_hello b ->
+    (match synth_server_hello b with
+     | Some x -> Some (M.ServerHello x)
+     | None -> None)
+  | GHS.Body_encrypted_extensions b ->
+    (match synth_encrypted_extensions b with
+     | Some x -> Some (M.EncryptedExtensions x)
+     | None -> None)
+  | GHS.Body_certificate b ->
+    Some (M.Certificate ({ M.chain = synth_cert_chain b.GCert.certificate_list }))
+  | GHS.Body_certificate_verify b ->
+    Some (M.CertificateVerify ({ M.scheme = synth_signature_scheme b.GCV.algorithm;
+                                 M.signature = (b.GCV.signature <: B.bytes) }))
+  | GHS.Body_finished b ->
+    Some (M.Finished ({ M.verify_data = (b <: B.bytes_of_len 32) }))
+  | GHS.Body_key_update _ -> None
+  | GHS.Body_new_session_ticket _ -> None
+
 let parse_handshake (input:B.bytes) : GTot (option (M.handshake_msg & nat)) =
-  if B.length input < 4 then None
-  else
-    let msg_type = nat_of_byte (Seq.index input 0) in
-    let body_len = read_u24 input 1 in
-    if body_len + 4 > B.length input then None
-    else
-      let consumed = body_len + 4 in
-      let body = Seq.slice input 4 consumed in
-      match msg_type with
-      | 1 ->
-        (match parse_client_hello body with
-         | Some ch -> Some (M.ClientHello ch, consumed)
-         | None -> None)
-      | 2 ->
-        (match parse_server_hello body with
-         | Some sh -> Some (M.ServerHello sh, consumed)
-         | None -> None)
-      | 8 ->
-        (match parse_encrypted_extensions body with
-         | Some ee -> Some (M.EncryptedExtensions ee, consumed)
-         | None -> None)
-      | 11 ->
-        (match parse_certificate_msg body with
-         | Some cert -> Some (M.Certificate cert, consumed)
-         | None -> None)
-      | 15 ->
-        (match parse_certificate_verify body with
-         | Some cv -> Some (M.CertificateVerify cv, consumed)
-         | None -> None)
-      | 20 ->
-        (match parse_finished body with
-         | Some fin -> Some (M.Finished fin, consumed)
-         | None -> None)
-      | _ -> None
+  match LP.parse GHS.handshake_parser input with
+  | Some (h, consumed) ->
+    (match synth_handshake_msg_of h with
+     | Some m -> Some (m, consumed)
+     | None -> None)
+  | None -> None
 
 let parse_handshake_msg (input:B.bytes) : GTot (option (M.handshake_msg & nat)) =
   parse_handshake input
