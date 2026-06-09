@@ -1,0 +1,10 @@
+# QuackyDucky harness build artifacts and verifier outputs (regenerated locally;
+# only the .fst/.fsti sources and generated.Makefile are committed).
+*.checked
+cache/
+krml/
+out/
+.depend
+.depend.rsp
+.depend.aux
+.depend.lax

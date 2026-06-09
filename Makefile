@@ -11,6 +11,14 @@ FSTAR_EXE  ?= $(FSTAR_HOME)/bin/fstar.exe
 KRML_HOME  ?= $(FSTAR_HOME)/karamel
 KRML_EXE   ?= $(KRML_HOME)/krml
 
+# EverParse / QuackyDucky: source of the generated TLS wire parser modules and
+# the LowParse + LowParse.Pulse combinator libraries they depend on.
+EVERPARSE_HOME ?= $(CURDIR)/../everparse
+QD_EXE         ?= $(EVERPARSE_HOME)/bin/qd.exe
+LOWPARSE_HOME  ?= $(EVERPARSE_HOME)/src/lowparse
+GENERATED_DIR   = generated
+QD_RFC          = tls.qd.rfc
+
 # ── Directories ────────────────────────────────────────────────────
 CACHE_DIR   = _cache
 OUTPUT_DIR  = _output
@@ -22,7 +30,10 @@ HACL_KL     = third_party/hacl-star/dist/karamel/krmllib/dist/minimal
 # ── F* Flags ───────────────────────────────────────────────────────
 INCLUDES = \
   --include src/spec \
-  --include src/impl
+  --include src/impl \
+  --include $(GENERATED_DIR) \
+  --include $(LOWPARSE_HOME) \
+  --include $(LOWPARSE_HOME)/pulse
 
 FSTAR_FLAGS = \
   --cache_checked_modules \
@@ -30,7 +41,7 @@ FSTAR_FLAGS = \
   --odir $(OUTPUT_DIR) \
   --warn_error -321 \
   --report_assumes warn \
-  --already_cached 'Prims,FStar,Pulse,PulseCore -TLS13' \
+  --already_cached 'Prims,FStar,Pulse,PulseCore,C,Spec.Loops,LowParse -TLS13 +TLS13.Wire.Generated' \
   --ext optimize_let_vc \
   --ext fly_deps \
   $(INCLUDES)
@@ -41,6 +52,28 @@ FSTAR = $(FSTAR_EXE) $(FSTAR_FLAGS)
 SPEC_FILES = $(wildcard src/spec/*.fst src/spec/*.fsti)
 IMPL_FILES = $(wildcard src/impl/*.fst src/impl/*.fsti)
 ALL_FILES  = $(SPEC_FILES) $(IMPL_FILES)
+
+# ── Generated QuackyDucky wire parser modules ──────────────────────
+# The TLS13.Wire.Generated.* modules in $(GENERATED_DIR) are produced by
+# QuackyDucky from $(QD_RFC) and are committed (with their .checked files) so
+# the main build consumes them as already-cached.  Use `make regen-generated`
+# to regenerate them after editing $(QD_RFC) or rebuilding qd.
+.PHONY: regen-generated
+regen-generated:
+	rm -f $(GENERATED_DIR)/TLS13.Wire.Generated.*.fst $(GENERATED_DIR)/TLS13.Wire.Generated.*.fsti
+	$(QD_EXE) -pulse -prefix "TLS13.Wire.Generated." -odir $(GENERATED_DIR) $(QD_RFC)
+	@echo "Regenerated TLS13.Wire.Generated.* — now run 'make verify-generated' to refresh .checked files."
+
+# Verify the generated modules in isolation using the EverParse harness flags.
+# The committed .checked files in $(GENERATED_DIR) are consumed directly (via the
+# harness's `--include .`), so a re-verification only happens after they are
+# removed or the sources change; in that case the refreshed files are synced up
+# from the harness cache/ directory.
+.PHONY: verify-generated
+verify-generated:
+	$(MAKE) -C $(GENERATED_DIR) -f generated.Makefile depend verify
+	-cp $(GENERATED_DIR)/cache/TLS13.Wire.Generated.*.checked $(GENERATED_DIR)/ 2>/dev/null || true
+	-$(MAKE) -C $(GENERATED_DIR) -f generated.Makefile clean-local 2>/dev/null || true
 
 # ── Dependency Analysis ────────────────────────────────────────────
 .depend: $(ALL_FILES) | check-toolchain
@@ -56,11 +89,20 @@ $(CACHE_DIR) $(OUTPUT_DIR) $(EXTRACT_DIR):
 	mkdir -p $@
 
 # ── Main Targets ───────────────────────────────────────────────────
-.PHONY: all verify test clean check-toolchain check-deps admit-count check-admits
+.PHONY: all verify test clean check-toolchain check-deps admit-count check-admits generated-checked
 
 all: verify
 
-verify: $(ALL_CHECKED_FILES)
+# Ensure the generated TLS13.Wire.Generated.* modules have up-to-date .checked
+# files (consumed as already-cached by the main build) before verifying.  The
+# .checked files are not committed; they are produced from the committed sources.
+generated-checked:
+	@if ! ls $(GENERATED_DIR)/TLS13.Wire.Generated.*.fst.checked >/dev/null 2>&1; then \
+	  echo "Generated .checked files missing — running verify-generated..."; \
+	  $(MAKE) verify-generated; \
+	fi
+
+verify: generated-checked $(ALL_CHECKED_FILES)
 	@echo "All F* modules verified"
 
 admit-count:
