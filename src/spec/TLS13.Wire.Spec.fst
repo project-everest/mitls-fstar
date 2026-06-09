@@ -9,6 +9,10 @@ module GSS = TLS13.Wire.Generated.SignatureScheme
 module GEE = TLS13.Wire.Generated.EncryptedExtensions
 module GExt = TLS13.Wire.Generated.Extension
 module GET = TLS13.Wire.Generated.ExtensionType
+module GSH = TLS13.Wire.Generated.ServerHello
+module GSHB = TLS13.Wire.Generated.ServerHello_body
+module GSHBody = TLS13.Wire.Generated.ServerHelloBody
+module GCS = TLS13.Wire.Generated.CipherSuite
 module M = TLS13.Messages
 module ML = FStar.Math.Lemmas
 module Seq = FStar.Seq
@@ -326,35 +330,54 @@ let parse_client_hello (input:B.bytes) : GTot (option M.client_hello) =
                     }
                   | _ -> None
 
-let parse_server_hello (input:B.bytes) : GTot (option M.server_hello) =
-  if B.length input < 35 then None
-  else if read_u16 input 0 <> 0x0303 then None
+let synth_cipher_suite (c:GCS.cipherSuite) : T.cipher_suite =
+  match c with
+  | GCS.TLS_CHACHA20_POLY1305_SHA256 -> T.TLS_CHACHA20_POLY1305_SHA256
+
+let rec sh_key_share
+  (l:list GExt.extension)
+  (saw_supported_versions:bool)
+  (key_share:option (B.bytes_of_len 32))
+  : GTot (option (B.bytes_of_len 32))
+       (decreases l)
+  =
+  match l with
+  | [] -> if saw_supported_versions then key_share else None
+  | e :: tl ->
+    let d : B.bytes = (e.GExt.extension_data <: B.bytes) in
+    (match e.GExt.extension_type with
+     | GET.Supported_versions ->
+       if B.length d = 2 && read_u16 d 0 = 0x0304
+       then sh_key_share tl true key_share
+       else None
+     | GET.Key_share ->
+       if B.length d = 36 && read_u16 d 0 = 0x001d && read_u16 d 2 = 32
+       then (match take_range d 4 32 with
+             | Some k -> sh_key_share tl saw_supported_versions (Some (k <: B.bytes_of_len 32))
+             | None -> None)
+       else None
+     | _ -> sh_key_share tl saw_supported_versions key_share)
+
+let synth_server_hello (sh:GSH.serverHello) : GTot (option M.server_hello) =
+  let random, body =
+    match sh.GSH.body with
+    | GSHB.HelloRetryRequest v -> (GSHB.serverHello_body_cst, v)
+    | GSHB.ServerHello_body_false sf -> (sf.GSHB.tag, sf.GSHB.value)
+  in
+  if U8.v body.GSHBody.legacy_compression_method <> 0 then None
   else
-    match take_range input 2 32 with
+    match sh_key_share body.GSHBody.extensions false None with
+    | Some ks ->
+      Some ({ M.random = (random <: B.bytes_of_len 32);
+              M.key_share = ks;
+              M.cipher_suite = synth_cipher_suite body.GSHBody.cipher_suite })
     | None -> None
-    | Some random ->
-      let session_id_len = nat_of_byte (Seq.index input 34) in
-      let cipher_suite_pos = 35 + session_id_len in
-      if cipher_suite_pos + 5 > B.length input then None
-      else
-        match cipher_suite_of_u16 (read_u16 input cipher_suite_pos) with
-        | None -> None
-        | Some suite ->
-          if nat_of_byte (Seq.index input (cipher_suite_pos + 2)) <> 0 then None
-          else
-            let extensions_len = read_u16 input (cipher_suite_pos + 3) in
-            let extensions_pos = cipher_suite_pos + 5 in
-            let extensions_end = extensions_pos + extensions_len in
-            if extensions_end <> B.length input then None
-            else
-              match parse_server_hello_extensions input extensions_pos extensions_end false None with
-              | Some key_share ->
-                Some {
-                  M.random = random;
-                  M.key_share = key_share;
-                  M.cipher_suite = suite
-                }
-              | None -> None
+
+let parse_server_hello (input:B.bytes) : GTot (option M.server_hello) =
+  match LP.parse GSH.serverHello_parser input with
+  | Some (sh, consumed) ->
+    if consumed = B.length input then synth_server_hello sh else None
+  | None -> None
 
 let parse_supported_server_hello_impl (input:B.bytes) : GTot (option M.server_hello) =
   if SHC.server_hello_ok_52 input then
