@@ -4,6 +4,8 @@ module B = TLS13.Bytes
 module H = TLS13.Handshake.Spec
 module LP = LowParse.Spec
 module GFinished = TLS13.Wire.Generated.Finished
+module GCV = TLS13.Wire.Generated.CertificateVerify
+module GSS = TLS13.Wire.Generated.SignatureScheme
 module M = TLS13.Messages
 module ML = FStar.Math.Lemmas
 module Seq = FStar.Seq
@@ -11,6 +13,7 @@ module SHC = TLS13.ServerHello.Checks
 module SP = FStar.Seq.Properties
 module T = TLS13.Types
 module U8 = FStar.UInt8
+module U16 = FStar.UInt16
 
 let byte (n:nat) : B.byte = U8.uint_to_t (n % 256)
 
@@ -487,8 +490,21 @@ let parse_encrypted_extensions (input:B.bytes) : GTot (option M.encrypted_extens
     if extensions_end <> B.length input then None
     else parse_encrypted_extensions_entries input extensions_pos extensions_end None
 
+let synth_signature_scheme (s:GSS.signatureScheme) : T.signature_scheme =
+  match s with
+  | GSS.Ecdsa_secp256r1_sha256 -> T.EcdsaSecp256r1Sha256
+  | GSS.Rsa_pss_rsae_sha256 -> T.RsaPssRsaeSha256
+  | GSS.Ed25519 -> T.Ed25519
+  | GSS.Unknown_signatureScheme v -> T.UnsupportedSignatureScheme (U16.v v)
+
 let parse_certificate_verify (input:B.bytes) : GTot (option M.certificate_verify) =
-  parse_certificate_verify_impl input
+  match LP.parse GCV.certificateVerify_parser input with
+  | Some (cv, consumed) ->
+    if consumed = B.length input
+    then Some ({ M.scheme = synth_signature_scheme cv.GCV.algorithm;
+                 M.signature = (cv.GCV.signature <: B.bytes) })
+    else None
+  | None -> None
 
 let parse_finished (input:B.bytes) : GTot (option M.finished) =
   match LP.parse GFinished.finished_parser input with
