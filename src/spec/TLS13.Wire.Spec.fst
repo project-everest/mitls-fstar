@@ -6,6 +6,9 @@ module LP = LowParse.Spec
 module GFinished = TLS13.Wire.Generated.Finished
 module GCV = TLS13.Wire.Generated.CertificateVerify
 module GSS = TLS13.Wire.Generated.SignatureScheme
+module GEE = TLS13.Wire.Generated.EncryptedExtensions
+module GExt = TLS13.Wire.Generated.Extension
+module GET = TLS13.Wire.Generated.ExtensionType
 module M = TLS13.Messages
 module ML = FStar.Math.Lemmas
 module Seq = FStar.Seq
@@ -481,14 +484,36 @@ let rec parse_encrypted_extensions_entries
       else parse_encrypted_extensions_entries input next entries_end alpn
   else None
 
+let extract_alpn_from_data (d:B.bytes) : GTot (option B.bytes) =
+  if B.length d >= 3 &&
+     read_u16 d 0 + 2 = B.length d &&
+     nat_of_byte (Seq.index d 2) + 3 = B.length d
+  then (match take_range d 3 (nat_of_byte (Seq.index d 2)) with
+        | Some name -> Some (name <: B.bytes)
+        | None -> None)
+  else None
+
+let rec synth_encrypted_extensions (l:list GExt.extension)
+  : GTot (option M.encrypted_extensions)
+       (decreases l)
+  =
+  match l with
+  | [] -> Some ({ M.negotiated_alpn = None })
+  | e :: tl ->
+    (match e.GExt.extension_type with
+     | GET.Application_layer_protocol_negotiation ->
+       (match extract_alpn_from_data (e.GExt.extension_data <: B.bytes) with
+        | Some name -> Some ({ M.negotiated_alpn = Some name })
+        | None -> None)
+     | _ -> synth_encrypted_extensions tl)
+
 let parse_encrypted_extensions (input:B.bytes) : GTot (option M.encrypted_extensions) =
-  if B.length input < 2 then None
-  else
-    let extensions_len = read_u16 input 0 in
-    let extensions_pos = 2 in
-    let extensions_end = extensions_pos + extensions_len in
-    if extensions_end <> B.length input then None
-    else parse_encrypted_extensions_entries input extensions_pos extensions_end None
+  match LP.parse GEE.encryptedExtensions_parser input with
+  | Some (exts, consumed) ->
+    if consumed = B.length input
+    then synth_encrypted_extensions exts
+    else None
+  | None -> None
 
 let synth_signature_scheme (s:GSS.signatureScheme) : T.signature_scheme =
   match s with
