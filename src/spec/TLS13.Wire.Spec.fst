@@ -2,6 +2,8 @@ module TLS13.Wire.Spec
 
 module B = TLS13.Bytes
 module H = TLS13.Handshake.Spec
+module LP = LowParse.Spec
+module GFinished = TLS13.Wire.Generated.Finished
 module M = TLS13.Messages
 module ML = FStar.Math.Lemmas
 module Seq = FStar.Seq
@@ -489,9 +491,12 @@ let parse_certificate_verify (input:B.bytes) : GTot (option M.certificate_verify
   parse_certificate_verify_impl input
 
 let parse_finished (input:B.bytes) : GTot (option M.finished) =
-  if B.length input == 32
-  then Some { M.verify_data = input }
-  else None
+  match LP.parse GFinished.finished_parser input with
+  | Some (vd, consumed) ->
+    if consumed = B.length input
+    then Some ({ M.verify_data = vd })
+    else None
+  | None -> None
 
 let parse_ignored_post_handshake (input:B.bytes) : GTot (option B.bytes) =
   if B.length input < 4 then None
