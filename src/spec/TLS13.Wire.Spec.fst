@@ -13,6 +13,8 @@ module GSH = TLS13.Wire.Generated.ServerHello
 module GSHB = TLS13.Wire.Generated.ServerHello_body
 module GSHBody = TLS13.Wire.Generated.ServerHelloBody
 module GCS = TLS13.Wire.Generated.CipherSuite
+module GCert = TLS13.Wire.Generated.Certificate
+module GCE = TLS13.Wire.Generated.CertificateEntry
 module M = TLS13.Messages
 module ML = FStar.Math.Lemmas
 module Seq = FStar.Seq
@@ -447,21 +449,21 @@ let rec parse_certificate_entries
         | _, _ -> None
   else None
 
+let rec synth_cert_chain (l:list GCE.certificateEntry)
+  : GTot (list B.bytes)
+       (decreases l)
+  =
+  match l with
+  | [] -> []
+  | e :: tl -> (e.GCE.cert_data <: B.bytes) :: synth_cert_chain tl
+
 let parse_certificate_msg (input:B.bytes) : GTot (option M.certificate_msg) =
-  if B.length input < 4 then None
-  else
-    let request_context_len = nat_of_byte (Seq.index input 0) in
-    let list_len_pos = 1 + request_context_len in
-    if list_len_pos + 3 > B.length input then None
-    else
-      let cert_list_len = read_u24 input list_len_pos in
-      let entries_pos = list_len_pos + 3 in
-      let entries_end = entries_pos + cert_list_len in
-      if entries_end <> B.length input then None
-      else
-        match parse_certificate_entries input entries_pos entries_end with
-        | Some chain -> Some { M.chain = chain }
-        | None -> None
+  match LP.parse GCert.certificate_parser input with
+  | Some (c, consumed) ->
+    if consumed = B.length input
+    then Some ({ M.chain = synth_cert_chain c.GCert.certificate_list })
+    else None
+  | None -> None
 
 let parse_certificate_verify_impl (input:B.bytes) : GTot (option M.certificate_verify) =
   if B.length input < 4 then None
