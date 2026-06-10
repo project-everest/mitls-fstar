@@ -4,7 +4,7 @@ set -euo pipefail
 repo_root="$(cd "$(dirname "$0")" && pwd)"
 fstar_dir="$repo_root/tools/FStar"
 source_flag="--nightly"
-version=""
+version="2026-06-09"
 
 usage() {
   cat <<'EOF'

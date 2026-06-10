@@ -25,6 +25,7 @@ INCLUDES = \
   --include src/impl
 
 FSTAR_FLAGS = \
+  $(OTHERFLAGS) \
   --cache_checked_modules \
   --cache_dir $(CACHE_DIR) \
   --odir $(OUTPUT_DIR) \
