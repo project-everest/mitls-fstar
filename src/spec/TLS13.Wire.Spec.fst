@@ -10,6 +10,7 @@ module GEE = TLS13.Wire.Generated.EncryptedExtensions
 module GExt = TLS13.Wire.Generated.Extension
 module GET = TLS13.Wire.Generated.ExtensionType
 module GSH = TLS13.Wire.Generated.ServerHello
+module GPV = TLS13.Wire.Generated.ProtocolVersion
 module GSHB = TLS13.Wire.Generated.ServerHello_body
 module GSHBody = TLS13.Wire.Generated.ServerHelloBody
 module GCS = TLS13.Wire.Generated.CipherSuite
@@ -348,6 +349,11 @@ let rec ch_extensions
      | _ -> ch_extensions tl server_name key_share saw_supported_versions signature_schemes)
 
 let synth_client_hello (c:GCH.clientHello) : GTot (option M.client_hello) =
+  // RFC 8446 4.1.2: ClientHello.legacy_version MUST be 0x0303 (TLS_1p2). The high
+  // M.client_hello has no version field, so requiring the canonical value here both
+  // matches the original parser and keeps the wire<->M map injective on this field.
+  if not (GPV.TLS_1p2? c.GCH.legacy_version) then None
+  else
   match ch_extensions c.GCH.extensions None None false [] with
   | Some (server_name, Some key_share, _, signature_schemes) ->
     Some ({ M.random = (c.GCH.random <: B.bytes_of_len 32);
@@ -392,6 +398,11 @@ let synth_server_hello (sh:GSH.serverHello) : GTot (option M.server_hello) =
   // (consistent with parse_supported_server_hello, which rejects HRR via
   // SHC.server_hello_ok).  parse_handshake maps the HRR arm to M.HelloRetryRequest
   // separately, so the modeled HelloRetryRequestRejected path is reachable.
+  // RFC 8446 4.1.3: ServerHello.legacy_version MUST be 0x0303 (TLS_1p2); the high
+  // M.server_hello has no version field, so requiring the canonical value here both
+  // matches the original parser and keeps the wire<->M map injective on this field.
+  if not (GPV.TLS_1p2? sh.GSH.legacy_version) then None
+  else
   match sh.GSH.body with
   | GSHB.HelloRetryRequest _ -> None
   | GSHB.ServerHello_body_false sf ->
@@ -621,6 +632,10 @@ let synth_handshake_msg_of (h:GHS.handshake) : GTot (option M.handshake_msg) =
      | Some x -> Some (M.ClientHello x)
      | None -> None)
   | GHS.Body_server_hello b ->
+    // legacy_version MUST be 0x0303 (matches synth_server_hello and the original
+    // parser, which rejected non-0x0303 before inspecting random/body).
+    if not (GPV.TLS_1p2? b.GSH.legacy_version) then None
+    else
     (match b.GSH.body with
      | GSHB.HelloRetryRequest _ -> Some M.HelloRetryRequest
      | GSHB.ServerHello_body_false _ ->
