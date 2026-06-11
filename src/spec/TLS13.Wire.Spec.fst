@@ -388,19 +388,22 @@ let rec sh_key_share
      | _ -> sh_key_share tl saw_supported_versions key_share)
 
 let synth_server_hello (sh:GSH.serverHello) : GTot (option M.server_hello) =
-  let random, body =
-    match sh.GSH.body with
-    | GSHB.HelloRetryRequest v -> (GSHB.serverHello_body_cst, v)
-    | GSHB.ServerHello_body_false sf -> (sf.GSHB.tag, sf.GSHB.value)
-  in
-  if U8.v body.GSHBody.legacy_compression_method <> 0 then None
-  else
-    match sh_key_share body.GSHBody.extensions false None with
-    | Some ks ->
-      Some ({ M.random = (random <: B.bytes_of_len 32);
-              M.key_share = ks;
-              M.cipher_suite = synth_cipher_suite body.GSHBody.cipher_suite })
-    | None -> None
+  // A magic-random HelloRetryRequest is NOT a normal ServerHello: reject it here
+  // (consistent with parse_supported_server_hello, which rejects HRR via
+  // SHC.server_hello_ok).  parse_handshake maps the HRR arm to M.HelloRetryRequest
+  // separately, so the modeled HelloRetryRequestRejected path is reachable.
+  match sh.GSH.body with
+  | GSHB.HelloRetryRequest _ -> None
+  | GSHB.ServerHello_body_false sf ->
+    let body = sf.GSHB.value in
+    if U8.v body.GSHBody.legacy_compression_method <> 0 then None
+    else
+      match sh_key_share body.GSHBody.extensions false None with
+      | Some ks ->
+        Some ({ M.random = (sf.GSHB.tag <: B.bytes_of_len 32);
+                M.key_share = ks;
+                M.cipher_suite = synth_cipher_suite body.GSHBody.cipher_suite })
+      | None -> None
 
 let parse_server_hello (input:B.bytes) : GTot (option M.server_hello) =
   match LP.parse GSH.serverHello_parser input with
@@ -618,9 +621,12 @@ let synth_handshake_msg_of (h:GHS.handshake) : GTot (option M.handshake_msg) =
      | Some x -> Some (M.ClientHello x)
      | None -> None)
   | GHS.Body_server_hello b ->
-    (match synth_server_hello b with
-     | Some x -> Some (M.ServerHello x)
-     | None -> None)
+    (match b.GSH.body with
+     | GSHB.HelloRetryRequest _ -> Some M.HelloRetryRequest
+     | GSHB.ServerHello_body_false _ ->
+       (match synth_server_hello b with
+        | Some x -> Some (M.ServerHello x)
+        | None -> None))
   | GHS.Body_encrypted_extensions b ->
     (match synth_encrypted_extensions b with
      | Some x -> Some (M.EncryptedExtensions x)
