@@ -133,3 +133,7 @@ val free_serverHello_body : PPB.free_t serverHello_body_vmatch
 
 val write_serverHello_body : PPB.l2r_safe_writer serverHello_body_vmatch serverHello_body_serializer serverHello_body_conv
 
+val serverHello_body_bytesize_eqn_HelloRetryRequest (x: serverHelloBody) : Lemma (serverHello_body_bytesize (HelloRetryRequest x) == 32 + (serverHelloBody_bytesize (x))) [SMTPat (serverHello_body_bytesize (HelloRetryRequest x))]
+
+val serverHello_body_bytesize_eqn_ServerHello_body_false (m: serverHello_body_false) : Lemma (serverHello_body_bytesize (ServerHello_body_false m) == 32 + (serverHelloBody_bytesize (m.value))) [SMTPat (serverHello_body_bytesize (ServerHello_body_false m))]
+

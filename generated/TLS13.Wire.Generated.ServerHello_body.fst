@@ -98,3 +98,15 @@ let free_serverHello_body = LPITE.free_ifthenelse #_ #_ #serverHello_body_random
 let write_serverHello_body = LPITE.l2r_safe_writer_ifthenelse parse_serverHello_body_param serialize_serverHello_body_param #_ #_ #_ #_ #_ #_ #serverHello_body_payload_vmatch #serverHello_body_payload_conv write_serverHello_body_random
   (fun _ -> write_serverHelloBody)
 
+let serverHello_body_bytesize_eqn_HelloRetryRequest x =
+  serverHello_body_bytesize_eq (HelloRetryRequest x);
+  LP.length_serialize_ifthenelse serialize_serverHello_body_param (HelloRetryRequest x);
+  serverHello_body_random_bytesize_eq serverHello_body_cst;
+  (serverHelloBody_bytesize_eq (x))
+
+let serverHello_body_bytesize_eqn_ServerHello_body_false m =
+  serverHello_body_bytesize_eq (ServerHello_body_false m);
+  LP.length_serialize_ifthenelse serialize_serverHello_body_param (ServerHello_body_false m);
+  serverHello_body_random_bytesize_eq m.tag;
+  (serverHelloBody_bytesize_eq (m.value))
+
