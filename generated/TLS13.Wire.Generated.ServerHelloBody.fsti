@@ -34,7 +34,7 @@ module LSeqB = LowParse.Pulse.SeqBytes
 module LPITE = LowParse.PulseParse.IfThenElse
 
 open TLS13.Wire.Generated.CipherSuite
-open TLS13.Wire.Generated.Extension
+open TLS13.Wire.Generated.ExtensionServerHello
 
 (* Type of field legacy_session_id_echo*)
 include TLS13.Wire.Generated.ServerHelloBody_legacy_session_id_echo

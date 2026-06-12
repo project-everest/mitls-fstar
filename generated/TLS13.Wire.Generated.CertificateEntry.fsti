@@ -33,7 +33,7 @@ module PPSL = LowParse.PulseParse.SizeLeaf
 module LSeqB = LowParse.Pulse.SeqBytes
 module LPITE = LowParse.PulseParse.IfThenElse
 
-open TLS13.Wire.Generated.Extension
+open TLS13.Wire.Generated.ExtensionCertificate
 
 (* Type of field cert_data*)
 include TLS13.Wire.Generated.CertificateEntry_cert_data

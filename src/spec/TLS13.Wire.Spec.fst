@@ -7,8 +7,6 @@ module GFinished = TLS13.Wire.Generated.Finished
 module GCV = TLS13.Wire.Generated.CertificateVerify
 module GSS = TLS13.Wire.Generated.SignatureScheme
 module GEE = TLS13.Wire.Generated.EncryptedExtensions
-module GExt = TLS13.Wire.Generated.Extension
-module GET = TLS13.Wire.Generated.ExtensionType
 module GSH = TLS13.Wire.Generated.ServerHello
 module GPV = TLS13.Wire.Generated.ProtocolVersion
 module GSHB = TLS13.Wire.Generated.ServerHello_body
@@ -18,6 +16,12 @@ module GCert = TLS13.Wire.Generated.Certificate
 module GCE = TLS13.Wire.Generated.CertificateEntry
 module GCH = TLS13.Wire.Generated.ClientHello
 module GHS = TLS13.Wire.Generated.Handshake
+module GESH = TLS13.Wire.Generated.ExtensionServerHello
+module GECH = TLS13.Wire.Generated.ExtensionClientHello
+module GEEE = TLS13.Wire.Generated.ExtensionEncryptedExtensions
+module GKSE = TLS13.Wire.Generated.KeyShareEntry
+module GNG = TLS13.Wire.Generated.NamedGroup
+module GSN = TLS13.Wire.Generated.ServerName
 module M = TLS13.Messages
 module ML = FStar.Math.Lemmas
 module Seq = FStar.Seq
@@ -302,8 +306,42 @@ let rec synth_cipher_suites (l:list GCS.cipherSuite)
   | [] -> []
   | c :: tl -> synth_cipher_suite c :: synth_cipher_suites tl
 
+let key_exchange_to_key32 (ke:GKSE.keyShareEntry_key_exchange) : GTot (option (B.bytes_of_len 32)) =
+  let b : B.bytes = (ke <: B.bytes) in
+  if B.length b = 32 then Some (b <: B.bytes_of_len 32) else None
+
+// Find an x25519 entry carrying a 32-byte key in a ClientHello key_share list.
+let rec ch_find_key_share (l:list GKSE.keyShareEntry)
+  : GTot (option (B.bytes_of_len 32)) (decreases l) =
+  match l with
+  | [] -> None
+  | e :: tl ->
+    if GNG.X25519? e.GKSE.group
+    then (match key_exchange_to_key32 e.GKSE.key_exchange with
+          | Some k -> Some k
+          | None -> ch_find_key_share tl)
+    else ch_find_key_share tl
+
+let synth_signature_scheme (s:GSS.signatureScheme) : T.signature_scheme =
+  match s with
+  | GSS.Ecdsa_secp256r1_sha256 -> T.EcdsaSecp256r1Sha256
+  | GSS.Rsa_pss_rsae_sha256 -> T.RsaPssRsaeSha256
+  | GSS.Ed25519 -> T.Ed25519
+  | GSS.Unknown_signatureScheme v -> T.UnsupportedSignatureScheme (U16.v v)
+
+let rec synth_sig_schemes (l:list GSS.signatureScheme) : GTot (list T.signature_scheme) (decreases l) =
+  match l with
+  | [] -> []
+  | s :: tl -> synth_signature_scheme s :: synth_sig_schemes tl
+
+// Hostname from the first host_name entry of a ClientHello server_name list.
+let ch_server_name (snl:list GSN.serverName) : GTot (option T.hostname) =
+  match snl with
+  | (GSN.Name_host_name h) :: _ -> Some ((h <: B.bytes) <: T.hostname)
+  | _ -> None
+
 let rec ch_extensions
-  (l:list GExt.extension)
+  (l:list GECH.extensionClientHello)
   (server_name:option T.hostname)
   (key_share:option (B.bytes_of_len 32))
   (saw_supported_versions:bool)
@@ -317,33 +355,21 @@ let rec ch_extensions
     then Some (server_name, key_share, saw_supported_versions, signature_schemes)
     else None
   | e :: tl ->
-    let d : B.bytes = (e.GExt.extension_data <: B.bytes) in
-    (match e.GExt.extension_type with
-     | GET.Server_name ->
-       if B.length d >= 5 &&
-          read_u16 d 0 + 2 = B.length d &&
-          nat_of_byte (Seq.index d 2) = 0 &&
-          read_u16 d 3 + 5 = B.length d
-       then (match take_range d 5 (read_u16 d 3) with
-             | Some name -> ch_extensions tl (Some (name <: T.hostname)) key_share saw_supported_versions signature_schemes
-             | None -> None)
-       else None
-     | GET.Supported_groups ->
-       if B.length d = 4 && read_u16 d 0 = 2 && read_u16 d 2 = 0x001d
-       then ch_extensions tl server_name key_share saw_supported_versions signature_schemes
-       else None
-     | GET.Signature_algorithms ->
-       if B.length d = 4 && read_u16 d 0 = 2
-       then ch_extensions tl server_name key_share saw_supported_versions [signature_scheme_of_u16 (read_u16 d 2)]
-       else None
-     | GET.Key_share ->
-       if B.length d = 38 && read_u16 d 0 = 36 && read_u16 d 2 = 0x001d && read_u16 d 4 = 32
-       then (match take_range d 6 32 with
-             | Some ks -> ch_extensions tl server_name (Some (ks <: B.bytes_of_len 32)) saw_supported_versions signature_schemes
-             | None -> None)
-       else None
-     | GET.Supported_versions ->
-       if B.length d = 3 && nat_of_byte (Seq.index d 0) = 2 && read_u16 d 1 = 0x0304
+    (match e with
+     | GECH.Extension_data_server_name snl ->
+       (match ch_server_name snl with
+        | Some name -> ch_extensions tl (Some name) key_share saw_supported_versions signature_schemes
+        | None -> None)
+     | GECH.Extension_data_supported_groups _ ->
+       ch_extensions tl server_name key_share saw_supported_versions signature_schemes
+     | GECH.Extension_data_signature_algorithms ssl ->
+       ch_extensions tl server_name key_share saw_supported_versions (synth_sig_schemes ssl)
+     | GECH.Extension_data_key_share kscl ->
+       (match ch_find_key_share kscl with
+        | Some ks -> ch_extensions tl server_name (Some ks) saw_supported_versions signature_schemes
+        | None -> None)
+     | GECH.Extension_data_supported_versions svl ->
+       if List.Tot.mem GPV.TLS_1p3 svl
        then ch_extensions tl server_name key_share true signature_schemes
        else None
      | _ -> ch_extensions tl server_name key_share saw_supported_versions signature_schemes)
@@ -370,7 +396,7 @@ let parse_client_hello (input:B.bytes) : GTot (option M.client_hello) =
   | None -> None
 
 let rec sh_key_share
-  (l:list GExt.extension)
+  (l:list GESH.extensionServerHello)
   (saw_supported_versions:bool)
   (key_share:option (B.bytes_of_len 32))
   : GTot (option (B.bytes_of_len 32))
@@ -379,16 +405,15 @@ let rec sh_key_share
   match l with
   | [] -> if saw_supported_versions then key_share else None
   | e :: tl ->
-    let d : B.bytes = (e.GExt.extension_data <: B.bytes) in
-    (match e.GExt.extension_type with
-     | GET.Supported_versions ->
-       if B.length d = 2 && read_u16 d 0 = 0x0304
-       then sh_key_share tl true key_share
-       else None
-     | GET.Key_share ->
-       if B.length d = 36 && read_u16 d 0 = 0x001d && read_u16 d 2 = 32
-       then (match take_range d 4 32 with
-             | Some k -> sh_key_share tl saw_supported_versions (Some (k <: B.bytes_of_len 32))
+    (match e with
+     | GESH.Extension_data_supported_versions sv ->
+       // sv : protocolVersion (closed enum); RFC requires the selected version 0x0304.
+       if GPV.TLS_1p3? sv then sh_key_share tl true key_share else None
+     | GESH.Extension_data_key_share ks ->
+       // ks : keyShareEntry; require x25519 + 32-byte key.
+       if GNG.X25519? ks.GKSE.group
+       then (match key_exchange_to_key32 ks.GKSE.key_exchange with
+             | Some k -> sh_key_share tl saw_supported_versions (Some k)
              | None -> None)
        else None
      | _ -> sh_key_share tl saw_supported_versions key_share)
@@ -550,25 +575,23 @@ let rec parse_encrypted_extensions_entries
       else parse_encrypted_extensions_entries input next entries_end alpn
   else None
 
-let extract_alpn_from_data (d:B.bytes) : GTot (option B.bytes) =
-  if B.length d >= 3 &&
-     read_u16 d 0 + 2 = B.length d &&
-     nat_of_byte (Seq.index d 2) + 3 = B.length d
-  then (match take_range d 3 (nat_of_byte (Seq.index d 2)) with
-        | Some name -> Some (name <: B.bytes)
-        | None -> None)
-  else None
+// First ALPN protocol name (as raw bytes) from a parsed protocol_name_list.
+let alpn_first_name (pnl:GEEE.extensionEncryptedExtensions_extension_data_application_layer_protocol_negotiation)
+  : GTot (option B.bytes) =
+  match (pnl <: list TLS13.Wire.Generated.ProtocolName.protocolName) with
+  | pn :: _ -> Some ((pn <: B.bytes))
+  | [] -> None
 
-let rec synth_encrypted_extensions (l:list GExt.extension)
+let rec synth_encrypted_extensions (l:list GEEE.extensionEncryptedExtensions)
   : GTot (option M.encrypted_extensions)
        (decreases l)
   =
   match l with
   | [] -> Some ({ M.negotiated_alpn = None })
   | e :: tl ->
-    (match e.GExt.extension_type with
-     | GET.Application_layer_protocol_negotiation ->
-       (match extract_alpn_from_data (e.GExt.extension_data <: B.bytes) with
+    (match e with
+     | GEEE.Extension_data_application_layer_protocol_negotiation pnl ->
+       (match alpn_first_name pnl with
         | Some name -> Some ({ M.negotiated_alpn = Some name })
         | None -> None)
      | _ -> synth_encrypted_extensions tl)
@@ -580,13 +603,6 @@ let parse_encrypted_extensions (input:B.bytes) : GTot (option M.encrypted_extens
     then synth_encrypted_extensions exts
     else None
   | None -> None
-
-let synth_signature_scheme (s:GSS.signatureScheme) : T.signature_scheme =
-  match s with
-  | GSS.Ecdsa_secp256r1_sha256 -> T.EcdsaSecp256r1Sha256
-  | GSS.Rsa_pss_rsae_sha256 -> T.RsaPssRsaeSha256
-  | GSS.Ed25519 -> T.Ed25519
-  | GSS.Unknown_signatureScheme v -> T.UnsupportedSignatureScheme (U16.v v)
 
 let parse_certificate_verify (input:B.bytes) : GTot (option M.certificate_verify) =
   match LP.parse GCV.certificateVerify_parser input with

@@ -33,17 +33,17 @@ module PPSL = LowParse.PulseParse.SizeLeaf
 module LSeqB = LowParse.Pulse.SeqBytes
 module LPITE = LowParse.PulseParse.IfThenElse
 
-open TLS13.Wire.Generated.Extension
+open TLS13.Wire.Generated.ExtensionCertificate
 
-noextract let certificateEntry_extensions_list_bytesize (x: list extension) : GTot nat = Seq.length (LP.serialize (LP.serialize_list _ extension_serializer) x)
+noextract let certificateEntry_extensions_list_bytesize (x: list extensionCertificate) : GTot nat = Seq.length (LP.serialize (LP.serialize_list _ extensionCertificate_serializer) x)
 
-type certificateEntry_extensions = l:list extension{let x = certificateEntry_extensions_list_bytesize l in 0 <= x /\ x <= 65535}
+type certificateEntry_extensions = l:list extensionCertificate{let x = certificateEntry_extensions_list_bytesize l in 0 <= x /\ x <= 65535}
 
 val certificateEntry_extensions_list_bytesize_nil : squash (certificateEntry_extensions_list_bytesize [] == 0)
 
-val certificateEntry_extensions_list_bytesize_cons (x: extension) (y: list extension) : Lemma (certificateEntry_extensions_list_bytesize (x :: y) == (extension_bytesize (x)) + certificateEntry_extensions_list_bytesize y) [SMTPat (certificateEntry_extensions_list_bytesize (x :: y))]
+val certificateEntry_extensions_list_bytesize_cons (x: extensionCertificate) (y: list extensionCertificate) : Lemma (certificateEntry_extensions_list_bytesize (x :: y) == (extensionCertificate_bytesize (x)) + certificateEntry_extensions_list_bytesize y) [SMTPat (certificateEntry_extensions_list_bytesize (x :: y))]
 
-type certificateEntry_extensions' = LP.parse_bounded_vldata_strong_t 0 65535 (LP.serialize_list _ extension_serializer)
+type certificateEntry_extensions' = LP.parse_bounded_vldata_strong_t 0 65535 (LP.serialize_list _ extensionCertificate_serializer)
 
 inline_for_extraction let synth_certificateEntry_extensions (x: certificateEntry_extensions') : Tot certificateEntry_extensions = x
 
@@ -65,15 +65,15 @@ val certificateEntry_extensions_jumper: LPS.jumper certificateEntry_extensions_p
 
 val certificateEntry_extensions_bytesize_eqn (x: certificateEntry_extensions) : Lemma (certificateEntry_extensions_bytesize x == 2 + certificateEntry_extensions_list_bytesize x) [SMTPat (certificateEntry_extensions_bytesize x)]
 
-let certificateEntry_extensions_lowtype = PPVCL.vclist_lowtype extension_lowtype
+let certificateEntry_extensions_lowtype = PPVCL.vclist_lowtype extensionCertificate_lowtype
 
-noextract let certificateEntry_extensions_mid = list extension
+noextract let certificateEntry_extensions_mid = list extensionCertificate
 
 let certificateEntry_extensions_vmatch : certificateEntry_extensions_lowtype -> certificateEntry_extensions_mid -> Pulse.Lib.Core.slprop =
-  PPVD.vmatch_vldata_strong 0 65535 (LP.serialize_list _ extension_serializer) (PPVCL.vmatch_vclist (PPB.vmatch_conv extension_vmatch extension_conv))
+  PPVD.vmatch_vldata_strong 0 65535 (LP.serialize_list _ extensionCertificate_serializer) (PPVCL.vmatch_vclist (PPB.vmatch_conv extensionCertificate_vmatch extensionCertificate_conv))
 
 noextract let certificateEntry_extensions_conv : certificateEntry_extensions_mid -> GTot (FStar.Pervasives.Native.option certificateEntry_extensions) =
-  PPC.synth_conv (PPVD.vldata_strong_conv 0 65535 (LP.serialize_list _ extension_serializer) (fun (x: list extension) -> FStar.Pervasives.Native.Some x)) synth_certificateEntry_extensions
+  PPC.synth_conv (PPVD.vldata_strong_conv 0 65535 (LP.serialize_list _ extensionCertificate_serializer) (fun (x: list extensionCertificate) -> FStar.Pervasives.Native.Some x)) synth_certificateEntry_extensions
 
 val read_certificateEntry_extensions : PPB.copyful_parse certificateEntry_extensions_vmatch certificateEntry_extensions_parser certificateEntry_extensions_conv
 

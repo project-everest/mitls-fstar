@@ -33,17 +33,17 @@ module PPSL = LowParse.PulseParse.SizeLeaf
 module LSeqB = LowParse.Pulse.SeqBytes
 module LPITE = LowParse.PulseParse.IfThenElse
 
-open TLS13.Wire.Generated.Extension
+open TLS13.Wire.Generated.ExtensionEncryptedExtensions
 
-noextract let encryptedExtensions_list_bytesize (x: list extension) : GTot nat = Seq.length (LP.serialize (LP.serialize_list _ extension_serializer) x)
+noextract let encryptedExtensions_list_bytesize (x: list extensionEncryptedExtensions) : GTot nat = Seq.length (LP.serialize (LP.serialize_list _ extensionEncryptedExtensions_serializer) x)
 
-type encryptedExtensions = l:list extension{let x = encryptedExtensions_list_bytesize l in 0 <= x /\ x <= 65535}
+type encryptedExtensions = l:list extensionEncryptedExtensions{let x = encryptedExtensions_list_bytesize l in 0 <= x /\ x <= 65535}
 
 val encryptedExtensions_list_bytesize_nil : squash (encryptedExtensions_list_bytesize [] == 0)
 
-val encryptedExtensions_list_bytesize_cons (x: extension) (y: list extension) : Lemma (encryptedExtensions_list_bytesize (x :: y) == (extension_bytesize (x)) + encryptedExtensions_list_bytesize y) [SMTPat (encryptedExtensions_list_bytesize (x :: y))]
+val encryptedExtensions_list_bytesize_cons (x: extensionEncryptedExtensions) (y: list extensionEncryptedExtensions) : Lemma (encryptedExtensions_list_bytesize (x :: y) == (extensionEncryptedExtensions_bytesize (x)) + encryptedExtensions_list_bytesize y) [SMTPat (encryptedExtensions_list_bytesize (x :: y))]
 
-type encryptedExtensions' = LP.parse_bounded_vldata_strong_t 0 65535 (LP.serialize_list _ extension_serializer)
+type encryptedExtensions' = LP.parse_bounded_vldata_strong_t 0 65535 (LP.serialize_list _ extensionEncryptedExtensions_serializer)
 
 inline_for_extraction let synth_encryptedExtensions (x: encryptedExtensions') : Tot encryptedExtensions = x
 
@@ -65,15 +65,15 @@ val encryptedExtensions_jumper: LPS.jumper encryptedExtensions_parser
 
 val encryptedExtensions_bytesize_eqn (x: encryptedExtensions) : Lemma (encryptedExtensions_bytesize x == 2 + encryptedExtensions_list_bytesize x) [SMTPat (encryptedExtensions_bytesize x)]
 
-let encryptedExtensions_lowtype = PPVCL.vclist_lowtype extension_lowtype
+let encryptedExtensions_lowtype = PPVCL.vclist_lowtype extensionEncryptedExtensions_lowtype
 
-noextract let encryptedExtensions_mid = list extension
+noextract let encryptedExtensions_mid = list extensionEncryptedExtensions
 
 let encryptedExtensions_vmatch : encryptedExtensions_lowtype -> encryptedExtensions_mid -> Pulse.Lib.Core.slprop =
-  PPVD.vmatch_vldata_strong 0 65535 (LP.serialize_list _ extension_serializer) (PPVCL.vmatch_vclist (PPB.vmatch_conv extension_vmatch extension_conv))
+  PPVD.vmatch_vldata_strong 0 65535 (LP.serialize_list _ extensionEncryptedExtensions_serializer) (PPVCL.vmatch_vclist (PPB.vmatch_conv extensionEncryptedExtensions_vmatch extensionEncryptedExtensions_conv))
 
 noextract let encryptedExtensions_conv : encryptedExtensions_mid -> GTot (FStar.Pervasives.Native.option encryptedExtensions) =
-  PPC.synth_conv (PPVD.vldata_strong_conv 0 65535 (LP.serialize_list _ extension_serializer) (fun (x: list extension) -> FStar.Pervasives.Native.Some x)) synth_encryptedExtensions
+  PPC.synth_conv (PPVD.vldata_strong_conv 0 65535 (LP.serialize_list _ extensionEncryptedExtensions_serializer) (fun (x: list extensionEncryptedExtensions) -> FStar.Pervasives.Native.Some x)) synth_encryptedExtensions
 
 val read_encryptedExtensions : PPB.copyful_parse encryptedExtensions_vmatch encryptedExtensions_parser encryptedExtensions_conv
 

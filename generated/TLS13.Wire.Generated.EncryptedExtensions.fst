@@ -37,29 +37,29 @@ module LPITE = LowParse.PulseParse.IfThenElse
 
 assume val fits_u64_squash : squash FStar.SizeT.fits_u64
 
-let encryptedExtensions_list_bytesize_nil = LP.serialize_list_nil extension_parser extension_serializer
+let encryptedExtensions_list_bytesize_nil = LP.serialize_list_nil extensionEncryptedExtensions_parser extensionEncryptedExtensions_serializer
 
-let encryptedExtensions_list_bytesize_cons x y = LP.serialize_list_cons extension_parser extension_serializer x y; (extension_bytesize_eq (x))
+let encryptedExtensions_list_bytesize_cons x y = LP.serialize_list_cons extensionEncryptedExtensions_parser extensionEncryptedExtensions_serializer x y; (extensionEncryptedExtensions_bytesize_eq (x))
 
 noextract let encryptedExtensions'_parser : LP.parser _ encryptedExtensions' =
-  LP.parse_bounded_vldata_strong 0 65535 (LP.serialize_list _ extension_serializer)
+  LP.parse_bounded_vldata_strong 0 65535 (LP.serialize_list _ extensionEncryptedExtensions_serializer)
 
 let encryptedExtensions_parser = encryptedExtensions'_parser `LP.parse_synth` synth_encryptedExtensions 
 
 noextract let encryptedExtensions'_serializer : LP.serializer encryptedExtensions'_parser =
-  LP.serialize_bounded_vldata_strong 0 65535 (LP.serialize_list _ extension_serializer)
+  LP.serialize_bounded_vldata_strong 0 65535 (LP.serialize_list _ extensionEncryptedExtensions_serializer)
 
 let encryptedExtensions_serializer = LP.serialize_synth _ synth_encryptedExtensions encryptedExtensions'_serializer synth_encryptedExtensions_recip ()
 
 let encryptedExtensions_bytesize_eq x = ()
 
 inline_for_extraction let encryptedExtensions'_validator : LPS.validator encryptedExtensions'_parser =
-  PPVD.validate_bounded_vldata_strong 0 65535 (LP.serialize_list _ extension_serializer) (PPLS.validate_list extension_validator ()) (PPBI.leaf_read_bounded_integer_2 fits_u64_squash) fits_u64_squash
+  PPVD.validate_bounded_vldata_strong 0 65535 (LP.serialize_list _ extensionEncryptedExtensions_serializer) (PPLS.validate_list extensionEncryptedExtensions_validator ()) (PPBI.leaf_read_bounded_integer_2 fits_u64_squash) fits_u64_squash
 
 let encryptedExtensions_validator = LPC.validate_synth encryptedExtensions'_validator synth_encryptedExtensions
 
 inline_for_extraction let encryptedExtensions'_jumper : LPS.jumper encryptedExtensions'_parser =
-  PPVD.jump_bounded_vldata_strong 0 65535 (LP.serialize_list _ extension_serializer) (PPB.serialized_of_leaf_reader (LP.serialize_bounded_integer (LP.log256' 65535)) (PPBI.leaf_read_bounded_integer_2 fits_u64_squash)) fits_u64_squash
+  PPVD.jump_bounded_vldata_strong 0 65535 (LP.serialize_list _ extensionEncryptedExtensions_serializer) (PPB.serialized_of_leaf_reader (LP.serialize_bounded_integer (LP.log256' 65535)) (PPBI.leaf_read_bounded_integer_2 fits_u64_squash)) fits_u64_squash
 
 let encryptedExtensions_jumper = LPC.jump_synth encryptedExtensions'_jumper synth_encryptedExtensions
 
@@ -71,24 +71,24 @@ let encryptedExtensions_copyful_synth_inverse () : Lemma (LP.synth_inverse synth
 let read_encryptedExtensions : PPB.copyful_parse encryptedExtensions_vmatch encryptedExtensions_parser encryptedExtensions_conv =
   encryptedExtensions_copyful_synth_injective ();
   encryptedExtensions_copyful_synth_inverse ();
-  assert_norm ((LP.get_parser_kind extension_parser).LP.parser_kind_subkind == Some LP.ParserStrong);
-  assert_norm ((LP.get_parser_kind extension_parser).LP.parser_kind_low > 0);
+  assert_norm ((LP.get_parser_kind extensionEncryptedExtensions_parser).LP.parser_kind_subkind == Some LP.ParserStrong);
+  assert_norm ((LP.get_parser_kind extensionEncryptedExtensions_parser).LP.parser_kind_low > 0);
   PPC.copyful_parse_synth
-    (PPVD.copyful_parse_bounded_vldata_strong_payload 0 65535 (LP.serialize_list _ extension_serializer)
-       (PPLS.copyful_parse_list read_extension extension_jumper ())
+    (PPVD.copyful_parse_bounded_vldata_strong_payload 0 65535 (LP.serialize_list _ extensionEncryptedExtensions_serializer)
+       (PPLS.copyful_parse_list read_extensionEncryptedExtensions extensionEncryptedExtensions_jumper ())
        (PPBI.leaf_read_bounded_integer_2 fits_u64_squash) fits_u64_squash)
     synth_encryptedExtensions synth_encryptedExtensions_recip
 
 let free_encryptedExtensions : PPB.free_t encryptedExtensions_vmatch =
-  PPVD.free_vldata_strong 0 65535 (LP.serialize_list _ extension_serializer) (PPVCL.free_vclist (PPB.free_vmatch_conv extension_vmatch extension_conv free_extension))
+  PPVD.free_vldata_strong 0 65535 (LP.serialize_list _ extensionEncryptedExtensions_serializer) (PPVCL.free_vclist (PPB.free_vmatch_conv extensionEncryptedExtensions_vmatch extensionEncryptedExtensions_conv free_extensionEncryptedExtensions))
 
 let write_encryptedExtensions : PPB.l2r_safe_writer encryptedExtensions_vmatch encryptedExtensions_serializer encryptedExtensions_conv =
   encryptedExtensions_copyful_synth_injective ();
   encryptedExtensions_copyful_synth_inverse ();
-  assert_norm ((LP.get_parser_kind extension_parser).LP.parser_kind_subkind == Some LP.ParserStrong);
-  assert_norm ((LP.get_parser_kind extension_parser).LP.parser_kind_low > 0);
+  assert_norm ((LP.get_parser_kind extensionEncryptedExtensions_parser).LP.parser_kind_subkind == Some LP.ParserStrong);
+  assert_norm ((LP.get_parser_kind extensionEncryptedExtensions_parser).LP.parser_kind_low > 0);
   PPC.l2r_safe_writer_synth
-    ((PPVD.l2r_safe_writer_bounded_vldata_strong_payload 0 (LSeqB.mk_seq_sizet 0 fits_u64_squash) 65535 (LSeqB.mk_seq_sizet 65535 fits_u64_squash) 2 2sz (LP.serialize_list _ extension_serializer)
-       (PPLS.l2r_safe_writer_list extension_serializer write_extension ()) fits_u64_squash) <: PPB.l2r_safe_writer _ encryptedExtensions'_serializer _)
+    ((PPVD.l2r_safe_writer_bounded_vldata_strong_payload 0 (LSeqB.mk_seq_sizet 0 fits_u64_squash) 65535 (LSeqB.mk_seq_sizet 65535 fits_u64_squash) 2 2sz (LP.serialize_list _ extensionEncryptedExtensions_serializer)
+       (PPLS.l2r_safe_writer_list extensionEncryptedExtensions_serializer write_extensionEncryptedExtensions ()) fits_u64_squash) <: PPB.l2r_safe_writer _ encryptedExtensions'_serializer _)
     synth_encryptedExtensions synth_encryptedExtensions_recip
 

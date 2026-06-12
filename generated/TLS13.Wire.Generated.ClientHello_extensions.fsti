@@ -33,17 +33,17 @@ module PPSL = LowParse.PulseParse.SizeLeaf
 module LSeqB = LowParse.Pulse.SeqBytes
 module LPITE = LowParse.PulseParse.IfThenElse
 
-open TLS13.Wire.Generated.Extension
+open TLS13.Wire.Generated.ExtensionClientHello
 
-noextract let clientHello_extensions_list_bytesize (x: list extension) : GTot nat = Seq.length (LP.serialize (LP.serialize_list _ extension_serializer) x)
+noextract let clientHello_extensions_list_bytesize (x: list extensionClientHello) : GTot nat = Seq.length (LP.serialize (LP.serialize_list _ extensionClientHello_serializer) x)
 
-type clientHello_extensions = l:list extension{let x = clientHello_extensions_list_bytesize l in 8 <= x /\ x <= 65535}
+type clientHello_extensions = l:list extensionClientHello{let x = clientHello_extensions_list_bytesize l in 8 <= x /\ x <= 65535}
 
 val clientHello_extensions_list_bytesize_nil : squash (clientHello_extensions_list_bytesize [] == 0)
 
-val clientHello_extensions_list_bytesize_cons (x: extension) (y: list extension) : Lemma (clientHello_extensions_list_bytesize (x :: y) == (extension_bytesize (x)) + clientHello_extensions_list_bytesize y) [SMTPat (clientHello_extensions_list_bytesize (x :: y))]
+val clientHello_extensions_list_bytesize_cons (x: extensionClientHello) (y: list extensionClientHello) : Lemma (clientHello_extensions_list_bytesize (x :: y) == (extensionClientHello_bytesize (x)) + clientHello_extensions_list_bytesize y) [SMTPat (clientHello_extensions_list_bytesize (x :: y))]
 
-type clientHello_extensions' = LP.parse_bounded_vldata_strong_t 8 65535 (LP.serialize_list _ extension_serializer)
+type clientHello_extensions' = LP.parse_bounded_vldata_strong_t 8 65535 (LP.serialize_list _ extensionClientHello_serializer)
 
 inline_for_extraction let synth_clientHello_extensions (x: clientHello_extensions') : Tot clientHello_extensions = x
 
@@ -65,15 +65,15 @@ val clientHello_extensions_jumper: LPS.jumper clientHello_extensions_parser
 
 val clientHello_extensions_bytesize_eqn (x: clientHello_extensions) : Lemma (clientHello_extensions_bytesize x == 2 + clientHello_extensions_list_bytesize x) [SMTPat (clientHello_extensions_bytesize x)]
 
-let clientHello_extensions_lowtype = PPVCL.vclist_lowtype extension_lowtype
+let clientHello_extensions_lowtype = PPVCL.vclist_lowtype extensionClientHello_lowtype
 
-noextract let clientHello_extensions_mid = list extension
+noextract let clientHello_extensions_mid = list extensionClientHello
 
 let clientHello_extensions_vmatch : clientHello_extensions_lowtype -> clientHello_extensions_mid -> Pulse.Lib.Core.slprop =
-  PPVD.vmatch_vldata_strong 8 65535 (LP.serialize_list _ extension_serializer) (PPVCL.vmatch_vclist (PPB.vmatch_conv extension_vmatch extension_conv))
+  PPVD.vmatch_vldata_strong 8 65535 (LP.serialize_list _ extensionClientHello_serializer) (PPVCL.vmatch_vclist (PPB.vmatch_conv extensionClientHello_vmatch extensionClientHello_conv))
 
 noextract let clientHello_extensions_conv : clientHello_extensions_mid -> GTot (FStar.Pervasives.Native.option clientHello_extensions) =
-  PPC.synth_conv (PPVD.vldata_strong_conv 8 65535 (LP.serialize_list _ extension_serializer) (fun (x: list extension) -> FStar.Pervasives.Native.Some x)) synth_clientHello_extensions
+  PPC.synth_conv (PPVD.vldata_strong_conv 8 65535 (LP.serialize_list _ extensionClientHello_serializer) (fun (x: list extensionClientHello) -> FStar.Pervasives.Native.Some x)) synth_clientHello_extensions
 
 val read_clientHello_extensions : PPB.copyful_parse clientHello_extensions_vmatch clientHello_extensions_parser clientHello_extensions_conv
 

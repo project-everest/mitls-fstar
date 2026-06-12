@@ -128,15 +128,14 @@ struct { opaque random[32]; } Random;
 
 
 /* ===================================================================== */
-/* Generic extension envelope (canonical TLS-13 QD style)                */
-/*   The covered extension bodies are the standalone types below; each   */
-/*   travels inside extension_data when extension_type matches its tag.  */
+/* Per-message typed extension envelopes                                 */
+/*   extension_type is an open enum; recognized extensions carry their   */
+/*   typed body, unrecognized ones carry raw bytes (default: opaque,     */
+/*   which QuackyDucky frames as a single 2-byte-length vlbytes that      */
+/*   round-trips the exact wire).  The recognized body for a given        */
+/*   extension_type differs by message (e.g. key_share: list in CH,       */
+/*   single entry in SH), so each message has its own envelope.           */
 /* ===================================================================== */
-
-struct {
-    ExtensionType extension_type;
-    opaque        extension_data<0..2^16-1>;
-} Extension;
 
 /* extension_data payloads for the covered extensions: */
 
@@ -197,6 +196,51 @@ struct {
 } SupportedVersionsServerHello;
 
 
+/* ClientHello extension envelope: recognized CH bodies + raw bytes default. */
+struct {
+    ExtensionType extension_type;
+    uint16        ext_len;
+    select (extension_type) {
+        case server_name:          ServerNameList;
+        case supported_groups:     NamedGroupList;
+        case signature_algorithms: SignatureSchemeList;
+        case key_share:            KeyShareClientHello;
+        case supported_versions:   SupportedVersionsClientHello;
+        default:                   opaque;
+    } extension_data[ext_len];
+} ExtensionClientHello;
+
+/* ServerHello extension envelope: key_share + supported_versions, raw default. */
+struct {
+    ExtensionType extension_type;
+    uint16        ext_len;
+    select (extension_type) {
+        case key_share:          KeyShareServerHello;
+        case supported_versions: SupportedVersionsServerHello;
+        default:                 opaque;
+    } extension_data[ext_len];
+} ExtensionServerHello;
+
+/* EncryptedExtensions envelope: ALPN recognized, raw bytes default. */
+struct {
+    ExtensionType extension_type;
+    uint16        ext_len;
+    select (extension_type) {
+        case application_layer_protocol_negotiation: ProtocolNameList;
+        default:                                     opaque;
+    } extension_data[ext_len];
+} ExtensionEncryptedExtensions;
+
+/* CertificateEntry envelope: no recognized extensions, raw bytes default. */
+struct {
+    ExtensionType extension_type;
+    uint16        ext_len;
+    select (extension_type) {
+        default: opaque;
+    } extension_data[ext_len];
+} ExtensionCertificate;
+
+
 /* ===================================================================== */
 /* Handshake messages                                                    */
 /* ===================================================================== */
@@ -207,7 +251,7 @@ struct {
     opaque          legacy_session_id<0..32>;          /* [covered: empty] */
     CipherSuite     cipher_suites<2..2^16-2>;          /* [covered: {0x1303}] */
     opaque          legacy_compression_methods<1..2^8-1>; /* [covered: {0x00}] */
-    Extension       extensions<8..2^16-1>;             /* order: server_name?, */
+    ExtensionClientHello extensions<8..2^16-1>;        /* order: server_name?, */
                                                        /* supported_groups,    */
                                                        /* signature_algorithms,*/
                                                        /* key_share,           */
@@ -227,7 +271,7 @@ struct {
     opaque          legacy_session_id_echo<0..32>;     /* [covered: empty]      */
     CipherSuite     cipher_suite;                      /* [covered: 0x1303]     */
     uint8           legacy_compression_method = { 0 };
-    Extension       extensions<6..2^16-1>;             /* supported_versions +  */
+    ExtensionServerHello extensions<6..2^16-1>;        /* supported_versions +  */
                                                        /* key_share             */
 } ServerHelloBody;
 
@@ -242,12 +286,12 @@ struct {
 } ServerHello;
 
 struct {
-    Extension extensions<0..2^16-1>;   /* [covered: only ALPN(16) interpreted] */
+    ExtensionEncryptedExtensions extensions<0..2^16-1>;   /* [covered: only ALPN(16) interpreted] */
 } EncryptedExtensions;
 
 struct {
     opaque    cert_data<1..2^24-1>;        /* X.509 DER (CertificateType X509) */
-    Extension extensions<0..2^16-1>;       /* [covered: empty] */
+    ExtensionCertificate extensions<0..2^16-1>;       /* [covered: empty] */
 } CertificateEntry;
 
 struct {

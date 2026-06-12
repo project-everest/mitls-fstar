@@ -36,7 +36,7 @@ module LPITE = LowParse.PulseParse.IfThenElse
 open TLS13.Wire.Generated.ProtocolVersion
 open TLS13.Wire.Generated.Random
 open TLS13.Wire.Generated.CipherSuite
-open TLS13.Wire.Generated.Extension
+open TLS13.Wire.Generated.ExtensionClientHello
 
 (* Type of field legacy_session_id*)
 include TLS13.Wire.Generated.ClientHello_legacy_session_id

@@ -37,29 +37,29 @@ module LPITE = LowParse.PulseParse.IfThenElse
 
 assume val fits_u64_squash : squash FStar.SizeT.fits_u64
 
-let clientHello_extensions_list_bytesize_nil = LP.serialize_list_nil extension_parser extension_serializer
+let clientHello_extensions_list_bytesize_nil = LP.serialize_list_nil extensionClientHello_parser extensionClientHello_serializer
 
-let clientHello_extensions_list_bytesize_cons x y = LP.serialize_list_cons extension_parser extension_serializer x y; (extension_bytesize_eq (x))
+let clientHello_extensions_list_bytesize_cons x y = LP.serialize_list_cons extensionClientHello_parser extensionClientHello_serializer x y; (extensionClientHello_bytesize_eq (x))
 
 noextract let clientHello_extensions'_parser : LP.parser _ clientHello_extensions' =
-  LP.parse_bounded_vldata_strong 8 65535 (LP.serialize_list _ extension_serializer)
+  LP.parse_bounded_vldata_strong 8 65535 (LP.serialize_list _ extensionClientHello_serializer)
 
 let clientHello_extensions_parser = clientHello_extensions'_parser `LP.parse_synth` synth_clientHello_extensions 
 
 noextract let clientHello_extensions'_serializer : LP.serializer clientHello_extensions'_parser =
-  LP.serialize_bounded_vldata_strong 8 65535 (LP.serialize_list _ extension_serializer)
+  LP.serialize_bounded_vldata_strong 8 65535 (LP.serialize_list _ extensionClientHello_serializer)
 
 let clientHello_extensions_serializer = LP.serialize_synth _ synth_clientHello_extensions clientHello_extensions'_serializer synth_clientHello_extensions_recip ()
 
 let clientHello_extensions_bytesize_eq x = ()
 
 inline_for_extraction let clientHello_extensions'_validator : LPS.validator clientHello_extensions'_parser =
-  PPVD.validate_bounded_vldata_strong 8 65535 (LP.serialize_list _ extension_serializer) (PPLS.validate_list extension_validator ()) (PPBI.leaf_read_bounded_integer_2 fits_u64_squash) fits_u64_squash
+  PPVD.validate_bounded_vldata_strong 8 65535 (LP.serialize_list _ extensionClientHello_serializer) (PPLS.validate_list extensionClientHello_validator ()) (PPBI.leaf_read_bounded_integer_2 fits_u64_squash) fits_u64_squash
 
 let clientHello_extensions_validator = LPC.validate_synth clientHello_extensions'_validator synth_clientHello_extensions
 
 inline_for_extraction let clientHello_extensions'_jumper : LPS.jumper clientHello_extensions'_parser =
-  PPVD.jump_bounded_vldata_strong 8 65535 (LP.serialize_list _ extension_serializer) (PPB.serialized_of_leaf_reader (LP.serialize_bounded_integer (LP.log256' 65535)) (PPBI.leaf_read_bounded_integer_2 fits_u64_squash)) fits_u64_squash
+  PPVD.jump_bounded_vldata_strong 8 65535 (LP.serialize_list _ extensionClientHello_serializer) (PPB.serialized_of_leaf_reader (LP.serialize_bounded_integer (LP.log256' 65535)) (PPBI.leaf_read_bounded_integer_2 fits_u64_squash)) fits_u64_squash
 
 let clientHello_extensions_jumper = LPC.jump_synth clientHello_extensions'_jumper synth_clientHello_extensions
 
@@ -71,24 +71,24 @@ let clientHello_extensions_copyful_synth_inverse () : Lemma (LP.synth_inverse sy
 let read_clientHello_extensions : PPB.copyful_parse clientHello_extensions_vmatch clientHello_extensions_parser clientHello_extensions_conv =
   clientHello_extensions_copyful_synth_injective ();
   clientHello_extensions_copyful_synth_inverse ();
-  assert_norm ((LP.get_parser_kind extension_parser).LP.parser_kind_subkind == Some LP.ParserStrong);
-  assert_norm ((LP.get_parser_kind extension_parser).LP.parser_kind_low > 0);
+  assert_norm ((LP.get_parser_kind extensionClientHello_parser).LP.parser_kind_subkind == Some LP.ParserStrong);
+  assert_norm ((LP.get_parser_kind extensionClientHello_parser).LP.parser_kind_low > 0);
   PPC.copyful_parse_synth
-    (PPVD.copyful_parse_bounded_vldata_strong_payload 8 65535 (LP.serialize_list _ extension_serializer)
-       (PPLS.copyful_parse_list read_extension extension_jumper ())
+    (PPVD.copyful_parse_bounded_vldata_strong_payload 8 65535 (LP.serialize_list _ extensionClientHello_serializer)
+       (PPLS.copyful_parse_list read_extensionClientHello extensionClientHello_jumper ())
        (PPBI.leaf_read_bounded_integer_2 fits_u64_squash) fits_u64_squash)
     synth_clientHello_extensions synth_clientHello_extensions_recip
 
 let free_clientHello_extensions : PPB.free_t clientHello_extensions_vmatch =
-  PPVD.free_vldata_strong 8 65535 (LP.serialize_list _ extension_serializer) (PPVCL.free_vclist (PPB.free_vmatch_conv extension_vmatch extension_conv free_extension))
+  PPVD.free_vldata_strong 8 65535 (LP.serialize_list _ extensionClientHello_serializer) (PPVCL.free_vclist (PPB.free_vmatch_conv extensionClientHello_vmatch extensionClientHello_conv free_extensionClientHello))
 
 let write_clientHello_extensions : PPB.l2r_safe_writer clientHello_extensions_vmatch clientHello_extensions_serializer clientHello_extensions_conv =
   clientHello_extensions_copyful_synth_injective ();
   clientHello_extensions_copyful_synth_inverse ();
-  assert_norm ((LP.get_parser_kind extension_parser).LP.parser_kind_subkind == Some LP.ParserStrong);
-  assert_norm ((LP.get_parser_kind extension_parser).LP.parser_kind_low > 0);
+  assert_norm ((LP.get_parser_kind extensionClientHello_parser).LP.parser_kind_subkind == Some LP.ParserStrong);
+  assert_norm ((LP.get_parser_kind extensionClientHello_parser).LP.parser_kind_low > 0);
   PPC.l2r_safe_writer_synth
-    ((PPVD.l2r_safe_writer_bounded_vldata_strong_payload 8 (LSeqB.mk_seq_sizet 8 fits_u64_squash) 65535 (LSeqB.mk_seq_sizet 65535 fits_u64_squash) 2 2sz (LP.serialize_list _ extension_serializer)
-       (PPLS.l2r_safe_writer_list extension_serializer write_extension ()) fits_u64_squash) <: PPB.l2r_safe_writer _ clientHello_extensions'_serializer _)
+    ((PPVD.l2r_safe_writer_bounded_vldata_strong_payload 8 (LSeqB.mk_seq_sizet 8 fits_u64_squash) 65535 (LSeqB.mk_seq_sizet 65535 fits_u64_squash) 2 2sz (LP.serialize_list _ extensionClientHello_serializer)
+       (PPLS.l2r_safe_writer_list extensionClientHello_serializer write_extensionClientHello ()) fits_u64_squash) <: PPB.l2r_safe_writer _ clientHello_extensions'_serializer _)
     synth_clientHello_extensions synth_clientHello_extensions_recip
 

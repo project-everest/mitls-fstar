@@ -33,17 +33,17 @@ module PPSL = LowParse.PulseParse.SizeLeaf
 module LSeqB = LowParse.Pulse.SeqBytes
 module LPITE = LowParse.PulseParse.IfThenElse
 
-open TLS13.Wire.Generated.Extension
+open TLS13.Wire.Generated.ExtensionServerHello
 
-noextract let serverHelloBody_extensions_list_bytesize (x: list extension) : GTot nat = Seq.length (LP.serialize (LP.serialize_list _ extension_serializer) x)
+noextract let serverHelloBody_extensions_list_bytesize (x: list extensionServerHello) : GTot nat = Seq.length (LP.serialize (LP.serialize_list _ extensionServerHello_serializer) x)
 
-type serverHelloBody_extensions = l:list extension{let x = serverHelloBody_extensions_list_bytesize l in 6 <= x /\ x <= 65535}
+type serverHelloBody_extensions = l:list extensionServerHello{let x = serverHelloBody_extensions_list_bytesize l in 6 <= x /\ x <= 65535}
 
 val serverHelloBody_extensions_list_bytesize_nil : squash (serverHelloBody_extensions_list_bytesize [] == 0)
 
-val serverHelloBody_extensions_list_bytesize_cons (x: extension) (y: list extension) : Lemma (serverHelloBody_extensions_list_bytesize (x :: y) == (extension_bytesize (x)) + serverHelloBody_extensions_list_bytesize y) [SMTPat (serverHelloBody_extensions_list_bytesize (x :: y))]
+val serverHelloBody_extensions_list_bytesize_cons (x: extensionServerHello) (y: list extensionServerHello) : Lemma (serverHelloBody_extensions_list_bytesize (x :: y) == (extensionServerHello_bytesize (x)) + serverHelloBody_extensions_list_bytesize y) [SMTPat (serverHelloBody_extensions_list_bytesize (x :: y))]
 
-type serverHelloBody_extensions' = LP.parse_bounded_vldata_strong_t 6 65535 (LP.serialize_list _ extension_serializer)
+type serverHelloBody_extensions' = LP.parse_bounded_vldata_strong_t 6 65535 (LP.serialize_list _ extensionServerHello_serializer)
 
 inline_for_extraction let synth_serverHelloBody_extensions (x: serverHelloBody_extensions') : Tot serverHelloBody_extensions = x
 
@@ -65,15 +65,15 @@ val serverHelloBody_extensions_jumper: LPS.jumper serverHelloBody_extensions_par
 
 val serverHelloBody_extensions_bytesize_eqn (x: serverHelloBody_extensions) : Lemma (serverHelloBody_extensions_bytesize x == 2 + serverHelloBody_extensions_list_bytesize x) [SMTPat (serverHelloBody_extensions_bytesize x)]
 
-let serverHelloBody_extensions_lowtype = PPVCL.vclist_lowtype extension_lowtype
+let serverHelloBody_extensions_lowtype = PPVCL.vclist_lowtype extensionServerHello_lowtype
 
-noextract let serverHelloBody_extensions_mid = list extension
+noextract let serverHelloBody_extensions_mid = list extensionServerHello
 
 let serverHelloBody_extensions_vmatch : serverHelloBody_extensions_lowtype -> serverHelloBody_extensions_mid -> Pulse.Lib.Core.slprop =
-  PPVD.vmatch_vldata_strong 6 65535 (LP.serialize_list _ extension_serializer) (PPVCL.vmatch_vclist (PPB.vmatch_conv extension_vmatch extension_conv))
+  PPVD.vmatch_vldata_strong 6 65535 (LP.serialize_list _ extensionServerHello_serializer) (PPVCL.vmatch_vclist (PPB.vmatch_conv extensionServerHello_vmatch extensionServerHello_conv))
 
 noextract let serverHelloBody_extensions_conv : serverHelloBody_extensions_mid -> GTot (FStar.Pervasives.Native.option serverHelloBody_extensions) =
-  PPC.synth_conv (PPVD.vldata_strong_conv 6 65535 (LP.serialize_list _ extension_serializer) (fun (x: list extension) -> FStar.Pervasives.Native.Some x)) synth_serverHelloBody_extensions
+  PPC.synth_conv (PPVD.vldata_strong_conv 6 65535 (LP.serialize_list _ extensionServerHello_serializer) (fun (x: list extensionServerHello) -> FStar.Pervasives.Native.Some x)) synth_serverHelloBody_extensions
 
 val read_serverHelloBody_extensions : PPB.copyful_parse serverHelloBody_extensions_vmatch serverHelloBody_extensions_parser serverHelloBody_extensions_conv
 
