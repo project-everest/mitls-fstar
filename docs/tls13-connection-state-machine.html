@@ -1,0 +1,1208 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TLS 1.3 ConnectionState state machine audit map</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f6f8fa;
+      --panel: #ffffff;
+      --ink: #24292f;
+      --muted: #57606a;
+      --line: #d0d7de;
+      --blue: #0969da;
+      --green: #1a7f37;
+      --orange: #bf8700;
+      --red: #cf222e;
+      --purple: #8250df;
+      --shadow: 0 1px 2px rgba(27, 31, 36, 0.08);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: var(--ink);
+      background: var(--bg);
+    }
+
+    a {
+      color: var(--blue);
+      text-decoration: none;
+    }
+
+    a:hover {
+      text-decoration: underline;
+    }
+
+    header {
+      padding: 32px 40px 24px;
+      background: linear-gradient(120deg, #0a3069, #8250df);
+      color: #ffffff;
+    }
+
+    header a {
+      color: #ffffff;
+      text-decoration: underline;
+    }
+
+    header p {
+      max-width: 980px;
+      margin: 8px 0 0;
+      font-size: 16px;
+    }
+
+    main {
+      max-width: 1280px;
+      margin: 0 auto;
+      padding: 24px;
+    }
+
+    nav {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 18px;
+    }
+
+    nav a {
+      display: inline-block;
+      padding: 6px 10px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: var(--panel);
+      box-shadow: var(--shadow);
+    }
+
+    section, article {
+      margin: 18px 0;
+      padding: 18px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: var(--panel);
+      box-shadow: var(--shadow);
+    }
+
+    h1, h2, h3, h4 {
+      margin: 0 0 10px;
+      line-height: 1.25;
+    }
+
+    h1 {
+      font-size: 28px;
+    }
+
+    h2 {
+      padding-bottom: 6px;
+      border-bottom: 1px solid var(--line);
+      font-size: 22px;
+    }
+
+    h3 {
+      font-size: 18px;
+    }
+
+    h4 {
+      color: var(--muted);
+      font-size: 13px;
+      letter-spacing: 0.03em;
+      text-transform: uppercase;
+    }
+
+    code {
+      padding: 0.12em 0.32em;
+      border-radius: 6px;
+      background: #f6f8fa;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 0.94em;
+    }
+
+    pre {
+      overflow-x: auto;
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #f6f8fa;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 10px 0;
+    }
+
+    th, td {
+      vertical-align: top;
+      padding: 8px 10px;
+      border: 1px solid var(--line);
+    }
+
+    th {
+      background: #f6f8fa;
+      text-align: left;
+    }
+
+    ul {
+      margin: 8px 0 0 20px;
+      padding: 0;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 12px;
+    }
+
+    .note {
+      color: var(--muted);
+    }
+
+    .diagram-wrap {
+      overflow-x: auto;
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: #ffffff;
+    }
+
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px 18px;
+      margin: 8px 0 12px;
+      color: var(--muted);
+    }
+
+    .legend span::before {
+      content: "";
+      display: inline-block;
+      width: 12px;
+      height: 12px;
+      margin-right: 6px;
+      border-radius: 50%;
+      vertical-align: -1px;
+      background: var(--blue);
+    }
+
+    .legend .network::before {
+      background: var(--green);
+    }
+
+    .legend .local::before {
+      background: var(--blue);
+    }
+
+    .legend .stutter::before {
+      background: var(--orange);
+    }
+
+    .legend .fail::before {
+      background: var(--red);
+    }
+
+    .legend .proof::before {
+      background: var(--purple);
+    }
+
+    svg text {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      pointer-events: none;
+    }
+
+    .state rect {
+      fill: #ffffff;
+      stroke: #57606a;
+      stroke-width: 1.4;
+      rx: 10;
+    }
+
+    .state text {
+      fill: var(--ink);
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .state .sub {
+      fill: var(--muted);
+      font-size: 10px;
+      font-weight: 400;
+    }
+
+    .state:hover rect {
+      stroke: var(--blue);
+      stroke-width: 2.2;
+    }
+
+    .edge {
+      fill: none;
+      stroke: var(--blue);
+      stroke-width: 1.9;
+    }
+
+    .edge.network {
+      stroke: var(--green);
+    }
+
+    .edge.stutter {
+      stroke: var(--orange);
+      stroke-dasharray: 5 4;
+    }
+
+    .edge.fail {
+      stroke: var(--red);
+      stroke-dasharray: 4 3;
+    }
+
+    .edge.proof {
+      stroke: var(--purple);
+      stroke-dasharray: 7 4;
+    }
+
+    .edge-label {
+      fill: var(--ink);
+      font-size: 10.5px;
+      font-weight: 600;
+    }
+
+    .edge-label.small {
+      fill: var(--muted);
+      font-size: 9.5px;
+      font-weight: 500;
+    }
+
+    .edge-hot {
+      fill: none;
+      stroke: transparent;
+      stroke-width: 14;
+    }
+
+    .chip {
+      display: inline-block;
+      padding: 2px 7px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: #f6f8fa;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .transition {
+      border-left: 5px solid var(--blue);
+    }
+
+    .transition.network {
+      border-left-color: var(--green);
+    }
+
+    .transition.fail {
+      border-left-color: var(--red);
+    }
+
+    .transition.stutter {
+      border-left-color: var(--orange);
+    }
+
+    .transition.proof {
+      border-left-color: var(--purple);
+    }
+
+    .transition dl {
+      display: grid;
+      grid-template-columns: 150px 1fr;
+      gap: 6px 14px;
+      margin: 0;
+    }
+
+    .transition dt {
+      color: var(--muted);
+      font-weight: 700;
+    }
+
+    .transition dd {
+      margin: 0;
+    }
+
+    .code-links {
+      margin-top: 10px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .two-col {
+      columns: 2 360px;
+      column-gap: 24px;
+    }
+
+    @media print {
+      body {
+        background: #ffffff;
+      }
+
+      main {
+        max-width: none;
+      }
+
+      nav {
+        display: none;
+      }
+
+      section, article {
+        box-shadow: none;
+        break-inside: avoid;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>TLS 1.3 <code>Spec.ConnectionState</code> state machine audit map</h1>
+    <p>
+      This is a clickable audit artifact for the authoritative TLS client spec in
+      <a href="../src/spec/TLS13.Spec.ConnectionState.fst"><code>src/spec/TLS13.Spec.ConnectionState.fst</code></a>.
+      The diagram links every major state and transition to a detailed card with guards, functional updates,
+      wire/log effects, and source references.
+    </p>
+  </header>
+
+  <main>
+    <nav aria-label="Document sections">
+      <a href="#diagram">Diagram</a>
+      <a href="#states">State inventory</a>
+      <a href="#transition-index">Transition index</a>
+      <a href="#functional-layers">Functional layers</a>
+      <a href="#theorem-surface">Top-level theorem relation</a>
+      <a href="#module-boundaries">Module boundaries</a>
+    </nav>
+
+    <section id="sources">
+      <h2>Reading guide and source-of-truth modules</h2>
+      <p>
+        The executable transition function is split by event class:
+        <a href="../src/spec/TLS13.Spec.ConnectionState.fst#L481-L538"><code>step_local_event</code></a>,
+        <a href="../src/spec/TLS13.Spec.ConnectionState.fst#L540-L641"><code>step_handshake_message</code></a>,
+        <a href="../src/spec/TLS13.Spec.ConnectionState.fst#L643-L785"><code>step_tls_message</code></a>, and
+        <a href="../src/spec/TLS13.Spec.ConnectionState.fst#L787-L797"><code>step_model</code></a>.
+        Legality is checked separately by
+        <a href="../src/spec/TLS13.Spec.ConnectionState.fst#L880-L999"><code>legal_*_event</code></a>.
+        A real state step is the relational wrapper
+        <a href="../src/spec/TLS13.Spec.ConnectionState.fst#L1830-L1847"><code>legal_connection_delta</code></a>, which joins the event,
+        the pure model update, raw-byte deltas, and append-only logs.
+      </p>
+      <p>
+        Line references point at the current repository layout. The large proof lemmas live outside the audit-facing core in
+        <a href="../src/spec/TLS13.ConnectionState.Lemmas.fst"><code>TLS13.ConnectionState.Lemmas</code></a>.
+      </p>
+    </section>
+
+    <section id="diagram">
+      <h2>Clickable full state machine diagram</h2>
+      <div class="legend">
+        <span class="local">local driver event</span>
+        <span class="network">received/sent TLS message</span>
+        <span class="stutter">stutter or key-install side effect</span>
+        <span class="fail">failure transition</span>
+        <span class="proof">proof/theorem projection</span>
+      </div>
+      <div class="diagram-wrap">
+        <svg width="1220" height="1120" viewBox="0 0 1220 1120" role="img" aria-labelledby="diagram-title diagram-desc">
+          <title id="diagram-title">TLS13.Spec.ConnectionState state machine</title>
+          <desc id="diagram-desc">Clickable diagram of connection control states, handshake stages, application states, failures, and top-level theorem projections.</desc>
+          <defs>
+            <marker id="arrow-blue" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+              <path d="M0,0 L0,6 L9,3 z" fill="#0969da"></path>
+            </marker>
+            <marker id="arrow-green" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+              <path d="M0,0 L0,6 L9,3 z" fill="#1a7f37"></path>
+            </marker>
+            <marker id="arrow-orange" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+              <path d="M0,0 L0,6 L9,3 z" fill="#bf8700"></path>
+            </marker>
+            <marker id="arrow-red" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+              <path d="M0,0 L0,6 L9,3 z" fill="#cf222e"></path>
+            </marker>
+            <marker id="arrow-purple" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+              <path d="M0,0 L0,6 L9,3 z" fill="#8250df"></path>
+            </marker>
+          </defs>
+
+          <rect x="40" y="92" width="550" height="792" rx="18" fill="#f6f8fa" stroke="#d0d7de"></rect>
+          <text x="60" y="118" class="edge-label">ControlHandshaking(stage)</text>
+
+          <a href="#state-new" aria-label="ControlNew state">
+            <g class="state" transform="translate(250 20)">
+              <rect width="190" height="58"></rect>
+              <text x="95" y="25" text-anchor="middle">ControlNew</text>
+              <text class="sub" x="95" y="43" text-anchor="middle">initial model, HsNotStarted</text>
+            </g>
+          </a>
+
+          <a href="#state-started" aria-label="HsStarted state">
+            <g class="state" transform="translate(250 110)">
+              <rect width="190" height="58"></rect>
+              <text x="95" y="25" text-anchor="middle">HsStarted</text>
+              <text class="sub" x="95" y="43" text-anchor="middle">start config recorded</text>
+            </g>
+          </a>
+
+          <a href="#state-clienthello" aria-label="HsClientHelloSent state">
+            <g class="state" transform="translate(250 205)">
+              <rect width="190" height="58"></rect>
+              <text x="95" y="25" text-anchor="middle">HsClientHelloSent</text>
+              <text class="sub" x="95" y="43" text-anchor="middle">CH bytes in transcript</text>
+            </g>
+          </a>
+
+          <a href="#state-serverhello" aria-label="HsServerHelloReceived state">
+            <g class="state" transform="translate(250 300)">
+              <rect width="190" height="58"></rect>
+              <text x="95" y="25" text-anchor="middle">HsServerHelloReceived</text>
+              <text class="sub" x="95" y="43" text-anchor="middle">SH bytes in transcript</text>
+            </g>
+          </a>
+
+          <a href="#state-encryptedextensions" aria-label="HsEncryptedExtensionsReceived state">
+            <g class="state" transform="translate(250 405)">
+              <rect width="190" height="58"></rect>
+              <text x="95" y="25" text-anchor="middle">HsEncryptedExtensionsReceived</text>
+              <text class="sub" x="95" y="43" text-anchor="middle">protected handshake begins</text>
+            </g>
+          </a>
+
+          <a href="#state-certificate" aria-label="HsCertificateReceived state">
+            <g class="state" transform="translate(250 500)">
+              <rect width="190" height="58"></rect>
+              <text x="95" y="25" text-anchor="middle">HsCertificateReceived</text>
+              <text class="sub" x="95" y="43" text-anchor="middle">chain and leaf DER stored</text>
+            </g>
+          </a>
+
+          <a href="#state-certificate-validated" aria-label="HsCertificateValidated state">
+            <g class="state" transform="translate(250 595)">
+              <rect width="190" height="58"></rect>
+              <text x="95" y="25" text-anchor="middle">HsCertificateValidated</text>
+              <text class="sub" x="95" y="43" text-anchor="middle">peer identity installed</text>
+            </g>
+          </a>
+
+          <a href="#state-cv-received" aria-label="HsCertificateVerifyReceived state">
+            <g class="state" transform="translate(250 690)">
+              <rect width="190" height="58"></rect>
+              <text x="95" y="25" text-anchor="middle">HsCertificateVerifyReceived</text>
+              <text class="sub" x="95" y="43" text-anchor="middle">CV input/signature stored</text>
+            </g>
+          </a>
+
+          <a href="#state-cv-verified" aria-label="HsCertificateVerifyVerified state">
+            <g class="state" transform="translate(250 785)">
+              <rect width="190" height="58"></rect>
+              <text x="95" y="25" text-anchor="middle">HsCertificateVerifyVerified</text>
+              <text class="sub" x="95" y="43" text-anchor="middle">signature TCB discharged</text>
+            </g>
+          </a>
+
+          <a href="#state-server-finished-received" aria-label="HsServerFinishedReceived state">
+            <g class="state" transform="translate(680 500)">
+              <rect width="210" height="58"></rect>
+              <text x="105" y="25" text-anchor="middle">HsServerFinishedReceived</text>
+              <text class="sub" x="105" y="43" text-anchor="middle">Finished parsed, not yet verified</text>
+            </g>
+          </a>
+
+          <a href="#state-server-finished-verified" aria-label="HsServerFinishedVerified state">
+            <g class="state" transform="translate(680 595)">
+              <rect width="210" height="58"></rect>
+              <text x="105" y="25" text-anchor="middle">HsServerFinishedVerified</text>
+              <text class="sub" x="105" y="43" text-anchor="middle">server Finished in transcript</text>
+            </g>
+          </a>
+
+          <a href="#state-application" aria-label="ControlApplicationData state">
+            <g class="state" transform="translate(680 700)">
+              <rect width="210" height="68"></rect>
+              <text x="105" y="27" text-anchor="middle">ControlApplicationData</text>
+              <text class="sub" x="105" y="45" text-anchor="middle">client Finished sent</text>
+              <text class="sub" x="105" y="59" text-anchor="middle">app, KeyUpdate, close_notify</text>
+            </g>
+          </a>
+
+          <a href="#state-closing" aria-label="ControlClosing state">
+            <g class="state" transform="translate(680 835)">
+              <rect width="210" height="58"></rect>
+              <text x="105" y="25" text-anchor="middle">ControlClosing</text>
+              <text class="sub" x="105" y="43" text-anchor="middle">local close_notify sent</text>
+            </g>
+          </a>
+
+          <a href="#state-closed" aria-label="ControlClosed state">
+            <g class="state" transform="translate(680 960)">
+              <rect width="210" height="58"></rect>
+              <text x="105" y="25" text-anchor="middle">ControlClosed</text>
+              <text class="sub" x="105" y="43" text-anchor="middle">peer close_notify received</text>
+            </g>
+          </a>
+
+          <a href="#state-failed" aria-label="ControlFailed state">
+            <g class="state" transform="translate(980 500)">
+              <rect width="200" height="68" fill="#fff5f5"></rect>
+              <text x="100" y="27" text-anchor="middle">ControlFailed(error)</text>
+              <text class="sub" x="100" y="45" text-anchor="middle">local fail, alert, rejected HRR,</text>
+              <text class="sub" x="100" y="59" text-anchor="middle">unsupported transition</text>
+            </g>
+          </a>
+
+          <a href="#t-start-handshake">
+            <path class="edge-hot" d="M345,78 L345,110"></path>
+            <path class="edge" marker-end="url(#arrow-blue)" d="M345,78 L345,108"></path>
+            <text class="edge-label" x="370" y="100">LocalStartHandshake</text>
+          </a>
+
+          <a href="#t-send-clienthello">
+            <path class="edge-hot" d="M345,168 L345,205"></path>
+            <path class="edge network" marker-end="url(#arrow-green)" d="M345,168 L345,203"></path>
+            <text class="edge-label" x="370" y="193">send ClientHello</text>
+          </a>
+
+          <a href="#t-recv-serverhello">
+            <path class="edge-hot" d="M345,263 L345,300"></path>
+            <path class="edge network" marker-end="url(#arrow-green)" d="M345,263 L345,298"></path>
+            <text class="edge-label" x="370" y="288">recv ServerHello</text>
+          </a>
+
+          <a href="#t-derive-and-install-handshake">
+            <path class="edge-hot" d="M440,330 C540,330 540,330 440,330"></path>
+            <path class="edge stutter" marker-end="url(#arrow-orange)" d="M440,330 C540,295 540,365 440,335"></path>
+            <text class="edge-label small" x="470" y="304">derive shared secret</text>
+            <text class="edge-label small" x="470" y="318">install handshake keys</text>
+          </a>
+
+          <a href="#t-recv-encryptedextensions">
+            <path class="edge-hot" d="M345,358 L345,405"></path>
+            <path class="edge network" marker-end="url(#arrow-green)" d="M345,358 L345,403"></path>
+            <text class="edge-label" x="370" y="389">recv EncryptedExtensions</text>
+          </a>
+
+          <a href="#t-recv-certificate">
+            <path class="edge-hot" d="M345,463 L345,500"></path>
+            <path class="edge network" marker-end="url(#arrow-green)" d="M345,463 L345,498"></path>
+            <text class="edge-label" x="370" y="488">recv Certificate</text>
+          </a>
+
+          <a href="#t-validate-certificate">
+            <path class="edge-hot" d="M345,558 L345,595"></path>
+            <path class="edge" marker-end="url(#arrow-blue)" d="M345,558 L345,593"></path>
+            <text class="edge-label" x="370" y="583">validate certificate</text>
+          </a>
+
+          <a href="#t-recv-certificate-verify">
+            <path class="edge-hot" d="M345,653 L345,690"></path>
+            <path class="edge network" marker-end="url(#arrow-green)" d="M345,653 L345,688"></path>
+            <text class="edge-label" x="370" y="678">recv CertificateVerify</text>
+          </a>
+
+          <a href="#t-verify-certificate-signature">
+            <path class="edge-hot" d="M345,748 L345,785"></path>
+            <path class="edge" marker-end="url(#arrow-blue)" d="M345,748 L345,783"></path>
+            <text class="edge-label" x="370" y="773">verify certificate signature</text>
+          </a>
+
+          <a href="#t-recv-server-finished">
+            <path class="edge-hot" d="M440,814 C560,814 585,529 680,529"></path>
+            <path class="edge network" marker-end="url(#arrow-green)" d="M440,814 C560,814 585,529 678,529"></path>
+            <text class="edge-label" x="500" y="690">recv Finished</text>
+          </a>
+
+          <a href="#t-verify-server-finished">
+            <path class="edge-hot" d="M785,558 L785,595"></path>
+            <path class="edge" marker-end="url(#arrow-blue)" d="M785,558 L785,593"></path>
+            <text class="edge-label" x="810" y="583">verify Finished</text>
+          </a>
+
+          <a href="#t-install-application-keys">
+            <path class="edge-hot" d="M890,624 C990,594 990,654 890,634"></path>
+            <path class="edge stutter" marker-end="url(#arrow-orange)" d="M890,624 C990,594 990,654 890,634"></path>
+            <text class="edge-label small" x="915" y="607">install app read/write keys</text>
+          </a>
+
+          <a href="#t-send-client-finished">
+            <path class="edge-hot" d="M785,653 L785,700"></path>
+            <path class="edge network" marker-end="url(#arrow-green)" d="M785,653 L785,698"></path>
+            <text class="edge-label" x="810" y="683">send client Finished</text>
+          </a>
+
+          <a href="#t-application-data">
+            <path class="edge-hot" d="M890,728 C1000,675 1000,795 890,752"></path>
+            <path class="edge network" marker-end="url(#arrow-green)" d="M890,728 C1000,675 1000,795 890,752"></path>
+            <text class="edge-label small" x="925" y="704">app send/recv</text>
+            <text class="edge-label small" x="925" y="719">tickets, KeyUpdate</text>
+          </a>
+
+          <a href="#t-deliver-application-data">
+            <path class="edge-hot" d="M680,742 C605,765 605,705 680,728"></path>
+            <path class="edge stutter" marker-end="url(#arrow-orange)" d="M680,742 C605,765 605,705 680,728"></path>
+            <text class="edge-label small" x="585" y="722">deliver pending</text>
+          </a>
+
+          <a href="#t-send-close-notify">
+            <path class="edge-hot" d="M785,768 L785,835"></path>
+            <path class="edge network" marker-end="url(#arrow-green)" d="M785,768 L785,833"></path>
+            <text class="edge-label" x="810" y="808">send close_notify</text>
+          </a>
+
+          <a href="#t-recv-close-notify">
+            <path class="edge-hot" d="M790,893 L790,960"></path>
+            <path class="edge network" marker-end="url(#arrow-green)" d="M790,893 L790,958"></path>
+            <text class="edge-label" x="815" y="933">recv close_notify</text>
+          </a>
+
+          <a href="#t-recv-close-notify">
+            <path class="edge-hot" d="M725,768 C625,835 625,930 680,978"></path>
+            <path class="edge network" marker-end="url(#arrow-green)" d="M725,768 C625,835 625,930 678,978"></path>
+            <text class="edge-label small" x="600" y="870">recv close_notify</text>
+          </a>
+
+          <a href="#t-hello-retry-request">
+            <path class="edge-hot" d="M440,234 C690,210 890,330 980,520"></path>
+            <path class="edge fail" marker-end="url(#arrow-red)" d="M440,234 C690,210 890,330 978,520"></path>
+            <text class="edge-label small" x="650" y="275">recv HelloRetryRequest</text>
+          </a>
+
+          <a href="#t-alert-and-fail">
+            <path class="edge-hot" d="M890,735 C930,650 960,590 980,552"></path>
+            <path class="edge fail" marker-end="url(#arrow-red)" d="M890,735 C930,650 960,590 978,552"></path>
+            <text class="edge-label small" x="928" y="651">alert / LocalFail</text>
+          </a>
+
+          <a href="#t-change-cipher-spec">
+            <path class="edge-hot" d="M68,150 C10,360 10,650 68,852"></path>
+            <path class="edge stutter" marker-end="url(#arrow-orange)" d="M68,150 C10,360 10,650 68,852"></path>
+            <text class="edge-label small" x="18" y="500" transform="rotate(-90 18,500)">ChangeCipherSpec stutters while handshaking</text>
+          </a>
+
+          <a href="#theorem-surface">
+            <path class="edge-hot" d="M885,734 C1050,850 1070,980 1120,1080"></path>
+            <path class="edge proof" marker-end="url(#arrow-purple)" d="M885,734 C1050,850 1070,980 1120,1080"></path>
+            <text class="edge-label small" x="1010" y="900">Impl.Client theorem surface</text>
+          </a>
+        </svg>
+      </div>
+    </section>
+
+    <section id="states">
+      <h2>State inventory</h2>
+      <div class="grid">
+        <article id="state-new">
+          <h3>Control states</h3>
+          <table>
+            <tr><th>Constructor</th><th>Meaning</th></tr>
+            <tr><td><code>ControlNew</code></td><td>Initial control state. The nested handshake record starts at <code>HsNotStarted</code>.</td></tr>
+            <tr><td><code>ControlHandshaking stage</code></td><td>Handshake phase parameterized by the stages below.</td></tr>
+            <tr><td><code>ControlApplicationData</code></td><td>Handshake complete; application data, KeyUpdate, tickets, and close_notify are live.</td></tr>
+            <tr id="state-closing"><td><code>ControlClosing</code></td><td>Local close_notify was sent; peer close_notify is still expected.</td></tr>
+            <tr id="state-closed"><td><code>ControlClosed</code></td><td>Peer close_notify has been accepted.</td></tr>
+            <tr id="state-failed"><td><code>ControlFailed error</code></td><td>Terminal failure with a TLS error.</td></tr>
+          </table>
+          <p class="code-links">Definition: <a href="../src/spec/TLS13.Spec.ConnectionState.fst#L36-L68"><code>connection_control_state</code> and <code>handshake_stage</code></a>.</p>
+        </article>
+
+        <article>
+          <h3>Handshake stages</h3>
+          <ol>
+            <li id="state-started"><code>HsStarted</code>: local start data installed.</li>
+            <li id="state-clienthello"><code>HsClientHelloSent</code>: ClientHello stored and transcript-appended.</li>
+            <li id="state-serverhello"><code>HsServerHelloReceived</code>: ServerHello stored and transcript-appended.</li>
+            <li id="state-encryptedextensions"><code>HsEncryptedExtensionsReceived</code>: encrypted extensions stored.</li>
+            <li id="state-certificate"><code>HsCertificateReceived</code>: certificate chain and leaf DER stored.</li>
+            <li id="state-certificate-validated"><code>HsCertificateValidated</code>: external X509 validation result installed.</li>
+            <li id="state-cv-received"><code>HsCertificateVerifyReceived</code>: CertificateVerify and exact signature-input bytes stored.</li>
+            <li id="state-cv-verified"><code>HsCertificateVerifyVerified</code>: external signature verification result installed.</li>
+            <li id="state-server-finished-received"><code>HsServerFinishedReceived</code>: Finished parsed under server handshake keys.</li>
+            <li id="state-server-finished-verified"><code>HsServerFinishedVerified</code>: Finished verify_data checked and transcript-appended.</li>
+            <li><code>HsClientFinishedSent</code>: historical handshake stage; the control state moves to <code>ControlApplicationData</code> after client Finished.</li>
+          </ol>
+        </article>
+
+        <article id="state-application">
+          <h3>Model fields updated by transitions</h3>
+          <p>
+            <code>connection_model_state</code> carries the review-critical state:
+            control phase, configuration, key schedule, handshake artifacts, record read/write state,
+            application log and pending plaintext, key-update response flag, and raw/event logs.
+          </p>
+          <p class="code-links">Definitions:
+            <a href="../src/spec/TLS13.Spec.ConnectionState.fst#L98-L218"><code>key_schedule_state</code>, <code>handshake_state</code>, <code>record_layer_state</code>, <code>application_state</code>, <code>connection_model_state</code></a>.
+          </p>
+        </article>
+      </div>
+    </section>
+
+    <section id="transition-index">
+      <h2>Transition details</h2>
+      <p>
+        Each card states the guard used by <code>legal_event</code>, the functional update performed by <code>step_model</code>,
+        and the log/byte obligations added by <code>legal_connection_delta</code>. "Raw sent/received" means the event-specific
+        bytes accepted by <a href="../src/spec/TLS13.Spec.ConnectionState.fst#L1688-L1718"><code>event_raw_delta_legal</code></a>.
+      </p>
+
+      <h3>Closed transition matrix</h3>
+      <table>
+        <tr><th>Event family</th><th>Legal source(s)</th><th>Target/effect</th><th>Unsupported or illegal cases</th></tr>
+        <tr>
+          <td><code>LocalStartHandshake</code></td>
+          <td><code>ControlNew</code></td>
+          <td><code>ControlHandshaking HsStarted</code></td>
+          <td>Any already-started control state is not legal.</td>
+        </tr>
+        <tr>
+          <td><code>LocalDeriveSharedSecret</code></td>
+          <td><code>HsServerHelloReceived</code> with stored start, key, ServerHello, and X25519 agreement</td>
+          <td>Stage stutters; key schedule gains shared, early, handshake, and master secrets.</td>
+          <td>Before ServerHello or without matching key-share material, the local event is illegal.</td>
+        </tr>
+        <tr>
+          <td><code>LocalInstallTrafficKeys</code></td>
+          <td><code>HsServerHelloReceived</code> for handshake keys; <code>HsServerFinishedVerified</code> for application keys</td>
+          <td>Stage stutters; key schedule and record read/write keys are installed as allowed by epoch/direction.</td>
+          <td>Mismatched epoch, direction, transcript-derived secret, or stage is illegal. Application write installation is deferred until client Finished.</td>
+        </tr>
+        <tr>
+          <td>Sent <code>ClientHello</code></td>
+          <td><code>HsStarted</code> with start-matching ClientHello</td>
+          <td><code>HsClientHelloSent</code></td>
+          <td>Received ClientHello and duplicate/out-of-order ClientHello are illegal.</td>
+        </tr>
+        <tr>
+          <td>Received <code>ServerHello</code></td>
+          <td><code>HsClientHelloSent</code> with supported suite and offered key share</td>
+          <td><code>HsServerHelloReceived</code></td>
+          <td>Sent ServerHello or unsupported selection is illegal for the supported client path.</td>
+        </tr>
+        <tr>
+          <td>Received <code>HelloRetryRequest</code></td>
+          <td><code>HsClientHelloSent</code></td>
+          <td><code>ControlFailed HelloRetryRequestRejected</code></td>
+          <td>HRR is syntactically legal here but intentionally rejected by the supported profile.</td>
+        </tr>
+        <tr>
+          <td>Received encrypted handshake messages</td>
+          <td>Strict sequence: EncryptedExtensions, Certificate, CertificateVerify, Finished</td>
+          <td>Advances through the corresponding handshake stages, record read sequence, and transcript/storage effects.</td>
+          <td>Out-of-order messages, missing auth material, wrong direction, or missing traffic keys are illegal.</td>
+        </tr>
+        <tr>
+          <td>Local auth/Finished checks</td>
+          <td>Certificate received, CertificateVerify received, or server Finished received</td>
+          <td>Advances to validated, CV-verified, or Finished-verified stages.</td>
+          <td>Failed X509/signature/Finished checks are not accepted events; implementation failure paths use <code>LocalFail</code> or fail responses.</td>
+        </tr>
+        <tr>
+          <td>Sent client <code>Finished</code></td>
+          <td><code>HsServerFinishedVerified</code> with all required client/server traffic material</td>
+          <td><code>ControlApplicationData</code></td>
+          <td>Sending Finished earlier, receiving client Finished, or missing key material is illegal.</td>
+        </tr>
+        <tr>
+          <td>Application data</td>
+          <td><code>ControlApplicationData</code></td>
+          <td>Read/write sequence advances; app log or pending-delivery state changes.</td>
+          <td>Application data outside application phase or without installed application traffic keys is illegal.</td>
+        </tr>
+        <tr>
+          <td>NewSessionTicket and KeyUpdate</td>
+          <td><code>ControlApplicationData</code> under server/client application traffic keys</td>
+          <td>Tickets are ignored after read advance; KeyUpdate rotates traffic keys and pending-response state.</td>
+          <td>Client-sent <code>KeyUpdate UpdateRequested</code> is not legal in this profile; a response send requires the pending flag.</td>
+        </tr>
+        <tr>
+          <td>Alerts and ChangeCipherSpec</td>
+          <td>CloseNotify in application/closing states; non-close alerts generally fail; CCS during handshaking stutters.</td>
+          <td>Close moves to closing/closed; non-close alert moves to failed; CCS keeps the model unchanged.</td>
+          <td>CloseNotify in unrelated phases and CCS outside handshaking are illegal.</td>
+        </tr>
+        <tr>
+          <td><code>LocalFail err</code></td>
+          <td>Any state</td>
+          <td><code>ControlFailed err</code></td>
+          <td>No unsupported case; it is the generic local failure escape.</td>
+        </tr>
+        <tr>
+          <td>Everything else</td>
+          <td>None</td>
+          <td><code>step_model</code> returns <code>None</code> or the guard is false, so no <code>legal_connection_delta</code> exists.</td>
+          <td>This includes server-role behavior, PSK/0-RTT, unsupported cipher/group choices, renegotiation, and multi-message paths outside the current client profile.</td>
+        </tr>
+      </table>
+
+      <article id="t-start-handshake" class="transition">
+        <h3><span class="chip">local</span> LocalStartHandshake</h3>
+        <dl>
+          <dt>Source</dt><dd><code>ControlNew</code>.</dd>
+          <dt>Guard</dt><dd><code>start_matches_config model.model_config start</code> and <code>key_share_consistent start.client_key_share</code>.</dd>
+          <dt>Update</dt><dd>Move to <code>ControlHandshaking HsStarted</code>; store <code>hs_start = Some start</code>.</dd>
+          <dt>Logs/bytes</dt><dd>Local event only: no raw sent or received bytes; event log appends <code>ConnLocalEvent</code>.</dd>
+        </dl>
+        <p class="code-links">Step: <a href="../src/spec/TLS13.Spec.ConnectionState.fst#L481-L485">L481-L485</a>; guard: <a href="../src/spec/TLS13.Spec.ConnectionState.fst#L880-L885">L880-L885</a>.</p>
+      </article>
+
+      <article id="t-send-clienthello" class="transition network">
+        <h3><span class="chip">sent handshake</span> ClientHello</h3>
+        <dl>
+          <dt>Source</dt><dd><code>ControlHandshaking HsStarted</code>.</dd>
+          <dt>Guard</dt><dd><code>hs_start = Some start</code> and <code>client_hello_matches_start ch start</code>.</dd>
+          <dt>Update</dt><dd>Store <code>hs_client_hello = Some ch</code>, exact serialized handshake bytes in <code>hs_client_hello_bytes</code>, append those bytes to the transcript, and move to <code>HsClientHelloSent</code>.</dd>
+          <dt>Logs/bytes</dt><dd>Raw sent delta is a cleartext handshake record for the ClientHello; raw received is empty. Projects to <code>SendClientHello</code> in the abstract trace automaton.</dd>
+        </dl>
+        <p class="code-links">Step: <a href="../src/spec/TLS13.Spec.ConnectionState.fst#L547-L556">L547-L556</a>; guard: <a href="../src/spec/TLS13.Spec.ConnectionState.fst#L933-L936">L933-L936</a>; raw-delta laws: <a href="../src/spec/TLS13.Spec.ConnectionState.fst#L1104-L1154">L1104-L1154</a>.</p>
+      </article>
+
+      <article id="t-recv-serverhello" class="transition network">
+        <h3><span class="chip">received handshake</span> ServerHello</h3>
+        <dl>
+          <dt>Source</dt><dd><code>ControlHandshaking HsClientHelloSent</code>.</dd>
+          <dt>Guard</dt><dd>ServerHello must be admissible for the stored ClientHello: supported cipher suite and key share selected from the client's offer.</dd>
+          <dt>Update</dt><dd>Store <code>hs_server_hello = Some sh</code>, exact serialized ServerHello bytes, append them to the transcript, and move to <code>HsServerHelloReceived</code>.</dd>
+          <dt>Logs/bytes</dt><dd>Raw received delta is a cleartext handshake record; raw sent is empty. This is the last cleartext handshake message accepted by the normal path.</dd>
+        </dl>
+        <p class="code-links">Step: <a href="../src/spec/TLS13.Spec.ConnectionState.fst#L557-L566">L557-L566</a>; guard: <a href="../src/spec/TLS13.Spec.ConnectionState.fst#L937-L941">L937-L941</a>; record/message projection: <a href="../src/spec/TLS13.Spec.ConnectionState.fst#L1016-L1097">L1016-L1097</a>.</p>
+      </article>
+
+      <article id="t-derive-and-install-handshake" class="transition stutter">
+        <h3><span class="chip">local/key schedule</span> derive shared secret and install handshake traffic keys</h3>
+        <dl>
+          <dt>Source</dt><dd><code>ControlHandshaking HsServerHelloReceived</code>.</dd>
+          <dt>Guard</dt><dd><code>LocalDeriveSharedSecret</code> requires stored start and ServerHello, the client's private key, and <code>X25519.shared_secret</code>. <code>LocalInstallTrafficKeys</code> requires traffic-secret material matching <code>expected_traffic_secret</code> for handshake read/write keys.</dd>
+          <dt>Update</dt><dd>Shared secret derivation fills early, handshake, and master secrets plus client/server handshake traffic secrets. Key installation updates the key schedule and installs matching record read/write state for handshake traffic.</dd>
+          <dt>Logs/bytes</dt><dd>Local events: no raw sent or received bytes. The stage stays <code>HsServerHelloReceived</code>; only key-schedule and record-key fields change.</dd>
+        </dl>
+        <p class="code-links">Shared-secret step: <a href="../src/spec/TLS13.Spec.ConnectionState.fst#L486-L500">L486-L500</a>; install step: <a href="../src/spec/TLS13.Spec.ConnectionState.fst#L501-L507">L501-L507</a>; install helper: <a href="../src/spec/TLS13.Spec.ConnectionState.fst#L343-L378">L343-L378</a>; guards: <a href="../src/spec/TLS13.Spec.ConnectionState.fst#L886-L893">L886-L893</a> and <a href="../src/spec/TLS13.Spec.ConnectionState.fst#L840-L878">L840-L878</a>.</p>
+      </article>
+
+      <article id="t-recv-encryptedextensions" class="transition network">
+        <h3><span class="chip">received handshake</span> EncryptedExtensions</h3>
+        <dl>
+          <dt>Source</dt><dd><code>ControlHandshaking HsServerHelloReceived</code>.</dd>
+          <dt>Guard</dt><dd>Server handshake read traffic keys must be installed.</dd>
+          <dt>Update</dt><dd>Advance the record read sequence, store <code>hs_encrypted_extensions</code>, append serialized EncryptedExtensions to the transcript, and move to <code>HsEncryptedExtensionsReceived</code>.</dd>
+          <dt>Logs/bytes</dt><dd>Raw received delta is a protected <code>ApplicationData</code> record that opens to a handshake message under the current read state.</dd>
+        </dl>
+        <p class="code-links">Step: <a href="../src/spec/TLS13.Spec.ConnectionState.fst#L567-L576">L567-L576</a>; guard: <a href="../src/spec/TLS13.Spec.ConnectionState.fst#L942-L943">L942-L943</a>; protected raw law: <a href="../src/spec/TLS13.Spec.ConnectionState.fst#L1459-L1500">L1459-L1500</a>.</p>
+      </article>
+
+      <article id="t-recv-certificate" class="transition network">
+        <h3><span class="chip">received handshake</span> Certificate</h3>
+        <dl>
+          <dt>Source</dt><dd><code>ControlHandshaking HsEncryptedExtensionsReceived</code>.</dd>
+          <dt>Guard</dt><dd>The certificate chain must be non-empty.</dd>
+          <dt>Update</dt><dd>Advance the read sequence, store the parsed certificate, cache the leaf DER from the chain head, append the serialized Certificate to the transcript, and move to <code>HsCertificateReceived</code>.</dd>
+          <dt>Logs/bytes</dt><dd>Protected received handshake record; exact leaf DER is later exposed to the driver copyout theorem.</dd>
+        </dl>
+        <p class="code-links">Step: <a href="../src/spec/TLS13.Spec.ConnectionState.fst#L577-L597">L577-L597</a>; guard: <a href="../src/spec/TLS13.Spec.ConnectionState.fst#L944-L945">L944-L945</a>; copyout theorem boundary: <a href="../src/impl/TLS13.Impl.Client.fsti#L261-L285">Client.fsti L261-L285</a>.</p>
+      </article>
+
+      <article id="t-validate-certificate" class="transition">
+        <h3><span class="chip">local/auth TCB</span> LocalValidateCertificate</h3>
+        <dl>
+          <dt>Source</dt><dd><code>ControlHandshaking HsCertificateReceived</code>.</dd>
+          <dt>Guard</dt><dd>Stored Certificate exists and <code>X509.Spec.validate_chain</code> succeeds for the installed config and supplied peer identity.</dd>
+          <dt>Update</dt><dd>Store <code>hs_validated_peer = Some peer</code> and move to <code>HsCertificateValidated</code>.</dd>
+          <dt>Logs/bytes</dt><dd>Local event only; the public client theorem exposes the validation assumption through <code>local_auth_tcb_projection</code>.</dd>
+        </dl>
+        <p class="code-links">Step: <a href="../src/spec/TLS13.Spec.ConnectionState.fst#L508-L509">L508-L509</a>; guard: <a href="../src/spec/TLS13.Spec.ConnectionState.fst#L897-L905">L897-L905</a>; theorem projection: <a href="../src/impl/TLS13.Impl.Client.Types.fst#L2834-L2862">Client.Types L2834-L2862</a>.</p>
+      </article>
+
+      <article id="t-recv-certificate-verify" class="transition network">
+        <h3><span class="chip">received handshake</span> CertificateVerify</h3>
+        <dl>
+          <dt>Source</dt><dd><code>ControlHandshaking HsCertificateValidated</code>.</dd>
+          <dt>Guard</dt><dd>The validated peer must be present.</dd>
+          <dt>Update</dt><dd>Advance the read sequence, store the parsed CertificateVerify, store the exact <code>certificate_verify_input</code> computed over the pre-CV transcript hash, append the serialized CertificateVerify, and move to <code>HsCertificateVerifyReceived</code>.</dd>
+          <dt>Logs/bytes</dt><dd>Protected received handshake record; exact CV input and signature are exposed to the external signature TCB.</dd>
+        </dl>
+        <p class="code-links">Step: <a href="../src/spec/TLS13.Spec.ConnectionState.fst#L598-L616">L598-L616</a>; guard: <a href="../src/spec/TLS13.Spec.ConnectionState.fst#L946-L947">L946-L947</a>; copyout boundary: <a href="../src/impl/TLS13.Impl.Client.fsti#L287-L324">Client.fsti L287-L324</a>.</p>
+      </article>
+
+      <article id="t-verify-certificate-signature" class="transition">
+        <h3><span class="chip">local/auth TCB</span> LocalVerifyCertificateSignature</h3>
+        <dl>
+          <dt>Source</dt><dd><code>ControlHandshaking HsCertificateVerifyReceived</code>.</dd>
+          <dt>Guard</dt><dd>Validated peer, stored CV, and stored CV input are present; the supplied CV matches the stored CV; <code>Crypto.Spec.verify_signature</code> succeeds.</dd>
+          <dt>Update</dt><dd>Mark <code>hs_certificate_verify_verified = true</code> and move to <code>HsCertificateVerifyVerified</code>.</dd>
+          <dt>Logs/bytes</dt><dd>Local event only; no raw wire bytes. The public theorem pins the local event to the stored peer/CV material.</dd>
+        </dl>
+        <p class="code-links">Step: <a href="../src/spec/TLS13.Spec.ConnectionState.fst#L510-L517">L510-L517</a>; guard: <a href="../src/spec/TLS13.Spec.ConnectionState.fst#L906-L911">L906-L911</a>; theorem projection: <a href="../src/impl/TLS13.Impl.Client.Types.fst#L2834-L2862">Client.Types L2834-L2862</a>.</p>
+      </article>
+
+      <article id="t-recv-server-finished" class="transition network">
+        <h3><span class="chip">received handshake</span> server Finished</h3>
+        <dl>
+          <dt>Source</dt><dd><code>ControlHandshaking HsCertificateVerifyVerified</code>.</dd>
+          <dt>Guard</dt><dd>Server handshake traffic key is installed.</dd>
+          <dt>Update</dt><dd>Advance the read sequence, store the parsed server Finished, and move to <code>HsServerFinishedReceived</code>. The transcript is not advanced until the local verify event succeeds.</dd>
+          <dt>Logs/bytes</dt><dd>Protected received handshake record under server handshake read keys.</dd>
+        </dl>
+        <p class="code-links">Step: <a href="../src/spec/TLS13.Spec.ConnectionState.fst#L617-L626">L617-L626</a>; guard: <a href="../src/spec/TLS13.Spec.ConnectionState.fst#L948-L949">L948-L949</a>.</p>
+      </article>
+
+      <article id="t-verify-server-finished" class="transition">
+        <h3><span class="chip">local/crypto check</span> LocalVerifyFinished</h3>
+        <dl>
+          <dt>Source</dt><dd><code>ControlHandshaking HsServerFinishedReceived</code>.</dd>
+          <dt>Guard</dt><dd>Stored Finished and server handshake traffic secret exist; <code>Handshake.Spec.verify_finished</code> succeeds over the current transcript hash.</dd>
+          <dt>Update</dt><dd>Mark the server Finished verified, append the serialized Finished to the transcript, and move to <code>HsServerFinishedVerified</code>.</dd>
+          <dt>Logs/bytes</dt><dd>Local event only. This is the state from which application traffic secrets may be installed and client Finished may be sent.</dd>
+        </dl>
+        <p class="code-links">Step: <a href="../src/spec/TLS13.Spec.ConnectionState.fst#L518-L527">L518-L527</a>; guard: <a href="../src/spec/TLS13.Spec.ConnectionState.fst#L912-L917">L912-L917</a>.</p>
+      </article>
+
+      <article id="t-install-application-keys" class="transition stutter">
+        <h3><span class="chip">local/key schedule</span> install application traffic keys</h3>
+        <dl>
+          <dt>Source</dt><dd><code>ControlHandshaking HsServerFinishedVerified</code>.</dd>
+          <dt>Guard</dt><dd>Traffic secret material must match <code>expected_traffic_secret</code> for application read/write labels at the current transcript.</dd>
+          <dt>Update</dt><dd>Server application read keys can be installed in <code>record_read</code>. Client application write material is recorded in the key schedule; actual write-state installation is completed by sending client Finished.</dd>
+          <dt>Logs/bytes</dt><dd>Local event only; no raw bytes. The special deferral for application write keys is encoded in <code>install_record_keys</code>.</dd>
+        </dl>
+        <p class="code-links">Install helper: <a href="../src/spec/TLS13.Spec.ConnectionState.fst#L343-L378">L343-L378</a>; event step: <a href="../src/spec/TLS13.Spec.ConnectionState.fst#L501-L507">L501-L507</a>; guard: <a href="../src/spec/TLS13.Spec.ConnectionState.fst#L840-L878">L840-L878</a>.</p>
+      </article>
+
+      <article id="t-send-client-finished" class="transition network">
+        <h3><span class="chip">sent handshake</span> client Finished</h3>
+        <dl>
+          <dt>Source</dt><dd><code>ControlHandshaking HsServerFinishedVerified</code>.</dd>
+          <dt>Guard</dt><dd>Client handshake, client application, and server application traffic materials must be present.</dd>
+          <dt>Update</dt><dd>Store <code>hs_client_finished</code>, append serialized Finished to the transcript, advance the handshake write sequence, install client application write keys, and move to <code>ControlApplicationData</code>.</dd>
+          <dt>Logs/bytes</dt><dd>Raw sent delta is a protected handshake record sealed under the current write state; application data becomes enabled afterward.</dd>
+        </dl>
+        <p class="code-links">Step: <a href="../src/spec/TLS13.Spec.ConnectionState.fst#L627-L637">L627-L637</a>; guard: <a href="../src/spec/TLS13.Spec.ConnectionState.fst#L950-L953">L950-L953</a>; local-send theorem projection: <a href="../src/impl/TLS13.Impl.Client.Types.fst#L2834-L2862">Client.Types L2834-L2862</a>.</p>
+      </article>
+
+      <article id="t-application-data" class="transition network">
+        <h3><span class="chip">application</span> application data, tickets, and KeyUpdate</h3>
+        <dl>
+          <dt>Source</dt><dd><code>ControlApplicationData</code>.</dd>
+          <dt>Guard</dt><dd>App data send requires client application traffic keys and supported fragment bounds. App data receive and post-handshake messages require server application read keys. KeyUpdate response send with <code>UpdateNotRequested</code> requires <code>app_key_update_response_pending</code>.</dd>
+          <dt>Update</dt><dd>Sent application data advances write records by the supported record count and appends to app log. Received application data advances read sequence and appends received bytes to app log. NewSessionTicket is ignored except for record-read advancement. Received KeyUpdate derives and installs new server read keys and may set a pending response flag. Sent KeyUpdate derives and installs new client write keys and clears the pending flag.</dd>
+          <dt>Logs/bytes</dt><dd>All network-visible application-state events are protected <code>ApplicationData</code> records. The theorem surface exposes sent seal/read decode/key-schedule projections for protected records.</dd>
+        </dl>
+        <p class="code-links">Application-data and KeyUpdate steps: <a href="../src/spec/TLS13.Spec.ConnectionState.fst#L651-L745">L651-L745</a>; guards: <a href="../src/spec/TLS13.Spec.ConnectionState.fst#L968-L980">L968-L980</a>; supported local app-send projection: <a href="../src/impl/TLS13.Impl.Client.Types.fst#L2834-L2862">Client.Types L2834-L2862</a>.</p>
+      </article>
+
+      <article id="t-deliver-application-data" class="transition stutter">
+        <h3><span class="chip">local</span> LocalDeliverApplicationData</h3>
+        <dl>
+          <dt>Source</dt><dd><code>ControlApplicationData</code>.</dd>
+          <dt>Guard</dt><dd>The pending plaintext buffer must have the delivered bytes as a prefix.</dd>
+          <dt>Update</dt><dd>Append delivered bytes to the application log and remove the delivered prefix from pending plaintext.</dd>
+          <dt>Logs/bytes</dt><dd>Local event only; no wire bytes. This transition is how implementation app copyout is related back to spec application observations.</dd>
+        </dl>
+        <p class="code-links">Step: <a href="../src/spec/TLS13.Spec.ConnectionState.fst#L528-L534">L528-L534</a>; guard: <a href="../src/spec/TLS13.Spec.ConnectionState.fst#L918-L920">L918-L920</a>; pending/app consistency: <a href="../src/spec/TLS13.Spec.ConnectionState.fst#L1314-L1374">L1314-L1374</a>.</p>
+      </article>
+
+      <article id="t-send-close-notify" class="transition network">
+        <h3><span class="chip">close</span> send close_notify</h3>
+        <dl>
+          <dt>Source</dt><dd><code>ControlApplicationData</code>.</dd>
+          <dt>Guard</dt><dd>Application data state; normal alert message shape.</dd>
+          <dt>Update</dt><dd>Advance write sequence and move to <code>ControlClosing</code>.</dd>
+          <dt>Logs/bytes</dt><dd>Protected alert record in raw sent bytes; raw received is empty.</dd>
+        </dl>
+        <p class="code-links">Step: <a href="../src/spec/TLS13.Spec.ConnectionState.fst#L748-L758">L748-L758</a>; guard: <a href="../src/spec/TLS13.Spec.ConnectionState.fst#L983-L984">L983-L984</a>.</p>
+      </article>
+
+      <article id="t-recv-close-notify" class="transition network">
+        <h3><span class="chip">close</span> receive close_notify</h3>
+        <dl>
+          <dt>Source</dt><dd><code>ControlApplicationData</code> or <code>ControlClosing</code>.</dd>
+          <dt>Guard</dt><dd>Received alert is exactly <code>CloseNotify</code>.</dd>
+          <dt>Update</dt><dd>Advance read sequence and move to <code>ControlClosed</code>.</dd>
+          <dt>Logs/bytes</dt><dd>Protected alert record in raw received bytes; raw sent is empty.</dd>
+        </dl>
+        <p class="code-links">Application-data close step: <a href="../src/spec/TLS13.Spec.ConnectionState.fst#L759-L767">L759-L767</a>; closing close step: <a href="../src/spec/TLS13.Spec.ConnectionState.fst#L768-L779">L768-L779</a>; guard: <a href="../src/spec/TLS13.Spec.ConnectionState.fst#L985-L986">L985-L986</a>.</p>
+      </article>
+
+      <article id="t-hello-retry-request" class="transition fail">
+        <h3><span class="chip">failure</span> HelloRetryRequest rejected</h3>
+        <dl>
+          <dt>Source</dt><dd><code>ControlHandshaking HsClientHelloSent</code>.</dd>
+          <dt>Guard</dt><dd>HelloRetryRequest is syntactically allowed as a received handshake message at this point.</dd>
+          <dt>Update</dt><dd>Move to <code>ControlFailed HelloRetryRequestRejected</code>. The supported profile intentionally rejects HRR.</dd>
+          <dt>Logs/bytes</dt><dd>Raw received cleartext handshake record is logged with the failure event.</dd>
+        </dl>
+        <p class="code-links">Step: <a href="../src/spec/TLS13.Spec.ConnectionState.fst#L638-L639">L638-L639</a>; guard: <a href="../src/spec/TLS13.Spec.ConnectionState.fst#L954-L955">L954-L955</a>.</p>
+      </article>
+
+      <article id="t-alert-and-fail" class="transition fail">
+        <h3><span class="chip">failure</span> alerts, local failure, and illegal transition failure</h3>
+        <dl>
+          <dt>Source</dt><dd>Non-close alerts may fail from any TLS-message context. <code>LocalFail err</code> may be generated locally from any state. Implementation theorem predicates also classify decode errors and unexpected-message failures.</dd>
+          <dt>Guard</dt><dd>Non-close alert is legal as a received/sent TLS alert. Local fail is always legal.</dd>
+          <dt>Update</dt><dd>Move to <code>ControlFailed (AlertError alert)</code>, <code>ControlFailed err</code>, or an implementation-produced decode/unexpected-message failure state.</dd>
+          <dt>Logs/bytes</dt><dd>Local fail has empty raw deltas. Network failures may have a consumed parsed record, and the client theorem exposes per-step rejected-input witnesses instead of adding rejected bytes to cumulative accepted raw logs.</dd>
+        </dl>
+        <p class="code-links">Alert step: <a href="../src/spec/TLS13.Spec.ConnectionState.fst#L780-L781">L780-L781</a>; local fail step: <a href="../src/spec/TLS13.Spec.ConnectionState.fst#L535-L536">L535-L536</a>; guards: <a href="../src/spec/TLS13.Spec.ConnectionState.fst#L921-L922">L921-L922</a> and <a href="../src/spec/TLS13.Spec.ConnectionState.fst#L987-L988">L987-L988</a>; decode-error theorem projection: <a href="../src/impl/TLS13.Impl.Client.Types.fst#L2598-L2615">Client.Types L2598-L2615</a>.</p>
+      </article>
+
+      <article id="t-change-cipher-spec" class="transition stutter">
+        <h3><span class="chip">stutter</span> ChangeCipherSpec during handshaking</h3>
+        <dl>
+          <dt>Source</dt><dd>Any <code>ControlHandshaking _</code> stage.</dd>
+          <dt>Guard</dt><dd>ChangeCipherSpec is legal during handshaking.</dd>
+          <dt>Update</dt><dd><code>Some model</code>: the state stutters.</dd>
+          <dt>Logs/bytes</dt><dd>The event is logged with raw bytes, but transcript, record state, key schedule, and application state do not change.</dd>
+        </dl>
+        <p class="code-links">Step: <a href="../src/spec/TLS13.Spec.ConnectionState.fst#L782-L783">L782-L783</a>; guard: <a href="../src/spec/TLS13.Spec.ConnectionState.fst#L989-L990">L989-L990</a>.</p>
+      </article>
+    </section>
+
+    <section id="functional-layers">
+      <h2>Functional layers preserved by the spec</h2>
+      <div class="grid">
+        <article>
+          <h3>Single-step transition law</h3>
+          <pre><code>legal_connection_delta st0 delta st1 =
+  legal_event st0.cs_model delta.delta_event /\
+  step_model st0.cs_model delta.delta_event == Some st1.cs_model /\
+  event_raw_delta_legal st0.cs_model delta.delta_event
+    delta.delta_raw_sent delta.delta_raw_received /\
+  st1.cs_wire_log.raw_sent ==
+    st0.cs_wire_log.raw_sent `B.append` delta.delta_raw_sent /\
+  st1.cs_wire_log.raw_received ==
+    st0.cs_wire_log.raw_received `B.append` delta.delta_raw_received /\
+  st1.cs_event_log ==
+    st0.cs_event_log `append` [delta.delta_event]</code></pre>
+          <p class="code-links">Definition: <a href="../src/spec/TLS13.Spec.ConnectionState.fst#L1830-L1847"><code>legal_connection_delta</code></a>.</p>
+        </article>
+
+        <article>
+          <h3>Event/log projections</h3>
+          <p>
+            <code>conn_event_transcript_delta</code>, <code>conn_event_app_sent_delta</code>,
+            <code>conn_event_app_received_delta</code>, and <code>conn_event_record_event_delta</code>
+            define the exact projections from accepted events into transcript bytes, app observations,
+            and record-layer events. These are intentionally functional views of the same event used by
+            <code>legal_connection_delta</code>.
+          </p>
+          <p class="code-links">Projection definitions: <a href="../src/spec/TLS13.Spec.ConnectionState.fst#L1016-L1154">L1016-L1154</a>.</p>
+        </article>
+
+        <article>
+          <h3>Layered consistency package</h3>
+          <p>
+            <code>connection_state_layered_log_consistent</code> packages the audit-relevant preserved facts:
+            event-log replay from the initial config, transcript projection, KeyUpdate pending flag projection,
+            record epoch/sequence projection, record-key/key-schedule consistency, pending application buffer shape,
+            and application-log projection.
+          </p>
+          <p class="code-links">Layer predicates: <a href="../src/spec/TLS13.Spec.ConnectionState.fst#L1314-L1374">L1314-L1374</a>; consistency roots: <a href="../src/spec/TLS13.Spec.ConnectionState.fst#L2085-L2092">L2085-L2092</a>.</p>
+        </article>
+
+        <article>
+          <h3>Raw-to-message replay package</h3>
+          <p>
+            <code>connection_state_raw_to_message_replay_consistent</code> combines cumulative raw-event replay,
+            protected raw segmentation, cumulative sent seal/write-key replay, and cumulative accepted received
+            decode/read-key replay. This is the strongest current pure-spec connection from raw wire logs to messages
+            and state evolution.
+          </p>
+          <p class="code-links">Raw replay and segmentation definitions: <a href="../src/spec/TLS13.Spec.ConnectionState.fst#L1688-L1847">L1688-L1847</a>; top consistency definitions: <a href="../src/spec/TLS13.Spec.ConnectionState.fst#L2085-L2092">L2085-L2092</a>.</p>
+        </article>
+      </div>
+    </section>
+
+    <section id="theorem-surface">
+      <h2>How this spec relates to the top-level verified client theorem</h2>
+      <div class="grid">
+        <article class="transition proof">
+          <h3><code>process_network_bytes</code></h3>
+          <p>
+            The public extracted network API owns concrete buffers and returns a
+            <code>CT.network_bytes_end_to_end_correct</code> postcondition. That predicate proves the consumed input prefix
+            is either zero, a decode-error witness, or a decoded TLS message/event; successful accepted steps are justified
+            by <code>CS.legal_connection_delta</code>, preserve <code>CT.client_state_correct</code>, preserve
+            <code>CT.client_end_to_end_invariant</code>, and expose raw-record, decoded-message, received-event,
+            received-decode, protected-open/read-key, emitted-output, write-key, and seal projections.
+          </p>
+          <p class="code-links">API postcondition: <a href="../src/impl/TLS13.Impl.Client.fsti#L326-L360">Client.fsti L326-L360</a>; theorem predicate: <a href="../src/impl/TLS13.Impl.Client.Types.fst#L2791-L2832">Client.Types L2791-L2832</a>; step predicate: <a href="../src/impl/TLS13.Impl.Client.Types.fst#L2450-L2477">Client.Types L2450-L2477</a>.</p>
+        </article>
+
+        <article class="transition proof">
+          <h3><code>process_local_event</code></h3>
+          <p>
+            The public extracted local-event API requires only <code>CT.local_input_wf</code> for the concrete payload and
+            returns <code>CT.local_event_end_to_end_correct</code>. The postcondition ties successful local sends to legal
+            spec events, exposes exact emitted network/app prefixes, records X509/signature TCB assumptions through
+            <code>local_auth_tcb_projection</code>, proves supported-profile app-send shape, and preserves the same
+            cumulative client invariants as the network theorem.
+          </p>
+          <p class="code-links">API postcondition: <a href="../src/impl/TLS13.Impl.Client.fsti#L362-L398">Client.fsti L362-L398</a>; theorem predicate: <a href="../src/impl/TLS13.Impl.Client.Types.fst#L2834-L2862">Client.Types L2834-L2862</a>; local step predicate: <a href="../src/impl/TLS13.Impl.Client.Types.fst#L2684-L2696">Client.Types L2684-L2696</a>.</p>
+        </article>
+
+        <article class="transition proof">
+          <h3><code>client_state_correct</code> and <code>client_end_to_end_invariant</code></h3>
+          <p>
+            <code>client_state_correct</code> is the implementation theorem's package of pure reachability and spec-log
+            consistency. <code>client_end_to_end_invariant</code> adds the raw-to-message replay package that connects
+            concrete raw buffers to accepted TLS records/messages, transcript and key-schedule evolution, state-machine
+            events, and application observations.
+          </p>
+          <p class="code-links">Theorem packages: <a href="../src/impl/TLS13.Impl.Client.Types.fst#L2450-L2862">Client.Types L2450-L2862</a>; spec consistency roots: <a href="../src/spec/TLS13.Spec.ConnectionState.fst#L2085-L2092">ConnectionState L2085-L2092</a>.</p>
+        </article>
+
+        <article class="transition proof">
+          <h3>Driver and IO history relation</h3>
+          <p>
+            The Pulse driver exposes <code>client_driver_connected d st received sent</code>. This predicate owns the
+            transport channel histories tracked by <code>TLS13.IO.is_channel</code> and relates them to
+            <code>st.cs_wire_log</code> through <code>client_driver_wire_logs_match</code>: sent transport bytes equal the
+            protocol raw-sent log, and received transport bytes split into accepted consumed bytes plus retained buffered
+            read-ahead.
+          </p>
+          <p class="code-links">Driver relation: <a href="../src/impl/TLS13.Impl.Client.Driver.fsti#L21-L50">Client.Driver.fsti L21-L50</a>; IO channel history interface: <a href="../src/impl/TLS13.IO.fsti">TLS13.IO.fsti</a>.</p>
+        </article>
+      </div>
+    </section>
+
+    <section id="module-boundaries">
+      <h2>Spec review surface and module boundaries</h2>
+      <table>
+        <tr><th>Module</th><th>Role in the audit story</th><th>References</th></tr>
+        <tr>
+          <td><code>TLS13.Spec.ConnectionState</code></td>
+          <td>Authoritative concrete TLS client state machine: states, guards, pure steps, event/raw deltas, wire logs, consistency predicates.</td>
+          <td><a href="../src/spec/TLS13.Spec.ConnectionState.fst">source</a></td>
+        </tr>
+        <tr>
+          <td><code>TLS13.ConnectionState.Lemmas</code></td>
+          <td>Proof-support module split out of the audit-facing core. Its lemmas preserve and project the spec invariants but are not the primary review surface.</td>
+          <td><a href="../src/spec/TLS13.ConnectionState.Lemmas.fst">source</a></td>
+        </tr>
+        <tr>
+          <td><code>TLS13.ConnectionLog</code></td>
+          <td>Raw I/O log and stream-shape layer used by <code>ConnectionState</code> for record/message streams, host traces, app projections, and parse/replay facts.</td>
+          <td><a href="../src/spec/TLS13.ConnectionLog.fst">source</a></td>
+        </tr>
+        <tr>
+          <td><code>TLS13.StateMachine</code></td>
+          <td>Small client-only abstract trace automaton. It is not the authoritative spec; it is a compact projection vocabulary used by <code>ConnectionLog</code> and implementation proof projections.</td>
+          <td><a href="../src/spec/TLS13.StateMachine.fst#L1-L12">module comment</a>; <a href="../src/spec/TLS13.StateMachine.fst#L224-L258">abstract step</a></td>
+        </tr>
+        <tr>
+          <td><code>TLS13.Impl.Client</code> / <code>TLS13.Impl.Client.Types</code></td>
+          <td>Extracted buffer/event API and public theorem predicates connecting implementation steps to <code>ConnectionState</code> legal deltas and invariants.</td>
+          <td><a href="../src/impl/TLS13.Impl.Client.fsti">API</a>; <a href="../src/impl/TLS13.Impl.Client.Types.fst">theorem predicates</a></td>
+        </tr>
+        <tr>
+          <td><code>TLS13.Impl.Client.Driver</code></td>
+          <td>Pulse top-level driver facade over IO histories and the extracted client API. It is where raw transport histories are threaded to protocol wire logs.</td>
+          <td><a href="../src/impl/TLS13.Impl.Client.Driver.fsti">API</a></td>
+        </tr>
+      </table>
+    </section>
+  </main>
+</body>
+</html>
