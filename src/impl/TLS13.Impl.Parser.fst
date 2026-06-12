@@ -56,6 +56,12 @@ module U32 = FStar.UInt32
 module Cast = FStar.Int.Cast
 module RVN = TLS13.Wire.Spec.NonExact
 
+module DW = TLS13.Impl.Parser.DecoderWF
+module RVD = TLS13.Wire.Spec.RevealDecode
+module Rec = TLS13.Record
+module RecSpec = TLS13.Record.Spec
+module CS = TLS13.Spec.ConnectionState
+
 (* ServerHello-related generated modules (aliases match TLS13.Wire.Spec.Reveal). *)
 module GSH = TLS13.Wire.Generated.ServerHello
 module GSHB = TLS13.Wire.Generated.ServerHello_body
@@ -219,6 +225,58 @@ fn alloc_copy_vec_prefix
   V.to_vec_pts_to dst;
   with copied. assert (V.pts_to dst copied);
   Seq.lemma_len_slice copied 0 (SZ.v src_len);
+  dst
+}
+
+(* Copy the slice [src[start..start+len)] of a source array into a freshly
+   allocated EXACT-length ([len]) full Vec.  Used by the record decoders for the
+   outer fragment, ciphertext, header AAD and recovered inner payload. *)
+inline_for_extraction
+fn alloc_copy_slice
+  (src: array U8.t)
+  (src_len: SZ.t)
+  (start: SZ.t)
+  (len: SZ.t)
+  (#p: perm)
+  requires pts_to src #p 'src_bytes **
+           pure (B.length 'src_bytes == SZ.v src_len /\
+                 SZ.v start + SZ.v len <= SZ.v src_len)
+  returns dst: V.vec U8.t
+  ensures pts_to src #p 'src_bytes **
+          (exists* dst_bytes.
+            V.pts_to dst dst_bytes **
+            pure (V.is_full_vec dst /\
+                  V.length dst == SZ.v len /\
+                  B.length dst_bytes == SZ.v len /\
+                  B.length (Ghost.reveal 'src_bytes) == SZ.v src_len /\
+                  SZ.v start + SZ.v len <= SZ.v src_len /\
+                  Seq.equal dst_bytes
+                            (Seq.slice (Ghost.reveal 'src_bytes)
+                                       (SZ.v start) (SZ.v start + SZ.v len))))
+{
+  let dst = V.alloc 0uy len;
+  V.to_array_pts_to dst;
+  Arr.pts_to_len src;
+  let src_slice = S.from_array src src_len;
+  S.pts_to_len src_slice;
+  let src_split1 = S.split src_slice start;
+  S.pts_to_len (fst src_split1);
+  S.pts_to_len (snd src_split1);
+  let src_split2 = S.split (snd src_split1) len;
+  S.pts_to_len (fst src_split2);
+  S.pts_to_len (snd src_split2);
+  let dst_slice = S.from_array (V.vec_to_array dst) len;
+  S.pts_to_len dst_slice;
+  S.copy dst_slice (fst src_split2);
+  Seq.lemma_split (Seq.slice (Ghost.reveal 'src_bytes) (SZ.v start) (SZ.v src_len)) (SZ.v len);
+  S.join (fst src_split2) (snd src_split2) (snd src_split1);
+  Seq.lemma_split (Ghost.reveal 'src_bytes) (SZ.v start);
+  S.join (fst src_split1) (snd src_split1) src_slice;
+  S.to_array src_slice;
+  S.to_array dst_slice;
+  V.to_vec_pts_to dst;
+  with copied. assert (V.pts_to dst copied);
+  Seq.slice_slice (Ghost.reveal 'src_bytes) (SZ.v start) (SZ.v src_len) 0 (SZ.v len);
   dst
 }
 
@@ -3068,6 +3126,272 @@ fn parse_tls_message
 (* decode_network_record / decode_network_buffer                           *)
 (* ----------------------------------------------------------------------- *)
 
+(* Strip the TLSInnerPlaintext trailer from a decrypted ApplicationData record.
+   The spec [WS.parse_plaintext] takes the LAST byte as the real content type
+   (no trailing zero-padding is stripped); the payload is the prefix.  We mirror
+   that exactly: require the last byte to be a recognised content type
+   (0x14..0x17) and return an owned copy of the prefix as the inner fragment.
+   Records that carry zero padding (last byte 0x00) are therefore rejected
+   (returns None), which is sound w.r.t. [WS.parse_plaintext] returning None. *)
+
+(* A recovered (content_type, owned fragment, length) triple.  We use a named
+   record rather than a tuple so that the Pulse prover, after a shallow
+   [match _ { Some r -> ... }], can frame the [match] slprop directly (field
+   projections of the bound [r] are already in normal form — a tuple pattern
+   would be a "deep pattern", which Pulse rejects). *)
+noeq
+type decoded_fragment = {
+  df_ct: U8.t;
+  df_payload: V.vec U8.t;
+  df_len: SZ.t;
+}
+
+fn decode_inner_plaintext
+  (out: array U8.t)
+  (opened_len: SZ.t)
+  requires pts_to out 'opened_bytes **
+           pure (B.length 'opened_bytes == SZ.v opened_len)
+  returns r: option decoded_fragment
+  ensures pts_to out 'opened_bytes **
+          (match r with
+           | None -> emp
+           | Some df ->
+             exists* payload_bytes.
+               V.pts_to df.df_payload payload_bytes **
+               pure (V.is_full_vec df.df_payload /\
+                     V.length df.df_payload == SZ.v df.df_len /\
+                     B.length payload_bytes == SZ.v df.df_len /\
+                     SZ.v df.df_len + 1 == SZ.v opened_len /\
+                     (U8.v df.df_ct == 0x14 \/ U8.v df.df_ct == 0x15 \/
+                      U8.v df.df_ct == 0x16 \/ U8.v df.df_ct == 0x17) /\
+                     (exists pt.
+                       WS.parse_plaintext (Ghost.reveal 'opened_bytes) == Some pt /\
+                       L.content_type_matches df.df_ct pt.M.content_type /\
+                       Seq.equal payload_bytes pt.M.fragment)))
+{
+  Arr.pts_to_len out;
+  if (SZ.lt 0sz opened_len) {
+    let last_idx = opened_len `SZ.sub` 1sz;
+    let last = out.(last_idx);
+    if (last = 0x14uy || last = 0x15uy || last = 0x16uy || last = 0x17uy) {
+      let payload = alloc_copy_slice out opened_len 0sz last_idx;
+      RVD.lemma_parse_plaintext_some 'opened_bytes;
+      Some ({ df_ct = last; df_payload = payload; df_len = last_idx })
+    } else {
+      None #decoded_fragment
+    }
+  } else {
+    None #decoded_fragment
+  }
+}
+
+(* Decrypt an ApplicationData (protected) record and strip the inner-plaintext
+   trailer.  Reaches the read record-key state from the connection, calls the
+   record-layer [peek_open_application] (which does NOT mutate the connection),
+   re-folds the connection unchanged, then strips the TLSInnerPlaintext trailer.
+   On success returns the inner content-type byte, an owned copy of the inner
+   payload, its length, and (in [pure]) the [protected_decoder_fragment_relation]
+   that ties the payload to [WS.parse_record]/[R.open_record]/[WS.parse_plaintext].
+   Frees all scratch buffers (aad, cipher, opened) on every path. *)
+fn peek_decrypt_record
+  (c: CR.connection_state)
+  (raw: array U8.t)
+  (raw_len: SZ.t)
+  (flen: SZ.t)
+  (#st0: Ghost.erased CS.connection_state)
+  (#raw_bytes: Ghost.erased B.bytes)
+  requires
+    CR.connection_exactly c st0 **
+    pts_to raw raw_bytes **
+    pure (
+      B.length (Ghost.reveal raw_bytes) == SZ.v raw_len /\
+      SZ.v raw_len == 5 + SZ.v flen /\
+      SZ.v flen <= 16640 /\
+      WS.parse_record (Ghost.reveal raw_bytes) ==
+        Some (T.ApplicationData,
+              Seq.slice (Ghost.reveal raw_bytes) 5 (5 + SZ.v flen),
+              SZ.v raw_len))
+  returns r: option decoded_fragment
+  ensures
+    CR.connection_exactly c st0 **
+    pts_to raw raw_bytes **
+    (match r with
+     | None -> emp
+     | Some df ->
+       exists* payload_bytes.
+         V.pts_to df.df_payload payload_bytes **
+         pure (
+           V.is_full_vec df.df_payload /\
+           V.length df.df_payload == SZ.v df.df_len /\
+           B.length payload_bytes == SZ.v df.df_len /\
+           SZ.v df.df_len <= 16640 /\
+           CT.protected_decoder_fragment_relation
+             (Ghost.reveal st0) df.df_ct payload_bytes (Ghost.reveal raw_bytes)))
+{
+  Arr.pts_to_len raw;
+  if (SZ.lt flen 16sz) {
+    (* fragment too short to contain an AEAD tag — reject *)
+    None #decoded_fragment
+  } else {
+    let out_len = SZ.sub flen 16sz;
+    let aad_vec = alloc_copy_slice raw raw_len 0sz 5sz;
+    let cipher_vec = alloc_copy_slice raw raw_len 5sz flen;
+    let out_vec = V.alloc 0uy out_len;
+    with aad_bytes. assert (V.pts_to aad_vec aad_bytes);
+    with cipher_bytes. assert (V.pts_to cipher_vec cipher_bytes);
+    assert (pure (Seq.equal aad_bytes (CT.record_header_aad (Ghost.reveal raw_bytes))));
+    assert (pure (Seq.equal cipher_bytes
+      (Seq.slice (Ghost.reveal raw_bytes) 5 (5 + SZ.v flen))));
+    V.to_array_pts_to aad_vec;
+    V.to_array_pts_to cipher_vec;
+    V.to_array_pts_to out_vec;
+    (* Reach the read record-key state inside the connection. *)
+    unfold (CR.connection_exactly c st0);
+    unfold (CR.connection_model_exactly c st0.CS.cs_model);
+    unfold (CR.record_layer_exactly c.records st0.CS.cs_model.CS.model_record);
+    let ok = Rec.peek_open_application c.records.read
+               (V.vec_to_array aad_vec) 5sz
+               (V.vec_to_array cipher_vec) flen
+               (V.vec_to_array out_vec);
+    (* peek does not mutate the connection: re-fold unchanged. *)
+    fold (CR.record_layer_exactly c.records st0.CS.cs_model.CS.model_record);
+    fold (CR.connection_model_exactly c st0.CS.cs_model);
+    fold (CR.connection_exactly c st0);
+    V.to_vec_pts_to aad_vec;
+    V.to_vec_pts_to cipher_vec;
+    V.to_vec_pts_to out_vec;
+    if ok {
+      with out_bytes. assert (V.pts_to out_vec out_bytes);
+      V.free aad_vec;
+      V.free cipher_vec;
+      V.to_array_pts_to out_vec;
+      let inner = decode_inner_plaintext (V.vec_to_array out_vec) out_len;
+      V.to_vec_pts_to out_vec;
+      match inner {
+        None -> {
+          V.free out_vec;
+          None #decoded_fragment
+        }
+        Some df -> {
+          with payload_bytes. assert (V.pts_to df.df_payload payload_bytes);
+          (* opened == out_bytes; plaintext == Some?.v (parse_plaintext out_bytes). *)
+          DW.lemma_mk_protected_decoder_fragment_relation
+            (reveal st0) df.df_ct payload_bytes (Ghost.reveal raw_bytes)
+            (Seq.slice (Ghost.reveal raw_bytes) 5 (5 + SZ.v flen))
+            (Ghost.reveal out_bytes)
+            (Some?.v (WS.parse_plaintext (Ghost.reveal out_bytes)));
+          V.free out_vec;
+          Some df
+        }
+      }
+    } else {
+      V.free aad_vec;
+      V.free cipher_vec;
+      V.free out_vec;
+      None #decoded_fragment
+    }
+  }
+}
+
+(* Construction helper: package an already-validated fragment + parse result
+   into a [NetworkRecordOk].  The trivial body just builds the record literal;
+   the value is that all the [decoded.decoded_record_*] projections reduce on a
+   record built from variable fields, so the Pulse prover can frame the
+   per-arm [match decoded.decoded_record_parsed with ...] slprop directly
+   against the [match parsed with ...] slprop supplied by the caller.  All the
+   semantic obligations (network_input_wf, parse_record, the per-arm parse
+   facts) are discharged by the caller and threaded through as preconditions. *)
+fn build_decoded_record_ok
+  (content_type: U8.t)
+  (fragment_vec: V.vec U8.t)
+  (fragment_len: SZ.t)
+  (parsed: option L.tls_message)
+  (st0: Ghost.erased CS.connection_state)
+  (raw_bytes: Ghost.erased B.bytes)
+  (#fragment_bytes: Ghost.erased B.bytes)
+  requires
+    V.pts_to fragment_vec fragment_bytes **
+    (match parsed with
+     | Some l ->
+       (exists* m.
+         L.is_valid_tls_message l m **
+         pure (CT.parsed_message_wire_success_for
+           content_type (Ghost.reveal fragment_bytes) l m)) **
+       pure (
+         exists ct msg.
+           L.content_type_matches content_type ct /\
+           WS.parse_tls_message ct (Ghost.reveal fragment_bytes) == Some msg) **
+       pure (CT.parsed_message_wire_success
+         content_type (Ghost.reveal fragment_bytes) l)
+     | None ->
+       pure (forall (ct:T.content_type).
+         L.content_type_matches content_type ct ==>
+         WS.parse_tls_message ct (Ghost.reveal fragment_bytes) == None)) **
+    pure (
+      V.is_full_vec fragment_vec /\
+      V.length fragment_vec == SZ.v fragment_len /\
+      B.length (Ghost.reveal fragment_bytes) == SZ.v fragment_len /\
+      (exists outer_ct outer_fragment.
+         WS.parse_record (Ghost.reveal raw_bytes) ==
+           Some (outer_ct, outer_fragment, B.length (Ghost.reveal raw_bytes))) /\
+      CT.network_input_wf
+        (Ghost.reveal st0) content_type
+        (Ghost.reveal fragment_bytes) (Ghost.reveal raw_bytes))
+  returns r: L.decoded_network_record_result
+  ensures
+    (match r with
+     | L.NetworkRecordNeedMoreInput -> emp
+     | L.NetworkRecordDecodeError -> emp
+     | L.NetworkRecordOk decoded ->
+      exists* fragment_bytes2.
+        V.pts_to decoded.L.decoded_record_fragment fragment_bytes2 **
+        (match decoded.L.decoded_record_parsed with
+         | Some l ->
+           (exists* m.
+             L.is_valid_tls_message l m **
+             pure (CT.parsed_message_wire_success_for
+               decoded.L.decoded_record_content_type
+               fragment_bytes2
+               l
+               m)) **
+           pure (
+             exists ct msg.
+               L.content_type_matches
+                 decoded.L.decoded_record_content_type
+                 ct /\
+               WS.parse_tls_message ct fragment_bytes2 == Some msg) **
+           pure (CT.parsed_message_wire_success
+             decoded.L.decoded_record_content_type
+             (Ghost.reveal fragment_bytes2)
+             l)
+         | None ->
+           pure (forall (ct:T.content_type).
+             L.content_type_matches
+               decoded.L.decoded_record_content_type
+               ct ==>
+             WS.parse_tls_message ct fragment_bytes2 == None)) **
+        pure (
+          V.is_full_vec decoded.L.decoded_record_fragment /\
+          V.length decoded.L.decoded_record_fragment ==
+            SZ.v decoded.L.decoded_record_fragment_len /\
+          B.length fragment_bytes2 ==
+            SZ.v decoded.L.decoded_record_fragment_len /\
+          (exists outer_ct outer_fragment.
+             WS.parse_record (Ghost.reveal raw_bytes) ==
+               Some (outer_ct, outer_fragment, B.length (Ghost.reveal raw_bytes))) /\
+          CT.network_input_wf
+            (Ghost.reveal st0)
+            decoded.L.decoded_record_content_type
+            fragment_bytes2
+            (Ghost.reveal raw_bytes)))
+{
+  L.NetworkRecordOk
+    { L.decoded_record_content_type = content_type;
+      L.decoded_record_fragment = fragment_vec;
+      L.decoded_record_fragment_len = fragment_len;
+      L.decoded_record_parsed = parsed }
+}
+
 fn decode_network_record
   (c:CR.connection_state)
   (raw: array U8.t)
@@ -3124,19 +3448,222 @@ fn decode_network_record
                   fragment_bytes
                   (Ghost.reveal 'raw_bytes)))
 {
-  (* PLACEHOLDER (sound, no admit) — returning [NetworkRecordDecodeError]
-     trivially satisfies the [emp] post-condition for that result.  A full
-     implementation must: parse the 5-byte outer header (ct in {0x14..0x17},
-     version 0x0303, length <= 16640) enforcing EXACT consumption
-     raw_len == 5 + fragment_len; for ApplicationData (0x17) decrypt the
-     fragment via the record layer ([TLS13.Record.peek_open_application] after
-     unfolding [CR.connection_exactly c] to reach [c.records.read]) and strip
-     the TLSInnerPlaintext trailer (drop trailing zero padding, read the real
-     content-type byte); then feed the recovered fragment to
-     [parse_tls_message]; and discharge [CT.network_input_wf] / [WS.parse_record]
-     via the [CT.lemma_network_input_wf_*] lemmas.  Depends on a completed
-     [parse_tls_message] (blocked above). *)
-  L.NetworkRecordDecodeError
+  Arr.pts_to_len raw;
+  if (SZ.lt raw_len 5sz) {
+    L.NetworkRecordNeedMoreInput
+  } else {
+    let b0 = raw.(0sz);
+    let b1 = raw.(1sz);
+    let b2 = raw.(2sz);
+    let b3 = raw.(3sz);
+    let b4 = raw.(4sz);
+    let flen = SZ.add (SZ.mul (u8_to_sz b3) 256sz) (u8_to_sz b4);
+    if (b1 = 0x03uy && b2 = 0x03uy && SZ.lte flen 16640sz &&
+        (b0 = 0x14uy || b0 = 0x15uy || b0 = 0x16uy || b0 = 0x17uy)) {
+      (* flen <= 16640, so flen + 5 fits in SizeT; require EXACT consumption. *)
+      let rec_len = SZ.add flen 5sz;
+      if (raw_len = rec_len) {
+      RVD.lemma_parse_record_from_header 'raw_bytes;
+      let outer_ct : T.content_type =
+        (if b0 = 0x14uy then T.ChangeCipherSpec
+         else if b0 = 0x15uy then T.Alert
+         else if b0 = 0x16uy then T.Handshake
+         else T.ApplicationData);
+      if (b0 = 0x17uy) {
+        (* PROTECTED path (ApplicationData): decrypt + strip inner plaintext. *)
+        let inner = peek_decrypt_record c raw raw_len flen;
+        match inner {
+          None -> {
+            L.NetworkRecordDecodeError
+          }
+          Some df -> {
+            with payload_bytes. assert (V.pts_to df.df_payload payload_bytes);
+            V.to_array_pts_to df.df_payload;
+            let parsed = parse_tls_message df.df_ct (V.vec_to_array df.df_payload) df.df_len;
+            V.to_vec_pts_to df.df_payload;
+            match parsed {
+              None -> {
+                DW.lemma_mk_protected_network_input_wf_none
+                  (reveal 'st0) df.df_ct payload_bytes (Ghost.reveal 'raw_bytes);
+                build_decoded_record_ok df.df_ct df.df_payload df.df_len None 'st0 'raw_bytes
+              }
+              Some l -> {
+                if (not (DW.l_is_received_cleartext l)) {
+                  with m. assert (L.is_valid_tls_message l m);
+                  DW.lemma_mk_protected_network_input_wf
+                    (reveal 'st0) df.df_ct payload_bytes (Ghost.reveal 'raw_bytes)
+                    (Seq.slice (Ghost.reveal 'raw_bytes) 5 (5 + SZ.v flen)) l m;
+                  build_decoded_record_ok df.df_ct df.df_payload df.df_len (Some l) 'st0 'raw_bytes
+                } else {
+                  L.free_tls_message l;
+                  V.free df.df_payload;
+                  L.NetworkRecordDecodeError
+                }
+              }
+            }
+          }
+        }
+      } else {
+        (* CLEARTEXT path: the outer fragment is the dispatcher fragment. *)
+        let fragment_vec = alloc_copy_slice raw raw_len 5sz flen;
+        with fragment_bytes. assert (V.pts_to fragment_vec fragment_bytes);
+        assert (pure (B.length fragment_bytes == SZ.v flen));
+        V.to_array_pts_to fragment_vec;
+        let parsed = parse_tls_message b0 (V.vec_to_array fragment_vec) flen;
+        V.to_vec_pts_to fragment_vec;
+        match parsed {
+          None -> {
+            DW.lemma_mk_cleartext_network_input_wf_none
+              (reveal 'st0) b0 outer_ct fragment_bytes (Ghost.reveal 'raw_bytes);
+            build_decoded_record_ok b0 fragment_vec flen None 'st0 'raw_bytes
+          }
+          Some l -> {
+            if (DW.cleartext_consistent b0 l) {
+              with m. assert (L.is_valid_tls_message l m);
+              DW.lemma_mk_cleartext_network_input_wf_consistent
+                (reveal 'st0) b0 outer_ct fragment_bytes (Ghost.reveal 'raw_bytes) l m;
+              build_decoded_record_ok b0 fragment_vec flen (Some l) 'st0 'raw_bytes
+            } else {
+              L.free_tls_message l;
+              V.free fragment_vec;
+              L.NetworkRecordDecodeError
+            }
+          }
+        }
+      }
+      } else {
+        L.NetworkRecordDecodeError
+      }
+    } else {
+      L.NetworkRecordDecodeError
+    }
+  }
+}
+
+(* Construction helper for [decode_network_buffer], analogous to
+   [build_decoded_record_ok]: it packages the owned raw-record prefix + decoded
+   fragment + parse result into a [NetworkBufferOk].  All semantic obligations
+   (the [Seq.slice] relation between the prefix and the input buffer, the
+   [WS.parse_record] fact on the prefix, and [network_input_wf] computed against
+   the prefix) are discharged by the caller and threaded through. *)
+fn build_decoded_buffer_ok
+  (content_type: U8.t)
+  (raw_record_vec: V.vec U8.t)
+  (consumed_len: SZ.t)
+  (fragment_vec: V.vec U8.t)
+  (fragment_len: SZ.t)
+  (parsed: option L.tls_message)
+  (st0: Ghost.erased CS.connection_state)
+  (raw_bytes: Ghost.erased B.bytes)
+  (#raw_record_bytes: Ghost.erased B.bytes)
+  (#fragment_bytes: Ghost.erased B.bytes)
+  requires
+    V.pts_to raw_record_vec raw_record_bytes **
+    V.pts_to fragment_vec fragment_bytes **
+    (match parsed with
+     | Some l ->
+       (exists* m.
+         L.is_valid_tls_message l m **
+         pure (CT.parsed_message_wire_success_for
+           content_type (Ghost.reveal fragment_bytes) l m)) **
+       pure (
+         exists ct msg.
+           L.content_type_matches content_type ct /\
+           WS.parse_tls_message ct (Ghost.reveal fragment_bytes) == Some msg) **
+       pure (CT.parsed_message_wire_success
+         content_type (Ghost.reveal fragment_bytes) l)
+     | None ->
+       pure (forall (ct:T.content_type).
+         L.content_type_matches content_type ct ==>
+         WS.parse_tls_message ct (Ghost.reveal fragment_bytes) == None)) **
+    pure (
+      V.is_full_vec raw_record_vec /\
+      V.length raw_record_vec == SZ.v consumed_len /\
+      B.length (Ghost.reveal raw_record_bytes) == SZ.v consumed_len /\
+      SZ.v consumed_len <= B.length (Ghost.reveal raw_bytes) /\
+      Seq.equal (Ghost.reveal raw_record_bytes)
+                (Seq.slice (Ghost.reveal raw_bytes) 0 (SZ.v consumed_len)) /\
+      (exists outer_ct outer_fragment.
+         WS.parse_record (Ghost.reveal raw_record_bytes) ==
+           Some (outer_ct, outer_fragment, B.length (Ghost.reveal raw_record_bytes))) /\
+      V.is_full_vec fragment_vec /\
+      V.length fragment_vec == SZ.v fragment_len /\
+      B.length (Ghost.reveal fragment_bytes) == SZ.v fragment_len /\
+      CT.network_input_wf
+        (Ghost.reveal st0) content_type
+        (Ghost.reveal fragment_bytes) (Ghost.reveal raw_record_bytes))
+  returns r: L.decoded_network_buffer_result
+  ensures
+    (match r with
+     | L.NetworkBufferNeedMoreInput -> emp
+     | L.NetworkBufferDecodeError -> emp
+     | L.NetworkBufferOk decoded ->
+      exists* raw_record_bytes2 fragment_bytes2.
+        V.pts_to decoded.L.decoded_buffer_raw_record raw_record_bytes2 **
+        V.pts_to decoded.L.decoded_buffer_fragment fragment_bytes2 **
+        (match decoded.L.decoded_buffer_parsed with
+         | Some l ->
+           (exists* m.
+            L.is_valid_tls_message l m **
+            pure (CT.parsed_message_wire_success_for
+              decoded.L.decoded_buffer_content_type
+              fragment_bytes2
+              l
+              m)) **
+           pure (
+            exists ct msg.
+              L.content_type_matches
+                decoded.L.decoded_buffer_content_type
+                ct /\
+              WS.parse_tls_message ct fragment_bytes2 == Some msg) **
+           pure (CT.parsed_message_wire_success
+            decoded.L.decoded_buffer_content_type
+            (Ghost.reveal fragment_bytes2)
+            l)
+         | None ->
+           pure (forall (ct:T.content_type).
+            L.content_type_matches
+              decoded.L.decoded_buffer_content_type
+              ct ==>
+            WS.parse_tls_message ct fragment_bytes2 == None)) **
+        pure (
+          V.is_full_vec decoded.L.decoded_buffer_raw_record /\
+          V.length decoded.L.decoded_buffer_raw_record ==
+            SZ.v decoded.L.decoded_buffer_raw_record_len /\
+          B.length raw_record_bytes2 ==
+            SZ.v decoded.L.decoded_buffer_raw_record_len /\
+          decoded.L.decoded_buffer_raw_record_len ==
+            decoded.L.decoded_buffer_consumed_len /\
+          SZ.v decoded.L.decoded_buffer_consumed_len <=
+            B.length (Ghost.reveal raw_bytes) /\
+          Seq.equal
+            raw_record_bytes2
+            (Seq.slice
+             (Ghost.reveal raw_bytes)
+             0
+             (SZ.v decoded.L.decoded_buffer_consumed_len)) /\
+          (exists outer_ct outer_fragment.
+             WS.parse_record raw_record_bytes2 ==
+               Some (outer_ct, outer_fragment, B.length raw_record_bytes2)) /\
+          V.is_full_vec decoded.L.decoded_buffer_fragment /\
+          V.length decoded.L.decoded_buffer_fragment ==
+            SZ.v decoded.L.decoded_buffer_fragment_len /\
+          B.length fragment_bytes2 ==
+            SZ.v decoded.L.decoded_buffer_fragment_len /\
+          CT.network_input_wf
+            (Ghost.reveal st0)
+            decoded.L.decoded_buffer_content_type
+            fragment_bytes2
+            raw_record_bytes2))
+{
+  L.NetworkBufferOk
+    { L.decoded_buffer_raw_record = raw_record_vec;
+      L.decoded_buffer_raw_record_len = consumed_len;
+      L.decoded_buffer_consumed_len = consumed_len;
+      L.decoded_buffer_content_type = content_type;
+      L.decoded_buffer_fragment = fragment_vec;
+      L.decoded_buffer_fragment_len = fragment_len;
+      L.decoded_buffer_parsed = parsed }
 }
 
 fn decode_network_buffer
@@ -3211,11 +3738,111 @@ fn decode_network_buffer
                   fragment_bytes
                   raw_record_bytes))
 {
-  (* PLACEHOLDER (sound, no admit) — returning [NetworkBufferDecodeError]
-     trivially satisfies the [emp] post-condition for that result.  Like
-     [decode_network_record] but consumes the FIRST record from a streaming
-     buffer (trailing bytes allowed) and returns owned copies of both the raw
-     record prefix and the decoded fragment, plus [consumed_len].  Depends on a
-     completed [parse_tls_message] (blocked above). *)
-  L.NetworkBufferDecodeError
+  Arr.pts_to_len raw;
+  if (SZ.lt raw_len 5sz) {
+    (* not even a full record header yet *)
+    L.NetworkBufferNeedMoreInput
+  } else {
+    let b0 = raw.(0sz);
+    let b1 = raw.(1sz);
+    let b2 = raw.(2sz);
+    let b3 = raw.(3sz);
+    let b4 = raw.(4sz);
+    let flen = SZ.add (SZ.mul (u8_to_sz b3) 256sz) (u8_to_sz b4);
+    if (b1 = 0x03uy && b2 = 0x03uy && SZ.lte flen 16640sz &&
+        (b0 = 0x14uy || b0 = 0x15uy || b0 = 0x16uy || b0 = 0x17uy)) {
+      (* flen <= 16640, so flen + 5 fits in SizeT. *)
+      let consumed_len = SZ.add flen 5sz;
+      if (SZ.lte consumed_len raw_len) {
+        (* enough bytes for the first record; trailing bytes are allowed. *)
+        let raw_record_vec = alloc_copy_slice raw raw_len 0sz consumed_len;
+        with raw_record_bytes. assert (V.pts_to raw_record_vec raw_record_bytes);
+        DW.lemma_parse_record_buffer_prefix (Ghost.reveal 'raw_bytes)
+          (Ghost.reveal raw_record_bytes) (SZ.v flen);
+        let outer_ct : T.content_type =
+          (if b0 = 0x14uy then T.ChangeCipherSpec
+           else if b0 = 0x15uy then T.Alert
+           else if b0 = 0x16uy then T.Handshake
+           else T.ApplicationData);
+        if (b0 = 0x17uy) {
+          (* PROTECTED path: decrypt the prefix + strip inner plaintext. *)
+          V.to_array_pts_to raw_record_vec;
+          let inner = peek_decrypt_record c (V.vec_to_array raw_record_vec) consumed_len flen;
+          V.to_vec_pts_to raw_record_vec;
+          match inner {
+            None -> {
+              V.free raw_record_vec;
+              L.NetworkBufferDecodeError
+            }
+            Some df -> {
+              with payload_bytes. assert (V.pts_to df.df_payload payload_bytes);
+              V.to_array_pts_to df.df_payload;
+              let parsed = parse_tls_message df.df_ct (V.vec_to_array df.df_payload) df.df_len;
+              V.to_vec_pts_to df.df_payload;
+              match parsed {
+                None -> {
+                  DW.lemma_mk_protected_network_input_wf_none
+                    (reveal 'st0) df.df_ct payload_bytes (Ghost.reveal raw_record_bytes);
+                  build_decoded_buffer_ok df.df_ct raw_record_vec consumed_len
+                    df.df_payload df.df_len None 'st0 'raw_bytes
+                }
+                Some l -> {
+                  if (not (DW.l_is_received_cleartext l)) {
+                    with m. assert (L.is_valid_tls_message l m);
+                    DW.lemma_mk_protected_network_input_wf
+                      (reveal 'st0) df.df_ct payload_bytes (Ghost.reveal raw_record_bytes)
+                      (Seq.slice (Ghost.reveal raw_record_bytes) 5 (5 + SZ.v flen)) l m;
+                    build_decoded_buffer_ok df.df_ct raw_record_vec consumed_len
+                      df.df_payload df.df_len (Some l) 'st0 'raw_bytes
+                  } else {
+                    L.free_tls_message l;
+                    V.free df.df_payload;
+                    V.free raw_record_vec;
+                    L.NetworkBufferDecodeError
+                  }
+                }
+              }
+            }
+          }
+        } else {
+          (* CLEARTEXT path: the outer fragment is the dispatcher fragment. *)
+          V.to_array_pts_to raw_record_vec;
+          let fragment_vec =
+            alloc_copy_slice (V.vec_to_array raw_record_vec) consumed_len 5sz flen;
+          with fragment_bytes. assert (V.pts_to fragment_vec fragment_bytes);
+          V.to_vec_pts_to raw_record_vec;
+          V.to_array_pts_to fragment_vec;
+          let parsed = parse_tls_message b0 (V.vec_to_array fragment_vec) flen;
+          V.to_vec_pts_to fragment_vec;
+          match parsed {
+            None -> {
+              DW.lemma_mk_cleartext_network_input_wf_none
+                (reveal 'st0) b0 outer_ct fragment_bytes (Ghost.reveal raw_record_bytes);
+              build_decoded_buffer_ok b0 raw_record_vec consumed_len
+                fragment_vec flen None 'st0 'raw_bytes
+            }
+            Some l -> {
+              if (DW.cleartext_consistent b0 l) {
+                with m. assert (L.is_valid_tls_message l m);
+                DW.lemma_mk_cleartext_network_input_wf_consistent
+                  (reveal 'st0) b0 outer_ct fragment_bytes (Ghost.reveal raw_record_bytes) l m;
+                build_decoded_buffer_ok b0 raw_record_vec consumed_len
+                  fragment_vec flen (Some l) 'st0 'raw_bytes
+              } else {
+                L.free_tls_message l;
+                V.free fragment_vec;
+                V.free raw_record_vec;
+                L.NetworkBufferDecodeError
+              }
+            }
+          }
+        }
+      } else {
+        (* header parsed but the full fragment has not arrived yet *)
+        L.NetworkBufferNeedMoreInput
+      }
+    } else {
+      L.NetworkBufferDecodeError
+    }
+  }
 }
