@@ -41,6 +41,8 @@ Current phase: **Phase 0/1 started**.
   - role/direction-to-traffic-label mapping;
   - role-parametric expected traffic-secret helper with the existing client
     helper preserved as a `ClientEndpoint` wrapper.
+- [x] Role-parametric record read/write key projection helpers added, with the
+  existing client projections preserved as `ClientEndpoint` wrappers.
 - [ ] Phase 2 paired endpoint traces and derived-key theorem family.
 
 ## End goal
@@ -702,6 +704,7 @@ Checklist:
 - [ ] Add server handshake stages.
 - [ ] Add server legal events.
 - [x] Generalize expected traffic secret by role, direction, epoch, and label.
+- [x] Add role-parametric record read/write key projection helpers.
 - [ ] Prove client projection compatibility.
 - [ ] Prove server projection correctness.
 - [ ] Generalize event-log, transcript, record-layer, key-schedule, raw replay,

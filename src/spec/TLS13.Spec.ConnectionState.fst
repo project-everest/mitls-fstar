@@ -455,7 +455,21 @@ let traffic_material_option_matches_record_direction
   | Some material -> traffic_material_matches_record_direction material st
   | None -> False
 
-let record_read_keys_match_key_schedule
+let traffic_material_for_label
+  (keys:key_schedule_state)
+  (epoch:traffic_epoch)
+  (label:traffic_label)
+  : option traffic_key_material =
+  match epoch, label with
+  | TrafficHandshake, ClientTraffic -> keys.ks_client_handshake_traffic
+  | TrafficHandshake, ServerTraffic -> keys.ks_server_handshake_traffic
+  | TrafficApplication, ClientTraffic -> keys.ks_client_application_traffic
+  | TrafficApplication, ServerTraffic -> keys.ks_server_application_traffic
+
+let record_keys_match_key_schedule_for_role
+  (role:endpoint_role)
+  (dir:traffic_direction)
+  (control:connection_control_state)
   (keys:key_schedule_state)
   (st:R.direction_state)
   : prop =
@@ -463,11 +477,37 @@ let record_read_keys_match_key_schedule
   | R.Initial ->
     st.R.key == None /\ st.R.static_iv == None
   | R.Handshake ->
-    traffic_material_option_matches_record_direction keys.ks_server_handshake_traffic st
+    traffic_material_option_matches_record_direction
+      (traffic_material_for_label
+       keys
+       TrafficHandshake
+       (traffic_label_for_endpoint_direction role dir))
+      st
   | R.Application ->
-    traffic_material_option_matches_record_direction keys.ks_server_application_traffic st
+    (match dir, control with
+     | TrafficWrite, ControlHandshaking _ ->
+       True
+     | _, _ ->
+       traffic_material_option_matches_record_direction
+        (traffic_material_for_label
+          keys
+          TrafficApplication
+          (traffic_label_for_endpoint_direction role dir))
+        st)
 
-let record_read_key_schedule_projection
+let record_read_keys_match_key_schedule
+  (keys:key_schedule_state)
+  (st:R.direction_state)
+  : prop =
+  record_keys_match_key_schedule_for_role
+    ClientEndpoint
+    TrafficRead
+    ControlApplicationData
+    keys
+    st
+
+let record_read_key_schedule_projection_for_role
+  (role:endpoint_role)
   (model:connection_model)
   : prop =
   match model.model_control with
@@ -480,31 +520,38 @@ let record_read_key_schedule_projection
       st.R.key == None /\ st.R.static_iv == None
     | R.Handshake ->
       exists material.
-        keys.ks_server_handshake_traffic == Some material /\
-        traffic_material_matches_record_direction material st
+       traffic_material_for_label
+         keys
+         TrafficHandshake
+         (traffic_label_for_endpoint_direction role TrafficRead) == Some material /\
+       traffic_material_matches_record_direction material st
     | R.Application ->
       exists material.
-        keys.ks_server_application_traffic == Some material /\
-        traffic_material_matches_record_direction material st
+       traffic_material_for_label
+         keys
+         TrafficApplication
+         (traffic_label_for_endpoint_direction role TrafficRead) == Some material /\
+       traffic_material_matches_record_direction material st
+
+let record_read_key_schedule_projection
+  (model:connection_model)
+  : prop =
+  record_read_key_schedule_projection_for_role ClientEndpoint model
 
 let record_write_keys_match_key_schedule
   (control:connection_control_state)
   (keys:key_schedule_state)
   (st:R.direction_state)
   : prop =
-  match st.R.epoch with
-  | R.Initial ->
-    st.R.key == None /\ st.R.static_iv == None
-  | R.Handshake ->
-    traffic_material_option_matches_record_direction keys.ks_client_handshake_traffic st
-  | R.Application ->
-    (match control with
-     | ControlHandshaking _ ->
-       True
-     | _ ->
-       traffic_material_option_matches_record_direction keys.ks_client_application_traffic st)
+  record_keys_match_key_schedule_for_role
+    ClientEndpoint
+    TrafficWrite
+    control
+    keys
+    st
 
-let record_write_key_schedule_projection
+let record_write_key_schedule_projection_for_role
+  (role:endpoint_role)
   (model:connection_model)
   : prop =
   match model.model_control with
@@ -517,7 +564,10 @@ let record_write_key_schedule_projection
       st.R.key == None /\ st.R.static_iv == None
     | R.Handshake ->
       exists material.
-        keys.ks_client_handshake_traffic == Some material /\
+        traffic_material_for_label
+          keys
+          TrafficHandshake
+          (traffic_label_for_endpoint_direction role TrafficWrite) == Some material /\
         traffic_material_matches_record_direction material st
     | R.Application ->
       (match model.model_control with
@@ -525,8 +575,16 @@ let record_write_key_schedule_projection
          True
        | _ ->
          exists material.
-           keys.ks_client_application_traffic == Some material /\
+           traffic_material_for_label
+             keys
+             TrafficApplication
+             (traffic_label_for_endpoint_direction role TrafficWrite) == Some material /\
            traffic_material_matches_record_direction material st)
+
+let record_write_key_schedule_projection
+  (model:connection_model)
+  : prop =
+  record_write_key_schedule_projection_for_role ClientEndpoint model
 
 let model_record_keys_consistent
   (model:connection_model)
