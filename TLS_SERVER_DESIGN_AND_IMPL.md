@@ -47,6 +47,8 @@ Current phase: **Phase 0/1 started**.
   `TLS13.ConnectionState.Lemmas`.
 - [x] Additive pure `server_config` added to `connection_config`; existing
   client constructors explicitly set `config_server = None`.
+- [x] Initial server handshake-stage constructors added, with low-level tag
+  mappings; existing client stages and transitions are unchanged.
 - [ ] Phase 2 paired endpoint traces and derived-key theorem family.
 
 ## End goal
@@ -705,7 +707,7 @@ Checklist:
       client theorem surface throughout the migration.
 - [x] Add server configuration fields.
 - [ ] Replace client-only start/session state with role-aware handshake data.
-- [ ] Add server handshake stages.
+- [x] Add server handshake stages.
 - [ ] Add server legal events.
 - [x] Generalize expected traffic secret by role, direction, epoch, and label.
 - [x] Add role-parametric record read/write key projection helpers.

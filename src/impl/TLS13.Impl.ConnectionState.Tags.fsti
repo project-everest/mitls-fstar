@@ -30,6 +30,13 @@ let handshake_stage_tag_matches (tag:U8.t) (stage:CS.handshake_stage) : prop =
   | CS.HsServerFinishedReceived -> U8.v tag == 9
   | CS.HsServerFinishedVerified -> U8.v tag == 10
   | CS.HsClientFinishedSent -> U8.v tag == 11
+  | CS.HsAwaitingClientHello -> U8.v tag == 12
+  | CS.HsClientHelloReceived -> U8.v tag == 13
+  | CS.HsServerHelloSent -> U8.v tag == 14
+  | CS.HsServerEncryptedFlightSent -> U8.v tag == 15
+  | CS.HsServerFinishedSent -> U8.v tag == 16
+  | CS.HsClientFinishedReceived -> U8.v tag == 17
+  | CS.HsClientFinishedVerified -> U8.v tag == 18
 
 noextract
 let alert_tag_matches (tag:U8.t) (alert:T.alert_description) : prop =

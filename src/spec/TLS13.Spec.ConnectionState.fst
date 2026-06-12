@@ -71,6 +71,13 @@ type handshake_stage =
   | HsServerFinishedReceived
   | HsServerFinishedVerified
   | HsClientFinishedSent
+  | HsAwaitingClientHello
+  | HsClientHelloReceived
+  | HsServerHelloSent
+  | HsServerEncryptedFlightSent
+  | HsServerFinishedSent
+  | HsClientFinishedReceived
+  | HsClientFinishedVerified
 
 type connection_control_state =
   | ControlNew
@@ -1608,6 +1615,14 @@ let phase_of_handshake_stage (stage:handshake_stage) : S.phase =
   | HsServerFinishedReceived -> S.CertificateVerified
   | HsServerFinishedVerified -> S.ServerFinishedVerified
   | HsClientFinishedSent -> S.ApplicationData
+  // Server-only stages need a role-parametric trace automaton in a later slice.
+  | HsAwaitingClientHello
+  | HsClientHelloReceived
+  | HsServerHelloSent
+  | HsServerEncryptedFlightSent
+  | HsServerFinishedSent
+  | HsClientFinishedReceived
+  | HsClientFinishedVerified -> S.Start
 
 let phase_of_control_state (control:connection_control_state) : S.phase =
   match control with
