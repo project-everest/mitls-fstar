@@ -30,7 +30,9 @@ Current phase: **Phase 0/1 started**.
   - Server credentials are supplied as in-memory PEM/DER buffers.
   - The top-level server `accept` mirrors the client driver's `connect` style
     and uses typed `TLS13.IO.listen_tcp`/`accept_tcp`.
-- [ ] Phase 0 baseline verification.
+- [x] Phase 0 baseline verification: `make verify` passes after the
+  role-vocabulary changes and the proof-guidance assertion in
+  `TLS13.Impl.Client.Types`.
 - [ ] Phase 1 role-parametric pure state and role-correct key projections.
 - [x] X25519 agreement lemma added at the crypto TCB boundary
   (`TLS13.Crypto.Spec.lemma_x25519_shared_agreement`).
@@ -745,8 +747,8 @@ Checklist:
 
 Validation:
 
-- [ ] Existing client theorem modules still verify.
-- [ ] No client public API behavior changes.
+- [x] Existing client theorem modules still verify.
+- [x] No client public API behavior changes.
 
 ### Phase 2: paired endpoint traces and derived-key theorem family
 
