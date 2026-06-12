@@ -1385,44 +1385,41 @@ fn parse_handshake_message
         Some (L.LTlsHandshake (L.LEncryptedExtensions lee))
       }
       _ -> {
-        (* BLOCKED — see TLS13.Impl.Parser report.  The remaining
-           constructors split into two categories:
+        (* REMAINING ARMS: this catch-all now covers exactly three constructors —
+           [Body_client_hello_low], [Body_server_hello_low] (including its
+           HelloRetryRequest sub-case) and [Body_certificate_low].  All other
+           constructors are handled in explicit arms above: Finished,
+           CertificateVerify (Decision-1 guard makes its synth land in the
+           4096-byte storage), EncryptedExtensions (verified ALPN scan),
+           Body_key_update (byte-level fallback) and Body_new_session_ticket
+           (validator-unreachable).
 
-           (1) Synth-valid arms that CAN be parsed via the generated reader
-               (ServerHello/EncryptedExtensions/Certificate/CertificateVerify/
-               ClientHello/HelloRetryRequest).  Each needs the same ghost-vmatch
-               elimination recipe as [Body_finished_low] above, plus an
-               L-level field copy and a per-constructor [RV] synth-reveal
-               lemma.  HOWEVER several of them are *unimplementable* under the
-               current (frozen) .fsti because the L [is_valid_*] predicate uses
-               fixed-size storage that the wire format can exceed, while the
-               spec's [synth_handshake_msg_of] returns [Some] unconditionally:
-                 - CertificateVerify: signature wire length <= 65535 but
-                   [is_valid_certificate_verify] forces <= max_signature_len
-                   (=4096); [M.certificate_verify.signature : C.signature =
-                   B.bytes] is UNREFINED.
-                 - Certificate: chain may exceed max_certificate_chain_bytes
-                   (=32768) or max_certificate_chain_entries (=8).
-               ServerHello (random/key_share are fixed 32 bytes) and
-               EncryptedExtensions (a single ALPN name is <= 255 = max_alpn_len)
-               have no size gap, but their synth-None sub-cases (e.g. a
-               ServerHello whose cipher suite is not CHACHA20, or an oversized
-               ServerHello body > server_hello_max_len) fall through to (2).
+           Each remaining arm needs the same recipe used for EncryptedExtensions:
+           a ghost vmatch-elimination chain peeling the generated [vmatch_conv]
+           down to the owned leaf Vecs, a copy of each fixed-size field into the
+           L representation, and a per-constructor [RV] synth-reveal lemma
+           (the ServerHello reveal lemmas are already in TLS13.Wire.Spec.Reveal:
+           [lemma_handshake_synth_server_hello_{bad_version,hrr,sh}],
+           [reveal_sh_key_share], [lemma_sh_key_share_{nil,cons}]).
 
-           (2) Body_key_update (synth -> None) and Body_new_session_ticket
-               (squash False; rejected by the validator).  For a Handshake
-               record, returning the correct result here requires evaluating
-               the spec's byte-level fallbacks [parse_key_update] /
-               [parse_ignored_post_handshake] (and proving they are [None] when
-               we return [None]).  Those fallbacks are NOT expressible through
-               the generated handshake reader: [parse_key_update]'s Some-case
-               cannot be connected to [Body_key_update] because
-               [handshake_serializer] is abstract (Reveal cannot unfold it to
-               recover the 5 wire bytes [24;0;0;1;req]); and NewSessionTicket is
-               [squash False] in the generated type, so no generated reader
-               produces it at all.  [parse_ignored_post_handshake] additionally
-               hits the same fixed-size storage gap (LTlsIgnoredPostHandshake
-               stores the body in a max_record_fragment_len = 16640 Vec). *)
+             - ServerHello: navigate serverHello = vmatch_pair(protocolVersion,
+               serverHello_body); check legacy_version == TLS_1p2; serverHello_body
+               is a vmatch_ite (HelloRetryRequest tag vs ServerHello_body_false);
+               for the HRR sub-case build [L.LHelloRetryRequest]; otherwise read
+               the 32-byte random tag, check legacy_compression_method == 0, and
+               run a key_share/supported_versions scan (mirroring [sh_key_share],
+               like [scan_ee_alpn] but with a dual accumulator + a 32-byte key
+               copy) to recover the x25519 key, then build [L.LServerHello].
+             - Certificate: recursive [synth_cert_chain] over the (Decision-1
+               guarded) entry list, copying each cert into the fixed-size chain
+               storage and proving [certificate_chain_matches].
+             - ClientHello: widest field set (random/server_name/key_share/
+               cipher_suites/signature_schemes); not reachable by a client but
+               required for totality.
+
+           Returning [None] here is UNSOUND (these synth to [Some] for valid
+           inputs, so [parse_tls_message] is not [None]); the arms must be built
+           out.  Tracked as the sole remaining [admit] in this file. *)
         admit ()
       }
     }
