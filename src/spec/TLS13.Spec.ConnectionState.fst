@@ -327,6 +327,7 @@ type traffic_key_install = {
 
 type local_event =
   | LocalStartHandshake of handshake_start
+  | LocalStartServer
   | LocalSelectServerParameters of server_handshake_selection
   | LocalDeriveSharedSecret of C.x25519_shared_secret
   | LocalInstallTrafficKeys of traffic_key_install
@@ -646,6 +647,16 @@ let step_local_event (model:connection_model) (ev:local_event) : GTot (option co
   match ev, model.model_control with
   | LocalStartHandshake start, ControlNew ->
     Some (with_handshake_stage model { hs with hs_start = Some start } HsStarted)
+  | LocalStartServer, ControlNew ->
+    Some (with_handshake_stage model hs HsAwaitingClientHello)
+  | LocalSelectServerParameters selection, ControlHandshaking HsAwaitingClientHello ->
+    Some (with_handshake_stage
+      model
+      { hs with
+          hs_server_selection = Some selection;
+          hs_client_hello = Some selection.server_selected_client_hello;
+      }
+      HsClientHelloReceived)
   | LocalDeriveSharedSecret shared, ControlHandshaking HsServerHelloReceived ->
     let early = K.early_secret B.empty in
     let handshake = K.handshake_secret early shared in
@@ -979,6 +990,57 @@ let rec cipher_suite_offered (suites:list T.cipher_suite) (suite:T.cipher_suite)
   | [] -> False
   | offered :: rest -> offered == suite \/ cipher_suite_offered rest suite
 
+let rec signature_scheme_offered
+  (schemes:list T.signature_scheme)
+  (scheme:T.signature_scheme)
+  : Tot prop
+        (decreases schemes)
+  =
+  match schemes with
+  | [] -> False
+  | offered :: rest -> offered == scheme \/ signature_scheme_offered rest scheme
+
+let rec named_group_offered
+  (groups:list T.named_group)
+  (group:T.named_group)
+  : Tot prop
+        (decreases groups)
+  =
+  match groups with
+  | [] -> False
+  | offered :: rest -> offered == group \/ named_group_offered rest group
+
+let sni_policy_accepts
+  (policy:option T.hostname)
+  (client_sni:option T.hostname)
+  : prop =
+  match policy with
+  | None -> True
+  | Some expected -> client_sni == Some expected
+
+let server_selection_acceptable
+  (cfg:server_config)
+  (selection:server_handshake_selection)
+  : prop =
+  let ch = selection.server_selected_client_hello in
+  cipher_suite_offered
+    cfg.server_supported_cipher_suites
+    selection.server_selected_cipher_suite /\
+  cipher_suite_offered
+    ch.M.cipher_suites
+    selection.server_selected_cipher_suite /\
+  named_group_offered
+    cfg.server_supported_groups
+    selection.server_selected_group /\
+  signature_scheme_offered
+    cfg.server_allowed_signature_schemes
+    selection.server_selected_signature_scheme /\
+  signature_scheme_offered
+    ch.M.signature_schemes
+    selection.server_selected_signature_scheme /\
+  sni_policy_accepts cfg.server_sni_policy ch.M.server_name /\
+  server_selection_key_share_consistent selection
+
 let start_matches_config (cfg:connection_config) (start:handshake_start) : prop =
   Seq.equal start.start_server_name cfg.config_server_name /\
   start.start_cipher_suites == cfg.config_cipher_suites /\
@@ -1061,6 +1123,16 @@ let legal_local_event (model:connection_model) (ev:local_event) : GTot prop =
   | LocalStartHandshake start, ControlNew ->
     start_matches_config model.model_config start /\
     handshake_start_key_share_consistent start
+  | LocalStartServer, ControlNew ->
+    model.model_config.config_role == ServerEndpoint /\
+    (match model.model_config.config_server with
+     | Some _ -> True
+     | None -> False)
+  | LocalSelectServerParameters selection, ControlHandshaking HsAwaitingClientHello ->
+    model.model_config.config_role == ServerEndpoint /\
+    (match model.model_config.config_server with
+     | Some cfg -> server_selection_acceptable cfg selection
+     | None -> False)
   | LocalDeriveSharedSecret shared, ControlHandshaking HsServerHelloReceived ->
     (match hs.hs_start, hs.hs_server_hello with
      | Some start, Some sh ->

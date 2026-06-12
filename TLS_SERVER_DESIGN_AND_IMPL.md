@@ -54,6 +54,10 @@ Current phase: **Phase 0/1 started**.
   key share, and credential identity.
 - [x] Initial server local-event vocabulary added for parameter selection,
   CertificateVerify signing, and client Finished verification.
+- [x] First server legal local transitions added:
+  - `LocalStartServer` enters `HsAwaitingClientHello` from server config.
+  - `LocalSelectServerParameters` records accepted ClientHello parameters and
+    selected server artifacts.
 - [ ] Phase 2 paired endpoint traces and derived-key theorem family.
 
 ## End goal
@@ -715,7 +719,8 @@ Checklist:
       data.
 - [x] Add server handshake stages.
 - [x] Add initial server local event vocabulary.
-- [ ] Add server legal event predicates and transitions.
+- [x] Add initial server legal event predicates and transitions.
+- [ ] Add remaining server legal event predicates and transitions.
 - [x] Generalize expected traffic secret by role, direction, epoch, and label.
 - [x] Add role-parametric record read/write key projection helpers.
 - [x] Prove client projection compatibility for the initial role/key helpers.
