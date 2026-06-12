@@ -601,6 +601,41 @@ let lemma_step_model_record_keys_consistent
               install.install_material.traffic_iv);
           assert (model1.model_handshake.hs_keys.ks_server_application_traffic ==
             Some install.install_material))
+     | LocalInstallTrafficKeysForRole role_install ->
+       assert (role_install.install_role == ClientEndpoint);
+       let install = role_install.install_payload in
+       (match install.install_epoch, install.install_direction with
+        | TrafficHandshake, TrafficWrite ->
+          assert (model1.model_record.record_write ==
+            R.install_keys
+              model0.model_record.record_write
+              R.Handshake
+              install.install_material.traffic_key
+              install.install_material.traffic_iv);
+          assert (model1.model_handshake.hs_keys.ks_client_handshake_traffic ==
+            Some install.install_material)
+        | TrafficHandshake, TrafficRead ->
+          assert (model1.model_record.record_read ==
+            R.install_keys
+              model0.model_record.record_read
+              R.Handshake
+              install.install_material.traffic_key
+              install.install_material.traffic_iv);
+          assert (model1.model_handshake.hs_keys.ks_server_handshake_traffic ==
+            Some install.install_material)
+        | TrafficApplication, TrafficWrite ->
+          assert (model1.model_record == model0.model_record);
+          assert (model1.model_control == model0.model_control);
+          assert (model0.model_control == ControlHandshaking HsServerFinishedVerified)
+        | TrafficApplication, TrafficRead ->
+          assert (model1.model_record.record_read ==
+            R.install_keys
+              model0.model_record.record_read
+              R.Application
+              install.install_material.traffic_key
+              install.install_material.traffic_iv);
+          assert (model1.model_handshake.hs_keys.ks_server_application_traffic ==
+            Some install.install_material))
      | LocalFail _ -> ()
      | _ ->
        assert (model1.model_record == model0.model_record);
@@ -732,6 +767,11 @@ let lemma_step_model_record_layer_delta
        assert (model1.model_record == install_record_keys model0.model_record install);
        lemma_projected_install_record_keys_of_record model0.model_record install;
        assert (model_record_layer_delta model0 ev model1)
+     | LocalInstallTrafficKeysForRole role_install ->
+      let install = role_install.install_payload in
+      assert (model1.model_record == install_record_keys model0.model_record install);
+      lemma_projected_install_record_keys_of_record model0.model_record install;
+      assert (model_record_layer_delta model0 ev model1)
      | _ ->
        assert (model1.model_record == model0.model_record);
        assert (model_record_layer_delta model0 ev model1))

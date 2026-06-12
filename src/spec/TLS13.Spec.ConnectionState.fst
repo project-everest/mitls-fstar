@@ -325,12 +325,18 @@ type traffic_key_install = {
   install_material: traffic_key_material;
 }
 
+type role_traffic_key_install = {
+  install_role: endpoint_role;
+  install_payload: traffic_key_install;
+}
+
 type local_event =
   | LocalStartHandshake of handshake_start
   | LocalStartServer
   | LocalSelectServerParameters of server_handshake_selection
   | LocalDeriveSharedSecret of C.x25519_shared_secret
   | LocalInstallTrafficKeys of traffic_key_install
+  | LocalInstallTrafficKeysForRole of role_traffic_key_install
   | LocalValidateCertificate of X.peer_identity
   | LocalVerifyCertificateSignature of M.certificate_verify
   | LocalSignCertificateVerify of M.certificate_verify
@@ -683,6 +689,18 @@ let step_local_event (model:connection_model) (ev:local_event) : GTot (option co
     Some (derive_shared_secret_model model hs shared)
   | LocalInstallTrafficKeys install, ControlHandshaking _ ->
     let keys = update_key_schedule_with_install hs.hs_keys install in
+    Some {
+      model with
+        model_record = install_record_keys model.model_record install;
+        model_handshake = { hs with hs_keys = keys };
+    }
+  | LocalInstallTrafficKeysForRole role_install, ControlHandshaking _ ->
+    let install = role_install.install_payload in
+    let keys =
+      update_key_schedule_with_install_for_role
+        role_install.install_role
+        hs.hs_keys
+        install in
     Some {
       model with
         model_record = install_record_keys model.model_record install;
@@ -1118,6 +1136,20 @@ let traffic_install_matches_key_schedule
     install.install_material == traffic_key_material_for_secret secret
   | None -> False
 
+let traffic_install_matches_key_schedule_for_role
+  (role:endpoint_role)
+  (hs:handshake_state)
+  (install:traffic_key_install)
+  : GTot prop =
+  match expected_traffic_secret_for_role
+          role
+          hs
+          install.install_epoch
+          install.install_direction with
+  | Some secret ->
+    install.install_material == traffic_key_material_for_secret secret
+  | None -> False
+
 let traffic_install_allowed_at_stage
   (stage:handshake_stage)
   (install:traffic_key_install)
@@ -1125,6 +1157,19 @@ let traffic_install_allowed_at_stage
   match install.install_epoch with
   | TrafficHandshake -> stage == HsServerHelloReceived
   | TrafficApplication -> stage == HsServerFinishedVerified
+
+let traffic_install_allowed_at_stage_for_role
+  (role:endpoint_role)
+  (stage:handshake_stage)
+  (install:traffic_key_install)
+  : prop =
+  match role with
+  | ClientEndpoint ->
+    traffic_install_allowed_at_stage stage install
+  | ServerEndpoint ->
+    (match install.install_epoch with
+     | TrafficHandshake -> stage == HsClientHelloReceived
+     | TrafficApplication -> stage == HsServerFinishedSent)
 
 let legal_local_event (model:connection_model) (ev:local_event) : GTot prop =
   let hs = model.model_handshake in
@@ -1164,6 +1209,17 @@ let legal_local_event (model:connection_model) (ev:local_event) : GTot prop =
   | LocalInstallTrafficKeys install, ControlHandshaking stage ->
     traffic_install_allowed_at_stage stage install /\
     traffic_install_matches_key_schedule hs install
+  | LocalInstallTrafficKeysForRole role_install, ControlHandshaking stage ->
+    role_install.install_role == ClientEndpoint /\
+    role_install.install_role == model.model_config.config_role /\
+    traffic_install_allowed_at_stage_for_role
+      role_install.install_role
+      stage
+      role_install.install_payload /\
+    traffic_install_matches_key_schedule_for_role
+      role_install.install_role
+      hs
+      role_install.install_payload
   | LocalValidateCertificate peer, ControlHandshaking HsCertificateReceived ->
     (match hs.hs_certificate with
      | Some cert ->
@@ -1535,6 +1591,8 @@ let projected_record_layer_step
   | ConnLocalEvent local ->
     (match local with
      | LocalInstallTrafficKeys install -> projected_install_record_keys record install
+     | LocalInstallTrafficKeysForRole role_install ->
+       projected_install_record_keys record role_install.install_payload
      | _ -> record)
   | ConnNetworkEvent msg ->
     (match msg.CL.message_direction, msg.CL.message_value with

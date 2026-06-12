@@ -61,6 +61,9 @@ Current phase: **Phase 0/1 started**.
 - [x] `LocalDeriveSharedSecret` is role-aware for the initial server path,
   deriving from the selected server private key and accepted ClientHello key
   share.
+- [x] Role-explicit traffic-key install event vocabulary and helpers added.
+  Server install legality is intentionally deferred until
+  `model_record_keys_consistent` is made role-parametric.
 - [ ] Phase 2 paired endpoint traces and derived-key theorem family.
 
 ## End goal
@@ -726,6 +729,7 @@ Checklist:
 - [ ] Add remaining server legal event predicates and transitions.
 - [x] Generalize expected traffic secret by role, direction, epoch, and label.
 - [x] Add role-parametric record read/write key projection helpers.
+- [ ] Generalize `model_record_keys_consistent` itself by endpoint role.
 - [x] Prove client projection compatibility for the initial role/key helpers.
 - [x] Prove server traffic-label direction mapping for the initial role/key
       helpers.
