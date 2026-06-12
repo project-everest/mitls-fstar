@@ -76,6 +76,32 @@ let lemma_record_write_key_schedule_projection_client_projection
 =
   ()
 
+let lemma_step_role_install_record_keys_consistent_for_role
+  (role:endpoint_role)
+  (model0:connection_model)
+  (install:traffic_key_install)
+  (model1:connection_model)
+  : Lemma
+      (requires
+        model_record_keys_consistent_for_role role model0 /\
+        traffic_install_allowed_at_stage_for_role
+          role
+          (match model0.model_control with
+           | ControlHandshaking stage -> stage
+           | _ -> HsNotStarted)
+          install /\
+        traffic_install_matches_key_schedule_for_role
+          role
+          model0.model_handshake
+          install /\
+        step_local_event
+          model0
+          (LocalInstallTrafficKeysForRole
+            { install_role = role; install_payload = install }) == Some model1)
+      (ensures model_record_keys_consistent_for_role role model1)
+=
+  ()
+
 let lemma_model_record_keys_consistent_record_read_key_schedule_projection
   (model:connection_model)
   : Lemma

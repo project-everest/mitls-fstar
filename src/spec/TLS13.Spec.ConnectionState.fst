@@ -635,18 +635,31 @@ let record_write_key_schedule_projection
   : prop =
   record_write_key_schedule_projection_for_role ClientEndpoint model
 
-let model_record_keys_consistent
+let model_record_keys_consistent_for_role
+  (role:endpoint_role)
   (model:connection_model)
   : prop =
   match model.model_control with
   | ControlFailed _ -> True
   | _ ->
     let keys = model.model_handshake.hs_keys in
-    record_read_keys_match_key_schedule keys model.model_record.record_read /\
-    record_write_keys_match_key_schedule
+    record_keys_match_key_schedule_for_role
+      role
+      TrafficRead
+      model.model_control
+      keys
+      model.model_record.record_read /\
+    record_keys_match_key_schedule_for_role
+      role
+      TrafficWrite
       model.model_control
       keys
       model.model_record.record_write
+
+let model_record_keys_consistent
+  (model:connection_model)
+  : prop =
+  model_record_keys_consistent_for_role ClientEndpoint model
 
 let derive_shared_secret_model
   (model:connection_model)

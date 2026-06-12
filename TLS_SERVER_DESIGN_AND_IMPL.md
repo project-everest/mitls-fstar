@@ -64,6 +64,9 @@ Current phase: **Phase 0/1 started**.
 - [x] Role-explicit traffic-key install event vocabulary and helpers added.
   Server install legality is intentionally deferred until
   `model_record_keys_consistent` is made role-parametric.
+- [x] Role-parametric `model_record_keys_consistent_for_role` added, with a
+  focused preservation lemma for role-explicit traffic-key installs. The legacy
+  client invariant remains a `ClientEndpoint` wrapper.
 - [ ] Phase 2 paired endpoint traces and derived-key theorem family.
 
 ## End goal
@@ -729,7 +732,10 @@ Checklist:
 - [ ] Add remaining server legal event predicates and transitions.
 - [x] Generalize expected traffic secret by role, direction, epoch, and label.
 - [x] Add role-parametric record read/write key projection helpers.
-- [ ] Generalize `model_record_keys_consistent` itself by endpoint role.
+- [x] Add role-parametric record-key consistency helper and install
+      preservation lemma.
+- [ ] Promote role-parametric record-key consistency into the full layered
+      invariant.
 - [x] Prove client projection compatibility for the initial role/key helpers.
 - [x] Prove server traffic-label direction mapping for the initial role/key
       helpers.
