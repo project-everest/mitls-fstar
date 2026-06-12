@@ -58,6 +58,9 @@ Current phase: **Phase 0/1 started**.
   - `LocalStartServer` enters `HsAwaitingClientHello` from server config.
   - `LocalSelectServerParameters` records accepted ClientHello parameters and
     selected server artifacts.
+- [x] `LocalDeriveSharedSecret` is role-aware for the initial server path,
+  deriving from the selected server private key and accepted ClientHello key
+  share.
 - [ ] Phase 2 paired endpoint traces and derived-key theorem family.
 
 ## End goal

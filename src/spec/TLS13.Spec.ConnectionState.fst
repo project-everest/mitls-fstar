@@ -642,6 +642,26 @@ let model_record_keys_consistent
       keys
       model.model_record.record_write
 
+let derive_shared_secret_model
+  (model:connection_model)
+  (hs:handshake_state)
+  (shared:C.x25519_shared_secret)
+  : connection_model =
+  let early = K.early_secret B.empty in
+  let handshake = K.handshake_secret early shared in
+  let master = K.master_secret handshake in
+  let keys = { hs.hs_keys with ks_shared_secret = Some shared } in
+  with_handshake_state
+    model
+    { hs with
+        hs_keys =
+          { keys with
+              ks_early_secret = Some early;
+              ks_handshake_secret = Some handshake;
+              ks_master_secret = Some master;
+          };
+    }
+
 let step_local_event (model:connection_model) (ev:local_event) : GTot (option connection_model) =
   let hs = model.model_handshake in
   match ev, model.model_control with
@@ -658,20 +678,9 @@ let step_local_event (model:connection_model) (ev:local_event) : GTot (option co
       }
       HsClientHelloReceived)
   | LocalDeriveSharedSecret shared, ControlHandshaking HsServerHelloReceived ->
-    let early = K.early_secret B.empty in
-    let handshake = K.handshake_secret early shared in
-    let master = K.master_secret handshake in
-    let keys = { hs.hs_keys with ks_shared_secret = Some shared } in
-    Some (with_handshake_state
-      model
-      { hs with
-          hs_keys =
-            { keys with
-                ks_early_secret = Some early;
-                ks_handshake_secret = Some handshake;
-                ks_master_secret = Some master;
-            };
-      })
+    Some (derive_shared_secret_model model hs shared)
+  | LocalDeriveSharedSecret shared, ControlHandshaking HsClientHelloReceived ->
+    Some (derive_shared_secret_model model hs shared)
   | LocalInstallTrafficKeys install, ControlHandshaking _ ->
     let keys = update_key_schedule_with_install hs.hs_keys install in
     Some {
@@ -1141,6 +1150,17 @@ let legal_local_event (model:connection_model) (ev:local_event) : GTot prop =
         | Some sk -> C.x25519_shared sk sh.M.key_share == Some shared
         | None -> False)
      | _, _ -> False)
+  | LocalDeriveSharedSecret shared, ControlHandshaking HsClientHelloReceived ->
+    (match hs.hs_server_selection with
+     | Some selection ->
+       server_selection_key_share_consistent selection /\
+       (match selection.server_key_share_private with
+       | Some sk ->
+         C.x25519_shared
+           sk
+           selection.server_selected_client_hello.M.key_share == Some shared
+       | None -> False)
+     | None -> False)
   | LocalInstallTrafficKeys install, ControlHandshaking stage ->
     traffic_install_allowed_at_stage stage install /\
     traffic_install_matches_key_schedule hs install
