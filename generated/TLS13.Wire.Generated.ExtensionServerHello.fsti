@@ -109,7 +109,7 @@ let extensionServerHello_low_tag (xl: extensionServerHello_low) : LP.maybe_enum_
   | Extension_data_server_name_low _ -> LP.Known (known_extensionType_as_enum_key Server_name)
   | Extension_data_Unknown_extensionType_low v _ -> LP.Unknown (unknown_extensionType_as_enum_key v)
 
-let extensionServerHello_mid_tag (m: extensionServerHello_mid) : LP.maybe_enum_key extensionType_enum =
+noextract let extensionServerHello_mid_tag (m: extensionServerHello_mid) : LP.maybe_enum_key extensionType_enum =
   match m with
   | Extension_data_key_share_mid _ -> LP.Known (known_extensionType_as_enum_key Key_share)
   | Extension_data_supported_versions_mid _ -> LP.Known (known_extensionType_as_enum_key Supported_versions)

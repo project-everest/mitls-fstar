@@ -112,7 +112,7 @@ let extensionClientHello_low_tag (xl: extensionClientHello_low) : LP.maybe_enum_
   | Extension_data_application_layer_protocol_negotiation_low _ -> LP.Known (known_extensionType_as_enum_key Application_layer_protocol_negotiation)
   | Extension_data_Unknown_extensionType_low v _ -> LP.Unknown (unknown_extensionType_as_enum_key v)
 
-let extensionClientHello_mid_tag (m: extensionClientHello_mid) : LP.maybe_enum_key extensionType_enum =
+noextract let extensionClientHello_mid_tag (m: extensionClientHello_mid) : LP.maybe_enum_key extensionType_enum =
   match m with
   | Extension_data_server_name_mid _ -> LP.Known (known_extensionType_as_enum_key Server_name)
   | Extension_data_supported_groups_mid _ -> LP.Known (known_extensionType_as_enum_key Supported_groups)

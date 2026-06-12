@@ -108,7 +108,7 @@ let extensionEncryptedExtensions_low_tag (xl: extensionEncryptedExtensions_low) 
   | Extension_data_server_name_low _ -> LP.Known (known_extensionType_as_enum_key Server_name)
   | Extension_data_Unknown_extensionType_low v _ -> LP.Unknown (unknown_extensionType_as_enum_key v)
 
-let extensionEncryptedExtensions_mid_tag (m: extensionEncryptedExtensions_mid) : LP.maybe_enum_key extensionType_enum =
+noextract let extensionEncryptedExtensions_mid_tag (m: extensionEncryptedExtensions_mid) : LP.maybe_enum_key extensionType_enum =
   match m with
   | Extension_data_application_layer_protocol_negotiation_mid _ -> LP.Known (known_extensionType_as_enum_key Application_layer_protocol_negotiation)
   | Extension_data_key_share_mid _ -> LP.Known (known_extensionType_as_enum_key Key_share)

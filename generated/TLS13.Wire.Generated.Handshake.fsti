@@ -113,7 +113,7 @@ let handshake_low_tag (xl: handshake_low) : LP.enum_key handshakeType_enum =
   | Body_key_update_low _ -> handshakeType_as_enum_key Key_update
   | Body_new_session_ticket_low _ -> handshakeType_as_enum_key New_session_ticket
 
-let handshake_mid_tag (m: handshake_mid) : LP.enum_key handshakeType_enum =
+noextract let handshake_mid_tag (m: handshake_mid) : LP.enum_key handshakeType_enum =
   match m with
   | Body_client_hello_mid _ -> handshakeType_as_enum_key Client_hello
   | Body_server_hello_mid _ -> handshakeType_as_enum_key Server_hello

@@ -73,7 +73,7 @@ let serverName_low_tag (xl: serverName_low) : LP.enum_key nameType_enum =
   match xl with
   | Name_host_name_low _ -> nameType_as_enum_key Host_name
 
-let serverName_mid_tag (m: serverName_mid) : LP.enum_key nameType_enum =
+noextract let serverName_mid_tag (m: serverName_mid) : LP.enum_key nameType_enum =
   match m with
   | Name_host_name_mid _ -> nameType_as_enum_key Host_name
 
