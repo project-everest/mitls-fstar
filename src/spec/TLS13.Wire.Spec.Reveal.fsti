@@ -38,6 +38,8 @@ module GESH = TLS13.Wire.Generated.ExtensionServerHello
 module GKSE = TLS13.Wire.Generated.KeyShareEntry
 module GNG = TLS13.Wire.Generated.NamedGroup
 module GPV = TLS13.Wire.Generated.ProtocolVersion
+module GCert = TLS13.Wire.Generated.Certificate
+module GCE = TLS13.Wire.Generated.CertificateEntry
 module LP = LowParse.Spec
 
 (* --- non-handshake content-type arms ------------------------------------ *)
@@ -355,3 +357,61 @@ val lemma_handshake_synth_server_hello_sh
                      M.body = LP.serialize GHS.handshake_serializer (GHS.Body_server_hello b) }))
               else None
             | None -> None))
+
+(* --- Certificate: per-constructor synth reveals ------------------------- *)
+
+(* Re-export of the internal [synth_cert_chain]: the list of [cert_data] DER
+   blobs from a certificate_list. *)
+val reveal_synth_cert_chain (l:list GCE.certificateEntry)
+  : GTot (list B.bytes)
+
+(* Re-export of the internal [cert_chain_total_bytes]: the total length of all
+   the [cert_data] blobs in a chain. *)
+val reveal_cert_chain_total_bytes (chain:list B.bytes)
+  : GTot nat
+
+(* [synth_cert_chain] of the empty list is empty. *)
+val lemma_synth_cert_chain_nil (_:unit)
+  : Lemma (ensures reveal_synth_cert_chain [] == [])
+
+(* One-step unfolding of [synth_cert_chain] on a head entry: the head's
+   [cert_data] is prepended to the synth of the tail. *)
+val lemma_synth_cert_chain_cons (e:GCE.certificateEntry) (tl:list GCE.certificateEntry)
+  : Lemma (ensures reveal_synth_cert_chain (e :: tl) ==
+                   (e.GCE.cert_data <: B.bytes) :: reveal_synth_cert_chain tl)
+
+(* [synth_cert_chain] preserves list length (it is a map). *)
+val lemma_synth_cert_chain_length (l:list GCE.certificateEntry)
+  : Lemma (ensures FStar.List.Tot.length (reveal_synth_cert_chain l) ==
+                   FStar.List.Tot.length l)
+
+(* [cert_chain_total_bytes] of the empty chain is zero. *)
+val lemma_cert_chain_total_bytes_nil (_:unit)
+  : Lemma (ensures reveal_cert_chain_total_bytes [] == 0)
+
+(* Appending one blob at the back adds its length to the total. *)
+val lemma_cert_chain_total_bytes_snoc (chain:list B.bytes) (x:B.bytes)
+  : Lemma (ensures reveal_cert_chain_total_bytes (FStar.List.Tot.append chain [x]) ==
+                   reveal_cert_chain_total_bytes chain + B.length x)
+
+(* The total bytes of a chain dominate the prefix total plus the next blob. *)
+val lemma_cert_chain_total_bytes_prefix_le
+  (prefix:list B.bytes) (x:B.bytes) (rest:list B.bytes)
+  : Lemma (ensures reveal_cert_chain_total_bytes prefix + B.length x <=
+                   reveal_cert_chain_total_bytes
+                     (FStar.List.Tot.append prefix (x :: rest)))
+
+(* The Certificate arm of [synth_handshake_msg_of]: when the synthesised chain
+   fits the fixed-size low-level representation (<= certificate_chain_max_entries
+   entries and <= certificate_chain_max_bytes total cert bytes) it yields an
+   [M.Certificate] whose body is the verbatim wire serialization; otherwise the
+   message is rejected ([None]). *)
+val lemma_handshake_synth_certificate (b:GHS.handshake_body_certificate)
+  : Lemma (ensures handshake_synth (GHS.Body_certificate b) ==
+            (let chain = reveal_synth_cert_chain
+                           (b.GCert.certificate_list <: list GCE.certificateEntry) in
+             if FStar.List.Tot.length chain <= M.certificate_chain_max_entries &&
+                reveal_cert_chain_total_bytes chain <= M.certificate_chain_max_bytes
+             then Some (M.Certificate ({ M.chain = chain;
+                    M.body = LP.serialize GHS.handshake_serializer (GHS.Body_certificate b) }))
+             else None))

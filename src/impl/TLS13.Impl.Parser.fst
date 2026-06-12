@@ -72,6 +72,11 @@ module GESHKS = TLS13.Wire.Generated.ExtensionServerHello_extension_data_key_sha
 module GESHSV = TLS13.Wire.Generated.ExtensionServerHello_extension_data_supported_versions
 module LPITE = LowParse.PulseParse.IfThenElse
 
+(* Certificate-related generated modules (aliases match TLS13.Wire.Spec.Reveal). *)
+module GCert = TLS13.Wire.Generated.Certificate
+module GCE = TLS13.Wire.Generated.CertificateEntry
+module CC = TLS13.Impl.Parser.CertChain
+
 (**
   Verified implementation of the M/L parser boundary.  See the interface
   TLS13.Impl.Parser.fsti for the full contracts.
@@ -2008,6 +2013,482 @@ fn scan_sh_key_share
   }
 }
 
+(* --- Certificate: eliminate / re-introduce the packed vmatch --------------- *)
+
+(* Tag agreement pins the mid constructor for a [Body_certificate_low]. *)
+let lemma_cert_constructor (xl: GHS.handshake_low) (vm: GHS.handshake_mid)
+  : Lemma
+   (requires GHS.Body_certificate_low? xl /\
+             GHS.handshake_low_tag xl == GHS.handshake_mid_tag vm)
+   (ensures GHS.Body_certificate_mid? vm)
+  = ()
+
+(* A [Body_certificate_mid cm] whose conv is [Some v] forces [v] to be a
+   [Body_certificate] whose high-level certificate_list is the (refined) mid list
+   [snd cm]. *)
+let lemma_cert_conv (cm: GHS.handshake_body_certificate_mid) (v: GHS.handshake)
+  : Lemma
+   (requires GHS.handshake_conv (GHS.Body_certificate_mid cm) == Some v)
+   (ensures GHS.Body_certificate? v /\
+            ((GHS.Body_certificate?._0 v).GCert.certificate_list <: list GCE.certificateEntry)
+              == (snd cm <: list GCE.certificateEntry))
+  = ()
+
+(* A [certificateEntry_conv em == Some h] forces [h.cert_data] to be the mid
+   cert_data seq [fst em], whose length fits the DER bounds. *)
+let lemma_certEntry_conv (em: GCE.certificateEntry_mid) (h: GCE.certificateEntry)
+  : Lemma
+   (requires GCE.certificateEntry_conv em == Some h)
+   (ensures (h.GCE.cert_data <: Seq.seq U8.t) == (fst em <: Seq.seq U8.t) /\
+            1 <= Seq.length (fst em <: Seq.seq U8.t) /\
+            Seq.length (fst em <: Seq.seq U8.t) <= 16777215)
+  = ()
+
+(* Expose the underlying request-context lvec and certificate-list vclist from the
+   packed Certificate read result. *)
+ghost
+fn elim_vmatch_certificate
+  (xcert: GHS.handshake_body_certificate_lowtype)
+  (#v: GHS.handshake)
+  requires PPB.vmatch_conv GHS.handshake_vmatch GHS.handshake_conv
+            (GHS.Body_certificate_low xcert) v
+  ensures exists* (cm: GHS.handshake_body_certificate_mid).
+           LSeqB.vmatch_copy_seqbytes (fst xcert) (fst cm) **
+           PPVCL.vmatch_vclist
+             (PPB.vmatch_conv GCE.certificateEntry_vmatch GCE.certificateEntry_conv)
+             (snd xcert) (snd cm) **
+           pure (GHS.handshake_conv (GHS.Body_certificate_mid cm) == Some v /\
+                 GHS.Body_certificate? v /\
+                 ((GHS.Body_certificate?._0 v).GCert.certificate_list <: list GCE.certificateEntry)
+                   == (snd cm <: list GCE.certificateEntry))
+{
+  PPB.elim_vmatch_conv GHS.handshake_vmatch GHS.handshake_conv
+   (GHS.Body_certificate_low xcert) v;
+  with vm. assert (GHS.handshake_vmatch (GHS.Body_certificate_low xcert) vm **
+                   pure (GHS.handshake_conv vm == Some v));
+  peek_handshake_tag (GHS.Body_certificate_low xcert);
+  lemma_cert_constructor (GHS.Body_certificate_low xcert) vm;
+  let cm0 = GHS.Body_certificate_mid?._0 vm;
+  rewrite (GHS.handshake_vmatch (GHS.Body_certificate_low xcert) vm)
+      as (GHS.handshake_vmatch (GHS.Body_certificate_low xcert)
+            (GHS.Body_certificate_mid cm0));
+  unfold (GHS.handshake_vmatch (GHS.Body_certificate_low xcert)
+           (GHS.Body_certificate_mid cm0));
+  rewrite (GHS.handshake_body_certificate_vmatch xcert cm0)
+      as (LPC.vmatch_pair GCert.certificate_certificate_request_context_vmatch
+            GCert.certificate_certificate_list_vmatch xcert cm0);
+  unfold (LPC.vmatch_pair GCert.certificate_certificate_request_context_vmatch
+            GCert.certificate_certificate_list_vmatch xcert cm0);
+  rewrite (GCert.certificate_certificate_request_context_vmatch (fst xcert) (fst cm0))
+      as (LSeqB.vmatch_copy_seqbytes (fst xcert) (fst cm0));
+  rewrite (GCert.certificate_certificate_list_vmatch (snd xcert) (snd cm0))
+      as (PPVCL.vmatch_vclist
+            (PPB.vmatch_conv GCE.certificateEntry_vmatch GCE.certificateEntry_conv)
+            (snd xcert) (snd cm0));
+  lemma_cert_conv cm0 v;
+}
+
+(* Re-pack the request-context lvec and certificate-list vclist back into the
+   handshake read result so it can be freed by the generated [free_handshake]. *)
+ghost
+fn intro_vmatch_certificate
+  (xcert: GHS.handshake_body_certificate_lowtype)
+  (cm: GHS.handshake_body_certificate_mid)
+  (#v: GHS.handshake)
+  requires LSeqB.vmatch_copy_seqbytes (fst xcert) (fst cm) **
+           PPVCL.vmatch_vclist
+             (PPB.vmatch_conv GCE.certificateEntry_vmatch GCE.certificateEntry_conv)
+             (snd xcert) (snd cm) **
+           pure (GHS.handshake_conv (GHS.Body_certificate_mid cm) == Some v)
+  ensures PPB.vmatch_conv GHS.handshake_vmatch GHS.handshake_conv
+            (GHS.Body_certificate_low xcert) v
+{
+  rewrite (PPVCL.vmatch_vclist
+            (PPB.vmatch_conv GCE.certificateEntry_vmatch GCE.certificateEntry_conv)
+            (snd xcert) (snd cm))
+      as (GCert.certificate_certificate_list_vmatch (snd xcert) (snd cm));
+  rewrite (LSeqB.vmatch_copy_seqbytes (fst xcert) (fst cm))
+      as (GCert.certificate_certificate_request_context_vmatch (fst xcert) (fst cm));
+  fold (LPC.vmatch_pair GCert.certificate_certificate_request_context_vmatch
+          GCert.certificate_certificate_list_vmatch xcert cm);
+  rewrite (LPC.vmatch_pair GCert.certificate_certificate_request_context_vmatch
+            GCert.certificate_certificate_list_vmatch xcert cm)
+      as (GHS.handshake_body_certificate_vmatch xcert cm);
+  fold (GHS.handshake_vmatch (GHS.Body_certificate_low xcert)
+          (GHS.Body_certificate_mid cm));
+  PPB.intro_vmatch_conv GHS.handshake_vmatch GHS.handshake_conv
+    (GHS.Body_certificate_low xcert) (GHS.Body_certificate_mid cm) v;
+}
+
+(* Copy the prefix [src[0..src_len)] of a (full) source Vec into the sub-region
+   [dst[off..off+src_len)] of an existing 32768-byte (full) destination Vec,
+   preserving the already-written prefix [dst[0..off)].  Used by the Certificate
+   chain copy loop to lay out each cert's DER blob at the running offset. *)
+inline_for_extraction
+fn copy_vec_into_at
+  (dst: V.vec U8.t)
+  (off: SZ.t)
+  (src: V.vec U8.t)
+  (src_len: SZ.t)
+  requires V.pts_to dst 'dst_bytes ** V.pts_to src 'src_bytes **
+           pure (V.is_full_vec dst /\ V.length dst == 32768 /\
+                 V.is_full_vec src /\ V.length src == SZ.v src_len /\
+                 SZ.v off + SZ.v src_len <= 32768)
+  ensures V.pts_to src 'src_bytes **
+          (exists* dst_bytes2.
+            V.pts_to dst dst_bytes2 **
+            pure (V.is_full_vec dst /\ V.length dst == 32768 /\
+                  SZ.v off + SZ.v src_len <= 32768 /\
+                  Seq.length dst_bytes2 == 32768 /\
+                  Seq.length (Ghost.reveal 'dst_bytes) == 32768 /\
+                  Seq.equal (Seq.slice dst_bytes2 0 (SZ.v off))
+                            (Seq.slice (Ghost.reveal 'dst_bytes) 0 (SZ.v off)) /\
+                  Seq.equal (Seq.slice dst_bytes2 (SZ.v off) (SZ.v off + SZ.v src_len))
+                            (Ghost.reveal 'src_bytes)))
+{
+  V.pts_to_len src;
+  V.pts_to_len dst;
+  V.to_array_pts_to dst;
+  V.to_array_pts_to src;
+  let src_slice = S.from_array (V.vec_to_array src) src_len;
+  let dst_slice = S.from_array (V.vec_to_array dst) 32768sz;
+  let sp1 = S.split dst_slice off;
+  S.pts_to_len (snd sp1);
+  let sp2 = S.split (snd sp1) src_len;
+  S.pts_to_len src_slice;
+  S.pts_to_len (fst sp2);
+  S.copy (fst sp2) src_slice;
+  S.to_array src_slice;
+  V.to_vec_pts_to src;
+  S.join (fst sp2) (snd sp2) (snd sp1);
+  S.join (fst sp1) (snd sp1) dst_slice;
+  S.to_array dst_slice;
+  V.to_vec_pts_to dst;
+  with copied. assert (V.pts_to dst copied);
+  Seq.lemma_len_slice (Ghost.reveal 'dst_bytes) 0 (SZ.v off);
+  Seq.lemma_len_slice copied 0 (SZ.v off);
+  Seq.lemma_len_slice copied (SZ.v off) (SZ.v off + SZ.v src_len);
+}
+
+(* --- Certificate: navigate one certificateEntry --------------------------- *)
+
+(* Decompose a certificateEntry read result into its cert_data lvec (the DER
+   blob) and its (ignored) extensions vclist. *)
+ghost
+fn elim_cert_entry (el: GCE.certificateEntry_lowtype) (#em: GCE.certificateEntry_mid)
+  requires GCE.certificateEntry_vmatch el em
+  ensures LSeqB.vmatch_copy_seqbytes (fst el) (fst em) **
+          GCE.certificateEntry_extensions_vmatch (snd el) (snd em)
+{
+  rewrite (GCE.certificateEntry_vmatch el em)
+      as (LPC.vmatch_pair GCE.certificateEntry_cert_data_vmatch
+            GCE.certificateEntry_extensions_vmatch el em);
+  unfold (LPC.vmatch_pair GCE.certificateEntry_cert_data_vmatch
+            GCE.certificateEntry_extensions_vmatch el em);
+  rewrite (GCE.certificateEntry_cert_data_vmatch (fst el) (fst em))
+      as (LSeqB.vmatch_copy_seqbytes (fst el) (fst em));
+}
+
+(* Re-pack a certificateEntry's cert_data lvec and extensions vclist into the
+   read result so it can be freed by the generated [free_handshake]. *)
+ghost
+fn intro_cert_entry (el: GCE.certificateEntry_lowtype) (#em: GCE.certificateEntry_mid)
+  requires LSeqB.vmatch_copy_seqbytes (fst el) (fst em) **
+           GCE.certificateEntry_extensions_vmatch (snd el) (snd em)
+  ensures GCE.certificateEntry_vmatch el em
+{
+  rewrite (LSeqB.vmatch_copy_seqbytes (fst el) (fst em))
+      as (GCE.certificateEntry_cert_data_vmatch (fst el) (fst em));
+  fold (LPC.vmatch_pair GCE.certificateEntry_cert_data_vmatch
+          GCE.certificateEntry_extensions_vmatch el em);
+  rewrite (LPC.vmatch_pair GCE.certificateEntry_cert_data_vmatch
+            GCE.certificateEntry_extensions_vmatch el em)
+      as (GCE.certificateEntry_vmatch el em);
+}
+
+(* Pure case-analysis lemma for the chain-doesn't-fit path: from "either the
+   running entry count already reached 8, or the running byte total plus this
+   blob exceeds 32768" derive that the full synthesised chain violates the
+   fixed-size bound — exactly the [None] condition of [synth_handshake_msg_of]. *)
+let lemma_cert_chain_nofit
+  (cm: list GCE.certificateEntry)
+  (iv cntv offv cert_len: nat)
+  (processed: list B.bytes)
+  : Lemma
+    (requires (
+       cntv == iv /\ cntv <= 8 /\ iv < FStar.List.Tot.length cm /\
+       RV.reveal_cert_chain_total_bytes processed == offv /\
+       FStar.List.Tot.append processed
+         (RV.reveal_synth_cert_chain (RV.list_drop iv cm))
+         == RV.reveal_synth_cert_chain cm /\
+       cert_len == B.length ((FStar.List.Tot.index cm iv).GCE.cert_data <: B.bytes) /\
+       (cntv >= 8 \/ offv + cert_len > 32768)))
+    (ensures (
+       FStar.List.Tot.length (RV.reveal_synth_cert_chain cm) > 8 \/
+       RV.reveal_cert_chain_total_bytes (RV.reveal_synth_cert_chain cm) > 32768))
+  = RV.lemma_synth_cert_chain_length cm;
+    RV.lemma_list_drop_index cm iv;
+    RV.lemma_synth_cert_chain_cons (FStar.List.Tot.index cm iv) (RV.list_drop (iv + 1) cm);
+    RV.lemma_cert_chain_total_bytes_prefix_le processed
+      ((FStar.List.Tot.index cm iv).GCE.cert_data <: B.bytes)
+      (RV.reveal_synth_cert_chain (RV.list_drop (iv + 1) cm))
+
+(* Walk the certificate_list vclist, copying each entry's DER blob into a fresh
+   fixed-size [max_certificate_chain_bytes]=32768 chain buffer and recording the
+   running [(offset, length)] pairs in fresh [max_certificate_chain_entries]=8
+   Vecs.  Returns [(chain_bytes, offsets, lens, chain_bytes_len, count, failed)].
+   On the [failed] path the chain does not fit the fixed-size representation (too
+   many entries or too many bytes) — soundly mirroring the Decision-1 [None] of
+   [synth_handshake_msg_of].  Otherwise [certificate_chain_matches] holds for the
+   synthesised chain. *)
+fn scan_certificate_chain
+  (xlist: GCert.certificate_certificate_list_lowtype)
+  (#cm: Ghost.erased (list GCE.certificateEntry))
+  requires PPVCL.vmatch_vclist
+             (PPB.vmatch_conv GCE.certificateEntry_vmatch GCE.certificateEntry_conv)
+             xlist cm
+  returns res: (V.vec U8.t & V.vec SZ.t & V.vec SZ.t & SZ.t & SZ.t & bool)
+  ensures PPVCL.vmatch_vclist
+            (PPB.vmatch_conv GCE.certificateEntry_vmatch GCE.certificateEntry_conv)
+            xlist cm **
+          (exists* cb offs lns.
+            V.pts_to (Mktuple6?._1 res) cb **
+            V.pts_to (Mktuple6?._2 res) offs **
+            V.pts_to (Mktuple6?._3 res) lns **
+            pure (
+              V.is_full_vec (Mktuple6?._1 res) /\
+              V.length (Mktuple6?._1 res) == 32768 /\ Seq.length cb == 32768 /\
+              V.is_full_vec (Mktuple6?._2 res) /\
+              V.length (Mktuple6?._2 res) == 8 /\ Seq.length offs == 8 /\
+              V.is_full_vec (Mktuple6?._3 res) /\
+              V.length (Mktuple6?._3 res) == 8 /\ Seq.length lns == 8 /\
+              (if (Mktuple6?._6 res)
+               then (FStar.List.Tot.length (RV.reveal_synth_cert_chain cm) > 8 \/
+                     RV.reveal_cert_chain_total_bytes (RV.reveal_synth_cert_chain cm) > 32768)
+               else (SZ.v (Mktuple6?._5 res) <= 8 /\
+                     SZ.v (Mktuple6?._4 res) <= 32768 /\
+                     SZ.v (Mktuple6?._5 res) <= Seq.length offs /\
+                     SZ.v (Mktuple6?._5 res) <= Seq.length lns /\
+                     FStar.List.Tot.length (RV.reveal_synth_cert_chain cm)
+                       == SZ.v (Mktuple6?._5 res) /\
+                     RV.reveal_cert_chain_total_bytes (RV.reveal_synth_cert_chain cm)
+                       == SZ.v (Mktuple6?._4 res) /\
+                     L.certificate_chain_matches cb (SZ.v (Mktuple6?._4 res)) offs lns
+                       (SZ.v (Mktuple6?._5 res)) (RV.reveal_synth_cert_chain cm)))))
+{
+  let chain_bytes = V.alloc 0uy 32768sz;
+  let offsets = V.alloc 0sz 8sz;
+  let lens = V.alloc 0sz 8sz;
+  match xlist {
+    None -> {
+      unfold (PPVCL.vmatch_vclist
+                (PPB.vmatch_conv GCE.certificateEntry_vmatch GCE.certificateEntry_conv)
+                None cm);
+      RV.lemma_synth_cert_chain_nil ();
+      RV.lemma_cert_chain_total_bytes_nil ();
+      fold (PPVCL.vmatch_vclist
+                (PPB.vmatch_conv GCE.certificateEntry_vmatch GCE.certificateEntry_conv)
+                None cm);
+      rewrite (PPVCL.vmatch_vclist
+                (PPB.vmatch_conv GCE.certificateEntry_vmatch GCE.certificateEntry_conv)
+                None cm)
+          as (PPVCL.vmatch_vclist
+                (PPB.vmatch_conv GCE.certificateEntry_vmatch GCE.certificateEntry_conv)
+                xlist cm);
+      (chain_bytes, offsets, lens, 0sz, 0sz, false)
+    }
+    Some nv -> {
+      unfold (PPVCL.vmatch_vclist
+                (PPB.vmatch_conv GCE.certificateEntry_vmatch GCE.certificateEntry_conv)
+                (Some nv) cm);
+      with s. assert (V.pts_to (snd nv) s **
+                      SM.seq_list_match s cm
+                        (PPB.vmatch_conv GCE.certificateEntry_vmatch GCE.certificateEntry_conv));
+      V.pts_to_len (snd nv);
+      let count = fst nv;
+      let mut i = 0sz;
+      let mut failed = false;
+      let mut off_ref = 0sz;
+      let mut cnt_ref = 0sz;
+      let proc_ref = GR.alloc (Nil #B.bytes);
+      RV.lemma_synth_cert_chain_nil ();
+      RV.lemma_cert_chain_total_bytes_nil ();
+      while (
+        let f = !failed;
+        let iv = !i;
+        (not f) && (iv `SZ.lt` count)
+      )
+      invariant exists* iv fl offv cntv processed cb offs lns.
+        R.pts_to i iv **
+        R.pts_to failed fl **
+        R.pts_to off_ref offv **
+        R.pts_to cnt_ref cntv **
+        GR.pts_to proc_ref processed **
+        V.pts_to (snd nv) s **
+        SM.seq_list_match s cm
+          (PPB.vmatch_conv GCE.certificateEntry_vmatch GCE.certificateEntry_conv) **
+        V.pts_to chain_bytes cb **
+        V.pts_to offsets offs **
+        V.pts_to lens lns **
+        pure (
+          SZ.v iv <= SZ.v count /\
+          SZ.v count == FStar.List.Tot.length cm /\
+          Seq.length s == FStar.List.Tot.length cm /\
+          V.is_full_vec (snd nv) /\
+          FStar.List.Tot.length cm > 0 /\
+          V.is_full_vec chain_bytes /\ V.length chain_bytes == 32768 /\ Seq.length cb == 32768 /\
+          V.is_full_vec offsets /\ V.length offsets == 8 /\ Seq.length offs == 8 /\
+          V.is_full_vec lens /\ V.length lens == 8 /\ Seq.length lns == 8 /\
+          (fl ==> (FStar.List.Tot.length (RV.reveal_synth_cert_chain cm) > 8 \/
+                   RV.reveal_cert_chain_total_bytes (RV.reveal_synth_cert_chain cm) > 32768)) /\
+          ((not fl) ==> (
+             SZ.v iv == SZ.v cntv /\
+             SZ.v cntv <= 8 /\
+             SZ.v offv <= 32768 /\
+             FStar.List.Tot.length processed == SZ.v cntv /\
+             RV.reveal_cert_chain_total_bytes processed == SZ.v offv /\
+             L.certificate_chain_matches cb (SZ.v offv) offs lns (SZ.v cntv) processed /\
+             (FStar.List.Tot.append processed
+                (RV.reveal_synth_cert_chain (RV.list_drop (SZ.v iv) cm))
+                == RV.reveal_synth_cert_chain cm)))
+        )
+      {
+        let iv = !i;
+        let cntv = !cnt_ref;
+        let offv = !off_ref;
+        with offs0 lns0 cb0 processed0. assert (
+          V.pts_to chain_bytes cb0 ** V.pts_to offsets offs0 **
+          V.pts_to lens lns0 ** GR.pts_to proc_ref processed0);
+        assert (pure (SZ.v iv < FStar.List.Tot.length cm));
+        let el = V.op_Array_Access (snd nv) iv;
+        SMU.seq_list_match_index_trade
+          (PPB.vmatch_conv GCE.certificateEntry_vmatch GCE.certificateEntry_conv)
+          s cm (SZ.v iv);
+        Trade.rewrite_with_trade
+          (PPB.vmatch_conv GCE.certificateEntry_vmatch GCE.certificateEntry_conv
+             (Seq.index s (SZ.v iv)) (FStar.List.Tot.index cm (SZ.v iv)))
+          (PPB.vmatch_conv GCE.certificateEntry_vmatch GCE.certificateEntry_conv
+             el (FStar.List.Tot.index cm (SZ.v iv)));
+        Trade.trans
+          (PPB.vmatch_conv GCE.certificateEntry_vmatch GCE.certificateEntry_conv
+             el (FStar.List.Tot.index cm (SZ.v iv)))
+          (PPB.vmatch_conv GCE.certificateEntry_vmatch GCE.certificateEntry_conv
+             (Seq.index s (SZ.v iv)) (FStar.List.Tot.index cm (SZ.v iv)))
+          (SM.seq_list_match s cm
+             (PPB.vmatch_conv GCE.certificateEntry_vmatch GCE.certificateEntry_conv));
+        PPB.elim_vmatch_conv GCE.certificateEntry_vmatch GCE.certificateEntry_conv
+          el (FStar.List.Tot.index cm (SZ.v iv));
+        with em. assert (GCE.certificateEntry_vmatch el em **
+                         pure (GCE.certificateEntry_conv em ==
+                               Some (FStar.List.Tot.index cm (SZ.v iv))));
+        lemma_certEntry_conv em (FStar.List.Tot.index cm (SZ.v iv));
+        elim_cert_entry el;
+        unfold (LSeqB.vmatch_copy_seqbytes (fst el) (fst em));
+        V.pts_to_len (fst el).PPBY.lvec_vec;
+        let cert_len = (fst el).PPBY.lvec_len;
+        let fits1 = cntv `SZ.lt` 8sz;
+        let room = 32768sz `SZ.sub` offv;
+        let fits2 = cert_len `SZ.lte` room;
+        (* the cert blob being added at this step *)
+        RV.lemma_list_drop_index cm (SZ.v iv);
+        RV.lemma_synth_cert_chain_cons
+          (FStar.List.Tot.index cm (SZ.v iv))
+          (RV.list_drop (SZ.v iv + 1) cm);
+        if (fits1 && fits2) {
+          V.op_Array_Assignment offsets cntv offv;
+          V.op_Array_Assignment lens cntv cert_len;
+          assert (pure (SZ.v offv + SZ.v cert_len <= 32768));
+          copy_vec_into_at chain_bytes offv (fst el).PPBY.lvec_vec cert_len;
+          with cbN. assert (V.pts_to chain_bytes cbN);
+          CC.certificate_chain_matches_extend
+            cb0 cbN offs0 lns0 (Seq.upd offs0 (SZ.v cntv) offv)
+            (Seq.upd lns0 (SZ.v cntv) cert_len)
+            (SZ.v cntv) processed0 (SZ.v offv);
+          let cd : Ghost.erased B.bytes =
+            Ghost.hide ((FStar.List.Tot.index cm (SZ.v iv)).GCE.cert_data <: B.bytes);
+          Seq.lemma_eq_elim (Seq.slice cbN (SZ.v offv) (SZ.v offv + SZ.v cert_len))
+                            (Ghost.reveal cd <: Seq.seq U8.t);
+          RV.lemma_cert_chain_total_bytes_snoc (Ghost.reveal processed0) (Ghost.reveal cd);
+          CC.lemma_append_cons (Ghost.reveal processed0) (Ghost.reveal cd)
+            (RV.reveal_synth_cert_chain (RV.list_drop (SZ.v iv + 1) cm));
+          let proc_new : Ghost.erased (list B.bytes) =
+            Ghost.hide (FStar.List.Tot.append (Ghost.reveal processed0) [Ghost.reveal cd]);
+          GR.write proc_ref proc_new;
+          fold (LSeqB.vmatch_copy_seqbytes (fst el) (fst em));
+          intro_cert_entry el;
+          PPB.intro_vmatch_conv GCE.certificateEntry_vmatch GCE.certificateEntry_conv
+            el em (FStar.List.Tot.index cm (SZ.v iv));
+          Trade.elim
+            (PPB.vmatch_conv GCE.certificateEntry_vmatch GCE.certificateEntry_conv
+               el (FStar.List.Tot.index cm (SZ.v iv)))
+            (SM.seq_list_match s cm
+               (PPB.vmatch_conv GCE.certificateEntry_vmatch GCE.certificateEntry_conv));
+          off_ref := offv `SZ.add` cert_len;
+          cnt_ref := cntv `SZ.add` 1sz;
+          SZ.fits_lte (SZ.v iv + 1) (SZ.v count);
+          i := iv `SZ.add` 1sz;
+          FStar.List.Tot.append_length (Ghost.reveal processed0) [Ghost.reveal cd];
+          assert (pure (FStar.List.Tot.length (Ghost.reveal proc_new) == SZ.v cntv + 1));
+          assert (pure (RV.reveal_cert_chain_total_bytes (Ghost.reveal proc_new)
+                        == SZ.v offv + SZ.v cert_len));
+          assert (pure (Seq.slice cbN (SZ.v offv) (SZ.v offv + SZ.v cert_len)
+                        == (Ghost.reveal cd <: Seq.seq U8.t)));
+          assert (pure (L.certificate_chain_matches cbN (SZ.v offv + SZ.v cert_len)
+                          (Seq.upd offs0 (SZ.v cntv) offv)
+                          (Seq.upd lns0 (SZ.v cntv) cert_len)
+                          (SZ.v cntv + 1) (Ghost.reveal proc_new)));
+          assert (pure (FStar.List.Tot.append (Ghost.reveal proc_new)
+                          (RV.reveal_synth_cert_chain (RV.list_drop (SZ.v iv + 1) cm))
+                          == RV.reveal_synth_cert_chain cm));
+        } else {
+          (* The chain does not fit: prove the negation of [cert_chain_fits]
+             via the pure case-analysis lemma (avoids an in-Pulse [if] whose
+             branches would carry mismatched ghost postconditions). *)
+          lemma_cert_chain_nofit cm (SZ.v iv) (SZ.v cntv) (SZ.v offv) (SZ.v cert_len)
+            (Ghost.reveal processed0);
+          fold (LSeqB.vmatch_copy_seqbytes (fst el) (fst em));
+          intro_cert_entry el;
+          PPB.intro_vmatch_conv GCE.certificateEntry_vmatch GCE.certificateEntry_conv
+            el em (FStar.List.Tot.index cm (SZ.v iv));
+          Trade.elim
+            (PPB.vmatch_conv GCE.certificateEntry_vmatch GCE.certificateEntry_conv
+               el (FStar.List.Tot.index cm (SZ.v iv)))
+            (SM.seq_list_match s cm
+               (PPB.vmatch_conv GCE.certificateEntry_vmatch GCE.certificateEntry_conv));
+          failed := true;
+        }
+      };
+      let fl = !failed;
+      let offv = !off_ref;
+      let cntv = !cnt_ref;
+      let iv = !i;
+      let proc_final = GR.read proc_ref;
+      RV.lemma_list_drop_length cm;
+      RV.lemma_synth_cert_chain_nil ();
+      assert (pure ((not fl) ==> SZ.v iv == FStar.List.Tot.length cm));
+      assert (pure ((not fl) ==>
+                    RV.list_drop (SZ.v iv) cm == RV.list_drop (FStar.List.Tot.length cm) cm));
+      assert (pure ((not fl) ==> RV.list_drop (SZ.v iv) cm == []));
+      assert (pure ((not fl) ==>
+                    RV.reveal_synth_cert_chain (RV.list_drop (SZ.v iv) cm) == []));
+      FStar.List.Tot.append_l_nil (Ghost.reveal proc_final);
+      assert (pure ((not fl) ==>
+                    Ghost.reveal proc_final == RV.reveal_synth_cert_chain cm));
+      fold (PPVCL.vmatch_vclist
+                (PPB.vmatch_conv GCE.certificateEntry_vmatch GCE.certificateEntry_conv)
+                (Some nv) cm);
+      rewrite (PPVCL.vmatch_vclist
+                (PPB.vmatch_conv GCE.certificateEntry_vmatch GCE.certificateEntry_conv)
+                (Some nv) cm)
+          as (PPVCL.vmatch_vclist
+                (PPB.vmatch_conv GCE.certificateEntry_vmatch GCE.certificateEntry_conv)
+                xlist cm);
+      GR.free proc_ref;
+      (chain_bytes, offsets, lens, offv, cntv, fl)
+    }
+  }
+}
+
 (* Full handshake (content-type 0x16) arm.  Parses the handshake message
    structure exclusively through the QuackyDucky-generated validator + copyful
    reader; ServerHello, Finished and CertificateVerify sub-arms are proven. *)
@@ -2322,30 +2803,108 @@ fn parse_handshake_message
           }
         }
       }
+      GHS.Body_certificate_low xcert -> {
+        elim_vmatch_certificate xcert;
+        with cm0. assert (
+          LSeqB.vmatch_copy_seqbytes (fst xcert) (fst cm0) **
+          PPVCL.vmatch_vclist
+            (PPB.vmatch_conv GCE.certificateEntry_vmatch GCE.certificateEntry_conv)
+            (snd xcert) (snd cm0) **
+          pure (GHS.handshake_conv (GHS.Body_certificate_mid cm0) == Some (Ghost.reveal gv) /\
+                GHS.Body_certificate? (Ghost.reveal gv) /\
+                ((GHS.Body_certificate?._0 (Ghost.reveal gv)).GCert.certificate_list
+                  <: list GCE.certificateEntry)
+                  == (snd cm0 <: list GCE.certificateEntry)));
+        let cert_body : Ghost.erased GHS.handshake_body_certificate =
+          Ghost.hide (GHS.Body_certificate?._0 (Ghost.reveal gv));
+        let res = scan_certificate_chain (snd xcert) #(snd cm0);
+        with cb offs lns. assert (
+          V.pts_to (Mktuple6?._1 res) cb **
+          V.pts_to (Mktuple6?._2 res) offs **
+          V.pts_to (Mktuple6?._3 res) lns);
+        let cbv = Mktuple6?._1 res;
+        let ofv = Mktuple6?._2 res;
+        let lnv = Mktuple6?._3 res;
+        let cblen = Mktuple6?._4 res;
+        let cnt = Mktuple6?._5 res;
+        let failed = Mktuple6?._6 res;
+        (* [reveal_synth_cert_chain (snd cm0)] is the synthesised chain. *)
+        RV.lemma_handshake_synth_certificate (Ghost.reveal cert_body <: GHS.handshake_body_certificate);
+        if failed {
+          (* The chain does not fit the fixed-size representation: synth lands
+             [None]; free the owned Vecs, re-pack and free the parsed structure,
+             and fall back. *)
+          rewrite (V.pts_to (Mktuple6?._1 res) cb) as (V.pts_to cbv cb);
+          rewrite (V.pts_to (Mktuple6?._2 res) offs) as (V.pts_to ofv offs);
+          rewrite (V.pts_to (Mktuple6?._3 res) lns) as (V.pts_to lnv lns);
+          V.free cbv;
+          V.free ofv;
+          V.free lnv;
+          intro_vmatch_certificate xcert (Ghost.reveal cm0) #(Ghost.reveal gv);
+          PPB.free_vmatch_conv GHS.handshake_vmatch GHS.handshake_conv
+            GHS.free_handshake (GHS.Body_certificate_low xcert);
+          Trade.elim (PPB.pts_to_parsed GHS.handshake_parser s #(1.0R /. 2.0R) (Ghost.reveal gv))
+                     (S.pts_to s 'input_bytes);
+          S.to_array s;
+          RV.lemma_parse_handshake_none_of_synth_none (Ghost.reveal 'input_bytes)
+            (Ghost.reveal gv) (SZ.v input_len);
+          handshake_fallback content_type input input_len
+        } else {
+          (* The chain fits: synth is [Some (M.Certificate {chain; body})].
+             Build the L representation from the owned Vecs and discharge. *)
+          intro_vmatch_certificate xcert (Ghost.reveal cm0) #(Ghost.reveal gv);
+          PPB.free_vmatch_conv GHS.handshake_vmatch GHS.handshake_conv
+            GHS.free_handshake (GHS.Body_certificate_low xcert);
+          Trade.elim (PPB.pts_to_parsed GHS.handshake_parser s #(1.0R /. 2.0R) (Ghost.reveal gv))
+                     (S.pts_to s 'input_bytes);
+          S.to_array s;
+          RV.lemma_ptm_handshake_some (Ghost.reveal 'input_bytes) (Ghost.reveal gv)
+            (Some?.v (RV.handshake_synth (Ghost.reveal gv)));
+          WS.lemma_parse_tls_message_round_trip T.Handshake (Ghost.reveal 'input_bytes);
+          let lcert = ({ L.certificate_msg_chain_bytes = cbv;
+                         L.certificate_msg_chain_bytes_len = cblen;
+                         L.certificate_msg_cert_offsets = ofv;
+                         L.certificate_msg_cert_lens = lnv;
+                         L.certificate_msg_cert_count = cnt });
+          rewrite (V.pts_to (Mktuple6?._1 res) cb)
+               as (V.pts_to lcert.L.certificate_msg_chain_bytes cb);
+          rewrite (V.pts_to (Mktuple6?._2 res) offs)
+               as (V.pts_to lcert.L.certificate_msg_cert_offsets offs);
+          rewrite (V.pts_to (Mktuple6?._3 res) lns)
+               as (V.pts_to lcert.L.certificate_msg_cert_lens lns);
+          fold (L.is_valid_certificate_msg lcert
+                  (M.Certificate?._0 (Some?.v (RV.handshake_synth (Ghost.reveal gv)))));
+          fold (L.is_valid_handshake_msg (L.LCertificate lcert)
+                  (Some?.v (RV.handshake_synth (Ghost.reveal gv))));
+          fold (L.is_valid_tls_message
+                  (L.LTlsHandshake (L.LCertificate lcert))
+                  (M.TlsHandshake (Some?.v (RV.handshake_synth (Ghost.reveal gv)))));
+          lemma_wire_exists content_type T.Handshake
+            (M.TlsHandshake (Some?.v (RV.handshake_synth (Ghost.reveal gv)))) 'input_bytes;
+          Some (L.LTlsHandshake (L.LCertificate lcert))
+        }
+      }
       _ -> {
-        (* REMAINING ARMS: this catch-all now covers exactly two constructors —
-           [Body_client_hello_low] and [Body_certificate_low].  All other
-           constructors are handled in explicit arms above: Finished,
-           CertificateVerify (Decision-1 guard makes its synth land in the
-           4096-byte storage), EncryptedExtensions (verified ALPN scan),
-           Body_key_update (byte-level fallback) and Body_new_session_ticket
-           (validator-unreachable).
+        (* REMAINING ARM: this catch-all now covers exactly one constructor —
+           [Body_client_hello_low].  All other constructors are handled in
+           explicit arms above: Finished, CertificateVerify (Decision-1 guard
+           makes its synth land in the 4096-byte storage), EncryptedExtensions
+           (verified ALPN scan), Certificate (verified [synth_cert_chain] copy
+           loop proving [certificate_chain_matches]), ServerHello (verified
+           key_share scan), Body_key_update (byte-level fallback) and
+           Body_new_session_ticket (validator-unreachable).
 
-           Each remaining arm needs the same recipe used for EncryptedExtensions
-           and ServerHello: a ghost vmatch-elimination chain peeling the generated
-           [vmatch_conv] down to the owned leaf Vecs, a copy of each fixed-size
-           field into the L representation, and a per-constructor [RV]
+           ClientHello has the widest field set (random / server_name /
+           key_share / cipher_suites / signature_schemes); it is not reachable by
+           a client but is required for totality.  Building it out follows the
+           same recipe used for EncryptedExtensions, ServerHello and Certificate:
+           a ghost vmatch-elimination chain peeling the generated [vmatch_conv]
+           down to the owned leaf Vecs, a copy of each fixed-size field into the
+           L representation, and the [RV.lemma_handshake_synth_client_hello]
            synth-reveal lemma.
 
-             - Certificate: recursive [synth_cert_chain] over the (Decision-1
-               guarded) entry list, copying each cert into the fixed-size chain
-               storage and proving [certificate_chain_matches].
-             - ClientHello: widest field set (random/server_name/key_share/
-               cipher_suites/signature_schemes); not reachable by a client but
-               required for totality.
-
-           Returning [None] here is UNSOUND (these synth to [Some] for valid
-           inputs, so [parse_tls_message] is not [None]); the arms must be built
+           Returning [None] here is UNSOUND (a valid ClientHello synths to
+           [Some], so [parse_tls_message] is not [None]); the arm must be built
            out.  Tracked as the sole remaining [admit] in this file. *)
         admit ()
       }

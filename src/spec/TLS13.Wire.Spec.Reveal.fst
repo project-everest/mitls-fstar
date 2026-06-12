@@ -21,6 +21,8 @@ module GESH = TLS13.Wire.Generated.ExtensionServerHello
 module GKSE = TLS13.Wire.Generated.KeyShareEntry
 module GNG = TLS13.Wire.Generated.NamedGroup
 module GPV = TLS13.Wire.Generated.ProtocolVersion
+module GCert = TLS13.Wire.Generated.Certificate
+module GCE = TLS13.Wire.Generated.CertificateEntry
 module LP = LowParse.Spec
 
 let lemma_ptm_change_cipher_spec fragment =
@@ -119,3 +121,32 @@ let lemma_handshake_synth_server_hello_bad_version b = ()
 let lemma_handshake_synth_server_hello_hrr b shb = ()
 
 let lemma_handshake_synth_server_hello_sh b sf = ()
+
+(* --- Certificate reveal interface --------------------------------------- *)
+
+let reveal_synth_cert_chain l = WS.synth_cert_chain l
+
+let reveal_cert_chain_total_bytes chain = WS.cert_chain_total_bytes chain
+
+let lemma_synth_cert_chain_nil () = ()
+
+let lemma_synth_cert_chain_cons e tl = ()
+
+let rec lemma_synth_cert_chain_length l =
+  match l with
+  | [] -> ()
+  | _ :: tl -> lemma_synth_cert_chain_length tl
+
+let lemma_cert_chain_total_bytes_nil () = ()
+
+let rec lemma_cert_chain_total_bytes_snoc chain x =
+  match chain with
+  | [] -> ()
+  | _ :: tl -> lemma_cert_chain_total_bytes_snoc tl x
+
+let rec lemma_cert_chain_total_bytes_prefix_le prefix x rest =
+  match prefix with
+  | [] -> ()
+  | _ :: tl -> lemma_cert_chain_total_bytes_prefix_le tl x rest
+
+let lemma_handshake_synth_certificate b = ()
