@@ -37,6 +37,19 @@ val x25519_shared:
   pk:B.bytes ->
   Tot (option x25519_shared_secret)
 
+val lemma_x25519_shared_agreement:
+  client_sk:x25519_private ->
+  server_sk:x25519_private ->
+  client_pub:x25519_public ->
+  server_pub:x25519_public ->
+  Lemma
+    (requires
+      x25519_public_from_private client_sk == client_pub /\
+      x25519_public_from_private server_sk == server_pub)
+    (ensures
+      x25519_shared client_sk server_pub ==
+      x25519_shared server_sk client_pub)
+
 val tls13_record_nonce:
   static_iv:B.bytes ->
   seq:nat ->

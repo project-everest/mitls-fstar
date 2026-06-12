@@ -32,6 +32,8 @@ Current phase: **Phase 0/1 started**.
     and uses typed `TLS13.IO.listen_tcp`/`accept_tcp`.
 - [ ] Phase 0 baseline verification.
 - [ ] Phase 1 role-parametric pure state and role-correct key projections.
+- [x] X25519 agreement lemma added at the crypto TCB boundary
+  (`TLS13.Crypto.Spec.lemma_x25519_shared_agreement`).
 - [ ] Phase 2 paired endpoint traces and derived-key theorem family.
 
 ## End goal
@@ -619,7 +621,7 @@ Checklist:
 
 - [ ] `paired_x25519_key_shares` records both endpoints' public shares and the
       local private/public correspondence.
-- [ ] `TLS13.Crypto.Spec` exposes a trusted X25519 agreement lemma.
+- [x] `TLS13.Crypto.Spec` exposes a trusted X25519 agreement lemma.
 - [ ] The derived-key theorem obtains shared-secret equality from
       `paired_x25519_key_shares` plus the X25519 agreement lemma.
 - [ ] The crypto TCB boundary is documented in the pure theorem and audit text.
