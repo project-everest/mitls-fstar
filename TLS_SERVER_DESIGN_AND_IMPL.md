@@ -15,6 +15,25 @@ theorems. Once those theorems are settled, the Pulse implementation should be a
 mostly mechanical refinement of the already-audited pure transitions, following
 the existing client implementation structure.
 
+## Implementation status
+
+Current phase: **Phase 0/1 started**.
+
+- [x] Single authoritative plan committed.
+- [x] Superseded server/transcript planning docs removed.
+- [x] First-milestone scope clarified:
+  - KeyUpdate is deferred.
+  - The first derived-key theorem uses a trusted `TLS13.Crypto.Spec` X25519
+    agreement lemma.
+  - `TLS13.Spec.ConnectionState` is refactored in place before considering a
+    separate endpoint-state module.
+  - Server credentials are supplied as in-memory PEM/DER buffers.
+  - The top-level server `accept` mirrors the client driver's `connect` style
+    and uses typed `TLS13.IO.listen_tcp`/`accept_tcp`.
+- [ ] Phase 0 baseline verification.
+- [ ] Phase 1 role-parametric pure state and role-correct key projections.
+- [ ] Phase 2 paired endpoint traces and derived-key theorem family.
+
 ## End goal
 
 Build a verified TLS 1.3 server for the same narrow profile as the verified
@@ -27,8 +46,9 @@ client:
 - First server credential scheme: `RsaPssRsaeSha256` (`0x0804`).
 - No PSK, no 0-RTT, no HelloRetryRequest, no client authentication, no early
   data, and no resumption in the first implementation.
-- Application data, close_notify, and KeyUpdate only if they stay aligned with
-  the current supported client profile.
+- Application data and close_notify are in scope for the first implementation.
+- KeyUpdate is explicitly deferred until after the first handshake/application
+  data server milestone.
 
 The main proof target is two-layered:
 
@@ -47,6 +67,7 @@ The first server version should deliberately omit:
 - PSK, 0-RTT, early data, and resumption.
 - HelloRetryRequest.
 - Client authentication.
+- KeyUpdate.
 - ALPN or non-empty EncryptedExtensions unless interop forces it.
 - Multiple simultaneous accepted connections in one verified server object.
 - A verified generic serializer for arbitrary TLS messages.
@@ -102,8 +123,8 @@ Current code anchors to preserve or factor:
   `server_application_traffic_secret`, `derive_aead_key`, and
   `derive_aead_iv`.
 - `TLS13.Crypto.Spec.fsti` exposes `x25519_public_from_private` and
-  `x25519_shared`, but must either expose an X25519 agreement lemma or leave
-  shared-secret equality as an explicit theorem premise.
+  `x25519_shared`; the first server milestone should add a trusted X25519
+  agreement lemma at this crypto TCB boundary.
 - Existing implementation-facing surfaces to keep client-compatible include
   `TLS13.Impl.Client.fsti`, `TLS13.Impl.Client.Driver.fsti`,
   `TLS13.Impl.Client.Types`, `TLS13.Impl.Parser.fsti`, and
@@ -194,13 +215,19 @@ Client configuration retains:
 
 Server configuration adds:
 
-- certificate chain bytes;
+- certificate chain bytes supplied to `new_server` as in-memory PEM or DER
+  buffers;
 - credential identity;
 - allowed signature schemes;
 - supported cipher suites;
 - supported groups;
 - optional SNI policy;
 - signing TCB identity for RSA-PSS/SHA-256.
+
+Private key bytes are an input to the server credential/signing TCB, not a pure
+protocol artifact. The pure state should remember only the credential identity,
+certificate chain bytes, selected signature scheme, and typed signing capability
+facts needed to justify CertificateVerify.
 
 ### Handshake/session state
 
@@ -241,7 +268,7 @@ The exact constructors can change, but the model must distinguish at least:
 | Application traffic secrets derived | Application traffic secrets are based on `TH_SF`; application use still blocked. |
 | Client Finished received | Client Finished parsed under client handshake read key. |
 | Client Finished verified | Client Finished MAC checked over `TH_SF`; connection may enter application data. |
-| Application data | App data, KeyUpdate, tickets, and close_notify according to supported profile. |
+| Application data | App data and close_notify according to supported profile; KeyUpdate is deferred. |
 | Closing/Closed/Failed | Same close/failure discipline as client, role-correct for alerts and logs. |
 
 ### Server legal events
@@ -261,7 +288,6 @@ Add legal events for:
 - receive client `Finished`;
 - verify client `Finished`;
 - send/receive application data;
-- send/receive KeyUpdate if supported;
 - send/receive close_notify;
 - fail with explicit TLS error.
 
@@ -290,7 +316,7 @@ event-log projections rather than inferred from control-state names.
 | `TH_before_SF` | through `CertificateVerify` | Server Finished verify_data. |
 | `TH_SF` | through server `Finished` | Application traffic secrets and client Finished verification context. |
 | `TH_CF` | through client `Finished` | Full handshake complete; not the base application traffic-secret context. |
-| `TH_KU(label,n)` | traffic update generation point, if modeled | KeyUpdate agreement by label and generation. |
+| `TH_KU(label,n)` | traffic update generation point, later milestone | KeyUpdate agreement by label and generation. |
 
 Client and server transcript update discipline:
 
@@ -300,8 +326,8 @@ Client and server transcript update discipline:
   Finished; client receives the same messages in the same transcript order.
 - Client sends Finished; server receives the same client Finished.
 - Compatibility ChangeCipherSpec is non-transcript.
-- Alerts, application data, tickets, and KeyUpdate do not alter the handshake
-  transcript.
+- Alerts, application data, tickets, and later KeyUpdate messages do not alter
+  the handshake transcript.
 
 Required lemmas:
 
@@ -370,12 +396,11 @@ First theorem scope:
 - `TrafficKey` and `TrafficIV` for those traffic secrets;
 - `FinishedKey ClientTraffic`;
 - `FinishedKey ServerTraffic`;
-- `TrafficUpdateSecret label n` only if KeyUpdate stays in the first server
-  profile.
 
-Exporter and resumption master secrets remain out of the first proof unless the
-implementation exposes them. Randomness, private keys, certificates, PSK/0-RTT
-secrets, and unsupported key material are not part of the theorem family.
+`TrafficUpdateSecret label n`, exporter secrets, and resumption master secrets
+remain out of the first proof. Randomness, private keys, certificates,
+PSK/0-RTT secrets, and unsupported key material are not part of the first
+theorem family.
 
 ### Dependency DAG
 
@@ -459,12 +484,29 @@ Meaning:
   - `x25519_shared client_sk server_pub`;
   - `x25519_shared server_sk client_pub`.
 
-The predicate should stop before silently asserting shared-secret equality. That
-equality must come from either:
+The predicate should stop before silently asserting shared-secret equality. For
+the first server milestone, equality must come from an explicit trusted
+`TLS13.Crypto.Spec` X25519 agreement lemma, not from a bare theorem premise.
 
-- an explicit `TLS13.Crypto.Spec` X25519 agreement law; or
-- a first-version theorem premise stating shared-secret equality, with the TCB
-  boundary documented.
+Suggested TCB lemma shape:
+
+```fstar
+val lemma_x25519_shared_agreement
+  (client_sk:x25519_private)
+  (server_sk:x25519_private)
+  (client_pub:x25519_public)
+  (server_pub:x25519_public)
+  : Lemma
+      (requires
+        x25519_public_from_private client_sk == client_pub /\
+        x25519_public_from_private server_sk == server_pub)
+      (ensures
+        x25519_shared client_sk server_pub ==
+        x25519_shared server_sk client_pub)
+```
+
+The lemma lives at the existing crypto TCB boundary: F* proofs may rely on it,
+but the audit must record that the X25519 Diffie-Hellman law is trusted.
 
 ### Key derivation checkpoint pairing
 
@@ -486,8 +528,9 @@ type key_derivation_checkpoint =
 
 `DeriveHandshakeTraffic` requires both endpoints to be at `TH_SH`.
 `DeriveApplicationTraffic` requires both endpoints to be at `TH_SF`.
-`DeriveTrafficUpdate label n` requires both endpoints to have applied the same
-number of updates for the same traffic label.
+`DeriveTrafficUpdate label n` is reserved for the later KeyUpdate milestone and
+will require both endpoints to have applied the same number of updates for the
+same traffic label.
 
 ### Derivation input agreement
 
@@ -502,7 +545,7 @@ This packages exactly the inputs required by the `derived_key_id`:
 - transcript checkpoint and transcript-hash agreement;
 - traffic label agreement;
 - role/direction mapping;
-- KeyUpdate generation count, when applicable.
+- KeyUpdate generation count, in the later KeyUpdate milestone.
 
 ## Main pure theorem family
 
@@ -529,7 +572,8 @@ theorem_paired_endpoints_derived_key_agrees :
 - AEAD key equality for `TrafficKey`;
 - AEAD IV equality for `TrafficIV`;
 - Finished-key equality for `FinishedKey`;
-- updated traffic-secret equality for `TrafficUpdateSecret`.
+- updated traffic-secret equality for `TrafficUpdateSecret` in the later
+  KeyUpdate milestone.
 
 For record-layer use, lift this to:
 
@@ -575,9 +619,10 @@ Checklist:
 
 - [ ] `paired_x25519_key_shares` records both endpoints' public shares and the
       local private/public correspondence.
-- [ ] The crypto spec exposes an X25519 agreement lemma, or the theorem explicitly
-      assumes shared-secret equality.
-- [ ] The TCB boundary is documented in the pure theorem and audit text.
+- [ ] `TLS13.Crypto.Spec` exposes a trusted X25519 agreement lemma.
+- [ ] The derived-key theorem obtains shared-secret equality from
+      `paired_x25519_key_shares` plus the X25519 agreement lemma.
+- [ ] The crypto TCB boundary is documented in the pure theorem and audit text.
 - [ ] Same shared secret implies same early, handshake, and master secrets for
       the supported empty-PSK profile.
 
@@ -592,8 +637,8 @@ Checklist:
       secret agreement.
 - [ ] Finished-key agreement is proved by deterministic derivation from the
       relevant traffic secret.
-- [ ] KeyUpdate agreement is proved by label and generation count if KeyUpdate is
-      in scope.
+- [ ] KeyUpdate agreement is explicitly out of first-milestone scope and tracked
+      as later theorem work.
 - [ ] Out-of-scope derived keys are explicitly not claimed.
 
 ### Gate 5: record-material agreement
@@ -615,16 +660,18 @@ Checklist:
 - [ ] Keep current client verification, extraction, and interop gates green.
 - [ ] Choose module names:
       - shared endpoint proof vocabulary: `TLS13.Impl.Endpoint.Types`;
-      - role-parametric pure state, if split: `TLS13.Spec.EndpointState`;
+      - role-parametric pure state: refactor `TLS13.Spec.ConnectionState` in
+        place first; introduce `TLS13.Spec.EndpointState` only later if the
+        in-place refactor becomes too large;
       - server public API: `TLS13.Impl.Server.fsti` / `.fst`;
       - server theorem vocabulary: `TLS13.Impl.Server.Types.fst`;
       - server driver: `TLS13.Impl.Server.Driver.fsti` / `.fst`;
       - server credential TCB: `TLS13.ServerCredentials.fsti` or
         `TLS13.OpenSSL.Server.fsti`;
       - runtime wrapper: `runtime/tls13_server_driver.h` / `.c`.
-- [ ] Decide whether KeyUpdate remains in first server scope.
-- [ ] Decide whether the first key-agreement theorem uses an X25519 agreement
-      lemma or an explicit shared-secret equality premise.
+- [ ] Record that KeyUpdate is deferred for the first server milestone.
+- [ ] Record that the first key-agreement theorem uses a trusted X25519
+      agreement lemma rather than a bare shared-secret equality premise.
 
 Validation:
 
@@ -639,6 +686,8 @@ Validation:
 Checklist:
 
 - [ ] Add `ServerEndpoint`.
+- [ ] Refactor `TLS13.Spec.ConnectionState` in place, preserving the existing
+      client theorem surface throughout the migration.
 - [ ] Add server configuration fields.
 - [ ] Replace client-only start/session state with role-aware handshake data.
 - [ ] Add server handshake stages.
@@ -664,7 +713,7 @@ Checklist:
 - [ ] Define `paired_x25519_key_shares`.
 - [ ] Define `same_key_derivation_checkpoint`.
 - [ ] Define `derivation_inputs_agree`.
-- [ ] Add or assume X25519 agreement.
+- [ ] Add the trusted X25519 agreement lemma.
 - [ ] Prove transcript pairing up to each checkpoint.
 - [ ] Prove base-secret agreement.
 - [ ] Prove traffic-secret agreement.
@@ -707,9 +756,13 @@ Checklist:
 - [ ] Relate credential identity to leaf public key and supported signature
       scheme.
 - [ ] Define typed signing postcondition for CertificateVerify.
-- [ ] Add Pulse/C interface for credential allocation/free from in-memory bytes.
+- [ ] Add Pulse/C interface for credential allocation/free from in-memory PEM or
+      DER certificate-chain and private-key byte buffers.
 - [ ] Add signing function for server CertificateVerify input.
 - [ ] Keep private key bytes outside protocol logic.
+- [ ] Do not make file-path loading part of the verified server API; any file IO
+      wrapper must live outside the first verified API and feed in-memory bytes
+      to `new_server`.
 - [ ] Keep Finished HMAC verification outside this TCB.
 
 Validation:
@@ -754,7 +807,7 @@ Validation:
 Recommended API shape:
 
 ```text
-new_server
+new_server certificate_chain_bytes private_key_bytes server_config
 next_local_action
 process_network_bytes
 process_local_event
@@ -794,7 +847,6 @@ Checklist:
       - client Finished receive/open;
       - application data;
       - alerts;
-      - KeyUpdate if supported;
       - decode/decrypt errors.
 - [ ] Add local handlers:
       - server random and key share generation;
@@ -804,7 +856,7 @@ Checklist:
       - server flight emission;
       - client Finished verification;
       - application key installation;
-      - application data, KeyUpdate, close_notify.
+      - application data and close_notify.
 - [ ] Add failure transitions:
       - unsupported cipher suite;
       - missing/unsupported X25519 key share;
@@ -827,7 +879,7 @@ Public driver target:
 
 ```text
 new_server
-accept
+accept bind_host bind_host_len port local_fuel fuel
 send
 receive
 close
@@ -835,9 +887,16 @@ close
 
 Checklist:
 
-- [ ] `new_server` allocates credential context and Pulse-owned buffers.
-- [ ] `accept` creates/listens/accepts one TCP channel, runs handshake to
-      completion, closes listener, and returns connected server handle.
+- [ ] `new_server` receives in-memory PEM/DER certificate-chain and private-key
+      byte buffers, allocates the credential context, and allocates Pulse-owned
+      protocol buffers.
+- [ ] `accept` mirrors the client driver's `connect` style: it takes bind-host
+      bytes, bind-host length, port, local-action fuel, and network fuel; it
+      calls typed `TLS13.IO.listen_tcp` and `TLS13.IO.accept_tcp` internally,
+      runs the TLS handshake to completion, closes the listener, and returns a
+      connected server handle.
+- [ ] The first public driver API does not take a pre-accepted channel or
+      externally owned listener handle.
 - [ ] `send`, `receive`, and `close` operate on one connected server handle.
 - [ ] Driver owns retained receive buffer.
 - [ ] Driver owns network output, application output, and signing scratch buffers.
@@ -863,6 +922,8 @@ Checklist:
 - [ ] Extend IO TCB with `accept_tcp`.
 - [ ] Add listener close/free if listener state persists.
 - [ ] Add server credential/signing C shim.
+- [ ] Credential C shim accepts in-memory PEM/DER buffers; it does not load
+      credential files by path in the first verified API.
 - [ ] Use concrete C stub names such as
       `c_stubs/tls13_server_credentials_karamel.c`,
       `c_stubs/tls13_server_credentials_karamel.h`,
@@ -902,7 +963,7 @@ Checklist:
 - [ ] OpenSSL `s_client` connects to verified server.
 - [ ] Application echo works.
 - [ ] close_notify works.
-- [ ] KeyUpdate works if in scope.
+- [ ] KeyUpdate is not accepted as a claimed first-milestone feature.
 - [ ] Verified client connects to verified server.
 - [ ] Pure paired-endpoint derived-key theorem instantiates on paired
       implementation states.
@@ -952,7 +1013,8 @@ Audit checklist:
 - No broad C fallback that returns success without a typed TCB postcondition.
 - No hidden weakening of parser/serializer contracts.
 - No role-ambiguous key projection lemmas.
-- No theorem that omits shared-secret equality from key agreement assumptions.
+- No theorem that hides the source of shared-secret equality; derive it from
+  `paired_x25519_key_shares` plus the trusted X25519 agreement lemma.
 - No implementation phase before pure derived-key theorem gates.
 - Keep transcript checkpoint lemmas named and small.
 - Keep derived-key agreement lemmas indexed by `derived_key_id`.
