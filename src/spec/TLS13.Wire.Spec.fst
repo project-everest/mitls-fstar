@@ -1176,3 +1176,44 @@ let lemma_parse_record_fragment_bound (input:B.bytes)
             assert (B.length fragment == fragment_len);
             assert (B.length fragment <= 16640)
           | None -> ()
+
+// Round-trip: a handshake message accepted by parse_tls_message re-serializes to
+// exactly the input fragment, for the messages whose M-value carries the verbatim
+// wire body (ServerHello, EncryptedExtensions, Certificate, CertificateVerify).
+// This is the spec obligation a verified parser discharges for
+// CT.parsed_message_wire_success_for.  Proof: synth sets m.body to the QuackyDucky
+// serialization of the parsed handshake value h, and LowParse's parsed_data_is_serialize
+// gives `serialize handshake_serializer h == fragment` (exact consumption).
+let lemma_parse_tls_message_round_trip
+  (content_type:T.content_type)
+  (fragment:B.bytes)
+  : Lemma
+    (ensures (
+      match parse_tls_message content_type fragment with
+      | Some (M.TlsHandshake (M.ServerHello sh)) ->
+        Seq.equal fragment (serialize_handshake (M.ServerHello sh))
+      | Some (M.TlsHandshake (M.EncryptedExtensions ee)) ->
+        Seq.equal fragment (serialize_handshake (M.EncryptedExtensions ee))
+      | Some (M.TlsHandshake (M.Certificate c)) ->
+        Seq.equal fragment (serialize_handshake (M.Certificate c))
+      | Some (M.TlsHandshake (M.CertificateVerify cv)) ->
+        Seq.equal fragment (serialize_handshake (M.CertificateVerify cv))
+      | _ -> True))
+=
+  match content_type with
+  | T.Handshake ->
+    (match LP.parse GHS.handshake_parser fragment with
+     | Some (h, consumed) ->
+       if consumed = B.length fragment then begin
+         LP.parsed_data_is_serialize GHS.handshake_serializer fragment;
+         Seq.lemma_eq_intro
+           (Seq.slice fragment consumed (B.length fragment))
+           B.empty;
+         Seq.lemma_eq_intro
+           (Seq.append (LP.serialize GHS.handshake_serializer h)
+                       (Seq.slice fragment consumed (B.length fragment)))
+           (LP.serialize GHS.handshake_serializer h)
+       end
+       else ()
+     | None -> ())
+  | _ -> ()

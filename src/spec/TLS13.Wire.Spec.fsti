@@ -256,3 +256,19 @@ val lemma_parse_record_fragment_bound:
       match parse_record input with
       | Some (_, fragment, _) -> B.length fragment <= 16640
       | None -> True))
+
+val lemma_parse_tls_message_round_trip:
+  content_type:T.content_type ->
+  fragment:B.bytes ->
+  Lemma
+    (ensures (
+      match parse_tls_message content_type fragment with
+      | Some (M.TlsHandshake (M.ServerHello sh)) ->
+        Seq.equal fragment (serialize_handshake (M.ServerHello sh))
+      | Some (M.TlsHandshake (M.EncryptedExtensions ee)) ->
+        Seq.equal fragment (serialize_handshake (M.EncryptedExtensions ee))
+      | Some (M.TlsHandshake (M.Certificate c)) ->
+        Seq.equal fragment (serialize_handshake (M.Certificate c))
+      | Some (M.TlsHandshake (M.CertificateVerify cv)) ->
+        Seq.equal fragment (serialize_handshake (M.CertificateVerify cv))
+      | _ -> True))
