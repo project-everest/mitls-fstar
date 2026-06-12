@@ -26,6 +26,56 @@ module X = TLS13.X509.Spec
 open FStar.List.Tot
 open TLS13.Spec.ConnectionState
 
+let lemma_endpoint_direction_traffic_labels
+  ()
+  : Lemma
+      (ensures
+        traffic_label_for_endpoint_direction ClientEndpoint TrafficWrite == ClientTraffic /\
+        traffic_label_for_endpoint_direction ClientEndpoint TrafficRead == ServerTraffic /\
+        traffic_label_for_endpoint_direction ServerEndpoint TrafficWrite == ServerTraffic /\
+        traffic_label_for_endpoint_direction ServerEndpoint TrafficRead == ClientTraffic)
+=
+  ()
+
+let lemma_expected_traffic_secret_client_projection
+  (hs:handshake_state)
+  (epoch:traffic_epoch)
+  (dir:traffic_direction)
+  : Lemma
+      (ensures
+        expected_traffic_secret hs epoch dir ==
+        expected_traffic_secret_for_role ClientEndpoint hs epoch dir)
+=
+  ()
+
+let lemma_update_key_schedule_with_install_client_projection
+  (keys:key_schedule_state)
+  (install:traffic_key_install)
+  : Lemma
+      (ensures
+        update_key_schedule_with_install keys install ==
+        update_key_schedule_with_install_for_role ClientEndpoint keys install)
+=
+  ()
+
+let lemma_record_read_key_schedule_projection_client_projection
+  (model:connection_model)
+  : Lemma
+      (ensures
+        record_read_key_schedule_projection model ==
+        record_read_key_schedule_projection_for_role ClientEndpoint model)
+=
+  ()
+
+let lemma_record_write_key_schedule_projection_client_projection
+  (model:connection_model)
+  : Lemma
+      (ensures
+        record_write_key_schedule_projection model ==
+        record_write_key_schedule_projection_for_role ClientEndpoint model)
+=
+  ()
+
 let lemma_model_record_keys_consistent_record_read_key_schedule_projection
   (model:connection_model)
   : Lemma

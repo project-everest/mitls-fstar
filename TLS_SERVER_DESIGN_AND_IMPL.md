@@ -43,6 +43,8 @@ Current phase: **Phase 0/1 started**.
     helper preserved as a `ClientEndpoint` wrapper.
 - [x] Role-parametric record read/write key projection helpers added, with the
   existing client projections preserved as `ClientEndpoint` wrappers.
+- [x] Client-compatibility and server traffic-label mapping lemmas added in
+  `TLS13.ConnectionState.Lemmas`.
 - [ ] Phase 2 paired endpoint traces and derived-key theorem family.
 
 ## End goal
@@ -705,8 +707,9 @@ Checklist:
 - [ ] Add server legal events.
 - [x] Generalize expected traffic secret by role, direction, epoch, and label.
 - [x] Add role-parametric record read/write key projection helpers.
-- [ ] Prove client projection compatibility.
-- [ ] Prove server projection correctness.
+- [x] Prove client projection compatibility for the initial role/key helpers.
+- [x] Prove server traffic-label direction mapping for the initial role/key
+      helpers.
 - [ ] Generalize event-log, transcript, record-layer, key-schedule, raw replay,
       seal replay, decode replay, and application-log consistency.
 - [ ] Add transcript checkpoints and derivation-input extraction helpers.

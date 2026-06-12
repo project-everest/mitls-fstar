@@ -18,6 +18,46 @@ module W = TLS13.Wire.Spec
 
 open TLS13.Spec.ConnectionState
 
+val lemma_endpoint_direction_traffic_labels
+  (u:unit)
+  : Lemma
+      (ensures
+        traffic_label_for_endpoint_direction ClientEndpoint TrafficWrite == ClientTraffic /\
+        traffic_label_for_endpoint_direction ClientEndpoint TrafficRead == ServerTraffic /\
+        traffic_label_for_endpoint_direction ServerEndpoint TrafficWrite == ServerTraffic /\
+        traffic_label_for_endpoint_direction ServerEndpoint TrafficRead == ClientTraffic)
+
+val lemma_expected_traffic_secret_client_projection
+  (hs:handshake_state)
+  (epoch:traffic_epoch)
+  (dir:traffic_direction)
+  : Lemma
+      (ensures
+        expected_traffic_secret hs epoch dir ==
+        expected_traffic_secret_for_role ClientEndpoint hs epoch dir)
+
+val lemma_update_key_schedule_with_install_client_projection
+  (keys:key_schedule_state)
+  (install:traffic_key_install)
+  : Lemma
+      (ensures
+        update_key_schedule_with_install keys install ==
+        update_key_schedule_with_install_for_role ClientEndpoint keys install)
+
+val lemma_record_read_key_schedule_projection_client_projection
+  (model:connection_model)
+  : Lemma
+      (ensures
+        record_read_key_schedule_projection model ==
+        record_read_key_schedule_projection_for_role ClientEndpoint model)
+
+val lemma_record_write_key_schedule_projection_client_projection
+  (model:connection_model)
+  : Lemma
+      (ensures
+        record_write_key_schedule_projection model ==
+        record_write_key_schedule_projection_for_role ClientEndpoint model)
+
 val lemma_model_record_keys_consistent_record_read_key_schedule_projection
   (model:connection_model)
   : Lemma
