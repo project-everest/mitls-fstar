@@ -19,6 +19,16 @@ type client_hello = {
 // refine the carried wire bytes and so serialize_handshake stays bounded.
 let server_hello_max_len : nat = 4096
 
+// Bounds on received-message fields, kept in sync with the impl-layer storage
+// maxima in TLS13.Impl.ConnectionState.Bounds / TLS13.Impl.Messages
+// (max_signature_len, max_certificate_chain_bytes, max_certificate_chain_entries).
+// The QuackyDucky grammar allows larger values (signature<0..2^16-1>,
+// cert_data<1..2^24-1>), so the synth functions reject fields exceeding these so
+// the fixed-size low-level (L) representation can always hold the parsed value.
+let signature_max_len : nat = 4096
+let certificate_chain_max_bytes : nat = 32768
+let certificate_chain_max_entries : nat = 8
+
 // The wire-encoded extensions of received messages are carried verbatim (as a
 // "bytes payload", including unknown extensions) so that re-serialization is
 // exact (parser round-trip), supporting servers that send extra/reordered

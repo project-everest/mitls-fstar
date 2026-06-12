@@ -528,6 +528,20 @@ let rec synth_cert_chain (l:list GCE.certificateEntry)
   | [] -> []
   | e :: tl -> (e.GCE.cert_data <: B.bytes) :: synth_cert_chain tl
 
+// Total number of bytes of certificate data in a chain (concatenated cert_data,
+// the layout the low-level certificate_msg representation stores).
+let rec cert_chain_total_bytes (chain:list B.bytes) : GTot nat =
+  match chain with
+  | [] -> 0
+  | c :: tl -> B.length c + cert_chain_total_bytes tl
+
+// A chain fits the fixed-size low-level representation iff it has at most
+// certificate_chain_max_entries certificates and their data fits in
+// certificate_chain_max_bytes.
+let cert_chain_fits (chain:list B.bytes) : GTot bool =
+  FStar.List.Tot.length chain <= M.certificate_chain_max_entries &&
+  cert_chain_total_bytes chain <= M.certificate_chain_max_bytes
+
 let parse_certificate_msg (input:B.bytes) : GTot (option M.certificate_msg) =
   match LP.parse GCert.certificate_parser input with
   | Some (c, consumed) ->
@@ -680,12 +694,18 @@ let synth_handshake_msg_of (h:GHS.handshake) : GTot (option M.handshake_msg) =
      | Some x -> Some (M.EncryptedExtensions ({ x with M.body = full }))
      | None -> None)
   | GHS.Body_certificate b ->
-    Some (M.Certificate ({ M.chain = synth_cert_chain b.GCert.certificate_list;
-                           M.body = full }))
+    // Reject chains too large for the fixed-size low-level representation.
+    let chain = synth_cert_chain b.GCert.certificate_list in
+    if cert_chain_fits chain
+    then Some (M.Certificate ({ M.chain = chain; M.body = full }))
+    else None
   | GHS.Body_certificate_verify b ->
-    Some (M.CertificateVerify ({ M.scheme = synth_signature_scheme b.GCV.algorithm;
-                                 M.signature = (b.GCV.signature <: B.bytes);
-                                 M.body = full }))
+    // Reject signatures too large for the fixed-size low-level representation.
+    if B.length b.GCV.signature <= M.signature_max_len
+    then Some (M.CertificateVerify ({ M.scheme = synth_signature_scheme b.GCV.algorithm;
+                                      M.signature = (b.GCV.signature <: B.bytes);
+                                      M.body = full }))
+    else None
   | GHS.Body_finished b ->
     Some (M.Finished ({ M.verify_data = (b <: B.bytes_of_len 32) }))
   | GHS.Body_key_update _ -> None
