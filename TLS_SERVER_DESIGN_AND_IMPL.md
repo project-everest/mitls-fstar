@@ -45,6 +45,8 @@ Current phase: **Phase 0/1 started**.
   existing client projections preserved as `ClientEndpoint` wrappers.
 - [x] Client-compatibility and server traffic-label mapping lemmas added in
   `TLS13.ConnectionState.Lemmas`.
+- [x] Additive pure `server_config` added to `connection_config`; existing
+  client constructors explicitly set `config_server = None`.
 - [ ] Phase 2 paired endpoint traces and derived-key theorem family.
 
 ## End goal
@@ -701,7 +703,7 @@ Checklist:
 - [x] Add `ServerEndpoint`.
 - [x] Start refactoring `TLS13.Spec.ConnectionState` in place, preserving the existing
       client theorem surface throughout the migration.
-- [ ] Add server configuration fields.
+- [x] Add server configuration fields.
 - [ ] Replace client-only start/session state with role-aware handshake data.
 - [ ] Add server handshake stages.
 - [ ] Add server legal events.

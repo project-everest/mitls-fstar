@@ -37,6 +37,17 @@ type endpoint_role =
   | ClientEndpoint
   | ServerEndpoint
 
+type server_credential_identity = B.bytes
+
+type server_config = {
+  server_certificate_chain: B.bytes;
+  server_credential_identity: server_credential_identity;
+  server_allowed_signature_schemes: list T.signature_scheme;
+  server_supported_cipher_suites: list T.cipher_suite;
+  server_supported_groups: list T.named_group;
+  server_sni_policy: option T.hostname;
+}
+
 type connection_config = {
   config_role: endpoint_role;
   config_server_name: T.hostname;
@@ -44,6 +55,7 @@ type connection_config = {
   config_validation_time: X.validation_time;
   config_cipher_suites: list T.cipher_suite;
   config_signature_schemes: list T.signature_scheme;
+  config_server: option server_config;
 }
 
 type handshake_stage =

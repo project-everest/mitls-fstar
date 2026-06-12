@@ -1106,6 +1106,7 @@ let default_connection_config : CS.connection_config = {
   CS.config_validation_time = { X.seconds_since_epoch = 0 };
   CS.config_cipher_suites = [T.TLS_CHACHA20_POLY1305_SHA256];
   CS.config_signature_schemes = [T.RsaPssRsaeSha256];
+  CS.config_server = None;
 }
 
 noextract
@@ -1127,6 +1128,7 @@ let configured_connection_config
     CS.config_validation_time = { X.seconds_since_epoch = SZ.v validation_time_seconds };
     CS.config_cipher_suites = default_connection_config.CS.config_cipher_suites;
     CS.config_signature_schemes = default_connection_config.CS.config_signature_schemes;
+    CS.config_server = None;
   }
 
 noextract
