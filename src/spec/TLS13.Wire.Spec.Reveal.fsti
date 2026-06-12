@@ -133,7 +133,9 @@ val lemma_handshake_synth_certificate_verify (b:GHS.handshake_body_certificate_v
 val lemma_handshake_synth_key_update (b:GHS.handshake_body_key_update)
   : Lemma (ensures handshake_synth (GHS.Body_key_update b) == None)
 
-(* --- byte-level fallback formats (outside the QD handshake grammar) ------ *)
+(* A client never legitimately receives a ClientHello; synth maps it to None. *)
+val lemma_handshake_synth_client_hello (b:GHS.handshake_body_client_hello)
+  : Lemma (ensures handshake_synth (GHS.Body_client_hello b) == None)(* --- byte-level fallback formats (outside the QD handshake grammar) ------ *)
 
 (* Re-export of the internal [parse_ignored_post_handshake] (not in the frozen
    TLS13.Wire.Spec interface). *)

@@ -670,9 +670,12 @@ let synth_handshake_msg_of (h:GHS.handshake) : GTot (option M.handshake_msg) =
   let full = LP.serialize GHS.handshake_serializer h in
   match h with
   | GHS.Body_client_hello b ->
-    (match synth_client_hello b with
-     | Some x -> Some (M.ClientHello x)
-     | None -> None)
+    // A TLS client never legitimately receives a ClientHello; the dispatcher
+    // would reject it as an unexpected handshake message anyway.  Modelling it
+    // as a parse failure (rather than Some (M.ClientHello _)) keeps the received
+    // message space to what a client can actually accept, and lets the verified
+    // parser reject it without the (never-exercised) ClientHello field copy.
+    None
   | GHS.Body_server_hello b ->
     // legacy_version MUST be 0x0303 (matches synth_server_hello and the original
     // parser, which rejected non-0x0303 before inspecting random/body).

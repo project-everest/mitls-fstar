@@ -511,6 +511,45 @@ fn peek_key_update_high (x: GHS.handshake_body_key_update_lowtype) (#v: GHS.hand
     (GHS.Body_key_update_low x) vm v;
 }
 
+(* --- ClientHello: pin the constructor (synth maps it to None) ------------- *)
+
+(* Tag agreement pins the mid constructor for a [Body_client_hello_low]. *)
+let lemma_client_hello_constructor (xl: GHS.handshake_low) (vm: GHS.handshake_mid)
+  : Lemma
+    (requires GHS.Body_client_hello_low? xl /\
+              GHS.handshake_low_tag xl == GHS.handshake_mid_tag vm)
+    (ensures GHS.Body_client_hello_mid? vm)
+  = ()
+
+(* A [Body_client_hello_mid] necessarily converts to a [Body_client_hello]. *)
+let lemma_client_hello_conv (vm: GHS.handshake_mid) (v: GHS.handshake)
+  : Lemma
+    (requires GHS.Body_client_hello_mid? vm /\ GHS.handshake_conv vm == Some v)
+    (ensures GHS.Body_client_hello? v)
+  = ()
+
+(* Recover (without consuming) the pure fact that the high-level handshake value
+   behind a [Body_client_hello_low] read-result is a [Body_client_hello] (whose
+   synth is [None]: a client never receives a ClientHello). *)
+ghost
+fn peek_client_hello_high (x: GHS.handshake_body_client_hello_lowtype) (#v: GHS.handshake)
+  requires PPB.vmatch_conv GHS.handshake_vmatch GHS.handshake_conv
+             (GHS.Body_client_hello_low x) v
+  ensures PPB.vmatch_conv GHS.handshake_vmatch GHS.handshake_conv
+             (GHS.Body_client_hello_low x) v **
+          pure (GHS.Body_client_hello? v)
+{
+  PPB.elim_vmatch_conv GHS.handshake_vmatch GHS.handshake_conv
+    (GHS.Body_client_hello_low x) v;
+  with vm. assert (GHS.handshake_vmatch (GHS.Body_client_hello_low x) vm **
+                   pure (GHS.handshake_conv vm == Some v));
+  peek_handshake_tag (GHS.Body_client_hello_low x);
+  lemma_client_hello_constructor (GHS.Body_client_hello_low x) vm;
+  lemma_client_hello_conv vm v;
+  PPB.intro_vmatch_conv GHS.handshake_vmatch GHS.handshake_conv
+    (GHS.Body_client_hello_low x) vm v;
+}
+
 (* --- EncryptedExtensions: eliminate / re-introduce the packed vmatch ------ *)
 
 (* Tag agreement pins the mid constructor for a [Body_encrypted_extensions_low]. *)
@@ -2884,29 +2923,21 @@ fn parse_handshake_message
           Some (L.LTlsHandshake (L.LCertificate lcert))
         }
       }
-      _ -> {
-        (* REMAINING ARM: this catch-all now covers exactly one constructor —
-           [Body_client_hello_low].  All other constructors are handled in
-           explicit arms above: Finished, CertificateVerify (Decision-1 guard
-           makes its synth land in the 4096-byte storage), EncryptedExtensions
-           (verified ALPN scan), Certificate (verified [synth_cert_chain] copy
-           loop proving [certificate_chain_matches]), ServerHello (verified
-           key_share scan), Body_key_update (byte-level fallback) and
-           Body_new_session_ticket (validator-unreachable).
-
-           ClientHello has the widest field set (random / server_name /
-           key_share / cipher_suites / signature_schemes); it is not reachable by
-           a client but is required for totality.  Building it out follows the
-           same recipe used for EncryptedExtensions, ServerHello and Certificate:
-           a ghost vmatch-elimination chain peeling the generated [vmatch_conv]
-           down to the owned leaf Vecs, a copy of each fixed-size field into the
-           L representation, and the [RV.lemma_handshake_synth_client_hello]
-           synth-reveal lemma.
-
-           Returning [None] here is UNSOUND (a valid ClientHello synths to
-           [Some], so [parse_tls_message] is not [None]); the arm must be built
-           out.  Tracked as the sole remaining [admit] in this file. *)
-        admit ()
+      GHS.Body_client_hello_low xch -> {
+        (* A TLS client never legitimately receives a ClientHello; synth maps it
+           to None (see WS.synth_handshake_msg_of / RV.lemma_handshake_synth_client_hello),
+           so parse_tls_message is None here and we reject via the fallback (which,
+           for a ClientHello msg_type, also yields None).  Free the read result. *)
+        peek_client_hello_high xch;
+        PPB.free_vmatch_conv GHS.handshake_vmatch GHS.handshake_conv
+          GHS.free_handshake (GHS.Body_client_hello_low xch);
+        Trade.elim (PPB.pts_to_parsed GHS.handshake_parser s #(1.0R /. 2.0R) (Ghost.reveal gv))
+                   (S.pts_to s 'input_bytes);
+        S.to_array s;
+        RV.lemma_handshake_synth_client_hello (GHS.Body_client_hello?._0 (Ghost.reveal gv));
+        RV.lemma_parse_handshake_none_of_synth_none (Ghost.reveal 'input_bytes)
+          (Ghost.reveal gv) (SZ.v input_len);
+        handshake_fallback content_type input input_len
       }
     }
   } else {

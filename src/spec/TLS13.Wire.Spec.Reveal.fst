@@ -59,6 +59,8 @@ let lemma_handshake_synth_certificate_verify b = ()
 
 let lemma_handshake_synth_key_update b = ()
 
+let lemma_handshake_synth_client_hello b = ()
+
 let reveal_parse_ignored_post_handshake input = WS.parse_ignored_post_handshake input
 
 (* a*65536 + b*256 + c == 1 with 0 <= a,b,c <= 255 forces a=b=0, c=1.
