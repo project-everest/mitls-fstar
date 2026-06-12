@@ -827,9 +827,9 @@ fn can_receive_server_hello
   assert (pure (current_transcript_len == transcript_len));
 
   W.lemma_serialize_server_hello_len sh;
-  assert (pure (B.length (W.serialize_handshake (M.ServerHello sh)) == 90));
-  assert (pure (SZ.fits (max_transcript_len - 90)));
-  let max_start = SZ.uint_to_t (max_transcript_len - 90);
+  assert (pure (B.length (W.serialize_handshake (M.ServerHello sh)) <= max_server_hello_len));
+  assert (pure (SZ.fits (max_transcript_len - max_server_hello_len)));
+  let max_start = SZ.uint_to_t (max_transcript_len - max_server_hello_len);
   let transcript_room = SZ.lte current_transcript_len max_start;
 
   if has_start {
@@ -867,7 +867,7 @@ fn can_receive_server_hello
             st0.CS.cs_model.CS.model_control ==
               CS.ControlHandshaking CS.HsClientHelloSent));
           assert (pure (ok ==> st0.CS.cs_model.CS.model_handshake.CS.hs_server_hello == None));
-          assert (pure (ok ==> SZ.v current_transcript_len <= max_transcript_len - 90));
+          assert (pure (ok ==> SZ.v current_transcript_len <= max_transcript_len - max_server_hello_len));
           assert (pure (ok ==> B.length st0.CS.cs_model.CS.model_handshake.CS.hs_transcript ==
             SZ.v current_transcript_len));
           assert (pure (ok ==>

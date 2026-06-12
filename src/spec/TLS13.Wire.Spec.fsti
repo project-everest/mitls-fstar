@@ -144,8 +144,8 @@ val lemma_serialize_finished_len:
 
 val lemma_serialize_server_hello_len:
   sh:M.server_hello ->
-  Lemma (B.length (serialize_handshake (M.ServerHello sh)) == 90 /\
-         B.length (serialize_handshake_msg (M.ServerHello sh)) == 90)
+  Lemma (B.length (serialize_handshake (M.ServerHello sh)) <= M.server_hello_max_len /\
+         B.length (serialize_handshake_msg (M.ServerHello sh)) <= M.server_hello_max_len)
 
 val serialize_server_certificate_verify_input:
   transcript_hash:B.bytes ->

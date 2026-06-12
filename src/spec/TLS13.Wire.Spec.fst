@@ -438,7 +438,10 @@ let synth_server_hello (sh:GSH.serverHello) : GTot (option M.server_hello) =
       | Some ks ->
         Some ({ M.random = (sf.GSHB.tag <: B.bytes_of_len 32);
                 M.key_share = ks;
-                M.cipher_suite = synth_cipher_suite body.GSHBody.cipher_suite })
+                M.cipher_suite = synth_cipher_suite body.GSHBody.cipher_suite;
+                // Overridden with the verbatim wire bytes in synth_handshake_msg_of;
+                // this standalone entry point is unused by the round-trip path.
+                M.body = B.empty })
       | None -> None
 
 let parse_server_hello (input:B.bytes) : GTot (option M.server_hello) =
@@ -454,7 +457,8 @@ let parse_supported_server_hello_impl (input:B.bytes) : GTot (option M.server_he
       Some {
         M.random = random;
         M.key_share = key_share;
-        M.cipher_suite = T.TLS_CHACHA20_POLY1305_SHA256
+        M.cipher_suite = T.TLS_CHACHA20_POLY1305_SHA256;
+        M.body = B.empty
       }
     | _, _ -> None
   else if SHC.server_hello_ok_58 input then
@@ -463,7 +467,8 @@ let parse_supported_server_hello_impl (input:B.bytes) : GTot (option M.server_he
       Some {
         M.random = random;
         M.key_share = key_share;
-        M.cipher_suite = T.TLS_CHACHA20_POLY1305_SHA256
+        M.cipher_suite = T.TLS_CHACHA20_POLY1305_SHA256;
+        M.body = B.empty
       }
     | _, _ -> None
   else None
@@ -527,7 +532,7 @@ let parse_certificate_msg (input:B.bytes) : GTot (option M.certificate_msg) =
   match LP.parse GCert.certificate_parser input with
   | Some (c, consumed) ->
     if consumed = B.length input
-    then Some ({ M.chain = synth_cert_chain c.GCert.certificate_list })
+    then Some ({ M.chain = synth_cert_chain c.GCert.certificate_list; M.body = B.empty })
     else None
   | None -> None
 
@@ -542,7 +547,8 @@ let parse_certificate_verify_impl (input:B.bytes) : GTot (option M.certificate_v
       | Some signature ->
         Some {
           M.scheme = signature_scheme_of_u16 scheme;
-          M.signature = signature
+          M.signature = signature;
+          M.body = B.empty
         }
       | None -> None
 
@@ -554,7 +560,7 @@ let rec parse_encrypted_extensions_entries
   : GTot (option M.encrypted_extensions)
        (decreases (entries_end - pos))
   =
-  if pos == entries_end then Some { M.negotiated_alpn = alpn }
+  if pos == entries_end then Some { M.negotiated_alpn = alpn; M.body = B.empty }
   else if pos < entries_end && pos + 4 <= entries_end && entries_end <= B.length input then
     let ext_type = read_u16 input pos in
     let ext_len = read_u16 input (pos + 2) in
@@ -587,12 +593,12 @@ let rec synth_encrypted_extensions (l:list GEEE.extensionEncryptedExtensions)
        (decreases l)
   =
   match l with
-  | [] -> Some ({ M.negotiated_alpn = None })
+  | [] -> Some ({ M.negotiated_alpn = None; M.body = B.empty })
   | e :: tl ->
     (match e with
      | GEEE.Extension_data_application_layer_protocol_negotiation pnl ->
        (match alpn_first_name pnl with
-        | Some name -> Some ({ M.negotiated_alpn = Some name })
+        | Some name -> Some ({ M.negotiated_alpn = Some name; M.body = B.empty })
         | None -> None)
      | _ -> synth_encrypted_extensions tl)
 
@@ -609,7 +615,8 @@ let parse_certificate_verify (input:B.bytes) : GTot (option M.certificate_verify
   | Some (cv, consumed) ->
     if consumed = B.length input
     then Some ({ M.scheme = synth_signature_scheme cv.GCV.algorithm;
-                 M.signature = (cv.GCV.signature <: B.bytes) })
+                 M.signature = (cv.GCV.signature <: B.bytes);
+                 M.body = B.empty })
     else None
   | None -> None
 
@@ -642,6 +649,11 @@ let parse_key_update (input:B.bytes) : GTot (option M.key_update_request) =
   else None
 
 let synth_handshake_msg_of (h:GHS.handshake) : GTot (option M.handshake_msg) =
+  // The verbatim wire bytes of this handshake message: the QuackyDucky
+  // serializer applied to the parsed value.  By LowParse's parse/serialize
+  // round-trip this equals the input fragment, so a parser can discharge
+  // `fragment == serialize_handshake msg` (see lemma_synth_handshake_round_trip).
+  let full = LP.serialize GHS.handshake_serializer h in
   match h with
   | GHS.Body_client_hello b ->
     (match synth_client_hello b with
@@ -656,17 +668,24 @@ let synth_handshake_msg_of (h:GHS.handshake) : GTot (option M.handshake_msg) =
      | GSHB.HelloRetryRequest _ -> Some M.HelloRetryRequest
      | GSHB.ServerHello_body_false _ ->
        (match synth_server_hello b with
-        | Some x -> Some (M.ServerHello x)
+        | Some x ->
+          // Bound the carried ServerHello to server_hello_max_len; oversized
+          // ServerHellos are rejected (they cannot fit the fixed receive buffer).
+          if B.length full <= M.server_hello_max_len
+          then Some (M.ServerHello ({ x with M.body = full }))
+          else None
         | None -> None))
   | GHS.Body_encrypted_extensions b ->
     (match synth_encrypted_extensions b with
-     | Some x -> Some (M.EncryptedExtensions x)
+     | Some x -> Some (M.EncryptedExtensions ({ x with M.body = full }))
      | None -> None)
   | GHS.Body_certificate b ->
-    Some (M.Certificate ({ M.chain = synth_cert_chain b.GCert.certificate_list }))
+    Some (M.Certificate ({ M.chain = synth_cert_chain b.GCert.certificate_list;
+                           M.body = full }))
   | GHS.Body_certificate_verify b ->
     Some (M.CertificateVerify ({ M.scheme = synth_signature_scheme b.GCV.algorithm;
-                                 M.signature = (b.GCV.signature <: B.bytes) }))
+                                 M.signature = (b.GCV.signature <: B.bytes);
+                                 M.body = full }))
   | GHS.Body_finished b ->
     Some (M.Finished ({ M.verify_data = (b <: B.bytes_of_len 32) }))
   | GHS.Body_key_update _ -> None
@@ -845,10 +864,24 @@ let serialize_handshake_body (msg:M.handshake_msg) : GTot (option (nat & B.bytes
   | M.Finished fin -> Some (20, serialize_finished fin)
   | M.HelloRetryRequest -> None
 
+// For received messages that must round-trip exactly (ServerHello, Encrypted-
+// Extensions, Certificate, CertificateVerify) we return the verbatim wire bytes
+// carried in the message (m.body == the full handshake message produced by the
+// QuackyDucky serializer at parse time).  This lets a verified parser discharge
+// `fragment == serialize_handshake msg` via LowParse's parse/serialize round-trip
+// even for non-canonical encodings (extra/reordered extensions, echoed
+// session_id, per-cert extensions).  ClientHello / Finished / key-update keep the
+// canonical hand-written encoding.
 let serialize_handshake (msg:M.handshake_msg) : GTot B.bytes =
-  match serialize_handshake_body msg with
-  | Some (msg_type, body) -> append3 (u8 msg_type) (u24 (B.length body)) body
-  | None -> B.empty
+  match msg with
+  | M.ServerHello sh -> sh.M.body
+  | M.EncryptedExtensions ee -> ee.M.body
+  | M.Certificate cert -> cert.M.body
+  | M.CertificateVerify cv -> cv.M.body
+  | _ ->
+    (match serialize_handshake_body msg with
+     | Some (msg_type, body) -> append3 (u8 msg_type) (u24 (B.length body)) body
+     | None -> B.empty)
 
 let serialize_handshake_msg (msg:M.handshake_msg) : GTot B.bytes =
   serialize_handshake msg
@@ -861,8 +894,8 @@ let lemma_serialize_finished_len (fin:M.finished)
   ()
 
 let lemma_serialize_server_hello_len (sh:M.server_hello)
-  : Lemma (B.length (serialize_handshake (M.ServerHello sh)) == 90 /\
-           B.length (serialize_handshake_msg (M.ServerHello sh)) == 90)
+  : Lemma (B.length (serialize_handshake (M.ServerHello sh)) <= M.server_hello_max_len /\
+           B.length (serialize_handshake_msg (M.ServerHello sh)) <= M.server_hello_max_len)
 =
   ()
 
