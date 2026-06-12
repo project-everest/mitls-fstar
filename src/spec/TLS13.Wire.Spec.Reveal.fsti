@@ -31,6 +31,13 @@ module GCS = TLS13.Wire.Generated.CipherSuite
 module GCV = TLS13.Wire.Generated.CertificateVerify
 module GEEE = TLS13.Wire.Generated.ExtensionEncryptedExtensions
 module GPN = TLS13.Wire.Generated.ProtocolName
+module GSH = TLS13.Wire.Generated.ServerHello
+module GSHB = TLS13.Wire.Generated.ServerHello_body
+module GSHBody = TLS13.Wire.Generated.ServerHelloBody
+module GESH = TLS13.Wire.Generated.ExtensionServerHello
+module GKSE = TLS13.Wire.Generated.KeyShareEntry
+module GNG = TLS13.Wire.Generated.NamedGroup
+module GPV = TLS13.Wire.Generated.ProtocolVersion
 module LP = LowParse.Spec
 
 (* --- non-handshake content-type arms ------------------------------------ *)
@@ -263,3 +270,80 @@ val lemma_alpn_first_name_index0
     (requires FStar.List.Tot.length (pnl <: list GPN.protocolName) > 0)
     (ensures reveal_alpn_first_name pnl ==
              Some (FStar.List.Tot.index (pnl <: list GPN.protocolName) 0 <: B.bytes))
+
+(* --- ServerHello reveal interface --------------------------------------- *)
+
+(* Re-export of the internal [key_exchange_to_key32]: a key_share entry yields a
+   32-byte key only when its raw bytes are exactly 32 long. *)
+val reveal_key_exchange_to_key32 (ke:GKSE.keyShareEntry_key_exchange)
+  : GTot (option (B.bytes_of_len 32))
+
+(* Re-export of the internal [sh_key_share] scan: walk the ServerHello extension
+   list, requiring an x25519/32-byte key_share AND a TLS_1p3 supported_versions. *)
+val reveal_sh_key_share
+  (l:list GESH.extensionServerHello)
+  (saw_supported_versions:bool)
+  (key_share:option (B.bytes_of_len 32))
+  : GTot (option (B.bytes_of_len 32))
+
+(* Empty extension list: the key is accepted only if a TLS_1p3 supported_versions
+   extension was seen. *)
+val lemma_sh_key_share_nil
+  (saw_supported_versions:bool)
+  (key_share:option (B.bytes_of_len 32))
+  : Lemma (ensures reveal_sh_key_share [] saw_supported_versions key_share ==
+                   (if saw_supported_versions then key_share else None))
+
+(* One-step unfolding of the scan on a head extension. *)
+val lemma_sh_key_share_cons
+  (e:GESH.extensionServerHello)
+  (tl:list GESH.extensionServerHello)
+  (saw_supported_versions:bool)
+  (key_share:option (B.bytes_of_len 32))
+  : Lemma (ensures reveal_sh_key_share (e :: tl) saw_supported_versions key_share ==
+      (match e with
+       | GESH.Extension_data_supported_versions sv ->
+         if GPV.TLS_1p3? sv then reveal_sh_key_share tl true key_share else None
+       | GESH.Extension_data_key_share kse ->
+         if GNG.X25519? kse.GKSE.group
+         then (match reveal_key_exchange_to_key32 kse.GKSE.key_exchange with
+               | Some k -> reveal_sh_key_share tl saw_supported_versions (Some k)
+               | None -> None)
+         else None
+       | _ -> reveal_sh_key_share tl saw_supported_versions key_share))
+
+(* [handshake_synth] of a ServerHello whose legacy_version is not 0x0303: None. *)
+val lemma_handshake_synth_server_hello_bad_version (b:GHS.handshake_body_server_hello)
+  : Lemma (requires not (GPV.TLS_1p2? b.GSH.legacy_version))
+          (ensures handshake_synth (GHS.Body_server_hello b) == None)
+
+(* [handshake_synth] of a HelloRetryRequest ServerHello (magic random) maps to
+   the dedicated [M.HelloRetryRequest] message. *)
+val lemma_handshake_synth_server_hello_hrr
+  (b:GHS.handshake_body_server_hello)
+  (shb:GSHBody.serverHelloBody)
+  : Lemma (requires GPV.TLS_1p2? b.GSH.legacy_version /\
+                    b.GSH.body == GSHB.HelloRetryRequest shb)
+          (ensures handshake_synth (GHS.Body_server_hello b) == Some M.HelloRetryRequest)
+
+(* [handshake_synth] of a normal ServerHello: guarded by compression==0, the
+   key_share scan, and the server_hello_max_len body bound; the carried body is
+   the verbatim wire serialization. *)
+val lemma_handshake_synth_server_hello_sh
+  (b:GHS.handshake_body_server_hello)
+  (sf:GSHB.serverHello_body_false)
+  : Lemma (requires GPV.TLS_1p2? b.GSH.legacy_version /\
+                    b.GSH.body == GSHB.ServerHello_body_false sf)
+          (ensures handshake_synth (GHS.Body_server_hello b) ==
+      (if U8.v sf.GSHB.value.GSHBody.legacy_compression_method <> 0 then None
+       else match reveal_sh_key_share sf.GSHB.value.GSHBody.extensions false None with
+            | Some ks ->
+              if B.length (LP.serialize GHS.handshake_serializer (GHS.Body_server_hello b))
+                 <= M.server_hello_max_len
+              then Some (M.ServerHello ({
+                     M.random = (sf.GSHB.tag <: B.bytes_of_len 32);
+                     M.key_share = ks;
+                     M.cipher_suite = synth_cipher_suite sf.GSHB.value.GSHBody.cipher_suite;
+                     M.body = LP.serialize GHS.handshake_serializer (GHS.Body_server_hello b) }))
+              else None
+            | None -> None))

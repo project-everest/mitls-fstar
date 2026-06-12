@@ -14,6 +14,13 @@ module GCS = TLS13.Wire.Generated.CipherSuite
 module GCV = TLS13.Wire.Generated.CertificateVerify
 module GEEE = TLS13.Wire.Generated.ExtensionEncryptedExtensions
 module GPN = TLS13.Wire.Generated.ProtocolName
+module GSH = TLS13.Wire.Generated.ServerHello
+module GSHB = TLS13.Wire.Generated.ServerHello_body
+module GSHBody = TLS13.Wire.Generated.ServerHelloBody
+module GESH = TLS13.Wire.Generated.ExtensionServerHello
+module GKSE = TLS13.Wire.Generated.KeyShareEntry
+module GNG = TLS13.Wire.Generated.NamedGroup
+module GPV = TLS13.Wire.Generated.ProtocolVersion
 module LP = LowParse.Spec
 
 let lemma_ptm_change_cipher_spec fragment =
@@ -94,3 +101,19 @@ let rec lemma_list_drop_length #a l =
   | _ :: tl -> lemma_list_drop_length tl
 
 let lemma_alpn_first_name_index0 pnl = ()
+
+(* --- ServerHello reveal interface --------------------------------------- *)
+
+let reveal_key_exchange_to_key32 ke = WS.key_exchange_to_key32 ke
+
+let reveal_sh_key_share l saw key_share = WS.sh_key_share l saw key_share
+
+let lemma_sh_key_share_nil saw key_share = ()
+
+let lemma_sh_key_share_cons e tl saw key_share = ()
+
+let lemma_handshake_synth_server_hello_bad_version b = ()
+
+let lemma_handshake_synth_server_hello_hrr b shb = ()
+
+let lemma_handshake_synth_server_hello_sh b sf = ()
