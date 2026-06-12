@@ -47,6 +47,7 @@ module PPVCL = LowParse.PulseParse.VCList
 module PPVD = LowParse.PulseParse.VLData
 module SM = Pulse.Lib.SeqMatch
 module SMU = Pulse.Lib.SeqMatch.Util
+module GR = Pulse.Lib.GhostReference
 
 module Core = Pulse.Lib.Core
 module PE = TLS13.Impl.Parser.PureExists
@@ -54,6 +55,22 @@ module Tac = FStar.Tactics
 module U32 = FStar.UInt32
 module Cast = FStar.Int.Cast
 module RVN = TLS13.Wire.Spec.NonExact
+
+(* ServerHello-related generated modules (aliases match TLS13.Wire.Spec.Reveal). *)
+module GSH = TLS13.Wire.Generated.ServerHello
+module GSHB = TLS13.Wire.Generated.ServerHello_body
+module GSHBody = TLS13.Wire.Generated.ServerHelloBody
+module GESH = TLS13.Wire.Generated.ExtensionServerHello
+module GKSE = TLS13.Wire.Generated.KeyShareEntry
+module GKSSH = TLS13.Wire.Generated.KeyShareServerHello
+module GNG = TLS13.Wire.Generated.NamedGroup
+module GPV = TLS13.Wire.Generated.ProtocolVersion
+module GCS = TLS13.Wire.Generated.CipherSuite
+module GSV = TLS13.Wire.Generated.SupportedVersionsServerHello
+module GKSEKE = TLS13.Wire.Generated.KeyShareEntry_key_exchange
+module GESHKS = TLS13.Wire.Generated.ExtensionServerHello_extension_data_key_share
+module GESHSV = TLS13.Wire.Generated.ExtensionServerHello_extension_data_supported_versions
+module LPITE = LowParse.PulseParse.IfThenElse
 
 (**
   Verified implementation of the M/L parser boundary.  See the interface
@@ -848,6 +865,39 @@ fn copy_vec_prefix_into
   Seq.lemma_len_slice copied 0 (SZ.v src_len);
 }
 
+(* Overwrite a (full) 32-byte destination Vec with the entire content of a (full)
+   32-byte source Vec.  Used by the ServerHello key_share scan to land the 32-byte
+   x25519 key into a pre-allocated buffer. *)
+inline_for_extraction
+fn copy_vec_32_into
+  (dst: V.vec U8.t)
+  (src: V.vec U8.t)
+  requires V.pts_to dst 'dst_bytes ** V.pts_to src 'src_bytes **
+           pure (V.is_full_vec dst /\ V.length dst == 32 /\
+                 V.is_full_vec src /\ V.length src == 32)
+  ensures V.pts_to src 'src_bytes **
+          (exists* dst_bytes2.
+            V.pts_to dst dst_bytes2 **
+            pure (V.is_full_vec dst /\
+                  V.length dst == 32 /\
+                  Seq.length dst_bytes2 == 32 /\
+                  Seq.equal dst_bytes2 (Ghost.reveal 'src_bytes)))
+{
+  V.pts_to_len src;
+  V.pts_to_len dst;
+  V.to_array_pts_to dst;
+  V.to_array_pts_to src;
+  let src_slice = S.from_array (V.vec_to_array src) 32sz;
+  let dst_slice = S.from_array (V.vec_to_array dst) 32sz;
+  S.pts_to_len src_slice;
+  S.pts_to_len dst_slice;
+  S.copy dst_slice src_slice;
+  S.to_array src_slice;
+  V.to_vec_pts_to src;
+  S.to_array dst_slice;
+  V.to_vec_pts_to dst;
+}
+
 (* Copy the first protocol name of a (non-empty) protocol-name list into the
    prefix of an existing 255-byte destination Vec (in place), restoring the input
    vclist.  Returns the real name length (<=255). *)
@@ -1213,9 +1263,754 @@ fn handshake_fallback
   }
 }
 
+(* ======================================================================== *)
+(* ServerHello arm helpers                                                  *)
+(* ======================================================================== *)
+
+(* Tag agreement pins the mid constructor for a [Body_server_hello_low]. *)
+let lemma_sh_constructor (xl: GHS.handshake_low) (vm: GHS.handshake_mid)
+  : Lemma
+   (requires GHS.Body_server_hello_low? xl /\
+             GHS.handshake_low_tag xl == GHS.handshake_mid_tag vm)
+   (ensures GHS.Body_server_hello_mid? vm)
+  = ()
+
+(* A [Body_server_hello_mid cm] whose handshake conv is [Some v] forces [v] to be
+   the [Body_server_hello] of the (Some-) converted serverHello mid. *)
+let lemma_sh_conv (cm: GSH.serverHello_mid) (v: GHS.handshake)
+  : Lemma
+   (requires GHS.handshake_conv (GHS.Body_server_hello_mid cm) == Some v)
+   (ensures Some? (GSH.serverHello_conv cm) /\
+            v == GHS.Body_server_hello (Some?.v (GSH.serverHello_conv cm)))
+  = ()
+
+(* Expose the underlying serverHello vmatch from the packed read result. *)
+ghost
+fn elim_vmatch_server_hello
+  (xsh: GHS.handshake_body_server_hello_lowtype)
+  (#v: GHS.handshake)
+  requires PPB.vmatch_conv GHS.handshake_vmatch GHS.handshake_conv
+            (GHS.Body_server_hello_low xsh) v
+  ensures exists* (cm: GSH.serverHello_mid).
+           GSH.serverHello_vmatch xsh cm **
+           pure (Some? (GSH.serverHello_conv cm) /\
+                 v == GHS.Body_server_hello (Some?.v (GSH.serverHello_conv cm)) /\
+                 GHS.handshake_conv (GHS.Body_server_hello_mid cm) == Some v)
+{
+  PPB.elim_vmatch_conv GHS.handshake_vmatch GHS.handshake_conv
+   (GHS.Body_server_hello_low xsh) v;
+  with vm. assert (GHS.handshake_vmatch (GHS.Body_server_hello_low xsh) vm **
+                   pure (GHS.handshake_conv vm == Some v));
+  peek_handshake_tag (GHS.Body_server_hello_low xsh);
+  lemma_sh_constructor (GHS.Body_server_hello_low xsh) vm;
+  let cm0 = GHS.Body_server_hello_mid?._0 vm;
+  rewrite (GHS.handshake_vmatch (GHS.Body_server_hello_low xsh) vm)
+      as (GHS.handshake_vmatch (GHS.Body_server_hello_low xsh)
+            (GHS.Body_server_hello_mid cm0));
+  unfold (GHS.handshake_vmatch (GHS.Body_server_hello_low xsh)
+           (GHS.Body_server_hello_mid cm0));
+  rewrite (GHS.handshake_body_server_hello_vmatch xsh cm0)
+      as (GSH.serverHello_vmatch xsh cm0);
+  lemma_sh_conv cm0 v;
+}
+
+(* Re-pack the serverHello vmatch into the handshake read result so it can be
+   freed by the generated [free_handshake]. *)
+ghost
+fn intro_vmatch_server_hello
+  (xsh: GHS.handshake_body_server_hello_lowtype)
+  (cm: GSH.serverHello_mid)
+  (#v: GHS.handshake)
+  requires GSH.serverHello_vmatch xsh cm **
+           pure (GHS.handshake_conv (GHS.Body_server_hello_mid cm) == Some v)
+  ensures PPB.vmatch_conv GHS.handshake_vmatch GHS.handshake_conv
+            (GHS.Body_server_hello_low xsh) v
+{
+  rewrite (GSH.serverHello_vmatch xsh cm)
+      as (GHS.handshake_body_server_hello_vmatch xsh cm);
+  fold (GHS.handshake_vmatch (GHS.Body_server_hello_low xsh)
+          (GHS.Body_server_hello_mid cm));
+  PPB.intro_vmatch_conv GHS.handshake_vmatch GHS.handshake_conv
+    (GHS.Body_server_hello_low xsh) (GHS.Body_server_hello_mid cm) v;
+}
+
+(* ---- ServerHello conv-structure facts (pure, transparent unfolding) ---- *)
+
+(* The serverHello conv preserves the legacy_version field verbatim. *)
+let lemma_sh_conv_version (cm: GSH.serverHello_mid) (cse: GSH.serverHello)
+  : Lemma (requires GSH.serverHello_conv cm == Some cse)
+          (ensures cse.GSH.legacy_version == fst cm)
+  = ()
+
+(* The serverHello_body ite conv: the random tag is 32 bytes, and the branch
+   discriminant [dfst (snd (snd cm))] selects HelloRetryRequest (true) vs the
+   normal ServerHello_body_false (false).  On the normal branch the tag equals
+   the random mid and the payload conv yields [sf.value]. *)
+let lemma_sh_conv_body (cm: GSH.serverHello_mid) (cse: GSH.serverHello)
+  : Lemma (requires GSH.serverHello_conv cm == Some cse)
+          (ensures
+            Seq.length (fst (snd cm)) == 32 /\
+            (dfst (snd (snd cm)) == true ==> GSHB.HelloRetryRequest? cse.GSH.body) /\
+            (dfst (snd (snd cm)) == false ==>
+               (GSHB.ServerHello_body_false? cse.GSH.body /\
+                (GSHB.ServerHello_body_false?._0 cse.GSH.body).GSHB.tag == fst (snd cm) /\
+                GSHBody.serverHelloBody_conv (dsnd (snd (snd cm))) ==
+                  Some (GSHB.ServerHello_body_false?._0 cse.GSH.body).GSHB.value)))
+  = ()
+
+(* The serverHelloBody conv preserves the compression byte and extension list. *)
+let lemma_shbody_conv (m: GSHBody.serverHelloBody_mid) (h: GSHBody.serverHelloBody)
+  : Lemma (requires GSHBody.serverHelloBody_conv m == Some h)
+          (ensures
+            h.GSHBody.legacy_compression_method == fst (snd m) /\
+            (h.GSHBody.extensions <: list GESH.extensionServerHello) == snd (snd m))
+  = ()
+
+(* The key_share extension conv exposes the underlying keyShareEntry verbatim:
+   group equals the namedGroup mid and the key_exchange bytes equal the mid. *)
+let lemma_extSH_ks_conv (cm_ks: GESH.extensionServerHello_extension_data_key_share_mid)
+                        (y: GESH.extensionServerHello_extension_data_key_share)
+  : Lemma (requires GESH.extensionServerHello_extension_data_key_share_conv cm_ks == Some y)
+          (ensures (y <: GKSE.keyShareEntry).GKSE.group == fst cm_ks /\
+                   ((y <: GKSE.keyShareEntry).GKSE.key_exchange <: B.bytes) == snd cm_ks)
+  = ()
+
+(* ---- extensionServerHello element-level navigation (mirrors extEE) ---- *)
+
+(* Tag agreement makes the low/high supported_versions constructors coincide. *)
+let lemma_extSH_sv_iff
+  (xl: GESH.extensionServerHello_low) (vm: GESH.extensionServerHello_mid)
+  (h: GESH.extensionServerHello)
+  : Lemma
+    (requires GESH.extensionServerHello_low_tag xl == GESH.extensionServerHello_mid_tag vm /\
+              GESH.extensionServerHello_conv vm == Some h)
+    (ensures GESH.Extension_data_supported_versions_low? xl <==>
+             GESH.Extension_data_supported_versions? h)
+  = ()
+
+(* Tag agreement makes the low/high key_share constructors coincide. *)
+let lemma_extSH_ks_iff
+  (xl: GESH.extensionServerHello_low) (vm: GESH.extensionServerHello_mid)
+  (h: GESH.extensionServerHello)
+  : Lemma
+    (requires GESH.extensionServerHello_low_tag xl == GESH.extensionServerHello_mid_tag vm /\
+              GESH.extensionServerHello_conv vm == Some h)
+    (ensures GESH.Extension_data_key_share_low? xl <==>
+             GESH.Extension_data_key_share? h)
+  = ()
+
+(* Tag agreement pins the mid constructor for a supported_versions element. *)
+let lemma_extSH_sv_constructor
+  (xl: GESH.extensionServerHello_low) (vm: GESH.extensionServerHello_mid)
+  : Lemma
+    (requires GESH.Extension_data_supported_versions_low? xl /\
+              GESH.extensionServerHello_low_tag xl == GESH.extensionServerHello_mid_tag vm)
+    (ensures GESH.Extension_data_supported_versions_mid? vm)
+  = ()
+
+(* Tag agreement pins the mid constructor for a key_share element. *)
+let lemma_extSH_ks_constructor
+  (xl: GESH.extensionServerHello_low) (vm: GESH.extensionServerHello_mid)
+  : Lemma
+    (requires GESH.Extension_data_key_share_low? xl /\
+              GESH.extensionServerHello_low_tag xl == GESH.extensionServerHello_mid_tag vm)
+    (ensures GESH.Extension_data_key_share_mid? vm)
+  = ()
+
+(* The supported_versions extension conv exposes its protocolVersion verbatim. *)
+let lemma_extSH_sv_data_conv
+  (cm: GESH.extensionServerHello_extension_data_supported_versions_mid)
+  (h: GESH.extensionServerHello)
+  : Lemma
+    (requires GESH.extensionServerHello_conv (GESH.Extension_data_supported_versions_mid cm) == Some h)
+    (ensures GESH.Extension_data_supported_versions? h /\
+             (GESH.Extension_data_supported_versions?._0 h <: GPV.protocolVersion) == cm)
+  = ()
+
+(* The key_share extension conv exposes the underlying keyShareEntry mid. *)
+let lemma_extSH_ks_data_conv
+  (cm: GESH.extensionServerHello_extension_data_key_share_mid)
+  (h: GESH.extensionServerHello)
+  : Lemma
+    (requires GESH.extensionServerHello_conv (GESH.Extension_data_key_share_mid cm) == Some h)
+    (ensures GESH.Extension_data_key_share? h /\
+             GESH.extensionServerHello_extension_data_key_share_conv cm ==
+               Some (GESH.Extension_data_key_share?._0 h))
+  = ()
+
+(* Recover the tag-agreement fact buried in an element's vmatch. *)
+ghost
+fn peek_extSH_tag (xl: GESH.extensionServerHello_low)
+               (#vm: GESH.extensionServerHello_mid)
+  requires GESH.extensionServerHello_vmatch xl vm
+  ensures GESH.extensionServerHello_vmatch xl vm **
+          pure (GESH.extensionServerHello_low_tag xl ==
+                GESH.extensionServerHello_mid_tag vm)
+{
+  unfold (GESH.extensionServerHello_vmatch xl vm);
+  fold (GESH.extensionServerHello_vmatch xl vm);
+}
+
+(* Expose, without consuming the resource, whether the high element is a
+   supported_versions / key_share extension (matching the runtime low tag). *)
+ghost
+fn elim_extSH_iffs (elem: GESH.extensionServerHello_low)
+                   (#h: GESH.extensionServerHello)
+  requires PPB.vmatch_conv GESH.extensionServerHello_vmatch
+             GESH.extensionServerHello_conv elem h
+  ensures PPB.vmatch_conv GESH.extensionServerHello_vmatch
+            GESH.extensionServerHello_conv elem h **
+          pure ((GESH.Extension_data_supported_versions_low? elem <==>
+                 GESH.Extension_data_supported_versions? h) /\
+                (GESH.Extension_data_key_share_low? elem <==>
+                 GESH.Extension_data_key_share? h))
+{
+  PPB.elim_vmatch_conv GESH.extensionServerHello_vmatch
+    GESH.extensionServerHello_conv elem h;
+  with vm. assert (GESH.extensionServerHello_vmatch elem vm **
+                   pure (GESH.extensionServerHello_conv vm == Some h));
+  peek_extSH_tag elem;
+  lemma_extSH_sv_iff elem vm h;
+  lemma_extSH_ks_iff elem vm h;
+  PPB.intro_vmatch_conv GESH.extensionServerHello_vmatch
+    GESH.extensionServerHello_conv elem vm h;
+}
+
+(* Given a supported_versions element, expose its protocolVersion value (equal to
+   the low value carried by the runtime constructor). *)
+ghost
+fn elim_extSH_sv (v: GSV.supportedVersionsServerHello_lowtype)
+                 (elem: GESH.extensionServerHello_low)
+                 (#h: GESH.extensionServerHello)
+  requires PPB.vmatch_conv GESH.extensionServerHello_vmatch
+             GESH.extensionServerHello_conv elem h **
+           pure (elem == GESH.Extension_data_supported_versions_low v)
+  ensures PPB.vmatch_conv GESH.extensionServerHello_vmatch
+            GESH.extensionServerHello_conv elem h **
+          pure (GESH.Extension_data_supported_versions? h /\
+                (GESH.Extension_data_supported_versions?._0 h <: GPV.protocolVersion) == v)
+{
+  PPB.elim_vmatch_conv GESH.extensionServerHello_vmatch
+    GESH.extensionServerHello_conv elem h;
+  with vm. assert (GESH.extensionServerHello_vmatch elem vm **
+                   pure (GESH.extensionServerHello_conv vm == Some h));
+  peek_extSH_tag elem;
+  lemma_extSH_sv_constructor elem vm;
+  let cm0 = GESH.Extension_data_supported_versions_mid?._0 vm;
+  rewrite (GESH.extensionServerHello_vmatch elem vm)
+      as (GESH.extensionServerHello_vmatch
+            (GESH.Extension_data_supported_versions_low v)
+            (GESH.Extension_data_supported_versions_mid cm0));
+  unfold (GESH.extensionServerHello_vmatch
+            (GESH.Extension_data_supported_versions_low v)
+            (GESH.Extension_data_supported_versions_mid cm0));
+  rewrite (GESH.extensionServerHello_extension_data_supported_versions_vmatch v cm0)
+      as (LPS.eq_as_slprop GPV.protocolVersion v cm0);
+  unfold (LPS.eq_as_slprop GPV.protocolVersion v cm0);
+  fold (LPS.eq_as_slprop GPV.protocolVersion v cm0);
+  rewrite (LPS.eq_as_slprop GPV.protocolVersion v cm0)
+      as (GESH.extensionServerHello_extension_data_supported_versions_vmatch v cm0);
+  fold (GESH.extensionServerHello_vmatch
+            (GESH.Extension_data_supported_versions_low v)
+            (GESH.Extension_data_supported_versions_mid cm0));
+  rewrite (GESH.extensionServerHello_vmatch
+            (GESH.Extension_data_supported_versions_low v)
+            (GESH.Extension_data_supported_versions_mid cm0))
+      as (GESH.extensionServerHello_vmatch elem vm);
+  lemma_extSH_sv_data_conv cm0 h;
+  PPB.intro_vmatch_conv GESH.extensionServerHello_vmatch
+    GESH.extensionServerHello_conv elem vm h;
+}
+
+(* Eliminate a key_share element's vmatch down to the keyShareEntry vmatch_pair. *)
+ghost
+fn elim_vmatch_extSH_key_share
+  (v0: GESH.extensionServerHello_extension_data_key_share_lowtype)
+  (elem: GESH.extensionServerHello_low)
+  (#h: GESH.extensionServerHello)
+  requires PPB.vmatch_conv GESH.extensionServerHello_vmatch
+             GESH.extensionServerHello_conv elem h **
+           pure (elem == GESH.Extension_data_key_share_low v0)
+  ensures exists* (cm: GESH.extensionServerHello_extension_data_key_share_mid).
+           GKSE.keyShareEntry_vmatch v0 cm **
+           pure (GESH.Extension_data_key_share? h /\
+                 GESH.extensionServerHello_extension_data_key_share_conv cm ==
+                   Some (GESH.Extension_data_key_share?._0 h) /\
+                 GESH.extensionServerHello_conv
+                   (GESH.Extension_data_key_share_mid cm) == Some h)
+{
+  PPB.elim_vmatch_conv GESH.extensionServerHello_vmatch
+    GESH.extensionServerHello_conv elem h;
+  with vm. assert (GESH.extensionServerHello_vmatch elem vm **
+                   pure (GESH.extensionServerHello_conv vm == Some h));
+  peek_extSH_tag elem;
+  lemma_extSH_ks_constructor elem vm;
+  let cm0 = GESH.Extension_data_key_share_mid?._0 vm;
+  rewrite (GESH.extensionServerHello_vmatch elem vm)
+      as (GESH.extensionServerHello_vmatch
+            (GESH.Extension_data_key_share_low v0)
+            (GESH.Extension_data_key_share_mid cm0));
+  unfold (GESH.extensionServerHello_vmatch
+            (GESH.Extension_data_key_share_low v0)
+            (GESH.Extension_data_key_share_mid cm0));
+  rewrite (GESH.extensionServerHello_extension_data_key_share_vmatch v0 cm0)
+      as (GKSE.keyShareEntry_vmatch v0 cm0);
+  lemma_extSH_ks_data_conv cm0 h;
+}
+
+(* Re-pack a keyShareEntry vmatch_pair back into a key_share element. *)
+ghost
+fn intro_vmatch_extSH_key_share
+  (v0: GESH.extensionServerHello_extension_data_key_share_lowtype)
+  (cm: GESH.extensionServerHello_extension_data_key_share_mid)
+  (#h: GESH.extensionServerHello)
+  requires GKSE.keyShareEntry_vmatch v0 cm **
+           pure (GESH.extensionServerHello_conv
+                   (GESH.Extension_data_key_share_mid cm) == Some h)
+  ensures PPB.vmatch_conv GESH.extensionServerHello_vmatch
+            GESH.extensionServerHello_conv
+            (GESH.Extension_data_key_share_low v0) h
+{
+  rewrite (GKSE.keyShareEntry_vmatch v0 cm)
+      as (GESH.extensionServerHello_extension_data_key_share_vmatch v0 cm);
+  fold (GESH.extensionServerHello_vmatch
+          (GESH.Extension_data_key_share_low v0)
+          (GESH.Extension_data_key_share_mid cm));
+  PPB.intro_vmatch_conv GESH.extensionServerHello_vmatch
+    GESH.extensionServerHello_conv
+    (GESH.Extension_data_key_share_low v0)
+    (GESH.Extension_data_key_share_mid cm) h;
+}
+
+(* Expose the protocolVersion (legacy_version) equality, the random tag lvec, and
+   the ite payload of the serverHello read result. *)
+ghost
+fn elim_serverHello_body (xsh: GSH.serverHello_lowtype) (#cm: GSH.serverHello_mid)
+  requires GSH.serverHello_vmatch xsh cm
+  ensures
+    LSeqB.vmatch_copy_seqbytes (fst (snd xsh)) (fst (snd cm)) **
+    LPITE.vmatch_ite_payload GSHB.serverHello_body_payload_vmatch
+      (snd (snd xsh)) (snd (snd cm)) **
+    pure (fst xsh == fst cm /\
+          (match GSHB.serverHello_body_random_conv (fst (snd cm)) with
+           | Some t -> GSHB.serverHello_body_cond t == dfst (snd (snd cm))
+           | None -> True))
+{
+  rewrite (GSH.serverHello_vmatch xsh cm)
+      as (LPC.vmatch_pair GPV.protocolVersion_vmatch GSHB.serverHello_body_vmatch xsh cm);
+  unfold (LPC.vmatch_pair GPV.protocolVersion_vmatch GSHB.serverHello_body_vmatch xsh cm);
+  rewrite (GPV.protocolVersion_vmatch (fst xsh) (fst cm))
+      as (LPS.eq_as_slprop GPV.protocolVersion (fst xsh) (fst cm));
+  unfold (LPS.eq_as_slprop GPV.protocolVersion (fst xsh) (fst cm));
+  rewrite (GSHB.serverHello_body_vmatch (snd xsh) (snd cm))
+      as (LPITE.vmatch_ite GSHB.serverHello_body_random_vmatch GSHB.serverHello_body_cond
+            GSHB.serverHello_body_random_conv GSHB.serverHello_body_payload_vmatch
+            (snd xsh) (snd cm));
+  unfold (LPITE.vmatch_ite GSHB.serverHello_body_random_vmatch GSHB.serverHello_body_cond
+            GSHB.serverHello_body_random_conv GSHB.serverHello_body_payload_vmatch
+            (snd xsh) (snd cm));
+  rewrite (GSHB.serverHello_body_random_vmatch (fst (snd xsh)) (fst (snd cm)))
+      as (LSeqB.vmatch_copy_seqbytes (fst (snd xsh)) (fst (snd cm)));
+}
+
+(* Re-pack the random tag lvec and ite payload into the serverHello read result. *)
+ghost
+fn intro_serverHello_body (xsh: GSH.serverHello_lowtype) (#cm: GSH.serverHello_mid)
+  requires
+    LSeqB.vmatch_copy_seqbytes (fst (snd xsh)) (fst (snd cm)) **
+    LPITE.vmatch_ite_payload GSHB.serverHello_body_payload_vmatch
+      (snd (snd xsh)) (snd (snd cm)) **
+    pure (fst xsh == fst cm /\
+          (match GSHB.serverHello_body_random_conv (fst (snd cm)) with
+           | Some t -> GSHB.serverHello_body_cond t == dfst (snd (snd cm))
+           | None -> True))
+  ensures GSH.serverHello_vmatch xsh cm
+{
+  fold (LPS.eq_as_slprop GPV.protocolVersion (fst xsh) (fst cm));
+  rewrite (LPS.eq_as_slprop GPV.protocolVersion (fst xsh) (fst cm))
+      as (GPV.protocolVersion_vmatch (fst xsh) (fst cm));
+  rewrite (LSeqB.vmatch_copy_seqbytes (fst (snd xsh)) (fst (snd cm)))
+      as (GSHB.serverHello_body_random_vmatch (fst (snd xsh)) (fst (snd cm)));
+  fold (LPITE.vmatch_ite GSHB.serverHello_body_random_vmatch GSHB.serverHello_body_cond
+          GSHB.serverHello_body_random_conv GSHB.serverHello_body_payload_vmatch
+          (snd xsh) (snd cm));
+  rewrite (LPITE.vmatch_ite GSHB.serverHello_body_random_vmatch GSHB.serverHello_body_cond
+            GSHB.serverHello_body_random_conv GSHB.serverHello_body_payload_vmatch
+            (snd xsh) (snd cm))
+      as (GSHB.serverHello_body_vmatch (snd xsh) (snd cm));
+  fold (LPC.vmatch_pair GPV.protocolVersion_vmatch GSHB.serverHello_body_vmatch xsh cm);
+  rewrite (LPC.vmatch_pair GPV.protocolVersion_vmatch GSHB.serverHello_body_vmatch xsh cm)
+      as (GSH.serverHello_vmatch xsh cm);
+}
+
+(* Decompose the serverHelloBody read result into the session-id-echo lvec, the
+   extensions vclist, and the (pure) cipher_suite and compression equalities. *)
+ghost
+fn elim_serverHelloBody (shl: GSHBody.serverHelloBody_lowtype)
+                        (#shm: GSHBody.serverHelloBody_mid)
+  requires GSHBody.serverHelloBody_vmatch shl shm
+  ensures
+    GSHBody.serverHelloBody_legacy_session_id_echo_vmatch (fst (fst shl)) (fst (fst shm)) **
+    PPVCL.vmatch_vclist
+      (PPB.vmatch_conv GESH.extensionServerHello_vmatch GESH.extensionServerHello_conv)
+      (snd (snd shl)) (snd (snd shm)) **
+    pure (snd (fst shl) == snd (fst shm) /\ fst (snd shl) == fst (snd shm))
+{
+  rewrite (GSHBody.serverHelloBody_vmatch shl shm)
+      as (LPC.vmatch_pair
+            (LPC.vmatch_pair GSHBody.serverHelloBody_legacy_session_id_echo_vmatch GCS.cipherSuite_vmatch)
+            (LPC.vmatch_pair (LPS.eq_as_slprop U8.t) GSHBody.serverHelloBody_extensions_vmatch)
+            shl shm);
+  unfold (LPC.vmatch_pair
+            (LPC.vmatch_pair GSHBody.serverHelloBody_legacy_session_id_echo_vmatch GCS.cipherSuite_vmatch)
+            (LPC.vmatch_pair (LPS.eq_as_slprop U8.t) GSHBody.serverHelloBody_extensions_vmatch)
+            shl shm);
+  unfold (LPC.vmatch_pair GSHBody.serverHelloBody_legacy_session_id_echo_vmatch GCS.cipherSuite_vmatch
+            (fst shl) (fst shm));
+  rewrite (GCS.cipherSuite_vmatch (snd (fst shl)) (snd (fst shm)))
+      as (LPS.eq_as_slprop GCS.cipherSuite (snd (fst shl)) (snd (fst shm)));
+  unfold (LPS.eq_as_slprop GCS.cipherSuite (snd (fst shl)) (snd (fst shm)));
+  unfold (LPC.vmatch_pair (LPS.eq_as_slprop U8.t) GSHBody.serverHelloBody_extensions_vmatch
+            (snd shl) (snd shm));
+  unfold (LPS.eq_as_slprop U8.t (fst (snd shl)) (fst (snd shm)));
+  rewrite (GSHBody.serverHelloBody_extensions_vmatch (snd (snd shl)) (snd (snd shm)))
+      as (PPVCL.vmatch_vclist
+            (PPB.vmatch_conv GESH.extensionServerHello_vmatch GESH.extensionServerHello_conv)
+            (snd (snd shl)) (snd (snd shm)));
+}
+
+(* Re-pack the session-id-echo lvec and extensions vclist into the serverHelloBody
+   read result so it can be freed by the generated [free_serverHelloBody]. *)
+ghost
+fn intro_serverHelloBody (shl: GSHBody.serverHelloBody_lowtype)
+                         (#shm: GSHBody.serverHelloBody_mid)
+  requires
+    GSHBody.serverHelloBody_legacy_session_id_echo_vmatch (fst (fst shl)) (fst (fst shm)) **
+    PPVCL.vmatch_vclist
+      (PPB.vmatch_conv GESH.extensionServerHello_vmatch GESH.extensionServerHello_conv)
+      (snd (snd shl)) (snd (snd shm)) **
+    pure (snd (fst shl) == snd (fst shm) /\ fst (snd shl) == fst (snd shm))
+  ensures GSHBody.serverHelloBody_vmatch shl shm
+{
+  rewrite (PPVCL.vmatch_vclist
+            (PPB.vmatch_conv GESH.extensionServerHello_vmatch GESH.extensionServerHello_conv)
+            (snd (snd shl)) (snd (snd shm)))
+      as (GSHBody.serverHelloBody_extensions_vmatch (snd (snd shl)) (snd (snd shm)));
+  fold (LPS.eq_as_slprop U8.t (fst (snd shl)) (fst (snd shm)));
+  fold (LPC.vmatch_pair (LPS.eq_as_slprop U8.t) GSHBody.serverHelloBody_extensions_vmatch
+          (snd shl) (snd shm));
+  fold (LPS.eq_as_slprop GCS.cipherSuite (snd (fst shl)) (snd (fst shm)));
+  rewrite (LPS.eq_as_slprop GCS.cipherSuite (snd (fst shl)) (snd (fst shm)))
+      as (GCS.cipherSuite_vmatch (snd (fst shl)) (snd (fst shm)));
+  fold (LPC.vmatch_pair GSHBody.serverHelloBody_legacy_session_id_echo_vmatch GCS.cipherSuite_vmatch
+          (fst shl) (fst shm));
+  fold (LPC.vmatch_pair
+          (LPC.vmatch_pair GSHBody.serverHelloBody_legacy_session_id_echo_vmatch GCS.cipherSuite_vmatch)
+          (LPC.vmatch_pair (LPS.eq_as_slprop U8.t) GSHBody.serverHelloBody_extensions_vmatch)
+          shl shm);
+  rewrite (LPC.vmatch_pair
+            (LPC.vmatch_pair GSHBody.serverHelloBody_legacy_session_id_echo_vmatch GCS.cipherSuite_vmatch)
+            (LPC.vmatch_pair (LPS.eq_as_slprop U8.t) GSHBody.serverHelloBody_extensions_vmatch)
+            shl shm)
+      as (GSHBody.serverHelloBody_vmatch shl shm);
+}
+
+(* Reshape the serverHello_body ite payload (given the concrete branch
+   discriminant [b] read from the low value) into the underlying
+   [serverHelloBody_vmatch] (the payload is a [serverHelloBody] on BOTH the HRR
+   and the normal branch; only the random tag distinguishes them). *)
+ghost
+fn elim_sh_ite_payload (xsh: GSH.serverHello_lowtype) (b: bool) (#cm: GSH.serverHello_mid)
+  requires LPITE.vmatch_ite_payload GSHB.serverHello_body_payload_vmatch
+             (snd (snd xsh)) (snd (snd cm)) **
+           pure (b == dfst (snd (snd xsh)))
+  ensures GSHBody.serverHelloBody_vmatch (dsnd (snd (snd xsh))) (dsnd (snd (snd cm))) **
+          pure (b == dfst (snd (snd cm)))
+{
+  rewrite (LPITE.vmatch_ite_payload GSHB.serverHello_body_payload_vmatch
+             (snd (snd xsh)) (snd (snd cm)))
+      as (LPITE.vmatch_ite_payload GSHB.serverHello_body_payload_vmatch
+             (| b, dsnd (snd (snd xsh)) |) (snd (snd cm)));
+  LPITE.vmatch_ite_payload_branch_eq GSHB.serverHello_body_payload_vmatch
+    b (dsnd (snd (snd xsh))) (snd (snd cm));
+  rewrite (LPITE.vmatch_ite_payload GSHB.serverHello_body_payload_vmatch
+             (| b, dsnd (snd (snd xsh)) |) (snd (snd cm)))
+      as (GSHBody.serverHelloBody_vmatch (dsnd (snd (snd xsh))) (dsnd (snd (snd cm))));
+}
+
+(* Re-pack the [serverHelloBody_vmatch] payload back into the ite payload. *)
+ghost
+fn intro_sh_ite_payload (xsh: GSH.serverHello_lowtype) (b: bool) (#cm: GSH.serverHello_mid)
+  requires GSHBody.serverHelloBody_vmatch (dsnd (snd (snd xsh))) (dsnd (snd (snd cm))) **
+           pure (b == dfst (snd (snd xsh)) /\ b == dfst (snd (snd cm)))
+  ensures LPITE.vmatch_ite_payload GSHB.serverHello_body_payload_vmatch
+            (snd (snd xsh)) (snd (snd cm))
+{
+  rewrite (GSHBody.serverHelloBody_vmatch (dsnd (snd (snd xsh))) (dsnd (snd (snd cm))))
+      as (LPITE.vmatch_ite_payload GSHB.serverHello_body_payload_vmatch
+             (| b, dsnd (snd (snd xsh)) |) (snd (snd cm)));
+  rewrite (LPITE.vmatch_ite_payload GSHB.serverHello_body_payload_vmatch
+             (| b, dsnd (snd (snd xsh)) |) (snd (snd cm)))
+      as (LPITE.vmatch_ite_payload GSHB.serverHello_body_payload_vmatch
+             (snd (snd xsh)) (snd (snd cm)));
+}
+
+(* Re-pack an (unfolded) keyShareEntry vmatch_pair back into [keyShareEntry_vmatch]. *)
+ghost
+fn repack_kse (v0: GKSE.keyShareEntry_lowtype) (#cm: Ghost.erased GKSE.keyShareEntry_mid)
+  requires V.pts_to (snd v0).PPBY.lvec_vec (snd cm) **
+           pure (V.is_full_vec (snd v0).PPBY.lvec_vec /\ fst v0 == reveal (fst cm))
+  ensures GKSE.keyShareEntry_vmatch v0 cm
+{
+  fold (LSeqB.vmatch_copy_seqbytes (snd v0) (snd cm));
+  rewrite (LSeqB.vmatch_copy_seqbytes (snd v0) (snd cm))
+      as (GKSE.keyShareEntry_key_exchange_vmatch (snd v0) (snd cm));
+  fold (LPS.eq_as_slprop GNG.namedGroup (fst v0) (fst cm));
+  rewrite (LPS.eq_as_slprop GNG.namedGroup (fst v0) (fst cm))
+      as (GNG.namedGroup_vmatch (fst v0) (fst cm));
+  fold (LPC.vmatch_pair GNG.namedGroup_vmatch GKSE.keyShareEntry_key_exchange_vmatch v0 cm);
+  rewrite (LPC.vmatch_pair GNG.namedGroup_vmatch GKSE.keyShareEntry_key_exchange_vmatch v0 cm)
+      as (GKSE.keyShareEntry_vmatch v0 cm);
+}
+
+(* Inspect a keyShareEntry: if it is an X25519 entry with a 32-byte key, copy the
+   32 key bytes into [key_vec] and return true; otherwise leave [key_vec]
+   unchanged and return false.  Mirrors the spec test
+   [X25519? group && key_exchange_to_key32 = Some _] used by [sh_key_share]. *)
+fn try_copy_x25519_key
+  (key_vec: V.vec U8.t)
+  (v0: GKSE.keyShareEntry_lowtype)
+  (#cm: Ghost.erased GKSE.keyShareEntry_mid)
+  requires V.pts_to key_vec 'kv ** GKSE.keyShareEntry_vmatch v0 cm **
+           pure (V.is_full_vec key_vec /\ V.length key_vec == 32)
+  returns ok: bool
+  ensures GKSE.keyShareEntry_vmatch v0 cm **
+          (exists* kbytes. V.pts_to key_vec kbytes **
+            pure (V.is_full_vec key_vec /\ V.length key_vec == 32 /\
+                  Seq.length kbytes == 32 /\
+                  (ok <==> (GNG.X25519? (fst (Ghost.reveal cm)) /\
+                            Seq.length (snd (Ghost.reveal cm)) == 32)) /\
+                  (ok ==> Seq.equal kbytes (snd (Ghost.reveal cm))) /\
+                  ((not ok) ==> Seq.equal kbytes (Ghost.reveal 'kv))))
+{
+  V.pts_to_len key_vec;
+  rewrite (GKSE.keyShareEntry_vmatch v0 cm)
+      as (LPC.vmatch_pair GNG.namedGroup_vmatch GKSE.keyShareEntry_key_exchange_vmatch v0 cm);
+  unfold (LPC.vmatch_pair GNG.namedGroup_vmatch GKSE.keyShareEntry_key_exchange_vmatch v0 cm);
+  rewrite (GNG.namedGroup_vmatch (fst v0) (fst cm))
+      as (LPS.eq_as_slprop GNG.namedGroup (fst v0) (fst cm));
+  unfold (LPS.eq_as_slprop GNG.namedGroup (fst v0) (fst cm));
+  rewrite (GKSE.keyShareEntry_key_exchange_vmatch (snd v0) (snd cm))
+      as (LSeqB.vmatch_copy_seqbytes (snd v0) (snd cm));
+  unfold (LSeqB.vmatch_copy_seqbytes (snd v0) (snd cm));
+  V.pts_to_len (snd v0).PPBY.lvec_vec;
+  let group_lo = fst v0;
+  let key_len = (snd v0).PPBY.lvec_len;
+  let is_x = GNG.X25519? group_lo;
+  let len_ok = SZ.eq key_len 32sz;
+  if (is_x && len_ok) {
+    copy_vec_32_into key_vec (snd v0).PPBY.lvec_vec;
+    repack_kse v0;
+    true
+  } else {
+    repack_kse v0;
+    false
+  }
+}
+
+(* Scan the ServerHello extension list for the x25519 key_share, mirroring the
+   spec [sh_key_share ext false None].  Tracks a [saw_supported_versions] flag and
+   a copied 32-byte key in [key_vec].  Returns [(key_vec, found)] where [found]
+   reflects whether the scan yields [Some key] (i.e. a TLS_1p3 supported_versions
+   AND an x25519/32-byte key_share, with no rejecting extension in between). *)
+fn scan_sh_key_share
+  (ext_lo: GSHBody.serverHelloBody_extensions_lowtype)
+  (#cext: Ghost.erased (list GESH.extensionServerHello))
+  requires PPVCL.vmatch_vclist
+             (PPB.vmatch_conv GESH.extensionServerHello_vmatch GESH.extensionServerHello_conv)
+             ext_lo cext
+  returns res: (V.vec U8.t & bool)
+  ensures PPVCL.vmatch_vclist
+            (PPB.vmatch_conv GESH.extensionServerHello_vmatch GESH.extensionServerHello_conv)
+            ext_lo cext **
+          (exists* kbytes. V.pts_to (fst res) kbytes **
+            pure (V.is_full_vec (fst res) /\ V.length (fst res) == 32 /\
+                  Seq.length kbytes == 32 /\
+                  (match RV.reveal_sh_key_share cext false None with
+                   | Some k -> (snd res) == true /\ Seq.equal kbytes (Ghost.reveal k <: Seq.seq U8.t)
+                   | None -> (snd res) == false)))
+{
+  let key_vec = V.alloc 0uy 32sz;
+  match ext_lo {
+    None -> {
+      unfold (PPVCL.vmatch_vclist
+                (PPB.vmatch_conv GESH.extensionServerHello_vmatch GESH.extensionServerHello_conv)
+                None cext);
+      RV.lemma_sh_key_share_nil false None;
+      fold (PPVCL.vmatch_vclist
+                (PPB.vmatch_conv GESH.extensionServerHello_vmatch GESH.extensionServerHello_conv)
+                None cext);
+      rewrite (PPVCL.vmatch_vclist
+                (PPB.vmatch_conv GESH.extensionServerHello_vmatch GESH.extensionServerHello_conv)
+                None cext)
+          as (PPVCL.vmatch_vclist
+                (PPB.vmatch_conv GESH.extensionServerHello_vmatch GESH.extensionServerHello_conv)
+                ext_lo cext);
+      (key_vec, false)
+    }
+    Some nv -> {
+      unfold (PPVCL.vmatch_vclist
+                (PPB.vmatch_conv GESH.extensionServerHello_vmatch GESH.extensionServerHello_conv)
+                (Some nv) cext);
+      with s. assert (V.pts_to (snd nv) s **
+                      SM.seq_list_match s cext
+                        (PPB.vmatch_conv GESH.extensionServerHello_vmatch
+                                         GESH.extensionServerHello_conv));
+      V.pts_to_len (snd nv);
+      let count = fst nv;
+      let mut i = 0sz;
+      let mut failed = false;
+      let mut saw_sv = false;
+      let mut have_key = false;
+      let kacc_ref = GR.alloc (None #(B.bytes_of_len 32));
+      while (
+        let f = !failed;
+        let iv = !i;
+        (not f) && (iv `SZ.lt` count)
+      )
+      invariant exists* iv fl svb hkb kacc kbytes.
+        R.pts_to i iv **
+        R.pts_to failed fl **
+        R.pts_to saw_sv svb **
+        R.pts_to have_key hkb **
+        GR.pts_to kacc_ref kacc **
+        V.pts_to (snd nv) s **
+        SM.seq_list_match s cext
+          (PPB.vmatch_conv GESH.extensionServerHello_vmatch GESH.extensionServerHello_conv) **
+        V.pts_to key_vec kbytes **
+        pure (
+          SZ.v iv <= SZ.v count /\
+          SZ.v count == FStar.List.Tot.length cext /\
+          Seq.length s == FStar.List.Tot.length cext /\
+          V.is_full_vec (snd nv) /\
+          V.is_full_vec key_vec /\ V.length key_vec == 32 /\ Seq.length kbytes == 32 /\
+          (hkb <==> Some? kacc) /\
+          (Some? kacc ==> Seq.equal kbytes (Ghost.reveal (Some?.v kacc) <: Seq.seq U8.t)) /\
+          (fl ==> RV.reveal_sh_key_share cext false None == None) /\
+          ((not fl) ==>
+            RV.reveal_sh_key_share cext false None ==
+            RV.reveal_sh_key_share (RV.list_drop (SZ.v iv) cext) svb kacc)
+        )
+      {
+        let iv = !i;
+        assert (pure (SZ.v iv < FStar.List.Tot.length cext));
+        let el = V.op_Array_Access (snd nv) iv;
+        SMU.seq_list_match_index_trade
+          (PPB.vmatch_conv GESH.extensionServerHello_vmatch GESH.extensionServerHello_conv)
+          s cext (SZ.v iv);
+        Trade.rewrite_with_trade
+          (PPB.vmatch_conv GESH.extensionServerHello_vmatch GESH.extensionServerHello_conv
+             (Seq.index s (SZ.v iv)) (FStar.List.Tot.index cext (SZ.v iv)))
+          (PPB.vmatch_conv GESH.extensionServerHello_vmatch GESH.extensionServerHello_conv
+             el (FStar.List.Tot.index cext (SZ.v iv)));
+        Trade.trans
+          (PPB.vmatch_conv GESH.extensionServerHello_vmatch GESH.extensionServerHello_conv
+             el (FStar.List.Tot.index cext (SZ.v iv)))
+          (PPB.vmatch_conv GESH.extensionServerHello_vmatch GESH.extensionServerHello_conv
+             (Seq.index s (SZ.v iv)) (FStar.List.Tot.index cext (SZ.v iv)))
+          (SM.seq_list_match s cext
+             (PPB.vmatch_conv GESH.extensionServerHello_vmatch GESH.extensionServerHello_conv));
+        elim_extSH_iffs el;
+        let svb0 = !saw_sv;
+        let kacc_g = GR.read kacc_ref;
+        RV.lemma_list_drop_index cext (SZ.v iv);
+        RV.lemma_sh_key_share_cons
+          (FStar.List.Tot.index cext (SZ.v iv))
+          (RV.list_drop (SZ.v iv + 1) cext)
+          svb0 (Ghost.reveal kacc_g);
+        if (GESH.Extension_data_supported_versions_low? el) {
+          let v = GESH.Extension_data_supported_versions_low?._0 el;
+          elim_extSH_sv v el;
+          Trade.elim
+            (PPB.vmatch_conv GESH.extensionServerHello_vmatch GESH.extensionServerHello_conv
+               el (FStar.List.Tot.index cext (SZ.v iv)))
+            (SM.seq_list_match s cext
+               (PPB.vmatch_conv GESH.extensionServerHello_vmatch GESH.extensionServerHello_conv));
+          if (GPV.TLS_1p3? v) {
+            saw_sv := true;
+            SZ.fits_lte (SZ.v iv + 1) (SZ.v count);
+            i := iv `SZ.add` 1sz;
+          } else {
+            failed := true;
+          }
+        } else if (GESH.Extension_data_key_share_low? el) {
+          let v0 = GESH.Extension_data_key_share_low?._0 el;
+          elim_vmatch_extSH_key_share v0 el #(FStar.List.Tot.index cext (SZ.v iv));
+          with cm_ks. assert (GKSE.keyShareEntry_vmatch v0 cm_ks);
+          lemma_extSH_ks_conv cm_ks
+            (GESH.Extension_data_key_share?._0 (FStar.List.Tot.index cext (SZ.v iv)));
+          RV.lemma_reveal_key_exchange_to_key32
+            ((GESH.Extension_data_key_share?._0 (FStar.List.Tot.index cext (SZ.v iv))
+                <: GKSE.keyShareEntry).GKSE.key_exchange);
+          let ok = try_copy_x25519_key key_vec v0 #cm_ks;
+          intro_vmatch_extSH_key_share v0 cm_ks #(FStar.List.Tot.index cext (SZ.v iv));
+          rewrite (PPB.vmatch_conv GESH.extensionServerHello_vmatch GESH.extensionServerHello_conv
+                     (GESH.Extension_data_key_share_low v0) (FStar.List.Tot.index cext (SZ.v iv)))
+              as (PPB.vmatch_conv GESH.extensionServerHello_vmatch GESH.extensionServerHello_conv
+                     el (FStar.List.Tot.index cext (SZ.v iv)));
+          Trade.elim
+            (PPB.vmatch_conv GESH.extensionServerHello_vmatch GESH.extensionServerHello_conv
+               el (FStar.List.Tot.index cext (SZ.v iv)))
+            (SM.seq_list_match s cext
+               (PPB.vmatch_conv GESH.extensionServerHello_vmatch GESH.extensionServerHello_conv));
+          if ok {
+            GR.write kacc_ref
+              (Ghost.hide (RV.reveal_key_exchange_to_key32
+                ((GESH.Extension_data_key_share?._0 (FStar.List.Tot.index cext (SZ.v iv))
+                    <: GKSE.keyShareEntry).GKSE.key_exchange)));
+            have_key := true;
+            SZ.fits_lte (SZ.v iv + 1) (SZ.v count);
+            i := iv `SZ.add` 1sz;
+          } else {
+            failed := true;
+          }
+        } else {
+          Trade.elim
+            (PPB.vmatch_conv GESH.extensionServerHello_vmatch GESH.extensionServerHello_conv
+               el (FStar.List.Tot.index cext (SZ.v iv)))
+            (SM.seq_list_match s cext
+               (PPB.vmatch_conv GESH.extensionServerHello_vmatch GESH.extensionServerHello_conv));
+          SZ.fits_lte (SZ.v iv + 1) (SZ.v count);
+          i := iv `SZ.add` 1sz;
+        }
+      };
+      let fl = !failed;
+      let svb0 = !saw_sv;
+      let hkb0 = !have_key;
+      let iv = !i;
+      RV.lemma_list_drop_length cext;
+      let kacc_final = GR.read kacc_ref;
+      RV.lemma_sh_key_share_nil svb0 (Ghost.reveal kacc_final);
+      assert (pure ((not fl) ==> SZ.v iv == FStar.List.Tot.length cext));
+      let found = (not fl) && svb0 && hkb0;
+      fold (PPVCL.vmatch_vclist
+                (PPB.vmatch_conv GESH.extensionServerHello_vmatch GESH.extensionServerHello_conv)
+                (Some nv) cext);
+      rewrite (PPVCL.vmatch_vclist
+                (PPB.vmatch_conv GESH.extensionServerHello_vmatch GESH.extensionServerHello_conv)
+                (Some nv) cext)
+          as (PPVCL.vmatch_vclist
+                (PPB.vmatch_conv GESH.extensionServerHello_vmatch GESH.extensionServerHello_conv)
+                ext_lo cext);
+      GR.free kacc_ref;
+      (key_vec, found)
+    }
+  }
+}
+
 (* Full handshake (content-type 0x16) arm.  Parses the handshake message
    structure exclusively through the QuackyDucky-generated validator + copyful
-   reader; only the Finished sub-arm is proven so far. *)
+   reader; ServerHello, Finished and CertificateVerify sub-arms are proven. *)
 fn parse_handshake_message
   (content_type: U8.t)
   (input: array U8.t)
@@ -1384,32 +2179,164 @@ fn parse_handshake_message
           (M.TlsHandshake (Some?.v (RV.handshake_synth (Ghost.reveal gv)))) 'input_bytes;
         Some (L.LTlsHandshake (L.LEncryptedExtensions lee))
       }
+      GHS.Body_server_hello_low xsh -> {
+        elim_vmatch_server_hello xsh;
+        with cm. assert (GSH.serverHello_vmatch xsh cm **
+                         pure (Some? (GSH.serverHello_conv cm) /\
+                               Ghost.reveal gv ==
+                                 GHS.Body_server_hello (Some?.v (GSH.serverHello_conv cm)) /\
+                               GHS.handshake_conv (GHS.Body_server_hello_mid cm) ==
+                                 Some (Ghost.reveal gv)));
+        let cse : Ghost.erased GSH.serverHello = Some?.v (GSH.serverHello_conv cm);
+        elim_serverHello_body xsh;
+        lemma_sh_conv_version cm (Ghost.reveal cse);
+        let lv = fst xsh;
+        if (not (GPV.TLS_1p2? lv)) {
+          (* Bad legacy_version: synth lands [None]; fall back. *)
+          intro_serverHello_body xsh;
+          intro_vmatch_server_hello xsh cm #(Ghost.reveal gv);
+          PPB.free_vmatch_conv GHS.handshake_vmatch GHS.handshake_conv
+            GHS.free_handshake (GHS.Body_server_hello_low xsh);
+          Trade.elim (PPB.pts_to_parsed GHS.handshake_parser s #(1.0R /. 2.0R) (Ghost.reveal gv))
+                     (S.pts_to s 'input_bytes);
+          S.to_array s;
+          RV.lemma_handshake_synth_server_hello_bad_version (Ghost.reveal cse <: GHS.handshake_body_server_hello);
+          RV.lemma_parse_handshake_none_of_synth_none (Ghost.reveal 'input_bytes)
+            (Ghost.reveal gv) (SZ.v input_len);
+          handshake_fallback content_type input input_len
+        } else {
+          let b = dfst (snd (snd xsh));
+          elim_sh_ite_payload xsh b;
+          lemma_sh_conv_body cm (Ghost.reveal cse);
+          if b {
+            (* HelloRetryRequest (magic random tag): synth maps to [M.HelloRetryRequest]. *)
+            intro_sh_ite_payload xsh b;
+            intro_serverHello_body xsh;
+            intro_vmatch_server_hello xsh cm #(Ghost.reveal gv);
+            PPB.free_vmatch_conv GHS.handshake_vmatch GHS.handshake_conv
+              GHS.free_handshake (GHS.Body_server_hello_low xsh);
+            Trade.elim (PPB.pts_to_parsed GHS.handshake_parser s #(1.0R /. 2.0R) (Ghost.reveal gv))
+                       (S.pts_to s 'input_bytes);
+            S.to_array s;
+            RV.lemma_handshake_synth_server_hello_hrr (Ghost.reveal cse <: GHS.handshake_body_server_hello)
+              (GSHB.HelloRetryRequest?._0 (Ghost.reveal cse).GSH.body);
+            RV.lemma_ptm_handshake_some (Ghost.reveal 'input_bytes) (Ghost.reveal gv)
+              M.HelloRetryRequest;
+            fold (L.is_valid_handshake_msg L.LHelloRetryRequest M.HelloRetryRequest);
+            fold (L.is_valid_tls_message
+                    (L.LTlsHandshake L.LHelloRetryRequest)
+                    (M.TlsHandshake M.HelloRetryRequest));
+            lemma_wire_exists content_type T.Handshake
+              (M.TlsHandshake M.HelloRetryRequest) 'input_bytes;
+            Some (L.LTlsHandshake L.LHelloRetryRequest)
+          } else {
+            (* Normal ServerHello_body_false. *)
+            let sf : Ghost.erased GSHB.serverHello_body_false =
+              GSHB.ServerHello_body_false?._0 (Ghost.reveal cse).GSH.body;
+            elim_serverHelloBody (dsnd (snd (snd xsh)));
+            lemma_shbody_conv (dsnd (snd (snd cm))) (Ghost.reveal sf).GSHB.value;
+            let comp = fst (snd (dsnd (snd (snd xsh))));
+            if (comp <> 0uy) {
+              (* legacy_compression_method != 0: synth lands [None]; fall back. *)
+              intro_serverHelloBody (dsnd (snd (snd xsh)));
+              intro_sh_ite_payload xsh b;
+              intro_serverHello_body xsh;
+              intro_vmatch_server_hello xsh cm #(Ghost.reveal gv);
+              PPB.free_vmatch_conv GHS.handshake_vmatch GHS.handshake_conv
+                GHS.free_handshake (GHS.Body_server_hello_low xsh);
+              Trade.elim (PPB.pts_to_parsed GHS.handshake_parser s #(1.0R /. 2.0R) (Ghost.reveal gv))
+                         (S.pts_to s 'input_bytes);
+              S.to_array s;
+              RV.lemma_handshake_synth_server_hello_sh (Ghost.reveal cse <: GHS.handshake_body_server_hello) (Ghost.reveal sf);
+              RV.lemma_parse_handshake_none_of_synth_none (Ghost.reveal 'input_bytes)
+                (Ghost.reveal gv) (SZ.v input_len);
+              handshake_fallback content_type input input_len
+            } else {
+              let res = scan_sh_key_share (snd (snd (dsnd (snd (snd xsh)))));
+              with kbytes. assert (V.pts_to (fst res) kbytes);
+              let randvec = V.alloc 0uy 32sz;
+              unfold (LSeqB.vmatch_copy_seqbytes (fst (snd xsh)) (fst (snd cm)));
+              V.pts_to_len (fst (snd xsh)).PPBY.lvec_vec;
+              copy_vec_32_into randvec (fst (snd xsh)).PPBY.lvec_vec;
+              with rbytes. assert (V.pts_to randvec rbytes);
+              fold (LSeqB.vmatch_copy_seqbytes (fst (snd xsh)) (fst (snd cm)));
+              intro_serverHelloBody (dsnd (snd (snd xsh)));
+              intro_sh_ite_payload xsh b;
+              intro_serverHello_body xsh;
+              intro_vmatch_server_hello xsh cm #(Ghost.reveal gv);
+              PPB.free_vmatch_conv GHS.handshake_vmatch GHS.handshake_conv
+                GHS.free_handshake (GHS.Body_server_hello_low xsh);
+              Trade.elim (PPB.pts_to_parsed GHS.handshake_parser s #(1.0R /. 2.0R) (Ghost.reveal gv))
+                         (S.pts_to s 'input_bytes);
+              S.to_array s;
+              LP.parsed_data_is_serialize GHS.handshake_serializer (Ghost.reveal 'input_bytes);
+              Seq.lemma_eq_elim
+                (LP.serialize GHS.handshake_serializer (Ghost.reveal gv) `Seq.append`
+                 Seq.slice (Ghost.reveal 'input_bytes) (SZ.v input_len)
+                   (Seq.length (Ghost.reveal 'input_bytes)))
+                (Ghost.reveal 'input_bytes);
+              Seq.lemma_len_append
+                (LP.serialize GHS.handshake_serializer (Ghost.reveal gv))
+                (Seq.slice (Ghost.reveal 'input_bytes) (SZ.v input_len)
+                   (Seq.length (Ghost.reveal 'input_bytes)));
+              assert (pure (Seq.length
+                (LP.serialize GHS.handshake_serializer (Ghost.reveal gv)) == SZ.v input_len));
+              RV.lemma_handshake_synth_server_hello_sh (Ghost.reveal cse <: GHS.handshake_body_server_hello) (Ghost.reveal sf);
+              assert (pure (B.length
+                (LP.serialize GHS.handshake_serializer
+                  (GHS.Body_server_hello (Ghost.reveal cse <: GHS.handshake_body_server_hello)))
+                  == SZ.v input_len));
+              let found = snd res;
+              let fits = SZ.lte input_len 4096sz;
+              if (found && fits) {
+                RV.lemma_ptm_handshake_some (Ghost.reveal 'input_bytes) (Ghost.reveal gv)
+                  (Some?.v (RV.handshake_synth (Ghost.reveal gv)));
+                WS.lemma_parse_tls_message_round_trip T.Handshake (Ghost.reveal 'input_bytes);
+                let lsh = ({ L.server_hello_random = randvec;
+                             L.server_hello_key_share = fst res;
+                             L.server_hello_cipher_suite = 0x1303us });
+                rewrite (V.pts_to randvec rbytes)
+                     as (V.pts_to lsh.L.server_hello_random rbytes);
+                rewrite (V.pts_to (fst res) kbytes)
+                     as (V.pts_to lsh.L.server_hello_key_share kbytes);
+                fold (L.is_valid_server_hello lsh
+                        (M.ServerHello?._0 (Some?.v (RV.handshake_synth (Ghost.reveal gv)))));
+                fold (L.is_valid_handshake_msg (L.LServerHello lsh)
+                        (Some?.v (RV.handshake_synth (Ghost.reveal gv))));
+                fold (L.is_valid_tls_message
+                        (L.LTlsHandshake (L.LServerHello lsh))
+                        (M.TlsHandshake (Some?.v (RV.handshake_synth (Ghost.reveal gv)))));
+                lemma_wire_exists content_type T.Handshake
+                  (M.TlsHandshake (Some?.v (RV.handshake_synth (Ghost.reveal gv)))) 'input_bytes;
+                Some (L.LTlsHandshake (L.LServerHello lsh))
+              } else {
+                (* key_share scan found nothing, or the body exceeds
+                   server_hello_max_len: synth is [None]; fall back. *)
+                V.free randvec;
+                V.free (fst res);
+                RV.lemma_parse_handshake_none_of_synth_none (Ghost.reveal 'input_bytes)
+                  (Ghost.reveal gv) (SZ.v input_len);
+                handshake_fallback content_type input input_len
+              }
+            }
+          }
+        }
+      }
       _ -> {
-        (* REMAINING ARMS: this catch-all now covers exactly three constructors —
-           [Body_client_hello_low], [Body_server_hello_low] (including its
-           HelloRetryRequest sub-case) and [Body_certificate_low].  All other
+        (* REMAINING ARMS: this catch-all now covers exactly two constructors —
+           [Body_client_hello_low] and [Body_certificate_low].  All other
            constructors are handled in explicit arms above: Finished,
            CertificateVerify (Decision-1 guard makes its synth land in the
            4096-byte storage), EncryptedExtensions (verified ALPN scan),
            Body_key_update (byte-level fallback) and Body_new_session_ticket
            (validator-unreachable).
 
-           Each remaining arm needs the same recipe used for EncryptedExtensions:
-           a ghost vmatch-elimination chain peeling the generated [vmatch_conv]
-           down to the owned leaf Vecs, a copy of each fixed-size field into the
-           L representation, and a per-constructor [RV] synth-reveal lemma
-           (the ServerHello reveal lemmas are already in TLS13.Wire.Spec.Reveal:
-           [lemma_handshake_synth_server_hello_{bad_version,hrr,sh}],
-           [reveal_sh_key_share], [lemma_sh_key_share_{nil,cons}]).
+           Each remaining arm needs the same recipe used for EncryptedExtensions
+           and ServerHello: a ghost vmatch-elimination chain peeling the generated
+           [vmatch_conv] down to the owned leaf Vecs, a copy of each fixed-size
+           field into the L representation, and a per-constructor [RV]
+           synth-reveal lemma.
 
-             - ServerHello: navigate serverHello = vmatch_pair(protocolVersion,
-               serverHello_body); check legacy_version == TLS_1p2; serverHello_body
-               is a vmatch_ite (HelloRetryRequest tag vs ServerHello_body_false);
-               for the HRR sub-case build [L.LHelloRetryRequest]; otherwise read
-               the 32-byte random tag, check legacy_compression_method == 0, and
-               run a key_share/supported_versions scan (mirroring [sh_key_share],
-               like [scan_ee_alpn] but with a dual accumulator + a 32-byte key
-               copy) to recover the x25519 key, then build [L.LServerHello].
              - Certificate: recursive [synth_cert_chain] over the (Decision-1
                guarded) entry list, copying each cert into the fixed-size chain
                storage and proving [certificate_chain_matches].

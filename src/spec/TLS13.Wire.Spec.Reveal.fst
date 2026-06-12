@@ -106,6 +106,8 @@ let lemma_alpn_first_name_index0 pnl = ()
 
 let reveal_key_exchange_to_key32 ke = WS.key_exchange_to_key32 ke
 
+let lemma_reveal_key_exchange_to_key32 ke = ()
+
 let reveal_sh_key_share l saw key_share = WS.sh_key_share l saw key_share
 
 let lemma_sh_key_share_nil saw key_share = ()

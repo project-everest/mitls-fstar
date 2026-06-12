@@ -278,6 +278,14 @@ val lemma_alpn_first_name_index0
 val reveal_key_exchange_to_key32 (ke:GKSE.keyShareEntry_key_exchange)
   : GTot (option (B.bytes_of_len 32))
 
+(* Definitional unfolding of [reveal_key_exchange_to_key32]: a key_share entry
+   yields [Some] (the raw bytes) exactly when those bytes are 32 long. *)
+val lemma_reveal_key_exchange_to_key32 (ke:GKSE.keyShareEntry_key_exchange)
+  : Lemma (ensures reveal_key_exchange_to_key32 ke ==
+                   (if B.length (ke <: B.bytes) = 32
+                    then Some ((ke <: B.bytes) <: B.bytes_of_len 32)
+                    else None))
+
 (* Re-export of the internal [sh_key_share] scan: walk the ServerHello extension
    list, requiring an x25519/32-byte key_share AND a TLS_1p3 supported_versions. *)
 val reveal_sh_key_share
