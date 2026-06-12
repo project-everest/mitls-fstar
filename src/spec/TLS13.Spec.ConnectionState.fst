@@ -35,6 +35,7 @@ let empty_wire_log : wire_log = CL.empty_raw_io_log
 
 type endpoint_role =
   | ClientEndpoint
+  | ServerEndpoint
 
 type connection_config = {
   config_role: endpoint_role;
@@ -231,9 +232,53 @@ type traffic_epoch =
   | TrafficHandshake
   | TrafficApplication
 
+type traffic_label =
+  | ClientTraffic
+  | ServerTraffic
+
+type base_secret_id =
+  | EarlySecret
+  | HandshakeSecret
+  | MasterSecret
+
+type labeled_traffic_epoch = {
+  traffic_id_epoch: traffic_epoch;
+  traffic_id_label: traffic_label;
+}
+
+type traffic_update_id = {
+  traffic_update_label: traffic_label;
+  traffic_update_generation: nat;
+}
+
+type derived_key_id =
+  | BaseSecret of base_secret_id
+  | TrafficSecret of labeled_traffic_epoch
+  | TrafficKey of labeled_traffic_epoch
+  | TrafficIV of labeled_traffic_epoch
+  | FinishedKey of traffic_label
+  | TrafficUpdateSecret of traffic_update_id
+  | ExporterMasterSecret
+  | ResumptionMasterSecret
+
+type key_derivation_checkpoint =
+  | DeriveHandshakeTraffic
+  | DeriveApplicationTraffic
+  | DeriveTrafficUpdate of traffic_update_id
+
 type traffic_direction =
   | TrafficWrite
   | TrafficRead
+
+let traffic_label_for_endpoint_direction
+  (role:endpoint_role)
+  (dir:traffic_direction)
+  : traffic_label =
+  match role, dir with
+  | ClientEndpoint, TrafficWrite -> ClientTraffic
+  | ClientEndpoint, TrafficRead -> ServerTraffic
+  | ServerEndpoint, TrafficWrite -> ServerTraffic
+  | ServerEndpoint, TrafficRead -> ClientTraffic
 
 type traffic_key_install = {
   install_epoch: traffic_epoch;
@@ -340,20 +385,38 @@ let traffic_record_epoch (epoch:traffic_epoch) : R.epoch =
   | TrafficHandshake -> R.Handshake
   | TrafficApplication -> R.Application
 
+let update_key_schedule_with_label
+  (keys:key_schedule_state)
+  (epoch:traffic_epoch)
+  (label:traffic_label)
+  (material:traffic_key_material)
+  : key_schedule_state =
+  match epoch, label with
+  | TrafficHandshake, ClientTraffic ->
+    { keys with ks_client_handshake_traffic = Some material }
+  | TrafficHandshake, ServerTraffic ->
+    { keys with ks_server_handshake_traffic = Some material }
+  | TrafficApplication, ClientTraffic ->
+    { keys with ks_client_application_traffic = Some material }
+  | TrafficApplication, ServerTraffic ->
+    { keys with ks_server_application_traffic = Some material }
+
+let update_key_schedule_with_install_for_role
+  (role:endpoint_role)
+  (keys:key_schedule_state)
+  (install:traffic_key_install)
+  : key_schedule_state =
+  update_key_schedule_with_label
+    keys
+    install.install_epoch
+    (traffic_label_for_endpoint_direction role install.install_direction)
+    install.install_material
+
 let update_key_schedule_with_install
   (keys:key_schedule_state)
   (install:traffic_key_install)
   : key_schedule_state =
-  let material = install.install_material in
-  match install.install_epoch, install.install_direction with
-  | TrafficHandshake, TrafficWrite ->
-    { keys with ks_client_handshake_traffic = Some material }
-  | TrafficHandshake, TrafficRead ->
-    { keys with ks_server_handshake_traffic = Some material }
-  | TrafficApplication, TrafficWrite ->
-    { keys with ks_client_application_traffic = Some material }
-  | TrafficApplication, TrafficRead ->
-    { keys with ks_server_application_traffic = Some material }
+  update_key_schedule_with_install_for_role ClientEndpoint keys install
 
 let install_record_keys
   (record:record_layer_state)
@@ -837,28 +900,43 @@ let client_hello_matches_start (start:handshake_start) (ch:M.client_hello) : pro
   ch.M.cipher_suites == start.start_cipher_suites /\
   ch.M.signature_schemes == start.start_signature_schemes
 
+let traffic_secret_for_label
+  (hs:handshake_state)
+  (epoch:traffic_epoch)
+  (label:traffic_label)
+  : GTot (option K.traffic_secret) =
+  match epoch, label with
+  | TrafficHandshake, ClientTraffic ->
+    (match hs.hs_keys.ks_handshake_secret with
+     | Some secret -> Some (K.client_handshake_traffic_secret secret (Tr.hash hs.hs_transcript))
+     | None -> None)
+  | TrafficHandshake, ServerTraffic ->
+    (match hs.hs_keys.ks_handshake_secret with
+     | Some secret -> Some (K.server_handshake_traffic_secret secret (Tr.hash hs.hs_transcript))
+     | None -> None)
+  | TrafficApplication, ClientTraffic ->
+    (match hs.hs_keys.ks_master_secret with
+     | Some secret -> Some (K.client_application_traffic_secret secret (Tr.hash hs.hs_transcript))
+     | None -> None)
+  | TrafficApplication, ServerTraffic ->
+    (match hs.hs_keys.ks_master_secret with
+     | Some secret -> Some (K.server_application_traffic_secret secret (Tr.hash hs.hs_transcript))
+     | None -> None)
+
+let expected_traffic_secret_for_role
+  (role:endpoint_role)
+  (hs:handshake_state)
+  (epoch:traffic_epoch)
+  (dir:traffic_direction)
+  : GTot (option K.traffic_secret) =
+  traffic_secret_for_label hs epoch (traffic_label_for_endpoint_direction role dir)
+
 let expected_traffic_secret
   (hs:handshake_state)
   (epoch:traffic_epoch)
   (dir:traffic_direction)
   : GTot (option K.traffic_secret) =
-  match epoch, dir with
-  | TrafficHandshake, TrafficWrite ->
-    (match hs.hs_keys.ks_handshake_secret with
-     | Some secret -> Some (K.client_handshake_traffic_secret secret (Tr.hash hs.hs_transcript))
-     | None -> None)
-  | TrafficHandshake, TrafficRead ->
-    (match hs.hs_keys.ks_handshake_secret with
-     | Some secret -> Some (K.server_handshake_traffic_secret secret (Tr.hash hs.hs_transcript))
-     | None -> None)
-  | TrafficApplication, TrafficWrite ->
-    (match hs.hs_keys.ks_master_secret with
-     | Some secret -> Some (K.client_application_traffic_secret secret (Tr.hash hs.hs_transcript))
-     | None -> None)
-  | TrafficApplication, TrafficRead ->
-    (match hs.hs_keys.ks_master_secret with
-     | Some secret -> Some (K.server_application_traffic_secret secret (Tr.hash hs.hs_transcript))
-     | None -> None)
+  expected_traffic_secret_for_role ClientEndpoint hs epoch dir
 
 let traffic_install_matches_key_schedule
   (hs:handshake_state)

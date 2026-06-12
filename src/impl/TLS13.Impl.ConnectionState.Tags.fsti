@@ -13,6 +13,7 @@ noextract
 let endpoint_role_tag_matches (tag:U8.t) (role:CS.endpoint_role) : prop =
   match role with
   | CS.ClientEndpoint -> U8.v tag == 0
+  | CS.ServerEndpoint -> U8.v tag == 1
 
 noextract
 let handshake_stage_tag_matches (tag:U8.t) (stage:CS.handshake_stage) : prop =

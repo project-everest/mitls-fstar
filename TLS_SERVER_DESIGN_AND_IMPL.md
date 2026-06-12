@@ -34,6 +34,13 @@ Current phase: **Phase 0/1 started**.
 - [ ] Phase 1 role-parametric pure state and role-correct key projections.
 - [x] X25519 agreement lemma added at the crypto TCB boundary
   (`TLS13.Crypto.Spec.lemma_x25519_shared_agreement`).
+- [x] Initial Phase 1 role/key vocabulary added:
+  - `ServerEndpoint`;
+  - `traffic_label`, `base_secret_id`, `derived_key_id`, and
+    `key_derivation_checkpoint`;
+  - role/direction-to-traffic-label mapping;
+  - role-parametric expected traffic-secret helper with the existing client
+    helper preserved as a `ClientEndpoint` wrapper.
 - [ ] Phase 2 paired endpoint traces and derived-key theorem family.
 
 ## End goal
@@ -592,7 +599,7 @@ Server Pulse implementation is blocked until these gates are complete.
 
 Checklist:
 
-- [ ] `ClientEndpoint` and `ServerEndpoint` roles exist in the pure model.
+- [x] `ClientEndpoint` and `ServerEndpoint` roles exist in the pure model.
 - [ ] Client configuration remains behaviorally unchanged.
 - [ ] Server configuration records supported suite/group/signature policy,
       credential identity, and certificate chain.
@@ -687,14 +694,14 @@ Validation:
 
 Checklist:
 
-- [ ] Add `ServerEndpoint`.
-- [ ] Refactor `TLS13.Spec.ConnectionState` in place, preserving the existing
+- [x] Add `ServerEndpoint`.
+- [x] Start refactoring `TLS13.Spec.ConnectionState` in place, preserving the existing
       client theorem surface throughout the migration.
 - [ ] Add server configuration fields.
 - [ ] Replace client-only start/session state with role-aware handshake data.
 - [ ] Add server handshake stages.
 - [ ] Add server legal events.
-- [ ] Generalize expected traffic secret by role, direction, epoch, and label.
+- [x] Generalize expected traffic secret by role, direction, epoch, and label.
 - [ ] Prove client projection compatibility.
 - [ ] Prove server projection correctness.
 - [ ] Generalize event-log, transcript, record-layer, key-schedule, raw replay,
