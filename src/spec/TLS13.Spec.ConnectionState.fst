@@ -327,11 +327,14 @@ type traffic_key_install = {
 
 type local_event =
   | LocalStartHandshake of handshake_start
+  | LocalSelectServerParameters of server_handshake_selection
   | LocalDeriveSharedSecret of C.x25519_shared_secret
   | LocalInstallTrafficKeys of traffic_key_install
   | LocalValidateCertificate of X.peer_identity
   | LocalVerifyCertificateSignature of M.certificate_verify
+  | LocalSignCertificateVerify of M.certificate_verify
   | LocalVerifyFinished of M.finished
+  | LocalVerifyClientFinished of M.finished
   | LocalDeliverApplicationData of B.bytes
   | LocalFail of T.tls_error
 

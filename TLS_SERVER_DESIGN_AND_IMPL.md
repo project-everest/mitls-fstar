@@ -52,6 +52,8 @@ Current phase: **Phase 0/1 started**.
 - [x] Optional server handshake selection artifacts added to `handshake_state`,
   including selected ClientHello, suite/group/signature scheme, random,
   key share, and credential identity.
+- [x] Initial server local-event vocabulary added for parameter selection,
+  CertificateVerify signing, and client Finished verification.
 - [ ] Phase 2 paired endpoint traces and derived-key theorem family.
 
 ## End goal
@@ -712,7 +714,8 @@ Checklist:
 - [x] Start replacing client-only start/session state with role-aware handshake
       data.
 - [x] Add server handshake stages.
-- [ ] Add server legal events.
+- [x] Add initial server local event vocabulary.
+- [ ] Add server legal event predicates and transitions.
 - [x] Generalize expected traffic secret by role, direction, epoch, and label.
 - [x] Add role-parametric record read/write key projection helpers.
 - [x] Prove client projection compatibility for the initial role/key helpers.
