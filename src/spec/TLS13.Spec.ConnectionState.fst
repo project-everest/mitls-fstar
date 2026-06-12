@@ -159,8 +159,27 @@ let empty_handshake_buffer_state : handshake_buffer_state = {
   hb_certificate_verify_input = None;
 }
 
+type server_handshake_selection = {
+  server_selected_client_hello: M.client_hello;
+  server_selected_cipher_suite: T.cipher_suite;
+  server_selected_group: T.named_group;
+  server_selected_signature_scheme: T.signature_scheme;
+  server_random: B.bytes_of_len 32;
+  server_key_share_private: option C.x25519_private;
+  server_key_share_public: C.x25519_public;
+  server_selected_credential: server_credential_identity;
+}
+
+let server_selection_key_share_consistent
+  (selection:server_handshake_selection)
+  : prop =
+  match selection.server_key_share_private with
+  | Some sk -> C.x25519_public_from_private sk == selection.server_key_share_public
+  | None -> True
+
 type handshake_state = {
   hs_start: option handshake_start;
+  hs_server_selection: option server_handshake_selection;
   hs_client_hello: option M.client_hello;
   hs_server_hello: option M.server_hello;
   hs_encrypted_extensions: option M.encrypted_extensions;
@@ -178,6 +197,7 @@ type handshake_state = {
 
 let empty_handshake_state : handshake_state = {
   hs_start = None;
+  hs_server_selection = None;
   hs_client_hello = None;
   hs_server_hello = None;
   hs_encrypted_extensions = None;

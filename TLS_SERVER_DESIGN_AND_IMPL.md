@@ -49,6 +49,9 @@ Current phase: **Phase 0/1 started**.
   client constructors explicitly set `config_server = None`.
 - [x] Initial server handshake-stage constructors added, with low-level tag
   mappings; existing client stages and transitions are unchanged.
+- [x] Optional server handshake selection artifacts added to `handshake_state`,
+  including selected ClientHello, suite/group/signature scheme, random,
+  key share, and credential identity.
 - [ ] Phase 2 paired endpoint traces and derived-key theorem family.
 
 ## End goal
@@ -706,7 +709,8 @@ Checklist:
 - [x] Start refactoring `TLS13.Spec.ConnectionState` in place, preserving the existing
       client theorem surface throughout the migration.
 - [x] Add server configuration fields.
-- [ ] Replace client-only start/session state with role-aware handshake data.
+- [x] Start replacing client-only start/session state with role-aware handshake
+      data.
 - [x] Add server handshake stages.
 - [ ] Add server legal events.
 - [x] Generalize expected traffic secret by role, direction, epoch, and label.
