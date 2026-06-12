@@ -30,7 +30,8 @@ fn parse_tls_message
   (input: array U8.t)
   (input_len: SZ.t)
   requires pts_to input 'input_bytes **
-           pure (B.length 'input_bytes == SZ.v input_len)
+           pure (B.length 'input_bytes == SZ.v input_len /\
+                 SZ.v input_len <= L.max_record_fragment_len)
   returns r: option L.tls_message
   ensures pts_to input 'input_bytes **
           (match r with
