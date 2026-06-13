@@ -164,6 +164,7 @@ type handshake_storage = {
   start: handshake_start_storage;
   messages: handshake_message_storage;
   server_key_share: optional_fixed_bytes;
+  server_key_share_private: optional_fixed_bytes;
   validated_peer: peer_storage;
   certificate_verify_verified: box bool;
   server_finished_verified: box bool;
@@ -1035,6 +1036,7 @@ let handshake_exactly
     handshake_start_exactly handshake.start hs.CS.hs_start **
     handshake_messages_exactly handshake.messages hs **
     server_key_share_exactly handshake.server_key_share hs **
+    optional_fixed_bytes_exactly handshake.server_key_share_private 32 None **
     peer_exactly handshake.validated_peer hs.CS.hs_validated_peer **
     Box.pts_to handshake.certificate_verify_verified cv_verified **
     Box.pts_to handshake.server_finished_verified server_finished_verified **

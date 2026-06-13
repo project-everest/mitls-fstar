@@ -970,6 +970,7 @@ fn alloc_handshake_empty ()
   let start = alloc_handshake_start_empty ();
   let messages = alloc_handshake_messages_empty ();
   let server_key_share = alloc_empty_optional_fixed32 ();
+  let server_key_share_private = alloc_empty_optional_fixed32 ();
   let validated_peer = alloc_peer_empty ();
   let certificate_verify_verified = Box.alloc false;
   let server_finished_verified = Box.alloc false;
@@ -981,6 +982,7 @@ fn alloc_handshake_empty ()
     start;
     messages;
     server_key_share;
+    server_key_share_private;
     validated_peer;
     certificate_verify_verified;
     server_finished_verified;
@@ -994,6 +996,8 @@ fn alloc_handshake_empty ()
     (handshake_messages_exactly handshake.messages CS.empty_handshake_state);
   rewrite (optional_fixed_bytes_exactly server_key_share 32 None) as
     (server_key_share_exactly handshake.server_key_share CS.empty_handshake_state);
+  rewrite (optional_fixed_bytes_exactly server_key_share_private 32 None) as
+    (optional_fixed_bytes_exactly handshake.server_key_share_private 32 None);
   rewrite (peer_exactly validated_peer None) as
     (peer_exactly handshake.validated_peer CS.empty_handshake_state.CS.hs_validated_peer);
   rewrite (Box.pts_to certificate_verify_verified false) as

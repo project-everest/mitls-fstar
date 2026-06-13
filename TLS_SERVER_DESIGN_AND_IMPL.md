@@ -277,8 +277,11 @@ Current phase: **Phase 6 server buffer/event API and theorem surface**.
   focused public `TLS13.Impl.Server.process_derive_shared_secret` wrapper exposes
   that transition at the server theorem surface. It currently assumes a supplied
   shared-secret buffer plus the pure `legal_event` premise; executable X25519
-  derivation from stored server/client shares remains pending until concrete
-  selection-private-key storage is added.
+  derivation from stored server/client shares remains pending. Concrete
+  allocation for a server private key-share slot now exists in
+  `TLS13.Impl.ConnectionState.Repr.handshake_storage`, but it is intentionally
+  kept as an empty storage resource until an executable selector can populate it
+  from concrete generated private-key bytes.
 - [x] Added role-indexed traffic-key install model support:
   `TLS13.Impl.ConnectionState.Model.installed_traffic_keys_for_role_state` and
   its evolution lemma mirror the pure `LocalInstallTrafficKeysForRole`
@@ -1223,7 +1226,9 @@ Checklist:
       - alerts;
       - decode/decrypt errors.
 - [ ] Add local handlers:
-      - server random and key share generation;
+      - server random and key share generation (empty concrete storage for the
+        future server private key-share slot is allocated; executable generation
+        and spec linkage remain pending);
       - cipher/group/signature selection;
       - shared-secret and traffic-secret derivation (supplied shared-secret
         wrapper and generic 32-byte-payload dispatcher complete; executable

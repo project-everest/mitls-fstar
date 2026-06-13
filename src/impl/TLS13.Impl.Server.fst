@@ -158,6 +158,8 @@ fn next_local_action
   } else if server_handshake_write_keys_ready {
     assert (pure (control.CR.snapshot_control_tag == 1uy));
     assert (pure (control.CR.snapshot_handshake_stage_tag == 14uy));
+    assert_norm (Tags.handshake_stage_tag_matches 14uy CS.HsServerHelloSent);
+    assert (pure (CR.control_snapshot_matches control 'st0));
     assert (pure (keys.CR.snapshot_handshake_secret_present));
     assert (pure (not keys.CR.snapshot_server_handshake_traffic_present));
     assert (pure ('st0.CS.cs_model.CS.model_control ==
@@ -175,6 +177,8 @@ fn next_local_action
   } else if client_handshake_read_keys_ready {
     assert (pure (control.CR.snapshot_control_tag == 1uy));
     assert (pure (control.CR.snapshot_handshake_stage_tag == 14uy));
+    assert_norm (Tags.handshake_stage_tag_matches 14uy CS.HsServerHelloSent);
+    assert (pure (CR.control_snapshot_matches control 'st0));
     assert (pure (keys.CR.snapshot_handshake_secret_present));
     assert (pure (not keys.CR.snapshot_client_handshake_traffic_present));
     assert (pure ('st0.CS.cs_model.CS.model_control ==
