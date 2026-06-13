@@ -166,6 +166,37 @@ fn mark_sent_encrypted_extensions
           ArrPts.pts_to raw 'raw_bytes **
           ArrPts.pts_to fragment 'fragment_bytes
 
+fn mark_sent_certificate
+  (c:connection_state)
+  (raw:array U8.t)
+  (fragment:array U8.t)
+  (fragment_len:SZ.t)
+  (lcert:IM.certificate_msg)
+  (#cert:erased M.certificate_msg)
+  (#st0:erased CS.connection_state)
+  requires connection_exactly c st0 **
+           ArrPts.pts_to raw 'raw_bytes **
+           ArrPts.pts_to fragment 'fragment_bytes **
+           IM.is_valid_certificate_msg lcert cert **
+           pure (B.length 'fragment_bytes == SZ.v fragment_len /\
+                 Seq.equal
+                   (Ghost.reveal 'fragment_bytes)
+                   (W.serialize_handshake (M.Certificate cert)) /\
+                 st0.CS.cs_model.CS.model_handshake.CS.hs_buffers.CS.hb_certificate_leaf_der == None /\
+                 (Ghost.reveal cert).M.chain <> [] /\
+                 can_send_certificate st0 cert (Ghost.reveal 'raw_bytes))
+  ensures connection_exactly
+            c
+            (sent_certificate_state st0 cert (Ghost.reveal 'raw_bytes)) **
+          ArrPts.pts_to raw 'raw_bytes **
+          ArrPts.pts_to fragment 'fragment_bytes **
+          pure (match (Ghost.reveal cert).M.chain with
+                | leaf :: _ ->
+                  (sent_certificate_state st0 cert (Ghost.reveal 'raw_bytes)).
+                    CS.cs_model.CS.model_handshake.CS.hs_buffers.CS.hb_certificate_leaf_der ==
+                    Some leaf
+                | [] -> False)
+
 fn try_send_client_hello
   (c:connection_state)
   (network_out:array U8.t)
