@@ -1704,6 +1704,98 @@ fn mark_sent_certificate_verify
     (sent_certificate_verify_state st0 cv (Ghost.reveal 'raw_bytes)))
 }
 
+fn serialize_stored_certificate_verify_fragment
+  (c:connection_state)
+  (#cv:erased M.certificate_verify)
+  (fragment:array U8.t)
+  (fragment_len:SZ.t)
+  (#st0:erased CS.connection_state)
+  requires connection_exactly c st0 **
+           ArrPts.pts_to fragment 'old_fragment_bytes **
+           pure (B.length 'old_fragment_bytes == SZ.v fragment_len /\
+                 st0.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify ==
+                   Some (Ghost.reveal cv) /\
+                 SZ.v fragment_len ==
+                   B.length (W.serialize_certificate_verify_from_signature
+                     (Ghost.reveal cv)))
+  returns written_fragment:(n:SZ.t{SZ.v n <= SZ.v fragment_len})
+  ensures exists* fragment_bytes.
+           connection_exactly c st0 **
+           ArrPts.pts_to fragment fragment_bytes **
+           pure (B.length fragment_bytes == SZ.v fragment_len /\
+                 SZ.v written_fragment == SZ.v fragment_len /\
+                 Seq.equal
+                   fragment_bytes
+                   (W.serialize_certificate_verify_from_signature
+                     (Ghost.reveal cv)) /\
+                 Seq.equal
+                   fragment_bytes
+                   (W.serialize_handshake
+                     (M.CertificateVerify (Ghost.reveal cv))))
+{
+  unfold (connection_exactly c st0);
+  unfold (connection_model_exactly c st0.CS.cs_model);
+  unfold (handshake_exactly c.handshake st0.CS.cs_model.CS.model_handshake);
+  with cv_verified server_finished_verified. _;
+  unfold (handshake_messages_exactly c.handshake.messages st0.CS.cs_model.CS.model_handshake);
+  unfold (certificate_verify_slot_exactly
+    c.handshake.messages.certificate_verify
+    st0.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify);
+  with stored. assert (Box.pts_to c.handshake.messages.certificate_verify stored);
+  let stored_cv_opt = !c.handshake.messages.certificate_verify;
+  assert (pure (stored_cv_opt == stored));
+  assert (pure (Some? stored_cv_opt));
+  let lcv = Some?.v stored_cv_opt;
+  assert (pure (stored_cv_opt == Some lcv));
+  assert (pure (stored == Some lcv));
+
+  rewrite (match stored, st0.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify with
+    | None, None -> pure True
+    | Some old_l, Some old_m -> IM.is_valid_certificate_verify old_l old_m
+    | _, _ -> pure False)
+    as (IM.is_valid_certificate_verify lcv (Ghost.reveal cv));
+  let written_fragment =
+    Ser.serialize_certificate_verify_from_signature
+      #cv
+      lcv
+      fragment
+      fragment_len;
+  with fragment_bytes. assert (ArrPts.pts_to fragment fragment_bytes);
+  assert (pure (B.length fragment_bytes == SZ.v fragment_len));
+  assert (pure (SZ.v written_fragment == SZ.v fragment_len));
+  assert (pure (Seq.equal
+    fragment_bytes
+    (W.serialize_certificate_verify_from_signature (Ghost.reveal cv))));
+  W.lemma_fixed_server_handshake_serializers
+    {
+      M.random = Seq.create 32 0uy;
+      M.key_share = Seq.create 32 0uy;
+      M.cipher_suite = T.TLS_CHACHA20_POLY1305_SHA256;
+    }
+    { M.chain = [] }
+    (Ghost.reveal cv)
+    { M.verify_data = Seq.create 32 0uy };
+  assert (pure (Seq.equal
+    (W.serialize_certificate_verify_from_signature (Ghost.reveal cv))
+    (W.serialize_handshake (M.CertificateVerify (Ghost.reveal cv)))));
+  assert (pure (Seq.equal
+    fragment_bytes
+    (W.serialize_handshake (M.CertificateVerify (Ghost.reveal cv)))));
+  rewrite (IM.is_valid_certificate_verify lcv (Ghost.reveal cv))
+    as (match stored, st0.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify with
+      | None, None -> pure True
+      | Some old_l, Some old_m -> IM.is_valid_certificate_verify old_l old_m
+      | _, _ -> pure False);
+  fold (certificate_verify_slot_exactly
+    c.handshake.messages.certificate_verify
+    st0.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify);
+  fold (handshake_messages_exactly c.handshake.messages st0.CS.cs_model.CS.model_handshake);
+  fold (handshake_exactly c.handshake st0.CS.cs_model.CS.model_handshake);
+  fold (connection_model_exactly c st0.CS.cs_model);
+  fold (connection_exactly c st0);
+  written_fragment
+}
+
 fn mark_sent_server_finished
   (c:connection_state)
   (raw:array U8.t)

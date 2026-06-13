@@ -235,6 +235,35 @@ fn mark_sent_certificate_verify
           ArrPts.pts_to raw 'raw_bytes **
           ArrPts.pts_to fragment 'fragment_bytes
 
+fn serialize_stored_certificate_verify_fragment
+  (c:connection_state)
+  (#cv:erased M.certificate_verify)
+  (fragment:array U8.t)
+  (fragment_len:SZ.t)
+  (#st0:erased CS.connection_state)
+  requires connection_exactly c st0 **
+          ArrPts.pts_to fragment 'old_fragment_bytes **
+          pure (B.length 'old_fragment_bytes == SZ.v fragment_len /\
+                st0.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify ==
+                  Some (Ghost.reveal cv) /\
+                SZ.v fragment_len ==
+                  B.length (W.serialize_certificate_verify_from_signature
+                    (Ghost.reveal cv)))
+  returns written_fragment:(n:SZ.t{SZ.v n <= SZ.v fragment_len})
+  ensures exists* fragment_bytes.
+          connection_exactly c st0 **
+          ArrPts.pts_to fragment fragment_bytes **
+          pure (B.length fragment_bytes == SZ.v fragment_len /\
+                SZ.v written_fragment == SZ.v fragment_len /\
+                Seq.equal
+                  fragment_bytes
+                  (W.serialize_certificate_verify_from_signature
+                    (Ghost.reveal cv)) /\
+                Seq.equal
+                  fragment_bytes
+                  (W.serialize_handshake
+                    (M.CertificateVerify (Ghost.reveal cv))))
+
 fn mark_sent_server_finished
   (c:connection_state)
   (raw:array U8.t)

@@ -1765,6 +1765,295 @@ fn process_send_certificate_verify_serialized
   resp
 }
 
+fn process_send_stored_certificate_verify_serialized
+  (s:server)
+  (#cv:erased M.certificate_verify)
+  (fragment_len:SZ.t)
+  (network_out:array U8.t)
+  (network_out_len:SZ.t)
+  (app_out:array U8.t)
+  (app_out_len:SZ.t)
+  requires connection_exactly s 'st0 **
+           pts_to network_out 'old_network_out **
+           pts_to app_out 'old_app_out **
+           pure (B.length 'old_network_out == SZ.v network_out_len /\
+                 B.length 'old_app_out == SZ.v app_out_len /\
+                 SZ.v fragment_len ==
+                   B.length
+                     (W.serialize_certificate_verify_from_signature
+                       (Ghost.reveal cv)) /\
+                 SZ.v fragment_len + 17 <= 16640 /\
+                 SZ.v network_out_len == SZ.v fragment_len + 22 /\
+                 ST.server_end_to_end_invariant 'st0 /\
+                 'st0.CS.cs_model.CS.model_control ==
+                   CS.ControlHandshaking CS.HsServerEncryptedFlightSent /\
+                 'st0.CS.cs_model.CS.model_config.CS.config_role ==
+                   CS.ServerEndpoint /\
+                 'st0.CS.cs_model.CS.model_handshake.CS.hs_certificate <> None /\
+                 'st0.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify_verified /\
+                 Some?
+                   'st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_handshake_traffic /\
+                 U64.fits
+                   ('st0.CS.cs_model.CS.model_record.CS.record_write.R.seq + 1) /\
+                 'st0.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify ==
+                   Some (Ghost.reveal cv) /\
+                 B.length 'st0.CS.cs_model.CS.model_handshake.CS.hs_transcript +
+                   SZ.v fragment_len <= Bounds.max_transcript_len /\
+                 CS.legal_event
+                   'st0.CS.cs_model
+                   (CS.ConnNetworkEvent {
+                     CL.message_direction = CL.Sent;
+                     CL.message_value =
+                       M.TlsHandshake (M.CertificateVerify (Ghost.reveal cv));
+                   }))
+  returns resp:ST.server_response
+  ensures exists* st1 network_out_bytes app_out_bytes.
+          connection_exactly s st1 **
+          pts_to network_out network_out_bytes **
+          pts_to app_out app_out_bytes **
+          pure (B.length network_out_bytes == SZ.v network_out_len /\
+                B.length app_out_bytes == SZ.v app_out_len /\
+                ST.server_local_event_end_to_end_correct
+                  'st0
+                  st1
+                  resp
+                  ST.LocalSendCertificateVerify
+                  B.empty
+                  network_out_bytes
+                  app_out_bytes)
+{
+  let fragment = V.alloc 0uy fragment_len;
+  with old_fragment_bytes. assert (V.pts_to fragment old_fragment_bytes);
+  V.pts_to_len fragment;
+  assert (pure (B.length old_fragment_bytes == SZ.v fragment_len));
+  V.to_array_pts_to fragment;
+
+  unfold (connection_exactly s 'st0);
+  let written_fragment =
+    CLH.serialize_stored_certificate_verify_fragment
+      s
+      #cv
+      (V.vec_to_array fragment)
+      fragment_len
+      #'st0;
+  fold (connection_exactly s 'st0);
+  with fragment_bytes. assert (pts_to (V.vec_to_array fragment) fragment_bytes);
+  assert (pure (B.length fragment_bytes == SZ.v fragment_len));
+  assert (pure (SZ.v written_fragment == SZ.v fragment_len));
+  assert (pure (Seq.equal
+    fragment_bytes
+    (W.serialize_certificate_verify_from_signature (Ghost.reveal cv))));
+  W.lemma_fixed_server_handshake_serializers
+    {
+      M.random = Seq.create 32 0uy;
+      M.key_share = Seq.create 32 0uy;
+      M.cipher_suite = T.TLS_CHACHA20_POLY1305_SHA256;
+    }
+    { M.chain = [] }
+    (Ghost.reveal cv)
+    { M.verify_data = Seq.create 32 0uy };
+  assert (pure (Seq.equal
+    (W.serialize_certificate_verify_from_signature (Ghost.reveal cv))
+    (W.serialize_handshake (M.CertificateVerify (Ghost.reveal cv)))));
+  assert (pure (Seq.equal
+    fragment_bytes
+    (W.serialize_handshake (M.CertificateVerify (Ghost.reveal cv)))));
+  assert (pure (
+    B.length (W.serialize_handshake (M.CertificateVerify (Ghost.reveal cv))) ==
+    SZ.v fragment_len));
+
+  unfold (connection_exactly s 'st0);
+  unfold (CR.connection_model_exactly s 'st0.CS.cs_model);
+  unfold (CR.record_layer_exactly s.records 'st0.CS.cs_model.CS.model_record);
+  let written_raw =
+    Ser.serialize_protected_handshake_record
+      #(M.CertificateVerify (Ghost.reveal cv))
+      s.records.write
+      (V.vec_to_array fragment)
+      written_fragment
+      network_out
+      network_out_len;
+  with network_out_bytes. assert (pts_to network_out network_out_bytes);
+  fold (CR.record_layer_exactly s.records 'st0.CS.cs_model.CS.model_record);
+  fold (CR.connection_model_exactly s 'st0.CS.cs_model);
+  fold (connection_exactly s 'st0);
+
+  assert (pure (B.length network_out_bytes == SZ.v network_out_len));
+  assert (pure (SZ.v written_raw == SZ.v fragment_len + 22));
+  assert (pure (SZ.v written_raw == SZ.v network_out_len));
+  Seq.lemma_len_slice network_out_bytes 0 (SZ.v written_raw);
+  Seq.lemma_eq_intro
+    network_out_bytes
+    (Seq.slice network_out_bytes 0 (SZ.v written_raw));
+  assert (pure (CS.raw_records_exactly network_out_bytes T.ApplicationData 1));
+  assert (pure (CS.event_raw_delta_legal
+    'st0.CS.cs_model
+    (CS.ConnNetworkEvent {
+      CL.message_direction = CL.Sent;
+      CL.message_value = M.TlsHandshake (M.CertificateVerify (Ghost.reveal cv));
+    })
+    network_out_bytes
+    B.empty));
+  assert (pure (CS.sent_single_protected_message_seal
+    'st0.CS.cs_model
+    (M.TlsHandshake (M.CertificateVerify (Ghost.reveal cv)))
+    network_out_bytes));
+  assert (pure (CS.sent_event_seal_projection
+    'st0.CS.cs_model
+    (CS.ConnNetworkEvent {
+      CL.message_direction = CL.Sent;
+      CL.message_value = M.TlsHandshake (M.CertificateVerify (Ghost.reveal cv));
+    })
+    network_out_bytes));
+  CSL.lemma_event_raw_delta_legal_protected_segmented
+    'st0.CS.cs_model
+    (CS.ConnNetworkEvent {
+      CL.message_direction = CL.Sent;
+      CL.message_value = M.TlsHandshake (M.CertificateVerify (Ghost.reveal cv));
+    })
+    network_out_bytes
+    B.empty;
+  assert (pure (CS.event_protected_raw_segmented_success
+    (CS.ConnNetworkEvent {
+      CL.message_direction = CL.Sent;
+      CL.message_value = M.TlsHandshake (M.CertificateVerify (Ghost.reveal cv));
+    })
+    network_out_bytes
+    B.empty));
+  assert (pure (CS.connection_state_record_keys_consistent_for_role
+    CS.ServerEndpoint
+    'st0));
+  assert (pure (CS.model_record_keys_consistent_for_role
+    CS.ServerEndpoint
+    'st0.CS.cs_model));
+  assert (pure (CS.record_write_key_schedule_projection_for_role
+    CS.ServerEndpoint
+    'st0.CS.cs_model));
+  assert (pure (CM.can_send_certificate_verify
+    'st0
+    (Ghost.reveal cv)
+    network_out_bytes));
+
+  unfold (connection_exactly s 'st0);
+  CLH.mark_sent_certificate_verify
+    s
+    network_out
+    (V.vec_to_array fragment)
+    written_fragment
+    #cv;
+  fold (connection_exactly
+    s
+    (CM.sent_certificate_verify_state 'st0 (Ghost.reveal cv) network_out_bytes));
+  V.to_vec_pts_to fragment;
+  V.free fragment;
+
+  let resp = {
+    ST.network_out_len = written_raw;
+    ST.app_out_len = 0sz;
+    ST.status = ST.StepOk;
+  };
+
+  let ev = Ghost.hide (CS.ConnNetworkEvent {
+    CL.message_direction = CL.Sent;
+    CL.message_value = M.TlsHandshake (M.CertificateVerify (Ghost.reveal cv));
+  });
+  let delta = Ghost.hide {
+    CS.delta_event = Ghost.reveal ev;
+    CS.delta_raw_sent = network_out_bytes;
+    CS.delta_raw_received = B.empty;
+  };
+
+  CM.lemma_sent_certificate_verify_state_evolves
+    'st0
+    (Ghost.reveal cv)
+    network_out_bytes;
+  assert (pure (CS.legal_connection_delta
+    'st0
+    (Ghost.reveal delta)
+    (CM.sent_certificate_verify_state 'st0 (Ghost.reveal cv) network_out_bytes)));
+
+  CSL.lemma_legal_connection_delta_full_log_consistent_for_role
+    CS.ServerEndpoint
+    'st0
+    (Ghost.reveal delta)
+    (CM.sent_certificate_verify_state 'st0 (Ghost.reveal cv) network_out_bytes);
+  CSL.lemma_legal_connection_delta_raw_event_replay_consistent
+    'st0
+    (Ghost.reveal delta)
+    (CM.sent_certificate_verify_state 'st0 (Ghost.reveal cv) network_out_bytes);
+  CSL.lemma_connection_state_protected_raw_segmented_replay
+    (CM.sent_certificate_verify_state 'st0 (Ghost.reveal cv) network_out_bytes);
+  CSL.lemma_legal_connection_delta_sent_seal_replay_consistent
+    'st0
+    (Ghost.reveal delta)
+    (CM.sent_certificate_verify_state 'st0 (Ghost.reveal cv) network_out_bytes);
+  CSL.lemma_legal_connection_delta_received_decode_replay_consistent
+    'st0
+    (Ghost.reveal delta)
+    (CM.sent_certificate_verify_state 'st0 (Ghost.reveal cv) network_out_bytes);
+
+  Seq.lemma_len_slice 'old_app_out 0 0;
+  Seq.lemma_eq_intro B.empty (Seq.slice 'old_app_out 0 0);
+  assert (pure (ST.response_network_out resp network_out_bytes ==
+    Seq.slice network_out_bytes 0 (SZ.v written_raw)));
+  assert (pure (Seq.equal
+    (ST.response_network_out resp network_out_bytes)
+    network_out_bytes));
+  assert (pure (ST.response_app_out resp 'old_app_out == Seq.slice 'old_app_out 0 0));
+  assert (pure (Seq.equal (ST.response_app_out resp 'old_app_out) B.empty));
+
+  assert (pure ((CM.sent_certificate_verify_state 'st0 (Ghost.reveal cv) network_out_bytes).CS.cs_model.CS.model_config ==
+    'st0.CS.cs_model.CS.model_config));
+  assert (pure ((CM.sent_certificate_verify_state 'st0 (Ghost.reveal cv) network_out_bytes).CS.cs_model.CS.model_config.CS.config_role ==
+    CS.ServerEndpoint));
+  assert (pure (Some?
+    (CM.sent_certificate_verify_state 'st0 (Ghost.reveal cv) network_out_bytes).CS.cs_model.CS.model_config.CS.config_server));
+  assert (pure (ST.server_state_correct
+    (CM.sent_certificate_verify_state 'st0 (Ghost.reveal cv) network_out_bytes)));
+  assert (pure (ST.server_raw_to_message_replay_consistent
+    (CM.sent_certificate_verify_state 'st0 (Ghost.reveal cv) network_out_bytes)));
+  assert (pure (ST.server_end_to_end_invariant
+    (CM.sent_certificate_verify_state 'st0 (Ghost.reveal cv) network_out_bytes)));
+
+  assert (pure (ST.legal_response_for_event
+    'st0
+    (CM.sent_certificate_verify_state 'st0 (Ghost.reveal cv) network_out_bytes)
+    resp
+    (Ghost.reveal ev)
+    network_out_bytes
+    B.empty
+    network_out_bytes
+    'old_app_out));
+  assert (pure (ST.legal_local_response
+    'st0
+    (CM.sent_certificate_verify_state 'st0 (Ghost.reveal cv) network_out_bytes)
+    resp
+    ST.LocalSendCertificateVerify
+    B.empty
+    (Ghost.reveal ev)
+    network_out_bytes
+    B.empty
+    network_out_bytes
+    'old_app_out));
+  assert (pure (ST.legal_handled_local_response
+    'st0
+    (CM.sent_certificate_verify_state 'st0 (Ghost.reveal cv) network_out_bytes)
+    resp
+    ST.LocalSendCertificateVerify
+    B.empty
+    network_out_bytes
+    'old_app_out));
+  assert (pure (ST.server_local_event_end_to_end_correct
+    'st0
+    (CM.sent_certificate_verify_state 'st0 (Ghost.reveal cv) network_out_bytes)
+    resp
+    ST.LocalSendCertificateVerify
+    B.empty
+    network_out_bytes
+    'old_app_out));
+  resp
+}
+
 fn process_send_server_finished_serialized
   (s:server)
   (network_out:array U8.t)

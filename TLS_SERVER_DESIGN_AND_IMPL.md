@@ -488,6 +488,15 @@ Current phase: **Phase 6 server buffer/event API and theorem surface**.
   and proves `server_local_event_end_to_end_correct` for
   `LocalSignCertificateVerify`. The credential resource is preserved; signer
   failure is surfaced as a verified local unexpected-message failure.
+- [x] Added the stored CertificateVerify protected-send wrapper:
+  `TLS13.Impl.ConnectionState.LocalHandshake.serialize_stored_certificate_verify_fragment`
+  borrows the L-level CertificateVerify already owned by the server handshake
+  state and serializes the exact handshake fragment without consuming the slot;
+  `TLS13.Impl.Server.process_send_stored_certificate_verify_serialized` then seals
+  that stored fragment as one protected `ApplicationData` record, stores the send
+  through `mark_sent_certificate_verify`, and proves
+  `server_local_event_end_to_end_correct` without requiring a duplicate
+  caller-owned L-level CertificateVerify.
 
 ## End goal
 
