@@ -23,24 +23,13 @@ module X = TLS13.X509.Spec
   artifact connecting a concrete response to the rich specification state.
 **)
 
-type client_status =
-  | StepOk
-  | NeedMoreInput
-  | DecodeError
-  | IllegalTransition
-  | OutputBufferTooSmall
-  | ConnectionFailed
+include TLS13.Impl.Endpoint.Types
 
-type client_response = {
-  network_out_len: SZ.t;
-  app_out_len: SZ.t;
-  status: client_status;
-}
+type client_status = endpoint_status
 
-type client_buffer_response = {
-  response: client_response;
-  consumed_len: SZ.t;
-}
+type client_response = endpoint_response
+
+type client_buffer_response = endpoint_buffer_response
 
 let client_state_core_correct
   (st:CS.connection_state)

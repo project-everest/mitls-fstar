@@ -17,7 +17,7 @@ the existing client implementation structure.
 
 ## Implementation status
 
-Current phase: **Phase 2 pure paired-endpoint theorem work**.
+Current phase: **Phase 3 shared endpoint/codec predicate refactor**.
 
 - [x] Single authoritative plan committed.
 - [x] Superseded server/transcript planning docs removed.
@@ -160,7 +160,13 @@ Current phase: **Phase 2 pure paired-endpoint theorem work**.
 - [x] Added `paired_handshake_events` and projection lemmas from paired
   checkpoint state to `same_transcript_checkpoint` and
   `same_key_derivation_checkpoint` for first-milestone key derivation points.
-- [ ] Move to Phase 3 shared endpoint/codec refactor.
+- [x] Started Phase 3 with `TLS13.Impl.Endpoint.Types`, a role-neutral
+  extraction-facing status/response/buffer-response module. `TLS13.Impl.Client.Types`
+  now includes that module and aliases the existing public client names to the
+  shared shapes, preserving the client constructor/field namespace while giving
+  the server API a shared base.
+- [ ] Continue Phase 3 by factoring role-neutral output-slice and parse/decode
+  predicates only where they are needed by the server API.
 
 ## End goal
 
@@ -891,7 +897,7 @@ Validation:
 
 Checklist:
 
-- [ ] Extract role-neutral response/status records from client theorem modules
+- [x] Extract role-neutral response/status records from client theorem modules
       into a shared endpoint module.
 - [ ] Extract role-neutral output-slice and parse/decode helper predicates.
 - [ ] Keep client local events, client input well-formedness, and client

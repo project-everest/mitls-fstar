@@ -125,6 +125,7 @@ BUNDLE_API_MODULE = TLS13.Impl.Client
 # Implementation modules to bundle as internal to the client.
 BUNDLE_IMPL_MODULES = \
   TLS13.Impl.Client \
+  TLS13.Impl.Endpoint.Types \
   TLS13.Impl.Client.Types \
   TLS13.Impl.ConnectionState.Bounds \
   TLS13.Impl.ConnectionState.Model \
@@ -150,7 +151,8 @@ BUNDLE_IMPL_MODULES = \
 
 # Non-API modules (everything except TLS13.Impl.Client)
 BUNDLE_INTERNAL_MODULES = \
-  TLS13.Impl.Client.Types,TLS13.Impl.ConnectionState.Bounds,\
+  TLS13.Impl.Endpoint.Types,TLS13.Impl.Client.Types,\
+  TLS13.Impl.ConnectionState.Bounds,\
   TLS13.Impl.ConnectionState.Model,TLS13.Impl.ConnectionState.Tags,\
   TLS13.Impl.ConnectionState.Repr,TLS13.Impl.ConnectionState.Queries,\
   TLS13.Impl.ConnectionState.Fail,TLS13.Impl.ConnectionState.LocalHandshake,\
