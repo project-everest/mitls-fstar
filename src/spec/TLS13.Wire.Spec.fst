@@ -755,6 +755,17 @@ let serialize_certificate_verify_from_signature
 : GTot B.bytes =
 serialize_handshake (M.CertificateVerify cv)
 
+let lemma_serialize_certificate_verify_from_signature_len
+  (cv:M.certificate_verify)
+  : Lemma
+      (B.length (serialize_certificate_verify cv) == 4 + B.length cv.M.signature /\
+       B.length (serialize_handshake (M.CertificateVerify cv)) ==
+         8 + B.length cv.M.signature /\
+       B.length (serialize_certificate_verify_from_signature cv) ==
+         8 + B.length cv.M.signature)
+=
+  ()
+
 let serialize_server_finished
 (fin:M.finished)
 : GTot B.bytes =

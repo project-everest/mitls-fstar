@@ -5154,11 +5154,55 @@ fn process_local_event
       }
     }
     ST.LocalSendCertificateVerify -> {
-      assert (pure False);
-      {
-        ST.network_out_len = 0sz;
-        ST.app_out_len = 0sz;
-        ST.status = ST.IllegalTransition;
+      assert (pure (Seq.equal (Ghost.reveal 'payload_bytes) B.empty));
+      assert (pure (Some?
+        'st0.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify));
+      let cv : erased M.certificate_verify =
+        Ghost.hide (Some?.v
+          'st0.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify);
+      assert (pure (
+        'st0.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify ==
+          Some (Ghost.reveal cv)));
+      unfold (connection_exactly s 'st0);
+      let snapshot = CQ.get_certificate_verify_signature_snapshot s;
+      fold (connection_exactly s 'st0);
+      assert (pure (SZ.v snapshot.CR.cv_signature_len <= IM.max_signature_len));
+      assert (pure (
+        SZ.v snapshot.CR.cv_signature_len ==
+          B.length (Ghost.reveal cv).M.signature));
+      W.lemma_serialize_certificate_verify_from_signature_len (Ghost.reveal cv);
+      assert (pure (
+        B.length (W.serialize_certificate_verify_from_signature (Ghost.reveal cv)) ==
+          8 + SZ.v snapshot.CR.cv_signature_len));
+      assert_norm (IM.max_signature_len == 4096);
+      assert (pure (SZ.fits (SZ.v snapshot.CR.cv_signature_len + 8)));
+      let fragment_len = SZ.add snapshot.CR.cv_signature_len 8sz;
+      assert (pure (
+        SZ.v fragment_len ==
+          B.length (W.serialize_certificate_verify_from_signature (Ghost.reveal cv))));
+      assert (pure (SZ.v fragment_len + 17 <= 16640));
+      assert (pure (SZ.fits (SZ.v fragment_len + 22)));
+      let expected_network_out_len = SZ.add fragment_len 22sz;
+      if (network_out_len = expected_network_out_len) {
+        assert (pure (SZ.v network_out_len == SZ.v fragment_len + 22));
+        process_send_stored_certificate_verify_serialized
+          s
+          #cv
+          fragment_len
+          network_out
+          network_out_len
+          app_out
+          app_out_len
+      } else {
+        process_local_unexpected_message
+          s
+          kind
+          payload
+          payload_len
+          network_out
+          network_out_len
+          app_out
+          app_out_len
       }
     }
     ST.LocalSendServerFinished -> {

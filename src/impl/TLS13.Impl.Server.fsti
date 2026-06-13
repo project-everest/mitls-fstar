@@ -166,6 +166,29 @@ let server_local_event_input_ready
       (st.CS.cs_model.CS.model_record.CS.record_write.R.seq + 1) /\
     B.length st.CS.cs_model.CS.model_handshake.CS.hs_transcript + 36 <=
       Bounds.max_transcript_len
+  | ST.LocalSendCertificateVerify ->
+    Seq.equal payload B.empty /\
+    st.CS.cs_model.CS.model_control ==
+      CS.ControlHandshaking CS.HsServerEncryptedFlightSent /\
+    st.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
+    st.CS.cs_model.CS.model_handshake.CS.hs_certificate <> None /\
+    st.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify_verified /\
+    Some? st.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify /\
+    Some?
+      st.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_handshake_traffic /\
+    U64.fits
+      (st.CS.cs_model.CS.model_record.CS.record_write.R.seq + 1) /\
+    (let cv = Some?.v
+       st.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify in
+     B.length st.CS.cs_model.CS.model_handshake.CS.hs_transcript +
+       B.length (TLS13.Wire.Spec.serialize_certificate_verify_from_signature cv) <=
+         Bounds.max_transcript_len /\
+     CS.legal_event
+       st.CS.cs_model
+       (CS.ConnNetworkEvent {
+         CL.message_direction = CL.Sent;
+         CL.message_value = M.TlsHandshake (M.CertificateVerify cv);
+       }))
   | ST.LocalDeriveSharedSecret ->
     B.length payload == 32 /\
     CS.legal_event

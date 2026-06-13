@@ -147,6 +147,20 @@ fn copy_certificate_verify_signature
                     cv.M.signature
                 | None -> False))
 
+fn get_certificate_verify_signature_snapshot
+  (c:connection_state)
+  (#st0:erased CS.connection_state)
+  requires connection_exactly c st0 **
+           pure (Some? st0.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify)
+  returns snapshot:certificate_verify_signature_snapshot
+  ensures connection_exactly c st0 **
+          pure (SZ.v snapshot.cv_signature_len <= IM.max_signature_len /\
+                (match st0.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify with
+                | Some cv ->
+                  IM.signature_scheme_matches snapshot.cv_signature_scheme cv.M.scheme /\
+                  SZ.v snapshot.cv_signature_len == B.length cv.M.signature
+                | None -> False))
+
 fn is_handshaking
   (c:connection_state)
   (#st0:erased CS.connection_state)

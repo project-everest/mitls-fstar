@@ -497,6 +497,14 @@ Current phase: **Phase 6 server buffer/event API and theorem surface**.
   through `mark_sent_certificate_verify`, and proves
   `server_local_event_end_to_end_correct` without requiring a duplicate
   caller-owned L-level CertificateVerify.
+- [x] Wired stored CertificateVerify sends into generic local dispatch:
+  `TLS13.Wire.Spec.lemma_serialize_certificate_verify_from_signature_len` and
+  `TLS13.Impl.ConnectionState.Queries.get_certificate_verify_signature_snapshot`
+  expose the stored signature length without consuming the handshake slot; the
+  generic `process_local_event` branch for `LocalSendCertificateVerify` now
+  computes the exact protected-record output length at runtime, calls the stored
+  sender when the caller buffer is exactly sized, and otherwise returns the
+  verified local unexpected-message failure path.
 
 ## End goal
 

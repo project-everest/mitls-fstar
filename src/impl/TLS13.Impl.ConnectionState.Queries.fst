@@ -536,6 +536,84 @@ fn copy_certificate_verify_signature
   fold (connection_exactly c st0);
   snapshot
 }
+
+fn get_certificate_verify_signature_snapshot
+  (c:connection_state)
+  (#st0:erased CS.connection_state)
+  requires connection_exactly c st0 **
+           pure (Some? st0.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify)
+  returns snapshot:certificate_verify_signature_snapshot
+  ensures connection_exactly c st0 **
+          pure (SZ.v snapshot.cv_signature_len <= IM.max_signature_len /\
+                (match st0.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify with
+                | Some cv ->
+                  IM.signature_scheme_matches snapshot.cv_signature_scheme cv.M.scheme /\
+                  SZ.v snapshot.cv_signature_len == B.length cv.M.signature
+                | None -> False))
+{
+  let cv = Ghost.hide (Some?.v st0.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify);
+  assert (pure (st0.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify ==
+    Some (Ghost.reveal cv)));
+
+  unfold (connection_exactly c st0);
+  unfold (connection_model_exactly c st0.CS.cs_model);
+  unfold (handshake_exactly c.handshake st0.CS.cs_model.CS.model_handshake);
+  unfold (handshake_messages_exactly c.handshake.messages st0.CS.cs_model.CS.model_handshake);
+  unfold (certificate_verify_slot_exactly
+    c.handshake.messages.certificate_verify
+    st0.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify);
+
+  with stored. assert (Box.pts_to c.handshake.messages.certificate_verify stored);
+  let stored_cv_opt = !c.handshake.messages.certificate_verify;
+  assert (pure (stored_cv_opt == stored));
+  assert (pure (Some? stored_cv_opt));
+  let lcv = Some?.v stored_cv_opt;
+  assert (pure (stored_cv_opt == Some lcv));
+  assert (pure (stored == Some lcv));
+
+  rewrite (match stored, st0.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify with
+    | None, None -> pure True
+    | Some old_l, Some old_m -> IM.is_valid_certificate_verify old_l old_m
+    | _, _ -> pure False)
+    as (IM.is_valid_certificate_verify lcv (Ghost.reveal cv));
+  unfold (IM.is_valid_certificate_verify lcv (Ghost.reveal cv));
+  with signature_bytes. _;
+
+  let signature_len = lcv.certificate_verify_signature_len;
+  V.pts_to_len lcv.certificate_verify_signature;
+  assert (pure (B.length signature_bytes == IM.max_signature_len));
+  assert (pure (SZ.v signature_len <= IM.max_signature_len));
+  assert (pure (IM.byte_prefix_matches
+    signature_bytes
+    signature_len
+    (Ghost.reveal cv).M.signature));
+  Seq.lemma_len_slice signature_bytes 0 (SZ.v signature_len);
+  assert (pure (B.length (Ghost.reveal cv).M.signature == SZ.v signature_len));
+
+  let snapshot = {
+    cv_signature_scheme = lcv.certificate_verify_scheme;
+    cv_signature_len = signature_len;
+  };
+  assert (pure (IM.signature_scheme_matches
+    snapshot.cv_signature_scheme
+    (Ghost.reveal cv).M.scheme));
+
+  fold (IM.is_valid_certificate_verify lcv (Ghost.reveal cv));
+  rewrite (IM.is_valid_certificate_verify lcv (Ghost.reveal cv))
+    as (match stored, st0.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify with
+      | None, None -> pure True
+      | Some old_l, Some old_m -> IM.is_valid_certificate_verify old_l old_m
+      | _, _ -> pure False);
+  fold (certificate_verify_slot_exactly
+    c.handshake.messages.certificate_verify
+    st0.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify);
+  fold (handshake_messages_exactly c.handshake.messages st0.CS.cs_model.CS.model_handshake);
+  fold (handshake_exactly c.handshake st0.CS.cs_model.CS.model_handshake);
+  fold (connection_model_exactly c st0.CS.cs_model);
+  fold (connection_exactly c st0);
+  snapshot
+}
+
 fn is_handshaking
   (c:connection_state)
   (#st0:erased CS.connection_state)

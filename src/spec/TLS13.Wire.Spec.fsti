@@ -163,6 +163,15 @@ val serialize_certificate_verify_from_signature:
   cv:M.certificate_verify ->
   GTot B.bytes
 
+val lemma_serialize_certificate_verify_from_signature_len:
+  cv:M.certificate_verify ->
+  Lemma
+    (B.length (serialize_certificate_verify cv) == 4 + B.length cv.M.signature /\
+     B.length (serialize_handshake (M.CertificateVerify cv)) ==
+       8 + B.length cv.M.signature /\
+     B.length (serialize_certificate_verify_from_signature cv) ==
+       8 + B.length cv.M.signature)
+
 val serialize_server_finished:
   fin:M.finished ->
   GTot B.bytes
