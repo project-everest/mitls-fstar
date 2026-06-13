@@ -907,6 +907,12 @@ let lemma_step_model_record_keys_consistent_for_role
            model0.model_handshake.hs_keys.ks_client_application_traffic);
          assert (model1.model_handshake.hs_keys.ks_server_application_traffic ==
            model0.model_handshake.hs_keys.ks_server_application_traffic)
+       | LocalVerifyClientFinished _ ->
+         assert (model1.model_record == model0.model_record);
+         assert (model1.model_control == ControlApplicationData);
+         assert (model1.model_handshake.hs_keys == model0.model_handshake.hs_keys);
+         assert (application_record_keys_installed_for_role ServerEndpoint model0);
+         assert (application_record_keys_installed_for_role ServerEndpoint model1)
        | LocalFail _ ->
          ()
        | _ ->

@@ -678,6 +678,31 @@ let model_record_keys_consistent
   model.model_config.config_role == ClientEndpoint /\
   model_record_keys_consistent_for_role ClientEndpoint model
 
+let application_record_keys_installed_for_role
+  (role:endpoint_role)
+  (model:connection_model)
+  : prop =
+  let keys = model.model_handshake.hs_keys in
+  match
+    traffic_material_for_label
+      keys
+      TrafficApplication
+      (traffic_label_for_endpoint_direction role TrafficRead),
+    traffic_material_for_label
+      keys
+      TrafficApplication
+      (traffic_label_for_endpoint_direction role TrafficWrite)
+  with
+  | Some read_material, Some write_material ->
+    traffic_material_matches_record_direction
+      read_material
+      model.model_record.record_read /\
+    traffic_material_matches_record_direction
+      write_material
+      model.model_record.record_write
+  | _, _ ->
+    False
+
 let derive_shared_secret_model
   (model:connection_model)
   (hs:handshake_state)
@@ -774,12 +799,14 @@ let step_local_event (model:connection_model) (ev:local_event) : GTot (option co
         (M.Finished fin))
       HsServerFinishedVerified)
   | LocalVerifyClientFinished fin, ControlHandshaking HsClientFinishedReceived ->
-    Some (with_handshake_stage
-      model
-      (append_handshake_to_transcript
-        { hs with hs_client_finished = Some fin }
-        (M.Finished fin))
-      HsClientFinishedVerified)
+    Some {
+      model with
+        model_control = ControlApplicationData;
+        model_handshake =
+          append_handshake_to_transcript
+            { hs with hs_client_finished = Some fin }
+            (M.Finished fin);
+    }
   | LocalDeliverApplicationData bytes, ControlApplicationData ->
     let app = model.model_application in
     Some {
@@ -1326,7 +1353,10 @@ let traffic_install_allowed_at_stage_for_role
   | ServerEndpoint ->
     (match install.install_epoch with
      | TrafficHandshake -> stage == HsServerHelloSent
-     | TrafficApplication -> stage == HsServerFinishedSent)
+     | TrafficApplication ->
+       (match install.install_direction with
+        | TrafficWrite -> stage == HsServerFinishedSent
+        | TrafficRead -> stage == HsClientFinishedReceived))
 
 let legal_local_event (model:connection_model) (ev:local_event) : GTot prop =
   let hs = model.model_handshake in
@@ -1417,6 +1447,7 @@ let legal_local_event (model:connection_model) (ev:local_event) : GTot prop =
      | _, _ -> False)
   | LocalVerifyClientFinished fin, ControlHandshaking HsClientFinishedReceived ->
     model.model_config.config_role == ServerEndpoint /\
+    application_record_keys_installed_for_role ServerEndpoint model /\
     (match hs.hs_client_finished, hs.hs_keys.ks_client_handshake_traffic with
      | Some stored_fin, Some client_hs ->
        stored_fin == fin /\
