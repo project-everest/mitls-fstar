@@ -294,6 +294,16 @@ Current phase: **Phase 6 server buffer/event API and theorem surface**.
   `LocalInstallServerHandshakeTrafficKeys`. It currently takes already-derived
   traffic material; deriving that material internally from the handshake secret
   and transcript remains pending.
+- [x] Added supplied-material client handshake read-key installation for the
+  server role:
+  `TLS13.Impl.ConnectionState.LocalHandshake.install_client_handshake_read_traffic_keys_from_material`
+  stores the client handshake traffic material, installs the concrete read
+  record keys, and proves the role-indexed legal delta. The focused public
+  `TLS13.Impl.Server.process_install_client_handshake_read_keys` wrapper proves
+  `server_local_event_end_to_end_correct` for
+  `LocalInstallClientHandshakeTrafficKeys`. It currently takes already-derived
+  traffic material; deriving that material internally from the handshake secret
+  and transcript remains pending.
 
 ## End goal
 
@@ -1155,8 +1165,9 @@ Checklist:
       - shared-secret and traffic-secret derivation (supplied shared-secret
         wrapper complete; executable server X25519 and traffic-key wrappers
         remain);
-      - handshake key installation (server write-key supplied-material mutation
-        complete; server read-key mutation and internal derivation remain);
+      - handshake key installation (server write-key and client read-key
+        supplied-material mutations/wrappers complete; internal derivation
+        remains);
       - server flight emission (focused sent-ServerHello public wrapper is
         complete; serializer-driven construction and encrypted flight remain);
       - client Finished verification;
