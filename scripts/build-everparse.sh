@@ -20,9 +20,10 @@ EVERPARSE_BRANCH="${EVERPARSE_BRANCH:-_taramana_fstar2_qd_copyful}"
 EVERPARSE_COMMIT="${EVERPARSE_COMMIT:-89326afa4223da09497ae368926900e8e93f8ebe}"
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-# Default location: sibling of the agentic-tls checkout (matches the Makefile's
-# EVERPARSE_HOME default of ../everparse).  Override with EVERPARSE_HOME.
-EVERPARSE_HOME="${EVERPARSE_HOME:-$(cd "$repo_root/.." && pwd)/everparse}"
+# Default location: tools/everparse inside the agentic-tls checkout (matches the
+# Makefile's EVERPARSE_HOME default of $(CURDIR)/tools/everparse, and the
+# tools/FStar convention used previously).  Override with EVERPARSE_HOME.
+EVERPARSE_HOME="${EVERPARSE_HOME:-$repo_root/tools/everparse}"
 jobs="${JOBS:-$(nproc 2>/dev/null || echo 4)}"
 
 fstar_exe="$EVERPARSE_HOME/opt/FStar/out/bin/fstar.exe"
@@ -43,6 +44,7 @@ fi
 
 if [ ! -d "$EVERPARSE_HOME/.git" ]; then
   echo "Cloning EverParse ($EVERPARSE_REPO @ $EVERPARSE_BRANCH) into $EVERPARSE_HOME ..."
+  mkdir -p "$(dirname "$EVERPARSE_HOME")"
   git clone --branch "$EVERPARSE_BRANCH" "$EVERPARSE_REPO" "$EVERPARSE_HOME"
 else
   echo "Updating existing EverParse checkout in $EVERPARSE_HOME ..."

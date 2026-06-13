@@ -10,7 +10,7 @@
 # (see ./setup.sh, which clones+builds the fork via `make quackyducky`).  Point
 # EVERPARSE_HOME at that checkout; everything else is derived from it.  Override
 # FSTAR_EXE/KRML_EXE/QD_EXE directly to use a different toolchain.
-EVERPARSE_HOME ?= $(CURDIR)/../everparse
+EVERPARSE_HOME ?= $(CURDIR)/tools/everparse
 FSTAR_HOME ?= $(EVERPARSE_HOME)/opt/FStar
 FSTAR_EXE  ?= $(FSTAR_HOME)/bin/fstar.exe
 KRML_HOME  ?= $(FSTAR_HOME)/karamel

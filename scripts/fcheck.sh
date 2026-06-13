@@ -2,8 +2,8 @@
 # Incremental single-file F* check using the Makefile flags.
 set -e
 cd "$(dirname "$0")/.."
-export FSTAR_EXE=${FSTAR_EXE:-$(realpath ../everparse/opt/FStar/bin/fstar.exe)}
-LP=$(realpath ../everparse/src/lowparse)
+export FSTAR_EXE=${FSTAR_EXE:-$(realpath tools/everparse/opt/FStar/bin/fstar.exe)}
+LP=$(realpath tools/everparse/src/lowparse)
 exec "$FSTAR_EXE" \
   --cache_checked_modules --cache_dir _cache --odir _output \
   --warn_error -321 --report_assumes warn \
