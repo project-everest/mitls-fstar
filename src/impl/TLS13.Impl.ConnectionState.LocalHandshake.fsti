@@ -235,6 +235,29 @@ fn mark_sent_certificate_verify
           ArrPts.pts_to raw 'raw_bytes **
           ArrPts.pts_to fragment 'fragment_bytes
 
+fn mark_sent_server_finished
+  (c:connection_state)
+  (raw:array U8.t)
+  (fragment:array U8.t)
+  (fragment_len:SZ.t)
+  (lfin:IM.finished)
+  (#fin:erased M.finished)
+  (#st0:erased CS.connection_state)
+  requires connection_exactly c st0 **
+           ArrPts.pts_to raw 'raw_bytes **
+           ArrPts.pts_to fragment 'fragment_bytes **
+           IM.is_valid_finished lfin fin **
+           pure (B.length 'fragment_bytes == SZ.v fragment_len /\
+                 Seq.equal
+                   (Ghost.reveal 'fragment_bytes)
+                   (W.serialize_handshake (M.Finished fin)) /\
+                 can_send_server_finished st0 fin (Ghost.reveal 'raw_bytes))
+  ensures connection_exactly
+            c
+            (sent_server_finished_state st0 fin (Ghost.reveal 'raw_bytes)) **
+          ArrPts.pts_to raw 'raw_bytes **
+          ArrPts.pts_to fragment 'fragment_bytes
+
 fn try_send_client_hello
   (c:connection_state)
   (network_out:array U8.t)

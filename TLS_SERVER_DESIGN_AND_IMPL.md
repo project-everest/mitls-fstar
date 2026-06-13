@@ -317,6 +317,14 @@ Current phase: **Phase 6 server buffer/event API and theorem surface**.
   bytes, and proves the `sent_certificate_verify_state` legal delta. Public
   wrappers remain pending on executable signing and protected-record
   seal/serializer support.
+- [x] Added the server Finished Pulse state mutation:
+  `TLS13.Impl.ConnectionState.LocalHandshake.mark_sent_server_finished` stores
+  an exact L-level Finished message, appends the exact Finished handshake
+  fragment to the transcript, advances the concrete write record sequence,
+  moves to `HsServerFinishedSent`, appends the supplied raw sent bytes, and
+  proves the `sent_server_finished_state` legal delta. A public wrapper remains
+  pending until the protected-record seal/serializer path and executable
+  Finished construction are connected.
 - [x] Added supplied-shared-secret derivation support:
   `TLS13.Impl.ConnectionState.LocalHandshake.derive_shared_secret_from_bytes`
   stores the shared, early, handshake, and master secrets in concrete key
