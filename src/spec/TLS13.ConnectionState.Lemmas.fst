@@ -385,7 +385,30 @@ let lemma_key_update_response_pending_snoc
 =
   lemma_key_update_response_pending_after_events_snoc false events ev
 
-let rec lemma_projected_record_layer_after_events_snoc
+let rec lemma_projected_record_layer_after_events_snoc_for_role
+  (role:endpoint_role)
+  (record:projected_record_layer_state)
+  (events:list conn_event)
+  (ev:conn_event)
+  : Lemma
+      (ensures
+        projected_record_layer_after_events_from_for_role role record (events @ [ev]) ==
+          projected_record_layer_step_for_role
+            role
+            (projected_record_layer_after_events_from_for_role role record events)
+            ev)
+      (decreases events)
+=
+  match events with
+  | [] -> ()
+  | hd :: tl ->
+    lemma_projected_record_layer_after_events_snoc_for_role
+      role
+      (projected_record_layer_step_for_role role record hd)
+      tl
+      ev
+
+let lemma_projected_record_layer_after_events_snoc
   (record:projected_record_layer_state)
   (events:list conn_event)
   (ev:conn_event)
@@ -395,15 +418,30 @@ let rec lemma_projected_record_layer_after_events_snoc
           projected_record_layer_step
             (projected_record_layer_after_events_from record events)
             ev)
-      (decreases events)
 =
-  match events with
-  | [] -> ()
-  | hd :: tl ->
-    lemma_projected_record_layer_after_events_snoc
-      (projected_record_layer_step record hd)
-      tl
-      ev
+  lemma_projected_record_layer_after_events_snoc_for_role
+    ClientEndpoint
+    record
+    events
+    ev
+
+let lemma_projected_record_layer_snoc_for_role
+  (role:endpoint_role)
+  (events:list conn_event)
+  (ev:conn_event)
+  : Lemma
+      (ensures
+        projected_record_layer_of_conn_events_for_role role (events @ [ev]) ==
+          projected_record_layer_step_for_role
+            role
+            (projected_record_layer_of_conn_events_for_role role events)
+            ev)
+=
+  lemma_projected_record_layer_after_events_snoc_for_role
+    role
+    initial_projected_record_layer_state
+    events
+    ev
 
 let lemma_projected_record_layer_snoc
   (events:list conn_event)
@@ -415,10 +453,7 @@ let lemma_projected_record_layer_snoc
             (projected_record_layer_of_conn_events events)
             ev)
 =
-  lemma_projected_record_layer_after_events_snoc
-    initial_projected_record_layer_state
-    events
-    ev
+  lemma_projected_record_layer_snoc_for_role ClientEndpoint events ev
 
 let rec lemma_projected_advance_records_of_record
   (st:R.direction_state)
@@ -474,6 +509,28 @@ let lemma_projected_install_record_keys_of_record
       (traffic_record_epoch install.install_epoch)
       install.install_material.traffic_key
       install.install_material.traffic_iv
+
+let lemma_projected_install_record_keys_of_record_for_role
+  (role:endpoint_role)
+  (record:record_layer_state)
+  (install:traffic_key_install)
+  : Lemma
+      (projected_record_layer_state_of_record
+        (install_record_keys_for_role role record install) ==
+       projected_install_record_keys_for_role
+        role
+        (projected_record_layer_state_of_record record)
+        install)
+=
+  match role, install.install_epoch, install.install_direction with
+  | ServerEndpoint, TrafficApplication, TrafficWrite ->
+    lemma_projected_install_keys_of_record
+      record.record_write
+      R.Application
+      install.install_material.traffic_key
+      install.install_material.traffic_iv
+  | _, _, _ ->
+    lemma_projected_install_record_keys_of_record record install
 
 let lemma_projected_client_application_write_after_finished
   (record:record_layer_state)
@@ -910,8 +967,16 @@ let lemma_step_model_record_layer_delta
        assert (model_record_layer_delta model0 ev model1)
      | LocalInstallTrafficKeysForRole role_install ->
       let install = role_install.install_payload in
-      assert (model1.model_record == install_record_keys model0.model_record install);
-      lemma_projected_install_record_keys_of_record model0.model_record install;
+      assert (role_install.install_role == model0.model_config.config_role);
+      assert (model1.model_record ==
+        install_record_keys_for_role
+          role_install.install_role
+          model0.model_record
+          install);
+      lemma_projected_install_record_keys_of_record_for_role
+        role_install.install_role
+        model0.model_record
+        install;
       assert (model_record_layer_delta model0 ev model1)
      | _ ->
        assert (model1.model_record == model0.model_record);
@@ -1012,7 +1077,8 @@ let lemma_step_model_record_layer_delta
        });
        lemma_projected_record_next_read model0.model_record;
        assert (
-         projected_record_layer_step
+         projected_record_layer_step_for_role
+           model0.model_config.config_role
            (projected_record_layer_state_of_record model0.model_record)
            ev ==
          { projected_record_layer_state_of_record model0.model_record with
@@ -1029,7 +1095,8 @@ let lemma_step_model_record_layer_delta
        });
        lemma_projected_record_next_write model0.model_record;
        assert (
-         projected_record_layer_step
+         projected_record_layer_step_for_role
+           model0.model_config.config_role
            (projected_record_layer_state_of_record model0.model_record)
            ev ==
          { projected_record_layer_state_of_record model0.model_record with
@@ -1044,7 +1111,8 @@ let lemma_step_model_record_layer_delta
        });
        lemma_projected_record_next_read model0.model_record;
        assert (
-         projected_record_layer_step
+         projected_record_layer_step_for_role
+           model0.model_config.config_role
            (projected_record_layer_state_of_record model0.model_record)
            ev ==
          { projected_record_layer_state_of_record model0.model_record with
@@ -1059,7 +1127,8 @@ let lemma_step_model_record_layer_delta
        });
        lemma_projected_record_next_read model0.model_record;
        assert (
-         projected_record_layer_step
+         projected_record_layer_step_for_role
+           model0.model_config.config_role
            (projected_record_layer_state_of_record model0.model_record)
            ev ==
          { projected_record_layer_state_of_record model0.model_record with
@@ -1077,7 +1146,8 @@ let lemma_step_model_record_layer_delta
           });
           lemma_projected_record_next_read model0.model_record;
           assert (
-            projected_record_layer_step
+            projected_record_layer_step_for_role
+              model0.model_config.config_role
               (projected_record_layer_state_of_record model0.model_record)
               ev ==
             { projected_record_layer_state_of_record model0.model_record with
@@ -1097,7 +1167,8 @@ let lemma_step_model_record_layer_delta
           });
           lemma_projected_record_next_write model0.model_record;
           assert (
-            projected_record_layer_step
+            projected_record_layer_step_for_role
+              model0.model_config.config_role
               (projected_record_layer_state_of_record model0.model_record)
               ev ==
             { projected_record_layer_state_of_record model0.model_record with
@@ -4392,24 +4463,40 @@ let lemma_legal_connection_delta_record_layer_consistent
       (ensures connection_state_record_layer_consistent st1)
 =
   lemma_step_model_record_layer_delta st0.cs_model delta.delta_event st1.cs_model;
-  lemma_projected_record_layer_snoc st0.cs_event_log delta.delta_event;
+  lemma_step_model_preserves_config st0.cs_model delta.delta_event st1.cs_model;
+  lemma_projected_record_layer_snoc_for_role
+    st0.cs_model.model_config.config_role
+    st0.cs_event_log
+    delta.delta_event;
   assert (st1.cs_event_log == st0.cs_event_log @ [delta.delta_event]);
+  assert (st1.cs_model.model_config == st0.cs_model.model_config);
   match st1.cs_model.model_control with
   | ControlFailed _ -> ()
   | _ ->
     assert (projected_record_layer_state_of_record st1.cs_model.model_record ==
-      projected_record_layer_step
+      projected_record_layer_step_for_role
+        st0.cs_model.model_config.config_role
         (projected_record_layer_state_of_record st0.cs_model.model_record)
         delta.delta_event);
     assert (projected_record_layer_state_of_record st0.cs_model.model_record ==
-      projected_record_layer_of_conn_events st0.cs_event_log);
+      projected_record_layer_of_conn_events_for_role
+        st0.cs_model.model_config.config_role
+        st0.cs_event_log);
     assert (projected_record_layer_state_of_record st1.cs_model.model_record ==
-      projected_record_layer_step
-        (projected_record_layer_of_conn_events st0.cs_event_log)
+      projected_record_layer_step_for_role
+        st0.cs_model.model_config.config_role
+        (projected_record_layer_of_conn_events_for_role
+          st0.cs_model.model_config.config_role
+          st0.cs_event_log)
         delta.delta_event);
-    assert (projected_record_layer_of_conn_events st1.cs_event_log ==
-      projected_record_layer_step
-        (projected_record_layer_of_conn_events st0.cs_event_log)
+    assert (projected_record_layer_of_conn_events_for_role
+      st0.cs_model.model_config.config_role
+      st1.cs_event_log ==
+      projected_record_layer_step_for_role
+        st0.cs_model.model_config.config_role
+        (projected_record_layer_of_conn_events_for_role
+          st0.cs_model.model_config.config_role
+          st0.cs_event_log)
         delta.delta_event)
 
 let lemma_legal_connection_delta_record_keys_consistent
@@ -4494,6 +4581,9 @@ let lemma_legal_connection_delta_layered_log_consistent_for_role
         connection_state_layered_log_consistent_for_role role st0)
       (ensures connection_state_layered_log_consistent_for_role role st1)
 =
+  lemma_step_model_preserves_config st0.cs_model delta.delta_event st1.cs_model;
+  assert (st1.cs_model.model_config == st0.cs_model.model_config);
+  assert (role == st1.cs_model.model_config.config_role);
   lemma_legal_connection_delta_event_log_consistent st0 delta st1;
   lemma_legal_connection_delta_transcript_consistent st0 delta st1;
   lemma_legal_connection_delta_key_update_pending_consistent st0 delta st1;

@@ -102,6 +102,11 @@ Current phase: **Phase 0/1 started**.
   `Certificate`, local `CertificateVerify` signing, and sent
   `CertificateVerify` now update the pure transcript and protected write-record
   projection under installed server handshake traffic keys.
+- [x] Record-layer event projection is now endpoint-role indexed, with the
+  legacy predicate name following the connection's configured role. This
+  separates client `Finished` application-write switching from server
+  `Finished` handshake-record advancement and enables server application-key
+  installs after server `Finished`.
 - [ ] Add server `Finished`, client `Finished` receive/verify, and the
   role-aware application-key/read-write record switching needed around those
   transitions.
@@ -787,6 +792,7 @@ Checklist:
       transitions, including transcript and raw cleartext classification.
 - [x] Add server encrypted-flight prefix pure transitions through
       `CertificateVerify`.
+- [x] Generalize record-layer event projection by endpoint role.
 - [x] Preserve the legacy Pulse client implementation by threading explicit
       client-role facts through readiness queries, model lemmas, and mutation
       boundaries.

@@ -489,6 +489,22 @@ let install_record_keys
           R.install_keys record.record_read epoch material.traffic_key material.traffic_iv;
     }
 
+let install_record_keys_for_role
+  (role:endpoint_role)
+  (record:record_layer_state)
+  (install:traffic_key_install)
+  : record_layer_state =
+  match role, install.install_epoch, install.install_direction with
+  | ServerEndpoint, TrafficApplication, TrafficWrite ->
+    let material = install.install_material in
+    {
+    record with
+      record_write =
+        R.install_keys record.record_write R.Application material.traffic_key material.traffic_iv;
+    }
+  | _, _, _ ->
+    install_record_keys record install
+
 let traffic_material_matches_record_direction
   (material:traffic_key_material)
   (st:R.direction_state)
@@ -717,7 +733,11 @@ let step_local_event (model:connection_model) (ev:local_event) : GTot (option co
         install in
     Some {
       model with
-        model_record = install_record_keys model.model_record install;
+        model_record =
+          install_record_keys_for_role
+            role_install.install_role
+            model.model_record
+            install;
         model_handshake = { hs with hs_keys = keys };
     }
   | LocalValidateCertificate peer, ControlHandshaking HsCertificateReceived ->
@@ -1756,12 +1776,29 @@ let projected_install_record_keys
   | _, TrafficRead ->
     { record with projected_read = projected_install_keys epoch }
 
+let projected_install_record_keys_for_role
+  (role:endpoint_role)
+  (record:projected_record_layer_state)
+  (install:traffic_key_install)
+  : projected_record_layer_state =
+  match role, install.install_epoch, install.install_direction with
+  | ServerEndpoint, TrafficApplication, TrafficWrite ->
+    { record with projected_write = projected_install_keys R.Application }
+  | _, _, _ ->
+    projected_install_record_keys record install
+
 let projected_client_application_write_after_finished
   (record:projected_record_layer_state)
   : projected_record_layer_state =
   { record with projected_write = projected_install_keys R.Application }
 
-let projected_record_layer_step
+let projected_server_finished_write
+  (record:projected_record_layer_state)
+  : projected_record_layer_state =
+  { record with projected_write = projected_next_seq record.projected_write }
+
+let projected_record_layer_step_for_role
+  (role:endpoint_role)
   (record:projected_record_layer_state)
   (ev:conn_event)
   : projected_record_layer_state =
@@ -1770,7 +1807,10 @@ let projected_record_layer_step
     (match local with
      | LocalInstallTrafficKeys install -> projected_install_record_keys record install
      | LocalInstallTrafficKeysForRole role_install ->
-       projected_install_record_keys record role_install.install_payload
+       projected_install_record_keys_for_role
+         role_install.install_role
+         record
+         role_install.install_payload
      | _ -> record)
   | ConnNetworkEvent msg ->
     (match msg.CL.message_direction, msg.CL.message_value with
@@ -1787,7 +1827,9 @@ let projected_record_layer_step
      | CL.Sent, M.TlsHandshake (M.CertificateVerify _) ->
        { record with projected_write = projected_next_seq record.projected_write }
      | CL.Sent, M.TlsHandshake (M.Finished _) ->
-       projected_client_application_write_after_finished record
+       (match role with
+        | ClientEndpoint -> projected_client_application_write_after_finished record
+        | ServerEndpoint -> projected_server_finished_write record)
      | CL.Sent, M.TlsApplicationData bytes ->
        { record with
            projected_write =
@@ -1803,23 +1845,46 @@ let projected_record_layer_step
      | _, _ ->
        record)
 
-let rec projected_record_layer_after_events_from
+let projected_record_layer_step
+  (record:projected_record_layer_state)
+  (ev:conn_event)
+  : projected_record_layer_state =
+  projected_record_layer_step_for_role ClientEndpoint record ev
+
+let rec projected_record_layer_after_events_from_for_role
+  (role:endpoint_role)
   (record:projected_record_layer_state)
   (events:list conn_event)
   : Tot projected_record_layer_state
-        (decreases events)
+       (decreases events)
 =
   match events with
   | [] -> record
   | ev :: rest ->
-    projected_record_layer_after_events_from
-      (projected_record_layer_step record ev)
-      rest
+    projected_record_layer_after_events_from_for_role
+     role
+     (projected_record_layer_step_for_role role record ev)
+     rest
+
+let projected_record_layer_after_events_from
+  (record:projected_record_layer_state)
+  (events:list conn_event)
+  : Tot projected_record_layer_state =
+  projected_record_layer_after_events_from_for_role ClientEndpoint record events
+
+let projected_record_layer_of_conn_events_for_role
+  (role:endpoint_role)
+  (events:list conn_event)
+  : Tot projected_record_layer_state =
+  projected_record_layer_after_events_from_for_role
+    role
+    initial_projected_record_layer_state
+    events
 
 let projected_record_layer_of_conn_events
   (events:list conn_event)
   : Tot projected_record_layer_state =
-  projected_record_layer_after_events_from initial_projected_record_layer_state events
+  projected_record_layer_of_conn_events_for_role ClientEndpoint events
 
 let connection_state_app_log_consistent
   (st:connection_state)
@@ -1858,14 +1923,27 @@ let connection_state_key_update_pending_consistent
   st.cs_model.model_application.app_key_update_response_pending ==
     key_update_response_pending_of_conn_events st.cs_event_log
 
-let connection_state_record_layer_consistent
+let connection_state_record_layer_consistent_for_role
+  (role:endpoint_role)
   (st:connection_state)
   : prop =
   match st.cs_model.model_control with
   | ControlFailed _ -> True
   | _ ->
     projected_record_layer_state_of_record st.cs_model.model_record ==
-      projected_record_layer_of_conn_events st.cs_event_log
+      projected_record_layer_of_conn_events_for_role role st.cs_event_log
+
+let connection_state_record_layer_consistent_for_config_role
+  (st:connection_state)
+  : prop =
+  connection_state_record_layer_consistent_for_role
+    st.cs_model.model_config.config_role
+    st
+
+let connection_state_record_layer_consistent
+  (st:connection_state)
+  : prop =
+  connection_state_record_layer_consistent_for_config_role st
 
 let connection_state_record_keys_consistent_for_role
   (role:endpoint_role)
@@ -1893,7 +1971,7 @@ let connection_state_layered_log_consistent_for_role
   connection_state_event_log_consistent st /\
   connection_state_transcript_consistent st /\
   connection_state_key_update_pending_consistent st /\
-  connection_state_record_layer_consistent st /\
+  connection_state_record_layer_consistent_for_role role st /\
   connection_state_record_keys_consistent_for_role role st /\
   connection_state_pending_application_consistent st /\
   connection_state_app_log_consistent st
@@ -1921,7 +1999,8 @@ let model_key_update_pending_delta
       model0.model_application.app_key_update_response_pending
       ev
 
-let model_record_layer_delta
+let model_record_layer_delta_for_role
+  (role:endpoint_role)
   (model0:connection_model)
   (ev:conn_event)
   (model1:connection_model)
@@ -1930,9 +2009,17 @@ let model_record_layer_delta
   | ControlFailed _ -> True
   | _ ->
     projected_record_layer_state_of_record model1.model_record ==
-      projected_record_layer_step
+      projected_record_layer_step_for_role
+        role
         (projected_record_layer_state_of_record model0.model_record)
         ev
+
+let model_record_layer_delta
+  (model0:connection_model)
+  (ev:conn_event)
+  (model1:connection_model)
+  : prop =
+  model_record_layer_delta_for_role model0.model_config.config_role model0 ev model1
 
 let model_pending_application_delta
   (model0:connection_model)
