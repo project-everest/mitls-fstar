@@ -806,6 +806,62 @@ let lemma_received_server_hello_state_evolves
   assert (CS.connection_state_consistent
     (received_server_hello_state st sh raw_received))
 
+let lemma_sent_server_hello_state_evolves
+  (st:CS.connection_state)
+  (sh:M.server_hello)
+  (raw_sent:B.bytes)
+  : Lemma
+      (requires CS.connection_state_consistent st /\
+                can_send_server_hello st sh raw_sent)
+      (ensures CS.connection_state_evolves
+                 st
+                 (sent_server_hello_state st sh raw_sent) /\
+               CS.connection_state_consistent
+                 (sent_server_hello_state st sh raw_sent) /\
+               CS.legal_connection_delta
+                 st
+                 {
+                   CS.delta_event =
+                     CS.ConnNetworkEvent {
+                       CL.message_direction = CL.Sent;
+                       CL.message_value = M.TlsHandshake (M.ServerHello sh);
+                     };
+                   CS.delta_raw_sent = raw_sent;
+                   CS.delta_raw_received = B.empty;
+                 }
+                 (sent_server_hello_state st sh raw_sent))
+=
+  let ev =
+    CS.ConnNetworkEvent {
+      CL.message_direction = CL.Sent;
+      CL.message_value = M.TlsHandshake (M.ServerHello sh);
+    } in
+  let delta = {
+    CS.delta_event = ev;
+    CS.delta_raw_sent = raw_sent;
+    CS.delta_raw_received = B.empty;
+  } in
+  assert (CS.legal_event st.CS.cs_model ev);
+  assert (CS.event_raw_delta_legal st.CS.cs_model ev raw_sent B.empty);
+  assert (CS.step_model st.CS.cs_model ev ==
+          Some (sent_server_hello_state st sh raw_sent).CS.cs_model);
+  assert (CS.legal_connection_delta
+    st
+    delta
+    (sent_server_hello_state st sh raw_sent));
+  assert (CS.connection_state_single_step
+    st
+    (sent_server_hello_state st sh raw_sent));
+  FStar.ReflexiveTransitiveClosure.closure_step
+    CS.connection_state_single_step
+    st
+    (sent_server_hello_state st sh raw_sent);
+  assert (CS.connection_state_evolves
+    st
+    (sent_server_hello_state st sh raw_sent));
+  assert (CS.connection_state_consistent
+    (sent_server_hello_state st sh raw_sent))
+
 let lemma_received_client_hello_state_evolves
   (st:CS.connection_state)
   (ch:M.client_hello)

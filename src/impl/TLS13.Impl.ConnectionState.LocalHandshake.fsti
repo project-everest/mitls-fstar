@@ -119,6 +119,30 @@ fn select_server_parameters
             }
             (selected_server_parameters_state st0 selection))
 
+fn mark_sent_server_hello
+  (c:connection_state)
+  (raw:array U8.t)
+  (fragment:array U8.t)
+  (fragment_len:SZ.t)
+  (lsh:IM.server_hello)
+  (#sh:erased M.server_hello)
+  (#st0:erased CS.connection_state)
+  requires connection_exactly c st0 **
+           ArrPts.pts_to raw 'raw_bytes **
+           ArrPts.pts_to fragment 'fragment_bytes **
+           IM.is_valid_server_hello lsh sh **
+           pure (B.length 'fragment_bytes == SZ.v fragment_len /\
+                 Seq.equal
+                   (Ghost.reveal 'fragment_bytes)
+                   (W.serialize_handshake (M.ServerHello sh)) /\
+                 SZ.v fragment_len <= max_server_hello_len /\
+                 can_send_server_hello st0 sh (Ghost.reveal 'raw_bytes))
+  ensures connection_exactly
+            c
+            (sent_server_hello_state st0 sh (Ghost.reveal 'raw_bytes)) **
+          ArrPts.pts_to raw 'raw_bytes **
+          ArrPts.pts_to fragment 'fragment_bytes
+
 fn try_send_client_hello
   (c:connection_state)
   (network_out:array U8.t)

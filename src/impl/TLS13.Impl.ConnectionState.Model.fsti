@@ -435,6 +435,68 @@ let received_server_hello_state
       }];
   }
 
+let sent_server_hello_state
+  (st:CS.connection_state)
+  (sh:M.server_hello)
+  (raw_sent:B.bytes)
+  : GTot CS.connection_state =
+  let model0 = st.CS.cs_model in
+  let hs0 = model0.CS.model_handshake in
+  let msg = M.ServerHello sh in
+  let hs1 =
+    CS.append_handshake_to_transcript
+      { hs0 with
+          CS.hs_server_hello = Some sh;
+          CS.hs_buffers =
+            { hs0.CS.hs_buffers with
+                CS.hb_server_hello_bytes = W.serialize_handshake msg };
+      }
+      msg in
+  {
+    CS.cs_model = CS.with_handshake_stage model0 hs1 CS.HsServerHelloSent;
+    CS.cs_wire_log = {
+      CL.raw_sent = B.append st.CS.cs_wire_log.CL.raw_sent raw_sent;
+      CL.raw_received = B.append st.CS.cs_wire_log.CL.raw_received B.empty;
+    };
+    CS.cs_event_log =
+      st.CS.cs_event_log @
+      [CS.ConnNetworkEvent {
+        CL.message_direction = CL.Sent;
+        CL.message_value = M.TlsHandshake msg;
+      }];
+  }
+
+let can_send_server_hello
+  (st:CS.connection_state)
+  (sh:M.server_hello)
+  (raw_sent:B.bytes)
+  : GTot prop =
+  st.CS.cs_model.CS.model_control ==
+    CS.ControlHandshaking CS.HsClientHelloReceived /\
+  st.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
+  Some? st.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_shared_secret /\
+  st.CS.cs_model.CS.model_handshake.CS.hs_server_hello == None /\
+  (match st.CS.cs_model.CS.model_handshake.CS.hs_server_selection with
+   | Some selection -> CS.server_hello_matches_selection selection sh
+   | None -> False) /\
+  B.length st.CS.cs_model.CS.model_handshake.CS.hs_transcript +
+    B.length (W.serialize_handshake (M.ServerHello sh)) <=
+    max_transcript_len /\
+  CS.legal_event
+    st.CS.cs_model
+    (CS.ConnNetworkEvent {
+      CL.message_direction = CL.Sent;
+      CL.message_value = M.TlsHandshake (M.ServerHello sh);
+    }) /\
+  CS.event_raw_delta_legal
+    st.CS.cs_model
+    (CS.ConnNetworkEvent {
+      CL.message_direction = CL.Sent;
+      CL.message_value = M.TlsHandshake (M.ServerHello sh);
+    })
+    raw_sent
+    B.empty
+
 let received_client_hello_state
   (st:CS.connection_state)
   (ch:M.client_hello)
@@ -1564,6 +1626,31 @@ val lemma_received_server_hello_state_evolves
                    CS.delta_raw_received = raw_received;
                  }
                  (received_server_hello_state st sh raw_received))
+
+val lemma_sent_server_hello_state_evolves
+  (st:CS.connection_state)
+  (sh:M.server_hello)
+  (raw_sent:B.bytes)
+  : Lemma
+      (requires CS.connection_state_consistent st /\
+                can_send_server_hello st sh raw_sent)
+      (ensures CS.connection_state_evolves
+                 st
+                 (sent_server_hello_state st sh raw_sent) /\
+               CS.connection_state_consistent
+                 (sent_server_hello_state st sh raw_sent) /\
+               CS.legal_connection_delta
+                 st
+                 {
+                   CS.delta_event =
+                     CS.ConnNetworkEvent {
+                       CL.message_direction = CL.Sent;
+                       CL.message_value = M.TlsHandshake (M.ServerHello sh);
+                     };
+                   CS.delta_raw_sent = raw_sent;
+                   CS.delta_raw_received = B.empty;
+                 }
+                 (sent_server_hello_state st sh raw_sent))
 
 val lemma_received_client_hello_state_evolves
   (st:CS.connection_state)

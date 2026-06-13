@@ -254,6 +254,15 @@ Current phase: **Phase 6 server buffer/event API and theorem surface**.
   `selection` precondition. This keeps the final executable selector and
   `next_local_action` scheduling gap visible rather than pretending that
   parameter generation is implemented.
+- [x] Added the first sent-ServerHello state-mutation slice:
+  `TLS13.Impl.ConnectionState.Model.sent_server_hello_state` mirrors the pure
+  `Sent ServerHello` transition, and
+  `TLS13.Impl.ConnectionState.LocalHandshake.mark_sent_server_hello` records a
+  caller-provided exact L-level ServerHello and handshake fragment, updates
+  `hs_server_hello`, stores the exact ServerHello transcript bytes, advances to
+  `HsServerHelloSent`, appends the raw sent bytes, and proves the legal
+  connection delta. The final serializer-driven public output wrapper is still
+  pending.
 
 ## End goal
 
@@ -1114,7 +1123,8 @@ Checklist:
       - cipher/group/signature selection;
       - shared-secret and traffic-secret derivation;
       - handshake key installation;
-      - server flight emission;
+      - server flight emission (first internal sent-ServerHello mutation is
+        complete; serializer-driven public wrapper and encrypted flight remain);
       - client Finished verification;
       - application key installation;
       - application data and close_notify.
