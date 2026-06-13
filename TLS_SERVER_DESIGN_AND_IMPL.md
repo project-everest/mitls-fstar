@@ -513,6 +513,14 @@ Current phase: **Phase 6 server buffer/event API and theorem surface**.
   later application-key hints. `next_local_action_sound` exposes the matching
   legal-event, transcript-room, write-sequence, role, stage, and server
   handshake-traffic-key facts required by generic local dispatch.
+- [x] Added scheduler readiness for stored CertificateVerify sends:
+  `TLS13.Impl.ConnectionState.Queries.can_send_certificate_verify_runtime`
+  inspects the stored certificate, signed CertificateVerify object, verified
+  flag, server handshake write keys, write sequence, and transcript room using
+  the dynamic CertificateVerify serializer length. `next_local_action` now
+  advertises `LocalSendCertificateVerify` when those facts hold, and
+  `next_local_action_sound` exposes the exact readiness facts consumed by the
+  generic stored-CertificateVerify dispatch branch.
 
 ## End goal
 
@@ -1396,9 +1404,11 @@ Checklist:
         EncryptedExtensions, Certificate, CertificateVerify, and server Finished
         public wrappers, pure model helpers, and Pulse state mutations for
         EncryptedExtensions, Certificate, CertificateVerify signing/send, and
-        server Finished are complete; concrete selection-to-L-ServerHello storage,
-        executable Certificate materialization from configured credentials, and
-        remaining full-flight scheduler hints remain);
+        server Finished are complete; scheduler hints are complete for
+        EncryptedExtensions and stored CertificateVerify; concrete
+        selection-to-L-ServerHello storage, executable Certificate materialization
+        from configured credentials, and remaining full-flight scheduler hints
+        remain);
       - client Finished verification (state mutation, focused public wrapper, and
         generic local dispatcher integration complete; network parse/open
         dispatch for received client Finished remains pending);

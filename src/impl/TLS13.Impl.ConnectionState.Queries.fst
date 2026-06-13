@@ -1798,6 +1798,255 @@ fn can_send_encrypted_extensions_runtime
     false
   }
 }
+
+fn can_send_certificate_verify_runtime
+  (c:connection_state)
+  (#st0:erased CS.connection_state)
+  requires connection_exactly c st0
+  returns ok: bool
+  ensures connection_exactly c st0 **
+          pure (ok ==>
+            st0.CS.cs_model.CS.model_control ==
+              CS.ControlHandshaking CS.HsServerEncryptedFlightSent /\
+            st0.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
+            st0.CS.cs_model.CS.model_handshake.CS.hs_certificate <> None /\
+            st0.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify_verified /\
+            Some? st0.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify /\
+            Some?
+              st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_handshake_traffic /\
+            U64.fits (st0.CS.cs_model.CS.model_record.CS.record_write.R.seq + 1) /\
+            (let cv =
+              Some?.v
+                st0.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify in
+             B.length st0.CS.cs_model.CS.model_handshake.CS.hs_transcript +
+               B.length (W.serialize_certificate_verify_from_signature cv) <=
+                 max_transcript_len /\
+             CS.legal_event
+               st0.CS.cs_model
+               (CS.ConnNetworkEvent {
+                 CL.message_direction = CL.Sent;
+                 CL.message_value = M.TlsHandshake (M.CertificateVerify cv);
+               })))
+{
+  unfold (connection_exactly c st0);
+  unfold (connection_model_exactly c st0.CS.cs_model);
+  unfold (control_exactly
+    c.control
+    st0.CS.cs_model.CS.model_control
+    st0.CS.cs_model.CS.model_failure);
+  unfold (record_layer_exactly c.records st0.CS.cs_model.CS.model_record);
+  unfold (handshake_exactly c.handshake st0.CS.cs_model.CS.model_handshake);
+  with cv_verified server_finished_verified. assert (pure True);
+  unfold (handshake_messages_exactly c.handshake.messages st0.CS.cs_model.CS.model_handshake);
+  unfold (certificate_slot_exactly
+    c.handshake.messages.certificate
+    st0.CS.cs_model.CS.model_handshake.CS.hs_certificate);
+  unfold (certificate_verify_slot_exactly
+    c.handshake.messages.certificate_verify
+    st0.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify);
+  unfold (sized_bytes_exactly
+    c.handshake.transcript
+    max_transcript_len
+    st0.CS.cs_model.CS.model_handshake.CS.hs_transcript);
+  unfold (key_schedule_exactly
+    c.handshake.keys
+    st0.CS.cs_model.CS.model_handshake.CS.hs_keys);
+  unfold (traffic_key_material_exactly
+    c.handshake.keys.server_handshake_traffic
+    st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_handshake_traffic);
+
+  let role_ok = config_role_is_server c.config;
+  let tag = !c.control.control_tag;
+  let stage = !c.control.handshake_stage_tag;
+  let tag_ok = tag = 1uy;
+  let stage_ok = stage = 15uy;
+
+  with stored_cert. assert (Box.pts_to c.handshake.messages.certificate stored_cert);
+  let stored_cert_opt = !c.handshake.messages.certificate;
+  let has_certificate = (
+    match stored_cert_opt with
+    | Some _ -> true
+    | None -> false);
+  assert (pure (stored_cert_opt == stored_cert));
+  assert (pure (has_certificate ==>
+    (st0.CS.cs_model.CS.model_handshake.CS.hs_certificate <> None)));
+
+  with stored_cv. assert (Box.pts_to c.handshake.messages.certificate_verify stored_cv);
+  let stored_cv_opt = !c.handshake.messages.certificate_verify;
+  let has_cv = (
+    match stored_cv_opt with
+    | Some _ -> true
+    | None -> false);
+  assert (pure (stored_cv_opt == stored_cv));
+  assert (pure (has_cv ==>
+    option_is_some st0.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify));
+
+  let already_verified = !c.handshake.certificate_verify_verified;
+  assert (pure (already_verified == cv_verified));
+  assert (pure (already_verified ==>
+    st0.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify_verified));
+
+  let has_server_handshake_keys = !c.handshake.keys.server_handshake_traffic.present;
+  let seq_ok = Rec.can_advance_seq c.records.write;
+  with transcript_storage transcript_len. assert (pure True);
+  let current_transcript_len = !c.handshake.transcript.len;
+  assert (pure (current_transcript_len == transcript_len));
+
+  if has_cv {
+    assert (pure has_cv);
+    assert (pure (option_is_some
+      st0.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify));
+    lemma_option_is_some_some_imp
+      st0.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify
+      has_cv;
+    let cv = Ghost.hide (Some?.v
+      st0.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify);
+    assert (pure (
+      st0.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify ==
+        Some (Ghost.reveal cv)));
+    let lcv = Some?.v stored_cv_opt;
+    assert (pure (stored_cv_opt == Some lcv));
+    assert (pure (stored_cv == Some lcv));
+
+    rewrite (match stored_cv, st0.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify with
+      | None, None -> pure True
+      | Some old_l, Some old_m -> IM.is_valid_certificate_verify old_l old_m
+      | _, _ -> pure False)
+      as (IM.is_valid_certificate_verify lcv (Ghost.reveal cv));
+    unfold (IM.is_valid_certificate_verify lcv (Ghost.reveal cv));
+    with signature_bytes. _;
+    let signature_len = lcv.certificate_verify_signature_len;
+    V.pts_to_len lcv.certificate_verify_signature;
+    assert (pure (B.length signature_bytes == IM.max_signature_len));
+    assert (pure (SZ.v signature_len <= IM.max_signature_len));
+    assert (pure (IM.byte_prefix_matches
+      signature_bytes
+      signature_len
+      (Ghost.reveal cv).M.signature));
+    Seq.lemma_len_slice signature_bytes 0 (SZ.v signature_len);
+    assert (pure (B.length (Ghost.reveal cv).M.signature == SZ.v signature_len));
+    W.lemma_serialize_certificate_verify_from_signature_len (Ghost.reveal cv);
+    assert (pure (
+      B.length (W.serialize_certificate_verify_from_signature (Ghost.reveal cv)) ==
+        8 + SZ.v signature_len));
+    assert_norm (IM.max_signature_len == 4096);
+    assert_norm (max_transcript_len == 65535);
+    assert (pure (SZ.v signature_len + 8 <= max_transcript_len));
+    assert (pure (SZ.fits (SZ.v signature_len + 8)));
+    let fragment_len = SZ.add signature_len 8sz;
+    assert (pure (
+      SZ.v fragment_len ==
+        B.length (W.serialize_certificate_verify_from_signature (Ghost.reveal cv))));
+    assert (pure (SZ.v fragment_len <= max_transcript_len));
+    let max_len = SZ.uint_to_t max_transcript_len;
+    let max_start = SZ.sub max_len fragment_len;
+    let transcript_room = sizet_lte_plain current_transcript_len max_start;
+    lemma_sizet_lte_plain current_transcript_len max_start;
+
+    let ok =
+      role_ok &&
+      tag_ok &&
+      stage_ok &&
+      has_certificate &&
+      already_verified &&
+      has_server_handshake_keys &&
+      seq_ok &&
+      transcript_room;
+
+    assert (pure (ok ==> U8.v tag == 1));
+    assert (pure (ok ==> U8.v stage == 15));
+    assert (pure (ok ==>
+      st0.CS.cs_model.CS.model_control ==
+        CS.ControlHandshaking CS.HsServerEncryptedFlightSent));
+    assert (pure (ok ==>
+      st0.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint));
+    assert (pure (ok ==>
+      (st0.CS.cs_model.CS.model_handshake.CS.hs_certificate <> None)));
+    assert (pure (ok ==>
+      st0.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify_verified));
+    assert (pure (ok ==> Some?
+      st0.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify));
+    assert (pure (ok ==> Some?
+      st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_handshake_traffic));
+    assert (pure (ok ==> U64.fits
+      (st0.CS.cs_model.CS.model_record.CS.record_write.R.seq + 1)));
+    assert (pure (ok ==> B.length st0.CS.cs_model.CS.model_handshake.CS.hs_transcript ==
+      SZ.v current_transcript_len));
+    assert (pure (ok ==> SZ.v current_transcript_len <= SZ.v max_start));
+    assert (pure (ok ==>
+      SZ.v current_transcript_len + SZ.v fragment_len <= max_transcript_len));
+    assert (pure (ok ==>
+      B.length st0.CS.cs_model.CS.model_handshake.CS.hs_transcript +
+        B.length (W.serialize_certificate_verify_from_signature (Ghost.reveal cv)) <=
+          max_transcript_len));
+    assert (pure (ok ==> CS.legal_event
+      st0.CS.cs_model
+      (CS.ConnNetworkEvent {
+        CL.message_direction = CL.Sent;
+        CL.message_value = M.TlsHandshake (M.CertificateVerify (Ghost.reveal cv));
+      })));
+
+    fold (IM.is_valid_certificate_verify lcv (Ghost.reveal cv));
+    rewrite (IM.is_valid_certificate_verify lcv (Ghost.reveal cv))
+      as (match stored_cv, st0.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify with
+        | None, None -> pure True
+        | Some old_l, Some old_m -> IM.is_valid_certificate_verify old_l old_m
+        | _, _ -> pure False);
+    fold (traffic_key_material_exactly
+      c.handshake.keys.server_handshake_traffic
+      st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_handshake_traffic);
+    fold (key_schedule_exactly
+      c.handshake.keys
+      st0.CS.cs_model.CS.model_handshake.CS.hs_keys);
+    fold (sized_bytes_exactly
+      c.handshake.transcript
+      max_transcript_len
+      st0.CS.cs_model.CS.model_handshake.CS.hs_transcript);
+    fold (certificate_verify_slot_exactly
+      c.handshake.messages.certificate_verify
+      st0.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify);
+    fold (certificate_slot_exactly
+      c.handshake.messages.certificate
+      st0.CS.cs_model.CS.model_handshake.CS.hs_certificate);
+    fold (handshake_messages_exactly c.handshake.messages st0.CS.cs_model.CS.model_handshake);
+    fold (handshake_exactly c.handshake st0.CS.cs_model.CS.model_handshake);
+    fold (record_layer_exactly c.records st0.CS.cs_model.CS.model_record);
+    fold (control_exactly
+      c.control
+      st0.CS.cs_model.CS.model_control
+      st0.CS.cs_model.CS.model_failure);
+    fold (connection_model_exactly c st0.CS.cs_model);
+    fold (connection_exactly c st0);
+    ok
+  } else {
+    fold (traffic_key_material_exactly
+      c.handshake.keys.server_handshake_traffic
+      st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_handshake_traffic);
+    fold (key_schedule_exactly
+      c.handshake.keys
+      st0.CS.cs_model.CS.model_handshake.CS.hs_keys);
+    fold (sized_bytes_exactly
+      c.handshake.transcript
+      max_transcript_len
+      st0.CS.cs_model.CS.model_handshake.CS.hs_transcript);
+    fold (certificate_verify_slot_exactly
+      c.handshake.messages.certificate_verify
+      st0.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify);
+    fold (certificate_slot_exactly
+      c.handshake.messages.certificate
+      st0.CS.cs_model.CS.model_handshake.CS.hs_certificate);
+    fold (handshake_messages_exactly c.handshake.messages st0.CS.cs_model.CS.model_handshake);
+    fold (handshake_exactly c.handshake st0.CS.cs_model.CS.model_handshake);
+    fold (record_layer_exactly c.records st0.CS.cs_model.CS.model_record);
+    fold (control_exactly
+      c.control
+      st0.CS.cs_model.CS.model_control
+      st0.CS.cs_model.CS.model_failure);
+    fold (connection_model_exactly c st0.CS.cs_model);
+    fold (connection_exactly c st0);
+    false
+  }
+}
 fn can_receive_certificate
   (c:connection_state)
   (lcert:IM.certificate_msg)

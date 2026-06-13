@@ -362,6 +362,35 @@ fn can_send_encrypted_extensions_runtime
                   M.TlsHandshake (M.EncryptedExtensions { M.negotiated_alpn = None });
               }))
 
+fn can_send_certificate_verify_runtime
+  (c:connection_state)
+  (#st0:erased CS.connection_state)
+  requires connection_exactly c st0
+  returns ok: bool
+  ensures connection_exactly c st0 **
+          pure (ok ==>
+            st0.CS.cs_model.CS.model_control ==
+              CS.ControlHandshaking CS.HsServerEncryptedFlightSent /\
+            st0.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
+            st0.CS.cs_model.CS.model_handshake.CS.hs_certificate <> None /\
+            st0.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify_verified /\
+            Some? st0.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify /\
+            Some?
+              st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_handshake_traffic /\
+            U64.fits (st0.CS.cs_model.CS.model_record.CS.record_write.R.seq + 1) /\
+            (let cv =
+              Some?.v
+                st0.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify in
+             B.length st0.CS.cs_model.CS.model_handshake.CS.hs_transcript +
+               B.length (W.serialize_certificate_verify_from_signature cv) <=
+                 max_transcript_len /\
+             CS.legal_event
+               st0.CS.cs_model
+               (CS.ConnNetworkEvent {
+                 CL.message_direction = CL.Sent;
+                 CL.message_value = M.TlsHandshake (M.CertificateVerify cv);
+               })))
+
 fn can_receive_certificate
   (c:connection_state)
   (lcert:IM.certificate_msg)
