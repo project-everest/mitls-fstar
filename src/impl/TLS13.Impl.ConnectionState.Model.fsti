@@ -673,6 +673,48 @@ let can_send_certificate
     raw_sent
     B.empty
 
+let signed_certificate_verify_state
+  (st:CS.connection_state)
+  (cv:M.certificate_verify)
+  : GTot CS.connection_state =
+  let model0 = st.CS.cs_model in
+  let hs0 = model0.CS.model_handshake in
+  let cv_input = H.certificate_verify_input (Tr.hash hs0.CS.hs_transcript) in
+  {
+    CS.cs_model =
+      CS.with_handshake_stage
+        model0
+        { hs0 with
+            CS.hs_certificate_verify = Some cv;
+            CS.hs_certificate_verify_verified = true;
+            CS.hs_buffers =
+              { hs0.CS.hs_buffers with
+                  CS.hb_certificate_verify_input = Some cv_input;
+              };
+        }
+        CS.HsServerEncryptedFlightSent;
+    CS.cs_wire_log = {
+      CL.raw_sent = B.append st.CS.cs_wire_log.CL.raw_sent B.empty;
+      CL.raw_received = B.append st.CS.cs_wire_log.CL.raw_received B.empty;
+    };
+    CS.cs_event_log =
+      st.CS.cs_event_log @ [CS.ConnLocalEvent (CS.LocalSignCertificateVerify cv)];
+  }
+
+let can_sign_certificate_verify
+  (st:CS.connection_state)
+  (cv:M.certificate_verify)
+  : GTot prop =
+  st.CS.cs_model.CS.model_control ==
+    CS.ControlHandshaking CS.HsServerEncryptedFlightSent /\
+  st.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
+  st.CS.cs_model.CS.model_handshake.CS.hs_certificate <> None /\
+  st.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify == None /\
+  st.CS.cs_model.CS.model_handshake.CS.hs_buffers.CS.hb_certificate_verify_input == None /\
+  CS.legal_event
+    st.CS.cs_model
+    (CS.ConnLocalEvent (CS.LocalSignCertificateVerify cv))
+
 let sent_certificate_verify_state
   (st:CS.connection_state)
   (cv:M.certificate_verify)
@@ -2147,6 +2189,27 @@ val lemma_sent_certificate_state_evolves
                    CS.delta_raw_received = B.empty;
                  }
                  (sent_certificate_state st cert raw_sent))
+
+val lemma_signed_certificate_verify_state_evolves
+  (st:CS.connection_state)
+  (cv:M.certificate_verify)
+  : Lemma
+      (requires CS.connection_state_consistent st /\
+                can_sign_certificate_verify st cv)
+      (ensures CS.connection_state_evolves
+                 st
+                 (signed_certificate_verify_state st cv) /\
+               CS.connection_state_consistent
+                 (signed_certificate_verify_state st cv) /\
+               CS.legal_connection_delta
+                 st
+                 {
+                   CS.delta_event =
+                     CS.ConnLocalEvent (CS.LocalSignCertificateVerify cv);
+                   CS.delta_raw_sent = B.empty;
+                   CS.delta_raw_received = B.empty;
+                 }
+                 (signed_certificate_verify_state st cv))
 
 val lemma_sent_certificate_verify_state_evolves
   (st:CS.connection_state)

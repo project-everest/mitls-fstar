@@ -305,6 +305,18 @@ Current phase: **Phase 6 server buffer/event API and theorem surface**.
   bytes, and proves the `sent_certificate_state` legal delta. Like
   EncryptedExtensions, a public server wrapper is intentionally pending until the
   protected-record seal/serializer path can expose the sent-seal replay facts.
+- [x] Added server CertificateVerify signing and send state mutations:
+  `TLS13.Impl.ConnectionState.Model.signed_certificate_verify_state` mirrors
+  `LocalSignCertificateVerify` by storing the signed CV, setting the verified
+  flag, and caching the exact server CertificateVerify input for the current
+  transcript hash. The Pulse mutation
+  `TLS13.Impl.ConnectionState.LocalHandshake.mark_signed_certificate_verify`
+  implements that local state update, and
+  `mark_sent_certificate_verify` then appends the exact CV handshake fragment,
+  advances the concrete write record sequence, appends the supplied raw sent
+  bytes, and proves the `sent_certificate_verify_state` legal delta. Public
+  wrappers remain pending on executable signing and protected-record
+  seal/serializer support.
 - [x] Added supplied-shared-secret derivation support:
   `TLS13.Impl.ConnectionState.LocalHandshake.derive_shared_secret_from_bytes`
   stores the shared, early, handshake, and master secrets in concrete key

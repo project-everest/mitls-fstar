@@ -197,6 +197,44 @@ fn mark_sent_certificate
                     Some leaf
                 | [] -> False)
 
+fn mark_signed_certificate_verify
+  (c:connection_state)
+  (lcv:IM.certificate_verify)
+  (#cv:erased M.certificate_verify)
+  (#st0:erased CS.connection_state)
+  requires connection_exactly c st0 **
+           IM.is_valid_certificate_verify lcv cv **
+           pure (can_sign_certificate_verify st0 cv)
+  ensures connection_exactly
+            c
+            (signed_certificate_verify_state st0 cv) **
+          pure ((signed_certificate_verify_state st0 cv).
+                  CS.cs_model.CS.model_handshake.CS.hs_buffers.CS.hb_certificate_verify_input ==
+                Some
+                  (H.certificate_verify_input
+                    (Tr.hash st0.CS.cs_model.CS.model_handshake.CS.hs_transcript)))
+
+fn mark_sent_certificate_verify
+  (c:connection_state)
+  (raw:array U8.t)
+  (fragment:array U8.t)
+  (fragment_len:SZ.t)
+  (#cv:erased M.certificate_verify)
+  (#st0:erased CS.connection_state)
+  requires connection_exactly c st0 **
+           ArrPts.pts_to raw 'raw_bytes **
+           ArrPts.pts_to fragment 'fragment_bytes **
+           pure (B.length 'fragment_bytes == SZ.v fragment_len /\
+                 Seq.equal
+                   (Ghost.reveal 'fragment_bytes)
+                   (W.serialize_handshake (M.CertificateVerify cv)) /\
+                 can_send_certificate_verify st0 cv (Ghost.reveal 'raw_bytes))
+  ensures connection_exactly
+            c
+            (sent_certificate_verify_state st0 cv (Ghost.reveal 'raw_bytes)) **
+          ArrPts.pts_to raw 'raw_bytes **
+          ArrPts.pts_to fragment 'fragment_bytes
+
 fn try_send_client_hello
   (c:connection_state)
   (network_out:array U8.t)

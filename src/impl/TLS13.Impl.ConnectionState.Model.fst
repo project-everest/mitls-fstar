@@ -1136,6 +1136,55 @@ let lemma_sent_certificate_state_evolves
   assert (CS.connection_state_consistent
     (sent_certificate_state st cert raw_sent))
 
+let lemma_signed_certificate_verify_state_evolves
+  (st:CS.connection_state)
+  (cv:M.certificate_verify)
+  : Lemma
+      (requires CS.connection_state_consistent st /\
+                can_sign_certificate_verify st cv)
+      (ensures CS.connection_state_evolves
+                 st
+                 (signed_certificate_verify_state st cv) /\
+               CS.connection_state_consistent
+                 (signed_certificate_verify_state st cv) /\
+               CS.legal_connection_delta
+                 st
+                 {
+                   CS.delta_event =
+                     CS.ConnLocalEvent (CS.LocalSignCertificateVerify cv);
+                   CS.delta_raw_sent = B.empty;
+                   CS.delta_raw_received = B.empty;
+                 }
+                 (signed_certificate_verify_state st cv))
+=
+  let ev = CS.ConnLocalEvent (CS.LocalSignCertificateVerify cv) in
+  let delta = {
+    CS.delta_event = ev;
+    CS.delta_raw_sent = B.empty;
+    CS.delta_raw_received = B.empty;
+  } in
+  Seq.lemma_eq_intro B.empty B.empty;
+  assert (CS.legal_event st.CS.cs_model ev);
+  assert (CS.step_model st.CS.cs_model ev ==
+          Some (signed_certificate_verify_state st cv).CS.cs_model);
+  assert (CS.event_raw_delta_legal st.CS.cs_model ev B.empty B.empty);
+  assert (CS.legal_connection_delta
+    st
+    delta
+    (signed_certificate_verify_state st cv));
+  assert (CS.connection_state_single_step
+    st
+    (signed_certificate_verify_state st cv));
+  FStar.ReflexiveTransitiveClosure.closure_step
+    CS.connection_state_single_step
+    st
+    (signed_certificate_verify_state st cv);
+  assert (CS.connection_state_evolves
+    st
+    (signed_certificate_verify_state st cv));
+  assert (CS.connection_state_consistent
+    (signed_certificate_verify_state st cv))
+
 let lemma_sent_certificate_verify_state_evolves
   (st:CS.connection_state)
   (cv:M.certificate_verify)
