@@ -190,6 +190,33 @@ fn try_derive_shared_secret
            else
              connection_exactly c st0)
 
+fn derive_shared_secret_from_bytes
+  (c:connection_state)
+  (shared_src:array U8.t)
+  (#shared:erased TLS13.Crypto.Spec.x25519_shared_secret)
+  (#st0:erased CS.connection_state)
+  requires connection_exactly c st0 **
+           ArrPts.pts_to shared_src shared **
+           pure (B.length (Ghost.reveal shared) == 32 /\
+                CS.legal_event
+                  st0.CS.cs_model
+                  (CS.ConnLocalEvent
+                    (CS.LocalDeriveSharedSecret (Ghost.reveal shared))))
+  ensures connection_exactly
+           c
+           (derived_shared_secret_state st0 (Ghost.reveal shared)) **
+          ArrPts.pts_to shared_src shared **
+          pure (CS.legal_connection_delta
+           st0
+           {
+             CS.delta_event =
+               CS.ConnLocalEvent
+                 (CS.LocalDeriveSharedSecret (Ghost.reveal shared));
+             CS.delta_raw_sent = B.empty;
+             CS.delta_raw_received = B.empty;
+           }
+           (derived_shared_secret_state st0 (Ghost.reveal shared)))
+
 fn try_install_client_handshake_traffic_keys
   (c:connection_state)
   (#st0:erased CS.connection_state)

@@ -1167,6 +1167,134 @@ fn try_send_client_hello
   }
 }
 
+fn derive_shared_secret_from_bytes
+  (c:connection_state)
+  (shared_src:array U8.t)
+  (#shared:erased TLS13.Crypto.Spec.x25519_shared_secret)
+  (#st0:erased CS.connection_state)
+  requires connection_exactly c st0 **
+           ArrPts.pts_to shared_src shared **
+           pure (B.length (Ghost.reveal shared) == 32 /\
+                 CS.legal_event
+                   st0.CS.cs_model
+                   (CS.ConnLocalEvent
+                     (CS.LocalDeriveSharedSecret (Ghost.reveal shared))))
+  ensures connection_exactly
+            c
+            (derived_shared_secret_state st0 (Ghost.reveal shared)) **
+          ArrPts.pts_to shared_src shared **
+          pure (CS.legal_connection_delta
+            st0
+            {
+              CS.delta_event =
+                CS.ConnLocalEvent
+                  (CS.LocalDeriveSharedSecret (Ghost.reveal shared));
+              CS.delta_raw_sent = B.empty;
+              CS.delta_raw_received = B.empty;
+            }
+            (derived_shared_secret_state st0 (Ghost.reveal shared)))
+{
+  assert (pure (CS.legal_event
+    st0.CS.cs_model
+    (CS.ConnLocalEvent
+      (CS.LocalDeriveSharedSecret (Ghost.reveal shared)))));
+
+  unfold (connection_exactly c st0);
+  unfold (connection_model_exactly c st0.CS.cs_model);
+  unfold (handshake_exactly c.handshake st0.CS.cs_model.CS.model_handshake);
+  with cv_verified server_finished_verified. _;
+  unfold (key_schedule_exactly
+    c.handshake.keys
+    st0.CS.cs_model.CS.model_handshake.CS.hs_keys);
+
+  let mut early_out = [| 0uy; 32sz |];
+  KS.early_secret_empty early_out;
+  let mut handshake_out = [| 0uy; 32sz |];
+  KS.handshake_secret early_out shared_src 32sz handshake_out;
+  let mut master_out = [| 0uy; 32sz |];
+  KS.master_secret handshake_out master_out;
+
+  store_optional_secret c.handshake.keys.shared_secret shared_src #shared;
+  store_optional_secret
+    c.handshake.keys.early_secret
+    early_out
+    #(K.early_secret B.empty);
+  store_optional_secret
+    c.handshake.keys.handshake_secret
+    handshake_out
+    #(K.handshake_secret (K.early_secret B.empty) (Ghost.reveal shared));
+  store_optional_secret
+    c.handshake.keys.master_secret
+    master_out
+    #(K.master_secret (K.handshake_secret (K.early_secret B.empty) (Ghost.reveal shared)));
+
+  fold (key_schedule_exactly
+    c.handshake.keys
+    (derived_shared_secret_state st0 (Ghost.reveal shared)).CS.cs_model.CS.model_handshake.CS.hs_keys);
+
+  assert (pure ((derived_shared_secret_state st0 (Ghost.reveal shared)).CS.cs_model.CS.model_handshake.CS.hs_start ==
+    st0.CS.cs_model.CS.model_handshake.CS.hs_start));
+  assert (pure ((derived_shared_secret_state st0 (Ghost.reveal shared)).CS.cs_model.CS.model_handshake.CS.hs_client_hello ==
+    st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello));
+  assert (pure ((derived_shared_secret_state st0 (Ghost.reveal shared)).CS.cs_model.CS.model_handshake.CS.hs_server_hello ==
+    st0.CS.cs_model.CS.model_handshake.CS.hs_server_hello));
+  assert (pure ((derived_shared_secret_state st0 (Ghost.reveal shared)).CS.cs_model.CS.model_handshake.CS.hs_encrypted_extensions ==
+    st0.CS.cs_model.CS.model_handshake.CS.hs_encrypted_extensions));
+  assert (pure ((derived_shared_secret_state st0 (Ghost.reveal shared)).CS.cs_model.CS.model_handshake.CS.hs_certificate ==
+    st0.CS.cs_model.CS.model_handshake.CS.hs_certificate));
+  assert (pure ((derived_shared_secret_state st0 (Ghost.reveal shared)).CS.cs_model.CS.model_handshake.CS.hs_certificate_verify ==
+    st0.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify));
+  assert (pure ((derived_shared_secret_state st0 (Ghost.reveal shared)).CS.cs_model.CS.model_handshake.CS.hs_server_finished ==
+    st0.CS.cs_model.CS.model_handshake.CS.hs_server_finished));
+  assert (pure ((derived_shared_secret_state st0 (Ghost.reveal shared)).CS.cs_model.CS.model_handshake.CS.hs_client_finished ==
+    st0.CS.cs_model.CS.model_handshake.CS.hs_client_finished));
+  assert (pure ((derived_shared_secret_state st0 (Ghost.reveal shared)).CS.cs_model.CS.model_handshake.CS.hs_validated_peer ==
+    st0.CS.cs_model.CS.model_handshake.CS.hs_validated_peer));
+  assert (pure ((derived_shared_secret_state st0 (Ghost.reveal shared)).CS.cs_model.CS.model_handshake.CS.hs_certificate_verify_verified ==
+    st0.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify_verified));
+  assert (pure ((derived_shared_secret_state st0 (Ghost.reveal shared)).CS.cs_model.CS.model_handshake.CS.hs_server_finished_verified ==
+    st0.CS.cs_model.CS.model_handshake.CS.hs_server_finished_verified));
+  assert (pure ((derived_shared_secret_state st0 (Ghost.reveal shared)).CS.cs_model.CS.model_handshake.CS.hs_transcript ==
+    st0.CS.cs_model.CS.model_handshake.CS.hs_transcript));
+  assert (pure ((derived_shared_secret_state st0 (Ghost.reveal shared)).CS.cs_model.CS.model_handshake.CS.hs_buffers ==
+    st0.CS.cs_model.CS.model_handshake.CS.hs_buffers));
+
+  unfold (handshake_messages_exactly
+    c.handshake.messages
+    st0.CS.cs_model.CS.model_handshake);
+  fold (handshake_messages_exactly
+    c.handshake.messages
+    (derived_shared_secret_state st0 (Ghost.reveal shared)).CS.cs_model.CS.model_handshake);
+  unfold (server_key_share_exactly
+    c.handshake.server_key_share
+    st0.CS.cs_model.CS.model_handshake);
+  fold (server_key_share_exactly
+    c.handshake.server_key_share
+    (derived_shared_secret_state st0 (Ghost.reveal shared)).CS.cs_model.CS.model_handshake);
+
+  fold (handshake_exactly
+    c.handshake
+    (derived_shared_secret_state st0 (Ghost.reveal shared)).CS.cs_model.CS.model_handshake);
+
+  assert (pure ((derived_shared_secret_state st0 (Ghost.reveal shared)).CS.cs_model.CS.model_config ==
+    st0.CS.cs_model.CS.model_config));
+  assert (pure ((derived_shared_secret_state st0 (Ghost.reveal shared)).CS.cs_model.CS.model_control ==
+    st0.CS.cs_model.CS.model_control));
+  assert (pure ((derived_shared_secret_state st0 (Ghost.reveal shared)).CS.cs_model.CS.model_failure ==
+    st0.CS.cs_model.CS.model_failure));
+  assert (pure ((derived_shared_secret_state st0 (Ghost.reveal shared)).CS.cs_model.CS.model_record ==
+    st0.CS.cs_model.CS.model_record));
+  assert (pure ((derived_shared_secret_state st0 (Ghost.reveal shared)).CS.cs_model.CS.model_application ==
+    st0.CS.cs_model.CS.model_application));
+  fold (connection_model_exactly
+    c
+    (derived_shared_secret_state st0 (Ghost.reveal shared)).CS.cs_model);
+
+  lemma_derived_shared_secret_state_evolves st0 (Ghost.reveal shared);
+  MR.update c.ghost_state (derived_shared_secret_state st0 (Ghost.reveal shared));
+  fold (connection_exactly c (derived_shared_secret_state st0 (Ghost.reveal shared)))
+}
+
 fn try_derive_shared_secret
   (c:connection_state)
   (#st0:erased CS.connection_state)

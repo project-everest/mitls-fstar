@@ -270,6 +270,15 @@ Current phase: **Phase 6 server buffer/event API and theorem surface**.
   `server_local_event_end_to_end_correct` for `LocalSendServerHello`. The final
   executable wrapper still needs to construct the L-level ServerHello and raw
   record via the serializer instead of taking them as pre-arranged buffers.
+- [x] Added supplied-shared-secret derivation support:
+  `TLS13.Impl.ConnectionState.LocalHandshake.derive_shared_secret_from_bytes`
+  stores the shared, early, handshake, and master secrets in concrete key
+  schedule storage and proves the generic `LocalDeriveSharedSecret` delta; the
+  focused public `TLS13.Impl.Server.process_derive_shared_secret` wrapper exposes
+  that transition at the server theorem surface. It currently assumes a supplied
+  shared-secret buffer plus the pure `legal_event` premise; executable X25519
+  derivation from stored server/client shares remains pending until concrete
+  selection-private-key storage is added.
 
 ## End goal
 
@@ -1128,7 +1137,9 @@ Checklist:
 - [ ] Add local handlers:
       - server random and key share generation;
       - cipher/group/signature selection;
-      - shared-secret and traffic-secret derivation;
+      - shared-secret and traffic-secret derivation (supplied shared-secret
+        wrapper complete; executable server X25519 and traffic-key wrappers
+        remain);
       - handshake key installation;
       - server flight emission (focused sent-ServerHello public wrapper is
         complete; serializer-driven construction and encrypted flight remain);
