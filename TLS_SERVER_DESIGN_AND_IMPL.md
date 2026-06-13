@@ -136,6 +136,11 @@ Current phase: **Phase 0/1 started**.
   `TLS13.ConnectionState.Lemmas.lemma_paired_endpoints_derived_key_agrees` for
   base secrets, handshake/application traffic secrets, AEAD keys/IVs, and
   Finished keys under the explicit first-milestone input-agreement predicate.
+- [x] Added endpoint-pairing predicates for wire logs and X25519 key shares.
+  `paired_x25519_key_shares` records the client/server public-share pairing,
+  private/public correspondence, and both local X25519 shared-secret
+  computations; `lemma_paired_x25519_key_shares_shared_secret_agree` derives
+  shared-secret equality using the trusted crypto TCB agreement lemma.
 - [x] Repaired the existing Pulse client proof surface after the role gates:
   implementation readiness queries and mutation/model lemmas now expose
   `ClientEndpoint` exactly where legacy client-only transitions rely on it, and
@@ -826,6 +831,7 @@ Checklist:
 - [x] Add server application-data and close_notify pure legal transitions.
 - [x] Add transcript checkpoint extraction helpers.
 - [x] Add first derived-key agreement theorem surface.
+- [x] Add X25519 key-share pairing predicate and shared-secret agreement lemma.
 - [x] Preserve the legacy Pulse client implementation by threading explicit
       client-role facts through readiness queries, model lemmas, and mutation
       boundaries.

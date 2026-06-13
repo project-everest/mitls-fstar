@@ -68,6 +68,13 @@ val lemma_paired_endpoints_derived_key_agrees
         derivation_inputs_agree key_id client server)
       (ensures peer_derived_key_material_agrees key_id client server)
 
+val lemma_paired_x25519_key_shares_shared_secret_agree
+  (client:connection_state)
+  (server:connection_state)
+  : Lemma
+      (requires paired_x25519_key_shares client server)
+      (ensures shared_secret_material_agrees client server)
+
 val lemma_step_role_install_record_keys_consistent_for_role
   (role:endpoint_role)
   (model0:connection_model)

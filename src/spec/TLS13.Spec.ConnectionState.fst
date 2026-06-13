@@ -263,6 +263,12 @@ let empty_handshake_state : handshake_state = {
   hs_keys = empty_key_schedule_state;
 }
 
+let client_hello_key_share (ch:M.client_hello) : C.x25519_public =
+  ch.M.key_share
+
+let server_hello_key_share (sh:M.server_hello) : C.x25519_public =
+  sh.M.key_share
+
 let append_handshake_bytes (prefix:B.bytes) (msg:M.handshake_msg) : GTot B.bytes =
   B.append prefix (W.serialize_handshake msg)
 
@@ -444,6 +450,54 @@ let same_key_derivation_checkpoint
   | Some transcript_checkpoint ->
     same_transcript_checkpoint transcript_checkpoint client server
   | None -> False
+
+let paired_wire_logs
+  (client:connection_state)
+  (server:connection_state)
+  : prop =
+  Seq.equal client.cs_wire_log.CL.raw_sent server.cs_wire_log.CL.raw_received /\
+  Seq.equal server.cs_wire_log.CL.raw_sent client.cs_wire_log.CL.raw_received
+
+let shared_secret_material_agrees
+  (client:connection_state)
+  (server:connection_state)
+  : prop =
+  match
+    client.cs_model.model_handshake.hs_keys.ks_shared_secret,
+    server.cs_model.model_handshake.hs_keys.ks_shared_secret
+  with
+  | Some client_shared, Some server_shared ->
+    Seq.equal client_shared server_shared
+  | _, _ -> False
+
+let paired_x25519_key_shares
+  (client:connection_state)
+  (server:connection_state)
+  : prop =
+  let client_hs = client.cs_model.model_handshake in
+  let server_hs = server.cs_model.model_handshake in
+  match
+    client_hs.hs_start,
+    client_hs.hs_server_hello,
+    server_hs.hs_server_selection,
+    server_hs.hs_client_hello
+  with
+  | Some start, Some (sh:M.server_hello), Some selection, Some (ch:M.client_hello) ->
+    (match
+      start.start_client_key_share_private,
+      selection.server_key_share_private,
+      client_hs.hs_keys.ks_shared_secret,
+      server_hs.hs_keys.ks_shared_secret
+     with
+     | Some client_sk, Some server_sk, Some client_shared, Some server_shared ->
+       client_hello_key_share ch == start.start_client_key_share_public /\
+       server_hello_key_share sh == selection.server_key_share_public /\
+       C.x25519_public_from_private client_sk == start.start_client_key_share_public /\
+       C.x25519_public_from_private server_sk == selection.server_key_share_public /\
+       C.x25519_shared client_sk (server_hello_key_share sh) == Some client_shared /\
+       C.x25519_shared server_sk (client_hello_key_share ch) == Some server_shared
+     | _, _, _, _ -> False)
+  | _, _, _, _ -> False
 
 let initial (cfg:connection_config) : connection_state = {
   cs_model = initial_model cfg;

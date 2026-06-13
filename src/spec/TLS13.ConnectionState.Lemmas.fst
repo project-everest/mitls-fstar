@@ -168,6 +168,46 @@ let lemma_paired_endpoints_derived_key_agrees
   | ResumptionMasterSecret ->
     assert False
 
+let lemma_paired_x25519_key_shares_shared_secret_agree
+  (client:connection_state)
+  (server:connection_state)
+  : Lemma
+      (requires paired_x25519_key_shares client server)
+      (ensures shared_secret_material_agrees client server)
+=
+  let client_hs = client.cs_model.model_handshake in
+  let server_hs = server.cs_model.model_handshake in
+  match
+    client_hs.hs_start,
+    client_hs.hs_server_hello,
+    server_hs.hs_server_selection,
+    server_hs.hs_client_hello
+  with
+  | Some start, Some (sh:M.server_hello), Some selection, Some (ch:M.client_hello) ->
+    (match
+      start.start_client_key_share_private,
+      selection.server_key_share_private,
+      client_hs.hs_keys.ks_shared_secret,
+      server_hs.hs_keys.ks_shared_secret
+     with
+     | Some client_sk, Some server_sk, Some client_shared, Some server_shared ->
+       C.lemma_x25519_shared_agreement
+         client_sk
+         server_sk
+         start.start_client_key_share_public
+         selection.server_key_share_public;
+       assert (client_hello_key_share ch == start.start_client_key_share_public);
+       assert (server_hello_key_share sh == selection.server_key_share_public);
+       assert (C.x25519_shared client_sk (server_hello_key_share sh) == Some client_shared);
+       assert (C.x25519_shared server_sk (client_hello_key_share ch) == Some server_shared);
+       assert (C.x25519_shared client_sk (server_hello_key_share sh) ==
+               C.x25519_shared server_sk (client_hello_key_share ch));
+       assert (Some client_shared == Some server_shared);
+       assert (client_shared == server_shared);
+       Seq.lemma_eq_intro client_shared server_shared
+     | _, _, _, _ -> assert False)
+  | _, _, _, _ -> assert False
+
 let lemma_step_role_install_record_keys_consistent_for_role
   (role:endpoint_role)
   (model0:connection_model)
