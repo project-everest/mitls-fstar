@@ -299,7 +299,12 @@ $(filter-out $(OUTPUT_DIR)/FStar_SizeT.krml $(OUTPUT_DIR)/TLS13_Impl_Messages.kr
 	  src_full="$${checked%.checked}"; \
 	  src="$$(basename "$$src_full")"; \
 	  src_arg="$$src"; \
-	  if [ -f "$$src_full" ]; then src_arg="$$src_full"; fi; \
+	  if [ -f "$$src_full" ]; then src_arg="$$src_full"; \
+	  else \
+	    for d in src/spec src/impl $(GENERATED_DIR); do \
+	      if [ -f "$$d/$$src" ]; then src_arg="$$d/$$src"; break; fi; \
+	    done; \
+	  fi; \
 	  mod="$${src%.fst}"; mod="$${mod%.fsti}"; \
 	  if [ -f "generated/krml/$(notdir $@)" ]; then \
 	    cp "generated/krml/$(notdir $@)" "$@"; \
