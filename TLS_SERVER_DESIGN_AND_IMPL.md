@@ -279,6 +279,12 @@ Current phase: **Phase 6 server buffer/event API and theorem surface**.
   shared-secret buffer plus the pure `legal_event` premise; executable X25519
   derivation from stored server/client shares remains pending until concrete
   selection-private-key storage is added.
+- [x] Added role-indexed traffic-key install model support:
+  `TLS13.Impl.ConnectionState.Model.installed_traffic_keys_for_role_state` and
+  its evolution lemma mirror the pure `LocalInstallTrafficKeysForRole`
+  transition. This is the model foundation needed for server read/write traffic
+  key install mutations, since the older implementation helper is client-role
+  specific.
 
 ## End goal
 
@@ -1140,7 +1146,8 @@ Checklist:
       - shared-secret and traffic-secret derivation (supplied shared-secret
         wrapper complete; executable server X25519 and traffic-key wrappers
         remain);
-      - handshake key installation;
+      - handshake key installation (role-indexed model helper complete; Pulse
+        mutations remain);
       - server flight emission (focused sent-ServerHello public wrapper is
         complete; serializer-driven construction and encrypted flight remain);
       - client Finished verification;

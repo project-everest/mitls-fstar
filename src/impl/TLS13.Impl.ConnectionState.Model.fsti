@@ -348,6 +348,39 @@ let installed_traffic_keys_state
       st.CS.cs_event_log @ [CS.ConnLocalEvent (CS.LocalInstallTrafficKeys install)];
   }
 
+let installed_traffic_keys_for_role_state
+  (st:CS.connection_state)
+  (role_install:CS.role_traffic_key_install)
+  : CS.connection_state =
+  let model0 = st.CS.cs_model in
+  let hs0 = model0.CS.model_handshake in
+  let install = role_install.CS.install_payload in
+  {
+    CS.cs_model = {
+      model0 with
+        CS.model_record =
+          CS.install_record_keys_for_role
+            role_install.CS.install_role
+            model0.CS.model_record
+            install;
+        CS.model_handshake = {
+          hs0 with
+            CS.hs_keys =
+              CS.update_key_schedule_with_install_for_role
+                role_install.CS.install_role
+                hs0.CS.hs_keys
+                install;
+        };
+    };
+    CS.cs_wire_log = {
+      CL.raw_sent = B.append st.CS.cs_wire_log.CL.raw_sent B.empty;
+      CL.raw_received = B.append st.CS.cs_wire_log.CL.raw_received B.empty;
+    };
+    CS.cs_event_log =
+      st.CS.cs_event_log @
+        [CS.ConnLocalEvent (CS.LocalInstallTrafficKeysForRole role_install)];
+  }
+
 let validated_certificate_state
   (st:CS.connection_state)
   (peer:X.peer_identity)
@@ -1407,6 +1440,31 @@ val lemma_installed_traffic_keys_state_evolves
                    CS.delta_raw_received = B.empty;
                  }
                  (installed_traffic_keys_state st install))
+
+val lemma_installed_traffic_keys_for_role_state_evolves
+  (st:CS.connection_state)
+  (role_install:CS.role_traffic_key_install)
+  : Lemma
+      (requires CS.connection_state_consistent st /\
+                CS.legal_event
+                 st.CS.cs_model
+                 (CS.ConnLocalEvent
+                   (CS.LocalInstallTrafficKeysForRole role_install)))
+      (ensures CS.connection_state_evolves
+                 st
+                 (installed_traffic_keys_for_role_state st role_install) /\
+               CS.connection_state_consistent
+                 (installed_traffic_keys_for_role_state st role_install) /\
+               CS.legal_connection_delta
+                 st
+                 {
+                  CS.delta_event =
+                    CS.ConnLocalEvent
+                      (CS.LocalInstallTrafficKeysForRole role_install);
+                  CS.delta_raw_sent = B.empty;
+                  CS.delta_raw_received = B.empty;
+                 }
+                 (installed_traffic_keys_for_role_state st role_install))
 
 val lemma_validated_certificate_state_evolves
   (st:CS.connection_state)

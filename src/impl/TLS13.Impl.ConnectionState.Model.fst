@@ -479,6 +479,60 @@ let lemma_installed_traffic_keys_state_evolves
   assert (CS.connection_state_evolves st (installed_traffic_keys_state st install));
   assert (CS.connection_state_consistent (installed_traffic_keys_state st install))
 
+let lemma_installed_traffic_keys_for_role_state_evolves
+  (st:CS.connection_state)
+  (role_install:CS.role_traffic_key_install)
+  : Lemma
+      (requires CS.connection_state_consistent st /\
+                CS.legal_event
+                  st.CS.cs_model
+                  (CS.ConnLocalEvent
+                    (CS.LocalInstallTrafficKeysForRole role_install)))
+      (ensures CS.connection_state_evolves
+                 st
+                 (installed_traffic_keys_for_role_state st role_install) /\
+               CS.connection_state_consistent
+                 (installed_traffic_keys_for_role_state st role_install) /\
+               CS.legal_connection_delta
+                 st
+                 {
+                   CS.delta_event =
+                     CS.ConnLocalEvent
+                       (CS.LocalInstallTrafficKeysForRole role_install);
+                   CS.delta_raw_sent = B.empty;
+                   CS.delta_raw_received = B.empty;
+                 }
+                 (installed_traffic_keys_for_role_state st role_install))
+=
+  let ev =
+    CS.ConnLocalEvent
+      (CS.LocalInstallTrafficKeysForRole role_install) in
+  let delta = {
+    CS.delta_event = ev;
+    CS.delta_raw_sent = B.empty;
+    CS.delta_raw_received = B.empty;
+  } in
+  Seq.lemma_eq_intro B.empty B.empty;
+  assert (CS.step_model st.CS.cs_model ev ==
+          Some (installed_traffic_keys_for_role_state st role_install).CS.cs_model);
+  assert (CS.event_raw_delta_legal st.CS.cs_model ev B.empty B.empty);
+  assert (CS.legal_connection_delta
+    st
+    delta
+    (installed_traffic_keys_for_role_state st role_install));
+  assert (CS.connection_state_single_step
+    st
+    (installed_traffic_keys_for_role_state st role_install));
+  FStar.ReflexiveTransitiveClosure.closure_step
+    CS.connection_state_single_step
+    st
+    (installed_traffic_keys_for_role_state st role_install);
+  assert (CS.connection_state_evolves
+    st
+    (installed_traffic_keys_for_role_state st role_install));
+  assert (CS.connection_state_consistent
+    (installed_traffic_keys_for_role_state st role_install))
+
 let lemma_validated_certificate_state_evolves
   (st:CS.connection_state)
   (peer:X.peer_identity)
