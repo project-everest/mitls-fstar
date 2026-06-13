@@ -430,6 +430,13 @@ Current phase: **Phase 6 server buffer/event API and theorem surface**.
   `process_derive_and_install_client_application_read_keys` expose
   `server_local_event_end_to_end_correct`; `next_local_action` and generic
   `process_local_event` now schedule/dispatch the ready application key installs.
+- [x] Wired server-side client Finished verification into the public theorem
+  surface and generic local dispatcher. `process_verify_client_finished` now
+  verifies the stored client Finished witness, calls the `LocalAuth`
+  state mutation, and proves `server_local_event_end_to_end_correct` for
+  `LocalVerifyClientFinished`; `server_local_event_input_ready` exposes the
+  exact stored-Finished and `can_verify_client_finished` facts required by that
+  wrapper.
 
 ## End goal
 
@@ -1259,8 +1266,8 @@ Checklist:
 - [x] Constructor establishes the server invariant.
 - [ ] Network/local steps preserve the server invariant.
       Initial slices completed: `LocalStartServer`, SNI-present received
-      `ClientHello`, derived traffic-key installs, and generic server
-      application-data/close_notify sends; the focused
+      `ClientHello`, derived traffic-key installs, client Finished verification,
+      and generic server application-data/close_notify sends; the focused
       `LocalSelectServerParameters` wrapper also preserves the invariant but
       remains proof-only until executable selection storage/generation is added.
 - [x] Emitted bytes expose raw-delta, parse-back, seal, and write-key provenance.
@@ -1281,7 +1288,10 @@ Checklist:
 
 - [x] Create small `.fsti` boundaries for server state mutations.
       Initial boundaries cover server start, received ClientHello, and the
-      ghost/spec-only server parameter-selection transition.
+      ghost/spec-only server parameter-selection transition; subsequent
+      boundaries cover supplied/internal key installs, encrypted-flight state
+      mutations, client Finished receive, and stored client Finished
+      verification.
 - [x] Reuse shared helpers where endpoint-independent.
       `TLS13.Impl.ConnectionState.LocalSend.try_send_application_data` and
       `try_send_close_notify` are now endpoint-neutral for application write
@@ -1306,13 +1316,14 @@ Checklist:
         hints, and generic local dispatcher integration complete for handshake
         keys);
       - server flight emission (focused sent-ServerHello public wrapper,
-        serializer-driven cleartext ServerHello record construction, and pure
-        model helpers for EncryptedExtensions/Certificate/CertificateVerify/
-        server Finished are complete; the EncryptedExtensions state mutation is
-        complete; concrete selection-to-L-ServerHello storage, protected-record
-        seal wrappers, and the remaining Pulse encrypted-flight send mutations
-        remain);
-      - client Finished verification;
+        serializer-driven cleartext ServerHello record construction, pure model
+        helpers, and Pulse state mutations for EncryptedExtensions, Certificate,
+        CertificateVerify signing/send, and server Finished are complete;
+        concrete selection-to-L-ServerHello storage and protected-record
+        seal/serializer public wrappers remain);
+      - client Finished verification (state mutation, focused public wrapper, and
+        generic local dispatcher integration complete; network parse/open
+        dispatch for received client Finished remains pending);
       - application key installation (server write-key and client read-key
         supplied-material and internally derived mutations/wrappers, scheduler
         hints, and generic local dispatcher integration complete);
@@ -1345,6 +1356,11 @@ Status:
       admits the same explicit `LocalFail unexpected_message` response shape as
       the client for send refusal, while successful protected sends prove raw
       segmentation, seal projection, and server-role write-key provenance.
+- [x] Generic `process_local_event` now handles
+      `LocalVerifyClientFinished` through the stored-Finished verification
+      wrapper, preserving the server invariant and entering application-data
+      control when the application record keys are installed and the client
+      Finished verifies against the client handshake traffic secret.
 - [ ] ClientHello reject/error paths are still pending: no-SNI policy rejection,
       unsupported cipher/group/signature offers, malformed ClientHello, and the
       final buffer-level decode-error path.

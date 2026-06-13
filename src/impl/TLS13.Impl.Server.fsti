@@ -126,6 +126,12 @@ let server_local_event_input_ready
       st.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_master_secret /\
     not (Some?
       st.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_application_traffic)
+  | ST.LocalVerifyClientFinished ->
+    Seq.equal payload B.empty /\
+    Some? st.CS.cs_model.CS.model_handshake.CS.hs_client_finished /\
+    CM.can_verify_client_finished
+      st
+      (Some?.v st.CS.cs_model.CS.model_handshake.CS.hs_client_finished)
   | ST.LocalDeriveSharedSecret ->
     B.length payload == 32 /\
     CS.legal_event
@@ -717,6 +723,38 @@ fn process_derive_and_install_client_application_read_keys
                         st1
                         resp
                         ST.LocalInstallClientApplicationTrafficKeys
+                        B.empty
+                        network_out_bytes
+                        app_out_bytes)
+
+fn process_verify_client_finished
+  (s:server)
+  (network_out:array U8.t)
+  (network_out_len:SZ.t)
+  (app_out:array U8.t)
+  (app_out_len:SZ.t)
+  requires connection_exactly s 'st0 **
+           pts_to network_out 'old_network_out **
+           pts_to app_out 'old_app_out **
+           pure (B.length 'old_network_out == SZ.v network_out_len /\
+                 B.length 'old_app_out == SZ.v app_out_len /\
+                 ST.server_end_to_end_invariant 'st0 /\
+                 Some? 'st0.CS.cs_model.CS.model_handshake.CS.hs_client_finished /\
+                 CM.can_verify_client_finished
+                   'st0
+                   (Some?.v 'st0.CS.cs_model.CS.model_handshake.CS.hs_client_finished))
+  returns resp:ST.server_response
+  ensures exists* st1 network_out_bytes app_out_bytes.
+          connection_exactly s st1 **
+          pts_to network_out network_out_bytes **
+          pts_to app_out app_out_bytes **
+          pure (B.length network_out_bytes == SZ.v network_out_len /\
+                B.length app_out_bytes == SZ.v app_out_len /\
+                ST.server_local_event_end_to_end_correct
+                        'st0
+                        st1
+                        resp
+                        ST.LocalVerifyClientFinished
                         B.empty
                         network_out_bytes
                         app_out_bytes)

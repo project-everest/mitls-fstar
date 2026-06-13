@@ -12,6 +12,7 @@ module CS = TLS13.Spec.ConnectionState
 module CSL = TLS13.ConnectionState.Lemmas
 module CM = TLS13.Impl.ConnectionState.Model
 module CF = TLS13.Impl.ConnectionState.Fail
+module CLA = TLS13.Impl.ConnectionState.LocalAuth
 module CLH = TLS13.Impl.ConnectionState.LocalHandshake
 module CLS = TLS13.Impl.ConnectionState.LocalSend
 module CN = TLS13.Impl.ConnectionState.Network
@@ -2889,6 +2890,149 @@ fn process_send_close_notify_local_event
   }
 }
 
+fn process_verify_client_finished
+  (s:server)
+  (network_out:array U8.t)
+  (network_out_len:SZ.t)
+  (app_out:array U8.t)
+  (app_out_len:SZ.t)
+  requires connection_exactly s 'st0 **
+           pts_to network_out 'old_network_out **
+           pts_to app_out 'old_app_out **
+           pure (B.length 'old_network_out == SZ.v network_out_len /\
+                 B.length 'old_app_out == SZ.v app_out_len /\
+                 ST.server_end_to_end_invariant 'st0 /\
+                 Some? 'st0.CS.cs_model.CS.model_handshake.CS.hs_client_finished /\
+                 CM.can_verify_client_finished
+                   'st0
+                   (Some?.v 'st0.CS.cs_model.CS.model_handshake.CS.hs_client_finished))
+  returns resp:ST.server_response
+  ensures exists* st1 network_out_bytes app_out_bytes.
+          connection_exactly s st1 **
+          pts_to network_out network_out_bytes **
+          pts_to app_out app_out_bytes **
+          pure (B.length network_out_bytes == SZ.v network_out_len /\
+                B.length app_out_bytes == SZ.v app_out_len /\
+                ST.server_local_event_end_to_end_correct
+                        'st0
+                        st1
+                        resp
+                        ST.LocalVerifyClientFinished
+                        B.empty
+                        network_out_bytes
+                        app_out_bytes)
+{
+  let fin = Ghost.hide
+    (Some?.v 'st0.CS.cs_model.CS.model_handshake.CS.hs_client_finished);
+  assert (pure ('st0.CS.cs_model.CS.model_handshake.CS.hs_client_finished ==
+    Some (Ghost.reveal fin)));
+  assert (pure (CM.can_verify_client_finished 'st0 (Ghost.reveal fin)));
+  W.lemma_serialize_finished_len (Ghost.reveal fin);
+  assert (pure (B.length 'st0.CS.cs_model.CS.model_handshake.CS.hs_transcript + 36 <=
+    Bounds.max_transcript_len));
+  unfold (connection_exactly s 'st0);
+  CLA.mark_verified_stored_client_finished
+    s
+    #fin;
+  fold (connection_exactly
+    s
+    (CM.verified_client_finished_state 'st0 (Ghost.reveal fin)));
+
+  let resp = {
+    ST.network_out_len = 0sz;
+    ST.app_out_len = 0sz;
+    ST.status = ST.StepOk;
+  };
+
+  let delta = Ghost.hide {
+    CS.delta_event =
+      CS.ConnLocalEvent (CS.LocalVerifyClientFinished (Ghost.reveal fin));
+    CS.delta_raw_sent = B.empty;
+    CS.delta_raw_received = B.empty;
+  };
+  CM.lemma_verified_client_finished_state_evolves 'st0 (Ghost.reveal fin);
+  assert (pure (CS.legal_connection_delta
+    'st0
+    (Ghost.reveal delta)
+    (CM.verified_client_finished_state 'st0 (Ghost.reveal fin))));
+
+  CSL.lemma_legal_connection_delta_full_log_consistent_for_role
+    CS.ServerEndpoint
+    'st0
+    (Ghost.reveal delta)
+    (CM.verified_client_finished_state 'st0 (Ghost.reveal fin));
+  CSL.lemma_legal_connection_delta_raw_event_replay_consistent
+    'st0
+    (Ghost.reveal delta)
+    (CM.verified_client_finished_state 'st0 (Ghost.reveal fin));
+  CSL.lemma_connection_state_protected_raw_segmented_replay
+    (CM.verified_client_finished_state 'st0 (Ghost.reveal fin));
+  CSL.lemma_legal_connection_delta_sent_seal_replay_consistent
+    'st0
+    (Ghost.reveal delta)
+    (CM.verified_client_finished_state 'st0 (Ghost.reveal fin));
+  CSL.lemma_legal_connection_delta_received_decode_replay_consistent
+    'st0
+    (Ghost.reveal delta)
+    (CM.verified_client_finished_state 'st0 (Ghost.reveal fin));
+
+  Seq.lemma_len_slice 'old_network_out 0 0;
+  Seq.lemma_eq_intro B.empty (Seq.slice 'old_network_out 0 0);
+  Seq.lemma_len_slice 'old_app_out 0 0;
+  Seq.lemma_eq_intro B.empty (Seq.slice 'old_app_out 0 0);
+
+  assert (pure ((CM.verified_client_finished_state 'st0 (Ghost.reveal fin)).CS.cs_model.CS.model_config ==
+    'st0.CS.cs_model.CS.model_config));
+  assert (pure ((CM.verified_client_finished_state 'st0 (Ghost.reveal fin)).CS.cs_model.CS.model_config.CS.config_role ==
+    CS.ServerEndpoint));
+  assert (pure (Some?
+    (CM.verified_client_finished_state 'st0 (Ghost.reveal fin)).CS.cs_model.CS.model_config.CS.config_server));
+  assert (pure (ST.server_state_correct
+    (CM.verified_client_finished_state 'st0 (Ghost.reveal fin))));
+  assert (pure (ST.server_raw_to_message_replay_consistent
+    (CM.verified_client_finished_state 'st0 (Ghost.reveal fin))));
+  assert (pure (ST.server_end_to_end_invariant
+    (CM.verified_client_finished_state 'st0 (Ghost.reveal fin))));
+
+  assert (pure (ST.legal_response_for_event
+    'st0
+    (CM.verified_client_finished_state 'st0 (Ghost.reveal fin))
+    resp
+    (CS.ConnLocalEvent (CS.LocalVerifyClientFinished (Ghost.reveal fin)))
+    B.empty
+    B.empty
+    'old_network_out
+    'old_app_out));
+  assert (pure (ST.legal_local_response
+    'st0
+    (CM.verified_client_finished_state 'st0 (Ghost.reveal fin))
+    resp
+    ST.LocalVerifyClientFinished
+    B.empty
+    (CS.ConnLocalEvent (CS.LocalVerifyClientFinished (Ghost.reveal fin)))
+    B.empty
+    B.empty
+    'old_network_out
+    'old_app_out));
+  assert (pure (ST.legal_handled_local_response
+    'st0
+    (CM.verified_client_finished_state 'st0 (Ghost.reveal fin))
+    resp
+    ST.LocalVerifyClientFinished
+    B.empty
+    'old_network_out
+    'old_app_out));
+  assert (pure (ST.server_local_event_end_to_end_correct
+    'st0
+    (CM.verified_client_finished_state 'st0 (Ghost.reveal fin))
+    resp
+    ST.LocalVerifyClientFinished
+    B.empty
+    'old_network_out
+    'old_app_out));
+  resp
+}
+
 fn process_local_event
   (s:server)
   (kind:ST.local_event_kind)
@@ -3019,12 +3163,15 @@ fn process_local_event
       }
     }
     ST.LocalVerifyClientFinished -> {
-      assert (pure False);
-      {
-        ST.network_out_len = 0sz;
-        ST.app_out_len = 0sz;
-        ST.status = ST.IllegalTransition;
-      }
+      let resp =
+        process_verify_client_finished
+          s
+          network_out
+          network_out_len
+          app_out
+          app_out_len;
+      assert (pure (Seq.equal (Ghost.reveal 'payload_bytes) B.empty));
+      resp
     }
     ST.LocalDeliverApplicationData -> {
       assert (pure False);
