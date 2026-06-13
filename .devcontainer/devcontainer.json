@@ -1,0 +1,27 @@
+{
+  "name": "agentic-tls",
+  "build": {
+    "dockerfile": "Dockerfile",
+    "context": ".."
+  },
+  "workspaceFolder": "/workspaces/agentic-tls",
+  "workspaceMount": "source=${localWorkspaceFolder},target=/workspaces/agentic-tls,type=bind",
+  "remoteUser": "vscode",
+
+  // Build the EverParse/QuackyDucky toolchain (F*, KaRaMeL, QuackyDucky,
+  // LowParse) and fetch project dependencies (HACL* submodule, RFCs, OpenSSL
+  // check).  This is the heavy step (~1h); it runs once after the container is
+  // created.  The toolchain lands in tools/everparse (gitignored).
+  "onCreateCommand": "./setup.sh --jobs 8",
+
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "FStarLang.fstar-vscode-assistant"
+      ],
+      "settings": {
+        "fstar.fstarExePath": "${workspaceFolder}/tools/everparse/opt/FStar/bin/fstar.exe"
+      }
+    }
+  }
+}
