@@ -152,6 +152,11 @@ type traffic_key_material = {
   traffic_iv: C.aead_nonce;
 }
 
+type record_key_iv_material = {
+  record_material_key: B.bytes;
+  record_material_iv: B.bytes;
+}
+
 let traffic_key_material_for_secret (secret:K.traffic_secret) : traffic_key_material =
   {
     traffic_secret = secret;
@@ -892,6 +897,142 @@ let application_record_keys_installed_for_role
       model.model_record.record_write
   | _, _ ->
     False
+
+let record_epoch_for_traffic_epoch
+  (epoch:traffic_epoch)
+  : R.epoch =
+  match epoch with
+  | TrafficHandshake -> R.Handshake
+  | TrafficApplication -> R.Application
+
+let record_direction_for_endpoint
+  (role:endpoint_role)
+  (dir:traffic_direction)
+  (model:connection_model)
+  : R.direction_state =
+  match dir with
+  | TrafficRead -> model.model_record.record_read
+  | TrafficWrite -> model.model_record.record_write
+
+let record_material_of_traffic_material
+  (material:traffic_key_material)
+  : record_key_iv_material =
+  {
+    record_material_key = material.traffic_key;
+    record_material_iv = material.traffic_iv;
+  }
+
+let record_direction_material
+  (st:R.direction_state)
+  : option record_key_iv_material =
+  match st.R.key, st.R.static_iv with
+  | Some key, Some iv ->
+    Some { record_material_key = key; record_material_iv = iv }
+  | _, _ ->
+    None
+
+let record_key_iv_material_agrees
+  (left:record_key_iv_material)
+  (right:record_key_iv_material)
+  : prop =
+  Seq.equal left.record_material_key right.record_material_key /\
+  Seq.equal left.record_material_iv right.record_material_iv
+
+let record_direction_material_matches_key_schedule_for_role
+  (role:endpoint_role)
+  (dir:traffic_direction)
+  (traffic_id:labeled_traffic_epoch)
+  (model:connection_model)
+  : prop =
+  let st = record_direction_for_endpoint role dir model in
+  st.R.epoch == record_epoch_for_traffic_epoch traffic_id.traffic_id_epoch /\
+  traffic_label_for_endpoint_direction role dir == traffic_id.traffic_id_label /\
+  (match
+    traffic_material_for_label
+      model.model_handshake.hs_keys
+      traffic_id.traffic_id_epoch
+      traffic_id.traffic_id_label,
+    record_direction_material st
+  with
+  | Some traffic_material, Some record_material ->
+    record_key_iv_material_agrees
+      (record_material_of_traffic_material traffic_material)
+      record_material
+  | _, _ ->
+    False)
+
+let key_schedule_traffic_record_material_agrees
+  (traffic_id:labeled_traffic_epoch)
+  (client:connection_state)
+  (server:connection_state)
+  : prop =
+  match
+    traffic_material_for_label
+      client.cs_model.model_handshake.hs_keys
+      traffic_id.traffic_id_epoch
+      traffic_id.traffic_id_label,
+    traffic_material_for_label
+      server.cs_model.model_handshake.hs_keys
+      traffic_id.traffic_id_epoch
+      traffic_id.traffic_id_label
+  with
+  | Some client_material, Some server_material ->
+    record_key_iv_material_agrees
+      (record_material_of_traffic_material client_material)
+      (record_material_of_traffic_material server_material)
+  | _, _ ->
+    False
+
+let peer_record_material_inputs_agree
+  (traffic_id:labeled_traffic_epoch)
+  (client:connection_state)
+  (server:connection_state)
+  : prop =
+  key_schedule_traffic_record_material_agrees traffic_id client server /\
+  (match traffic_id.traffic_id_label with
+  | ClientTraffic ->
+    record_direction_material_matches_key_schedule_for_role
+      ClientEndpoint TrafficWrite traffic_id client.cs_model /\
+    record_direction_material_matches_key_schedule_for_role
+      ServerEndpoint TrafficRead traffic_id server.cs_model
+  | ServerTraffic ->
+    record_direction_material_matches_key_schedule_for_role
+      ServerEndpoint TrafficWrite traffic_id server.cs_model /\
+    record_direction_material_matches_key_schedule_for_role
+      ClientEndpoint TrafficRead traffic_id client.cs_model)
+
+let peer_record_material_agrees
+  (traffic_id:labeled_traffic_epoch)
+  (client:connection_state)
+  (server:connection_state)
+  : prop =
+  match traffic_id.traffic_id_label with
+  | ClientTraffic ->
+    (match
+      record_direction_material client.cs_model.model_record.record_write,
+      record_direction_material server.cs_model.model_record.record_read
+    with
+    | Some client_write, Some server_read ->
+      client.cs_model.model_record.record_write.R.epoch ==
+        record_epoch_for_traffic_epoch traffic_id.traffic_id_epoch /\
+      server.cs_model.model_record.record_read.R.epoch ==
+        record_epoch_for_traffic_epoch traffic_id.traffic_id_epoch /\
+      record_key_iv_material_agrees client_write server_read
+    | _, _ ->
+      False)
+  | ServerTraffic ->
+    (match
+      record_direction_material server.cs_model.model_record.record_write,
+      record_direction_material client.cs_model.model_record.record_read
+    with
+    | Some server_write, Some client_read ->
+      server.cs_model.model_record.record_write.R.epoch ==
+        record_epoch_for_traffic_epoch traffic_id.traffic_id_epoch /\
+      client.cs_model.model_record.record_read.R.epoch ==
+        record_epoch_for_traffic_epoch traffic_id.traffic_id_epoch /\
+      record_key_iv_material_agrees server_write client_read
+    | _, _ ->
+      False)
 
 let derive_shared_secret_model
   (model:connection_model)

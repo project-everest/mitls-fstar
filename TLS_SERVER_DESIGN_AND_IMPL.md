@@ -17,7 +17,7 @@ the existing client implementation structure.
 
 ## Implementation status
 
-Current phase: **Phase 0/1 started**.
+Current phase: **Phase 2 pure paired-endpoint theorem work**.
 
 - [x] Single authoritative plan committed.
 - [x] Superseded server/transcript planning docs removed.
@@ -149,7 +149,16 @@ Current phase: **Phase 0/1 started**.
   implementation readiness queries and mutation/model lemmas now expose
   `ClientEndpoint` exactly where legacy client-only transitions rely on it, and
   bounded full `make verify` passes.
-- [ ] Phase 2 paired endpoint traces and derived-key theorem family.
+- [x] Added pure record-material agreement vocabulary and theorem:
+  `record_direction_material_matches_key_schedule_for_role`,
+  `key_schedule_traffic_record_material_agrees`,
+  `peer_record_material_inputs_agree`, `peer_record_material_agrees`, and
+  `lemma_peer_record_material_agrees`. These prove the first-milestone
+  cross-endpoint record key/IV shape: client write equals server read for
+  `ClientTraffic`, and server write equals client read for `ServerTraffic`, once
+  both endpoints project the installed traffic material for the same label.
+- [ ] Finish Phase 2 paired endpoint trace/checkpoint lemmas not yet needed by
+  the derived-key bridge, then move to Phase 3 shared endpoint/codec refactor.
 
 ## End goal
 
@@ -708,64 +717,64 @@ Server Pulse implementation is blocked until these gates are complete.
 Checklist:
 
 - [x] `ClientEndpoint` and `ServerEndpoint` roles exist in the pure model.
-- [ ] Client configuration remains behaviorally unchanged.
-- [ ] Server configuration records supported suite/group/signature policy,
+- [x] Client configuration remains behaviorally unchanged.
+- [x] Server configuration records supported suite/group/signature policy,
       credential identity, and certificate chain.
-- [ ] Read/write direction is never interpreted without endpoint role.
-- [ ] Client read/write key projections reduce to the existing client
+- [x] Read/write direction is never interpreted without endpoint role.
+- [x] Client read/write key projections reduce to the existing client
       projections.
-- [ ] Server read/write key projections prove the correct traffic-label mapping.
+- [x] Server read/write key projections prove the correct traffic-label mapping.
 
 ### Gate 2: transcript precision
 
 Checklist:
 
-- [ ] Every client and server handshake message transition appends exactly
+- [x] Every supported client and server handshake message transition appends exactly
       `serialize_handshake msg`.
 - [ ] Non-transcript messages are explicitly non-transcript.
-- [ ] `TH_CH`, `TH_SH`, `TH_before_CV`, `TH_before_SF`, `TH_SF`, and `TH_CF`
+- [x] `TH_CH`, `TH_SH`, `TH_before_CV`, `TH_before_SF`, `TH_SF`, and `TH_CF`
       are named predicates/lemmas.
-- [ ] CertificateVerify input uses `hash(TH_before_CV)`.
-- [ ] Server Finished uses `hash(TH_before_SF)`.
-- [ ] Client Finished verification uses `hash(TH_SF)`.
+- [x] CertificateVerify input uses `hash(TH_before_CV)`.
+- [x] Server Finished uses `hash(TH_before_SF)`.
+- [x] Client Finished verification uses `hash(TH_SF)`.
 - [ ] Paired legal events imply equal transcript bytes at each checkpoint.
 
 ### Gate 3: X25519/shared-secret boundary
 
 Checklist:
 
-- [ ] `paired_x25519_key_shares` records both endpoints' public shares and the
+- [x] `paired_x25519_key_shares` records both endpoints' public shares and the
       local private/public correspondence.
 - [x] `TLS13.Crypto.Spec` exposes a trusted X25519 agreement lemma.
-- [ ] The derived-key theorem obtains shared-secret equality from
+- [x] The derived-key theorem obtains shared-secret equality from
       `paired_x25519_key_shares` plus the X25519 agreement lemma.
-- [ ] The crypto TCB boundary is documented in the pure theorem and audit text.
-- [ ] Same shared secret implies same early, handshake, and master secrets for
+- [x] The crypto TCB boundary is documented in the pure theorem and audit text.
+- [x] Same shared secret implies same early, handshake, and master secrets for
       the supported empty-PSK profile.
 
 ### Gate 4: derived-key agreement
 
 Checklist:
 
-- [ ] `derived_key_id` and `derivation_inputs_agree` are defined.
-- [ ] Handshake traffic-secret agreement is proved at `TH_SH`.
-- [ ] Application traffic-secret agreement is proved at `TH_SF`.
-- [ ] AEAD key/IV agreement is proved by deterministic derivation from traffic
+- [x] `derived_key_id` and `derivation_inputs_agree` are defined.
+- [x] Handshake traffic-secret agreement is proved at `TH_SH`.
+- [x] Application traffic-secret agreement is proved at `TH_SF`.
+- [x] AEAD key/IV agreement is proved by deterministic derivation from traffic
       secret agreement.
-- [ ] Finished-key agreement is proved by deterministic derivation from the
+- [x] Finished-key agreement is proved by deterministic derivation from the
       relevant traffic secret.
-- [ ] KeyUpdate agreement is explicitly out of first-milestone scope and tracked
+- [x] KeyUpdate agreement is explicitly out of first-milestone scope and tracked
       as later theorem work.
-- [ ] Out-of-scope derived keys are explicitly not claimed.
+- [x] Out-of-scope derived keys are explicitly not claimed.
 
 ### Gate 5: record-material agreement
 
 Checklist:
 
-- [ ] Endpoint record read/write projections expose installed key/IV material.
-- [ ] Client write equals server read for `ClientTraffic`.
-- [ ] Server write equals client read for `ServerTraffic`.
-- [ ] Record sequence/epoch consistency is preserved.
+- [x] Endpoint record read/write projections expose installed key/IV material.
+- [x] Client write equals server read for `ClientTraffic`.
+- [x] Server write equals client read for `ServerTraffic`.
+- [x] Record sequence/epoch consistency is preserved.
 - [ ] Sent seal and accepted received decode replay use the agreed material.
 
 ## Phase-by-phase implementation plan
@@ -841,9 +850,9 @@ Checklist:
 - [x] Preserve the legacy Pulse client implementation by threading explicit
       client-role facts through readiness queries, model lemmas, and mutation
       boundaries.
-- [ ] Generalize event-log, transcript, record-layer, key-schedule, raw replay,
+- [x] Generalize event-log, transcript, record-layer, key-schedule, raw replay,
       seal replay, decode replay, and application-log consistency.
-- [ ] Add transcript checkpoints and derivation-input extraction helpers.
+- [x] Add transcript checkpoints and derivation-input extraction helpers.
 
 Validation:
 
@@ -856,23 +865,24 @@ Validation:
 
 Checklist:
 
-- [ ] Define `paired_wire_logs`.
+- [x] Define `paired_wire_logs`.
 - [ ] Define `paired_handshake_events`.
-- [ ] Define `paired_x25519_key_shares`.
-- [ ] Define `same_key_derivation_checkpoint`.
-- [ ] Define `derivation_inputs_agree`.
-- [ ] Add the trusted X25519 agreement lemma.
+- [x] Define `paired_x25519_key_shares`.
+- [x] Define `same_key_derivation_checkpoint`.
+- [x] Define `derivation_inputs_agree`.
+- [x] Add the trusted X25519 agreement lemma.
 - [ ] Prove transcript pairing up to each checkpoint.
-- [ ] Prove base-secret agreement.
-- [ ] Prove traffic-secret agreement.
-- [ ] Prove AEAD key/IV and Finished-key agreement.
-- [ ] Prove peer record-material agreement.
-- [ ] Expose `theorem_paired_endpoints_derived_key_agrees`.
+- [x] Prove base-secret agreement.
+- [x] Prove traffic-secret agreement.
+- [x] Prove AEAD key/IV and Finished-key agreement.
+- [x] Prove peer record-material agreement.
+- [x] Expose `lemma_paired_x25519_key_shares_derived_key_agrees` and
+      `lemma_peer_record_material_agrees`.
 
 Validation:
 
-- [ ] This phase verifies in pure/spec modules without server Pulse code.
-- [ ] The theorem scope lists supported and out-of-scope `derived_key_id` cases.
+- [x] This phase verifies in pure/spec modules without server Pulse code.
+- [x] The theorem scope lists supported and out-of-scope `derived_key_id` cases.
 
 ### Phase 3: shared endpoint/codec predicate refactor
 

@@ -314,6 +314,100 @@ let lemma_paired_x25519_key_shares_derived_key_agrees
      assert False);
   lemma_paired_endpoints_derived_key_agrees key_id client server
 
+let lemma_peer_record_material_agrees
+  (traffic_id:labeled_traffic_epoch)
+  (client:connection_state)
+  (server:connection_state)
+  : Lemma
+      (requires peer_record_material_inputs_agree traffic_id client server)
+      (ensures peer_record_material_agrees traffic_id client server)
+=
+  match traffic_id.traffic_id_label with
+  | ClientTraffic ->
+    let client_st = client.cs_model.model_record.record_write in
+    let server_st = server.cs_model.model_record.record_read in
+    (match
+      traffic_material_for_label
+        client.cs_model.model_handshake.hs_keys
+        traffic_id.traffic_id_epoch
+        ClientTraffic,
+      traffic_material_for_label
+        server.cs_model.model_handshake.hs_keys
+        traffic_id.traffic_id_epoch
+        ClientTraffic,
+      record_direction_material client_st,
+      record_direction_material server_st
+     with
+     | Some client_material, Some server_material,
+       Some client_record, Some server_record ->
+       assert (record_key_iv_material_agrees
+         (record_material_of_traffic_material client_material)
+         (record_material_of_traffic_material server_material));
+       assert (record_key_iv_material_agrees
+         (record_material_of_traffic_material client_material)
+         client_record);
+       assert (record_key_iv_material_agrees
+         (record_material_of_traffic_material server_material)
+         server_record);
+       assert (Seq.equal client_material.traffic_key server_material.traffic_key);
+       assert (Seq.equal client_material.traffic_iv server_material.traffic_iv);
+       assert (Seq.equal client_material.traffic_key client_record.record_material_key);
+       assert (Seq.equal client_material.traffic_iv client_record.record_material_iv);
+       assert (Seq.equal server_material.traffic_key server_record.record_material_key);
+       assert (Seq.equal server_material.traffic_iv server_record.record_material_iv);
+       Seq.lemma_eq_elim client_material.traffic_key client_record.record_material_key;
+       Seq.lemma_eq_elim client_material.traffic_iv client_record.record_material_iv;
+       Seq.lemma_eq_elim client_material.traffic_key server_material.traffic_key;
+       Seq.lemma_eq_elim client_material.traffic_iv server_material.traffic_iv;
+       Seq.lemma_eq_elim server_material.traffic_key server_record.record_material_key;
+       Seq.lemma_eq_elim server_material.traffic_iv server_record.record_material_iv;
+       assert (Seq.equal client_record.record_material_key server_record.record_material_key);
+       assert (Seq.equal client_record.record_material_iv server_record.record_material_iv)
+     | _, _, _, _ ->
+       assert False)
+  | ServerTraffic ->
+    let server_st = server.cs_model.model_record.record_write in
+    let client_st = client.cs_model.model_record.record_read in
+    (match
+      traffic_material_for_label
+        client.cs_model.model_handshake.hs_keys
+        traffic_id.traffic_id_epoch
+        ServerTraffic,
+      traffic_material_for_label
+        server.cs_model.model_handshake.hs_keys
+        traffic_id.traffic_id_epoch
+        ServerTraffic,
+      record_direction_material client_st,
+      record_direction_material server_st
+     with
+     | Some client_material, Some server_material,
+       Some client_record, Some server_record ->
+       assert (record_key_iv_material_agrees
+         (record_material_of_traffic_material client_material)
+         (record_material_of_traffic_material server_material));
+       assert (record_key_iv_material_agrees
+         (record_material_of_traffic_material client_material)
+         client_record);
+       assert (record_key_iv_material_agrees
+         (record_material_of_traffic_material server_material)
+         server_record);
+       assert (Seq.equal client_material.traffic_key server_material.traffic_key);
+       assert (Seq.equal client_material.traffic_iv server_material.traffic_iv);
+       assert (Seq.equal client_material.traffic_key client_record.record_material_key);
+       assert (Seq.equal client_material.traffic_iv client_record.record_material_iv);
+       assert (Seq.equal server_material.traffic_key server_record.record_material_key);
+       assert (Seq.equal server_material.traffic_iv server_record.record_material_iv);
+       Seq.lemma_eq_elim client_material.traffic_key client_record.record_material_key;
+       Seq.lemma_eq_elim client_material.traffic_iv client_record.record_material_iv;
+       Seq.lemma_eq_elim client_material.traffic_key server_material.traffic_key;
+       Seq.lemma_eq_elim client_material.traffic_iv server_material.traffic_iv;
+       Seq.lemma_eq_elim server_material.traffic_key server_record.record_material_key;
+       Seq.lemma_eq_elim server_material.traffic_iv server_record.record_material_iv;
+       assert (Seq.equal server_record.record_material_key client_record.record_material_key);
+       assert (Seq.equal server_record.record_material_iv client_record.record_material_iv)
+     | _, _, _, _ ->
+       assert False)
+
 let lemma_step_role_install_record_keys_consistent_for_role
   (role:endpoint_role)
   (model0:connection_model)

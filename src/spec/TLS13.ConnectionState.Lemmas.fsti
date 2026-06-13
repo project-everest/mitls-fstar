@@ -99,6 +99,14 @@ val lemma_paired_x25519_key_shares_derived_key_agrees
         derivation_checkpoint_inputs_agree key_id client server)
       (ensures peer_derived_key_material_agrees key_id client server)
 
+val lemma_peer_record_material_agrees
+  (traffic_id:labeled_traffic_epoch)
+  (client:connection_state)
+  (server:connection_state)
+  : Lemma
+      (requires peer_record_material_inputs_agree traffic_id client server)
+      (ensures peer_record_material_agrees traffic_id client server)
+
 val lemma_step_role_install_record_keys_consistent_for_role
   (role:endpoint_role)
   (model0:connection_model)
