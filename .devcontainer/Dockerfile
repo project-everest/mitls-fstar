@@ -40,6 +40,13 @@ RUN apt-get update \
       python3 \
  && rm -rf /var/lib/apt/lists/*
 
+# Some Docker/CI hosts disallow unprivileged user namespaces, so opam's
+# bubblewrap sandbox check fails and opam would otherwise prompt interactively
+# to disable it.  OPAMYES makes `make quackyducky`'s `opam init` answer that
+# prompt non-interactively (the build already runs inside this container).
+ENV OPAMYES=1
+ENV OPAMCONFIRMLEVEL=unsafe-yes
+
 # Run as a non-root user (opam refuses to operate as root, and bind-mounted
 # workspace files stay owned by a normal user).  ubuntu:24.04 ships a default
 # uid-1000 "ubuntu" user; replace it with the conventional "vscode" user.
