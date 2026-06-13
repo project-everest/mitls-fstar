@@ -1024,6 +1024,230 @@ let lemma_sent_server_hello_state_evolves
   assert (CS.connection_state_consistent
     (sent_server_hello_state st sh raw_sent))
 
+let lemma_sent_encrypted_extensions_state_evolves
+  (st:CS.connection_state)
+  (ee:M.encrypted_extensions)
+  (raw_sent:B.bytes)
+  : Lemma
+      (requires CS.connection_state_consistent st /\
+                can_send_encrypted_extensions st ee raw_sent)
+      (ensures CS.connection_state_evolves
+                 st
+                 (sent_encrypted_extensions_state st ee raw_sent) /\
+               CS.connection_state_consistent
+                 (sent_encrypted_extensions_state st ee raw_sent) /\
+               CS.legal_connection_delta
+                 st
+                 {
+                   CS.delta_event =
+                     CS.ConnNetworkEvent {
+                       CL.message_direction = CL.Sent;
+                       CL.message_value = M.TlsHandshake (M.EncryptedExtensions ee);
+                     };
+                   CS.delta_raw_sent = raw_sent;
+                   CS.delta_raw_received = B.empty;
+                 }
+                 (sent_encrypted_extensions_state st ee raw_sent))
+=
+  let ev =
+    CS.ConnNetworkEvent {
+      CL.message_direction = CL.Sent;
+      CL.message_value = M.TlsHandshake (M.EncryptedExtensions ee);
+    } in
+  let delta = {
+    CS.delta_event = ev;
+    CS.delta_raw_sent = raw_sent;
+    CS.delta_raw_received = B.empty;
+  } in
+  assert (CS.legal_event st.CS.cs_model ev);
+  assert (CS.event_raw_delta_legal st.CS.cs_model ev raw_sent B.empty);
+  assert (CS.step_model st.CS.cs_model ev ==
+          Some (sent_encrypted_extensions_state st ee raw_sent).CS.cs_model);
+  assert (CS.legal_connection_delta
+    st
+    delta
+    (sent_encrypted_extensions_state st ee raw_sent));
+  assert (CS.connection_state_single_step
+    st
+    (sent_encrypted_extensions_state st ee raw_sent));
+  FStar.ReflexiveTransitiveClosure.closure_step
+    CS.connection_state_single_step
+    st
+    (sent_encrypted_extensions_state st ee raw_sent);
+  assert (CS.connection_state_evolves
+    st
+    (sent_encrypted_extensions_state st ee raw_sent));
+  assert (CS.connection_state_consistent
+    (sent_encrypted_extensions_state st ee raw_sent))
+
+let lemma_sent_certificate_state_evolves
+  (st:CS.connection_state)
+  (cert:M.certificate_msg)
+  (raw_sent:B.bytes)
+  : Lemma
+      (requires CS.connection_state_consistent st /\
+                can_send_certificate st cert raw_sent)
+      (ensures CS.connection_state_evolves
+                 st
+                 (sent_certificate_state st cert raw_sent) /\
+               CS.connection_state_consistent
+                 (sent_certificate_state st cert raw_sent) /\
+               CS.legal_connection_delta
+                 st
+                 {
+                   CS.delta_event =
+                     CS.ConnNetworkEvent {
+                       CL.message_direction = CL.Sent;
+                       CL.message_value = M.TlsHandshake (M.Certificate cert);
+                     };
+                   CS.delta_raw_sent = raw_sent;
+                   CS.delta_raw_received = B.empty;
+                 }
+                 (sent_certificate_state st cert raw_sent))
+=
+  let ev =
+    CS.ConnNetworkEvent {
+      CL.message_direction = CL.Sent;
+      CL.message_value = M.TlsHandshake (M.Certificate cert);
+    } in
+  let delta = {
+    CS.delta_event = ev;
+    CS.delta_raw_sent = raw_sent;
+    CS.delta_raw_received = B.empty;
+  } in
+  assert (CS.legal_event st.CS.cs_model ev);
+  assert (CS.event_raw_delta_legal st.CS.cs_model ev raw_sent B.empty);
+  assert (CS.step_model st.CS.cs_model ev ==
+          Some (sent_certificate_state st cert raw_sent).CS.cs_model);
+  assert (CS.legal_connection_delta
+    st
+    delta
+    (sent_certificate_state st cert raw_sent));
+  assert (CS.connection_state_single_step
+    st
+    (sent_certificate_state st cert raw_sent));
+  FStar.ReflexiveTransitiveClosure.closure_step
+    CS.connection_state_single_step
+    st
+    (sent_certificate_state st cert raw_sent);
+  assert (CS.connection_state_evolves
+    st
+    (sent_certificate_state st cert raw_sent));
+  assert (CS.connection_state_consistent
+    (sent_certificate_state st cert raw_sent))
+
+let lemma_sent_certificate_verify_state_evolves
+  (st:CS.connection_state)
+  (cv:M.certificate_verify)
+  (raw_sent:B.bytes)
+  : Lemma
+      (requires CS.connection_state_consistent st /\
+                can_send_certificate_verify st cv raw_sent)
+      (ensures CS.connection_state_evolves
+                 st
+                 (sent_certificate_verify_state st cv raw_sent) /\
+               CS.connection_state_consistent
+                 (sent_certificate_verify_state st cv raw_sent) /\
+               CS.legal_connection_delta
+                 st
+                 {
+                   CS.delta_event =
+                     CS.ConnNetworkEvent {
+                       CL.message_direction = CL.Sent;
+                       CL.message_value = M.TlsHandshake (M.CertificateVerify cv);
+                     };
+                   CS.delta_raw_sent = raw_sent;
+                   CS.delta_raw_received = B.empty;
+                 }
+                 (sent_certificate_verify_state st cv raw_sent))
+=
+  let ev =
+    CS.ConnNetworkEvent {
+      CL.message_direction = CL.Sent;
+      CL.message_value = M.TlsHandshake (M.CertificateVerify cv);
+    } in
+  let delta = {
+    CS.delta_event = ev;
+    CS.delta_raw_sent = raw_sent;
+    CS.delta_raw_received = B.empty;
+  } in
+  assert (CS.legal_event st.CS.cs_model ev);
+  assert (CS.event_raw_delta_legal st.CS.cs_model ev raw_sent B.empty);
+  assert (CS.step_model st.CS.cs_model ev ==
+          Some (sent_certificate_verify_state st cv raw_sent).CS.cs_model);
+  assert (CS.legal_connection_delta
+    st
+    delta
+    (sent_certificate_verify_state st cv raw_sent));
+  assert (CS.connection_state_single_step
+    st
+    (sent_certificate_verify_state st cv raw_sent));
+  FStar.ReflexiveTransitiveClosure.closure_step
+    CS.connection_state_single_step
+    st
+    (sent_certificate_verify_state st cv raw_sent);
+  assert (CS.connection_state_evolves
+    st
+    (sent_certificate_verify_state st cv raw_sent));
+  assert (CS.connection_state_consistent
+    (sent_certificate_verify_state st cv raw_sent))
+
+let lemma_sent_server_finished_state_evolves
+  (st:CS.connection_state)
+  (fin:M.finished)
+  (raw_sent:B.bytes)
+  : Lemma
+      (requires CS.connection_state_consistent st /\
+                can_send_server_finished st fin raw_sent)
+      (ensures CS.connection_state_evolves
+                 st
+                 (sent_server_finished_state st fin raw_sent) /\
+               CS.connection_state_consistent
+                 (sent_server_finished_state st fin raw_sent) /\
+               CS.legal_connection_delta
+                 st
+                 {
+                   CS.delta_event =
+                     CS.ConnNetworkEvent {
+                       CL.message_direction = CL.Sent;
+                       CL.message_value = M.TlsHandshake (M.Finished fin);
+                     };
+                   CS.delta_raw_sent = raw_sent;
+                   CS.delta_raw_received = B.empty;
+                 }
+                 (sent_server_finished_state st fin raw_sent))
+=
+  let ev =
+    CS.ConnNetworkEvent {
+      CL.message_direction = CL.Sent;
+      CL.message_value = M.TlsHandshake (M.Finished fin);
+    } in
+  let delta = {
+    CS.delta_event = ev;
+    CS.delta_raw_sent = raw_sent;
+    CS.delta_raw_received = B.empty;
+  } in
+  assert (CS.legal_event st.CS.cs_model ev);
+  assert (CS.event_raw_delta_legal st.CS.cs_model ev raw_sent B.empty);
+  assert (CS.step_model st.CS.cs_model ev ==
+          Some (sent_server_finished_state st fin raw_sent).CS.cs_model);
+  assert (CS.legal_connection_delta
+    st
+    delta
+    (sent_server_finished_state st fin raw_sent));
+  assert (CS.connection_state_single_step
+    st
+    (sent_server_finished_state st fin raw_sent));
+  FStar.ReflexiveTransitiveClosure.closure_step
+    CS.connection_state_single_step
+    st
+    (sent_server_finished_state st fin raw_sent);
+  assert (CS.connection_state_evolves
+    st
+    (sent_server_finished_state st fin raw_sent));
+  assert (CS.connection_state_consistent
+    (sent_server_finished_state st fin raw_sent))
+
 let lemma_received_client_hello_state_evolves
   (st:CS.connection_state)
   (ch:M.client_hello)

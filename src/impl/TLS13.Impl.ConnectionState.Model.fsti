@@ -530,6 +530,284 @@ let can_send_server_hello
     raw_sent
     B.empty
 
+let sent_encrypted_extensions_state
+  (st:CS.connection_state)
+  (ee:M.encrypted_extensions)
+  (raw_sent:B.bytes)
+  : GTot CS.connection_state =
+  let model0 = st.CS.cs_model in
+  let hs0 = model0.CS.model_handshake in
+  let msg = M.EncryptedExtensions ee in
+  let hs1 =
+    CS.append_handshake_to_transcript
+      { hs0 with CS.hs_encrypted_extensions = Some ee }
+      msg in
+  {
+    CS.cs_model =
+      CS.with_handshake_stage
+        { model0 with
+            CS.model_record =
+              { model0.CS.model_record with
+                  CS.record_write = R.next_seq model0.CS.model_record.CS.record_write;
+              };
+        }
+        hs1
+        CS.HsServerEncryptedFlightSent;
+    CS.cs_wire_log = {
+      CL.raw_sent = B.append st.CS.cs_wire_log.CL.raw_sent raw_sent;
+      CL.raw_received = B.append st.CS.cs_wire_log.CL.raw_received B.empty;
+    };
+    CS.cs_event_log =
+      st.CS.cs_event_log @
+      [CS.ConnNetworkEvent {
+        CL.message_direction = CL.Sent;
+        CL.message_value = M.TlsHandshake msg;
+      }];
+  }
+
+let can_send_encrypted_extensions
+  (st:CS.connection_state)
+  (ee:M.encrypted_extensions)
+  (raw_sent:B.bytes)
+  : GTot prop =
+  st.CS.cs_model.CS.model_control ==
+    CS.ControlHandshaking CS.HsServerHelloSent /\
+  st.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
+  ee.M.negotiated_alpn == None /\
+  Some?
+    st.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_handshake_traffic /\
+  B.length st.CS.cs_model.CS.model_handshake.CS.hs_transcript +
+    B.length (W.serialize_handshake (M.EncryptedExtensions ee)) <=
+    max_transcript_len /\
+  CS.legal_event
+    st.CS.cs_model
+    (CS.ConnNetworkEvent {
+      CL.message_direction = CL.Sent;
+      CL.message_value = M.TlsHandshake (M.EncryptedExtensions ee);
+    }) /\
+  CS.event_raw_delta_legal
+    st.CS.cs_model
+    (CS.ConnNetworkEvent {
+      CL.message_direction = CL.Sent;
+      CL.message_value = M.TlsHandshake (M.EncryptedExtensions ee);
+    })
+    raw_sent
+    B.empty
+
+let sent_certificate_state
+  (st:CS.connection_state)
+  (cert:M.certificate_msg)
+  (raw_sent:B.bytes)
+  : GTot CS.connection_state =
+  let model0 = st.CS.cs_model in
+  let hs0 = model0.CS.model_handshake in
+  let msg = M.Certificate cert in
+  let hs1 =
+    CS.append_handshake_to_transcript
+      { hs0 with
+          CS.hs_certificate = Some cert;
+          CS.hs_buffers =
+            { hs0.CS.hs_buffers with
+                CS.hb_certificate_leaf_der =
+                  (match cert.M.chain with
+                   | leaf :: _ -> Some leaf
+                   | [] -> None);
+            };
+      }
+      msg in
+  {
+    CS.cs_model =
+      CS.with_handshake_stage
+        { model0 with
+            CS.model_record =
+              { model0.CS.model_record with
+                  CS.record_write = R.next_seq model0.CS.model_record.CS.record_write;
+              };
+        }
+        hs1
+        CS.HsServerEncryptedFlightSent;
+    CS.cs_wire_log = {
+      CL.raw_sent = B.append st.CS.cs_wire_log.CL.raw_sent raw_sent;
+      CL.raw_received = B.append st.CS.cs_wire_log.CL.raw_received B.empty;
+    };
+    CS.cs_event_log =
+      st.CS.cs_event_log @
+      [CS.ConnNetworkEvent {
+        CL.message_direction = CL.Sent;
+        CL.message_value = M.TlsHandshake msg;
+      }];
+  }
+
+let can_send_certificate
+  (st:CS.connection_state)
+  (cert:M.certificate_msg)
+  (raw_sent:B.bytes)
+  : GTot prop =
+  st.CS.cs_model.CS.model_control ==
+    CS.ControlHandshaking CS.HsServerEncryptedFlightSent /\
+  st.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
+  st.CS.cs_model.CS.model_handshake.CS.hs_encrypted_extensions <> None /\
+  st.CS.cs_model.CS.model_handshake.CS.hs_certificate == None /\
+  Some?
+    st.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_handshake_traffic /\
+  (match st.CS.cs_model.CS.model_config.CS.config_server with
+   | Some cfg -> CS.certificate_msg_matches_server_config cfg cert
+   | None -> False) /\
+  B.length st.CS.cs_model.CS.model_handshake.CS.hs_transcript +
+    B.length (W.serialize_handshake (M.Certificate cert)) <=
+    max_transcript_len /\
+  CS.legal_event
+    st.CS.cs_model
+    (CS.ConnNetworkEvent {
+      CL.message_direction = CL.Sent;
+      CL.message_value = M.TlsHandshake (M.Certificate cert);
+    }) /\
+  CS.event_raw_delta_legal
+    st.CS.cs_model
+    (CS.ConnNetworkEvent {
+      CL.message_direction = CL.Sent;
+      CL.message_value = M.TlsHandshake (M.Certificate cert);
+    })
+    raw_sent
+    B.empty
+
+let sent_certificate_verify_state
+  (st:CS.connection_state)
+  (cv:M.certificate_verify)
+  (raw_sent:B.bytes)
+  : GTot CS.connection_state =
+  let model0 = st.CS.cs_model in
+  let hs0 = model0.CS.model_handshake in
+  let msg = M.CertificateVerify cv in
+  let hs1 =
+    CS.append_handshake_to_transcript
+      { hs0 with CS.hs_certificate_verify = Some cv }
+      msg in
+  {
+    CS.cs_model =
+      CS.with_handshake_stage
+        { model0 with
+            CS.model_record =
+              { model0.CS.model_record with
+                  CS.record_write = R.next_seq model0.CS.model_record.CS.record_write;
+              };
+        }
+        hs1
+        CS.HsServerEncryptedFlightSent;
+    CS.cs_wire_log = {
+      CL.raw_sent = B.append st.CS.cs_wire_log.CL.raw_sent raw_sent;
+      CL.raw_received = B.append st.CS.cs_wire_log.CL.raw_received B.empty;
+    };
+    CS.cs_event_log =
+      st.CS.cs_event_log @
+      [CS.ConnNetworkEvent {
+        CL.message_direction = CL.Sent;
+        CL.message_value = M.TlsHandshake msg;
+      }];
+  }
+
+let can_send_certificate_verify
+  (st:CS.connection_state)
+  (cv:M.certificate_verify)
+  (raw_sent:B.bytes)
+  : GTot prop =
+  st.CS.cs_model.CS.model_control ==
+    CS.ControlHandshaking CS.HsServerEncryptedFlightSent /\
+  st.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
+  st.CS.cs_model.CS.model_handshake.CS.hs_certificate <> None /\
+  st.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify_verified /\
+  Some?
+    st.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_handshake_traffic /\
+  (match st.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify with
+   | Some stored_cv -> stored_cv == cv
+   | None -> False) /\
+  B.length st.CS.cs_model.CS.model_handshake.CS.hs_transcript +
+    B.length (W.serialize_handshake (M.CertificateVerify cv)) <=
+    max_transcript_len /\
+  CS.legal_event
+    st.CS.cs_model
+    (CS.ConnNetworkEvent {
+      CL.message_direction = CL.Sent;
+      CL.message_value = M.TlsHandshake (M.CertificateVerify cv);
+    }) /\
+  CS.event_raw_delta_legal
+    st.CS.cs_model
+    (CS.ConnNetworkEvent {
+      CL.message_direction = CL.Sent;
+      CL.message_value = M.TlsHandshake (M.CertificateVerify cv);
+    })
+    raw_sent
+    B.empty
+
+let sent_server_finished_state
+  (st:CS.connection_state)
+  (fin:M.finished)
+  (raw_sent:B.bytes)
+  : GTot CS.connection_state =
+  let model0 = st.CS.cs_model in
+  let hs0 = model0.CS.model_handshake in
+  let msg = M.Finished fin in
+  let hs1 =
+    CS.append_handshake_to_transcript
+      { hs0 with CS.hs_server_finished = Some fin }
+      msg in
+  {
+    CS.cs_model =
+      CS.with_handshake_stage
+        { model0 with
+            CS.model_record =
+              { model0.CS.model_record with
+                  CS.record_write = R.next_seq model0.CS.model_record.CS.record_write;
+              };
+        }
+        hs1
+        CS.HsServerFinishedSent;
+    CS.cs_wire_log = {
+      CL.raw_sent = B.append st.CS.cs_wire_log.CL.raw_sent raw_sent;
+      CL.raw_received = B.append st.CS.cs_wire_log.CL.raw_received B.empty;
+    };
+    CS.cs_event_log =
+      st.CS.cs_event_log @
+      [CS.ConnNetworkEvent {
+        CL.message_direction = CL.Sent;
+        CL.message_value = M.TlsHandshake msg;
+      }];
+  }
+
+let can_send_server_finished
+  (st:CS.connection_state)
+  (fin:M.finished)
+  (raw_sent:B.bytes)
+  : GTot prop =
+  st.CS.cs_model.CS.model_control ==
+    CS.ControlHandshaking CS.HsServerEncryptedFlightSent /\
+  st.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
+  st.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify_verified /\
+  (match st.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_handshake_traffic with
+   | Some server_hs ->
+     H.verify_finished
+       server_hs.CS.traffic_secret
+       (Tr.hash st.CS.cs_model.CS.model_handshake.CS.hs_transcript)
+       fin
+   | None -> False) /\
+  B.length st.CS.cs_model.CS.model_handshake.CS.hs_transcript +
+    B.length (W.serialize_handshake (M.Finished fin)) <=
+    max_transcript_len /\
+  CS.legal_event
+    st.CS.cs_model
+    (CS.ConnNetworkEvent {
+      CL.message_direction = CL.Sent;
+      CL.message_value = M.TlsHandshake (M.Finished fin);
+    }) /\
+  CS.event_raw_delta_legal
+    st.CS.cs_model
+    (CS.ConnNetworkEvent {
+      CL.message_direction = CL.Sent;
+      CL.message_value = M.TlsHandshake (M.Finished fin);
+    })
+    raw_sent
+    B.empty
+
 let received_client_hello_state
   (st:CS.connection_state)
   (ch:M.client_hello)
@@ -1815,6 +2093,106 @@ val lemma_sent_server_hello_state_evolves
                    CS.delta_raw_received = B.empty;
                  }
                  (sent_server_hello_state st sh raw_sent))
+
+val lemma_sent_encrypted_extensions_state_evolves
+  (st:CS.connection_state)
+  (ee:M.encrypted_extensions)
+  (raw_sent:B.bytes)
+  : Lemma
+      (requires CS.connection_state_consistent st /\
+                can_send_encrypted_extensions st ee raw_sent)
+      (ensures CS.connection_state_evolves
+                 st
+                 (sent_encrypted_extensions_state st ee raw_sent) /\
+               CS.connection_state_consistent
+                 (sent_encrypted_extensions_state st ee raw_sent) /\
+               CS.legal_connection_delta
+                 st
+                 {
+                  CS.delta_event =
+                    CS.ConnNetworkEvent {
+                      CL.message_direction = CL.Sent;
+                      CL.message_value = M.TlsHandshake (M.EncryptedExtensions ee);
+                    };
+                  CS.delta_raw_sent = raw_sent;
+                  CS.delta_raw_received = B.empty;
+                 }
+                 (sent_encrypted_extensions_state st ee raw_sent))
+
+val lemma_sent_certificate_state_evolves
+  (st:CS.connection_state)
+  (cert:M.certificate_msg)
+  (raw_sent:B.bytes)
+  : Lemma
+      (requires CS.connection_state_consistent st /\
+                can_send_certificate st cert raw_sent)
+      (ensures CS.connection_state_evolves
+                 st
+                 (sent_certificate_state st cert raw_sent) /\
+               CS.connection_state_consistent
+                 (sent_certificate_state st cert raw_sent) /\
+               CS.legal_connection_delta
+                 st
+                 {
+                   CS.delta_event =
+                     CS.ConnNetworkEvent {
+                       CL.message_direction = CL.Sent;
+                       CL.message_value = M.TlsHandshake (M.Certificate cert);
+                     };
+                   CS.delta_raw_sent = raw_sent;
+                   CS.delta_raw_received = B.empty;
+                 }
+                 (sent_certificate_state st cert raw_sent))
+
+val lemma_sent_certificate_verify_state_evolves
+  (st:CS.connection_state)
+  (cv:M.certificate_verify)
+  (raw_sent:B.bytes)
+  : Lemma
+      (requires CS.connection_state_consistent st /\
+                can_send_certificate_verify st cv raw_sent)
+      (ensures CS.connection_state_evolves
+                 st
+                 (sent_certificate_verify_state st cv raw_sent) /\
+               CS.connection_state_consistent
+                 (sent_certificate_verify_state st cv raw_sent) /\
+               CS.legal_connection_delta
+                 st
+                 {
+                   CS.delta_event =
+                     CS.ConnNetworkEvent {
+                       CL.message_direction = CL.Sent;
+                       CL.message_value = M.TlsHandshake (M.CertificateVerify cv);
+                     };
+                   CS.delta_raw_sent = raw_sent;
+                   CS.delta_raw_received = B.empty;
+                 }
+                 (sent_certificate_verify_state st cv raw_sent))
+
+val lemma_sent_server_finished_state_evolves
+  (st:CS.connection_state)
+  (fin:M.finished)
+  (raw_sent:B.bytes)
+  : Lemma
+      (requires CS.connection_state_consistent st /\
+                can_send_server_finished st fin raw_sent)
+      (ensures CS.connection_state_evolves
+                 st
+                 (sent_server_finished_state st fin raw_sent) /\
+               CS.connection_state_consistent
+                 (sent_server_finished_state st fin raw_sent) /\
+               CS.legal_connection_delta
+                 st
+                 {
+                   CS.delta_event =
+                     CS.ConnNetworkEvent {
+                       CL.message_direction = CL.Sent;
+                       CL.message_value = M.TlsHandshake (M.Finished fin);
+                     };
+                   CS.delta_raw_sent = raw_sent;
+                   CS.delta_raw_received = B.empty;
+                 }
+                 (sent_server_finished_state st fin raw_sent))
 
 val lemma_received_client_hello_state_evolves
   (st:CS.connection_state)

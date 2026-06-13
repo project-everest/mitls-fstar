@@ -278,6 +278,15 @@ Current phase: **Phase 6 server buffer/event API and theorem surface**.
   caller-provided raw/fragment buffers. The L-level ServerHello is still supplied
   by the caller because executable server parameter selection and concrete
   selection storage remain pending.
+- [x] Added extraction-facing pure model helpers for the rest of the first
+  server encrypted flight:
+  `sent_encrypted_extensions_state`, `sent_certificate_state`,
+  `sent_certificate_verify_state`, `sent_server_finished_state`, their
+  `can_send_*` predicates, and one-step evolution/legal-delta lemmas. These
+  mirror the existing pure spec transitions, advance the write record sequence
+  where appropriate, update the transcript/stored handshake artifacts, and give
+  the future Pulse send mutations the same focused model surface as
+  `sent_server_hello_state`.
 - [x] Added supplied-shared-secret derivation support:
   `TLS13.Impl.ConnectionState.LocalHandshake.derive_shared_secret_from_bytes`
   stores the shared, early, handshake, and master secrets in concrete key
@@ -1249,10 +1258,11 @@ Checklist:
         supplied-material and internally derived mutations/wrappers, scheduler
         hints, and generic local dispatcher integration complete for handshake
         keys);
-      - server flight emission (focused sent-ServerHello public wrapper and
-        serializer-driven cleartext ServerHello record construction are
-        complete; concrete selection-to-L-ServerHello storage and encrypted
-        flight remain);
+      - server flight emission (focused sent-ServerHello public wrapper,
+        serializer-driven cleartext ServerHello record construction, and pure
+        model helpers for EncryptedExtensions/Certificate/CertificateVerify/
+        server Finished are complete; concrete selection-to-L-ServerHello
+        storage and Pulse encrypted-flight send mutations remain);
       - client Finished verification;
       - application key installation (server write-key and client read-key
         supplied-material and internally derived mutations/wrappers, scheduler
