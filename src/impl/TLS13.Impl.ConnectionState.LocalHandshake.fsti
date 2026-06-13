@@ -217,6 +217,66 @@ fn derive_shared_secret_from_bytes
            }
            (derived_shared_secret_state st0 (Ghost.reveal shared)))
 
+fn install_server_handshake_write_traffic_keys_from_material
+  (c:connection_state)
+  (traffic_secret_src:array U8.t)
+  (traffic_key_src:array U8.t)
+  (traffic_iv_src:array U8.t)
+  (#material:erased CS.traffic_key_material)
+  (#st0:erased CS.connection_state)
+  requires connection_exactly c st0 **
+           ArrPts.pts_to traffic_secret_src material.CS.traffic_secret **
+           ArrPts.pts_to traffic_key_src material.CS.traffic_key **
+           ArrPts.pts_to traffic_iv_src material.CS.traffic_iv **
+           pure (CS.legal_event
+            st0.CS.cs_model
+            (CS.ConnLocalEvent
+              (CS.LocalInstallTrafficKeysForRole {
+                CS.install_role = CS.ServerEndpoint;
+                CS.install_payload = {
+                  CS.install_epoch = CS.TrafficHandshake;
+                  CS.install_direction = CS.TrafficWrite;
+                  CS.install_material = Ghost.reveal material;
+                };
+              })))
+  ensures connection_exactly
+           c
+           (installed_traffic_keys_for_role_state st0 {
+             CS.install_role = CS.ServerEndpoint;
+             CS.install_payload = {
+               CS.install_epoch = CS.TrafficHandshake;
+               CS.install_direction = CS.TrafficWrite;
+               CS.install_material = Ghost.reveal material;
+             };
+           }) **
+          ArrPts.pts_to traffic_secret_src material.CS.traffic_secret **
+          ArrPts.pts_to traffic_key_src material.CS.traffic_key **
+          ArrPts.pts_to traffic_iv_src material.CS.traffic_iv **
+          pure (CS.legal_connection_delta
+           st0
+           {
+             CS.delta_event =
+               CS.ConnLocalEvent
+                 (CS.LocalInstallTrafficKeysForRole {
+                   CS.install_role = CS.ServerEndpoint;
+                   CS.install_payload = {
+                     CS.install_epoch = CS.TrafficHandshake;
+                     CS.install_direction = CS.TrafficWrite;
+                     CS.install_material = Ghost.reveal material;
+                   };
+                 });
+             CS.delta_raw_sent = B.empty;
+             CS.delta_raw_received = B.empty;
+           }
+           (installed_traffic_keys_for_role_state st0 {
+             CS.install_role = CS.ServerEndpoint;
+             CS.install_payload = {
+               CS.install_epoch = CS.TrafficHandshake;
+               CS.install_direction = CS.TrafficWrite;
+               CS.install_material = Ghost.reveal material;
+             };
+           }))
+
 fn try_install_client_handshake_traffic_keys
   (c:connection_state)
   (#st0:erased CS.connection_state)

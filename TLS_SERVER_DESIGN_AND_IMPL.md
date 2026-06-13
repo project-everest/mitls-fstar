@@ -285,6 +285,15 @@ Current phase: **Phase 6 server buffer/event API and theorem surface**.
   transition. This is the model foundation needed for server read/write traffic
   key install mutations, since the older implementation helper is client-role
   specific.
+- [x] Added supplied-material server handshake write-key installation:
+  `TLS13.Impl.ConnectionState.LocalHandshake.install_server_handshake_write_traffic_keys_from_material`
+  stores the server handshake traffic material, installs the concrete write
+  record keys, and proves the role-indexed legal delta. The focused public
+  `TLS13.Impl.Server.process_install_server_handshake_write_keys` wrapper proves
+  `server_local_event_end_to_end_correct` for
+  `LocalInstallServerHandshakeTrafficKeys`. It currently takes already-derived
+  traffic material; deriving that material internally from the handshake secret
+  and transcript remains pending.
 
 ## End goal
 
@@ -1146,8 +1155,8 @@ Checklist:
       - shared-secret and traffic-secret derivation (supplied shared-secret
         wrapper complete; executable server X25519 and traffic-key wrappers
         remain);
-      - handshake key installation (role-indexed model helper complete; Pulse
-        mutations remain);
+      - handshake key installation (server write-key supplied-material mutation
+        complete; server read-key mutation and internal derivation remain);
       - server flight emission (focused sent-ServerHello public wrapper is
         complete; serializer-driven construction and encrypted flight remain);
       - client Finished verification;
