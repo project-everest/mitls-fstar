@@ -245,8 +245,15 @@ Current phase: **Phase 6 server buffer/event API and theorem surface**.
   `TLS13.Impl.ConnectionState.LocalHandshake.select_server_parameters` proves the
   corresponding `LocalSelectServerParameters` legal delta while refolding the
   unchanged concrete storage. This is intentionally ghost/spec-only for now:
-  executable random/key-share generation, concrete selection storage, scheduler
-  readiness, and the public local-event wrapper remain pending.
+  executable random/key-share generation, concrete selection storage, and
+  scheduler readiness remain pending.
+- [x] Added the focused public `TLS13.Impl.Server.process_select_server_parameters`
+  wrapper. It exposes the verified `LocalSelectServerParameters` transition at
+  the server API theorem surface, returns `StepOk` with zero network/app output,
+  and proves `server_local_event_end_to_end_correct` under an explicit ghost
+  `selection` precondition. This keeps the final executable selector and
+  `next_local_action` scheduling gap visible rather than pretending that
+  parameter generation is implemented.
 
 ## End goal
 
@@ -1072,8 +1079,9 @@ Checklist:
 - [x] Constructor establishes the server invariant.
 - [ ] Network/local steps preserve the server invariant.
       Initial slices completed: `LocalStartServer` and SNI-present received
-      `ClientHello`; the internal `LocalSelectServerParameters` mutation proves
-      its legal delta and is awaiting a public wrapper plus executable selection.
+      `ClientHello`; the focused `LocalSelectServerParameters` wrapper also
+      preserves the invariant but remains proof-only until executable selection
+      storage/generation is added.
 - [x] Emitted bytes expose raw-delta, parse-back, seal, and write-key provenance.
 - [ ] Consumed bytes expose exact consumed prefix, parse/decode classification,
       open facts, and read-key provenance.
