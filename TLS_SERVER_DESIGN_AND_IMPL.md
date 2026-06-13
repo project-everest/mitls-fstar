@@ -463,6 +463,13 @@ Current phase: **Phase 6 server buffer/event API and theorem surface**.
   and proves `server_local_event_end_to_end_correct` including leaf-DER caching,
   protected segmentation, seal projection, and server-role write-key-schedule
   projection.
+- [x] Added the protected server CertificateVerify public wrapper:
+  `process_send_certificate_verify_serialized` serializes the supplied exact
+  signed L-level CertificateVerify message into a caller-sized scratch fragment,
+  seals it as one protected `ApplicationData` record, stores it through
+  `mark_sent_certificate_verify`, frees the transient L-level object, and proves
+  `server_local_event_end_to_end_correct` including protected segmentation, seal
+  projection, and server-role write-key-schedule projection.
 
 ## End goal
 
