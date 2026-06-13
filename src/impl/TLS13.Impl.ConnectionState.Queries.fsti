@@ -503,6 +503,24 @@ fn can_send_application_data_runtime
             SZ.v payload_len <= SM.max_application_data_fragment_len /\
             SZ.v payload_len + 22 <= SZ.v network_out_len)
 
+fn can_send_endpoint_application_data_runtime
+  (c:connection_state)
+  (payload_len:SZ.t)
+  (network_out_len:SZ.t)
+  (#st0:erased CS.connection_state)
+  requires connection_exactly c st0
+  returns ok: bool
+  ensures connection_exactly c st0 **
+          pure (ok ==>
+            st0.CS.cs_model.CS.model_control == CS.ControlApplicationData /\
+            CS.application_traffic_available_for_role
+              st0.CS.cs_model.CS.model_config.CS.config_role
+              st0.CS.cs_model.CS.model_handshake
+              CL.Sent /\
+            U64.fits (st0.CS.cs_model.CS.model_record.CS.record_write.R.seq + 1) /\
+            SZ.v payload_len <= SM.max_application_data_fragment_len /\
+            SZ.v payload_len + 22 <= SZ.v network_out_len)
+
 fn can_send_close_notify_runtime
   (c:connection_state)
   (network_out_len:SZ.t)
@@ -514,6 +532,22 @@ fn can_send_close_notify_runtime
             st0.CS.cs_model.CS.model_control == CS.ControlApplicationData /\
             st0.CS.cs_model.CS.model_config.CS.config_role == CS.ClientEndpoint /\
             Some? st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_application_traffic /\
+            U64.fits (st0.CS.cs_model.CS.model_record.CS.record_write.R.seq + 1) /\
+            24 <= SZ.v network_out_len)
+
+fn can_send_endpoint_close_notify_runtime
+  (c:connection_state)
+  (network_out_len:SZ.t)
+  (#st0:erased CS.connection_state)
+  requires connection_exactly c st0
+  returns ok: bool
+  ensures connection_exactly c st0 **
+          pure (ok ==>
+            st0.CS.cs_model.CS.model_control == CS.ControlApplicationData /\
+            CS.application_traffic_available_for_role
+              st0.CS.cs_model.CS.model_config.CS.config_role
+              st0.CS.cs_model.CS.model_handshake
+              CL.Sent /\
             U64.fits (st0.CS.cs_model.CS.model_record.CS.record_write.R.seq + 1) /\
             24 <= SZ.v network_out_len)
 

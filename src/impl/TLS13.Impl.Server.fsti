@@ -14,6 +14,7 @@ module CR = TLS13.Impl.ConnectionState.Repr
 module CQ = TLS13.Impl.ConnectionState.Queries
 module IM = TLS13.Impl.Messages
 module M = TLS13.Messages
+module SM = TLS13.StateMachine
 module ST = TLS13.Impl.Server.Types
 module Seq = FStar.Seq
 module SZ = FStar.SizeT
@@ -130,6 +131,18 @@ let server_local_event_input_ready
     CS.legal_event
       st.CS.cs_model
       (CS.ConnLocalEvent (CS.LocalDeriveSharedSecret payload))
+  | ST.LocalSendApplicationData ->
+    st.CS.cs_model.CS.model_control == CS.ControlApplicationData /\
+    st.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
+    Some?
+      st.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_application_traffic /\
+    B.length payload <= SM.max_application_data_fragment_len
+  | ST.LocalSendCloseNotify ->
+    Seq.equal payload B.empty /\
+    st.CS.cs_model.CS.model_control == CS.ControlApplicationData /\
+    st.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
+    Some?
+      st.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_application_traffic
   | _ ->
     False
 

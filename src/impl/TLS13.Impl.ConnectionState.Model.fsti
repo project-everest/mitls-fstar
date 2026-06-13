@@ -1153,7 +1153,10 @@ let can_send_application_data
   (raw_sent:B.bytes)
   : GTot prop =
   st.CS.cs_model.CS.model_control == CS.ControlApplicationData /\
-  Some? st.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_application_traffic /\
+  CS.application_traffic_available_for_role
+    st.CS.cs_model.CS.model_config.CS.config_role
+    st.CS.cs_model.CS.model_handshake
+    CL.Sent /\
   U64.fits (st.CS.cs_model.CS.model_record.CS.record_write.R.seq + 1) /\
   B.length bytes <= SM.max_application_data_fragment_len /\
   SM.application_data_record_count bytes == 1 /\
@@ -1193,7 +1196,10 @@ let can_send_close_notify
   (raw_sent:B.bytes)
   : GTot prop =
   st.CS.cs_model.CS.model_control == CS.ControlApplicationData /\
-  Some? st.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_application_traffic /\
+  CS.application_traffic_available_for_role
+    st.CS.cs_model.CS.model_config.CS.config_role
+    st.CS.cs_model.CS.model_handshake
+    CL.Sent /\
   U64.fits (st.CS.cs_model.CS.model_record.CS.record_write.R.seq + 1) /\
   CS.legal_event
     st.CS.cs_model

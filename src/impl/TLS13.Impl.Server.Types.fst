@@ -269,8 +269,25 @@ let legal_response_for_event
   SZ.v resp.network_out_len == B.length raw_sent /\
   SZ.v resp.app_out_len <= B.length app_out /\
   Seq.equal (response_network_out resp network_out) raw_sent /\
-  response_app_out_matches_event resp ev app_out /\
-  resp.status == StepOk
+  response_app_out_matches_event resp ev app_out
+
+let unexpected_message_response
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (resp:server_response)
+  (network_out:B.bytes)
+  (app_out:B.bytes)
+  : prop =
+  resp.status == IllegalTransition /\
+  legal_response_for_event
+    st0
+    st1
+    resp
+    (CS.ConnLocalEvent (CS.LocalFail (T.AlertError T.UnexpectedMessage)))
+    B.empty
+    B.empty
+    network_out
+    app_out
 
 let legal_local_response
   (st0:CS.connection_state)
@@ -288,6 +305,7 @@ let legal_local_response
   local_payload_matches_app_sent_delta kind payload ev /\
   local_event_supported_profile kind payload ev /\
   CS.sent_event_seal_projection st0.CS.cs_model ev raw_sent /\
+  resp.status == StepOk /\
   legal_response_for_event st0 st1 resp ev raw_sent raw_received network_out app_out
 
 let legal_handled_local_response
@@ -299,18 +317,19 @@ let legal_handled_local_response
   (network_out:B.bytes)
   (app_out:B.bytes)
   : prop =
-  exists ev raw_sent raw_received.
-    legal_local_response
-      st0
-      st1
-      resp
-      kind
-      payload
-      ev
-      raw_sent
-      raw_received
-      network_out
-      app_out
+  (exists ev raw_sent raw_received.
+     legal_local_response
+       st0
+       st1
+       resp
+       kind
+       payload
+       ev
+       raw_sent
+       raw_received
+       network_out
+       app_out) \/
+  unexpected_message_response st0 st1 resp network_out app_out
 
 let received_message_event (msg:M.tls_message) : CS.conn_event =
   CS.ConnNetworkEvent {
@@ -337,6 +356,7 @@ let legal_network_response
   (network_out:B.bytes)
   (app_out:B.bytes)
   : prop =
+  resp.status == StepOk /\
   legal_response_for_event
     st0
     st1
@@ -382,7 +402,9 @@ let server_local_event_end_to_end_correct
       | CS.ConnNetworkEvent msg ->
          if msg.CL.message_direction == CL.Sent &&
            CS.network_message_is_cleartext msg.CL.message_direction msg.CL.message_value == false
-        then CS.record_write_key_schedule_projection st0.CS.cs_model
+        then CS.record_write_key_schedule_projection_for_role
+               CS.ServerEndpoint
+               st0.CS.cs_model
         else True
       | CS.ConnLocalEvent _ -> True))
 
@@ -413,6 +435,8 @@ let server_network_bytes_end_to_end_correct
       | CS.ConnNetworkEvent msg ->
          if msg.CL.message_direction == CL.Sent &&
            CS.network_message_is_cleartext msg.CL.message_direction msg.CL.message_value == false
-        then CS.record_write_key_schedule_projection st0.CS.cs_model
+        then CS.record_write_key_schedule_projection_for_role
+               CS.ServerEndpoint
+               st0.CS.cs_model
         else True
       | CS.ConnLocalEvent _ -> True))

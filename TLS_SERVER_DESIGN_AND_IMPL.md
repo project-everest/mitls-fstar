@@ -1187,10 +1187,11 @@ Checklist:
 - [x] Define `server_local_event_end_to_end_correct`.
 - [x] Constructor establishes the server invariant.
 - [ ] Network/local steps preserve the server invariant.
-      Initial slices completed: `LocalStartServer` and SNI-present received
-      `ClientHello`; the focused `LocalSelectServerParameters` wrapper also
-      preserves the invariant but remains proof-only until executable selection
-      storage/generation is added.
+      Initial slices completed: `LocalStartServer`, SNI-present received
+      `ClientHello`, derived traffic-key installs, and generic server
+      application-data/close_notify sends; the focused
+      `LocalSelectServerParameters` wrapper also preserves the invariant but
+      remains proof-only until executable selection storage/generation is added.
 - [x] Emitted bytes expose raw-delta, parse-back, seal, and write-key provenance.
 - [ ] Consumed bytes expose exact consumed prefix, parse/decode classification,
       open facts, and read-key provenance.
@@ -1210,7 +1211,10 @@ Checklist:
 - [x] Create small `.fsti` boundaries for server state mutations.
       Initial boundaries cover server start, received ClientHello, and the
       ghost/spec-only server parameter-selection transition.
-- [ ] Reuse shared helpers where endpoint-independent.
+- [x] Reuse shared helpers where endpoint-independent.
+      `TLS13.Impl.ConnectionState.LocalSend.try_send_application_data` and
+      `try_send_close_notify` are now endpoint-neutral for application write
+      traffic and are reused by the generic server local dispatcher.
 - [ ] Add network handlers:
       - ClientHello accept/reject;
       - compatibility CCS receive if supported;
@@ -1234,7 +1238,9 @@ Checklist:
       - application key installation (server write-key and client read-key
         supplied-material and internally derived mutations/wrappers, scheduler
         hints, and generic local dispatcher integration complete);
-      - application data and close_notify.
+      - application data and close_notify (generic local dispatcher complete for
+        server sends, including explicit unexpected-message failure on seal or
+        output-buffer refusal; receive-side application data remains pending).
 - [ ] Add failure transitions:
       - unsupported cipher suite;
       - missing/unsupported X25519 key share;
@@ -1255,6 +1261,12 @@ Status:
 
 - [x] Initial SNI-present ClientHello accept handler proves the pure
       `Received ClientHello` transition and preserves `server_end_to_end_invariant`.
+- [x] Generic `process_local_event` now handles server
+      `LocalSendApplicationData` and `LocalSendCloseNotify` through the shared
+      endpoint-neutral `LocalSend` mutations. The server theorem surface now
+      admits the same explicit `LocalFail unexpected_message` response shape as
+      the client for send refusal, while successful protected sends prove raw
+      segmentation, seal projection, and server-role write-key provenance.
 - [ ] ClientHello reject/error paths are still pending: no-SNI policy rejection,
       unsupported cipher/group/signature offers, malformed ClientHello, and the
       final buffer-level decode-error path.

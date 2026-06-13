@@ -605,8 +605,6 @@ fn mark_sent_application_data_after_record_advanced
     (Ghost.reveal 'payload_bytes)
     (Ghost.reveal raw_sent)));
   assert (pure (st0.CS.cs_model.CS.model_control == CS.ControlApplicationData));
-  assert (pure (Some?
-    st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_application_traffic));
   assert (pure (U64.fits (st0.CS.cs_model.CS.model_record.CS.record_write.R.seq + 1)));
 
   unfold (application_exactly c.application st0.CS.cs_model.CS.model_application);
@@ -742,8 +740,6 @@ fn mark_sent_close_notify_after_record_advanced
     st0
     (Ghost.reveal raw_sent)));
   assert (pure (st0.CS.cs_model.CS.model_control == CS.ControlApplicationData));
-  assert (pure (Some?
-    st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_application_traffic));
   assert (pure (U64.fits (st0.CS.cs_model.CS.model_record.CS.record_write.R.seq + 1)));
 
   unfold (control_exactly
@@ -901,11 +897,13 @@ fn try_send_application_data
             ArrPts.pts_to payload 'payload_bytes **
             ArrPts.pts_to network_out 'old_network_out)
 {
-  let ready = can_send_application_data_runtime c payload_len network_out_len;
+  let ready = can_send_endpoint_application_data_runtime c payload_len network_out_len;
   if ready {
     assert (pure (st0.CS.cs_model.CS.model_control == CS.ControlApplicationData));
-    assert (pure (Some?
-      st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_application_traffic));
+    assert (pure (CS.application_traffic_available_for_role
+      st0.CS.cs_model.CS.model_config.CS.config_role
+      st0.CS.cs_model.CS.model_handshake
+      CL.Sent));
     assert (pure (U64.fits (st0.CS.cs_model.CS.model_record.CS.record_write.R.seq + 1)));
     assert (pure (B.length (Ghost.reveal 'payload_bytes) == SZ.v payload_len));
     assert (pure (B.length (Ghost.reveal 'payload_bytes) <= SM.max_application_data_fragment_len));
@@ -1180,11 +1178,13 @@ fn try_send_close_notify
             connection_exactly c st0 **
             ArrPts.pts_to network_out 'old_network_out)
 {
-  let ready = can_send_close_notify_runtime c network_out_len;
+  let ready = can_send_endpoint_close_notify_runtime c network_out_len;
   if ready {
     assert (pure (st0.CS.cs_model.CS.model_control == CS.ControlApplicationData));
-    assert (pure (Some?
-      st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_application_traffic));
+    assert (pure (CS.application_traffic_available_for_role
+      st0.CS.cs_model.CS.model_config.CS.config_role
+      st0.CS.cs_model.CS.model_handshake
+      CL.Sent));
     assert (pure (U64.fits (st0.CS.cs_model.CS.model_record.CS.record_write.R.seq + 1)));
     assert (pure (24 <= SZ.v network_out_len));
 
