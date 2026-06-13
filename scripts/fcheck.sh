@@ -3,6 +3,8 @@
 set -e
 cd "$(dirname "$0")/.."
 export FSTAR_EXE=${FSTAR_EXE:-$(realpath tools/everparse/opt/FStar/bin/fstar.exe)}
+# F* finds Z3 (z3-<version>) on PATH; the toolchain ships it under opt/z3.
+export PATH="$(realpath tools/everparse/opt/z3):$PATH"
 LP=$(realpath tools/everparse/src/lowparse)
 exec "$FSTAR_EXE" \
   --cache_checked_modules --cache_dir _cache --odir _output \

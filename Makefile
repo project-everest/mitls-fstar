@@ -23,6 +23,14 @@ KRML_EXE   ?= $(KRML_HOME)/out/bin/krml
 # LowParse.Pulse combinator libraries the generated modules depend on.
 QD_EXE         ?= $(EVERPARSE_HOME)/bin/qd.exe
 LOWPARSE_HOME  ?= $(EVERPARSE_HOME)/src/lowparse
+
+# F* locates Z3 by looking for `z3-<version>` on PATH.  The EverParse toolchain
+# ships the pinned Z3 binaries under opt/z3 (e.g. z3-4.13.3); make them visible
+# to every F* invocation (this Makefile and the generated/ sub-make) instead of
+# relying on the caller having sourced tools/everparse/env.sh.
+Z3_DIR         ?= $(EVERPARSE_HOME)/opt/z3
+export PATH := $(Z3_DIR):$(PATH)
+
 GENERATED_DIR   = generated
 QD_RFC          = tls.qd.rfc
 FSTAR_PREFIX    = $(patsubst %/bin/fstar.exe,%,$(realpath $(FSTAR_EXE)))
