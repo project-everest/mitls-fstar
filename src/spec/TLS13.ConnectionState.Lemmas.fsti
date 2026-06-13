@@ -99,6 +99,25 @@ val lemma_paired_x25519_key_shares_derived_key_agrees
         derivation_checkpoint_inputs_agree key_id client server)
       (ensures peer_derived_key_material_agrees key_id client server)
 
+val lemma_paired_handshake_events_same_transcript_checkpoint
+  (checkpoint:transcript_checkpoint)
+  (client:connection_state)
+  (server:connection_state)
+  : Lemma
+      (requires paired_handshake_events client server)
+      (ensures same_transcript_checkpoint checkpoint client server)
+
+val lemma_paired_handshake_events_same_key_derivation_checkpoint
+  (checkpoint:key_derivation_checkpoint)
+  (client:connection_state)
+  (server:connection_state)
+  : Lemma
+      (requires
+        paired_handshake_events client server /\
+        (checkpoint == DeriveHandshakeTraffic \/
+         checkpoint == DeriveApplicationTraffic))
+      (ensures same_key_derivation_checkpoint checkpoint client server)
+
 val lemma_peer_record_material_agrees
   (traffic_id:labeled_traffic_epoch)
   (client:connection_state)

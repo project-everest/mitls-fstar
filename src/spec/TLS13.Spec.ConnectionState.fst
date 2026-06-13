@@ -468,6 +468,17 @@ let paired_wire_logs
   Seq.equal client.cs_wire_log.CL.raw_sent server.cs_wire_log.CL.raw_received /\
   Seq.equal server.cs_wire_log.CL.raw_sent client.cs_wire_log.CL.raw_received
 
+let paired_handshake_events
+  (client:connection_state)
+  (server:connection_state)
+  : prop =
+  same_transcript_checkpoint TH_CH client server /\
+  same_transcript_checkpoint TH_SH client server /\
+  same_transcript_checkpoint TH_before_CV client server /\
+  same_transcript_checkpoint TH_before_SF client server /\
+  same_transcript_checkpoint TH_SF client server /\
+  same_transcript_checkpoint TH_CF client server
+
 let shared_secret_material_agrees
   (client:connection_state)
   (server:connection_state)

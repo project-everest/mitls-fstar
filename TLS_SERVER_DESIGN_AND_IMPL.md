@@ -157,8 +157,10 @@ Current phase: **Phase 2 pure paired-endpoint theorem work**.
   cross-endpoint record key/IV shape: client write equals server read for
   `ClientTraffic`, and server write equals client read for `ServerTraffic`, once
   both endpoints project the installed traffic material for the same label.
-- [ ] Finish Phase 2 paired endpoint trace/checkpoint lemmas not yet needed by
-  the derived-key bridge, then move to Phase 3 shared endpoint/codec refactor.
+- [x] Added `paired_handshake_events` and projection lemmas from paired
+  checkpoint state to `same_transcript_checkpoint` and
+  `same_key_derivation_checkpoint` for first-milestone key derivation points.
+- [ ] Move to Phase 3 shared endpoint/codec refactor.
 
 ## End goal
 
@@ -737,7 +739,7 @@ Checklist:
 - [x] CertificateVerify input uses `hash(TH_before_CV)`.
 - [x] Server Finished uses `hash(TH_before_SF)`.
 - [x] Client Finished verification uses `hash(TH_SF)`.
-- [ ] Paired legal events imply equal transcript bytes at each checkpoint.
+- [x] Paired checkpoint state implies equal transcript bytes at each checkpoint.
 
 ### Gate 3: X25519/shared-secret boundary
 
@@ -866,12 +868,13 @@ Validation:
 Checklist:
 
 - [x] Define `paired_wire_logs`.
-- [ ] Define `paired_handshake_events`.
+- [x] Define `paired_handshake_events`.
 - [x] Define `paired_x25519_key_shares`.
 - [x] Define `same_key_derivation_checkpoint`.
 - [x] Define `derivation_inputs_agree`.
 - [x] Add the trusted X25519 agreement lemma.
-- [ ] Prove transcript pairing up to each checkpoint.
+- [x] Prove transcript pairing up to each checkpoint from
+      `paired_handshake_events`.
 - [x] Prove base-secret agreement.
 - [x] Prove traffic-secret agreement.
 - [x] Prove AEAD key/IV and Finished-key agreement.

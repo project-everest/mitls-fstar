@@ -314,6 +314,41 @@ let lemma_paired_x25519_key_shares_derived_key_agrees
      assert False);
   lemma_paired_endpoints_derived_key_agrees key_id client server
 
+let lemma_paired_handshake_events_same_transcript_checkpoint
+  (checkpoint:transcript_checkpoint)
+  (client:connection_state)
+  (server:connection_state)
+  : Lemma
+      (requires paired_handshake_events client server)
+      (ensures same_transcript_checkpoint checkpoint client server)
+=
+  match checkpoint with
+  | TH_CH -> ()
+  | TH_SH -> ()
+  | TH_before_CV -> ()
+  | TH_before_SF -> ()
+  | TH_SF -> ()
+  | TH_CF -> ()
+
+let lemma_paired_handshake_events_same_key_derivation_checkpoint
+  (checkpoint:key_derivation_checkpoint)
+  (client:connection_state)
+  (server:connection_state)
+  : Lemma
+      (requires
+        paired_handshake_events client server /\
+        (checkpoint == DeriveHandshakeTraffic \/
+         checkpoint == DeriveApplicationTraffic))
+      (ensures same_key_derivation_checkpoint checkpoint client server)
+=
+  match checkpoint with
+  | DeriveHandshakeTraffic ->
+    lemma_paired_handshake_events_same_transcript_checkpoint TH_SH client server
+  | DeriveApplicationTraffic ->
+    lemma_paired_handshake_events_same_transcript_checkpoint TH_SF client server
+  | DeriveTrafficUpdate _ ->
+    assert False
+
 let lemma_peer_record_material_agrees
   (traffic_id:labeled_traffic_epoch)
   (client:connection_state)
