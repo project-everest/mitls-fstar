@@ -331,6 +331,15 @@ Current phase: **Phase 6 server buffer/event API and theorem surface**.
   preserving `server_local_event_end_to_end_correct`. Other server local actions
   remain intentionally outside this generic dispatcher until their handlers are
   implemented.
+- [x] Added supplied-material server application write-key installation:
+  `TLS13.Impl.ConnectionState.LocalHandshake.install_server_application_write_traffic_keys_from_material`
+  stores server application traffic material, installs the concrete application
+  write record keys, and proves the role-indexed legal delta. The focused public
+  `TLS13.Impl.Server.process_install_server_application_write_keys` wrapper
+  proves `server_local_event_end_to_end_correct` for
+  `LocalInstallServerApplicationTrafficKeys`. It currently takes already-derived
+  application traffic material; internal derivation from the master secret and
+  transcript remains pending, as does the client application read-key counterpart.
 
 ## End goal
 
@@ -1199,7 +1208,9 @@ Checklist:
       - server flight emission (focused sent-ServerHello public wrapper is
         complete; serializer-driven construction and encrypted flight remain);
       - client Finished verification;
-      - application key installation;
+      - application key installation (server application write-key
+        supplied-material mutation/wrapper complete; internal derivation and
+        client application read-key counterpart remain);
       - application data and close_notify.
 - [ ] Add failure transitions:
       - unsupported cipher suite;
