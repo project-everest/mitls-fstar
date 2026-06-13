@@ -141,6 +141,10 @@ Current phase: **Phase 0/1 started**.
   private/public correspondence, and both local X25519 shared-secret
   computations; `lemma_paired_x25519_key_shares_shared_secret_agree` derives
   shared-secret equality using the trusted crypto TCB agreement lemma.
+- [x] Added supported-profile key-schedule lineage and the stronger theorem
+  `lemma_paired_x25519_key_shares_derived_key_agrees`, which derives
+  base-secret agreement from paired X25519 shares plus deterministic empty-PSK
+  lineage before applying the first-milestone derived-key agreement theorem.
 - [x] Repaired the existing Pulse client proof surface after the role gates:
   implementation readiness queries and mutation/model lemmas now expose
   `ClientEndpoint` exactly where legacy client-only transitions rely on it, and
@@ -832,6 +836,8 @@ Checklist:
 - [x] Add transcript checkpoint extraction helpers.
 - [x] Add first derived-key agreement theorem surface.
 - [x] Add X25519 key-share pairing predicate and shared-secret agreement lemma.
+- [x] Bridge paired X25519 key shares to base-secret and derived-key agreement
+      without a bare shared-secret/base-secret equality premise.
 - [x] Preserve the legacy Pulse client implementation by threading explicit
       client-role facts through readiness queries, model lemmas, and mutation
       boundaries.

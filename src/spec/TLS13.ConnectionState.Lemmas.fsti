@@ -75,6 +75,30 @@ val lemma_paired_x25519_key_shares_shared_secret_agree
       (requires paired_x25519_key_shares client server)
       (ensures shared_secret_material_agrees client server)
 
+val lemma_paired_x25519_key_shares_base_secret_agree
+  (base_id:base_secret_id)
+  (client:connection_state)
+  (server:connection_state)
+  : Lemma
+      (requires
+        paired_x25519_key_shares client server /\
+        connection_supported_profile_key_schedule_lineage client /\
+        connection_supported_profile_key_schedule_lineage server)
+      (ensures base_secret_inputs_agree base_id client server)
+
+val lemma_paired_x25519_key_shares_derived_key_agrees
+  (key_id:derived_key_id)
+  (client:connection_state)
+  (server:connection_state)
+  : Lemma
+      (requires
+        first_milestone_derived_key_id key_id /\
+        paired_x25519_key_shares client server /\
+        connection_supported_profile_key_schedule_lineage client /\
+        connection_supported_profile_key_schedule_lineage server /\
+        derivation_checkpoint_inputs_agree key_id client server)
+      (ensures peer_derived_key_material_agrees key_id client server)
+
 val lemma_step_role_install_record_keys_consistent_for_role
   (role:endpoint_role)
   (model0:connection_model)

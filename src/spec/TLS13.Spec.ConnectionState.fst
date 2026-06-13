@@ -451,6 +451,11 @@ let same_key_derivation_checkpoint
     same_transcript_checkpoint transcript_checkpoint client server
   | None -> False
 
+let key_checkpoint_for_epoch (epoch:traffic_epoch) : key_derivation_checkpoint =
+  match epoch with
+  | TrafficHandshake -> DeriveHandshakeTraffic
+  | TrafficApplication -> DeriveApplicationTraffic
+
 let paired_wire_logs
   (client:connection_state)
   (server:connection_state)
@@ -469,6 +474,26 @@ let shared_secret_material_agrees
   | Some client_shared, Some server_shared ->
     Seq.equal client_shared server_shared
   | _, _ -> False
+
+let supported_profile_key_schedule_lineage
+  (keys:key_schedule_state)
+  : prop =
+  match
+    keys.ks_shared_secret,
+    keys.ks_early_secret,
+    keys.ks_handshake_secret,
+    keys.ks_master_secret
+  with
+  | Some shared, Some early, Some handshake, Some master ->
+    Seq.equal early (K.early_secret B.empty) /\
+    Seq.equal handshake (K.handshake_secret early shared) /\
+    Seq.equal master (K.master_secret handshake)
+  | _, _, _, _ -> False
+
+let connection_supported_profile_key_schedule_lineage
+  (st:connection_state)
+  : prop =
+  supported_profile_key_schedule_lineage st.cs_model.model_handshake.hs_keys
 
 let paired_x25519_key_shares
   (client:connection_state)
@@ -498,6 +523,27 @@ let paired_x25519_key_shares
        C.x25519_shared server_sk (client_hello_key_share ch) == Some server_shared
      | _, _, _, _ -> False)
   | _, _, _, _ -> False
+
+let derivation_checkpoint_inputs_agree
+  (key_id:derived_key_id)
+  (client:connection_state)
+  (server:connection_state)
+  : prop =
+  match key_id with
+  | BaseSecret _ -> True
+  | TrafficSecret traffic_id
+  | TrafficKey traffic_id
+  | TrafficIV traffic_id ->
+    same_key_derivation_checkpoint
+      (key_checkpoint_for_epoch traffic_id.traffic_id_epoch)
+      client
+      server
+  | FinishedKey _ ->
+    same_key_derivation_checkpoint DeriveHandshakeTraffic client server
+  | TrafficUpdateSecret _
+  | ExporterMasterSecret
+  | ResumptionMasterSecret ->
+    False
 
 let initial (cfg:connection_config) : connection_state = {
   cs_model = initial_model cfg;
@@ -1492,11 +1538,6 @@ let application_traffic_available_for_role
       hs.hs_keys
       TrafficApplication
       (traffic_label_for_endpoint_direction role traffic_dir))
-
-let key_checkpoint_for_epoch (epoch:traffic_epoch) : key_derivation_checkpoint =
-  match epoch with
-  | TrafficHandshake -> DeriveHandshakeTraffic
-  | TrafficApplication -> DeriveApplicationTraffic
 
 let key_checkpoint_for_derived_key
   (key_id:derived_key_id)

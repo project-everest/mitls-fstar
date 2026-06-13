@@ -208,6 +208,112 @@ let lemma_paired_x25519_key_shares_shared_secret_agree
      | _, _, _, _ -> assert False)
   | _, _, _, _ -> assert False
 
+let lemma_shared_secret_lineage_base_secret_agree
+  (base_id:base_secret_id)
+  (client:connection_state)
+  (server:connection_state)
+  : Lemma
+      (requires
+        shared_secret_material_agrees client server /\
+        connection_supported_profile_key_schedule_lineage client /\
+        connection_supported_profile_key_schedule_lineage server)
+      (ensures base_secret_inputs_agree base_id client server)
+=
+  let client_keys = client.cs_model.model_handshake.hs_keys in
+  let server_keys = server.cs_model.model_handshake.hs_keys in
+  match
+    client_keys.ks_shared_secret,
+    server_keys.ks_shared_secret,
+    client_keys.ks_early_secret,
+    server_keys.ks_early_secret,
+    client_keys.ks_handshake_secret,
+    server_keys.ks_handshake_secret,
+    client_keys.ks_master_secret,
+    server_keys.ks_master_secret
+  with
+  | Some client_shared, Some server_shared,
+    Some client_early, Some server_early,
+    Some client_handshake, Some server_handshake,
+    Some client_master, Some server_master ->
+    assert (Seq.equal client_shared server_shared);
+    assert (Seq.equal client_early (K.early_secret B.empty));
+    assert (Seq.equal server_early (K.early_secret B.empty));
+    Seq.lemma_eq_elim client_shared server_shared;
+    Seq.lemma_eq_elim client_early (K.early_secret B.empty);
+    Seq.lemma_eq_elim server_early (K.early_secret B.empty);
+    assert (Seq.equal client_early server_early);
+    assert (Seq.equal client_handshake (K.handshake_secret client_early client_shared));
+    assert (Seq.equal server_handshake (K.handshake_secret server_early server_shared));
+    Seq.lemma_eq_elim client_handshake (K.handshake_secret client_early client_shared);
+    Seq.lemma_eq_elim server_handshake (K.handshake_secret server_early server_shared);
+    assert (Seq.equal client_handshake server_handshake);
+    assert (Seq.equal client_master (K.master_secret client_handshake));
+    assert (Seq.equal server_master (K.master_secret server_handshake));
+    Seq.lemma_eq_elim client_handshake server_handshake;
+    Seq.lemma_eq_elim client_master (K.master_secret client_handshake);
+    Seq.lemma_eq_elim server_master (K.master_secret server_handshake);
+    assert (Seq.equal client_master server_master);
+    (match base_id with
+     | EarlySecret -> assert (Seq.equal client_early server_early)
+     | HandshakeSecret -> assert (Seq.equal client_handshake server_handshake)
+     | MasterSecret -> assert (Seq.equal client_master server_master))
+  | _, _, _, _, _, _, _, _ ->
+    assert False
+
+let lemma_paired_x25519_key_shares_base_secret_agree
+  (base_id:base_secret_id)
+  (client:connection_state)
+  (server:connection_state)
+  : Lemma
+      (requires
+        paired_x25519_key_shares client server /\
+        connection_supported_profile_key_schedule_lineage client /\
+        connection_supported_profile_key_schedule_lineage server)
+      (ensures base_secret_inputs_agree base_id client server)
+=
+  lemma_paired_x25519_key_shares_shared_secret_agree client server;
+  lemma_shared_secret_lineage_base_secret_agree base_id client server
+
+let lemma_paired_x25519_key_shares_derived_key_agrees
+  (key_id:derived_key_id)
+  (client:connection_state)
+  (server:connection_state)
+  : Lemma
+      (requires
+        first_milestone_derived_key_id key_id /\
+        paired_x25519_key_shares client server /\
+        connection_supported_profile_key_schedule_lineage client /\
+        connection_supported_profile_key_schedule_lineage server /\
+        derivation_checkpoint_inputs_agree key_id client server)
+      (ensures peer_derived_key_material_agrees key_id client server)
+=
+  (match key_id with
+   | BaseSecret base_id ->
+     lemma_paired_x25519_key_shares_base_secret_agree base_id client server;
+     assert (derivation_inputs_agree key_id client server)
+   | TrafficSecret traffic_id
+   | TrafficKey traffic_id
+   | TrafficIV traffic_id ->
+     let base_id =
+       match traffic_id.traffic_id_epoch with
+       | TrafficHandshake -> HandshakeSecret
+       | TrafficApplication -> MasterSecret in
+     lemma_paired_x25519_key_shares_base_secret_agree base_id client server;
+     assert (traffic_secret_inputs_agree traffic_id client server);
+     assert (derivation_inputs_agree key_id client server)
+   | FinishedKey label ->
+     lemma_paired_x25519_key_shares_base_secret_agree HandshakeSecret client server;
+     assert (traffic_secret_inputs_agree
+       { traffic_id_epoch = TrafficHandshake; traffic_id_label = label }
+       client
+       server);
+     assert (derivation_inputs_agree key_id client server)
+   | TrafficUpdateSecret _
+   | ExporterMasterSecret
+   | ResumptionMasterSecret ->
+     assert False);
+  lemma_paired_endpoints_derived_key_agrees key_id client server
+
 let lemma_step_role_install_record_keys_consistent_for_role
   (role:endpoint_role)
   (model0:connection_model)
