@@ -119,6 +119,11 @@ Current phase: **Phase 0/1 started**.
   application read keys install after receiving client `Finished`, and
   `LocalVerifyClientFinished` now requires both application record directions
   to match the key schedule before entering `ControlApplicationData`.
+- [x] Application-data and close_notify legal message predicates are now
+  endpoint-role aware. Server application sends use server application traffic,
+  server application receives use client application traffic, and close_notify
+  is legal for either endpoint role while KeyUpdate remains client-only/deferred
+  for the first server milestone.
 - [x] Repaired the existing Pulse client proof surface after the role gates:
   implementation readiness queries and mutation/model lemmas now expose
   `ClientEndpoint` exactly where legacy client-only transitions rely on it, and
@@ -806,6 +811,7 @@ Checklist:
 - [x] Add final server handshake-completion transition into
       `ControlApplicationData` after application keys are installed and client
       `Finished` verifies.
+- [x] Add server application-data and close_notify pure legal transitions.
 - [x] Preserve the legacy Pulse client implementation by threading explicit
       client-role facts through readiness queries, model lemmas, and mutation
       boundaries.

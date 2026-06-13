@@ -241,6 +241,27 @@ let rec lemma_record_write_keys_advance
   if n = 0 then ()
   else lemma_record_write_keys_advance control keys st (n - 1)
 
+let rec lemma_record_keys_advance_for_role
+  (role:endpoint_role)
+  (dir:traffic_direction)
+  (control:connection_control_state)
+  (keys:key_schedule_state)
+  (st:R.direction_state)
+  (n:nat)
+  : Lemma
+      (requires record_keys_match_key_schedule_for_role role dir control keys st)
+      (ensures
+        record_keys_match_key_schedule_for_role
+          role
+          dir
+          control
+          keys
+          (advance_direction_records st n))
+      (decreases n)
+=
+  if n = 0 then ()
+  else lemma_record_keys_advance_for_role role dir control keys st (n - 1)
+
 let lemma_initial_app_log_consistent
   (cfg:connection_config)
   : Lemma (connection_state_app_log_consistent (initial cfg))
@@ -920,6 +941,34 @@ let lemma_step_model_record_keys_consistent_for_role
          assert (model1.model_handshake.hs_keys == model0.model_handshake.hs_keys))
      | ConnNetworkEvent msg ->
       (match msg.CL.message_value with
+       | M.TlsApplicationData bytes ->
+         assert (model1.model_handshake.hs_keys == model0.model_handshake.hs_keys);
+         (match msg.CL.message_direction with
+          | CL.Sent ->
+            assert (model1.model_record.record_write ==
+              advance_direction_records
+                model0.model_record.record_write
+                (S.application_data_record_count bytes));
+            assert (model1.model_record.record_read ==
+              model0.model_record.record_read);
+            lemma_record_keys_advance_for_role
+              ServerEndpoint
+              TrafficWrite
+              model0.model_control
+              model0.model_handshake.hs_keys
+              model0.model_record.record_write
+              (S.application_data_record_count bytes)
+          | CL.Received ->
+            assert (model1.model_record.record_read ==
+              R.next_seq model0.model_record.record_read);
+            assert (model1.model_record.record_write ==
+              model0.model_record.record_write);
+            lemma_record_keys_next_seq_for_role
+              ServerEndpoint
+              TrafficRead
+              model0.model_control
+              model0.model_handshake.hs_keys
+              model0.model_record.record_read)
        | M.TlsHandshake (M.ClientHello _)
        | M.TlsHandshake (M.ServerHello _) ->
          assert (model1.model_record == model0.model_record);
@@ -966,9 +1015,44 @@ let lemma_step_model_record_keys_consistent_for_role
            model0.model_record.record_write
        | M.TlsAlert T.CloseNotify ->
          (match model0.model_control with
-          | ControlApplicationData
+          | ControlApplicationData ->
+            assert (model1.model_handshake.hs_keys == model0.model_handshake.hs_keys);
+            (match msg.CL.message_direction with
+             | CL.Sent ->
+               assert (model1.model_record.record_write ==
+                 R.next_seq model0.model_record.record_write);
+               assert (model1.model_record.record_read ==
+                 model0.model_record.record_read);
+               lemma_record_keys_next_seq_for_role
+                 ServerEndpoint
+                 TrafficWrite
+                 model0.model_control
+                 model0.model_handshake.hs_keys
+                 model0.model_record.record_write
+             | CL.Received ->
+               assert (model1.model_record.record_read ==
+                 R.next_seq model0.model_record.record_read);
+               assert (model1.model_record.record_write ==
+                 model0.model_record.record_write);
+               lemma_record_keys_next_seq_for_role
+                 ServerEndpoint
+                 TrafficRead
+                 model0.model_control
+                 model0.model_handshake.hs_keys
+                 model0.model_record.record_read)
           | ControlClosing ->
-            assert False
+            assert (msg.CL.message_direction == CL.Received);
+            assert (model1.model_handshake.hs_keys == model0.model_handshake.hs_keys);
+            assert (model1.model_record.record_read ==
+              R.next_seq model0.model_record.record_read);
+            assert (model1.model_record.record_write ==
+              model0.model_record.record_write);
+            lemma_record_keys_next_seq_for_role
+              ServerEndpoint
+              TrafficRead
+              model0.model_control
+              model0.model_handshake.hs_keys
+              model0.model_record.record_read
           | _ ->
             assert (ControlFailed? model1.model_control))
        | M.TlsAlert _ ->
@@ -4666,6 +4750,7 @@ let lemma_legal_connection_delta_full_log_consistent
       (ensures connection_state_full_log_consistent st1)
 =
   assert (st0.cs_model.model_config.config_role == ClientEndpoint);
+  lemma_step_model_preserves_config st0.cs_model delta.delta_event st1.cs_model;
   assert (st1.cs_model.model_config == st0.cs_model.model_config);
   lemma_legal_connection_delta_layered_log_consistent st0 delta st1;
   lemma_connection_state_connection_log_view_consistent st1;

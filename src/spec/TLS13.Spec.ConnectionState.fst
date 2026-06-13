@@ -1334,6 +1334,21 @@ let traffic_install_matches_key_schedule_for_role
     install.install_material == traffic_key_material_for_secret secret
   | None -> False
 
+let application_traffic_available_for_role
+  (role:endpoint_role)
+  (hs:handshake_state)
+  (dir:direction)
+  : GTot prop =
+  let traffic_dir =
+    match dir with
+    | CL.Sent -> TrafficWrite
+    | CL.Received -> TrafficRead in
+  Some?
+    (traffic_material_for_label
+      hs.hs_keys
+      TrafficApplication
+      (traffic_label_for_endpoint_direction role traffic_dir))
+
 let traffic_install_allowed_at_stage
   (stage:handshake_stage)
   (install:traffic_key_install)
@@ -1553,10 +1568,10 @@ let legal_tls_message
   | M.TlsHandshake handshake_msg, _ ->
     legal_handshake_message model dir handshake_msg
   | M.TlsApplicationData _, ControlApplicationData ->
-    model.model_config.config_role == ClientEndpoint /\
-    (match dir with
-     | CL.Sent -> Some? hs.hs_keys.ks_client_application_traffic
-     | CL.Received -> Some? hs.hs_keys.ks_server_application_traffic)
+    application_traffic_available_for_role
+      model.model_config.config_role
+      hs
+      dir
   | M.TlsIgnoredPostHandshake _, ControlApplicationData ->
     model.model_config.config_role == ClientEndpoint /\
     dir == CL.Received /\ Some? hs.hs_keys.ks_server_application_traffic
@@ -1571,9 +1586,8 @@ let legal_tls_message
      | CL.Sent, M.UpdateRequested ->
        False)
   | M.TlsAlert T.CloseNotify, ControlApplicationData ->
-    model.model_config.config_role == ClientEndpoint
+    True
   | M.TlsAlert T.CloseNotify, ControlClosing ->
-    model.model_config.config_role == ClientEndpoint /\
     dir == CL.Received
   | M.TlsAlert _, _ ->
     True
