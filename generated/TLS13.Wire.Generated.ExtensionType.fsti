@@ -56,7 +56,7 @@ let string_of_extensionType = function
   | Key_share -> "key_share"
   | Unknown_extensionType _ -> "Unknown_extensionType"
 
-[@LT.Norm] inline_for_extraction let extensionType_enum : LP.enum extensionType U16.t =
+[@LT.Norm] inline_for_extraction noextract let extensionType_enum : LP.enum extensionType U16.t =
   [@inline_let] let e = [
     Server_name, 0us;
     Supported_groups, 10us;

@@ -42,7 +42,7 @@ let string_of_keyUpdateRequest = function
   | Update_not_requested -> "update_not_requested"
   | Update_requested -> "update_requested"
 
-[@LT.Norm] inline_for_extraction let keyUpdateRequest_enum : LP.enum keyUpdateRequest U8.t =
+[@LT.Norm] inline_for_extraction noextract let keyUpdateRequest_enum : LP.enum keyUpdateRequest U8.t =
   [@inline_let] let e = [
     Update_not_requested, 0z;
     Update_requested, 1z;

@@ -50,7 +50,7 @@ let string_of_signatureScheme = function
   | Ed25519 -> "ed25519"
   | Unknown_signatureScheme _ -> "Unknown_signatureScheme"
 
-[@LT.Norm] inline_for_extraction let signatureScheme_enum : LP.enum signatureScheme U16.t =
+[@LT.Norm] inline_for_extraction noextract let signatureScheme_enum : LP.enum signatureScheme U16.t =
   [@inline_let] let e = [
     Ecdsa_secp256r1_sha256, 1027us;
     Rsa_pss_rsae_sha256, 2052us;

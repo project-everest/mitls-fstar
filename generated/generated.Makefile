@@ -40,10 +40,9 @@ KRML_OPTS += -ccopt -Wno-tautological-constant-out-of-range-compare
 endif
 
 # -Wno-tautological-overlap-compare because of T32
-# KRML_WARN: Warning 9 (globals needing krmlinit_globals) is fatal by default,
-# but the parsers/serializers form a *library* whose enum lookup tables are
-# legitimately initialised by the consumer's krmlinit_globals() call, so the
-# `extract` target downgrades it (and the related Warning 17) to a warning.
+# KRML_WARN: Warning 9/17 (globals needing krmlinit_globals) stay fatal: the
+# QuackyDucky enum lookup tables are emitted `noextract` (inlined at use sites),
+# so the generated parsers/serializers no longer require krmlinit_globals().
 KRML_WARN ?= @2-26
 KRML = $(KRML_EXE) \
 	 -fstar $(FSTAR_EXE) \
@@ -58,7 +57,6 @@ KRML = $(KRML_EXE) \
 
 ALL_KRML_FILES := $(filter-out krml/prims.krml,$(ALL_KRML_FILES))
 
-extract: KRML_WARN := @2-26-9-17
 extract: $(ALL_KRML_FILES) # from .depend
 	-@mkdir out
 	$(KRML) -skip-compilation $^

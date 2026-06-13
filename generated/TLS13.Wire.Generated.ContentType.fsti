@@ -48,7 +48,7 @@ let string_of_contentType = function
   | Handshake -> "handshake"
   | Application_data -> "application_data"
 
-[@LT.Norm] inline_for_extraction let contentType_enum : LP.enum contentType U8.t =
+[@LT.Norm] inline_for_extraction noextract let contentType_enum : LP.enum contentType U8.t =
   [@inline_let] let e = [
     Invalid, 0z;
     Change_cipher_spec, 20z;

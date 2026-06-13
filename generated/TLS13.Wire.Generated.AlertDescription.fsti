@@ -58,7 +58,7 @@ let string_of_alertDescription = function
   | Protocol_version -> "protocol_version"
   | Unsupported_extension -> "unsupported_extension"
 
-[@LT.Norm] inline_for_extraction let alertDescription_enum : LP.enum alertDescription U8.t =
+[@LT.Norm] inline_for_extraction noextract let alertDescription_enum : LP.enum alertDescription U8.t =
   [@inline_let] let e = [
     Close_notify, 0z;
     Unexpected_message, 10z;

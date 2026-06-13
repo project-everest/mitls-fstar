@@ -42,7 +42,7 @@ let string_of_protocolVersion = function
   | TLS_1p2 -> "TLS_1p2"
   | TLS_1p3 -> "TLS_1p3"
 
-[@LT.Norm] inline_for_extraction let protocolVersion_enum : LP.enum protocolVersion U16.t =
+[@LT.Norm] inline_for_extraction noextract let protocolVersion_enum : LP.enum protocolVersion U16.t =
   [@inline_let] let e = [
     TLS_1p2, 771us;
     TLS_1p3, 772us;

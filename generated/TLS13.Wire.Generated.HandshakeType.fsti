@@ -54,7 +54,7 @@ let string_of_handshakeType = function
   | Finished -> "finished"
   | Key_update -> "key_update"
 
-[@LT.Norm] inline_for_extraction let handshakeType_enum : LP.enum handshakeType U8.t =
+[@LT.Norm] inline_for_extraction noextract let handshakeType_enum : LP.enum handshakeType U8.t =
   [@inline_let] let e = [
     Client_hello, 1z;
     New_session_ticket, 4z;

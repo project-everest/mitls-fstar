@@ -40,7 +40,7 @@ type nameType =
 let string_of_nameType = function
   | Host_name -> "host_name"
 
-[@LT.Norm] inline_for_extraction let nameType_enum : LP.enum nameType U8.t =
+[@LT.Norm] inline_for_extraction noextract let nameType_enum : LP.enum nameType U8.t =
   [@inline_let] let e = [
     Host_name, 0z;
   ] in

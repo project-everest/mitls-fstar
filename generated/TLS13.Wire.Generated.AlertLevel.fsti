@@ -42,7 +42,7 @@ let string_of_alertLevel = function
   | Warning -> "warning"
   | Fatal -> "fatal"
 
-[@LT.Norm] inline_for_extraction let alertLevel_enum : LP.enum alertLevel U8.t =
+[@LT.Norm] inline_for_extraction noextract let alertLevel_enum : LP.enum alertLevel U8.t =
   [@inline_let] let e = [
     Warning, 1z;
     Fatal, 2z;

@@ -46,7 +46,7 @@ let string_of_namedGroup = function
   | X25519 -> "x25519"
   | Unknown_namedGroup _ -> "Unknown_namedGroup"
 
-[@LT.Norm] inline_for_extraction let namedGroup_enum : LP.enum namedGroup U16.t =
+[@LT.Norm] inline_for_extraction noextract let namedGroup_enum : LP.enum namedGroup U16.t =
   [@inline_let] let e = [
     X25519, 29us;
   ] in

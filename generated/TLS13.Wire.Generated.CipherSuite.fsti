@@ -40,7 +40,7 @@ type cipherSuite =
 let string_of_cipherSuite = function
   | TLS_CHACHA20_POLY1305_SHA256 -> "TLS_CHACHA20_POLY1305_SHA256"
 
-[@LT.Norm] inline_for_extraction let cipherSuite_enum : LP.enum cipherSuite U16.t =
+[@LT.Norm] inline_for_extraction noextract let cipherSuite_enum : LP.enum cipherSuite U16.t =
   [@inline_let] let e = [
     TLS_CHACHA20_POLY1305_SHA256, 4867us;
   ] in
