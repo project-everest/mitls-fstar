@@ -18,6 +18,10 @@ QD_EXE         ?= $(EVERPARSE_HOME)/bin/qd.exe
 LOWPARSE_HOME  ?= $(EVERPARSE_HOME)/src/lowparse
 GENERATED_DIR   = generated
 QD_RFC          = tls.qd.rfc
+FSTAR_PREFIX    = $(patsubst %/bin/fstar.exe,%,$(realpath $(FSTAR_EXE)))
+FSTAR_ULIB      = $(FSTAR_PREFIX)/lib/fstar/ulib
+FSTAR_PULSE_COMMON = $(FSTAR_PREFIX)/lib/fstar/pulse/common
+FSTAR_PULSE_LIB = $(FSTAR_PREFIX)/lib/fstar/pulse/pulse/lib
 
 # ── Directories ────────────────────────────────────────────────────
 CACHE_DIR   = _cache
@@ -34,6 +38,8 @@ INCLUDES = \
   --include $(GENERATED_DIR) \
   --include $(LOWPARSE_HOME) \
   --include $(LOWPARSE_HOME)/pulse
+
+FSTAR_DEP_OPTIONS := --extract '*,-FStar.Tactics,-FStar.Reflection,-Pulse,+Pulse.Lib.Pervasives,+Pulse.Lib.Slice,+Pulse.Lib.Array,+Pulse.Lib.Array.*'
 
 FSTAR_FLAGS = \
   --cache_checked_modules \
@@ -76,8 +82,8 @@ verify-generated:
 	-$(MAKE) -C $(GENERATED_DIR) -f generated.Makefile clean-local 2>/dev/null || true
 
 # ── Dependency Analysis ────────────────────────────────────────────
-.depend: $(ALL_FILES) | check-toolchain
-	$(FSTAR) --dep full $(ALL_FILES) --output_deps_to $@
+.depend: $(ALL_FILES) Makefile | check-toolchain
+	$(FSTAR) $(FSTAR_DEP_OPTIONS) --dep full $(ALL_FILES) --output_deps_to $@
 
 include .depend
 
@@ -125,17 +131,6 @@ check-admits:
 	else \
 	  echo "0 admit(s) found"; \
 	fi
-
-# ── Generic Extraction Rules ───────────────────────────────────────
-# Extract individual module to .krml
-$(OUTPUT_DIR)/%.krml: verify | $(OUTPUT_DIR)
-	$(FSTAR) --codegen krml \
-	  --extract_module $(subst _,.,$*) \
-	  src/impl/$(subst _,.,$*).fst \
-	  --krmloutput $@
-
-# Note: .krml → .c extraction requires KaRaMeL bundling configuration
-# See bundle-specific targets below
 
 # ── Extraction Bundles ─────────────────────────────────────────────
 # List of modules to extract (dotted names)
@@ -204,44 +199,158 @@ BUNDLE_INTERNAL_MODULES = \
   TLS13.Impl.Handle.Local,TLS13.Impl.Messages,\
   TLS13.KeySchedule,TLS13.Record
 
-# Interface-only modules (not extracted, only .fsti):
+# Interface-only external modules (not implemented in F*):
 # TLS13.Crypto, TLS13.X509, TLS13.MachineTypes, TLS13.IO,
-# TLS13.Impl.Parser, TLS13.Impl.Serializer
+# TLS13.Impl.Serializer
 
-# Extract all impl modules to .krml
-BUNDLE_KRML_FILES = $(patsubst %,$(OUTPUT_DIR)/%.krml,$(subst .,_,$(BUNDLE_IMPL_MODULES)))
+FULL_KRML_FILES = $(filter-out $(OUTPUT_DIR)/prims.krml $(OUTPUT_DIR)/Prims.krml,$(ALL_KRML_FILES))
+KRML_STUB_DIR = $(OUTPUT_DIR)/krml_stubs
+KRML_STUB_CACHE = $(OUTPUT_DIR)/krml_stub_cache
+
+# Extract the full dependency closure so calls through .fsti interfaces (notably
+# TLS13.Impl.Parser) resolve to their verified implementations.
+BUNDLE_KRML_FILES = $(filter-out \
+  $(OUTPUT_DIR)/TLS13_Impl_Client_Driver.krml \
+  $(OUTPUT_DIR)/TLS13_OpenSSL.krml \
+  $(OUTPUT_DIR)/TLS13_IO.krml,$(FULL_KRML_FILES))
 
 DRIVER_BUNDLE_DIR = $(EXTRACT_DIR)/driver_bundle
-DRIVER_KRML_FILES = \
-  $(BUNDLE_KRML_FILES) \
-  $(OUTPUT_DIR)/TLS13_IO.krml \
-  $(OUTPUT_DIR)/TLS13_Impl_Client_Driver.krml \
-  $(OUTPUT_DIR)/TLS13_OpenSSL.krml
+DRIVER_KRML_FILES = $(filter-out \
+  $(OUTPUT_DIR)/TLS13_Extract_Smoke.krml \
+  $(OUTPUT_DIR)/FStar_Errors_Msg.krml \
+  $(OUTPUT_DIR)/FStar_Tactics_%.krml \
+  $(OUTPUT_DIR)/FStar_Reflection_%.krml \
+  $(OUTPUT_DIR)/FStar_Syntax_Syntax.krml \
+  $(OUTPUT_DIR)/FStar_TypeChecker_%.krml \
+  $(OUTPUT_DIR)/FStar_VConfig.krml \
+  $(OUTPUT_DIR)/TLS13_X509.krml \
+  $(OUTPUT_DIR)/TLS13_MachineTypes.krml,$(FULL_KRML_FILES))
 
-# Extract FStar.Pervasives.Native for tuple support
-$(OUTPUT_DIR)/FStar_Pervasives_Native.krml: verify | $(OUTPUT_DIR)
-	$(FSTAR_EXE) --codegen krml --extract_module FStar.Pervasives.Native \
-	  --odir $(OUTPUT_DIR) --cache_dir $(CACHE_DIR) \
-	  --already_cached Prims,FStar \
-	  FStar.Pervasives.Native.fst
+# Extract each dependency-discovered module to its own .krml.  Use the checked
+# source prerequisite from .depend instead of deriving module names from the
+# target; generated modules legitimately contain underscores in their names.
+$(filter-out $(OUTPUT_DIR)/FStar_SizeT.krml $(OUTPUT_DIR)/TLS13_Impl_Messages.krml,$(ALL_KRML_FILES)): %.krml: | $(OUTPUT_DIR)
+	@checked="$(firstword $(filter %.checked,$^))"; \
+	  src_full="$${checked%.checked}"; \
+	  src="$$(basename "$$src_full")"; \
+	  src_arg="$$src"; \
+	  if [ -f "$$src_full" ]; then src_arg="$$src_full"; fi; \
+	  mod="$${src%.fst}"; mod="$${mod%.fsti}"; \
+	  if [ -f "generated/krml/$(notdir $@)" ]; then \
+	    cp "generated/krml/$(notdir $@)" "$@"; \
+	  elif echo "$$checked" | grep -q '/everparse/src/lowparse/'; then \
+	    cache="$$(dirname "$$checked")"; \
+	    $(FSTAR_EXE) --cache_checked_modules --cache_dir "$$cache" --odir $(OUTPUT_DIR) \
+	      --warn_error -321 --report_assumes warn \
+	      --already_cached 'Prims,FStar,Pulse,PulseCore,C,Spec.Loops,LowParse -TLS13 +TLS13.Wire.Generated' \
+	      --ext optimize_let_vc --ext fly_deps $(INCLUDES) "$$src_arg" \
+	      --codegen krml --extract_module "$$mod" --krmloutput "$@"; \
+	  elif echo "$$checked" | grep -q '/lib/fstar/ulib.checked/'; then \
+	    cache="$$(dirname "$$checked")"; \
+	    $(FSTAR_EXE) --cache_checked_modules --cache_dir "$$cache" --odir $(OUTPUT_DIR) \
+	      --warn_error -321 --report_assumes warn \
+	      --already_cached 'Prims,FStar,Pulse,PulseCore,C,Spec.Loops,LowParse -TLS13 +TLS13.Wire.Generated' \
+	      --ext optimize_let_vc --ext fly_deps $(INCLUDES) "$$src" \
+	      --codegen krml --extract_module "$$mod" --krmloutput "$@"; \
+	  else \
+	    case "$$mod" in \
+	      Pulse.*|Pulse) cache="$(FSTAR_PREFIX)/lib/fstar/pulse/pulse.checked" ;; \
+	      PulseCore.*) cache="$(FSTAR_PREFIX)/lib/fstar/pulse/common.checked" ;; \
+	      *) cache="$(CACHE_DIR)" ;; \
+	    esac; \
+	    if [ "$$cache" = "$(CACHE_DIR)" ]; then \
+	    iface="$${src_arg%.fst}.fsti"; \
+	    if [ "$$iface" != "$$src_arg" ] && [ -f "$$iface" ]; then \
+	      $(FSTAR) "$$iface" || exit $$?; \
+	    fi; \
+	    $(FSTAR) "$$src_arg" && \
+	    $(FSTAR) "$$src_arg" --codegen krml --extract_module "$$mod" --krmloutput "$@"; \
+	    else \
+	    src_path="$$src_arg"; \
+	    if [ -f "$(FSTAR_PREFIX)/lib/fstar/pulse/pulse/lib/$$src" ]; then \
+	      src_path="$(FSTAR_PREFIX)/lib/fstar/pulse/pulse/lib/$$src"; \
+	    elif [ -f "$(FSTAR_PREFIX)/lib/fstar/pulse/common/$$src" ]; then \
+	      src_path="$(FSTAR_PREFIX)/lib/fstar/pulse/common/$$src"; \
+	    fi; \
+	    iface="$${src%.fst}.fsti"; \
+	    iface_path=""; \
+	    if [ -f "$(FSTAR_PREFIX)/lib/fstar/pulse/pulse/lib/$$iface" ]; then \
+	      iface_path="$(FSTAR_PREFIX)/lib/fstar/pulse/pulse/lib/$$iface"; \
+	    elif [ -f "$(FSTAR_PREFIX)/lib/fstar/pulse/common/$$iface" ]; then \
+	      iface_path="$(FSTAR_PREFIX)/lib/fstar/pulse/common/$$iface"; \
+	    fi; \
+	    if [ "$$iface" != "$$src" ] && \
+	       [ -n "$$iface_path" ]; then \
+	      $(FSTAR_EXE) --cache_checked_modules --cache_dir "$$cache" --odir $(OUTPUT_DIR) \
+	        --warn_error -321 --report_assumes warn \
+	        --already_cached 'Prims,FStar,Pulse,PulseCore,C,Spec.Loops,LowParse -TLS13 +TLS13.Wire.Generated' \
+	        --ext optimize_let_vc --ext fly_deps $(INCLUDES) "$$iface_path" || exit $$?; \
+	    fi; \
+	    $(FSTAR_EXE) --cache_checked_modules --cache_dir "$$cache" --odir $(OUTPUT_DIR) \
+	      --warn_error -321 --report_assumes warn \
+	      --already_cached 'Prims,FStar,Pulse,PulseCore,C,Spec.Loops,LowParse -TLS13 +TLS13.Wire.Generated' \
+	      --ext optimize_let_vc --ext fly_deps $(INCLUDES) "$$src_path" && \
+	    $(FSTAR_EXE) --cache_checked_modules --cache_dir "$$cache" --odir $(OUTPUT_DIR) \
+	      --warn_error -321 --report_assumes warn \
+	      --already_cached 'Prims,FStar,Pulse,PulseCore,C,Spec.Loops,LowParse -TLS13 +TLS13.Wire.Generated' \
+	      --ext optimize_let_vc --ext fly_deps $(INCLUDES) "$$src_path" \
+	      --codegen krml --extract_module "$$mod" --krmloutput "$@"; \
+	    fi; \
+	  fi
+	touch -c $@
 
-# Pattern rule for extracting modules to .krml
-# Note: Some modules are interface-only (.fsti) and don't need extraction
-$(OUTPUT_DIR)/%.krml: verify | $(OUTPUT_DIR)
-	@if [ -f "src/impl/$(subst _,.,$*).fst" ]; then \
-	  $(FSTAR) --codegen krml --extract_module $(subst _,.,$*) src/impl/$(subst _,.,$*).fst; \
-	elif [ -f "src/impl/$(subst _,.,$*).fsti" ]; then \
-	  $(FSTAR) --codegen krml --extract_module $(subst _,.,$*) src/impl/$(subst _,.,$*).fsti --krmloutput $@; \
-	elif [ -f "src/spec/$(subst _,.,$*).fst" ]; then \
-	  $(FSTAR) --codegen krml --extract_module $(subst _,.,$*) src/spec/$(subst _,.,$*).fst; \
-	else \
-	  echo "Note: $(subst _,.,$*) is interface-only, skipping extraction"; \
-	  touch $@; \
-	fi
+$(filter-out $(OUTPUT_DIR)/FStar_SizeT.krml,$(ALL_KRML_FILES)): $(OUTPUT_DIR)/FStar_SizeT.krml
 
-extract-krml-bundle: $(BUNDLE_KRML_FILES) $(OUTPUT_DIR)/FStar_Pervasives_Native.krml
+$(KRML_STUB_DIR) $(KRML_STUB_CACHE):
+	mkdir -p $@
 
-extract-driver-krml: $(DRIVER_KRML_FILES) $(OUTPUT_DIR)/FStar_Pervasives_Native.krml
+$(KRML_STUB_DIR)/TLS13.Impl.Messages.fst: src/impl/TLS13.Impl.Messages.fst Makefile | $(KRML_STUB_DIR)
+	@awk ' \
+	  /^[[:space:]]*noextract[[:space:]]*$$/ { pending = 1; next } \
+	  pending && /^[[:space:]]*let max_(server_name_len|alpn_len|cipher_suites|signature_schemes|certificate_chain_bytes|certificate_chain_entries|signature_len|record_fragment_len)[[:space:]]*:/ { pending = 0; print; next } \
+	  pending { print "noextract"; pending = 0 } \
+	  { print } \
+	  END { if (pending) print "noextract" }' $< > $@
+
+$(KRML_STUB_DIR)/FStar.SizeT.fsti: $(FSTAR_ULIB)/FStar.SizeT.fsti Makefile | $(KRML_STUB_DIR)
+	@awk '/noextract_to "krml"/ { next } { print }' $< > $@
+
+$(KRML_STUB_DIR)/FStar.SizeT.fst: $(FSTAR_ULIB)/FStar.SizeT.fst Makefile | $(KRML_STUB_DIR)
+	@cp $< $@
+
+$(OUTPUT_DIR)/FStar_SizeT.krml: \
+  $(KRML_STUB_DIR)/FStar.SizeT.fsti $(KRML_STUB_DIR)/FStar.SizeT.fst Makefile | $(OUTPUT_DIR) $(KRML_STUB_CACHE)
+	$(FSTAR_EXE) --cache_checked_modules --cache_dir $(KRML_STUB_CACHE) --odir $(OUTPUT_DIR) \
+	  --include $(KRML_STUB_DIR) --already_cached 'Prims,FStar -FStar.SizeT' \
+	  $(KRML_STUB_DIR)/FStar.SizeT.fsti
+	$(FSTAR_EXE) --cache_checked_modules --cache_dir $(KRML_STUB_CACHE) --odir $(OUTPUT_DIR) \
+	  --include $(KRML_STUB_DIR) --already_cached 'Prims,FStar -FStar.SizeT' \
+	  $(KRML_STUB_DIR)/FStar.SizeT.fst
+	$(FSTAR_EXE) --cache_checked_modules --cache_dir $(KRML_STUB_CACHE) --odir $(OUTPUT_DIR) \
+	  --include $(KRML_STUB_DIR) --already_cached 'Prims,FStar -FStar.SizeT' \
+	  --codegen krml --extract_module FStar.SizeT \
+	  $(KRML_STUB_DIR)/FStar.SizeT.fst --krmloutput $@
+	$(FSTAR_EXE) --cache_checked_modules --cache_dir $(CACHE_DIR) --odir $(OUTPUT_DIR) \
+	  --already_cached 'Prims,FStar -FStar.SizeT' $(FSTAR_ULIB)/FStar.SizeT.fsti
+	$(FSTAR_EXE) --cache_checked_modules --cache_dir $(CACHE_DIR) --odir $(OUTPUT_DIR) \
+	  --already_cached 'Prims,FStar -FStar.SizeT' $(FSTAR_ULIB)/FStar.SizeT.fst
+
+$(OUTPUT_DIR)/TLS13_Impl_Messages.krml: \
+  $(KRML_STUB_DIR)/TLS13.Impl.Messages.fst Makefile | $(OUTPUT_DIR) $(KRML_STUB_CACHE)
+	-cp $(CACHE_DIR)/*.checked $(KRML_STUB_CACHE)/ 2>/dev/null || true
+	$(FSTAR_EXE) --cache_checked_modules --cache_dir $(KRML_STUB_CACHE) --odir $(OUTPUT_DIR) \
+	  --warn_error -321 --report_assumes warn \
+	  --already_cached 'Prims,FStar,Pulse,PulseCore,C,Spec.Loops,LowParse -TLS13 +TLS13.Wire.Generated' \
+	  --ext optimize_let_vc --ext fly_deps $(INCLUDES) $<
+	$(FSTAR_EXE) --cache_checked_modules --cache_dir $(KRML_STUB_CACHE) --odir $(OUTPUT_DIR) \
+	  --warn_error -321 --report_assumes warn \
+	  --already_cached 'Prims,FStar,Pulse,PulseCore,C,Spec.Loops,LowParse -TLS13 +TLS13.Wire.Generated' \
+	  --ext optimize_let_vc --ext fly_deps $(INCLUDES) \
+	  --codegen krml --extract_module TLS13.Impl.Messages $< --krmloutput $@
+
+extract-krml-bundle: $(BUNDLE_KRML_FILES)
+
+extract-driver-krml: $(DRIVER_KRML_FILES)
 
 # Generate C for the new buffer/event-oriented client API.
 extract-bundle: extract-krml-bundle | $(BUNDLE_DIR)
@@ -250,15 +359,18 @@ extract-bundle: extract-krml-bundle | $(BUNDLE_DIR)
 	$(KRML_EXE) \
 	  -tmpdir $(BUNDLE_DIR) \
 	  -skip-compilation \
-	  -warn-error -2-9-17-6 \
 	  -add-include '<stdbool.h>' \
+	  -add-include '"krml/internal/compat.h"' \
 	  -add-include '"../../c_stubs/tls13_connection_backend.h"' \
 	  -add-include '"../../c_stubs/tls13_crypto_external.h"' \
 	  -add-include '"../../c_stubs/tls13_spec_types.h"' \
+	  -drop 'FStar.Tactics.\*' -drop FStar.Tactics -drop 'FStar.Reflection.\*' \
+	  -library TLS13.Crypto -library TLS13.X509 -library TLS13.Impl.Serializer \
+	  -bundle 'LowParse.\*' \
 	  -bundle 'FStar.*,Pulse.*,PulseCore.*,Prims' \
+	  -warn-error '@2-26' \
 	  -no-prefix TLS13.Impl.Client \
-	  $(BUNDLE_KRML_FILES) \
-	  _output/FStar_Pervasives_Native.krml
+	  $(BUNDLE_KRML_FILES)
 	@echo ""
 	@echo "Extraction complete:"
 	@ls -lh $(BUNDLE_DIR)/TLS13_*.c 2>/dev/null | awk '{print "  " $$9 " (" $$5 ")"}'
@@ -275,22 +387,139 @@ $(BUNDLE_DIR):
 $(DRIVER_BUNDLE_DIR):
 	mkdir -p $@
 
+define POSTPROCESS_DRIVER_BUNDLE_PY
+from pathlib import Path
+import os
+import re
+
+root = Path(os.environ["DRIVER_BUNDLE_DIR"])
+macro_inc = '#include "../../c_stubs/tls13_serializer_macros.h"\n'
+
+for path in root.glob("*.c"):
+    text = path.read_text()
+
+    if "TLS13_Impl_Serializer_" in text and macro_inc not in text:
+        lines = text.splitlines(True)
+        first_include = None
+        last_include = None
+        for i, line in enumerate(lines):
+            if line.startswith("#include "):
+                if first_include is None:
+                    first_include = i
+                last_include = i
+            elif first_include is not None and line.strip() == "":
+                continue
+            elif first_include is not None:
+                break
+        if last_include is not None:
+            lines.insert(last_include + 1, macro_inc)
+            text = "".join(lines)
+
+    if path.name == "TLS13_Wire_Generated.c":
+        fp_re = re.compile(
+            r'(static\s+[A-Za-z_][\w\s\*]*?\n\(\*([A-Za-z_]\w*)\)\([^;]*?\)\s*=\s*)([A-Za-z_]\w+)(;)',
+            re.S,
+        )
+        inits = {m.group(2): m.group(3) for m in fp_re.finditer(text)}
+
+        def resolve(name):
+            seen = set()
+            while name in inits and name not in seen:
+                seen.add(name)
+                name = inits[name]
+            return name
+
+        text = fp_re.sub(lambda m: m.group(1) + resolve(m.group(3)) + m.group(4), text)
+
+    if path.name == "FStar_Pulse_PulseCore_Prims.c" and "krml_checked_int_t FStar_UInt8_v(uint8_t x)" not in text:
+        text += "\nkrml_checked_int_t FStar_UInt8_v(uint8_t x)\n{\n  return (krml_checked_int_t)x;\n}\n"
+
+    if path.name == "TLS13_Transcript.c":
+        text = text.replace(
+            "Prims_list__uint8_t *TLS13_Transcript_empty = TLS13_Bytes_empty;",
+            "Prims_list__uint8_t *TLS13_Transcript_empty;",
+        )
+
+    if path.name == "TLS13_ConnectionLog.c":
+        text = text.replace(
+            "TLS13_ConnectionLog_raw_io_log\n"
+            "TLS13_ConnectionLog_empty_raw_io_log =\n"
+            "  { .raw_sent = TLS13_Bytes_empty, .raw_received = TLS13_Bytes_empty };",
+            "TLS13_ConnectionLog_raw_io_log\n"
+            "TLS13_ConnectionLog_empty_raw_io_log;",
+        )
+
+    if path.name == "TLS13_Spec_ConnectionState.c":
+        text = re.sub(
+            r'TLS13_Spec_ConnectionState_handshake_buffer_state\n'
+            r'TLS13_Spec_ConnectionState_empty_handshake_buffer_state =\n'
+            r'  \{\n'
+            r'    \.hb_client_hello_bytes = TLS13_Bytes_empty, \.hb_server_hello_bytes = TLS13_Bytes_empty,\n'
+            r'    \.hb_encrypted_server_handshake_bytes = TLS13_Bytes_empty,\n'
+            r'    \.hb_encrypted_server_handshake_parsed = 0,\n'
+            r'    \.hb_certificate_leaf_der = \{ \.tag = FStar_Pervasives_Native_None \},\n'
+            r'    \.hb_certificate_verify_input = \{ \.tag = FStar_Pervasives_Native_None \}\n'
+            r'  \};',
+            "TLS13_Spec_ConnectionState_handshake_buffer_state\n"
+            "TLS13_Spec_ConnectionState_empty_handshake_buffer_state;",
+            text,
+        )
+
+    path.write_text(text)
+
+krmlinit = root / "krmlinit.c"
+if krmlinit.exists():
+    text = krmlinit.read_text()
+    marker = "  TLS13_Bytes_empty = FStar_Seq_Base_create__uint8_t(0, TLS13_Bytes_zero);\n"
+    text = text.replace(
+        "  TLS13_Keys_empty_hash = TLS13_Crypto_Spec_sha256(TLS13_Bytes_empty);\n",
+        "  TLS13_Keys_empty_hash = TLS13_Bytes_zeros(32);\n",
+    )
+    init_block = """  TLS13_Transcript_empty = TLS13_Bytes_empty;
+  TLS13_ConnectionLog_empty_raw_io_log =
+    ((TLS13_ConnectionLog_raw_io_log){ .raw_sent = TLS13_Bytes_empty, .raw_received = TLS13_Bytes_empty });
+  TLS13_Spec_ConnectionState_empty_handshake_buffer_state =
+    ((TLS13_Spec_ConnectionState_handshake_buffer_state){
+      .hb_client_hello_bytes = TLS13_Bytes_empty,
+      .hb_server_hello_bytes = TLS13_Bytes_empty,
+      .hb_encrypted_server_handshake_bytes = TLS13_Bytes_empty,
+      .hb_encrypted_server_handshake_parsed = 0,
+      .hb_certificate_leaf_der = { .tag = FStar_Pervasives_Native_None },
+      .hb_certificate_verify_input = { .tag = FStar_Pervasives_Native_None }
+    });
+"""
+    if init_block not in text:
+        text = text.replace(marker, marker + init_block)
+    krmlinit.write_text(text)
+endef
+export POSTPROCESS_DRIVER_BUNDLE_PY
+
 extract-driver-bundle: extract-driver-krml | $(DRIVER_BUNDLE_DIR)
 	@echo "Extracting TLS13 client driver slice..."
 	@rm -f $(DRIVER_BUNDLE_DIR)/*.c $(DRIVER_BUNDLE_DIR)/*.h $(DRIVER_BUNDLE_DIR)/internal/*.h
 	$(KRML_EXE) \
 	  -tmpdir $(DRIVER_BUNDLE_DIR) \
 	  -skip-compilation \
-	  -warn-error -2-9-17-6 \
 	  -add-include '<stdbool.h>' \
+	  -add-include '"krml/internal/compat.h"' \
 	  -add-include '"../../c_stubs/tls13_connection_backend.h"' \
 	  -add-include '"../../c_stubs/tls13_crypto_external.h"' \
 	  -add-include '"../../c_stubs/tls13_spec_types.h"' \
 	  -add-include '"../../c_stubs/tls13_openssl_karamel.h"' \
+	  -drop 'FStar.Tactics.\*' -drop FStar.Tactics -drop 'FStar.Reflection.\*' \
+	  -library TLS13.Crypto -library TLS13.X509 -library TLS13.IO \
+	  -library TLS13.OpenSSL -library TLS13.Impl.Serializer \
+	  -bundle 'TLS13.Crypto.Spec,TLS13.X509.Spec,TLS13.Record.Spec,TLS13.Handshake.Spec,TLS13.Wire.Spec,TLS13.Wire.Spec.*' \
+	  -bundle 'TLS13.Wire.Generated.*' \
+	  -bundle 'LowParse.\*' \
 	  -bundle 'FStar.*,Pulse.*,PulseCore.*,Prims' \
+	  -warn-error '@2-26' \
+	  -warn-error '+9' \
 	  -no-prefix TLS13.Impl.Client \
-	  $(DRIVER_KRML_FILES) \
-	  _output/FStar_Pervasives_Native.krml
+	  $(DRIVER_KRML_FILES)
+	perl -0pi -e 's/krml_checked_int_t FStar_SizeT_v\(size_t x\)\n\{\n  return FStar_UInt64_v\(FStar_SizeT___proj__Sz__item__x\(x\)\);\n\}\n/krml_checked_int_t FStar_SizeT_v(size_t x)\n{\n  return (krml_checked_int_t)x;\n}\n/s' \
+	  $(DRIVER_BUNDLE_DIR)/FStar_Pulse_PulseCore_Prims.c
+	DRIVER_BUNDLE_DIR="$(DRIVER_BUNDLE_DIR)" python3 -c "$$POSTPROCESS_DRIVER_BUNDLE_PY"
 
 # ── Smoke Test Extraction ───────────────────────────────────────────────
 

@@ -1,14 +1,63 @@
 #include "tls13_client_driver.h"
 
 #include "TLS13_Impl_Client_Driver.h"
+#include "TLS13_Impl_Serializer.h"
 
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
+#if defined(__GNUC__)
+extern void krmlinit_globals(void) __attribute__((weak));
+#else
+extern void krmlinit_globals(void);
+#endif
+
 #define TLS13_DRIVER_WORKFLOW_FUEL 1000u
 #define TLS13_DRIVER_LOCAL_FUEL 100u
+
+void TLS13_Impl_Serializer_build_server_certificate_verify_input(
+    uint8_t *transcript_hash,
+    uint8_t *out,
+    size_t out_len) {
+  TLS13_Connection_Backend_build_server_certificate_verify_input(
+      transcript_hash, out, out_len);
+}
+
+size_t TLS13_Impl_Serializer_serialize_raw_application_data_record(
+    uint8_t *fragment,
+    size_t fragment_len,
+    uint8_t *out,
+    size_t out_len) {
+  return TLS13_Connection_Backend_serialize_raw_application_data_record(
+      fragment, fragment_len, out, out_len);
+}
+
+size_t TLS13_Impl_Serializer_serialize_client_finished_outputs(
+    TLS13_Record_record_state write_state,
+    uint8_t *lfin,
+    uint8_t *handshake_out,
+    uint8_t *network_out,
+    size_t network_out_len) {
+  return TLS13_Connection_Backend_serialize_client_finished_outputs(
+      write_state.key,
+      write_state.iv,
+      *write_state.seq,
+      *write_state.installed,
+      lfin,
+      handshake_out,
+      network_out,
+      network_out_len);
+}
+
+size_t TLS13_Impl_Serializer_serialize_finished_handshake(
+    uint8_t *lfin,
+    uint8_t *handshake_out,
+    size_t handshake_out_len) {
+  return TLS13_Connection_Backend_serialize_finished_handshake(
+      lfin, handshake_out, handshake_out_len);
+}
 
 struct tls13_client_driver_s {
   TLS13_Impl_Client_Driver_client_driver verified_driver;
@@ -26,6 +75,20 @@ static int driver_fail(tls13_client_driver *driver, const char *fmt, ...) {
   return 1;
 }
 
+static void ensure_krml_globals_initialized(void) {
+  static bool initialized = false;
+  if (!initialized) {
+    initialized = true;
+#if defined(__GNUC__)
+    if (krmlinit_globals != NULL) {
+      krmlinit_globals();
+    }
+#else
+    krmlinit_globals();
+#endif
+  }
+}
+
 int tls13_client_driver_connect(
     tls13_client_driver **out,
     const char *connect_host,
@@ -38,6 +101,7 @@ int tls13_client_driver_connect(
       (trust_anchor_pem == NULL && trust_anchor_pem_len != 0u)) {
     return 1;
   }
+  ensure_krml_globals_initialized();
   *out = NULL;
   tls13_client_driver *driver = calloc(1, sizeof *driver);
   if (driver == NULL) {
