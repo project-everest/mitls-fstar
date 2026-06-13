@@ -69,7 +69,7 @@ val write_serverHello_body_random : PPB.l2r_safe_writer serverHello_body_random_
 
 val size_serverHello_body_random : PPB.l2r_safe_size serverHello_body_random_vmatch serverHello_body_random_serializer serverHello_body_random_conv
 
-let serverHello_body_cst : serverHello_body_random =
+noextract let serverHello_body_cst : serverHello_body_random =
   assert_norm (L.length [0xcfuy; 0x21uy; 0xaduy; 0x74uy; 0xe5uy; 0x9auy; 0x61uy; 0x11uy; 0xbeuy; 0x1duy; 0x8cuy; 0x02uy; 0x1euy; 0x65uy; 0xb8uy; 0x91uy; 0xc2uy; 0xa2uy; 0x11uy; 0x16uy; 0x7auy; 0xbbuy; 0x8cuy; 0x5euy; 0x07uy; 0x9euy; 0x09uy; 0xe2uy; 0xc8uy; 0xa8uy; 0x33uy; 0x9cuy] == 32);
   Seq.seq_of_list [0xcfuy; 0x21uy; 0xaduy; 0x74uy; 0xe5uy; 0x9auy; 0x61uy; 0x11uy; 0xbeuy; 0x1duy; 0x8cuy; 0x02uy; 0x1euy; 0x65uy; 0xb8uy; 0x91uy; 0xc2uy; 0xa2uy; 0x11uy; 0x16uy; 0x7auy; 0xbbuy; 0x8cuy; 0x5euy; 0x07uy; 0x9euy; 0x09uy; 0xe2uy; 0xc8uy; 0xa8uy; 0x33uy; 0x9cuy]
 
@@ -82,7 +82,7 @@ type serverHello_body =
   | HelloRetryRequest of serverHelloBody
   | ServerHello_body_false of serverHello_body_false
 
-inline_for_extraction let serverHello_body_cond (x:serverHello_body_random) : Tot bool = x = serverHello_body_cst
+noextract let serverHello_body_cond (x:serverHello_body_random) : Tot bool = x = serverHello_body_cst
 
 inline_for_extraction let serverHello_body_payload (b:bool) : Tot Type =
   if b then serverHelloBody else serverHelloBody
@@ -90,7 +90,7 @@ inline_for_extraction let serverHello_body_payload (b:bool) : Tot Type =
 inline_for_extraction let parse_serverHello_body_payload (b:bool) : Tot (k: LP.parser_kind & LP.parser k (serverHello_body_payload b)) =
   if b then (| _ , serverHelloBody_parser |) else (| _, serverHelloBody_parser |)
 
-inline_for_extraction let serverHello_body_synth (x:serverHello_body_random) (y:serverHello_body_payload (serverHello_body_cond x)) : Tot serverHello_body =
+noextract let serverHello_body_synth (x:serverHello_body_random) (y:serverHello_body_payload (serverHello_body_cond x)) : Tot serverHello_body =
   if serverHello_body_cond x then HelloRetryRequest y else ServerHello_body_false ({ tag = x; value = y })
 
 inline_for_extraction noextract let parse_serverHello_body_param = {
