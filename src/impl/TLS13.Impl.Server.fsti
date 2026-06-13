@@ -134,6 +134,36 @@ let server_local_event_input_ready
     CM.can_verify_client_finished
       st
       (Some?.v st.CS.cs_model.CS.model_handshake.CS.hs_client_finished)
+  | ST.LocalSendEncryptedExtensions ->
+    Seq.equal payload B.empty /\
+    st.CS.cs_model.CS.model_control ==
+      CS.ControlHandshaking CS.HsServerHelloSent /\
+    st.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
+    Some?
+      st.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_handshake_traffic /\
+    U64.fits
+      (st.CS.cs_model.CS.model_record.CS.record_write.R.seq + 1) /\
+    B.length st.CS.cs_model.CS.model_handshake.CS.hs_transcript + 6 <=
+      Bounds.max_transcript_len /\
+    CS.legal_event
+      st.CS.cs_model
+      (CS.ConnNetworkEvent {
+        CL.message_direction = CL.Sent;
+        CL.message_value =
+          M.TlsHandshake (M.EncryptedExtensions { M.negotiated_alpn = None });
+      })
+  | ST.LocalSendServerFinished ->
+    Seq.equal payload B.empty /\
+    st.CS.cs_model.CS.model_control ==
+      CS.ControlHandshaking CS.HsServerEncryptedFlightSent /\
+    st.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
+    st.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify_verified /\
+    Some?
+      st.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_handshake_traffic /\
+    U64.fits
+      (st.CS.cs_model.CS.model_record.CS.record_write.R.seq + 1) /\
+    B.length st.CS.cs_model.CS.model_handshake.CS.hs_transcript + 36 <=
+      Bounds.max_transcript_len
   | ST.LocalDeriveSharedSecret ->
     B.length payload == 32 /\
     CS.legal_event

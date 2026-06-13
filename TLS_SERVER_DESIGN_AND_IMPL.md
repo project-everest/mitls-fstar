@@ -470,6 +470,15 @@ Current phase: **Phase 6 server buffer/event API and theorem surface**.
   `mark_sent_certificate_verify`, frees the transient L-level object, and proves
   `server_local_event_end_to_end_correct` including protected segmentation, seal
   projection, and server-role write-key-schedule projection.
+- [x] Started protected-flight generic local dispatch:
+  `server_local_event_input_ready` and the generic
+  `TLS13.Impl.Server.process_local_event` now cover
+  `LocalSendEncryptedExtensions` and `LocalSendServerFinished` through the
+  self-contained protected serializers. Exact-size output buffers take the
+  proved send path; incorrectly sized buffers produce a verified
+  `IllegalTransition`/unexpected-message local-fail response. Certificate and
+  CertificateVerify remain focused-wrapper-only until executable credential
+  selection/signing supplies their concrete L-level inputs.
 
 ## End goal
 

@@ -4270,6 +4270,115 @@ fn process_verify_client_finished
   resp
 }
 
+fn process_local_unexpected_message
+  (s:server)
+  (kind:ST.local_event_kind)
+  (payload:array U8.t)
+  (payload_len:SZ.t)
+  (network_out:array U8.t)
+  (network_out_len:SZ.t)
+  (app_out:array U8.t)
+  (app_out_len:SZ.t)
+  requires connection_exactly s 'st0 **
+           pts_to payload 'payload_bytes **
+           pts_to network_out 'old_network_out **
+           pts_to app_out 'old_app_out **
+           pure (B.length 'payload_bytes == SZ.v payload_len /\
+                 B.length 'old_network_out == SZ.v network_out_len /\
+                 B.length 'old_app_out == SZ.v app_out_len /\
+                 ST.server_end_to_end_invariant 'st0)
+  returns resp:ST.server_response
+  ensures exists* st1 network_out_bytes app_out_bytes.
+          connection_exactly s st1 **
+          pts_to payload 'payload_bytes **
+          pts_to network_out network_out_bytes **
+          pts_to app_out app_out_bytes **
+          pure (B.length network_out_bytes == SZ.v network_out_len /\
+                B.length app_out_bytes == SZ.v app_out_len /\
+                ST.server_local_event_end_to_end_correct
+                  'st0
+                  st1
+                  resp
+                  kind
+                  (Ghost.reveal 'payload_bytes)
+                  network_out_bytes
+                  app_out_bytes)
+{
+  unfold (connection_exactly s 'st0);
+  CF.mark_unexpected_message s;
+  fold (connection_exactly s (CM.local_fail_state 'st0 CM.tls_unexpected_message_error));
+  let resp = {
+    ST.network_out_len = 0sz;
+    ST.app_out_len = 0sz;
+    ST.status = ST.IllegalTransition;
+  };
+  Seq.lemma_len_slice 'old_network_out 0 0;
+  Seq.lemma_eq_intro B.empty (Seq.slice 'old_network_out 0 0);
+  Seq.lemma_len_slice 'old_app_out 0 0;
+  Seq.lemma_eq_intro B.empty (Seq.slice 'old_app_out 0 0);
+  CM.lemma_local_fail_state_evolves 'st0 CM.tls_unexpected_message_error;
+  let delta = Ghost.hide {
+    CS.delta_event =
+      CS.ConnLocalEvent (CS.LocalFail CM.tls_unexpected_message_error);
+    CS.delta_raw_sent = B.empty;
+    CS.delta_raw_received = B.empty;
+  };
+  CSL.lemma_legal_connection_delta_full_log_consistent_for_role
+    CS.ServerEndpoint
+    'st0
+    (Ghost.reveal delta)
+    (CM.local_fail_state 'st0 CM.tls_unexpected_message_error);
+  CSL.lemma_legal_connection_delta_raw_event_replay_consistent
+    'st0
+    (Ghost.reveal delta)
+    (CM.local_fail_state 'st0 CM.tls_unexpected_message_error);
+  CSL.lemma_connection_state_protected_raw_segmented_replay
+    (CM.local_fail_state 'st0 CM.tls_unexpected_message_error);
+  CSL.lemma_legal_connection_delta_sent_seal_replay_consistent
+    'st0
+    (Ghost.reveal delta)
+    (CM.local_fail_state 'st0 CM.tls_unexpected_message_error);
+  CSL.lemma_legal_connection_delta_received_decode_replay_consistent
+    'st0
+    (Ghost.reveal delta)
+    (CM.local_fail_state 'st0 CM.tls_unexpected_message_error);
+  assert (pure ((CM.local_fail_state 'st0 CM.tls_unexpected_message_error).CS.cs_model.CS.model_config ==
+    'st0.CS.cs_model.CS.model_config));
+  assert (pure ((CM.local_fail_state 'st0 CM.tls_unexpected_message_error).CS.cs_model.CS.model_config.CS.config_role ==
+    CS.ServerEndpoint));
+  assert (pure (Some?
+    (CM.local_fail_state 'st0 CM.tls_unexpected_message_error).CS.cs_model.CS.model_config.CS.config_server));
+  assert (pure (ST.server_state_correct
+    (CM.local_fail_state 'st0 CM.tls_unexpected_message_error)));
+  assert (pure (ST.server_raw_to_message_replay_consistent
+    (CM.local_fail_state 'st0 CM.tls_unexpected_message_error)));
+  assert (pure (ST.server_end_to_end_invariant
+    (CM.local_fail_state 'st0 CM.tls_unexpected_message_error)));
+  assert (pure (ST.unexpected_message_response
+    'st0
+    (CM.local_fail_state 'st0 CM.tls_unexpected_message_error)
+    resp
+    'old_network_out
+    'old_app_out));
+  assert (pure (ST.legal_handled_local_response
+    'st0
+    (CM.local_fail_state 'st0 CM.tls_unexpected_message_error)
+    resp
+    kind
+    (Ghost.reveal 'payload_bytes)
+    'old_network_out
+    'old_app_out));
+  assert (pure (ST.server_local_event_end_to_end_correct
+    'st0
+    (CM.local_fail_state 'st0 CM.tls_unexpected_message_error)
+    resp
+    kind
+    (Ghost.reveal 'payload_bytes)
+    'old_network_out
+    'old_app_out));
+  resp
+}
+
 fn process_local_event
   (s:server)
   (kind:ST.local_event_kind)
@@ -4427,11 +4536,24 @@ fn process_local_event
       }
     }
     ST.LocalSendEncryptedExtensions -> {
-      assert (pure False);
-      {
-        ST.network_out_len = 0sz;
-        ST.app_out_len = 0sz;
-        ST.status = ST.IllegalTransition;
+      assert (pure (Seq.equal (Ghost.reveal 'payload_bytes) B.empty));
+      if (network_out_len = 28sz) {
+        process_send_encrypted_extensions_serialized
+          s
+          network_out
+          network_out_len
+          app_out
+          app_out_len
+      } else {
+        process_local_unexpected_message
+          s
+          kind
+          payload
+          payload_len
+          network_out
+          network_out_len
+          app_out
+          app_out_len
       }
     }
     ST.LocalSendCertificate -> {
@@ -4451,11 +4573,24 @@ fn process_local_event
       }
     }
     ST.LocalSendServerFinished -> {
-      assert (pure False);
-      {
-        ST.network_out_len = 0sz;
-        ST.app_out_len = 0sz;
-        ST.status = ST.IllegalTransition;
+      assert (pure (Seq.equal (Ghost.reveal 'payload_bytes) B.empty));
+      if (network_out_len = 58sz) {
+        process_send_server_finished_serialized
+          s
+          network_out
+          network_out_len
+          app_out
+          app_out_len
+      } else {
+        process_local_unexpected_message
+          s
+          kind
+          payload
+          payload_len
+          network_out
+          network_out_len
+          app_out
+          app_out_len
       }
     }
     ST.LocalSendApplicationData -> {
