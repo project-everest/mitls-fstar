@@ -12,7 +12,10 @@ module U16 = FStar.UInt16
 module U8 = FStar.UInt8
 
 val channel : Type0
+val listener : Type0
+
 val is_channel: channel -> received:B.bytes -> sent:B.bytes -> slprop
+val is_listener: listener -> bind_host:B.bytes -> port:U16.t -> slprop
 
 fn connect_tcp (hostname: array U8.t) (hostname_len: SZ.t) (port: U16.t)
   requires pts_to hostname 'hostname_bytes **
@@ -22,6 +25,27 @@ fn connect_tcp (hostname: array U8.t) (hostname_len: SZ.t) (port: U16.t)
           (match ch with
            | Some c -> is_channel c B.empty B.empty
            | None -> emp)
+
+fn listen_tcp (bind_host: array U8.t) (bind_host_len: SZ.t) (port: U16.t)
+  requires pts_to bind_host 'bind_host_bytes **
+          pure (B.length 'bind_host_bytes == SZ.v bind_host_len)
+  returns l: option listener
+  ensures pts_to bind_host 'bind_host_bytes **
+          (match l with
+          | Some listener -> is_listener listener 'bind_host_bytes port
+          | None -> emp)
+
+fn accept_tcp (l: listener)
+  requires is_listener l 'bind_host 'port
+  returns ch: option channel
+  ensures is_listener l 'bind_host 'port **
+          (match ch with
+          | Some c -> is_channel c B.empty B.empty
+          | None -> emp)
+
+fn close_listener (l: listener)
+  requires is_listener l 'bind_host 'port
+  ensures emp
 
 fn read (ch: channel) (out: array U8.t) (max_len: SZ.t)
   requires is_channel ch 'received 'sent **

@@ -1577,6 +1577,7 @@ let server_selection_acceptable
   signature_scheme_offered
     ch.M.signature_schemes
     selection.server_selected_signature_scheme /\
+  selection.server_selected_credential == cfg.server_credential_identity /\
   sni_policy_accepts cfg.server_sni_policy ch.M.server_name /\
   server_selection_key_share_consistent selection
 
@@ -1614,6 +1615,18 @@ let certificate_msg_matches_server_config
   (cert:M.certificate_msg)
   : prop =
   cert.M.chain == [cfg.server_certificate_chain]
+
+let server_certificate_verify_signature_valid
+  (selection:server_handshake_selection)
+  (hs:handshake_state)
+  (cv:M.certificate_verify)
+  : prop =
+  cv.M.scheme == selection.server_selected_signature_scheme /\
+  C.verify_signature
+    cv.M.scheme
+    selection.server_selected_credential
+    (H.certificate_verify_input (Tr.hash hs.hs_transcript))
+    cv.M.signature
 
 let traffic_secret_for_label
   (hs:handshake_state)
@@ -1982,7 +1995,7 @@ let legal_local_event (model:connection_model) (ev:local_event) : GTot prop =
     hs.hs_certificate_verify == None /\
     (match hs.hs_certificate, hs.hs_server_selection with
      | Some _, Some selection ->
-       cv.M.scheme == selection.server_selected_signature_scheme /\
+       server_certificate_verify_signature_valid selection hs cv /\
        signature_scheme_offered
          model.model_config.config_signature_schemes
          cv.M.scheme

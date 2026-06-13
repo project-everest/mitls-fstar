@@ -6,15 +6,24 @@ open Pulse.Lib.Pervasives
 open Pulse.Lib.Array.PtsTo
 
 module B = TLS13.Bytes
+module C = TLS13.Crypto.Spec
 module CS = TLS13.Spec.ConnectionState
 module CT = TLS13.Impl.Client.Types
+module Seq = FStar.Seq
 module SZ = FStar.SizeT
+module T = TLS13.Types
 module U16 = FStar.UInt16
 module U8 = FStar.UInt8
 
 val auth_context : Type0
+val server_credentials : Type0
 
 val is_auth_context : auth_context -> slprop
+val is_server_credentials:
+  server_credentials ->
+  certificate_chain:B.bytes ->
+  credential_identity:CS.server_credential_identity ->
+  slprop
 
 fn auth_context_new
   (server_name:array U8.t)
@@ -32,6 +41,56 @@ fn auth_context_new
           (match result with
            | Some ctx -> is_auth_context ctx
            | None -> emp)
+
+fn server_credentials_new
+  (certificate_chain:array U8.t)
+  (certificate_chain_len:SZ.t)
+  (private_key:array U8.t)
+  (private_key_len:SZ.t)
+  requires pts_to certificate_chain 'certificate_chain_bytes **
+           pts_to private_key 'private_key_bytes **
+           pure (B.length 'certificate_chain_bytes == SZ.v certificate_chain_len /\
+                 B.length 'private_key_bytes == SZ.v private_key_len)
+  returns result: option server_credentials
+  ensures exists* credential_identity.
+          pts_to certificate_chain 'certificate_chain_bytes **
+          pts_to private_key 'private_key_bytes **
+          (match result with
+           | Some creds ->
+             is_server_credentials
+               creds
+               (Ghost.reveal 'certificate_chain_bytes)
+               credential_identity
+           | None -> emp)
+
+fn sign_certificate_verify
+  (creds:server_credentials)
+  (input:array U8.t)
+  (input_len:SZ.t)
+  (signature:array U8.t)
+  (signature_capacity:SZ.t)
+  requires is_server_credentials creds 'certificate_chain 'credential_identity **
+           pts_to input 'input_bytes **
+           pts_to signature 'old_signature **
+           pure (SZ.v input_len <= B.length 'input_bytes /\
+                 B.length 'old_signature == SZ.v signature_capacity)
+  returns result: option SZ.t
+  ensures exists* signature_bytes.
+          is_server_credentials creds 'certificate_chain 'credential_identity **
+          pts_to input 'input_bytes **
+          pts_to signature signature_bytes **
+          pure (SZ.v input_len <= B.length (Ghost.reveal 'input_bytes) /\
+                B.length signature_bytes == SZ.v signature_capacity /\
+                (match result with
+                 | Some signature_len ->
+                   SZ.v signature_len <= SZ.v signature_capacity /\
+                   SZ.v signature_len <= B.length signature_bytes /\
+                   C.verify_signature
+                     T.RsaPssRsaeSha256
+                     (Ghost.reveal 'credential_identity)
+                     (Seq.slice (Ghost.reveal 'input_bytes) 0 (SZ.v input_len))
+                     (Seq.slice signature_bytes 0 (SZ.v signature_len))
+                 | None -> True))
 
 fn validate_certificate_for_local_event
   (ctx:auth_context)
@@ -88,4 +147,8 @@ fn verify_certificate_signature_for_local_event
 
 fn auth_context_free (ctx:auth_context)
   requires is_auth_context ctx
+  ensures emp
+
+fn server_credentials_free (creds:server_credentials)
+  requires is_server_credentials creds 'certificate_chain 'credential_identity
   ensures emp

@@ -165,6 +165,18 @@ Current phase: **Phase 3 shared endpoint/codec predicate refactor**.
   now includes that module and aliases the existing public client names to the
   shared shapes, preserving the client constructor/field namespace while giving
   the server API a shared base.
+- [x] Started Phase 4 TCB specification:
+  - `server_selection_acceptable` now pins the selected credential identity to
+    the configured server credential identity.
+  - `LocalSignCertificateVerify` legality now requires the CertificateVerify
+    signature to verify over the exact `certificate_verify_input` for the
+    current transcript hash and selected credential identity.
+  - `TLS13.IO.fsti` now exposes typed `listener`, `listen_tcp`, `accept_tcp`,
+    and `close_listener` resources for the planned server `accept`.
+  - `TLS13.OpenSSL.fsti` now exposes typed in-memory server credential
+    allocation/free and `sign_certificate_verify`, with a postcondition that a
+    successful signature verifies as `RsaPssRsaeSha256` against the credential
+    identity.
 - [ ] Continue Phase 3 by factoring role-neutral output-slice and parse/decode
   predicates only where they are needed by the server API.
 
@@ -919,14 +931,14 @@ Validation:
 
 Checklist:
 
-- [ ] Define server credential identity and certificate-chain spec.
-- [ ] Relate credential identity to leaf public key and supported signature
+- [x] Define server credential identity and certificate-chain spec.
+- [x] Relate credential identity to leaf public key and supported signature
       scheme.
-- [ ] Define typed signing postcondition for CertificateVerify.
-- [ ] Add Pulse/C interface for credential allocation/free from in-memory PEM or
+- [x] Define typed signing postcondition for CertificateVerify.
+- [x] Add Pulse/C interface for credential allocation/free from in-memory PEM or
       DER certificate-chain and private-key byte buffers.
-- [ ] Add signing function for server CertificateVerify input.
-- [ ] Keep private key bytes outside protocol logic.
+- [x] Add signing function for server CertificateVerify input.
+- [x] Keep private key bytes outside protocol logic.
 - [ ] Do not make file-path loading part of the verified server API; any file IO
       wrapper must live outside the first verified API and feed in-memory bytes
       to `new_server`.
@@ -934,7 +946,7 @@ Checklist:
 
 Validation:
 
-- [ ] TCB interface exposes exact typed postconditions.
+- [x] TCB interface exposes exact typed postconditions.
 - [ ] C stubs do not return success without establishing the typed postcondition.
 
 ### Phase 5: server serializers and codec support
