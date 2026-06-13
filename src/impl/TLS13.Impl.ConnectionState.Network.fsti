@@ -387,6 +387,21 @@ fn mark_received_server_finished
             (received_server_finished_state st0 (Ghost.reveal fin) (Ghost.reveal 'raw_bytes)) **
           ArrPts.pts_to raw 'raw_bytes
 
+fn mark_received_client_finished
+  (c:connection_state)
+  (raw:array U8.t)
+  (lfin:IM.finished)
+  (#fin:erased M.finished)
+  (#st0:erased CS.connection_state)
+  requires connection_exactly c st0 **
+           ArrPts.pts_to raw 'raw_bytes **
+           IM.is_valid_finished lfin fin **
+           pure (can_receive_client_finished st0 (Ghost.reveal fin) (Ghost.reveal 'raw_bytes))
+  ensures connection_exactly
+            c
+            (received_client_finished_state st0 (Ghost.reveal fin) (Ghost.reveal 'raw_bytes)) **
+          ArrPts.pts_to raw 'raw_bytes
+
 fn mark_received_application_data
   (c:connection_state)
   (raw:array U8.t)

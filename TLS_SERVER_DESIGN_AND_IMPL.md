@@ -325,6 +325,15 @@ Current phase: **Phase 6 server buffer/event API and theorem surface**.
   proves the `sent_server_finished_state` legal delta. A public wrapper remains
   pending until the protected-record seal/serializer path and executable
   Finished construction are connected.
+- [x] Added server-side client Finished receive/verify state mutations:
+  `TLS13.Impl.ConnectionState.Model.received_client_finished_state` and
+  `verified_client_finished_state` expose the pure server path for receiving the
+  client's protected Finished, then verifying it after application traffic keys
+  are installed. `TLS13.Impl.ConnectionState.Network.mark_received_client_finished`
+  stores the exact L-level Finished and advances the concrete read record
+  sequence to `HsClientFinishedReceived`; `LocalAuth.mark_verified_client_finished`
+  and `mark_verified_stored_client_finished` append the exact stored Finished
+  bytes to the transcript and enter `ControlApplicationData`.
 - [x] Added supplied-shared-secret derivation support:
   `TLS13.Impl.ConnectionState.LocalHandshake.derive_shared_secret_from_bytes`
   stores the shared, early, handshake, and master secrets in concrete key

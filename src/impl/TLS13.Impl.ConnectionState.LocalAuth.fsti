@@ -140,3 +140,37 @@ fn mark_verified_stored_server_finished
   ensures connection_exactly
             c
             (verified_server_finished_state st0 (Ghost.reveal fin))
+
+fn mark_verified_client_finished
+  (c:connection_state)
+  (payload:array U8.t)
+  (payload_len:SZ.t)
+  (#fin:erased M.finished)
+  (#st0:erased CS.connection_state)
+  requires connection_exactly c st0 **
+           ArrPts.pts_to payload 'payload_bytes **
+           pure (B.length 'payload_bytes == SZ.v payload_len /\
+                 Seq.equal
+                   (Ghost.reveal 'payload_bytes)
+                   (W.serialize_handshake (M.Finished (Ghost.reveal fin))) /\
+                 B.length st0.CS.cs_model.CS.model_handshake.CS.hs_transcript +
+                   SZ.v payload_len <= max_transcript_len /\
+                 can_verify_client_finished st0 (Ghost.reveal fin))
+  ensures connection_exactly
+            c
+            (verified_client_finished_state st0 (Ghost.reveal fin)) **
+          ArrPts.pts_to payload 'payload_bytes
+
+fn mark_verified_stored_client_finished
+  (c:connection_state)
+  (#fin:erased M.finished)
+  (#st0:erased CS.connection_state)
+  requires connection_exactly c st0 **
+           pure (st0.CS.cs_model.CS.model_handshake.CS.hs_client_finished ==
+                   Some (Ghost.reveal fin) /\
+                 B.length st0.CS.cs_model.CS.model_handshake.CS.hs_transcript + 36 <=
+                   max_transcript_len /\
+                 can_verify_client_finished st0 (Ghost.reveal fin))
+  ensures connection_exactly
+            c
+            (verified_client_finished_state st0 (Ghost.reveal fin))

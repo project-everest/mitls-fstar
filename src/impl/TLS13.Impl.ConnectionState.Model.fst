@@ -1297,6 +1297,111 @@ let lemma_sent_server_finished_state_evolves
   assert (CS.connection_state_consistent
     (sent_server_finished_state st fin raw_sent))
 
+let lemma_received_client_finished_state_evolves
+  (st:CS.connection_state)
+  (fin:M.finished)
+  (raw_received:B.bytes)
+  : Lemma
+      (requires CS.connection_state_consistent st /\
+                can_receive_client_finished st fin raw_received)
+      (ensures CS.connection_state_evolves
+                 st
+                 (received_client_finished_state st fin raw_received) /\
+               CS.connection_state_consistent
+                 (received_client_finished_state st fin raw_received) /\
+               CS.legal_connection_delta
+                 st
+                 {
+                   CS.delta_event =
+                     CS.ConnNetworkEvent {
+                       CL.message_direction = CL.Received;
+                       CL.message_value = M.TlsHandshake (M.Finished fin);
+                     };
+                   CS.delta_raw_sent = B.empty;
+                   CS.delta_raw_received = raw_received;
+                 }
+                 (received_client_finished_state st fin raw_received))
+=
+  let ev =
+    CS.ConnNetworkEvent {
+      CL.message_direction = CL.Received;
+      CL.message_value = M.TlsHandshake (M.Finished fin);
+    } in
+  let delta = {
+    CS.delta_event = ev;
+    CS.delta_raw_sent = B.empty;
+    CS.delta_raw_received = raw_received;
+  } in
+  assert (CS.legal_event st.CS.cs_model ev);
+  assert (CS.event_raw_delta_legal st.CS.cs_model ev B.empty raw_received);
+  assert (CS.step_model st.CS.cs_model ev ==
+          Some (received_client_finished_state st fin raw_received).CS.cs_model);
+  assert (CS.legal_connection_delta
+    st
+    delta
+    (received_client_finished_state st fin raw_received));
+  assert (CS.connection_state_single_step
+    st
+    (received_client_finished_state st fin raw_received));
+  FStar.ReflexiveTransitiveClosure.closure_step
+    CS.connection_state_single_step
+    st
+    (received_client_finished_state st fin raw_received);
+  assert (CS.connection_state_evolves
+    st
+    (received_client_finished_state st fin raw_received));
+  assert (CS.connection_state_consistent
+    (received_client_finished_state st fin raw_received))
+
+let lemma_verified_client_finished_state_evolves
+  (st:CS.connection_state)
+  (fin:M.finished)
+  : Lemma
+      (requires CS.connection_state_consistent st /\
+                can_verify_client_finished st fin)
+      (ensures CS.connection_state_evolves
+                 st
+                 (verified_client_finished_state st fin) /\
+               CS.connection_state_consistent
+                 (verified_client_finished_state st fin) /\
+               CS.legal_connection_delta
+                 st
+                 {
+                   CS.delta_event =
+                     CS.ConnLocalEvent (CS.LocalVerifyClientFinished fin);
+                   CS.delta_raw_sent = B.empty;
+                   CS.delta_raw_received = B.empty;
+                 }
+                 (verified_client_finished_state st fin))
+=
+  let ev = CS.ConnLocalEvent (CS.LocalVerifyClientFinished fin) in
+  let delta = {
+    CS.delta_event = ev;
+    CS.delta_raw_sent = B.empty;
+    CS.delta_raw_received = B.empty;
+  } in
+  Seq.lemma_eq_intro B.empty B.empty;
+  assert (CS.legal_event st.CS.cs_model ev);
+  assert (CS.step_model st.CS.cs_model ev ==
+          Some (verified_client_finished_state st fin).CS.cs_model);
+  assert (CS.event_raw_delta_legal st.CS.cs_model ev B.empty B.empty);
+  assert (CS.legal_connection_delta
+    st
+    delta
+    (verified_client_finished_state st fin));
+  assert (CS.connection_state_single_step
+    st
+    (verified_client_finished_state st fin));
+  FStar.ReflexiveTransitiveClosure.closure_step
+    CS.connection_state_single_step
+    st
+    (verified_client_finished_state st fin);
+  assert (CS.connection_state_evolves
+    st
+    (verified_client_finished_state st fin));
+  assert (CS.connection_state_consistent
+    (verified_client_finished_state st fin))
+
 let lemma_received_client_hello_state_evolves
   (st:CS.connection_state)
   (ch:M.client_hello)

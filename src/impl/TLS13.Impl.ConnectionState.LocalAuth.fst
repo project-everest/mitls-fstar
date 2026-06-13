@@ -691,3 +691,260 @@ fn mark_verified_stored_server_finished
     36sz
     #fin
 }
+
+fn mark_verified_client_finished
+  (c:connection_state)
+  (payload:array U8.t)
+  (payload_len:SZ.t)
+  (#fin:erased M.finished)
+  (#st0:erased CS.connection_state)
+  requires connection_exactly c st0 **
+           ArrPts.pts_to payload 'payload_bytes **
+           pure (B.length 'payload_bytes == SZ.v payload_len /\
+                 Seq.equal
+                   (Ghost.reveal 'payload_bytes)
+                   (W.serialize_handshake (M.Finished (Ghost.reveal fin))) /\
+                 B.length st0.CS.cs_model.CS.model_handshake.CS.hs_transcript +
+                   SZ.v payload_len <= max_transcript_len /\
+                 can_verify_client_finished st0 (Ghost.reveal fin))
+  ensures connection_exactly
+            c
+            (verified_client_finished_state st0 (Ghost.reveal fin)) **
+          ArrPts.pts_to payload 'payload_bytes
+{
+  assert (pure (can_verify_client_finished st0 (Ghost.reveal fin)));
+  assert (pure (st0.CS.cs_model.CS.model_control ==
+    CS.ControlHandshaking CS.HsClientFinishedReceived));
+  assert (pure (st0.CS.cs_model.CS.model_config.CS.config_role ==
+    CS.ServerEndpoint));
+  assert (pure (st0.CS.cs_model.CS.model_handshake.CS.hs_client_finished ==
+    Some (Ghost.reveal fin)));
+  assert (pure (CS.legal_event
+    st0.CS.cs_model
+    (CS.ConnLocalEvent
+      (CS.LocalVerifyClientFinished (Ghost.reveal fin)))));
+
+  unfold (connection_exactly c st0);
+  unfold (connection_model_exactly c st0.CS.cs_model);
+  unfold (control_exactly c.control st0.CS.cs_model.CS.model_control st0.CS.cs_model.CS.model_failure);
+  unfold (handshake_exactly c.handshake st0.CS.cs_model.CS.model_handshake);
+  with cv_verified server_finished_verified. _;
+
+  c.control.control_tag := 2uy;
+  assert (pure (Tags.control_state_matches
+    2uy
+    17uy
+    false
+    0uy
+    0uy
+    CS.ControlApplicationData));
+  fold (control_exactly
+    c.control
+    CS.ControlApplicationData
+    st0.CS.cs_model.CS.model_failure);
+
+  unfold (sized_bytes_exactly
+    c.handshake.transcript
+    max_transcript_len
+    st0.CS.cs_model.CS.model_handshake.CS.hs_transcript);
+  with old_transcript_storage old_transcript_len. _;
+  let transcript_len = !c.handshake.transcript.len;
+  assert (pure (transcript_len == old_transcript_len));
+  assert (pure (SZ.v transcript_len ==
+    B.length st0.CS.cs_model.CS.model_handshake.CS.hs_transcript));
+  assert (pure (SZ.v transcript_len + SZ.v payload_len <= max_transcript_len));
+
+  copy_array_to_transcript
+    payload
+    c.handshake.transcript.bytes
+    payload_len
+    transcript_len;
+
+  with copied_transcript_storage.
+    assert (V.pts_to c.handshake.transcript.bytes copied_transcript_storage);
+  assert (pure (SZ.fits (SZ.v transcript_len + SZ.v payload_len)));
+  let new_transcript_len = SZ.add transcript_len payload_len;
+  c.handshake.transcript.len := new_transcript_len;
+
+  assert (pure (Seq.equal
+    (B.append
+      st0.CS.cs_model.CS.model_handshake.CS.hs_transcript
+      (Ghost.reveal 'payload_bytes))
+    (B.append
+      st0.CS.cs_model.CS.model_handshake.CS.hs_transcript
+      (W.serialize_handshake (M.Finished (Ghost.reveal fin))))));
+  fold (sized_bytes_exactly
+    c.handshake.transcript
+    max_transcript_len
+    (B.append
+      st0.CS.cs_model.CS.model_handshake.CS.hs_transcript
+      (W.serialize_handshake (M.Finished (Ghost.reveal fin)))));
+
+  assert (pure ((verified_client_finished_state st0 (Ghost.reveal fin)).CS.cs_model.CS.model_handshake.CS.hs_start ==
+    st0.CS.cs_model.CS.model_handshake.CS.hs_start));
+  assert (pure ((verified_client_finished_state st0 (Ghost.reveal fin)).CS.cs_model.CS.model_handshake.CS.hs_client_hello ==
+    st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello));
+  assert (pure ((verified_client_finished_state st0 (Ghost.reveal fin)).CS.cs_model.CS.model_handshake.CS.hs_server_hello ==
+    st0.CS.cs_model.CS.model_handshake.CS.hs_server_hello));
+  assert (pure ((verified_client_finished_state st0 (Ghost.reveal fin)).CS.cs_model.CS.model_handshake.CS.hs_encrypted_extensions ==
+    st0.CS.cs_model.CS.model_handshake.CS.hs_encrypted_extensions));
+  assert (pure ((verified_client_finished_state st0 (Ghost.reveal fin)).CS.cs_model.CS.model_handshake.CS.hs_certificate ==
+    st0.CS.cs_model.CS.model_handshake.CS.hs_certificate));
+  assert (pure ((verified_client_finished_state st0 (Ghost.reveal fin)).CS.cs_model.CS.model_handshake.CS.hs_certificate_verify ==
+    st0.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify));
+  assert (pure ((verified_client_finished_state st0 (Ghost.reveal fin)).CS.cs_model.CS.model_handshake.CS.hs_certificate_verify_verified ==
+    st0.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify_verified));
+  assert (pure ((verified_client_finished_state st0 (Ghost.reveal fin)).CS.cs_model.CS.model_handshake.CS.hs_validated_peer ==
+    st0.CS.cs_model.CS.model_handshake.CS.hs_validated_peer));
+  assert (pure ((verified_client_finished_state st0 (Ghost.reveal fin)).CS.cs_model.CS.model_handshake.CS.hs_server_finished ==
+    st0.CS.cs_model.CS.model_handshake.CS.hs_server_finished));
+  assert (pure ((verified_client_finished_state st0 (Ghost.reveal fin)).CS.cs_model.CS.model_handshake.CS.hs_server_finished_verified ==
+    st0.CS.cs_model.CS.model_handshake.CS.hs_server_finished_verified));
+  assert (pure ((verified_client_finished_state st0 (Ghost.reveal fin)).CS.cs_model.CS.model_handshake.CS.hs_client_finished ==
+    st0.CS.cs_model.CS.model_handshake.CS.hs_client_finished));
+  assert (pure ((verified_client_finished_state st0 (Ghost.reveal fin)).CS.cs_model.CS.model_handshake.CS.hs_buffers ==
+    st0.CS.cs_model.CS.model_handshake.CS.hs_buffers));
+  assert (pure ((verified_client_finished_state st0 (Ghost.reveal fin)).CS.cs_model.CS.model_handshake.CS.hs_keys ==
+    st0.CS.cs_model.CS.model_handshake.CS.hs_keys));
+
+  rewrite (handshake_start_exactly
+    c.handshake.start
+    st0.CS.cs_model.CS.model_handshake.CS.hs_start)
+    as (handshake_start_exactly
+      c.handshake.start
+      (verified_client_finished_state st0 (Ghost.reveal fin)).CS.cs_model.CS.model_handshake.CS.hs_start);
+  unfold (handshake_messages_exactly
+    c.handshake.messages
+    st0.CS.cs_model.CS.model_handshake);
+  fold (handshake_messages_exactly
+    c.handshake.messages
+    (verified_client_finished_state st0 (Ghost.reveal fin)).CS.cs_model.CS.model_handshake);
+  unfold (server_key_share_exactly c.handshake.server_key_share st0.CS.cs_model.CS.model_handshake);
+  fold (server_key_share_exactly
+    c.handshake.server_key_share
+    (verified_client_finished_state st0 (Ghost.reveal fin)).CS.cs_model.CS.model_handshake);
+  rewrite (peer_exactly
+    c.handshake.validated_peer
+    st0.CS.cs_model.CS.model_handshake.CS.hs_validated_peer)
+    as (peer_exactly
+      c.handshake.validated_peer
+      (verified_client_finished_state st0 (Ghost.reveal fin)).CS.cs_model.CS.model_handshake.CS.hs_validated_peer);
+  rewrite (handshake_buffers_exactly
+    c.handshake.buffers
+    st0.CS.cs_model.CS.model_handshake.CS.hs_buffers)
+    as (handshake_buffers_exactly
+      c.handshake.buffers
+      (verified_client_finished_state st0 (Ghost.reveal fin)).CS.cs_model.CS.model_handshake.CS.hs_buffers);
+  rewrite (key_schedule_exactly
+    c.handshake.keys
+    st0.CS.cs_model.CS.model_handshake.CS.hs_keys)
+    as (key_schedule_exactly
+      c.handshake.keys
+      (verified_client_finished_state st0 (Ghost.reveal fin)).CS.cs_model.CS.model_handshake.CS.hs_keys);
+  assert (pure (cv_verified ==
+    (verified_client_finished_state st0 (Ghost.reveal fin)).CS.cs_model.CS.model_handshake.CS.hs_certificate_verify_verified));
+  assert (pure (server_finished_verified ==
+    (verified_client_finished_state st0 (Ghost.reveal fin)).CS.cs_model.CS.model_handshake.CS.hs_server_finished_verified));
+  fold (handshake_exactly
+    c.handshake
+    (verified_client_finished_state st0 (Ghost.reveal fin)).CS.cs_model.CS.model_handshake);
+
+  assert (pure ((verified_client_finished_state st0 (Ghost.reveal fin)).CS.cs_model.CS.model_config ==
+    st0.CS.cs_model.CS.model_config));
+  assert (pure ((verified_client_finished_state st0 (Ghost.reveal fin)).CS.cs_model.CS.model_record ==
+    st0.CS.cs_model.CS.model_record));
+  assert (pure ((verified_client_finished_state st0 (Ghost.reveal fin)).CS.cs_model.CS.model_application ==
+    st0.CS.cs_model.CS.model_application));
+  rewrite (connection_config_exactly c.config st0.CS.cs_model.CS.model_config)
+    as (connection_config_exactly
+      c.config
+      (verified_client_finished_state st0 (Ghost.reveal fin)).CS.cs_model.CS.model_config);
+  rewrite (record_layer_exactly c.records st0.CS.cs_model.CS.model_record)
+    as (record_layer_exactly
+      c.records
+      (verified_client_finished_state st0 (Ghost.reveal fin)).CS.cs_model.CS.model_record);
+  rewrite (application_exactly c.application st0.CS.cs_model.CS.model_application)
+    as (application_exactly
+      c.application
+      (verified_client_finished_state st0 (Ghost.reveal fin)).CS.cs_model.CS.model_application);
+  fold (connection_model_exactly
+    c
+    (verified_client_finished_state st0 (Ghost.reveal fin)).CS.cs_model);
+
+  lemma_verified_client_finished_state_evolves st0 (Ghost.reveal fin);
+  MR.update
+    c.ghost_state
+    (verified_client_finished_state st0 (Ghost.reveal fin));
+  fold (connection_exactly
+    c
+    (verified_client_finished_state st0 (Ghost.reveal fin)))
+}
+
+fn mark_verified_stored_client_finished
+  (c:connection_state)
+  (#fin:erased M.finished)
+  (#st0:erased CS.connection_state)
+  requires connection_exactly c st0 **
+           pure (st0.CS.cs_model.CS.model_handshake.CS.hs_client_finished ==
+                   Some (Ghost.reveal fin) /\
+                 B.length st0.CS.cs_model.CS.model_handshake.CS.hs_transcript + 36 <=
+                   max_transcript_len /\
+                 can_verify_client_finished st0 (Ghost.reveal fin))
+  ensures connection_exactly
+            c
+            (verified_client_finished_state st0 (Ghost.reveal fin))
+{
+  let mut serialized_finished = [| 0uy; 36sz |];
+
+  unfold (connection_exactly c st0);
+  unfold (connection_model_exactly c st0.CS.cs_model);
+  unfold (handshake_exactly c.handshake st0.CS.cs_model.CS.model_handshake);
+  with cv_verified server_finished_verified. _;
+  unfold (handshake_messages_exactly c.handshake.messages st0.CS.cs_model.CS.model_handshake);
+  unfold (finished_slot_exactly
+    c.handshake.messages.client_finished
+    st0.CS.cs_model.CS.model_handshake.CS.hs_client_finished);
+  with stored. assert (Box.pts_to c.handshake.messages.client_finished stored);
+  let stored_fin_opt = !c.handshake.messages.client_finished;
+  assert (pure (stored_fin_opt == stored));
+  assert (pure (Some? stored_fin_opt));
+  let lfin = Some?.v stored_fin_opt;
+  assert (pure (stored_fin_opt == Some lfin));
+  assert (pure (stored == Some lfin));
+
+  rewrite (match stored, st0.CS.cs_model.CS.model_handshake.CS.hs_client_finished with
+    | None, None -> pure True
+    | Some old_l, Some old_m -> IM.is_valid_finished old_l old_m
+    | _, _ -> pure False)
+    as (IM.is_valid_finished lfin (Ghost.reveal fin));
+  let written_len =
+    Ser.serialize_finished_handshake
+      #fin
+      lfin
+      serialized_finished
+      36sz;
+  with serialized_finished_bytes.
+    assert (ArrPts.pts_to serialized_finished serialized_finished_bytes);
+  assert (pure (Seq.equal
+    serialized_finished_bytes
+    (W.serialize_handshake (M.Finished (Ghost.reveal fin)))));
+  assert (pure (SZ.v written_len == 36));
+  rewrite (IM.is_valid_finished lfin (Ghost.reveal fin))
+    as (match stored, st0.CS.cs_model.CS.model_handshake.CS.hs_client_finished with
+      | None, None -> pure True
+      | Some old_l, Some old_m -> IM.is_valid_finished old_l old_m
+      | _, _ -> pure False);
+  fold (finished_slot_exactly
+    c.handshake.messages.client_finished
+    st0.CS.cs_model.CS.model_handshake.CS.hs_client_finished);
+  fold (handshake_messages_exactly c.handshake.messages st0.CS.cs_model.CS.model_handshake);
+  fold (handshake_exactly c.handshake st0.CS.cs_model.CS.model_handshake);
+  fold (connection_model_exactly c st0.CS.cs_model);
+  fold (connection_exactly c st0);
+
+  mark_verified_client_finished
+    c
+    serialized_finished
+    36sz
+    #fin
+}

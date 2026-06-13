@@ -854,6 +854,113 @@ let can_send_server_finished
     raw_sent
     B.empty
 
+let received_client_finished_state
+  (st:CS.connection_state)
+  (fin:M.finished)
+  (raw_received:B.bytes)
+  : GTot CS.connection_state =
+  let model0 = st.CS.cs_model in
+  let hs0 = model0.CS.model_handshake in
+  let msg = M.Finished fin in
+  {
+    CS.cs_model =
+      CS.with_handshake_stage
+        { model0 with
+            CS.model_record =
+              { model0.CS.model_record with
+                  CS.record_read = R.next_seq model0.CS.model_record.CS.record_read;
+              };
+        }
+        { hs0 with CS.hs_client_finished = Some fin }
+        CS.HsClientFinishedReceived;
+    CS.cs_wire_log = {
+      CL.raw_sent = B.append st.CS.cs_wire_log.CL.raw_sent B.empty;
+      CL.raw_received = B.append st.CS.cs_wire_log.CL.raw_received raw_received;
+    };
+    CS.cs_event_log =
+      st.CS.cs_event_log @
+      [CS.ConnNetworkEvent {
+        CL.message_direction = CL.Received;
+        CL.message_value = M.TlsHandshake msg;
+      }];
+  }
+
+let can_receive_client_finished
+  (st:CS.connection_state)
+  (fin:M.finished)
+  (raw_received:B.bytes)
+  : GTot prop =
+  st.CS.cs_model.CS.model_control ==
+    CS.ControlHandshaking CS.HsServerFinishedSent /\
+  st.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
+  st.CS.cs_model.CS.model_handshake.CS.hs_client_finished == None /\
+  Some?
+    st.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_handshake_traffic /\
+  U64.fits (st.CS.cs_model.CS.model_record.CS.record_read.R.seq + 1) /\
+  CS.legal_event
+    st.CS.cs_model
+    (CS.ConnNetworkEvent {
+      CL.message_direction = CL.Received;
+      CL.message_value = M.TlsHandshake (M.Finished fin);
+    }) /\
+  CS.event_raw_delta_legal
+    st.CS.cs_model
+    (CS.ConnNetworkEvent {
+      CL.message_direction = CL.Received;
+      CL.message_value = M.TlsHandshake (M.Finished fin);
+    })
+    B.empty
+    raw_received
+
+let verified_client_finished_state
+  (st:CS.connection_state)
+  (fin:M.finished)
+  : GTot CS.connection_state =
+  let model0 = st.CS.cs_model in
+  let hs0 = model0.CS.model_handshake in
+  {
+    CS.cs_model = {
+      model0 with
+        CS.model_control = CS.ControlApplicationData;
+        CS.model_handshake =
+          CS.append_handshake_to_transcript
+            { hs0 with CS.hs_client_finished = Some fin }
+            (M.Finished fin);
+    };
+    CS.cs_wire_log = {
+      CL.raw_sent = B.append st.CS.cs_wire_log.CL.raw_sent B.empty;
+      CL.raw_received = B.append st.CS.cs_wire_log.CL.raw_received B.empty;
+    };
+    CS.cs_event_log =
+      st.CS.cs_event_log @ [CS.ConnLocalEvent (CS.LocalVerifyClientFinished fin)];
+  }
+
+let can_verify_client_finished
+  (st:CS.connection_state)
+  (fin:M.finished)
+  : GTot prop =
+  st.CS.cs_model.CS.model_control ==
+    CS.ControlHandshaking CS.HsClientFinishedReceived /\
+  st.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
+  CS.application_record_keys_installed_for_role
+    CS.ServerEndpoint
+    st.CS.cs_model /\
+  (match st.CS.cs_model.CS.model_handshake.CS.hs_client_finished,
+         st.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_handshake_traffic with
+   | Some stored_fin, Some client_hs ->
+     stored_fin == fin /\
+     H.verify_finished
+       client_hs.CS.traffic_secret
+       (Tr.hash st.CS.cs_model.CS.model_handshake.CS.hs_transcript)
+       fin
+   | _, _ -> False) /\
+  B.length st.CS.cs_model.CS.model_handshake.CS.hs_transcript +
+    B.length (W.serialize_handshake (M.Finished fin)) <=
+    max_transcript_len /\
+  CS.legal_event
+    st.CS.cs_model
+    (CS.ConnLocalEvent (CS.LocalVerifyClientFinished fin))
+
 let received_client_hello_state
   (st:CS.connection_state)
   (ch:M.client_hello)
@@ -2260,6 +2367,52 @@ val lemma_sent_server_finished_state_evolves
                    CS.delta_raw_received = B.empty;
                  }
                  (sent_server_finished_state st fin raw_sent))
+
+val lemma_received_client_finished_state_evolves
+  (st:CS.connection_state)
+  (fin:M.finished)
+  (raw_received:B.bytes)
+  : Lemma
+      (requires CS.connection_state_consistent st /\
+                can_receive_client_finished st fin raw_received)
+      (ensures CS.connection_state_evolves
+                 st
+                 (received_client_finished_state st fin raw_received) /\
+               CS.connection_state_consistent
+                 (received_client_finished_state st fin raw_received) /\
+               CS.legal_connection_delta
+                 st
+                 {
+                  CS.delta_event =
+                    CS.ConnNetworkEvent {
+                      CL.message_direction = CL.Received;
+                      CL.message_value = M.TlsHandshake (M.Finished fin);
+                    };
+                  CS.delta_raw_sent = B.empty;
+                  CS.delta_raw_received = raw_received;
+                 }
+                 (received_client_finished_state st fin raw_received))
+
+val lemma_verified_client_finished_state_evolves
+  (st:CS.connection_state)
+  (fin:M.finished)
+  : Lemma
+      (requires CS.connection_state_consistent st /\
+                can_verify_client_finished st fin)
+      (ensures CS.connection_state_evolves
+                 st
+                 (verified_client_finished_state st fin) /\
+               CS.connection_state_consistent
+                 (verified_client_finished_state st fin) /\
+               CS.legal_connection_delta
+                 st
+                 {
+                  CS.delta_event =
+                    CS.ConnLocalEvent (CS.LocalVerifyClientFinished fin);
+                  CS.delta_raw_sent = B.empty;
+                  CS.delta_raw_received = B.empty;
+                 }
+                 (verified_client_finished_state st fin))
 
 val lemma_received_client_hello_state_evolves
   (st:CS.connection_state)
