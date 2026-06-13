@@ -356,6 +356,50 @@ fn serialize_raw_application_data_record
                   Some (T.ApplicationData, (Ghost.reveal 'fragment_bytes), SZ.v written) /\
                 CS.raw_records_exactly raw_prefix T.ApplicationData 1))
 
+fn serialize_protected_handshake_record
+  (#msg: erased M.handshake_msg)
+  (write_state: Rec.record_state)
+  (handshake: array U8.t)
+  (handshake_len: SZ.t)
+  (network_out: array U8.t)
+  (network_out_len: SZ.t)
+  requires Rec.is_record_state write_state 'record_write **
+           pts_to handshake 'handshake_bytes **
+           pts_to network_out 'old_network **
+           pure (B.length 'handshake_bytes == SZ.v handshake_len /\
+                Seq.equal
+                  (Ghost.reveal 'handshake_bytes)
+                  (WS.serialize_handshake (Ghost.reveal msg)) /\
+                B.length 'old_network == SZ.v network_out_len /\
+                SZ.v handshake_len + 17 <= 16640 /\
+                SZ.v handshake_len + 22 <= SZ.v network_out_len)
+  returns written: (n:SZ.t{SZ.v n <= SZ.v network_out_len})
+  ensures exists* network_bytes.
+          Rec.is_record_state write_state 'record_write **
+          pts_to handshake 'handshake_bytes **
+          pts_to network_out network_bytes **
+          pure (B.length network_bytes == SZ.v network_out_len /\
+                SZ.v written == SZ.v handshake_len + 22 /\
+                (let raw_prefix = Seq.slice network_bytes 0 (SZ.v written) in
+                CS.raw_records_exactly raw_prefix T.ApplicationData 1 /\
+                (exists outer_fragment.
+                   WS.parse_record raw_prefix ==
+                     Some (T.ApplicationData, outer_fragment, B.length raw_prefix) /\
+                   Seq.equal raw_prefix (WS.serialize_record T.ApplicationData outer_fragment) /\
+                   Seq.equal
+                     (CS.record_header_aad raw_prefix)
+                     (CS.application_data_record_header (SZ.v handshake_len + 17)) /\
+                   R.seal
+                     'record_write
+                     (CS.record_header_aad raw_prefix)
+                     {
+                       R.content_type = T.ApplicationData;
+                       R.fragment =
+                         CS.sent_tls_inner_plaintext_fragment
+                           (M.TlsHandshake (Ghost.reveal msg));
+                     } ==
+                     Some (outer_fragment, R.next_seq 'record_write))))
+
 fn serialize_client_finished_outputs
   (write_state: Rec.record_state)
   (lfin: L.finished)

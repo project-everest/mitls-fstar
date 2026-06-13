@@ -14,10 +14,12 @@ module CR = TLS13.Impl.ConnectionState.Repr
 module CQ = TLS13.Impl.ConnectionState.Queries
 module IM = TLS13.Impl.Messages
 module M = TLS13.Messages
+module R = TLS13.Record.Spec
 module SM = TLS13.StateMachine
 module ST = TLS13.Impl.Server.Types
 module Seq = FStar.Seq
 module SZ = FStar.SizeT
+module U64 = FStar.UInt64
 module U8 = FStar.UInt8
 
 type server = CR.connection_state
@@ -357,6 +359,53 @@ fn process_send_server_hello_serialized
                    B.empty
                    network_out_bytes
                    app_out_bytes)
+
+fn process_send_encrypted_extensions_serialized
+  (s:server)
+  (network_out:array U8.t)
+  (network_out_len:SZ.t)
+  (app_out:array U8.t)
+  (app_out_len:SZ.t)
+  requires connection_exactly s 'st0 **
+           pts_to network_out 'old_network_out **
+           pts_to app_out 'old_app_out **
+           pure (B.length 'old_network_out == SZ.v network_out_len /\
+                 B.length 'old_app_out == SZ.v app_out_len /\
+                 SZ.v network_out_len == 28 /\
+                 ST.server_end_to_end_invariant 'st0 /\
+                 'st0.CS.cs_model.CS.model_control ==
+                   CS.ControlHandshaking CS.HsServerHelloSent /\
+                 'st0.CS.cs_model.CS.model_config.CS.config_role ==
+                   CS.ServerEndpoint /\
+                 Some?
+                   'st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_handshake_traffic /\
+                 U64.fits
+                   ('st0.CS.cs_model.CS.model_record.CS.record_write.R.seq + 1) /\
+                 B.length 'st0.CS.cs_model.CS.model_handshake.CS.hs_transcript + 6 <=
+                   Bounds.max_transcript_len /\
+                 CS.legal_event
+                   'st0.CS.cs_model
+                   (CS.ConnNetworkEvent {
+                     CL.message_direction = CL.Sent;
+                     CL.message_value =
+                       M.TlsHandshake
+                         (M.EncryptedExtensions { M.negotiated_alpn = None });
+                   }))
+  returns resp:ST.server_response
+  ensures exists* st1 network_out_bytes app_out_bytes.
+          connection_exactly s st1 **
+          pts_to network_out network_out_bytes **
+          pts_to app_out app_out_bytes **
+          pure (B.length network_out_bytes == SZ.v network_out_len /\
+                B.length app_out_bytes == SZ.v app_out_len /\
+                ST.server_local_event_end_to_end_correct
+                  'st0
+                  st1
+                  resp
+                  ST.LocalSendEncryptedExtensions
+                  B.empty
+                  network_out_bytes
+                  app_out_bytes)
 
 fn process_derive_shared_secret
   (s:server)

@@ -535,6 +535,65 @@ static inline size_t TLS13_Connection_Backend_serialize_raw_application_data_rec
 #define TLS13_Impl_Serializer_serialize_raw_application_data_record(fragment, fragment_len, out, out_len, ...) \
   TLS13_Connection_Backend_serialize_raw_application_data_record((fragment), (fragment_len), (out), (out_len))
 
+static inline size_t TLS13_Connection_Backend_serialize_protected_handshake_record(
+    const uint8_t *write_key,
+    const uint8_t *write_iv,
+    uint64_t write_seq,
+    bool write_installed,
+    uint8_t *handshake,
+    size_t handshake_len,
+    uint8_t *network_out,
+    size_t network_out_len) {
+  size_t inner_len = handshake_len + 1u;
+  size_t ciphertext_len = inner_len + 16u;
+  size_t written = 5u + ciphertext_len;
+  if (!write_installed || handshake == NULL || network_out == NULL ||
+      inner_len > 16640u || ciphertext_len > 0xffffu ||
+      written > network_out_len) {
+    return 0u;
+  }
+
+  network_out[0] = 23u;
+  network_out[1] = 0x03u;
+  network_out[2] = 0x03u;
+  TLS13_Connection_Backend_write_u16(network_out + 3u, ciphertext_len);
+
+  uint8_t inner_plaintext[16640u];
+  memcpy(inner_plaintext, handshake, handshake_len);
+  inner_plaintext[handshake_len] = 22u;
+
+  uint8_t nonce[12u];
+  if (!tls13_record_nonce(nonce, write_iv, write_seq)) {
+    return 0u;
+  }
+  if (!tls13_hacl_chacha20_poly1305_seal_combined(
+          network_out + 5u,
+          ciphertext_len,
+          write_key,
+          nonce,
+          network_out,
+          5u,
+          inner_plaintext,
+          inner_len)) {
+    return 0u;
+  }
+  return written;
+}
+
+#define TLS13_Impl_Serializer_serialize_protected_handshake_record(msg_erased, write_state, handshake, handshake_len, network_out, network_out_len, ...) \
+  ({ \
+    __auto_type _tls13_write_state = (write_state); \
+    TLS13_Connection_Backend_serialize_protected_handshake_record( \
+        _tls13_write_state.key, \
+        _tls13_write_state.iv, \
+        *_tls13_write_state.seq, \
+        *_tls13_write_state.installed, \
+        (handshake), \
+        (handshake_len), \
+        (network_out), \
+        (network_out_len)); \
+  })
+
 static inline size_t TLS13_Connection_Backend_serialize_client_finished_outputs(
     const uint8_t *write_key,
     const uint8_t *write_iv,

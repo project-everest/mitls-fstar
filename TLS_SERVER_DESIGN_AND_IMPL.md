@@ -189,6 +189,11 @@ Current phase: **Phase 6 server buffer/event API and theorem surface**.
     with exact emitted bytes and parse-back postconditions.
   - `c_stubs/tls13_connection_backend.h` implements matching C TCB helpers over
     concrete L-level server message storage.
+  - The serializer TCB now also exposes
+    `serialize_protected_handshake_record`, a generic protected handshake-record
+    builder whose postcondition gives the outer `ApplicationData` parse,
+    recursive raw-record segmentation, header-AAD bytes, and `Record.Spec.seal`
+    equation for the supplied handshake fragment under the current write state.
 - [x] Started Phase 6 with `TLS13.Impl.Server.Types`:
   server status/response aliases over shared endpoint response types,
   server-specific local action/payload vocabulary, `server_state_correct`,
@@ -437,6 +442,13 @@ Current phase: **Phase 6 server buffer/event API and theorem surface**.
   `LocalVerifyClientFinished`; `server_local_event_input_ready` exposes the
   exact stored-Finished and `can_verify_client_finished` facts required by that
   wrapper.
+- [x] Added the first protected encrypted-flight public wrapper:
+  `TLS13.Impl.Server.process_send_encrypted_extensions_serialized` constructs
+  the fixed empty-ALPN EncryptedExtensions fragment, seals it as one protected
+  `ApplicationData` record with the current server handshake write state, stores
+  the L-level message through `mark_sent_encrypted_extensions`, and proves
+  `server_local_event_end_to_end_correct` including protected segmentation,
+  seal projection, and server write-key-schedule projection.
 
 ## End goal
 
@@ -1316,11 +1328,12 @@ Checklist:
         hints, and generic local dispatcher integration complete for handshake
         keys);
       - server flight emission (focused sent-ServerHello public wrapper,
-        serializer-driven cleartext ServerHello record construction, pure model
-        helpers, and Pulse state mutations for EncryptedExtensions, Certificate,
-        CertificateVerify signing/send, and server Finished are complete;
-        concrete selection-to-L-ServerHello storage and protected-record
-        seal/serializer public wrappers remain);
+        serializer-driven cleartext ServerHello record construction, protected
+        EncryptedExtensions public wrapper, pure model helpers, and Pulse state
+        mutations for EncryptedExtensions, Certificate, CertificateVerify
+        signing/send, and server Finished are complete; concrete
+        selection-to-L-ServerHello storage and protected-record public wrappers
+        for Certificate, CertificateVerify, and server Finished remain);
       - client Finished verification (state mutation, focused public wrapper, and
         generic local dispatcher integration complete; network parse/open
         dispatch for received client Finished remains pending);
