@@ -259,6 +259,45 @@ let lemma_started_handshake_state_evolves
   assert (CS.connection_state_evolves st (started_handshake_state st start));
   assert (CS.connection_state_consistent (started_handshake_state st start))
 
+let lemma_started_server_state_evolves
+  (st:CS.connection_state)
+  : Lemma
+      (requires CS.connection_state_consistent st /\
+                can_start_server st)
+      (ensures CS.connection_state_evolves
+                 st
+                 (started_server_state st) /\
+               CS.connection_state_consistent
+                 (started_server_state st) /\
+               CS.legal_connection_delta
+                 st
+                 {
+                   CS.delta_event = CS.ConnLocalEvent CS.LocalStartServer;
+                   CS.delta_raw_sent = B.empty;
+                   CS.delta_raw_received = B.empty;
+                 }
+                 (started_server_state st))
+=
+  let ev = CS.ConnLocalEvent CS.LocalStartServer in
+  let delta = {
+    CS.delta_event = ev;
+    CS.delta_raw_sent = B.empty;
+    CS.delta_raw_received = B.empty;
+  } in
+  Seq.lemma_eq_intro B.empty B.empty;
+  assert (CS.legal_event st.CS.cs_model ev);
+  assert (CS.step_model st.CS.cs_model ev ==
+          Some (started_server_state st).CS.cs_model);
+  assert (CS.event_raw_delta_legal st.CS.cs_model ev B.empty B.empty);
+  assert (CS.legal_connection_delta st delta (started_server_state st));
+  assert (CS.connection_state_single_step st (started_server_state st));
+  FStar.ReflexiveTransitiveClosure.closure_step
+    CS.connection_state_single_step
+    st
+    (started_server_state st);
+  assert (CS.connection_state_evolves st (started_server_state st));
+  assert (CS.connection_state_consistent (started_server_state st))
+
 let lemma_sent_client_hello_state_evolves
   (st:CS.connection_state)
   (ch:M.client_hello)

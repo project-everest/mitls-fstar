@@ -61,6 +61,7 @@ let server_state_core_correct
   (st:CS.connection_state)
   : prop =
   st.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
+  Some? st.CS.cs_model.CS.model_config.CS.config_server /\
   CS.connection_state_consistent st /\
   CS.connection_state_full_log_consistent_for_role CS.ServerEndpoint st
 
@@ -82,7 +83,8 @@ let server_end_to_end_invariant
 let lemma_initial_server_state_correct
   (cfg:CS.connection_config)
   : Lemma
-      (requires cfg.CS.config_role == CS.ServerEndpoint)
+      (requires cfg.CS.config_role == CS.ServerEndpoint /\
+                Some? cfg.CS.config_server)
       (ensures server_state_correct (CS.initial cfg))
 =
   CSL.lemma_initial_full_log_consistent_for_role CS.ServerEndpoint cfg;
@@ -95,7 +97,8 @@ let lemma_initial_server_state_correct
 let lemma_initial_server_end_to_end_invariant
   (cfg:CS.connection_config)
   : Lemma
-      (requires cfg.CS.config_role == CS.ServerEndpoint)
+      (requires cfg.CS.config_role == CS.ServerEndpoint /\
+                Some? cfg.CS.config_server)
       (ensures server_end_to_end_invariant (CS.initial cfg))
 =
   lemma_initial_server_state_correct cfg;

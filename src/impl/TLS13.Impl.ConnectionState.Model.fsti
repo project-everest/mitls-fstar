@@ -136,6 +136,34 @@ let can_start_handshake
     st.CS.cs_model
     (CS.ConnLocalEvent (CS.LocalStartHandshake start))
 
+let started_server_state
+  (st:CS.connection_state)
+  : CS.connection_state =
+  let model0 = st.CS.cs_model in
+  {
+    CS.cs_model =
+      CS.with_handshake_stage
+        model0
+        model0.CS.model_handshake
+        CS.HsAwaitingClientHello;
+    CS.cs_wire_log = {
+      CL.raw_sent = B.append st.CS.cs_wire_log.CL.raw_sent B.empty;
+      CL.raw_received = B.append st.CS.cs_wire_log.CL.raw_received B.empty;
+    };
+    CS.cs_event_log =
+      st.CS.cs_event_log @ [CS.ConnLocalEvent CS.LocalStartServer];
+  }
+
+let can_start_server
+  (st:CS.connection_state)
+  : GTot prop =
+  st.CS.cs_model.CS.model_control == CS.ControlNew /\
+  st.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
+  Some? st.CS.cs_model.CS.model_config.CS.config_server /\
+  CS.legal_event
+    st.CS.cs_model
+    (CS.ConnLocalEvent CS.LocalStartServer)
+
 let sent_client_hello_state
   (st:CS.connection_state)
   (ch:M.client_hello)
@@ -1136,6 +1164,25 @@ val lemma_started_handshake_state_evolves
                    CS.delta_raw_received = B.empty;
                  }
                  (started_handshake_state st start))
+
+val lemma_started_server_state_evolves
+  (st:CS.connection_state)
+  : Lemma
+      (requires CS.connection_state_consistent st /\
+                can_start_server st)
+      (ensures CS.connection_state_evolves
+                 st
+                 (started_server_state st) /\
+               CS.connection_state_consistent
+                 (started_server_state st) /\
+               CS.legal_connection_delta
+                 st
+                 {
+                  CS.delta_event = CS.ConnLocalEvent CS.LocalStartServer;
+                  CS.delta_raw_sent = B.empty;
+                  CS.delta_raw_received = B.empty;
+                 }
+                 (started_server_state st))
 
 val lemma_sent_client_hello_state_evolves
   (st:CS.connection_state)

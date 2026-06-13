@@ -7,7 +7,9 @@ open Pulse.Lib.Array.PtsTo
 
 module B = TLS13.Bytes
 module CS = TLS13.Spec.ConnectionState
+module CM = TLS13.Impl.ConnectionState.Model
 module CR = TLS13.Impl.ConnectionState.Repr
+module CQ = TLS13.Impl.ConnectionState.Queries
 module ST = TLS13.Impl.Server.Types
 module SZ = FStar.SizeT
 module U8 = FStar.UInt8
@@ -20,6 +22,21 @@ let connection_exactly (s:server) (st:CS.connection_state) : slprop =
 noextract
 let server_state_ref (s:server) : CR.state_ref =
   CR.connection_state_ref s
+
+noextract
+let next_local_action_sound
+  (st:CS.connection_state)
+  (action:ST.next_local_action)
+  : prop =
+  if action.ST.next_local_ready then
+    match action.ST.next_local_kind with
+    | ST.LocalStartServer ->
+      action.ST.next_local_payload == ST.LocalPayloadNone /\
+      CM.can_start_server st
+    | _ ->
+      False
+  else
+    True
 
 fn new_server
   (certificate_chain:array U8.t)
@@ -70,3 +87,12 @@ fn new_server
                   (CR.server_initial_state
                     (Ghost.reveal 'certificate_chain_bytes)
                     (Ghost.reveal 'credential_identity_bytes)))
+
+fn next_local_action
+  (s:server)
+  requires connection_exactly s 'st0 **
+           pure (ST.server_state_correct 'st0)
+  returns action:ST.next_local_action
+  ensures connection_exactly s 'st0 **
+          pure (ST.server_state_correct 'st0 /\
+                next_local_action_sound 'st0 action)

@@ -67,6 +67,29 @@ fn config_role_is_client
   ok
 }
 
+fn config_role_is_server
+  (cfg:connection_config_storage)
+  (#spec:erased CS.connection_config)
+  requires connection_config_exactly cfg spec
+  returns ok: bool
+  ensures connection_config_exactly cfg spec **
+          pure (ok ==> spec.CS.config_role == CS.ServerEndpoint)
+{
+  unfold (connection_config_exactly cfg spec);
+  with role validation_time.
+    assert (Box.pts_to cfg.role_tag role **
+            Box.pts_to cfg.validation_time_seconds validation_time);
+  let role_tag = !cfg.role_tag;
+  let ok = role_tag = 1uy;
+  assert (pure (role_tag == role));
+  assert (pure (Tags.endpoint_role_tag_matches role spec.CS.config_role));
+  assert (pure (SZ.v validation_time == spec.CS.config_validation_time.X.seconds_since_epoch));
+  assert_norm (Tags.endpoint_role_tag_matches 1uy CS.ServerEndpoint);
+  assert (pure (ok ==> spec.CS.config_role == CS.ServerEndpoint));
+  fold (connection_config_exactly cfg spec);
+  ok
+}
+
 fn get_control_snapshot
   (c:connection_state)
   (#st0:erased CS.connection_state)
@@ -654,6 +677,47 @@ fn can_start_handshake_runtime
     false
   }
 }
+
+fn can_start_server_runtime
+  (c:connection_state)
+  (#st0:erased CS.connection_state)
+  requires connection_exactly c st0
+  returns ok: bool
+  ensures connection_exactly c st0 **
+          pure (ok ==>
+            st0.CS.cs_model.CS.model_control == CS.ControlNew /\
+            st0.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint)
+{
+  unfold (connection_exactly c st0);
+  unfold (connection_model_exactly c st0.CS.cs_model);
+  let role_ok = config_role_is_server c.config;
+  unfold (control_exactly c.control st0.CS.cs_model.CS.model_control st0.CS.cs_model.CS.model_failure);
+
+  let tag = !c.control.control_tag;
+  let tag_ok = tag = 0uy;
+  let ok = role_ok && tag_ok;
+  if ok {
+    assert (pure (U8.v tag == 0));
+    assert (pure (st0.CS.cs_model.CS.model_control == CS.ControlNew));
+    assert (pure (st0.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint));
+    fold (control_exactly
+      c.control
+      st0.CS.cs_model.CS.model_control
+      st0.CS.cs_model.CS.model_failure);
+    fold (connection_model_exactly c st0.CS.cs_model);
+    fold (connection_exactly c st0);
+    true
+  } else {
+    fold (control_exactly
+      c.control
+      st0.CS.cs_model.CS.model_control
+      st0.CS.cs_model.CS.model_failure);
+    fold (connection_model_exactly c st0.CS.cs_model);
+    fold (connection_exactly c st0);
+    false
+  }
+}
+
 fn can_send_client_hello_runtime
   (c:connection_state)
   (network_out_len:SZ.t)

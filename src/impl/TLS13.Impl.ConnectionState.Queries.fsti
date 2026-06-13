@@ -52,6 +52,14 @@ fn config_role_is_client
   ensures connection_config_exactly cfg spec **
           pure (ok ==> spec.CS.config_role == CS.ClientEndpoint)
 
+fn config_role_is_server
+  (cfg:connection_config_storage)
+  (#spec:erased CS.connection_config)
+  requires connection_config_exactly cfg spec
+  returns ok: bool
+  ensures connection_config_exactly cfg spec **
+          pure (ok ==> spec.CS.config_role == CS.ServerEndpoint)
+
 fn get_control_snapshot
   (c:connection_state)
   (#st0:erased CS.connection_state)
@@ -169,6 +177,16 @@ fn can_start_handshake_runtime
             st0.CS.cs_model.CS.model_control == CS.ControlNew /\
             st0.CS.cs_model.CS.model_config.CS.config_role == CS.ClientEndpoint /\
             st0.CS.cs_model.CS.model_handshake.CS.hs_start == None)
+
+fn can_start_server_runtime
+  (c:connection_state)
+  (#st0:erased CS.connection_state)
+  requires connection_exactly c st0
+  returns ok: bool
+  ensures connection_exactly c st0 **
+          pure (ok ==>
+            st0.CS.cs_model.CS.model_control == CS.ControlNew /\
+            st0.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint)
 
 fn can_send_client_hello_runtime
   (c:connection_state)

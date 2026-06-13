@@ -199,8 +199,16 @@ Current phase: **Phase 6 server buffer/event API and theorem surface**.
   initial connection state with ghost/spec server credential metadata, and
   `TLS13.Impl.Server.new_server` establishes `server_state_correct` and
   `server_end_to_end_invariant`.
-- [ ] Continue Phase 6 by adding Pulse network/local handlers against the new
-  theorem surface.
+- [x] Added the first read-only server action scheduler:
+  `TLS13.Impl.Server.next_local_action` advertises `LocalStartServer` exactly
+  when the concrete server is still `ControlNew` and the public
+  `server_state_correct` invariant supplies the required server config.
+- [x] Added the first server local mutation primitive:
+  `TLS13.Impl.ConnectionState.LocalHandshake.try_start_server` performs the
+  control-only `LocalStartServer` transition to `HsAwaitingClientHello` and
+  proves the corresponding legal connection delta.
+- [ ] Continue Phase 6 by adding a public server `process_local_event` wrapper
+  over `LocalStartServer`, then network `ClientHello` handling.
 
 ## End goal
 

@@ -8,7 +8,9 @@ open Pulse.Lib.Array.PtsTo
 module B = TLS13.Bytes
 module CS = TLS13.Spec.ConnectionState
 module CSL = TLS13.ConnectionState.Lemmas
+module CM = TLS13.Impl.ConnectionState.Model
 module CR = TLS13.Impl.ConnectionState.Repr
+module CQ = TLS13.Impl.ConnectionState.Queries
 module ST = TLS13.Impl.Server.Types
 module SZ = FStar.SizeT
 module U8 = FStar.UInt8
@@ -107,4 +109,38 @@ fn new_server
       (Ghost.reveal 'certificate_chain_bytes)
       (Ghost.reveal 'credential_identity_bytes)));
   s
+}
+
+fn next_local_action
+  (s:server)
+  requires connection_exactly s 'st0 **
+           pure (ST.server_state_correct 'st0)
+  returns action:ST.next_local_action
+  ensures connection_exactly s 'st0 **
+          pure (ST.server_state_correct 'st0 /\
+                next_local_action_sound 'st0 action)
+{
+  unfold (connection_exactly s 'st0);
+  let start_ready = CQ.can_start_server_runtime s;
+  fold (connection_exactly s 'st0);
+  if start_ready {
+    assert (pure ('st0.CS.cs_model.CS.model_control == CS.ControlNew));
+    assert (pure ('st0.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint));
+    assert (pure (Some? 'st0.CS.cs_model.CS.model_config.CS.config_server));
+    assert (pure (CS.legal_event
+      'st0.CS.cs_model
+      (CS.ConnLocalEvent CS.LocalStartServer)));
+    assert (pure (CM.can_start_server 'st0));
+    {
+      ST.next_local_ready = true;
+      ST.next_local_kind = ST.LocalStartServer;
+      ST.next_local_payload = ST.LocalPayloadNone;
+    }
+  } else {
+    {
+      ST.next_local_ready = false;
+      ST.next_local_kind = ST.LocalFail;
+      ST.next_local_payload = ST.LocalPayloadNone;
+    }
+  }
 }
