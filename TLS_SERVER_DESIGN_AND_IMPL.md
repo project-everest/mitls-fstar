@@ -479,6 +479,15 @@ Current phase: **Phase 6 server buffer/event API and theorem surface**.
   `IllegalTransition`/unexpected-message local-fail response. Certificate and
   CertificateVerify remain focused-wrapper-only until executable credential
   selection/signing supplies their concrete L-level inputs.
+- [x] Added the focused executable server CertificateVerify signing wrapper:
+  `process_sign_certificate_verify` takes an explicit
+  `TLS13.OpenSSL.server_credentials` resource, hashes the current transcript,
+  builds the exact TLS 1.3 server CertificateVerify input, asks the OpenSSL TCB
+  to produce an RSA-PSS/SHA-256 signature, builds the corresponding L-level
+  CertificateVerify object, stores it through `mark_signed_certificate_verify`,
+  and proves `server_local_event_end_to_end_correct` for
+  `LocalSignCertificateVerify`. The credential resource is preserved; signer
+  failure is surfaced as a verified local unexpected-message failure.
 
 ## End goal
 
