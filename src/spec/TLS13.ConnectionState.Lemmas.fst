@@ -789,6 +789,68 @@ let lemma_step_model_record_keys_consistent
           assert (model1.model_record == model0.model_record);
           assert (model1.model_handshake.hs_keys == model0.model_handshake.hs_keys)))
 
+let lemma_step_model_record_keys_consistent_for_role
+  (role:endpoint_role)
+  (model0:connection_model)
+  (ev:conn_event)
+  (model1:connection_model)
+  : Lemma
+     (requires
+       legal_event model0 ev /\
+       step_model model0 ev == Some model1 /\
+       role == model0.model_config.config_role /\
+       model_record_keys_consistent_for_role role model0)
+     (ensures model_record_keys_consistent_for_role role model1)
+=
+  match role with
+  | ClientEndpoint ->
+    lemma_step_model_record_keys_consistent model0 ev model1
+  | ServerEndpoint ->
+    (match ev with
+     | ConnLocalEvent local ->
+      (match local with
+       | LocalInstallTrafficKeysForRole role_install ->
+         assert (role_install.install_role == model0.model_config.config_role);
+         assert (role_install.install_role == ServerEndpoint);
+         let install = role_install.install_payload in
+         lemma_step_role_install_record_keys_consistent_for_role
+           ServerEndpoint
+           model0
+           install
+           model1
+       | LocalInstallTrafficKeys _ ->
+         assert False
+       | LocalDeriveSharedSecret _ ->
+         assert (model1.model_record == model0.model_record);
+         assert (model1.model_handshake.hs_keys.ks_client_handshake_traffic ==
+           model0.model_handshake.hs_keys.ks_client_handshake_traffic);
+         assert (model1.model_handshake.hs_keys.ks_server_handshake_traffic ==
+           model0.model_handshake.hs_keys.ks_server_handshake_traffic);
+         assert (model1.model_handshake.hs_keys.ks_client_application_traffic ==
+           model0.model_handshake.hs_keys.ks_client_application_traffic);
+         assert (model1.model_handshake.hs_keys.ks_server_application_traffic ==
+           model0.model_handshake.hs_keys.ks_server_application_traffic)
+       | LocalFail _ ->
+         ()
+       | _ ->
+         assert (model1.model_record == model0.model_record);
+         assert (model1.model_handshake.hs_keys == model0.model_handshake.hs_keys))
+     | ConnNetworkEvent msg ->
+      (match msg.CL.message_value with
+       | M.TlsAlert T.CloseNotify ->
+         (match model0.model_control with
+          | ControlApplicationData
+          | ControlClosing ->
+            assert False
+          | _ ->
+            assert (ControlFailed? model1.model_control))
+       | M.TlsAlert _ ->
+         assert (ControlFailed? model1.model_control)
+       | M.TlsChangeCipherSpec ->
+         assert (model1 == model0)
+       | _ ->
+         assert False))
+
 let lemma_step_model_record_layer_delta
   (model0:connection_model)
   (ev:conn_event)

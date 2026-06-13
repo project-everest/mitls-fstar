@@ -1188,6 +1188,7 @@ let legal_local_event (model:connection_model) (ev:local_event) : GTot prop =
   let hs = model.model_handshake in
   match ev, model.model_control with
   | LocalStartHandshake start, ControlNew ->
+    model.model_config.config_role == ClientEndpoint /\
     start_matches_config model.model_config start /\
     handshake_start_key_share_consistent start
   | LocalStartServer, ControlNew ->
@@ -1201,6 +1202,7 @@ let legal_local_event (model:connection_model) (ev:local_event) : GTot prop =
      | Some cfg -> server_selection_acceptable cfg selection
      | None -> False)
   | LocalDeriveSharedSecret shared, ControlHandshaking HsServerHelloReceived ->
+    model.model_config.config_role == ClientEndpoint /\
     (match hs.hs_start, hs.hs_server_hello with
      | Some start, Some sh ->
        handshake_start_key_share_consistent start /\
@@ -1209,6 +1211,7 @@ let legal_local_event (model:connection_model) (ev:local_event) : GTot prop =
         | None -> False)
      | _, _ -> False)
   | LocalDeriveSharedSecret shared, ControlHandshaking HsClientHelloReceived ->
+    model.model_config.config_role == ServerEndpoint /\
     (match hs.hs_server_selection with
      | Some selection ->
        server_selection_key_share_consistent selection /\
@@ -1220,6 +1223,7 @@ let legal_local_event (model:connection_model) (ev:local_event) : GTot prop =
        | None -> False)
      | None -> False)
   | LocalInstallTrafficKeys install, ControlHandshaking stage ->
+    model.model_config.config_role == ClientEndpoint /\
     traffic_install_allowed_at_stage stage install /\
     traffic_install_matches_key_schedule hs install
   | LocalInstallTrafficKeysForRole role_install, ControlHandshaking stage ->
@@ -1234,6 +1238,7 @@ let legal_local_event (model:connection_model) (ev:local_event) : GTot prop =
       hs
       role_install.install_payload
   | LocalValidateCertificate peer, ControlHandshaking HsCertificateReceived ->
+    model.model_config.config_role == ClientEndpoint /\
     (match hs.hs_certificate with
      | Some cert ->
        X.validate_chain
@@ -1243,12 +1248,14 @@ let legal_local_event (model:connection_model) (ev:local_event) : GTot prop =
          cert.M.chain == Some peer
      | None -> False)
   | LocalVerifyCertificateSignature cv, ControlHandshaking HsCertificateVerifyReceived ->
+    model.model_config.config_role == ClientEndpoint /\
     (match hs.hs_validated_peer, hs.hs_certificate_verify, hs.hs_buffers.hb_certificate_verify_input with
      | Some peer, Some stored_cv, Some input ->
        stored_cv == cv /\
        C.verify_signature cv.M.scheme peer.X.leaf_public_key input cv.M.signature
      | _, _, _ -> False)
   | LocalVerifyFinished fin, ControlHandshaking HsServerFinishedReceived ->
+    model.model_config.config_role == ClientEndpoint /\
     (match hs.hs_server_finished, hs.hs_keys.ks_server_handshake_traffic with
      | Some stored_fin, Some server_hs ->
        stored_fin == fin /\
@@ -1270,27 +1277,35 @@ let legal_handshake_message
   let hs = model.model_handshake in
   match dir, msg, model.model_control with
   | CL.Sent, M.ClientHello ch, ControlHandshaking HsStarted ->
+    model.model_config.config_role == ClientEndpoint /\
     (match hs.hs_start with
      | Some start -> client_hello_matches_start start ch
      | None -> False)
   | CL.Received, M.ServerHello sh, ControlHandshaking HsClientHelloSent ->
+    model.model_config.config_role == ClientEndpoint /\
     H.is_supported_cipher_suite sh.M.cipher_suite /\
     (match hs.hs_start with
      | Some start -> cipher_suite_offered start.start_cipher_suites sh.M.cipher_suite
      | None -> False)
   | CL.Received, M.EncryptedExtensions _, ControlHandshaking HsServerHelloReceived ->
+    model.model_config.config_role == ClientEndpoint /\
     Some? hs.hs_keys.ks_server_handshake_traffic
   | CL.Received, M.Certificate cert, ControlHandshaking HsEncryptedExtensionsReceived ->
+    model.model_config.config_role == ClientEndpoint /\
     cert.M.chain <> []
   | CL.Received, M.CertificateVerify _, ControlHandshaking HsCertificateValidated ->
+    model.model_config.config_role == ClientEndpoint /\
     Some? hs.hs_validated_peer
   | CL.Received, M.Finished _, ControlHandshaking HsCertificateVerifyVerified ->
+    model.model_config.config_role == ClientEndpoint /\
     Some? hs.hs_keys.ks_server_handshake_traffic
   | CL.Sent, M.Finished _, ControlHandshaking HsServerFinishedVerified ->
+    model.model_config.config_role == ClientEndpoint /\
     Some? hs.hs_keys.ks_client_handshake_traffic /\
     Some? hs.hs_keys.ks_client_application_traffic /\
     Some? hs.hs_keys.ks_server_application_traffic
   | CL.Received, M.HelloRetryRequest, ControlHandshaking HsClientHelloSent ->
+    model.model_config.config_role == ClientEndpoint /\
     True
   | _, _, _ ->
     False
@@ -1305,12 +1320,15 @@ let legal_tls_message
   | M.TlsHandshake handshake_msg, _ ->
     legal_handshake_message model dir handshake_msg
   | M.TlsApplicationData _, ControlApplicationData ->
+    model.model_config.config_role == ClientEndpoint /\
     (match dir with
      | CL.Sent -> Some? hs.hs_keys.ks_client_application_traffic
      | CL.Received -> Some? hs.hs_keys.ks_server_application_traffic)
   | M.TlsIgnoredPostHandshake _, ControlApplicationData ->
+    model.model_config.config_role == ClientEndpoint /\
     dir == CL.Received /\ Some? hs.hs_keys.ks_server_application_traffic
   | M.TlsKeyUpdate req, ControlApplicationData ->
+    model.model_config.config_role == ClientEndpoint /\
     (match dir, req with
      | CL.Received, _ ->
        Some? hs.hs_keys.ks_server_application_traffic
@@ -1320,8 +1338,9 @@ let legal_tls_message
      | CL.Sent, M.UpdateRequested ->
        False)
   | M.TlsAlert T.CloseNotify, ControlApplicationData ->
-    True
+    model.model_config.config_role == ClientEndpoint
   | M.TlsAlert T.CloseNotify, ControlClosing ->
+    model.model_config.config_role == ClientEndpoint /\
     dir == CL.Received
   | M.TlsAlert _, _ ->
     True

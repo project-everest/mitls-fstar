@@ -104,6 +104,19 @@ val lemma_model_record_keys_consistent_record_write_key_schedule_projection
       (requires model_record_keys_consistent model)
       (ensures record_write_key_schedule_projection model)
 
+val lemma_step_model_record_keys_consistent_for_role
+  (role:endpoint_role)
+  (model0:connection_model)
+  (ev:conn_event)
+  (model1:connection_model)
+  : Lemma
+      (requires
+        legal_event model0 ev /\
+        step_model model0 ev == Some model1 /\
+        role == model0.model_config.config_role /\
+        model_record_keys_consistent_for_role role model0)
+      (ensures model_record_keys_consistent_for_role role model1)
+
 val lemma_raw_records_exactly_one_parse_record
   (raw:B.bytes)
   (outer:T.content_type)

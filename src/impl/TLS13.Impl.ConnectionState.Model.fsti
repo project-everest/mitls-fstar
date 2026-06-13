@@ -1237,6 +1237,7 @@ val lemma_client_handshake_traffic_install_legal
   : Lemma
       (requires model.CS.model_control ==
                   CS.ControlHandshaking CS.HsServerHelloReceived /\
+                model.CS.model_config.CS.config_role == CS.ClientEndpoint /\
                 model.CS.model_handshake.CS.hs_keys.CS.ks_handshake_secret ==
                   Some handshake_secret)
       (ensures CS.legal_event
@@ -1258,6 +1259,7 @@ val lemma_server_handshake_traffic_install_legal
   : Lemma
       (requires model.CS.model_control ==
                   CS.ControlHandshaking CS.HsServerHelloReceived /\
+                model.CS.model_config.CS.config_role == CS.ClientEndpoint /\
                 model.CS.model_handshake.CS.hs_keys.CS.ks_handshake_secret ==
                   Some handshake_secret)
       (ensures CS.legal_event
@@ -1279,6 +1281,7 @@ val lemma_client_application_traffic_install_legal
   : Lemma
       (requires model.CS.model_control ==
                   CS.ControlHandshaking CS.HsServerFinishedVerified /\
+                model.CS.model_config.CS.config_role == CS.ClientEndpoint /\
                 model.CS.model_handshake.CS.hs_keys.CS.ks_master_secret ==
                   Some master_secret)
       (ensures CS.legal_event
@@ -1300,6 +1303,7 @@ val lemma_server_application_traffic_install_legal
   : Lemma
       (requires model.CS.model_control ==
                   CS.ControlHandshaking CS.HsServerFinishedVerified /\
+                model.CS.model_config.CS.config_role == CS.ClientEndpoint /\
                 model.CS.model_handshake.CS.hs_keys.CS.ks_master_secret ==
                   Some master_secret)
       (ensures CS.legal_event
@@ -1322,6 +1326,8 @@ val lemma_received_hello_retry_request_rejected_state_evolves
       (requires CS.connection_state_consistent st /\
                 st.CS.cs_model.CS.model_control ==
                   CS.ControlHandshaking CS.HsClientHelloSent /\
+                st.CS.cs_model.CS.model_config.CS.config_role ==
+                  CS.ClientEndpoint /\
                 CS.event_raw_delta_legal
                   st.CS.cs_model
                   (CS.ConnNetworkEvent {
@@ -1429,6 +1435,8 @@ val lemma_received_encrypted_extensions_state_evolves
       (requires CS.connection_state_consistent st /\
                 st.CS.cs_model.CS.model_control ==
                   CS.ControlHandshaking CS.HsServerHelloReceived /\
+                st.CS.cs_model.CS.model_config.CS.config_role ==
+                  CS.ClientEndpoint /\
                 Some?
                   st.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_handshake_traffic /\
                 CS.event_raw_delta_legal
@@ -1465,6 +1473,8 @@ val lemma_received_certificate_state_evolves
       (requires CS.connection_state_consistent st /\
                 st.CS.cs_model.CS.model_control ==
                   CS.ControlHandshaking CS.HsEncryptedExtensionsReceived /\
+                st.CS.cs_model.CS.model_config.CS.config_role ==
+                  CS.ClientEndpoint /\
                 cert.M.chain <> [] /\
                 CS.event_raw_delta_legal
                   st.CS.cs_model
@@ -1500,6 +1510,8 @@ val lemma_received_certificate_verify_state_evolves
       (requires CS.connection_state_consistent st /\
                 st.CS.cs_model.CS.model_control ==
                   CS.ControlHandshaking CS.HsCertificateValidated /\
+                st.CS.cs_model.CS.model_config.CS.config_role ==
+                  CS.ClientEndpoint /\
                 Some?
                   st.CS.cs_model.CS.model_handshake.CS.hs_validated_peer /\
                 CS.event_raw_delta_legal
@@ -1562,6 +1574,8 @@ val lemma_received_server_finished_state_evolves
       (requires CS.connection_state_consistent st /\
                 st.CS.cs_model.CS.model_control ==
                   CS.ControlHandshaking CS.HsCertificateVerifyVerified /\
+                st.CS.cs_model.CS.model_config.CS.config_role ==
+                  CS.ClientEndpoint /\
       Some?
         st.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_handshake_traffic /\
       CS.event_raw_delta_legal
@@ -1681,6 +1695,8 @@ val lemma_received_close_notify_state_evolves
       (requires CS.connection_state_consistent st /\
                 (st.CS.cs_model.CS.model_control == CS.ControlApplicationData \/
                  st.CS.cs_model.CS.model_control == CS.ControlClosing) /\
+                st.CS.cs_model.CS.model_config.CS.config_role ==
+                  CS.ClientEndpoint /\
                 CS.event_raw_delta_legal
                   st.CS.cs_model
                   (CS.ConnNetworkEvent {
@@ -1738,6 +1754,8 @@ val lemma_received_application_data_state_evolves
   : Lemma
       (requires CS.connection_state_consistent st /\
                 st.CS.cs_model.CS.model_control == CS.ControlApplicationData /\
+                st.CS.cs_model.CS.model_config.CS.config_role ==
+                  CS.ClientEndpoint /\
                 Some? st.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_application_traffic /\
                 CS.event_raw_delta_legal
                   st.CS.cs_model
@@ -1772,6 +1790,8 @@ val lemma_received_ignored_post_handshake_state_evolves
   : Lemma
       (requires CS.connection_state_consistent st /\
                 st.CS.cs_model.CS.model_control == CS.ControlApplicationData /\
+                st.CS.cs_model.CS.model_config.CS.config_role ==
+                  CS.ClientEndpoint /\
                 Some? st.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_application_traffic /\
                 CS.event_raw_delta_legal
                   st.CS.cs_model
@@ -1806,6 +1826,8 @@ val lemma_received_key_update_state_evolves
   : Lemma
       (requires CS.connection_state_consistent st /\
                 st.CS.cs_model.CS.model_control == CS.ControlApplicationData /\
+                st.CS.cs_model.CS.model_config.CS.config_role ==
+                  CS.ClientEndpoint /\
                 Some? st.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_application_traffic /\
                 CS.event_raw_delta_legal
                   st.CS.cs_model
@@ -1839,6 +1861,8 @@ val lemma_received_key_update_not_requested_state_evolves
   : Lemma
       (requires CS.connection_state_consistent st /\
                 st.CS.cs_model.CS.model_control == CS.ControlApplicationData /\
+                st.CS.cs_model.CS.model_config.CS.config_role ==
+                  CS.ClientEndpoint /\
                 Some? st.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_application_traffic /\
                 CS.event_raw_delta_legal
                   st.CS.cs_model

@@ -44,6 +44,14 @@ open TLS13.Impl.ConnectionState.Bounds
 open TLS13.Impl.ConnectionState.Model
 open TLS13.Impl.ConnectionState.Repr
 
+fn config_role_is_client
+  (cfg:connection_config_storage)
+  (#spec:erased CS.connection_config)
+  requires connection_config_exactly cfg spec
+  returns ok: bool
+  ensures connection_config_exactly cfg spec **
+          pure (ok ==> spec.CS.config_role == CS.ClientEndpoint)
+
 fn get_control_snapshot
   (c:connection_state)
   (#st0:erased CS.connection_state)
@@ -148,7 +156,8 @@ fn is_waiting_server_hello
   ensures connection_exactly c st0 **
           pure (ok ==>
             st0.CS.cs_model.CS.model_control ==
-              CS.ControlHandshaking CS.HsClientHelloSent)
+              CS.ControlHandshaking CS.HsClientHelloSent /\
+            st0.CS.cs_model.CS.model_config.CS.config_role == CS.ClientEndpoint)
 
 fn can_start_handshake_runtime
   (c:connection_state)
@@ -158,6 +167,7 @@ fn can_start_handshake_runtime
   ensures connection_exactly c st0 **
           pure (ok ==>
             st0.CS.cs_model.CS.model_control == CS.ControlNew /\
+            st0.CS.cs_model.CS.model_config.CS.config_role == CS.ClientEndpoint /\
             st0.CS.cs_model.CS.model_handshake.CS.hs_start == None)
 
 fn can_send_client_hello_runtime
@@ -170,6 +180,7 @@ fn can_send_client_hello_runtime
           pure (ok ==>
             st0.CS.cs_model.CS.model_control ==
               CS.ControlHandshaking CS.HsStarted /\
+            st0.CS.cs_model.CS.model_config.CS.config_role == CS.ClientEndpoint /\
             Some? st0.CS.cs_model.CS.model_handshake.CS.hs_start /\
             st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello == None /\
             B.length st0.CS.cs_model.CS.model_handshake.CS.hs_transcript
@@ -205,6 +216,7 @@ fn can_receive_application_data
   ensures connection_exactly c st0 **
           pure (ok ==>
             st0.CS.cs_model.CS.model_control == CS.ControlApplicationData /\
+            st0.CS.cs_model.CS.model_config.CS.config_role == CS.ClientEndpoint /\
             Some? st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_application_traffic /\
             U64.fits (st0.CS.cs_model.CS.model_record.CS.record_read.R.seq + 1))
 
@@ -229,6 +241,7 @@ fn can_install_handshake_traffic_keys
           pure (ok ==>
             st0.CS.cs_model.CS.model_control ==
               CS.ControlHandshaking CS.HsServerHelloReceived /\
+            st0.CS.cs_model.CS.model_config.CS.config_role == CS.ClientEndpoint /\
             Some?
               st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_handshake_secret)
 
@@ -241,6 +254,7 @@ fn can_install_application_traffic_keys
           pure (ok ==>
             st0.CS.cs_model.CS.model_control ==
               CS.ControlHandshaking CS.HsServerFinishedVerified /\
+            st0.CS.cs_model.CS.model_config.CS.config_role == CS.ClientEndpoint /\
             Some?
               st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_master_secret)
 
@@ -305,6 +319,7 @@ fn can_validate_certificate
           pure (ok ==>
             st0.CS.cs_model.CS.model_control ==
               CS.ControlHandshaking CS.HsCertificateReceived /\
+            st0.CS.cs_model.CS.model_config.CS.config_role == CS.ClientEndpoint /\
             st0.CS.cs_model.CS.model_handshake.CS.hs_validated_peer == None /\
             Some? st0.CS.cs_model.CS.model_handshake.CS.hs_certificate /\
             Some?
@@ -344,6 +359,7 @@ fn can_verify_certificate_signature
           pure (ok ==>
             st0.CS.cs_model.CS.model_control ==
               CS.ControlHandshaking CS.HsCertificateVerifyReceived /\
+            st0.CS.cs_model.CS.model_config.CS.config_role == CS.ClientEndpoint /\
             Some? st0.CS.cs_model.CS.model_handshake.CS.hs_validated_peer /\
             Some? st0.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify /\
             Some? st0.CS.cs_model.CS.model_handshake.CS.hs_buffers.CS.hb_certificate_verify_input /\
@@ -380,6 +396,7 @@ fn can_verify_server_finished
           pure (ok ==>
             st0.CS.cs_model.CS.model_control ==
               CS.ControlHandshaking CS.HsServerFinishedReceived /\
+            st0.CS.cs_model.CS.model_config.CS.config_role == CS.ClientEndpoint /\
             Some? st0.CS.cs_model.CS.model_handshake.CS.hs_server_finished /\
             Some? st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_handshake_traffic /\
             st0.CS.cs_model.CS.model_handshake.CS.hs_server_finished_verified == false /\
@@ -418,6 +435,7 @@ fn can_send_client_finished_runtime
           pure (ok ==>
             st0.CS.cs_model.CS.model_control ==
               CS.ControlHandshaking CS.HsServerFinishedVerified /\
+            st0.CS.cs_model.CS.model_config.CS.config_role == CS.ClientEndpoint /\
             st0.CS.cs_model.CS.model_handshake.CS.hs_client_finished == None /\
             Some? st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_handshake_traffic /\
             Some? st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_application_traffic /\
@@ -436,6 +454,7 @@ fn can_send_application_data_runtime
   ensures connection_exactly c st0 **
           pure (ok ==>
             st0.CS.cs_model.CS.model_control == CS.ControlApplicationData /\
+            st0.CS.cs_model.CS.model_config.CS.config_role == CS.ClientEndpoint /\
             Some? st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_application_traffic /\
             U64.fits (st0.CS.cs_model.CS.model_record.CS.record_write.R.seq + 1) /\
             SZ.v payload_len <= SM.max_application_data_fragment_len /\
@@ -450,6 +469,7 @@ fn can_send_close_notify_runtime
   ensures connection_exactly c st0 **
           pure (ok ==>
             st0.CS.cs_model.CS.model_control == CS.ControlApplicationData /\
+            st0.CS.cs_model.CS.model_config.CS.config_role == CS.ClientEndpoint /\
             Some? st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_application_traffic /\
             U64.fits (st0.CS.cs_model.CS.model_record.CS.record_write.R.seq + 1) /\
             24 <= SZ.v network_out_len)
@@ -463,6 +483,7 @@ fn can_send_key_update_runtime
   ensures connection_exactly c st0 **
           pure (ok ==>
             st0.CS.cs_model.CS.model_control == CS.ControlApplicationData /\
+            st0.CS.cs_model.CS.model_config.CS.config_role == CS.ClientEndpoint /\
             st0.CS.cs_model.CS.model_application.CS.app_key_update_response_pending /\
             Some? st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_application_traffic /\
             U64.fits (st0.CS.cs_model.CS.model_record.CS.record_write.R.seq + 1) /\
@@ -477,4 +498,5 @@ fn can_receive_close_notify
           pure (ok ==>
             (st0.CS.cs_model.CS.model_control == CS.ControlApplicationData \/
              st0.CS.cs_model.CS.model_control == CS.ControlClosing) /\
+            st0.CS.cs_model.CS.model_config.CS.config_role == CS.ClientEndpoint /\
             U64.fits (st0.CS.cs_model.CS.model_record.CS.record_read.R.seq + 1))

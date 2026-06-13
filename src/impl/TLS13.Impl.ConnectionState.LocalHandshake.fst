@@ -774,6 +774,7 @@ fn try_derive_shared_secret
 {
   unfold (connection_exactly c st0);
   unfold (connection_model_exactly c st0.CS.cs_model);
+  let role_ok = config_role_is_client c.config;
   unfold (control_exactly c.control st0.CS.cs_model.CS.model_control st0.CS.cs_model.CS.model_failure);
   unfold (handshake_exactly c.handshake st0.CS.cs_model.CS.model_handshake);
   unfold (handshake_messages_exactly
@@ -812,9 +813,10 @@ fn try_derive_shared_secret
   let server_share_storage_e = Ghost.hide server_share_storage;
   assert (pure (has_server_share == server_share_present));
 
-  let ready = tag_ok && stage_ok && has_start && has_server_share;
+  let ready = role_ok && tag_ok && stage_ok && has_start && has_server_share;
 
   if ready {
+    assert (pure (st0.CS.cs_model.CS.model_config.CS.config_role == CS.ClientEndpoint));
     assert (pure (U8.v tag == 1));
     assert (pure (U8.v stage == 3));
     assert (pure has_start);

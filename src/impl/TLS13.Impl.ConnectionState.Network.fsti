@@ -98,6 +98,7 @@ fn mark_received_close_notify
            Pulse.Lib.Array.PtsTo.pts_to raw 'raw_bytes **
            pure ((st0.CS.cs_model.CS.model_control == CS.ControlApplicationData \/
                   st0.CS.cs_model.CS.model_control == CS.ControlClosing) /\
+                 st0.CS.cs_model.CS.model_config.CS.config_role == CS.ClientEndpoint /\
                  U64.fits (st0.CS.cs_model.CS.model_record.CS.record_read.R.seq + 1) /\
                  CS.event_raw_delta_legal
                    st0.CS.cs_model
@@ -120,6 +121,7 @@ fn mark_received_hello_retry_request_rejected
            Pulse.Lib.Array.PtsTo.pts_to raw 'raw_bytes **
            pure (st0.CS.cs_model.CS.model_control ==
                    CS.ControlHandshaking CS.HsClientHelloSent /\
+                 st0.CS.cs_model.CS.model_config.CS.config_role == CS.ClientEndpoint /\
                  CS.event_raw_delta_legal
                    st0.CS.cs_model
                    (CS.ConnNetworkEvent {
@@ -189,6 +191,7 @@ fn mark_received_encrypted_extensions
            IM.is_valid_encrypted_extensions lee ee **
            pure (st0.CS.cs_model.CS.model_control ==
                     CS.ControlHandshaking CS.HsServerHelloReceived /\
+                  st0.CS.cs_model.CS.model_config.CS.config_role == CS.ClientEndpoint /\
                   st0.CS.cs_model.CS.model_handshake.CS.hs_encrypted_extensions == None /\
                   Some?
                     st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_handshake_traffic /\
@@ -227,6 +230,7 @@ fn mark_received_certificate
            IM.is_valid_certificate_msg lcert cert **
            pure (st0.CS.cs_model.CS.model_control ==
                     CS.ControlHandshaking CS.HsEncryptedExtensionsReceived /\
+                  st0.CS.cs_model.CS.model_config.CS.config_role == CS.ClientEndpoint /\
                   st0.CS.cs_model.CS.model_handshake.CS.hs_certificate == None /\
            st0.CS.cs_model.CS.model_handshake.CS.hs_buffers.CS.hb_certificate_leaf_der == None /\
            (Ghost.reveal cert).M.chain <> [] /\
@@ -271,6 +275,7 @@ fn mark_received_certificate_verify
            IM.is_valid_certificate_verify lcv cv **
            pure (st0.CS.cs_model.CS.model_control ==
                     CS.ControlHandshaking CS.HsCertificateValidated /\
+                  st0.CS.cs_model.CS.model_config.CS.config_role == CS.ClientEndpoint /\
                   st0.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify == None /\
                   st0.CS.cs_model.CS.model_handshake.CS.hs_buffers.CS.hb_certificate_verify_input == None /\
                   Some? st0.CS.cs_model.CS.model_handshake.CS.hs_validated_peer /\
@@ -311,6 +316,7 @@ fn mark_received_server_finished
            IM.is_valid_finished lfin fin **
            pure (st0.CS.cs_model.CS.model_control ==
                     CS.ControlHandshaking CS.HsCertificateVerifyVerified /\
+                  st0.CS.cs_model.CS.model_config.CS.config_role == CS.ClientEndpoint /\
                   st0.CS.cs_model.CS.model_handshake.CS.hs_server_finished == None /\
                   Some?
                     st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_handshake_traffic /\
@@ -336,6 +342,7 @@ fn mark_received_application_data
   requires connection_exactly c st0 **
            Pulse.Lib.Array.PtsTo.pts_to raw 'raw_bytes **
            pure (st0.CS.cs_model.CS.model_control == CS.ControlApplicationData /\
+                 st0.CS.cs_model.CS.model_config.CS.config_role == CS.ClientEndpoint /\
                  Some? st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_application_traffic /\
                  U64.fits (st0.CS.cs_model.CS.model_record.CS.record_read.R.seq + 1) /\
                  CS.event_raw_delta_legal
@@ -359,6 +366,7 @@ fn mark_received_ignored_post_handshake
   requires connection_exactly c st0 **
            Pulse.Lib.Array.PtsTo.pts_to raw 'raw_bytes **
            pure (st0.CS.cs_model.CS.model_control == CS.ControlApplicationData /\
+                 st0.CS.cs_model.CS.model_config.CS.config_role == CS.ClientEndpoint /\
                  Some? st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_application_traffic /\
                  U64.fits (st0.CS.cs_model.CS.model_record.CS.record_read.R.seq + 1) /\
                  CS.event_raw_delta_legal
@@ -383,6 +391,7 @@ fn mark_received_key_update
   requires connection_exactly c st0 **
            Pulse.Lib.Array.PtsTo.pts_to raw 'raw_bytes **
            pure (st0.CS.cs_model.CS.model_control == CS.ControlApplicationData /\
+                 st0.CS.cs_model.CS.model_config.CS.config_role == CS.ClientEndpoint /\
                  Some? st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_application_traffic /\
                  (requested ==> req == M.UpdateRequested) /\
                  (requested == false ==> req == M.UpdateNotRequested) /\

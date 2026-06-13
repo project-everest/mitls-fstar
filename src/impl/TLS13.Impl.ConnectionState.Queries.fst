@@ -44,6 +44,29 @@ open TLS13.Impl.ConnectionState.Bounds
 open TLS13.Impl.ConnectionState.Model
 open TLS13.Impl.ConnectionState.Repr
 
+fn config_role_is_client
+  (cfg:connection_config_storage)
+  (#spec:erased CS.connection_config)
+  requires connection_config_exactly cfg spec
+  returns ok: bool
+  ensures connection_config_exactly cfg spec **
+          pure (ok ==> spec.CS.config_role == CS.ClientEndpoint)
+{
+  unfold (connection_config_exactly cfg spec);
+  with role validation_time.
+    assert (Box.pts_to cfg.role_tag role **
+            Box.pts_to cfg.validation_time_seconds validation_time);
+  let role_tag = !cfg.role_tag;
+  let ok = role_tag = 0uy;
+  assert (pure (role_tag == role));
+  assert (pure (Tags.endpoint_role_tag_matches role spec.CS.config_role));
+  assert (pure (SZ.v validation_time == spec.CS.config_validation_time.X.seconds_since_epoch));
+  assert_norm (Tags.endpoint_role_tag_matches 0uy CS.ClientEndpoint);
+  assert (pure (ok ==> spec.CS.config_role == CS.ClientEndpoint));
+  fold (connection_config_exactly cfg spec);
+  ok
+}
+
 fn get_control_snapshot
   (c:connection_state)
   (#st0:erased CS.connection_state)
@@ -526,17 +549,20 @@ fn is_waiting_server_hello
   ensures connection_exactly c st0 **
           pure (ok ==>
             st0.CS.cs_model.CS.model_control ==
-              CS.ControlHandshaking CS.HsClientHelloSent)
+              CS.ControlHandshaking CS.HsClientHelloSent /\
+            st0.CS.cs_model.CS.model_config.CS.config_role == CS.ClientEndpoint)
 {
   unfold (connection_exactly c st0);
   unfold (connection_model_exactly c st0.CS.cs_model);
   unfold (control_exactly c.control st0.CS.cs_model.CS.model_control st0.CS.cs_model.CS.model_failure);
 
+  let role_ok = config_role_is_client c.config;
+
   let tag = !c.control.control_tag;
   let stage = !c.control.handshake_stage_tag;
   let tag_ok = tag = 1uy;
   let stage_ok = stage = 2uy;
-  let ok = tag_ok && stage_ok;
+  let ok = role_ok && tag_ok && stage_ok;
 
   assert (pure (ok ==> U8.v tag == 1));
   assert (pure (ok ==> U8.v stage == 2));
@@ -560,10 +586,12 @@ fn can_start_handshake_runtime
   ensures connection_exactly c st0 **
           pure (ok ==>
             st0.CS.cs_model.CS.model_control == CS.ControlNew /\
+            st0.CS.cs_model.CS.model_config.CS.config_role == CS.ClientEndpoint /\
             st0.CS.cs_model.CS.model_handshake.CS.hs_start == None)
 {
   unfold (connection_exactly c st0);
   unfold (connection_model_exactly c st0.CS.cs_model);
+  let role_ok = config_role_is_client c.config;
   unfold (control_exactly c.control st0.CS.cs_model.CS.model_control st0.CS.cs_model.CS.model_failure);
   unfold (handshake_exactly c.handshake st0.CS.cs_model.CS.model_handshake);
   unfold (handshake_start_exactly
@@ -578,7 +606,7 @@ fn can_start_handshake_runtime
 
   let tag_ok = tag = 0uy;
   let start_empty = not has_start;
-  let ok = tag_ok && start_empty;
+  let ok = role_ok && tag_ok && start_empty;
   if ok {
     assert (pure (U8.v tag == 0));
     assert (pure (not start_present));
@@ -636,6 +664,7 @@ fn can_send_client_hello_runtime
           pure (ok ==>
             st0.CS.cs_model.CS.model_control ==
               CS.ControlHandshaking CS.HsStarted /\
+            st0.CS.cs_model.CS.model_config.CS.config_role == CS.ClientEndpoint /\
             Some? st0.CS.cs_model.CS.model_handshake.CS.hs_start /\
             st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello == None /\
             B.length st0.CS.cs_model.CS.model_handshake.CS.hs_transcript
@@ -644,6 +673,7 @@ fn can_send_client_hello_runtime
 {
   unfold (connection_exactly c st0);
   unfold (connection_model_exactly c st0.CS.cs_model);
+  let role_ok = config_role_is_client c.config;
   unfold (control_exactly c.control st0.CS.cs_model.CS.model_control st0.CS.cs_model.CS.model_failure);
   unfold (handshake_exactly c.handshake st0.CS.cs_model.CS.model_handshake);
   unfold (handshake_start_exactly
@@ -680,6 +710,7 @@ fn can_send_client_hello_runtime
   let out_room = sizet_lte_plain 517sz network_out_len;
   lemma_sizet_lte_plain 517sz network_out_len;
   let ok =
+    role_ok &&
     (tag = 1uy) &&
     (stage = 1uy) &&
     has_start &&
@@ -801,6 +832,8 @@ fn can_receive_server_hello
     max_transcript_len
     st0.CS.cs_model.CS.model_handshake.CS.hs_transcript);
 
+  let role_ok = config_role_is_client c.config;
+
   let tag = !c.control.control_tag;
   let stage = !c.control.handshake_stage_tag;
   let tag_ok = tag = 1uy;
@@ -859,7 +892,7 @@ fn can_receive_server_hello
             sh.M.cipher_suite));
           assert (pure (H.is_supported_cipher_suite sh.M.cipher_suite));
 
-          let control_ok = tag_ok && stage_ok;
+          let control_ok = tag_ok && stage_ok && role_ok;
           let ok = control_ok && no_server_hello && transcript_room;
           assert (pure (ok ==> U8.v tag == 1));
           assert (pure (ok ==> U8.v stage == 2));
@@ -969,11 +1002,13 @@ fn can_receive_application_data
   ensures connection_exactly c st0 **
           pure (ok ==>
             st0.CS.cs_model.CS.model_control == CS.ControlApplicationData /\
+            st0.CS.cs_model.CS.model_config.CS.config_role == CS.ClientEndpoint /\
             Some? st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_application_traffic /\
             U64.fits (st0.CS.cs_model.CS.model_record.CS.record_read.R.seq + 1))
 {
   unfold (connection_exactly c st0);
   unfold (connection_model_exactly c st0.CS.cs_model);
+  let role_ok = config_role_is_client c.config;
   unfold (control_exactly c.control st0.CS.cs_model.CS.model_control st0.CS.cs_model.CS.model_failure);
   unfold (record_layer_exactly c.records st0.CS.cs_model.CS.model_record);
   unfold (handshake_exactly c.handshake st0.CS.cs_model.CS.model_handshake);
@@ -999,7 +1034,7 @@ fn can_receive_application_data
   let seq_ok = Rec.can_advance_seq c.records.read;
   fold (record_layer_exactly c.records st0.CS.cs_model.CS.model_record);
 
-  let ok = control_ok && server_app_present && seq_ok;
+  let ok = role_ok && control_ok && server_app_present && seq_ok;
 
   assert (pure (ok ==> U8.v tag == 2));
   assert (pure (ok ==> st0.CS.cs_model.CS.model_control == CS.ControlApplicationData));
@@ -1057,11 +1092,13 @@ fn can_install_handshake_traffic_keys
           pure (ok ==>
             st0.CS.cs_model.CS.model_control ==
               CS.ControlHandshaking CS.HsServerHelloReceived /\
+            st0.CS.cs_model.CS.model_config.CS.config_role == CS.ClientEndpoint /\
             Some?
               st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_handshake_secret)
 {
   unfold (connection_exactly c st0);
   unfold (connection_model_exactly c st0.CS.cs_model);
+  let role_ok = config_role_is_client c.config;
   unfold (control_exactly c.control st0.CS.cs_model.CS.model_control st0.CS.cs_model.CS.model_failure);
   unfold (handshake_exactly c.handshake st0.CS.cs_model.CS.model_handshake);
   unfold (key_schedule_exactly
@@ -1080,7 +1117,7 @@ fn can_install_handshake_traffic_keys
     assert (V.pts_to c.handshake.keys.handshake_secret.secret stored_secret);
   assert (pure (present == stored_present));
 
-  let ok = (tag = 1uy) && (stage = 3uy) && present;
+  let ok = role_ok && (tag = 1uy) && (stage = 3uy) && present;
   if ok {
     assert (pure (U8.v tag == 1));
     assert (pure (U8.v stage == 3));
@@ -1134,11 +1171,13 @@ fn can_install_application_traffic_keys
           pure (ok ==>
             st0.CS.cs_model.CS.model_control ==
               CS.ControlHandshaking CS.HsServerFinishedVerified /\
+            st0.CS.cs_model.CS.model_config.CS.config_role == CS.ClientEndpoint /\
             Some?
               st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_master_secret)
 {
   unfold (connection_exactly c st0);
   unfold (connection_model_exactly c st0.CS.cs_model);
+  let role_ok = config_role_is_client c.config;
   unfold (control_exactly c.control st0.CS.cs_model.CS.model_control st0.CS.cs_model.CS.model_failure);
   unfold (handshake_exactly c.handshake st0.CS.cs_model.CS.model_handshake);
   unfold (key_schedule_exactly
@@ -1157,7 +1196,7 @@ fn can_install_application_traffic_keys
     assert (V.pts_to c.handshake.keys.master_secret.secret stored_secret);
   assert (pure (present == stored_present));
 
-  let ok = (tag = 1uy) && (stage = 10uy) && present;
+  let ok = role_ok && (tag = 1uy) && (stage = 10uy) && present;
   if ok {
     assert (pure (U8.v tag == 1));
     assert (pure (U8.v stage == 10));
@@ -1246,6 +1285,8 @@ fn can_receive_encrypted_extensions
     c.handshake.keys.server_handshake_traffic
     st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_handshake_traffic);
 
+  let role_ok = config_role_is_client c.config;
+
   let tag = !c.control.control_tag;
   let stage = !c.control.handshake_stage_tag;
   let tag_ok = tag = 1uy;
@@ -1288,7 +1329,7 @@ fn can_receive_encrypted_extensions
     let transcript_room = sizet_lte_plain current_transcript_len max_start;
     lemma_sizet_lte_plain current_transcript_len max_start;
 
-    let control_ok = tag_ok && stage_ok;
+    let control_ok = tag_ok && stage_ok && role_ok;
     let ok =
       control_ok &&
       no_encrypted_extensions &&
@@ -1417,6 +1458,8 @@ fn can_receive_certificate
     st0.CS.cs_model.CS.model_handshake.CS.hs_buffers.CS.hb_certificate_leaf_der);
   unfold (IM.is_valid_certificate_msg lcert (Ghost.reveal cert));
 
+  let role_ok = config_role_is_client c.config;
+
   let tag = !c.control.control_tag;
   let stage = !c.control.handshake_stage_tag;
   let tag_ok = tag = 1uy;
@@ -1466,7 +1509,7 @@ fn can_receive_certificate
       assert (pure has_certificate);
       assert (pure (cert_count_nat > 0));
       assert (pure ((Ghost.reveal cert).M.chain <> []));
-      let control_ok = tag_ok && stage_ok;
+      let control_ok = tag_ok && stage_ok && role_ok;
       let ok =
         control_ok &&
         no_certificate &&
@@ -1587,6 +1630,7 @@ fn can_validate_certificate
           pure (ok ==>
             st0.CS.cs_model.CS.model_control ==
               CS.ControlHandshaking CS.HsCertificateReceived /\
+            st0.CS.cs_model.CS.model_config.CS.config_role == CS.ClientEndpoint /\
             st0.CS.cs_model.CS.model_handshake.CS.hs_validated_peer == None /\
             Some? st0.CS.cs_model.CS.model_handshake.CS.hs_certificate /\
             Some?
@@ -1611,6 +1655,8 @@ fn can_validate_certificate
     c.handshake.buffers.certificate_leaf_der
     max_handshake_flight_len
     st0.CS.cs_model.CS.model_handshake.CS.hs_buffers.CS.hb_certificate_leaf_der);
+
+  let role_ok = config_role_is_client c.config;
 
   let tag = !c.control.control_tag;
   let stage = !c.control.handshake_stage_tag;
@@ -1648,6 +1694,7 @@ fn can_validate_certificate
   let max_pk_len = SZ.uint_to_t max_public_key_len;
   let payload_fits = SZ.lte payload_len max_pk_len;
   let ok =
+    role_ok &&
     tag_ok &&
     stage_ok &&
     no_peer &&
@@ -1737,6 +1784,8 @@ fn can_receive_certificate_verify
     max_certificate_verify_input_len
     st0.CS.cs_model.CS.model_handshake.CS.hs_buffers.CS.hb_certificate_verify_input);
 
+  let role_ok = config_role_is_client c.config;
+
   let tag = !c.control.control_tag;
   let stage = !c.control.handshake_stage_tag;
   let tag_ok = tag = 1uy;
@@ -1784,7 +1833,7 @@ fn can_receive_certificate_verify
     let transcript_room = sizet_lte_plain current_transcript_len max_start;
     lemma_sizet_lte_plain current_transcript_len max_start;
 
-    let control_ok = tag_ok && stage_ok;
+    let control_ok = tag_ok && stage_ok && role_ok;
     let ok =
       control_ok &&
       no_cv &&
@@ -1882,6 +1931,7 @@ fn can_verify_certificate_signature
           pure (ok ==>
             st0.CS.cs_model.CS.model_control ==
               CS.ControlHandshaking CS.HsCertificateVerifyReceived /\
+            st0.CS.cs_model.CS.model_config.CS.config_role == CS.ClientEndpoint /\
             Some? st0.CS.cs_model.CS.model_handshake.CS.hs_validated_peer /\
             Some? st0.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify /\
             Some? st0.CS.cs_model.CS.model_handshake.CS.hs_buffers.CS.hb_certificate_verify_input /\
@@ -1906,6 +1956,8 @@ fn can_verify_certificate_signature
     c.handshake.buffers.certificate_verify_input
     max_certificate_verify_input_len
     st0.CS.cs_model.CS.model_handshake.CS.hs_buffers.CS.hb_certificate_verify_input);
+
+  let role_ok = config_role_is_client c.config;
 
   let tag = !c.control.control_tag;
   let stage = !c.control.handshake_stage_tag;
@@ -1942,6 +1994,7 @@ fn can_verify_certificate_signature
     st0.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify_verified == false));
 
   let ok =
+    role_ok &&
     tag_ok &&
     stage_ok &&
     has_cv &&
@@ -2032,6 +2085,8 @@ fn can_receive_server_finished
     c.handshake.keys.server_handshake_traffic
     st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_handshake_traffic);
 
+  let role_ok = config_role_is_client c.config;
+
   let tag = !c.control.control_tag;
   let stage = !c.control.handshake_stage_tag;
   let tag_ok = tag = 1uy;
@@ -2061,7 +2116,7 @@ fn can_receive_server_finished
   assert (pure (has_server_handshake_keys == server_hs_present));
 
   let seq_ok = Rec.can_advance_seq c.records.read;
-  let ok = tag_ok && stage_ok && no_fin && has_server_handshake_keys && seq_ok;
+  let ok = role_ok && tag_ok && stage_ok && no_fin && has_server_handshake_keys && seq_ok;
 
   assert (pure (ok ==> U8.v tag == 1));
   assert (pure (ok ==> U8.v stage == 8));
@@ -2112,6 +2167,7 @@ fn can_verify_server_finished
           pure (ok ==>
             st0.CS.cs_model.CS.model_control ==
               CS.ControlHandshaking CS.HsServerFinishedReceived /\
+            st0.CS.cs_model.CS.model_config.CS.config_role == CS.ClientEndpoint /\
             Some? st0.CS.cs_model.CS.model_handshake.CS.hs_server_finished /\
             Some? st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_handshake_traffic /\
             st0.CS.cs_model.CS.model_handshake.CS.hs_server_finished_verified == false /\
@@ -2137,6 +2193,8 @@ fn can_verify_server_finished
     c.handshake.transcript
     max_transcript_len
     st0.CS.cs_model.CS.model_handshake.CS.hs_transcript);
+
+  let role_ok = config_role_is_client c.config;
 
   let tag = !c.control.control_tag;
   let stage = !c.control.handshake_stage_tag;
@@ -2177,6 +2235,7 @@ fn can_verify_server_finished
     lemma_sizet_lte_plain current_transcript_len max_start;
 
     let ok =
+      role_ok &&
       tag_ok &&
       stage_ok &&
       has_fin &&
@@ -2423,6 +2482,7 @@ fn can_send_client_finished_runtime
           pure (ok ==>
             st0.CS.cs_model.CS.model_control ==
               CS.ControlHandshaking CS.HsServerFinishedVerified /\
+            st0.CS.cs_model.CS.model_config.CS.config_role == CS.ClientEndpoint /\
             st0.CS.cs_model.CS.model_handshake.CS.hs_client_finished == None /\
             Some? st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_handshake_traffic /\
             Some? st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_application_traffic /\
@@ -2457,6 +2517,8 @@ fn can_send_client_finished_runtime
     c.handshake.transcript
     max_transcript_len
     st0.CS.cs_model.CS.model_handshake.CS.hs_transcript);
+
+  let role_ok = config_role_is_client c.config;
 
   let tag = !c.control.control_tag;
   let stage = !c.control.handshake_stage_tag;
@@ -2528,6 +2590,7 @@ fn can_send_client_finished_runtime
   let out_room = sizet_lte_plain 58sz network_out_len;
 
   let ok =
+    role_ok &&
     tag_ok &&
     stage_ok &&
     client_finished_absent &&
@@ -2568,6 +2631,7 @@ fn can_send_application_data_runtime
   ensures connection_exactly c st0 **
           pure (ok ==>
             st0.CS.cs_model.CS.model_control == CS.ControlApplicationData /\
+            st0.CS.cs_model.CS.model_config.CS.config_role == CS.ClientEndpoint /\
             Some? st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_application_traffic /\
             U64.fits (st0.CS.cs_model.CS.model_record.CS.record_write.R.seq + 1) /\
             SZ.v payload_len <= SM.max_application_data_fragment_len /\
@@ -2584,6 +2648,8 @@ fn can_send_application_data_runtime
   unfold (traffic_key_material_exactly
     c.handshake.keys.client_application_traffic
     st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_application_traffic);
+
+  let role_ok = config_role_is_client c.config;
 
   let tag = !c.control.control_tag;
   let control_ok = tag = 2uy;
@@ -2604,6 +2670,7 @@ fn can_send_application_data_runtime
     can_send_application_data_sizes payload_len network_out_len;
 
   let ok =
+    role_ok &&
     control_ok &&
     client_app_present &&
     seq_ok &&
@@ -2634,6 +2701,7 @@ fn can_send_close_notify_runtime
   ensures connection_exactly c st0 **
           pure (ok ==>
             st0.CS.cs_model.CS.model_control == CS.ControlApplicationData /\
+            st0.CS.cs_model.CS.model_config.CS.config_role == CS.ClientEndpoint /\
             Some? st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_application_traffic /\
             U64.fits (st0.CS.cs_model.CS.model_record.CS.record_write.R.seq + 1) /\
             24 <= SZ.v network_out_len)
@@ -2649,6 +2717,8 @@ fn can_send_close_notify_runtime
   unfold (traffic_key_material_exactly
     c.handshake.keys.client_application_traffic
     st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_application_traffic);
+
+  let role_ok = config_role_is_client c.config;
 
   let tag = !c.control.control_tag;
   let control_ok = tag = 2uy;
@@ -2669,6 +2739,7 @@ fn can_send_close_notify_runtime
     can_send_close_notify_sizes network_out_len;
 
   let ok =
+    role_ok &&
     control_ok &&
     client_app_present &&
     seq_ok &&
@@ -2698,6 +2769,7 @@ fn can_send_key_update_runtime
   ensures connection_exactly c st0 **
           pure (ok ==>
             st0.CS.cs_model.CS.model_control == CS.ControlApplicationData /\
+            st0.CS.cs_model.CS.model_config.CS.config_role == CS.ClientEndpoint /\
             st0.CS.cs_model.CS.model_application.CS.app_key_update_response_pending /\
             Some? st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_application_traffic /\
             U64.fits (st0.CS.cs_model.CS.model_record.CS.record_write.R.seq + 1) /\
@@ -2716,6 +2788,8 @@ fn can_send_key_update_runtime
     st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_application_traffic);
   unfold (application_exactly c.application st0.CS.cs_model.CS.model_application);
   with source_offset pending_response. _;
+
+  let role_ok = config_role_is_client c.config;
 
   let tag = !c.control.control_tag;
   let control_ok = tag = 2uy;
@@ -2738,6 +2812,7 @@ fn can_send_key_update_runtime
     can_send_key_update_sizes network_out_len;
 
   let ok =
+    role_ok &&
     control_ok &&
     pending &&
     client_app_present &&
@@ -2770,10 +2845,12 @@ fn can_receive_close_notify
           pure (ok ==>
             (st0.CS.cs_model.CS.model_control == CS.ControlApplicationData \/
              st0.CS.cs_model.CS.model_control == CS.ControlClosing) /\
+            st0.CS.cs_model.CS.model_config.CS.config_role == CS.ClientEndpoint /\
             U64.fits (st0.CS.cs_model.CS.model_record.CS.record_read.R.seq + 1))
 {
   unfold (connection_exactly c st0);
   unfold (connection_model_exactly c st0.CS.cs_model);
+  let role_ok = config_role_is_client c.config;
   unfold (control_exactly c.control st0.CS.cs_model.CS.model_control st0.CS.cs_model.CS.model_failure);
   unfold (record_layer_exactly c.records st0.CS.cs_model.CS.model_record);
 
@@ -2790,7 +2867,7 @@ fn can_receive_close_notify
   let seq_ok = Rec.can_advance_seq c.records.read;
   fold (record_layer_exactly c.records st0.CS.cs_model.CS.model_record);
 
-  let ok = control_ok && seq_ok;
+  let ok = role_ok && control_ok && seq_ok;
 
   assert (pure (app_ok ==> U8.v tag == 2));
   assert (pure (closing_ok ==> U8.v tag == 3));

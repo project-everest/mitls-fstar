@@ -64,8 +64,8 @@ Current phase: **Phase 0/1 started**.
   deriving from the selected server private key and accepted ClientHello key
   share.
 - [x] Role-explicit traffic-key install event vocabulary and helpers added.
-  Server install legality is intentionally deferred until
-  `model_record_keys_consistent` is made role-parametric.
+  Server install legality remains intentionally deferred until the surrounding
+  server transition set and preservation lemmas are completed.
 - [x] Role-parametric `model_record_keys_consistent_for_role` added, with a
   focused preservation lemma for role-explicit traffic-key installs. The legacy
   client invariant remains a `ClientEndpoint` wrapper.
@@ -73,6 +73,16 @@ Current phase: **Phase 0/1 started**.
   invariant packages added. The existing client-named packages remain
   `ClientEndpoint` wrappers, while new `_for_role` surfaces can state the same
   invariant for `ServerEndpoint`.
+- [x] Existing client-only legal transitions are now explicitly gated by
+  `ClientEndpoint`, and the server shared-secret path is explicitly gated by
+  `ServerEndpoint`, preventing accidental server-config execution of client
+  handshake/application transitions.
+- [x] Added a role-parametric record-key preservation lemma for legal model
+  steps under the endpoint role stored in the connection config.
+- [x] Repaired the existing Pulse client proof surface after the role gates:
+  implementation readiness queries and mutation/model lemmas now expose
+  `ClientEndpoint` exactly where legacy client-only transitions rely on it, and
+  bounded full `make verify` passes.
 - [ ] Phase 2 paired endpoint traces and derived-key theorem family.
 
 ## End goal
@@ -745,6 +755,11 @@ Checklist:
 - [x] Prove client projection compatibility for the initial role/key helpers.
 - [x] Prove server traffic-label direction mapping for the initial role/key
       helpers.
+- [x] Add endpoint-role guards to the existing client-only legal transitions.
+- [x] Add role-parametric record-key preservation for legal model steps.
+- [x] Preserve the legacy Pulse client implementation by threading explicit
+      client-role facts through readiness queries, model lemmas, and mutation
+      boundaries.
 - [ ] Generalize event-log, transcript, record-layer, key-schedule, raw replay,
       seal replay, decode replay, and application-log consistency.
 - [ ] Add transcript checkpoints and derivation-input extraction helpers.
@@ -752,6 +767,8 @@ Checklist:
 Validation:
 
 - [x] Existing client theorem modules still verify.
+- [x] Full `make verify` passes after client-only transition role gates and
+      implementation proof repair.
 - [x] No client public API behavior changes.
 
 ### Phase 2: paired endpoint traces and derived-key theorem family
