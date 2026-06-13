@@ -6,14 +6,21 @@
 .DEFAULT_GOAL := all
 
 # ── Toolchain Configuration ────────────────────────────────────────
-FSTAR_HOME ?= $(CURDIR)/tools/FStar
+# The F*, KaRaMeL and QuackyDucky toolchain is provided by the EverParse build
+# (see ./setup.sh, which clones+builds the fork via `make quackyducky`).  Point
+# EVERPARSE_HOME at that checkout; everything else is derived from it.  Override
+# FSTAR_EXE/KRML_EXE/QD_EXE directly to use a different toolchain.
+EVERPARSE_HOME ?= $(CURDIR)/../everparse
+FSTAR_HOME ?= $(EVERPARSE_HOME)/opt/FStar
 FSTAR_EXE  ?= $(FSTAR_HOME)/bin/fstar.exe
 KRML_HOME  ?= $(FSTAR_HOME)/karamel
-KRML_EXE   ?= $(KRML_HOME)/krml
+# Use the installed KaRaMeL binary (opt/FStar/karamel/out/bin/krml): unlike the
+# in-tree `krml` symlink to _build/default/src/Karamel.exe, it self-locates its
+# krmllib/share, so no extra symlinks are needed.
+KRML_EXE   ?= $(KRML_HOME)/out/bin/krml
 
-# EverParse / QuackyDucky: source of the generated TLS wire parser modules and
-# the LowParse + LowParse.Pulse combinator libraries they depend on.
-EVERPARSE_HOME ?= $(CURDIR)/../everparse
+# QuackyDucky: compiler for the TLS wire format spec, plus the LowParse +
+# LowParse.Pulse combinator libraries the generated modules depend on.
 QD_EXE         ?= $(EVERPARSE_HOME)/bin/qd.exe
 LOWPARSE_HOME  ?= $(EVERPARSE_HOME)/src/lowparse
 GENERATED_DIR   = generated
@@ -59,13 +66,27 @@ SPEC_FILES = $(wildcard src/spec/*.fst src/spec/*.fsti)
 IMPL_FILES = $(wildcard src/impl/*.fst src/impl/*.fsti)
 ALL_FILES  = $(SPEC_FILES) $(IMPL_FILES)
 
-# ── Generated QuackyDucky wire parser modules ──────────────────────
-# The TLS13.Wire.Generated.* modules in $(GENERATED_DIR) are produced by
-# QuackyDucky from $(QD_RFC) and are committed (with their .checked files) so
-# the main build consumes them as already-cached.  Use `make regen-generated`
-# to regenerate them after editing $(QD_RFC) or rebuilding qd.
+# ── TLS wire parsers/serializers: QuackyDucky → F* → KaRaMeL pipeline ──────
+# The TLS13.Wire.Generated.* modules are produced by QuackyDucky from $(QD_RFC),
+# verified by F*, and (optionally) extracted to C by KaRaMeL.  The generated
+# sources + their .checked files are committed so the main client build consumes
+# them as already-cached; the rules below regenerate/verify/extract them via the
+# EverParse harness (generated/generated.Makefile), driven by the same toolchain.
+#
+#   make regen-generated    QuackyDucky:  $(QD_RFC) -> generated/TLS13.Wire.Generated.*
+#   make verify-generated    F* verify:    refresh generated/*.checked
+#   make extract-generated   KaRaMeL:      generated/out/*.c (parsers + serializers)
+#   make parsers             run all three in order
+
+# Toolchain passed through to the generated/ EverParse harness sub-make.
+GENERATED_MAKE_VARS = \
+  EVERPARSE_HOME='$(realpath $(EVERPARSE_HOME))' \
+  FSTAR_EXE='$(FSTAR_EXE)' \
+  KRML_EXE='$(KRML_EXE)' \
+  KRML_HOME='$(KRML_HOME)'
+
 .PHONY: regen-generated
-regen-generated:
+regen-generated: | check-toolchain
 	rm -f $(GENERATED_DIR)/TLS13.Wire.Generated.*.fst $(GENERATED_DIR)/TLS13.Wire.Generated.*.fsti
 	$(QD_EXE) -pulse -prefix "TLS13.Wire.Generated." -odir $(GENERATED_DIR) $(QD_RFC)
 	@echo "Regenerated TLS13.Wire.Generated.* — now run 'make verify-generated' to refresh .checked files."
@@ -76,10 +97,24 @@ regen-generated:
 # removed or the sources change; in that case the refreshed files are synced up
 # from the harness cache/ directory.
 .PHONY: verify-generated
-verify-generated:
-	$(MAKE) -C $(GENERATED_DIR) -f generated.Makefile depend verify
+verify-generated: | check-toolchain
+	$(MAKE) -C $(GENERATED_DIR) -f generated.Makefile depend verify $(GENERATED_MAKE_VARS)
 	-cp $(GENERATED_DIR)/cache/TLS13.Wire.Generated.*.checked $(GENERATED_DIR)/ 2>/dev/null || true
 	-$(MAKE) -C $(GENERATED_DIR) -f generated.Makefile clean-local 2>/dev/null || true
+
+# Extract the generated parsers and serializers to C (standalone library) via
+# KaRaMeL.  Output lands in generated/out/*.c,*.h.  Consumers must call
+# krmlinit_globals() at startup to initialise the enum lookup tables (the
+# parsers/serializers library is what the verified client links against; the
+# client driver wires krmlinit_globals — see extract-driver-bundle).
+.PHONY: extract-generated
+extract-generated: | check-toolchain
+	$(MAKE) -C $(GENERATED_DIR) -f generated.Makefile depend verify extract $(GENERATED_MAKE_VARS)
+	@echo "Extracted TLS wire parsers/serializers to $(GENERATED_DIR)/out/"
+
+# Full parsers/serializers pipeline from $(QD_RFC): generate, verify, extract.
+.PHONY: parsers
+parsers: regen-generated verify-generated extract-generated
 
 # ── Dependency Analysis ────────────────────────────────────────────
 .depend: $(ALL_FILES) Makefile | check-toolchain
@@ -95,7 +130,7 @@ $(CACHE_DIR) $(OUTPUT_DIR) $(EXTRACT_DIR):
 	mkdir -p $@
 
 # ── Main Targets ───────────────────────────────────────────────────
-.PHONY: all verify test clean check-toolchain check-deps admit-count check-admits generated-checked
+.PHONY: all verify test clean check-toolchain check-deps admit-count check-admits generated-checked parsers extract-generated
 
 all: verify
 
@@ -770,8 +805,17 @@ test-openssl-echo: test/openssl_echo_server test/test_extracted_client_openssl_e
 
 # ── Dependency Checks ──────────────────────────────────────────────
 check-toolchain:
-	@if ! command -v $(FSTAR_EXE) >/dev/null 2>&1; then \
-	  echo "F* not found at $(FSTAR_EXE). Run ./setup.sh or override FSTAR_EXE."; \
+	@if [ ! -x "$(FSTAR_EXE)" ] && ! command -v "$(FSTAR_EXE)" >/dev/null 2>&1; then \
+	  echo "F* not found at $(FSTAR_EXE)."; \
+	  echo "Build the EverParse toolchain with ./setup.sh (or set EVERPARSE_HOME / FSTAR_EXE)."; \
+	  exit 1; \
+	fi
+	@if [ ! -x "$(KRML_EXE)" ] && ! command -v "$(KRML_EXE)" >/dev/null 2>&1; then \
+	  echo "KaRaMeL not found at $(KRML_EXE).  Build EverParse with ./setup.sh (or set KRML_EXE)."; \
+	  exit 1; \
+	fi
+	@if [ ! -x "$(QD_EXE)" ] && ! command -v "$(QD_EXE)" >/dev/null 2>&1; then \
+	  echo "QuackyDucky not found at $(QD_EXE).  Build EverParse with ./setup.sh (or set QD_EXE)."; \
 	  exit 1; \
 	fi
 

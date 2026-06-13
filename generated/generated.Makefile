@@ -25,7 +25,11 @@ clean_rules += clean-local
 
 include $(EVERPARSE_SRC_PATH)/common.Makefile
 
-FSTAR_OPTIONS += $(LAX_OPT) --ext 'optimize_let_vc=false' --warn_error @272
+# --warn_error +241: the F* toolchain install may ship Pulse .checked files whose
+# dependence hashes don't match under these harness flags; downgrade the "stale
+# checked, will recheck" error (241) to a warning so F* transparently rechecks
+# them (otherwise a cold-cache run — e.g. a fresh checkout — aborts).
+FSTAR_OPTIONS += $(LAX_OPT) --ext 'optimize_let_vc=false' --warn_error @272 --warn_error +241
 
 export LOWPARSE_HOME
 
@@ -36,6 +40,11 @@ KRML_OPTS += -ccopt -Wno-tautological-constant-out-of-range-compare
 endif
 
 # -Wno-tautological-overlap-compare because of T32
+# KRML_WARN: Warning 9 (globals needing krmlinit_globals) is fatal by default,
+# but the parsers/serializers form a *library* whose enum lookup tables are
+# legitimately initialised by the consumer's krmlinit_globals() call, so the
+# `extract` target downgrades it (and the related Warning 17) to a warning.
+KRML_WARN ?= @2-26
 KRML = $(KRML_EXE) \
 	 -fstar $(FSTAR_EXE) \
 	 -ccopt "-O3" -ccopt "-ffast-math" \
@@ -45,10 +54,11 @@ KRML = $(KRML_EXE) \
 	 -bundle 'LowParse.\*' \
 	 $(KRML_OPTS) \
 	 $(HEADERS) \
-	 -warn-error '@2-26'
+	 -warn-error '$(KRML_WARN)'
 
 ALL_KRML_FILES := $(filter-out krml/prims.krml,$(ALL_KRML_FILES))
 
+extract: KRML_WARN := @2-26-9-17
 extract: $(ALL_KRML_FILES) # from .depend
 	-@mkdir out
 	$(KRML) -skip-compilation $^

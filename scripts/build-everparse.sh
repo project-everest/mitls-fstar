@@ -1,0 +1,62 @@
+#!/usr/bin/env bash
+# Clone and build EverParse (QuackyDucky + LowParse + the F*/KaRaMeL toolchain it
+# vendors under opt/FStar) from the fork/branch used by this project.
+#
+# `make quackyducky` in the EverParse tree builds everything we need:
+#   - the F* binary           at opt/FStar/out/bin/fstar.exe (symlinked opt/FStar/bin/fstar.exe)
+#   - the KaRaMeL binary       at opt/FStar/karamel/out/bin/krml
+#   - the QuackyDucky compiler at bin/qd.exe
+#   - the verified LowParse + LowParse.Pulse .checked libraries under src/lowparse
+#
+# The agentic-tls Makefile consumes this toolchain via EVERPARSE_HOME (no separate
+# F* install is required).
+set -euo pipefail
+
+EVERPARSE_REPO="${EVERPARSE_REPO:-https://github.com/tahina-pro/quackyducky}"
+EVERPARSE_BRANCH="${EVERPARSE_BRANCH:-_taramana_fstar2_qd_copyful}"
+
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# Default location: sibling of the agentic-tls checkout (matches the Makefile's
+# EVERPARSE_HOME default of ../everparse).  Override with EVERPARSE_HOME.
+EVERPARSE_HOME="${EVERPARSE_HOME:-$(cd "$repo_root/.." && pwd)/everparse}"
+jobs="${JOBS:-$(nproc 2>/dev/null || echo 4)}"
+
+fstar_exe="$EVERPARSE_HOME/opt/FStar/out/bin/fstar.exe"
+krml_exe="$EVERPARSE_HOME/opt/FStar/karamel/out/bin/krml"
+qd_exe="$EVERPARSE_HOME/bin/qd.exe"
+
+for cmd in git make opam; do
+  if ! command -v "$cmd" >/dev/null 2>&1; then
+    echo "missing prerequisite: $cmd" >&2
+    exit 1
+  fi
+done
+
+if [ -x "$fstar_exe" ] && [ -x "$krml_exe" ] && [ -x "$qd_exe" ]; then
+  echo "EverParse toolchain already built in $EVERPARSE_HOME"
+  exit 0
+fi
+
+if [ ! -d "$EVERPARSE_HOME/.git" ]; then
+  echo "Cloning EverParse ($EVERPARSE_REPO @ $EVERPARSE_BRANCH) into $EVERPARSE_HOME ..."
+  git clone --branch "$EVERPARSE_BRANCH" "$EVERPARSE_REPO" "$EVERPARSE_HOME"
+else
+  echo "Updating existing EverParse checkout in $EVERPARSE_HOME ..."
+  git -C "$EVERPARSE_HOME" fetch origin "$EVERPARSE_BRANCH"
+  git -C "$EVERPARSE_HOME" checkout "$EVERPARSE_BRANCH"
+fi
+
+echo "Building EverParse (make quackyducky -j$jobs) — this also builds F* and KaRaMeL ..."
+make -C "$EVERPARSE_HOME" -j"$jobs" quackyducky
+
+for f in "$fstar_exe" "$krml_exe" "$qd_exe"; do
+  if [ ! -x "$f" ]; then
+    echo "EverParse build did not produce $f" >&2
+    exit 1
+  fi
+done
+
+echo "EverParse toolchain ready in $EVERPARSE_HOME"
+echo "  F*:          $fstar_exe"
+echo "  KaRaMeL:     $krml_exe"
+echo "  QuackyDucky: $qd_exe"
