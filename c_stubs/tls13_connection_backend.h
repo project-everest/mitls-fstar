@@ -361,6 +361,28 @@ static inline size_t TLS13_Connection_Backend_serialize_server_hello_fixed(
   return 90u;
 }
 
+static inline size_t TLS13_Connection_Backend_serialize_server_hello_record_fixed(
+    const uint8_t *random,
+    const uint8_t *key_share,
+    uint16_t cipher_suite,
+    uint8_t *out,
+    size_t out_len) {
+  if (out == NULL || out_len < 95u) {
+    return 0u;
+  }
+  out[0] = 22u;
+  out[1] = 0x03u;
+  out[2] = 0x03u;
+  TLS13_Connection_Backend_write_u16(out + 3u, 90u);
+  size_t fragment_len =
+      TLS13_Connection_Backend_serialize_server_hello_fixed(
+          random, key_share, cipher_suite, out + 5u, out_len - 5u);
+  if (fragment_len != 90u) {
+    return 0u;
+  }
+  return 95u;
+}
+
 static inline size_t TLS13_Connection_Backend_serialize_empty_encrypted_extensions_fixed(
     uint8_t *out,
     size_t out_len) {
@@ -468,6 +490,11 @@ static inline size_t TLS13_Connection_Backend_serialize_certificate_verify_fixed
 
 #define TLS13_Impl_Serializer_serialize_server_hello_from_selection(sh_erased, lsh, out, out_len, ...) \
   TLS13_Connection_Backend_serialize_server_hello_fixed( \
+      (lsh).server_hello_random, (lsh).server_hello_key_share, \
+      (lsh).server_hello_cipher_suite, (out), (out_len))
+
+#define TLS13_Impl_Serializer_serialize_server_hello_record_from_selection(sh_erased, lsh, out, out_len, ...) \
+  TLS13_Connection_Backend_serialize_server_hello_record_fixed( \
       (lsh).server_hello_random, (lsh).server_hello_key_share, \
       (lsh).server_hello_cipher_suite, (out), (out_len))
 

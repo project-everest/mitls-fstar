@@ -267,9 +267,17 @@ Current phase: **Phase 6 server buffer/event API and theorem surface**.
   exposes the sent-ServerHello mutation at the server API theorem surface under
   explicit exact raw/network-output and handshake-fragment preconditions, returns
   `StepOk` with the raw ServerHello output prefix, and proves
-  `server_local_event_end_to_end_correct` for `LocalSendServerHello`. The final
-  executable wrapper still needs to construct the L-level ServerHello and raw
-  record via the serializer instead of taking them as pre-arranged buffers.
+  `server_local_event_end_to_end_correct` for `LocalSendServerHello`.
+- [x] Added the serializer-driven public
+  `TLS13.Impl.Server.process_send_server_hello_serialized` wrapper. It takes the
+  selected concrete L-level ServerHello, serializes the exact 95-byte cleartext
+  TLS ServerHello record into `network_out`, serializes the exact 90-byte
+  handshake fragment into an internal temporary buffer for transcript storage,
+  reuses `mark_sent_server_hello`, and proves
+  `server_local_event_end_to_end_correct` for `LocalSendServerHello` without
+  caller-provided raw/fragment buffers. The L-level ServerHello is still supplied
+  by the caller because executable server parameter selection and concrete
+  selection storage remain pending.
 - [x] Added supplied-shared-secret derivation support:
   `TLS13.Impl.ConnectionState.LocalHandshake.derive_shared_secret_from_bytes`
   stores the shared, early, handshake, and master secrets in concrete key
@@ -501,7 +509,9 @@ First server version:
   - offered `RsaPssRsaeSha256`;
   - acceptable SNI according to server config, if an SNI policy is configured.
 - Server flight:
-  - cleartext `ServerHello`;
+  - cleartext `ServerHello` (focused raw/fragment wrapper and serialized
+    95-byte record wrapper complete; executable selection still supplies the
+    L-level ServerHello);
   - encrypted empty `EncryptedExtensions`;
   - encrypted `Certificate`;
   - encrypted `CertificateVerify`;
@@ -1142,6 +1152,8 @@ Checklist:
 
 - [ ] Add supported ClientHello acceptability lemmas.
 - [x] Add ServerHello serialize/parse-back facts.
+- [x] Add cleartext ServerHello record serialization facts, including exact
+      raw-record bytes, `parse_record`, and `raw_records_exactly`.
 - [x] Add empty EncryptedExtensions serialize/parse-back facts.
 - [x] Add Certificate serialize/parse-back facts over configured chain.
 - [x] Add CertificateVerify serialize/parse-back facts.
@@ -1237,8 +1249,10 @@ Checklist:
         supplied-material and internally derived mutations/wrappers, scheduler
         hints, and generic local dispatcher integration complete for handshake
         keys);
-      - server flight emission (focused sent-ServerHello public wrapper is
-        complete; serializer-driven construction and encrypted flight remain);
+      - server flight emission (focused sent-ServerHello public wrapper and
+        serializer-driven cleartext ServerHello record construction are
+        complete; concrete selection-to-L-ServerHello storage and encrypted
+        flight remain);
       - client Finished verification;
       - application key installation (server write-key and client read-key
         supplied-material and internally derived mutations/wrappers, scheduler
