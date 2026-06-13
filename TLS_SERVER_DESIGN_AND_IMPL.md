@@ -456,6 +456,13 @@ Current phase: **Phase 6 server buffer/event API and theorem surface**.
   seals it as one protected `ApplicationData` record, stores it through
   `mark_sent_server_finished`, and proves `server_local_event_end_to_end_correct`
   including server-role write-key-schedule projection.
+- [x] Added the protected server Certificate public wrapper:
+  `process_send_certificate_serialized` serializes the supplied exact L-level
+  certificate message into a caller-sized scratch fragment, seals it as one
+  protected `ApplicationData` record, stores it through `mark_sent_certificate`,
+  and proves `server_local_event_end_to_end_correct` including leaf-DER caching,
+  protected segmentation, seal projection, and server-role write-key-schedule
+  projection.
 
 ## End goal
 
@@ -1336,11 +1343,11 @@ Checklist:
         keys);
       - server flight emission (focused sent-ServerHello public wrapper,
         serializer-driven cleartext ServerHello record construction, protected
-        EncryptedExtensions and server Finished public wrappers, pure model
-        helpers, and Pulse state mutations for EncryptedExtensions, Certificate,
-        CertificateVerify signing/send, and server Finished are complete;
-        concrete selection-to-L-ServerHello storage and protected-record public
-        wrappers for Certificate and CertificateVerify remain);
+        EncryptedExtensions, Certificate, and server Finished public wrappers,
+        pure model helpers, and Pulse state mutations for EncryptedExtensions,
+        Certificate, CertificateVerify signing/send, and server Finished are
+        complete; concrete selection-to-L-ServerHello storage and the
+        protected-record public wrapper for CertificateVerify remain);
       - client Finished verification (state mutation, focused public wrapper, and
         generic local dispatcher integration complete; network parse/open
         dispatch for received client Finished remains pending);
