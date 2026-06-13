@@ -226,6 +226,31 @@ fn can_receive_server_hello
                 CL.message_value = M.TlsHandshake (M.ServerHello sh);
               }))
 
+fn can_receive_client_hello
+  (c:connection_state)
+  (fragment_len:SZ.t)
+  (#ch:erased M.client_hello)
+  (#st0:erased CS.connection_state)
+  requires connection_exactly c st0 **
+           pure (Some? st0.CS.cs_model.CS.model_config.CS.config_server)
+  returns ok: bool
+  ensures connection_exactly c st0 **
+          pure (ok ==>
+            st0.CS.cs_model.CS.model_control ==
+              CS.ControlHandshaking CS.HsAwaitingClientHello /\
+            st0.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
+            Some? st0.CS.cs_model.CS.model_config.CS.config_server /\
+            st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello == None /\
+            B.length st0.CS.cs_model.CS.model_handshake.CS.hs_transcript +
+              SZ.v fragment_len <=
+              max_transcript_len /\
+            CS.legal_event
+              st0.CS.cs_model
+              (CS.ConnNetworkEvent {
+                CL.message_direction = CL.Received;
+                CL.message_value = M.TlsHandshake (M.ClientHello ch);
+              }))
+
 fn can_receive_application_data
   (c:connection_state)
   (#st0:erased CS.connection_state)

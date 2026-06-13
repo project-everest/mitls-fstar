@@ -1058,6 +1058,128 @@ fn can_receive_server_hello
     false
   }
 }
+
+fn can_receive_client_hello
+  (c:connection_state)
+  (fragment_len:SZ.t)
+  (#ch:erased M.client_hello)
+  (#st0:erased CS.connection_state)
+  requires connection_exactly c st0 **
+           pure (Some? st0.CS.cs_model.CS.model_config.CS.config_server)
+  returns ok: bool
+  ensures connection_exactly c st0 **
+          pure (ok ==>
+            st0.CS.cs_model.CS.model_control ==
+              CS.ControlHandshaking CS.HsAwaitingClientHello /\
+            st0.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
+            Some? st0.CS.cs_model.CS.model_config.CS.config_server /\
+            st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello == None /\
+            B.length st0.CS.cs_model.CS.model_handshake.CS.hs_transcript +
+              SZ.v fragment_len <=
+              max_transcript_len /\
+            CS.legal_event
+              st0.CS.cs_model
+              (CS.ConnNetworkEvent {
+                CL.message_direction = CL.Received;
+                CL.message_value = M.TlsHandshake (M.ClientHello ch);
+              }))
+{
+  unfold (connection_exactly c st0);
+  unfold (connection_model_exactly c st0.CS.cs_model);
+  unfold (control_exactly c.control st0.CS.cs_model.CS.model_control st0.CS.cs_model.CS.model_failure);
+  unfold (handshake_exactly c.handshake st0.CS.cs_model.CS.model_handshake);
+  unfold (handshake_messages_exactly c.handshake.messages st0.CS.cs_model.CS.model_handshake);
+  unfold (client_hello_slot_exactly
+    c.handshake.messages.client_hello_present
+    c.handshake.messages.client_hello
+    st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello);
+  unfold (sized_bytes_exactly
+    c.handshake.transcript
+    max_transcript_len
+    st0.CS.cs_model.CS.model_handshake.CS.hs_transcript);
+
+  let role_ok = config_role_is_server c.config;
+
+  let tag = !c.control.control_tag;
+  let stage = !c.control.handshake_stage_tag;
+  let tag_ok = tag = 1uy;
+  let stage_ok = stage = 12uy;
+
+  let has_client_hello = !c.handshake.messages.client_hello_present;
+  let no_client_hello = not has_client_hello;
+  assert (pure (no_client_hello ==>
+    st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello == None));
+
+  let current_transcript_len = !c.handshake.transcript.len;
+  assert (pure (SZ.v current_transcript_len ==
+    B.length st0.CS.cs_model.CS.model_handshake.CS.hs_transcript));
+
+  let fragment_fits = SZ.lte fragment_len (SZ.uint_to_t max_transcript_len);
+  if fragment_fits {
+    assert (pure (SZ.v fragment_len <= max_transcript_len));
+    assert (pure (SZ.fits (max_transcript_len - SZ.v fragment_len)));
+    let max_start = SZ.uint_to_t (max_transcript_len - SZ.v fragment_len);
+    let transcript_room = SZ.lte current_transcript_len max_start;
+    let control_ok = tag_ok && stage_ok && role_ok;
+    let ok = control_ok && no_client_hello && transcript_room;
+
+    assert (pure (ok ==> U8.v tag == 1));
+    assert (pure (ok ==> U8.v stage == 12));
+    assert (pure (ok ==>
+      st0.CS.cs_model.CS.model_control ==
+        CS.ControlHandshaking CS.HsAwaitingClientHello));
+    assert (pure (ok ==> st0.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint));
+    assert (pure (ok ==> Some? st0.CS.cs_model.CS.model_config.CS.config_server));
+    assert (pure (ok ==> st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello == None));
+    assert (pure (ok ==> SZ.v current_transcript_len + SZ.v fragment_len <= max_transcript_len));
+    assert (pure (ok ==>
+      B.length st0.CS.cs_model.CS.model_handshake.CS.hs_transcript +
+        SZ.v fragment_len <=
+        max_transcript_len));
+    assert (pure (ok ==> CS.legal_event
+      st0.CS.cs_model
+      (CS.ConnNetworkEvent {
+        CL.message_direction = CL.Received;
+        CL.message_value = M.TlsHandshake (M.ClientHello ch);
+      })));
+
+    fold (sized_bytes_exactly
+      c.handshake.transcript
+      max_transcript_len
+      st0.CS.cs_model.CS.model_handshake.CS.hs_transcript);
+    fold (client_hello_slot_exactly
+      c.handshake.messages.client_hello_present
+      c.handshake.messages.client_hello
+      st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello);
+    fold (handshake_messages_exactly c.handshake.messages st0.CS.cs_model.CS.model_handshake);
+    fold (handshake_exactly c.handshake st0.CS.cs_model.CS.model_handshake);
+    fold (control_exactly
+      c.control
+      st0.CS.cs_model.CS.model_control
+      st0.CS.cs_model.CS.model_failure);
+    fold (connection_model_exactly c st0.CS.cs_model);
+    fold (connection_exactly c st0);
+    ok
+  } else {
+    fold (sized_bytes_exactly
+      c.handshake.transcript
+      max_transcript_len
+      st0.CS.cs_model.CS.model_handshake.CS.hs_transcript);
+    fold (client_hello_slot_exactly
+      c.handshake.messages.client_hello_present
+      c.handshake.messages.client_hello
+      st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello);
+    fold (handshake_messages_exactly c.handshake.messages st0.CS.cs_model.CS.model_handshake);
+    fold (handshake_exactly c.handshake st0.CS.cs_model.CS.model_handshake);
+    fold (control_exactly
+      c.control
+      st0.CS.cs_model.CS.model_control
+      st0.CS.cs_model.CS.model_failure);
+    fold (connection_model_exactly c st0.CS.cs_model);
+    fold (connection_exactly c st0);
+    false
+  }
+}
 fn can_receive_application_data
   (c:connection_state)
   (#st0:erased CS.connection_state)

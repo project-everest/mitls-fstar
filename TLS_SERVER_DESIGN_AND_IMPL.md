@@ -234,6 +234,11 @@ Current phase: **Phase 6 server buffer/event API and theorem surface**.
 - [ ] Continue Phase 6/7 by moving from the focused ClientHello event handler to
   the final buffer-oriented server `process_network_bytes` dispatcher and by
   adding ClientHello reject paths.
+- [x] Added `TLS13.Impl.ConnectionState.Queries.can_receive_client_hello`, the
+  concrete readiness check needed by the upcoming buffer dispatcher. It reads
+  only role/control, stored-ClientHello presence, and transcript length, and
+  proves server role, `HsAwaitingClientHello`, no prior ClientHello, transcript
+  room for the decoded fragment, and received-ClientHello `legal_event`.
 
 ## End goal
 
