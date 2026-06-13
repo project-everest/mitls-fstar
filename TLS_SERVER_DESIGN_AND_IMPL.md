@@ -79,6 +79,16 @@ Current phase: **Phase 0/1 started**.
   handshake/application transitions.
 - [x] Added a role-parametric record-key preservation lemma for legal model
   steps under the endpoint role stored in the connection config.
+- [x] Legacy client-named record-key, layered-log, full-log, replay, and
+  trace-wrapper lemmas are now explicitly `ClientEndpoint`-guarded, so they
+  cannot be applied accidentally to server-configured states.
+- [x] `LocalInstallTrafficKeysForRole` is now genuinely role-parametric for
+  config-role installs, allowing the server path to install its handshake
+  traffic keys while preserving the legacy `LocalInstallTrafficKeys` client
+  wrapper.
+- [x] Role-indexed legal-delta preservation lemmas now cover record-key,
+  layered-log, and full-log consistency through the endpoint role stored in the
+  connection config.
 - [x] Repaired the existing Pulse client proof surface after the role gates:
   implementation readiness queries and mutation/model lemmas now expose
   `ClientEndpoint` exactly where legacy client-only transitions rely on it, and

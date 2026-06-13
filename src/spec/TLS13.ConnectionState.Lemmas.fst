@@ -269,13 +269,17 @@ let lemma_initial_record_layer_consistent
 
 let lemma_initial_record_keys_consistent
   (cfg:connection_config)
-  : Lemma (connection_state_record_keys_consistent (initial cfg))
+  : Lemma
+      (requires cfg.config_role == ClientEndpoint)
+      (ensures connection_state_record_keys_consistent (initial cfg))
 =
   ()
 
 let lemma_initial_layered_log_consistent
   (cfg:connection_config)
-  : Lemma (connection_state_layered_log_consistent (initial cfg))
+  : Lemma
+      (requires cfg.config_role == ClientEndpoint)
+      (ensures connection_state_layered_log_consistent (initial cfg))
 =
   lemma_initial_layered_log_consistent_for_role ClientEndpoint cfg
 
@@ -592,9 +596,11 @@ let lemma_step_model_record_keys_consistent
       (requires
         legal_event model0 ev /\
         step_model model0 ev == Some model1 /\
+        model0.model_config.config_role == ClientEndpoint /\
         model_record_keys_consistent model0)
       (ensures model_record_keys_consistent model1)
 =
+  assert (model1.model_config == model0.model_config);
   match ev with
   | ConnLocalEvent local ->
     (match local with
@@ -804,6 +810,8 @@ let lemma_step_model_record_keys_consistent_for_role
 =
   match role with
   | ClientEndpoint ->
+    assert (model0.model_config.config_role == ClientEndpoint);
+    assert (model_record_keys_consistent model0);
     lemma_step_model_record_keys_consistent model0 ev model1
   | ServerEndpoint ->
     (match ev with
@@ -2814,6 +2822,7 @@ let rec lemma_conn_events_sent_seal_replay_strengthen
          raw_sent
          raw_received
          final_model /\
+       model.model_config.config_role == ClientEndpoint /\
        model_record_keys_consistent model)
       (ensures
        conn_events_sent_seal_key_schedule_replay
@@ -3018,8 +3027,14 @@ let rec lemma_conn_events_sent_seal_replay_strengthen
       tail_sent
       tail_received
       final_model);
+    assert (model.model_config.config_role == ClientEndpoint);
     lemma_model_record_keys_consistent_record_write_key_schedule_projection model;
     lemma_step_model_record_keys_consistent model ev model1;
+    assert (model_record_keys_consistent model1);
+    assert_norm (model_record_keys_consistent model1 ==
+      (model1.model_config.config_role == ClientEndpoint /\
+       model_record_keys_consistent_for_role ClientEndpoint model1));
+    assert (model1.model_config.config_role == ClientEndpoint);
     lemma_conn_events_sent_seal_replay_strengthen
       model1
       rest
@@ -3540,6 +3555,7 @@ let rec lemma_conn_events_received_decode_replay_strengthen
           raw_sent
           raw_received
           final_model /\
+        model.model_config.config_role == ClientEndpoint /\
         model_record_keys_consistent model)
       (ensures
         conn_events_received_decode_key_schedule_replay
@@ -3744,8 +3760,14 @@ let rec lemma_conn_events_received_decode_replay_strengthen
       tail_sent
       tail_received
       final_model);
+    assert (model.model_config.config_role == ClientEndpoint);
     lemma_model_record_keys_consistent_record_read_key_schedule_projection model;
     lemma_step_model_record_keys_consistent model ev model1;
+    assert (model_record_keys_consistent model1);
+    assert_norm (model_record_keys_consistent model1 ==
+      (model1.model_config.config_role == ClientEndpoint /\
+       model_record_keys_consistent_for_role ClientEndpoint model1));
+    assert (model1.model_config.config_role == ClientEndpoint);
     lemma_conn_events_received_decode_replay_strengthen
       model1
       rest
@@ -4010,7 +4032,9 @@ let lemma_initial_sent_seal_key_schedule_replay_consistent
 let lemma_connection_state_sent_seal_key_schedule_replay
   (st:connection_state)
   : Lemma
-      (requires connection_state_sent_seal_replay_consistent st)
+      (requires
+        st.cs_model.model_config.config_role == ClientEndpoint /\
+        connection_state_sent_seal_replay_consistent st)
       (ensures connection_state_sent_seal_key_schedule_replay_consistent st)
 =
   lemma_initial_record_keys_consistent st.cs_model.model_config;
@@ -4037,7 +4061,9 @@ let lemma_initial_received_decode_key_schedule_replay_consistent
 let lemma_connection_state_received_decode_key_schedule_replay
   (st:connection_state)
   : Lemma
-      (requires connection_state_received_decode_replay_consistent st)
+      (requires
+        st.cs_model.model_config.config_role == ClientEndpoint /\
+        connection_state_received_decode_replay_consistent st)
       (ensures connection_state_received_decode_key_schedule_replay_consistent st)
 =
   lemma_initial_record_keys_consistent st.cs_model.model_config;
@@ -4063,6 +4089,7 @@ let lemma_connection_state_raw_to_message_replay
   (st:connection_state)
   : Lemma
       (requires
+        st.cs_model.model_config.config_role == ClientEndpoint /\
         connection_state_raw_event_replay_consistent st /\
         connection_state_sent_seal_replay_consistent st /\
         connection_state_received_decode_replay_consistent st)
@@ -4342,7 +4369,27 @@ let lemma_legal_connection_delta_record_keys_consistent
         connection_state_record_keys_consistent st0)
       (ensures connection_state_record_keys_consistent st1)
 =
+  assert (st0.cs_model.model_config.config_role == ClientEndpoint);
+  assert (st1.cs_model.model_config == st0.cs_model.model_config);
   lemma_step_model_record_keys_consistent
+    st0.cs_model
+    delta.delta_event
+    st1.cs_model
+
+let lemma_legal_connection_delta_record_keys_consistent_for_role
+  (role:endpoint_role)
+  (st0:connection_state)
+  (delta:connection_delta)
+  (st1:connection_state)
+  : Lemma
+      (requires
+        legal_connection_delta st0 delta st1 /\
+        role == st0.cs_model.model_config.config_role /\
+        connection_state_record_keys_consistent_for_role role st0)
+      (ensures connection_state_record_keys_consistent_for_role role st1)
+=
+  lemma_step_model_record_keys_consistent_for_role
+    role
     st0.cs_model
     delta.delta_event
     st1.cs_model
@@ -4372,6 +4419,8 @@ let lemma_legal_connection_delta_layered_log_consistent
         connection_state_layered_log_consistent st0)
       (ensures connection_state_layered_log_consistent st1)
 =
+  assert (st0.cs_model.model_config.config_role == ClientEndpoint);
+  assert (st1.cs_model.model_config == st0.cs_model.model_config);
   lemma_legal_connection_delta_event_log_consistent st0 delta st1;
   lemma_legal_connection_delta_transcript_consistent st0 delta st1;
   lemma_legal_connection_delta_key_update_pending_consistent st0 delta st1;
@@ -4380,9 +4429,31 @@ let lemma_legal_connection_delta_layered_log_consistent
   lemma_legal_connection_delta_pending_application_consistent st0 delta st1;
   lemma_legal_connection_delta_app_log_consistent st0 delta st1
 
+let lemma_legal_connection_delta_layered_log_consistent_for_role
+  (role:endpoint_role)
+  (st0:connection_state)
+  (delta:connection_delta)
+  (st1:connection_state)
+  : Lemma
+      (requires
+        legal_connection_delta st0 delta st1 /\
+        role == st0.cs_model.model_config.config_role /\
+        connection_state_layered_log_consistent_for_role role st0)
+      (ensures connection_state_layered_log_consistent_for_role role st1)
+=
+  lemma_legal_connection_delta_event_log_consistent st0 delta st1;
+  lemma_legal_connection_delta_transcript_consistent st0 delta st1;
+  lemma_legal_connection_delta_key_update_pending_consistent st0 delta st1;
+  lemma_legal_connection_delta_record_layer_consistent st0 delta st1;
+  lemma_legal_connection_delta_record_keys_consistent_for_role role st0 delta st1;
+  lemma_legal_connection_delta_pending_application_consistent st0 delta st1;
+  lemma_legal_connection_delta_app_log_consistent st0 delta st1
+
 let lemma_initial_full_log_consistent
   (cfg:connection_config)
-  : Lemma (connection_state_full_log_consistent (initial cfg))
+  : Lemma
+      (requires cfg.config_role == ClientEndpoint)
+      (ensures connection_state_full_log_consistent (initial cfg))
 =
   lemma_initial_layered_log_consistent cfg;
   lemma_connection_state_connection_log_view_consistent (initial cfg);
@@ -4407,7 +4478,25 @@ let lemma_legal_connection_delta_full_log_consistent
         connection_state_full_log_consistent st0)
       (ensures connection_state_full_log_consistent st1)
 =
+  assert (st0.cs_model.model_config.config_role == ClientEndpoint);
+  assert (st1.cs_model.model_config == st0.cs_model.model_config);
   lemma_legal_connection_delta_layered_log_consistent st0 delta st1;
+  lemma_connection_state_connection_log_view_consistent st1;
+  lemma_legal_connection_delta_raw_event_replay_consistent st0 delta st1
+
+let lemma_legal_connection_delta_full_log_consistent_for_role
+  (role:endpoint_role)
+  (st0:connection_state)
+  (delta:connection_delta)
+  (st1:connection_state)
+  : Lemma
+      (requires
+        legal_connection_delta st0 delta st1 /\
+        role == st0.cs_model.model_config.config_role /\
+        connection_state_full_log_consistent_for_role role st0)
+      (ensures connection_state_full_log_consistent_for_role role st1)
+=
+  lemma_legal_connection_delta_layered_log_consistent_for_role role st0 delta st1;
   lemma_connection_state_connection_log_view_consistent st1;
   lemma_legal_connection_delta_raw_event_replay_consistent st0 delta st1
 

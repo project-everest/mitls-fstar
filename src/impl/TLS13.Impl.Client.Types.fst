@@ -65,7 +65,9 @@ let client_end_to_end_invariant
 
 let lemma_initial_client_state_correct
   (cfg:CS.connection_config)
-  : Lemma (client_state_correct (CS.initial cfg))
+  : Lemma
+      (requires cfg.CS.config_role == CS.ClientEndpoint)
+      (ensures client_state_correct (CS.initial cfg))
 =
   CSL.lemma_initial_full_log_consistent cfg;
   CSL.lemma_initial_sent_seal_replay_consistent cfg;
@@ -76,7 +78,9 @@ let lemma_initial_client_state_correct
 
 let lemma_initial_client_end_to_end_invariant
   (cfg:CS.connection_config)
-  : Lemma (client_end_to_end_invariant (CS.initial cfg))
+  : Lemma
+      (requires cfg.CS.config_role == CS.ClientEndpoint)
+      (ensures client_end_to_end_invariant (CS.initial cfg))
 =
   lemma_initial_client_state_correct cfg;
   CSL.lemma_initial_raw_to_message_replay_consistent cfg
@@ -5749,7 +5753,9 @@ let lemma_driver_trace_from_initial_end_to_end
   (st1:CS.connection_state)
   (steps:list driver_step)
   : Lemma
-      (requires driver_trace_chained (CS.initial cfg) st1 steps)
+      (requires
+        cfg.CS.config_role == CS.ClientEndpoint /\
+        driver_trace_chained (CS.initial cfg) st1 steps)
       (ensures
         client_end_to_end_invariant st1 /\
         driver_trace_end_to_end (CS.initial cfg) st1 steps)

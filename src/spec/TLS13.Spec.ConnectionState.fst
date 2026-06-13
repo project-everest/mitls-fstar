@@ -659,6 +659,7 @@ let model_record_keys_consistent_for_role
 let model_record_keys_consistent
   (model:connection_model)
   : prop =
+  model.model_config.config_role == ClientEndpoint /\
   model_record_keys_consistent_for_role ClientEndpoint model
 
 let derive_shared_secret_model
@@ -1227,7 +1228,6 @@ let legal_local_event (model:connection_model) (ev:local_event) : GTot prop =
     traffic_install_allowed_at_stage stage install /\
     traffic_install_matches_key_schedule hs install
   | LocalInstallTrafficKeysForRole role_install, ControlHandshaking stage ->
-    role_install.install_role == ClientEndpoint /\
     role_install.install_role == model.model_config.config_role /\
     traffic_install_allowed_at_stage_for_role
       role_install.install_role
@@ -1733,6 +1733,7 @@ let connection_state_record_keys_consistent_for_config_role
 let connection_state_record_keys_consistent
   (st:connection_state)
   : prop =
+  st.cs_model.model_config.config_role == ClientEndpoint /\
   connection_state_record_keys_consistent_for_role ClientEndpoint st
 
 let connection_state_layered_log_consistent_for_role
@@ -1757,6 +1758,7 @@ let connection_state_layered_log_consistent_for_config_role
 let connection_state_layered_log_consistent
   (st:connection_state)
   : prop =
+  st.cs_model.model_config.config_role == ClientEndpoint /\
   connection_state_layered_log_consistent_for_role ClientEndpoint st
 
 let model_key_update_pending_delta
@@ -2487,6 +2489,7 @@ let connection_state_full_log_consistent_for_config_role
 let connection_state_full_log_consistent
   (st:connection_state)
   : prop =
+  st.cs_model.model_config.config_role == ClientEndpoint /\
   connection_state_full_log_consistent_for_role ClientEndpoint st
 
 let connection_state_single_step : RTC.binrel connection_state =

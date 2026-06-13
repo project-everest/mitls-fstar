@@ -190,7 +190,9 @@ val lemma_initial_sent_seal_key_schedule_replay_consistent
 val lemma_connection_state_sent_seal_key_schedule_replay
   (st:connection_state)
   : Lemma
-      (requires connection_state_sent_seal_replay_consistent st)
+      (requires
+        st.cs_model.model_config.config_role == ClientEndpoint /\
+        connection_state_sent_seal_replay_consistent st)
       (ensures connection_state_sent_seal_key_schedule_replay_consistent st)
 
 val lemma_initial_received_decode_replay_consistent
@@ -204,7 +206,9 @@ val lemma_initial_received_decode_key_schedule_replay_consistent
 val lemma_connection_state_received_decode_key_schedule_replay
   (st:connection_state)
   : Lemma
-      (requires connection_state_received_decode_replay_consistent st)
+      (requires
+        st.cs_model.model_config.config_role == ClientEndpoint /\
+        connection_state_received_decode_replay_consistent st)
       (ensures connection_state_received_decode_key_schedule_replay_consistent st)
 
 val lemma_initial_raw_to_message_replay_consistent
@@ -215,6 +219,7 @@ val lemma_connection_state_raw_to_message_replay
   (st:connection_state)
   : Lemma
       (requires
+        st.cs_model.model_config.config_role == ClientEndpoint /\
         connection_state_raw_event_replay_consistent st /\
         connection_state_sent_seal_replay_consistent st /\
         connection_state_received_decode_replay_consistent st)
@@ -297,6 +302,18 @@ val lemma_legal_connection_delta_transcript_consistent
         connection_state_transcript_consistent st0)
       (ensures connection_state_transcript_consistent st1)
 
+val lemma_legal_connection_delta_record_keys_consistent_for_role
+  (role:endpoint_role)
+  (st0:connection_state)
+  (delta:connection_delta)
+  (st1:connection_state)
+  : Lemma
+      (requires
+        legal_connection_delta st0 delta st1 /\
+        role == st0.cs_model.model_config.config_role /\
+        connection_state_record_keys_consistent_for_role role st0)
+      (ensures connection_state_record_keys_consistent_for_role role st1)
+
 val lemma_legal_connection_delta_layered_log_consistent
   (st0:connection_state)
   (delta:connection_delta)
@@ -307,9 +324,23 @@ val lemma_legal_connection_delta_layered_log_consistent
         connection_state_layered_log_consistent st0)
       (ensures connection_state_layered_log_consistent st1)
 
+val lemma_legal_connection_delta_layered_log_consistent_for_role
+  (role:endpoint_role)
+  (st0:connection_state)
+  (delta:connection_delta)
+  (st1:connection_state)
+  : Lemma
+      (requires
+        legal_connection_delta st0 delta st1 /\
+        role == st0.cs_model.model_config.config_role /\
+        connection_state_layered_log_consistent_for_role role st0)
+      (ensures connection_state_layered_log_consistent_for_role role st1)
+
 val lemma_initial_full_log_consistent
   (cfg:connection_config)
-  : Lemma (connection_state_full_log_consistent (initial cfg))
+  : Lemma
+      (requires cfg.config_role == ClientEndpoint)
+      (ensures connection_state_full_log_consistent (initial cfg))
 
 val lemma_initial_full_log_consistent_for_role
   (role:endpoint_role)
@@ -325,6 +356,18 @@ val lemma_legal_connection_delta_full_log_consistent
         legal_connection_delta st0 delta st1 /\
         connection_state_full_log_consistent st0)
       (ensures connection_state_full_log_consistent st1)
+
+val lemma_legal_connection_delta_full_log_consistent_for_role
+  (role:endpoint_role)
+  (st0:connection_state)
+  (delta:connection_delta)
+  (st1:connection_state)
+  : Lemma
+      (requires
+        legal_connection_delta st0 delta st1 /\
+        role == st0.cs_model.model_config.config_role /\
+        connection_state_full_log_consistent_for_role role st0)
+      (ensures connection_state_full_log_consistent_for_role role st1)
 
 val lemma_legal_connection_delta_protected_single_parse_record
   (st0:connection_state)
