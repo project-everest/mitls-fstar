@@ -1913,6 +1913,174 @@ fn derive_and_install_server_handshake_write_traffic_keys
     #material;
 }
 
+fn derive_and_install_client_handshake_read_traffic_keys
+  (c:connection_state)
+  (#st0:erased CS.connection_state)
+  requires connection_exactly c st0 **
+           pure (st0.CS.cs_model.CS.model_control ==
+                    CS.ControlHandshaking CS.HsServerHelloSent /\
+                 st0.CS.cs_model.CS.model_config.CS.config_role ==
+                    CS.ServerEndpoint /\
+                 Some?
+                   st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_handshake_secret)
+  ensures exists* material.
+            connection_exactly c
+              (installed_traffic_keys_for_role_state st0 {
+                CS.install_role = CS.ServerEndpoint;
+                CS.install_payload = {
+                  CS.install_epoch = CS.TrafficHandshake;
+                  CS.install_direction = CS.TrafficRead;
+                  CS.install_material = material;
+                };
+              }) **
+            pure (CS.legal_connection_delta
+              st0
+              {
+                CS.delta_event =
+                  CS.ConnLocalEvent
+                    (CS.LocalInstallTrafficKeysForRole {
+                      CS.install_role = CS.ServerEndpoint;
+                      CS.install_payload = {
+                        CS.install_epoch = CS.TrafficHandshake;
+                        CS.install_direction = CS.TrafficRead;
+                        CS.install_material = material;
+                      };
+                    });
+                CS.delta_raw_sent = B.empty;
+                CS.delta_raw_received = B.empty;
+              }
+              (installed_traffic_keys_for_role_state st0 {
+                CS.install_role = CS.ServerEndpoint;
+                CS.install_payload = {
+                  CS.install_epoch = CS.TrafficHandshake;
+                  CS.install_direction = CS.TrafficRead;
+                  CS.install_material = material;
+                };
+              }))
+{
+  unfold (connection_exactly c st0);
+  unfold (connection_model_exactly c st0.CS.cs_model);
+  unfold (control_exactly c.control st0.CS.cs_model.CS.model_control st0.CS.cs_model.CS.model_failure);
+  unfold (handshake_exactly c.handshake st0.CS.cs_model.CS.model_handshake);
+  unfold (sized_bytes_exactly
+    c.handshake.transcript
+    max_transcript_len
+    st0.CS.cs_model.CS.model_handshake.CS.hs_transcript);
+  unfold (key_schedule_exactly
+    c.handshake.keys
+    st0.CS.cs_model.CS.model_handshake.CS.hs_keys);
+  unfold (optional_secret_exactly
+    c.handshake.keys.handshake_secret
+    st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_handshake_secret);
+
+  with transcript_storage.
+    assert (V.pts_to c.handshake.transcript.bytes transcript_storage);
+  with transcript_len.
+    assert (Box.pts_to c.handshake.transcript.len transcript_len);
+  let transcript_len_runtime = !c.handshake.transcript.len;
+  assert (pure (transcript_len_runtime == transcript_len));
+  with hs_present.
+    assert (Box.pts_to c.handshake.keys.handshake_secret.present hs_present);
+  with hs_secret_storage.
+    assert (V.pts_to c.handshake.keys.handshake_secret.secret hs_secret_storage);
+  lemma_optional_fixed_bytes_match_present_of_some
+    hs_present
+    hs_secret_storage
+    32
+    st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_handshake_secret;
+  assert (pure (st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_handshake_secret ==
+    Some hs_secret_storage));
+  let hs_secret = Ghost.hide (Some?.v st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_handshake_secret);
+  assert (pure (Ghost.reveal hs_secret == hs_secret_storage));
+
+  assert (pure (byte_prefix_matches
+    transcript_storage
+    transcript_len_runtime
+    st0.CS.cs_model.CS.model_handshake.CS.hs_transcript));
+  assert (pure (Seq.equal
+    st0.CS.cs_model.CS.model_handshake.CS.hs_transcript
+    (Seq.slice transcript_storage 0 (SZ.v transcript_len_runtime))));
+  Seq.lemma_eq_intro
+    st0.CS.cs_model.CS.model_handshake.CS.hs_transcript
+    (Seq.slice transcript_storage 0 (SZ.v transcript_len_runtime));
+
+  V.to_array_pts_to c.handshake.transcript.bytes;
+  let mut transcript_hash = [| 0uy; 32sz |];
+  Crypto.sha256_prefix
+    (V.vec_to_array c.handshake.transcript.bytes)
+    transcript_len_runtime
+    transcript_hash;
+  V.to_vec_pts_to c.handshake.transcript.bytes;
+  with transcript_hash_bytes. assert (ArrPts.pts_to transcript_hash transcript_hash_bytes);
+  assert (pure (transcript_hash_bytes == Tr.hash st0.CS.cs_model.CS.model_handshake.CS.hs_transcript));
+
+  V.to_array_pts_to c.handshake.keys.handshake_secret.secret;
+  let mut traffic_secret_out = [| 0uy; 32sz |];
+  KS.client_handshake_traffic_secret
+    (V.vec_to_array c.handshake.keys.handshake_secret.secret)
+    transcript_hash
+    traffic_secret_out;
+  V.to_vec_pts_to c.handshake.keys.handshake_secret.secret;
+  with traffic_secret_bytes. assert (ArrPts.pts_to traffic_secret_out traffic_secret_bytes);
+  assert (pure (traffic_secret_bytes ==
+    K.client_handshake_traffic_secret
+      (Ghost.reveal hs_secret)
+      (Tr.hash st0.CS.cs_model.CS.model_handshake.CS.hs_transcript)));
+
+  let mut traffic_key_out = [| 0uy; 32sz |];
+  KS.derive_traffic_key traffic_secret_out traffic_key_out;
+  let mut traffic_iv_out = [| 0uy; 12sz |];
+  KS.derive_traffic_iv traffic_secret_out traffic_iv_out;
+  with traffic_key_bytes. assert (ArrPts.pts_to traffic_key_out traffic_key_bytes);
+  with traffic_iv_bytes. assert (ArrPts.pts_to traffic_iv_out traffic_iv_bytes);
+
+  let traffic_secret = Ghost.hide traffic_secret_bytes;
+  let material = Ghost.hide (CS.traffic_key_material_for_secret (Ghost.reveal traffic_secret));
+  assert (pure ((Ghost.reveal material).CS.traffic_secret == traffic_secret_bytes));
+  assert (pure ((Ghost.reveal material).CS.traffic_key == traffic_key_bytes));
+  assert (pure ((Ghost.reveal material).CS.traffic_iv == traffic_iv_bytes));
+
+  fold (optional_secret_exactly
+    c.handshake.keys.handshake_secret
+    st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_handshake_secret);
+  fold (key_schedule_exactly
+    c.handshake.keys
+    st0.CS.cs_model.CS.model_handshake.CS.hs_keys);
+  fold (sized_bytes_exactly
+    c.handshake.transcript
+    max_transcript_len
+    st0.CS.cs_model.CS.model_handshake.CS.hs_transcript);
+  fold (handshake_exactly c.handshake st0.CS.cs_model.CS.model_handshake);
+  fold (control_exactly
+    c.control
+    st0.CS.cs_model.CS.model_control
+    st0.CS.cs_model.CS.model_failure);
+  fold (connection_model_exactly c st0.CS.cs_model);
+  fold (connection_exactly c st0);
+
+  lemma_server_role_client_handshake_read_traffic_install_legal
+    st0.CS.cs_model
+    (Ghost.reveal hs_secret);
+  assert (pure (CS.legal_event
+    st0.CS.cs_model
+    (CS.ConnLocalEvent
+      (CS.LocalInstallTrafficKeysForRole {
+        CS.install_role = CS.ServerEndpoint;
+        CS.install_payload = {
+          CS.install_epoch = CS.TrafficHandshake;
+          CS.install_direction = CS.TrafficRead;
+          CS.install_material = Ghost.reveal material;
+        };
+      }))));
+
+  install_client_handshake_read_traffic_keys_from_material
+    c
+    traffic_secret_out
+    traffic_key_out
+    traffic_iv_out
+    #material;
+}
+
 fn try_derive_shared_secret
   (c:connection_state)
   (#st0:erased CS.connection_state)

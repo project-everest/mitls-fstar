@@ -304,6 +304,17 @@ Current phase: **Phase 6 server buffer/event API and theorem surface**.
   `LocalInstallClientHandshakeTrafficKeys`. It currently takes already-derived
   traffic material; deriving that material internally from the handshake secret
   and transcript remains pending.
+- [x] Added internal derivation wrappers for server handshake traffic keys:
+  `derive_and_install_server_handshake_write_traffic_keys` and
+  `derive_and_install_client_handshake_read_traffic_keys` compute the traffic
+  secret from the stored handshake secret and exact transcript hash, derive the
+  record key/IV, install the appropriate concrete record direction, and prove
+  the role-indexed legal delta. Public wrappers
+  `process_derive_and_install_server_handshake_write_keys` and
+  `process_derive_and_install_client_handshake_read_keys` expose those steps at
+  the server theorem surface. These wrappers remove the supplied-material gap
+  for handshake traffic keys; readiness scheduling and application traffic-key
+  derivation remain pending.
 
 ## End goal
 
@@ -1166,8 +1177,8 @@ Checklist:
         wrapper complete; executable server X25519 and traffic-key wrappers
         remain);
       - handshake key installation (server write-key and client read-key
-        supplied-material mutations/wrappers complete; internal derivation
-        remains);
+        supplied-material and internally derived mutations/wrappers complete;
+        scheduler integration remains);
       - server flight emission (focused sent-ServerHello public wrapper is
         complete; serializer-driven construction and encrypted flight remain);
       - client Finished verification;

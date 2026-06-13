@@ -382,6 +382,51 @@ fn derive_and_install_server_handshake_write_traffic_keys
                };
              }))
 
+fn derive_and_install_client_handshake_read_traffic_keys
+  (c:connection_state)
+  (#st0:erased CS.connection_state)
+  requires connection_exactly c st0 **
+           pure (st0.CS.cs_model.CS.model_control ==
+                   CS.ControlHandshaking CS.HsServerHelloSent /\
+                st0.CS.cs_model.CS.model_config.CS.config_role ==
+                   CS.ServerEndpoint /\
+                Some?
+                  st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_handshake_secret)
+  ensures exists* material.
+            connection_exactly c
+             (installed_traffic_keys_for_role_state st0 {
+               CS.install_role = CS.ServerEndpoint;
+               CS.install_payload = {
+                 CS.install_epoch = CS.TrafficHandshake;
+                 CS.install_direction = CS.TrafficRead;
+                 CS.install_material = material;
+               };
+             }) **
+            pure (CS.legal_connection_delta
+             st0
+             {
+               CS.delta_event =
+                 CS.ConnLocalEvent
+                   (CS.LocalInstallTrafficKeysForRole {
+                     CS.install_role = CS.ServerEndpoint;
+                     CS.install_payload = {
+                       CS.install_epoch = CS.TrafficHandshake;
+                       CS.install_direction = CS.TrafficRead;
+                       CS.install_material = material;
+                     };
+                   });
+               CS.delta_raw_sent = B.empty;
+               CS.delta_raw_received = B.empty;
+             }
+             (installed_traffic_keys_for_role_state st0 {
+               CS.install_role = CS.ServerEndpoint;
+               CS.install_payload = {
+                 CS.install_epoch = CS.TrafficHandshake;
+                 CS.install_direction = CS.TrafficRead;
+                 CS.install_material = material;
+               };
+             }))
+
 fn try_install_client_handshake_traffic_keys
   (c:connection_state)
   (#st0:erased CS.connection_state)
