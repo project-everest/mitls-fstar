@@ -730,6 +730,19 @@ let step_local_event (model:connection_model) (ev:local_event) : GTot (option co
           hs_certificate_verify_verified = true;
       }
       HsCertificateVerifyVerified)
+  | LocalSignCertificateVerify cv, ControlHandshaking HsServerEncryptedFlightSent ->
+    Some (with_handshake_stage
+      model
+      { hs with
+          hs_certificate_verify = Some cv;
+          hs_certificate_verify_verified = true;
+          hs_buffers =
+            { hs.hs_buffers with
+                hb_certificate_verify_input =
+                  Some (H.certificate_verify_input (Tr.hash hs.hs_transcript));
+            };
+      }
+      HsServerEncryptedFlightSent)
   | LocalVerifyFinished fin, ControlHandshaking HsServerFinishedReceived ->
     Some (with_handshake_stage
       model
@@ -799,6 +812,53 @@ let step_handshake_message
         }
         msg in
     Some (with_handshake_stage model hs' HsServerHelloSent)
+  | CL.Sent, M.EncryptedExtensions ee, ControlHandshaking HsServerHelloSent ->
+    Some (with_handshake_stage
+      { model with
+          model_record =
+            { model.model_record with
+                record_write = R.next_seq model.model_record.record_write;
+            };
+      }
+      (append_handshake_to_transcript
+        { hs with hs_encrypted_extensions = Some ee }
+        msg)
+      HsServerEncryptedFlightSent)
+  | CL.Sent, M.Certificate cert, ControlHandshaking HsServerEncryptedFlightSent ->
+    Some (with_handshake_stage
+      { model with
+          model_record =
+            { model.model_record with
+                record_write = R.next_seq model.model_record.record_write;
+            };
+      }
+      (append_handshake_to_transcript
+        { hs with
+            hs_certificate = Some cert;
+            hs_buffers =
+            { hs.hs_buffers with
+                hb_certificate_leaf_der =
+                  (match cert.M.chain with
+                   | leaf :: _ -> Some leaf
+                   | [] -> None);
+            };
+        }
+        msg)
+      HsServerEncryptedFlightSent)
+  | CL.Sent, M.CertificateVerify cv, ControlHandshaking HsServerEncryptedFlightSent ->
+    Some (with_handshake_stage
+      { model with
+          model_record =
+            { model.model_record with
+                record_write = R.next_seq model.model_record.record_write;
+            };
+      }
+      (append_handshake_to_transcript
+        { hs with
+            hs_certificate_verify = Some cv;
+        }
+        msg)
+      HsServerEncryptedFlightSent)
   | CL.Received, M.EncryptedExtensions ee, ControlHandshaking HsServerHelloReceived ->
     Some (with_handshake_stage
       { model with
@@ -1131,6 +1191,12 @@ let server_hello_matches_selection
   Seq.equal sh.M.key_share selection.server_key_share_public /\
   sh.M.cipher_suite == selection.server_selected_cipher_suite
 
+let certificate_msg_matches_server_config
+  (cfg:server_config)
+  (cert:M.certificate_msg)
+  : prop =
+  cert.M.chain == [cfg.server_certificate_chain]
+
 let traffic_secret_for_label
   (hs:handshake_state)
   (epoch:traffic_epoch)
@@ -1283,6 +1349,16 @@ let legal_local_event (model:connection_model) (ev:local_event) : GTot prop =
        stored_cv == cv /\
        C.verify_signature cv.M.scheme peer.X.leaf_public_key input cv.M.signature
      | _, _, _ -> False)
+  | LocalSignCertificateVerify cv, ControlHandshaking HsServerEncryptedFlightSent ->
+    model.model_config.config_role == ServerEndpoint /\
+    hs.hs_certificate_verify == None /\
+    (match hs.hs_certificate, hs.hs_server_selection with
+     | Some _, Some selection ->
+       cv.M.scheme == selection.server_selected_signature_scheme /\
+       signature_scheme_offered
+         model.model_config.config_signature_schemes
+         cv.M.scheme
+     | _, _ -> False)
   | LocalVerifyFinished fin, ControlHandshaking HsServerFinishedReceived ->
     model.model_config.config_role == ClientEndpoint /\
     (match hs.hs_server_finished, hs.hs_keys.ks_server_handshake_traffic with
@@ -1326,6 +1402,26 @@ let legal_handshake_message
     Some? hs.hs_keys.ks_shared_secret /\
     (match hs.hs_server_selection with
      | Some selection -> server_hello_matches_selection selection sh
+     | None -> False)
+  | CL.Sent, M.EncryptedExtensions ee, ControlHandshaking HsServerHelloSent ->
+    model.model_config.config_role == ServerEndpoint /\
+    ee.M.negotiated_alpn == None /\
+    Some? hs.hs_keys.ks_server_handshake_traffic
+  | CL.Sent, M.Certificate cert, ControlHandshaking HsServerEncryptedFlightSent ->
+    model.model_config.config_role == ServerEndpoint /\
+    hs.hs_encrypted_extensions <> None /\
+    hs.hs_certificate == None /\
+    Some? hs.hs_keys.ks_server_handshake_traffic /\
+    (match model.model_config.config_server with
+     | Some cfg -> certificate_msg_matches_server_config cfg cert
+     | None -> False)
+  | CL.Sent, M.CertificateVerify cv, ControlHandshaking HsServerEncryptedFlightSent ->
+    model.model_config.config_role == ServerEndpoint /\
+    hs.hs_certificate <> None /\
+    hs.hs_certificate_verify_verified /\
+    Some? hs.hs_keys.ks_server_handshake_traffic /\
+    (match hs.hs_certificate_verify with
+     | Some stored_cv -> stored_cv == cv
      | None -> False)
   | CL.Received, M.EncryptedExtensions _, ControlHandshaking HsServerHelloReceived ->
     model.model_config.config_role == ClientEndpoint /\
@@ -1511,10 +1607,16 @@ let conn_event_transcript_delta (ev:conn_event) : GTot B.bytes =
        W.serialize_handshake (M.ServerHello sh)
      | CL.Sent, M.TlsHandshake (M.ServerHello sh) ->
        W.serialize_handshake (M.ServerHello sh)
+     | CL.Sent, M.TlsHandshake (M.EncryptedExtensions ee) ->
+       W.serialize_handshake (M.EncryptedExtensions ee)
      | CL.Received, M.TlsHandshake (M.EncryptedExtensions ee) ->
        W.serialize_handshake (M.EncryptedExtensions ee)
+     | CL.Sent, M.TlsHandshake (M.Certificate cert) ->
+       W.serialize_handshake (M.Certificate cert)
      | CL.Received, M.TlsHandshake (M.Certificate cert) ->
        W.serialize_handshake (M.Certificate cert)
+     | CL.Sent, M.TlsHandshake (M.CertificateVerify cv) ->
+       W.serialize_handshake (M.CertificateVerify cv)
      | CL.Received, M.TlsHandshake (M.CertificateVerify cv) ->
        W.serialize_handshake (M.CertificateVerify cv)
      | CL.Sent, M.TlsHandshake (M.Finished fin) ->
@@ -1680,6 +1782,10 @@ let projected_record_layer_step
      | CL.Received, M.TlsIgnoredPostHandshake _
      | CL.Received, M.TlsAlert T.CloseNotify ->
        { record with projected_read = projected_next_seq record.projected_read }
+     | CL.Sent, M.TlsHandshake (M.EncryptedExtensions _)
+     | CL.Sent, M.TlsHandshake (M.Certificate _)
+     | CL.Sent, M.TlsHandshake (M.CertificateVerify _) ->
+       { record with projected_write = projected_next_seq record.projected_write }
      | CL.Sent, M.TlsHandshake (M.Finished _) ->
        projected_client_application_write_after_finished record
      | CL.Sent, M.TlsApplicationData bytes ->

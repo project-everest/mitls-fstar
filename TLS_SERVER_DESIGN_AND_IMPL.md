@@ -97,6 +97,14 @@ Current phase: **Phase 0/1 started**.
 - [x] Server handshake traffic-key installation is now staged after the
   transcript includes `ServerHello` (`HsServerHelloSent`), rather than at the
   pre-`ServerHello` ClientHello stage.
+- [x] Added server encrypted-flight prefix transitions:
+  sent empty-ALPN `EncryptedExtensions`, configured single-certificate
+  `Certificate`, local `CertificateVerify` signing, and sent
+  `CertificateVerify` now update the pure transcript and protected write-record
+  projection under installed server handshake traffic keys.
+- [ ] Add server `Finished`, client `Finished` receive/verify, and the
+  role-aware application-key/read-write record switching needed around those
+  transitions.
 - [x] Repaired the existing Pulse client proof surface after the role gates:
   implementation readiness queries and mutation/model lemmas now expose
   `ClientEndpoint` exactly where legacy client-only transitions rely on it, and
@@ -777,6 +785,8 @@ Checklist:
 - [x] Add role-parametric record-key preservation for legal model steps.
 - [x] Add server received-`ClientHello` and sent-`ServerHello` pure network
       transitions, including transcript and raw cleartext classification.
+- [x] Add server encrypted-flight prefix pure transitions through
+      `CertificateVerify`.
 - [x] Preserve the legacy Pulse client implementation by threading explicit
       client-role facts through readiness queries, model lemmas, and mutation
       boundaries.

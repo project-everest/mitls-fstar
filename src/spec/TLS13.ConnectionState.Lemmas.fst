@@ -212,6 +212,18 @@ let lemma_record_write_keys_next_seq
 =
   ()
 
+let lemma_record_keys_next_seq_for_role
+  (role:endpoint_role)
+  (dir:traffic_direction)
+  (control:connection_control_state)
+  (keys:key_schedule_state)
+  (st:R.direction_state)
+  : Lemma
+      (requires record_keys_match_key_schedule_for_role role dir control keys st)
+      (ensures record_keys_match_key_schedule_for_role role dir control keys (R.next_seq st))
+=
+  ()
+
 let rec lemma_record_write_keys_advance
   (control:connection_control_state)
   (keys:key_schedule_state)
@@ -849,6 +861,21 @@ let lemma_step_model_record_keys_consistent_for_role
        | M.TlsHandshake (M.ServerHello _) ->
          assert (model1.model_record == model0.model_record);
          assert (model1.model_handshake.hs_keys == model0.model_handshake.hs_keys)
+       | M.TlsHandshake (M.EncryptedExtensions _)
+       | M.TlsHandshake (M.Certificate _)
+       | M.TlsHandshake (M.CertificateVerify _) ->
+         assert (msg.CL.message_direction == CL.Sent);
+         assert (model1.model_record.record_write ==
+           R.next_seq model0.model_record.record_write);
+         assert (model1.model_record.record_read ==
+           model0.model_record.record_read);
+         assert (model1.model_handshake.hs_keys == model0.model_handshake.hs_keys);
+         lemma_record_keys_next_seq_for_role
+           ServerEndpoint
+           TrafficWrite
+           model0.model_control
+           model0.model_handshake.hs_keys
+           model0.model_record.record_write
        | M.TlsAlert T.CloseNotify ->
          (match model0.model_control with
           | ControlApplicationData
@@ -993,6 +1020,23 @@ let lemma_step_model_record_layer_delta
                projected_next_seq
                  (projected_record_layer_state_of_record model0.model_record).projected_read });
        assert (model_record_layer_delta model0 ev model1)
+     | CL.Sent, M.TlsHandshake (M.EncryptedExtensions _)
+     | CL.Sent, M.TlsHandshake (M.Certificate _)
+     | CL.Sent, M.TlsHandshake (M.CertificateVerify _) ->
+       assert (model1.model_record == {
+         model0.model_record with
+           record_write = R.next_seq model0.model_record.record_write
+       });
+       lemma_projected_record_next_write model0.model_record;
+       assert (
+         projected_record_layer_step
+           (projected_record_layer_state_of_record model0.model_record)
+           ev ==
+         { projected_record_layer_state_of_record model0.model_record with
+             projected_write =
+               projected_next_seq
+                 (projected_record_layer_state_of_record model0.model_record).projected_write });
+       assert (model_record_layer_delta model0 ev model1)
      | CL.Received, M.TlsApplicationData _ ->
        assert (model1.model_record == {
          model0.model_record with
@@ -1128,8 +1172,11 @@ let lemma_step_model_transcript_delta
      | CL.Received, M.TlsHandshake (M.ClientHello _) -> ()
      | CL.Received, M.TlsHandshake (M.ServerHello _) -> ()
      | CL.Sent, M.TlsHandshake (M.ServerHello _) -> ()
+     | CL.Sent, M.TlsHandshake (M.EncryptedExtensions _) -> ()
      | CL.Received, M.TlsHandshake (M.EncryptedExtensions _) -> ()
+     | CL.Sent, M.TlsHandshake (M.Certificate _) -> ()
      | CL.Received, M.TlsHandshake (M.Certificate _) -> ()
+     | CL.Sent, M.TlsHandshake (M.CertificateVerify _) -> ()
      | CL.Received, M.TlsHandshake (M.CertificateVerify _) -> ()
      | CL.Sent, M.TlsHandshake (M.Finished _) -> ()
      | _, _ ->
