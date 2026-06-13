@@ -291,9 +291,9 @@ Current phase: **Phase 6 server buffer/event API and theorem surface**.
   record keys, and proves the role-indexed legal delta. The focused public
   `TLS13.Impl.Server.process_install_server_handshake_write_keys` wrapper proves
   `server_local_event_end_to_end_correct` for
-  `LocalInstallServerHandshakeTrafficKeys`. It currently takes already-derived
-  traffic material; deriving that material internally from the handshake secret
-  and transcript remains pending.
+  `LocalInstallServerHandshakeTrafficKeys`. The supplied-material wrapper is now
+  complemented by an internally derived wrapper below, which derives the same
+  material from the stored handshake secret and transcript.
 - [x] Added supplied-material client handshake read-key installation for the
   server role:
   `TLS13.Impl.ConnectionState.LocalHandshake.install_client_handshake_read_traffic_keys_from_material`
@@ -301,9 +301,9 @@ Current phase: **Phase 6 server buffer/event API and theorem surface**.
   record keys, and proves the role-indexed legal delta. The focused public
   `TLS13.Impl.Server.process_install_client_handshake_read_keys` wrapper proves
   `server_local_event_end_to_end_correct` for
-  `LocalInstallClientHandshakeTrafficKeys`. It currently takes already-derived
-  traffic material; deriving that material internally from the handshake secret
-  and transcript remains pending.
+  `LocalInstallClientHandshakeTrafficKeys`. The supplied-material wrapper is now
+  complemented by an internally derived wrapper below, which derives the same
+  material from the stored handshake secret and transcript.
 - [x] Added internal derivation wrappers for server handshake traffic keys:
   `derive_and_install_server_handshake_write_traffic_keys` and
   `derive_and_install_client_handshake_read_traffic_keys` compute the traffic
@@ -315,6 +315,16 @@ Current phase: **Phase 6 server buffer/event API and theorem surface**.
   the server theorem surface. These wrappers remove the supplied-material gap
   for handshake traffic keys; readiness scheduling and application traffic-key
   derivation remain pending.
+- [x] Integrated derived handshake key installation into
+  `TLS13.Impl.Server.next_local_action`: after `HsServerHelloSent`, the scheduler
+  now advertises `LocalInstallServerHandshakeTrafficKeys` while the server
+  handshake write material is absent, then
+  `LocalInstallClientHandshakeTrafficKeys` while the client handshake read
+  material is absent. `next_local_action_sound` exposes the exact control-stage,
+  role, handshake-secret-present, and destination-slot-empty facts needed by the
+  derived public wrappers. The generic `process_local_event` dispatcher still
+  only handles `LocalStartServer`; broadening it to dispatch these key-install
+  actions remains pending.
 
 ## End goal
 
@@ -1177,8 +1187,8 @@ Checklist:
         wrapper complete; executable server X25519 and traffic-key wrappers
         remain);
       - handshake key installation (server write-key and client read-key
-        supplied-material and internally derived mutations/wrappers complete;
-        scheduler integration remains);
+        supplied-material and internally derived mutations/wrappers plus
+        scheduler hints complete; generic local dispatcher integration remains);
       - server flight emission (focused sent-ServerHello public wrapper is
         complete; serializer-driven construction and encrypted flight remain);
       - client Finished verification;

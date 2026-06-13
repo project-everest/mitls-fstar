@@ -113,8 +113,20 @@ fn next_local_action
                 next_local_action_sound 'st0 action)
 {
   unfold (connection_exactly s 'st0);
+  let control = CQ.get_control_snapshot s;
+  let keys = CQ.get_key_schedule_snapshot s;
   let start_ready = CQ.can_start_server_runtime s;
   fold (connection_exactly s 'st0);
+  let server_handshake_write_keys_ready =
+    (control.CR.snapshot_control_tag = 1uy) &&
+    (control.CR.snapshot_handshake_stage_tag = 14uy) &&
+    keys.CR.snapshot_handshake_secret_present &&
+    not keys.CR.snapshot_server_handshake_traffic_present;
+  let client_handshake_read_keys_ready =
+    (control.CR.snapshot_control_tag = 1uy) &&
+    (control.CR.snapshot_handshake_stage_tag = 14uy) &&
+    keys.CR.snapshot_handshake_secret_present &&
+    not keys.CR.snapshot_client_handshake_traffic_present;
   if start_ready {
     assert (pure ('st0.CS.cs_model.CS.model_control == CS.ControlNew));
     assert (pure ('st0.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint));
@@ -126,6 +138,40 @@ fn next_local_action
     {
       ST.next_local_ready = true;
       ST.next_local_kind = ST.LocalStartServer;
+      ST.next_local_payload = ST.LocalPayloadNone;
+    }
+  } else if server_handshake_write_keys_ready {
+    assert (pure (control.CR.snapshot_control_tag == 1uy));
+    assert (pure (control.CR.snapshot_handshake_stage_tag == 14uy));
+    assert (pure (keys.CR.snapshot_handshake_secret_present));
+    assert (pure (not keys.CR.snapshot_server_handshake_traffic_present));
+    assert (pure ('st0.CS.cs_model.CS.model_control ==
+      CS.ControlHandshaking CS.HsServerHelloSent));
+    assert (pure ('st0.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint));
+    assert (pure (Some?
+      'st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_handshake_secret));
+    assert (pure (not (Some?
+      'st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_handshake_traffic)));
+    {
+      ST.next_local_ready = true;
+      ST.next_local_kind = ST.LocalInstallServerHandshakeTrafficKeys;
+      ST.next_local_payload = ST.LocalPayloadNone;
+    }
+  } else if client_handshake_read_keys_ready {
+    assert (pure (control.CR.snapshot_control_tag == 1uy));
+    assert (pure (control.CR.snapshot_handshake_stage_tag == 14uy));
+    assert (pure (keys.CR.snapshot_handshake_secret_present));
+    assert (pure (not keys.CR.snapshot_client_handshake_traffic_present));
+    assert (pure ('st0.CS.cs_model.CS.model_control ==
+      CS.ControlHandshaking CS.HsServerHelloSent));
+    assert (pure ('st0.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint));
+    assert (pure (Some?
+      'st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_handshake_secret));
+    assert (pure (not (Some?
+      'st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_handshake_traffic)));
+    {
+      ST.next_local_ready = true;
+      ST.next_local_kind = ST.LocalInstallClientHandshakeTrafficKeys;
       ST.next_local_payload = ST.LocalPayloadNone;
     }
   } else {
