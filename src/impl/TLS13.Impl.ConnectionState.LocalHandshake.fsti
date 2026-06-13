@@ -87,6 +87,21 @@ fn try_start_server
            else
             connection_exactly c st0)
 
+fn start_server
+  (c:connection_state)
+  (#st0:erased CS.connection_state)
+  requires connection_exactly c st0 **
+           pure (can_start_server st0)
+  ensures connection_exactly c (started_server_state st0) **
+          pure (CS.legal_connection_delta
+            st0
+            {
+             CS.delta_event = CS.ConnLocalEvent CS.LocalStartServer;
+             CS.delta_raw_sent = B.empty;
+             CS.delta_raw_received = B.empty;
+            }
+            (started_server_state st0))
+
 fn try_send_client_hello
   (c:connection_state)
   (network_out:array U8.t)

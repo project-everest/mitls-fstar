@@ -70,15 +70,21 @@ let server_state_correct
   : prop =
   server_state_core_correct st /\
   CS.connection_state_sent_seal_replay_consistent st /\
-  CS.connection_state_sent_seal_key_schedule_replay_consistent st /\
-  CS.connection_state_received_decode_replay_consistent st /\
-  CS.connection_state_received_decode_key_schedule_replay_consistent st
+  CS.connection_state_received_decode_replay_consistent st
+
+let server_raw_to_message_replay_consistent
+  (st:CS.connection_state)
+  : prop =
+  CS.connection_state_raw_event_replay_consistent st /\
+  CS.connection_state_protected_raw_segmented_replay_consistent st /\
+  CS.connection_state_sent_seal_replay_consistent st /\
+  CS.connection_state_received_decode_replay_consistent st
 
 let server_end_to_end_invariant
   (st:CS.connection_state)
   : prop =
   server_state_correct st /\
-  CS.connection_state_raw_to_message_replay_consistent st
+  server_raw_to_message_replay_consistent st
 
 let lemma_initial_server_state_correct
   (cfg:CS.connection_config)
@@ -88,10 +94,9 @@ let lemma_initial_server_state_correct
       (ensures server_state_correct (CS.initial cfg))
 =
   CSL.lemma_initial_full_log_consistent_for_role CS.ServerEndpoint cfg;
+  CSL.lemma_connection_state_protected_raw_segmented_replay (CS.initial cfg);
   CSL.lemma_initial_sent_seal_replay_consistent cfg;
-  CSL.lemma_initial_sent_seal_key_schedule_replay_consistent cfg;
   CSL.lemma_initial_received_decode_replay_consistent cfg;
-  CSL.lemma_initial_received_decode_key_schedule_replay_consistent cfg;
   assert (CS.connection_state_evolves (CS.initial cfg) (CS.initial cfg))
 
 let lemma_initial_server_end_to_end_invariant
@@ -102,7 +107,7 @@ let lemma_initial_server_end_to_end_invariant
       (ensures server_end_to_end_invariant (CS.initial cfg))
 =
   lemma_initial_server_state_correct cfg;
-  CSL.lemma_initial_raw_to_message_replay_consistent cfg
+  assert (server_raw_to_message_replay_consistent (CS.initial cfg))
 
 let lemma_server_state_correct_protected_raw_segmented_replay
   (st:CS.connection_state)

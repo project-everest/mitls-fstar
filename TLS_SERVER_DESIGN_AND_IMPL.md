@@ -207,8 +207,18 @@ Current phase: **Phase 6 server buffer/event API and theorem surface**.
   `TLS13.Impl.ConnectionState.LocalHandshake.try_start_server` performs the
   control-only `LocalStartServer` transition to `HsAwaitingClientHello` and
   proves the corresponding legal connection delta.
-- [ ] Continue Phase 6 by adding a public server `process_local_event` wrapper
-  over `LocalStartServer`, then network `ClientHello` handling.
+- [x] Added the first public server `process_local_event` slice for
+  `LocalStartServer`. The wrapper requires the action selected by
+  `next_local_action`, performs the verified `start_server` mutation, returns
+  `StepOk` with zero network/app output, and proves
+  `server_local_event_end_to_end_correct`.
+- [x] Corrected the first server invariant package so it does not reuse the
+  existing client-specific `connection_state_raw_to_message_replay_consistent`
+  key-schedule replay subpackage. The server surface now exposes a
+  server-local raw-message replay package over raw-event replay, protected raw
+  segmentation, sent-seal replay, and received-decode replay; role-indexed
+  key-schedule replay remains a later proof-hardening step.
+- [ ] Continue Phase 6 with network `ClientHello` handling.
 
 ## End goal
 

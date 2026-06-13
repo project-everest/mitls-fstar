@@ -402,6 +402,58 @@ fn try_start_server
   }
 }
 
+fn start_server
+  (c:connection_state)
+  (#st0:erased CS.connection_state)
+  requires connection_exactly c st0 **
+           pure (can_start_server st0)
+  ensures connection_exactly c (started_server_state st0) **
+          pure (CS.legal_connection_delta
+            st0
+            {
+              CS.delta_event = CS.ConnLocalEvent CS.LocalStartServer;
+              CS.delta_raw_sent = B.empty;
+              CS.delta_raw_received = B.empty;
+            }
+            (started_server_state st0))
+{
+  assert (pure (st0.CS.cs_model.CS.model_control == CS.ControlNew));
+  assert (pure (st0.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint));
+  assert (pure (Some? st0.CS.cs_model.CS.model_config.CS.config_server));
+  assert (pure (CS.legal_event
+    st0.CS.cs_model
+    (CS.ConnLocalEvent CS.LocalStartServer)));
+
+  unfold (connection_exactly c st0);
+  unfold (connection_model_exactly c st0.CS.cs_model);
+  unfold (control_exactly c.control st0.CS.cs_model.CS.model_control st0.CS.cs_model.CS.model_failure);
+  with old_control_tag old_stage_tag old_failure_present old_failure_code old_failure_alert. _;
+
+  c.control.control_tag := 1uy;
+  c.control.handshake_stage_tag := 12uy;
+
+  assert_norm (Tags.handshake_stage_tag_matches 12uy CS.HsAwaitingClientHello);
+  assert (pure (Tags.control_state_matches
+    1uy
+    12uy
+    old_failure_present
+    old_failure_code
+    old_failure_alert
+    (CS.ControlHandshaking CS.HsAwaitingClientHello)));
+  fold (control_exactly
+    c.control
+    (CS.ControlHandshaking CS.HsAwaitingClientHello)
+    st0.CS.cs_model.CS.model_failure);
+
+  fold (connection_model_exactly
+    c
+    (started_server_state st0).CS.cs_model);
+
+  lemma_started_server_state_evolves st0;
+  MR.update c.ghost_state (started_server_state st0);
+  fold (connection_exactly c (started_server_state st0))
+}
+
 fn try_send_client_hello
   (c:connection_state)
   (network_out:array U8.t)

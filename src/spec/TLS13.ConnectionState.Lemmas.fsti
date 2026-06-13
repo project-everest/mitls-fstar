@@ -293,6 +293,16 @@ val lemma_connection_state_raw_to_message_replay
         connection_state_received_decode_replay_consistent st)
       (ensures connection_state_raw_to_message_replay_consistent st)
 
+val lemma_legal_connection_delta_raw_event_replay_consistent
+  (st0:connection_state)
+  (delta:connection_delta)
+  (st1:connection_state)
+  : Lemma
+      (requires
+        legal_connection_delta st0 delta st1 /\
+        connection_state_raw_event_replay_consistent st0)
+      (ensures connection_state_raw_event_replay_consistent st1)
+
 val lemma_legal_connection_delta_sent_seal_replay_consistent
   (st0:connection_state)
   (delta:connection_delta)
