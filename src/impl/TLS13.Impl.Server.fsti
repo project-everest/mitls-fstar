@@ -56,8 +56,26 @@ let next_local_action_sound
         st.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_handshake_secret /\
       not (Some?
         st.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_handshake_traffic)
+    | ST.LocalInstallServerApplicationTrafficKeys ->
+     action.ST.next_local_payload == ST.LocalPayloadNone /\
+     st.CS.cs_model.CS.model_control ==
+       CS.ControlHandshaking CS.HsServerFinishedSent /\
+     st.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
+     Some?
+       st.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_master_secret /\
+     not (Some?
+       st.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_application_traffic)
+    | ST.LocalInstallClientApplicationTrafficKeys ->
+     action.ST.next_local_payload == ST.LocalPayloadNone /\
+     st.CS.cs_model.CS.model_control ==
+       CS.ControlHandshaking CS.HsClientFinishedReceived /\
+     st.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
+     Some?
+       st.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_master_secret /\
+     not (Some?
+       st.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_application_traffic)
     | _ ->
-      False
+     False
   else
     True
 
@@ -87,6 +105,22 @@ let server_local_event_input_ready
       st.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_handshake_secret /\
     not (Some?
       st.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_handshake_traffic)
+  | ST.LocalInstallServerApplicationTrafficKeys ->
+    st.CS.cs_model.CS.model_control ==
+      CS.ControlHandshaking CS.HsServerFinishedSent /\
+    st.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
+    Some?
+      st.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_master_secret /\
+    not (Some?
+      st.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_application_traffic)
+  | ST.LocalInstallClientApplicationTrafficKeys ->
+    st.CS.cs_model.CS.model_control ==
+      CS.ControlHandshaking CS.HsClientFinishedReceived /\
+    st.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
+    Some?
+      st.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_master_secret /\
+    not (Some?
+      st.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_application_traffic)
   | _ ->
     False)
 
@@ -559,6 +593,74 @@ fn process_install_client_application_read_keys
                        B.empty
                        network_out_bytes
                        app_out_bytes)
+
+fn process_derive_and_install_server_application_write_keys
+  (s:server)
+  (network_out:array U8.t)
+  (network_out_len:SZ.t)
+  (app_out:array U8.t)
+  (app_out_len:SZ.t)
+  requires connection_exactly s 'st0 **
+           pts_to network_out 'old_network_out **
+           pts_to app_out 'old_app_out **
+           pure (B.length 'old_network_out == SZ.v network_out_len /\
+                 B.length 'old_app_out == SZ.v app_out_len /\
+                 ST.server_end_to_end_invariant 'st0 /\
+                 'st0.CS.cs_model.CS.model_control ==
+                   CS.ControlHandshaking CS.HsServerFinishedSent /\
+                 'st0.CS.cs_model.CS.model_config.CS.config_role ==
+                   CS.ServerEndpoint /\
+                 Some?
+                   'st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_master_secret)
+  returns resp:ST.server_response
+  ensures exists* st1 network_out_bytes app_out_bytes.
+          connection_exactly s st1 **
+          pts_to network_out network_out_bytes **
+          pts_to app_out app_out_bytes **
+          pure (B.length network_out_bytes == SZ.v network_out_len /\
+                B.length app_out_bytes == SZ.v app_out_len /\
+                ST.server_local_event_end_to_end_correct
+                        'st0
+                        st1
+                        resp
+                        ST.LocalInstallServerApplicationTrafficKeys
+                        B.empty
+                        network_out_bytes
+                        app_out_bytes)
+
+fn process_derive_and_install_client_application_read_keys
+  (s:server)
+  (network_out:array U8.t)
+  (network_out_len:SZ.t)
+  (app_out:array U8.t)
+  (app_out_len:SZ.t)
+  requires connection_exactly s 'st0 **
+           pts_to network_out 'old_network_out **
+           pts_to app_out 'old_app_out **
+           pure (B.length 'old_network_out == SZ.v network_out_len /\
+                 B.length 'old_app_out == SZ.v app_out_len /\
+                 ST.server_end_to_end_invariant 'st0 /\
+                 'st0.CS.cs_model.CS.model_control ==
+                   CS.ControlHandshaking CS.HsClientFinishedReceived /\
+                 'st0.CS.cs_model.CS.model_config.CS.config_role ==
+                   CS.ServerEndpoint /\
+                 Some?
+                   'st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_master_secret)
+  returns resp:ST.server_response
+  ensures exists* st1 network_out_bytes app_out_bytes.
+          connection_exactly s st1 **
+          pts_to network_out network_out_bytes **
+          pts_to app_out app_out_bytes **
+          pure (B.length network_out_bytes == SZ.v network_out_len /\
+                B.length app_out_bytes == SZ.v app_out_len /\
+                ST.server_local_event_end_to_end_correct
+                        'st0
+                        st1
+                        resp
+                        ST.LocalInstallClientApplicationTrafficKeys
+                        B.empty
+                        network_out_bytes
+                        app_out_bytes)
 
 fn process_client_hello
   (s:server)

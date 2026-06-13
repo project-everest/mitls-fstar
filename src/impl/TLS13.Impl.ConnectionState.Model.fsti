@@ -1627,6 +1627,56 @@ val lemma_server_application_traffic_install_legal
                   (Tr.hash model.CS.model_handshake.CS.hs_transcript));
           })))
 
+val lemma_server_role_server_application_write_traffic_install_legal
+  (model:CS.connection_model)
+  (master_secret:TLS13.Crypto.Spec.secret)
+  : Lemma
+      (requires model.CS.model_control ==
+                 CS.ControlHandshaking CS.HsServerFinishedSent /\
+               model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
+               model.CS.model_handshake.CS.hs_keys.CS.ks_master_secret ==
+                 Some master_secret)
+      (ensures CS.legal_event
+        model
+        (CS.ConnLocalEvent
+          (CS.LocalInstallTrafficKeysForRole {
+           CS.install_role = CS.ServerEndpoint;
+           CS.install_payload = {
+             CS.install_epoch = CS.TrafficApplication;
+             CS.install_direction = CS.TrafficWrite;
+             CS.install_material =
+               CS.traffic_key_material_for_secret
+                 (K.server_application_traffic_secret
+                   master_secret
+                   (Tr.hash model.CS.model_handshake.CS.hs_transcript));
+           };
+          })))
+
+val lemma_server_role_client_application_read_traffic_install_legal
+  (model:CS.connection_model)
+  (master_secret:TLS13.Crypto.Spec.secret)
+  : Lemma
+      (requires model.CS.model_control ==
+                 CS.ControlHandshaking CS.HsClientFinishedReceived /\
+               model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
+               model.CS.model_handshake.CS.hs_keys.CS.ks_master_secret ==
+                 Some master_secret)
+      (ensures CS.legal_event
+        model
+        (CS.ConnLocalEvent
+          (CS.LocalInstallTrafficKeysForRole {
+           CS.install_role = CS.ServerEndpoint;
+           CS.install_payload = {
+             CS.install_epoch = CS.TrafficApplication;
+             CS.install_direction = CS.TrafficRead;
+             CS.install_material =
+               CS.traffic_key_material_for_secret
+                 (K.client_application_traffic_secret
+                   master_secret
+                   (Tr.hash model.CS.model_handshake.CS.hs_transcript));
+           };
+          })))
+
 val lemma_received_hello_retry_request_rejected_state_evolves
   (st:CS.connection_state)
   (raw_received:B.bytes)

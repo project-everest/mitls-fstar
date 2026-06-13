@@ -326,11 +326,13 @@ Current phase: **Phase 6 server buffer/event API and theorem surface**.
 - [x] Broadened the generic `TLS13.Impl.Server.process_local_event` dispatcher:
   `server_local_event_input_ready` now covers `LocalStartServer`,
   `LocalInstallServerHandshakeTrafficKeys`, and
-  `LocalInstallClientHandshakeTrafficKeys`, and the dispatcher routes the two
-  key-install actions through the internally derived public wrappers while
-  preserving `server_local_event_end_to_end_correct`. Other server local actions
-  remain intentionally outside this generic dispatcher until their handlers are
-  implemented.
+  `LocalInstallClientHandshakeTrafficKeys`; it also covers
+  `LocalInstallServerApplicationTrafficKeys` at `HsServerFinishedSent` and
+  `LocalInstallClientApplicationTrafficKeys` at `HsClientFinishedReceived`. The
+  dispatcher routes these key-install actions through the internally derived
+  public wrappers while preserving `server_local_event_end_to_end_correct`.
+  Other server local actions remain intentionally outside this generic
+  dispatcher until their handlers are implemented.
 - [x] Added supplied-material server application write-key installation:
   `TLS13.Impl.ConnectionState.LocalHandshake.install_server_application_write_traffic_keys_from_material`
   stores server application traffic material, installs the concrete application
@@ -344,9 +346,16 @@ Current phase: **Phase 6 server buffer/event API and theorem surface**.
   read record keys, and proves the role-indexed legal delta. The focused public
   `TLS13.Impl.Server.process_install_client_application_read_keys` wrapper proves
   `server_local_event_end_to_end_correct` for
-  `LocalInstallClientApplicationTrafficKeys`. Both application key wrappers
-  currently take already-derived traffic material; internal derivation from the
-  master secret and transcript remains pending.
+  `LocalInstallClientApplicationTrafficKeys`.
+- [x] Added internally derived server application write and client application
+  read key installation. The mutations derive traffic secrets from the stored
+  master secret and transcript hash, derive AEAD key/IV material, install the
+  role-correct concrete record direction, and prove role-indexed legal deltas.
+  The public wrappers
+  `process_derive_and_install_server_application_write_keys` and
+  `process_derive_and_install_client_application_read_keys` expose
+  `server_local_event_end_to_end_correct`; `next_local_action` and generic
+  `process_local_event` now schedule/dispatch the ready application key installs.
 
 ## End goal
 
@@ -1216,8 +1225,8 @@ Checklist:
         complete; serializer-driven construction and encrypted flight remain);
       - client Finished verification;
       - application key installation (server write-key and client read-key
-        supplied-material mutations/wrappers complete; internal derivation
-        remains);
+        supplied-material and internally derived mutations/wrappers, scheduler
+        hints, and generic local dispatcher integration complete);
       - application data and close_notify.
 - [ ] Add failure transitions:
       - unsupported cipher suite;
