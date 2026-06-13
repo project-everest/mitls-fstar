@@ -14,6 +14,10 @@ set -euo pipefail
 
 EVERPARSE_REPO="${EVERPARSE_REPO:-https://github.com/tahina-pro/quackyducky}"
 EVERPARSE_BRANCH="${EVERPARSE_BRANCH:-_taramana_fstar2_qd_copyful}"
+# Pinned EverParse commit this project is verified against.  The branch above is
+# only used as a fetch hint; the build always checks out this exact commit so the
+# toolchain is reproducible regardless of where the branch tip has moved.
+EVERPARSE_COMMIT="${EVERPARSE_COMMIT:-89326afa4223da09497ae368926900e8e93f8ebe}"
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # Default location: sibling of the agentic-tls checkout (matches the Makefile's
@@ -43,8 +47,10 @@ if [ ! -d "$EVERPARSE_HOME/.git" ]; then
 else
   echo "Updating existing EverParse checkout in $EVERPARSE_HOME ..."
   git -C "$EVERPARSE_HOME" fetch origin "$EVERPARSE_BRANCH"
-  git -C "$EVERPARSE_HOME" checkout "$EVERPARSE_BRANCH"
 fi
+
+echo "Checking out pinned EverParse commit $EVERPARSE_COMMIT ..."
+git -C "$EVERPARSE_HOME" checkout --quiet "$EVERPARSE_COMMIT"
 
 echo "Building EverParse (make quackyducky -j$jobs) — this also builds F* and KaRaMeL ..."
 make -C "$EVERPARSE_HOME" -j"$jobs" quackyducky

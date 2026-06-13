@@ -15,8 +15,9 @@ no separate F* installation is required.
 
 Environment overrides:
   EVERPARSE_HOME    where to clone/build EverParse (default: ../everparse)
-  EVERPARSE_REPO    git URL    (default: https://github.com/tahina-pro/quackyducky)
-  EVERPARSE_BRANCH  git branch (default: _taramana_fstar2_qd_copyful)
+  EVERPARSE_REPO    git URL     (default: https://github.com/tahina-pro/quackyducky)
+  EVERPARSE_BRANCH  git branch  (default: _taramana_fstar2_qd_copyful)
+  EVERPARSE_COMMIT  pinned commit to build (default: recorded in scripts/build-everparse.sh)
   JOBS              parallelism for the EverParse build (default: nproc)
 USAGE
 }
