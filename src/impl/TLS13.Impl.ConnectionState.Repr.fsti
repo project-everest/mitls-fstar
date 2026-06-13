@@ -1140,6 +1140,40 @@ let configured_initial_state
   : CS.connection_state =
   CS.initial (configured_connection_config server_name trust_anchors validation_time_seconds)
 
+noextract
+
+let server_connection_config
+  (certificate_chain:B.bytes)
+  (credential_identity:B.bytes)
+  : CS.connection_config =
+  {
+    CS.config_role = CS.ServerEndpoint;
+    CS.config_server_name = B.empty;
+    CS.config_trust_store = { X.anchors = B.empty };
+    CS.config_validation_time = { X.seconds_since_epoch = 0 };
+    CS.config_cipher_suites = default_connection_config.CS.config_cipher_suites;
+    CS.config_signature_schemes = default_connection_config.CS.config_signature_schemes;
+    CS.config_server =
+      Some {
+        CS.server_certificate_chain = certificate_chain;
+        CS.server_credential_identity = credential_identity;
+        CS.server_allowed_signature_schemes =
+          default_connection_config.CS.config_signature_schemes;
+        CS.server_supported_cipher_suites =
+          default_connection_config.CS.config_cipher_suites;
+        CS.server_supported_groups = [T.X25519];
+        CS.server_sni_policy = None;
+      };
+  }
+
+noextract
+
+let server_initial_state
+  (certificate_chain:B.bytes)
+  (credential_identity:B.bytes)
+  : CS.connection_state =
+  CS.initial (server_connection_config certificate_chain credential_identity)
+
 let lemma_default_initial_consistent ()
   : Lemma (CS.connection_state_consistent default_initial_state)
 =
@@ -1152,6 +1186,15 @@ let lemma_configured_initial_consistent
   : Lemma
       (CS.connection_state_consistent
         (configured_initial_state server_name trust_anchors validation_time_seconds))
+=
+  ()
+
+let lemma_server_initial_consistent
+  (certificate_chain:B.bytes)
+  (credential_identity:B.bytes)
+  : Lemma
+      (CS.connection_state_consistent
+        (server_initial_state certificate_chain credential_identity))
 =
   ()
 
@@ -1330,6 +1373,24 @@ fn new_client
               (Ghost.reveal 'server_name_bytes)
               (Ghost.reveal 'trust_anchors_bytes)
               validation_time_seconds)
+
+fn new_server
+  (certificate_chain:array U8.t)
+  (certificate_chain_len:SZ.t)
+  (credential_identity:array U8.t)
+  (credential_identity_len:SZ.t)
+  requires ArrPts.pts_to certificate_chain 'certificate_chain_bytes **
+           ArrPts.pts_to credential_identity 'credential_identity_bytes **
+           pure (B.length 'certificate_chain_bytes == SZ.v certificate_chain_len /\
+                   B.length 'credential_identity_bytes == SZ.v credential_identity_len)
+  returns c:connection_state
+  ensures ArrPts.pts_to certificate_chain 'certificate_chain_bytes **
+          ArrPts.pts_to credential_identity 'credential_identity_bytes **
+          connection_exactly
+              c
+              (server_initial_state
+                (Ghost.reveal 'certificate_chain_bytes)
+                (Ghost.reveal 'credential_identity_bytes))
 
 fn copy_server_hello_prefix_to_transcript
   (src:V.vec U8.t)

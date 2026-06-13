@@ -418,6 +418,95 @@ fn alloc_default_config_storage ()
   cfg
 }
 
+fn alloc_server_config_storage
+  (certificate_chain:array U8.t)
+  (certificate_chain_len:SZ.t)
+  (credential_identity:array U8.t)
+  (credential_identity_len:SZ.t)
+  requires ArrPts.pts_to certificate_chain 'certificate_chain_bytes **
+           ArrPts.pts_to credential_identity 'credential_identity_bytes **
+           pure (B.length 'certificate_chain_bytes == SZ.v certificate_chain_len /\
+                 B.length 'credential_identity_bytes == SZ.v credential_identity_len)
+  returns cfg:connection_config_storage
+  ensures ArrPts.pts_to certificate_chain 'certificate_chain_bytes **
+          ArrPts.pts_to credential_identity 'credential_identity_bytes **
+          connection_config_exactly
+            cfg
+            (server_connection_config
+              (Ghost.reveal 'certificate_chain_bytes)
+              (Ghost.reveal 'credential_identity_bytes))
+{
+  assert (pure (SZ.fits max_hostname_len));
+  assert (pure (SZ.fits max_trust_anchors_len));
+  let role_tag = Box.alloc 1uy;
+  let server_name = alloc_empty_sized_bytes #max_hostname_len;
+  let trust_anchors = alloc_empty_sized_bytes #max_trust_anchors_len;
+  let validation_time_seconds = Box.alloc 0sz;
+  let cipher_suites = alloc_default_cipher_suites ();
+  let signature_schemes = alloc_default_signature_schemes ();
+  let cfg = {
+    role_tag;
+    server_name;
+    trust_anchors;
+    validation_time_seconds;
+    cipher_suites;
+    signature_schemes;
+  };
+  rewrite (Box.pts_to role_tag 1uy) as (Box.pts_to cfg.role_tag 1uy);
+  rewrite (sized_bytes_exactly server_name max_hostname_len B.empty) as
+    (sized_bytes_exactly
+      cfg.server_name
+      max_hostname_len
+      (server_connection_config
+        (Ghost.reveal 'certificate_chain_bytes)
+        (Ghost.reveal 'credential_identity_bytes)).CS.config_server_name);
+  rewrite (sized_bytes_exactly trust_anchors max_trust_anchors_len B.empty) as
+    (sized_bytes_exactly
+      cfg.trust_anchors
+      max_trust_anchors_len
+      (server_connection_config
+        (Ghost.reveal 'certificate_chain_bytes)
+        (Ghost.reveal 'credential_identity_bytes)).CS.config_trust_store.X.anchors);
+  rewrite (Box.pts_to validation_time_seconds 0sz) as
+    (Box.pts_to cfg.validation_time_seconds 0sz);
+  rewrite (cipher_suite_list_exactly
+    cipher_suites
+    max_cipher_suites
+    default_connection_config.CS.config_cipher_suites) as
+    (cipher_suite_list_exactly
+      cfg.cipher_suites
+      max_cipher_suites
+      (server_connection_config
+        (Ghost.reveal 'certificate_chain_bytes)
+        (Ghost.reveal 'credential_identity_bytes)).CS.config_cipher_suites);
+  rewrite (signature_scheme_list_exactly
+    signature_schemes
+    max_signature_schemes
+    default_connection_config.CS.config_signature_schemes) as
+    (signature_scheme_list_exactly
+      cfg.signature_schemes
+      max_signature_schemes
+      (server_connection_config
+        (Ghost.reveal 'certificate_chain_bytes)
+        (Ghost.reveal 'credential_identity_bytes)).CS.config_signature_schemes);
+  assert_norm (Tags.endpoint_role_tag_matches 1uy CS.ServerEndpoint);
+  assert (pure (Tags.endpoint_role_tag_matches
+    1uy
+    (server_connection_config
+      (Ghost.reveal 'certificate_chain_bytes)
+      (Ghost.reveal 'credential_identity_bytes)).CS.config_role));
+  assert (pure (SZ.v 0sz ==
+    (server_connection_config
+      (Ghost.reveal 'certificate_chain_bytes)
+      (Ghost.reveal 'credential_identity_bytes)).CS.config_validation_time.X.seconds_since_epoch));
+  fold (connection_config_exactly
+    cfg
+    (server_connection_config
+      (Ghost.reveal 'certificate_chain_bytes)
+      (Ghost.reveal 'credential_identity_bytes)));
+  cfg
+}
+
 fn alloc_config_storage
   (server_name:array U8.t)
   (server_name_len:SZ.t)
@@ -1135,6 +1224,124 @@ fn new_client
       (Ghost.reveal 'server_name_bytes)
       (Ghost.reveal 'trust_anchors_bytes)
       validation_time_seconds));
+  c
+}
+
+fn new_server
+  (certificate_chain:array U8.t)
+  (certificate_chain_len:SZ.t)
+  (credential_identity:array U8.t)
+  (credential_identity_len:SZ.t)
+  requires ArrPts.pts_to certificate_chain 'certificate_chain_bytes **
+           ArrPts.pts_to credential_identity 'credential_identity_bytes **
+           pure (B.length 'certificate_chain_bytes == SZ.v certificate_chain_len /\
+                 B.length 'credential_identity_bytes == SZ.v credential_identity_len)
+  returns c:connection_state
+  ensures ArrPts.pts_to certificate_chain 'certificate_chain_bytes **
+          ArrPts.pts_to credential_identity 'credential_identity_bytes **
+          connection_exactly
+            c
+            (server_initial_state
+              (Ghost.reveal 'certificate_chain_bytes)
+              (Ghost.reveal 'credential_identity_bytes))
+{
+  lemma_server_initial_consistent
+    (Ghost.reveal 'certificate_chain_bytes)
+    (Ghost.reveal 'credential_identity_bytes);
+  let config =
+    alloc_server_config_storage
+      certificate_chain
+      certificate_chain_len
+      credential_identity
+      credential_identity_len;
+  let control = alloc_control_new ();
+  let read = Rec.record_state_new ();
+  let write = Rec.record_state_new ();
+  let records = { read; write };
+  let handshake = alloc_handshake_empty ();
+  let application = alloc_application_empty ();
+  let ghost_state = MR.alloc #_ #connection_state_preorder
+    (server_initial_state
+      (Ghost.reveal 'certificate_chain_bytes)
+      (Ghost.reveal 'credential_identity_bytes));
+  let c = {
+    config;
+    control;
+    records;
+    handshake;
+    application;
+    ghost_state;
+  };
+  rewrite (connection_config_exactly
+    config
+    (server_connection_config
+      (Ghost.reveal 'certificate_chain_bytes)
+      (Ghost.reveal 'credential_identity_bytes))) as
+    (connection_config_exactly
+      c.config
+      (server_initial_state
+        (Ghost.reveal 'certificate_chain_bytes)
+        (Ghost.reveal 'credential_identity_bytes)).CS.cs_model.CS.model_config);
+  rewrite (control_exactly control CS.ControlNew None) as
+    (control_exactly
+      c.control
+      (server_initial_state
+        (Ghost.reveal 'certificate_chain_bytes)
+        (Ghost.reveal 'credential_identity_bytes)).CS.cs_model.CS.model_control
+      (server_initial_state
+        (Ghost.reveal 'certificate_chain_bytes)
+        (Ghost.reveal 'credential_identity_bytes)).CS.cs_model.CS.model_failure);
+  rewrite (Rec.is_record_state read R.initial_direction_state) as
+    (Rec.is_record_state
+      c.records.read
+      (server_initial_state
+        (Ghost.reveal 'certificate_chain_bytes)
+        (Ghost.reveal 'credential_identity_bytes)).CS.cs_model.CS.model_record.CS.record_read);
+  rewrite (Rec.is_record_state write R.initial_direction_state) as
+    (Rec.is_record_state
+      c.records.write
+      (server_initial_state
+        (Ghost.reveal 'certificate_chain_bytes)
+        (Ghost.reveal 'credential_identity_bytes)).CS.cs_model.CS.model_record.CS.record_write);
+  fold (record_layer_exactly
+    c.records
+    (server_initial_state
+      (Ghost.reveal 'certificate_chain_bytes)
+      (Ghost.reveal 'credential_identity_bytes)).CS.cs_model.CS.model_record);
+  rewrite (handshake_exactly handshake CS.empty_handshake_state) as
+    (handshake_exactly
+      c.handshake
+      (server_initial_state
+        (Ghost.reveal 'certificate_chain_bytes)
+        (Ghost.reveal 'credential_identity_bytes)).CS.cs_model.CS.model_handshake);
+  rewrite (application_exactly application CS.empty_application_state) as
+    (application_exactly
+      c.application
+      (server_initial_state
+        (Ghost.reveal 'certificate_chain_bytes)
+        (Ghost.reveal 'credential_identity_bytes)).CS.cs_model.CS.model_application);
+  fold (connection_model_exactly
+    c
+    (server_initial_state
+      (Ghost.reveal 'certificate_chain_bytes)
+      (Ghost.reveal 'credential_identity_bytes)).CS.cs_model);
+  rewrite (MR.pts_to
+    ghost_state
+    #1.0R
+    (server_initial_state
+      (Ghost.reveal 'certificate_chain_bytes)
+      (Ghost.reveal 'credential_identity_bytes))) as
+    (MR.pts_to
+      c.ghost_state
+      #1.0R
+      (server_initial_state
+        (Ghost.reveal 'certificate_chain_bytes)
+        (Ghost.reveal 'credential_identity_bytes)));
+  fold (connection_exactly
+    c
+    (server_initial_state
+      (Ghost.reveal 'certificate_chain_bytes)
+      (Ghost.reveal 'credential_identity_bytes)));
   c
 }
 

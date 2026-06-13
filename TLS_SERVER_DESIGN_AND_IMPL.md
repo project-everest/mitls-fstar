@@ -17,7 +17,7 @@ the existing client implementation structure.
 
 ## Implementation status
 
-Current phase: **Phase 3 shared endpoint/codec predicate refactor**.
+Current phase: **Phase 6 server buffer/event API and theorem surface**.
 
 - [x] Single authoritative plan committed.
 - [x] Superseded server/transcript planning docs removed.
@@ -189,8 +189,18 @@ Current phase: **Phase 3 shared endpoint/codec predicate refactor**.
     with exact emitted bytes and parse-back postconditions.
   - `c_stubs/tls13_connection_backend.h` implements matching C TCB helpers over
     concrete L-level server message storage.
-- [ ] Continue Phase 3 by factoring role-neutral output-slice and parse/decode
-  predicates only where they are needed by the server API.
+- [x] Started Phase 6 with `TLS13.Impl.Server.Types`:
+  server status/response aliases over shared endpoint response types,
+  server-specific local action/payload vocabulary, `server_state_correct`,
+  `server_end_to_end_invariant`, initial invariant lemmas, and first theorem
+  predicates for server network/local buffer steps.
+- [x] Added the first public server constructor path:
+  `TLS13.Impl.ConnectionState.Repr.new_server` builds a `ServerEndpoint`
+  initial connection state with ghost/spec server credential metadata, and
+  `TLS13.Impl.Server.new_server` establishes `server_state_correct` and
+  `server_end_to_end_invariant`.
+- [ ] Continue Phase 6 by adding Pulse network/local handlers against the new
+  theorem surface.
 
 ## End goal
 
@@ -1007,15 +1017,15 @@ process_local_event
 
 Checklist:
 
-- [ ] Define `server_state_correct`.
-- [ ] Define `server_end_to_end_invariant`.
-- [ ] Define server response/status types.
-- [ ] Define server local event kinds.
-- [ ] Define `server_network_bytes_end_to_end_correct`.
-- [ ] Define `server_local_event_end_to_end_correct`.
-- [ ] Constructor establishes the server invariant.
+- [x] Define `server_state_correct`.
+- [x] Define `server_end_to_end_invariant`.
+- [x] Define server response/status types.
+- [x] Define server local event kinds.
+- [x] Define `server_network_bytes_end_to_end_correct`.
+- [x] Define `server_local_event_end_to_end_correct`.
+- [x] Constructor establishes the server invariant.
 - [ ] Network/local steps preserve the server invariant.
-- [ ] Emitted bytes expose raw-delta, parse-back, seal, and write-key provenance.
+- [x] Emitted bytes expose raw-delta, parse-back, seal, and write-key provenance.
 - [ ] Consumed bytes expose exact consumed prefix, parse/decode classification,
       open facts, and read-key provenance.
 - [ ] Server invariants expose facts needed to instantiate
