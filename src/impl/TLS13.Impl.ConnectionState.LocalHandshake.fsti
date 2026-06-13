@@ -102,6 +102,23 @@ fn start_server
             }
             (started_server_state st0))
 
+fn select_server_parameters
+  (c:connection_state)
+  (#selection:erased CS.server_handshake_selection)
+  (#st0:erased CS.connection_state)
+  requires connection_exactly c st0 **
+           pure (can_select_server_parameters st0 selection)
+  ensures connection_exactly c (selected_server_parameters_state st0 selection) **
+          pure (CS.legal_connection_delta
+            st0
+            {
+              CS.delta_event =
+                CS.ConnLocalEvent (CS.LocalSelectServerParameters selection);
+              CS.delta_raw_sent = B.empty;
+              CS.delta_raw_received = B.empty;
+            }
+            (selected_server_parameters_state st0 selection))
+
 fn try_send_client_hello
   (c:connection_state)
   (network_out:array U8.t)

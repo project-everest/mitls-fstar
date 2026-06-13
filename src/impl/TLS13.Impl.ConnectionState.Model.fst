@@ -298,6 +298,55 @@ let lemma_started_server_state_evolves
   assert (CS.connection_state_evolves st (started_server_state st));
   assert (CS.connection_state_consistent (started_server_state st))
 
+let lemma_selected_server_parameters_state_evolves
+  (st:CS.connection_state)
+  (selection:CS.server_handshake_selection)
+  : Lemma
+      (requires CS.connection_state_consistent st /\
+                can_select_server_parameters st selection)
+      (ensures CS.connection_state_evolves
+                 st
+                 (selected_server_parameters_state st selection) /\
+               CS.connection_state_consistent
+                 (selected_server_parameters_state st selection) /\
+               CS.legal_connection_delta
+                 st
+                 {
+                   CS.delta_event =
+                     CS.ConnLocalEvent (CS.LocalSelectServerParameters selection);
+                   CS.delta_raw_sent = B.empty;
+                   CS.delta_raw_received = B.empty;
+                 }
+                 (selected_server_parameters_state st selection))
+=
+  let ev = CS.ConnLocalEvent (CS.LocalSelectServerParameters selection) in
+  let delta = {
+    CS.delta_event = ev;
+    CS.delta_raw_sent = B.empty;
+    CS.delta_raw_received = B.empty;
+  } in
+  Seq.lemma_eq_intro B.empty B.empty;
+  assert (CS.legal_event st.CS.cs_model ev);
+  assert (CS.step_model st.CS.cs_model ev ==
+          Some (selected_server_parameters_state st selection).CS.cs_model);
+  assert (CS.event_raw_delta_legal st.CS.cs_model ev B.empty B.empty);
+  assert (CS.legal_connection_delta
+    st
+    delta
+    (selected_server_parameters_state st selection));
+  assert (CS.connection_state_single_step
+    st
+    (selected_server_parameters_state st selection));
+  FStar.ReflexiveTransitiveClosure.closure_step
+    CS.connection_state_single_step
+    st
+    (selected_server_parameters_state st selection);
+  assert (CS.connection_state_evolves
+    st
+    (selected_server_parameters_state st selection));
+  assert (CS.connection_state_consistent
+    (selected_server_parameters_state st selection))
+
 let lemma_sent_client_hello_state_evolves
   (st:CS.connection_state)
   (ch:M.client_hello)

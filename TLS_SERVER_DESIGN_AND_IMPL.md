@@ -239,6 +239,14 @@ Current phase: **Phase 6 server buffer/event API and theorem surface**.
   only role/control, stored-ClientHello presence, and transcript length, and
   proves server role, `HsAwaitingClientHello`, no prior ClientHello, transcript
   room for the decoded fragment, and received-ClientHello `legal_event`.
+- [x] Added the first server parameter-selection model/mutation slice:
+  `TLS13.Impl.ConnectionState.Model.selected_server_parameters_state` records
+  `hs_server_selection` after an accepted `ClientHello`, and
+  `TLS13.Impl.ConnectionState.LocalHandshake.select_server_parameters` proves the
+  corresponding `LocalSelectServerParameters` legal delta while refolding the
+  unchanged concrete storage. This is intentionally ghost/spec-only for now:
+  executable random/key-share generation, concrete selection storage, scheduler
+  readiness, and the public local-event wrapper remain pending.
 
 ## End goal
 
@@ -1064,7 +1072,8 @@ Checklist:
 - [x] Constructor establishes the server invariant.
 - [ ] Network/local steps preserve the server invariant.
       Initial slices completed: `LocalStartServer` and SNI-present received
-      `ClientHello`.
+      `ClientHello`; the internal `LocalSelectServerParameters` mutation proves
+      its legal delta and is awaiting a public wrapper plus executable selection.
 - [x] Emitted bytes expose raw-delta, parse-back, seal, and write-key provenance.
 - [ ] Consumed bytes expose exact consumed prefix, parse/decode classification,
       open facts, and read-key provenance.
@@ -1082,7 +1091,8 @@ Validation:
 Checklist:
 
 - [x] Create small `.fsti` boundaries for server state mutations.
-      Initial boundaries cover server start and received ClientHello.
+      Initial boundaries cover server start, received ClientHello, and the
+      ghost/spec-only server parameter-selection transition.
 - [ ] Reuse shared helpers where endpoint-independent.
 - [ ] Add network handlers:
       - ClientHello accept/reject;

@@ -454,6 +454,101 @@ fn start_server
   fold (connection_exactly c (started_server_state st0))
 }
 
+fn select_server_parameters
+  (c:connection_state)
+  (#selection:erased CS.server_handshake_selection)
+  (#st0:erased CS.connection_state)
+  requires connection_exactly c st0 **
+           pure (can_select_server_parameters st0 selection)
+  ensures connection_exactly c (selected_server_parameters_state st0 selection) **
+          pure (CS.legal_connection_delta
+            st0
+            {
+              CS.delta_event =
+                CS.ConnLocalEvent (CS.LocalSelectServerParameters selection);
+              CS.delta_raw_sent = B.empty;
+              CS.delta_raw_received = B.empty;
+            }
+            (selected_server_parameters_state st0 selection))
+{
+  assert (pure (st0.CS.cs_model.CS.model_control ==
+    CS.ControlHandshaking CS.HsClientHelloReceived));
+  assert (pure (st0.CS.cs_model.CS.model_config.CS.config_role ==
+    CS.ServerEndpoint));
+  assert (pure (st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello ==
+    Some (Ghost.reveal selection).CS.server_selected_client_hello));
+  assert (pure (CS.legal_event
+    st0.CS.cs_model
+    (CS.ConnLocalEvent
+      (CS.LocalSelectServerParameters (Ghost.reveal selection)))));
+
+  unfold (connection_exactly c st0);
+  unfold (connection_model_exactly c st0.CS.cs_model);
+
+  assert (pure ((selected_server_parameters_state st0 (Ghost.reveal selection)).CS.cs_model.CS.model_config ==
+    st0.CS.cs_model.CS.model_config));
+  assert (pure ((selected_server_parameters_state st0 (Ghost.reveal selection)).CS.cs_model.CS.model_control ==
+    st0.CS.cs_model.CS.model_control));
+  assert (pure ((selected_server_parameters_state st0 (Ghost.reveal selection)).CS.cs_model.CS.model_failure ==
+    st0.CS.cs_model.CS.model_failure));
+  assert (pure ((selected_server_parameters_state st0 (Ghost.reveal selection)).CS.cs_model.CS.model_record ==
+    st0.CS.cs_model.CS.model_record));
+  assert (pure ((selected_server_parameters_state st0 (Ghost.reveal selection)).CS.cs_model.CS.model_application ==
+    st0.CS.cs_model.CS.model_application));
+  assert (pure ((selected_server_parameters_state st0 (Ghost.reveal selection)).CS.cs_model.CS.model_handshake.CS.hs_start ==
+    st0.CS.cs_model.CS.model_handshake.CS.hs_start));
+  assert (pure ((selected_server_parameters_state st0 (Ghost.reveal selection)).CS.cs_model.CS.model_handshake.CS.hs_client_hello ==
+    st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello));
+  assert (pure ((selected_server_parameters_state st0 (Ghost.reveal selection)).CS.cs_model.CS.model_handshake.CS.hs_server_hello ==
+    st0.CS.cs_model.CS.model_handshake.CS.hs_server_hello));
+  assert (pure ((selected_server_parameters_state st0 (Ghost.reveal selection)).CS.cs_model.CS.model_handshake.CS.hs_encrypted_extensions ==
+    st0.CS.cs_model.CS.model_handshake.CS.hs_encrypted_extensions));
+  assert (pure ((selected_server_parameters_state st0 (Ghost.reveal selection)).CS.cs_model.CS.model_handshake.CS.hs_certificate ==
+    st0.CS.cs_model.CS.model_handshake.CS.hs_certificate));
+  assert (pure ((selected_server_parameters_state st0 (Ghost.reveal selection)).CS.cs_model.CS.model_handshake.CS.hs_certificate_verify ==
+    st0.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify));
+  assert (pure ((selected_server_parameters_state st0 (Ghost.reveal selection)).CS.cs_model.CS.model_handshake.CS.hs_server_finished ==
+    st0.CS.cs_model.CS.model_handshake.CS.hs_server_finished));
+  assert (pure ((selected_server_parameters_state st0 (Ghost.reveal selection)).CS.cs_model.CS.model_handshake.CS.hs_client_finished ==
+    st0.CS.cs_model.CS.model_handshake.CS.hs_client_finished));
+  assert (pure ((selected_server_parameters_state st0 (Ghost.reveal selection)).CS.cs_model.CS.model_handshake.CS.hs_validated_peer ==
+    st0.CS.cs_model.CS.model_handshake.CS.hs_validated_peer));
+  assert (pure ((selected_server_parameters_state st0 (Ghost.reveal selection)).CS.cs_model.CS.model_handshake.CS.hs_certificate_verify_verified ==
+    st0.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify_verified));
+  assert (pure ((selected_server_parameters_state st0 (Ghost.reveal selection)).CS.cs_model.CS.model_handshake.CS.hs_server_finished_verified ==
+    st0.CS.cs_model.CS.model_handshake.CS.hs_server_finished_verified));
+  assert (pure ((selected_server_parameters_state st0 (Ghost.reveal selection)).CS.cs_model.CS.model_handshake.CS.hs_transcript ==
+    st0.CS.cs_model.CS.model_handshake.CS.hs_transcript));
+  assert (pure ((selected_server_parameters_state st0 (Ghost.reveal selection)).CS.cs_model.CS.model_handshake.CS.hs_buffers ==
+    st0.CS.cs_model.CS.model_handshake.CS.hs_buffers));
+  assert (pure ((selected_server_parameters_state st0 (Ghost.reveal selection)).CS.cs_model.CS.model_handshake.CS.hs_keys ==
+    st0.CS.cs_model.CS.model_handshake.CS.hs_keys));
+
+  unfold (handshake_exactly c.handshake st0.CS.cs_model.CS.model_handshake);
+  with cv_verified server_finished_verified. _;
+  unfold (handshake_messages_exactly c.handshake.messages st0.CS.cs_model.CS.model_handshake);
+  fold (handshake_messages_exactly
+    c.handshake.messages
+    (selected_server_parameters_state st0 (Ghost.reveal selection)).CS.cs_model.CS.model_handshake);
+  unfold (server_key_share_exactly c.handshake.server_key_share st0.CS.cs_model.CS.model_handshake);
+  fold (server_key_share_exactly
+    c.handshake.server_key_share
+    (selected_server_parameters_state st0 (Ghost.reveal selection)).CS.cs_model.CS.model_handshake);
+  fold (handshake_exactly
+    c.handshake
+    (selected_server_parameters_state st0 (Ghost.reveal selection)).CS.cs_model.CS.model_handshake);
+
+  fold (connection_model_exactly
+    c
+    (selected_server_parameters_state st0 (Ghost.reveal selection)).CS.cs_model);
+
+  lemma_selected_server_parameters_state_evolves
+    st0
+    (Ghost.reveal selection);
+  MR.update c.ghost_state (selected_server_parameters_state st0 (Ghost.reveal selection));
+  fold (connection_exactly c (selected_server_parameters_state st0 (Ghost.reveal selection)))
+}
+
 fn try_send_client_hello
   (c:connection_state)
   (network_out:array U8.t)

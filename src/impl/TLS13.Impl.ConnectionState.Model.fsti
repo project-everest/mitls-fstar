@@ -164,6 +164,45 @@ let can_start_server
     st.CS.cs_model
     (CS.ConnLocalEvent CS.LocalStartServer)
 
+let selected_server_parameters_state
+  (st:CS.connection_state)
+  (selection:CS.server_handshake_selection)
+  : CS.connection_state =
+  let model0 = st.CS.cs_model in
+  let hs0 = model0.CS.model_handshake in
+  {
+    CS.cs_model =
+      CS.with_handshake_stage
+        model0
+        { hs0 with
+            CS.hs_server_selection = Some selection;
+            CS.hs_client_hello = Some selection.CS.server_selected_client_hello;
+        }
+        CS.HsClientHelloReceived;
+    CS.cs_wire_log = {
+      CL.raw_sent = B.append st.CS.cs_wire_log.CL.raw_sent B.empty;
+      CL.raw_received = B.append st.CS.cs_wire_log.CL.raw_received B.empty;
+    };
+    CS.cs_event_log =
+      st.CS.cs_event_log @
+        [CS.ConnLocalEvent (CS.LocalSelectServerParameters selection)];
+  }
+
+let can_select_server_parameters
+  (st:CS.connection_state)
+  (selection:CS.server_handshake_selection)
+  : GTot prop =
+  st.CS.cs_model.CS.model_control == CS.ControlHandshaking CS.HsClientHelloReceived /\
+  st.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
+  st.CS.cs_model.CS.model_handshake.CS.hs_client_hello ==
+    Some selection.CS.server_selected_client_hello /\
+  (match st.CS.cs_model.CS.model_config.CS.config_server with
+   | Some cfg -> CS.server_selection_acceptable cfg selection
+   | None -> False) /\
+  CS.legal_event
+    st.CS.cs_model
+    (CS.ConnLocalEvent (CS.LocalSelectServerParameters selection))
+
 let sent_client_hello_state
   (st:CS.connection_state)
   (ch:M.client_hello)
@@ -1214,6 +1253,27 @@ val lemma_started_server_state_evolves
                   CS.delta_raw_received = B.empty;
                  }
                  (started_server_state st))
+
+val lemma_selected_server_parameters_state_evolves
+  (st:CS.connection_state)
+  (selection:CS.server_handshake_selection)
+  : Lemma
+      (requires CS.connection_state_consistent st /\
+                can_select_server_parameters st selection)
+      (ensures CS.connection_state_evolves
+                 st
+                 (selected_server_parameters_state st selection) /\
+               CS.connection_state_consistent
+                 (selected_server_parameters_state st selection) /\
+               CS.legal_connection_delta
+                 st
+                 {
+                   CS.delta_event =
+                     CS.ConnLocalEvent (CS.LocalSelectServerParameters selection);
+                   CS.delta_raw_sent = B.empty;
+                   CS.delta_raw_received = B.empty;
+                 }
+                 (selected_server_parameters_state st selection))
 
 val lemma_sent_client_hello_state_evolves
   (st:CS.connection_state)
