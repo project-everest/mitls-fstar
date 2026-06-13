@@ -135,8 +135,15 @@ extract-generated: | check-toolchain
 	@echo "Extracted TLS wire parsers/serializers to $(GENERATED_DIR)/out/"
 
 # Full parsers/serializers pipeline from $(QD_RFC): generate, verify, extract.
+# These three stages share the generated/ directory (.depend, cache/, the .fst
+# sources) and are inherently ordered, so they MUST run sequentially even under
+# a parallel `make -jN`; run them via recursive $(MAKE) rather than as parallel
+# prerequisites.
 .PHONY: parsers
-parsers: regen-generated verify-generated extract-generated
+parsers:
+	$(MAKE) regen-generated
+	$(MAKE) verify-generated
+	$(MAKE) extract-generated
 
 # ── Dependency Analysis ────────────────────────────────────────────
 # The generated .checked files must exist before `.depend` is computed, because
