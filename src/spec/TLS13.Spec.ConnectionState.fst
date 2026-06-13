@@ -689,7 +689,7 @@ let step_local_event (model:connection_model) (ev:local_event) : GTot (option co
     Some (with_handshake_stage model { hs with hs_start = Some start } HsStarted)
   | LocalStartServer, ControlNew ->
     Some (with_handshake_stage model hs HsAwaitingClientHello)
-  | LocalSelectServerParameters selection, ControlHandshaking HsAwaitingClientHello ->
+  | LocalSelectServerParameters selection, ControlHandshaking HsClientHelloReceived ->
     Some (with_handshake_stage
       model
       { hs with
@@ -769,6 +769,16 @@ let step_handshake_message
         }
         msg in
     Some (with_handshake_stage model hs' HsClientHelloSent)
+  | CL.Received, M.ClientHello ch, ControlHandshaking HsAwaitingClientHello ->
+    let hs' =
+      append_handshake_to_transcript
+        { hs with
+            hs_client_hello = Some ch;
+            hs_buffers =
+              { hs.hs_buffers with hb_client_hello_bytes = W.serialize_handshake msg };
+        }
+        msg in
+    Some (with_handshake_stage model hs' HsClientHelloReceived)
   | CL.Received, M.ServerHello sh, ControlHandshaking HsClientHelloSent ->
     let hs' =
       append_handshake_to_transcript
@@ -779,6 +789,16 @@ let step_handshake_message
         }
         msg in
     Some (with_handshake_stage model hs' HsServerHelloReceived)
+  | CL.Sent, M.ServerHello sh, ControlHandshaking HsClientHelloReceived ->
+    let hs' =
+      append_handshake_to_transcript
+        { hs with
+            hs_server_hello = Some sh;
+            hs_buffers =
+              { hs.hs_buffers with hb_server_hello_bytes = W.serialize_handshake msg };
+        }
+        msg in
+    Some (with_handshake_stage model hs' HsServerHelloSent)
   | CL.Received, M.EncryptedExtensions ee, ControlHandshaking HsServerHelloReceived ->
     Some (with_handshake_stage
       { model with
@@ -1103,6 +1123,14 @@ let client_hello_matches_start (start:handshake_start) (ch:M.client_hello) : pro
   ch.M.cipher_suites == start.start_cipher_suites /\
   ch.M.signature_schemes == start.start_signature_schemes
 
+let server_hello_matches_selection
+  (selection:server_handshake_selection)
+  (sh:M.server_hello)
+  : prop =
+  Seq.equal sh.M.random selection.server_random /\
+  Seq.equal sh.M.key_share selection.server_key_share_public /\
+  sh.M.cipher_suite == selection.server_selected_cipher_suite
+
 let traffic_secret_for_label
   (hs:handshake_state)
   (epoch:traffic_epoch)
@@ -1182,7 +1210,7 @@ let traffic_install_allowed_at_stage_for_role
     traffic_install_allowed_at_stage stage install
   | ServerEndpoint ->
     (match install.install_epoch with
-     | TrafficHandshake -> stage == HsClientHelloReceived
+     | TrafficHandshake -> stage == HsServerHelloSent
      | TrafficApplication -> stage == HsServerFinishedSent)
 
 let legal_local_event (model:connection_model) (ev:local_event) : GTot prop =
@@ -1197,8 +1225,9 @@ let legal_local_event (model:connection_model) (ev:local_event) : GTot prop =
     (match model.model_config.config_server with
      | Some _ -> True
      | None -> False)
-  | LocalSelectServerParameters selection, ControlHandshaking HsAwaitingClientHello ->
+  | LocalSelectServerParameters selection, ControlHandshaking HsClientHelloReceived ->
     model.model_config.config_role == ServerEndpoint /\
+    hs.hs_client_hello == Some selection.server_selected_client_hello /\
     (match model.model_config.config_server with
      | Some cfg -> server_selection_acceptable cfg selection
      | None -> False)
@@ -1281,11 +1310,22 @@ let legal_handshake_message
     (match hs.hs_start with
      | Some start -> client_hello_matches_start start ch
      | None -> False)
+  | CL.Received, M.ClientHello _, ControlHandshaking HsAwaitingClientHello ->
+    model.model_config.config_role == ServerEndpoint /\
+    (match model.model_config.config_server with
+     | Some _ -> True
+     | None -> False)
   | CL.Received, M.ServerHello sh, ControlHandshaking HsClientHelloSent ->
     model.model_config.config_role == ClientEndpoint /\
     H.is_supported_cipher_suite sh.M.cipher_suite /\
     (match hs.hs_start with
      | Some start -> cipher_suite_offered start.start_cipher_suites sh.M.cipher_suite
+     | None -> False)
+  | CL.Sent, M.ServerHello sh, ControlHandshaking HsClientHelloReceived ->
+    model.model_config.config_role == ServerEndpoint /\
+    Some? hs.hs_keys.ks_shared_secret /\
+    (match hs.hs_server_selection with
+     | Some selection -> server_hello_matches_selection selection sh
      | None -> False)
   | CL.Received, M.EncryptedExtensions _, ControlHandshaking HsServerHelloReceived ->
     model.model_config.config_role == ClientEndpoint /\
@@ -1465,7 +1505,11 @@ let conn_event_transcript_delta (ev:conn_event) : GTot B.bytes =
     (match msg.CL.message_direction, msg.CL.message_value with
      | CL.Sent, M.TlsHandshake (M.ClientHello ch) ->
        W.serialize_handshake (M.ClientHello ch)
+     | CL.Received, M.TlsHandshake (M.ClientHello ch) ->
+       W.serialize_handshake (M.ClientHello ch)
      | CL.Received, M.TlsHandshake (M.ServerHello sh) ->
+       W.serialize_handshake (M.ServerHello sh)
+     | CL.Sent, M.TlsHandshake (M.ServerHello sh) ->
        W.serialize_handshake (M.ServerHello sh)
      | CL.Received, M.TlsHandshake (M.EncryptedExtensions ee) ->
        W.serialize_handshake (M.EncryptedExtensions ee)
@@ -2000,7 +2044,9 @@ let cleartext_tls_message_raw (msg:M.tls_message) (raw:B.bytes) : GTot prop =
 let network_message_is_cleartext (dir:direction) (msg:M.tls_message) : bool =
   match dir, msg with
   | CL.Sent, M.TlsHandshake (M.ClientHello _) -> true
+  | CL.Received, M.TlsHandshake (M.ClientHello _) -> true
   | CL.Received, M.TlsHandshake (M.ServerHello _) -> true
+  | CL.Sent, M.TlsHandshake (M.ServerHello _) -> true
   | CL.Received, M.TlsHandshake M.HelloRetryRequest -> true
   | _, M.TlsChangeCipherSpec -> true
   | _, _ -> false

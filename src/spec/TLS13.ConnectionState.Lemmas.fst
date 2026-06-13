@@ -845,6 +845,10 @@ let lemma_step_model_record_keys_consistent_for_role
          assert (model1.model_handshake.hs_keys == model0.model_handshake.hs_keys))
      | ConnNetworkEvent msg ->
       (match msg.CL.message_value with
+       | M.TlsHandshake (M.ClientHello _)
+       | M.TlsHandshake (M.ServerHello _) ->
+         assert (model1.model_record == model0.model_record);
+         assert (model1.model_handshake.hs_keys == model0.model_handshake.hs_keys)
        | M.TlsAlert T.CloseNotify ->
          (match model0.model_control with
           | ControlApplicationData
@@ -1121,7 +1125,9 @@ let lemma_step_model_transcript_delta
   | ConnNetworkEvent msg ->
     (match msg.CL.message_direction, msg.CL.message_value with
      | CL.Sent, M.TlsHandshake (M.ClientHello _) -> ()
+     | CL.Received, M.TlsHandshake (M.ClientHello _) -> ()
      | CL.Received, M.TlsHandshake (M.ServerHello _) -> ()
+     | CL.Sent, M.TlsHandshake (M.ServerHello _) -> ()
      | CL.Received, M.TlsHandshake (M.EncryptedExtensions _) -> ()
      | CL.Received, M.TlsHandshake (M.Certificate _) -> ()
      | CL.Received, M.TlsHandshake (M.CertificateVerify _) -> ()

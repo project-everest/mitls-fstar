@@ -89,6 +89,14 @@ Current phase: **Phase 0/1 started**.
 - [x] Role-indexed legal-delta preservation lemmas now cover record-key,
   layered-log, and full-log consistency through the endpoint role stored in the
   connection config.
+- [x] Added the first network-visible server handshake transitions:
+  received `ClientHello` appends exact transcript bytes and enters
+  `HsClientHelloReceived`; sent `ServerHello` is checked against the selected
+  server parameters, appends exact transcript bytes, is classified as cleartext
+  raw TLS, and enters `HsServerHelloSent`.
+- [x] Server handshake traffic-key installation is now staged after the
+  transcript includes `ServerHello` (`HsServerHelloSent`), rather than at the
+  pre-`ServerHello` ClientHello stage.
 - [x] Repaired the existing Pulse client proof surface after the role gates:
   implementation readiness queries and mutation/model lemmas now expose
   `ClientEndpoint` exactly where legacy client-only transitions rely on it, and
@@ -767,6 +775,8 @@ Checklist:
       helpers.
 - [x] Add endpoint-role guards to the existing client-only legal transitions.
 - [x] Add role-parametric record-key preservation for legal model steps.
+- [x] Add server received-`ClientHello` and sent-`ServerHello` pure network
+      transitions, including transcript and raw cleartext classification.
 - [x] Preserve the legacy Pulse client implementation by threading explicit
       client-role facts through readiness queries, model lemmas, and mutation
       boundaries.
