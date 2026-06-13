@@ -576,6 +576,7 @@ let can_send_encrypted_extensions
   ee.M.negotiated_alpn == None /\
   Some?
     st.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_handshake_traffic /\
+  U64.fits (st.CS.cs_model.CS.model_record.CS.record_write.R.seq + 1) /\
   B.length st.CS.cs_model.CS.model_handshake.CS.hs_transcript +
     B.length (W.serialize_handshake (M.EncryptedExtensions ee)) <=
     max_transcript_len /\
@@ -650,6 +651,7 @@ let can_send_certificate
   st.CS.cs_model.CS.model_handshake.CS.hs_certificate == None /\
   Some?
     st.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_handshake_traffic /\
+  U64.fits (st.CS.cs_model.CS.model_record.CS.record_write.R.seq + 1) /\
   (match st.CS.cs_model.CS.model_config.CS.config_server with
    | Some cfg -> CS.certificate_msg_matches_server_config cfg cert
    | None -> False) /\
@@ -718,6 +720,7 @@ let can_send_certificate_verify
   st.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify_verified /\
   Some?
     st.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_handshake_traffic /\
+  U64.fits (st.CS.cs_model.CS.model_record.CS.record_write.R.seq + 1) /\
   (match st.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify with
    | Some stored_cv -> stored_cv == cv
    | None -> False) /\
@@ -783,6 +786,7 @@ let can_send_server_finished
     CS.ControlHandshaking CS.HsServerEncryptedFlightSent /\
   st.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
   st.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify_verified /\
+  U64.fits (st.CS.cs_model.CS.model_record.CS.record_write.R.seq + 1) /\
   (match st.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_handshake_traffic with
    | Some server_hs ->
      H.verify_finished

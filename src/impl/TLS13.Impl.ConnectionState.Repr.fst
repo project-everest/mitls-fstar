@@ -1409,6 +1409,55 @@ fn copy_server_hello_prefix_to_transcript
   V.to_vec_pts_to dst
 }
 
+fn copy_array_prefix_to_transcript
+  (src:array U8.t)
+  (dst:V.vec U8.t)
+  (src_len:SZ.t)
+  (dst_offset:SZ.t)
+  requires ArrPts.pts_to src 'src_bytes **
+           V.pts_to dst 'dst_bytes **
+           pure (V.is_full_vec dst /\
+                 V.length dst == max_transcript_len /\
+                 B.length 'src_bytes == SZ.v src_len /\
+                 B.length 'dst_bytes == max_transcript_len /\
+                 Seq.length 'dst_bytes == max_transcript_len /\
+                 SZ.v dst_offset + SZ.v src_len <= max_transcript_len)
+  ensures ArrPts.pts_to src 'src_bytes **
+          V.pts_to dst
+            (Seq.append
+              (CL.raw_slice 'dst_bytes 0 (SZ.v dst_offset))
+              (Seq.append
+                (Ghost.reveal 'src_bytes)
+                (CL.raw_slice
+                  'dst_bytes
+                  (SZ.v dst_offset + SZ.v src_len)
+                  max_transcript_len)))
+{
+  ArrPts.pts_to_len src;
+  V.to_array_pts_to dst;
+
+  assert (pure (SZ.fits max_transcript_len));
+  let dst_cap = SZ.uint_to_t max_transcript_len;
+  let src_slice = Slice.from_array src src_len;
+  let dst_slice = Slice.from_array (V.vec_to_array dst) dst_cap;
+
+  let dst_split = Slice.split dst_slice dst_offset;
+  let dst_insert_split = Slice.split (snd dst_split) src_len;
+
+  Slice.pts_to_len src_slice;
+  Slice.pts_to_len (fst dst_insert_split);
+  assert (pure (Slice.len src_slice == src_len));
+  assert (pure (Slice.len (fst dst_insert_split) == src_len));
+  Slice.copy (fst dst_insert_split) src_slice;
+
+  Slice.to_array src_slice;
+
+  Slice.join (fst dst_insert_split) (snd dst_insert_split) (snd dst_split);
+  Slice.join (fst dst_split) (snd dst_split) dst_slice;
+  Slice.to_array dst_slice;
+  V.to_vec_pts_to dst
+}
+
 fn copy_client_hello_prefix_to_transcript
   (src:V.vec U8.t)
   (dst:V.vec U8.t)

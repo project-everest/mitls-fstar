@@ -143,6 +143,29 @@ fn mark_sent_server_hello
           ArrPts.pts_to raw 'raw_bytes **
           ArrPts.pts_to fragment 'fragment_bytes
 
+fn mark_sent_encrypted_extensions
+  (c:connection_state)
+  (raw:array U8.t)
+  (fragment:array U8.t)
+  (fragment_len:SZ.t)
+  (lee:IM.encrypted_extensions)
+  (#ee:erased M.encrypted_extensions)
+  (#st0:erased CS.connection_state)
+  requires connection_exactly c st0 **
+          ArrPts.pts_to raw 'raw_bytes **
+          ArrPts.pts_to fragment 'fragment_bytes **
+          IM.is_valid_encrypted_extensions lee ee **
+          pure (B.length 'fragment_bytes == SZ.v fragment_len /\
+                Seq.equal
+                  (Ghost.reveal 'fragment_bytes)
+                  (W.serialize_handshake (M.EncryptedExtensions ee)) /\
+                can_send_encrypted_extensions st0 ee (Ghost.reveal 'raw_bytes))
+  ensures connection_exactly
+           c
+           (sent_encrypted_extensions_state st0 ee (Ghost.reveal 'raw_bytes)) **
+          ArrPts.pts_to raw 'raw_bytes **
+          ArrPts.pts_to fragment 'fragment_bytes
+
 fn try_send_client_hello
   (c:connection_state)
   (network_out:array U8.t)

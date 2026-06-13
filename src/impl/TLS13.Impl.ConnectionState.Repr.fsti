@@ -1422,6 +1422,30 @@ fn copy_server_hello_prefix_to_transcript
                   (SZ.v dst_offset + SZ.v src_len)
                   max_transcript_len)))
 
+fn copy_array_prefix_to_transcript
+  (src:array U8.t)
+  (dst:V.vec U8.t)
+  (src_len:SZ.t)
+  (dst_offset:SZ.t)
+  requires ArrPts.pts_to src 'src_bytes **
+           V.pts_to dst 'dst_bytes **
+           pure (V.is_full_vec dst /\
+                 V.length dst == max_transcript_len /\
+                 B.length 'src_bytes == SZ.v src_len /\
+                 B.length 'dst_bytes == max_transcript_len /\
+                 Seq.length 'dst_bytes == max_transcript_len /\
+                 SZ.v dst_offset + SZ.v src_len <= max_transcript_len)
+  ensures ArrPts.pts_to src 'src_bytes **
+          V.pts_to dst
+            (Seq.append
+              (CL.raw_slice 'dst_bytes 0 (SZ.v dst_offset))
+              (Seq.append
+                (Ghost.reveal 'src_bytes)
+                (CL.raw_slice
+                  'dst_bytes
+                  (SZ.v dst_offset + SZ.v src_len)
+                  max_transcript_len)))
+
 fn copy_client_hello_prefix_to_transcript
   (src:V.vec U8.t)
   (dst:V.vec U8.t)

@@ -287,6 +287,15 @@ Current phase: **Phase 6 server buffer/event API and theorem surface**.
   where appropriate, update the transcript/stored handshake artifacts, and give
   the future Pulse send mutations the same focused model surface as
   `sent_server_hello_state`.
+- [x] Added the first encrypted-flight Pulse state mutation:
+  `TLS13.Impl.ConnectionState.LocalHandshake.mark_sent_encrypted_extensions`
+  stores an exact L-level EncryptedExtensions message, appends the exact
+  handshake fragment to the transcript using the new reusable
+  `copy_array_prefix_to_transcript` helper, advances the concrete write record
+  sequence, moves to `HsServerEncryptedFlightSent`, appends the supplied raw
+  sent bytes, and proves the `sent_encrypted_extensions_state` legal delta. A
+  public server wrapper still requires the protected-record seal/serializer path
+  so the end-to-end sent-seal replay invariant is not weakened.
 - [x] Added supplied-shared-secret derivation support:
   `TLS13.Impl.ConnectionState.LocalHandshake.derive_shared_secret_from_bytes`
   stores the shared, early, handshake, and master secrets in concrete key
@@ -1261,8 +1270,10 @@ Checklist:
       - server flight emission (focused sent-ServerHello public wrapper,
         serializer-driven cleartext ServerHello record construction, and pure
         model helpers for EncryptedExtensions/Certificate/CertificateVerify/
-        server Finished are complete; concrete selection-to-L-ServerHello
-        storage and Pulse encrypted-flight send mutations remain);
+        server Finished are complete; the EncryptedExtensions state mutation is
+        complete; concrete selection-to-L-ServerHello storage, protected-record
+        seal wrappers, and the remaining Pulse encrypted-flight send mutations
+        remain);
       - client Finished verification;
       - application key installation (server write-key and client read-key
         supplied-material and internally derived mutations/wrappers, scheduler
