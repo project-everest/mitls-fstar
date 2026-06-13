@@ -181,6 +181,14 @@ Current phase: **Phase 3 shared endpoint/codec predicate refactor**.
   `tls13_io_listen_tcp`/`tls13_io_accept_tcp` and the KaRaMeL listener ABI,
   plus OpenSSL-backed in-memory server credential allocation, RSA-PSS/SHA-256
   CertificateVerify signing, and credential free functions.
+- [x] Started Phase 5 serializer support:
+  - `TLS13.Wire.Spec` now has stable fixed-server serializer anchors for
+    ServerHello, empty EncryptedExtensions, Certificate, CertificateVerify, and
+    server Finished, all definitionally tied to `serialize_handshake`.
+  - `TLS13.Impl.Serializer.fsti` exposes L-level fixed server handshake builders
+    with exact emitted bytes and parse-back postconditions.
+  - `c_stubs/tls13_connection_backend.h` implements matching C TCB helpers over
+    concrete L-level server message storage.
 - [ ] Continue Phase 3 by factoring role-neutral output-slice and parse/decode
   predicates only where they are needed by the server API.
 
@@ -958,26 +966,27 @@ Validation:
 Checklist:
 
 - [ ] Add supported ClientHello acceptability lemmas.
-- [ ] Add ServerHello serialize/parse-back facts.
-- [ ] Add empty EncryptedExtensions serialize/parse-back facts.
-- [ ] Add Certificate serialize/parse-back facts over configured chain.
-- [ ] Add CertificateVerify serialize/parse-back facts.
-- [ ] Add server Finished serialize/parse-back facts.
-- [ ] Expose exact bytes written and length bounds.
+- [x] Add ServerHello serialize/parse-back facts.
+- [x] Add empty EncryptedExtensions serialize/parse-back facts.
+- [x] Add Certificate serialize/parse-back facts over configured chain.
+- [x] Add CertificateVerify serialize/parse-back facts.
+- [x] Add server Finished serialize/parse-back facts.
+- [x] Expose exact bytes written and length bounds.
 - [ ] Expose record header/AAD facts.
 - [ ] Expose protected-record seal facts.
 - [ ] Expose transcript-fragment equality for each handshake fragment.
-- [ ] Add or expose fixed server builders with stable names:
+- [x] Add or expose fixed server builders with stable names:
       `serialize_server_hello_from_selection`,
       `serialize_empty_encrypted_extensions`,
       `serialize_certificate_from_credential`,
       `build_server_certificate_verify_input`,
       `serialize_certificate_verify_from_signature`, and
-      `serialize_server_finished_outputs`.
+      `serialize_server_finished`.
 - [ ] Ensure contracts expose `TLS13.Wire.Spec.parse_record`,
-      `parse_tls_message`, `TLS13.Record.Spec.seal`, and
+      `TLS13.Record.Spec.seal`, and
       `TLS13.Handshake.Spec.certificate_verify_input(hash(transcript_before_cv))`
-      facts where relevant.
+      facts where relevant. Fixed server handshake builders already expose
+      `parse_tls_message` facts for the handshake fragments.
 - [ ] Avoid broad generic serializers unless proof requires them.
 
 Validation:

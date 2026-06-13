@@ -147,6 +147,48 @@ val lemma_serialize_server_hello_len:
   Lemma (B.length (serialize_handshake (M.ServerHello sh)) == 90 /\
          B.length (serialize_handshake_msg (M.ServerHello sh)) == 90)
 
+val serialize_server_hello_from_selection:
+  sh:M.server_hello ->
+  GTot B.bytes
+
+val serialize_empty_encrypted_extensions:
+  unit ->
+  GTot B.bytes
+
+val serialize_certificate_from_credential:
+  cert:M.certificate_msg ->
+  GTot B.bytes
+
+val serialize_certificate_verify_from_signature:
+  cv:M.certificate_verify ->
+  GTot B.bytes
+
+val serialize_server_finished:
+  fin:M.finished ->
+  GTot B.bytes
+
+val lemma_fixed_server_handshake_serializers:
+  sh:M.server_hello ->
+  cert:M.certificate_msg ->
+  cv:M.certificate_verify ->
+  fin:M.finished ->
+  Lemma
+    (Seq.equal
+       (serialize_server_hello_from_selection sh)
+       (serialize_handshake (M.ServerHello sh)) /\
+     Seq.equal
+       (serialize_empty_encrypted_extensions ())
+       (serialize_handshake (M.EncryptedExtensions { M.negotiated_alpn = None })) /\
+     Seq.equal
+       (serialize_certificate_from_credential cert)
+       (serialize_handshake (M.Certificate cert)) /\
+     Seq.equal
+       (serialize_certificate_verify_from_signature cv)
+       (serialize_handshake (M.CertificateVerify cv)) /\
+     Seq.equal
+       (serialize_server_finished fin)
+       (serialize_handshake (M.Finished fin)))
+
 val serialize_server_certificate_verify_input:
   transcript_hash:B.bytes ->
   GTot B.bytes

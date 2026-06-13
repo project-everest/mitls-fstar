@@ -331,6 +331,163 @@ static inline void TLS13_Connection_Backend_build_server_certificate_verify_inpu
 #define TLS13_Impl_Serializer_build_server_certificate_verify_input(transcript_hash, out, out_len, ...) \
   TLS13_Connection_Backend_build_server_certificate_verify_input((transcript_hash), (out), (out_len))
 
+static inline size_t TLS13_Connection_Backend_serialize_server_hello_fixed(
+    const uint8_t *random,
+    const uint8_t *key_share,
+    uint16_t cipher_suite,
+    uint8_t *out,
+    size_t out_len) {
+  if (random == NULL || key_share == NULL || out == NULL || out_len < 90u) {
+    return 0u;
+  }
+  out[0] = 2u;
+  TLS13_Connection_Backend_write_u24(out + 1u, 86u);
+  out[4] = 0x03u;
+  out[5] = 0x03u;
+  memcpy(out + 6u, random, 32u);
+  out[38] = 0u;
+  TLS13_Connection_Backend_write_u16(out + 39u, cipher_suite);
+  out[41] = 0u;
+  TLS13_Connection_Backend_write_u16(out + 42u, 46u);
+  TLS13_Connection_Backend_write_u16(out + 44u, 0x0033u);
+  TLS13_Connection_Backend_write_u16(out + 46u, 36u);
+  TLS13_Connection_Backend_write_u16(out + 48u, 0x001du);
+  TLS13_Connection_Backend_write_u16(out + 50u, 32u);
+  memcpy(out + 52u, key_share, 32u);
+  TLS13_Connection_Backend_write_u16(out + 84u, 0x002bu);
+  TLS13_Connection_Backend_write_u16(out + 86u, 2u);
+  out[88] = 0x03u;
+  out[89] = 0x04u;
+  return 90u;
+}
+
+static inline size_t TLS13_Connection_Backend_serialize_empty_encrypted_extensions_fixed(
+    uint8_t *out,
+    size_t out_len) {
+  if (out == NULL || out_len < 6u) {
+    return 0u;
+  }
+  out[0] = 8u;
+  TLS13_Connection_Backend_write_u24(out + 1u, 2u);
+  TLS13_Connection_Backend_write_u16(out + 4u, 0u);
+  return 6u;
+}
+
+static inline size_t TLS13_Connection_Backend_serialize_certificate_fixed(
+    const uint8_t *cert,
+    size_t cert_len,
+    uint8_t *out,
+    size_t out_len) {
+  size_t body_len = 1u + 3u + 3u + cert_len + 2u;
+  size_t total_len = 4u + body_len;
+  if ((cert == NULL && cert_len != 0u) || out == NULL ||
+      cert_len > 0xffffffu || body_len > 0xffffffu || total_len > out_len) {
+    return 0u;
+  }
+  out[0] = 11u;
+  TLS13_Connection_Backend_write_u24(out + 1u, body_len);
+  out[4] = 0u;
+  TLS13_Connection_Backend_write_u24(out + 5u, 3u + cert_len + 2u);
+  TLS13_Connection_Backend_write_u24(out + 8u, cert_len);
+  if (cert_len != 0u) {
+    memcpy(out + 11u, cert, cert_len);
+  }
+  TLS13_Connection_Backend_write_u16(out + 11u + cert_len, 0u);
+  return total_len;
+}
+
+static inline size_t TLS13_Connection_Backend_serialize_certificate_msg_fixed(
+    const uint8_t *chain_bytes,
+    size_t chain_bytes_len,
+    const size_t *cert_offsets,
+    const size_t *cert_lens,
+    size_t cert_count,
+    uint8_t *out,
+    size_t out_len) {
+  if ((chain_bytes == NULL && chain_bytes_len != 0u) ||
+      cert_offsets == NULL || cert_lens == NULL || out == NULL ||
+      cert_count > 8u) {
+    return 0u;
+  }
+  size_t cert_list_len = 0u;
+  for (size_t i = 0u; i < cert_count; i++) {
+    size_t off = cert_offsets[i];
+    size_t len = cert_lens[i];
+    if (off > chain_bytes_len || len > chain_bytes_len - off ||
+        len > 0xffffffu || cert_list_len > 0xffffffu - (3u + len + 2u)) {
+      return 0u;
+    }
+    cert_list_len += 3u + len + 2u;
+  }
+  size_t body_len = 1u + 3u + cert_list_len;
+  size_t total_len = 4u + body_len;
+  if (body_len > 0xffffffu || total_len > out_len) {
+    return 0u;
+  }
+  out[0] = 11u;
+  TLS13_Connection_Backend_write_u24(out + 1u, body_len);
+  out[4] = 0u;
+  TLS13_Connection_Backend_write_u24(out + 5u, cert_list_len);
+  uint8_t *p = out + 8u;
+  for (size_t i = 0u; i < cert_count; i++) {
+    size_t off = cert_offsets[i];
+    size_t len = cert_lens[i];
+    TLS13_Connection_Backend_write_u24(p, len);
+    p += 3u;
+    if (len != 0u) {
+      memcpy(p, chain_bytes + off, len);
+      p += len;
+    }
+    TLS13_Connection_Backend_write_u16(p, 0u);
+    p += 2u;
+  }
+  return total_len;
+}
+
+static inline size_t TLS13_Connection_Backend_serialize_certificate_verify_fixed(
+    uint16_t signature_scheme,
+    const uint8_t *signature,
+    size_t signature_len,
+    uint8_t *out,
+    size_t out_len) {
+  size_t body_len = 4u + signature_len;
+  size_t total_len = 4u + body_len;
+  if ((signature == NULL && signature_len != 0u) || out == NULL ||
+      signature_len > 0xffffu || body_len > 0xffffffu || total_len > out_len) {
+    return 0u;
+  }
+  out[0] = 15u;
+  TLS13_Connection_Backend_write_u24(out + 1u, body_len);
+  TLS13_Connection_Backend_write_u16(out + 4u, signature_scheme);
+  TLS13_Connection_Backend_write_u16(out + 6u, signature_len);
+  if (signature_len != 0u) {
+    memcpy(out + 8u, signature, signature_len);
+  }
+  return total_len;
+}
+
+#define TLS13_Impl_Serializer_serialize_server_hello_from_selection(sh_erased, lsh, out, out_len, ...) \
+  TLS13_Connection_Backend_serialize_server_hello_fixed( \
+      (lsh).server_hello_random, (lsh).server_hello_key_share, \
+      (lsh).server_hello_cipher_suite, (out), (out_len))
+
+#define TLS13_Impl_Serializer_serialize_empty_encrypted_extensions(out, out_len, ...) \
+  TLS13_Connection_Backend_serialize_empty_encrypted_extensions_fixed((out), (out_len))
+
+#define TLS13_Impl_Serializer_serialize_certificate_from_credential(cert_erased, lcert, out, out_len, ...) \
+  TLS13_Connection_Backend_serialize_certificate_msg_fixed( \
+      (lcert).certificate_msg_chain_bytes, (lcert).certificate_msg_chain_bytes_len, \
+      (lcert).certificate_msg_cert_offsets, (lcert).certificate_msg_cert_lens, \
+      (lcert).certificate_msg_cert_count, (out), (out_len))
+
+#define TLS13_Impl_Serializer_serialize_certificate_verify_from_signature(cv_erased, lcv, out, out_len, ...) \
+  TLS13_Connection_Backend_serialize_certificate_verify_fixed( \
+      (lcv).certificate_verify_scheme, (lcv).certificate_verify_signature, \
+      (lcv).certificate_verify_signature_len, (out), (out_len))
+
+#define TLS13_Impl_Serializer_serialize_server_finished(fin_erased, lfin, out, out_len, ...) \
+  TLS13_Impl_Serializer_serialize_finished_handshake((fin_erased), (lfin), (out), (out_len), NULL)
+
 static inline size_t TLS13_Connection_Backend_serialize_raw_application_data_record(
     uint8_t *fragment,
     size_t fragment_len,

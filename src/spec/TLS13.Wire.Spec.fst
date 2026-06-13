@@ -730,14 +730,63 @@ let lemma_serialize_finished_len (fin:M.finished)
   ()
 
 let lemma_serialize_server_hello_len (sh:M.server_hello)
-  : Lemma (B.length (serialize_handshake (M.ServerHello sh)) == 90 /\
-           B.length (serialize_handshake_msg (M.ServerHello sh)) == 90)
+: Lemma (B.length (serialize_handshake (M.ServerHello sh)) == 90 /\
+         B.length (serialize_handshake_msg (M.ServerHello sh)) == 90)
 =
-  ()
+()
+
+let serialize_server_hello_from_selection
+(sh:M.server_hello)
+: GTot B.bytes =
+serialize_handshake (M.ServerHello sh)
+
+let serialize_empty_encrypted_extensions
+()
+: GTot B.bytes =
+serialize_handshake (M.EncryptedExtensions { M.negotiated_alpn = None })
+
+let serialize_certificate_from_credential
+(cert:M.certificate_msg)
+: GTot B.bytes =
+serialize_handshake (M.Certificate cert)
+
+let serialize_certificate_verify_from_signature
+(cv:M.certificate_verify)
+: GTot B.bytes =
+serialize_handshake (M.CertificateVerify cv)
+
+let serialize_server_finished
+(fin:M.finished)
+: GTot B.bytes =
+serialize_handshake (M.Finished fin)
+
+let lemma_fixed_server_handshake_serializers
+(sh:M.server_hello)
+(cert:M.certificate_msg)
+(cv:M.certificate_verify)
+(fin:M.finished)
+: Lemma
+  (Seq.equal
+     (serialize_server_hello_from_selection sh)
+     (serialize_handshake (M.ServerHello sh)) /\
+   Seq.equal
+     (serialize_empty_encrypted_extensions ())
+     (serialize_handshake (M.EncryptedExtensions { M.negotiated_alpn = None })) /\
+   Seq.equal
+     (serialize_certificate_from_credential cert)
+     (serialize_handshake (M.Certificate cert)) /\
+   Seq.equal
+     (serialize_certificate_verify_from_signature cv)
+     (serialize_handshake (M.CertificateVerify cv)) /\
+   Seq.equal
+     (serialize_server_finished fin)
+     (serialize_handshake (M.Finished fin)))
+=
+()
 
 let serialize_server_certificate_verify_input (transcript_hash:B.bytes) : GTot B.bytes =
-  if B.length transcript_hash == 32
-  then H.certificate_verify_input transcript_hash
+if B.length transcript_hash == 32
+then H.certificate_verify_input transcript_hash
   else B.empty
 
 let lemma_serialize_server_certificate_verify_input_len32
