@@ -263,6 +263,13 @@ Current phase: **Phase 6 server buffer/event API and theorem surface**.
   `HsServerHelloSent`, appends the raw sent bytes, and proves the legal
   connection delta. The final serializer-driven public output wrapper is still
   pending.
+- [x] Added focused public `TLS13.Impl.Server.process_send_server_hello`. It
+  exposes the sent-ServerHello mutation at the server API theorem surface under
+  explicit exact raw/network-output and handshake-fragment preconditions, returns
+  `StepOk` with the raw ServerHello output prefix, and proves
+  `server_local_event_end_to_end_correct` for `LocalSendServerHello`. The final
+  executable wrapper still needs to construct the L-level ServerHello and raw
+  record via the serializer instead of taking them as pre-arranged buffers.
 
 ## End goal
 
@@ -1123,8 +1130,8 @@ Checklist:
       - cipher/group/signature selection;
       - shared-secret and traffic-secret derivation;
       - handshake key installation;
-      - server flight emission (first internal sent-ServerHello mutation is
-        complete; serializer-driven public wrapper and encrypted flight remain);
+      - server flight emission (focused sent-ServerHello public wrapper is
+        complete; serializer-driven construction and encrypted flight remain);
       - client Finished verification;
       - application key installation;
       - application data and close_notify.
