@@ -449,6 +449,13 @@ Current phase: **Phase 6 server buffer/event API and theorem surface**.
   the L-level message through `mark_sent_encrypted_extensions`, and proves
   `server_local_event_end_to_end_correct` including protected segmentation,
   seal projection, and server write-key-schedule projection.
+- [x] Added the protected server Finished public wrapper:
+  `process_send_server_finished_serialized` derives the Finished verify_data from
+  the stored server handshake traffic secret and exact current transcript hash,
+  builds the L-level Finished, serializes the exact 36-byte handshake fragment,
+  seals it as one protected `ApplicationData` record, stores it through
+  `mark_sent_server_finished`, and proves `server_local_event_end_to_end_correct`
+  including server-role write-key-schedule projection.
 
 ## End goal
 
@@ -1329,11 +1336,11 @@ Checklist:
         keys);
       - server flight emission (focused sent-ServerHello public wrapper,
         serializer-driven cleartext ServerHello record construction, protected
-        EncryptedExtensions public wrapper, pure model helpers, and Pulse state
-        mutations for EncryptedExtensions, Certificate, CertificateVerify
-        signing/send, and server Finished are complete; concrete
-        selection-to-L-ServerHello storage and protected-record public wrappers
-        for Certificate, CertificateVerify, and server Finished remain);
+        EncryptedExtensions and server Finished public wrappers, pure model
+        helpers, and Pulse state mutations for EncryptedExtensions, Certificate,
+        CertificateVerify signing/send, and server Finished are complete;
+        concrete selection-to-L-ServerHello storage and protected-record public
+        wrappers for Certificate and CertificateVerify remain);
       - client Finished verification (state mutation, focused public wrapper, and
         generic local dispatcher integration complete; network parse/open
         dispatch for received client Finished remains pending);
