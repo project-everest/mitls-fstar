@@ -58,6 +58,16 @@ val lemma_record_write_key_schedule_projection_client_projection
         record_write_key_schedule_projection model ==
         record_write_key_schedule_projection_for_role ClientEndpoint model)
 
+val lemma_paired_endpoints_derived_key_agrees
+  (key_id:derived_key_id)
+  (client:connection_state)
+  (server:connection_state)
+  : Lemma
+      (requires
+        first_milestone_derived_key_id key_id /\
+        derivation_inputs_agree key_id client server)
+      (ensures peer_derived_key_material_agrees key_id client server)
+
 val lemma_step_role_install_record_keys_consistent_for_role
   (role:endpoint_role)
   (model0:connection_model)

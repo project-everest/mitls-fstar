@@ -76,6 +76,98 @@ let lemma_record_write_key_schedule_projection_client_projection
 =
   ()
 
+let lemma_expected_traffic_secret_for_state_agrees
+  (traffic_id:labeled_traffic_epoch)
+  (client:connection_state)
+  (server:connection_state)
+  : Lemma
+      (requires traffic_secret_inputs_agree traffic_id client server)
+      (ensures
+        (match
+          expected_traffic_secret_for_state traffic_id client,
+          expected_traffic_secret_for_state traffic_id server
+        with
+        | Some client_secret, Some server_secret -> Seq.equal client_secret server_secret
+        | _, _ -> False))
+=
+  let base_id =
+    match traffic_id.traffic_id_epoch with
+    | TrafficHandshake -> HandshakeSecret
+    | TrafficApplication -> MasterSecret in
+  let checkpoint = key_checkpoint_for_epoch traffic_id.traffic_id_epoch in
+  match
+    base_secret_material base_id client.cs_model.model_handshake.hs_keys,
+    base_secret_material base_id server.cs_model.model_handshake.hs_keys,
+    transcript_bytes_for_key_checkpoint checkpoint client,
+    transcript_bytes_for_key_checkpoint checkpoint server
+  with
+  | Some client_base, Some server_base, Some client_transcript, Some server_transcript ->
+    assert (Seq.equal client_base server_base);
+    assert (Seq.equal client_transcript server_transcript);
+    Seq.lemma_eq_elim client_base server_base;
+    Seq.lemma_eq_elim client_transcript server_transcript;
+    assert (expected_traffic_secret_for_state traffic_id client ==
+            expected_traffic_secret_for_state traffic_id server)
+  | _, _, _, _ ->
+    assert False
+
+let lemma_paired_endpoints_derived_key_agrees
+  (key_id:derived_key_id)
+  (client:connection_state)
+  (server:connection_state)
+  : Lemma
+      (requires
+        first_milestone_derived_key_id key_id /\
+        derivation_inputs_agree key_id client server)
+      (ensures peer_derived_key_material_agrees key_id client server)
+=
+  match key_id with
+  | BaseSecret base_id ->
+    (match
+      base_secret_material base_id client.cs_model.model_handshake.hs_keys,
+      base_secret_material base_id server.cs_model.model_handshake.hs_keys
+     with
+     | Some client_secret, Some server_secret ->
+       assert (Seq.equal client_secret server_secret)
+     | _, _ -> assert False)
+  | TrafficSecret traffic_id ->
+    lemma_expected_traffic_secret_for_state_agrees traffic_id client server
+  | TrafficKey traffic_id ->
+    lemma_expected_traffic_secret_for_state_agrees traffic_id client server;
+    (match
+      expected_traffic_secret_for_state traffic_id client,
+      expected_traffic_secret_for_state traffic_id server
+     with
+     | Some client_secret, Some server_secret ->
+       assert (Seq.equal client_secret server_secret);
+       Seq.lemma_eq_elim client_secret server_secret
+     | _, _ -> assert False)
+  | TrafficIV traffic_id ->
+    lemma_expected_traffic_secret_for_state_agrees traffic_id client server;
+    (match
+      expected_traffic_secret_for_state traffic_id client,
+      expected_traffic_secret_for_state traffic_id server
+     with
+     | Some client_secret, Some server_secret ->
+       assert (Seq.equal client_secret server_secret);
+       Seq.lemma_eq_elim client_secret server_secret
+     | _, _ -> assert False)
+  | FinishedKey label ->
+    let traffic_id = { traffic_id_epoch = TrafficHandshake; traffic_id_label = label } in
+    lemma_expected_traffic_secret_for_state_agrees traffic_id client server;
+    (match
+      expected_traffic_secret_for_state traffic_id client,
+      expected_traffic_secret_for_state traffic_id server
+     with
+     | Some client_secret, Some server_secret ->
+       assert (Seq.equal client_secret server_secret);
+       Seq.lemma_eq_elim client_secret server_secret
+     | _, _ -> assert False)
+  | TrafficUpdateSecret _
+  | ExporterMasterSecret
+  | ResumptionMasterSecret ->
+    assert False
+
 let lemma_step_role_install_record_keys_consistent_for_role
   (role:endpoint_role)
   (model0:connection_model)

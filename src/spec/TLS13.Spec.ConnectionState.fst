@@ -87,6 +87,56 @@ type connection_control_state =
   | ControlClosed
   | ControlFailed of T.tls_error
 
+type traffic_epoch =
+  | TrafficHandshake
+  | TrafficApplication
+
+type traffic_label =
+  | ClientTraffic
+  | ServerTraffic
+
+type base_secret_id =
+  | EarlySecret
+  | HandshakeSecret
+  | MasterSecret
+
+type labeled_traffic_epoch = {
+  traffic_id_epoch: traffic_epoch;
+  traffic_id_label: traffic_label;
+}
+
+type traffic_update_id = {
+  traffic_update_label: traffic_label;
+  traffic_update_generation: nat;
+}
+
+type derived_key_id =
+  | BaseSecret of base_secret_id
+  | TrafficSecret of labeled_traffic_epoch
+  | TrafficKey of labeled_traffic_epoch
+  | TrafficIV of labeled_traffic_epoch
+  | FinishedKey of traffic_label
+  | TrafficUpdateSecret of traffic_update_id
+  | ExporterMasterSecret
+  | ResumptionMasterSecret
+
+type key_derivation_checkpoint =
+  | DeriveHandshakeTraffic
+  | DeriveApplicationTraffic
+  | DeriveTrafficUpdate of traffic_update_id
+
+type transcript_checkpoint =
+  | TH_CH
+  | TH_SH
+  | TH_before_CV
+  | TH_before_SF
+  | TH_SF
+  | TH_CF
+
+type traffic_direction =
+  | TrafficWrite
+  | TrafficRead
+
 type handshake_start = {
   start_server_name: T.hostname;
   start_client_random: B.bytes_of_len 32;
@@ -213,6 +263,66 @@ let empty_handshake_state : handshake_state = {
   hs_keys = empty_key_schedule_state;
 }
 
+let append_handshake_bytes (prefix:B.bytes) (msg:M.handshake_msg) : GTot B.bytes =
+  B.append prefix (W.serialize_handshake msg)
+
+let transcript_checkpoint_bytes
+  (checkpoint:transcript_checkpoint)
+  (hs:handshake_state)
+  : GTot (option B.bytes) =
+  match hs.hs_client_hello with
+  | None -> None
+  | Some ch ->
+    let th_ch = W.serialize_handshake (M.ClientHello ch) in
+    (match checkpoint with
+     | TH_CH -> Some th_ch
+     | _ ->
+       match hs.hs_server_hello with
+       | None -> None
+       | Some sh ->
+         let th_sh = append_handshake_bytes th_ch (M.ServerHello sh) in
+         (match checkpoint with
+          | TH_SH -> Some th_sh
+          | _ ->
+            match hs.hs_encrypted_extensions, hs.hs_certificate with
+            | Some ee, Some cert ->
+              let th_ee = append_handshake_bytes th_sh (M.EncryptedExtensions ee) in
+              let th_before_cv = append_handshake_bytes th_ee (M.Certificate cert) in
+              (match checkpoint with
+               | TH_before_CV -> Some th_before_cv
+               | _ ->
+                 match hs.hs_certificate_verify with
+                 | None -> None
+                 | Some cv ->
+                   let th_before_sf =
+                     append_handshake_bytes th_before_cv (M.CertificateVerify cv) in
+                   (match checkpoint with
+                    | TH_before_SF -> Some th_before_sf
+                    | _ ->
+                      match hs.hs_server_finished with
+                      | None -> None
+                      | Some sf ->
+                        let th_sf =
+                          append_handshake_bytes th_before_sf (M.Finished sf) in
+                        (match checkpoint with
+                         | TH_SF -> Some th_sf
+                         | TH_CF ->
+                           (match hs.hs_client_finished with
+                            | Some cf ->
+                              Some (append_handshake_bytes th_sf (M.Finished cf))
+                            | None -> None)
+                         | _ -> None))
+                 )
+            | _, _ -> None))
+
+let key_derivation_checkpoint_transcript
+  (checkpoint:key_derivation_checkpoint)
+  : option transcript_checkpoint =
+  match checkpoint with
+  | DeriveHandshakeTraffic -> Some TH_SH
+  | DeriveApplicationTraffic -> Some TH_SF
+  | DeriveTrafficUpdate _ -> None
+
 type record_layer_state = {
   record_read: R.direction_state;
   record_write: R.direction_state;
@@ -267,48 +377,6 @@ let initial_model (cfg:connection_config) : connection_model = {
   model_failure = None;
 }
 
-type traffic_epoch =
-  | TrafficHandshake
-  | TrafficApplication
-
-type traffic_label =
-  | ClientTraffic
-  | ServerTraffic
-
-type base_secret_id =
-  | EarlySecret
-  | HandshakeSecret
-  | MasterSecret
-
-type labeled_traffic_epoch = {
-  traffic_id_epoch: traffic_epoch;
-  traffic_id_label: traffic_label;
-}
-
-type traffic_update_id = {
-  traffic_update_label: traffic_label;
-  traffic_update_generation: nat;
-}
-
-type derived_key_id =
-  | BaseSecret of base_secret_id
-  | TrafficSecret of labeled_traffic_epoch
-  | TrafficKey of labeled_traffic_epoch
-  | TrafficIV of labeled_traffic_epoch
-  | FinishedKey of traffic_label
-  | TrafficUpdateSecret of traffic_update_id
-  | ExporterMasterSecret
-  | ResumptionMasterSecret
-
-type key_derivation_checkpoint =
-  | DeriveHandshakeTraffic
-  | DeriveApplicationTraffic
-  | DeriveTrafficUpdate of traffic_update_id
-
-type traffic_direction =
-  | TrafficWrite
-  | TrafficRead
-
 let traffic_label_for_endpoint_direction
   (role:endpoint_role)
   (dir:traffic_direction)
@@ -354,6 +422,28 @@ type connection_state = {
   cs_wire_log: wire_log;
   cs_event_log: list conn_event;
 }
+
+let same_transcript_checkpoint
+  (checkpoint:transcript_checkpoint)
+  (client:connection_state)
+  (server:connection_state)
+  : GTot prop =
+  match
+    transcript_checkpoint_bytes checkpoint client.cs_model.model_handshake,
+    transcript_checkpoint_bytes checkpoint server.cs_model.model_handshake
+  with
+  | Some client_bytes, Some server_bytes -> Seq.equal client_bytes server_bytes
+  | _, _ -> False
+
+let same_key_derivation_checkpoint
+  (checkpoint:key_derivation_checkpoint)
+  (client:connection_state)
+  (server:connection_state)
+  : GTot prop =
+  match key_derivation_checkpoint_transcript checkpoint with
+  | Some transcript_checkpoint ->
+    same_transcript_checkpoint transcript_checkpoint client server
+  | None -> False
 
 let initial (cfg:connection_config) : connection_state = {
   cs_model = initial_model cfg;
@@ -1348,6 +1438,203 @@ let application_traffic_available_for_role
       hs.hs_keys
       TrafficApplication
       (traffic_label_for_endpoint_direction role traffic_dir))
+
+let key_checkpoint_for_epoch (epoch:traffic_epoch) : key_derivation_checkpoint =
+  match epoch with
+  | TrafficHandshake -> DeriveHandshakeTraffic
+  | TrafficApplication -> DeriveApplicationTraffic
+
+let key_checkpoint_for_derived_key
+  (key_id:derived_key_id)
+  : option key_derivation_checkpoint =
+  match key_id with
+  | BaseSecret _ -> None
+  | TrafficSecret traffic_id
+  | TrafficKey traffic_id
+  | TrafficIV traffic_id ->
+    Some (key_checkpoint_for_epoch traffic_id.traffic_id_epoch)
+  | FinishedKey _ ->
+    Some DeriveHandshakeTraffic
+  | TrafficUpdateSecret update_id ->
+    Some (DeriveTrafficUpdate update_id)
+  | ExporterMasterSecret
+  | ResumptionMasterSecret ->
+    None
+
+let first_milestone_derived_key_id
+  (key_id:derived_key_id)
+  : bool =
+  match key_id with
+  | BaseSecret EarlySecret
+  | BaseSecret HandshakeSecret
+  | BaseSecret MasterSecret
+  | TrafficSecret _
+  | TrafficKey _
+  | TrafficIV _
+  | FinishedKey _ -> true
+  | TrafficUpdateSecret _
+  | ExporterMasterSecret
+  | ResumptionMasterSecret -> false
+
+let base_secret_material
+  (base_id:base_secret_id)
+  (keys:key_schedule_state)
+  : option C.secret =
+  match base_id with
+  | EarlySecret -> keys.ks_early_secret
+  | HandshakeSecret -> keys.ks_handshake_secret
+  | MasterSecret -> keys.ks_master_secret
+
+let transcript_bytes_for_key_checkpoint
+  (checkpoint:key_derivation_checkpoint)
+  (st:connection_state)
+  : GTot (option B.bytes) =
+  match key_derivation_checkpoint_transcript checkpoint with
+  | Some transcript_checkpoint ->
+    transcript_checkpoint_bytes transcript_checkpoint st.cs_model.model_handshake
+  | None -> None
+
+let traffic_secret_base_for_epoch
+  (epoch:traffic_epoch)
+  (keys:key_schedule_state)
+  : option C.secret =
+  match epoch with
+  | TrafficHandshake -> keys.ks_handshake_secret
+  | TrafficApplication -> keys.ks_master_secret
+
+let derive_traffic_secret_for_label
+  (epoch:traffic_epoch)
+  (label:traffic_label)
+  (base:C.secret)
+  (transcript:B.bytes)
+  : GTot K.traffic_secret =
+  let h = Tr.hash transcript in
+  match epoch, label with
+  | TrafficHandshake, ClientTraffic ->
+    K.client_handshake_traffic_secret base h
+  | TrafficHandshake, ServerTraffic ->
+    K.server_handshake_traffic_secret base h
+  | TrafficApplication, ClientTraffic ->
+    K.client_application_traffic_secret base h
+  | TrafficApplication, ServerTraffic ->
+    K.server_application_traffic_secret base h
+
+let expected_traffic_secret_for_state
+  (traffic_id:labeled_traffic_epoch)
+  (st:connection_state)
+  : GTot (option K.traffic_secret) =
+  match
+    traffic_secret_base_for_epoch
+      traffic_id.traffic_id_epoch
+      st.cs_model.model_handshake.hs_keys,
+    transcript_bytes_for_key_checkpoint
+      (key_checkpoint_for_epoch traffic_id.traffic_id_epoch)
+      st
+  with
+  | Some base, Some transcript ->
+    Some
+      (derive_traffic_secret_for_label
+        traffic_id.traffic_id_epoch
+        traffic_id.traffic_id_label
+        base
+        transcript)
+  | _, _ -> None
+
+let expected_derived_key_material
+  (key_id:derived_key_id)
+  (st:connection_state)
+  : GTot (option B.bytes) =
+  match key_id with
+  | BaseSecret base_id ->
+    (match base_secret_material base_id st.cs_model.model_handshake.hs_keys with
+     | Some secret -> Some secret
+     | None -> None)
+  | TrafficSecret traffic_id ->
+    (match expected_traffic_secret_for_state traffic_id st with
+     | Some secret -> Some secret
+     | None -> None)
+  | TrafficKey traffic_id ->
+    (match expected_traffic_secret_for_state traffic_id st with
+     | Some secret -> Some (K.derive_aead_key secret)
+     | None -> None)
+  | TrafficIV traffic_id ->
+    (match expected_traffic_secret_for_state traffic_id st with
+     | Some secret -> Some (K.derive_aead_iv secret)
+     | None -> None)
+  | FinishedKey label ->
+    (match expected_traffic_secret_for_state
+      { traffic_id_epoch = TrafficHandshake; traffic_id_label = label }
+      st
+     with
+     | Some secret -> Some (K.finished_key secret)
+     | None -> None)
+  | TrafficUpdateSecret _
+  | ExporterMasterSecret
+  | ResumptionMasterSecret ->
+    None
+
+let base_secret_inputs_agree
+  (base_id:base_secret_id)
+  (client:connection_state)
+  (server:connection_state)
+  : prop =
+  match
+    base_secret_material base_id client.cs_model.model_handshake.hs_keys,
+    base_secret_material base_id server.cs_model.model_handshake.hs_keys
+  with
+  | Some client_secret, Some server_secret ->
+    Seq.equal client_secret server_secret
+  | _, _ -> False
+
+let traffic_secret_inputs_agree
+  (traffic_id:labeled_traffic_epoch)
+  (client:connection_state)
+  (server:connection_state)
+  : prop =
+  let base_id =
+    match traffic_id.traffic_id_epoch with
+    | TrafficHandshake -> HandshakeSecret
+    | TrafficApplication -> MasterSecret in
+  base_secret_inputs_agree base_id client server /\
+  same_key_derivation_checkpoint
+    (key_checkpoint_for_epoch traffic_id.traffic_id_epoch)
+    client
+    server
+
+let derivation_inputs_agree
+  (key_id:derived_key_id)
+  (client:connection_state)
+  (server:connection_state)
+  : prop =
+  match key_id with
+  | BaseSecret base_id ->
+    base_secret_inputs_agree base_id client server
+  | TrafficSecret traffic_id
+  | TrafficKey traffic_id
+  | TrafficIV traffic_id ->
+    traffic_secret_inputs_agree traffic_id client server
+  | FinishedKey label ->
+    traffic_secret_inputs_agree
+      { traffic_id_epoch = TrafficHandshake; traffic_id_label = label }
+      client
+      server
+  | TrafficUpdateSecret _
+  | ExporterMasterSecret
+  | ResumptionMasterSecret ->
+    False
+
+let peer_derived_key_material_agrees
+  (key_id:derived_key_id)
+  (client:connection_state)
+  (server:connection_state)
+  : prop =
+  match
+    expected_derived_key_material key_id client,
+    expected_derived_key_material key_id server
+  with
+  | Some client_material, Some server_material ->
+    Seq.equal client_material server_material
+  | _, _ -> False
 
 let traffic_install_allowed_at_stage
   (stage:handshake_stage)
