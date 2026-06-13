@@ -107,9 +107,16 @@ Current phase: **Phase 0/1 started**.
   separates client `Finished` application-write switching from server
   `Finished` handshake-record advancement and enables server application-key
   installs after server `Finished`.
-- [ ] Add server `Finished`, client `Finished` receive/verify, and the
-  role-aware application-key/read-write record switching needed around those
-  transitions.
+- [x] Added server `Finished` send and client `Finished` receive/verify pure
+  transitions. Server `Finished` is verified against the server handshake
+  traffic secret, appends exact transcript bytes, advances the protected
+  handshake write record, and enters `HsServerFinishedSent`; received client
+  `Finished` advances the protected handshake read record, and
+  `LocalVerifyClientFinished` verifies against the client handshake traffic
+  secret before appending the final handshake transcript bytes.
+- [ ] Add the role-aware application-key read/write record switching and final
+  server transition into `ControlApplicationData` after client `Finished`
+  verification.
 - [x] Repaired the existing Pulse client proof surface after the role gates:
   implementation readiness queries and mutation/model lemmas now expose
   `ClientEndpoint` exactly where legacy client-only transitions rely on it, and
@@ -793,6 +800,7 @@ Checklist:
 - [x] Add server encrypted-flight prefix pure transitions through
       `CertificateVerify`.
 - [x] Generalize record-layer event projection by endpoint role.
+- [x] Add server `Finished` and client `Finished` pure transitions.
 - [x] Preserve the legacy Pulse client implementation by threading explicit
       client-role facts through readiness queries, model lemmas, and mutation
       boundaries.

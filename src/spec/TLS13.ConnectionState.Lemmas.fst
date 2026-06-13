@@ -918,6 +918,31 @@ let lemma_step_model_record_keys_consistent_for_role
        | M.TlsHandshake (M.ServerHello _) ->
          assert (model1.model_record == model0.model_record);
          assert (model1.model_handshake.hs_keys == model0.model_handshake.hs_keys)
+       | M.TlsHandshake (M.Finished _) ->
+         assert (model1.model_handshake.hs_keys == model0.model_handshake.hs_keys);
+         (match msg.CL.message_direction with
+          | CL.Sent ->
+            assert (model1.model_record.record_write ==
+              R.next_seq model0.model_record.record_write);
+            assert (model1.model_record.record_read ==
+              model0.model_record.record_read);
+            lemma_record_keys_next_seq_for_role
+              ServerEndpoint
+              TrafficWrite
+              model0.model_control
+              model0.model_handshake.hs_keys
+              model0.model_record.record_write
+          | CL.Received ->
+            assert (model1.model_record.record_read ==
+              R.next_seq model0.model_record.record_read);
+            assert (model1.model_record.record_write ==
+              model0.model_record.record_write);
+            lemma_record_keys_next_seq_for_role
+              ServerEndpoint
+              TrafficRead
+              model0.model_control
+              model0.model_handshake.hs_keys
+              model0.model_record.record_read)
        | M.TlsHandshake (M.EncryptedExtensions _)
        | M.TlsHandshake (M.Certificate _)
        | M.TlsHandshake (M.CertificateVerify _) ->
@@ -997,21 +1022,33 @@ let lemma_step_model_record_layer_delta
          (S.application_data_record_count bytes);
        assert (model_record_layer_delta model0 ev model1)
      | CL.Sent, M.TlsHandshake (M.Finished _) ->
-       (match model0.model_control with
-        | ControlHandshaking HsServerFinishedVerified ->
-          assert (Some? model0.model_handshake.hs_keys.ks_client_application_traffic);
-          (match model0.model_handshake.hs_keys.ks_client_application_traffic with
-           | Some _ ->
-             assert (model1.model_record ==
-               install_client_application_write_after_finished
-                 model0.model_record
-                 model0.model_handshake.hs_keys);
-             lemma_projected_client_application_write_after_finished
-               model0.model_record
-               model0.model_handshake.hs_keys;
+       (match model0.model_config.config_role with
+        | ClientEndpoint ->
+          (match model0.model_control with
+           | ControlHandshaking HsServerFinishedVerified ->
+             assert (Some? model0.model_handshake.hs_keys.ks_client_application_traffic);
+             (match model0.model_handshake.hs_keys.ks_client_application_traffic with
+              | Some _ ->
+                assert (model1.model_record ==
+                  install_client_application_write_after_finished
+                    model0.model_record
+                    model0.model_handshake.hs_keys);
+                lemma_projected_client_application_write_after_finished
+                  model0.model_record
+                  model0.model_handshake.hs_keys;
+                assert (model_record_layer_delta model0 ev model1)
+              | None -> assert False)
+           | _ -> assert False)
+        | ServerEndpoint ->
+          (match model0.model_control with
+           | ControlHandshaking HsServerEncryptedFlightSent ->
+             assert (model1.model_record == {
+               model0.model_record with
+                 record_write = R.next_seq model0.model_record.record_write
+             });
+             lemma_projected_record_next_write model0.model_record;
              assert (model_record_layer_delta model0 ev model1)
-           | None -> assert False)
-        | _ -> assert False)
+           | _ -> assert False))
      | CL.Received, M.TlsKeyUpdate _ ->
        (match model0.model_control with
         | ControlApplicationData ->
@@ -1234,6 +1271,7 @@ let lemma_step_model_transcript_delta
   | ConnLocalEvent local ->
     (match local with
      | LocalVerifyFinished _ -> ()
+     | LocalVerifyClientFinished _ -> ()
      | _ ->
        CL.lemma_append_empty_right t0;
        Seq.lemma_eq_refl model1.model_handshake.hs_transcript t0)

@@ -773,6 +773,13 @@ let step_local_event (model:connection_model) (ev:local_event) : GTot (option co
         }
         (M.Finished fin))
       HsServerFinishedVerified)
+  | LocalVerifyClientFinished fin, ControlHandshaking HsClientFinishedReceived ->
+    Some (with_handshake_stage
+      model
+      (append_handshake_to_transcript
+        { hs with hs_client_finished = Some fin }
+        (M.Finished fin))
+      HsClientFinishedVerified)
   | LocalDeliverApplicationData bytes, ControlApplicationData ->
     let app = model.model_application in
     Some {
@@ -879,6 +886,18 @@ let step_handshake_message
         }
         msg)
       HsServerEncryptedFlightSent)
+  | CL.Sent, M.Finished fin, ControlHandshaking HsServerEncryptedFlightSent ->
+    Some (with_handshake_stage
+      { model with
+          model_record =
+            { model.model_record with
+                record_write = R.next_seq model.model_record.record_write;
+            };
+      }
+      (append_handshake_to_transcript
+        { hs with hs_server_finished = Some fin }
+        msg)
+      HsServerFinishedSent)
   | CL.Received, M.EncryptedExtensions ee, ControlHandshaking HsServerHelloReceived ->
     Some (with_handshake_stage
       { model with
@@ -939,6 +958,16 @@ let step_handshake_message
       }
       { hs with hs_server_finished = Some fin }
       HsServerFinishedReceived)
+  | CL.Received, M.Finished fin, ControlHandshaking HsServerFinishedSent ->
+    Some (with_handshake_stage
+      { model with
+          model_record =
+            { model.model_record with
+                record_read = R.next_seq model.model_record.record_read;
+            };
+      }
+      { hs with hs_client_finished = Some fin }
+      HsClientFinishedReceived)
   | CL.Sent, M.Finished fin, ControlHandshaking HsServerFinishedVerified ->
     Some {
       model with
@@ -1386,6 +1415,13 @@ let legal_local_event (model:connection_model) (ev:local_event) : GTot prop =
        stored_fin == fin /\
        H.verify_finished server_hs.traffic_secret (Tr.hash hs.hs_transcript) fin
      | _, _ -> False)
+  | LocalVerifyClientFinished fin, ControlHandshaking HsClientFinishedReceived ->
+    model.model_config.config_role == ServerEndpoint /\
+    (match hs.hs_client_finished, hs.hs_keys.ks_client_handshake_traffic with
+     | Some stored_fin, Some client_hs ->
+       stored_fin == fin /\
+       H.verify_finished client_hs.traffic_secret (Tr.hash hs.hs_transcript) fin
+     | _, _ -> False)
   | LocalDeliverApplicationData bytes, ControlApplicationData ->
     exists pending.
       Seq.equal model.model_application.app_pending_plaintext (B.append bytes pending)
@@ -1443,6 +1479,13 @@ let legal_handshake_message
     (match hs.hs_certificate_verify with
      | Some stored_cv -> stored_cv == cv
      | None -> False)
+  | CL.Sent, M.Finished fin, ControlHandshaking HsServerEncryptedFlightSent ->
+    model.model_config.config_role == ServerEndpoint /\
+    hs.hs_certificate_verify_verified /\
+    (match hs.hs_keys.ks_server_handshake_traffic with
+     | Some server_hs ->
+       H.verify_finished server_hs.traffic_secret (Tr.hash hs.hs_transcript) fin
+     | None -> False)
   | CL.Received, M.EncryptedExtensions _, ControlHandshaking HsServerHelloReceived ->
     model.model_config.config_role == ClientEndpoint /\
     Some? hs.hs_keys.ks_server_handshake_traffic
@@ -1455,6 +1498,9 @@ let legal_handshake_message
   | CL.Received, M.Finished _, ControlHandshaking HsCertificateVerifyVerified ->
     model.model_config.config_role == ClientEndpoint /\
     Some? hs.hs_keys.ks_server_handshake_traffic
+  | CL.Received, M.Finished _, ControlHandshaking HsServerFinishedSent ->
+    model.model_config.config_role == ServerEndpoint /\
+    Some? hs.hs_keys.ks_client_handshake_traffic
   | CL.Sent, M.Finished _, ControlHandshaking HsServerFinishedVerified ->
     model.model_config.config_role == ClientEndpoint /\
     Some? hs.hs_keys.ks_client_handshake_traffic /\
@@ -1645,6 +1691,7 @@ let conn_event_transcript_delta (ev:conn_event) : GTot B.bytes =
   | ConnLocalEvent local ->
     (match local with
      | LocalVerifyFinished fin -> W.serialize_handshake (M.Finished fin)
+     | LocalVerifyClientFinished fin -> W.serialize_handshake (M.Finished fin)
      | _ -> B.empty)
 
 let rec transcript_bytes_of_conn_events (events:list conn_event)
