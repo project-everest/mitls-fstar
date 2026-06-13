@@ -102,6 +102,20 @@ let lemma_step_role_install_record_keys_consistent_for_role
 =
   ()
 
+let lemma_initial_record_keys_consistent_for_role
+  (role:endpoint_role)
+  (cfg:connection_config)
+  : Lemma (connection_state_record_keys_consistent_for_role role (initial cfg))
+=
+  ()
+
+let lemma_initial_layered_log_consistent_for_role
+  (role:endpoint_role)
+  (cfg:connection_config)
+  : Lemma (connection_state_layered_log_consistent_for_role role (initial cfg))
+=
+  ()
+
 let lemma_model_record_keys_consistent_record_read_key_schedule_projection
   (model:connection_model)
   : Lemma
@@ -263,7 +277,7 @@ let lemma_initial_layered_log_consistent
   (cfg:connection_config)
   : Lemma (connection_state_layered_log_consistent (initial cfg))
 =
-  ()
+  lemma_initial_layered_log_consistent_for_role ClientEndpoint cfg
 
 let rec lemma_app_sent_messages_snoc
   (events:list conn_event)
@@ -4309,6 +4323,15 @@ let lemma_initial_full_log_consistent
   : Lemma (connection_state_full_log_consistent (initial cfg))
 =
   lemma_initial_layered_log_consistent cfg;
+  lemma_connection_state_connection_log_view_consistent (initial cfg);
+  lemma_initial_raw_event_replay_consistent cfg
+
+let lemma_initial_full_log_consistent_for_role
+  (role:endpoint_role)
+  (cfg:connection_config)
+  : Lemma (connection_state_full_log_consistent_for_role role (initial cfg))
+=
+  lemma_initial_layered_log_consistent_for_role role cfg;
   lemma_connection_state_connection_log_view_consistent (initial cfg);
   lemma_initial_raw_event_replay_consistent cfg
 

@@ -69,6 +69,10 @@ Current phase: **Phase 0/1 started**.
 - [x] Role-parametric `model_record_keys_consistent_for_role` added, with a
   focused preservation lemma for role-explicit traffic-key installs. The legacy
   client invariant remains a `ClientEndpoint` wrapper.
+- [x] Role-indexed connection-state record-key, layered-log, and full-log
+  invariant packages added. The existing client-named packages remain
+  `ClientEndpoint` wrappers, while new `_for_role` surfaces can state the same
+  invariant for `ServerEndpoint`.
 - [ ] Phase 2 paired endpoint traces and derived-key theorem family.
 
 ## End goal
@@ -736,7 +740,7 @@ Checklist:
 - [x] Add role-parametric record read/write key projection helpers.
 - [x] Add role-parametric record-key consistency helper and install
       preservation lemma.
-- [ ] Promote role-parametric record-key consistency into the full layered
+- [x] Promote role-parametric record-key consistency into the full layered
       invariant.
 - [x] Prove client projection compatibility for the initial role/key helpers.
 - [x] Prove server traffic-label direction mapping for the initial role/key

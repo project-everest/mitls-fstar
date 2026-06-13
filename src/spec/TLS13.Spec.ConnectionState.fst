@@ -1698,21 +1698,47 @@ let connection_state_record_layer_consistent
     projected_record_layer_state_of_record st.cs_model.model_record ==
       projected_record_layer_of_conn_events st.cs_event_log
 
+let connection_state_record_keys_consistent_for_role
+  (role:endpoint_role)
+  (st:connection_state)
+  : prop =
+  model_record_keys_consistent_for_role role st.cs_model
+
+let connection_state_record_keys_consistent_for_config_role
+  (st:connection_state)
+  : prop =
+  connection_state_record_keys_consistent_for_role
+    st.cs_model.model_config.config_role
+    st
+
 let connection_state_record_keys_consistent
   (st:connection_state)
   : prop =
-  model_record_keys_consistent st.cs_model
+  connection_state_record_keys_consistent_for_role ClientEndpoint st
 
-let connection_state_layered_log_consistent
+let connection_state_layered_log_consistent_for_role
+  (role:endpoint_role)
   (st:connection_state)
   : prop =
   connection_state_event_log_consistent st /\
   connection_state_transcript_consistent st /\
   connection_state_key_update_pending_consistent st /\
   connection_state_record_layer_consistent st /\
-  connection_state_record_keys_consistent st /\
+  connection_state_record_keys_consistent_for_role role st /\
   connection_state_pending_application_consistent st /\
   connection_state_app_log_consistent st
+
+let connection_state_layered_log_consistent_for_config_role
+  (st:connection_state)
+  : prop =
+  connection_state_layered_log_consistent_for_role
+    st.cs_model.model_config.config_role
+    st
+
+let connection_state_layered_log_consistent
+  (st:connection_state)
+  : prop =
+  connection_state_layered_log_consistent_for_role ClientEndpoint st
 
 let model_key_update_pending_delta
   (model0:connection_model)
@@ -2424,12 +2450,25 @@ let connection_state_raw_to_message_replay_consistent
   connection_state_received_decode_replay_consistent st /\
   connection_state_received_decode_key_schedule_replay_consistent st
 
+let connection_state_full_log_consistent_for_role
+  (role:endpoint_role)
+  (st:connection_state)
+  : prop =
+  connection_state_layered_log_consistent_for_role role st /\
+  connection_state_connection_log_view_consistent st /\
+  connection_state_raw_event_replay_consistent st
+
+let connection_state_full_log_consistent_for_config_role
+  (st:connection_state)
+  : prop =
+  connection_state_full_log_consistent_for_role
+    st.cs_model.model_config.config_role
+    st
+
 let connection_state_full_log_consistent
   (st:connection_state)
   : prop =
-  connection_state_layered_log_consistent st /\
-  connection_state_connection_log_view_consistent st /\
-  connection_state_raw_event_replay_consistent st
+  connection_state_full_log_consistent_for_role ClientEndpoint st
 
 let connection_state_single_step : RTC.binrel connection_state =
   fun st0 st1 -> exists delta. legal_connection_delta st0 delta st1

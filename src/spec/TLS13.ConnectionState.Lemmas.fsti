@@ -82,6 +82,16 @@ val lemma_step_role_install_record_keys_consistent_for_role
             { install_role = role; install_payload = install }) == Some model1)
       (ensures model_record_keys_consistent_for_role role model1)
 
+val lemma_initial_record_keys_consistent_for_role
+  (role:endpoint_role)
+  (cfg:connection_config)
+  : Lemma (connection_state_record_keys_consistent_for_role role (initial cfg))
+
+val lemma_initial_layered_log_consistent_for_role
+  (role:endpoint_role)
+  (cfg:connection_config)
+  : Lemma (connection_state_layered_log_consistent_for_role role (initial cfg))
+
 val lemma_model_record_keys_consistent_record_read_key_schedule_projection
   (model:connection_model)
   : Lemma
@@ -287,6 +297,11 @@ val lemma_legal_connection_delta_layered_log_consistent
 val lemma_initial_full_log_consistent
   (cfg:connection_config)
   : Lemma (connection_state_full_log_consistent (initial cfg))
+
+val lemma_initial_full_log_consistent_for_role
+  (role:endpoint_role)
+  (cfg:connection_config)
+  : Lemma (connection_state_full_log_consistent_for_role role (initial cfg))
 
 val lemma_legal_connection_delta_full_log_consistent
   (st0:connection_state)
