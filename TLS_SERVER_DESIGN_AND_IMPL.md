@@ -333,6 +333,13 @@ Current phase: **Phase 6 server buffer/event API and theorem surface**.
   public wrappers while preserving `server_local_event_end_to_end_correct`.
   Other server local actions remain intentionally outside this generic
   dispatcher until their handlers are implemented.
+- [x] The generic `process_local_event` dispatcher now also accepts
+  `LocalDeriveSharedSecret` with a 32-byte payload for the existing
+  supplied-shared-secret path. It routes through
+  `process_derive_shared_secret` and proves
+  `server_local_event_end_to_end_correct` with the payload identified as the
+  derived shared secret. This is still the supplied-material path; executable
+  server X25519 from stored private/client shares remains a later milestone.
 - [x] Added supplied-material server application write-key installation:
   `TLS13.Impl.ConnectionState.LocalHandshake.install_server_application_write_traffic_keys_from_material`
   stores server application traffic material, installs the concrete application
@@ -1215,8 +1222,8 @@ Checklist:
       - server random and key share generation;
       - cipher/group/signature selection;
       - shared-secret and traffic-secret derivation (supplied shared-secret
-        wrapper complete; executable server X25519 and traffic-key wrappers
-        remain);
+        wrapper and generic 32-byte-payload dispatcher complete; executable
+        server X25519 remains);
       - handshake key installation (server write-key and client read-key
         supplied-material and internally derived mutations/wrappers, scheduler
         hints, and generic local dispatcher integration complete for handshake

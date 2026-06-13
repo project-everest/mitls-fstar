@@ -706,7 +706,7 @@ fn process_derive_shared_secret
                   st1
                   resp
                   ST.LocalDeriveSharedSecret
-                  B.empty
+                  (Ghost.reveal shared)
                   network_out_bytes
                   app_out_bytes)
 {
@@ -790,7 +790,7 @@ fn process_derive_shared_secret
     (CM.derived_shared_secret_state 'st0 (Ghost.reveal shared))
     resp
     ST.LocalDeriveSharedSecret
-    B.empty
+    (Ghost.reveal shared)
     (CS.ConnLocalEvent
       (CS.LocalDeriveSharedSecret (Ghost.reveal shared)))
     B.empty
@@ -802,7 +802,7 @@ fn process_derive_shared_secret
     (CM.derived_shared_secret_state 'st0 (Ghost.reveal shared))
     resp
     ST.LocalDeriveSharedSecret
-    B.empty
+    (Ghost.reveal shared)
     'old_network_out
     'old_app_out));
   assert (pure (ST.server_local_event_end_to_end_correct
@@ -810,7 +810,7 @@ fn process_derive_shared_secret
     (CM.derived_shared_secret_state 'st0 (Ghost.reveal shared))
     resp
     ST.LocalDeriveSharedSecret
-    B.empty
+    (Ghost.reveal shared)
     'old_network_out
     'old_app_out));
   resp
@@ -2205,12 +2205,23 @@ fn process_local_event
       }
     }
     ST.LocalDeriveSharedSecret -> {
-      assert (pure False);
-      {
-        ST.network_out_len = 0sz;
-        ST.app_out_len = 0sz;
-        ST.status = ST.IllegalTransition;
-      }
+      assert (pure (B.length (Ghost.reveal 'payload_bytes) == 32));
+      assert (pure (CS.legal_event
+        'st0.CS.cs_model
+        (CS.ConnLocalEvent
+          (CS.LocalDeriveSharedSecret (Ghost.reveal 'payload_bytes)))));
+      let shared : erased TLS13.Crypto.Spec.x25519_shared_secret =
+        Ghost.hide (Ghost.reveal 'payload_bytes);
+      let resp =
+        process_derive_shared_secret
+          s
+          payload
+          #shared
+          network_out
+          network_out_len
+          app_out
+          app_out_len;
+      resp
     }
     ST.LocalInstallClientApplicationTrafficKeys -> {
       let resp =

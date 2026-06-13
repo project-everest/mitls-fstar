@@ -85,11 +85,12 @@ let server_local_event_input_ready
   (kind:ST.local_event_kind)
   (payload:B.bytes)
   : prop =
-  Seq.equal payload B.empty /\
-  (match kind with
+  match kind with
   | ST.LocalStartServer ->
+    Seq.equal payload B.empty /\
     CM.can_start_server st
   | ST.LocalInstallServerHandshakeTrafficKeys ->
+    Seq.equal payload B.empty /\
     st.CS.cs_model.CS.model_control ==
       CS.ControlHandshaking CS.HsServerHelloSent /\
     st.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
@@ -98,6 +99,7 @@ let server_local_event_input_ready
     not (Some?
       st.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_handshake_traffic)
   | ST.LocalInstallClientHandshakeTrafficKeys ->
+    Seq.equal payload B.empty /\
     st.CS.cs_model.CS.model_control ==
       CS.ControlHandshaking CS.HsServerHelloSent /\
     st.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
@@ -106,6 +108,7 @@ let server_local_event_input_ready
     not (Some?
       st.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_handshake_traffic)
   | ST.LocalInstallServerApplicationTrafficKeys ->
+    Seq.equal payload B.empty /\
     st.CS.cs_model.CS.model_control ==
       CS.ControlHandshaking CS.HsServerFinishedSent /\
     st.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
@@ -114,6 +117,7 @@ let server_local_event_input_ready
     not (Some?
       st.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_application_traffic)
   | ST.LocalInstallClientApplicationTrafficKeys ->
+    Seq.equal payload B.empty /\
     st.CS.cs_model.CS.model_control ==
       CS.ControlHandshaking CS.HsClientFinishedReceived /\
     st.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
@@ -121,8 +125,13 @@ let server_local_event_input_ready
       st.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_master_secret /\
     not (Some?
       st.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_application_traffic)
+  | ST.LocalDeriveSharedSecret ->
+    B.length payload == 32 /\
+    CS.legal_event
+      st.CS.cs_model
+      (CS.ConnLocalEvent (CS.LocalDeriveSharedSecret payload))
   | _ ->
-    False)
+    False
 
 fn new_server
   (certificate_chain:array U8.t)
@@ -326,7 +335,7 @@ fn process_derive_shared_secret
                    st1
                    resp
                    ST.LocalDeriveSharedSecret
-                   B.empty
+                   (Ghost.reveal shared)
                    network_out_bytes
                    app_out_bytes)
 
