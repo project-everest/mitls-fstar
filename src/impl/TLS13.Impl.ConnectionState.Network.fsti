@@ -177,6 +177,59 @@ fn mark_received_server_hello
           Pulse.Lib.Array.PtsTo.pts_to raw 'raw_bytes **
           Pulse.Lib.Array.PtsTo.pts_to fragment 'fragment_bytes
 
+fn mark_received_client_hello
+  (c:connection_state)
+  (raw:array U8.t)
+  (fragment:array U8.t)
+  (fragment_len:SZ.t)
+  (lch:IM.client_hello)
+  (#ch:erased M.client_hello)
+  (#st0:erased CS.connection_state)
+  requires connection_exactly c st0 **
+          Pulse.Lib.Array.PtsTo.pts_to raw 'raw_bytes **
+          Pulse.Lib.Array.PtsTo.pts_to fragment 'fragment_bytes **
+          IM.is_valid_client_hello lch ch **
+          pure (st0.CS.cs_model.CS.model_control ==
+                  CS.ControlHandshaking CS.HsAwaitingClientHello /\
+                st0.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
+                Some? st0.CS.cs_model.CS.model_config.CS.config_server /\
+                B.length 'fragment_bytes == SZ.v fragment_len /\
+                SZ.v fragment_len <= max_client_hello_len /\
+                Seq.equal
+                  (Ghost.reveal 'fragment_bytes)
+                  (W.serialize_handshake (M.ClientHello ch)) /\
+                lch.IM.client_hello_has_server_name == true /\
+                client_hello_server_name_len_for ch ==
+                  lch.IM.client_hello_server_name_len /\
+                client_hello_cipher_suites_len_for ch ==
+                  lch.IM.client_hello_cipher_suites_len /\
+                client_hello_signature_schemes_len_for ch ==
+                  lch.IM.client_hello_signature_schemes_len /\
+                st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello == None /\
+                B.length st0.CS.cs_model.CS.model_handshake.CS.hs_transcript +
+                  B.length (W.serialize_handshake (M.ClientHello ch)) <=
+                  max_transcript_len /\
+                CS.legal_event
+                  st0.CS.cs_model
+                  (CS.ConnNetworkEvent {
+                    CL.message_direction = CL.Received;
+                    CL.message_value = M.TlsHandshake (M.ClientHello ch);
+                  }) /\
+                CS.event_raw_delta_legal
+                  st0.CS.cs_model
+                  (CS.ConnNetworkEvent {
+                    CL.message_direction = CL.Received;
+                    CL.message_value = M.TlsHandshake (M.ClientHello ch);
+                  })
+                  B.empty
+                  (Ghost.reveal 'raw_bytes))
+  ensures connection_exactly
+           c
+           (received_client_hello_state st0 ch (Ghost.reveal 'raw_bytes)) **
+          Pulse.Lib.Array.PtsTo.pts_to raw 'raw_bytes **
+          Pulse.Lib.Array.PtsTo.pts_to fragment 'fragment_bytes **
+          IM.is_valid_client_hello lch ch
+
 fn mark_received_encrypted_extensions
   (c:connection_state)
   (raw:array U8.t)

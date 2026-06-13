@@ -312,6 +312,54 @@ let legal_handled_local_response
       network_out
       app_out
 
+let received_message_event (msg:M.tls_message) : CS.conn_event =
+  CS.ConnNetworkEvent {
+    CL.message_direction = CL.Received;
+    CL.message_value = msg;
+  }
+
+let received_message_delta
+  (msg:M.tls_message)
+  (raw_received:B.bytes)
+  : CS.connection_delta =
+  {
+    CS.delta_event = received_message_event msg;
+    CS.delta_raw_sent = B.empty;
+    CS.delta_raw_received = raw_received;
+  }
+
+let legal_network_response
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (resp:server_response)
+  (msg:M.tls_message)
+  (raw_received:B.bytes)
+  (network_out:B.bytes)
+  (app_out:B.bytes)
+  : prop =
+  legal_response_for_event
+    st0
+    st1
+    resp
+    (received_message_event msg)
+    B.empty
+    raw_received
+    network_out
+    app_out
+
+let server_network_event_end_to_end_correct
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (resp:server_response)
+  (msg:M.tls_message)
+  (raw_received:B.bytes)
+  (network_out:B.bytes)
+  (app_out:B.bytes)
+  : prop =
+  server_end_to_end_invariant st0 /\
+  server_end_to_end_invariant st1 /\
+  legal_network_response st0 st1 resp msg raw_received network_out app_out
+
 let server_local_event_end_to_end_correct
   (st0:CS.connection_state)
   (st1:CS.connection_state)

@@ -757,6 +757,76 @@ let lemma_received_server_hello_state_evolves
   assert (CS.connection_state_consistent
     (received_server_hello_state st sh raw_received))
 
+let lemma_received_client_hello_state_evolves
+  (st:CS.connection_state)
+  (ch:M.client_hello)
+  (raw_received:B.bytes)
+  : Lemma
+      (requires CS.connection_state_consistent st /\
+                st.CS.cs_model.CS.model_control ==
+                  CS.ControlHandshaking CS.HsAwaitingClientHello /\
+                CS.legal_event
+                  st.CS.cs_model
+                  (CS.ConnNetworkEvent {
+                    CL.message_direction = CL.Received;
+                    CL.message_value = M.TlsHandshake (M.ClientHello ch);
+                  }) /\
+                CS.event_raw_delta_legal
+                  st.CS.cs_model
+                  (CS.ConnNetworkEvent {
+                    CL.message_direction = CL.Received;
+                    CL.message_value = M.TlsHandshake (M.ClientHello ch);
+                  })
+                  B.empty
+                  raw_received)
+      (ensures CS.connection_state_evolves
+                 st
+                 (received_client_hello_state st ch raw_received) /\
+               CS.connection_state_consistent
+                 (received_client_hello_state st ch raw_received) /\
+               CS.legal_connection_delta
+                 st
+                 {
+                   CS.delta_event =
+                     CS.ConnNetworkEvent {
+                       CL.message_direction = CL.Received;
+                       CL.message_value = M.TlsHandshake (M.ClientHello ch);
+                     };
+                   CS.delta_raw_sent = B.empty;
+                   CS.delta_raw_received = raw_received;
+                 }
+                 (received_client_hello_state st ch raw_received))
+=
+  let ev =
+    CS.ConnNetworkEvent {
+      CL.message_direction = CL.Received;
+      CL.message_value = M.TlsHandshake (M.ClientHello ch);
+    } in
+  let delta = {
+    CS.delta_event = ev;
+    CS.delta_raw_sent = B.empty;
+    CS.delta_raw_received = raw_received;
+  } in
+  assert (CS.legal_event st.CS.cs_model ev);
+  assert (CS.step_model st.CS.cs_model ev ==
+          Some (received_client_hello_state st ch raw_received).CS.cs_model);
+  assert (CS.legal_connection_delta
+    st
+    delta
+    (received_client_hello_state st ch raw_received));
+  assert (CS.connection_state_single_step
+    st
+    (received_client_hello_state st ch raw_received));
+  FStar.ReflexiveTransitiveClosure.closure_step
+    CS.connection_state_single_step
+    st
+    (received_client_hello_state st ch raw_received);
+  assert (CS.connection_state_evolves
+    st
+    (received_client_hello_state st ch raw_received));
+  assert (CS.connection_state_consistent
+    (received_client_hello_state st ch raw_received))
+
 let lemma_received_encrypted_extensions_state_evolves
   (st:CS.connection_state)
   (ee:M.encrypted_extensions)

@@ -218,7 +218,22 @@ Current phase: **Phase 6 server buffer/event API and theorem surface**.
   server-local raw-message replay package over raw-event replay, protected raw
   segmentation, sent-seal replay, and received-decode replay; role-indexed
   key-schedule replay remains a later proof-hardening step.
-- [ ] Continue Phase 6 with network `ClientHello` handling.
+- [x] Added the first verified server network receive slice for SNI-present
+  `ClientHello`:
+  - `TLS13.Impl.ConnectionState.Model.received_client_hello_state` mirrors the
+    pure server receive transition, appending exact ClientHello handshake bytes
+    to the transcript and raw receive log.
+  - `TLS13.Impl.ConnectionState.Network.mark_received_client_hello` copies the
+    parsed L-level ClientHello into server connection storage, records the exact
+    handshake fragment, advances to `HsClientHelloReceived`, and proves the legal
+    connection delta.
+  - `TLS13.Impl.Server.process_client_hello` is a focused Pulse handler that
+    copy-and-frees the parsed ClientHello, returns `StepOk` with zero output, and
+    proves `server_network_event_end_to_end_correct` plus invariant
+    preservation.
+- [ ] Continue Phase 6/7 by moving from the focused ClientHello event handler to
+  the final buffer-oriented server `process_network_bytes` dispatcher and by
+  adding ClientHello reject paths.
 
 ## End goal
 
@@ -1043,6 +1058,8 @@ Checklist:
 - [x] Define `server_local_event_end_to_end_correct`.
 - [x] Constructor establishes the server invariant.
 - [ ] Network/local steps preserve the server invariant.
+      Initial slices completed: `LocalStartServer` and SNI-present received
+      `ClientHello`.
 - [x] Emitted bytes expose raw-delta, parse-back, seal, and write-key provenance.
 - [ ] Consumed bytes expose exact consumed prefix, parse/decode classification,
       open facts, and read-key provenance.
@@ -1059,7 +1076,8 @@ Validation:
 
 Checklist:
 
-- [ ] Create small `.fsti` boundaries for server state mutations.
+- [x] Create small `.fsti` boundaries for server state mutations.
+      Initial boundaries cover server start and received ClientHello.
 - [ ] Reuse shared helpers where endpoint-independent.
 - [ ] Add network handlers:
       - ClientHello accept/reject;
@@ -1092,6 +1110,14 @@ Validation:
 - [ ] Each handler proves it follows the pure transition.
 - [ ] Each handler preserves server invariant.
 - [ ] No broad catches or success-shaped fallbacks.
+
+Status:
+
+- [x] Initial SNI-present ClientHello accept handler proves the pure
+      `Received ClientHello` transition and preserves `server_end_to_end_invariant`.
+- [ ] ClientHello reject/error paths are still pending: no-SNI policy rejection,
+      unsupported cipher/group/signature offers, malformed ClientHello, and the
+      final buffer-level decode-error path.
 
 ### Phase 8: verified top-level server driver
 

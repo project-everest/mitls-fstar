@@ -396,6 +396,37 @@ let received_server_hello_state
       }];
   }
 
+let received_client_hello_state
+  (st:CS.connection_state)
+  (ch:M.client_hello)
+  (raw_received:B.bytes)
+  : GTot CS.connection_state =
+  let model0 = st.CS.cs_model in
+  let hs0 = model0.CS.model_handshake in
+  let msg = M.ClientHello ch in
+  let hs1 =
+    CS.append_handshake_to_transcript
+      { hs0 with
+         CS.hs_client_hello = Some ch;
+         CS.hs_buffers =
+           { hs0.CS.hs_buffers with
+               CS.hb_client_hello_bytes = W.serialize_handshake msg };
+      }
+      msg in
+  {
+    CS.cs_model = CS.with_handshake_stage model0 hs1 CS.HsClientHelloReceived;
+    CS.cs_wire_log = {
+      CL.raw_sent = B.append st.CS.cs_wire_log.CL.raw_sent B.empty;
+      CL.raw_received = B.append st.CS.cs_wire_log.CL.raw_received raw_received;
+    };
+    CS.cs_event_log =
+      st.CS.cs_event_log @
+      [CS.ConnNetworkEvent {
+       CL.message_direction = CL.Received;
+       CL.message_value = M.TlsHandshake msg;
+      }];
+  }
+
 let received_encrypted_extensions_state
   (st:CS.connection_state)
   (ee:M.encrypted_extensions)
@@ -1473,6 +1504,46 @@ val lemma_received_server_hello_state_evolves
                    CS.delta_raw_received = raw_received;
                  }
                  (received_server_hello_state st sh raw_received))
+
+val lemma_received_client_hello_state_evolves
+  (st:CS.connection_state)
+  (ch:M.client_hello)
+  (raw_received:B.bytes)
+  : Lemma
+      (requires CS.connection_state_consistent st /\
+                st.CS.cs_model.CS.model_control ==
+                 CS.ControlHandshaking CS.HsAwaitingClientHello /\
+                CS.legal_event
+                 st.CS.cs_model
+                 (CS.ConnNetworkEvent {
+                   CL.message_direction = CL.Received;
+                   CL.message_value = M.TlsHandshake (M.ClientHello ch);
+                 }) /\
+                CS.event_raw_delta_legal
+                 st.CS.cs_model
+                 (CS.ConnNetworkEvent {
+                   CL.message_direction = CL.Received;
+                   CL.message_value = M.TlsHandshake (M.ClientHello ch);
+                 })
+                 B.empty
+                 raw_received)
+      (ensures CS.connection_state_evolves
+                 st
+                 (received_client_hello_state st ch raw_received) /\
+               CS.connection_state_consistent
+                 (received_client_hello_state st ch raw_received) /\
+               CS.legal_connection_delta
+                 st
+                 {
+                  CS.delta_event =
+                    CS.ConnNetworkEvent {
+                      CL.message_direction = CL.Received;
+                      CL.message_value = M.TlsHandshake (M.ClientHello ch);
+                    };
+                  CS.delta_raw_sent = B.empty;
+                  CS.delta_raw_received = raw_received;
+                 }
+                 (received_client_hello_state st ch raw_received))
 
 val lemma_received_encrypted_extensions_state_evolves
   (st:CS.connection_state)
