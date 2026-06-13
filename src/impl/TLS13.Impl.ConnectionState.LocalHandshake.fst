@@ -1970,6 +1970,231 @@ fn install_server_application_write_traffic_keys_from_material
     }))
 }
 
+fn install_client_application_read_traffic_keys_from_material
+  (c:connection_state)
+  (traffic_secret_src:array U8.t)
+  (traffic_key_src:array U8.t)
+  (traffic_iv_src:array U8.t)
+  (#material:erased CS.traffic_key_material)
+  (#st0:erased CS.connection_state)
+  requires connection_exactly c st0 **
+           ArrPts.pts_to traffic_secret_src material.CS.traffic_secret **
+           ArrPts.pts_to traffic_key_src material.CS.traffic_key **
+           ArrPts.pts_to traffic_iv_src material.CS.traffic_iv **
+           pure (CS.legal_event
+             st0.CS.cs_model
+             (CS.ConnLocalEvent
+               (CS.LocalInstallTrafficKeysForRole {
+                 CS.install_role = CS.ServerEndpoint;
+                 CS.install_payload = {
+                   CS.install_epoch = CS.TrafficApplication;
+                   CS.install_direction = CS.TrafficRead;
+                   CS.install_material = Ghost.reveal material;
+                 };
+               })))
+  ensures connection_exactly
+           c
+           (installed_traffic_keys_for_role_state st0 {
+             CS.install_role = CS.ServerEndpoint;
+             CS.install_payload = {
+               CS.install_epoch = CS.TrafficApplication;
+               CS.install_direction = CS.TrafficRead;
+               CS.install_material = Ghost.reveal material;
+             };
+           }) **
+          ArrPts.pts_to traffic_secret_src material.CS.traffic_secret **
+          ArrPts.pts_to traffic_key_src material.CS.traffic_key **
+          ArrPts.pts_to traffic_iv_src material.CS.traffic_iv **
+          pure (CS.legal_connection_delta
+            st0
+            {
+              CS.delta_event =
+                CS.ConnLocalEvent
+                  (CS.LocalInstallTrafficKeysForRole {
+                    CS.install_role = CS.ServerEndpoint;
+                    CS.install_payload = {
+                      CS.install_epoch = CS.TrafficApplication;
+                      CS.install_direction = CS.TrafficRead;
+                      CS.install_material = Ghost.reveal material;
+                    };
+                  });
+              CS.delta_raw_sent = B.empty;
+              CS.delta_raw_received = B.empty;
+            }
+            (installed_traffic_keys_for_role_state st0 {
+              CS.install_role = CS.ServerEndpoint;
+              CS.install_payload = {
+                CS.install_epoch = CS.TrafficApplication;
+                CS.install_direction = CS.TrafficRead;
+                CS.install_material = Ghost.reveal material;
+              };
+            }))
+{
+  let install = Ghost.hide {
+    CS.install_epoch = CS.TrafficApplication;
+    CS.install_direction = CS.TrafficRead;
+    CS.install_material = Ghost.reveal material;
+  };
+  let role_install = Ghost.hide {
+    CS.install_role = CS.ServerEndpoint;
+    CS.install_payload = Ghost.reveal install;
+  };
+  assert (pure (CS.legal_event
+    st0.CS.cs_model
+    (CS.ConnLocalEvent
+      (CS.LocalInstallTrafficKeysForRole (Ghost.reveal role_install)))));
+
+  unfold (connection_exactly c st0);
+  unfold (connection_model_exactly c st0.CS.cs_model);
+  unfold (control_exactly c.control st0.CS.cs_model.CS.model_control st0.CS.cs_model.CS.model_failure);
+  unfold (record_layer_exactly c.records st0.CS.cs_model.CS.model_record);
+  unfold (handshake_exactly c.handshake st0.CS.cs_model.CS.model_handshake);
+  with cv_verified server_finished_verified. _;
+  unfold (key_schedule_exactly
+    c.handshake.keys
+    st0.CS.cs_model.CS.model_handshake.CS.hs_keys);
+
+  store_traffic_key_material
+    c.handshake.keys.client_application_traffic
+    traffic_secret_src
+    traffic_key_src
+    traffic_iv_src
+    #material;
+  fold (key_schedule_exactly
+    c.handshake.keys
+    (installed_traffic_keys_for_role_state st0 (Ghost.reveal role_install)).CS.cs_model.CS.model_handshake.CS.hs_keys);
+
+  Rec.install_application_keys_runtime c.records.read traffic_key_src traffic_iv_src;
+  assert (pure ((Ghost.reveal install).CS.install_epoch == CS.TrafficApplication));
+  assert (pure ((Ghost.reveal install).CS.install_direction == CS.TrafficRead));
+  assert (pure ((Ghost.reveal install).CS.install_material == Ghost.reveal material));
+  assert (pure ((Ghost.reveal role_install).CS.install_role == CS.ServerEndpoint));
+  assert (pure ((Ghost.reveal role_install).CS.install_payload == Ghost.reveal install));
+  assert (pure ((installed_traffic_keys_for_role_state st0 (Ghost.reveal role_install)).CS.cs_model.CS.model_record.CS.record_write ==
+    st0.CS.cs_model.CS.model_record.CS.record_write));
+  assert (pure ((installed_traffic_keys_for_role_state st0 (Ghost.reveal role_install)).CS.cs_model.CS.model_record.CS.record_read ==
+    R.install_keys
+      st0.CS.cs_model.CS.model_record.CS.record_read
+      R.Application
+      (Ghost.reveal material).CS.traffic_key
+      (Ghost.reveal material).CS.traffic_iv));
+  rewrite (Rec.is_record_state c.records.write st0.CS.cs_model.CS.model_record.CS.record_write)
+    as (Rec.is_record_state
+      c.records.write
+      (installed_traffic_keys_for_role_state st0 (Ghost.reveal role_install)).CS.cs_model.CS.model_record.CS.record_write);
+  rewrite (Rec.is_record_state
+    c.records.read
+    (R.install_keys
+      st0.CS.cs_model.CS.model_record.CS.record_read
+      R.Application
+      (Ghost.reveal material).CS.traffic_key
+      (Ghost.reveal material).CS.traffic_iv))
+    as (Rec.is_record_state
+      c.records.read
+      (installed_traffic_keys_for_role_state st0 (Ghost.reveal role_install)).CS.cs_model.CS.model_record.CS.record_read);
+  fold (record_layer_exactly
+    c.records
+    (installed_traffic_keys_for_role_state st0 (Ghost.reveal role_install)).CS.cs_model.CS.model_record);
+
+  assert (pure ((installed_traffic_keys_for_role_state st0 (Ghost.reveal role_install)).CS.cs_model.CS.model_handshake.CS.hs_start ==
+    st0.CS.cs_model.CS.model_handshake.CS.hs_start));
+  assert (pure ((installed_traffic_keys_for_role_state st0 (Ghost.reveal role_install)).CS.cs_model.CS.model_handshake.CS.hs_client_hello ==
+    st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello));
+  assert (pure ((installed_traffic_keys_for_role_state st0 (Ghost.reveal role_install)).CS.cs_model.CS.model_handshake.CS.hs_server_hello ==
+    st0.CS.cs_model.CS.model_handshake.CS.hs_server_hello));
+  assert (pure ((installed_traffic_keys_for_role_state st0 (Ghost.reveal role_install)).CS.cs_model.CS.model_handshake.CS.hs_encrypted_extensions ==
+    st0.CS.cs_model.CS.model_handshake.CS.hs_encrypted_extensions));
+  assert (pure ((installed_traffic_keys_for_role_state st0 (Ghost.reveal role_install)).CS.cs_model.CS.model_handshake.CS.hs_certificate ==
+    st0.CS.cs_model.CS.model_handshake.CS.hs_certificate));
+  assert (pure ((installed_traffic_keys_for_role_state st0 (Ghost.reveal role_install)).CS.cs_model.CS.model_handshake.CS.hs_certificate_verify ==
+    st0.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify));
+  assert (pure ((installed_traffic_keys_for_role_state st0 (Ghost.reveal role_install)).CS.cs_model.CS.model_handshake.CS.hs_server_finished ==
+    st0.CS.cs_model.CS.model_handshake.CS.hs_server_finished));
+  assert (pure ((installed_traffic_keys_for_role_state st0 (Ghost.reveal role_install)).CS.cs_model.CS.model_handshake.CS.hs_client_finished ==
+    st0.CS.cs_model.CS.model_handshake.CS.hs_client_finished));
+  assert (pure ((installed_traffic_keys_for_role_state st0 (Ghost.reveal role_install)).CS.cs_model.CS.model_handshake.CS.hs_validated_peer ==
+    st0.CS.cs_model.CS.model_handshake.CS.hs_validated_peer));
+  assert (pure ((installed_traffic_keys_for_role_state st0 (Ghost.reveal role_install)).CS.cs_model.CS.model_handshake.CS.hs_certificate_verify_verified ==
+    st0.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify_verified));
+  assert (pure ((installed_traffic_keys_for_role_state st0 (Ghost.reveal role_install)).CS.cs_model.CS.model_handshake.CS.hs_server_finished_verified ==
+    st0.CS.cs_model.CS.model_handshake.CS.hs_server_finished_verified));
+  assert (pure ((installed_traffic_keys_for_role_state st0 (Ghost.reveal role_install)).CS.cs_model.CS.model_handshake.CS.hs_transcript ==
+    st0.CS.cs_model.CS.model_handshake.CS.hs_transcript));
+  assert (pure ((installed_traffic_keys_for_role_state st0 (Ghost.reveal role_install)).CS.cs_model.CS.model_handshake.CS.hs_buffers ==
+    st0.CS.cs_model.CS.model_handshake.CS.hs_buffers));
+
+  unfold (handshake_messages_exactly c.handshake.messages st0.CS.cs_model.CS.model_handshake);
+  fold (handshake_messages_exactly
+    c.handshake.messages
+    (installed_traffic_keys_for_role_state st0 (Ghost.reveal role_install)).CS.cs_model.CS.model_handshake);
+  unfold (server_key_share_exactly c.handshake.server_key_share st0.CS.cs_model.CS.model_handshake);
+  fold (server_key_share_exactly
+    c.handshake.server_key_share
+    (installed_traffic_keys_for_role_state st0 (Ghost.reveal role_install)).CS.cs_model.CS.model_handshake);
+  rewrite (handshake_start_exactly
+    c.handshake.start
+    st0.CS.cs_model.CS.model_handshake.CS.hs_start)
+    as (handshake_start_exactly
+      c.handshake.start
+      (installed_traffic_keys_for_role_state st0 (Ghost.reveal role_install)).CS.cs_model.CS.model_handshake.CS.hs_start);
+  rewrite (peer_exactly
+    c.handshake.validated_peer
+    st0.CS.cs_model.CS.model_handshake.CS.hs_validated_peer)
+    as (peer_exactly
+      c.handshake.validated_peer
+      (installed_traffic_keys_for_role_state st0 (Ghost.reveal role_install)).CS.cs_model.CS.model_handshake.CS.hs_validated_peer);
+  rewrite (handshake_buffers_exactly
+    c.handshake.buffers
+    st0.CS.cs_model.CS.model_handshake.CS.hs_buffers)
+    as (handshake_buffers_exactly
+      c.handshake.buffers
+      (installed_traffic_keys_for_role_state st0 (Ghost.reveal role_install)).CS.cs_model.CS.model_handshake.CS.hs_buffers);
+  rewrite (sized_bytes_exactly
+    c.handshake.transcript
+    max_transcript_len
+    st0.CS.cs_model.CS.model_handshake.CS.hs_transcript)
+    as (sized_bytes_exactly
+      c.handshake.transcript
+      max_transcript_len
+      (installed_traffic_keys_for_role_state st0 (Ghost.reveal role_install)).CS.cs_model.CS.model_handshake.CS.hs_transcript);
+  fold (handshake_exactly
+    c.handshake
+    (installed_traffic_keys_for_role_state st0 (Ghost.reveal role_install)).CS.cs_model.CS.model_handshake);
+
+  fold (control_exactly
+    c.control
+    (installed_traffic_keys_for_role_state st0 (Ghost.reveal role_install)).CS.cs_model.CS.model_control
+    (installed_traffic_keys_for_role_state st0 (Ghost.reveal role_install)).CS.cs_model.CS.model_failure);
+  assert (pure ((installed_traffic_keys_for_role_state st0 (Ghost.reveal role_install)).CS.cs_model.CS.model_config ==
+    st0.CS.cs_model.CS.model_config));
+  assert (pure ((installed_traffic_keys_for_role_state st0 (Ghost.reveal role_install)).CS.cs_model.CS.model_application ==
+    st0.CS.cs_model.CS.model_application));
+  rewrite (connection_config_exactly c.config st0.CS.cs_model.CS.model_config)
+    as (connection_config_exactly
+      c.config
+      (installed_traffic_keys_for_role_state st0 (Ghost.reveal role_install)).CS.cs_model.CS.model_config);
+  rewrite (application_exactly c.application st0.CS.cs_model.CS.model_application)
+    as (application_exactly
+      c.application
+      (installed_traffic_keys_for_role_state st0 (Ghost.reveal role_install)).CS.cs_model.CS.model_application);
+  fold (connection_model_exactly
+    c
+    (installed_traffic_keys_for_role_state st0 (Ghost.reveal role_install)).CS.cs_model);
+
+  lemma_installed_traffic_keys_for_role_state_evolves st0 (Ghost.reveal role_install);
+  MR.update c.ghost_state (installed_traffic_keys_for_role_state st0 (Ghost.reveal role_install));
+  fold (connection_exactly c (installed_traffic_keys_for_role_state st0 (Ghost.reveal role_install)));
+  rewrite (connection_exactly c (installed_traffic_keys_for_role_state st0 (Ghost.reveal role_install)))
+    as (connection_exactly c (installed_traffic_keys_for_role_state st0 {
+      CS.install_role = CS.ServerEndpoint;
+      CS.install_payload = {
+        CS.install_epoch = CS.TrafficApplication;
+        CS.install_direction = CS.TrafficRead;
+        CS.install_material = Ghost.reveal material;
+      };
+    }))
+}
+
 fn derive_and_install_server_handshake_write_traffic_keys
   (c:connection_state)
   (#st0:erased CS.connection_state)
