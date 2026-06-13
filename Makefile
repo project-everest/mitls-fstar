@@ -333,7 +333,6 @@ $(filter-out $(OUTPUT_DIR)/FStar_SizeT.krml $(OUTPUT_DIR)/TLS13_Impl_Messages.kr
 	    if [ "$$iface" != "$$src_arg" ] && [ -f "$$iface" ]; then \
 	      $(FSTAR) "$$iface" || exit $$?; \
 	    fi; \
-	    $(FSTAR) "$$src_arg" && \
 	    $(FSTAR) "$$src_arg" --codegen krml --extract_module "$$mod" --krmloutput "$@"; \
 	    else \
 	    src_path="$$src_arg"; \
