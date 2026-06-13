@@ -6,6 +6,7 @@
 #include <stdint.h>
 
 typedef struct tls13_peer_identity_s tls13_peer_identity;
+typedef struct tls13_server_credentials_s tls13_server_credentials;
 
 #define TLS13_SIG_RSA_PSS_RSAE_SHA256 ((uint16_t)0x0804u)
 
@@ -33,6 +34,22 @@ bool tls13_openssl_peer_verify_signature(
     const uint8_t *signature,
     size_t signature_len);
 
+tls13_server_credentials *tls13_openssl_server_credentials_new(
+    const uint8_t *certificate_chain,
+    size_t certificate_chain_len,
+    const uint8_t *private_key,
+    size_t private_key_len);
+
+bool tls13_openssl_server_sign_rsa_pss_sha256(
+    const tls13_server_credentials *creds,
+    const uint8_t *message,
+    size_t message_len,
+    uint8_t *signature,
+    size_t signature_capacity,
+    size_t *signature_len);
+
 void tls13_openssl_peer_identity_free(tls13_peer_identity *peer);
+
+void tls13_openssl_server_credentials_free(tls13_server_credentials *creds);
 
 #endif

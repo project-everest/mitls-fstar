@@ -2,5 +2,6 @@
 #define TLS13_OPENSSL_KARAMEL_H
 
 typedef struct TLS13_OpenSSL_auth_context_s *TLS13_OpenSSL_auth_context;
+typedef struct TLS13_OpenSSL_server_credentials_s *TLS13_OpenSSL_server_credentials;
 
 #endif

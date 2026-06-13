@@ -2,6 +2,7 @@
 
 #include <errno.h>
 #include <netdb.h>
+#include <netinet/in.h>
 #include <stdio.h>
 #include <string.h>
 #include <sys/socket.h>
@@ -45,6 +46,58 @@ int tls13_io_connect_tcp(const char *hostname, uint16_t port) {
     fd = -1;
   }
   freeaddrinfo(result);
+  return fd;
+}
+
+int tls13_io_listen_tcp(const char *bind_host, uint16_t port) {
+  if (bind_host == NULL) {
+    errno = EINVAL;
+    return -1;
+  }
+
+  char port_string[6];
+  int n = snprintf(port_string, sizeof port_string, "%u", (unsigned)port);
+  if (n < 0 || (size_t)n >= sizeof port_string) {
+    errno = EINVAL;
+    return -1;
+  }
+
+  struct addrinfo hints;
+  memset(&hints, 0, sizeof hints);
+  hints.ai_family = AF_UNSPEC;
+  hints.ai_socktype = SOCK_STREAM;
+  hints.ai_flags = AI_PASSIVE;
+
+  struct addrinfo *result = NULL;
+  int gai = getaddrinfo(bind_host[0] == '\0' ? NULL : bind_host, port_string, &hints, &result);
+  if (gai != 0) {
+    errno = EADDRNOTAVAIL;
+    return -1;
+  }
+
+  int fd = -1;
+  for (struct addrinfo *rp = result; rp != NULL; rp = rp->ai_next) {
+    fd = socket(rp->ai_family, rp->ai_socktype, rp->ai_protocol);
+    if (fd < 0) {
+      continue;
+    }
+    int one = 1;
+    (void)setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &one, sizeof one);
+    if (bind(fd, rp->ai_addr, rp->ai_addrlen) == 0 && listen(fd, 1) == 0) {
+      break;
+    }
+    close(fd);
+    fd = -1;
+  }
+  freeaddrinfo(result);
+  return fd;
+}
+
+int tls13_io_accept_tcp(int listener_fd) {
+  int fd;
+  do {
+    fd = accept(listener_fd, NULL, NULL);
+  } while (fd < 0 && errno == EINTR);
   return fd;
 }
 

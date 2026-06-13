@@ -8,6 +8,10 @@
 
 int tls13_io_connect_tcp(const char *hostname, uint16_t port);
 
+int tls13_io_listen_tcp(const char *bind_host, uint16_t port);
+
+int tls13_io_accept_tcp(int listener_fd);
+
 ssize_t tls13_io_read_fd(int fd, uint8_t *out, size_t max_len);
 
 ssize_t tls13_io_write_fd(int fd, const uint8_t *buf, size_t len);

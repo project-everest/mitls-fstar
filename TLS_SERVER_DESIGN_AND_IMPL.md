@@ -177,6 +177,10 @@ Current phase: **Phase 3 shared endpoint/codec predicate refactor**.
     allocation/free and `sign_certificate_verify`, with a postcondition that a
     successful signature verifies as `RsaPssRsaeSha256` against the credential
     identity.
+- [x] Added C shim support for the new Phase 4 TCB surface:
+  `tls13_io_listen_tcp`/`tls13_io_accept_tcp` and the KaRaMeL listener ABI,
+  plus OpenSSL-backed in-memory server credential allocation, RSA-PSS/SHA-256
+  CertificateVerify signing, and credential free functions.
 - [ ] Continue Phase 3 by factoring role-neutral output-slice and parse/decode
   predicates only where they are needed by the server API.
 
@@ -947,7 +951,7 @@ Checklist:
 Validation:
 
 - [x] TCB interface exposes exact typed postconditions.
-- [ ] C stubs do not return success without establishing the typed postcondition.
+- [x] C stubs do not return success without establishing the typed postcondition.
 
 ### Phase 5: server serializers and codec support
 
