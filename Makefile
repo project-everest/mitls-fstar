@@ -68,10 +68,11 @@ ALL_FILES  = $(SPEC_FILES) $(IMPL_FILES)
 
 # ── TLS wire parsers/serializers: QuackyDucky → F* → KaRaMeL pipeline ──────
 # The TLS13.Wire.Generated.* modules are produced by QuackyDucky from $(QD_RFC),
-# verified by F*, and (optionally) extracted to C by KaRaMeL.  The generated
-# sources + their .checked files are committed so the main client build consumes
-# them as already-cached; the rules below regenerate/verify/extract them via the
-# EverParse harness (generated/generated.Makefile), driven by the same toolchain.
+# verified by F*, and (optionally) extracted to C by KaRaMeL.  Only the generated
+# .fst/.fsti sources are committed; their .checked files are gitignored and
+# produced locally, consumed by the main client build as already-cached; the
+# rules below regenerate/verify/extract them via the EverParse harness
+# (generated/generated.Makefile), driven by the same toolchain.
 #
 #   make regen-generated    QuackyDucky:  $(QD_RFC) -> generated/TLS13.Wire.Generated.*
 #   make verify-generated    F* verify:    refresh generated/*.checked
@@ -85,22 +86,35 @@ GENERATED_MAKE_VARS = \
   KRML_EXE='$(KRML_EXE)' \
   KRML_HOME='$(KRML_HOME)'
 
+# Committed generated sources and a stamp marking that their (gitignored)
+# .checked files have been produced.  The main build's `.depend` consumes the
+# generated modules as already-cached (--already_cached +TLS13.Wire.Generated),
+# so the .checked MUST exist before `.depend` is computed — see its order-only
+# prerequisite below.  The stamp rebuilds whenever a generated source changes.
+GENERATED_SRCS  = $(wildcard $(GENERATED_DIR)/TLS13.Wire.Generated.*.fst $(GENERATED_DIR)/TLS13.Wire.Generated.*.fsti)
+GENERATED_STAMP = $(GENERATED_DIR)/.checked.stamp
+
 .PHONY: regen-generated
 regen-generated: | check-toolchain
 	rm -f $(GENERATED_DIR)/TLS13.Wire.Generated.*.fst $(GENERATED_DIR)/TLS13.Wire.Generated.*.fsti
 	$(QD_EXE) -pulse -prefix "TLS13.Wire.Generated." -odir $(GENERATED_DIR) $(QD_RFC)
 	@echo "Regenerated TLS13.Wire.Generated.* — now run 'make verify-generated' to refresh .checked files."
 
-# Verify the generated modules in isolation using the EverParse harness flags.
-# The committed .checked files in $(GENERATED_DIR) are consumed directly (via the
-# harness's `--include .`), so a re-verification only happens after they are
-# removed or the sources change; in that case the refreshed files are synced up
-# from the harness cache/ directory.
-.PHONY: verify-generated
-verify-generated: | check-toolchain
+# Verify the generated modules in isolation using the EverParse harness flags,
+# producing their (gitignored) .checked files.  Driven through a stamp so the
+# main build's `.depend` can depend on it (order-only) without re-running it on
+# every invocation; the stamp rebuilds when a generated source changes.
+$(GENERATED_STAMP): $(GENERATED_SRCS) | check-toolchain
 	$(MAKE) -C $(GENERATED_DIR) -f generated.Makefile depend verify $(GENERATED_MAKE_VARS)
 	-cp $(GENERATED_DIR)/cache/TLS13.Wire.Generated.*.checked $(GENERATED_DIR)/ 2>/dev/null || true
 	-$(MAKE) -C $(GENERATED_DIR) -f generated.Makefile clean-local 2>/dev/null || true
+	touch $@
+
+# Force a re-verification of the generated modules (e.g. after regen-generated).
+.PHONY: verify-generated
+verify-generated: | check-toolchain
+	rm -f $(GENERATED_STAMP)
+	$(MAKE) $(GENERATED_STAMP)
 
 # Extract the generated parsers and serializers to C (standalone library) via
 # KaRaMeL.  Output lands in generated/out/*.c,*.h.  Consumers must call
@@ -117,7 +131,11 @@ extract-generated: | check-toolchain
 parsers: regen-generated verify-generated extract-generated
 
 # ── Dependency Analysis ────────────────────────────────────────────
-.depend: $(ALL_FILES) Makefile | check-toolchain
+# The generated .checked files must exist before `.depend` is computed, because
+# the dependency scan runs F* with --already_cached +TLS13.Wire.Generated.  The
+# order-only $(GENERATED_STAMP) prerequisite produces them first (without forcing
+# a needless `.depend` rebuild once present).
+.depend: $(ALL_FILES) Makefile | check-toolchain $(GENERATED_STAMP)
 	$(FSTAR) $(FSTAR_DEP_OPTIONS) --dep full $(ALL_FILES) --output_deps_to $@
 
 include .depend
@@ -136,12 +154,9 @@ all: verify
 
 # Ensure the generated TLS13.Wire.Generated.* modules have up-to-date .checked
 # files (consumed as already-cached by the main build) before verifying.  The
-# .checked files are not committed; they are produced from the committed sources.
-generated-checked:
-	@if ! ls $(GENERATED_DIR)/TLS13.Wire.Generated.*.fst.checked >/dev/null 2>&1; then \
-	  echo "Generated .checked files missing — running verify-generated..."; \
-	  $(MAKE) verify-generated; \
-	fi
+# .checked files are not committed; they are produced from the committed sources
+# via $(GENERATED_STAMP).
+generated-checked: $(GENERATED_STAMP)
 
 verify: generated-checked $(ALL_CHECKED_FILES)
 	@echo "All F* modules verified"

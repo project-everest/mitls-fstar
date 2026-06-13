@@ -1,6 +1,7 @@
 # QuackyDucky harness build artifacts and verifier outputs (regenerated locally;
 # only the .fst/.fsti sources and generated.Makefile are committed).
 *.checked
+.checked.stamp
 cache/
 krml/
 out/
