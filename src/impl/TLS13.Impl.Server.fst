@@ -133,6 +133,7 @@ fn next_local_action
   let control = CQ.get_control_snapshot s;
   let keys = CQ.get_key_schedule_snapshot s;
   let start_ready = CQ.can_start_server_runtime s;
+  let send_encrypted_extensions_ready = CQ.can_send_encrypted_extensions_runtime s;
   fold (connection_exactly s 'st0);
   let server_handshake_write_keys_ready =
     (control.CR.snapshot_control_tag = 1uy) &&
@@ -203,6 +204,29 @@ fn next_local_action
     {
       ST.next_local_ready = true;
       ST.next_local_kind = ST.LocalInstallClientHandshakeTrafficKeys;
+      ST.next_local_payload = ST.LocalPayloadNone;
+    }
+  } else if send_encrypted_extensions_ready {
+    assert (pure ('st0.CS.cs_model.CS.model_control ==
+      CS.ControlHandshaking CS.HsServerHelloSent));
+    assert (pure ('st0.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint));
+    assert (pure (Some?
+      'st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_handshake_traffic));
+    assert (pure (U64.fits
+      ('st0.CS.cs_model.CS.model_record.CS.record_write.R.seq + 1)));
+    assert (pure (
+      B.length 'st0.CS.cs_model.CS.model_handshake.CS.hs_transcript + 6 <=
+        Bounds.max_transcript_len));
+    assert (pure (CS.legal_event
+      'st0.CS.cs_model
+      (CS.ConnNetworkEvent {
+        CL.message_direction = CL.Sent;
+        CL.message_value =
+          M.TlsHandshake (M.EncryptedExtensions { M.negotiated_alpn = None });
+      })));
+    {
+      ST.next_local_ready = true;
+      ST.next_local_kind = ST.LocalSendEncryptedExtensions;
       ST.next_local_payload = ST.LocalPayloadNone;
     }
   } else if server_application_write_keys_ready {

@@ -1673,6 +1673,131 @@ fn can_receive_encrypted_extensions
     false
   }
 }
+
+fn can_send_encrypted_extensions_runtime
+  (c:connection_state)
+  (#st0:erased CS.connection_state)
+  requires connection_exactly c st0
+  returns ok: bool
+  ensures connection_exactly c st0 **
+          pure (ok ==>
+            st0.CS.cs_model.CS.model_control ==
+              CS.ControlHandshaking CS.HsServerHelloSent /\
+            st0.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
+            Some?
+              st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_handshake_traffic /\
+            U64.fits (st0.CS.cs_model.CS.model_record.CS.record_write.R.seq + 1) /\
+            B.length st0.CS.cs_model.CS.model_handshake.CS.hs_transcript + 6 <=
+              max_transcript_len /\
+            CS.legal_event
+              st0.CS.cs_model
+              (CS.ConnNetworkEvent {
+                CL.message_direction = CL.Sent;
+                CL.message_value =
+                  M.TlsHandshake (M.EncryptedExtensions { M.negotiated_alpn = None });
+              }))
+{
+  unfold (connection_exactly c st0);
+  unfold (connection_model_exactly c st0.CS.cs_model);
+  unfold (control_exactly
+    c.control
+    st0.CS.cs_model.CS.model_control
+    st0.CS.cs_model.CS.model_failure);
+  unfold (record_layer_exactly c.records st0.CS.cs_model.CS.model_record);
+  unfold (handshake_exactly c.handshake st0.CS.cs_model.CS.model_handshake);
+  unfold (sized_bytes_exactly
+    c.handshake.transcript
+    max_transcript_len
+    st0.CS.cs_model.CS.model_handshake.CS.hs_transcript);
+  unfold (key_schedule_exactly
+    c.handshake.keys
+    st0.CS.cs_model.CS.model_handshake.CS.hs_keys);
+  unfold (traffic_key_material_exactly
+    c.handshake.keys.server_handshake_traffic
+    st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_handshake_traffic);
+
+  let role_ok = config_role_is_server c.config;
+  let tag = !c.control.control_tag;
+  let stage = !c.control.handshake_stage_tag;
+  let has_server_handshake_keys = !c.handshake.keys.server_handshake_traffic.present;
+  let seq_ok = Rec.can_advance_seq c.records.write;
+  let max_start = SZ.uint_to_t (max_transcript_len - 6);
+  let current_transcript_len = !c.handshake.transcript.len;
+  let transcript_room = sizet_lte_plain current_transcript_len max_start;
+  lemma_sizet_lte_plain current_transcript_len max_start;
+  let ok =
+    tag = 1uy &&
+    stage = 14uy &&
+    role_ok &&
+    has_server_handshake_keys &&
+    seq_ok &&
+    transcript_room;
+
+  if ok {
+    assert (pure (U8.v tag == 1));
+    assert (pure (U8.v stage == 14));
+    assert (pure (
+      st0.CS.cs_model.CS.model_control ==
+        CS.ControlHandshaking CS.HsServerHelloSent));
+    assert (pure (
+      st0.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint));
+    assert (pure (Some?
+      st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_handshake_traffic));
+    assert (pure (U64.fits
+      (st0.CS.cs_model.CS.model_record.CS.record_write.R.seq + 1)));
+    assert (pure (SZ.v current_transcript_len <= SZ.v max_start));
+    assert (pure (
+      B.length st0.CS.cs_model.CS.model_handshake.CS.hs_transcript + 6 <=
+        max_transcript_len));
+    assert (pure (CS.legal_event
+      st0.CS.cs_model
+      (CS.ConnNetworkEvent {
+        CL.message_direction = CL.Sent;
+        CL.message_value =
+          M.TlsHandshake (M.EncryptedExtensions { M.negotiated_alpn = None });
+      })));
+
+    fold (traffic_key_material_exactly
+      c.handshake.keys.server_handshake_traffic
+      st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_handshake_traffic);
+    fold (key_schedule_exactly
+      c.handshake.keys
+      st0.CS.cs_model.CS.model_handshake.CS.hs_keys);
+    fold (sized_bytes_exactly
+      c.handshake.transcript
+      max_transcript_len
+      st0.CS.cs_model.CS.model_handshake.CS.hs_transcript);
+    fold (handshake_exactly c.handshake st0.CS.cs_model.CS.model_handshake);
+    fold (record_layer_exactly c.records st0.CS.cs_model.CS.model_record);
+    fold (control_exactly
+      c.control
+      st0.CS.cs_model.CS.model_control
+      st0.CS.cs_model.CS.model_failure);
+    fold (connection_model_exactly c st0.CS.cs_model);
+    fold (connection_exactly c st0);
+    ok
+  } else {
+    fold (traffic_key_material_exactly
+      c.handshake.keys.server_handshake_traffic
+      st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_handshake_traffic);
+    fold (key_schedule_exactly
+      c.handshake.keys
+      st0.CS.cs_model.CS.model_handshake.CS.hs_keys);
+    fold (sized_bytes_exactly
+      c.handshake.transcript
+      max_transcript_len
+      st0.CS.cs_model.CS.model_handshake.CS.hs_transcript);
+    fold (handshake_exactly c.handshake st0.CS.cs_model.CS.model_handshake);
+    fold (record_layer_exactly c.records st0.CS.cs_model.CS.model_record);
+    fold (control_exactly
+      c.control
+      st0.CS.cs_model.CS.model_control
+      st0.CS.cs_model.CS.model_failure);
+    fold (connection_model_exactly c st0.CS.cs_model);
+    fold (connection_exactly c st0);
+    false
+  }
+}
 fn can_receive_certificate
   (c:connection_state)
   (lcert:IM.certificate_msg)

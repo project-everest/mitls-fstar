@@ -505,6 +505,14 @@ Current phase: **Phase 6 server buffer/event API and theorem surface**.
   computes the exact protected-record output length at runtime, calls the stored
   sender when the caller buffer is exactly sized, and otherwise returns the
   verified local unexpected-message failure path.
+- [x] Added scheduler readiness for the first protected server flight message:
+  `TLS13.Impl.ConnectionState.Queries.can_send_encrypted_extensions_runtime`
+  exposes the concrete read-only server send facts for empty-ALPN
+  EncryptedExtensions, and `TLS13.Impl.Server.next_local_action` now advertises
+  `LocalSendEncryptedExtensions` after both handshake-key install hints and before
+  later application-key hints. `next_local_action_sound` exposes the matching
+  legal-event, transcript-room, write-sequence, role, stage, and server
+  handshake-traffic-key facts required by generic local dispatch.
 
 ## End goal
 
@@ -1385,11 +1393,12 @@ Checklist:
         keys);
       - server flight emission (focused sent-ServerHello public wrapper,
         serializer-driven cleartext ServerHello record construction, protected
-        EncryptedExtensions, Certificate, and server Finished public wrappers,
-        pure model helpers, and Pulse state mutations for EncryptedExtensions,
-        Certificate, CertificateVerify signing/send, and server Finished are
-        complete; concrete selection-to-L-ServerHello storage and the
-        protected-record public wrapper for CertificateVerify remain);
+        EncryptedExtensions, Certificate, CertificateVerify, and server Finished
+        public wrappers, pure model helpers, and Pulse state mutations for
+        EncryptedExtensions, Certificate, CertificateVerify signing/send, and
+        server Finished are complete; concrete selection-to-L-ServerHello storage,
+        executable Certificate materialization from configured credentials, and
+        remaining full-flight scheduler hints remain);
       - client Finished verification (state mutation, focused public wrapper, and
         generic local dispatcher integration complete; network parse/open
         dispatch for received client Finished remains pending);
