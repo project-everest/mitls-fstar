@@ -322,9 +322,15 @@ Current phase: **Phase 6 server buffer/event API and theorem surface**.
   `LocalInstallClientHandshakeTrafficKeys` while the client handshake read
   material is absent. `next_local_action_sound` exposes the exact control-stage,
   role, handshake-secret-present, and destination-slot-empty facts needed by the
-  derived public wrappers. The generic `process_local_event` dispatcher still
-  only handles `LocalStartServer`; broadening it to dispatch these key-install
-  actions remains pending.
+  derived public wrappers.
+- [x] Broadened the generic `TLS13.Impl.Server.process_local_event` dispatcher:
+  `server_local_event_input_ready` now covers `LocalStartServer`,
+  `LocalInstallServerHandshakeTrafficKeys`, and
+  `LocalInstallClientHandshakeTrafficKeys`, and the dispatcher routes the two
+  key-install actions through the internally derived public wrappers while
+  preserving `server_local_event_end_to_end_correct`. Other server local actions
+  remain intentionally outside this generic dispatcher until their handlers are
+  implemented.
 
 ## End goal
 
@@ -1187,8 +1193,9 @@ Checklist:
         wrapper complete; executable server X25519 and traffic-key wrappers
         remain);
       - handshake key installation (server write-key and client read-key
-        supplied-material and internally derived mutations/wrappers plus
-        scheduler hints complete; generic local dispatcher integration remains);
+        supplied-material and internally derived mutations/wrappers, scheduler
+        hints, and generic local dispatcher integration complete for handshake
+        keys);
       - server flight emission (focused sent-ServerHello public wrapper is
         complete; serializer-driven construction and encrypted flight remain);
       - client Finished verification;

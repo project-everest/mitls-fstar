@@ -183,7 +183,7 @@ fn next_local_action
   }
 }
 
-fn process_local_event
+fn process_start_server_local_event
   (s:server)
   (kind:ST.local_event_kind)
   (payload:array U8.t)
@@ -1421,6 +1421,201 @@ fn process_derive_and_install_client_handshake_read_keys
     'old_network_out
     'old_app_out));
   resp
+}
+
+fn process_local_event
+  (s:server)
+  (kind:ST.local_event_kind)
+  (payload:array U8.t)
+  (payload_len:SZ.t)
+  (network_out:array U8.t)
+  (network_out_len:SZ.t)
+  (app_out:array U8.t)
+  (app_out_len:SZ.t)
+  requires connection_exactly s 'st0 **
+           pts_to payload 'payload_bytes **
+           pts_to network_out 'old_network_out **
+           pts_to app_out 'old_app_out **
+           pure (B.length 'payload_bytes == SZ.v payload_len /\
+                 B.length 'old_network_out == SZ.v network_out_len /\
+                 B.length 'old_app_out == SZ.v app_out_len /\
+                 ST.server_end_to_end_invariant 'st0 /\
+                 server_local_event_input_ready
+                   'st0
+                   kind
+                   (Ghost.reveal 'payload_bytes))
+  returns resp:ST.server_response
+  ensures exists* st1 network_out_bytes app_out_bytes.
+          connection_exactly s st1 **
+          pts_to payload 'payload_bytes **
+          pts_to network_out network_out_bytes **
+          pts_to app_out app_out_bytes **
+          pure (B.length network_out_bytes == SZ.v network_out_len /\
+                B.length app_out_bytes == SZ.v app_out_len /\
+                ST.server_local_event_end_to_end_correct
+                  'st0
+                  st1
+                  resp
+                  kind
+                  (Ghost.reveal 'payload_bytes)
+                  network_out_bytes
+                  app_out_bytes)
+{
+  match kind {
+    ST.LocalStartServer -> {
+      process_start_server_local_event
+        s
+        kind
+        payload
+        payload_len
+        network_out
+        network_out_len
+        app_out
+        app_out_len
+    }
+    ST.LocalInstallServerHandshakeTrafficKeys -> {
+      let resp =
+        process_derive_and_install_server_handshake_write_keys
+          s
+          network_out
+          network_out_len
+          app_out
+          app_out_len;
+      assert (pure (Seq.equal (Ghost.reveal 'payload_bytes) B.empty));
+      resp
+    }
+    ST.LocalInstallClientHandshakeTrafficKeys -> {
+      let resp =
+        process_derive_and_install_client_handshake_read_keys
+          s
+          network_out
+          network_out_len
+          app_out
+          app_out_len;
+      assert (pure (Seq.equal (Ghost.reveal 'payload_bytes) B.empty));
+      resp
+    }
+    ST.LocalSelectServerParameters -> {
+      assert (pure False);
+      {
+        ST.network_out_len = 0sz;
+        ST.app_out_len = 0sz;
+        ST.status = ST.IllegalTransition;
+      }
+    }
+    ST.LocalDeriveSharedSecret -> {
+      assert (pure False);
+      {
+        ST.network_out_len = 0sz;
+        ST.app_out_len = 0sz;
+        ST.status = ST.IllegalTransition;
+      }
+    }
+    ST.LocalInstallClientApplicationTrafficKeys -> {
+      assert (pure False);
+      {
+        ST.network_out_len = 0sz;
+        ST.app_out_len = 0sz;
+        ST.status = ST.IllegalTransition;
+      }
+    }
+    ST.LocalInstallServerApplicationTrafficKeys -> {
+      assert (pure False);
+      {
+        ST.network_out_len = 0sz;
+        ST.app_out_len = 0sz;
+        ST.status = ST.IllegalTransition;
+      }
+    }
+    ST.LocalSignCertificateVerify -> {
+      assert (pure False);
+      {
+        ST.network_out_len = 0sz;
+        ST.app_out_len = 0sz;
+        ST.status = ST.IllegalTransition;
+      }
+    }
+    ST.LocalVerifyClientFinished -> {
+      assert (pure False);
+      {
+        ST.network_out_len = 0sz;
+        ST.app_out_len = 0sz;
+        ST.status = ST.IllegalTransition;
+      }
+    }
+    ST.LocalDeliverApplicationData -> {
+      assert (pure False);
+      {
+        ST.network_out_len = 0sz;
+        ST.app_out_len = 0sz;
+        ST.status = ST.IllegalTransition;
+      }
+    }
+    ST.LocalSendServerHello -> {
+      assert (pure False);
+      {
+        ST.network_out_len = 0sz;
+        ST.app_out_len = 0sz;
+        ST.status = ST.IllegalTransition;
+      }
+    }
+    ST.LocalSendEncryptedExtensions -> {
+      assert (pure False);
+      {
+        ST.network_out_len = 0sz;
+        ST.app_out_len = 0sz;
+        ST.status = ST.IllegalTransition;
+      }
+    }
+    ST.LocalSendCertificate -> {
+      assert (pure False);
+      {
+        ST.network_out_len = 0sz;
+        ST.app_out_len = 0sz;
+        ST.status = ST.IllegalTransition;
+      }
+    }
+    ST.LocalSendCertificateVerify -> {
+      assert (pure False);
+      {
+        ST.network_out_len = 0sz;
+        ST.app_out_len = 0sz;
+        ST.status = ST.IllegalTransition;
+      }
+    }
+    ST.LocalSendServerFinished -> {
+      assert (pure False);
+      {
+        ST.network_out_len = 0sz;
+        ST.app_out_len = 0sz;
+        ST.status = ST.IllegalTransition;
+      }
+    }
+    ST.LocalSendApplicationData -> {
+      assert (pure False);
+      {
+        ST.network_out_len = 0sz;
+        ST.app_out_len = 0sz;
+        ST.status = ST.IllegalTransition;
+      }
+    }
+    ST.LocalSendCloseNotify -> {
+      assert (pure False);
+      {
+        ST.network_out_len = 0sz;
+        ST.app_out_len = 0sz;
+        ST.status = ST.IllegalTransition;
+      }
+    }
+    ST.LocalFail -> {
+      assert (pure False);
+      {
+        ST.network_out_len = 0sz;
+        ST.app_out_len = 0sz;
+        ST.status = ST.IllegalTransition;
+      }
+    }
+  }
 }
 
 fn process_client_hello

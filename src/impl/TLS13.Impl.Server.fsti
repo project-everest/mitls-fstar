@@ -61,6 +61,35 @@ let next_local_action_sound
   else
     True
 
+noextract
+let server_local_event_input_ready
+  (st:CS.connection_state)
+  (kind:ST.local_event_kind)
+  (payload:B.bytes)
+  : prop =
+  Seq.equal payload B.empty /\
+  (match kind with
+  | ST.LocalStartServer ->
+    CM.can_start_server st
+  | ST.LocalInstallServerHandshakeTrafficKeys ->
+    st.CS.cs_model.CS.model_control ==
+      CS.ControlHandshaking CS.HsServerHelloSent /\
+    st.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
+    Some?
+      st.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_handshake_secret /\
+    not (Some?
+      st.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_handshake_traffic)
+  | ST.LocalInstallClientHandshakeTrafficKeys ->
+    st.CS.cs_model.CS.model_control ==
+      CS.ControlHandshaking CS.HsServerHelloSent /\
+    st.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
+    Some?
+      st.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_handshake_secret /\
+    not (Some?
+      st.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_handshake_traffic)
+  | _ ->
+    False)
+
 fn new_server
   (certificate_chain:array U8.t)
   (certificate_chain_len:SZ.t)
@@ -129,9 +158,10 @@ fn process_local_event
                  B.length 'old_network_out == SZ.v network_out_len /\
                  B.length 'old_app_out == SZ.v app_out_len /\
                  ST.server_end_to_end_invariant 'st0 /\
-                 kind == ST.LocalStartServer /\
-                 Seq.equal (Ghost.reveal 'payload_bytes) B.empty /\
-                 CM.can_start_server 'st0)
+                 server_local_event_input_ready
+                   'st0
+                   kind
+                   (Ghost.reveal 'payload_bytes))
   returns resp:ST.server_response
   ensures exists* st1 network_out_bytes app_out_bytes.
           connection_exactly s st1 **
