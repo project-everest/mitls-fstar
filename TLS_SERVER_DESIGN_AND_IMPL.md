@@ -1831,6 +1831,12 @@ Status:
       `next_local_action_sound` predicate now lives in
       `TLS13.Impl.Server.Types`, while the public facade delegates the executable
       scheduler through an exact-state rewrite.
+- [x] Server local-dispatch readiness vocabulary has been moved into
+      `TLS13.Impl.Server.Types`. The public `TLS13.Impl.Server.fsti` facade now
+      aliases `server_local_event_input_ready` and
+      `server_local_event_input_ready_with_credentials` from the theorem
+      vocabulary module, keeping the heavyweight case analysis out of the
+      facade and making it reusable by future small dispatch modules.
 - [x] Generic `process_local_event` now handles server
       `LocalSendApplicationData` and `LocalSendCloseNotify` through the shared
       endpoint-neutral `LocalSend` mutations. The server theorem surface now
