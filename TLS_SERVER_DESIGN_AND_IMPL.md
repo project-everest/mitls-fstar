@@ -128,6 +128,13 @@ Current phase: **Phase 6 server buffer/event API and theorem surface**.
   mutation, preserves `server_end_to_end_invariant`, and extends the public
   consumed-prefix/read-key decode projection to the exact
   `received_application_data_state`.
+- [x] Added protected server close_notify receive dispatch:
+  close_notify model/mutation/query helpers are role-parametric with legacy
+  client wrappers preserved, and `process_network_bytes` now accepts protected
+  `LTlsAlert CloseNotify` records in application/closing control. The successful
+  branch advances the server read record, enters `received_close_notify_state`,
+  preserves the server invariant, and exposes the exact consumed prefix plus
+  `ServerEndpoint` read-key provenance.
 - [x] Application-data and close_notify legal message predicates are now
   endpoint-role aware. Server application sends use server application traffic,
   server application receives use client application traffic, and close_notify
@@ -1566,9 +1573,11 @@ Checklist:
       projection derived from the server invariant. Protected application-data
       receives now use the same projection, expose the exact
       `received_application_data_state`, and copy the accepted plaintext into the
-      response `app_out` prefix. Remaining work is to extend this toward the full
-      client theorem shape with uniform parse/decode classification and
-      rejected-input witnesses for all byte outcomes.
+      response `app_out` prefix. Protected close_notify receives likewise expose
+      the exact `received_close_notify_state`, consumed prefix, and read-key
+      provenance. Remaining work is to extend this toward the full client
+      theorem shape with uniform parse/decode classification and rejected-input
+      witnesses for all byte outcomes.
       First focused server receive slice completed for protected client
       `Finished`: `process_client_finished` preserves
       `server_network_event_end_to_end_correct`; the unified
@@ -1603,7 +1612,8 @@ Checklist:
       - client Finished receive/open dispatch complete;
       - application data receive/dispatch complete for protected records with a
         fitting `app_out` buffer;
-      - alerts;
+      - close_notify alert receive/dispatch complete for protected records;
+      - non-close alerts;
       - decode/decrypt errors.
 - [ ] Add local handlers:
       - server random and key share generation (empty concrete storage for the
@@ -1648,6 +1658,11 @@ Checklist:
         server receive handler; the server network application-data dispatcher
         branch now accepts protected application data in application control,
         copies plaintext into `app_out`, preserves the server invariant, and
+        exposes the exact consumed-prefix/read-key projection).
+      - close_notify receive (the low-level model lemma, record mutation, and
+        readiness query are now role-parametric with legacy client wrappers
+        preserved; the server network alert dispatcher accepts protected
+        close_notify in application/closing control, preserves the invariant, and
         exposes the exact consumed-prefix/read-key projection).
 - [ ] Add failure transitions:
       - unsupported cipher suite;
@@ -1711,6 +1726,12 @@ Status:
       copies the plaintext response prefix, and publishes the exact
       `received_application_data_state` with consumed-prefix equality and
       `ServerEndpoint` read-key provenance.
+- [x] Public `process_network_bytes` now handles protected close_notify alert
+      records after handshake completion or while already closing. The branch
+      derives the protected parser/open projection, checks endpoint-generic
+      close_notify readiness, calls the role-parametric close_notify mutation,
+      and publishes the exact `received_close_notify_state` with consumed-prefix
+      equality and `ServerEndpoint` read-key provenance.
 - [ ] Rich ClientHello reject/error deltas are still pending: no-SNI policy
       rejection, unsupported cipher/group/signature offers, malformed
       ClientHello consumed-prefix witnesses, and alert-producing failure paths.

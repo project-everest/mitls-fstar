@@ -1924,7 +1924,8 @@ let lemma_received_alert_failure_state_evolves
   assert (CS.connection_state_evolves st (received_alert_failure_state st alert raw_received));
   assert (CS.connection_state_consistent (received_alert_failure_state st alert raw_received))
 
-let lemma_received_close_notify_state_evolves
+let lemma_received_close_notify_state_evolves_for_role
+  (role:CS.endpoint_role)
   (st:CS.connection_state)
   (raw_received:B.bytes)
   : Lemma
@@ -1932,7 +1933,7 @@ let lemma_received_close_notify_state_evolves
                 (st.CS.cs_model.CS.model_control == CS.ControlApplicationData \/
                  st.CS.cs_model.CS.model_control == CS.ControlClosing) /\
                 st.CS.cs_model.CS.model_config.CS.config_role ==
-                  CS.ClientEndpoint /\
+                  role /\
                 CS.event_raw_delta_legal
                   st.CS.cs_model
                   (CS.ConnNetworkEvent {
@@ -1988,6 +1989,46 @@ let lemma_received_close_notify_state_evolves
     (received_close_notify_state st raw_received));
   assert (CS.connection_state_consistent
     (received_close_notify_state st raw_received))
+
+let lemma_received_close_notify_state_evolves
+  (st:CS.connection_state)
+  (raw_received:B.bytes)
+  : Lemma
+      (requires CS.connection_state_consistent st /\
+                (st.CS.cs_model.CS.model_control == CS.ControlApplicationData \/
+                 st.CS.cs_model.CS.model_control == CS.ControlClosing) /\
+                st.CS.cs_model.CS.model_config.CS.config_role ==
+                  CS.ClientEndpoint /\
+                CS.event_raw_delta_legal
+                  st.CS.cs_model
+                  (CS.ConnNetworkEvent {
+                    CL.message_direction = CL.Received;
+                    CL.message_value = M.TlsAlert T.CloseNotify;
+                  })
+                  B.empty
+                  raw_received)
+      (ensures CS.connection_state_evolves
+                 st
+                 (received_close_notify_state st raw_received) /\
+               CS.connection_state_consistent
+                 (received_close_notify_state st raw_received) /\
+               CS.legal_connection_delta
+                 st
+                 {
+                   CS.delta_event =
+                     CS.ConnNetworkEvent {
+                       CL.message_direction = CL.Received;
+                       CL.message_value = M.TlsAlert T.CloseNotify;
+                     };
+                   CS.delta_raw_sent = B.empty;
+                   CS.delta_raw_received = raw_received;
+                 }
+                 (received_close_notify_state st raw_received))
+=
+  lemma_received_close_notify_state_evolves_for_role
+    CS.ClientEndpoint
+    st
+    raw_received
 
 let lemma_sent_close_notify_state_evolves
   (st:CS.connection_state)

@@ -737,6 +737,17 @@ fn can_send_key_update_runtime
             U64.fits (st0.CS.cs_model.CS.model_record.CS.record_write.R.seq + 1) /\
             27 <= SZ.v network_out_len)
 
+fn can_receive_endpoint_close_notify
+  (c:connection_state)
+  (#st0:erased CS.connection_state)
+  requires connection_exactly c st0
+  returns ok: bool
+  ensures connection_exactly c st0 **
+          pure (ok ==>
+            (st0.CS.cs_model.CS.model_control == CS.ControlApplicationData \/
+             st0.CS.cs_model.CS.model_control == CS.ControlClosing) /\
+            U64.fits (st0.CS.cs_model.CS.model_record.CS.record_read.R.seq + 1))
+
 fn can_receive_close_notify
   (c:connection_state)
   (#st0:erased CS.connection_state)

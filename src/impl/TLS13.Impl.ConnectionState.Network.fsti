@@ -90,15 +90,16 @@ fn mark_received_alert_failure
             (received_alert_failure_state st0 (Ghost.reveal alert) (Ghost.reveal 'raw_bytes)) **
           Pulse.Lib.Array.PtsTo.pts_to raw 'raw_bytes
 
-fn mark_received_close_notify
+fn mark_received_close_notify_for_role
   (c:connection_state)
   (raw:array U8.t)
+  (#role:erased CS.endpoint_role)
   (#st0:erased CS.connection_state)
   requires connection_exactly c st0 **
            Pulse.Lib.Array.PtsTo.pts_to raw 'raw_bytes **
            pure ((st0.CS.cs_model.CS.model_control == CS.ControlApplicationData \/
-                  st0.CS.cs_model.CS.model_control == CS.ControlClosing) /\
-                 st0.CS.cs_model.CS.model_config.CS.config_role == CS.ClientEndpoint /\
+                 st0.CS.cs_model.CS.model_control == CS.ControlClosing) /\
+                 st0.CS.cs_model.CS.model_config.CS.config_role == role /\
                  U64.fits (st0.CS.cs_model.CS.model_record.CS.record_read.R.seq + 1) /\
                  CS.event_raw_delta_legal
                    st0.CS.cs_model
@@ -111,6 +112,29 @@ fn mark_received_close_notify
   ensures connection_exactly
             c
             (received_close_notify_state st0 (Ghost.reveal 'raw_bytes)) **
+          Pulse.Lib.Array.PtsTo.pts_to raw 'raw_bytes
+
+fn mark_received_close_notify
+  (c:connection_state)
+  (raw:array U8.t)
+  (#st0:erased CS.connection_state)
+  requires connection_exactly c st0 **
+          Pulse.Lib.Array.PtsTo.pts_to raw 'raw_bytes **
+          pure ((st0.CS.cs_model.CS.model_control == CS.ControlApplicationData \/
+                 st0.CS.cs_model.CS.model_control == CS.ControlClosing) /\
+                st0.CS.cs_model.CS.model_config.CS.config_role == CS.ClientEndpoint /\
+                U64.fits (st0.CS.cs_model.CS.model_record.CS.record_read.R.seq + 1) /\
+                CS.event_raw_delta_legal
+                  st0.CS.cs_model
+                  (CS.ConnNetworkEvent {
+                    CL.message_direction = CL.Received;
+                    CL.message_value = M.TlsAlert T.CloseNotify;
+                  })
+                  B.empty
+                  (Ghost.reveal 'raw_bytes))
+  ensures connection_exactly
+           c
+           (received_close_notify_state st0 (Ghost.reveal 'raw_bytes)) **
           Pulse.Lib.Array.PtsTo.pts_to raw 'raw_bytes
 
 fn mark_received_hello_retry_request_rejected

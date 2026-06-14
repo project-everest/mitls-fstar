@@ -4397,6 +4397,49 @@ fn can_send_key_update_runtime
   fold (connection_exactly c st0);
   ok
 }
+fn can_receive_endpoint_close_notify
+  (c:connection_state)
+  (#st0:erased CS.connection_state)
+  requires connection_exactly c st0
+  returns ok: bool
+  ensures connection_exactly c st0 **
+          pure (ok ==>
+            (st0.CS.cs_model.CS.model_control == CS.ControlApplicationData \/
+             st0.CS.cs_model.CS.model_control == CS.ControlClosing) /\
+            U64.fits (st0.CS.cs_model.CS.model_record.CS.record_read.R.seq + 1))
+{
+  unfold (connection_exactly c st0);
+  unfold (connection_model_exactly c st0.CS.cs_model);
+  unfold (control_exactly c.control st0.CS.cs_model.CS.model_control st0.CS.cs_model.CS.model_failure);
+  unfold (record_layer_exactly c.records st0.CS.cs_model.CS.model_record);
+
+  let tag = !c.control.control_tag;
+  let app_ok = tag = 2uy;
+  let closing_ok = tag = 3uy;
+  let control_ok = app_ok || closing_ok;
+
+  fold (control_exactly
+    c.control
+    st0.CS.cs_model.CS.model_control
+    st0.CS.cs_model.CS.model_failure);
+
+  let seq_ok = Rec.can_advance_seq c.records.read;
+  fold (record_layer_exactly c.records st0.CS.cs_model.CS.model_record);
+
+  let ok = control_ok && seq_ok;
+
+  assert (pure (app_ok ==> U8.v tag == 2));
+  assert (pure (closing_ok ==> U8.v tag == 3));
+  assert (pure (ok ==>
+    (st0.CS.cs_model.CS.model_control == CS.ControlApplicationData \/
+     st0.CS.cs_model.CS.model_control == CS.ControlClosing)));
+  assert (pure (ok ==> U64.fits (st0.CS.cs_model.CS.model_record.CS.record_read.R.seq + 1)));
+
+  fold (connection_model_exactly c st0.CS.cs_model);
+  fold (connection_exactly c st0);
+  ok
+}
+
 fn can_receive_close_notify
   (c:connection_state)
   (#st0:erased CS.connection_state)

@@ -631,6 +631,172 @@ fn process_application_data
   resp
 }
 
+fn process_close_notify
+  (s:server)
+  (raw:array U8.t)
+  (raw_len:SZ.t)
+  (network_out:array U8.t)
+  (network_out_len:SZ.t)
+  (app_out:array U8.t)
+  (app_out_len:SZ.t)
+  requires connection_exactly s 'st0 **
+           pts_to raw 'raw_bytes **
+           pts_to network_out 'old_network_out **
+           pts_to app_out 'old_app_out **
+           pure (B.length 'raw_bytes == SZ.v raw_len /\
+                 B.length 'old_network_out == SZ.v network_out_len /\
+                 B.length 'old_app_out == SZ.v app_out_len /\
+                 ST.server_end_to_end_invariant 'st0 /\
+                 ('st0.CS.cs_model.CS.model_control == CS.ControlApplicationData \/
+                  'st0.CS.cs_model.CS.model_control == CS.ControlClosing) /\
+                 'st0.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
+                 U64.fits ('st0.CS.cs_model.CS.model_record.CS.record_read.R.seq + 1) /\
+                 CT.received_tls_raw_delta_legal
+                   'st0
+                   (M.TlsAlert T.CloseNotify)
+                   (Ghost.reveal 'raw_bytes) /\
+                 CS.received_event_nonempty_decode_projection
+                   'st0.CS.cs_model
+                   (ST.received_message_event
+                     (M.TlsAlert T.CloseNotify))
+                   (Ghost.reveal 'raw_bytes))
+  returns resp:ST.server_response
+  ensures exists* st1 network_out_bytes app_out_bytes.
+          connection_exactly s st1 **
+          pts_to raw 'raw_bytes **
+          pts_to network_out network_out_bytes **
+          pts_to app_out app_out_bytes **
+          pure (B.length network_out_bytes == SZ.v network_out_len /\
+                B.length app_out_bytes == SZ.v app_out_len /\
+                st1 ==
+                  CM.received_close_notify_state
+                    'st0
+                    (Ghost.reveal 'raw_bytes) /\
+                ST.server_network_event_end_to_end_correct
+                  'st0
+                  st1
+                  resp
+                  (M.TlsAlert T.CloseNotify)
+                  (Ghost.reveal 'raw_bytes)
+                  network_out_bytes
+                  app_out_bytes)
+{
+  unfold (connection_exactly s 'st0);
+  CN.mark_received_close_notify_for_role
+    s
+    raw
+    #CS.ServerEndpoint;
+  fold (connection_exactly
+    s
+    (CM.received_close_notify_state
+      'st0
+      (Ghost.reveal 'raw_bytes)));
+
+  let resp = {
+    ST.network_out_len = 0sz;
+    ST.app_out_len = 0sz;
+    ST.status = ST.StepOk;
+  };
+
+  CM.lemma_received_close_notify_state_evolves_for_role
+    CS.ServerEndpoint
+    'st0
+    (Ghost.reveal 'raw_bytes);
+  assert (pure (CS.legal_connection_delta
+    'st0
+    (ST.received_message_delta
+      (M.TlsAlert T.CloseNotify)
+      (Ghost.reveal 'raw_bytes))
+    (CM.received_close_notify_state
+      'st0
+      (Ghost.reveal 'raw_bytes))));
+
+  CSL.lemma_legal_connection_delta_full_log_consistent_for_role
+    CS.ServerEndpoint
+    'st0
+    (ST.received_message_delta
+      (M.TlsAlert T.CloseNotify)
+      (Ghost.reveal 'raw_bytes))
+    (CM.received_close_notify_state
+      'st0
+      (Ghost.reveal 'raw_bytes));
+  CSL.lemma_legal_connection_delta_raw_event_replay_consistent
+    'st0
+    (ST.received_message_delta
+      (M.TlsAlert T.CloseNotify)
+      (Ghost.reveal 'raw_bytes))
+    (CM.received_close_notify_state
+      'st0
+      (Ghost.reveal 'raw_bytes));
+  CSL.lemma_connection_state_protected_raw_segmented_replay
+    (CM.received_close_notify_state
+      'st0
+      (Ghost.reveal 'raw_bytes));
+  CSL.lemma_legal_connection_delta_sent_seal_replay_consistent
+    'st0
+    (ST.received_message_delta
+      (M.TlsAlert T.CloseNotify)
+      (Ghost.reveal 'raw_bytes))
+    (CM.received_close_notify_state
+      'st0
+      (Ghost.reveal 'raw_bytes));
+  CSL.lemma_legal_connection_delta_received_decode_replay_consistent
+    'st0
+    (ST.received_message_delta
+      (M.TlsAlert T.CloseNotify)
+      (Ghost.reveal 'raw_bytes))
+    (CM.received_close_notify_state
+      'st0
+      (Ghost.reveal 'raw_bytes));
+
+  Seq.lemma_len_slice 'old_network_out 0 0;
+  Seq.lemma_eq_intro B.empty (Seq.slice 'old_network_out 0 0);
+  Seq.lemma_len_slice 'old_app_out 0 0;
+  Seq.lemma_eq_intro B.empty (Seq.slice 'old_app_out 0 0);
+  assert (pure (Seq.equal B.empty (ST.response_network_out resp 'old_network_out)));
+  assert (pure (Seq.equal B.empty (ST.response_app_out resp 'old_app_out)));
+
+  assert (pure ((CM.received_close_notify_state 'st0 (Ghost.reveal 'raw_bytes)).CS.cs_model.CS.model_config ==
+    'st0.CS.cs_model.CS.model_config));
+  assert (pure ((CM.received_close_notify_state 'st0 (Ghost.reveal 'raw_bytes)).CS.cs_model.CS.model_config.CS.config_role ==
+    CS.ServerEndpoint));
+  assert (pure (Some?
+    (CM.received_close_notify_state 'st0 (Ghost.reveal 'raw_bytes)).CS.cs_model.CS.model_config.CS.config_server));
+  assert (pure (ST.server_state_correct
+    (CM.received_close_notify_state 'st0 (Ghost.reveal 'raw_bytes))));
+  assert (pure (ST.server_raw_to_message_replay_consistent
+    (CM.received_close_notify_state 'st0 (Ghost.reveal 'raw_bytes))));
+  assert (pure (ST.server_end_to_end_invariant
+    (CM.received_close_notify_state 'st0 (Ghost.reveal 'raw_bytes))));
+
+  assert (pure (ST.legal_response_for_event
+    'st0
+    (CM.received_close_notify_state 'st0 (Ghost.reveal 'raw_bytes))
+    resp
+    (ST.received_message_event (M.TlsAlert T.CloseNotify))
+    B.empty
+    (Ghost.reveal 'raw_bytes)
+    'old_network_out
+    'old_app_out));
+  assert (pure (ST.legal_network_response
+    'st0
+    (CM.received_close_notify_state 'st0 (Ghost.reveal 'raw_bytes))
+    resp
+    (M.TlsAlert T.CloseNotify)
+    (Ghost.reveal 'raw_bytes)
+    'old_network_out
+    'old_app_out));
+  assert (pure (ST.server_network_event_end_to_end_correct
+    'st0
+    (CM.received_close_notify_state 'st0 (Ghost.reveal 'raw_bytes))
+    resp
+    (M.TlsAlert T.CloseNotify)
+    (Ghost.reveal 'raw_bytes)
+    'old_network_out
+    'old_app_out));
+  resp
+}
+
 fn process_network_bytes
   (s:server)
   (raw:array U8.t)
@@ -1587,30 +1753,221 @@ fn process_network_bytes
             }
           }
           IM.LTlsAlert alert -> {
-            IM.free_tls_message (IM.LTlsAlert alert);
-            V.to_vec_pts_to decoded_buffer.IM.decoded_buffer_fragment;
-            V.free decoded_buffer.IM.decoded_buffer_fragment;
-            V.to_vec_pts_to decoded_buffer.IM.decoded_buffer_raw_record;
-            V.free decoded_buffer.IM.decoded_buffer_raw_record;
-            let resp = {
-              ST.network_out_len = 0sz;
-              ST.app_out_len = 0sz;
-              ST.status = ST.IllegalTransition;
-            };
-            let buffer_resp = {
-              ST.response = resp;
-              ST.consumed_len = 0sz;
-            };
-            assert (pure (ST.server_network_bytes_end_to_end_correct
-              'st0
-              'st0
+            with m. assert (pure True);
+            unfold (IM.is_valid_tls_message (IM.LTlsAlert alert) m);
+            with malert. _;
+            assert (pure (IM.alert_description_matches alert malert));
+            assert (pure (m == M.TlsAlert malert));
+            let parsed_alert =
+              Ghost.hide (IM.alert_description_of_wire_or_unexpected alert);
+            IM.lemma_alert_description_of_wire_matches alert malert;
+            assert (pure (Ghost.reveal parsed_alert == malert));
+            let close_notify = alert = 0uy;
+            if close_notify {
+              assert (pure (U8.v alert == 0));
+              assert (pure (Ghost.reveal parsed_alert == T.CloseNotify));
+              assert (pure (IM.alert_description_matches alert T.CloseNotify));
+              assert (pure (CT.parsed_message_wire_success_for
+                decoded_buffer.IM.decoded_buffer_content_type
+                fragment_bytes
+                (IM.LTlsAlert alert)
+                (M.TlsAlert T.CloseNotify)));
+              assert (pure (CT.wire_parse_success
+                decoded_buffer.IM.decoded_buffer_content_type
+                fragment_bytes
+                (M.TlsAlert T.CloseNotify)));
+              assert (pure (CT.received_tls_raw_delta_legal
+                'st0
+                (M.TlsAlert T.CloseNotify)
+                raw_record_bytes));
+              CT.lemma_parsed_message_network_input_projection
+                'st0
+                decoded_buffer.IM.decoded_buffer_content_type
+                fragment_bytes
+                (IM.LTlsAlert alert)
+                (M.TlsAlert T.CloseNotify)
+                raw_record_bytes;
+              assert (pure (CT.network_input_message_projection
+                'st0
+                decoded_buffer.IM.decoded_buffer_content_type
+                fragment_bytes
+                (M.TlsAlert T.CloseNotify)
+                raw_record_bytes));
+              assert (pure (CS.network_message_is_cleartext
+                CL.Received
+                (M.TlsAlert T.CloseNotify) == false));
+              assert (pure (CT.protected_record_decodes_to_message
+                'st0
+                raw_record_bytes
+                (M.TlsAlert T.CloseNotify)));
+              CT.lemma_protected_record_decodes_to_received_single_decode
+                'st0
+                raw_record_bytes
+                (M.TlsAlert T.CloseNotify);
+              assert (pure (CS.received_event_nonempty_decode_projection
+                'st0.CS.cs_model
+                (ST.received_message_event
+                  (M.TlsAlert T.CloseNotify))
+                raw_record_bytes));
+              unfold (connection_exactly s 'st0);
+              let ready =
+                CQ.can_receive_endpoint_close_notify
+                  s
+                  #'st0;
+              fold (connection_exactly s 'st0);
+              if ready {
+                assert (pure ('st0.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint));
+                assert (pure ('st0.CS.cs_model.CS.model_control == CS.ControlApplicationData \/
+                  'st0.CS.cs_model.CS.model_control == CS.ControlClosing));
+                assert (pure (U64.fits ('st0.CS.cs_model.CS.model_record.CS.record_read.R.seq + 1)));
+                let resp =
+                  process_close_notify
+                    s
+                    (V.vec_to_array decoded_buffer.IM.decoded_buffer_raw_record)
+                    decoded_buffer.IM.decoded_buffer_raw_record_len
+                    network_out
+                    network_out_len
+                    app_out
+                    app_out_len;
+                let buffer_resp = {
+                  ST.response = resp;
+                  ST.consumed_len = decoded_buffer.IM.decoded_buffer_consumed_len;
+                };
+                with st1 network_out_bytes app_out_bytes.
+                  assert (connection_exactly s st1 **
+                          pts_to (V.vec_to_array decoded_buffer.IM.decoded_buffer_raw_record) raw_record_bytes **
+                          pts_to network_out network_out_bytes **
+                          pts_to app_out app_out_bytes);
+                assert (pure (SZ.v decoded_buffer.IM.decoded_buffer_consumed_len <=
+                  B.length (Ghost.reveal 'raw_bytes)));
+                assert (pure (ST.server_network_bytes_end_to_end_correct
+                  'st0
+                  st1
+                  buffer_resp
+                  (Ghost.reveal 'raw_bytes)
+                  network_out_bytes
+                  app_out_bytes));
+                assert (pure (st1 ==
+                  CM.received_close_notify_state
+                    'st0
+                    raw_record_bytes));
+                assert (pure (Seq.equal
+                  raw_record_bytes
+                  (Seq.slice
+                    (Ghost.reveal 'raw_bytes)
+                    0
+                    (SZ.v buffer_resp.ST.consumed_len))));
+                assert (pure (Seq.equal
+                  raw_record_bytes
+                  (ST.server_network_consumed_prefix
+                    buffer_resp
+                    (Ghost.reveal 'raw_bytes))));
+                assert (pure (ST.server_decoded_message_event_projection
+                  'st0
+                  st1
+                  resp
+                  (M.TlsAlert T.CloseNotify)
+                  raw_record_bytes
+                  network_out_bytes
+                  app_out_bytes));
+                ST.lemma_server_state_correct_record_read_key_schedule_projection
+                  'st0;
+                assert (pure (CS.record_read_key_schedule_projection_for_role
+                  CS.ServerEndpoint
+                  'st0.CS.cs_model));
+                assert (pure (ST.server_protected_record_decode_uses_scheduled_read_key
+                  'st0
+                  raw_record_bytes));
+                assert (pure (ST.server_protected_record_decode_correct
+                  'st0
+                  raw_record_bytes
+                  (M.TlsAlert T.CloseNotify)));
+                assert (pure (ST.server_network_step_ok_received_decode_projection
+                  'st0
+                  st1
+                  buffer_resp
+                  (Ghost.reveal 'raw_bytes)
+                  network_out_bytes
+                  app_out_bytes));
+                assert (pure (exists raw_received.
+                  st1 ==
+                    CM.received_close_notify_state
+                      'st0
+                      raw_received /\
+                  Seq.equal
+                    raw_received
+                    (ST.server_network_consumed_prefix
+                      buffer_resp
+                      (Ghost.reveal 'raw_bytes))));
+                assert (pure (ST.server_network_step_ok_consumed_prefix
+                  'st0
+                  st1
+                  buffer_resp
+                  (Ghost.reveal 'raw_bytes)));
+                assert (pure (buffer_resp.ST.response.ST.status == ST.NeedMoreInput ==>
+                  buffer_resp.ST.consumed_len == 0sz));
+                assert (pure (ST.server_network_consumed_input_projection
+                  'st0
+                  st1
+                  buffer_resp
+                  (Ghost.reveal 'raw_bytes)
+                  network_out_bytes
+                  app_out_bytes));
+                V.to_vec_pts_to decoded_buffer.IM.decoded_buffer_fragment;
+                V.free decoded_buffer.IM.decoded_buffer_fragment;
+                V.to_vec_pts_to decoded_buffer.IM.decoded_buffer_raw_record;
+                V.free decoded_buffer.IM.decoded_buffer_raw_record;
+                buffer_resp
+              } else {
+                V.to_vec_pts_to decoded_buffer.IM.decoded_buffer_fragment;
+                V.free decoded_buffer.IM.decoded_buffer_fragment;
+                V.to_vec_pts_to decoded_buffer.IM.decoded_buffer_raw_record;
+                V.free decoded_buffer.IM.decoded_buffer_raw_record;
+                let resp = {
+                  ST.network_out_len = 0sz;
+                  ST.app_out_len = 0sz;
+                  ST.status = ST.IllegalTransition;
+                };
+                let buffer_resp = {
+                  ST.response = resp;
+                  ST.consumed_len = 0sz;
+                };
+                assert (pure (ST.server_network_bytes_end_to_end_correct
+                  'st0
+                  'st0
+                  buffer_resp
+                  (Ghost.reveal 'raw_bytes)
+                  'old_network_out
+                  'old_app_out));
+                assert (pure (buffer_resp.ST.response.ST.status == ST.NeedMoreInput ==>
+                  buffer_resp.ST.consumed_len == 0sz));
+                buffer_resp
+              }
+            } else {
+              V.to_vec_pts_to decoded_buffer.IM.decoded_buffer_fragment;
+              V.free decoded_buffer.IM.decoded_buffer_fragment;
+              V.to_vec_pts_to decoded_buffer.IM.decoded_buffer_raw_record;
+              V.free decoded_buffer.IM.decoded_buffer_raw_record;
+              let resp = {
+                ST.network_out_len = 0sz;
+                ST.app_out_len = 0sz;
+                ST.status = ST.IllegalTransition;
+              };
+              let buffer_resp = {
+                ST.response = resp;
+                ST.consumed_len = 0sz;
+              };
+              assert (pure (ST.server_network_bytes_end_to_end_correct
+                'st0
+                'st0
+                buffer_resp
+                (Ghost.reveal 'raw_bytes)
+                'old_network_out
+                'old_app_out));
+              assert (pure (buffer_resp.ST.response.ST.status == ST.NeedMoreInput ==>
+                buffer_resp.ST.consumed_len == 0sz));
               buffer_resp
-              (Ghost.reveal 'raw_bytes)
-              'old_network_out
-              'old_app_out));
-            assert (pure (buffer_resp.ST.response.ST.status == ST.NeedMoreInput ==>
-              buffer_resp.ST.consumed_len == 0sz));
-            buffer_resp
+            }
           }
           IM.LTlsChangeCipherSpec -> {
             IM.free_tls_message IM.LTlsChangeCipherSpec;
