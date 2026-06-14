@@ -275,3 +275,61 @@ fn process_derive_and_install_client_handshake_read_keys
                        B.empty
                        network_out_bytes
                        app_out_bytes)
+
+fn process_install_server_application_write_keys
+  (s:server)
+  (traffic_secret_src:array U8.t)
+  (traffic_key_src:array U8.t)
+  (traffic_iv_src:array U8.t)
+  (#material:erased CS.traffic_key_material)
+  (network_out:array U8.t)
+  (network_out_len:SZ.t)
+  (app_out:array U8.t)
+  (app_out_len:SZ.t)
+  requires connection_exactly s 'st0 **
+           pts_to traffic_secret_src material.CS.traffic_secret **
+           pts_to traffic_key_src material.CS.traffic_key **
+           pts_to traffic_iv_src material.CS.traffic_iv **
+           pts_to network_out 'old_network_out **
+           pts_to app_out 'old_app_out **
+           pure (B.length 'old_network_out == SZ.v network_out_len /\
+                 B.length 'old_app_out == SZ.v app_out_len /\
+                 ST.server_end_to_end_invariant 'st0 /\
+                 CS.legal_event
+                        'st0.CS.cs_model
+                        (CS.ConnLocalEvent
+                          (CS.LocalInstallTrafficKeysForRole {
+                            CS.install_role = CS.ServerEndpoint;
+                            CS.install_payload = {
+                              CS.install_epoch = CS.TrafficApplication;
+                              CS.install_direction = CS.TrafficWrite;
+                              CS.install_material = Ghost.reveal material;
+                            };
+                          })))
+  returns resp:ST.server_response
+  ensures exists* st1 network_out_bytes app_out_bytes.
+          connection_exactly s st1 **
+          pts_to traffic_secret_src material.CS.traffic_secret **
+          pts_to traffic_key_src material.CS.traffic_key **
+          pts_to traffic_iv_src material.CS.traffic_iv **
+          pts_to network_out network_out_bytes **
+          pts_to app_out app_out_bytes **
+          pure (B.length network_out_bytes == SZ.v network_out_len /\
+                B.length app_out_bytes == SZ.v app_out_len /\
+                st1 ==
+                  CM.installed_traffic_keys_for_role_state 'st0 {
+                    CS.install_role = CS.ServerEndpoint;
+                    CS.install_payload = {
+                      CS.install_epoch = CS.TrafficApplication;
+                      CS.install_direction = CS.TrafficWrite;
+                      CS.install_material = Ghost.reveal material;
+                    };
+                  } /\
+                ST.server_local_event_end_to_end_correct
+                       'st0
+                       st1
+                       resp
+                       ST.LocalInstallServerApplicationTrafficKeys
+                       B.empty
+                       network_out_bytes
+                       app_out_bytes)

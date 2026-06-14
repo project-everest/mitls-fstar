@@ -265,7 +265,8 @@ Current phase: **Phase 6 server buffer/event API and theorem surface**.
   server-handshake write-key installation, and internally derived
   server-handshake write-key installation, plus supplied client-handshake
   read-key installation and internally derived client-handshake read-key
-  installation now live behind that interface, with
+  installation, plus supplied server-application write-key installation now live
+  behind that interface, with
   `TLS13.Impl.Server` retaining only public wrappers and explicit
   `connection_exactly` predicate rewrites.
 - [ ] Continue Phase 6/7 by strengthening `process_network_bytes` from the first
