@@ -58,6 +58,7 @@ INCLUDES = \
 FSTAR_DEP_OPTIONS := --extract '*,-FStar.Tactics,-FStar.Reflection,-Pulse,+Pulse.Lib.Pervasives,+Pulse.Lib.Slice,+Pulse.Lib.Array,+Pulse.Lib.Array.*'
 
 FSTAR_FLAGS = \
+  $(OTHERFLAGS) \
   --cache_checked_modules \
   --cache_dir $(CACHE_DIR) \
   --odir $(OUTPUT_DIR) \
