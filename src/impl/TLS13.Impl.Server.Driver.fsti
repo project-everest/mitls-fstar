@@ -31,6 +31,11 @@ type server_driver_local_status =
   | ServerDriverLocalNotReady
   | ServerDriverLocalExternalOrUnsupported
 
+type server_driver_network_loop_result = {
+  server_driver_network_loop_last: ST.server_buffer_response;
+  server_driver_network_loop_exhausted: bool;
+}
+
 noextract
 val server_driver_live
   (d:server_driver)
@@ -249,6 +254,28 @@ fn read_and_process_network_once
            (Ghost.reveal 'sent)
            sent')
 
+fn read_process_network_until_ready
+  (d:server_driver)
+  (fuel:SZ.t)
+  requires server_driver_connected
+            d
+            'st0
+            'certificate_chain
+            'credential_identity
+            'received
+            'sent
+  returns result:server_driver_network_loop_result
+  ensures exists* st1 received' sent'.
+          server_driver_connected
+           d
+           st1
+           'certificate_chain
+           'credential_identity
+           received'
+           sent' **
+          pure (result.server_driver_network_loop_exhausted == false ==>
+            result.server_driver_network_loop_last.ST.response.ST.status <>
+              ST.NeedMoreInput)
 fn start_server_once
   (d:server_driver)
   requires server_driver_connected

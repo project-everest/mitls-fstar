@@ -2082,6 +2082,70 @@ fn read_and_process_network_once
   resp
 }
 
+fn rec read_process_network_until_ready
+  (d:server_driver)
+  (fuel:SZ.t)
+  requires server_driver_connected
+            d
+            'st0
+            'certificate_chain
+            'credential_identity
+            'received
+            'sent
+  returns result:server_driver_network_loop_result
+  ensures exists* st1 received' sent'.
+          server_driver_connected
+           d
+           st1
+           'certificate_chain
+           'credential_identity
+           received'
+           sent' **
+          pure (result.server_driver_network_loop_exhausted == false ==>
+            result.server_driver_network_loop_last.ST.response.ST.status <>
+              ST.NeedMoreInput)
+  decreases (SZ.v fuel)
+{
+  let no_op_resp = {
+    ST.network_out_len = 0sz;
+    ST.app_out_len = 0sz;
+    ST.status = ST.NeedMoreInput;
+  };
+  let no_op_buffer_resp = {
+    ST.response = no_op_resp;
+    ST.consumed_len = 0sz;
+  };
+  if (fuel = 0sz) {
+    {
+      server_driver_network_loop_last = no_op_buffer_resp;
+      server_driver_network_loop_exhausted = true;
+    }
+  } else {
+    assert (pure (0 < SZ.v fuel));
+    let step = read_and_process_network_once d;
+    with st1 received' sent'.
+      assert (server_driver_connected
+        d
+        st1
+        'certificate_chain
+        'credential_identity
+        received'
+        sent');
+    let need_more = step.ST.response.ST.status = ST.NeedMoreInput;
+    if need_more {
+      let next_fuel = SZ.sub fuel 1sz;
+      assert (pure (SZ.v next_fuel < SZ.v fuel));
+      read_process_network_until_ready d next_fuel
+    } else {
+      assert (pure (step.ST.response.ST.status <> ST.NeedMoreInput));
+      {
+        server_driver_network_loop_last = step;
+        server_driver_network_loop_exhausted = false;
+      }
+    }
+  }
+}
+
 fn start_server_once
   (d:server_driver)
   requires server_driver_connected
@@ -2499,6 +2563,39 @@ fn select_default_server_parameters_once
   assert (pure (B.length app_out_bytes == SZ.v driver_app_out_capacity));
   assert (pure (st1 ==
     CM.selected_server_parameters_state 'st0 (Ghost.reveal selection)));
+  assert (pure (st1.CS.cs_model.CS.model_control ==
+    CS.ControlHandshaking CS.HsClientHelloReceived));
+  assert (pure (st1.CS.cs_model.CS.model_config.CS.config_role ==
+    CS.ServerEndpoint));
+  assert (pure (Some?
+    st1.CS.cs_model.CS.model_handshake.CS.hs_client_hello));
+  assert (pure (
+    st1.CS.cs_model.CS.model_handshake.CS.hs_client_hello ==
+      Some (Ghost.reveal selection).CS.server_selected_client_hello));
+  assert (pure (
+    st1.CS.cs_model.CS.model_handshake.CS.hs_server_selection ==
+      Some (Ghost.reveal selection)));
+  assert (pure (Some?
+    st1.CS.cs_model.CS.model_handshake.CS.hs_server_selection));
+  assert (pure (
+    Some?.v st1.CS.cs_model.CS.model_handshake.CS.hs_server_selection ==
+      Ghost.reveal selection));
+  assert (pure (CS.server_selection_key_share_consistent
+    (Ghost.reveal selection)));
+  assert (pure (Some?
+    (Ghost.reveal selection).CS.server_key_share_private));
+  assert (pure (
+    Some?.v (Ghost.reveal selection).CS.server_key_share_private ==
+      server_private_key_bytes));
+  assert (pure (Seq.equal
+    server_private_key_bytes
+    (CL.raw_slice material_bytes 32 64)));
+  Seq.lemma_eq_elim
+    server_private_key_bytes
+    (CL.raw_slice material_bytes 32 64);
+  assert (pure (
+    Some?.v (Ghost.reveal selection).CS.server_key_share_private ==
+      CL.raw_slice material_bytes 32 64));
   assert (pure (ST.server_end_to_end_invariant st1));
 
   CL.lemma_append_empty_right 'st0.CS.cs_wire_log.CL.raw_sent;
@@ -2653,6 +2750,34 @@ fn select_default_server_parameters_from_payload_once
   assert (pure (B.length app_out_bytes == SZ.v driver_app_out_capacity));
   assert (pure (st1 ==
     CM.selected_server_parameters_state 'st0 (Ghost.reveal selection)));
+  assert (pure (st1.CS.cs_model.CS.model_control ==
+    CS.ControlHandshaking CS.HsClientHelloReceived));
+  assert (pure (st1.CS.cs_model.CS.model_config.CS.config_role ==
+    CS.ServerEndpoint));
+  assert (pure (Some?
+    st1.CS.cs_model.CS.model_handshake.CS.hs_client_hello));
+  assert (pure (
+    st1.CS.cs_model.CS.model_handshake.CS.hs_client_hello ==
+      Some (Ghost.reveal selection).CS.server_selected_client_hello));
+  assert (pure (
+    st1.CS.cs_model.CS.model_handshake.CS.hs_server_selection ==
+      Some (Ghost.reveal selection)));
+  assert (pure (Some?
+    st1.CS.cs_model.CS.model_handshake.CS.hs_server_selection));
+  assert (pure (
+    Some?.v st1.CS.cs_model.CS.model_handshake.CS.hs_server_selection ==
+      Ghost.reveal selection));
+  assert (pure (CS.server_selection_key_share_consistent
+    (Ghost.reveal selection)));
+  assert (pure (Some?
+    (Ghost.reveal selection).CS.server_key_share_private));
+  assert (pure (
+    Some?.v (Ghost.reveal selection).CS.server_key_share_private ==
+      server_private_key_bytes));
+  assert (pure (ST.server_local_event_input_ready
+    st1
+    ST.LocalDeriveSharedSecret
+    server_private_key_bytes));
   assert (pure (ST.server_end_to_end_invariant st1));
   Seq.lemma_eq_elim
     server_random_bytes
@@ -3231,6 +3356,47 @@ fn select_and_derive_shared_secret_once
       pts_to (V.vec_to_array d.server_driver_app_out) app_out_bytes);
   assert (pure (st1 ==
     CM.selected_server_parameters_state 'st0 (Ghost.reveal selection)));
+  assert (pure (st1.CS.cs_model.CS.model_control ==
+    CS.ControlHandshaking CS.HsClientHelloReceived));
+  assert (pure (st1.CS.cs_model.CS.model_config.CS.config_role ==
+    CS.ServerEndpoint));
+  assert (pure (Some?
+    st1.CS.cs_model.CS.model_handshake.CS.hs_client_hello));
+  assert (pure (
+    st1.CS.cs_model.CS.model_handshake.CS.hs_client_hello ==
+      Some (Ghost.reveal selection).CS.server_selected_client_hello));
+  assert (pure (
+    st1.CS.cs_model.CS.model_handshake.CS.hs_server_selection ==
+      Some (Ghost.reveal selection)));
+  assert (pure (Some?
+    st1.CS.cs_model.CS.model_handshake.CS.hs_server_selection));
+  assert (pure (
+    Some?.v st1.CS.cs_model.CS.model_handshake.CS.hs_server_selection ==
+      Ghost.reveal selection));
+  assert (pure (CS.server_selection_key_share_consistent
+    (Ghost.reveal selection)));
+  assert (pure (Some?
+    (Ghost.reveal selection).CS.server_key_share_private));
+  assert (pure (
+    Some?.v (Ghost.reveal selection).CS.server_key_share_private ==
+      server_private_key_bytes));
+  assert (pure (Seq.equal
+    server_private_key_bytes
+    (CL.raw_slice material_bytes 32 64)));
+  Seq.lemma_eq_elim
+    server_private_key_bytes
+    (CL.raw_slice material_bytes 32 64);
+  assert (pure (
+    Some?.v (Ghost.reveal selection).CS.server_key_share_private ==
+      CL.raw_slice material_bytes 32 64));
+  assert (pure (ST.server_local_event_input_ready
+    st1
+    ST.LocalDeriveSharedSecret
+    (CL.raw_slice material_bytes 32 64)));
+  assert (pure (ST.server_local_event_input_ready
+    st1
+    ST.LocalDeriveSharedSecret
+    server_private_key_bytes));
   assert (pure (ST.server_end_to_end_invariant st1));
   CL.lemma_append_empty_right 'st0.CS.cs_wire_log.CL.raw_sent;
   CL.lemma_append_empty_right 'st0.CS.cs_wire_log.CL.raw_received;

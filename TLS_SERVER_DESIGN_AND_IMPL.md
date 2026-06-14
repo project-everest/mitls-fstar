@@ -1994,6 +1994,14 @@ Status:
       single verified network step suitable for fueled handshake/receive loops:
       one transport read, one protocol processing attempt, exact response write,
       and suffix compaction while preserving the connected IO-history invariant.
+- [x] Added the first fueled network-read loop:
+      `TLS13.Impl.Server.Driver.read_process_network_until_ready` repeatedly
+      invokes the verified read/process step while the protocol response is
+      `NeedMoreInput`, stops before running past a successful or failing network
+      event, and preserves the connected-driver invariant. This is intentionally
+      a network-only loop: successful `StepOk` handshake events stop so the
+      higher-level handshake driver can run the required local-action flight
+      before waiting for the next peer record.
 - [x] Added the first generic local-output driver slice:
       `TLS13.Impl.Server.Driver.process_local_event_and_write_once` calls the
       credential-aware public server local-event API using driver-owned network
@@ -2091,9 +2099,9 @@ Checklist:
       perform the first connected local transition after attach, and
       `generate_server_material_once` fills the driver-owned selection material
       buffer. The driver-owned select+derive path and first compacting
-      retained-network processing plus read/process slices are verified;
-      local-action draining, fueled read/process loops, and the full handshake
-      accept orchestration remain to be layered on top.
+      retained-network processing plus read/process slices and the first
+      `NeedMoreInput` retry loop are verified; local-action draining and the
+      full handshake accept orchestration remain to be layered on top.
 - [ ] The first public driver API does not take a pre-accepted channel or
       externally owned listener handle.
 - [ ] `send`, `receive`, and `close` operate on one connected server handle.
@@ -2111,6 +2119,9 @@ Checklist:
 - [x] Driver uses total-write `TLS13.IO.write` postconditions in the verified
       local-output and retained-network processing slices.
 - [ ] Driver uses fueled loops for handshake/receive/close.
+      Current status: the first network-only `NeedMoreInput` retry loop is
+      verified; local-action and full handshake/receive/close orchestration
+      loops remain pending.
 - [ ] C wrapper owns only handle/lifetime/error state.
 
 Validation:
