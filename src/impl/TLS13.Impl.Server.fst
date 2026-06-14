@@ -1450,6 +1450,85 @@ fn process_derive_shared_secret
   resp
 }
 
+fn process_derive_shared_secret_from_private_array
+  (s:server)
+  (server_private_key:array U8.t)
+  (network_out:array U8.t)
+  (network_out_len:SZ.t)
+  (app_out:array U8.t)
+  (app_out_len:SZ.t)
+  requires connection_exactly s 'st0 **
+           pts_to server_private_key 'server_private_key_bytes **
+           pts_to network_out 'old_network_out **
+           pts_to app_out 'old_app_out **
+           pure (B.length 'server_private_key_bytes == 32 /\
+                 B.length 'old_network_out == SZ.v network_out_len /\
+                 B.length 'old_app_out == SZ.v app_out_len /\
+                 ST.server_end_to_end_invariant 'st0 /\
+                 'st0.CS.cs_model.CS.model_config.CS.config_role ==
+                   CS.ServerEndpoint /\
+                 'st0.CS.cs_model.CS.model_control ==
+                   CS.ControlHandshaking CS.HsClientHelloReceived /\
+                 Some? 'st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello /\
+                 (match 'st0.CS.cs_model.CS.model_handshake.CS.hs_server_selection with
+                  | Some selection ->
+                    CS.server_selection_key_share_consistent selection /\
+                    'st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello ==
+                      Some selection.CS.server_selected_client_hello /\
+                    Some? selection.CS.server_key_share_private /\
+                    Some?.v selection.CS.server_key_share_private ==
+                      Ghost.reveal 'server_private_key_bytes
+                  | None -> False))
+  returns resp:ST.server_response
+  ensures exists* st1 network_out_bytes app_out_bytes.
+          connection_exactly s st1 **
+          pts_to server_private_key 'server_private_key_bytes **
+          pts_to network_out network_out_bytes **
+          pts_to app_out app_out_bytes **
+          pure (B.length network_out_bytes == SZ.v network_out_len /\
+                B.length app_out_bytes == SZ.v app_out_len /\
+                ST.server_local_event_end_to_end_correct
+                  'st0
+                  st1
+                  resp
+                  ST.LocalDeriveSharedSecret
+                  B.empty
+                  network_out_bytes
+                  app_out_bytes /\
+                (resp.ST.status == ST.StepOk ==>
+                  (exists shared.
+                    st1 == CM.derived_shared_secret_state 'st0 shared /\
+                    (match 'st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello with
+                     | Some ch ->
+                       TLS13.Crypto.Spec.x25519_shared
+                         (Ghost.reveal 'server_private_key_bytes)
+                         ch.M.key_share == Some shared
+                     | None -> False))) /\
+                (resp.ST.status == ST.IllegalTransition ==>
+                  ST.unexpected_message_response
+                    'st0
+                    st1
+                    resp
+                    network_out_bytes
+                    app_out_bytes))
+{
+  rewrite (connection_exactly s 'st0) as (SK.connection_exactly s 'st0);
+  let resp = SK.process_derive_shared_secret_from_private_array
+    s
+    server_private_key
+    network_out
+    network_out_len
+    app_out
+    app_out_len;
+  with st1 network_out_bytes app_out_bytes.
+    assert (SK.connection_exactly s st1 **
+            pts_to server_private_key 'server_private_key_bytes **
+            pts_to network_out network_out_bytes **
+            pts_to app_out app_out_bytes);
+  rewrite (SK.connection_exactly s st1) as (connection_exactly s st1);
+  resp
+}
+
 fn process_install_server_handshake_write_keys
   (s:server)
   (traffic_secret_src:array U8.t)

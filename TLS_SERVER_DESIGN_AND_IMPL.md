@@ -378,8 +378,11 @@ Current phase: **Phase 6 server buffer/event API and theorem surface**.
   concrete 32-byte server private-key array through the crypto runtime TCB, and
   reuses the verified shared-secret/key-schedule lineage mutation on success.
   Its theorem exposes the computed `TLS13.Crypto.Spec.x25519_shared` equation
-  and the corresponding `LocalDeriveSharedSecret` legal delta. A public server
-  response wrapper and scheduler integration remain pending.
+  and the corresponding `LocalDeriveSharedSecret` legal delta. The public
+  `TLS13.Impl.Server.process_derive_shared_secret_from_private_array` wrapper
+  exposes this as `server_local_event_end_to_end_correct`; runtime X25519
+  failure is mapped to the existing unexpected-message local failure response.
+  Scheduler integration remains pending.
 - [x] Added the first sent-ServerHello state-mutation slice:
   `TLS13.Impl.ConnectionState.Model.sent_server_hello_state` mirrors the pure
   `Sent ServerHello` transition, and
@@ -482,8 +485,9 @@ Current phase: **Phase 6 server buffer/event API and theorem surface**.
   key is present. The supplied-private selector now populates that slot from a
   concrete private-key array, and the low-level server X25519 helper now derives
   the shared secret from that private-key array and the stored parsed
-  `ClientHello` public share. A public response wrapper, entropy/public-key
-  generation, and scheduler integration remain pending.
+  `ClientHello` public share. The public response wrapper for that helper is
+  now verified; entropy/public-key generation and scheduler integration remain
+  pending.
 - [x] Added role-indexed traffic-key install model support:
   `TLS13.Impl.ConnectionState.Model.installed_traffic_keys_for_role_state` and
   its evolution lemma mirror the pure `LocalInstallTrafficKeysForRole`
@@ -1595,9 +1599,10 @@ Checklist:
       and supplied-private selections. Server private-key-share storage is
       represented in `connection_exactly` and the supplied-private wrapper
       populates it; the low-level server X25519 helper computes the shared
-      secret from concrete private bytes plus the stored ClientHello share. A
-      public response wrapper, random/public-key generation, remaining protected
-      receive cases, and scheduler integration remain pending.
+      secret from concrete private bytes plus the stored ClientHello share, and
+      the public response wrapper exposes the corresponding local step theorem.
+      Random/public-key generation, remaining protected receive cases, and
+      scheduler integration remain pending.
 - [x] Emitted bytes expose raw-delta, parse-back, seal, and write-key provenance.
 - [ ] Consumed bytes expose exact consumed prefix, parse/decode classification,
       open facts, and read-key provenance.
