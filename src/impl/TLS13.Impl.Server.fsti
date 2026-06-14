@@ -1647,6 +1647,11 @@ fn process_client_hello
           pts_to app_out app_out_bytes **
           pure (B.length network_out_bytes == SZ.v network_out_len /\
                 B.length app_out_bytes == SZ.v app_out_len /\
+                st1 ==
+                  CM.received_client_hello_state
+                    'st0
+                    (Ghost.reveal ch)
+                    (Ghost.reveal 'raw_bytes) /\
                 ST.server_network_event_end_to_end_correct
                   'st0
                   st1
@@ -1692,6 +1697,11 @@ fn process_client_finished
           pts_to app_out app_out_bytes **
           pure (B.length network_out_bytes == SZ.v network_out_len /\
                 B.length app_out_bytes == SZ.v app_out_len /\
+                st1 ==
+                  CM.received_client_finished_state
+                    'st0
+                    (Ghost.reveal fin)
+                    (Ghost.reveal 'raw_bytes) /\
                 ST.server_network_event_end_to_end_correct
                   'st0
                   st1

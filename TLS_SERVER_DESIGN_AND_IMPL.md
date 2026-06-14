@@ -624,6 +624,10 @@ Current phase: **Phase 6 server buffer/event API and theorem surface**.
   pure send-state constructor they install. CertificateVerify signing remains at
   the existing end-to-end contract because the signature-bearing message is
   produced by the OpenSSL signing TCB rather than determined solely by pre-state.
+- [x] Strengthened focused receive wrapper postconditions for later chaining:
+  ClientHello and client Finished receive entry points now expose the exact pure
+  received-state constructor in addition to
+  `server_network_event_end_to_end_correct`.
 
 ## End goal
 
