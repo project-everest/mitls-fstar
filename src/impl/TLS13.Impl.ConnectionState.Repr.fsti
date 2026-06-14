@@ -1384,7 +1384,8 @@ fn new_server
   requires ArrPts.pts_to certificate_chain 'certificate_chain_bytes **
            ArrPts.pts_to credential_identity 'credential_identity_bytes **
            pure (B.length 'certificate_chain_bytes == SZ.v certificate_chain_len /\
-                   B.length 'credential_identity_bytes == SZ.v credential_identity_len)
+                  B.length 'credential_identity_bytes == SZ.v credential_identity_len /\
+                  B.length 'certificate_chain_bytes <= max_server_certificate_chain_len)
   returns c:connection_state
   ensures ArrPts.pts_to certificate_chain 'certificate_chain_bytes **
           ArrPts.pts_to credential_identity 'credential_identity_bytes **

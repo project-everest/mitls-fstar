@@ -97,6 +97,36 @@ let next_local_action_sound
          CL.message_value =
            M.TlsHandshake (M.EncryptedExtensions { M.negotiated_alpn = None });
        })
+    | ST.LocalSendCertificate ->
+     action.ST.next_local_payload == ST.LocalPayloadNone /\
+     st.CS.cs_model.CS.model_control ==
+       CS.ControlHandshaking CS.HsServerEncryptedFlightSent /\
+     st.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
+     st.CS.cs_model.CS.model_handshake.CS.hs_encrypted_extensions <> None /\
+     st.CS.cs_model.CS.model_handshake.CS.hs_certificate == None /\
+     st.CS.cs_model.CS.model_handshake.CS.hs_buffers.CS.hb_certificate_leaf_der == None /\
+     Some?
+       st.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_handshake_traffic /\
+     U64.fits
+       (st.CS.cs_model.CS.model_record.CS.record_write.R.seq + 1) /\
+     (match st.CS.cs_model.CS.model_config.CS.config_server with
+      | Some cfg ->
+        B.length cfg.CS.server_certificate_chain <=
+          Bounds.max_server_certificate_chain_len /\
+        B.length st.CS.cs_model.CS.model_handshake.CS.hs_transcript +
+          B.length
+            (TLS13.Wire.Spec.serialize_certificate_from_credential
+              { M.chain = [cfg.CS.server_certificate_chain] }) <=
+            Bounds.max_transcript_len /\
+        CS.legal_event
+          st.CS.cs_model
+          (CS.ConnNetworkEvent {
+            CL.message_direction = CL.Sent;
+            CL.message_value =
+              M.TlsHandshake
+                (M.Certificate { M.chain = [cfg.CS.server_certificate_chain] });
+          })
+      | None -> False)
     | ST.LocalSendCertificateVerify ->
      action.ST.next_local_payload == ST.LocalPayloadNone /\
      st.CS.cs_model.CS.model_control ==
@@ -258,7 +288,9 @@ fn new_server
   requires pts_to certificate_chain 'certificate_chain_bytes **
            pts_to credential_identity 'credential_identity_bytes **
            pure (B.length 'certificate_chain_bytes == SZ.v certificate_chain_len /\
-                 B.length 'credential_identity_bytes == SZ.v credential_identity_len)
+                 B.length 'credential_identity_bytes == SZ.v credential_identity_len /\
+                 B.length 'certificate_chain_bytes <=
+                   Bounds.max_server_certificate_chain_len)
   returns s:server
   ensures pts_to certificate_chain 'certificate_chain_bytes **
           pts_to credential_identity 'credential_identity_bytes **

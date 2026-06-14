@@ -1799,6 +1799,237 @@ fn can_send_encrypted_extensions_runtime
   }
 }
 
+fn can_send_certificate_runtime
+  (c:connection_state)
+  (#st0:erased CS.connection_state)
+  requires connection_exactly c st0 **
+           pure (match st0.CS.cs_model.CS.model_config.CS.config_server with
+                 | Some cfg ->
+                   B.length cfg.CS.server_certificate_chain <=
+                     max_server_certificate_chain_len
+                 | None -> False)
+  returns ok: bool
+  ensures connection_exactly c st0 **
+          pure (ok ==>
+            st0.CS.cs_model.CS.model_control ==
+              CS.ControlHandshaking CS.HsServerEncryptedFlightSent /\
+            st0.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
+            st0.CS.cs_model.CS.model_handshake.CS.hs_encrypted_extensions <> None /\
+            st0.CS.cs_model.CS.model_handshake.CS.hs_certificate == None /\
+            st0.CS.cs_model.CS.model_handshake.CS.hs_buffers.CS.hb_certificate_leaf_der == None /\
+            Some?
+              st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_handshake_traffic /\
+            U64.fits (st0.CS.cs_model.CS.model_record.CS.record_write.R.seq + 1) /\
+            (match st0.CS.cs_model.CS.model_config.CS.config_server with
+             | Some cfg ->
+               B.length st0.CS.cs_model.CS.model_handshake.CS.hs_transcript +
+                 B.length
+                   (W.serialize_certificate_from_credential
+                     { M.chain = [cfg.CS.server_certificate_chain] }) <=
+                   max_transcript_len /\
+               CS.legal_event
+                 st0.CS.cs_model
+                 (CS.ConnNetworkEvent {
+                   CL.message_direction = CL.Sent;
+                   CL.message_value =
+                     M.TlsHandshake
+                       (M.Certificate { M.chain = [cfg.CS.server_certificate_chain] });
+                 })
+             | None -> False))
+{
+  unfold (connection_exactly c st0);
+  unfold (connection_model_exactly c st0.CS.cs_model);
+  unfold (control_exactly
+    c.control
+    st0.CS.cs_model.CS.model_control
+    st0.CS.cs_model.CS.model_failure);
+  unfold (record_layer_exactly c.records st0.CS.cs_model.CS.model_record);
+  unfold (handshake_exactly c.handshake st0.CS.cs_model.CS.model_handshake);
+  unfold (handshake_messages_exactly c.handshake.messages st0.CS.cs_model.CS.model_handshake);
+  unfold (encrypted_extensions_slot_exactly
+    c.handshake.messages.encrypted_extensions
+    st0.CS.cs_model.CS.model_handshake.CS.hs_encrypted_extensions);
+  unfold (certificate_slot_exactly
+    c.handshake.messages.certificate
+    st0.CS.cs_model.CS.model_handshake.CS.hs_certificate);
+  unfold (sized_bytes_exactly
+    c.handshake.transcript
+    max_transcript_len
+    st0.CS.cs_model.CS.model_handshake.CS.hs_transcript);
+  unfold (handshake_buffers_exactly
+    c.handshake.buffers
+    st0.CS.cs_model.CS.model_handshake.CS.hs_buffers);
+  unfold (optional_sized_bytes_exactly
+    c.handshake.buffers.certificate_leaf_der
+    max_handshake_flight_len
+    st0.CS.cs_model.CS.model_handshake.CS.hs_buffers.CS.hb_certificate_leaf_der);
+  unfold (key_schedule_exactly
+    c.handshake.keys
+    st0.CS.cs_model.CS.model_handshake.CS.hs_keys);
+  unfold (traffic_key_material_exactly
+    c.handshake.keys.server_handshake_traffic
+    st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_handshake_traffic);
+
+  let role_ok = config_role_is_server c.config;
+  let tag = !c.control.control_tag;
+  let stage = !c.control.handshake_stage_tag;
+  let tag_ok = tag = 1uy;
+  let stage_ok = stage = 15uy;
+
+  with stored_ee. assert (Box.pts_to c.handshake.messages.encrypted_extensions stored_ee);
+  let stored_ee_opt = !c.handshake.messages.encrypted_extensions;
+  let has_encrypted_extensions = (
+    match stored_ee_opt with
+    | Some _ -> true
+    | None -> false);
+  assert (pure (stored_ee_opt == stored_ee));
+  assert (pure (has_encrypted_extensions ==>
+    st0.CS.cs_model.CS.model_handshake.CS.hs_encrypted_extensions <> None));
+
+  with stored_cert. assert (Box.pts_to c.handshake.messages.certificate stored_cert);
+  let stored_cert_opt = !c.handshake.messages.certificate;
+  let no_certificate = (
+    match stored_cert_opt with
+    | None -> true
+    | Some _ -> false);
+  assert (pure (stored_cert_opt == stored_cert));
+  assert (pure (no_certificate ==> stored_cert == None));
+  assert (pure (no_certificate ==>
+    st0.CS.cs_model.CS.model_handshake.CS.hs_certificate == None));
+
+  with parsed leaf_present leaf_storage leaf_len. assert (pure True);
+  let leaf_present_runtime = !c.handshake.buffers.certificate_leaf_der.present;
+  let no_leaf = not leaf_present_runtime;
+  assert (pure (leaf_present_runtime == leaf_present));
+  assert (pure (no_leaf ==> not leaf_present));
+  assert (pure (no_leaf ==>
+    st0.CS.cs_model.CS.model_handshake.CS.hs_buffers.CS.hb_certificate_leaf_der == None));
+
+  with transcript_storage transcript_len. assert (pure True);
+  let current_transcript_len = !c.handshake.transcript.len;
+  assert (pure (current_transcript_len == transcript_len));
+
+  let has_server_handshake_keys = !c.handshake.keys.server_handshake_traffic.present;
+  let seq_ok = Rec.can_advance_seq c.records.write;
+
+  assert_norm (max_server_certificate_chain_len == 16610);
+  assert_norm (max_transcript_len == 65535);
+  assert (pure (SZ.fits (13 + max_server_certificate_chain_len)));
+  let max_certificate_fragment_len =
+    SZ.uint_to_t (13 + max_server_certificate_chain_len);
+  let max_len = SZ.uint_to_t max_transcript_len;
+  let max_start = SZ.sub max_len max_certificate_fragment_len;
+  let transcript_room = sizet_lte_plain current_transcript_len max_start;
+  lemma_sizet_lte_plain current_transcript_len max_start;
+
+  let ok =
+    tag_ok &&
+    stage_ok &&
+    role_ok &&
+    has_encrypted_extensions &&
+    no_certificate &&
+    no_leaf &&
+    has_server_handshake_keys &&
+    seq_ok &&
+    transcript_room;
+
+  assert (pure (Some? st0.CS.cs_model.CS.model_config.CS.config_server));
+  let server_cfg =
+    Ghost.hide (Some?.v st0.CS.cs_model.CS.model_config.CS.config_server);
+  assert (pure (
+    st0.CS.cs_model.CS.model_config.CS.config_server ==
+      Some (Ghost.reveal server_cfg)));
+  assert (pure (
+    B.length (Ghost.reveal server_cfg).CS.server_certificate_chain <=
+      max_server_certificate_chain_len));
+  W.lemma_serialize_certificate_from_single_chain_len
+    (Ghost.reveal server_cfg).CS.server_certificate_chain;
+  assert (pure (
+    B.length
+      (W.serialize_certificate_from_credential
+        { M.chain = [(Ghost.reveal server_cfg).CS.server_certificate_chain] }) ==
+      13 + B.length (Ghost.reveal server_cfg).CS.server_certificate_chain));
+
+  assert (pure (ok ==> U8.v tag == 1));
+  assert (pure (ok ==> U8.v stage == 15));
+  assert (pure (ok ==>
+    st0.CS.cs_model.CS.model_control ==
+      CS.ControlHandshaking CS.HsServerEncryptedFlightSent));
+  assert (pure (ok ==>
+    st0.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint));
+  assert (pure (ok ==>
+    st0.CS.cs_model.CS.model_handshake.CS.hs_encrypted_extensions <> None));
+  assert (pure (ok ==> st0.CS.cs_model.CS.model_handshake.CS.hs_certificate == None));
+  assert (pure (ok ==>
+    st0.CS.cs_model.CS.model_handshake.CS.hs_buffers.CS.hb_certificate_leaf_der == None));
+  assert (pure (ok ==> Some?
+    st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_handshake_traffic));
+  assert (pure (ok ==> U64.fits
+    (st0.CS.cs_model.CS.model_record.CS.record_write.R.seq + 1)));
+  assert (pure (ok ==> B.length st0.CS.cs_model.CS.model_handshake.CS.hs_transcript ==
+    SZ.v current_transcript_len));
+  assert (pure (ok ==> SZ.v current_transcript_len <= SZ.v max_start));
+  assert (pure (ok ==>
+    SZ.v current_transcript_len + SZ.v max_certificate_fragment_len <= max_transcript_len));
+  assert (pure (ok ==>
+    SZ.v current_transcript_len +
+      B.length
+        (W.serialize_certificate_from_credential
+          { M.chain = [(Ghost.reveal server_cfg).CS.server_certificate_chain] }) <=
+      max_transcript_len));
+  assert (pure (ok ==>
+    B.length st0.CS.cs_model.CS.model_handshake.CS.hs_transcript +
+      B.length
+        (W.serialize_certificate_from_credential
+          { M.chain = [(Ghost.reveal server_cfg).CS.server_certificate_chain] }) <=
+        max_transcript_len));
+  assert (pure (CS.certificate_msg_matches_server_config
+    (Ghost.reveal server_cfg)
+    { M.chain = [(Ghost.reveal server_cfg).CS.server_certificate_chain] }));
+  assert (pure (ok ==> CS.legal_event
+    st0.CS.cs_model
+    (CS.ConnNetworkEvent {
+      CL.message_direction = CL.Sent;
+      CL.message_value =
+        M.TlsHandshake
+          (M.Certificate { M.chain = [(Ghost.reveal server_cfg).CS.server_certificate_chain] });
+    })));
+
+  fold (traffic_key_material_exactly
+    c.handshake.keys.server_handshake_traffic
+    st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_handshake_traffic);
+  fold (key_schedule_exactly
+    c.handshake.keys
+    st0.CS.cs_model.CS.model_handshake.CS.hs_keys);
+  fold (optional_sized_bytes_exactly
+    c.handshake.buffers.certificate_leaf_der
+    max_handshake_flight_len
+    st0.CS.cs_model.CS.model_handshake.CS.hs_buffers.CS.hb_certificate_leaf_der);
+  fold (handshake_buffers_exactly
+    c.handshake.buffers
+    st0.CS.cs_model.CS.model_handshake.CS.hs_buffers);
+  fold (sized_bytes_exactly
+    c.handshake.transcript
+    max_transcript_len
+    st0.CS.cs_model.CS.model_handshake.CS.hs_transcript);
+  fold (certificate_slot_exactly
+    c.handshake.messages.certificate
+    st0.CS.cs_model.CS.model_handshake.CS.hs_certificate);
+  fold (encrypted_extensions_slot_exactly
+    c.handshake.messages.encrypted_extensions
+    st0.CS.cs_model.CS.model_handshake.CS.hs_encrypted_extensions);
+  fold (handshake_messages_exactly c.handshake.messages st0.CS.cs_model.CS.model_handshake);
+  fold (handshake_exactly c.handshake st0.CS.cs_model.CS.model_handshake);
+  fold (record_layer_exactly c.records st0.CS.cs_model.CS.model_record);
+  fold (control_exactly
+    c.control
+    st0.CS.cs_model.CS.model_control
+    st0.CS.cs_model.CS.model_failure);
+  fold (connection_model_exactly c st0.CS.cs_model);
+  fold (connection_exactly c st0);
+  ok
+}
+
 fn can_send_certificate_verify_runtime
   (c:connection_state)
   (#st0:erased CS.connection_state)

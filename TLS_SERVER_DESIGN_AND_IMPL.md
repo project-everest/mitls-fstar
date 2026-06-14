@@ -547,6 +547,24 @@ Current phase: **Phase 6 server buffer/event API and theorem surface**.
   `server_local_event_end_to_end_correct` for `LocalSendCertificate`, preserving
   the credential resource and tying the sent certificate to the configured server
   certificate chain.
+- [x] Made the first supported server certificate-size bound explicit:
+  `Bounds.max_server_certificate_chain_len` is `16610`, the largest certificate
+  chain that fits the current one-record protected Certificate path
+  (`13 + certificate_len` handshake bytes plus the 17-byte AEAD expansion within
+  a 16640-byte TLSInnerPlaintext limit). `new_server` now requires this bound,
+  and `server_state_core_correct` preserves it through the immutable server
+  config so schedulers and driver code can rely on it.
+- [x] Added scheduler readiness for credential-backed Certificate sends:
+  `TLS13.Impl.ConnectionState.Queries.can_send_certificate_runtime` checks the
+  concrete phase, stored EncryptedExtensions, empty Certificate/leaf-DER slots,
+  server handshake write keys, write-sequence advance, and a conservative
+  transcript-room bound for the maximum supported certificate size. It proves the
+  exact configured one-certificate legal send event, and
+  `TLS13.Impl.Server.next_local_action` now advertises `LocalSendCertificate`
+  between EncryptedExtensions and CertificateVerify. The generic no-credential
+  `process_local_event` path remains intentionally unwired for Certificate; the
+  credential-aware driver path should call
+  `process_send_certificate_from_credentials`.
 
 ## End goal
 

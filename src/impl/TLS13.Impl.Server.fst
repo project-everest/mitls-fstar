@@ -48,7 +48,9 @@ fn new_server
   requires pts_to certificate_chain 'certificate_chain_bytes **
            pts_to credential_identity 'credential_identity_bytes **
            pure (B.length 'certificate_chain_bytes == SZ.v certificate_chain_len /\
-                 B.length 'credential_identity_bytes == SZ.v credential_identity_len)
+                 B.length 'credential_identity_bytes == SZ.v credential_identity_len /\
+                 B.length 'certificate_chain_bytes <=
+                   Bounds.max_server_certificate_chain_len)
   returns s:server
   ensures pts_to certificate_chain 'certificate_chain_bytes **
           pts_to credential_identity 'credential_identity_bytes **
@@ -134,6 +136,12 @@ fn next_local_action
   let keys = CQ.get_key_schedule_snapshot s;
   let start_ready = CQ.can_start_server_runtime s;
   let send_encrypted_extensions_ready = CQ.can_send_encrypted_extensions_runtime s;
+  assert (pure (match 'st0.CS.cs_model.CS.model_config.CS.config_server with
+    | Some cfg ->
+      B.length cfg.CS.server_certificate_chain <=
+        Bounds.max_server_certificate_chain_len
+    | None -> False));
+  let send_certificate_ready = CQ.can_send_certificate_runtime s;
   let send_certificate_verify_ready = CQ.can_send_certificate_verify_runtime s;
   fold (connection_exactly s 'st0);
   let server_handshake_write_keys_ready =
@@ -228,6 +236,45 @@ fn next_local_action
     {
       ST.next_local_ready = true;
       ST.next_local_kind = ST.LocalSendEncryptedExtensions;
+      ST.next_local_payload = ST.LocalPayloadNone;
+    }
+  } else if send_certificate_ready {
+    assert (pure ('st0.CS.cs_model.CS.model_control ==
+      CS.ControlHandshaking CS.HsServerEncryptedFlightSent));
+    assert (pure ('st0.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint));
+    assert (pure ('st0.CS.cs_model.CS.model_handshake.CS.hs_encrypted_extensions <> None));
+    assert (pure ('st0.CS.cs_model.CS.model_handshake.CS.hs_certificate == None));
+    assert (pure ('st0.CS.cs_model.CS.model_handshake.CS.hs_buffers.CS.hb_certificate_leaf_der == None));
+    assert (pure (Some?
+      'st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_handshake_traffic));
+    assert (pure (U64.fits
+      ('st0.CS.cs_model.CS.model_record.CS.record_write.R.seq + 1)));
+    assert (pure (Some? 'st0.CS.cs_model.CS.model_config.CS.config_server));
+    let server_cfg =
+      Ghost.hide (Some?.v 'st0.CS.cs_model.CS.model_config.CS.config_server);
+    assert (pure (
+      'st0.CS.cs_model.CS.model_config.CS.config_server ==
+        Some (Ghost.reveal server_cfg)));
+    assert (pure (
+      B.length (Ghost.reveal server_cfg).CS.server_certificate_chain <=
+        Bounds.max_server_certificate_chain_len));
+    assert (pure (
+      B.length 'st0.CS.cs_model.CS.model_handshake.CS.hs_transcript +
+        B.length
+          (W.serialize_certificate_from_credential
+            { M.chain = [(Ghost.reveal server_cfg).CS.server_certificate_chain] }) <=
+          Bounds.max_transcript_len));
+    assert (pure (CS.legal_event
+      'st0.CS.cs_model
+      (CS.ConnNetworkEvent {
+        CL.message_direction = CL.Sent;
+        CL.message_value =
+          M.TlsHandshake
+            (M.Certificate { M.chain = [(Ghost.reveal server_cfg).CS.server_certificate_chain] });
+      })));
+    {
+      ST.next_local_ready = true;
+      ST.next_local_kind = ST.LocalSendCertificate;
       ST.next_local_payload = ST.LocalPayloadNone;
     }
   } else if send_certificate_verify_ready {

@@ -362,6 +362,44 @@ fn can_send_encrypted_extensions_runtime
                   M.TlsHandshake (M.EncryptedExtensions { M.negotiated_alpn = None });
               }))
 
+fn can_send_certificate_runtime
+  (c:connection_state)
+  (#st0:erased CS.connection_state)
+  requires connection_exactly c st0 **
+           pure (match st0.CS.cs_model.CS.model_config.CS.config_server with
+                | Some cfg ->
+                  B.length cfg.CS.server_certificate_chain <=
+                    max_server_certificate_chain_len
+                | None -> False)
+  returns ok: bool
+  ensures connection_exactly c st0 **
+          pure (ok ==>
+            st0.CS.cs_model.CS.model_control ==
+              CS.ControlHandshaking CS.HsServerEncryptedFlightSent /\
+            st0.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
+            st0.CS.cs_model.CS.model_handshake.CS.hs_encrypted_extensions <> None /\
+            st0.CS.cs_model.CS.model_handshake.CS.hs_certificate == None /\
+            st0.CS.cs_model.CS.model_handshake.CS.hs_buffers.CS.hb_certificate_leaf_der == None /\
+            Some?
+              st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_handshake_traffic /\
+            U64.fits (st0.CS.cs_model.CS.model_record.CS.record_write.R.seq + 1) /\
+            (match st0.CS.cs_model.CS.model_config.CS.config_server with
+             | Some cfg ->
+              B.length st0.CS.cs_model.CS.model_handshake.CS.hs_transcript +
+                B.length
+                  (W.serialize_certificate_from_credential
+                    { M.chain = [cfg.CS.server_certificate_chain] }) <=
+                  max_transcript_len /\
+              CS.legal_event
+                st0.CS.cs_model
+                (CS.ConnNetworkEvent {
+                  CL.message_direction = CL.Sent;
+                  CL.message_value =
+                    M.TlsHandshake
+                      (M.Certificate { M.chain = [cfg.CS.server_certificate_chain] });
+                })
+             | None -> False))
+
 fn can_send_certificate_verify_runtime
   (c:connection_state)
   (#st0:erased CS.connection_state)

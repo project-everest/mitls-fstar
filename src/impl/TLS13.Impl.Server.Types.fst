@@ -1,6 +1,7 @@
 module TLS13.Impl.Server.Types
 
 module B = TLS13.Bytes
+module Bounds = TLS13.Impl.ConnectionState.Bounds
 module CL = TLS13.ConnectionLog
 module CS = TLS13.Spec.ConnectionState
 module CSL = TLS13.ConnectionState.Lemmas
@@ -62,6 +63,11 @@ let server_state_core_correct
   : prop =
   st.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
   Some? st.CS.cs_model.CS.model_config.CS.config_server /\
+  (match st.CS.cs_model.CS.model_config.CS.config_server with
+   | Some cfg ->
+     B.length cfg.CS.server_certificate_chain <=
+       Bounds.max_server_certificate_chain_len
+   | None -> False) /\
   CS.connection_state_consistent st /\
   CS.connection_state_full_log_consistent_for_role CS.ServerEndpoint st
 
@@ -90,7 +96,12 @@ let lemma_initial_server_state_correct
   (cfg:CS.connection_config)
   : Lemma
       (requires cfg.CS.config_role == CS.ServerEndpoint /\
-                Some? cfg.CS.config_server)
+                Some? cfg.CS.config_server /\
+                (match cfg.CS.config_server with
+                 | Some server_cfg ->
+                   B.length server_cfg.CS.server_certificate_chain <=
+                     Bounds.max_server_certificate_chain_len
+                 | None -> False))
       (ensures server_state_correct (CS.initial cfg))
 =
   CSL.lemma_initial_full_log_consistent_for_role CS.ServerEndpoint cfg;
@@ -103,7 +114,12 @@ let lemma_initial_server_end_to_end_invariant
   (cfg:CS.connection_config)
   : Lemma
       (requires cfg.CS.config_role == CS.ServerEndpoint /\
-                Some? cfg.CS.config_server)
+                Some? cfg.CS.config_server /\
+                (match cfg.CS.config_server with
+                 | Some server_cfg ->
+                   B.length server_cfg.CS.server_certificate_chain <=
+                     Bounds.max_server_certificate_chain_len
+                 | None -> False))
       (ensures server_end_to_end_invariant (CS.initial cfg))
 =
   lemma_initial_server_state_correct cfg;
