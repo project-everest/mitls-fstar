@@ -382,7 +382,11 @@ Current phase: **Phase 6 server buffer/event API and theorem surface**.
   `TLS13.Impl.Server.process_derive_shared_secret_from_private_array` wrapper
   exposes this as `server_local_event_end_to_end_correct`; runtime X25519
   failure is mapped to the existing unexpected-message local failure response.
-  Scheduler integration remains pending.
+  Generic `process_local_event` dispatch for `LocalDeriveSharedSecret` now uses
+  this private-key path when the 32-byte local payload matches the stored server
+  private key. Autonomous `next_local_action` scheduling remains pending until
+  entropy/public-key generation stores concrete private bytes without a driver
+  payload.
 - [x] Added the first sent-ServerHello state-mutation slice:
   `TLS13.Impl.ConnectionState.Model.sent_server_hello_state` mirrors the pure
   `Sent ServerHello` transition, and
@@ -486,8 +490,10 @@ Current phase: **Phase 6 server buffer/event API and theorem surface**.
   concrete private-key array, and the low-level server X25519 helper now derives
   the shared secret from that private-key array and the stored parsed
   `ClientHello` public share. The public response wrapper for that helper is
-  now verified; entropy/public-key generation and scheduler integration remain
-  pending.
+  now verified, and generic `process_local_event` dispatch now routes
+  `LocalDeriveSharedSecret` through this private-key path when the local payload
+  matches the stored selection. Entropy/public-key generation and autonomous
+  `next_local_action` scheduling remain pending.
 - [x] Added role-indexed traffic-key install model support:
   `TLS13.Impl.ConnectionState.Model.installed_traffic_keys_for_role_state` and
   its evolution lemma mirror the pure `LocalInstallTrafficKeysForRole`
@@ -1600,9 +1606,10 @@ Checklist:
       represented in `connection_exactly` and the supplied-private wrapper
       populates it; the low-level server X25519 helper computes the shared
       secret from concrete private bytes plus the stored ClientHello share, and
-      the public response wrapper exposes the corresponding local step theorem.
-      Random/public-key generation, remaining protected receive cases, and
-      scheduler integration remain pending.
+      the public response wrapper plus generic local-event dispatch expose the
+      corresponding local step theorem. Random/public-key generation, remaining
+      protected receive cases, and autonomous scheduler integration remain
+      pending.
 - [x] Emitted bytes expose raw-delta, parse-back, seal, and write-key provenance.
 - [ ] Consumed bytes expose exact consumed prefix, parse/decode classification,
       open facts, and read-key provenance.

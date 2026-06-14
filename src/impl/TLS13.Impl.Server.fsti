@@ -284,9 +284,18 @@ let server_local_event_input_ready
        }))
   | ST.LocalDeriveSharedSecret ->
     B.length payload == 32 /\
-    CS.legal_event
-      st.CS.cs_model
-      (CS.ConnLocalEvent (CS.LocalDeriveSharedSecret payload))
+    st.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
+    st.CS.cs_model.CS.model_control ==
+      CS.ControlHandshaking CS.HsClientHelloReceived /\
+    Some? st.CS.cs_model.CS.model_handshake.CS.hs_client_hello /\
+    (match st.CS.cs_model.CS.model_handshake.CS.hs_server_selection with
+     | Some selection ->
+       CS.server_selection_key_share_consistent selection /\
+       st.CS.cs_model.CS.model_handshake.CS.hs_client_hello ==
+         Some selection.CS.server_selected_client_hello /\
+       Some? selection.CS.server_key_share_private /\
+       Some?.v selection.CS.server_key_share_private == payload
+     | None -> False)
   | ST.LocalSendApplicationData ->
     st.CS.cs_model.CS.model_control == CS.ControlApplicationData /\
     st.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
@@ -1348,7 +1357,7 @@ fn process_derive_shared_secret_from_private_array
                   st1
                   resp
                   ST.LocalDeriveSharedSecret
-                  B.empty
+                  (Ghost.reveal 'server_private_key_bytes)
                   network_out_bytes
                   app_out_bytes /\
                 (resp.ST.status == ST.StepOk ==>

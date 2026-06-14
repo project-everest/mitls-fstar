@@ -103,7 +103,7 @@ fn process_derive_shared_secret_from_private_array
                   st1
                   resp
                   ST.LocalDeriveSharedSecret
-                  B.empty
+                  (Ghost.reveal 'server_private_key_bytes)
                   network_out_bytes
                   app_out_bytes /\
                 (resp.ST.status == ST.StepOk ==>

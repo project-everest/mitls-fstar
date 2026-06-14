@@ -1492,7 +1492,7 @@ fn process_derive_shared_secret_from_private_array
                   st1
                   resp
                   ST.LocalDeriveSharedSecret
-                  B.empty
+                  (Ghost.reveal 'server_private_key_bytes)
                   network_out_bytes
                   app_out_bytes /\
                 (resp.ST.status == ST.StepOk ==>
@@ -2500,17 +2500,10 @@ fn process_local_event
     }
     ST.LocalDeriveSharedSecret -> {
       assert (pure (B.length (Ghost.reveal 'payload_bytes) == 32));
-      assert (pure (CS.legal_event
-        'st0.CS.cs_model
-        (CS.ConnLocalEvent
-          (CS.LocalDeriveSharedSecret (Ghost.reveal 'payload_bytes)))));
-      let shared : erased TLS13.Crypto.Spec.x25519_shared_secret =
-        Ghost.hide (Ghost.reveal 'payload_bytes);
       let resp =
-        process_derive_shared_secret
+        process_derive_shared_secret_from_private_array
           s
           payload
-          #shared
           network_out
           network_out_len
           app_out

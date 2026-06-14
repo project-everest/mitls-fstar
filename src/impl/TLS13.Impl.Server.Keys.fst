@@ -232,7 +232,7 @@ fn process_derive_shared_secret_from_private_array
                   st1
                   resp
                   ST.LocalDeriveSharedSecret
-                  B.empty
+                  (Ghost.reveal 'server_private_key_bytes)
                   network_out_bytes
                   app_out_bytes /\
                 (resp.ST.status == ST.StepOk ==>
@@ -337,7 +337,7 @@ fn process_derive_shared_secret_from_private_array
       (CM.derived_shared_secret_state 'st0 (Ghost.reveal shared_e))
       resp
       ST.LocalDeriveSharedSecret
-      B.empty
+      (Ghost.reveal 'server_private_key_bytes)
       (CS.ConnLocalEvent
         (CS.LocalDeriveSharedSecret (Ghost.reveal shared_e)))
       B.empty
@@ -349,7 +349,7 @@ fn process_derive_shared_secret_from_private_array
       (CM.derived_shared_secret_state 'st0 (Ghost.reveal shared_e))
       resp
       ST.LocalDeriveSharedSecret
-      B.empty
+      (Ghost.reveal 'server_private_key_bytes)
       'old_network_out
       'old_app_out));
     assert (pure (ST.server_local_event_end_to_end_correct
@@ -357,7 +357,7 @@ fn process_derive_shared_secret_from_private_array
       (CM.derived_shared_secret_state 'st0 (Ghost.reveal shared_e))
       resp
       ST.LocalDeriveSharedSecret
-      B.empty
+      (Ghost.reveal 'server_private_key_bytes)
       'old_network_out
       'old_app_out));
     resp
@@ -422,7 +422,7 @@ fn process_derive_shared_secret_from_private_array
       (CM.local_fail_state 'st0 CM.tls_unexpected_message_error)
       resp
       ST.LocalDeriveSharedSecret
-      B.empty
+      (Ghost.reveal 'server_private_key_bytes)
       'old_network_out
       'old_app_out));
     assert (pure (ST.server_local_event_end_to_end_correct
@@ -430,7 +430,7 @@ fn process_derive_shared_secret_from_private_array
       (CM.local_fail_state 'st0 CM.tls_unexpected_message_error)
       resp
       ST.LocalDeriveSharedSecret
-      B.empty
+      (Ghost.reveal 'server_private_key_bytes)
       'old_network_out
       'old_app_out));
     resp
