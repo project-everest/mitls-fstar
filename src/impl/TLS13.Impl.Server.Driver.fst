@@ -35,6 +35,7 @@ module T = TLS13.Types
 module U16 = FStar.UInt16
 module U8 = FStar.UInt8
 module V = Pulse.Lib.Vec
+module W = TLS13.Wire.Spec
 
 let driver_network_out_capacity : SZ.t = SZ.uint_to_t 20000
 let driver_app_out_capacity : SZ.t = SZ.uint_to_t 16640
@@ -1198,6 +1199,173 @@ let server_driver_select_derive_from_payload_success_correct
           (CL.raw_slice payload 32 64)
           ch.M.key_share == Some shared
       | None -> False))
+
+noextract
+let server_driver_send_server_hello_from_payload_success_correct
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (resp:ST.server_response)
+  (payload:B.bytes)
+  : prop =
+  resp.ST.status == ST.StepOk ==>
+    B.length payload == 64 /\
+    (let sh = {
+      M.random = CL.raw_slice payload 0 32;
+      M.key_share =
+        CryptoSpec.x25519_public_from_private (CL.raw_slice payload 32 64);
+      M.cipher_suite = T.TLS_CHACHA20_POLY1305_SHA256;
+     } in
+     st1 ==
+      CM.sent_server_hello_state
+        st0
+        sh
+        (CS.serialized_cleartext_tls_message
+          (M.TlsHandshake (M.ServerHello sh))))
+
+let lemma_select_derive_success_server_hello_ready
+  (st0 st2:CS.connection_state)
+  (resp:ST.server_response)
+  (payload:B.bytes)
+  : Lemma
+      (requires
+       B.length payload == 64 /\
+       resp.ST.status == ST.StepOk /\
+       server_driver_select_derive_from_payload_success_correct
+         st0 st2 resp payload /\
+       st2.CS.cs_model.CS.model_control ==
+         CS.ControlHandshaking CS.HsClientHelloReceived /\
+       st2.CS.cs_model.CS.model_config.CS.config_role ==
+         CS.ServerEndpoint /\
+       Some? st2.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_shared_secret /\
+       st2.CS.cs_model.CS.model_handshake.CS.hs_server_hello == None /\
+       Some? st2.CS.cs_model.CS.model_handshake.CS.hs_server_selection /\
+       B.length st2.CS.cs_model.CS.model_handshake.CS.hs_transcript + 90 <=
+         Bounds.max_transcript_len)
+      (ensures
+       ST.server_local_event_input_ready
+         st2
+         ST.LocalSendServerHello
+         payload)
+=
+  assert (CL.raw_slice payload 0 32 == Seq.slice payload 0 32);
+  assert (CL.raw_slice payload 32 64 == Seq.slice payload 32 64);
+  Seq.lemma_len_slice payload 0 32;
+  Seq.lemma_len_slice payload 32 64;
+  assert (B.length (CL.raw_slice payload 0 32) == 32);
+  assert (B.length (CL.raw_slice payload 32 64) == 32);
+  let server_random = CL.raw_slice payload 0 32 in
+  let server_private_key = CL.raw_slice payload 32 64 in
+  let sh = {
+    M.random = server_random;
+    M.key_share = CryptoSpec.x25519_public_from_private server_private_key;
+    M.cipher_suite = T.TLS_CHACHA20_POLY1305_SHA256;
+  } in
+  assert (exists st1 shared.
+    server_driver_selection_from_payload_correct st0 st1 payload /\
+    st2 == CM.derived_shared_secret_state st1 shared /\
+    (match st1.CS.cs_model.CS.model_handshake.CS.hs_client_hello with
+     | Some ch ->
+      CryptoSpec.x25519_shared
+        server_private_key
+        ch.M.key_share == Some shared
+     | None -> False));
+  let st1 =
+    ID.indefinite_description_ghost
+      CS.connection_state
+      (fun st1 -> exists shared.
+       server_driver_selection_from_payload_correct st0 st1 payload /\
+       st2 == CM.derived_shared_secret_state st1 shared /\
+       (match st1.CS.cs_model.CS.model_handshake.CS.hs_client_hello with
+        | Some ch ->
+          CryptoSpec.x25519_shared
+            server_private_key
+            ch.M.key_share == Some shared
+        | None -> False)) in
+  let shared =
+    ID.indefinite_description_ghost
+      CryptoSpec.x25519_shared_secret
+      (fun shared ->
+       server_driver_selection_from_payload_correct st0 st1 payload /\
+       st2 == CM.derived_shared_secret_state st1 shared /\
+       (match st1.CS.cs_model.CS.model_handshake.CS.hs_client_hello with
+        | Some ch ->
+          CryptoSpec.x25519_shared
+            server_private_key
+            ch.M.key_share == Some shared
+        | None -> False)) in
+  assert (server_driver_selection_from_payload_correct st0 st1 payload);
+  assert (st2 == CM.derived_shared_secret_state st1 shared);
+  assert (match st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello,
+               st0.CS.cs_model.CS.model_config.CS.config_server with
+    | Some ch, Some cfg ->
+      let selection = {
+       CS.server_selected_client_hello = ch;
+       CS.server_selected_cipher_suite = T.TLS_CHACHA20_POLY1305_SHA256;
+       CS.server_selected_group = T.X25519;
+       CS.server_selected_signature_scheme = T.RsaPssRsaeSha256;
+       CS.server_random = server_random;
+       CS.server_key_share_private = Some server_private_key;
+       CS.server_key_share_public =
+         CryptoSpec.x25519_public_from_private server_private_key;
+       CS.server_selected_credential = cfg.CS.server_credential_identity;
+      } in
+      st1 == CM.selected_server_parameters_state st0 selection
+    | _ -> False);
+  assert (Some? st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello);
+  assert (Some? st0.CS.cs_model.CS.model_config.CS.config_server);
+  let selected_ch = Some?.v st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello in
+  let server_cfg = Some?.v st0.CS.cs_model.CS.model_config.CS.config_server in
+  let selection = {
+    CS.server_selected_client_hello = selected_ch;
+    CS.server_selected_cipher_suite = T.TLS_CHACHA20_POLY1305_SHA256;
+    CS.server_selected_group = T.X25519;
+    CS.server_selected_signature_scheme = T.RsaPssRsaeSha256;
+    CS.server_random = server_random;
+    CS.server_key_share_private = Some server_private_key;
+    CS.server_key_share_public =
+      CryptoSpec.x25519_public_from_private server_private_key;
+    CS.server_selected_credential = server_cfg.CS.server_credential_identity;
+  } in
+  assert (st1 == CM.selected_server_parameters_state st0 selection);
+  assert (st2.CS.cs_model.CS.model_handshake.CS.hs_server_selection ==
+    Some selection);
+  assert (Some?.v st2.CS.cs_model.CS.model_handshake.CS.hs_server_selection ==
+    selection);
+  assert (Seq.equal selection.CS.server_random server_random);
+  assert (Some? selection.CS.server_key_share_private);
+  assert (Seq.equal (Some?.v selection.CS.server_key_share_private) server_private_key);
+  assert (CS.server_selection_key_share_consistent selection);
+  assert (CS.server_hello_matches_selection selection sh);
+  W.lemma_serialize_server_hello_len sh;
+  assert (B.length (W.serialize_handshake (M.ServerHello sh)) == 90);
+  assert (
+    B.length st2.CS.cs_model.CS.model_handshake.CS.hs_transcript +
+      B.length (W.serialize_handshake (M.ServerHello sh)) <=
+      Bounds.max_transcript_len);
+  assert (CS.legal_event
+    st2.CS.cs_model
+    (CS.ConnNetworkEvent {
+      CL.message_direction = CL.Sent;
+      CL.message_value = M.TlsHandshake (M.ServerHello sh);
+    }));
+  assert (CS.event_raw_delta_legal
+    st2.CS.cs_model
+    (CS.ConnNetworkEvent {
+      CL.message_direction = CL.Sent;
+      CL.message_value = M.TlsHandshake (M.ServerHello sh);
+    })
+    (CS.serialized_cleartext_tls_message
+      (M.TlsHandshake (M.ServerHello sh)))
+    B.empty);
+  assert (CM.can_send_server_hello
+    st2
+    sh
+    (CS.serialized_cleartext_tls_message
+      (M.TlsHandshake (M.ServerHello sh))));
+  assert (ST.server_local_event_input_ready
+    st2
+    ST.LocalSendServerHello
+    payload)
 
 fn new_server
   (certificate_chain:array U8.t)
@@ -4230,7 +4398,12 @@ fn send_server_hello_from_payload_once
            ST.LocalSendServerHello
            (Ghost.reveal 'payload_bytes)
            (Ghost.reveal 'sent)
-           sent')
+           sent' /\
+         server_driver_send_server_hello_from_payload_success_correct
+           'st0
+           st1
+           resp
+           (Ghost.reveal 'payload_bytes))
 {
  unfold (server_driver_connected
    d
@@ -4508,7 +4681,204 @@ fn send_server_hello_from_payload_once
      (if SZ.v written <= B.length network_out_bytes
       then Seq.slice network_out_bytes 0 (SZ.v written)
       else B.empty))));
+ assert (pure (server_driver_send_server_hello_from_payload_success_correct
+   'st0
+   st1
+   resp
+   (Ghost.reveal 'payload_bytes)));
  resp
+}
+
+fn select_derive_send_server_hello_from_payload_once
+ (d:server_driver)
+ (payload:array U8.t)
+ (payload_len:SZ.t)
+ requires server_driver_connected
+            d
+            'st0
+            'certificate_chain
+            'credential_identity
+            'received
+            'sent **
+          pts_to payload 'payload_bytes **
+          pure (B.length 'payload_bytes == SZ.v payload_len /\
+                SZ.v payload_len == 64 /\
+                ST.server_local_event_input_ready
+                  'st0
+                  ST.LocalSelectServerParameters
+                  (Ghost.reveal 'payload_bytes))
+ returns result:server_driver_select_derive_server_hello_result
+ ensures (match result with
+          | ServerDriverSelectDeriveServerHelloOk ->
+            exists* st3 sent_after_send.
+              server_driver_connected
+                d
+                st3
+                'certificate_chain
+                'credential_identity
+                'received
+                sent_after_send **
+              pts_to payload 'payload_bytes
+          | ServerDriverSelectDeriveServerHelloDeriveFailed ->
+            exists* st2 sent_after_derive.
+              server_driver_connected
+                d
+                st2
+                'certificate_chain
+                'credential_identity
+                'received
+                sent_after_derive **
+              pts_to payload 'payload_bytes
+          | ServerDriverSelectDeriveServerHelloSendNotReady ->
+            exists* st2 sent_after_derive.
+              server_driver_connected
+                d
+                st2
+                'certificate_chain
+                'credential_identity
+                'received
+                sent_after_derive **
+              pts_to payload 'payload_bytes)
+{
+ let derive_resp =
+   select_and_derive_shared_secret_from_payload_once
+     d
+     payload
+     payload_len;
+ with st2 sent_after_derive.
+   assert (
+     server_driver_connected
+       d
+       st2
+       'certificate_chain
+       'credential_identity
+       'received
+       sent_after_derive **
+     pts_to payload 'payload_bytes **
+     pure (server_driver_select_derive_from_payload_success_correct
+       'st0
+       st2
+       derive_resp
+       (Ghost.reveal 'payload_bytes)));
+
+ if (derive_resp.ST.status = ST.StepOk) {
+   assert (pure (derive_resp.ST.status == ST.StepOk));
+   unfold (server_driver_connected
+     d
+     st2
+     'certificate_chain
+     'credential_identity
+     'received
+     sent_after_derive);
+   with ch2 buffered2 buffered_len2.
+     assert (
+       Box.pts_to d.server_driver_channel (Some ch2) **
+       IO.is_channel ch2 'received sent_after_derive **
+       server_driver_buffers d buffered2 buffered_len2);
+   rewrite (S.connection_exactly d.server_driver_server st2)
+     as (CR.connection_exactly d.server_driver_server st2);
+   let ready =
+     CQ.can_send_server_hello_runtime
+       d.server_driver_server;
+   rewrite (CR.connection_exactly d.server_driver_server st2)
+     as (S.connection_exactly d.server_driver_server st2);
+   fold (server_driver_connected
+     d
+     st2
+     'certificate_chain
+     'credential_identity
+     'received
+     sent_after_derive);
+   if ready {
+     assert (pure (ready));
+     assert (pure (st2.CS.cs_model.CS.model_control ==
+       CS.ControlHandshaking CS.HsClientHelloReceived));
+     assert (pure (st2.CS.cs_model.CS.model_config.CS.config_role ==
+       CS.ServerEndpoint));
+     assert (pure (Some?
+       st2.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_shared_secret));
+     assert (pure (
+       st2.CS.cs_model.CS.model_handshake.CS.hs_server_hello == None));
+     assert (pure (Some?
+       st2.CS.cs_model.CS.model_handshake.CS.hs_server_selection));
+     assert (pure (
+       B.length st2.CS.cs_model.CS.model_handshake.CS.hs_transcript + 90 <=
+         Bounds.max_transcript_len));
+     lemma_select_derive_success_server_hello_ready
+       'st0
+       st2
+       derive_resp
+       (Ghost.reveal 'payload_bytes);
+     assert (pure (ST.server_local_event_input_ready
+       st2
+       ST.LocalSendServerHello
+       (Ghost.reveal 'payload_bytes)));
+     let send_resp =
+       send_server_hello_from_payload_once
+         d
+         payload
+         payload_len;
+     with st3 sent_after_send.
+       assert (
+         server_driver_connected
+           d
+           st3
+           'certificate_chain
+           'credential_identity
+           'received
+           sent_after_send **
+         pts_to payload 'payload_bytes **
+         pure (server_driver_local_write_correct
+           st2
+           st3
+           send_resp
+           ST.LocalSendServerHello
+           (Ghost.reveal 'payload_bytes)
+           sent_after_derive
+           sent_after_send /\
+         server_driver_send_server_hello_from_payload_success_correct
+           st2
+           st3
+           send_resp
+           (Ghost.reveal 'payload_bytes)));
+     assert (pure (derive_resp.ST.status == ST.StepOk));
+     assert (pure (server_driver_select_derive_from_payload_success_correct
+       'st0
+       st2
+       derive_resp
+       (Ghost.reveal 'payload_bytes)));
+     assert (pure (server_driver_local_write_correct
+       st2
+       st3
+       send_resp
+       ST.LocalSendServerHello
+       (Ghost.reveal 'payload_bytes)
+       sent_after_derive
+       sent_after_send));
+     assert (pure (server_driver_send_server_hello_from_payload_success_correct
+       st2
+       st3
+       send_resp
+       (Ghost.reveal 'payload_bytes)));
+     ServerDriverSelectDeriveServerHelloOk
+   } else {
+     assert (pure (derive_resp.ST.status == ST.StepOk));
+     assert (pure (server_driver_select_derive_from_payload_success_correct
+       'st0
+       st2
+       derive_resp
+       (Ghost.reveal 'payload_bytes)));
+     ServerDriverSelectDeriveServerHelloSendNotReady
+   }
+ } else {
+   assert (pure (derive_resp.ST.status <> ST.StepOk));
+   assert (pure (server_driver_select_derive_from_payload_success_correct
+     'st0
+     st2
+     derive_resp
+     (Ghost.reveal 'payload_bytes)));
+   ServerDriverSelectDeriveServerHelloDeriveFailed
+ }
 }
 
 fn select_and_derive_shared_secret_once
@@ -5097,6 +5467,280 @@ fn accept_start_read_client_hello_select_derive_once
       } else {
         assert (pure (wait.server_driver_client_hello_wait_ready == false));
         ServerDriverAcceptSelectDeriveClientHelloWait wait
+      }
+    }
+  }
+}
+
+fn accept_start_read_client_hello_select_derive_send_server_hello_once
+  (d:server_driver)
+  (bind_host:array U8.t)
+  (bind_host_len:SZ.t)
+  (port:U16.t)
+  (network_fuel:SZ.t)
+  requires server_driver_live d 'st0 'certificate_chain 'credential_identity **
+           pts_to bind_host 'bind_host_bytes **
+           pure (B.length 'bind_host_bytes == SZ.v bind_host_len /\
+                 CM.can_start_server 'st0 /\
+                 Some? 'st0.CS.cs_model.CS.model_config.CS.config_server /\
+                 (match 'st0.CS.cs_model.CS.model_config.CS.config_server with
+                  | Some cfg ->
+                    CS.cipher_suite_offered
+                      cfg.CS.server_supported_cipher_suites
+                      T.TLS_CHACHA20_POLY1305_SHA256 /\
+                    CS.named_group_offered
+                      cfg.CS.server_supported_groups
+                      T.X25519 /\
+                    CS.signature_scheme_offered
+                      cfg.CS.server_allowed_signature_schemes
+                      T.RsaPssRsaeSha256 /\
+                    cfg.CS.server_sni_policy == None
+                  | None -> False))
+  returns result:server_driver_accept_server_hello_result
+  ensures pts_to bind_host 'bind_host_bytes **
+          (match result with
+           | ServerDriverAcceptServerHelloListenFailed ->
+             server_driver_live d 'st0 'certificate_chain 'credential_identity
+           | ServerDriverAcceptServerHelloAcceptFailed ->
+             server_driver_live d 'st0 'certificate_chain 'credential_identity
+           | ServerDriverAcceptServerHelloClientHelloWait wait ->
+             exists* st1 received sent.
+               server_driver_connected
+                 d
+                 st1
+                 'certificate_chain
+                 'credential_identity
+                 received
+                 sent **
+               pure (wait.server_driver_client_hello_wait_ready == false)
+           | ServerDriverAcceptServerHelloMaterialFailed
+           | ServerDriverAcceptServerHelloSelectionNotReady ->
+             exists* st1 received sent.
+               server_driver_connected
+                 d
+                 st1
+                 'certificate_chain
+                 'credential_identity
+                 received
+                 sent **
+               pure (st1.CS.cs_model.CS.model_control ==
+                 CS.ControlHandshaking CS.HsClientHelloReceived)
+           | ServerDriverAcceptServerHelloDeriveFailed
+           | ServerDriverAcceptServerHelloSendNotReady
+           | ServerDriverAcceptServerHelloOk ->
+             exists* st2 received sent.
+               server_driver_connected
+                 d
+                 st2
+                 'certificate_chain
+                 'credential_identity
+                 received
+                 sent)
+{
+  let accepted =
+    accept_transport_start_and_read_client_hello
+      d
+      bind_host
+      bind_host_len
+      port
+      network_fuel;
+  match accepted {
+    ServerDriverAcceptClientHelloListenFailed -> {
+      ServerDriverAcceptServerHelloListenFailed
+    }
+    ServerDriverAcceptClientHelloAcceptFailed -> {
+      ServerDriverAcceptServerHelloAcceptFailed
+    }
+    ServerDriverAcceptClientHelloTransportOk wait -> {
+      with st_ch received sent.
+        assert (server_driver_connected
+          d
+          st_ch
+          'certificate_chain
+          'credential_identity
+          received
+          sent **
+        pure (wait.server_driver_client_hello_wait_ready == true ==>
+          st_ch.CS.cs_model.CS.model_control ==
+            CS.ControlHandshaking CS.HsClientHelloReceived /\
+          st_ch.CS.cs_model.CS.model_config ==
+            (CM.started_server_state 'st0).CS.cs_model.CS.model_config));
+      if wait.server_driver_client_hello_wait_ready {
+        assert (pure (wait.server_driver_client_hello_wait_ready == true));
+        assert (pure (st_ch.CS.cs_model.CS.model_control ==
+          CS.ControlHandshaking CS.HsClientHelloReceived));
+        assert (pure (
+          (CM.started_server_state 'st0).CS.cs_model.CS.model_config ==
+            'st0.CS.cs_model.CS.model_config));
+        assert (pure (
+          st_ch.CS.cs_model.CS.model_config ==
+            'st0.CS.cs_model.CS.model_config));
+        assert (pure (Some?
+          st_ch.CS.cs_model.CS.model_config.CS.config_server));
+        assert (pure (
+          match st_ch.CS.cs_model.CS.model_config.CS.config_server with
+          | Some cfg ->
+            CS.cipher_suite_offered
+              cfg.CS.server_supported_cipher_suites
+              T.TLS_CHACHA20_POLY1305_SHA256 /\
+            CS.named_group_offered
+              cfg.CS.server_supported_groups
+              T.X25519 /\
+            CS.signature_scheme_offered
+              cfg.CS.server_allowed_signature_schemes
+              T.RsaPssRsaeSha256 /\
+            cfg.CS.server_sni_policy == None
+          | None -> False));
+        assert (pure (
+          match st_ch.CS.cs_model.CS.model_handshake.CS.hs_client_hello,
+                st_ch.CS.cs_model.CS.model_config.CS.config_server with
+          | Some ch, Some cfg ->
+            CS.cipher_suite_offered
+              cfg.CS.server_supported_cipher_suites
+              T.TLS_CHACHA20_POLY1305_SHA256 /\
+            CS.named_group_offered
+              cfg.CS.server_supported_groups
+              T.X25519 /\
+            CS.signature_scheme_offered
+              cfg.CS.server_allowed_signature_schemes
+              T.RsaPssRsaeSha256 /\
+            CS.sni_policy_accepts cfg.CS.server_sni_policy ch.M.server_name
+          | _, _ -> True));
+
+        let mut material_payload = [| 0uy; 64sz |];
+        let material_ok = Crypto.random_bytes material_payload 64sz;
+        with material_bytes.
+          assert (pts_to material_payload material_bytes);
+        assert (pure (B.length material_bytes == 64));
+        if material_ok {
+          assert (pure (CL.raw_slice material_bytes 0 32 ==
+            Seq.slice material_bytes 0 32));
+          Seq.lemma_len_slice material_bytes 0 32;
+          assert (pure (B.length (CL.raw_slice material_bytes 0 32) == 32));
+          assert (pure (CL.raw_slice material_bytes 32 64 ==
+            Seq.slice material_bytes 32 64));
+          Seq.lemma_len_slice material_bytes 32 64;
+          assert (pure (B.length (CL.raw_slice material_bytes 32 64) == 32));
+          let server_random : erased (b:B.bytes{B.length b == 32}) =
+            Ghost.hide (CL.raw_slice material_bytes 0 32);
+          let server_private_key : erased (b:B.bytes{B.length b == 32}) =
+            Ghost.hide (CL.raw_slice material_bytes 32 64);
+          assert (pure (Ghost.reveal server_random ==
+            CL.raw_slice material_bytes 0 32));
+          assert (pure (Ghost.reveal server_private_key ==
+            CL.raw_slice material_bytes 32 64));
+
+          unfold (server_driver_connected
+            d
+            st_ch
+            'certificate_chain
+            'credential_identity
+            received
+            sent);
+          with ch2 buffered2 buffered_len2.
+            assert (
+              Box.pts_to d.server_driver_channel (Some ch2) **
+              IO.is_channel ch2 received sent **
+              server_driver_buffers d buffered2 buffered_len2);
+          rewrite (S.connection_exactly d.server_driver_server st_ch)
+            as (CR.connection_exactly d.server_driver_server st_ch);
+          let ready =
+            CQ.can_select_supported_server_parameters_runtime
+              d.server_driver_server
+              #server_random
+              #server_private_key;
+          rewrite (CR.connection_exactly d.server_driver_server st_ch)
+            as (S.connection_exactly d.server_driver_server st_ch);
+          fold (server_driver_connected
+            d
+            st_ch
+            'certificate_chain
+            'credential_identity
+            received
+            sent);
+          if ready {
+            assert (pure (ready));
+            assert (pure (st_ch.CS.cs_model.CS.model_control ==
+              CS.ControlHandshaking CS.HsClientHelloReceived));
+            assert (pure (st_ch.CS.cs_model.CS.model_config.CS.config_role ==
+              CS.ServerEndpoint));
+            assert (pure (CR.server_selection_absent
+              st_ch.CS.cs_model.CS.model_handshake));
+            assert (pure (Some?
+              st_ch.CS.cs_model.CS.model_handshake.CS.hs_client_hello));
+            assert (pure (Some?
+              st_ch.CS.cs_model.CS.model_config.CS.config_server));
+            assert (pure (match st_ch.CS.cs_model.CS.model_handshake.CS.hs_client_hello,
+                                st_ch.CS.cs_model.CS.model_config.CS.config_server with
+              | Some selected_ch, Some cfg ->
+                let selection = {
+                  CS.server_selected_client_hello = selected_ch;
+                  CS.server_selected_cipher_suite =
+                    T.TLS_CHACHA20_POLY1305_SHA256;
+                  CS.server_selected_group = T.X25519;
+                  CS.server_selected_signature_scheme = T.RsaPssRsaeSha256;
+                  CS.server_random = Ghost.reveal server_random;
+                  CS.server_key_share_private = Some (Ghost.reveal server_private_key);
+                  CS.server_key_share_public =
+                    CryptoSpec.x25519_public_from_private
+                      (Ghost.reveal server_private_key);
+                  CS.server_selected_credential = cfg.CS.server_credential_identity;
+                } in
+                CM.can_select_server_parameters st_ch selection
+              | _, _ -> False));
+            Seq.lemma_eq_elim
+              (Ghost.reveal server_random)
+              (CL.raw_slice material_bytes 0 32);
+            Seq.lemma_eq_elim
+              (Ghost.reveal server_private_key)
+              (CL.raw_slice material_bytes 32 64);
+            assert (pure (ST.server_local_event_input_ready
+              st_ch
+              ST.LocalSelectServerParameters
+              material_bytes));
+            let server_hello_result =
+              select_derive_send_server_hello_from_payload_once
+                d
+                material_payload
+                64sz;
+            match server_hello_result {
+              ServerDriverSelectDeriveServerHelloOk -> {
+                ServerDriverAcceptServerHelloOk
+              }
+              ServerDriverSelectDeriveServerHelloDeriveFailed -> {
+                ServerDriverAcceptServerHelloDeriveFailed
+              }
+              ServerDriverSelectDeriveServerHelloSendNotReady -> {
+                ServerDriverAcceptServerHelloSendNotReady
+              }
+            }
+          } else {
+            assert (server_driver_connected
+              d
+              st_ch
+              'certificate_chain
+              'credential_identity
+              received
+              sent);
+            assert (pure (st_ch.CS.cs_model.CS.model_control ==
+              CS.ControlHandshaking CS.HsClientHelloReceived));
+            ServerDriverAcceptServerHelloSelectionNotReady
+          }
+        } else {
+          assert (server_driver_connected
+            d
+            st_ch
+            'certificate_chain
+            'credential_identity
+            received
+            sent);
+          assert (pure (st_ch.CS.cs_model.CS.model_control ==
+            CS.ControlHandshaking CS.HsClientHelloReceived));
+          ServerDriverAcceptServerHelloMaterialFailed
+        }
+      } else {
+        assert (pure (wait.server_driver_client_hello_wait_ready == false));
+        ServerDriverAcceptServerHelloClientHelloWait wait
       }
     }
   }

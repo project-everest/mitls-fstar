@@ -318,6 +318,24 @@ fn can_select_supported_server_parameters_runtime
                 can_select_server_parameters st0 selection
               | _, _ -> False))
 
+fn can_send_server_hello_runtime
+  (c:connection_state)
+  (#st0:erased CS.connection_state)
+  requires connection_exactly c st0
+  returns ok: bool
+  ensures connection_exactly c st0 **
+          pure (ok ==>
+            st0.CS.cs_model.CS.model_control ==
+              CS.ControlHandshaking CS.HsClientHelloReceived /\
+            st0.CS.cs_model.CS.model_config.CS.config_role ==
+              CS.ServerEndpoint /\
+            Some?
+              st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_shared_secret /\
+            st0.CS.cs_model.CS.model_handshake.CS.hs_server_hello == None /\
+            Some? st0.CS.cs_model.CS.model_handshake.CS.hs_server_selection /\
+            B.length st0.CS.cs_model.CS.model_handshake.CS.hs_transcript + 90 <=
+              max_transcript_len)
+
 fn can_receive_client_finished
   (c:connection_state)
   (#fin:erased M.finished)

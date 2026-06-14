@@ -63,6 +63,21 @@ type server_driver_accept_select_derive_result =
   | ServerDriverAcceptSelectDeriveListenFailed
   | ServerDriverAcceptSelectDeriveAcceptFailed
 
+type server_driver_accept_server_hello_result =
+  | ServerDriverAcceptServerHelloOk
+  | ServerDriverAcceptServerHelloClientHelloWait of server_driver_client_hello_wait_result
+  | ServerDriverAcceptServerHelloMaterialFailed
+  | ServerDriverAcceptServerHelloSelectionNotReady
+  | ServerDriverAcceptServerHelloDeriveFailed
+  | ServerDriverAcceptServerHelloSendNotReady
+  | ServerDriverAcceptServerHelloListenFailed
+  | ServerDriverAcceptServerHelloAcceptFailed
+
+type server_driver_select_derive_server_hello_result =
+  | ServerDriverSelectDeriveServerHelloOk
+  | ServerDriverSelectDeriveServerHelloDeriveFailed
+  | ServerDriverSelectDeriveServerHelloSendNotReady
+
 noextract
 val server_driver_live
   (d:server_driver)
@@ -128,6 +143,14 @@ noextract
 val server_driver_select_derive_from_payload_success_correct
   (st0:CS.connection_state)
   (st2:CS.connection_state)
+  (resp:ST.server_response)
+  (payload:B.bytes)
+  : prop
+
+noextract
+val server_driver_send_server_hello_from_payload_success_correct
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
   (resp:ST.server_response)
   (payload:B.bytes)
   : prop
@@ -708,7 +731,63 @@ fn send_server_hello_from_payload_once
            ST.LocalSendServerHello
            (Ghost.reveal 'payload_bytes)
            (Ghost.reveal 'sent)
-           sent')
+           sent' /\
+           server_driver_send_server_hello_from_payload_success_correct
+            'st0
+            st1
+            resp
+            (Ghost.reveal 'payload_bytes))
+
+fn select_derive_send_server_hello_from_payload_once
+  (d:server_driver)
+  (payload:array U8.t)
+  (payload_len:SZ.t)
+  requires server_driver_connected
+             d
+             'st0
+             'certificate_chain
+             'credential_identity
+             'received
+             'sent **
+           pts_to payload 'payload_bytes **
+           pure (B.length 'payload_bytes == SZ.v payload_len /\
+                 SZ.v payload_len == 64 /\
+                 ST.server_local_event_input_ready
+                   'st0
+                   ST.LocalSelectServerParameters
+                   (Ghost.reveal 'payload_bytes))
+  returns result:server_driver_select_derive_server_hello_result
+  ensures (match result with
+           | ServerDriverSelectDeriveServerHelloOk ->
+             exists* st3 sent_after_send.
+               server_driver_connected
+                 d
+                 st3
+                 'certificate_chain
+                 'credential_identity
+                 'received
+                 sent_after_send **
+               pts_to payload 'payload_bytes
+           | ServerDriverSelectDeriveServerHelloDeriveFailed ->
+             exists* st2 sent_after_derive.
+               server_driver_connected
+                 d
+                 st2
+                 'certificate_chain
+                 'credential_identity
+                 'received
+                 sent_after_derive **
+               pts_to payload 'payload_bytes
+           | ServerDriverSelectDeriveServerHelloSendNotReady ->
+             exists* st2 sent_after_derive.
+               server_driver_connected
+                 d
+                 st2
+                 'certificate_chain
+                 'credential_identity
+                 'received
+                 sent_after_derive **
+               pts_to payload 'payload_bytes)
 
 fn select_and_derive_shared_secret_once
   (d:server_driver)
@@ -853,6 +932,71 @@ fn accept_start_read_client_hello_select_derive_once
                 'credential_identity
                 received
                 sent)
+
+fn accept_start_read_client_hello_select_derive_send_server_hello_once
+  (d:server_driver)
+  (bind_host:array U8.t)
+  (bind_host_len:SZ.t)
+  (port:U16.t)
+  (network_fuel:SZ.t)
+  requires server_driver_live d 'st0 'certificate_chain 'credential_identity **
+          pts_to bind_host 'bind_host_bytes **
+          pure (B.length 'bind_host_bytes == SZ.v bind_host_len /\
+                 CM.can_start_server 'st0 /\
+                 Some? 'st0.CS.cs_model.CS.model_config.CS.config_server /\
+                 (match 'st0.CS.cs_model.CS.model_config.CS.config_server with
+                  | Some cfg ->
+                    CS.cipher_suite_offered
+                      cfg.CS.server_supported_cipher_suites
+                      T.TLS_CHACHA20_POLY1305_SHA256 /\
+                    CS.named_group_offered
+                      cfg.CS.server_supported_groups
+                      T.X25519 /\
+                    CS.signature_scheme_offered
+                      cfg.CS.server_allowed_signature_schemes
+                      T.RsaPssRsaeSha256 /\
+                    cfg.CS.server_sni_policy == None
+                  | None -> False))
+  returns result:server_driver_accept_server_hello_result
+  ensures pts_to bind_host 'bind_host_bytes **
+          (match result with
+           | ServerDriverAcceptServerHelloListenFailed ->
+             server_driver_live d 'st0 'certificate_chain 'credential_identity
+           | ServerDriverAcceptServerHelloAcceptFailed ->
+             server_driver_live d 'st0 'certificate_chain 'credential_identity
+           | ServerDriverAcceptServerHelloClientHelloWait wait ->
+             exists* st1 received sent.
+                server_driver_connected
+                  d
+                  st1
+                  'certificate_chain
+                  'credential_identity
+                  received
+                  sent **
+                pure (wait.server_driver_client_hello_wait_ready == false)
+           | ServerDriverAcceptServerHelloMaterialFailed
+           | ServerDriverAcceptServerHelloSelectionNotReady ->
+             exists* st1 received sent.
+                server_driver_connected
+                  d
+                  st1
+                  'certificate_chain
+                  'credential_identity
+                  received
+                  sent **
+                pure (st1.CS.cs_model.CS.model_control ==
+                  CS.ControlHandshaking CS.HsClientHelloReceived)
+           | ServerDriverAcceptServerHelloDeriveFailed
+           | ServerDriverAcceptServerHelloSendNotReady
+           | ServerDriverAcceptServerHelloOk ->
+             exists* st2 received sent.
+                server_driver_connected
+                  d
+                  st2
+                  'certificate_chain
+                  'credential_identity
+                  received
+                  sent)
 
 fn process_ready_empty_local_action_once
   (d:server_driver)

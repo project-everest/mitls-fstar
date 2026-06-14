@@ -1777,10 +1777,10 @@ Checklist:
         public executable Certificate send wrapper, and concrete-array
         ServerHello builder/send wrapper are in place, including a private-key
         derived-public-share variant. Generic local dispatch now emits
-        ServerHello from the same 64-byte material payload, and the Pulse driver
-        now has a focused material-payload ServerHello write helper. Full
-        accept-path composition still needs the post-derive
-        `LocalSendServerHello` readiness gate);
+        ServerHello from the same 64-byte material payload. The Pulse driver now
+        has a focused material-payload ServerHello write helper, a concrete
+        post-derive readiness gate, and a verified accept/read/select/derive/send
+        ServerHello slice);
       - client Finished verification (state mutation, focused receive wrapper,
         focused verify wrapper, and generic local dispatcher integration
         complete; full network parse/open dispatch for received client Finished
@@ -2027,12 +2027,23 @@ Status:
       and re-establishes the connected-driver IO-history invariant. This avoids
       the generic oversized network buffer path, which intentionally cannot
       satisfy the focused 95-byte ServerHello serializer precondition.
-- [ ] Add a concrete post-derive ServerHello readiness gate before composing the
-      two helpers above into the accept handshake path. The failed inline attempt
-      showed that `LocalSendServerHello` readiness after exact select+derive
-      should be owned by a small query/theorem boundary (checking/stating
-      `CM.can_send_server_hello` for the stored selection and material payload),
-      not by a large Pulse-body proof.
+- [x] Added the concrete post-derive ServerHello readiness gate and composed
+      accept-through-ServerHello driver slice:
+      `TLS13.Impl.ConnectionState.Queries.can_send_server_hello_runtime` checks
+      the concrete control stage, server role, shared-secret presence, absent
+      stored ServerHello, server-selection presence, and transcript room for the
+      90-byte ServerHello handshake fragment. The driver factors the remaining
+      material-selection relation into
+      `lemma_select_derive_success_server_hello_ready`, uses the query after
+      exact select+derive, and exposes
+      `select_derive_send_server_hello_from_payload_once` plus
+      `accept_start_read_client_hello_select_derive_send_server_hello_once`.
+      The new accept slice generates a stack 64-byte
+      `server_random || server_private_key` payload, checks supported-profile
+      selection readiness, performs exact select+derive, emits the matching
+      cleartext ServerHello through `TLS13.IO.write`, and preserves the connected
+      driver IO-history invariant across listen/accept, read, select, derive, and
+      ServerHello send outcomes.
 - [x] Added the first retained-receive IO slice:
       `TLS13.Impl.Server.Driver.read_transport_once` appends at most one
       `TLS13.IO.read` result into the driver-owned raw buffer when no retained
