@@ -260,6 +260,10 @@ Current phase: **Phase 6 server buffer/event API and theorem surface**.
   `TLS13.Impl.Server` keeps thin public wrappers. This preserves the verified
   theorem surface and cuts the top-level server implementation by roughly one
   thousand lines, following the client `Handle.*`/facade structure.
+- [x] Started a focused `TLS13.Impl.Server.Keys.fsti`/`.fst` module for
+  key-schedule-related server handlers. The shared-secret derivation handler now
+  lives behind that interface, with `TLS13.Impl.Server` retaining only the public
+  wrapper and explicit `connection_exactly` predicate rewrites.
 - [ ] Continue Phase 6/7 by strengthening `process_network_bytes` from the first
   ClientHello path to the final dispatcher theorem: add consumed-prefix
   classification/projections and richer ClientHello/Finished reject deltas
@@ -1636,6 +1640,9 @@ Status:
       `process_network_bytes` through explicit `connection_exactly` predicate
       rewrites, keeping the public API stable while shrinking the monolithic
       implementation.
+- [x] Server shared-secret derivation has been split into
+      `TLS13.Impl.Server.Keys`, establishing the next small-module boundary for
+      traffic-key derivation and installation handlers.
 - [x] Generic `process_local_event` now handles server
       `LocalSendApplicationData` and `LocalSendCloseNotify` through the shared
       endpoint-neutral `LocalSend` mutations. The server theorem surface now
