@@ -607,6 +607,13 @@ Current phase: **Phase 6 server buffer/event API and theorem surface**.
   credential-chain sender, dispatches `LocalSignCertificateVerify` through the
   signing wrapper, and delegates all other actions to the existing generic
   `process_local_event`, preserving `server_local_event_end_to_end_correct`.
+- [x] Strengthened focused server wrapper postconditions for later chaining:
+  `process_select_server_parameters`,
+  `process_select_default_server_parameters_from_arrays`, and
+  `process_derive_shared_secret` now expose the exact pure post-state
+  constructor (`selected_server_parameters_state` or
+  `derived_shared_secret_state`) in addition to
+  `server_local_event_end_to_end_correct`.
 
 ## End goal
 

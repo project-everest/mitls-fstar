@@ -508,6 +508,10 @@ fn process_select_server_parameters
           pts_to app_out app_out_bytes **
           pure (B.length network_out_bytes == SZ.v network_out_len /\
                 B.length app_out_bytes == SZ.v app_out_len /\
+                st1 ==
+                  CM.selected_server_parameters_state
+                    'st0
+                    (Ghost.reveal selection) /\
                 ST.server_local_event_end_to_end_correct
                    'st0
                    st1
@@ -563,6 +567,25 @@ fn process_select_default_server_parameters_from_arrays
           pts_to app_out app_out_bytes **
           pure (B.length network_out_bytes == SZ.v network_out_len /\
                 B.length app_out_bytes == SZ.v app_out_len /\
+                (B.length (Ghost.reveal 'server_random_bytes) == 32 /\
+                 B.length (Ghost.reveal 'server_key_share_bytes) == 32 ==>
+                 (match 'st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello,
+                        'st0.CS.cs_model.CS.model_config.CS.config_server with
+                  | Some ch, Some cfg ->
+                    let selection = {
+                      CS.server_selected_client_hello = ch;
+                      CS.server_selected_cipher_suite =
+                        T.TLS_CHACHA20_POLY1305_SHA256;
+                      CS.server_selected_group = T.X25519;
+                      CS.server_selected_signature_scheme = T.RsaPssRsaeSha256;
+                      CS.server_random = Ghost.reveal 'server_random_bytes;
+                      CS.server_key_share_private = None;
+                      CS.server_key_share_public = Ghost.reveal 'server_key_share_bytes;
+                      CS.server_selected_credential =
+                        cfg.CS.server_credential_identity;
+                    } in
+                    st1 == CM.selected_server_parameters_state 'st0 selection
+                  | _ -> True)) /\
                 ST.server_local_event_end_to_end_correct
                   'st0
                   st1
@@ -1107,6 +1130,10 @@ fn process_derive_shared_secret
           pts_to app_out app_out_bytes **
           pure (B.length network_out_bytes == SZ.v network_out_len /\
                 B.length app_out_bytes == SZ.v app_out_len /\
+                st1 ==
+                  CM.derived_shared_secret_state
+                    'st0
+                    (Ghost.reveal shared) /\
                 ST.server_local_event_end_to_end_correct
                    'st0
                    st1
