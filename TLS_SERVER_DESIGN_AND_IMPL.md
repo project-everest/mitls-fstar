@@ -1611,7 +1611,13 @@ Checklist:
             `server_selection_presence_exactly`. This gives read-only runtime
             queries a sound selection-absence witness instead of inferring
             absence from private-key storage.
-      - [ ] Add the sound runtime supported-profile selection-readiness query.
+      - [x] Added the sound runtime supported-profile selection-readiness query:
+            `TLS13.Impl.ConnectionState.Queries.can_select_supported_server_parameters_runtime`
+            checks the concrete server stage, selection-presence bit, stored
+            ClientHello metadata, SNI/cipher/signature-list non-emptiness, and
+            first signature-scheme word, then proves readiness for the supported
+            selection built from erased 32-byte server-random/private-key slices
+            under explicit server-config support facts.
 - [x] Add ServerHello serialize/parse-back facts.
 - [x] Add cleartext ServerHello record serialization facts, including exact
       raw-record bytes, `parse_record`, and `raw_records_exactly`.
@@ -1984,6 +1990,15 @@ Status:
       payload ownership; the exact selected-state equality is used internally for
       the zero-output wire-log proof rather than exported, because Pulse
       `requires` pure slice-length facts do not scope into result refinements.
+- [x] Added the checked supported-profile selection driver helper:
+      `TLS13.Impl.Server.Driver.select_supported_server_parameters_from_payload_if_ready_once`
+      takes the same concrete 64-byte `server_random || server_private_key`
+      payload, proves the two 32-byte ghost slices, calls the runtime readiness
+      query above, and only delegates to the focused default-selection helper
+      when the stored ClientHello and server configuration prove supported
+      selection readiness. The helper preserves the connected driver state and
+      reports `ServerDriverLocalNotReady` without advancing state when the
+      concrete query fails.
 - [x] Added the first retained-receive IO slice:
       `TLS13.Impl.Server.Driver.read_transport_once` appends at most one
       `TLS13.IO.read` result into the driver-owned raw buffer when no retained
@@ -2034,11 +2049,10 @@ Status:
       `ready` result really corresponds to
       `ControlHandshaking HsClientHelloReceived`, so the higher-level handshake
       driver can safely distinguish compatibility CCS/no-input retries from the
-      first meaningful ClientHello state. This helper deliberately does not
-      claim supported-profile parameter-selection readiness; that still belongs
-      to the guarded `LocalSelectServerParameters` predicate and explicit
-      select/derive helpers until we add either a concrete selection-present
-      query or a supported-ClientHello acceptability projection.
+      first meaningful ClientHello state. This helper deliberately remains only a
+      stage wait; supported-profile parameter-selection readiness is checked by
+      `select_supported_server_parameters_from_payload_if_ready_once` using the
+      concrete ClientHello metadata and selection-presence witness.
 - [x] Added the first composed accept/read-ClientHello driver helper:
       `TLS13.Impl.Server.Driver.accept_transport_start_and_read_client_hello`
       accepts a TCP connection, performs the verified server-start transition,
@@ -2046,9 +2060,9 @@ Status:
       variant that keeps transport failures separate from the successful
       connected case; in the connected case, a ready wait result publicly proves
       `ControlHandshaking HsClientHelloReceived`. This is the first top-level
-      server accept orchestration slice, deliberately stopping before
-      parameter selection because supported-profile selection readiness is still
-      a separate proof obligation.
+      server accept orchestration slice, deliberately stopping before parameter
+      selection; the follow-on checked selection helper now owns the separate
+      supported-profile readiness proof.
 - [x] Added the first generic local-output driver slice:
       `TLS13.Impl.Server.Driver.process_local_event_and_write_once` calls the
       credential-aware public server local-event API using driver-owned network

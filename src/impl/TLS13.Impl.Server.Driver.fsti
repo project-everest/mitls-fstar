@@ -11,11 +11,13 @@ module CS = TLS13.Spec.ConnectionState
 module CM = TLS13.Impl.ConnectionState.Model
 module CR = TLS13.Impl.ConnectionState.Repr
 module IO = TLS13.IO
+module M = TLS13.Messages
 module O = TLS13.OpenSSL
 module Seq = FStar.Seq
 module S = TLS13.Impl.Server
 module ST = TLS13.Impl.Server.Types
 module SZ = FStar.SizeT
+module T = TLS13.Types
 module U16 = FStar.UInt16
 module U8 = FStar.UInt8
 
@@ -469,6 +471,63 @@ fn select_default_server_parameters_from_payload_once
             'st0
             st1
             (Ghost.reveal 'payload_bytes))
+
+fn select_supported_server_parameters_from_payload_if_ready_once
+  (d:server_driver)
+  (payload:array U8.t)
+  (payload_len:SZ.t)
+  requires server_driver_connected
+              d
+              'st0
+              'certificate_chain
+              'credential_identity
+              'received
+              'sent **
+           pts_to payload 'payload_bytes **
+           pure (B.length 'payload_bytes == SZ.v payload_len /\
+                 SZ.v payload_len == 64 /\
+                 Some? 'st0.CS.cs_model.CS.model_config.CS.config_server /\
+                 (match 'st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello,
+                        'st0.CS.cs_model.CS.model_config.CS.config_server with
+                  | Some ch, Some cfg ->
+                    CS.cipher_suite_offered
+                      cfg.CS.server_supported_cipher_suites
+                      T.TLS_CHACHA20_POLY1305_SHA256 /\
+                    CS.named_group_offered
+                      cfg.CS.server_supported_groups
+                      T.X25519 /\
+                    CS.signature_scheme_offered
+                      cfg.CS.server_allowed_signature_schemes
+                      T.RsaPssRsaeSha256 /\
+                    CS.sni_policy_accepts cfg.CS.server_sni_policy ch.M.server_name
+                  | _, _ -> True))
+  returns status:server_driver_local_status
+  ensures (match status with
+           | ServerDriverLocalProcessed ->
+             exists* st1.
+               server_driver_connected
+                 d
+                 st1
+                 'certificate_chain
+                 'credential_identity
+                 'received
+                 'sent **
+               pts_to payload 'payload_bytes **
+               pure (server_driver_selection_from_payload_correct
+                 'st0
+                 st1
+                 (Ghost.reveal 'payload_bytes))
+           | ServerDriverLocalNotReady ->
+               server_driver_connected
+                 d
+                 'st0
+                 'certificate_chain
+                 'credential_identity
+                 'received
+                 'sent **
+               pts_to payload 'payload_bytes
+           | ServerDriverLocalExternalOrUnsupported ->
+               pure False)
 
 fn process_local_event_and_write_once
   (d:server_driver)

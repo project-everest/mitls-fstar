@@ -10,6 +10,7 @@ module B = TLS13.Bytes
 module Box = Pulse.Lib.Box
 module CL = TLS13.ConnectionLog
 module Crypto = TLS13.Crypto
+module CryptoSpec = TLS13.Crypto.Spec
 module CS = TLS13.Spec.ConnectionState
 module H = TLS13.Handshake.Spec
 module IM = TLS13.Impl.Messages
@@ -1369,6 +1370,274 @@ fn can_receive_client_finished
   fold (connection_model_exactly c st0.CS.cs_model);
   fold (connection_exactly c st0);
   ok
+}
+
+fn can_select_supported_server_parameters_runtime
+  (c:connection_state)
+  (#server_random:erased (b:B.bytes{B.length b == 32}))
+  (#server_private_key:erased (b:B.bytes{B.length b == 32}))
+  (#st0:erased CS.connection_state)
+  requires connection_exactly c st0 **
+           pure (Some? st0.CS.cs_model.CS.model_config.CS.config_server /\
+                 (match st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello,
+                        st0.CS.cs_model.CS.model_config.CS.config_server with
+                  | Some ch, Some cfg ->
+                    CS.cipher_suite_offered
+                      cfg.CS.server_supported_cipher_suites
+                      T.TLS_CHACHA20_POLY1305_SHA256 /\
+                    CS.named_group_offered
+                      cfg.CS.server_supported_groups
+                      T.X25519 /\
+                    CS.signature_scheme_offered
+                      cfg.CS.server_allowed_signature_schemes
+                      T.RsaPssRsaeSha256 /\
+                    CS.sni_policy_accepts cfg.CS.server_sni_policy ch.M.server_name
+                  | _, _ -> True))
+  returns ok: bool
+  ensures connection_exactly c st0 **
+          pure (ok ==>
+            st0.CS.cs_model.CS.model_control ==
+              CS.ControlHandshaking CS.HsClientHelloReceived /\
+            st0.CS.cs_model.CS.model_config.CS.config_role ==
+              CS.ServerEndpoint /\
+            server_selection_absent st0.CS.cs_model.CS.model_handshake /\
+            Some? st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello /\
+            Some? st0.CS.cs_model.CS.model_config.CS.config_server /\
+            (match st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello,
+                   st0.CS.cs_model.CS.model_config.CS.config_server with
+             | Some ch, Some cfg ->
+               let selection = {
+                 CS.server_selected_client_hello = ch;
+                 CS.server_selected_cipher_suite =
+                   T.TLS_CHACHA20_POLY1305_SHA256;
+                 CS.server_selected_group = T.X25519;
+                 CS.server_selected_signature_scheme = T.RsaPssRsaeSha256;
+                 CS.server_random = Ghost.reveal server_random;
+                 CS.server_key_share_private =
+                   Some (Ghost.reveal server_private_key);
+                 CS.server_key_share_public =
+                   CryptoSpec.x25519_public_from_private
+                     (Ghost.reveal server_private_key);
+                 CS.server_selected_credential =
+                   cfg.CS.server_credential_identity;
+               } in
+               can_select_server_parameters st0 selection
+             | _, _ -> False))
+{
+  unfold (connection_exactly c st0);
+  unfold (connection_model_exactly c st0.CS.cs_model);
+  let role_ok = config_role_is_server c.config;
+  unfold (control_exactly
+    c.control
+    st0.CS.cs_model.CS.model_control
+    st0.CS.cs_model.CS.model_failure);
+  unfold (handshake_exactly c.handshake st0.CS.cs_model.CS.model_handshake);
+  with cv_verified server_finished_verified. _;
+  unfold (server_selection_presence_exactly
+    c.handshake.server_selection_present
+    st0.CS.cs_model.CS.model_handshake.CS.hs_server_selection);
+  with selection_present. _;
+  unfold (handshake_messages_exactly
+    c.handshake.messages
+    st0.CS.cs_model.CS.model_handshake);
+  unfold (client_hello_slot_exactly
+    c.handshake.messages.client_hello_present
+    c.handshake.messages.client_hello
+    st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello);
+  with ch_present ch_random ch_server_name ch_key_share
+       ch_cipher_suites ch_signature_schemes. _;
+  unfold (client_hello_metadata_exactly
+    c.handshake.messages.client_hello_has_server_name
+    c.handshake.messages.client_hello_server_name_len
+    c.handshake.messages.client_hello_cipher_suites_len
+    c.handshake.messages.client_hello_signature_schemes_len
+    st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello);
+  with ch_has_server_name ch_server_name_len
+       ch_cipher_suites_len ch_signature_schemes_len. _;
+
+  let tag = !c.control.control_tag;
+  let stage = !c.control.handshake_stage_tag;
+  let has_selection = !c.handshake.server_selection_present;
+  let has_client_hello = !c.handshake.messages.client_hello_present;
+  let has_server_name = !c.handshake.messages.client_hello_has_server_name;
+  let cipher_suites_len = !c.handshake.messages.client_hello_cipher_suites_len;
+  let signature_schemes_len = !c.handshake.messages.client_hello_signature_schemes_len;
+
+  assert (pure (has_selection == selection_present));
+  assert (pure (has_client_hello == ch_present));
+  assert (pure (has_server_name == ch_has_server_name));
+  assert (pure (cipher_suites_len == ch_cipher_suites_len));
+  assert (pure (signature_schemes_len == ch_signature_schemes_len));
+
+  assert (pure (SZ.v 0sz < max_signature_schemes));
+  V.to_array_pts_to c.handshake.messages.client_hello.IM.client_hello_signature_schemes;
+  let first_signature =
+    (V.vec_to_array c.handshake.messages.client_hello.IM.client_hello_signature_schemes).(0sz);
+  V.to_vec_pts_to c.handshake.messages.client_hello.IM.client_hello_signature_schemes;
+  assert (pure (first_signature == Seq.index ch_signature_schemes 0));
+
+  let control_ok = (tag = 1uy) && (stage = 13uy) && role_ok;
+  let selection_absent = not has_selection;
+  let cipher_nonempty = SZ.gt cipher_suites_len 0sz;
+  let signature_nonempty = SZ.gt signature_schemes_len 0sz;
+  let signature_supported = first_signature = 0x0804us;
+  let ok =
+    control_ok &&
+    selection_absent &&
+    has_client_hello &&
+    has_server_name &&
+    cipher_nonempty &&
+    signature_nonempty &&
+    signature_supported;
+
+  if ok {
+    assert (pure (U8.v tag == 1));
+    assert (pure (U8.v stage == 13));
+    assert (pure (st0.CS.cs_model.CS.model_control ==
+      CS.ControlHandshaking CS.HsClientHelloReceived));
+    assert (pure (st0.CS.cs_model.CS.model_config.CS.config_role ==
+      CS.ServerEndpoint));
+    assert (pure (selection_present == false));
+    assert (pure (selection_present ==
+      Some? st0.CS.cs_model.CS.model_handshake.CS.hs_server_selection));
+    assert (pure (not (Some? st0.CS.cs_model.CS.model_handshake.CS.hs_server_selection)));
+    assert (pure (server_selection_absent st0.CS.cs_model.CS.model_handshake));
+    assert (pure (ch_present == true));
+    assert (pure (Some? st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello));
+    lemma_option_some_v st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello;
+    let ch = Ghost.hide (Some?.v st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello);
+    assert (pure (st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello ==
+      Some (Ghost.reveal ch)));
+    assert (pure (Some? st0.CS.cs_model.CS.model_config.CS.config_server));
+    lemma_option_some_v st0.CS.cs_model.CS.model_config.CS.config_server;
+    let cfg = Ghost.hide (Some?.v st0.CS.cs_model.CS.model_config.CS.config_server);
+    assert (pure (st0.CS.cs_model.CS.model_config.CS.config_server ==
+      Some (Ghost.reveal cfg)));
+
+    assert (pure (ch_cipher_suites_len == client_hello_cipher_suites_len_for (Ghost.reveal ch)));
+    assert (pure (ch_signature_schemes_len == client_hello_signature_schemes_len_for (Ghost.reveal ch)));
+    assert (pure (SZ.v cipher_suites_len > 0));
+    assert (pure (SZ.v signature_schemes_len > 0));
+    assert (pure (SZ.v (client_hello_cipher_suites_len_for (Ghost.reveal ch)) > 0));
+    assert (pure (SZ.v (client_hello_signature_schemes_len_for (Ghost.reveal ch)) > 0));
+    assert (pure (IM.cipher_suites_match
+      ch_cipher_suites
+      (SZ.v (client_hello_cipher_suites_len_for (Ghost.reveal ch)))
+      (Ghost.reveal ch).M.cipher_suites));
+    lemma_cipher_suites_match_length
+      ch_cipher_suites
+      (SZ.v (client_hello_cipher_suites_len_for (Ghost.reveal ch)))
+      (Ghost.reveal ch).M.cipher_suites;
+    assert (pure (length (Ghost.reveal ch).M.cipher_suites > 0));
+    assert (pure ((Ghost.reveal ch).M.cipher_suites <> []));
+    lemma_nonempty_cipher_suites_offer
+      (Ghost.reveal ch).M.cipher_suites
+      T.TLS_CHACHA20_POLY1305_SHA256;
+    assert (pure (CS.cipher_suite_offered
+      (Ghost.reveal ch).M.cipher_suites
+      T.TLS_CHACHA20_POLY1305_SHA256));
+
+    assert (pure (IM.signature_schemes_match
+      ch_signature_schemes
+      (SZ.v (client_hello_signature_schemes_len_for (Ghost.reveal ch)))
+      (Ghost.reveal ch).M.signature_schemes));
+    assert (pure (0 < SZ.v (client_hello_signature_schemes_len_for (Ghost.reveal ch))));
+    assert (pure (SZ.v (client_hello_signature_schemes_len_for (Ghost.reveal ch)) <=
+      Seq.length ch_signature_schemes));
+    assert (pure (U16.v first_signature == 0x0804));
+    assert (pure (U16.v (Seq.index ch_signature_schemes 0) == 0x0804));
+    lemma_signature_schemes_match_first_rsa_offer
+      ch_signature_schemes
+      (SZ.v (client_hello_signature_schemes_len_for (Ghost.reveal ch)))
+      (Ghost.reveal ch).M.signature_schemes;
+    assert (pure (CS.signature_scheme_offered
+      (Ghost.reveal ch).M.signature_schemes
+      T.RsaPssRsaeSha256));
+
+    assert (pure (CS.cipher_suite_offered
+      (Ghost.reveal cfg).CS.server_supported_cipher_suites
+      T.TLS_CHACHA20_POLY1305_SHA256));
+    assert (pure (CS.named_group_offered
+      (Ghost.reveal cfg).CS.server_supported_groups
+      T.X25519));
+    assert (pure (CS.signature_scheme_offered
+      (Ghost.reveal cfg).CS.server_allowed_signature_schemes
+      T.RsaPssRsaeSha256));
+    assert (pure (CS.sni_policy_accepts
+      (Ghost.reveal cfg).CS.server_sni_policy
+      (Ghost.reveal ch).M.server_name));
+
+    let selection = Ghost.hide {
+      CS.server_selected_client_hello = Ghost.reveal ch;
+      CS.server_selected_cipher_suite = T.TLS_CHACHA20_POLY1305_SHA256;
+      CS.server_selected_group = T.X25519;
+      CS.server_selected_signature_scheme = T.RsaPssRsaeSha256;
+      CS.server_random = Ghost.reveal server_random;
+      CS.server_key_share_private =
+        Some (Ghost.reveal server_private_key);
+      CS.server_key_share_public =
+        CryptoSpec.x25519_public_from_private
+          (Ghost.reveal server_private_key);
+      CS.server_selected_credential =
+        (Ghost.reveal cfg).CS.server_credential_identity;
+    };
+    assert (pure (CS.server_selection_key_share_consistent (Ghost.reveal selection)));
+    assert (pure (CS.server_selection_acceptable (Ghost.reveal cfg) (Ghost.reveal selection)));
+    assert (pure (CS.legal_event
+      st0.CS.cs_model
+      (CS.ConnLocalEvent (CS.LocalSelectServerParameters (Ghost.reveal selection)))));
+    assert (pure (can_select_server_parameters st0 (Ghost.reveal selection)));
+
+    fold (client_hello_metadata_exactly
+      c.handshake.messages.client_hello_has_server_name
+      c.handshake.messages.client_hello_server_name_len
+      c.handshake.messages.client_hello_cipher_suites_len
+      c.handshake.messages.client_hello_signature_schemes_len
+      st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello);
+    fold (client_hello_slot_exactly
+      c.handshake.messages.client_hello_present
+      c.handshake.messages.client_hello
+      st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello);
+    fold (handshake_messages_exactly
+      c.handshake.messages
+      st0.CS.cs_model.CS.model_handshake);
+    fold (server_selection_presence_exactly
+      c.handshake.server_selection_present
+      st0.CS.cs_model.CS.model_handshake.CS.hs_server_selection);
+    fold (handshake_exactly c.handshake st0.CS.cs_model.CS.model_handshake);
+    fold (control_exactly
+      c.control
+      st0.CS.cs_model.CS.model_control
+      st0.CS.cs_model.CS.model_failure);
+    fold (connection_model_exactly c st0.CS.cs_model);
+    fold (connection_exactly c st0);
+    true
+  } else {
+    fold (client_hello_metadata_exactly
+      c.handshake.messages.client_hello_has_server_name
+      c.handshake.messages.client_hello_server_name_len
+      c.handshake.messages.client_hello_cipher_suites_len
+      c.handshake.messages.client_hello_signature_schemes_len
+      st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello);
+    fold (client_hello_slot_exactly
+      c.handshake.messages.client_hello_present
+      c.handshake.messages.client_hello
+      st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello);
+    fold (handshake_messages_exactly
+      c.handshake.messages
+      st0.CS.cs_model.CS.model_handshake);
+    fold (server_selection_presence_exactly
+      c.handshake.server_selection_present
+      st0.CS.cs_model.CS.model_handshake.CS.hs_server_selection);
+    fold (handshake_exactly c.handshake st0.CS.cs_model.CS.model_handshake);
+    fold (control_exactly
+      c.control
+      st0.CS.cs_model.CS.model_control
+      st0.CS.cs_model.CS.model_failure);
+    fold (connection_model_exactly c st0.CS.cs_model);
+    fold (connection_exactly c st0);
+    false
+  }
 }
 fn can_receive_application_data
   (c:connection_state)

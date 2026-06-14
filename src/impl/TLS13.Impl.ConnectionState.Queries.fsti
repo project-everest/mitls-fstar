@@ -10,6 +10,7 @@ module B = TLS13.Bytes
 module Box = Pulse.Lib.Box
 module CL = TLS13.ConnectionLog
 module Crypto = TLS13.Crypto
+module CryptoSpec = TLS13.Crypto.Spec
 module CS = TLS13.Spec.ConnectionState
 module H = TLS13.Handshake.Spec
 module IM = TLS13.Impl.Messages
@@ -264,6 +265,58 @@ fn can_receive_client_hello
                 CL.message_direction = CL.Received;
                 CL.message_value = M.TlsHandshake (M.ClientHello ch);
               }))
+
+fn can_select_supported_server_parameters_runtime
+  (c:connection_state)
+  (#server_random:erased (b:B.bytes{B.length b == 32}))
+  (#server_private_key:erased (b:B.bytes{B.length b == 32}))
+  (#st0:erased CS.connection_state)
+  requires connection_exactly c st0 **
+           pure (Some? st0.CS.cs_model.CS.model_config.CS.config_server /\
+                  (match st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello,
+                         st0.CS.cs_model.CS.model_config.CS.config_server with
+                   | Some ch, Some cfg ->
+                     CS.cipher_suite_offered
+                       cfg.CS.server_supported_cipher_suites
+                       T.TLS_CHACHA20_POLY1305_SHA256 /\
+                     CS.named_group_offered
+                       cfg.CS.server_supported_groups
+                       T.X25519 /\
+                     CS.signature_scheme_offered
+                       cfg.CS.server_allowed_signature_schemes
+                       T.RsaPssRsaeSha256 /\
+                     CS.sni_policy_accepts cfg.CS.server_sni_policy ch.M.server_name
+                   | _, _ -> True))
+  returns ok: bool
+  ensures connection_exactly c st0 **
+          pure (ok ==>
+            st0.CS.cs_model.CS.model_control ==
+              CS.ControlHandshaking CS.HsClientHelloReceived /\
+            st0.CS.cs_model.CS.model_config.CS.config_role ==
+              CS.ServerEndpoint /\
+            server_selection_absent st0.CS.cs_model.CS.model_handshake /\
+            Some? st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello /\
+            Some? st0.CS.cs_model.CS.model_config.CS.config_server /\
+            (match st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello,
+                    st0.CS.cs_model.CS.model_config.CS.config_server with
+              | Some ch, Some cfg ->
+                let selection = {
+                  CS.server_selected_client_hello = ch;
+                  CS.server_selected_cipher_suite =
+                    T.TLS_CHACHA20_POLY1305_SHA256;
+                  CS.server_selected_group = T.X25519;
+                  CS.server_selected_signature_scheme = T.RsaPssRsaeSha256;
+                  CS.server_random = Ghost.reveal server_random;
+                  CS.server_key_share_private =
+                    Some (Ghost.reveal server_private_key);
+                  CS.server_key_share_public =
+                    CryptoSpec.x25519_public_from_private
+                      (Ghost.reveal server_private_key);
+                  CS.server_selected_credential =
+                    cfg.CS.server_credential_identity;
+                } in
+                can_select_server_parameters st0 selection
+              | _, _ -> False))
 
 fn can_receive_client_finished
   (c:connection_state)

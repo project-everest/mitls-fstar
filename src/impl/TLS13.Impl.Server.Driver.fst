@@ -50,6 +50,88 @@ let pending_after_consumed (buffered_len consumed_len:SZ.t) : SZ.t =
 
 let no_channel : option IO.channel = None
 
+let lemma_read_append_buffer_matches_raw_prefix_index
+  (raw_after_read raw raw_tail_after buffered read_chunk:B.bytes)
+  (current_len read_len total_len:nat)
+  (k:nat { k < total_len })
+  : Lemma
+    (requires
+      B.length buffered == current_len /\
+      B.length read_chunk == read_len /\
+      B.length raw >= current_len /\
+      B.length raw_tail_after >= read_len /\
+      B.length raw_after_read >= total_len /\
+      total_len == current_len + read_len /\
+      Seq.equal buffered (Seq.slice raw 0 current_len) /\
+      Seq.equal read_chunk (Seq.slice raw_tail_after 0 read_len) /\
+      (forall (i:nat). i < current_len ==>
+        Seq.index raw_after_read i == Seq.index raw i) /\
+      (forall (i:nat). i < read_len ==>
+        Seq.index raw_after_read (current_len + i) ==
+        Seq.index raw_tail_after i))
+    (ensures
+      Seq.index (B.append buffered read_chunk) k ==
+      Seq.index (Seq.slice raw_after_read 0 total_len) k)
+  =
+  Seq.lemma_eq_elim buffered (Seq.slice raw 0 current_len);
+  Seq.lemma_eq_elim read_chunk (Seq.slice raw_tail_after 0 read_len);
+  Seq.lemma_len_slice raw_after_read 0 total_len;
+  if k < current_len then (
+    Seq.lemma_index_app1 buffered read_chunk k;
+    Seq.lemma_index_slice raw 0 current_len k;
+    Seq.lemma_index_slice raw_after_read 0 total_len k
+  ) else (
+    assert (current_len <= k);
+    assert (k - current_len < read_len);
+    assert (current_len + (k - current_len) == k);
+    Seq.lemma_index_app2 buffered read_chunk k;
+    Seq.lemma_index_slice raw_tail_after 0 read_len (k - current_len);
+    Seq.lemma_index_slice raw_after_read 0 total_len k
+  )
+
+let lemma_read_append_buffer_matches_raw_prefix
+  (raw_after_read raw raw_tail_after buffered read_chunk:B.bytes)
+  (current_len read_len total_len:nat)
+  : Lemma
+    (requires
+      B.length buffered == current_len /\
+      B.length read_chunk == read_len /\
+      B.length raw >= current_len /\
+      B.length raw_tail_after >= read_len /\
+      B.length raw_after_read >= total_len /\
+      total_len == current_len + read_len /\
+      Seq.equal buffered (Seq.slice raw 0 current_len) /\
+      Seq.equal read_chunk (Seq.slice raw_tail_after 0 read_len) /\
+      (forall (i:nat). i < current_len ==>
+        Seq.index raw_after_read i == Seq.index raw i) /\
+      (forall (i:nat). i < read_len ==>
+        Seq.index raw_after_read (current_len + i) ==
+        Seq.index raw_tail_after i))
+    (ensures
+      Seq.equal (B.append buffered read_chunk)
+        (Seq.slice raw_after_read 0 total_len))
+  =
+  Seq.lemma_len_append buffered read_chunk;
+  Seq.lemma_len_slice raw_after_read 0 total_len;
+  let index_proof (k:nat { k < Seq.length (B.append buffered read_chunk) })
+    : Lemma
+      (Seq.index (B.append buffered read_chunk) k ==
+       Seq.index (Seq.slice raw_after_read 0 total_len) k)
+    =
+    lemma_read_append_buffer_matches_raw_prefix_index
+      raw_after_read raw raw_tail_after buffered read_chunk
+      current_len read_len total_len k
+  in
+  FStar.Classical.forall_intro
+    #(k:nat { k < Seq.length (B.append buffered read_chunk) })
+    #(fun k ->
+      Seq.index (B.append buffered read_chunk) k ==
+      Seq.index (Seq.slice raw_after_read 0 total_len) k)
+    index_proof;
+  Seq.lemma_eq_intro
+    (B.append buffered read_chunk)
+    (Seq.slice raw_after_read 0 total_len)
+
 noeq type server_driver = {
   server_driver_server: S.server;
   server_driver_credentials: O.server_credentials;
@@ -2134,6 +2216,9 @@ fn read_and_process_network_once
   A.to_mask raw_tail_array;
   with raw_tail_mask_after.
     assert (A.pts_to_mask raw_tail_array #1.0R raw_tail_mask_after (fun _ -> True));
+  assert (pure (Seq.length raw_tail_mask_after == B.length raw_tail_after));
+  assert (pure (forall (i:nat). i < Seq.length raw_tail_mask_after ==>
+    Seq.index raw_tail_mask_after i == Some (Seq.index raw_tail_after i)));
   assert (pure (forall (i:nat). i < Seq.length raw_tail_mask_after ==>
     Some? (Seq.index raw_tail_mask_after i)));
   rewrite
@@ -2173,12 +2258,24 @@ fn read_and_process_network_once
   assert (pure (Seq.equal buffered (Seq.slice raw 0 (SZ.v current_len))));
   assert (pure (Seq.equal read_chunk
     (Seq.slice raw_tail_after 0 (SZ.v read_len))));
-  Seq.lemma_len_slice raw_after_read 0 (SZ.v total_len);
-  assert (pure (forall (k:nat). k < SZ.v total_len ==>
-    Seq.index (Ghost.reveal new_buffered) k ==
-    Seq.index (Seq.slice raw_after_read 0 (SZ.v total_len)) k));
-  Seq.lemma_eq_intro
-    (Ghost.reveal new_buffered)
+  assert (pure (forall (i:nat). i < B.length raw_after_read ==>
+    Some (Seq.index raw_after_read i) == Seq.index raw_joined_mask i));
+  assert (pure (forall (i:nat). i < SZ.v current_len ==>
+    Seq.index raw_after_read i == Seq.index raw i));
+  assert (pure (forall (i:nat). i < SZ.v read_len ==>
+    Seq.index raw_after_read (SZ.v current_len + i) ==
+    Seq.index raw_tail_after i));
+  lemma_read_append_buffer_matches_raw_prefix
+    raw_after_read
+    raw
+    raw_tail_after
+    buffered
+    read_chunk
+    (SZ.v current_len)
+    (SZ.v read_len)
+    (SZ.v total_len);
+  Seq.lemma_eq_elim
+    (B.append buffered read_chunk)
     (Seq.slice raw_after_read 0 (SZ.v total_len));
   assert (pure (Seq.equal (Ghost.reveal new_buffered)
     (Seq.slice raw_after_read 0 (SZ.v total_len))));
@@ -3449,6 +3546,186 @@ fn derive_shared_secret_from_payload_once
     ST.LocalDeriveSharedSecret
     payload
     payload_len
+}
+
+fn select_supported_server_parameters_from_payload_if_ready_once
+  (d:server_driver)
+  (payload:array U8.t)
+  (payload_len:SZ.t)
+  requires server_driver_connected
+              d
+              'st0
+              'certificate_chain
+              'credential_identity
+              'received
+              'sent **
+           pts_to payload 'payload_bytes **
+           pure (B.length 'payload_bytes == SZ.v payload_len /\
+                 SZ.v payload_len == 64 /\
+                 Some? 'st0.CS.cs_model.CS.model_config.CS.config_server /\
+                 (match 'st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello,
+                        'st0.CS.cs_model.CS.model_config.CS.config_server with
+                  | Some ch, Some cfg ->
+                    CS.cipher_suite_offered
+                      cfg.CS.server_supported_cipher_suites
+                      T.TLS_CHACHA20_POLY1305_SHA256 /\
+                    CS.named_group_offered
+                      cfg.CS.server_supported_groups
+                      T.X25519 /\
+                    CS.signature_scheme_offered
+                      cfg.CS.server_allowed_signature_schemes
+                      T.RsaPssRsaeSha256 /\
+                    CS.sni_policy_accepts cfg.CS.server_sni_policy ch.M.server_name
+                  | _, _ -> True))
+  returns status:server_driver_local_status
+  ensures (match status with
+           | ServerDriverLocalProcessed ->
+             exists* st1.
+               server_driver_connected
+                 d
+                 st1
+                 'certificate_chain
+                 'credential_identity
+                 'received
+                 'sent **
+               pts_to payload 'payload_bytes **
+               pure (server_driver_selection_from_payload_correct
+                 'st0
+                 st1
+                 (Ghost.reveal 'payload_bytes))
+           | ServerDriverLocalNotReady ->
+               server_driver_connected
+                 d
+                 'st0
+                 'certificate_chain
+                 'credential_identity
+                 'received
+                 'sent **
+               pts_to payload 'payload_bytes
+           | ServerDriverLocalExternalOrUnsupported ->
+               pure False)
+{
+  assert (pure (B.length (Ghost.reveal 'payload_bytes) == 64));
+  assert (pure (CL.raw_slice (Ghost.reveal 'payload_bytes) 0 32 ==
+    Seq.slice (Ghost.reveal 'payload_bytes) 0 32));
+  Seq.lemma_len_slice (Ghost.reveal 'payload_bytes) 0 32;
+  assert (pure (B.length (CL.raw_slice (Ghost.reveal 'payload_bytes) 0 32) == 32));
+  assert (pure (CL.raw_slice (Ghost.reveal 'payload_bytes) 32 64 ==
+    Seq.slice (Ghost.reveal 'payload_bytes) 32 64));
+  Seq.lemma_len_slice (Ghost.reveal 'payload_bytes) 32 64;
+  assert (pure (B.length (CL.raw_slice (Ghost.reveal 'payload_bytes) 32 64) == 32));
+  let server_random : erased (b:B.bytes{B.length b == 32}) =
+    Ghost.hide (CL.raw_slice (Ghost.reveal 'payload_bytes) 0 32);
+  let server_private_key : erased (b:B.bytes{B.length b == 32}) =
+    Ghost.hide (CL.raw_slice (Ghost.reveal 'payload_bytes) 32 64);
+  assert (pure (Ghost.reveal server_random ==
+    CL.raw_slice (Ghost.reveal 'payload_bytes) 0 32));
+  assert (pure (Ghost.reveal server_private_key ==
+    CL.raw_slice (Ghost.reveal 'payload_bytes) 32 64));
+
+  unfold (server_driver_connected
+    d
+    'st0
+    'certificate_chain
+    'credential_identity
+    'received
+    'sent);
+  with ch buffered buffered_len.
+    assert (Box.pts_to d.server_driver_channel (Some ch) **
+            IO.is_channel ch 'received 'sent **
+            server_driver_buffers d buffered buffered_len);
+  assert (pure (ST.server_end_to_end_invariant 'st0));
+  assert (pure (server_driver_wire_logs_match
+    'st0
+    'received
+    'sent
+    buffered
+    buffered_len));
+
+  rewrite (S.connection_exactly d.server_driver_server 'st0)
+    as (CR.connection_exactly d.server_driver_server 'st0);
+  let ready =
+    CQ.can_select_supported_server_parameters_runtime
+      d.server_driver_server
+      #server_random
+      #server_private_key;
+  rewrite (CR.connection_exactly d.server_driver_server 'st0)
+    as (S.connection_exactly d.server_driver_server 'st0);
+  if ready {
+    assert (pure (ready));
+    assert (pure ('st0.CS.cs_model.CS.model_control ==
+      CS.ControlHandshaking CS.HsClientHelloReceived));
+    assert (pure ('st0.CS.cs_model.CS.model_config.CS.config_role ==
+      CS.ServerEndpoint));
+    assert (pure (CR.server_selection_absent
+      'st0.CS.cs_model.CS.model_handshake));
+    assert (pure (Some?
+      'st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello));
+    assert (pure (Some?
+      'st0.CS.cs_model.CS.model_config.CS.config_server));
+    assert (pure (match 'st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello,
+                        'st0.CS.cs_model.CS.model_config.CS.config_server with
+      | Some selected_ch, Some cfg ->
+        let selection = {
+          CS.server_selected_client_hello = selected_ch;
+          CS.server_selected_cipher_suite =
+            T.TLS_CHACHA20_POLY1305_SHA256;
+          CS.server_selected_group = T.X25519;
+          CS.server_selected_signature_scheme = T.RsaPssRsaeSha256;
+          CS.server_random = Ghost.reveal server_random;
+          CS.server_key_share_private = Some (Ghost.reveal server_private_key);
+          CS.server_key_share_public =
+            CryptoSpec.x25519_public_from_private
+              (Ghost.reveal server_private_key);
+          CS.server_selected_credential = cfg.CS.server_credential_identity;
+        } in
+        CM.can_select_server_parameters 'st0 selection
+      | _, _ -> False));
+    Seq.lemma_eq_elim
+      (Ghost.reveal server_random)
+      (CL.raw_slice (Ghost.reveal 'payload_bytes) 0 32);
+    Seq.lemma_eq_elim
+      (Ghost.reveal server_private_key)
+      (CL.raw_slice (Ghost.reveal 'payload_bytes) 32 64);
+    assert (pure (ST.server_local_event_input_ready
+      'st0
+      ST.LocalSelectServerParameters
+      (Ghost.reveal 'payload_bytes)));
+    fold (server_driver_connected
+      d
+      'st0
+      'certificate_chain
+      'credential_identity
+      'received
+      'sent);
+    let resp =
+      select_default_server_parameters_from_payload_once
+        d
+        payload
+        payload_len;
+    with st1.
+      assert (server_driver_connected
+        d
+        st1
+        'certificate_chain
+        'credential_identity
+        'received
+        'sent);
+    assert (pure (server_driver_selection_from_payload_correct
+      'st0
+      st1
+      (Ghost.reveal 'payload_bytes)));
+    ServerDriverLocalProcessed
+  } else {
+    fold (server_driver_connected
+      d
+      'st0
+      'certificate_chain
+      'credential_identity
+      'received
+      'sent);
+    ServerDriverLocalNotReady
+  }
 }
 
 fn select_and_derive_shared_secret_from_payload_once
