@@ -90,6 +90,46 @@ fn new_server
                     (Ghost.reveal 'certificate_chain_bytes)
                     (Ghost.reveal 'credential_identity_bytes)))
 
+fn new_server_erased_credential_identity
+  (certificate_chain:array U8.t)
+  (certificate_chain_len:SZ.t)
+  (#credential_identity:erased CS.server_credential_identity)
+  requires pts_to certificate_chain 'certificate_chain_bytes **
+           pure (B.length 'certificate_chain_bytes == SZ.v certificate_chain_len /\
+                 B.length 'certificate_chain_bytes <=
+                   Bounds.max_server_certificate_chain_len)
+  returns s:server
+  ensures pts_to certificate_chain 'certificate_chain_bytes **
+          connection_exactly
+            s
+            (CR.server_initial_state
+              (Ghost.reveal 'certificate_chain_bytes)
+              (Ghost.reveal credential_identity)) **
+          pure (ST.server_state_correct
+                  (CR.server_initial_state
+                    (Ghost.reveal 'certificate_chain_bytes)
+                    (Ghost.reveal credential_identity)) /\
+                ST.server_end_to_end_invariant
+                  (CR.server_initial_state
+                    (Ghost.reveal 'certificate_chain_bytes)
+                    (Ghost.reveal credential_identity)) /\
+                ST.server_raw_to_message_replay_consistent
+                  (CR.server_initial_state
+                    (Ghost.reveal 'certificate_chain_bytes)
+                    (Ghost.reveal credential_identity)) /\
+                CS.connection_state_sent_seal_replay_consistent
+                  (CR.server_initial_state
+                    (Ghost.reveal 'certificate_chain_bytes)
+                    (Ghost.reveal credential_identity)) /\
+                CS.connection_state_received_decode_replay_consistent
+                  (CR.server_initial_state
+                    (Ghost.reveal 'certificate_chain_bytes)
+                    (Ghost.reveal credential_identity)) /\
+                CS.connection_state_protected_raw_segmented_replay_consistent
+                  (CR.server_initial_state
+                    (Ghost.reveal 'certificate_chain_bytes)
+                    (Ghost.reveal credential_identity)))
+
 fn next_local_action
   (s:server)
   requires connection_exactly s 'st0 **

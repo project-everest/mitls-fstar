@@ -237,6 +237,13 @@ Current phase: **Phase 6 server buffer/event API and theorem surface**.
   initial connection state with ghost/spec server credential metadata, and
   `TLS13.Impl.Server.new_server` establishes `server_state_correct` and
   `server_end_to_end_invariant`.
+- [x] Added an erased-credential-identity server constructor path:
+  `TLS13.Impl.ConnectionState.Repr.new_server_erased_credential_identity` and
+  `TLS13.Impl.Server.new_server_erased_credential_identity` initialize the same
+  concrete server state while taking the credential identity ghostly. This keeps
+  credential identity as proof/spec metadata and avoids forcing future server
+  driver code to materialize a runtime public-key byte buffer solely to connect
+  the `TLS13.OpenSSL.server_credentials_new` postcondition to the server model.
 - [x] Added the first read-only server action scheduler:
   `TLS13.Impl.Server.next_local_action` advertises `LocalStartServer` exactly
   when the concrete server is still `ControlNew` and the public
@@ -1566,6 +1573,10 @@ Checklist:
       DER certificate-chain and private-key byte buffers.
 - [x] Add signing function for server CertificateVerify input.
 - [x] Keep private key bytes outside protocol logic.
+- [x] Keep credential identity proof-only at the server constructor boundary when
+      it comes from the credential TCB: the erased-identity constructor connects
+      the ghost identity returned by `TLS13.OpenSSL.server_credentials_new` to
+      the server model without adding a runtime identity buffer.
 - [ ] Do not make file-path loading part of the verified server API; any file IO
       wrapper must live outside the first verified API and feed in-memory bytes
       to `new_server`.
@@ -1895,6 +1906,10 @@ Checklist:
 - [ ] `new_server` receives in-memory PEM/DER certificate-chain and private-key
       byte buffers, allocates the credential context, and allocates Pulse-owned
       protocol buffers.
+      The core server facade now has the erased-identity constructor needed to
+      connect credential allocation to server-state initialization; the driver
+      still needs to allocate the credential context and own the private-key
+      buffer lifetime.
 - [ ] `accept` mirrors the client driver's `connect` style: it takes bind-host
       bytes, bind-host length, port, local-action fuel, and network fuel; it
       calls typed `TLS13.IO.listen_tcp` and `TLS13.IO.accept_tcp` internally,

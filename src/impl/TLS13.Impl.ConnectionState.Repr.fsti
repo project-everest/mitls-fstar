@@ -1428,6 +1428,21 @@ fn new_server
                 (Ghost.reveal 'certificate_chain_bytes)
                 (Ghost.reveal 'credential_identity_bytes))
 
+fn new_server_erased_credential_identity
+  (certificate_chain:array U8.t)
+  (certificate_chain_len:SZ.t)
+  (#credential_identity:erased CS.server_credential_identity)
+  requires ArrPts.pts_to certificate_chain 'certificate_chain_bytes **
+           pure (B.length 'certificate_chain_bytes == SZ.v certificate_chain_len /\
+                    B.length 'certificate_chain_bytes <= max_server_certificate_chain_len)
+  returns c:connection_state
+  ensures ArrPts.pts_to certificate_chain 'certificate_chain_bytes **
+          connection_exactly
+                c
+                (server_initial_state
+                  (Ghost.reveal 'certificate_chain_bytes)
+                  (Ghost.reveal credential_identity))
+
 fn copy_server_hello_prefix_to_transcript
   (src:V.vec U8.t)
   (dst:V.vec U8.t)
