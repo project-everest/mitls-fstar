@@ -53,6 +53,7 @@ type local_event_kind =
 
 type local_payload_kind =
   | LocalPayloadNone
+  | LocalPayloadServerPrivateKey
   | LocalPayloadServerRandomAndPrivateKey
   | LocalPayloadCertificateVerifySignature
   | LocalPayloadApplicationData
