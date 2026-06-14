@@ -312,7 +312,11 @@ let signature_scheme_matches (wire:U16.t) (scheme:T.signature_scheme) : prop =
   | T.RsaPssRsaeSha256 -> U16.v wire == 0x0804
   | T.EcdsaSecp256r1Sha256 -> U16.v wire == 0x0403
   | T.Ed25519 -> U16.v wire == 0x0807
-  | T.UnsupportedSignatureScheme n -> U16.v wire == n
+  | T.UnsupportedSignatureScheme n ->
+    U16.v wire == n /\
+    n <> 0x0804 /\
+    n <> 0x0403 /\
+    n <> 0x0807
 
 noextract
 let byte_prefix_matches

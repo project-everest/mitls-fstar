@@ -1592,6 +1592,17 @@ Validation:
 Checklist:
 
 - [ ] Add supported ClientHello acceptability lemmas.
+      - [x] Made `TLS13.Impl.Messages.signature_scheme_matches` disjoint for
+            known signature-scheme wire codes and added
+            `TLS13.Impl.ConnectionState.Model.lemma_signature_schemes_match_first_rsa_offer`,
+            proving that a first stored signature-scheme word of `0x0804`
+            implies the pure ClientHello signature list offers
+            `RsaPssRsaeSha256`.
+      - [ ] Strengthen `client_hello_slot_exactly` to relate the concrete stored
+            ClientHello length/tag fields (`has_server_name`, server-name length,
+            cipher-suite length, signature-scheme length) to the pure
+            ClientHello. This is required before adding a sound runtime
+            supported-profile selection-readiness query.
 - [x] Add ServerHello serialize/parse-back facts.
 - [x] Add cleartext ServerHello record serialization facts, including exact
       raw-record bytes, `parse_record`, and `raw_records_exactly`.

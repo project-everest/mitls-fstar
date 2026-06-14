@@ -60,6 +60,17 @@ val lemma_signature_schemes_match_length
       (requires IM.signature_schemes_match wire len schemes)
       (ensures len == length schemes)
 
+val lemma_signature_schemes_match_first_rsa_offer
+  (wire:Seq.seq U16.t)
+  (len:nat)
+  (schemes:list T.signature_scheme)
+  : Lemma
+      (requires IM.signature_schemes_match wire len schemes /\
+                0 < len /\
+                len <= Seq.length wire /\
+                U16.v (Seq.index wire 0) == 0x0804)
+      (ensures CS.signature_scheme_offered schemes T.RsaPssRsaeSha256)
+
 let client_hello_server_name_len_for (m:M.client_hello) : SZ.t =
   match m.M.server_name with
   | Some sn -> bounded_u16_sizet (B.length sn)

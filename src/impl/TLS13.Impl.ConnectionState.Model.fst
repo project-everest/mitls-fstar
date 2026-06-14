@@ -84,6 +84,29 @@ let rec lemma_signature_schemes_match_length
   else
     ()
 
+let lemma_signature_schemes_match_first_rsa_offer
+  (wire:Seq.seq U16.t)
+  (len:nat)
+  (schemes:list T.signature_scheme)
+  : Lemma
+      (requires IM.signature_schemes_match wire len schemes /\
+                0 < len /\
+                len <= Seq.length wire /\
+                U16.v (Seq.index wire 0) == 0x0804)
+      (ensures CS.signature_scheme_offered schemes T.RsaPssRsaeSha256)
+=
+  match schemes with
+  | scheme :: _ ->
+    assert (IM.signature_scheme_matches (Seq.index wire 0) scheme);
+    (match scheme with
+    | T.RsaPssRsaeSha256 -> ()
+    | T.EcdsaSecp256r1Sha256 -> assert False
+    | T.Ed25519 -> assert False
+    | T.UnsupportedSignatureScheme _ -> assert False)
+  | [] ->
+    lemma_signature_schemes_match_length wire len schemes;
+    assert False
+
 let lemma_nonempty_cipher_suites_offer
   (suites:list T.cipher_suite)
   (suite:T.cipher_suite)
