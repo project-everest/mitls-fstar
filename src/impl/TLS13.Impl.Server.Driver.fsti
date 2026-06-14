@@ -339,6 +339,43 @@ fn process_local_event_and_write_once
            (Ghost.reveal 'sent)
            sent')
 
+fn derive_shared_secret_from_payload_once
+  (d:server_driver)
+  (payload:array U8.t)
+  (payload_len:SZ.t)
+  requires server_driver_connected
+             d
+             'st0
+             'certificate_chain
+             'credential_identity
+             'received
+             'sent **
+           pts_to payload 'payload_bytes **
+           pure (B.length 'payload_bytes == SZ.v payload_len /\
+                SZ.v payload_len == 32 /\
+                ST.server_local_event_input_ready
+                  'st0
+                  ST.LocalDeriveSharedSecret
+                  (Ghost.reveal 'payload_bytes))
+  returns resp:ST.server_response
+  ensures exists* st1 sent'.
+          server_driver_connected
+           d
+           st1
+           'certificate_chain
+           'credential_identity
+           'received
+           sent' **
+          pts_to payload 'payload_bytes **
+          pure (server_driver_local_write_correct
+           'st0
+           st1
+           resp
+           ST.LocalDeriveSharedSecret
+           (Ghost.reveal 'payload_bytes)
+           (Ghost.reveal 'sent)
+           sent')
+
 fn process_ready_empty_local_action_once
   (d:server_driver)
   requires server_driver_connected

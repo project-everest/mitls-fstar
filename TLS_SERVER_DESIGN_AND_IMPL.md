@@ -1918,6 +1918,14 @@ Status:
       of the particular 64-byte material payload when the server public share is
       derived from the private key, and preserves the connected IO-history
       relation for this zero-output local transition.
+- [x] Added the first shared-secret derivation driver slice:
+      `TLS13.Impl.Server.Driver.derive_shared_secret_from_payload_once` accepts
+      an explicit 32-byte private-key payload satisfying
+      `LocalDeriveSharedSecret` readiness, routes it through the generic
+      local-event/write helper, and preserves the connected driver invariant.
+      Wiring this to the driver-owned material buffer remains separate because
+      the selection postcondition still needs an explicit relation between the
+      retained material private key and the selected server state.
 - [x] Added the first verified selection driver slice:
       `TLS13.Impl.Server.Driver.select_default_server_parameters_from_payload_once`
       takes an explicit 64-byte material payload, requires the existing
