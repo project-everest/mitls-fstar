@@ -159,6 +159,22 @@ let server_driver_connected
     server_driver_buffers d buffered buffered_len **
     pure (server_driver_wire_logs_match st received sent buffered buffered_len)
 
+noextract
+let server_driver_closed
+  (d:server_driver)
+  (st:CS.connection_state)
+  (certificate_chain:B.bytes)
+  (credential_identity:CS.server_credential_identity)
+  : slprop =
+  S.connection_exactly d.server_driver_server st **
+  O.is_server_credentials
+    d.server_driver_credentials
+    certificate_chain
+    credential_identity **
+  Box.pts_to d.server_driver_channel no_channel **
+  exists* buffered buffered_len.
+    server_driver_buffers d buffered buffered_len
+
 fn new_server
   (certificate_chain:array U8.t)
   (certificate_chain_len:SZ.t)
@@ -376,4 +392,39 @@ fn accept_transport_once
       }
     }
   }
+}
+
+fn close_transport_once
+  (d:server_driver)
+  requires server_driver_connected
+             d
+             'st0
+             'certificate_chain
+             'credential_identity
+             'received
+             'sent
+  ensures server_driver_closed d 'st0 'certificate_chain 'credential_identity
+{
+  unfold (server_driver_connected
+    d
+    'st0
+    'certificate_chain
+    'credential_identity
+    'received
+    'sent);
+  with ch buffered buffered_len.
+    assert (Box.pts_to d.server_driver_channel (Some ch) **
+            IO.is_channel ch 'received 'sent **
+            server_driver_buffers d buffered buffered_len);
+  let current_channel = Box.(!d.server_driver_channel);
+  assert (pure (current_channel == Some ch));
+  assert (pure (Some? current_channel));
+  let concrete_ch = Some?.v current_channel;
+  assert (pure (current_channel == Some concrete_ch));
+  assert (pure (Some concrete_ch == Some ch));
+  rewrite (IO.is_channel ch 'received 'sent) as
+    (IO.is_channel concrete_ch 'received 'sent);
+  IO.close concrete_ch;
+  Box.(d.server_driver_channel := no_channel);
+  fold (server_driver_closed d 'st0 'certificate_chain 'credential_identity);
 }

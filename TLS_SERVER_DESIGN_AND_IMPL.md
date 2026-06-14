@@ -1871,6 +1871,11 @@ Status:
       empty transport histories. This is intentionally a transport-only step;
       the full public `accept` still needs to run the TLS handshake loop after
       attaching the channel.
+- [x] Added the matching verified transport-close slice:
+      `TLS13.Impl.Server.Driver.close_transport_once` consumes a connected
+      `TLS13.IO.channel`, closes it through the IO TCB, resets the channel slot,
+      and preserves the verified server state, credential context, and driver
+      buffers in `server_driver_closed`.
 - [x] Generic `process_local_event` now handles server
       `LocalSendApplicationData` and `LocalSendCloseNotify` through the shared
       endpoint-neutral `LocalSend` mutations. The server theorem surface now
@@ -1949,6 +1954,9 @@ Checklist:
 - [ ] The first public driver API does not take a pre-accepted channel or
       externally owned listener handle.
 - [ ] `send`, `receive`, and `close` operate on one connected server handle.
+      Current status: transport-only close is verified as
+      `close_transport_once`; protocol close_notify and application send/receive
+      remain pending.
 - [ ] Driver owns retained receive buffer.
 - [ ] Driver owns network output, application output, and signing scratch buffers.
 - [ ] Driver maintains exact IO-history relation:

@@ -42,6 +42,14 @@ val server_driver_connected
   (sent:B.bytes)
   : slprop
 
+noextract
+val server_driver_closed
+  (d:server_driver)
+  (st:CS.connection_state)
+  (certificate_chain:B.bytes)
+  (credential_identity:CS.server_credential_identity)
+  : slprop
+
 fn new_server
   (certificate_chain:array U8.t)
   (certificate_chain_len:SZ.t)
@@ -98,3 +106,14 @@ fn accept_transport_once
                B.empty
            | _ ->
              server_driver_live d 'st0 'certificate_chain 'credential_identity)
+
+fn close_transport_once
+  (d:server_driver)
+  requires server_driver_connected
+             d
+             'st0
+             'certificate_chain
+             'credential_identity
+             'received
+             'sent
+  ensures server_driver_closed d 'st0 'certificate_chain 'credential_identity
