@@ -8,6 +8,7 @@ open Pulse.Lib.Array.PtsTo
 module B = TLS13.Bytes
 module Bounds = TLS13.Impl.ConnectionState.Bounds
 module CS = TLS13.Spec.ConnectionState
+module CM = TLS13.Impl.ConnectionState.Model
 module CR = TLS13.Impl.ConnectionState.Repr
 module IO = TLS13.IO
 module O = TLS13.OpenSSL
@@ -117,3 +118,22 @@ fn close_transport_once
              'received
              'sent
   ensures server_driver_closed d 'st0 'certificate_chain 'credential_identity
+
+fn start_server_once
+  (d:server_driver)
+  requires server_driver_connected
+             d
+             'st0
+             'certificate_chain
+             'credential_identity
+             'received
+             'sent **
+           pure (CM.can_start_server 'st0)
+  returns resp:ST.server_response
+  ensures server_driver_connected
+            d
+            (CM.started_server_state 'st0)
+            'certificate_chain
+            'credential_identity
+            'received
+            'sent

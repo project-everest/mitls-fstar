@@ -9,6 +9,7 @@ module B = TLS13.Bytes
 module Bounds = TLS13.Impl.ConnectionState.Bounds
 module CL = TLS13.ConnectionLog
 module CS = TLS13.Spec.ConnectionState
+module CM = TLS13.Impl.ConnectionState.Model
 module CR = TLS13.Impl.ConnectionState.Repr
 module IM = TLS13.Impl.Messages
 module IO = TLS13.IO
@@ -16,6 +17,7 @@ module O = TLS13.OpenSSL
 module Seq = FStar.Seq
 module SeqP = FStar.Seq.Properties
 module S = TLS13.Impl.Server
+module SSetup = TLS13.Impl.Server.Setup
 module ST = TLS13.Impl.Server.Types
 module Box = Pulse.Lib.Box
 module SZ = FStar.SizeT
@@ -137,7 +139,8 @@ let server_driver_live
     credential_identity **
   Box.pts_to d.server_driver_channel no_channel **
   server_driver_buffers d B.empty 0sz **
-  pure (server_driver_wire_logs_match st B.empty B.empty B.empty 0sz)
+  pure (ST.server_end_to_end_invariant st /\
+        server_driver_wire_logs_match st B.empty B.empty B.empty 0sz)
 
 noextract
 let server_driver_connected
@@ -157,7 +160,8 @@ let server_driver_connected
     Box.pts_to d.server_driver_channel (Some ch) **
     IO.is_channel ch received sent **
     server_driver_buffers d buffered buffered_len **
-    pure (server_driver_wire_logs_match st received sent buffered buffered_len)
+    pure (ST.server_end_to_end_invariant st /\
+          server_driver_wire_logs_match st received sent buffered buffered_len)
 
 noextract
 let server_driver_closed
@@ -173,7 +177,8 @@ let server_driver_closed
     credential_identity **
   Box.pts_to d.server_driver_channel no_channel **
   exists* buffered buffered_len.
-    server_driver_buffers d buffered buffered_len
+    server_driver_buffers d buffered buffered_len **
+    pure (ST.server_end_to_end_invariant st)
 
 fn new_server
   (certificate_chain:array U8.t)
@@ -427,4 +432,118 @@ fn close_transport_once
   IO.close concrete_ch;
   Box.(d.server_driver_channel := no_channel);
   fold (server_driver_closed d 'st0 'certificate_chain 'credential_identity);
+}
+
+fn start_server_once
+  (d:server_driver)
+  requires server_driver_connected
+             d
+             'st0
+             'certificate_chain
+             'credential_identity
+             'received
+             'sent **
+           pure (CM.can_start_server 'st0)
+  returns resp:ST.server_response
+  ensures server_driver_connected
+            d
+            (CM.started_server_state 'st0)
+            'certificate_chain
+            'credential_identity
+            'received
+            'sent
+{
+  unfold (server_driver_connected
+    d
+    'st0
+    'certificate_chain
+    'credential_identity
+    'received
+    'sent);
+  with ch buffered buffered_len.
+    assert (Box.pts_to d.server_driver_channel (Some ch) **
+            IO.is_channel ch 'received 'sent **
+            server_driver_buffers d buffered buffered_len);
+  assert (pure (ST.server_end_to_end_invariant 'st0));
+  assert (pure (server_driver_wire_logs_match
+    'st0
+    'received
+    'sent
+    buffered
+    buffered_len));
+
+  unfold (server_driver_buffers d buffered buffered_len);
+  with empty_payload raw network_out material cv_input signature app_out.
+    assert (
+      Box.pts_to d.server_driver_buffered_len buffered_len **
+      V.pts_to d.server_driver_empty_payload #1.0R empty_payload **
+      V.pts_to d.server_driver_raw #1.0R raw **
+      V.pts_to d.server_driver_network_out #1.0R network_out **
+      V.pts_to d.server_driver_material_payload #1.0R material **
+      V.pts_to d.server_driver_certificate_verify_input #1.0R cv_input **
+      V.pts_to d.server_driver_signature #1.0R signature **
+      V.pts_to d.server_driver_app_out #1.0R app_out);
+  assert (pure (Seq.equal empty_payload B.empty));
+  V.to_array_pts_to d.server_driver_empty_payload;
+  V.to_array_pts_to d.server_driver_network_out;
+  V.to_array_pts_to d.server_driver_app_out;
+
+  rewrite (S.connection_exactly d.server_driver_server 'st0) as
+    (SSetup.connection_exactly d.server_driver_server 'st0);
+  let resp =
+    SSetup.process_start_server_local_event
+      d.server_driver_server
+      ST.LocalStartServer
+      (V.vec_to_array d.server_driver_empty_payload)
+      0sz
+      (V.vec_to_array d.server_driver_network_out)
+      driver_network_out_capacity
+      (V.vec_to_array d.server_driver_app_out)
+      driver_app_out_capacity;
+  with st1 network_out_bytes app_out_bytes.
+    assert (
+      SSetup.connection_exactly d.server_driver_server st1 **
+      pts_to (V.vec_to_array d.server_driver_empty_payload) empty_payload **
+      pts_to (V.vec_to_array d.server_driver_network_out) network_out_bytes **
+      pts_to (V.vec_to_array d.server_driver_app_out) app_out_bytes);
+  rewrite (SSetup.connection_exactly d.server_driver_server st1) as
+    (S.connection_exactly d.server_driver_server st1);
+  assert (pure (B.length network_out_bytes == SZ.v driver_network_out_capacity));
+  assert (pure (B.length app_out_bytes == SZ.v driver_app_out_capacity));
+  assert (pure (ST.server_local_event_end_to_end_correct
+    'st0
+    st1
+    resp
+    ST.LocalStartServer
+    empty_payload
+    network_out_bytes
+    app_out_bytes));
+  assert (pure (ST.server_end_to_end_invariant st1));
+  assert (pure (st1 == CM.started_server_state 'st0));
+  rewrite (S.connection_exactly d.server_driver_server st1) as
+    (S.connection_exactly
+      d.server_driver_server
+      (CM.started_server_state 'st0));
+  CL.lemma_append_empty_right 'st0.CS.cs_wire_log.CL.raw_sent;
+  CL.lemma_append_empty_right 'st0.CS.cs_wire_log.CL.raw_received;
+  assert (pure (Seq.equal 'sent (CM.started_server_state 'st0).CS.cs_wire_log.CL.raw_sent));
+  assert (pure (server_driver_wire_logs_match
+    (CM.started_server_state 'st0)
+    'received
+    'sent
+    buffered
+    buffered_len));
+
+  V.to_vec_pts_to d.server_driver_empty_payload;
+  V.to_vec_pts_to d.server_driver_network_out;
+  V.to_vec_pts_to d.server_driver_app_out;
+  fold (server_driver_buffers d buffered buffered_len);
+  fold (server_driver_connected
+    d
+    (CM.started_server_state 'st0)
+    'certificate_chain
+    'credential_identity
+    'received
+    'sent);
+  resp
 }

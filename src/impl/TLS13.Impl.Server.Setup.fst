@@ -50,6 +50,7 @@ fn process_start_server_local_event
           pts_to app_out app_out_bytes **
           pure (B.length network_out_bytes == SZ.v network_out_len /\
                 B.length app_out_bytes == SZ.v app_out_len /\
+                st1 == CM.started_server_state 'st0 /\
                 ST.server_local_event_end_to_end_correct
                   'st0
                   st1

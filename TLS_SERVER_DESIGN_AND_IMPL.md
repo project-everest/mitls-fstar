@@ -1876,6 +1876,18 @@ Status:
       `TLS13.IO.channel`, closes it through the IO TCB, resets the channel slot,
       and preserves the verified server state, credential context, and driver
       buffers in `server_driver_closed`.
+- [x] Strengthened the server-driver state predicates so `server_driver_live`,
+      `server_driver_connected`, and `server_driver_closed` carry
+      `server_end_to_end_invariant`. This makes subsequent driver steps able to
+      call the public/focused server Pulse APIs without adding ghost-only
+      preconditions at each operation boundary.
+- [x] Added the first verified connected local-action slice:
+      `TLS13.Impl.Server.Driver.start_server_once` consumes a connected driver
+      whose protocol state satisfies `can_start_server`, calls the focused
+      `TLS13.Impl.Server.Setup.process_start_server_local_event`, and returns the
+      driver in `CM.started_server_state` with transport histories unchanged.
+      The focused setup interface now exposes this exact started-state
+      postcondition for downstream driver proofs.
 - [x] Generic `process_local_event` now handles server
       `LocalSendApplicationData` and `LocalSendCloseNotify` through the shared
       endpoint-neutral `LocalSend` mutations. The server theorem surface now
@@ -1949,17 +1961,20 @@ Checklist:
       connected server handle.
       Current status: the verified `accept_transport_once` slice performs the
       listen/accept/close-listener ownership transition and establishes
-      `server_driver_connected`; local-action draining and network handshake
-      processing remain to be layered on top.
+      `server_driver_connected`; the verified `start_server_once` slice performs
+      the first connected local transition after attach. Selection/material
+      generation, local-action draining, and network handshake processing remain
+      to be layered on top.
 - [ ] The first public driver API does not take a pre-accepted channel or
       externally owned listener handle.
 - [ ] `send`, `receive`, and `close` operate on one connected server handle.
       Current status: transport-only close is verified as
       `close_transport_once`; protocol close_notify and application send/receive
       remain pending.
-- [ ] Driver owns retained receive buffer.
-- [ ] Driver owns network output, application output, and signing scratch buffers.
-- [ ] Driver maintains exact IO-history relation:
+- [x] Driver owns retained receive buffer.
+- [x] Driver owns network output, application output, and signing scratch buffers.
+- [x] Driver maintains exact IO-history relation for constructor/attach/close and
+      zero-output start-server slices:
       - server transport sent bytes;
       - server transport received bytes;
       - protocol raw sent/received wire logs;
