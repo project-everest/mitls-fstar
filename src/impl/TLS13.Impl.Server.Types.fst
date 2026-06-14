@@ -571,6 +571,15 @@ let server_network_step_ok_consumed_prefix
          raw_received /\
       Seq.equal
        raw_received
+       (server_network_consumed_prefix resp input)) \/
+    (exists bytes raw_received.
+      st1 ==
+       CM.received_application_data_state
+         st0
+         bytes
+         raw_received /\
+      Seq.equal
+       raw_received
        (server_network_consumed_prefix resp input))
 
 let server_decoded_message_event_projection

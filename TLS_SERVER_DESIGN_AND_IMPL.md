@@ -119,6 +119,15 @@ Current phase: **Phase 6 server buffer/event API and theorem surface**.
   application read keys install after receiving client `Finished`, and
   `LocalVerifyClientFinished` now requires both application record directions
   to match the key schedule before entering `ControlApplicationData`.
+- [x] Added protected server application-data receive dispatch:
+  `TLS13.Impl.Server.Network.process_network_bytes` now accepts decoded
+  `LTlsApplicationData` records when the server is in application-data control,
+  server-role client application read keys are installed, and the caller
+  `app_out` buffer can hold the plaintext. The handler copies the delivered
+  plaintext prefix, applies the role-parametric received-application-data
+  mutation, preserves `server_end_to_end_invariant`, and extends the public
+  consumed-prefix/read-key decode projection to the exact
+  `received_application_data_state`.
 - [x] Application-data and close_notify legal message predicates are now
   endpoint-role aware. Server application sends use server application traffic,
   server application receives use client application traffic, and close_notify
@@ -1529,10 +1538,11 @@ Checklist:
       Initial slices completed: `LocalStartServer`, focused SNI-present
       received `ClientHello`, first public `process_network_bytes` ClientHello
       dispatch, derived traffic-key installs, client Finished verification, and
-      generic server application-data/close_notify sends; the focused
+      generic server application-data/close_notify sends; protected server
+      application-data receive byte dispatch is also complete. The focused
       `LocalSelectServerParameters` wrapper also preserves the invariant and now
       has a default-profile concrete-array entry point; random/X25519 generation,
-      private-key-share storage, protected receive byte dispatch, and scheduler
+      private-key-share storage, remaining protected receive cases, and scheduler
       integration remain pending.
 - [x] Emitted bytes expose raw-delta, parse-back, seal, and write-key provenance.
 - [ ] Consumed bytes expose exact consumed prefix, parse/decode classification,
@@ -1553,9 +1563,12 @@ Checklist:
       `server_network_step_ok_received_decode_projection`; protected accepted
       receives use `server_protected_record_decode_correct`, which combines the
       protected open-to-message fact with the `ServerEndpoint` read-key schedule
-      projection derived from the server invariant. Remaining work is to extend
-      this toward the full client theorem shape with uniform parse/decode
-      classification and rejected-input witnesses for all byte outcomes.
+      projection derived from the server invariant. Protected application-data
+      receives now use the same projection, expose the exact
+      `received_application_data_state`, and copy the accepted plaintext into the
+      response `app_out` prefix. Remaining work is to extend this toward the full
+      client theorem shape with uniform parse/decode classification and
+      rejected-input witnesses for all byte outcomes.
       First focused server receive slice completed for protected client
       `Finished`: `process_client_finished` preserves
       `server_network_event_end_to_end_correct`; the unified
@@ -1587,9 +1600,9 @@ Checklist:
 - [ ] Add network handlers:
       - ClientHello accept/reject;
       - compatibility CCS receive if supported;
-      - client Finished receive/open (focused public wrapper complete; full
-        parse/open dispatch still pending);
-      - application data;
+      - client Finished receive/open dispatch complete;
+      - application data receive/dispatch complete for protected records with a
+        fitting `app_out` buffer;
       - alerts;
       - decode/decrypt errors.
 - [ ] Add local handlers:
@@ -1633,7 +1646,9 @@ Checklist:
         and runtime readiness query for received application data are now
         role-parametric, which removes the previous client-only blocker for the
         server receive handler; the server network application-data dispatcher
-        branch remains pending).
+        branch now accepts protected application data in application control,
+        copies plaintext into `app_out`, preserves the server invariant, and
+        exposes the exact consumed-prefix/read-key projection).
 - [ ] Add failure transitions:
       - unsupported cipher suite;
       - missing/unsupported X25519 key share;
@@ -1689,6 +1704,13 @@ Status:
       wrapper, preserving the server invariant and entering application-data
       control when the application record keys are installed and the client
       Finished verifies against the client handshake traffic secret.
+- [x] Public `process_network_bytes` now handles protected application-data
+      records after handshake completion. The branch derives the protected
+      parser/open projection, checks endpoint-generic receive readiness plus
+      concrete `app_out` capacity, calls the role-parametric receive mutation,
+      copies the plaintext response prefix, and publishes the exact
+      `received_application_data_state` with consumed-prefix equality and
+      `ServerEndpoint` read-key provenance.
 - [ ] Rich ClientHello reject/error deltas are still pending: no-SNI policy
       rejection, unsupported cipher/group/signature offers, malformed
       ClientHello consumed-prefix witnesses, and alert-producing failure paths.
