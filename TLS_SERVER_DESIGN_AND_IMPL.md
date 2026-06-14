@@ -259,6 +259,14 @@ Current phase: **Phase 6 server buffer/event API and theorem surface**.
   `selection` precondition. This keeps the final executable selector and
   `next_local_action` scheduling gap visible rather than pretending that
   parameter generation is implemented.
+- [x] Added focused public
+  `TLS13.Impl.Server.process_select_default_server_parameters_from_arrays`
+  wrapper. It constructs the supported-profile selection witness from the stored
+  parsed `ClientHello`, the server config credential identity, and concrete
+  32-byte server-random/public-key-share arrays, then reuses the verified
+  selection transition. This removes the caller-built ghost-selection record for
+  the default profile; concrete random/X25519 generation, private-key-share
+  storage, and scheduler integration remain pending.
 - [x] Added the first sent-ServerHello state-mutation slice:
   `TLS13.Impl.ConnectionState.Model.sent_server_hello_state` mirrors the pure
   `Sent ServerHello` transition, and
@@ -1422,8 +1430,9 @@ Checklist:
       Initial slices completed: `LocalStartServer`, SNI-present received
       `ClientHello`, derived traffic-key installs, client Finished verification,
       and generic server application-data/close_notify sends; the focused
-      `LocalSelectServerParameters` wrapper also preserves the invariant but
-      remains proof-only until executable selection storage/generation is added.
+      `LocalSelectServerParameters` wrapper also preserves the invariant and now
+      has a default-profile concrete-array entry point; random/X25519 generation,
+      private-key-share storage, and scheduler integration remain pending.
 - [x] Emitted bytes expose raw-delta, parse-back, seal, and write-key provenance.
 - [ ] Consumed bytes expose exact consumed prefix, parse/decode classification,
       open facts, and read-key provenance.
@@ -1467,7 +1476,9 @@ Checklist:
 - [ ] Add local handlers:
       - server random and key share generation (empty concrete storage for the
         future server private key-share slot is allocated; executable generation
-        and spec linkage remain pending);
+        and spec linkage remain pending; default-profile selection can now be
+        recorded from caller-supplied concrete server-random/public-key-share
+        arrays);
       - cipher/group/signature selection;
       - shared-secret and traffic-secret derivation (supplied shared-secret
         wrapper and generic 32-byte-payload dispatcher complete; executable

@@ -648,6 +648,88 @@ fn process_select_server_parameters
   resp
 }
 
+fn process_select_default_server_parameters_from_arrays
+  (s:server)
+  (server_random:array U8.t)
+  (server_key_share:array U8.t)
+  (network_out:array U8.t)
+  (network_out_len:SZ.t)
+  (app_out:array U8.t)
+  (app_out_len:SZ.t)
+  requires connection_exactly s 'st0 **
+           pts_to server_random 'server_random_bytes **
+           pts_to server_key_share 'server_key_share_bytes **
+           pts_to network_out 'old_network_out **
+           pts_to app_out 'old_app_out **
+           pure (B.length 'server_random_bytes == 32 /\
+                 B.length 'server_key_share_bytes == 32 /\
+                 B.length 'old_network_out == SZ.v network_out_len /\
+                 B.length 'old_app_out == SZ.v app_out_len /\
+                 ST.server_end_to_end_invariant 'st0 /\
+                 Some? 'st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello /\
+                 Some? 'st0.CS.cs_model.CS.model_config.CS.config_server /\
+                 (let ch =
+                    Some?.v 'st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello in
+                  let cfg =
+                    Some?.v 'st0.CS.cs_model.CS.model_config.CS.config_server in
+                  let selection = {
+                    CS.server_selected_client_hello = ch;
+                    CS.server_selected_cipher_suite =
+                      T.TLS_CHACHA20_POLY1305_SHA256;
+                    CS.server_selected_group = T.X25519;
+                    CS.server_selected_signature_scheme = T.RsaPssRsaeSha256;
+                    CS.server_random = Ghost.reveal 'server_random_bytes;
+                    CS.server_key_share_private = None;
+                    CS.server_key_share_public = Ghost.reveal 'server_key_share_bytes;
+                    CS.server_selected_credential =
+                      cfg.CS.server_credential_identity;
+                  } in
+                  CM.can_select_server_parameters 'st0 selection))
+  returns resp:ST.server_response
+  ensures exists* st1 network_out_bytes app_out_bytes.
+          connection_exactly s st1 **
+          pts_to server_random 'server_random_bytes **
+          pts_to server_key_share 'server_key_share_bytes **
+          pts_to network_out network_out_bytes **
+          pts_to app_out app_out_bytes **
+          pure (B.length network_out_bytes == SZ.v network_out_len /\
+                B.length app_out_bytes == SZ.v app_out_len /\
+                ST.server_local_event_end_to_end_correct
+                  'st0
+                  st1
+                  resp
+                  ST.LocalSelectServerParameters
+                  B.empty
+                  network_out_bytes
+                  app_out_bytes)
+{
+  let ch =
+    Ghost.hide (Some?.v 'st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello);
+  let cfg =
+    Ghost.hide (Some?.v 'st0.CS.cs_model.CS.model_config.CS.config_server);
+  let selection = Ghost.hide {
+    CS.server_selected_client_hello = Ghost.reveal ch;
+    CS.server_selected_cipher_suite = T.TLS_CHACHA20_POLY1305_SHA256;
+    CS.server_selected_group = T.X25519;
+    CS.server_selected_signature_scheme = T.RsaPssRsaeSha256;
+    CS.server_random = Ghost.reveal 'server_random_bytes;
+    CS.server_key_share_private = None;
+    CS.server_key_share_public = Ghost.reveal 'server_key_share_bytes;
+    CS.server_selected_credential =
+      (Ghost.reveal cfg).CS.server_credential_identity;
+  };
+  assert (pure (CM.can_select_server_parameters
+    'st0
+    (Ghost.reveal selection)));
+  process_select_server_parameters
+    s
+    #selection
+    network_out
+    network_out_len
+    app_out
+    app_out_len
+}
+
 fn process_send_server_hello
   (s:server)
   (raw:array U8.t)
