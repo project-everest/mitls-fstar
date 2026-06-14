@@ -224,6 +224,31 @@ fn process_buffered_network_bytes_compact_once
            (Ghost.reveal 'sent)
            sent')
 
+fn read_and_process_network_once
+  (d:server_driver)
+  requires server_driver_connected
+            d
+            'st0
+            'certificate_chain
+            'credential_identity
+            'received
+            'sent
+  returns resp:ST.server_buffer_response
+  ensures exists* st1 received' sent'.
+          server_driver_connected
+           d
+           st1
+           'certificate_chain
+           'credential_identity
+           received'
+           sent' **
+          pure (server_driver_network_process_correct
+           'st0
+           st1
+           resp
+           (Ghost.reveal 'sent)
+           sent')
+
 fn start_server_once
   (d:server_driver)
   requires server_driver_connected

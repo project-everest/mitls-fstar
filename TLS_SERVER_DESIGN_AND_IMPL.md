@@ -1985,6 +1985,15 @@ Status:
       `DecodeError` exposes its local-fail response, legal non-alert network
       events are `StepOk`, close_notify alerts are `StepOk`, and non-close
       alerts are `ConnectionFailed` with a consumed-prefix witness.
+- [x] Added the first read-append plus compact-process network driver slice:
+      `TLS13.Impl.Server.Driver.read_and_process_network_once` reads from the
+      connected transport into the free suffix of the driver-owned retained
+      buffer, updates the retained-length box, proves the appended transport
+      bytes are exactly the new retained suffix in the raw buffer, and then
+      calls the verified compacting retained-prefix processor. This gives a
+      single verified network step suitable for fueled handshake/receive loops:
+      one transport read, one protocol processing attempt, exact response write,
+      and suffix compaction while preserving the connected IO-history invariant.
 - [x] Added the first generic local-output driver slice:
       `TLS13.Impl.Server.Driver.process_local_event_and_write_once` calls the
       credential-aware public server local-event API using driver-owned network
@@ -2082,9 +2091,9 @@ Checklist:
       perform the first connected local transition after attach, and
       `generate_server_material_once` fills the driver-owned selection material
       buffer. The driver-owned select+derive path and first compacting
-      retained-network processing slice are verified; local-action draining,
-      fueled read/process loops, and the full handshake accept orchestration
-      remain to be layered on top.
+      retained-network processing plus read/process slices are verified;
+      local-action draining, fueled read/process loops, and the full handshake
+      accept orchestration remain to be layered on top.
 - [ ] The first public driver API does not take a pre-accepted channel or
       externally owned listener handle.
 - [ ] `send`, `receive`, and `close` operate on one connected server handle.
