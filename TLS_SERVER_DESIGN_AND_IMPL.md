@@ -270,9 +270,10 @@ Current phase: **Phase 6 server buffer/event API and theorem surface**.
   server send-flight handlers. The raw, serialized, and from-array
   `ServerHello` send transitions and the protected `EncryptedExtensions` send
   transition now live behind that interface. Certificate construction from
-  credentials and certificate send transitions are also factored there. The
-  top-level server module keeps public forwarding wrappers and uses the Send
-  helper from the credential-aware local dispatcher.
+  credentials, certificate send transitions, and CertificateVerify send
+  transitions are also factored there. The top-level server module keeps public
+  forwarding wrappers and uses the Send helper from the credential-aware local
+  dispatcher.
 - [ ] Continue Phase 6/7 by strengthening `process_network_bytes` from the first
   ClientHello path to the final dispatcher theorem: add consumed-prefix
   classification/projections and richer ClientHello/Finished reject deltas
