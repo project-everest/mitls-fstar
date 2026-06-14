@@ -7,12 +7,14 @@ module CS = TLS13.Spec.ConnectionState
 module CSL = TLS13.ConnectionState.Lemmas
 module CT = TLS13.Impl.Client.Types
 module CM = TLS13.Impl.ConnectionState.Model
+module CR = TLS13.Impl.ConnectionState.Repr
 module M = TLS13.Messages
 module R = TLS13.Record.Spec
 module SM = TLS13.StateMachine
 module Seq = FStar.Seq
 module SZ = FStar.SizeT
 module T = TLS13.Types
+module U64 = FStar.UInt64
 module WS = TLS13.Wire.Spec
 
 (**
@@ -63,6 +65,181 @@ type next_local_action = {
   next_local_kind: local_event_kind;
   next_local_payload: local_payload_kind;
 }
+
+noextract
+let next_local_action_sound
+  (st:CS.connection_state)
+  (action:next_local_action)
+  : prop =
+  if action.next_local_ready then
+    match action.next_local_kind with
+    | LocalStartServer ->
+      action.next_local_payload == LocalPayloadNone /\
+      CM.can_start_server st
+    | LocalSelectServerParameters ->
+      action.next_local_payload == LocalPayloadServerRandomAndPrivateKey /\
+      st.CS.cs_model.CS.model_control ==
+        CS.ControlHandshaking CS.HsClientHelloReceived /\
+      st.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
+      CR.server_selection_absent st.CS.cs_model.CS.model_handshake /\
+      Some? st.CS.cs_model.CS.model_handshake.CS.hs_client_hello /\
+      Some? st.CS.cs_model.CS.model_config.CS.config_server
+    | LocalDeriveSharedSecret ->
+      action.next_local_payload == LocalPayloadServerPrivateKey /\
+      st.CS.cs_model.CS.model_control ==
+        CS.ControlHandshaking CS.HsClientHelloReceived /\
+      st.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
+      Some? st.CS.cs_model.CS.model_handshake.CS.hs_client_hello /\
+      (match st.CS.cs_model.CS.model_handshake.CS.hs_server_selection with
+       | Some selection ->
+         CS.server_selection_key_share_consistent selection /\
+         st.CS.cs_model.CS.model_handshake.CS.hs_client_hello ==
+           Some selection.CS.server_selected_client_hello /\
+         Some? selection.CS.server_key_share_private
+       | None -> False)
+    | LocalSendServerHello ->
+      action.next_local_payload == LocalPayloadServerRandomAndPrivateKey /\
+      st.CS.cs_model.CS.model_control ==
+        CS.ControlHandshaking CS.HsClientHelloReceived /\
+      st.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
+      Some? st.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_shared_secret /\
+      st.CS.cs_model.CS.model_handshake.CS.hs_server_hello == None /\
+      (match st.CS.cs_model.CS.model_handshake.CS.hs_server_selection with
+       | Some selection ->
+         CS.server_selection_key_share_consistent selection /\
+         Some? selection.CS.server_key_share_private
+       | None -> False)
+    | LocalInstallServerHandshakeTrafficKeys ->
+      action.next_local_payload == LocalPayloadNone /\
+      st.CS.cs_model.CS.model_control ==
+        CS.ControlHandshaking CS.HsServerHelloSent /\
+      st.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
+      Some?
+        st.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_handshake_secret /\
+      not (Some?
+        st.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_handshake_traffic)
+    | LocalInstallClientHandshakeTrafficKeys ->
+      action.next_local_payload == LocalPayloadNone /\
+      st.CS.cs_model.CS.model_control ==
+        CS.ControlHandshaking CS.HsServerHelloSent /\
+      st.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
+      Some?
+        st.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_handshake_secret /\
+      not (Some?
+        st.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_handshake_traffic)
+    | LocalInstallServerApplicationTrafficKeys ->
+      action.next_local_payload == LocalPayloadNone /\
+      st.CS.cs_model.CS.model_control ==
+        CS.ControlHandshaking CS.HsServerFinishedSent /\
+      st.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
+      Some?
+        st.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_master_secret /\
+      not (Some?
+        st.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_application_traffic)
+    | LocalInstallClientApplicationTrafficKeys ->
+      action.next_local_payload == LocalPayloadNone /\
+      st.CS.cs_model.CS.model_control ==
+        CS.ControlHandshaking CS.HsClientFinishedReceived /\
+      st.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
+      Some?
+        st.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_master_secret /\
+      not (Some?
+        st.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_application_traffic)
+    | LocalSendEncryptedExtensions ->
+      action.next_local_payload == LocalPayloadNone /\
+      st.CS.cs_model.CS.model_control ==
+        CS.ControlHandshaking CS.HsServerHelloSent /\
+      st.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
+      Some?
+        st.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_handshake_traffic /\
+      U64.fits
+        (st.CS.cs_model.CS.model_record.CS.record_write.R.seq + 1) /\
+      B.length st.CS.cs_model.CS.model_handshake.CS.hs_transcript + 6 <=
+        Bounds.max_transcript_len /\
+      CS.legal_event
+        st.CS.cs_model
+        (CS.ConnNetworkEvent {
+          CL.message_direction = CL.Sent;
+          CL.message_value =
+            M.TlsHandshake (M.EncryptedExtensions { M.negotiated_alpn = None });
+        })
+    | LocalSendCertificate ->
+      action.next_local_payload == LocalPayloadNone /\
+      st.CS.cs_model.CS.model_control ==
+        CS.ControlHandshaking CS.HsServerEncryptedFlightSent /\
+      st.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
+      st.CS.cs_model.CS.model_handshake.CS.hs_encrypted_extensions <> None /\
+      st.CS.cs_model.CS.model_handshake.CS.hs_certificate == None /\
+      st.CS.cs_model.CS.model_handshake.CS.hs_buffers.CS.hb_certificate_leaf_der == None /\
+      Some?
+        st.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_handshake_traffic /\
+      U64.fits
+        (st.CS.cs_model.CS.model_record.CS.record_write.R.seq + 1) /\
+      (match st.CS.cs_model.CS.model_config.CS.config_server with
+       | Some cfg ->
+         B.length cfg.CS.server_certificate_chain <=
+           Bounds.max_server_certificate_chain_len /\
+         B.length st.CS.cs_model.CS.model_handshake.CS.hs_transcript +
+           B.length
+             (WS.serialize_certificate_from_credential
+               { M.chain = [cfg.CS.server_certificate_chain] }) <=
+             Bounds.max_transcript_len /\
+         CS.legal_event
+           st.CS.cs_model
+           (CS.ConnNetworkEvent {
+             CL.message_direction = CL.Sent;
+             CL.message_value =
+               M.TlsHandshake
+                 (M.Certificate { M.chain = [cfg.CS.server_certificate_chain] });
+           })
+       | None -> False)
+    | LocalSignCertificateVerify ->
+      action.next_local_payload == LocalPayloadNone /\
+      st.CS.cs_model.CS.model_control ==
+        CS.ControlHandshaking CS.HsServerEncryptedFlightSent /\
+      st.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
+      st.CS.cs_model.CS.model_handshake.CS.hs_certificate <> None /\
+      st.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify == None /\
+      st.CS.cs_model.CS.model_handshake.CS.hs_buffers.CS.hb_certificate_verify_input == None
+    | LocalSendCertificateVerify ->
+      action.next_local_payload == LocalPayloadNone /\
+      st.CS.cs_model.CS.model_control ==
+        CS.ControlHandshaking CS.HsServerEncryptedFlightSent /\
+      st.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
+      st.CS.cs_model.CS.model_handshake.CS.hs_certificate <> None /\
+      st.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify_verified /\
+      Some? st.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify /\
+      Some?
+        st.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_handshake_traffic /\
+      U64.fits
+        (st.CS.cs_model.CS.model_record.CS.record_write.R.seq + 1) /\
+      (let cv = Some?.v
+         st.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify in
+       B.length st.CS.cs_model.CS.model_handshake.CS.hs_transcript +
+         B.length (WS.serialize_certificate_verify_from_signature cv) <=
+           Bounds.max_transcript_len /\
+       CS.legal_event
+         st.CS.cs_model
+         (CS.ConnNetworkEvent {
+           CL.message_direction = CL.Sent;
+           CL.message_value = M.TlsHandshake (M.CertificateVerify cv);
+         }))
+    | LocalSendServerFinished ->
+      action.next_local_payload == LocalPayloadNone /\
+      st.CS.cs_model.CS.model_control ==
+        CS.ControlHandshaking CS.HsServerEncryptedFlightSent /\
+      st.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
+      st.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify_verified /\
+      Some?
+        st.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_handshake_traffic /\
+      U64.fits
+        (st.CS.cs_model.CS.model_record.CS.record_write.R.seq + 1) /\
+      B.length st.CS.cs_model.CS.model_handshake.CS.hs_transcript + 36 <=
+        Bounds.max_transcript_len
+    | _ ->
+      False
+  else
+    True
 
 let server_state_core_correct
   (st:CS.connection_state)

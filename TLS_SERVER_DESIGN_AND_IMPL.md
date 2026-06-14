@@ -1435,6 +1435,9 @@ Checklist:
         in-place refactor becomes too large;
       - server public API: `TLS13.Impl.Server.fsti` / `.fst`;
       - server theorem vocabulary: `TLS13.Impl.Server.Types.fst`;
+      - server scheduler: `TLS13.Impl.Server.Schedule.fsti` / `.fst`;
+      - server material payload helpers: `TLS13.Impl.Server.Material.fsti` /
+        `.fst`;
       - server driver: `TLS13.Impl.Server.Driver.fsti` / `.fst`;
       - server credential TCB: `TLS13.ServerCredentials.fsti` or
         `TLS13.OpenSSL.Server.fsti`;
@@ -1823,6 +1826,11 @@ Status:
       helper that copies the 64-byte `server_random || server_private_key`
       payload into exact 32-byte arrays, keeping byte-splitting proof details out
       of the top-level facade.
+- [x] Server local-action scheduling has been split into
+      `TLS13.Impl.Server.Schedule.fsti` / `.fst`. The pure
+      `next_local_action_sound` predicate now lives in
+      `TLS13.Impl.Server.Types`, while the public facade delegates the executable
+      scheduler through an exact-state rewrite.
 - [x] Generic `process_local_event` now handles server
       `LocalSendApplicationData` and `LocalSendCloseNotify` through the shared
       endpoint-neutral `LocalSend` mutations. The server theorem surface now
