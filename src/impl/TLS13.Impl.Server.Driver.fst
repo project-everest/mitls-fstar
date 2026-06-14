@@ -9,11 +9,13 @@ module B = TLS13.Bytes
 module Bounds = TLS13.Impl.ConnectionState.Bounds
 module CL = TLS13.ConnectionLog
 module Crypto = TLS13.Crypto
+module CryptoSpec = TLS13.Crypto.Spec
 module CS = TLS13.Spec.ConnectionState
 module CM = TLS13.Impl.ConnectionState.Model
 module CR = TLS13.Impl.ConnectionState.Repr
 module IM = TLS13.Impl.Messages
 module IO = TLS13.IO
+module Mat = TLS13.Impl.Server.Material
 module O = TLS13.OpenSSL
 module Seq = FStar.Seq
 module SeqP = FStar.Seq.Properties
@@ -22,6 +24,7 @@ module SSetup = TLS13.Impl.Server.Setup
 module ST = TLS13.Impl.Server.Types
 module Box = Pulse.Lib.Box
 module SZ = FStar.SizeT
+module T = TLS13.Types
 module U16 = FStar.UInt16
 module U8 = FStar.UInt8
 module V = Pulse.Lib.Vec
@@ -680,4 +683,155 @@ fn generate_server_material_once
     'received
     'sent);
   ok
+}
+
+fn select_default_server_parameters_from_payload_once
+  (d:server_driver)
+  (payload:array U8.t)
+  (payload_len:SZ.t)
+  requires server_driver_connected
+             d
+             'st0
+             'certificate_chain
+             'credential_identity
+             'received
+             'sent **
+           pts_to payload 'payload_bytes **
+           pure (B.length 'payload_bytes == SZ.v payload_len /\
+                 SZ.v payload_len == 64 /\
+                 B.length (CL.raw_slice (Ghost.reveal 'payload_bytes) 0 32) == 32 /\
+                 B.length (CL.raw_slice (Ghost.reveal 'payload_bytes) 32 64) == 32 /\
+                 ST.server_local_event_input_ready
+                   'st0
+                   ST.LocalSelectServerParameters
+                   (Ghost.reveal 'payload_bytes))
+  returns resp:ST.server_response
+  ensures exists* st1.
+          server_driver_connected
+            d
+            st1
+            'certificate_chain
+            'credential_identity
+            'received
+            'sent **
+          pts_to payload 'payload_bytes
+{
+  unfold (server_driver_connected
+    d
+    'st0
+    'certificate_chain
+    'credential_identity
+    'received
+    'sent);
+  with ch buffered buffered_len.
+    assert (Box.pts_to d.server_driver_channel (Some ch) **
+            IO.is_channel ch 'received 'sent **
+            server_driver_buffers d buffered buffered_len);
+  assert (pure (ST.server_end_to_end_invariant 'st0));
+  assert (pure (server_driver_wire_logs_match
+    'st0
+    'received
+    'sent
+    buffered
+    buffered_len));
+
+  unfold (server_driver_buffers d buffered buffered_len);
+  with empty_payload raw network_out material cv_input signature app_out.
+    assert (
+      Box.pts_to d.server_driver_buffered_len buffered_len **
+      V.pts_to d.server_driver_empty_payload #1.0R empty_payload **
+      V.pts_to d.server_driver_raw #1.0R raw **
+      V.pts_to d.server_driver_network_out #1.0R network_out **
+      V.pts_to d.server_driver_material_payload #1.0R material **
+      V.pts_to d.server_driver_certificate_verify_input #1.0R cv_input **
+      V.pts_to d.server_driver_signature #1.0R signature **
+      V.pts_to d.server_driver_app_out #1.0R app_out);
+  V.to_array_pts_to d.server_driver_network_out;
+  V.to_array_pts_to d.server_driver_app_out;
+
+  let mut server_random = [| 0uy; 32sz |];
+  let mut server_private_key = [| 0uy; 32sz |];
+  Mat.copy_server_random_and_private_from_payload
+    payload
+    server_random
+    server_private_key;
+  with server_random_bytes. assert (pts_to server_random server_random_bytes);
+  with server_private_key_bytes.
+    assert (pts_to server_private_key server_private_key_bytes);
+  assert (pure (B.length server_random_bytes == 32));
+  assert (pure (B.length server_private_key_bytes == 32));
+  assert (pure (Seq.equal
+    server_random_bytes
+    (CL.raw_slice (Ghost.reveal 'payload_bytes) 0 32)));
+  assert (pure (Seq.equal
+    server_private_key_bytes
+    (CL.raw_slice (Ghost.reveal 'payload_bytes) 32 64)));
+  assert (pure (CR.server_selection_absent
+    'st0.CS.cs_model.CS.model_handshake));
+  assert (pure (Some?
+    'st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello));
+  assert (pure (Some?
+    'st0.CS.cs_model.CS.model_config.CS.config_server));
+  let selected_ch =
+    Ghost.hide (Some?.v 'st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello);
+  let server_cfg =
+    Ghost.hide (Some?.v 'st0.CS.cs_model.CS.model_config.CS.config_server);
+  let selection = Ghost.hide {
+    CS.server_selected_client_hello = Ghost.reveal selected_ch;
+    CS.server_selected_cipher_suite = T.TLS_CHACHA20_POLY1305_SHA256;
+    CS.server_selected_group = T.X25519;
+    CS.server_selected_signature_scheme = T.RsaPssRsaeSha256;
+    CS.server_random = server_random_bytes;
+    CS.server_key_share_private = Some server_private_key_bytes;
+    CS.server_key_share_public =
+      CryptoSpec.x25519_public_from_private server_private_key_bytes;
+    CS.server_selected_credential =
+      (Ghost.reveal server_cfg).CS.server_credential_identity;
+  };
+  assert (pure (CM.can_select_server_parameters
+    'st0
+    (Ghost.reveal selection)));
+
+  let resp =
+    S.process_select_default_server_parameters_with_derived_public_from_private_array
+      d.server_driver_server
+      server_random
+      server_private_key
+      (V.vec_to_array d.server_driver_network_out)
+      driver_network_out_capacity
+      (V.vec_to_array d.server_driver_app_out)
+      driver_app_out_capacity;
+  with st1 network_out_bytes app_out_bytes.
+    assert (
+      S.connection_exactly d.server_driver_server st1 **
+      pts_to server_random server_random_bytes **
+      pts_to server_private_key server_private_key_bytes **
+      pts_to (V.vec_to_array d.server_driver_network_out) network_out_bytes **
+      pts_to (V.vec_to_array d.server_driver_app_out) app_out_bytes);
+  assert (pure (B.length network_out_bytes == SZ.v driver_network_out_capacity));
+  assert (pure (B.length app_out_bytes == SZ.v driver_app_out_capacity));
+  assert (pure (st1 ==
+    CM.selected_server_parameters_state 'st0 (Ghost.reveal selection)));
+  assert (pure (ST.server_end_to_end_invariant st1));
+
+  CL.lemma_append_empty_right 'st0.CS.cs_wire_log.CL.raw_sent;
+  CL.lemma_append_empty_right 'st0.CS.cs_wire_log.CL.raw_received;
+  assert (pure (server_driver_wire_logs_match
+    st1
+    'received
+    'sent
+    buffered
+    buffered_len));
+
+  V.to_vec_pts_to d.server_driver_network_out;
+  V.to_vec_pts_to d.server_driver_app_out;
+  fold (server_driver_buffers d buffered buffered_len);
+  fold (server_driver_connected
+    d
+    st1
+    'certificate_chain
+    'credential_identity
+    'received
+    'sent);
+  resp
 }

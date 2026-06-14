@@ -1901,6 +1901,17 @@ Status:
       protocol state, credential context, IO channel, retained-buffer relation,
       and server invariant. This provides the concrete material source needed by
       the future default selection/ServerHello driver step.
+- [x] Added the first verified selection driver slice:
+      `TLS13.Impl.Server.Driver.select_default_server_parameters_from_payload_once`
+      takes an explicit 64-byte material payload, requires the existing
+      `server_local_event_input_ready` predicate for
+      `LocalSelectServerParameters`, splits the payload with
+      `TLS13.Impl.Server.Material.copy_server_random_and_private_from_payload`,
+      and calls the focused default-selection wrapper. The public postcondition
+      intentionally exposes the persistent connected driver state and returns
+      payload ownership; the exact selected-state equality is used internally for
+      the zero-output wire-log proof rather than exported, because Pulse
+      `requires` pure slice-length facts do not scope into result refinements.
 - [x] Generic `process_local_event` now handles server
       `LocalSendApplicationData` and `LocalSendCloseNotify` through the shared
       endpoint-neutral `LocalSend` mutations. The server theorem surface now
@@ -1977,8 +1988,9 @@ Checklist:
       `server_driver_connected`; the verified `start_server_once` and
       `start_server_if_ready` slices perform the first connected local transition
       after attach, and `generate_server_material_once` fills the driver-owned
-      selection material buffer. Selection dispatch, local-action draining, and
-      network handshake processing remain to be layered on top.
+      selection material buffer. The external-payload selection helper is
+      verified; wiring it to the driver-owned material buffer, local-action
+      draining, and network handshake processing remain to be layered on top.
 - [ ] The first public driver API does not take a pre-accepted channel or
       externally owned listener handle.
 - [ ] `send`, `receive`, and `close` operate on one connected server handle.
