@@ -561,8 +561,8 @@ Current phase: **Phase 6 server buffer/event API and theorem surface**.
   `process_derive_and_install_server_handshake_write_keys` and
   `process_derive_and_install_client_handshake_read_keys` expose those steps at
   the server theorem surface. These wrappers remove the supplied-material gap
-  for handshake traffic keys; readiness scheduling and application traffic-key
-  derivation remain pending.
+  for handshake traffic keys; application traffic-key derivation is now also
+  complete below.
 - [x] Integrated derived handshake key installation into
   `TLS13.Impl.Server.next_local_action`: after `HsServerHelloSent`, the scheduler
   now advertises `LocalInstallServerHandshakeTrafficKeys` while the server
@@ -582,12 +582,13 @@ Current phase: **Phase 6 server buffer/event API and theorem surface**.
   Other server local actions remain intentionally outside this generic
   dispatcher until their handlers are implemented.
 - [x] The generic `process_local_event` dispatcher now also accepts
-  `LocalDeriveSharedSecret` with a 32-byte payload for the existing
-  supplied-shared-secret path. It routes through
-  `process_derive_shared_secret` and proves
-  `server_local_event_end_to_end_correct` with the payload identified as the
-  derived shared secret. This is still the supplied-material path; executable
-  server X25519 from stored private/client shares remains a later milestone.
+  `LocalDeriveSharedSecret` with a 32-byte server-private-key payload. It routes
+  through `process_derive_shared_secret_from_private_array`, computes executable
+  X25519 against the stored ClientHello key share, installs the derived shared
+  secret and key-schedule lineage, and proves
+  `server_local_event_end_to_end_correct` for the `LocalDeriveSharedSecret`
+  step. Supplying an already-computed shared secret remains available only
+  through the focused proof wrapper.
 - [x] Added supplied-material server application write-key installation:
   `TLS13.Impl.ConnectionState.LocalHandshake.install_server_application_write_traffic_keys_from_material`
   stores server application traffic material, installs the concrete application
