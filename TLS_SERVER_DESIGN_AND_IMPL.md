@@ -1854,9 +1854,15 @@ Status:
       certificate-chain and private-key buffers, binds the ghost credential
       identity returned by the TCB, initializes the verified server state through
       the erased-identity constructor, and packages both resources in
-      `server_driver_live`. It deliberately does not yet own IO channels or TLS
-      scratch buffers; those will be added in the subsequent accept/send/receive
-      driver slices.
+      `server_driver_live`.
+- [x] Extended `TLS13.Impl.Server.Driver.server_driver_live` with initial
+      driver-owned scratch state: disconnected channel slot, retained receive
+      buffer length, empty local-event payload, raw receive buffer, network
+      output buffer, 64-byte server material payload buffer, CertificateVerify
+      input buffer, signature buffer, and application output buffer. The
+      constructor allocates and folds these resources, establishing the
+      ownership boundary needed before adding `accept`, local-action draining,
+      and network processing loops.
 - [x] Generic `process_local_event` now handles server
       `LocalSendApplicationData` and `LocalSendCloseNotify` through the shared
       endpoint-neutral `LocalSend` mutations. The server theorem surface now
@@ -1920,9 +1926,9 @@ Checklist:
       still needs to allocate the credential context and own the private-key
       buffer lifetime.
       Current status: `TLS13.Impl.Server.Driver.new_server` now allocates the
-      credential context and verified server state; retained receive/output and
-      signing scratch buffers remain to be added with the IO-capable driver
-      state.
+      credential context, verified server state, retained receive/output
+      buffers, server material payload buffer, and signing scratch buffers.
+      The IO-capable `accept` state transition remains to be added.
 - [ ] `accept` mirrors the client driver's `connect` style: it takes bind-host
       bytes, bind-host length, port, local-action fuel, and network fuel; it
       calls typed `TLS13.IO.listen_tcp` and `TLS13.IO.accept_tcp` internally,
