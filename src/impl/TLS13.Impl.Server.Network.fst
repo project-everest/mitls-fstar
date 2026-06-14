@@ -1128,6 +1128,126 @@ fn process_change_cipher_spec
   resp
 }
 
+fn process_decode_error
+  (s:server)
+  (raw:array U8.t)
+  (raw_len:SZ.t)
+  (network_out:array U8.t)
+  (network_out_len:SZ.t)
+  (app_out:array U8.t)
+  (app_out_len:SZ.t)
+  requires connection_exactly s 'st0 **
+           pts_to raw 'raw_bytes **
+           pts_to network_out 'old_network_out **
+           pts_to app_out 'old_app_out **
+           pure (B.length 'raw_bytes == SZ.v raw_len /\
+                 B.length 'old_network_out == SZ.v network_out_len /\
+                 B.length 'old_app_out == SZ.v app_out_len /\
+                 ST.server_end_to_end_invariant 'st0)
+  returns resp:ST.server_response
+  ensures exists* st1 network_out_bytes app_out_bytes.
+          connection_exactly s st1 **
+          pts_to raw 'raw_bytes **
+          pts_to network_out network_out_bytes **
+          pts_to app_out app_out_bytes **
+          pure (B.length network_out_bytes == SZ.v network_out_len /\
+                B.length app_out_bytes == SZ.v app_out_len /\
+                st1 == CM.local_fail_state 'st0 CM.tls_decode_error /\
+                ST.server_end_to_end_invariant st1 /\
+                ST.decode_error_response
+                  'st0
+                  st1
+                  resp
+                  network_out_bytes
+                  app_out_bytes)
+{
+  unfold (connection_exactly s 'st0);
+  CF.mark_decode_error s;
+  fold (connection_exactly s (CM.local_fail_state 'st0 CM.tls_decode_error));
+
+  let resp = {
+    ST.network_out_len = 0sz;
+    ST.app_out_len = 0sz;
+    ST.status = ST.DecodeError;
+  };
+
+  CM.lemma_local_fail_state_evolves
+    'st0
+    CM.tls_decode_error;
+  assert (pure (CS.legal_connection_delta
+    'st0
+    {
+      CS.delta_event = CS.ConnLocalEvent (CS.LocalFail CM.tls_decode_error);
+      CS.delta_raw_sent = B.empty;
+      CS.delta_raw_received = B.empty;
+    }
+    (CM.local_fail_state 'st0 CM.tls_decode_error)));
+
+  CSL.lemma_legal_connection_delta_full_log_consistent_for_role
+    CS.ServerEndpoint
+    'st0
+    {
+      CS.delta_event = CS.ConnLocalEvent (CS.LocalFail CM.tls_decode_error);
+      CS.delta_raw_sent = B.empty;
+      CS.delta_raw_received = B.empty;
+    }
+    (CM.local_fail_state 'st0 CM.tls_decode_error);
+  CSL.lemma_legal_connection_delta_raw_event_replay_consistent
+    'st0
+    {
+      CS.delta_event = CS.ConnLocalEvent (CS.LocalFail CM.tls_decode_error);
+      CS.delta_raw_sent = B.empty;
+      CS.delta_raw_received = B.empty;
+    }
+    (CM.local_fail_state 'st0 CM.tls_decode_error);
+  CSL.lemma_connection_state_protected_raw_segmented_replay
+    (CM.local_fail_state 'st0 CM.tls_decode_error);
+  CSL.lemma_legal_connection_delta_sent_seal_replay_consistent
+    'st0
+    {
+      CS.delta_event = CS.ConnLocalEvent (CS.LocalFail CM.tls_decode_error);
+      CS.delta_raw_sent = B.empty;
+      CS.delta_raw_received = B.empty;
+    }
+    (CM.local_fail_state 'st0 CM.tls_decode_error);
+  CSL.lemma_legal_connection_delta_received_decode_replay_consistent
+    'st0
+    {
+      CS.delta_event = CS.ConnLocalEvent (CS.LocalFail CM.tls_decode_error);
+      CS.delta_raw_sent = B.empty;
+      CS.delta_raw_received = B.empty;
+    }
+    (CM.local_fail_state 'st0 CM.tls_decode_error);
+
+  Seq.lemma_len_slice 'old_network_out 0 0;
+  Seq.lemma_eq_intro B.empty (Seq.slice 'old_network_out 0 0);
+  Seq.lemma_len_slice 'old_app_out 0 0;
+  Seq.lemma_eq_intro B.empty (Seq.slice 'old_app_out 0 0);
+  assert (pure (Seq.equal B.empty (ST.response_network_out resp 'old_network_out)));
+  assert (pure (Seq.equal B.empty (ST.response_app_out resp 'old_app_out)));
+
+  assert (pure ((CM.local_fail_state 'st0 CM.tls_decode_error).CS.cs_model.CS.model_config ==
+    'st0.CS.cs_model.CS.model_config));
+  assert (pure ((CM.local_fail_state 'st0 CM.tls_decode_error).CS.cs_model.CS.model_config.CS.config_role ==
+    CS.ServerEndpoint));
+  assert (pure (Some?
+    (CM.local_fail_state 'st0 CM.tls_decode_error).CS.cs_model.CS.model_config.CS.config_server));
+  assert (pure (ST.server_state_correct
+    (CM.local_fail_state 'st0 CM.tls_decode_error)));
+  assert (pure (ST.server_raw_to_message_replay_consistent
+    (CM.local_fail_state 'st0 CM.tls_decode_error)));
+  assert (pure (ST.server_end_to_end_invariant
+    (CM.local_fail_state 'st0 CM.tls_decode_error)));
+
+  assert (pure (ST.decode_error_response
+    'st0
+    (CM.local_fail_state 'st0 CM.tls_decode_error)
+    resp
+    'old_network_out
+    'old_app_out));
+  resp
+}
+
 fn process_network_bytes
   (s:server)
   (raw:array U8.t)
@@ -1193,24 +1313,47 @@ fn process_network_bytes
       buffer_resp
     }
     IM.NetworkBufferDecodeError -> {
-      let resp = {
-        ST.network_out_len = 0sz;
-        ST.app_out_len = 0sz;
-        ST.status = ST.DecodeError;
-      };
+      let resp =
+        process_decode_error
+          s
+          raw
+          raw_len
+          network_out
+          network_out_len
+          app_out
+          app_out_len;
       let buffer_resp = {
         ST.response = resp;
         ST.consumed_len = 0sz;
       };
+      with st1 network_out_bytes app_out_bytes.
+        assert (connection_exactly s st1 **
+                pts_to raw 'raw_bytes **
+                pts_to network_out network_out_bytes **
+                pts_to app_out app_out_bytes);
+      assert (pure (st1 == CM.local_fail_state 'st0 CM.tls_decode_error));
+      assert (pure (ST.decode_error_response
+        'st0
+        st1
+        resp
+        network_out_bytes
+        app_out_bytes));
       assert (pure (ST.server_network_bytes_end_to_end_correct
         'st0
-        'st0
+        st1
         buffer_resp
         (Ghost.reveal 'raw_bytes)
-        'old_network_out
-        'old_app_out));
+        network_out_bytes
+        app_out_bytes));
       assert (pure (buffer_resp.ST.response.ST.status == ST.NeedMoreInput ==>
         buffer_resp.ST.consumed_len == 0sz));
+      assert (pure (ST.server_network_consumed_input_projection
+        'st0
+        st1
+        buffer_resp
+        (Ghost.reveal 'raw_bytes)
+        network_out_bytes
+        app_out_bytes));
       buffer_resp
     }
     IM.NetworkBufferOk decoded_buffer -> {
@@ -1221,28 +1364,53 @@ fn process_network_bytes
       V.to_array_pts_to decoded_buffer.IM.decoded_buffer_fragment;
       match decoded_buffer.IM.decoded_buffer_parsed {
         None -> {
+          let resp =
+            process_decode_error
+              s
+              (V.vec_to_array decoded_buffer.IM.decoded_buffer_raw_record)
+              decoded_buffer.IM.decoded_buffer_raw_record_len
+              network_out
+              network_out_len
+              app_out
+              app_out_len;
+          let buffer_resp = {
+            ST.response = resp;
+            ST.consumed_len = decoded_buffer.IM.decoded_buffer_consumed_len;
+          };
+          with st1 network_out_bytes app_out_bytes.
+            assert (connection_exactly s st1 **
+                    pts_to (V.vec_to_array decoded_buffer.IM.decoded_buffer_raw_record) raw_record_bytes **
+                    pts_to network_out network_out_bytes **
+                    pts_to app_out app_out_bytes);
+          assert (pure (st1 == CM.local_fail_state 'st0 CM.tls_decode_error));
+          assert (pure (ST.decode_error_response
+            'st0
+            st1
+            resp
+            network_out_bytes
+            app_out_bytes));
+          assert (pure (SZ.v decoded_buffer.IM.decoded_buffer_consumed_len <=
+            B.length (Ghost.reveal 'raw_bytes)));
+          assert (pure (ST.server_network_bytes_end_to_end_correct
+            'st0
+            st1
+            buffer_resp
+            (Ghost.reveal 'raw_bytes)
+            network_out_bytes
+            app_out_bytes));
+          assert (pure (buffer_resp.ST.response.ST.status == ST.NeedMoreInput ==>
+            buffer_resp.ST.consumed_len == 0sz));
+          assert (pure (ST.server_network_consumed_input_projection
+            'st0
+            st1
+            buffer_resp
+            (Ghost.reveal 'raw_bytes)
+            network_out_bytes
+            app_out_bytes));
           V.to_vec_pts_to decoded_buffer.IM.decoded_buffer_fragment;
           V.free decoded_buffer.IM.decoded_buffer_fragment;
           V.to_vec_pts_to decoded_buffer.IM.decoded_buffer_raw_record;
           V.free decoded_buffer.IM.decoded_buffer_raw_record;
-          let resp = {
-            ST.network_out_len = 0sz;
-            ST.app_out_len = 0sz;
-            ST.status = ST.DecodeError;
-          };
-          let buffer_resp = {
-            ST.response = resp;
-            ST.consumed_len = 0sz;
-          };
-          assert (pure (ST.server_network_bytes_end_to_end_correct
-            'st0
-            'st0
-            buffer_resp
-            (Ghost.reveal 'raw_bytes)
-            'old_network_out
-            'old_app_out));
-          assert (pure (buffer_resp.ST.response.ST.status == ST.NeedMoreInput ==>
-            buffer_resp.ST.consumed_len == 0sz));
           buffer_resp
         }
         Some l -> {

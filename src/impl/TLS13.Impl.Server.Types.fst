@@ -386,6 +386,24 @@ let unexpected_message_response
     network_out
     app_out
 
+let decode_error_response
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (resp:server_response)
+  (network_out:B.bytes)
+  (app_out:B.bytes)
+  : prop =
+  resp.status == DecodeError /\
+  legal_response_for_event
+    st0
+    st1
+    resp
+    (CS.ConnLocalEvent (CS.LocalFail CM.tls_decode_error))
+    B.empty
+    B.empty
+    network_out
+    app_out
+
 let legal_local_response
   (st0:CS.connection_state)
   (st1:CS.connection_state)

@@ -146,6 +146,12 @@ Current phase: **Phase 6 server buffer/event API and theorem surface**.
   handshaking control state, preserve the server invariant via
   `received_change_cipher_spec_state`, and expose the exact consumed prefix. CCS
   outside handshaking remains a zero-consume `IllegalTransition` refusal.
+- [x] Added server decode-error state mutation:
+  top-level parser failures now return zero-consume `DecodeError` after entering
+  `LocalFail DecodeError`, while record-level parsed-buffer failures consume the
+  decoded raw-record prefix and enter the same failed state. Both paths preserve
+  the server invariant and expose the server `decode_error_response` theorem
+  shape.
 - [x] Application-data and close_notify legal message predicates are now
   endpoint-role aware. Server application sends use server application traffic,
   server application receives use client application traffic, and close_notify
@@ -1625,7 +1631,8 @@ Checklist:
         fitting `app_out` buffer;
       - close_notify alert receive/dispatch complete for protected records;
       - non-close alert receive/dispatch complete for protected records;
-      - decode/decrypt errors.
+      - decode/decrypt errors enter `LocalFail DecodeError`, with zero-consume
+        top-level parser failure and consumed record-level parse/decrypt failure.
 - [ ] Add local handlers:
       - server random and key share generation (empty concrete storage for the
         future server private key-share slot is allocated; executable generation
@@ -1683,6 +1690,10 @@ Checklist:
         handshaking, records the received CCS event, preserves the invariant, and
         exposes the exact consumed-prefix projection; non-handshaking CCS remains
         a zero-consume refusal).
+      - decode errors (top-level parser failures now fail the connection without
+        consuming input; record-level parsed-buffer failures consume the decoded
+        record prefix, fail the connection with `LocalFail DecodeError`, and
+        preserve the server invariant).
 - [ ] Add failure transitions:
       - unsupported cipher suite;
       - missing/unsupported X25519 key share;
@@ -1759,6 +1770,11 @@ Status:
       while handshaking by calling `mark_received_change_cipher_spec` and
       publishing the exact `received_change_cipher_spec_state` with
       consumed-prefix equality.
+- [x] Public `process_network_bytes` now handles decoder failures by calling the
+      shared decode-error fail mutation. Parser-level failures consume zero
+      bytes; record-level parse/decrypt failures consume the decoded raw-record
+      prefix and return `DecodeError` from the exact `LocalFail DecodeError`
+      post-state.
 - [ ] Rich ClientHello reject/error deltas are still pending: no-SNI policy
       rejection, unsupported cipher/group/signature offers, malformed
       ClientHello consumed-prefix witnesses, and alert-producing failure paths.
