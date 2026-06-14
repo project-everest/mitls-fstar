@@ -2020,6 +2020,14 @@ Status:
       shared-secret derivation, application sends, and external/unsupported
       actions as unsupported until the corresponding driver invariants and
       payload wiring are added.
+- [x] Added the first fueled local-action drain:
+      `TLS13.Impl.Server.Driver.drain_ready_empty_local_actions` repeatedly
+      invokes the verified scheduler-driven empty-payload wrapper until fuel is
+      exhausted, no local action is ready, or the next ready action requires an
+      explicit credential/material/application payload. This provides the safe
+      automatic drain layer for the currently scheduler-supported local actions
+      while keeping certificate send/sign, selection, shared-secret derivation,
+      and application sends on explicit proof-carrying driver helpers.
 - [x] Generic `process_local_event` now handles server
       `LocalSendApplicationData` and `LocalSendCloseNotify` through the shared
       endpoint-neutral `LocalSend` mutations. The server theorem surface now
@@ -2100,8 +2108,8 @@ Checklist:
       `generate_server_material_once` fills the driver-owned selection material
       buffer. The driver-owned select+derive path and first compacting
       retained-network processing plus read/process slices and the first
-      `NeedMoreInput` retry loop are verified; local-action draining and the
-      full handshake accept orchestration remain to be layered on top.
+      `NeedMoreInput` retry loop and empty-action local drain are verified; the
+      full handshake accept orchestration remains to be layered on top.
 - [ ] The first public driver API does not take a pre-accepted channel or
       externally owned listener handle.
 - [ ] `send`, `receive`, and `close` operate on one connected server handle.

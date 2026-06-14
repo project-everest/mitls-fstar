@@ -36,6 +36,11 @@ type server_driver_network_loop_result = {
   server_driver_network_loop_exhausted: bool;
 }
 
+type server_driver_local_drain_result = {
+  server_driver_local_drain_last: server_driver_local_status;
+  server_driver_local_drain_exhausted: bool;
+}
+
 noextract
 val server_driver_live
   (d:server_driver)
@@ -553,6 +558,26 @@ fn process_ready_empty_local_action_once
               'credential_identity
               'received
               'sent)
+
+fn drain_ready_empty_local_actions
+  (d:server_driver)
+  (fuel:SZ.t)
+  requires server_driver_connected
+              d
+              'st0
+              'certificate_chain
+              'credential_identity
+              'received
+              'sent
+  returns result:server_driver_local_drain_result
+  ensures exists* st1 sent'.
+          server_driver_connected
+            d
+            st1
+            'certificate_chain
+            'credential_identity
+            'received
+            sent'
 
 fn send_application_data_once
   (d:server_driver)

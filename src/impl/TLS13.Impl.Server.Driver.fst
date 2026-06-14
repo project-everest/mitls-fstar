@@ -3667,6 +3667,68 @@ fn process_ready_empty_local_action_once
   }
 }
 
+fn rec drain_ready_empty_local_actions
+  (d:server_driver)
+  (fuel:SZ.t)
+  requires server_driver_connected
+             d
+             'st0
+             'certificate_chain
+             'credential_identity
+             'received
+             'sent
+  returns result:server_driver_local_drain_result
+  ensures exists* st1 sent'.
+          server_driver_connected
+            d
+            st1
+            'certificate_chain
+            'credential_identity
+            'received
+            sent'
+  decreases (SZ.v fuel)
+{
+  if (fuel = 0sz) {
+    let result:server_driver_local_drain_result = {
+      server_driver_local_drain_last = ServerDriverLocalNotReady;
+      server_driver_local_drain_exhausted = true;
+    };
+    result
+  } else {
+    assert (pure (0 < SZ.v fuel));
+    let status = process_ready_empty_local_action_once d;
+    match status {
+      ServerDriverLocalProcessed -> {
+        with st1 sent'.
+          assert (server_driver_connected
+            d
+            st1
+            'certificate_chain
+            'credential_identity
+            'received
+            sent');
+        let next_fuel = SZ.sub fuel 1sz;
+        assert (pure (SZ.v next_fuel < SZ.v fuel));
+        drain_ready_empty_local_actions d next_fuel
+      }
+      ServerDriverLocalNotReady -> {
+        let result:server_driver_local_drain_result = {
+          server_driver_local_drain_last = ServerDriverLocalNotReady;
+          server_driver_local_drain_exhausted = false;
+        };
+        result
+      }
+      ServerDriverLocalExternalOrUnsupported -> {
+        let result:server_driver_local_drain_result = {
+          server_driver_local_drain_last = ServerDriverLocalExternalOrUnsupported;
+          server_driver_local_drain_exhausted = false;
+        };
+        result
+      }
+    }
+  }
+}
+
 fn send_application_data_once
   (d:server_driver)
   (payload:array U8.t)
