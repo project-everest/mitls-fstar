@@ -1895,6 +1895,12 @@ Status:
       `LocalStartServer`, and otherwise preserves the connected driver state
       while reporting that the next action is not ready or unsupported by this
       first wrapper.
+- [x] Added `TLS13.Impl.Server.Driver.generate_server_material_once`, which fills
+      the driver-owned 64-byte `server_random || server_private_key` buffer
+      through the `TLS13.Crypto.random_bytes` TCB while preserving the connected
+      protocol state, credential context, IO channel, retained-buffer relation,
+      and server invariant. This provides the concrete material source needed by
+      the future default selection/ServerHello driver step.
 - [x] Generic `process_local_event` now handles server
       `LocalSendApplicationData` and `LocalSendCloseNotify` through the shared
       endpoint-neutral `LocalSend` mutations. The server theorem surface now
@@ -1970,7 +1976,8 @@ Checklist:
       listen/accept/close-listener ownership transition and establishes
       `server_driver_connected`; the verified `start_server_once` and
       `start_server_if_ready` slices perform the first connected local transition
-      after attach. Selection/material generation, local-action draining, and
+      after attach, and `generate_server_material_once` fills the driver-owned
+      selection material buffer. Selection dispatch, local-action draining, and
       network handshake processing remain to be layered on top.
 - [ ] The first public driver API does not take a pre-accepted channel or
       externally owned listener handle.

@@ -170,3 +170,21 @@ fn start_server_if_ready
                'credential_identity
                'received
                'sent)
+
+fn generate_server_material_once
+  (d:server_driver)
+  requires server_driver_connected
+             d
+             'st0
+             'certificate_chain
+             'credential_identity
+             'received
+             'sent
+  returns ok:bool
+  ensures server_driver_connected
+            d
+            'st0
+            'certificate_chain
+            'credential_identity
+            'received
+            'sent
