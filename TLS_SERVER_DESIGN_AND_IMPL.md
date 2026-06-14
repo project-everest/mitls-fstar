@@ -275,6 +275,11 @@ Current phase: **Phase 6 server buffer/event API and theorem surface**.
   factored there too, completing the main encrypted handshake-flight send
   cluster. The top-level server module keeps public forwarding wrappers and uses
   the Send helper from the credential-aware local dispatcher.
+- [x] Added a focused `TLS13.Impl.Server.Auth.fsti`/`.fst` module for
+  server authentication-side local handlers. CertificateVerify signing,
+  stored client Finished verification, and the local unexpected-message helper
+  now live behind that interface, with `TLS13.Impl.Server` keeping forwarding
+  wrappers for the public handlers and local dispatcher.
 - [ ] Continue Phase 6/7 by strengthening `process_network_bytes` from the first
   ClientHello path to the final dispatcher theorem: add consumed-prefix
   classification/projections and richer ClientHello/Finished reject deltas
