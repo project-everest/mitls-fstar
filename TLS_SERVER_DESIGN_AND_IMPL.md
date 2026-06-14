@@ -1627,7 +1627,10 @@ Checklist:
         hints, and generic local dispatcher integration complete);
       - application data and close_notify (generic local dispatcher complete for
         server sends, including explicit unexpected-message failure on seal or
-        output-buffer refusal; receive-side application data remains pending).
+        output-buffer refusal; the verified handlers are factored behind the
+        focused `TLS13.Impl.Server.App.fsti` boundary with the facade delegating
+        through exact-state rewrites; receive-side application data remains
+        pending).
 - [ ] Add failure transitions:
       - unsupported cipher suite;
       - missing/unsupported X25519 key share;
