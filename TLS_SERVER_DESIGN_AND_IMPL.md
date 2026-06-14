@@ -369,9 +369,12 @@ Current phase: **Phase 6 server buffer/event API and theorem surface**.
   constructs the supported-profile selection with
   `server_key_share_private = Some server_sk`. Its precondition still requires
   `CM.can_select_server_parameters`, so public/private X25519 consistency is
-  supplied by the pure selection admissibility predicate. Entropy generation and
-  computing the public key from the private key inside the wrapper remain
-  pending.
+  supplied by the pure selection admissibility predicate. The newer
+  `process_select_default_server_parameters_with_derived_public_from_private_array`
+  wrapper computes `server_key_share_public =
+  TLS13.Crypto.Spec.x25519_public_from_private server_sk` internally before
+  recording the selection, so callers no longer supply the server public share
+  for this path. Entropy generation remains pending.
 - [x] Added low-level executable server X25519 shared-secret derivation:
   `TLS13.Impl.ConnectionState.LocalHandshake.try_derive_server_shared_secret_from_private_array`
   reads the stored parsed `ClientHello` key share, computes X25519 with a
@@ -492,7 +495,8 @@ Current phase: **Phase 6 server buffer/event API and theorem surface**.
   `ClientHello` public share. The public response wrapper for that helper is
   now verified, and generic `process_local_event` dispatch now routes
   `LocalDeriveSharedSecret` through this private-key path when the local payload
-  matches the stored selection. Entropy/public-key generation and autonomous
+  matches the stored selection. The selection wrapper now derives the public
+  key-share from the private key internally; entropy generation and autonomous
   `next_local_action` scheduling remain pending.
 - [x] Added role-indexed traffic-key install model support:
   `TLS13.Impl.ConnectionState.Model.installed_traffic_keys_for_role_state` and
@@ -1604,10 +1608,11 @@ Checklist:
       has default-profile concrete-array entry points for both supplied-public
       and supplied-private selections. Server private-key-share storage is
       represented in `connection_exactly` and the supplied-private wrapper
-      populates it; the low-level server X25519 helper computes the shared
-      secret from concrete private bytes plus the stored ClientHello share, and
-      the public response wrapper plus generic local-event dispatch expose the
-      corresponding local step theorem. Random/public-key generation, remaining
+      populates it; the selected public share can now be derived internally from
+      the private key, and the low-level server X25519 helper computes the
+      shared secret from concrete private bytes plus the stored ClientHello
+      share. The public response wrapper plus generic local-event dispatch expose
+      the corresponding local step theorem. Random generation, remaining
       protected receive cases, and autonomous scheduler integration remain
       pending.
 - [x] Emitted bytes expose raw-delta, parse-back, seal, and write-key provenance.

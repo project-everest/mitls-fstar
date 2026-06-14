@@ -10,6 +10,7 @@ module B = TLS13.Bytes
 module Bounds = TLS13.Impl.ConnectionState.Bounds
 module CL = TLS13.ConnectionLog
 module Crypto = TLS13.Crypto
+module CryptoSpec = TLS13.Crypto.Spec
 module CS = TLS13.Spec.ConnectionState
 module CSL = TLS13.ConnectionState.Lemmas
 module CT = TLS13.Impl.Client.Types
@@ -694,6 +695,108 @@ fn process_select_default_server_parameters_with_private_from_arrays
             pts_to server_random 'server_random_bytes **
             pts_to server_private_key 'server_private_key_bytes **
             pts_to server_key_share 'server_key_share_bytes **
+            pts_to network_out network_out_bytes **
+            pts_to app_out app_out_bytes);
+  rewrite (SSetup.connection_exactly s st1) as (connection_exactly s st1);
+  resp
+}
+
+fn process_select_default_server_parameters_with_derived_public_from_private_array
+  (s:server)
+  (server_random:array U8.t)
+  (server_private_key:array U8.t)
+  (network_out:array U8.t)
+  (network_out_len:SZ.t)
+  (app_out:array U8.t)
+  (app_out_len:SZ.t)
+  requires connection_exactly s 'st0 **
+           pts_to server_random 'server_random_bytes **
+           pts_to server_private_key 'server_private_key_bytes **
+           pts_to network_out 'old_network_out **
+           pts_to app_out 'old_app_out **
+           pure (B.length 'server_random_bytes == 32 /\
+                 B.length 'server_private_key_bytes == 32 /\
+                 B.length 'old_network_out == SZ.v network_out_len /\
+                 B.length 'old_app_out == SZ.v app_out_len /\
+                 ST.server_end_to_end_invariant 'st0 /\
+                 CR.server_selection_absent
+                  'st0.CS.cs_model.CS.model_handshake /\
+                 Some? 'st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello /\
+                 Some? 'st0.CS.cs_model.CS.model_config.CS.config_server /\
+                 (let ch =
+                   Some?.v 'st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello in
+                  let cfg =
+                   Some?.v 'st0.CS.cs_model.CS.model_config.CS.config_server in
+                  let selection = {
+                   CS.server_selected_client_hello = ch;
+                   CS.server_selected_cipher_suite =
+                     T.TLS_CHACHA20_POLY1305_SHA256;
+                   CS.server_selected_group = T.X25519;
+                   CS.server_selected_signature_scheme = T.RsaPssRsaeSha256;
+                   CS.server_random = Ghost.reveal 'server_random_bytes;
+                   CS.server_key_share_private =
+                     Some (Ghost.reveal 'server_private_key_bytes);
+                   CS.server_key_share_public =
+                     CryptoSpec.x25519_public_from_private
+                       (Ghost.reveal 'server_private_key_bytes);
+                   CS.server_selected_credential =
+                     cfg.CS.server_credential_identity;
+                  } in
+                  CM.can_select_server_parameters 'st0 selection))
+  returns resp:ST.server_response
+  ensures exists* st1 network_out_bytes app_out_bytes.
+          connection_exactly s st1 **
+          pts_to server_random 'server_random_bytes **
+          pts_to server_private_key 'server_private_key_bytes **
+          pts_to network_out network_out_bytes **
+          pts_to app_out app_out_bytes **
+          pure (B.length network_out_bytes == SZ.v network_out_len /\
+                B.length app_out_bytes == SZ.v app_out_len /\
+                (B.length (Ghost.reveal 'server_random_bytes) == 32 /\
+                 B.length (Ghost.reveal 'server_private_key_bytes) == 32 ==>
+                 (match 'st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello,
+                       'st0.CS.cs_model.CS.model_config.CS.config_server with
+                  | Some ch, Some cfg ->
+                   let selection = {
+                     CS.server_selected_client_hello = ch;
+                     CS.server_selected_cipher_suite =
+                       T.TLS_CHACHA20_POLY1305_SHA256;
+                     CS.server_selected_group = T.X25519;
+                     CS.server_selected_signature_scheme = T.RsaPssRsaeSha256;
+                     CS.server_random = Ghost.reveal 'server_random_bytes;
+                     CS.server_key_share_private =
+                       Some (Ghost.reveal 'server_private_key_bytes);
+                     CS.server_key_share_public =
+                       CryptoSpec.x25519_public_from_private
+                         (Ghost.reveal 'server_private_key_bytes);
+                     CS.server_selected_credential =
+                       cfg.CS.server_credential_identity;
+                   } in
+                   st1 == CM.selected_server_parameters_state 'st0 selection
+                  | _ -> True)) /\
+                ST.server_local_event_end_to_end_correct
+                  'st0
+                  st1
+                  resp
+                  ST.LocalSelectServerParameters
+                  B.empty
+                  network_out_bytes
+                  app_out_bytes)
+{
+  rewrite (connection_exactly s 'st0) as (SSetup.connection_exactly s 'st0);
+  let resp =
+    SSetup.process_select_default_server_parameters_with_derived_public_from_private_array
+      s
+      server_random
+      server_private_key
+      network_out
+      network_out_len
+      app_out
+      app_out_len;
+  with st1 network_out_bytes app_out_bytes.
+    assert (SSetup.connection_exactly s st1 **
+            pts_to server_random 'server_random_bytes **
+            pts_to server_private_key 'server_private_key_bytes **
             pts_to network_out network_out_bytes **
             pts_to app_out app_out_bytes);
   rewrite (SSetup.connection_exactly s st1) as (connection_exactly s st1);
