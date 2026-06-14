@@ -212,6 +212,10 @@ fn new_server
                        (CR.server_initial_state
                          (Ghost.reveal 'certificate_chain_bytes)
                          credential_identity) /\
+                     CM.can_start_server
+                       (CR.server_initial_state
+                         (Ghost.reveal 'certificate_chain_bytes)
+                         credential_identity) /\
                      ST.server_end_to_end_invariant
                        (CR.server_initial_state
                          (Ghost.reveal 'certificate_chain_bytes)

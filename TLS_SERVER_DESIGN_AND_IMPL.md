@@ -1854,7 +1854,10 @@ Status:
       certificate-chain and private-key buffers, binds the ghost credential
       identity returned by the TCB, initializes the verified server state through
       the erased-identity constructor, and packages both resources in
-      `server_driver_live`.
+      `server_driver_live`. Its postcondition now also exposes
+      `CM.can_start_server` for the constructed initial state, making the
+      verified `accept_transport_and_start_once` helper immediately usable after
+      successful construction.
 - [x] Extended `TLS13.Impl.Server.Driver.server_driver_live` with initial
       driver-owned scratch state: disconnected channel slot, retained receive
       buffer length, empty local-event payload, raw receive buffer, network
@@ -1984,7 +1987,8 @@ Checklist:
       Current status: `TLS13.Impl.Server.Driver.new_server` now allocates the
       credential context, verified server state, retained receive/output
       buffers, server material payload buffer, and signing scratch buffers.
-      The IO-capable `accept` state transition remains to be added.
+      It also exposes `CM.can_start_server` for the initial state. The
+      IO-capable full-handshake `accept` loop remains to be added.
 - [ ] `accept` mirrors the client driver's `connect` style: it takes bind-host
       bytes, bind-host length, port, local-action fuel, and network fuel; it
       calls typed `TLS13.IO.listen_tcp` and `TLS13.IO.accept_tcp` internally,
