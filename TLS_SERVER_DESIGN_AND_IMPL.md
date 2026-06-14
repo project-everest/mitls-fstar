@@ -1926,6 +1926,13 @@ Status:
       Wiring this to the driver-owned material buffer remains separate because
       the selection postcondition still needs an explicit relation between the
       retained material private key and the selected server state.
+- [x] Strengthened the explicit-payload selection postcondition with
+      `server_driver_selection_from_payload_correct` and added
+      `select_and_derive_shared_secret_from_payload_once`, which selects default
+      parameters and immediately derives the X25519 shared secret from the same
+      64-byte `server_random || server_private_key` payload. This gives a
+      verified composed explicit-material path while the driver-owned material
+      path still needs persistent buffer/state relation tracking.
 - [x] Added verified server application-output helpers:
       `TLS13.Impl.Server.Driver.send_application_data_once` and
       `send_close_notify_once` reuse the local-event/write helper for
