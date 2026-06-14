@@ -390,6 +390,15 @@ Current phase: **Phase 6 server buffer/event API and theorem surface**.
   private key. Autonomous `next_local_action` scheduling remains pending until
   entropy/public-key generation stores concrete private bytes without a driver
   payload.
+- [x] Wired generic local dispatch for supplied entropy material:
+  `server_local_event_input_ready` now accepts a 64-byte
+  `server_random || server_private_key` payload for
+  `LocalSelectServerParameters` and `LocalSendServerHello`. Generic
+  `process_local_event` splits that payload into concrete 32-byte arrays,
+  records the default supplied-private selection with the public share derived
+  internally, and emits the matching cleartext ServerHello through the
+  derived-public send wrapper. This closes the previous generic-dispatch stubs
+  for selection and ServerHello without adding broad concrete cache fields.
 - [x] Added the first sent-ServerHello state-mutation slice:
   `TLS13.Impl.ConnectionState.Model.sent_server_hello_state` mirrors the pure
   `Sent ServerHello` transition, and
@@ -505,9 +514,10 @@ Current phase: **Phase 6 server buffer/event API and theorem surface**.
   `LocalDeriveSharedSecret` through this private-key path when the local payload
   matches the stored selection. The selection wrapper now derives the public
   key-share from the private key internally, and the ServerHello send wrapper
-  can derive the emitted public share from the same concrete private key;
-  entropy generation and autonomous `next_local_action` scheduling remain
-  pending.
+  can derive the emitted public share from the same concrete private key.
+  Generic local dispatch now supports the same material layout for selection
+  and ServerHello; entropy generation and autonomous `next_local_action`
+  scheduling remain pending.
 - [x] Added role-indexed traffic-key install model support:
   `TLS13.Impl.ConnectionState.Model.installed_traffic_keys_for_role_state` and
   its evolution lemma mirror the pure `LocalInstallTrafficKeysForRole`
@@ -1695,7 +1705,8 @@ Checklist:
         future server private key-share slot is allocated; executable generation
         and spec linkage remain pending; default-profile selection can now be
         recorded from caller-supplied concrete server-random/public-key-share
-        arrays);
+        arrays and from a generic 64-byte
+        `server_random || server_private_key` local payload);
       - cipher/group/signature selection;
       - shared-secret and traffic-secret derivation (supplied shared-secret
         wrapper and generic 32-byte-payload dispatcher complete; executable
@@ -1715,8 +1726,9 @@ Checklist:
         certificate-chain copyout TCB, verified L-level one-certificate builder,
         public executable Certificate send wrapper, and concrete-array
         ServerHello builder/send wrapper are in place, including a private-key
-        derived-public-share variant. Concrete generation and persistent
-        selection-to-L-ServerHello storage remain pending);
+        derived-public-share variant. Generic local dispatch now emits
+        ServerHello from the same 64-byte material payload. Concrete generation
+        and persistent selection-to-L-ServerHello storage remain pending);
       - client Finished verification (state mutation, focused receive wrapper,
         focused verify wrapper, and generic local dispatcher integration
         complete; full network parse/open dispatch for received client Finished

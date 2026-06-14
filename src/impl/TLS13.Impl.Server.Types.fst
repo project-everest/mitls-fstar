@@ -524,6 +524,188 @@ let server_local_event_end_to_end_correct
         else True
       | CS.ConnLocalEvent _ -> True))
 
+let lemma_legal_local_response_select_payload_irrelevant
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (resp:server_response)
+  (payload0 payload1:B.bytes)
+  (ev:CS.conn_event)
+  (raw_sent raw_received:B.bytes)
+  (network_out:B.bytes)
+  (app_out:B.bytes)
+  : Lemma
+      (requires legal_local_response
+                 st0 st1 resp LocalSelectServerParameters payload0 ev
+                 raw_sent raw_received network_out app_out)
+      (ensures legal_local_response
+                st0 st1 resp LocalSelectServerParameters payload1 ev
+                raw_sent raw_received network_out app_out)
+=
+  ()
+
+let lemma_legal_local_response_send_server_hello_payload_irrelevant
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (resp:server_response)
+  (payload0 payload1:B.bytes)
+  (ev:CS.conn_event)
+  (raw_sent raw_received:B.bytes)
+  (network_out:B.bytes)
+  (app_out:B.bytes)
+  : Lemma
+      (requires legal_local_response
+                 st0 st1 resp LocalSendServerHello payload0 ev
+                 raw_sent raw_received network_out app_out)
+      (ensures legal_local_response
+                st0 st1 resp LocalSendServerHello payload1 ev
+                raw_sent raw_received network_out app_out)
+=
+  ()
+
+let lemma_local_select_server_parameters_payload_irrelevant
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (resp:server_response)
+  (payload0 payload1:B.bytes)
+  (network_out:B.bytes)
+  (app_out:B.bytes)
+  : Lemma
+      (requires server_local_event_end_to_end_correct
+                        st0 st1 resp LocalSelectServerParameters payload0 network_out app_out)
+      (ensures server_local_event_end_to_end_correct
+                       st0 st1 resp LocalSelectServerParameters payload1 network_out app_out)
+=
+  let goal (_:unit) =
+    server_local_event_end_to_end_correct
+      st0 st1 resp LocalSelectServerParameters payload1 network_out app_out in
+  FStar.Classical.or_elim
+    #(exists ev raw_sent raw_received.
+        legal_local_response
+          st0 st1 resp LocalSelectServerParameters payload0 ev
+          raw_sent raw_received network_out app_out)
+    #(unexpected_message_response st0 st1 resp network_out app_out)
+    #goal
+    (fun h ->
+      FStar.Classical.exists_elim (goal ())
+        #CS.conn_event
+        #(fun ev -> exists raw_sent raw_received.
+          legal_local_response
+            st0 st1 resp LocalSelectServerParameters payload0 ev
+            raw_sent raw_received network_out app_out)
+        h
+        (fun ev ->
+      FStar.Classical.exists_elim (goal ())
+        #B.bytes
+        #(fun raw_sent -> exists raw_received.
+          legal_local_response
+            st0 st1 resp LocalSelectServerParameters payload0 ev
+            raw_sent raw_received network_out app_out)
+        ()
+        (fun raw_sent ->
+      FStar.Classical.exists_elim (goal ())
+        #B.bytes
+        #(fun raw_received ->
+          legal_local_response
+            st0 st1 resp LocalSelectServerParameters payload0 ev
+            raw_sent raw_received network_out app_out)
+        ()
+        (fun raw_received ->
+        lemma_legal_local_response_select_payload_irrelevant
+          st0 st1 resp payload0 payload1 ev raw_sent raw_received network_out app_out;
+        FStar.Classical.exists_intro
+          (fun raw_received' ->
+            legal_local_response
+              st0 st1 resp LocalSelectServerParameters payload1 ev
+              raw_sent raw_received' network_out app_out)
+          raw_received;
+        FStar.Classical.exists_intro
+          (fun raw_sent' ->
+            exists raw_received'.
+              legal_local_response
+                st0 st1 resp LocalSelectServerParameters payload1 ev
+                raw_sent' raw_received' network_out app_out)
+          raw_sent;
+        FStar.Classical.exists_intro
+          (fun ev' ->
+            exists raw_sent' raw_received'.
+              legal_local_response
+                st0 st1 resp LocalSelectServerParameters payload1 ev'
+                raw_sent' raw_received' network_out app_out)
+          ev))))
+    (fun _ -> ())
+
+let lemma_local_send_server_hello_payload_irrelevant
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (resp:server_response)
+  (payload0 payload1:B.bytes)
+  (network_out:B.bytes)
+  (app_out:B.bytes)
+  : Lemma
+      (requires server_local_event_end_to_end_correct
+                        st0 st1 resp LocalSendServerHello payload0 network_out app_out)
+      (ensures server_local_event_end_to_end_correct
+                       st0 st1 resp LocalSendServerHello payload1 network_out app_out)
+=
+  let goal (_:unit) =
+    server_local_event_end_to_end_correct
+      st0 st1 resp LocalSendServerHello payload1 network_out app_out in
+  FStar.Classical.or_elim
+    #(exists ev raw_sent raw_received.
+        legal_local_response
+          st0 st1 resp LocalSendServerHello payload0 ev
+          raw_sent raw_received network_out app_out)
+    #(unexpected_message_response st0 st1 resp network_out app_out)
+    #goal
+    (fun h ->
+      FStar.Classical.exists_elim (goal ())
+        #CS.conn_event
+        #(fun ev -> exists raw_sent raw_received.
+          legal_local_response
+            st0 st1 resp LocalSendServerHello payload0 ev
+            raw_sent raw_received network_out app_out)
+        h
+        (fun ev ->
+      FStar.Classical.exists_elim (goal ())
+        #B.bytes
+        #(fun raw_sent -> exists raw_received.
+          legal_local_response
+            st0 st1 resp LocalSendServerHello payload0 ev
+            raw_sent raw_received network_out app_out)
+        ()
+        (fun raw_sent ->
+      FStar.Classical.exists_elim (goal ())
+        #B.bytes
+        #(fun raw_received ->
+          legal_local_response
+            st0 st1 resp LocalSendServerHello payload0 ev
+            raw_sent raw_received network_out app_out)
+        ()
+        (fun raw_received ->
+        lemma_legal_local_response_send_server_hello_payload_irrelevant
+          st0 st1 resp payload0 payload1 ev raw_sent raw_received network_out app_out;
+        FStar.Classical.exists_intro
+          (fun raw_received' ->
+            legal_local_response
+              st0 st1 resp LocalSendServerHello payload1 ev
+              raw_sent raw_received' network_out app_out)
+          raw_received;
+        FStar.Classical.exists_intro
+          (fun raw_sent' ->
+            exists raw_received'.
+              legal_local_response
+                st0 st1 resp LocalSendServerHello payload1 ev
+                raw_sent' raw_received' network_out app_out)
+          raw_sent;
+        FStar.Classical.exists_intro
+          (fun ev' ->
+            exists raw_sent' raw_received'.
+              legal_local_response
+                st0 st1 resp LocalSendServerHello payload1 ev'
+                raw_sent' raw_received' network_out app_out)
+          ev))))
+    (fun _ -> ())
+
 let server_network_bytes_end_to_end_correct
   (st0:CS.connection_state)
   (st1:CS.connection_state)

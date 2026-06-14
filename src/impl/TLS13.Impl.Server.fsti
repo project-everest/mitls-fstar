@@ -230,6 +230,55 @@ let server_local_event_input_ready
     CM.can_verify_client_finished
       st
       (Some?.v st.CS.cs_model.CS.model_handshake.CS.hs_client_finished)
+  | ST.LocalSelectServerParameters ->
+    B.length payload == 64 /\
+    st.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
+    st.CS.cs_model.CS.model_control ==
+      CS.ControlHandshaking CS.HsClientHelloReceived /\
+    CR.server_selection_absent st.CS.cs_model.CS.model_handshake /\
+    Some? st.CS.cs_model.CS.model_handshake.CS.hs_client_hello /\
+    Some? st.CS.cs_model.CS.model_config.CS.config_server /\
+    (let ch = Some?.v st.CS.cs_model.CS.model_handshake.CS.hs_client_hello in
+     let cfg = Some?.v st.CS.cs_model.CS.model_config.CS.config_server in
+     let server_random = CL.raw_slice payload 0 32 in
+     let server_private_key = CL.raw_slice payload 32 64 in
+     let selection = {
+       CS.server_selected_client_hello = ch;
+       CS.server_selected_cipher_suite = T.TLS_CHACHA20_POLY1305_SHA256;
+       CS.server_selected_group = T.X25519;
+       CS.server_selected_signature_scheme = T.RsaPssRsaeSha256;
+       CS.server_random = server_random;
+       CS.server_key_share_private = Some server_private_key;
+       CS.server_key_share_public =
+         CryptoSpec.x25519_public_from_private server_private_key;
+       CS.server_selected_credential = cfg.CS.server_credential_identity;
+     } in
+     CM.can_select_server_parameters st selection)
+  | ST.LocalSendServerHello ->
+    B.length payload == 64 /\
+    st.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
+    (    let server_random = CL.raw_slice payload 0 32 in
+    let server_private_key = CL.raw_slice payload 32 64 in
+     let sh = {
+       M.random = server_random;
+       M.key_share =
+         CryptoSpec.x25519_public_from_private server_private_key;
+       M.cipher_suite = T.TLS_CHACHA20_POLY1305_SHA256;
+     } in
+     (match st.CS.cs_model.CS.model_handshake.CS.hs_server_selection with
+      | Some selection ->
+        Seq.equal selection.CS.server_random server_random /\
+        Some? selection.CS.server_key_share_private /\
+        Seq.equal
+          (Some?.v selection.CS.server_key_share_private)
+          server_private_key /\
+        CS.server_selection_key_share_consistent selection
+      | None -> False) /\
+     CM.can_send_server_hello
+       st
+       sh
+       (CS.serialized_cleartext_tls_message
+         (M.TlsHandshake (M.ServerHello sh))))
   | ST.LocalSendEncryptedExtensions ->
     Seq.equal payload B.empty /\
     st.CS.cs_model.CS.model_control ==
