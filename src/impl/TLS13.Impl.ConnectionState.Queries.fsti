@@ -265,6 +265,28 @@ fn can_receive_client_hello
                 CL.message_value = M.TlsHandshake (M.ClientHello ch);
               }))
 
+fn can_receive_client_finished
+  (c:connection_state)
+  (#fin:erased M.finished)
+  (#st0:erased CS.connection_state)
+  requires connection_exactly c st0
+  returns ok: bool
+  ensures connection_exactly c st0 **
+          pure (ok ==>
+            st0.CS.cs_model.CS.model_control ==
+              CS.ControlHandshaking CS.HsServerFinishedSent /\
+            st0.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
+            st0.CS.cs_model.CS.model_handshake.CS.hs_client_finished == None /\
+            Some?
+              st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_handshake_traffic /\
+            U64.fits (st0.CS.cs_model.CS.model_record.CS.record_read.R.seq + 1) /\
+            CS.legal_event
+              st0.CS.cs_model
+              (CS.ConnNetworkEvent {
+                CL.message_direction = CL.Received;
+                CL.message_value = M.TlsHandshake (M.Finished (Ghost.reveal fin));
+              }))
+
 fn can_receive_application_data
   (c:connection_state)
   (#st0:erased CS.connection_state)

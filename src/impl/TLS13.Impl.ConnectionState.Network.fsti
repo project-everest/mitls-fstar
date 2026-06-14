@@ -396,7 +396,7 @@ fn mark_received_client_finished
   requires connection_exactly c st0 **
            ArrPts.pts_to raw 'raw_bytes **
            IM.is_valid_finished lfin fin **
-           pure (can_receive_client_finished st0 (Ghost.reveal fin) (Ghost.reveal 'raw_bytes))
+           pure (Model.can_receive_client_finished st0 (Ghost.reveal fin) (Ghost.reveal 'raw_bytes))
   ensures connection_exactly
             c
             (received_client_finished_state st0 (Ghost.reveal fin) (Ghost.reveal 'raw_bytes)) **

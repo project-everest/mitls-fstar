@@ -1258,6 +1258,118 @@ fn can_receive_client_hello
     false
   }
 }
+fn can_receive_client_finished
+  (c:connection_state)
+  (#fin:erased M.finished)
+  (#st0:erased CS.connection_state)
+  requires connection_exactly c st0
+  returns ok: bool
+  ensures connection_exactly c st0 **
+          pure (ok ==>
+            st0.CS.cs_model.CS.model_control ==
+              CS.ControlHandshaking CS.HsServerFinishedSent /\
+            st0.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
+            st0.CS.cs_model.CS.model_handshake.CS.hs_client_finished == None /\
+            Some?
+              st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_handshake_traffic /\
+            U64.fits (st0.CS.cs_model.CS.model_record.CS.record_read.R.seq + 1) /\
+            CS.legal_event
+              st0.CS.cs_model
+              (CS.ConnNetworkEvent {
+                CL.message_direction = CL.Received;
+                CL.message_value = M.TlsHandshake (M.Finished (Ghost.reveal fin));
+              }))
+{
+  unfold (connection_exactly c st0);
+  unfold (connection_model_exactly c st0.CS.cs_model);
+  unfold (control_exactly c.control st0.CS.cs_model.CS.model_control st0.CS.cs_model.CS.model_failure);
+  unfold (record_layer_exactly c.records st0.CS.cs_model.CS.model_record);
+  unfold (handshake_exactly c.handshake st0.CS.cs_model.CS.model_handshake);
+  unfold (handshake_messages_exactly c.handshake.messages st0.CS.cs_model.CS.model_handshake);
+  unfold (finished_slot_exactly
+    c.handshake.messages.client_finished
+    st0.CS.cs_model.CS.model_handshake.CS.hs_client_finished);
+  unfold (key_schedule_exactly
+    c.handshake.keys
+    st0.CS.cs_model.CS.model_handshake.CS.hs_keys);
+  unfold (traffic_key_material_exactly
+    c.handshake.keys.client_handshake_traffic
+    st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_handshake_traffic);
+
+  let role_ok = config_role_is_server c.config;
+
+  let tag = !c.control.control_tag;
+  let stage = !c.control.handshake_stage_tag;
+  let tag_ok = tag = 1uy;
+  let stage_ok = stage = 16uy;
+
+  with stored_fin. assert (Box.pts_to c.handshake.messages.client_finished stored_fin);
+  let stored = !c.handshake.messages.client_finished;
+  let no_fin = (
+    match stored with
+    | None -> true
+    | Some _ -> false);
+  assert (pure (stored == stored_fin));
+  assert (pure (no_fin ==> stored == None));
+  assert (pure (no_fin ==> stored_fin == None));
+  assert (pure (no_fin ==>
+    st0.CS.cs_model.CS.model_handshake.CS.hs_client_finished == None));
+
+  with client_hs_present.
+    assert (Box.pts_to c.handshake.keys.client_handshake_traffic.present client_hs_present);
+  with client_hs_secret.
+    assert (V.pts_to c.handshake.keys.client_handshake_traffic.traffic_secret client_hs_secret);
+  with client_hs_key.
+    assert (V.pts_to c.handshake.keys.client_handshake_traffic.traffic_key client_hs_key);
+  with client_hs_iv.
+    assert (V.pts_to c.handshake.keys.client_handshake_traffic.traffic_iv client_hs_iv);
+  let has_client_handshake_keys = !c.handshake.keys.client_handshake_traffic.present;
+  assert (pure (has_client_handshake_keys == client_hs_present));
+
+  let seq_ok = Rec.can_advance_seq c.records.read;
+  let ok = role_ok && tag_ok && stage_ok && no_fin && has_client_handshake_keys && seq_ok;
+
+  assert (pure (ok ==> U8.v tag == 1));
+  assert (pure (ok ==> U8.v stage == 16));
+  assert (pure (ok ==>
+    st0.CS.cs_model.CS.model_control ==
+      CS.ControlHandshaking CS.HsServerFinishedSent));
+  assert (pure (ok ==>
+    st0.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint));
+  assert (pure (ok ==>
+    st0.CS.cs_model.CS.model_handshake.CS.hs_client_finished == None));
+  assert (pure (ok ==> client_hs_present));
+  assert (pure (ok ==> Some?
+    st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_handshake_traffic));
+  assert (pure (ok ==>
+    U64.fits (st0.CS.cs_model.CS.model_record.CS.record_read.R.seq + 1)));
+  assert (pure (ok ==> CS.legal_event
+    st0.CS.cs_model
+    (CS.ConnNetworkEvent {
+      CL.message_direction = CL.Received;
+      CL.message_value = M.TlsHandshake (M.Finished (Ghost.reveal fin));
+    })));
+
+  fold (traffic_key_material_exactly
+    c.handshake.keys.client_handshake_traffic
+    st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_handshake_traffic);
+  fold (key_schedule_exactly
+    c.handshake.keys
+    st0.CS.cs_model.CS.model_handshake.CS.hs_keys);
+  fold (finished_slot_exactly
+    c.handshake.messages.client_finished
+    st0.CS.cs_model.CS.model_handshake.CS.hs_client_finished);
+  fold (handshake_messages_exactly c.handshake.messages st0.CS.cs_model.CS.model_handshake);
+  fold (handshake_exactly c.handshake st0.CS.cs_model.CS.model_handshake);
+  fold (record_layer_exactly c.records st0.CS.cs_model.CS.model_record);
+  fold (control_exactly
+    c.control
+    st0.CS.cs_model.CS.model_control
+    st0.CS.cs_model.CS.model_failure);
+  fold (connection_model_exactly c st0.CS.cs_model);
+  fold (connection_exactly c st0);
+  ok
+}
 fn can_receive_application_data
   (c:connection_state)
   (#st0:erased CS.connection_state)

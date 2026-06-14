@@ -248,11 +248,16 @@ Current phase: **Phase 6 server buffer/event API and theorem surface**.
   `received_client_hello_state` post-state and proves that the stored raw
   ClientHello receive bytes equal the consumed input prefix
   `Seq.slice input 0 consumed_len`.
+- [x] Added protected client `Finished` byte dispatch to the public server
+  `process_network_bytes` path. The dispatcher now derives the parser/open
+  projection for protected `Finished`, checks concrete server readiness with a
+  new `can_receive_client_finished` query, calls the focused verified handler,
+  and exposes the exact `received_client_finished_state` post-state plus the
+  consumed-prefix raw-byte equality on successful `StepOk`.
 - [ ] Continue Phase 6/7 by strengthening `process_network_bytes` from the first
   ClientHello path to the final dispatcher theorem: add consumed-prefix
-  classification/projections, protected client Finished dispatch, and richer
-  ClientHello reject deltas instead of the current state-preserving refusal
-  cases.
+  classification/projections and richer ClientHello/Finished reject deltas
+  instead of the current state-preserving refusal cases.
 - [x] Removed the immediate C parser backend blocker for that dispatcher:
   `c_stubs/tls13_connection_backend.h` now decodes canonical supported-profile
   `ClientHello` handshake records into `LClientHello`, matching the serializer
@@ -1506,15 +1511,17 @@ Checklist:
       `ClientHello` records and the first server `process_network_bytes` wrapper
       consumes accepted ClientHello prefixes. Its public theorem now exposes the
       exact successful post-state and proves the accepted ClientHello raw bytes
-      equal `Seq.slice input 0 consumed_len`; parse/decode classification, open
-      facts, read-key provenance, and rejected-input witnesses remain to be
-      added.
+      equal `Seq.slice input 0 consumed_len`. The dispatcher now also accepts
+      protected client `Finished`, derives its protected open/decode projection,
+      and exposes the exact `received_client_finished_state` post-state with the
+      same consumed-prefix equality. Remaining work is to expose uniform
+      parse/decode classification, read-key provenance, and rejected-input
+      witnesses for all byte outcomes.
       First focused server receive slice completed for protected client
       `Finished`: `process_client_finished` preserves
-      `server_network_event_end_to_end_correct` when the caller supplies the
-      parser/open decode projection for the protected raw record. The unified
-      `process_network_bytes` dispatcher still needs to derive this protected
-      fact from parser/record-open postconditions.
+      `server_network_event_end_to_end_correct`; the unified
+      `process_network_bytes` dispatcher now derives the required protected
+      parser/open projection from decoder postconditions before calling it.
 - [ ] Server invariants expose facts needed to instantiate
       `theorem_paired_endpoints_derived_key_agrees` with a client state.
 
@@ -1612,6 +1619,11 @@ Status:
       `received_client_hello_state` witness and the accepted consumed-prefix
       equality, so downstream server proofs can recover the stored raw receive
       bytes without re-opening the decoder proof.
+- [x] Public `process_network_bytes` now handles protected client `Finished`
+      records by deriving the decoder/open projection, checking
+      `HsServerFinishedSent` readiness and client-handshake read-key presence,
+      calling `process_client_finished`, and publishing the exact
+      `received_client_finished_state` plus consumed-prefix equality.
 - [x] Generic `process_local_event` now handles server
       `LocalSendApplicationData` and `LocalSendCloseNotify` through the shared
       endpoint-neutral `LocalSend` mutations. The server theorem surface now
