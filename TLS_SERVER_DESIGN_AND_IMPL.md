@@ -254,6 +254,12 @@ Current phase: **Phase 6 server buffer/event API and theorem surface**.
   new `can_receive_client_finished` query, calls the focused verified handler,
   and exposes the exact `received_client_finished_state` post-state plus the
   consumed-prefix raw-byte equality on successful `StepOk`.
+- [x] Began factoring the oversized server Pulse implementation: receive-event
+  handlers and public byte dispatch now live in
+  `TLS13.Impl.Server.Network.fsti`/`.fst` behind a focused interface, while
+  `TLS13.Impl.Server` keeps thin public wrappers. This preserves the verified
+  theorem surface and cuts the top-level server implementation by roughly one
+  thousand lines, following the client `Handle.*`/facade structure.
 - [ ] Continue Phase 6/7 by strengthening `process_network_bytes` from the first
   ClientHello path to the final dispatcher theorem: add consumed-prefix
   classification/projections and richer ClientHello/Finished reject deltas
@@ -1624,6 +1630,12 @@ Status:
       `HsServerFinishedSent` readiness and client-handshake read-key presence,
       calling `process_client_finished`, and publishing the exact
       `received_client_finished_state` plus consumed-prefix equality.
+- [x] Server network receive/byte-dispatch code has been split into
+      `TLS13.Impl.Server.Network` with an `.fsti` boundary. `TLS13.Impl.Server`
+      now delegates `process_client_hello`, `process_client_finished`, and
+      `process_network_bytes` through explicit `connection_exactly` predicate
+      rewrites, keeping the public API stable while shrinking the monolithic
+      implementation.
 - [x] Generic `process_local_event` now handles server
       `LocalSendApplicationData` and `LocalSendCloseNotify` through the shared
       endpoint-neutral `LocalSend` mutations. The server theorem surface now
