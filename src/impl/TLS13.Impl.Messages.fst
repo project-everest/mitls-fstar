@@ -419,6 +419,11 @@ let is_valid_client_hello ([@@@mkey] l:client_hello) (m:M.client_hello) : slprop
       V.length l.client_hello_key_share == 32 /\
       V.length l.client_hello_cipher_suites == max_cipher_suites /\
       V.length l.client_hello_signature_schemes == max_signature_schemes /\
+      B.length random == 32 /\
+      B.length server_name == max_server_name_len /\
+      B.length key_share == 32 /\
+      Seq.length cipher_suites == max_cipher_suites /\
+      Seq.length signature_schemes == max_signature_schemes /\
       SZ.v l.client_hello_server_name_len <= B.length server_name /\
       SZ.v l.client_hello_cipher_suites_len <= Seq.length cipher_suites /\
       SZ.v l.client_hello_signature_schemes_len <= Seq.length signature_schemes /\

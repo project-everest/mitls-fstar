@@ -1907,3 +1907,37 @@ fn process_client_finished
                   (Ghost.reveal 'raw_bytes)
                   network_out_bytes
                   app_out_bytes)
+
+fn process_network_bytes
+  (s:server)
+  (raw:array U8.t)
+  (raw_len:SZ.t)
+  (network_out:array U8.t)
+  (network_out_len:SZ.t)
+  (app_out:array U8.t)
+  (app_out_len:SZ.t)
+  requires connection_exactly s 'st0 **
+           pts_to raw 'raw_bytes **
+           pts_to network_out 'old_network_out **
+           pts_to app_out 'old_app_out **
+           pure (B.length 'raw_bytes == SZ.v raw_len /\
+                 B.length 'old_network_out == SZ.v network_out_len /\
+                 B.length 'old_app_out == SZ.v app_out_len /\
+                 ST.server_end_to_end_invariant 'st0)
+  returns buffer_resp:ST.server_buffer_response
+  ensures exists* st1 network_out_bytes app_out_bytes.
+          connection_exactly s st1 **
+          pts_to raw 'raw_bytes **
+          pts_to network_out network_out_bytes **
+          pts_to app_out app_out_bytes **
+          pure (B.length network_out_bytes == SZ.v network_out_len /\
+                B.length app_out_bytes == SZ.v app_out_len /\
+                ST.server_network_bytes_end_to_end_correct
+                  'st0
+                  st1
+                  buffer_resp
+                  (Ghost.reveal 'raw_bytes)
+                  network_out_bytes
+                  app_out_bytes /\
+                (buffer_resp.ST.response.ST.status == ST.NeedMoreInput ==>
+                  buffer_resp.ST.consumed_len == 0sz))

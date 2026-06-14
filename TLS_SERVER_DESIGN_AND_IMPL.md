@@ -236,18 +236,27 @@ Current phase: **Phase 6 server buffer/event API and theorem surface**.
     copy-and-frees the parsed ClientHello, returns `StepOk` with zero output, and
     proves `server_network_event_end_to_end_correct` plus invariant
     preservation.
-- [ ] Continue Phase 6/7 by moving from the focused ClientHello event handler to
-  the final buffer-oriented server `process_network_bytes` dispatcher and by
-  adding ClientHello reject paths.
+- [x] Added the first public buffer-oriented server `process_network_bytes`
+  dispatcher. It calls the shared record decoder, accepts canonical
+  SNI-present `ClientHello` records when the concrete server state is ready and
+  the decoded fragment fits the stored ClientHello buffer, returns explicit
+  zero-consume `NeedMoreInput`/`DecodeError`/`IllegalTransition` statuses for
+  unsupported or overlarge inputs, preserves `server_end_to_end_invariant`, and
+  exposes `server_network_bytes_end_to_end_correct`.
+- [ ] Continue Phase 6/7 by strengthening `process_network_bytes` from the first
+  ClientHello path to the final dispatcher theorem: add consumed-prefix
+  classification/projections, protected client Finished dispatch, and richer
+  ClientHello reject deltas instead of the current state-preserving refusal
+  cases.
 - [x] Removed the immediate C parser backend blocker for that dispatcher:
-  `c_stubs/tls13_connection_backend.h` now decodes supported-profile
-  `ClientHello` handshake records into `LClientHello`, matching the pure
-  `TLS13.Wire.Spec.parse_client_hello` profile for legacy version, one
-  ChaCha20/Poly1305 suite, X25519 key share, TLS 1.3 supported_versions,
-  optional SNI, and an optional single advertised signature scheme. The
-  remaining dispatcher work is to expose the corresponding server-oriented
-  parser/consumed-prefix theorem surface and connect it to
-  `process_client_hello`.
+  `c_stubs/tls13_connection_backend.h` now decodes canonical supported-profile
+  `ClientHello` handshake records into `LClientHello`, matching the serializer
+  order and profile for legacy version, one ChaCha20/Poly1305 suite, optional
+  non-empty SNI, supported_groups X25519, signature_algorithms RSA-PSS-RSAE
+  SHA-256, X25519 key_share, and TLS 1.3 supported_versions. The remaining
+  dispatcher work is to expose the corresponding server-oriented
+  parser/consumed-prefix theorem surface beyond the current invariant-preserving
+  byte-step predicate.
 - [x] Added `TLS13.Impl.ConnectionState.Queries.can_receive_client_hello`, the
   concrete readiness check needed by the upcoming buffer dispatcher. It reads
   only role/control, stored-ClientHello presence, and transcript length, and
@@ -1477,24 +1486,29 @@ Checklist:
 - [x] Define `server_local_event_end_to_end_correct`.
 - [x] Constructor establishes the server invariant.
 - [ ] Network/local steps preserve the server invariant.
-      Initial slices completed: `LocalStartServer`, SNI-present received
-      `ClientHello`, derived traffic-key installs, client Finished verification,
-      and generic server application-data/close_notify sends; the focused
+      Initial slices completed: `LocalStartServer`, focused SNI-present
+      received `ClientHello`, first public `process_network_bytes` ClientHello
+      dispatch, derived traffic-key installs, client Finished verification, and
+      generic server application-data/close_notify sends; the focused
       `LocalSelectServerParameters` wrapper also preserves the invariant and now
       has a default-profile concrete-array entry point; random/X25519 generation,
-      private-key-share storage, and scheduler integration remain pending.
+      private-key-share storage, protected receive byte dispatch, and scheduler
+      integration remain pending.
 - [x] Emitted bytes expose raw-delta, parse-back, seal, and write-key provenance.
 - [ ] Consumed bytes expose exact consumed prefix, parse/decode classification,
       open facts, and read-key provenance.
-      The C parser backend now decodes supported-profile `ClientHello` records,
-      so the remaining cleartext-server receive work is proof/API wiring rather
-      than missing runtime decoding.
+      The C parser backend now decodes canonical supported-profile
+      `ClientHello` records and the first server `process_network_bytes` wrapper
+      consumes accepted ClientHello prefixes, but its public theorem still only
+      exposes invariant preservation and consumed-length bounds. Exact
+      consumed-prefix parse/decode classification and rejected-input witnesses
+      remain to be added.
       First focused server receive slice completed for protected client
       `Finished`: `process_client_finished` preserves
       `server_network_event_end_to_end_correct` when the caller supplies the
-      parser/open decode projection for the protected raw record. A unified
-      `process_network_bytes`-style dispatcher still needs to derive this fact
-      from parser/record-open postconditions.
+      parser/open decode projection for the protected raw record. The unified
+      `process_network_bytes` dispatcher still needs to derive this protected
+      fact from parser/record-open postconditions.
 - [ ] Server invariants expose facts needed to instantiate
       `theorem_paired_endpoints_derived_key_agrees` with a client state.
 
@@ -1582,6 +1596,12 @@ Status:
 
 - [x] Initial SNI-present ClientHello accept handler proves the pure
       `Received ClientHello` transition and preserves `server_end_to_end_invariant`.
+- [x] First public `process_network_bytes` path handles decoded canonical
+      SNI-present ClientHello by calling the focused handler. It also returns
+      explicit state-preserving `IllegalTransition` refusals for no SNI,
+      overlarge ClientHello fragments, non-ready server states, and unsupported
+      decoded message kinds, plus zero-consume `NeedMoreInput`/`DecodeError`
+      statuses from the decoder.
 - [x] Generic `process_local_event` now handles server
       `LocalSendApplicationData` and `LocalSendCloseNotify` through the shared
       endpoint-neutral `LocalSend` mutations. The server theorem surface now
@@ -1593,9 +1613,9 @@ Status:
       wrapper, preserving the server invariant and entering application-data
       control when the application record keys are installed and the client
       Finished verifies against the client handshake traffic secret.
-- [ ] ClientHello reject/error paths are still pending: no-SNI policy rejection,
-      unsupported cipher/group/signature offers, malformed ClientHello, and the
-      final buffer-level decode-error path.
+- [ ] Rich ClientHello reject/error deltas are still pending: no-SNI policy
+      rejection, unsupported cipher/group/signature offers, malformed
+      ClientHello consumed-prefix witnesses, and alert-producing failure paths.
 
 ### Phase 8: verified top-level server driver
 

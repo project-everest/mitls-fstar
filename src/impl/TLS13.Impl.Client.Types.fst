@@ -1922,8 +1922,8 @@ let parsed_message_wire_success_for
     Seq.equal fragment (WS.serialize_handshake (M.ServerHello sh))
   | L.LTlsHandshake (L.LServerHello _), _ ->
     False
-  | L.LTlsHandshake (L.LClientHello _), M.TlsHandshake (M.ClientHello _) ->
-    True
+  | L.LTlsHandshake (L.LClientHello _), M.TlsHandshake (M.ClientHello ch) ->
+    Seq.equal fragment (WS.serialize_handshake (M.ClientHello ch))
   | L.LTlsHandshake (L.LClientHello _), _ ->
     False
   | L.LTlsHandshake (L.LEncryptedExtensions _), M.TlsHandshake (M.EncryptedExtensions ee) ->
