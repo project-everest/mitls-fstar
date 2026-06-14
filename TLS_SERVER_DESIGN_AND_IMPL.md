@@ -635,6 +635,11 @@ Current phase: **Phase 6 server buffer/event API and theorem surface**.
   `connection_exactly` resource with the derived material witness, and
   `process_verify_client_finished` exposes `verified_client_finished_state` with
   the stored Finished witness.
+- [x] Promoted focused server application-data and close_notify send wrappers to
+  the public Pulse theorem surface. Their contracts preserve the existing
+  end-to-end local-event theorem and, on successful sends, expose the exact
+  `sent_application_data_state` or `sent_close_notify_state` plus the emitted
+  raw network prefix.
 
 ## End goal
 

@@ -4732,6 +4732,16 @@ fn process_send_application_data_local_event
           pts_to app_out app_out_bytes **
           pure (B.length network_out_bytes == SZ.v network_out_len /\
                 B.length app_out_bytes == SZ.v app_out_len /\
+                (resp.status == ST.StepOk ==>
+                  exists raw_sent.
+                    st1 ==
+                      CM.sent_application_data_state
+                        'st0
+                        (Ghost.reveal 'payload_bytes)
+                        raw_sent /\
+                    Seq.equal
+                      raw_sent
+                      (ST.response_network_out resp network_out_bytes)) /\
                 ST.server_local_event_end_to_end_correct
                   'st0
                   st1
@@ -5043,6 +5053,15 @@ fn process_send_close_notify_local_event
           pts_to app_out app_out_bytes **
           pure (B.length network_out_bytes == SZ.v network_out_len /\
                 B.length app_out_bytes == SZ.v app_out_len /\
+                (resp.status == ST.StepOk ==>
+                  exists raw_sent.
+                    st1 ==
+                      CM.sent_close_notify_state
+                        'st0
+                        raw_sent /\
+                    Seq.equal
+                      raw_sent
+                      (ST.response_network_out resp network_out_bytes)) /\
                 ST.server_local_event_end_to_end_correct
                   'st0
                   st1
