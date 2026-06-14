@@ -3606,164 +3606,33 @@ fn process_derive_and_install_server_application_write_keys
           pure (B.length network_out_bytes == SZ.v network_out_len /\
                 B.length app_out_bytes == SZ.v app_out_len /\
                 ST.server_local_event_end_to_end_correct
-                  'st0
-                  (CM.installed_traffic_keys_for_role_state 'st0 {
-                    CS.install_role = CS.ServerEndpoint;
-                    CS.install_payload = {
-                      CS.install_epoch = CS.TrafficApplication;
-                      CS.install_direction = CS.TrafficWrite;
-                      CS.install_material = material;
-                    };
-                  })
-                  resp
-                  ST.LocalInstallServerApplicationTrafficKeys
-                  B.empty
-                  network_out_bytes
-                  app_out_bytes)
+                        'st0
+                        (CM.installed_traffic_keys_for_role_state 'st0 {
+                          CS.install_role = CS.ServerEndpoint;
+                          CS.install_payload = {
+                            CS.install_epoch = CS.TrafficApplication;
+                            CS.install_direction = CS.TrafficWrite;
+                            CS.install_material = material;
+                          };
+                        })
+                        resp
+                        ST.LocalInstallServerApplicationTrafficKeys
+                        B.empty
+                        network_out_bytes
+                        app_out_bytes)
 {
-  unfold (connection_exactly s 'st0);
-  CLH.derive_and_install_server_application_write_traffic_keys s;
-  with material.
-    assert (CR.connection_exactly
-      s
-      (CM.installed_traffic_keys_for_role_state 'st0 {
-        CS.install_role = CS.ServerEndpoint;
-        CS.install_payload = {
-          CS.install_epoch = CS.TrafficApplication;
-          CS.install_direction = CS.TrafficWrite;
-          CS.install_material = material;
-        };
-      }));
-  let install = Ghost.hide {
-    CS.install_epoch = CS.TrafficApplication;
-    CS.install_direction = CS.TrafficWrite;
-    CS.install_material = material;
-  };
-  let role_install = Ghost.hide {
-    CS.install_role = CS.ServerEndpoint;
-    CS.install_payload = Ghost.reveal install;
-  };
-  fold (connection_exactly
+  rewrite (connection_exactly s 'st0) as (SK.connection_exactly s 'st0);
+  let resp = SK.process_derive_and_install_server_application_write_keys
     s
-    (CM.installed_traffic_keys_for_role_state 'st0 (Ghost.reveal role_install)));
-
-  let resp = {
-    ST.network_out_len = 0sz;
-    ST.app_out_len = 0sz;
-    ST.status = ST.StepOk;
-  };
-
-  let delta = Ghost.hide {
-    CS.delta_event =
-      CS.ConnLocalEvent
-        (CS.LocalInstallTrafficKeysForRole (Ghost.reveal role_install));
-    CS.delta_raw_sent = B.empty;
-    CS.delta_raw_received = B.empty;
-  };
-  assert (pure (CS.legal_connection_delta
-    'st0
-    (Ghost.reveal delta)
-    (CM.installed_traffic_keys_for_role_state 'st0 (Ghost.reveal role_install))));
-
-  CSL.lemma_legal_connection_delta_full_log_consistent_for_role
-    CS.ServerEndpoint
-    'st0
-    (Ghost.reveal delta)
-    (CM.installed_traffic_keys_for_role_state 'st0 (Ghost.reveal role_install));
-  CSL.lemma_legal_connection_delta_raw_event_replay_consistent
-    'st0
-    (Ghost.reveal delta)
-    (CM.installed_traffic_keys_for_role_state 'st0 (Ghost.reveal role_install));
-  CSL.lemma_connection_state_protected_raw_segmented_replay
-    (CM.installed_traffic_keys_for_role_state 'st0 (Ghost.reveal role_install));
-  CSL.lemma_legal_connection_delta_sent_seal_replay_consistent
-    'st0
-    (Ghost.reveal delta)
-    (CM.installed_traffic_keys_for_role_state 'st0 (Ghost.reveal role_install));
-  CSL.lemma_legal_connection_delta_received_decode_replay_consistent
-    'st0
-    (Ghost.reveal delta)
-    (CM.installed_traffic_keys_for_role_state 'st0 (Ghost.reveal role_install));
-
-  Seq.lemma_len_slice 'old_network_out 0 0;
-  Seq.lemma_eq_intro B.empty (Seq.slice 'old_network_out 0 0);
-  Seq.lemma_len_slice 'old_app_out 0 0;
-  Seq.lemma_eq_intro B.empty (Seq.slice 'old_app_out 0 0);
-
-  assert (pure ((CM.installed_traffic_keys_for_role_state 'st0 (Ghost.reveal role_install)).CS.cs_model.CS.model_config ==
-    'st0.CS.cs_model.CS.model_config));
-  assert (pure ((CM.installed_traffic_keys_for_role_state 'st0 (Ghost.reveal role_install)).CS.cs_model.CS.model_config.CS.config_role ==
-    CS.ServerEndpoint));
-  assert (pure (Some?
-    (CM.installed_traffic_keys_for_role_state 'st0 (Ghost.reveal role_install)).CS.cs_model.CS.model_config.CS.config_server));
-  assert (pure (ST.server_state_correct
-    (CM.installed_traffic_keys_for_role_state 'st0 (Ghost.reveal role_install))));
-  assert (pure (ST.server_raw_to_message_replay_consistent
-    (CM.installed_traffic_keys_for_role_state 'st0 (Ghost.reveal role_install))));
-  assert (pure (ST.server_end_to_end_invariant
-    (CM.installed_traffic_keys_for_role_state 'st0 (Ghost.reveal role_install))));
-
-  assert (pure (ST.legal_response_for_event
-    'st0
-    (CM.installed_traffic_keys_for_role_state 'st0 (Ghost.reveal role_install))
-    resp
-    (CS.ConnLocalEvent
-      (CS.LocalInstallTrafficKeysForRole (Ghost.reveal role_install)))
-    B.empty
-    B.empty
-    'old_network_out
-    'old_app_out));
-  assert (pure (ST.legal_local_response
-    'st0
-    (CM.installed_traffic_keys_for_role_state 'st0 (Ghost.reveal role_install))
-    resp
-    ST.LocalInstallServerApplicationTrafficKeys
-    B.empty
-    (CS.ConnLocalEvent
-      (CS.LocalInstallTrafficKeysForRole (Ghost.reveal role_install)))
-    B.empty
-    B.empty
-    'old_network_out
-    'old_app_out));
-  assert (pure (ST.legal_handled_local_response
-    'st0
-    (CM.installed_traffic_keys_for_role_state 'st0 (Ghost.reveal role_install))
-    resp
-    ST.LocalInstallServerApplicationTrafficKeys
-    B.empty
-    'old_network_out
-    'old_app_out));
-  assert (pure (ST.server_local_event_end_to_end_correct
-    'st0
-    (CM.installed_traffic_keys_for_role_state 'st0 (Ghost.reveal role_install))
-    resp
-    ST.LocalInstallServerApplicationTrafficKeys
-    B.empty
-    'old_network_out
-    'old_app_out));
-  assert (pure (Ghost.reveal role_install == {
-    CS.install_role = CS.ServerEndpoint;
-    CS.install_payload = {
-      CS.install_epoch = CS.TrafficApplication;
-      CS.install_direction = CS.TrafficWrite;
-      CS.install_material = material;
-    };
-  }));
-  rewrite
-    (connection_exactly
-      s
-      (CM.installed_traffic_keys_for_role_state 'st0 (Ghost.reveal role_install)))
-    as
-    (connection_exactly
-      s
-      (CM.installed_traffic_keys_for_role_state 'st0 {
-        CS.install_role = CS.ServerEndpoint;
-        CS.install_payload = {
-          CS.install_epoch = CS.TrafficApplication;
-          CS.install_direction = CS.TrafficWrite;
-          CS.install_material = material;
-        };
-      }));
+    network_out
+    network_out_len
+    app_out
+    app_out_len;
+  with st1 network_out_bytes app_out_bytes.
+    assert (SK.connection_exactly s st1 **
+            pts_to network_out network_out_bytes **
+            pts_to app_out app_out_bytes);
+  rewrite (SK.connection_exactly s st1) as (connection_exactly s st1);
   resp
 }
 

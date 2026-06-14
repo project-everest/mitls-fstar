@@ -266,9 +266,10 @@ Current phase: **Phase 6 server buffer/event API and theorem surface**.
   server-handshake write-key installation, plus supplied client-handshake
   read-key installation and internally derived client-handshake read-key
   installation, plus supplied server-application write-key installation now live
-  behind that interface. Supplied client-application read-key installation is
-  also factored there. `TLS13.Impl.Server` retains only public wrappers and
-  explicit `connection_exactly` predicate rewrites.
+  behind that interface. Supplied client-application read-key installation and
+  internally derived server-application write-key installation are also factored
+  there. `TLS13.Impl.Server` retains only public wrappers and explicit
+  `connection_exactly` predicate rewrites.
 - [ ] Continue Phase 6/7 by strengthening `process_network_bytes` from the first
   ClientHello path to the final dispatcher theorem: add consumed-prefix
   classification/projections and richer ClientHello/Finished reject deltas
