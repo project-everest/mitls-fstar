@@ -528,6 +528,14 @@ Current phase: **Phase 6 server buffer/event API and theorem surface**.
   retains and exposes those bytes through the KaRaMeL-facing wrapper, making the
   next step a verified L-level one-certificate `Certificate` builder rather than
   a ghost-only config lookup.
+- [x] Added the verified L-level server Certificate builder:
+  `TLS13.Impl.Server.build_certificate_from_credentials` copies the credential
+  certificate-chain bytes into owned `IM.certificate_msg` storage, initializes a
+  one-entry offset/length table, and proves
+  `IM.is_valid_certificate_msg` for the pure certificate
+  `{ chain = [credential_certificate_chain] }`. Copyout failure frees the scratch
+  storage and returns `None`; the public send wrapper remains the next wiring
+  step.
 
 ## End goal
 
@@ -1413,10 +1421,11 @@ Checklist:
         EncryptedExtensions, Certificate, CertificateVerify signing/send, and
         server Finished are complete; scheduler hints are complete for
         EncryptedExtensions and stored CertificateVerify; the credential
-        certificate-chain copyout TCB needed for executable Certificate
-        materialization is in place; concrete selection-to-L-ServerHello storage,
-        the verified L-level Certificate builder, and remaining full-flight
-        scheduler hints remain);
+        certificate-chain copyout TCB and verified L-level one-certificate
+        builder needed for executable Certificate materialization are in place;
+        concrete selection-to-L-ServerHello storage, the public executable
+        Certificate send wrapper, and remaining full-flight scheduler hints
+        remain);
       - client Finished verification (state mutation, focused public wrapper, and
         generic local dispatcher integration complete; network parse/open
         dispatch for received client Finished remains pending);

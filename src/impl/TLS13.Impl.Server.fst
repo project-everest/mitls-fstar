@@ -1239,6 +1239,103 @@ fn process_send_encrypted_extensions_serialized
   resp
 }
 
+fn build_certificate_from_credentials
+  (creds:O.server_credentials)
+  requires O.is_server_credentials creds 'certificate_chain 'credential_identity
+  returns result: option IM.certificate_msg
+  ensures O.is_server_credentials creds 'certificate_chain 'credential_identity **
+          (match result with
+           | Some lcert ->
+             IM.is_valid_certificate_msg
+               lcert
+               { M.chain = [Ghost.reveal 'certificate_chain] }
+           | None -> emp)
+{
+  assert_norm (IM.max_certificate_chain_bytes == 32768);
+  let chain_bytes = V.alloc 0uy 32768sz;
+  with old_chain_bytes. assert (V.pts_to chain_bytes old_chain_bytes);
+  assert (pure (V.is_full_vec chain_bytes));
+  assert (pure (V.length chain_bytes == IM.max_certificate_chain_bytes));
+  assert (pure (B.length old_chain_bytes == IM.max_certificate_chain_bytes));
+  V.to_array_pts_to chain_bytes;
+  let copy_result =
+    O.copy_server_certificate_chain
+      creds
+      (V.vec_to_array chain_bytes)
+      32768sz;
+  match copy_result {
+    None -> {
+      V.to_vec_pts_to chain_bytes;
+      V.free chain_bytes;
+      None
+    }
+    Some certificate_len -> {
+      V.to_vec_pts_to chain_bytes;
+      with copied_chain_bytes. assert (V.pts_to chain_bytes copied_chain_bytes);
+      assert (pure (B.length copied_chain_bytes == IM.max_certificate_chain_bytes));
+      assert (pure (SZ.v certificate_len ==
+        B.length (Ghost.reveal 'certificate_chain)));
+      assert (pure (SZ.v certificate_len <= IM.max_certificate_chain_bytes));
+      assert (pure (Seq.equal
+        (Seq.slice copied_chain_bytes 0 (SZ.v certificate_len))
+        (Ghost.reveal 'certificate_chain)));
+
+      assert_norm (IM.max_certificate_chain_entries == 8);
+      let cert_offsets = V.alloc 0sz 8sz;
+      let cert_lens = V.alloc 0sz 8sz;
+      with old_offsets. assert (V.pts_to cert_offsets old_offsets);
+      with old_lens. assert (V.pts_to cert_lens old_lens);
+      assert (pure (V.is_full_vec cert_offsets));
+      assert (pure (V.is_full_vec cert_lens));
+      assert (pure (V.length cert_offsets == IM.max_certificate_chain_entries));
+      assert (pure (V.length cert_lens == IM.max_certificate_chain_entries));
+
+      V.to_array_pts_to cert_offsets;
+      (V.vec_to_array cert_offsets).(0sz) <- 0sz;
+      V.to_vec_pts_to cert_offsets;
+      V.to_array_pts_to cert_lens;
+      (V.vec_to_array cert_lens).(0sz) <- certificate_len;
+      V.to_vec_pts_to cert_lens;
+
+      with offsets. assert (V.pts_to cert_offsets offsets);
+      with lens. assert (V.pts_to cert_lens lens);
+      assert (pure (Seq.length offsets == IM.max_certificate_chain_entries));
+      assert (pure (Seq.length lens == IM.max_certificate_chain_entries));
+      assert (pure (Seq.index offsets 0 == 0sz));
+      assert (pure (Seq.index lens 0 == certificate_len));
+
+      let lcert = {
+        IM.certificate_msg_chain_bytes = chain_bytes;
+        IM.certificate_msg_chain_bytes_len = certificate_len;
+        IM.certificate_msg_cert_offsets = cert_offsets;
+        IM.certificate_msg_cert_lens = cert_lens;
+        IM.certificate_msg_cert_count = 1sz;
+      };
+      rewrite (V.pts_to chain_bytes copied_chain_bytes) as
+        (V.pts_to lcert.IM.certificate_msg_chain_bytes copied_chain_bytes);
+      rewrite (V.pts_to cert_offsets offsets) as
+        (V.pts_to lcert.IM.certificate_msg_cert_offsets offsets);
+      rewrite (V.pts_to cert_lens lens) as
+        (V.pts_to lcert.IM.certificate_msg_cert_lens lens);
+      assert (pure (SZ.v lcert.IM.certificate_msg_chain_bytes_len <=
+        B.length copied_chain_bytes));
+      assert (pure (SZ.v lcert.IM.certificate_msg_cert_count <= Seq.length offsets));
+      assert (pure (SZ.v lcert.IM.certificate_msg_cert_count <= Seq.length lens));
+      assert (pure (IM.certificate_chain_matches
+        copied_chain_bytes
+        (SZ.v certificate_len)
+        offsets
+        lens
+        1
+        [Ghost.reveal 'certificate_chain]));
+      fold (IM.is_valid_certificate_msg
+        lcert
+        { M.chain = [Ghost.reveal 'certificate_chain] });
+      Some lcert
+    }
+  }
+}
+
 fn process_send_certificate_serialized
   (s:server)
   (lcert:IM.certificate_msg)
