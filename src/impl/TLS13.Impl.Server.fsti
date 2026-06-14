@@ -150,6 +150,18 @@ let next_local_action_sound
           CL.message_direction = CL.Sent;
           CL.message_value = M.TlsHandshake (M.CertificateVerify cv);
         }))
+    | ST.LocalSendServerFinished ->
+     action.ST.next_local_payload == ST.LocalPayloadNone /\
+     st.CS.cs_model.CS.model_control ==
+      CS.ControlHandshaking CS.HsServerEncryptedFlightSent /\
+     st.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
+     st.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify_verified /\
+     Some?
+      st.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_handshake_traffic /\
+     U64.fits
+      (st.CS.cs_model.CS.model_record.CS.record_write.R.seq + 1) /\
+     B.length st.CS.cs_model.CS.model_handshake.CS.hs_transcript + 36 <=
+      Bounds.max_transcript_len
     | _ ->
      False
   else

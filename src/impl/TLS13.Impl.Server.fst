@@ -143,6 +143,7 @@ fn next_local_action
     | None -> False));
   let send_certificate_ready = CQ.can_send_certificate_runtime s;
   let send_certificate_verify_ready = CQ.can_send_certificate_verify_runtime s;
+  let send_server_finished_ready = CQ.can_send_server_finished_runtime s;
   fold (connection_exactly s 'st0);
   let server_handshake_write_keys_ready =
     (control.CR.snapshot_control_tag = 1uy) &&
@@ -304,6 +305,23 @@ fn next_local_action
     {
       ST.next_local_ready = true;
       ST.next_local_kind = ST.LocalSendCertificateVerify;
+      ST.next_local_payload = ST.LocalPayloadNone;
+    }
+  } else if send_server_finished_ready {
+    assert (pure ('st0.CS.cs_model.CS.model_control ==
+      CS.ControlHandshaking CS.HsServerEncryptedFlightSent));
+    assert (pure ('st0.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint));
+    assert (pure ('st0.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify_verified));
+    assert (pure (Some?
+      'st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_handshake_traffic));
+    assert (pure (U64.fits
+      ('st0.CS.cs_model.CS.model_record.CS.record_write.R.seq + 1)));
+    assert (pure (
+      B.length 'st0.CS.cs_model.CS.model_handshake.CS.hs_transcript + 36 <=
+        Bounds.max_transcript_len));
+    {
+      ST.next_local_ready = true;
+      ST.next_local_kind = ST.LocalSendServerFinished;
       ST.next_local_payload = ST.LocalPayloadNone;
     }
   } else if server_application_write_keys_ready {

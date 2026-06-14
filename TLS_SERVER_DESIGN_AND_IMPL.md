@@ -565,6 +565,14 @@ Current phase: **Phase 6 server buffer/event API and theorem surface**.
   `process_local_event` path remains intentionally unwired for Certificate; the
   credential-aware driver path should call
   `process_send_certificate_from_credentials`.
+- [x] Added scheduler readiness for ServerFinished:
+  `TLS13.Impl.ConnectionState.Queries.can_send_server_finished_runtime` checks the
+  encrypted-flight phase, verified CertificateVerify flag, server handshake write
+  keys, write-sequence advance, and transcript room for the fixed 36-byte
+  Finished handshake message. `next_local_action` now advertises
+  `LocalSendServerFinished` after CertificateVerify and before application-key
+  installation; generic `process_local_event` already dispatches this
+  self-contained send path with exact 58-byte protected-record output.
 
 ## End goal
 

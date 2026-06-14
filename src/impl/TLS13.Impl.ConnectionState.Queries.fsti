@@ -429,6 +429,23 @@ fn can_send_certificate_verify_runtime
                  CL.message_value = M.TlsHandshake (M.CertificateVerify cv);
                })))
 
+fn can_send_server_finished_runtime
+  (c:connection_state)
+  (#st0:erased CS.connection_state)
+  requires connection_exactly c st0
+  returns ok: bool
+  ensures connection_exactly c st0 **
+          pure (ok ==>
+            st0.CS.cs_model.CS.model_control ==
+              CS.ControlHandshaking CS.HsServerEncryptedFlightSent /\
+            st0.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
+            st0.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify_verified /\
+            Some?
+              st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_handshake_traffic /\
+            U64.fits (st0.CS.cs_model.CS.model_record.CS.record_write.R.seq + 1) /\
+            B.length st0.CS.cs_model.CS.model_handshake.CS.hs_transcript + 36 <=
+              max_transcript_len)
+
 fn can_receive_certificate
   (c:connection_state)
   (lcert:IM.certificate_msg)
