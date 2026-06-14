@@ -141,6 +141,11 @@ Current phase: **Phase 6 server buffer/event API and theorem surface**.
   `NeedMoreInput`/`DecodeError`. Non-close `LTlsAlert` records now consume the
   protected record, enter `received_alert_failure_state`, preserve the server
   invariant, and return `ConnectionFailed`.
+- [x] Added compatibility ChangeCipherSpec receive dispatch:
+  cleartext `LTlsChangeCipherSpec` records are accepted while the server is in a
+  handshaking control state, preserve the server invariant via
+  `received_change_cipher_spec_state`, and expose the exact consumed prefix. CCS
+  outside handshaking remains a zero-consume `IllegalTransition` refusal.
 - [x] Application-data and close_notify legal message predicates are now
   endpoint-role aware. Server application sends use server application traffic,
   server application receives use client application traffic, and close_notify
@@ -1614,7 +1619,7 @@ Checklist:
       traffic and are reused by the generic server local dispatcher.
 - [ ] Add network handlers:
       - ClientHello accept/reject;
-      - compatibility CCS receive if supported;
+      - compatibility CCS receive complete while handshaking;
       - client Finished receive/open dispatch complete;
       - application data receive/dispatch complete for protected records with a
         fitting `app_out` buffer;
@@ -1674,6 +1679,10 @@ Checklist:
         is reused by the server network dispatcher; protected non-close alerts
         now consume their record, enter `received_alert_failure_state`, preserve
         the invariant, and return `ConnectionFailed`).
+      - compatibility CCS receive (cleartext CCS is now accepted while
+        handshaking, records the received CCS event, preserves the invariant, and
+        exposes the exact consumed-prefix projection; non-handshaking CCS remains
+        a zero-consume refusal).
 - [ ] Add failure transitions:
       - unsupported cipher suite;
       - missing/unsupported X25519 key share;
@@ -1746,6 +1755,10 @@ Status:
       records by deriving the protected parser/open projection, calling the
       alert-failure mutation, and returning `ConnectionFailed` with the exact
       `received_alert_failure_state` post-state.
+- [x] Public `process_network_bytes` now handles cleartext compatibility CCS
+      while handshaking by calling `mark_received_change_cipher_spec` and
+      publishing the exact `received_change_cipher_spec_state` with
+      consumed-prefix equality.
 - [ ] Rich ClientHello reject/error deltas are still pending: no-SNI policy
       rejection, unsupported cipher/group/signature offers, malformed
       ClientHello consumed-prefix witnesses, and alert-producing failure paths.

@@ -589,6 +589,14 @@ let server_network_step_ok_consumed_prefix
          raw_received /\
       Seq.equal
        raw_received
+       (server_network_consumed_prefix resp input)) \/
+    (exists raw_received.
+      st1 ==
+       CM.received_change_cipher_spec_state
+         st0
+         raw_received /\
+      Seq.equal
+       raw_received
        (server_network_consumed_prefix resp input))
 
 let server_decoded_message_event_projection
