@@ -133,6 +133,10 @@ noeq
 type handshake_message_storage = {
   client_hello_present: box bool;
   client_hello: IM.client_hello;
+  client_hello_has_server_name: box bool;
+  client_hello_server_name_len: box SZ.t;
+  client_hello_cipher_suites_len: box SZ.t;
+  client_hello_signature_schemes_len: box SZ.t;
   server_hello: box (option IM.server_hello);
   encrypted_extensions: box (option IM.encrypted_extensions);
   certificate: box (option IM.certificate_msg);
@@ -857,6 +861,30 @@ let client_hello_slot_exactly
           else
             spec == None))
 
+let client_hello_metadata_exactly
+  (has_server_name_box:box bool)
+  (server_name_len_box:box SZ.t)
+  (cipher_suites_len_box:box SZ.t)
+  (signature_schemes_len_box:box SZ.t)
+  (spec:option M.client_hello)
+  : slprop =
+  exists* has_server_name server_name_len cipher_suites_len signature_schemes_len.
+    Box.pts_to has_server_name_box has_server_name **
+    Box.pts_to server_name_len_box server_name_len **
+    Box.pts_to cipher_suites_len_box cipher_suites_len **
+    Box.pts_to signature_schemes_len_box signature_schemes_len **
+    pure (match spec with
+      | Some m ->
+        has_server_name == true /\
+        server_name_len == client_hello_server_name_len_for m /\
+        cipher_suites_len == client_hello_cipher_suites_len_for m /\
+        signature_schemes_len == client_hello_signature_schemes_len_for m
+      | None ->
+        has_server_name == false /\
+        server_name_len == 0sz /\
+        cipher_suites_len == 0sz /\
+        signature_schemes_len == 0sz)
+
 let server_hello_slot_exactly
   ([@@@mkey] slot:box (option IM.server_hello))
   (spec:option M.server_hello)
@@ -927,6 +955,12 @@ let handshake_messages_exactly
   (hs:CS.handshake_state)
   : slprop =
   client_hello_slot_exactly msgs.client_hello_present msgs.client_hello hs.CS.hs_client_hello **
+  client_hello_metadata_exactly
+    msgs.client_hello_has_server_name
+    msgs.client_hello_server_name_len
+    msgs.client_hello_cipher_suites_len
+    msgs.client_hello_signature_schemes_len
+    hs.CS.hs_client_hello **
   server_hello_slot_exactly msgs.server_hello hs.CS.hs_server_hello **
   encrypted_extensions_slot_exactly msgs.encrypted_extensions hs.CS.hs_encrypted_extensions **
   certificate_slot_exactly msgs.certificate hs.CS.hs_certificate **

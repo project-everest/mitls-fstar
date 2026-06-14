@@ -1598,11 +1598,15 @@ Checklist:
             proving that a first stored signature-scheme word of `0x0804`
             implies the pure ClientHello signature list offers
             `RsaPssRsaeSha256`.
-      - [ ] Strengthen `client_hello_slot_exactly` to relate the concrete stored
-            ClientHello length/tag fields (`has_server_name`, server-name length,
-            cipher-suite length, signature-scheme length) to the pure
-            ClientHello. This is required before adding a sound runtime
-            supported-profile selection-readiness query.
+      - [x] Strengthened the stored ClientHello representation with concrete
+            metadata boxes for `has_server_name`, server-name length,
+            cipher-suite length, and signature-scheme length, tied to
+            `hs_client_hello` by `client_hello_metadata_exactly` inside
+            `handshake_messages_exactly`. This avoids relying on immutable
+            parser record fields after copying ClientHello vectors, and gives
+            the upcoming supported-profile selection-readiness query concrete
+            runtime fields to inspect.
+      - [ ] Add the sound runtime supported-profile selection-readiness query.
 - [x] Add ServerHello serialize/parse-back facts.
 - [x] Add cleartext ServerHello record serialization facts, including exact
       raw-record bytes, `parse_record`, and `raw_records_exactly`.

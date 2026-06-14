@@ -638,7 +638,16 @@ fn mark_received_client_hello
     st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello);
   with old_client_hello_present old_l_random old_l_server_name
        old_l_key_share old_l_cipher_suites old_l_signature_schemes. _;
+  unfold (client_hello_metadata_exactly
+    c.handshake.messages.client_hello_has_server_name
+    c.handshake.messages.client_hello_server_name_len
+    c.handshake.messages.client_hello_cipher_suites_len
+    c.handshake.messages.client_hello_signature_schemes_len
+    st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello);
+  with old_ch_has_server_name old_ch_server_name_len
+       old_ch_cipher_suites_len old_ch_signature_schemes_len. _;
   assert (pure (old_client_hello_present == false));
+  assert (pure (old_ch_has_server_name == false));
 
   unfold (IM.is_valid_client_hello lch ch);
   with lch_random lch_server_name lch_key_share
@@ -690,6 +699,14 @@ fn mark_received_client_hello
   V.to_vec_pts_to c.handshake.messages.client_hello.IM.client_hello_signature_schemes;
 
   c.handshake.messages.client_hello_present := true;
+  c.handshake.messages.client_hello_has_server_name :=
+    lch.IM.client_hello_has_server_name;
+  c.handshake.messages.client_hello_server_name_len :=
+    lch.IM.client_hello_server_name_len;
+  c.handshake.messages.client_hello_cipher_suites_len :=
+    lch.IM.client_hello_cipher_suites_len;
+  c.handshake.messages.client_hello_signature_schemes_len :=
+    lch.IM.client_hello_signature_schemes_len;
 
   with stored_random. assert (V.pts_to c.handshake.messages.client_hello.IM.client_hello_random stored_random);
   with stored_server_name. assert (V.pts_to c.handshake.messages.client_hello.IM.client_hello_server_name stored_server_name);
@@ -728,6 +745,12 @@ fn mark_received_client_hello
   fold (client_hello_slot_exactly
     c.handshake.messages.client_hello_present
     c.handshake.messages.client_hello
+    (Some (Ghost.reveal ch)));
+  fold (client_hello_metadata_exactly
+    c.handshake.messages.client_hello_has_server_name
+    c.handshake.messages.client_hello_server_name_len
+    c.handshake.messages.client_hello_cipher_suites_len
+    c.handshake.messages.client_hello_signature_schemes_len
     (Some (Ghost.reveal ch)));
 
   unfold (handshake_buffers_exactly
@@ -2347,6 +2370,18 @@ fn mark_received_key_update
       c.handshake.start
       (received_key_update_state st0 req (Ghost.reveal 'raw_bytes)).CS.cs_model.CS.model_handshake.CS.hs_start);
   unfold (handshake_messages_exactly c.handshake.messages st0.CS.cs_model.CS.model_handshake);
+  rewrite (client_hello_metadata_exactly
+    c.handshake.messages.client_hello_has_server_name
+    c.handshake.messages.client_hello_server_name_len
+    c.handshake.messages.client_hello_cipher_suites_len
+    c.handshake.messages.client_hello_signature_schemes_len
+    st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello) as
+    (client_hello_metadata_exactly
+      c.handshake.messages.client_hello_has_server_name
+      c.handshake.messages.client_hello_server_name_len
+      c.handshake.messages.client_hello_cipher_suites_len
+      c.handshake.messages.client_hello_signature_schemes_len
+      (received_key_update_state st0 req (Ghost.reveal 'raw_bytes)).CS.cs_model.CS.model_handshake.CS.hs_client_hello);
   fold (handshake_messages_exactly
     c.handshake.messages
     (received_key_update_state st0 req (Ghost.reveal 'raw_bytes)).CS.cs_model.CS.model_handshake);

@@ -909,6 +909,10 @@ fn alloc_handshake_messages_empty ()
   let client_hello_slot : client_hello_slot_storage = alloc_client_hello_slot_empty ();
   let client_hello_present : box bool = client_hello_slot.ch_present;
   let client_hello : IM.client_hello = client_hello_slot.ch_value;
+  let client_hello_has_server_name : box bool = Box.alloc false;
+  let client_hello_server_name_len : box SZ.t = Box.alloc 0sz;
+  let client_hello_cipher_suites_len : box SZ.t = Box.alloc 0sz;
+  let client_hello_signature_schemes_len : box SZ.t = Box.alloc 0sz;
   rewrite (client_hello_slot_exactly client_hello_slot.ch_present client_hello_slot.ch_value None) as
     (client_hello_slot_exactly client_hello_present client_hello None);
   let server_hello : box (option IM.server_hello) = Box.alloc (None #IM.server_hello);
@@ -923,6 +927,10 @@ fn alloc_handshake_messages_empty ()
   let msgs = {
     client_hello_present;
     client_hello;
+    client_hello_has_server_name;
+    client_hello_server_name_len;
+    client_hello_cipher_suites_len;
+    client_hello_signature_schemes_len;
     server_hello;
     encrypted_extensions;
     certificate;
@@ -932,6 +940,32 @@ fn alloc_handshake_messages_empty ()
   };
   rewrite (client_hello_slot_exactly client_hello_present client_hello None) as
     (client_hello_slot_exactly msgs.client_hello_present msgs.client_hello CS.empty_handshake_state.CS.hs_client_hello);
+  rewrite (Box.pts_to client_hello_has_server_name false) as
+    (Box.pts_to msgs.client_hello_has_server_name false);
+  rewrite (Box.pts_to client_hello_server_name_len 0sz) as
+    (Box.pts_to msgs.client_hello_server_name_len 0sz);
+  rewrite (Box.pts_to client_hello_cipher_suites_len 0sz) as
+    (Box.pts_to msgs.client_hello_cipher_suites_len 0sz);
+  rewrite (Box.pts_to client_hello_signature_schemes_len 0sz) as
+    (Box.pts_to msgs.client_hello_signature_schemes_len 0sz);
+  fold (client_hello_metadata_exactly
+    msgs.client_hello_has_server_name
+    msgs.client_hello_server_name_len
+    msgs.client_hello_cipher_suites_len
+    msgs.client_hello_signature_schemes_len
+    None);
+  rewrite (client_hello_metadata_exactly
+    msgs.client_hello_has_server_name
+    msgs.client_hello_server_name_len
+    msgs.client_hello_cipher_suites_len
+    msgs.client_hello_signature_schemes_len
+    None) as
+    (client_hello_metadata_exactly
+      msgs.client_hello_has_server_name
+      msgs.client_hello_server_name_len
+      msgs.client_hello_cipher_suites_len
+      msgs.client_hello_signature_schemes_len
+      CS.empty_handshake_state.CS.hs_client_hello);
   rewrite (Box.pts_to server_hello None) as (Box.pts_to msgs.server_hello None);
   rewrite (Box.pts_to encrypted_extensions None) as
     (Box.pts_to msgs.encrypted_extensions None);
