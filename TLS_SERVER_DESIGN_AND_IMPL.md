@@ -135,6 +135,12 @@ Current phase: **Phase 6 server buffer/event API and theorem surface**.
   branch advances the server read record, enters `received_close_notify_state`,
   preserves the server invariant, and exposes the exact consumed prefix plus
   `ServerEndpoint` read-key provenance.
+- [x] Added protected server non-close alert receive dispatch:
+  `server_network_event_end_to_end_correct` now permits handled received TLS
+  events to return `ConnectionFailed` as well as `StepOk`, while still excluding
+  `NeedMoreInput`/`DecodeError`. Non-close `LTlsAlert` records now consume the
+  protected record, enter `received_alert_failure_state`, preserve the server
+  invariant, and return `ConnectionFailed`.
 - [x] Application-data and close_notify legal message predicates are now
   endpoint-role aware. Server application sends use server application traffic,
   server application receives use client application traffic, and close_notify
@@ -1613,7 +1619,7 @@ Checklist:
       - application data receive/dispatch complete for protected records with a
         fitting `app_out` buffer;
       - close_notify alert receive/dispatch complete for protected records;
-      - non-close alerts;
+      - non-close alert receive/dispatch complete for protected records;
       - decode/decrypt errors.
 - [ ] Add local handlers:
       - server random and key share generation (empty concrete storage for the
@@ -1664,6 +1670,10 @@ Checklist:
         preserved; the server network alert dispatcher accepts protected
         close_notify in application/closing control, preserves the invariant, and
         exposes the exact consumed-prefix/read-key projection).
+      - non-close alert receive (the existing alert-failure model/mutation path
+        is reused by the server network dispatcher; protected non-close alerts
+        now consume their record, enter `received_alert_failure_state`, preserve
+        the invariant, and return `ConnectionFailed`).
 - [ ] Add failure transitions:
       - unsupported cipher suite;
       - missing/unsupported X25519 key share;
@@ -1732,6 +1742,10 @@ Status:
       close_notify readiness, calls the role-parametric close_notify mutation,
       and publishes the exact `received_close_notify_state` with consumed-prefix
       equality and `ServerEndpoint` read-key provenance.
+- [x] Public `process_network_bytes` now handles protected non-close alert
+      records by deriving the protected parser/open projection, calling the
+      alert-failure mutation, and returning `ConnectionFailed` with the exact
+      `received_alert_failure_state` post-state.
 - [ ] Rich ClientHello reject/error deltas are still pending: no-SNI policy
       rejection, unsupported cipher/group/signature offers, malformed
       ClientHello consumed-prefix witnesses, and alert-producing failure paths.

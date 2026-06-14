@@ -453,7 +453,8 @@ let legal_network_response
   (network_out:B.bytes)
   (app_out:B.bytes)
   : prop =
-  resp.status == StepOk /\
+  (resp.status == DecodeError ==> False) /\
+  (resp.status == NeedMoreInput ==> False) /\
   legal_response_for_event
     st0
     st1
