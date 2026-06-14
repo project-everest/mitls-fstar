@@ -400,10 +400,13 @@ $(OUTPUT_DIR)/FStar_SizeT.krml: \
 	  --include $(KRML_STUB_DIR) --already_cached 'Prims,FStar -FStar.SizeT' \
 	  --codegen krml --extract_module FStar.SizeT \
 	  $(KRML_STUB_DIR)/FStar.SizeT.fst --krmloutput $@
-	$(FSTAR_EXE) --cache_checked_modules --cache_dir $(CACHE_DIR) --odir $(OUTPUT_DIR) \
-	  --already_cached 'Prims,FStar -FStar.SizeT' $(FSTAR_ULIB)/FStar.SizeT.fsti
-	$(FSTAR_EXE) --cache_checked_modules --cache_dir $(CACHE_DIR) --odir $(OUTPUT_DIR) \
-	  --already_cached 'Prims,FStar -FStar.SizeT' $(FSTAR_ULIB)/FStar.SizeT.fst
+	@# NOTE: do NOT verify the original FStar.SizeT into $(CACHE_DIR): that writes
+	@# a _cache/FStar.SizeT.*.checked whose dependence hash differs from the F*
+	@# install's already-cached FStar.SizeT.  Modules verified in `make verify`
+	@# record the install hash, so a conflicting _cache copy makes them stale
+	@# (dependence hash mismatch) and breaks per-module extraction of
+	@# interface-only modules (Error 317).  FStar.SizeT is already-cached from the
+	@# install for every other extraction, so no _cache copy is needed.
 
 $(OUTPUT_DIR)/TLS13_Impl_Messages.krml: \
   $(KRML_STUB_DIR)/TLS13.Impl.Messages.fst Makefile | $(OUTPUT_DIR) $(KRML_STUB_CACHE)
