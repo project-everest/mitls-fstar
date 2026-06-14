@@ -945,6 +945,39 @@ let server_key_share_exactly
      | Some sh -> Some sh.M.key_share
      | None -> None)
 
+let server_key_share_private_option
+  (hs:CS.handshake_state)
+  : option (b:B.bytes{B.length b == 32}) =
+  match hs.CS.hs_server_selection with
+  | Some selection -> selection.CS.server_key_share_private
+  | None -> None
+
+let server_selection_absent
+  (hs:CS.handshake_state)
+  : prop =
+  match hs.CS.hs_server_selection with
+  | Some _ -> False
+  | None -> True
+
+let server_selection_private_absent
+  (selection:CS.server_handshake_selection)
+  : prop =
+  match selection.CS.server_key_share_private with
+  | Some _ -> False
+  | None -> True
+
+let server_key_share_private_exactly
+  ([@@@mkey] slot:optional_fixed_bytes)
+  (hs:CS.handshake_state)
+  : slprop =
+  match hs.CS.hs_server_selection with
+  | Some selection ->
+    (match selection.CS.server_key_share_private with
+     | Some sk -> optional_fixed_bytes_exactly slot 32 (Some sk)
+     | None -> optional_fixed_bytes_exactly slot 32 None)
+  | None ->
+    optional_fixed_bytes_exactly slot 32 None
+
 let peer_fields_allocated
   ([@@@mkey] peer:peer_storage)
   : slprop =
@@ -1036,7 +1069,7 @@ let handshake_exactly
     handshake_start_exactly handshake.start hs.CS.hs_start **
     handshake_messages_exactly handshake.messages hs **
     server_key_share_exactly handshake.server_key_share hs **
-    optional_fixed_bytes_exactly handshake.server_key_share_private 32 None **
+    server_key_share_private_exactly handshake.server_key_share_private hs **
     peer_exactly handshake.validated_peer hs.CS.hs_validated_peer **
     Box.pts_to handshake.certificate_verify_verified cv_verified **
     Box.pts_to handshake.server_finished_verified server_finished_verified **

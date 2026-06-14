@@ -502,7 +502,10 @@ fn process_select_server_parameters
            pure (B.length 'old_network_out == SZ.v network_out_len /\
                   B.length 'old_app_out == SZ.v app_out_len /\
                   ST.server_end_to_end_invariant 'st0 /\
-                  CM.can_select_server_parameters 'st0 selection)
+                  CM.can_select_server_parameters 'st0 selection /\
+                  CR.server_selection_absent
+                    'st0.CS.cs_model.CS.model_handshake /\
+                  CR.server_selection_private_absent selection)
   returns resp:ST.server_response
   ensures exists* st1 network_out_bytes app_out_bytes.
           connection_exactly s st1 **
@@ -541,6 +544,8 @@ fn process_select_default_server_parameters_from_arrays
                  B.length 'old_network_out == SZ.v network_out_len /\
                  B.length 'old_app_out == SZ.v app_out_len /\
                  ST.server_end_to_end_invariant 'st0 /\
+                 CR.server_selection_absent
+                   'st0.CS.cs_model.CS.model_handshake /\
                  Some? 'st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello /\
                  Some? 'st0.CS.cs_model.CS.model_config.CS.config_server /\
                  (let ch =

@@ -339,10 +339,12 @@ Current phase: **Phase 6 server buffer/event API and theorem surface**.
   `TLS13.Impl.ConnectionState.Model.selected_server_parameters_state` records
   `hs_server_selection` after an accepted `ClientHello`, and
   `TLS13.Impl.ConnectionState.LocalHandshake.select_server_parameters` proves the
-  corresponding `LocalSelectServerParameters` legal delta while refolding the
-  unchanged concrete storage. This is intentionally ghost/spec-only for now:
-  executable random/key-share generation, concrete selection storage, and
-  scheduler readiness remain pending.
+  corresponding `LocalSelectServerParameters` legal delta while preserving the
+  existing no-private-material concrete storage. `connection_exactly` now also
+  has a real server private-key-share storage predicate keyed by
+  `hs_server_selection.server_key_share_private`, so a generated selector can
+  later populate `Some server_sk` from concrete bytes. Executable
+  random/key-share generation and scheduler readiness remain pending.
 - [x] Added the focused public `TLS13.Impl.Server.process_select_server_parameters`
   wrapper. It exposes the verified `LocalSelectServerParameters` transition at
   the server API theorem surface, returns `StepOk` with zero network/app output,
@@ -356,8 +358,9 @@ Current phase: **Phase 6 server buffer/event API and theorem surface**.
   parsed `ClientHello`, the server config credential identity, and concrete
   32-byte server-random/public-key-share arrays, then reuses the verified
   selection transition. This removes the caller-built ghost-selection record for
-  the default profile; concrete random/X25519 generation, private-key-share
-  storage, and scheduler integration remain pending.
+  the default profile; the wrapper is now explicitly the no-private-material
+  supplied-public-key path. Concrete random/X25519 generation that records
+  `Some server_sk` and scheduler integration remain pending.
 - [x] Added the first sent-ServerHello state-mutation slice:
   `TLS13.Impl.ConnectionState.Model.sent_server_hello_state` mirrors the pure
   `Sent ServerHello` transition, and
@@ -455,9 +458,11 @@ Current phase: **Phase 6 server buffer/event API and theorem surface**.
   shared-secret buffer plus the pure `legal_event` premise; executable X25519
   derivation from stored server/client shares remains pending. Concrete
   allocation for a server private key-share slot now exists in
-  `TLS13.Impl.ConnectionState.Repr.handshake_storage`, but it is intentionally
-  kept as an empty storage resource until an executable selector can populate it
-  from concrete generated private-key bytes.
+  `TLS13.Impl.ConnectionState.Repr.handshake_storage`, and
+  `connection_exactly` now relates it to `hs_server_selection` when a private
+  key is present; the existing supplied-public-key selector remains intentionally
+  constrained to the empty/private-absent case until an executable selector can
+  populate it from concrete generated private-key bytes.
 - [x] Added role-indexed traffic-key install model support:
   `TLS13.Impl.ConnectionState.Model.installed_traffic_keys_for_role_state` and
   its evolution lemma mirror the pure `LocalInstallTrafficKeysForRole`
@@ -1565,9 +1570,10 @@ Checklist:
       generic server application-data/close_notify sends; protected server
       application-data receive byte dispatch is also complete. The focused
       `LocalSelectServerParameters` wrapper also preserves the invariant and now
-      has a default-profile concrete-array entry point; random/X25519 generation,
-      private-key-share storage, remaining protected receive cases, and scheduler
-      integration remain pending.
+      has a default-profile concrete-array entry point. Server private-key-share
+      storage is represented in `connection_exactly`, but random/X25519
+      generation that populates it, remaining protected receive cases, and
+      scheduler integration remain pending.
 - [x] Emitted bytes expose raw-delta, parse-back, seal, and write-key provenance.
 - [ ] Consumed bytes expose exact consumed prefix, parse/decode classification,
       open facts, and read-key provenance.

@@ -997,8 +997,13 @@ fn alloc_handshake_empty ()
     (handshake_messages_exactly handshake.messages CS.empty_handshake_state);
   rewrite (optional_fixed_bytes_exactly server_key_share 32 None) as
     (server_key_share_exactly handshake.server_key_share CS.empty_handshake_state);
+  assert (pure (handshake.server_key_share_private == server_key_share_private));
   rewrite (optional_fixed_bytes_exactly server_key_share_private 32 None) as
     (optional_fixed_bytes_exactly handshake.server_key_share_private 32 None);
+  rewrite (optional_fixed_bytes_exactly handshake.server_key_share_private 32 None) as
+    (server_key_share_private_exactly
+      handshake.server_key_share_private
+      CS.empty_handshake_state);
   rewrite (peer_exactly validated_peer None) as
     (peer_exactly handshake.validated_peer CS.empty_handshake_state.CS.hs_validated_peer);
   rewrite (Box.pts_to certificate_verify_verified false) as

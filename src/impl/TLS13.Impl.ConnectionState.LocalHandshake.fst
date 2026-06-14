@@ -459,7 +459,10 @@ fn select_server_parameters
   (#selection:erased CS.server_handshake_selection)
   (#st0:erased CS.connection_state)
   requires connection_exactly c st0 **
-           pure (can_select_server_parameters st0 selection)
+           pure (can_select_server_parameters st0 selection /\
+                 server_selection_absent
+                   st0.CS.cs_model.CS.model_handshake /\
+                 server_selection_private_absent selection)
   ensures connection_exactly c (selected_server_parameters_state st0 selection) **
           pure (CS.legal_connection_delta
             st0
@@ -534,6 +537,25 @@ fn select_server_parameters
   fold (server_key_share_exactly
     c.handshake.server_key_share
     (selected_server_parameters_state st0 (Ghost.reveal selection)).CS.cs_model.CS.model_handshake);
+  assert (pure (server_selection_absent
+    st0.CS.cs_model.CS.model_handshake));
+  assert (pure (server_selection_private_absent (Ghost.reveal selection)));
+  assert (pure ((Ghost.reveal selection).CS.server_key_share_private == None));
+  assert (pure (None == (Ghost.reveal selection).CS.server_key_share_private));
+  rewrite (server_key_share_private_exactly
+    c.handshake.server_key_share_private
+    st0.CS.cs_model.CS.model_handshake)
+    as (optional_fixed_bytes_exactly
+      c.handshake.server_key_share_private
+      32
+      None);
+  rewrite (optional_fixed_bytes_exactly
+    c.handshake.server_key_share_private
+    32
+    None)
+    as (server_key_share_private_exactly
+      c.handshake.server_key_share_private
+      (selected_server_parameters_state st0 (Ghost.reveal selection)).CS.cs_model.CS.model_handshake);
   fold (handshake_exactly
     c.handshake
     (selected_server_parameters_state st0 (Ghost.reveal selection)).CS.cs_model.CS.model_handshake);

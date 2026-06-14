@@ -107,7 +107,10 @@ fn select_server_parameters
   (#selection:erased CS.server_handshake_selection)
   (#st0:erased CS.connection_state)
   requires connection_exactly c st0 **
-           pure (can_select_server_parameters st0 selection)
+           pure (can_select_server_parameters st0 selection /\
+                 server_selection_absent
+                   st0.CS.cs_model.CS.model_handshake /\
+                 server_selection_private_absent selection)
   ensures connection_exactly c (selected_server_parameters_state st0 selection) **
           pure (CS.legal_connection_delta
             st0
