@@ -463,3 +463,76 @@ fn send_close_notify_once
             'credential_identity
             'received
             sent'
+
+fn send_certificate_once
+  (d:server_driver)
+  requires server_driver_connected
+              d
+              'st0
+              'certificate_chain
+              'credential_identity
+              'received
+              'sent **
+           pure (ST.server_local_event_input_ready_with_credentials
+             'st0
+             ST.LocalSendCertificate
+             B.empty
+             (Ghost.reveal 'certificate_chain)
+             (Ghost.reveal 'credential_identity))
+  returns resp:ST.server_response
+  ensures exists* st1 sent'.
+          server_driver_connected
+            d
+            st1
+            'certificate_chain
+            'credential_identity
+            'received
+            sent'
+
+fn sign_certificate_verify_once
+  (d:server_driver)
+  requires server_driver_connected
+              d
+              'st0
+              'certificate_chain
+              'credential_identity
+              'received
+              'sent **
+           pure (ST.server_local_event_input_ready_with_credentials
+             'st0
+             ST.LocalSignCertificateVerify
+             B.empty
+             (Ghost.reveal 'certificate_chain)
+             (Ghost.reveal 'credential_identity))
+  returns resp:ST.server_response
+  ensures exists* st1 sent'.
+          server_driver_connected
+            d
+            st1
+            'certificate_chain
+            'credential_identity
+            'received
+            sent'
+
+fn verify_client_finished_once
+  (d:server_driver)
+  requires server_driver_connected
+              d
+              'st0
+              'certificate_chain
+              'credential_identity
+              'received
+              'sent **
+           pure (ST.server_local_event_input_ready
+             'st0
+             ST.LocalVerifyClientFinished
+             B.empty)
+  returns resp:ST.server_response
+  ensures exists* st1 sent'.
+          server_driver_connected
+            d
+            st1
+            'certificate_chain
+            'credential_identity
+            'received
+            sent'

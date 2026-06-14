@@ -1932,6 +1932,13 @@ Status:
       application data and close_notify in application-data control, preserving
       the connected IO-history invariant while appending exactly the protected
       response record bytes to the transport sent history.
+- [x] Added focused credential/Finished driver helpers:
+      `send_certificate_once`, `sign_certificate_verify_once`, and
+      `verify_client_finished_once` expose precise readiness-preconditioned
+      wrappers for the credential-bearing certificate flight and stored client
+      Finished verification. The scheduler wrapper still leaves certificate
+      send/sign unsupported until its soundness predicate exposes the same
+      credential/config-matching facts directly.
 - [x] Added the first verified selection driver slice:
       `TLS13.Impl.Server.Driver.select_default_server_parameters_from_payload_once`
       takes an explicit 64-byte material payload, requires the existing
