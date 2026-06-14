@@ -794,6 +794,11 @@ fn process_send_server_hello
           pts_to app_out app_out_bytes **
           pure (B.length network_out_bytes == SZ.v network_out_len /\
                 B.length app_out_bytes == SZ.v app_out_len /\
+                st1 ==
+                  CM.sent_server_hello_state
+                    'st0
+                    sh
+                    (Ghost.reveal 'raw_bytes) /\
                 ST.server_local_event_end_to_end_correct
                   'st0
                   st1
@@ -959,6 +964,15 @@ fn process_send_server_hello_serialized
           pts_to app_out app_out_bytes **
           pure (B.length network_out_bytes == SZ.v network_out_len /\
                 B.length app_out_bytes == SZ.v app_out_len /\
+                Seq.equal
+                  network_out_bytes
+                  (CS.serialized_cleartext_tls_message
+                    (M.TlsHandshake (M.ServerHello sh))) /\
+                st1 ==
+                  CM.sent_server_hello_state
+                    'st0
+                    sh
+                    network_out_bytes /\
                 ST.server_local_event_end_to_end_correct
                   'st0
                   st1
@@ -1212,6 +1226,22 @@ fn process_send_server_hello_from_arrays
           pts_to app_out app_out_bytes **
           pure (B.length network_out_bytes == SZ.v network_out_len /\
                 B.length app_out_bytes == SZ.v app_out_len /\
+                (B.length (Ghost.reveal 'server_random_bytes) == 32 /\
+                 B.length (Ghost.reveal 'server_key_share_bytes) == 32 ==>
+                 (let sh = {
+                    M.random = Ghost.reveal 'server_random_bytes;
+                    M.key_share = Ghost.reveal 'server_key_share_bytes;
+                    M.cipher_suite = T.TLS_CHACHA20_POLY1305_SHA256;
+                  } in
+                  Seq.equal
+                    network_out_bytes
+                    (CS.serialized_cleartext_tls_message
+                      (M.TlsHandshake (M.ServerHello sh))) /\
+                  st1 ==
+                    CM.sent_server_hello_state
+                      'st0
+                      sh
+                      network_out_bytes)) /\
                 ST.server_local_event_end_to_end_correct
                   'st0
                   st1

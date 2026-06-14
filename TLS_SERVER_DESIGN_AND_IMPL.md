@@ -614,6 +614,10 @@ Current phase: **Phase 6 server buffer/event API and theorem surface**.
   constructor (`selected_server_parameters_state` or
   `derived_shared_secret_state`) in addition to
   `server_local_event_end_to_end_correct`.
+- [x] Strengthened ServerHello send wrapper postconditions for later chaining:
+  the raw-fragment, serializer-backed, and concrete-array ServerHello send
+  entry points now expose `sent_server_hello_state`; the serializer-backed
+  wrappers also expose exact cleartext ServerHello record bytes.
 
 ## End goal
 
