@@ -713,7 +713,126 @@ static inline size_t TLS13_Connection_Backend_serialize_finished_handshake(
         uint8_t *_body = (input) + 4u; \
         TLS13_Impl_Messages_handshake_msg _hs = { .tag = TLS13_Impl_Messages_LHelloRetryRequest }; \
         bool _ok = true; \
-        if (_ht == 2u && _hlen >= 38u) { \
+        if (_ht == 1u && _hlen >= 35u) { \
+          uint8_t *_random = calloc(32u, sizeof(uint8_t)); \
+          uint8_t *_server_name = calloc(255u, sizeof(uint8_t)); \
+          uint8_t *_key_share = calloc(32u, sizeof(uint8_t)); \
+          uint16_t *_cipher_suites = calloc(16u, sizeof(uint16_t)); \
+          uint16_t *_signature_schemes = calloc(16u, sizeof(uint16_t)); \
+          _ok = _random != NULL && _server_name != NULL && _key_share != NULL && \
+            _cipher_suites != NULL && _signature_schemes != NULL && \
+            TLS13_Connection_Backend_read_u16(_body) == 0x0303u; \
+          bool _has_server_name = false; \
+          size_t _server_name_len = 0u; \
+          bool _found_key_share = false; \
+          bool _found_supported_versions = false; \
+          size_t _signature_schemes_len = 0u; \
+          if (_ok) { \
+            memcpy(_random, _body + 2u, 32u); \
+            size_t _sid_len = _body[34u]; \
+            size_t _cipher_len_off = 35u + _sid_len; \
+            _ok = _cipher_len_off + 2u <= _hlen; \
+            if (_ok) { \
+              size_t _cipher_len = TLS13_Connection_Backend_read_u16(_body + _cipher_len_off); \
+              size_t _cipher_pos = _cipher_len_off + 2u; \
+              size_t _compression_len_off = _cipher_pos + _cipher_len; \
+              _ok = _cipher_len == 2u && _compression_len_off + 1u <= _hlen; \
+              if (_ok) { \
+                uint16_t _cipher = (uint16_t)TLS13_Connection_Backend_read_u16(_body + _cipher_pos); \
+                size_t _compression_len = _body[_compression_len_off]; \
+                size_t _compression_pos = _compression_len_off + 1u; \
+                _ok = _cipher == 0x1303u && _compression_len == 1u && \
+                  _compression_pos + 1u <= _hlen && _body[_compression_pos] == 0u; \
+                if (_ok) { \
+                  _cipher_suites[0] = _cipher; \
+                  size_t _ext_len_off = _compression_pos + _compression_len; \
+                  _ok = _ext_len_off + 2u <= _hlen; \
+                  if (_ok) { \
+                    size_t _ext_len = TLS13_Connection_Backend_read_u16(_body + _ext_len_off); \
+                    size_t _pos = _ext_len_off + 2u; \
+                    size_t _end = _pos + _ext_len; \
+                    _ok = _end == _hlen; \
+                    while (_ok && _pos + 4u <= _end) { \
+                      size_t _etype = TLS13_Connection_Backend_read_u16(_body + _pos); \
+                      size_t _elen = TLS13_Connection_Backend_read_u16(_body + _pos + 2u); \
+                      size_t _edata = _pos + 4u; \
+                      if (_edata + _elen > _end) { \
+                        _ok = false; \
+                      } else if (_etype == 0x0000u) { \
+                        if (_elen >= 5u && \
+                            TLS13_Connection_Backend_read_u16(_body + _edata) + 2u == _elen && \
+                            _body[_edata + 2u] == 0u && \
+                            TLS13_Connection_Backend_read_u16(_body + _edata + 3u) + 5u == _elen) { \
+                          size_t _name_len = TLS13_Connection_Backend_read_u16(_body + _edata + 3u); \
+                          if (_name_len <= 255u) { \
+                            memcpy(_server_name, _body + _edata + 5u, _name_len); \
+                            _server_name_len = _name_len; \
+                            _has_server_name = true; \
+                          } else { \
+                            _ok = false; \
+                          } \
+                        } else { \
+                          _ok = false; \
+                        } \
+                      } else if (_etype == 0x000au) { \
+                        _ok = _elen == 4u && \
+                          TLS13_Connection_Backend_read_u16(_body + _edata) == 2u && \
+                          TLS13_Connection_Backend_read_u16(_body + _edata + 2u) == 0x001du; \
+                      } else if (_etype == 0x000du) { \
+                        if (_elen == 4u && TLS13_Connection_Backend_read_u16(_body + _edata) == 2u) { \
+                          _signature_schemes[0] = (uint16_t)TLS13_Connection_Backend_read_u16(_body + _edata + 2u); \
+                          _signature_schemes_len = 1u; \
+                        } else { \
+                          _ok = false; \
+                        } \
+                      } else if (_etype == 0x0033u) { \
+                        if (_elen == 38u && \
+                            TLS13_Connection_Backend_read_u16(_body + _edata) == 36u && \
+                            TLS13_Connection_Backend_read_u16(_body + _edata + 2u) == 0x001du && \
+                            TLS13_Connection_Backend_read_u16(_body + _edata + 4u) == 32u) { \
+                          memcpy(_key_share, _body + _edata + 6u, 32u); \
+                          _found_key_share = true; \
+                        } else { \
+                          _ok = false; \
+                        } \
+                      } else if (_etype == 0x002bu) { \
+                        if (_elen == 3u && _body[_edata] == 2u && \
+                            TLS13_Connection_Backend_read_u16(_body + _edata + 1u) == 0x0304u) { \
+                          _found_supported_versions = true; \
+                        } else { \
+                          _ok = false; \
+                        } \
+                      } \
+                      _pos = _edata + _elen; \
+                    } \
+                    _ok = _ok && _pos == _end && _found_key_share && _found_supported_versions; \
+                  } \
+                } \
+              } \
+            } \
+          } \
+          if (_ok) { \
+            _hs = (TLS13_Impl_Messages_handshake_msg){ \
+              .tag = TLS13_Impl_Messages_LClientHello, \
+              { .case_LClientHello = { \
+                  .client_hello_random = _random, \
+                  .client_hello_server_name = _server_name, \
+                  .client_hello_server_name_len = _server_name_len, \
+                  .client_hello_has_server_name = _has_server_name, \
+                  .client_hello_key_share = _key_share, \
+                  .client_hello_cipher_suites = _cipher_suites, \
+                  .client_hello_cipher_suites_len = 1u, \
+                  .client_hello_signature_schemes = _signature_schemes, \
+                  .client_hello_signature_schemes_len = _signature_schemes_len } } \
+            }; \
+          } else { \
+            free(_random); \
+            free(_server_name); \
+            free(_key_share); \
+            free(_cipher_suites); \
+            free(_signature_schemes); \
+          } \
+        } else if (_ht == 2u && _hlen >= 38u) { \
           size_t _sid_len = _body[34u]; \
           size_t _cipher_off = 35u + _sid_len; \
           size_t _ext_len_off = _cipher_off + 3u; \

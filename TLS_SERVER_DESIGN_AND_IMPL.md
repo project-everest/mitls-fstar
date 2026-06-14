@@ -239,6 +239,15 @@ Current phase: **Phase 6 server buffer/event API and theorem surface**.
 - [ ] Continue Phase 6/7 by moving from the focused ClientHello event handler to
   the final buffer-oriented server `process_network_bytes` dispatcher and by
   adding ClientHello reject paths.
+- [x] Removed the immediate C parser backend blocker for that dispatcher:
+  `c_stubs/tls13_connection_backend.h` now decodes supported-profile
+  `ClientHello` handshake records into `LClientHello`, matching the pure
+  `TLS13.Wire.Spec.parse_client_hello` profile for legacy version, one
+  ChaCha20/Poly1305 suite, X25519 key share, TLS 1.3 supported_versions,
+  optional SNI, and an optional single advertised signature scheme. The
+  remaining dispatcher work is to expose the corresponding server-oriented
+  parser/consumed-prefix theorem surface and connect it to
+  `process_client_hello`.
 - [x] Added `TLS13.Impl.ConnectionState.Queries.can_receive_client_hello`, the
   concrete readiness check needed by the upcoming buffer dispatcher. It reads
   only role/control, stored-ClientHello presence, and transcript length, and
@@ -1477,6 +1486,9 @@ Checklist:
 - [x] Emitted bytes expose raw-delta, parse-back, seal, and write-key provenance.
 - [ ] Consumed bytes expose exact consumed prefix, parse/decode classification,
       open facts, and read-key provenance.
+      The C parser backend now decodes supported-profile `ClientHello` records,
+      so the remaining cleartext-server receive work is proof/API wiring rather
+      than missing runtime decoding.
       First focused server receive slice completed for protected client
       `Finished`: `process_client_finished` preserves
       `server_network_event_end_to_end_correct` when the caller supplies the
