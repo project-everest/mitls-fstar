@@ -579,7 +579,7 @@ Current phase: **Phase 6 server buffer/event API and theorem surface**.
   `TLS13.Impl.Server.next_local_action` now advertises `LocalSendCertificate`
   between EncryptedExtensions and CertificateVerify. The generic no-credential
   `process_local_event` path remains intentionally unwired for Certificate; the
-  credential-aware driver path should call
+  credential-aware dispatcher handles this action through
   `process_send_certificate_from_credentials`.
 - [x] Added scheduler readiness for ServerFinished:
   `TLS13.Impl.ConnectionState.Queries.can_send_server_finished_runtime` checks the
@@ -599,6 +599,14 @@ Current phase: **Phase 6 server buffer/event API and theorem surface**.
   `process_sign_certificate_verify` wrapper still requires and proves the exact
   credential identity, selected RSA-PSS/SHA-256 scheme, generated input, and
   signature-validity facts.
+- [x] Added the credential-aware local dispatcher:
+  `server_local_event_input_ready_with_credentials` extends the ordinary local
+  input predicate only for credential-backed Certificate and CertificateVerify
+  signing actions. `process_local_event_with_credentials` preserves the
+  credential resource, dispatches `LocalSendCertificate` through the
+  credential-chain sender, dispatches `LocalSignCertificateVerify` through the
+  signing wrapper, and delegates all other actions to the existing generic
+  `process_local_event`, preserving `server_local_event_end_to_end_correct`.
 
 ## End goal
 

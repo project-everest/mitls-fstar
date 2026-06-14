@@ -300,6 +300,59 @@ let server_local_event_input_ready
   | _ ->
     False
 
+let server_local_event_input_ready_with_credentials
+  (st:CS.connection_state)
+  (kind:ST.local_event_kind)
+  (payload:B.bytes)
+  (certificate_chain:B.bytes)
+  (credential_identity:CS.server_credential_identity)
+  : prop =
+  match kind with
+  | ST.LocalSendCertificate ->
+    Seq.equal payload B.empty /\
+    st.CS.cs_model.CS.model_control ==
+      CS.ControlHandshaking CS.HsServerEncryptedFlightSent /\
+    st.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
+    st.CS.cs_model.CS.model_handshake.CS.hs_encrypted_extensions <> None /\
+    st.CS.cs_model.CS.model_handshake.CS.hs_certificate == None /\
+    st.CS.cs_model.CS.model_handshake.CS.hs_buffers.CS.hb_certificate_leaf_der == None /\
+    Some?
+      st.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_handshake_traffic /\
+    U64.fits
+      (st.CS.cs_model.CS.model_record.CS.record_write.R.seq + 1) /\
+    13 + B.length certificate_chain + 17 <= 16640 /\
+    (match st.CS.cs_model.CS.model_config.CS.config_server with
+     | Some cfg -> cfg.CS.server_certificate_chain == certificate_chain
+     | None -> False) /\
+    B.length st.CS.cs_model.CS.model_handshake.CS.hs_transcript +
+      13 + B.length certificate_chain <= Bounds.max_transcript_len /\
+    CS.legal_event
+      st.CS.cs_model
+      (CS.ConnNetworkEvent {
+        CL.message_direction = CL.Sent;
+        CL.message_value =
+          M.TlsHandshake (M.Certificate { M.chain = [certificate_chain] });
+      })
+  | ST.LocalSignCertificateVerify ->
+    Seq.equal payload B.empty /\
+    st.CS.cs_model.CS.model_control ==
+      CS.ControlHandshaking CS.HsServerEncryptedFlightSent /\
+    st.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
+    st.CS.cs_model.CS.model_handshake.CS.hs_certificate <> None /\
+    st.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify == None /\
+    st.CS.cs_model.CS.model_handshake.CS.hs_buffers.CS.hb_certificate_verify_input == None /\
+    (match st.CS.cs_model.CS.model_handshake.CS.hs_server_selection with
+     | Some selection ->
+       selection.CS.server_selected_signature_scheme ==
+         T.RsaPssRsaeSha256 /\
+       selection.CS.server_selected_credential == credential_identity /\
+       CS.signature_scheme_offered
+         st.CS.cs_model.CS.model_config.CS.config_signature_schemes
+         T.RsaPssRsaeSha256
+     | None -> False)
+  | _ ->
+    server_local_event_input_ready st kind payload
+
 fn new_server
   (certificate_chain:array U8.t)
   (certificate_chain_len:SZ.t)
@@ -377,6 +430,49 @@ fn process_local_event
   returns resp:ST.server_response
   ensures exists* st1 network_out_bytes app_out_bytes.
           connection_exactly s st1 **
+          pts_to payload 'payload_bytes **
+          pts_to network_out network_out_bytes **
+          pts_to app_out app_out_bytes **
+          pure (B.length network_out_bytes == SZ.v network_out_len /\
+                B.length app_out_bytes == SZ.v app_out_len /\
+                ST.server_local_event_end_to_end_correct
+                  'st0
+                  st1
+                  resp
+                  kind
+                  (Ghost.reveal 'payload_bytes)
+                  network_out_bytes
+                  app_out_bytes)
+
+fn process_local_event_with_credentials
+  (s:server)
+  (creds:O.server_credentials)
+  (kind:ST.local_event_kind)
+  (payload:array U8.t)
+  (payload_len:SZ.t)
+  (network_out:array U8.t)
+  (network_out_len:SZ.t)
+  (app_out:array U8.t)
+  (app_out_len:SZ.t)
+  requires connection_exactly s 'st0 **
+           O.is_server_credentials creds 'certificate_chain 'credential_identity **
+           pts_to payload 'payload_bytes **
+           pts_to network_out 'old_network_out **
+           pts_to app_out 'old_app_out **
+           pure (B.length 'payload_bytes == SZ.v payload_len /\
+                 B.length 'old_network_out == SZ.v network_out_len /\
+                 B.length 'old_app_out == SZ.v app_out_len /\
+                 ST.server_end_to_end_invariant 'st0 /\
+                 server_local_event_input_ready_with_credentials
+                   'st0
+                   kind
+                   (Ghost.reveal 'payload_bytes)
+                   (Ghost.reveal 'certificate_chain)
+                   (Ghost.reveal 'credential_identity))
+  returns resp:ST.server_response
+  ensures exists* st1 network_out_bytes app_out_bytes.
+          connection_exactly s st1 **
+          O.is_server_credentials creds 'certificate_chain 'credential_identity **
           pts_to payload 'payload_bytes **
           pts_to network_out network_out_bytes **
           pts_to app_out app_out_bytes **

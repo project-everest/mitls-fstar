@@ -5807,6 +5807,253 @@ fn process_local_event
   }
 }
 
+fn process_local_event_with_credentials
+  (s:server)
+  (creds:O.server_credentials)
+  (kind:ST.local_event_kind)
+  (payload:array U8.t)
+  (payload_len:SZ.t)
+  (network_out:array U8.t)
+  (network_out_len:SZ.t)
+  (app_out:array U8.t)
+  (app_out_len:SZ.t)
+  requires connection_exactly s 'st0 **
+         O.is_server_credentials creds 'certificate_chain 'credential_identity **
+         pts_to payload 'payload_bytes **
+         pts_to network_out 'old_network_out **
+         pts_to app_out 'old_app_out **
+         pure (B.length 'payload_bytes == SZ.v payload_len /\
+               B.length 'old_network_out == SZ.v network_out_len /\
+               B.length 'old_app_out == SZ.v app_out_len /\
+               ST.server_end_to_end_invariant 'st0 /\
+               server_local_event_input_ready_with_credentials
+                 'st0
+                 kind
+                 (Ghost.reveal 'payload_bytes)
+                 (Ghost.reveal 'certificate_chain)
+                 (Ghost.reveal 'credential_identity))
+  returns resp:ST.server_response
+  ensures exists* st1 network_out_bytes app_out_bytes.
+        connection_exactly s st1 **
+        O.is_server_credentials creds 'certificate_chain 'credential_identity **
+        pts_to payload 'payload_bytes **
+        pts_to network_out network_out_bytes **
+        pts_to app_out app_out_bytes **
+        pure (B.length network_out_bytes == SZ.v network_out_len /\
+              B.length app_out_bytes == SZ.v app_out_len /\
+              ST.server_local_event_end_to_end_correct
+                'st0
+                st1
+                resp
+                kind
+                (Ghost.reveal 'payload_bytes)
+                network_out_bytes
+                app_out_bytes)
+{
+  match kind {
+    ST.LocalSendCertificate -> {
+      assert (pure (Seq.equal (Ghost.reveal 'payload_bytes) B.empty));
+      let built = build_certificate_from_credentials creds;
+      match built {
+        None -> {
+          assert_norm (IM.max_certificate_chain_bytes == 32768);
+          assert (pure (
+            B.length (Ghost.reveal 'certificate_chain) >
+              IM.max_certificate_chain_bytes));
+          assert (pure (
+            13 + B.length (Ghost.reveal 'certificate_chain) + 17 <= 16640));
+          assert (pure False);
+          {
+            ST.network_out_len = 0sz;
+            ST.app_out_len = 0sz;
+            ST.status = ST.IllegalTransition;
+          }
+        }
+        Some lcert -> {
+          assert (pure (SZ.v lcert.IM.certificate_msg_chain_bytes_len ==
+            B.length (Ghost.reveal 'certificate_chain)));
+          W.lemma_serialize_certificate_from_single_chain_len
+            (Ghost.reveal 'certificate_chain);
+          assert (pure (
+            B.length
+              (W.serialize_certificate_from_credential
+                { M.chain = [Ghost.reveal 'certificate_chain] }) ==
+              13 + B.length (Ghost.reveal 'certificate_chain)));
+          assert (pure (
+            SZ.fits (SZ.v lcert.IM.certificate_msg_chain_bytes_len + 13)));
+          let fragment_len =
+            SZ.add lcert.IM.certificate_msg_chain_bytes_len 13sz;
+          assert (pure (SZ.v fragment_len ==
+            13 + B.length (Ghost.reveal 'certificate_chain)));
+          assert (pure (SZ.fits (SZ.v fragment_len + 22)));
+          let expected_network_out_len = SZ.add fragment_len 22sz;
+          if (network_out_len = expected_network_out_len) {
+            assert (pure (SZ.v network_out_len ==
+              13 + B.length (Ghost.reveal 'certificate_chain) + 22));
+            IM.free_certificate_msg lcert;
+            process_send_certificate_from_credentials
+              s
+              creds
+              network_out
+              network_out_len
+              app_out
+              app_out_len
+          } else {
+            IM.free_certificate_msg lcert;
+            process_local_unexpected_message
+              s
+              kind
+              payload
+              payload_len
+              network_out
+              network_out_len
+              app_out
+              app_out_len
+          }
+        }
+      }
+    }
+    ST.LocalSignCertificateVerify -> {
+      assert (pure (Seq.equal (Ghost.reveal 'payload_bytes) B.empty));
+      process_sign_certificate_verify
+        s
+        creds
+        network_out
+        network_out_len
+        app_out
+        app_out_len
+    }
+    ST.LocalStartServer -> {
+      assert (pure (server_local_event_input_ready
+        'st0
+        kind
+        (Ghost.reveal 'payload_bytes)));
+      process_local_event
+        s kind payload payload_len network_out network_out_len app_out app_out_len
+    }
+    ST.LocalSelectServerParameters -> {
+      assert (pure (server_local_event_input_ready
+        'st0
+        kind
+        (Ghost.reveal 'payload_bytes)));
+      process_local_event
+        s kind payload payload_len network_out network_out_len app_out app_out_len
+    }
+    ST.LocalDeriveSharedSecret -> {
+      assert (pure (server_local_event_input_ready
+        'st0
+        kind
+        (Ghost.reveal 'payload_bytes)));
+      process_local_event
+        s kind payload payload_len network_out network_out_len app_out app_out_len
+    }
+    ST.LocalInstallClientHandshakeTrafficKeys -> {
+      assert (pure (server_local_event_input_ready
+        'st0
+        kind
+        (Ghost.reveal 'payload_bytes)));
+      process_local_event
+        s kind payload payload_len network_out network_out_len app_out app_out_len
+    }
+    ST.LocalInstallServerHandshakeTrafficKeys -> {
+      assert (pure (server_local_event_input_ready
+        'st0
+        kind
+        (Ghost.reveal 'payload_bytes)));
+      process_local_event
+        s kind payload payload_len network_out network_out_len app_out app_out_len
+    }
+    ST.LocalInstallClientApplicationTrafficKeys -> {
+      assert (pure (server_local_event_input_ready
+        'st0
+        kind
+        (Ghost.reveal 'payload_bytes)));
+      process_local_event
+        s kind payload payload_len network_out network_out_len app_out app_out_len
+    }
+    ST.LocalInstallServerApplicationTrafficKeys -> {
+      assert (pure (server_local_event_input_ready
+        'st0
+        kind
+        (Ghost.reveal 'payload_bytes)));
+      process_local_event
+        s kind payload payload_len network_out network_out_len app_out app_out_len
+    }
+    ST.LocalVerifyClientFinished -> {
+      assert (pure (server_local_event_input_ready
+        'st0
+        kind
+        (Ghost.reveal 'payload_bytes)));
+      process_local_event
+        s kind payload payload_len network_out network_out_len app_out app_out_len
+    }
+    ST.LocalDeliverApplicationData -> {
+      assert (pure (server_local_event_input_ready
+        'st0
+        kind
+        (Ghost.reveal 'payload_bytes)));
+      process_local_event
+        s kind payload payload_len network_out network_out_len app_out app_out_len
+    }
+    ST.LocalSendServerHello -> {
+      assert (pure (server_local_event_input_ready
+        'st0
+        kind
+        (Ghost.reveal 'payload_bytes)));
+      process_local_event
+        s kind payload payload_len network_out network_out_len app_out app_out_len
+    }
+    ST.LocalSendEncryptedExtensions -> {
+      assert (pure (server_local_event_input_ready
+        'st0
+        kind
+        (Ghost.reveal 'payload_bytes)));
+      process_local_event
+        s kind payload payload_len network_out network_out_len app_out app_out_len
+    }
+    ST.LocalSendCertificateVerify -> {
+      assert (pure (server_local_event_input_ready
+        'st0
+        kind
+        (Ghost.reveal 'payload_bytes)));
+      process_local_event
+        s kind payload payload_len network_out network_out_len app_out app_out_len
+    }
+    ST.LocalSendServerFinished -> {
+      assert (pure (server_local_event_input_ready
+        'st0
+        kind
+        (Ghost.reveal 'payload_bytes)));
+      process_local_event
+        s kind payload payload_len network_out network_out_len app_out app_out_len
+    }
+    ST.LocalSendApplicationData -> {
+      assert (pure (server_local_event_input_ready
+        'st0
+        kind
+        (Ghost.reveal 'payload_bytes)));
+      process_local_event
+        s kind payload payload_len network_out network_out_len app_out app_out_len
+    }
+    ST.LocalSendCloseNotify -> {
+      assert (pure (server_local_event_input_ready
+        'st0
+        kind
+        (Ghost.reveal 'payload_bytes)));
+      process_local_event
+        s kind payload payload_len network_out network_out_len app_out app_out_len
+    }
+    ST.LocalFail -> {
+      assert (pure (server_local_event_input_ready
+        'st0
+        kind
+        (Ghost.reveal 'payload_bytes)));
+      process_local_event
+        s kind payload payload_len network_out network_out_len app_out app_out_len
+    }
+  }
+}
+
 fn process_client_hello
   (s:server)
   (raw:array U8.t)
