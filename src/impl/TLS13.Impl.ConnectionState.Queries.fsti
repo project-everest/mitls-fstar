@@ -299,6 +299,20 @@ fn can_receive_application_data
             Some? st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_application_traffic /\
             U64.fits (st0.CS.cs_model.CS.model_record.CS.record_read.R.seq + 1))
 
+fn can_receive_endpoint_application_data
+  (c:connection_state)
+  (#st0:erased CS.connection_state)
+  requires connection_exactly c st0
+  returns ok: bool
+  ensures connection_exactly c st0 **
+          pure (ok ==>
+            st0.CS.cs_model.CS.model_control == CS.ControlApplicationData /\
+            CS.application_traffic_available_for_role
+              st0.CS.cs_model.CS.model_config.CS.config_role
+              st0.CS.cs_model.CS.model_handshake
+              CL.Received /\
+            U64.fits (st0.CS.cs_model.CS.model_record.CS.record_read.R.seq + 1))
+
 fn can_deliver_application_data
   (c:connection_state)
   (payload_len:SZ.t)

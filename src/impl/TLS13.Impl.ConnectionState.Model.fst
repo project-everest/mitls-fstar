@@ -2044,16 +2044,19 @@ let lemma_sent_close_notify_state_evolves
   assert (CS.connection_state_consistent
     (sent_close_notify_state st raw_sent))
 
-let lemma_received_application_data_state_evolves
+let lemma_received_application_data_state_evolves_for_role
+  (role:CS.endpoint_role)
   (st:CS.connection_state)
   (bytes:B.bytes)
   (raw_received:B.bytes)
   : Lemma
       (requires CS.connection_state_consistent st /\
                 st.CS.cs_model.CS.model_control == CS.ControlApplicationData /\
-                st.CS.cs_model.CS.model_config.CS.config_role ==
-                  CS.ClientEndpoint /\
-                Some? st.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_application_traffic /\
+                st.CS.cs_model.CS.model_config.CS.config_role == role /\
+                CS.application_traffic_available_for_role
+                  role
+                  st.CS.cs_model.CS.model_handshake
+                  CL.Received /\
                 CS.event_raw_delta_legal
                   st.CS.cs_model
                   (CS.ConnNetworkEvent {
@@ -2090,6 +2093,7 @@ let lemma_received_application_data_state_evolves
     CS.delta_raw_sent = B.empty;
     CS.delta_raw_received = raw_received;
   } in
+  assert (CS.legal_tls_message st.CS.cs_model CL.Received (M.TlsApplicationData bytes));
   assert (CS.legal_event st.CS.cs_model ev);
   assert (CS.step_model st.CS.cs_model ev ==
           Some (received_application_data_state st bytes raw_received).CS.cs_model);
@@ -2109,6 +2113,55 @@ let lemma_received_application_data_state_evolves
     (received_application_data_state st bytes raw_received));
   assert (CS.connection_state_consistent
     (received_application_data_state st bytes raw_received))
+
+let lemma_received_application_data_state_evolves
+  (st:CS.connection_state)
+  (bytes:B.bytes)
+  (raw_received:B.bytes)
+  : Lemma
+      (requires CS.connection_state_consistent st /\
+                st.CS.cs_model.CS.model_control == CS.ControlApplicationData /\
+                st.CS.cs_model.CS.model_config.CS.config_role ==
+                  CS.ClientEndpoint /\
+                Some? st.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_application_traffic /\
+                CS.event_raw_delta_legal
+                  st.CS.cs_model
+                  (CS.ConnNetworkEvent {
+                    CL.message_direction = CL.Received;
+                    CL.message_value = M.TlsApplicationData bytes;
+                  })
+                  B.empty
+                  raw_received)
+      (ensures CS.connection_state_evolves
+                 st
+                 (received_application_data_state st bytes raw_received) /\
+               CS.connection_state_consistent
+                 (received_application_data_state st bytes raw_received) /\
+               CS.legal_connection_delta
+                 st
+                 {
+                   CS.delta_event =
+                     CS.ConnNetworkEvent {
+                       CL.message_direction = CL.Received;
+                       CL.message_value = M.TlsApplicationData bytes;
+                     };
+                   CS.delta_raw_sent = B.empty;
+                   CS.delta_raw_received = raw_received;
+                 }
+                 (received_application_data_state st bytes raw_received))
+=
+  assert_norm (CS.traffic_label_for_endpoint_direction
+    CS.ClientEndpoint
+    CS.TrafficRead == CS.ServerTraffic);
+  assert (CS.application_traffic_available_for_role
+    CS.ClientEndpoint
+    st.CS.cs_model.CS.model_handshake
+    CL.Received);
+  lemma_received_application_data_state_evolves_for_role
+    CS.ClientEndpoint
+    st
+    bytes
+    raw_received
 
 let lemma_received_ignored_post_handshake_state_evolves
   (st:CS.connection_state)

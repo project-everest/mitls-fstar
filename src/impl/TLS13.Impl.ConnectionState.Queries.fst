@@ -1425,6 +1425,119 @@ fn can_receive_application_data
   fold (connection_exactly c st0);
   ok
 }
+
+fn can_receive_endpoint_application_data
+  (c:connection_state)
+  (#st0:erased CS.connection_state)
+  requires connection_exactly c st0
+  returns ok: bool
+  ensures connection_exactly c st0 **
+          pure (ok ==>
+            st0.CS.cs_model.CS.model_control == CS.ControlApplicationData /\
+            CS.application_traffic_available_for_role
+              st0.CS.cs_model.CS.model_config.CS.config_role
+              st0.CS.cs_model.CS.model_handshake
+              CL.Received /\
+            U64.fits (st0.CS.cs_model.CS.model_record.CS.record_read.R.seq + 1))
+{
+  unfold (connection_exactly c st0);
+  unfold (connection_model_exactly c st0.CS.cs_model);
+  unfold (control_exactly c.control st0.CS.cs_model.CS.model_control st0.CS.cs_model.CS.model_failure);
+  unfold (record_layer_exactly c.records st0.CS.cs_model.CS.model_record);
+  unfold (handshake_exactly c.handshake st0.CS.cs_model.CS.model_handshake);
+  unfold (key_schedule_exactly
+    c.handshake.keys
+    st0.CS.cs_model.CS.model_handshake.CS.hs_keys);
+  unfold (traffic_key_material_exactly
+    c.handshake.keys.client_application_traffic
+    st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_application_traffic);
+  unfold (traffic_key_material_exactly
+    c.handshake.keys.server_application_traffic
+    st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_application_traffic);
+
+  unfold (connection_config_exactly c.config st0.CS.cs_model.CS.model_config);
+  with config_role_tag validation_time.
+    assert (Box.pts_to c.config.role_tag config_role_tag **
+            Box.pts_to c.config.validation_time_seconds validation_time);
+  let role_tag = !c.config.role_tag;
+  let role_client_ok = role_tag = 0uy;
+  let role_server_ok = role_tag = 1uy;
+  assert (pure (role_tag == config_role_tag));
+  assert (pure (Tags.endpoint_role_tag_matches
+    config_role_tag
+    st0.CS.cs_model.CS.model_config.CS.config_role));
+  assert_norm (Tags.endpoint_role_tag_matches 0uy CS.ClientEndpoint);
+  assert_norm (Tags.endpoint_role_tag_matches 1uy CS.ServerEndpoint);
+  assert (pure (role_client_ok ==>
+    st0.CS.cs_model.CS.model_config.CS.config_role == CS.ClientEndpoint));
+  assert (pure (role_server_ok ==>
+    st0.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint));
+  assert (pure (role_client_ok ==> not role_server_ok));
+  assert (pure (role_server_ok ==> not role_client_ok));
+  fold (connection_config_exactly c.config st0.CS.cs_model.CS.model_config);
+
+  let tag = !c.control.control_tag;
+  let control_ok = tag = 2uy;
+  let client_app_present = !c.handshake.keys.client_application_traffic.present;
+  let server_app_present = !c.handshake.keys.server_application_traffic.present;
+
+  fold (traffic_key_material_exactly
+    c.handshake.keys.server_application_traffic
+    st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_application_traffic);
+  fold (traffic_key_material_exactly
+    c.handshake.keys.client_application_traffic
+    st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_application_traffic);
+  fold (key_schedule_exactly
+    c.handshake.keys
+    st0.CS.cs_model.CS.model_handshake.CS.hs_keys);
+  fold (handshake_exactly c.handshake st0.CS.cs_model.CS.model_handshake);
+
+  let seq_ok = Rec.can_advance_seq c.records.read;
+  fold (record_layer_exactly c.records st0.CS.cs_model.CS.model_record);
+
+  let app_present_for_role =
+    (role_client_ok && server_app_present) ||
+    (role_server_ok && client_app_present);
+  let ok =
+    control_ok &&
+    app_present_for_role &&
+    seq_ok;
+
+  assert (pure (ok ==> U8.v tag == 2));
+  assert (pure (ok ==> st0.CS.cs_model.CS.model_control == CS.ControlApplicationData));
+  assert (pure (ok ==> U64.fits (st0.CS.cs_model.CS.model_record.CS.record_read.R.seq + 1)));
+  assert_norm (CS.traffic_label_for_endpoint_direction CS.ClientEndpoint CS.TrafficRead ==
+    CS.ServerTraffic);
+  assert_norm (CS.traffic_label_for_endpoint_direction CS.ServerEndpoint CS.TrafficRead ==
+    CS.ClientTraffic);
+  if ok {
+    assert (pure (app_present_for_role));
+    if role_client_ok {
+      assert (pure (server_app_present));
+      assert (pure (Some?
+        st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_application_traffic));
+    } else {
+      assert (pure (role_server_ok));
+      assert (pure (client_app_present));
+      assert (pure (Some?
+        st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_application_traffic));
+    }
+  };
+  assert (pure (ok ==>
+    CS.application_traffic_available_for_role
+      st0.CS.cs_model.CS.model_config.CS.config_role
+      st0.CS.cs_model.CS.model_handshake
+      CL.Received));
+
+  fold (control_exactly
+    c.control
+    st0.CS.cs_model.CS.model_control
+    st0.CS.cs_model.CS.model_failure);
+  fold (connection_model_exactly c st0.CS.cs_model);
+  fold (connection_exactly c st0);
+  ok
+}
+
 fn can_deliver_application_data
   (c:connection_state)
   (payload_len:SZ.t)

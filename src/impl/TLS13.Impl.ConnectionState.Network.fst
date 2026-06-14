@@ -1990,6 +1990,86 @@ fn mark_received_application_data
     (received_application_data_state st0 bytes (Ghost.reveal 'raw_bytes)))
 }
 
+fn mark_received_application_data_for_role
+  (c:connection_state)
+  (raw:array U8.t)
+  (#role:erased CS.endpoint_role)
+  (#bytes:erased B.bytes)
+  (#st0:erased CS.connection_state)
+  requires connection_exactly c st0 **
+           Pulse.Lib.Array.PtsTo.pts_to raw 'raw_bytes **
+           pure (st0.CS.cs_model.CS.model_control == CS.ControlApplicationData /\
+                 st0.CS.cs_model.CS.model_config.CS.config_role == role /\
+                 CS.application_traffic_available_for_role
+                   role
+                   st0.CS.cs_model.CS.model_handshake
+                   CL.Received /\
+                 U64.fits (st0.CS.cs_model.CS.model_record.CS.record_read.R.seq + 1) /\
+                 CS.event_raw_delta_legal
+                   st0.CS.cs_model
+                   (CS.ConnNetworkEvent {
+                     CL.message_direction = CL.Received;
+                     CL.message_value = M.TlsApplicationData bytes;
+                   })
+                   B.empty
+                   (Ghost.reveal 'raw_bytes))
+  ensures connection_exactly
+            c
+            (received_application_data_state st0 bytes (Ghost.reveal 'raw_bytes)) **
+          Pulse.Lib.Array.PtsTo.pts_to raw 'raw_bytes
+{
+  assert (pure (st0.CS.cs_model.CS.model_control == CS.ControlApplicationData));
+  assert (pure (CS.application_traffic_available_for_role
+    role
+    st0.CS.cs_model.CS.model_handshake
+    CL.Received));
+  assert (pure (U64.fits (st0.CS.cs_model.CS.model_record.CS.record_read.R.seq + 1)));
+  assert (pure (CS.event_raw_delta_legal
+    st0.CS.cs_model
+    (CS.ConnNetworkEvent {
+      CL.message_direction = CL.Received;
+      CL.message_value = M.TlsApplicationData bytes;
+    })
+    B.empty
+    (Ghost.reveal 'raw_bytes)));
+  unfold (connection_exactly c st0);
+  unfold (connection_model_exactly c st0.CS.cs_model);
+  unfold (record_layer_exactly c.records st0.CS.cs_model.CS.model_record);
+
+  Rec.advance_seq c.records.read;
+  fold (record_layer_exactly
+    c.records
+    { st0.CS.cs_model.CS.model_record with
+        CS.record_read = R.next_seq st0.CS.cs_model.CS.model_record.CS.record_read });
+
+  unfold (application_exactly c.application st0.CS.cs_model.CS.model_application);
+  assert (pure (CS.pending_application_consistent
+    (received_application_data_state st0 bytes (Ghost.reveal 'raw_bytes)).CS.cs_model.CS.model_application));
+  fold (application_exactly
+    c.application
+    (received_application_data_state st0 bytes (Ghost.reveal 'raw_bytes)).CS.cs_model.CS.model_application);
+
+  assert (pure ((received_application_data_state st0 bytes (Ghost.reveal 'raw_bytes)).CS.cs_model.CS.model_control ==
+                st0.CS.cs_model.CS.model_control));
+  assert (pure ((received_application_data_state st0 bytes (Ghost.reveal 'raw_bytes)).CS.cs_model.CS.model_handshake ==
+                st0.CS.cs_model.CS.model_handshake));
+  fold (connection_model_exactly
+    c
+    (received_application_data_state st0 bytes (Ghost.reveal 'raw_bytes)).CS.cs_model);
+
+  lemma_received_application_data_state_evolves_for_role
+    role
+    st0
+    bytes
+    (Ghost.reveal 'raw_bytes);
+  MR.update
+    c.ghost_state
+    (received_application_data_state st0 bytes (Ghost.reveal 'raw_bytes));
+  fold (connection_exactly
+    c
+    (received_application_data_state st0 bytes (Ghost.reveal 'raw_bytes)))
+}
+
 fn mark_received_ignored_post_handshake
   (c:connection_state)
   (raw:array U8.t)

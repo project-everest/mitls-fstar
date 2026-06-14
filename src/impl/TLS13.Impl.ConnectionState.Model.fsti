@@ -2774,6 +2774,45 @@ val lemma_sent_close_notify_state_evolves
                  }
                  (sent_close_notify_state st raw_sent))
 
+val lemma_received_application_data_state_evolves_for_role
+  (role:CS.endpoint_role)
+  (st:CS.connection_state)
+  (bytes:B.bytes)
+  (raw_received:B.bytes)
+  : Lemma
+      (requires CS.connection_state_consistent st /\
+                st.CS.cs_model.CS.model_control == CS.ControlApplicationData /\
+                st.CS.cs_model.CS.model_config.CS.config_role == role /\
+                CS.application_traffic_available_for_role
+                  role
+                  st.CS.cs_model.CS.model_handshake
+                  CL.Received /\
+                CS.event_raw_delta_legal
+                  st.CS.cs_model
+                  (CS.ConnNetworkEvent {
+                    CL.message_direction = CL.Received;
+                    CL.message_value = M.TlsApplicationData bytes;
+                  })
+                  B.empty
+                  raw_received)
+      (ensures CS.connection_state_evolves
+                 st
+                 (received_application_data_state st bytes raw_received) /\
+               CS.connection_state_consistent
+                 (received_application_data_state st bytes raw_received) /\
+               CS.legal_connection_delta
+                 st
+                 {
+                   CS.delta_event =
+                     CS.ConnNetworkEvent {
+                       CL.message_direction = CL.Received;
+                       CL.message_value = M.TlsApplicationData bytes;
+                     };
+                   CS.delta_raw_sent = B.empty;
+                   CS.delta_raw_received = raw_received;
+                 }
+                 (received_application_data_state st bytes raw_received))
+
 val lemma_received_application_data_state_evolves
   (st:CS.connection_state)
   (bytes:B.bytes)

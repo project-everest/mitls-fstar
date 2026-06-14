@@ -1629,8 +1629,11 @@ Checklist:
         server sends, including explicit unexpected-message failure on seal or
         output-buffer refusal; the verified handlers are factored behind the
         focused `TLS13.Impl.Server.App.fsti` boundary with the facade delegating
-        through exact-state rewrites; receive-side application data remains
-        pending).
+        through exact-state rewrites; the low-level model lemma, record mutation,
+        and runtime readiness query for received application data are now
+        role-parametric, which removes the previous client-only blocker for the
+        server receive handler; the server network application-data dispatcher
+        branch remains pending).
 - [ ] Add failure transitions:
       - unsupported cipher suite;
       - missing/unsupported X25519 key share;
