@@ -372,6 +372,14 @@ Current phase: **Phase 6 server buffer/event API and theorem surface**.
   supplied by the pure selection admissibility predicate. Entropy generation and
   computing the public key from the private key inside the wrapper remain
   pending.
+- [x] Added low-level executable server X25519 shared-secret derivation:
+  `TLS13.Impl.ConnectionState.LocalHandshake.try_derive_server_shared_secret_from_private_array`
+  reads the stored parsed `ClientHello` key share, computes X25519 with a
+  concrete 32-byte server private-key array through the crypto runtime TCB, and
+  reuses the verified shared-secret/key-schedule lineage mutation on success.
+  Its theorem exposes the computed `TLS13.Crypto.Spec.x25519_shared` equation
+  and the corresponding `LocalDeriveSharedSecret` legal delta. A public server
+  response wrapper and scheduler integration remain pending.
 - [x] Added the first sent-ServerHello state-mutation slice:
   `TLS13.Impl.ConnectionState.Model.sent_server_hello_state` mirrors the pure
   `Sent ServerHello` transition, and
@@ -472,8 +480,10 @@ Current phase: **Phase 6 server buffer/event API and theorem surface**.
   `TLS13.Impl.ConnectionState.Repr.handshake_storage`, and
   `connection_exactly` now relates it to `hs_server_selection` when a private
   key is present. The supplied-private selector now populates that slot from a
-  concrete private-key array; executable X25519 generation and shared-secret
-  derivation from stored server/client shares remain pending.
+  concrete private-key array, and the low-level server X25519 helper now derives
+  the shared secret from that private-key array and the stored parsed
+  `ClientHello` public share. A public response wrapper, entropy/public-key
+  generation, and scheduler integration remain pending.
 - [x] Added role-indexed traffic-key install model support:
   `TLS13.Impl.ConnectionState.Model.installed_traffic_keys_for_role_state` and
   its evolution lemma mirror the pure `LocalInstallTrafficKeysForRole`
@@ -1584,8 +1594,10 @@ Checklist:
       has default-profile concrete-array entry points for both supplied-public
       and supplied-private selections. Server private-key-share storage is
       represented in `connection_exactly` and the supplied-private wrapper
-      populates it, but random/X25519 generation, remaining protected receive
-      cases, and scheduler integration remain pending.
+      populates it; the low-level server X25519 helper computes the shared
+      secret from concrete private bytes plus the stored ClientHello share. A
+      public response wrapper, random/public-key generation, remaining protected
+      receive cases, and scheduler integration remain pending.
 - [x] Emitted bytes expose raw-delta, parse-back, seal, and write-key provenance.
 - [ ] Consumed bytes expose exact consumed prefix, parse/decode classification,
       open facts, and read-key provenance.

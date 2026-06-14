@@ -363,6 +363,51 @@ fn try_derive_shared_secret
            else
              connection_exactly c st0)
 
+fn try_derive_server_shared_secret_from_private_array
+  (c:connection_state)
+  (server_private_key:array U8.t)
+  (#st0:erased CS.connection_state)
+  requires connection_exactly c st0 **
+           ArrPts.pts_to server_private_key 'server_private_key_bytes **
+           pure (B.length 'server_private_key_bytes == 32 /\
+                 st0.CS.cs_model.CS.model_config.CS.config_role ==
+                   CS.ServerEndpoint /\
+                 st0.CS.cs_model.CS.model_control ==
+                   CS.ControlHandshaking CS.HsClientHelloReceived /\
+                 Some? st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello /\
+                 (match st0.CS.cs_model.CS.model_handshake.CS.hs_server_selection with
+                  | Some selection ->
+                    CS.server_selection_key_share_consistent selection /\
+                    st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello ==
+                      Some selection.CS.server_selected_client_hello /\
+                    Some? selection.CS.server_key_share_private /\
+                    Some?.v selection.CS.server_key_share_private ==
+                      Ghost.reveal 'server_private_key_bytes
+                  | None -> False))
+  returns ok: bool
+  ensures (if ok then
+             exists* shared.
+               connection_exactly c (derived_shared_secret_state st0 shared) **
+               ArrPts.pts_to server_private_key 'server_private_key_bytes **
+               pure ((match st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello with
+                      | Some ch ->
+                        TLS13.Crypto.Spec.x25519_shared
+                          (Ghost.reveal 'server_private_key_bytes)
+                          ch.M.key_share == Some shared
+                      | None -> False) /\
+                     CS.legal_connection_delta
+                       st0
+                       {
+                         CS.delta_event =
+                           CS.ConnLocalEvent (CS.LocalDeriveSharedSecret shared);
+                         CS.delta_raw_sent = B.empty;
+                         CS.delta_raw_received = B.empty;
+                       }
+                       (derived_shared_secret_state st0 shared))
+           else
+             connection_exactly c st0 **
+             ArrPts.pts_to server_private_key 'server_private_key_bytes)
+
 fn derive_shared_secret_from_bytes
   (c:connection_state)
   (shared_src:array U8.t)

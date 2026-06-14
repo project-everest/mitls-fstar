@@ -4596,6 +4596,180 @@ fn try_derive_shared_secret
   }
 }
 
+fn try_derive_server_shared_secret_from_private_array
+  (c:connection_state)
+  (server_private_key:array U8.t)
+  (#st0:erased CS.connection_state)
+  requires connection_exactly c st0 **
+           ArrPts.pts_to server_private_key 'server_private_key_bytes **
+           pure (B.length 'server_private_key_bytes == 32 /\
+                 st0.CS.cs_model.CS.model_config.CS.config_role ==
+                   CS.ServerEndpoint /\
+                 st0.CS.cs_model.CS.model_control ==
+                   CS.ControlHandshaking CS.HsClientHelloReceived /\
+                 Some? st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello /\
+                 (match st0.CS.cs_model.CS.model_handshake.CS.hs_server_selection with
+                  | Some selection ->
+                    CS.server_selection_key_share_consistent selection /\
+                    st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello ==
+                      Some selection.CS.server_selected_client_hello /\
+                    Some? selection.CS.server_key_share_private /\
+                    Some?.v selection.CS.server_key_share_private ==
+                      Ghost.reveal 'server_private_key_bytes
+                  | None -> False))
+  returns ok: bool
+  ensures (if ok then
+             exists* shared.
+               connection_exactly c (derived_shared_secret_state st0 shared) **
+               ArrPts.pts_to server_private_key 'server_private_key_bytes **
+               pure ((match st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello with
+                      | Some ch ->
+                        TLS13.Crypto.Spec.x25519_shared
+                          (Ghost.reveal 'server_private_key_bytes)
+                          ch.M.key_share == Some shared
+                      | None -> False) /\
+                     CS.legal_connection_delta
+                       st0
+                       {
+                         CS.delta_event =
+                           CS.ConnLocalEvent (CS.LocalDeriveSharedSecret shared);
+                         CS.delta_raw_sent = B.empty;
+                         CS.delta_raw_received = B.empty;
+                       }
+                       (derived_shared_secret_state st0 shared))
+           else
+             connection_exactly c st0 **
+             ArrPts.pts_to server_private_key 'server_private_key_bytes)
+{
+  unfold (connection_exactly c st0);
+  unfold (connection_model_exactly c st0.CS.cs_model);
+  unfold (control_exactly
+    c.control
+    st0.CS.cs_model.CS.model_control
+    st0.CS.cs_model.CS.model_failure);
+  unfold (handshake_exactly c.handshake st0.CS.cs_model.CS.model_handshake);
+  with cv_verified server_finished_verified. _;
+  unfold (handshake_messages_exactly
+    c.handshake.messages
+    st0.CS.cs_model.CS.model_handshake);
+  unfold (client_hello_slot_exactly
+    c.handshake.messages.client_hello_present
+    c.handshake.messages.client_hello
+    st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello);
+  with ch_present ch_random ch_server_name ch_key_share ch_cipher_suites ch_signature_schemes. _;
+
+  let ch = Ghost.hide (Some?.v st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello);
+  assert (pure (st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello ==
+    Some (Ghost.reveal ch)));
+  assert (pure ch_present);
+  assert (pure (Seq.equal ch_key_share (Ghost.reveal ch).M.key_share));
+  Seq.lemma_eq_intro ch_key_share (Ghost.reveal ch).M.key_share;
+  assert (pure (ch_key_share == (Ghost.reveal ch).M.key_share));
+  assert (pure (B.length ch_key_share == 32));
+  assert (pure (B.length (Ghost.reveal 'server_private_key_bytes) == 32));
+
+  assert (pure (Some? st0.CS.cs_model.CS.model_handshake.CS.hs_server_selection));
+  lemma_option_some_v st0.CS.cs_model.CS.model_handshake.CS.hs_server_selection;
+  let selection =
+    Ghost.hide (Some?.v st0.CS.cs_model.CS.model_handshake.CS.hs_server_selection);
+  assert (pure (st0.CS.cs_model.CS.model_handshake.CS.hs_server_selection ==
+    Some (Ghost.reveal selection)));
+  assert (pure (CS.server_selection_key_share_consistent (Ghost.reveal selection)));
+  assert (pure (st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello ==
+    Some (Ghost.reveal selection).CS.server_selected_client_hello));
+  assert (pure ((Ghost.reveal selection).CS.server_selected_client_hello ==
+    Ghost.reveal ch));
+  assert (pure (Some? (Ghost.reveal selection).CS.server_key_share_private));
+  lemma_option_some_v (Ghost.reveal selection).CS.server_key_share_private;
+  assert (pure ((Ghost.reveal selection).CS.server_key_share_private ==
+    Some (Ghost.reveal 'server_private_key_bytes)));
+
+  V.to_array_pts_to c.handshake.messages.client_hello.IM.client_hello_key_share;
+  let mut shared_out = [| 0uy; 32sz |];
+  let crypto_ok =
+    Crypto.x25519_shared_runtime
+      server_private_key
+      (V.vec_to_array c.handshake.messages.client_hello.IM.client_hello_key_share)
+      shared_out;
+  V.to_vec_pts_to c.handshake.messages.client_hello.IM.client_hello_key_share;
+
+  if crypto_ok {
+    with shared. assert (ArrPts.pts_to shared_out shared);
+    ArrPts.pts_to_len shared_out;
+    assert (pure (B.length shared == 32));
+    assert (pure (Crypto.x25519_shared_call
+      (Ghost.reveal 'server_private_key_bytes)
+      ch_key_share
+      shared
+      crypto_ok));
+    Crypto.lemma_x25519_shared_call_success
+      (Ghost.reveal 'server_private_key_bytes)
+      ch_key_share
+      shared
+      crypto_ok;
+    assert (pure (TLS13.Crypto.Spec.x25519_shared
+      (Ghost.reveal 'server_private_key_bytes)
+      ch_key_share == Some shared));
+    assert (pure (TLS13.Crypto.Spec.x25519_shared
+      (Ghost.reveal 'server_private_key_bytes)
+      (Ghost.reveal ch).M.key_share == Some shared));
+    let shared_secret =
+      Ghost.hide (Some?.v (TLS13.Crypto.Spec.x25519_shared
+        (Ghost.reveal 'server_private_key_bytes)
+        (Ghost.reveal ch).M.key_share));
+    assert (pure (Ghost.reveal shared_secret == shared));
+    assert (pure (TLS13.Crypto.Spec.x25519_shared
+      (Ghost.reveal 'server_private_key_bytes)
+      (Ghost.reveal ch).M.key_share == Some (Ghost.reveal shared_secret)));
+    assert (pure (TLS13.Crypto.Spec.x25519_shared
+      (Some?.v (Ghost.reveal selection).CS.server_key_share_private)
+      (Ghost.reveal selection).CS.server_selected_client_hello.M.key_share ==
+      Some (Ghost.reveal shared_secret)));
+    assert (pure (CS.legal_event
+      st0.CS.cs_model
+      (CS.ConnLocalEvent
+        (CS.LocalDeriveSharedSecret (Ghost.reveal shared_secret)))));
+
+    fold (client_hello_slot_exactly
+      c.handshake.messages.client_hello_present
+      c.handshake.messages.client_hello
+      st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello);
+    fold (handshake_messages_exactly
+      c.handshake.messages
+      st0.CS.cs_model.CS.model_handshake);
+    fold (handshake_exactly c.handshake st0.CS.cs_model.CS.model_handshake);
+    fold (control_exactly
+      c.control
+      st0.CS.cs_model.CS.model_control
+      st0.CS.cs_model.CS.model_failure);
+    fold (connection_model_exactly c st0.CS.cs_model);
+    fold (connection_exactly c st0);
+
+    derive_shared_secret_from_bytes
+      c
+      shared_out
+      #shared_secret;
+    true
+  } else {
+    with shared_old. assert (ArrPts.pts_to shared_out shared_old);
+    fold (client_hello_slot_exactly
+      c.handshake.messages.client_hello_present
+      c.handshake.messages.client_hello
+      st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello);
+    fold (handshake_messages_exactly
+      c.handshake.messages
+      st0.CS.cs_model.CS.model_handshake);
+    fold (handshake_exactly c.handshake st0.CS.cs_model.CS.model_handshake);
+    fold (control_exactly
+      c.control
+      st0.CS.cs_model.CS.model_control
+      st0.CS.cs_model.CS.model_failure);
+    fold (connection_model_exactly c st0.CS.cs_model);
+    fold (connection_exactly c st0);
+    false
+  }
+}
+
 fn try_install_client_handshake_traffic_keys
   (c:connection_state)
   (#st0:erased CS.connection_state)
