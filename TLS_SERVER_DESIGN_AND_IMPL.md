@@ -1848,6 +1848,15 @@ Status:
       `server_local_event_input_ready_with_credentials` from the theorem
       vocabulary module, keeping the heavyweight case analysis out of the
       facade and making it reusable by future small dispatch modules.
+- [x] Started the verified top-level server driver slice in
+      `TLS13.Impl.Server.Driver.fsti` / `.fst`. The first public constructor
+      allocates the OpenSSL server credential context from in-memory
+      certificate-chain and private-key buffers, binds the ghost credential
+      identity returned by the TCB, initializes the verified server state through
+      the erased-identity constructor, and packages both resources in
+      `server_driver_live`. It deliberately does not yet own IO channels or TLS
+      scratch buffers; those will be added in the subsequent accept/send/receive
+      driver slices.
 - [x] Generic `process_local_event` now handles server
       `LocalSendApplicationData` and `LocalSendCloseNotify` through the shared
       endpoint-neutral `LocalSend` mutations. The server theorem surface now
@@ -1910,6 +1919,10 @@ Checklist:
       connect credential allocation to server-state initialization; the driver
       still needs to allocate the credential context and own the private-key
       buffer lifetime.
+      Current status: `TLS13.Impl.Server.Driver.new_server` now allocates the
+      credential context and verified server state; retained receive/output and
+      signing scratch buffers remain to be added with the IO-capable driver
+      state.
 - [ ] `accept` mirrors the client driver's `connect` style: it takes bind-host
       bytes, bind-host length, port, local-action fuel, and network fuel; it
       calls typed `TLS13.IO.listen_tcp` and `TLS13.IO.accept_tcp` internally,
