@@ -401,8 +401,10 @@ Current phase: **Phase 6 server buffer/event API and theorem surface**.
   for selection and ServerHello without adding broad concrete cache fields.
   The extraction-facing payload vocabulary now includes
   `LocalPayloadServerRandomAndPrivateKey` for this 64-byte driver-supplied
-  material; scheduler advertisement remains pending until the supported-profile
-  ClientHello readiness query is precise enough.
+  material, and the public `next_local_action_sound` theorem now has explicit
+  cases describing the selection, shared-secret, and ServerHello readiness facts
+  that require that material. Actual scheduler advertisement remains pending
+  until the supported-profile ClientHello readiness query is precise enough.
 - [x] Added the first sent-ServerHello state-mutation slice:
   `TLS13.Impl.ConnectionState.Model.sent_server_hello_state` mirrors the pure
   `Sent ServerHello` transition, and

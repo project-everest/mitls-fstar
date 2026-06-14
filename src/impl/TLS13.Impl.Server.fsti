@@ -46,6 +46,39 @@ let next_local_action_sound
     | ST.LocalStartServer ->
       action.ST.next_local_payload == ST.LocalPayloadNone /\
       CM.can_start_server st
+    | ST.LocalSelectServerParameters ->
+      action.ST.next_local_payload == ST.LocalPayloadServerRandomAndPrivateKey /\
+      st.CS.cs_model.CS.model_control ==
+        CS.ControlHandshaking CS.HsClientHelloReceived /\
+      st.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
+      CR.server_selection_absent st.CS.cs_model.CS.model_handshake /\
+      Some? st.CS.cs_model.CS.model_handshake.CS.hs_client_hello /\
+      Some? st.CS.cs_model.CS.model_config.CS.config_server
+    | ST.LocalDeriveSharedSecret ->
+      action.ST.next_local_payload == ST.LocalPayloadServerRandomAndPrivateKey /\
+      st.CS.cs_model.CS.model_control ==
+        CS.ControlHandshaking CS.HsClientHelloReceived /\
+      st.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
+      Some? st.CS.cs_model.CS.model_handshake.CS.hs_client_hello /\
+      (match st.CS.cs_model.CS.model_handshake.CS.hs_server_selection with
+       | Some selection ->
+         CS.server_selection_key_share_consistent selection /\
+         st.CS.cs_model.CS.model_handshake.CS.hs_client_hello ==
+           Some selection.CS.server_selected_client_hello /\
+         Some? selection.CS.server_key_share_private
+       | None -> False)
+    | ST.LocalSendServerHello ->
+      action.ST.next_local_payload == ST.LocalPayloadServerRandomAndPrivateKey /\
+      st.CS.cs_model.CS.model_control ==
+        CS.ControlHandshaking CS.HsClientHelloReceived /\
+      st.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
+      Some? st.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_shared_secret /\
+      st.CS.cs_model.CS.model_handshake.CS.hs_server_hello == None /\
+      (match st.CS.cs_model.CS.model_handshake.CS.hs_server_selection with
+       | Some selection ->
+         CS.server_selection_key_share_consistent selection /\
+         Some? selection.CS.server_key_share_private
+       | None -> False)
     | ST.LocalInstallServerHandshakeTrafficKeys ->
       action.ST.next_local_payload == ST.LocalPayloadNone /\
       st.CS.cs_model.CS.model_control ==
