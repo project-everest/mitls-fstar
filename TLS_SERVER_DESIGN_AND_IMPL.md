@@ -266,6 +266,10 @@ Current phase: **Phase 6 server buffer/event API and theorem surface**.
   internally derived, now live behind that interface. `TLS13.Impl.Server`
   retains only public wrappers and explicit `connection_exactly` predicate
   rewrites for these key handlers.
+- [x] Started a focused `TLS13.Impl.Server.Send.fsti`/`.fst` module for
+  server send-flight handlers. The raw `ServerHello` send transition now lives
+  behind that interface, with the top-level server module keeping only the
+  public forwarding wrapper.
 - [ ] Continue Phase 6/7 by strengthening `process_network_bytes` from the first
   ClientHello path to the final dispatcher theorem: add consumed-prefix
   classification/projections and richer ClientHello/Finished reject deltas
