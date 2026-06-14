@@ -2006,6 +2006,19 @@ Status:
       non-exhausted network step relative to the loop's original protocol state
       and sent log; internally, a `NeedMoreInput` stutter lemma proves retries do
       not advance the protocol state or transport-sent history.
+- [x] Added a fueled ClientHello-stage wait loop:
+      `TLS13.Impl.Server.Driver.read_until_client_hello_received` checks the
+      driver-owned concrete control snapshot before each read/process step and
+      recurses until the server reaches `HsClientHelloReceived`, fuel is
+      exhausted, or the caller stops. Its public postcondition proves that a
+      `ready` result really corresponds to
+      `ControlHandshaking HsClientHelloReceived`, so the higher-level handshake
+      driver can safely distinguish compatibility CCS/no-input retries from the
+      first meaningful ClientHello state. This helper deliberately does not
+      claim supported-profile parameter-selection readiness; that still belongs
+      to the guarded `LocalSelectServerParameters` predicate and explicit
+      select/derive helpers until we add either a concrete selection-present
+      query or a supported-ClientHello acceptability projection.
 - [x] Added the first generic local-output driver slice:
       `TLS13.Impl.Server.Driver.process_local_event_and_write_once` calls the
       credential-aware public server local-event API using driver-owned network

@@ -41,6 +41,12 @@ type server_driver_local_drain_result = {
   server_driver_local_drain_exhausted: bool;
 }
 
+type server_driver_client_hello_wait_result = {
+  server_driver_client_hello_wait_last: ST.server_buffer_response;
+  server_driver_client_hello_wait_ready: bool;
+  server_driver_client_hello_wait_exhausted: bool;
+}
+
 noextract
 val server_driver_live
   (d:server_driver)
@@ -287,6 +293,29 @@ fn read_process_network_until_ready
               result.server_driver_network_loop_last
               (Ghost.reveal 'sent)
               sent')
+
+fn read_until_client_hello_received
+  (d:server_driver)
+  (fuel:SZ.t)
+  requires server_driver_connected
+            d
+            'st0
+            'certificate_chain
+            'credential_identity
+            'received
+            'sent
+  returns result:server_driver_client_hello_wait_result
+  ensures exists* st1 received' sent'.
+          server_driver_connected
+            d
+            st1
+            'certificate_chain
+            'credential_identity
+            received'
+            sent' **
+          pure (result.server_driver_client_hello_wait_ready == true ==>
+            st1.CS.cs_model.CS.model_control ==
+               CS.ControlHandshaking CS.HsClientHelloReceived)
 fn start_server_once
   (d:server_driver)
   requires server_driver_connected

@@ -15,6 +15,7 @@ module CryptoSpec = TLS13.Crypto.Spec
 module CS = TLS13.Spec.ConnectionState
 module CM = TLS13.Impl.ConnectionState.Model
 module CR = TLS13.Impl.ConnectionState.Repr
+module CQ = TLS13.Impl.ConnectionState.Queries
 module ID = FStar.IndefiniteDescription
 module IM = TLS13.Impl.Messages
 module IO = TLS13.IO
@@ -26,6 +27,7 @@ module SeqP = FStar.Seq.Properties
 module S = TLS13.Impl.Server
 module SSetup = TLS13.Impl.Server.Setup
 module ST = TLS13.Impl.Server.Types
+module Tags = TLS13.Impl.ConnectionState.Tags
 module Box = Pulse.Lib.Box
 module R = Pulse.Lib.Reference
 module SZ = FStar.SizeT
@@ -1191,6 +1193,51 @@ fn new_server
   }
 }
 
+fn server_driver_control_snapshot
+  (d:server_driver)
+  requires server_driver_connected
+             d
+             'st0
+             'certificate_chain
+             'credential_identity
+             'received
+             'sent
+  returns snapshot:CR.control_snapshot
+  ensures server_driver_connected
+             d
+             'st0
+             'certificate_chain
+             'credential_identity
+             'received
+             'sent **
+          pure (CR.control_snapshot_matches snapshot 'st0)
+{
+  unfold (server_driver_connected
+    d
+    'st0
+    'certificate_chain
+    'credential_identity
+    'received
+    'sent);
+  with ch buffered buffered_len.
+    assert (Box.pts_to d.server_driver_channel (Some ch) **
+            IO.is_channel ch 'received 'sent **
+            server_driver_buffers d buffered buffered_len);
+  rewrite (S.connection_exactly d.server_driver_server 'st0)
+    as (CR.connection_exactly d.server_driver_server 'st0);
+  let snapshot = CQ.get_control_snapshot d.server_driver_server;
+  rewrite (CR.connection_exactly d.server_driver_server 'st0)
+    as (S.connection_exactly d.server_driver_server 'st0);
+  fold (server_driver_connected
+    d
+    'st0
+    'certificate_chain
+    'credential_identity
+    'received
+    'sent);
+  snapshot
+}
+
 fn accept_transport_once
   (d:server_driver)
   (bind_host:array U8.t)
@@ -2263,6 +2310,79 @@ fn rec read_process_network_until_ready
         server_driver_network_loop_exhausted = false;
       }
     }
+  }
+}
+
+fn rec read_until_client_hello_received
+  (d:server_driver)
+  (fuel:SZ.t)
+  requires server_driver_connected
+            d
+            'st0
+            'certificate_chain
+            'credential_identity
+            'received
+            'sent
+  returns result:server_driver_client_hello_wait_result
+  ensures exists* st1 received' sent'.
+          server_driver_connected
+            d
+            st1
+            'certificate_chain
+            'credential_identity
+            received'
+            sent' **
+          pure (result.server_driver_client_hello_wait_ready == true ==>
+            st1.CS.cs_model.CS.model_control ==
+              CS.ControlHandshaking CS.HsClientHelloReceived)
+  decreases (SZ.v fuel)
+{
+  let no_op_resp = {
+    ST.network_out_len = 0sz;
+    ST.app_out_len = 0sz;
+    ST.status = ST.NeedMoreInput;
+  };
+  let no_op_buffer_resp = {
+    ST.response = no_op_resp;
+    ST.consumed_len = 0sz;
+  };
+  let snapshot = server_driver_control_snapshot d;
+  assert (pure (CR.control_snapshot_matches snapshot 'st0));
+  let client_hello_received =
+    (snapshot.CR.snapshot_control_tag = 1uy) &&
+    (snapshot.CR.snapshot_handshake_stage_tag = 13uy);
+  if client_hello_received {
+    assert (pure (snapshot.CR.snapshot_control_tag == 1uy));
+    assert (pure (snapshot.CR.snapshot_handshake_stage_tag == 13uy));
+    assert_norm (Tags.handshake_stage_tag_matches 13uy CS.HsClientHelloReceived);
+    assert (pure (
+      'st0.CS.cs_model.CS.model_control ==
+        CS.ControlHandshaking CS.HsClientHelloReceived));
+    {
+      server_driver_client_hello_wait_last = no_op_buffer_resp;
+      server_driver_client_hello_wait_ready = true;
+      server_driver_client_hello_wait_exhausted = false;
+    }
+  } else if (fuel = 0sz) {
+    {
+      server_driver_client_hello_wait_last = no_op_buffer_resp;
+      server_driver_client_hello_wait_ready = false;
+      server_driver_client_hello_wait_exhausted = true;
+    }
+  } else {
+    assert (pure (0 < SZ.v fuel));
+    let _ = read_and_process_network_once d;
+    with st1 received' sent'.
+      assert (server_driver_connected
+        d
+        st1
+        'certificate_chain
+        'credential_identity
+        received'
+        sent');
+    let next_fuel = SZ.sub fuel 1sz;
+    assert (pure (SZ.v next_fuel < SZ.v fuel));
+    read_until_client_hello_received d next_fuel
   }
 }
 
