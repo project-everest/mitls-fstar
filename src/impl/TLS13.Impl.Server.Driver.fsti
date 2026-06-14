@@ -73,6 +73,16 @@ type server_driver_accept_server_hello_result =
   | ServerDriverAcceptServerHelloListenFailed
   | ServerDriverAcceptServerHelloAcceptFailed
 
+type server_driver_accept_server_hello_drain_result =
+  | ServerDriverAcceptServerHelloDrainOk of server_driver_local_drain_result
+  | ServerDriverAcceptServerHelloDrainClientHelloWait of server_driver_client_hello_wait_result
+  | ServerDriverAcceptServerHelloDrainMaterialFailed
+  | ServerDriverAcceptServerHelloDrainSelectionNotReady
+  | ServerDriverAcceptServerHelloDrainDeriveFailed
+  | ServerDriverAcceptServerHelloDrainSendNotReady
+  | ServerDriverAcceptServerHelloDrainListenFailed
+  | ServerDriverAcceptServerHelloDrainAcceptFailed
+
 type server_driver_select_derive_server_hello_result =
   | ServerDriverSelectDeriveServerHelloOk
   | ServerDriverSelectDeriveServerHelloDeriveFailed
@@ -993,6 +1003,48 @@ fn accept_start_read_client_hello_select_derive_send_server_hello_once
                 server_driver_connected
                   d
                   st2
+                  'certificate_chain
+                  'credential_identity
+                  received
+                  sent)
+
+fn accept_start_read_client_hello_select_derive_send_server_hello_drain_empty_once
+  (d:server_driver)
+  (bind_host:array U8.t)
+  (bind_host_len:SZ.t)
+  (port:U16.t)
+  (network_fuel:SZ.t)
+  (local_fuel:SZ.t)
+  requires server_driver_live d 'st0 'certificate_chain 'credential_identity **
+          pts_to bind_host 'bind_host_bytes **
+          pure (B.length 'bind_host_bytes == SZ.v bind_host_len /\
+                CM.can_start_server 'st0 /\
+                Some? 'st0.CS.cs_model.CS.model_config.CS.config_server /\
+                (match 'st0.CS.cs_model.CS.model_config.CS.config_server with
+                  | Some cfg ->
+                    CS.cipher_suite_offered
+                      cfg.CS.server_supported_cipher_suites
+                      T.TLS_CHACHA20_POLY1305_SHA256 /\
+                    CS.named_group_offered
+                      cfg.CS.server_supported_groups
+                      T.X25519 /\
+                    CS.signature_scheme_offered
+                      cfg.CS.server_allowed_signature_schemes
+                      T.RsaPssRsaeSha256 /\
+                    cfg.CS.server_sni_policy == None
+                  | None -> False))
+  returns result:server_driver_accept_server_hello_drain_result
+  ensures pts_to bind_host 'bind_host_bytes **
+          (match result with
+           | ServerDriverAcceptServerHelloDrainListenFailed ->
+             server_driver_live d 'st0 'certificate_chain 'credential_identity
+           | ServerDriverAcceptServerHelloDrainAcceptFailed ->
+             server_driver_live d 'st0 'certificate_chain 'credential_identity
+           | _ ->
+             exists* st1 received sent.
+               server_driver_connected
+                  d
+                  st1
                   'certificate_chain
                   'credential_identity
                   received

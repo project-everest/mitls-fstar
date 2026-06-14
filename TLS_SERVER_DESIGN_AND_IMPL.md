@@ -808,6 +808,16 @@ Current phase: **Phase 6 server buffer/event API and theorem surface**.
   end-to-end local-event theorem and, on successful sends, expose the exact
   `sent_application_data_state` or `sent_close_notify_state` plus the emitted
   raw network prefix.
+- [x] Added the next composed server-driver orchestration slice:
+  `accept_start_read_client_hello_select_derive_send_server_hello_drain_empty_once`
+  accepts TCP, starts the server, reads through `ClientHello`, generates
+  driver-owned `server_random || server_private_key`, performs checked supported
+  selection and X25519 shared-secret derivation, emits the exact cleartext
+  `ServerHello`, and then runs the existing fueled empty-action drain. This
+  advances the executable driver past the cleartext flight into scheduler-driven
+  payload-free actions such as handshake key installs and EncryptedExtensions,
+  while still stopping before credential-bearing Certificate/CertificateVerify
+  actions unless a later credential-aware orchestration layer handles them.
 
 ## End goal
 
