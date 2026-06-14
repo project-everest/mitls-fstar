@@ -1027,6 +1027,115 @@ fn process_send_server_hello_serialized
   resp
 }
 
+fn build_server_hello_from_arrays
+  (server_random:array U8.t)
+  (server_key_share:array U8.t)
+  (#sh:erased M.server_hello)
+  requires pts_to server_random 'server_random_bytes **
+           pts_to server_key_share 'server_key_share_bytes **
+           pure (B.length 'server_random_bytes == 32 /\
+                B.length 'server_key_share_bytes == 32 /\
+                Ghost.reveal sh == {
+                  M.random = Ghost.reveal 'server_random_bytes;
+                  M.key_share = Ghost.reveal 'server_key_share_bytes;
+                  M.cipher_suite = T.TLS_CHACHA20_POLY1305_SHA256;
+                })
+  returns lsh:IM.server_hello
+  ensures pts_to server_random 'server_random_bytes **
+          pts_to server_key_share 'server_key_share_bytes **
+          IM.is_valid_server_hello lsh sh
+{
+  let random_vec = V.alloc 0uy 32sz;
+  let key_share_vec = V.alloc 0uy 32sz;
+  CR.copy_fixed32_array_to_vec server_random random_vec;
+  CR.copy_fixed32_array_to_vec server_key_share key_share_vec;
+  let lsh = {
+    IM.server_hello_random = random_vec;
+    IM.server_hello_key_share = key_share_vec;
+    IM.server_hello_cipher_suite = 0x1303us;
+  };
+  with random_bytes. assert (V.pts_to random_vec random_bytes);
+  with key_share_bytes. assert (V.pts_to key_share_vec key_share_bytes);
+  assert (pure (Seq.equal random_bytes (Ghost.reveal 'server_random_bytes)));
+  assert (pure (Seq.equal key_share_bytes (Ghost.reveal 'server_key_share_bytes)));
+  assert_norm (IM.cipher_suite_matches 0x1303us T.TLS_CHACHA20_POLY1305_SHA256);
+  rewrite (V.pts_to random_vec random_bytes)
+    as (V.pts_to lsh.IM.server_hello_random random_bytes);
+  rewrite (V.pts_to key_share_vec key_share_bytes)
+    as (V.pts_to lsh.IM.server_hello_key_share key_share_bytes);
+  fold (IM.is_valid_server_hello
+    lsh
+    (Ghost.reveal sh));
+  lsh
+}
+
+fn process_send_server_hello_from_arrays
+  (s:server)
+  (server_random:array U8.t)
+  (server_key_share:array U8.t)
+  (network_out:array U8.t)
+  (network_out_len:SZ.t)
+  (app_out:array U8.t)
+  (app_out_len:SZ.t)
+  requires connection_exactly s 'st0 **
+           pts_to server_random 'server_random_bytes **
+           pts_to server_key_share 'server_key_share_bytes **
+           pts_to network_out 'old_network_out **
+           pts_to app_out 'old_app_out **
+           pure (B.length 'server_random_bytes == 32 /\
+                 B.length 'server_key_share_bytes == 32 /\
+                 B.length 'old_network_out == SZ.v network_out_len /\
+                 B.length 'old_app_out == SZ.v app_out_len /\
+                 SZ.v network_out_len == 95 /\
+                 ST.server_end_to_end_invariant 'st0 /\
+                 (let sh = {
+                   M.random = Ghost.reveal 'server_random_bytes;
+                   M.key_share = Ghost.reveal 'server_key_share_bytes;
+                   M.cipher_suite = T.TLS_CHACHA20_POLY1305_SHA256;
+                 } in
+                 CM.can_send_server_hello
+                   'st0
+                   sh
+                   (CS.serialized_cleartext_tls_message
+                     (M.TlsHandshake (M.ServerHello sh)))))
+  returns resp:ST.server_response
+  ensures exists* st1 network_out_bytes app_out_bytes.
+          connection_exactly s st1 **
+          pts_to server_random 'server_random_bytes **
+          pts_to server_key_share 'server_key_share_bytes **
+          pts_to network_out network_out_bytes **
+          pts_to app_out app_out_bytes **
+          pure (B.length network_out_bytes == SZ.v network_out_len /\
+                B.length app_out_bytes == SZ.v app_out_len /\
+                ST.server_local_event_end_to_end_correct
+                  'st0
+                  st1
+                  resp
+                  ST.LocalSendServerHello
+                  B.empty
+                  network_out_bytes
+                  app_out_bytes)
+{
+  let sh = Ghost.hide {
+    M.random = Ghost.reveal 'server_random_bytes;
+    M.key_share = Ghost.reveal 'server_key_share_bytes;
+    M.cipher_suite = T.TLS_CHACHA20_POLY1305_SHA256;
+  };
+  let lsh =
+    build_server_hello_from_arrays
+      server_random
+      server_key_share
+      #sh;
+  process_send_server_hello_serialized
+    s
+    lsh
+    #sh
+    network_out
+    network_out_len
+    app_out
+    app_out_len
+}
+
 fn process_send_encrypted_extensions_serialized
   (s:server)
   (network_out:array U8.t)

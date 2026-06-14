@@ -283,6 +283,14 @@ Current phase: **Phase 6 server buffer/event API and theorem surface**.
   caller-provided raw/fragment buffers. The L-level ServerHello is still supplied
   by the caller because executable server parameter selection and concrete
   selection storage remain pending.
+- [x] Added
+  `TLS13.Impl.Server.process_send_server_hello_from_arrays`, which builds the
+  exact L-level ServerHello from concrete 32-byte server-random and public
+  key-share arrays, fixes the supported cipher suite to
+  `TLS_CHACHA20_POLY1305_SHA256`, reuses the serialized ServerHello send wrapper,
+  and preserves `server_local_event_end_to_end_correct`. Concrete generation and
+  persistent selection storage still remain pending, but callers no longer need
+  to construct the L-level ServerHello record themselves.
 - [x] Added extraction-facing pure model helpers for the rest of the first
   server encrypted flight:
   `sent_encrypted_extensions_state`, `sent_certificate_state`,
@@ -719,8 +727,8 @@ First server version:
   - acceptable SNI according to server config, if an SNI policy is configured.
 - Server flight:
   - cleartext `ServerHello` (focused raw/fragment wrapper and serialized
-    95-byte record wrapper complete; executable selection still supplies the
-    L-level ServerHello);
+    95-byte record wrapper complete; concrete-array wrapper now builds the
+    L-level ServerHello from server-random and public key-share bytes);
   - encrypted empty `EncryptedExtensions`;
   - encrypted `Certificate`;
   - encrypted `CertificateVerify`;
@@ -1477,8 +1485,9 @@ Checklist:
         EncryptedExtensions, credential-backed Certificate, CertificateVerify
         signing, stored CertificateVerify, and ServerFinished; the credential
         certificate-chain copyout TCB, verified L-level one-certificate builder,
-        and public executable Certificate send wrapper are in place. Concrete
-        selection-to-L-ServerHello storage remains pending);
+        public executable Certificate send wrapper, and concrete-array
+        ServerHello builder/send wrapper are in place. Concrete generation and
+        persistent selection-to-L-ServerHello storage remain pending);
       - client Finished verification (state mutation, focused receive wrapper,
         focused verify wrapper, and generic local dispatcher integration
         complete; full network parse/open dispatch for received client Finished
