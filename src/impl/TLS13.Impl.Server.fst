@@ -3405,33 +3405,11 @@ fn process_network_bytes
                   (Ghost.reveal 'raw_bytes)
                   network_out_bytes
                   app_out_bytes /\
-                (buffer_resp.ST.response.ST.status == ST.StepOk ==>
-                  (exists ch raw_received.
-                    st1 ==
-                      CM.received_client_hello_state
-                        'st0
-                        ch
-                        raw_received /\
-                    Seq.equal
-                      raw_received
-                      (Seq.slice
-                        (Ghost.reveal 'raw_bytes)
-                        0
-                        (SZ.v buffer_resp.ST.consumed_len))) \/
-                  (exists fin raw_received.
-                    st1 ==
-                      CM.received_client_finished_state
-                        'st0
-                        fin
-                        raw_received /\
-                    Seq.equal
-                      raw_received
-                      (Seq.slice
-                        (Ghost.reveal 'raw_bytes)
-                        0
-                        (SZ.v buffer_resp.ST.consumed_len)))) /\
-                (buffer_resp.ST.response.ST.status == ST.NeedMoreInput ==>
-                  buffer_resp.ST.consumed_len == 0sz))
+                ST.server_network_consumed_input_projection
+                   'st0
+                   st1
+                   buffer_resp
+                   (Ghost.reveal 'raw_bytes))
 {
   rewrite (connection_exactly s 'st0) as (SN.connection_exactly s 'st0);
   let buffer_resp = SN.process_network_bytes

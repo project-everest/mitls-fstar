@@ -5,6 +5,7 @@ module Bounds = TLS13.Impl.ConnectionState.Bounds
 module CL = TLS13.ConnectionLog
 module CS = TLS13.Spec.ConnectionState
 module CSL = TLS13.ConnectionState.Lemmas
+module CM = TLS13.Impl.ConnectionState.Model
 module M = TLS13.Messages
 module SM = TLS13.StateMachine
 module Seq = FStar.Seq
@@ -456,3 +457,47 @@ let server_network_bytes_end_to_end_correct
                st0.CS.cs_model
         else True
       | CS.ConnLocalEvent _ -> True))
+
+noextract
+let server_network_consumed_prefix
+  (resp:server_buffer_response)
+  (input:B.bytes)
+  : B.bytes =
+  if SZ.v resp.consumed_len <= B.length input
+  then Seq.slice input 0 (SZ.v resp.consumed_len)
+  else B.empty
+
+let server_network_step_ok_consumed_prefix
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (resp:server_buffer_response)
+  (input:B.bytes)
+  : prop =
+  resp.response.status == StepOk ==>
+    (exists ch raw_received.
+      st1 ==
+       CM.received_client_hello_state
+         st0
+         ch
+         raw_received /\
+      Seq.equal
+       raw_received
+       (server_network_consumed_prefix resp input)) \/
+    (exists fin raw_received.
+      st1 ==
+       CM.received_client_finished_state
+         st0
+         fin
+         raw_received /\
+      Seq.equal
+       raw_received
+       (server_network_consumed_prefix resp input))
+
+let server_network_consumed_input_projection
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (resp:server_buffer_response)
+  (input:B.bytes)
+  : prop =
+  server_network_step_ok_consumed_prefix st0 st1 resp input /\
+  (resp.response.status == NeedMoreInput ==> resp.consumed_len == 0sz)

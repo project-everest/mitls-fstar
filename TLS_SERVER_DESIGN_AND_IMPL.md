@@ -1544,9 +1544,14 @@ Checklist:
       equal `Seq.slice input 0 consumed_len`. The dispatcher now also accepts
       protected client `Finished`, derives its protected open/decode projection,
       and exposes the exact `received_client_finished_state` post-state with the
-      same consumed-prefix equality. Remaining work is to expose uniform
-      parse/decode classification, read-key provenance, and rejected-input
-      witnesses for all byte outcomes.
+      same consumed-prefix equality. This is now centralized in the public
+      theorem vocabulary as `server_network_consumed_prefix`,
+      `server_network_step_ok_consumed_prefix`, and
+      `server_network_consumed_input_projection`, so the public facade and
+      focused network module share one receive-side projection predicate.
+      Remaining work is to extend that predicate toward the client theorem
+      shape with uniform parse/decode classification, read-key provenance, and
+      rejected-input witnesses for all byte outcomes.
       First focused server receive slice completed for protected client
       `Finished`: `process_client_finished` preserves
       `server_network_event_end_to_end_correct`; the unified
