@@ -1922,6 +1922,14 @@ Status:
       payload ownership; the exact selected-state equality is used internally for
       the zero-output wire-log proof rather than exported, because Pulse
       `requires` pure slice-length facts do not scope into result refinements.
+- [x] Added the first retained-receive IO slice:
+      `TLS13.Impl.Server.Driver.read_transport_once` appends at most one
+      `TLS13.IO.read` result into the driver-owned raw buffer when no retained
+      bytes are pending, updates the retained-buffer length, and preserves the
+      protocol state, credential context, channel ownership, IO-history
+      relation, and server invariant. If retained bytes are already present it
+      returns a verified zero-length no-op, leaving future compacting
+      process/read loops to consume or compact the buffer first.
 - [x] Generic `process_local_event` now handles server
       `LocalSendApplicationData` and `LocalSendCloseNotify` through the shared
       endpoint-neutral `LocalSend` mutations. The server theorem surface now
@@ -2012,7 +2020,7 @@ Checklist:
 - [x] Driver owns retained receive buffer.
 - [x] Driver owns network output, application output, and signing scratch buffers.
 - [x] Driver maintains exact IO-history relation for constructor/attach/close and
-      zero-output start-server slices:
+      zero-output start-server plus first read-append slices:
       - server transport sent bytes;
       - server transport received bytes;
       - protocol raw sent/received wire logs;

@@ -151,6 +151,26 @@ fn close_transport_once
              'sent
   ensures server_driver_closed d 'st0 'certificate_chain 'credential_identity
 
+fn read_transport_once
+  (d:server_driver)
+  requires server_driver_connected
+             d
+             'st0
+             'certificate_chain
+             'credential_identity
+             'received
+             'sent
+  returns n:SZ.t
+  ensures exists* received'.
+          server_driver_connected
+            d
+            'st0
+            'certificate_chain
+            'credential_identity
+            received'
+            'sent **
+          pure (SZ.v n <= 65535)
+
 fn start_server_once
   (d:server_driver)
   requires server_driver_connected

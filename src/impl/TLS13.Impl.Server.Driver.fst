@@ -13,6 +13,7 @@ module CryptoSpec = TLS13.Crypto.Spec
 module CS = TLS13.Spec.ConnectionState
 module CM = TLS13.Impl.ConnectionState.Model
 module CR = TLS13.Impl.ConnectionState.Repr
+module ID = FStar.IndefiniteDescription
 module IM = TLS13.Impl.Messages
 module IO = TLS13.IO
 module Mat = TLS13.Impl.Server.Material
@@ -440,6 +441,158 @@ fn close_transport_once
   IO.close concrete_ch;
   Box.(d.server_driver_channel := no_channel);
   fold (server_driver_closed d 'st0 'certificate_chain 'credential_identity);
+}
+
+fn read_transport_once
+  (d:server_driver)
+  requires server_driver_connected
+             d
+             'st0
+             'certificate_chain
+             'credential_identity
+             'received
+             'sent
+  returns n:SZ.t
+  ensures exists* received'.
+          server_driver_connected
+            d
+            'st0
+            'certificate_chain
+            'credential_identity
+            received'
+            'sent **
+          pure (SZ.v n <= 65535)
+{
+  unfold (server_driver_connected
+    d
+    'st0
+    'certificate_chain
+    'credential_identity
+    'received
+    'sent);
+  with ch buffered buffered_len.
+    assert (Box.pts_to d.server_driver_channel (Some ch) **
+            IO.is_channel ch 'received 'sent **
+            server_driver_buffers d buffered buffered_len);
+  assert (pure (ST.server_end_to_end_invariant 'st0));
+  assert (pure (server_driver_wire_logs_match
+    'st0
+    'received
+    'sent
+    buffered
+    buffered_len));
+  unfold (server_driver_buffers d buffered buffered_len);
+  with empty_payload raw network_out material cv_input signature app_out.
+    assert (
+      Box.pts_to d.server_driver_buffered_len buffered_len **
+      V.pts_to d.server_driver_empty_payload #1.0R empty_payload **
+      V.pts_to d.server_driver_raw #1.0R raw **
+      V.pts_to d.server_driver_network_out #1.0R network_out **
+      V.pts_to d.server_driver_material_payload #1.0R material **
+      V.pts_to d.server_driver_certificate_verify_input #1.0R cv_input **
+      V.pts_to d.server_driver_signature #1.0R signature **
+      V.pts_to d.server_driver_app_out #1.0R app_out);
+  let current_len = Box.(!d.server_driver_buffered_len);
+  assert (pure (current_len == buffered_len));
+  if (current_len = 0sz) {
+    assert (pure (buffered_len == 0sz));
+    assert (pure (B.length buffered == 0));
+    assert (pure (forall (i:nat{i < B.length buffered}).
+      Seq.index buffered i == Seq.index B.empty i));
+    Seq.lemma_eq_intro buffered B.empty;
+
+    let current_channel = Box.(!d.server_driver_channel);
+    assert (pure (current_channel == Some ch));
+    assert (pure (Some? current_channel));
+    let concrete_ch = Some?.v current_channel;
+    assert (pure (current_channel == Some concrete_ch));
+    assert (pure (Some concrete_ch == Some ch));
+    rewrite (IO.is_channel ch 'received 'sent) as
+      (IO.is_channel concrete_ch 'received 'sent);
+    V.to_array_pts_to d.server_driver_raw;
+    let read_len =
+      IO.read
+        concrete_ch
+        (V.vec_to_array d.server_driver_raw)
+        driver_rx_capacity;
+    with raw_after read_chunk.
+      assert (IO.is_channel
+                concrete_ch
+                (B.append (Ghost.reveal 'received) read_chunk)
+                (Ghost.reveal 'sent) **
+              pts_to (V.vec_to_array d.server_driver_raw) raw_after);
+    rewrite (IO.is_channel
+                concrete_ch
+                (B.append (Ghost.reveal 'received) read_chunk)
+                (Ghost.reveal 'sent)) as
+      (IO.is_channel
+        ch
+        (B.append (Ghost.reveal 'received) read_chunk)
+        (Ghost.reveal 'sent));
+    assert (pure (B.length raw_after == SZ.v driver_rx_capacity));
+    assert (pure (SZ.v read_len <= SZ.v driver_rx_capacity));
+    assert (pure (B.length read_chunk == SZ.v read_len));
+    assert (pure (Seq.equal
+      read_chunk
+      (Seq.slice raw_after 0 (SZ.v read_len))));
+    let old_consumed =
+      Ghost.hide (ID.indefinite_description_ghost
+        B.bytes
+        (fun consumed ->
+          server_driver_wire_logs_match_witness
+            'st0
+            (Ghost.reveal 'received)
+            (Ghost.reveal 'sent)
+            consumed
+            buffered
+            buffered_len));
+    assert (pure (server_driver_wire_logs_match_witness
+      'st0
+      (Ghost.reveal 'received)
+      (Ghost.reveal 'sent)
+      (Ghost.reveal old_consumed)
+      buffered
+      buffered_len));
+    CL.lemma_append_empty_right (Ghost.reveal old_consumed);
+    assert (pure (Seq.equal
+      (Ghost.reveal old_consumed)
+      (Ghost.reveal 'received)));
+    assert (pure (server_driver_wire_logs_match_witness
+      'st0
+      (B.append (Ghost.reveal 'received) read_chunk)
+      (Ghost.reveal 'sent)
+      (Ghost.reveal old_consumed)
+      read_chunk
+      read_len));
+    assert (pure (server_driver_wire_logs_match
+      'st0
+      (B.append (Ghost.reveal 'received) read_chunk)
+      (Ghost.reveal 'sent)
+      read_chunk
+      read_len));
+    Box.(d.server_driver_buffered_len := read_len);
+    V.to_vec_pts_to d.server_driver_raw;
+    fold (server_driver_buffers d read_chunk read_len);
+    fold (server_driver_connected
+      d
+      'st0
+      'certificate_chain
+      'credential_identity
+      (B.append (Ghost.reveal 'received) read_chunk)
+      'sent);
+    read_len
+  } else {
+    CL.lemma_append_empty_right (Ghost.reveal 'received);
+    fold (server_driver_buffers d buffered buffered_len);
+    fold (server_driver_connected
+      d
+      'st0
+      'certificate_chain
+      'credential_identity
+      'received
+      'sent);
+    0sz
+  }
 }
 
 fn start_server_once
