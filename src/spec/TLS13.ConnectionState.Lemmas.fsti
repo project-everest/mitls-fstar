@@ -172,6 +172,14 @@ val lemma_model_record_keys_consistent_record_write_key_schedule_projection
       (requires model_record_keys_consistent model)
       (ensures record_write_key_schedule_projection model)
 
+val lemma_step_model_preserves_config
+  (model:connection_model)
+  (ev:conn_event)
+  (model':connection_model)
+  : Lemma
+      (requires step_model model ev == Some model')
+      (ensures model'.model_config == model.model_config)
+
 val lemma_step_model_record_keys_consistent_for_role
   (role:endpoint_role)
   (model0:connection_model)

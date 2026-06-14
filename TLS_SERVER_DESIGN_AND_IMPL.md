@@ -2056,22 +2056,35 @@ Status:
       recurses until the server reaches `HsClientHelloReceived`, fuel is
       exhausted, or the caller stops. Its public postcondition proves that a
       `ready` result really corresponds to
-      `ControlHandshaking HsClientHelloReceived`, so the higher-level handshake
-      driver can safely distinguish compatibility CCS/no-input retries from the
-      first meaningful ClientHello state. This helper deliberately remains only a
-      stage wait; supported-profile parameter-selection readiness is checked by
-      `select_supported_server_parameters_from_payload_if_ready_once` using the
-      concrete ClientHello metadata and selection-presence witness.
+      `ControlHandshaking HsClientHelloReceived` and that the server config was
+      preserved from the loop entry, so the higher-level handshake driver can
+      safely distinguish compatibility CCS/no-input retries from the first
+      meaningful ClientHello state while carrying supported-profile config
+      facts forward. This helper deliberately remains only a stage wait;
+      ClientHello-specific supported-profile parameter-selection readiness is
+      checked by `select_supported_server_parameters_from_payload_if_ready_once`
+      using the concrete ClientHello metadata and selection-presence witness.
 - [x] Added the first composed accept/read-ClientHello driver helper:
       `TLS13.Impl.Server.Driver.accept_transport_start_and_read_client_hello`
       accepts a TCP connection, performs the verified server-start transition,
       then invokes the fueled ClientHello-stage wait loop. The result is a
       variant that keeps transport failures separate from the successful
       connected case; in the connected case, a ready wait result publicly proves
-      `ControlHandshaking HsClientHelloReceived`. This is the first top-level
-      server accept orchestration slice, deliberately stopping before parameter
-      selection; the follow-on checked selection helper now owns the separate
-      supported-profile readiness proof.
+      `ControlHandshaking HsClientHelloReceived` and config preservation from
+      the started server state. This is the first top-level server accept
+      orchestration slice, deliberately stopping before parameter selection; the
+      follow-on checked selection helper now owns the separate supported-profile
+      readiness proof.
+- [x] Added the first composed accept/read/select/derive driver helper:
+      `TLS13.Impl.Server.Driver.accept_start_read_client_hello_select_derive_once`
+      accepts TCP, starts the server, waits for ClientHello, generates the
+      driver-owned 64-byte material buffer, and invokes
+      `select_and_derive_shared_secret_if_ready_once`. Its result variant keeps
+      listen failure, accept failure, ClientHello wait/exhaustion, entropy
+      failure, selection-not-ready, and successful select+derive distinct. The
+      helper uses the wait-loop config-preservation proof plus the concrete
+      runtime readiness query, so this composed slice no longer needs a ghost
+      ClientHello-selection precondition after the network wait.
 - [x] Added the first generic local-output driver slice:
       `TLS13.Impl.Server.Driver.process_local_event_and_write_once` calls the
       credential-aware public server local-event API using driver-owned network
