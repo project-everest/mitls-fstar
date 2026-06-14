@@ -2019,6 +2019,16 @@ Status:
       to the guarded `LocalSelectServerParameters` predicate and explicit
       select/derive helpers until we add either a concrete selection-present
       query or a supported-ClientHello acceptability projection.
+- [x] Added the first composed accept/read-ClientHello driver helper:
+      `TLS13.Impl.Server.Driver.accept_transport_start_and_read_client_hello`
+      accepts a TCP connection, performs the verified server-start transition,
+      then invokes the fueled ClientHello-stage wait loop. The result is a
+      variant that keeps transport failures separate from the successful
+      connected case; in the connected case, a ready wait result publicly proves
+      `ControlHandshaking HsClientHelloReceived`. This is the first top-level
+      server accept orchestration slice, deliberately stopping before
+      parameter selection because supported-profile selection readiness is still
+      a separate proof obligation.
 - [x] Added the first generic local-output driver slice:
       `TLS13.Impl.Server.Driver.process_local_event_and_write_once` calls the
       credential-aware public server local-event API using driver-owned network

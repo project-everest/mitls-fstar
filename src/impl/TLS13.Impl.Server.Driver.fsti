@@ -47,6 +47,11 @@ type server_driver_client_hello_wait_result = {
   server_driver_client_hello_wait_exhausted: bool;
 }
 
+type server_driver_accept_client_hello_result =
+  | ServerDriverAcceptClientHelloTransportOk of server_driver_client_hello_wait_result
+  | ServerDriverAcceptClientHelloListenFailed
+  | ServerDriverAcceptClientHelloAcceptFailed
+
 noextract
 val server_driver_live
   (d:server_driver)
@@ -183,6 +188,34 @@ fn accept_transport_and_start_once
                B.empty
            | _ ->
              server_driver_live d 'st0 'certificate_chain 'credential_identity)
+
+fn accept_transport_start_and_read_client_hello
+  (d:server_driver)
+  (bind_host:array U8.t)
+  (bind_host_len:SZ.t)
+  (port:U16.t)
+  (network_fuel:SZ.t)
+  requires server_driver_live d 'st0 'certificate_chain 'credential_identity **
+           pts_to bind_host 'bind_host_bytes **
+           pure (B.length 'bind_host_bytes == SZ.v bind_host_len /\
+                CM.can_start_server 'st0)
+  returns result:server_driver_accept_client_hello_result
+  ensures pts_to bind_host 'bind_host_bytes **
+          (match result with
+           | ServerDriverAcceptClientHelloTransportOk wait ->
+            exists* st1 received sent.
+              server_driver_connected
+                d
+                st1
+                'certificate_chain
+                'credential_identity
+                received
+                sent **
+              pure (wait.server_driver_client_hello_wait_ready == true ==>
+                  st1.CS.cs_model.CS.model_control ==
+                    CS.ControlHandshaking CS.HsClientHelloReceived)
+           | _ ->
+            server_driver_live d 'st0 'certificate_chain 'credential_identity)
 
 fn close_transport_once
   (d:server_driver)
