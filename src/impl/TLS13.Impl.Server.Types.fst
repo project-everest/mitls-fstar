@@ -890,6 +890,15 @@ let legal_network_response
   : prop =
   (resp.status == DecodeError ==> False) /\
   (resp.status == NeedMoreInput ==> False) /\
+  (resp.status == IllegalTransition ==> False) /\
+  (resp.status == OutputBufferTooSmall ==> False) /\
+  (match msg with
+   | M.TlsAlert T.CloseNotify ->
+     resp.status == StepOk
+   | M.TlsAlert _ ->
+     resp.status == ConnectionFailed
+   | _ ->
+     resp.status == StepOk) /\
   legal_response_for_event
     st0
     st1
@@ -1279,6 +1288,33 @@ let server_network_step_ok_received_decode_projection
            (server_network_consumed_prefix resp input)
            msg)
 
+let server_network_connection_failed_consumed_prefix
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (resp:server_buffer_response)
+  (input:B.bytes)
+  (network_out:B.bytes)
+  (app_out:B.bytes)
+  : prop =
+  resp.response.status == ConnectionFailed ==>
+    exists alert raw_received.
+      st1 ==
+        CM.received_alert_failure_state
+         st0
+         alert
+         raw_received /\
+      Seq.equal
+        raw_received
+        (server_network_consumed_prefix resp input) /\
+      legal_network_response
+        st0
+        st1
+        resp.response
+        (M.TlsAlert alert)
+        raw_received
+        network_out
+        app_out
+
 let server_network_consumed_input_projection
   (st0:CS.connection_state)
   (st1:CS.connection_state)
@@ -1290,4 +1326,16 @@ let server_network_consumed_input_projection
   server_network_step_ok_consumed_prefix st0 st1 resp input /\
   server_network_step_ok_received_decode_projection
     st0 st1 resp input network_out app_out /\
-  (resp.response.status == NeedMoreInput ==> resp.consumed_len == 0sz)
+  server_network_connection_failed_consumed_prefix
+    st0 st1 resp input network_out app_out /\
+  (resp.response.status == NeedMoreInput ==>
+    st1 == st0 /\
+    resp.consumed_len == 0sz /\
+    resp.response.network_out_len == 0sz) /\
+  (resp.response.status == IllegalTransition ==>
+    st1 == st0 /\
+    resp.consumed_len == 0sz /\
+    resp.response.network_out_len == 0sz) /\
+  (resp.response.status == DecodeError ==>
+    decode_error_response st0 st1 resp.response network_out app_out) /\
+  (resp.response.status == OutputBufferTooSmall ==> False)

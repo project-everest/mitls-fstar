@@ -1972,6 +1972,19 @@ Status:
       relation, and server invariant. If retained bytes are already present it
       returns a verified zero-length no-op, leaving future compacting
       process/read loops to consume or compact the buffer first.
+- [x] Added the first compacting retained-network processing slice:
+      `TLS13.Impl.Server.Driver.process_buffered_network_bytes_compact_once`
+      processes the driver-owned retained prefix with the public server
+      `process_network_bytes` API, writes exactly
+      `ST.response_network_out resp.response network_out_bytes` through the
+      total-write `TLS13.IO.write` postcondition, shifts any unconsumed suffix
+      back to the start of the retained buffer, and re-establishes the exact
+      connected-driver IO-history relation. The server network theorem surface
+      now also records the status facts needed by this driver proof:
+      `NeedMoreInput` and `IllegalTransition` are zero-consumption stutters,
+      `DecodeError` exposes its local-fail response, legal non-alert network
+      events are `StepOk`, close_notify alerts are `StepOk`, and non-close
+      alerts are `ConnectionFailed` with a consumed-prefix witness.
 - [x] Added the first generic local-output driver slice:
       `TLS13.Impl.Server.Driver.process_local_event_and_write_once` calls the
       credential-aware public server local-event API using driver-owned network
@@ -2068,9 +2081,10 @@ Checklist:
       `start_server_if_ready`, and `accept_transport_and_start_once` slices
       perform the first connected local transition after attach, and
       `generate_server_material_once` fills the driver-owned selection material
-      buffer. The external-payload selection helper is verified; wiring it to the
-      driver-owned material buffer, local-action draining, and network handshake
-      processing remain to be layered on top.
+      buffer. The driver-owned select+derive path and first compacting
+      retained-network processing slice are verified; local-action draining,
+      fueled read/process loops, and the full handshake accept orchestration
+      remain to be layered on top.
 - [ ] The first public driver API does not take a pre-accepted channel or
       externally owned listener handle.
 - [ ] `send`, `receive`, and `close` operate on one connected server handle.
@@ -2085,7 +2099,8 @@ Checklist:
       - server transport received bytes;
       - protocol raw sent/received wire logs;
       - retained buffered read-ahead.
-- [ ] Driver uses total-write `TLS13.IO.write` postconditions.
+- [x] Driver uses total-write `TLS13.IO.write` postconditions in the verified
+      local-output and retained-network processing slices.
 - [ ] Driver uses fueled loops for handshake/receive/close.
 - [ ] C wrapper owns only handle/lifetime/error state.
 

@@ -69,6 +69,15 @@ val server_driver_local_write_correct
   : prop
 
 noextract
+val server_driver_network_process_correct
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (resp:ST.server_buffer_response)
+  (sent:B.bytes)
+  (sent':B.bytes)
+  : prop
+
+noextract
 val server_driver_selection_from_payload_correct
   (st0:CS.connection_state)
   (st1:CS.connection_state)
@@ -189,6 +198,31 @@ fn read_transport_once
             received'
             'sent **
           pure (SZ.v n <= 65535)
+
+fn process_buffered_network_bytes_compact_once
+  (d:server_driver)
+  requires server_driver_connected
+            d
+            'st0
+            'certificate_chain
+            'credential_identity
+            'received
+            'sent
+  returns resp:ST.server_buffer_response
+  ensures exists* st1 sent'.
+          server_driver_connected
+           d
+           st1
+           'certificate_chain
+           'credential_identity
+           'received
+           sent' **
+          pure (server_driver_network_process_correct
+           'st0
+           st1
+           resp
+           (Ghost.reveal 'sent)
+           sent')
 
 fn start_server_once
   (d:server_driver)
