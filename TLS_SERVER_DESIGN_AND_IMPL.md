@@ -1888,6 +1888,13 @@ Status:
       driver in `CM.started_server_state` with transport histories unchanged.
       The focused setup interface now exposes this exact started-state
       postcondition for downstream driver proofs.
+- [x] Added `TLS13.Impl.Server.Driver.start_server_if_ready`, the first
+      scheduler-driven connected-driver wrapper. It calls
+      `TLS13.Impl.Server.next_local_action`, uses `next_local_action_sound` to
+      discharge the `can_start_server` precondition when the executable action is
+      `LocalStartServer`, and otherwise preserves the connected driver state
+      while reporting that the next action is not ready or unsupported by this
+      first wrapper.
 - [x] Generic `process_local_event` now handles server
       `LocalSendApplicationData` and `LocalSendCloseNotify` through the shared
       endpoint-neutral `LocalSend` mutations. The server theorem surface now
@@ -1961,10 +1968,10 @@ Checklist:
       connected server handle.
       Current status: the verified `accept_transport_once` slice performs the
       listen/accept/close-listener ownership transition and establishes
-      `server_driver_connected`; the verified `start_server_once` slice performs
-      the first connected local transition after attach. Selection/material
-      generation, local-action draining, and network handshake processing remain
-      to be layered on top.
+      `server_driver_connected`; the verified `start_server_once` and
+      `start_server_if_ready` slices perform the first connected local transition
+      after attach. Selection/material generation, local-action draining, and
+      network handshake processing remain to be layered on top.
 - [ ] The first public driver API does not take a pre-accepted channel or
       externally owned listener handle.
 - [ ] `send`, `receive`, and `close` operate on one connected server handle.

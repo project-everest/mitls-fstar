@@ -25,6 +25,11 @@ type server_driver_transport_status =
   | ServerDriverListenFailed
   | ServerDriverAcceptFailed
 
+type server_driver_local_status =
+  | ServerDriverLocalProcessed
+  | ServerDriverLocalNotReady
+  | ServerDriverLocalExternalOrUnsupported
+
 noextract
 val server_driver_live
   (d:server_driver)
@@ -137,3 +142,31 @@ fn start_server_once
             'credential_identity
             'received
             'sent
+
+fn start_server_if_ready
+  (d:server_driver)
+  requires server_driver_connected
+             d
+             'st0
+             'certificate_chain
+             'credential_identity
+             'received
+             'sent
+  returns status:server_driver_local_status
+  ensures (match status with
+           | ServerDriverLocalProcessed ->
+             server_driver_connected
+               d
+               (CM.started_server_state 'st0)
+               'certificate_chain
+               'credential_identity
+               'received
+               'sent
+           | _ ->
+             server_driver_connected
+               d
+               'st0
+               'certificate_chain
+               'credential_identity
+               'received
+               'sent)

@@ -547,3 +547,68 @@ fn start_server_once
     'sent);
   resp
 }
+
+fn start_server_if_ready
+  (d:server_driver)
+  requires server_driver_connected
+             d
+             'st0
+             'certificate_chain
+             'credential_identity
+             'received
+             'sent
+  returns status:server_driver_local_status
+  ensures (match status with
+           | ServerDriverLocalProcessed ->
+             server_driver_connected
+               d
+               (CM.started_server_state 'st0)
+               'certificate_chain
+               'credential_identity
+               'received
+               'sent
+           | _ ->
+             server_driver_connected
+               d
+               'st0
+               'certificate_chain
+               'credential_identity
+               'received
+               'sent)
+{
+  unfold (server_driver_connected
+    d
+    'st0
+    'certificate_chain
+    'credential_identity
+    'received
+    'sent);
+  with ch buffered buffered_len.
+    assert (Box.pts_to d.server_driver_channel (Some ch) **
+            IO.is_channel ch 'received 'sent **
+            server_driver_buffers d buffered buffered_len);
+  assert (pure (ST.server_end_to_end_invariant 'st0));
+  assert (pure (ST.server_state_correct 'st0));
+  let action = S.next_local_action d.server_driver_server;
+  assert (pure (ST.next_local_action_sound 'st0 action));
+  fold (server_driver_connected
+    d
+    'st0
+    'certificate_chain
+    'credential_identity
+    'received
+    'sent);
+  if action.ST.next_local_ready {
+    assert (pure (action.ST.next_local_ready == true));
+    if (action.ST.next_local_kind = ST.LocalStartServer) {
+      assert (pure (action.ST.next_local_kind == ST.LocalStartServer));
+      assert (pure (CM.can_start_server 'st0));
+      let _ = start_server_once d;
+      ServerDriverLocalProcessed
+    } else {
+      ServerDriverLocalExternalOrUnsupported
+    }
+  } else {
+    ServerDriverLocalNotReady
+  }
+}
