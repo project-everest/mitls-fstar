@@ -1309,6 +1309,12 @@ fn process_send_encrypted_extensions_serialized
           pts_to app_out app_out_bytes **
           pure (B.length network_out_bytes == SZ.v network_out_len /\
                 B.length app_out_bytes == SZ.v app_out_len /\
+                (let ee = { M.negotiated_alpn = None } in
+                 st1 ==
+                   CM.sent_encrypted_extensions_state
+                     'st0
+                     ee
+                     network_out_bytes) /\
                 ST.server_local_event_end_to_end_correct
                   'st0
                   st1
@@ -1725,6 +1731,11 @@ fn process_send_certificate_serialized
           pts_to app_out app_out_bytes **
           pure (B.length network_out_bytes == SZ.v network_out_len /\
                 B.length app_out_bytes == SZ.v app_out_len /\
+                st1 ==
+                  CM.sent_certificate_state
+                    'st0
+                    (Ghost.reveal cert)
+                    network_out_bytes /\
                 ST.server_local_event_end_to_end_correct
                   'st0
                   st1
@@ -2013,6 +2024,11 @@ fn process_send_certificate_from_credentials
           pts_to app_out app_out_bytes **
           pure (B.length network_out_bytes == SZ.v network_out_len /\
                 B.length app_out_bytes == SZ.v app_out_len /\
+                st1 ==
+                  CM.sent_certificate_state
+                    'st0
+                    { M.chain = [Ghost.reveal 'certificate_chain] }
+                    network_out_bytes /\
                 ST.server_local_event_end_to_end_correct
                   'st0
                   st1
@@ -2130,6 +2146,11 @@ fn process_send_certificate_verify_serialized
           pts_to app_out app_out_bytes **
           pure (B.length network_out_bytes == SZ.v network_out_len /\
                 B.length app_out_bytes == SZ.v app_out_len /\
+                st1 ==
+                  CM.sent_certificate_verify_state
+                    'st0
+                    (Ghost.reveal cv)
+                    network_out_bytes /\
                 ST.server_local_event_end_to_end_correct
                   'st0
                   st1
@@ -2416,6 +2437,11 @@ fn process_send_stored_certificate_verify_serialized
           pts_to app_out app_out_bytes **
           pure (B.length network_out_bytes == SZ.v network_out_len /\
                 B.length app_out_bytes == SZ.v app_out_len /\
+                st1 ==
+                  CM.sent_certificate_verify_state
+                    'st0
+                    (Ghost.reveal cv)
+                    network_out_bytes /\
                 ST.server_local_event_end_to_end_correct
                   'st0
                   st1
@@ -2688,6 +2714,23 @@ fn process_send_server_finished_serialized
           pts_to app_out app_out_bytes **
           pure (B.length network_out_bytes == SZ.v network_out_len /\
                 B.length app_out_bytes == SZ.v app_out_len /\
+                (match
+                   'st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_handshake_traffic
+                 with
+                 | Some server_hs ->
+                   let fin = {
+                     M.verify_data =
+                       K.finished_verify_data
+                         server_hs.CS.traffic_secret
+                         (Tr.hash
+                           'st0.CS.cs_model.CS.model_handshake.CS.hs_transcript);
+                   } in
+                   st1 ==
+                     CM.sent_server_finished_state
+                       'st0
+                       fin
+                       network_out_bytes
+                 | None -> True) /\
                 ST.server_local_event_end_to_end_correct
                   'st0
                   st1

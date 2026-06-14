@@ -618,6 +618,12 @@ Current phase: **Phase 6 server buffer/event API and theorem surface**.
   the raw-fragment, serializer-backed, and concrete-array ServerHello send
   entry points now expose `sent_server_hello_state`; the serializer-backed
   wrappers also expose exact cleartext ServerHello record bytes.
+- [x] Strengthened encrypted-flight send wrapper postconditions for later
+  chaining: EncryptedExtensions, Certificate, CertificateVerify, stored
+  CertificateVerify, and server Finished send entry points now expose the exact
+  pure send-state constructor they install. CertificateVerify signing remains at
+  the existing end-to-end contract because the signature-bearing message is
+  produced by the OpenSSL signing TCB rather than determined solely by pre-state.
 
 ## End goal
 
