@@ -1606,6 +1606,11 @@ Checklist:
             parser record fields after copying ClientHello vectors, and gives
             the upcoming supported-profile selection-readiness query concrete
             runtime fields to inspect.
+      - [x] Added a concrete `server_selection_present` box to
+            `handshake_exactly`, tied to `hs_server_selection` by
+            `server_selection_presence_exactly`. This gives read-only runtime
+            queries a sound selection-absence witness instead of inferring
+            absence from private-key storage.
       - [ ] Add the sound runtime supported-profile selection-readiness query.
 - [x] Add ServerHello serialize/parse-back facts.
 - [x] Add cleartext ServerHello record serialization facts, including exact

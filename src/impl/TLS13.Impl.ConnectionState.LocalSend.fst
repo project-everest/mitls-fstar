@@ -1766,6 +1766,8 @@ fn try_send_key_update
                     st0.CS.cs_model.CS.model_handshake.CS.hs_transcript));
       assert (pure ((sent_key_update_response_state st0 (Ghost.reveal raw_sent)).CS.cs_model.CS.model_handshake.CS.hs_buffers ==
                     st0.CS.cs_model.CS.model_handshake.CS.hs_buffers));
+      assert (pure ((sent_key_update_response_state st0 (Ghost.reveal raw_sent)).CS.cs_model.CS.model_handshake.CS.hs_server_selection ==
+                    st0.CS.cs_model.CS.model_handshake.CS.hs_server_selection));
 
       rewrite (handshake_start_exactly
         c.handshake.start
@@ -1774,9 +1776,27 @@ fn try_send_key_update
           c.handshake.start
           (sent_key_update_response_state st0 (Ghost.reveal raw_sent)).CS.cs_model.CS.model_handshake.CS.hs_start);
       unfold (handshake_messages_exactly c.handshake.messages st0.CS.cs_model.CS.model_handshake);
+      rewrite (client_hello_metadata_exactly
+        c.handshake.messages.client_hello_has_server_name
+        c.handshake.messages.client_hello_server_name_len
+        c.handshake.messages.client_hello_cipher_suites_len
+        c.handshake.messages.client_hello_signature_schemes_len
+        st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello) as
+        (client_hello_metadata_exactly
+          c.handshake.messages.client_hello_has_server_name
+          c.handshake.messages.client_hello_server_name_len
+          c.handshake.messages.client_hello_cipher_suites_len
+          c.handshake.messages.client_hello_signature_schemes_len
+          (sent_key_update_response_state st0 (Ghost.reveal raw_sent)).CS.cs_model.CS.model_handshake.CS.hs_client_hello);
       fold (handshake_messages_exactly
         c.handshake.messages
         (sent_key_update_response_state st0 (Ghost.reveal raw_sent)).CS.cs_model.CS.model_handshake);
+      rewrite (server_selection_presence_exactly
+        c.handshake.server_selection_present
+        st0.CS.cs_model.CS.model_handshake.CS.hs_server_selection) as
+        (server_selection_presence_exactly
+          c.handshake.server_selection_present
+          (sent_key_update_response_state st0 (Ghost.reveal raw_sent)).CS.cs_model.CS.model_handshake.CS.hs_server_selection);
       unfold (server_key_share_exactly c.handshake.server_key_share st0.CS.cs_model.CS.model_handshake);
       fold (server_key_share_exactly
         c.handshake.server_key_share

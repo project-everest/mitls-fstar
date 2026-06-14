@@ -264,6 +264,8 @@ fn try_start_handshake
       st0.CS.cs_model.CS.model_handshake.CS.hs_buffers));
     assert (pure ((started_handshake_state st0 (Ghost.reveal start)).CS.cs_model.CS.model_handshake.CS.hs_keys ==
       st0.CS.cs_model.CS.model_handshake.CS.hs_keys));
+    assert (pure ((started_handshake_state st0 (Ghost.reveal start)).CS.cs_model.CS.model_handshake.CS.hs_server_selection ==
+      st0.CS.cs_model.CS.model_handshake.CS.hs_server_selection));
     unfold (handshake_messages_exactly
       c.handshake.messages
       st0.CS.cs_model.CS.model_handshake);
@@ -276,6 +278,17 @@ fn try_start_handshake
     fold (server_key_share_exactly
       c.handshake.server_key_share
       (started_handshake_state st0 (Ghost.reveal start)).CS.cs_model.CS.model_handshake);
+    unfold (server_selection_presence_exactly
+      c.handshake.server_selection_present
+      st0.CS.cs_model.CS.model_handshake.CS.hs_server_selection);
+    with selection_present. _;
+    assert (pure (selection_present ==
+      Some? st0.CS.cs_model.CS.model_handshake.CS.hs_server_selection));
+    assert (pure (selection_present ==
+      Some? (started_handshake_state st0 (Ghost.reveal start)).CS.cs_model.CS.model_handshake.CS.hs_server_selection));
+    fold (server_selection_presence_exactly
+      c.handshake.server_selection_present
+      (started_handshake_state st0 (Ghost.reveal start)).CS.cs_model.CS.model_handshake.CS.hs_server_selection);
     rewrite (peer_exactly
       c.handshake.validated_peer
       st0.CS.cs_model.CS.model_handshake.CS.hs_validated_peer)
@@ -529,6 +542,10 @@ fn select_server_parameters
 
   unfold (handshake_exactly c.handshake st0.CS.cs_model.CS.model_handshake);
   with cv_verified server_finished_verified. _;
+  unfold (server_selection_presence_exactly
+    c.handshake.server_selection_present
+    st0.CS.cs_model.CS.model_handshake.CS.hs_server_selection);
+  with old_selection_present. _;
   unfold (handshake_messages_exactly c.handshake.messages st0.CS.cs_model.CS.model_handshake);
   rewrite (client_hello_metadata_exactly
     c.handshake.messages.client_hello_has_server_name
@@ -568,6 +585,10 @@ fn select_server_parameters
     as (server_key_share_private_exactly
       c.handshake.server_key_share_private
       (selected_server_parameters_state st0 (Ghost.reveal selection)).CS.cs_model.CS.model_handshake);
+  c.handshake.server_selection_present := true;
+  fold (server_selection_presence_exactly
+    c.handshake.server_selection_present
+    (selected_server_parameters_state st0 (Ghost.reveal selection)).CS.cs_model.CS.model_handshake.CS.hs_server_selection);
   fold (handshake_exactly
     c.handshake
     (selected_server_parameters_state st0 (Ghost.reveal selection)).CS.cs_model.CS.model_handshake);
@@ -672,6 +693,10 @@ fn select_server_parameters_with_private_from_array
 
   unfold (handshake_exactly c.handshake st0.CS.cs_model.CS.model_handshake);
   with cv_verified server_finished_verified. _;
+  unfold (server_selection_presence_exactly
+    c.handshake.server_selection_present
+    st0.CS.cs_model.CS.model_handshake.CS.hs_server_selection);
+  with old_selection_present. _;
   unfold (handshake_messages_exactly c.handshake.messages st0.CS.cs_model.CS.model_handshake);
   rewrite (client_hello_metadata_exactly
     c.handshake.messages.client_hello_has_server_name
@@ -716,6 +741,10 @@ fn select_server_parameters_with_private_from_array
       (selected_server_parameters_state st0 (Ghost.reveal selection)).CS.cs_model.CS.model_handshake);
   rewrite (ArrPts.pts_to server_private_key private_bytes) as
     (ArrPts.pts_to server_private_key 'server_private_key_bytes);
+  c.handshake.server_selection_present := true;
+  fold (server_selection_presence_exactly
+    c.handshake.server_selection_present
+    (selected_server_parameters_state st0 (Ghost.reveal selection)).CS.cs_model.CS.model_handshake.CS.hs_server_selection);
   fold (handshake_exactly
     c.handshake
     (selected_server_parameters_state st0 (Ghost.reveal selection)).CS.cs_model.CS.model_handshake);
@@ -912,6 +941,14 @@ fn mark_sent_server_hello
   fold (handshake_messages_exactly
     c.handshake.messages
     (sent_server_hello_state st0 sh (Ghost.reveal 'raw_bytes)).CS.cs_model.CS.model_handshake);
+  assert (pure ((sent_server_hello_state st0 sh (Ghost.reveal 'raw_bytes)).CS.cs_model.CS.model_handshake.CS.hs_server_selection ==
+    st0.CS.cs_model.CS.model_handshake.CS.hs_server_selection));
+  rewrite (server_selection_presence_exactly
+    c.handshake.server_selection_present
+    st0.CS.cs_model.CS.model_handshake.CS.hs_server_selection) as
+    (server_selection_presence_exactly
+      c.handshake.server_selection_present
+      (sent_server_hello_state st0 sh (Ghost.reveal 'raw_bytes)).CS.cs_model.CS.model_handshake.CS.hs_server_selection);
   fold (handshake_buffers_exactly
     c.handshake.buffers
     (sent_server_hello_state st0 sh (Ghost.reveal 'raw_bytes)).CS.cs_model.CS.model_handshake.CS.hs_buffers);

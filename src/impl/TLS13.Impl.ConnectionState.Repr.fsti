@@ -167,6 +167,7 @@ noeq
 type handshake_storage = {
   start: handshake_start_storage;
   messages: handshake_message_storage;
+  server_selection_present: box bool;
   server_key_share: optional_fixed_bytes;
   server_key_share_private: optional_fixed_bytes;
   validated_peer: peer_storage;
@@ -1000,6 +1001,14 @@ let server_selection_private_absent
   | Some _ -> False
   | None -> True
 
+let server_selection_presence_exactly
+  ([@@@mkey] present_box:box bool)
+  (selection:option CS.server_handshake_selection)
+  : slprop =
+  exists* present.
+    Box.pts_to present_box present **
+    pure (present == Some? selection)
+
 let server_key_share_private_exactly
   ([@@@mkey] slot:optional_fixed_bytes)
   (hs:CS.handshake_state)
@@ -1102,6 +1111,9 @@ let handshake_exactly
   exists* cv_verified server_finished_verified.
     handshake_start_exactly handshake.start hs.CS.hs_start **
     handshake_messages_exactly handshake.messages hs **
+    server_selection_presence_exactly
+      handshake.server_selection_present
+      hs.CS.hs_server_selection **
     server_key_share_exactly handshake.server_key_share hs **
     server_key_share_private_exactly handshake.server_key_share_private hs **
     peer_exactly handshake.validated_peer hs.CS.hs_validated_peer **

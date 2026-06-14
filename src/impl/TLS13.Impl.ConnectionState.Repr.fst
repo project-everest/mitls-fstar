@@ -1090,6 +1090,7 @@ fn alloc_handshake_empty ()
 {
   let start = alloc_handshake_start_empty ();
   let messages = alloc_handshake_messages_empty ();
+  let server_selection_present = Box.alloc false;
   let server_key_share = alloc_empty_optional_fixed32 ();
   let server_key_share_private = alloc_empty_optional_fixed32 ();
   let validated_peer = alloc_peer_empty ();
@@ -1102,6 +1103,7 @@ fn alloc_handshake_empty ()
   let handshake = {
     start;
     messages;
+    server_selection_present;
     server_key_share;
     server_key_share_private;
     validated_peer;
@@ -1115,6 +1117,11 @@ fn alloc_handshake_empty ()
     (handshake_start_exactly handshake.start CS.empty_handshake_state.CS.hs_start);
   rewrite (handshake_messages_exactly messages CS.empty_handshake_state) as
     (handshake_messages_exactly handshake.messages CS.empty_handshake_state);
+  rewrite (Box.pts_to server_selection_present false) as
+    (Box.pts_to handshake.server_selection_present false);
+  fold (server_selection_presence_exactly
+    handshake.server_selection_present
+    CS.empty_handshake_state.CS.hs_server_selection);
   rewrite (optional_fixed_bytes_exactly server_key_share 32 None) as
     (server_key_share_exactly handshake.server_key_share CS.empty_handshake_state);
   assert (pure (handshake.server_key_share_private == server_key_share_private));
