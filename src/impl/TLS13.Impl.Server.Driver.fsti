@@ -12,6 +12,7 @@ module CM = TLS13.Impl.ConnectionState.Model
 module CR = TLS13.Impl.ConnectionState.Repr
 module IO = TLS13.IO
 module O = TLS13.OpenSSL
+module Seq = FStar.Seq
 module S = TLS13.Impl.Server
 module ST = TLS13.Impl.Server.Types
 module SZ = FStar.SizeT
@@ -242,6 +243,29 @@ fn generate_server_material_once
   ensures server_driver_connected
             d
             'st0
+            'certificate_chain
+            'credential_identity
+            'received
+            'sent
+
+fn select_default_server_parameters_once
+  (d:server_driver)
+  requires server_driver_connected
+             d
+             'st0
+             'certificate_chain
+             'credential_identity
+             'received
+             'sent **
+           pure (ST.server_local_event_input_ready
+            'st0
+            ST.LocalSelectServerParameters
+            (Seq.create 64 0uy))
+  returns resp:ST.server_response
+  ensures exists* st1.
+          server_driver_connected
+            d
+            st1
             'certificate_chain
             'credential_identity
             'received

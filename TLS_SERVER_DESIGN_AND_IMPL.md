@@ -1911,6 +1911,13 @@ Status:
       protocol state, credential context, IO channel, retained-buffer relation,
       and server invariant. This provides the concrete material source needed by
       the future default selection/ServerHello driver step.
+- [x] Wired the driver-owned material buffer into server-parameter selection:
+      `TLS13.Impl.Server.Driver.select_default_server_parameters_once` now uses
+      the generated 64-byte `server_random || server_private_key` scratch buffer
+      directly, proves that supported-profile selection readiness is independent
+      of the particular 64-byte material payload when the server public share is
+      derived from the private key, and preserves the connected IO-history
+      relation for this zero-output local transition.
 - [x] Added the first verified selection driver slice:
       `TLS13.Impl.Server.Driver.select_default_server_parameters_from_payload_once`
       takes an explicit 64-byte material payload, requires the existing
