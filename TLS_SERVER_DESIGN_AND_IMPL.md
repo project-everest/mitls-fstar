@@ -361,6 +361,17 @@ Current phase: **Phase 6 server buffer/event API and theorem surface**.
   the default profile; the wrapper is now explicitly the no-private-material
   supplied-public-key path. Concrete random/X25519 generation that records
   `Some server_sk` and scheduler integration remain pending.
+- [x] Added supplied-private-key server selection:
+  `TLS13.Impl.ConnectionState.LocalHandshake.select_server_parameters_with_private_from_array`
+  stores a concrete 32-byte private key into
+  `handshake.server_key_share_private`, while
+  `TLS13.Impl.Server.process_select_default_server_parameters_with_private_from_arrays`
+  constructs the supported-profile selection with
+  `server_key_share_private = Some server_sk`. Its precondition still requires
+  `CM.can_select_server_parameters`, so public/private X25519 consistency is
+  supplied by the pure selection admissibility predicate. Entropy generation and
+  computing the public key from the private key inside the wrapper remain
+  pending.
 - [x] Added the first sent-ServerHello state-mutation slice:
   `TLS13.Impl.ConnectionState.Model.sent_server_hello_state` mirrors the pure
   `Sent ServerHello` transition, and
@@ -460,9 +471,9 @@ Current phase: **Phase 6 server buffer/event API and theorem surface**.
   allocation for a server private key-share slot now exists in
   `TLS13.Impl.ConnectionState.Repr.handshake_storage`, and
   `connection_exactly` now relates it to `hs_server_selection` when a private
-  key is present; the existing supplied-public-key selector remains intentionally
-  constrained to the empty/private-absent case until an executable selector can
-  populate it from concrete generated private-key bytes.
+  key is present. The supplied-private selector now populates that slot from a
+  concrete private-key array; executable X25519 generation and shared-secret
+  derivation from stored server/client shares remain pending.
 - [x] Added role-indexed traffic-key install model support:
   `TLS13.Impl.ConnectionState.Model.installed_traffic_keys_for_role_state` and
   its evolution lemma mirror the pure `LocalInstallTrafficKeysForRole`
@@ -1570,10 +1581,11 @@ Checklist:
       generic server application-data/close_notify sends; protected server
       application-data receive byte dispatch is also complete. The focused
       `LocalSelectServerParameters` wrapper also preserves the invariant and now
-      has a default-profile concrete-array entry point. Server private-key-share
-      storage is represented in `connection_exactly`, but random/X25519
-      generation that populates it, remaining protected receive cases, and
-      scheduler integration remain pending.
+      has default-profile concrete-array entry points for both supplied-public
+      and supplied-private selections. Server private-key-share storage is
+      represented in `connection_exactly` and the supplied-private wrapper
+      populates it, but random/X25519 generation, remaining protected receive
+      cases, and scheduler integration remain pending.
 - [x] Emitted bytes expose raw-delta, parse-back, seal, and write-key provenance.
 - [ ] Consumed bytes expose exact consumed prefix, parse/decode classification,
       open facts, and read-key provenance.

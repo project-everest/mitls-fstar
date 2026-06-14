@@ -122,6 +122,32 @@ fn select_server_parameters
             }
             (selected_server_parameters_state st0 selection))
 
+fn select_server_parameters_with_private_from_array
+  (c:connection_state)
+  (server_private_key:array U8.t)
+  (#selection:erased CS.server_handshake_selection)
+  (#st0:erased CS.connection_state)
+  requires connection_exactly c st0 **
+           ArrPts.pts_to server_private_key 'server_private_key_bytes **
+           pure (B.length 'server_private_key_bytes == 32 /\
+                 can_select_server_parameters st0 selection /\
+                 server_selection_absent
+                   st0.CS.cs_model.CS.model_handshake /\
+                 Some? selection.CS.server_key_share_private /\
+                 Some?.v selection.CS.server_key_share_private ==
+                   Ghost.reveal 'server_private_key_bytes)
+  ensures connection_exactly c (selected_server_parameters_state st0 selection) **
+          ArrPts.pts_to server_private_key 'server_private_key_bytes **
+          pure (CS.legal_connection_delta
+            st0
+            {
+              CS.delta_event =
+                CS.ConnLocalEvent (CS.LocalSelectServerParameters selection);
+              CS.delta_raw_sent = B.empty;
+              CS.delta_raw_received = B.empty;
+            }
+            (selected_server_parameters_state st0 selection))
+
 fn mark_sent_server_hello
   (c:connection_state)
   (raw:array U8.t)

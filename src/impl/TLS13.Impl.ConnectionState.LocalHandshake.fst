@@ -571,6 +571,142 @@ fn select_server_parameters
   fold (connection_exactly c (selected_server_parameters_state st0 (Ghost.reveal selection)))
 }
 
+fn select_server_parameters_with_private_from_array
+  (c:connection_state)
+  (server_private_key:array U8.t)
+  (#selection:erased CS.server_handshake_selection)
+  (#st0:erased CS.connection_state)
+  requires connection_exactly c st0 **
+           ArrPts.pts_to server_private_key 'server_private_key_bytes **
+           pure (B.length 'server_private_key_bytes == 32 /\
+                 can_select_server_parameters st0 selection /\
+                 server_selection_absent
+                   st0.CS.cs_model.CS.model_handshake /\
+                 Some? selection.CS.server_key_share_private /\
+                 Some?.v selection.CS.server_key_share_private ==
+                   Ghost.reveal 'server_private_key_bytes)
+  ensures connection_exactly c (selected_server_parameters_state st0 selection) **
+          ArrPts.pts_to server_private_key 'server_private_key_bytes **
+          pure (CS.legal_connection_delta
+            st0
+            {
+              CS.delta_event =
+                CS.ConnLocalEvent (CS.LocalSelectServerParameters selection);
+              CS.delta_raw_sent = B.empty;
+              CS.delta_raw_received = B.empty;
+            }
+            (selected_server_parameters_state st0 selection))
+{
+  assert (pure (st0.CS.cs_model.CS.model_control ==
+    CS.ControlHandshaking CS.HsClientHelloReceived));
+  assert (pure (st0.CS.cs_model.CS.model_config.CS.config_role ==
+    CS.ServerEndpoint));
+  assert (pure (st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello ==
+    Some (Ghost.reveal selection).CS.server_selected_client_hello));
+  assert (pure (CS.legal_event
+    st0.CS.cs_model
+    (CS.ConnLocalEvent
+      (CS.LocalSelectServerParameters (Ghost.reveal selection)))));
+  lemma_len32_refinement_tautology();
+  let private_bytes : erased (b:B.bytes{B.length b == 32}) =
+    Ghost.hide (Ghost.reveal 'server_private_key_bytes);
+  assert (pure (Ghost.reveal private_bytes == Ghost.reveal 'server_private_key_bytes));
+  assert (pure (Some? (Ghost.reveal selection).CS.server_key_share_private));
+  lemma_option_some_v (Ghost.reveal selection).CS.server_key_share_private;
+  assert (pure ((Ghost.reveal selection).CS.server_key_share_private ==
+    Some (Ghost.reveal private_bytes)));
+
+  unfold (connection_exactly c st0);
+  unfold (connection_model_exactly c st0.CS.cs_model);
+
+  assert (pure ((selected_server_parameters_state st0 (Ghost.reveal selection)).CS.cs_model.CS.model_config ==
+    st0.CS.cs_model.CS.model_config));
+  assert (pure ((selected_server_parameters_state st0 (Ghost.reveal selection)).CS.cs_model.CS.model_control ==
+    st0.CS.cs_model.CS.model_control));
+  assert (pure ((selected_server_parameters_state st0 (Ghost.reveal selection)).CS.cs_model.CS.model_failure ==
+    st0.CS.cs_model.CS.model_failure));
+  assert (pure ((selected_server_parameters_state st0 (Ghost.reveal selection)).CS.cs_model.CS.model_record ==
+    st0.CS.cs_model.CS.model_record));
+  assert (pure ((selected_server_parameters_state st0 (Ghost.reveal selection)).CS.cs_model.CS.model_application ==
+    st0.CS.cs_model.CS.model_application));
+  assert (pure ((selected_server_parameters_state st0 (Ghost.reveal selection)).CS.cs_model.CS.model_handshake.CS.hs_start ==
+    st0.CS.cs_model.CS.model_handshake.CS.hs_start));
+  assert (pure ((selected_server_parameters_state st0 (Ghost.reveal selection)).CS.cs_model.CS.model_handshake.CS.hs_client_hello ==
+    st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello));
+  assert (pure ((selected_server_parameters_state st0 (Ghost.reveal selection)).CS.cs_model.CS.model_handshake.CS.hs_server_hello ==
+    st0.CS.cs_model.CS.model_handshake.CS.hs_server_hello));
+  assert (pure ((selected_server_parameters_state st0 (Ghost.reveal selection)).CS.cs_model.CS.model_handshake.CS.hs_encrypted_extensions ==
+    st0.CS.cs_model.CS.model_handshake.CS.hs_encrypted_extensions));
+  assert (pure ((selected_server_parameters_state st0 (Ghost.reveal selection)).CS.cs_model.CS.model_handshake.CS.hs_certificate ==
+    st0.CS.cs_model.CS.model_handshake.CS.hs_certificate));
+  assert (pure ((selected_server_parameters_state st0 (Ghost.reveal selection)).CS.cs_model.CS.model_handshake.CS.hs_certificate_verify ==
+    st0.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify));
+  assert (pure ((selected_server_parameters_state st0 (Ghost.reveal selection)).CS.cs_model.CS.model_handshake.CS.hs_server_finished ==
+    st0.CS.cs_model.CS.model_handshake.CS.hs_server_finished));
+  assert (pure ((selected_server_parameters_state st0 (Ghost.reveal selection)).CS.cs_model.CS.model_handshake.CS.hs_client_finished ==
+    st0.CS.cs_model.CS.model_handshake.CS.hs_client_finished));
+  assert (pure ((selected_server_parameters_state st0 (Ghost.reveal selection)).CS.cs_model.CS.model_handshake.CS.hs_validated_peer ==
+    st0.CS.cs_model.CS.model_handshake.CS.hs_validated_peer));
+  assert (pure ((selected_server_parameters_state st0 (Ghost.reveal selection)).CS.cs_model.CS.model_handshake.CS.hs_certificate_verify_verified ==
+    st0.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify_verified));
+  assert (pure ((selected_server_parameters_state st0 (Ghost.reveal selection)).CS.cs_model.CS.model_handshake.CS.hs_server_finished_verified ==
+    st0.CS.cs_model.CS.model_handshake.CS.hs_server_finished_verified));
+  assert (pure ((selected_server_parameters_state st0 (Ghost.reveal selection)).CS.cs_model.CS.model_handshake.CS.hs_transcript ==
+    st0.CS.cs_model.CS.model_handshake.CS.hs_transcript));
+  assert (pure ((selected_server_parameters_state st0 (Ghost.reveal selection)).CS.cs_model.CS.model_handshake.CS.hs_buffers ==
+    st0.CS.cs_model.CS.model_handshake.CS.hs_buffers));
+  assert (pure ((selected_server_parameters_state st0 (Ghost.reveal selection)).CS.cs_model.CS.model_handshake.CS.hs_keys ==
+    st0.CS.cs_model.CS.model_handshake.CS.hs_keys));
+
+  unfold (handshake_exactly c.handshake st0.CS.cs_model.CS.model_handshake);
+  with cv_verified server_finished_verified. _;
+  unfold (handshake_messages_exactly c.handshake.messages st0.CS.cs_model.CS.model_handshake);
+  fold (handshake_messages_exactly
+    c.handshake.messages
+    (selected_server_parameters_state st0 (Ghost.reveal selection)).CS.cs_model.CS.model_handshake);
+  unfold (server_key_share_exactly c.handshake.server_key_share st0.CS.cs_model.CS.model_handshake);
+  fold (server_key_share_exactly
+    c.handshake.server_key_share
+    (selected_server_parameters_state st0 (Ghost.reveal selection)).CS.cs_model.CS.model_handshake);
+  assert (pure (server_selection_absent
+    st0.CS.cs_model.CS.model_handshake));
+  rewrite (server_key_share_private_exactly
+    c.handshake.server_key_share_private
+    st0.CS.cs_model.CS.model_handshake)
+    as (optional_fixed_bytes_exactly
+      c.handshake.server_key_share_private
+      32
+      None);
+  rewrite (ArrPts.pts_to server_private_key 'server_private_key_bytes) as
+    (ArrPts.pts_to server_private_key private_bytes);
+  store_optional_fixed32_from_array
+    server_private_key
+    c.handshake.server_key_share_private
+    #private_bytes;
+  rewrite (optional_fixed_bytes_exactly
+    c.handshake.server_key_share_private
+    32
+    (Some (Ghost.reveal private_bytes))) as
+    (server_key_share_private_exactly
+      c.handshake.server_key_share_private
+      (selected_server_parameters_state st0 (Ghost.reveal selection)).CS.cs_model.CS.model_handshake);
+  rewrite (ArrPts.pts_to server_private_key private_bytes) as
+    (ArrPts.pts_to server_private_key 'server_private_key_bytes);
+  fold (handshake_exactly
+    c.handshake
+    (selected_server_parameters_state st0 (Ghost.reveal selection)).CS.cs_model.CS.model_handshake);
+
+  fold (connection_model_exactly
+    c
+    (selected_server_parameters_state st0 (Ghost.reveal selection)).CS.cs_model);
+
+  lemma_selected_server_parameters_state_evolves
+    st0
+    (Ghost.reveal selection);
+  MR.update c.ghost_state (selected_server_parameters_state st0 (Ghost.reveal selection));
+  fold (connection_exactly c (selected_server_parameters_state st0 (Ghost.reveal selection)))
+}
+
 fn mark_sent_server_hello
   (c:connection_state)
   (raw:array U8.t)
