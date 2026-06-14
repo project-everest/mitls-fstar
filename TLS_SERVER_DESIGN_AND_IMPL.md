@@ -261,7 +261,8 @@ Current phase: **Phase 6 server buffer/event API and theorem surface**.
   theorem surface and cuts the top-level server implementation by roughly one
   thousand lines, following the client `Handle.*`/facade structure.
 - [x] Started a focused `TLS13.Impl.Server.Keys.fsti`/`.fst` module for
-  key-schedule-related server handlers. Shared-secret derivation and supplied
+  key-schedule-related server handlers. Shared-secret derivation, supplied
+  server-handshake write-key installation, and internally derived
   server-handshake write-key installation now live behind that interface, with
   `TLS13.Impl.Server` retaining only public wrappers and explicit
   `connection_exactly` predicate rewrites.
