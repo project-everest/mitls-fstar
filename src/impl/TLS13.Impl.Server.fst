@@ -5793,3 +5793,170 @@ fn process_client_hello
     'old_app_out));
   resp
 }
+
+fn process_client_finished
+  (s:server)
+  (raw:array U8.t)
+  (raw_len:SZ.t)
+  (lfin:IM.finished)
+  (#fin:erased M.finished)
+  (network_out:array U8.t)
+  (network_out_len:SZ.t)
+  (app_out:array U8.t)
+  (app_out_len:SZ.t)
+  requires connection_exactly s 'st0 **
+           pts_to raw 'raw_bytes **
+           IM.is_valid_finished lfin fin **
+           pts_to network_out 'old_network_out **
+           pts_to app_out 'old_app_out **
+           pure (B.length 'raw_bytes == SZ.v raw_len /\
+                 B.length 'old_network_out == SZ.v network_out_len /\
+                 B.length 'old_app_out == SZ.v app_out_len /\
+                 ST.server_end_to_end_invariant 'st0 /\
+                 CM.can_receive_client_finished
+                   'st0
+                   (Ghost.reveal fin)
+                   (Ghost.reveal 'raw_bytes) /\
+                 CS.received_event_nonempty_decode_projection
+                   'st0.CS.cs_model
+                   (ST.received_message_event
+                     (M.TlsHandshake (M.Finished (Ghost.reveal fin))))
+                   (Ghost.reveal 'raw_bytes))
+  returns resp:ST.server_response
+  ensures exists* st1 network_out_bytes app_out_bytes.
+          connection_exactly s st1 **
+          pts_to raw 'raw_bytes **
+          pts_to network_out network_out_bytes **
+          pts_to app_out app_out_bytes **
+          pure (B.length network_out_bytes == SZ.v network_out_len /\
+                B.length app_out_bytes == SZ.v app_out_len /\
+                ST.server_network_event_end_to_end_correct
+                  'st0
+                  st1
+                  resp
+                  (M.TlsHandshake (M.Finished (Ghost.reveal fin)))
+                  (Ghost.reveal 'raw_bytes)
+                  network_out_bytes
+                  app_out_bytes)
+{
+  unfold (connection_exactly s 'st0);
+  CN.mark_received_client_finished
+    s
+    raw
+    lfin
+    #fin;
+  fold (connection_exactly
+    s
+    (CM.received_client_finished_state
+      'st0
+      (Ghost.reveal fin)
+      (Ghost.reveal 'raw_bytes)));
+
+  let resp = {
+    ST.network_out_len = 0sz;
+    ST.app_out_len = 0sz;
+    ST.status = ST.StepOk;
+  };
+
+  CM.lemma_received_client_finished_state_evolves
+    'st0
+    (Ghost.reveal fin)
+    (Ghost.reveal 'raw_bytes);
+  assert (pure (CS.legal_connection_delta
+    'st0
+    (ST.received_message_delta
+      (M.TlsHandshake (M.Finished (Ghost.reveal fin)))
+      (Ghost.reveal 'raw_bytes))
+    (CM.received_client_finished_state
+      'st0
+      (Ghost.reveal fin)
+      (Ghost.reveal 'raw_bytes))));
+
+  CSL.lemma_legal_connection_delta_full_log_consistent_for_role
+    CS.ServerEndpoint
+    'st0
+    (ST.received_message_delta
+      (M.TlsHandshake (M.Finished (Ghost.reveal fin)))
+      (Ghost.reveal 'raw_bytes))
+    (CM.received_client_finished_state
+      'st0
+      (Ghost.reveal fin)
+      (Ghost.reveal 'raw_bytes));
+  CSL.lemma_legal_connection_delta_raw_event_replay_consistent
+    'st0
+    (ST.received_message_delta
+      (M.TlsHandshake (M.Finished (Ghost.reveal fin)))
+      (Ghost.reveal 'raw_bytes))
+    (CM.received_client_finished_state
+      'st0
+      (Ghost.reveal fin)
+      (Ghost.reveal 'raw_bytes));
+  CSL.lemma_connection_state_protected_raw_segmented_replay
+    (CM.received_client_finished_state
+      'st0
+      (Ghost.reveal fin)
+      (Ghost.reveal 'raw_bytes));
+  CSL.lemma_legal_connection_delta_sent_seal_replay_consistent
+    'st0
+    (ST.received_message_delta
+      (M.TlsHandshake (M.Finished (Ghost.reveal fin)))
+      (Ghost.reveal 'raw_bytes))
+    (CM.received_client_finished_state
+      'st0
+      (Ghost.reveal fin)
+      (Ghost.reveal 'raw_bytes));
+  CSL.lemma_legal_connection_delta_received_decode_replay_consistent
+    'st0
+    (ST.received_message_delta
+      (M.TlsHandshake (M.Finished (Ghost.reveal fin)))
+      (Ghost.reveal 'raw_bytes))
+    (CM.received_client_finished_state
+      'st0
+      (Ghost.reveal fin)
+      (Ghost.reveal 'raw_bytes));
+
+  Seq.lemma_len_slice 'old_network_out 0 0;
+  Seq.lemma_eq_intro B.empty (Seq.slice 'old_network_out 0 0);
+  Seq.lemma_len_slice 'old_app_out 0 0;
+  Seq.lemma_eq_intro B.empty (Seq.slice 'old_app_out 0 0);
+
+  assert (pure ((CM.received_client_finished_state 'st0 (Ghost.reveal fin) (Ghost.reveal 'raw_bytes)).CS.cs_model.CS.model_config ==
+    'st0.CS.cs_model.CS.model_config));
+  assert (pure ((CM.received_client_finished_state 'st0 (Ghost.reveal fin) (Ghost.reveal 'raw_bytes)).CS.cs_model.CS.model_config.CS.config_role ==
+    CS.ServerEndpoint));
+  assert (pure (Some?
+    (CM.received_client_finished_state 'st0 (Ghost.reveal fin) (Ghost.reveal 'raw_bytes)).CS.cs_model.CS.model_config.CS.config_server));
+  assert (pure (ST.server_state_correct
+    (CM.received_client_finished_state 'st0 (Ghost.reveal fin) (Ghost.reveal 'raw_bytes))));
+  assert (pure (ST.server_raw_to_message_replay_consistent
+    (CM.received_client_finished_state 'st0 (Ghost.reveal fin) (Ghost.reveal 'raw_bytes))));
+  assert (pure (ST.server_end_to_end_invariant
+    (CM.received_client_finished_state 'st0 (Ghost.reveal fin) (Ghost.reveal 'raw_bytes))));
+
+  assert (pure (ST.legal_response_for_event
+    'st0
+    (CM.received_client_finished_state 'st0 (Ghost.reveal fin) (Ghost.reveal 'raw_bytes))
+    resp
+    (ST.received_message_event (M.TlsHandshake (M.Finished (Ghost.reveal fin))))
+    B.empty
+    (Ghost.reveal 'raw_bytes)
+    'old_network_out
+    'old_app_out));
+  assert (pure (ST.legal_network_response
+    'st0
+    (CM.received_client_finished_state 'st0 (Ghost.reveal fin) (Ghost.reveal 'raw_bytes))
+    resp
+    (M.TlsHandshake (M.Finished (Ghost.reveal fin)))
+    (Ghost.reveal 'raw_bytes)
+    'old_network_out
+    'old_app_out));
+  assert (pure (ST.server_network_event_end_to_end_correct
+    'st0
+    (CM.received_client_finished_state 'st0 (Ghost.reveal fin) (Ghost.reveal 'raw_bytes))
+    resp
+    (M.TlsHandshake (M.Finished (Ghost.reveal fin)))
+    (Ghost.reveal 'raw_bytes)
+    'old_network_out
+    'old_app_out));
+  resp
+}

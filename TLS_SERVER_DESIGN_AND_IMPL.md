@@ -1419,6 +1419,12 @@ Checklist:
 - [x] Emitted bytes expose raw-delta, parse-back, seal, and write-key provenance.
 - [ ] Consumed bytes expose exact consumed prefix, parse/decode classification,
       open facts, and read-key provenance.
+      First focused server receive slice completed for protected client
+      `Finished`: `process_client_finished` preserves
+      `server_network_event_end_to_end_correct` when the caller supplies the
+      parser/open decode projection for the protected raw record. A unified
+      `process_network_bytes`-style dispatcher still needs to derive this fact
+      from parser/record-open postconditions.
 - [ ] Server invariants expose facts needed to instantiate
       `theorem_paired_endpoints_derived_key_agrees` with a client state.
 
@@ -1445,7 +1451,8 @@ Checklist:
 - [ ] Add network handlers:
       - ClientHello accept/reject;
       - compatibility CCS receive if supported;
-      - client Finished receive/open;
+      - client Finished receive/open (focused public wrapper complete; full
+        parse/open dispatch still pending);
       - application data;
       - alerts;
       - decode/decrypt errors.
@@ -1467,15 +1474,15 @@ Checklist:
         public wrappers, pure model helpers, and Pulse state mutations for
         EncryptedExtensions, Certificate, CertificateVerify signing/send, and
         server Finished are complete; scheduler hints are complete for
-        EncryptedExtensions and stored CertificateVerify; the credential
-        certificate-chain copyout TCB and verified L-level one-certificate
-        builder needed for executable Certificate materialization are in place;
-        concrete selection-to-L-ServerHello storage, the public executable
-        Certificate send wrapper, and remaining full-flight scheduler hints
-        remain);
-      - client Finished verification (state mutation, focused public wrapper, and
-        generic local dispatcher integration complete; network parse/open
-        dispatch for received client Finished remains pending);
+        EncryptedExtensions, credential-backed Certificate, CertificateVerify
+        signing, stored CertificateVerify, and ServerFinished; the credential
+        certificate-chain copyout TCB, verified L-level one-certificate builder,
+        and public executable Certificate send wrapper are in place. Concrete
+        selection-to-L-ServerHello storage remains pending);
+      - client Finished verification (state mutation, focused receive wrapper,
+        focused verify wrapper, and generic local dispatcher integration
+        complete; full network parse/open dispatch for received client Finished
+        remains pending);
       - application key installation (server write-key and client read-key
         supplied-material and internally derived mutations/wrappers, scheduler
         hints, and generic local dispatcher integration complete);
