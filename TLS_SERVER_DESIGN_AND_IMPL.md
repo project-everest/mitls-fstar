@@ -2001,7 +2001,11 @@ Status:
       event, and preserves the connected-driver invariant. This is intentionally
       a network-only loop: successful `StepOk` handshake events stop so the
       higher-level handshake driver can run the required local-action flight
-      before waiting for the next peer record.
+      before waiting for the next peer record. Its public postcondition now
+      exposes `server_driver_network_process_correct` for the final
+      non-exhausted network step relative to the loop's original protocol state
+      and sent log; internally, a `NeedMoreInput` stutter lemma proves retries do
+      not advance the protocol state or transport-sent history.
 - [x] Added the first generic local-output driver slice:
       `TLS13.Impl.Server.Driver.process_local_event_and_write_once` calls the
       credential-aware public server local-event API using driver-owned network

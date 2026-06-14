@@ -616,6 +616,74 @@ let lemma_server_driver_network_process_correct_intro
             (ST.response_network_out resp.ST.response network_out_bytes')))
     input
 
+let lemma_server_driver_network_process_need_more_stutter
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (resp:ST.server_buffer_response)
+  (sent:B.bytes)
+  (sent':B.bytes)
+  : Lemma
+      (requires
+        server_driver_network_process_correct st0 st1 resp sent sent' /\
+        resp.ST.response.ST.status == ST.NeedMoreInput)
+      (ensures
+        st1 == st0 /\
+        Seq.equal sent' sent)
+=
+  let input =
+    ID.indefinite_description_ghost
+      B.bytes
+      (fun input -> exists network_out_bytes app_out_bytes.
+        ST.server_network_bytes_end_to_end_correct
+          st0 st1 resp input network_out_bytes app_out_bytes /\
+        ST.server_network_consumed_input_projection
+          st0 st1 resp input network_out_bytes app_out_bytes /\
+        Seq.equal
+          sent'
+          (B.append
+            sent
+            (ST.response_network_out resp.ST.response network_out_bytes))) in
+  let network_out_bytes =
+    ID.indefinite_description_ghost
+      B.bytes
+      (fun network_out_bytes -> exists app_out_bytes.
+        ST.server_network_bytes_end_to_end_correct
+          st0 st1 resp input network_out_bytes app_out_bytes /\
+        ST.server_network_consumed_input_projection
+          st0 st1 resp input network_out_bytes app_out_bytes /\
+        Seq.equal
+          sent'
+          (B.append
+            sent
+            (ST.response_network_out resp.ST.response network_out_bytes))) in
+  let app_out_bytes =
+    ID.indefinite_description_ghost
+      B.bytes
+      (fun app_out_bytes ->
+        ST.server_network_bytes_end_to_end_correct
+          st0 st1 resp input network_out_bytes app_out_bytes /\
+        ST.server_network_consumed_input_projection
+          st0 st1 resp input network_out_bytes app_out_bytes /\
+        Seq.equal
+          sent'
+          (B.append
+            sent
+            (ST.response_network_out resp.ST.response network_out_bytes))) in
+  assert (ST.server_network_consumed_input_projection
+    st0 st1 resp input network_out_bytes app_out_bytes);
+  assert (st1 == st0);
+  assert (resp.ST.response.ST.network_out_len == 0sz);
+  Seq.lemma_len_slice network_out_bytes 0 0;
+  Seq.lemma_eq_intro B.empty (ST.response_network_out resp.ST.response network_out_bytes);
+  Seq.lemma_eq_elim
+    (ST.response_network_out resp.ST.response network_out_bytes)
+    B.empty;
+  Seq.append_empty_r sent;
+  assert (Seq.equal
+    sent'
+    (B.append sent (ST.response_network_out resp.ST.response network_out_bytes)));
+  assert (Seq.equal sent' sent)
+
 let lemma_logged_received_bytes_accounted_append_delta
   (old_logged:B.bytes)
   (old_consumed:B.bytes)
@@ -2103,7 +2171,13 @@ fn rec read_process_network_until_ready
            sent' **
           pure (result.server_driver_network_loop_exhausted == false ==>
             result.server_driver_network_loop_last.ST.response.ST.status <>
-              ST.NeedMoreInput)
+              ST.NeedMoreInput /\
+            server_driver_network_process_correct
+              'st0
+              st1
+              result.server_driver_network_loop_last
+              (Ghost.reveal 'sent)
+              sent')
   decreases (SZ.v fuel)
 {
   let no_op_resp = {
@@ -2130,14 +2204,60 @@ fn rec read_process_network_until_ready
         'certificate_chain
         'credential_identity
         received'
-        sent');
+        sent' **
+      pure (server_driver_network_process_correct
+        'st0
+        st1
+        step
+        (Ghost.reveal 'sent)
+        sent'));
     let need_more = step.ST.response.ST.status = ST.NeedMoreInput;
     if need_more {
+      lemma_server_driver_network_process_need_more_stutter
+        'st0
+        st1
+        step
+        (Ghost.reveal 'sent)
+        sent';
+      assert (pure (st1 == 'st0));
+      assert (pure (Seq.equal sent' (Ghost.reveal 'sent)));
+      Seq.lemma_eq_elim sent' (Ghost.reveal 'sent);
       let next_fuel = SZ.sub fuel 1sz;
       assert (pure (SZ.v next_fuel < SZ.v fuel));
-      read_process_network_until_ready d next_fuel
+      let result = read_process_network_until_ready d next_fuel;
+      with st2 received2 sent2.
+        assert (server_driver_connected
+          d
+          st2
+          'certificate_chain
+          'credential_identity
+          received2
+          sent2 **
+        pure (result.server_driver_network_loop_exhausted == false ==>
+          result.server_driver_network_loop_last.ST.response.ST.status <>
+            ST.NeedMoreInput /\
+          server_driver_network_process_correct
+            st1
+            st2
+            result.server_driver_network_loop_last
+            sent'
+            sent2));
+      assert (pure (result.server_driver_network_loop_exhausted == false ==>
+        server_driver_network_process_correct
+          'st0
+          st2
+          result.server_driver_network_loop_last
+          (Ghost.reveal 'sent)
+          sent2));
+      result
     } else {
       assert (pure (step.ST.response.ST.status <> ST.NeedMoreInput));
+      assert (pure (server_driver_network_process_correct
+        'st0
+        st1
+        step
+        (Ghost.reveal 'sent)
+        sent'));
       {
         server_driver_network_loop_last = step;
         server_driver_network_loop_exhausted = false;

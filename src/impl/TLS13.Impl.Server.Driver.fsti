@@ -280,7 +280,13 @@ fn read_process_network_until_ready
            sent' **
           pure (result.server_driver_network_loop_exhausted == false ==>
             result.server_driver_network_loop_last.ST.response.ST.status <>
-              ST.NeedMoreInput)
+              ST.NeedMoreInput /\
+            server_driver_network_process_correct
+              'st0
+              st1
+              result.server_driver_network_loop_last
+              (Ghost.reveal 'sent)
+              sent')
 fn start_server_once
   (d:server_driver)
   requires server_driver_connected
