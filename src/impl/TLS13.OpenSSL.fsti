@@ -92,6 +92,27 @@ fn sign_certificate_verify
                      (Seq.slice signature_bytes 0 (SZ.v signature_len))
                  | None -> True))
 
+fn copy_server_certificate_chain
+  (creds:server_credentials)
+  (out:array U8.t)
+  (out_capacity:SZ.t)
+  requires is_server_credentials creds 'certificate_chain 'credential_identity **
+           pts_to out 'old_out **
+           pure (B.length 'old_out == SZ.v out_capacity)
+  returns result: option SZ.t
+  ensures exists* out_bytes.
+          is_server_credentials creds 'certificate_chain 'credential_identity **
+          pts_to out out_bytes **
+          pure (B.length out_bytes == SZ.v out_capacity /\
+                (match result with
+                 | Some written ->
+                  SZ.v written == B.length (Ghost.reveal 'certificate_chain) /\
+                  SZ.v written <= SZ.v out_capacity /\
+                  Seq.equal
+                    (Seq.slice out_bytes 0 (SZ.v written))
+                    (Ghost.reveal 'certificate_chain)
+                 | None -> True))
+
 fn validate_certificate_for_local_event
   (ctx:auth_context)
   (#st:erased CS.connection_state)

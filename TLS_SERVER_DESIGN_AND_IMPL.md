@@ -521,6 +521,13 @@ Current phase: **Phase 6 server buffer/event API and theorem surface**.
   advertises `LocalSendCertificateVerify` when those facts hold, and
   `next_local_action_sound` exposes the exact readiness facts consumed by the
   generic stored-CertificateVerify dispatch branch.
+- [x] Added the credential certificate-chain copyout TCB needed for executable
+  Certificate sending: `TLS13.OpenSSL.copy_server_certificate_chain` preserves
+  `is_server_credentials` and copies the exact credential certificate-chain bytes
+  into a caller buffer when capacity permits. The C OpenSSL stub layer now
+  retains and exposes those bytes through the KaRaMeL-facing wrapper, making the
+  next step a verified L-level one-certificate `Certificate` builder rather than
+  a ghost-only config lookup.
 
 ## End goal
 
@@ -1405,10 +1412,11 @@ Checklist:
         public wrappers, pure model helpers, and Pulse state mutations for
         EncryptedExtensions, Certificate, CertificateVerify signing/send, and
         server Finished are complete; scheduler hints are complete for
-        EncryptedExtensions and stored CertificateVerify; concrete
-        selection-to-L-ServerHello storage, executable Certificate materialization
-        from configured credentials, and remaining full-flight scheduler hints
-        remain);
+        EncryptedExtensions and stored CertificateVerify; the credential
+        certificate-chain copyout TCB needed for executable Certificate
+        materialization is in place; concrete selection-to-L-ServerHello storage,
+        the verified L-level Certificate builder, and remaining full-flight
+        scheduler hints remain);
       - client Finished verification (state mutation, focused public wrapper, and
         generic local dispatcher integration complete; network parse/open
         dispatch for received client Finished remains pending);

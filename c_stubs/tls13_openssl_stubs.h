@@ -48,6 +48,12 @@ bool tls13_openssl_server_sign_rsa_pss_sha256(
     size_t signature_capacity,
     size_t *signature_len);
 
+bool tls13_openssl_server_copy_certificate_chain(
+    const tls13_server_credentials *creds,
+    uint8_t *out,
+    size_t out_capacity,
+    size_t *out_len);
+
 void tls13_openssl_peer_identity_free(tls13_peer_identity *peer);
 
 void tls13_openssl_server_credentials_free(tls13_server_credentials *creds);

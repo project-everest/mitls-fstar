@@ -275,6 +275,24 @@ done:
   return ok;
 }
 
+bool tls13_openssl_server_copy_certificate_chain(
+    const tls13_server_credentials *creds,
+    uint8_t *out,
+    size_t out_capacity,
+    size_t *out_len) {
+  if (creds == NULL || out == NULL || out_len == NULL) {
+    return false;
+  }
+  if (creds->certificate_chain_len > out_capacity) {
+    return false;
+  }
+  if (creds->certificate_chain_len != 0u) {
+    memcpy(out, creds->certificate_chain, creds->certificate_chain_len);
+  }
+  *out_len = creds->certificate_chain_len;
+  return true;
+}
+
 void tls13_openssl_peer_identity_free(tls13_peer_identity *peer) {
   if (peer == NULL) {
     return;

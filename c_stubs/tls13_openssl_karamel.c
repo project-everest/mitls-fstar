@@ -149,6 +149,28 @@ TLS13_OpenSSL_sign_certificate_verify(
   };
 }
 
+FStar_Pervasives_Native_option__size_t
+TLS13_OpenSSL_copy_server_certificate_chain(
+    TLS13_OpenSSL_server_credentials creds,
+    uint8_t *out,
+    size_t out_capacity) {
+  if (creds == NULL || creds->creds == NULL || out == NULL) {
+    return (FStar_Pervasives_Native_option__size_t){.tag = FStar_Pervasives_Native_None};
+  }
+  size_t out_len = 0u;
+  if (!tls13_openssl_server_copy_certificate_chain(
+          creds->creds,
+          out,
+          out_capacity,
+          &out_len)) {
+    return (FStar_Pervasives_Native_option__size_t){.tag = FStar_Pervasives_Native_None};
+  }
+  return (FStar_Pervasives_Native_option__size_t){
+      .tag = FStar_Pervasives_Native_Some,
+      .v = out_len,
+  };
+}
+
 bool TLS13_OpenSSL_validate_certificate_for_local_event(
     TLS13_OpenSSL_auth_context ctx,
     uint8_t *leaf_der,
