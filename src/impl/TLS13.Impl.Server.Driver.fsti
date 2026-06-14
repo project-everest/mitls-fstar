@@ -416,6 +416,29 @@ fn select_and_derive_shared_secret_from_payload_once
            sent' **
           pts_to payload 'payload_bytes
 
+fn select_and_derive_shared_secret_once
+  (d:server_driver)
+  requires server_driver_connected
+             d
+             'st0
+             'certificate_chain
+             'credential_identity
+             'received
+             'sent **
+           pure (ST.server_local_event_input_ready
+            'st0
+            ST.LocalSelectServerParameters
+            (Seq.create 64 0uy))
+  returns resp:ST.server_response
+  ensures exists* st2 sent'.
+          server_driver_connected
+           d
+           st2
+           'certificate_chain
+           'credential_identity
+           'received
+           sent'
+
 fn process_ready_empty_local_action_once
   (d:server_driver)
   requires server_driver_connected

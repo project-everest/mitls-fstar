@@ -1933,6 +1933,13 @@ Status:
       64-byte `server_random || server_private_key` payload. This gives a
       verified composed explicit-material path while the driver-owned material
       path still needs persistent buffer/state relation tracking.
+- [x] Added the composed driver-owned material path:
+      `TLS13.Impl.Server.Driver.select_and_derive_shared_secret_once` uses the
+      generated driver-owned material buffer, performs default selection, keeps a
+      stack copy of the selected private key across the zero-output selection
+      transition, and immediately derives the shared secret through the verified
+      local-event helper. This avoids requiring a persistent material/state
+      relation for the common select-then-derive sequence.
 - [x] Added verified server application-output helpers:
       `TLS13.Impl.Server.Driver.send_application_data_once` and
       `send_close_notify_once` reuse the local-event/write helper for
