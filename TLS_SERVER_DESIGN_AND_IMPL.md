@@ -422,6 +422,14 @@ Current phase: **Phase 6 server buffer/event API and theorem surface**.
   and preserves `server_local_event_end_to_end_correct`. Concrete generation and
   persistent selection storage still remain pending, but callers no longer need
   to construct the L-level ServerHello record themselves.
+- [x] Added
+  `TLS13.Impl.Server.process_send_server_hello_with_derived_public_from_private_array`,
+  which takes concrete server-random and server-private-key arrays, computes the
+  X25519 public key share through the crypto runtime TCB, builds the supported
+  ServerHello internally, and preserves `server_local_event_end_to_end_correct`
+  for `LocalSendServerHello`. This matches the supplied-private parameter
+  selection path, so drivers no longer need to supply a separate public share
+  when using a concrete server private key.
 - [x] Added extraction-facing pure model helpers for the rest of the first
   server encrypted flight:
   `sent_encrypted_extensions_state`, `sent_certificate_state`,
@@ -496,8 +504,10 @@ Current phase: **Phase 6 server buffer/event API and theorem surface**.
   now verified, and generic `process_local_event` dispatch now routes
   `LocalDeriveSharedSecret` through this private-key path when the local payload
   matches the stored selection. The selection wrapper now derives the public
-  key-share from the private key internally; entropy generation and autonomous
-  `next_local_action` scheduling remain pending.
+  key-share from the private key internally, and the ServerHello send wrapper
+  can derive the emitted public share from the same concrete private key;
+  entropy generation and autonomous `next_local_action` scheduling remain
+  pending.
 - [x] Added role-indexed traffic-key install model support:
   `TLS13.Impl.ConnectionState.Model.installed_traffic_keys_for_role_state` and
   its evolution lemma mirror the pure `LocalInstallTrafficKeysForRole`
@@ -1704,8 +1714,9 @@ Checklist:
         signing, stored CertificateVerify, and ServerFinished; the credential
         certificate-chain copyout TCB, verified L-level one-certificate builder,
         public executable Certificate send wrapper, and concrete-array
-        ServerHello builder/send wrapper are in place. Concrete generation and
-        persistent selection-to-L-ServerHello storage remain pending);
+        ServerHello builder/send wrapper are in place, including a private-key
+        derived-public-share variant. Concrete generation and persistent
+        selection-to-L-ServerHello storage remain pending);
       - client Finished verification (state mutation, focused receive wrapper,
         focused verify wrapper, and generic local dispatcher integration
         complete; full network parse/open dispatch for received client Finished
