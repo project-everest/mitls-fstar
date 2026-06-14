@@ -243,6 +243,11 @@ Current phase: **Phase 6 server buffer/event API and theorem surface**.
   zero-consume `NeedMoreInput`/`DecodeError`/`IllegalTransition` statuses for
   unsupported or overlarge inputs, preserves `server_end_to_end_invariant`, and
   exposes `server_network_bytes_end_to_end_correct`.
+- [x] Strengthened the successful ClientHello byte-dispatch theorem surface:
+  every `StepOk` result from `process_network_bytes` now exposes the exact
+  `received_client_hello_state` post-state and proves that the stored raw
+  ClientHello receive bytes equal the consumed input prefix
+  `Seq.slice input 0 consumed_len`.
 - [ ] Continue Phase 6/7 by strengthening `process_network_bytes` from the first
   ClientHello path to the final dispatcher theorem: add consumed-prefix
   classification/projections, protected client Finished dispatch, and richer
@@ -1499,10 +1504,11 @@ Checklist:
       open facts, and read-key provenance.
       The C parser backend now decodes canonical supported-profile
       `ClientHello` records and the first server `process_network_bytes` wrapper
-      consumes accepted ClientHello prefixes, but its public theorem still only
-      exposes invariant preservation and consumed-length bounds. Exact
-      consumed-prefix parse/decode classification and rejected-input witnesses
-      remain to be added.
+      consumes accepted ClientHello prefixes. Its public theorem now exposes the
+      exact successful post-state and proves the accepted ClientHello raw bytes
+      equal `Seq.slice input 0 consumed_len`; parse/decode classification, open
+      facts, read-key provenance, and rejected-input witnesses remain to be
+      added.
       First focused server receive slice completed for protected client
       `Finished`: `process_client_finished` preserves
       `server_network_event_end_to_end_correct` when the caller supplies the
@@ -1602,6 +1608,10 @@ Status:
       overlarge ClientHello fragments, non-ready server states, and unsupported
       decoded message kinds, plus zero-consume `NeedMoreInput`/`DecodeError`
       statuses from the decoder.
+- [x] Successful ClientHello byte dispatch now publishes the exact
+      `received_client_hello_state` witness and the accepted consumed-prefix
+      equality, so downstream server proofs can recover the stored raw receive
+      bytes without re-opening the decoder proof.
 - [x] Generic `process_local_event` now handles server
       `LocalSendApplicationData` and `LocalSendCloseNotify` through the shared
       endpoint-neutral `LocalSend` mutations. The server theorem surface now
