@@ -1777,8 +1777,10 @@ Checklist:
         public executable Certificate send wrapper, and concrete-array
         ServerHello builder/send wrapper are in place, including a private-key
         derived-public-share variant. Generic local dispatch now emits
-        ServerHello from the same 64-byte material payload. Concrete generation
-        and persistent selection-to-L-ServerHello storage remain pending);
+        ServerHello from the same 64-byte material payload, and the Pulse driver
+        now has a focused material-payload ServerHello write helper. Full
+        accept-path composition still needs the post-derive
+        `LocalSendServerHello` readiness gate);
       - client Finished verification (state mutation, focused receive wrapper,
         focused verify wrapper, and generic local dispatcher integration
         complete; full network parse/open dispatch for received client Finished
@@ -2008,6 +2010,29 @@ Status:
       payload-independent selection-readiness precondition. This removes the
       ghost readiness assumption from the next accept-loop step that follows
       ClientHello receipt and material generation.
+- [x] Strengthened the driver select+derive boundary for ServerHello chaining:
+      `TLS13.Impl.Server.Driver.derive_shared_secret_from_payload_once` now calls
+      the exact private-key X25519 server wrapper directly and exposes the
+      successful `CM.derived_shared_secret_state`/`x25519_shared` postcondition
+      while preserving the existing IO-history write predicate. The
+      payload-based composed select+derive helper now exposes a
+      `server_driver_select_derive_from_payload_success_correct` predicate tying
+      a `StepOk` derive result to the selected state induced by the same
+      64-byte material payload.
+- [x] Added the exact material-payload ServerHello driver send helper:
+      `TLS13.Impl.Server.Driver.send_server_hello_from_payload_once` takes the
+      same 64-byte `server_random || server_private_key` payload, uses a local
+      95-byte ServerHello output buffer required by the focused server wrapper,
+      writes the exact cleartext ServerHello response through `TLS13.IO.write`,
+      and re-establishes the connected-driver IO-history invariant. This avoids
+      the generic oversized network buffer path, which intentionally cannot
+      satisfy the focused 95-byte ServerHello serializer precondition.
+- [ ] Add a concrete post-derive ServerHello readiness gate before composing the
+      two helpers above into the accept handshake path. The failed inline attempt
+      showed that `LocalSendServerHello` readiness after exact select+derive
+      should be owned by a small query/theorem boundary (checking/stating
+      `CM.can_send_server_hello` for the stored selection and material payload),
+      not by a large Pulse-body proof.
 - [x] Added the first retained-receive IO slice:
       `TLS13.Impl.Server.Driver.read_transport_once` appends at most one
       `TLS13.IO.read` result into the driver-owned raw buffer when no retained

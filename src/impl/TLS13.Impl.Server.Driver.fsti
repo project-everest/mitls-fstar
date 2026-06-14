@@ -116,6 +116,22 @@ val server_driver_selection_from_payload_correct
   (payload:B.bytes)
   : prop
 
+noextract
+val server_driver_derive_shared_secret_success_correct
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (resp:ST.server_response)
+  (payload:B.bytes)
+  : prop
+
+noextract
+val server_driver_select_derive_from_payload_success_correct
+  (st0:CS.connection_state)
+  (st2:CS.connection_state)
+  (resp:ST.server_response)
+  (payload:B.bytes)
+  : prop
+
 fn new_server
   (certificate_chain:array U8.t)
   (certificate_chain_len:SZ.t)
@@ -616,7 +632,12 @@ fn derive_shared_secret_from_payload_once
            ST.LocalDeriveSharedSecret
            (Ghost.reveal 'payload_bytes)
            (Ghost.reveal 'sent)
-           sent')
+           sent' /\
+          server_driver_derive_shared_secret_success_correct
+           'st0
+           st1
+           resp
+           (Ghost.reveal 'payload_bytes))
 
 fn select_and_derive_shared_secret_from_payload_once
   (d:server_driver)
@@ -645,7 +666,49 @@ fn select_and_derive_shared_secret_from_payload_once
            'credential_identity
            'received
            sent' **
-          pts_to payload 'payload_bytes
+          pts_to payload 'payload_bytes **
+          pure (server_driver_select_derive_from_payload_success_correct
+           'st0
+           st2
+           resp
+           (Ghost.reveal 'payload_bytes))
+
+fn send_server_hello_from_payload_once
+  (d:server_driver)
+  (payload:array U8.t)
+  (payload_len:SZ.t)
+  requires server_driver_connected
+            d
+            'st0
+            'certificate_chain
+            'credential_identity
+            'received
+            'sent **
+           pts_to payload 'payload_bytes **
+           pure (B.length 'payload_bytes == SZ.v payload_len /\
+                SZ.v payload_len == 64 /\
+                ST.server_local_event_input_ready
+                  'st0
+                  ST.LocalSendServerHello
+                  (Ghost.reveal 'payload_bytes))
+  returns resp:ST.server_response
+  ensures exists* st1 sent'.
+          server_driver_connected
+           d
+           st1
+           'certificate_chain
+           'credential_identity
+           'received
+           sent' **
+          pts_to payload 'payload_bytes **
+          pure (server_driver_local_write_correct
+           'st0
+           st1
+           resp
+           ST.LocalSendServerHello
+           (Ghost.reveal 'payload_bytes)
+           (Ghost.reveal 'sent)
+           sent')
 
 fn select_and_derive_shared_secret_once
   (d:server_driver)
