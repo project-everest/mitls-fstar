@@ -1863,6 +1863,14 @@ Status:
       constructor allocates and folds these resources, establishing the
       ownership boundary needed before adding `accept`, local-action draining,
       and network processing loops.
+- [x] Added the first verified server transport-attach slice:
+      `TLS13.Impl.Server.Driver.accept_transport_once` listens on the driver
+      supplied bind host/port, accepts at most one TCP channel through the typed
+      `TLS13.IO.listen_tcp` / `accept_tcp` TCBs, closes the listener, and moves
+      the driver from `server_driver_live` to `server_driver_connected` with
+      empty transport histories. This is intentionally a transport-only step;
+      the full public `accept` still needs to run the TLS handshake loop after
+      attaching the channel.
 - [x] Generic `process_local_event` now handles server
       `LocalSendApplicationData` and `LocalSendCloseNotify` through the shared
       endpoint-neutral `LocalSend` mutations. The server theorem surface now
@@ -1934,6 +1942,10 @@ Checklist:
       calls typed `TLS13.IO.listen_tcp` and `TLS13.IO.accept_tcp` internally,
       runs the TLS handshake to completion, closes the listener, and returns a
       connected server handle.
+      Current status: the verified `accept_transport_once` slice performs the
+      listen/accept/close-listener ownership transition and establishes
+      `server_driver_connected`; local-action draining and network handshake
+      processing remain to be layered on top.
 - [ ] The first public driver API does not take a pre-accepted channel or
       externally owned listener handle.
 - [ ] `send`, `receive`, and `close` operate on one connected server handle.

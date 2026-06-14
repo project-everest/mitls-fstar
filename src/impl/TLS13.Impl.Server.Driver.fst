@@ -7,16 +7,19 @@ open Pulse.Lib.Array.PtsTo
 
 module B = TLS13.Bytes
 module Bounds = TLS13.Impl.ConnectionState.Bounds
+module CL = TLS13.ConnectionLog
 module CS = TLS13.Spec.ConnectionState
 module CR = TLS13.Impl.ConnectionState.Repr
 module IM = TLS13.Impl.Messages
 module IO = TLS13.IO
 module O = TLS13.OpenSSL
 module Seq = FStar.Seq
+module SeqP = FStar.Seq.Properties
 module S = TLS13.Impl.Server
 module ST = TLS13.Impl.Server.Types
 module Box = Pulse.Lib.Box
 module SZ = FStar.SizeT
+module U16 = FStar.UInt16
 module U8 = FStar.UInt8
 module V = Pulse.Lib.Vec
 
@@ -42,6 +45,45 @@ noeq type server_driver = {
   server_driver_signature: V.vec U8.t;
   server_driver_app_out: V.vec U8.t;
 }
+
+noextract
+let logged_received_bytes_accounted
+  (logged:B.bytes)
+  (consumed:B.bytes)
+  : prop =
+  B.length logged <= B.length consumed /\
+  (forall b. SeqP.count b logged <= SeqP.count b consumed)
+
+noextract
+let server_driver_wire_logs_match_witness
+  (st:CS.connection_state)
+  (received:B.bytes)
+  (sent:B.bytes)
+  (consumed:B.bytes)
+  (buffered:B.bytes)
+  (buffered_len:SZ.t)
+  : prop =
+  Seq.equal sent st.CS.cs_wire_log.CL.raw_sent /\
+  B.length buffered == SZ.v buffered_len /\
+  Seq.equal (B.append consumed buffered) received /\
+  logged_received_bytes_accounted st.CS.cs_wire_log.CL.raw_received consumed
+
+noextract
+let server_driver_wire_logs_match
+  (st:CS.connection_state)
+  (received:B.bytes)
+  (sent:B.bytes)
+  (buffered:B.bytes)
+  (buffered_len:SZ.t)
+  : prop =
+  exists consumed.
+    server_driver_wire_logs_match_witness
+      st
+      received
+      sent
+      consumed
+      buffered
+      buffered_len
 
 noextract
 let server_driver_buffers
@@ -94,7 +136,28 @@ let server_driver_live
     certificate_chain
     credential_identity **
   Box.pts_to d.server_driver_channel no_channel **
-  server_driver_buffers d B.empty 0sz
+  server_driver_buffers d B.empty 0sz **
+  pure (server_driver_wire_logs_match st B.empty B.empty B.empty 0sz)
+
+noextract
+let server_driver_connected
+  (d:server_driver)
+  (st:CS.connection_state)
+  (certificate_chain:B.bytes)
+  (credential_identity:CS.server_credential_identity)
+  (received:B.bytes)
+  (sent:B.bytes)
+  : slprop =
+  S.connection_exactly d.server_driver_server st **
+  O.is_server_credentials
+    d.server_driver_credentials
+    certificate_chain
+    credential_identity **
+  exists* ch buffered buffered_len.
+    Box.pts_to d.server_driver_channel (Some ch) **
+    IO.is_channel ch received sent **
+    server_driver_buffers d buffered buffered_len **
+    pure (server_driver_wire_logs_match st received sent buffered buffered_len)
 
 fn new_server
   (certificate_chain:array U8.t)
@@ -257,6 +320,60 @@ fn new_server
         (Ghost.reveal 'certificate_chain_bytes)
         credential_identity);
       Some d
+    }
+  }
+}
+
+fn accept_transport_once
+  (d:server_driver)
+  (bind_host:array U8.t)
+  (bind_host_len:SZ.t)
+  (port:U16.t)
+  requires server_driver_live d 'st0 'certificate_chain 'credential_identity **
+           pts_to bind_host 'bind_host_bytes **
+           pure (B.length 'bind_host_bytes == SZ.v bind_host_len)
+  returns status:server_driver_transport_status
+  ensures pts_to bind_host 'bind_host_bytes **
+          (match status with
+           | ServerDriverTransportOk ->
+             server_driver_connected
+               d
+               'st0
+               'certificate_chain
+               'credential_identity
+               B.empty
+               B.empty
+           | _ ->
+             server_driver_live d 'st0 'certificate_chain 'credential_identity)
+{
+  unfold (server_driver_live d 'st0 'certificate_chain 'credential_identity);
+  let listener_opt = IO.listen_tcp bind_host bind_host_len port;
+  match listener_opt {
+    None -> {
+      fold (server_driver_live d 'st0 'certificate_chain 'credential_identity);
+      ServerDriverListenFailed
+    }
+    Some listener -> {
+      let ch_opt = IO.accept_tcp listener;
+      match ch_opt {
+        None -> {
+          IO.close_listener listener;
+          fold (server_driver_live d 'st0 'certificate_chain 'credential_identity);
+          ServerDriverAcceptFailed
+        }
+        Some ch -> {
+          IO.close_listener listener;
+          Box.(d.server_driver_channel := Some ch);
+          fold (server_driver_connected
+            d
+            'st0
+            'certificate_chain
+            'credential_identity
+            B.empty
+            B.empty);
+          ServerDriverTransportOk
+        }
+      }
     }
   }
 }

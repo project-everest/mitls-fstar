@@ -9,13 +9,20 @@ module B = TLS13.Bytes
 module Bounds = TLS13.Impl.ConnectionState.Bounds
 module CS = TLS13.Spec.ConnectionState
 module CR = TLS13.Impl.ConnectionState.Repr
+module IO = TLS13.IO
 module O = TLS13.OpenSSL
 module S = TLS13.Impl.Server
 module ST = TLS13.Impl.Server.Types
 module SZ = FStar.SizeT
+module U16 = FStar.UInt16
 module U8 = FStar.UInt8
 
 val server_driver : Type0
+
+type server_driver_transport_status =
+  | ServerDriverTransportOk
+  | ServerDriverListenFailed
+  | ServerDriverAcceptFailed
 
 noextract
 val server_driver_live
@@ -23,6 +30,16 @@ val server_driver_live
   (st:CS.connection_state)
   (certificate_chain:B.bytes)
   (credential_identity:CS.server_credential_identity)
+  : slprop
+
+noextract
+val server_driver_connected
+  (d:server_driver)
+  (st:CS.connection_state)
+  (certificate_chain:B.bytes)
+  (credential_identity:CS.server_credential_identity)
+  (received:B.bytes)
+  (sent:B.bytes)
   : slprop
 
 fn new_server
@@ -59,3 +76,25 @@ fn new_server
                          credential_identity))
            | None ->
              emp)
+
+fn accept_transport_once
+  (d:server_driver)
+  (bind_host:array U8.t)
+  (bind_host_len:SZ.t)
+  (port:U16.t)
+  requires server_driver_live d 'st0 'certificate_chain 'credential_identity **
+           pts_to bind_host 'bind_host_bytes **
+           pure (B.length 'bind_host_bytes == SZ.v bind_host_len)
+  returns status:server_driver_transport_status
+  ensures pts_to bind_host 'bind_host_bytes **
+          (match status with
+           | ServerDriverTransportOk ->
+             server_driver_connected
+               d
+               'st0
+               'certificate_chain
+               'credential_identity
+               B.empty
+               B.empty
+           | _ ->
+             server_driver_live d 'st0 'certificate_chain 'credential_identity)
