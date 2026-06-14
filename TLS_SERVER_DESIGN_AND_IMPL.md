@@ -628,6 +628,13 @@ Current phase: **Phase 6 server buffer/event API and theorem surface**.
   ClientHello and client Finished receive entry points now expose the exact pure
   received-state constructor in addition to
   `server_network_event_end_to_end_correct`.
+- [x] Strengthened traffic-key installation and client-Finished verification
+  wrapper postconditions for later chaining: supplied-material key installs
+  expose exact `installed_traffic_keys_for_role_state` equality, internally
+  derived key installs expose the exact installed state directly in the returned
+  `connection_exactly` resource with the derived material witness, and
+  `process_verify_client_finished` exposes `verified_client_finished_state` with
+  the stored Finished witness.
 
 ## End goal
 

@@ -3244,6 +3244,15 @@ fn process_install_server_handshake_write_keys
           pts_to app_out app_out_bytes **
           pure (B.length network_out_bytes == SZ.v network_out_len /\
                 B.length app_out_bytes == SZ.v app_out_len /\
+                st1 ==
+                  CM.installed_traffic_keys_for_role_state 'st0 {
+                    CS.install_role = CS.ServerEndpoint;
+                    CS.install_payload = {
+                      CS.install_epoch = CS.TrafficHandshake;
+                      CS.install_direction = CS.TrafficWrite;
+                      CS.install_material = Ghost.reveal material;
+                    };
+                  } /\
                 ST.server_local_event_end_to_end_correct
                   'st0
                   st1
@@ -3393,15 +3402,31 @@ fn process_derive_and_install_server_handshake_write_keys
                  Some?
                    'st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_handshake_secret)
   returns resp:ST.server_response
-  ensures exists* st1 network_out_bytes app_out_bytes.
-          connection_exactly s st1 **
+  ensures exists* network_out_bytes app_out_bytes material.
+          connection_exactly
+            s
+            (CM.installed_traffic_keys_for_role_state 'st0 {
+              CS.install_role = CS.ServerEndpoint;
+              CS.install_payload = {
+                CS.install_epoch = CS.TrafficHandshake;
+                CS.install_direction = CS.TrafficWrite;
+                CS.install_material = material;
+              };
+            }) **
           pts_to network_out network_out_bytes **
           pts_to app_out app_out_bytes **
           pure (B.length network_out_bytes == SZ.v network_out_len /\
                 B.length app_out_bytes == SZ.v app_out_len /\
                 ST.server_local_event_end_to_end_correct
                   'st0
-                  st1
+                  (CM.installed_traffic_keys_for_role_state 'st0 {
+                    CS.install_role = CS.ServerEndpoint;
+                    CS.install_payload = {
+                      CS.install_epoch = CS.TrafficHandshake;
+                      CS.install_direction = CS.TrafficWrite;
+                      CS.install_material = material;
+                    };
+                  })
                   resp
                   ST.LocalInstallServerHandshakeTrafficKeys
                   B.empty
@@ -3528,6 +3553,29 @@ fn process_derive_and_install_server_handshake_write_keys
     B.empty
     'old_network_out
     'old_app_out));
+  assert (pure (Ghost.reveal role_install == {
+    CS.install_role = CS.ServerEndpoint;
+    CS.install_payload = {
+      CS.install_epoch = CS.TrafficHandshake;
+      CS.install_direction = CS.TrafficWrite;
+      CS.install_material = material;
+    };
+  }));
+  rewrite
+    (connection_exactly
+      s
+      (CM.installed_traffic_keys_for_role_state 'st0 (Ghost.reveal role_install)))
+    as
+    (connection_exactly
+      s
+      (CM.installed_traffic_keys_for_role_state 'st0 {
+        CS.install_role = CS.ServerEndpoint;
+        CS.install_payload = {
+          CS.install_epoch = CS.TrafficHandshake;
+          CS.install_direction = CS.TrafficWrite;
+          CS.install_material = material;
+        };
+      }));
   resp
 }
 
@@ -3571,6 +3619,15 @@ fn process_install_client_handshake_read_keys
           pts_to app_out app_out_bytes **
           pure (B.length network_out_bytes == SZ.v network_out_len /\
                 B.length app_out_bytes == SZ.v app_out_len /\
+                st1 ==
+                  CM.installed_traffic_keys_for_role_state 'st0 {
+                    CS.install_role = CS.ServerEndpoint;
+                    CS.install_payload = {
+                      CS.install_epoch = CS.TrafficHandshake;
+                      CS.install_direction = CS.TrafficRead;
+                      CS.install_material = Ghost.reveal material;
+                    };
+                  } /\
                 ST.server_local_event_end_to_end_correct
                   'st0
                   st1
@@ -3720,15 +3777,31 @@ fn process_derive_and_install_client_handshake_read_keys
                  Some?
                    'st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_handshake_secret)
   returns resp:ST.server_response
-  ensures exists* st1 network_out_bytes app_out_bytes.
-          connection_exactly s st1 **
+  ensures exists* network_out_bytes app_out_bytes material.
+          connection_exactly
+            s
+            (CM.installed_traffic_keys_for_role_state 'st0 {
+              CS.install_role = CS.ServerEndpoint;
+              CS.install_payload = {
+                CS.install_epoch = CS.TrafficHandshake;
+                CS.install_direction = CS.TrafficRead;
+                CS.install_material = material;
+              };
+            }) **
           pts_to network_out network_out_bytes **
           pts_to app_out app_out_bytes **
           pure (B.length network_out_bytes == SZ.v network_out_len /\
                 B.length app_out_bytes == SZ.v app_out_len /\
                 ST.server_local_event_end_to_end_correct
                   'st0
-                  st1
+                  (CM.installed_traffic_keys_for_role_state 'st0 {
+                    CS.install_role = CS.ServerEndpoint;
+                    CS.install_payload = {
+                      CS.install_epoch = CS.TrafficHandshake;
+                      CS.install_direction = CS.TrafficRead;
+                      CS.install_material = material;
+                    };
+                  })
                   resp
                   ST.LocalInstallClientHandshakeTrafficKeys
                   B.empty
@@ -3855,6 +3928,29 @@ fn process_derive_and_install_client_handshake_read_keys
     B.empty
     'old_network_out
     'old_app_out));
+  assert (pure (Ghost.reveal role_install == {
+    CS.install_role = CS.ServerEndpoint;
+    CS.install_payload = {
+      CS.install_epoch = CS.TrafficHandshake;
+      CS.install_direction = CS.TrafficRead;
+      CS.install_material = material;
+    };
+  }));
+  rewrite
+    (connection_exactly
+      s
+      (CM.installed_traffic_keys_for_role_state 'st0 (Ghost.reveal role_install)))
+    as
+    (connection_exactly
+      s
+      (CM.installed_traffic_keys_for_role_state 'st0 {
+        CS.install_role = CS.ServerEndpoint;
+        CS.install_payload = {
+          CS.install_epoch = CS.TrafficHandshake;
+          CS.install_direction = CS.TrafficRead;
+          CS.install_material = material;
+        };
+      }));
   resp
 }
 
@@ -3898,6 +3994,15 @@ fn process_install_server_application_write_keys
           pts_to app_out app_out_bytes **
           pure (B.length network_out_bytes == SZ.v network_out_len /\
                 B.length app_out_bytes == SZ.v app_out_len /\
+                st1 ==
+                  CM.installed_traffic_keys_for_role_state 'st0 {
+                    CS.install_role = CS.ServerEndpoint;
+                    CS.install_payload = {
+                      CS.install_epoch = CS.TrafficApplication;
+                      CS.install_direction = CS.TrafficWrite;
+                      CS.install_material = Ghost.reveal material;
+                    };
+                  } /\
                 ST.server_local_event_end_to_end_correct
                   'st0
                   st1
@@ -4068,6 +4173,15 @@ fn process_install_client_application_read_keys
           pts_to app_out app_out_bytes **
           pure (B.length network_out_bytes == SZ.v network_out_len /\
                 B.length app_out_bytes == SZ.v app_out_len /\
+                st1 ==
+                  CM.installed_traffic_keys_for_role_state 'st0 {
+                    CS.install_role = CS.ServerEndpoint;
+                    CS.install_payload = {
+                      CS.install_epoch = CS.TrafficApplication;
+                      CS.install_direction = CS.TrafficRead;
+                      CS.install_material = Ghost.reveal material;
+                    };
+                  } /\
                 ST.server_local_event_end_to_end_correct
                   'st0
                   st1
@@ -4217,15 +4331,31 @@ fn process_derive_and_install_server_application_write_keys
                  Some?
                    'st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_master_secret)
   returns resp:ST.server_response
-  ensures exists* st1 network_out_bytes app_out_bytes.
-          connection_exactly s st1 **
+  ensures exists* network_out_bytes app_out_bytes material.
+          connection_exactly
+            s
+            (CM.installed_traffic_keys_for_role_state 'st0 {
+              CS.install_role = CS.ServerEndpoint;
+              CS.install_payload = {
+                CS.install_epoch = CS.TrafficApplication;
+                CS.install_direction = CS.TrafficWrite;
+                CS.install_material = material;
+              };
+            }) **
           pts_to network_out network_out_bytes **
           pts_to app_out app_out_bytes **
           pure (B.length network_out_bytes == SZ.v network_out_len /\
                 B.length app_out_bytes == SZ.v app_out_len /\
                 ST.server_local_event_end_to_end_correct
                   'st0
-                  st1
+                  (CM.installed_traffic_keys_for_role_state 'st0 {
+                    CS.install_role = CS.ServerEndpoint;
+                    CS.install_payload = {
+                      CS.install_epoch = CS.TrafficApplication;
+                      CS.install_direction = CS.TrafficWrite;
+                      CS.install_material = material;
+                    };
+                  })
                   resp
                   ST.LocalInstallServerApplicationTrafficKeys
                   B.empty
@@ -4352,6 +4482,29 @@ fn process_derive_and_install_server_application_write_keys
     B.empty
     'old_network_out
     'old_app_out));
+  assert (pure (Ghost.reveal role_install == {
+    CS.install_role = CS.ServerEndpoint;
+    CS.install_payload = {
+      CS.install_epoch = CS.TrafficApplication;
+      CS.install_direction = CS.TrafficWrite;
+      CS.install_material = material;
+    };
+  }));
+  rewrite
+    (connection_exactly
+      s
+      (CM.installed_traffic_keys_for_role_state 'st0 (Ghost.reveal role_install)))
+    as
+    (connection_exactly
+      s
+      (CM.installed_traffic_keys_for_role_state 'st0 {
+        CS.install_role = CS.ServerEndpoint;
+        CS.install_payload = {
+          CS.install_epoch = CS.TrafficApplication;
+          CS.install_direction = CS.TrafficWrite;
+          CS.install_material = material;
+        };
+      }));
   resp
 }
 
@@ -4374,15 +4527,31 @@ fn process_derive_and_install_client_application_read_keys
                  Some?
                    'st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_master_secret)
   returns resp:ST.server_response
-  ensures exists* st1 network_out_bytes app_out_bytes.
-          connection_exactly s st1 **
+  ensures exists* network_out_bytes app_out_bytes material.
+          connection_exactly
+            s
+            (CM.installed_traffic_keys_for_role_state 'st0 {
+              CS.install_role = CS.ServerEndpoint;
+              CS.install_payload = {
+                CS.install_epoch = CS.TrafficApplication;
+                CS.install_direction = CS.TrafficRead;
+                CS.install_material = material;
+              };
+            }) **
           pts_to network_out network_out_bytes **
           pts_to app_out app_out_bytes **
           pure (B.length network_out_bytes == SZ.v network_out_len /\
                 B.length app_out_bytes == SZ.v app_out_len /\
                 ST.server_local_event_end_to_end_correct
                   'st0
-                  st1
+                  (CM.installed_traffic_keys_for_role_state 'st0 {
+                    CS.install_role = CS.ServerEndpoint;
+                    CS.install_payload = {
+                      CS.install_epoch = CS.TrafficApplication;
+                      CS.install_direction = CS.TrafficRead;
+                      CS.install_material = material;
+                    };
+                  })
                   resp
                   ST.LocalInstallClientApplicationTrafficKeys
                   B.empty
@@ -4509,6 +4678,29 @@ fn process_derive_and_install_client_application_read_keys
     B.empty
     'old_network_out
     'old_app_out));
+  assert (pure (Ghost.reveal role_install == {
+    CS.install_role = CS.ServerEndpoint;
+    CS.install_payload = {
+      CS.install_epoch = CS.TrafficApplication;
+      CS.install_direction = CS.TrafficRead;
+      CS.install_material = material;
+    };
+  }));
+  rewrite
+    (connection_exactly
+      s
+      (CM.installed_traffic_keys_for_role_state 'st0 (Ghost.reveal role_install)))
+    as
+    (connection_exactly
+      s
+      (CM.installed_traffic_keys_for_role_state 'st0 {
+        CS.install_role = CS.ServerEndpoint;
+        CS.install_payload = {
+          CS.install_epoch = CS.TrafficApplication;
+          CS.install_direction = CS.TrafficRead;
+          CS.install_material = material;
+        };
+      }));
   resp
 }
 
@@ -5084,15 +5276,19 @@ fn process_verify_client_finished
                    'st0
                    (Some?.v 'st0.CS.cs_model.CS.model_handshake.CS.hs_client_finished))
   returns resp:ST.server_response
-  ensures exists* st1 network_out_bytes app_out_bytes.
-          connection_exactly s st1 **
+  ensures exists* network_out_bytes app_out_bytes fin.
+          connection_exactly
+            s
+            (CM.verified_client_finished_state 'st0 fin) **
           pts_to network_out network_out_bytes **
           pts_to app_out app_out_bytes **
           pure (B.length network_out_bytes == SZ.v network_out_len /\
                 B.length app_out_bytes == SZ.v app_out_len /\
+                'st0.CS.cs_model.CS.model_handshake.CS.hs_client_finished ==
+                  Some fin /\
                 ST.server_local_event_end_to_end_correct
                         'st0
-                        st1
+                        (CM.verified_client_finished_state 'st0 fin)
                         resp
                         ST.LocalVerifyClientFinished
                         B.empty
