@@ -1926,6 +1926,12 @@ Status:
       Wiring this to the driver-owned material buffer remains separate because
       the selection postcondition still needs an explicit relation between the
       retained material private key and the selected server state.
+- [x] Added verified server application-output helpers:
+      `TLS13.Impl.Server.Driver.send_application_data_once` and
+      `send_close_notify_once` reuse the local-event/write helper for
+      application data and close_notify in application-data control, preserving
+      the connected IO-history invariant while appending exactly the protected
+      response record bytes to the transport sent history.
 - [x] Added the first verified selection driver slice:
       `TLS13.Impl.Server.Driver.select_default_server_parameters_from_payload_once`
       takes an explicit 64-byte material payload, requires the existing

@@ -404,3 +404,62 @@ fn process_ready_empty_local_action_once
               'credential_identity
               'received
               'sent)
+
+fn send_application_data_once
+  (d:server_driver)
+  (payload:array U8.t)
+  (payload_len:SZ.t)
+  requires server_driver_connected
+              d
+              'st0
+              'certificate_chain
+              'credential_identity
+              'received
+              'sent **
+           pts_to payload 'payload_bytes **
+           pure (B.length 'payload_bytes == SZ.v payload_len /\
+                ST.server_local_event_input_ready
+                  'st0
+                  ST.LocalSendApplicationData
+                  (Ghost.reveal 'payload_bytes))
+  returns resp:ST.server_response
+  ensures exists* st1 sent'.
+          server_driver_connected
+            d
+            st1
+            'certificate_chain
+            'credential_identity
+            'received
+            sent' **
+          pts_to payload 'payload_bytes **
+          pure (server_driver_local_write_correct
+            'st0
+            st1
+            resp
+            ST.LocalSendApplicationData
+            (Ghost.reveal 'payload_bytes)
+            (Ghost.reveal 'sent)
+            sent')
+
+fn send_close_notify_once
+  (d:server_driver)
+  requires server_driver_connected
+              d
+              'st0
+              'certificate_chain
+              'credential_identity
+              'received
+              'sent **
+           pure (ST.server_local_event_input_ready
+             'st0
+             ST.LocalSendCloseNotify
+             B.empty)
+  returns resp:ST.server_response
+  ensures exists* st1 sent'.
+          server_driver_connected
+            d
+            st1
+            'certificate_chain
+            'credential_identity
+            'received
+            sent'
