@@ -314,3 +314,32 @@ fn process_local_event_and_write_once
            (Ghost.reveal 'payload_bytes)
            (Ghost.reveal 'sent)
            sent')
+
+fn process_ready_empty_local_action_once
+  (d:server_driver)
+  requires server_driver_connected
+             d
+             'st0
+             'certificate_chain
+             'credential_identity
+             'received
+             'sent
+  returns status:server_driver_local_status
+  ensures (match status with
+           | ServerDriverLocalProcessed ->
+            exists* st1 sent'.
+              server_driver_connected
+                d
+                st1
+                'certificate_chain
+                'credential_identity
+                'received
+                sent'
+           | _ ->
+            server_driver_connected
+              d
+              'st0
+              'certificate_chain
+              'credential_identity
+              'received
+              'sent)

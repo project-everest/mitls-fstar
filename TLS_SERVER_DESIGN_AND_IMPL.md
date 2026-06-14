@@ -1939,6 +1939,15 @@ Status:
       invariant. The public driver postcondition exposes a named
       `server_driver_local_write_correct` predicate rather than raw scratch
       buffers, keeping the interface stable for future scheduler-driven draining.
+- [x] Added the first scheduler-driven local-output wrapper:
+      `TLS13.Impl.Server.Driver.process_ready_empty_local_action_once` queries
+      `next_local_action` and processes ready empty-payload actions that do not
+      require additional credential/config-matching facts: start, traffic-key
+      installs, EncryptedExtensions, CertificateVerify, and ServerFinished. It
+      deliberately reports certificate send/sign, material-bearing selection,
+      shared-secret derivation, application sends, and external/unsupported
+      actions as unsupported until the corresponding driver invariants and
+      payload wiring are added.
 - [x] Generic `process_local_event` now handles server
       `LocalSendApplicationData` and `LocalSendCloseNotify` through the shared
       endpoint-neutral `LocalSend` mutations. The server theorem surface now

@@ -1563,3 +1563,240 @@ fn process_local_event_and_write_once
        else B.empty))));
   resp
 }
+
+fn process_empty_local_event_and_write_once
+  (d:server_driver)
+  (kind:ST.local_event_kind)
+  requires server_driver_connected
+              d
+              'st0
+              'certificate_chain
+              'credential_identity
+              'received
+              'sent **
+           pure (ST.server_local_event_input_ready_with_credentials
+             'st0
+             kind
+             B.empty
+             (Ghost.reveal 'certificate_chain)
+             (Ghost.reveal 'credential_identity))
+  returns resp:ST.server_response
+  ensures exists* st1 sent'.
+          server_driver_connected
+            d
+            st1
+            'certificate_chain
+            'credential_identity
+            'received
+            sent'
+{
+  let mut empty_payload = [| 0uy; 0sz |];
+  with empty_payload_bytes.
+    assert (pts_to empty_payload empty_payload_bytes);
+  assert (pure (B.length empty_payload_bytes == 0));
+  assert (pure (forall (i:nat{i < B.length empty_payload_bytes}).
+    Seq.index empty_payload_bytes i == Seq.index B.empty i));
+  Seq.lemma_eq_intro empty_payload_bytes B.empty;
+  assert (pure (Seq.equal empty_payload_bytes B.empty));
+  Seq.lemma_eq_elim empty_payload_bytes B.empty;
+  assert (pure (ST.server_local_event_input_ready_with_credentials
+    'st0
+    kind
+    empty_payload_bytes
+    (Ghost.reveal 'certificate_chain)
+    (Ghost.reveal 'credential_identity)));
+  let resp =
+    process_local_event_and_write_once
+      d
+      kind
+      empty_payload
+      0sz;
+  resp
+}
+
+fn process_ready_empty_local_action_once
+  (d:server_driver)
+  requires server_driver_connected
+              d
+              'st0
+              'certificate_chain
+              'credential_identity
+              'received
+              'sent
+  returns status:server_driver_local_status
+  ensures (match status with
+           | ServerDriverLocalProcessed ->
+             exists* st1 sent'.
+               server_driver_connected
+                 d
+                 st1
+                 'certificate_chain
+                 'credential_identity
+                 'received
+                 sent'
+           | _ ->
+             server_driver_connected
+               d
+               'st0
+               'certificate_chain
+               'credential_identity
+               'received
+               'sent)
+{
+  unfold (server_driver_connected
+    d
+    'st0
+    'certificate_chain
+    'credential_identity
+    'received
+    'sent);
+  with ch buffered buffered_len.
+    assert (Box.pts_to d.server_driver_channel (Some ch) **
+            IO.is_channel ch 'received 'sent **
+            server_driver_buffers d buffered buffered_len);
+  assert (pure (ST.server_end_to_end_invariant 'st0));
+  assert (pure (ST.server_state_correct 'st0));
+  let action = S.next_local_action d.server_driver_server;
+  assert (pure (ST.next_local_action_sound 'st0 action));
+  fold (server_driver_connected
+    d
+    'st0
+    'certificate_chain
+    'credential_identity
+    'received
+    'sent);
+  if action.ST.next_local_ready {
+    assert (pure (action.ST.next_local_ready == true));
+    match action.ST.next_local_kind {
+      ST.LocalStartServer -> {
+        assert (pure (CM.can_start_server 'st0));
+        let _ = start_server_once d;
+        ServerDriverLocalProcessed
+      }
+      ST.LocalInstallServerHandshakeTrafficKeys -> {
+        assert (pure (ST.server_local_event_input_ready
+          'st0
+          action.ST.next_local_kind
+          B.empty));
+        assert (pure (ST.server_local_event_input_ready_with_credentials
+          'st0
+          action.ST.next_local_kind
+          B.empty
+          (Ghost.reveal 'certificate_chain)
+          (Ghost.reveal 'credential_identity)));
+        let _ =
+          process_empty_local_event_and_write_once
+            d
+            action.ST.next_local_kind;
+        ServerDriverLocalProcessed
+      }
+      ST.LocalInstallClientHandshakeTrafficKeys -> {
+        assert (pure (ST.server_local_event_input_ready
+          'st0
+          action.ST.next_local_kind
+          B.empty));
+        assert (pure (ST.server_local_event_input_ready_with_credentials
+          'st0
+          action.ST.next_local_kind
+          B.empty
+          (Ghost.reveal 'certificate_chain)
+          (Ghost.reveal 'credential_identity)));
+        let _ =
+          process_empty_local_event_and_write_once
+            d
+            action.ST.next_local_kind;
+        ServerDriverLocalProcessed
+      }
+      ST.LocalInstallServerApplicationTrafficKeys -> {
+        assert (pure (ST.server_local_event_input_ready
+          'st0
+          action.ST.next_local_kind
+          B.empty));
+        assert (pure (ST.server_local_event_input_ready_with_credentials
+          'st0
+          action.ST.next_local_kind
+          B.empty
+          (Ghost.reveal 'certificate_chain)
+          (Ghost.reveal 'credential_identity)));
+        let _ =
+          process_empty_local_event_and_write_once
+            d
+            action.ST.next_local_kind;
+        ServerDriverLocalProcessed
+      }
+      ST.LocalInstallClientApplicationTrafficKeys -> {
+        assert (pure (ST.server_local_event_input_ready
+          'st0
+          action.ST.next_local_kind
+          B.empty));
+        assert (pure (ST.server_local_event_input_ready_with_credentials
+          'st0
+          action.ST.next_local_kind
+          B.empty
+          (Ghost.reveal 'certificate_chain)
+          (Ghost.reveal 'credential_identity)));
+        let _ =
+          process_empty_local_event_and_write_once
+            d
+            action.ST.next_local_kind;
+        ServerDriverLocalProcessed
+      }
+      ST.LocalSendEncryptedExtensions -> {
+        assert (pure (ST.server_local_event_input_ready
+          'st0
+          action.ST.next_local_kind
+          B.empty));
+        assert (pure (ST.server_local_event_input_ready_with_credentials
+          'st0
+          action.ST.next_local_kind
+          B.empty
+          (Ghost.reveal 'certificate_chain)
+          (Ghost.reveal 'credential_identity)));
+        let _ =
+          process_empty_local_event_and_write_once
+            d
+            action.ST.next_local_kind;
+        ServerDriverLocalProcessed
+      }
+      ST.LocalSendCertificateVerify -> {
+        assert (pure (ST.server_local_event_input_ready
+          'st0
+          action.ST.next_local_kind
+          B.empty));
+        assert (pure (ST.server_local_event_input_ready_with_credentials
+          'st0
+          action.ST.next_local_kind
+          B.empty
+          (Ghost.reveal 'certificate_chain)
+          (Ghost.reveal 'credential_identity)));
+        let _ =
+          process_empty_local_event_and_write_once
+            d
+            action.ST.next_local_kind;
+        ServerDriverLocalProcessed
+      }
+      ST.LocalSendServerFinished -> {
+        assert (pure (ST.server_local_event_input_ready
+          'st0
+          action.ST.next_local_kind
+          B.empty));
+        assert (pure (ST.server_local_event_input_ready_with_credentials
+          'st0
+          action.ST.next_local_kind
+          B.empty
+          (Ghost.reveal 'certificate_chain)
+          (Ghost.reveal 'credential_identity)));
+        let _ =
+          process_empty_local_event_and_write_once
+            d
+            action.ST.next_local_kind;
+        ServerDriverLocalProcessed
+      }
+      _ -> {
+        ServerDriverLocalExternalOrUnsupported
+      }
+    }
+  } else {
+    ServerDriverLocalNotReady
+  }
+}
