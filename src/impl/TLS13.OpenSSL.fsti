@@ -111,7 +111,8 @@ fn copy_server_certificate_chain
                   Seq.equal
                     (Seq.slice out_bytes 0 (SZ.v written))
                     (Ghost.reveal 'certificate_chain)
-                 | None -> True))
+                 | None ->
+                   B.length (Ghost.reveal 'certificate_chain) > SZ.v out_capacity))
 
 fn validate_certificate_for_local_event
   (ctx:auth_context)

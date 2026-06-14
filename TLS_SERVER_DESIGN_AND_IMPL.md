@@ -533,9 +533,20 @@ Current phase: **Phase 6 server buffer/event API and theorem surface**.
   certificate-chain bytes into owned `IM.certificate_msg` storage, initializes a
   one-entry offset/length table, and proves
   `IM.is_valid_certificate_msg` for the pure certificate
-  `{ chain = [credential_certificate_chain] }`. Copyout failure frees the scratch
-  storage and returns `None`; the public send wrapper remains the next wiring
-  step.
+  `{ chain = [credential_certificate_chain] }`, plus concrete length/count facts
+  for the one-entry message. The OpenSSL copyout TCB now states that copyout
+  failure means the output capacity was too small, so the focused send wrapper
+  can rule out builder failure under the supported certificate-size bound.
+- [x] Added the focused executable server Certificate send wrapper:
+  `TLS13.Impl.Server.process_send_certificate_from_credentials` takes
+  `TLS13.OpenSSL.server_credentials`, materializes the one-certificate
+  `IM.certificate_msg`, uses the new pure wire lemma
+  `TLS13.Wire.Spec.lemma_serialize_certificate_from_single_chain_len` to compute
+  the exact `13 + certificate_len` handshake fragment length, and delegates to
+  the existing protected `Certificate` send path. Its public postcondition is
+  `server_local_event_end_to_end_correct` for `LocalSendCertificate`, preserving
+  the credential resource and tying the sent certificate to the configured server
+  certificate chain.
 
 ## End goal
 

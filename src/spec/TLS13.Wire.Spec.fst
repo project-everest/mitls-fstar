@@ -750,6 +750,21 @@ let serialize_certificate_from_credential
 : GTot B.bytes =
 serialize_handshake (M.Certificate cert)
 
+let lemma_serialize_certificate_from_single_chain_len
+  (certificate:B.bytes)
+  : Lemma
+      (B.length
+        (serialize_certificate_msg { M.chain = [certificate] }) ==
+          9 + B.length certificate /\
+       B.length
+        (serialize_handshake (M.Certificate { M.chain = [certificate] })) ==
+          13 + B.length certificate /\
+       B.length
+        (serialize_certificate_from_credential { M.chain = [certificate] }) ==
+          13 + B.length certificate)
+=
+  ()
+
 let serialize_certificate_verify_from_signature
 (cv:M.certificate_verify)
 : GTot B.bytes =
