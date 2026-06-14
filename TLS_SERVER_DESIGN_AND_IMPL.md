@@ -1930,6 +1930,15 @@ Status:
       relation, and server invariant. If retained bytes are already present it
       returns a verified zero-length no-op, leaving future compacting
       process/read loops to consume or compact the buffer first.
+- [x] Added the first generic local-output driver slice:
+      `TLS13.Impl.Server.Driver.process_local_event_and_write_once` calls the
+      credential-aware public server local-event API using driver-owned network
+      and application output buffers, proves the local step's raw-sent delta is
+      exactly the response network prefix, writes that prefix through
+      `TLS13.IO.write`, and re-establishes the connected driver IO-history
+      invariant. The public driver postcondition exposes a named
+      `server_driver_local_write_correct` predicate rather than raw scratch
+      buffers, keeping the interface stable for future scheduler-driven draining.
 - [x] Generic `process_local_event` now handles server
       `LocalSendApplicationData` and `LocalSendCloseNotify` through the shared
       endpoint-neutral `LocalSend` mutations. The server theorem surface now

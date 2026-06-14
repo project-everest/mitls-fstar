@@ -56,6 +56,17 @@ val server_driver_closed
   (credential_identity:CS.server_credential_identity)
   : slprop
 
+noextract
+val server_driver_local_write_correct
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (resp:ST.server_response)
+  (kind:ST.local_event_kind)
+  (payload:B.bytes)
+  (sent:B.bytes)
+  (sent':B.bytes)
+  : prop
+
 fn new_server
   (certificate_chain:array U8.t)
   (certificate_chain_len:SZ.t)
@@ -264,3 +275,42 @@ fn select_default_server_parameters_from_payload_once
              'received
              'sent **
           pts_to payload 'payload_bytes
+
+fn process_local_event_and_write_once
+  (d:server_driver)
+  (kind:ST.local_event_kind)
+  (payload:array U8.t)
+  (payload_len:SZ.t)
+  requires server_driver_connected
+             d
+             'st0
+             'certificate_chain
+             'credential_identity
+             'received
+             'sent **
+          pts_to payload 'payload_bytes **
+          pure (B.length 'payload_bytes == SZ.v payload_len /\
+                ST.server_local_event_input_ready_with_credentials
+                  'st0
+                  kind
+                  (Ghost.reveal 'payload_bytes)
+                  (Ghost.reveal 'certificate_chain)
+                  (Ghost.reveal 'credential_identity))
+  returns resp:ST.server_response
+  ensures exists* st1 sent'.
+          server_driver_connected
+           d
+           st1
+           'certificate_chain
+           'credential_identity
+           'received
+           sent' **
+          pts_to payload 'payload_bytes **
+          pure (server_driver_local_write_correct
+           'st0
+           st1
+           resp
+           kind
+           (Ghost.reveal 'payload_bytes)
+           (Ghost.reveal 'sent)
+           sent')
