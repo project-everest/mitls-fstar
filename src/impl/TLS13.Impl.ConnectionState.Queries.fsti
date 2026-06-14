@@ -400,6 +400,20 @@ fn can_send_certificate_runtime
                 })
              | None -> False))
 
+fn can_sign_certificate_verify_runtime
+  (c:connection_state)
+  (#st0:erased CS.connection_state)
+  requires connection_exactly c st0
+  returns ok: bool
+  ensures connection_exactly c st0 **
+          pure (ok ==>
+            st0.CS.cs_model.CS.model_control ==
+              CS.ControlHandshaking CS.HsServerEncryptedFlightSent /\
+            st0.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
+            st0.CS.cs_model.CS.model_handshake.CS.hs_certificate <> None /\
+            st0.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify == None /\
+            st0.CS.cs_model.CS.model_handshake.CS.hs_buffers.CS.hb_certificate_verify_input == None)
+
 fn can_send_certificate_verify_runtime
   (c:connection_state)
   (#st0:erased CS.connection_state)

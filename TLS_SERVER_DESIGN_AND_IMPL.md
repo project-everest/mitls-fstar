@@ -573,6 +573,16 @@ Current phase: **Phase 6 server buffer/event API and theorem surface**.
   `LocalSendServerFinished` after CertificateVerify and before application-key
   installation; generic `process_local_event` already dispatches this
   self-contained send path with exact 58-byte protected-record output.
+- [x] Added scheduler readiness for CertificateVerify signing:
+  `TLS13.Impl.ConnectionState.Queries.can_sign_certificate_verify_runtime` checks
+  the concrete encrypted-flight phase, sent Certificate slot, empty
+  CertificateVerify slot, and empty CertificateVerify-input cache.
+  `next_local_action` now advertises `LocalSignCertificateVerify` between
+  Certificate and CertificateVerify. The concrete scheduler fact deliberately
+  omits the ghost-only credential/selection relation; the focused
+  `process_sign_certificate_verify` wrapper still requires and proves the exact
+  credential identity, selected RSA-PSS/SHA-256 scheme, generated input, and
+  signature-validity facts.
 
 ## End goal
 

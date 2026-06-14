@@ -2030,6 +2030,121 @@ fn can_send_certificate_runtime
   ok
 }
 
+fn can_sign_certificate_verify_runtime
+  (c:connection_state)
+  (#st0:erased CS.connection_state)
+  requires connection_exactly c st0
+  returns ok: bool
+  ensures connection_exactly c st0 **
+          pure (ok ==>
+            st0.CS.cs_model.CS.model_control ==
+              CS.ControlHandshaking CS.HsServerEncryptedFlightSent /\
+            st0.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint /\
+            st0.CS.cs_model.CS.model_handshake.CS.hs_certificate <> None /\
+            st0.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify == None /\
+            st0.CS.cs_model.CS.model_handshake.CS.hs_buffers.CS.hb_certificate_verify_input == None)
+{
+  unfold (connection_exactly c st0);
+  unfold (connection_model_exactly c st0.CS.cs_model);
+  unfold (control_exactly
+    c.control
+    st0.CS.cs_model.CS.model_control
+    st0.CS.cs_model.CS.model_failure);
+  unfold (handshake_exactly c.handshake st0.CS.cs_model.CS.model_handshake);
+  unfold (handshake_messages_exactly c.handshake.messages st0.CS.cs_model.CS.model_handshake);
+  unfold (certificate_slot_exactly
+    c.handshake.messages.certificate
+    st0.CS.cs_model.CS.model_handshake.CS.hs_certificate);
+  unfold (certificate_verify_slot_exactly
+    c.handshake.messages.certificate_verify
+    st0.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify);
+  unfold (handshake_buffers_exactly
+    c.handshake.buffers
+    st0.CS.cs_model.CS.model_handshake.CS.hs_buffers);
+  unfold (optional_sized_bytes_exactly
+    c.handshake.buffers.certificate_verify_input
+    max_certificate_verify_input_len
+    st0.CS.cs_model.CS.model_handshake.CS.hs_buffers.CS.hb_certificate_verify_input);
+
+  let role_ok = config_role_is_server c.config;
+  let tag = !c.control.control_tag;
+  let stage = !c.control.handshake_stage_tag;
+  let tag_ok = tag = 1uy;
+  let stage_ok = stage = 15uy;
+
+  with stored_cert. assert (Box.pts_to c.handshake.messages.certificate stored_cert);
+  let stored_cert_opt = !c.handshake.messages.certificate;
+  let has_certificate = (
+    match stored_cert_opt with
+    | Some _ -> true
+    | None -> false);
+  assert (pure (stored_cert_opt == stored_cert));
+  assert (pure (has_certificate ==>
+    st0.CS.cs_model.CS.model_handshake.CS.hs_certificate <> None));
+
+  with stored_cv. assert (Box.pts_to c.handshake.messages.certificate_verify stored_cv);
+  let stored_cv_opt = !c.handshake.messages.certificate_verify;
+  let no_cv = (
+    match stored_cv_opt with
+    | None -> true
+    | Some _ -> false);
+  assert (pure (stored_cv_opt == stored_cv));
+  assert (pure (no_cv ==> stored_cv == None));
+  assert (pure (no_cv ==>
+    st0.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify == None));
+
+  with parsed input_present input_storage input_len. assert (pure True);
+  let input_present_runtime = !c.handshake.buffers.certificate_verify_input.present;
+  let no_input = not input_present_runtime;
+  assert (pure (input_present_runtime == input_present));
+  assert (pure (no_input ==> not input_present));
+  assert (pure (no_input ==>
+    st0.CS.cs_model.CS.model_handshake.CS.hs_buffers.CS.hb_certificate_verify_input == None));
+
+  let ok =
+    tag_ok &&
+    stage_ok &&
+    role_ok &&
+    has_certificate &&
+    no_cv &&
+    no_input;
+
+  assert (pure (ok ==> U8.v tag == 1));
+  assert (pure (ok ==> U8.v stage == 15));
+  assert (pure (ok ==>
+    st0.CS.cs_model.CS.model_control ==
+      CS.ControlHandshaking CS.HsServerEncryptedFlightSent));
+  assert (pure (ok ==>
+    st0.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint));
+  assert (pure (ok ==> st0.CS.cs_model.CS.model_handshake.CS.hs_certificate <> None));
+  assert (pure (ok ==> st0.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify == None));
+  assert (pure (ok ==>
+    st0.CS.cs_model.CS.model_handshake.CS.hs_buffers.CS.hb_certificate_verify_input == None));
+
+  fold (optional_sized_bytes_exactly
+    c.handshake.buffers.certificate_verify_input
+    max_certificate_verify_input_len
+    st0.CS.cs_model.CS.model_handshake.CS.hs_buffers.CS.hb_certificate_verify_input);
+  fold (handshake_buffers_exactly
+    c.handshake.buffers
+    st0.CS.cs_model.CS.model_handshake.CS.hs_buffers);
+  fold (certificate_verify_slot_exactly
+    c.handshake.messages.certificate_verify
+    st0.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify);
+  fold (certificate_slot_exactly
+    c.handshake.messages.certificate
+    st0.CS.cs_model.CS.model_handshake.CS.hs_certificate);
+  fold (handshake_messages_exactly c.handshake.messages st0.CS.cs_model.CS.model_handshake);
+  fold (handshake_exactly c.handshake st0.CS.cs_model.CS.model_handshake);
+  fold (control_exactly
+    c.control
+    st0.CS.cs_model.CS.model_control
+    st0.CS.cs_model.CS.model_failure);
+  fold (connection_model_exactly c st0.CS.cs_model);
+  fold (connection_exactly c st0);
+  ok
+}
+
 fn can_send_certificate_verify_runtime
   (c:connection_state)
   (#st0:erased CS.connection_state)
