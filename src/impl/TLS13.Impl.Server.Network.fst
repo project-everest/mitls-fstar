@@ -454,7 +454,9 @@ fn process_network_bytes
                    'st0
                    st1
                    buffer_resp
-                   (Ghost.reveal 'raw_bytes))
+                   (Ghost.reveal 'raw_bytes)
+                   network_out_bytes
+                   app_out_bytes)
 {
   unfold (connection_exactly s 'st0);
   let decoded = P.decode_network_buffer s raw raw_len;
@@ -669,6 +671,26 @@ fn process_network_bytes
                         (Ghost.reveal 'raw_bytes)
                         0
                         (SZ.v buffer_resp.ST.consumed_len))));
+                    assert (pure (Seq.equal
+                      raw_record_bytes
+                      (ST.server_network_consumed_prefix
+                        buffer_resp
+                        (Ghost.reveal 'raw_bytes))));
+                    assert (pure (ST.server_decoded_message_event_projection
+                      'st0
+                      st1
+                      resp
+                      (M.TlsHandshake (M.ClientHello ch))
+                      raw_record_bytes
+                      network_out_bytes
+                      app_out_bytes));
+                    assert (pure (ST.server_network_step_ok_received_decode_projection
+                      'st0
+                      st1
+                      buffer_resp
+                      (Ghost.reveal 'raw_bytes)
+                      network_out_bytes
+                      app_out_bytes));
                     assert (pure (buffer_resp.ST.response.ST.status == ST.StepOk ==>
                       (exists ch raw_received.
                         st1 ==
@@ -694,8 +716,20 @@ fn process_network_bytes
                             (Ghost.reveal 'raw_bytes)
                             0
                             (SZ.v buffer_resp.ST.consumed_len)))));
+                    assert (pure (ST.server_network_step_ok_consumed_prefix
+                      'st0
+                      st1
+                      buffer_resp
+                      (Ghost.reveal 'raw_bytes)));
                     assert (pure (buffer_resp.ST.response.ST.status == ST.NeedMoreInput ==>
                       buffer_resp.ST.consumed_len == 0sz));
+                    assert (pure (ST.server_network_consumed_input_projection
+                      'st0
+                      st1
+                      buffer_resp
+                      (Ghost.reveal 'raw_bytes)
+                      network_out_bytes
+                      app_out_bytes));
                     V.to_vec_pts_to decoded_buffer.IM.decoded_buffer_fragment;
                     V.free decoded_buffer.IM.decoded_buffer_fragment;
                     V.to_vec_pts_to decoded_buffer.IM.decoded_buffer_raw_record;
@@ -984,6 +1018,38 @@ fn process_network_bytes
                     (Ghost.reveal 'raw_bytes)
                     0
                     (SZ.v buffer_resp.ST.consumed_len))));
+                assert (pure (Seq.equal
+                  raw_record_bytes
+                  (ST.server_network_consumed_prefix
+                    buffer_resp
+                    (Ghost.reveal 'raw_bytes))));
+                assert (pure (ST.server_decoded_message_event_projection
+                  'st0
+                  st1
+                  resp
+                  (M.TlsHandshake (M.Finished fin))
+                  raw_record_bytes
+                  network_out_bytes
+                  app_out_bytes));
+                ST.lemma_server_state_correct_record_read_key_schedule_projection
+                  'st0;
+                assert (pure (CS.record_read_key_schedule_projection_for_role
+                  CS.ServerEndpoint
+                  'st0.CS.cs_model));
+                assert (pure (ST.server_protected_record_decode_uses_scheduled_read_key
+                  'st0
+                  raw_record_bytes));
+                assert (pure (ST.server_protected_record_decode_correct
+                  'st0
+                  raw_record_bytes
+                  (M.TlsHandshake (M.Finished fin))));
+                assert (pure (ST.server_network_step_ok_received_decode_projection
+                  'st0
+                  st1
+                  buffer_resp
+                  (Ghost.reveal 'raw_bytes)
+                  network_out_bytes
+                  app_out_bytes));
                 assert (pure (buffer_resp.ST.response.ST.status == ST.StepOk ==>
                   (exists ch raw_received.
                     st1 ==
@@ -1009,8 +1075,20 @@ fn process_network_bytes
                         (Ghost.reveal 'raw_bytes)
                         0
                         (SZ.v buffer_resp.ST.consumed_len)))));
+                assert (pure (ST.server_network_step_ok_consumed_prefix
+                  'st0
+                  st1
+                  buffer_resp
+                  (Ghost.reveal 'raw_bytes)));
                 assert (pure (buffer_resp.ST.response.ST.status == ST.NeedMoreInput ==>
                   buffer_resp.ST.consumed_len == 0sz));
+                assert (pure (ST.server_network_consumed_input_projection
+                  'st0
+                  st1
+                  buffer_resp
+                  (Ghost.reveal 'raw_bytes)
+                  network_out_bytes
+                  app_out_bytes));
                 V.to_vec_pts_to decoded_buffer.IM.decoded_buffer_fragment;
                 V.free decoded_buffer.IM.decoded_buffer_fragment;
                 V.to_vec_pts_to decoded_buffer.IM.decoded_buffer_raw_record;

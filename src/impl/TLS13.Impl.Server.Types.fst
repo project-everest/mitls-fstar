@@ -5,12 +5,15 @@ module Bounds = TLS13.Impl.ConnectionState.Bounds
 module CL = TLS13.ConnectionLog
 module CS = TLS13.Spec.ConnectionState
 module CSL = TLS13.ConnectionState.Lemmas
+module CT = TLS13.Impl.Client.Types
 module CM = TLS13.Impl.ConnectionState.Model
 module M = TLS13.Messages
+module R = TLS13.Record.Spec
 module SM = TLS13.StateMachine
 module Seq = FStar.Seq
 module SZ = FStar.SizeT
 module T = TLS13.Types
+module WS = TLS13.Wire.Spec
 
 (**
   Extraction-facing server step shapes and theorem vocabulary.
@@ -133,6 +136,83 @@ let lemma_server_state_correct_protected_raw_segmented_replay
       (ensures CS.connection_state_protected_raw_segmented_replay_consistent st)
 =
   CSL.lemma_connection_state_protected_raw_segmented_replay st
+
+let lemma_model_record_keys_consistent_for_role_record_read_key_schedule_projection
+  (role:CS.endpoint_role)
+  (model:CS.connection_model)
+  : Lemma
+      (requires CS.model_record_keys_consistent_for_role role model)
+      (ensures CS.record_read_key_schedule_projection_for_role role model)
+=
+  match model.CS.model_control with
+  | CS.ControlFailed _ -> ()
+  | _ ->
+    let keys = model.CS.model_handshake.CS.hs_keys in
+    let read = model.CS.model_record.CS.record_read in
+    assert (CS.record_keys_match_key_schedule_for_role
+      role
+      CS.TrafficRead
+      model.CS.model_control
+      keys
+      read);
+    (match read.R.epoch with
+     | R.Initial -> ()
+     | R.Handshake ->
+       assert (CS.traffic_material_option_matches_record_direction
+         (CS.traffic_material_for_label
+           keys
+           CS.TrafficHandshake
+           (CS.traffic_label_for_endpoint_direction role CS.TrafficRead))
+         read);
+       (match CS.traffic_material_for_label
+         keys
+         CS.TrafficHandshake
+         (CS.traffic_label_for_endpoint_direction role CS.TrafficRead) with
+        | Some material ->
+          assert (exists material'.
+            CS.traffic_material_for_label
+              keys
+              CS.TrafficHandshake
+              (CS.traffic_label_for_endpoint_direction role CS.TrafficRead) ==
+                Some material' /\
+            CS.traffic_material_matches_record_direction material' read)
+        | None -> assert False)
+     | R.Application ->
+       assert (CS.traffic_material_option_matches_record_direction
+         (CS.traffic_material_for_label
+           keys
+           CS.TrafficApplication
+           (CS.traffic_label_for_endpoint_direction role CS.TrafficRead))
+         read);
+       (match CS.traffic_material_for_label
+         keys
+         CS.TrafficApplication
+         (CS.traffic_label_for_endpoint_direction role CS.TrafficRead) with
+        | Some material ->
+          assert (exists material'.
+            CS.traffic_material_for_label
+              keys
+              CS.TrafficApplication
+              (CS.traffic_label_for_endpoint_direction role CS.TrafficRead) ==
+                Some material' /\
+            CS.traffic_material_matches_record_direction material' read)
+        | None -> assert False))
+
+let lemma_server_state_correct_record_read_key_schedule_projection
+  (st:CS.connection_state)
+  : Lemma
+      (requires server_state_correct st)
+      (ensures CS.record_read_key_schedule_projection_for_role
+        CS.ServerEndpoint
+        st.CS.cs_model)
+=
+  assert (server_state_core_correct st);
+  assert (CS.connection_state_full_log_consistent_for_role CS.ServerEndpoint st);
+  assert (CS.connection_state_layered_log_consistent_for_role CS.ServerEndpoint st);
+  assert (CS.connection_state_record_keys_consistent_for_role CS.ServerEndpoint st);
+  lemma_model_record_keys_consistent_for_role_record_read_key_schedule_projection
+    CS.ServerEndpoint
+    st.CS.cs_model
 
 noextract
 let response_network_out (resp:server_response) (network_out:B.bytes) : B.bytes =
@@ -493,11 +573,78 @@ let server_network_step_ok_consumed_prefix
        raw_received
        (server_network_consumed_prefix resp input))
 
+let server_decoded_message_event_projection
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (resp:server_response)
+  (msg:M.tls_message)
+  (raw_received:B.bytes)
+  (network_out:B.bytes)
+  (app_out:B.bytes)
+  : prop =
+  legal_network_response st0 st1 resp msg raw_received network_out app_out \/
+  (CT.received_tls_raw_delta_legal st0 msg raw_received /\
+   unexpected_message_response st0 st1 resp network_out app_out)
+
+let server_protected_record_decode_uses_scheduled_read_key
+  (st0:CS.connection_state)
+  (raw_received:B.bytes)
+  : prop =
+  exists outer_fragment opened.
+    WS.parse_record raw_received ==
+      Some (T.ApplicationData, outer_fragment, B.length raw_received) /\
+    CT.protected_record_opened st0 raw_received outer_fragment opened /\
+    CS.record_read_key_schedule_projection_for_role
+      CS.ServerEndpoint
+      st0.CS.cs_model
+
+let server_protected_record_decode_correct
+  (st0:CS.connection_state)
+  (raw_received:B.bytes)
+  (msg:M.tls_message)
+  : prop =
+  CT.protected_record_decodes_to_message st0 raw_received msg /\
+  server_protected_record_decode_uses_scheduled_read_key st0 raw_received
+
+let server_network_step_ok_received_decode_projection
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (resp:server_buffer_response)
+  (input:B.bytes)
+  (network_out:B.bytes)
+  (app_out:B.bytes)
+  : prop =
+  resp.response.status == StepOk ==>
+    exists msg.
+      CT.received_tls_raw_delta_legal
+        st0
+        msg
+        (server_network_consumed_prefix resp input) /\
+      server_decoded_message_event_projection
+        st0
+        st1
+        resp.response
+        msg
+        (server_network_consumed_prefix resp input)
+        network_out
+        app_out /\
+      (if CS.network_message_is_cleartext CL.Received msg
+       then True
+       else
+         server_protected_record_decode_correct
+           st0
+           (server_network_consumed_prefix resp input)
+           msg)
+
 let server_network_consumed_input_projection
   (st0:CS.connection_state)
   (st1:CS.connection_state)
   (resp:server_buffer_response)
   (input:B.bytes)
+  (network_out:B.bytes)
+  (app_out:B.bytes)
   : prop =
   server_network_step_ok_consumed_prefix st0 st1 resp input /\
+  server_network_step_ok_received_decode_projection
+    st0 st1 resp input network_out app_out /\
   (resp.response.status == NeedMoreInput ==> resp.consumed_len == 0sz)

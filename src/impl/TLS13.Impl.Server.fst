@@ -3409,7 +3409,9 @@ fn process_network_bytes
                    'st0
                    st1
                    buffer_resp
-                   (Ghost.reveal 'raw_bytes))
+                   (Ghost.reveal 'raw_bytes)
+                   network_out_bytes
+                   app_out_bytes)
 {
   rewrite (connection_exactly s 'st0) as (SN.connection_exactly s 'st0);
   let buffer_resp = SN.process_network_bytes

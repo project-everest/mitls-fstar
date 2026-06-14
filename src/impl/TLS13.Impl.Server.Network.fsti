@@ -187,4 +187,6 @@ fn process_network_bytes
                    'st0
                    st1
                    buffer_resp
-                   (Ghost.reveal 'raw_bytes))
+                   (Ghost.reveal 'raw_bytes)
+                   network_out_bytes
+                   app_out_bytes)

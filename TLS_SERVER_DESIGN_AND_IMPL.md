@@ -1549,9 +1549,13 @@ Checklist:
       `server_network_step_ok_consumed_prefix`, and
       `server_network_consumed_input_projection`, so the public facade and
       focused network module share one receive-side projection predicate.
-      Remaining work is to extend that predicate toward the client theorem
-      shape with uniform parse/decode classification, read-key provenance, and
-      rejected-input witnesses for all byte outcomes.
+      The projection now also exposes accepted-message decode facts through
+      `server_network_step_ok_received_decode_projection`; protected accepted
+      receives use `server_protected_record_decode_correct`, which combines the
+      protected open-to-message fact with the `ServerEndpoint` read-key schedule
+      projection derived from the server invariant. Remaining work is to extend
+      this toward the full client theorem shape with uniform parse/decode
+      classification and rejected-input witnesses for all byte outcomes.
       First focused server receive slice completed for protected client
       `Finished`: `process_client_finished` preserves
       `server_network_event_end_to_end_correct`; the unified
