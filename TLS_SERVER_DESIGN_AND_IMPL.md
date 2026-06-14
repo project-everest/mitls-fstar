@@ -280,6 +280,10 @@ Current phase: **Phase 6 server buffer/event API and theorem surface**.
   stored client Finished verification, and the local unexpected-message helper
   now live behind that interface, with `TLS13.Impl.Server` keeping forwarding
   wrappers for the public handlers and local dispatcher.
+- [x] Added a focused `TLS13.Impl.Server.Setup.fsti`/`.fst` module for
+  server start and parameter-selection handlers. The top-level server module
+  now delegates start-server and server-parameter selection through this
+  interface.
 - [ ] Continue Phase 6/7 by strengthening `process_network_bytes` from the first
   ClientHello path to the final dispatcher theorem: add consumed-prefix
   classification/projections and richer ClientHello/Finished reject deltas

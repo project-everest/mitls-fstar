@@ -32,6 +32,7 @@ module P = TLS13.Impl.Parser
 module R = TLS13.Record.Spec
 module Ser = TLS13.Impl.Serializer
 module SM = TLS13.StateMachine
+module SSetup = TLS13.Impl.Server.Setup
 module SA = TLS13.Impl.Server.Auth
 module SS = TLS13.Impl.Server.Send
 module SN = TLS13.Impl.Server.Network
@@ -427,97 +428,22 @@ fn process_start_server_local_event
                   network_out_bytes
                   app_out_bytes)
 {
-  unfold (connection_exactly s 'st0);
-  CLH.start_server s;
-  fold (connection_exactly s (CM.started_server_state 'st0));
-
-  let resp = {
-    ST.network_out_len = 0sz;
-    ST.app_out_len = 0sz;
-    ST.status = ST.StepOk;
-  };
-
-  let delta = {
-    CS.delta_event = CS.ConnLocalEvent CS.LocalStartServer;
-    CS.delta_raw_sent = B.empty;
-    CS.delta_raw_received = B.empty;
-  };
-  assert (pure (CS.legal_connection_delta
-    'st0
-    delta
-    (CM.started_server_state 'st0)));
-
-  CSL.lemma_legal_connection_delta_full_log_consistent_for_role
-    CS.ServerEndpoint
-    'st0
-    delta
-    (CM.started_server_state 'st0);
-  CSL.lemma_legal_connection_delta_raw_event_replay_consistent
-    'st0
-    delta
-    (CM.started_server_state 'st0);
-  CSL.lemma_connection_state_protected_raw_segmented_replay
-    (CM.started_server_state 'st0);
-  CSL.lemma_legal_connection_delta_sent_seal_replay_consistent
-    'st0
-    delta
-    (CM.started_server_state 'st0);
-  CSL.lemma_legal_connection_delta_received_decode_replay_consistent
-    'st0
-    delta
-    (CM.started_server_state 'st0);
-
-  Seq.lemma_len_slice 'old_network_out 0 0;
-  Seq.lemma_eq_intro B.empty (Seq.slice 'old_network_out 0 0);
-  Seq.lemma_len_slice 'old_app_out 0 0;
-  Seq.lemma_eq_intro B.empty (Seq.slice 'old_app_out 0 0);
-
-  assert (pure ((CM.started_server_state 'st0).CS.cs_model.CS.model_config ==
-    'st0.CS.cs_model.CS.model_config));
-  assert (pure ((CM.started_server_state 'st0).CS.cs_model.CS.model_config.CS.config_role ==
-    CS.ServerEndpoint));
-  assert (pure (Some?
-    (CM.started_server_state 'st0).CS.cs_model.CS.model_config.CS.config_server));
-  assert (pure (ST.server_state_correct (CM.started_server_state 'st0)));
-  assert (pure (ST.server_raw_to_message_replay_consistent (CM.started_server_state 'st0)));
-  assert (pure (ST.server_end_to_end_invariant (CM.started_server_state 'st0)));
-
-  assert (pure (ST.legal_response_for_event
-    'st0
-    (CM.started_server_state 'st0)
-    resp
-    (CS.ConnLocalEvent CS.LocalStartServer)
-    B.empty
-    B.empty
-    'old_network_out
-    'old_app_out));
-  assert (pure (ST.legal_local_response
-    'st0
-    (CM.started_server_state 'st0)
-    resp
+  rewrite (connection_exactly s 'st0) as (SSetup.connection_exactly s 'st0);
+  let resp = SSetup.process_start_server_local_event
+    s
     kind
-    (Ghost.reveal 'payload_bytes)
-    (CS.ConnLocalEvent CS.LocalStartServer)
-    B.empty
-    B.empty
-    'old_network_out
-    'old_app_out));
-  assert (pure (ST.legal_handled_local_response
-    'st0
-    (CM.started_server_state 'st0)
-    resp
-    kind
-    (Ghost.reveal 'payload_bytes)
-    'old_network_out
-    'old_app_out));
-  assert (pure (ST.server_local_event_end_to_end_correct
-    'st0
-    (CM.started_server_state 'st0)
-    resp
-    kind
-    (Ghost.reveal 'payload_bytes)
-    'old_network_out
-    'old_app_out));
+    payload
+    payload_len
+    network_out
+    network_out_len
+    app_out
+    app_out_len;
+  with st1 network_out_bytes app_out_bytes.
+    assert (SSetup.connection_exactly s st1 **
+            pts_to payload 'payload_bytes **
+            pts_to network_out network_out_bytes **
+            pts_to app_out app_out_bytes);
+  rewrite (SSetup.connection_exactly s st1) as (connection_exactly s st1);
   resp
 }
 
@@ -532,9 +458,9 @@ fn process_select_server_parameters
            pts_to network_out 'old_network_out **
            pts_to app_out 'old_app_out **
            pure (B.length 'old_network_out == SZ.v network_out_len /\
-                 B.length 'old_app_out == SZ.v app_out_len /\
-                 ST.server_end_to_end_invariant 'st0 /\
-                 CM.can_select_server_parameters 'st0 selection)
+                  B.length 'old_app_out == SZ.v app_out_len /\
+                  ST.server_end_to_end_invariant 'st0 /\
+                  CM.can_select_server_parameters 'st0 selection)
   returns resp:ST.server_response
   ensures exists* st1 network_out_bytes app_out_bytes.
           connection_exactly s st1 **
@@ -547,115 +473,27 @@ fn process_select_server_parameters
                     'st0
                     (Ghost.reveal selection) /\
                 ST.server_local_event_end_to_end_correct
-                  'st0
-                  st1
-                  resp
-                  ST.LocalSelectServerParameters
-                  B.empty
-                  network_out_bytes
-                  app_out_bytes)
+                   'st0
+                   st1
+                   resp
+                   ST.LocalSelectServerParameters
+                   B.empty
+                   network_out_bytes
+                   app_out_bytes)
 {
-  unfold (connection_exactly s 'st0);
-  CLH.select_server_parameters s #selection;
-  fold (connection_exactly s (CM.selected_server_parameters_state 'st0 (Ghost.reveal selection)));
-
-  let resp = {
-    ST.network_out_len = 0sz;
-    ST.app_out_len = 0sz;
-    ST.status = ST.StepOk;
-  };
-
-  let delta = Ghost.hide {
-    CS.delta_event =
-      CS.ConnLocalEvent
-        (CS.LocalSelectServerParameters (Ghost.reveal selection));
-    CS.delta_raw_sent = B.empty;
-    CS.delta_raw_received = B.empty;
-  };
-  CM.lemma_selected_server_parameters_state_evolves
-    'st0
-    (Ghost.reveal selection);
-  assert (pure (CS.legal_connection_delta
-    'st0
-    (Ghost.reveal delta)
-    (CM.selected_server_parameters_state 'st0 (Ghost.reveal selection))));
-
-  CSL.lemma_legal_connection_delta_full_log_consistent_for_role
-    CS.ServerEndpoint
-    'st0
-    (Ghost.reveal delta)
-    (CM.selected_server_parameters_state 'st0 (Ghost.reveal selection));
-  CSL.lemma_legal_connection_delta_raw_event_replay_consistent
-    'st0
-    (Ghost.reveal delta)
-    (CM.selected_server_parameters_state 'st0 (Ghost.reveal selection));
-  CSL.lemma_connection_state_protected_raw_segmented_replay
-    (CM.selected_server_parameters_state 'st0 (Ghost.reveal selection));
-  CSL.lemma_legal_connection_delta_sent_seal_replay_consistent
-    'st0
-    (Ghost.reveal delta)
-    (CM.selected_server_parameters_state 'st0 (Ghost.reveal selection));
-  CSL.lemma_legal_connection_delta_received_decode_replay_consistent
-    'st0
-    (Ghost.reveal delta)
-    (CM.selected_server_parameters_state 'st0 (Ghost.reveal selection));
-
-  Seq.lemma_len_slice 'old_network_out 0 0;
-  Seq.lemma_eq_intro B.empty (Seq.slice 'old_network_out 0 0);
-  Seq.lemma_len_slice 'old_app_out 0 0;
-  Seq.lemma_eq_intro B.empty (Seq.slice 'old_app_out 0 0);
-
-  assert (pure ((CM.selected_server_parameters_state 'st0 (Ghost.reveal selection)).CS.cs_model.CS.model_config ==
-    'st0.CS.cs_model.CS.model_config));
-  assert (pure ((CM.selected_server_parameters_state 'st0 (Ghost.reveal selection)).CS.cs_model.CS.model_config.CS.config_role ==
-    CS.ServerEndpoint));
-  assert (pure (Some?
-    (CM.selected_server_parameters_state 'st0 (Ghost.reveal selection)).CS.cs_model.CS.model_config.CS.config_server));
-  assert (pure (ST.server_state_correct
-    (CM.selected_server_parameters_state 'st0 (Ghost.reveal selection))));
-  assert (pure (ST.server_raw_to_message_replay_consistent
-    (CM.selected_server_parameters_state 'st0 (Ghost.reveal selection))));
-  assert (pure (ST.server_end_to_end_invariant
-    (CM.selected_server_parameters_state 'st0 (Ghost.reveal selection))));
-
-  assert (pure (ST.legal_response_for_event
-    'st0
-    (CM.selected_server_parameters_state 'st0 (Ghost.reveal selection))
-    resp
-    (CS.ConnLocalEvent
-      (CS.LocalSelectServerParameters (Ghost.reveal selection)))
-    B.empty
-    B.empty
-    'old_network_out
-    'old_app_out));
-  assert (pure (ST.legal_local_response
-    'st0
-    (CM.selected_server_parameters_state 'st0 (Ghost.reveal selection))
-    resp
-    ST.LocalSelectServerParameters
-    B.empty
-    (CS.ConnLocalEvent
-      (CS.LocalSelectServerParameters (Ghost.reveal selection)))
-    B.empty
-    B.empty
-    'old_network_out
-    'old_app_out));
-  assert (pure (ST.legal_handled_local_response
-    'st0
-    (CM.selected_server_parameters_state 'st0 (Ghost.reveal selection))
-    resp
-    ST.LocalSelectServerParameters
-    B.empty
-    'old_network_out
-    'old_app_out));
-  assert (pure (ST.server_local_event_end_to_end_correct
-    'st0
-    (CM.selected_server_parameters_state 'st0 (Ghost.reveal selection))
-    resp
-    ST.LocalSelectServerParameters
-    B.empty
-    'old_network_out
-    'old_app_out));
+  rewrite (connection_exactly s 'st0) as (SSetup.connection_exactly s 'st0);
+  let resp = SSetup.process_select_server_parameters
+    s
+    #selection
+    network_out
+    network_out_len
+    app_out
+    app_out_len;
+  with st1 network_out_bytes app_out_bytes.
+    assert (SSetup.connection_exactly s st1 **
+            pts_to network_out network_out_bytes **
+            pts_to app_out app_out_bytes);
+  rewrite (SSetup.connection_exactly s st1) as (connection_exactly s st1);
   resp
 }
 
@@ -733,31 +571,23 @@ fn process_select_default_server_parameters_from_arrays
                   network_out_bytes
                   app_out_bytes)
 {
-  let ch =
-    Ghost.hide (Some?.v 'st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello);
-  let cfg =
-    Ghost.hide (Some?.v 'st0.CS.cs_model.CS.model_config.CS.config_server);
-  let selection = Ghost.hide {
-    CS.server_selected_client_hello = Ghost.reveal ch;
-    CS.server_selected_cipher_suite = T.TLS_CHACHA20_POLY1305_SHA256;
-    CS.server_selected_group = T.X25519;
-    CS.server_selected_signature_scheme = T.RsaPssRsaeSha256;
-    CS.server_random = Ghost.reveal 'server_random_bytes;
-    CS.server_key_share_private = None;
-    CS.server_key_share_public = Ghost.reveal 'server_key_share_bytes;
-    CS.server_selected_credential =
-      (Ghost.reveal cfg).CS.server_credential_identity;
-  };
-  assert (pure (CM.can_select_server_parameters
-    'st0
-    (Ghost.reveal selection)));
-  process_select_server_parameters
+  rewrite (connection_exactly s 'st0) as (SSetup.connection_exactly s 'st0);
+  let resp = SSetup.process_select_default_server_parameters_from_arrays
     s
-    #selection
+    server_random
+    server_key_share
     network_out
     network_out_len
     app_out
-    app_out_len
+    app_out_len;
+  with st1 network_out_bytes app_out_bytes.
+    assert (SSetup.connection_exactly s st1 **
+            pts_to server_random 'server_random_bytes **
+            pts_to server_key_share 'server_key_share_bytes **
+            pts_to network_out network_out_bytes **
+            pts_to app_out app_out_bytes);
+  rewrite (SSetup.connection_exactly s st1) as (connection_exactly s st1);
+  resp
 }
 
 fn process_send_server_hello
