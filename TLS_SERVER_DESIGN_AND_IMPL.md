@@ -1895,6 +1895,13 @@ Status:
       `LocalStartServer`, and otherwise preserves the connected driver state
       while reporting that the next action is not ready or unsupported by this
       first wrapper.
+- [x] Added `TLS13.Impl.Server.Driver.accept_transport_and_start_once`, a
+      composed helper that performs the verified listen/accept/close-listener
+      transport attach and immediately runs the verified `LocalStartServer`
+      transition when the input protocol state satisfies `can_start_server`.
+      This gives the first combined transport+protocol entry point:
+      success returns a connected driver at `CM.started_server_state`, while
+      listen/accept failures preserve `server_driver_live`.
 - [x] Added `TLS13.Impl.Server.Driver.generate_server_material_once`, which fills
       the driver-owned 64-byte `server_random || server_private_key` buffer
       through the `TLS13.Crypto.random_bytes` TCB while preserving the connected
@@ -1985,12 +1992,13 @@ Checklist:
       connected server handle.
       Current status: the verified `accept_transport_once` slice performs the
       listen/accept/close-listener ownership transition and establishes
-      `server_driver_connected`; the verified `start_server_once` and
-      `start_server_if_ready` slices perform the first connected local transition
-      after attach, and `generate_server_material_once` fills the driver-owned
-      selection material buffer. The external-payload selection helper is
-      verified; wiring it to the driver-owned material buffer, local-action
-      draining, and network handshake processing remain to be layered on top.
+      `server_driver_connected`; the verified `start_server_once`,
+      `start_server_if_ready`, and `accept_transport_and_start_once` slices
+      perform the first connected local transition after attach, and
+      `generate_server_material_once` fills the driver-owned selection material
+      buffer. The external-payload selection helper is verified; wiring it to the
+      driver-owned material buffer, local-action draining, and network handshake
+      processing remain to be layered on top.
 - [ ] The first public driver API does not take a pre-accepted channel or
       externally owned listener handle.
 - [ ] `send`, `receive`, and `close` operate on one connected server handle.

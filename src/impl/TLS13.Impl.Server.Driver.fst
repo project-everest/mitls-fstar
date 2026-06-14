@@ -552,6 +552,44 @@ fn start_server_once
   resp
 }
 
+fn accept_transport_and_start_once
+  (d:server_driver)
+  (bind_host:array U8.t)
+  (bind_host_len:SZ.t)
+  (port:U16.t)
+  requires server_driver_live d 'st0 'certificate_chain 'credential_identity **
+           pts_to bind_host 'bind_host_bytes **
+           pure (B.length 'bind_host_bytes == SZ.v bind_host_len /\
+                 CM.can_start_server 'st0)
+  returns status:server_driver_transport_status
+  ensures pts_to bind_host 'bind_host_bytes **
+          (match status with
+           | ServerDriverTransportOk ->
+             server_driver_connected
+               d
+               (CM.started_server_state 'st0)
+               'certificate_chain
+               'credential_identity
+               B.empty
+               B.empty
+           | _ ->
+             server_driver_live d 'st0 'certificate_chain 'credential_identity)
+{
+  let status = accept_transport_once d bind_host bind_host_len port;
+  match status {
+    ServerDriverTransportOk -> {
+      let _ = start_server_once d;
+      ServerDriverTransportOk
+    }
+    ServerDriverListenFailed -> {
+      ServerDriverListenFailed
+    }
+    ServerDriverAcceptFailed -> {
+      ServerDriverAcceptFailed
+    }
+  }
+}
+
 fn start_server_if_ready
   (d:server_driver)
   requires server_driver_connected
