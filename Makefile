@@ -35,6 +35,7 @@ GENERATED_DIR   = generated
 QD_RFC          = tls.qd.rfc
 FSTAR_PREFIX    = $(patsubst %/bin/fstar.exe,%,$(realpath $(FSTAR_EXE)))
 FSTAR_ULIB      = $(FSTAR_PREFIX)/lib/fstar/ulib
+FSTAR_ULIB_CHECKED = $(FSTAR_PREFIX)/lib/fstar/ulib.checked
 FSTAR_PULSE_COMMON = $(FSTAR_PREFIX)/lib/fstar/pulse/common
 FSTAR_PULSE_LIB = $(FSTAR_PREFIX)/lib/fstar/pulse/pulse/lib
 
@@ -390,6 +391,18 @@ $(KRML_STUB_DIR)/FStar.SizeT.fst: $(FSTAR_ULIB)/FStar.SizeT.fst Makefile | $(KRM
 
 $(OUTPUT_DIR)/FStar_SizeT.krml: \
   $(KRML_STUB_DIR)/FStar.SizeT.fsti $(KRML_STUB_DIR)/FStar.SizeT.fst Makefile | $(OUTPUT_DIR) $(KRML_STUB_CACHE)
+	@# The stub FStar.SizeT (with `noextract_to "krml"` stripped) shares the module
+	@# name FStar.SizeT with the standard library, so despite --cache_dir, F*
+	@# rewrites the *install's* ulib.checked/FStar.SizeT.*.checked with a leaner,
+	@# digest-incompatible variant.  Modules already verified by `make verify`
+	@# recorded the original install hash, so that clobber makes downstream
+	@# per-module (Pulse) extraction see a stale FStar.SizeT (Error 317).  Back up
+	@# the install checked, do the stub work, then restore the originals.
+	@for f in FStar.SizeT.fsti.checked FStar.SizeT.fst.checked; do \
+	  if [ -f "$(FSTAR_ULIB_CHECKED)/$$f" ]; then \
+	    cp -p "$(FSTAR_ULIB_CHECKED)/$$f" "$(FSTAR_ULIB_CHECKED)/$$f.agentic-bak"; \
+	  fi; \
+	done
 	$(FSTAR_EXE) --cache_checked_modules --cache_dir $(KRML_STUB_CACHE) --odir $(OUTPUT_DIR) \
 	  --include $(KRML_STUB_DIR) --already_cached 'Prims,FStar -FStar.SizeT' \
 	  $(KRML_STUB_DIR)/FStar.SizeT.fsti
@@ -400,6 +413,12 @@ $(OUTPUT_DIR)/FStar_SizeT.krml: \
 	  --include $(KRML_STUB_DIR) --already_cached 'Prims,FStar -FStar.SizeT' \
 	  --codegen krml --extract_module FStar.SizeT \
 	  $(KRML_STUB_DIR)/FStar.SizeT.fst --krmloutput $@
+	@# Restore the pristine install FStar.SizeT checked clobbered above.
+	@for f in FStar.SizeT.fsti.checked FStar.SizeT.fst.checked; do \
+	  if [ -f "$(FSTAR_ULIB_CHECKED)/$$f.agentic-bak" ]; then \
+	    mv -f "$(FSTAR_ULIB_CHECKED)/$$f.agentic-bak" "$(FSTAR_ULIB_CHECKED)/$$f"; \
+	  fi; \
+	done
 	@# NOTE: do NOT verify the original FStar.SizeT into $(CACHE_DIR): that writes
 	@# a _cache/FStar.SizeT.*.checked whose dependence hash differs from the F*
 	@# install's already-cached FStar.SizeT.  Modules verified in `make verify`
