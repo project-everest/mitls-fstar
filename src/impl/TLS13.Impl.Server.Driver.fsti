@@ -7,8 +7,6 @@ open Pulse.Lib.Array.PtsTo
 
 module B = TLS13.Bytes
 module Bounds = TLS13.Impl.ConnectionState.Bounds
-module CL = TLS13.ConnectionLog
-module CryptoSpec = TLS13.Crypto.Spec
 module CS = TLS13.Spec.ConnectionState
 module CM = TLS13.Impl.ConnectionState.Model
 module CR = TLS13.Impl.ConnectionState.Repr
@@ -17,7 +15,6 @@ module O = TLS13.OpenSSL
 module S = TLS13.Impl.Server
 module ST = TLS13.Impl.Server.Types
 module SZ = FStar.SizeT
-module T = TLS13.Types
 module U16 = FStar.UInt16
 module U8 = FStar.UInt8
 
@@ -206,8 +203,6 @@ fn select_default_server_parameters_from_payload_once
            pts_to payload 'payload_bytes **
            pure (B.length 'payload_bytes == SZ.v payload_len /\
                   SZ.v payload_len == 64 /\
-                  B.length (CL.raw_slice (Ghost.reveal 'payload_bytes) 0 32) == 32 /\
-                  B.length (CL.raw_slice (Ghost.reveal 'payload_bytes) 32 64) == 32 /\
                   ST.server_local_event_input_ready
                     'st0
                     ST.LocalSelectServerParameters

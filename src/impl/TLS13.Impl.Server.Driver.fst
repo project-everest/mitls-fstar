@@ -699,8 +699,6 @@ fn select_default_server_parameters_from_payload_once
            pts_to payload 'payload_bytes **
            pure (B.length 'payload_bytes == SZ.v payload_len /\
                  SZ.v payload_len == 64 /\
-                 B.length (CL.raw_slice (Ghost.reveal 'payload_bytes) 0 32) == 32 /\
-                 B.length (CL.raw_slice (Ghost.reveal 'payload_bytes) 32 64) == 32 /\
                  ST.server_local_event_input_ready
                    'st0
                    ST.LocalSelectServerParameters
