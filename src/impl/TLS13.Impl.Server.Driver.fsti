@@ -657,6 +657,52 @@ fn select_and_derive_shared_secret_once
            'received
            sent'
 
+fn select_and_derive_shared_secret_if_ready_once
+  (d:server_driver)
+  requires server_driver_connected
+            d
+            'st0
+            'certificate_chain
+            'credential_identity
+            'received
+            'sent **
+          pure (Some? 'st0.CS.cs_model.CS.model_config.CS.config_server /\
+                (match 'st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello,
+                       'st0.CS.cs_model.CS.model_config.CS.config_server with
+                 | Some ch, Some cfg ->
+                   CS.cipher_suite_offered
+                     cfg.CS.server_supported_cipher_suites
+                     T.TLS_CHACHA20_POLY1305_SHA256 /\
+                   CS.named_group_offered
+                     cfg.CS.server_supported_groups
+                     T.X25519 /\
+                   CS.signature_scheme_offered
+                     cfg.CS.server_allowed_signature_schemes
+                     T.RsaPssRsaeSha256 /\
+                   CS.sni_policy_accepts cfg.CS.server_sni_policy ch.M.server_name
+                 | _, _ -> True))
+  returns status:server_driver_local_status
+  ensures (match status with
+          | ServerDriverLocalProcessed ->
+            exists* st2 sent'.
+              server_driver_connected
+                d
+                st2
+                'certificate_chain
+                'credential_identity
+                'received
+                sent'
+          | ServerDriverLocalNotReady ->
+            server_driver_connected
+              d
+              'st0
+              'certificate_chain
+              'credential_identity
+              'received
+              'sent
+          | ServerDriverLocalExternalOrUnsupported ->
+            pure False)
+
 fn process_ready_empty_local_action_once
   (d:server_driver)
   requires server_driver_connected

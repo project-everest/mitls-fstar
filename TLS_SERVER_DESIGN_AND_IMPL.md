@@ -1999,6 +1999,15 @@ Status:
       selection readiness. The helper preserves the connected driver state and
       reports `ServerDriverLocalNotReady` without advancing state when the
       concrete query fails.
+- [x] Added the checked driver-owned select+derive helper:
+      `TLS13.Impl.Server.Driver.select_and_derive_shared_secret_if_ready_once`
+      reads the already generated driver-owned 64-byte material buffer, proves
+      its 32-byte random/private-key slices, runs the same concrete
+      supported-profile readiness query, and then reuses the existing verified
+      `select_and_derive_shared_secret_once` path only after deriving the
+      payload-independent selection-readiness precondition. This removes the
+      ghost readiness assumption from the next accept-loop step that follows
+      ClientHello receipt and material generation.
 - [x] Added the first retained-receive IO slice:
       `TLS13.Impl.Server.Driver.read_transport_once` appends at most one
       `TLS13.IO.read` result into the driver-owned raw buffer when no retained
