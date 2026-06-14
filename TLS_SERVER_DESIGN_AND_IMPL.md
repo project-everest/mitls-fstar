@@ -1818,6 +1818,11 @@ Status:
 - [x] Server shared-secret derivation has been split into
       `TLS13.Impl.Server.Keys`, establishing the next small-module boundary for
       traffic-key derivation and installation handlers.
+- [x] Server driver-material payload handling has been split into
+      `TLS13.Impl.Server.Material.fsti` / `.fst`. The new module owns the Pulse
+      helper that copies the 64-byte `server_random || server_private_key`
+      payload into exact 32-byte arrays, keeping byte-splitting proof details out
+      of the top-level facade.
 - [x] Generic `process_local_event` now handles server
       `LocalSendApplicationData` and `LocalSendCloseNotify` through the shared
       endpoint-neutral `LocalSend` mutations. The server theorem surface now
