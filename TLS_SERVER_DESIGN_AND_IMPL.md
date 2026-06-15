@@ -819,6 +819,147 @@ Current phase: **Phase 6 server buffer/event API and theorem surface**.
   while still stopping before credential-bearing Certificate/CertificateVerify
   actions unless a later credential-aware orchestration layer handles them.
 
+## Server driver public API and refactoring plan
+
+The server driver must converge to the same public-interface style as
+`TLS13.Impl.Client.Driver`: a small facade for consumers and extraction, with
+internal proof/development slices hidden behind smaller implementation modules.
+The current `TLS13.Impl.Server.Driver.fsti` is a temporary proof-development
+surface, not the final public API: it exposes many intermediate transport,
+network, local-action, selection, derivation, ServerHello, and credential helper
+steps that should be internal.
+
+The final public `TLS13.Impl.Server.Driver.fsti` should expose only:
+
+```fstar
+val server_driver : Type0
+
+noextract
+val server_driver_live :
+  d:server_driver ->
+  st:CS.connection_state ->
+  certificate_chain:B.bytes ->
+  credential_identity:CS.server_credential_identity ->
+  slprop
+
+noextract
+val server_driver_connected :
+  d:server_driver ->
+  st:CS.connection_state ->
+  certificate_chain:B.bytes ->
+  credential_identity:CS.server_credential_identity ->
+  received:B.bytes ->
+  sent:B.bytes ->
+  slprop
+
+noextract
+val server_driver_closed :
+  d:server_driver ->
+  st:CS.connection_state ->
+  certificate_chain:B.bytes ->
+  credential_identity:CS.server_credential_identity ->
+  slprop
+
+type server_workflow_status =
+  | ServerWorkflowOk
+  | ServerWorkflowNeedMoreInput
+  | ServerWorkflowNeedExternalAction
+  | ServerWorkflowStepFailed
+  | ServerWorkflowExhausted
+  | ServerWorkflowClosed
+
+type server_receive_result = {
+  server_receive_status: server_workflow_status;
+  server_receive_len: SZ.t;
+}
+
+fn new_server ...
+fn accept ...
+fn send ...
+fn receive ...
+fn close ...
+```
+
+`accept` is the server analogue of the client driver's `connect`: it listens,
+accepts one TCP channel, completes the supported-profile handshake as far as
+application-data readiness or a precise failure/exhaustion status, and preserves
+the server driver IO-history invariant. `send`, `receive`, and `close` should
+mirror the client driver's public API shape. The facade may expose one
+noextract predicate such as `server_driver_application_ready st` if callers need
+the successful `accept` result to state that application-data control and
+application traffic keys are installed.
+
+Move these helper surfaces out of the public driver interface:
+
+- transport helpers: `accept_transport_once`, `accept_transport_and_start_once`,
+  `read_transport_once`, `close_transport_once`;
+- network-buffer helpers: `process_buffered_network_bytes_compact_once`,
+  `read_and_process_network_once`, `read_process_network_until_ready`,
+  `read_until_client_hello_received`;
+- local-event helpers: `process_local_event_and_write_once`,
+  `process_ready_empty_local_action_once`, `drain_ready_empty_local_actions`;
+- selection/derivation/ServerHello slices:
+  `generate_server_material_once`, all payload selection helpers,
+  `derive_shared_secret_from_payload_once`,
+  `select_derive_send_server_hello_from_payload_once`, and the intermediate
+  accept/select/derive/ServerHello composition helpers;
+- credential/application helpers:
+  `send_certificate_once`, `sign_certificate_verify_once`,
+  `verify_client_finished_once`, `send_application_data_once`,
+  `send_close_notify_once`;
+- helper theorem predicates such as
+  `server_driver_local_write_correct`,
+  `server_driver_network_process_correct`,
+  `server_driver_selection_from_payload_correct`,
+  `server_driver_select_derive_from_payload_success_correct`, and
+  `server_driver_send_server_hello_from_payload_success_correct`, except where a
+  small internal `.fsti` needs them.
+
+Refactor `TLS13.Impl.Server.Driver.fst` by strangling the current large file
+into these modules, verifying each interface before its implementation:
+
+1. `TLS13.Impl.Server.Driver.State.fsti/fst`
+   - Owns `server_driver`, capacities, driver buffers, live/connected/closed
+     predicates, wire-log matching, credential/config matching, and local/network
+     correctness projection lemmas.
+2. `TLS13.Impl.Server.Driver.Transport.fsti/fst`
+   - Owns listen/accept/read/write/close and channel ownership transitions.
+3. `TLS13.Impl.Server.Driver.Network.fsti/fst`
+   - Owns retained-buffer compaction, one-step network processing,
+     read/process loops, `NeedMoreInput` retry, and ClientHello wait loops.
+4. `TLS13.Impl.Server.Driver.Local.fsti/fst`
+   - Owns generic local-event writes, empty-action drains, credential-aware
+     local actions, Certificate/CertificateVerify/Finished helper steps, and
+     local IO-history preservation.
+5. `TLS13.Impl.Server.Driver.Handshake.fsti/fst`
+   - Owns supported selection, shared-secret derivation, ServerHello,
+     encrypted-flight orchestration, client Finished receive/verify,
+     application key installation, and full handshake composition.
+6. `TLS13.Impl.Server.Driver.App.fsti/fst`
+   - Owns application-data send/receive loops and close_notify.
+7. `TLS13.Impl.Server.Driver.fsti/fst`
+   - Becomes the small public facade: `new_server`, `accept`, `send`,
+     `receive`, and `close`.
+
+Critical-path checklist for this refactor:
+
+- [ ] Freeze the final public `TLS13.Impl.Server.Driver.fsti` shape above and
+      stop exporting new temporary proof slices from the public facade.
+- [ ] Move state predicates and projection lemmas into
+      `TLS13.Impl.Server.Driver.State`.
+- [ ] Move transport operations into `TLS13.Impl.Server.Driver.Transport`.
+- [ ] Move retained-buffer network processing into
+      `TLS13.Impl.Server.Driver.Network`.
+- [ ] Move local-event/drain logic into `TLS13.Impl.Server.Driver.Local`.
+- [ ] Move selection/derive/handshake orchestration into
+      `TLS13.Impl.Server.Driver.Handshake`.
+- [ ] Move application send/receive/close logic into
+      `TLS13.Impl.Server.Driver.App`.
+- [ ] Replace the current public driver interface with the client-like facade.
+- [ ] Continue the remaining full-handshake implementation only after the
+      relevant internal module boundary is in place, to keep verifier iteration
+      small and avoid growing the public API with scaffolding.
+
 ## End goal
 
 Build a verified TLS 1.3 server for the same narrow profile as the verified
