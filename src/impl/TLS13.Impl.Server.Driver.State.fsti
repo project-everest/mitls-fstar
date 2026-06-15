@@ -46,6 +46,11 @@ noeq type server_driver = {
   server_driver_app_out: V.vec U8.t;
 }
 
+type server_driver_transport_status =
+  | ServerDriverTransportOk
+  | ServerDriverListenFailed
+  | ServerDriverAcceptFailed
+
 noextract
 let logged_received_bytes_accounted
   (logged:B.bytes)

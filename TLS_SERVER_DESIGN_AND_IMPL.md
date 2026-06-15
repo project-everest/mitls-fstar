@@ -847,6 +847,13 @@ main driver still owns most local/network/selection projection lemmas; those
 should move behind the State or later Transport/Network/Handshake boundaries as
 the file is split further.
 
+`TLS13.Impl.Server.Driver.Transport.fsti/fst` now owns the first transport
+ownership transitions: TCP listen/accept into a connected driver, closing a
+connected transport, and closing a never-connected live driver. Buffered reads
+remain in the main driver for the moment because their proof is tightly coupled
+to retained-buffer compaction and network-step accounting; that should move with
+the next Transport/Network boundary.
+
 The final public `TLS13.Impl.Server.Driver.fsti` should expose only:
 
 ```fstar
