@@ -109,6 +109,8 @@ noextract
 let server_driver_receive_status_correct
   (result:server_receive_result)
   (loop:DN.server_driver_network_loop_result)
+  (app_out:B.bytes)
+  (out_bytes:B.bytes)
   : prop =
   if loop.DN.server_driver_network_loop_exhausted then
     result.server_receive_status == ServerWorkflowExhausted /\
@@ -116,10 +118,17 @@ let server_driver_receive_status_correct
   else
     match loop.DN.server_driver_network_loop_last.ST.response.ST.status with
     | ST.StepOk ->
-      (result.server_receive_status == ServerWorkflowOk \/
-       result.server_receive_status == ServerWorkflowStepFailed) /\
-      (result.server_receive_status == ServerWorkflowStepFailed ==>
-        result.server_receive_len == 0sz)
+      if SZ.v loop.DN.server_driver_network_loop_last.ST.response.ST.app_out_len
+          <= B.length out_bytes /\
+         SZ.v loop.DN.server_driver_network_loop_last.ST.response.ST.app_out_len
+          <= B.length app_out
+      then
+        result.server_receive_status == ServerWorkflowOk /\
+        result.server_receive_len ==
+          loop.DN.server_driver_network_loop_last.ST.response.ST.app_out_len
+      else
+        result.server_receive_status == ServerWorkflowStepFailed /\
+        result.server_receive_len == 0sz
     | ST.NeedMoreInput ->
       result.server_receive_status == ServerWorkflowNeedMoreInput /\
       result.server_receive_len == 0sz
@@ -156,7 +165,7 @@ let server_driver_receive_correct
   (app_out:B.bytes)
   (out_bytes:B.bytes)
   : prop =
-  server_driver_receive_status_correct result loop /\
+  server_driver_receive_status_correct result loop app_out out_bytes /\
   SZ.v result.server_receive_len <= B.length out_bytes /\
   (loop.DN.server_driver_network_loop_exhausted == false ==>
     DN.server_driver_network_process_correct

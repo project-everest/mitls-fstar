@@ -771,7 +771,58 @@ fn receive
         forget_server_driver_connected_app_out d;
         result
       }
-      _ -> {
+      ST.DecodeError -> {
+        let result = {
+          server_receive_status = ServerWorkflowStepFailed;
+          server_receive_len = 0sz;
+        };
+        assert (pure (server_driver_receive_correct
+          'st0
+          st1
+          result
+          loop
+          (Ghost.reveal 'sent)
+          sent'
+          loop_app_out
+          (Ghost.reveal 'out_bytes)));
+        forget_server_driver_connected_app_out d;
+        result
+      }
+      ST.IllegalTransition -> {
+        let result = {
+          server_receive_status = ServerWorkflowStepFailed;
+          server_receive_len = 0sz;
+        };
+        assert (pure (server_driver_receive_correct
+          'st0
+          st1
+          result
+          loop
+          (Ghost.reveal 'sent)
+          sent'
+          loop_app_out
+          (Ghost.reveal 'out_bytes)));
+        forget_server_driver_connected_app_out d;
+        result
+      }
+      ST.OutputBufferTooSmall -> {
+        let result = {
+          server_receive_status = ServerWorkflowStepFailed;
+          server_receive_len = 0sz;
+        };
+        assert (pure (server_driver_receive_correct
+          'st0
+          st1
+          result
+          loop
+          (Ghost.reveal 'sent)
+          sent'
+          loop_app_out
+          (Ghost.reveal 'out_bytes)));
+        forget_server_driver_connected_app_out d;
+        result
+      }
+      ST.ConnectionFailed -> {
         let result = {
           server_receive_status = ServerWorkflowStepFailed;
           server_receive_len = 0sz;
