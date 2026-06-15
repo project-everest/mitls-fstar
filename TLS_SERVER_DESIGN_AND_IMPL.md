@@ -894,7 +894,9 @@ behind Handshake, as has the payload-level select+derive composition helper
 `select_and_derive_shared_secret_from_payload_once`. The exact
 `send_server_hello_from_payload_once` helper, including the focused 95-byte
 ServerHello output buffer and connected IO-history accounting, is now also owned
-by Handshake.
+by Handshake. The payload-level
+`select_derive_send_server_hello_from_payload_once` composition has moved there
+too.
 Selection, derivation, ServerHello, encrypted-flight orchestration, and the full
 public `accept` handshake still remain in the main driver until subsequent
 Handshake slices move them behind this boundary.

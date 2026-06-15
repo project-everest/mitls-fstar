@@ -1594,6 +1594,198 @@ fn send_server_hello_from_payload_once
  resp
 }
 
+fn select_derive_send_server_hello_from_payload_once
+ (d:server_driver)
+ (payload:array U8.t)
+ (payload_len:SZ.t)
+ requires server_driver_connected
+            d
+            'st0
+            'certificate_chain
+            'credential_identity
+            'received
+            'sent **
+          pts_to payload 'payload_bytes **
+          pure (B.length 'payload_bytes == SZ.v payload_len /\
+                SZ.v payload_len == 64 /\
+                ST.server_local_event_input_ready
+                  'st0
+                  ST.LocalSelectServerParameters
+                  (Ghost.reveal 'payload_bytes))
+ returns result:server_driver_select_derive_server_hello_result
+ ensures (match result with
+          | ServerDriverSelectDeriveServerHelloOk ->
+            exists* st3 sent_after_send.
+              server_driver_connected
+                d
+                st3
+                'certificate_chain
+                'credential_identity
+                'received
+                sent_after_send **
+              pts_to payload 'payload_bytes
+          | ServerDriverSelectDeriveServerHelloDeriveFailed ->
+            exists* st2 sent_after_derive.
+              server_driver_connected
+                d
+                st2
+                'certificate_chain
+                'credential_identity
+                'received
+                sent_after_derive **
+              pts_to payload 'payload_bytes
+          | ServerDriverSelectDeriveServerHelloSendNotReady ->
+            exists* st2 sent_after_derive.
+              server_driver_connected
+                d
+                st2
+                'certificate_chain
+                'credential_identity
+                'received
+                sent_after_derive **
+              pts_to payload 'payload_bytes)
+{
+ let derive_resp =
+   select_and_derive_shared_secret_from_payload_once
+     d
+     payload
+     payload_len;
+ with st2 sent_after_derive.
+   assert (
+     server_driver_connected
+       d
+       st2
+       'certificate_chain
+       'credential_identity
+       'received
+       sent_after_derive **
+     pts_to payload 'payload_bytes **
+     pure (server_driver_select_derive_from_payload_success_correct
+       'st0
+       st2
+       derive_resp
+       (Ghost.reveal 'payload_bytes)));
+
+ if (derive_resp.ST.status = ST.StepOk) {
+   assert (pure (derive_resp.ST.status == ST.StepOk));
+   unfold (server_driver_connected
+     d
+     st2
+     'certificate_chain
+     'credential_identity
+     'received
+     sent_after_derive);
+   with ch2 buffered2 buffered_len2.
+     assert (
+       Box.pts_to d.server_driver_channel (Some ch2) **
+       IO.is_channel ch2 'received sent_after_derive **
+       server_driver_buffers d buffered2 buffered_len2);
+   rewrite (S.connection_exactly d.server_driver_server st2)
+     as (CR.connection_exactly d.server_driver_server st2);
+   let ready =
+     CQ.can_send_server_hello_runtime
+       d.server_driver_server;
+   rewrite (CR.connection_exactly d.server_driver_server st2)
+     as (S.connection_exactly d.server_driver_server st2);
+   fold (server_driver_connected
+     d
+     st2
+     'certificate_chain
+     'credential_identity
+     'received
+     sent_after_derive);
+   if ready {
+     assert (pure (ready));
+     assert (pure (st2.CS.cs_model.CS.model_control ==
+       CS.ControlHandshaking CS.HsClientHelloReceived));
+     assert (pure (st2.CS.cs_model.CS.model_config.CS.config_role ==
+       CS.ServerEndpoint));
+     assert (pure (Some?
+       st2.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_shared_secret));
+     assert (pure (
+       st2.CS.cs_model.CS.model_handshake.CS.hs_server_hello == None));
+     assert (pure (Some?
+       st2.CS.cs_model.CS.model_handshake.CS.hs_server_selection));
+     assert (pure (
+       B.length st2.CS.cs_model.CS.model_handshake.CS.hs_transcript + 90 <=
+         Bounds.max_transcript_len));
+     lemma_select_derive_success_server_hello_ready
+       'st0
+       st2
+       derive_resp
+       (Ghost.reveal 'payload_bytes);
+     assert (pure (ST.server_local_event_input_ready
+       st2
+       ST.LocalSendServerHello
+       (Ghost.reveal 'payload_bytes)));
+     let send_resp =
+       send_server_hello_from_payload_once
+         d
+         payload
+         payload_len;
+     with st3 sent_after_send.
+       assert (
+         server_driver_connected
+           d
+           st3
+           'certificate_chain
+           'credential_identity
+           'received
+           sent_after_send **
+         pts_to payload 'payload_bytes **
+         pure (server_driver_local_write_correct
+           st2
+           st3
+           send_resp
+           ST.LocalSendServerHello
+           (Ghost.reveal 'payload_bytes)
+           sent_after_derive
+           sent_after_send /\
+         server_driver_send_server_hello_from_payload_success_correct
+           st2
+           st3
+           send_resp
+           (Ghost.reveal 'payload_bytes)));
+     assert (pure (derive_resp.ST.status == ST.StepOk));
+     assert (pure (server_driver_select_derive_from_payload_success_correct
+       'st0
+       st2
+       derive_resp
+       (Ghost.reveal 'payload_bytes)));
+     assert (pure (server_driver_local_write_correct
+       st2
+       st3
+       send_resp
+       ST.LocalSendServerHello
+       (Ghost.reveal 'payload_bytes)
+       sent_after_derive
+       sent_after_send));
+     assert (pure (server_driver_send_server_hello_from_payload_success_correct
+       st2
+       st3
+       send_resp
+       (Ghost.reveal 'payload_bytes)));
+     ServerDriverSelectDeriveServerHelloOk
+   } else {
+     assert (pure (derive_resp.ST.status == ST.StepOk));
+     assert (pure (server_driver_select_derive_from_payload_success_correct
+       'st0
+       st2
+       derive_resp
+       (Ghost.reveal 'payload_bytes)));
+     ServerDriverSelectDeriveServerHelloSendNotReady
+   }
+ } else {
+   assert (pure (derive_resp.ST.status <> ST.StepOk));
+   assert (pure (server_driver_select_derive_from_payload_success_correct
+     'st0
+     st2
+     derive_resp
+     (Ghost.reveal 'payload_bytes)));
+   ServerDriverSelectDeriveServerHelloDeriveFailed
+ }
+}
+
 fn accept_transport_and_start_once
   (d:server_driver)
   (bind_host:array U8.t)

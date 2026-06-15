@@ -435,6 +435,57 @@ fn send_server_hello_from_payload_once
             resp
             (Ghost.reveal 'payload_bytes))
 
+fn select_derive_send_server_hello_from_payload_once
+ (d:DS.server_driver)
+ (payload:array U8.t)
+ (payload_len:SZ.t)
+ requires DS.server_driver_connected
+            d
+            'st0
+            'certificate_chain
+            'credential_identity
+            'received
+            'sent **
+          pts_to payload 'payload_bytes **
+          pure (B.length 'payload_bytes == SZ.v payload_len /\
+                SZ.v payload_len == 64 /\
+                ST.server_local_event_input_ready
+                  'st0
+                  ST.LocalSelectServerParameters
+                  (Ghost.reveal 'payload_bytes))
+ returns result:server_driver_select_derive_server_hello_result
+ ensures (match result with
+          | ServerDriverSelectDeriveServerHelloOk ->
+            exists* st3 sent_after_send.
+              DS.server_driver_connected
+                d
+                st3
+                'certificate_chain
+                'credential_identity
+                'received
+                sent_after_send **
+              pts_to payload 'payload_bytes
+          | ServerDriverSelectDeriveServerHelloDeriveFailed ->
+            exists* st2 sent_after_derive.
+              DS.server_driver_connected
+                d
+                st2
+                'certificate_chain
+                'credential_identity
+                'received
+                sent_after_derive **
+              pts_to payload 'payload_bytes
+          | ServerDriverSelectDeriveServerHelloSendNotReady ->
+            exists* st2 sent_after_derive.
+              DS.server_driver_connected
+                d
+                st2
+                'certificate_chain
+                'credential_identity
+                'received
+                sent_after_derive **
+              pts_to payload 'payload_bytes)
+
 fn accept_transport_and_start_once
   (d:DS.server_driver)
   (bind_host:array U8.t)
