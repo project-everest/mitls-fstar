@@ -302,6 +302,63 @@ fn derive_shared_secret_from_payload_once
               resp
               (Ghost.reveal 'payload_bytes))
 
+fn select_supported_server_parameters_from_payload_if_ready_once
+  (d:DS.server_driver)
+  (payload:array U8.t)
+  (payload_len:SZ.t)
+  requires DS.server_driver_connected
+                d
+                'st0
+                'certificate_chain
+                'credential_identity
+                'received
+                'sent **
+           pts_to payload 'payload_bytes **
+           pure (B.length 'payload_bytes == SZ.v payload_len /\
+                   SZ.v payload_len == 64 /\
+                   Some? 'st0.CS.cs_model.CS.model_config.CS.config_server /\
+                   (match 'st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello,
+                          'st0.CS.cs_model.CS.model_config.CS.config_server with
+                    | Some ch, Some cfg ->
+                      CS.cipher_suite_offered
+                        cfg.CS.server_supported_cipher_suites
+                        T.TLS_CHACHA20_POLY1305_SHA256 /\
+                      CS.named_group_offered
+                        cfg.CS.server_supported_groups
+                        T.X25519 /\
+                      CS.signature_scheme_offered
+                        cfg.CS.server_allowed_signature_schemes
+                        T.RsaPssRsaeSha256 /\
+                      CS.sni_policy_accepts cfg.CS.server_sni_policy ch.M.server_name
+                    | _, _ -> True))
+  returns status:DL.server_driver_local_status
+  ensures (match status with
+           | DL.ServerDriverLocalProcessed ->
+               exists* st1.
+                 DS.server_driver_connected
+                   d
+                   st1
+                   'certificate_chain
+                   'credential_identity
+                   'received
+                   'sent **
+                 pts_to payload 'payload_bytes **
+                 pure (server_driver_selection_from_payload_correct
+                   'st0
+                   st1
+                   (Ghost.reveal 'payload_bytes))
+           | DL.ServerDriverLocalNotReady ->
+                 DS.server_driver_connected
+                   d
+                   'st0
+                   'certificate_chain
+                   'credential_identity
+                   'received
+                   'sent **
+                 pts_to payload 'payload_bytes
+           | DL.ServerDriverLocalExternalOrUnsupported ->
+                 pure False)
+
 fn accept_transport_and_start_once
   (d:DS.server_driver)
   (bind_host:array U8.t)
