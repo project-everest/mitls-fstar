@@ -118,16 +118,20 @@ agreement remains a composition task.
 
 On the Pulse implementation side, public server `accept` and client `connect`
 now both expose application-data readiness on success, public client/server
-`send` operations expose exact local-write sent-log append facts, and public
-client/server `close` operations expose verified `close_notify` local-write
-facts before transport shutdown. The remaining implementation-side gaps are:
+`send` operations expose exact local-write sent-log append facts, public
+client/server `receive` operations expose exact successful app-output copyout
+facts, and public client/server `close` operations expose verified
+`close_notify` local-write facts before transport shutdown. The remaining
+implementation-side gaps are:
 
 - build the concrete bridge from complete client/server driver states and raw IO
   logs to the aggregate paired-endpoint key-material theorem's input predicate;
 - continue splitting the remaining public driver orchestration into smaller
   `Driver.Handshake`/`Driver.App` modules with narrow `.fsti` boundaries;
-- extract and validate the full server facade with the C/runtime IO stubs and
-  concrete OpenSSL interop tests.
+- strengthen the private client receive workflow with a factored network-loop
+  theorem, analogous to the server `Driver.Network` boundary, so public receive
+  can expose the whole workflow theorem rather than only the exact status and
+  copyout facts.
 
 ## Latest verified in-progress slice
 
@@ -145,6 +149,12 @@ The follow-on client facade slice strengthens public `send`: its postcondition
 now exposes `client_driver_send_correct`, tying the returned status to the
 verified `LocalSendApplicationData` theorem and proving the transport sent log
 is exactly the old sent log appended with the emitted TLS record bytes.
+
+The next client facade slice strengthens public `receive`: its postcondition now
+exposes `client_driver_receive_correct`, tying the returned status to the actual
+driver workflow status, response app length, and output-buffer capacity split;
+on success the caller's output prefix is exactly `CT.response_app_out` from the
+driver's concrete app-output buffer.
 
 The latest client facade slice strengthens public `close`: its postcondition now
 exposes `client_driver_close_correct`, tying the returned status to a verified

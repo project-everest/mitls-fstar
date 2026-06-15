@@ -157,6 +157,63 @@ type client_receive_result = {
   client_receive_len: SZ.t;
 }
 
+noextract
+let client_driver_receive_status_correct
+  (result:client_receive_result)
+  (workflow_status:driver_workflow_status)
+  (resp:CT.client_response)
+  (app_out:B.bytes)
+  (out_bytes:B.bytes)
+  : prop =
+  if workflow_status == DriverWorkflowOk then
+    if SZ.v resp.CT.app_out_len <= B.length out_bytes /\
+       SZ.v resp.CT.app_out_len <= B.length app_out
+    then
+      result.client_receive_status == DriverWorkflowOk /\
+      result.client_receive_len == resp.CT.app_out_len
+    else
+      result.client_receive_status == DriverWorkflowStepFailed /\
+      result.client_receive_len == 0sz
+  else
+    result.client_receive_status == workflow_status /\
+    result.client_receive_len == 0sz
+
+noextract
+let client_driver_receive_copyout_correct
+  (result:client_receive_result)
+  (resp:CT.client_response)
+  (app_out:B.bytes)
+  (out_bytes:B.bytes)
+  : prop =
+  if result.client_receive_status == DriverWorkflowOk then
+    SZ.v result.client_receive_len <= B.length out_bytes /\
+    result.client_receive_len == resp.CT.app_out_len /\
+    (if SZ.v result.client_receive_len <= B.length out_bytes then
+      Seq.equal
+        (Seq.slice out_bytes 0 (SZ.v result.client_receive_len))
+        (CT.response_app_out resp app_out)
+     else False)
+  else
+    True
+
+noextract
+let client_driver_receive_correct
+  (result:client_receive_result)
+  (workflow_status:driver_workflow_status)
+  (resp:CT.client_response)
+  (app_out:B.bytes)
+  (out_bytes:B.bytes)
+  : prop =
+  client_driver_receive_status_correct
+    result
+    workflow_status
+    resp
+    app_out
+    out_bytes /\
+  SZ.v result.client_receive_len <= B.length out_bytes /\
+  (result.client_receive_status == DriverWorkflowOk ==>
+    client_driver_receive_copyout_correct result resp app_out out_bytes)
+
 fn new_client
   (server_name:array U8.t)
   (server_name_len:SZ.t)
@@ -253,7 +310,14 @@ fn receive
           client_driver_connected d st1 received1 sent1 **
           pts_to out out_bytes **
           pure (B.length out_bytes == SZ.v out_len /\
-                SZ.v result.client_receive_len <= SZ.v out_len)
+                SZ.v result.client_receive_len <= SZ.v out_len /\
+                (exists workflow_status resp app_out.
+                  client_driver_receive_correct
+                    result
+                    workflow_status
+                    resp
+                    app_out
+                    out_bytes))
 
 fn close
   (d:client_driver)

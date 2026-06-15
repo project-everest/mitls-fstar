@@ -4759,7 +4759,14 @@ fn receive
           client_driver_connected d st1 received1 sent1 **
           pts_to out out_bytes **
           pure (B.length out_bytes == SZ.v out_len /\
-                SZ.v result.client_receive_len <= SZ.v out_len)
+                SZ.v result.client_receive_len <= SZ.v out_len /\
+                (exists workflow_status resp app_out.
+                  client_driver_receive_correct
+                    result
+                    workflow_status
+                    resp
+                    app_out
+                    out_bytes))
 {
   unfold (client_driver_connected d 'st0 (Ghost.reveal 'received0) (Ghost.reveal 'sent0));
   with ch buffered buffered_len.
@@ -4883,37 +4890,45 @@ fn receive
         let _ = A.memcpy_l copy_len (V.vec_to_array d.client_driver_app_out) out;
         with out_bytes.
           assert (pts_to out out_bytes);
-        unfold (top_driver_exactly td st1 workflow_buffered workflow.driver_workflow_rx_len);
-        rewrite (driver_exactly td.top_driver_core st1 workflow_buffered workflow.driver_workflow_rx_len) as
-          (driver_exactly core st1 workflow_buffered workflow.driver_workflow_rx_len);
-        unfold (driver_exactly core st1 workflow_buffered workflow.driver_workflow_rx_len);
-        V.to_vec_pts_to d.client_driver_empty_payload;
-        V.to_vec_pts_to d.client_driver_raw;
-        V.to_vec_pts_to d.client_driver_network_out;
-        V.to_vec_pts_to d.client_driver_auth_leaf_der;
-        V.to_vec_pts_to d.client_driver_auth_payload;
-        V.to_vec_pts_to d.client_driver_auth_cv_input;
-        V.to_vec_pts_to d.client_driver_auth_signature;
-        V.to_vec_pts_to d.client_driver_app_out;
-        Box.(d.client_driver_buffered_len := workflow.driver_workflow_rx_len);
-        assert (pure (SZ.v workflow.driver_workflow_rx_len <= SZ.v driver_rx_capacity));
-        rewrite (C.connection_exactly core.driver_client st1) as
-          (C.connection_exactly d.client_driver_client st1);
-        rewrite (channel_open core.driver_channel st1 workflow_buffered workflow.driver_workflow_rx_len) as
-          (channel_open ch st1 workflow_buffered workflow.driver_workflow_rx_len);
-        rewrite (O.is_auth_context td.top_driver_auth) as
-          (O.is_auth_context d.client_driver_auth);
-        fold (client_driver_buffers d workflow_buffered workflow.driver_workflow_rx_len);
-        unfold (channel_open ch st1 workflow_buffered workflow.driver_workflow_rx_len);
-        with received1 sent1.
-          assert (IO.is_channel ch received1 sent1 **
-                  pure (client_driver_wire_logs_match st1 received1 sent1 workflow_buffered workflow.driver_workflow_rx_len));
-        fold (client_driver_connected d st1 received1 sent1);
-        {
+        A.pts_to_len out;
+        assert (pure (B.length out_bytes == SZ.v out_len));
+        assert (pure (SZ.v copy_len <= B.length app_out_bytes));
+        assert (pure (Seq.equal
+          (CT.response_app_out response app_out_bytes)
+          (Seq.slice app_out_bytes 0 (SZ.v copy_len))));
+        Seq.lemma_len_slice out_bytes 0 (SZ.v copy_len);
+        Seq.lemma_len_slice app_out_bytes 0 (SZ.v copy_len);
+        assert (pure (Seq.equal
+          (Seq.slice out_bytes 0 (SZ.v copy_len))
+          (Seq.slice app_out_bytes 0 (SZ.v copy_len))));
+        let receive_result = {
           client_receive_status = DriverWorkflowOk;
           client_receive_len = copy_len;
-        }
-      } else {
+        };
+        assert (pure (client_driver_receive_copyout_correct
+          receive_result
+          response
+          app_out_bytes
+          out_bytes));
+        assert (pure (client_driver_receive_status_correct
+          receive_result
+          workflow.driver_workflow_status
+          response
+          app_out_bytes
+          out_bytes));
+        assert (pure (client_driver_receive_correct
+          receive_result
+          workflow.driver_workflow_status
+          response
+          app_out_bytes
+          out_bytes));
+        assert (pure (exists workflow_status resp app_out.
+          client_driver_receive_correct
+            receive_result
+            workflow_status
+            resp
+            app_out
+            out_bytes));
         unfold (top_driver_exactly td st1 workflow_buffered workflow.driver_workflow_rx_len);
         rewrite (driver_exactly td.top_driver_core st1 workflow_buffered workflow.driver_workflow_rx_len) as
           (driver_exactly core st1 workflow_buffered workflow.driver_workflow_rx_len);
@@ -4940,11 +4955,62 @@ fn receive
           assert (IO.is_channel ch received1 sent1 **
                   pure (client_driver_wire_logs_match st1 received1 sent1 workflow_buffered workflow.driver_workflow_rx_len));
         fold (client_driver_connected d st1 received1 sent1);
-        {
+        receive_result
+      } else {
+        with out_bytes.
+          assert (pts_to out out_bytes);
+        assert (pure (B.length out_bytes == SZ.v out_len));
+        let receive_result = {
           client_receive_status =
             if workflow_ok then DriverWorkflowStepFailed else workflow.driver_workflow_status;
           client_receive_len = 0sz;
-        }
+        };
+        assert (pure (client_driver_receive_status_correct
+          receive_result
+          workflow.driver_workflow_status
+          response
+          app_out_bytes
+          out_bytes));
+        assert (pure (client_driver_receive_correct
+          receive_result
+          workflow.driver_workflow_status
+          response
+          app_out_bytes
+          out_bytes));
+        assert (pure (exists workflow_status resp app_out.
+          client_driver_receive_correct
+            receive_result
+            workflow_status
+            resp
+            app_out
+            out_bytes));
+        unfold (top_driver_exactly td st1 workflow_buffered workflow.driver_workflow_rx_len);
+        rewrite (driver_exactly td.top_driver_core st1 workflow_buffered workflow.driver_workflow_rx_len) as
+          (driver_exactly core st1 workflow_buffered workflow.driver_workflow_rx_len);
+        unfold (driver_exactly core st1 workflow_buffered workflow.driver_workflow_rx_len);
+        V.to_vec_pts_to d.client_driver_empty_payload;
+        V.to_vec_pts_to d.client_driver_raw;
+        V.to_vec_pts_to d.client_driver_network_out;
+        V.to_vec_pts_to d.client_driver_auth_leaf_der;
+        V.to_vec_pts_to d.client_driver_auth_payload;
+        V.to_vec_pts_to d.client_driver_auth_cv_input;
+        V.to_vec_pts_to d.client_driver_auth_signature;
+        V.to_vec_pts_to d.client_driver_app_out;
+        Box.(d.client_driver_buffered_len := workflow.driver_workflow_rx_len);
+        assert (pure (SZ.v workflow.driver_workflow_rx_len <= SZ.v driver_rx_capacity));
+        rewrite (C.connection_exactly core.driver_client st1) as
+          (C.connection_exactly d.client_driver_client st1);
+        rewrite (channel_open core.driver_channel st1 workflow_buffered workflow.driver_workflow_rx_len) as
+          (channel_open ch st1 workflow_buffered workflow.driver_workflow_rx_len);
+        rewrite (O.is_auth_context td.top_driver_auth) as
+          (O.is_auth_context d.client_driver_auth);
+        fold (client_driver_buffers d workflow_buffered workflow.driver_workflow_rx_len);
+        unfold (channel_open ch st1 workflow_buffered workflow.driver_workflow_rx_len);
+        with received1 sent1.
+          assert (IO.is_channel ch received1 sent1 **
+                  pure (client_driver_wire_logs_match st1 received1 sent1 workflow_buffered workflow.driver_workflow_rx_len));
+        fold (client_driver_connected d st1 received1 sent1);
+        receive_result
       }
     }
   }

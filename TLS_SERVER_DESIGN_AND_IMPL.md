@@ -1062,6 +1062,11 @@ The client public `send` facade is also now non-degenerate: it exposes
 `CT.local_event_end_to_end_correct` theorem for `LocalSendApplicationData` and
 an exact sent-log append equation using `CT.response_network_out`.
 
+The client public `receive` facade now exposes `client_driver_receive_correct`:
+the returned status follows the actual workflow status and app-output capacity
+split, and every successful return proves that the caller's output prefix is
+exactly `CT.response_app_out` from the concrete driver app-output buffer.
+
 The client public `close` facade now mirrors the server close theorem surface:
 it exposes `client_driver_close_correct`, proving that shutdown is justified by
 the verified `LocalSendCloseNotify` transition and the exact sent-log append for
@@ -1786,6 +1791,8 @@ Checklist:
       installed client application read/write record keys.
 - [x] Public client `send` exposes the local application-send theorem and exact
       sent-log append relation.
+- [x] Public client `receive` exposes exact successful app-output copyout and
+      status/capacity split facts.
 - [x] Public client `close` exposes the local close_notify theorem and exact
       sent-log append relation before transport close.
 
