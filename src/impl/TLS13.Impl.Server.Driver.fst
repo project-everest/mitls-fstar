@@ -233,84 +233,6 @@ fn new_server
   }
 }
 
-fn accept_start_read_client_hello_select_derive_send_server_hello_drain_empty_once
-  (d:server_driver)
-  (bind_host:array U8.t)
-  (bind_host_len:SZ.t)
-  (port:U16.t)
-  (network_fuel:SZ.t)
-  (local_fuel:SZ.t)
-  requires server_driver_live d 'st0 'certificate_chain 'credential_identity **
-           pts_to bind_host 'bind_host_bytes **
-           pure (B.length 'bind_host_bytes == SZ.v bind_host_len /\
-                 CM.can_start_server 'st0 /\
-                 Some? 'st0.CS.cs_model.CS.model_config.CS.config_server /\
-                 (match 'st0.CS.cs_model.CS.model_config.CS.config_server with
-                  | Some cfg ->
-                    CS.cipher_suite_offered
-                      cfg.CS.server_supported_cipher_suites
-                      T.TLS_CHACHA20_POLY1305_SHA256 /\
-                    CS.named_group_offered
-                      cfg.CS.server_supported_groups
-                      T.X25519 /\
-                    CS.signature_scheme_offered
-                      cfg.CS.server_allowed_signature_schemes
-                      T.RsaPssRsaeSha256 /\
-                    cfg.CS.server_sni_policy == None
-                  | None -> False))
-  returns result:server_driver_accept_server_hello_drain_result
-  ensures pts_to bind_host 'bind_host_bytes **
-          (match result with
-           | ServerDriverAcceptServerHelloDrainListenFailed ->
-             server_driver_live d 'st0 'certificate_chain 'credential_identity
-           | ServerDriverAcceptServerHelloDrainAcceptFailed ->
-             server_driver_live d 'st0 'certificate_chain 'credential_identity
-           | _ ->
-             exists* st1 received sent.
-               server_driver_connected
-                 d
-                 st1
-                 'certificate_chain
-                 'credential_identity
-                 received
-                 sent)
-{
-  let accepted =
-    accept_start_read_client_hello_select_derive_send_server_hello_once
-      d
-      bind_host
-      bind_host_len
-      port
-      network_fuel;
-  match accepted {
-    ServerDriverAcceptServerHelloListenFailed -> {
-      ServerDriverAcceptServerHelloDrainListenFailed
-    }
-    ServerDriverAcceptServerHelloAcceptFailed -> {
-      ServerDriverAcceptServerHelloDrainAcceptFailed
-    }
-    ServerDriverAcceptServerHelloClientHelloWait wait -> {
-      ServerDriverAcceptServerHelloDrainClientHelloWait wait
-    }
-    ServerDriverAcceptServerHelloMaterialFailed -> {
-      ServerDriverAcceptServerHelloDrainMaterialFailed
-    }
-    ServerDriverAcceptServerHelloSelectionNotReady -> {
-      ServerDriverAcceptServerHelloDrainSelectionNotReady
-    }
-    ServerDriverAcceptServerHelloDeriveFailed -> {
-      ServerDriverAcceptServerHelloDrainDeriveFailed
-    }
-    ServerDriverAcceptServerHelloSendNotReady -> {
-      ServerDriverAcceptServerHelloDrainSendNotReady
-    }
-    ServerDriverAcceptServerHelloOk -> {
-      let drain = drain_ready_empty_local_actions d local_fuel;
-      ServerDriverAcceptServerHelloDrainOk drain
-    }
-  }
-}
-
 fn accept
   (d:server_driver)
   (bind_host:array U8.t)
@@ -337,10 +259,31 @@ fn accept
                     cfg.CS.server_sni_policy == None
                   | None -> False))
   returns status:server_workflow_status
-  ensures exists* st1.
-          pts_to bind_host 'bind_host_bytes **
-            server_driver_closed d st1 'certificate_chain 'credential_identity **
-            pure (status <> ServerWorkflowOk)
+  ensures pts_to bind_host 'bind_host_bytes **
+          (match status with
+           | ServerWorkflowClosed ->
+             exists* st1.
+               server_driver_closed d st1 'certificate_chain 'credential_identity
+           | ServerWorkflowOk ->
+             exists* st1 received sent.
+               server_driver_connected
+                 d
+                 st1
+                 'certificate_chain
+                 'credential_identity
+                 received
+                 sent **
+               pure (st1.CS.cs_model.CS.model_control ==
+                 CS.ControlApplicationData)
+           | _ ->
+             exists* st1 received sent.
+               server_driver_connected
+                 d
+                 st1
+                 'certificate_chain
+                 'credential_identity
+                 received
+                 sent)
 {
   let result =
     accept_start_read_client_hello_select_derive_send_server_hello_drain_empty_once
@@ -353,11 +296,11 @@ fn accept
   match result {
     ServerDriverAcceptServerHelloDrainListenFailed -> {
       close_live_without_transport d;
-      ServerWorkflowStepFailed
+      ServerWorkflowClosed
     }
     ServerDriverAcceptServerHelloDrainAcceptFailed -> {
       close_live_without_transport d;
-      ServerWorkflowStepFailed
+      ServerWorkflowClosed
     }
     ServerDriverAcceptServerHelloDrainClientHelloWait wait -> {
       with st1 received sent.
@@ -368,7 +311,6 @@ fn accept
           'credential_identity
           received
           sent);
-      close_transport_once d;
       if (wait.server_driver_client_hello_wait_exhausted) {
         ServerWorkflowExhausted
       } else {
@@ -384,7 +326,6 @@ fn accept
           'credential_identity
           received
           sent);
-      close_transport_once d;
       ServerWorkflowStepFailed
     }
     ServerDriverAcceptServerHelloDrainSelectionNotReady -> {
@@ -396,7 +337,6 @@ fn accept
           'credential_identity
           received
           sent);
-      close_transport_once d;
       ServerWorkflowStepFailed
     }
     ServerDriverAcceptServerHelloDrainDeriveFailed -> {
@@ -408,7 +348,6 @@ fn accept
           'credential_identity
           received
           sent);
-      close_transport_once d;
       ServerWorkflowStepFailed
     }
     ServerDriverAcceptServerHelloDrainSendNotReady -> {
@@ -420,7 +359,6 @@ fn accept
           'credential_identity
           received
           sent);
-      close_transport_once d;
       ServerWorkflowStepFailed
     }
     ServerDriverAcceptServerHelloDrainOk drain -> {
@@ -432,7 +370,6 @@ fn accept
           'credential_identity
           received
           sent);
-      close_transport_once d;
       if (drain.server_driver_local_drain_exhausted) {
         ServerWorkflowExhausted
       } else {
@@ -479,8 +416,13 @@ fn send
             'received
             sent' **
           pts_to payload 'payload_bytes **
-          pure (status == ServerWorkflowOk \/
-                status == ServerWorkflowStepFailed)
+          pure (server_driver_send_correct
+            'st0
+            st1
+            status
+            (Ghost.reveal 'payload_bytes)
+            (Ghost.reveal 'sent)
+            sent')
 {
   let resp = send_application_data_once d payload payload_len;
   if (resp.ST.status = ST.StepOk) {
@@ -506,7 +448,7 @@ fn receive
            pts_to out 'out_bytes **
            pure (B.length 'out_bytes == SZ.v out_len)
   returns result:server_receive_result
-  ensures exists* st1 received' sent'.
+  ensures exists* st1 received' sent' out_bytes.
           server_driver_connected
             d
             st1
@@ -514,35 +456,186 @@ fn receive
             'credential_identity
             received'
             sent' **
-          pts_to out 'out_bytes **
-          pure (result.server_receive_len == 0sz /\
-                SZ.v result.server_receive_len <= SZ.v out_len)
+          pts_to out out_bytes **
+          pure (B.length out_bytes == SZ.v out_len /\
+                SZ.v result.server_receive_len <= SZ.v out_len /\
+                (exists loop.
+                  server_driver_receive_correct
+                    'st0
+                    st1
+                    result
+                    loop
+                    (Ghost.reveal 'sent)
+                    sent'
+                    out_bytes))
 {
   let loop = read_process_network_until_ready d network_fuel;
+  with st1 received' sent'.
+    assert (server_driver_connected
+      d
+      st1
+      'certificate_chain
+      'credential_identity
+      received'
+      sent' **
+      pure (loop.server_driver_network_loop_exhausted == false ==>
+        loop.server_driver_network_loop_last.ST.response.ST.status <>
+          ST.NeedMoreInput /\
+        server_driver_network_process_correct
+          'st0
+          st1
+          loop.server_driver_network_loop_last
+          (Ghost.reveal 'sent)
+          sent'));
   if (loop.server_driver_network_loop_exhausted) {
-    {
+    let result = {
       server_receive_status = ServerWorkflowExhausted;
       server_receive_len = 0sz;
-    }
+    };
+    assert (pure (server_driver_receive_correct
+      'st0
+      st1
+      result
+      loop
+      (Ghost.reveal 'sent)
+      sent'
+      (Ghost.reveal 'out_bytes)));
+    result
   } else {
     match loop.server_driver_network_loop_last.ST.response.ST.status {
       ST.StepOk -> {
-        {
-          server_receive_status = ServerWorkflowOk;
-          server_receive_len = 0sz;
+        unfold (server_driver_connected
+          d
+          st1
+          'certificate_chain
+          'credential_identity
+          received'
+          sent');
+        with ch buffered buffered_len.
+          assert (Box.pts_to d.server_driver_channel (Some ch) **
+                  IO.is_channel ch received' sent' **
+                  server_driver_buffers d buffered buffered_len);
+        unfold (server_driver_buffers d buffered buffered_len);
+        with empty_payload raw network_out material cv_input signature app_out.
+          assert (
+            Box.pts_to d.server_driver_buffered_len buffered_len **
+            V.pts_to d.server_driver_empty_payload #1.0R empty_payload **
+            V.pts_to d.server_driver_raw #1.0R raw **
+            V.pts_to d.server_driver_network_out #1.0R network_out **
+            V.pts_to d.server_driver_material_payload #1.0R material **
+            V.pts_to d.server_driver_certificate_verify_input #1.0R cv_input **
+            V.pts_to d.server_driver_signature #1.0R signature **
+            V.pts_to d.server_driver_app_out #1.0R app_out);
+        let copy_len = loop.server_driver_network_loop_last.ST.response.ST.app_out_len;
+        let app_fits = SZ.lte copy_len out_len;
+        let app_src_fits = SZ.lte copy_len driver_app_out_capacity;
+        if (app_fits && app_src_fits) {
+          V.to_array_pts_to d.server_driver_app_out;
+          A.pts_to_len (V.vec_to_array d.server_driver_app_out);
+          A.pts_to_len out;
+          assert (pure (SZ.v copy_len <= SZ.v out_len));
+          assert (pure (SZ.v copy_len <= SZ.v driver_app_out_capacity));
+          assert (pure (B.length app_out == SZ.v driver_app_out_capacity));
+          assert (pure (A.length (V.vec_to_array d.server_driver_app_out) ==
+            B.length app_out));
+          assert (pure (A.length out == SZ.v out_len));
+          assert (pure (SZ.v copy_len <= A.length (V.vec_to_array d.server_driver_app_out)));
+          assert (pure (SZ.v copy_len <= A.length out));
+          let _ = A.memcpy_l copy_len (V.vec_to_array d.server_driver_app_out) out;
+          with out_bytes.
+            assert (pts_to out out_bytes);
+          assert (pure (B.length out_bytes == SZ.v out_len));
+          assert (pure (SZ.v copy_len <= B.length app_out));
+          assert (pure (Seq.equal
+            (ST.response_app_out
+              loop.server_driver_network_loop_last.ST.response
+              app_out)
+            (Seq.slice app_out 0 (SZ.v copy_len))));
+          Seq.lemma_len_slice out_bytes 0 (SZ.v copy_len);
+          Seq.lemma_len_slice app_out 0 (SZ.v copy_len);
+          assert (pure (Seq.equal
+            (Seq.slice out_bytes 0 (SZ.v copy_len))
+            (Seq.slice app_out 0 (SZ.v copy_len))));
+          V.to_vec_pts_to d.server_driver_app_out;
+          fold (server_driver_buffers d buffered buffered_len);
+          fold (server_driver_connected
+            d
+            st1
+            'certificate_chain
+            'credential_identity
+            received'
+            sent');
+          let result = {
+            server_receive_status = ServerWorkflowOk;
+            server_receive_len = copy_len;
+          };
+          assert (pure (server_driver_receive_copyout_correct
+            result
+            loop.server_driver_network_loop_last.ST.response
+            app_out
+            out_bytes));
+          assert (pure (server_driver_receive_correct
+            'st0
+            st1
+            result
+            loop
+            (Ghost.reveal 'sent)
+            sent'
+            out_bytes));
+          result
+        } else {
+          fold (server_driver_buffers d buffered buffered_len);
+          fold (server_driver_connected
+            d
+            st1
+            'certificate_chain
+            'credential_identity
+            received'
+            sent');
+          let result = {
+            server_receive_status = ServerWorkflowStepFailed;
+            server_receive_len = 0sz;
+          };
+          assert (pure (server_driver_receive_correct
+            'st0
+            st1
+            result
+            loop
+            (Ghost.reveal 'sent)
+            sent'
+            (Ghost.reveal 'out_bytes)));
+          result
         }
       }
       ST.NeedMoreInput -> {
-        {
+        let result = {
           server_receive_status = ServerWorkflowNeedMoreInput;
           server_receive_len = 0sz;
-        }
+        };
+        assert (pure (server_driver_receive_correct
+          'st0
+          st1
+          result
+          loop
+          (Ghost.reveal 'sent)
+          sent'
+          (Ghost.reveal 'out_bytes)));
+        result
       }
       _ -> {
-        {
+        let result = {
           server_receive_status = ServerWorkflowStepFailed;
           server_receive_len = 0sz;
-        }
+        };
+        assert (pure (server_driver_receive_correct
+          'st0
+          st1
+          result
+          loop
+          (Ghost.reveal 'sent)
+          sent'
+          (Ghost.reveal 'out_bytes)));
+        result
       }
     }
   }

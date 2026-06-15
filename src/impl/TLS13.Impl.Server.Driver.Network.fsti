@@ -59,13 +59,33 @@ fn compact_buffer_suffix
                      (SZ.v buffered_len)))
 
 noextract
-val server_driver_network_process_correct
+let server_driver_network_process_correct
   (st0:CS.connection_state)
   (st1:CS.connection_state)
   (resp:ST.server_buffer_response)
   (sent:B.bytes)
   (sent':B.bytes)
-  : prop
+  : prop =
+  exists input network_out_bytes app_out_bytes.
+    ST.server_network_bytes_end_to_end_correct
+      st0
+      st1
+      resp
+      input
+      network_out_bytes
+      app_out_bytes /\
+    ST.server_network_consumed_input_projection
+      st0
+      st1
+      resp
+      input
+      network_out_bytes
+      app_out_bytes /\
+    Seq.equal
+      sent'
+      (B.append
+        sent
+        (ST.response_network_out resp.ST.response network_out_bytes))
 
 fn process_buffered_network_bytes_compact_once
   (d:DS.server_driver)

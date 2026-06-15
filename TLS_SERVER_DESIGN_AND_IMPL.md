@@ -902,10 +902,12 @@ belongs to Handshake as well, along with its material-buffer readiness wrapper
 slice, `accept_start_read_client_hello_select_derive_once`, now also lives in
 Handshake. The next accept orchestration slice,
 `accept_start_read_client_hello_select_derive_send_server_hello_once`, has moved
-there too.
-Selection, derivation, ServerHello, encrypted-flight orchestration, and the full
-public `accept` handshake still remain in the main driver until subsequent
-Handshake slices move them behind this boundary.
+there too. The drain wrapper
+`accept_start_read_client_hello_select_derive_send_server_hello_drain_empty_once`
+has moved there as well, so the main driver facade no longer owns the
+accept-through-ServerHello composition logic.
+Encrypted-flight orchestration and the full public `accept` handshake still
+remain to be completed behind this boundary.
 
 The final public `TLS13.Impl.Server.Driver.fsti` should expose only:
 
@@ -958,16 +960,37 @@ fn receive ...
 fn close ...
 ```
 
+The public facade must not use weak or degenerate postconditions. Current status:
+`accept` no longer advertises `status <> ServerWorkflowOk` or closes every
+connected partial handshake. Transport listen/accept failures return
+`ServerWorkflowClosed` with `server_driver_closed`; all other current
+in-progress/failure/exhaustion statuses preserve `server_driver_connected` and
+therefore the IO-history relation. Future `ServerWorkflowOk` remains reserved
+for a state whose model control is `ControlApplicationData`.
+
+`send` now exposes `server_driver_send_correct`, a transparent noextract
+predicate stating that the hidden response is the verified
+`LocalSendApplicationData` local-event theorem, including the payload-to-sent-app
+delta fact from `TLS13.Impl.Server.Types`, and that the transport `sent'` log is
+exactly `sent` appended with the emitted network-output prefix.
+
+`receive` now exposes `server_driver_receive_correct`, tying the returned status
+to the verified network retry loop and, for non-exhausted results, to
+`server_driver_network_process_correct`. On a successful protocol step it copies
+the concrete app-output prefix to the caller buffer and exposes
+`server_driver_receive_copyout_correct`, relating `server_receive_len` and the
+caller-visible output prefix to `ST.response_app_out`. The network/local helper
+correctness predicates in `Driver.Network.fsti` and `Driver.Local.fsti` are now
+transparent definitions, not opaque `val` declarations, so auditors can unfold
+them to the public server theorem predicates and exact sent-log append facts.
+
 `accept` is the server analogue of the client driver's `connect`: it listens,
 accepts one TCP channel, completes the supported-profile handshake as far as
 application-data readiness or a precise failure/exhaustion status, and preserves
-the server driver IO-history invariant. The first facade-freeze implementation
-is deliberately honest: because the full server handshake is not complete yet,
-public `accept` closes the partial transport and returns a non-OK status rather
-than claiming handshake completion. `send`, `receive`, and `close` now have the
-client-driver public API shape; `receive` is still a placeholder over the
-network-processing loop and does not yet copy delivered application bytes to the
-caller buffer. The final `accept` may expose one noextract predicate such as
+the server driver IO-history invariant. The implementation is still deliberately
+honest about handshake incompleteness: it does not return `ServerWorkflowOk`
+until the remaining encrypted-flight and ClientFinished orchestration is
+verified. The final `accept` may expose one noextract predicate such as
 `server_driver_application_ready st` if callers need the successful result to
 state that application-data control and application traffic keys are installed.
 

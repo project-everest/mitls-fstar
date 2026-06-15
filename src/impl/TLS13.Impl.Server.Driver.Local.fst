@@ -142,29 +142,6 @@ fn start_server_once
   resp
 }
 
-noextract
-let server_driver_local_write_correct
-  (st0:CS.connection_state)
-  (st1:CS.connection_state)
-  (resp:ST.server_response)
-  (kind:ST.local_event_kind)
-  (payload:B.bytes)
-  (sent:B.bytes)
-  (sent':B.bytes)
-  : prop =
-  exists network_out_bytes app_out_bytes.
-    ST.server_local_event_end_to_end_correct
-      st0
-      st1
-      resp
-      kind
-      payload
-      network_out_bytes
-      app_out_bytes /\
-    Seq.equal
-      sent'
-      (B.append sent (ST.response_network_out resp network_out_bytes))
-
 let lemma_server_driver_local_write_correct_intro
   (st0:CS.connection_state)
   (st1:CS.connection_state)
