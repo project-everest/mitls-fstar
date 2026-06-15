@@ -8,6 +8,7 @@ open Pulse.Lib.Array.PtsTo
 module B = TLS13.Bytes
 module CL = TLS13.ConnectionLog
 module CS = TLS13.Spec.ConnectionState
+module DS = TLS13.Impl.Server.Driver.State
 module ST = TLS13.Impl.Server.Types
 module Seq = FStar.Seq
 module SZ = FStar.SizeT
@@ -54,6 +55,31 @@ val server_driver_network_process_correct
   (sent:B.bytes)
   (sent':B.bytes)
   : prop
+
+fn process_buffered_network_bytes_compact_once
+  (d:DS.server_driver)
+  requires DS.server_driver_connected
+             d
+             'st0
+             'certificate_chain
+             'credential_identity
+             'received
+             'sent
+  returns resp:ST.server_buffer_response
+  ensures exists* st1 sent'.
+          DS.server_driver_connected
+            d
+            st1
+            'certificate_chain
+            'credential_identity
+            'received
+            sent' **
+          pure (server_driver_network_process_correct
+            'st0
+            st1
+            resp
+            (Ghost.reveal 'sent)
+            sent')
 
 val lemma_server_driver_network_process_correct_intro
   (st0:CS.connection_state)
