@@ -855,6 +855,11 @@ the read/process/compact network path, whose proof is tightly coupled to
 retained-buffer compaction and network-step accounting; that should move with
 the next Network boundary.
 
+`TLS13.Impl.Server.Driver.Network.fsti/fst` now owns the first retained-buffer
+network helper: `pending_after_consumed` and the verified in-place
+`compact_buffer_suffix` primitive. The higher-level read/process/compact step
+and ClientHello wait loops remain in the main driver for now.
+
 The final public `TLS13.Impl.Server.Driver.fsti` should expose only:
 
 ```fstar
