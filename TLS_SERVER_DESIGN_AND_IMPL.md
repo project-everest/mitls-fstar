@@ -849,10 +849,11 @@ the file is split further.
 
 `TLS13.Impl.Server.Driver.Transport.fsti/fst` now owns the first transport
 ownership transitions: TCP listen/accept into a connected driver, closing a
-connected transport, and closing a never-connected live driver. Buffered reads
-remain in the main driver for the moment because their proof is tightly coupled
-to retained-buffer compaction and network-step accounting; that should move with
-the next Transport/Network boundary.
+connected transport, and closing a never-connected live driver. The unused
+standalone `read_transport_once` helper was removed. Active reads happen through
+the read/process/compact network path, whose proof is tightly coupled to
+retained-buffer compaction and network-step accounting; that should move with
+the next Network boundary.
 
 The final public `TLS13.Impl.Server.Driver.fsti` should expose only:
 
