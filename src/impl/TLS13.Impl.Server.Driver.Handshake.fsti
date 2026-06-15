@@ -204,6 +204,62 @@ fn generate_server_material_once
               'received
               'sent
 
+fn select_default_server_parameters_once
+  (d:DS.server_driver)
+  requires DS.server_driver_connected
+                d
+                'st0
+                'certificate_chain
+                'credential_identity
+                'received
+                'sent **
+           pure (ST.server_local_event_input_ready
+               'st0
+               ST.LocalSelectServerParameters
+               (Seq.create 64 0uy))
+  returns resp:ST.server_response
+  ensures exists* st1.
+          DS.server_driver_connected
+              d
+              st1
+              'certificate_chain
+              'credential_identity
+              'received
+              'sent
+
+fn select_default_server_parameters_from_payload_once
+  (d:DS.server_driver)
+  (payload:array U8.t)
+  (payload_len:SZ.t)
+  requires DS.server_driver_connected
+               d
+               'st0
+               'certificate_chain
+               'credential_identity
+               'received
+               'sent **
+           pts_to payload 'payload_bytes **
+           pure (B.length 'payload_bytes == SZ.v payload_len /\
+                   SZ.v payload_len == 64 /\
+                   ST.server_local_event_input_ready
+                     'st0
+                     ST.LocalSelectServerParameters
+                     (Ghost.reveal 'payload_bytes))
+  returns resp:ST.server_response
+  ensures exists* st1.
+          DS.server_driver_connected
+              d
+              st1
+              'certificate_chain
+              'credential_identity
+              'received
+              'sent **
+          pts_to payload 'payload_bytes **
+          pure (server_driver_selection_from_payload_correct
+              'st0
+              st1
+              (Ghost.reveal 'payload_bytes))
+
 fn accept_transport_and_start_once
   (d:DS.server_driver)
   (bind_host:array U8.t)

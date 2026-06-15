@@ -883,6 +883,10 @@ The driver-owned entropy/material payload helper
 `generate_server_material_once` has moved behind the Handshake boundary, and the
 unused `start_server_if_ready` wrapper was removed rather than preserving dead
 orchestration code.
+The focused default selection helpers
+`select_default_server_parameters_once` and
+`select_default_server_parameters_from_payload_once` now also live behind this
+boundary.
 Selection, derivation, ServerHello, encrypted-flight orchestration, and the full
 public `accept` handshake still remain in the main driver until subsequent
 Handshake slices move them behind this boundary.
