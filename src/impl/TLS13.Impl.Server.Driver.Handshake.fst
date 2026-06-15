@@ -701,6 +701,276 @@ fn select_default_server_parameters_from_payload_once
   resp
 }
 
+fn derive_shared_secret_from_payload_once
+  (d:server_driver)
+  (payload:array U8.t)
+  (payload_len:SZ.t)
+  requires server_driver_connected
+              d
+              'st0
+              'certificate_chain
+              'credential_identity
+              'received
+              'sent **
+           pts_to payload 'payload_bytes **
+           pure (B.length 'payload_bytes == SZ.v payload_len /\
+                 SZ.v payload_len == 32 /\
+                 ST.server_local_event_input_ready
+                   'st0
+                   ST.LocalDeriveSharedSecret
+                   (Ghost.reveal 'payload_bytes))
+  returns resp:ST.server_response
+  ensures exists* st1 sent'.
+          server_driver_connected
+            d
+            st1
+            'certificate_chain
+            'credential_identity
+            'received
+            sent' **
+          pts_to payload 'payload_bytes **
+          pure (server_driver_local_write_correct
+            'st0
+            st1
+            resp
+            ST.LocalDeriveSharedSecret
+            (Ghost.reveal 'payload_bytes)
+            (Ghost.reveal 'sent)
+            sent' /\
+           server_driver_derive_shared_secret_success_correct
+            'st0
+            st1
+            resp
+            (Ghost.reveal 'payload_bytes))
+{
+  unfold (server_driver_connected
+    d
+    'st0
+    'certificate_chain
+    'credential_identity
+    'received
+    'sent);
+  with ch buffered buffered_len.
+    assert (Box.pts_to d.server_driver_channel (Some ch) **
+            IO.is_channel ch 'received 'sent **
+            server_driver_buffers d buffered buffered_len);
+  assert (pure (ST.server_end_to_end_invariant 'st0));
+  assert (pure (server_driver_wire_logs_match
+    'st0
+    'received
+    'sent
+    buffered
+    buffered_len));
+
+  unfold (server_driver_buffers d buffered buffered_len);
+  with empty_payload raw network_out material cv_input signature app_out.
+    assert (
+      Box.pts_to d.server_driver_buffered_len buffered_len **
+      V.pts_to d.server_driver_empty_payload #1.0R empty_payload **
+      V.pts_to d.server_driver_raw #1.0R raw **
+      V.pts_to d.server_driver_network_out #1.0R network_out **
+      V.pts_to d.server_driver_material_payload #1.0R material **
+      V.pts_to d.server_driver_certificate_verify_input #1.0R cv_input **
+      V.pts_to d.server_driver_signature #1.0R signature **
+      V.pts_to d.server_driver_app_out #1.0R app_out);
+  V.to_array_pts_to d.server_driver_network_out;
+  V.to_array_pts_to d.server_driver_app_out;
+
+  let resp =
+    S.process_derive_shared_secret_from_private_array
+      d.server_driver_server
+      payload
+      (V.vec_to_array d.server_driver_network_out)
+      driver_network_out_capacity
+      (V.vec_to_array d.server_driver_app_out)
+      driver_app_out_capacity;
+  with st1 network_out_bytes app_out_bytes.
+    assert (
+      S.connection_exactly d.server_driver_server st1 **
+      pts_to payload 'payload_bytes **
+      pts_to (V.vec_to_array d.server_driver_network_out) network_out_bytes **
+      pts_to (V.vec_to_array d.server_driver_app_out) app_out_bytes);
+  assert (pure (B.length network_out_bytes == SZ.v driver_network_out_capacity));
+  assert (pure (B.length app_out_bytes == SZ.v driver_app_out_capacity));
+  assert (pure (ST.server_local_event_end_to_end_correct
+    'st0
+    st1
+    resp
+    ST.LocalDeriveSharedSecret
+    (Ghost.reveal 'payload_bytes)
+    network_out_bytes
+    app_out_bytes));
+  assert (pure (ST.server_end_to_end_invariant st1));
+  lemma_local_event_wire_lengths
+    'st0
+    st1
+    resp
+    ST.LocalDeriveSharedSecret
+    (Ghost.reveal 'payload_bytes)
+    network_out_bytes
+    app_out_bytes;
+  assert (pure (SZ.v resp.ST.network_out_len <= B.length network_out_bytes));
+
+  let current_channel = Box.(!d.server_driver_channel);
+  assert (pure (current_channel == Some ch));
+  assert (pure (Some? current_channel));
+  let concrete_ch = Some?.v current_channel;
+  assert (pure (current_channel == Some concrete_ch));
+  assert (pure (Some concrete_ch == Some ch));
+  rewrite (IO.is_channel ch 'received 'sent) as
+    (IO.is_channel concrete_ch 'received 'sent);
+  let written =
+    IO.write
+      concrete_ch
+      (V.vec_to_array d.server_driver_network_out)
+      resp.ST.network_out_len;
+  assert (pure (written == resp.ST.network_out_len));
+  assert (pure (SZ.v written <= B.length network_out_bytes));
+  rewrite
+    (IO.is_channel
+      concrete_ch
+      'received
+      (B.append
+        (Ghost.reveal 'sent)
+        (if SZ.v written <= B.length network_out_bytes
+         then Seq.slice network_out_bytes 0 (SZ.v written)
+         else B.empty)))
+    as
+    (IO.is_channel
+      ch
+      'received
+      (B.append
+        (Ghost.reveal 'sent)
+        (if SZ.v written <= B.length network_out_bytes
+         then Seq.slice network_out_bytes 0 (SZ.v written)
+         else B.empty)));
+  Seq.lemma_len_slice network_out_bytes 0 (SZ.v written);
+  assert (pure (Seq.equal
+    (if SZ.v written <= B.length network_out_bytes
+     then Seq.slice network_out_bytes 0 (SZ.v written)
+     else B.empty)
+    (ST.response_network_out resp network_out_bytes)));
+  let old_consumed =
+    Ghost.hide (ID.indefinite_description_ghost
+      B.bytes
+      (fun consumed ->
+        server_driver_wire_logs_match_witness
+          'st0
+          (Ghost.reveal 'received)
+          (Ghost.reveal 'sent)
+          consumed
+          buffered
+          buffered_len));
+  assert (pure (server_driver_wire_logs_match_witness
+    'st0
+    (Ghost.reveal 'received)
+    (Ghost.reveal 'sent)
+    (Ghost.reveal old_consumed)
+    buffered
+    buffered_len));
+  assert (pure (Seq.equal
+    (Ghost.reveal 'sent)
+    'st0.CS.cs_wire_log.CL.raw_sent));
+  Seq.lemma_eq_elim
+    (Ghost.reveal 'sent)
+    'st0.CS.cs_wire_log.CL.raw_sent;
+  assert (pure (Seq.equal
+    st1.CS.cs_wire_log.CL.raw_sent
+    (B.append
+      'st0.CS.cs_wire_log.CL.raw_sent
+      (ST.response_network_out resp network_out_bytes))));
+  assert (pure (Seq.equal
+    st1.CS.cs_wire_log.CL.raw_received
+    'st0.CS.cs_wire_log.CL.raw_received));
+  Seq.lemma_eq_elim
+    st1.CS.cs_wire_log.CL.raw_received
+    'st0.CS.cs_wire_log.CL.raw_received;
+  assert (pure (Seq.equal
+    (B.append
+      (Ghost.reveal 'sent)
+      (if SZ.v written <= B.length network_out_bytes
+       then Seq.slice network_out_bytes 0 (SZ.v written)
+       else B.empty))
+    st1.CS.cs_wire_log.CL.raw_sent));
+  assert (pure (server_driver_wire_logs_match_witness
+    st1
+    (Ghost.reveal 'received)
+    (B.append
+      (Ghost.reveal 'sent)
+      (if SZ.v written <= B.length network_out_bytes
+       then Seq.slice network_out_bytes 0 (SZ.v written)
+       else B.empty))
+    (Ghost.reveal old_consumed)
+    buffered
+    buffered_len));
+  assert (pure (server_driver_wire_logs_match
+    st1
+    (Ghost.reveal 'received)
+    (B.append
+      (Ghost.reveal 'sent)
+      (if SZ.v written <= B.length network_out_bytes
+       then Seq.slice network_out_bytes 0 (SZ.v written)
+       else B.empty))
+    buffered
+    buffered_len));
+
+  V.to_vec_pts_to d.server_driver_network_out;
+  V.to_vec_pts_to d.server_driver_app_out;
+  fold (server_driver_buffers d buffered buffered_len);
+  fold (server_driver_connected
+    d
+    st1
+    'certificate_chain
+    'credential_identity
+    'received
+    (B.append
+      (Ghost.reveal 'sent)
+      (if SZ.v written <= B.length network_out_bytes
+       then Seq.slice network_out_bytes 0 (SZ.v written)
+       else B.empty)));
+  assert (pure (Seq.equal
+    (B.append
+      (Ghost.reveal 'sent)
+      (if SZ.v written <= B.length network_out_bytes
+       then Seq.slice network_out_bytes 0 (SZ.v written)
+       else B.empty))
+    (B.append
+      (Ghost.reveal 'sent)
+      (ST.response_network_out resp network_out_bytes))));
+  lemma_server_driver_local_write_correct_intro
+    'st0
+    st1
+    resp
+    ST.LocalDeriveSharedSecret
+    (Ghost.reveal 'payload_bytes)
+    (Ghost.reveal 'sent)
+    (B.append
+      (Ghost.reveal 'sent)
+      (if SZ.v written <= B.length network_out_bytes
+       then Seq.slice network_out_bytes 0 (SZ.v written)
+       else B.empty))
+    network_out_bytes
+    app_out_bytes;
+  assert (pure (server_driver_local_write_correct
+    'st0
+    st1
+    resp
+    ST.LocalDeriveSharedSecret
+    (Ghost.reveal 'payload_bytes)
+    (Ghost.reveal 'sent)
+    (B.append
+      (Ghost.reveal 'sent)
+      (if SZ.v written <= B.length network_out_bytes
+       then Seq.slice network_out_bytes 0 (SZ.v written)
+       else B.empty))));
+  assert (pure (server_driver_derive_shared_secret_success_correct
+    'st0
+    st1
+    resp
+    (Ghost.reveal 'payload_bytes)));
+  resp
+}
+
 fn accept_transport_and_start_once
   (d:server_driver)
   (bind_host:array U8.t)

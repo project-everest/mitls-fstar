@@ -886,7 +886,8 @@ orchestration code.
 The focused default selection helpers
 `select_default_server_parameters_once` and
 `select_default_server_parameters_from_payload_once` now also live behind this
-boundary.
+boundary, and `derive_shared_secret_from_payload_once` now owns the exact
+LocalDeriveSharedSecret write/accounting step there as well.
 Selection, derivation, ServerHello, encrypted-flight orchestration, and the full
 public `accept` handshake still remain in the main driver until subsequent
 Handshake slices move them behind this boundary.
