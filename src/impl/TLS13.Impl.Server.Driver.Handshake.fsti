@@ -359,6 +359,40 @@ fn select_supported_server_parameters_from_payload_if_ready_once
            | DL.ServerDriverLocalExternalOrUnsupported ->
                  pure False)
 
+fn select_and_derive_shared_secret_from_payload_once
+  (d:DS.server_driver)
+  (payload:array U8.t)
+  (payload_len:SZ.t)
+  requires DS.server_driver_connected
+              d
+              'st0
+              'certificate_chain
+              'credential_identity
+              'received
+              'sent **
+           pts_to payload 'payload_bytes **
+           pure (B.length 'payload_bytes == SZ.v payload_len /\
+                   SZ.v payload_len == 64 /\
+                   ST.server_local_event_input_ready
+                     'st0
+                     ST.LocalSelectServerParameters
+                     (Ghost.reveal 'payload_bytes))
+  returns resp:ST.server_response
+  ensures exists* st2 sent'.
+          DS.server_driver_connected
+            d
+            st2
+            'certificate_chain
+            'credential_identity
+            'received
+            sent' **
+          pts_to payload 'payload_bytes **
+          pure (server_driver_select_derive_from_payload_success_correct
+            'st0
+            st2
+            resp
+            (Ghost.reveal 'payload_bytes))
+
 fn accept_transport_and_start_once
   (d:DS.server_driver)
   (bind_host:array U8.t)

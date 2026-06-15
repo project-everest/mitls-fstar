@@ -1152,6 +1152,122 @@ fn select_supported_server_parameters_from_payload_if_ready_once
   }
 }
 
+fn select_and_derive_shared_secret_from_payload_once
+  (d:server_driver)
+  (payload:array U8.t)
+  (payload_len:SZ.t)
+  requires server_driver_connected
+              d
+              'st0
+              'certificate_chain
+              'credential_identity
+              'received
+              'sent **
+           pts_to payload 'payload_bytes **
+           pure (B.length 'payload_bytes == SZ.v payload_len /\
+                 SZ.v payload_len == 64 /\
+                 ST.server_local_event_input_ready
+                   'st0
+                   ST.LocalSelectServerParameters
+                   (Ghost.reveal 'payload_bytes))
+  returns resp:ST.server_response
+  ensures exists* st2 sent'.
+          server_driver_connected
+            d
+            st2
+            'certificate_chain
+            'credential_identity
+            'received
+            sent' **
+          pts_to payload 'payload_bytes **
+          pure (server_driver_select_derive_from_payload_success_correct
+            'st0
+            st2
+            resp
+            (Ghost.reveal 'payload_bytes))
+{
+  let _ =
+    select_default_server_parameters_from_payload_once
+      d
+      payload
+      payload_len;
+  with st1.
+    assert (
+      server_driver_connected
+        d
+        st1
+        'certificate_chain
+        'credential_identity
+        'received
+        'sent **
+      pts_to payload 'payload_bytes **
+      pure (server_driver_selection_from_payload_correct
+        'st0
+        st1
+        (Ghost.reveal 'payload_bytes)));
+
+  let mut server_random = [| 0uy; 32sz |];
+  let mut server_private_key = [| 0uy; 32sz |];
+  Mat.copy_server_random_and_private_from_payload
+    payload
+    server_random
+    server_private_key;
+  with server_random_bytes. assert (pts_to server_random server_random_bytes);
+  with server_private_key_bytes.
+    assert (pts_to server_private_key server_private_key_bytes);
+  assert (pure (B.length server_private_key_bytes == 32));
+  assert (pure (Seq.equal
+    server_private_key_bytes
+    (CL.raw_slice (Ghost.reveal 'payload_bytes) 32 64)));
+  Seq.lemma_eq_elim
+    server_private_key_bytes
+    (CL.raw_slice (Ghost.reveal 'payload_bytes) 32 64);
+  assert (pure (ST.server_local_event_input_ready
+    st1
+    ST.LocalDeriveSharedSecret
+    server_private_key_bytes));
+  let resp =
+    derive_shared_secret_from_payload_once
+      d
+      server_private_key
+      32sz;
+  with st2 sent'.
+    assert (
+      server_driver_connected
+        d
+        st2
+        'certificate_chain
+        'credential_identity
+        'received
+        sent' **
+      pts_to server_private_key server_private_key_bytes **
+      pure (server_driver_local_write_correct
+        st1
+        st2
+        resp
+        ST.LocalDeriveSharedSecret
+        server_private_key_bytes
+        (Ghost.reveal 'sent)
+        sent' /\
+      server_driver_derive_shared_secret_success_correct
+        st1
+        st2
+        resp
+        server_private_key_bytes));
+  assert (pure (Seq.equal
+    server_private_key_bytes
+    (CL.raw_slice (Ghost.reveal 'payload_bytes) 32 64)));
+  Seq.lemma_eq_elim
+    server_private_key_bytes
+    (CL.raw_slice (Ghost.reveal 'payload_bytes) 32 64);
+  assert (pure (server_driver_select_derive_from_payload_success_correct
+    'st0
+    st2
+    resp
+    (Ghost.reveal 'payload_bytes)));
+  resp
+}
+
 fn accept_transport_and_start_once
   (d:server_driver)
   (bind_host:array U8.t)
