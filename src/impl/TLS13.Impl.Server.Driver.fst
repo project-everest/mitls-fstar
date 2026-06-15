@@ -77,6 +77,26 @@ let lemma_server_driver_wire_logs_match_received_exact_prefix
     buffered
     buffered_len
 
+let lemma_server_driver_wire_logs_match_received_no_read_ahead
+  (st:CS.connection_state)
+  (received:B.bytes)
+  (sent:B.bytes)
+  (buffered:B.bytes)
+  (buffered_len:SZ.t)
+  : Lemma
+      (requires
+        server_driver_wire_logs_match st received sent buffered buffered_len /\
+        ST.server_connection_control_not_failed st /\
+        buffered_len == 0sz)
+      (ensures server_driver_received_no_read_ahead st received)
+=
+  DS.lemma_server_driver_wire_logs_match_received_no_read_ahead
+    st
+    received
+    sent
+    buffered
+    buffered_len
+
 open TLS13.Impl.Server.Driver.State
 open TLS13.Impl.Server.Driver.Transport
 open TLS13.Impl.Server.Driver.Network
@@ -338,7 +358,8 @@ fn accept
                pure (server_driver_application_ready st1 /\
                     server_driver_sent_log_exact st1 sent /\
                     server_driver_received_log_accounted st1 received /\
-                    server_driver_received_log_exact_prefix st1 received)
+                    server_driver_received_log_exact_prefix st1 received /\
+                    server_driver_received_no_read_ahead st1 received)
            | _ ->
              exists* st1 received sent.
                server_driver_connected
@@ -513,6 +534,20 @@ fn accept
                           assert (Box.pts_to d.server_driver_channel (Some ch) **
                                   IO.is_channel ch received3 sent3 **
                                   server_driver_buffers d buffered buffered_len);
+                        unfold (server_driver_buffers d buffered buffered_len);
+                        with empty_payload raw network_out material cv_input signature app_out.
+                          assert (
+                            Box.pts_to d.server_driver_buffered_len buffered_len **
+                            V.pts_to d.server_driver_empty_payload #1.0R empty_payload **
+                            V.pts_to d.server_driver_raw #1.0R raw **
+                            V.pts_to d.server_driver_network_out #1.0R network_out **
+                            V.pts_to d.server_driver_material_payload #1.0R material **
+                            V.pts_to d.server_driver_certificate_verify_input #1.0R cv_input **
+                            V.pts_to d.server_driver_signature #1.0R signature **
+                            V.pts_to d.server_driver_app_out #1.0R app_out);
+                        let current_buffered_len = Box.(!d.server_driver_buffered_len);
+                        assert (pure (current_buffered_len == buffered_len));
+                        fold (server_driver_buffers d buffered buffered_len);
                         assert (pure (ST.server_end_to_end_invariant st3));
                         rewrite (S.connection_exactly d.server_driver_server st3) as
                           (CR.connection_exactly d.server_driver_server st3);
@@ -521,35 +556,55 @@ fn accept
                             d.server_driver_server;
                         rewrite (CR.connection_exactly d.server_driver_server st3) as
                           (S.connection_exactly d.server_driver_server st3);
-                        if app_keys_ready {
-                          assert (pure (CS.application_record_keys_installed_for_role
-                            CS.ServerEndpoint
-                            st3.CS.cs_model));
-                          assert (pure (server_driver_sent_log_exact st3 sent3));
-                          lemma_server_driver_wire_logs_match_received_accounted
-                            st3
-                            received3
-                            sent3
-                            buffered
-                            buffered_len;
-                          assert (pure (server_driver_received_log_accounted st3 received3));
-                          assert (pure (ST.server_connection_control_not_failed st3));
-                          lemma_server_driver_wire_logs_match_received_exact_prefix
-                            st3
-                            received3
-                            sent3
-                            buffered
-                            buffered_len;
-                          assert (pure (server_driver_received_log_exact_prefix st3 received3));
-                          fold (server_driver_connected
-                            d
-                            st3
-                            'certificate_chain
-                            'credential_identity
-                            received3
-                            sent3);
-                          assert (pure (server_driver_application_ready st3));
-                          ServerWorkflowOk
+                        let retained_empty = current_buffered_len = 0sz;
+                        if retained_empty {
+                          assert (pure (buffered_len == 0sz));
+                          if app_keys_ready {
+                            assert (pure (CS.application_record_keys_installed_for_role
+                              CS.ServerEndpoint
+                              st3.CS.cs_model));
+                            assert (pure (server_driver_sent_log_exact st3 sent3));
+                            lemma_server_driver_wire_logs_match_received_accounted
+                              st3
+                              received3
+                              sent3
+                              buffered
+                              buffered_len;
+                            assert (pure (server_driver_received_log_accounted st3 received3));
+                            assert (pure (ST.server_connection_control_not_failed st3));
+                            lemma_server_driver_wire_logs_match_received_exact_prefix
+                              st3
+                              received3
+                              sent3
+                              buffered
+                              buffered_len;
+                            assert (pure (server_driver_received_log_exact_prefix st3 received3));
+                            lemma_server_driver_wire_logs_match_received_no_read_ahead
+                              st3
+                              received3
+                              sent3
+                              buffered
+                              buffered_len;
+                            assert (pure (server_driver_received_no_read_ahead st3 received3));
+                            fold (server_driver_connected
+                              d
+                              st3
+                              'certificate_chain
+                              'credential_identity
+                              received3
+                              sent3);
+                            assert (pure (server_driver_application_ready st3));
+                            ServerWorkflowOk
+                          } else {
+                            fold (server_driver_connected
+                              d
+                              st3
+                              'certificate_chain
+                              'credential_identity
+                              received3
+                              sent3);
+                            ServerWorkflowStepFailed
+                          }
                         } else {
                           fold (server_driver_connected
                             d
@@ -558,7 +613,7 @@ fn accept
                             'credential_identity
                             received3
                             sent3);
-                          ServerWorkflowStepFailed
+                          ServerWorkflowNeedMoreInput
                         }
                       } else {
                         ServerWorkflowNeedMoreInput

@@ -118,10 +118,12 @@ explicit no-read-ahead bridge
 `lemma_paired_wire_logs_from_exact_prefix_no_read_ahead`, which upgrades the
 public ordered received-prefix facts to full `CS.paired_wire_logs` when each
 transport receive history has no retained suffix beyond the protocol
-`raw_received` log. What is still missing is the harder concrete proof that
-complete Pulse client and server runs automatically establish those bridge
-premises, especially the final no-read-ahead condition in the presence of
-retained buffers and rejected consumed bytes.
+`raw_received` log. Successful public client `connect` and server `accept` now
+also expose that no-read-ahead fact. What is still missing is the concrete
+paired-resource theorem that packages successful client/server resources and
+establishes the remaining
+`supported_profile_client_server_key_material_inputs_agree` premise for live
+runs.
 
 On the Pulse implementation side, public server `accept` and client `connect`
 now both expose application-data readiness on success, public client/server
@@ -229,17 +231,26 @@ bytes still prevent deriving `CS.paired_wire_logs` directly.
      state-machine input predicate to prove
      `CS.supported_profile_client_server_key_material_agrees` without requiring
      impossible full TCP-history equality in the presence of retained read-ahead.
+   - Successful public client `connect` and server `accept` now also expose
+     `client_driver_received_no_read_ahead` and
+     `server_driver_received_no_read_ahead`: `ServerWorkflowOk` /
+     `DriverWorkflowOk` only return on application-ready states whose retained
+     input buffer is empty, so the concrete transport receive length equals the
+     protocol `raw_received` length.
    - `TLS13.Impl.Driver.Pairing` now also exposes
      `lemma_endpoint_transport_received_exact_from_prefix_no_read_ahead` and
      `lemma_paired_wire_logs_from_exact_prefix_no_read_ahead`: if each endpoint's
      concrete receive history has the same length as its protocol `raw_received`
      log, the ordered-prefix facts collapse to exact transport/protocol
      equality and yield full `CS.paired_wire_logs`.
-   - The remaining proof work is to prove the final successful-handshake
-     drained/no-retained facts, or an equivalent synchronized no-read-ahead
-     condition, so the ordered-prefix bridge can be upgraded to full
-     `CS.paired_wire_logs` and instantiate the aggregate key-material theorem
-     from two live driver resources alone.
+   - `lemma_client_server_driver_key_material_agrees_from_no_read_ahead` now
+     consumes the public application-ready, sent-exact, received-prefix, and
+     no-read-ahead facts plus paired transport histories to prove both full
+     `CS.paired_wire_logs` and
+     `CS.supported_profile_client_server_key_material_agrees`.
+   - The remaining proof work is to prove the supported-profile state-machine
+     input predicate from two live successful driver resources, rather than
+     requiring it as an external theorem premise.
 
 3. **Extraction and interoperability**
    - Keep the public API buffer/driver oriented.
@@ -249,16 +260,12 @@ bytes still prevent deriving `CS.paired_wire_logs` directly.
 
 ## Recommended next steps
 
-1. Prove or enforce the successful `connect`/`accept` no-read-ahead facts needed
-   to instantiate `lemma_paired_wire_logs_from_exact_prefix_no_read_ahead` from
-   live driver resources.
-2. Add the concrete driver-pair predicate that relates successful connected
+1. Add the concrete driver-pair predicate that relates successful connected
    client/server resources to
    `supported_profile_client_server_key_material_inputs_agree`.
-3. Strengthen any remaining driver received-log relation only if the
-   no-read-ahead proof cannot be obtained from the current retained-buffer
-   invariants.
-4. Re-run extraction and interop tests after each C-facing facade change.
+2. Prove the transcript/key-share/key-schedule components of that predicate from
+   the existing successful driver resources and exact wire-log bridge.
+3. Re-run extraction and interop tests after each C-facing facade change.
 
 ## Engineering note
 

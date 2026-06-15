@@ -200,6 +200,42 @@ let lemma_client_server_driver_key_material_agrees_from_prefixes
     server_sent;
   CSL.lemma_supported_profile_client_server_key_material_agrees client server
 
+let lemma_client_server_driver_key_material_agrees_from_no_read_ahead
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  (client_received:B.bytes)
+  (client_sent:B.bytes)
+  (server_received:B.bytes)
+  (server_sent:B.bytes)
+  : Lemma
+      (requires
+        client_server_driver_key_material_no_read_ahead_inputs
+          client
+          server
+          client_received
+          client_sent
+          server_received
+          server_sent)
+      (ensures
+        paired_driver_transport_logs_exact
+          client
+          server
+          client_received
+          client_sent
+          server_received
+          server_sent /\
+        CS.paired_wire_logs client server /\
+        CS.supported_profile_client_server_key_material_agrees client server)
+=
+  lemma_paired_wire_logs_from_exact_prefix_no_read_ahead
+    client
+    server
+    client_received
+    client_sent
+    server_received
+    server_sent;
+  CSL.lemma_supported_profile_client_server_key_material_agrees client server
+
 let lemma_paired_wire_logs_from_exact_transport
   (client:CS.connection_state)
   (server:CS.connection_state)

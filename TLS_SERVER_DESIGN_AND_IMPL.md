@@ -1113,15 +1113,16 @@ protocol received log, a non-failed network step preserves exactness by appendin
 the consumed prefix. That exact-unless-failed fact is now folded into the hidden
 client/server driver wire-log witnesses: non-failed states carry exact protocol
 `raw_received == consumed transport prefix`, while failed states retain the
-weaker accounting relation for rejected consumed bytes. The remaining work is to
-prove the successful-handshake drained/no-retained facts needed for the final
-exact paired-wire-log bridge. The public client `connect` and server `accept`
-success paths now expose ordered exact-prefix received-log facts, and
+weaker accounting relation for rejected consumed bytes. The public client
+`connect` and server `accept` success paths now expose ordered exact-prefix
+received-log facts, and
 `TLS13.Impl.Driver.Pairing.lemma_paired_protocol_received_logs_exact_prefix`
 composes those public facts with paired transport histories into a checked
-cross-endpoint ordered-prefix theorem. The last step is upgrading ordered prefix
-to full equality by proving zero retained read-ahead, or an equivalent
-synchronized no-read-ahead condition, at the paired success boundary.
+cross-endpoint ordered-prefix theorem. They now also expose public
+`client_driver_received_no_read_ahead` / `server_driver_received_no_read_ahead`
+facts on successful application-ready returns; success is gated on an empty
+retained input buffer, so transport receive length equals protocol
+`raw_received` length at the success boundary.
 `TLS13.Impl.Driver.Pairing` now makes that final transport assumption explicit:
 `lemma_endpoint_transport_received_exact_from_prefix_no_read_ahead` collapses an
 endpoint ordered-prefix fact to exact transport/protocol received-log equality
@@ -1130,7 +1131,10 @@ when the transport receive history has the same length as the protocol
 `lemma_paired_wire_logs_from_exact_prefix_no_read_ahead` combines the public
 sent-exact facts, ordered received-prefix facts, paired transport histories, and
 those no-read-ahead premises to prove full `CS.paired_wire_logs`. The same module
-also provides
+also provides `lemma_client_server_driver_key_material_agrees_from_no_read_ahead`,
+which consumes those public no-read-ahead facts plus the supported-profile input
+predicate to prove both full `CS.paired_wire_logs` and
+`CS.supported_profile_client_server_key_material_agrees`, and
 `lemma_client_server_driver_key_material_agrees_from_prefixes`, which proves the
 main supported-profile key-material agreement from the ordered-prefix public
 driver facts plus the existing supported-profile state-machine input predicate,
@@ -1876,9 +1880,15 @@ Checklist:
       received prefixes to full `CS.paired_wire_logs` when successful paired
       runs prove the concrete receive histories contain no retained suffix
       beyond each endpoint's protocol `raw_received` log.
-- [ ] Prove successful `connect`/`accept` drained/no-retained facts, or an
-      equivalent synchronized no-read-ahead condition, to upgrade ordered
-      prefixes to full `CS.paired_wire_logs` from concrete paired resources.
+- [x] Expose successful `connect`/`accept` no-read-ahead facts publicly, with
+      success gated on empty retained input buffers.
+- [x] Add a no-read-ahead driver key-material theorem that derives both full
+      `CS.paired_wire_logs` and
+      `CS.supported_profile_client_server_key_material_agrees` from public
+      success facts plus the existing supported-profile state-machine input
+      predicate.
+- [ ] Prove the supported-profile state-machine input predicate from concrete
+      paired successful driver resources.
 
 ## Phase-by-phase implementation plan
 

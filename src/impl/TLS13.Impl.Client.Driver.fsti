@@ -91,6 +91,13 @@ let client_driver_received_log_exact_prefix
     Seq.equal received
       (B.append st.CS.cs_wire_log.CL.raw_received retained)
 
+noextract
+let client_driver_received_no_read_ahead
+  (st:CS.connection_state)
+  (received:B.bytes)
+  : prop =
+  B.length received == B.length st.CS.cs_wire_log.CL.raw_received
+
 val lemma_client_driver_wire_logs_match_received_exact_prefix
   (st:CS.connection_state)
   (received:B.bytes)
@@ -102,6 +109,19 @@ val lemma_client_driver_wire_logs_match_received_exact_prefix
         client_driver_wire_logs_match st received sent buffered buffered_len /\
         CT.connection_control_not_failed st)
       (ensures client_driver_received_log_exact_prefix st received)
+
+val lemma_client_driver_wire_logs_match_received_no_read_ahead
+  (st:CS.connection_state)
+  (received:B.bytes)
+  (sent:B.bytes)
+  (buffered:B.bytes)
+  (buffered_len:SZ.t)
+  : Lemma
+      (requires
+        client_driver_wire_logs_match st received sent buffered buffered_len /\
+        CT.connection_control_not_failed st /\
+        buffered_len == 0sz)
+      (ensures client_driver_received_no_read_ahead st received)
 
 noextract
 let client_driver_local_write_correct
@@ -311,7 +331,8 @@ fn connect
                pure (client_driver_application_ready st1 /\
                      client_driver_sent_log_exact st1 sent /\
                      client_driver_received_log_accounted st1 received /\
-                     client_driver_received_log_exact_prefix st1 received)
+                     client_driver_received_log_exact_prefix st1 received /\
+                     client_driver_received_no_read_ahead st1 received)
            | _ ->
              client_driver_closed d st1)
 
