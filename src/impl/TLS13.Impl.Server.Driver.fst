@@ -289,8 +289,7 @@ fn accept
                  'credential_identity
                  received
                  sent **
-               pure (st1.CS.cs_model.CS.model_control ==
-                 CS.ControlApplicationData)
+               pure (server_driver_application_ready st1)
            | _ ->
              exists* st1 received sent.
                server_driver_connected
@@ -454,6 +453,26 @@ fn accept
                         assert (pure (
                           st3.CS.cs_model.CS.model_control ==
                             CS.ControlApplicationData));
+                        unfold (server_driver_connected
+                          d
+                          st3
+                          'certificate_chain
+                          'credential_identity
+                          received3
+                          sent3);
+                        with ch buffered buffered_len.
+                          assert (Box.pts_to d.server_driver_channel (Some ch) **
+                                  IO.is_channel ch received3 sent3 **
+                                  server_driver_buffers d buffered buffered_len);
+                        assert (pure (ST.server_end_to_end_invariant st3));
+                        fold (server_driver_connected
+                          d
+                          st3
+                          'certificate_chain
+                          'credential_identity
+                          received3
+                          sent3);
+                        assert (pure (server_driver_application_ready st3));
                         ServerWorkflowOk
                       } else {
                         ServerWorkflowNeedMoreInput

@@ -989,7 +989,9 @@ connected partial handshake. Transport listen/accept failures return
 in-progress/failure/exhaustion statuses preserve `server_driver_connected` and
 therefore the IO-history relation. `ServerWorkflowOk` is returned only after a
 verified control snapshot proves the connected state has model control
-`ControlApplicationData`.
+`ControlApplicationData`; the public postcondition now exposes that success as
+`server_driver_application_ready`, which also bundles
+`ST.server_end_to_end_invariant` for audit.
 
 `send` now exposes `server_driver_send_correct`, a transparent noextract
 predicate stating that the hidden response is the verified

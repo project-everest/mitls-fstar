@@ -179,6 +179,13 @@ let server_driver_receive_correct
       app_out
       out_bytes)
 
+noextract
+let server_driver_application_ready
+  (st:CS.connection_state)
+  : prop =
+  ST.server_end_to_end_invariant st /\
+  st.CS.cs_model.CS.model_control == CS.ControlApplicationData
+
 fn new_server
   (certificate_chain:array U8.t)
   (certificate_chain_len:SZ.t)
@@ -258,8 +265,7 @@ fn accept
                  'credential_identity
                  received
                  sent **
-               pure (st1.CS.cs_model.CS.model_control ==
-                 CS.ControlApplicationData)
+               pure (server_driver_application_ready st1)
            | _ ->
              exists* st1 received sent.
                server_driver_connected
