@@ -974,10 +974,11 @@ fn close ...
 The public facade must not use weak or degenerate postconditions. Current status:
 `accept` no longer advertises `status <> ServerWorkflowOk` or closes every
 connected partial handshake. Transport listen/accept failures return
-`ServerWorkflowClosed` with `server_driver_closed`; all other current
+`ServerWorkflowClosed` with `server_driver_closed`; all other
 in-progress/failure/exhaustion statuses preserve `server_driver_connected` and
-therefore the IO-history relation. Future `ServerWorkflowOk` remains reserved
-for a state whose model control is `ControlApplicationData`.
+therefore the IO-history relation. `ServerWorkflowOk` is returned only after a
+verified control snapshot proves the connected state has model control
+`ControlApplicationData`.
 
 `send` now exposes `server_driver_send_correct`, a transparent noextract
 predicate stating that the hidden response is the verified
@@ -987,8 +988,13 @@ exactly `sent` appended with the emitted network-output prefix.
 
 `receive` now exposes `server_driver_receive_correct`, tying the returned status
 to the verified network retry loop and, for non-exhausted results, to
-`server_driver_network_process_correct`. On a successful protocol step it copies
-the concrete app-output prefix to the caller buffer and exposes
+`server_driver_network_process_correct`. It now also carries the concrete
+driver app-output buffer through an internal
+`server_driver_connected_with_app_out` witness, so successful copyout is tied to
+the same `app_out` bytes used by the verified
+`server_driver_network_process_correct_for_app_out` theorem, not to an
+unconstrained existential. On a successful protocol step it copies that exact
+app-output prefix to the caller buffer and exposes
 `server_driver_receive_copyout_correct`, relating `server_receive_len` and the
 caller-visible output prefix to `ST.response_app_out`. The network/local helper
 correctness predicates in `Driver.Network.fsti` and `Driver.Local.fsti` are now
@@ -996,13 +1002,14 @@ transparent definitions, not opaque `val` declarations, so auditors can unfold
 them to the public server theorem predicates and exact sent-log append facts.
 
 `accept` is the server analogue of the client driver's `connect`: it listens,
-accepts one TCP channel, completes the supported-profile handshake as far as
-application-data readiness or a precise failure/exhaustion status, and preserves
-the server driver IO-history invariant. The implementation is still deliberately
-honest about handshake incompleteness: it does not return `ServerWorkflowOk`
-until the remaining encrypted-flight and ClientFinished orchestration is
-verified. The final `accept` may expose one noextract predicate such as
-`server_driver_application_ready st` if callers need the successful result to
+accepts one TCP channel, completes the supported-profile handshake through the
+server encrypted flight, ClientFinished processing, local post-flight actions,
+and application-data readiness or a precise failure/exhaustion status, and
+preserves the server driver IO-history invariant. `ServerWorkflowOk` is no
+longer a placeholder: the public postcondition exposes a connected state whose
+model control is `ControlApplicationData`. A later cleanup may expose one
+noextract predicate such as `server_driver_application_ready st` if callers need
+the successful result to
 state that application-data control and application traffic keys are installed.
 
 Move these helper surfaces out of the public driver interface:

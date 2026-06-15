@@ -153,6 +153,7 @@ let server_driver_receive_correct
   (loop:DN.server_driver_network_loop_result)
   (sent:B.bytes)
   (sent':B.bytes)
+  (app_out:B.bytes)
   (out_bytes:B.bytes)
   : prop =
   server_driver_receive_status_correct result loop /\
@@ -163,14 +164,20 @@ let server_driver_receive_correct
       st1
       loop.DN.server_driver_network_loop_last
       sent
-      sent') /\
+      sent' /\
+    DN.server_driver_network_process_correct_for_app_out
+      st0
+      st1
+      loop.DN.server_driver_network_loop_last
+      sent
+      sent'
+      app_out) /\
   (result.server_receive_status == ServerWorkflowOk ==>
-    exists app_out.
-      server_driver_receive_copyout_correct
-        result
-        loop.DN.server_driver_network_loop_last.ST.response
-        app_out
-        out_bytes)
+    server_driver_receive_copyout_correct
+      result
+      loop.DN.server_driver_network_loop_last.ST.response
+      app_out
+      out_bytes)
 
 fn new_server
   (certificate_chain:array U8.t)
@@ -325,7 +332,7 @@ fn receive
           pts_to out out_bytes **
           pure (B.length out_bytes == SZ.v out_len /\
                 SZ.v result.server_receive_len <= SZ.v out_len /\
-                (exists loop.
+                (exists loop app_out.
                   server_driver_receive_correct
                     'st0
                     st1
@@ -333,6 +340,7 @@ fn receive
                     loop
                     (Ghost.reveal 'sent)
                     sent'
+                    app_out
                     out_bytes))
 
 fn close

@@ -395,14 +395,16 @@ fn accept
           }
           ServerDriverLocalNotReady -> {
             let net = DN.read_process_network_until_ready d network_fuel;
-            with st_net received_net sent_net.
-              assert (server_driver_connected
+            with st_net received_net sent_net net_app_out.
+              assert (server_driver_connected_with_app_out
                 d
                 st_net
                 'certificate_chain
                 'credential_identity
                 received_net
-                sent_net);
+                sent_net
+                net_app_out);
+            forget_server_driver_connected_app_out d;
             if (net.DN.server_driver_network_loop_exhausted) {
               ServerWorkflowExhausted
             } else {
@@ -533,7 +535,7 @@ fn receive
           pts_to out out_bytes **
           pure (B.length out_bytes == SZ.v out_len /\
                 SZ.v result.server_receive_len <= SZ.v out_len /\
-                (exists loop.
+                (exists loop app_out.
                   server_driver_receive_correct
                     'st0
                     st1
@@ -541,26 +543,35 @@ fn receive
                     loop
                     (Ghost.reveal 'sent)
                     sent'
+                    app_out
                     out_bytes))
 {
   let loop = read_process_network_until_ready d network_fuel;
-  with st1 received' sent'.
-    assert (server_driver_connected
+  with st1 received' sent' loop_app_out.
+    assert (server_driver_connected_with_app_out
       d
       st1
       'certificate_chain
       'credential_identity
       received'
-      sent' **
+      sent'
+      loop_app_out **
       pure (loop.server_driver_network_loop_exhausted == false ==>
         loop.server_driver_network_loop_last.ST.response.ST.status <>
           ST.NeedMoreInput /\
         server_driver_network_process_correct
           'st0
           st1
-          loop.server_driver_network_loop_last
-          (Ghost.reveal 'sent)
-          sent'));
+            loop.server_driver_network_loop_last
+            (Ghost.reveal 'sent)
+            sent' /\
+          server_driver_network_process_correct_for_app_out
+            'st0
+            st1
+            loop.server_driver_network_loop_last
+            (Ghost.reveal 'sent)
+            sent'
+            loop_app_out));
   if (loop.server_driver_network_loop_exhausted) {
     let result = {
       server_receive_status = ServerWorkflowExhausted;
@@ -573,24 +584,35 @@ fn receive
       loop
       (Ghost.reveal 'sent)
       sent'
+      B.empty
       (Ghost.reveal 'out_bytes)));
+    forget_server_driver_connected_app_out d;
     result
   } else {
     match loop.server_driver_network_loop_last.ST.response.ST.status {
       ST.StepOk -> {
-        unfold (server_driver_connected
+        unfold (server_driver_connected_with_app_out
           d
           st1
           'certificate_chain
           'credential_identity
           received'
-          sent');
+          sent'
+          loop_app_out);
         with ch buffered buffered_len.
           assert (Box.pts_to d.server_driver_channel (Some ch) **
                   IO.is_channel ch received' sent' **
-                  server_driver_buffers d buffered buffered_len);
-        unfold (server_driver_buffers d buffered buffered_len);
-        with empty_payload raw network_out material cv_input signature app_out.
+                  server_driver_buffers_with_app_out
+                    d
+                    buffered
+                    buffered_len
+                    loop_app_out);
+        unfold (server_driver_buffers_with_app_out
+          d
+          buffered
+          buffered_len
+          loop_app_out);
+        with empty_payload raw network_out material cv_input signature.
           assert (
             Box.pts_to d.server_driver_buffered_len buffered_len **
             V.pts_to d.server_driver_empty_payload #1.0R empty_payload **
@@ -599,7 +621,7 @@ fn receive
             V.pts_to d.server_driver_material_payload #1.0R material **
             V.pts_to d.server_driver_certificate_verify_input #1.0R cv_input **
             V.pts_to d.server_driver_signature #1.0R signature **
-            V.pts_to d.server_driver_app_out #1.0R app_out);
+            V.pts_to d.server_driver_app_out #1.0R loop_app_out);
         let copy_len = loop.server_driver_network_loop_last.ST.response.ST.app_out_len;
         let app_fits = SZ.lte copy_len out_len;
         let app_src_fits = SZ.lte copy_len driver_app_out_capacity;
@@ -609,44 +631,57 @@ fn receive
           A.pts_to_len out;
           assert (pure (SZ.v copy_len <= SZ.v out_len));
           assert (pure (SZ.v copy_len <= SZ.v driver_app_out_capacity));
-          assert (pure (B.length app_out == SZ.v driver_app_out_capacity));
+          assert (pure (B.length loop_app_out == SZ.v driver_app_out_capacity));
           assert (pure (A.length (V.vec_to_array d.server_driver_app_out) ==
-            B.length app_out));
+            B.length loop_app_out));
           assert (pure (A.length out == SZ.v out_len));
           assert (pure (SZ.v copy_len <= A.length (V.vec_to_array d.server_driver_app_out)));
           assert (pure (SZ.v copy_len <= A.length out));
           let _ = A.memcpy_l copy_len (V.vec_to_array d.server_driver_app_out) out;
           with out_bytes.
             assert (pts_to out out_bytes);
+          A.pts_to_len out;
           assert (pure (B.length out_bytes == SZ.v out_len));
-          assert (pure (SZ.v copy_len <= B.length app_out));
+          assert (pure (SZ.v copy_len <= B.length loop_app_out));
           assert (pure (Seq.equal
             (ST.response_app_out
               loop.server_driver_network_loop_last.ST.response
-              app_out)
-            (Seq.slice app_out 0 (SZ.v copy_len))));
+              loop_app_out)
+            (Seq.slice loop_app_out 0 (SZ.v copy_len))));
           Seq.lemma_len_slice out_bytes 0 (SZ.v copy_len);
-          Seq.lemma_len_slice app_out 0 (SZ.v copy_len);
+          Seq.lemma_len_slice loop_app_out 0 (SZ.v copy_len);
           assert (pure (Seq.equal
             (Seq.slice out_bytes 0 (SZ.v copy_len))
-            (Seq.slice app_out 0 (SZ.v copy_len))));
+            (Seq.slice loop_app_out 0 (SZ.v copy_len))));
           V.to_vec_pts_to d.server_driver_app_out;
-          fold (server_driver_buffers d buffered buffered_len);
-          fold (server_driver_connected
+          fold (server_driver_buffers_with_app_out
+            d
+            buffered
+            buffered_len
+            loop_app_out);
+          fold (server_driver_connected_with_app_out
             d
             st1
             'certificate_chain
             'credential_identity
             received'
-            sent');
+            sent'
+            loop_app_out);
           let result = {
             server_receive_status = ServerWorkflowOk;
             server_receive_len = copy_len;
           };
+          assert (pure (server_driver_network_process_correct_for_app_out
+            'st0
+            st1
+            loop.server_driver_network_loop_last
+            (Ghost.reveal 'sent)
+            sent'
+            loop_app_out));
           assert (pure (server_driver_receive_copyout_correct
             result
             loop.server_driver_network_loop_last.ST.response
-            app_out
+            loop_app_out
             out_bytes));
           assert (pure (server_driver_receive_correct
             'st0
@@ -655,17 +690,24 @@ fn receive
             loop
             (Ghost.reveal 'sent)
             sent'
+            loop_app_out
             out_bytes));
+          forget_server_driver_connected_app_out d;
           result
         } else {
-          fold (server_driver_buffers d buffered buffered_len);
-          fold (server_driver_connected
+          fold (server_driver_buffers_with_app_out
+            d
+            buffered
+            buffered_len
+            loop_app_out);
+          fold (server_driver_connected_with_app_out
             d
             st1
             'certificate_chain
             'credential_identity
             received'
-            sent');
+            sent'
+            loop_app_out);
           let result = {
             server_receive_status = ServerWorkflowStepFailed;
             server_receive_len = 0sz;
@@ -677,7 +719,9 @@ fn receive
             loop
             (Ghost.reveal 'sent)
             sent'
+            loop_app_out
             (Ghost.reveal 'out_bytes)));
+          forget_server_driver_connected_app_out d;
           result
         }
       }
@@ -693,7 +737,9 @@ fn receive
           loop
           (Ghost.reveal 'sent)
           sent'
+          loop_app_out
           (Ghost.reveal 'out_bytes)));
+        forget_server_driver_connected_app_out d;
         result
       }
       _ -> {
@@ -708,7 +754,9 @@ fn receive
           loop
           (Ghost.reveal 'sent)
           sent'
+          loop_app_out
           (Ghost.reveal 'out_bytes)));
+        forget_server_driver_connected_app_out d;
         result
       }
     }

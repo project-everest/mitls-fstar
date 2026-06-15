@@ -223,3 +223,114 @@ let lemma_logged_received_bytes_accounted_append_delta
   ) else (
     Seq.lemma_eq_elim raw_delta consumed_delta
   )
+
+fn forget_server_driver_connected_app_out
+  (d:server_driver)
+  requires server_driver_connected_with_app_out
+            d
+            'st
+            'certificate_chain
+            'credential_identity
+            'received
+            'sent
+            'app_out
+  ensures server_driver_connected
+            d
+            'st
+            'certificate_chain
+            'credential_identity
+            'received
+            'sent
+{
+  unfold (server_driver_connected_with_app_out
+    d
+    'st
+    'certificate_chain
+    'credential_identity
+    'received
+    'sent
+    'app_out);
+  with ch buffered buffered_len.
+    assert (Box.pts_to d.server_driver_channel (Some ch) **
+            IO.is_channel ch 'received 'sent **
+            server_driver_buffers_with_app_out
+              d
+              buffered
+              buffered_len
+              'app_out);
+  unfold (server_driver_buffers_with_app_out
+    d
+    buffered
+    buffered_len
+    'app_out);
+  with empty_payload raw network_out material cv_input signature.
+    assert (
+      Box.pts_to d.server_driver_buffered_len buffered_len **
+      V.pts_to d.server_driver_empty_payload #1.0R empty_payload **
+      V.pts_to d.server_driver_raw #1.0R raw **
+      V.pts_to d.server_driver_network_out #1.0R network_out **
+      V.pts_to d.server_driver_material_payload #1.0R material **
+      V.pts_to d.server_driver_certificate_verify_input #1.0R cv_input **
+      V.pts_to d.server_driver_signature #1.0R signature **
+      V.pts_to d.server_driver_app_out #1.0R 'app_out);
+  fold (server_driver_buffers d buffered buffered_len);
+  fold (server_driver_connected
+    d
+    'st
+    'certificate_chain
+    'credential_identity
+    'received
+    'sent)
+}
+
+fn expose_server_driver_connected_app_out
+  (d:server_driver)
+  requires server_driver_connected
+            d
+            'st
+            'certificate_chain
+            'credential_identity
+            'received
+            'sent
+  ensures exists* app_out.
+            server_driver_connected_with_app_out
+              d
+              'st
+              'certificate_chain
+              'credential_identity
+              'received
+              'sent
+              app_out
+{
+  unfold (server_driver_connected
+    d
+    'st
+    'certificate_chain
+    'credential_identity
+    'received
+    'sent);
+  with ch buffered buffered_len.
+    assert (Box.pts_to d.server_driver_channel (Some ch) **
+            IO.is_channel ch 'received 'sent **
+            server_driver_buffers d buffered buffered_len);
+  unfold (server_driver_buffers d buffered buffered_len);
+  with empty_payload raw network_out material cv_input signature app_out.
+    assert (
+      Box.pts_to d.server_driver_buffered_len buffered_len **
+      V.pts_to d.server_driver_empty_payload #1.0R empty_payload **
+      V.pts_to d.server_driver_raw #1.0R raw **
+      V.pts_to d.server_driver_network_out #1.0R network_out **
+      V.pts_to d.server_driver_material_payload #1.0R material **
+      V.pts_to d.server_driver_certificate_verify_input #1.0R cv_input **
+      V.pts_to d.server_driver_signature #1.0R signature **
+      V.pts_to d.server_driver_app_out #1.0R app_out);
+  fold (server_driver_buffers_with_app_out d buffered buffered_len app_out);
+  fold (server_driver_connected_with_app_out
+    d
+    'st
+    'certificate_chain
+    'credential_identity
+    'received
+    'sent
+    app_out)
+}

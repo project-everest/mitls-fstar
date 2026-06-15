@@ -186,6 +186,46 @@ let server_driver_buffers
       V.is_full_vec d.server_driver_app_out)
 
 noextract
+let server_driver_buffers_with_app_out
+  (d:server_driver)
+  (buffered:B.bytes)
+  (buffered_len:SZ.t)
+  (app_out:B.bytes)
+  : slprop
+  =
+  Box.pts_to d.server_driver_buffered_len buffered_len **
+  exists* empty_payload raw network_out material cv_input signature.
+    V.pts_to d.server_driver_empty_payload #1.0R empty_payload **
+    V.pts_to d.server_driver_raw #1.0R raw **
+    V.pts_to d.server_driver_network_out #1.0R network_out **
+    V.pts_to d.server_driver_material_payload #1.0R material **
+    V.pts_to d.server_driver_certificate_verify_input #1.0R cv_input **
+    V.pts_to d.server_driver_signature #1.0R signature **
+    V.pts_to d.server_driver_app_out #1.0R app_out **
+    pure (
+      B.length empty_payload == 0 /\
+      B.length raw == SZ.v driver_rx_capacity /\
+      B.length buffered == SZ.v buffered_len /\
+      SZ.v buffered_len <= SZ.v driver_rx_capacity /\
+      Seq.equal buffered (Seq.slice raw 0 (SZ.v buffered_len)) /\
+      B.length network_out == SZ.v driver_network_out_capacity /\
+      B.length material == SZ.v driver_material_capacity /\
+      B.length cv_input == SZ.v driver_certificate_verify_input_capacity /\
+      B.length signature == SZ.v driver_signature_capacity /\
+      B.length app_out == SZ.v driver_app_out_capacity /\
+      Bounds.max_certificate_verify_input_len <=
+        SZ.v driver_certificate_verify_input_capacity /\
+      IM.max_signature_len <= SZ.v driver_signature_capacity /\
+      IM.max_record_fragment_len <= SZ.v driver_app_out_capacity /\
+      V.is_full_vec d.server_driver_empty_payload /\
+      V.is_full_vec d.server_driver_raw /\
+      V.is_full_vec d.server_driver_network_out /\
+      V.is_full_vec d.server_driver_material_payload /\
+      V.is_full_vec d.server_driver_certificate_verify_input /\
+      V.is_full_vec d.server_driver_signature /\
+      V.is_full_vec d.server_driver_app_out)
+
+noextract
 let server_driver_live
   (d:server_driver)
   (st:CS.connection_state)
@@ -234,6 +274,71 @@ let server_driver_connected
             credential_identity /\
           server_driver_supported_profile_selection st credential_identity /\
           server_driver_wire_logs_match st received sent buffered buffered_len)
+
+noextract
+let server_driver_connected_with_app_out
+  (d:server_driver)
+  (st:CS.connection_state)
+  (certificate_chain:B.bytes)
+  (credential_identity:CS.server_credential_identity)
+  (received:B.bytes)
+  (sent:B.bytes)
+  (app_out:B.bytes)
+  : slprop
+  =
+  S.connection_exactly d.server_driver_server st **
+  O.is_server_credentials
+    d.server_driver_credentials
+    certificate_chain
+    credential_identity **
+  exists* ch buffered buffered_len.
+    Box.pts_to d.server_driver_channel (Some ch) **
+    IO.is_channel ch received sent **
+    server_driver_buffers_with_app_out d buffered buffered_len app_out **
+    pure (ST.server_end_to_end_invariant st /\
+          server_driver_config_matches_credentials
+           st
+           certificate_chain
+           credential_identity /\
+          server_driver_supported_profile_selection st credential_identity /\
+          server_driver_wire_logs_match st received sent buffered buffered_len)
+
+fn forget_server_driver_connected_app_out
+  (d:server_driver)
+  requires server_driver_connected_with_app_out
+           d
+           'st
+           'certificate_chain
+           'credential_identity
+           'received
+           'sent
+           'app_out
+  ensures server_driver_connected
+           d
+           'st
+           'certificate_chain
+           'credential_identity
+           'received
+           'sent
+
+fn expose_server_driver_connected_app_out
+  (d:server_driver)
+  requires server_driver_connected
+           d
+           'st
+           'certificate_chain
+           'credential_identity
+           'received
+           'sent
+  ensures exists* app_out.
+           server_driver_connected_with_app_out
+             d
+             'st
+             'certificate_chain
+             'credential_identity
+             'received
+             'sent
+             app_out
 
 noextract
 let server_driver_closed

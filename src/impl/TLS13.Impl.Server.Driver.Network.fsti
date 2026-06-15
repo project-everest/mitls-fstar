@@ -88,6 +88,36 @@ let server_driver_network_process_correct
         sent
         (ST.response_network_out resp.ST.response network_out_bytes))
 
+noextract
+let server_driver_network_process_correct_for_app_out
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (resp:ST.server_buffer_response)
+  (sent:B.bytes)
+  (sent':B.bytes)
+  (app_out_bytes:B.bytes)
+  : prop =
+  exists input network_out_bytes.
+    ST.server_network_bytes_end_to_end_correct
+      st0
+      st1
+      resp
+      input
+      network_out_bytes
+      app_out_bytes /\
+    ST.server_network_consumed_input_projection
+      st0
+      st1
+      resp
+      input
+      network_out_bytes
+      app_out_bytes /\
+    Seq.equal
+      sent'
+      (B.append
+        sent
+        (ST.response_network_out resp.ST.response network_out_bytes))
+
 fn process_buffered_network_bytes_compact_once
   (d:DS.server_driver)
   requires DS.server_driver_connected
@@ -98,20 +128,28 @@ fn process_buffered_network_bytes_compact_once
              'received
              'sent
   returns resp:ST.server_buffer_response
-  ensures exists* st1 sent'.
-          DS.server_driver_connected
+  ensures exists* st1 sent' app_out_bytes.
+          DS.server_driver_connected_with_app_out
             d
             st1
             'certificate_chain
             'credential_identity
             'received
-            sent' **
+            sent'
+            app_out_bytes **
           pure (server_driver_network_process_correct
             'st0
             st1
             resp
             (Ghost.reveal 'sent)
-            sent')
+            sent' /\
+            server_driver_network_process_correct_for_app_out
+             'st0
+             st1
+             resp
+             (Ghost.reveal 'sent)
+             sent'
+             app_out_bytes)
 
 fn read_and_process_network_once
   (d:DS.server_driver)
@@ -123,20 +161,28 @@ fn read_and_process_network_once
             'received
             'sent
   returns resp:ST.server_buffer_response
-  ensures exists* st1 received' sent'.
-          DS.server_driver_connected
+  ensures exists* st1 received' sent' app_out_bytes.
+          DS.server_driver_connected_with_app_out
            d
            st1
            'certificate_chain
            'credential_identity
            received'
-           sent' **
+           sent'
+           app_out_bytes **
           pure (server_driver_network_process_correct
            'st0
            st1
            resp
            (Ghost.reveal 'sent)
-           sent')
+           sent' /\
+           server_driver_network_process_correct_for_app_out
+            'st0
+            st1
+            resp
+            (Ghost.reveal 'sent)
+            sent'
+            app_out_bytes)
 
 fn server_driver_control_snapshot
   (d:DS.server_driver)
@@ -168,14 +214,15 @@ fn read_process_network_until_ready
             'received
             'sent
   returns result:server_driver_network_loop_result
-  ensures exists* st1 received' sent'.
-          DS.server_driver_connected
+  ensures exists* st1 received' sent' app_out_bytes.
+          DS.server_driver_connected_with_app_out
            d
            st1
            'certificate_chain
            'credential_identity
            received'
-           sent' **
+           sent'
+           app_out_bytes **
           pure (result.server_driver_network_loop_exhausted == false ==>
             result.server_driver_network_loop_last.ST.response.ST.status <>
               ST.NeedMoreInput /\
@@ -184,7 +231,14 @@ fn read_process_network_until_ready
               st1
               result.server_driver_network_loop_last
               (Ghost.reveal 'sent)
-              sent')
+              sent' /\
+            server_driver_network_process_correct_for_app_out
+              'st0
+              st1
+              result.server_driver_network_loop_last
+              (Ghost.reveal 'sent)
+              sent'
+              app_out_bytes)
 
 fn read_until_client_hello_received
   (d:DS.server_driver)
@@ -233,6 +287,29 @@ val lemma_server_driver_network_process_correct_intro
             (ST.response_network_out resp.ST.response network_out_bytes)))
       (ensures server_driver_network_process_correct
         st0 st1 resp sent sent')
+
+val lemma_server_driver_network_process_correct_for_app_out_intro
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (resp:ST.server_buffer_response)
+  (input:B.bytes)
+  (network_out_bytes:B.bytes)
+  (app_out_bytes:B.bytes)
+  (sent:B.bytes)
+  (sent':B.bytes)
+  : Lemma
+      (requires
+        ST.server_network_bytes_end_to_end_correct
+          st0 st1 resp input network_out_bytes app_out_bytes /\
+        ST.server_network_consumed_input_projection
+          st0 st1 resp input network_out_bytes app_out_bytes /\
+        Seq.equal
+          sent'
+          (B.append
+            sent
+            (ST.response_network_out resp.ST.response network_out_bytes)))
+      (ensures server_driver_network_process_correct_for_app_out
+        st0 st1 resp sent sent' app_out_bytes)
 
 val lemma_server_driver_network_process_need_more_stutter
   (st0:CS.connection_state)
