@@ -211,6 +211,45 @@ let server_driver_closed
     server_driver_buffers d buffered buffered_len **
     pure (ST.server_end_to_end_invariant st)
 
+val lemma_legal_response_network_out_len
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (resp:ST.server_response)
+  (ev:CS.conn_event)
+  (raw_sent:B.bytes)
+  (raw_received:B.bytes)
+  (network_out:B.bytes)
+  (app_out:B.bytes)
+  : Lemma
+      (requires ST.legal_response_for_event
+        st0 st1 resp ev raw_sent raw_received network_out app_out)
+      (ensures
+        SZ.v resp.ST.network_out_len <= B.length network_out /\
+        B.length (ST.response_network_out resp network_out) ==
+          SZ.v resp.ST.network_out_len)
+
+val lemma_legal_response_for_event_wire_lengths
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (resp:ST.server_response)
+  (ev:CS.conn_event)
+  (raw_sent:B.bytes)
+  (raw_received:B.bytes)
+  (network_out:B.bytes)
+  (app_out:B.bytes)
+  : Lemma
+      (requires ST.legal_response_for_event
+        st0 st1 resp ev raw_sent raw_received network_out app_out)
+      (ensures
+        B.length st1.CS.cs_wire_log.CL.raw_sent ==
+          B.length st0.CS.cs_wire_log.CL.raw_sent + B.length raw_sent /\
+        B.length st1.CS.cs_wire_log.CL.raw_received ==
+          B.length st0.CS.cs_wire_log.CL.raw_received + B.length raw_received /\
+        Seq.equal st1.CS.cs_wire_log.CL.raw_sent
+          (B.append st0.CS.cs_wire_log.CL.raw_sent raw_sent) /\
+        Seq.equal st1.CS.cs_wire_log.CL.raw_received
+          (B.append st0.CS.cs_wire_log.CL.raw_received raw_received))
+
 val lemma_logged_received_bytes_accounted_append_delta
   (old_logged:B.bytes)
   (old_consumed:B.bytes)
