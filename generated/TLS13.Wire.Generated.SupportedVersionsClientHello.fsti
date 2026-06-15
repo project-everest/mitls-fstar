@@ -37,7 +37,7 @@ open TLS13.Wire.Generated.ProtocolVersion
 
 inline_for_extraction noextract let min_count = 1
 inline_for_extraction noextract let max_count = 127
-type supportedVersionsClientHello = l:list protocolVersion{1 <= L.length l /\ L.length l <= 127}
+noextract type supportedVersionsClientHello = l:list protocolVersion{1 <= L.length l /\ L.length l <= 127}
 
 inline_for_extraction noextract let supportedVersionsClientHello_parser_kind = LP.strong_parser_kind 3 255 None
 

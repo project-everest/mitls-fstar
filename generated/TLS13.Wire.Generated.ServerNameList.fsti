@@ -37,17 +37,17 @@ open TLS13.Wire.Generated.ServerName
 
 noextract let serverNameList_list_bytesize (x: list serverName) : GTot nat = Seq.length (LP.serialize (LP.serialize_list _ serverName_serializer) x)
 
-type serverNameList = l:list serverName{let x = serverNameList_list_bytesize l in 1 <= x /\ x <= 65535}
+noextract type serverNameList = l:list serverName{let x = serverNameList_list_bytesize l in 1 <= x /\ x <= 65535}
 
 val serverNameList_list_bytesize_nil : squash (serverNameList_list_bytesize [] == 0)
 
 val serverNameList_list_bytesize_cons (x: serverName) (y: list serverName) : Lemma (serverNameList_list_bytesize (x :: y) == (serverName_bytesize (x)) + serverNameList_list_bytesize y) [SMTPat (serverNameList_list_bytesize (x :: y))]
 
-type serverNameList' = LP.parse_bounded_vldata_strong_t 1 65535 (LP.serialize_list _ serverName_serializer)
+noextract type serverNameList' = LP.parse_bounded_vldata_strong_t 1 65535 (LP.serialize_list _ serverName_serializer)
 
-inline_for_extraction let synth_serverNameList (x: serverNameList') : Tot serverNameList = x
+inline_for_extraction noextract let synth_serverNameList (x: serverNameList') : Tot serverNameList = x
 
-inline_for_extraction let synth_serverNameList_recip (x: serverNameList) : Tot serverNameList' = x
+inline_for_extraction noextract let synth_serverNameList_recip (x: serverNameList) : Tot serverNameList' = x
 
 inline_for_extraction noextract let serverNameList_parser_kind = LP.strong_parser_kind 3 65537 None
 

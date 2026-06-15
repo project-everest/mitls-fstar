@@ -37,7 +37,7 @@ open TLS13.Wire.Generated.CipherSuite
 
 inline_for_extraction noextract let min_count = 1
 inline_for_extraction noextract let max_count = 32767
-type clientHello_cipher_suites = l:list cipherSuite{1 <= L.length l /\ L.length l <= 32767}
+noextract type clientHello_cipher_suites = l:list cipherSuite{1 <= L.length l /\ L.length l <= 32767}
 
 inline_for_extraction noextract let clientHello_cipher_suites_parser_kind = LP.strong_parser_kind 4 65536 None
 

@@ -37,17 +37,17 @@ open TLS13.Wire.Generated.ExtensionClientHello
 
 noextract let clientHello_extensions_list_bytesize (x: list extensionClientHello) : GTot nat = Seq.length (LP.serialize (LP.serialize_list _ extensionClientHello_serializer) x)
 
-type clientHello_extensions = l:list extensionClientHello{let x = clientHello_extensions_list_bytesize l in 8 <= x /\ x <= 65535}
+noextract type clientHello_extensions = l:list extensionClientHello{let x = clientHello_extensions_list_bytesize l in 8 <= x /\ x <= 65535}
 
 val clientHello_extensions_list_bytesize_nil : squash (clientHello_extensions_list_bytesize [] == 0)
 
 val clientHello_extensions_list_bytesize_cons (x: extensionClientHello) (y: list extensionClientHello) : Lemma (clientHello_extensions_list_bytesize (x :: y) == (extensionClientHello_bytesize (x)) + clientHello_extensions_list_bytesize y) [SMTPat (clientHello_extensions_list_bytesize (x :: y))]
 
-type clientHello_extensions' = LP.parse_bounded_vldata_strong_t 8 65535 (LP.serialize_list _ extensionClientHello_serializer)
+noextract type clientHello_extensions' = LP.parse_bounded_vldata_strong_t 8 65535 (LP.serialize_list _ extensionClientHello_serializer)
 
-inline_for_extraction let synth_clientHello_extensions (x: clientHello_extensions') : Tot clientHello_extensions = x
+inline_for_extraction noextract let synth_clientHello_extensions (x: clientHello_extensions') : Tot clientHello_extensions = x
 
-inline_for_extraction let synth_clientHello_extensions_recip (x: clientHello_extensions) : Tot clientHello_extensions' = x
+inline_for_extraction noextract let synth_clientHello_extensions_recip (x: clientHello_extensions) : Tot clientHello_extensions' = x
 
 inline_for_extraction noextract let clientHello_extensions_parser_kind = LP.strong_parser_kind 10 65537 None
 

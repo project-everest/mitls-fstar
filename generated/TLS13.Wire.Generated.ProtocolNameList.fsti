@@ -37,17 +37,17 @@ open TLS13.Wire.Generated.ProtocolName
 
 noextract let protocolNameList_list_bytesize (x: list protocolName) : GTot nat = Seq.length (LP.serialize (LP.serialize_list _ protocolName_serializer) x)
 
-type protocolNameList = l:list protocolName{let x = protocolNameList_list_bytesize l in 2 <= x /\ x <= 65535}
+noextract type protocolNameList = l:list protocolName{let x = protocolNameList_list_bytesize l in 2 <= x /\ x <= 65535}
 
 val protocolNameList_list_bytesize_nil : squash (protocolNameList_list_bytesize [] == 0)
 
 val protocolNameList_list_bytesize_cons (x: protocolName) (y: list protocolName) : Lemma (protocolNameList_list_bytesize (x :: y) == (protocolName_bytesize (x)) + protocolNameList_list_bytesize y) [SMTPat (protocolNameList_list_bytesize (x :: y))]
 
-type protocolNameList' = LP.parse_bounded_vldata_strong_t 2 65535 (LP.serialize_list _ protocolName_serializer)
+noextract type protocolNameList' = LP.parse_bounded_vldata_strong_t 2 65535 (LP.serialize_list _ protocolName_serializer)
 
-inline_for_extraction let synth_protocolNameList (x: protocolNameList') : Tot protocolNameList = x
+inline_for_extraction noextract let synth_protocolNameList (x: protocolNameList') : Tot protocolNameList = x
 
-inline_for_extraction let synth_protocolNameList_recip (x: protocolNameList) : Tot protocolNameList' = x
+inline_for_extraction noextract let synth_protocolNameList_recip (x: protocolNameList) : Tot protocolNameList' = x
 
 inline_for_extraction noextract let protocolNameList_parser_kind = LP.strong_parser_kind 4 65537 None
 

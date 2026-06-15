@@ -37,17 +37,17 @@ open TLS13.Wire.Generated.KeyShareEntry
 
 noextract let keyShareClientHello_list_bytesize (x: list keyShareEntry) : GTot nat = Seq.length (LP.serialize (LP.serialize_list _ keyShareEntry_serializer) x)
 
-type keyShareClientHello = l:list keyShareEntry{let x = keyShareClientHello_list_bytesize l in 0 <= x /\ x <= 65535}
+noextract type keyShareClientHello = l:list keyShareEntry{let x = keyShareClientHello_list_bytesize l in 0 <= x /\ x <= 65535}
 
 val keyShareClientHello_list_bytesize_nil : squash (keyShareClientHello_list_bytesize [] == 0)
 
 val keyShareClientHello_list_bytesize_cons (x: keyShareEntry) (y: list keyShareEntry) : Lemma (keyShareClientHello_list_bytesize (x :: y) == (keyShareEntry_bytesize (x)) + keyShareClientHello_list_bytesize y) [SMTPat (keyShareClientHello_list_bytesize (x :: y))]
 
-type keyShareClientHello' = LP.parse_bounded_vldata_strong_t 0 65535 (LP.serialize_list _ keyShareEntry_serializer)
+noextract type keyShareClientHello' = LP.parse_bounded_vldata_strong_t 0 65535 (LP.serialize_list _ keyShareEntry_serializer)
 
-inline_for_extraction let synth_keyShareClientHello (x: keyShareClientHello') : Tot keyShareClientHello = x
+inline_for_extraction noextract let synth_keyShareClientHello (x: keyShareClientHello') : Tot keyShareClientHello = x
 
-inline_for_extraction let synth_keyShareClientHello_recip (x: keyShareClientHello) : Tot keyShareClientHello' = x
+inline_for_extraction noextract let synth_keyShareClientHello_recip (x: keyShareClientHello) : Tot keyShareClientHello' = x
 
 inline_for_extraction noextract let keyShareClientHello_parser_kind = LP.strong_parser_kind 2 65537 None
 

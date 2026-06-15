@@ -37,7 +37,7 @@ open TLS13.Wire.Generated.NamedGroup
 
 inline_for_extraction noextract let min_count = 1
 inline_for_extraction noextract let max_count = 32767
-type namedGroupList = l:list namedGroup{1 <= L.length l /\ L.length l <= 32767}
+noextract type namedGroupList = l:list namedGroup{1 <= L.length l /\ L.length l <= 32767}
 
 inline_for_extraction noextract let namedGroupList_parser_kind = LP.strong_parser_kind 4 65537 None
 

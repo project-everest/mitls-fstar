@@ -37,17 +37,17 @@ open TLS13.Wire.Generated.CertificateEntry
 
 noextract let certificate_certificate_list_list_bytesize (x: list certificateEntry) : GTot nat = Seq.length (LP.serialize (LP.serialize_list _ certificateEntry_serializer) x)
 
-type certificate_certificate_list = l:list certificateEntry{let x = certificate_certificate_list_list_bytesize l in 0 <= x /\ x <= 16777215}
+noextract type certificate_certificate_list = l:list certificateEntry{let x = certificate_certificate_list_list_bytesize l in 0 <= x /\ x <= 16777215}
 
 val certificate_certificate_list_list_bytesize_nil : squash (certificate_certificate_list_list_bytesize [] == 0)
 
 val certificate_certificate_list_list_bytesize_cons (x: certificateEntry) (y: list certificateEntry) : Lemma (certificate_certificate_list_list_bytesize (x :: y) == (certificateEntry_bytesize (x)) + certificate_certificate_list_list_bytesize y) [SMTPat (certificate_certificate_list_list_bytesize (x :: y))]
 
-type certificate_certificate_list' = LP.parse_bounded_vldata_strong_t 0 16777215 (LP.serialize_list _ certificateEntry_serializer)
+noextract type certificate_certificate_list' = LP.parse_bounded_vldata_strong_t 0 16777215 (LP.serialize_list _ certificateEntry_serializer)
 
-inline_for_extraction let synth_certificate_certificate_list (x: certificate_certificate_list') : Tot certificate_certificate_list = x
+inline_for_extraction noextract let synth_certificate_certificate_list (x: certificate_certificate_list') : Tot certificate_certificate_list = x
 
-inline_for_extraction let synth_certificate_certificate_list_recip (x: certificate_certificate_list) : Tot certificate_certificate_list' = x
+inline_for_extraction noextract let synth_certificate_certificate_list_recip (x: certificate_certificate_list) : Tot certificate_certificate_list' = x
 
 inline_for_extraction noextract let certificate_certificate_list_parser_kind = LP.strong_parser_kind 3 16777218 None
 

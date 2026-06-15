@@ -37,17 +37,17 @@ open TLS13.Wire.Generated.ExtensionEncryptedExtensions
 
 noextract let encryptedExtensions_list_bytesize (x: list extensionEncryptedExtensions) : GTot nat = Seq.length (LP.serialize (LP.serialize_list _ extensionEncryptedExtensions_serializer) x)
 
-type encryptedExtensions = l:list extensionEncryptedExtensions{let x = encryptedExtensions_list_bytesize l in 0 <= x /\ x <= 65535}
+noextract type encryptedExtensions = l:list extensionEncryptedExtensions{let x = encryptedExtensions_list_bytesize l in 0 <= x /\ x <= 65535}
 
 val encryptedExtensions_list_bytesize_nil : squash (encryptedExtensions_list_bytesize [] == 0)
 
 val encryptedExtensions_list_bytesize_cons (x: extensionEncryptedExtensions) (y: list extensionEncryptedExtensions) : Lemma (encryptedExtensions_list_bytesize (x :: y) == (extensionEncryptedExtensions_bytesize (x)) + encryptedExtensions_list_bytesize y) [SMTPat (encryptedExtensions_list_bytesize (x :: y))]
 
-type encryptedExtensions' = LP.parse_bounded_vldata_strong_t 0 65535 (LP.serialize_list _ extensionEncryptedExtensions_serializer)
+noextract type encryptedExtensions' = LP.parse_bounded_vldata_strong_t 0 65535 (LP.serialize_list _ extensionEncryptedExtensions_serializer)
 
-inline_for_extraction let synth_encryptedExtensions (x: encryptedExtensions') : Tot encryptedExtensions = x
+inline_for_extraction noextract let synth_encryptedExtensions (x: encryptedExtensions') : Tot encryptedExtensions = x
 
-inline_for_extraction let synth_encryptedExtensions_recip (x: encryptedExtensions) : Tot encryptedExtensions' = x
+inline_for_extraction noextract let synth_encryptedExtensions_recip (x: encryptedExtensions) : Tot encryptedExtensions' = x
 
 inline_for_extraction noextract let encryptedExtensions_parser_kind = LP.strong_parser_kind 2 65537 None
 
