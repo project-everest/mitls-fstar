@@ -245,7 +245,8 @@ let client_driver_live
   O.is_auth_context d.client_driver_auth **
   Box.pts_to d.client_driver_channel no_channel **
   client_driver_buffers d B.empty 0sz **
-  pure (client_driver_wire_logs_match st B.empty B.empty B.empty 0sz)
+  pure (client_driver_wire_logs_match st B.empty B.empty B.empty 0sz /\
+        CT.client_end_to_end_invariant st)
 
 noextract
 let client_driver_connected
@@ -3181,11 +3182,14 @@ fn driver_progress_buffered_network_step
                    (Seq.slice raw_bytes 0
                      (SZ.v result.buffered_network_io_buffered.buffered_network_new_len)) /\
                  B.length network_out_bytes == SZ.v network_out_len /\
-                 B.length app_out_bytes == SZ.v app_out_len)
+                 B.length app_out_bytes == SZ.v app_out_len /\
+                 (CT.client_end_to_end_invariant 'st0 ==>
+                  CT.client_end_to_end_invariant st1))
 {
   let empty_buffer = buffered_len = 0sz;
   if empty_buffer {
-    driver_read_buffered_network_bytes_compact_once
+    let read_result =
+      driver_read_buffered_network_bytes_compact_once
       d
       raw
       raw_capacity
@@ -3193,7 +3197,26 @@ fn driver_progress_buffered_network_step
       network_out
       network_out_len
       app_out
-      app_out_len
+      app_out_len;
+    with st1 buffered_after raw_bytes network_out_bytes app_out_bytes.
+      assert (driver_exactly d st1 buffered_after
+                read_result.buffered_network_io_buffered.buffered_network_new_len **
+              pts_to raw raw_bytes **
+              pts_to network_out network_out_bytes **
+              pts_to app_out app_out_bytes);
+    assert (pure (CT.network_bytes_end_to_end_correct
+      'st0
+      st1
+      read_result.buffered_network_io_buffered.buffered_network_read.network_read_buffer_resp
+      (Ghost.reveal
+        read_result.buffered_network_io_buffered.buffered_network_read.network_read_prefix)
+      (Ghost.reveal 'old_network_out)
+      network_out_bytes
+      (Ghost.reveal 'old_app_out)
+      app_out_bytes));
+    assert (pure (CT.client_end_to_end_invariant 'st0 ==>
+      CT.client_end_to_end_invariant st1));
+    read_result
   } else {
     let processed =
       driver_process_buffered_network_bytes_compact_once
@@ -3210,6 +3233,17 @@ fn driver_progress_buffered_network_step
               pts_to raw raw_bytes **
               pts_to network_out network_out_bytes **
               pts_to app_out app_out_bytes);
+    assert (pure (CT.network_bytes_end_to_end_correct
+      'st0
+      st1
+      processed.buffered_network_read.network_read_buffer_resp
+      (Ghost.reveal processed.buffered_network_read.network_read_prefix)
+      (Ghost.reveal 'old_network_out)
+      network_out_bytes
+      (Ghost.reveal 'old_app_out)
+      app_out_bytes));
+    assert (pure (CT.client_end_to_end_invariant 'st0 ==>
+      CT.client_end_to_end_invariant st1));
     assert (pure (B.length raw_bytes == SZ.v raw_capacity));
     assert (pure (SZ.v processed.buffered_network_new_len <= SZ.v buffered_len));
     assert (pure (SZ.v processed.buffered_network_new_len <= SZ.v raw_capacity));
@@ -3219,7 +3253,8 @@ fn driver_progress_buffered_network_step
     if need_more {
       assert (pure (Seq.equal buffered_after
         (Seq.slice raw_bytes 0 (SZ.v processed.buffered_network_new_len))));
-      driver_read_buffered_network_bytes_compact_once
+      let read_result =
+        driver_read_buffered_network_bytes_compact_once
         d
         raw
         raw_capacity
@@ -3227,7 +3262,28 @@ fn driver_progress_buffered_network_step
         network_out
         network_out_len
         app_out
-        app_out_len
+        app_out_len;
+      with st2 buffered_after2 raw_bytes2 network_out_bytes2 app_out_bytes2.
+        assert (driver_exactly d st2 buffered_after2
+                  read_result.buffered_network_io_buffered.buffered_network_new_len **
+                pts_to raw raw_bytes2 **
+                pts_to network_out network_out_bytes2 **
+                pts_to app_out app_out_bytes2);
+      assert (pure (CT.network_bytes_end_to_end_correct
+        st1
+        st2
+        read_result.buffered_network_io_buffered.buffered_network_read.network_read_buffer_resp
+        (Ghost.reveal
+          read_result.buffered_network_io_buffered.buffered_network_read.network_read_prefix)
+        network_out_bytes
+        network_out_bytes2
+        app_out_bytes
+        app_out_bytes2));
+      assert (pure (CT.client_end_to_end_invariant st1 ==>
+        CT.client_end_to_end_invariant st2));
+      assert (pure (CT.client_end_to_end_invariant 'st0 ==>
+        CT.client_end_to_end_invariant st2));
+      read_result
     } else {
       assert (pure (Seq.equal buffered_after
         (Seq.slice raw_bytes 0 (SZ.v processed.buffered_network_new_len))));
@@ -3298,7 +3354,11 @@ fn top_driver_process_one_local_action
                  B.length auth_signature_bytes == SZ.v auth_signature_len /\
                  B.length app_out_bytes == SZ.v app_out_len /\
                  (result.ready_local_processed \/
-                  result.ready_local_written == 0sz))
+                  result.ready_local_written == 0sz) /\
+                 (result.ready_local_processed ==>
+                  (CT.client_end_to_end_invariant 'st0 ==>
+                   CT.client_end_to_end_invariant st1)) /\
+                 (result.ready_local_processed == false ==> st1 == 'st0))
 {
   unfold (top_driver_exactly d 'st0 (Ghost.reveal 'buffered) (Ghost.reveal 'pending_len));
   let step =
@@ -3318,6 +3378,10 @@ fn top_driver_process_one_local_action
             pts_to app_out app_out_bytes);
   assert (pure (B.length network_out_bytes == SZ.v network_out_len));
   assert (pure (B.length app_out_bytes == SZ.v app_out_len));
+  assert (pure (step.ready_local_processed ==>
+    (CT.client_end_to_end_invariant 'st0 ==>
+     CT.client_end_to_end_invariant st1)));
+  assert (pure (step.ready_local_processed == false ==> st1 == 'st0));
   if step.ready_local_processed {
     fold (top_driver_exactly d st1 (Ghost.reveal 'buffered) (Ghost.reveal 'pending_len));
     step
@@ -3401,6 +3465,18 @@ fn top_driver_process_one_local_action
                       pts_to auth_payload_prefix auth_payload_prefix_bytes **
                       pts_to network_out network_out_bytes2 **
                       pts_to app_out app_out_bytes2);
+            assert (pure (CT.local_event_end_to_end_correct
+              st1
+              st2
+              write_result.local_write_resp
+              CT.LocalValidateCertificate
+              auth_payload_prefix_bytes
+              network_out_bytes2
+              app_out_bytes2));
+            assert (pure (CT.client_end_to_end_invariant st1 ==>
+              CT.client_end_to_end_invariant st2));
+            assert (pure (CT.client_end_to_end_invariant 'st0 ==>
+              CT.client_end_to_end_invariant st2));
             A.to_mask auth_payload_prefix;
             with auth_payload_prefix_mask_after.
               assert (A.pts_to_mask auth_payload_prefix #1.0R auth_payload_prefix_mask_after (fun _ -> True));
@@ -3539,6 +3615,18 @@ fn top_driver_process_one_local_action
                       pts_to empty_payload 'empty_payload_bytes **
                       pts_to network_out network_out_bytes2 **
                       pts_to app_out app_out_bytes2);
+            assert (pure (CT.local_event_end_to_end_correct
+              st1
+              st2
+              write_result.local_write_resp
+              CT.LocalVerifyCertificateSignature
+              (Ghost.reveal 'empty_payload_bytes)
+              network_out_bytes2
+              app_out_bytes2));
+            assert (pure (CT.client_end_to_end_invariant st1 ==>
+              CT.client_end_to_end_invariant st2));
+            assert (pure (CT.client_end_to_end_invariant 'st0 ==>
+              CT.client_end_to_end_invariant st2));
             fold (top_driver_exactly d st2 (Ghost.reveal 'buffered) (Ghost.reveal 'pending_len));
             {
               ready_local_action = step.ready_local_action;
@@ -3631,6 +3719,8 @@ fn rec driver_handshake
                    (Seq.slice raw_bytes 0 (SZ.v result.driver_workflow_rx_len)) /\
                  B.length network_out_bytes == SZ.v network_out_len /\
                  B.length app_out_bytes == SZ.v app_out_len /\
+                 (CT.client_end_to_end_invariant 'st0 ==>
+                  CT.client_end_to_end_invariant st1) /\
                  (result.driver_workflow_status == DriverWorkflowOk ==>
                   st1.CS.cs_model.CS.model_control == CS.ControlApplicationData))
   decreases (SZ.v fuel)
@@ -3737,6 +3827,18 @@ fn rec driver_handshake
                   pts_to auth_signature auth_signature_local **
                   pts_to app_out app_out_local);
         if local.ready_local_processed {
+          assert (pure (local.ready_local_processed == true));
+          assert (pure (local.ready_local_processed == true ==>
+            (CT.client_end_to_end_invariant 'st0 ==>
+             CT.client_end_to_end_invariant st_local)));
+          assert (pure (CT.client_end_to_end_invariant 'st0 ==>
+            CT.client_end_to_end_invariant st_local))
+        } else {
+          assert (pure (st_local == 'st0));
+          assert (pure (CT.client_end_to_end_invariant 'st0 ==>
+            CT.client_end_to_end_invariant st_local))
+        };
+        if local.ready_local_processed {
           let ok = local.ready_local_resp.CT.status = CT.StepOk;
           let wrote_all =
             local.ready_local_written = local.ready_local_resp.CT.network_out_len;
@@ -3795,6 +3897,7 @@ fn rec driver_handshake
             assert (pure (B.length network_out_local == SZ.v network_out_len));
             assert (pure (B.length app_out_local == SZ.v app_out_len));
             assert (pure (L.max_record_fragment_len <= SZ.v app_out_len));
+            assert (pure (st_local == 'st0));
             unfold (top_driver_exactly d st_local 'buffered buffered_len);
             let network =
               driver_progress_buffered_network_step
@@ -3816,6 +3919,10 @@ fn rec driver_handshake
             fold (top_driver_exactly d st_network
               buffered_network
               network.buffered_network_io_buffered.buffered_network_new_len);
+            assert (pure (CT.client_end_to_end_invariant st_local ==>
+              CT.client_end_to_end_invariant st_network));
+            assert (pure (CT.client_end_to_end_invariant 'st0 ==>
+              CT.client_end_to_end_invariant st_network));
             let net_read =
               network.buffered_network_io_buffered.buffered_network_read;
             let net_resp = net_read.network_read_buffer_resp.CT.response;
@@ -3937,7 +4044,9 @@ fn rec driver_receive_application_data
                  Seq.equal buffered_after
                    (Seq.slice raw_bytes 0 (SZ.v result.driver_workflow_rx_len)) /\
                  B.length network_out_bytes == SZ.v network_out_len /\
-                 B.length app_out_bytes == SZ.v app_out_len)
+                 B.length app_out_bytes == SZ.v app_out_len /\
+                 (CT.client_end_to_end_invariant 'st0 ==>
+                  CT.client_end_to_end_invariant st1))
   decreases (SZ.v fuel)
 {
   if (fuel = 0sz) {
@@ -4006,6 +4115,8 @@ fn rec driver_receive_application_data
     fold (top_driver_exactly d st_network
       buffered_network
       network.buffered_network_io_buffered.buffered_network_new_len);
+    assert (pure (CT.client_end_to_end_invariant 'st0 ==>
+      CT.client_end_to_end_invariant st_network));
     let no_op_resp = {
       CT.network_out_len = 0sz;
       CT.app_out_len = 0sz;
@@ -4086,6 +4197,20 @@ fn rec driver_receive_application_data
                 pts_to auth_cv_input auth_cv_input_local **
                 pts_to auth_signature auth_signature_local **
                 pts_to app_out app_out_local);
+      if local.ready_local_processed {
+        assert (pure (local.ready_local_processed == true));
+        assert (pure (local.ready_local_processed == true ==>
+          (CT.client_end_to_end_invariant st_network ==>
+           CT.client_end_to_end_invariant st_local)));
+        assert (pure (CT.client_end_to_end_invariant st_network ==>
+          CT.client_end_to_end_invariant st_local));
+        assert (pure (CT.client_end_to_end_invariant 'st0 ==>
+          CT.client_end_to_end_invariant st_local))
+      } else {
+        assert (pure (st_local == st_network));
+        assert (pure (CT.client_end_to_end_invariant 'st0 ==>
+          CT.client_end_to_end_invariant st_local))
+      };
       let local_processed = local.ready_local_processed;
       let local_ready = local.ready_local_action.CT.next_local_ready;
       let local_ok = local.ready_local_resp.CT.status = CT.StepOk;

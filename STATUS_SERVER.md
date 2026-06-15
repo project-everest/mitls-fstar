@@ -103,8 +103,9 @@ That committed state includes:
 - The client top-level driver facade is being hardened symmetrically: successful
   `TLS13.Impl.Client.Driver.connect` now exposes
   `client_driver_application_ready`, proving the connected client state is in
-  `ControlApplicationData` and has role-correct client application record
-  read/write keys installed.
+  `ControlApplicationData`, preserves `CT.client_end_to_end_invariant` through
+  the recursive Pulse handshake orchestration, and has role-correct client
+  application record read/write keys installed.
 
 ## What is not complete yet
 
@@ -151,8 +152,9 @@ The client facade readiness slice strengthens `connect`. It adds
 `client_application_record_keys_installed_runtime` in
 `TLS13.Impl.ConnectionState.Queries` and uses it in
 `TLS13.Impl.Client.Driver.connect`, so `DriverWorkflowOk` is no longer merely a
-connected transport result: it proves application-data control and installed
-client application record keys. Focused verification for
+connected transport result: it proves application-data control, the client
+end-to-end invariant, and installed client application record keys. Focused
+verification for
 `TLS13.Impl.ConnectionState.Queries` and `TLS13.Impl.Client.Driver` passes, as
 do the extracted client driver slice and OpenSSL echo interop tests.
 
@@ -255,9 +257,16 @@ bytes still prevent deriving `CS.paired_wire_logs` directly.
      `lemma_client_server_driver_key_material_agrees_from_no_read_ahead_components`
      proves the aggregate spec input predicate plus the same wire-log and
      key-material conclusions from those explicit components.
+   - `client_driver_application_ready` is now symmetric with
+     `server_driver_application_ready` at the invariant layer: it includes the
+     client end-to-end invariant, threaded through the Pulse handshake and
+     receive helper postconditions.
    - The remaining proof work is to prove the supported-profile state-machine
      input predicate from two live successful driver resources, rather than
-     requiring it as an external theorem premise.
+     requiring it as an external theorem premise. In particular, key-schedule
+     lineage and transcript/record-material pairing need dedicated pure-state
+     projection lemmas from reachable successful endpoint states; they are not
+     inferred from installed application record keys alone.
 
 3. **Extraction and interoperability**
    - Keep the public API buffer/driver oriented.

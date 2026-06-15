@@ -1050,12 +1050,11 @@ TCP channel.
 The client facade now exposes the corresponding success fact needed by the
 future paired-run bridge: `TLS13.Impl.Client.Driver.connect` returns
 `DriverWorkflowOk` only with `client_driver_application_ready`, proving
-`ControlApplicationData` plus
-`CS.application_record_keys_installed_for_role CS.ClientEndpoint`. The core
-client invariant remains exposed at the lower `TLS13.Impl.Client` buffer/event
-API; carrying it through the heap driver predicates is a separate API-tightening
-task if the paired-run bridge needs that fact from `client_driver_connected`
-alone.
+`CT.client_end_to_end_invariant`, `ControlApplicationData`, and
+`CS.application_record_keys_installed_for_role CS.ClientEndpoint`. The Pulse
+handshake and receive orchestration helpers thread the invariant as a
+postcondition, so the top-level client success predicate is symmetric with the
+server success predicate at the invariant layer.
 
 The client public `send` facade is also now non-degenerate: it exposes
 `client_driver_send_correct`, which unfolds to the verified
@@ -1863,8 +1862,9 @@ Checklist:
 - [x] Server write equals client read for `ServerTraffic`.
 - [x] Record sequence/epoch consistency is preserved.
 - [ ] Sent seal and accepted received decode replay use the agreed material.
-- [x] Public client `connect` success exposes application-data control and
-      installed client application read/write record keys.
+- [x] Public client `connect` success exposes the client end-to-end invariant,
+      application-data control, and installed client application read/write
+      record keys.
 - [x] Public client `send` exposes the local application-send theorem and exact
       sent-log append relation.
 - [x] Public client `receive` exposes exact successful app-output copyout and
