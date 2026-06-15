@@ -344,6 +344,316 @@ let lemma_server_driver_network_process_correct_preserves_config
     network_out_bytes
     app_out_bytes
 
+let lemma_server_driver_supported_profile_selection_same_config_and_selection
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (credential_identity:CS.server_credential_identity)
+  : Lemma
+      (requires
+        server_driver_supported_profile_selection st0 credential_identity /\
+        st1.CS.cs_model.CS.model_config ==
+          st0.CS.cs_model.CS.model_config /\
+        st1.CS.cs_model.CS.model_handshake.CS.hs_server_selection ==
+          st0.CS.cs_model.CS.model_handshake.CS.hs_server_selection)
+      (ensures
+        server_driver_supported_profile_selection st1 credential_identity)
+=
+  ()
+
+let lemma_legal_response_for_event_preserves_supported_profile_selection
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (resp:ST.server_response)
+  (ev:CS.conn_event)
+  (raw_sent:B.bytes)
+  (raw_received:B.bytes)
+  (network_out:B.bytes)
+  (app_out:B.bytes)
+  (credential_identity:CS.server_credential_identity)
+  : Lemma
+      (requires
+        ST.legal_response_for_event
+          st0
+          st1
+          resp
+          ev
+          raw_sent
+          raw_received
+          network_out
+          app_out /\
+        server_driver_supported_profile_selection st0 credential_identity /\
+        (match ev with
+         | CS.ConnNetworkEvent _ -> True
+         | CS.ConnLocalEvent (CS.LocalFail _) -> True
+         | _ -> False))
+      (ensures
+        server_driver_supported_profile_selection st1 credential_identity)
+=
+  assert (CS.legal_connection_delta
+    st0
+    {
+      CS.delta_event = ev;
+      CS.delta_raw_sent = raw_sent;
+      CS.delta_raw_received = raw_received;
+    }
+    st1);
+  assert (CS.step_model st0.CS.cs_model ev == Some st1.CS.cs_model);
+  assert (
+    st1.CS.cs_model.CS.model_config ==
+      st0.CS.cs_model.CS.model_config);
+  assert (
+    st1.CS.cs_model.CS.model_handshake.CS.hs_server_selection ==
+      st0.CS.cs_model.CS.model_handshake.CS.hs_server_selection);
+  lemma_server_driver_supported_profile_selection_same_config_and_selection
+    st0
+    st1
+    credential_identity
+
+let lemma_legal_network_response_preserves_supported_profile_selection
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (resp:ST.server_response)
+  (msg:M.tls_message)
+  (raw_received:B.bytes)
+  (network_out:B.bytes)
+  (app_out:B.bytes)
+  (credential_identity:CS.server_credential_identity)
+  : Lemma
+      (requires
+        ST.legal_network_response
+          st0
+          st1
+          resp
+          msg
+          raw_received
+          network_out
+          app_out /\
+        server_driver_supported_profile_selection st0 credential_identity)
+      (ensures
+        server_driver_supported_profile_selection st1 credential_identity)
+=
+  assert (ST.legal_response_for_event
+    st0
+    st1
+    resp
+    (ST.received_message_event msg)
+    B.empty
+    raw_received
+    network_out
+    app_out);
+  lemma_legal_response_for_event_preserves_supported_profile_selection
+    st0
+    st1
+    resp
+    (ST.received_message_event msg)
+    B.empty
+    raw_received
+    network_out
+    app_out
+    credential_identity
+
+let lemma_server_driver_network_process_correct_preserves_supported_profile_selection
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (resp:ST.server_buffer_response)
+  (sent:B.bytes)
+  (sent':B.bytes)
+  (credential_identity:CS.server_credential_identity)
+  : Lemma
+      (requires
+        server_driver_network_process_correct st0 st1 resp sent sent' /\
+        server_driver_supported_profile_selection st0 credential_identity)
+      (ensures
+        server_driver_supported_profile_selection st1 credential_identity)
+=
+  let input =
+    ID.indefinite_description_ghost
+      B.bytes
+      (fun input -> exists network_out_bytes app_out_bytes.
+        ST.server_network_bytes_end_to_end_correct
+          st0 st1 resp input network_out_bytes app_out_bytes /\
+        ST.server_network_consumed_input_projection
+          st0 st1 resp input network_out_bytes app_out_bytes /\
+        Seq.equal
+          sent'
+          (B.append
+            sent
+            (ST.response_network_out resp.ST.response network_out_bytes))) in
+  let network_out_bytes =
+    ID.indefinite_description_ghost
+      B.bytes
+      (fun network_out_bytes -> exists app_out_bytes.
+        ST.server_network_bytes_end_to_end_correct
+          st0 st1 resp input network_out_bytes app_out_bytes /\
+        ST.server_network_consumed_input_projection
+          st0 st1 resp input network_out_bytes app_out_bytes /\
+        Seq.equal
+          sent'
+          (B.append
+            sent
+            (ST.response_network_out resp.ST.response network_out_bytes))) in
+  let app_out_bytes =
+    ID.indefinite_description_ghost
+      B.bytes
+      (fun app_out_bytes ->
+        ST.server_network_bytes_end_to_end_correct
+          st0 st1 resp input network_out_bytes app_out_bytes /\
+        ST.server_network_consumed_input_projection
+          st0 st1 resp input network_out_bytes app_out_bytes /\
+        Seq.equal
+          sent'
+          (B.append
+            sent
+            (ST.response_network_out resp.ST.response network_out_bytes))) in
+  assert (ST.server_network_consumed_input_projection
+    st0 st1 resp input network_out_bytes app_out_bytes);
+  lemma_server_driver_network_process_correct_preserves_config
+    st0
+    st1
+    resp
+    sent
+    sent';
+  match resp.response.status with
+  | ST.NeedMoreInput ->
+    assert (st1 == st0)
+  | ST.IllegalTransition ->
+    assert (st1 == st0)
+  | ST.OutputBufferTooSmall ->
+    assert False
+  | ST.DecodeError ->
+    assert (ST.decode_error_response
+      st0
+      st1
+      resp.ST.response
+      network_out_bytes
+      app_out_bytes);
+    lemma_legal_response_for_event_preserves_supported_profile_selection
+      st0
+      st1
+      resp.ST.response
+      (CS.ConnLocalEvent (CS.LocalFail CM.tls_decode_error))
+      B.empty
+      B.empty
+      network_out_bytes
+      app_out_bytes
+      credential_identity
+  | ST.ConnectionFailed ->
+    assert (ST.server_network_connection_failed_consumed_prefix
+      st0 st1 resp input network_out_bytes app_out_bytes);
+    let alert =
+      ID.indefinite_description_ghost
+        T.alert_description
+        (fun alert -> exists raw_received.
+          st1 ==
+            CM.received_alert_failure_state st0 alert raw_received /\
+          Seq.equal
+            raw_received
+            (ST.server_network_consumed_prefix resp input) /\
+          ST.legal_network_response
+            st0
+            st1
+            resp.ST.response
+            (M.TlsAlert alert)
+            raw_received
+            network_out_bytes
+            app_out_bytes) in
+    let raw_received =
+      ID.indefinite_description_ghost
+        B.bytes
+        (fun raw_received ->
+          st1 ==
+            CM.received_alert_failure_state st0 alert raw_received /\
+          Seq.equal
+            raw_received
+            (ST.server_network_consumed_prefix resp input) /\
+          ST.legal_network_response
+            st0
+            st1
+            resp.ST.response
+            (M.TlsAlert alert)
+            raw_received
+            network_out_bytes
+            app_out_bytes) in
+    assert (ST.legal_network_response
+      st0
+      st1
+      resp.ST.response
+      (M.TlsAlert alert)
+      raw_received
+      network_out_bytes
+      app_out_bytes);
+    lemma_legal_network_response_preserves_supported_profile_selection
+      st0
+      st1
+      resp.ST.response
+      (M.TlsAlert alert)
+      raw_received
+      network_out_bytes
+      app_out_bytes
+      credential_identity
+  | ST.StepOk ->
+    assert (ST.server_network_step_ok_received_decode_projection
+      st0 st1 resp input network_out_bytes app_out_bytes);
+    let msg =
+      ID.indefinite_description_ghost
+        M.tls_message
+        (fun msg ->
+          CT.received_tls_raw_delta_legal
+            st0
+            msg
+            (ST.server_network_consumed_prefix resp input) /\
+          ST.server_decoded_message_event_projection
+            st0
+            st1
+            resp.ST.response
+            msg
+            (ST.server_network_consumed_prefix resp input)
+            network_out_bytes
+            app_out_bytes /\
+          (if CS.network_message_is_cleartext CL.Received msg
+           then True
+           else
+             ST.server_protected_record_decode_correct
+               st0
+               (ST.server_network_consumed_prefix resp input)
+               msg)) in
+    assert (ST.server_decoded_message_event_projection
+      st0
+      st1
+      resp.ST.response
+      msg
+      (ST.server_network_consumed_prefix resp input)
+      network_out_bytes
+      app_out_bytes);
+    if ST.legal_network_response
+      st0
+      st1
+      resp.ST.response
+      msg
+      (ST.server_network_consumed_prefix resp input)
+      network_out_bytes
+      app_out_bytes
+    then
+      lemma_legal_network_response_preserves_supported_profile_selection
+        st0
+        st1
+        resp.ST.response
+        msg
+        (ST.server_network_consumed_prefix resp input)
+        network_out_bytes
+        app_out_bytes
+        credential_identity
+    else (
+      assert (ST.unexpected_message_response
+        st0
+        st1
+        resp.ST.response
+        network_out_bytes
+        app_out_bytes);
+      assert (resp.ST.response.ST.status == ST.IllegalTransition);
+      assert False
+    )
+
 let lemma_slice_append_full
   (s:B.bytes)
   (n:nat)
@@ -1112,6 +1422,20 @@ fn process_buffered_network_bytes_compact_once
   assert (pure (server_driver_config_matches_credentials
     st1
     (Ghost.reveal 'certificate_chain)
+    (Ghost.reveal 'credential_identity)));
+  lemma_server_driver_network_process_correct_preserves_supported_profile_selection
+    'st0
+    st1
+    buffer_resp
+    (Ghost.reveal 'sent)
+    (B.append
+      (Ghost.reveal 'sent)
+      (if SZ.v written <= B.length network_out_bytes
+       then Seq.slice network_out_bytes 0 (SZ.v written)
+       else B.empty))
+    (Ghost.reveal 'credential_identity);
+  assert (pure (server_driver_supported_profile_selection
+    st1
     (Ghost.reveal 'credential_identity)));
   fold (server_driver_connected
     d

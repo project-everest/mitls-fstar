@@ -914,6 +914,73 @@ fn derive_shared_secret_from_payload_once
        else B.empty))
     buffered
     buffered_len));
+  lemma_server_driver_local_write_correct_intro
+    'st0
+    st1
+    resp
+    ST.LocalDeriveSharedSecret
+    (Ghost.reveal 'payload_bytes)
+    (Ghost.reveal 'sent)
+    (B.append
+      (Ghost.reveal 'sent)
+      (if SZ.v written <= B.length network_out_bytes
+       then Seq.slice network_out_bytes 0 (SZ.v written)
+       else B.empty))
+    network_out_bytes
+    app_out_bytes;
+  assert (pure (ST.server_local_event_input_ready
+    'st0
+    ST.LocalDeriveSharedSecret
+    (Ghost.reveal 'payload_bytes)));
+  assert (pure (ST.server_local_event_input_ready_with_credentials
+    'st0
+    ST.LocalDeriveSharedSecret
+    (Ghost.reveal 'payload_bytes)
+    (Ghost.reveal 'certificate_chain)
+    (Ghost.reveal 'credential_identity) ==
+    ST.server_local_event_input_ready
+      'st0
+      ST.LocalDeriveSharedSecret
+      (Ghost.reveal 'payload_bytes)));
+  assert (pure (ST.server_local_event_input_ready_with_credentials
+    'st0
+    ST.LocalDeriveSharedSecret
+    (Ghost.reveal 'payload_bytes)
+    (Ghost.reveal 'certificate_chain)
+    (Ghost.reveal 'credential_identity)));
+  lemma_server_driver_local_write_correct_preserves_config
+    'st0
+    st1
+    resp
+    ST.LocalDeriveSharedSecret
+    (Ghost.reveal 'payload_bytes)
+    (Ghost.reveal 'sent)
+    (B.append
+      (Ghost.reveal 'sent)
+      (if SZ.v written <= B.length network_out_bytes
+       then Seq.slice network_out_bytes 0 (SZ.v written)
+       else B.empty));
+  assert (pure (server_driver_config_matches_credentials
+    st1
+    (Ghost.reveal 'certificate_chain)
+    (Ghost.reveal 'credential_identity)));
+  lemma_server_driver_local_write_correct_preserves_supported_profile_selection
+    'st0
+    st1
+    resp
+    ST.LocalDeriveSharedSecret
+    (Ghost.reveal 'payload_bytes)
+    (Ghost.reveal 'certificate_chain)
+    (Ghost.reveal 'credential_identity)
+    (Ghost.reveal 'sent)
+    (B.append
+      (Ghost.reveal 'sent)
+      (if SZ.v written <= B.length network_out_bytes
+       then Seq.slice network_out_bytes 0 (SZ.v written)
+       else B.empty));
+  assert (pure (server_driver_supported_profile_selection
+    st1
+    (Ghost.reveal 'credential_identity)));
 
   V.to_vec_pts_to d.server_driver_network_out;
   V.to_vec_pts_to d.server_driver_app_out;

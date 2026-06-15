@@ -240,6 +240,20 @@ val lemma_server_driver_network_process_correct_preserves_config
         st1.CS.cs_model.CS.model_config ==
           st0.CS.cs_model.CS.model_config)
 
+val lemma_server_driver_network_process_correct_preserves_supported_profile_selection
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (resp:ST.server_buffer_response)
+  (sent:B.bytes)
+  (sent':B.bytes)
+  (credential_identity:CS.server_credential_identity)
+  : Lemma
+      (requires
+        server_driver_network_process_correct st0 st1 resp sent sent' /\
+        DS.server_driver_supported_profile_selection st0 credential_identity)
+      (ensures
+        DS.server_driver_supported_profile_selection st1 credential_identity)
+
 val lemma_slice_append_full
   (s:B.bytes)
   (n:nat)

@@ -19,6 +19,7 @@ module RS = TLS13.Record.Spec
 module S = TLS13.Impl.Server
 module SSetup = TLS13.Impl.Server.Setup
 module ST = TLS13.Impl.Server.Types
+module T = TLS13.Types
 module W = TLS13.Wire.Spec
 module Box = Pulse.Lib.Box
 module SZ = FStar.SizeT
@@ -259,6 +260,308 @@ let lemma_server_driver_local_write_correct_preserves_config
     network_out_bytes
     app_out_bytes
 
+let lemma_legal_response_for_event_preserves_server_selection_except_select
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (resp:ST.server_response)
+  (ev:CS.conn_event)
+  (raw_sent:B.bytes)
+  (raw_received:B.bytes)
+  (network_out:B.bytes)
+  (app_out:B.bytes)
+  : Lemma
+      (requires
+        ST.legal_response_for_event
+          st0
+          st1
+          resp
+          ev
+          raw_sent
+          raw_received
+          network_out
+          app_out /\
+        (match ev with
+         | CS.ConnLocalEvent (CS.LocalSelectServerParameters _) -> False
+         | _ -> True))
+      (ensures
+        st1.CS.cs_model.CS.model_handshake.CS.hs_server_selection ==
+          st0.CS.cs_model.CS.model_handshake.CS.hs_server_selection)
+=
+  assert (CS.legal_connection_delta
+    st0
+    {
+      CS.delta_event = ev;
+      CS.delta_raw_sent = raw_sent;
+      CS.delta_raw_received = raw_received;
+    }
+    st1);
+  assert (CS.step_model st0.CS.cs_model ev == Some st1.CS.cs_model);
+  assert (
+    st1.CS.cs_model.CS.model_handshake.CS.hs_server_selection ==
+      st0.CS.cs_model.CS.model_handshake.CS.hs_server_selection)
+
+let lemma_legal_local_response_preserves_server_selection_except_select
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (resp:ST.server_response)
+  (kind:ST.local_event_kind)
+  (payload:B.bytes)
+  (ev:CS.conn_event)
+  (raw_sent:B.bytes)
+  (raw_received:B.bytes)
+  (network_out:B.bytes)
+  (app_out:B.bytes)
+  : Lemma
+      (requires
+        ST.legal_local_response
+          st0
+          st1
+          resp
+          kind
+          payload
+          ev
+          raw_sent
+          raw_received
+          network_out
+          app_out /\
+        kind <> ST.LocalSelectServerParameters)
+      (ensures
+        st1.CS.cs_model.CS.model_handshake.CS.hs_server_selection ==
+          st0.CS.cs_model.CS.model_handshake.CS.hs_server_selection)
+=
+  assert (ST.local_event_kind_matches kind payload ev);
+  assert (match ev with
+    | CS.ConnLocalEvent (CS.LocalSelectServerParameters _) -> False
+    | _ -> True);
+  assert (ST.legal_response_for_event
+    st0
+    st1
+    resp
+    ev
+    raw_sent
+    raw_received
+    network_out
+    app_out);
+  lemma_legal_response_for_event_preserves_server_selection_except_select
+    st0
+    st1
+    resp
+    ev
+    raw_sent
+    raw_received
+    network_out
+    app_out
+
+let lemma_legal_handled_local_response_preserves_server_selection_except_select
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (resp:ST.server_response)
+  (kind:ST.local_event_kind)
+  (payload:B.bytes)
+  (network_out:B.bytes)
+  (app_out:B.bytes)
+  : Lemma
+      (requires
+        ST.legal_handled_local_response
+          st0
+          st1
+          resp
+          kind
+          payload
+          network_out
+          app_out /\
+        kind <> ST.LocalSelectServerParameters)
+      (ensures
+        st1.CS.cs_model.CS.model_handshake.CS.hs_server_selection ==
+          st0.CS.cs_model.CS.model_handshake.CS.hs_server_selection)
+=
+  let goal (_:unit) =
+    st1.CS.cs_model.CS.model_handshake.CS.hs_server_selection ==
+      st0.CS.cs_model.CS.model_handshake.CS.hs_server_selection in
+  FStar.Classical.or_elim
+    #(exists ev raw_sent raw_received.
+       ST.legal_local_response
+         st0
+         st1
+         resp
+         kind
+         payload
+         ev
+         raw_sent
+         raw_received
+         network_out
+         app_out)
+    #(ST.unexpected_message_response st0 st1 resp network_out app_out)
+    #goal
+    (fun h ->
+      FStar.Classical.exists_elim (goal ())
+        #CS.conn_event
+        #(fun ev -> exists raw_sent raw_received.
+          ST.legal_local_response
+            st0
+            st1
+            resp
+            kind
+            payload
+            ev
+            raw_sent
+            raw_received
+            network_out
+            app_out)
+        h
+        (fun ev ->
+      FStar.Classical.exists_elim (goal ())
+        #B.bytes
+        #(fun raw_sent -> exists raw_received.
+          ST.legal_local_response
+            st0
+            st1
+            resp
+            kind
+            payload
+            ev
+            raw_sent
+            raw_received
+            network_out
+            app_out)
+        ()
+        (fun raw_sent ->
+      FStar.Classical.exists_elim (goal ())
+        #B.bytes
+        #(fun raw_received ->
+          ST.legal_local_response
+            st0
+            st1
+            resp
+            kind
+            payload
+            ev
+            raw_sent
+            raw_received
+            network_out
+            app_out)
+        ()
+        (fun raw_received ->
+          lemma_legal_local_response_preserves_server_selection_except_select
+            st0
+            st1
+            resp
+            kind
+            payload
+            ev
+            raw_sent
+            raw_received
+            network_out
+            app_out))))
+    (fun _ ->
+      assert (ST.legal_response_for_event
+        st0
+        st1
+        resp
+        (CS.ConnLocalEvent (CS.LocalFail (T.AlertError T.UnexpectedMessage)))
+        B.empty
+        B.empty
+        network_out
+        app_out);
+      lemma_legal_response_for_event_preserves_server_selection_except_select
+        st0
+        st1
+        resp
+        (CS.ConnLocalEvent (CS.LocalFail (T.AlertError T.UnexpectedMessage)))
+        B.empty
+        B.empty
+        network_out
+        app_out)
+
+let lemma_server_driver_local_write_correct_preserves_supported_profile_selection
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (resp:ST.server_response)
+  (kind:ST.local_event_kind)
+  (payload:B.bytes)
+  (certificate_chain:B.bytes)
+  (credential_identity:CS.server_credential_identity)
+  (sent:B.bytes)
+  (sent':B.bytes)
+  : Lemma
+      (requires
+        server_driver_local_write_correct st0 st1 resp kind payload sent sent' /\
+        kind <> ST.LocalSelectServerParameters /\
+        ST.server_local_event_input_ready_with_credentials
+          st0 kind payload certificate_chain credential_identity /\
+        server_driver_config_matches_credentials
+          st0 certificate_chain credential_identity /\
+        server_driver_supported_profile_selection st0 credential_identity)
+      (ensures
+        server_driver_supported_profile_selection st1 credential_identity)
+=
+  let network_out_bytes =
+    ID.indefinite_description_ghost
+      B.bytes
+      (fun network_out_bytes -> exists app_out_bytes.
+          ST.server_local_event_end_to_end_correct
+            st0
+            st1
+            resp
+            kind
+            payload
+            network_out_bytes
+            app_out_bytes /\
+          Seq.equal
+            sent'
+            (B.append sent (ST.response_network_out resp network_out_bytes))) in
+  let app_out_bytes =
+    ID.indefinite_description_ghost
+      B.bytes
+      (fun app_out_bytes ->
+          ST.server_local_event_end_to_end_correct
+            st0
+            st1
+            resp
+            kind
+            payload
+            network_out_bytes
+            app_out_bytes /\
+          Seq.equal
+            sent'
+            (B.append sent (ST.response_network_out resp network_out_bytes))) in
+  assert (ST.server_local_event_end_to_end_correct
+    st0
+    st1
+    resp
+    kind
+    payload
+    network_out_bytes
+    app_out_bytes);
+  lemma_server_driver_local_write_correct_preserves_config
+    st0
+    st1
+    resp
+    kind
+    payload
+    sent
+    sent';
+  assert (ST.legal_handled_local_response
+    st0
+    st1
+    resp
+    kind
+    payload
+    network_out_bytes
+    app_out_bytes);
+  lemma_legal_handled_local_response_preserves_server_selection_except_select
+    st0
+    st1
+    resp
+    kind
+    payload
+    network_out_bytes
+    app_out_bytes;
+  assert (
+    st1.CS.cs_model.CS.model_handshake.CS.hs_server_selection ==
+      st0.CS.cs_model.CS.model_handshake.CS.hs_server_selection);
+  assert (server_driver_supported_profile_selection st1 credential_identity)
+
 fn process_local_event_and_write_once
   (d:server_driver)
   (kind:ST.local_event_kind)
@@ -273,6 +576,7 @@ fn process_local_event_and_write_once
               'sent **
            pts_to payload 'payload_bytes **
            pure (B.length 'payload_bytes == SZ.v payload_len /\
+                 kind <> ST.LocalSelectServerParameters /\
                  ST.server_local_event_input_ready_with_credentials
                    'st0
                    kind
@@ -505,6 +809,23 @@ fn process_local_event_and_write_once
     st1
     (Ghost.reveal 'certificate_chain)
     (Ghost.reveal 'credential_identity)));
+  lemma_server_driver_local_write_correct_preserves_supported_profile_selection
+    'st0
+    st1
+    resp
+    kind
+    (Ghost.reveal 'payload_bytes)
+    (Ghost.reveal 'certificate_chain)
+    (Ghost.reveal 'credential_identity)
+    (Ghost.reveal 'sent)
+    (B.append
+      (Ghost.reveal 'sent)
+      (if SZ.v written <= B.length network_out_bytes
+       then Seq.slice network_out_bytes 0 (SZ.v written)
+       else B.empty));
+  assert (pure (server_driver_supported_profile_selection
+    st1
+    (Ghost.reveal 'credential_identity)));
 
   V.to_vec_pts_to d.server_driver_network_out;
   V.to_vec_pts_to d.server_driver_app_out;
@@ -591,7 +912,8 @@ fn process_empty_local_event_and_write_once
               kind
               B.empty
               (Ghost.reveal 'certificate_chain)
-              (Ghost.reveal 'credential_identity))
+              (Ghost.reveal 'credential_identity) /\
+              kind <> ST.LocalSelectServerParameters)
   returns resp:ST.server_response
   ensures exists* st1 sent'.
            server_driver_connected
@@ -617,6 +939,7 @@ fn process_empty_local_event_and_write_once
     empty_payload_bytes
     (Ghost.reveal 'certificate_chain)
     (Ghost.reveal 'credential_identity)));
+  assert (pure (kind <> ST.LocalSelectServerParameters));
   let resp =
     process_local_event_and_write_once
        d

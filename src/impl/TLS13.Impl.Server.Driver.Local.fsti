@@ -107,6 +107,28 @@ val lemma_server_driver_local_write_correct_preserves_config
           st1.CS.cs_model.CS.model_config ==
             st0.CS.cs_model.CS.model_config)
 
+val lemma_server_driver_local_write_correct_preserves_supported_profile_selection
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (resp:ST.server_response)
+  (kind:ST.local_event_kind)
+  (payload:B.bytes)
+  (certificate_chain:B.bytes)
+  (credential_identity:CS.server_credential_identity)
+  (sent:B.bytes)
+  (sent':B.bytes)
+  : Lemma
+      (requires
+        server_driver_local_write_correct st0 st1 resp kind payload sent sent' /\
+        kind <> ST.LocalSelectServerParameters /\
+        ST.server_local_event_input_ready_with_credentials
+          st0 kind payload certificate_chain credential_identity /\
+        DS.server_driver_config_matches_credentials
+          st0 certificate_chain credential_identity /\
+        DS.server_driver_supported_profile_selection st0 credential_identity)
+      (ensures
+        DS.server_driver_supported_profile_selection st1 credential_identity)
+
 fn process_local_event_and_write_once
   (d:DS.server_driver)
   (kind:ST.local_event_kind)
@@ -121,6 +143,7 @@ fn process_local_event_and_write_once
               'sent **
            pts_to payload 'payload_bytes **
            pure (B.length 'payload_bytes == SZ.v payload_len /\
+                 kind <> ST.LocalSelectServerParameters /\
                  ST.server_local_event_input_ready_with_credentials
                    'st0
                    kind
@@ -161,7 +184,8 @@ fn process_empty_local_event_and_write_once
              kind
              B.empty
              (Ghost.reveal 'certificate_chain)
-             (Ghost.reveal 'credential_identity))
+             (Ghost.reveal 'credential_identity) /\
+             kind <> ST.LocalSelectServerParameters)
   returns resp:ST.server_response
   ensures exists* st1 sent'.
           DS.server_driver_connected

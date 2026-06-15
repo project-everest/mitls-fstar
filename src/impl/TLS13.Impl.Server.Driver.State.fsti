@@ -17,6 +17,7 @@ module S = TLS13.Impl.Server
 module ST = TLS13.Impl.Server.Types
 module Box = Pulse.Lib.Box
 module SZ = FStar.SizeT
+module T = TLS13.Types
 module U8 = FStar.UInt8
 module V = Pulse.Lib.Vec
 
@@ -107,6 +108,21 @@ let server_driver_config_matches_credentials
   | None -> False
 
 noextract
+let server_driver_supported_profile_selection
+  (st:CS.connection_state)
+  (credential_identity:CS.server_credential_identity)
+  : prop =
+  CS.signature_scheme_offered
+    st.CS.cs_model.CS.model_config.CS.config_signature_schemes
+    T.RsaPssRsaeSha256 /\
+  (match st.CS.cs_model.CS.model_handshake.CS.hs_server_selection with
+   | Some selection ->
+     selection.CS.server_selected_signature_scheme == T.RsaPssRsaeSha256 /\
+     selection.CS.server_selected_credential == credential_identity
+   | None ->
+     True)
+
+noextract
 let server_driver_buffers
   (d:server_driver)
   (buffered:B.bytes)
@@ -165,6 +181,7 @@ let server_driver_live
           st
           certificate_chain
           credential_identity /\
+        server_driver_supported_profile_selection st credential_identity /\
         server_driver_wire_logs_match st B.empty B.empty B.empty 0sz)
 
 noextract
@@ -191,6 +208,7 @@ let server_driver_connected
             st
             certificate_chain
             credential_identity /\
+          server_driver_supported_profile_selection st credential_identity /\
           server_driver_wire_logs_match st received sent buffered buffered_len)
 
 noextract
