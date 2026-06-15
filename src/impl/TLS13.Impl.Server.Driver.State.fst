@@ -89,6 +89,50 @@ let lemma_server_driver_wire_logs_match_received_accounted
     (Ghost.reveal consumed)
     buffered
 
+let lemma_server_driver_wire_logs_match_received_exact_prefix
+  (st:CS.connection_state)
+  (received:B.bytes)
+  (sent:B.bytes)
+  (buffered:B.bytes)
+  (buffered_len:SZ.t)
+  : Lemma
+      (requires
+        server_driver_wire_logs_match st received sent buffered buffered_len /\
+        ST.server_connection_control_not_failed st)
+      (ensures
+        exists retained.
+          Seq.equal received
+            (B.append st.CS.cs_wire_log.CL.raw_received retained))
+=
+  let consumed =
+    ID.indefinite_description_ghost
+      B.bytes
+      (fun consumed ->
+        server_driver_wire_logs_match_witness
+          st
+          received
+          sent
+          consumed
+          buffered
+          buffered_len) in
+  assert (server_driver_wire_logs_match_witness
+    st
+    received
+    sent
+    (Ghost.reveal consumed)
+    buffered
+    buffered_len);
+  assert (Seq.equal st.CS.cs_wire_log.CL.raw_received (Ghost.reveal consumed));
+  assert (Seq.equal (B.append (Ghost.reveal consumed) buffered) received);
+  Seq.lemma_eq_elim st.CS.cs_wire_log.CL.raw_received (Ghost.reveal consumed);
+  Seq.lemma_eq_elim (B.append st.CS.cs_wire_log.CL.raw_received buffered) received;
+  assert (Seq.equal received (B.append st.CS.cs_wire_log.CL.raw_received buffered));
+  FStar.Classical.exists_intro
+    (fun retained ->
+      Seq.equal received
+        (B.append st.CS.cs_wire_log.CL.raw_received retained))
+    buffered
+
 let lemma_legal_response_network_out_len
   (st0:CS.connection_state)
   (st1:CS.connection_state)

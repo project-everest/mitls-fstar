@@ -269,6 +269,47 @@ let client_driver_closed
   : slprop =
   C.connection_exactly d.client_driver_client st
 
+let lemma_client_driver_wire_logs_match_received_exact_prefix
+  (st:CS.connection_state)
+  (received:B.bytes)
+  (sent:B.bytes)
+  (buffered:B.bytes)
+  (buffered_len:SZ.t)
+  : Lemma
+      (requires
+        client_driver_wire_logs_match st received sent buffered buffered_len /\
+        CT.connection_control_not_failed st)
+      (ensures client_driver_received_log_exact_prefix st received)
+=
+  let consumed =
+    ID.indefinite_description_ghost
+      B.bytes
+      (fun consumed ->
+        client_driver_wire_logs_match_witness
+          st
+          received
+          sent
+          consumed
+          buffered
+          buffered_len) in
+  assert (client_driver_wire_logs_match_witness
+    st
+    received
+    sent
+    (Ghost.reveal consumed)
+    buffered
+    buffered_len);
+  assert (Seq.equal st.CS.cs_wire_log.CL.raw_received (Ghost.reveal consumed));
+  assert (Seq.equal (B.append (Ghost.reveal consumed) buffered) received);
+  Seq.lemma_eq_elim st.CS.cs_wire_log.CL.raw_received (Ghost.reveal consumed);
+  Seq.lemma_eq_elim (B.append st.CS.cs_wire_log.CL.raw_received buffered) received;
+  assert (Seq.equal received (B.append st.CS.cs_wire_log.CL.raw_received buffered));
+  FStar.Classical.exists_intro
+    (fun retained ->
+      Seq.equal received
+        (B.append st.CS.cs_wire_log.CL.raw_received retained))
+    buffered
+
 type local_write_result = {
   local_write_resp: CT.client_response;
   local_write_written: SZ.t;
@@ -4819,7 +4860,8 @@ fn connect
                client_driver_connected d st1 received sent **
                pure (client_driver_application_ready st1 /\
                      client_driver_sent_log_exact st1 sent /\
-                     client_driver_received_log_accounted st1 received)
+                     client_driver_received_log_accounted st1 received /\
+                     client_driver_received_log_exact_prefix st1 received)
            | _ ->
              client_driver_closed d st1)
 {
@@ -4948,6 +4990,14 @@ fn connect
            result.driver_workflow_rx_len;
          assert (pure (client_driver_received_log_accounted st1 received));
          assert (pure (st1.CS.cs_model.CS.model_control == CS.ControlApplicationData));
+         assert (pure (CT.connection_control_not_failed st1));
+         lemma_client_driver_wire_logs_match_received_exact_prefix
+           st1
+           received
+           sent
+           buffered_after
+           result.driver_workflow_rx_len;
+         assert (pure (client_driver_received_log_exact_prefix st1 received));
          rewrite (C.connection_exactly d.client_driver_client st1) as
            (CR.connection_exactly d.client_driver_client st1);
          let keys_installed =

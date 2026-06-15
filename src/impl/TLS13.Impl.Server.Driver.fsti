@@ -216,6 +216,27 @@ let server_driver_received_log_accounted
     SeqP.count b received)
 
 noextract
+let server_driver_received_log_exact_prefix
+  (st:CS.connection_state)
+  (received:B.bytes)
+  : prop =
+  exists retained.
+    Seq.equal received
+      (B.append st.CS.cs_wire_log.CL.raw_received retained)
+
+val lemma_server_driver_wire_logs_match_received_exact_prefix
+  (st:CS.connection_state)
+  (received:B.bytes)
+  (sent:B.bytes)
+  (buffered:B.bytes)
+  (buffered_len:SZ.t)
+  : Lemma
+      (requires
+        server_driver_wire_logs_match st received sent buffered buffered_len /\
+        ST.server_connection_control_not_failed st)
+      (ensures server_driver_received_log_exact_prefix st received)
+
+noextract
 let server_driver_close_correct
   (st0:CS.connection_state)
   (st1:CS.connection_state)
@@ -312,7 +333,8 @@ fn accept
                  sent **
                pure (server_driver_application_ready st1 /\
                      server_driver_sent_log_exact st1 sent /\
-                     server_driver_received_log_accounted st1 received)
+                     server_driver_received_log_accounted st1 received /\
+                     server_driver_received_log_exact_prefix st1 received)
            | _ ->
              exists* st1 received sent.
                server_driver_connected

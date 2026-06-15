@@ -58,6 +58,25 @@ let server_driver_connected = DS.server_driver_connected
 noextract
 let server_driver_closed = DS.server_driver_closed
 
+let lemma_server_driver_wire_logs_match_received_exact_prefix
+  (st:CS.connection_state)
+  (received:B.bytes)
+  (sent:B.bytes)
+  (buffered:B.bytes)
+  (buffered_len:SZ.t)
+  : Lemma
+      (requires
+        server_driver_wire_logs_match st received sent buffered buffered_len /\
+        ST.server_connection_control_not_failed st)
+      (ensures server_driver_received_log_exact_prefix st received)
+=
+  DS.lemma_server_driver_wire_logs_match_received_exact_prefix
+    st
+    received
+    sent
+    buffered
+    buffered_len
+
 open TLS13.Impl.Server.Driver.State
 open TLS13.Impl.Server.Driver.Transport
 open TLS13.Impl.Server.Driver.Network
@@ -318,7 +337,8 @@ fn accept
                  sent **
                pure (server_driver_application_ready st1 /\
                     server_driver_sent_log_exact st1 sent /\
-                    server_driver_received_log_accounted st1 received)
+                    server_driver_received_log_accounted st1 received /\
+                    server_driver_received_log_exact_prefix st1 received)
            | _ ->
              exists* st1 received sent.
                server_driver_connected
@@ -513,6 +533,14 @@ fn accept
                             buffered
                             buffered_len;
                           assert (pure (server_driver_received_log_accounted st3 received3));
+                          assert (pure (ST.server_connection_control_not_failed st3));
+                          lemma_server_driver_wire_logs_match_received_exact_prefix
+                            st3
+                            received3
+                            sent3
+                            buffered
+                            buffered_len;
+                          assert (pure (server_driver_received_log_exact_prefix st3 received3));
                           fold (server_driver_connected
                             d
                             st3

@@ -215,10 +215,15 @@ bytes still prevent deriving `CS.paired_wire_logs` directly.
      `raw_received` log must be exactly the consumed transport prefix, while
      failed states still retain the weaker accounting relation needed for
      rejected consumed bytes.
+   - Successful public client `connect` and server `accept` now expose ordered
+     exact-prefix received-log facts, and `TLS13.Impl.Driver.Pairing` composes
+     paired transport histories with those facts into a checked
+     `paired_protocol_received_logs_exact_prefix` theorem.
    - The remaining proof work is to prove the final successful-handshake
-     drained/no-retained facts at client `connect` and server `accept`, then
-     expose exact received-log equality publicly enough to instantiate the
-     aggregate key-material theorem from two live driver resources alone.
+     drained/no-retained facts, or an equivalent synchronized no-read-ahead
+     condition, so the ordered-prefix bridge can be upgraded to full
+     `CS.paired_wire_logs` and instantiate the aggregate key-material theorem
+     from two live driver resources alone.
 
 3. **Extraction and interoperability**
    - Keep the public API buffer/driver oriented.
