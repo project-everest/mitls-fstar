@@ -2647,8 +2647,9 @@ Checklist:
 - [ ] Unsupported signature scheme rejected.
 - [ ] Bad client Finished rejected.
 - [ ] Application data before client Finished rejected.
-- [ ] OpenSSL `s_client` connects to verified server.
-- [ ] Application echo works.
+- [x] OpenSSL client interop target connects to the extracted verified server
+      (`make test-openssl-sclient`).
+- [x] Application echo works in the extracted server/OpenSSL client interop test.
 - [x] Verified server facade `close` sends close_notify before transport close.
 - [ ] KeyUpdate is not accepted as a claimed first-milestone feature.
 - [ ] Verified client connects to verified server.

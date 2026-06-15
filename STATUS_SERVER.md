@@ -94,6 +94,10 @@ That committed state includes:
   and driver buffers. Public `close` now requires the same application-ready
   state exposed by successful `accept`, sends verified `LocalSendCloseNotify`
   via the local-write theorem, and then closes the transport.
+- Concrete extracted-server validation now passes for the current facade:
+  `make test-extracted-server-driver-slice` and `make test-openssl-sclient`
+  both complete successfully, including a real OpenSSL client handshake,
+  application echo, and server close path.
 
 ## What is not complete yet
 
