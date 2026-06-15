@@ -875,6 +875,10 @@ accept-orchestration layer. Its first verified slice owns
 `accept_transport_start_and_read_client_hello`, composing the Transport,
 Local-start, and Network ClientHello-wait boundaries while preserving the
 connected driver IO-history invariant and the ClientHello-ready config fact.
+It also owns the intermediate accept/select/derive/ServerHello result types,
+the payload-based selection/derive/ServerHello correctness predicates, and the
+pure readiness lemmas used to compose ServerHello emission after successful
+selection and X25519 derivation.
 Selection, derivation, ServerHello, encrypted-flight orchestration, and the full
 public `accept` handshake still remain in the main driver until subsequent
 Handshake slices move them behind this boundary.

@@ -6,20 +6,185 @@ open Pulse.Lib.Pervasives
 open Pulse.Lib.Array.PtsTo
 
 module B = TLS13.Bytes
+module Bounds = TLS13.Impl.ConnectionState.Bounds
+module CL = TLS13.ConnectionLog
+module CryptoSpec = TLS13.Crypto.Spec
 module CS = TLS13.Spec.ConnectionState
 module CM = TLS13.Impl.ConnectionState.Model
+module CR = TLS13.Impl.ConnectionState.Repr
 module DN = TLS13.Impl.Server.Driver.Network
+module DL = TLS13.Impl.Server.Driver.Local
 module DS = TLS13.Impl.Server.Driver.State
 module DT = TLS13.Impl.Server.Driver.Transport
+module M = TLS13.Messages
+module Seq = FStar.Seq
 module ST = TLS13.Impl.Server.Types
 module SZ = FStar.SizeT
+module T = TLS13.Types
 module U16 = FStar.UInt16
 module U8 = FStar.UInt8
+module W = TLS13.Wire.Spec
 
 type server_driver_accept_client_hello_result =
   | ServerDriverAcceptClientHelloTransportOk of DN.server_driver_client_hello_wait_result
   | ServerDriverAcceptClientHelloListenFailed
   | ServerDriverAcceptClientHelloAcceptFailed
+
+type server_driver_accept_select_derive_result =
+  | ServerDriverAcceptSelectDeriveOk
+  | ServerDriverAcceptSelectDeriveClientHelloWait of DN.server_driver_client_hello_wait_result
+  | ServerDriverAcceptSelectDeriveMaterialFailed
+  | ServerDriverAcceptSelectDeriveSelectionNotReady
+  | ServerDriverAcceptSelectDeriveInternalUnsupported
+  | ServerDriverAcceptSelectDeriveListenFailed
+  | ServerDriverAcceptSelectDeriveAcceptFailed
+
+type server_driver_accept_server_hello_result =
+  | ServerDriverAcceptServerHelloOk
+  | ServerDriverAcceptServerHelloClientHelloWait of DN.server_driver_client_hello_wait_result
+  | ServerDriverAcceptServerHelloMaterialFailed
+  | ServerDriverAcceptServerHelloSelectionNotReady
+  | ServerDriverAcceptServerHelloDeriveFailed
+  | ServerDriverAcceptServerHelloSendNotReady
+  | ServerDriverAcceptServerHelloListenFailed
+  | ServerDriverAcceptServerHelloAcceptFailed
+
+type server_driver_accept_server_hello_drain_result =
+  | ServerDriverAcceptServerHelloDrainOk of DL.server_driver_local_drain_result
+  | ServerDriverAcceptServerHelloDrainClientHelloWait of DN.server_driver_client_hello_wait_result
+  | ServerDriverAcceptServerHelloDrainMaterialFailed
+  | ServerDriverAcceptServerHelloDrainSelectionNotReady
+  | ServerDriverAcceptServerHelloDrainDeriveFailed
+  | ServerDriverAcceptServerHelloDrainSendNotReady
+  | ServerDriverAcceptServerHelloDrainListenFailed
+  | ServerDriverAcceptServerHelloDrainAcceptFailed
+
+type server_driver_select_derive_server_hello_result =
+  | ServerDriverSelectDeriveServerHelloOk
+  | ServerDriverSelectDeriveServerHelloDeriveFailed
+  | ServerDriverSelectDeriveServerHelloSendNotReady
+
+val lemma_select_server_parameters_ready_payload_irrelevant :
+  st:CS.connection_state ->
+  payload0:B.bytes ->
+  payload1:B.bytes ->
+  Lemma
+    (requires
+      B.length payload0 == 64 /\
+      B.length payload1 == 64 /\
+      ST.server_local_event_input_ready
+        st
+        ST.LocalSelectServerParameters
+        payload0)
+    (ensures
+      ST.server_local_event_input_ready
+        st
+        ST.LocalSelectServerParameters
+        payload1)
+
+noextract
+let server_driver_selection_from_payload_correct
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (payload:B.bytes)
+  : GTot prop =
+  B.length payload == 64 /\
+  (match st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello,
+         st0.CS.cs_model.CS.model_config.CS.config_server with
+   | Some ch, Some cfg ->
+     let selection = {
+       CS.server_selected_client_hello = ch;
+       CS.server_selected_cipher_suite = T.TLS_CHACHA20_POLY1305_SHA256;
+       CS.server_selected_group = T.X25519;
+       CS.server_selected_signature_scheme = T.RsaPssRsaeSha256;
+       CS.server_random = CL.raw_slice payload 0 32;
+       CS.server_key_share_private = Some (CL.raw_slice payload 32 64);
+       CS.server_key_share_public =
+         CryptoSpec.x25519_public_from_private (CL.raw_slice payload 32 64);
+       CS.server_selected_credential = cfg.CS.server_credential_identity;
+     } in
+     st1 == CM.selected_server_parameters_state st0 selection
+   | _ -> False)
+
+noextract
+let server_driver_derive_shared_secret_success_correct
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (resp:ST.server_response)
+  (payload:B.bytes)
+  : GTot prop =
+  resp.ST.status == ST.StepOk ==>
+   (exists shared.
+     st1 == CM.derived_shared_secret_state st0 shared /\
+     (match st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello with
+      | Some ch ->
+        CryptoSpec.x25519_shared payload ch.M.key_share == Some shared
+      | None -> False))
+
+let server_driver_select_derive_from_payload_success_correct
+  (st0:CS.connection_state)
+  (st2:CS.connection_state)
+  (resp:ST.server_response)
+  (payload:B.bytes)
+  : GTot prop =
+  resp.ST.status == ST.StepOk ==>
+   (exists st1 shared.
+     server_driver_selection_from_payload_correct st0 st1 payload /\
+     st2 == CM.derived_shared_secret_state st1 shared /\
+     (match st1.CS.cs_model.CS.model_handshake.CS.hs_client_hello with
+      | Some ch ->
+        CryptoSpec.x25519_shared
+          (CL.raw_slice payload 32 64)
+          ch.M.key_share == Some shared
+      | None -> False))
+
+noextract
+let server_driver_send_server_hello_from_payload_success_correct
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (resp:ST.server_response)
+  (payload:B.bytes)
+  : GTot prop =
+  resp.ST.status == ST.StepOk ==>
+    B.length payload == 64 /\
+    (let sh = {
+      M.random = CL.raw_slice payload 0 32;
+      M.key_share =
+        CryptoSpec.x25519_public_from_private (CL.raw_slice payload 32 64);
+      M.cipher_suite = T.TLS_CHACHA20_POLY1305_SHA256;
+     } in
+     st1 ==
+      CM.sent_server_hello_state
+        st0
+        sh
+        (CS.serialized_cleartext_tls_message
+          (M.TlsHandshake (M.ServerHello sh))))
+
+val lemma_select_derive_success_server_hello_ready :
+  st0:CS.connection_state ->
+  st2:CS.connection_state ->
+  resp:ST.server_response ->
+  payload:B.bytes ->
+  Lemma
+    (requires
+     B.length payload == 64 /\
+     resp.ST.status == ST.StepOk /\
+     server_driver_select_derive_from_payload_success_correct
+       st0 st2 resp payload /\
+     st2.CS.cs_model.CS.model_control ==
+       CS.ControlHandshaking CS.HsClientHelloReceived /\
+     st2.CS.cs_model.CS.model_config.CS.config_role ==
+       CS.ServerEndpoint /\
+     Some? st2.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_shared_secret /\
+     st2.CS.cs_model.CS.model_handshake.CS.hs_server_hello == None /\
+     Some? st2.CS.cs_model.CS.model_handshake.CS.hs_server_selection /\
+     B.length st2.CS.cs_model.CS.model_handshake.CS.hs_transcript + 90 <=
+       Bounds.max_transcript_len)
+    (ensures
+     ST.server_local_event_input_ready
+       st2
+       ST.LocalSendServerHello
+       payload)
 
 fn accept_transport_and_start_once
   (d:DS.server_driver)
