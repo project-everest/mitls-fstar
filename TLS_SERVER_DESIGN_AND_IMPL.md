@@ -1121,7 +1121,12 @@ success paths now expose ordered exact-prefix received-log facts, and
 composes those public facts with paired transport histories into a checked
 cross-endpoint ordered-prefix theorem. The last step is upgrading ordered prefix
 to full equality by proving zero retained read-ahead, or an equivalent
-synchronized no-read-ahead condition, at the paired success boundary.
+synchronized no-read-ahead condition, at the paired success boundary. The same
+module also provides
+`lemma_client_server_driver_key_material_agrees_from_prefixes`, which proves the
+main supported-profile key-material agreement from the ordered-prefix public
+driver facts plus the existing supported-profile state-machine input predicate,
+without requiring full TCP-history equality.
 
 Current extraction status: the first focused server-core KaRaMeL prefix through
 `TLS13.Impl.Server.Network` now completes. The previous KaRaMeL
@@ -1855,6 +1860,10 @@ Checklist:
 - [x] Expose ordered exact-prefix received-log facts on successful public
       client `connect` and server `accept`, and compose them across paired
       transport histories in `TLS13.Impl.Driver.Pairing`.
+- [x] Add a prefix-based driver key-material agreement theorem that derives
+      `CS.supported_profile_client_server_key_material_agrees` from ordered
+      prefix conformance plus the existing supported-profile state-machine
+      input predicate.
 - [ ] Prove successful `connect`/`accept` drained/no-retained facts, or an
       equivalent synchronized no-read-ahead condition, to upgrade ordered
       prefixes to full `CS.paired_wire_logs` from concrete paired resources.

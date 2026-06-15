@@ -219,6 +219,12 @@ bytes still prevent deriving `CS.paired_wire_logs` directly.
      exact-prefix received-log facts, and `TLS13.Impl.Driver.Pairing` composes
      paired transport histories with those facts into a checked
      `paired_protocol_received_logs_exact_prefix` theorem.
+   - `TLS13.Impl.Driver.Pairing` also exposes
+     `lemma_client_server_driver_key_material_agrees_from_prefixes`, which uses
+     those ordered-prefix public facts plus the existing supported-profile
+     state-machine input predicate to prove
+     `CS.supported_profile_client_server_key_material_agrees` without requiring
+     impossible full TCP-history equality in the presence of retained read-ahead.
    - The remaining proof work is to prove the final successful-handshake
      drained/no-retained facts, or an equivalent synchronized no-read-ahead
      condition, so the ordered-prefix bridge can be upgraded to full

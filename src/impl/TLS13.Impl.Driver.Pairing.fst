@@ -91,6 +91,35 @@ let lemma_paired_protocol_received_logs_exact_prefix
         (B.append client.CS.cs_wire_log.CL.raw_received retained))
     client_retained
 
+let lemma_client_server_driver_key_material_agrees_from_prefixes
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  (client_received:B.bytes)
+  (client_sent:B.bytes)
+  (server_received:B.bytes)
+  (server_sent:B.bytes)
+  : Lemma
+      (requires
+        client_server_driver_key_material_prefix_inputs
+          client
+          server
+          client_received
+          client_sent
+          server_received
+          server_sent)
+      (ensures
+        paired_protocol_received_logs_exact_prefix client server /\
+        CS.supported_profile_client_server_key_material_agrees client server)
+=
+  lemma_paired_protocol_received_logs_exact_prefix
+    client
+    server
+    client_received
+    client_sent
+    server_received
+    server_sent;
+  CSL.lemma_supported_profile_client_server_key_material_agrees client server
+
 let lemma_paired_wire_logs_from_exact_transport
   (client:CS.connection_state)
   (server:CS.connection_state)

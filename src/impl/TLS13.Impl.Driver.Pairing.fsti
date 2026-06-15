@@ -133,6 +133,48 @@ val lemma_paired_protocol_received_logs_exact_prefix
           server_sent)
       (ensures paired_protocol_received_logs_exact_prefix client server)
 
+noextract
+let client_server_driver_key_material_prefix_inputs
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  (client_received:B.bytes)
+  (client_sent:B.bytes)
+  (server_received:B.bytes)
+  (server_sent:B.bytes)
+  : prop =
+  CD.client_driver_application_ready client /\
+  SD.server_driver_application_ready server /\
+  CD.client_driver_sent_log_exact client client_sent /\
+  SD.server_driver_sent_log_exact server server_sent /\
+  CD.client_driver_received_log_exact_prefix client client_received /\
+  SD.server_driver_received_log_exact_prefix server server_received /\
+  paired_transport_histories
+    client_received
+    client_sent
+    server_received
+    server_sent /\
+  CS.supported_profile_client_server_key_material_inputs_agree client server
+
+val lemma_client_server_driver_key_material_agrees_from_prefixes
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  (client_received:B.bytes)
+  (client_sent:B.bytes)
+  (server_received:B.bytes)
+  (server_sent:B.bytes)
+  : Lemma
+      (requires
+        client_server_driver_key_material_prefix_inputs
+          client
+          server
+          client_received
+          client_sent
+          server_received
+          server_sent)
+      (ensures
+        paired_protocol_received_logs_exact_prefix client server /\
+        CS.supported_profile_client_server_key_material_agrees client server)
+
 val lemma_paired_wire_logs_from_exact_transport
   (client:CS.connection_state)
   (server:CS.connection_state)
