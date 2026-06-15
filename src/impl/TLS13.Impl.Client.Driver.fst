@@ -3986,6 +3986,8 @@ fn driver_send_close_notify
                    (Ghost.reveal 'empty_payload_bytes)
                    network_out_bytes
                    app_out_bytes /\
+                 result.local_write_written ==
+                   result.local_write_resp.CT.network_out_len /\
                  (result.local_write_resp.CT.status == CT.StepOk ==>
                   SZ.v result.local_write_written <=
                   SZ.v result.local_write_resp.CT.network_out_len))
@@ -4052,7 +4054,13 @@ fn rec driver_close_workflow
            pure (B.length raw_bytes == SZ.v raw_capacity /\
                  SZ.v result.driver_workflow_rx_len <= SZ.v raw_capacity /\
                  B.length network_out_bytes == SZ.v network_out_len /\
-                 B.length app_out_bytes == SZ.v app_out_len)
+                 B.length app_out_bytes == SZ.v app_out_len /\
+                 (exists st_close_notify.
+                   client_driver_close_correct
+                     'st0
+                     st_close_notify
+                     result.driver_workflow_status
+                     wait_for_peer))
   decreases (SZ.v fuel)
 {
   unfold (top_driver_exactly d 'st0 'buffered buffered_len);
@@ -4069,6 +4077,31 @@ fn rec driver_close_workflow
             pts_to empty_payload 'empty_payload_bytes **
             pts_to network_out network_out_after_close **
             pts_to app_out app_out_after_close);
+  assert (pure (forall (i:nat{i < B.length (Ghost.reveal 'empty_payload_bytes)}).
+    Seq.index (Ghost.reveal 'empty_payload_bytes) i == Seq.index B.empty i));
+  Seq.lemma_eq_intro (Ghost.reveal 'empty_payload_bytes) B.empty;
+  Seq.lemma_eq_elim (Ghost.reveal 'empty_payload_bytes) B.empty;
+  lemma_local_event_wire_lengths
+    'st0
+    st_after_close_notify
+    close_result.local_write_resp
+    CT.LocalSendCloseNotify
+    B.empty
+    network_out_after_close
+    app_out_after_close;
+  assert (pure (Seq.equal
+    st_after_close_notify.CS.cs_wire_log.CL.raw_sent
+    (B.append
+      'st0.CS.cs_wire_log.CL.raw_sent
+      (CT.response_network_out close_result.local_write_resp network_out_after_close))));
+  assert (pure (client_driver_local_write_correct
+    'st0
+    st_after_close_notify
+    close_result.local_write_resp
+    CT.LocalSendCloseNotify
+    B.empty
+    'st0.CS.cs_wire_log.CL.raw_sent
+    st_after_close_notify.CS.cs_wire_log.CL.raw_sent));
   let no_op_resp = {
     CT.network_out_len = 0sz;
     CT.app_out_len = 0sz;
@@ -4106,8 +4139,26 @@ fn rec driver_close_workflow
   let close_ok = close_result.local_write_resp.CT.status = CT.StepOk;
   let close_wrote_all =
     close_result.local_write_written = close_result.local_write_resp.CT.network_out_len;
+  assert (pure (close_wrote_all == true));
   let close_failed = (close_ok && close_wrote_all) = false;
   if close_failed {
+   assert (pure (close_ok == false));
+   assert (pure (close_result.local_write_resp.CT.status <> CT.StepOk));
+   assert (pure (client_driver_close_status_correct
+     wait_for_peer
+     DriverWorkflowStepFailed
+     close_result.local_write_resp));
+   assert (pure (client_driver_close_correct
+     'st0
+     st_after_close_notify
+     DriverWorkflowStepFailed
+     wait_for_peer));
+   assert (pure (exists st_close_notify.
+     client_driver_close_correct
+       'st0
+       st_close_notify
+       DriverWorkflowStepFailed
+       wait_for_peer));
    unfold (driver_exactly d.top_driver_core st_after_close_notify 'buffered buffered_len);
    unfold (channel_open d.top_driver_core.driver_channel st_after_close_notify 'buffered buffered_len);
    with received sent.
@@ -4150,6 +4201,22 @@ fn rec driver_close_workflow
     O.auth_context_free d.top_driver_auth;
     let wait_ok = waited.driver_workflow_status = DriverWorkflowOk;
     if wait_ok {
+      assert (pure (close_ok == true));
+      assert (pure (client_driver_close_status_correct
+        wait_for_peer
+        DriverWorkflowClosed
+        close_result.local_write_resp));
+      assert (pure (client_driver_close_correct
+        'st0
+        st_after_close_notify
+        DriverWorkflowClosed
+        wait_for_peer));
+      assert (pure (exists st_close_notify.
+        client_driver_close_correct
+          'st0
+          st_close_notify
+          DriverWorkflowClosed
+          wait_for_peer));
       {
         driver_workflow_status = DriverWorkflowClosed;
         driver_workflow_rx_len = waited.driver_workflow_rx_len;
@@ -4160,6 +4227,22 @@ fn rec driver_close_workflow
         driver_workflow_network = waited.driver_workflow_network;
       }
     } else {
+      assert (pure (close_ok == true));
+      assert (pure (client_driver_close_status_correct
+        wait_for_peer
+        waited.driver_workflow_status
+        close_result.local_write_resp));
+      assert (pure (client_driver_close_correct
+        'st0
+        st_after_close_notify
+        waited.driver_workflow_status
+        wait_for_peer));
+      assert (pure (exists st_close_notify.
+        client_driver_close_correct
+          'st0
+          st_close_notify
+          waited.driver_workflow_status
+          wait_for_peer));
       {
         driver_workflow_status = waited.driver_workflow_status;
         driver_workflow_rx_len = waited.driver_workflow_rx_len;
@@ -4178,10 +4261,27 @@ fn rec driver_close_workflow
              pure (client_driver_wire_logs_match st_after_close_notify received sent 'buffered buffered_len));
     IO.close d.top_driver_core.driver_channel;
     O.auth_context_free d.top_driver_auth;
-    {
-      driver_workflow_status = DriverWorkflowClosed;
-      driver_workflow_rx_len = buffered_len;
-      driver_workflow_local = {
+   assert (pure (wait_for_peer == false));
+   assert (pure (close_ok == true));
+   assert (pure (client_driver_close_status_correct
+     wait_for_peer
+     DriverWorkflowClosed
+     close_result.local_write_resp));
+   assert (pure (client_driver_close_correct
+     'st0
+     st_after_close_notify
+     DriverWorkflowClosed
+     wait_for_peer));
+   assert (pure (exists st_close_notify.
+     client_driver_close_correct
+       'st0
+       st_close_notify
+       DriverWorkflowClosed
+       wait_for_peer));
+   {
+     driver_workflow_status = DriverWorkflowClosed;
+     driver_workflow_rx_len = buffered_len;
+     driver_workflow_local = {
         driver_drain_last = no_op_local;
         driver_drain_exhausted = false;
       };
@@ -4857,7 +4957,13 @@ fn close
   requires client_driver_connected d 'st0 'received0 'sent0
   returns status:driver_workflow_status
   ensures exists* st1.
-          client_driver_closed d st1
+          client_driver_closed d st1 **
+          pure (exists st_close_notify.
+            client_driver_close_correct
+              'st0
+              st_close_notify
+              status
+              wait_for_peer)
 {
   unfold (client_driver_connected d 'st0 (Ghost.reveal 'received0) (Ghost.reveal 'sent0));
   with ch buffered buffered_len.
@@ -4953,5 +5059,11 @@ fn close
   fold (client_driver_buffers d (Ghost.reveal close_buffered) workflow.driver_workflow_rx_len);
   free_client_driver_buffers d workflow.driver_workflow_rx_len;
   fold (client_driver_closed d st1);
+  assert (pure (exists st_close_notify.
+    client_driver_close_correct
+      'st0
+      st_close_notify
+      workflow.driver_workflow_status
+      wait_for_peer));
   workflow.driver_workflow_status
 }

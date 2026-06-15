@@ -1062,6 +1062,11 @@ The client public `send` facade is also now non-degenerate: it exposes
 `CT.local_event_end_to_end_correct` theorem for `LocalSendApplicationData` and
 an exact sent-log append equation using `CT.response_network_out`.
 
+The client public `close` facade now mirrors the server close theorem surface:
+it exposes `client_driver_close_correct`, proving that shutdown is justified by
+the verified `LocalSendCloseNotify` transition and the exact sent-log append for
+the emitted close_notify record before the TCP channel is closed.
+
 Current extraction status: the first focused server-core KaRaMeL prefix through
 `TLS13.Impl.Server.Network` now completes. The previous KaRaMeL
 `Failure("nth")` was isolated to the large `process_network_bytes` dispatcher;
@@ -1781,6 +1786,8 @@ Checklist:
       installed client application read/write record keys.
 - [x] Public client `send` exposes the local application-send theorem and exact
       sent-log append relation.
+- [x] Public client `close` exposes the local close_notify theorem and exact
+      sent-log append relation before transport close.
 
 ## Phase-by-phase implementation plan
 

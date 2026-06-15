@@ -124,6 +124,34 @@ let client_driver_send_correct
       sent' /\
     client_driver_send_status_correct status resp
 
+noextract
+let client_driver_close_status_correct
+  (wait_for_peer:bool)
+  (status:driver_workflow_status)
+  (resp:CT.client_response)
+  : prop =
+  (resp.CT.status <> CT.StepOk ==> status == DriverWorkflowStepFailed) /\
+  (resp.CT.status == CT.StepOk /\ wait_for_peer == false ==>
+    status == DriverWorkflowClosed)
+
+noextract
+let client_driver_close_correct
+  (st0:CS.connection_state)
+  (st_close_notify:CS.connection_state)
+  (status:driver_workflow_status)
+  (wait_for_peer:bool)
+  : prop =
+  exists resp.
+    client_driver_local_write_correct
+      st0
+      st_close_notify
+      resp
+      CT.LocalSendCloseNotify
+      B.empty
+      st0.CS.cs_wire_log.CL.raw_sent
+      st_close_notify.CS.cs_wire_log.CL.raw_sent /\
+    client_driver_close_status_correct wait_for_peer status resp
+
 type client_receive_result = {
   client_receive_status: driver_workflow_status;
   client_receive_len: SZ.t;
@@ -234,4 +262,10 @@ fn close
   requires client_driver_connected d 'st0 'received0 'sent0
   returns status:driver_workflow_status
   ensures exists* st1.
-          client_driver_closed d st1
+          client_driver_closed d st1 **
+          pure (exists st_close_notify.
+            client_driver_close_correct
+              'st0
+              st_close_notify
+              status
+              wait_for_peer)

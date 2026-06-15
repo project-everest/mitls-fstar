@@ -117,9 +117,10 @@ input predicate. That bridge from concrete driver states to paired endpoint
 agreement remains a composition task.
 
 On the Pulse implementation side, public server `accept` and client `connect`
-now both expose application-data readiness on success, and public client/server
-`send` operations expose exact local-write sent-log append facts. The remaining
-implementation-side gaps are:
+now both expose application-data readiness on success, public client/server
+`send` operations expose exact local-write sent-log append facts, and public
+client/server `close` operations expose verified `close_notify` local-write
+facts before transport shutdown. The remaining implementation-side gaps are:
 
 - build the concrete bridge from complete client/server driver states and raw IO
   logs to the aggregate paired-endpoint key-material theorem's input predicate;
@@ -144,6 +145,11 @@ The follow-on client facade slice strengthens public `send`: its postcondition
 now exposes `client_driver_send_correct`, tying the returned status to the
 verified `LocalSendApplicationData` theorem and proving the transport sent log
 is exactly the old sent log appended with the emitted TLS record bytes.
+
+The latest client facade slice strengthens public `close`: its postcondition now
+exposes `client_driver_close_correct`, tying the returned status to a verified
+`LocalSendCloseNotify` theorem and exact close-notify sent-log append before the
+TCP channel is closed.
 
 ## Remaining proof gaps
 
