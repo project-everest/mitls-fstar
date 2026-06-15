@@ -486,6 +486,29 @@ fn select_derive_send_server_hello_from_payload_once
                 sent_after_derive **
               pts_to payload 'payload_bytes)
 
+fn select_and_derive_shared_secret_once
+ (d:DS.server_driver)
+  requires DS.server_driver_connected
+              d
+              'st0
+              'certificate_chain
+              'credential_identity
+              'received
+              'sent **
+           pure (ST.server_local_event_input_ready
+             'st0
+             ST.LocalSelectServerParameters
+             (Seq.create 64 0uy))
+  returns resp:ST.server_response
+  ensures exists* st2 sent'.
+          DS.server_driver_connected
+            d
+            st2
+            'certificate_chain
+            'credential_identity
+            'received
+            sent'
+
 fn accept_transport_and_start_once
   (d:DS.server_driver)
   (bind_host:array U8.t)
