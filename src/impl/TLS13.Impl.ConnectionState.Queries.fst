@@ -1897,9 +1897,10 @@ fn can_receive_endpoint_application_data
   let seq_ok = Rec.can_advance_seq c.records.read;
   fold (record_layer_exactly c.records st0.CS.cs_model.CS.model_record);
 
+  let client_role_app_present = role_client_ok && server_app_present;
+  let server_role_app_present = role_server_ok && client_app_present;
   let app_present_for_role =
-    (role_client_ok && server_app_present) ||
-    (role_server_ok && client_app_present);
+    (if client_role_app_present then true else server_role_app_present);
   let ok =
     control_ok &&
     app_present_for_role &&
@@ -4869,9 +4870,10 @@ fn can_send_endpoint_application_data_runtime
   let size_ok =
     can_send_application_data_sizes payload_len network_out_len;
 
+  let client_role_app_present = role_client_ok && client_app_present;
+  let server_role_app_present = role_server_ok && server_app_present;
   let app_present_for_role =
-    (role_client_ok && client_app_present) ||
-    (role_server_ok && server_app_present);
+    (if client_role_app_present then true else server_role_app_present);
   let ok =
     control_ok &&
     app_present_for_role &&
@@ -5058,9 +5060,10 @@ fn can_send_endpoint_close_notify_runtime
   let size_ok =
     can_send_close_notify_sizes network_out_len;
 
+  let client_role_app_present = role_client_ok && client_app_present;
+  let server_role_app_present = role_server_ok && server_app_present;
   let app_present_for_role =
-    (role_client_ok && client_app_present) ||
-    (role_server_ok && server_app_present);
+    (if client_role_app_present then true else server_role_app_present);
   let ok =
     control_ok &&
     app_present_for_role &&
