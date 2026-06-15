@@ -14,6 +14,7 @@ module CT = TLS13.Impl.Client.Types
 module IO = TLS13.IO
 module O = TLS13.OpenSSL
 module Seq = FStar.Seq
+module SeqP = FStar.Seq.Properties
 module SZ = FStar.SizeT
 module U16 = FStar.UInt16
 module U8 = FStar.UInt8
@@ -70,6 +71,16 @@ let client_driver_sent_log_exact
   (sent:B.bytes)
   : prop =
   Seq.equal sent st.CS.cs_wire_log.CL.raw_sent
+
+noextract
+let client_driver_received_log_accounted
+  (st:CS.connection_state)
+  (received:B.bytes)
+  : prop =
+  B.length st.CS.cs_wire_log.CL.raw_received <= B.length received /\
+  (forall b.
+    SeqP.count b st.CS.cs_wire_log.CL.raw_received <=
+    SeqP.count b received)
 
 noextract
 let client_driver_local_write_correct
@@ -277,7 +288,8 @@ fn connect
              exists* received sent.
                client_driver_connected d st1 received sent **
                pure (client_driver_application_ready st1 /\
-                     client_driver_sent_log_exact st1 sent)
+                     client_driver_sent_log_exact st1 sent /\
+                     client_driver_received_log_accounted st1 received)
            | _ ->
              client_driver_closed d st1)
 
@@ -303,7 +315,8 @@ fn send
                   (Ghost.reveal 'payload_bytes)
                   (Ghost.reveal 'sent0)
                   sent1 /\
-                client_driver_sent_log_exact st1 sent1)
+          client_driver_sent_log_exact st1 sent1 /\
+          client_driver_received_log_accounted st1 received1)
 
 fn receive
   (d:client_driver)
@@ -321,7 +334,8 @@ fn receive
           pure (B.length out_bytes == SZ.v out_len /\
                 SZ.v result.client_receive_len <= SZ.v out_len /\
                 client_driver_sent_log_exact st1 sent1 /\
-                (exists workflow_status resp app_out.
+          client_driver_received_log_accounted st1 received1 /\
+          (exists workflow_status resp app_out.
                   client_driver_receive_correct
                     result
                     workflow_status

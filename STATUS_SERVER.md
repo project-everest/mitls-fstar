@@ -124,9 +124,10 @@ now both expose application-data readiness on success, public client/server
 `send` operations expose exact local-write sent-log append facts, public
 client/server `receive` operations expose exact successful app-output copyout
 facts, public connected send/receive/accept success results expose exact
-transport sent-history/protocol sent-log equality, and public client/server
-`close` operations expose verified `close_notify` local-write facts before
-transport shutdown. The remaining implementation-side gaps are:
+transport sent-history/protocol sent-log equality plus received-log accounting
+facts, and public client/server `close` operations expose verified
+`close_notify` local-write facts before transport shutdown. The remaining
+implementation-side gaps are:
 
 - prove the exact transport/protocol log obligations named by
   `TLS13.Impl.Driver.Pairing.paired_driver_transport_logs_exact` from complete
@@ -140,8 +141,7 @@ transport shutdown. The remaining implementation-side gaps are:
 
 ## Latest verified in-progress slice
 
-The current in-progress slice strengthens the client facade rather than the
-server driver. It adds
+The client facade readiness slice strengthens `connect`. It adds
 `client_application_record_keys_installed_runtime` in
 `TLS13.Impl.ConnectionState.Queries` and uses it in
 `TLS13.Impl.Client.Driver.connect`, so `DriverWorkflowOk` is no longer merely a
@@ -173,6 +173,14 @@ obligations, and existing
 single checked theorem that yields both `CS.paired_wire_logs` and
 `CS.supported_profile_client_server_key_material_agrees`.
 
+The latest facade-accounting slice exposes public
+`client_driver_received_log_accounted` and
+`server_driver_received_log_accounted` predicates on successful connected
+client/server paths. These prove the protocol `raw_received` bytes are
+accounted for within the concrete transport receive history. This is deliberately
+weaker than ordered exact equality: retained read-ahead and rejected consumed
+bytes still prevent deriving `CS.paired_wire_logs` directly.
+
 ## Remaining proof gaps
 
 1. **Concrete client/server agreement bridge**
@@ -182,10 +190,11 @@ single checked theorem that yields both `CS.paired_wire_logs` and
      and key-share agreement hypotheses are established from wire logs.
 
 2. **Exact received-log pairing**
-   - The current driver predicates expose exact sent logs, but received transport
-     logs may include retained read-ahead and currently account protocol
-     `raw_received` inside consumed transport bytes rather than proving exact
-     peer sent/received equality.
+   - The current driver predicates expose exact sent logs and public received
+     accounting, but received transport logs may include retained read-ahead and
+     rejected consumed bytes. The next strengthening must carry an ordered
+     accepted-prefix/no-rejected/no-retained fact, not just length/count
+     accounting, before it can prove exact peer sent/received equality.
    - Tightening or supplementing this relation is the next proof boundary needed
      before the aggregate key-material theorem can be instantiated from two live
      driver resources alone.

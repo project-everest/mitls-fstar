@@ -31,6 +31,63 @@ let driver_signature_capacity : SZ.t = SZ.uint_to_t 4096
 
 let no_channel : option IO.channel = None
 
+let lemma_logged_received_bytes_accounted_transport
+  (st:CS.connection_state)
+  (received:B.bytes)
+  (consumed:B.bytes)
+  (buffered:B.bytes)
+  : Lemma
+      (requires
+        logged_received_bytes_accounted st.CS.cs_wire_log.CL.raw_received consumed /\
+        Seq.equal (B.append consumed buffered) received)
+      (ensures
+        B.length st.CS.cs_wire_log.CL.raw_received <= B.length received /\
+        (forall b.
+          SeqP.count b st.CS.cs_wire_log.CL.raw_received <=
+          SeqP.count b received))
+=
+  Seq.lemma_len_append consumed buffered;
+  Seq.lemma_eq_elim (B.append consumed buffered) received;
+  SeqP.lemma_append_count consumed buffered
+
+let lemma_server_driver_wire_logs_match_received_accounted
+  (st:CS.connection_state)
+  (received:B.bytes)
+  (sent:B.bytes)
+  (buffered:B.bytes)
+  (buffered_len:SZ.t)
+  : Lemma
+      (requires server_driver_wire_logs_match st received sent buffered buffered_len)
+      (ensures
+        B.length st.CS.cs_wire_log.CL.raw_received <= B.length received /\
+        (forall b.
+          SeqP.count b st.CS.cs_wire_log.CL.raw_received <=
+          SeqP.count b received))
+=
+  let consumed =
+    ID.indefinite_description_ghost
+      B.bytes
+      (fun consumed ->
+        server_driver_wire_logs_match_witness
+          st
+          received
+          sent
+          consumed
+          buffered
+          buffered_len) in
+  assert (server_driver_wire_logs_match_witness
+    st
+    received
+    sent
+    (Ghost.reveal consumed)
+    buffered
+    buffered_len);
+  lemma_logged_received_bytes_accounted_transport
+    st
+    received
+    (Ghost.reveal consumed)
+    buffered
+
 let lemma_legal_response_network_out_len
   (st0:CS.connection_state)
   (st1:CS.connection_state)

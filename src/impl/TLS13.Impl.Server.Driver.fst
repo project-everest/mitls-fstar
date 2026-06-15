@@ -317,7 +317,8 @@ fn accept
                  received
                  sent **
                pure (server_driver_application_ready st1 /\
-                     server_driver_sent_log_exact st1 sent)
+                    server_driver_sent_log_exact st1 sent /\
+                    server_driver_received_log_accounted st1 received)
            | _ ->
              exists* st1 received sent.
                server_driver_connected
@@ -505,6 +506,13 @@ fn accept
                             CS.ServerEndpoint
                             st3.CS.cs_model));
                           assert (pure (server_driver_sent_log_exact st3 sent3));
+                          lemma_server_driver_wire_logs_match_received_accounted
+                            st3
+                            received3
+                            sent3
+                            buffered
+                            buffered_len;
+                          assert (pure (server_driver_received_log_accounted st3 received3));
                           fold (server_driver_connected
                             d
                             st3
@@ -578,7 +586,8 @@ fn send
             (Ghost.reveal 'payload_bytes)
             (Ghost.reveal 'sent)
             sent' /\
-            server_driver_sent_log_exact st1 sent')
+            server_driver_sent_log_exact st1 sent' /\
+            server_driver_received_log_accounted st1 (Ghost.reveal 'received))
 {
   let resp = send_application_data_once d payload payload_len;
   with st1 sent'.
@@ -602,6 +611,13 @@ fn send
             server_driver_buffers d buffered buffered_len **
             pure (server_driver_wire_logs_match st1 (Ghost.reveal 'received) sent' buffered buffered_len));
   assert (pure (server_driver_sent_log_exact st1 sent'));
+  lemma_server_driver_wire_logs_match_received_accounted
+    st1
+    (Ghost.reveal 'received)
+    sent'
+    buffered
+    buffered_len;
+  assert (pure (server_driver_received_log_accounted st1 (Ghost.reveal 'received)));
   fold (server_driver_connected
     d
     st1
@@ -644,6 +660,7 @@ fn receive
           pure (B.length out_bytes == SZ.v out_len /\
                 SZ.v result.server_receive_len <= SZ.v out_len /\
                 server_driver_sent_log_exact st1 sent' /\
+                server_driver_received_log_accounted st1 received' /\
                 (exists loop app_out.
                   server_driver_receive_correct
                     'st0
@@ -695,6 +712,13 @@ fn receive
             server_driver_buffers_with_app_out d buffered buffered_len loop_app_out **
             pure (server_driver_wire_logs_match st1 received' sent' buffered buffered_len));
   assert (pure (server_driver_sent_log_exact st1 sent'));
+  lemma_server_driver_wire_logs_match_received_accounted
+    st1
+    received'
+    sent'
+    buffered
+    buffered_len;
+  assert (pure (server_driver_received_log_accounted st1 received'));
   fold (server_driver_connected_with_app_out
     d
     st1

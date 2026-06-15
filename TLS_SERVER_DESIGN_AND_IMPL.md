@@ -1076,8 +1076,14 @@ Both public driver facades now also expose exact transport sent-history to
 protocol sent-log projections on connected success paths:
 `client_driver_sent_log_exact` and `server_driver_sent_log_exact`. This gives the
 paired-run bridge one side of the concrete transport/protocol log obligation
-directly; exact received-log matching remains harder because connected drivers
-may retain read-ahead and may account for rejected consumed bytes.
+directly. They also expose
+`client_driver_received_log_accounted` and
+`server_driver_received_log_accounted`, proving the protocol `raw_received`
+bytes are accounted for within the concrete transport receive history on
+successful connected paths. This is still weaker than ordered exact equality:
+the remaining bridge work must carry an ordered accepted-prefix/no-rejected
+condition and prove retained read-ahead is drained before deriving
+`CS.paired_wire_logs`.
 
 The first audit-facing driver-pair bridge now lives in
 `TLS13.Impl.Driver.Pairing`. Its
@@ -1088,8 +1094,8 @@ matching, paired transport histories, and the existing
 instantiates the main spec theorem to prove
 `CS.supported_profile_client_server_key_material_agrees`. The remaining concrete
 composition work is to prove the exact transport/protocol received-log matching
-from complete driver resources despite retained read-ahead and rejected consumed
-bytes.
+from complete driver resources by strengthening the hidden received-log relation
+from length/count accounting to ordered accepted-prefix/exact-drained facts.
 
 Current extraction status: the first focused server-core KaRaMeL prefix through
 `TLS13.Impl.Server.Network` now completes. The previous KaRaMeL
@@ -1814,8 +1820,12 @@ Checklist:
       status/capacity split facts.
 - [x] Public client `close` exposes the local close_notify theorem and exact
       sent-log append relation before transport close.
+- [x] Public client/server connected success paths expose received-log accounting
+      facts in addition to exact sent-log projections.
 - [x] `TLS13.Impl.Driver.Pairing` packages the public driver-pair obligations
       and instantiates the main supported-profile key-material theorem.
+- [ ] Strengthen received-log accounting to ordered exact/drained facts sufficient
+      to prove `CS.paired_wire_logs` from concrete paired driver resources.
 
 ## Phase-by-phase implementation plan
 

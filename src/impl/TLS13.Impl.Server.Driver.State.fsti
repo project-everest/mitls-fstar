@@ -94,6 +94,35 @@ let server_driver_wire_logs_match
       buffered
       buffered_len
 
+val lemma_logged_received_bytes_accounted_transport
+  (st:CS.connection_state)
+  (received:B.bytes)
+  (consumed:B.bytes)
+  (buffered:B.bytes)
+  : Lemma
+      (requires
+        logged_received_bytes_accounted st.CS.cs_wire_log.CL.raw_received consumed /\
+        Seq.equal (B.append consumed buffered) received)
+      (ensures
+        B.length st.CS.cs_wire_log.CL.raw_received <= B.length received /\
+        (forall b.
+          SeqP.count b st.CS.cs_wire_log.CL.raw_received <=
+          SeqP.count b received))
+
+val lemma_server_driver_wire_logs_match_received_accounted
+  (st:CS.connection_state)
+  (received:B.bytes)
+  (sent:B.bytes)
+  (buffered:B.bytes)
+  (buffered_len:SZ.t)
+  : Lemma
+      (requires server_driver_wire_logs_match st received sent buffered buffered_len)
+      (ensures
+        B.length st.CS.cs_wire_log.CL.raw_received <= B.length received /\
+        (forall b.
+          SeqP.count b st.CS.cs_wire_log.CL.raw_received <=
+          SeqP.count b received))
+
 noextract
 let server_driver_config_matches_credentials
   (st:CS.connection_state)
