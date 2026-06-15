@@ -833,6 +833,12 @@ Current phase: **Phase 6 server buffer/event API and theorem surface**.
   The empty-action drain therefore handles scheduler-advertised
   `LocalSignCertificateVerify` with the driver credential resource, then can
   continue through `LocalSendCertificateVerify` and `LocalSendServerFinished`.
+- [x] Extended the public `accept` orchestration past the server encrypted
+  flight: after the ServerHello/local-flight drain reaches a not-ready state,
+  `accept` runs the retained-buffer network loop to consume the next peer
+  record, drains local actions again for ClientFinished verification and client
+  application read-key installation, and only returns `ServerWorkflowOk` after a
+  verified control snapshot proves `ControlApplicationData`.
 
 ## Server driver public API and refactoring plan
 

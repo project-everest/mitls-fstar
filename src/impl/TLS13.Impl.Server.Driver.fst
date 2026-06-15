@@ -64,6 +64,22 @@ open TLS13.Impl.Server.Driver.Network
 open TLS13.Impl.Server.Driver.Local
 open TLS13.Impl.Server.Driver.Handshake
 
+let lemma_control_snapshot_app_ready
+  (snapshot:CR.control_snapshot)
+  (st:CS.connection_state)
+  : Lemma
+      (requires
+        CR.control_snapshot_matches snapshot st /\
+        snapshot.CR.snapshot_control_tag == 2uy)
+      (ensures
+        st.CS.cs_model.CS.model_control == CS.ControlApplicationData)
+=
+  assert_norm (U8.v 2uy == 2);
+  assert (U8.v snapshot.CR.snapshot_control_tag == 2);
+  match st.CS.cs_model.CS.model_control with
+  | CS.ControlApplicationData -> ()
+  | _ -> assert False
+
 fn new_server
   (certificate_chain:array U8.t)
   (certificate_chain_len:SZ.t)
@@ -378,7 +394,65 @@ fn accept
             ServerWorkflowNeedExternalAction
           }
           ServerDriverLocalNotReady -> {
-            ServerWorkflowNeedMoreInput
+            let net = DN.read_process_network_until_ready d network_fuel;
+            with st_net received_net sent_net.
+              assert (server_driver_connected
+                d
+                st_net
+                'certificate_chain
+                'credential_identity
+                received_net
+                sent_net);
+            if (net.DN.server_driver_network_loop_exhausted) {
+              ServerWorkflowExhausted
+            } else {
+              if (net.DN.server_driver_network_loop_last.ST.response.ST.status = ST.StepOk) {
+                let drain_after_client_finished =
+                  DL.drain_ready_empty_local_actions d local_fuel;
+                with st2 received2 sent2.
+                  assert (server_driver_connected
+                    d
+                    st2
+                    'certificate_chain
+                    'credential_identity
+                    received2
+                    sent2);
+                if (drain_after_client_finished.DL.server_driver_local_drain_exhausted) {
+                  ServerWorkflowExhausted
+                } else {
+                  match drain_after_client_finished.DL.server_driver_local_drain_last {
+                    ServerDriverLocalExternalOrUnsupported -> {
+                      ServerWorkflowNeedExternalAction
+                    }
+                    _ -> {
+                      let snapshot = DN.server_driver_control_snapshot d;
+                      with st3 received3 sent3.
+                        assert (server_driver_connected
+                          d
+                          st3
+                          'certificate_chain
+                          'credential_identity
+                          received3
+                          sent3);
+                      assert (pure (CR.control_snapshot_matches snapshot st3));
+                      let app_ready = snapshot.CR.snapshot_control_tag = 2uy;
+                      if app_ready {
+                        assert (pure (snapshot.CR.snapshot_control_tag == 2uy));
+                        lemma_control_snapshot_app_ready snapshot st3;
+                        assert (pure (
+                          st3.CS.cs_model.CS.model_control ==
+                            CS.ControlApplicationData));
+                        ServerWorkflowOk
+                      } else {
+                        ServerWorkflowNeedMoreInput
+                      }
+                    }
+                  }
+                }
+              } else {
+                ServerWorkflowStepFailed
+              }
+            }
           }
           ServerDriverLocalProcessed -> {
             ServerWorkflowNeedMoreInput

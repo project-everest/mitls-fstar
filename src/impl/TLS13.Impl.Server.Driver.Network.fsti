@@ -8,6 +8,7 @@ open Pulse.Lib.Array.PtsTo
 module B = TLS13.Bytes
 module CL = TLS13.ConnectionLog
 module CS = TLS13.Spec.ConnectionState
+module CR = TLS13.Impl.ConnectionState.Repr
 module DS = TLS13.Impl.Server.Driver.State
 module ST = TLS13.Impl.Server.Types
 module Seq = FStar.Seq
@@ -136,6 +137,25 @@ fn read_and_process_network_once
            resp
            (Ghost.reveal 'sent)
            sent')
+
+fn server_driver_control_snapshot
+  (d:DS.server_driver)
+  requires DS.server_driver_connected
+           d
+           'st0
+           'certificate_chain
+           'credential_identity
+           'received
+           'sent
+  returns snapshot:CR.control_snapshot
+  ensures DS.server_driver_connected
+           d
+           'st0
+           'certificate_chain
+           'credential_identity
+           'received
+           'sent **
+          pure (CR.control_snapshot_matches snapshot 'st0)
 
 fn read_process_network_until_ready
   (d:DS.server_driver)
