@@ -862,6 +862,13 @@ the read-append plus compact-process slice, the `NeedMoreInput` retry loop, and
 the ClientHello wait loop. It also owns the network-step correctness predicate
 and wire-accounting/projection lemmas used by the retained-buffer driver.
 
+`TLS13.Impl.Server.Driver.Local.fsti/fst` now owns the local-event IO-history
+boundary: `LocalStartServer`, the generic credential-aware local-event
+process-and-write helper, empty-payload local events, scheduler-driven
+empty-action draining, and the simple application/close_notify/credential/
+Finished local wrappers. Higher-level selection, derivation, ServerHello, and
+accept orchestration remain in the main driver until the Handshake split.
+
 The final public `TLS13.Impl.Server.Driver.fsti` should expose only:
 
 ```fstar
@@ -987,7 +994,7 @@ Critical-path checklist for this refactor:
 - [ ] Move transport operations into `TLS13.Impl.Server.Driver.Transport`.
 - [ ] Move retained-buffer network processing into
       `TLS13.Impl.Server.Driver.Network`.
-- [ ] Move local-event/drain logic into `TLS13.Impl.Server.Driver.Local`.
+- [x] Move local-event/drain logic into `TLS13.Impl.Server.Driver.Local`.
 - [ ] Move selection/derive/handshake orchestration into
       `TLS13.Impl.Server.Driver.Handshake`.
 - [ ] Move application send/receive/close logic into
