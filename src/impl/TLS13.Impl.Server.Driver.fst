@@ -465,15 +465,36 @@ fn accept
                                   IO.is_channel ch received3 sent3 **
                                   server_driver_buffers d buffered buffered_len);
                         assert (pure (ST.server_end_to_end_invariant st3));
-                        fold (server_driver_connected
-                          d
-                          st3
-                          'certificate_chain
-                          'credential_identity
-                          received3
-                          sent3);
-                        assert (pure (server_driver_application_ready st3));
-                        ServerWorkflowOk
+                        rewrite (S.connection_exactly d.server_driver_server st3) as
+                          (CR.connection_exactly d.server_driver_server st3);
+                        let app_keys_ready =
+                          CQ.server_application_record_keys_installed_runtime
+                            d.server_driver_server;
+                        rewrite (CR.connection_exactly d.server_driver_server st3) as
+                          (S.connection_exactly d.server_driver_server st3);
+                        if app_keys_ready {
+                          assert (pure (CS.application_record_keys_installed_for_role
+                            CS.ServerEndpoint
+                            st3.CS.cs_model));
+                          fold (server_driver_connected
+                            d
+                            st3
+                            'certificate_chain
+                            'credential_identity
+                            received3
+                            sent3);
+                          assert (pure (server_driver_application_ready st3));
+                          ServerWorkflowOk
+                        } else {
+                          fold (server_driver_connected
+                            d
+                            st3
+                            'certificate_chain
+                            'credential_identity
+                            received3
+                            sent3);
+                          ServerWorkflowStepFailed
+                        }
                       } else {
                         ServerWorkflowNeedMoreInput
                       }

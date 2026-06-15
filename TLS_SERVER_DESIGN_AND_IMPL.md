@@ -845,7 +845,9 @@ Current phase: **Phase 6 server buffer/event API and theorem surface**.
   `accept` runs the retained-buffer network loop to consume the next peer
   record, drains local actions again for ClientFinished verification and client
   application read-key installation, and only returns `ServerWorkflowOk` after a
-  verified control snapshot proves `ControlApplicationData`.
+  verified control snapshot proves `ControlApplicationData` and a concrete
+  runtime query proves the server application read/write record keys are
+  installed from the key schedule.
 - [x] Tightened the scheduler-side ClientFinished readiness proof. A new
   concrete `can_verify_client_finished_runtime` query checks the stored
   ClientFinished verify_data, transcript room, and both live application
@@ -996,7 +998,9 @@ connected partial handshake. Transport listen/accept failures return
 in-progress/failure/exhaustion statuses preserve `server_driver_connected` and
 therefore the IO-history relation. `ServerWorkflowOk` is returned only after a
 verified control snapshot proves the connected state has model control
-`ControlApplicationData`; the public postcondition now exposes that success as
+`ControlApplicationData` and a concrete read-only query proves the server
+application read/write record keys are installed from the key schedule; the
+public postcondition now exposes that success as
 `server_driver_application_ready`, which also bundles
 `ST.server_end_to_end_invariant` for audit.
 
@@ -1033,7 +1037,8 @@ preserves the server driver IO-history invariant. `ServerWorkflowOk` is no
 longer a placeholder: the public postcondition exposes a connected state whose
 model control is `ControlApplicationData` through the public
 `server_driver_application_ready` predicate, which also carries
-`ST.server_end_to_end_invariant`.
+`ST.server_end_to_end_invariant` and
+`CS.application_record_keys_installed_for_role CS.ServerEndpoint`.
 
 Current extraction status: the first focused server-core KaRaMeL prefix through
 `TLS13.Impl.Server.Network` now completes. The previous KaRaMeL

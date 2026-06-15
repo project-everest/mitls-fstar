@@ -193,7 +193,8 @@ let server_driver_application_ready
   (st:CS.connection_state)
   : prop =
   ST.server_end_to_end_invariant st /\
-  st.CS.cs_model.CS.model_control == CS.ControlApplicationData
+  st.CS.cs_model.CS.model_control == CS.ControlApplicationData /\
+  CS.application_record_keys_installed_for_role CS.ServerEndpoint st.CS.cs_model
 
 fn new_server
   (certificate_chain:array U8.t)

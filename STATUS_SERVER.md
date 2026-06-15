@@ -1,6 +1,6 @@
 # TLS server verification status
 
-Status date: 2026-06-14.
+Status date: 2026-06-15.
 
 ## Goal
 
@@ -84,6 +84,14 @@ That committed state includes:
   drains scheduler-supported empty local actions. This advances the executable
   driver beyond ServerHello into scheduler-driven payload-free actions, while
   still stopping at credential-bearing actions.
+- Since that baseline, the public server facade has been hardened: `accept`
+  reaches application-data control on `ServerWorkflowOk` and now exposes
+  `server_driver_application_ready`, including
+  `ST.server_end_to_end_invariant` and
+  `CS.application_record_keys_installed_for_role CS.ServerEndpoint`. The public
+  `receive` spec is also tied to the concrete app-output buffer and returns
+  `ServerWorkflowOk` exactly when the copied application bytes fit the caller
+  and driver buffers.
 
 ## What is not complete yet
 
@@ -96,18 +104,15 @@ connected through their raw IO logs, automatically establish that theorem's
 input predicate. That bridge from concrete driver states to paired endpoint
 agreement remains a composition task.
 
-On the Pulse/server side, the remaining handshake orchestration is the main gap:
+On the Pulse/server side, public `accept` now has a verified success path to
+application-data readiness. The remaining implementation-side gaps are:
 
-- finish the credential-bearing encrypted flight in the driver:
-  `Certificate`, `CertificateVerify` signing, stored CertificateVerify send,
-  and ServerFinished;
-- read/process the client Finished record;
-- verify client Finished;
-- install application read keys;
-- enter application-data control;
-- expose a top-level accept/handshake driver that reaches application data or a
-  precise failure state;
-- extract and validate the server with the C/runtime IO stubs.
+- build the concrete bridge from complete client/server driver states and raw IO
+  logs to the aggregate paired-endpoint key-material theorem's input predicate;
+- continue splitting the remaining public driver orchestration into smaller
+  `Driver.Handshake`/`Driver.App` modules with narrow `.fsti` boundaries;
+- extract and validate the full server facade with the C/runtime IO stubs and
+  concrete OpenSSL interop tests.
 
 ## Latest verified in-progress slice
 
