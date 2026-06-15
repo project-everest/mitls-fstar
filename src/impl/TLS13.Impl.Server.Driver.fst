@@ -3147,56 +3147,6 @@ fn accept_start_read_client_hello_select_derive_send_server_hello_once
   }
 }
 
-fn process_empty_local_event_and_write_once
-  (d:server_driver)
-  (kind:ST.local_event_kind)
-  requires server_driver_connected
-              d
-              'st0
-              'certificate_chain
-              'credential_identity
-              'received
-              'sent **
-           pure (ST.server_local_event_input_ready_with_credentials
-             'st0
-             kind
-             B.empty
-             (Ghost.reveal 'certificate_chain)
-             (Ghost.reveal 'credential_identity))
-  returns resp:ST.server_response
-  ensures exists* st1 sent'.
-          server_driver_connected
-            d
-            st1
-            'certificate_chain
-            'credential_identity
-            'received
-            sent'
-{
-  let mut empty_payload = [| 0uy; 0sz |];
-  with empty_payload_bytes.
-    assert (pts_to empty_payload empty_payload_bytes);
-  assert (pure (B.length empty_payload_bytes == 0));
-  assert (pure (forall (i:nat{i < B.length empty_payload_bytes}).
-    Seq.index empty_payload_bytes i == Seq.index B.empty i));
-  Seq.lemma_eq_intro empty_payload_bytes B.empty;
-  assert (pure (Seq.equal empty_payload_bytes B.empty));
-  Seq.lemma_eq_elim empty_payload_bytes B.empty;
-  assert (pure (ST.server_local_event_input_ready_with_credentials
-    'st0
-    kind
-    empty_payload_bytes
-    (Ghost.reveal 'certificate_chain)
-    (Ghost.reveal 'credential_identity)));
-  let resp =
-    process_local_event_and_write_once
-      d
-      kind
-      empty_payload
-      0sz;
-  resp
-}
-
 fn process_ready_empty_local_action_once
   (d:server_driver)
   requires server_driver_connected

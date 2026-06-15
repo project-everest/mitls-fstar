@@ -122,3 +122,29 @@ fn process_local_event_and_write_once
             (Ghost.reveal 'payload_bytes)
             (Ghost.reveal 'sent)
             sent')
+
+fn process_empty_local_event_and_write_once
+  (d:DS.server_driver)
+  (kind:ST.local_event_kind)
+  requires DS.server_driver_connected
+              d
+              'st0
+              'certificate_chain
+              'credential_identity
+              'received
+              'sent **
+           pure (ST.server_local_event_input_ready_with_credentials
+             'st0
+             kind
+             B.empty
+             (Ghost.reveal 'certificate_chain)
+             (Ghost.reveal 'credential_identity))
+  returns resp:ST.server_response
+  ensures exists* st1 sent'.
+          DS.server_driver_connected
+            d
+            st1
+            'certificate_chain
+            'credential_identity
+            'received
+            sent'
