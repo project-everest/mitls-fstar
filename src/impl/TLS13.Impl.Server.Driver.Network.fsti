@@ -14,6 +14,17 @@ module Seq = FStar.Seq
 module SZ = FStar.SizeT
 module U8 = FStar.UInt8
 
+type server_driver_network_loop_result = {
+  server_driver_network_loop_last: ST.server_buffer_response;
+  server_driver_network_loop_exhausted: bool;
+}
+
+type server_driver_client_hello_wait_result = {
+  server_driver_client_hello_wait_last: ST.server_buffer_response;
+  server_driver_client_hello_wait_ready: bool;
+  server_driver_client_hello_wait_exhausted: bool;
+}
+
 val pending_after_consumed (buffered_len consumed_len:SZ.t)
   : r:SZ.t {
       (SZ.v consumed_len <= SZ.v buffered_len ==>
@@ -105,6 +116,60 @@ fn read_and_process_network_once
            resp
            (Ghost.reveal 'sent)
            sent')
+
+fn read_process_network_until_ready
+  (d:DS.server_driver)
+  (fuel:SZ.t)
+  requires DS.server_driver_connected
+            d
+            'st0
+            'certificate_chain
+            'credential_identity
+            'received
+            'sent
+  returns result:server_driver_network_loop_result
+  ensures exists* st1 received' sent'.
+          DS.server_driver_connected
+           d
+           st1
+           'certificate_chain
+           'credential_identity
+           received'
+           sent' **
+          pure (result.server_driver_network_loop_exhausted == false ==>
+            result.server_driver_network_loop_last.ST.response.ST.status <>
+              ST.NeedMoreInput /\
+            server_driver_network_process_correct
+              'st0
+              st1
+              result.server_driver_network_loop_last
+              (Ghost.reveal 'sent)
+              sent')
+
+fn read_until_client_hello_received
+  (d:DS.server_driver)
+  (fuel:SZ.t)
+  requires DS.server_driver_connected
+            d
+            'st0
+            'certificate_chain
+            'credential_identity
+            'received
+            'sent
+  returns result:server_driver_client_hello_wait_result
+  ensures exists* st1 received' sent'.
+          DS.server_driver_connected
+            d
+            st1
+            'certificate_chain
+            'credential_identity
+            received'
+            sent' **
+          pure (result.server_driver_client_hello_wait_ready == true ==>
+            st1.CS.cs_model.CS.model_control ==
+              CS.ControlHandshaking CS.HsClientHelloReceived /\
+            st1.CS.cs_model.CS.model_config ==
+              'st0.CS.cs_model.CS.model_config)
 
 val lemma_server_driver_network_process_correct_intro
   (st0:CS.connection_state)
