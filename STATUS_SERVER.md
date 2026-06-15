@@ -248,6 +248,13 @@ bytes still prevent deriving `CS.paired_wire_logs` directly.
      no-read-ahead facts plus paired transport histories to prove both full
      `CS.paired_wire_logs` and
      `CS.supported_profile_client_server_key_material_agrees`.
+   - `client_server_driver_supported_profile_state_inputs` now names the
+     remaining semantic state-machine obligations explicitly: paired X25519
+     key shares, client/server key-schedule lineage, paired transcript
+     checkpoints, and all record-material input agreement. The component theorem
+     `lemma_client_server_driver_key_material_agrees_from_no_read_ahead_components`
+     proves the aggregate spec input predicate plus the same wire-log and
+     key-material conclusions from those explicit components.
    - The remaining proof work is to prove the supported-profile state-machine
      input predicate from two live successful driver resources, rather than
      requiring it as an external theorem premise.
@@ -260,11 +267,13 @@ bytes still prevent deriving `CS.paired_wire_logs` directly.
 
 ## Recommended next steps
 
-1. Add the concrete driver-pair predicate that relates successful connected
-   client/server resources to
-   `supported_profile_client_server_key_material_inputs_agree`.
-2. Prove the transcript/key-share/key-schedule components of that predicate from
-   the existing successful driver resources and exact wire-log bridge.
+1. Prove each component of
+   `client_server_driver_supported_profile_state_inputs` from successful paired
+   driver resources: X25519 shares, key-schedule lineage, transcript
+   checkpoints, and record-material inputs.
+2. Package those component proofs into a concrete driver-pair theorem that
+   instantiates
+   `lemma_client_server_driver_key_material_agrees_from_no_read_ahead_components`.
 3. Re-run extraction and interop tests after each C-facing facade change.
 
 ## Engineering note

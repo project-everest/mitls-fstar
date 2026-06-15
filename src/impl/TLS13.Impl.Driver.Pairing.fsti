@@ -247,6 +247,41 @@ let client_server_driver_key_material_no_read_ahead_inputs
     server_sent /\
   CS.supported_profile_client_server_key_material_inputs_agree client server
 
+noextract
+let client_server_driver_supported_profile_state_inputs
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  : prop =
+  CS.paired_x25519_key_shares client server /\
+  CS.connection_supported_profile_key_schedule_lineage client /\
+  CS.connection_supported_profile_key_schedule_lineage server /\
+  CS.paired_handshake_events client server /\
+  CS.supported_profile_all_record_material_inputs_agree client server
+
+noextract
+let client_server_driver_key_material_no_read_ahead_component_inputs
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  (client_received:B.bytes)
+  (client_sent:B.bytes)
+  (server_received:B.bytes)
+  (server_sent:B.bytes)
+  : prop =
+  CD.client_driver_application_ready client /\
+  SD.server_driver_application_ready server /\
+  CD.client_driver_sent_log_exact client client_sent /\
+  SD.server_driver_sent_log_exact server server_sent /\
+  CD.client_driver_received_log_exact_prefix client client_received /\
+  SD.server_driver_received_log_exact_prefix server server_received /\
+  CD.client_driver_received_no_read_ahead client client_received /\
+  SD.server_driver_received_no_read_ahead server server_received /\
+  paired_transport_histories
+    client_received
+    client_sent
+    server_received
+    server_sent /\
+  client_server_driver_supported_profile_state_inputs client server
+
 val lemma_client_server_driver_key_material_agrees_from_no_read_ahead
   (client:CS.connection_state)
   (server:CS.connection_state)
@@ -264,6 +299,36 @@ val lemma_client_server_driver_key_material_agrees_from_no_read_ahead
           server_received
           server_sent)
       (ensures
+        paired_driver_transport_logs_exact
+          client
+          server
+          client_received
+          client_sent
+          server_received
+          server_sent /\
+        CS.paired_wire_logs client server /\
+        CS.supported_profile_client_server_key_material_agrees client server)
+
+val lemma_client_server_driver_key_material_agrees_from_no_read_ahead_components
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  (client_received:B.bytes)
+  (client_sent:B.bytes)
+  (server_received:B.bytes)
+  (server_sent:B.bytes)
+  : Lemma
+      (requires
+        client_server_driver_key_material_no_read_ahead_component_inputs
+          client
+          server
+          client_received
+          client_sent
+          server_received
+          server_sent)
+      (ensures
+        CS.supported_profile_client_server_key_material_inputs_agree
+          client
+          server /\
         paired_driver_transport_logs_exact
           client
           server

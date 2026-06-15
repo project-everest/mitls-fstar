@@ -1138,7 +1138,15 @@ predicate to prove both full `CS.paired_wire_logs` and
 `lemma_client_server_driver_key_material_agrees_from_prefixes`, which proves the
 main supported-profile key-material agreement from the ordered-prefix public
 driver facts plus the existing supported-profile state-machine input predicate,
-without requiring full TCP-history equality.
+without requiring full TCP-history equality. The remaining semantic obligations
+are now named by
+`client_server_driver_supported_profile_state_inputs`: paired X25519 key shares,
+client/server key-schedule lineage, paired transcript checkpoints, and all
+record-material input agreement. The checked
+`lemma_client_server_driver_key_material_agrees_from_no_read_ahead_components`
+turns those explicit components plus public no-read-ahead success facts into the
+aggregate supported-profile input predicate, full paired wire logs, and the main
+key-material agreement conclusion.
 
 Current extraction status: the first focused server-core KaRaMeL prefix through
 `TLS13.Impl.Server.Network` now completes. The previous KaRaMeL
@@ -1887,8 +1895,11 @@ Checklist:
       `CS.supported_profile_client_server_key_material_agrees` from public
       success facts plus the existing supported-profile state-machine input
       predicate.
-- [ ] Prove the supported-profile state-machine input predicate from concrete
-      paired successful driver resources.
+- [x] Split the remaining supported-profile state-machine input predicate into
+      explicit audit-facing driver-pair components and add a checked theorem
+      from those components to the aggregate key-material conclusion.
+- [ ] Prove those explicit component predicates from concrete paired successful
+      driver resources.
 
 ## Phase-by-phase implementation plan
 
