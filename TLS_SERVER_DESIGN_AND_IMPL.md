@@ -856,11 +856,11 @@ retained-buffer compaction and network-step accounting; that should move with
 the next Network boundary.
 
 `TLS13.Impl.Server.Driver.Network.fsti/fst` now owns the first retained-buffer
-network helper: `pending_after_consumed` and the verified in-place
-`compact_buffer_suffix` primitive. It also owns the network-step correctness
-predicate and wire-accounting/projection lemmas used by the retained-buffer
-driver. The higher-level read/process/compact step and ClientHello wait loops
-remain in the main driver for now.
+network helper: `pending_after_consumed`, the verified in-place
+`compact_buffer_suffix` primitive, the compacting buffered-network processor,
+the read-append plus compact-process slice, the `NeedMoreInput` retry loop, and
+the ClientHello wait loop. It also owns the network-step correctness predicate
+and wire-accounting/projection lemmas used by the retained-buffer driver.
 
 The final public `TLS13.Impl.Server.Driver.fsti` should expose only:
 
@@ -2254,7 +2254,7 @@ Status:
       events are `StepOk`, close_notify alerts are `StepOk`, and non-close
       alerts are `ConnectionFailed` with a consumed-prefix witness.
 - [x] Added the first read-append plus compact-process network driver slice:
-      `TLS13.Impl.Server.Driver.read_and_process_network_once` reads from the
+      `TLS13.Impl.Server.Driver.Network.read_and_process_network_once` reads from the
       connected transport into the free suffix of the driver-owned retained
       buffer, updates the retained-length box, proves the appended transport
       bytes are exactly the new retained suffix in the raw buffer, and then
@@ -2263,7 +2263,7 @@ Status:
       one transport read, one protocol processing attempt, exact response write,
       and suffix compaction while preserving the connected IO-history invariant.
 - [x] Added the first fueled network-read loop:
-      `TLS13.Impl.Server.Driver.read_process_network_until_ready` repeatedly
+      `TLS13.Impl.Server.Driver.Network.read_process_network_until_ready` repeatedly
       invokes the verified read/process step while the protocol response is
       `NeedMoreInput`, stops before running past a successful or failing network
       event, and preserves the connected-driver invariant. This is intentionally
@@ -2275,7 +2275,7 @@ Status:
       and sent log; internally, a `NeedMoreInput` stutter lemma proves retries do
       not advance the protocol state or transport-sent history.
 - [x] Added a fueled ClientHello-stage wait loop:
-      `TLS13.Impl.Server.Driver.read_until_client_hello_received` checks the
+      `TLS13.Impl.Server.Driver.Network.read_until_client_hello_received` checks the
       driver-owned concrete control snapshot before each read/process step and
       recurses until the server reaches `HsClientHelloReceived`, fuel is
       exhausted, or the caller stops. Its public postcondition proves that a
@@ -2413,10 +2413,12 @@ Checklist:
       `start_server_if_ready`, and `accept_transport_and_start_once` slices
       perform the first connected local transition after attach, and
       `generate_server_material_once` fills the driver-owned selection material
-      buffer. The driver-owned select+derive path and first compacting
-      retained-network processing plus read/process slices and the first
-      `NeedMoreInput` retry loop and empty-action local drain are verified; the
-      full handshake accept orchestration remains to be layered on top.
+      buffer. The driver-owned select+derive path, the compacting retained
+      network/read-process slices, the `NeedMoreInput` retry loop, and the
+      ClientHello wait loop are verified and split behind
+      `TLS13.Impl.Server.Driver.Network`; the empty-action local drain is also
+      verified. The full handshake accept orchestration remains to be layered on
+      top.
 - [ ] The first public driver API does not take a pre-accepted channel or
       externally owned listener handle.
 - [ ] `send`, `receive`, and `close` operate on one connected server handle.
