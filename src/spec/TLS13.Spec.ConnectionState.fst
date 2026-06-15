@@ -105,6 +105,12 @@ type labeled_traffic_epoch = {
   traffic_id_label: traffic_label;
 }
 
+let traffic_id
+  (epoch:traffic_epoch)
+  (label:traffic_label)
+  : labeled_traffic_epoch =
+  { traffic_id_epoch = epoch; traffic_id_label = label }
+
 type traffic_update_id = {
   traffic_update_label: traffic_label;
   traffic_update_generation: nat;
@@ -1895,6 +1901,83 @@ let peer_derived_key_material_agrees
   | Some client_material, Some server_material ->
     Seq.equal client_material server_material
   | _, _ -> False
+
+let supported_profile_all_derived_key_material_agrees
+  (client:connection_state)
+  (server:connection_state)
+  : prop =
+  peer_derived_key_material_agrees (BaseSecret EarlySecret) client server /\
+  peer_derived_key_material_agrees (BaseSecret HandshakeSecret) client server /\
+  peer_derived_key_material_agrees (BaseSecret MasterSecret) client server /\
+  peer_derived_key_material_agrees
+    (TrafficSecret (traffic_id TrafficHandshake ClientTraffic)) client server /\
+  peer_derived_key_material_agrees
+    (TrafficSecret (traffic_id TrafficHandshake ServerTraffic)) client server /\
+  peer_derived_key_material_agrees
+    (TrafficSecret (traffic_id TrafficApplication ClientTraffic)) client server /\
+  peer_derived_key_material_agrees
+    (TrafficSecret (traffic_id TrafficApplication ServerTraffic)) client server /\
+  peer_derived_key_material_agrees
+    (TrafficKey (traffic_id TrafficHandshake ClientTraffic)) client server /\
+  peer_derived_key_material_agrees
+    (TrafficKey (traffic_id TrafficHandshake ServerTraffic)) client server /\
+  peer_derived_key_material_agrees
+    (TrafficKey (traffic_id TrafficApplication ClientTraffic)) client server /\
+  peer_derived_key_material_agrees
+    (TrafficKey (traffic_id TrafficApplication ServerTraffic)) client server /\
+  peer_derived_key_material_agrees
+    (TrafficIV (traffic_id TrafficHandshake ClientTraffic)) client server /\
+  peer_derived_key_material_agrees
+    (TrafficIV (traffic_id TrafficHandshake ServerTraffic)) client server /\
+  peer_derived_key_material_agrees
+    (TrafficIV (traffic_id TrafficApplication ClientTraffic)) client server /\
+  peer_derived_key_material_agrees
+    (TrafficIV (traffic_id TrafficApplication ServerTraffic)) client server /\
+  peer_derived_key_material_agrees (FinishedKey ClientTraffic) client server /\
+  peer_derived_key_material_agrees (FinishedKey ServerTraffic) client server
+
+let supported_profile_all_record_material_inputs_agree
+  (client:connection_state)
+  (server:connection_state)
+  : prop =
+  peer_record_material_inputs_agree
+    (traffic_id TrafficHandshake ClientTraffic) client server /\
+  peer_record_material_inputs_agree
+    (traffic_id TrafficHandshake ServerTraffic) client server /\
+  peer_record_material_inputs_agree
+    (traffic_id TrafficApplication ClientTraffic) client server /\
+  peer_record_material_inputs_agree
+    (traffic_id TrafficApplication ServerTraffic) client server
+
+let supported_profile_all_record_material_agrees
+  (client:connection_state)
+  (server:connection_state)
+  : prop =
+  peer_record_material_agrees
+    (traffic_id TrafficHandshake ClientTraffic) client server /\
+  peer_record_material_agrees
+    (traffic_id TrafficHandshake ServerTraffic) client server /\
+  peer_record_material_agrees
+    (traffic_id TrafficApplication ClientTraffic) client server /\
+  peer_record_material_agrees
+    (traffic_id TrafficApplication ServerTraffic) client server
+
+let supported_profile_client_server_key_material_inputs_agree
+  (client:connection_state)
+  (server:connection_state)
+  : prop =
+  paired_x25519_key_shares client server /\
+  connection_supported_profile_key_schedule_lineage client /\
+  connection_supported_profile_key_schedule_lineage server /\
+  paired_handshake_events client server /\
+  supported_profile_all_record_material_inputs_agree client server
+
+let supported_profile_client_server_key_material_agrees
+  (client:connection_state)
+  (server:connection_state)
+  : prop =
+  supported_profile_all_derived_key_material_agrees client server /\
+  supported_profile_all_record_material_agrees client server
 
 let traffic_install_allowed_at_stage
   (stage:handshake_stage)

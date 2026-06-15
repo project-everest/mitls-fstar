@@ -59,7 +59,10 @@ That committed state includes:
   `src/spec/TLS13.ConnectionState.Lemmas.fst`, including:
   - `lemma_paired_endpoints_derived_key_agrees`;
   - `lemma_paired_x25519_key_shares_shared_secret_agree`;
-  - `lemma_paired_x25519_key_shares_derived_key_agrees`.
+  - `lemma_paired_x25519_key_shares_derived_key_agrees`;
+  - `lemma_supported_profile_client_server_key_material_agrees`, the aggregate
+    supported-profile theorem for all first-milestone derived key material and
+    installed peer record key/IV directions.
 - Verified public server wrappers for the important local/network state
   mutations, including ClientHello receive, supported selection, shared-secret
   derivation, ServerHello send, handshake/application key installs,
@@ -86,12 +89,12 @@ That committed state includes:
 
 We do **not** yet have the final verified interoperable server.
 
-The main spec-level derived-key agreement theorem exists, but it is not yet
-packaged as a top-level theorem saying that a complete concrete client run and a
-complete concrete server run, connected through their raw IO logs, satisfy the
-derived-key agreement theorem automatically. The bridge from concrete Pulse
-driver states to paired endpoint agreement is still a remaining composition
-task.
+The main spec-level key-material agreement theorem is now packaged as an
+aggregate supported-profile theorem. What is still missing is the concrete bridge
+saying that a complete Pulse client run and a complete Pulse server run,
+connected through their raw IO logs, automatically establish that theorem's
+input predicate. That bridge from concrete driver states to paired endpoint
+agreement remains a composition task.
 
 On the Pulse/server side, the remaining handshake orchestration is the main gap:
 

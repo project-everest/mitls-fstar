@@ -118,6 +118,18 @@ val lemma_paired_handshake_events_same_key_derivation_checkpoint
          checkpoint == DeriveApplicationTraffic))
       (ensures same_key_derivation_checkpoint checkpoint client server)
 
+val lemma_paired_supported_profile_all_derived_key_material_agrees
+  (client:connection_state)
+  (server:connection_state)
+  : Lemma
+      (requires
+        paired_x25519_key_shares client server /\
+        connection_supported_profile_key_schedule_lineage client /\
+        connection_supported_profile_key_schedule_lineage server /\
+        paired_handshake_events client server)
+      (ensures
+        supported_profile_all_derived_key_material_agrees client server)
+
 val lemma_peer_record_material_agrees
   (traffic_id:labeled_traffic_epoch)
   (client:connection_state)
@@ -125,6 +137,24 @@ val lemma_peer_record_material_agrees
   : Lemma
       (requires peer_record_material_inputs_agree traffic_id client server)
       (ensures peer_record_material_agrees traffic_id client server)
+
+val lemma_paired_supported_profile_all_record_material_agrees
+  (client:connection_state)
+  (server:connection_state)
+  : Lemma
+      (requires
+        supported_profile_all_record_material_inputs_agree client server)
+      (ensures
+        supported_profile_all_record_material_agrees client server)
+
+val lemma_supported_profile_client_server_key_material_agrees
+  (client:connection_state)
+  (server:connection_state)
+  : Lemma
+      (requires
+        supported_profile_client_server_key_material_inputs_agree client server)
+      (ensures
+        supported_profile_client_server_key_material_agrees client server)
 
 val lemma_step_role_install_record_keys_consistent_for_role
   (role:endpoint_role)

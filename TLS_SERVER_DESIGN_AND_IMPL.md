@@ -193,6 +193,13 @@ Current phase: **Phase 6 server buffer/event API and theorem surface**.
 - [x] Added `paired_handshake_events` and projection lemmas from paired
   checkpoint state to `same_transcript_checkpoint` and
   `same_key_derivation_checkpoint` for first-milestone key derivation points.
+- [x] Packaged the main supported-profile spec-level agreement theorem surface:
+  `supported_profile_client_server_key_material_inputs_agree` names the complete
+  first-milestone assumptions, and
+  `lemma_supported_profile_client_server_key_material_agrees` proves the finite
+  aggregate conclusion for every supported base secret, handshake/application
+  traffic secret, AEAD key/IV, Finished key, and installed peer record key/IV
+  direction.
 - [x] Started Phase 3 with `TLS13.Impl.Endpoint.Types`, a role-neutral
   extraction-facing status/response/buffer-response module. `TLS13.Impl.Client.Types`
   now includes that module and aliases the existing public client names to the
@@ -1142,9 +1149,10 @@ The main proof target is two-layered:
    calc-sample-style layered invariant from concrete raw buffers through parsed
    TLS records/messages, transcript and key schedule evolution, state-machine
    events, record keys, wire logs, and application-log projection.
-2. **Client/server derived-key agreement**: for each supported protocol-derived
-   key identified by a `derived_key_id`, paired client and server states derive
-   equal peer read/write material when their derivation inputs agree.
+2. **Client/server key-material agreement**: paired client and server states
+   satisfying the supported-profile input predicate derive equal base secrets,
+   handshake/application traffic secrets, AEAD keys/IVs, Finished keys, and
+   installed peer record key/IV material.
 
 ## Non-goals for the first server milestone
 
@@ -1728,6 +1736,10 @@ Checklist:
 - [x] KeyUpdate agreement is explicitly out of first-milestone scope and tracked
       as later theorem work.
 - [x] Out-of-scope derived keys are explicitly not claimed.
+- [x] The per-key theorems are packaged by
+      `lemma_supported_profile_client_server_key_material_agrees`, whose finite
+      postcondition covers the complete first-milestone supported-profile
+      key-material surface, including installed record key/IV agreement.
 
 ### Gate 5: record-material agreement
 

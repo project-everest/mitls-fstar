@@ -349,6 +349,57 @@ let lemma_paired_handshake_events_same_key_derivation_checkpoint
   | DeriveTrafficUpdate _ ->
     assert False
 
+let lemma_paired_supported_profile_all_derived_key_material_agrees
+  (client:connection_state)
+  (server:connection_state)
+  : Lemma
+      (requires
+        paired_x25519_key_shares client server /\
+        connection_supported_profile_key_schedule_lineage client /\
+        connection_supported_profile_key_schedule_lineage server /\
+        paired_handshake_events client server)
+      (ensures
+        supported_profile_all_derived_key_material_agrees client server)
+=
+  lemma_paired_handshake_events_same_key_derivation_checkpoint
+    DeriveHandshakeTraffic client server;
+  lemma_paired_handshake_events_same_key_derivation_checkpoint
+    DeriveApplicationTraffic client server;
+  lemma_paired_x25519_key_shares_derived_key_agrees
+    (BaseSecret EarlySecret) client server;
+  lemma_paired_x25519_key_shares_derived_key_agrees
+    (BaseSecret HandshakeSecret) client server;
+  lemma_paired_x25519_key_shares_derived_key_agrees
+    (BaseSecret MasterSecret) client server;
+  lemma_paired_x25519_key_shares_derived_key_agrees
+    (TrafficSecret (traffic_id TrafficHandshake ClientTraffic)) client server;
+  lemma_paired_x25519_key_shares_derived_key_agrees
+    (TrafficSecret (traffic_id TrafficHandshake ServerTraffic)) client server;
+  lemma_paired_x25519_key_shares_derived_key_agrees
+    (TrafficSecret (traffic_id TrafficApplication ClientTraffic)) client server;
+  lemma_paired_x25519_key_shares_derived_key_agrees
+    (TrafficSecret (traffic_id TrafficApplication ServerTraffic)) client server;
+  lemma_paired_x25519_key_shares_derived_key_agrees
+    (TrafficKey (traffic_id TrafficHandshake ClientTraffic)) client server;
+  lemma_paired_x25519_key_shares_derived_key_agrees
+    (TrafficKey (traffic_id TrafficHandshake ServerTraffic)) client server;
+  lemma_paired_x25519_key_shares_derived_key_agrees
+    (TrafficKey (traffic_id TrafficApplication ClientTraffic)) client server;
+  lemma_paired_x25519_key_shares_derived_key_agrees
+    (TrafficKey (traffic_id TrafficApplication ServerTraffic)) client server;
+  lemma_paired_x25519_key_shares_derived_key_agrees
+    (TrafficIV (traffic_id TrafficHandshake ClientTraffic)) client server;
+  lemma_paired_x25519_key_shares_derived_key_agrees
+    (TrafficIV (traffic_id TrafficHandshake ServerTraffic)) client server;
+  lemma_paired_x25519_key_shares_derived_key_agrees
+    (TrafficIV (traffic_id TrafficApplication ClientTraffic)) client server;
+  lemma_paired_x25519_key_shares_derived_key_agrees
+    (TrafficIV (traffic_id TrafficApplication ServerTraffic)) client server;
+  lemma_paired_x25519_key_shares_derived_key_agrees
+    (FinishedKey ClientTraffic) client server;
+  lemma_paired_x25519_key_shares_derived_key_agrees
+    (FinishedKey ServerTraffic) client server
+
 let lemma_peer_record_material_agrees
   (traffic_id:labeled_traffic_epoch)
   (client:connection_state)
@@ -442,6 +493,36 @@ let lemma_peer_record_material_agrees
        assert (Seq.equal server_record.record_material_iv client_record.record_material_iv)
      | _, _, _, _ ->
        assert False)
+
+let lemma_paired_supported_profile_all_record_material_agrees
+  (client:connection_state)
+  (server:connection_state)
+  : Lemma
+     (requires
+       supported_profile_all_record_material_inputs_agree client server)
+     (ensures
+       supported_profile_all_record_material_agrees client server)
+=
+  lemma_peer_record_material_agrees
+    (traffic_id TrafficHandshake ClientTraffic) client server;
+  lemma_peer_record_material_agrees
+    (traffic_id TrafficHandshake ServerTraffic) client server;
+  lemma_peer_record_material_agrees
+    (traffic_id TrafficApplication ClientTraffic) client server;
+  lemma_peer_record_material_agrees
+    (traffic_id TrafficApplication ServerTraffic) client server
+
+let lemma_supported_profile_client_server_key_material_agrees
+  (client:connection_state)
+  (server:connection_state)
+  : Lemma
+     (requires
+       supported_profile_client_server_key_material_inputs_agree client server)
+     (ensures
+       supported_profile_client_server_key_material_agrees client server)
+=
+  lemma_paired_supported_profile_all_derived_key_material_agrees client server;
+  lemma_paired_supported_profile_all_record_material_agrees client server
 
 let lemma_step_role_install_record_keys_consistent_for_role
   (role:endpoint_role)
