@@ -630,6 +630,71 @@ fn accept_start_read_client_hello_select_derive_once
                  received
                  sent)
 
+fn accept_start_read_client_hello_select_derive_send_server_hello_once
+  (d:DS.server_driver)
+  (bind_host:array U8.t)
+  (bind_host_len:SZ.t)
+  (port:U16.t)
+  (network_fuel:SZ.t)
+  requires DS.server_driver_live d 'st0 'certificate_chain 'credential_identity **
+           pts_to bind_host 'bind_host_bytes **
+           pure (B.length 'bind_host_bytes == SZ.v bind_host_len /\
+                   CM.can_start_server 'st0 /\
+                   Some? 'st0.CS.cs_model.CS.model_config.CS.config_server /\
+                   (match 'st0.CS.cs_model.CS.model_config.CS.config_server with
+                    | Some cfg ->
+                      CS.cipher_suite_offered
+                        cfg.CS.server_supported_cipher_suites
+                        T.TLS_CHACHA20_POLY1305_SHA256 /\
+                      CS.named_group_offered
+                        cfg.CS.server_supported_groups
+                        T.X25519 /\
+                      CS.signature_scheme_offered
+                        cfg.CS.server_allowed_signature_schemes
+                        T.RsaPssRsaeSha256 /\
+                      cfg.CS.server_sni_policy == None
+                    | None -> False))
+  returns result:server_driver_accept_server_hello_result
+  ensures pts_to bind_host 'bind_host_bytes **
+          (match result with
+           | ServerDriverAcceptServerHelloListenFailed ->
+               DS.server_driver_live d 'st0 'certificate_chain 'credential_identity
+           | ServerDriverAcceptServerHelloAcceptFailed ->
+               DS.server_driver_live d 'st0 'certificate_chain 'credential_identity
+           | ServerDriverAcceptServerHelloClientHelloWait wait ->
+               exists* st1 received sent.
+                 DS.server_driver_connected
+                   d
+                   st1
+                   'certificate_chain
+                   'credential_identity
+                   received
+                   sent **
+                 pure (wait.DN.server_driver_client_hello_wait_ready == false)
+           | ServerDriverAcceptServerHelloMaterialFailed
+           | ServerDriverAcceptServerHelloSelectionNotReady ->
+               exists* st1 received sent.
+                 DS.server_driver_connected
+                   d
+                   st1
+                   'certificate_chain
+                   'credential_identity
+                   received
+                   sent **
+                 pure (st1.CS.cs_model.CS.model_control ==
+                   CS.ControlHandshaking CS.HsClientHelloReceived)
+           | ServerDriverAcceptServerHelloDeriveFailed
+           | ServerDriverAcceptServerHelloSendNotReady
+           | ServerDriverAcceptServerHelloOk ->
+               exists* st2 received sent.
+                 DS.server_driver_connected
+                   d
+                   st2
+                   'certificate_chain
+                   'credential_identity
+                   received
+                   sent)
+
 fn accept_transport_and_start_once
   (d:DS.server_driver)
   (bind_host:array U8.t)
