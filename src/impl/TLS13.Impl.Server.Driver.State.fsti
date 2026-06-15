@@ -1,0 +1,221 @@
+module TLS13.Impl.Server.Driver.State
+
+#lang-pulse
+
+open Pulse.Lib.Pervasives
+
+module B = TLS13.Bytes
+module Bounds = TLS13.Impl.ConnectionState.Bounds
+module CL = TLS13.ConnectionLog
+module CS = TLS13.Spec.ConnectionState
+module IO = TLS13.IO
+module IM = TLS13.Impl.Messages
+module O = TLS13.OpenSSL
+module Seq = FStar.Seq
+module SeqP = FStar.Seq.Properties
+module S = TLS13.Impl.Server
+module ST = TLS13.Impl.Server.Types
+module Box = Pulse.Lib.Box
+module SZ = FStar.SizeT
+module U8 = FStar.UInt8
+module V = Pulse.Lib.Vec
+
+val driver_network_out_capacity : c:SZ.t { SZ.v c == 20000 }
+val driver_app_out_capacity :
+  c:SZ.t { SZ.v c == 16640 /\ IM.max_record_fragment_len <= SZ.v c }
+val driver_rx_capacity : c:SZ.t { SZ.v c == 65535 }
+val driver_material_capacity : c:SZ.t { SZ.v c == 64 }
+val driver_certificate_verify_input_capacity :
+  c:SZ.t { SZ.v c == 256 /\ Bounds.max_certificate_verify_input_len <= SZ.v c }
+val driver_signature_capacity :
+  c:SZ.t { SZ.v c == 4096 /\ IM.max_signature_len <= SZ.v c }
+
+val no_channel : option IO.channel
+
+noeq type server_driver = {
+  server_driver_server: S.server;
+  server_driver_credentials: O.server_credentials;
+  server_driver_channel: Box.box (option IO.channel);
+  server_driver_buffered_len: Box.box SZ.t;
+  server_driver_empty_payload: V.vec U8.t;
+  server_driver_raw: V.vec U8.t;
+  server_driver_network_out: V.vec U8.t;
+  server_driver_material_payload: V.vec U8.t;
+  server_driver_certificate_verify_input: V.vec U8.t;
+  server_driver_signature: V.vec U8.t;
+  server_driver_app_out: V.vec U8.t;
+}
+
+noextract
+let logged_received_bytes_accounted
+  (logged:B.bytes)
+  (consumed:B.bytes)
+  : prop
+  =
+  B.length logged <= B.length consumed /\
+  (forall b. SeqP.count b logged <= SeqP.count b consumed)
+
+noextract
+let server_driver_wire_logs_match_witness
+  (st:CS.connection_state)
+  (received:B.bytes)
+  (sent:B.bytes)
+  (consumed:B.bytes)
+  (buffered:B.bytes)
+  (buffered_len:SZ.t)
+  : prop
+  =
+  Seq.equal sent st.CS.cs_wire_log.CL.raw_sent /\
+  B.length buffered == SZ.v buffered_len /\
+  Seq.equal (B.append consumed buffered) received /\
+  logged_received_bytes_accounted st.CS.cs_wire_log.CL.raw_received consumed
+
+noextract
+let server_driver_wire_logs_match
+  (st:CS.connection_state)
+  (received:B.bytes)
+  (sent:B.bytes)
+  (buffered:B.bytes)
+  (buffered_len:SZ.t)
+  : prop
+  =
+  exists consumed.
+    server_driver_wire_logs_match_witness
+      st
+      received
+      sent
+      consumed
+      buffered
+      buffered_len
+
+noextract
+let server_driver_config_matches_credentials
+  (st:CS.connection_state)
+  (certificate_chain:B.bytes)
+  (credential_identity:CS.server_credential_identity)
+  : prop
+  =
+  match st.CS.cs_model.CS.model_config.CS.config_server with
+  | Some cfg ->
+    cfg.CS.server_certificate_chain == certificate_chain /\
+    cfg.CS.server_credential_identity == credential_identity
+  | None -> False
+
+noextract
+let server_driver_buffers
+  (d:server_driver)
+  (buffered:B.bytes)
+  (buffered_len:SZ.t)
+  : slprop
+  =
+  Box.pts_to d.server_driver_buffered_len buffered_len **
+  exists* empty_payload raw network_out material cv_input signature app_out.
+    V.pts_to d.server_driver_empty_payload #1.0R empty_payload **
+    V.pts_to d.server_driver_raw #1.0R raw **
+    V.pts_to d.server_driver_network_out #1.0R network_out **
+    V.pts_to d.server_driver_material_payload #1.0R material **
+    V.pts_to d.server_driver_certificate_verify_input #1.0R cv_input **
+    V.pts_to d.server_driver_signature #1.0R signature **
+    V.pts_to d.server_driver_app_out #1.0R app_out **
+    pure (
+      B.length empty_payload == 0 /\
+      B.length raw == SZ.v driver_rx_capacity /\
+      B.length buffered == SZ.v buffered_len /\
+      SZ.v buffered_len <= SZ.v driver_rx_capacity /\
+      Seq.equal buffered (Seq.slice raw 0 (SZ.v buffered_len)) /\
+      B.length network_out == SZ.v driver_network_out_capacity /\
+      B.length material == SZ.v driver_material_capacity /\
+      B.length cv_input == SZ.v driver_certificate_verify_input_capacity /\
+      B.length signature == SZ.v driver_signature_capacity /\
+      B.length app_out == SZ.v driver_app_out_capacity /\
+      Bounds.max_certificate_verify_input_len <=
+        SZ.v driver_certificate_verify_input_capacity /\
+      IM.max_signature_len <= SZ.v driver_signature_capacity /\
+      IM.max_record_fragment_len <= SZ.v driver_app_out_capacity /\
+      V.is_full_vec d.server_driver_empty_payload /\
+      V.is_full_vec d.server_driver_raw /\
+      V.is_full_vec d.server_driver_network_out /\
+      V.is_full_vec d.server_driver_material_payload /\
+      V.is_full_vec d.server_driver_certificate_verify_input /\
+      V.is_full_vec d.server_driver_signature /\
+      V.is_full_vec d.server_driver_app_out)
+
+noextract
+let server_driver_live
+  (d:server_driver)
+  (st:CS.connection_state)
+  (certificate_chain:B.bytes)
+  (credential_identity:CS.server_credential_identity)
+  : slprop
+  =
+  S.connection_exactly d.server_driver_server st **
+  O.is_server_credentials
+    d.server_driver_credentials
+    certificate_chain
+    credential_identity **
+  Box.pts_to d.server_driver_channel no_channel **
+  server_driver_buffers d B.empty 0sz **
+  pure (ST.server_end_to_end_invariant st /\
+        server_driver_config_matches_credentials
+          st
+          certificate_chain
+          credential_identity /\
+        server_driver_wire_logs_match st B.empty B.empty B.empty 0sz)
+
+noextract
+let server_driver_connected
+  (d:server_driver)
+  (st:CS.connection_state)
+  (certificate_chain:B.bytes)
+  (credential_identity:CS.server_credential_identity)
+  (received:B.bytes)
+  (sent:B.bytes)
+  : slprop
+  =
+  S.connection_exactly d.server_driver_server st **
+  O.is_server_credentials
+    d.server_driver_credentials
+    certificate_chain
+    credential_identity **
+  exists* ch buffered buffered_len.
+    Box.pts_to d.server_driver_channel (Some ch) **
+    IO.is_channel ch received sent **
+    server_driver_buffers d buffered buffered_len **
+    pure (ST.server_end_to_end_invariant st /\
+          server_driver_config_matches_credentials
+            st
+            certificate_chain
+            credential_identity /\
+          server_driver_wire_logs_match st received sent buffered buffered_len)
+
+noextract
+let server_driver_closed
+  (d:server_driver)
+  (st:CS.connection_state)
+  (certificate_chain:B.bytes)
+  (credential_identity:CS.server_credential_identity)
+  : slprop
+  =
+  S.connection_exactly d.server_driver_server st **
+  O.is_server_credentials
+    d.server_driver_credentials
+    certificate_chain
+    credential_identity **
+  Box.pts_to d.server_driver_channel no_channel **
+  exists* buffered buffered_len.
+    server_driver_buffers d buffered buffered_len **
+    pure (ST.server_end_to_end_invariant st)
+
+val lemma_logged_received_bytes_accounted_append_delta
+  (old_logged:B.bytes)
+  (old_consumed:B.bytes)
+  (raw_delta:B.bytes)
+  (consumed_delta:B.bytes)
+  : Lemma
+      (requires
+        logged_received_bytes_accounted old_logged old_consumed /\
+        (Seq.equal raw_delta B.empty \/ Seq.equal raw_delta consumed_delta))
+      (ensures
+        logged_received_bytes_accounted
+          (B.append old_logged raw_delta)
+          (B.append old_consumed consumed_delta))

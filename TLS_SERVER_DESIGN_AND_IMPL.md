@@ -840,6 +840,13 @@ selection, derivation, ServerHello, and credential helper result types and
 proof predicates now belong in the implementation and should be moved behind
 small internal module boundaries next.
 
+Refactor progress: `TLS13.Impl.Server.Driver.State.fsti/fst` now owns the
+driver record, buffer capacities, live/connected/closed predicates, wire-log
+accounting predicates, and the first wire-accounting preservation lemma. The
+main driver still owns most local/network/selection projection lemmas; those
+should move behind the State or later Transport/Network/Handshake boundaries as
+the file is split further.
+
 The final public `TLS13.Impl.Server.Driver.fsti` should expose only:
 
 ```fstar
