@@ -6,18 +6,23 @@ open Pulse.Lib.Pervasives
 open Pulse.Lib.Array.PtsTo
 
 module B = TLS13.Bytes
+module Bounds = TLS13.Impl.ConnectionState.Bounds
 module CL = TLS13.ConnectionLog
 module CS = TLS13.Spec.ConnectionState
 module CM = TLS13.Impl.ConnectionState.Model
 module ID = FStar.IndefiniteDescription
 module IO = TLS13.IO
+module M = TLS13.Messages
 module O = TLS13.OpenSSL
 module Seq = FStar.Seq
+module RS = TLS13.Record.Spec
 module S = TLS13.Impl.Server
 module SSetup = TLS13.Impl.Server.Setup
 module ST = TLS13.Impl.Server.Types
+module W = TLS13.Wire.Spec
 module Box = Pulse.Lib.Box
 module SZ = FStar.SizeT
+module U64 = FStar.UInt64
 module U8 = FStar.UInt8
 module V = Pulse.Lib.Vec
 
@@ -642,4 +647,323 @@ fn process_empty_local_event_and_write_once
        empty_payload
        0sz;
   resp
+}
+
+fn process_ready_empty_local_action_once
+  (d:server_driver)
+  requires server_driver_connected
+               d
+               'st0
+               'certificate_chain
+               'credential_identity
+               'received
+               'sent
+  returns status:server_driver_local_status
+  ensures (match status with
+            | ServerDriverLocalProcessed ->
+              exists* st1 sent'.
+                server_driver_connected
+                  d
+                  st1
+                  'certificate_chain
+                  'credential_identity
+                  'received
+                  sent'
+            | _ ->
+              server_driver_connected
+                d
+                'st0
+                'certificate_chain
+                'credential_identity
+                'received
+                'sent)
+{
+  unfold (server_driver_connected
+    d
+    'st0
+    'certificate_chain
+    'credential_identity
+    'received
+    'sent);
+  with ch buffered buffered_len.
+    assert (Box.pts_to d.server_driver_channel (Some ch) **
+             IO.is_channel ch 'received 'sent **
+             server_driver_buffers d buffered buffered_len);
+  assert (pure (ST.server_end_to_end_invariant 'st0));
+  assert (pure (ST.server_state_correct 'st0));
+  let action = S.next_local_action d.server_driver_server;
+  assert (pure (ST.next_local_action_sound 'st0 action));
+  fold (server_driver_connected
+    d
+    'st0
+    'certificate_chain
+    'credential_identity
+    'received
+    'sent);
+  if action.ST.next_local_ready {
+    assert (pure (action.ST.next_local_ready == true));
+    match action.ST.next_local_kind {
+       ST.LocalStartServer -> {
+         assert (pure (CM.can_start_server 'st0));
+         let _ = start_server_once d;
+         ServerDriverLocalProcessed
+       }
+       ST.LocalInstallServerHandshakeTrafficKeys -> {
+         assert (pure (ST.server_local_event_input_ready
+           'st0
+           action.ST.next_local_kind
+           B.empty));
+         assert (pure (ST.server_local_event_input_ready_with_credentials
+           'st0
+           action.ST.next_local_kind
+           B.empty
+           (Ghost.reveal 'certificate_chain)
+           (Ghost.reveal 'credential_identity)));
+         let _ =
+           process_empty_local_event_and_write_once
+             d
+             action.ST.next_local_kind;
+         ServerDriverLocalProcessed
+       }
+       ST.LocalInstallClientHandshakeTrafficKeys -> {
+         assert (pure (ST.server_local_event_input_ready
+           'st0
+           action.ST.next_local_kind
+           B.empty));
+         assert (pure (ST.server_local_event_input_ready_with_credentials
+           'st0
+           action.ST.next_local_kind
+           B.empty
+           (Ghost.reveal 'certificate_chain)
+           (Ghost.reveal 'credential_identity)));
+         let _ =
+           process_empty_local_event_and_write_once
+             d
+             action.ST.next_local_kind;
+         ServerDriverLocalProcessed
+       }
+       ST.LocalInstallServerApplicationTrafficKeys -> {
+         assert (pure (ST.server_local_event_input_ready
+           'st0
+           action.ST.next_local_kind
+           B.empty));
+         assert (pure (ST.server_local_event_input_ready_with_credentials
+           'st0
+           action.ST.next_local_kind
+           B.empty
+           (Ghost.reveal 'certificate_chain)
+           (Ghost.reveal 'credential_identity)));
+         let _ =
+           process_empty_local_event_and_write_once
+             d
+             action.ST.next_local_kind;
+         ServerDriverLocalProcessed
+       }
+       ST.LocalInstallClientApplicationTrafficKeys -> {
+         assert (pure (ST.server_local_event_input_ready
+           'st0
+           action.ST.next_local_kind
+           B.empty));
+         assert (pure (ST.server_local_event_input_ready_with_credentials
+           'st0
+           action.ST.next_local_kind
+           B.empty
+           (Ghost.reveal 'certificate_chain)
+           (Ghost.reveal 'credential_identity)));
+         let _ =
+           process_empty_local_event_and_write_once
+             d
+             action.ST.next_local_kind;
+         ServerDriverLocalProcessed
+       }
+       ST.LocalSendEncryptedExtensions -> {
+         assert (pure (ST.server_local_event_input_ready
+           'st0
+           action.ST.next_local_kind
+           B.empty));
+         assert (pure (ST.server_local_event_input_ready_with_credentials
+           'st0
+           action.ST.next_local_kind
+           B.empty
+           (Ghost.reveal 'certificate_chain)
+           (Ghost.reveal 'credential_identity)));
+         let _ =
+           process_empty_local_event_and_write_once
+             d
+             action.ST.next_local_kind;
+         ServerDriverLocalProcessed
+       }
+       ST.LocalSendCertificate -> {
+         assert (pure (action.ST.next_local_payload == ST.LocalPayloadNone));
+         assert (pure ('st0.CS.cs_model.CS.model_control ==
+           CS.ControlHandshaking CS.HsServerEncryptedFlightSent));
+         assert (pure ('st0.CS.cs_model.CS.model_config.CS.config_role ==
+           CS.ServerEndpoint));
+         assert (pure (
+           'st0.CS.cs_model.CS.model_handshake.CS.hs_encrypted_extensions <> None));
+         assert (pure (
+           'st0.CS.cs_model.CS.model_handshake.CS.hs_certificate == None));
+         assert (pure (
+           'st0.CS.cs_model.CS.model_handshake.CS.hs_buffers.CS.hb_certificate_leaf_der == None));
+         assert (pure (Some?
+           'st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_handshake_traffic));
+         assert (pure (U64.fits
+           ('st0.CS.cs_model.CS.model_record.CS.record_write.RS.seq + 1)));
+         assert (pure (match 'st0.CS.cs_model.CS.model_config.CS.config_server with
+           | Some cfg ->
+             B.length cfg.CS.server_certificate_chain <=
+               Bounds.max_server_certificate_chain_len /\
+             B.length 'st0.CS.cs_model.CS.model_handshake.CS.hs_transcript +
+               B.length
+                 (W.serialize_certificate_from_credential
+                   { M.chain = [cfg.CS.server_certificate_chain] }) <=
+                 Bounds.max_transcript_len /\
+             CS.legal_event
+               'st0.CS.cs_model
+               (CS.ConnNetworkEvent {
+                 CL.message_direction = CL.Sent;
+                 CL.message_value =
+                   M.TlsHandshake
+                     (M.Certificate { M.chain = [cfg.CS.server_certificate_chain] });
+               })
+           | None -> False));
+         assert (pure (match 'st0.CS.cs_model.CS.model_config.CS.config_server with
+           | Some cfg ->
+             cfg.CS.server_certificate_chain ==
+               Ghost.reveal 'certificate_chain /\
+             cfg.CS.server_credential_identity ==
+               Ghost.reveal 'credential_identity
+           | None -> False));
+         assert (pure (B.length (Ghost.reveal 'certificate_chain) <=
+           Bounds.max_server_certificate_chain_len));
+         W.lemma_serialize_certificate_from_single_chain_len
+           (Ghost.reveal 'certificate_chain);
+         assert (pure (13 + B.length (Ghost.reveal 'certificate_chain) + 17 <= 16640));
+         assert (pure (
+           B.length 'st0.CS.cs_model.CS.model_handshake.CS.hs_transcript +
+             13 + B.length (Ghost.reveal 'certificate_chain) <=
+               Bounds.max_transcript_len));
+         assert (pure (CS.legal_event
+           'st0.CS.cs_model
+           (CS.ConnNetworkEvent {
+             CL.message_direction = CL.Sent;
+             CL.message_value =
+               M.TlsHandshake
+                 (M.Certificate { M.chain = [Ghost.reveal 'certificate_chain] });
+           })));
+         assert (pure (ST.server_local_event_input_ready_with_credentials
+           'st0
+           action.ST.next_local_kind
+           B.empty
+           (Ghost.reveal 'certificate_chain)
+           (Ghost.reveal 'credential_identity)));
+         let _ =
+           process_empty_local_event_and_write_once
+             d
+             action.ST.next_local_kind;
+         ServerDriverLocalProcessed
+       }
+       ST.LocalSendCertificateVerify -> {
+         assert (pure (ST.server_local_event_input_ready
+           'st0
+           action.ST.next_local_kind
+           B.empty));
+         assert (pure (ST.server_local_event_input_ready_with_credentials
+           'st0
+           action.ST.next_local_kind
+           B.empty
+           (Ghost.reveal 'certificate_chain)
+           (Ghost.reveal 'credential_identity)));
+         let _ =
+           process_empty_local_event_and_write_once
+             d
+             action.ST.next_local_kind;
+         ServerDriverLocalProcessed
+       }
+       ST.LocalSendServerFinished -> {
+         assert (pure (ST.server_local_event_input_ready
+           'st0
+           action.ST.next_local_kind
+           B.empty));
+         assert (pure (ST.server_local_event_input_ready_with_credentials
+           'st0
+           action.ST.next_local_kind
+           B.empty
+           (Ghost.reveal 'certificate_chain)
+           (Ghost.reveal 'credential_identity)));
+         let _ =
+           process_empty_local_event_and_write_once
+             d
+             action.ST.next_local_kind;
+         ServerDriverLocalProcessed
+       }
+       _ -> {
+         ServerDriverLocalExternalOrUnsupported
+       }
+    }
+  } else {
+    ServerDriverLocalNotReady
+  }
+}
+
+fn rec drain_ready_empty_local_actions
+  (d:server_driver)
+  (fuel:SZ.t)
+  requires server_driver_connected
+              d
+              'st0
+              'certificate_chain
+              'credential_identity
+              'received
+              'sent
+  returns result:server_driver_local_drain_result
+  ensures exists* st1 sent'.
+           server_driver_connected
+             d
+             st1
+             'certificate_chain
+             'credential_identity
+             'received
+             sent'
+  decreases (SZ.v fuel)
+{
+  if (fuel = 0sz) {
+    let result:server_driver_local_drain_result = {
+       server_driver_local_drain_last = ServerDriverLocalNotReady;
+       server_driver_local_drain_exhausted = true;
+    };
+    result
+  } else {
+    assert (pure (0 < SZ.v fuel));
+    let status = process_ready_empty_local_action_once d;
+    match status {
+       ServerDriverLocalProcessed -> {
+         with st1 sent'.
+           assert (server_driver_connected
+             d
+             st1
+             'certificate_chain
+             'credential_identity
+             'received
+             sent');
+         let next_fuel = SZ.sub fuel 1sz;
+         assert (pure (SZ.v next_fuel < SZ.v fuel));
+         drain_ready_empty_local_actions d next_fuel
+       }
+       ServerDriverLocalNotReady -> {
+         let result:server_driver_local_drain_result = {
+           server_driver_local_drain_last = ServerDriverLocalNotReady;
+           server_driver_local_drain_exhausted = false;
+         };
+         result
+       }
+       ServerDriverLocalExternalOrUnsupported -> {
+         let result:server_driver_local_drain_result = {
+           server_driver_local_drain_last = ServerDriverLocalExternalOrUnsupported;
+           server_driver_local_drain_exhausted = false;
+         };
+         result
+       }
+    }
+  }
 }

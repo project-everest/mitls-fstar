@@ -6,6 +6,7 @@ open Pulse.Lib.Pervasives
 open Pulse.Lib.Array.PtsTo
 
 module B = TLS13.Bytes
+module Bounds = TLS13.Impl.ConnectionState.Bounds
 module CS = TLS13.Spec.ConnectionState
 module CM = TLS13.Impl.ConnectionState.Model
 module DS = TLS13.Impl.Server.Driver.State
@@ -13,6 +14,16 @@ module ST = TLS13.Impl.Server.Types
 module Seq = FStar.Seq
 module SZ = FStar.SizeT
 module U8 = FStar.UInt8
+
+type server_driver_local_status =
+  | ServerDriverLocalProcessed
+  | ServerDriverLocalNotReady
+  | ServerDriverLocalExternalOrUnsupported
+
+type server_driver_local_drain_result = {
+  server_driver_local_drain_last: server_driver_local_status;
+  server_driver_local_drain_exhausted: bool;
+}
 
 fn start_server_once
   (d:DS.server_driver)
@@ -140,6 +151,55 @@ fn process_empty_local_event_and_write_once
              (Ghost.reveal 'certificate_chain)
              (Ghost.reveal 'credential_identity))
   returns resp:ST.server_response
+  ensures exists* st1 sent'.
+          DS.server_driver_connected
+            d
+            st1
+            'certificate_chain
+            'credential_identity
+            'received
+            sent'
+
+fn process_ready_empty_local_action_once
+  (d:DS.server_driver)
+  requires DS.server_driver_connected
+              d
+              'st0
+              'certificate_chain
+              'credential_identity
+              'received
+              'sent
+  returns status:server_driver_local_status
+  ensures (match status with
+           | ServerDriverLocalProcessed ->
+             exists* st1 sent'.
+               DS.server_driver_connected
+                 d
+                 st1
+                 'certificate_chain
+                 'credential_identity
+                 'received
+                 sent'
+           | _ ->
+             DS.server_driver_connected
+               d
+               'st0
+               'certificate_chain
+               'credential_identity
+               'received
+               'sent)
+
+fn drain_ready_empty_local_actions
+  (d:DS.server_driver)
+  (fuel:SZ.t)
+  requires DS.server_driver_connected
+             d
+             'st0
+             'certificate_chain
+             'credential_identity
+             'received
+             'sent
+  returns result:server_driver_local_drain_result
   ensures exists* st1 sent'.
           DS.server_driver_connected
             d
