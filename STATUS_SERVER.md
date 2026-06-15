@@ -110,11 +110,13 @@ That committed state includes:
 We do **not** yet have the final verified interoperable server.
 
 The main spec-level key-material agreement theorem is now packaged as an
-aggregate supported-profile theorem. What is still missing is the concrete bridge
-saying that a complete Pulse client run and a complete Pulse server run,
-connected through their raw IO logs, automatically establish that theorem's
-input predicate. That bridge from concrete driver states to paired endpoint
-agreement remains a composition task.
+aggregate supported-profile theorem, and `TLS13.Impl.Driver.Pairing` now provides
+the audit-facing driver-pair bridge theorem:
+`lemma_client_server_driver_key_material_agrees`. What is still missing is the
+harder concrete proof that complete Pulse client and server runs automatically
+establish that bridge theorem's input predicate, especially the exact
+transport/protocol received-log condition in the presence of retained read-ahead
+and rejected consumed bytes.
 
 On the Pulse implementation side, public server `accept` and client `connect`
 now both expose application-data readiness on success, public client/server
@@ -124,8 +126,9 @@ facts, and public client/server `close` operations expose verified
 `close_notify` local-write facts before transport shutdown. The remaining
 implementation-side gaps are:
 
-- build the concrete bridge from complete client/server driver states and raw IO
-  logs to the aggregate paired-endpoint key-material theorem's input predicate;
+- prove the exact transport/protocol log obligations named by
+  `TLS13.Impl.Driver.Pairing.paired_driver_transport_logs_exact` from complete
+  client/server driver resources and raw IO logs;
 - continue splitting the remaining public driver orchestration into smaller
   `Driver.Handshake`/`Driver.App` modules with narrow `.fsti` boundaries;
 - strengthen the private client receive workflow with a factored network-loop
@@ -160,6 +163,13 @@ The latest client facade slice strengthens public `close`: its postcondition now
 exposes `client_driver_close_correct`, tying the returned status to a verified
 `LocalSendCloseNotify` theorem and exact close-notify sent-log append before the
 TCP channel is closed.
+
+The latest theorem-bridge slice adds `TLS13.Impl.Driver.Pairing`, which packages
+the public client/server application-readiness facts, exact paired transport log
+obligations, and existing
+`supported_profile_client_server_key_material_inputs_agree` predicate into a
+single checked theorem that yields both `CS.paired_wire_logs` and
+`CS.supported_profile_client_server_key_material_agrees`.
 
 ## Remaining proof gaps
 
