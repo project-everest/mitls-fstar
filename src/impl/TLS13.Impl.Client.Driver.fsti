@@ -13,6 +13,7 @@ module CS = TLS13.Spec.ConnectionState
 module CT = TLS13.Impl.Client.Types
 module IO = TLS13.IO
 module O = TLS13.OpenSSL
+module Seq = FStar.Seq
 module SZ = FStar.SizeT
 module U16 = FStar.UInt16
 module U8 = FStar.UInt8
@@ -63,6 +64,29 @@ let client_driver_application_ready
   st.CS.cs_model.CS.model_control == CS.ControlApplicationData /\
   CS.application_record_keys_installed_for_role CS.ClientEndpoint st.CS.cs_model
 
+noextract
+let client_driver_local_write_correct
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (resp:CT.client_response)
+  (kind:CT.local_event_kind)
+  (payload:B.bytes)
+  (sent:B.bytes)
+  (sent':B.bytes)
+  : prop =
+  exists network_out_bytes app_out_bytes.
+    CT.local_event_end_to_end_correct
+      st0
+      st1
+      resp
+      kind
+      payload
+      network_out_bytes
+      app_out_bytes /\
+    Seq.equal
+      sent'
+      (B.append sent (CT.response_network_out resp network_out_bytes))
+
 type driver_workflow_status =
   | DriverWorkflowOk
   | DriverWorkflowNeedMoreInput
@@ -70,6 +94,35 @@ type driver_workflow_status =
   | DriverWorkflowStepFailed
   | DriverWorkflowExhausted
   | DriverWorkflowClosed
+
+noextract
+let client_driver_send_status_correct
+  (status:driver_workflow_status)
+  (resp:CT.client_response)
+  : prop =
+  if resp.CT.status == CT.StepOk
+  then status == DriverWorkflowOk
+  else status == DriverWorkflowStepFailed
+
+noextract
+let client_driver_send_correct
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (status:driver_workflow_status)
+  (payload:B.bytes)
+  (sent:B.bytes)
+  (sent':B.bytes)
+  : prop =
+  exists resp.
+    client_driver_local_write_correct
+      st0
+      st1
+      resp
+      CT.LocalSendApplicationData
+      payload
+      sent
+      sent' /\
+    client_driver_send_status_correct status resp
 
 type client_receive_result = {
   client_receive_status: driver_workflow_status;
@@ -149,7 +202,14 @@ fn send
   returns status:driver_workflow_status
   ensures exists* st1 received1 sent1.
           pts_to payload 'payload_bytes **
-          client_driver_connected d st1 received1 sent1
+          client_driver_connected d st1 received1 sent1 **
+          pure (client_driver_send_correct
+                  'st0
+                  st1
+                  status
+                  (Ghost.reveal 'payload_bytes)
+                  (Ghost.reveal 'sent0)
+                  sent1)
 
 fn receive
   (d:client_driver)

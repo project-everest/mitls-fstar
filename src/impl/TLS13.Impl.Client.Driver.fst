@@ -1218,6 +1218,8 @@ fn process_local_event_and_write_once
                    (Ghost.reveal 'payload_bytes)
                    network_out_bytes
                    app_out_bytes /\
+                 result.local_write_written ==
+                   result.local_write_resp.CT.network_out_len /\
                  (result.local_write_resp.CT.status == CT.StepOk ==>
                   SZ.v result.local_write_written <=
                   SZ.v result.local_write_resp.CT.network_out_len))
@@ -1339,6 +1341,8 @@ fn driver_process_local_event
                    (Ghost.reveal 'payload_bytes)
                    network_out_bytes
                    app_out_bytes /\
+                 result.local_write_written ==
+                   result.local_write_resp.CT.network_out_len /\
                  (result.local_write_resp.CT.status == CT.StepOk ==>
                   SZ.v result.local_write_written <=
                   SZ.v result.local_write_resp.CT.network_out_len))
@@ -3812,6 +3816,8 @@ fn send_application_data_once
                    (Ghost.reveal 'payload_bytes)
                    network_out_bytes
                    app_out_bytes /\
+                 result.local_write_written ==
+                   result.local_write_resp.CT.network_out_len /\
                  (result.local_write_resp.CT.status == CT.StepOk ==>
                   SZ.v result.local_write_written <=
                   SZ.v result.local_write_resp.CT.network_out_len))
@@ -3863,9 +3869,11 @@ fn driver_send_application_data
                    (Ghost.reveal 'payload_bytes)
                    network_out_bytes
                    app_out_bytes /\
+                 result.local_write_written ==
+                   result.local_write_resp.CT.network_out_len /\
                  (result.local_write_resp.CT.status == CT.StepOk ==>
-                  SZ.v result.local_write_written <=
-                  SZ.v result.local_write_resp.CT.network_out_len))
+                 SZ.v result.local_write_written <=
+                 SZ.v result.local_write_resp.CT.network_out_len))
 {
   unfold (driver_exactly d 'st0 (Ghost.reveal 'buffered) (Ghost.reveal 'pending_len));
   let result =
@@ -3923,6 +3931,8 @@ fn top_driver_send_application_data
                   (Ghost.reveal 'payload_bytes)
                   network_out_bytes
                   app_out_bytes /\
+                 result.local_write_written ==
+                   result.local_write_resp.CT.network_out_len /\
                  (result.local_write_resp.CT.status == CT.StepOk ==>
                  SZ.v result.local_write_written <=
                  SZ.v result.local_write_resp.CT.network_out_len))
@@ -4457,7 +4467,14 @@ fn send
   returns status:driver_workflow_status
   ensures exists* st1 received1 sent1.
           pts_to payload 'payload_bytes **
-          client_driver_connected d st1 received1 sent1
+          client_driver_connected d st1 received1 sent1 **
+          pure (client_driver_send_correct
+                  'st0
+                  st1
+                  status
+                  (Ghost.reveal 'payload_bytes)
+                  (Ghost.reveal 'sent0)
+                  sent1)
 {
   unfold (client_driver_connected d 'st0 (Ghost.reveal 'received0) (Ghost.reveal 'sent0));
   with ch buffered buffered_len.
@@ -4553,12 +4570,75 @@ fn send
       with received1 sent1.
         assert (IO.is_channel ch received1 sent1 **
                 pure (client_driver_wire_logs_match st1 received1 sent1 buffered current_buffered_len));
+      lemma_local_event_wire_lengths
+        'st0
+        st1
+        result.local_write_resp
+        CT.LocalSendApplicationData
+        (Ghost.reveal 'payload_bytes)
+        network_out_bytes
+        app_out_bytes;
+      assert (pure (Seq.equal
+        (Ghost.reveal 'sent0)
+        'st0.CS.cs_wire_log.CL.raw_sent));
+      assert (pure (Seq.equal sent1 st1.CS.cs_wire_log.CL.raw_sent));
+      assert (pure (Seq.equal
+        st1.CS.cs_wire_log.CL.raw_sent
+        (B.append
+          'st0.CS.cs_wire_log.CL.raw_sent
+          (CT.response_network_out result.local_write_resp network_out_bytes))));
+      Seq.lemma_eq_elim
+        (Ghost.reveal 'sent0)
+        'st0.CS.cs_wire_log.CL.raw_sent;
+      Seq.lemma_eq_elim
+        sent1
+        st1.CS.cs_wire_log.CL.raw_sent;
+      assert (pure (Seq.equal
+        sent1
+        (B.append
+          (Ghost.reveal 'sent0)
+          (CT.response_network_out result.local_write_resp network_out_bytes))));
+      assert (pure (client_driver_local_write_correct
+        'st0
+        st1
+        result.local_write_resp
+        CT.LocalSendApplicationData
+        (Ghost.reveal 'payload_bytes)
+        (Ghost.reveal 'sent0)
+        sent1));
+      assert (pure (result.local_write_written ==
+        result.local_write_resp.CT.network_out_len));
       fold (client_driver_connected d st1 received1 sent1);
       let ok = result.local_write_resp.CT.status = CT.StepOk;
       let wrote_all = result.local_write_written = result.local_write_resp.CT.network_out_len;
+      assert (pure (wrote_all == true));
       if (ok && wrote_all) {
+        assert (pure (ok == true));
+        assert (pure (result.local_write_resp.CT.status == CT.StepOk));
+        assert (pure (client_driver_send_status_correct
+          DriverWorkflowOk
+          result.local_write_resp));
+        assert (pure (client_driver_send_correct
+          'st0
+          st1
+          DriverWorkflowOk
+          (Ghost.reveal 'payload_bytes)
+          (Ghost.reveal 'sent0)
+          sent1));
         DriverWorkflowOk
       } else {
+        assert (pure (ok == false));
+        assert (pure (not (result.local_write_resp.CT.status == CT.StepOk)));
+        assert (pure (client_driver_send_status_correct
+          DriverWorkflowStepFailed
+          result.local_write_resp));
+        assert (pure (client_driver_send_correct
+          'st0
+          st1
+          DriverWorkflowStepFailed
+          (Ghost.reveal 'payload_bytes)
+          (Ghost.reveal 'sent0)
+          sent1));
         DriverWorkflowStepFailed
       }
     }

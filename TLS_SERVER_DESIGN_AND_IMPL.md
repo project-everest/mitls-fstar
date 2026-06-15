@@ -1057,6 +1057,11 @@ API; carrying it through the heap driver predicates is a separate API-tightening
 task if the paired-run bridge needs that fact from `client_driver_connected`
 alone.
 
+The client public `send` facade is also now non-degenerate: it exposes
+`client_driver_send_correct`, which unfolds to the verified
+`CT.local_event_end_to_end_correct` theorem for `LocalSendApplicationData` and
+an exact sent-log append equation using `CT.response_network_out`.
+
 Current extraction status: the first focused server-core KaRaMeL prefix through
 `TLS13.Impl.Server.Network` now completes. The previous KaRaMeL
 `Failure("nth")` was isolated to the large `process_network_bytes` dispatcher;
@@ -1774,6 +1779,8 @@ Checklist:
 - [ ] Sent seal and accepted received decode replay use the agreed material.
 - [x] Public client `connect` success exposes application-data control and
       installed client application read/write record keys.
+- [x] Public client `send` exposes the local application-send theorem and exact
+      sent-log append relation.
 
 ## Phase-by-phase implementation plan
 

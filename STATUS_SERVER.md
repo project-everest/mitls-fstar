@@ -117,7 +117,8 @@ input predicate. That bridge from concrete driver states to paired endpoint
 agreement remains a composition task.
 
 On the Pulse implementation side, public server `accept` and client `connect`
-now both expose application-data readiness on success. The remaining
+now both expose application-data readiness on success, and public client/server
+`send` operations expose exact local-write sent-log append facts. The remaining
 implementation-side gaps are:
 
 - build the concrete bridge from complete client/server driver states and raw IO
@@ -138,6 +139,11 @@ connected transport result: it proves application-data control and installed
 client application record keys. Focused verification for
 `TLS13.Impl.ConnectionState.Queries` and `TLS13.Impl.Client.Driver` passes, as
 do the extracted client driver slice and OpenSSL echo interop tests.
+
+The follow-on client facade slice strengthens public `send`: its postcondition
+now exposes `client_driver_send_correct`, tying the returned status to the
+verified `LocalSendApplicationData` theorem and proving the transport sent log
+is exactly the old sent log appended with the emitted TLS record bytes.
 
 ## Remaining proof gaps
 
