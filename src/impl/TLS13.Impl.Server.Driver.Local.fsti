@@ -17,6 +17,7 @@ module U8 = FStar.UInt8
 
 type server_driver_local_status =
   | ServerDriverLocalProcessed
+  | ServerDriverLocalStepFailed
   | ServerDriverLocalNotReady
   | ServerDriverLocalExternalOrUnsupported
 
@@ -213,7 +214,8 @@ fn process_ready_empty_local_action_once
               'sent
   returns status:server_driver_local_status
   ensures (match status with
-           | ServerDriverLocalProcessed ->
+           | ServerDriverLocalProcessed
+           | ServerDriverLocalStepFailed ->
              exists* st1 sent'.
                DS.server_driver_connected
                  d

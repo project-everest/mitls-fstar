@@ -1093,6 +1093,8 @@ fn select_supported_server_parameters_from_payload_if_ready_once
                  'received
                  'sent **
                pts_to payload 'payload_bytes
+           | ServerDriverLocalStepFailed ->
+               pure False
            | ServerDriverLocalExternalOrUnsupported ->
                pure False)
 {
@@ -2100,6 +2102,8 @@ fn select_and_derive_shared_secret_if_ready_once
                'credential_identity
                'received
                'sent
+           | ServerDriverLocalStepFailed ->
+             pure False
            | ServerDriverLocalExternalOrUnsupported ->
              pure False)
 {
@@ -2531,6 +2535,10 @@ fn accept_start_read_client_hello_select_derive_once
               ServerDriverAcceptSelectDeriveSelectionNotReady
             }
             ServerDriverLocalExternalOrUnsupported -> {
+              assert (pure False);
+              ServerDriverAcceptSelectDeriveInternalUnsupported
+            }
+            ServerDriverLocalStepFailed -> {
               assert (pure False);
               ServerDriverAcceptSelectDeriveInternalUnsupported
             }

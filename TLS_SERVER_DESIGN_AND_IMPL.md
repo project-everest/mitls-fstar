@@ -845,6 +845,11 @@ Current phase: **Phase 6 server buffer/event API and theorem surface**.
   record-key directions against the key schedule before advertising
   `LocalVerifyClientFinished`; the local driver now dispatches that action in
   the empty-action drain instead of stopping at `HsClientFinishedReceived`.
+- [x] Hardened empty local-action drain failure reporting. A local action whose
+  verified core response is not `StepOk` now returns
+  `ServerDriverLocalStepFailed`, stops the drain immediately, and maps to public
+  `ServerWorkflowStepFailed` instead of being reported as successfully
+  processed.
 
 ## Server driver public API and refactoring plan
 

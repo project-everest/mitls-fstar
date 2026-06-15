@@ -397,6 +397,9 @@ fn accept
           ServerDriverLocalExternalOrUnsupported -> {
             ServerWorkflowNeedExternalAction
           }
+          ServerDriverLocalStepFailed -> {
+            ServerWorkflowStepFailed
+          }
           ServerDriverLocalNotReady -> {
             let net = DN.read_process_network_until_ready d network_fuel;
             with st_net received_net sent_net net_app_out.
@@ -429,6 +432,9 @@ fn accept
                   match drain_after_client_finished.DL.server_driver_local_drain_last {
                     ServerDriverLocalExternalOrUnsupported -> {
                       ServerWorkflowNeedExternalAction
+                    }
+                    ServerDriverLocalStepFailed -> {
+                      ServerWorkflowStepFailed
                     }
                     _ -> {
                       let snapshot = DN.server_driver_control_snapshot d;

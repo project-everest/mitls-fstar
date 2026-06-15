@@ -1583,7 +1583,8 @@ fn process_ready_empty_local_action_once
                'sent
   returns status:server_driver_local_status
   ensures (match status with
-            | ServerDriverLocalProcessed ->
+            | ServerDriverLocalProcessed
+            | ServerDriverLocalStepFailed ->
               exists* st1 sent'.
                 server_driver_connected
                   d
@@ -1631,8 +1632,12 @@ fn process_ready_empty_local_action_once
     match action.ST.next_local_kind {
        ST.LocalStartServer -> {
          assert (pure (CM.can_start_server 'st0));
-         let _ = start_server_once d;
-         ServerDriverLocalProcessed
+         let resp = start_server_once d;
+         if (resp.ST.status = ST.StepOk) {
+           ServerDriverLocalProcessed
+         } else {
+           ServerDriverLocalStepFailed
+         }
        }
        ST.LocalInstallServerHandshakeTrafficKeys -> {
          assert (pure (ST.server_local_event_input_ready
@@ -1645,11 +1650,15 @@ fn process_ready_empty_local_action_once
            B.empty
            (Ghost.reveal 'certificate_chain)
            (Ghost.reveal 'credential_identity)));
-         let _ =
+         let resp =
            process_empty_local_event_and_write_once
              d
              action.ST.next_local_kind;
-         ServerDriverLocalProcessed
+         if (resp.ST.status = ST.StepOk) {
+           ServerDriverLocalProcessed
+         } else {
+           ServerDriverLocalStepFailed
+         }
        }
        ST.LocalInstallClientHandshakeTrafficKeys -> {
          assert (pure (ST.server_local_event_input_ready
@@ -1662,11 +1671,15 @@ fn process_ready_empty_local_action_once
            B.empty
            (Ghost.reveal 'certificate_chain)
            (Ghost.reveal 'credential_identity)));
-         let _ =
+         let resp =
            process_empty_local_event_and_write_once
              d
              action.ST.next_local_kind;
-         ServerDriverLocalProcessed
+         if (resp.ST.status = ST.StepOk) {
+           ServerDriverLocalProcessed
+         } else {
+           ServerDriverLocalStepFailed
+         }
        }
        ST.LocalInstallServerApplicationTrafficKeys -> {
          assert (pure (ST.server_local_event_input_ready
@@ -1679,11 +1692,15 @@ fn process_ready_empty_local_action_once
            B.empty
            (Ghost.reveal 'certificate_chain)
            (Ghost.reveal 'credential_identity)));
-         let _ =
+         let resp =
            process_empty_local_event_and_write_once
              d
              action.ST.next_local_kind;
-         ServerDriverLocalProcessed
+         if (resp.ST.status = ST.StepOk) {
+           ServerDriverLocalProcessed
+         } else {
+           ServerDriverLocalStepFailed
+         }
        }
        ST.LocalInstallClientApplicationTrafficKeys -> {
          assert (pure (ST.server_local_event_input_ready
@@ -1696,11 +1713,15 @@ fn process_ready_empty_local_action_once
            B.empty
            (Ghost.reveal 'certificate_chain)
            (Ghost.reveal 'credential_identity)));
-         let _ =
+         let resp =
            process_empty_local_event_and_write_once
              d
              action.ST.next_local_kind;
-         ServerDriverLocalProcessed
+         if (resp.ST.status = ST.StepOk) {
+           ServerDriverLocalProcessed
+         } else {
+           ServerDriverLocalStepFailed
+         }
        }
        ST.LocalSendEncryptedExtensions -> {
          assert (pure (ST.server_local_event_input_ready
@@ -1713,12 +1734,16 @@ fn process_ready_empty_local_action_once
            B.empty
            (Ghost.reveal 'certificate_chain)
            (Ghost.reveal 'credential_identity)));
-         let _ =
+         let resp =
            process_empty_local_event_exact_network_len_and_write_once
              d
              action.ST.next_local_kind
              28sz;
-         ServerDriverLocalProcessed
+         if (resp.ST.status = ST.StepOk) {
+           ServerDriverLocalProcessed
+         } else {
+           ServerDriverLocalStepFailed
+         }
        }
        ST.LocalSendCertificate -> {
          assert (pure (action.ST.next_local_payload == ST.LocalPayloadNone));
@@ -1784,9 +1809,13 @@ fn process_ready_empty_local_action_once
            B.empty
            (Ghost.reveal 'certificate_chain)
            (Ghost.reveal 'credential_identity)));
-         let _ =
+         let resp =
            process_send_certificate_exact_and_write_once d;
-         ServerDriverLocalProcessed
+         if (resp.ST.status = ST.StepOk) {
+           ServerDriverLocalProcessed
+         } else {
+           ServerDriverLocalStepFailed
+         }
        }
        ST.LocalSignCertificateVerify -> {
          assert (pure (action.ST.next_local_payload == ST.LocalPayloadNone));
@@ -1808,11 +1837,15 @@ fn process_ready_empty_local_action_once
            B.empty
            (Ghost.reveal 'certificate_chain)
            (Ghost.reveal 'credential_identity)));
-         let _ =
+         let resp =
            process_empty_local_event_and_write_once
              d
              action.ST.next_local_kind;
-         ServerDriverLocalProcessed
+         if (resp.ST.status = ST.StepOk) {
+           ServerDriverLocalProcessed
+         } else {
+           ServerDriverLocalStepFailed
+         }
        }
        ST.LocalSendCertificateVerify -> {
          assert (pure (ST.server_local_event_input_ready
@@ -1827,9 +1860,13 @@ fn process_ready_empty_local_action_once
            (Ghost.reveal 'credential_identity)));
          assert (pure (Some?
            'st0.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify));
-         let _ =
+         let resp =
            process_send_certificate_verify_exact_and_write_once d;
-         ServerDriverLocalProcessed
+         if (resp.ST.status = ST.StepOk) {
+           ServerDriverLocalProcessed
+         } else {
+           ServerDriverLocalStepFailed
+         }
        }
        ST.LocalSendServerFinished -> {
          assert (pure (ST.server_local_event_input_ready
@@ -1842,12 +1879,16 @@ fn process_ready_empty_local_action_once
            B.empty
            (Ghost.reveal 'certificate_chain)
            (Ghost.reveal 'credential_identity)));
-         let _ =
+         let resp =
            process_empty_local_event_exact_network_len_and_write_once
              d
              action.ST.next_local_kind
              58sz;
-         ServerDriverLocalProcessed
+         if (resp.ST.status = ST.StepOk) {
+           ServerDriverLocalProcessed
+         } else {
+           ServerDriverLocalStepFailed
+         }
        }
        ST.LocalVerifyClientFinished -> {
          assert (pure (ST.server_local_event_input_ready
@@ -1860,11 +1901,15 @@ fn process_ready_empty_local_action_once
            B.empty
            (Ghost.reveal 'certificate_chain)
            (Ghost.reveal 'credential_identity)));
-         let _ =
+         let resp =
            process_empty_local_event_and_write_once
              d
              action.ST.next_local_kind;
-         ServerDriverLocalProcessed
+         if (resp.ST.status = ST.StepOk) {
+           ServerDriverLocalProcessed
+         } else {
+           ServerDriverLocalStepFailed
+         }
        }
        _ -> {
          ServerDriverLocalExternalOrUnsupported
@@ -1918,6 +1963,13 @@ fn rec drain_ready_empty_local_actions
          let next_fuel = SZ.sub fuel 1sz;
          assert (pure (SZ.v next_fuel < SZ.v fuel));
          drain_ready_empty_local_actions d next_fuel
+       }
+       ServerDriverLocalStepFailed -> {
+         let result:server_driver_local_drain_result = {
+          server_driver_local_drain_last = ServerDriverLocalStepFailed;
+          server_driver_local_drain_exhausted = false;
+         };
+         result
        }
        ServerDriverLocalNotReady -> {
          let result:server_driver_local_drain_result = {

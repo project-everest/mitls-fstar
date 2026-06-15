@@ -356,6 +356,8 @@ fn select_supported_server_parameters_from_payload_if_ready_once
                    'received
                    'sent **
                  pts_to payload 'payload_bytes
+           | DL.ServerDriverLocalStepFailed ->
+                 pure False
            | DL.ServerDriverLocalExternalOrUnsupported ->
                  pure False)
 
@@ -552,6 +554,8 @@ fn select_and_derive_shared_secret_if_ready_once
                'credential_identity
                'received
                'sent
+           | DL.ServerDriverLocalStepFailed ->
+             pure False
            | DL.ServerDriverLocalExternalOrUnsupported ->
              pure False)
 
