@@ -149,6 +149,71 @@ noeq type server_driver = {
   server_driver_app_out: V.vec U8.t;
 }
 
+type server_driver_transport_status =
+  | ServerDriverTransportOk
+  | ServerDriverListenFailed
+  | ServerDriverAcceptFailed
+
+type server_driver_local_status =
+  | ServerDriverLocalProcessed
+  | ServerDriverLocalNotReady
+  | ServerDriverLocalExternalOrUnsupported
+
+type server_driver_network_loop_result = {
+  server_driver_network_loop_last: ST.server_buffer_response;
+  server_driver_network_loop_exhausted: bool;
+}
+
+type server_driver_local_drain_result = {
+  server_driver_local_drain_last: server_driver_local_status;
+  server_driver_local_drain_exhausted: bool;
+}
+
+type server_driver_client_hello_wait_result = {
+  server_driver_client_hello_wait_last: ST.server_buffer_response;
+  server_driver_client_hello_wait_ready: bool;
+  server_driver_client_hello_wait_exhausted: bool;
+}
+
+type server_driver_accept_client_hello_result =
+  | ServerDriverAcceptClientHelloTransportOk of server_driver_client_hello_wait_result
+  | ServerDriverAcceptClientHelloListenFailed
+  | ServerDriverAcceptClientHelloAcceptFailed
+
+type server_driver_accept_select_derive_result =
+  | ServerDriverAcceptSelectDeriveOk
+  | ServerDriverAcceptSelectDeriveClientHelloWait of server_driver_client_hello_wait_result
+  | ServerDriverAcceptSelectDeriveMaterialFailed
+  | ServerDriverAcceptSelectDeriveSelectionNotReady
+  | ServerDriverAcceptSelectDeriveInternalUnsupported
+  | ServerDriverAcceptSelectDeriveListenFailed
+  | ServerDriverAcceptSelectDeriveAcceptFailed
+
+type server_driver_accept_server_hello_result =
+  | ServerDriverAcceptServerHelloOk
+  | ServerDriverAcceptServerHelloClientHelloWait of server_driver_client_hello_wait_result
+  | ServerDriverAcceptServerHelloMaterialFailed
+  | ServerDriverAcceptServerHelloSelectionNotReady
+  | ServerDriverAcceptServerHelloDeriveFailed
+  | ServerDriverAcceptServerHelloSendNotReady
+  | ServerDriverAcceptServerHelloListenFailed
+  | ServerDriverAcceptServerHelloAcceptFailed
+
+type server_driver_accept_server_hello_drain_result =
+  | ServerDriverAcceptServerHelloDrainOk of server_driver_local_drain_result
+  | ServerDriverAcceptServerHelloDrainClientHelloWait of server_driver_client_hello_wait_result
+  | ServerDriverAcceptServerHelloDrainMaterialFailed
+  | ServerDriverAcceptServerHelloDrainSelectionNotReady
+  | ServerDriverAcceptServerHelloDrainDeriveFailed
+  | ServerDriverAcceptServerHelloDrainSendNotReady
+  | ServerDriverAcceptServerHelloDrainListenFailed
+  | ServerDriverAcceptServerHelloDrainAcceptFailed
+
+type server_driver_select_derive_server_hello_result =
+  | ServerDriverSelectDeriveServerHelloOk
+  | ServerDriverSelectDeriveServerHelloDeriveFailed
+  | ServerDriverSelectDeriveServerHelloSendNotReady
+
 noextract
 let logged_received_bytes_accounted
   (logged:B.bytes)
@@ -1750,6 +1815,15 @@ fn close_transport_once
     (IO.is_channel concrete_ch 'received 'sent);
   IO.close concrete_ch;
   Box.(d.server_driver_channel := no_channel);
+  fold (server_driver_closed d 'st0 'certificate_chain 'credential_identity);
+}
+
+fn close_live_without_transport
+  (d:server_driver)
+  requires server_driver_live d 'st0 'certificate_chain 'credential_identity
+  ensures server_driver_closed d 'st0 'certificate_chain 'credential_identity
+{
+  unfold (server_driver_live d 'st0 'certificate_chain 'credential_identity);
   fold (server_driver_closed d 'st0 'certificate_chain 'credential_identity);
 }
 
@@ -6512,4 +6586,260 @@ fn verify_client_finished_once
   process_empty_local_event_and_write_once
     d
     ST.LocalVerifyClientFinished
+}
+
+fn accept
+  (d:server_driver)
+  (bind_host:array U8.t)
+  (bind_host_len:SZ.t)
+  (port:U16.t)
+  (local_fuel:SZ.t)
+  (network_fuel:SZ.t)
+  requires server_driver_live d 'st0 'certificate_chain 'credential_identity **
+           pts_to bind_host 'bind_host_bytes **
+           pure (B.length 'bind_host_bytes == SZ.v bind_host_len /\
+                 CM.can_start_server 'st0 /\
+                 Some? 'st0.CS.cs_model.CS.model_config.CS.config_server /\
+                 (match 'st0.CS.cs_model.CS.model_config.CS.config_server with
+                  | Some cfg ->
+                    CS.cipher_suite_offered
+                      cfg.CS.server_supported_cipher_suites
+                      T.TLS_CHACHA20_POLY1305_SHA256 /\
+                    CS.named_group_offered
+                      cfg.CS.server_supported_groups
+                      T.X25519 /\
+                    CS.signature_scheme_offered
+                      cfg.CS.server_allowed_signature_schemes
+                      T.RsaPssRsaeSha256 /\
+                    cfg.CS.server_sni_policy == None
+                  | None -> False))
+  returns status:server_workflow_status
+  ensures exists* st1.
+          pts_to bind_host 'bind_host_bytes **
+            server_driver_closed d st1 'certificate_chain 'credential_identity **
+            pure (status <> ServerWorkflowOk)
+{
+  let result =
+    accept_start_read_client_hello_select_derive_send_server_hello_drain_empty_once
+      d
+      bind_host
+      bind_host_len
+      port
+      network_fuel
+      local_fuel;
+  match result {
+    ServerDriverAcceptServerHelloDrainListenFailed -> {
+      close_live_without_transport d;
+      ServerWorkflowStepFailed
+    }
+    ServerDriverAcceptServerHelloDrainAcceptFailed -> {
+      close_live_without_transport d;
+      ServerWorkflowStepFailed
+    }
+    ServerDriverAcceptServerHelloDrainClientHelloWait wait -> {
+      with st1 received sent.
+        assert (server_driver_connected
+          d
+          st1
+          'certificate_chain
+          'credential_identity
+          received
+          sent);
+      close_transport_once d;
+      if (wait.server_driver_client_hello_wait_exhausted) {
+        ServerWorkflowExhausted
+      } else {
+        ServerWorkflowNeedMoreInput
+      }
+    }
+    ServerDriverAcceptServerHelloDrainMaterialFailed -> {
+      with st1 received sent.
+        assert (server_driver_connected
+          d
+          st1
+          'certificate_chain
+          'credential_identity
+          received
+          sent);
+      close_transport_once d;
+      ServerWorkflowStepFailed
+    }
+    ServerDriverAcceptServerHelloDrainSelectionNotReady -> {
+      with st1 received sent.
+        assert (server_driver_connected
+          d
+          st1
+          'certificate_chain
+          'credential_identity
+          received
+          sent);
+      close_transport_once d;
+      ServerWorkflowStepFailed
+    }
+    ServerDriverAcceptServerHelloDrainDeriveFailed -> {
+      with st1 received sent.
+        assert (server_driver_connected
+          d
+          st1
+          'certificate_chain
+          'credential_identity
+          received
+          sent);
+      close_transport_once d;
+      ServerWorkflowStepFailed
+    }
+    ServerDriverAcceptServerHelloDrainSendNotReady -> {
+      with st1 received sent.
+        assert (server_driver_connected
+          d
+          st1
+          'certificate_chain
+          'credential_identity
+          received
+          sent);
+      close_transport_once d;
+      ServerWorkflowStepFailed
+    }
+    ServerDriverAcceptServerHelloDrainOk drain -> {
+      with st1 received sent.
+        assert (server_driver_connected
+          d
+          st1
+          'certificate_chain
+          'credential_identity
+          received
+          sent);
+      close_transport_once d;
+      if (drain.server_driver_local_drain_exhausted) {
+        ServerWorkflowExhausted
+      } else {
+        match drain.server_driver_local_drain_last {
+          ServerDriverLocalExternalOrUnsupported -> {
+            ServerWorkflowNeedExternalAction
+          }
+          ServerDriverLocalNotReady -> {
+            ServerWorkflowNeedMoreInput
+          }
+          ServerDriverLocalProcessed -> {
+            ServerWorkflowNeedMoreInput
+          }
+        }
+      }
+    }
+  }
+}
+
+fn send
+  (d:server_driver)
+  (payload:array U8.t)
+  (payload_len:SZ.t)
+  requires server_driver_connected
+              d
+              'st0
+              'certificate_chain
+              'credential_identity
+              'received
+              'sent **
+           pts_to payload 'payload_bytes **
+           pure (B.length 'payload_bytes == SZ.v payload_len /\
+                 ST.server_local_event_input_ready
+                   'st0
+                   ST.LocalSendApplicationData
+                   (Ghost.reveal 'payload_bytes))
+  returns status:server_workflow_status
+  ensures exists* st1 sent'.
+          server_driver_connected
+            d
+            st1
+            'certificate_chain
+            'credential_identity
+            'received
+            sent' **
+          pts_to payload 'payload_bytes **
+          pure (status == ServerWorkflowOk \/
+                status == ServerWorkflowStepFailed)
+{
+  let resp = send_application_data_once d payload payload_len;
+  if (resp.ST.status = ST.StepOk) {
+    ServerWorkflowOk
+  } else {
+    ServerWorkflowStepFailed
+  }
+}
+
+fn receive
+  (d:server_driver)
+  (out:array U8.t)
+  (out_len:SZ.t)
+  (local_fuel:SZ.t)
+  (network_fuel:SZ.t)
+  requires server_driver_connected
+              d
+              'st0
+              'certificate_chain
+              'credential_identity
+              'received
+              'sent **
+           pts_to out 'out_bytes **
+           pure (B.length 'out_bytes == SZ.v out_len)
+  returns result:server_receive_result
+  ensures exists* st1 received' sent'.
+          server_driver_connected
+            d
+            st1
+            'certificate_chain
+            'credential_identity
+            received'
+            sent' **
+          pts_to out 'out_bytes **
+          pure (result.server_receive_len == 0sz /\
+                SZ.v result.server_receive_len <= SZ.v out_len)
+{
+  let loop = read_process_network_until_ready d network_fuel;
+  if (loop.server_driver_network_loop_exhausted) {
+    {
+      server_receive_status = ServerWorkflowExhausted;
+      server_receive_len = 0sz;
+    }
+  } else {
+    match loop.server_driver_network_loop_last.ST.response.ST.status {
+      ST.StepOk -> {
+        {
+          server_receive_status = ServerWorkflowOk;
+          server_receive_len = 0sz;
+        }
+      }
+      ST.NeedMoreInput -> {
+        {
+          server_receive_status = ServerWorkflowNeedMoreInput;
+          server_receive_len = 0sz;
+        }
+      }
+      _ -> {
+        {
+          server_receive_status = ServerWorkflowStepFailed;
+          server_receive_len = 0sz;
+        }
+      }
+    }
+  }
+}
+
+fn close
+  (d:server_driver)
+  (wait_for_peer:bool)
+  (network_fuel:SZ.t)
+  requires server_driver_connected
+              d
+              'st0
+              'certificate_chain
+              'credential_identity
+              'received
+              'sent
+  returns status:server_workflow_status
+  ensures server_driver_closed d 'st0 'certificate_chain 'credential_identity **
+          pure (status == ServerWorkflowClosed)
+{
+  close_transport_once d;
+  ServerWorkflowClosed
 }

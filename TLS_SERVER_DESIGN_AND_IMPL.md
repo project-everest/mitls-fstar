@@ -834,10 +834,11 @@ Current phase: **Phase 6 server buffer/event API and theorem surface**.
 The server driver must converge to the same public-interface style as
 `TLS13.Impl.Client.Driver`: a small facade for consumers and extraction, with
 internal proof/development slices hidden behind smaller implementation modules.
-The current `TLS13.Impl.Server.Driver.fsti` is a temporary proof-development
-surface, not the final public API: it exposes many intermediate transport,
-network, local-action, selection, derivation, ServerHello, and credential helper
-steps that should be internal.
+The current `TLS13.Impl.Server.Driver.fsti` has been narrowed to the planned
+public facade shape. The intermediate transport, network, local-action,
+selection, derivation, ServerHello, and credential helper result types and
+proof predicates now belong in the implementation and should be moved behind
+small internal module boundaries next.
 
 The final public `TLS13.Impl.Server.Driver.fsti` should expose only:
 
@@ -893,11 +894,15 @@ fn close ...
 `accept` is the server analogue of the client driver's `connect`: it listens,
 accepts one TCP channel, completes the supported-profile handshake as far as
 application-data readiness or a precise failure/exhaustion status, and preserves
-the server driver IO-history invariant. `send`, `receive`, and `close` should
-mirror the client driver's public API shape. The facade may expose one
-noextract predicate such as `server_driver_application_ready st` if callers need
-the successful `accept` result to state that application-data control and
-application traffic keys are installed.
+the server driver IO-history invariant. The first facade-freeze implementation
+is deliberately honest: because the full server handshake is not complete yet,
+public `accept` closes the partial transport and returns a non-OK status rather
+than claiming handshake completion. `send`, `receive`, and `close` now have the
+client-driver public API shape; `receive` is still a placeholder over the
+network-processing loop and does not yet copy delivered application bytes to the
+caller buffer. The final `accept` may expose one noextract predicate such as
+`server_driver_application_ready st` if callers need the successful result to
+state that application-data control and application traffic keys are installed.
 
 Move these helper surfaces out of the public driver interface:
 
@@ -953,7 +958,7 @@ into these modules, verifying each interface before its implementation:
 
 Critical-path checklist for this refactor:
 
-- [ ] Freeze the final public `TLS13.Impl.Server.Driver.fsti` shape above and
+- [x] Freeze the final public `TLS13.Impl.Server.Driver.fsti` shape above and
       stop exporting new temporary proof slices from the public facade.
 - [ ] Move state predicates and projection lemmas into
       `TLS13.Impl.Server.Driver.State`.
