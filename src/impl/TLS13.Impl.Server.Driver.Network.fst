@@ -383,6 +383,88 @@ let lemma_slice_append_full
     Seq.index s i);
   Seq.lemma_eq_intro (B.append (Seq.slice s 0 n) (Seq.slice s n (B.length s))) s
 
+let lemma_read_append_buffer_matches_raw_prefix_index
+  (raw_after_read raw raw_tail_after buffered read_chunk:B.bytes)
+  (current_len read_len total_len:nat)
+  (k:nat { k < total_len })
+  : Lemma
+    (requires
+      B.length buffered == current_len /\
+      B.length read_chunk == read_len /\
+      B.length raw >= current_len /\
+      B.length raw_tail_after >= read_len /\
+      B.length raw_after_read >= total_len /\
+      total_len == current_len + read_len /\
+      Seq.equal buffered (Seq.slice raw 0 current_len) /\
+      Seq.equal read_chunk (Seq.slice raw_tail_after 0 read_len) /\
+      (forall (i:nat). i < current_len ==>
+        Seq.index raw_after_read i == Seq.index raw i) /\
+      (forall (i:nat). i < read_len ==>
+        Seq.index raw_after_read (current_len + i) ==
+        Seq.index raw_tail_after i))
+    (ensures
+      Seq.index (B.append buffered read_chunk) k ==
+      Seq.index (Seq.slice raw_after_read 0 total_len) k)
+  =
+  Seq.lemma_eq_elim buffered (Seq.slice raw 0 current_len);
+  Seq.lemma_eq_elim read_chunk (Seq.slice raw_tail_after 0 read_len);
+  Seq.lemma_len_slice raw_after_read 0 total_len;
+  if k < current_len then (
+    Seq.lemma_index_app1 buffered read_chunk k;
+    Seq.lemma_index_slice raw 0 current_len k;
+    Seq.lemma_index_slice raw_after_read 0 total_len k
+  ) else (
+    assert (current_len <= k);
+    assert (k - current_len < read_len);
+    assert (current_len + (k - current_len) == k);
+    Seq.lemma_index_app2 buffered read_chunk k;
+    Seq.lemma_index_slice raw_tail_after 0 read_len (k - current_len);
+    Seq.lemma_index_slice raw_after_read 0 total_len k
+  )
+
+let lemma_read_append_buffer_matches_raw_prefix
+  (raw_after_read raw raw_tail_after buffered read_chunk:B.bytes)
+  (current_len read_len total_len:nat)
+  : Lemma
+    (requires
+      B.length buffered == current_len /\
+      B.length read_chunk == read_len /\
+      B.length raw >= current_len /\
+      B.length raw_tail_after >= read_len /\
+      B.length raw_after_read >= total_len /\
+      total_len == current_len + read_len /\
+      Seq.equal buffered (Seq.slice raw 0 current_len) /\
+      Seq.equal read_chunk (Seq.slice raw_tail_after 0 read_len) /\
+      (forall (i:nat). i < current_len ==>
+        Seq.index raw_after_read i == Seq.index raw i) /\
+      (forall (i:nat). i < read_len ==>
+        Seq.index raw_after_read (current_len + i) ==
+        Seq.index raw_tail_after i))
+    (ensures
+      Seq.equal (B.append buffered read_chunk)
+        (Seq.slice raw_after_read 0 total_len))
+  =
+  Seq.lemma_len_append buffered read_chunk;
+  Seq.lemma_len_slice raw_after_read 0 total_len;
+  let index_proof (k:nat { k < Seq.length (B.append buffered read_chunk) })
+    : Lemma
+      (Seq.index (B.append buffered read_chunk) k ==
+       Seq.index (Seq.slice raw_after_read 0 total_len) k)
+    =
+    lemma_read_append_buffer_matches_raw_prefix_index
+      raw_after_read raw raw_tail_after buffered read_chunk
+      current_len read_len total_len k
+  in
+  FStar.Classical.forall_intro
+    #(k:nat { k < Seq.length (B.append buffered read_chunk) })
+    #(fun k ->
+      Seq.index (B.append buffered read_chunk) k ==
+      Seq.index (Seq.slice raw_after_read 0 total_len) k)
+    index_proof;
+  Seq.lemma_eq_intro
+    (B.append buffered read_chunk)
+    (Seq.slice raw_after_read 0 total_len)
+
 let lemma_server_network_wire_accounting
   (st0:CS.connection_state)
   (st1:CS.connection_state)

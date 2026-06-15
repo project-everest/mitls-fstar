@@ -113,6 +113,51 @@ val lemma_slice_append_full
         (B.append (Seq.slice s 0 n) (Seq.slice s n (B.length s)))
         s)
 
+val lemma_read_append_buffer_matches_raw_prefix_index
+  (raw_after_read raw raw_tail_after buffered read_chunk:B.bytes)
+  (current_len read_len total_len:nat)
+  (k:nat { k < total_len })
+  : Lemma
+    (requires
+      B.length buffered == current_len /\
+      B.length read_chunk == read_len /\
+      B.length raw >= current_len /\
+      B.length raw_tail_after >= read_len /\
+      B.length raw_after_read >= total_len /\
+      total_len == current_len + read_len /\
+      Seq.equal buffered (Seq.slice raw 0 current_len) /\
+      Seq.equal read_chunk (Seq.slice raw_tail_after 0 read_len) /\
+      (forall (i:nat). i < current_len ==>
+        Seq.index raw_after_read i == Seq.index raw i) /\
+      (forall (i:nat). i < read_len ==>
+        Seq.index raw_after_read (current_len + i) ==
+        Seq.index raw_tail_after i))
+    (ensures
+      Seq.index (B.append buffered read_chunk) k ==
+      Seq.index (Seq.slice raw_after_read 0 total_len) k)
+
+val lemma_read_append_buffer_matches_raw_prefix
+  (raw_after_read raw raw_tail_after buffered read_chunk:B.bytes)
+  (current_len read_len total_len:nat)
+  : Lemma
+    (requires
+      B.length buffered == current_len /\
+      B.length read_chunk == read_len /\
+      B.length raw >= current_len /\
+      B.length raw_tail_after >= read_len /\
+      B.length raw_after_read >= total_len /\
+      total_len == current_len + read_len /\
+      Seq.equal buffered (Seq.slice raw 0 current_len) /\
+      Seq.equal read_chunk (Seq.slice raw_tail_after 0 read_len) /\
+      (forall (i:nat). i < current_len ==>
+        Seq.index raw_after_read i == Seq.index raw i) /\
+      (forall (i:nat). i < read_len ==>
+        Seq.index raw_after_read (current_len + i) ==
+        Seq.index raw_tail_after i))
+    (ensures
+      Seq.equal (B.append buffered read_chunk)
+        (Seq.slice raw_after_read 0 total_len))
+
 val lemma_server_network_wire_accounting
   (st0:CS.connection_state)
   (st1:CS.connection_state)
