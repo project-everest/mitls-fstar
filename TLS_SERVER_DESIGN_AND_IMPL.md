@@ -1072,6 +1072,13 @@ it exposes `client_driver_close_correct`, proving that shutdown is justified by
 the verified `LocalSendCloseNotify` transition and the exact sent-log append for
 the emitted close_notify record before the TCP channel is closed.
 
+Both public driver facades now also expose exact transport sent-history to
+protocol sent-log projections on connected success paths:
+`client_driver_sent_log_exact` and `server_driver_sent_log_exact`. This gives the
+paired-run bridge one side of the concrete transport/protocol log obligation
+directly; exact received-log matching remains harder because connected drivers
+may retain read-ahead and may account for rejected consumed bytes.
+
 The first audit-facing driver-pair bridge now lives in
 `TLS13.Impl.Driver.Pairing`. Its
 `lemma_client_server_driver_key_material_agrees` theorem packages the public

@@ -7,6 +7,7 @@ open Pulse.Lib.Array.PtsTo
 
 module B = TLS13.Bytes
 module Bounds = TLS13.Impl.ConnectionState.Bounds
+module CL = TLS13.ConnectionLog
 module CS = TLS13.Spec.ConnectionState
 module CM = TLS13.Impl.ConnectionState.Model
 module CR = TLS13.Impl.ConnectionState.Repr
@@ -197,6 +198,13 @@ let server_driver_application_ready
   CS.application_record_keys_installed_for_role CS.ServerEndpoint st.CS.cs_model
 
 noextract
+let server_driver_sent_log_exact
+  (st:CS.connection_state)
+  (sent:B.bytes)
+  : prop =
+  Seq.equal sent st.CS.cs_wire_log.CL.raw_sent
+
+noextract
 let server_driver_close_correct
   (st0:CS.connection_state)
   (st1:CS.connection_state)
@@ -291,7 +299,8 @@ fn accept
                  'credential_identity
                  received
                  sent **
-               pure (server_driver_application_ready st1)
+               pure (server_driver_application_ready st1 /\
+                     server_driver_sent_log_exact st1 sent)
            | _ ->
              exists* st1 received sent.
                server_driver_connected
@@ -335,7 +344,8 @@ fn send
             status
             (Ghost.reveal 'payload_bytes)
             (Ghost.reveal 'sent)
-            sent')
+            sent' /\
+            server_driver_sent_log_exact st1 sent')
 
 fn receive
   (d:server_driver)
@@ -364,6 +374,7 @@ fn receive
           pts_to out out_bytes **
           pure (B.length out_bytes == SZ.v out_len /\
                 SZ.v result.server_receive_len <= SZ.v out_len /\
+                server_driver_sent_log_exact st1 sent' /\
                 (exists loop app_out.
                   server_driver_receive_correct
                     'st0

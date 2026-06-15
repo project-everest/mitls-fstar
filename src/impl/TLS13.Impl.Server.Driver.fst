@@ -316,7 +316,8 @@ fn accept
                  'credential_identity
                  received
                  sent **
-               pure (server_driver_application_ready st1)
+               pure (server_driver_application_ready st1 /\
+                     server_driver_sent_log_exact st1 sent)
            | _ ->
              exists* st1 received sent.
                server_driver_connected
@@ -503,6 +504,7 @@ fn accept
                           assert (pure (CS.application_record_keys_installed_for_role
                             CS.ServerEndpoint
                             st3.CS.cs_model));
+                          assert (pure (server_driver_sent_log_exact st3 sent3));
                           fold (server_driver_connected
                             d
                             st3
@@ -575,9 +577,38 @@ fn send
             status
             (Ghost.reveal 'payload_bytes)
             (Ghost.reveal 'sent)
-            sent')
+            sent' /\
+            server_driver_sent_log_exact st1 sent')
 {
   let resp = send_application_data_once d payload payload_len;
+  with st1 sent'.
+    assert (server_driver_connected
+      d
+      st1
+      'certificate_chain
+      'credential_identity
+      'received
+      sent');
+  unfold (server_driver_connected
+    d
+    st1
+    'certificate_chain
+    'credential_identity
+    (Ghost.reveal 'received)
+    sent');
+  with ch buffered buffered_len.
+    assert (Box.pts_to d.server_driver_channel (Some ch) **
+            IO.is_channel ch (Ghost.reveal 'received) sent' **
+            server_driver_buffers d buffered buffered_len **
+            pure (server_driver_wire_logs_match st1 (Ghost.reveal 'received) sent' buffered buffered_len));
+  assert (pure (server_driver_sent_log_exact st1 sent'));
+  fold (server_driver_connected
+    d
+    st1
+    'certificate_chain
+    'credential_identity
+    (Ghost.reveal 'received)
+    sent');
   if (resp.ST.status = ST.StepOk) {
     ServerWorkflowOk
   } else {
@@ -612,6 +643,7 @@ fn receive
           pts_to out out_bytes **
           pure (B.length out_bytes == SZ.v out_len /\
                 SZ.v result.server_receive_len <= SZ.v out_len /\
+                server_driver_sent_log_exact st1 sent' /\
                 (exists loop app_out.
                   server_driver_receive_correct
                     'st0
@@ -649,6 +681,28 @@ fn receive
             (Ghost.reveal 'sent)
             sent'
             loop_app_out));
+  unfold (server_driver_connected_with_app_out
+    d
+    st1
+    'certificate_chain
+    'credential_identity
+    received'
+    sent'
+    loop_app_out);
+  with ch buffered buffered_len.
+    assert (Box.pts_to d.server_driver_channel (Some ch) **
+            IO.is_channel ch received' sent' **
+            server_driver_buffers_with_app_out d buffered buffered_len loop_app_out **
+            pure (server_driver_wire_logs_match st1 received' sent' buffered buffered_len));
+  assert (pure (server_driver_sent_log_exact st1 sent'));
+  fold (server_driver_connected_with_app_out
+    d
+    st1
+    'certificate_chain
+    'credential_identity
+    received'
+    sent'
+    loop_app_out);
   if (loop.server_driver_network_loop_exhausted) {
     let result = {
       server_receive_status = ServerWorkflowExhausted;

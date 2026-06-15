@@ -122,9 +122,10 @@ On the Pulse implementation side, public server `accept` and client `connect`
 now both expose application-data readiness on success, public client/server
 `send` operations expose exact local-write sent-log append facts, public
 client/server `receive` operations expose exact successful app-output copyout
-facts, and public client/server `close` operations expose verified
-`close_notify` local-write facts before transport shutdown. The remaining
-implementation-side gaps are:
+facts, public connected send/receive/accept success results expose exact
+transport sent-history/protocol sent-log equality, and public client/server
+`close` operations expose verified `close_notify` local-write facts before
+transport shutdown. The remaining implementation-side gaps are:
 
 - prove the exact transport/protocol log obligations named by
   `TLS13.Impl.Driver.Pairing.paired_driver_transport_logs_exact` from complete

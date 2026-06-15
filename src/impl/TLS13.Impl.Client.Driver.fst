@@ -4386,7 +4386,8 @@ fn connect
            | DriverWorkflowOk ->
              exists* received sent.
                client_driver_connected d st1 received sent **
-               pure (client_driver_application_ready st1)
+               pure (client_driver_application_ready st1 /\
+                     client_driver_sent_log_exact st1 sent)
            | _ ->
              client_driver_closed d st1)
 {
@@ -4506,6 +4507,7 @@ fn connect
          with received sent.
            assert (IO.is_channel ch received sent **
                    pure (client_driver_wire_logs_match st1 received sent buffered_after result.driver_workflow_rx_len));
+         assert (pure (client_driver_sent_log_exact st1 sent));
          assert (pure (st1.CS.cs_model.CS.model_control == CS.ControlApplicationData));
          rewrite (C.connection_exactly d.client_driver_client st1) as
            (CR.connection_exactly d.client_driver_client st1);
@@ -4574,7 +4576,8 @@ fn send
                   status
                   (Ghost.reveal 'payload_bytes)
                   (Ghost.reveal 'sent0)
-                  sent1)
+                  sent1 /\
+                client_driver_sent_log_exact st1 sent1)
 {
   unfold (client_driver_connected d 'st0 (Ghost.reveal 'received0) (Ghost.reveal 'sent0));
   with ch buffered buffered_len.
@@ -4682,6 +4685,7 @@ fn send
         (Ghost.reveal 'sent0)
         'st0.CS.cs_wire_log.CL.raw_sent));
       assert (pure (Seq.equal sent1 st1.CS.cs_wire_log.CL.raw_sent));
+      assert (pure (client_driver_sent_log_exact st1 sent1));
       assert (pure (Seq.equal
         st1.CS.cs_wire_log.CL.raw_sent
         (B.append
@@ -4760,6 +4764,7 @@ fn receive
           pts_to out out_bytes **
           pure (B.length out_bytes == SZ.v out_len /\
                 SZ.v result.client_receive_len <= SZ.v out_len /\
+                client_driver_sent_log_exact st1 sent1 /\
                 (exists workflow_status resp app_out.
                   client_driver_receive_correct
                     result
@@ -4954,6 +4959,7 @@ fn receive
         with received1 sent1.
           assert (IO.is_channel ch received1 sent1 **
                   pure (client_driver_wire_logs_match st1 received1 sent1 workflow_buffered workflow.driver_workflow_rx_len));
+        assert (pure (client_driver_sent_log_exact st1 sent1));
         fold (client_driver_connected d st1 received1 sent1);
         receive_result
       } else {
@@ -5009,6 +5015,7 @@ fn receive
         with received1 sent1.
           assert (IO.is_channel ch received1 sent1 **
                   pure (client_driver_wire_logs_match st1 received1 sent1 workflow_buffered workflow.driver_workflow_rx_len));
+        assert (pure (client_driver_sent_log_exact st1 sent1));
         fold (client_driver_connected d st1 received1 sent1);
         receive_result
       }

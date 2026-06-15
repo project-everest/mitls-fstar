@@ -65,6 +65,13 @@ let client_driver_application_ready
   CS.application_record_keys_installed_for_role CS.ClientEndpoint st.CS.cs_model
 
 noextract
+let client_driver_sent_log_exact
+  (st:CS.connection_state)
+  (sent:B.bytes)
+  : prop =
+  Seq.equal sent st.CS.cs_wire_log.CL.raw_sent
+
+noextract
 let client_driver_local_write_correct
   (st0:CS.connection_state)
   (st1:CS.connection_state)
@@ -269,7 +276,8 @@ fn connect
            | DriverWorkflowOk ->
              exists* received sent.
                client_driver_connected d st1 received sent **
-               pure (client_driver_application_ready st1)
+               pure (client_driver_application_ready st1 /\
+                     client_driver_sent_log_exact st1 sent)
            | _ ->
              client_driver_closed d st1)
 
@@ -294,7 +302,8 @@ fn send
                   status
                   (Ghost.reveal 'payload_bytes)
                   (Ghost.reveal 'sent0)
-                  sent1)
+                  sent1 /\
+                client_driver_sent_log_exact st1 sent1)
 
 fn receive
   (d:client_driver)
@@ -311,6 +320,7 @@ fn receive
           pts_to out out_bytes **
           pure (B.length out_bytes == SZ.v out_len /\
                 SZ.v result.client_receive_len <= SZ.v out_len /\
+                client_driver_sent_log_exact st1 sent1 /\
                 (exists workflow_status resp app_out.
                   client_driver_receive_correct
                     result
