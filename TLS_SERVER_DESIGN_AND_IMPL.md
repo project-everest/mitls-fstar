@@ -869,6 +869,16 @@ empty-action draining, and the simple application/close_notify/credential/
 Finished local wrappers. Higher-level selection, derivation, ServerHello, and
 accept orchestration remain in the main driver until the Handshake split.
 
+`TLS13.Impl.Server.Driver.Handshake.fsti/fst` has started taking over the
+accept-orchestration layer. Its first verified slice owns
+`accept_transport_and_start_once` and
+`accept_transport_start_and_read_client_hello`, composing the Transport,
+Local-start, and Network ClientHello-wait boundaries while preserving the
+connected driver IO-history invariant and the ClientHello-ready config fact.
+Selection, derivation, ServerHello, encrypted-flight orchestration, and the full
+public `accept` handshake still remain in the main driver until subsequent
+Handshake slices move them behind this boundary.
+
 The final public `TLS13.Impl.Server.Driver.fsti` should expose only:
 
 ```fstar
@@ -989,10 +999,10 @@ Critical-path checklist for this refactor:
 
 - [x] Freeze the final public `TLS13.Impl.Server.Driver.fsti` shape above and
       stop exporting new temporary proof slices from the public facade.
-- [ ] Move state predicates and projection lemmas into
+- [x] Move state predicates and projection lemmas into
       `TLS13.Impl.Server.Driver.State`.
-- [ ] Move transport operations into `TLS13.Impl.Server.Driver.Transport`.
-- [ ] Move retained-buffer network processing into
+- [x] Move transport operations into `TLS13.Impl.Server.Driver.Transport`.
+- [x] Move retained-buffer network processing into
       `TLS13.Impl.Server.Driver.Network`.
 - [x] Move local-event/drain logic into `TLS13.Impl.Server.Driver.Local`.
 - [ ] Move selection/derive/handshake orchestration into
