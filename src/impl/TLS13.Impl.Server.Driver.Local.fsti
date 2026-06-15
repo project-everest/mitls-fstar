@@ -208,3 +208,135 @@ fn drain_ready_empty_local_actions
             'credential_identity
             'received
             sent'
+
+fn send_application_data_once
+  (d:DS.server_driver)
+  (payload:array U8.t)
+  (payload_len:SZ.t)
+  requires DS.server_driver_connected
+              d
+              'st0
+              'certificate_chain
+              'credential_identity
+              'received
+              'sent **
+           pts_to payload 'payload_bytes **
+           pure (B.length 'payload_bytes == SZ.v payload_len /\
+                 ST.server_local_event_input_ready
+                   'st0
+                   ST.LocalSendApplicationData
+                   (Ghost.reveal 'payload_bytes))
+  returns resp:ST.server_response
+  ensures exists* st1 sent'.
+          DS.server_driver_connected
+            d
+            st1
+            'certificate_chain
+            'credential_identity
+            'received
+            sent' **
+          pts_to payload 'payload_bytes **
+          pure (server_driver_local_write_correct
+            'st0
+            st1
+            resp
+            ST.LocalSendApplicationData
+            (Ghost.reveal 'payload_bytes)
+            (Ghost.reveal 'sent)
+            sent')
+
+fn send_close_notify_once
+  (d:DS.server_driver)
+  requires DS.server_driver_connected
+              d
+              'st0
+              'certificate_chain
+              'credential_identity
+              'received
+              'sent **
+           pure (ST.server_local_event_input_ready
+             'st0
+             ST.LocalSendCloseNotify
+             B.empty)
+  returns resp:ST.server_response
+  ensures exists* st1 sent'.
+          DS.server_driver_connected
+            d
+            st1
+            'certificate_chain
+            'credential_identity
+            'received
+            sent'
+
+fn send_certificate_once
+  (d:DS.server_driver)
+  requires DS.server_driver_connected
+              d
+              'st0
+              'certificate_chain
+              'credential_identity
+              'received
+              'sent **
+           pure (ST.server_local_event_input_ready_with_credentials
+             'st0
+             ST.LocalSendCertificate
+             B.empty
+             (Ghost.reveal 'certificate_chain)
+             (Ghost.reveal 'credential_identity))
+  returns resp:ST.server_response
+  ensures exists* st1 sent'.
+          DS.server_driver_connected
+            d
+            st1
+            'certificate_chain
+            'credential_identity
+            'received
+            sent'
+
+fn sign_certificate_verify_once
+  (d:DS.server_driver)
+  requires DS.server_driver_connected
+              d
+              'st0
+              'certificate_chain
+              'credential_identity
+              'received
+              'sent **
+           pure (ST.server_local_event_input_ready_with_credentials
+             'st0
+             ST.LocalSignCertificateVerify
+             B.empty
+             (Ghost.reveal 'certificate_chain)
+             (Ghost.reveal 'credential_identity))
+  returns resp:ST.server_response
+  ensures exists* st1 sent'.
+          DS.server_driver_connected
+            d
+            st1
+            'certificate_chain
+            'credential_identity
+            'received
+            sent'
+
+fn verify_client_finished_once
+  (d:DS.server_driver)
+  requires DS.server_driver_connected
+              d
+              'st0
+              'certificate_chain
+              'credential_identity
+              'received
+              'sent **
+           pure (ST.server_local_event_input_ready
+             'st0
+             ST.LocalVerifyClientFinished
+             B.empty)
+  returns resp:ST.server_response
+  ensures exists* st1 sent'.
+          DS.server_driver_connected
+            d
+            st1
+            'certificate_chain
+            'credential_identity
+            'received
+            sent'
