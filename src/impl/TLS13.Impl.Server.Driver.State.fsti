@@ -250,6 +250,30 @@ val lemma_legal_response_for_event_wire_lengths
         Seq.equal st1.CS.cs_wire_log.CL.raw_received
           (B.append st0.CS.cs_wire_log.CL.raw_received raw_received))
 
+val lemma_local_event_wire_lengths
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (resp:ST.server_response)
+  (kind:ST.local_event_kind)
+  (payload:B.bytes)
+  (network_out:B.bytes)
+  (app_out:B.bytes)
+  : Lemma
+      (requires ST.server_local_event_end_to_end_correct
+        st0 st1 resp kind payload network_out app_out)
+      (ensures
+        B.length st1.CS.cs_wire_log.CL.raw_sent ==
+          B.length st0.CS.cs_wire_log.CL.raw_sent + SZ.v resp.ST.network_out_len /\
+        B.length st1.CS.cs_wire_log.CL.raw_received ==
+          B.length st0.CS.cs_wire_log.CL.raw_received /\
+        Seq.equal st1.CS.cs_wire_log.CL.raw_sent
+          (B.append
+            st0.CS.cs_wire_log.CL.raw_sent
+            (ST.response_network_out resp network_out)) /\
+        Seq.equal st1.CS.cs_wire_log.CL.raw_received
+          st0.CS.cs_wire_log.CL.raw_received /\
+        SZ.v resp.ST.network_out_len <= B.length network_out)
+
 val lemma_logged_received_bytes_accounted_append_delta
   (old_logged:B.bytes)
   (old_consumed:B.bytes)
