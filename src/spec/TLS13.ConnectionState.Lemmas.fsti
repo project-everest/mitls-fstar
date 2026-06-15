@@ -27,6 +27,24 @@ val lemma_endpoint_direction_traffic_labels
         traffic_label_for_endpoint_direction ServerEndpoint TrafficWrite == ServerTraffic /\
         traffic_label_for_endpoint_direction ServerEndpoint TrafficRead == ClientTraffic)
 
+val lemma_legal_connection_delta_local_fail_control_failed
+  (st0:connection_state)
+  (st1:connection_state)
+  (err:T.tls_error)
+  (raw_sent:B.bytes)
+  (raw_received:B.bytes)
+  : Lemma
+      (requires
+        legal_connection_delta
+          st0
+          {
+            delta_event = ConnLocalEvent (LocalFail err);
+            delta_raw_sent = raw_sent;
+            delta_raw_received = raw_received;
+          }
+          st1)
+      (ensures st1.cs_model.model_control == ControlFailed err)
+
 val lemma_expected_traffic_secret_client_projection
   (hs:handshake_state)
   (epoch:traffic_epoch)

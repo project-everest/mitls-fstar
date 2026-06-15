@@ -1099,10 +1099,12 @@ proves cross-endpoint protocol received-log accounting. The remaining concrete
 composition work is to prove the exact transport/protocol received-log matching
 from complete driver resources by strengthening the hidden received-log relation
 from length/count accounting to ordered accepted-prefix/exact-drained facts.
-The next proof boundary is to expose role-shared lemmas that failure responses
-(`LocalFail`, decode error, unexpected message, bad Finished) always produce a
-`ControlFailed` state, and that every non-failed network step with nonzero
-consumed input logs that consumed prefix as the accepted protocol
+The next proof boundary is partly discharged: role-shared
+`lemma_legal_connection_delta_local_fail_control_failed` plus client/server
+response lemmas now expose that `LocalFail`-based decode error, unexpected
+message, and bad Finished responses produce a `ControlFailed` state. The
+remaining theorem-surface fact is that every non-failed network step with
+nonzero consumed input logs that consumed prefix as the accepted protocol
 `raw_received` delta. Those facts are needed before the driver witness can carry
 an "exact unless failed" consumed-byte invariant.
 

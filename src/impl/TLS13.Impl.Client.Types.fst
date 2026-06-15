@@ -2132,6 +2132,57 @@ let bad_finished_response
     network_out
     app_out
 
+let lemma_decode_error_response_control_failed
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (resp:client_response)
+  (network_out:B.bytes)
+  (app_out:B.bytes)
+  : Lemma
+      (requires decode_error_response st0 st1 resp network_out app_out)
+      (ensures st1.CS.cs_model.CS.model_control == CS.ControlFailed tls_decode_error)
+=
+  CSL.lemma_legal_connection_delta_local_fail_control_failed
+    st0
+    st1
+    tls_decode_error
+    B.empty
+    B.empty
+
+let lemma_unexpected_message_response_control_failed
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (resp:client_response)
+  (network_out:B.bytes)
+  (app_out:B.bytes)
+  : Lemma
+      (requires unexpected_message_response st0 st1 resp network_out app_out)
+      (ensures st1.CS.cs_model.CS.model_control == CS.ControlFailed tls_unexpected_message_error)
+=
+  CSL.lemma_legal_connection_delta_local_fail_control_failed
+    st0
+    st1
+    tls_unexpected_message_error
+    B.empty
+    B.empty
+
+let lemma_bad_finished_response_control_failed
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (resp:client_response)
+  (network_out:B.bytes)
+  (app_out:B.bytes)
+  : Lemma
+      (requires bad_finished_response st0 st1 resp network_out app_out)
+      (ensures st1.CS.cs_model.CS.model_control == CS.ControlFailed tls_bad_finished_error)
+=
+  CSL.lemma_legal_connection_delta_local_fail_control_failed
+    st0
+    st1
+    tls_bad_finished_error
+    B.empty
+    B.empty
+
 let legal_handled_local_response
   (st0:CS.connection_state)
   (st1:CS.connection_state)
