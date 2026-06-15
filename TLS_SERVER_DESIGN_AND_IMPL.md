@@ -818,6 +818,16 @@ Current phase: **Phase 6 server buffer/event API and theorem surface**.
   payload-free actions such as handshake key installs and EncryptedExtensions,
   while still stopping before credential-bearing Certificate/CertificateVerify
   actions unless a later credential-aware orchestration layer handles them.
+- [x] Added the first credential/config-preserving local-driver extension:
+  `server_driver_config_matches_credentials` ties the driver's credential
+  resource to the immutable server config inside `server_driver_live` and
+  `server_driver_connected`; local and network driver proof predicates now expose
+  config-preservation projection lemmas so the invariant survives retained-buffer
+  processing and local writes. The empty-action drain now handles
+  scheduler-advertised `LocalSendCertificate` using the driver's credential
+  resource and the existing credential-aware local-event dispatcher. It still
+  stops before `LocalSignCertificateVerify` until the stored selected-credential
+  projection is factored into a stable query/invariant.
 
 ## Server driver public API and refactoring plan
 

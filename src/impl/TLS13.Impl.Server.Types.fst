@@ -1408,6 +1408,203 @@ let lemma_legal_network_response_preserves_config
     network_out
     app_out
 
+let lemma_legal_local_response_preserves_config
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (resp:server_response)
+  (kind:local_event_kind)
+  (payload:B.bytes)
+  (ev:CS.conn_event)
+  (raw_sent:B.bytes)
+  (raw_received:B.bytes)
+  (network_out:B.bytes)
+  (app_out:B.bytes)
+  : Lemma
+      (requires
+        legal_local_response
+          st0
+          st1
+          resp
+          kind
+          payload
+          ev
+          raw_sent
+          raw_received
+          network_out
+          app_out)
+      (ensures
+        st1.CS.cs_model.CS.model_config ==
+          st0.CS.cs_model.CS.model_config)
+=
+  assert (legal_response_for_event
+    st0
+    st1
+    resp
+    ev
+    raw_sent
+    raw_received
+    network_out
+    app_out);
+  lemma_legal_response_for_event_preserves_config
+    st0
+    st1
+    resp
+    ev
+    raw_sent
+    raw_received
+    network_out
+    app_out
+
+let lemma_legal_handled_local_response_preserves_config
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (resp:server_response)
+  (kind:local_event_kind)
+  (payload:B.bytes)
+  (network_out:B.bytes)
+  (app_out:B.bytes)
+  : Lemma
+      (requires
+        legal_handled_local_response
+          st0
+          st1
+          resp
+          kind
+          payload
+          network_out
+          app_out)
+      (ensures
+        st1.CS.cs_model.CS.model_config ==
+          st0.CS.cs_model.CS.model_config)
+=
+  let goal (_:unit) =
+    st1.CS.cs_model.CS.model_config ==
+      st0.CS.cs_model.CS.model_config in
+  FStar.Classical.or_elim
+    #(exists ev raw_sent raw_received.
+       legal_local_response
+         st0
+         st1
+         resp
+         kind
+         payload
+         ev
+         raw_sent
+         raw_received
+         network_out
+         app_out)
+    #(unexpected_message_response st0 st1 resp network_out app_out)
+    #goal
+    (fun h ->
+      FStar.Classical.exists_elim (goal ())
+        #CS.conn_event
+        #(fun ev -> exists raw_sent raw_received.
+          legal_local_response
+            st0
+            st1
+            resp
+            kind
+            payload
+            ev
+            raw_sent
+            raw_received
+            network_out
+            app_out)
+        h
+        (fun ev ->
+      FStar.Classical.exists_elim (goal ())
+        #B.bytes
+        #(fun raw_sent -> exists raw_received.
+          legal_local_response
+            st0
+            st1
+            resp
+            kind
+            payload
+            ev
+            raw_sent
+            raw_received
+            network_out
+            app_out)
+        ()
+        (fun raw_sent ->
+      FStar.Classical.exists_elim (goal ())
+        #B.bytes
+        #(fun raw_received ->
+          legal_local_response
+            st0
+            st1
+            resp
+            kind
+            payload
+            ev
+            raw_sent
+            raw_received
+            network_out
+            app_out)
+        ()
+        (fun raw_received ->
+          lemma_legal_local_response_preserves_config
+            st0
+            st1
+            resp
+            kind
+            payload
+            ev
+            raw_sent
+            raw_received
+            network_out
+            app_out))))
+    (fun _ ->
+      lemma_legal_response_for_event_preserves_config
+        st0
+        st1
+        resp
+        (CS.ConnLocalEvent (CS.LocalFail (T.AlertError T.UnexpectedMessage)))
+        B.empty
+        B.empty
+        network_out
+        app_out)
+
+let lemma_server_local_event_preserves_config
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (resp:server_response)
+  (kind:local_event_kind)
+  (payload:B.bytes)
+  (network_out:B.bytes)
+  (app_out:B.bytes)
+  : Lemma
+      (requires
+        server_local_event_end_to_end_correct
+          st0
+          st1
+          resp
+          kind
+          payload
+          network_out
+          app_out)
+      (ensures
+        st1.CS.cs_model.CS.model_config ==
+          st0.CS.cs_model.CS.model_config)
+=
+  assert (legal_handled_local_response
+    st0
+    st1
+    resp
+    kind
+    payload
+    network_out
+    app_out);
+  lemma_legal_handled_local_response_preserves_config
+    st0
+    st1
+    resp
+    kind
+    payload
+    network_out
+    app_out
+
 let lemma_server_network_bytes_preserves_config
   (st0:CS.connection_state)
   (st1:CS.connection_state)

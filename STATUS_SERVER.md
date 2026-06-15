@@ -106,15 +106,22 @@ On the Pulse/server side, the remaining handshake orchestration is the main gap:
   precise failure state;
 - extract and validate the server with the C/runtime IO stubs.
 
-## Current uncommitted/in-progress work
+## Latest verified in-progress slice
 
-There are uncommitted changes in:
+After the pause snapshot, the credential/config driver slice was focused-verified
+with:
+
+```text
+make _cache/TLS13.Impl.Server.Types.fst.checked \
+     _cache/TLS13.Impl.Server.Driver.fst.checked
+```
+
+The slice updates:
 
 - `src/impl/TLS13.Impl.Server.Driver.fst`
 - `src/impl/TLS13.Impl.Server.Types.fst`
 
-These changes are **in progress** and should not be treated as a completed
-verified slice yet. They add:
+It adds:
 
 - `server_driver_config_matches_credentials`, an invariant tying the driver's
   credential resource to the immutable server config stored in the connection
@@ -123,13 +130,11 @@ verified slice yet. They add:
 - driver-level local/network config-preservation projections so
   `server_driver_connected` can carry the credential/config invariant across
   processing;
-- an attempted extension of the local drain to process scheduler-advertised
+- an extension of the local drain to process scheduler-advertised
   `LocalSendCertificate`.
 
-The last focused verification before the pause found a simple missing import
-(`U64`) in `TLS13.Impl.Server.Driver.fst`; that import has been added, but the
-driver has not yet been re-verified after the import because work was paused.
-So this current working-tree state is unverified.
+This slice still needs the repository full gate before it should be considered a
+committed checkpoint.
 
 One important finding from this in-progress work: automatic
 `LocalSignCertificateVerify` scheduling still needs an additional proof

@@ -30,9 +30,11 @@ module ST = TLS13.Impl.Server.Types
 module Tags = TLS13.Impl.ConnectionState.Tags
 module Box = Pulse.Lib.Box
 module R = Pulse.Lib.Reference
+module RS = TLS13.Record.Spec
 module SZ = FStar.SizeT
 module T = TLS13.Types
 module U16 = FStar.UInt16
+module U64 = FStar.UInt64
 module U8 = FStar.UInt8
 module V = Pulse.Lib.Vec
 module W = TLS13.Wire.Spec
@@ -185,6 +187,18 @@ let server_driver_wire_logs_match
       consumed
       buffered
       buffered_len
+
+noextract
+let server_driver_config_matches_credentials
+  (st:CS.connection_state)
+  (certificate_chain:B.bytes)
+  (credential_identity:CS.server_credential_identity)
+  : prop =
+  match st.CS.cs_model.CS.model_config.CS.config_server with
+  | Some cfg ->
+    cfg.CS.server_certificate_chain == certificate_chain /\
+    cfg.CS.server_credential_identity == credential_identity
+  | None -> False
 
 let lemma_legal_response_network_out_len
   (st0:CS.connection_state)
@@ -481,6 +495,10 @@ let server_driver_live
   Box.pts_to d.server_driver_channel no_channel **
   server_driver_buffers d B.empty 0sz **
   pure (ST.server_end_to_end_invariant st /\
+        server_driver_config_matches_credentials
+          st
+          certificate_chain
+          credential_identity /\
         server_driver_wire_logs_match st B.empty B.empty B.empty 0sz)
 
 noextract
@@ -502,6 +520,10 @@ let server_driver_connected
     IO.is_channel ch received sent **
     server_driver_buffers d buffered buffered_len **
     pure (ST.server_end_to_end_invariant st /\
+          server_driver_config_matches_credentials
+            st
+            certificate_chain
+            credential_identity /\
           server_driver_wire_logs_match st received sent buffered buffered_len)
 
 noextract
@@ -628,6 +650,67 @@ let lemma_server_driver_local_write_correct_intro
           sent'
           (B.append sent (ST.response_network_out resp network_out_bytes')))
     network_out_bytes
+
+let lemma_server_driver_local_write_correct_preserves_config
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (resp:ST.server_response)
+  (kind:ST.local_event_kind)
+  (payload:B.bytes)
+  (sent:B.bytes)
+  (sent':B.bytes)
+  : Lemma
+      (requires server_driver_local_write_correct st0 st1 resp kind payload sent sent')
+      (ensures
+          st1.CS.cs_model.CS.model_config ==
+            st0.CS.cs_model.CS.model_config)
+=
+  let network_out_bytes =
+    ID.indefinite_description_ghost
+      B.bytes
+      (fun network_out_bytes -> exists app_out_bytes.
+          ST.server_local_event_end_to_end_correct
+            st0
+            st1
+            resp
+            kind
+            payload
+            network_out_bytes
+            app_out_bytes /\
+          Seq.equal
+            sent'
+            (B.append sent (ST.response_network_out resp network_out_bytes))) in
+  let app_out_bytes =
+    ID.indefinite_description_ghost
+      B.bytes
+      (fun app_out_bytes ->
+          ST.server_local_event_end_to_end_correct
+            st0
+            st1
+            resp
+            kind
+            payload
+            network_out_bytes
+            app_out_bytes /\
+          Seq.equal
+            sent'
+            (B.append sent (ST.response_network_out resp network_out_bytes))) in
+  assert (ST.server_local_event_end_to_end_correct
+    st0
+    st1
+    resp
+    kind
+    payload
+    network_out_bytes
+    app_out_bytes);
+  ST.lemma_server_local_event_preserves_config
+    st0
+    st1
+    resp
+    kind
+    payload
+    network_out_bytes
+    app_out_bytes
 
 let lemma_server_driver_network_process_correct_intro
   (st0:CS.connection_state)
@@ -2276,6 +2359,33 @@ fn process_buffered_network_bytes_compact_once
        else B.empty))
     (Ghost.reveal new_buffered)
     compact_len));
+  lemma_server_driver_network_process_correct_intro
+    'st0
+    st1
+    buffer_resp
+    raw_prefix
+    network_out_bytes
+    app_out_bytes
+    (Ghost.reveal 'sent)
+    (B.append
+      (Ghost.reveal 'sent)
+      (if SZ.v written <= B.length network_out_bytes
+       then Seq.slice network_out_bytes 0 (SZ.v written)
+       else B.empty));
+  lemma_server_driver_network_process_correct_preserves_config
+    'st0
+    st1
+    buffer_resp
+    (Ghost.reveal 'sent)
+    (B.append
+      (Ghost.reveal 'sent)
+      (if SZ.v written <= B.length network_out_bytes
+       then Seq.slice network_out_bytes 0 (SZ.v written)
+       else B.empty));
+  assert (pure (server_driver_config_matches_credentials
+    st1
+    (Ghost.reveal 'certificate_chain)
+    (Ghost.reveal 'credential_identity)));
   fold (server_driver_connected
     d
     st1
@@ -3037,6 +3147,10 @@ fn start_server_if_ready
             server_driver_buffers d buffered buffered_len);
   assert (pure (ST.server_end_to_end_invariant 'st0));
   assert (pure (ST.server_state_correct 'st0));
+  assert (pure (server_driver_config_matches_credentials
+    'st0
+    (Ghost.reveal 'certificate_chain)
+    (Ghost.reveal 'credential_identity)));
   let action = S.next_local_action d.server_driver_server;
   assert (pure (ST.next_local_action_sound 'st0 action));
   fold (server_driver_connected
@@ -3726,6 +3840,36 @@ fn process_local_event_and_write_once
        else B.empty))
     buffered
     buffered_len));
+  lemma_server_driver_local_write_correct_intro
+    'st0
+    st1
+    resp
+    kind
+    (Ghost.reveal 'payload_bytes)
+    (Ghost.reveal 'sent)
+    (B.append
+      (Ghost.reveal 'sent)
+      (if SZ.v written <= B.length network_out_bytes
+       then Seq.slice network_out_bytes 0 (SZ.v written)
+       else B.empty))
+    network_out_bytes
+    app_out_bytes;
+  lemma_server_driver_local_write_correct_preserves_config
+    'st0
+    st1
+    resp
+    kind
+    (Ghost.reveal 'payload_bytes)
+    (Ghost.reveal 'sent)
+    (B.append
+      (Ghost.reveal 'sent)
+      (if SZ.v written <= B.length network_out_bytes
+       then Seq.slice network_out_bytes 0 (SZ.v written)
+       else B.empty));
+  assert (pure (server_driver_config_matches_credentials
+    st1
+    (Ghost.reveal 'certificate_chain)
+    (Ghost.reveal 'credential_identity)));
 
   V.to_vec_pts_to d.server_driver_network_out;
   V.to_vec_pts_to d.server_driver_app_out;
@@ -5928,6 +6072,76 @@ fn process_ready_empty_local_action_once
           'st0
           action.ST.next_local_kind
           B.empty));
+        assert (pure (ST.server_local_event_input_ready_with_credentials
+          'st0
+          action.ST.next_local_kind
+          B.empty
+          (Ghost.reveal 'certificate_chain)
+          (Ghost.reveal 'credential_identity)));
+        let _ =
+          process_empty_local_event_and_write_once
+            d
+            action.ST.next_local_kind;
+        ServerDriverLocalProcessed
+      }
+      ST.LocalSendCertificate -> {
+        assert (pure (action.ST.next_local_payload == ST.LocalPayloadNone));
+        assert (pure ('st0.CS.cs_model.CS.model_control ==
+          CS.ControlHandshaking CS.HsServerEncryptedFlightSent));
+        assert (pure ('st0.CS.cs_model.CS.model_config.CS.config_role ==
+          CS.ServerEndpoint));
+        assert (pure (
+          'st0.CS.cs_model.CS.model_handshake.CS.hs_encrypted_extensions <> None));
+        assert (pure (
+          'st0.CS.cs_model.CS.model_handshake.CS.hs_certificate == None));
+        assert (pure (
+          'st0.CS.cs_model.CS.model_handshake.CS.hs_buffers.CS.hb_certificate_leaf_der == None));
+        assert (pure (Some?
+          'st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_handshake_traffic));
+        assert (pure (U64.fits
+          ('st0.CS.cs_model.CS.model_record.CS.record_write.RS.seq + 1)));
+        assert (pure (match 'st0.CS.cs_model.CS.model_config.CS.config_server with
+          | Some cfg ->
+            B.length cfg.CS.server_certificate_chain <=
+              Bounds.max_server_certificate_chain_len /\
+            B.length 'st0.CS.cs_model.CS.model_handshake.CS.hs_transcript +
+              B.length
+                (W.serialize_certificate_from_credential
+                  { M.chain = [cfg.CS.server_certificate_chain] }) <=
+                Bounds.max_transcript_len /\
+            CS.legal_event
+              'st0.CS.cs_model
+              (CS.ConnNetworkEvent {
+                CL.message_direction = CL.Sent;
+                CL.message_value =
+                  M.TlsHandshake
+                    (M.Certificate { M.chain = [cfg.CS.server_certificate_chain] });
+              })
+          | None -> False));
+        assert (pure (match 'st0.CS.cs_model.CS.model_config.CS.config_server with
+          | Some cfg ->
+            cfg.CS.server_certificate_chain ==
+              Ghost.reveal 'certificate_chain /\
+            cfg.CS.server_credential_identity ==
+              Ghost.reveal 'credential_identity
+          | None -> False));
+        assert (pure (B.length (Ghost.reveal 'certificate_chain) <=
+          Bounds.max_server_certificate_chain_len));
+        W.lemma_serialize_certificate_from_single_chain_len
+          (Ghost.reveal 'certificate_chain);
+        assert (pure (13 + B.length (Ghost.reveal 'certificate_chain) + 17 <= 16640));
+        assert (pure (
+          B.length 'st0.CS.cs_model.CS.model_handshake.CS.hs_transcript +
+            13 + B.length (Ghost.reveal 'certificate_chain) <=
+              Bounds.max_transcript_len));
+        assert (pure (CS.legal_event
+          'st0.CS.cs_model
+          (CS.ConnNetworkEvent {
+            CL.message_direction = CL.Sent;
+            CL.message_value =
+              M.TlsHandshake
+                (M.Certificate { M.chain = [Ghost.reveal 'certificate_chain] });
+          })));
         assert (pure (ST.server_local_event_input_ready_with_credentials
           'st0
           action.ST.next_local_kind
