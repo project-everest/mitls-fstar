@@ -897,7 +897,8 @@ ServerHello output buffer and connected IO-history accounting, is now also owned
 by Handshake. The payload-level
 `select_derive_send_server_hello_from_payload_once` composition has moved there
 too. The material-buffer helper `select_and_derive_shared_secret_once` now
-belongs to Handshake as well.
+belongs to Handshake as well, along with its material-buffer readiness wrapper
+`select_and_derive_shared_secret_if_ready_once`.
 Selection, derivation, ServerHello, encrypted-flight orchestration, and the full
 public `accept` handshake still remain in the main driver until subsequent
 Handshake slices move them behind this boundary.
