@@ -121,6 +121,8 @@ val lemma_server_driver_local_write_correct_preserves_supported_profile_selectio
       (requires
         server_driver_local_write_correct st0 st1 resp kind payload sent sent' /\
         kind <> ST.LocalSelectServerParameters /\
+        kind <> ST.LocalStartServer /\
+        kind <> ST.LocalSendServerHello /\
         ST.server_local_event_input_ready_with_credentials
           st0 kind payload certificate_chain credential_identity /\
         DS.server_driver_config_matches_credentials
@@ -144,6 +146,8 @@ fn process_local_event_and_write_once
            pts_to payload 'payload_bytes **
            pure (B.length 'payload_bytes == SZ.v payload_len /\
                  kind <> ST.LocalSelectServerParameters /\
+                 kind <> ST.LocalStartServer /\
+                 kind <> ST.LocalSendServerHello /\
                  ST.server_local_event_input_ready_with_credentials
                    'st0
                    kind
@@ -185,7 +189,9 @@ fn process_empty_local_event_and_write_once
              B.empty
              (Ghost.reveal 'certificate_chain)
              (Ghost.reveal 'credential_identity) /\
-             kind <> ST.LocalSelectServerParameters)
+             kind <> ST.LocalSelectServerParameters /\
+             kind <> ST.LocalStartServer /\
+             kind <> ST.LocalSendServerHello)
   returns resp:ST.server_response
   ensures exists* st1 sent'.
           DS.server_driver_connected

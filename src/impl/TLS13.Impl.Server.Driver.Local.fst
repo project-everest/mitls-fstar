@@ -487,6 +487,8 @@ let lemma_server_driver_local_write_correct_preserves_supported_profile_selectio
       (requires
         server_driver_local_write_correct st0 st1 resp kind payload sent sent' /\
         kind <> ST.LocalSelectServerParameters /\
+        kind <> ST.LocalStartServer /\
+        kind <> ST.LocalSendServerHello /\
         ST.server_local_event_input_ready_with_credentials
           st0 kind payload certificate_chain credential_identity /\
         server_driver_config_matches_credentials
@@ -560,6 +562,43 @@ let lemma_server_driver_local_write_correct_preserves_supported_profile_selectio
   assert (
     st1.CS.cs_model.CS.model_handshake.CS.hs_server_selection ==
       st0.CS.cs_model.CS.model_handshake.CS.hs_server_selection);
+  match kind with
+  | ST.LocalStartServer ->
+    assert False
+  | ST.LocalSelectServerParameters ->
+    assert False
+  | ST.LocalDeriveSharedSecret ->
+    assert (server_driver_selection_present_when_required st1)
+  | ST.LocalInstallClientHandshakeTrafficKeys ->
+    assert (server_driver_selection_present_when_required st1)
+  | ST.LocalInstallServerHandshakeTrafficKeys ->
+    assert (server_driver_selection_present_when_required st1)
+  | ST.LocalInstallClientApplicationTrafficKeys ->
+    assert (server_driver_selection_present_when_required st1)
+  | ST.LocalInstallServerApplicationTrafficKeys ->
+    assert (server_driver_selection_present_when_required st1)
+  | ST.LocalSignCertificateVerify ->
+    assert (server_driver_selection_present_when_required st1)
+  | ST.LocalVerifyClientFinished ->
+    assert (server_driver_selection_present_when_required st1)
+  | ST.LocalDeliverApplicationData ->
+    assert (server_driver_selection_present_when_required st1)
+  | ST.LocalSendServerHello ->
+    assert False
+  | ST.LocalSendEncryptedExtensions ->
+    assert (server_driver_selection_present_when_required st1)
+  | ST.LocalSendCertificate ->
+    assert (server_driver_selection_present_when_required st1)
+  | ST.LocalSendCertificateVerify ->
+    assert (server_driver_selection_present_when_required st1)
+  | ST.LocalSendServerFinished ->
+    assert (server_driver_selection_present_when_required st1)
+  | ST.LocalSendApplicationData ->
+    assert (server_driver_selection_present_when_required st1)
+  | ST.LocalSendCloseNotify ->
+    assert (server_driver_selection_present_when_required st1)
+  | ST.LocalFail ->
+    assert (server_driver_selection_present_when_required st1);
   assert (server_driver_supported_profile_selection st1 credential_identity)
 
 fn process_local_event_and_write_once
@@ -577,6 +616,8 @@ fn process_local_event_and_write_once
            pts_to payload 'payload_bytes **
            pure (B.length 'payload_bytes == SZ.v payload_len /\
                  kind <> ST.LocalSelectServerParameters /\
+                 kind <> ST.LocalStartServer /\
+                 kind <> ST.LocalSendServerHello /\
                  ST.server_local_event_input_ready_with_credentials
                    'st0
                    kind
@@ -913,7 +954,9 @@ fn process_empty_local_event_and_write_once
               B.empty
               (Ghost.reveal 'certificate_chain)
               (Ghost.reveal 'credential_identity) /\
-              kind <> ST.LocalSelectServerParameters)
+              kind <> ST.LocalSelectServerParameters /\
+              kind <> ST.LocalStartServer /\
+              kind <> ST.LocalSendServerHello)
   returns resp:ST.server_response
   ensures exists* st1 sent'.
            server_driver_connected
@@ -940,6 +983,8 @@ fn process_empty_local_event_and_write_once
     (Ghost.reveal 'certificate_chain)
     (Ghost.reveal 'credential_identity)));
   assert (pure (kind <> ST.LocalSelectServerParameters));
+  assert (pure (kind <> ST.LocalStartServer));
+  assert (pure (kind <> ST.LocalSendServerHello));
   let resp =
     process_local_event_and_write_once
        d
@@ -991,6 +1036,9 @@ fn process_ready_empty_local_action_once
              server_driver_buffers d buffered buffered_len);
   assert (pure (ST.server_end_to_end_invariant 'st0));
   assert (pure (ST.server_state_correct 'st0));
+  assert (pure (server_driver_supported_profile_selection
+    'st0
+    (Ghost.reveal 'credential_identity)));
   let action = S.next_local_action d.server_driver_server;
   assert (pure (ST.next_local_action_sound 'st0 action));
   fold (server_driver_connected
@@ -1151,6 +1199,32 @@ fn process_ready_empty_local_action_once
                M.TlsHandshake
                  (M.Certificate { M.chain = [Ghost.reveal 'certificate_chain] });
            })));
+         assert (pure (ST.server_local_event_input_ready_with_credentials
+           'st0
+           action.ST.next_local_kind
+           B.empty
+           (Ghost.reveal 'certificate_chain)
+           (Ghost.reveal 'credential_identity)));
+         let _ =
+           process_empty_local_event_and_write_once
+             d
+             action.ST.next_local_kind;
+         ServerDriverLocalProcessed
+       }
+       ST.LocalSignCertificateVerify -> {
+         assert (pure (action.ST.next_local_payload == ST.LocalPayloadNone));
+         assert (pure ('st0.CS.cs_model.CS.model_control ==
+           CS.ControlHandshaking CS.HsServerEncryptedFlightSent));
+         assert (pure ('st0.CS.cs_model.CS.model_config.CS.config_role ==
+           CS.ServerEndpoint));
+         assert (pure (
+           'st0.CS.cs_model.CS.model_handshake.CS.hs_certificate <> None));
+         assert (pure (
+           'st0.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify == None));
+         assert (pure (
+           'st0.CS.cs_model.CS.model_handshake.CS.hs_buffers.CS.hb_certificate_verify_input == None));
+         assert (pure (Some?
+           'st0.CS.cs_model.CS.model_handshake.CS.hs_server_selection));
          assert (pure (ST.server_local_event_input_ready_with_credentials
            'st0
            action.ST.next_local_kind

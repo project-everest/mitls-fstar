@@ -354,7 +354,8 @@ let lemma_server_driver_supported_profile_selection_same_config_and_selection
         st1.CS.cs_model.CS.model_config ==
           st0.CS.cs_model.CS.model_config /\
         st1.CS.cs_model.CS.model_handshake.CS.hs_server_selection ==
-          st0.CS.cs_model.CS.model_handshake.CS.hs_server_selection)
+          st0.CS.cs_model.CS.model_handshake.CS.hs_server_selection /\
+        server_driver_selection_present_when_required st1)
       (ensures
         server_driver_supported_profile_selection st1 credential_identity)
 =
@@ -383,7 +384,7 @@ let lemma_legal_response_for_event_preserves_supported_profile_selection
           app_out /\
         server_driver_supported_profile_selection st0 credential_identity /\
         (match ev with
-         | CS.ConnNetworkEvent _ -> True
+         | CS.ConnNetworkEvent msg -> msg.CL.message_direction == CL.Received
          | CS.ConnLocalEvent (CS.LocalFail _) -> True
          | _ -> False))
       (ensures
@@ -404,6 +405,33 @@ let lemma_legal_response_for_event_preserves_supported_profile_selection
   assert (
     st1.CS.cs_model.CS.model_handshake.CS.hs_server_selection ==
       st0.CS.cs_model.CS.model_handshake.CS.hs_server_selection);
+  match ev with
+  | CS.ConnLocalEvent (CS.LocalFail _) ->
+    assert (server_driver_selection_present_when_required st1)
+  | CS.ConnNetworkEvent msg ->
+    assert (msg.CL.message_direction == CL.Received);
+    (match msg.CL.message_value with
+     | M.TlsHandshake hs ->
+       (match hs with
+        | M.ClientHello _ ->
+          assert (server_driver_selection_present_when_required st1)
+        | M.Finished _ ->
+          assert (server_driver_selection_present_when_required st1)
+        | _ ->
+          assert (server_driver_selection_present_when_required st1))
+     | M.TlsApplicationData _ ->
+       assert (server_driver_selection_present_when_required st1)
+     | M.TlsAlert _ ->
+       assert (server_driver_selection_present_when_required st1)
+     | M.TlsChangeCipherSpec ->
+       assert (server_driver_selection_present_when_required st1)
+     | M.TlsIgnoredPostHandshake _ ->
+       assert (server_driver_selection_present_when_required st1)
+     | M.TlsKeyUpdate _ ->
+       assert (server_driver_selection_present_when_required st1))
+  | _ ->
+    assert False;
+  assert (server_driver_selection_present_when_required st1);
   lemma_server_driver_supported_profile_selection_same_config_and_selection
     st0
     st1

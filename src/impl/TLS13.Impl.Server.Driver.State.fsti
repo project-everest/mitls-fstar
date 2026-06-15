@@ -108,6 +108,29 @@ let server_driver_config_matches_credentials
   | None -> False
 
 noextract
+let server_driver_selection_present_when_required
+  (st:CS.connection_state)
+  : prop =
+  let selection = st.CS.cs_model.CS.model_handshake.CS.hs_server_selection in
+  match st.CS.cs_model.CS.model_control with
+  | CS.ControlHandshaking CS.HsServerHelloSent ->
+    Some? selection
+  | CS.ControlHandshaking CS.HsServerEncryptedFlightSent ->
+    Some? selection
+  | CS.ControlHandshaking CS.HsServerFinishedSent ->
+    Some? selection
+  | CS.ControlHandshaking CS.HsClientFinishedReceived ->
+    Some? selection
+  | CS.ControlApplicationData ->
+    Some? selection
+  | CS.ControlClosing ->
+    Some? selection
+  | CS.ControlClosed ->
+    Some? selection
+  | _ ->
+    True
+
+noextract
 let server_driver_supported_profile_selection
   (st:CS.connection_state)
   (credential_identity:CS.server_credential_identity)
@@ -115,6 +138,7 @@ let server_driver_supported_profile_selection
   CS.signature_scheme_offered
     st.CS.cs_model.CS.model_config.CS.config_signature_schemes
     T.RsaPssRsaeSha256 /\
+  server_driver_selection_present_when_required st /\
   (match st.CS.cs_model.CS.model_handshake.CS.hs_server_selection with
    | Some selection ->
      selection.CS.server_selected_signature_scheme == T.RsaPssRsaeSha256 /\

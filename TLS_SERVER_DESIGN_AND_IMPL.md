@@ -825,9 +825,14 @@ Current phase: **Phase 6 server buffer/event API and theorem surface**.
   config-preservation projection lemmas so the invariant survives retained-buffer
   processing and local writes. The empty-action drain now handles
   scheduler-advertised `LocalSendCertificate` using the driver's credential
-  resource and the existing credential-aware local-event dispatcher. It still
-  stops before `LocalSignCertificateVerify` until the stored selected-credential
-  projection is factored into a stable query/invariant.
+  resource and the existing credential-aware local-event dispatcher.
+- [x] Added a stable supported-profile selection invariant to the server driver:
+  connected/live states preserve the fixed RSA-PSS/RSAE/SHA-256 credential
+  selection facts, and from `HsServerHelloSent` onward require a concrete stored
+  server selection. Network and local driver writes now preserve this invariant.
+  The empty-action drain therefore handles scheduler-advertised
+  `LocalSignCertificateVerify` with the driver credential resource, then can
+  continue through `LocalSendCertificateVerify` and `LocalSendServerFinished`.
 
 ## Server driver public API and refactoring plan
 
