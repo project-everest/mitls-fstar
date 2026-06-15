@@ -196,6 +196,22 @@ let server_driver_application_ready
   st.CS.cs_model.CS.model_control == CS.ControlApplicationData /\
   CS.application_record_keys_installed_for_role CS.ServerEndpoint st.CS.cs_model
 
+noextract
+let server_driver_close_correct
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (sent:B.bytes)
+  : prop =
+  exists sent' resp.
+    DL.server_driver_local_write_correct
+      st0
+      st1
+      resp
+      ST.LocalSendCloseNotify
+      B.empty
+      sent
+      sent'
+
 fn new_server
   (certificate_chain:array U8.t)
   (certificate_chain_len:SZ.t)
@@ -369,7 +385,13 @@ fn close
               'certificate_chain
               'credential_identity
               'received
-              'sent
+              'sent **
+            pure (server_driver_application_ready 'st0)
   returns status:server_workflow_status
-  ensures server_driver_closed d 'st0 'certificate_chain 'credential_identity **
-          pure (status == ServerWorkflowClosed)
+  ensures exists* st1.
+            server_driver_closed d st1 'certificate_chain 'credential_identity **
+            pure (status == ServerWorkflowClosed /\
+                 server_driver_close_correct
+                   'st0
+                   st1
+                   (Ghost.reveal 'sent))

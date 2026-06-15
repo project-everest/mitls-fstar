@@ -1040,6 +1040,13 @@ model control is `ControlApplicationData` through the public
 `ST.server_end_to_end_invariant` and
 `CS.application_record_keys_installed_for_role CS.ServerEndpoint`.
 
+`close` is no longer just a transport close on application-ready states. Its
+public precondition is the same `server_driver_application_ready` predicate
+exposed by successful `accept`; the implementation sends `LocalSendCloseNotify`
+through `send_close_notify_once`, exposes `server_driver_close_correct` tying the
+transition to `DL.server_driver_local_write_correct`, and only then closes the
+TCP channel.
+
 Current extraction status: the first focused server-core KaRaMeL prefix through
 `TLS13.Impl.Server.Network` now completes. The previous KaRaMeL
 `Failure("nth")` was isolated to the large `process_network_bytes` dispatcher;
@@ -2561,10 +2568,10 @@ Checklist:
       top.
 - [ ] The first public driver API does not take a pre-accepted channel or
       externally owned listener handle.
-- [ ] `send`, `receive`, and `close` operate on one connected server handle.
-      Current status: transport-only close is verified as
-      `close_transport_once`; protocol close_notify and application send/receive
-      remain pending.
+- [x] `send`, `receive`, and `close` operate on one connected server handle.
+      `send` exposes application-data local-write correctness, `receive` exposes
+      concrete app-output copyout correctness, and `close` now sends verified
+      `LocalSendCloseNotify` before closing the transport.
 - [x] Driver owns retained receive buffer.
 - [x] Driver owns network output, application output, and signing scratch buffers.
 - [x] Driver maintains exact IO-history relation for constructor/attach/close and
@@ -2642,7 +2649,7 @@ Checklist:
 - [ ] Application data before client Finished rejected.
 - [ ] OpenSSL `s_client` connects to verified server.
 - [ ] Application echo works.
-- [ ] close_notify works.
+- [x] Verified server facade `close` sends close_notify before transport close.
 - [ ] KeyUpdate is not accepted as a claimed first-milestone feature.
 - [ ] Verified client connects to verified server.
 - [ ] Pure paired-endpoint derived-key theorem instantiates on paired

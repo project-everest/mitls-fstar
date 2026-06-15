@@ -91,7 +91,9 @@ That committed state includes:
   `CS.application_record_keys_installed_for_role CS.ServerEndpoint`. The public
   `receive` spec is also tied to the concrete app-output buffer and returns
   `ServerWorkflowOk` exactly when the copied application bytes fit the caller
-  and driver buffers.
+  and driver buffers. Public `close` now requires the same application-ready
+  state exposed by successful `accept`, sends verified `LocalSendCloseNotify`
+  via the local-write theorem, and then closes the transport.
 
 ## What is not complete yet
 

@@ -970,7 +970,15 @@ fn process_empty_local_event_and_write_once
              'certificate_chain
              'credential_identity
              'received
-             sent'
+             sent' **
+           pure (server_driver_local_write_correct
+             'st0
+             st1
+             resp
+             kind
+             B.empty
+             (Ghost.reveal 'sent)
+             sent')
 {
   let mut empty_payload = [| 0uy; 0sz |];
   with empty_payload_bytes.
@@ -981,6 +989,7 @@ fn process_empty_local_event_and_write_once
   Seq.lemma_eq_intro empty_payload_bytes B.empty;
   assert (pure (Seq.equal empty_payload_bytes B.empty));
   Seq.lemma_eq_elim empty_payload_bytes B.empty;
+  assert (pure (empty_payload_bytes == B.empty));
   assert (pure (ST.server_local_event_input_ready_with_credentials
     'st0
     kind
@@ -996,6 +1005,30 @@ fn process_empty_local_event_and_write_once
        kind
        empty_payload
        0sz;
+  with st1 sent'.
+    assert (server_driver_connected
+      d
+      st1
+      'certificate_chain
+      'credential_identity
+      'received
+      sent');
+  assert (pure (server_driver_local_write_correct
+    'st0
+    st1
+    resp
+    kind
+    empty_payload_bytes
+    (Ghost.reveal 'sent)
+    sent'));
+  assert (pure (server_driver_local_write_correct
+    'st0
+    st1
+    resp
+    kind
+    B.empty
+    (Ghost.reveal 'sent)
+    sent'));
   resp
 }
 
@@ -2060,7 +2093,15 @@ fn send_application_data_once
                'certificate_chain
                'credential_identity
                'received
-               sent'
+               sent' **
+             pure (server_driver_local_write_correct
+               'st0
+               st1
+               resp
+               ST.LocalSendCloseNotify
+               B.empty
+               (Ghost.reveal 'sent)
+               sent')
   {
     assert (pure (ST.server_local_event_input_ready_with_credentials
        'st0

@@ -201,7 +201,15 @@ fn process_empty_local_event_and_write_once
             'certificate_chain
             'credential_identity
             'received
-            sent'
+            sent' **
+          pure (server_driver_local_write_correct
+            'st0
+            st1
+            resp
+            kind
+            B.empty
+            (Ghost.reveal 'sent)
+            sent')
 
 fn process_ready_empty_local_action_once
   (d:DS.server_driver)
@@ -310,7 +318,15 @@ fn send_close_notify_once
             'certificate_chain
             'credential_identity
             'received
-            sent'
+            sent' **
+          pure (server_driver_local_write_correct
+            'st0
+            st1
+            resp
+            ST.LocalSendCloseNotify
+            B.empty
+            (Ghost.reveal 'sent)
+            sent')
 
 fn send_certificate_once
   (d:DS.server_driver)

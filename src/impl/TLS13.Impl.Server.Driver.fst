@@ -80,6 +80,33 @@ let lemma_control_snapshot_app_ready
   | CS.ControlApplicationData -> ()
   | _ -> assert False
 
+let lemma_application_ready_close_notify_ready
+  (st:CS.connection_state)
+  : Lemma
+    (requires server_driver_application_ready st)
+    (ensures
+      ST.server_local_event_input_ready
+        st
+        ST.LocalSendCloseNotify
+        B.empty)
+=
+  Seq.lemma_eq_intro B.empty B.empty;
+  assert (Seq.equal B.empty B.empty);
+  assert (ST.server_end_to_end_invariant st);
+  assert (st.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint);
+  assert_norm (CS.traffic_label_for_endpoint_direction CS.ServerEndpoint CS.TrafficWrite ==
+    CS.ServerTraffic);
+  assert (CS.application_record_keys_installed_for_role CS.ServerEndpoint st.CS.cs_model);
+  match st.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_application_traffic with
+  | Some _ -> ()
+  | None ->
+    assert_norm (CS.traffic_material_for_label
+      st.CS.cs_model.CS.model_handshake.CS.hs_keys
+      CS.TrafficApplication
+      CS.ServerTraffic ==
+      st.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_application_traffic);
+    assert False
+
 fn new_server
   (certificate_chain:array U8.t)
   (certificate_chain_len:SZ.t)
@@ -874,11 +901,44 @@ fn close
               'certificate_chain
               'credential_identity
               'received
-              'sent
+              'sent **
+           pure (server_driver_application_ready 'st0)
   returns status:server_workflow_status
-  ensures server_driver_closed d 'st0 'certificate_chain 'credential_identity **
-          pure (status == ServerWorkflowClosed)
+  ensures exists* st1.
+          server_driver_closed d st1 'certificate_chain 'credential_identity **
+          pure (status == ServerWorkflowClosed /\
+                server_driver_close_correct
+                  'st0
+                  st1
+                  (Ghost.reveal 'sent))
 {
+  lemma_application_ready_close_notify_ready 'st0;
+  let resp = DL.send_close_notify_once d;
+  with st1 sent'.
+    assert (server_driver_connected
+      d
+      st1
+      'certificate_chain
+      'credential_identity
+      'received
+      sent');
+  assert (pure (server_driver_close_correct
+    'st0
+    st1
+    (Ghost.reveal 'sent)));
   close_transport_once d;
+  assert (server_driver_closed d st1 'certificate_chain 'credential_identity);
+  assert (pure (ServerWorkflowClosed == ServerWorkflowClosed /\
+    server_driver_close_correct
+      'st0
+      st1
+      (Ghost.reveal 'sent)));
+  assert (exists* st_after.
+    server_driver_closed d st_after 'certificate_chain 'credential_identity **
+    pure (ServerWorkflowClosed == ServerWorkflowClosed /\
+          server_driver_close_correct
+            'st0
+            st_after
+            (Ghost.reveal 'sent)));
   ServerWorkflowClosed
 }
