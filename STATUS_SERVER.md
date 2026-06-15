@@ -35,10 +35,11 @@ older server/transcript planning documents.
 
 ## Committed verified status
 
-The latest committed verified server-driver slice is:
+The latest committed verified server-driver baseline before the current client
+facade hardening slice is:
 
 ```text
-7f2c5d0 Compose server hello empty drain
+e0df22b Record server interop validation
 ```
 
 At that point the full gate had passed:
@@ -98,6 +99,11 @@ That committed state includes:
   `make test-extracted-server-driver-slice` and `make test-openssl-sclient`
   both complete successfully, including a real OpenSSL client handshake,
   application echo, and server close path.
+- The client top-level driver facade is being hardened symmetrically: successful
+  `TLS13.Impl.Client.Driver.connect` now exposes
+  `client_driver_application_ready`, proving the connected client state is in
+  `ControlApplicationData` and has role-correct client application record
+  read/write keys installed.
 
 ## What is not complete yet
 
@@ -110,8 +116,9 @@ connected through their raw IO logs, automatically establish that theorem's
 input predicate. That bridge from concrete driver states to paired endpoint
 agreement remains a composition task.
 
-On the Pulse/server side, public `accept` now has a verified success path to
-application-data readiness. The remaining implementation-side gaps are:
+On the Pulse implementation side, public server `accept` and client `connect`
+now both expose application-data readiness on success. The remaining
+implementation-side gaps are:
 
 - build the concrete bridge from complete client/server driver states and raw IO
   logs to the aggregate paired-endpoint key-material theorem's input predicate;
@@ -122,72 +129,34 @@ application-data readiness. The remaining implementation-side gaps are:
 
 ## Latest verified in-progress slice
 
-After the pause snapshot, the credential/config driver slice was focused-verified
-with:
-
-```text
-make _cache/TLS13.Impl.Server.Types.fst.checked \
-     _cache/TLS13.Impl.Server.Driver.fst.checked
-```
-
-The slice updates:
-
-- `src/impl/TLS13.Impl.Server.Driver.fst`
-- `src/impl/TLS13.Impl.Server.Types.fst`
-
-It adds:
-
-- `server_driver_config_matches_credentials`, an invariant tying the driver's
-  credential resource to the immutable server config stored in the connection
-  state;
-- theorem-layer local-event config preservation lemmas;
-- driver-level local/network config-preservation projections so
-  `server_driver_connected` can carry the credential/config invariant across
-  processing;
-- an extension of the local drain to process scheduler-advertised
-  `LocalSendCertificate`.
-
-This slice still needs the repository full gate before it should be considered a
-committed checkpoint.
-
-One important finding from this in-progress work: automatic
-`LocalSignCertificateVerify` scheduling still needs an additional proof
-projection. The scheduler can expose concrete readiness facts for signing, but
-the credential-aware signing wrapper also needs the ghost fact that the stored
-server selection's credential identity matches the driver's credential identity.
-That fact is true by construction for the supported selection path, but it is
-not yet available as a stable invariant/query at the scheduler/driver boundary.
+The current in-progress slice strengthens the client facade rather than the
+server driver. It adds
+`client_application_record_keys_installed_runtime` in
+`TLS13.Impl.ConnectionState.Queries` and uses it in
+`TLS13.Impl.Client.Driver.connect`, so `DriverWorkflowOk` is no longer merely a
+connected transport result: it proves application-data control and installed
+client application record keys. Focused verification for
+`TLS13.Impl.ConnectionState.Queries` and `TLS13.Impl.Client.Driver` passes, as
+do the extracted client driver slice and OpenSSL echo interop tests.
 
 ## Remaining proof gaps
 
-1. **Credential identity projection for signing**
-   - Add a small, stable proof boundary showing that after supported server
-     selection, the stored `hs_server_selection.server_selected_credential`
-     matches the immutable server config and driver credential resource.
-   - Prefer a reusable pure invariant/query over ad hoc assertions inside the
-     large driver.
-
-2. **Credential-aware driver drain**
-   - Finish and verify the driver credential/config invariant.
-   - Let the local drain process `LocalSendCertificate`.
-   - Then add a focused step for `LocalSignCertificateVerify`.
-   - After signing, reuse the existing generic/stored CertificateVerify send and
-     ServerFinished scheduler paths.
-
-3. **Full server handshake driver**
-   - Compose accept/start/read ClientHello, select/derive/send ServerHello,
-     handshake-key installs, EncryptedExtensions, Certificate, CV signing,
-     CertificateVerify, ServerFinished, client-Finished read/verify, and
-     application-key installation.
-   - Preserve the raw-byte IO-history relation and expose exact branch outcomes.
-
-4. **Concrete client/server agreement bridge**
+1. **Concrete client/server agreement bridge**
    - Connect concrete client and server driver post-states to the existing
      spec-level paired endpoint predicates.
    - Use the existing derived-key agreement lemmas once the concrete transcript
      and key-share agreement hypotheses are established from wire logs.
 
-5. **Extraction and interoperability**
+2. **Exact received-log pairing**
+   - The current driver predicates expose exact sent logs, but received transport
+     logs may include retained read-ahead and currently account protocol
+     `raw_received` inside consumed transport bytes rather than proving exact
+     peer sent/received equality.
+   - Tightening or supplementing this relation is the next proof boundary needed
+     before the aggregate key-material theorem can be instantiated from two live
+     driver resources alone.
+
+3. **Extraction and interoperability**
    - Keep the public API buffer/driver oriented.
    - Extract the verified server path to C.
    - Validate against the supported client/server profile with concrete
@@ -195,17 +164,13 @@ not yet available as a stable invariant/query at the scheduler/driver boundary.
 
 ## Recommended next steps
 
-1. Re-run focused verification for the current in-progress driver after the
-   `U64` import:
-   `make _cache/TLS13.Impl.Server.Driver.fst.checked`.
-2. If it passes, run the full gate and commit the credential/config invariant
-   plus Certificate-drain support as a small slice.
-3. If it does not pass quickly, split the credential/config invariant and local
-   preservation lemmas behind a smaller interface before continuing.
-4. Add the selected-credential projection needed for
-   `LocalSignCertificateVerify`.
-5. Compose and verify the next driver slice through the complete server
-   encrypted flight.
+1. Finish validating and commit the client `connect` readiness hardening slice.
+2. Add the smallest pure/driver bridge predicate that relates a connected client
+   and connected server with paired exact wire histories to
+   `supported_profile_client_server_key_material_inputs_agree`.
+3. Strengthen the driver received-log relation enough to prove that bridge
+   without hiding retained read-ahead or rejected bytes.
+4. Re-run extraction and interop tests after each C-facing facade change.
 
 ## Engineering note
 

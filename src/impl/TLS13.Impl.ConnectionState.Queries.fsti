@@ -754,6 +754,17 @@ fn server_application_record_keys_installed_runtime
               CS.ServerEndpoint
               st0.CS.cs_model)
 
+fn client_application_record_keys_installed_runtime
+  (c:connection_state)
+  (#st0:erased CS.connection_state)
+  requires connection_exactly c st0
+  returns ok: bool
+  ensures connection_exactly c st0 **
+          pure (ok ==>
+            CS.application_record_keys_installed_for_role
+              CS.ClientEndpoint
+              st0.CS.cs_model)
+
 fn can_send_client_finished_runtime
   (c:connection_state)
   (network_out_len:SZ.t)

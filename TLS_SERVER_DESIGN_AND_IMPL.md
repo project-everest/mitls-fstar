@@ -1047,6 +1047,16 @@ through `send_close_notify_once`, exposes `server_driver_close_correct` tying th
 transition to `DL.server_driver_local_write_correct`, and only then closes the
 TCP channel.
 
+The client facade now exposes the corresponding success fact needed by the
+future paired-run bridge: `TLS13.Impl.Client.Driver.connect` returns
+`DriverWorkflowOk` only with `client_driver_application_ready`, proving
+`ControlApplicationData` plus
+`CS.application_record_keys_installed_for_role CS.ClientEndpoint`. The core
+client invariant remains exposed at the lower `TLS13.Impl.Client` buffer/event
+API; carrying it through the heap driver predicates is a separate API-tightening
+task if the paired-run bridge needs that fact from `client_driver_connected`
+alone.
+
 Current extraction status: the first focused server-core KaRaMeL prefix through
 `TLS13.Impl.Server.Network` now completes. The previous KaRaMeL
 `Failure("nth")` was isolated to the large `process_network_bytes` dispatcher;
@@ -1762,6 +1772,8 @@ Checklist:
 - [x] Server write equals client read for `ServerTraffic`.
 - [x] Record sequence/epoch consistency is preserved.
 - [ ] Sent seal and accepted received decode replay use the agreed material.
+- [x] Public client `connect` success exposes application-data control and
+      installed client application read/write record keys.
 
 ## Phase-by-phase implementation plan
 
@@ -2655,8 +2667,10 @@ Checklist:
 - [ ] Verified client connects to verified server.
 - [ ] Pure paired-endpoint derived-key theorem instantiates on paired
       implementation states.
-- [ ] Existing OpenSSL echo client test still passes.
-- [ ] Existing client driver slice test still passes.
+- [x] Existing OpenSSL echo client test still passes after the latest client
+      facade readiness check.
+- [x] Existing client driver slice test still passes after the latest client
+      facade readiness check.
 - [ ] `make verify` passes.
 - [ ] `make check-admits` stays at zero.
 - [ ] `make check-c-stubs` passes if C stubs are added.

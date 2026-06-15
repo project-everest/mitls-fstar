@@ -9,6 +9,7 @@ module B = TLS13.Bytes
 module C = TLS13.Impl.Client
 module CL = TLS13.ConnectionLog
 module CR = TLS13.Impl.ConnectionState.Repr
+module CS = TLS13.Spec.ConnectionState
 module CT = TLS13.Impl.Client.Types
 module IO = TLS13.IO
 module O = TLS13.OpenSSL
@@ -54,6 +55,13 @@ val client_driver_closed
   (d:client_driver)
   (st:TLS13.Spec.ConnectionState.connection_state)
   : slprop
+
+noextract
+let client_driver_application_ready
+  (st:CS.connection_state)
+  : prop =
+  st.CS.cs_model.CS.model_control == CS.ControlApplicationData /\
+  CS.application_record_keys_installed_for_role CS.ClientEndpoint st.CS.cs_model
 
 type driver_workflow_status =
   | DriverWorkflowOk
@@ -122,7 +130,8 @@ fn connect
           (match status with
            | DriverWorkflowOk ->
              exists* received sent.
-               client_driver_connected d st1 received sent
+               client_driver_connected d st1 received sent **
+               pure (client_driver_application_ready st1)
            | _ ->
              client_driver_closed d st1)
 

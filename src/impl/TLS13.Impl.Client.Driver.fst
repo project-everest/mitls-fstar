@@ -10,6 +10,7 @@ module A = Pulse.Lib.Array
 module C = TLS13.Impl.Client
 module Bounds = TLS13.Impl.ConnectionState.Bounds
 module CL = TLS13.ConnectionLog
+module CQ = TLS13.Impl.ConnectionState.Queries
 module CR = TLS13.Impl.ConnectionState.Repr
 module CS = TLS13.Spec.ConnectionState
 module CT = TLS13.Impl.Client.Types
@@ -3114,7 +3115,9 @@ fn rec driver_handshake
                  Seq.equal buffered_after
                    (Seq.slice raw_bytes 0 (SZ.v result.driver_workflow_rx_len)) /\
                  B.length network_out_bytes == SZ.v network_out_len /\
-                 B.length app_out_bytes == SZ.v app_out_len)
+                 B.length app_out_bytes == SZ.v app_out_len /\
+                 (result.driver_workflow_status == DriverWorkflowOk ==>
+                  st1.CS.cs_model.CS.model_control == CS.ControlApplicationData))
   decreases (SZ.v fuel)
 {
   let no_op_resp = {
@@ -3169,6 +3172,8 @@ fn rec driver_handshake
     fold (top_driver_exactly d st_snapshot 'buffered buffered_len);
     let app_ready = snapshot.CR.snapshot_control_tag = 2uy;
     if app_ready {
+      assert (pure (CR.control_snapshot_matches snapshot st_snapshot));
+      assert (pure (st_snapshot.CS.cs_model.CS.model_control == CS.ControlApplicationData));
       {
         driver_workflow_status = DriverWorkflowOk;
         driver_workflow_rx_len = buffered_len;
@@ -4270,7 +4275,8 @@ fn connect
           (match status with
            | DriverWorkflowOk ->
              exists* received sent.
-               client_driver_connected d st1 received sent
+               client_driver_connected d st1 received sent **
+               pure (client_driver_application_ready st1)
            | _ ->
              client_driver_closed d st1)
 {
@@ -4390,9 +4396,27 @@ fn connect
          with received sent.
            assert (IO.is_channel ch received sent **
                    pure (client_driver_wire_logs_match st1 received sent buffered_after result.driver_workflow_rx_len));
-         Box.(d.client_driver_channel := Some ch);
-         fold (client_driver_connected d st1 received sent);
-         DriverWorkflowOk
+         assert (pure (st1.CS.cs_model.CS.model_control == CS.ControlApplicationData));
+         rewrite (C.connection_exactly d.client_driver_client st1) as
+           (CR.connection_exactly d.client_driver_client st1);
+         let keys_installed =
+           CQ.client_application_record_keys_installed_runtime
+             d.client_driver_client;
+         rewrite (CR.connection_exactly d.client_driver_client st1) as
+           (C.connection_exactly d.client_driver_client st1);
+         if keys_installed {
+           assert (pure (CS.application_record_keys_installed_for_role
+             CS.ClientEndpoint
+             st1.CS.cs_model));
+           assert (pure (client_driver_application_ready st1));
+           Box.(d.client_driver_channel := Some ch);
+           fold (client_driver_connected d st1 received sent);
+           DriverWorkflowOk
+         } else {
+           fold (channel_open ch st1 buffered_after result.driver_workflow_rx_len);
+           close_failed_connect d ch result.driver_workflow_rx_len;
+           DriverWorkflowStepFailed
+         }
        }
         DriverWorkflowNeedMoreInput -> {
           close_failed_connect d ch result.driver_workflow_rx_len;

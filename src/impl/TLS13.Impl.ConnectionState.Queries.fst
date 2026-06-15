@@ -4680,6 +4680,113 @@ fn server_application_record_keys_installed_runtime
     ok
   }
 }
+
+fn client_application_record_keys_installed_runtime
+  (c:connection_state)
+  (#st0:erased CS.connection_state)
+  requires connection_exactly c st0
+  returns ok: bool
+  ensures connection_exactly c st0 **
+          pure (ok ==>
+            CS.application_record_keys_installed_for_role
+              CS.ClientEndpoint
+              st0.CS.cs_model)
+{
+  unfold (connection_exactly c st0);
+  unfold (connection_model_exactly c st0.CS.cs_model);
+  unfold (record_layer_exactly c.records st0.CS.cs_model.CS.model_record);
+  unfold (handshake_exactly c.handshake st0.CS.cs_model.CS.model_handshake);
+  with cv_verified server_finished_verified. _;
+  unfold (key_schedule_exactly
+    c.handshake.keys
+    st0.CS.cs_model.CS.model_handshake.CS.hs_keys);
+  unfold (traffic_key_material_exactly
+    c.handshake.keys.client_application_traffic
+    st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_application_traffic);
+  unfold (traffic_key_material_exactly
+    c.handshake.keys.server_application_traffic
+    st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_application_traffic);
+
+  with client_app_present_w client_app_secret client_app_key client_app_iv.
+    assert (Box.pts_to c.handshake.keys.client_application_traffic.present client_app_present_w **
+            V.pts_to c.handshake.keys.client_application_traffic.traffic_secret client_app_secret **
+            V.pts_to c.handshake.keys.client_application_traffic.traffic_key client_app_key **
+            V.pts_to c.handshake.keys.client_application_traffic.traffic_iv client_app_iv);
+  with server_app_present_w server_app_secret server_app_key server_app_iv.
+    assert (Box.pts_to c.handshake.keys.server_application_traffic.present server_app_present_w **
+            V.pts_to c.handshake.keys.server_application_traffic.traffic_secret server_app_secret **
+            V.pts_to c.handshake.keys.server_application_traffic.traffic_key server_app_key **
+            V.pts_to c.handshake.keys.server_application_traffic.traffic_iv server_app_iv);
+
+  let client_app_present = !c.handshake.keys.client_application_traffic.present;
+  let server_app_present = !c.handshake.keys.server_application_traffic.present;
+  assert (pure (client_app_present == client_app_present_w));
+  assert (pure (server_app_present == server_app_present_w));
+
+  V.to_array_pts_to c.handshake.keys.server_application_traffic.traffic_key;
+  V.to_array_pts_to c.handshake.keys.server_application_traffic.traffic_iv;
+  let read_keys_match =
+    Rec.application_keys_match
+      c.records.read
+      (V.vec_to_array c.handshake.keys.server_application_traffic.traffic_key)
+      (V.vec_to_array c.handshake.keys.server_application_traffic.traffic_iv);
+  V.to_vec_pts_to c.handshake.keys.server_application_traffic.traffic_iv;
+  V.to_vec_pts_to c.handshake.keys.server_application_traffic.traffic_key;
+
+  V.to_array_pts_to c.handshake.keys.client_application_traffic.traffic_key;
+  V.to_array_pts_to c.handshake.keys.client_application_traffic.traffic_iv;
+  let write_keys_match =
+    Rec.application_keys_match
+      c.records.write
+      (V.vec_to_array c.handshake.keys.client_application_traffic.traffic_key)
+      (V.vec_to_array c.handshake.keys.client_application_traffic.traffic_iv);
+  V.to_vec_pts_to c.handshake.keys.client_application_traffic.traffic_iv;
+  V.to_vec_pts_to c.handshake.keys.client_application_traffic.traffic_key;
+
+  let ok =
+    client_app_present &&
+    server_app_present &&
+    read_keys_match &&
+    write_keys_match;
+
+  fold (traffic_key_material_exactly
+    c.handshake.keys.server_application_traffic
+    st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_application_traffic);
+  fold (traffic_key_material_exactly
+    c.handshake.keys.client_application_traffic
+    st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_application_traffic);
+  fold (key_schedule_exactly
+    c.handshake.keys
+    st0.CS.cs_model.CS.model_handshake.CS.hs_keys);
+  fold (handshake_exactly c.handshake st0.CS.cs_model.CS.model_handshake);
+  fold (record_layer_exactly c.records st0.CS.cs_model.CS.model_record);
+  fold (connection_model_exactly c st0.CS.cs_model);
+  fold (connection_exactly c st0);
+  if ok {
+    lemma_traffic_key_material_match_present_of_some
+      client_app_present_w
+      client_app_secret
+      client_app_key
+      client_app_iv
+      st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_application_traffic;
+    lemma_traffic_key_material_match_present_of_some
+      server_app_present_w
+      server_app_secret
+      server_app_key
+      server_app_iv
+      st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_application_traffic;
+    assert_norm (CS.traffic_label_for_endpoint_direction CS.ClientEndpoint CS.TrafficRead ==
+      CS.ServerTraffic);
+    assert_norm (CS.traffic_label_for_endpoint_direction CS.ClientEndpoint CS.TrafficWrite ==
+      CS.ClientTraffic);
+    assert (pure (CS.application_record_keys_installed_for_role
+      CS.ClientEndpoint
+      st0.CS.cs_model));
+    ok
+  } else {
+    ok
+  }
+}
 fn can_send_client_finished_runtime
   (c:connection_state)
   (network_out_len:SZ.t)
