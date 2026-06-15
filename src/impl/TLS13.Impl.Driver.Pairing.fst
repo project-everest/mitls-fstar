@@ -11,6 +11,30 @@ module CS = TLS13.Spec.ConnectionState
 module CSL = TLS13.ConnectionState.Lemmas
 module SD = TLS13.Impl.Server.Driver
 module Seq = FStar.Seq
+module SeqP = FStar.Seq.Properties
+
+let lemma_paired_protocol_received_logs_accounted
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  (client_received:B.bytes)
+  (client_sent:B.bytes)
+  (server_received:B.bytes)
+  (server_sent:B.bytes)
+  : Lemma
+      (requires
+        paired_driver_transport_logs_accounted
+          client
+          server
+          client_received
+          client_sent
+          server_received
+          server_sent)
+      (ensures paired_protocol_received_logs_accounted client server)
+=
+  Seq.lemma_eq_elim client_received server_sent;
+  Seq.lemma_eq_elim server_sent server.CS.cs_wire_log.CL.raw_sent;
+  Seq.lemma_eq_elim server_received client_sent;
+  Seq.lemma_eq_elim client_sent client.CS.cs_wire_log.CL.raw_sent
 
 let lemma_paired_wire_logs_from_exact_transport
   (client:CS.connection_state)

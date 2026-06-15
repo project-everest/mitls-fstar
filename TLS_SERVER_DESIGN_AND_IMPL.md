@@ -1092,7 +1092,10 @@ client/server application-readiness facts, exact endpoint transport/protocol log
 matching, paired transport histories, and the existing
 `CS.supported_profile_client_server_key_material_inputs_agree` predicate, then
 instantiates the main spec theorem to prove
-`CS.supported_profile_client_server_key_material_agrees`. The remaining concrete
+`CS.supported_profile_client_server_key_material_agrees`. The module also exposes
+`lemma_paired_protocol_received_logs_accounted`, which composes the public
+sent-exact/received-accounted facade facts with paired transport histories and
+proves cross-endpoint protocol received-log accounting. The remaining concrete
 composition work is to prove the exact transport/protocol received-log matching
 from complete driver resources by strengthening the hidden received-log relation
 from length/count accounting to ordered accepted-prefix/exact-drained facts.

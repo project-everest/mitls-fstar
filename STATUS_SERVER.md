@@ -166,12 +166,15 @@ exposes `client_driver_close_correct`, tying the returned status to a verified
 `LocalSendCloseNotify` theorem and exact close-notify sent-log append before the
 TCP channel is closed.
 
-The latest theorem-bridge slice adds `TLS13.Impl.Driver.Pairing`, which packages
+The latest theorem-bridge slices add `TLS13.Impl.Driver.Pairing`, which packages
 the public client/server application-readiness facts, exact paired transport log
 obligations, and existing
 `supported_profile_client_server_key_material_inputs_agree` predicate into a
 single checked theorem that yields both `CS.paired_wire_logs` and
-`CS.supported_profile_client_server_key_material_agrees`.
+`CS.supported_profile_client_server_key_material_agrees`. The same module now
+also exposes `lemma_paired_protocol_received_logs_accounted`, a checked
+intermediate bridge from public sent-exact/received-accounted facade facts plus
+paired transport histories to cross-endpoint protocol received-log accounting.
 
 The latest facade-accounting slice exposes public
 `client_driver_received_log_accounted` and

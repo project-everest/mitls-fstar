@@ -10,6 +10,7 @@ module CL = TLS13.ConnectionLog
 module CS = TLS13.Spec.ConnectionState
 module SD = TLS13.Impl.Server.Driver
 module Seq = FStar.Seq
+module SeqP = FStar.Seq.Properties
 
 noextract
 let endpoint_transport_logs_exact
@@ -46,6 +47,59 @@ let paired_driver_transport_logs_exact
     client_sent
     server_received
     server_sent
+
+noextract
+let paired_driver_transport_logs_accounted
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  (client_received:B.bytes)
+  (client_sent:B.bytes)
+  (server_received:B.bytes)
+  (server_sent:B.bytes)
+  : prop =
+  CD.client_driver_sent_log_exact client client_sent /\
+  SD.server_driver_sent_log_exact server server_sent /\
+  CD.client_driver_received_log_accounted client client_received /\
+  SD.server_driver_received_log_accounted server server_received /\
+  paired_transport_histories
+    client_received
+    client_sent
+    server_received
+    server_sent
+
+noextract
+let paired_protocol_received_logs_accounted
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  : prop =
+  B.length client.CS.cs_wire_log.CL.raw_received <=
+    B.length server.CS.cs_wire_log.CL.raw_sent /\
+  (forall b.
+    SeqP.count b client.CS.cs_wire_log.CL.raw_received <=
+    SeqP.count b server.CS.cs_wire_log.CL.raw_sent) /\
+  B.length server.CS.cs_wire_log.CL.raw_received <=
+    B.length client.CS.cs_wire_log.CL.raw_sent /\
+  (forall b.
+    SeqP.count b server.CS.cs_wire_log.CL.raw_received <=
+    SeqP.count b client.CS.cs_wire_log.CL.raw_sent)
+
+val lemma_paired_protocol_received_logs_accounted
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  (client_received:B.bytes)
+  (client_sent:B.bytes)
+  (server_received:B.bytes)
+  (server_sent:B.bytes)
+  : Lemma
+      (requires
+        paired_driver_transport_logs_accounted
+          client
+          server
+          client_received
+          client_sent
+          server_received
+          server_sent)
+      (ensures paired_protocol_received_logs_accounted client server)
 
 val lemma_paired_wire_logs_from_exact_transport
   (client:CS.connection_state)
