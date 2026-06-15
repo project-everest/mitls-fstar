@@ -1099,14 +1099,21 @@ proves cross-endpoint protocol received-log accounting. The remaining concrete
 composition work is to prove the exact transport/protocol received-log matching
 from complete driver resources by strengthening the hidden received-log relation
 from length/count accounting to ordered accepted-prefix/exact-drained facts.
-The next proof boundary is partly discharged: role-shared
-`lemma_legal_connection_delta_local_fail_control_failed` plus client/server
-response lemmas now expose that `LocalFail`-based decode error, unexpected
-message, and bad Finished responses produce a `ControlFailed` state. The
-remaining theorem-surface fact is that every non-failed network step with
-nonzero consumed input logs that consumed prefix as the accepted protocol
-`raw_received` delta. Those facts are needed before the driver witness can carry
-an "exact unless failed" consumed-byte invariant.
+The next proof boundary is now discharged at the theorem surface:
+role-shared `lemma_legal_connection_delta_local_fail_control_failed` plus
+client/server response lemmas expose that `LocalFail`-based decode error,
+unexpected message, and bad Finished responses produce a `ControlFailed` state.
+Client/server network predicates
+`network_bytes_nonfailed_received_prefix_accepted` and
+`server_network_nonfailed_received_prefix_accepted` now expose that every
+non-failed network step with nonzero consumed input logs that consumed prefix as
+the accepted protocol `raw_received` delta. Driver-side exact append helpers
+prove that, assuming the prior consumed transport prefix exactly matched the
+protocol received log, a non-failed network step preserves exactness by appending
+the consumed prefix. The remaining work is to fold this exact-unless-failed fact
+into the hidden client/server driver wire-log invariants and prove the
+successful-handshake drained/no-retained facts needed for the final exact
+paired-wire-log bridge.
 
 Current extraction status: the first focused server-core KaRaMeL prefix through
 `TLS13.Impl.Server.Network` now completes. The previous KaRaMeL

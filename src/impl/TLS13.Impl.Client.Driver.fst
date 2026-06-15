@@ -719,6 +719,213 @@ let lemma_network_bytes_logged_received_accounted
       (CT.network_consumed_prefix network_input buffer_resp.CT.consumed_len)
   )
 
+let lemma_network_bytes_zero_consumed_raw_received_unchanged
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (buffer_resp:CT.client_buffer_response)
+  (network_input:B.bytes)
+  (old_network_out:B.bytes)
+  (network_out:B.bytes)
+  (old_app_out:B.bytes)
+  (app_out:B.bytes)
+  : Lemma
+      (requires
+        CT.network_bytes_end_to_end_correct
+          st0
+          st1
+          buffer_resp
+          network_input
+          old_network_out
+          network_out
+          old_app_out
+          app_out /\
+        buffer_resp.CT.consumed_len == 0sz)
+      (ensures
+        Seq.equal
+          st1.CS.cs_wire_log.CL.raw_received
+          st0.CS.cs_wire_log.CL.raw_received)
+=
+  let resp = buffer_resp.CT.response in
+  assert (CT.network_bytes_step_correct
+    st0 st1 buffer_resp network_input old_network_out network_out old_app_out app_out);
+  if CT.response_stuttered st0 st1 resp old_network_out network_out old_app_out app_out then (
+    assert (st1 == st0)
+  ) else (
+    assert (CT.some_legal_response_for_network_prefix
+      st0 st1 resp network_input buffer_resp.CT.consumed_len network_out app_out);
+    let ev =
+      ID.indefinite_description_ghost
+        CS.conn_event
+        (fun ev -> exists raw_sent raw_received.
+          CT.legal_response_for_event st0 st1 resp ev raw_sent raw_received network_out app_out /\
+          CT.raw_received_matches_network_input
+            raw_received
+            (CT.network_consumed_prefix network_input buffer_resp.CT.consumed_len)) in
+    let raw_sent =
+      ID.indefinite_description_ghost
+        B.bytes
+        (fun raw_sent -> exists raw_received.
+          CT.legal_response_for_event st0 st1 resp ev raw_sent raw_received network_out app_out /\
+          CT.raw_received_matches_network_input
+            raw_received
+            (CT.network_consumed_prefix network_input buffer_resp.CT.consumed_len)) in
+    let raw_received =
+      ID.indefinite_description_ghost
+        B.bytes
+        (fun raw_received ->
+          CT.legal_response_for_event st0 st1 resp ev raw_sent raw_received network_out app_out /\
+          CT.raw_received_matches_network_input
+            raw_received
+            (CT.network_consumed_prefix network_input buffer_resp.CT.consumed_len)) in
+    assert (CT.legal_response_for_event
+      st0 st1 resp ev raw_sent raw_received network_out app_out);
+    assert (CT.network_consumed_prefix network_input buffer_resp.CT.consumed_len ==
+      Seq.slice network_input 0 0);
+    Seq.lemma_len_slice network_input 0 0;
+    Seq.lemma_eq_intro
+      (CT.network_consumed_prefix network_input buffer_resp.CT.consumed_len)
+      B.empty;
+    assert (Seq.equal
+      (CT.network_consumed_prefix network_input buffer_resp.CT.consumed_len)
+      B.empty);
+    assert (CT.raw_received_matches_network_input
+      raw_received
+      (CT.network_consumed_prefix network_input buffer_resp.CT.consumed_len));
+    if Seq.equal raw_received B.empty then (
+      Seq.lemma_eq_elim raw_received B.empty
+    ) else (
+      assert (Seq.equal raw_received
+        (CT.network_consumed_prefix network_input buffer_resp.CT.consumed_len));
+      Seq.lemma_eq_elim raw_received
+        (CT.network_consumed_prefix network_input buffer_resp.CT.consumed_len);
+      Seq.lemma_eq_elim
+        (CT.network_consumed_prefix network_input buffer_resp.CT.consumed_len)
+        B.empty
+    );
+    lemma_legal_response_for_event_wire_lengths
+      st0
+      st1
+      resp
+      ev
+      raw_sent
+      raw_received
+      network_out
+      app_out;
+    Seq.append_empty_r st0.CS.cs_wire_log.CL.raw_received
+  )
+
+let lemma_network_bytes_logged_received_exact_when_nonfailed
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (buffer_resp:CT.client_buffer_response)
+  (network_input:B.bytes)
+  (old_network_out:B.bytes)
+  (network_out:B.bytes)
+  (old_app_out:B.bytes)
+  (app_out:B.bytes)
+  (old_consumed:B.bytes)
+  : Lemma
+      (requires
+        CT.connection_control_not_failed st0 /\
+        Seq.equal st0.CS.cs_wire_log.CL.raw_received old_consumed /\
+        CT.network_bytes_end_to_end_correct
+          st0
+          st1
+          buffer_resp
+          network_input
+          old_network_out
+          network_out
+          old_app_out
+          app_out)
+      (ensures
+        CT.connection_control_not_failed st1 ==>
+          Seq.equal
+            st1.CS.cs_wire_log.CL.raw_received
+            (B.append old_consumed
+              (CT.network_consumed_prefix network_input buffer_resp.CT.consumed_len)))
+=
+  if CT.connection_control_not_failed st1 then (
+    CT.lemma_network_bytes_end_to_end_nonfailed_received_prefix_accepted
+      st0
+      st1
+      buffer_resp
+      network_input
+      old_network_out
+      network_out
+      old_app_out
+      app_out;
+    if buffer_resp.CT.consumed_len == 0sz then (
+      lemma_network_bytes_zero_consumed_raw_received_unchanged
+        st0
+        st1
+        buffer_resp
+        network_input
+        old_network_out
+        network_out
+        old_app_out
+        app_out;
+      assert (Seq.equal
+        st1.CS.cs_wire_log.CL.raw_received
+        st0.CS.cs_wire_log.CL.raw_received);
+      Seq.lemma_eq_elim st0.CS.cs_wire_log.CL.raw_received old_consumed;
+      assert (CT.network_consumed_prefix network_input buffer_resp.CT.consumed_len ==
+        Seq.slice network_input 0 0);
+      Seq.lemma_len_slice network_input 0 0;
+      Seq.lemma_eq_intro
+        (CT.network_consumed_prefix network_input buffer_resp.CT.consumed_len)
+        B.empty;
+      Seq.lemma_eq_elim
+        (CT.network_consumed_prefix network_input buffer_resp.CT.consumed_len)
+        B.empty;
+      Seq.append_empty_r old_consumed
+    ) else (
+      assert (exists msg.
+        CT.legal_received_tls_response
+          st0
+          st1
+          buffer_resp.CT.response
+          msg
+          (CT.network_consumed_prefix network_input buffer_resp.CT.consumed_len)
+          network_out
+          app_out);
+      let msg =
+        ID.indefinite_description_ghost
+          M.tls_message
+          (fun msg ->
+            CT.legal_received_tls_response
+              st0
+              st1
+              buffer_resp.CT.response
+              msg
+              (CT.network_consumed_prefix network_input buffer_resp.CT.consumed_len)
+              network_out
+              app_out) in
+      let ev = CS.ConnNetworkEvent {
+        CL.message_direction = CL.Received;
+        CL.message_value = msg;
+      } in
+      assert (CT.legal_response_for_event
+        st0
+        st1
+        buffer_resp.CT.response
+        ev
+        B.empty
+        (CT.network_consumed_prefix network_input buffer_resp.CT.consumed_len)
+        network_out
+        app_out);
+      lemma_legal_response_for_event_wire_lengths
+        st0
+        st1
+        buffer_resp.CT.response
+        ev
+        B.empty
+        (CT.network_consumed_prefix network_input buffer_resp.CT.consumed_len)
+        network_out
+        app_out;
+      Seq.lemma_eq_elim st0.CS.cs_wire_log.CL.raw_received old_consumed
+    )
+  )
+
 fn new_client
   (server_name:array U8.t)
   (server_name_len:SZ.t)

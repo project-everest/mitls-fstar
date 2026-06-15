@@ -1136,6 +1136,304 @@ let lemma_server_network_wire_accounting
       raw_received
       (ST.server_network_consumed_prefix buffer_resp input)
 
+let lemma_server_network_zero_consumed_raw_received_unchanged
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (buffer_resp:ST.server_buffer_response)
+  (input:B.bytes)
+  (network_out:B.bytes)
+  (app_out:B.bytes)
+  : Lemma
+      (requires
+        ST.server_network_bytes_end_to_end_correct
+          st0 st1 buffer_resp input network_out app_out /\
+        ST.server_network_consumed_input_projection
+          st0 st1 buffer_resp input network_out app_out /\
+        buffer_resp.ST.consumed_len == 0sz)
+      (ensures
+        Seq.equal
+          st1.CS.cs_wire_log.CL.raw_received
+          st0.CS.cs_wire_log.CL.raw_received)
+=
+  let resp = buffer_resp.ST.response in
+  assert (ST.server_network_consumed_prefix buffer_resp input ==
+    Seq.slice input 0 0);
+  Seq.lemma_len_slice input 0 0;
+  Seq.lemma_eq_intro (ST.server_network_consumed_prefix buffer_resp input) B.empty;
+  assert (Seq.equal (ST.server_network_consumed_prefix buffer_resp input) B.empty);
+  match resp.ST.status with
+  | ST.NeedMoreInput ->
+    assert (st1 == st0)
+  | ST.IllegalTransition ->
+    assert (st1 == st0)
+  | ST.DecodeError ->
+    assert (ST.decode_error_response st0 st1 resp network_out app_out);
+    lemma_legal_response_for_event_wire_lengths
+      st0
+      st1
+      resp
+      (CS.ConnLocalEvent (CS.LocalFail CM.tls_decode_error))
+      B.empty
+      B.empty
+      network_out
+      app_out;
+    Seq.append_empty_r st0.CS.cs_wire_log.CL.raw_received
+  | ST.OutputBufferTooSmall ->
+    assert False
+  | ST.StepOk ->
+    assert (ST.server_network_step_ok_received_decode_projection
+      st0 st1 buffer_resp input network_out app_out);
+    assert (exists msg.
+      CT.received_tls_raw_delta_legal
+        st0
+        msg
+        (ST.server_network_consumed_prefix buffer_resp input) /\
+      ST.server_decoded_message_event_projection
+        st0
+        st1
+        resp
+        msg
+        (ST.server_network_consumed_prefix buffer_resp input)
+        network_out
+        app_out /\
+      (if CS.network_message_is_cleartext CL.Received msg
+       then True
+       else
+         ST.server_protected_record_decode_correct
+           st0
+           (ST.server_network_consumed_prefix buffer_resp input)
+           msg));
+    let msg =
+      ID.indefinite_description_ghost
+        M.tls_message
+        (fun msg ->
+          CT.received_tls_raw_delta_legal
+            st0
+            msg
+            (ST.server_network_consumed_prefix buffer_resp input) /\
+          ST.server_decoded_message_event_projection
+            st0
+            st1
+            resp
+            msg
+            (ST.server_network_consumed_prefix buffer_resp input)
+            network_out
+            app_out /\
+          (if CS.network_message_is_cleartext CL.Received msg
+           then True
+           else
+             ST.server_protected_record_decode_correct
+               st0
+               (ST.server_network_consumed_prefix buffer_resp input)
+               msg)) in
+    assert (ST.server_decoded_message_event_projection
+      st0
+      st1
+      resp
+      msg
+      (ST.server_network_consumed_prefix buffer_resp input)
+      network_out
+      app_out);
+    if ST.legal_network_response
+      st0
+      st1
+      resp
+      msg
+      (ST.server_network_consumed_prefix buffer_resp input)
+      network_out
+      app_out then (
+      assert (ST.legal_response_for_event
+        st0
+        st1
+        resp
+        (ST.received_message_event msg)
+        B.empty
+        (ST.server_network_consumed_prefix buffer_resp input)
+        network_out
+        app_out);
+      Seq.lemma_eq_elim (ST.server_network_consumed_prefix buffer_resp input) B.empty;
+      lemma_legal_response_for_event_wire_lengths
+        st0
+        st1
+        resp
+        (ST.received_message_event msg)
+        B.empty
+        B.empty
+        network_out
+        app_out;
+      Seq.append_empty_r st0.CS.cs_wire_log.CL.raw_received
+    ) else (
+      assert (ST.unexpected_message_response st0 st1 resp network_out app_out);
+      assert (resp.ST.status == ST.IllegalTransition);
+      assert False
+    )
+  | ST.ConnectionFailed ->
+    assert (ST.server_network_connection_failed_consumed_prefix
+      st0 st1 buffer_resp input network_out app_out);
+    let alert =
+      ID.indefinite_description_ghost
+        T.alert_description
+        (fun alert -> exists raw_received.
+          st1 ==
+            CM.received_alert_failure_state
+              st0
+              alert
+              raw_received /\
+          Seq.equal
+            raw_received
+            (ST.server_network_consumed_prefix buffer_resp input) /\
+          ST.legal_network_response
+            st0
+            st1
+            resp
+            (M.TlsAlert alert)
+            raw_received
+            network_out
+            app_out) in
+    let raw_received =
+      ID.indefinite_description_ghost
+        B.bytes
+        (fun raw_received ->
+          st1 ==
+            CM.received_alert_failure_state
+              st0
+              alert
+              raw_received /\
+          Seq.equal
+            raw_received
+            (ST.server_network_consumed_prefix buffer_resp input) /\
+          ST.legal_network_response
+            st0
+            st1
+            resp
+            (M.TlsAlert alert)
+            raw_received
+            network_out
+            app_out) in
+    assert (Seq.equal raw_received (ST.server_network_consumed_prefix buffer_resp input));
+    Seq.lemma_eq_elim raw_received (ST.server_network_consumed_prefix buffer_resp input);
+    Seq.lemma_eq_elim (ST.server_network_consumed_prefix buffer_resp input) B.empty;
+    assert (ST.legal_network_response
+      st0
+      st1
+      resp
+      (M.TlsAlert alert)
+      B.empty
+      network_out
+      app_out);
+    assert (ST.legal_response_for_event
+      st0
+      st1
+      resp
+      (ST.received_message_event (M.TlsAlert alert))
+      B.empty
+      B.empty
+      network_out
+      app_out);
+    lemma_legal_response_for_event_wire_lengths
+      st0
+      st1
+      resp
+      (ST.received_message_event (M.TlsAlert alert))
+      B.empty
+      B.empty
+      network_out
+      app_out;
+    Seq.append_empty_r st0.CS.cs_wire_log.CL.raw_received
+
+let lemma_server_network_logged_received_exact_when_nonfailed
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (buffer_resp:ST.server_buffer_response)
+  (input:B.bytes)
+  (network_out:B.bytes)
+  (app_out:B.bytes)
+  (old_consumed:B.bytes)
+  : Lemma
+      (requires
+        ST.server_connection_control_not_failed st0 /\
+        Seq.equal st0.CS.cs_wire_log.CL.raw_received old_consumed /\
+        ST.server_network_bytes_end_to_end_correct
+          st0 st1 buffer_resp input network_out app_out /\
+        ST.server_network_consumed_input_projection
+          st0 st1 buffer_resp input network_out app_out)
+      (ensures
+        ST.server_connection_control_not_failed st1 ==>
+          Seq.equal
+            st1.CS.cs_wire_log.CL.raw_received
+            (B.append old_consumed
+              (ST.server_network_consumed_prefix buffer_resp input)))
+=
+  if ST.server_connection_control_not_failed st1 then (
+    ST.lemma_server_network_bytes_end_to_end_nonfailed_received_prefix_accepted
+      st0
+      st1
+      buffer_resp
+      input
+      network_out
+      app_out;
+    if buffer_resp.ST.consumed_len == 0sz then (
+      lemma_server_network_zero_consumed_raw_received_unchanged
+        st0
+        st1
+        buffer_resp
+        input
+        network_out
+        app_out;
+      assert (Seq.equal
+        st1.CS.cs_wire_log.CL.raw_received
+        st0.CS.cs_wire_log.CL.raw_received);
+      Seq.lemma_eq_elim st0.CS.cs_wire_log.CL.raw_received old_consumed;
+      assert (ST.server_network_consumed_prefix buffer_resp input ==
+        Seq.slice input 0 0);
+      Seq.lemma_len_slice input 0 0;
+      Seq.lemma_eq_intro (ST.server_network_consumed_prefix buffer_resp input) B.empty;
+      Seq.lemma_eq_elim (ST.server_network_consumed_prefix buffer_resp input) B.empty;
+      Seq.append_empty_r old_consumed
+    ) else (
+      assert (exists msg.
+        ST.legal_network_response
+          st0
+          st1
+          buffer_resp.ST.response
+          msg
+          (ST.server_network_consumed_prefix buffer_resp input)
+          network_out
+          app_out);
+      let msg =
+        ID.indefinite_description_ghost
+          M.tls_message
+          (fun msg ->
+            ST.legal_network_response
+              st0
+              st1
+              buffer_resp.ST.response
+              msg
+              (ST.server_network_consumed_prefix buffer_resp input)
+              network_out
+              app_out) in
+      assert (ST.legal_response_for_event
+        st0
+        st1
+        buffer_resp.ST.response
+        (ST.received_message_event msg)
+        B.empty
+        (ST.server_network_consumed_prefix buffer_resp input)
+        network_out
+        app_out);
+      lemma_legal_response_for_event_wire_lengths
+        st0
+        st1
+        buffer_resp.ST.response
+        (ST.received_message_event msg)
+        B.empty
+        (ST.server_network_consumed_prefix buffer_resp input)
+        network_out
+        app_out;
+      Seq.lemma_eq_elim st0.CS.cs_wire_log.CL.raw_received old_consumed
+    )
+  )
+
 fn process_buffered_network_bytes_compact_once
   (d:server_driver)
   requires server_driver_connected

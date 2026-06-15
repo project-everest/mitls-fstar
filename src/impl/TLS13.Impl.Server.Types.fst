@@ -1392,6 +1392,299 @@ let server_network_consumed_input_projection
     decode_error_response st0 st1 resp.response network_out app_out) /\
   (resp.response.status == OutputBufferTooSmall ==> False)
 
+let server_connection_control_not_failed
+  (st:CS.connection_state)
+  : prop =
+  match st.CS.cs_model.CS.model_control with
+  | CS.ControlFailed _ -> False
+  | _ -> True
+
+let lemma_server_connection_control_not_failed_contradicts_failed
+  (st:CS.connection_state)
+  (err:T.tls_error)
+  : Lemma
+      (requires
+        server_connection_control_not_failed st /\
+        st.CS.cs_model.CS.model_control == CS.ControlFailed err)
+      (ensures False)
+=
+  match st.CS.cs_model.CS.model_control with
+  | CS.ControlFailed _ -> assert False
+  | _ -> assert False
+
+let server_network_nonfailed_received_prefix_accepted
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (resp:server_buffer_response)
+  (input:B.bytes)
+  (network_out:B.bytes)
+  (app_out:B.bytes)
+  : prop =
+  server_connection_control_not_failed st1 ==>
+    (resp.consumed_len == 0sz \/
+     exists msg.
+       legal_network_response
+         st0
+         st1
+         resp.response
+         msg
+         (server_network_consumed_prefix resp input)
+         network_out
+         app_out)
+
+let lemma_server_network_consumed_input_projection_nonfailed_received_prefix_accepted
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (resp:server_buffer_response)
+  (input:B.bytes)
+  (network_out:B.bytes)
+  (app_out:B.bytes)
+  : Lemma
+      (requires
+        server_network_consumed_input_projection
+          st0
+          st1
+          resp
+          input
+          network_out
+          app_out)
+      (ensures
+        server_network_nonfailed_received_prefix_accepted
+          st0
+          st1
+          resp
+          input
+          network_out
+          app_out)
+=
+  if server_connection_control_not_failed st1 then (
+    if resp.consumed_len == 0sz then ()
+    else (
+      match resp.response.status with
+      | StepOk ->
+        assert (server_network_step_ok_received_decode_projection
+          st0
+          st1
+          resp
+          input
+          network_out
+          app_out);
+        assert (exists msg.
+          CT.received_tls_raw_delta_legal
+            st0
+            msg
+            (server_network_consumed_prefix resp input) /\
+          server_decoded_message_event_projection
+            st0
+            st1
+            resp.response
+            msg
+            (server_network_consumed_prefix resp input)
+            network_out
+            app_out /\
+          (if CS.network_message_is_cleartext CL.Received msg
+           then True
+           else
+             server_protected_record_decode_correct
+               st0
+               (server_network_consumed_prefix resp input)
+               msg));
+        let msg =
+          ID.indefinite_description_ghost
+            M.tls_message
+            (fun msg ->
+              CT.received_tls_raw_delta_legal
+                st0
+                msg
+                (server_network_consumed_prefix resp input) /\
+              server_decoded_message_event_projection
+                st0
+                st1
+                resp.response
+                msg
+                (server_network_consumed_prefix resp input)
+                network_out
+                app_out /\
+              (if CS.network_message_is_cleartext CL.Received msg
+               then True
+               else
+                 server_protected_record_decode_correct
+                   st0
+                   (server_network_consumed_prefix resp input)
+                   msg)) in
+        assert (server_decoded_message_event_projection
+          st0
+          st1
+          resp.response
+          msg
+          (server_network_consumed_prefix resp input)
+          network_out
+          app_out);
+        if legal_network_response
+          st0
+          st1
+          resp.response
+          msg
+          (server_network_consumed_prefix resp input)
+          network_out
+          app_out
+        then (
+          assert (exists msg'.
+            legal_network_response
+              st0
+              st1
+              resp.response
+              msg'
+              (server_network_consumed_prefix resp input)
+              network_out
+              app_out)
+        ) else (
+          assert (unexpected_message_response
+            st0
+            st1
+            resp.response
+            network_out
+            app_out);
+          assert (resp.response.status == IllegalTransition);
+          assert False
+        )
+      | ConnectionFailed ->
+        assert (server_network_connection_failed_consumed_prefix
+          st0
+          st1
+          resp
+          input
+          network_out
+          app_out);
+        assert (exists alert raw_received.
+          st1 ==
+            CM.received_alert_failure_state
+              st0
+              alert
+              raw_received /\
+          Seq.equal
+            raw_received
+            (server_network_consumed_prefix resp input) /\
+          legal_network_response
+            st0
+            st1
+            resp.response
+            (M.TlsAlert alert)
+            raw_received
+            network_out
+            app_out);
+        let alert =
+          ID.indefinite_description_ghost
+            T.alert_description
+            (fun alert -> exists raw_received.
+              st1 ==
+                CM.received_alert_failure_state
+                  st0
+                  alert
+                  raw_received /\
+              Seq.equal
+                raw_received
+                (server_network_consumed_prefix resp input) /\
+              legal_network_response
+                st0
+                st1
+                resp.response
+                (M.TlsAlert alert)
+                raw_received
+                network_out
+                app_out) in
+        let raw_received =
+          ID.indefinite_description_ghost
+            B.bytes
+            (fun raw_received ->
+              st1 ==
+                CM.received_alert_failure_state
+                  st0
+                  alert
+                  raw_received /\
+              Seq.equal
+                raw_received
+                (server_network_consumed_prefix resp input) /\
+              legal_network_response
+                st0
+                st1
+                resp.response
+                (M.TlsAlert alert)
+                raw_received
+                network_out
+                app_out) in
+        assert (st1 ==
+          CM.received_alert_failure_state
+            st0
+            alert
+            raw_received);
+        assert (st1.CS.cs_model.CS.model_control ==
+          CS.ControlFailed (T.AlertError alert));
+        lemma_server_connection_control_not_failed_contradicts_failed
+          st1
+          (T.AlertError alert)
+      | DecodeError ->
+        assert (decode_error_response st0 st1 resp.response network_out app_out);
+        lemma_decode_error_response_control_failed
+          st0
+          st1
+          resp.response
+          network_out
+          app_out;
+        lemma_server_connection_control_not_failed_contradicts_failed
+          st1
+          CM.tls_decode_error
+      | NeedMoreInput ->
+        assert (resp.consumed_len == 0sz);
+        assert False
+      | IllegalTransition ->
+        assert (resp.consumed_len == 0sz);
+        assert False
+      | OutputBufferTooSmall ->
+        assert False
+    )
+  )
+
+let lemma_server_network_bytes_end_to_end_nonfailed_received_prefix_accepted
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (resp:server_buffer_response)
+  (input:B.bytes)
+  (network_out:B.bytes)
+  (app_out:B.bytes)
+  : Lemma
+      (requires
+        server_network_bytes_end_to_end_correct
+          st0
+          st1
+          resp
+          input
+          network_out
+          app_out /\
+        server_network_consumed_input_projection
+          st0
+          st1
+          resp
+          input
+          network_out
+          app_out)
+      (ensures
+        server_network_nonfailed_received_prefix_accepted
+          st0
+          st1
+          resp
+          input
+          network_out
+          app_out)
+=
+  lemma_server_network_consumed_input_projection_nonfailed_received_prefix_accepted
+    st0
+    st1
+    resp
+    input
+    network_out
+    app_out
+
 let lemma_legal_response_for_event_preserves_config
   (st0:CS.connection_state)
   (st1:CS.connection_state)

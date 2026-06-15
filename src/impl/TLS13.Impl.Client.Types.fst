@@ -2711,6 +2711,167 @@ let network_bytes_consumed_input_projection
        (network_consumed_prefix network_input buffer_resp.consumed_len)
        msg))
 
+let connection_control_not_failed
+  (st:CS.connection_state)
+  : prop =
+  match st.CS.cs_model.CS.model_control with
+  | CS.ControlFailed _ -> False
+  | _ -> True
+
+let lemma_connection_control_not_failed_contradicts_failed
+  (st:CS.connection_state)
+  (err:T.tls_error)
+  : Lemma
+      (requires
+       connection_control_not_failed st /\
+       st.CS.cs_model.CS.model_control == CS.ControlFailed err)
+      (ensures False)
+=
+  match st.CS.cs_model.CS.model_control with
+  | CS.ControlFailed _ -> assert False
+  | _ -> assert False
+
+let network_bytes_nonfailed_received_prefix_accepted
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (buffer_resp:client_buffer_response)
+  (network_input:B.bytes)
+  (network_out:B.bytes)
+  (app_out:B.bytes)
+  : prop =
+  connection_control_not_failed st1 ==>
+    (buffer_resp.consumed_len == 0sz \/
+     exists msg.
+       legal_received_tls_response
+        st0
+        st1
+        buffer_resp.response
+        msg
+        (network_consumed_prefix network_input buffer_resp.consumed_len)
+        network_out
+        app_out)
+
+let lemma_network_bytes_consumed_input_event_projection_nonfailed_received_prefix_accepted
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (buffer_resp:client_buffer_response)
+  (network_input:B.bytes)
+  (network_out:B.bytes)
+  (app_out:B.bytes)
+  : Lemma
+      (requires
+       network_bytes_consumed_input_event_projection
+         st0
+         st1
+         buffer_resp
+         network_input
+         network_out
+         app_out)
+      (ensures
+       network_bytes_nonfailed_received_prefix_accepted
+         st0
+         st1
+         buffer_resp
+         network_input
+         network_out
+         app_out)
+=
+  if connection_control_not_failed st1 then (
+    if buffer_resp.consumed_len == 0sz then ()
+    else if buffer_resp.response.status == DecodeError then (
+      assert (network_bytes_decode_error_projection
+       st0
+       st1
+       buffer_resp
+       network_input
+       network_out
+       app_out);
+      assert (decode_error_response st0 st1 buffer_resp.response network_out app_out);
+      lemma_decode_error_response_control_failed
+       st0
+       st1
+       buffer_resp.response
+       network_out
+       app_out;
+      lemma_connection_control_not_failed_contradicts_failed
+       st1
+       tls_decode_error
+    ) else (
+      assert (exists msg.
+       received_tls_raw_delta_legal
+         st0
+         msg
+         (network_consumed_prefix network_input buffer_resp.consumed_len) /\
+       decoded_message_event_projection
+         st0
+         st1
+         buffer_resp.response
+         msg
+         (network_consumed_prefix network_input buffer_resp.consumed_len)
+         network_out
+         app_out);
+      let msg =
+       ID.indefinite_description_ghost
+         M.tls_message
+         (fun msg ->
+           received_tls_raw_delta_legal
+             st0
+             msg
+             (network_consumed_prefix network_input buffer_resp.consumed_len) /\
+           decoded_message_event_projection
+             st0
+             st1
+             buffer_resp.response
+             msg
+             (network_consumed_prefix network_input buffer_resp.consumed_len)
+             network_out
+             app_out) in
+      assert (decoded_message_event_projection
+       st0
+       st1
+       buffer_resp.response
+       msg
+       (network_consumed_prefix network_input buffer_resp.consumed_len)
+       network_out
+       app_out);
+      if legal_received_tls_response
+       st0
+       st1
+       buffer_resp.response
+       msg
+       (network_consumed_prefix network_input buffer_resp.consumed_len)
+       network_out
+       app_out
+      then (
+       assert (exists msg'.
+         legal_received_tls_response
+           st0
+           st1
+           buffer_resp.response
+           msg'
+           (network_consumed_prefix network_input buffer_resp.consumed_len)
+           network_out
+           app_out)
+      ) else (
+       assert (unexpected_message_response
+         st0
+         st1
+         buffer_resp.response
+         network_out
+         app_out);
+       lemma_unexpected_message_response_control_failed
+         st0
+         st1
+         buffer_resp.response
+         network_out
+         app_out;
+       lemma_connection_control_not_failed_contradicts_failed
+         st1
+         tls_unexpected_message_error
+      )
+    )
+  )
+
 let network_bytes_network_out_seal_projection
   (st0:CS.connection_state)
   (st1:CS.connection_state)
@@ -2870,6 +3031,43 @@ let network_bytes_end_to_end_correct
    CS.connection_state_sent_seal_replay_consistent st1) /\
   (CS.connection_state_received_decode_replay_consistent st0 ==>
    CS.connection_state_received_decode_replay_consistent st1)
+
+let lemma_network_bytes_end_to_end_nonfailed_received_prefix_accepted
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (buffer_resp:client_buffer_response)
+  (network_input:B.bytes)
+  (old_network_out:B.bytes)
+  (network_out:B.bytes)
+  (old_app_out:B.bytes)
+  (app_out:B.bytes)
+  : Lemma
+      (requires
+        network_bytes_end_to_end_correct
+          st0
+          st1
+          buffer_resp
+          network_input
+          old_network_out
+          network_out
+          old_app_out
+          app_out)
+      (ensures
+        network_bytes_nonfailed_received_prefix_accepted
+          st0
+          st1
+          buffer_resp
+          network_input
+          network_out
+          app_out)
+=
+  lemma_network_bytes_consumed_input_event_projection_nonfailed_received_prefix_accepted
+    st0
+    st1
+    buffer_resp
+    network_input
+    network_out
+    app_out
 
 let local_event_end_to_end_correct
   (st0:CS.connection_state)

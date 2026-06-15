@@ -198,15 +198,22 @@ bytes still prevent deriving `CS.paired_wire_logs` directly.
      rejected consumed bytes. The next strengthening must carry an ordered
      accepted-prefix/no-rejected/no-retained fact, not just length/count
      accounting, before it can prove exact peer sent/received equality.
-   - The first of those proof obligations is now discharged at the theorem
-     surface: shared spec lemma
+   - Both immediate theorem-surface obligations for that strengthening are now
+     discharged. Shared spec lemma
      `lemma_legal_connection_delta_local_fail_control_failed` and client/server
      response lemmas expose that `LocalFail`-based decode-error,
      unexpected-message, and bad-Finished responses leave the connection in
-     `ControlFailed`. The remaining immediate obligation is to expose that a
-     non-failed network step with nonzero consumed input records the consumed
-     prefix as the protocol raw-received delta rather than treating it as
-     rejected input.
+     `ControlFailed`. New client/server network predicates
+     `network_bytes_nonfailed_received_prefix_accepted` and
+     `server_network_nonfailed_received_prefix_accepted` prove that a non-failed
+     network step with nonzero consumed input records the consumed prefix as the
+     accepted protocol raw-received delta. Driver-side helper lemmas now prove
+     exact received-log append for such non-failed network steps when the prior
+     consumed transport prefix was exact.
+   - The remaining proof work is to make that exact-unless-failed property part
+     of the hidden driver wire-log invariant itself and then prove the final
+     drained/no-retained facts at successful client `connect` and server
+     `accept`.
    - Tightening or supplementing this relation is the next proof boundary needed
      before the aggregate key-material theorem can be instantiated from two live
      driver resources alone.
