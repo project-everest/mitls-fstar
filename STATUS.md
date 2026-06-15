@@ -190,7 +190,7 @@ Start with these files:
 - `runtime/tls13_client_driver.c` and `.h`: stable concrete C API and thin wrapper around the extracted top-level Pulse workflow.
 - `src/impl/TLS13.Impl.Client.Driver.fsti` and `.fst`: narrowed verified/extracted Pulse driver API, top-level workflow, private helper slices, and the current transport/auth TCB boundary.
 - `src/impl/TLS13.OpenSSL.fsti` and `c_stubs/tls13_openssl_karamel.*`: typed OpenSSL auth TCB used by the verified workflow.
-- `c_stubs/tls13_io_karamel.*` and `test/unit/test_extracted_client_driver_slice.c`: C ABI bridge and smoke test for the extracted narrow Pulse driver API.
+- `c_stubs/tls13_io_karamel.*` and `test/unit/test_extracted_client_openssl_echo.c`: C ABI bridge and OpenSSL echo smoke test for the extracted narrow Pulse driver API.
 - `src/spec/TLS13.Spec.ConnectionState.fst`: audit-facing core connection-state model, legal deltas, cumulative replay predicates, and the accepted-versus-rejected raw-byte distinction. Proof-only preservation/projection lemmas are isolated in `src/spec/TLS13.ConnectionState.Lemmas.fst`; `src/spec/TLS13.StateMachine.fst` is the small client-only trace automaton used by log/projection proofs.
 - `src/impl/TLS13.Impl.Parser.fsti` and `src/impl/TLS13.Impl.Serializer.fsti`: active TCB contracts.
 - `c_stubs/tls13_connection_backend.h`: handwritten C implementation of parser/serializer assumptions.

@@ -36,7 +36,7 @@ and application-log projection.
 | Lightweight trace automaton | `src/spec/TLS13.StateMachine.fst` | Compact client-only trace/state vocabulary used by `ConnectionLog` and implementation proof projections; it is not the authoritative connection-state model. |
 | Record/crypto implementation | `src/impl/TLS13.Record.*`, `src/impl/TLS13.KeySchedule.*` | Extracted record-layer and key-schedule implementation against crypto TCBs. |
 | Parser/serializer TCB | `src/impl/TLS13.Impl.Parser.fsti`, `src/impl/TLS13.Impl.Serializer.fsti`, `c_stubs/tls13_connection_backend.h` | Interface-only F*/Pulse contracts implemented by handwritten C macros/static helpers. |
-| Runtime tests | `test/unit/test_connection_bindings.c`, `test/unit/test_extracted_client_openssl_echo.c`, `test/openssl_echo_server.c` | Deterministic extracted-client API tests and local OpenSSL TLS 1.3 interop. |
+| Runtime tests | `test/unit/test_extracted_client_openssl_echo.c`, `test/openssl_echo_server.c` | Local OpenSSL TLS 1.3 interop through the extracted client driver. |
 
 The public client API is buffer/event oriented:
 
@@ -307,8 +307,8 @@ The public client API is buffer/event oriented:
   private implementation slices. External certificate validation and
   CertificateVerify are explicit typed auth TCB actions in `TLS13.OpenSSL.fsti`.
   The extracted C smoke test exercises the narrow generated API surface.
-  `make test-extracted-client-driver-slice` extracts this module to C and
-  compiles/runs a smoke test through `c_stubs/tls13_io_karamel.*`.
+  `make test-openssl-echo` extracts this module to C and runs the supported
+  OpenSSL TLS 1.3 echo interop path through `runtime/tls13_client_driver.c`.
 - `TLS13.Impl.ConnectionState` has been split by responsibility: `Repr` owns the
   concrete representation and exact predicates, `Queries` owns read-only checks
   and copyouts, `Model`/`Bounds`/`Tags` own pure/proof helpers, and the mutation
@@ -498,8 +498,7 @@ Other trusted runtime boundaries remain:
    `LocalAuth`, `LocalSend`, or `LocalApp`) for state updates. Do not reintroduce
    a broad re-export facade.
 8. Keep runtime coverage aligned with the proof target by maintaining the
-   deterministic binding test and the OpenSSL interop test through the extracted
-   `TLS13.Impl.Client` API.
+   OpenSSL interop test through the extracted `TLS13.Impl.Client.Driver` API.
 
 ## Validation workflow
 
@@ -515,9 +514,6 @@ make check-c-stubs
 # generate extracted C
 make extract-bundle
 
-# deterministic extracted-client API test
-make test-connection-bindings
-
 # local OpenSSL TLS 1.3 interop
 make test-openssl-echo
 
@@ -526,11 +522,9 @@ make check-admits
 git --no-pager diff --check
 ```
 
-`make test-connection-bindings` is the smallest useful command for confirming
-that extracted C compiles and the public client API works. `make test` includes
-the binding test but not `test-openssl-echo`; run
-`make test-connection-bindings test-openssl-echo` for extracted-client runtime
-confidence.
+`make test-openssl-echo` is the supported runtime command for confirming that
+the extracted C compiles and the OpenSSL echo interop path works. `make test`
+includes verification, echo stub checks, and that interop test.
 
 For the calc methodology reference:
 

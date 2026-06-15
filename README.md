@@ -54,17 +54,15 @@ different toolchain when invoking `make`.
 make parsers         # QuackyDucky: regenerate, verify, and extract the TLS wire
                      #   parsers/serializers from tls.qd.rfc (generated/)
 make verify          # verify all F*/Pulse modules
-make extract-bundle  # extract current C artifacts
-make test            # local C binding and extraction smoke tests
-make test-openssl-echo
+make extract-bundle  # extract the OpenSSL echo client driver bundle
+make test            # verify, check echo stubs, and run OpenSSL echo interop
 ```
 
 The QuackyDucky pipeline can also be driven stage by stage with
 `make regen-generated`, `make verify-generated`, and `make extract-generated`.
 
 `make test-openssl-echo` runs the controlled local OpenSSL TLS 1.3 echo interop
-scenario. The main test sources live in `test/`, with component and binding
-tests in `test/unit/`.
+scenario. The main test sources live in `test/` and `test/unit/`.
 
 For the methodology reference:
 
