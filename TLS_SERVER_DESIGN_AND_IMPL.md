@@ -1121,8 +1121,16 @@ success paths now expose ordered exact-prefix received-log facts, and
 composes those public facts with paired transport histories into a checked
 cross-endpoint ordered-prefix theorem. The last step is upgrading ordered prefix
 to full equality by proving zero retained read-ahead, or an equivalent
-synchronized no-read-ahead condition, at the paired success boundary. The same
-module also provides
+synchronized no-read-ahead condition, at the paired success boundary.
+`TLS13.Impl.Driver.Pairing` now makes that final transport assumption explicit:
+`lemma_endpoint_transport_received_exact_from_prefix_no_read_ahead` collapses an
+endpoint ordered-prefix fact to exact transport/protocol received-log equality
+when the transport receive history has the same length as the protocol
+`raw_received` log, and
+`lemma_paired_wire_logs_from_exact_prefix_no_read_ahead` combines the public
+sent-exact facts, ordered received-prefix facts, paired transport histories, and
+those no-read-ahead premises to prove full `CS.paired_wire_logs`. The same module
+also provides
 `lemma_client_server_driver_key_material_agrees_from_prefixes`, which proves the
 main supported-profile key-material agreement from the ordered-prefix public
 driver facts plus the existing supported-profile state-machine input predicate,
@@ -1864,6 +1872,10 @@ Checklist:
       `CS.supported_profile_client_server_key_material_agrees` from ordered
       prefix conformance plus the existing supported-profile state-machine
       input predicate.
+- [x] Add an explicit no-read-ahead bridge theorem that upgrades ordered
+      received prefixes to full `CS.paired_wire_logs` when successful paired
+      runs prove the concrete receive histories contain no retained suffix
+      beyond each endpoint's protocol `raw_received` log.
 - [ ] Prove successful `connect`/`accept` drained/no-retained facts, or an
       equivalent synchronized no-read-ahead condition, to upgrade ordered
       prefixes to full `CS.paired_wire_logs` from concrete paired resources.

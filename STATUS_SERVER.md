@@ -113,11 +113,15 @@ We do **not** yet have the final verified interoperable server.
 The main spec-level key-material agreement theorem is now packaged as an
 aggregate supported-profile theorem, and `TLS13.Impl.Driver.Pairing` now provides
 the audit-facing driver-pair bridge theorem:
-`lemma_client_server_driver_key_material_agrees`. What is still missing is the
-harder concrete proof that complete Pulse client and server runs automatically
-establish that bridge theorem's input predicate, especially the exact
-transport/protocol received-log condition in the presence of retained read-ahead
-and rejected consumed bytes.
+`lemma_client_server_driver_key_material_agrees`. It also now provides the
+explicit no-read-ahead bridge
+`lemma_paired_wire_logs_from_exact_prefix_no_read_ahead`, which upgrades the
+public ordered received-prefix facts to full `CS.paired_wire_logs` when each
+transport receive history has no retained suffix beyond the protocol
+`raw_received` log. What is still missing is the harder concrete proof that
+complete Pulse client and server runs automatically establish those bridge
+premises, especially the final no-read-ahead condition in the presence of
+retained buffers and rejected consumed bytes.
 
 On the Pulse implementation side, public server `accept` and client `connect`
 now both expose application-data readiness on success, public client/server
@@ -225,6 +229,12 @@ bytes still prevent deriving `CS.paired_wire_logs` directly.
      state-machine input predicate to prove
      `CS.supported_profile_client_server_key_material_agrees` without requiring
      impossible full TCP-history equality in the presence of retained read-ahead.
+   - `TLS13.Impl.Driver.Pairing` now also exposes
+     `lemma_endpoint_transport_received_exact_from_prefix_no_read_ahead` and
+     `lemma_paired_wire_logs_from_exact_prefix_no_read_ahead`: if each endpoint's
+     concrete receive history has the same length as its protocol `raw_received`
+     log, the ordered-prefix facts collapse to exact transport/protocol
+     equality and yield full `CS.paired_wire_logs`.
    - The remaining proof work is to prove the final successful-handshake
      drained/no-retained facts, or an equivalent synchronized no-read-ahead
      condition, so the ordered-prefix bridge can be upgraded to full
@@ -239,12 +249,15 @@ bytes still prevent deriving `CS.paired_wire_logs` directly.
 
 ## Recommended next steps
 
-1. Finish validating and commit the client `connect` readiness hardening slice.
-2. Add the smallest pure/driver bridge predicate that relates a connected client
-   and connected server with paired exact wire histories to
+1. Prove or enforce the successful `connect`/`accept` no-read-ahead facts needed
+   to instantiate `lemma_paired_wire_logs_from_exact_prefix_no_read_ahead` from
+   live driver resources.
+2. Add the concrete driver-pair predicate that relates successful connected
+   client/server resources to
    `supported_profile_client_server_key_material_inputs_agree`.
-3. Strengthen the driver received-log relation enough to prove that bridge
-   without hiding retained read-ahead or rejected bytes.
+3. Strengthen any remaining driver received-log relation only if the
+   no-read-ahead proof cannot be obtained from the current retained-buffer
+   invariants.
 4. Re-run extraction and interop tests after each C-facing facade change.
 
 ## Engineering note

@@ -91,6 +91,86 @@ let lemma_paired_protocol_received_logs_exact_prefix
         (B.append client.CS.cs_wire_log.CL.raw_received retained))
     client_retained
 
+let lemma_endpoint_transport_received_exact_from_prefix_no_read_ahead
+  (st:CS.connection_state)
+  (received:B.bytes)
+  : Lemma
+      (requires
+        (exists retained.
+          Seq.equal received
+            (B.append st.CS.cs_wire_log.CL.raw_received retained)) /\
+        endpoint_transport_received_no_read_ahead st received)
+      (ensures Seq.equal received st.CS.cs_wire_log.CL.raw_received)
+=
+  let retained =
+    FStar.IndefiniteDescription.indefinite_description_ghost
+      B.bytes
+      (fun retained ->
+        Seq.equal received
+          (B.append st.CS.cs_wire_log.CL.raw_received retained)) in
+  assert (Seq.equal received
+    (B.append st.CS.cs_wire_log.CL.raw_received retained));
+  Seq.lemma_len_append st.CS.cs_wire_log.CL.raw_received retained;
+  Seq.lemma_eq_elim received (B.append st.CS.cs_wire_log.CL.raw_received retained);
+  assert (B.length retained == 0);
+  assert (B.length retained == B.length B.empty);
+  assert (forall (i:nat{i < B.length retained}).
+    Seq.index retained i == Seq.index B.empty i);
+  Seq.lemma_eq_intro retained B.empty;
+  Seq.lemma_eq_elim retained B.empty;
+  Seq.append_empty_r st.CS.cs_wire_log.CL.raw_received;
+  assert (Seq.equal
+    (B.append st.CS.cs_wire_log.CL.raw_received B.empty)
+    st.CS.cs_wire_log.CL.raw_received)
+
+let lemma_paired_wire_logs_from_exact_prefix_no_read_ahead
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  (client_received:B.bytes)
+  (client_sent:B.bytes)
+  (server_received:B.bytes)
+  (server_sent:B.bytes)
+  : Lemma
+      (requires
+        CD.client_driver_sent_log_exact client client_sent /\
+        SD.server_driver_sent_log_exact server server_sent /\
+        CD.client_driver_received_log_exact_prefix client client_received /\
+        SD.server_driver_received_log_exact_prefix server server_received /\
+        endpoint_transport_received_no_read_ahead client client_received /\
+        endpoint_transport_received_no_read_ahead server server_received /\
+        paired_transport_histories
+          client_received
+          client_sent
+          server_received
+          server_sent)
+      (ensures
+        paired_driver_transport_logs_exact
+          client
+          server
+          client_received
+          client_sent
+          server_received
+          server_sent /\
+        CS.paired_wire_logs client server)
+=
+  lemma_endpoint_transport_received_exact_from_prefix_no_read_ahead
+    client
+    client_received;
+  lemma_endpoint_transport_received_exact_from_prefix_no_read_ahead
+    server
+    server_received;
+  assert (paired_driver_transport_logs_exact
+    client
+    server
+    client_received
+    client_sent
+    server_received
+    server_sent);
+  Seq.lemma_eq_elim client_sent client.CS.cs_wire_log.CL.raw_sent;
+  Seq.lemma_eq_elim server_received server.CS.cs_wire_log.CL.raw_received;
+  Seq.lemma_eq_elim server_sent server.CS.cs_wire_log.CL.raw_sent;
+  Seq.lemma_eq_elim client_received client.CS.cs_wire_log.CL.raw_received
+
 let lemma_client_server_driver_key_material_agrees_from_prefixes
   (client:CS.connection_state)
   (server:CS.connection_state)
