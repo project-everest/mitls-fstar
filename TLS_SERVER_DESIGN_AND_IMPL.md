@@ -898,7 +898,9 @@ by Handshake. The payload-level
 `select_derive_send_server_hello_from_payload_once` composition has moved there
 too. The material-buffer helper `select_and_derive_shared_secret_once` now
 belongs to Handshake as well, along with its material-buffer readiness wrapper
-`select_and_derive_shared_secret_if_ready_once`.
+`select_and_derive_shared_secret_if_ready_once`. The first accept orchestration
+slice, `accept_start_read_client_hello_select_derive_once`, now also lives in
+Handshake.
 Selection, derivation, ServerHello, encrypted-flight orchestration, and the full
 public `accept` handshake still remain in the main driver until subsequent
 Handshake slices move them behind this boundary.
