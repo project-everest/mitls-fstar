@@ -1012,6 +1012,16 @@ noextract predicate such as `server_driver_application_ready st` if callers need
 the successful result to
 state that application-data control and application traffic keys are installed.
 
+Current extraction status: the first focused server-core KaRaMeL prefix through
+`TLS13.Impl.Server.Network` now completes. The previous KaRaMeL
+`Failure("nth")` was isolated to the large `process_network_bytes` dispatcher;
+marking the focused network branch handlers `inline_for_extraction` removes the
+problematic switch-branch call sites without weakening the public network theorem
+surface. Proof-only response predicates in `TLS13.Impl.Server.Types` are marked
+`noextract`, and the setup/start delta is kept erased, reducing proof artifacts
+in generated C. Remaining extraction work is to extend the clean server bundle to
+the driver modules and then add the runtime/server interop tests.
+
 Move these helper surfaces out of the public driver interface:
 
 - transport helpers: `accept_transport_once`, `accept_transport_and_start_once`,

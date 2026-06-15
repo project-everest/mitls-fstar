@@ -70,34 +70,34 @@ fn process_start_server_local_event
     ST.status = ST.StepOk;
   };
 
-  let delta = {
+  let delta : erased CS.connection_delta = Ghost.hide {
     CS.delta_event = CS.ConnLocalEvent CS.LocalStartServer;
     CS.delta_raw_sent = B.empty;
     CS.delta_raw_received = B.empty;
   };
   assert (pure (CS.legal_connection_delta
     'st0
-    delta
+    (Ghost.reveal delta)
     (CM.started_server_state 'st0)));
 
   CSL.lemma_legal_connection_delta_full_log_consistent_for_role
     CS.ServerEndpoint
     'st0
-    delta
+    (Ghost.reveal delta)
     (CM.started_server_state 'st0);
   CSL.lemma_legal_connection_delta_raw_event_replay_consistent
     'st0
-    delta
+    (Ghost.reveal delta)
     (CM.started_server_state 'st0);
   CSL.lemma_connection_state_protected_raw_segmented_replay
     (CM.started_server_state 'st0);
   CSL.lemma_legal_connection_delta_sent_seal_replay_consistent
     'st0
-    delta
+    (Ghost.reveal delta)
     (CM.started_server_state 'st0);
   CSL.lemma_legal_connection_delta_received_decode_replay_consistent
     'st0
-    delta
+    (Ghost.reveal delta)
     (CM.started_server_state 'st0);
 
   Seq.lemma_len_slice 'old_network_out 0 0;

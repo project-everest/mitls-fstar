@@ -65,6 +65,7 @@ let lemma_client_hello_sni_len_for
   | None ->
     assert False
 
+inline_for_extraction
 fn process_client_hello
   (s:server)
   (raw:array U8.t)
@@ -248,6 +249,7 @@ fn process_client_hello
   resp
 }
 
+inline_for_extraction
 fn process_client_finished
   (s:server)
   (raw:array U8.t)
@@ -420,6 +422,7 @@ fn process_client_finished
   resp
 }
 
+inline_for_extraction
 fn process_application_data
   (s:server)
   (raw:array U8.t)
@@ -631,6 +634,7 @@ fn process_application_data
   resp
 }
 
+inline_for_extraction
 fn process_close_notify
   (s:server)
   (raw:array U8.t)
@@ -797,6 +801,7 @@ fn process_close_notify
   resp
 }
 
+inline_for_extraction
 fn process_alert_failure
   (s:server)
   (raw:array U8.t)
@@ -973,6 +978,7 @@ fn process_alert_failure
   resp
 }
 
+inline_for_extraction
 fn process_change_cipher_spec
   (s:server)
   (raw:array U8.t)
@@ -1128,6 +1134,7 @@ fn process_change_cipher_spec
   resp
 }
 
+inline_for_extraction
 fn process_decode_error
   (s:server)
   (raw:array U8.t)

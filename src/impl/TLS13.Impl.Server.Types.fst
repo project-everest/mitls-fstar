@@ -662,6 +662,7 @@ noextract
 let event_api_app_sent (ev:CS.conn_event) : GTot B.bytes =
   CL.concat_bytes (CS.conn_event_app_sent_delta ev)
 
+noextract
 let local_event_kind_matches
   (kind:local_event_kind)
   (payload:B.bytes)
@@ -734,6 +735,7 @@ let local_event_kind_matches
   | _, _ ->
     False
 
+noextract
 let local_payload_matches_app_sent_delta
   (kind:local_event_kind)
   (payload:B.bytes)
@@ -745,6 +747,7 @@ let local_payload_matches_app_sent_delta
   | _ ->
     Seq.equal (event_api_app_sent ev) B.empty
 
+noextract
 let local_event_supported_profile
   (kind:local_event_kind)
   (payload:B.bytes)
@@ -763,6 +766,7 @@ let local_event_supported_profile
   | _, _ ->
     True
 
+noextract
 let legal_response_for_event
   (st0:CS.connection_state)
   (st1:CS.connection_state)
@@ -786,6 +790,7 @@ let legal_response_for_event
   Seq.equal (response_network_out resp network_out) raw_sent /\
   response_app_out_matches_event resp ev app_out
 
+noextract
 let unexpected_message_response
   (st0:CS.connection_state)
   (st1:CS.connection_state)
@@ -804,6 +809,7 @@ let unexpected_message_response
     network_out
     app_out
 
+noextract
 let decode_error_response
   (st0:CS.connection_state)
   (st1:CS.connection_state)
@@ -822,6 +828,7 @@ let decode_error_response
     network_out
     app_out
 
+noextract
 let legal_local_response
   (st0:CS.connection_state)
   (st1:CS.connection_state)
@@ -841,6 +848,7 @@ let legal_local_response
   resp.status == StepOk /\
   legal_response_for_event st0 st1 resp ev raw_sent raw_received network_out app_out
 
+noextract
 let legal_handled_local_response
   (st0:CS.connection_state)
   (st1:CS.connection_state)
@@ -864,12 +872,14 @@ let legal_handled_local_response
        app_out) \/
   unexpected_message_response st0 st1 resp network_out app_out
 
+noextract
 let received_message_event (msg:M.tls_message) : CS.conn_event =
   CS.ConnNetworkEvent {
     CL.message_direction = CL.Received;
     CL.message_value = msg;
   }
 
+noextract
 let received_message_delta
   (msg:M.tls_message)
   (raw_received:B.bytes)
@@ -880,6 +890,7 @@ let received_message_delta
     CS.delta_raw_received = raw_received;
   }
 
+noextract
 let legal_network_response
   (st0:CS.connection_state)
   (st1:CS.connection_state)
