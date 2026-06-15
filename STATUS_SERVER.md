@@ -95,10 +95,11 @@ That committed state includes:
   and driver buffers. Public `close` now requires the same application-ready
   state exposed by successful `accept`, sends verified `LocalSendCloseNotify`
   via the local-write theorem, and then closes the transport.
-- Concrete extracted-server validation now passes for the current facade:
-  `make test-extracted-server-driver-slice` and `make test-openssl-sclient`
-  both complete successfully, including a real OpenSSL client handshake,
-  application echo, and server close path.
+- Concrete extracted client/server validation passes for the current facades:
+  `make test-extracted-client-driver-slice`, `make test-openssl-echo`,
+  `make test-extracted-server-driver-slice`, and `make test-openssl-sclient`
+  all complete successfully, including real OpenSSL interop in both directions,
+  application echo, and close paths.
 - The client top-level driver facade is being hardened symmetrically: successful
   `TLS13.Impl.Client.Driver.connect` now exposes
   `client_driver_application_ready`, proving the connected client state is in

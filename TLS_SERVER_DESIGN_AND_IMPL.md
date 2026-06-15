@@ -2667,15 +2667,14 @@ Checklist:
 - [ ] Add any separate non-driver server-core extraction target if later needed.
 - [x] Add `test-extracted-server-driver-slice`.
 - [x] Add `test-openssl-sclient` harness.
-- [ ] Make `test-openssl-sclient` pass by proving/supporting OpenSSL's legacy
+- [x] Make `test-openssl-sclient` pass by proving/supporting OpenSSL's legacy
       `03 01` initial ClientHello record version in the wire/raw-log model.
       Current status: the proof-side compatibility split is implemented as
       `TLS13.Wire.Spec.parse_record_wire`, while canonical `parse_record` remains
       the serializer/raw-log parser for emitted records. Received ClientHello and
       protected-record decode predicates now use `parse_record_wire`, the parser
       TCB contracts expose `parse_record_wire`, and the C parser TCB accepts both
-      `03 03` and `03 01` outer record versions without byte normalization. The
-      final status of this checklist item is pending `test-openssl-sclient`.
+      `03 03` and `03 01` outer record versions without byte normalization.
 - [ ] Add `test-verified-client-server`.
 - [x] Ensure generated top-level driver symbols avoid POSIX collisions with `accept`, `listen`,
       `send`, and `close`.
@@ -2713,8 +2712,8 @@ Checklist:
       facade readiness check.
 - [x] Existing client driver slice test still passes after the latest client
       facade readiness check.
-- [ ] `make verify` passes.
-- [ ] `make check-admits` stays at zero.
+- [x] `make verify` passes.
+- [x] `make check-admits` stays at zero.
 - [ ] `make check-c-stubs` passes if C stubs are added.
 
 Audit checklist:
@@ -2730,7 +2729,7 @@ Audit checklist:
 - [ ] Parser/serializer C backend additions are documented.
 - [ ] IO listen/accept TCB additions are documented.
 - [ ] Runtime C owned code is documented and contains no protocol logic.
-- [ ] Validation commands and interop evidence are documented.
+- [x] Validation commands and interop evidence are documented.
 
 ## Suggested implementation order
 
