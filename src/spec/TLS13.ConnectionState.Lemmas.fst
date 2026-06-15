@@ -61,6 +61,45 @@ let lemma_legal_connection_delta_local_fail_control_failed
     Some (fail_model st0.cs_model err));
   assert (st1.cs_model == fail_model st0.cs_model err)
 
+let lemma_step_model_from_failed_results_failed
+  (model0:connection_model)
+  (ev:conn_event)
+  (model1:connection_model)
+  : Lemma
+      (requires
+        ControlFailed? model0.model_control /\
+        step_model model0 ev == Some model1)
+      (ensures ControlFailed? model1.model_control)
+=
+  match model0.model_control with
+  | ControlFailed err0 ->
+    (match ev with
+     | ConnLocalEvent local ->
+       (match local with
+        | LocalFail err ->
+          assert (step_local_event model0 local == Some (fail_model model0 err));
+          assert (model1 == fail_model model0 err)
+        | _ ->
+          assert (step_local_event model0 local == None);
+          assert False)
+     | ConnNetworkEvent msg ->
+       (match msg.CL.message_value with
+        | M.TlsAlert alert ->
+          assert (step_tls_message
+            model0
+            msg.CL.message_direction
+            msg.CL.message_value ==
+            Some (fail_model model0 (T.AlertError alert)));
+          assert (model1 == fail_model model0 (T.AlertError alert))
+        | _ ->
+          assert (step_tls_message
+            model0
+            msg.CL.message_direction
+            msg.CL.message_value == None);
+          assert False))
+  | _ ->
+    assert False
+
 let lemma_expected_traffic_secret_client_projection
   (hs:handshake_state)
   (epoch:traffic_epoch)

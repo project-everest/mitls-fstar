@@ -210,13 +210,15 @@ bytes still prevent deriving `CS.paired_wire_logs` directly.
      accepted protocol raw-received delta. Driver-side helper lemmas now prove
      exact received-log append for such non-failed network steps when the prior
      consumed transport prefix was exact.
-   - The remaining proof work is to make that exact-unless-failed property part
-     of the hidden driver wire-log invariant itself and then prove the final
-     drained/no-retained facts at successful client `connect` and server
-     `accept`.
-   - Tightening or supplementing this relation is the next proof boundary needed
-     before the aggregate key-material theorem can be instantiated from two live
-     driver resources alone.
+   - The exact-unless-failed property is now folded into the hidden client/server
+     driver wire-log witnesses: in every non-failed state, the protocol
+     `raw_received` log must be exactly the consumed transport prefix, while
+     failed states still retain the weaker accounting relation needed for
+     rejected consumed bytes.
+   - The remaining proof work is to prove the final successful-handshake
+     drained/no-retained facts at client `connect` and server `accept`, then
+     expose exact received-log equality publicly enough to instantiate the
+     aggregate key-material theorem from two live driver resources alone.
 
 3. **Extraction and interoperability**
    - Keep the public API buffer/driver oriented.

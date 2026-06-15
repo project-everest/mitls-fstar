@@ -45,6 +45,16 @@ val lemma_legal_connection_delta_local_fail_control_failed
           st1)
       (ensures st1.cs_model.model_control == ControlFailed err)
 
+val lemma_step_model_from_failed_results_failed
+  (model0:connection_model)
+  (ev:conn_event)
+  (model1:connection_model)
+  : Lemma
+      (requires
+        ControlFailed? model0.model_control /\
+        step_model model0 ev == Some model1)
+      (ensures ControlFailed? model1.model_control)
+
 val lemma_expected_traffic_secret_client_projection
   (hs:handshake_state)
   (epoch:traffic_epoch)

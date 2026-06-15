@@ -806,6 +806,21 @@ fn receive
           Seq.lemma_len_slice out_bytes 0 (SZ.v copy_len);
           Seq.lemma_len_slice loop_app_out 0 (SZ.v copy_len);
           assert (pure (Seq.equal
+            out_bytes
+            (Seq.append
+              (Seq.slice loop_app_out 0 (SZ.v copy_len))
+              (Seq.slice (Ghost.reveal 'out_bytes) (SZ.v copy_len) (A.length out)))));
+          Seq.lemma_len_slice loop_app_out 0 (SZ.v copy_len);
+          assert (pure (Seq.length (Seq.slice loop_app_out 0 (SZ.v copy_len)) == SZ.v copy_len));
+          SeqP.append_slices
+            (Seq.slice loop_app_out 0 (SZ.v copy_len))
+            (Seq.slice (Ghost.reveal 'out_bytes) (SZ.v copy_len) (A.length out));
+          Seq.lemma_eq_elim
+            out_bytes
+            (Seq.append
+              (Seq.slice loop_app_out 0 (SZ.v copy_len))
+              (Seq.slice (Ghost.reveal 'out_bytes) (SZ.v copy_len) (A.length out)));
+          assert (pure (Seq.equal
             (Seq.slice out_bytes 0 (SZ.v copy_len))
             (Seq.slice loop_app_out 0 (SZ.v copy_len))));
           V.to_vec_pts_to d.server_driver_app_out;

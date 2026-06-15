@@ -1348,11 +1348,20 @@ let lemma_server_network_logged_received_exact_when_nonfailed
   (input:B.bytes)
   (network_out:B.bytes)
   (app_out:B.bytes)
+  (received:B.bytes)
+  (sent:B.bytes)
   (old_consumed:B.bytes)
+  (buffered:B.bytes)
+  (buffered_len:SZ.t)
   : Lemma
       (requires
-        ST.server_connection_control_not_failed st0 /\
-        Seq.equal st0.CS.cs_wire_log.CL.raw_received old_consumed /\
+        server_driver_wire_logs_match_witness
+          st0
+          received
+          sent
+          old_consumed
+          buffered
+          buffered_len /\
         ST.server_network_bytes_end_to_end_correct
           st0 st1 buffer_resp input network_out app_out /\
         ST.server_network_consumed_input_projection
@@ -1365,6 +1374,15 @@ let lemma_server_network_logged_received_exact_when_nonfailed
               (ST.server_network_consumed_prefix buffer_resp input)))
 =
   if ST.server_connection_control_not_failed st1 then (
+    ST.lemma_server_network_bytes_end_to_end_nonfailed_previous
+      st0
+      st1
+      buffer_resp
+      input
+      network_out
+      app_out;
+    assert (ST.server_connection_control_not_failed st0);
+    assert (Seq.equal st0.CS.cs_wire_log.CL.raw_received old_consumed);
     ST.lemma_server_network_bytes_end_to_end_nonfailed_received_prefix_accepted
       st0
       st1
@@ -1795,6 +1813,26 @@ fn process_buffered_network_bytes_compact_once
   assert (pure (logged_received_bytes_accounted
     st1.CS.cs_wire_log.CL.raw_received
     (B.append (Ghost.reveal old_consumed) (Ghost.reveal consumed_prefix))));
+  lemma_server_network_logged_received_exact_when_nonfailed
+    'st0
+    st1
+    buffer_resp
+    buffered
+    network_out_bytes
+    app_out_bytes
+    (Ghost.reveal 'received)
+    (Ghost.reveal 'sent)
+    (Ghost.reveal old_consumed)
+    buffered
+    buffered_len;
+  assert (pure (ST.server_connection_control_not_failed st1 ==>
+    Seq.equal
+      st1.CS.cs_wire_log.CL.raw_received
+      (B.append (Ghost.reveal old_consumed)
+        (ST.server_network_consumed_prefix buffer_resp buffered))));
+  Seq.lemma_eq_elim
+    (Ghost.reveal consumed_prefix)
+    (ST.server_network_consumed_prefix buffer_resp buffered);
   assert (pure (server_driver_wire_logs_match_witness
     st1
     (Ghost.reveal 'received)

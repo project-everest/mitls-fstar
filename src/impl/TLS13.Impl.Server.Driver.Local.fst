@@ -804,6 +804,19 @@ fn process_local_event_and_write_once
        then Seq.slice network_out_bytes 0 (SZ.v written)
        else B.empty))
     st1.CS.cs_wire_log.CL.raw_sent));
+  lemma_server_local_event_received_exact_when_nonfailed
+    'st0
+    st1
+    resp
+    kind
+    (Ghost.reveal 'payload_bytes)
+    network_out_bytes
+    app_out_bytes
+    (Ghost.reveal 'received)
+    (Ghost.reveal 'sent)
+    (Ghost.reveal old_consumed)
+    buffered
+    buffered_len;
   assert (pure (server_driver_wire_logs_match_witness
     st1
     (Ghost.reveal 'received)
@@ -1267,6 +1280,19 @@ fn process_empty_local_event_exact_network_len_and_write_once
        then Seq.slice network_out_bytes 0 (SZ.v written)
        else B.empty))
     st1.CS.cs_wire_log.CL.raw_sent));
+  lemma_server_local_event_received_exact_when_nonfailed
+    'st0
+    st1
+    resp
+    kind
+    B.empty
+    network_out_bytes
+    app_out_bytes
+    (Ghost.reveal 'received)
+    (Ghost.reveal 'sent)
+    (Ghost.reveal old_consumed)
+    buffered
+    buffered_len;
   assert (pure (server_driver_wire_logs_match_witness
     st1
     (Ghost.reveal 'received)

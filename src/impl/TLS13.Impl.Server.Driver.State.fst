@@ -7,6 +7,7 @@ open Pulse.Lib.Pervasives
 module B = TLS13.Bytes
 module Bounds = TLS13.Impl.ConnectionState.Bounds
 module CL = TLS13.ConnectionLog
+module CM = TLS13.Impl.ConnectionState.Model
 module CS = TLS13.Spec.ConnectionState
 module IO = TLS13.IO
 module IM = TLS13.Impl.Messages
@@ -255,6 +256,88 @@ let lemma_local_event_wire_lengths
     assert (Seq.equal B.empty (ST.response_network_out resp network_out));
     Seq.lemma_eq_elim B.empty (ST.response_network_out resp network_out);
     Seq.append_empty_r st0.CS.cs_wire_log.CL.raw_received
+  )
+
+let lemma_server_local_event_received_exact_when_nonfailed
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (resp:ST.server_response)
+  (kind:ST.local_event_kind)
+  (payload:B.bytes)
+  (network_out:B.bytes)
+  (app_out:B.bytes)
+  (received:B.bytes)
+  (sent:B.bytes)
+  (consumed:B.bytes)
+  (buffered:B.bytes)
+  (buffered_len:SZ.t)
+  : Lemma
+      (requires
+        ST.server_local_event_end_to_end_correct
+          st0 st1 resp kind payload network_out app_out /\
+        server_driver_wire_logs_match_witness
+          st0 received sent consumed buffered buffered_len)
+      (ensures
+        ST.server_connection_control_not_failed st1 ==>
+          Seq.equal st1.CS.cs_wire_log.CL.raw_received consumed)
+=
+  if ST.server_connection_control_not_failed st1 then (
+    assert (ST.legal_handled_local_response st0 st1 resp kind payload network_out app_out);
+    if (exists ev raw_sent raw_received.
+          ST.legal_local_response
+            st0 st1 resp kind payload ev raw_sent raw_received network_out app_out) then (
+      let ev =
+        ID.indefinite_description_ghost
+          CS.conn_event
+          (fun ev -> exists raw_sent raw_received.
+            ST.legal_local_response
+              st0 st1 resp kind payload ev raw_sent raw_received network_out app_out) in
+      let raw_sent =
+        ID.indefinite_description_ghost
+          B.bytes
+          (fun raw_sent -> exists raw_received.
+            ST.legal_local_response
+              st0 st1 resp kind payload ev raw_sent raw_received network_out app_out) in
+      let raw_received =
+        ID.indefinite_description_ghost
+          B.bytes
+          (fun raw_received ->
+            ST.legal_local_response
+              st0 st1 resp kind payload ev raw_sent raw_received network_out app_out) in
+      assert (ST.legal_response_for_event
+        st0 st1 resp ev raw_sent raw_received network_out app_out);
+      ST.lemma_legal_response_for_event_nonfailed_previous
+        st0
+        st1
+        resp
+        ev
+        raw_sent
+        raw_received
+        network_out
+        app_out;
+      assert (ST.server_connection_control_not_failed st0);
+      assert (Seq.equal st0.CS.cs_wire_log.CL.raw_received consumed);
+      lemma_local_event_wire_lengths
+        st0
+        st1
+        resp
+        kind
+        payload
+        network_out
+        app_out;
+      Seq.lemma_eq_elim st1.CS.cs_wire_log.CL.raw_received st0.CS.cs_wire_log.CL.raw_received
+    ) else (
+      assert (ST.unexpected_message_response st0 st1 resp network_out app_out);
+      ST.lemma_unexpected_message_response_control_failed
+        st0
+        st1
+        resp
+        network_out
+        app_out;
+      ST.lemma_server_connection_control_not_failed_contradicts_failed
+        st1
+        CM.tls_unexpected_message_error
+    )
   )
 
 let lemma_logged_received_bytes_accounted_append_delta

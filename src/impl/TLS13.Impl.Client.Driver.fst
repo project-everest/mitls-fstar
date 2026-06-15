@@ -82,7 +82,9 @@ let client_driver_wire_logs_match_witness
   Seq.equal sent st.CS.cs_wire_log.CL.raw_sent /\
   B.length buffered == SZ.v buffered_len /\
   Seq.equal (B.append consumed buffered) received /\
-  logged_received_bytes_accounted st.CS.cs_wire_log.CL.raw_received consumed
+  logged_received_bytes_accounted st.CS.cs_wire_log.CL.raw_received consumed /\
+  (CT.connection_control_not_failed st ==>
+    Seq.equal st.CS.cs_wire_log.CL.raw_received consumed)
 
 noextract
 let client_driver_wire_logs_match
@@ -559,6 +561,99 @@ let lemma_local_event_wire_lengths
     Seq.append_empty_r st0.CS.cs_wire_log.CL.raw_received
   )
 
+let lemma_local_event_received_exact_when_nonfailed
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (resp:CT.client_response)
+  (kind:CT.local_event_kind)
+  (payload:B.bytes)
+  (network_out:B.bytes)
+  (app_out:B.bytes)
+  (received:B.bytes)
+  (sent:B.bytes)
+  (consumed:B.bytes)
+  (buffered:B.bytes)
+  (buffered_len:SZ.t)
+  : Lemma
+      (requires
+        CT.local_event_end_to_end_correct
+          st0 st1 resp kind payload network_out app_out /\
+        client_driver_wire_logs_match_witness
+          st0 received sent consumed buffered buffered_len)
+      (ensures
+        CT.connection_control_not_failed st1 ==>
+          Seq.equal st1.CS.cs_wire_log.CL.raw_received consumed)
+=
+  if CT.connection_control_not_failed st1 then (
+    assert (CT.local_event_step_correct st0 st1 resp kind payload network_out app_out);
+    assert (CT.legal_handled_local_response st0 st1 resp kind payload network_out app_out);
+    if (exists ev raw_sent raw_received.
+          CT.legal_local_response
+            st0 st1 resp kind payload ev raw_sent raw_received network_out app_out) then (
+      let ev =
+        ID.indefinite_description_ghost
+          CS.conn_event
+          (fun ev -> exists raw_sent raw_received.
+            CT.legal_local_response
+              st0 st1 resp kind payload ev raw_sent raw_received network_out app_out) in
+      let raw_sent =
+        ID.indefinite_description_ghost
+          B.bytes
+          (fun raw_sent -> exists raw_received.
+            CT.legal_local_response
+              st0 st1 resp kind payload ev raw_sent raw_received network_out app_out) in
+      let raw_received =
+        ID.indefinite_description_ghost
+          B.bytes
+          (fun raw_received ->
+            CT.legal_local_response
+              st0 st1 resp kind payload ev raw_sent raw_received network_out app_out) in
+      assert (CT.legal_response_for_event
+        st0 st1 resp ev raw_sent raw_received network_out app_out);
+      CT.lemma_legal_response_for_event_nonfailed_previous
+        st0
+        st1
+        resp
+        ev
+        raw_sent
+        raw_received
+        network_out
+        app_out;
+      assert (CT.connection_control_not_failed st0);
+      assert (Seq.equal st0.CS.cs_wire_log.CL.raw_received consumed);
+      lemma_local_event_wire_lengths
+        st0
+        st1
+        resp
+        kind
+        payload
+        network_out
+        app_out;
+      Seq.lemma_eq_elim st1.CS.cs_wire_log.CL.raw_received st0.CS.cs_wire_log.CL.raw_received
+    ) else if CT.unexpected_message_response st0 st1 resp network_out app_out then (
+      CT.lemma_unexpected_message_response_control_failed
+        st0
+        st1
+        resp
+        network_out
+        app_out;
+      CT.lemma_connection_control_not_failed_contradicts_failed
+        st1
+        CT.tls_unexpected_message_error
+    ) else (
+      assert (CT.bad_finished_response st0 st1 resp network_out app_out);
+      CT.lemma_bad_finished_response_control_failed
+        st0
+        st1
+        resp
+        network_out
+        app_out;
+      CT.lemma_connection_control_not_failed_contradicts_failed
+        st1
+        CT.tls_bad_finished_error
+    )
+  )
+
 let lemma_network_bytes_wire_lengths
   (st0:CS.connection_state)
   (st1:CS.connection_state)
@@ -823,11 +918,20 @@ let lemma_network_bytes_logged_received_exact_when_nonfailed
   (network_out:B.bytes)
   (old_app_out:B.bytes)
   (app_out:B.bytes)
+  (received:B.bytes)
+  (sent:B.bytes)
   (old_consumed:B.bytes)
+  (buffered:B.bytes)
+  (buffered_len:SZ.t)
   : Lemma
       (requires
-        CT.connection_control_not_failed st0 /\
-        Seq.equal st0.CS.cs_wire_log.CL.raw_received old_consumed /\
+        client_driver_wire_logs_match_witness
+          st0
+          received
+          sent
+          old_consumed
+          buffered
+          buffered_len /\
         CT.network_bytes_end_to_end_correct
           st0
           st1
@@ -845,6 +949,17 @@ let lemma_network_bytes_logged_received_exact_when_nonfailed
               (CT.network_consumed_prefix network_input buffer_resp.CT.consumed_len)))
 =
   if CT.connection_control_not_failed st1 then (
+    CT.lemma_network_bytes_end_to_end_nonfailed_previous
+      st0
+      st1
+      buffer_resp
+      network_input
+      old_network_out
+      network_out
+      old_app_out
+      app_out;
+    assert (CT.connection_control_not_failed st0);
+    assert (Seq.equal st0.CS.cs_wire_log.CL.raw_received old_consumed);
     CT.lemma_network_bytes_end_to_end_nonfailed_received_prefix_accepted
       st0
       st1
@@ -1523,6 +1638,24 @@ fn process_local_event_and_write_once
   with received sent.
     assert (IO.is_channel ch received sent **
             pure (client_driver_wire_logs_match 'st0 received sent (Ghost.reveal 'buffered) (Ghost.reveal 'pending_len)));
+  let old_consumed =
+    Ghost.hide (ID.indefinite_description_ghost
+      B.bytes
+      (fun consumed ->
+        client_driver_wire_logs_match_witness
+          'st0
+          received
+          sent
+          consumed
+          (Ghost.reveal 'buffered)
+          (Ghost.reveal 'pending_len)));
+  assert (pure (client_driver_wire_logs_match_witness
+    'st0
+    received
+    sent
+    (Ghost.reveal old_consumed)
+    (Ghost.reveal 'buffered)
+    (Ghost.reveal 'pending_len)));
   let written = IO.write ch network_out resp.CT.network_out_len;
   assert (pure (written == resp.CT.network_out_len));
   assert (pure (SZ.v written <= B.length network_out_bytes));
@@ -1546,6 +1679,19 @@ fn process_local_event_and_write_once
   Seq.lemma_eq_elim
     st1.CS.cs_wire_log.CL.raw_received
     'st0.CS.cs_wire_log.CL.raw_received;
+  lemma_local_event_received_exact_when_nonfailed
+    'st0
+    st1
+    resp
+    kind
+    (Ghost.reveal 'payload_bytes)
+    network_out_bytes
+    app_out_bytes
+    received
+    sent
+    (Ghost.reveal old_consumed)
+    (Ghost.reveal 'buffered)
+    (Ghost.reveal 'pending_len);
   assert (pure (client_driver_wire_logs_match
     st1
     received
@@ -1826,6 +1972,9 @@ fn driver_process_buffered_network_bytes_once
   assert (pure (B.length (Ghost.reveal new_buffered) == SZ.v new_pending));
   assert (pure (Seq.equal (Ghost.reveal consumed_prefix)
     (Seq.slice (Ghost.reveal 'buffered) 0 (SZ.v buffer_resp.CT.consumed_len))));
+  assert (pure (Seq.equal
+    (Ghost.reveal consumed_prefix)
+    (CT.network_consumed_prefix raw_prefix buffer_resp.CT.consumed_len)));
   lemma_slice_append_full
     (Ghost.reveal 'buffered)
     (SZ.v buffer_resp.CT.consumed_len);
@@ -1863,6 +2012,28 @@ fn driver_process_buffered_network_bytes_once
     (B.append
       'st0.CS.cs_wire_log.CL.raw_sent
       (CT.response_network_out buffer_resp.CT.response network_out_bytes))));
+  lemma_network_bytes_logged_received_exact_when_nonfailed
+    'st0
+    st1
+    buffer_resp
+    raw_prefix
+    (Ghost.reveal 'old_network_out)
+    network_out_bytes
+    (Ghost.reveal 'old_app_out)
+    app_out_bytes
+    received
+    sent
+    (Ghost.reveal old_consumed)
+    (Ghost.reveal 'buffered)
+    buffered_len;
+  assert (pure (CT.connection_control_not_failed st1 ==>
+    Seq.equal
+      st1.CS.cs_wire_log.CL.raw_received
+      (B.append (Ghost.reveal old_consumed)
+        (CT.network_consumed_prefix raw_prefix buffer_resp.CT.consumed_len))));
+  Seq.lemma_eq_elim
+    (Ghost.reveal consumed_prefix)
+    (CT.network_consumed_prefix raw_prefix buffer_resp.CT.consumed_len);
   assert (pure (client_driver_wire_logs_match_witness
     st1
     received

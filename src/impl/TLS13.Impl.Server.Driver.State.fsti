@@ -74,7 +74,9 @@ let server_driver_wire_logs_match_witness
   Seq.equal sent st.CS.cs_wire_log.CL.raw_sent /\
   B.length buffered == SZ.v buffered_len /\
   Seq.equal (B.append consumed buffered) received /\
-  logged_received_bytes_accounted st.CS.cs_wire_log.CL.raw_received consumed
+  logged_received_bytes_accounted st.CS.cs_wire_log.CL.raw_received consumed /\
+  (ST.server_connection_control_not_failed st ==>
+    Seq.equal st.CS.cs_wire_log.CL.raw_received consumed)
 
 noextract
 let server_driver_wire_logs_match
@@ -449,6 +451,29 @@ val lemma_local_event_wire_lengths
         Seq.equal st1.CS.cs_wire_log.CL.raw_received
           st0.CS.cs_wire_log.CL.raw_received /\
         SZ.v resp.ST.network_out_len <= B.length network_out)
+
+val lemma_server_local_event_received_exact_when_nonfailed
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (resp:ST.server_response)
+  (kind:ST.local_event_kind)
+  (payload:B.bytes)
+  (network_out:B.bytes)
+  (app_out:B.bytes)
+  (received:B.bytes)
+  (sent:B.bytes)
+  (consumed:B.bytes)
+  (buffered:B.bytes)
+  (buffered_len:SZ.t)
+  : Lemma
+      (requires
+        ST.server_local_event_end_to_end_correct
+          st0 st1 resp kind payload network_out app_out /\
+        server_driver_wire_logs_match_witness
+          st0 received sent consumed buffered buffered_len)
+      (ensures
+        ST.server_connection_control_not_failed st1 ==>
+          Seq.equal st1.CS.cs_wire_log.CL.raw_received consumed)
 
 val lemma_logged_received_bytes_accounted_append_delta
   (old_logged:B.bytes)

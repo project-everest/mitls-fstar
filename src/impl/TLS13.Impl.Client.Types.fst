@@ -2731,6 +2731,55 @@ let lemma_connection_control_not_failed_contradicts_failed
   | CS.ControlFailed _ -> assert False
   | _ -> assert False
 
+let lemma_legal_response_for_event_nonfailed_previous
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (resp:client_response)
+  (ev:CS.conn_event)
+  (raw_sent:B.bytes)
+  (raw_received:B.bytes)
+  (network_out:B.bytes)
+  (app_out:B.bytes)
+  : Lemma
+      (requires
+        legal_response_for_event
+          st0
+          st1
+          resp
+          ev
+          raw_sent
+          raw_received
+          network_out
+          app_out /\
+        connection_control_not_failed st1)
+      (ensures connection_control_not_failed st0)
+=
+  if connection_control_not_failed st0 then ()
+  else (
+    match st0.CS.cs_model.CS.model_control with
+    | CS.ControlFailed _ ->
+      assert (CS.legal_connection_delta
+        st0
+        {
+          CS.delta_event = ev;
+          CS.delta_raw_sent = raw_sent;
+          CS.delta_raw_received = raw_received;
+        }
+        st1);
+      assert (CS.step_model st0.CS.cs_model ev == Some st1.CS.cs_model);
+      CSL.lemma_step_model_from_failed_results_failed
+        st0.CS.cs_model
+        ev
+        st1.CS.cs_model;
+      match st1.CS.cs_model.CS.model_control with
+      | CS.ControlFailed err ->
+        assert False
+      | _ ->
+        assert False
+    | _ ->
+      assert False
+  )
+
 let network_bytes_nonfailed_received_prefix_accepted
   (st0:CS.connection_state)
   (st1:CS.connection_state)
@@ -3068,6 +3117,74 @@ let lemma_network_bytes_end_to_end_nonfailed_received_prefix_accepted
     network_input
     network_out
     app_out
+
+let lemma_network_bytes_end_to_end_nonfailed_previous
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (buffer_resp:client_buffer_response)
+  (network_input:B.bytes)
+  (old_network_out:B.bytes)
+  (network_out:B.bytes)
+  (old_app_out:B.bytes)
+  (app_out:B.bytes)
+  : Lemma
+      (requires
+        network_bytes_end_to_end_correct
+          st0
+          st1
+          buffer_resp
+          network_input
+          old_network_out
+          network_out
+          old_app_out
+          app_out /\
+        connection_control_not_failed st1)
+      (ensures connection_control_not_failed st0)
+=
+  let resp = buffer_resp.response in
+  assert (network_bytes_step_correct
+    st0 st1 buffer_resp network_input old_network_out network_out old_app_out app_out);
+  if response_stuttered st0 st1 resp old_network_out network_out old_app_out app_out then (
+    assert (st1 == st0)
+  ) else (
+    assert (some_legal_response_for_network_prefix
+      st0 st1 resp network_input buffer_resp.consumed_len network_out app_out);
+    let ev =
+      ID.indefinite_description_ghost
+        CS.conn_event
+        (fun ev -> exists raw_sent raw_received.
+          legal_response_for_event st0 st1 resp ev raw_sent raw_received network_out app_out /\
+          raw_received_matches_network_input
+            raw_received
+            (network_consumed_prefix network_input buffer_resp.consumed_len)) in
+    let raw_sent =
+      ID.indefinite_description_ghost
+        B.bytes
+        (fun raw_sent -> exists raw_received.
+          legal_response_for_event st0 st1 resp ev raw_sent raw_received network_out app_out /\
+          raw_received_matches_network_input
+            raw_received
+            (network_consumed_prefix network_input buffer_resp.consumed_len)) in
+    let raw_received =
+      ID.indefinite_description_ghost
+        B.bytes
+        (fun raw_received ->
+          legal_response_for_event st0 st1 resp ev raw_sent raw_received network_out app_out /\
+          raw_received_matches_network_input
+            raw_received
+            (network_consumed_prefix network_input buffer_resp.consumed_len)) in
+    assert (legal_response_for_event
+      st0 st1 resp ev raw_sent raw_received network_out app_out);
+    lemma_legal_response_for_event_nonfailed_previous
+      st0
+      st1
+      resp
+      ev
+      raw_sent
+      raw_received
+      network_out
+      app_out
+  )
 
 let local_event_end_to_end_correct
   (st0:CS.connection_state)

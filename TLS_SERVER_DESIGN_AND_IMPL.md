@@ -1110,10 +1110,12 @@ non-failed network step with nonzero consumed input logs that consumed prefix as
 the accepted protocol `raw_received` delta. Driver-side exact append helpers
 prove that, assuming the prior consumed transport prefix exactly matched the
 protocol received log, a non-failed network step preserves exactness by appending
-the consumed prefix. The remaining work is to fold this exact-unless-failed fact
-into the hidden client/server driver wire-log invariants and prove the
-successful-handshake drained/no-retained facts needed for the final exact
-paired-wire-log bridge.
+the consumed prefix. That exact-unless-failed fact is now folded into the hidden
+client/server driver wire-log witnesses: non-failed states carry exact protocol
+`raw_received == consumed transport prefix`, while failed states retain the
+weaker accounting relation for rejected consumed bytes. The remaining work is to
+prove the successful-handshake drained/no-retained facts needed for the final
+exact paired-wire-log bridge.
 
 Current extraction status: the first focused server-core KaRaMeL prefix through
 `TLS13.Impl.Server.Network` now completes. The previous KaRaMeL
@@ -1842,8 +1844,11 @@ Checklist:
       facts in addition to exact sent-log projections.
 - [x] `TLS13.Impl.Driver.Pairing` packages the public driver-pair obligations
       and instantiates the main supported-profile key-material theorem.
-- [ ] Strengthen received-log accounting to ordered exact/drained facts sufficient
-      to prove `CS.paired_wire_logs` from concrete paired driver resources.
+- [x] Fold ordered exact received-log matching into the hidden client/server
+      driver wire-log witnesses for non-failed states.
+- [ ] Prove successful `connect`/`accept` drained/no-retained facts and expose
+      enough exact received-log equality to prove `CS.paired_wire_logs` from
+      concrete paired driver resources.
 
 ## Phase-by-phase implementation plan
 
