@@ -1165,3 +1165,255 @@ fn process_buffered_network_bytes_compact_once
        else B.empty));
   buffer_resp
 }
+
+fn read_and_process_network_once
+  (d:server_driver)
+  requires server_driver_connected
+            d
+            'st0
+            'certificate_chain
+            'credential_identity
+            'received
+            'sent
+  returns resp:ST.server_buffer_response
+  ensures exists* st1 received' sent'.
+          server_driver_connected
+           d
+           st1
+           'certificate_chain
+           'credential_identity
+           received'
+           sent' **
+          pure (server_driver_network_process_correct
+           'st0
+           st1
+           resp
+           (Ghost.reveal 'sent)
+           sent')
+{
+  unfold (server_driver_connected
+    d
+    'st0
+    'certificate_chain
+    'credential_identity
+    'received
+    'sent);
+  with ch buffered buffered_len.
+    assert (Box.pts_to d.server_driver_channel (Some ch) **
+            IO.is_channel ch 'received 'sent **
+            server_driver_buffers d buffered buffered_len);
+  assert (pure (ST.server_end_to_end_invariant 'st0));
+  assert (pure (server_driver_wire_logs_match
+    'st0
+    'received
+    'sent
+    buffered
+    buffered_len));
+  unfold (server_driver_buffers d buffered buffered_len);
+  with empty_payload raw network_out material cv_input signature app_out.
+    assert (
+      Box.pts_to d.server_driver_buffered_len buffered_len **
+      V.pts_to d.server_driver_empty_payload #1.0R empty_payload **
+      V.pts_to d.server_driver_raw #1.0R raw **
+      V.pts_to d.server_driver_network_out #1.0R network_out **
+      V.pts_to d.server_driver_material_payload #1.0R material **
+      V.pts_to d.server_driver_certificate_verify_input #1.0R cv_input **
+      V.pts_to d.server_driver_signature #1.0R signature **
+      V.pts_to d.server_driver_app_out #1.0R app_out);
+  let current_len = Box.(!d.server_driver_buffered_len);
+  assert (pure (current_len == buffered_len));
+  assert (pure (SZ.v current_len <= SZ.v driver_rx_capacity));
+
+  let old_consumed =
+    Ghost.hide (ID.indefinite_description_ghost
+      B.bytes
+      (fun consumed ->
+        server_driver_wire_logs_match_witness
+          'st0
+          (Ghost.reveal 'received)
+          (Ghost.reveal 'sent)
+          consumed
+          buffered
+          buffered_len));
+  assert (pure (server_driver_wire_logs_match_witness
+    'st0
+    (Ghost.reveal 'received)
+    (Ghost.reveal 'sent)
+    (Ghost.reveal old_consumed)
+    buffered
+    buffered_len));
+
+  V.to_array_pts_to d.server_driver_raw;
+  A.pts_to_len (V.vec_to_array d.server_driver_raw);
+  assert (pure (A.length (V.vec_to_array d.server_driver_raw) ==
+    SZ.v driver_rx_capacity));
+  A.to_mask (V.vec_to_array d.server_driver_raw);
+  with raw_mask.
+    assert (A.pts_to_mask
+      (V.vec_to_array d.server_driver_raw)
+      #1.0R
+      raw_mask
+      (fun _ -> True));
+  assert (pure (Seq.length raw_mask == SZ.v driver_rx_capacity));
+  assert (pure (forall (i:nat). i < Seq.length raw_mask ==>
+    Seq.index raw_mask i == Some (Seq.index raw i)));
+
+  let available = SZ.sub driver_rx_capacity current_len;
+  assert (pure (SZ.v available == SZ.v driver_rx_capacity - SZ.v current_len));
+  let raw_tail_array =
+    A.sub
+      (V.vec_to_array d.server_driver_raw)
+      #1.0R
+      #(fun _ -> True)
+      current_len
+      (SZ.v driver_rx_capacity);
+  with raw_tail_mask.
+    assert (A.pts_to_mask raw_tail_array #1.0R raw_tail_mask (fun _ -> True));
+  assert (pure (Seq.length raw_tail_mask == SZ.v available));
+  assert (pure (forall (i:nat). i < Seq.length raw_tail_mask ==>
+    Some? (Seq.index raw_tail_mask i)));
+  A.from_mask raw_tail_array;
+  with raw_tail.
+    assert (pts_to raw_tail_array raw_tail);
+  assert (pure (B.length raw_tail == SZ.v available));
+
+  let current_channel = Box.(!d.server_driver_channel);
+  assert (pure (current_channel == Some ch));
+  assert (pure (Some? current_channel));
+  let concrete_ch = Some?.v current_channel;
+  assert (pure (current_channel == Some concrete_ch));
+  assert (pure (Some concrete_ch == Some ch));
+  rewrite (IO.is_channel ch 'received 'sent) as
+    (IO.is_channel concrete_ch 'received 'sent);
+  let read_len = IO.read concrete_ch raw_tail_array available;
+  with raw_tail_after read_chunk.
+    assert (IO.is_channel
+              concrete_ch
+              (B.append (Ghost.reveal 'received) read_chunk)
+              (Ghost.reveal 'sent) **
+            pts_to raw_tail_array raw_tail_after);
+  rewrite (IO.is_channel
+              concrete_ch
+              (B.append (Ghost.reveal 'received) read_chunk)
+              (Ghost.reveal 'sent)) as
+    (IO.is_channel
+      ch
+      (B.append (Ghost.reveal 'received) read_chunk)
+      (Ghost.reveal 'sent));
+  assert (pure (B.length raw_tail_after == SZ.v available));
+  assert (pure (B.length read_chunk == SZ.v read_len));
+  assert (pure (SZ.v read_len <= SZ.v available));
+  assert (pure (SZ.v current_len + SZ.v read_len <= SZ.v driver_rx_capacity));
+  SZ.fits_lte (SZ.v current_len + SZ.v read_len) (SZ.v driver_rx_capacity);
+  let total_len = current_len `SZ.add` read_len;
+  assert (pure (SZ.v total_len == SZ.v current_len + SZ.v read_len));
+  assert (pure (SZ.v total_len <= SZ.v driver_rx_capacity));
+  assert (pure (SZ.v total_len == SZ.v buffered_len + SZ.v read_len));
+
+  let new_buffered =
+    Ghost.hide (B.append buffered read_chunk);
+  Seq.lemma_len_append buffered read_chunk;
+  assert (pure (B.length (Ghost.reveal new_buffered) == SZ.v total_len));
+  Seq.append_assoc (Ghost.reveal old_consumed) buffered read_chunk;
+  assert (pure (Seq.equal
+    (B.append
+      (B.append (Ghost.reveal old_consumed) buffered)
+      read_chunk)
+    (B.append (Ghost.reveal 'received) read_chunk)));
+  assert (pure (Seq.equal
+    (B.append (Ghost.reveal old_consumed) (Ghost.reveal new_buffered))
+    (B.append (Ghost.reveal 'received) read_chunk)));
+  assert (pure (server_driver_wire_logs_match_witness
+    'st0
+    (B.append (Ghost.reveal 'received) read_chunk)
+    (Ghost.reveal 'sent)
+    (Ghost.reveal old_consumed)
+    (Ghost.reveal new_buffered)
+    total_len));
+  assert (pure (server_driver_wire_logs_match
+    'st0
+    (B.append (Ghost.reveal 'received) read_chunk)
+    (Ghost.reveal 'sent)
+    (Ghost.reveal new_buffered)
+    total_len));
+
+  A.to_mask raw_tail_array;
+  with raw_tail_mask_after.
+    assert (A.pts_to_mask raw_tail_array #1.0R raw_tail_mask_after (fun _ -> True));
+  assert (pure (Seq.length raw_tail_mask_after == B.length raw_tail_after));
+  assert (pure (forall (i:nat). i < Seq.length raw_tail_mask_after ==>
+    Seq.index raw_tail_mask_after i == Some (Seq.index raw_tail_after i)));
+  assert (pure (forall (i:nat). i < Seq.length raw_tail_mask_after ==>
+    Some? (Seq.index raw_tail_mask_after i)));
+  rewrite
+    (A.pts_to_mask raw_tail_array #1.0R raw_tail_mask_after (fun _ -> True))
+    as
+    (A.pts_to_mask
+      (A.gsub
+        (V.vec_to_array d.server_driver_raw)
+        (SZ.v current_len)
+        (SZ.v driver_rx_capacity))
+      #1.0R
+      raw_tail_mask_after
+      (fun _ -> True));
+  A.return_sub
+    (V.vec_to_array d.server_driver_raw)
+    #1.0R
+    #raw_mask
+    #raw_tail_mask_after
+    #(fun k -> True /\ ~(SZ.v current_len <= k /\ k < SZ.v driver_rx_capacity))
+    #(fun _ -> True)
+    #(SZ.v current_len)
+    #(SZ.v driver_rx_capacity);
+  with raw_joined_mask.
+    assert (A.pts_to_mask (V.vec_to_array d.server_driver_raw) #1.0R raw_joined_mask
+      (fun k ->
+        (True /\ ~(SZ.v current_len <= k /\ k < SZ.v driver_rx_capacity)) \/
+        (SZ.v current_len <= k /\ k < SZ.v driver_rx_capacity /\ True)));
+  assert (pure (forall (i:nat). i < Seq.length raw_joined_mask ==>
+    ((True /\ ~(SZ.v current_len <= i /\ i < SZ.v driver_rx_capacity)) \/
+     (SZ.v current_len <= i /\ i < SZ.v driver_rx_capacity /\ True))));
+  assert (pure (forall (i:nat). i < Seq.length raw_joined_mask ==>
+    Some? (Seq.index raw_joined_mask i)));
+  A.from_mask (V.vec_to_array d.server_driver_raw);
+  with raw_after_read.
+    assert (pts_to (V.vec_to_array d.server_driver_raw) raw_after_read);
+  assert (pure (B.length raw_after_read == SZ.v driver_rx_capacity));
+  assert (pure (Seq.equal buffered (Seq.slice raw 0 (SZ.v current_len))));
+  assert (pure (Seq.equal read_chunk
+    (Seq.slice raw_tail_after 0 (SZ.v read_len))));
+  assert (pure (forall (i:nat). i < B.length raw_after_read ==>
+    Some (Seq.index raw_after_read i) == Seq.index raw_joined_mask i));
+  assert (pure (forall (i:nat). i < SZ.v current_len ==>
+    Seq.index raw_after_read i == Seq.index raw i));
+  assert (pure (forall (i:nat). i < SZ.v read_len ==>
+    Seq.index raw_after_read (SZ.v current_len + i) ==
+    Seq.index raw_tail_after i));
+  lemma_read_append_buffer_matches_raw_prefix
+    raw_after_read
+    raw
+    raw_tail_after
+    buffered
+    read_chunk
+    (SZ.v current_len)
+    (SZ.v read_len)
+    (SZ.v total_len);
+  Seq.lemma_eq_elim
+    (B.append buffered read_chunk)
+    (Seq.slice raw_after_read 0 (SZ.v total_len));
+  assert (pure (Seq.equal (Ghost.reveal new_buffered)
+    (Seq.slice raw_after_read 0 (SZ.v total_len))));
+
+  Box.(d.server_driver_buffered_len := total_len);
+  V.to_vec_pts_to d.server_driver_raw;
+  fold (server_driver_buffers d (Ghost.reveal new_buffered) total_len);
+  fold (server_driver_connected
+    d
+    'st0
+    'certificate_chain
+    'credential_identity
+    (B.append (Ghost.reveal 'received) read_chunk)
+    'sent);
+  let resp = process_buffered_network_bytes_compact_once d;
+  resp
+}
