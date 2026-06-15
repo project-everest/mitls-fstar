@@ -48,6 +48,16 @@ bool TLS13_Crypto_equal32(uint8_t *a, uint8_t *b, void *a_bytes, void *b_bytes) 
   return diff == 0u;
 }
 
+bool TLS13_Crypto_equal12(uint8_t *a, uint8_t *b, void *a_bytes, void *b_bytes) {
+  (void)a_bytes;
+  (void)b_bytes;
+  volatile uint8_t diff = 0;
+  for (size_t i = 0; i < 12u; ++i) {
+    diff = (uint8_t)(diff | (uint8_t)(a[i] ^ b[i]));
+  }
+  return diff == 0u;
+}
+
 void TLS13_Crypto_hkdf_extract(
     uint8_t *salt,
     size_t salt_len,

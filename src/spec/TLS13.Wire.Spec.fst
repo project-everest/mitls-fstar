@@ -287,7 +287,12 @@ let parse_client_hello (input:B.bytes) : GTot (option M.client_hello) =
         let cipher_suites_len = read_u16 input cipher_suites_len_pos in
         let cipher_suites_pos = cipher_suites_len_pos + 2 in
         let compression_len_pos = cipher_suites_pos + cipher_suites_len in
-        if cipher_suites_len <> 2 || compression_len_pos + 1 > B.length input then None
+        if compression_len_pos + 1 > B.length input then None
+        else if
+          cipher_suites_len <> 2 &&
+          (cipher_suites_len <> 4 ||
+           read_u16 input (cipher_suites_pos + 2) <> 0x00ff)
+        then None
         else
           match cipher_suite_of_u16 (read_u16 input cipher_suites_pos) with
           | None -> None
@@ -837,6 +842,52 @@ let parse_record (input:B.bytes) : GTot (option (T.content_type & M.sealed_recor
           match take_range input 5 fragment_len with
           | Some fragment -> Some (content_type, fragment, 5 + fragment_len)
           | None -> None
+
+let record_version_wire_compatible (input:B.bytes) : GTot bool =
+  B.length input >= 3 &&
+  nat_of_byte (Seq.index input 1) == 0x03 &&
+  (nat_of_byte (Seq.index input 2) == 0x03 ||
+   nat_of_byte (Seq.index input 2) == 0x01)
+
+let parse_record_wire (input:B.bytes) : GTot (option (T.content_type & M.sealed_record & nat)) =
+  if B.length input < 5 then None
+  else
+    match content_type_of_byte (Seq.index input 0) with
+    | None -> None
+    | Some content_type ->
+      if not (record_version_wire_compatible input) then None
+      else
+        let fragment_len = read_u16 input 3 in
+        if fragment_len > 16384 + 256 || 5 + fragment_len > B.length input then None
+        else
+          match take_range input 5 fragment_len with
+          | Some fragment -> Some (content_type, fragment, 5 + fragment_len)
+          | None -> None
+
+let lemma_parse_record_implies_parse_record_wire (input:B.bytes)
+  : Lemma
+    (requires Some? (parse_record input))
+    (ensures parse_record_wire input == parse_record input)
+=
+  match parse_record input with
+  | None -> assert False
+  | Some _ -> ()
+
+let lemma_parse_record_wire_some_consumed_positive
+  (input:B.bytes)
+  (content_type:T.content_type)
+  (fragment:M.sealed_record)
+  (consumed:nat)
+  : Lemma
+    (requires parse_record_wire input == Some (content_type, fragment, consumed))
+    (ensures consumed > 0 /\ consumed <= B.length input)
+=
+  match parse_record_wire input with
+  | None -> assert False
+  | Some (_, _, _) ->
+    assert (B.length input >= 5);
+    assert (consumed >= 5);
+    assert (consumed <= B.length input)
 
 // Parse just the 5-byte record header (without requiring the fragment data)
 let parse_record_header (input:B.bytes) : GTot (option (T.content_type & nat)) =

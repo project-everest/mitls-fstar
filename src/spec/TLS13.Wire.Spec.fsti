@@ -225,6 +225,25 @@ val parse_record:
   input:B.bytes ->
   GTot (option (T.content_type & M.sealed_record & nat))
 
+val parse_record_wire:
+  input:B.bytes ->
+  GTot (option (T.content_type & M.sealed_record & nat))
+
+val lemma_parse_record_implies_parse_record_wire:
+  input:B.bytes ->
+  Lemma
+    (requires Some? (parse_record input))
+    (ensures parse_record_wire input == parse_record input)
+
+val lemma_parse_record_wire_some_consumed_positive:
+  input:B.bytes ->
+  content_type:T.content_type ->
+  fragment:M.sealed_record ->
+  consumed:nat ->
+  Lemma
+    (requires parse_record_wire input == Some (content_type, fragment, consumed))
+    (ensures consumed > 0 /\ consumed <= B.length input)
+
 val parse_record_header:
   input:B.bytes ->
   GTot (option (T.content_type & nat))

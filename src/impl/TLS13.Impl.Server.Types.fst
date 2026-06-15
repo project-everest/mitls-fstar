@@ -238,6 +238,12 @@ let next_local_action_sound
         (st.CS.cs_model.CS.model_record.CS.record_write.R.seq + 1) /\
       B.length st.CS.cs_model.CS.model_handshake.CS.hs_transcript + 36 <=
         Bounds.max_transcript_len
+    | LocalVerifyClientFinished ->
+      action.next_local_payload == LocalPayloadNone /\
+      Some? st.CS.cs_model.CS.model_handshake.CS.hs_client_finished /\
+      CM.can_verify_client_finished
+        st
+        (Some?.v st.CS.cs_model.CS.model_handshake.CS.hs_client_finished)
     | _ ->
       False
   else
@@ -1255,7 +1261,7 @@ let server_protected_record_decode_uses_scheduled_read_key
   (raw_received:B.bytes)
   : prop =
   exists outer_fragment opened.
-    WS.parse_record raw_received ==
+    WS.parse_record_wire raw_received ==
       Some (T.ApplicationData, outer_fragment, B.length raw_received) /\
     CT.protected_record_opened st0 raw_received outer_fragment opened /\
     CS.record_read_key_schedule_projection_for_role

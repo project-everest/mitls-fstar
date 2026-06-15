@@ -330,7 +330,11 @@ fn accept
       if (wait.server_driver_client_hello_wait_exhausted) {
         ServerWorkflowExhausted
       } else {
-        ServerWorkflowNeedMoreInput
+        if (wait.server_driver_client_hello_wait_last.ST.response.ST.status = ST.NeedMoreInput) {
+          ServerWorkflowNeedMoreInput
+        } else {
+          ServerWorkflowStepFailed
+        }
       }
     }
     ServerDriverAcceptServerHelloDrainMaterialFailed -> {

@@ -30,6 +30,29 @@ module V = Pulse.Lib.Vec
 
 open TLS13.Impl.Server.Driver.State
 
+let lemma_control_snapshot_client_hello_received
+  (snapshot:CR.control_snapshot)
+  (st:CS.connection_state)
+  : Lemma
+      (requires
+        CR.control_snapshot_matches snapshot st /\
+        snapshot.CR.snapshot_control_tag == 1uy /\
+        snapshot.CR.snapshot_handshake_stage_tag == 13uy)
+      (ensures
+        st.CS.cs_model.CS.model_control ==
+          CS.ControlHandshaking CS.HsClientHelloReceived)
+=
+  assert_norm (U8.v 1uy == 1);
+  assert_norm (U8.v 13uy == 13);
+  assert (U8.v snapshot.CR.snapshot_control_tag == 1);
+  assert (U8.v snapshot.CR.snapshot_handshake_stage_tag == 13);
+  match st.CS.cs_model.CS.model_control with
+  | CS.ControlHandshaking stage ->
+    match stage with
+    | CS.HsClientHelloReceived -> ()
+    | _ -> assert False
+  | _ -> assert False
+
 let pending_after_consumed (buffered_len consumed_len:SZ.t) : SZ.t =
   if SZ.lte consumed_len buffered_len
   then SZ.sub buffered_len consumed_len
@@ -2118,6 +2141,7 @@ fn rec read_until_client_hello_received
     assert (pure (snapshot.CR.snapshot_control_tag == 1uy));
     assert (pure (snapshot.CR.snapshot_handshake_stage_tag == 13uy));
     assert_norm (Tags.handshake_stage_tag_matches 13uy CS.HsClientHelloReceived);
+    lemma_control_snapshot_client_hello_received snapshot 'st0;
     assert (pure (
       'st0.CS.cs_model.CS.model_control ==
         CS.ControlHandshaking CS.HsClientHelloReceived));
@@ -2154,31 +2178,69 @@ fn rec read_until_client_hello_received
         (Ghost.reveal 'sent)
         sent'));
     forget_server_driver_connected_app_out d;
-    lemma_server_driver_network_process_correct_preserves_config
-      'st0
-      st1
-      step
-      (Ghost.reveal 'sent)
-      sent';
-    let next_fuel = SZ.sub fuel 1sz;
-    assert (pure (SZ.v next_fuel < SZ.v fuel));
-    let result = read_until_client_hello_received d next_fuel;
-    with st2 received2 sent2.
-      assert (server_driver_connected
-        d
-        st2
-        'certificate_chain
-        'credential_identity
-        received2
-        sent2 **
-      pure (result.server_driver_client_hello_wait_ready == true ==>
-        st2.CS.cs_model.CS.model_control ==
-          CS.ControlHandshaking CS.HsClientHelloReceived /\
-        st2.CS.cs_model.CS.model_config ==
-          st1.CS.cs_model.CS.model_config));
-    assert (pure (result.server_driver_client_hello_wait_ready == true ==>
-      st2.CS.cs_model.CS.model_config ==
-        'st0.CS.cs_model.CS.model_config));
-    result
+    let snapshot_after = server_driver_control_snapshot d;
+    assert (pure (CR.control_snapshot_matches snapshot_after st1));
+    let client_hello_received_after =
+      (snapshot_after.CR.snapshot_control_tag = 1uy) &&
+      (snapshot_after.CR.snapshot_handshake_stage_tag = 13uy);
+    if client_hello_received_after {
+      assert (pure (snapshot_after.CR.snapshot_control_tag == 1uy));
+      assert (pure (snapshot_after.CR.snapshot_handshake_stage_tag == 13uy));
+      assert_norm (Tags.handshake_stage_tag_matches 13uy CS.HsClientHelloReceived);
+      lemma_control_snapshot_client_hello_received snapshot_after st1;
+      assert (pure (
+        st1.CS.cs_model.CS.model_control ==
+          CS.ControlHandshaking CS.HsClientHelloReceived));
+      lemma_server_driver_network_process_correct_preserves_config
+        'st0
+        st1
+        step
+        (Ghost.reveal 'sent)
+        sent';
+      assert (pure (
+        st1.CS.cs_model.CS.model_config ==
+          'st0.CS.cs_model.CS.model_config));
+      {
+        server_driver_client_hello_wait_last = step;
+        server_driver_client_hello_wait_ready = true;
+        server_driver_client_hello_wait_exhausted = false;
+      }
+    } else {
+      let need_more = step.ST.response.ST.status = ST.NeedMoreInput;
+      if need_more {
+        lemma_server_driver_network_process_correct_preserves_config
+          'st0
+          st1
+          step
+          (Ghost.reveal 'sent)
+          sent';
+        let next_fuel = SZ.sub fuel 1sz;
+        assert (pure (SZ.v next_fuel < SZ.v fuel));
+        let result = read_until_client_hello_received d next_fuel;
+        with st2 received2 sent2.
+          assert (server_driver_connected
+            d
+            st2
+            'certificate_chain
+            'credential_identity
+            received2
+            sent2 **
+          pure (result.server_driver_client_hello_wait_ready == true ==>
+            st2.CS.cs_model.CS.model_control ==
+              CS.ControlHandshaking CS.HsClientHelloReceived /\
+            st2.CS.cs_model.CS.model_config ==
+              st1.CS.cs_model.CS.model_config));
+        assert (pure (result.server_driver_client_hello_wait_ready == true ==>
+          st2.CS.cs_model.CS.model_config ==
+            'st0.CS.cs_model.CS.model_config));
+        result
+      } else {
+        {
+          server_driver_client_hello_wait_last = step;
+          server_driver_client_hello_wait_ready = false;
+          server_driver_client_hello_wait_exhausted = false;
+        }
+      }
+    }
   }
 }

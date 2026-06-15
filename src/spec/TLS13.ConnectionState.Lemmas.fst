@@ -2468,7 +2468,11 @@ let lemma_event_raw_delta_legal_protected_single_parse_record
       | CL.Sent ->
         lemma_network_message_raw_delta_legal_protected_single_parse_record model msg raw_sent
       | CL.Received ->
-        lemma_network_message_raw_delta_legal_protected_single_parse_record model msg raw_received
+        lemma_network_message_raw_delta_legal_protected_single_parse_record model msg raw_received;
+        assert (exists fragment.
+          W.parse_record raw_received ==
+            Some (T.ApplicationData, fragment, B.length raw_received));
+        W.lemma_parse_record_implies_parse_record_wire raw_received
     else ()
 
 let lemma_event_raw_delta_legal_protected_parse_prefix
@@ -2490,7 +2494,13 @@ let lemma_event_raw_delta_legal_protected_parse_prefix
       | CL.Sent ->
         lemma_network_message_raw_delta_legal_protected_parse_prefix model msg raw_sent
       | CL.Received ->
-        lemma_network_message_raw_delta_legal_protected_parse_prefix model msg raw_received
+        lemma_network_message_raw_delta_legal_protected_parse_prefix model msg raw_received;
+        assert (exists fragment. exists (consumed:nat).
+          W.parse_record raw_received ==
+            Some (T.ApplicationData, fragment, consumed) /\
+          consumed > 0 /\
+          consumed <= B.length raw_received);
+        W.lemma_parse_record_implies_parse_record_wire raw_received
 
 let lemma_event_raw_delta_legal_protected_decompose_prefix
   (model:connection_model)
@@ -2511,7 +2521,17 @@ let lemma_event_raw_delta_legal_protected_decompose_prefix
       | CL.Sent ->
         lemma_network_message_raw_delta_legal_protected_decompose_prefix model msg raw_sent
       | CL.Received ->
-        lemma_network_message_raw_delta_legal_protected_decompose_prefix model msg raw_received
+        lemma_network_message_raw_delta_legal_protected_decompose_prefix model msg raw_received;
+        assert (exists fragment. exists (consumed:nat).
+          W.parse_record raw_received ==
+            Some (T.ApplicationData, fragment, consumed) /\
+          consumed > 0 /\
+          consumed <= B.length raw_received /\
+          raw_records_exactly
+            (Seq.slice raw_received consumed (B.length raw_received))
+            T.ApplicationData
+            (protected_record_count msg.CL.message_direction msg.CL.message_value - 1));
+        W.lemma_parse_record_implies_parse_record_wire raw_received
 
 let lemma_event_raw_delta_legal_protected_segmented
   (model:connection_model)

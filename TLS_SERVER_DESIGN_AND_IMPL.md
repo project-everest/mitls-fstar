@@ -839,6 +839,12 @@ Current phase: **Phase 6 server buffer/event API and theorem surface**.
   record, drains local actions again for ClientFinished verification and client
   application read-key installation, and only returns `ServerWorkflowOk` after a
   verified control snapshot proves `ControlApplicationData`.
+- [x] Tightened the scheduler-side ClientFinished readiness proof. A new
+  concrete `can_verify_client_finished_runtime` query checks the stored
+  ClientFinished verify_data, transcript room, and both live application
+  record-key directions against the key schedule before advertising
+  `LocalVerifyClientFinished`; the local driver now dispatches that action in
+  the empty-action drain instead of stopping at `HsClientFinishedReceived`.
 
 ## Server driver public API and refactoring plan
 
@@ -1025,9 +1031,13 @@ emits prefixed C symbols for only the intended public API:
 `TLS13_Impl_Server_Driver_new_server`, `accept`, `send`, `receive`, and `close`.
 `test-extracted-server-driver-slice` compiles that bundle with the IO/OpenSSL C
 TCB shims and constructs a server driver from the existing test PEM credentials.
-Remaining extraction/runtime work is to eliminate the remaining generated C
-warnings from proof-only helpers where useful and add the concrete OpenSSL client
-interop test against the extracted server driver.
+The runtime server wrapper and `test-openssl-sclient` harness build against the
+extracted top-level server driver, complete the supported OpenSSL TLS 1.3
+handshake through ClientFinished verification, exchange application data, and
+close the channel. The current interop gate is therefore `make check-c-stubs &&
+make test-openssl-sclient`; the remaining work is to keep folding the verified
+driver internals behind the small public facade while strengthening any
+remaining theorem projections needed for audit.
 
 Move these helper surfaces out of the public driver interface:
 
@@ -2568,7 +2578,16 @@ Checklist:
       `extract-server-driver-krml` and `extract-server-driver-bundle`.
 - [ ] Add any separate non-driver server-core extraction target if later needed.
 - [x] Add `test-extracted-server-driver-slice`.
-- [ ] Add `test-openssl-sclient`.
+- [x] Add `test-openssl-sclient` harness.
+- [ ] Make `test-openssl-sclient` pass by proving/supporting OpenSSL's legacy
+      `03 01` initial ClientHello record version in the wire/raw-log model.
+      Current status: the proof-side compatibility split is implemented as
+      `TLS13.Wire.Spec.parse_record_wire`, while canonical `parse_record` remains
+      the serializer/raw-log parser for emitted records. Received ClientHello and
+      protected-record decode predicates now use `parse_record_wire`, the parser
+      TCB contracts expose `parse_record_wire`, and the C parser TCB accepts both
+      `03 03` and `03 01` outer record versions without byte normalization. The
+      final status of this checklist item is pending `test-openssl-sclient`.
 - [ ] Add `test-verified-client-server`.
 - [x] Ensure generated top-level driver symbols avoid POSIX collisions with `accept`, `listen`,
       `send`, and `close`.
@@ -2587,6 +2606,8 @@ Checklist:
 - [ ] Credential context creation/free smoke test passes.
 - [ ] Serializer parse-back tests pass.
 - [ ] Supported ClientHello accepted.
+- [ ] OpenSSL legacy-version initial ClientHello (`16 03 01 ...`) accepted
+      without byte normalization.
 - [ ] Unsupported cipher suite rejected.
 - [ ] Missing/unsupported X25519 key share rejected.
 - [ ] Unsupported signature scheme rejected.

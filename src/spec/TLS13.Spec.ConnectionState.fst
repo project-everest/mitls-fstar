@@ -2873,6 +2873,15 @@ let cleartext_tls_message_raw (msg:M.tls_message) (raw:B.bytes) : GTot prop =
   | _ ->
     Seq.equal raw (serialized_cleartext_tls_message msg)
 
+let received_cleartext_tls_message_raw (msg:M.tls_message) (raw:B.bytes) : GTot prop =
+  match msg with
+  | M.TlsHandshake (M.ClientHello _) ->
+    exists fragment.
+      W.parse_record_wire raw == Some (T.Handshake, fragment, B.length raw) /\
+      W.parse_tls_message T.Handshake fragment == Some msg
+  | _ ->
+    cleartext_tls_message_raw msg raw
+
 let network_message_is_cleartext (dir:direction) (msg:M.tls_message) : bool =
   match dir, msg with
   | CL.Sent, M.TlsHandshake (M.ClientHello _) -> true
@@ -2930,7 +2939,7 @@ let received_single_protected_message_decode
   (raw_received:B.bytes)
   : prop =
   exists outer_fragment opened plaintext.
-    W.parse_record raw_received ==
+    W.parse_record_wire raw_received ==
       Some (T.ApplicationData, outer_fragment, B.length raw_received) /\
     received_record_opened model raw_received outer_fragment opened /\
     W.parse_plaintext opened == Some plaintext /\
@@ -2965,7 +2974,10 @@ let network_message_raw_delta_legal
   (raw:B.bytes)
   : GTot prop =
   if network_message_is_cleartext msg.CL.message_direction msg.CL.message_value
-  then cleartext_tls_message_raw msg.CL.message_value raw
+  then
+    match msg.CL.message_direction with
+    | CL.Sent -> cleartext_tls_message_raw msg.CL.message_value raw
+    | CL.Received -> received_cleartext_tls_message_raw msg.CL.message_value raw
   else
     raw_records_exactly
       raw
@@ -3009,7 +3021,7 @@ let event_protected_single_raw_parse_success
             Some (T.ApplicationData, fragment, B.length raw_sent)
       | CL.Received ->
         exists fragment.
-          W.parse_record raw_received ==
+         W.parse_record_wire raw_received ==
             Some (T.ApplicationData, fragment, B.length raw_received)
     else True
   | ConnLocalEvent _ -> True
@@ -3033,7 +3045,7 @@ let event_protected_raw_parse_prefix_success
           consumed <= B.length raw_sent)
       | CL.Received ->
         (exists fragment. exists (consumed:nat).
-          W.parse_record raw_received ==
+         W.parse_record_wire raw_received ==
             Some (T.ApplicationData, fragment, consumed) /\
           consumed > 0 /\
           consumed <= B.length raw_received))
@@ -3062,7 +3074,7 @@ let event_protected_raw_decompose_prefix_success
             (protected_record_count msg.CL.message_direction msg.CL.message_value - 1))
       | CL.Received ->
         (exists fragment. exists (consumed:nat).
-          W.parse_record raw_received ==
+         W.parse_record_wire raw_received ==
             Some (T.ApplicationData, fragment, consumed) /\
           consumed > 0 /\
           consumed <= B.length raw_received /\

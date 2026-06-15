@@ -121,6 +121,70 @@ fn can_advance_seq (st: record_state)
   }
 }
 
+fn seq_eq (st: record_state) (expected: U64.t)
+  requires is_record_state st 's
+  returns ok: bool
+  ensures is_record_state st 's **
+          pure (ok ==> 's.R.seq == U64.v expected)
+{
+  unfold (is_record_state st 's);
+  with key_b iv_b seq_b installed_b. _;
+  let current_seq = !st.seq;
+  assert (pure (current_seq == seq_b));
+  assert (pure (U64.v current_seq == 's.R.seq));
+  let ok = current_seq = expected;
+  assert (pure (ok ==> current_seq == expected));
+  assert (pure (ok ==> U64.v current_seq == U64.v expected));
+  assert (pure (ok ==> 's.R.seq == U64.v expected));
+  fold (is_record_state st 's);
+  ok
+}
+
+fn application_keys_match (st: record_state) (key: array U8.t) (iv: array U8.t)
+  requires is_record_state st 's **
+           pts_to key 'key_bytes **
+           pts_to iv 'iv_bytes **
+           pure (B.length 'key_bytes == 32 /\ B.length 'iv_bytes == 12)
+  returns ok: bool
+  ensures is_record_state st 's **
+          pts_to key 'key_bytes **
+          pts_to iv 'iv_bytes **
+          pure (ok ==>
+            's.R.key == Some (Ghost.reveal 'key_bytes) /\
+            's.R.static_iv == Some (Ghost.reveal 'iv_bytes))
+{
+  unfold (is_record_state st 's);
+  with stored_key stored_iv stored_seq stored_installed.
+    assert (V.pts_to st.key stored_key **
+            V.pts_to st.iv stored_iv **
+            Box.pts_to st.seq stored_seq **
+            Box.pts_to st.installed stored_installed);
+  pts_to_len key;
+  pts_to_len iv;
+  V.pts_to_len st.key;
+  V.pts_to_len st.iv;
+  assert (pure (B.length stored_key == 32));
+  assert (pure (B.length stored_iv == 12));
+  let installed = !st.installed;
+  assert (pure (installed == stored_installed));
+  V.to_array_pts_to st.key;
+  let key_ok = Crypto.equal32 (V.vec_to_array st.key) key;
+  V.to_vec_pts_to st.key;
+  V.to_array_pts_to st.iv;
+  let iv_ok = Crypto.equal12 (V.vec_to_array st.iv) iv;
+  V.to_vec_pts_to st.iv;
+  let ok = installed && key_ok && iv_ok;
+  assert (pure (ok ==> stored_installed));
+  assert (pure (ok ==> Seq.equal stored_key 'key_bytes));
+  assert (pure (ok ==> Seq.equal stored_iv 'iv_bytes));
+  assert (pure (ok ==> stored_key == Ghost.reveal 'key_bytes));
+  assert (pure (ok ==> stored_iv == Ghost.reveal 'iv_bytes));
+  assert (pure (ok ==> 's.R.key == Some (Ghost.reveal 'key_bytes)));
+  assert (pure (ok ==> 's.R.static_iv == Some (Ghost.reveal 'iv_bytes)));
+  fold (is_record_state st 's);
+  ok
+}
+
 fn advance_seq (st: record_state)
   requires is_record_state st 's **
            pure (U64.fits ('s.R.seq + 1))

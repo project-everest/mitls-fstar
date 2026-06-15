@@ -737,7 +737,10 @@ static inline size_t TLS13_Connection_Backend_serialize_finished_handshake(
               size_t _cipher_len = TLS13_Connection_Backend_read_u16(_body + _cipher_len_off); \
               size_t _cipher_pos = _cipher_len_off + 2u; \
               size_t _compression_len_off = _cipher_pos + _cipher_len; \
-              _ok = _cipher_len == 2u && _compression_len_off + 1u <= _hlen; \
+              _ok = _compression_len_off + 1u <= _hlen && \
+                (_cipher_len == 2u || \
+                 (_cipher_len == 4u && \
+                  TLS13_Connection_Backend_read_u16(_body + _cipher_pos + 2u) == 0x00ffu)); \
               if (_ok) { \
                 uint16_t _cipher = (uint16_t)TLS13_Connection_Backend_read_u16(_body + _cipher_pos); \
                 size_t _compression_len = _body[_compression_len_off]; \
@@ -753,69 +756,59 @@ static inline size_t TLS13_Connection_Backend_serialize_finished_handshake(
                     size_t _pos = _ext_len_off + 2u; \
                     size_t _end = _pos + _ext_len; \
                     _ok = _end == _hlen; \
-                    if (_ok && _pos + 4u <= _end && \
-                        TLS13_Connection_Backend_read_u16(_body + _pos) == 0x0000u) { \
+                    while (_ok && _pos < _end) { \
+                      _ok = _pos + 4u <= _end; \
+                      if (!_ok) { break; } \
+                      uint16_t _etype = TLS13_Connection_Backend_read_u16(_body + _pos); \
                       size_t _elen = TLS13_Connection_Backend_read_u16(_body + _pos + 2u); \
                       size_t _edata = _pos + 4u; \
-                      _ok = _edata + _elen <= _end && _elen >= 5u && \
-                        TLS13_Connection_Backend_read_u16(_body + _edata) + 2u == _elen && \
-                        _body[_edata + 2u] == 0u && \
-                        TLS13_Connection_Backend_read_u16(_body + _edata + 3u) + 5u == _elen; \
-                      if (_ok) { \
-                        size_t _name_len = TLS13_Connection_Backend_read_u16(_body + _edata + 3u); \
-                        if (_name_len > 0u && _name_len <= 255u) { \
-                          memcpy(_server_name, _body + _edata + 5u, _name_len); \
-                          _server_name_len = _name_len; \
-                          _has_server_name = true; \
-                          _pos = _edata + _elen; \
-                        } else { \
-                          _ok = false; \
+                      size_t _next = _edata + _elen; \
+                      _ok = _next <= _end; \
+                      if (!_ok) { break; } \
+                      if (_etype == 0x0000u) { \
+                        _ok = _elen >= 5u && \
+                          TLS13_Connection_Backend_read_u16(_body + _edata) + 2u == _elen && \
+                          _body[_edata + 2u] == 0u && \
+                          TLS13_Connection_Backend_read_u16(_body + _edata + 3u) + 5u == _elen; \
+                        if (_ok) { \
+                          size_t _name_len = TLS13_Connection_Backend_read_u16(_body + _edata + 3u); \
+                          _ok = _name_len <= 255u; \
+                          if (_ok) { \
+                            memcpy(_server_name, _body + _edata + 5u, _name_len); \
+                            _server_name_len = _name_len; \
+                            _has_server_name = true; \
+                          } \
+                        } \
+                      } else if (_etype == 0x000au) { \
+                        _ok = _elen == 4u && \
+                          TLS13_Connection_Backend_read_u16(_body + _edata) == 2u && \
+                          TLS13_Connection_Backend_read_u16(_body + _edata + 2u) == 0x001du; \
+                      } else if (_etype == 0x000du) { \
+                        _ok = _elen == 4u && \
+                          TLS13_Connection_Backend_read_u16(_body + _edata) == 2u; \
+                        if (_ok) { \
+                          _signature_schemes[0] = \
+                            (uint16_t)TLS13_Connection_Backend_read_u16(_body + _edata + 2u); \
+                          _signature_schemes_len = 1u; \
+                        } \
+                      } else if (_etype == 0x0033u) { \
+                        _ok = _elen == 38u && \
+                          TLS13_Connection_Backend_read_u16(_body + _edata) == 36u && \
+                          TLS13_Connection_Backend_read_u16(_body + _edata + 2u) == 0x001du && \
+                          TLS13_Connection_Backend_read_u16(_body + _edata + 4u) == 32u; \
+                        if (_ok) { \
+                          memcpy(_key_share, _body + _edata + 6u, 32u); \
+                          _found_key_share = true; \
+                        } \
+                      } else if (_etype == 0x002bu) { \
+                        _ok = _elen == 3u && \
+                          _body[_edata] == 2u && \
+                          TLS13_Connection_Backend_read_u16(_body + _edata + 1u) == 0x0304u; \
+                        if (_ok) { \
+                          _found_supported_versions = true; \
                         } \
                       } \
-                    } \
-                    if (_ok) { \
-                      _ok = _pos + 8u <= _end && \
-                        TLS13_Connection_Backend_read_u16(_body + _pos) == 0x000au && \
-                        TLS13_Connection_Backend_read_u16(_body + _pos + 2u) == 4u && \
-                        TLS13_Connection_Backend_read_u16(_body + _pos + 4u) == 2u && \
-                        TLS13_Connection_Backend_read_u16(_body + _pos + 6u) == 0x001du; \
-                      _pos += 8u; \
-                    } \
-                    if (_ok) { \
-                      _ok = _pos + 8u <= _end && \
-                        TLS13_Connection_Backend_read_u16(_body + _pos) == 0x000du && \
-                        TLS13_Connection_Backend_read_u16(_body + _pos + 2u) == 4u && \
-                        TLS13_Connection_Backend_read_u16(_body + _pos + 4u) == 2u && \
-                        TLS13_Connection_Backend_read_u16(_body + _pos + 6u) == 0x0804u; \
-                      if (_ok) { \
-                        _signature_schemes[0] = 0x0804u; \
-                        _signature_schemes_len = 1u; \
-                      } \
-                      _pos += 8u; \
-                    } \
-                    if (_ok) { \
-                      _ok = _pos + 42u <= _end && \
-                        TLS13_Connection_Backend_read_u16(_body + _pos) == 0x0033u && \
-                        TLS13_Connection_Backend_read_u16(_body + _pos + 2u) == 38u && \
-                        TLS13_Connection_Backend_read_u16(_body + _pos + 4u) == 36u && \
-                        TLS13_Connection_Backend_read_u16(_body + _pos + 6u) == 0x001du && \
-                        TLS13_Connection_Backend_read_u16(_body + _pos + 8u) == 32u; \
-                      if (_ok) { \
-                        memcpy(_key_share, _body + _pos + 10u, 32u); \
-                        _found_key_share = true; \
-                      } \
-                      _pos += 42u; \
-                    } \
-                    if (_ok) { \
-                      _ok = _pos + 7u <= _end && \
-                        TLS13_Connection_Backend_read_u16(_body + _pos) == 0x002bu && \
-                        TLS13_Connection_Backend_read_u16(_body + _pos + 2u) == 3u && \
-                        _body[_pos + 4u] == 2u && \
-                        TLS13_Connection_Backend_read_u16(_body + _pos + 5u) == 0x0304u; \
-                      if (_ok) { \
-                        _found_supported_versions = true; \
-                      } \
-                      _pos += 7u; \
+                      _pos = _next; \
                     } \
                     _ok = _ok && _pos == _end && _found_key_share && _found_supported_versions; \
                   } \
@@ -1037,7 +1030,8 @@ static inline bool TLS13_Connection_Backend_decode_inner_plaintext(
         _tls13_result = TLS13_CONNECTION_BACKEND_DECODED_BUFFER_DECODE_ERROR(); \
       } else if (_tls13_raw_len < 3u) { \
         _tls13_result = TLS13_CONNECTION_BACKEND_DECODED_BUFFER_NEED_MORE_INPUT(); \
-      } else if (_tls13_raw[1] != 3u || _tls13_raw[2] != 3u) { \
+      } else if (_tls13_raw[1] != 3u || \
+                 (_tls13_raw[2] != 3u && _tls13_raw[2] != 1u)) { \
         _tls13_result = TLS13_CONNECTION_BACKEND_DECODED_BUFFER_DECODE_ERROR(); \
       } else if (_tls13_raw_len < 5u) { \
         _tls13_result = TLS13_CONNECTION_BACKEND_DECODED_BUFFER_NEED_MORE_INPUT(); \
@@ -1132,7 +1126,7 @@ static inline bool TLS13_Connection_Backend_decode_inner_plaintext(
       uint8_t _tls13_outer_ct = _tls13_raw[0]; \
       if (!TLS13_Connection_Backend_is_tls_content_type(_tls13_outer_ct) || \
           _tls13_raw[1] != 3u || \
-          _tls13_raw[2] != 3u) { \
+          (_tls13_raw[2] != 3u && _tls13_raw[2] != 1u)) { \
         _tls13_result = TLS13_CONNECTION_BACKEND_DECODED_RECORD_DECODE_ERROR(); \
       } else { \
         size_t _tls13_fragment_len = TLS13_Connection_Backend_read_u16(_tls13_raw + 3u); \

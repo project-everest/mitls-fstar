@@ -111,7 +111,7 @@ fn decode_network_record
                 B.length fragment_bytes ==
                   SZ.v decoded.L.decoded_record_fragment_len /\
                 (exists outer_ct outer_fragment.
-                   WS.parse_record (Ghost.reveal 'raw_bytes) ==
+                   WS.parse_record_wire (Ghost.reveal 'raw_bytes) ==
                      Some (outer_ct, outer_fragment, B.length (Ghost.reveal 'raw_bytes))) /\
                 CT.network_input_wf
                   'st0
@@ -189,7 +189,7 @@ fn decode_network_buffer
                    0
                    (SZ.v decoded.L.decoded_buffer_consumed_len)) /\
                 (exists outer_ct outer_fragment.
-                   WS.parse_record raw_record_bytes ==
+                   WS.parse_record_wire raw_record_bytes ==
                      Some (outer_ct, outer_fragment, B.length raw_record_bytes)) /\
                 V.is_full_vec decoded.L.decoded_buffer_fragment /\
                 V.length decoded.L.decoded_buffer_fragment ==

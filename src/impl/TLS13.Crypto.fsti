@@ -57,6 +57,15 @@ fn equal32 (a: array U8.t) (b: array U8.t)
           pts_to b 'b_bytes **
           pure (ok <==> Seq.equal 'a_bytes 'b_bytes)
 
+fn equal12 (a: array U8.t) (b: array U8.t)
+  requires pts_to a 'a_bytes **
+           pts_to b 'b_bytes **
+           pure (B.length 'a_bytes == 12 /\ B.length 'b_bytes == 12)
+  returns ok: bool
+  ensures pts_to a 'a_bytes **
+          pts_to b 'b_bytes **
+          pure (ok <==> Seq.equal 'a_bytes 'b_bytes)
+
 fn hkdf_extract (salt: array U8.t) (salt_len: SZ.t) (ikm: array U8.t) (ikm_len: SZ.t) (out: array U8.t)
   requires pts_to salt 'salt_bytes **
            pts_to ikm 'ikm_bytes **

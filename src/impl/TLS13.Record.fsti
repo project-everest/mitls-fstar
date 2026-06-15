@@ -31,6 +31,25 @@ fn can_advance_seq (st: record_state)
   ensures is_record_state st 's **
           pure (ok ==> U64.fits ('s.R.seq + 1))
 
+fn seq_eq (st: record_state) (expected: U64.t)
+  requires is_record_state st 's
+  returns ok: bool
+  ensures is_record_state st 's **
+          pure (ok ==> 's.R.seq == U64.v expected)
+
+fn application_keys_match (st: record_state) (key: array U8.t) (iv: array U8.t)
+  requires is_record_state st 's **
+           pts_to key 'key_bytes **
+           pts_to iv 'iv_bytes **
+           pure (B.length 'key_bytes == 32 /\ B.length 'iv_bytes == 12)
+  returns ok: bool
+  ensures is_record_state st 's **
+          pts_to key 'key_bytes **
+          pts_to iv 'iv_bytes **
+          pure (ok ==>
+            's.R.key == Some (Ghost.reveal 'key_bytes) /\
+            's.R.static_iv == Some (Ghost.reveal 'iv_bytes))
+
 fn advance_seq (st: record_state)
   requires is_record_state st 's **
            pure (U64.fits ('s.R.seq + 1))

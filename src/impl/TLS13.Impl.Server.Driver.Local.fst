@@ -6,11 +6,15 @@ open Pulse.Lib.Pervasives
 open Pulse.Lib.Array.PtsTo
 
 module B = TLS13.Bytes
+module A = Pulse.Lib.Array
 module Bounds = TLS13.Impl.ConnectionState.Bounds
 module CL = TLS13.ConnectionLog
 module CS = TLS13.Spec.ConnectionState
 module CM = TLS13.Impl.ConnectionState.Model
+module CQ = TLS13.Impl.ConnectionState.Queries
+module CR = TLS13.Impl.ConnectionState.Repr
 module ID = FStar.IndefiniteDescription
+module IM = TLS13.Impl.Messages
 module IO = TLS13.IO
 module M = TLS13.Messages
 module O = TLS13.OpenSSL
@@ -18,6 +22,7 @@ module Seq = FStar.Seq
 module RS = TLS13.Record.Spec
 module S = TLS13.Impl.Server
 module SSetup = TLS13.Impl.Server.Setup
+module SS = TLS13.Impl.Server.Send
 module ST = TLS13.Impl.Server.Types
 module T = TLS13.Types
 module W = TLS13.Wire.Spec
@@ -994,6 +999,579 @@ fn process_empty_local_event_and_write_once
   resp
 }
 
+fn process_empty_local_event_exact_network_len_and_write_once
+  (d:server_driver)
+  (kind:ST.local_event_kind)
+  (exact_network_out_len:SZ.t)
+  requires server_driver_connected
+              d
+              'st0
+              'certificate_chain
+              'credential_identity
+              'received
+              'sent **
+           pure (SZ.v exact_network_out_len <= SZ.v driver_network_out_capacity /\
+                 ST.server_local_event_input_ready_with_credentials
+                   'st0
+                   kind
+                   B.empty
+                   (Ghost.reveal 'certificate_chain)
+                   (Ghost.reveal 'credential_identity) /\
+                 kind <> ST.LocalSelectServerParameters /\
+                 kind <> ST.LocalStartServer /\
+                 kind <> ST.LocalSendServerHello)
+  returns resp:ST.server_response
+  ensures exists* st1 sent'.
+          server_driver_connected
+            d
+            st1
+            'certificate_chain
+            'credential_identity
+            'received
+            sent' **
+          pure (server_driver_local_write_correct
+            'st0
+            st1
+            resp
+            kind
+            B.empty
+            (Ghost.reveal 'sent)
+            sent')
+{
+  unfold (server_driver_connected
+    d
+    'st0
+    'certificate_chain
+    'credential_identity
+    'received
+    'sent);
+  with ch buffered buffered_len.
+    assert (Box.pts_to d.server_driver_channel (Some ch) **
+            IO.is_channel ch 'received 'sent **
+            server_driver_buffers d buffered buffered_len);
+  assert (pure (ST.server_end_to_end_invariant 'st0));
+  assert (pure (server_driver_wire_logs_match
+    'st0
+    'received
+    'sent
+    buffered
+    buffered_len));
+
+  unfold (server_driver_buffers d buffered buffered_len);
+  with empty_payload raw network_out material cv_input signature app_out.
+    assert (
+      Box.pts_to d.server_driver_buffered_len buffered_len **
+      V.pts_to d.server_driver_empty_payload #1.0R empty_payload **
+      V.pts_to d.server_driver_raw #1.0R raw **
+      V.pts_to d.server_driver_network_out #1.0R network_out **
+      V.pts_to d.server_driver_material_payload #1.0R material **
+      V.pts_to d.server_driver_certificate_verify_input #1.0R cv_input **
+      V.pts_to d.server_driver_signature #1.0R signature **
+      V.pts_to d.server_driver_app_out #1.0R app_out);
+  V.to_array_pts_to d.server_driver_empty_payload;
+  V.to_array_pts_to d.server_driver_network_out;
+  V.to_array_pts_to d.server_driver_app_out;
+  assert (pure (B.length empty_payload == 0));
+  assert (pure (forall (i:nat{i < B.length empty_payload}).
+    Seq.index empty_payload i == Seq.index B.empty i));
+  Seq.lemma_eq_intro empty_payload B.empty;
+  assert (pure (Seq.equal empty_payload B.empty));
+  Seq.lemma_eq_elim empty_payload B.empty;
+  assert (pure (B.length network_out == SZ.v driver_network_out_capacity));
+  assert (pure (B.length app_out == SZ.v driver_app_out_capacity));
+  A.pts_to_len (V.vec_to_array d.server_driver_network_out);
+  assert (pure (A.length (V.vec_to_array d.server_driver_network_out) ==
+    SZ.v driver_network_out_capacity));
+  A.to_mask (V.vec_to_array d.server_driver_network_out);
+  with network_out_mask.
+    assert (A.pts_to_mask
+      (V.vec_to_array d.server_driver_network_out)
+      #1.0R
+      network_out_mask
+      (fun _ -> True));
+  assert (pure (Seq.length network_out_mask == SZ.v driver_network_out_capacity));
+  assert (pure (forall (i:nat). i < Seq.length network_out_mask ==>
+    Seq.index network_out_mask i == Some (Seq.index network_out i)));
+  let exact_network_out =
+    A.sub
+      (V.vec_to_array d.server_driver_network_out)
+      #1.0R
+      #(fun _ -> True)
+      0sz
+      (SZ.v exact_network_out_len);
+  with exact_network_out_mask.
+    assert (A.pts_to_mask exact_network_out #1.0R exact_network_out_mask (fun _ -> True));
+  assert (pure (forall (i:nat). i < Seq.length exact_network_out_mask ==>
+    Some? (Seq.index exact_network_out_mask i)));
+  A.from_mask exact_network_out;
+  with old_exact_network_out.
+    assert (pts_to exact_network_out old_exact_network_out);
+  assert (pure (B.length old_exact_network_out == SZ.v exact_network_out_len));
+  assert (pure (Seq.equal old_exact_network_out
+    (Seq.slice network_out 0 (SZ.v exact_network_out_len))));
+
+  let resp =
+    S.process_local_event_with_credentials
+      d.server_driver_server
+      d.server_driver_credentials
+      kind
+      (V.vec_to_array d.server_driver_empty_payload)
+      0sz
+      exact_network_out
+      exact_network_out_len
+      (V.vec_to_array d.server_driver_app_out)
+      driver_app_out_capacity;
+  with st1 network_out_bytes app_out_bytes.
+    assert (
+      S.connection_exactly d.server_driver_server st1 **
+      O.is_server_credentials
+        d.server_driver_credentials
+        'certificate_chain
+        'credential_identity **
+      pts_to (V.vec_to_array d.server_driver_empty_payload) empty_payload **
+      pts_to exact_network_out network_out_bytes **
+      pts_to (V.vec_to_array d.server_driver_app_out) app_out_bytes);
+  assert (pure (B.length network_out_bytes == SZ.v exact_network_out_len));
+  assert (pure (B.length app_out_bytes == SZ.v driver_app_out_capacity));
+  assert (pure (ST.server_local_event_end_to_end_correct
+    'st0
+    st1
+    resp
+    kind
+    B.empty
+    network_out_bytes
+    app_out_bytes));
+  assert (pure (ST.server_end_to_end_invariant st1));
+  lemma_local_event_wire_lengths
+    'st0
+    st1
+    resp
+    kind
+    B.empty
+    network_out_bytes
+    app_out_bytes;
+  assert (pure (SZ.v resp.ST.network_out_len <= B.length network_out_bytes));
+
+  let current_channel = Box.(!d.server_driver_channel);
+  assert (pure (current_channel == Some ch));
+  assert (pure (Some? current_channel));
+  let concrete_ch = Some?.v current_channel;
+  assert (pure (current_channel == Some concrete_ch));
+  assert (pure (Some concrete_ch == Some ch));
+  rewrite (IO.is_channel ch 'received 'sent) as
+    (IO.is_channel concrete_ch 'received 'sent);
+  let written =
+    IO.write
+      concrete_ch
+      exact_network_out
+      resp.ST.network_out_len;
+  assert (pure (written == resp.ST.network_out_len));
+  assert (pure (SZ.v written <= B.length network_out_bytes));
+  rewrite
+    (IO.is_channel
+      concrete_ch
+      'received
+      (B.append
+        (Ghost.reveal 'sent)
+        (if SZ.v written <= B.length network_out_bytes
+         then Seq.slice network_out_bytes 0 (SZ.v written)
+         else B.empty)))
+    as
+    (IO.is_channel
+      ch
+      'received
+      (B.append
+        (Ghost.reveal 'sent)
+        (if SZ.v written <= B.length network_out_bytes
+         then Seq.slice network_out_bytes 0 (SZ.v written)
+         else B.empty)));
+  Seq.lemma_len_slice network_out_bytes 0 (SZ.v written);
+  assert (pure (Seq.equal
+    (if SZ.v written <= B.length network_out_bytes
+     then Seq.slice network_out_bytes 0 (SZ.v written)
+     else B.empty)
+    (ST.response_network_out resp network_out_bytes)));
+
+  let old_consumed =
+    Ghost.hide (ID.indefinite_description_ghost
+      B.bytes
+      (fun consumed ->
+        server_driver_wire_logs_match_witness
+          'st0
+          (Ghost.reveal 'received)
+          (Ghost.reveal 'sent)
+          consumed
+          buffered
+          buffered_len));
+  assert (pure (server_driver_wire_logs_match_witness
+    'st0
+    (Ghost.reveal 'received)
+    (Ghost.reveal 'sent)
+    (Ghost.reveal old_consumed)
+    buffered
+    buffered_len));
+  assert (pure (Seq.equal
+    (Ghost.reveal 'sent)
+    'st0.CS.cs_wire_log.CL.raw_sent));
+  Seq.lemma_eq_elim
+    (Ghost.reveal 'sent)
+    'st0.CS.cs_wire_log.CL.raw_sent;
+  assert (pure (Seq.equal
+    st1.CS.cs_wire_log.CL.raw_sent
+    (B.append
+      'st0.CS.cs_wire_log.CL.raw_sent
+      (ST.response_network_out resp network_out_bytes))));
+  assert (pure (Seq.equal
+    st1.CS.cs_wire_log.CL.raw_received
+    'st0.CS.cs_wire_log.CL.raw_received));
+  Seq.lemma_eq_elim
+    st1.CS.cs_wire_log.CL.raw_received
+    'st0.CS.cs_wire_log.CL.raw_received;
+  assert (pure (Seq.equal
+    (B.append
+      (Ghost.reveal 'sent)
+      (if SZ.v written <= B.length network_out_bytes
+       then Seq.slice network_out_bytes 0 (SZ.v written)
+       else B.empty))
+    st1.CS.cs_wire_log.CL.raw_sent));
+  assert (pure (server_driver_wire_logs_match_witness
+    st1
+    (Ghost.reveal 'received)
+    (B.append
+      (Ghost.reveal 'sent)
+      (if SZ.v written <= B.length network_out_bytes
+       then Seq.slice network_out_bytes 0 (SZ.v written)
+       else B.empty))
+    (Ghost.reveal old_consumed)
+    buffered
+    buffered_len));
+  assert (pure (server_driver_wire_logs_match
+    st1
+    (Ghost.reveal 'received)
+    (B.append
+      (Ghost.reveal 'sent)
+      (if SZ.v written <= B.length network_out_bytes
+       then Seq.slice network_out_bytes 0 (SZ.v written)
+       else B.empty))
+    buffered
+    buffered_len));
+  lemma_server_driver_local_write_correct_intro
+    'st0
+    st1
+    resp
+    kind
+    B.empty
+    (Ghost.reveal 'sent)
+    (B.append
+      (Ghost.reveal 'sent)
+      (if SZ.v written <= B.length network_out_bytes
+       then Seq.slice network_out_bytes 0 (SZ.v written)
+       else B.empty))
+    network_out_bytes
+    app_out_bytes;
+  lemma_server_driver_local_write_correct_preserves_config
+    'st0
+    st1
+    resp
+    kind
+    B.empty
+    (Ghost.reveal 'sent)
+    (B.append
+      (Ghost.reveal 'sent)
+      (if SZ.v written <= B.length network_out_bytes
+       then Seq.slice network_out_bytes 0 (SZ.v written)
+       else B.empty));
+  assert (pure (server_driver_config_matches_credentials
+    st1
+    (Ghost.reveal 'certificate_chain)
+    (Ghost.reveal 'credential_identity)));
+  lemma_server_driver_local_write_correct_preserves_supported_profile_selection
+    'st0
+    st1
+    resp
+    kind
+    B.empty
+    (Ghost.reveal 'certificate_chain)
+    (Ghost.reveal 'credential_identity)
+    (Ghost.reveal 'sent)
+    (B.append
+      (Ghost.reveal 'sent)
+      (if SZ.v written <= B.length network_out_bytes
+       then Seq.slice network_out_bytes 0 (SZ.v written)
+       else B.empty));
+  assert (pure (server_driver_supported_profile_selection
+    st1
+    (Ghost.reveal 'credential_identity)));
+
+  A.to_mask exact_network_out;
+  with exact_network_out_mask_after.
+    assert (A.pts_to_mask exact_network_out #1.0R exact_network_out_mask_after (fun _ -> True));
+  assert (pure (forall (i:nat). i < Seq.length exact_network_out_mask_after ==>
+    Some? (Seq.index exact_network_out_mask_after i)));
+  assert (pure (forall (i:nat). i < Seq.length exact_network_out_mask_after ==>
+    Seq.index exact_network_out_mask_after i == Some (Seq.index network_out_bytes i)));
+  rewrite
+    (A.pts_to_mask exact_network_out #1.0R exact_network_out_mask_after (fun _ -> True))
+    as
+    (A.pts_to_mask
+      (A.gsub (V.vec_to_array d.server_driver_network_out) 0 (SZ.v exact_network_out_len))
+      #1.0R
+      exact_network_out_mask_after
+      (fun _ -> True));
+  A.return_sub
+    (V.vec_to_array d.server_driver_network_out)
+    #1.0R
+    #network_out_mask
+    #exact_network_out_mask_after
+    #(fun k -> True /\ ~(0 <= k /\ k < SZ.v exact_network_out_len))
+    #(fun _ -> True)
+    #0
+    #(SZ.v exact_network_out_len);
+  with network_out_joined_mask.
+    assert (A.pts_to_mask (V.vec_to_array d.server_driver_network_out) #1.0R network_out_joined_mask
+      (fun k ->
+        (True /\ ~(0 <= k /\ k < SZ.v exact_network_out_len)) \/
+        (0 <= k /\ k < SZ.v exact_network_out_len /\ True)));
+  assert (pure (forall (i:nat). i < Seq.length network_out_joined_mask ==>
+    ((True /\ ~(0 <= i /\ i < SZ.v exact_network_out_len)) \/
+     (0 <= i /\ i < SZ.v exact_network_out_len /\ True))));
+  assert (pure (forall (i:nat). i < Seq.length network_out_joined_mask ==>
+    Seq.index network_out_joined_mask i ==
+      (if 0 <= i && i < SZ.v exact_network_out_len
+       then Seq.index exact_network_out_mask_after i
+       else Seq.index network_out_mask i)));
+  assert (pure (forall (i:nat). i < Seq.length network_out_joined_mask ==>
+    Some? (Seq.index network_out_joined_mask i)));
+  A.from_mask (V.vec_to_array d.server_driver_network_out);
+  with joined_network_out.
+    assert (pts_to (V.vec_to_array d.server_driver_network_out) joined_network_out);
+  assert (pure (B.length joined_network_out == SZ.v driver_network_out_capacity));
+
+  V.to_vec_pts_to d.server_driver_empty_payload;
+  V.to_vec_pts_to d.server_driver_network_out;
+  V.to_vec_pts_to d.server_driver_app_out;
+  fold (server_driver_buffers d buffered buffered_len);
+  fold (server_driver_connected
+    d
+    st1
+    'certificate_chain
+    'credential_identity
+    'received
+    (B.append
+      (Ghost.reveal 'sent)
+      (if SZ.v written <= B.length network_out_bytes
+       then Seq.slice network_out_bytes 0 (SZ.v written)
+       else B.empty)));
+  assert (pure (Seq.equal
+    (B.append
+      (Ghost.reveal 'sent)
+      (if SZ.v written <= B.length network_out_bytes
+       then Seq.slice network_out_bytes 0 (SZ.v written)
+       else B.empty))
+    (B.append
+      (Ghost.reveal 'sent)
+      (ST.response_network_out resp network_out_bytes))));
+  lemma_server_driver_local_write_correct_intro
+    'st0
+    st1
+    resp
+    kind
+    B.empty
+    (Ghost.reveal 'sent)
+    (B.append
+      (Ghost.reveal 'sent)
+      (if SZ.v written <= B.length network_out_bytes
+       then Seq.slice network_out_bytes 0 (SZ.v written)
+       else B.empty))
+    network_out_bytes
+    app_out_bytes;
+  resp
+}
+
+fn process_send_certificate_exact_and_write_once
+  (d:server_driver)
+  requires server_driver_connected
+              d
+              'st0
+              'certificate_chain
+              'credential_identity
+              'received
+              'sent **
+           pure (ST.server_local_event_input_ready_with_credentials
+                   'st0
+                   ST.LocalSendCertificate
+                   B.empty
+                   (Ghost.reveal 'certificate_chain)
+                   (Ghost.reveal 'credential_identity) /\
+                 B.length (Ghost.reveal 'certificate_chain) <=
+                   Bounds.max_server_certificate_chain_len)
+  returns resp:ST.server_response
+  ensures exists* st1 sent'.
+          server_driver_connected
+            d
+            st1
+            'certificate_chain
+            'credential_identity
+            'received
+            sent'
+{
+  unfold (server_driver_connected
+    d
+    'st0
+    'certificate_chain
+    'credential_identity
+    'received
+    'sent);
+  with ch buffered buffered_len.
+    assert (Box.pts_to d.server_driver_channel (Some ch) **
+            IO.is_channel ch 'received 'sent **
+            server_driver_buffers d buffered buffered_len);
+  assert (pure (ST.server_end_to_end_invariant 'st0));
+  assert (pure (server_driver_config_matches_credentials
+    'st0
+    (Ghost.reveal 'certificate_chain)
+    (Ghost.reveal 'credential_identity)));
+  assert (pure (server_driver_supported_profile_selection
+    'st0
+    (Ghost.reveal 'credential_identity)));
+  assert (pure (server_driver_wire_logs_match
+    'st0
+    'received
+    'sent
+    buffered
+    buffered_len));
+  let built = SS.build_certificate_from_credentials d.server_driver_credentials;
+  match built {
+    None -> {
+      assert_norm (IM.max_certificate_chain_bytes == 32768);
+      assert_norm (Bounds.max_server_certificate_chain_len == 16610);
+      assert (pure False);
+      fold (server_driver_connected
+        d
+        'st0
+        'certificate_chain
+        'credential_identity
+        'received
+        'sent);
+      process_empty_local_event_and_write_once d ST.LocalSendCertificate
+    }
+    Some lcert -> {
+      assert (pure (SZ.v lcert.IM.certificate_msg_chain_bytes_len ==
+        B.length (Ghost.reveal 'certificate_chain)));
+      assert (pure (SZ.fits (SZ.v lcert.IM.certificate_msg_chain_bytes_len + 13)));
+      let fragment_len =
+        SZ.add lcert.IM.certificate_msg_chain_bytes_len 13sz;
+      assert (pure (SZ.v fragment_len ==
+        13 + B.length (Ghost.reveal 'certificate_chain)));
+      assert (pure (SZ.fits (SZ.v fragment_len + 22)));
+      let expected_network_out_len = SZ.add fragment_len 22sz;
+      assert (pure (SZ.v expected_network_out_len ==
+        13 + B.length (Ghost.reveal 'certificate_chain) + 22));
+      assert_norm (Bounds.max_server_certificate_chain_len == 16610);
+      assert_norm (driver_network_out_capacity == 20000sz);
+      assert (pure (SZ.v expected_network_out_len <= SZ.v driver_network_out_capacity));
+      IM.free_certificate_msg lcert;
+      fold (server_driver_connected
+        d
+        'st0
+        'certificate_chain
+        'credential_identity
+        'received
+        'sent);
+      process_empty_local_event_exact_network_len_and_write_once
+        d
+        ST.LocalSendCertificate
+        expected_network_out_len
+    }
+  }
+}
+
+fn process_send_certificate_verify_exact_and_write_once
+  (d:server_driver)
+  requires server_driver_connected
+              d
+              'st0
+              'certificate_chain
+              'credential_identity
+              'received
+              'sent **
+           pure (ST.server_local_event_input_ready_with_credentials
+                   'st0
+                   ST.LocalSendCertificateVerify
+                   B.empty
+                   (Ghost.reveal 'certificate_chain)
+                   (Ghost.reveal 'credential_identity) /\
+                 Some?
+                   'st0.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify)
+  returns resp:ST.server_response
+  ensures exists* st1 sent'.
+          server_driver_connected
+            d
+            st1
+            'certificate_chain
+            'credential_identity
+            'received
+            sent'
+{
+  unfold (server_driver_connected
+    d
+    'st0
+    'certificate_chain
+    'credential_identity
+    'received
+    'sent);
+  with ch buffered buffered_len.
+    assert (Box.pts_to d.server_driver_channel (Some ch) **
+            IO.is_channel ch 'received 'sent **
+            server_driver_buffers d buffered buffered_len);
+  assert (pure (ST.server_end_to_end_invariant 'st0));
+  assert (pure (server_driver_config_matches_credentials
+    'st0
+    (Ghost.reveal 'certificate_chain)
+    (Ghost.reveal 'credential_identity)));
+  assert (pure (server_driver_supported_profile_selection
+    'st0
+    (Ghost.reveal 'credential_identity)));
+  assert (pure (server_driver_wire_logs_match
+    'st0
+    'received
+    'sent
+    buffered
+    buffered_len));
+  rewrite
+    (S.connection_exactly d.server_driver_server 'st0)
+    as
+    (CR.connection_exactly d.server_driver_server 'st0);
+  let snapshot =
+    CQ.get_certificate_verify_signature_snapshot d.server_driver_server;
+  rewrite
+    (CR.connection_exactly d.server_driver_server 'st0)
+    as
+    (S.connection_exactly d.server_driver_server 'st0);
+  assert (pure (SZ.v snapshot.CR.cv_signature_len <= IM.max_signature_len));
+  assert_norm (IM.max_signature_len == 4096);
+  assert (pure (SZ.fits (SZ.v snapshot.CR.cv_signature_len + 8)));
+  let fragment_len = SZ.add snapshot.CR.cv_signature_len 8sz;
+  assert (pure (SZ.v fragment_len == SZ.v snapshot.CR.cv_signature_len + 8));
+  assert (pure (SZ.v fragment_len + 17 <= 16640));
+  assert (pure (SZ.fits (SZ.v fragment_len + 22)));
+  let expected_network_out_len = SZ.add fragment_len 22sz;
+  assert (pure (SZ.v expected_network_out_len == SZ.v fragment_len + 22));
+  assert_norm (driver_network_out_capacity == 20000sz);
+  assert (pure (SZ.v expected_network_out_len <= SZ.v driver_network_out_capacity));
+  fold (server_driver_connected
+    d
+    'st0
+    'certificate_chain
+    'credential_identity
+    'received
+    'sent);
+  process_empty_local_event_exact_network_len_and_write_once
+    d
+    ST.LocalSendCertificateVerify
+    expected_network_out_len
+}
+
 fn process_ready_empty_local_action_once
   (d:server_driver)
   requires server_driver_connected
@@ -1136,9 +1714,10 @@ fn process_ready_empty_local_action_once
            (Ghost.reveal 'certificate_chain)
            (Ghost.reveal 'credential_identity)));
          let _ =
-           process_empty_local_event_and_write_once
+           process_empty_local_event_exact_network_len_and_write_once
              d
-             action.ST.next_local_kind;
+             action.ST.next_local_kind
+             28sz;
          ServerDriverLocalProcessed
        }
        ST.LocalSendCertificate -> {
@@ -1206,9 +1785,7 @@ fn process_ready_empty_local_action_once
            (Ghost.reveal 'certificate_chain)
            (Ghost.reveal 'credential_identity)));
          let _ =
-           process_empty_local_event_and_write_once
-             d
-             action.ST.next_local_kind;
+           process_send_certificate_exact_and_write_once d;
          ServerDriverLocalProcessed
        }
        ST.LocalSignCertificateVerify -> {
@@ -1248,13 +1825,31 @@ fn process_ready_empty_local_action_once
            B.empty
            (Ghost.reveal 'certificate_chain)
            (Ghost.reveal 'credential_identity)));
+         assert (pure (Some?
+           'st0.CS.cs_model.CS.model_handshake.CS.hs_certificate_verify));
          let _ =
-           process_empty_local_event_and_write_once
-             d
-             action.ST.next_local_kind;
+           process_send_certificate_verify_exact_and_write_once d;
          ServerDriverLocalProcessed
        }
        ST.LocalSendServerFinished -> {
+         assert (pure (ST.server_local_event_input_ready
+           'st0
+           action.ST.next_local_kind
+           B.empty));
+         assert (pure (ST.server_local_event_input_ready_with_credentials
+           'st0
+           action.ST.next_local_kind
+           B.empty
+           (Ghost.reveal 'certificate_chain)
+           (Ghost.reveal 'credential_identity)));
+         let _ =
+           process_empty_local_event_exact_network_len_and_write_once
+             d
+             action.ST.next_local_kind
+             58sz;
+         ServerDriverLocalProcessed
+       }
+       ST.LocalVerifyClientFinished -> {
          assert (pure (ST.server_local_event_input_ready
            'st0
            action.ST.next_local_kind

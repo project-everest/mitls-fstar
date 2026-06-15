@@ -63,6 +63,12 @@ fn next_local_action
     (control.CR.snapshot_handshake_stage_tag = 17uy) &&
     keys.CR.snapshot_master_secret_present &&
     not keys.CR.snapshot_client_application_traffic_present;
+  let verify_client_finished_ready =
+    (control.CR.snapshot_control_tag = 1uy) &&
+    (control.CR.snapshot_handshake_stage_tag = 17uy) &&
+    keys.CR.snapshot_client_handshake_traffic_present &&
+    keys.CR.snapshot_client_application_traffic_present &&
+    keys.CR.snapshot_server_application_traffic_present;
   if start_ready {
     assert (pure ('st0.CS.cs_model.CS.model_control == CS.ControlNew));
     assert (pure ('st0.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint));
@@ -270,6 +276,47 @@ fn next_local_action
       ST.next_local_ready = true;
       ST.next_local_kind = ST.LocalInstallClientApplicationTrafficKeys;
       ST.next_local_payload = ST.LocalPayloadNone;
+    }
+  } else if verify_client_finished_ready {
+    assert (pure (control.CR.snapshot_control_tag == 1uy));
+    assert (pure (control.CR.snapshot_handshake_stage_tag == 17uy));
+    assert_norm (Tags.handshake_stage_tag_matches 17uy CS.HsClientFinishedReceived);
+    assert (pure (keys.CR.snapshot_client_handshake_traffic_present));
+    assert (pure (keys.CR.snapshot_client_application_traffic_present));
+    assert (pure (keys.CR.snapshot_server_application_traffic_present));
+    assert (pure ('st0.CS.cs_model.CS.model_control ==
+      CS.ControlHandshaking CS.HsClientFinishedReceived));
+    assert (pure ('st0.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint));
+    assert (pure (Some?
+      'st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_handshake_traffic));
+    assert (pure (Some?
+      'st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_application_traffic));
+    assert (pure (Some?
+      'st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_application_traffic));
+    unfold (connection_exactly s 'st0);
+    let verify_ready = CQ.can_verify_client_finished_runtime s;
+    fold (connection_exactly s 'st0);
+    if verify_ready {
+      assert (pure (Some?
+        'st0.CS.cs_model.CS.model_handshake.CS.hs_client_finished));
+      assert (pure (CM.can_verify_client_finished
+        'st0
+        (Some?.v 'st0.CS.cs_model.CS.model_handshake.CS.hs_client_finished)));
+      assert (pure (ST.server_local_event_input_ready
+        'st0
+        ST.LocalVerifyClientFinished
+        B.empty));
+      {
+        ST.next_local_ready = true;
+        ST.next_local_kind = ST.LocalVerifyClientFinished;
+        ST.next_local_payload = ST.LocalPayloadNone;
+      }
+    } else {
+      {
+        ST.next_local_ready = false;
+        ST.next_local_kind = ST.LocalFail;
+        ST.next_local_payload = ST.LocalPayloadNone;
+      }
     }
   } else {
     {

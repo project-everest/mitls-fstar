@@ -471,8 +471,11 @@ test/test_extracted_server_driver_slice: \
   c_stubs/tls13_io_karamel.c c_stubs/tls13_io_karamel.h \
   c_stubs/tls13_io_stubs.c c_stubs/tls13_io_stubs.h \
   c_stubs/tls13_openssl_karamel.c c_stubs/tls13_openssl_karamel.h \
-  c_stubs/tls13_openssl_stubs.c c_stubs/tls13_openssl_stubs.h $(HACL_OBJECTS)
+  c_stubs/tls13_openssl_stubs.c c_stubs/tls13_openssl_stubs.h \
+  c_stubs/tls13_server_extraction_shims.c c_stubs/tls13_server_extraction_shims.h \
+  $(HACL_OBJECTS)
 	$(CC) $(CFLAGS_COMMON) \
+	  -include c_stubs/tls13_server_extraction_shims.h \
 	  -I_extract/server_driver_bundle -I_extract/server_driver_bundle/internal \
 	  _extract/server_driver_bundle/*.c \
 	  c_stubs/tls13_crypto_external.c \
@@ -481,12 +484,41 @@ test/test_extracted_server_driver_slice: \
 	  c_stubs/tls13_io_stubs.c \
 	  c_stubs/tls13_openssl_karamel.c \
 	  c_stubs/tls13_openssl_stubs.c \
+	  c_stubs/tls13_server_extraction_shims.c \
 	  test/unit/test_extracted_server_driver_slice.c \
 	  $(HACL_WRAPPER_SOURCES) \
 	  $(LDFLAGS_COMMON) -lssl -lcrypto -o $@
 
 test-extracted-server-driver-slice: test/test_extracted_server_driver_slice
 	./test/test_extracted_server_driver_slice
+
+test/test_extracted_server_openssl_client: \
+  test/unit/test_extracted_server_openssl_client.c extract-server-driver-bundle \
+  runtime/tls13_server_driver.c runtime/tls13_server_driver.h \
+  c_stubs/tls13_io_karamel.c c_stubs/tls13_io_karamel.h \
+  c_stubs/tls13_io_stubs.c c_stubs/tls13_io_stubs.h \
+  c_stubs/tls13_openssl_karamel.c c_stubs/tls13_openssl_karamel.h \
+  c_stubs/tls13_openssl_stubs.c c_stubs/tls13_openssl_stubs.h \
+  c_stubs/tls13_server_extraction_shims.c c_stubs/tls13_server_extraction_shims.h \
+  $(HACL_OBJECTS)
+	$(CC) $(CFLAGS_COMMON) \
+	  -include c_stubs/tls13_server_extraction_shims.h \
+	  -I_extract/server_driver_bundle -I_extract/server_driver_bundle/internal \
+	  _extract/server_driver_bundle/*.c \
+	  c_stubs/tls13_crypto_external.c \
+	  c_stubs/tls13_pulse_shims.c \
+	  runtime/tls13_server_driver.c \
+	  c_stubs/tls13_io_karamel.c \
+	  c_stubs/tls13_io_stubs.c \
+	  c_stubs/tls13_openssl_karamel.c \
+	  c_stubs/tls13_openssl_stubs.c \
+	  c_stubs/tls13_server_extraction_shims.c \
+	  test/unit/test_extracted_server_openssl_client.c \
+	  $(HACL_WRAPPER_SOURCES) \
+	  $(LDFLAGS_COMMON) -lssl -lcrypto -o $@
+
+test-openssl-sclient: test/test_extracted_server_openssl_client
+	./test/test_extracted_server_openssl_client
 
 test/test_extracted_client_openssl_echo: \
   test/unit/test_extracted_client_openssl_echo.c extract-driver-bundle \
@@ -606,6 +638,7 @@ clean:
 	  test/test_key_schedule_bindings \
 	  test/test_extracted_client_openssl_echo \
 	  test/test_extracted_server_driver_slice \
+	  test/test_extracted_server_openssl_client \
 	  test/openssl_echo_server test/openssl_echo_server.port \
 	  test/openssl_echo_server.log
 	find src test -name '*.checked' -delete
@@ -616,4 +649,5 @@ clean:
   test-record-bindings test-hacl-stubs test-openssl-stubs test-io-stubs \
   test-extracted-client-driver-slice test-extracted-server-driver-slice \
   test-extracted-client-openssl-echo \
-  test-client test-openssl-echo check-c-stubs check-toolchain check-deps clean
+  test-client test-openssl-echo test-openssl-sclient \
+  check-c-stubs check-toolchain check-deps clean

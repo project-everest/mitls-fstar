@@ -710,6 +710,39 @@ fn server_finished_verify_data_matches
                  fin
              | _, _ -> False))
 
+fn client_finished_verify_data_matches
+  (c:connection_state)
+  (#st0:erased CS.connection_state)
+  requires connection_exactly c st0 **
+           pure (st0.CS.cs_model.CS.model_control ==
+                   CS.ControlHandshaking CS.HsClientFinishedReceived /\
+                 Some? st0.CS.cs_model.CS.model_handshake.CS.hs_client_finished /\
+                 Some?
+                   st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_handshake_traffic)
+  returns ok: bool
+  ensures connection_exactly c st0 **
+          pure (ok ==>
+            (match st0.CS.cs_model.CS.model_handshake.CS.hs_client_finished,
+                  st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_handshake_traffic with
+             | Some fin, Some client_hs ->
+              H.verify_finished
+                client_hs.CS.traffic_secret
+                (Tr.hash st0.CS.cs_model.CS.model_handshake.CS.hs_transcript)
+                fin
+             | _, _ -> False))
+
+fn can_verify_client_finished_runtime
+  (c:connection_state)
+  (#st0:erased CS.connection_state)
+  requires connection_exactly c st0
+  returns ok: bool
+  ensures connection_exactly c st0 **
+          pure (ok ==>
+            Some? st0.CS.cs_model.CS.model_handshake.CS.hs_client_finished /\
+            Model.can_verify_client_finished
+              st0
+              (Some?.v st0.CS.cs_model.CS.model_handshake.CS.hs_client_finished))
+
 fn can_send_client_finished_runtime
   (c:connection_state)
   (network_out_len:SZ.t)
