@@ -712,9 +712,9 @@ fn process_send_encrypted_extensions_serialized
                   network_out_bytes
                   app_out_bytes)
 {
-  let ee_val = { M.negotiated_alpn = None };
-  let ee = Ghost.hide ee_val;
-  assert (pure (ee_val.M.negotiated_alpn == None));
+  let ee : erased M.encrypted_extensions =
+    Ghost.hide { M.negotiated_alpn = None };
+  assert (pure ((Ghost.reveal ee).M.negotiated_alpn == None));
 
   let alpn = V.alloc 0uy 255sz;
   let lee = {
@@ -729,7 +729,7 @@ fn process_send_encrypted_extensions_serialized
   assert (pure (SZ.v lee.IM.encrypted_extensions_alpn_len <= B.length alpn_bytes));
   rewrite (V.pts_to alpn alpn_bytes)
     as (V.pts_to lee.IM.encrypted_extensions_alpn alpn_bytes);
-  fold (IM.is_valid_encrypted_extensions lee ee_val);
+  fold (IM.is_valid_encrypted_extensions lee (Ghost.reveal ee));
 
   let mut fragment = [| 0uy; 6sz |];
   let written_fragment =
@@ -742,35 +742,35 @@ fn process_send_encrypted_extensions_serialized
   assert (pure (Seq.equal
     fragment_bytes
     (W.serialize_empty_encrypted_extensions ())));
-  let dummy_sh = {
+  let dummy_sh : erased M.server_hello = Ghost.hide {
     M.random = Seq.create 32 0uy;
     M.key_share = Seq.create 32 0uy;
     M.cipher_suite = T.TLS_CHACHA20_POLY1305_SHA256;
   };
-  let dummy_cert = { M.chain = [] };
-  let dummy_cv = {
+  let dummy_cert : erased M.certificate_msg = Ghost.hide { M.chain = [] };
+  let dummy_cv : erased M.certificate_verify = Ghost.hide {
     M.scheme = T.RsaPssRsaeSha256;
     M.signature = B.empty;
   };
-  let dummy_fin = { M.verify_data = Seq.create 32 0uy };
+  let dummy_fin : erased M.finished = Ghost.hide { M.verify_data = Seq.create 32 0uy };
   W.lemma_fixed_server_handshake_serializers
-    dummy_sh
-    dummy_cert
-    dummy_cv
-    dummy_fin;
+    (Ghost.reveal dummy_sh)
+    (Ghost.reveal dummy_cert)
+    (Ghost.reveal dummy_cv)
+    (Ghost.reveal dummy_fin);
   assert (pure (Seq.equal
     (W.serialize_empty_encrypted_extensions ())
-    (W.serialize_handshake (M.EncryptedExtensions ee_val))));
+    (W.serialize_handshake (M.EncryptedExtensions (Ghost.reveal ee)))));
   assert (pure (Seq.equal
     fragment_bytes
-    (W.serialize_handshake (M.EncryptedExtensions ee_val))));
+    (W.serialize_handshake (M.EncryptedExtensions (Ghost.reveal ee)))));
 
   unfold (connection_exactly s 'st0);
   unfold (CR.connection_model_exactly s 'st0.CS.cs_model);
   unfold (CR.record_layer_exactly s.records 'st0.CS.cs_model.CS.model_record);
   let written_raw =
     Ser.serialize_protected_handshake_record
-      #(M.EncryptedExtensions ee_val)
+      #(M.EncryptedExtensions (Ghost.reveal ee))
       s.records.write
       fragment
       written_fragment
@@ -793,33 +793,33 @@ fn process_send_encrypted_extensions_serialized
     'st0.CS.cs_model
     (CS.ConnNetworkEvent {
       CL.message_direction = CL.Sent;
-      CL.message_value = M.TlsHandshake (M.EncryptedExtensions ee_val);
+      CL.message_value = M.TlsHandshake (M.EncryptedExtensions (Ghost.reveal ee));
     })
     network_out_bytes
     B.empty));
   assert (pure (CS.sent_single_protected_message_seal
     'st0.CS.cs_model
-    (M.TlsHandshake (M.EncryptedExtensions ee_val))
+    (M.TlsHandshake (M.EncryptedExtensions (Ghost.reveal ee)))
     network_out_bytes));
   assert (pure (CS.sent_event_seal_projection
     'st0.CS.cs_model
     (CS.ConnNetworkEvent {
       CL.message_direction = CL.Sent;
-      CL.message_value = M.TlsHandshake (M.EncryptedExtensions ee_val);
+      CL.message_value = M.TlsHandshake (M.EncryptedExtensions (Ghost.reveal ee));
     })
     network_out_bytes));
   CSL.lemma_event_raw_delta_legal_protected_segmented
     'st0.CS.cs_model
     (CS.ConnNetworkEvent {
       CL.message_direction = CL.Sent;
-      CL.message_value = M.TlsHandshake (M.EncryptedExtensions ee_val);
+      CL.message_value = M.TlsHandshake (M.EncryptedExtensions (Ghost.reveal ee));
     })
     network_out_bytes
     B.empty;
   assert (pure (CS.event_protected_raw_segmented_success
     (CS.ConnNetworkEvent {
       CL.message_direction = CL.Sent;
-      CL.message_value = M.TlsHandshake (M.EncryptedExtensions ee_val);
+      CL.message_value = M.TlsHandshake (M.EncryptedExtensions (Ghost.reveal ee));
     })
     network_out_bytes
     B.empty));
@@ -834,7 +834,7 @@ fn process_send_encrypted_extensions_serialized
     'st0.CS.cs_model));
   assert (pure (CM.can_send_encrypted_extensions
     'st0
-    ee_val
+    (Ghost.reveal ee)
     network_out_bytes));
 
   unfold (connection_exactly s 'st0);
@@ -847,7 +847,7 @@ fn process_send_encrypted_extensions_serialized
     #ee;
   fold (connection_exactly
     s
-    (CM.sent_encrypted_extensions_state 'st0 ee_val network_out_bytes));
+    (CM.sent_encrypted_extensions_state 'st0 (Ghost.reveal ee) network_out_bytes));
 
   let resp = {
     ST.network_out_len = written_raw;
@@ -857,7 +857,7 @@ fn process_send_encrypted_extensions_serialized
 
   let ev = Ghost.hide (CS.ConnNetworkEvent {
     CL.message_direction = CL.Sent;
-    CL.message_value = M.TlsHandshake (M.EncryptedExtensions ee_val);
+    CL.message_value = M.TlsHandshake (M.EncryptedExtensions (Ghost.reveal ee));
   });
   let delta = Ghost.hide {
     CS.delta_event = Ghost.reveal ev;
@@ -867,32 +867,32 @@ fn process_send_encrypted_extensions_serialized
 
   CM.lemma_sent_encrypted_extensions_state_evolves
     'st0
-    ee_val
+    (Ghost.reveal ee)
     network_out_bytes;
   assert (pure (CS.legal_connection_delta
     'st0
     (Ghost.reveal delta)
-    (CM.sent_encrypted_extensions_state 'st0 ee_val network_out_bytes)));
+    (CM.sent_encrypted_extensions_state 'st0 (Ghost.reveal ee) network_out_bytes)));
 
   CSL.lemma_legal_connection_delta_full_log_consistent_for_role
     CS.ServerEndpoint
     'st0
     (Ghost.reveal delta)
-    (CM.sent_encrypted_extensions_state 'st0 ee_val network_out_bytes);
+    (CM.sent_encrypted_extensions_state 'st0 (Ghost.reveal ee) network_out_bytes);
   CSL.lemma_legal_connection_delta_raw_event_replay_consistent
     'st0
     (Ghost.reveal delta)
-    (CM.sent_encrypted_extensions_state 'st0 ee_val network_out_bytes);
+    (CM.sent_encrypted_extensions_state 'st0 (Ghost.reveal ee) network_out_bytes);
   CSL.lemma_connection_state_protected_raw_segmented_replay
-    (CM.sent_encrypted_extensions_state 'st0 ee_val network_out_bytes);
+    (CM.sent_encrypted_extensions_state 'st0 (Ghost.reveal ee) network_out_bytes);
   CSL.lemma_legal_connection_delta_sent_seal_replay_consistent
     'st0
     (Ghost.reveal delta)
-    (CM.sent_encrypted_extensions_state 'st0 ee_val network_out_bytes);
+    (CM.sent_encrypted_extensions_state 'st0 (Ghost.reveal ee) network_out_bytes);
   CSL.lemma_legal_connection_delta_received_decode_replay_consistent
     'st0
     (Ghost.reveal delta)
-    (CM.sent_encrypted_extensions_state 'st0 ee_val network_out_bytes);
+    (CM.sent_encrypted_extensions_state 'st0 (Ghost.reveal ee) network_out_bytes);
 
   Seq.lemma_len_slice 'old_app_out 0 0;
   Seq.lemma_eq_intro B.empty (Seq.slice 'old_app_out 0 0);
@@ -904,22 +904,22 @@ fn process_send_encrypted_extensions_serialized
   assert (pure (ST.response_app_out resp 'old_app_out == Seq.slice 'old_app_out 0 0));
   assert (pure (Seq.equal (ST.response_app_out resp 'old_app_out) B.empty));
 
-  assert (pure ((CM.sent_encrypted_extensions_state 'st0 ee_val network_out_bytes).CS.cs_model.CS.model_config ==
+  assert (pure ((CM.sent_encrypted_extensions_state 'st0 (Ghost.reveal ee) network_out_bytes).CS.cs_model.CS.model_config ==
     'st0.CS.cs_model.CS.model_config));
-  assert (pure ((CM.sent_encrypted_extensions_state 'st0 ee_val network_out_bytes).CS.cs_model.CS.model_config.CS.config_role ==
+  assert (pure ((CM.sent_encrypted_extensions_state 'st0 (Ghost.reveal ee) network_out_bytes).CS.cs_model.CS.model_config.CS.config_role ==
     CS.ServerEndpoint));
   assert (pure (Some?
-    (CM.sent_encrypted_extensions_state 'st0 ee_val network_out_bytes).CS.cs_model.CS.model_config.CS.config_server));
+    (CM.sent_encrypted_extensions_state 'st0 (Ghost.reveal ee) network_out_bytes).CS.cs_model.CS.model_config.CS.config_server));
   assert (pure (ST.server_state_correct
-    (CM.sent_encrypted_extensions_state 'st0 ee_val network_out_bytes)));
+    (CM.sent_encrypted_extensions_state 'st0 (Ghost.reveal ee) network_out_bytes)));
   assert (pure (ST.server_raw_to_message_replay_consistent
-    (CM.sent_encrypted_extensions_state 'st0 ee_val network_out_bytes)));
+    (CM.sent_encrypted_extensions_state 'st0 (Ghost.reveal ee) network_out_bytes)));
   assert (pure (ST.server_end_to_end_invariant
-    (CM.sent_encrypted_extensions_state 'st0 ee_val network_out_bytes)));
+    (CM.sent_encrypted_extensions_state 'st0 (Ghost.reveal ee) network_out_bytes)));
 
   assert (pure (ST.legal_response_for_event
     'st0
-    (CM.sent_encrypted_extensions_state 'st0 ee_val network_out_bytes)
+    (CM.sent_encrypted_extensions_state 'st0 (Ghost.reveal ee) network_out_bytes)
     resp
     (Ghost.reveal ev)
     network_out_bytes
@@ -928,7 +928,7 @@ fn process_send_encrypted_extensions_serialized
     'old_app_out));
   assert (pure (ST.legal_local_response
     'st0
-    (CM.sent_encrypted_extensions_state 'st0 ee_val network_out_bytes)
+    (CM.sent_encrypted_extensions_state 'st0 (Ghost.reveal ee) network_out_bytes)
     resp
     ST.LocalSendEncryptedExtensions
     B.empty
@@ -939,7 +939,7 @@ fn process_send_encrypted_extensions_serialized
     'old_app_out));
   assert (pure (ST.legal_handled_local_response
     'st0
-    (CM.sent_encrypted_extensions_state 'st0 ee_val network_out_bytes)
+    (CM.sent_encrypted_extensions_state 'st0 (Ghost.reveal ee) network_out_bytes)
     resp
     ST.LocalSendEncryptedExtensions
     B.empty
@@ -947,7 +947,7 @@ fn process_send_encrypted_extensions_serialized
     'old_app_out));
   assert (pure (ST.server_local_event_end_to_end_correct
     'st0
-    (CM.sent_encrypted_extensions_state 'st0 ee_val network_out_bytes)
+    (CM.sent_encrypted_extensions_state 'st0 (Ghost.reveal ee) network_out_bytes)
     resp
     ST.LocalSendEncryptedExtensions
     B.empty

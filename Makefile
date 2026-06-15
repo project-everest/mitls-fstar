@@ -178,6 +178,44 @@ DRIVER_KRML_FILES = \
   $(OUTPUT_DIR)/TLS13_Impl_Client_Driver.krml \
   $(OUTPUT_DIR)/TLS13_OpenSSL.krml
 
+SERVER_DRIVER_BUNDLE_DIR = $(EXTRACT_DIR)/server_driver_bundle
+SERVER_DRIVER_MODULES = \
+  TLS13.Impl.Endpoint.Types \
+  TLS13.Impl.ConnectionState.Bounds \
+  TLS13.Impl.ConnectionState.Model \
+  TLS13.Impl.ConnectionState.Tags \
+  TLS13.Impl.ConnectionState.Repr \
+  TLS13.Impl.ConnectionState.Queries \
+  TLS13.Impl.ConnectionState.Fail \
+  TLS13.Impl.ConnectionState.Network \
+  TLS13.Impl.ConnectionState.LocalHandshake \
+  TLS13.Impl.ConnectionState.LocalAuth \
+  TLS13.Impl.ConnectionState.LocalSend \
+  TLS13.Impl.ConnectionState.LocalApp \
+  TLS13.Impl.Messages \
+  TLS13.KeySchedule \
+  TLS13.Record \
+  TLS13.Impl.Server.Types \
+  TLS13.Impl.Server.Setup \
+  TLS13.Impl.Server.Schedule \
+  TLS13.Impl.Server.Keys \
+  TLS13.Impl.Server.Network \
+  TLS13.Impl.Server.Material \
+  TLS13.Impl.Server.Send \
+  TLS13.Impl.Server.Auth \
+  TLS13.Impl.Server.App \
+  TLS13.Impl.Server \
+  TLS13.IO \
+  TLS13.OpenSSL \
+  TLS13.Impl.Server.Driver.State \
+  TLS13.Impl.Server.Driver.Transport \
+  TLS13.Impl.Server.Driver.Network \
+  TLS13.Impl.Server.Driver.Local \
+  TLS13.Impl.Server.Driver.Handshake \
+  TLS13.Impl.Server.Driver
+SERVER_DRIVER_KRML_FILES = \
+  $(patsubst %,$(OUTPUT_DIR)/%.krml,$(subst .,_,$(SERVER_DRIVER_MODULES)))
+
 # Extract FStar.Pervasives.Native for tuple support
 $(OUTPUT_DIR)/FStar_Pervasives_Native.krml: verify | $(OUTPUT_DIR)
 	$(FSTAR_EXE) --codegen krml --extract_module FStar.Pervasives.Native \
@@ -235,6 +273,9 @@ $(BUNDLE_DIR):
 $(DRIVER_BUNDLE_DIR):
 	mkdir -p $@
 
+$(SERVER_DRIVER_BUNDLE_DIR):
+	mkdir -p $@
+
 extract-driver-bundle: extract-driver-krml | $(DRIVER_BUNDLE_DIR)
 	@echo "Extracting TLS13 client driver slice..."
 	@rm -f $(DRIVER_BUNDLE_DIR)/*.c $(DRIVER_BUNDLE_DIR)/*.h $(DRIVER_BUNDLE_DIR)/internal/*.h
@@ -250,6 +291,25 @@ extract-driver-bundle: extract-driver-krml | $(DRIVER_BUNDLE_DIR)
 	  -bundle 'FStar.*,Pulse.*,PulseCore.*,Prims' \
 	  -no-prefix TLS13.Impl.Client \
 	  $(DRIVER_KRML_FILES) \
+	  _output/FStar_Pervasives_Native.krml
+
+extract-server-driver-krml: $(SERVER_DRIVER_KRML_FILES) $(OUTPUT_DIR)/FStar_Pervasives_Native.krml
+
+extract-server-driver-bundle: extract-server-driver-krml | $(SERVER_DRIVER_BUNDLE_DIR)
+	@echo "Extracting TLS13 server driver slice..."
+	@rm -f $(SERVER_DRIVER_BUNDLE_DIR)/*.c $(SERVER_DRIVER_BUNDLE_DIR)/*.h $(SERVER_DRIVER_BUNDLE_DIR)/internal/*.h
+	$(KRML_EXE) \
+	  -tmpdir $(SERVER_DRIVER_BUNDLE_DIR) \
+	  -skip-compilation \
+	  -warn-error -2-9-17-6 \
+	  -add-include '"../../c_stubs/tls13_connection_backend.h"' \
+	  -add-include '"../../c_stubs/tls13_crypto_external.h"' \
+	  -add-include '"../../c_stubs/tls13_spec_types.h"' \
+	  -add-include '"../../c_stubs/tls13_io_karamel.h"' \
+	  -add-include '"../../c_stubs/tls13_openssl_karamel.h"' \
+	  -bundle 'FStar.*,Pulse.*,PulseCore.*,Prims' \
+	  -no-prefix TLS13.Impl.Server \
+	  $(SERVER_DRIVER_KRML_FILES) \
 	  _output/FStar_Pervasives_Native.krml
 
 # ── Smoke Test Extraction ───────────────────────────────────────────────
@@ -406,6 +466,28 @@ test/test_extracted_client_driver_slice: \
 test-extracted-client-driver-slice: test/test_extracted_client_driver_slice
 	./test/test_extracted_client_driver_slice
 
+test/test_extracted_server_driver_slice: \
+  test/unit/test_extracted_server_driver_slice.c extract-server-driver-bundle \
+  c_stubs/tls13_io_karamel.c c_stubs/tls13_io_karamel.h \
+  c_stubs/tls13_io_stubs.c c_stubs/tls13_io_stubs.h \
+  c_stubs/tls13_openssl_karamel.c c_stubs/tls13_openssl_karamel.h \
+  c_stubs/tls13_openssl_stubs.c c_stubs/tls13_openssl_stubs.h $(HACL_OBJECTS)
+	$(CC) $(CFLAGS_COMMON) \
+	  -I_extract/server_driver_bundle -I_extract/server_driver_bundle/internal \
+	  _extract/server_driver_bundle/*.c \
+	  c_stubs/tls13_crypto_external.c \
+	  c_stubs/tls13_pulse_shims.c \
+	  c_stubs/tls13_io_karamel.c \
+	  c_stubs/tls13_io_stubs.c \
+	  c_stubs/tls13_openssl_karamel.c \
+	  c_stubs/tls13_openssl_stubs.c \
+	  test/unit/test_extracted_server_driver_slice.c \
+	  $(HACL_WRAPPER_SOURCES) \
+	  $(LDFLAGS_COMMON) -lssl -lcrypto -o $@
+
+test-extracted-server-driver-slice: test/test_extracted_server_driver_slice
+	./test/test_extracted_server_driver_slice
+
 test/test_extracted_client_openssl_echo: \
   test/unit/test_extracted_client_openssl_echo.c extract-driver-bundle \
   runtime/tls13_client_driver.c runtime/tls13_client_driver.h \
@@ -523,12 +605,15 @@ clean:
 	  test/test_extract_smoke test/test_connection_bindings \
 	  test/test_key_schedule_bindings \
 	  test/test_extracted_client_openssl_echo \
+	  test/test_extracted_server_driver_slice \
 	  test/openssl_echo_server test/openssl_echo_server.port \
 	  test/openssl_echo_server.log
 	find src test -name '*.checked' -delete
 
 .PHONY: all verify test extract-krml extract-connection extract-smoke extract-bundle \
+  extract-server-driver-krml extract-server-driver-bundle \
   test-extract-smoke test-connection-bindings test-key-schedule-bindings \
   test-record-bindings test-hacl-stubs test-openssl-stubs test-io-stubs \
+  test-extracted-client-driver-slice test-extracted-server-driver-slice \
   test-extracted-client-openssl-echo \
   test-client test-openssl-echo check-c-stubs check-toolchain check-deps clean

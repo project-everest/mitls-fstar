@@ -10,6 +10,7 @@
 #include "tls13_hacl_stubs.h"
 
 typedef struct TLS13_IO_channel_s *TLS13_IO_channel;
+typedef struct TLS13_IO_listener_s *TLS13_IO_listener;
 typedef uintptr_t TLS13_Handshake_handshake_context;
 
 typedef struct TLS13_Connection_Backend_config_s {

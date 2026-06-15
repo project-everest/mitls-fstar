@@ -21,10 +21,6 @@ struct TLS13_IO_listener_s {
   int fd;
 };
 
-#ifndef TLS13_IO_H
-typedef struct TLS13_IO_listener_s *TLS13_IO_listener;
-#endif
-
 typedef struct FStar_Pervasives_Native_option__TLS13_IO_channel_s {
   uint8_t tag;
   TLS13_IO_channel v;

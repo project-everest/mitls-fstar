@@ -1019,8 +1019,15 @@ marking the focused network branch handlers `inline_for_extraction` removes the
 problematic switch-branch call sites without weakening the public network theorem
 surface. Proof-only response predicates in `TLS13.Impl.Server.Types` are marked
 `noextract`, and the setup/start delta is kept erased, reducing proof artifacts
-in generated C. Remaining extraction work is to extend the clean server bundle to
-the driver modules and then add the runtime/server interop tests.
+in generated C. The server driver bundle target
+`extract-server-driver-bundle` now extracts the full top-level driver facade and
+emits prefixed C symbols for only the intended public API:
+`TLS13_Impl_Server_Driver_new_server`, `accept`, `send`, `receive`, and `close`.
+`test-extracted-server-driver-slice` compiles that bundle with the IO/OpenSSL C
+TCB shims and constructs a server driver from the existing test PEM credentials.
+Remaining extraction/runtime work is to eliminate the remaining generated C
+warnings from proof-only helpers where useful and add the concrete OpenSSL client
+interop test against the extracted server driver.
 
 Move these helper surfaces out of the public driver interface:
 
@@ -2546,27 +2553,24 @@ Validation:
 
 Checklist:
 
-- [ ] Extend IO TCB with `listen_tcp`.
-- [ ] Extend IO TCB with `accept_tcp`.
-- [ ] Add listener close/free if listener state persists.
-- [ ] Add server credential/signing C shim.
-- [ ] Credential C shim accepts in-memory PEM/DER buffers; it does not load
+- [x] Extend IO TCB with `listen_tcp`.
+- [x] Extend IO TCB with `accept_tcp`.
+- [x] Add listener close/free if listener state persists.
+- [x] Add server credential/signing C shim.
+- [x] Credential C shim accepts in-memory PEM/DER buffers; it does not load
       credential files by path in the first verified API.
-- [ ] Use concrete C stub names such as
-      `c_stubs/tls13_server_credentials_karamel.c`,
-      `c_stubs/tls13_server_credentials_karamel.h`,
-      `c_stubs/tls13_io_karamel.c`, and `tls13_io_stubs.c`, with
-      `c_stubs/tls13_connection_backend.h` extended only for typed serializer
-      hooks.
-- [ ] Add extraction targets:
-      - `extract-server-krml`;
-      - `extract-server-bundle`;
-      - `extract-server-driver-bundle`.
-- [ ] Add test targets:
-      - `test-extracted-server-driver-slice`;
-      - `test-openssl-sclient`;
-      - `test-verified-client-server`.
-- [ ] Ensure generated symbols avoid POSIX collisions with `accept`, `listen`,
+- [x] Use concrete C stub names
+      `c_stubs/tls13_openssl_karamel.c/.h`, `c_stubs/tls13_io_karamel.c/.h`,
+      and `c_stubs/tls13_io_stubs.c/.h`, with
+      `c_stubs/tls13_connection_backend.h` extended for typed serializer and IO
+      ABI typedefs.
+- [x] Add server-driver extraction targets:
+      `extract-server-driver-krml` and `extract-server-driver-bundle`.
+- [ ] Add any separate non-driver server-core extraction target if later needed.
+- [x] Add `test-extracted-server-driver-slice`.
+- [ ] Add `test-openssl-sclient`.
+- [ ] Add `test-verified-client-server`.
+- [x] Ensure generated top-level driver symbols avoid POSIX collisions with `accept`, `listen`,
       `send`, and `close`.
 
 Validation:
