@@ -879,6 +879,10 @@ It also owns the intermediate accept/select/derive/ServerHello result types,
 the payload-based selection/derive/ServerHello correctness predicates, and the
 pure readiness lemmas used to compose ServerHello emission after successful
 selection and X25519 derivation.
+The driver-owned entropy/material payload helper
+`generate_server_material_once` has moved behind the Handshake boundary, and the
+unused `start_server_if_ready` wrapper was removed rather than preserving dead
+orchestration code.
 Selection, derivation, ServerHello, encrypted-flight orchestration, and the full
 public `accept` handshake still remain in the main driver until subsequent
 Handshake slices move them behind this boundary.

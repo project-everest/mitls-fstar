@@ -186,6 +186,24 @@ val lemma_select_derive_success_server_hello_ready :
        ST.LocalSendServerHello
        payload)
 
+fn generate_server_material_once
+  (d:DS.server_driver)
+  requires DS.server_driver_connected
+               d
+               'st0
+               'certificate_chain
+               'credential_identity
+               'received
+               'sent
+  returns ok:bool
+  ensures DS.server_driver_connected
+              d
+              'st0
+              'certificate_chain
+              'credential_identity
+              'received
+              'sent
+
 fn accept_transport_and_start_once
   (d:DS.server_driver)
   (bind_host:array U8.t)
