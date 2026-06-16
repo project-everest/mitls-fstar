@@ -2540,6 +2540,29 @@ let lemma_supported_profile_application_record_material_inputs_agree_from_expect
   assert (peer_record_material_inputs_agree client_app client server);
   assert (peer_record_material_inputs_agree server_app client server)
 
+let lemma_no_key_update_application_traffic_material_matches_expected
+  (role:endpoint_role)
+  (st:connection_state)
+  : Lemma
+      (requires
+        first_epoch_application_traffic_material_no_key_update_invariant st /\
+        st.cs_model.model_config.config_role == role /\
+        st.cs_model.model_control == ControlApplicationData /\
+        application_record_keys_installed_for_role role st.cs_model)
+      (ensures supported_profile_application_traffic_material_matches_expected st)
+=
+  match role with
+  | ClientEndpoint ->
+    assert_norm (traffic_label_for_endpoint_direction ClientEndpoint TrafficRead == ServerTraffic);
+    assert_norm (traffic_label_for_endpoint_direction ClientEndpoint TrafficWrite == ClientTraffic);
+    assert (Some? st.cs_model.model_handshake.hs_keys.ks_server_application_traffic);
+    assert (Some? st.cs_model.model_handshake.hs_keys.ks_client_application_traffic)
+  | ServerEndpoint ->
+    assert_norm (traffic_label_for_endpoint_direction ServerEndpoint TrafficRead == ClientTraffic);
+    assert_norm (traffic_label_for_endpoint_direction ServerEndpoint TrafficWrite == ServerTraffic);
+    assert (Some? st.cs_model.model_handshake.hs_keys.ks_client_application_traffic);
+    assert (Some? st.cs_model.model_handshake.hs_keys.ks_server_application_traffic)
+
 let lemma_supported_profile_client_server_key_material_agrees
   (client:connection_state)
   (server:connection_state)

@@ -11,6 +11,7 @@ module CS = TLS13.Spec.ConnectionState
 module SD = TLS13.Impl.Server.Driver
 module Seq = FStar.Seq
 module SeqP = FStar.Seq.Properties
+module WFL = TLS13.Spec.WireFormatLemmas
 
 noextract
 let endpoint_transport_logs_exact
@@ -405,6 +406,29 @@ let client_server_driver_supported_profile_application_record_state_inputs
   : prop =
   CS.supported_profile_application_traffic_material_matches_expected client /\
   CS.supported_profile_application_traffic_material_matches_expected server
+
+noextract
+let client_server_driver_first_epoch_no_key_update_state_inputs
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  : prop =
+  CS.first_epoch_application_traffic_material_no_key_update_invariant client /\
+  CS.first_epoch_application_traffic_material_no_key_update_invariant server
+
+val lemma_client_server_driver_supported_profile_application_record_state_inputs_from_first_epoch_no_key_update
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  : Lemma
+      (requires
+        CD.client_driver_application_ready client /\
+        SD.server_driver_application_ready server /\
+        client_server_driver_first_epoch_no_key_update_state_inputs
+          client
+          server)
+      (ensures
+        client_server_driver_supported_profile_application_record_state_inputs
+          client
+          server)
 
 noextract
 let client_server_driver_remaining_semantic_projection_inputs
@@ -952,5 +976,268 @@ val lemma_client_server_driver_key_material_agrees
           server_received
           server_sent)
       (ensures
+        CS.paired_wire_logs client server /\
+        CS.supported_profile_client_server_key_material_agrees client server)
+
+noextract
+let client_server_driver_public_success_exact_wire_hello_inputs
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  (client_received:B.bytes)
+  (client_sent:B.bytes)
+  (server_received:B.bytes)
+  (server_sent:B.bytes)
+  : prop =
+  client_server_driver_public_success_transport_inputs
+    client
+    server
+    client_received
+    client_sent
+    server_received
+    server_sent /\
+  WFL.state_exact_client_hello_wire_parseback_profile client
+
+val lemma_client_server_driver_paired_cleartext_hello_messages_from_public_success_exact_wire_replay
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  (client_received:B.bytes)
+  (client_sent:B.bytes)
+  (server_received:B.bytes)
+  (server_sent:B.bytes)
+  : Lemma
+      (requires
+        client_server_driver_public_success_exact_wire_hello_inputs
+          client
+          server
+          client_received
+          client_sent
+          server_received
+          server_sent)
+      (ensures
+        paired_driver_transport_logs_exact
+          client
+          server
+          client_received
+          client_sent
+          server_received
+          server_sent /\
+        CS.paired_wire_logs client server /\
+        paired_cleartext_hello_messages client server)
+
+noextract
+let client_server_driver_key_material_no_read_ahead_exact_wire_hello_handshake_event_inputs
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  (client_received:B.bytes)
+  (client_sent:B.bytes)
+  (server_received:B.bytes)
+  (server_sent:B.bytes)
+  : prop =
+  client_server_driver_public_success_exact_wire_hello_inputs
+    client
+    server
+    client_received
+    client_sent
+    server_received
+    server_sent /\
+  paired_handshake_events client server /\
+  client_server_driver_supported_profile_application_record_state_inputs
+    client
+    server
+
+val lemma_client_server_driver_key_material_agrees_from_public_success_exact_wire_hello_and_handshake_events
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  (client_received:B.bytes)
+  (client_sent:B.bytes)
+  (server_received:B.bytes)
+  (server_sent:B.bytes)
+  : Lemma
+      (requires
+        client_server_driver_key_material_no_read_ahead_exact_wire_hello_handshake_event_inputs
+          client
+          server
+          client_received
+          client_sent
+          server_received
+          server_sent)
+      (ensures
+        client_server_driver_remaining_semantic_projection_inputs client server /\
+        client_server_driver_supported_profile_derived_state_inputs
+          client
+          server /\
+        CS.supported_profile_all_derived_key_material_agrees client server /\
+        CS.supported_profile_client_server_key_material_inputs_agree
+          client
+          server /\
+        paired_driver_transport_logs_exact
+          client
+          server
+          client_received
+          client_sent
+          server_received
+          server_sent /\
+        CS.paired_wire_logs client server /\
+        CS.supported_profile_client_server_key_material_agrees client server)
+
+val lemma_client_server_driver_paired_x25519_key_shares_from_wire_key_shares
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  : Lemma
+      (requires
+        CD.client_driver_application_ready client /\
+        SD.server_driver_application_ready server /\
+        WFL.paired_cleartext_hello_key_shares client server)
+      (ensures CS.paired_x25519_key_shares client server)
+
+noextract
+let client_server_driver_public_success_supported_wire_hello_inputs
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  (client_received:B.bytes)
+  (client_sent:B.bytes)
+  (server_received:B.bytes)
+  (server_sent:B.bytes)
+  : prop =
+  client_server_driver_public_success_transport_inputs
+    client
+    server
+    client_received
+    client_sent
+    server_received
+    server_sent /\
+  WFL.supported_client_config_wire_profile
+    client.CS.cs_model.CS.model_config
+
+val lemma_client_server_driver_paired_cleartext_hello_key_shares_from_public_success_wire_replay
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  (client_received:B.bytes)
+  (client_sent:B.bytes)
+  (server_received:B.bytes)
+  (server_sent:B.bytes)
+  : Lemma
+      (requires
+        client_server_driver_public_success_supported_wire_hello_inputs
+          client
+          server
+          client_received
+          client_sent
+          server_received
+          server_sent)
+      (ensures
+        paired_driver_transport_logs_exact
+          client
+          server
+          client_received
+          client_sent
+          server_received
+          server_sent /\
+        CS.paired_wire_logs client server /\
+        WFL.paired_cleartext_hello_key_shares client server)
+
+noextract
+let client_server_driver_key_material_no_read_ahead_supported_wire_hello_handshake_event_inputs
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  (client_received:B.bytes)
+  (client_sent:B.bytes)
+  (server_received:B.bytes)
+  (server_sent:B.bytes)
+  : prop =
+  client_server_driver_public_success_supported_wire_hello_inputs
+    client
+    server
+    client_received
+    client_sent
+    server_received
+    server_sent /\
+  paired_handshake_events client server /\
+  client_server_driver_first_epoch_no_key_update_state_inputs
+    client
+    server
+
+val lemma_client_server_driver_key_material_agrees_from_public_success_supported_wire_hello_and_handshake_events
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  (client_received:B.bytes)
+  (client_sent:B.bytes)
+  (server_received:B.bytes)
+  (server_sent:B.bytes)
+  : Lemma
+      (requires
+        client_server_driver_key_material_no_read_ahead_supported_wire_hello_handshake_event_inputs
+          client
+          server
+          client_received
+          client_sent
+          server_received
+          server_sent)
+      (ensures
+        client_server_driver_supported_profile_derived_state_inputs
+          client
+          server /\
+        CS.supported_profile_all_derived_key_material_agrees client server /\
+        CS.supported_profile_client_server_key_material_inputs_agree
+          client
+          server /\
+        paired_driver_transport_logs_exact
+          client
+          server
+          client_received
+          client_sent
+          server_received
+          server_sent /\
+        CS.paired_wire_logs client server /\
+        CS.supported_profile_client_server_key_material_agrees client server)
+
+noextract
+let client_server_driver_end_to_end_agreement_inputs
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  (client_received:B.bytes)
+  (client_sent:B.bytes)
+  (server_received:B.bytes)
+  (server_sent:B.bytes)
+  : prop =
+  client_server_driver_key_material_no_read_ahead_supported_wire_hello_handshake_event_inputs
+    client
+    server
+    client_received
+    client_sent
+    server_received
+    server_sent
+
+val lemma_client_server_driver_end_to_end_key_material_agrees
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  (client_received:B.bytes)
+  (client_sent:B.bytes)
+  (server_received:B.bytes)
+  (server_sent:B.bytes)
+  : Lemma
+      (requires
+        client_server_driver_end_to_end_agreement_inputs
+          client
+          server
+          client_received
+          client_sent
+          server_received
+          server_sent)
+      (ensures
+        client_server_driver_supported_profile_derived_state_inputs
+          client
+          server /\
+        CS.supported_profile_all_derived_key_material_agrees client server /\
+        CS.supported_profile_client_server_key_material_inputs_agree
+          client
+          server /\
+        paired_driver_transport_logs_exact
+          client
+          server
+          client_received
+          client_sent
+          server_received
+          server_sent /\
         CS.paired_wire_logs client server /\
         CS.supported_profile_client_server_key_material_agrees client server)

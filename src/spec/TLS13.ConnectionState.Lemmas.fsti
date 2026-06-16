@@ -267,6 +267,17 @@ val lemma_supported_profile_application_record_material_inputs_agree_from_expect
       (ensures
         supported_profile_application_record_material_inputs_agree client server)
 
+val lemma_no_key_update_application_traffic_material_matches_expected
+  (role:endpoint_role)
+  (st:connection_state)
+  : Lemma
+      (requires
+        first_epoch_application_traffic_material_no_key_update_invariant st /\
+        st.cs_model.model_config.config_role == role /\
+        st.cs_model.model_control == ControlApplicationData /\
+        application_record_keys_installed_for_role role st.cs_model)
+      (ensures supported_profile_application_traffic_material_matches_expected st)
+
 val lemma_supported_profile_client_server_key_material_agrees
   (client:connection_state)
   (server:connection_state)

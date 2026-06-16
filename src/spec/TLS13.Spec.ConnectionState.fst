@@ -434,11 +434,29 @@ type conn_event =
   | ConnNetworkEvent of directed_message M.tls_message
   | ConnLocalEvent of local_event
 
+let conn_event_is_key_update (ev:conn_event) : bool =
+  match ev with
+  | ConnNetworkEvent msg ->
+    (match msg.CL.message_value with
+     | M.TlsKeyUpdate _ -> true
+     | _ -> false)
+  | ConnLocalEvent _ ->
+    false
+
+let rec conn_events_no_key_update (events:list conn_event) : bool =
+  match events with
+  | [] -> true
+  | ev :: rest ->
+    not (conn_event_is_key_update ev) && conn_events_no_key_update rest
+
 type connection_state = {
   cs_model: connection_model;
   cs_wire_log: wire_log;
   cs_event_log: list conn_event;
 }
+
+let connection_state_no_key_update_trace (st:connection_state) : prop =
+  conn_events_no_key_update st.cs_event_log == true
 
 let same_transcript_checkpoint
   (checkpoint:transcript_checkpoint)
@@ -2068,6 +2086,26 @@ let supported_profile_application_traffic_material_matches_expected
     (traffic_id TrafficApplication ClientTraffic) st /\
   traffic_material_matches_expected_derived_material
     (traffic_id TrafficApplication ServerTraffic) st
+
+let first_epoch_application_traffic_material_slots_match_expected
+  (st:connection_state)
+  : prop =
+  (Some?
+    st.cs_model.model_handshake.hs_keys.ks_client_application_traffic ==>
+      traffic_material_matches_expected_derived_material
+        (traffic_id TrafficApplication ClientTraffic)
+        st) /\
+  (Some?
+    st.cs_model.model_handshake.hs_keys.ks_server_application_traffic ==>
+      traffic_material_matches_expected_derived_material
+        (traffic_id TrafficApplication ServerTraffic)
+        st)
+
+let first_epoch_application_traffic_material_no_key_update_invariant
+  (st:connection_state)
+  : prop =
+  connection_state_no_key_update_trace st /\
+  first_epoch_application_traffic_material_slots_match_expected st
 
 let base_secret_inputs_agree
   (base_id:base_secret_id)

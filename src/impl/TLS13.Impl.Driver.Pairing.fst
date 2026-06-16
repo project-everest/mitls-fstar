@@ -10,9 +10,12 @@ module CD = TLS13.Impl.Client.Driver
 module CL = TLS13.ConnectionLog
 module CS = TLS13.Spec.ConnectionState
 module CSL = TLS13.ConnectionState.Lemmas
+module CT = TLS13.Impl.Client.Types
 module SD = TLS13.Impl.Server.Driver
 module Seq = FStar.Seq
 module SeqP = FStar.Seq.Properties
+module ST = TLS13.Impl.Server.Types
+module WFL = TLS13.Spec.WireFormatLemmas
 
 let lemma_paired_protocol_received_logs_accounted
   (client:CS.connection_state)
@@ -447,6 +450,38 @@ let lemma_client_server_driver_application_record_epochs_installed
     CS.ServerEndpoint
     server.CS.cs_model);
   CSL.lemma_connection_application_ready_record_epochs_installed
+    CS.ServerEndpoint
+    server
+
+let lemma_client_server_driver_supported_profile_application_record_state_inputs_from_first_epoch_no_key_update
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  : Lemma
+      (requires
+        CD.client_driver_application_ready client /\
+        SD.server_driver_application_ready server /\
+        client_server_driver_first_epoch_no_key_update_state_inputs
+          client
+          server)
+      (ensures
+        client_server_driver_supported_profile_application_record_state_inputs
+          client
+          server)
+=
+  assert (client.CS.cs_model.CS.model_config.CS.config_role == CS.ClientEndpoint);
+  assert (client.CS.cs_model.CS.model_control == CS.ControlApplicationData);
+  assert (CS.application_record_keys_installed_for_role
+    CS.ClientEndpoint
+    client.CS.cs_model);
+  CSL.lemma_no_key_update_application_traffic_material_matches_expected
+    CS.ClientEndpoint
+    client;
+  assert (server.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint);
+  assert (server.CS.cs_model.CS.model_control == CS.ControlApplicationData);
+  assert (CS.application_record_keys_installed_for_role
+    CS.ServerEndpoint
+    server.CS.cs_model);
+  CSL.lemma_no_key_update_application_traffic_material_matches_expected
     CS.ServerEndpoint
     server
 
@@ -1007,3 +1042,341 @@ let lemma_client_server_driver_key_material_agrees
     server_received
     server_sent;
   CSL.lemma_supported_profile_client_server_key_material_agrees client server
+
+let lemma_client_server_driver_paired_cleartext_hello_messages_from_public_success_exact_wire_replay
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  (client_received:B.bytes)
+  (client_sent:B.bytes)
+  (server_received:B.bytes)
+  (server_sent:B.bytes)
+  : Lemma
+      (requires
+        client_server_driver_public_success_exact_wire_hello_inputs
+          client
+          server
+          client_received
+          client_sent
+          server_received
+          server_sent)
+      (ensures
+        paired_driver_transport_logs_exact
+          client
+          server
+          client_received
+          client_sent
+          server_received
+          server_sent /\
+        CS.paired_wire_logs client server /\
+        paired_cleartext_hello_messages client server)
+=
+  lemma_paired_wire_logs_from_exact_prefix_no_read_ahead
+    client
+    server
+    client_received
+    client_sent
+    server_received
+    server_sent;
+  assert (CS.paired_wire_logs client server);
+  assert (CD.client_driver_application_ready client);
+  assert (CT.client_end_to_end_invariant client);
+  assert (CS.connection_state_raw_to_message_replay_consistent client);
+  assert (CS.connection_state_raw_event_replay_consistent client);
+  assert (SD.server_driver_application_ready server);
+  assert (ST.server_end_to_end_invariant server);
+  assert (ST.server_raw_to_message_replay_consistent server);
+  assert (CS.connection_state_raw_event_replay_consistent server);
+  assert (CS.stable_client_x25519_key_share_projection client);
+  assert (CS.client_x25519_key_share_projection client);
+  assert (CS.stable_server_x25519_key_share_projection server);
+  assert (CS.server_x25519_key_share_projection server);
+  WFL.lemma_paired_cleartext_hello_messages_from_raw_replay
+    client
+    server
+
+let lemma_client_server_driver_key_material_agrees_from_public_success_exact_wire_hello_and_handshake_events
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  (client_received:B.bytes)
+  (client_sent:B.bytes)
+  (server_received:B.bytes)
+  (server_sent:B.bytes)
+  : Lemma
+      (requires
+        client_server_driver_key_material_no_read_ahead_exact_wire_hello_handshake_event_inputs
+          client
+          server
+          client_received
+          client_sent
+          server_received
+          server_sent)
+      (ensures
+        client_server_driver_remaining_semantic_projection_inputs client server /\
+        client_server_driver_supported_profile_derived_state_inputs
+          client
+          server /\
+        CS.supported_profile_all_derived_key_material_agrees client server /\
+        CS.supported_profile_client_server_key_material_inputs_agree
+          client
+          server /\
+        paired_driver_transport_logs_exact
+          client
+          server
+          client_received
+          client_sent
+          server_received
+          server_sent /\
+        CS.paired_wire_logs client server /\
+        CS.supported_profile_client_server_key_material_agrees client server)
+=
+  lemma_client_server_driver_paired_cleartext_hello_messages_from_public_success_exact_wire_replay
+    client
+    server
+    client_received
+    client_sent
+    server_received
+    server_sent;
+  assert (client_server_driver_key_material_no_read_ahead_handshake_event_inputs
+    client
+    server
+    client_received
+    client_sent
+    server_received
+    server_sent);
+  lemma_client_server_driver_key_material_agrees_from_public_success_cleartext_and_handshake_events
+    client
+    server
+    client_received
+    client_sent
+    server_received
+    server_sent
+
+let lemma_client_server_driver_paired_x25519_key_shares_from_wire_key_shares
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  : Lemma
+      (requires
+        CD.client_driver_application_ready client /\
+        SD.server_driver_application_ready server /\
+        WFL.paired_cleartext_hello_key_shares client server)
+      (ensures CS.paired_x25519_key_shares client server)
+=
+  assert (CS.stable_client_x25519_key_share_projection client);
+  assert (CS.client_x25519_key_share_projection client);
+  assert (CS.stable_server_x25519_key_share_projection server);
+  assert (CS.server_x25519_key_share_projection server);
+  let client_hs = client.CS.cs_model.CS.model_handshake in
+  let server_hs = server.CS.cs_model.CS.model_handshake in
+  match
+    client_hs.CS.hs_start,
+    client_hs.CS.hs_client_hello,
+    client_hs.CS.hs_server_hello,
+    client_hs.CS.hs_keys.CS.ks_shared_secret,
+    server_hs.CS.hs_server_selection,
+    server_hs.CS.hs_client_hello,
+    server_hs.CS.hs_server_hello,
+    server_hs.CS.hs_keys.CS.ks_shared_secret
+  with
+  | Some start, Some client_ch, Some client_sh, Some client_shared,
+    Some selection, Some server_ch, Some server_sh, Some server_shared ->
+    (match
+      start.CS.start_client_key_share_private,
+      selection.CS.server_key_share_private
+     with
+     | Some client_sk, Some server_sk ->
+       assert (CS.client_hello_key_share client_ch ==
+         start.CS.start_client_key_share_public);
+       assert (CS.client_hello_key_share client_ch ==
+         CS.client_hello_key_share server_ch);
+       assert (CS.client_hello_key_share server_ch ==
+         start.CS.start_client_key_share_public);
+       assert (CS.server_hello_key_share server_sh ==
+         selection.CS.server_key_share_public);
+       assert (CS.server_hello_key_share client_sh ==
+         CS.server_hello_key_share server_sh);
+       assert (CS.server_hello_key_share client_sh ==
+         selection.CS.server_key_share_public);
+       assert (C.x25519_public_from_private client_sk ==
+         start.CS.start_client_key_share_public);
+       assert (C.x25519_public_from_private server_sk ==
+         selection.CS.server_key_share_public);
+       assert (C.x25519_shared client_sk (CS.server_hello_key_share client_sh) ==
+         Some client_shared);
+       assert (C.x25519_shared server_sk (CS.client_hello_key_share server_ch) ==
+         Some server_shared)
+     | _, _ ->
+       assert False)
+  | _, _, _, _, _, _, _, _ ->
+    assert False
+
+let lemma_client_server_driver_paired_cleartext_hello_key_shares_from_public_success_wire_replay
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  (client_received:B.bytes)
+  (client_sent:B.bytes)
+  (server_received:B.bytes)
+  (server_sent:B.bytes)
+  : Lemma
+      (requires
+        client_server_driver_public_success_supported_wire_hello_inputs
+          client
+          server
+          client_received
+          client_sent
+          server_received
+          server_sent)
+      (ensures
+        paired_driver_transport_logs_exact
+          client
+          server
+          client_received
+          client_sent
+          server_received
+          server_sent /\
+        CS.paired_wire_logs client server /\
+        WFL.paired_cleartext_hello_key_shares client server)
+=
+  lemma_paired_wire_logs_from_exact_prefix_no_read_ahead
+    client
+    server
+    client_received
+    client_sent
+    server_received
+    server_sent;
+  assert (CS.paired_wire_logs client server);
+  assert (CD.client_driver_application_ready client);
+  assert (CT.client_end_to_end_invariant client);
+  assert (CS.connection_state_raw_to_message_replay_consistent client);
+  assert (CS.connection_state_raw_event_replay_consistent client);
+  assert (SD.server_driver_application_ready server);
+  assert (ST.server_end_to_end_invariant server);
+  assert (ST.server_raw_to_message_replay_consistent server);
+  assert (CS.connection_state_raw_event_replay_consistent server);
+  assert (CS.stable_client_x25519_key_share_projection client);
+  assert (CS.client_x25519_key_share_projection client);
+  WFL.lemma_state_supported_client_hello_wire_profile_from_config
+    client;
+  assert (CS.stable_server_x25519_key_share_projection server);
+  assert (CS.server_x25519_key_share_projection server);
+  WFL.lemma_paired_cleartext_hello_key_shares_from_raw_replay
+    client
+    server
+
+let lemma_client_server_driver_key_material_agrees_from_public_success_supported_wire_hello_and_handshake_events
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  (client_received:B.bytes)
+  (client_sent:B.bytes)
+  (server_received:B.bytes)
+  (server_sent:B.bytes)
+  : Lemma
+      (requires
+        client_server_driver_key_material_no_read_ahead_supported_wire_hello_handshake_event_inputs
+          client
+          server
+          client_received
+          client_sent
+          server_received
+          server_sent)
+      (ensures
+        client_server_driver_supported_profile_derived_state_inputs
+          client
+          server /\
+        CS.supported_profile_all_derived_key_material_agrees client server /\
+        CS.supported_profile_client_server_key_material_inputs_agree
+          client
+          server /\
+        paired_driver_transport_logs_exact
+          client
+          server
+          client_received
+          client_sent
+          server_received
+          server_sent /\
+        CS.paired_wire_logs client server /\
+        CS.supported_profile_client_server_key_material_agrees client server)
+=
+  lemma_client_server_driver_paired_cleartext_hello_key_shares_from_public_success_wire_replay
+    client
+    server
+    client_received
+    client_sent
+    server_received
+    server_sent;
+  lemma_client_server_driver_paired_x25519_key_shares_from_wire_key_shares
+    client
+    server;
+  CSL.lemma_paired_handshake_events_same_key_derivation_checkpoint
+    CS.DeriveHandshakeTraffic
+    client
+    server;
+  CSL.lemma_paired_handshake_events_same_key_derivation_checkpoint
+    CS.DeriveApplicationTraffic
+    client
+    server;
+  assert (CS.paired_key_derivation_checkpoints client server);
+  assert (client_server_driver_supported_profile_derived_state_inputs
+    client
+    server);
+  lemma_client_server_driver_supported_profile_application_record_state_inputs_from_first_epoch_no_key_update
+    client
+    server;
+  assert (client_server_driver_supported_profile_state_inputs
+    client
+    server);
+  assert (client_server_driver_key_material_no_read_ahead_component_inputs
+    client
+    server
+    client_received
+    client_sent
+    server_received
+    server_sent);
+  lemma_client_server_driver_key_material_agrees_from_public_success_components
+    client
+    server
+    client_received
+    client_sent
+    server_received
+    server_sent
+
+let lemma_client_server_driver_end_to_end_key_material_agrees
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  (client_received:B.bytes)
+  (client_sent:B.bytes)
+  (server_received:B.bytes)
+  (server_sent:B.bytes)
+  : Lemma
+      (requires
+        client_server_driver_end_to_end_agreement_inputs
+          client
+          server
+          client_received
+          client_sent
+          server_received
+          server_sent)
+      (ensures
+        client_server_driver_supported_profile_derived_state_inputs
+          client
+          server /\
+        CS.supported_profile_all_derived_key_material_agrees client server /\
+        CS.supported_profile_client_server_key_material_inputs_agree
+          client
+          server /\
+        paired_driver_transport_logs_exact
+          client
+          server
+          client_received
+          client_sent
+          server_received
+          server_sent /\
+        CS.paired_wire_logs client server /\
+        CS.supported_profile_client_server_key_material_agrees client server)
+=
+  lemma_client_server_driver_key_material_agrees_from_public_success_supported_wire_hello_and_handshake_events
+    client
+    server
+    client_received
+    client_sent
+    server_received
+    server_sent
