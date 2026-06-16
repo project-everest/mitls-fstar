@@ -187,19 +187,19 @@ fn alloc_empty_optional_sized_bytes (cap:SZ.t) (#cap_spec:erased nat)
 }
 
 fn copy_optional_sized_bytes_to_array
-  (#cap:nat)
+  (#cap:erased nat)
   (slot:optional_sized_bytes)
   (dst:array U8.t)
   (dst_len:SZ.t)
   (#bytes_opt:erased (option B.bytes))
-  requires optional_sized_bytes_exactly slot cap bytes_opt **
+  requires optional_sized_bytes_exactly slot (reveal cap) bytes_opt **
            ArrPts.pts_to dst 'old_dst **
            pure (B.length 'old_dst == SZ.v dst_len /\
-                 cap <= SZ.v dst_len /\
+                 reveal cap <= SZ.v dst_len /\
                  Some? (Ghost.reveal bytes_opt))
   returns copied_len:SZ.t
   ensures exists* dst_bytes.
-          optional_sized_bytes_exactly slot cap bytes_opt **
+          optional_sized_bytes_exactly slot (reveal cap) bytes_opt **
           ArrPts.pts_to dst dst_bytes **
           pure (B.length dst_bytes == SZ.v dst_len /\
                 SZ.v copied_len <= B.length dst_bytes /\
@@ -209,7 +209,7 @@ fn copy_optional_sized_bytes_to_array
                   Seq.equal (Seq.slice dst_bytes 0 (SZ.v copied_len)) bytes
                 | None -> False))
 {
-  unfold (optional_sized_bytes_exactly slot cap (Ghost.reveal bytes_opt));
+  unfold (optional_sized_bytes_exactly slot (reveal cap) (Ghost.reveal bytes_opt));
   with present storage len. _;
 
   let copy_len = !slot.value.len;
@@ -219,7 +219,7 @@ fn copy_optional_sized_bytes_to_array
     match Ghost.reveal bytes_opt with
     | Some bytes -> byte_prefix_matches storage copy_len bytes
     | None -> False));
-  assert (pure (SZ.v copy_len <= cap));
+  assert (pure (SZ.v copy_len <= reveal cap));
   assert (pure (SZ.v copy_len <= SZ.v dst_len));
 
   ArrPts.pts_to_len dst;
@@ -240,7 +240,7 @@ fn copy_optional_sized_bytes_to_array
       Seq.equal (Seq.slice dst_bytes 0 (SZ.v copy_len)) bytes
     | None -> False));
 
-  fold (optional_sized_bytes_exactly slot cap (Ghost.reveal bytes_opt));
+  fold (optional_sized_bytes_exactly slot (reveal cap) (Ghost.reveal bytes_opt));
   copy_len
 }
 

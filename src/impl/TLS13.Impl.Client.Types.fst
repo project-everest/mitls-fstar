@@ -147,6 +147,7 @@ type next_local_action = {
   next_local_payload: local_payload_kind;
 }
 
+noextract
 let local_validation_peer
   (st:CS.connection_state)
   (payload:B.bytes)

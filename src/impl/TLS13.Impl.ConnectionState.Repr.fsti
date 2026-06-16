@@ -1178,19 +1178,19 @@ fn alloc_empty_optional_sized_bytes (cap:SZ.t) (#cap_spec:erased nat)
   ensures optional_sized_bytes_exactly slot cap_spec None
 
 fn copy_optional_sized_bytes_to_array
-  (#cap:nat)
+  (#cap:erased nat)
   (slot:optional_sized_bytes)
   (dst:array U8.t)
   (dst_len:SZ.t)
   (#bytes_opt:erased (option B.bytes))
-  requires optional_sized_bytes_exactly slot cap bytes_opt **
+  requires optional_sized_bytes_exactly slot (reveal cap) bytes_opt **
            ArrPts.pts_to dst 'old_dst **
            pure (B.length 'old_dst == SZ.v dst_len /\
-                 cap <= SZ.v dst_len /\
+                 reveal cap <= SZ.v dst_len /\
                  Some? (Ghost.reveal bytes_opt))
   returns copied_len:SZ.t
   ensures exists* dst_bytes.
-          optional_sized_bytes_exactly slot cap bytes_opt **
+          optional_sized_bytes_exactly slot (reveal cap) bytes_opt **
           ArrPts.pts_to dst dst_bytes **
           pure (B.length dst_bytes == SZ.v dst_len /\
                 SZ.v copied_len <= B.length dst_bytes /\

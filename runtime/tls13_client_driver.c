@@ -76,23 +76,14 @@ int tls13_client_driver_connect(
   uint8_t *trust_anchor_input =
       trust_anchor_pem_len == 0u ? &empty_trust_anchor : (uint8_t *)trust_anchor_pem;
 
-  FStar_Pervasives_Native_option__TLS13_Impl_Client_Driver_client_driver created =
+  TLS13_Impl_Client_Driver_client_driver verified_driver =
       TLS13_Impl_Client_Driver_new_client(
           (uint8_t *)server_name,
           server_name_len,
           trust_anchor_input,
           trust_anchor_pem_len,
           validation_time_seconds);
-  if (created.tag != FStar_Pervasives_Native_Some) {
-    driver_fail(
-        driver,
-        "verified driver allocation for %s failed",
-        server_name);
-    free(driver);
-    return 1;
-  }
 
-  TLS13_Impl_Client_Driver_client_driver verified_driver = created.v;
   TLS13_Impl_Client_Driver_driver_workflow_status status =
       TLS13_Impl_Client_Driver_connect(
           verified_driver,

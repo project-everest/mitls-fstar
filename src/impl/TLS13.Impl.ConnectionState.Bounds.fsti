@@ -1,16 +1,28 @@
 module TLS13.Impl.ConnectionState.Bounds
 
+noextract
 let max_hostname_len : nat = 255
+noextract
 let max_trust_anchors_len : nat = 65535
+noextract
 let max_public_key_len : nat = 4096
+noextract
 let max_cipher_suites : nat = 16
+noextract
 let max_signature_schemes : nat = 16
+noextract
 let max_client_hello_len : nat = 512
+noextract
 let max_server_hello_len : nat = 4096
+noextract
 let max_handshake_flight_len : nat = 32768
+noextract
 let max_transcript_len : nat = 65535
+noextract
 let max_certificate_verify_input_len : nat = 256
+noextract
 let max_pending_plaintext_len : nat = 32768
+noextract
 let max_pending_raw_len : nat = 32768
 
 module SZ = FStar.SizeT

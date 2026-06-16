@@ -5,13 +5,6 @@
 #else
 #include <stddef.h>
 #include <stdint.h>
-#define FStar_Pervasives_Native_None 0
-#define FStar_Pervasives_Native_Some 1
-typedef uint8_t FStar_Pervasives_Native_option__TLS13_OpenSSL_auth_context_tags;
-typedef struct FStar_Pervasives_Native_option__TLS13_OpenSSL_auth_context_s {
-  FStar_Pervasives_Native_option__TLS13_OpenSSL_auth_context_tags tag;
-  TLS13_OpenSSL_auth_context v;
-} FStar_Pervasives_Native_option__TLS13_OpenSSL_auth_context;
 #endif
 
 #include "tls13_openssl_stubs.h"
@@ -53,7 +46,7 @@ static uint8_t *duplicate_bytes(uint8_t *src, size_t len) {
   return dst;
 }
 
-FStar_Pervasives_Native_option__TLS13_OpenSSL_auth_context
+TLS13_OpenSSL_auth_context
 TLS13_OpenSSL_auth_context_new(
     uint8_t *server_name,
     size_t server_name_len,
@@ -62,8 +55,7 @@ TLS13_OpenSSL_auth_context_new(
     size_t validation_time_seconds) {
   TLS13_OpenSSL_auth_context ctx = calloc(1, sizeof *ctx);
   if (ctx == NULL) {
-    return (FStar_Pervasives_Native_option__TLS13_OpenSSL_auth_context){
-        .tag = FStar_Pervasives_Native_None};
+    abort();
   }
   ctx->server_name = duplicate_hostname_bytes(server_name, server_name_len);
   ctx->trust_anchors = duplicate_bytes(trust_anchors, trust_anchors_len);
@@ -71,11 +63,9 @@ TLS13_OpenSSL_auth_context_new(
   ctx->validation_time_seconds = validation_time_seconds;
   if (ctx->server_name == NULL || ctx->trust_anchors == NULL) {
     TLS13_OpenSSL_auth_context_free(ctx);
-    return (FStar_Pervasives_Native_option__TLS13_OpenSSL_auth_context){
-        .tag = FStar_Pervasives_Native_None};
+    abort();
   }
-  return (FStar_Pervasives_Native_option__TLS13_OpenSSL_auth_context){
-      .tag = FStar_Pervasives_Native_Some, .v = ctx};
+  return ctx;
 }
 
 bool TLS13_OpenSSL_validate_certificate_for_local_event(

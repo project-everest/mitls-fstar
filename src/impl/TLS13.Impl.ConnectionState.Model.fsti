@@ -100,6 +100,7 @@ val lemma_nonempty_cipher_suites_offer
       (requires suites <> [])
       (ensures CS.cipher_suite_offered suites suite)
 
+noextract
 let local_fail_state (st:CS.connection_state) (err:T.tls_error) : CS.connection_state =
   {
     CS.cs_model = CS.fail_model st.CS.cs_model err;
@@ -110,6 +111,7 @@ let local_fail_state (st:CS.connection_state) (err:T.tls_error) : CS.connection_
     CS.cs_event_log = st.CS.cs_event_log @ [CS.ConnLocalEvent (CS.LocalFail err)];
   }
 
+noextract
 let client_hello_of_start (start:CS.handshake_start) : M.client_hello =
   {
     M.random = start.CS.start_client_random;
@@ -119,6 +121,7 @@ let client_hello_of_start (start:CS.handshake_start) : M.client_hello =
     M.signature_schemes = start.CS.start_signature_schemes;
   }
 
+noextract
 let started_handshake_state
   (st:CS.connection_state)
   (start:CS.handshake_start)
@@ -243,6 +246,7 @@ val lemma_client_hello_len_helpers_from_start
                client_hello_cipher_suites_len_for ch == cipher_suites_len /\
                client_hello_signature_schemes_len_for ch == signature_schemes_len)
 
+noextract
 let derived_shared_secret_state
   (st:CS.connection_state)
   (shared:TLS13.Crypto.Spec.x25519_shared_secret)
@@ -272,6 +276,7 @@ let derived_shared_secret_state
       st.CS.cs_event_log @ [CS.ConnLocalEvent (CS.LocalDeriveSharedSecret shared)];
   }
 
+noextract
 let installed_traffic_keys_state
   (st:CS.connection_state)
   (install:CS.traffic_key_install)
@@ -295,6 +300,7 @@ let installed_traffic_keys_state
       st.CS.cs_event_log @ [CS.ConnLocalEvent (CS.LocalInstallTrafficKeys install)];
   }
 
+noextract
 let validated_certificate_state
   (st:CS.connection_state)
   (peer:X.peer_identity)
@@ -315,6 +321,7 @@ let validated_certificate_state
       st.CS.cs_event_log @ [CS.ConnLocalEvent (CS.LocalValidateCertificate peer)];
   }
 
+noextract
 let received_hello_retry_request_rejected_state
   (st:CS.connection_state)
   (raw_received:B.bytes)
@@ -333,6 +340,7 @@ let received_hello_retry_request_rejected_state
       }];
   }
 
+noextract
 let received_change_cipher_spec_state
   (st:CS.connection_state)
   (raw_received:B.bytes)
@@ -497,6 +505,7 @@ let received_certificate_verify_state
       }];
   }
 
+noextract
 let verified_certificate_signature_state
   (st:CS.connection_state)
   (cv:M.certificate_verify)
@@ -520,6 +529,7 @@ let verified_certificate_signature_state
       st.CS.cs_event_log @ [CS.ConnLocalEvent (CS.LocalVerifyCertificateSignature cv)];
   }
 
+noextract
 let received_server_finished_state
   (st:CS.connection_state)
   (fin:M.finished)
@@ -649,6 +659,7 @@ let can_send_client_finished
     })
     raw_sent
 
+noextract
 let received_alert_failure_state
   (st:CS.connection_state)
   (alert:T.alert_description)
@@ -668,6 +679,7 @@ let received_alert_failure_state
       }];
   }
 
+noextract
 let received_close_notify_state
   (st:CS.connection_state)
   (raw_received:B.bytes)
@@ -696,6 +708,7 @@ let received_close_notify_state
       }];
   }
 
+noextract
 let sent_close_notify_state
   (st:CS.connection_state)
   (raw_sent:B.bytes)
@@ -724,6 +737,7 @@ let sent_close_notify_state
       }];
   }
 
+noextract
 let received_application_data_state
   (st:CS.connection_state)
   (bytes:B.bytes)
@@ -757,6 +771,7 @@ let received_application_data_state
       }];
   }
 
+noextract
 let received_ignored_post_handshake_state
   (st:CS.connection_state)
   (body:B.bytes)
@@ -785,6 +800,7 @@ let received_ignored_post_handshake_state
       }];
   }
 
+noextract
 let received_key_update_state
   (st:CS.connection_state)
   (req:M.key_update_request)
@@ -834,12 +850,14 @@ let received_key_update_state
   | None ->
     st
 
+noextract
 let received_key_update_not_requested_state
   (st:CS.connection_state)
   (raw_received:B.bytes)
   : CS.connection_state =
   received_key_update_state st M.UpdateNotRequested raw_received
 
+noextract
 let sent_key_update_response_state
   (st:CS.connection_state)
   (raw_sent:B.bytes)
@@ -888,6 +906,7 @@ let sent_key_update_response_state
   | None ->
     st
 
+noextract
 let delivered_application_data_state
   (st:CS.connection_state)
   (bytes:B.bytes)
@@ -912,6 +931,7 @@ let delivered_application_data_state
       [CS.ConnLocalEvent (CS.LocalDeliverApplicationData bytes)];
   }
 
+noextract
 let sent_application_data_state
   (st:CS.connection_state)
   (bytes:B.bytes)

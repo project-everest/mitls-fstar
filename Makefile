@@ -456,62 +456,21 @@ for path in list(root.glob("*.c")) + list((root / "internal").glob("*.h")):
     # so a generated host file can no longer be relied upon.
 
 
-    if path.name == "TLS13_Transcript.c":
-        text = text.replace(
-            "Prims_list__uint8_t *TLS13_Transcript_empty = TLS13_Bytes_empty;",
-            "Prims_list__uint8_t *TLS13_Transcript_empty;",
-        )
-
-    if path.name == "TLS13_ConnectionLog.c":
-        text = text.replace(
-            "TLS13_ConnectionLog_raw_io_log\n"
-            "TLS13_ConnectionLog_empty_raw_io_log =\n"
-            "  { .raw_sent = TLS13_Bytes_empty, .raw_received = TLS13_Bytes_empty };",
-            "TLS13_ConnectionLog_raw_io_log\n"
-            "TLS13_ConnectionLog_empty_raw_io_log;",
-        )
-
-    if path.name == "TLS13_Spec_ConnectionState.c":
-        text = re.sub(
-            r'TLS13_Spec_ConnectionState_handshake_buffer_state\n'
-            r'TLS13_Spec_ConnectionState_empty_handshake_buffer_state =\n'
-            r'  \{\n'
-            r'    \.hb_client_hello_bytes = TLS13_Bytes_empty, \.hb_server_hello_bytes = TLS13_Bytes_empty,\n'
-            r'    \.hb_encrypted_server_handshake_bytes = TLS13_Bytes_empty,\n'
-            r'    \.hb_encrypted_server_handshake_parsed = 0,\n'
-            r'    \.hb_certificate_leaf_der = \{ \.tag = FStar_Pervasives_Native_None \},\n'
-            r'    \.hb_certificate_verify_input = \{ \.tag = FStar_Pervasives_Native_None \}\n'
-            r'  \};',
-            "TLS13_Spec_ConnectionState_handshake_buffer_state\n"
-            "TLS13_Spec_ConnectionState_empty_handshake_buffer_state;",
-            text,
-        )
+    # Spec/model globals that used to be demoted-to-declaration here (TLS13.Transcript,
+    # TLS13.ConnectionLog, TLS13.Spec.ConnectionState) are now erased at the source level
+    # (the spec modules are bundle-hidden and the dead model-transition functions that
+    # referenced them are [noextract]), so they no longer appear in the C and need no
+    # post-processing.
 
     path.write_text(text)
 
 krmlinit = root / "krmlinit.c"
 if krmlinit.exists():
     text = krmlinit.read_text()
-    marker = "  TLS13_Bytes_empty = FStar_Seq_Base_create__uint8_t(0, TLS13_Bytes_zero);\n"
     text = text.replace(
         "  TLS13_Keys_empty_hash = TLS13_Crypto_Spec_sha256(TLS13_Bytes_empty);\n",
         "  TLS13_Keys_empty_hash = TLS13_Bytes_zeros(32);\n",
     )
-    init_block = """  TLS13_Transcript_empty = TLS13_Bytes_empty;
-  TLS13_ConnectionLog_empty_raw_io_log =
-    ((TLS13_ConnectionLog_raw_io_log){ .raw_sent = TLS13_Bytes_empty, .raw_received = TLS13_Bytes_empty });
-  TLS13_Spec_ConnectionState_empty_handshake_buffer_state =
-    ((TLS13_Spec_ConnectionState_handshake_buffer_state){
-      .hb_client_hello_bytes = TLS13_Bytes_empty,
-      .hb_server_hello_bytes = TLS13_Bytes_empty,
-      .hb_encrypted_server_handshake_bytes = TLS13_Bytes_empty,
-      .hb_encrypted_server_handshake_parsed = 0,
-      .hb_certificate_leaf_der = { .tag = FStar_Pervasives_Native_None },
-      .hb_certificate_verify_input = { .tag = FStar_Pervasives_Native_None }
-    });
-"""
-    if init_block not in text:
-        text = text.replace(marker, marker + init_block)
     krmlinit.write_text(text)
 endef
 export POSTPROCESS_DRIVER_BUNDLE_PY
@@ -532,6 +491,7 @@ extract-driver-bundle: extract-driver-krml | $(DRIVER_BUNDLE_DIR)
 	  -library TLS13.Crypto -library TLS13.X509 -library TLS13.IO \
 	  -library TLS13.OpenSSL \
 	  -bundle 'TLS13.Crypto.Spec,TLS13.X509.Spec,TLS13.Record.Spec,TLS13.Handshake.Spec,TLS13.Wire.Spec,TLS13.Wire.Spec.*' \
+	  -bundle 'TLS13.Spec.ConnectionState,TLS13.ConnectionLog,TLS13.StateMachine,TLS13.Transcript' \
 	  -bundle 'TLS13.Wire.Generated.*' \
 	  -bundle 'LowParse.\*' \
 	  -bundle 'FStar.*,Pulse.*,PulseCore.*,Prims' \

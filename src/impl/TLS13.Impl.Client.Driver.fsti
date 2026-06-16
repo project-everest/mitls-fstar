@@ -82,29 +82,25 @@ fn new_client
                    TLS13.Impl.ConnectionState.Bounds.max_hostname_len /\
                  SZ.v trust_anchors_len <=
                    TLS13.Impl.ConnectionState.Bounds.max_trust_anchors_len)
-  returns result: option client_driver
+  returns result: client_driver
   ensures pts_to server_name 'server_name_bytes **
           pts_to trust_anchors 'trust_anchors_bytes **
-          (match result with
-           | Some d ->
-             client_driver_live
-               d
-               (CR.configured_initial_state
-                 (Ghost.reveal 'server_name_bytes)
-                 (Ghost.reveal 'trust_anchors_bytes)
-                 validation_time_seconds) **
-             pure (CT.client_state_correct
-               (CR.configured_initial_state
-                 (Ghost.reveal 'server_name_bytes)
-                 (Ghost.reveal 'trust_anchors_bytes)
-                 validation_time_seconds) /\
-                   CT.client_end_to_end_invariant
-                     (CR.configured_initial_state
-                       (Ghost.reveal 'server_name_bytes)
-                       (Ghost.reveal 'trust_anchors_bytes)
-                       validation_time_seconds))
-           | None ->
-             emp)
+          client_driver_live
+            result
+            (CR.configured_initial_state
+              (Ghost.reveal 'server_name_bytes)
+              (Ghost.reveal 'trust_anchors_bytes)
+              validation_time_seconds) **
+          pure (CT.client_state_correct
+            (CR.configured_initial_state
+              (Ghost.reveal 'server_name_bytes)
+              (Ghost.reveal 'trust_anchors_bytes)
+              validation_time_seconds) /\
+                CT.client_end_to_end_invariant
+                  (CR.configured_initial_state
+                    (Ghost.reveal 'server_name_bytes)
+                    (Ghost.reveal 'trust_anchors_bytes)
+                    validation_time_seconds))
 
 fn connect
   (d:client_driver)
