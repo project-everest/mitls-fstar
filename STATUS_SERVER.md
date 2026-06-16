@@ -131,14 +131,15 @@ returns historical derived-key agreement, the aggregate key-material input
 predicate, exact paired transport/protocol wire logs, and final
 `CS.supported_profile_client_server_key_material_agrees`.
 
-What is still missing is the concrete paired-resource theorem that establishes
-the remaining semantic state inputs for live runs: paired X25519 shares, paired
-transcript checkpoints, and precise current application record-state facts. The
-last category is intentionally still explicit: successful application readiness
-proves role-correct application record keys are installed, but it does not yet
-prove the record epoch/current application traffic material facts needed by the
-aggregate record-material theorem, especially in the presence of post-handshake
-KeyUpdate behavior.
+What is still missing is the concrete paired-resource theorem that keeps
+`paired_transport_histories` as an explicit environment precondition and
+establishes the remaining semantic state inputs for live runs: paired X25519
+shares, paired transcript checkpoints, and precise current application
+record-state facts. The last category is intentionally still explicit:
+successful application readiness proves role-correct application record keys are
+installed, but it does not yet prove the record epoch/current application
+traffic material facts needed by the aggregate record-material theorem,
+especially in the presence of post-handshake KeyUpdate behavior.
 
 On the Pulse implementation side, public server `accept` and client `connect`
 now both expose application-data readiness on success, exact sent-log equality,
@@ -152,8 +153,8 @@ resource. Public client/server `close` operations expose verified
 implementation-side gaps are:
 
 - package a concrete paired-run theorem over successful client/server resources
-  and raw IO logs that supplies the paired transport histories and semantic
-  state inputs required by
+  that takes `paired_transport_histories` as an environment precondition and
+  supplies the semantic state inputs required by
   `lemma_client_server_driver_key_material_agrees_from_public_success_components`;
 - continue splitting the remaining public driver orchestration into smaller
   `Driver.Handshake`/`Driver.App` modules with narrow `.fsti` boundaries;

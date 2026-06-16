@@ -1163,6 +1163,15 @@ turns those explicit components plus public no-read-ahead success facts into the
 aggregate supported-profile input predicate, full paired wire logs, and the main
 key-material agreement conclusion.
 
+The final paired-run theorem will deliberately keep
+`paired_transport_histories` as an environment precondition. We are not trying to
+verify a TCP scheduler or duplex IO harness as part of the state-machine
+correctness theorem. The remaining driver-side work is therefore to package
+successful client/server resources and prove the semantic state inputs
+(`paired_x25519_key_shares`, `paired_handshake_events`, and current application
+record-state material/epoch facts), then call the existing pairing bridge under
+the assumed paired transport histories.
+
 Current extraction status: the first focused server-core KaRaMeL prefix through
 `TLS13.Impl.Server.Network` now completes. The previous KaRaMeL
 `Failure("nth")` was isolated to the large `process_network_bytes` dispatcher;
