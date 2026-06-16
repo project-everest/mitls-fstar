@@ -25,6 +25,7 @@ module SZ = FStar.SizeT
 module T = TLS13.Types
 module U16 = FStar.UInt16
 module U8 = FStar.UInt8
+module Cast = FStar.Int.Cast
 module V = Pulse.Lib.Vec
 module WS = TLS13.Wire.Spec
 module WSR = TLS13.Wire.Spec.Reveal
@@ -32,6 +33,37 @@ module WSRD = TLS13.Wire.Spec.RevealDecode
 
 let byte (n:nat) : B.byte =
   U8.uint_to_t (n % 256)
+
+(* Machine-native low byte of a [SZ.t]: extract [n mod 256] entirely in machine
+   integers (sizet -> uint32 -> uint8), with no detour through the mathematical
+   [SZ.v n] view.  This keeps the extracted C free of [FStar_SizeT_v] /
+   [Prims_op_Division] / [Prims_op_Modulus] at the wire-length byte-split sites:
+   it lowers to a couple of [size_t]->[uint32_t]->[uint8_t] casts. *)
+inline_for_extraction
+let u8_of_sizet (n:SZ.t) : Tot (b:U8.t { U8.v b == SZ.v n % 256 }) =
+  let r = Cast.uint32_to_uint8 (SZ.sizet_to_uint32 n) in
+  // U8.v r == (SZ.v n % pow2 32) % pow2 8
+  assert_norm (pow2 8 == 256);
+  assert_norm (pow2 8 * pow2 24 == pow2 32);
+  FStar.Math.Lemmas.modulo_modulo_lemma (SZ.v n) (pow2 8) (pow2 24);
+  r
+
+(* [u8_of_sizet] of [SZ.div n d] equals the spec byte [byte (SZ.v n / d)]:
+   both have [U8.v == (SZ.v n / d) % 256], so they are equal by [v]-injectivity.
+   Stated as an SMTPat on [u8_of_sizet _] so the wire-length byte-split proofs
+   (which describe the stored value as [byte (SZ.v len / d)]) stay automatic once
+   the executable store writes [u8_of_sizet (SZ.div len dsz)] instead. *)
+let u8_of_sizet_v_byte (n:SZ.t)
+  : Lemma (u8_of_sizet n == byte (SZ.v n))
+          [SMTPat (u8_of_sizet n)]
+  = ()
+
+(* High byte of a u24 via two divisions by 256 (the [65536sz] literal exceeds
+   SizeT's portable 16-bit minimum range, so we cannot write it directly):
+   [(n / 256) / 256 == n / 65536]. *)
+let u8_of_sizet_div2_byte (n:SZ.t)
+  : Lemma (u8_of_sizet (SZ.div (SZ.div n 256sz) 256sz) == byte (SZ.v n / 65536))
+  = FStar.Math.Lemmas.division_multiplication_lemma (SZ.v n) 256 256
 
 let write_u16_bytes (n:nat) : GTot B.bytes =
   B.of_list [byte (n / 256); byte n]
@@ -849,9 +881,9 @@ fn write_u16 (out:array U8.t) (off:SZ.t) (n:SZ.t)
                   (Seq.slice out_bytes (SZ.v off) (SZ.v off + 2))
                   (write_u16_bytes (SZ.v n)))
 {
-  out.(off) <- U8.uint_to_t ((SZ.v n / 256) % 256);
+  out.(off) <- u8_of_sizet (SZ.div n 256sz);
   let off1 = SZ.add off 1sz;
-  out.(off1) <- U8.uint_to_t (SZ.v n % 256);
+  out.(off1) <- u8_of_sizet n;
   with out_bytes. assert (pts_to out out_bytes);
   assert (pure (B.length out_bytes == B.length 'old));
   assert (pure (Seq.length (write_u16_bytes (SZ.v n)) == 2));
@@ -876,11 +908,12 @@ fn write_u24 (out:array U8.t) (off:SZ.t) (n:SZ.t)
                   (Seq.slice out_bytes (SZ.v off) (SZ.v off + 3))
                   (write_u24_bytes (SZ.v n)))
 {
-  out.(off) <- U8.uint_to_t ((SZ.v n / 65536) % 256);
+  u8_of_sizet_div2_byte n;
+  out.(off) <- u8_of_sizet (SZ.div (SZ.div n 256sz) 256sz);
   let off1 = SZ.add off 1sz;
-  out.(off1) <- U8.uint_to_t ((SZ.v n / 256) % 256);
+  out.(off1) <- u8_of_sizet (SZ.div n 256sz);
   let off2 = SZ.add off 2sz;
-  out.(off2) <- U8.uint_to_t (SZ.v n % 256);
+  out.(off2) <- u8_of_sizet n;
   with out_bytes. assert (pts_to out out_bytes);
   assert (pure (B.length out_bytes == B.length 'old));
   assert (pure (Seq.length (write_u24_bytes (SZ.v n)) == 3));
@@ -1317,8 +1350,8 @@ fn serialize_application_data_header
   pts_to_len out;
   assert (pure (B.length header_prefix == 5));
   assert (pure (B.length header_prefix == length out));
-  out.(3sz) <- byte (SZ.v fragment_len / 256);
-  out.(4sz) <- byte (SZ.v fragment_len);
+  out.(3sz) <- u8_of_sizet (SZ.div fragment_len 256sz);
+  out.(4sz) <- u8_of_sizet fragment_len;
   with header_bytes. assert (pts_to out header_bytes);
   assert (pure (B.length header_bytes == 5));
   WSR.lemma_application_data_record_header_bytes (SZ.v fragment_len);
@@ -1377,8 +1410,8 @@ fn serialize_raw_application_data_record
   pts_to_len out;
   assert (pure (B.length header_prefix == SZ.v out_len));
   assert (pure (B.length header_prefix == length out));
-  out.(3sz) <- byte (SZ.v fragment_len / 256);
-  out.(4sz) <- byte (SZ.v fragment_len);
+  out.(3sz) <- u8_of_sizet (SZ.div fragment_len 256sz);
+  out.(4sz) <- u8_of_sizet fragment_len;
   with header_written. assert (pts_to out header_written);
   assert (pure (B.length header_written == SZ.v out_len));
   WSR.lemma_application_data_record_header_bytes (SZ.v fragment_len);
@@ -2185,15 +2218,15 @@ fn write_client_hello_sni_and_common_extensions
   (out).(47sz) <- 0uy;
   (out).(48sz) <- 0uy;
   let sni_data_len = hostname_len `SZ.add` 5sz;
-  (out).(49sz) <- byte (SZ.v sni_data_len / 256);
-  (out).(50sz) <- byte (SZ.v sni_data_len);
+  (out).(49sz) <- u8_of_sizet (SZ.div sni_data_len 256sz);
+  (out).(50sz) <- u8_of_sizet sni_data_len;
   let sni_list_len = hostname_len `SZ.add` 3sz;
-  (out).(51sz) <- byte (SZ.v sni_list_len / 256);
-  (out).(52sz) <- byte (SZ.v sni_list_len);
+  (out).(51sz) <- u8_of_sizet (SZ.div sni_list_len 256sz);
+  (out).(52sz) <- u8_of_sizet sni_list_len;
   pts_to_len out;
   (out).(53sz) <- 0uy;
-  (out).(54sz) <- byte (SZ.v hostname_len / 256);
-  (out).(55sz) <- byte (SZ.v hostname_len);
+  (out).(54sz) <- u8_of_sizet (SZ.div hostname_len 256sz);
+  (out).(55sz) <- u8_of_sizet hostname_len;
   copy_array_slice_to_array
     server_name_src
     255sz
@@ -2561,9 +2594,10 @@ fn serialize_client_hello_from_start
   V.to_array_pts_to start_key_share;
 
   (V.vec_to_array client_hello_bytes).(0sz) <- 1uy;
-  (V.vec_to_array client_hello_bytes).(1sz) <- byte (SZ.v body_len / 65536);
-  (V.vec_to_array client_hello_bytes).(2sz) <- byte (SZ.v body_len / 256);
-  (V.vec_to_array client_hello_bytes).(3sz) <- byte (SZ.v body_len);
+  u8_of_sizet_div2_byte body_len;
+  (V.vec_to_array client_hello_bytes).(1sz) <- u8_of_sizet (SZ.div (SZ.div body_len 256sz) 256sz);
+  (V.vec_to_array client_hello_bytes).(2sz) <- u8_of_sizet (SZ.div body_len 256sz);
+  (V.vec_to_array client_hello_bytes).(3sz) <- u8_of_sizet body_len;
   (V.vec_to_array client_hello_bytes).(4sz) <- 0x03uy;
   (V.vec_to_array client_hello_bytes).(5sz) <- 0x03uy;
   copy_array_slice_to_array
@@ -2581,8 +2615,8 @@ fn serialize_client_hello_from_start
   (V.vec_to_array client_hello_bytes).(42sz) <- 0x03uy;
   (V.vec_to_array client_hello_bytes).(43sz) <- 1uy;
   (V.vec_to_array client_hello_bytes).(44sz) <- 0uy;
-  (V.vec_to_array client_hello_bytes).(45sz) <- byte (SZ.v extensions_len / 256);
-  (V.vec_to_array client_hello_bytes).(46sz) <- byte (SZ.v extensions_len);
+  (V.vec_to_array client_hello_bytes).(45sz) <- u8_of_sizet (SZ.div extensions_len 256sz);
+  (V.vec_to_array client_hello_bytes).(46sz) <- u8_of_sizet extensions_len;
   with client_hello_prefix. assert (pts_to (V.vec_to_array client_hello_bytes) client_hello_prefix);
   pts_to_len (V.vec_to_array client_hello_bytes);
   assert (pure (B.length client_hello_prefix == 512));
@@ -2664,7 +2698,7 @@ fn serialize_client_hello_from_start
     assert (pure (Seq.index network_after_record_version 0 == 22uy));
     assert (pure (Seq.index network_after_record_version 1 == 0x03uy));
     assert (pure (Seq.index network_after_record_version 2 == 0x03uy));
-    network_out.(3sz) <- byte (SZ.v handshake_len / 256);
+    network_out.(3sz) <- u8_of_sizet (SZ.div handshake_len 256sz);
     with network_after_len_hi. assert (pts_to network_out network_after_len_hi);
     Seq.lemma_index_upd1 network_after_record_version 3 (byte (SZ.v handshake_len / 256));
     Seq.lemma_index_upd2 network_after_record_version 3 (byte (SZ.v handshake_len / 256)) 0;
@@ -2674,7 +2708,7 @@ fn serialize_client_hello_from_start
     assert (pure (Seq.index network_after_len_hi 1 == 0x03uy));
     assert (pure (Seq.index network_after_len_hi 2 == 0x03uy));
     assert (pure (Seq.index network_after_len_hi 3 == byte (SZ.v handshake_len / 256)));
-    network_out.(4sz) <- byte (SZ.v handshake_len);
+    network_out.(4sz) <- u8_of_sizet handshake_len;
     with network_header_bytes. assert (pts_to network_out network_header_bytes);
     Seq.lemma_index_upd1 network_after_len_hi 4 (byte (SZ.v handshake_len));
     Seq.lemma_index_upd2 network_after_len_hi 4 (byte (SZ.v handshake_len)) 0;
@@ -2953,7 +2987,7 @@ fn serialize_client_hello_from_start
     assert (pure (Seq.index network_after_record_version 0 == 22uy));
     assert (pure (Seq.index network_after_record_version 1 == 0x03uy));
     assert (pure (Seq.index network_after_record_version 2 == 0x03uy));
-    network_out.(3sz) <- byte (SZ.v handshake_len / 256);
+    network_out.(3sz) <- u8_of_sizet (SZ.div handshake_len 256sz);
     with network_after_len_hi. assert (pts_to network_out network_after_len_hi);
     Seq.lemma_index_upd1 network_after_record_version 3 (byte (SZ.v handshake_len / 256));
     Seq.lemma_index_upd2 network_after_record_version 3 (byte (SZ.v handshake_len / 256)) 0;
@@ -2963,7 +2997,7 @@ fn serialize_client_hello_from_start
     assert (pure (Seq.index network_after_len_hi 1 == 0x03uy));
     assert (pure (Seq.index network_after_len_hi 2 == 0x03uy));
     assert (pure (Seq.index network_after_len_hi 3 == byte (SZ.v handshake_len / 256)));
-    network_out.(4sz) <- byte (SZ.v handshake_len);
+    network_out.(4sz) <- u8_of_sizet handshake_len;
     with network_header_bytes. assert (pts_to network_out network_header_bytes);
     Seq.lemma_index_upd1 network_after_len_hi 4 (byte (SZ.v handshake_len));
     Seq.lemma_index_upd2 network_after_len_hi 4 (byte (SZ.v handshake_len)) 0;

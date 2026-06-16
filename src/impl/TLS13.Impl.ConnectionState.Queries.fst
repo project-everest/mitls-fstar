@@ -1452,8 +1452,6 @@ fn can_receive_certificate
 
   with chain_bytes offsets lens. assert (pure True);
   let cert_count = lcert.IM.certificate_msg_cert_count;
-  let cert_count_nat = SZ.v cert_count;
-  let chain_bytes_len_nat = SZ.v lcert.IM.certificate_msg_chain_bytes_len;
   let has_certificate = SZ.gt cert_count 0sz;
 
   assert (pure (SZ.fits max_transcript_len));
@@ -1466,7 +1464,7 @@ fn can_receive_certificate
 
     if has_certificate {
       assert (pure has_certificate);
-      assert (pure (cert_count_nat > 0));
+      assert (pure (SZ.v cert_count > 0));
       assert (pure ((Ghost.reveal cert).M.chain <> []));
       let control_ok = tag_ok && stage_ok;
       let ok =
