@@ -293,8 +293,6 @@ BUNDLE_INTERNAL_MODULES = \
 # TLS13.Crypto, TLS13.X509, TLS13.MachineTypes, TLS13.IO
 
 FULL_KRML_FILES = $(filter-out $(OUTPUT_DIR)/prims.krml $(OUTPUT_DIR)/Prims.krml,$(ALL_KRML_FILES))
-KRML_STUB_DIR = $(OUTPUT_DIR)/krml_stubs
-KRML_STUB_CACHE = $(OUTPUT_DIR)/krml_stub_cache
 
 # Extract the full dependency closure so calls through .fsti interfaces (notably
 # TLS13.Impl.Parser) resolve to their verified implementations.
@@ -318,7 +316,7 @@ DRIVER_KRML_FILES = $(filter-out \
 # Extract each dependency-discovered module to its own .krml.  Use the checked
 # source prerequisite from .depend instead of deriving module names from the
 # target; generated modules legitimately contain underscores in their names.
-$(filter-out $(OUTPUT_DIR)/FStar_SizeT.krml $(OUTPUT_DIR)/TLS13_Impl_Messages.krml,$(ALL_KRML_FILES)): %.krml: | $(OUTPUT_DIR)
+$(filter-out $(OUTPUT_DIR)/FStar_SizeT.krml,$(ALL_KRML_FILES)): %.krml: | $(OUTPUT_DIR)
 	@checked="$(firstword $(filter %.checked,$^))"; \
 	  src_full="$${checked%.checked}"; \
 	  src="$$(basename "$$src_full")"; \
@@ -395,17 +393,6 @@ $(filter-out $(OUTPUT_DIR)/FStar_SizeT.krml $(OUTPUT_DIR)/TLS13_Impl_Messages.kr
 
 $(filter-out $(OUTPUT_DIR)/FStar_SizeT.krml,$(ALL_KRML_FILES)): | $(OUTPUT_DIR)/FStar_SizeT.krml
 
-$(KRML_STUB_DIR) $(KRML_STUB_CACHE):
-	mkdir -p $@
-
-$(KRML_STUB_DIR)/TLS13.Impl.Messages.fst: src/impl/TLS13.Impl.Messages.fst | $(KRML_STUB_DIR)
-	@awk ' \
-	  /^[[:space:]]*noextract[[:space:]]*$$/ { pending = 1; next } \
-	  pending && /^[[:space:]]*let max_(server_name_len|alpn_len|cipher_suites|signature_schemes|certificate_chain_bytes|certificate_chain_entries|signature_len|record_fragment_len)[[:space:]]*:/ { pending = 0; print; next } \
-	  pending { print "noextract"; pending = 0 } \
-	  { print } \
-	  END { if (pending) print "noextract" }' $< > $@
-
 $(OUTPUT_DIR)/FStar_SizeT.krml: $(FSTAR_ULIB)/FStar.SizeT.fst | $(OUTPUT_DIR)
 	@# Extract the *stock* standard-library FStar.SizeT to .krml, reusing the F*
 	@# install's already-cached FStar.SizeT.checked (--already_cached 'Prims,FStar'
@@ -417,19 +404,6 @@ $(OUTPUT_DIR)/FStar_SizeT.krml: $(FSTAR_ULIB)/FStar.SizeT.fst | $(OUTPUT_DIR)
 	$(FSTAR_EXE) --odir $(OUTPUT_DIR) --already_cached 'Prims,FStar' \
 	  --codegen krml --extract_module FStar.SizeT \
 	  $(FSTAR_ULIB)/FStar.SizeT.fst --krmloutput $@
-
-$(OUTPUT_DIR)/TLS13_Impl_Messages.krml: \
-  $(KRML_STUB_DIR)/TLS13.Impl.Messages.fst | $(OUTPUT_DIR) $(KRML_STUB_CACHE)
-	-cp $(CACHE_DIR)/*.checked $(KRML_STUB_CACHE)/ 2>/dev/null || true
-	$(FSTAR_EXE) --cache_checked_modules --cache_dir $(KRML_STUB_CACHE) --odir $(OUTPUT_DIR) \
-	  --warn_error -321 --report_assumes warn \
-	  --already_cached 'Prims,FStar,Pulse,PulseCore,C,Spec.Loops,LowParse -TLS13 +TLS13.Wire.Generated' \
-	  --ext optimize_let_vc --ext fly_deps $(INCLUDES) $<
-	$(FSTAR_EXE) --cache_checked_modules --cache_dir $(KRML_STUB_CACHE) --odir $(OUTPUT_DIR) \
-	  --warn_error -321 --report_assumes warn \
-	  --already_cached 'Prims,FStar,Pulse,PulseCore,C,Spec.Loops,LowParse -TLS13 +TLS13.Wire.Generated' \
-	  --ext optimize_let_vc --ext fly_deps $(INCLUDES) \
-	  --codegen krml --extract_module TLS13.Impl.Messages $< --krmloutput $@
 
 extract-krml-bundle: $(BUNDLE_KRML_FILES)
 
