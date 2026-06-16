@@ -2297,7 +2297,9 @@ fn rec read_process_network_until_ready
            received'
            sent'
            app_out_bytes **
-          pure (result.server_driver_network_loop_exhausted == false ==>
+          pure (st1.CS.cs_model.CS.model_config ==
+                 'st0.CS.cs_model.CS.model_config /\
+            (result.server_driver_network_loop_exhausted == false ==>
             result.server_driver_network_loop_last.ST.response.ST.status <>
               ST.NeedMoreInput /\
             server_driver_network_process_correct
@@ -2312,7 +2314,7 @@ fn rec read_process_network_until_ready
               result.server_driver_network_loop_last
               (Ghost.reveal 'sent)
               sent'
-              app_out_bytes)
+              app_out_bytes))
   decreases (SZ.v fuel)
 {
   let no_op_resp = {
@@ -2326,6 +2328,8 @@ fn rec read_process_network_until_ready
   };
   if (fuel = 0sz) {
     expose_server_driver_connected_app_out d;
+    assert (pure ('st0.CS.cs_model.CS.model_config ==
+      'st0.CS.cs_model.CS.model_config));
     {
       server_driver_network_loop_last = no_op_buffer_resp;
       server_driver_network_loop_exhausted = true;
@@ -2379,7 +2383,9 @@ fn rec read_process_network_until_ready
           received2
           sent2
           result_app_out **
-        pure (result.server_driver_network_loop_exhausted == false ==>
+        pure (st2.CS.cs_model.CS.model_config ==
+          st1.CS.cs_model.CS.model_config /\
+        (result.server_driver_network_loop_exhausted == false ==>
           result.server_driver_network_loop_last.ST.response.ST.status <>
             ST.NeedMoreInput /\
           server_driver_network_process_correct
@@ -2394,7 +2400,9 @@ fn rec read_process_network_until_ready
                 result.server_driver_network_loop_last
                 sent'
                 sent2
-                result_app_out));
+                result_app_out)));
+      assert (pure (st2.CS.cs_model.CS.model_config ==
+        'st0.CS.cs_model.CS.model_config));
       assert (pure (result.server_driver_network_loop_exhausted == false ==>
         server_driver_network_process_correct
             'st0
@@ -2418,6 +2426,14 @@ fn rec read_process_network_until_ready
         step
         (Ghost.reveal 'sent)
         sent'));
+      lemma_server_driver_network_process_correct_preserves_config
+        'st0
+        st1
+        step
+        (Ghost.reveal 'sent)
+        sent';
+      assert (pure (st1.CS.cs_model.CS.model_config ==
+        'st0.CS.cs_model.CS.model_config));
       assert (pure (server_driver_network_process_correct_for_app_out
         'st0
         st1

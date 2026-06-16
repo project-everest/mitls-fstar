@@ -672,6 +672,8 @@ fn send
             (Ghost.reveal 'payload_bytes)
             (Ghost.reveal 'sent)
             sent' /\
+            st1.CS.cs_model.CS.model_config ==
+              'st0.CS.cs_model.CS.model_config /\
             server_driver_sent_log_exact 'st0 (Ghost.reveal 'sent) /\
             server_driver_received_log_accounted 'st0 (Ghost.reveal 'received) /\
             server_driver_sent_log_exact st1 sent' /\
@@ -718,6 +720,14 @@ fn send
       'credential_identity
       'received
       sent');
+  lemma_server_driver_local_write_correct_preserves_config
+    'st0
+    st1
+    resp
+    ST.LocalSendApplicationData
+    (Ghost.reveal 'payload_bytes)
+    (Ghost.reveal 'sent)
+    sent';
   unfold (server_driver_connected
     d
     st1
@@ -779,6 +789,8 @@ fn receive
           pts_to out out_bytes **
           pure (B.length out_bytes == SZ.v out_len /\
                 SZ.v result.server_receive_len <= SZ.v out_len /\
+                st1.CS.cs_model.CS.model_config ==
+                  'st0.CS.cs_model.CS.model_config /\
                 server_driver_sent_log_exact 'st0 (Ghost.reveal 'sent) /\
                 server_driver_received_log_accounted 'st0 (Ghost.reveal 'received) /\
                 server_driver_sent_log_exact st1 sent' /\
@@ -836,7 +848,9 @@ fn receive
       received'
       sent'
       loop_app_out **
-      pure (loop.server_driver_network_loop_exhausted == false ==>
+      pure (st1.CS.cs_model.CS.model_config ==
+        'st0.CS.cs_model.CS.model_config /\
+      (loop.server_driver_network_loop_exhausted == false ==>
         loop.server_driver_network_loop_last.ST.response.ST.status <>
           ST.NeedMoreInput /\
         server_driver_network_process_correct
@@ -851,7 +865,7 @@ fn receive
             loop.server_driver_network_loop_last
             (Ghost.reveal 'sent)
             sent'
-            loop_app_out));
+            loop_app_out)));
   unfold (server_driver_connected_with_app_out
     d
     st1
@@ -1154,6 +1168,8 @@ fn close
   ensures exists* st1.
           server_driver_closed d st1 'certificate_chain 'credential_identity **
           pure (status == ServerWorkflowClosed /\
+                st1.CS.cs_model.CS.model_config ==
+                  'st0.CS.cs_model.CS.model_config /\
                 server_driver_sent_log_exact 'st0 (Ghost.reveal 'sent) /\
                 server_driver_received_log_accounted 'st0 (Ghost.reveal 'received) /\
                 server_driver_close_correct
@@ -1203,6 +1219,14 @@ fn close
       'credential_identity
       'received
       sent');
+  lemma_server_driver_local_write_correct_preserves_config
+    'st0
+    st1
+    resp
+    ST.LocalSendCloseNotify
+    B.empty
+    (Ghost.reveal 'sent)
+    sent';
   assert (pure (server_driver_close_correct
     'st0
     st1
@@ -1210,6 +1234,8 @@ fn close
   close_transport_once d;
   assert (server_driver_closed d st1 'certificate_chain 'credential_identity);
   assert (pure (ServerWorkflowClosed == ServerWorkflowClosed /\
+    st1.CS.cs_model.CS.model_config ==
+      'st0.CS.cs_model.CS.model_config /\
     server_driver_sent_log_exact 'st0 (Ghost.reveal 'sent) /\
     server_driver_received_log_accounted 'st0 (Ghost.reveal 'received) /\
     server_driver_close_correct
@@ -1219,6 +1245,8 @@ fn close
   assert (exists* st_after.
     server_driver_closed d st_after 'certificate_chain 'credential_identity **
     pure (ServerWorkflowClosed == ServerWorkflowClosed /\
+          st_after.CS.cs_model.CS.model_config ==
+            'st0.CS.cs_model.CS.model_config /\
           server_driver_sent_log_exact 'st0 (Ghost.reveal 'sent) /\
           server_driver_received_log_accounted 'st0 (Ghost.reveal 'received) /\
           server_driver_close_correct

@@ -401,6 +401,8 @@ fn send
             (Ghost.reveal 'payload_bytes)
             (Ghost.reveal 'sent)
             sent' /\
+            st1.CS.cs_model.CS.model_config ==
+              'st0.CS.cs_model.CS.model_config /\
             server_driver_sent_log_exact 'st0 (Ghost.reveal 'sent) /\
             server_driver_received_log_accounted 'st0 (Ghost.reveal 'received) /\
             server_driver_sent_log_exact st1 sent' /\
@@ -433,6 +435,8 @@ fn receive
           pts_to out out_bytes **
           pure (B.length out_bytes == SZ.v out_len /\
                 SZ.v result.server_receive_len <= SZ.v out_len /\
+                st1.CS.cs_model.CS.model_config ==
+                  'st0.CS.cs_model.CS.model_config /\
                 server_driver_sent_log_exact 'st0 (Ghost.reveal 'sent) /\
                 server_driver_received_log_accounted 'st0 (Ghost.reveal 'received) /\
                 server_driver_sent_log_exact st1 sent' /\
@@ -464,6 +468,8 @@ fn close
   ensures exists* st1.
             server_driver_closed d st1 'certificate_chain 'credential_identity **
             pure (status == ServerWorkflowClosed /\
+                 st1.CS.cs_model.CS.model_config ==
+                   'st0.CS.cs_model.CS.model_config /\
                  server_driver_sent_log_exact 'st0 (Ghost.reveal 'sent) /\
                  server_driver_received_log_accounted 'st0 (Ghost.reveal 'received) /\
                  server_driver_close_correct

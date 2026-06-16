@@ -223,7 +223,9 @@ fn read_process_network_until_ready
            received'
            sent'
            app_out_bytes **
-          pure (result.server_driver_network_loop_exhausted == false ==>
+          pure (st1.CS.cs_model.CS.model_config ==
+                 'st0.CS.cs_model.CS.model_config /\
+            (result.server_driver_network_loop_exhausted == false ==>
             result.server_driver_network_loop_last.ST.response.ST.status <>
               ST.NeedMoreInput /\
             server_driver_network_process_correct
@@ -238,7 +240,7 @@ fn read_process_network_until_ready
               result.server_driver_network_loop_last
               (Ghost.reveal 'sent)
               sent'
-              app_out_bytes)
+              app_out_bytes))
 
 fn read_until_client_hello_received
   (d:DS.server_driver)
