@@ -31,6 +31,20 @@ let lemma_sizet_lte_plain (x:SZ.t) (y:SZ.t)
 =
   ()
 
+let lemma_seal_some_of_keys
+  (s:R.direction_state)
+  (aad:B.bytes)
+  (pt:M.plaintext)
+  : Lemma
+      (requires (match s.R.key, s.R.static_iv with
+                 | Some _, Some _ -> True
+                 | _, _ -> False))
+      (ensures Some? (R.seal s aad pt))
+=
+  match s.R.key, s.R.static_iv with
+  | Some _, Some _ -> ()
+  | _, _ -> ()
+
 let lemma_bounded_u16_sizet_of_sizet
   (n:nat)
   (z:SZ.t)

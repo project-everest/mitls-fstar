@@ -19,8 +19,10 @@ module TLS13.Wire.Spec.Reveal
 *)
 
 module B = TLS13.Bytes
+module CS = TLS13.Spec.ConnectionState
 module M = TLS13.Messages
 module T = TLS13.Types
+module H = TLS13.Handshake.Spec
 module Seq = FStar.Seq
 module U8 = FStar.UInt8
 module U16 = FStar.UInt16
@@ -60,6 +62,326 @@ val lemma_parse_plaintext_fragment_len (input:B.bytes)
   : Lemma (ensures (match WS.parse_plaintext input with
                     | Some pt -> B.length pt.M.fragment + 1 == B.length input
                     | None -> True))
+
+val u8:
+  n:nat ->
+  GTot B.bytes
+
+val u16:
+  n:nat ->
+  GTot B.bytes
+
+val u24:
+  n:nat ->
+  GTot B.bytes
+
+val content_type_byte:
+  ct:T.content_type ->
+  GTot U8.t
+
+val lemma_content_type_byte_value:
+  ct:T.content_type ->
+  Lemma (match ct with
+         | T.ChangeCipherSpec -> U8.v (content_type_byte ct) == 0x14
+         | T.Alert -> U8.v (content_type_byte ct) == 0x15
+         | T.Handshake -> U8.v (content_type_byte ct) == 0x16
+         | T.ApplicationData -> U8.v (content_type_byte ct) == 0x17)
+
+val serialize_record_header:
+  content_type:T.content_type ->
+  fragment_len:nat ->
+  GTot B.bytes
+
+val lemma_serialize_record_reveal:
+  content_type:T.content_type ->
+  fragment:B.bytes ->
+  Lemma (Seq.equal
+    (WS.serialize_record content_type fragment)
+    (B.append (serialize_record_header content_type (B.length fragment)) fragment))
+
+val lemma_serialize_application_data_header_reveal:
+  fragment_len:nat ->
+  Lemma (Seq.equal
+    (serialize_record_header T.ApplicationData fragment_len)
+    (CS.application_data_record_header fragment_len))
+
+val lemma_serialize_handshake_record_header_reveal:
+  fragment_len:nat ->
+  Lemma (Seq.equal
+    (serialize_record_header T.Handshake fragment_len)
+    (B.of_list [
+      0x16uy; 0x03uy; 0x03uy;
+      U8.uint_to_t ((fragment_len / 256) % 256);
+      U8.uint_to_t (fragment_len % 256)
+    ]))
+
+val lemma_application_data_record_aad:
+  fragment:B.bytes{B.length fragment <= 16640} ->
+  Lemma (Seq.equal
+    (CS.record_header_aad (WS.serialize_record T.ApplicationData fragment))
+    (CS.application_data_record_header (B.length fragment)))
+
+val lemma_serialize_application_data_record_reveal:
+  fragment:B.bytes ->
+  Lemma (Seq.equal
+    (WS.serialize_record T.ApplicationData fragment)
+    (B.append (CS.application_data_record_header (B.length fragment)) fragment))
+
+val lemma_application_data_record_header:
+  fragment_len:nat{fragment_len <= 16640} ->
+  Lemma (Seq.equal
+    (CS.application_data_record_header fragment_len)
+    (serialize_record_header T.ApplicationData fragment_len) /\
+    WS.parse_record_header (CS.application_data_record_header fragment_len) ==
+      Some (T.ApplicationData, fragment_len))
+
+val application_data_record_header_bytes:
+  fragment_len:nat ->
+  GTot (b:B.bytes{B.length b == 5})
+
+val lemma_application_data_record_header_bytes:
+  fragment_len:nat{fragment_len <= 16640} ->
+  Lemma (Seq.equal
+    (CS.application_data_record_header fragment_len)
+    (application_data_record_header_bytes fragment_len) /\
+    WS.parse_record_header (application_data_record_header_bytes fragment_len) ==
+      Some (T.ApplicationData, fragment_len))
+
+val lemma_application_data_record_header_bytes_reveal:
+  fragment_len:nat ->
+  Lemma (Seq.equal
+    (application_data_record_header_bytes fragment_len)
+    (B.of_list [
+      0x17uy;
+      0x03uy;
+      0x03uy;
+      U8.uint_to_t ((fragment_len / 256) % 256);
+      U8.uint_to_t (fragment_len % 256)
+    ]))
+
+val lemma_serialize_plaintext_reveal:
+  pt:M.plaintext ->
+  Lemma (Seq.equal
+    (WS.serialize_plaintext pt)
+    (B.append pt.M.fragment (B.singleton (content_type_byte pt.M.content_type))))
+
+val lemma_plaintext_roundtrip_reveal:
+  ct:T.content_type ->
+  fragment:B.bytes ->
+  Lemma (Seq.equal
+           (WS.serialize_plaintext { M.content_type = ct; M.fragment = fragment })
+           (B.append fragment (B.singleton (content_type_byte ct))) /\
+         WS.parse_plaintext (B.append fragment (B.singleton (content_type_byte ct))) ==
+           Some { M.content_type = ct; M.fragment = fragment })
+
+val lemma_serialize_finished_reveal:
+  fin:M.finished ->
+  Lemma (Seq.equal
+    (WS.serialize_handshake (M.Finished fin))
+    (B.append (B.of_list [20uy; 0uy; 0uy; 32uy]) fin.M.verify_data))
+
+(* Parse-serialise round trip for Finished: serialising a Finished message and
+   then parsing it gives back the original message.  Combined with
+   lemma_serialize_finished_reveal this lets callers prove the concrete byte
+   array they built is both the right serialisation AND parses correctly. *)
+val lemma_parse_finished_handshake:
+  fin:M.finished ->
+  Lemma (WS.parse_tls_message T.Handshake (WS.serialize_handshake (M.Finished fin)) ==
+         Some (M.TlsHandshake (M.Finished fin)))
+
+val lemma_serialize_server_certificate_verify_input_reveal:
+  transcript_hash:B.bytes{B.length transcript_hash == 32} ->
+  Lemma (Seq.equal
+    (WS.serialize_server_certificate_verify_input transcript_hash)
+    (TLS13.Handshake.Spec.certificate_verify_input transcript_hash))
+
+val certificate_verify_context_with_zero:
+  b:B.bytes{B.length b == 34}
+
+val lemma_certificate_verify_context_with_zero_literal:
+  unit ->
+  Lemma (Seq.equal
+    certificate_verify_context_with_zero
+    (B.of_list [
+      0x54uy; 0x4cuy; 0x53uy; 0x20uy; 0x31uy; 0x2euy; 0x33uy; 0x2cuy;
+      0x20uy; 0x73uy; 0x65uy; 0x72uy; 0x76uy; 0x65uy; 0x72uy; 0x20uy;
+      0x43uy; 0x65uy; 0x72uy; 0x74uy; 0x69uy; 0x66uy; 0x69uy; 0x63uy;
+      0x61uy; 0x74uy; 0x65uy; 0x56uy; 0x65uy; 0x72uy; 0x69uy; 0x66uy;
+      0x79uy; 0uy
+    ]))
+
+val certificate_verify_context_byte:
+  i:nat{i < 34} ->
+  GTot U8.t
+
+val lemma_certificate_verify_context_byte:
+  i:nat{i < 34} ->
+  Lemma (Seq.index certificate_verify_context_with_zero i ==
+         certificate_verify_context_byte i)
+
+/// Exposes the concrete byte at each index as a match-on-nat expression.
+/// Callers use this with a concrete i to let Z3 evaluate the nat-match via
+/// simple equality chains (no recursive List.Tot.index fuel needed).
+val lemma_certificate_verify_context_index_eq:
+  i:nat{i < 34} ->
+  Lemma (Seq.index certificate_verify_context_with_zero i ==
+    (match i with
+     | 0  -> 0x54uy | 1  -> 0x4cuy | 2  -> 0x53uy | 3  -> 0x20uy
+     | 4  -> 0x31uy | 5  -> 0x2euy | 6  -> 0x33uy | 7  -> 0x2cuy
+     | 8  -> 0x20uy | 9  -> 0x73uy | 10 -> 0x65uy | 11 -> 0x72uy
+     | 12 -> 0x76uy | 13 -> 0x65uy | 14 -> 0x72uy | 15 -> 0x20uy
+     | 16 -> 0x43uy | 17 -> 0x65uy | 18 -> 0x72uy | 19 -> 0x74uy
+     | 20 -> 0x69uy | 21 -> 0x66uy | 22 -> 0x69uy | 23 -> 0x63uy
+     | 24 -> 0x61uy | 25 -> 0x74uy | 26 -> 0x65uy | 27 -> 0x56uy
+     | 28 -> 0x65uy | 29 -> 0x72uy | 30 -> 0x69uy | 31 -> 0x66uy
+     | 32 -> 0x79uy | _  -> 0uy))
+
+val lemma_serialize_server_certificate_verify_input_bytes:
+  transcript_hash:B.bytes{B.length transcript_hash == 32} ->
+  Lemma (Seq.equal
+    (WS.serialize_server_certificate_verify_input transcript_hash)
+    (B.append
+      (B.append (Seq.create 64 0x20uy) certificate_verify_context_with_zero)
+      transcript_hash))
+
+val lemma_serialize_client_hello_reveal:
+  hello:M.client_hello ->
+  Lemma (Seq.equal
+    (WS.serialize_handshake (M.ClientHello hello))
+    (B.append
+      (B.of_list [1uy])
+      (B.append
+        (u24 (B.length (WS.serialize_client_hello hello)))
+        (WS.serialize_client_hello hello))))
+
+let client_hello_byte (n:nat) : B.byte =
+  U8.uint_to_t (n % 256)
+
+let client_hello_common_extensions_bytes (key_share:B.bytes) : B.bytes =
+  B.append
+    (B.of_list [0uy; 0x0auy; 0uy; 4uy; 0uy; 2uy; 0uy; 0x1duy])
+    (B.append
+      (B.of_list [0uy; 0x0duy; 0uy; 4uy; 0uy; 2uy; 0x08uy; 0x04uy])
+      (B.append
+        (B.append
+          (B.of_list [0uy; 0x33uy; 0uy; 38uy; 0uy; 36uy; 0uy; 0x1duy; 0uy; 32uy])
+          key_share)
+        (B.of_list [0uy; 0x2buy; 0uy; 3uy; 2uy; 0x03uy; 0x04uy])))
+
+let client_hello_server_name_extension_bytes (hostname:B.bytes) : B.bytes =
+  if B.length hostname = 0 then B.empty
+  else
+    B.append
+      (B.of_list [
+        0uy; 0uy;
+        client_hello_byte ((5 + B.length hostname) / 256);
+        client_hello_byte (5 + B.length hostname);
+        client_hello_byte ((3 + B.length hostname) / 256);
+        client_hello_byte (3 + B.length hostname);
+        0uy;
+        client_hello_byte (B.length hostname / 256);
+        client_hello_byte (B.length hostname)])
+      hostname
+
+let client_hello_extensions_bytes (hostname:B.bytes) (key_share:B.bytes) : B.bytes =
+  B.append
+    (client_hello_server_name_extension_bytes hostname)
+    (client_hello_common_extensions_bytes key_share)
+
+let client_hello_prefix_bytes (body_len:nat) (extensions_len:nat) (random:B.bytes) : B.bytes =
+  B.append
+    (B.of_list [
+      1uy;
+      client_hello_byte (body_len / 65536);
+      client_hello_byte (body_len / 256);
+      client_hello_byte body_len;
+      0x03uy; 0x03uy])
+    (B.append
+      random
+      (B.of_list [
+        0uy; 0uy; 2uy; 0x13uy; 0x03uy; 1uy; 0uy;
+        client_hello_byte (extensions_len / 256);
+        client_hello_byte extensions_len]))
+
+let client_hello_body_bytes
+  (random:B.bytes)
+  (hostname:B.bytes)
+  (key_share:B.bytes)
+  : B.bytes =
+  let extensions = client_hello_extensions_bytes hostname key_share in
+  B.append
+    (B.of_list [0x03uy; 0x03uy])
+    (B.append
+      random
+      (B.append
+        (B.of_list [0uy])
+        (B.append
+          (B.of_list [0uy; 2uy; 0x13uy; 0x03uy; 1uy])
+          (B.append
+            (B.of_list [0uy])
+            (B.append
+              (B.of_list [
+                client_hello_byte (B.length extensions / 256);
+                client_hello_byte (B.length extensions)])
+              extensions)))))
+
+let client_hello_handshake_bytes
+  (random:B.bytes)
+  (hostname:B.bytes)
+  (key_share:B.bytes)
+  : B.bytes =
+  let body = client_hello_body_bytes random hostname key_share in
+  B.append
+    (B.of_list [1uy])
+    (B.append
+      (B.of_list [
+        client_hello_byte (B.length body / 65536);
+        client_hello_byte (B.length body / 256);
+        client_hello_byte (B.length body)])
+      body)
+
+val lemma_client_hello_common_extensions_len:
+  key_share:B.bytes{B.length key_share == 32} ->
+  Lemma (B.length (client_hello_common_extensions_bytes key_share) == 65)
+
+val lemma_client_hello_server_name_extension_len:
+  hostname:B.bytes{B.length hostname <= 255} ->
+  Lemma (B.length (client_hello_server_name_extension_bytes hostname) ==
+    (if B.length hostname == 0 then 0 else 9 + B.length hostname))
+
+val lemma_client_hello_extensions_len:
+  hostname:B.bytes{B.length hostname <= 255} ->
+  key_share:B.bytes{B.length key_share == 32} ->
+  Lemma (B.length (client_hello_extensions_bytes hostname key_share) ==
+    65 + (if B.length hostname == 0 then 0 else 9 + B.length hostname))
+
+val lemma_client_hello_handshake_bytes_reveal:
+  hello:M.client_hello{B.length hello.M.random == 32 /\
+                       B.length hello.M.key_share == 32 /\
+                       (match hello.M.server_name with
+                        | Some h -> B.length h <= 255
+                        | None -> True)} ->
+  Lemma (Seq.equal
+    (WS.serialize_handshake (M.ClientHello hello))
+    (client_hello_handshake_bytes
+      hello.M.random
+      (match hello.M.server_name with
+       | Some h -> h
+       | None -> B.empty)
+      hello.M.key_share))
+
+val lemma_client_hello_handshake_bytes_prefix:
+  random:B.bytes{B.length random == 32} ->
+  hostname:B.bytes{B.length hostname <= 255} ->
+  key_share:B.bytes{B.length key_share == 32} ->
+  Lemma (Seq.equal
+    (client_hello_handshake_bytes random hostname key_share)
+    (B.append
+      (client_hello_prefix_bytes
+        (43 + B.length (client_hello_extensions_bytes hostname key_share))
+        (B.length (client_hello_extensions_bytes hostname key_share))
+        random)
+      (client_hello_extensions_bytes hostname key_share)))
 
 val lemma_ptm_alert (fragment:B.bytes)
   : Lemma (ensures (
