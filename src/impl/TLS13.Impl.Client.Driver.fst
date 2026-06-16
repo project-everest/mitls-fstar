@@ -385,6 +385,41 @@ type ready_local_action_result = {
   ready_local_written: SZ.t;
 }
 
+let lemma_ready_local_action_result_preserves_config
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (result:ready_local_action_result)
+  (payload:B.bytes)
+  (network_out:B.bytes)
+  (app_out:B.bytes)
+  : Lemma
+      (requires
+        (result.ready_local_processed ==>
+          CT.local_event_end_to_end_correct
+            st0
+            st1
+            result.ready_local_resp
+            result.ready_local_action.CT.next_local_kind
+            payload
+            network_out
+            app_out) /\
+        (result.ready_local_processed == false ==> st1 == st0))
+      (ensures
+        st1.CS.cs_model.CS.model_config ==
+          st0.CS.cs_model.CS.model_config)
+=
+  if result.ready_local_processed then
+    CT.lemma_local_event_end_to_end_correct_preserves_config
+      st0
+      st1
+      result.ready_local_resp
+      result.ready_local_action.CT.next_local_kind
+      payload
+      network_out
+      app_out
+  else
+    assert (st1 == st0)
+
 type driver_drain_result = {
   driver_drain_last: ready_local_action_result;
   driver_drain_exhausted: bool;
@@ -1818,6 +1853,8 @@ fn process_local_event_and_write_once
                    (Ghost.reveal 'payload_bytes)
                    network_out_bytes
                    app_out_bytes /\
+                 st1.CS.cs_model.CS.model_config ==
+                   'st0.CS.cs_model.CS.model_config /\
                  result.local_write_written ==
                    result.local_write_resp.CT.network_out_len /\
                  (result.local_write_resp.CT.status == CT.StepOk ==>
@@ -1849,6 +1886,14 @@ fn process_local_event_and_write_once
     (Ghost.reveal 'payload_bytes)
     network_out_bytes
     app_out_bytes));
+  CT.lemma_local_event_end_to_end_correct_preserves_config
+    'st0
+    st1
+    resp
+    kind
+    (Ghost.reveal 'payload_bytes)
+    network_out_bytes
+    app_out_bytes;
   lemma_local_event_wire_lengths
     'st0
     st1
@@ -1995,6 +2040,14 @@ fn driver_process_local_event
             pts_to payload 'payload_bytes **
             pts_to network_out network_out_bytes **
             pts_to app_out app_out_bytes);
+  CT.lemma_local_event_end_to_end_correct_preserves_config
+    'st0
+    st1
+    result.local_write_resp
+    kind
+    (Ghost.reveal 'payload_bytes)
+    network_out_bytes
+    app_out_bytes;
   fold (driver_exactly d st1 (Ghost.reveal 'buffered) (Ghost.reveal 'pending_len));
   result
 }
@@ -3025,6 +3078,8 @@ fn process_ready_internal_local_action_once
                   True) /\
                  (result.ready_local_processed \/
                   result.ready_local_written == 0sz) /\
+                 st1.CS.cs_model.CS.model_config ==
+                   'st0.CS.cs_model.CS.model_config /\
                  (result.ready_local_processed == false ==> st1 == 'st0))
 {
   rewrite (C.connection_exactly c 'st0) as (CR.connection_exactly c 'st0);
@@ -3056,6 +3111,9 @@ fn process_ready_internal_local_action_once
       action.CT.next_local_kind = CT.LocalValidateCertificate ||
       action.CT.next_local_kind = CT.LocalVerifyCertificateSignature;
     if needs_external_payload {
+      assert (pure ('st0.CS.cs_model.CS.model_config ==
+        'st0.CS.cs_model.CS.model_config));
+      assert (pure ('st0 == 'st0));
       {
         ready_local_action = action;
         ready_local_processed = false;
@@ -3100,6 +3158,8 @@ fn process_ready_internal_local_action_once
         (Ghost.reveal 'empty_payload_bytes)
         network_out_bytes
         app_out_bytes));
+      assert (pure (st1.CS.cs_model.CS.model_config ==
+        'st0.CS.cs_model.CS.model_config));
       assert (pure (write_result.local_write_resp.CT.status == CT.StepOk ==>
         SZ.v write_result.local_write_written <=
         SZ.v write_result.local_write_resp.CT.network_out_len));
@@ -3111,6 +3171,9 @@ fn process_ready_internal_local_action_once
       }
     }
   } else {
+    assert (pure ('st0.CS.cs_model.CS.model_config ==
+      'st0.CS.cs_model.CS.model_config));
+    assert (pure ('st0 == 'st0));
     {
       ready_local_action = action;
       ready_local_processed = false;
@@ -3166,6 +3229,8 @@ fn driver_handshake_step
                   True) /\
                  (result.ready_local_processed \/
                   result.ready_local_written == 0sz) /\
+                 st1.CS.cs_model.CS.model_config ==
+                   'st0.CS.cs_model.CS.model_config /\
                  (result.ready_local_processed == false ==> st1 == 'st0))
 {
   unfold (driver_exactly d 'st0 (Ghost.reveal 'buffered) (Ghost.reveal 'pending_len));
@@ -3186,6 +3251,15 @@ fn driver_handshake_step
             pts_to empty_payload 'empty_payload_bytes **
             pts_to network_out network_out_bytes **
             pts_to app_out app_out_bytes);
+  lemma_ready_local_action_result_preserves_config
+    'st0
+    st1
+    result
+    (Ghost.reveal 'empty_payload_bytes)
+    network_out_bytes
+    app_out_bytes;
+  assert (pure (st1.CS.cs_model.CS.model_config ==
+    'st0.CS.cs_model.CS.model_config));
   fold (driver_exactly d st1 (Ghost.reveal 'buffered) (Ghost.reveal 'pending_len));
   result
 }
@@ -3332,6 +3406,8 @@ fn driver_progress_buffered_network_step
                    result
                    network_out_bytes
                    app_out_bytes /\
+                 st1.CS.cs_model.CS.model_config ==
+                   'st0.CS.cs_model.CS.model_config /\
                  (CT.client_end_to_end_invariant 'st0 ==>
                   CT.client_end_to_end_invariant st1))
 {
@@ -3363,6 +3439,16 @@ fn driver_progress_buffered_network_step
       network_out_bytes
       (Ghost.reveal 'old_app_out)
       app_out_bytes));
+    CT.lemma_network_bytes_end_to_end_correct_preserves_config
+      'st0
+      st1
+      read_result.buffered_network_io_buffered.buffered_network_read.network_read_buffer_resp
+      (Ghost.reveal
+        read_result.buffered_network_io_buffered.buffered_network_read.network_read_prefix)
+      (Ghost.reveal 'old_network_out)
+      network_out_bytes
+      (Ghost.reveal 'old_app_out)
+      app_out_bytes;
     assert (pure (client_buffered_network_io_step_correct
       st1
       read_result
@@ -3396,6 +3482,15 @@ fn driver_progress_buffered_network_step
       network_out_bytes
       (Ghost.reveal 'old_app_out)
       app_out_bytes));
+    CT.lemma_network_bytes_end_to_end_correct_preserves_config
+      'st0
+      st1
+      processed.buffered_network_read.network_read_buffer_resp
+      (Ghost.reveal processed.buffered_network_read.network_read_prefix)
+      (Ghost.reveal 'old_network_out)
+      network_out_bytes
+      (Ghost.reveal 'old_app_out)
+      app_out_bytes;
     assert (pure (CT.client_end_to_end_invariant 'st0 ==>
       CT.client_end_to_end_invariant st1));
     assert (pure (B.length raw_bytes == SZ.v raw_capacity));
@@ -3433,6 +3528,18 @@ fn driver_progress_buffered_network_step
         network_out_bytes2
         app_out_bytes
         app_out_bytes2));
+      CT.lemma_network_bytes_end_to_end_correct_preserves_config
+        st1
+        st2
+        read_result.buffered_network_io_buffered.buffered_network_read.network_read_buffer_resp
+        (Ghost.reveal
+          read_result.buffered_network_io_buffered.buffered_network_read.network_read_prefix)
+        network_out_bytes
+        network_out_bytes2
+        app_out_bytes
+        app_out_bytes2;
+      assert (pure (st2.CS.cs_model.CS.model_config ==
+        'st0.CS.cs_model.CS.model_config));
       assert (pure (client_buffered_network_io_step_correct
         st2
         read_result
@@ -3517,6 +3624,8 @@ fn top_driver_process_one_local_action
                  B.length auth_cv_input_bytes == SZ.v auth_cv_input_len /\
                  B.length auth_signature_bytes == SZ.v auth_signature_len /\
                  B.length app_out_bytes == SZ.v app_out_len /\
+                 st1.CS.cs_model.CS.model_config ==
+                   'st0.CS.cs_model.CS.model_config /\
                  (result.ready_local_processed \/
                   result.ready_local_written == 0sz) /\
                  (result.ready_local_processed ==>
@@ -3542,6 +3651,8 @@ fn top_driver_process_one_local_action
             pts_to app_out app_out_bytes);
   assert (pure (B.length network_out_bytes == SZ.v network_out_len));
   assert (pure (B.length app_out_bytes == SZ.v app_out_len));
+  assert (pure (st1.CS.cs_model.CS.model_config ==
+    'st0.CS.cs_model.CS.model_config));
   assert (pure (step.ready_local_processed ==>
     (CT.client_end_to_end_invariant 'st0 ==>
      CT.client_end_to_end_invariant st1)));
@@ -3637,6 +3748,16 @@ fn top_driver_process_one_local_action
               auth_payload_prefix_bytes
               network_out_bytes2
               app_out_bytes2));
+            CT.lemma_local_event_end_to_end_correct_preserves_config
+              st1
+              st2
+              write_result.local_write_resp
+              CT.LocalValidateCertificate
+              auth_payload_prefix_bytes
+              network_out_bytes2
+              app_out_bytes2;
+            assert (pure (st2.CS.cs_model.CS.model_config ==
+              'st0.CS.cs_model.CS.model_config));
             assert (pure (CT.client_end_to_end_invariant st1 ==>
               CT.client_end_to_end_invariant st2));
             assert (pure (CT.client_end_to_end_invariant 'st0 ==>
@@ -3787,6 +3908,16 @@ fn top_driver_process_one_local_action
               (Ghost.reveal 'empty_payload_bytes)
               network_out_bytes2
               app_out_bytes2));
+            CT.lemma_local_event_end_to_end_correct_preserves_config
+              st1
+              st2
+              write_result.local_write_resp
+              CT.LocalVerifyCertificateSignature
+              (Ghost.reveal 'empty_payload_bytes)
+              network_out_bytes2
+              app_out_bytes2;
+            assert (pure (st2.CS.cs_model.CS.model_config ==
+              'st0.CS.cs_model.CS.model_config));
             assert (pure (CT.client_end_to_end_invariant st1 ==>
               CT.client_end_to_end_invariant st2));
             assert (pure (CT.client_end_to_end_invariant 'st0 ==>
@@ -3883,6 +4014,8 @@ fn rec driver_handshake
                    (Seq.slice raw_bytes 0 (SZ.v result.driver_workflow_rx_len)) /\
                  B.length network_out_bytes == SZ.v network_out_len /\
                  B.length app_out_bytes == SZ.v app_out_len /\
+                 st1.CS.cs_model.CS.model_config ==
+                   'st0.CS.cs_model.CS.model_config /\
                  (CT.client_end_to_end_invariant 'st0 ==>
                   CT.client_end_to_end_invariant st1) /\
                  (result.driver_workflow_status == DriverWorkflowOk ==>
@@ -3938,6 +4071,8 @@ fn rec driver_handshake
     let snapshot = driver_control_snapshot d.top_driver_core;
     with st_snapshot.
       assert (driver_exactly d.top_driver_core st_snapshot 'buffered buffered_len);
+    assert (pure (st_snapshot.CS.cs_model.CS.model_config ==
+      'st0.CS.cs_model.CS.model_config));
     fold (top_driver_exactly d st_snapshot 'buffered buffered_len);
     let app_ready = snapshot.CR.snapshot_control_tag = 2uy;
     if app_ready {
@@ -3990,6 +4125,10 @@ fn rec driver_handshake
                   pts_to auth_cv_input auth_cv_input_local **
                   pts_to auth_signature auth_signature_local **
                   pts_to app_out app_out_local);
+        assert (pure (st_local.CS.cs_model.CS.model_config ==
+          st_snapshot.CS.cs_model.CS.model_config));
+        assert (pure (st_local.CS.cs_model.CS.model_config ==
+          'st0.CS.cs_model.CS.model_config));
         if local.ready_local_processed {
           assert (pure (local.ready_local_processed == true));
           assert (pure (local.ready_local_processed == true ==>
@@ -4080,6 +4219,10 @@ fn rec driver_handshake
                       pts_to raw raw_network **
                       pts_to network_out network_out_network **
                       pts_to app_out app_out_network);
+            assert (pure (st_network.CS.cs_model.CS.model_config ==
+              st_local.CS.cs_model.CS.model_config));
+            assert (pure (st_network.CS.cs_model.CS.model_config ==
+              'st0.CS.cs_model.CS.model_config));
             fold (top_driver_exactly d st_network
               buffered_network
               network.buffered_network_io_buffered.buffered_network_new_len);
@@ -4239,6 +4382,8 @@ fn rec driver_receive_application_data
                    (Seq.slice raw_bytes 0 (SZ.v result.driver_workflow_rx_len)) /\
                  B.length network_out_bytes == SZ.v network_out_len /\
                  B.length app_out_bytes == SZ.v app_out_len /\
+                 st1.CS.cs_model.CS.model_config ==
+                   'st0.CS.cs_model.CS.model_config /\
                  client_receive_observation_network_correct
                    'st0
                    st1
@@ -4311,6 +4456,8 @@ fn rec driver_receive_application_data
               pts_to raw raw_network **
               pts_to network_out network_out_network **
               pts_to app_out app_out_network);
+    assert (pure (st_network.CS.cs_model.CS.model_config ==
+      'st0.CS.cs_model.CS.model_config));
     fold (top_driver_exactly d st_network
       buffered_network
       network.buffered_network_io_buffered.buffered_network_new_len);
@@ -4489,6 +4636,10 @@ fn rec driver_receive_application_data
                 pts_to auth_cv_input auth_cv_input_local **
                 pts_to auth_signature auth_signature_local **
                 pts_to app_out app_out_local);
+      assert (pure (st_local.CS.cs_model.CS.model_config ==
+        st_network.CS.cs_model.CS.model_config));
+      assert (pure (st_local.CS.cs_model.CS.model_config ==
+        'st0.CS.cs_model.CS.model_config));
       if local.ready_local_processed {
         assert (pure (local.ready_local_processed == true));
         assert (pure (local.ready_local_processed == true ==>
@@ -4636,7 +4787,9 @@ fn rec driver_await_peer_close_notify
                  Seq.equal buffered_after
                    (Seq.slice raw_bytes 0 (SZ.v result.driver_workflow_rx_len)) /\
                  B.length network_out_bytes == SZ.v network_out_len /\
-                 B.length app_out_bytes == SZ.v app_out_len)
+                 B.length app_out_bytes == SZ.v app_out_len /\
+                 st1.CS.cs_model.CS.model_config ==
+                   'st0.CS.cs_model.CS.model_config)
   decreases (SZ.v fuel)
 {
   let no_op_resp = {
@@ -4687,6 +4840,8 @@ fn rec driver_await_peer_close_notify
     let snapshot = driver_control_snapshot d;
     with st_snapshot.
       assert (driver_exactly d st_snapshot 'buffered buffered_len);
+    assert (pure (st_snapshot.CS.cs_model.CS.model_config ==
+      'st0.CS.cs_model.CS.model_config));
     let closed = snapshot.CR.snapshot_control_tag = 4uy;
     if closed {
       {
@@ -4716,6 +4871,10 @@ fn rec driver_await_peer_close_notify
                 pts_to raw raw_network **
                 pts_to network_out network_out_network **
                 pts_to app_out app_out_network);
+      assert (pure (st_network.CS.cs_model.CS.model_config ==
+        st_snapshot.CS.cs_model.CS.model_config));
+      assert (pure (st_network.CS.cs_model.CS.model_config ==
+        'st0.CS.cs_model.CS.model_config));
       let net_read =
         network.buffered_network_io_buffered.buffered_network_read;
       let net_resp = net_read.network_read_buffer_resp.CT.response;
@@ -4834,6 +4993,8 @@ fn send_application_data_once
                    (Ghost.reveal 'payload_bytes)
                    network_out_bytes
                    app_out_bytes /\
+                 st1.CS.cs_model.CS.model_config ==
+                   'st0.CS.cs_model.CS.model_config /\
                  result.local_write_written ==
                    result.local_write_resp.CT.network_out_len /\
                  (result.local_write_resp.CT.status == CT.StepOk ==>
@@ -4887,6 +5048,8 @@ fn driver_send_application_data
                    (Ghost.reveal 'payload_bytes)
                    network_out_bytes
                    app_out_bytes /\
+                 st1.CS.cs_model.CS.model_config ==
+                   'st0.CS.cs_model.CS.model_config /\
                  result.local_write_written ==
                    result.local_write_resp.CT.network_out_len /\
                  (result.local_write_resp.CT.status == CT.StepOk ==>
@@ -4910,6 +5073,14 @@ fn driver_send_application_data
             pts_to payload 'payload_bytes **
             pts_to network_out network_out_bytes **
             pts_to app_out app_out_bytes);
+  CT.lemma_local_event_end_to_end_correct_preserves_config
+    'st0
+    st1
+    result.local_write_resp
+    CT.LocalSendApplicationData
+    (Ghost.reveal 'payload_bytes)
+    network_out_bytes
+    app_out_bytes;
   fold (driver_exactly d st1 (Ghost.reveal 'buffered) (Ghost.reveal 'pending_len));
   result
 }
@@ -4949,6 +5120,8 @@ fn top_driver_send_application_data
                   (Ghost.reveal 'payload_bytes)
                   network_out_bytes
                   app_out_bytes /\
+                 st1.CS.cs_model.CS.model_config ==
+                   'st0.CS.cs_model.CS.model_config /\
                  result.local_write_written ==
                    result.local_write_resp.CT.network_out_len /\
                  (result.local_write_resp.CT.status == CT.StepOk ==>
@@ -4970,6 +5143,8 @@ fn top_driver_send_application_data
             pts_to payload 'payload_bytes **
             pts_to network_out network_out_bytes **
             pts_to app_out app_out_bytes);
+  assert (pure (st1.CS.cs_model.CS.model_config ==
+    'st0.CS.cs_model.CS.model_config));
   fold (top_driver_exactly d st1 (Ghost.reveal 'buffered) (Ghost.reveal 'pending_len));
   result
 }
@@ -5004,6 +5179,8 @@ fn driver_send_close_notify
                    (Ghost.reveal 'empty_payload_bytes)
                    network_out_bytes
                    app_out_bytes /\
+                 st1.CS.cs_model.CS.model_config ==
+                   'st0.CS.cs_model.CS.model_config /\
                  result.local_write_written ==
                    result.local_write_resp.CT.network_out_len /\
                  (result.local_write_resp.CT.status == CT.StepOk ==>
@@ -5032,6 +5209,14 @@ fn driver_send_close_notify
             pts_to empty_payload 'empty_payload_bytes **
             pts_to network_out network_out_bytes **
             pts_to app_out app_out_bytes);
+  CT.lemma_local_event_end_to_end_correct_preserves_config
+    'st0
+    st1
+    result.local_write_resp
+    CT.LocalSendCloseNotify
+    (Ghost.reveal 'empty_payload_bytes)
+    network_out_bytes
+    app_out_bytes;
   fold (driver_exactly d st1 (Ghost.reveal 'buffered) (Ghost.reveal 'pending_len));
   result
 }
@@ -5073,6 +5258,8 @@ fn rec driver_close_workflow
                  SZ.v result.driver_workflow_rx_len <= SZ.v raw_capacity /\
                  B.length network_out_bytes == SZ.v network_out_len /\
                  B.length app_out_bytes == SZ.v app_out_len /\
+                 st1.CS.cs_model.CS.model_config ==
+                   'st0.CS.cs_model.CS.model_config /\
                  (exists st_close_notify.
                    client_driver_close_correct
                      'st0
@@ -5095,6 +5282,8 @@ fn rec driver_close_workflow
             pts_to empty_payload 'empty_payload_bytes **
             pts_to network_out network_out_after_close **
             pts_to app_out app_out_after_close);
+  assert (pure (st_after_close_notify.CS.cs_model.CS.model_config ==
+    'st0.CS.cs_model.CS.model_config));
   assert (pure (forall (i:nat{i < B.length (Ghost.reveal 'empty_payload_bytes)}).
     Seq.index (Ghost.reveal 'empty_payload_bytes) i == Seq.index B.empty i));
   Seq.lemma_eq_intro (Ghost.reveal 'empty_payload_bytes) B.empty;
@@ -5210,6 +5399,10 @@ fn rec driver_close_workflow
               pts_to raw raw_wait **
               pts_to network_out network_out_wait **
               pts_to app_out app_out_wait);
+    assert (pure (st_wait.CS.cs_model.CS.model_config ==
+      st_after_close_notify.CS.cs_model.CS.model_config));
+    assert (pure (st_wait.CS.cs_model.CS.model_config ==
+      'st0.CS.cs_model.CS.model_config));
     unfold (driver_exactly d.top_driver_core st_wait buffered_wait waited.driver_workflow_rx_len);
     unfold (channel_open d.top_driver_core.driver_channel st_wait buffered_wait waited.driver_workflow_rx_len);
     with received sent.
@@ -5405,6 +5598,8 @@ fn connect
              exists* received sent.
                client_driver_connected d st1 received sent **
                pure (client_driver_application_ready st1 /\
+                     st1.CS.cs_model.CS.model_config ==
+                       'st0.CS.cs_model.CS.model_config /\
                      client_driver_sent_log_exact st1 sent /\
                      client_driver_received_log_accounted st1 received /\
                      client_driver_received_log_exact_prefix st1 received /\
@@ -5501,6 +5696,8 @@ fn connect
                 pts_to (V.vec_to_array d.client_driver_auth_cv_input) auth_cv_input_bytes **
                 pts_to (V.vec_to_array d.client_driver_auth_signature) auth_signature_bytes **
                 pts_to (V.vec_to_array d.client_driver_app_out) app_out_bytes);
+      assert (pure (st1.CS.cs_model.CS.model_config ==
+        'st0.CS.cs_model.CS.model_config));
       unfold (top_driver_exactly td st1 buffered_after result.driver_workflow_rx_len);
       rewrite (driver_exactly td.top_driver_core st1 buffered_after result.driver_workflow_rx_len) as
         (driver_exactly core st1 buffered_after result.driver_workflow_rx_len);
@@ -5629,8 +5826,10 @@ fn send
                   (Ghost.reveal 'payload_bytes)
                   (Ghost.reveal 'sent0)
                   sent1 /\
-                 client_driver_sent_log_exact 'st0 (Ghost.reveal 'sent0) /\
-                 client_driver_received_log_accounted 'st0 (Ghost.reveal 'received0) /\
+                  st1.CS.cs_model.CS.model_config ==
+                    'st0.CS.cs_model.CS.model_config /\
+                  client_driver_sent_log_exact 'st0 (Ghost.reveal 'sent0) /\
+                  client_driver_received_log_accounted 'st0 (Ghost.reveal 'received0) /\
                  client_driver_sent_log_exact st1 sent1 /\
                  client_driver_received_log_accounted st1 received1)
 {
@@ -5719,6 +5918,8 @@ fn send
                 pts_to payload 'payload_bytes **
                 pts_to (V.vec_to_array d.client_driver_network_out) network_out_bytes **
                 pts_to (V.vec_to_array d.client_driver_app_out) app_out_bytes);
+      assert (pure (st1.CS.cs_model.CS.model_config ==
+        'st0.CS.cs_model.CS.model_config));
       unfold (top_driver_exactly td st1 buffered current_buffered_len);
       rewrite (driver_exactly td.top_driver_core st1 buffered current_buffered_len) as
         (driver_exactly core st1 buffered current_buffered_len);
@@ -5834,8 +6035,10 @@ fn receive
           pts_to out out_bytes **
           pure (B.length out_bytes == SZ.v out_len /\
                 SZ.v result.client_receive_len <= SZ.v out_len /\
-                client_driver_sent_log_exact 'st0 (Ghost.reveal 'sent0) /\
-                client_driver_received_log_accounted 'st0 (Ghost.reveal 'received0) /\
+          st1.CS.cs_model.CS.model_config ==
+            'st0.CS.cs_model.CS.model_config /\
+          client_driver_sent_log_exact 'st0 (Ghost.reveal 'sent0) /\
+          client_driver_received_log_accounted 'st0 (Ghost.reveal 'received0) /\
                 client_driver_sent_log_exact st1 sent1 /\
                 client_driver_received_log_accounted st1 received1 /\
                 (exists obs app_out.
@@ -5959,6 +6162,8 @@ fn receive
                 pts_to (V.vec_to_array d.client_driver_auth_cv_input) auth_cv_input_bytes **
                 pts_to (V.vec_to_array d.client_driver_auth_signature) auth_signature_bytes **
                 pts_to (V.vec_to_array d.client_driver_app_out) app_out_bytes);
+      assert (pure (st1.CS.cs_model.CS.model_config ==
+        'st0.CS.cs_model.CS.model_config));
       let response =
         workflow.driver_workflow_network.buffered_network_io_buffered.buffered_network_read.network_read_buffer_resp.CT.response;
       let copy_len = response.CT.app_out_len;
@@ -6129,7 +6334,9 @@ fn close
   returns status:driver_workflow_status
   ensures exists* st1.
           client_driver_closed d st1 **
-          pure (client_driver_sent_log_exact 'st0 (Ghost.reveal 'sent0) /\
+          pure (st1.CS.cs_model.CS.model_config ==
+                  'st0.CS.cs_model.CS.model_config /\
+                client_driver_sent_log_exact 'st0 (Ghost.reveal 'sent0) /\
                 client_driver_received_log_accounted 'st0 (Ghost.reveal 'received0) /\
                 (exists st_close_notify.
             client_driver_close_correct
@@ -6224,6 +6431,8 @@ fn close
             pts_to (V.vec_to_array d.client_driver_raw) raw_bytes **
             pts_to (V.vec_to_array d.client_driver_network_out) network_out_bytes **
             pts_to (V.vec_to_array d.client_driver_app_out) app_out_bytes);
+  assert (pure (st1.CS.cs_model.CS.model_config ==
+    'st0.CS.cs_model.CS.model_config));
   rewrite (C.connection_exactly td.top_driver_core.driver_client st1) as
     (C.connection_exactly d.client_driver_client st1);
   V.to_vec_pts_to d.client_driver_empty_payload;

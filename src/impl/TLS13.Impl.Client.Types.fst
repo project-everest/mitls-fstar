@@ -730,6 +730,40 @@ let some_legal_response
   exists ev raw_sent raw_received.
     legal_response_for_event st0 st1 resp ev raw_sent raw_received network_out app_out
 
+let lemma_some_legal_response_preserves_config
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (resp:client_response)
+  (network_out:B.bytes)
+  (app_out:B.bytes)
+  : Lemma
+      (requires some_legal_response st0 st1 resp network_out app_out)
+      (ensures st1.CS.cs_model.CS.model_config == st0.CS.cs_model.CS.model_config)
+=
+  assert (exists ev raw_sent raw_received.
+    legal_response_for_event st0 st1 resp ev raw_sent raw_received network_out app_out);
+  let ev =
+    ID.indefinite_description_ghost
+      CS.conn_event
+      (fun ev -> exists raw_sent raw_received.
+        legal_response_for_event st0 st1 resp ev raw_sent raw_received network_out app_out) in
+  let raw_sent =
+    ID.indefinite_description_ghost
+      B.bytes
+      (fun raw_sent -> exists raw_received.
+        legal_response_for_event st0 st1 resp ev raw_sent raw_received network_out app_out) in
+  let raw_received =
+    ID.indefinite_description_ghost
+      B.bytes
+      (fun raw_received ->
+        legal_response_for_event st0 st1 resp ev raw_sent raw_received network_out app_out) in
+  assert (legal_response_for_event
+    st0 st1 resp ev raw_sent raw_received network_out app_out);
+  CSL.lemma_step_model_preserves_config
+    st0.CS.cs_model
+    ev
+    st1.CS.cs_model
+
 let lemma_some_legal_response_received_decode_replay_consistent_aux
   (st0:CS.connection_state)
   (st1:CS.connection_state)
@@ -3081,6 +3115,43 @@ let network_bytes_end_to_end_correct
   (CS.connection_state_received_decode_replay_consistent st0 ==>
    CS.connection_state_received_decode_replay_consistent st1)
 
+let lemma_network_bytes_end_to_end_correct_preserves_config
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (buffer_resp:client_buffer_response)
+  (network_input:B.bytes)
+  (old_network_out:B.bytes)
+  (network_out:B.bytes)
+  (old_app_out:B.bytes)
+  (app_out:B.bytes)
+  : Lemma
+      (requires
+        network_bytes_end_to_end_correct
+          st0 st1 buffer_resp network_input old_network_out network_out old_app_out app_out)
+      (ensures st1.CS.cs_model.CS.model_config == st0.CS.cs_model.CS.model_config)
+=
+  assert (network_bytes_step_correct
+    st0 st1 buffer_resp network_input old_network_out network_out old_app_out app_out);
+  if response_stuttered
+      st0
+      st1
+      buffer_resp.response
+      old_network_out
+      network_out
+      old_app_out
+      app_out
+  then
+    assert (st1 == st0)
+  else (
+    assert (some_legal_response st0 st1 buffer_resp.response network_out app_out);
+    lemma_some_legal_response_preserves_config
+      st0
+      st1
+      buffer_resp.response
+      network_out
+      app_out
+  )
+
 let lemma_network_bytes_end_to_end_nonfailed_received_prefix_accepted
   (st0:CS.connection_state)
   (st1:CS.connection_state)
@@ -3215,6 +3286,22 @@ let local_event_end_to_end_correct
    CS.connection_state_sent_seal_replay_consistent st1) /\
   (CS.connection_state_received_decode_replay_consistent st0 ==>
    CS.connection_state_received_decode_replay_consistent st1)
+
+let lemma_local_event_end_to_end_correct_preserves_config
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (resp:client_response)
+  (kind:local_event_kind)
+  (payload:B.bytes)
+  (network_out:B.bytes)
+  (app_out:B.bytes)
+  : Lemma
+      (requires local_event_end_to_end_correct st0 st1 resp kind payload network_out app_out)
+      (ensures st1.CS.cs_model.CS.model_config == st0.CS.cs_model.CS.model_config)
+=
+  assert (local_event_step_correct st0 st1 resp kind payload network_out app_out);
+  assert (some_legal_response st0 st1 resp network_out app_out);
+  lemma_some_legal_response_preserves_config st0 st1 resp network_out app_out
 
 let lemma_network_bytes_end_to_end_correct_client_end_to_end_invariant
   (st0:CS.connection_state)

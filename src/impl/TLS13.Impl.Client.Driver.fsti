@@ -362,6 +362,8 @@ fn connect
              exists* received sent.
                client_driver_connected d st1 received sent **
                pure (client_driver_application_ready st1 /\
+                     st1.CS.cs_model.CS.model_config ==
+                       'st0.CS.cs_model.CS.model_config /\
                      client_driver_sent_log_exact st1 sent /\
                      client_driver_received_log_accounted st1 received /\
                      client_driver_received_log_exact_prefix st1 received /\
@@ -391,9 +393,11 @@ fn send
                   (Ghost.reveal 'payload_bytes)
                   (Ghost.reveal 'sent0)
                   sent1 /\
-                 client_driver_sent_log_exact 'st0 (Ghost.reveal 'sent0) /\
-                 client_driver_received_log_accounted 'st0 (Ghost.reveal 'received0) /\
-                 client_driver_sent_log_exact st1 sent1 /\
+                  st1.CS.cs_model.CS.model_config ==
+                    'st0.CS.cs_model.CS.model_config /\
+                  client_driver_sent_log_exact 'st0 (Ghost.reveal 'sent0) /\
+                  client_driver_received_log_accounted 'st0 (Ghost.reveal 'received0) /\
+                  client_driver_sent_log_exact st1 sent1 /\
                  client_driver_received_log_accounted st1 received1)
 
 fn receive
@@ -411,9 +415,11 @@ fn receive
           pts_to out out_bytes **
           pure (B.length out_bytes == SZ.v out_len /\
                 SZ.v result.client_receive_len <= SZ.v out_len /\
-                client_driver_sent_log_exact 'st0 (Ghost.reveal 'sent0) /\
-                client_driver_received_log_accounted 'st0 (Ghost.reveal 'received0) /\
-                client_driver_sent_log_exact st1 sent1 /\
+          st1.CS.cs_model.CS.model_config ==
+            'st0.CS.cs_model.CS.model_config /\
+          client_driver_sent_log_exact 'st0 (Ghost.reveal 'sent0) /\
+          client_driver_received_log_accounted 'st0 (Ghost.reveal 'received0) /\
+          client_driver_sent_log_exact st1 sent1 /\
                 client_driver_received_log_accounted st1 received1 /\
                 (exists obs app_out.
                   client_driver_receive_correct
@@ -432,7 +438,9 @@ fn close
   returns status:driver_workflow_status
   ensures exists* st1.
           client_driver_closed d st1 **
-          pure (client_driver_sent_log_exact 'st0 (Ghost.reveal 'sent0) /\
+          pure (st1.CS.cs_model.CS.model_config ==
+                  'st0.CS.cs_model.CS.model_config /\
+                client_driver_sent_log_exact 'st0 (Ghost.reveal 'sent0) /\
                 client_driver_received_log_accounted 'st0 (Ghost.reveal 'received0) /\
                 (exists st_close_notify.
             client_driver_close_correct
