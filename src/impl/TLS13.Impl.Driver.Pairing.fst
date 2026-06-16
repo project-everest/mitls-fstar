@@ -317,6 +317,8 @@ let lemma_client_server_driver_supported_profile_derived_state_inputs_from_proje
           client
           server)
 =
+  assert (CS.paired_cleartext_hello_messages client server);
+  assert (client_server_driver_x25519_projection_inputs client server);
   lemma_client_server_driver_paired_x25519_key_shares_from_projection_inputs
     client
     server;
