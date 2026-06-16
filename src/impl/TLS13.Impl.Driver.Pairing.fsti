@@ -521,6 +521,27 @@ let client_server_driver_key_material_no_read_ahead_projection_inputs
     server_sent /\
   client_server_driver_remaining_semantic_projection_inputs client server
 
+noextract
+let client_server_driver_key_material_no_read_ahead_paired_handshake_message_inputs
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  (client_received:B.bytes)
+  (client_sent:B.bytes)
+  (server_received:B.bytes)
+  (server_sent:B.bytes)
+  : prop =
+  client_server_driver_public_success_transport_inputs
+    client
+    server
+    client_received
+    client_sent
+    server_received
+    server_sent /\
+  paired_handshake_message_states client server /\
+  client_server_driver_supported_profile_application_record_state_inputs
+    client
+    server
+
 val lemma_client_server_driver_key_material_agrees_from_no_read_ahead
   (client:CS.connection_state)
   (server:CS.connection_state)
@@ -661,6 +682,41 @@ val lemma_client_server_driver_key_material_agrees_from_public_success_transport
           server_sent /\
         client_server_driver_remaining_semantic_projection_inputs client server)
       (ensures
+        client_server_driver_supported_profile_derived_state_inputs
+          client
+          server /\
+        CS.supported_profile_all_derived_key_material_agrees client server /\
+        CS.supported_profile_client_server_key_material_inputs_agree
+          client
+          server /\
+        paired_driver_transport_logs_exact
+          client
+          server
+          client_received
+          client_sent
+          server_received
+          server_sent /\
+        CS.paired_wire_logs client server /\
+        CS.supported_profile_client_server_key_material_agrees client server)
+
+val lemma_client_server_driver_key_material_agrees_from_public_success_paired_handshake_messages
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  (client_received:B.bytes)
+  (client_sent:B.bytes)
+  (server_received:B.bytes)
+  (server_sent:B.bytes)
+  : Lemma
+      (requires
+        client_server_driver_key_material_no_read_ahead_paired_handshake_message_inputs
+          client
+          server
+          client_received
+          client_sent
+          server_received
+          server_sent)
+      (ensures
+        client_server_driver_remaining_semantic_projection_inputs client server /\
         client_server_driver_supported_profile_derived_state_inputs
           client
           server /\
