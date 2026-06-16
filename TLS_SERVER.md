@@ -322,9 +322,9 @@ first version should avoid coalesced handshake records.
    - header-AAD facts for protected records;
    - `TLS13.Record.Spec.seal` facts for encrypted records;
    - transcript-message equality for the handshake fragment.
-4. Extend the C serializer backend in `c_stubs/tls13_connection_backend.h` only
-   for these typed hooks. Do not add broad generic serializers unless the proof
-   requires them.
+4. Extend the verified `TLS13.Impl.Serializer` implementation only for these
+   typed hooks. Do not add broad generic serializers unless the proof requires
+   them.
 5. Keep parser changes minimal: ClientHello parsing already exists, but its
    postconditions must use shared endpoint predicates from Phase 1.
 
@@ -567,7 +567,7 @@ Before calling the server audit-ready, `TLS_SERVER.md`, `AUDIT.md`, and
 - server handshake transcript sequence;
 - key-schedule direction mapping for server read/write states;
 - server credential/signing TCB and what it proves;
-- parser/serializer C backend TCB additions;
+- parser/serializer verified-code additions;
 - IO listen/accept TCB additions;
 - proof theorem names and how they correspond to the client theorem surface;
 - runtime C owned code and why it is not protocol logic;

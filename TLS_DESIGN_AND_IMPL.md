@@ -35,7 +35,7 @@ and application-log projection.
 | Layered log vocabulary | `src/spec/TLS13.ConnectionLog.fst` | Raw I/O logs, records/messages, directed messages, app projection, and stream-shape facts. |
 | Lightweight trace automaton | `src/spec/TLS13.StateMachine.fst` | Compact client-only trace/state vocabulary used by `ConnectionLog` and implementation proof projections; it is not the authoritative connection-state model. |
 | Record/crypto implementation | `src/impl/TLS13.Record.*`, `src/impl/TLS13.KeySchedule.*` | Extracted record-layer and key-schedule implementation against crypto TCBs. |
-| Parser/serializer TCB | `src/impl/TLS13.Impl.Parser.fsti`, `src/impl/TLS13.Impl.Serializer.fsti`, `c_stubs/tls13_connection_backend.h` | Interface-only F*/Pulse contracts implemented by handwritten C macros/static helpers. |
+| Parser/serializer implementation | `src/impl/TLS13.Impl.Parser.*`, `src/impl/TLS13.Impl.Serializer.*` | Verified Pulse facades for the supported parser/serializer hooks, with postconditions tied to `TLS13.Wire.Spec` and the extracted low-level record/key code. |
 | Runtime tests | `test/unit/test_extracted_client_openssl_echo.c`, `test/openssl_echo_server.c` | Local OpenSSL TLS 1.3 interop through the extracted client driver. |
 
 The public client API is buffer/event oriented:
@@ -61,10 +61,10 @@ The public client API is buffer/event oriented:
   serializes the stored parsed Finished internally for local verification rather
   than exposing a public driver copyout hook.
 - The old parser/framing hooks have been removed from the active
-  `TLS13.Impl.Parser` TCB surface and C backend. The active network path uses
+  `TLS13.Impl.Parser` surface. The active network path uses
   `TLS13_Impl_Parser_decode_network_buffer` and
-  `TLS13_Impl_Parser_decode_network_record`, both implemented in
-  `c_stubs/tls13_connection_backend.h`. Their success contracts now include
+  `TLS13_Impl_Parser_decode_network_record`, both implemented in verified
+  F*/Pulse and extracted with the client bundle. Their success contracts include
   `TLS13.Wire.Spec.parse_record` facts for the raw outer record bytes; the
   dispatcher fragment relation is now explicit in `CT.network_input_wf`.
   Cleartext records expose the outer fragment. `ApplicationData` records expose
@@ -87,10 +87,10 @@ The public client API is buffer/event oriented:
   `client_state_correct`, the protected-record projection is packaged as
   `CT.protected_record_decode_correct`, combining that open-to-message fact with
   read-key schedule provenance.
-- The active serializer TCB surface no longer includes stale unused ClientHello
+- The active serializer surface no longer includes stale unused ClientHello
   record-header/localhost fixed-builder declarations or the unused standalone
   ClientFinished application-data-record declaration. Live fixed helpers now
-  expose concrete shape facts: inner plaintext encoding states the copied
+  expose verified concrete shape facts: inner plaintext encoding states the copied
   payload slice plus trailing content-type byte and its no-padding
   `parse_plaintext` result, application-data header
   serialization states the public `TLS13.Wire.Spec.parse_record_header` result,
@@ -318,19 +318,19 @@ The public client API is buffer/event oriented:
 
 ## C shim and TCB boundary
 
-`TLS13.Impl.Parser.fsti` and `TLS13.Impl.Serializer.fsti` are interface-only TCB
-modules. Their extracted calls are satisfied by macros/static helpers in
-`c_stubs/tls13_connection_backend.h`, included into generated C by the KaRaMeL
-`-add-include` flags in `make extract-bundle`.
+`TLS13.Impl.Parser` and `TLS13.Impl.Serializer` are implemented in verified
+F*/Pulse for the supported client path. Their extracted calls are bundled into
+the generated client C; there is no handwritten parser/serializer backend header
+on the OpenSSL echo path.
 
 The active network input path is:
 
 1. `process_network_bytes` calls `TLS13_Impl_Parser_decode_network_buffer`;
-2. that C helper parses TLS record headers inline and then dispatches through
+2. that verified helper parses TLS record headers and then dispatches through
    `TLS13_Impl_Parser_parse_tls_message`.
 
-`TLS13_Impl_Parser_decode_network_record` remains part of the parser TCB surface
-for internal/expert use, and `TLS13_Impl_Parser_parse_tls_message` remains the
+`TLS13_Impl_Parser_decode_network_record` remains part of the parser surface for
+internal/expert use, and `TLS13_Impl_Parser_parse_tls_message` remains the
 message decoder used by the network decoders. The old generic parser entry
 points are no longer exposed by `TLS13.Impl.Parser.fsti`, and
 `process_tls_record` / `process_network_event` are no longer exported by
@@ -339,10 +339,10 @@ points are no longer exposed by `TLS13.Impl.Parser.fsti`, and
 
 No active C shim should forward to old framing modules or undefined generated
 symbols. New parser/serializer hooks should be added directly to
-`TLS13.Impl.Parser` / `TLS13.Impl.Serializer` with postconditions tied to the
-`M`/`L` validity predicates and `TLS13.Wire.Spec`. Unused generic parser or
-serializer hooks should stay out of the interface rather than expanding the
-handwritten TCB surface.
+`TLS13.Impl.Parser` / `TLS13.Impl.Serializer` with verified implementations and
+postconditions tied to the `M`/`L` validity predicates and `TLS13.Wire.Spec`.
+Unused generic parser or serializer hooks should stay out of the interface
+rather than expanding the extracted surface.
 
 Other trusted runtime boundaries remain:
 
@@ -480,11 +480,11 @@ Other trusted runtime boundaries remain:
    on those decoded-message projection facts to connect key schedule, KeyUpdate
    epochs, pending buffers, rejected consumed-byte decryption facts, supported
    one-record sent seals, and remaining event-log projections.
-5. Continue auditing `TLS13.Impl.Parser.fsti` and
-   `TLS13.Impl.Serializer.fsti` entry by entry. Mark each supported
-   message/record as strong or weak relative to the required `M`/`L` +
-   `TLS13.Wire.Spec` postconditions, strengthen weak live entries, and keep
-   unused generic parser/serializer hooks out of the TCB surface.
+5. Continue auditing `TLS13.Impl.Parser.*` and `TLS13.Impl.Serializer.*` entry
+   by entry. Mark each supported message/record as strong or weak relative to
+   the required `M`/`L` + `TLS13.Wire.Spec` postconditions, strengthen weak live
+   entries, and keep unused generic parser/serializer hooks out of the extracted
+   surface.
 6. Make the certificate and CertificateVerify boundary auditable by proving that
    driver-visible copyout bytes are exactly the certificate leaf DER,
    CertificateVerify input, and signature bytes from the parsed handshake, and

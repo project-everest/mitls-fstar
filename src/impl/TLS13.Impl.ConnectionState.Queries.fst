@@ -2427,6 +2427,10 @@ fn can_send_client_finished_runtime
             Some? st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_handshake_traffic /\
             Some? st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_application_traffic /\
             Some? st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_application_traffic /\
+            (match st0.CS.cs_model.CS.model_record.CS.record_write.R.key,
+                   st0.CS.cs_model.CS.model_record.CS.record_write.R.static_iv with
+             | Some _, Some _ -> True
+             | _, _ -> False) /\
             U64.fits (st0.CS.cs_model.CS.model_record.CS.record_write.R.seq + 1) /\
             B.length st0.CS.cs_model.CS.model_handshake.CS.hs_transcript + 36 <= max_transcript_len /\
             58 <= SZ.v network_out_len)
@@ -2514,6 +2518,7 @@ fn can_send_client_finished_runtime
     st0.CS.cs_model.CS.model_failure);
 
   let seq_ok = Rec.can_advance_seq c.records.write;
+  let seal_key_ok = Rec.has_seal_keys c.records.write;
   fold (record_layer_exactly c.records st0.CS.cs_model.CS.model_record);
 
   assert (pure (SZ.fits max_transcript_len));
@@ -2535,6 +2540,7 @@ fn can_send_client_finished_runtime
     client_app_present &&
     server_app_present &&
     seq_ok &&
+    seal_key_ok &&
     transcript_room &&
     out_room;
 
@@ -2546,6 +2552,11 @@ fn can_send_client_finished_runtime
   assert (pure (ok ==> Some? st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_handshake_traffic));
   assert (pure (ok ==> Some? st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_client_application_traffic));
   assert (pure (ok ==> Some? st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_server_application_traffic));
+  assert (pure (ok ==>
+    (match st0.CS.cs_model.CS.model_record.CS.record_write.R.key,
+           st0.CS.cs_model.CS.model_record.CS.record_write.R.static_iv with
+     | Some _, Some _ -> True
+     | _, _ -> False)));
   assert (pure (ok ==> U64.fits (st0.CS.cs_model.CS.model_record.CS.record_write.R.seq + 1)));
   lemma_sizet_lte_plain 58sz network_out_len;
   assert (pure (ok ==> 58 <= SZ.v network_out_len));

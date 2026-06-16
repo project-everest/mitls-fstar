@@ -248,6 +248,7 @@ BUNDLE_IMPL_MODULES = \
   TLS13.Impl.Handle.Dispatch \
   TLS13.Impl.Handle.Handshake \
   TLS13.Impl.Handle.Local \
+  TLS13.Impl.Serializer \
   TLS13.Impl.Messages \
   TLS13.KeySchedule \
   TLS13.Record
@@ -263,12 +264,11 @@ BUNDLE_INTERNAL_MODULES = \
   TLS13.Impl.Handle.Alert,TLS13.Impl.Handle.ApplicationData,\
   TLS13.Impl.Handle.ChangeCipherSpec,TLS13.Impl.Handle.DecodeError,\
   TLS13.Impl.Handle.Dispatch,TLS13.Impl.Handle.Handshake,\
-  TLS13.Impl.Handle.Local,TLS13.Impl.Messages,\
+  TLS13.Impl.Handle.Local,TLS13.Impl.Serializer,TLS13.Impl.Messages,\
   TLS13.KeySchedule,TLS13.Record
 
 # Interface-only external modules (not implemented in F*):
-# TLS13.Crypto, TLS13.X509, TLS13.MachineTypes, TLS13.IO,
-# TLS13.Impl.Serializer
+# TLS13.Crypto, TLS13.X509, TLS13.MachineTypes, TLS13.IO
 
 FULL_KRML_FILES = $(filter-out $(OUTPUT_DIR)/prims.krml $(OUTPUT_DIR)/Prims.krml,$(ALL_KRML_FILES))
 KRML_STUB_DIR = $(OUTPUT_DIR)/krml_stubs
@@ -463,27 +463,9 @@ import os
 import re
 
 root = Path(os.environ["DRIVER_BUNDLE_DIR"])
-macro_inc = '#include "../../c_stubs/tls13_serializer_macros.h"\n'
 
-for path in root.glob("*.c"):
+for path in list(root.glob("*.c")) + list((root / "internal").glob("*.h")):
     text = path.read_text()
-
-    if "TLS13_Impl_Serializer_" in text and macro_inc not in text:
-        lines = text.splitlines(True)
-        first_include = None
-        last_include = None
-        for i, line in enumerate(lines):
-            if line.startswith("#include "):
-                if first_include is None:
-                    first_include = i
-                last_include = i
-            elif first_include is not None and line.strip() == "":
-                continue
-            elif first_include is not None:
-                break
-        if last_include is not None:
-            lines.insert(last_include + 1, macro_inc)
-            text = "".join(lines)
 
     if path.name == "TLS13_Wire_Generated.c":
         fp_re = re.compile(
@@ -503,6 +485,68 @@ for path in root.glob("*.c"):
 
     if path.name == "FStar_Pulse_PulseCore_Prims.c" and "krml_checked_int_t FStar_UInt8_v(uint8_t x)" not in text:
         text += "\nkrml_checked_int_t FStar_UInt8_v(uint8_t x)\n{\n  return (krml_checked_int_t)x;\n}\n"
+
+    if path.name == "FStar_Pulse_PulseCore_Prims.c":
+        runtime_helpers = """
+krml_checked_int_t Prims_op_Division(krml_checked_int_t x, krml_checked_int_t y)
+{
+  return x / y;
+}
+
+krml_checked_int_t Prims_op_Subtraction(krml_checked_int_t x, krml_checked_int_t y)
+{
+  return x - y;
+}
+
+krml_checked_int_t Prims_op_Addition(krml_checked_int_t x, krml_checked_int_t y)
+{
+  return x + y;
+}
+
+krml_checked_int_t Prims_op_Modulus(krml_checked_int_t x, krml_checked_int_t y)
+{
+  return x % y;
+}
+
+bool Prims_op_LessThanOrEqual(krml_checked_int_t x, krml_checked_int_t y)
+{
+  return x <= y;
+}
+
+bool Prims_op_GreaterThan(krml_checked_int_t x, krml_checked_int_t y)
+{
+  return x > y;
+}
+
+bool Prims_op_LessThan(krml_checked_int_t x, krml_checked_int_t y)
+{
+  return x < y;
+}
+
+uint8_t FStar_UInt8_uint_to_t(krml_checked_int_t x)
+{
+  return (uint8_t)x;
+}
+
+size_t FStar_SizeT_uint_to_t(krml_checked_int_t x)
+{
+  return (size_t)x;
+}
+"""
+        if "krml_checked_int_t Prims_op_Division(" not in text:
+            text += "\n" + runtime_helpers
+
+    if path.name == "FStar_Pulse_PulseCore_Prims.h":
+        if "FStar_SizeT_uint_to_t" not in text:
+            text = text.replace(
+                "krml_checked_int_t FStar_SizeT_v(size_t x);\n",
+                "krml_checked_int_t FStar_SizeT_v(size_t x);\n\nsize_t FStar_SizeT_uint_to_t(krml_checked_int_t x);\n",
+            )
+
+    if path.suffix == ".c" and "FStar_SizeT_uint_to_t" in text and "internal/FStar_Pulse_PulseCore_Prims.h" not in text:
+        first_include = re.search(r'#include "[^"]+"\n', text)
+        if first_include:
+            text = text[:first_include.end()] + '#include "internal/FStar_Pulse_PulseCore_Prims.h"\n' + text[first_include.end():]
 
     if path.name == "TLS13_Transcript.c":
         text = text.replace(
@@ -572,13 +616,13 @@ extract-driver-bundle: extract-driver-krml | $(DRIVER_BUNDLE_DIR)
 	  -skip-compilation \
 	  -add-include '<stdbool.h>' \
 	  -add-include '"krml/internal/compat.h"' \
-	  -add-include '"../../c_stubs/tls13_connection_backend.h"' \
 	  -add-include '"../../c_stubs/tls13_crypto_external.h"' \
 	  -add-include '"../../c_stubs/tls13_spec_types.h"' \
+	  -add-include '"../../c_stubs/tls13_io_karamel.h"' \
 	  -add-include '"../../c_stubs/tls13_openssl_karamel.h"' \
 	  -drop 'FStar.Tactics.\*' -drop FStar.Tactics -drop 'FStar.Reflection.\*' \
 	  -library TLS13.Crypto -library TLS13.X509 -library TLS13.IO \
-	  -library TLS13.OpenSSL -library TLS13.Impl.Serializer \
+	  -library TLS13.OpenSSL \
 	  -bundle 'TLS13.Crypto.Spec,TLS13.X509.Spec,TLS13.Record.Spec,TLS13.Handshake.Spec,TLS13.Wire.Spec,TLS13.Wire.Spec.*' \
 	  -bundle 'TLS13.Wire.Generated.*' \
 	  -bundle 'LowParse.\*' \
@@ -632,14 +676,12 @@ ECHO_STUB_SOURCES = \
   c_stubs/tls13_hacl_stubs.c
 
 ECHO_STUB_HEADERS = \
-  c_stubs/tls13_connection_backend.h \
   c_stubs/tls13_crypto_external.h \
   c_stubs/tls13_hacl_stubs.h \
   c_stubs/tls13_io_karamel.h \
   c_stubs/tls13_io_stubs.h \
   c_stubs/tls13_openssl_karamel.h \
   c_stubs/tls13_openssl_stubs.h \
-  c_stubs/tls13_serializer_macros.h \
   c_stubs/tls13_spec_types.h
 
 # Common C flags for all test builds

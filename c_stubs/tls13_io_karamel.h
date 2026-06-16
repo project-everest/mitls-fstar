@@ -4,7 +4,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#include "tls13_connection_backend.h"
+typedef struct TLS13_IO_channel_s *TLS13_IO_channel;
 
 TLS13_IO_channel tls13_io_channel_from_fd(int fd);
 

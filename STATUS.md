@@ -147,9 +147,8 @@ For the near-term end-to-end theorem, the first option is the right path.
 
 ### 4. Finish the TCB audit at the theorem boundary
 
-The active Parser/Serializer hooks are much stronger now, but the final theorem should include a concise audited list of trusted assumptions:
+The active Parser/Serializer hooks are verified F*/Pulse code now, so the final theorem should include a concise audited list of the remaining trusted assumptions:
 
-- parser and serializer C shims;
 - HACL/crypto wrappers and entropy/X25519;
 - X509 chain validation and signature verification;
 - Pulse runtime/extraction/runtime shims;
@@ -179,7 +178,7 @@ Breakdown:
 
 If the required theorem must cumulatively account for rejected consumed bytes inside `connection_state`, estimate closer to 2-3 weeks total from here because that is a spec/model change, not a lemma-only strengthening.
 
-If the required theorem also removes Parser/Serializer/Crypto/X509 TCBs or adds full multi-record app-data support, that is substantially larger work, likely several additional weeks to months depending on scope.
+If the required theorem also removes Crypto/X509 TCBs or adds full multi-record app-data support, that is substantially larger work, likely several additional weeks to months depending on scope.
 
 ## What to audit now
 
@@ -192,8 +191,7 @@ Start with these files:
 - `src/impl/TLS13.OpenSSL.fsti` and `c_stubs/tls13_openssl_karamel.*`: typed OpenSSL auth TCB used by the verified workflow.
 - `c_stubs/tls13_io_karamel.*` and `test/unit/test_extracted_client_openssl_echo.c`: C ABI bridge and OpenSSL echo smoke test for the extracted narrow Pulse driver API.
 - `src/spec/TLS13.Spec.ConnectionState.fst`: audit-facing core connection-state model, legal deltas, cumulative replay predicates, and the accepted-versus-rejected raw-byte distinction. Proof-only preservation/projection lemmas are isolated in `src/spec/TLS13.ConnectionState.Lemmas.fst`; `src/spec/TLS13.StateMachine.fst` is the small client-only trace automaton used by log/projection proofs.
-- `src/impl/TLS13.Impl.Parser.fsti` and `src/impl/TLS13.Impl.Serializer.fsti`: active TCB contracts.
-- `c_stubs/tls13_connection_backend.h`: handwritten C implementation of parser/serializer assumptions.
+- `src/impl/TLS13.Impl.Parser.*` and `src/impl/TLS13.Impl.Serializer.*`: verified parser/serializer facades and their `TLS13.Wire.Spec` postconditions.
 - `TLS_DESIGN_AND_IMPL.md`: high-level description of the current proof architecture and remaining gaps.
 - `AUDIT.md`: audit-oriented summary of the theorem guarantees, supported profile, verified/C split, and TCB surface.
 

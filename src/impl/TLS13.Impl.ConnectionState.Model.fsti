@@ -34,6 +34,16 @@ let sizet_lte_plain (x:SZ.t) (y:SZ.t) : bool =
 val lemma_sizet_lte_plain (x:SZ.t) (y:SZ.t)
   : Lemma (sizet_lte_plain x y == (SZ.v x <= SZ.v y))
 
+val lemma_seal_some_of_keys
+  (s:R.direction_state)
+  (aad:B.bytes)
+  (pt:M.plaintext)
+  : Lemma
+      (requires (match s.R.key, s.R.static_iv with
+                 | Some _, Some _ -> True
+                 | _, _ -> False))
+      (ensures Some? (R.seal s aad pt))
+
 let bounded_u16_sizet (n:nat) : SZ.t =
   if n < 65536 then SZ.uint_to_t n else 0sz
 
