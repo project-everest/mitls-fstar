@@ -28,6 +28,9 @@ inline_for_extraction let max_server_hello_len_sz : SZ.t = 4096sz
 inline_for_extraction let max_handshake_flight_len_sz : SZ.t = 32768sz
 inline_for_extraction let max_transcript_len_sz : SZ.t = 65535sz
 inline_for_extraction let max_certificate_verify_input_len_sz : SZ.t = 256sz
+inline_for_extraction let max_trust_anchors_len_sz : SZ.t = 65535sz
+inline_for_extraction let max_pending_plaintext_len_sz : SZ.t = 32768sz
+inline_for_extraction let max_pending_raw_len_sz : SZ.t = 32768sz
 
 let option_is_some #a (x:option a) : prop =
   match x with

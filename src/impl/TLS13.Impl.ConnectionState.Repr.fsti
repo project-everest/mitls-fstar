@@ -1153,28 +1153,29 @@ let lemma_configured_initial_consistent
 =
   ()
 
-fn alloc_empty_sized_bytes (#cap:nat)
-  requires pure (SZ.fits cap)
+fn alloc_empty_sized_bytes (cap:SZ.t) (#cap_spec:erased nat)
+  requires pure (SZ.v cap == reveal cap_spec)
   returns slot:sized_bytes
-  ensures sized_bytes_exactly slot cap B.empty
+  ensures sized_bytes_exactly slot cap_spec B.empty
 
 fn copy_array_to_sized_bytes
-  (#cap:nat)
+  (#cap_spec:erased nat)
   (src:array U8.t)
   (dst:sized_bytes)
+  (cap:SZ.t)
   (src_len:SZ.t)
   requires ArrPts.pts_to src 'src_bytes **
-           sized_bytes_allocated dst cap **
-           pure (SZ.fits cap /\
+           sized_bytes_allocated dst cap_spec **
+           pure (SZ.v cap == reveal cap_spec /\
                  B.length 'src_bytes == SZ.v src_len /\
-                 SZ.v src_len <= cap)
+                 SZ.v src_len <= reveal cap_spec)
   ensures ArrPts.pts_to src 'src_bytes **
-          sized_bytes_exactly dst cap (Ghost.reveal 'src_bytes)
+          sized_bytes_exactly dst cap_spec (Ghost.reveal 'src_bytes)
 
-fn alloc_empty_optional_sized_bytes (#cap:nat)
-  requires pure (SZ.fits cap)
+fn alloc_empty_optional_sized_bytes (cap:SZ.t) (#cap_spec:erased nat)
+  requires pure (SZ.v cap == reveal cap_spec)
   returns slot:optional_sized_bytes
-  ensures optional_sized_bytes_exactly slot cap None
+  ensures optional_sized_bytes_exactly slot cap_spec None
 
 fn copy_optional_sized_bytes_to_array
   (#cap:nat)
@@ -1434,24 +1435,26 @@ fn store_optional_fixed32_from_array
 fn copy_cipher_suite_list_storage
   (src:u16_list_storage)
   (dst:u16_list_storage)
-  (cap:nat)
+  (cap:SZ.t)
+  (#cap_spec:erased nat)
   (#suites:erased (list T.cipher_suite))
-  requires cipher_suite_list_exactly src cap suites **
-           cipher_suite_list_allocated dst cap **
-           pure (SZ.fits cap)
-  ensures cipher_suite_list_exactly src cap suites **
-          cipher_suite_list_exactly dst cap suites
+  requires cipher_suite_list_exactly src cap_spec suites **
+           cipher_suite_list_allocated dst cap_spec **
+           pure (SZ.v cap == reveal cap_spec)
+  ensures cipher_suite_list_exactly src cap_spec suites **
+          cipher_suite_list_exactly dst cap_spec suites
 
 fn copy_signature_scheme_list_storage
   (src:u16_list_storage)
   (dst:u16_list_storage)
-  (cap:nat)
+  (cap:SZ.t)
+  (#cap_spec:erased nat)
   (#schemes:erased (list T.signature_scheme))
-  requires signature_scheme_list_exactly src cap schemes **
-           signature_scheme_list_allocated dst cap **
-           pure (SZ.fits cap)
-  ensures signature_scheme_list_exactly src cap schemes **
-          signature_scheme_list_exactly dst cap schemes
+  requires signature_scheme_list_exactly src cap_spec schemes **
+           signature_scheme_list_allocated dst cap_spec **
+           pure (SZ.v cap == reveal cap_spec)
+  ensures signature_scheme_list_exactly src cap_spec schemes **
+          signature_scheme_list_exactly dst cap_spec schemes
 
 fn copy_hostname_sized_bytes
   (src:sized_bytes)

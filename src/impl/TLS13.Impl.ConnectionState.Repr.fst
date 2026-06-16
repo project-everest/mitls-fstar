@@ -101,47 +101,46 @@ fn store_traffic_key_material
   fold (traffic_key_material_exactly slot (Some (Ghost.reveal material)))
 }
 
-fn alloc_empty_sized_bytes (#cap:nat)
-  requires pure (SZ.fits cap)
+fn alloc_empty_sized_bytes (cap:SZ.t) (#cap_spec:erased nat)
+  requires pure (SZ.v cap == reveal cap_spec)
   returns slot:sized_bytes
-  ensures sized_bytes_exactly slot cap B.empty
+  ensures sized_bytes_exactly slot cap_spec B.empty
 {
-  let cap_sz = SZ.uint_to_t cap;
-  let bytes = V.alloc 0uy cap_sz;
+  let bytes = V.alloc 0uy cap;
   let len = Box.alloc 0sz;
   let slot = { bytes; len };
-  assert (pure (SZ.v cap_sz == cap));
-  rewrite (V.pts_to bytes (Seq.create cap 0uy)) as
-    (V.pts_to slot.bytes (Seq.create cap 0uy));
+  rewrite (V.pts_to bytes (Seq.create (SZ.v cap) 0uy)) as
+    (V.pts_to slot.bytes (Seq.create (SZ.v cap) 0uy));
   rewrite (Box.pts_to len 0sz) as (Box.pts_to slot.len 0sz);
-  assert (pure (B.length (Seq.create cap 0uy) == cap));
-  Seq.lemma_len_slice (Seq.create cap 0uy) 0 0;
-  Seq.lemma_eq_intro B.empty (Seq.slice (Seq.create cap 0uy) 0 0);
-  assert (pure (byte_prefix_matches (Seq.create cap 0uy) 0sz B.empty));
-  fold (sized_bytes_exactly slot cap B.empty);
+  assert (pure (B.length (Seq.create (SZ.v cap) 0uy) == SZ.v cap));
+  Seq.lemma_len_slice (Seq.create (SZ.v cap) 0uy) 0 0;
+  Seq.lemma_eq_intro B.empty (Seq.slice (Seq.create (SZ.v cap) 0uy) 0 0);
+  assert (pure (byte_prefix_matches (Seq.create (SZ.v cap) 0uy) 0sz B.empty));
+  fold (sized_bytes_exactly slot cap_spec B.empty);
   slot
 }
 
 fn copy_array_to_sized_bytes
-  (#cap:nat)
+  (#cap_spec:erased nat)
   (src:array U8.t)
   (dst:sized_bytes)
+  (cap:SZ.t)
   (src_len:SZ.t)
   requires ArrPts.pts_to src 'src_bytes **
-           sized_bytes_allocated dst cap **
-           pure (SZ.fits cap /\
+           sized_bytes_allocated dst cap_spec **
+           pure (SZ.v cap == reveal cap_spec /\
                  B.length 'src_bytes == SZ.v src_len /\
-                 SZ.v src_len <= cap)
+                 SZ.v src_len <= reveal cap_spec)
   ensures ArrPts.pts_to src 'src_bytes **
-          sized_bytes_exactly dst cap (Ghost.reveal 'src_bytes)
+          sized_bytes_exactly dst cap_spec (Ghost.reveal 'src_bytes)
 {
-  unfold (sized_bytes_allocated dst cap);
+  unfold (sized_bytes_allocated dst cap_spec);
   with dst_storage dst_len. _;
 
   ArrPts.pts_to_len src;
   V.to_array_pts_to dst.bytes;
 
-  let dst_cap = SZ.uint_to_t cap;
+  let dst_cap = cap;
   let src_slice = Slice.from_array src src_len;
   let dst_slice = Slice.from_array (V.vec_to_array dst.bytes) dst_cap;
 
@@ -165,27 +164,25 @@ fn copy_array_to_sized_bytes
   assert (pure (Seq.equal
     (Seq.slice copied_dst_storage 0 (SZ.v src_len))
     (Ghost.reveal 'src_bytes)));
-  fold (sized_bytes_exactly dst cap (Ghost.reveal 'src_bytes))
+  fold (sized_bytes_exactly dst cap_spec (Ghost.reveal 'src_bytes))
 }
 
-fn alloc_empty_optional_sized_bytes (#cap:nat)
-  requires pure (SZ.fits cap)
+fn alloc_empty_optional_sized_bytes (cap:SZ.t) (#cap_spec:erased nat)
+  requires pure (SZ.v cap == reveal cap_spec)
   returns slot:optional_sized_bytes
-  ensures optional_sized_bytes_exactly slot cap None
+  ensures optional_sized_bytes_exactly slot cap_spec None
 {
-  let cap_sz = SZ.uint_to_t cap;
   let present = Box.alloc false;
-  let bytes = V.alloc 0uy cap_sz;
+  let bytes = V.alloc 0uy cap;
   let len = Box.alloc 0sz;
   let value = { bytes; len };
   let slot = { present; value };
-  assert (pure (SZ.v cap_sz == cap));
   rewrite (Box.pts_to present false) as (Box.pts_to slot.present false);
-  rewrite (V.pts_to bytes (Seq.create cap 0uy)) as
-    (V.pts_to slot.value.bytes (Seq.create cap 0uy));
+  rewrite (V.pts_to bytes (Seq.create (SZ.v cap) 0uy)) as
+    (V.pts_to slot.value.bytes (Seq.create (SZ.v cap) 0uy));
   rewrite (Box.pts_to len 0sz) as (Box.pts_to slot.value.len 0sz);
-  assert (pure (B.length (Seq.create cap 0uy) == cap));
-  fold (optional_sized_bytes_exactly slot cap None);
+  assert (pure (B.length (Seq.create (SZ.v cap) 0uy) == SZ.v cap));
+  fold (optional_sized_bytes_exactly slot cap_spec None);
   slot
 }
 
@@ -374,8 +371,8 @@ fn alloc_default_config_storage ()
   assert (pure (SZ.fits max_hostname_len));
   assert (pure (SZ.fits max_trust_anchors_len));
   let role_tag = Box.alloc 0uy;
-  let server_name = alloc_empty_sized_bytes #max_hostname_len;
-  let trust_anchors = alloc_empty_sized_bytes #max_trust_anchors_len;
+  let server_name = alloc_empty_sized_bytes max_hostname_len_sz #max_hostname_len;
+  let trust_anchors = alloc_empty_sized_bytes max_trust_anchors_len_sz #max_trust_anchors_len;
   let validation_time_seconds = Box.alloc 0sz;
   let cipher_suites = alloc_default_cipher_suites ();
   let signature_schemes = alloc_default_signature_schemes ();
@@ -443,7 +440,7 @@ fn alloc_config_storage
   assert (pure (SZ.fits max_hostname_len));
   assert (pure (SZ.fits max_trust_anchors_len));
   let role_tag = Box.alloc 0uy;
-  let server_name_slot = alloc_empty_sized_bytes #max_hostname_len;
+  let server_name_slot = alloc_empty_sized_bytes max_hostname_len_sz #max_hostname_len;
   unfold (sized_bytes_exactly server_name_slot max_hostname_len B.empty);
   with empty_server_name_storage empty_server_name_len. _;
   fold (sized_bytes_allocated server_name_slot max_hostname_len);
@@ -451,8 +448,9 @@ fn alloc_config_storage
     #max_hostname_len
     server_name
     server_name_slot
+    max_hostname_len_sz
     server_name_len;
-  let trust_anchors_slot = alloc_empty_sized_bytes #max_trust_anchors_len;
+  let trust_anchors_slot = alloc_empty_sized_bytes max_trust_anchors_len_sz #max_trust_anchors_len;
   unfold (sized_bytes_exactly trust_anchors_slot max_trust_anchors_len B.empty);
   with empty_trust_anchors_storage empty_trust_anchors_len. _;
   fold (sized_bytes_allocated trust_anchors_slot max_trust_anchors_len);
@@ -460,6 +458,7 @@ fn alloc_config_storage
     #max_trust_anchors_len
     trust_anchors
     trust_anchors_slot
+    max_trust_anchors_len_sz
     trust_anchors_len;
   let validation_time_seconds_box = Box.alloc validation_time_seconds;
   let cipher_suites = alloc_default_cipher_suites ();
@@ -628,7 +627,7 @@ fn alloc_handshake_start_empty ()
 {
   assert (pure (SZ.fits max_hostname_len));
   let present = Box.alloc false;
-  let server_name = alloc_empty_sized_bytes #max_hostname_len;
+  let server_name = alloc_empty_sized_bytes max_hostname_len_sz #max_hostname_len;
   let client_random = V.alloc 0uy 32sz;
   let client_key_share_private = alloc_empty_optional_fixed32 ();
   let client_key_share_public = V.alloc 0uy 32sz;
@@ -800,8 +799,8 @@ fn alloc_peer_empty ()
   assert (pure (SZ.fits max_hostname_len));
   assert (pure (SZ.fits max_public_key_len));
   let present = Box.alloc false;
-  let validated_hostname = alloc_empty_sized_bytes #max_hostname_len;
-  let leaf_public_key = alloc_empty_sized_bytes #max_public_key_len;
+  let validated_hostname = alloc_empty_sized_bytes max_hostname_len_sz #max_hostname_len;
+  let leaf_public_key = alloc_empty_sized_bytes max_public_key_len_sz #max_public_key_len;
   let permitted_items = V.alloc 0us (max_signature_schemes_sz);
   let permitted_len = Box.alloc 0sz;
   let permitted_signature_schemes = { items = permitted_items; len = permitted_len };
@@ -843,12 +842,12 @@ fn alloc_handshake_buffers_empty ()
   assert (pure (SZ.fits max_server_hello_len));
   assert (pure (SZ.fits max_handshake_flight_len));
   assert (pure (SZ.fits max_certificate_verify_input_len));
-  let client_hello_bytes = alloc_empty_sized_bytes #max_client_hello_len;
-  let server_hello_bytes = alloc_empty_sized_bytes #max_server_hello_len;
-  let encrypted_server_handshake_bytes = alloc_empty_sized_bytes #max_handshake_flight_len;
+  let client_hello_bytes = alloc_empty_sized_bytes max_client_hello_len_sz #max_client_hello_len;
+  let server_hello_bytes = alloc_empty_sized_bytes max_server_hello_len_sz #max_server_hello_len;
+  let encrypted_server_handshake_bytes = alloc_empty_sized_bytes max_handshake_flight_len_sz #max_handshake_flight_len;
   let encrypted_server_handshake_parsed = Box.alloc 0sz;
-  let certificate_leaf_der = alloc_empty_optional_sized_bytes #max_handshake_flight_len;
-  let certificate_verify_input = alloc_empty_optional_sized_bytes #max_certificate_verify_input_len;
+  let certificate_leaf_der = alloc_empty_optional_sized_bytes max_handshake_flight_len_sz #max_handshake_flight_len;
+  let certificate_verify_input = alloc_empty_optional_sized_bytes max_certificate_verify_input_len_sz #max_certificate_verify_input_len;
   let buffers = {
     client_hello_bytes;
     server_hello_bytes;
@@ -885,7 +884,7 @@ fn alloc_handshake_empty ()
   let certificate_verify_verified = Box.alloc false;
   let server_finished_verified = Box.alloc false;
   assert (pure (SZ.fits max_transcript_len));
-  let transcript = alloc_empty_sized_bytes #max_transcript_len;
+  let transcript = alloc_empty_sized_bytes max_transcript_len_sz #max_transcript_len;
   let buffers = alloc_handshake_buffers_empty ();
   let keys = alloc_key_schedule_empty ();
   let handshake = {
@@ -928,10 +927,10 @@ fn alloc_application_empty ()
 {
   assert (pure (SZ.fits max_pending_plaintext_len));
   assert (pure (SZ.fits max_pending_raw_len));
-  let pending_plaintext = alloc_empty_sized_bytes #max_pending_plaintext_len;
-  let pending_source_record = alloc_empty_sized_bytes #max_pending_plaintext_len;
+  let pending_plaintext = alloc_empty_sized_bytes max_pending_plaintext_len_sz #max_pending_plaintext_len;
+  let pending_source_record = alloc_empty_sized_bytes max_pending_plaintext_len_sz #max_pending_plaintext_len;
   let pending_source_offset = Box.alloc 0sz;
-  let pending_received_raw = alloc_empty_sized_bytes #max_pending_raw_len;
+  let pending_received_raw = alloc_empty_sized_bytes max_pending_raw_len_sz #max_pending_raw_len;
   let key_update_response_pending = Box.alloc false;
   let app = {
     pending_plaintext;
@@ -1351,63 +1350,63 @@ fn store_optional_fixed32_from_array
 fn copy_cipher_suite_list_storage
   (src:u16_list_storage)
   (dst:u16_list_storage)
-  (cap:nat)
+  (cap:SZ.t)
+  (#cap_spec:erased nat)
   (#suites:erased (list T.cipher_suite))
-  requires cipher_suite_list_exactly src cap suites **
-           cipher_suite_list_allocated dst cap **
-           pure (SZ.fits cap)
-  ensures cipher_suite_list_exactly src cap suites **
-          cipher_suite_list_exactly dst cap suites
+  requires cipher_suite_list_exactly src cap_spec suites **
+           cipher_suite_list_allocated dst cap_spec **
+           pure (SZ.v cap == reveal cap_spec)
+  ensures cipher_suite_list_exactly src cap_spec suites **
+          cipher_suite_list_exactly dst cap_spec suites
 {
-  unfold (cipher_suite_list_exactly src cap (Ghost.reveal suites));
-  unfold (cipher_suite_list_allocated dst cap);
+  unfold (cipher_suite_list_exactly src cap_spec (Ghost.reveal suites));
+  unfold (cipher_suite_list_allocated dst cap_spec);
   with src_items. assert (V.pts_to src.items src_items);
   with src_len. assert (Box.pts_to src.len src_len);
   with dst_items. assert (V.pts_to dst.items dst_items);
   with dst_len. assert (Box.pts_to dst.len dst_len);
   let src_len_runtime = !src.len;
   assert (pure (src_len_runtime == src_len));
-  let cap_sz = SZ.uint_to_t cap;
   V.to_array_pts_to src.items;
   V.to_array_pts_to dst.items;
-  Arr.memcpy cap_sz (V.vec_to_array src.items) (V.vec_to_array dst.items);
+  Arr.memcpy cap (V.vec_to_array src.items) (V.vec_to_array dst.items);
   V.to_vec_pts_to src.items;
   V.to_vec_pts_to dst.items;
   dst.len := src_len_runtime;
   assert (V.pts_to dst.items src_items);
-  fold (cipher_suite_list_exactly src cap (Ghost.reveal suites));
-  fold (cipher_suite_list_exactly dst cap (Ghost.reveal suites))
+  fold (cipher_suite_list_exactly src cap_spec (Ghost.reveal suites));
+  fold (cipher_suite_list_exactly dst cap_spec (Ghost.reveal suites))
 }
 
 fn copy_signature_scheme_list_storage
   (src:u16_list_storage)
   (dst:u16_list_storage)
-  (cap:nat)
+  (cap:SZ.t)
+  (#cap_spec:erased nat)
   (#schemes:erased (list T.signature_scheme))
-  requires signature_scheme_list_exactly src cap schemes **
-           signature_scheme_list_allocated dst cap **
-           pure (SZ.fits cap)
-  ensures signature_scheme_list_exactly src cap schemes **
-          signature_scheme_list_exactly dst cap schemes
+  requires signature_scheme_list_exactly src cap_spec schemes **
+           signature_scheme_list_allocated dst cap_spec **
+           pure (SZ.v cap == reveal cap_spec)
+  ensures signature_scheme_list_exactly src cap_spec schemes **
+          signature_scheme_list_exactly dst cap_spec schemes
 {
-  unfold (signature_scheme_list_exactly src cap (Ghost.reveal schemes));
-  unfold (signature_scheme_list_allocated dst cap);
+  unfold (signature_scheme_list_exactly src cap_spec (Ghost.reveal schemes));
+  unfold (signature_scheme_list_allocated dst cap_spec);
   with src_items. assert (V.pts_to src.items src_items);
   with src_len. assert (Box.pts_to src.len src_len);
   with dst_items. assert (V.pts_to dst.items dst_items);
   with dst_len. assert (Box.pts_to dst.len dst_len);
   let src_len_runtime = !src.len;
   assert (pure (src_len_runtime == src_len));
-  let cap_sz = SZ.uint_to_t cap;
   V.to_array_pts_to src.items;
   V.to_array_pts_to dst.items;
-  Arr.memcpy cap_sz (V.vec_to_array src.items) (V.vec_to_array dst.items);
+  Arr.memcpy cap (V.vec_to_array src.items) (V.vec_to_array dst.items);
   V.to_vec_pts_to src.items;
   V.to_vec_pts_to dst.items;
   dst.len := src_len_runtime;
   assert (V.pts_to dst.items src_items);
-  fold (signature_scheme_list_exactly src cap (Ghost.reveal schemes));
-  fold (signature_scheme_list_exactly dst cap (Ghost.reveal schemes))
+  fold (signature_scheme_list_exactly src cap_spec (Ghost.reveal schemes));
+  fold (signature_scheme_list_exactly dst cap_spec (Ghost.reveal schemes))
 }
 
 fn copy_hostname_sized_bytes
