@@ -386,6 +386,37 @@ val lemma_client_server_driver_key_material_agrees_from_no_read_ahead_components
         CS.paired_wire_logs client server /\
         CS.supported_profile_client_server_key_material_agrees client server)
 
+val lemma_client_server_driver_key_material_agrees_from_public_success
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  (client_received:B.bytes)
+  (client_sent:B.bytes)
+  (server_received:B.bytes)
+  (server_sent:B.bytes)
+  : Lemma
+      (requires
+        client_server_driver_key_material_no_read_ahead_component_inputs
+          client
+          server
+          client_received
+          client_sent
+          server_received
+          server_sent)
+      (ensures
+        CS.supported_profile_all_derived_key_material_agrees client server /\
+        CS.supported_profile_client_server_key_material_inputs_agree
+          client
+          server /\
+        paired_driver_transport_logs_exact
+          client
+          server
+          client_received
+          client_sent
+          server_received
+          server_sent /\
+        CS.paired_wire_logs client server /\
+        CS.supported_profile_client_server_key_material_agrees client server)
+
 val lemma_paired_wire_logs_from_exact_transport
   (client:CS.connection_state)
   (server:CS.connection_state)
