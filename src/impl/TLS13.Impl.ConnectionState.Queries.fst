@@ -673,8 +673,9 @@ fn can_send_client_hello_runtime
   assert (pure (has_client_hello == ch_present));
   assert (pure (B.length st0.CS.cs_model.CS.model_handshake.CS.hs_transcript == SZ.v transcript_len));
 
-  assert (pure (SZ.fits (max_transcript_len - max_client_hello_len)));
-  let transcript_bound = SZ.uint_to_t (max_transcript_len - max_client_hello_len);
+  assert (pure (SZ.v max_transcript_len_sz == max_transcript_len /\
+                SZ.v max_client_hello_len_sz == max_client_hello_len));
+  let transcript_bound = SZ.sub max_transcript_len_sz max_client_hello_len_sz;
   let transcript_room = sizet_lte_plain transcript_len transcript_bound;
   lemma_sizet_lte_plain transcript_len transcript_bound;
   let out_room = sizet_lte_plain 517sz network_out_len;
@@ -828,8 +829,9 @@ fn can_receive_server_hello
 
   W.lemma_serialize_server_hello_len sh;
   assert (pure (B.length (W.serialize_handshake (M.ServerHello sh)) <= max_server_hello_len));
-  assert (pure (SZ.fits (max_transcript_len - max_server_hello_len)));
-  let max_start = SZ.uint_to_t (max_transcript_len - max_server_hello_len);
+  assert (pure (SZ.v max_transcript_len_sz == max_transcript_len /\
+                SZ.v max_server_hello_len_sz == max_server_hello_len));
+  let max_start = SZ.sub max_transcript_len_sz max_server_hello_len_sz;
   let transcript_room = SZ.lte current_transcript_len max_start;
 
   if has_start {
