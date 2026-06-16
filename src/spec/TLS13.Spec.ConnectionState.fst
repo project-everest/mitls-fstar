@@ -568,6 +568,50 @@ let client_x25519_key_share_projection
   | _, _, _, _ ->
     False
 
+let client_x25519_pre_shared_secret_projection
+  (client:connection_state)
+  : prop =
+  let hs = client.cs_model.model_handshake in
+  match hs.hs_start, hs.hs_client_hello with
+  | Some start, Some ch ->
+    client_hello_key_share ch == start.start_client_key_share_public /\
+    (match start.start_client_key_share_private with
+     | Some client_sk ->
+       C.x25519_public_from_private client_sk ==
+         start.start_client_key_share_public
+     | None ->
+       True)
+  | _, _ ->
+    False
+
+let client_x25519_key_share_projection_stable_control
+  (control:connection_control_state)
+  : prop =
+  match control with
+  | ControlHandshaking HsServerHelloReceived
+  | ControlHandshaking HsEncryptedExtensionsReceived
+  | ControlHandshaking HsCertificateReceived
+  | ControlHandshaking HsCertificateValidated
+  | ControlHandshaking HsCertificateVerifyReceived
+  | ControlHandshaking HsCertificateVerifyVerified
+  | ControlHandshaking HsServerFinishedReceived
+  | ControlHandshaking HsServerFinishedVerified
+  | ControlHandshaking HsClientFinishedSent
+  | ControlApplicationData
+  | ControlClosing
+  | ControlClosed
+  | ControlFailed _ ->
+    True
+  | _ ->
+    False
+
+let stable_client_x25519_key_share_projection
+  (client:connection_state)
+  : prop =
+  client_x25519_key_share_projection client /\
+  client_x25519_key_share_projection_stable_control
+    client.cs_model.model_control
+
 let server_x25519_key_share_projection
   (server:connection_state)
   : prop =
@@ -589,6 +633,51 @@ let server_x25519_key_share_projection
       False)
   | _, _, _, _ ->
     False
+
+let server_x25519_pre_server_hello_projection
+  (server:connection_state)
+  : prop =
+  let hs = server.cs_model.model_handshake in
+  match
+    hs.hs_server_selection,
+    hs.hs_client_hello,
+    hs.hs_keys.ks_shared_secret
+  with
+  | Some selection, Some ch, Some shared ->
+    (match selection.server_key_share_private with
+     | Some server_sk ->
+       selection.server_selected_client_hello == ch /\
+       C.x25519_public_from_private server_sk ==
+         selection.server_key_share_public /\
+       C.x25519_shared server_sk (client_hello_key_share ch) == Some shared
+     | None ->
+       False)
+  | _, _, _ ->
+    False
+
+let server_x25519_key_share_projection_stable_control
+  (control:connection_control_state)
+  : prop =
+  match control with
+  | ControlHandshaking HsServerHelloSent
+  | ControlHandshaking HsServerEncryptedFlightSent
+  | ControlHandshaking HsServerFinishedSent
+  | ControlHandshaking HsClientFinishedReceived
+  | ControlHandshaking HsClientFinishedVerified
+  | ControlApplicationData
+  | ControlClosing
+  | ControlClosed
+  | ControlFailed _ ->
+    True
+  | _ ->
+    False
+
+let stable_server_x25519_key_share_projection
+  (server:connection_state)
+  : prop =
+  server_x25519_key_share_projection server /\
+  server_x25519_key_share_projection_stable_control
+    server.cs_model.model_control
 
 let paired_cleartext_hello_messages
   (client:connection_state)
@@ -2169,6 +2258,7 @@ let legal_local_event (model:connection_model) (ev:local_event) : GTot prop =
      | None -> False)
   | LocalSelectServerParameters selection, ControlHandshaking HsClientHelloReceived ->
     model.model_config.config_role == ServerEndpoint /\
+    hs.hs_keys.ks_shared_secret == None /\
     hs.hs_client_hello == Some selection.server_selected_client_hello /\
     (match model.model_config.config_server with
      | Some cfg -> server_selection_acceptable cfg selection

@@ -286,8 +286,8 @@ let client_server_driver_x25519_projection_inputs
   (client:CS.connection_state)
   (server:CS.connection_state)
   : prop =
-  client_x25519_key_share_projection client /\
-  server_x25519_key_share_projection server /\
+  CD.client_driver_application_ready client /\
+  SD.server_driver_application_ready server /\
   paired_cleartext_hello_messages client server
 
 noextract

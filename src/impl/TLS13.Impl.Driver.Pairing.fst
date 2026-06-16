@@ -209,6 +209,10 @@ let lemma_client_server_driver_paired_x25519_key_shares_from_projection_inputs
         client_server_driver_x25519_projection_inputs client server)
       (ensures CS.paired_x25519_key_shares client server)
 =
+  assert (CS.stable_client_x25519_key_share_projection client);
+  assert (CS.client_x25519_key_share_projection client);
+  assert (CS.stable_server_x25519_key_share_projection server);
+  assert (CS.server_x25519_key_share_projection server);
   let client_hs = client.CS.cs_model.CS.model_handshake in
   let server_hs = server.CS.cs_model.CS.model_handshake in
   match

@@ -55,6 +55,26 @@ val lemma_step_model_from_failed_results_failed
         step_model model0 ev == Some model1)
       (ensures ControlFailed? model1.model_control)
 
+val lemma_legal_connection_delta_stable_client_x25519_key_share_projection
+  (st0:connection_state)
+  (delta:connection_delta)
+  (st1:connection_state)
+  : Lemma
+      (requires
+        legal_connection_delta st0 delta st1 /\
+        stable_client_x25519_key_share_projection st0)
+      (ensures stable_client_x25519_key_share_projection st1)
+
+val lemma_legal_connection_delta_stable_server_x25519_key_share_projection
+  (st0:connection_state)
+  (delta:connection_delta)
+  (st1:connection_state)
+  : Lemma
+      (requires
+        legal_connection_delta st0 delta st1 /\
+        stable_server_x25519_key_share_projection st0)
+      (ensures stable_server_x25519_key_share_projection st1)
+
 val lemma_expected_traffic_secret_client_projection
   (hs:handshake_state)
   (epoch:traffic_epoch)
@@ -80,6 +100,26 @@ val lemma_connection_application_keys_supported_profile_key_schedule_lineage
         connection_state_consistent st /\
         application_record_keys_installed_for_role role st.cs_model)
       (ensures connection_supported_profile_key_schedule_lineage st)
+
+val lemma_client_application_ready_stable_x25519_key_share_projection
+  (st:connection_state)
+  : Lemma
+      (requires
+        connection_state_consistent st /\
+        st.cs_model.model_config.config_role == ClientEndpoint /\
+        st.cs_model.model_control == ControlApplicationData /\
+        application_record_keys_installed_for_role ClientEndpoint st.cs_model)
+      (ensures stable_client_x25519_key_share_projection st)
+
+val lemma_server_application_ready_stable_x25519_key_share_projection
+  (st:connection_state)
+  : Lemma
+      (requires
+        connection_state_consistent st /\
+        st.cs_model.model_config.config_role == ServerEndpoint /\
+        st.cs_model.model_control == ControlApplicationData /\
+        application_record_keys_installed_for_role ServerEndpoint st.cs_model)
+      (ensures stable_server_x25519_key_share_projection st)
 
 val lemma_record_read_key_schedule_projection_client_projection
   (model:connection_model)

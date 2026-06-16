@@ -295,6 +295,7 @@ fn can_select_supported_server_parameters_runtime
             st0.CS.cs_model.CS.model_config.CS.config_role ==
               CS.ServerEndpoint /\
             server_selection_absent st0.CS.cs_model.CS.model_handshake /\
+            st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_shared_secret == None /\
             Some? st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello /\
             Some? st0.CS.cs_model.CS.model_config.CS.config_server /\
             (match st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello,

@@ -13,6 +13,7 @@ module CT = TLS13.Impl.Client.Types
 module Crypto = TLS13.Crypto
 module CryptoSpec = TLS13.Crypto.Spec
 module CS = TLS13.Spec.ConnectionState
+module CSL = TLS13.ConnectionState.Lemmas
 module CM = TLS13.Impl.ConnectionState.Model
 module CR = TLS13.Impl.ConnectionState.Repr
 module CQ = TLS13.Impl.ConnectionState.Queries
@@ -563,6 +564,8 @@ fn accept
                             assert (pure (CS.application_record_keys_installed_for_role
                               CS.ServerEndpoint
                               st3.CS.cs_model));
+                            CSL.lemma_server_application_ready_stable_x25519_key_share_projection
+                              st3;
                             assert (pure (server_driver_sent_log_exact st3 sent3));
                             lemma_server_driver_wire_logs_match_received_accounted
                               st3

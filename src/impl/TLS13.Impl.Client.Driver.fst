@@ -13,6 +13,7 @@ module CL = TLS13.ConnectionLog
 module CQ = TLS13.Impl.ConnectionState.Queries
 module CR = TLS13.Impl.ConnectionState.Repr
 module CS = TLS13.Spec.ConnectionState
+module CSL = TLS13.ConnectionState.Lemmas
 module CT = TLS13.Impl.Client.Types
 module ID = FStar.IndefiniteDescription
 module IO = TLS13.IO
@@ -4137,6 +4138,7 @@ fn rec driver_handshake
                   result.driver_workflow_rx_len);
               result
             } else {
+              assert (pure (0 < SZ.v fuel));
               let next_fuel = SZ.sub fuel 1sz;
               assert (pure (SZ.v next_fuel < SZ.v fuel));
               driver_handshake
@@ -5562,6 +5564,8 @@ fn connect
              assert (pure (CS.application_record_keys_installed_for_role
                CS.ClientEndpoint
                st1.CS.cs_model));
+             CSL.lemma_client_application_ready_stable_x25519_key_share_projection
+               st1;
              assert (pure (client_driver_application_ready st1));
              Box.(d.client_driver_channel := Some ch);
              fold (client_driver_connected d st1 received sent);

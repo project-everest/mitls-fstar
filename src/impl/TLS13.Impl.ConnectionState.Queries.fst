@@ -1401,6 +1401,7 @@ fn can_select_supported_server_parameters_runtime
             st0.CS.cs_model.CS.model_config.CS.config_role ==
               CS.ServerEndpoint /\
             server_selection_absent st0.CS.cs_model.CS.model_handshake /\
+            st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_shared_secret == None /\
             Some? st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello /\
             Some? st0.CS.cs_model.CS.model_config.CS.config_server /\
             (match st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello,
@@ -1476,14 +1477,39 @@ fn can_select_supported_server_parameters_runtime
   V.to_vec_pts_to c.handshake.messages.client_hello.IM.client_hello_signature_schemes;
   assert (pure (first_signature == Seq.index ch_signature_schemes 0));
 
+  unfold (key_schedule_exactly
+    c.handshake.keys
+    st0.CS.cs_model.CS.model_handshake.CS.hs_keys);
+  unfold (optional_secret_exactly
+    c.handshake.keys.shared_secret
+    st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_shared_secret);
+  with shared_secret_present shared_secret_bytes.
+    assert (Box.pts_to c.handshake.keys.shared_secret.present shared_secret_present **
+            V.pts_to c.handshake.keys.shared_secret.secret shared_secret_bytes **
+            pure (optional_fixed_bytes_match
+              shared_secret_present
+              shared_secret_bytes
+              32
+              st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_shared_secret));
+  let shared_secret_is_present = !c.handshake.keys.shared_secret.present;
+  assert (pure (shared_secret_is_present == shared_secret_present));
+  fold (optional_secret_exactly
+    c.handshake.keys.shared_secret
+    st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_shared_secret);
+  fold (key_schedule_exactly
+    c.handshake.keys
+    st0.CS.cs_model.CS.model_handshake.CS.hs_keys);
+
   let control_ok = (tag = 1uy) && (stage = 13uy) && role_ok;
   let selection_absent = not has_selection;
+  let shared_secret_absent = not shared_secret_is_present;
   let cipher_nonempty = SZ.gt cipher_suites_len 0sz;
   let signature_nonempty = SZ.gt signature_schemes_len 0sz;
   let signature_supported = first_signature = 0x0804us;
   let ok =
     control_ok &&
     selection_absent &&
+    shared_secret_absent &&
     has_client_hello &&
     has_server_name &&
     cipher_nonempty &&
@@ -1501,6 +1527,9 @@ fn can_select_supported_server_parameters_runtime
     assert (pure (selection_present ==
       Some? st0.CS.cs_model.CS.model_handshake.CS.hs_server_selection));
     assert (pure (not (Some? st0.CS.cs_model.CS.model_handshake.CS.hs_server_selection)));
+    assert (pure (shared_secret_is_present == false));
+    assert (pure (shared_secret_present == false));
+    assert (pure (st0.CS.cs_model.CS.model_handshake.CS.hs_keys.CS.ks_shared_secret == None));
     assert (pure (server_selection_absent st0.CS.cs_model.CS.model_handshake));
     assert (pure (ch_present == true));
     assert (pure (Some? st0.CS.cs_model.CS.model_handshake.CS.hs_client_hello));
