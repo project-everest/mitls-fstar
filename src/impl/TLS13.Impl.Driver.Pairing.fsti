@@ -347,19 +347,28 @@ val lemma_client_server_driver_supported_profile_derived_key_material_agrees
         CS.connection_supported_profile_key_schedule_lineage server /\
         CS.supported_profile_all_derived_key_material_agrees client server)
 
+val lemma_client_server_driver_application_record_epochs_installed
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  : Lemma
+      (requires
+        CD.client_driver_application_ready client /\
+        SD.server_driver_application_ready server)
+      (ensures
+        CS.application_record_epochs_installed_for_role
+          CS.ClientEndpoint
+          client.CS.cs_model /\
+        CS.application_record_epochs_installed_for_role
+          CS.ServerEndpoint
+          server.CS.cs_model)
+
 noextract
 let client_server_driver_supported_profile_application_record_state_inputs
   (client:CS.connection_state)
   (server:CS.connection_state)
   : prop =
   CS.supported_profile_application_traffic_material_matches_expected client /\
-  CS.supported_profile_application_traffic_material_matches_expected server /\
-  CS.application_record_epochs_installed_for_role
-    CS.ClientEndpoint
-    client.CS.cs_model /\
-  CS.application_record_epochs_installed_for_role
-    CS.ServerEndpoint
-    server.CS.cs_model
+  CS.supported_profile_application_traffic_material_matches_expected server
 
 noextract
 let client_server_driver_remaining_semantic_projection_inputs

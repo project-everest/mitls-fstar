@@ -318,6 +318,40 @@ let lemma_client_server_driver_supported_profile_derived_key_material_agrees
     client
     server
 
+let lemma_client_server_driver_application_record_epochs_installed
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  : Lemma
+      (requires
+        CD.client_driver_application_ready client /\
+        SD.server_driver_application_ready server)
+      (ensures
+        CS.application_record_epochs_installed_for_role
+          CS.ClientEndpoint
+          client.CS.cs_model /\
+        CS.application_record_epochs_installed_for_role
+          CS.ServerEndpoint
+          server.CS.cs_model)
+=
+  assert (CS.connection_state_consistent client);
+  assert (client.CS.cs_model.CS.model_config.CS.config_role == CS.ClientEndpoint);
+  assert (client.CS.cs_model.CS.model_control == CS.ControlApplicationData);
+  assert (CS.application_record_keys_installed_for_role
+    CS.ClientEndpoint
+    client.CS.cs_model);
+  CSL.lemma_connection_application_ready_record_epochs_installed
+    CS.ClientEndpoint
+    client;
+  assert (CS.connection_state_consistent server);
+  assert (server.CS.cs_model.CS.model_config.CS.config_role == CS.ServerEndpoint);
+  assert (server.CS.cs_model.CS.model_control == CS.ControlApplicationData);
+  assert (CS.application_record_keys_installed_for_role
+    CS.ServerEndpoint
+    server.CS.cs_model);
+  CSL.lemma_connection_application_ready_record_epochs_installed
+    CS.ServerEndpoint
+    server
+
 let lemma_client_server_driver_supported_profile_state_inputs_from_projection_inputs
   (client:CS.connection_state)
   (server:CS.connection_state)
@@ -358,6 +392,15 @@ let lemma_client_server_driver_supported_profile_key_material_inputs_agree
     CS.ClientEndpoint
     client.CS.cs_model);
   assert (CS.application_record_keys_installed_for_role
+    CS.ServerEndpoint
+    server.CS.cs_model);
+  lemma_client_server_driver_application_record_epochs_installed
+    client
+    server;
+  assert (CS.application_record_epochs_installed_for_role
+    CS.ClientEndpoint
+    client.CS.cs_model);
+  assert (CS.application_record_epochs_installed_for_role
     CS.ServerEndpoint
     server.CS.cs_model);
   CSL.lemma_supported_profile_application_record_material_inputs_agree_from_expected

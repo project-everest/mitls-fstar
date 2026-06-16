@@ -101,6 +101,17 @@ val lemma_connection_application_keys_supported_profile_key_schedule_lineage
         application_record_keys_installed_for_role role st.cs_model)
       (ensures connection_supported_profile_key_schedule_lineage st)
 
+val lemma_connection_application_ready_record_epochs_installed
+  (role:endpoint_role)
+  (st:connection_state)
+  : Lemma
+      (requires
+        connection_state_consistent st /\
+        st.cs_model.model_config.config_role == role /\
+        st.cs_model.model_control == ControlApplicationData /\
+        application_record_keys_installed_for_role role st.cs_model)
+      (ensures application_record_epochs_installed_for_role role st.cs_model)
+
 val lemma_client_application_ready_stable_x25519_key_share_projection
   (st:connection_state)
   : Lemma

@@ -1233,6 +1233,619 @@ let lemma_connection_state_consistent_server_x25519_reachable_shape
   assert (connection_state_evolves (initial st.cs_model.model_config) st);
   assert (p st)
 
+let no_application_traffic_keys
+  (keys:key_schedule_state)
+  : prop =
+  keys.ks_client_application_traffic == None /\
+  keys.ks_server_application_traffic == None
+
+let client_application_record_read_epoch_link
+  (model:connection_model)
+  : prop =
+  Some? model.model_handshake.hs_keys.ks_server_application_traffic ==>
+    model.model_record.record_read.R.epoch == R.Application
+
+let client_application_record_write_epoch_link
+  (model:connection_model)
+  : prop =
+  Some? model.model_handshake.hs_keys.ks_client_application_traffic ==>
+    model.model_record.record_write.R.epoch == R.Application
+
+let client_application_record_epoch_link
+  (model:connection_model)
+  : prop =
+  client_application_record_read_epoch_link model /\
+  client_application_record_write_epoch_link model
+
+let server_application_record_read_epoch_link
+  (model:connection_model)
+  : prop =
+  Some? model.model_handshake.hs_keys.ks_client_application_traffic ==>
+    model.model_record.record_read.R.epoch == R.Application
+
+let server_application_record_write_epoch_link
+  (model:connection_model)
+  : prop =
+  Some? model.model_handshake.hs_keys.ks_server_application_traffic ==>
+    model.model_record.record_write.R.epoch == R.Application
+
+let server_application_record_epoch_link
+  (model:connection_model)
+  : prop =
+  server_application_record_read_epoch_link model /\
+  server_application_record_write_epoch_link model
+
+let client_application_record_epoch_reachable_shape
+  (model:connection_model)
+  : prop =
+  let keys = model.model_handshake.hs_keys in
+  match model.model_control with
+  | ControlNew
+  | ControlHandshaking HsStarted
+  | ControlHandshaking HsClientHelloSent
+  | ControlHandshaking HsServerHelloReceived
+  | ControlHandshaking HsEncryptedExtensionsReceived
+  | ControlHandshaking HsCertificateReceived
+  | ControlHandshaking HsCertificateValidated
+  | ControlHandshaking HsCertificateVerifyReceived
+  | ControlHandshaking HsCertificateVerifyVerified
+  | ControlHandshaking HsServerFinishedReceived ->
+    keys.ks_server_application_traffic == None
+  | ControlHandshaking HsServerFinishedVerified ->
+    client_application_record_read_epoch_link model
+  | ControlApplicationData
+  | ControlClosing
+  | ControlClosed ->
+    client_application_record_epoch_link model
+  | ControlFailed _ ->
+    True
+  | _ ->
+    True
+
+let server_application_record_epoch_reachable_shape
+  (model:connection_model)
+  : prop =
+  let keys = model.model_handshake.hs_keys in
+  match model.model_control with
+  | ControlNew
+  | ControlHandshaking HsAwaitingClientHello
+  | ControlHandshaking HsClientHelloReceived
+  | ControlHandshaking HsServerHelloSent
+  | ControlHandshaking HsServerEncryptedFlightSent ->
+    no_application_traffic_keys keys
+  | ControlHandshaking HsServerFinishedSent ->
+    keys.ks_client_application_traffic == None /\
+    server_application_record_write_epoch_link model
+  | ControlHandshaking HsClientFinishedReceived ->
+    server_application_record_epoch_link model
+  | ControlApplicationData
+  | ControlClosing
+  | ControlClosed ->
+    server_application_record_epoch_link model
+  | ControlFailed _ ->
+    True
+  | _ ->
+    True
+
+let model_application_record_epoch_reachable_shape_for_role
+  (role:endpoint_role)
+  (model:connection_model)
+  : prop =
+  match role with
+  | ClientEndpoint ->
+    model.model_config.config_role == ClientEndpoint ==>
+      client_application_record_epoch_reachable_shape model
+  | ServerEndpoint ->
+    model.model_config.config_role == ServerEndpoint ==>
+      server_application_record_epoch_reachable_shape model
+
+let connection_application_record_epoch_reachable_shape_for_role
+  (role:endpoint_role)
+  (st:connection_state)
+  : prop =
+  model_application_record_epoch_reachable_shape_for_role role st.cs_model
+
+let lemma_initial_application_record_epoch_reachable_shape_for_role
+  (role:endpoint_role)
+  (cfg:connection_config)
+  : Lemma
+      (ensures
+        connection_application_record_epoch_reachable_shape_for_role
+          role
+          (initial cfg))
+=
+  ()
+
+let rec lemma_advance_direction_records_preserves_epoch
+  (st:R.direction_state)
+  (n:nat)
+  : Lemma
+      (ensures (advance_direction_records st n).R.epoch == st.R.epoch)
+      (decreases n)
+=
+  if n = 0 then ()
+  else lemma_advance_direction_records_preserves_epoch st (n - 1)
+
+let lemma_step_model_application_record_epoch_reachable_shape_for_role
+  (role:endpoint_role)
+  (model:connection_model)
+  (ev:conn_event)
+  (model':connection_model)
+  : Lemma
+      (requires
+        model_application_record_epoch_reachable_shape_for_role role model /\
+        legal_event model ev /\
+        step_model model ev == Some model')
+      (ensures
+        model_application_record_epoch_reachable_shape_for_role role model')
+=
+  assert (model'.model_config == model.model_config);
+  match role with
+  | ClientEndpoint ->
+    if model'.model_config.config_role == ClientEndpoint then begin
+      assert (model.model_config.config_role == ClientEndpoint);
+      assert (client_application_record_epoch_reachable_shape model);
+      (match ev with
+       | ConnLocalEvent local ->
+         assert (legal_local_event model local);
+         assert (step_local_event model local == Some model');
+         (match local with
+          | LocalStartHandshake _ ->
+            (match model.model_control with
+             | ControlNew ->
+               assert (model.model_handshake.hs_keys.ks_server_application_traffic == None);
+               assert (model'.model_handshake.hs_keys.ks_server_application_traffic == None)
+             | _ ->
+               assert False)
+          | LocalDeriveSharedSecret _ ->
+            (match model.model_control with
+             | ControlHandshaking HsServerHelloReceived ->
+               assert (model.model_handshake.hs_keys.ks_server_application_traffic == None);
+               assert (model'.model_handshake.hs_keys.ks_server_application_traffic == None)
+             | _ ->
+               assert False)
+          | LocalInstallTrafficKeys install ->
+            (match model.model_control with
+             | ControlHandshaking stage ->
+               assert (traffic_install_allowed_at_stage stage install);
+               (match install.install_epoch, install.install_direction with
+                | TrafficHandshake, _ ->
+                  assert (stage == HsServerHelloReceived);
+                  assert (model.model_handshake.hs_keys.ks_server_application_traffic == None);
+                  assert (model'.model_handshake.hs_keys.ks_server_application_traffic == None)
+                | TrafficApplication, TrafficRead ->
+                  assert (stage == HsServerFinishedVerified);
+                  assert_norm (traffic_label_for_endpoint_direction ClientEndpoint TrafficRead == ServerTraffic);
+                  assert (model'.model_record.record_read.R.epoch == R.Application)
+                | TrafficApplication, TrafficWrite ->
+                  assert (stage == HsServerFinishedVerified);
+                  assert_norm (traffic_label_for_endpoint_direction ClientEndpoint TrafficWrite == ClientTraffic);
+                  assert (model'.model_handshake.hs_keys.ks_server_application_traffic ==
+                          model.model_handshake.hs_keys.ks_server_application_traffic);
+                  assert (model'.model_record.record_read ==
+                          model.model_record.record_read);
+                  assert (client_application_record_read_epoch_link model);
+                  assert (client_application_record_read_epoch_link model'))
+             | _ ->
+               assert False)
+          | LocalInstallTrafficKeysForRole role_install ->
+            (match model.model_control with
+             | ControlHandshaking stage ->
+               assert (role_install.install_role == ClientEndpoint);
+               let install = role_install.install_payload in
+               assert (traffic_install_allowed_at_stage_for_role
+                 ClientEndpoint stage install);
+               (match install.install_epoch, install.install_direction with
+                | TrafficHandshake, _ ->
+                  assert (stage == HsServerHelloReceived);
+                  assert (model.model_handshake.hs_keys.ks_server_application_traffic == None);
+                  assert (model'.model_handshake.hs_keys.ks_server_application_traffic == None)
+                | TrafficApplication, TrafficRead ->
+                  assert (stage == HsServerFinishedVerified);
+                  assert_norm (traffic_label_for_endpoint_direction ClientEndpoint TrafficRead == ServerTraffic);
+                  assert (model'.model_record.record_read.R.epoch == R.Application)
+                | TrafficApplication, TrafficWrite ->
+                  assert (stage == HsServerFinishedVerified);
+                  assert_norm (traffic_label_for_endpoint_direction ClientEndpoint TrafficWrite == ClientTraffic);
+                  assert (model'.model_handshake.hs_keys.ks_server_application_traffic ==
+                          model.model_handshake.hs_keys.ks_server_application_traffic);
+                  assert (model'.model_record.record_read ==
+                          model.model_record.record_read);
+                  assert (client_application_record_read_epoch_link model);
+                  assert (client_application_record_read_epoch_link model'))
+             | _ ->
+               assert False)
+          | LocalValidateCertificate _ ->
+            (match model.model_control with
+             | ControlHandshaking HsCertificateReceived ->
+               assert (model.model_handshake.hs_keys.ks_server_application_traffic == None);
+               assert (model'.model_handshake.hs_keys.ks_server_application_traffic == None)
+             | _ ->
+               assert False)
+          | LocalVerifyCertificateSignature _ ->
+            (match model.model_control with
+             | ControlHandshaking HsCertificateVerifyReceived ->
+               assert (model.model_handshake.hs_keys.ks_server_application_traffic == None);
+               assert (model'.model_handshake.hs_keys.ks_server_application_traffic == None)
+             | _ ->
+               assert False)
+          | LocalVerifyFinished _ ->
+            (match model.model_control with
+             | ControlHandshaking HsServerFinishedReceived ->
+               assert (model.model_handshake.hs_keys.ks_server_application_traffic == None);
+               assert (model'.model_handshake.hs_keys.ks_server_application_traffic == None)
+             | _ ->
+               assert False)
+          | LocalDeliverApplicationData _ ->
+            (match model.model_control with
+             | ControlApplicationData ->
+               assert (client_application_record_epoch_link model);
+               assert (model'.model_handshake.hs_keys == model.model_handshake.hs_keys);
+               assert (model'.model_record == model.model_record);
+               assert (client_application_record_epoch_link model')
+             | _ ->
+               assert False)
+          | LocalFail _ ->
+            ()
+          | _ ->
+            assert False)
+       | ConnNetworkEvent msg ->
+         assert (legal_tls_message
+           model
+           msg.CL.message_direction
+           msg.CL.message_value);
+         assert (step_tls_message
+           model
+           msg.CL.message_direction
+           msg.CL.message_value == Some model');
+         (match msg.CL.message_value, msg.CL.message_direction, model.model_control with
+          | M.TlsHandshake (M.ClientHello _), CL.Sent,
+            ControlHandshaking HsStarted
+          | M.TlsHandshake (M.ServerHello _), CL.Received,
+            ControlHandshaking HsClientHelloSent
+          | M.TlsHandshake (M.EncryptedExtensions _), CL.Received,
+            ControlHandshaking HsServerHelloReceived
+          | M.TlsHandshake (M.Certificate _), CL.Received,
+            ControlHandshaking HsEncryptedExtensionsReceived
+          | M.TlsHandshake (M.CertificateVerify _), CL.Received,
+            ControlHandshaking HsCertificateValidated
+          | M.TlsHandshake (M.Finished _), CL.Received,
+            ControlHandshaking HsCertificateVerifyVerified ->
+            assert (model.model_handshake.hs_keys.ks_server_application_traffic == None);
+            assert (model'.model_handshake.hs_keys.ks_server_application_traffic == None)
+          | M.TlsHandshake (M.Finished _), CL.Sent,
+            ControlHandshaking HsServerFinishedVerified ->
+            assert (Some? model.model_handshake.hs_keys.ks_server_application_traffic);
+            assert (Some? model.model_handshake.hs_keys.ks_client_application_traffic);
+            assert (client_application_record_read_epoch_link model);
+            assert (model.model_record.record_read.R.epoch == R.Application);
+            assert (model'.model_record.record_read.R.epoch == R.Application);
+            assert (model'.model_record.record_write.R.epoch == R.Application);
+            assert (client_application_record_epoch_link model')
+          | M.TlsHandshake M.HelloRetryRequest, CL.Received,
+            ControlHandshaking HsClientHelloSent ->
+            ()
+          | M.TlsApplicationData bytes, CL.Sent, ControlApplicationData ->
+            assert (client_application_record_epoch_link model);
+            lemma_advance_direction_records_preserves_epoch
+              model.model_record.record_write
+              (S.application_data_record_count bytes);
+            assert (client_application_record_epoch_link model')
+          | M.TlsApplicationData _, CL.Received, ControlApplicationData
+          | M.TlsIgnoredPostHandshake _, CL.Received, ControlApplicationData ->
+            assert (client_application_record_epoch_link model);
+            assert (client_application_record_epoch_link model')
+          | M.TlsKeyUpdate _, CL.Received, ControlApplicationData ->
+            assert (client_application_record_epoch_link model);
+            assert (model'.model_record.record_read.R.epoch == R.Application);
+            assert (model'.model_record.record_write ==
+                    model.model_record.record_write);
+            assert (client_application_record_epoch_link model')
+          | M.TlsKeyUpdate M.UpdateNotRequested, CL.Sent,
+            ControlApplicationData ->
+            assert (client_application_record_epoch_link model);
+            assert (model'.model_record.record_read ==
+                    model.model_record.record_read);
+            assert (model'.model_record.record_write.R.epoch == R.Application);
+            assert (client_application_record_epoch_link model')
+          | M.TlsAlert T.CloseNotify, CL.Sent, ControlApplicationData ->
+            assert (client_application_record_epoch_link model);
+            assert (model'.model_record.record_read ==
+                    model.model_record.record_read);
+            assert (model'.model_record.record_write.R.epoch ==
+                    (R.next_seq model.model_record.record_write).R.epoch);
+            assert (client_application_record_epoch_link model')
+          | M.TlsAlert T.CloseNotify, CL.Received, ControlApplicationData
+          | M.TlsAlert T.CloseNotify, CL.Received, ControlClosing ->
+            assert (client_application_record_epoch_link model);
+            assert (model'.model_record.record_write ==
+                    model.model_record.record_write);
+            assert (model'.model_record.record_read.R.epoch ==
+                    (R.next_seq model.model_record.record_read).R.epoch);
+            assert (client_application_record_epoch_link model')
+          | M.TlsAlert _, _, _ ->
+            ()
+          | M.TlsChangeCipherSpec, _, ControlHandshaking _ ->
+            assert (model' == model)
+          | _, _, _ ->
+            assert False));
+      assert (client_application_record_epoch_reachable_shape model')
+    end;
+    assert (model_application_record_epoch_reachable_shape_for_role
+      ClientEndpoint
+      model')
+  | ServerEndpoint ->
+    if model'.model_config.config_role == ServerEndpoint then begin
+      assert (model.model_config.config_role == ServerEndpoint);
+      assert (server_application_record_epoch_reachable_shape model);
+      (match ev with
+       | ConnLocalEvent local ->
+         assert (legal_local_event model local);
+         assert (step_local_event model local == Some model');
+         (match local with
+          | LocalStartServer ->
+            (match model.model_control with
+             | ControlNew ->
+               assert (no_application_traffic_keys model.model_handshake.hs_keys);
+               assert (no_application_traffic_keys model'.model_handshake.hs_keys)
+             | _ ->
+               assert False)
+          | LocalSelectServerParameters _ ->
+            (match model.model_control with
+             | ControlHandshaking HsClientHelloReceived ->
+               assert (no_application_traffic_keys model.model_handshake.hs_keys);
+               assert (no_application_traffic_keys model'.model_handshake.hs_keys)
+             | _ ->
+               assert False)
+          | LocalDeriveSharedSecret _ ->
+            (match model.model_control with
+             | ControlHandshaking HsClientHelloReceived ->
+               assert (no_application_traffic_keys model.model_handshake.hs_keys);
+               assert (no_application_traffic_keys model'.model_handshake.hs_keys)
+             | _ ->
+               assert False)
+          | LocalInstallTrafficKeysForRole role_install ->
+            (match model.model_control with
+             | ControlHandshaking stage ->
+               assert (role_install.install_role == ServerEndpoint);
+               let install = role_install.install_payload in
+               assert (traffic_install_allowed_at_stage_for_role
+                 ServerEndpoint stage install);
+               (match install.install_epoch, install.install_direction with
+                | TrafficHandshake, _ ->
+                  assert (stage == HsServerHelloSent);
+                  assert (no_application_traffic_keys model.model_handshake.hs_keys);
+                  assert (no_application_traffic_keys model'.model_handshake.hs_keys)
+                | TrafficApplication, TrafficWrite ->
+                  assert (stage == HsServerFinishedSent);
+                  assert_norm (traffic_label_for_endpoint_direction ServerEndpoint TrafficWrite == ServerTraffic);
+                  assert (model'.model_handshake.hs_keys.ks_client_application_traffic ==
+                          model.model_handshake.hs_keys.ks_client_application_traffic);
+                  assert (model.model_handshake.hs_keys.ks_client_application_traffic == None);
+                  assert (model'.model_handshake.hs_keys.ks_client_application_traffic == None);
+                  assert (model'.model_record.record_write.R.epoch == R.Application)
+                | TrafficApplication, TrafficRead ->
+                  assert (stage == HsClientFinishedReceived);
+                  assert_norm (traffic_label_for_endpoint_direction ServerEndpoint TrafficRead == ClientTraffic);
+                  assert (model'.model_record.record_read.R.epoch == R.Application);
+                  assert (model'.model_handshake.hs_keys.ks_server_application_traffic ==
+                          model.model_handshake.hs_keys.ks_server_application_traffic);
+                  assert (model'.model_record.record_write ==
+                          model.model_record.record_write);
+                  assert (server_application_record_write_epoch_link model);
+                  assert (server_application_record_epoch_link model'))
+             | _ ->
+               assert False)
+          | LocalSignCertificateVerify _ ->
+            (match model.model_control with
+             | ControlHandshaking HsServerEncryptedFlightSent ->
+               assert (no_application_traffic_keys model.model_handshake.hs_keys);
+               assert (no_application_traffic_keys model'.model_handshake.hs_keys)
+             | _ ->
+               assert False)
+          | LocalVerifyClientFinished _ ->
+            (match model.model_control with
+             | ControlHandshaking HsClientFinishedReceived ->
+               assert (application_record_keys_installed_for_role
+                 ServerEndpoint model);
+               assert (Some? model.model_handshake.hs_keys.ks_client_application_traffic);
+               assert (Some? model.model_handshake.hs_keys.ks_server_application_traffic);
+               assert (server_application_record_epoch_link model);
+               assert (model'.model_record == model.model_record);
+               assert (model'.model_handshake.hs_keys == model.model_handshake.hs_keys);
+               assert (server_application_record_epoch_link model')
+             | _ ->
+               assert False)
+          | LocalDeliverApplicationData _ ->
+            (match model.model_control with
+             | ControlApplicationData ->
+               assert (server_application_record_epoch_link model);
+               assert (model'.model_handshake.hs_keys == model.model_handshake.hs_keys);
+               assert (model'.model_record == model.model_record);
+               assert (server_application_record_epoch_link model')
+             | _ ->
+               assert False)
+          | LocalFail _ ->
+            ()
+          | LocalInstallTrafficKeys _ ->
+            assert False
+          | _ ->
+            assert False)
+       | ConnNetworkEvent msg ->
+         assert (legal_tls_message
+           model
+           msg.CL.message_direction
+           msg.CL.message_value);
+         assert (step_tls_message
+           model
+           msg.CL.message_direction
+           msg.CL.message_value == Some model');
+         (match msg.CL.message_value, msg.CL.message_direction, model.model_control with
+          | M.TlsHandshake (M.ClientHello _), CL.Received,
+            ControlHandshaking HsAwaitingClientHello
+          | M.TlsHandshake (M.ServerHello _), CL.Sent,
+            ControlHandshaking HsClientHelloReceived
+          | M.TlsHandshake (M.EncryptedExtensions _), CL.Sent,
+            ControlHandshaking HsServerHelloSent
+          | M.TlsHandshake (M.Certificate _), CL.Sent,
+            ControlHandshaking HsServerEncryptedFlightSent
+          | M.TlsHandshake (M.CertificateVerify _), CL.Sent,
+            ControlHandshaking HsServerEncryptedFlightSent ->
+            assert (no_application_traffic_keys model.model_handshake.hs_keys);
+            assert (no_application_traffic_keys model'.model_handshake.hs_keys)
+          | M.TlsHandshake (M.Finished _), CL.Sent,
+            ControlHandshaking HsServerEncryptedFlightSent ->
+            assert (no_application_traffic_keys model.model_handshake.hs_keys);
+            assert (model'.model_handshake.hs_keys.ks_client_application_traffic == None);
+            assert (server_application_record_write_epoch_link model')
+          | M.TlsHandshake (M.Finished _), CL.Received,
+            ControlHandshaking HsServerFinishedSent ->
+            assert (model.model_handshake.hs_keys.ks_client_application_traffic == None);
+            assert (model'.model_handshake.hs_keys.ks_client_application_traffic == None);
+            assert (server_application_record_write_epoch_link model);
+            assert (model'.model_record.record_write ==
+                    model.model_record.record_write);
+            assert (server_application_record_epoch_link model')
+          | M.TlsApplicationData bytes, CL.Sent, ControlApplicationData ->
+            assert (server_application_record_epoch_link model);
+            lemma_advance_direction_records_preserves_epoch
+              model.model_record.record_write
+              (S.application_data_record_count bytes);
+            assert (server_application_record_epoch_link model')
+          | M.TlsApplicationData _, CL.Received, ControlApplicationData ->
+            assert (server_application_record_epoch_link model);
+            assert (model'.model_record.record_write ==
+                    model.model_record.record_write);
+            assert (model'.model_record.record_read.R.epoch ==
+                    (R.next_seq model.model_record.record_read).R.epoch);
+            assert (server_application_record_epoch_link model')
+          | M.TlsAlert T.CloseNotify, CL.Sent, ControlApplicationData ->
+            assert (server_application_record_epoch_link model);
+            assert (model'.model_record.record_read ==
+                    model.model_record.record_read);
+            assert (model'.model_record.record_write.R.epoch ==
+                    (R.next_seq model.model_record.record_write).R.epoch);
+            assert (server_application_record_epoch_link model')
+          | M.TlsAlert T.CloseNotify, CL.Received, ControlApplicationData
+          | M.TlsAlert T.CloseNotify, CL.Received, ControlClosing ->
+            assert (server_application_record_epoch_link model);
+            assert (model'.model_record.record_write ==
+                    model.model_record.record_write);
+            assert (model'.model_record.record_read.R.epoch ==
+                    (R.next_seq model.model_record.record_read).R.epoch);
+            assert (server_application_record_epoch_link model')
+          | M.TlsAlert _, _, _ ->
+            ()
+          | M.TlsChangeCipherSpec, _, ControlHandshaking _ ->
+            assert (model' == model)
+          | _, _, _ ->
+            assert False));
+      assert (server_application_record_epoch_reachable_shape model')
+    end;
+    assert (model_application_record_epoch_reachable_shape_for_role
+      ServerEndpoint
+      model')
+
+let lemma_connection_delta_application_record_epoch_reachable_shape_for_role
+  (role:endpoint_role)
+  (st0:connection_state)
+  (st1:connection_state)
+  : Lemma
+      (requires
+        connection_application_record_epoch_reachable_shape_for_role role st0 /\
+        connection_state_single_step st0 st1)
+      (ensures
+        connection_application_record_epoch_reachable_shape_for_role role st1)
+=
+  match st1 with
+  | _ ->
+    assert (exists delta. legal_connection_delta st0 delta st1);
+    let delta_w =
+      ID.indefinite_description_ghost
+        connection_delta
+        (fun delta -> legal_connection_delta st0 delta st1) in
+    let delta : connection_delta = delta_w in
+    assert (legal_connection_delta st0 delta st1);
+    assert (legal_event st0.cs_model delta.delta_event);
+    assert (step_model st0.cs_model delta.delta_event == Some st1.cs_model);
+    lemma_step_model_application_record_epoch_reachable_shape_for_role
+      role
+      st0.cs_model
+      delta.delta_event
+      st1.cs_model
+
+let lemma_connection_state_single_step_application_record_epoch_reachable_shape_for_role
+  (role:endpoint_role)
+  : Lemma
+      (ensures
+        forall (x:connection_state) (y:connection_state).
+          {:pattern
+            (connection_application_record_epoch_reachable_shape_for_role role y);
+            (connection_state_single_step x y)}
+          connection_application_record_epoch_reachable_shape_for_role role x /\
+          connection_state_single_step x y ==>
+          connection_application_record_epoch_reachable_shape_for_role role y)
+=
+  introduce forall x y.
+    connection_application_record_epoch_reachable_shape_for_role role x /\
+    connection_state_single_step x y ==>
+    connection_application_record_epoch_reachable_shape_for_role role y
+  with
+    introduce _ ==> _ with _.
+    lemma_connection_delta_application_record_epoch_reachable_shape_for_role
+      role
+      x
+      y
+
+let lemma_connection_application_ready_record_epochs_installed
+  (role:endpoint_role)
+  (st:connection_state)
+  : Lemma
+      (requires
+        connection_state_consistent st /\
+        st.cs_model.model_config.config_role == role /\
+        st.cs_model.model_control == ControlApplicationData /\
+        application_record_keys_installed_for_role role st.cs_model)
+      (ensures application_record_epochs_installed_for_role role st.cs_model)
+=
+  let p = connection_application_record_epoch_reachable_shape_for_role role in
+  lemma_initial_application_record_epoch_reachable_shape_for_role
+    role
+    st.cs_model.model_config;
+  lemma_connection_state_single_step_application_record_epoch_reachable_shape_for_role
+    role;
+  let stable :
+    squash (
+      forall (x:connection_state) (y:connection_state).
+        {:pattern (p y); (connection_state_single_step x y)}
+        p x /\ connection_state_single_step x y ==> p y) = () in
+  RTC.stable_on_closure
+    connection_state_single_step
+    p
+    stable;
+  assert (p (initial st.cs_model.model_config));
+  assert (connection_state_evolves (initial st.cs_model.model_config) st);
+  assert (p st);
+  match role with
+  | ClientEndpoint ->
+    assert_norm (traffic_label_for_endpoint_direction ClientEndpoint TrafficRead == ServerTraffic);
+    assert_norm (traffic_label_for_endpoint_direction ClientEndpoint TrafficWrite == ClientTraffic);
+    assert (Some? st.cs_model.model_handshake.hs_keys.ks_server_application_traffic);
+    assert (Some? st.cs_model.model_handshake.hs_keys.ks_client_application_traffic);
+    assert (client_application_record_epoch_reachable_shape st.cs_model);
+    assert (client_application_record_epoch_link st.cs_model);
+    assert (st.cs_model.model_record.record_read.R.epoch == R.Application);
+    assert (st.cs_model.model_record.record_write.R.epoch == R.Application)
+  | ServerEndpoint ->
+    assert_norm (traffic_label_for_endpoint_direction ServerEndpoint TrafficRead == ClientTraffic);
+    assert_norm (traffic_label_for_endpoint_direction ServerEndpoint TrafficWrite == ServerTraffic);
+    assert (Some? st.cs_model.model_handshake.hs_keys.ks_client_application_traffic);
+    assert (Some? st.cs_model.model_handshake.hs_keys.ks_server_application_traffic);
+    assert (server_application_record_epoch_reachable_shape st.cs_model);
+    assert (server_application_record_epoch_link st.cs_model);
+    assert (st.cs_model.model_record.record_read.R.epoch == R.Application);
+    assert (st.cs_model.model_record.record_write.R.epoch == R.Application)
+
 let lemma_client_application_ready_stable_x25519_key_share_projection
   (st:connection_state)
   : Lemma
