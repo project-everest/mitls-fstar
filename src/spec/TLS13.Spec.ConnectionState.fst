@@ -546,6 +546,107 @@ let paired_x25519_key_shares
      | _, _, _, _ -> False)
   | _, _, _, _ -> False
 
+let client_x25519_key_share_projection
+  (client:connection_state)
+  : prop =
+  let hs = client.cs_model.model_handshake in
+  match
+    hs.hs_start,
+    hs.hs_client_hello,
+    hs.hs_server_hello,
+    hs.hs_keys.ks_shared_secret
+  with
+  | Some start, Some ch, Some sh, Some shared ->
+    (match start.start_client_key_share_private with
+     | Some client_sk ->
+      client_hello_key_share ch == start.start_client_key_share_public /\
+      C.x25519_public_from_private client_sk ==
+        start.start_client_key_share_public /\
+      C.x25519_shared client_sk (server_hello_key_share sh) == Some shared
+     | None ->
+      False)
+  | _, _, _, _ ->
+    False
+
+let server_x25519_key_share_projection
+  (server:connection_state)
+  : prop =
+  let hs = server.cs_model.model_handshake in
+  match
+    hs.hs_server_selection,
+    hs.hs_client_hello,
+    hs.hs_server_hello,
+    hs.hs_keys.ks_shared_secret
+  with
+  | Some selection, Some ch, Some sh, Some shared ->
+    (match selection.server_key_share_private with
+     | Some server_sk ->
+      server_hello_key_share sh == selection.server_key_share_public /\
+      C.x25519_public_from_private server_sk ==
+        selection.server_key_share_public /\
+      C.x25519_shared server_sk (client_hello_key_share ch) == Some shared
+     | None ->
+      False)
+  | _, _, _, _ ->
+    False
+
+let paired_cleartext_hello_messages
+  (client:connection_state)
+  (server:connection_state)
+  : prop =
+  let client_hs = client.cs_model.model_handshake in
+  let server_hs = server.cs_model.model_handshake in
+  match
+    client_hs.hs_client_hello,
+    server_hs.hs_client_hello,
+    client_hs.hs_server_hello,
+    server_hs.hs_server_hello
+  with
+  | Some client_ch, Some server_ch, Some client_sh, Some server_sh ->
+    client_ch == server_ch /\
+    client_sh == server_sh
+  | _, _, _, _ ->
+    False
+
+let paired_handshake_message_states
+  (client:connection_state)
+  (server:connection_state)
+  : prop =
+  let client_hs = client.cs_model.model_handshake in
+  let server_hs = server.cs_model.model_handshake in
+  match
+    client_hs.hs_client_hello,
+    server_hs.hs_client_hello,
+    client_hs.hs_server_hello,
+    server_hs.hs_server_hello,
+    client_hs.hs_encrypted_extensions,
+    server_hs.hs_encrypted_extensions,
+    client_hs.hs_certificate,
+    server_hs.hs_certificate,
+    client_hs.hs_certificate_verify,
+    server_hs.hs_certificate_verify,
+    client_hs.hs_server_finished,
+    server_hs.hs_server_finished,
+    client_hs.hs_client_finished,
+    server_hs.hs_client_finished
+  with
+  | Some client_ch, Some server_ch,
+    Some client_sh, Some server_sh,
+    Some client_ee, Some server_ee,
+    Some client_cert, Some server_cert,
+    Some client_cv, Some server_cv,
+    Some client_sf, Some server_sf,
+    Some client_cf, Some server_cf ->
+    client_ch == server_ch /\
+    client_sh == server_sh /\
+    client_ee == server_ee /\
+    client_cert == server_cert /\
+    client_cv == server_cv /\
+    client_sf == server_sf /\
+    client_cf == server_cf
+  | _, _, _, _, _, _, _, _, _, _, _, _, _, _ ->
+    False
+
 let derivation_checkpoint_inputs_agree
   (key_id:derived_key_id)
   (client:connection_state)
