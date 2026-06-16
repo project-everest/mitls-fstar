@@ -5,6 +5,7 @@ module TLS13.Impl.Driver.Pairing
 open Pulse.Lib.Pervasives
 
 module B = TLS13.Bytes
+module C = TLS13.Crypto.Spec
 module CD = TLS13.Impl.Client.Driver
 module CL = TLS13.ConnectionLog
 module CS = TLS13.Spec.ConnectionState
@@ -200,6 +201,125 @@ let lemma_client_server_driver_key_material_agrees_from_prefixes
     server_sent;
   CSL.lemma_supported_profile_client_server_key_material_agrees client server
 
+let lemma_client_server_driver_paired_x25519_key_shares_from_projection_inputs
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  : Lemma
+      (requires
+        client_server_driver_x25519_projection_inputs client server)
+      (ensures CS.paired_x25519_key_shares client server)
+=
+  let client_hs = client.CS.cs_model.CS.model_handshake in
+  let server_hs = server.CS.cs_model.CS.model_handshake in
+  match
+    client_hs.CS.hs_start,
+    client_hs.CS.hs_client_hello,
+    client_hs.CS.hs_server_hello,
+    client_hs.CS.hs_keys.CS.ks_shared_secret,
+    server_hs.CS.hs_server_selection,
+    server_hs.CS.hs_client_hello,
+    server_hs.CS.hs_server_hello,
+    server_hs.CS.hs_keys.CS.ks_shared_secret
+  with
+  | Some start, Some client_ch, Some client_sh, Some client_shared,
+    Some selection, Some server_ch, Some server_sh, Some server_shared ->
+    (match
+      start.CS.start_client_key_share_private,
+      selection.CS.server_key_share_private
+     with
+     | Some client_sk, Some server_sk ->
+       assert (client_ch == server_ch);
+       assert (client_sh == server_sh);
+       assert (CS.client_hello_key_share client_ch ==
+         start.CS.start_client_key_share_public);
+       assert (CS.client_hello_key_share server_ch ==
+         start.CS.start_client_key_share_public);
+       assert (CS.server_hello_key_share server_sh ==
+         selection.CS.server_key_share_public);
+       assert (CS.server_hello_key_share client_sh ==
+         selection.CS.server_key_share_public);
+       assert (C.x25519_public_from_private client_sk ==
+         start.CS.start_client_key_share_public);
+       assert (C.x25519_public_from_private server_sk ==
+         selection.CS.server_key_share_public);
+       assert (C.x25519_shared client_sk (CS.server_hello_key_share client_sh) ==
+         Some client_shared);
+       assert (C.x25519_shared server_sk (CS.client_hello_key_share server_ch) ==
+         Some server_shared)
+     | _, _ ->
+       assert False)
+  | _, _, _, _, _, _, _, _ ->
+    assert False
+
+let lemma_client_server_driver_paired_handshake_events_from_projection_inputs
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  : Lemma
+      (requires
+        client_server_driver_handshake_projection_inputs client server)
+      (ensures CS.paired_handshake_events client server)
+=
+  let client_hs = client.CS.cs_model.CS.model_handshake in
+  let server_hs = server.CS.cs_model.CS.model_handshake in
+  match
+    client_hs.CS.hs_client_hello,
+    server_hs.CS.hs_client_hello,
+    client_hs.CS.hs_server_hello,
+    server_hs.CS.hs_server_hello,
+    client_hs.CS.hs_encrypted_extensions,
+    server_hs.CS.hs_encrypted_extensions,
+    client_hs.CS.hs_certificate,
+    server_hs.CS.hs_certificate,
+    client_hs.CS.hs_certificate_verify,
+    server_hs.CS.hs_certificate_verify,
+    client_hs.CS.hs_server_finished,
+    server_hs.CS.hs_server_finished,
+    client_hs.CS.hs_client_finished,
+    server_hs.CS.hs_client_finished
+  with
+  | Some client_ch, Some server_ch,
+    Some client_sh, Some server_sh,
+    Some client_ee, Some server_ee,
+    Some client_cert, Some server_cert,
+    Some client_cv, Some server_cv,
+    Some client_sf, Some server_sf,
+    Some client_cf, Some server_cf ->
+    assert (client_ch == server_ch);
+    assert (client_sh == server_sh);
+    assert (client_ee == server_ee);
+    assert (client_cert == server_cert);
+    assert (client_cv == server_cv);
+    assert (client_sf == server_sf);
+    assert (client_cf == server_cf);
+    assert (CS.same_transcript_checkpoint CS.TH_CH client server);
+    assert (CS.same_transcript_checkpoint CS.TH_SH client server);
+    assert (CS.same_transcript_checkpoint CS.TH_before_CV client server);
+    assert (CS.same_transcript_checkpoint CS.TH_before_SF client server);
+    assert (CS.same_transcript_checkpoint CS.TH_SF client server);
+    assert (CS.same_transcript_checkpoint CS.TH_CF client server)
+  | _, _, _, _, _, _, _, _, _, _, _, _, _, _ ->
+    assert False
+
+let lemma_client_server_driver_supported_profile_derived_state_inputs_from_projection_inputs
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  : Lemma
+      (requires
+        client_server_driver_supported_profile_derived_projection_inputs
+          client
+          server)
+      (ensures
+        client_server_driver_supported_profile_derived_state_inputs
+          client
+          server)
+=
+  lemma_client_server_driver_paired_x25519_key_shares_from_projection_inputs
+    client
+    server;
+  lemma_client_server_driver_paired_handshake_events_from_projection_inputs
+    client
+    server
+
 let lemma_client_server_driver_supported_profile_derived_key_material_agrees
   (client:CS.connection_state)
   (server:CS.connection_state)
@@ -230,6 +350,23 @@ let lemma_client_server_driver_supported_profile_derived_key_material_agrees
   assert (CS.connection_supported_profile_key_schedule_lineage client);
   assert (CS.connection_supported_profile_key_schedule_lineage server);
   CSL.lemma_paired_supported_profile_all_derived_key_material_agrees
+    client
+    server
+
+let lemma_client_server_driver_supported_profile_state_inputs_from_projection_inputs
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  : Lemma
+      (requires
+        client_server_driver_supported_profile_projected_state_inputs
+          client
+          server)
+      (ensures
+        client_server_driver_supported_profile_state_inputs
+          client
+          server)
+=
+  lemma_client_server_driver_supported_profile_derived_state_inputs_from_projection_inputs
     client
     server
 
@@ -380,6 +517,58 @@ let lemma_client_server_driver_key_material_agrees_from_public_success_component
     client
     server;
   lemma_client_server_driver_key_material_agrees_from_no_read_ahead_components
+    client
+    server
+    client_received
+    client_sent
+    server_received
+    server_sent
+
+let lemma_client_server_driver_key_material_agrees_from_public_success_projections
+  (client:CS.connection_state)
+  (server:CS.connection_state)
+  (client_received:B.bytes)
+  (client_sent:B.bytes)
+  (server_received:B.bytes)
+  (server_sent:B.bytes)
+  : Lemma
+      (requires
+        client_server_driver_key_material_no_read_ahead_projection_inputs
+          client
+          server
+          client_received
+          client_sent
+          server_received
+          server_sent)
+      (ensures
+        client_server_driver_supported_profile_derived_state_inputs
+          client
+          server /\
+        CS.supported_profile_all_derived_key_material_agrees client server /\
+        CS.supported_profile_client_server_key_material_inputs_agree
+          client
+          server /\
+        paired_driver_transport_logs_exact
+          client
+          server
+          client_received
+          client_sent
+          server_received
+          server_sent /\
+        CS.paired_wire_logs client server /\
+        CS.supported_profile_client_server_key_material_agrees client server)
+=
+  lemma_client_server_driver_supported_profile_state_inputs_from_projection_inputs
+    client
+    server;
+  assert (client_server_driver_key_material_no_read_ahead_component_inputs
+    client
+    server
+    client_received
+    client_sent
+    server_received
+    server_sent);
+  lemma_client_server_driver_key_material_agrees_from_public_success_components
     client
     server
     client_received
