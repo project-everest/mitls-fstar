@@ -346,7 +346,9 @@ fn accept
           (match status with
            | ServerWorkflowClosed ->
              exists* st1.
-               server_driver_closed d st1 'certificate_chain 'credential_identity
+               server_driver_closed d st1 'certificate_chain 'credential_identity **
+               pure (st1.CS.cs_model.CS.model_config ==
+                 'st0.CS.cs_model.CS.model_config)
            | ServerWorkflowOk ->
              exists* st1 received sent.
                server_driver_connected
