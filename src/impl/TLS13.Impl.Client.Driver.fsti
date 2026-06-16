@@ -217,15 +217,41 @@ type client_receive_result = {
   client_receive_len: SZ.t;
 }
 
+noeq type client_receive_observation = {
+  client_receive_observed_status: driver_workflow_status;
+  client_receive_observed_response: CT.client_buffer_response;
+}
+
+noextract
+let client_receive_observation_network_correct
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
+  (obs:client_receive_observation)
+  (app_out:B.bytes)
+  : prop =
+  obs.client_receive_observed_status <> DriverWorkflowExhausted ==>
+    exists st_network st_before input old_network_out network_out old_app_out observed_app_out.
+      CT.network_bytes_end_to_end_correct
+        st_before
+        st_network
+        obs.client_receive_observed_response
+        input
+        old_network_out
+        network_out
+        old_app_out
+        observed_app_out /\
+      (obs.client_receive_observed_status == DriverWorkflowOk ==>
+        st_network == st1 /\ Seq.equal observed_app_out app_out)
+
 noextract
 let client_driver_receive_status_correct
   (result:client_receive_result)
-  (workflow_status:driver_workflow_status)
-  (resp:CT.client_response)
+  (obs:client_receive_observation)
   (app_out:B.bytes)
   (out_bytes:B.bytes)
   : prop =
-  if workflow_status == DriverWorkflowOk then
+  let resp = obs.client_receive_observed_response.CT.response in
+  if obs.client_receive_observed_status == DriverWorkflowOk then
     if SZ.v resp.CT.app_out_len <= B.length out_bytes /\
        SZ.v resp.CT.app_out_len <= B.length app_out
     then
@@ -235,7 +261,7 @@ let client_driver_receive_status_correct
       result.client_receive_status == DriverWorkflowStepFailed /\
       result.client_receive_len == 0sz
   else
-    result.client_receive_status == workflow_status /\
+    result.client_receive_status == obs.client_receive_observed_status /\
     result.client_receive_len == 0sz
 
 noextract
@@ -258,21 +284,26 @@ let client_driver_receive_copyout_correct
 
 noextract
 let client_driver_receive_correct
+  (st0:CS.connection_state)
+  (st1:CS.connection_state)
   (result:client_receive_result)
-  (workflow_status:driver_workflow_status)
-  (resp:CT.client_response)
+  (obs:client_receive_observation)
   (app_out:B.bytes)
   (out_bytes:B.bytes)
   : prop =
   client_driver_receive_status_correct
     result
-    workflow_status
-    resp
+    obs
     app_out
     out_bytes /\
+  client_receive_observation_network_correct st0 st1 obs app_out /\
   SZ.v result.client_receive_len <= B.length out_bytes /\
   (result.client_receive_status == DriverWorkflowOk ==>
-    client_driver_receive_copyout_correct result resp app_out out_bytes)
+    client_driver_receive_copyout_correct
+      result
+      obs.client_receive_observed_response.CT.response
+      app_out
+      out_bytes)
 
 fn new_client
   (server_name:array U8.t)
@@ -379,11 +410,12 @@ fn receive
                 SZ.v result.client_receive_len <= SZ.v out_len /\
                 client_driver_sent_log_exact st1 sent1 /\
           client_driver_received_log_accounted st1 received1 /\
-          (exists workflow_status resp app_out.
+          (exists obs app_out.
                   client_driver_receive_correct
+                   'st0
+                   st1
                     result
-                    workflow_status
-                    resp
+                    obs
                     app_out
                     out_bytes))
 
